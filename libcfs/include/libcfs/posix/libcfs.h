@@ -98,13 +98,11 @@
 #endif
 
 #include <libcfs/list.h>
-#include <libcfs/posix/posix-types.h>
 #include <libcfs/user-time.h>
 #include <libcfs/user-prim.h>
 #include <libcfs/user-mem.h>
 #include <libcfs/user-lock.h>
 #include <libcfs/user-tcpip.h>
-#include <libcfs/posix/posix-wordsize.h>
 #include <libcfs/user-bitops.h>
 
 # define do_gettimeofday(tv) gettimeofday(tv, NULL);

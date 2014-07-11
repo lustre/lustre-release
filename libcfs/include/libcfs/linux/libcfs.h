@@ -119,10 +119,6 @@ do {                                                                    \
 struct cfs_stack_trace {
 };
 
-/* long integer with size equal to pointer */
-typedef unsigned long ulong_ptr_t;
-typedef long long_ptr_t;
-
 #ifndef WITH_WATCHDOG
 #define WITH_WATCHDOG
 #endif

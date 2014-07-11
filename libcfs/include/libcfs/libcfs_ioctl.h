@@ -108,6 +108,7 @@ struct libcfs_ioctl_handler {
 
 /* 'f' ioctls are defined in lustre_ioctl.h and lustre_user.h except for: */
 #define LIBCFS_IOC_DEBUG_MASK             _IOWR('f', 250, long)
+#define IOCTL_LIBCFS_TYPE		  long
 
 /* ioctls for manipulating snapshots 30- */
 #define IOC_LIBCFS_TYPE                   'e'

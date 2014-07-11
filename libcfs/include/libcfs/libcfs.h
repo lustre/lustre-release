@@ -41,6 +41,8 @@
 #define __attribute__(x)
 #endif
 
+#include <libcfs/types.h>
+
 #if !defined(__WINNT__) && !defined(__KERNEL__)
 #include <libcfs/posix/libcfs.h>
 #elif defined(__linux__)

@@ -49,28 +49,6 @@ AS_IF([test "x$enable_panic_dumplog" = xyes],
 ]) # LIBCFS_CONFIG_PANIC_DUMPLOG
 
 #
-# LIBCFS_U64_LONG_LONG_LINUX
-#
-# check kernel __u64 type
-#
-AC_DEFUN([LIBCFS_U64_LONG_LONG_LINUX], [
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="$EXTRA_KCFLAGS -Werror"
-LB_CHECK_COMPILE([if Linux kernel '__u64' is 'long long' type],
-kernel_u64_long_long, [
-	#include <linux/types.h>
-	#include <linux/stddef.h>
-],[
-	unsigned long long *data;
-	data = (__u64*)sizeof(data);
-],[
-	AC_DEFINE(HAVE_KERN__U64_LONG_LONG, 1,
-		[Linux kernel __u64 is long long type])
-])
-EXTRA_KCFLAGS="$tmp_flags"
-]) # LIBCFS_U64_LONG_LONG_LINUX
-
-#
 # LIBCFS_STACKTRACE_OPS_HAVE_WALK_STACK
 #
 # 2.6.32-30.el6 adds a new 'walk_stack' field in 'struct stacktrace_ops'
@@ -332,7 +310,6 @@ AC_MSG_NOTICE([LibCFS kernel checks
 ==============================================================================])
 LIBCFS_CONFIG_PANIC_DUMPLOG
 
-LIBCFS_U64_LONG_LONG_LINUX
 # 2.6.32
 LIBCFS_STACKTRACE_OPS_HAVE_WALK_STACK
 LC_SHRINKER_WANT_SHRINK_PTR

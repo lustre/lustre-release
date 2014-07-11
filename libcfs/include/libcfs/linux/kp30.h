@@ -99,66 +99,6 @@
 # define printf(format, b...) CDEBUG(D_OTHER, format , ## b)
 # define time(a) CURRENT_TIME
 
-#define IOCTL_LIBCFS_TYPE long
-
-#ifdef __CYGWIN__
-# ifndef BITS_PER_LONG
-#  if (~0UL) == 0xffffffffUL
-#   define BITS_PER_LONG 32
-#  else
-#   define BITS_PER_LONG 64
-#  endif
-# endif
-#endif
-
-#if BITS_PER_LONG > 32
-# define LI_POISON ((int)0x5a5a5a5a5a5a5a5a)
-# define LL_POISON ((long)0x5a5a5a5a5a5a5a5a)
-# define LP_POISON ((void *)(long)0x5a5a5a5a5a5a5a5a)
-#else
-# define LI_POISON ((int)0x5a5a5a5a)
-# define LL_POISON ((long)0x5a5a5a5a)
-# define LP_POISON ((void *)(long)0x5a5a5a5a)
-#endif
-
-/* this is a bit chunky */
-
-#define _LWORDSIZE BITS_PER_LONG
-
-#if defined(HAVE_KERN__U64_LONG_LONG)
-# define LPU64 "%llu"
-# define LPD64 "%lld"
-# define LPX64 "%#llx"
-# define LPX64i "%llx"
-# define LPO64 "%#llo"
-# define LPF64 "L"
-#else
-# define LPU64 "%lu"
-# define LPD64 "%ld"
-# define LPX64 "%#lx"
-# define LPX64i "%lx"
-# define LPO64 "%#lo"
-# define LPF64 "l"
-#endif
-
-/*
- * long_ptr_t & ulong_ptr_t, same to "long" for gcc
- */
-# define LPLU "%lu"
-# define LPLD "%ld"
-# define LPLX "%#lx"
-
-/*
- * pid_t
- */
-# define LPPID "%d"
-
-#ifndef LPU64
-# error "No word size defined"
-#endif
-
-#undef _LWORDSIZE
-
 #ifdef HAVE_SYSCTL_CTLNAME
 #define INIT_CTL_NAME	.ctl_name = CTL_UNNUMBERED,
 #define INIT_STRATEGY	.strategy = &sysctl_intvec,

@@ -46,7 +46,7 @@
 #if !defined(__KERNEL__)
 
 #include <stddef.h>
-#include <libcfs/posix/posix-types.h>
+#include <libcfs/types.h>
 
 struct ll_fiemap_extent {
         __u64 fe_logical;  /* logical offset in bytes for the start of
