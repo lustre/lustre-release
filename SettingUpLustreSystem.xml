@@ -43,15 +43,16 @@
     <para>Since the block devices are accessed by only one or two server nodes, a storage area network (SAN) that is accessible from all the servers is not required. Expensive switches are not needed because point-to-point connections between the servers and the storage arrays normally provide the simplest and best attachments. (If failover capability is desired, the storage must be attached to multiple servers.)</para>
     <para>For a production environment, it is preferable that the MGS have separate storage to allow future expansion to multiple file systems. However, it is possible to run the MDS and MGS on the same machine and have them share the same storage device.</para>
     <para>For best performance in a production environment, dedicated clients are required. For a non-production Lustre environment or for testing, a Lustre client and server can run on the same machine. However, dedicated clients are the only supported configuration.</para>
-    <para>Performance and other issues can occur when an MDS or OSS and a client are running on the same machine:</para>
+    <warning><para>Performance and recovery issues can occur if you put a client on an MDS or OSS:</para>
     <itemizedlist>
-      <listitem>
-        <para>Running the MDS and a client on the same machine can cause recovery and deadlock issues and impact the performance of other Lustre clients.</para>
-      </listitem>
       <listitem>
         <para>Running the OSS and a client on the same machine can cause issues with low memory and memory pressure. If the client consumes all the memory and then tries to write data to the file system, the OSS will need to allocate pages to receive data from the client but will not be able to perform this operation due to low memory. This can cause the client to hang.</para>
       </listitem>
+      <listitem>
+        <para>Running the MDS and a client on the same machine can cause recovery and deadlock issues and impact the performance of other Lustre clients.</para>
+      </listitem>
     </itemizedlist>
+	</warning>
     <para>Only servers running on 64-bit CPUs are tested and supported. 64-bit CPU clients are
       typically used for testing to match expected customer usage and avoid limitations due to the 4
       GB limit for RAM size, 1 GB low-memory limitation, and 16 TB file size limit of 32-bit CPUs.
