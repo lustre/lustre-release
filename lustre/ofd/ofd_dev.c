@@ -426,6 +426,8 @@ static int ofd_lfsck_out_notify(const struct lu_env *env, void *data,
 		ofd->ofd_lastid_rebuilding = 0;
 		ofd->ofd_lastid_gen++;
 		up_write(&ofd->ofd_lastid_rwsem);
+		CWARN("%s: Rebuilt crashed LAST_ID files successfully.\n",
+		      obd->obd_name);
 		break;
 	}
 	default:
@@ -1331,7 +1333,8 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 	} else {
 		if (unlikely(exp->exp_filter_data.fed_lastid_gen !=
 			     ofd->ofd_lastid_gen)) {
-			ofd_obd_disconnect(exp);
+			/* Keep the export ref so we can send the reply. */
+			ofd_obd_disconnect(class_export_get(exp));
 			GOTO(out_nolock, rc = -ENOTCONN);
 		}
 

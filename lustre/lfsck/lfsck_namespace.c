@@ -1650,8 +1650,8 @@ int lfsck_verify_linkea(const struct lu_env *env, struct dt_device *dev,
 	if (rc != 0)
 		RETURN(rc);
 
-	linkea_buf.lb_buf = ldata.ld_buf->lb_buf;
-	linkea_buf.lb_len = ldata.ld_leh->leh_len;
+	lfsck_buf_init(&linkea_buf, ldata.ld_buf->lb_buf,
+		       ldata.ld_leh->leh_len);
 	th = dt_trans_create(env, dev);
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));

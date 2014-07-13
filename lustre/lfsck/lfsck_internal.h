@@ -663,6 +663,13 @@ lfsck_name_get_const(const struct lu_env *env, const void *area, ssize_t len)
 	return lname;
 }
 
+static inline void
+lfsck_buf_init(struct lu_buf *buf, void *area, ssize_t len)
+{
+	buf->lb_buf = area;
+	buf->lb_len = len;
+}
+
 static inline struct lu_buf *
 lfsck_buf_get(const struct lu_env *env, void *area, ssize_t len)
 {

@@ -778,9 +778,9 @@ static inline int ostid_to_fid(struct lu_fid *fid, const struct ost_id *ostid,
 		 * been in production for years.  This can handle create rates
 		 * of 1M objects/s/OST for 9 years, or combinations thereof. */
 		if (oid >= IDIF_MAX_OID) {
-			 CERROR("bad MDT0 id, "DOSTID" ost_idx:%u\n",
-				POSTID(ostid), ost_idx);
-			 return -EBADF;
+			CERROR("bad MDT0 id(1), "DOSTID" ost_idx:%u\n",
+			       POSTID(ostid), ost_idx);
+			return -EBADF;
 		}
 		fid->f_seq = fid_idif_seq(oid, ost_idx);
 		/* truncate to 32 bits by assignment */
@@ -794,7 +794,7 @@ static inline int ostid_to_fid(struct lu_fid *fid, const struct ost_id *ostid,
 		 * OST objects into the FID namespace.  In both cases, we just
 		 * pass the FID through, no conversion needed. */
 		if (ostid->oi_fid.f_ver != 0) {
-			CERROR("bad MDT0 id, "DOSTID" ost_idx:%u\n",
+			CERROR("bad MDT0 id(2), "DOSTID" ost_idx:%u\n",
 				POSTID(ostid), ost_idx);
 			return -EBADF;
 		}
@@ -929,7 +929,7 @@ static inline int lu_fid_cmp(const struct lu_fid *f0,
 static inline void ostid_cpu_to_le(const struct ost_id *src_oi,
 				   struct ost_id *dst_oi)
 {
-	if (fid_seq_is_mdt0(ostid_seq(src_oi))) {
+	if (fid_seq_is_mdt0(src_oi->oi.oi_seq)) {
 		dst_oi->oi.oi_id = cpu_to_le64(src_oi->oi.oi_id);
 		dst_oi->oi.oi_seq = cpu_to_le64(src_oi->oi.oi_seq);
 	} else {
@@ -940,7 +940,7 @@ static inline void ostid_cpu_to_le(const struct ost_id *src_oi,
 static inline void ostid_le_to_cpu(const struct ost_id *src_oi,
 				   struct ost_id *dst_oi)
 {
-	if (fid_seq_is_mdt0(ostid_seq(src_oi))) {
+	if (fid_seq_is_mdt0(src_oi->oi.oi_seq)) {
 		dst_oi->oi.oi_id = le64_to_cpu(src_oi->oi.oi_id);
 		dst_oi->oi.oi_seq = le64_to_cpu(src_oi->oi.oi_seq);
 	} else {

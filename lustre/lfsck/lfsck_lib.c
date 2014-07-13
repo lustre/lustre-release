@@ -402,8 +402,8 @@ static int lfsck_create_lpf_local(const struct lu_env *env,
 		GOTO(stop, rc);
 
 	/* 3a. insert linkEA for child */
-	linkea_buf.lb_buf = ldata.ld_buf->lb_buf;
-	linkea_buf.lb_len = ldata.ld_leh->leh_len;
+	lfsck_buf_init(&linkea_buf, ldata.ld_buf->lb_buf,
+		       ldata.ld_leh->leh_len);
 	rc = dt_declare_xattr_set(env, child, &linkea_buf,
 				  XATTR_NAME_LINK, 0, th);
 	if (rc != 0)
@@ -569,8 +569,8 @@ static int lfsck_create_lpf_remote(const struct lu_env *env,
 		GOTO(stop, rc);
 
 	/* 3a. insert linkEA for child */
-	linkea_buf.lb_buf = ldata.ld_buf->lb_buf;
-	linkea_buf.lb_len = ldata.ld_leh->leh_len;
+	lfsck_buf_init(&linkea_buf, ldata.ld_buf->lb_buf,
+		       ldata.ld_leh->leh_len);
 	rc = dt_declare_xattr_set(env, child, &linkea_buf,
 				  XATTR_NAME_LINK, 0, th);
 	if (rc != 0)
