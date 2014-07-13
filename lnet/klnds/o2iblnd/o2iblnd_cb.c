@@ -800,6 +800,7 @@ kiblnd_setup_rd_kiov (lnet_ni_t *ni, kib_tx_t *tx, kib_rdma_desc_t *rd,
 
 static int
 kiblnd_post_tx_locked (kib_conn_t *conn, kib_tx_t *tx, int credit)
+__must_hold(&conn->ibc_lock)
 {
         kib_msg_t         *msg = tx->tx_msg;
         kib_peer_t        *peer = conn->ibc_peer;

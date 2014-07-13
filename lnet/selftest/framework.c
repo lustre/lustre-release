@@ -210,6 +210,7 @@ sfw_del_session_timer (void)
 /* called with sfw_data.fw_lock held */
 static void
 sfw_deactivate_session (void)
+__must_hold(&sfw_data.fw_lock)
 {
         sfw_session_t *sn = sfw_data.fw_session;
         int            nactive = 0;

@@ -92,6 +92,7 @@ EXPORT_SYMBOL(cfs_percpt_lock_alloc);
  */
 void
 cfs_percpt_lock(struct cfs_percpt_lock *pcl, int index)
+__acquires(pcl->pcl_locks)
 {
 	int	ncpt = cfs_cpt_number(pcl->pcl_cptab);
 	int	i;
@@ -126,6 +127,7 @@ EXPORT_SYMBOL(cfs_percpt_lock);
 /** unlock a CPU partition */
 void
 cfs_percpt_unlock(struct cfs_percpt_lock *pcl, int index)
+__releases(pcl->pcl_locks)
 {
 	int	ncpt = cfs_cpt_number(pcl->pcl_cptab);
 	int	i;

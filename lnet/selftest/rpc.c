@@ -503,6 +503,7 @@ srpc_post_passive_rqtbuf(int service, int local, void *buf, int len,
 
 int
 srpc_service_post_buffer(struct srpc_service_cd *scd, struct srpc_buffer *buf)
+__must_hold(&scd->scd_lock)
 {
 	struct srpc_service	*sv = scd->scd_svc;
 	struct srpc_msg		*msg = &buf->buf_msg;
@@ -734,6 +735,7 @@ srpc_finish_service(struct srpc_service *sv)
 /* called with sv->sv_lock held */
 void
 srpc_service_recycle_buffer(struct srpc_service_cd *scd, srpc_buffer_t *buf)
+__must_hold(&scd->scd_lock)
 {
 	if (!scd->scd_svc->sv_shuttingdown && scd->scd_buf_adjust >= 0) {
 		if (srpc_service_post_buffer(scd, buf) != 0) {
