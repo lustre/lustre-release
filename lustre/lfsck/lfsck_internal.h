@@ -581,6 +581,10 @@ struct lfsck_thread_info {
 /* lfsck_lib.c */
 int lfsck_fid_alloc(const struct lu_env *env, struct lfsck_instance *lfsck,
 		    struct lu_fid *fid, bool locked);
+int lfsck_ibits_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
+		     struct dt_object *obj, struct lustre_handle *lh,
+		     __u64 bits, ldlm_mode_t mode);
+void lfsck_ibits_unlock(struct lustre_handle *lh, ldlm_mode_t mode);
 int lfsck_create_lpf(const struct lu_env *env, struct lfsck_instance *lfsck);
 struct lfsck_instance *lfsck_instance_find(struct dt_device *key, bool ref,
 					   bool unlink);

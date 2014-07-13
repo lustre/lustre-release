@@ -350,6 +350,68 @@ int lfsck_fid_alloc(const struct lu_env *env, struct lfsck_instance *lfsck,
 	RETURN(rc);
 }
 
+/**
+ * Request the specified ibits lock for the given object.
+ *
+ * Before the LFSCK modifying on the namespace visible object,
+ * it needs to acquire related ibits ldlm lock.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] lfsck	pointer to the lfsck instance
+ * \param[in] obj	pointer to the dt_object to be locked
+ * \param[out] lh	pointer to the lock handle
+ * \param[in] ibits	the bits for the ldlm lock to be acquired
+ * \param[in] mode	the mode for the ldlm lock to be acquired
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
+int lfsck_ibits_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
+		     struct dt_object *obj, struct lustre_handle *lh,
+		     __u64 bits, ldlm_mode_t mode)
+{
+	struct lfsck_thread_info	*info	= lfsck_env_info(env);
+	ldlm_policy_data_t		*policy = &info->lti_policy;
+	struct ldlm_res_id		*resid	= &info->lti_resid;
+	__u64				 flags	= LDLM_FL_ATOMIC_CB;
+	int				 rc;
+
+	LASSERT(lfsck->li_namespace != NULL);
+
+	memset(policy, 0, sizeof(*policy));
+	policy->l_inodebits.bits = bits;
+	fid_build_reg_res_name(lfsck_dto2fid(obj), resid);
+	rc = ldlm_cli_enqueue_local(lfsck->li_namespace, resid, LDLM_IBITS,
+				    policy, mode, &flags, ldlm_blocking_ast,
+				    ldlm_completion_ast, NULL, NULL, 0,
+				    LVB_T_NONE, NULL, lh);
+	if (rc == ELDLM_OK) {
+		rc = 0;
+	} else {
+		memset(lh, 0, sizeof(*lh));
+		rc = -EIO;
+	}
+
+	return rc;
+}
+
+/**
+ * Release the the specified ibits lock.
+ *
+ * If the lock has been acquired before, release it
+ * and cleanup the handle. Otherwise, do nothing.
+ *
+ * \param[in] lh	pointer to the lock handle
+ * \param[in] mode	the mode for the ldlm lock to be released
+ */
+void lfsck_ibits_unlock(struct lustre_handle *lh, ldlm_mode_t mode)
+{
+	if (lustre_handle_is_used(lh)) {
+		ldlm_lock_decref(lh, mode);
+		memset(lh, 0, sizeof(*lh));
+	}
+}
+
 static const char dot[] = ".";
 static const char dotdot[] = "..";
 static const char dotlustre[] = ".lustre";
@@ -696,6 +758,7 @@ int lfsck_create_lpf(const struct lu_env *env, struct lfsck_instance *lfsck)
 	struct dt_object_format  *dof	= &info->lti_dof;
 	struct dt_object	 *parent = NULL;
 	struct dt_object	 *child	= NULL;
+	struct lustre_handle	  lh	= { 0 };
 	char			  name[8];
 	int			  node	= lfsck_dev_idx(lfsck->li_bottom);
 	int			  rc	= 0;
@@ -721,8 +784,16 @@ int lfsck_create_lpf(const struct lu_env *env, struct lfsck_instance *lfsck)
 	if (IS_ERR(parent))
 		RETURN(PTR_ERR(parent));
 
+	if (lfsck->li_lpf_obj != NULL)
+		GOTO(out, rc = 0);
+
 	if (unlikely(!dt_try_as_dir(env, parent)))
 		GOTO(out, rc = -ENOTDIR);
+
+	rc = lfsck_ibits_lock(env, lfsck, parent, &lh,
+			      MDS_INODELOCK_UPDATE, LCK_EX);
+	if (rc != 0)
+		GOTO(out, rc);
 
 	mutex_lock(&lfsck->li_mutex);
 	if (lfsck->li_lpf_obj != NULL)
@@ -784,6 +855,7 @@ int lfsck_create_lpf(const struct lu_env *env, struct lfsck_instance *lfsck)
 
 unlock:
 	mutex_unlock(&lfsck->li_mutex);
+	lfsck_ibits_unlock(&lh, LCK_EX);
 	if (rc != 0 && child != NULL && !IS_ERR(child))
 		lu_object_put(env, &child->do_lu);
 out:
