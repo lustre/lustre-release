@@ -575,6 +575,7 @@ struct lfsck_thread_info {
 	struct lu_orphan_rec	lti_rec;
 	struct lov_user_md	lti_lum;
 	struct dt_insert_rec	lti_dt_rec;
+	struct lu_object_conf	lti_conf;
 };
 
 /* lfsck_lib.c */
@@ -782,6 +783,21 @@ static inline void lfsck_object_put(const struct lu_env *env,
 				    struct dt_object *obj)
 {
 	lu_object_put(env, &obj->do_lu);
+}
+
+static inline struct dt_object *
+lfsck_object_find_by_dev_nowait(const struct lu_env *env, struct dt_device *dev,
+				const struct lu_fid *fid)
+{
+	struct lu_object_conf	*conf = &lfsck_env_info(env)->lti_conf;
+	struct dt_object	*obj;
+
+	conf->loc_flags = LOC_F_NOWAIT;
+	obj = lu2dt(lu_object_find_slice(env, dt2lu_dev(dev), fid, conf));
+	if (unlikely(obj == NULL))
+		return ERR_PTR(-ENOENT);
+
+	return obj;
 }
 
 static inline struct dt_object *

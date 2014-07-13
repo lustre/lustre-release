@@ -605,10 +605,13 @@ static struct lu_object *htable_lookup(struct lu_site *s,
          * drained), and moreover, lookup has to wait until object is freed.
          */
 
-	init_waitqueue_entry_current(waiter);
-	add_wait_queue(&bkt->lsb_marche_funebre, waiter);
-	set_current_state(TASK_UNINTERRUPTIBLE);
-	lprocfs_counter_incr(s->ls_stats, LU_SS_CACHE_DEATH_RACE);
+	if (likely(waiter != NULL)) {
+		init_waitqueue_entry_current(waiter);
+		add_wait_queue(&bkt->lsb_marche_funebre, waiter);
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		lprocfs_counter_incr(s->ls_stats, LU_SS_CACHE_DEATH_RACE);
+	}
+
 	return ERR_PTR(-EAGAIN);
 }
 
@@ -794,6 +797,12 @@ struct lu_object *lu_object_find_at(const struct lu_env *env,
 	wait_queue_t           wait;
 
 	while (1) {
+		if (conf != NULL && conf->loc_flags & LOC_F_NOWAIT) {
+			obj = lu_object_find_try(env, dev, f, conf, NULL);
+
+			return obj;
+		}
+
 		obj = lu_object_find_try(env, dev, f, conf, &wait);
 		if (obj != ERR_PTR(-EAGAIN))
 			return obj;
