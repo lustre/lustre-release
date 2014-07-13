@@ -448,8 +448,8 @@ int lfsck_master_engine(void *args)
 	if (!thread_is_running(thread))
 		GOTO(fini_oit, rc = 0);
 
-	if (!cfs_list_empty(&lfsck->li_list_scan) ||
-	    cfs_list_empty(&lfsck->li_list_double_scan))
+	if (!list_empty(&lfsck->li_list_scan) ||
+	    list_empty(&lfsck->li_list_double_scan))
 		rc = lfsck_master_oit_engine(env, lfsck);
 	else
 		rc = 1;
@@ -472,7 +472,7 @@ fini_oit:
 	lfsck_di_oit_put(env, lfsck);
 	oit_iops->fini(env, oit_di);
 	if (rc == 1) {
-		if (!cfs_list_empty(&lfsck->li_list_double_scan))
+		if (!list_empty(&lfsck->li_list_double_scan))
 			rc = lfsck_double_scan(env, lfsck);
 		else
 			rc = 0;
