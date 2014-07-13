@@ -1293,7 +1293,8 @@ test_14() {
 	echo "Inject failure stub to simulate dangling referenced MDT-object"
 	#define OBD_FAIL_LFSCK_DANGLING	0x1610
 	do_facet ost1 $LCTL set_param fail_loc=0x1610
-	createmany -o $DIR/$tdir/f $((count + 32))
+	createmany -o $DIR/$tdir/f $((count + 31))
+	touch $DIR/$tdir/guard
 	do_facet ost1 $LCTL set_param fail_loc=0
 
 	start_full_debug_logging
@@ -1321,8 +1322,8 @@ test_14() {
 	[ $repaired -ge 32 ] ||
 		error "(4) Fail to repair dangling reference: $repaired"
 
-	echo "'ls' should fail because it will not repair dangling by default"
-	ls -ail $DIR/$tdir > /dev/null 2>&1 && error "(5) ls should fail."
+	echo "'stat' should fail because of not repair dangling by default"
+	stat $DIR/$tdir/guard > /dev/null 2>&1 && error "(5) stat should fail"
 
 	echo "Trigger layout LFSCK to repair dangling reference"
 	$START_LAYOUT -r -c || error "(6) Fail to start LFSCK for layout!"
@@ -1334,13 +1335,22 @@ test_14() {
 		error "(7) unexpected status"
 	}
 
+	# There may be some async LFSCK updates in processing, wait for
+	# a while until the target reparation has been done. LU-4970.
+
+	echo "'stat' should success after layout LFSCK repairing"
+	wait_update_facet client "stat $DIR/$tdir/guard |
+		awk '/Size/ { print \\\$2 }'" "0" 6 || {
+		stat $DIR/$tdir/guard
+		$SHOW_LAYOUT
+		error "(8) unexpected size"
+	}
+
 	repaired=$($SHOW_LAYOUT |
 			 awk '/^repaired_dangling/ { print $2 }')
 	[ $repaired -ge 32 ] ||
-		error "(8) Fail to repair dangling reference: $repaired"
+		error "(9) Fail to repair dangling reference: $repaired"
 
-	echo "'ls' should success after layout LFSCK repairing"
-	ls -ail $DIR/$tdir > /dev/null || error "(9) ls should success."
 	stop_full_debug_logging
 }
 run_test 14 "LFSCK can repair MDT-object with dangling reference"
