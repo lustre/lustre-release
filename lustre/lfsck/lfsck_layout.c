@@ -3339,9 +3339,6 @@ static int lfsck_layout_check_parent(const struct lu_env *env,
 	}
 
 	tobj = lfsck_object_find(env, com->lc_lfsck, pfid);
-	if (tobj == NULL)
-		RETURN(LLIT_UNMATCHED_PAIR);
-
 	if (IS_ERR(tobj))
 		RETURN(PTR_ERR(tobj));
 

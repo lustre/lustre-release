@@ -524,9 +524,7 @@ again:
 			goto shrink;
 
 		parent = lfsck_object_find(env, lfsck, pfid);
-		if (parent == NULL)
-			goto shrink;
-		else if (IS_ERR(parent))
+		if (IS_ERR(parent))
 			GOTO(stop, rc = PTR_ERR(parent));
 
 		if (!dt_object_exists(parent))
@@ -1428,10 +1426,7 @@ static int lfsck_namespace_double_scan_main(void *args)
 		fid_be_to_cpu(&fid, (const struct lu_fid *)key);
 		target = lfsck_object_find(env, lfsck, &fid);
 		down_write(&com->lc_sem);
-		if (target == NULL) {
-			rc = 0;
-			goto checkpoint;
-		} else if (IS_ERR(target)) {
+		if (IS_ERR(target)) {
 			rc = PTR_ERR(target);
 			goto checkpoint;
 		}

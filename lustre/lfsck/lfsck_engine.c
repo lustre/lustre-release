@@ -151,6 +151,419 @@ stop:
 	return rc;
 }
 
+static int lfsck_parent_fid(const struct lu_env *env, struct dt_object *obj,
+			    struct lu_fid *fid)
+{
+	if (unlikely(!S_ISDIR(lfsck_object_type(obj)) ||
+		     !dt_try_as_dir(env, obj)))
+		return -ENOTDIR;
+
+	return dt_lookup(env, obj, (struct dt_rec *)fid,
+			 (const struct dt_key *)"..", BYPASS_CAPA);
+}
+
+static int lfsck_needs_scan_dir(const struct lu_env *env,
+				struct lfsck_instance *lfsck,
+				struct dt_object *obj)
+{
+	struct lu_fid *fid   = &lfsck_env_info(env)->lti_fid;
+	int	       depth = 0;
+	int	       rc;
+
+	if (list_empty(&lfsck->li_list_dir) || !S_ISDIR(lfsck_object_type(obj)))
+		RETURN(0);
+
+	while (1) {
+		/* XXX: Currently, we do not scan the "/REMOTE_PARENT_DIR",
+		 *	which is the agent directory to manage the objects
+		 *	which name entries reside on remote MDTs. Related
+		 *	consistency verification will be processed in LFSCK
+		 *	phase III. */
+		if (lu_fid_eq(lfsck_dto2fid(obj), &lfsck->li_global_root_fid)) {
+			if (depth > 0)
+				lfsck_object_put(env, obj);
+			return 1;
+		}
+
+		/* No need to check .lustre and its children. */
+		if (fid_seq_is_dot(fid_seq(lfsck_dto2fid(obj)))) {
+			if (depth > 0)
+				lfsck_object_put(env, obj);
+			return 0;
+		}
+
+		dt_read_lock(env, obj, MOR_TGT_CHILD);
+		if (unlikely(lfsck_is_dead_obj(obj))) {
+			dt_read_unlock(env, obj);
+			if (depth > 0)
+				lfsck_object_put(env, obj);
+			return 0;
+		}
+
+		rc = dt_xattr_get(env, obj,
+				  lfsck_buf_get(env, NULL, 0), XATTR_NAME_LINK,
+				  BYPASS_CAPA);
+		dt_read_unlock(env, obj);
+		if (rc >= 0) {
+			if (depth > 0)
+				lfsck_object_put(env, obj);
+			return 1;
+		}
+
+		if (rc < 0 && rc != -ENODATA) {
+			if (depth > 0)
+				lfsck_object_put(env, obj);
+			return rc;
+		}
+
+		rc = lfsck_parent_fid(env, obj, fid);
+		if (depth > 0)
+			lfsck_object_put(env, obj);
+		if (rc != 0)
+			return rc;
+
+		if (unlikely(lu_fid_eq(fid, &lfsck->li_local_root_fid)))
+			return 0;
+
+		obj = lfsck_object_find(env, lfsck, fid);
+		if (IS_ERR(obj))
+			return PTR_ERR(obj);
+
+		if (!dt_object_exists(obj)) {
+			lfsck_object_put(env, obj);
+			return 0;
+		}
+
+		if (dt_object_remote(obj)) {
+			/* .lustre/lost+found/MDTxxx can be remote directory. */
+			if (fid_seq_is_dot(fid_seq(lfsck_dto2fid(obj))))
+				rc = 0;
+			else
+				/* Other remote directory should be client
+				 * visible and need to be checked. */
+				rc = 1;
+			lfsck_object_put(env, obj);
+			return rc;
+		}
+
+		depth++;
+	}
+	return 0;
+}
+
+/* LFSCK wrap functions */
+
+static void lfsck_fail(const struct lu_env *env, struct lfsck_instance *lfsck,
+		       bool new_checked)
+{
+	struct lfsck_component *com;
+
+	list_for_each_entry(com, &lfsck->li_list_scan, lc_link) {
+		com->lc_ops->lfsck_fail(env, com, new_checked);
+	}
+}
+
+static int lfsck_checkpoint(const struct lu_env *env,
+			    struct lfsck_instance *lfsck)
+{
+	struct lfsck_component *com;
+	int			rc  = 0;
+	int			rc1 = 0;
+
+	if (likely(cfs_time_beforeq(cfs_time_current(),
+				    lfsck->li_time_next_checkpoint)))
+		return 0;
+
+	lfsck_pos_fill(env, lfsck, &lfsck->li_pos_current, false);
+	list_for_each_entry(com, &lfsck->li_list_scan, lc_link) {
+		rc = com->lc_ops->lfsck_checkpoint(env, com, false);
+		if (rc != 0)
+			rc1 = rc;
+	}
+
+	lfsck->li_time_last_checkpoint = cfs_time_current();
+	lfsck->li_time_next_checkpoint = lfsck->li_time_last_checkpoint +
+				cfs_time_seconds(LFSCK_CHECKPOINT_INTERVAL);
+	return rc1 != 0 ? rc1 : rc;
+}
+
+static int lfsck_prep(const struct lu_env *env, struct lfsck_instance *lfsck,
+		      struct lfsck_start_param *lsp)
+{
+	struct dt_object       *obj	= NULL;
+	struct lfsck_component *com;
+	struct lfsck_component *next;
+	struct lfsck_position  *pos	= NULL;
+	const struct dt_it_ops *iops	=
+				&lfsck->li_obj_oit->do_index_ops->dio_it;
+	struct dt_it	       *di;
+	int			rc;
+	ENTRY;
+
+	LASSERT(lfsck->li_obj_dir == NULL);
+	LASSERT(lfsck->li_di_dir == NULL);
+
+	lfsck->li_current_oit_processed = 0;
+	list_for_each_entry_safe(com, next, &lfsck->li_list_scan, lc_link) {
+		com->lc_new_checked = 0;
+		if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
+			com->lc_journal = 0;
+
+		rc = com->lc_ops->lfsck_prep(env, com, lsp);
+		if (rc != 0)
+			GOTO(out, rc);
+
+		if ((pos == NULL) ||
+		    (!lfsck_pos_is_zero(&com->lc_pos_start) &&
+		     lfsck_pos_is_eq(pos, &com->lc_pos_start) > 0))
+			pos = &com->lc_pos_start;
+	}
+
+	/* Init otable-based iterator. */
+	if (pos == NULL) {
+		rc = iops->load(env, lfsck->li_di_oit, 0);
+		if (rc > 0) {
+			lfsck->li_oit_over = 1;
+			rc = 0;
+		}
+
+		GOTO(out, rc);
+	}
+
+	rc = iops->load(env, lfsck->li_di_oit, pos->lp_oit_cookie);
+	if (rc < 0)
+		GOTO(out, rc);
+	else if (rc > 0)
+		lfsck->li_oit_over = 1;
+
+	if (!lfsck->li_master || fid_is_zero(&pos->lp_dir_parent))
+		GOTO(out, rc = 0);
+
+	/* Find the directory for namespace-based traverse. */
+	obj = lfsck_object_find(env, lfsck, &pos->lp_dir_parent);
+	if (IS_ERR(obj))
+		RETURN(PTR_ERR(obj));
+
+	/* XXX: Currently, skip remote object, the consistency for
+	 *	remote object will be processed in LFSCK phase III. */
+	if (!dt_object_exists(obj) || dt_object_remote(obj) ||
+	    unlikely(!S_ISDIR(lfsck_object_type(obj))))
+		GOTO(out, rc = 0);
+
+	if (unlikely(!dt_try_as_dir(env, obj)))
+		GOTO(out, rc = -ENOTDIR);
+
+	/* Init the namespace-based directory traverse. */
+	iops = &obj->do_index_ops->dio_it;
+	di = iops->init(env, obj, lfsck->li_args_dir, BYPASS_CAPA);
+	if (IS_ERR(di))
+		GOTO(out, rc = PTR_ERR(di));
+
+	LASSERT(pos->lp_dir_cookie < MDS_DIR_END_OFF);
+
+	rc = iops->load(env, di, pos->lp_dir_cookie);
+	if ((rc == 0) || (rc > 0 && pos->lp_dir_cookie > 0))
+		rc = iops->next(env, di);
+	else if (rc > 0)
+		rc = 0;
+
+	if (rc != 0) {
+		iops->put(env, di);
+		iops->fini(env, di);
+		GOTO(out, rc);
+	}
+
+	lfsck->li_obj_dir = lfsck_object_get(obj);
+	lfsck->li_cookie_dir = iops->store(env, di);
+	spin_lock(&lfsck->li_lock);
+	lfsck->li_di_dir = di;
+	spin_unlock(&lfsck->li_lock);
+
+	GOTO(out, rc = 0);
+
+out:
+	if (obj != NULL)
+		lfsck_object_put(env, obj);
+
+	if (rc < 0) {
+		list_for_each_entry_safe(com, next, &lfsck->li_list_scan,
+					 lc_link)
+			com->lc_ops->lfsck_post(env, com, rc, true);
+
+		return rc;
+	}
+
+	rc = 0;
+	lfsck_pos_fill(env, lfsck, &lfsck->li_pos_current, true);
+	list_for_each_entry(com, &lfsck->li_list_scan, lc_link) {
+		rc = com->lc_ops->lfsck_checkpoint(env, com, true);
+		if (rc != 0)
+			break;
+	}
+
+	lfsck->li_time_last_checkpoint = cfs_time_current();
+	lfsck->li_time_next_checkpoint = lfsck->li_time_last_checkpoint +
+				cfs_time_seconds(LFSCK_CHECKPOINT_INTERVAL);
+	return rc;
+}
+
+static int lfsck_exec_oit(const struct lu_env *env,
+			  struct lfsck_instance *lfsck, struct dt_object *obj)
+{
+	struct lfsck_component *com;
+	const struct dt_it_ops *iops;
+	struct dt_it	       *di;
+	int			rc;
+	ENTRY;
+
+	LASSERT(lfsck->li_obj_dir == NULL);
+
+	list_for_each_entry(com, &lfsck->li_list_scan, lc_link) {
+		rc = com->lc_ops->lfsck_exec_oit(env, com, obj);
+		if (rc != 0)
+			RETURN(rc);
+	}
+
+	rc = lfsck_needs_scan_dir(env, lfsck, obj);
+	if (rc <= 0)
+		GOTO(out, rc);
+
+	if (unlikely(!dt_try_as_dir(env, obj)))
+		GOTO(out, rc = -ENOTDIR);
+
+	iops = &obj->do_index_ops->dio_it;
+	di = iops->init(env, obj, lfsck->li_args_dir, BYPASS_CAPA);
+	if (IS_ERR(di))
+		GOTO(out, rc = PTR_ERR(di));
+
+	rc = iops->load(env, di, 0);
+	if (rc == 0)
+		rc = iops->next(env, di);
+	else if (rc > 0)
+		rc = 0;
+
+	if (rc != 0) {
+		iops->put(env, di);
+		iops->fini(env, di);
+		GOTO(out, rc);
+	}
+
+	lfsck->li_obj_dir = lfsck_object_get(obj);
+	lfsck->li_cookie_dir = iops->store(env, di);
+	spin_lock(&lfsck->li_lock);
+	lfsck->li_di_dir = di;
+	spin_unlock(&lfsck->li_lock);
+
+	GOTO(out, rc = 0);
+
+out:
+	if (rc < 0)
+		lfsck_fail(env, lfsck, false);
+	return (rc > 0 ? 0 : rc);
+}
+
+static int lfsck_exec_dir(const struct lu_env *env,
+			  struct lfsck_instance *lfsck,
+			  struct dt_object *obj, struct lu_dirent *ent)
+{
+	struct lfsck_component *com;
+	int			rc;
+
+	list_for_each_entry(com, &lfsck->li_list_scan, lc_link) {
+		rc = com->lc_ops->lfsck_exec_dir(env, com, obj, ent);
+		if (rc != 0)
+			return rc;
+	}
+	return 0;
+}
+
+static int lfsck_post(const struct lu_env *env, struct lfsck_instance *lfsck,
+		      int result)
+{
+	struct lfsck_component *com;
+	struct lfsck_component *next;
+	int			rc  = 0;
+	int			rc1 = 0;
+
+	lfsck_pos_fill(env, lfsck, &lfsck->li_pos_current, false);
+	list_for_each_entry_safe(com, next, &lfsck->li_list_scan, lc_link) {
+		rc = com->lc_ops->lfsck_post(env, com, result, false);
+		if (rc != 0)
+			rc1 = rc;
+	}
+
+	lfsck->li_time_last_checkpoint = cfs_time_current();
+	lfsck->li_time_next_checkpoint = lfsck->li_time_last_checkpoint +
+				cfs_time_seconds(LFSCK_CHECKPOINT_INTERVAL);
+
+	/* Ignore some component post failure to make other can go ahead. */
+	return result;
+}
+
+static int lfsck_double_scan(const struct lu_env *env,
+			     struct lfsck_instance *lfsck)
+{
+	struct lfsck_component *com;
+	struct lfsck_component *next;
+	struct l_wait_info	lwi = { 0 };
+	int			rc  = 0;
+	int			rc1 = 0;
+
+	list_for_each_entry(com, &lfsck->li_list_double_scan, lc_link) {
+		if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
+			com->lc_journal = 0;
+
+		rc = com->lc_ops->lfsck_double_scan(env, com);
+		if (rc != 0)
+			rc1 = rc;
+	}
+
+	l_wait_event(lfsck->li_thread.t_ctl_waitq,
+		     atomic_read(&lfsck->li_double_scan_count) == 0,
+		     &lwi);
+
+	if (lfsck->li_status != LS_PAUSED &&
+	    lfsck->li_status != LS_CO_PAUSED) {
+		list_for_each_entry_safe(com, next, &lfsck->li_list_double_scan,
+					 lc_link) {
+			spin_lock(&lfsck->li_lock);
+			list_move_tail(&com->lc_link, &lfsck->li_list_idle);
+			spin_unlock(&lfsck->li_lock);
+		}
+	}
+
+	return rc1 != 0 ? rc1 : rc;
+}
+
+static void lfsck_quit(const struct lu_env *env, struct lfsck_instance *lfsck)
+{
+	struct lfsck_component *com;
+	struct lfsck_component *next;
+
+	list_for_each_entry_safe(com, next, &lfsck->li_list_scan,
+				 lc_link) {
+		if (com->lc_ops->lfsck_quit != NULL)
+			com->lc_ops->lfsck_quit(env, com);
+
+		spin_lock(&lfsck->li_lock);
+		list_del_init(&com->lc_link_dir);
+		list_move_tail(&com->lc_link, &lfsck->li_list_idle);
+		spin_unlock(&lfsck->li_lock);
+	}
+
+	list_for_each_entry_safe(com, next, &lfsck->li_list_double_scan,
+				 lc_link) {
+		if (com->lc_ops->lfsck_quit != NULL)
+			com->lc_ops->lfsck_quit(env, com);
+
+		spin_lock(&lfsck->li_lock);
+		list_move_tail(&com->lc_link, &lfsck->li_list_idle);
+		spin_unlock(&lfsck->li_lock);
+	}
+}
+
+/* LFSCK engines */
+
 static int lfsck_master_dir_engine(const struct lu_env *env,
 				   struct lfsck_instance *lfsck)
 {
@@ -202,9 +615,7 @@ static int lfsck_master_dir_engine(const struct lu_env *env,
 
 		*fid = ent->lde_fid;
 		child = lfsck_object_find(env, lfsck, fid);
-		if (child == NULL) {
-			goto checkpoint;
-		} else if (IS_ERR(child)) {
+		if (IS_ERR(child)) {
 			CDEBUG(D_LFSCK, "%s: scan dir failed at find target, "
 			       "parent "DFID", child %.*s "DFID": rc = %d\n",
 			       lfsck_lfsck2name(lfsck),
@@ -335,9 +746,7 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 		}
 
 		target = lfsck_object_find(env, lfsck, fid);
-		if (target == NULL) {
-			goto checkpoint;
-		} else if (IS_ERR(target)) {
+		if (IS_ERR(target)) {
 			CDEBUG(D_LFSCK, "%s: OIT scan failed at find target "
 			       DFID", cookie "LPU64": rc = %d\n",
 			       lfsck_lfsck2name(lfsck), PFID(fid),

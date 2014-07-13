@@ -600,25 +600,10 @@ void lfsck_pos_fill(const struct lu_env *env, struct lfsck_instance *lfsck,
 bool __lfsck_set_speed(struct lfsck_instance *lfsck, __u32 limit);
 void lfsck_control_speed(struct lfsck_instance *lfsck);
 void lfsck_control_speed_by_self(struct lfsck_component *com);
-int lfsck_reset(const struct lu_env *env, struct lfsck_instance *lfsck,
-		bool init);
 struct lfsck_thread_args *lfsck_thread_args_init(struct lfsck_instance *lfsck,
 						 struct lfsck_component *com,
 						 struct lfsck_start_param *lsp);
 void lfsck_thread_args_fini(struct lfsck_thread_args *lta);
-void lfsck_fail(const struct lu_env *env, struct lfsck_instance *lfsck,
-		bool new_checked);
-int lfsck_checkpoint(const struct lu_env *env, struct lfsck_instance *lfsck);
-int lfsck_prep(const struct lu_env *env, struct lfsck_instance *lfsck,
-	       struct lfsck_start_param *lsp);
-int lfsck_exec_oit(const struct lu_env *env, struct lfsck_instance *lfsck,
-		   struct dt_object *obj);
-int lfsck_exec_dir(const struct lu_env *env, struct lfsck_instance *lfsck,
-		   struct dt_object *obj, struct lu_dirent *ent);
-int lfsck_post(const struct lu_env *env, struct lfsck_instance *lfsck,
-	       int result);
-int lfsck_double_scan(const struct lu_env *env, struct lfsck_instance *lfsck);
-void lfsck_quit(const struct lu_env *env, struct lfsck_instance *lfsck);
 int lfsck_async_request(const struct lu_env *env, struct obd_export *exp,
 			struct lfsck_request *lr,
 			struct ptlrpc_request_set *set,
@@ -780,14 +765,6 @@ static inline int lfsck_is_dead_obj(const struct dt_object *obj)
 	return !!test_bit(LU_OBJECT_HEARD_BANSHEE, &loh->loh_flags);
 }
 
-static inline struct dt_object *lfsck_object_find(const struct lu_env *env,
-						  struct lfsck_instance *lfsck,
-						  const struct lu_fid *fid)
-{
-	return lu2dt(lu_object_find_slice(env, dt2lu_dev(lfsck->li_next),
-		     fid, NULL));
-}
-
 static inline struct dt_object *lfsck_object_get(struct dt_object *obj)
 {
 	lu_object_get(&obj->do_lu);
@@ -811,6 +788,13 @@ lfsck_object_find_by_dev(const struct lu_env *env, struct dt_device *dev,
 		return ERR_PTR(-ENOENT);
 
 	return obj;
+}
+
+static inline struct dt_object *lfsck_object_find(const struct lu_env *env,
+						  struct lfsck_instance *lfsck,
+						  const struct lu_fid *fid)
+{
+	return lfsck_object_find_by_dev(env, lfsck->li_next, fid);
 }
 
 static inline struct lfsck_tgt_desc *lfsck_tgt_get(struct lfsck_tgt_descs *ltds,
