@@ -117,62 +117,203 @@ struct dt_txn_commit_cb {
 struct dt_device_operations {
         /**
          * Return device-wide statistics.
+	 *
+	 * Return device-wide stats including block size, total and
+	 * free blocks, total and free objects, etc. See struct obd_statfs
+	 * for the details.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dev	dt device
+	 * \param[out] osfs	stats information
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
          */
         int   (*dt_statfs)(const struct lu_env *env,
-                           struct dt_device *dev, struct obd_statfs *osfs);
+			   struct dt_device *dev,
+			   struct obd_statfs *osfs);
+
         /**
-         * Create transaction, described by \a param.
+	 * Create transaction.
+	 *
+	 * Create in-memory structure representing the transaction for the
+	 * caller. The structure returned will be used by the calling thread
+	 * to specify the transaction the updates belong to. Once created
+	 * successfully ->dt_trans_stop() must be called in any case (with
+	 * ->dt_trans_start() and updates or not) so that the transaction
+	 * handle and other resources can be released by the layers below.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dev	dt device
+	 *
+	 * \retval pointer to handle	if creation succeeds
+	 * \retval ERR_PTR(errno)	if creation fails
          */
         struct thandle *(*dt_trans_create)(const struct lu_env *env,
                                            struct dt_device *dev);
+
         /**
-         * Start transaction, described by \a param.
+	 * Start transaction.
+	 *
+	 * Start the transaction. The transaction described by \a th can be
+	 * started only once. Another start is considered as an error.
+	 * A thread is not supposed to start a transaction while another
+	 * transaction isn't closed by the thread (though multiple handles
+	 * can be created). The caller should start the transaction once
+	 * all possible updates are declared (see the ->do_declare_* methods
+	 * below) and all the needed resources are reserved.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dev	dt device
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
          */
         int   (*dt_trans_start)(const struct lu_env *env,
-                                struct dt_device *dev, struct thandle *th);
+				struct dt_device *dev,
+				struct thandle *th);
+
 	/**
-	 * Finish previously started transaction.
+	 * Stop transaction.
+	 *
+	 * Once stopped the transaction described by \a th is complete (all
+	 * the needed updates are applied) and further processing such as
+	 * flushing to disk, sending to another target, etc, is handled by
+	 * lower layers. The caller can't access this transaction by the
+	 * handle anymore (except from the commit callbacks, see below).
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dev	dt device
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
 	 */
-	int   (*dt_trans_stop)(const struct lu_env *env, struct dt_device *dev,
+	int   (*dt_trans_stop)(const struct lu_env *env,
+			       struct dt_device *dev,
 			       struct thandle *th);
+
         /**
          * Add commit callback to the transaction.
+	 *
+	 * Add a commit callback to the given transaction handle. The callback
+	 * will be called when the associated transaction is stored. I.e. the
+	 * transaction will survive an event like power off if the callback did
+	 * run. The number of callbacks isn't limited, but you should note that
+	 * some disk filesystems do handle the commit callbacks in the thread
+	 * handling commit/flush of all the transactions, meaning that new
+	 * transactions are blocked from commit and flush until all the
+	 * callbacks are done. Also, note multiple callbacks can be running
+	 * concurrently using multiple CPU cores. The callbacks will be running
+	 * in a special environment which can not be used to pass data around.
+	 *
+	 * \param[in] th	transaction handle
+	 * \param[in] dcb	commit callback description
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
          */
         int   (*dt_trans_cb_add)(struct thandle *th,
                                  struct dt_txn_commit_cb *dcb);
+
         /**
-         * Return fid of root index object.
+	 * Return FID of root index object.
+	 *
+	 * Return the FID of the root object in the filesystem. This object
+	 * is usually provided as a bootstrap point by a disk filesystem.
+	 * This is up to the implementation which FID to use, though
+	 * [FID_SEQ_ROOT:1:0] is reserved for this purpose.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dev	dt device
+	 * \param[out] fid	FID of the root object
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
          */
         int   (*dt_root_get)(const struct lu_env *env,
-                             struct dt_device *dev, struct lu_fid *f);
+			     struct dt_device *dev,
+			     struct lu_fid *f);
+
         /**
          * Return device configuration data.
+	 *
+	 * Return device (disk fs, actually) specific configuration.
+	 * The configuration isn't subject to change at runtime.
+	 * See struct dt_device_param for the details.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dev	dt device
+	 * \param[out] param	configuration parameters
          */
         void  (*dt_conf_get)(const struct lu_env *env,
                              const struct dt_device *dev,
                              struct dt_device_param *param);
-        /**
-         *  handling device state, mostly for tests
-         */
-        int   (*dt_sync)(const struct lu_env *env, struct dt_device *dev);
-        int   (*dt_ro)(const struct lu_env *env, struct dt_device *dev);
-        /**
-          * Start a transaction commit asynchronously
-          *
-          * \param env environment
-          * \param dev dt_device to start commit on
-          *
-          * \return 0 success, negative value if error
-          */
+
+	/**
+	 * Sync the device.
+	 *
+	 * Sync all the cached state (dirty buffers, pages, etc) to the
+	 * persistent storage. The method returns control once the sync is
+	 * complete. This operation may incur significant I/O to disk and
+	 * should be reserved for cases where a global sync is strictly
+	 * necessary.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dev	dt device
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int   (*dt_sync)(const struct lu_env *env,
+			 struct dt_device *dev);
+
+	/**
+	 * Make device read-only.
+	 *
+	 * Prevent new modifications to the device. This is a very specific
+	 * state where all the changes are accepted successfully and the
+	 * commit callbacks are called, but persistent state never changes.
+	 * Used only in the tests to simulate power-off scenario.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dev	dt device
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int   (*dt_ro)(const struct lu_env *env,
+		       struct dt_device *dev);
+
+	/**
+	 * Start transaction commit asynchronously.
+	 *
+
+	 * Provide a hint to the underlying filesystem that it should start
+	 * committing soon. The control returns immediately. It's up to the
+	 * layer implementing the method how soon to start committing. Usually
+	 * this should be throttled to some extent, otherwise the number of
+	 * aggregated transaction goes too high causing performance drop.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dev	dt device
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
          int   (*dt_commit_async)(const struct lu_env *env,
                                   struct dt_device *dev);
-        /**
-         * Initialize capability context.
-         */
-        int   (*dt_init_capa_ctxt)(const struct lu_env *env,
-                                   struct dt_device *dev,
-                                   int mode, unsigned long timeout,
-                                   __u32 alg, struct lustre_capa_key *keys);
+
+	 /**
+	  * Not used, subject to removal.
+	  */
+	 int   (*dt_init_capa_ctxt)(const struct lu_env *env,
+				    struct dt_device *dev,
+				    int mode,
+				    unsigned long timeout,
+				    __u32 alg,
+				    struct lustre_capa_key *keys);
 };
 
 struct dt_index_features {
@@ -282,275 +423,944 @@ typedef __u64 dt_obj_version_t;
 union ldlm_policy_data;
 
 /**
- * Per-dt-object operations.
+ * A dt_object provides common operations to create and destroy
+ * objects and to manage regular and extended attributes.
  */
 struct dt_object_operations {
-        void  (*do_read_lock)(const struct lu_env *env,
-                              struct dt_object *dt, unsigned role);
-        void  (*do_write_lock)(const struct lu_env *env,
-                               struct dt_object *dt, unsigned role);
+	/**
+	 * Get read lock on object.
+	 *
+	 * Read lock is compatible with other read locks, so it's shared.
+	 * Read lock is not compatible with write lock which is exclusive.
+	 * The lock is blocking and can't be used from an interrupt context.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object to lock for reading
+	 * \param[in] role	a hint to debug locks (see kernel's mutexes)
+	 */
+	void  (*do_read_lock)(const struct lu_env *env,
+			      struct dt_object *dt,
+			      unsigned role);
+
+	/*
+	 * Get write lock on object.
+	 *
+	 * Write lock is exclusive and cannot be shared. The lock is blocking
+	 * and can't be used from an interrupt context.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object to lock for writing
+	 * \param[in] role	a hint to debug locks (see kernel's mutexes)
+	 *
+	 */
+	void  (*do_write_lock)(const struct lu_env *env,
+			       struct dt_object *dt,
+			       unsigned role);
+
+	/**
+	 * Release read lock.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 */
         void  (*do_read_unlock)(const struct lu_env *env,
                                 struct dt_object *dt);
+
+	/**
+	 * Release write lock.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 */
         void  (*do_write_unlock)(const struct lu_env *env,
                                  struct dt_object *dt);
+
+	/**
+	 * Check whether write lock is held.
+	 *
+	 * The caller can learn whether write lock is held on the object
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 *
+	 * \retval 0		no write lock
+	 * \retval 1		write lock is held
+	 */
         int  (*do_write_locked)(const struct lu_env *env,
                                 struct dt_object *dt);
-        /**
-         * Note: following ->do_{x,}attr_{set,get}() operations are very
-         * similar to ->moo_{x,}attr_{set,get}() operations in struct
-         * md_object_operations (see md_object.h). These operations are not in
-         * lu_object_operations, because ->do_{x,}attr_set() versions take
-         * transaction handle as an argument (this transaction is started by
-         * caller). We might factor ->do_{x,}attr_get() into
-         * lu_object_operations, but that would break existing symmetry.
-         */
 
+	/**
+	 * Declare intention to request reqular attributes.
+	 *
+	 * Notity the underlying filesystem that the caller may request regular
+	 * attributes with ->do_attr_get() soon. This allows OSD to implement
+	 * prefetching logic in an object-oriented manner. The implementation
+	 * can be noop. This method should avoid expensive delays such as
+	 * waiting on disk I/O, otherwise the goal of enabling a performance
+	 * optimization would be defeated.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] capa	unused
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
 	int   (*do_declare_attr_get)(const struct lu_env *env,
 				     struct dt_object *dt,
 				     struct lustre_capa *capa);
-        /**
-         * Return standard attributes.
-         *
-         * precondition: lu_object_exists(&dt->do_lu);
-         */
-        int   (*do_attr_get)(const struct lu_env *env,
-                             struct dt_object *dt, struct lu_attr *attr,
-                             struct lustre_capa *capa);
-        /**
-         * Set standard attributes.
-         *
-         * precondition: dt_object_exists(dt);
+
+	/**
+	 * Return regular attributes.
+	 *
+	 * The object must exist. Currently all the attributes should be
+	 * returned, but in the future this can be improved so that only
+	 * a selected set is returned. This can improve performance as in
+	 * some cases attributes are stored in different places and
+	 * getting them all can be an iterative and expensive process.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[out] attr	attributes to fill
+	 * \param[in] capa	unused
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int   (*do_attr_get)(const struct lu_env *env,
+			     struct dt_object *dt,
+			     struct lu_attr *attr,
+			     struct lustre_capa *capa);
+
+	/**
+	 * Declare intention to change regular object's attributes.
+	 *
+	 * Notify the underlying filesystem that the regular attributes may
+	 * change in this transaction. This enables the layer below to prepare
+	 * resources (e.g. journal credits in ext4).  This method should be
+	 * called between creating the transaction and starting it. Note that
+	 * the la_valid field of \a attr specifies which attributes will change.
+	 * The object need not exist.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] attr	attributes to change specified in attr.la_valid
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
          */
         int   (*do_declare_attr_set)(const struct lu_env *env,
                                      struct dt_object *dt,
                                      const struct lu_attr *attr,
-                                     struct thandle *handle);
+				     struct thandle *th);
+
+	/**
+	 * Change regular attributes.
+	 *
+	 * Change regular attributes in the given transaction. Note only
+	 * attributes flagged by attr.la_valid change. The object must
+	 * exist. If the layer implementing this method is responsible for
+	 * quota, then the method should maintain object accounting for the
+	 * given credentials when la_uid/la_gid changes.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] attr	new attributes to apply
+	 * \param[in] th	transaction handle
+	 * \param[in] capa	unused
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
         int   (*do_attr_set)(const struct lu_env *env,
                              struct dt_object *dt,
                              const struct lu_attr *attr,
-                             struct thandle *handle,
+			     struct thandle *th,
                              struct lustre_capa *capa);
 
+	/**
+	 * Declare intention to request extented attribute.
+	 *
+	 * Notify the underlying filesystem that the caller may request extended
+	 * attribute with ->do_xattr_get() soon. This allows OSD to implement
+	 * prefetching logic in an object-oriented manner. The implementation
+	 * can be noop. This method should avoid expensive delays such as
+	 * waiting on disk I/O, otherwise the goal of enabling a performance
+	 * optimization would be defeated.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] buf	unused, may be removed in the future
+	 * \param[in] name	name of the extended attribute
+	 * \param[in] capa	unused, may be removed in the future
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
 	int   (*do_declare_xattr_get)(const struct lu_env *env,
 				      struct dt_object *dt,
 				      struct lu_buf *buf,
 				      const char *name,
 				      struct lustre_capa *capa);
 
-        /**
-         * Return a value of an extended attribute.
-         *
-         * precondition: dt_object_exists(dt);
+	/**
+	 * Return a value of an extended attribute.
+	 *
+	 * The object must exist. If the buffer is NULL, then the method
+	 * must return the size of the value.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[out] buf	buffer in which to store the value
+	 * \param[in] name	name of the extended attribute
+	 * \param[in] capa	unused
+	 *
+	 * \retval 0		on success
+	 * \retval -ERANGE	if \a buf is too small
+	 * \retval negative	negated errno on error
+	 * \retval positive	value's size if \a buf is NULL or has zero size
+	 */
+	int   (*do_xattr_get)(const struct lu_env *env,
+			      struct dt_object *dt,
+			      struct lu_buf *buf,
+			      const char *name,
+			      struct lustre_capa *capa);
+
+	/**
+	 * Declare intention to change an extended attribute.
+	 *
+	 * Notify the underlying filesystem that the extended attribute may
+	 * change in this transaction.  This enables the layer below to prepare
+	 * resources (e.g. journal credits in ext4).  This method should be
+	 * called between creating the transaction and starting it. The object
+	 * need not exist.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] buf	buffer storing new value of the attribute
+	 * \param[in] name	name of the attribute
+	 * \param[in] fl	LU_XATTR_CREATE - fail if EA exists
+	 *			LU_XATTR_REPLACE - fail if EA doesn't exist
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
          */
-        int   (*do_xattr_get)(const struct lu_env *env, struct dt_object *dt,
-                              struct lu_buf *buf, const char *name,
-                              struct lustre_capa *capa);
-        /**
-         * Set value of an extended attribute.
-         *
-         * \a fl - flags from enum lu_xattr_flags
-         *
-         * precondition: dt_object_exists(dt);
+	int   (*do_declare_xattr_set)(const struct lu_env *env,
+				      struct dt_object *dt,
+				      const struct lu_buf *buf,
+				      const char *name,
+				      int fl,
+				      struct thandle *th);
+
+	/**
+	 * Set an extended attribute.
+	 *
+	 * Change or replace the specified extended attribute (EA).
+	 * The flags passed in \a fl dictate whether the EA is to be
+	 * created or replaced, as follows.
+	 *   LU_XATTR_CREATE - fail if EA exists
+	 *   LU_XATTR_REPLACE - fail if EA doesn't exist
+	 * The object must exist.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] buf	buffer storing new value of the attribute
+	 * \param[in] name	name of the attribute
+	 * \param[in] fl	flags indicating EA creation or replacement
+	 * \param[in] th	transaction handle
+	 * \param[in] capa	unused
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int   (*do_xattr_set)(const struct lu_env *env,
+			      struct dt_object *dt,
+			      const struct lu_buf *buf,
+			      const char *name,
+			      int fl,
+			      struct thandle *th,
+			      struct lustre_capa *capa);
+
+	/**
+	 * Declare intention to delete an extended attribute.
+	 *
+	 * Notify the underlying filesystem that the extended attribute may
+	 * be deleted in this transaction. This enables the layer below to
+	 * prepare resources (e.g. journal credits in ext4).  This method
+	 * should be called between creating the transaction and starting it.
+	 * The object need not exist.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] name	name of the attribute
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int   (*do_declare_xattr_del)(const struct lu_env *env,
+				      struct dt_object *dt,
+				      const char *name,
+				      struct thandle *th);
+
+	/**
+	 * Delete an extended attribute.
+	 *
+	 * This method deletes the specified extended attribute. The object
+	 * must exist.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] name	name of the attribute
+	 * \param[in] th	transaction handle
+	 * \param[in] capa	unused
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int   (*do_xattr_del)(const struct lu_env *env,
+			      struct dt_object *dt,
+			      const char *name,
+			      struct thandle *th,
+			      struct lustre_capa *capa);
+
+	/**
+	 * Return a list of the extended attributes.
+	 *
+	 * Fills the passed buffer with a list of the extended attributes
+	 * found in the object. The names are separated with '\0'.
+	 * The object must exist.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[out] buf	buffer to put the list in
+	 * \param[in] capa	unused
+	 *
+	 * \retval positive	bytes used/required in the buffer
+	 * \retval negative	negated errno on error
          */
-        int   (*do_declare_xattr_set)(const struct lu_env *env,
-                                      struct dt_object *dt,
-                                      const struct lu_buf *buf,
-                                      const char *name, int fl,
-                                      struct thandle *handle);
-        int   (*do_xattr_set)(const struct lu_env *env,
-                              struct dt_object *dt, const struct lu_buf *buf,
-                              const char *name, int fl, struct thandle *handle,
-                              struct lustre_capa *capa);
-        /**
-         * Delete existing extended attribute.
-         *
-         * precondition: dt_object_exists(dt);
-         */
-        int   (*do_declare_xattr_del)(const struct lu_env *env,
-                                      struct dt_object *dt,
-                                      const char *name, struct thandle *handle);
-        int   (*do_xattr_del)(const struct lu_env *env,
-                              struct dt_object *dt,
-                              const char *name, struct thandle *handle,
-                              struct lustre_capa *capa);
-        /**
-         * Place list of existing extended attributes into \a buf (which has
-         * length len).
-         *
-         * precondition: dt_object_exists(dt);
-         */
-        int   (*do_xattr_list)(const struct lu_env *env,
-                               struct dt_object *dt, struct lu_buf *buf,
-                               struct lustre_capa *capa);
-        /**
-         * Init allocation hint using parent object and child mode.
-         * (1) The \a parent might be NULL if this is a partial creation for
-         *     remote object.
-         * (2) The type of child is in \a child_mode.
-         * (3) The result hint is stored in \a ah;
-         */
+	int   (*do_xattr_list)(const struct lu_env *env,
+			       struct dt_object *dt,
+			       struct lu_buf *buf,
+			       struct lustre_capa *capa);
+
+	/**
+	 * Prepare allocation hint for a new object.
+	 *
+	 * This method is used by the caller to inform OSD of the parent-child
+	 * relationship between two objects and enable efficient object
+	 * allocation. Filled allocation hint will be passed to ->do_create()
+	 * later.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[out] ah	allocation hint
+	 * \param[in] parent	parent object (can be NULL)
+	 * \param[in] child	child object
+	 * \param[in] _mode	type of the child object
+	 */
 	void  (*do_ah_init)(const struct lu_env *env,
 			    struct dt_allocation_hint *ah,
 			    struct dt_object *parent,
 			    struct dt_object *child,
-			    umode_t child_mode);
-        /**
-         * Create new object on this device.
-         *
-         * precondition: !dt_object_exists(dt);
-         * postcondition: ergo(result == 0, dt_object_exists(dt));
-         */
+			    umode_t mode);
+
+	/**
+	 * Declare intention to create a new object.
+	 *
+	 * Notify the underlying filesystem that the object may be created
+	 * in this transaction. This enables the layer below to prepare
+	 * resources (e.g. journal credits in ext4).  This method should be
+	 * called between creating the transaction and starting it.
+	 *
+	 * If the layer implementing this method is responsible for quota,
+	 * then the method should reserve an object for the given credentials
+	 * and return an error if quota is over. If object creation later
+	 * fails for some reason, then the reservation should be released
+	 * properly (usually in ->dt_trans_stop()).
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] attr	attributes of the new object
+	 * \param[in] hint	allocation hint
+	 * \param[in] dof	object format
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
         int   (*do_declare_create)(const struct lu_env *env,
                                    struct dt_object *dt,
                                    struct lu_attr *attr,
                                    struct dt_allocation_hint *hint,
                                    struct dt_object_format *dof,
                                    struct thandle *th);
-        int   (*do_create)(const struct lu_env *env, struct dt_object *dt,
+
+	/**
+	 * Create new object.
+	 *
+	 * The method creates the object passed with the specified attributes
+	 * and object format. Object allocation procedure can use information
+	 * stored in the allocation hint. Different object formats are supported
+	 * (see enum dt_format_type and struct dt_object_format) depending on
+	 * the device. If creation succeeds, then LOHA_EXISTS flag must be set
+	 * in the LU-object header attributes.
+	 *
+	 * If the layer implementing this method is responsible for quota,
+	 * then the method should maintain object accounting for the given
+	 * credentials.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] attr	attributes of the new object
+	 * \param[in] hint	allocation hint
+	 * \param[in] dof	object format
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int   (*do_create)(const struct lu_env *env,
+			   struct dt_object *dt,
                            struct lu_attr *attr,
                            struct dt_allocation_hint *hint,
                            struct dt_object_format *dof,
                            struct thandle *th);
 
-        /**
-          Destroy object on this device
-         * precondition: !dt_object_exists(dt);
-         * postcondition: ergo(result == 0, dt_object_exists(dt));
-         */
+	/**
+	 * Declare intention to destroy an object.
+	 *
+	 * Notify the underlying filesystem that the object may be destroyed
+	 * in this transaction. This enables the layer below to prepare
+	 * resources (e.g. journal credits in ext4).  This method should be
+	 * called between creating the transaction and starting it. The object
+	 * need not exist.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
         int   (*do_declare_destroy)(const struct lu_env *env,
                                     struct dt_object *dt,
                                     struct thandle *th);
-        int   (*do_destroy)(const struct lu_env *env, struct dt_object *dt,
-                            struct thandle *th);
 
-        /**
+	/**
+	 * Destroy an object.
+	 *
+	 * This method destroys the object and all the resources associated
+	 * with the object (data, key/value pairs, extended attributes, etc).
+	 * The object must exist. If destroy is successful, then flag
+	 * LU_OBJECT_HEARD_BANSHEE should be set to forbid access to this
+	 * instance of in-core object. Any subsequent access to the same FID
+	 * should get another instance with no LOHA_EXIST flag set.
+	 *
+	 * If the layer implementing this method is responsible for quota,
+	 * then the method should maintain object accounting for the given
+	 * credentials.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int   (*do_destroy)(const struct lu_env *env,
+			    struct dt_object *dt,
+			    struct thandle *th);
+
+	/**
+	 * Try object as an index.
+	 *
          * Announce that this object is going to be used as an index. This
-         * operation check that object supports indexing operations and
+	 * operation checks that object supports indexing operations and
          * installs appropriate dt_index_operations vector on success.
-         *
          * Also probes for features. Operation is successful if all required
-         * features are supported.
-         */
+	 * features are supported. It's not possible to access the object
+	 * with index methods before ->do_index_try() returns success.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] feat	index features
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
         int   (*do_index_try)(const struct lu_env *env,
                               struct dt_object *dt,
                               const struct dt_index_features *feat);
-        /**
-         * Add nlink of the object
-         * precondition: dt_object_exists(dt);
-         */
-        int   (*do_declare_ref_add)(const struct lu_env *env,
-                                    struct dt_object *dt, struct thandle *th);
+
+	/**
+	 * Declare intention to increment nlink count.
+	 *
+	 * Notify the underlying filesystem that the nlink regular attribute
+	 * be changed in this transaction. This enables the layer below to
+	 * prepare resources (e.g. journal credits in ext4).  This method
+	 * should be called between creating the transaction and starting it.
+	 * The object need not exist.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int   (*do_declare_ref_add)(const struct lu_env *env,
+				    struct dt_object *dt,
+				    struct thandle *th);
+
+	/**
+	 * Increment nlink.
+	 *
+	 * Increment nlink (from the regular attributes set) in the given
+	 * transaction. Note the absolute limit for nlink should be learnt
+	 * from struct dt_device_param::ddp_max_nlink. The object must exist.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
         int   (*do_ref_add)(const struct lu_env *env,
                             struct dt_object *dt, struct thandle *th);
-        /**
-         * Del nlink of the object
-         * precondition: dt_object_exists(dt);
-         */
-        int   (*do_declare_ref_del)(const struct lu_env *env,
-                                    struct dt_object *dt, struct thandle *th);
-        int   (*do_ref_del)(const struct lu_env *env,
-                            struct dt_object *dt, struct thandle *th);
 
+	/**
+	 * Declare intention to decrement nlink count.
+	 *
+	 * Notify the underlying filesystem that the nlink regular attribute
+	 * be changed in this transaction. This enables the layer below to
+	 * prepare resources (e.g. journal credits in ext4).  This method
+	 * should be called between creating the transaction and starting it.
+	 * The object need not exist.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int   (*do_declare_ref_del)(const struct lu_env *env,
+				    struct dt_object *dt,
+				    struct thandle *th);
+
+	/**
+	 * Decrement nlink.
+	 *
+	 * Decrement nlink (from the regular attributes set) in the given
+	 * transaction. The object must exist.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int   (*do_ref_del)(const struct lu_env *env,
+			    struct dt_object *dt,
+			    struct thandle *th);
+
+	/**
+	 * Not used, subject to removal.
+	 */
 	struct obd_capa *(*do_capa_get)(const struct lu_env *env,
 					struct dt_object *dt,
 					struct lustre_capa *old,
 					__u64 opc);
-	int (*do_object_sync)(const struct lu_env *env, struct dt_object *obj,
-			      __u64 start, __u64 end);
+
 	/**
-	 * Get object info of next level. Currently, only get inode from osd.
-	 * This is only used by quota b=16542
-	 * precondition: dt_object_exists(dt);
+	 * Sync obect.
+	 *
+	 * The method is called to sync specified range of the object to a
+	 * persistent storage. The control is returned once the operation is
+	 * complete. The difference from ->do_sync() is that the object can
+	 * be in-sync with the persistent storage (nothing to flush), then
+	 * the method returns quickly with no I/O overhead. So, this method
+	 * should be preferred over ->do_sync() where possible. Also note that
+	 * if the object isn't clean, then some disk filesystems will call
+	 * ->do_sync() to maintain overall consistency, in which case it's
+	 * still very expensive.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] start	start of the range to sync
+	 * \param[in] end	end of the range to sync
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
 	 */
-	int (*do_data_get)(const struct lu_env *env, struct dt_object *dt,
+	int (*do_object_sync)(const struct lu_env *env,
+			      struct dt_object *obj,
+			      __u64 start,
+			      __u64 end);
+
+	/**
+	 * Not used, subject to removal.
+	 */
+	int (*do_data_get)(const struct lu_env *env,
+			   struct dt_object *dt,
 			   void **data);
 
 	/**
 	 * Lock object.
+	 *
+	 * Lock object(s) using Distributed Lock Manager (LDLM).
+	 *
+	 * Get LDLM locks for the object. Currently used to lock "remote"
+	 * objects in DNE configuration - a service running on MDTx needs
+	 * to lock an object on MDTy.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[out] lh	lock handle, sometimes used, sometimes not
+	 * \param[in] einfo	ldlm callbacks, locking type and mode
+	 * \param[out] einfo	private data to be passed to unlock later
+	 * \param[in] policy	inodebits data
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
 	 */
 	int (*do_object_lock)(const struct lu_env *env, struct dt_object *dt,
 			      struct lustre_handle *lh,
 			      struct ldlm_enqueue_info *einfo,
 			      union ldlm_policy_data *policy);
 
-	int (*do_object_unlock)(const struct lu_env *env, struct dt_object *dt,
+	/**
+	 * Unlock object.
+	 *
+	 * Release LDLM lock(s) granted with ->do_object_lock().
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] einfo	lock handles, from ->do_object_lock()
+	 * \param[in] policy	inodebits data
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int (*do_object_unlock)(const struct lu_env *env,
+				struct dt_object *dt,
 				struct ldlm_enqueue_info *einfo,
 				union ldlm_policy_data *policy);
 };
 
 /**
- * Per-dt-object operations on "file body".
+ * Per-dt-object operations on "file body" - unstructure raw data.
  */
 struct dt_body_operations {
-        /**
-         * precondition: dt_object_exists(dt);
-         */
-        ssize_t (*dbo_read)(const struct lu_env *env, struct dt_object *dt,
-                            struct lu_buf *buf, loff_t *pos,
-                            struct lustre_capa *capa);
 	/**
-	 * precondition: dt_object_exists(dt);
+	 * Read data.
+	 *
+	 * Read unstructured data from an existing regular object.
+	 * Only data before attr.la_size is returned.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[out] buf	buffer (including size) to copy data in
+	 * \param[in] pos	position in the object to start
+	 * \param[out] pos	original value of \a pos + bytes returned
+	 * \param[in] capa	unused
+	 *
+	 * \retval positive	bytes read on success
+	 * \retval negative	negated errno on error
+	 */
+	ssize_t (*dbo_read)(const struct lu_env *env,
+			    struct dt_object *dt,
+			    struct lu_buf *buf,
+			    loff_t *pos,
+			    struct lustre_capa *capa);
+
+	/**
+	 * Declare intention to write data to object.
+	 *
+	 * Notify the underlying filesystem that data may be written in
+	 * this transaction. This enables the layer below to prepare resources
+	 * (e.g. journal credits in ext4).  This method should be called
+	 * between creating the transaction and starting it. The object need
+	 * not exist. If the layer implementing this method is responsible for
+	 * quota, then the method should reserve space for the given credentials
+	 * and return an error if quota is over. If the write later fails
+	 * for some reason, then the reserve should be released properly
+	 * (usually in ->dt_trans_stop()).
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] buf	buffer (including size) to copy data from
+	 * \param[in] pos	position in the object to start
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
 	 */
 	ssize_t (*dbo_declare_write)(const struct lu_env *env,
 				     struct dt_object *dt,
-				     const struct lu_buf *buf, loff_t pos,
-				     struct thandle *handle);
-	ssize_t (*dbo_write)(const struct lu_env *env, struct dt_object *dt,
-			     const struct lu_buf *buf, loff_t *pos,
-			     struct thandle *handle, struct lustre_capa *capa,
-			     int ignore_quota);
-        /*
-         * methods for zero-copy IO
-         */
+				     const struct lu_buf *buf,
+				     loff_t pos,
+				     struct thandle *th);
 
-        /*
-         * precondition: dt_object_exists(dt);
-         * returns:
-         * < 0 - error code
-         * = 0 - illegal
-         * > 0 - number of local buffers prepared
-         */
-        int (*dbo_bufs_get)(const struct lu_env *env, struct dt_object *dt,
-                            loff_t pos, ssize_t len, struct niobuf_local *lb,
-                            int rw, struct lustre_capa *capa);
-        /*
-         * precondition: dt_object_exists(dt);
-         */
-        int (*dbo_bufs_put)(const struct lu_env *env, struct dt_object *dt,
-                            struct niobuf_local *lb, int nr);
-        /*
-         * precondition: dt_object_exists(dt);
-         */
-        int (*dbo_write_prep)(const struct lu_env *env, struct dt_object *dt,
-                              struct niobuf_local *lb, int nr);
-        /*
-         * precondition: dt_object_exists(dt);
-         */
-        int (*dbo_declare_write_commit)(const struct lu_env *env,
-                                        struct dt_object *dt,
-                                        struct niobuf_local *,
-                                        int, struct thandle *);
-        /*
-         * precondition: dt_object_exists(dt);
-         */
-        int (*dbo_write_commit)(const struct lu_env *env, struct dt_object *dt,
-                                struct niobuf_local *, int, struct thandle *);
-        /*
-         * precondition: dt_object_exists(dt);
-         */
-        int (*dbo_read_prep)(const struct lu_env *env, struct dt_object *dt,
-                             struct niobuf_local *lnb, int nr);
-        int (*dbo_fiemap_get)(const struct lu_env *env, struct dt_object *dt,
-                              struct ll_user_fiemap *fm);
-        /**
-         * Punch object's content
-         * precondition: regular object, not index
-         */
-        int   (*dbo_declare_punch)(const struct lu_env *, struct dt_object *,
-                                  __u64, __u64, struct thandle *th);
-        int   (*dbo_punch)(const struct lu_env *env, struct dt_object *dt,
-                          __u64 start, __u64 end, struct thandle *th,
-                          struct lustre_capa *capa);
+	/**
+	 * Write unstructured data to regular existing object.
+	 *
+	 * The method allocates space and puts data in. Also, the method should
+	 * maintain attr.la_size properly. Partial writes are possible.
+	 *
+	 * If the layer implementing this method is responsible for quota,
+	 * then the method should maintain space accounting for the given
+	 * credentials.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] buf	buffer (including size) to copy data from
+	 * \param[in] pos	position in the object to start
+	 * \param[out] pos	\a pos + bytes written
+	 * \param[in] th	transaction handle
+	 * \param[in] capa	unused
+	 * \param[in] ignore	unused (was used to request quota ignorance)
+	 *
+	 * \retval positive	bytes written on success
+	 * \retval negative	negated errno on error
+	 */
+	ssize_t (*dbo_write)(const struct lu_env *env,
+			     struct dt_object *dt,
+			     const struct lu_buf *buf,
+			     loff_t *pos,
+			     struct thandle *th,
+			     struct lustre_capa *capa,
+			     int ignore);
+
+	/**
+	 * Return buffers for data.
+	 *
+	 * This method is used to access data with no copying. It's so-called
+	 * zero-copy I/O. The method returns the descriptors for the internal
+	 * buffers where data are managed by the disk filesystem. For example,
+	 * pagecache in case of ext4 or ARC with ZFS. Then other components
+	 * (e.g. networking) can transfer data from or to the buffers with no
+	 * additional copying.
+	 *
+	 * The method should fill an array of struct niobuf_local, where
+	 * each element describes a full or partial page for data at specific
+	 * offset. The caller should use page/lnb_page_offset/len to find data
+	 * at object's offset lnb_file_offset.
+	 *
+	 * The memory referenced by the descriptors can't change its purpose
+	 * until the complimentary ->dbo_bufs_put() is called. The caller should
+	 * specify if the buffers are used to read or modify data so that OSD
+	 * can decide how to initialize the buffers: bring all the data for
+	 * reads or just bring partial buffers for write. Note: the method does
+	 * not check whether output array is large enough.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] pos	position in the object to start
+	 * \param[in] len	size of region in bytes
+	 * \param[out] lb	array of descriptors to fill
+	 * \param[in] rw	0 if used to read, 1 if used for write
+	 * \param[in] capa	unused
+	 *
+	 * \retval positive	number of descriptors on success
+	 * \retval negative	negated errno on error
+	 */
+	int (*dbo_bufs_get)(const struct lu_env *env,
+			    struct dt_object *dt,
+			    loff_t pos,
+			    ssize_t len,
+			    struct niobuf_local *lb,
+			    int rw,
+			    struct lustre_capa *capa);
+
+	/**
+	 * Release reference granted by ->dbo_bufs_get().
+	 *
+	 * Release the reference granted by the previous ->dbo_bufs_get().
+	 * Note the references are counted.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[out] lb	array of descriptors to fill
+	 * \param[in] nr	size of the array
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int (*dbo_bufs_put)(const struct lu_env *env,
+			    struct dt_object *dt,
+			    struct niobuf_local *lb,
+			    int nr);
+
+	/**
+	 * Prepare buffers for reading.
+	 *
+	 * The method is called on the given buffers to fill them with data
+	 * if that wasn't done in ->dbo_bufs_get(). The idea is that the
+	 * caller should be able to get few buffers for discontiguous regions
+	 * using few calls to ->dbo_bufs_get() and then request them all for
+	 * the preparation with a single call, so that OSD can fire many I/Os
+	 * to run concurrently. It's up to the specific OSD whether to implement
+	 * this logic in ->dbo_read_prep() or just use ->dbo_bufs_get() to
+	 * prepare data for every requested region individually.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] lnb	array of buffer descriptors
+	 * \param[in] nr	size of the array
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int (*dbo_read_prep)(const struct lu_env *env,
+			     struct dt_object *dt,
+			     struct niobuf_local *lnb,
+			     int nr);
+
+	/**
+	 * Prepare buffers for write.
+	 *
+	 * This method is called on the given buffers to ensure the partial
+	 * buffers contain correct data. The underlying idea is the same as
+	 * in ->db_read_prep().
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] lb	array of buffer descriptors
+	 * \param[in] nr	size of the array
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int (*dbo_write_prep)(const struct lu_env *env,
+			      struct dt_object *dt,
+			      struct niobuf_local *lb,
+			      int nr);
+
+	/**
+	 * Declare intention to write data stored in the buffers.
+	 *
+	 * Notify the underlying filesystem that data may be written in
+	 * this transaction. This enables the layer below to prepare resources
+	 * (e.g. journal credits in ext4).  This method should be called
+	 * between creating the transaction and starting it.
+	 *
+	 * If the layer implementing this method is responsible for quota,
+	 * then the method should be reserving a space for the given
+	 * credentials and return an error if quota is exceeded. If the write
+	 * later fails for some reason, then the reserve should be released
+	 * properly (usually in ->dt_trans_stop()).
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] lb	array of descriptors
+	 * \param[in] nr	size of the array
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int (*dbo_declare_write_commit)(const struct lu_env *env,
+					struct dt_object *dt,
+					struct niobuf_local *lb,
+					int nr,
+					struct thandle *th);
+
+	/**
+	 * Write to existing object.
+	 *
+	 * This method is used to write data to a persistent storage using
+	 * the buffers returned by ->dbo_bufs_get(). The caller puts new
+	 * data into the buffers using own mechanisms (e.g. direct transfer
+	 * from a NIC). The method should maintain attr.la_size. Also,
+	 * attr.la_blocks should be maintained but this can be done in lazy
+	 * manner, when actual allocation happens.
+	 *
+	 * If the layer implementing this method is responsible for quota,
+	 * then the method should maintain space accounting for the given
+	 * credentials.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] lb	array of descriptors for the buffers
+	 * \param[in] nr	size of the array
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int (*dbo_write_commit)(const struct lu_env *env,
+				struct dt_object *dt,
+				struct niobuf_local *lb,
+				int nr,
+				struct thandle *th);
+
+	/**
+	 * Return logical to physical block mapping for a given extent
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] fm	describe the region to map and the output buffer
+	 *			see the details in include/linux/fiemap.h
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int (*dbo_fiemap_get)(const struct lu_env *env,
+			      struct dt_object *dt,
+			      struct ll_user_fiemap *fm);
+
+	/**
+	 * Declare intention to deallocate space from an object.
+	 *
+	 * Notify the underlying filesystem that space may be deallocated in
+	 * this transactions. This enables the layer below to prepare resources
+	 * (e.g. journal credits in ext4).  This method should be called between
+	 * creating the transaction and starting it. The object need not exist.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] start	the start of the region to deallocate
+	 * \param[in] end	the end of the region to deallocate
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int   (*dbo_declare_punch)(const struct lu_env *env,
+				   struct dt_object *dt,
+				   __u64 start,
+				   __u64 end,
+				   struct thandle *th);
+
+	/**
+	 * Deallocate specified region in an object.
+	 *
+	 * This method is used to deallocate (release) space possibly consumed
+	 * by the given region of the object. If the layer implementing this
+	 * method is responsible for quota, then the method should maintain
+	 * space accounting for the given credentials.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] start	the start of the region to deallocate
+	 * \param[in] end	the end of the region to deallocate
+	 * \param[in] th	transaction handle
+	 * \param[in] capa	unused
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int   (*dbo_punch)(const struct lu_env *env,
+			   struct dt_object *dt,
+			   __u64 start,
+			   __u64 end,
+			   struct thandle *th,
+			   struct lustre_capa *capa);
 };
 
 /**
@@ -569,76 +1379,343 @@ struct dt_key;
 struct dt_it;
 
 /**
- * Per-dt-object operations on object as index.
+ * Per-dt-object operations on object as index. Index is a set of key/value
+ * pairs abstracted from an on-disk representation. An index supports the
+ * number of operations including lookup by key, insert and delete. Also,
+ * an index can be iterated to find the pairs one by one, from a beginning
+ * or specified point.
  */
 struct dt_index_operations {
-        /**
-         * precondition: dt_object_exists(dt);
-         */
-        int (*dio_lookup)(const struct lu_env *env, struct dt_object *dt,
-                          struct dt_rec *rec, const struct dt_key *key,
-                          struct lustre_capa *capa);
-        /**
-         * precondition: dt_object_exists(dt);
-         */
+	/**
+	 * Lookup in an index by key.
+	 *
+	 * The method returns a value for the given key. Key/value format
+	 * and size should have been negotiated with ->do_index_try() before.
+	 * Thus it's the caller's responsibility to provide the method with
+	 * proper key and big enough buffer. No external locking is required,
+	 * all the internal consistency should be implemented by the method
+	 * or lower layers. The object should should have been created with
+	 * type DFT_INDEX or DFT_DIR.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[out] rec	buffer where value will be stored
+	 * \param[in] key	key
+	 * \param[in] capa	unused
+	 *
+	 * \retval 0		on success
+	 * \retval -ENOENT	if key isn't found
+	 * \retval negative	negated errno on error
+	 */
+	int (*dio_lookup)(const struct lu_env *env,
+			  struct dt_object *dt,
+			  struct dt_rec *rec,
+			  const struct dt_key *key,
+			  struct lustre_capa *capa);
+
+	/**
+	 * Declare intention to insert a key/value into an index.
+	 *
+	 * Notify the underlying filesystem that new key/value may be inserted
+	 * in this transaction. This enables the layer below to prepare
+	 * resources (e.g. journal credits in ext4). This method should be
+	 * called between creating the transaction and starting it. key/value
+	 * format and size is subject to ->do_index_try().
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] rec	buffer storing value
+	 * \param[in] key	key
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
         int (*dio_declare_insert)(const struct lu_env *env,
-                                  struct dt_object *dt,
-                                  const struct dt_rec *rec,
-                                  const struct dt_key *key,
-                                  struct thandle *handle);
-        int (*dio_insert)(const struct lu_env *env, struct dt_object *dt,
-                          const struct dt_rec *rec, const struct dt_key *key,
-                          struct thandle *handle, struct lustre_capa *capa,
-                          int ignore_quota);
-        /**
-         * precondition: dt_object_exists(dt);
-         */
+				  struct dt_object *dt,
+				  const struct dt_rec *rec,
+				  const struct dt_key *key,
+				  struct thandle *th);
+
+	/**
+	 * Insert a new key/value pair into an index.
+	 *
+	 * The method inserts specified key/value pair into the given index
+	 * object. The internal consistency is maintained by the method or
+	 * the functionality below. The format and size of key/value should
+	 * have been negotiated before using ->do_index_try(), no additional
+	 * information can be specified to the method. The keys are unique
+	 * in a given index.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] rec	buffer storing value
+	 * \param[in] key	key
+	 * \param[in] th	transaction handle
+	 * \param[in] capa	unused
+	 * \param[in] ignore	unused (was used to request quota ignorance)
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int (*dio_insert)(const struct lu_env *env,
+			  struct dt_object *dt,
+			  const struct dt_rec *rec,
+			  const struct dt_key *key,
+			  struct thandle *th,
+			  struct lustre_capa *capa,
+			  int ignore);
+
+	/**
+	 * Declare intention to delete a key/value from an index.
+	 *
+	 * Notify the underlying filesystem that key/value may be deleted in
+	 * this transaction. This enables the layer below to prepare resources
+	 * (e.g. journal credits in ext4).  This method should be called
+	 * between creating the transaction and starting it. Key/value format
+	 * and size is subject to ->do_index_try(). The object need not exist.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] key	key
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
         int (*dio_declare_delete)(const struct lu_env *env,
-                                  struct dt_object *dt,
-                                  const struct dt_key *key,
-                                  struct thandle *handle);
-        int (*dio_delete)(const struct lu_env *env, struct dt_object *dt,
-                          const struct dt_key *key, struct thandle *handle,
-                          struct lustre_capa *capa);
+				  struct dt_object *dt,
+				  const struct dt_key *key,
+				  struct thandle *th);
+
+	/**
+	 * Delete key/value pair from an index.
+	 *
+	 * The method deletes specified key and corresponding value from the
+	 * given index object. The internal consistency is maintained by the
+	 * method or the functionality below. The format and size of the key
+	 * should have been negotiated before using ->do_index_try(), no
+	 * additional information can be specified to the method.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] key	key
+	 * \param[in] th	transaction handle
+	 * \param[in] capa	unused
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int (*dio_delete)(const struct lu_env *env,
+			  struct dt_object *dt,
+			  const struct dt_key *key,
+			  struct thandle *th,
+			  struct lustre_capa *capa);
+
         /**
-         * Iterator interface
+	 * Iterator interface.
+	 *
+	 * Methods to iterate over an existing index, list the keys stored and
+	 * associated values, get key/value size, etc.
          */
         struct dt_it_ops {
-                /**
-                 * Allocate and initialize new iterator.
-                 *
-                 * precondition: dt_object_exists(dt);
+		/**
+		 * Allocate and initialize new iterator.
+		 *
+		 * The iterator is a handler to be used in the subsequent
+		 * methods to access index's content. Note the position is
+		 * not defined at this point and should be initialized with
+		 * ->get() or ->load() method.
+		 *
+		 * \param[in] env	execution environment for this thread
+		 * \param[in] dt	object
+		 * \param[in] attr	ask the iterator to return part of
+					the records, see LUDA_* for details
+		 * \param[in] capa	unused
+		 *
+		 * \retval pointer	iterator pointer on success
+		 * \retval ERR_PTR(errno)	on error
                  */
                 struct dt_it *(*init)(const struct lu_env *env,
                                       struct dt_object *dt,
                                       __u32 attr,
                                       struct lustre_capa *capa);
+
+		/**
+		 * Release iterator.
+		 *
+		 * Release the specified iterator and all the resources
+		 * associated (e.g. the object, index cache, etc).
+		 *
+		 * \param[in] env	execution environment for this thread
+		 * \param[in] di	iterator to release
+		 */
                 void          (*fini)(const struct lu_env *env,
                                       struct dt_it *di);
+
+		/**
+		 * Move position of iterator.
+		 *
+		 * Move the position of the specified iterator to the specified
+		 * key.
+		 *
+		 * \param[in] env	execution environment for this thread
+		 * \param[in] di	iterator
+		 * \param[in] key	key to position to
+		 *
+		 * \retval 0		if exact key is found
+		 * \retval 1		if at the record with least key
+		 *			not larger than the key
+		 * \retval negative	negated errno on error
+		 */
                 int            (*get)(const struct lu_env *env,
                                       struct dt_it *di,
                                       const struct dt_key *key);
+
+		/**
+		 * Release position
+		 *
+		 * Complimentary method for dt_it_ops::get() above. Some
+		 * implementation can increase a reference on the iterator in
+		 * dt_it_ops::get(). So the caller should be able to release
+		 * with dt_it_ops::put().
+		 *
+		 * \param[in] env	execution environment for this thread
+		 * \param[in] di	iterator
+		 */
                 void           (*put)(const struct lu_env *env,
                                       struct dt_it *di);
+
+		/**
+		 * Move to next record.
+		 *
+		 * Moves the position of the iterator to a next record
+		 *
+		 * \param[in] env	execution environment for this thread
+		 * \param[in] di	iterator
+		 *
+		 * \retval 1		if no more records
+		 * \retval 0		on success, the next record is found
+		 * \retval negative	negated errno on error
+		 */
                 int           (*next)(const struct lu_env *env,
                                       struct dt_it *di);
+
+		/**
+		 * Return key.
+		 *
+		 * Returns a pointer to a buffer containing the key of the
+		 * record at the current position. The pointer is valid and
+		 * retains data until ->get(), ->load() and ->fini() methods
+		 * are called.
+		 *
+		 * \param[in] env	execution environment for this thread
+		 * \param[in] di	iterator
+		 *
+		 * \retval pointer to key	on success
+		 * \retval ERR_PTR(errno)	on error
+		 */
                 struct dt_key *(*key)(const struct lu_env *env,
                                       const struct dt_it *di);
+
+		/**
+		 * Return key size.
+		 *
+		 * Returns size of the key at the current position.
+		 *
+		 * \param[in] env	execution environment for this thread
+		 * \param[in] di	iterator
+		 *
+		 * \retval key's size	on success
+		 * \retval negative	negated errno on error
+		 */
                 int       (*key_size)(const struct lu_env *env,
                                       const struct dt_it *di);
+
+		/**
+		 * Return record.
+		 *
+		 * Stores the value of the record at the current position. The
+		 * buffer must be big enough (as negotiated with
+		 * ->do_index_try() or ->rec_size()). The caller can specify
+		 * she is interested only in part of the record, using attr
+		 * argument (see LUDA_* definitions for the details).
+		 *
+		 * \param[in] env	execution environment for this thread
+		 * \param[in] di	iterator
+		 * \param[out] rec	buffer to store value in
+		 * \param[in] attr	specify part of the value to copy
+		 *
+		 * \retval 0		on success
+		 * \retval negative	negated errno on error
+		 */
                 int            (*rec)(const struct lu_env *env,
                                       const struct dt_it *di,
                                       struct dt_rec *rec,
                                       __u32 attr);
+
+		/**
+		 * Return record size.
+		 *
+		 * Returns size of the record at the current position. The
+		 * \a attr can be used to specify only the parts of the record
+		 * needed to be returned. (see LUDA_* definitions for the
+		 * details).
+		 *
+		 * \param[in] env	execution environment for this thread
+		 * \param[in] di	iterator
+		 * \param[in] attr	part of the record to return
+		 *
+		 * \retval record's size	on success
+		 * \retval negative		negated errno on error
+		 */
 		int	   (*rec_size)(const struct lu_env *env,
 				       const struct dt_it *di,
 				      __u32 attr);
+
+		/**
+		 * Return a cookie (hash).
+		 *
+		 * Returns the cookie (usually hash) of the key at the current
+		 * position. This allows the caller to resume iteration at this
+		 * position later. The exact value is specific to implementation
+		 * and should not be interpreted by the caller.
+		 *
+		 * \param[in] env	execution environment for this thread
+		 * \param[in] di	iterator
+		 *
+		 * \retval cookie/hash of the key
+		 */
                 __u64        (*store)(const struct lu_env *env,
                                       const struct dt_it *di);
+
+		/**
+		 * Initialize position using cookie/hash.
+		 *
+		 * Initializes the current position of the iterator to one
+		 * described by the cookie/hash as returned by ->store()
+		 * previously.
+		 *
+		 * \param[in] env	execution environment for this thread
+		 * \param[in] di	iterator
+		 * \param[in] hash	cookie/hash value
+		 *
+		 * \retval positive	if current position points to
+		 *			record with least cookie not larger
+		 *			than cookie
+		 * \retval 0		if current position matches cookie
+		 * \retval negative	negated errno on error
+		 */
                 int           (*load)(const struct lu_env *env,
-                                      const struct dt_it *di, __u64 hash);
+				      const struct dt_it *di,
+				      __u64 hash);
+
+		/**
+		 * Not used
+		 */
                 int        (*key_rec)(const struct lu_env *env,
-                                      const struct dt_it *di, void* key_rec);
+				      const struct dt_it *di,
+				      void *key_rec);
         } dio_it;
 };
 
