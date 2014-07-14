@@ -712,10 +712,12 @@ loff_t find_tree_dqentry(const struct lu_env *env,
                          struct osd_it_quota *it);
 /* osd_quota.c */
 int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
-		    struct lquota_id_info *qi, bool allocated, int *flags);
+		    struct lquota_id_info *qi, struct osd_object *obj,
+		    bool enforce, int *flags);
 int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 			  long long space, struct osd_thandle *oh,
-			  bool is_blk, bool allocated, int *flags, bool force);
+			  struct osd_object *obj, bool is_blk, int *flags,
+			  bool force);
 const struct dt_rec *osd_quota_pack(struct osd_object *obj,
 				    const struct dt_rec *rec,
 				    union lquota_rec *quota_rec);
