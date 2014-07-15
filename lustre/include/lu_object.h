@@ -626,7 +626,10 @@ struct lu_site {
          **/
         cfs_list_t                ls_ld_linkage;
 	spinlock_t		ls_ld_lock;
-
+	/**
+	 * Lock to serialize site purge.
+	 */
+	struct mutex		ls_purge_mutex;
 	/**
 	 * lu_site stats
 	 */

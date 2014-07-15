@@ -367,6 +367,11 @@ int lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr)
         start = s->ls_purge_start;
         bnr = (nr == ~0) ? -1 : nr / CFS_HASH_NBKT(s->ls_obj_hash) + 1;
  again:
+	/*
+	 * It doesn't make any sense to make purge threads parallel, that can
+	 * only bring troubles to us. See LU-5331.
+	 */
+	mutex_lock(&s->ls_purge_mutex);
         did_sth = 0;
         cfs_hash_for_each_bucket(s->ls_obj_hash, &bd, i) {
                 if (i < start)
@@ -411,6 +416,7 @@ int lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr)
                 if (nr == 0)
                         break;
         }
+	mutex_unlock(&s->ls_purge_mutex);
 
         if (nr != 0 && did_sth && start != 0) {
                 start = 0; /* restart from the first bucket */
@@ -1095,6 +1101,7 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
 	ENTRY;
 
 	memset(s, 0, sizeof *s);
+	mutex_init(&s->ls_purge_mutex);
 	bits = lu_htable_order(top);
 	snprintf(name, 16, "lu_site_%s", top->ld_type->ldt_name);
 	for (bits = min(max(LU_SITE_BITS_MIN, bits), LU_SITE_BITS_MAX);
