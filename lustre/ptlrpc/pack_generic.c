@@ -2150,19 +2150,12 @@ EXPORT_SYMBOL(lustre_swab_lmv_mds_md);
 
 void lustre_swab_lmv_user_md(struct lmv_user_md *lum)
 {
-	int i;
-
 	__swab32s(&lum->lum_magic);
 	__swab32s(&lum->lum_stripe_count);
 	__swab32s(&lum->lum_stripe_offset);
 	__swab32s(&lum->lum_hash_type);
 	__swab32s(&lum->lum_type);
 	CLASSERT(offsetof(typeof(*lum), lum_padding1) != 0);
-	for (i = 0; i < lum->lum_stripe_count; i++) {
-		__swab32s(&lum->lum_objects[i].lum_mds);
-		lustre_swab_lu_fid(&lum->lum_objects[i].lum_fid);
-	}
-
 }
 EXPORT_SYMBOL(lustre_swab_lmv_user_md);
 
