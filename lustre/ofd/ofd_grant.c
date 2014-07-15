@@ -122,7 +122,7 @@ void ofd_grant_sanity_check(struct obd_device *obd, const char *func)
 	obd_size		 fo_tot_pending;
 	obd_size		 fo_tot_dirty;
 
-	if (cfs_list_empty(&obd->obd_exports))
+	if (list_empty(&obd->obd_exports))
 		return;
 
 	/* We don't want to do this for large machines that do lots of
@@ -134,7 +134,7 @@ void ofd_grant_sanity_check(struct obd_device *obd, const char *func)
 
 	spin_lock(&obd->obd_dev_lock);
 	spin_lock(&ofd->ofd_grant_lock);
-	cfs_list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
+	list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
 		struct filter_export_data	*fed;
 		int				 error = 0;
 

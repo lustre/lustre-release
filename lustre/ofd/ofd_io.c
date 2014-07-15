@@ -799,7 +799,7 @@ static int ofd_soft_sync_cb_add(struct thandle *th, struct obd_export *exp)
 
 	dcb = &ossc->ossc_cb;
 	dcb->dcb_func = ofd_cb_soft_sync;
-	CFS_INIT_LIST_HEAD(&dcb->dcb_linkage);
+	INIT_LIST_HEAD(&dcb->dcb_linkage);
 	strlcpy(dcb->dcb_name, "ofd_cb_soft_sync", sizeof(dcb->dcb_name));
 
 	rc = dt_trans_cb_add(th, dcb);

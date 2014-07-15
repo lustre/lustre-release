@@ -761,13 +761,13 @@ int ofd_fiemap_get(const struct lu_env *env, struct ofd_device *ofd,
 }
 
 struct locked_region {
-	cfs_list_t		list;
+	struct list_head	list;
 	struct lustre_handle	lh;
 };
 
 static int lock_region(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 		       unsigned long long begin, unsigned long long end,
-		       cfs_list_t *locked)
+		       struct list_head *locked)
 {
 	struct locked_region	*region = NULL;
 	__u64			 flags = 0;
@@ -785,7 +785,7 @@ static int lock_region(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 
 	CDEBUG(D_OTHER, "ost lock [%llu,%llu], lh=%p\n", begin, end,
 	       &region->lh);
-	cfs_list_add(&region->list, locked);
+	list_add(&region->list, locked);
 
 	return 0;
 }
@@ -793,7 +793,7 @@ static int lock_region(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 static int lock_zero_regions(struct ldlm_namespace *ns,
 			     struct ldlm_res_id *res_id,
 			     struct ll_user_fiemap *fiemap,
-			     cfs_list_t *locked)
+			     struct list_head *locked)
 {
 	__u64 begin = fiemap->fm_start;
 	unsigned int i;
@@ -826,14 +826,15 @@ static int lock_zero_regions(struct ldlm_namespace *ns,
 	RETURN(rc);
 }
 
-static void unlock_zero_regions(struct ldlm_namespace *ns, cfs_list_t *locked)
+static void
+unlock_zero_regions(struct ldlm_namespace *ns, struct list_head *locked)
 {
 	struct locked_region *entry, *temp;
 
-	cfs_list_for_each_entry_safe(entry, temp, locked, list) {
+	list_for_each_entry_safe(entry, temp, locked, list) {
 		CDEBUG(D_OTHER, "ost unlock lh=%p\n", &entry->lh);
 		tgt_extent_unlock(&entry->lh, LCK_PR);
-		cfs_list_del(&entry->list);
+		list_del(&entry->list);
 		OBD_FREE_PTR(entry);
 	}
 }
@@ -911,13 +912,14 @@ int ofd_get_info_hdl(struct tgt_session_info *tsi)
 		 * flushed back from client, then call fiemap again. */
 		if (fm_key->oa.o_valid & OBD_MD_FLFLAGS &&
 		    fm_key->oa.o_flags & OBD_FL_SRVLOCK) {
-			cfs_list_t locked = CFS_LIST_HEAD_INIT(locked);
+			struct list_head locked;
 
+			INIT_LIST_HEAD(&locked);
 			ost_fid_build_resid(fid, &fti->fti_resid);
 			rc = lock_zero_regions(ofd->ofd_namespace,
 					       &fti->fti_resid, fiemap,
 					       &locked);
-			if (rc == 0 && !cfs_list_empty(&locked)) {
+			if (rc == 0 && !list_empty(&locked)) {
 				rc = ofd_fiemap_get(tsi->tsi_env, ofd, fid,
 						    fiemap);
 				unlock_zero_regions(ofd->ofd_namespace,
@@ -2147,7 +2149,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	init_rwsem(&m->ofd_lastid_rwsem);
 
 	obd->u.filter.fo_fl_oss_capa = 0;
-	CFS_INIT_LIST_HEAD(&obd->u.filter.fo_capa_keys);
+	INIT_LIST_HEAD(&obd->u.filter.fo_capa_keys);
 	obd->u.filter.fo_capa_hash = init_capa_hash();
 	if (obd->u.filter.fo_capa_hash == NULL)
 		RETURN(-ENOMEM);

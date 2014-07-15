@@ -61,7 +61,7 @@ static enum interval_iter ofd_intent_cb(struct interval_node *n, void *args)
 	if (interval_high(n) <= size)
 		return INTERVAL_ITER_STOP;
 
-	cfs_list_for_each_entry(lck, &node->li_group, l_sl_policy) {
+	list_for_each_entry(lck, &node->li_group, l_sl_policy) {
 		/* Don't send glimpse ASTs to liblustre clients.
 		 * They aren't listening for them, and they do
 		 * entirely synchronous I/O anyways. */
@@ -107,9 +107,10 @@ int ofd_intent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
 		[DLM_REPLY_REC_OFF]   = sizeof(*reply_lvb)
 	};
 	struct ldlm_glimpse_work	 gl_work;
-	CFS_LIST_HEAD(gl_list);
+	struct list_head		 gl_list;
 	ENTRY;
 
+	INIT_LIST_HEAD(&gl_list);
 	lock->l_lvb_type = LVB_T_OST;
 	policy = ldlm_get_processing_policy(res);
 	LASSERT(policy != NULL);
@@ -242,7 +243,7 @@ int ofd_intent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
 	gl_work.gl_lock = LDLM_LOCK_GET(l);
 	/* The glimpse callback is sent to one single extent lock. As a result,
 	 * the gl_work list is just composed of one element */
-	cfs_list_add_tail(&gl_work.gl_list, &gl_list);
+	list_add_tail(&gl_work.gl_list, &gl_list);
 	/* There is actually no need for a glimpse descriptor when glimpsing
 	 * extent locks */
 	gl_work.gl_desc = NULL;
@@ -251,7 +252,7 @@ int ofd_intent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
 
 	rc = ldlm_glimpse_locks(res, &gl_list); /* this will update the LVB */
 
-	if (!cfs_list_empty(&gl_list))
+	if (!list_empty(&gl_list))
 		LDLM_LOCK_RELEASE(l);
 
 	lock_res(res);

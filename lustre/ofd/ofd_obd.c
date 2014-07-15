@@ -348,7 +348,7 @@ static int ofd_init_export(struct obd_export *exp)
 	int rc;
 
 	spin_lock_init(&exp->exp_filter_data.fed_lock);
-	CFS_INIT_LIST_HEAD(&exp->exp_filter_data.fed_mod_list);
+	INIT_LIST_HEAD(&exp->exp_filter_data.fed_mod_list);
 	atomic_set(&exp->exp_filter_data.fed_soft_sync_count, 0);
 	spin_lock(&exp->exp_lock);
 	exp->exp_connecting = 1;
@@ -403,7 +403,7 @@ static int ofd_destroy_export(struct obd_export *exp)
 	if (!(exp->exp_flags & OBD_OPT_FORCE))
 		ofd_grant_sanity_check(exp->exp_obd, __FUNCTION__);
 
-	LASSERT(cfs_list_empty(&exp->exp_filter_data.fed_mod_list));
+	LASSERT(list_empty(&exp->exp_filter_data.fed_mod_list));
 	return 0;
 }
 

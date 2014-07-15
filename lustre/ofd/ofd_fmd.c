@@ -53,7 +53,7 @@ static inline void ofd_fmd_put_nolock(struct obd_export *exp,
 		/* XXX when we have persistent reservations and the handle
 		 * is stored herein we need to drop it here. */
 		fed->fed_mod_count--;
-		cfs_list_del(&fmd->fmd_list);
+		list_del(&fmd->fmd_list);
 		OBD_SLAB_FREE(fmd, ll_fmd_cachep, sizeof(*fmd));
 	}
 }
@@ -82,7 +82,7 @@ static void ofd_fmd_expire_nolock(struct obd_export *exp,
 
 	cfs_time_t now = cfs_time_current();
 
-	cfs_list_for_each_entry_safe(fmd, tmp, &fed->fed_mod_list, fmd_list) {
+	list_for_each_entry_safe(fmd, tmp, &fed->fed_mod_list, fmd_list) {
 		if (fmd == keep)
 			break;
 
@@ -90,7 +90,7 @@ static void ofd_fmd_expire_nolock(struct obd_export *exp,
 		    fed->fed_mod_count < ofd->ofd_fmd_max_num)
 			break;
 
-		cfs_list_del_init(&fmd->fmd_list);
+		list_del_init(&fmd->fmd_list);
 		ofd_fmd_put_nolock(exp, fmd); /* list reference */
 	}
 }
@@ -117,11 +117,11 @@ static struct ofd_mod_data *ofd_fmd_find_nolock(struct obd_export *exp,
 
 	assert_spin_locked(&fed->fed_lock);
 
-	cfs_list_for_each_entry_reverse(fmd, &fed->fed_mod_list, fmd_list) {
+	list_for_each_entry_reverse(fmd, &fed->fed_mod_list, fmd_list) {
 		if (lu_fid_eq(&fmd->fmd_fid, fid)) {
 			found = fmd;
-			cfs_list_del(&fmd->fmd_list);
-			cfs_list_add_tail(&fmd->fmd_list, &fed->fed_mod_list);
+			list_del(&fmd->fmd_list);
+			list_add_tail(&fmd->fmd_list, &fed->fed_mod_list);
 			fmd->fmd_expire = cfs_time_add(now, ofd->ofd_fmd_max_age);
 			break;
 		}
@@ -167,8 +167,8 @@ struct ofd_mod_data *ofd_fmd_get(struct obd_export *exp, const struct lu_fid *fi
 	found = ofd_fmd_find_nolock(exp, fid);
 	if (fmd_new) {
 		if (found == NULL) {
-			cfs_list_add_tail(&fmd_new->fmd_list,
-					  &fed->fed_mod_list);
+			list_add_tail(&fmd_new->fmd_list,
+				      &fed->fed_mod_list);
 			fmd_new->fmd_fid = *fid;
 			fmd_new->fmd_refcount++;   /* list reference */
 			found = fmd_new;
@@ -200,7 +200,7 @@ void ofd_fmd_drop(struct obd_export *exp, const struct lu_fid *fid)
 	spin_lock(&fed->fed_lock);
 	found = ofd_fmd_find_nolock(exp, fid);
 	if (found) {
-		cfs_list_del_init(&found->fmd_list);
+		list_del_init(&found->fmd_list);
 		ofd_fmd_put_nolock(exp, found);
 	}
 	spin_unlock(&fed->fed_lock);
@@ -214,8 +214,8 @@ void ofd_fmd_cleanup(struct obd_export *exp)
 	struct ofd_mod_data		*fmd = NULL, *tmp;
 
 	spin_lock(&fed->fed_lock);
-	cfs_list_for_each_entry_safe(fmd, tmp, &fed->fed_mod_list, fmd_list) {
-		cfs_list_del_init(&fmd->fmd_list);
+	list_for_each_entry_safe(fmd, tmp, &fed->fed_mod_list, fmd_list) {
+		list_del_init(&fmd->fmd_list);
 		if (fmd->fmd_refcount > 1) {
 			CDEBUG(D_INFO, "fmd %p still referenced (refcount = %d)\n",
 			       fmd, fmd->fmd_refcount);
