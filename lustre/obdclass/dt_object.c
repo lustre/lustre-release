@@ -67,13 +67,13 @@ EXPORT_SYMBOL(dt_key);
  */
 void dt_txn_callback_add(struct dt_device *dev, struct dt_txn_callback *cb)
 {
-        cfs_list_add(&cb->dtc_linkage, &dev->dd_txn_callbacks);
+	list_add(&cb->dtc_linkage, &dev->dd_txn_callbacks);
 }
 EXPORT_SYMBOL(dt_txn_callback_add);
 
 void dt_txn_callback_del(struct dt_device *dev, struct dt_txn_callback *cb)
 {
-        cfs_list_del_init(&cb->dtc_linkage);
+	list_del_init(&cb->dtc_linkage);
 }
 EXPORT_SYMBOL(dt_txn_callback_del);
 
@@ -86,7 +86,7 @@ int dt_txn_hook_start(const struct lu_env *env,
         if (th->th_local)
                 return 0;
 
-        cfs_list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
+	list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
                 if (cb->dtc_txn_start == NULL ||
                     !(cb->dtc_tag & env->le_ctx.lc_tags))
                         continue;
@@ -107,7 +107,7 @@ int dt_txn_hook_stop(const struct lu_env *env, struct thandle *txn)
         if (txn->th_local)
                 return 0;
 
-        cfs_list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
+	list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
                 if (cb->dtc_txn_stop == NULL ||
                     !(cb->dtc_tag & env->le_ctx.lc_tags))
                         continue;
@@ -121,24 +121,23 @@ EXPORT_SYMBOL(dt_txn_hook_stop);
 
 void dt_txn_hook_commit(struct thandle *txn)
 {
-        struct dt_txn_callback *cb;
+	struct dt_txn_callback *cb;
 
-        if (txn->th_local)
-                return;
+	if (txn->th_local)
+		return;
 
-        cfs_list_for_each_entry(cb, &txn->th_dev->dd_txn_callbacks,
-                                dtc_linkage) {
-                if (cb->dtc_txn_commit)
-                        cb->dtc_txn_commit(txn, cb->dtc_cookie);
-        }
+	list_for_each_entry(cb, &txn->th_dev->dd_txn_callbacks,
+			    dtc_linkage) {
+		if (cb->dtc_txn_commit)
+			cb->dtc_txn_commit(txn, cb->dtc_cookie);
+	}
 }
 EXPORT_SYMBOL(dt_txn_hook_commit);
 
 int dt_device_init(struct dt_device *dev, struct lu_device_type *t)
 {
-
-        CFS_INIT_LIST_HEAD(&dev->dd_txn_callbacks);
-        return lu_device_init(&dev->dd_lu_dev, t);
+	INIT_LIST_HEAD(&dev->dd_txn_callbacks);
+	return lu_device_init(&dev->dd_lu_dev, t);
 }
 EXPORT_SYMBOL(dt_device_init);
 

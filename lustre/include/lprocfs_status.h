@@ -411,13 +411,13 @@ static inline void s2dhms(struct dhms *ts, time_t secs)
 typedef void (*cntr_init_callback)(struct lprocfs_stats *stats);
 
 struct obd_job_stats {
-	cfs_hash_t        *ojs_hash;
-	cfs_list_t         ojs_list;
-	rwlock_t       ojs_lock; /* protect the obj_list */
-	cntr_init_callback ojs_cntr_init_fn;
-	int                ojs_cntr_num;
-	int                ojs_cleanup_interval;
-	time_t		   ojs_last_cleanup;
+	cfs_hash_t	       *ojs_hash;
+	struct list_head	ojs_list;
+	rwlock_t		ojs_lock; /* protect the obj_list */
+	cntr_init_callback	ojs_cntr_init_fn;
+	int			ojs_cntr_num;
+	int			ojs_cleanup_interval;
+	time_t			ojs_last_cleanup;
 };
 
 #ifdef LPROCFS

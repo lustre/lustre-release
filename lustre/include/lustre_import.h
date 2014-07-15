@@ -71,7 +71,7 @@ struct adaptive_timeout {
 };
 
 struct ptlrpc_at_array {
-        cfs_list_t       *paa_reqs_array; /** array to hold requests */
+	struct list_head *paa_reqs_array; /** array to hold requests */
         __u32             paa_size;       /** the size of array */
         __u32             paa_count;      /** the total count of reqs */
         time_t            paa_deadline;   /** the earliest deadline of reqs */
@@ -132,9 +132,9 @@ enum obd_import_event {
  * Definition of import connection structure
  */
 struct obd_import_conn {
-        /** Item for linking connections together */
-        cfs_list_t                oic_item;
-        /** Pointer to actual PortalRPC connection */
+	/** Item for linking connections together */
+	struct list_head	  oic_item;
+	/** Pointer to actual PortalRPC connection */
         struct ptlrpc_connection *oic_conn;
         /** uuid of remote side */
         struct obd_uuid           oic_uuid;
@@ -165,19 +165,19 @@ struct obd_import {
 	struct ptlrpc_connection *imp_connection;
         /** PortalRPC client structure for this import */
         struct ptlrpc_client     *imp_client;
-        /** List element for linking into pinger chain */
-        cfs_list_t                imp_pinger_chain;
-        /** List element for linking into chain for destruction */
-        cfs_list_t                imp_zombie_chain;
+	/** List element for linking into pinger chain */
+	struct list_head	  imp_pinger_chain;
+	/** List element for linking into chain for destruction */
+	struct list_head	  imp_zombie_chain;
 
         /**
          * Lists of requests that are retained for replay, waiting for a reply,
          * or waiting for recovery to complete, respectively.
          * @{
          */
-        cfs_list_t                imp_replay_list;
-        cfs_list_t                imp_sending_list;
-        cfs_list_t                imp_delayed_list;
+	struct list_head	imp_replay_list;
+	struct list_head	imp_sending_list;
+	struct list_head	imp_delayed_list;
         /** @} */
 
 	/**
@@ -187,12 +187,12 @@ struct obd_import {
 	 * The imp_replay_cursor is for accelerating searching during replay.
 	 * @{
 	 */
-	cfs_list_t		  imp_committed_list;
-	cfs_list_t		 *imp_replay_cursor;
+	struct list_head	imp_committed_list;
+	struct list_head	*imp_replay_cursor;
 	/** @} */
 
-        /** obd device for this import */
-        struct obd_device        *imp_obd;
+	/** obd device for this import */
+	struct obd_device	*imp_obd;
 
         /**
          * some seciruty-related fields
@@ -252,7 +252,7 @@ struct obd_import {
         __u64                     imp_last_success_conn;
 
         /** List of all possible connection for import. */
-        cfs_list_t                imp_conn_list;
+	struct list_head	imp_conn_list;
         /**
          * Current connection. \a imp_connection is imp_conn_current->oic_conn
          */

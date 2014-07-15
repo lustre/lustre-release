@@ -52,12 +52,12 @@ struct obd_device_target {
 
 struct filter_obd {
 	/* NB this field MUST be first */
-	struct obd_device_target	fo_obt;
+	struct obd_device_target	 fo_obt;
 
 	/* capability related */
-	unsigned int			fo_fl_oss_capa;
-	cfs_list_t			fo_capa_keys;
-	cfs_hlist_head_t	       *fo_capa_hash;
+	unsigned int			 fo_fl_oss_capa;
+	struct list_head		 fo_capa_keys;
+	struct hlist_head		*fo_capa_hash;
 };
 
 struct echo_obd {

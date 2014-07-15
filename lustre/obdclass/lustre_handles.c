@@ -48,11 +48,11 @@
 #include <lustre_lib.h>
 
 #ifndef __KERNEL__
-# define list_add_rcu            cfs_list_add
-# define list_del_rcu            cfs_list_del
-# define list_for_each_rcu       cfs_list_for_each
-# define list_for_each_safe_rcu  cfs_list_for_each_safe
-# define list_for_each_entry_rcu cfs_list_for_each_entry
+# define list_add_rcu            list_add
+# define list_del_rcu            list_del
+# define list_for_each_rcu       list_for_each
+# define list_for_each_safe_rcu  list_for_each_safe
+# define list_for_each_entry_rcu list_for_each_entry
 # define rcu_read_lock()         spin_lock(&bucket->lock)
 # define rcu_read_unlock()       spin_unlock(&bucket->lock)
 #endif /* !__KERNEL__ */
@@ -62,8 +62,8 @@ static __u64 handle_base;
 static spinlock_t handle_base_lock;
 
 static struct handle_bucket {
-	spinlock_t	lock;
-	cfs_list_t	head;
+	spinlock_t	 lock;
+	struct list_head head;
 } *handle_hash;
 
 #define HANDLE_HASH_SIZE (1 << 16)
@@ -80,7 +80,7 @@ void class_handle_hash(struct portals_handle *h,
         ENTRY;
 
         LASSERT(h != NULL);
-        LASSERT(cfs_list_empty(&h->h_link));
+	LASSERT(list_empty(&h->h_link));
 
         /*
          * This is fast, but simplistic cookie generation algorithm, it will
@@ -118,7 +118,7 @@ EXPORT_SYMBOL(class_handle_hash);
 
 static void class_handle_unhash_nolock(struct portals_handle *h)
 {
-        if (cfs_list_empty(&h->h_link)) {
+	if (list_empty(&h->h_link)) {
                 CERROR("removing an already-removed handle ("LPX64")\n",
                        h->h_cookie);
                 return;
@@ -223,7 +223,7 @@ int class_handle_init(void)
 	spin_lock_init(&handle_base_lock);
 	for (bucket = handle_hash + HANDLE_HASH_SIZE - 1; bucket >= handle_hash;
 	     bucket--) {
-		CFS_INIT_LIST_HEAD(&bucket->head);
+		INIT_LIST_HEAD(&bucket->head);
 		spin_lock_init(&bucket->lock);
 	}
 

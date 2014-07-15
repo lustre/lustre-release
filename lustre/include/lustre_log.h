@@ -80,15 +80,16 @@ enum llog_open_param {
 };
 
 struct plain_handle_data {
-        cfs_list_t          phd_entry;
-        struct llog_handle *phd_cat_handle;
-        struct llog_cookie  phd_cookie; /* cookie of this log in its cat */
+	struct list_head	phd_entry;
+	struct llog_handle	*phd_cat_handle;
+	/* cookie of this log in its cat */
+	struct llog_cookie	phd_cookie;
 };
 
 struct cat_handle_data {
-        cfs_list_t              chd_head;
-        struct llog_handle     *chd_current_log; /* currently open log */
-	struct llog_handle	*chd_next_log; /* llog to be used next */
+	struct list_head	chd_head;
+	struct llog_handle     *chd_current_log;/* currently open log */
+	struct llog_handle     *chd_next_log;	/* llog to be used next */
 };
 
 static inline void logid_to_fid(struct llog_logid *id, struct lu_fid *fid)

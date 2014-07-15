@@ -217,7 +217,7 @@ void lprocfs_free_per_client_stats(struct obd_device *obd)
 	/* not need locking because all clients is died */
 	while (!list_empty(&obd->obd_nid_stats)) {
 		stat = list_entry(obd->obd_nid_stats.next,
-				      struct nid_stat, nid_list);
+				  struct nid_stat, nid_list);
 		list_del_init(&stat->nid_list);
 		cfs_hash_del(hash, &stat->nid, &stat->nid_hash);
 		lprocfs_free_client_stats(stat);
@@ -312,11 +312,12 @@ ssize_t
 lprocfs_nid_stats_clear_seq_write(struct file *file, const char *buffer,
 					size_t count, loff_t *off)
 {
-	struct list_head free_list = LIST_HEAD_INIT(free_list);
 	struct seq_file *m = file->private_data;
 	struct obd_device *obd = m->private;
 	struct nid_stat *client_stat;
+	struct list_head free_list;
 
+	INIT_LIST_HEAD(&free_list);
 	cfs_hash_cond_del(obd->obd_nid_stats_hash,
 			  lprocfs_nid_stats_clear_write_cb, &free_list);
 
@@ -446,16 +447,17 @@ EXPORT_SYMBOL(lprocfs_nid_stats_clear_read);
 int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
 				  unsigned long count, void *data)
 {
-	struct list_head free_list = LIST_HEAD_INIT(free_list);
 	struct obd_device *obd = (struct obd_device *)data;
 	struct nid_stat *client_stat;
+	struct list_head free_list;
 
+	INIT_LIST_HEAD(&free_list);
 	cfs_hash_cond_del(obd->obd_nid_stats_hash,
 			  lprocfs_nid_stats_clear_write_cb, &free_list);
 
 	while (!list_empty(&free_list)) {
 		client_stat = list_entry(free_list.next, struct nid_stat,
-					     nid_list);
+					 nid_list);
 		list_del_init(&client_stat->nid_list);
 		lprocfs_free_client_stats(client_stat);
 	}

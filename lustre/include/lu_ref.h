@@ -121,11 +121,11 @@ struct lu_ref {
 	 * Spin-lock protecting lu_ref::lf_list.
 	 */
 	spinlock_t		lf_guard;
-        /**
-         * List of all outstanding references (each represented by struct
-         * lu_ref_link), pointing to this object.
-         */
-        cfs_list_t           lf_list;
+	/**
+	 * List of all outstanding references (each represented by struct
+	 * lu_ref_link), pointing to this object.
+	 */
+	struct list_head	lf_list;
         /**
          * # of links.
          */
@@ -147,12 +147,12 @@ struct lu_ref {
         /**
          * Linkage into a global list of all lu_ref's (lu_ref_refs).
          */
-        cfs_list_t           lf_linkage;
+	struct list_head	lf_linkage;
 };
 
 struct lu_ref_link {
 	struct lu_ref	*ll_ref;
-	cfs_list_t	 ll_linkage;
+	struct list_head ll_linkage;
 	const char	*ll_scope;
 	const void	*ll_source;
 };

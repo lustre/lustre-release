@@ -388,11 +388,11 @@ int class_attach(struct lustre_cfg *lcfg)
 	obd->obd_pool_limit = 0;
 	obd->obd_pool_slv = 0;
 
-	CFS_INIT_LIST_HEAD(&obd->obd_exports);
-	CFS_INIT_LIST_HEAD(&obd->obd_unlinked_exports);
-	CFS_INIT_LIST_HEAD(&obd->obd_delayed_exports);
-	CFS_INIT_LIST_HEAD(&obd->obd_exports_timed);
-	CFS_INIT_LIST_HEAD(&obd->obd_nid_stats);
+	INIT_LIST_HEAD(&obd->obd_exports);
+	INIT_LIST_HEAD(&obd->obd_unlinked_exports);
+	INIT_LIST_HEAD(&obd->obd_delayed_exports);
+	INIT_LIST_HEAD(&obd->obd_exports_timed);
+	INIT_LIST_HEAD(&obd->obd_nid_stats);
 	spin_lock_init(&obd->obd_nid_lock);
 	spin_lock_init(&obd->obd_dev_lock);
 	mutex_init(&obd->obd_dev_mutex);
@@ -408,10 +408,10 @@ int class_attach(struct lustre_cfg *lcfg)
 	spin_lock_init(&obd->obd_recovery_task_lock);
 	init_waitqueue_head(&obd->obd_next_transno_waitq);
 	init_waitqueue_head(&obd->obd_evict_inprogress_waitq);
-	CFS_INIT_LIST_HEAD(&obd->obd_req_replay_queue);
-	CFS_INIT_LIST_HEAD(&obd->obd_lock_replay_queue);
-	CFS_INIT_LIST_HEAD(&obd->obd_final_req_queue);
-	CFS_INIT_LIST_HEAD(&obd->obd_evict_list);
+	INIT_LIST_HEAD(&obd->obd_req_replay_queue);
+	INIT_LIST_HEAD(&obd->obd_lock_replay_queue);
+	INIT_LIST_HEAD(&obd->obd_final_req_queue);
+	INIT_LIST_HEAD(&obd->obd_evict_list);
 	INIT_LIST_HEAD(&obd->obd_lwp_list);
 
 	llog_group_init(&obd->obd_olg);
@@ -528,7 +528,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 GOTO(err_hash, err = PTR_ERR(exp));
 
         obd->obd_self_export = exp;
-        cfs_list_del_init(&exp->exp_obd_chain_timed);
+	list_del_init(&exp->exp_obd_chain_timed);
         class_export_put(exp);
 
         err = obd_setup(obd, lcfg);
@@ -823,14 +823,15 @@ int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
         RETURN(rc);
 }
 
-CFS_LIST_HEAD(lustre_profile_list);
+struct list_head lustre_profile_list =
+	LIST_HEAD_INIT(lustre_profile_list);
 
 struct lustre_profile *class_get_profile(const char * prof)
 {
         struct lustre_profile *lprof;
 
         ENTRY;
-        cfs_list_for_each_entry(lprof, &lustre_profile_list, lp_list) {
+	list_for_each_entry(lprof, &lustre_profile_list, lp_list) {
                 if (!strcmp(lprof->lp_profile, prof)) {
                         RETURN(lprof);
                 }
@@ -855,7 +856,7 @@ int class_add_profile(int proflen, char *prof, int osclen, char *osc,
         OBD_ALLOC(lprof, sizeof(*lprof));
         if (lprof == NULL)
                 RETURN(-ENOMEM);
-        CFS_INIT_LIST_HEAD(&lprof->lp_list);
+	INIT_LIST_HEAD(&lprof->lp_list);
 
         LASSERT(proflen == (strlen(prof) + 1));
         OBD_ALLOC(lprof->lp_profile, proflen);
@@ -877,7 +878,7 @@ int class_add_profile(int proflen, char *prof, int osclen, char *osc,
                 memcpy(lprof->lp_md, mdc, mdclen);
         }
 
-        cfs_list_add(&lprof->lp_list, &lustre_profile_list);
+	list_add(&lprof->lp_list, &lustre_profile_list);
         RETURN(err);
 
 out:
@@ -900,7 +901,7 @@ void class_del_profile(const char *prof)
 
         lprof = class_get_profile(prof);
         if (lprof) {
-                cfs_list_del(&lprof->lp_list);
+		list_del(&lprof->lp_list);
                 OBD_FREE(lprof->lp_profile, strlen(lprof->lp_profile) + 1);
                 OBD_FREE(lprof->lp_dt, strlen(lprof->lp_dt) + 1);
                 if (lprof->lp_md)
@@ -917,8 +918,8 @@ void class_del_profiles(void)
         struct lustre_profile *lprof, *n;
         ENTRY;
 
-        cfs_list_for_each_entry_safe(lprof, n, &lustre_profile_list, lp_list) {
-                cfs_list_del(&lprof->lp_list);
+	list_for_each_entry_safe(lprof, n, &lustre_profile_list, lp_list) {
+		list_del(&lprof->lp_list);
                 OBD_FREE(lprof->lp_profile, strlen(lprof->lp_profile) + 1);
                 OBD_FREE(lprof->lp_dt, strlen(lprof->lp_dt) + 1);
                 if (lprof->lp_md)
@@ -2033,13 +2034,13 @@ uuid_hash(cfs_hash_t *hs, const void *key, unsigned mask)
 }
 
 static void *
-uuid_key(cfs_hlist_node_t *hnode)
+uuid_key(struct hlist_node *hnode)
 {
-        struct obd_export *exp;
+	struct obd_export *exp;
 
-        exp = cfs_hlist_entry(hnode, struct obd_export, exp_uuid_hash);
+	exp = hlist_entry(hnode, struct obd_export, exp_uuid_hash);
 
-        return &exp->exp_client_uuid;
+	return &exp->exp_client_uuid;
 }
 
 /*
@@ -2047,38 +2048,38 @@ uuid_key(cfs_hlist_node_t *hnode)
  *       state with this function
  */
 static int
-uuid_keycmp(const void *key, cfs_hlist_node_t *hnode)
+uuid_keycmp(const void *key, struct hlist_node *hnode)
 {
         struct obd_export *exp;
 
         LASSERT(key);
-        exp = cfs_hlist_entry(hnode, struct obd_export, exp_uuid_hash);
+	exp = hlist_entry(hnode, struct obd_export, exp_uuid_hash);
 
         return obd_uuid_equals(key, &exp->exp_client_uuid) &&
                !exp->exp_failed;
 }
 
 static void *
-uuid_export_object(cfs_hlist_node_t *hnode)
+uuid_export_object(struct hlist_node *hnode)
 {
-        return cfs_hlist_entry(hnode, struct obd_export, exp_uuid_hash);
+	return hlist_entry(hnode, struct obd_export, exp_uuid_hash);
 }
 
 static void
-uuid_export_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+uuid_export_get(cfs_hash_t *hs, struct hlist_node *hnode)
 {
         struct obd_export *exp;
 
-        exp = cfs_hlist_entry(hnode, struct obd_export, exp_uuid_hash);
+	exp = hlist_entry(hnode, struct obd_export, exp_uuid_hash);
         class_export_get(exp);
 }
 
 static void
-uuid_export_put_locked(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+uuid_export_put_locked(cfs_hash_t *hs, struct hlist_node *hnode)
 {
         struct obd_export *exp;
 
-        exp = cfs_hlist_entry(hnode, struct obd_export, exp_uuid_hash);
+	exp = hlist_entry(hnode, struct obd_export, exp_uuid_hash);
         class_export_put(exp);
 }
 
@@ -2103,11 +2104,11 @@ nid_hash(cfs_hash_t *hs, const void *key, unsigned mask)
 }
 
 static void *
-nid_key(cfs_hlist_node_t *hnode)
+nid_key(struct hlist_node *hnode)
 {
         struct obd_export *exp;
 
-        exp = cfs_hlist_entry(hnode, struct obd_export, exp_nid_hash);
+	exp = hlist_entry(hnode, struct obd_export, exp_nid_hash);
 
         RETURN(&exp->exp_connection->c_peer.nid);
 }
@@ -2117,38 +2118,38 @@ nid_key(cfs_hlist_node_t *hnode)
  *       state with this function
  */
 static int
-nid_kepcmp(const void *key, cfs_hlist_node_t *hnode)
+nid_kepcmp(const void *key, struct hlist_node *hnode)
 {
         struct obd_export *exp;
 
         LASSERT(key);
-        exp = cfs_hlist_entry(hnode, struct obd_export, exp_nid_hash);
+	exp = hlist_entry(hnode, struct obd_export, exp_nid_hash);
 
         RETURN(exp->exp_connection->c_peer.nid == *(lnet_nid_t *)key &&
                !exp->exp_failed);
 }
 
 static void *
-nid_export_object(cfs_hlist_node_t *hnode)
+nid_export_object(struct hlist_node *hnode)
 {
-        return cfs_hlist_entry(hnode, struct obd_export, exp_nid_hash);
+	return hlist_entry(hnode, struct obd_export, exp_nid_hash);
 }
 
 static void
-nid_export_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+nid_export_get(cfs_hash_t *hs, struct hlist_node *hnode)
 {
         struct obd_export *exp;
 
-        exp = cfs_hlist_entry(hnode, struct obd_export, exp_nid_hash);
+	exp = hlist_entry(hnode, struct obd_export, exp_nid_hash);
         class_export_get(exp);
 }
 
 static void
-nid_export_put_locked(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+nid_export_put_locked(cfs_hash_t *hs, struct hlist_node *hnode)
 {
         struct obd_export *exp;
 
-        exp = cfs_hlist_entry(hnode, struct obd_export, exp_nid_hash);
+	exp = hlist_entry(hnode, struct obd_export, exp_nid_hash);
         class_export_put(exp);
 }
 
@@ -2167,42 +2168,42 @@ static cfs_hash_ops_t nid_hash_ops = {
  */
 
 static void *
-nidstats_key(cfs_hlist_node_t *hnode)
+nidstats_key(struct hlist_node *hnode)
 {
         struct nid_stat *ns;
 
-        ns = cfs_hlist_entry(hnode, struct nid_stat, nid_hash);
+	ns = hlist_entry(hnode, struct nid_stat, nid_hash);
 
         return &ns->nid;
 }
 
 static int
-nidstats_keycmp(const void *key, cfs_hlist_node_t *hnode)
+nidstats_keycmp(const void *key, struct hlist_node *hnode)
 {
         return *(lnet_nid_t *)nidstats_key(hnode) == *(lnet_nid_t *)key;
 }
 
 static void *
-nidstats_object(cfs_hlist_node_t *hnode)
+nidstats_object(struct hlist_node *hnode)
 {
-        return cfs_hlist_entry(hnode, struct nid_stat, nid_hash);
+	return hlist_entry(hnode, struct nid_stat, nid_hash);
 }
 
 static void
-nidstats_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+nidstats_get(cfs_hash_t *hs, struct hlist_node *hnode)
 {
         struct nid_stat *ns;
 
-        ns = cfs_hlist_entry(hnode, struct nid_stat, nid_hash);
+	ns = hlist_entry(hnode, struct nid_stat, nid_hash);
         nidstat_getref(ns);
 }
 
 static void
-nidstats_put_locked(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+nidstats_put_locked(cfs_hash_t *hs, struct hlist_node *hnode)
 {
         struct nid_stat *ns;
 
-        ns = cfs_hlist_entry(hnode, struct nid_stat, nid_hash);
+	ns = hlist_entry(hnode, struct nid_stat, nid_hash);
         nidstat_putref(ns);
 }
 

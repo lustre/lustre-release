@@ -123,7 +123,7 @@ cl_page_at_trusted(const struct cl_page *page,
 	const struct cl_page_slice *slice;
 	ENTRY;
 
-	cfs_list_for_each_entry(slice, &page->cp_layers, cpl_linkage) {
+	list_for_each_entry(slice, &page->cp_layers, cpl_linkage) {
 		if (slice->cpl_obj->co_lu.lo_dev->ld_type == dtype)
 			RETURN(slice);
 	}
@@ -135,18 +135,18 @@ static void cl_page_free(const struct lu_env *env, struct cl_page *page)
 	struct cl_object *obj  = page->cp_obj;
 	int pagesize = cl_object_header(obj)->coh_page_bufsize;
 
-	PASSERT(env, page, cfs_list_empty(&page->cp_batch));
+	PASSERT(env, page, list_empty(&page->cp_batch));
 	PASSERT(env, page, page->cp_owner == NULL);
 	PASSERT(env, page, page->cp_req == NULL);
 	PASSERT(env, page, page->cp_state == CPS_FREEING);
 
 	ENTRY;
-	while (!cfs_list_empty(&page->cp_layers)) {
+	while (!list_empty(&page->cp_layers)) {
 		struct cl_page_slice *slice;
 
-		slice = cfs_list_entry(page->cp_layers.next,
-				       struct cl_page_slice, cpl_linkage);
-		cfs_list_del_init(page->cp_layers.next);
+		slice = list_entry(page->cp_layers.next,
+				   struct cl_page_slice, cpl_linkage);
+		list_del_init(page->cp_layers.next);
 		if (unlikely(slice->cpl_ops->cpo_fini != NULL))
 			slice->cpl_ops->cpo_fini(env, slice);
 	}
@@ -190,13 +190,13 @@ struct cl_page *cl_page_alloc(const struct lu_env *env,
 		page->cp_vmpage = vmpage;
 		cl_page_state_set_trust(page, CPS_CACHED);
 		page->cp_type = type;
-		CFS_INIT_LIST_HEAD(&page->cp_layers);
-		CFS_INIT_LIST_HEAD(&page->cp_batch);
-		CFS_INIT_LIST_HEAD(&page->cp_flight);
+		INIT_LIST_HEAD(&page->cp_layers);
+		INIT_LIST_HEAD(&page->cp_batch);
+		INIT_LIST_HEAD(&page->cp_flight);
 		lu_ref_init(&page->cp_reference);
 		head = o->co_lu.lo_header;
-		cfs_list_for_each_entry(o, &head->loh_layers,
-					co_lu.lo_linkage) {
+		list_for_each_entry(o, &head->loh_layers,
+				    co_lu.lo_linkage) {
 			if (o->co_ops->coo_page_init != NULL) {
 				result = o->co_ops->coo_page_init(env, o, page,
 								  ind);
@@ -388,7 +388,7 @@ void cl_page_put(const struct lu_env *env, struct cl_page *page)
 
 		LASSERT(atomic_read(&page->cp_ref) == 0);
 		PASSERT(env, page, page->cp_owner == NULL);
-		PASSERT(env, page, cfs_list_empty(&page->cp_batch));
+		PASSERT(env, page, list_empty(&page->cp_batch));
 		/*
 		 * Page is no longer reachable by other threads. Tear
 		 * it down.
@@ -434,27 +434,27 @@ EXPORT_SYMBOL(cl_page_at);
 
 #define CL_PAGE_OP(opname) offsetof(struct cl_page_operations, opname)
 
-#define CL_PAGE_INVOKE(_env, _page, _op, _proto, ...)                   \
-({                                                                      \
-	const struct lu_env        *__env  = (_env);                    \
-	struct cl_page             *__page = (_page);                   \
-	const struct cl_page_slice *__scan;                             \
-	int                         __result;                           \
-	ptrdiff_t                   __op   = (_op);                     \
-	int                       (*__method)_proto;                    \
+#define CL_PAGE_INVOKE(_env, _page, _op, _proto, ...)			\
+({									\
+	const struct lu_env	   *__env  = (_env);			\
+	struct cl_page		   *__page = (_page);			\
+	const struct cl_page_slice *__scan;				\
+	int			    __result;				\
+	ptrdiff_t		    __op   = (_op);			\
+	int			   (*__method)_proto;			\
 									\
-	__result = 0;                                                   \
-	cfs_list_for_each_entry(__scan, &__page->cp_layers, cpl_linkage) {     \
-		__method = *(void **)((char *)__scan->cpl_ops +  __op);        \
-		if (__method != NULL) {                                        \
+	__result = 0;							\
+	list_for_each_entry(__scan, &__page->cp_layers, cpl_linkage) {	\
+		__method = *(void **)((char *)__scan->cpl_ops +  __op);	\
+		if (__method != NULL) {					\
 			__result = (*__method)(__env, __scan, ## __VA_ARGS__); \
-			if (__result != 0)                              \
-				break;                                  \
-		}                                                       \
-	}                                                               \
-	if (__result > 0)                                               \
-		__result = 0;                                           \
-	__result;                                                       \
+			if (__result != 0)				\
+				break;					\
+		}							\
+	}								\
+	if (__result > 0)						\
+		__result = 0;						\
+	__result;							\
 })
 
 #define CL_PAGE_INVOKE_REVERSE(_env, _page, _op, _proto, ...)		\
@@ -468,7 +468,7 @@ EXPORT_SYMBOL(cl_page_at);
 									\
 	__result = 0;							\
 	list_for_each_entry_reverse(__scan, &__page->cp_layers,		\
-					cpl_linkage) {			\
+				    cpl_linkage) {			\
 		__method = *(void **)((char *)__scan->cpl_ops +  __op);	\
 		if (__method != NULL) {					\
 			__result = (*__method)(__env, __scan, ## __VA_ARGS__); \
@@ -489,8 +489,7 @@ do {									\
 	ptrdiff_t                   __op   = (_op);			\
 	void                      (*__method)_proto;			\
 									\
-	cfs_list_for_each_entry(__scan, &__page->cp_layers,		\
-			        cpl_linkage) {				\
+	list_for_each_entry(__scan, &__page->cp_layers, cpl_linkage) {	\
 		__method = *(void **)((char *)__scan->cpl_ops +  __op); \
 		if (__method != NULL)					\
 			(*__method)(__env, __scan, ## __VA_ARGS__);	\
@@ -506,8 +505,8 @@ do {									\
 	void                      (*__method)_proto;			\
 									\
 	/* get to the bottom page. */					\
-	cfs_list_for_each_entry_reverse(__scan, &__page->cp_layers,	\
-					cpl_linkage) {			\
+	list_for_each_entry_reverse(__scan, &__page->cp_layers,		\
+				    cpl_linkage) {			\
 		__method = *(void **)((char *)__scan->cpl_ops + __op);	\
 		if (__method != NULL)					\
 			(*__method)(__env, __scan, ## __VA_ARGS__);	\

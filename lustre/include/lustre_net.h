@@ -518,7 +518,7 @@
  */
 struct ptlrpc_connection {
 	/** linkage for connections hash table */
-	cfs_hlist_node_t        c_hash;
+	struct hlist_node        c_hash;
 	/** Our own lnet nid for this connection */
 	lnet_nid_t              c_self;
 	/** Remote side nid for this connection */
@@ -574,26 +574,26 @@ typedef int (*set_producer_func)(struct ptlrpc_request_set *, void *);
  * returned.
  */
 struct ptlrpc_request_set {
-	atomic_t          set_refcount;
+	atomic_t		set_refcount;
 	/** number of in queue requests */
-	atomic_t          set_new_count;
+	atomic_t		set_new_count;
 	/** number of uncompleted requests */
-	atomic_t          set_remaining;
+	atomic_t		set_remaining;
 	/** wait queue to wait on for request events */
-	wait_queue_head_t           set_waitq;
-	wait_queue_head_t          *set_wakeup_ptr;
+	wait_queue_head_t	set_waitq;
+	wait_queue_head_t      *set_wakeup_ptr;
 	/** List of requests in the set */
-	cfs_list_t            set_requests;
+	struct list_head	set_requests;
 	/**
 	 * List of completion callbacks to be called when the set is completed
 	 * This is only used if \a set_interpret is NULL.
 	 * Links struct ptlrpc_set_cbdata.
 	 */
-	cfs_list_t            set_cblist;
+	struct list_head	set_cblist;
 	/** Completion callback, if only one. */
-	set_interpreter_func  set_interpret;
+	set_interpreter_func	set_interpret;
 	/** opaq argument passed to completion \a set_interpret callback. */
-	void                 *set_arg;
+	void			*set_arg;
 	/**
 	 * Lock for \a set_new_requests manipulations
 	 * locked so that any old caller can communicate requests to
@@ -601,29 +601,29 @@ struct ptlrpc_request_set {
 	 */
 	spinlock_t		set_new_req_lock;
 	/** List of new yet unsent requests. Only used with ptlrpcd now. */
-	cfs_list_t            set_new_requests;
+	struct list_head	set_new_requests;
 
 	/** rq_status of requests that have been freed already */
-	int                   set_rc;
+	int			set_rc;
 	/** Additional fields used by the flow control extension */
 	/** Maximum number of RPCs in flight */
-	int                   set_max_inflight;
+	int			set_max_inflight;
 	/** Callback function used to generate RPCs */
-	set_producer_func     set_producer;
+	set_producer_func	set_producer;
 	/** opaq argument passed to the producer callback */
-	void                 *set_producer_arg;
+	void			*set_producer_arg;
 };
 
 /**
  * Description of a single ptrlrpc_set callback
  */
 struct ptlrpc_set_cbdata {
-        /** List linkage item */
-        cfs_list_t              psc_item;
-        /** Pointer to interpreting function */
-        set_interpreter_func    psc_interpret;
-        /** Opaq argument to pass to the callback */
-        void                   *psc_data;
+	/** List linkage item */
+	struct list_head	psc_item;
+	/** Pointer to interpreting function */
+	set_interpreter_func	psc_interpret;
+	/** Opaq argument to pass to the callback */
+	void			*psc_data;
 };
 
 struct ptlrpc_bulk_desc;
@@ -650,20 +650,20 @@ struct ptlrpc_cb_id {
  * added to the state for replay/failover consistency guarantees.
  */
 struct ptlrpc_reply_state {
-        /** Callback description */
-        struct ptlrpc_cb_id    rs_cb_id;
-        /** Linkage for list of all reply states in a system */
-        cfs_list_t             rs_list;
-        /** Linkage for list of all reply states on same export */
-        cfs_list_t             rs_exp_list;
-        /** Linkage for list of all reply states for same obd */
-        cfs_list_t             rs_obd_list;
+	/** Callback description */
+	struct ptlrpc_cb_id	rs_cb_id;
+	/** Linkage for list of all reply states in a system */
+	struct list_head	rs_list;
+	/** Linkage for list of all reply states on same export */
+	struct list_head	rs_exp_list;
+	/** Linkage for list of all reply states for same obd */
+	struct list_head	rs_obd_list;
 #if RS_DEBUG
-        cfs_list_t             rs_debug_list;
+	struct list_head	rs_debug_list;
 #endif
-        /** A spinlock to protect the reply state flags */
+	/** A spinlock to protect the reply state flags */
 	spinlock_t		rs_lock;
-        /** Reply state flags */
+	/** Reply state flags */
         unsigned long          rs_difficult:1;     /* ACK/commit stuff */
         unsigned long          rs_no_ack:1;    /* no ACK, even for
                                                   difficult requests */
@@ -738,13 +738,13 @@ typedef int (*ptlrpc_interpterer_t)(const struct lu_env *env,
  */
 struct ptlrpc_request_pool {
 	/** Locks the list */
-	spinlock_t prp_lock;
-        /** list of ptlrpc_request structs */
-        cfs_list_t prp_req_list;
-        /** Maximum message size that would fit into a rquest from this pool */
-        int prp_rq_size;
-        /** Function to allocate more requests for this pool */
-        void (*prp_populate)(struct ptlrpc_request_pool *, int);
+	spinlock_t		prp_lock;
+	/** list of ptlrpc_request structs */
+	struct list_head	prp_req_list;
+	/** Maximum message size that would fit into a rquest from this pool */
+	int			prp_rq_size;
+	/** Function to allocate more requests for this pool */
+	void (*prp_populate)(struct ptlrpc_request_pool *, int);
 };
 
 struct lu_context;
@@ -1058,7 +1058,7 @@ struct ptlrpc_nrs {
 	/**
 	 * List of registered policies
 	 */
-	cfs_list_t			nrs_policy_list;
+	struct list_head		nrs_policy_list;
 	/**
 	 * List of policies with queued requests. Policies that have any
 	 * outstanding requests are queued here, and this list is queried
@@ -1067,7 +1067,7 @@ struct ptlrpc_nrs {
 	 * point transition away from the
 	 * ptlrpc_nrs_pol_state::NRS_POL_STATE_STARTED state are drained.
 	 */
-	cfs_list_t			nrs_policy_queued;
+	struct list_head		nrs_policy_queued;
 	/**
 	 * Service partition for this NRS head
 	 */
@@ -1173,7 +1173,7 @@ struct ptlrpc_nrs_pol_desc {
 	/**
 	 * Link into nrs_core::nrs_policies
 	 */
-	cfs_list_t				pd_list;
+	struct list_head			pd_list;
 	/**
 	 * NRS operations for this policy
 	 */
@@ -1309,12 +1309,12 @@ struct ptlrpc_nrs_policy {
 	 * Linkage into the NRS head's list of policies,
 	 * ptlrpc_nrs:nrs_policy_list
 	 */
-	cfs_list_t			pol_list;
+	struct list_head		pol_list;
 	/**
 	 * Linkage into the NRS head's list of policies with enqueued
 	 * requests ptlrpc_nrs:nrs_policy_queued
 	 */
-	cfs_list_t			pol_list_queued;
+	struct list_head		pol_list_queued;
 	/**
 	 * Current state of this policy
 	 */
@@ -1416,7 +1416,7 @@ struct nrs_fifo_head {
 	/**
 	 * List of queued requests.
 	 */
-	cfs_list_t			fh_list;
+	struct list_head		fh_list;
 	/**
 	 * For debugging purposes.
 	 */
@@ -1424,7 +1424,7 @@ struct nrs_fifo_head {
 };
 
 struct nrs_fifo_req {
-	cfs_list_t		fr_list;
+	struct list_head	fr_list;
 	__u64			fr_sequence;
 };
 
@@ -1466,7 +1466,7 @@ struct nrs_crrn_net {
  */
 struct nrs_crrn_client {
 	struct ptlrpc_nrs_resource	cc_res;
-	cfs_hlist_node_t		cc_hnode;
+	struct hlist_node		cc_hnode;
 	lnet_nid_t			cc_nid;
 	/**
 	 * The round number against which this client is currently scheduling
@@ -1626,7 +1626,7 @@ struct nrs_orr_data {
  */
 struct nrs_orr_object {
 	struct ptlrpc_nrs_resource	oo_res;
-	cfs_hlist_node_t		oo_hnode;
+	struct hlist_node		oo_hnode;
 	/**
 	 * The round number against which requests are being scheduled for this
 	 * object or OST
@@ -1790,34 +1790,34 @@ struct ptlrpc_hpreq_ops {
  */
 struct ptlrpc_request {
 	/* Request type: one of PTL_RPC_MSG_* */
-	int rq_type;
+	int			rq_type;
 	/** Result of request processing */
-	int rq_status;
-        /**
-         * Linkage item through which this request is included into
-         * sending/delayed lists on client and into rqbd list on server
-         */
-        cfs_list_t rq_list;
-        /**
-         * Server side list of incoming unserved requests sorted by arrival
-         * time.  Traversed from time to time to notice about to expire
-         * requests and sent back "early replies" to clients to let them
-         * know server is alive and well, just very busy to service their
-         * requests in time
-         */
-        cfs_list_t rq_timed_list;
-        /** server-side history, used for debuging purposes. */
-        cfs_list_t rq_history_list;
-        /** server-side per-export list */
-        cfs_list_t rq_exp_list;
-        /** server-side hp handlers */
-        struct ptlrpc_hpreq_ops *rq_ops;
+	int			rq_status;
+	/**
+	 * Linkage item through which this request is included into
+	 * sending/delayed lists on client and into rqbd list on server
+	 */
+	struct list_head	rq_list;
+	/**
+	 * Server side list of incoming unserved requests sorted by arrival
+	 * time.  Traversed from time to time to notice about to expire
+	 * requests and sent back "early replies" to clients to let them
+	 * know server is alive and well, just very busy to service their
+	 * requests in time
+	 */
+	struct list_head	rq_timed_list;
+	/** server-side history, used for debuging purposes. */
+	struct list_head	rq_history_list;
+	/** server-side per-export list */
+	struct list_head	rq_exp_list;
+	/** server-side hp handlers */
+	struct ptlrpc_hpreq_ops	*rq_ops;
 
 	/** initial thread servicing this request */
-	struct ptlrpc_thread *rq_svc_thread;
+	struct ptlrpc_thread	*rq_svc_thread;
 
         /** history sequence # */
-        __u64 rq_history_seq;
+	__u64			rq_history_seq;
 	/** \addtogroup  nrs
 	 * @{
 	 */
@@ -1900,17 +1900,17 @@ struct ptlrpc_request {
          * there.
          * Also see \a rq_replay comment above.
          */
-        cfs_list_t rq_replay_list;
+	struct list_head	rq_replay_list;
 
-        /**
-         * security and encryption data
-         * @{ */
-        struct ptlrpc_cli_ctx   *rq_cli_ctx;     /**< client's half ctx */
-        struct ptlrpc_svc_ctx   *rq_svc_ctx;     /**< server's half ctx */
-        cfs_list_t               rq_ctx_chain;   /**< link to waited ctx */
+	/**
+	 * security and encryption data
+	 * @{ */
+	struct ptlrpc_cli_ctx   *rq_cli_ctx;	/**< client's half ctx */
+	struct ptlrpc_svc_ctx   *rq_svc_ctx;	/**< server's half ctx */
+	struct list_head	rq_ctx_chain;	/**< link to waited ctx */
 
-        struct sptlrpc_flavor    rq_flvr;        /**< for client & server */
-        enum lustre_sec_part     rq_sp_from;
+	struct sptlrpc_flavor	rq_flvr;	/**< for client & server */
+	enum lustre_sec_part	rq_sp_from;
 
 	/* client/server security flags */
 	unsigned int
@@ -2034,7 +2034,7 @@ struct ptlrpc_request {
         /** Per-request waitq introduced by bug 21938 for recovery waiting */
 	wait_queue_head_t rq_set_waitq;
 	/** Link item for request set lists */
-	cfs_list_t  rq_set_chain;
+	struct list_head  rq_set_chain;
         /** Link back to the request set */
         struct ptlrpc_request_set *rq_set;
         /** Async completion handler, called when reply is received */
@@ -2244,16 +2244,16 @@ do {                                                                          \
  * Structure that defines a single page of a bulk transfer
  */
 struct ptlrpc_bulk_page {
-        /** Linkage to list of pages in a bulk */
-        cfs_list_t       bp_link;
-        /**
-         * Number of bytes in a page to transfer starting from \a bp_pageoffset
-         */
-        int              bp_buflen;
-        /** offset within a page */
-        int              bp_pageoffset;
-        /** The page itself */
-        struct page     *bp_page;
+	/** Linkage to list of pages in a bulk */
+	struct list_head bp_link;
+	/**
+	 * Number of bytes in a page to transfer starting from \a bp_pageoffset
+	 */
+	int		 bp_buflen;
+	/** offset within a page */
+	int		 bp_pageoffset;
+	/** The page itself */
+	struct page	*bp_page;
 };
 
 #define BULK_GET_SOURCE   0
@@ -2334,7 +2334,7 @@ struct ptlrpc_thread {
         /**
          * List of active threads in svc->srv_threads
          */
-        cfs_list_t t_link;
+	struct list_head t_link;
         /**
          * thread-private data (preallocated memory)
          */
@@ -2429,23 +2429,23 @@ static inline int thread_test_and_clear_flags(struct ptlrpc_thread *thread,
  * More than one request can fit into the buffer.
  */
 struct ptlrpc_request_buffer_desc {
-        /** Link item for rqbds on a service */
-        cfs_list_t             rqbd_list;
-        /** History of requests for this buffer */
-        cfs_list_t             rqbd_reqs;
-        /** Back pointer to service for which this buffer is registered */
-	struct ptlrpc_service_part *rqbd_svcpt;
-        /** LNet descriptor */
-        lnet_handle_md_t       rqbd_md_h;
-        int                    rqbd_refcount;
-        /** The buffer itself */
-        char                  *rqbd_buffer;
-        struct ptlrpc_cb_id    rqbd_cbid;
-        /**
-         * This "embedded" request structure is only used for the
-         * last request to fit into the buffer
-         */
-        struct ptlrpc_request  rqbd_req;
+	/** Link item for rqbds on a service */
+	struct list_head		rqbd_list;
+	/** History of requests for this buffer */
+	struct list_head		rqbd_reqs;
+	/** Back pointer to service for which this buffer is registered */
+	struct ptlrpc_service_part	*rqbd_svcpt;
+	/** LNet descriptor */
+	lnet_handle_md_t		rqbd_md_h;
+	int				rqbd_refcount;
+	/** The buffer itself */
+	char				*rqbd_buffer;
+	struct ptlrpc_cb_id		rqbd_cbid;
+	/**
+	 * This "embedded" request structure is only used for the
+	 * last request to fit into the buffer
+	 */
+	struct ptlrpc_request		rqbd_req;
 };
 
 typedef int  (*svc_handler_t)(struct ptlrpc_request *req);
@@ -2496,9 +2496,9 @@ struct ptlrpc_service_ops {
 struct ptlrpc_service {
 	/** serialize /proc operations */
 	spinlock_t			srv_lock;
-        /** most often accessed fields */
-        /** chain thru all services */
-        cfs_list_t                      srv_list;
+	/** most often accessed fields */
+	/** chain thru all services */
+	struct list_head		srv_list;
 	/** service operations table */
 	struct ptlrpc_service_ops	srv_ops;
         /** only statically allocated strings here; we don't clean them */
@@ -2506,7 +2506,7 @@ struct ptlrpc_service {
         /** only statically allocated strings here; we don't clean them */
         char                           *srv_thread_name;
         /** service thread list */
-        cfs_list_t                      srv_threads;
+	struct list_head		srv_threads;
 	/** threads # should be created for each partition on initializing */
 	int				srv_nthrs_cpt_init;
 	/** limit of threads number for each partition */
@@ -2587,7 +2587,7 @@ struct ptlrpc_service_part {
 	/** # running threads */
 	int				scp_nthrs_running;
 	/** service threads list */
-	cfs_list_t			scp_threads;
+	struct list_head		scp_threads;
 
 	/**
 	 * serialize the following fields, used for protecting
@@ -2604,11 +2604,11 @@ struct ptlrpc_service_part {
 	/** # incoming reqs */
 	int				scp_nreqs_incoming;
 	/** request buffers to be reposted */
-	cfs_list_t			scp_rqbd_idle;
+	struct list_head		scp_rqbd_idle;
 	/** req buffers receiving */
-	cfs_list_t			scp_rqbd_posted;
+	struct list_head		scp_rqbd_posted;
 	/** incoming reqs */
-	cfs_list_t			scp_req_incoming;
+	struct list_head		scp_req_incoming;
 	/** timeout before re-posting reqs, in tick */
 	cfs_duration_t			scp_rqbd_timeout;
 	/**
@@ -2618,9 +2618,9 @@ struct ptlrpc_service_part {
 	wait_queue_head_t		scp_waitq;
 
 	/** request history */
-	cfs_list_t			scp_hist_reqs;
+	struct list_head		scp_hist_reqs;
 	/** request buffer history */
-	cfs_list_t			scp_hist_rqbds;
+	struct list_head		scp_hist_rqbds;
 	/** # request buffers in history */
 	int				scp_hist_nrqbds;
 	/** sequence number for request */
@@ -2672,13 +2672,13 @@ struct ptlrpc_service_part {
 	 */
 	spinlock_t			scp_rep_lock __cfs_cacheline_aligned;
 	/** all the active replies */
-	cfs_list_t			scp_rep_active;
+	struct list_head		scp_rep_active;
 #ifndef __KERNEL__
 	/** replies waiting for service */
-	cfs_list_t			scp_rep_queue;
+	struct list_head		scp_rep_queue;
 #endif
 	/** List of free reply_states */
-	cfs_list_t			scp_rep_idle;
+	struct list_head		scp_rep_idle;
 	/** waitq to run, when adding stuff to srv_free_rs_list */
 	wait_queue_head_t		scp_rep_waitq;
 	/** # 'difficult' replies */
@@ -3476,9 +3476,9 @@ typedef int (*timeout_cb_t)(struct timeout_item *, void *);
 int ptlrpc_pinger_add_import(struct obd_import *imp);
 int ptlrpc_pinger_del_import(struct obd_import *imp);
 int ptlrpc_add_timeout_client(int time, enum timeout_event event,
-                              timeout_cb_t cb, void *data,
-                              cfs_list_t *obd_list);
-int ptlrpc_del_timeout_client(cfs_list_t *obd_list,
+			      timeout_cb_t cb, void *data,
+			      struct list_head *obd_list);
+int ptlrpc_del_timeout_client(struct list_head *obd_list,
                               enum timeout_event event);
 struct ptlrpc_request * ptlrpc_prep_ping(struct obd_import *imp);
 int ptlrpc_obd_ping(struct obd_device *obd);

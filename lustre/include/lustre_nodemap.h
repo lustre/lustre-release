@@ -84,7 +84,7 @@ struct lu_nodemap {
 	/* attached client members of this nodemap */
 	struct list_head	nm_exports;
 	/* access by nodemap name */
-	cfs_hlist_node_t	nm_hash;
+	struct hlist_node	nm_hash;
 };
 
 void nodemap_activate(const bool value);

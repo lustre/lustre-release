@@ -45,14 +45,14 @@ struct nrs_tbf_cmd;
 
 struct nrs_tbf_jobid {
 	char		*tj_id;
-	cfs_list_t	 tj_linkage;
+	struct list_head tj_linkage;
 };
 
 struct nrs_tbf_client {
 	/** Resource object for policy instance. */
 	struct ptlrpc_nrs_resource	 tc_res;
 	/** Node in the hash table. */
-	cfs_hlist_node_t		 tc_hnode;
+	struct hlist_node		 tc_hnode;
 	/** NID of the client. */
 	lnet_nid_t			 tc_nid;
 	/** Jobid of the client. */
@@ -60,7 +60,7 @@ struct nrs_tbf_client {
 	/** Reference number of the client. */
 	atomic_t			 tc_ref;
 	/** Likage to rule. */
-	cfs_list_t		         tc_linkage;
+	struct list_head	         tc_linkage;
 	/** Pointer to rule. */
 	struct nrs_tbf_rule		*tc_rule;
 	/** Generation of the rule matched. */
@@ -76,7 +76,7 @@ struct nrs_tbf_client {
 	/** Time check-point. */
 	__u64				 tc_check_time;
 	/** List of queued requests. */
-	cfs_list_t			 tc_list;
+	struct list_head		 tc_list;
 	/** Node in binary heap. */
 	cfs_binheap_node_t		 tc_node;
 	/** Whether the client is in heap. */
@@ -87,7 +87,7 @@ struct nrs_tbf_client {
 	 * Linkage into LRU list. Protected bucket lock of
 	 * nrs_tbf_head::th_cli_hash.
 	 */
-	cfs_list_t			 tc_lru;
+	struct list_head		 tc_lru;
 };
 
 #define MAX_TBF_NAME (16)
@@ -101,13 +101,13 @@ struct nrs_tbf_rule {
 	/** Head belongs to. */
 	struct nrs_tbf_head		*tr_head;
 	/** Likage to head. */
-	cfs_list_t			 tr_linkage;
+	struct list_head		 tr_linkage;
 	/** Nid list of the rule. */
-	cfs_list_t			 tr_nids;
+	struct list_head		 tr_nids;
 	/** Nid list string of the rule.*/
 	char				*tr_nids_str;
 	/** Jobid list of the rule. */
-	cfs_list_t			 tr_jobids;
+	struct list_head		 tr_jobids;
 	/** Jobid list string of the rule.*/
 	char				*tr_jobids_str;
 	/** RPC/s limit. */
@@ -117,7 +117,7 @@ struct nrs_tbf_rule {
 	/** Token bucket depth. */
 	__u64				 tr_depth;
 	/** List of client. */
-	cfs_list_t			 tr_cli_list;
+	struct list_head		 tr_cli_list;
 	/** Flags of the rule. */
 	__u32				 tr_flags;
 	/** Usage Reference count taken on the rule. */
@@ -155,7 +155,7 @@ struct nrs_tbf_bucket {
 	 * LRU list, updated on each access to client. Protected by
 	 * bucket lock of nrs_tbf_head::th_cli_hash.
 	 */
-	cfs_list_t	ntb_lru;
+	struct list_head	ntb_lru;
 };
 
 /**
@@ -169,7 +169,7 @@ struct nrs_tbf_head {
 	/**
 	 * List of rules.
 	 */
-	cfs_list_t			 th_list;
+	struct list_head		 th_list;
 	/**
 	 * Lock to protect the list of rules.
 	 */
@@ -232,9 +232,9 @@ struct nrs_tbf_cmd {
 	enum nrs_tbf_cmd_type	 tc_cmd;
 	char			*tc_name;
 	__u64			 tc_rpc_rate;
-	cfs_list_t		 tc_nids;
+	struct list_head	 tc_nids;
 	char			*tc_nids_str;
-	cfs_list_t		 tc_jobids;
+	struct list_head	 tc_jobids;
 	char			*tc_jobids_str;
 	__u32			 tc_valid_types;
 	__u32			 tc_rule_flags;
@@ -244,7 +244,7 @@ struct nrs_tbf_req {
 	/**
 	 * Linkage to queue.
 	 */
-	cfs_list_t		tr_list;
+	struct list_head	tr_list;
 	/**
 	 * Sequence of the request.
 	 */

@@ -853,7 +853,7 @@ struct lu_local_obj_desc {
         __u32                            llod_oid;
         int                              llod_is_index;
         const struct dt_index_features  *llod_feat;
-        cfs_list_t                       llod_linkage;
+	struct list_head		 llod_linkage;
 };
 
 int lustre_buf2som(void *buf, int rc, struct md_som_data *msd);

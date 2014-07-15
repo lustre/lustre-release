@@ -75,14 +75,14 @@ struct tg_export_data {
 struct mdt_export_data {
 	struct tg_export_data	med_ted;
 	/** List of all files opened by client on this MDT */
-	cfs_list_t		med_open_head;
+	struct list_head	med_open_head;
 	spinlock_t		med_open_lock; /* med_open_head, mfd_list */
 	struct mutex		med_idmap_mutex;
 	struct lustre_idmap_table *med_idmap;
 };
 
 struct ec_export_data { /* echo client */
-        cfs_list_t eced_locks;
+	struct list_head	eced_locks;
 };
 
 /* In-memory access to client data from OST struct */
@@ -93,7 +93,7 @@ struct filter_export_data {
 	__u64			fed_lastid_gen;
 	long			fed_dirty;    /* in bytes */
 	long			fed_grant;    /* in bytes */
-	cfs_list_t		fed_mod_list; /* files being modified */
+	struct list_head	fed_mod_list; /* files being modified */
 	long			fed_pending;  /* bytes just being written */
 	/* count of SOFT_SYNC RPCs, which will be reset after
 	 * ofd_soft_sync_limit number of RPCs, and trigger a sync. */
@@ -104,7 +104,7 @@ struct filter_export_data {
 };
 
 struct mgs_export_data {
-	cfs_list_t		med_clients;	/* mgc fs client via this exp */
+	struct list_head	med_clients;	/* mgc fs client via this exp */
 	spinlock_t		med_lock;	/* protect med_clients */
 };
 
@@ -113,15 +113,15 @@ struct mgs_export_data {
  * It tracks access patterns to this export on a per-client-NID basis
  */
 struct nid_stat {
-	lnet_nid_t              nid;
-	cfs_hlist_node_t        nid_hash;
-	cfs_list_t              nid_list;
+	lnet_nid_t		 nid;
+	struct hlist_node	 nid_hash;
+	struct list_head	 nid_list;
 	struct obd_device       *nid_obd;
 	struct proc_dir_entry   *nid_proc;
 	struct lprocfs_stats    *nid_stats;
 	struct lprocfs_stats    *nid_ldlm_stats;
-	atomic_t             	nid_exp_ref_count; /* for obd_nid_stats_hash
-                                                           exp_nid_stats */
+	atomic_t		 nid_exp_ref_count; /* for obd_nid_stats_hash
+						       exp_nid_stats */
 };
 
 #define nidstat_getref(nidstat)                                                \
@@ -155,38 +155,38 @@ struct obd_export {
 	 * Subsequent client RPCs contain this handle id to identify
 	 * what export they are talking to.
 	 */
-	struct portals_handle     exp_handle;
-	atomic_t              exp_refcount;
+	struct portals_handle	exp_handle;
+	atomic_t		exp_refcount;
 	/**
 	 * Set of counters below is to track where export references are
 	 * kept. The exp_rpc_count is used for reconnect handling also,
 	 * the cb_count and locks_count are for debug purposes only for now.
 	 * The sum of them should be less than exp_refcount by 3
 	 */
-	atomic_t              exp_rpc_count; /* RPC references */
-	atomic_t              exp_cb_count; /* Commit callback references */
+	atomic_t		exp_rpc_count; /* RPC references */
+	atomic_t		exp_cb_count; /* Commit callback references */
 	/** Number of queued replay requests to be processes */
-	atomic_t		  exp_replay_count;
-	atomic_t              exp_locks_count; /** Lock references */
+	atomic_t		exp_replay_count;
+	atomic_t		exp_locks_count; /** Lock references */
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
-	cfs_list_t                exp_locks_list;
-	spinlock_t		  exp_locks_list_guard;
+	struct list_head	exp_locks_list;
+	spinlock_t		exp_locks_list_guard;
 #endif
         /** UUID of client connected to this export */
-        struct obd_uuid           exp_client_uuid;
+	struct obd_uuid		exp_client_uuid;
         /** To link all exports on an obd device */
-        cfs_list_t                exp_obd_chain;
-        cfs_hlist_node_t          exp_uuid_hash; /** uuid-export hash*/
-        cfs_hlist_node_t          exp_nid_hash; /** nid-export hash */
+	struct list_head	exp_obd_chain;
+	struct hlist_node	exp_uuid_hash;	/** uuid-export hash*/
+	struct hlist_node	exp_nid_hash;	/** nid-export hash */
         /**
          * All exports eligible for ping evictor are linked into a list
          * through this field in "most time since last request on this export"
          * order
          * protected by obd_dev_lock
          */
-        cfs_list_t                exp_obd_chain_timed;
-        /** Obd device of this export */
-        struct obd_device        *exp_obd;
+	struct list_head	exp_obd_chain_timed;
+	/** Obd device of this export */
+	struct obd_device      *exp_obd;
 	/**
 	 * "reverse" import to send requests (e.g. from ldlm) back to client
 	 * exp_lock protect its change
@@ -199,20 +199,20 @@ struct obd_export {
         __u32                     exp_conn_cnt;
         /** Hash list of all ldlm locks granted on this export */
         cfs_hash_t               *exp_lock_hash;
-        /**
+	/**
 	 * Hash list for Posix lock deadlock detection, added with
 	 * ldlm_lock::l_exp_flock_hash.
-         */
-	cfs_hash_t               *exp_flock_hash;
-        cfs_list_t                exp_outstanding_replies;
-        cfs_list_t                exp_uncommitted_replies;
-	spinlock_t		  exp_uncommitted_replies_lock;
-        /** Last committed transno for this export */
-        __u64                     exp_last_committed;
-        /** When was last request received */
-        cfs_time_t                exp_last_request_time;
-        /** On replay all requests waiting for replay are linked here */
-        cfs_list_t                exp_req_replay_queue;
+	 */
+	cfs_hash_t	       *exp_flock_hash;
+	struct list_head	exp_outstanding_replies;
+	struct list_head	exp_uncommitted_replies;
+	spinlock_t		exp_uncommitted_replies_lock;
+	/** Last committed transno for this export */
+	__u64			exp_last_committed;
+	/** When was last request received */
+	cfs_time_t		exp_last_request_time;
+	/** On replay all requests waiting for replay are linked here */
+	struct list_head	exp_req_replay_queue;
 	/**
 	 * protects exp_flags, exp_outstanding_replies and the change
 	 * of exp_imp_reverse
@@ -247,13 +247,13 @@ struct obd_export {
         cfs_time_t                exp_flvr_expire[2];   /* seconds */
 
         /** protects exp_hp_rpcs */
-	spinlock_t		  exp_rpc_lock;
-	cfs_list_t		  exp_hp_rpcs;	/* (potential) HP RPCs */
-	cfs_list_t		  exp_reg_rpcs;  /* RPC being handled */
+	spinlock_t		exp_rpc_lock;
+	struct list_head	exp_hp_rpcs;	/* (potential) HP RPCs */
+	struct list_head	exp_reg_rpcs;  /* RPC being handled */
 
-        /** blocking dlm lock list, protected by exp_bl_list_lock */
-        cfs_list_t                exp_bl_list;
-	spinlock_t		  exp_bl_list_lock;
+	/** blocking dlm lock list, protected by exp_bl_list_lock */
+	struct list_head	exp_bl_list;
+	spinlock_t		exp_bl_list_lock;
 
         /** Target specific data */
         union {

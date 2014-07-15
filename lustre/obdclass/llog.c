@@ -69,7 +69,7 @@ struct llog_handle *llog_alloc_handle(void)
 
 	init_rwsem(&loghandle->lgh_lock);
 	spin_lock_init(&loghandle->lgh_hdr_lock);
-	CFS_INIT_LIST_HEAD(&loghandle->u.phd.phd_entry);
+	INIT_LIST_HEAD(&loghandle->u.phd.phd_entry);
 	atomic_set(&loghandle->lgh_refcount, 1);
 
 	return loghandle;
@@ -87,9 +87,9 @@ void llog_free_handle(struct llog_handle *loghandle)
 		goto out;
 
 	if (loghandle->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN)
-		LASSERT(cfs_list_empty(&loghandle->u.phd.phd_entry));
+		LASSERT(list_empty(&loghandle->u.phd.phd_entry));
 	else if (loghandle->lgh_hdr->llh_flags & LLOG_F_IS_CAT)
-		LASSERT(cfs_list_empty(&loghandle->u.chd.chd_head));
+		LASSERT(list_empty(&loghandle->u.chd.chd_head));
 	LASSERT(sizeof(*(loghandle->lgh_hdr)) == LLOG_CHUNK_SIZE);
 	OBD_FREE(loghandle->lgh_hdr, LLOG_CHUNK_SIZE);
 out:
@@ -252,8 +252,8 @@ int llog_init_handle(const struct lu_env *env, struct llog_handle *handle,
 		}
 	}
 	if (flags & LLOG_F_IS_CAT) {
-		LASSERT(cfs_list_empty(&handle->u.chd.chd_head));
-		CFS_INIT_LIST_HEAD(&handle->u.chd.chd_head);
+		LASSERT(list_empty(&handle->u.chd.chd_head));
+		INIT_LIST_HEAD(&handle->u.chd.chd_head);
 		llh->llh_size = sizeof(struct llog_logid_rec);
 	} else if (!(flags & LLOG_F_IS_PLAIN)) {
 		CERROR("%s: unknown flags: %#x (expected %#x or %#x)\n",

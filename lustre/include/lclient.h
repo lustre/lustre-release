@@ -205,7 +205,7 @@ struct ccc_object {
          *
          * \see ccc_page::cpg_pending_linkage
          */
-        cfs_list_t             cob_pending_list;
+	struct list_head	cob_pending_list;
 
         /**
          * Access this counter is protected by inode->i_sem. Now that
@@ -469,7 +469,7 @@ struct cl_client_cache {
 	/**
 	 * List of entities(OSCs) for this LRU cache
 	 */
-	cfs_list_t		ccc_lru;
+	struct list_head	ccc_lru;
 	/**
 	 * Max # of LRU entries
 	 */

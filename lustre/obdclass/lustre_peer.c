@@ -50,19 +50,19 @@
 #define NIDS_MAX        32
 
 struct uuid_nid_data {
-        cfs_list_t       un_list;
-        struct obd_uuid  un_uuid;
-        int              un_nid_count;
-        lnet_nid_t       un_nids[NIDS_MAX];
+	struct list_head	un_list;
+	struct obd_uuid		un_uuid;
+	int			un_nid_count;
+	lnet_nid_t		un_nids[NIDS_MAX];
 };
 
 /* FIXME: This should probably become more elegant than a global linked list */
-static cfs_list_t	g_uuid_list;
+static struct list_head	g_uuid_list;
 static spinlock_t	g_uuid_lock;
 
 void class_init_uuidlist(void)
 {
-	CFS_INIT_LIST_HEAD(&g_uuid_list);
+	INIT_LIST_HEAD(&g_uuid_list);
 	spin_lock_init(&g_uuid_lock);
 }
 
@@ -80,7 +80,7 @@ int lustre_uuid_to_peer(const char *uuid, lnet_nid_t *peer_nid, int index)
 
 	obd_str2uuid(&tmp, uuid);
 	spin_lock(&g_uuid_lock);
-	cfs_list_for_each_entry(data, &g_uuid_list, un_list) {
+	list_for_each_entry(data, &g_uuid_list, un_list) {
 		if (obd_uuid_equals(&data->un_uuid, &tmp)) {
 			if (index >= data->un_nid_count)
 				break;
@@ -116,7 +116,7 @@ int class_add_uuid(const char *uuid, __u64 nid)
         data->un_nid_count = 1;
 
 	spin_lock(&g_uuid_lock);
-        cfs_list_for_each_entry(entry, &g_uuid_list, un_list) {
+	list_for_each_entry(entry, &g_uuid_list, un_list) {
                 if (obd_uuid_equals(&entry->un_uuid, &data->un_uuid)) {
                         int i;
 
@@ -133,7 +133,7 @@ int class_add_uuid(const char *uuid, __u64 nid)
                 }
         }
         if (!found)
-                cfs_list_add(&data->un_list, &g_uuid_list);
+		list_add(&data->un_list, &g_uuid_list);
 	spin_unlock(&g_uuid_lock);
 
         if (found) {
@@ -150,43 +150,44 @@ EXPORT_SYMBOL(class_add_uuid);
 /* Delete the nids for one uuid if specified, otherwise delete all */
 int class_del_uuid(const char *uuid)
 {
-	CFS_LIST_HEAD(deathrow);
 	struct uuid_nid_data *data;
+	struct list_head deathrow;
+
+	INIT_LIST_HEAD(&deathrow);
 
 	spin_lock(&g_uuid_lock);
-        if (uuid != NULL) {
-                struct obd_uuid tmp;
+	if (uuid != NULL) {
+		struct obd_uuid tmp;
 
-                obd_str2uuid(&tmp, uuid);
-                cfs_list_for_each_entry(data, &g_uuid_list, un_list) {
-                        if (obd_uuid_equals(&data->un_uuid, &tmp)) {
-                                cfs_list_move(&data->un_list, &deathrow);
-                                break;
-                        }
-                }
-        } else
-                cfs_list_splice_init(&g_uuid_list, &deathrow);
+		obd_str2uuid(&tmp, uuid);
+		list_for_each_entry(data, &g_uuid_list, un_list) {
+			if (obd_uuid_equals(&data->un_uuid, &tmp)) {
+				list_move(&data->un_list, &deathrow);
+				break;
+			}
+		}
+	} else
+		list_splice_init(&g_uuid_list, &deathrow);
 	spin_unlock(&g_uuid_lock);
 
-        if (uuid != NULL && cfs_list_empty(&deathrow)) {
-                CDEBUG(D_INFO, "Try to delete a non-existent uuid %s\n", uuid);
-                return -EINVAL;
-        }
+	if (uuid != NULL && list_empty(&deathrow)) {
+		CDEBUG(D_INFO, "Try to delete a non-existent uuid %s\n", uuid);
+		return -EINVAL;
+	}
 
-        while (!cfs_list_empty(&deathrow)) {
-                data = cfs_list_entry(deathrow.next, struct uuid_nid_data,
-                                      un_list);
-                cfs_list_del(&data->un_list);
+	while (!list_empty(&deathrow)) {
+		data = list_entry(deathrow.next, struct uuid_nid_data,
+				  un_list);
+		list_del(&data->un_list);
 
-                CDEBUG(D_INFO, "del uuid %s %s/%d\n",
-                       obd_uuid2str(&data->un_uuid),
-                       libcfs_nid2str(data->un_nids[0]),
-                       data->un_nid_count);
+		CDEBUG(D_INFO, "del uuid %s %s/%d\n",
+		       obd_uuid2str(&data->un_uuid),
+		       libcfs_nid2str(data->un_nids[0]),
+		       data->un_nid_count);
 
-                OBD_FREE(data, sizeof(*data));
-        }
-
-        return 0;
+		OBD_FREE(data, sizeof(*data));
+	}
+	return 0;
 }
 
 /* check if @nid exists in nid list of @uuid */
@@ -200,7 +201,7 @@ int class_check_uuid(struct obd_uuid *uuid, __u64 nid)
                obd_uuid2str(uuid), libcfs_nid2str(nid));
 
 	spin_lock(&g_uuid_lock);
-        cfs_list_for_each_entry(entry, &g_uuid_list, un_list) {
+	list_for_each_entry(entry, &g_uuid_list, un_list) {
                 int i;
 
                 if (!obd_uuid_equals(&entry->un_uuid, uuid))

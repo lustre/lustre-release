@@ -67,13 +67,13 @@
  */
 
 struct job_stat {
-	cfs_hlist_node_t      js_hash;
-	cfs_list_t            js_list;
-	atomic_t          js_refcount;
-	char                  js_jobid[JOBSTATS_JOBID_SIZE];
-	time_t                js_timestamp; /* seconds */
-	struct lprocfs_stats *js_stats;
-	struct obd_job_stats *js_jobstats;
+	struct hlist_node	js_hash;
+	struct list_head	js_list;
+	atomic_t		js_refcount;
+	char			js_jobid[JOBSTATS_JOBID_SIZE];
+	time_t			js_timestamp; /* seconds */
+	struct lprocfs_stats	*js_stats;
+	struct obd_job_stats	*js_jobstats;
 };
 
 static unsigned job_stat_hash(cfs_hash_t *hs, const void *key, unsigned mask)
@@ -81,30 +81,30 @@ static unsigned job_stat_hash(cfs_hash_t *hs, const void *key, unsigned mask)
 	return cfs_hash_djb2_hash(key, strlen(key), mask);
 }
 
-static void *job_stat_key(cfs_hlist_node_t *hnode)
+static void *job_stat_key(struct hlist_node *hnode)
 {
 	struct job_stat *job;
-	job = cfs_hlist_entry(hnode, struct job_stat, js_hash);
+	job = hlist_entry(hnode, struct job_stat, js_hash);
 	return job->js_jobid;
 }
 
-static int job_stat_keycmp(const void *key, cfs_hlist_node_t *hnode)
+static int job_stat_keycmp(const void *key, struct hlist_node *hnode)
 {
 	struct job_stat *job;
-	job = cfs_hlist_entry(hnode, struct job_stat, js_hash);
+	job = hlist_entry(hnode, struct job_stat, js_hash);
 	return (strlen(job->js_jobid) == strlen(key)) &&
 	       !strncmp(job->js_jobid, key, strlen(key));
 }
 
-static void *job_stat_object(cfs_hlist_node_t *hnode)
+static void *job_stat_object(struct hlist_node *hnode)
 {
-	return cfs_hlist_entry(hnode, struct job_stat, js_hash);
+	return hlist_entry(hnode, struct job_stat, js_hash);
 }
 
-static void job_stat_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+static void job_stat_get(cfs_hash_t *hs, struct hlist_node *hnode)
 {
 	struct job_stat *job;
-	job = cfs_hlist_entry(hnode, struct job_stat, js_hash);
+	job = hlist_entry(hnode, struct job_stat, js_hash);
 	atomic_inc(&job->js_refcount);
 }
 
@@ -114,7 +114,7 @@ static void job_free(struct job_stat *job)
 	LASSERT(job->js_jobstats);
 
 	write_lock(&job->js_jobstats->ojs_lock);
-	cfs_list_del_init(&job->js_list);
+	list_del_init(&job->js_list);
 	write_unlock(&job->js_jobstats->ojs_lock);
 
 	lprocfs_free_stats(&job->js_stats);
@@ -128,14 +128,14 @@ static void job_putref(struct job_stat *job)
 		job_free(job);
 }
 
-static void job_stat_put_locked(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+static void job_stat_put_locked(cfs_hash_t *hs, struct hlist_node *hnode)
 {
 	struct job_stat *job;
-	job = cfs_hlist_entry(hnode, struct job_stat, js_hash);
+	job = hlist_entry(hnode, struct job_stat, js_hash);
 	job_putref(job);
 }
 
-static void job_stat_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+static void job_stat_exit(cfs_hash_t *hs, struct hlist_node *hnode)
 {
 	CERROR("should not have any items\n");
 }
@@ -151,12 +151,12 @@ static cfs_hash_ops_t job_stats_hash_ops = {
 };
 
 static int job_iter_callback(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-			     cfs_hlist_node_t *hnode, void *data)
+			     struct hlist_node *hnode, void *data)
 {
 	time_t oldest = *((time_t *)data);
 	struct job_stat *job;
 
-	job = cfs_hlist_entry(hnode, struct job_stat, js_hash);
+	job = hlist_entry(hnode, struct job_stat, js_hash);
 	if (!oldest || job->js_timestamp < oldest)
 		cfs_hash_bd_del_locked(hs, bd, hnode);
 
@@ -202,8 +202,8 @@ static struct job_stat *job_alloc(char *jobid, struct obd_job_stats *jobs)
 	memcpy(job->js_jobid, jobid, JOBSTATS_JOBID_SIZE);
 	job->js_timestamp = cfs_time_current_sec();
 	job->js_jobstats = jobs;
-	CFS_INIT_HLIST_NODE(&job->js_hash);
-	CFS_INIT_LIST_HEAD(&job->js_list);
+	INIT_HLIST_NODE(&job->js_hash);
+	INIT_LIST_HEAD(&job->js_list);
 	atomic_set(&job->js_refcount, 1);
 
 	return job;
@@ -242,15 +242,15 @@ int lprocfs_job_stats_log(struct obd_device *obd, char *jobid,
 	if (job2 != job) {
 		job_putref(job);
 		job = job2;
-		/* We cannot LASSERT(!cfs_list_empty(&job->js_list)) here,
+		/* We cannot LASSERT(!list_empty(&job->js_list)) here,
 		 * since we just lost the race for inserting "job" into the
 		 * ojs_list, and some other thread is doing it _right_now_.
 		 * Instead, be content the other thread is doing this, since
 		 * "job2" was initialized in job_alloc() already. LU-2163 */
 	} else {
-		LASSERT(cfs_list_empty(&job->js_list));
+		LASSERT(list_empty(&job->js_list));
 		write_lock(&stats->ojs_lock);
-		cfs_list_add_tail(&job->js_list, &stats->ojs_list);
+		list_add_tail(&job->js_list, &stats->ojs_list);
 		write_unlock(&stats->ojs_lock);
 	}
 
@@ -275,7 +275,7 @@ void lprocfs_job_stats_fini(struct obd_device *obd)
 	cfs_hash_for_each_safe(stats->ojs_hash, job_iter_callback, &oldest);
 	cfs_hash_putref(stats->ojs_hash);
 	stats->ojs_hash = NULL;
-	LASSERT(cfs_list_empty(&stats->ojs_list));
+	LASSERT(list_empty(&stats->ojs_list));
 }
 EXPORT_SYMBOL(lprocfs_job_stats_fini);
 
@@ -289,7 +289,7 @@ static void *lprocfs_jobstats_seq_start(struct seq_file *p, loff_t *pos)
 	if (off == 0)
 		return SEQ_START_TOKEN;
 	off--;
-	cfs_list_for_each_entry(job, &stats->ojs_list, js_list) {
+	list_for_each_entry(job, &stats->ojs_list, js_list) {
 		if (!off--)
 			return job;
 	}
@@ -307,7 +307,7 @@ static void *lprocfs_jobstats_seq_next(struct seq_file *p, void *v, loff_t *pos)
 {
 	struct obd_job_stats *stats = p->private;
 	struct job_stat *job;
-	cfs_list_t *next;
+	struct list_head *next;
 
 	++*pos;
 	if (v == SEQ_START_TOKEN) {
@@ -318,7 +318,7 @@ static void *lprocfs_jobstats_seq_next(struct seq_file *p, void *v, loff_t *pos)
 	}
 
 	return next == &stats->ojs_list ? NULL :
-		cfs_list_entry(next, struct job_stat, js_list);
+		list_entry(next, struct job_stat, js_list);
 }
 
 /*
@@ -513,7 +513,7 @@ int lprocfs_job_stats_init(struct obd_device *obd, int cntr_num,
 	if (stats->ojs_hash == NULL)
 		RETURN(-ENOMEM);
 
-	CFS_INIT_LIST_HEAD(&stats->ojs_list);
+	INIT_LIST_HEAD(&stats->ojs_list);
 	rwlock_init(&stats->ojs_lock);
 	stats->ojs_cntr_num = cntr_num;
 	stats->ojs_cntr_init_fn = init_fn;

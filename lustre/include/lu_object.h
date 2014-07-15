@@ -288,7 +288,7 @@ struct lu_device {
         /**
          * Link the device to the site.
          **/
-        cfs_list_t                         ld_linkage;
+	struct list_head		   ld_linkage;
 };
 
 struct lu_device_type_operations;
@@ -473,7 +473,7 @@ struct lu_object {
         /**
          * Linkage into list of all layers.
          */
-        cfs_list_t                         lo_linkage;
+	struct list_head		   lo_linkage;
 	/**
 	 * Link to the device, for debugging.
 	 */
@@ -558,7 +558,7 @@ struct lu_site_bkt_data {
 	/**
 	 * number of busy object on this bucket
 	 */
-	long                      lsb_busy;
+	long			lsb_busy;
 	/**
 	 * LRU list, updated on each access to object. Protected by
 	 * bucket lock of lu_site::ls_obj_hash.
@@ -567,7 +567,7 @@ struct lu_site_bkt_data {
 	 * moved to the lu_site::ls_lru.prev (this is due to the non-existence
 	 * of list_for_each_entry_safe_reverse()).
 	 */
-	cfs_list_t                lsb_lru;
+	struct list_head	lsb_lru;
 	/**
 	 * Wait-queue signaled when an object in this site is ultimately
 	 * destroyed (lu_object_free()). It is used by lu_object_find() to
@@ -576,7 +576,7 @@ struct lu_site_bkt_data {
 	 *
 	 * \see htable_lookup().
 	 */
-	wait_queue_head_t               lsb_marche_funebre;
+	wait_queue_head_t	lsb_marche_funebre;
 };
 
 enum {
@@ -603,28 +603,28 @@ struct lu_site {
         /**
          * objects hash table
          */
-        cfs_hash_t               *ls_obj_hash;
+	cfs_hash_t		*ls_obj_hash;
         /**
          * index of bucket on hash table while purging
          */
-        int                       ls_purge_start;
-        /**
-         * Top-level device for this stack.
-         */
-        struct lu_device         *ls_top_dev;
+	int			ls_purge_start;
+	/**
+	 * Top-level device for this stack.
+	 */
+	struct lu_device	*ls_top_dev;
 	/**
 	 * Bottom-level device for this stack
 	 */
 	struct lu_device	*ls_bottom_dev;
-        /**
-         * Linkage into global list of sites.
-         */
-        cfs_list_t                ls_linkage;
-        /**
-         * List for lu device for this site, protected
-         * by ls_ld_lock.
-         **/
-        cfs_list_t                ls_ld_linkage;
+	/**
+	 * Linkage into global list of sites.
+	 */
+	struct list_head	ls_linkage;
+	/**
+	 * List for lu device for this site, protected
+	 * by ls_ld_lock.
+	 **/
+	struct list_head	ls_ld_linkage;
 	spinlock_t		ls_ld_lock;
 	/**
 	 * Lock to serialize site purge.
@@ -745,8 +745,8 @@ struct lu_object *lu_object_find_slice(const struct lu_env *env,
  */
 static inline struct lu_object *lu_object_top(struct lu_object_header *h)
 {
-        LASSERT(!cfs_list_empty(&h->loh_layers));
-        return container_of0(h->loh_layers.next, struct lu_object, lo_linkage);
+	LASSERT(!list_empty(&h->loh_layers));
+	return container_of0(h->loh_layers.next, struct lu_object, lo_linkage);
 }
 
 /**
@@ -959,22 +959,22 @@ struct lu_context {
          * Pointer to an array with key values. Internal implementation
          * detail.
          */
-        void                 **lc_value;
-        /**
-         * Linkage into a list of all remembered contexts. Only
-         * `non-transient' contexts, i.e., ones created for service threads
-         * are placed here.
-         */
-        cfs_list_t             lc_remember;
-        /**
-         * Version counter used to skip calls to lu_context_refill() when no
-         * keys were registered.
-         */
-        unsigned               lc_version;
+	void		      **lc_value;
+	/**
+	 * Linkage into a list of all remembered contexts. Only
+	 * `non-transient' contexts, i.e., ones created for service threads
+	 * are placed here.
+	 */
+	struct list_head	lc_remember;
+	/**
+	 * Version counter used to skip calls to lu_context_refill() when no
+	 * keys were registered.
+	 */
+	unsigned		lc_version;
         /**
          * Debugging cookie.
          */
-        unsigned               lc_cookie;
+	unsigned		lc_cookie;
 };
 
 /**

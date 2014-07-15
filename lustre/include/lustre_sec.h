@@ -531,17 +531,17 @@ struct ptlrpc_ctx_ops {
                                         PTLRPC_CTX_ERROR)
 
 struct ptlrpc_cli_ctx {
-	cfs_hlist_node_t        cc_cache;      /* linked into ctx cache */
-	atomic_t                cc_refcount;
+	struct hlist_node	cc_cache;	/* linked into ctx cache */
+	atomic_t		cc_refcount;
 	struct ptlrpc_sec      *cc_sec;
 	struct ptlrpc_ctx_ops  *cc_ops;
-        cfs_time_t              cc_expire;     /* in seconds */
-        unsigned int            cc_early_expire:1;
-        unsigned long           cc_flags;
-        struct vfs_cred         cc_vcred;
+	cfs_time_t		cc_expire;	/* in seconds */
+	unsigned int		cc_early_expire:1;
+	unsigned long		cc_flags;
+	struct vfs_cred		cc_vcred;
 	spinlock_t		cc_lock;
-        cfs_list_t              cc_req_list;   /* waiting reqs linked here */
-        cfs_list_t              cc_gc_chain;   /* linked to gc chain */
+	struct list_head	cc_req_list;	/* waiting reqs linked here */
+	struct list_head	cc_gc_chain;	/* linked to gc chain */
 };
 
 /**
@@ -856,12 +856,12 @@ struct ptlrpc_sec {
         struct obd_import              *ps_import;
 	spinlock_t			ps_lock;
 
-        /*
-         * garbage collection
-         */
-        cfs_list_t                      ps_gc_list;
-        cfs_time_t                      ps_gc_interval; /* in seconds */
-        cfs_time_t                      ps_gc_next;     /* in seconds */
+	/*
+	 * garbage collection
+	 */
+	struct list_head		ps_gc_list;
+	cfs_time_t			ps_gc_interval;	/* in seconds */
+	cfs_time_t			ps_gc_next;	/* in seconds */
 };
 
 static inline int sec_is_reverse(struct ptlrpc_sec *sec)

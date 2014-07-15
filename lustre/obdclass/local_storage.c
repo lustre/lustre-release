@@ -35,7 +35,7 @@
 #include "local_storage.h"
 
 /* all initialized local storages on this node are linked on this */
-static CFS_LIST_HEAD(ls_list_head);
+static struct list_head ls_list_head = LIST_HEAD_INIT(ls_list_head);
 static DEFINE_MUTEX(ls_list_mutex);
 
 static int ls_object_init(const struct lu_env *env, struct lu_object *o,
@@ -108,7 +108,7 @@ static struct ls_device *__ls_find_dev(struct dt_device *dev)
 {
 	struct ls_device *ls, *ret = NULL;
 
-	cfs_list_for_each_entry(ls, &ls_list_head, ls_linkage) {
+	list_for_each_entry(ls, &ls_list_head, ls_linkage) {
 		if (ls->ls_osd == dev) {
 			atomic_inc(&ls->ls_refcount);
 			ret = ls;
@@ -156,7 +156,7 @@ struct ls_device *ls_device_get(struct dt_device *dev)
 		GOTO(out_ls, ls = ERR_PTR(-ENOMEM));
 
 	atomic_set(&ls->ls_refcount, 1);
-	CFS_INIT_LIST_HEAD(&ls->ls_los_list);
+	INIT_LIST_HEAD(&ls->ls_los_list);
 	mutex_init(&ls->ls_los_mutex);
 
 	ls->ls_osd = dev;
@@ -167,7 +167,7 @@ struct ls_device *ls_device_get(struct dt_device *dev)
 	ls->ls_top_dev.dd_lu_dev.ld_site = dev->dd_lu_dev.ld_site;
 
 	/* finally add ls to the list */
-	cfs_list_add(&ls->ls_linkage, &ls_list_head);
+	list_add(&ls->ls_linkage, &ls_list_head);
 out_ls:
 	mutex_unlock(&ls_list_mutex);
 	RETURN(ls);
@@ -181,8 +181,8 @@ void ls_device_put(const struct lu_env *env, struct ls_device *ls)
 
 	mutex_lock(&ls_list_mutex);
 	if (atomic_read(&ls->ls_refcount) == 0) {
-		LASSERT(cfs_list_empty(&ls->ls_los_list));
-		cfs_list_del(&ls->ls_linkage);
+		LASSERT(list_empty(&ls->ls_los_list));
+		list_del(&ls->ls_linkage);
 		lu_site_purge(env, ls->ls_top_dev.dd_lu_dev.ld_site, ~0);
 		lu_device_fini(&ls->ls_top_dev.dd_lu_dev);
 		OBD_FREE_PTR(ls);
@@ -664,7 +664,7 @@ struct local_oid_storage *dt_los_find(struct ls_device *ls, __u64 seq)
 {
 	struct local_oid_storage *los, *ret = NULL;
 
-	cfs_list_for_each_entry(los, &ls->ls_los_list, los_list) {
+	list_for_each_entry(los, &ls->ls_los_list, los_list) {
 		if (los->los_seq == seq) {
 			atomic_inc(&los->los_refcount);
 			ret = los;
@@ -805,7 +805,7 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 	mutex_init(&(*los)->los_id_lock);
 	(*los)->los_dev = &ls->ls_top_dev;
 	atomic_inc(&ls->ls_refcount);
-	cfs_list_add(&(*los)->los_list, &ls->ls_los_list);
+	list_add(&(*los)->los_list, &ls->ls_los_list);
 
 	/* Use {seq, 0, 0} to create the LAST_ID file for every
 	 * sequence.  OIDs start at LUSTRE_FID_INIT_OID.
@@ -882,7 +882,7 @@ out_trans:
 	}
 out_los:
 	if (rc != 0) {
-		cfs_list_del(&(*los)->los_list);
+		list_del(&(*los)->los_list);
 		atomic_dec(&ls->ls_refcount);
 		OBD_FREE_PTR(*los);
 		*los = NULL;
@@ -925,7 +925,7 @@ void local_oid_storage_fini(const struct lu_env *env,
 
 	if (los->los_obj)
 		lu_object_put_nocache(env, &los->los_obj->do_lu);
-	cfs_list_del(&los->los_list);
+	list_del(&los->los_list);
 	OBD_FREE_PTR(los);
 	mutex_unlock(&ls->ls_los_mutex);
 	ls_device_put(env, ls);
