@@ -239,8 +239,23 @@ static int nrs_policy_start_locked(struct ptlrpc_nrs_policy *policy, char *arg)
 		if (nrs->nrs_policy_fallback == NULL)
 			RETURN(-EPERM);
 
-		if (policy->pol_state == NRS_POL_STATE_STARTED)
-			RETURN(0);
+		if (policy->pol_state == NRS_POL_STATE_STARTED) {
+			/**
+			 * If the policy argument now is different from the last time,
+			 * stop the policy first and start it again with the new
+			 * argument.
+			 */
+			if ((arg != NULL) && (strlen(arg) >= NRS_POL_ARG_MAX))
+				return -EINVAL;
+
+			if ((arg == NULL && strlen(policy->pol_arg) == 0) ||
+			    (arg != NULL && strcmp(policy->pol_arg, arg) == 0))
+				RETURN(0);
+
+			rc = nrs_policy_stop_locked(policy);
+			if (rc)
+				RETURN(-EAGAIN);
+		}
 	}
 
 	/**
@@ -253,6 +268,14 @@ static int nrs_policy_start_locked(struct ptlrpc_nrs_policy *policy, char *arg)
 		CERROR("NRS: cannot get module for policy %s; is it alive?\n",
 		       policy->pol_desc->pd_name);
 		RETURN(-ENODEV);
+	}
+
+	if (arg != NULL) {
+		if (strlen(arg) + 1 > sizeof(policy->pol_arg)) {
+			CERROR("NRS: arg '%s' is too long\n", arg);
+			GOTO(out, rc = -E2BIG);
+		}
+		strncpy(policy->pol_arg, arg, sizeof(policy->pol_arg));
 	}
 
 	/**

@@ -456,7 +456,9 @@ void nrs_policy_get_info_locked(struct ptlrpc_nrs_policy *policy,
 	LASSERT(info != NULL);
 	assert_spin_locked(&policy->pol_nrs->nrs_lock);
 
+	LASSERT(sizeof(info->pi_arg) == sizeof(policy->pol_arg));
 	memcpy(info->pi_name, policy->pol_desc->pd_name, NRS_POL_NAME_MAX);
+	memcpy(info->pi_arg, policy->pol_arg, sizeof(policy->pol_arg));
 
 	info->pi_fallback    = !!(policy->pol_flags & PTLRPC_NRS_FL_FALLBACK);
 	info->pi_state	     = policy->pol_state;
@@ -527,6 +529,8 @@ again:
 			if (i == 0) {
 				memcpy(infos[pol_idx].pi_name, tmp.pi_name,
 				       NRS_POL_NAME_MAX);
+				memcpy(infos[pol_idx].pi_arg, tmp.pi_arg,
+				       sizeof(tmp.pi_arg));
 				memcpy(&infos[pol_idx].pi_state, &tmp.pi_state,
 				       sizeof(tmp.pi_state));
 				infos[pol_idx].pi_fallback = tmp.pi_fallback;
@@ -538,6 +542,9 @@ again:
 				LASSERT(strncmp(infos[pol_idx].pi_name,
 						tmp.pi_name,
 						NRS_POL_NAME_MAX) == 0);
+				LASSERT(strncmp(infos[pol_idx].pi_arg,
+						tmp.pi_arg,
+						sizeof(tmp.pi_arg)) == 0);
 				/**
 				 * Not asserting ptlrpc_nrs_pol_info::pi_state,
 				 * because it may be different between
@@ -590,12 +597,19 @@ again:
 		   "high_priority_requests:");
 
 	for (pol_idx = 0; pol_idx < num_pols; pol_idx++) {
-		seq_printf(m, "  - name: %s\n"
-			      "    state: %s\n"
+		if (strlen(infos[pol_idx].pi_arg) > 0)
+			seq_printf(m, "  - name: %s %s\n",
+				      infos[pol_idx].pi_name,
+				      infos[pol_idx].pi_arg);
+		else
+			seq_printf(m, "  - name: %s\n",
+				      infos[pol_idx].pi_name);
+
+
+		seq_printf(m, "    state: %s\n"
 			      "    fallback: %s\n"
 			      "    queued: %-20d\n"
 			      "    active: %-20d\n\n",
-			      infos[pol_idx].pi_name,
 			      nrs_state2str(infos[pol_idx].pi_state),
 			      infos[pol_idx].pi_fallback ? "yes" : "no",
 			      (int)infos[pol_idx].pi_req_queued,
