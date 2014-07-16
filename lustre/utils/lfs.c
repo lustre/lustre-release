@@ -3755,7 +3755,7 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 				hur = llapi_hsm_user_request_alloc(nbfile_alloc,
 								   opaque_len);
 				if (hur == NULL) {
-					fprintf(stderr, "Cannot allocate "
+					fprintf(stderr, "hsm: cannot allocate "
 						"the request: %s\n",
 						strerror(errno));
 					hur = oldhur;
@@ -3765,8 +3765,11 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 				}
 				size = hur_len(oldhur);
 				if (size < 0) {
-					fprintf(stderr, "Cannot allocate "
-						"the requested size\n");
+					fprintf(stderr, "hsm: cannot allocate "
+						"%u files + %u bytes data\n",
+					    oldhur->hur_request.hr_itemcount,
+					    oldhur->hur_request.hr_data_len);
+					free(hur);
 					hur = oldhur;
 					rc = -E2BIG;
 					fclose(fp);
