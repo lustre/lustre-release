@@ -1,25 +1,39 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="userutilities">
+<?xml version="1.0" encoding="UTF-8"?>
+<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="userutilities">
   <title xml:id="userutilities.title">User Utilities</title>
   <para>This chapter describes user utilities and includes the following sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438206_94597"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438206_94597"/>
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438206_42260"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438206_42260"/>
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438206_75125"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438206_75125"/>
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438206_86244"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438206_86244"/>
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438206_56217"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438206_56217"/>
+      </para>
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438206_94597">
-    <title><indexterm><primary>lfs</primary></indexterm>
+    <title>
+      <indexterm>
+        <primary>lfs</primary>
+      </indexterm>
       <literal>lfs</literal>
     </title>
     <para>The <literal>lfs</literal> utility can be used for user configuration routines and monitoring.</para>
@@ -99,17 +113,23 @@ lfs help
           <thead>
             <row>
               <entry nameend="c2" namest="c1">
-                <para><emphasis role="bold">Option</emphasis></para>
+                <para>
+                  <emphasis role="bold">Option</emphasis>
+                </para>
               </entry>
               <entry>
-                <para><emphasis role="bold">Description</emphasis></para>
+                <para>
+                  <emphasis role="bold">Description</emphasis>
+                </para>
               </entry>
             </row>
           </thead>
           <tbody>
             <row>
               <entry nameend="c2" namest="c1">
-                <para><literal>changelog</literal> </para>
+                <para>
+                  <literal>changelog</literal>
+                </para>
               </entry>
               <entry>
                 <para>Shows the metadata changes on an MDT. Start and end points are optional. The <literal>--follow </literal>option blocks on new changes; this option is only valid when run directly on the MDT node.</para>
@@ -117,7 +137,9 @@ lfs help
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para> <literal>changelog_clear</literal></para>
+                <para>
+                  <literal>changelog_clear</literal>
+                </para>
               </entry>
               <entry>
                 <para>Indicates that changelog records previous to <literal><replaceable>endrec</replaceable></literal> are no longer of interest to a particular consumer <literal><replaceable>id</replaceable></literal>, potentially allowing the MDT to free up disk space. An <literal><replaceable>endrec</replaceable></literal> of 0 indicates the current last record. Changelog consumers must be registered on the MDT node using <literal>lctl</literal>.</para>
@@ -144,10 +166,12 @@ lfs help
                 <para>By default, the usage of all mounted Lustre file systems is reported. If the
                     <literal>path</literal> option is included, only the usage for the specified
                   file system is reported. If the <literal>-h</literal> option is included, the
-                  output is printed in human-readable format, using SI base-2 suffixes for <emphasis
-                    role="bold">M</emphasis>ega-, <emphasis role="bold">G</emphasis>iga-, <emphasis
-                    role="bold">T</emphasis>era-, <emphasis role="bold">P</emphasis>eta-, or
-                    <emphasis role="bold">E</emphasis>xabytes.</para>
+                  output is printed in human-readable format, using SI base-2 suffixes for 
+                  <emphasis role="bold">M</emphasis>ega-, 
+                  <emphasis role="bold">G</emphasis>iga-, 
+                  <emphasis role="bold">T</emphasis>era-, 
+                  <emphasis role="bold">P</emphasis>eta-, or
+                  <emphasis role="bold">E</emphasis>xabytes.</para>
                 <para>If the <literal>--lazy</literal> option is specified, any OST that is
                   currently disconnected from the client will be skipped. Using the
                     <literal>--lazy</literal> option prevents the <literal>df</literal> output from
@@ -159,7 +183,9 @@ lfs help
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para><literal> find</literal></para>
+                <para>
+                  <literal> find</literal>
+                </para>
               </entry>
               <entry>
                 <para>Searches the directory tree rooted at the given directory/filename for files that match the given parameters.</para>
@@ -184,10 +210,12 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--ctime</literal></para>
+                <para>
+                  <literal>--ctime</literal>
+                </para>
               </entry>
               <entry>
                 <para>File status was last changed N*24 hours ago.</para>
@@ -195,10 +223,12 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--mtime</literal></para>
+                <para>
+                  <literal>--mtime</literal>
+                </para>
               </entry>
               <entry>
                 <para>File data was last modified N*24 hours ago.</para>
@@ -206,10 +236,12 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--obd</literal></para>
+                <para>
+                  <literal>--obd</literal>
+                </para>
               </entry>
               <entry>
                 <para>File has an object on a specific OST(s).</para>
@@ -217,10 +249,12 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--size</literal></para>
+                <para>
+                  <literal>--size</literal>
+                </para>
               </entry>
               <entry>
                 <para>File has a size in bytes, or kilo-, Mega-, Giga-, Tera-, Peta- or Exabytes if a suffix is given.</para>
@@ -228,10 +262,12 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--type</literal></para>
+                <para>
+                  <literal>--type</literal>
+                </para>
               </entry>
               <entry>
                 <para>File has the type  - block, character, directory, pipe, file, symlink, socket
@@ -240,10 +276,12 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--uid</literal></para>
+                <para>
+                  <literal>--uid</literal>
+                </para>
               </entry>
               <entry>
                 <para>File has a specific numeric user ID.</para>
@@ -251,10 +289,12 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--user</literal></para>
+                <para>
+                  <literal>--user</literal>
+                </para>
               </entry>
               <entry>
                 <para>File owned by a specific user (numeric user ID allowed).</para>
@@ -262,10 +302,12 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--gid</literal></para>
+                <para>
+                  <literal>--gid</literal>
+                </para>
               </entry>
               <entry>
                 <para>File has a specific group ID.</para>
@@ -273,10 +315,12 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--group</literal></para>
+                <para>
+                  <literal>--group</literal>
+                </para>
               </entry>
               <entry>
                 <para>File belongs to a specific group (numeric group ID allowed).</para>
@@ -284,7 +328,7 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
                 <para> -<literal>-maxdepth</literal></para>
@@ -295,10 +339,10 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--print</literal> / <literal>--print0</literal></para>
+                <para><literal>--print</literal> / <literal>--print0</literal></para>
               </entry>
               <entry>
                 <para>Prints the full filename, followed by a new line or NULL character correspondingly.</para>
@@ -306,7 +350,9 @@ lfs help
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para> <literal>osts [path]</literal></para>
+                <para>
+                  <literal>osts [path]</literal>
+                </para>
               </entry>
               <entry>
                 <para>Lists all OSTs for the file system. If a path located on a mounted Lustre file
@@ -316,10 +362,12 @@ lfs help
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para> <literal>getname [path...]</literal></para>
+                <para>
+                  <literal>getname [path...]</literal>
+                </para>
               </entry>
               <entry>
-                  <para>List each Lustre file system instance associated with each Lustre mount
+                <para>List each Lustre file system instance associated with each Lustre mount
                   point. If no path is specified, all Lustre mount points are interrogated. If a
                   list of paths is provided, the instance of each path is provided. If the path is
                   not a Lustre instance 'No such device' is returned.</para>
@@ -327,7 +375,9 @@ lfs help
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para> <literal>getstripe</literal></para>
+                <para>
+                  <literal>getstripe</literal>
+                </para>
               </entry>
               <entry>
                 <para>Lists striping information for a given filename or directory. By default, the stripe count, stripe size and offset are returned.</para>
@@ -336,15 +386,17 @@ lfs help
                   printed without substituting the file system default values for unspecified
                   fields. If the striping EA is not set, 0, 0, and -1 will be printed for the stripe
                   count, size, and offset respectively.</para>
-				<para condition='l24'>The <literal>-M</literal> prints the index of the MDT for a given directory. See <xref linkend='dbdoclet.rmremotedir'/>.</para>
+                <para condition="l24">The <literal>-M</literal> prints the index of the MDT for a given directory. See <xref linkend="dbdoclet.rmremotedir"/>.</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--obd <replaceable>ost_name</replaceable></literal></para>
+                <para>
+                  <literal>--obd <replaceable>ost_name</replaceable></literal>
+                </para>
               </entry>
               <entry>
                 <para>Lists files that have an object on a specific OST.</para>
@@ -352,21 +404,25 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--quiet</literal></para>
+                <para>
+                  <literal>--quiet</literal>
+                </para>
               </entry>
               <entry>
-                <para>Lists details about the file&apos;s object ID information.</para>
+                <para>Lists details about the file's object ID information.</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--verbose</literal></para>
+                <para>
+                  <literal>--verbose</literal>
+                </para>
               </entry>
               <entry>
                 <para>Prints additional striping information.</para>
@@ -374,10 +430,12 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--count</literal></para>
+                <para>
+                  <literal>--count</literal>
+                </para>
               </entry>
               <entry>
                 <para>Lists the stripe count (how many OSTs to use).</para>
@@ -385,10 +443,12 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--index</literal></para>
+                <para>
+                  <literal>--index</literal>
+                </para>
               </entry>
               <entry>
                 <para>Lists the index for each OST in the file system.</para>
@@ -396,10 +456,12 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--offset</literal></para>
+                <para>
+                  <literal>--offset</literal>
+                </para>
               </entry>
               <entry>
                 <para>Lists the OST index on which file striping starts.</para>
@@ -407,10 +469,12 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--pool</literal></para>
+                <para>
+                  <literal>--pool</literal>
+                </para>
               </entry>
               <entry>
                 <para>Lists the pools to which a file belongs.</para>
@@ -418,10 +482,12 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--size</literal></para>
+                <para>
+                  <literal>--size</literal>
+                </para>
               </entry>
               <entry>
                 <para>Lists the stripe size (how much data to write to one OST before moving to the next OST).</para>
@@ -429,10 +495,12 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--directory</literal></para>
+                <para>
+                  <literal>--directory</literal>
+                </para>
               </entry>
               <entry>
                 <para>Lists entries about a specified directory instead of its contents (in the same manner as <literal>ls -d</literal>).</para>
@@ -440,10 +508,12 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--recursive</literal></para>
+                <para>
+                  <literal>--recursive</literal>
+                </para>
               </entry>
               <entry>
                 <para>Recurses into all sub-directories.</para>
@@ -451,20 +521,25 @@ lfs help
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para> <literal>setstripe</literal></para>
+                <para>
+                  <literal>setstripe</literal>
+                </para>
               </entry>
               <entry>
-                <para>Create new files with a specific file layout (stripe pattern) configuration.<footnote>
-                    <para>The file cannot exist prior to using <literal>setstripe</literal>. A directory must exist prior to using <literal>setstripe</literal>.</para>
-                  </footnote></para>
+				<para>Create new files with a specific file layout (stripe
+                  pattern) configuration.<footnote><para>The file cannot exist prior to using
+                  <literal>setstripe</literal>. A directory must exist prior to using
+                  <literal>setstripe</literal>.</para></footnote></para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--count stripe_cnt</literal></para>
+                <para>
+                  <literal>--count stripe_cnt</literal>
+                </para>
               </entry>
               <entry>
                 <para>Number of OSTs over which to stripe a file. A <literal>stripe_cnt</literal> of 0 uses the file system-wide default stripe count (default is 1). A <literal>stripe_cnt</literal> of -1 stripes over all available OSTs.</para>
@@ -472,23 +547,23 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--size stripe_size</literal><footnote>
-                    <para>The default stripe-size is 0. The default start-ost is -1. Do NOT confuse them! If you set start-ost to 0, all new file creations occur on OST 0 (seldom a good idea).</para>
-                  </footnote>&#160;</para>
+                <para><literal>--size stripe_size</literal><footnote><para>The default stripe-size is 0. The default start-ost is -1. Do NOT confuse them! If you set start-ost to 0, all new file creations occur on OST 0 (seldom a good idea).</para></footnote> </para>
               </entry>
               <entry>
-                <para>Number of bytes to store on an OST before moving to the next OST. A stripe_size of 0 uses the file system&apos;s default stripe size, (default is 1 MB). Can be specified with <emphasis role="bold">k</emphasis> (KB), <emphasis role="bold">m</emphasis> (MB), or <emphasis role="bold">g</emphasis> (GB), respectively.</para>
+                <para>Number of bytes to store on an OST before moving to the next OST. A stripe_size of 0 uses the file system's default stripe size, (default is 1 MB). Can be specified with <emphasis role="bold">k</emphasis> (KB), <emphasis role="bold">m</emphasis> (MB), or <emphasis role="bold">g</emphasis> (GB), respectively.</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--index --offset start_ost_index</literal></para>
+                <para>
+                  <literal>--index --offset start_ost_index</literal>
+                </para>
               </entry>
               <entry>
                 <para>The OST index (base 10, starting at 0) on which to start striping for this file. A start_ost_index value of -1 allows the MDS to choose the starting index. This is the default value, and it means that the MDS selects the starting OST as it wants. We strongly recommend selecting this default, as it allows space and load balancing to be done by the MDS as needed. The <literal>start_ost_index</literal> value has no relevance on whether the MDS will use round-robin or QoS weighted allocation for the remaining stripes in the file.</para>
@@ -496,10 +571,12 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>  </para>
               </entry>
               <entry>
-                <para> <literal>--pool <replaceable>pool</replaceable></literal></para>
+                <para>
+                  <literal>--pool <replaceable>pool</replaceable></literal>
+                </para>
               </entry>
               <entry>
                 <para>Name of the pre-defined pool of OSTs (see <xref linkend="dbdoclet.50438219_38274"/>) that will be used for striping. The <literal>stripe_cnt</literal>, <literal>stripe_size</literal> and <literal>start_ost</literal> values are used as well. The start-ost value must be part of the pool or an error is returned.</para>
@@ -507,7 +584,9 @@ lfs help
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para> <literal>setstripe -d</literal></para>
+                <para>
+                  <literal>setstripe -d</literal>
+                </para>
               </entry>
               <entry>
                 <para>Deletes default striping on the specified directory.</para>
@@ -515,24 +594,37 @@ lfs help
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para> <literal>poollist {filesystem} [.poolname]|{pathname}</literal></para>
+                <para>
+                  <literal>poollist {filesystem} [.poolname]|{pathname}</literal>
+                </para>
               </entry>
               <entry>
-                <para>Lists pools in the file system or pathname, or OSTs in the file system&apos;s pool.</para>
+                <para>Lists pools in the file system or pathname, or OSTs in the file system's pool.</para>
               </entry>
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para> <literal>quota [-q] [-v] [-o <replaceable>obd_uuid</replaceable>|-i <replaceable>mdt_idx</replaceable>|-I <replaceable>ost_idx</replaceable>] [-u|-g <replaceable>uname|uid|gname|gid]</replaceable> <replaceable>/mount_point</replaceable></literal></para>
-                <para>&#160;</para>
+                <para>
+                  <literal>quota [-q] [-v] [-o <replaceable>obd_uuid</replaceable>|-i <replaceable>mdt_idx</replaceable>|-I <replaceable>ost_idx</replaceable>] [-u|-g <replaceable>uname|uid|gname|gid]</replaceable> <replaceable>/mount_point</replaceable></literal>
+                </para>
+                <para> </para>
               </entry>
               <entry>
-                <para>Displays disk usage and limits, either for the full file system or for objects on a specific OBD. A user or group name or an ID can be specified. If both user and group are omitted, quotas for the current UID/GID are shown. The <literal>-q</literal> option disables printing of additional descriptions (including column titles). It fills in blank spaces in the &apos;&apos;grace&apos;&apos; column with zeros (when there is no grace period set), to ensure that the number of columns is consistent. The <literal>-v</literal> option provides more verbose (per-OBD statistics) output.</para>
+				<para>Displays disk usage and limits, either for the full file
+                  system or for objects on a specific OBD. A user or group name or an ID can be
+                  specified. If both user and group are omitted, quotas for the current UID/GID
+                  are shown. The <literal>-q</literal> option disables printing of additional
+                  descriptions (including column titles). It fills in blank spaces in the
+                  <literal>grace</literal> column with zeros (when there is no grace period set), 
+                  to ensure that the number of columns is consistent. The <literal>-v</literal> 
+                  option provides more verbose (per-OBD statistics) output.</para>
               </entry>
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para> <literal>quota -t <replaceable>-u|-g</replaceable> <replaceable>/mount_point</replaceable></literal></para>
+                <para>
+                  <literal>quota -t <replaceable>-u|-g</replaceable> <replaceable>/mount_point</replaceable></literal>
+                </para>
               </entry>
               <entry>
                 <para>Displays block and inode grace times for user (<literal>-u</literal>) or group (<literal>-g</literal>) quotas.</para>
@@ -540,15 +632,19 @@ lfs help
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para> <literal>quotachown</literal></para>
+                <para>
+                  <literal>quotachown</literal>
+                </para>
               </entry>
               <entry>
-                <para>Changes the file&apos;s owner and group on OSTs of the specified file system.</para>
+                <para>Changes the file's owner and group on OSTs of the specified file system.</para>
               </entry>
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para> <literal>quotacheck [-ugf] <replaceable>/mount_point</replaceable></literal></para>
+                <para>
+                  <literal>quotacheck [-ugf] <replaceable>/mount_point</replaceable></literal>
+                </para>
               </entry>
               <entry>
                 <para>Scans the specified file system for disk usage, and creates or updates quota files. Options specify quota for users (<literal>-u</literal>), groups (<literal>-g</literal>), and force (<literal>-f</literal>).</para>
@@ -556,7 +652,9 @@ lfs help
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para> <literal>quotaon [-ugf] <replaceable>/mount_point</replaceable></literal></para>
+                <para>
+                  <literal>quotaon [-ugf] <replaceable>/mount_point</replaceable></literal>
+                </para>
               </entry>
               <entry>
                 <para>Turns on file system quotas. Options specify quota for users (<literal>-u</literal>), groups (<literal>-g</literal>), and force (<literal>-f</literal>).</para>
@@ -564,7 +662,9 @@ lfs help
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para> <literal>quotaoff [-ugf] <replaceable>/mount_point</replaceable></literal></para>
+                <para>
+                  <literal>quotaoff [-ugf] <replaceable>/mount_point</replaceable></literal>
+                </para>
               </entry>
               <entry>
                 <para>Turns off file system quotas. Options specify quota for users (<literal>-u</literal>), groups (<literal>-g</literal>), and force (<literal>-f</literal>).</para>
@@ -572,7 +672,9 @@ lfs help
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para> <literal>quotainv [-ug] [-f] <replaceable>/mount_point</replaceable></literal></para>
+                <para>
+                  <literal>quotainv [-ug] [-f] <replaceable>/mount_point</replaceable></literal>
+                </para>
               </entry>
               <entry>
                 <para> Clears quota files (administrative quota files if used without <literal>-f</literal>, operational quota files otherwise), all of their quota entries for users (<literal>-u</literal>) or groups (<literal>-g</literal>). After running <literal>quotainv</literal>, you must run <literal>quotacheck</literal> before using quotas.</para>
@@ -583,26 +685,30 @@ lfs help
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para> <literal>setquota -u|-g <replaceable>uname|uid|gname|gid}</replaceable> [--block-softlimit <replaceable>block_softlimit</replaceable>] [--block-hardlimit <replaceable>block_hardlimit</replaceable>] [--inode-softlimit <replaceable>inode_softlimit</replaceable>] [--inode-hardlimit <replaceable>inode_hardlimit</replaceable>] <replaceable>/mount_point</replaceable></literal></para>
+                <para>
+                  <literal>setquota -u|-g <replaceable>uname|uid|gname|gid}</replaceable> [--block-softlimit <replaceable>block_softlimit</replaceable>] [--block-hardlimit <replaceable>block_hardlimit</replaceable>] [--inode-softlimit <replaceable>inode_softlimit</replaceable>] [--inode-hardlimit <replaceable>inode_hardlimit</replaceable>] <replaceable>/mount_point</replaceable></literal>
+                </para>
               </entry>
               <entry>
-                <para>Sets file system quotas for users or groups. Limits can be specified with <literal>--{block|inode}-{softlimit|hardlimit}</literal> or their short equivalents <literal>-b</literal>, <literal>-B</literal>, <literal>-i</literal>, <literal>-I</literal>. Users can set 1, 2, 3 or 4 limits.<footnote>
-                    <para>The old <literal>setquota</literal> interface is supported, but it may be
-                      removed in a future Lustre software release.</para>
-                  </footnote>Also, limits can be specified with special suffixes, -b, -k, -m, -g, -t, and -p to indicate units of 1, 2^10, 2^20, 2^30, 2^40 and 2^50, respectively. By default, the block limits unit is 1 kilobyte (1,024), and block limits are always kilobyte-grained (even if specified in bytes). See <xref linkend="dbdoclet.50438206_11903"/>.</para>
+                <para>Sets file system quotas for users or groups. Limits can be specified with <literal>--{block|inode}-{softlimit|hardlimit}</literal> or their short equivalents <literal>-b</literal>, <literal>-B</literal>, <literal>-i</literal>, <literal>-I</literal>. Users can set 1, 2, 3 or 4 limits.<footnote><para>The old <literal>setquota</literal> interface is supported, but it may be
+                      removed in a future Lustre software release.</para></footnote>Also, limits can be specified with special suffixes, -b, -k, -m, -g, -t, and -p to indicate units of 1, 2^10, 2^20, 2^30, 2^40 and 2^50, respectively. By default, the block limits unit is 1 kilobyte (1,024), and block limits are always kilobyte-grained (even if specified in bytes). See <xref linkend="dbdoclet.50438206_11903"/>.</para>
               </entry>
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para><literal> setquota -t -u|-g [--block-grace <replaceable>block_grace</replaceable>] [--inode-grace <replaceable>inode_grace</replaceable>] <replaceable>/mount_point</replaceable></literal></para>
+                <para>
+                  <literal> setquota -t -u|-g [--block-grace <replaceable>block_grace</replaceable>] [--inode-grace <replaceable>inode_grace</replaceable>] <replaceable>/mount_point</replaceable></literal>
+                </para>
               </entry>
               <entry>
-                <para>Sets the file system quota grace times for users or groups. Grace time is specified in &apos;<literal>XXwXXdXXhXXmXXs</literal>&apos; format or as an integer seconds value. See <xref linkend="dbdoclet.50438206_11903"/>.</para>
+                <para>Sets the file system quota grace times for users or groups. Grace time is specified in '<literal>XXwXXdXXhXXmXXs</literal>' format or as an integer seconds value. See <xref linkend="dbdoclet.50438206_11903"/>.</para>
               </entry>
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para> <literal>help</literal></para>
+                <para>
+                  <literal>help</literal>
+                </para>
               </entry>
               <entry>
                 <para>Provides brief help on various <literal>lfs</literal> arguments.</para>
@@ -610,7 +716,9 @@ lfs help
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para> <literal>exit/quit</literal></para>
+                <para>
+                  <literal>exit/quit</literal>
+                </para>
               </entry>
               <entry>
                 <para>Quits the interactive <literal>lfs</literal> session.</para>
@@ -644,7 +752,7 @@ lfs help
       <screen>$ lfs df -i</screen>
       <para>List space or inode usage for a specific OST pool.</para>
       <screen>$ lfs df --pool <replaceable>filesystem</replaceable>[.<replaceable>pool</replaceable>] | <replaceable>pathname</replaceable></screen>
-      <para>List quotas of user &apos;bob&apos;.</para>
+      <para>List quotas of user 'bob'.</para>
       <screen>$ lfs quota -u bob /mnt/lustre</screen>
       <para>Show grace times for user quotas on <literal>/mnt/lustre</literal>.</para>
       <screen>$ lfs quota -t -u /mnt/lustre</screen>
@@ -656,7 +764,7 @@ lfs help
       <screen>$ lfs quotaon -ug /mnt/lustre</screen>
       <para>Turns off quotas of user and group.</para>
       <screen>$ lfs quotaoff -ug /mnt/lustre</screen>
-      <para>Sets quotas of user &apos;bob&apos;, with a 1 GB block quota hardlimit and a 2 GB block quota softlimit.</para>
+      <para>Sets quotas of user 'bob', with a 1 GB block quota hardlimit and a 2 GB block quota softlimit.</para>
       <screen>$ lfs setquota -u bob --block-softlimit 2000000 --block-hardlimit 1000000 /mnt/lustre</screen>
       <para>Sets grace times for user quotas: 1000 seconds for block quotas, 1 week and 4 days for inode quotas.</para>
       <screen>$ lfs setquota -t -u --block-grace 1000 --inode-grace 1w4d /mnt/lustre</screen>
@@ -671,19 +779,24 @@ lfs help
       <para>Finds all directories/files associated with <literal>poolA</literal>.</para>
       <screen>$ lfs find /mnt/lustre --pool poolA</screen>
       <para>Finds all directories/files not associated with a pool.</para>
-      <screen>$ lfs find /mnt//lustre --pool &quot;&quot;</screen>
+      <screen>$ lfs find /mnt//lustre --pool ""</screen>
       <para>Finds all directories/files associated with pool.</para>
-      <screen>$ lfs find /mnt/lustre ! --pool &quot;&quot;</screen>
+      <screen>$ lfs find /mnt/lustre ! --pool ""</screen>
       <para>Associates a directory with the pool <literal>my_pool</literal>, so all new files and directories are created in the pool.</para>
       <screen>$ lfs setstripe --pool my_pool /mnt/lustre/dir</screen>
     </section>
     <section remap="h5">
       <title>See Also</title>
-      <para><xref linkend="dbdoclet.50438219_38274"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438219_38274"/>
+      </para>
     </section>
   </section>
   <section xml:id="dbdoclet.50438206_42260">
-    <title><indexterm><primary>lfs_migrate</primary></indexterm>
+    <title>
+      <indexterm>
+        <primary>lfs_migrate</primary>
+      </indexterm>
       <literal>lfs_migrate</literal>
     </title>
     <para>The <literal>lfs_migrate</literal> utility is a simple tool to migrate files between Lustre OSTs.</para>
@@ -693,10 +806,55 @@ lfs help
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>The <literal>lfs_migrate</literal> utility is a simple tool to assist migration of files between Lustre OSTs. The utility copies each specified file to a new file, verifies the file contents have not changed, and then renames the new file to the original filename. This allows balanced space usage between OSTs, moving files of OSTs that are starting to show hardware problems (though are still functional) or OSTs that will be discontinued.</para>
-      <para>Because <literal>lfs_migrate</literal> is not closely integrated with the MDS, it cannot determine whether a file is currently open and/or in-use by other applications or nodes. This makes it UNSAFE for use on files that might be modified by other applications, since the migrated file is only a copy of the current file. This results in the old file becoming an open-unlinked file and any modifications to that file are lost.</para>
-      <para>Files to be migrated can be specified as command-line arguments. If a directory is specified on the command-line then all files within the directory are migrated. If no files are specified on the command-line, then a list of files is read from the standard input, making <literal>lfs_migrate</literal> suitable for use with <literal>lfs</literal> find to locate files on specific OSTs and/or matching other file attributes.</para>
-      <para>The current file allocation policies on the MDS dictate where the new files are placed, taking into account whether specific OSTs have been disabled on the MDS via <literal>lctl</literal> (preventing new files from being allocated there), whether some OSTs are overly full (reducing the number of files placed on those OSTs), or if there is a specific default file striping for the target directory (potentially changing the stripe count, stripe size, OST pool, or OST index of a new file).</para>
+      <para>The <literal>lfs_migrate</literal> utility is a simple tool to
+      assist migration of files between Lustre OSTs. The utility copies each
+      specified file to a new file, verifies the file contents have not changed, and
+      then renames the new file to the original filename. This allows balanced space
+      usage between OSTs, moving files off OSTs that are starting to show hardware
+      problems (though are still functional) or OSTs that will be
+      discontinued.</para>
+      <warning>
+        <para>For versions of Lustre before 2.5, <literal>lfs_migrate</literal> is not
+        closely integrated with the MDS, it cannot determine whether a file is
+        currently open and/or in-use by other applications or nodes. This makes it
+        UNSAFE for use on files that might be modified by other applications, since the
+        migrated file is only a copy of the current file. This results in the old file
+        becoming an open-unlinked file and any modifications to that file are
+        lost.</para>
+      </warning>
+      <para>Files to be migrated can be specified as command-line arguments. If a
+      directory is specified on the command-line then all files within the directory
+      are migrated. If no files are specified on the command-line, then a list of
+      files is read from the standard input, making <literal>lfs_migrate</literal>
+      suitable for use with <literal>lfs</literal> find to locate files on specific
+      OSTs and/or matching other file attributes.</para>
+      <para>The current file allocation policies on the MDS dictate where the new
+      files are placed, taking into account whether specific OSTs have been disabled
+      on the MDS via <literal>lctl</literal> (preventing new files from being
+      allocated there), whether some OSTs are overly full (reducing the number of
+      files placed on those OSTs), or if there is a specific default file striping
+      for the target directory (potentially changing the stripe count, stripe size,
+      OST pool, or OST index of a new file).</para>
+      <note>
+        <para>The <literal>lfs_migrate</literal> utility can also be used in some cases 
+        to reduce file
+        <indexterm><primary>fragmentation</primary></indexterm>fragmentation. File
+        fragmentation will typically reduce Lustre file system performance.  File
+        fragmentation may be observed on an aged file system and will commonly occur if
+        the file was written by many threads. Provided there is sufficient free space
+        (or if it was written when the file system was nearly full) 
+        that is less fragmented than the file being copied, re-writing a file with
+        <literal>lfs_migrate</literal> will result in a migrated file with reduced
+        fragmentation. The tool <literal>filefrag</literal> can be used to report file
+        fragmentation. See <xref linkend="dbdoclet.50438206_75125"/></para>
+      </note>
+      <note>
+        <para>As long as a file has extent lengths of tens of megabytes
+        (<replaceable>read_bandwidth * seek_time</replaceable>) or more, the read
+        performance for the file will not be significantly impacted by fragmentation,
+        since the read pipeline can be filled by large reads from disk even with an
+        occasional disk seek.</para>
+      </note>
     </section>
     <section remap="h5">
       <title>Options</title>
@@ -708,10 +866,14 @@ lfs help
           <thead>
             <row>
               <entry>
-                <para><emphasis role="bold">Option</emphasis></para>
+                <para>
+                  <emphasis role="bold">Option</emphasis>
+                </para>
               </entry>
               <entry>
-                <para><emphasis role="bold">Description</emphasis></para>
+                <para>
+                  <emphasis role="bold">Description</emphasis>
+                </para>
               </entry>
             </row>
           </thead>
@@ -719,7 +881,8 @@ lfs help
             <row>
               <entry>
                 <para>
-                  <literal>-c <replaceable>stripecount</replaceable></literal></para>
+                  <literal>-c <replaceable>stripecount</replaceable></literal>
+                </para>
               </entry>
               <entry>
                 <para>Restripe file using the specified stripe count. This option may not be
@@ -729,7 +892,8 @@ lfs help
             <row>
               <entry>
                 <para>
-                  <literal>-h</literal></para>
+                  <literal>-h</literal>
+                </para>
               </entry>
               <entry>
                 <para>Display help information.</para>
@@ -755,31 +919,37 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> <literal>-q</literal></para>
+                <para>
+                  <literal>-q</literal>
+                </para>
               </entry>
               <entry>
                 <para>Run quietly (does not print filenames or status).</para>
               </entry>
             </row>
             <row>
-              <entry><literal>-R</literal></entry>
+              <entry>
+                <literal>-R</literal>
+              </entry>
               <entry>Restripe file using default directory striping instead of keeping striping.
                 This option may not be specified at the same time as the <literal>-c</literal>
                 option.</entry>
             </row>
             <row>
               <entry>
-                <literal>-s</literal></entry>
+                <literal>-s</literal>
+              </entry>
               <entry>Skip file data comparison after migrate. Default is to compare migrated file
                 against original to verify correctness.</entry>
             </row>
             <row>
               <entry>
                 <para>
-                  <literal>-y</literal></para>
+                  <literal>-y</literal>
+                </para>
               </entry>
               <entry>
-                <para>Answer &apos;<literal>y</literal>&apos; to usage warning without prompting
+                <para>Answer '<literal>y</literal>' to usage warning without prompting
                   (for scripts, use with caution).</para>
               </entry>
             </row>
@@ -796,11 +966,16 @@ lfs help
     </section>
     <section remap="h5">
       <title>See Also</title>
-      <para><xref linkend="dbdoclet.50438206_94597"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438206_94597"/>
+      </para>
     </section>
   </section>
   <section xml:id="dbdoclet.50438206_75125">
-    <title><indexterm><primary>filefrag</primary></indexterm>
+    <title>
+      <indexterm>
+        <primary>filefrag</primary>
+      </indexterm>
       <literal>filefrag</literal>
     </title>
     <para>The <literal>e2fsprogs</literal> package contains the <literal>filefrag</literal> tool which reports the extent of file fragmentation.</para>
@@ -833,6 +1008,11 @@ lfs help
 	can fully utilize the disk disk bandwidth even with occasional seeks.
         </para>
       </note>
+	  <para>In default mode <footnote><para>The default mode is faster than the
+        verbose/extent mode.</para></footnote>, <literal>filefrag</literal> returns the
+        number of physically discontiguous extents in the file. In extent or verbose
+        mode, each extent is printed with details. For a Lustre file system, the
+        extents are printed in device offset order, not logical offset order.</para>
     </section>
     <section remap="h5">
       <title>Options</title>
@@ -844,17 +1024,23 @@ lfs help
           <thead>
             <row>
               <entry>
-                <para><emphasis role="bold">Option</emphasis></para>
+                <para>
+                  <emphasis role="bold">Option</emphasis>
+                </para>
               </entry>
               <entry>
-                <para><emphasis role="bold">Description</emphasis></para>
+                <para>
+                  <emphasis role="bold">Description</emphasis>
+                </para>
               </entry>
             </row>
           </thead>
           <tbody>
             <row>
               <entry>
-                <para> <literal>-b</literal></para>
+                <para>
+                  <literal>-b</literal>
+                </para>
               </entry>
               <entry>
                 <para>Uses the 1024-byte blocksize for the output. By default, this blocksize is
@@ -863,7 +1049,9 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> <literal>-e</literal></para>
+                <para>
+                  <literal>-e</literal>
+                </para>
               </entry>
               <entry>
                 <para>Uses the extent mode when printing the output.  This is
@@ -872,7 +1060,9 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> <literal>-l</literal></para>
+                <para>
+                  <literal>-l</literal>
+                </para>
               </entry>
               <entry>
                 <para>Displays extents in LUN offset order.  This is the only
@@ -881,7 +1071,9 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> <literal>-s</literal></para>
+                <para>
+                  <literal>-s</literal>
+                </para>
               </entry>
               <entry>
                 <para>Synchronizes any unwritten file data to disk before
@@ -890,7 +1082,9 @@ lfs help
             </row>
             <row>
               <entry>
-                <para> <literal>-v</literal></para>
+                <para>
+                  <literal>-v</literal>
+                </para>
               </entry>
               <entry>
                 <para>Prints the file's layout in verbose mode when checking
@@ -929,7 +1123,10 @@ File size of /mnt/lustre/foo is 1468297786 (1433888 blocks of 1024 bytes)
     </section>
   </section>
   <section xml:id="dbdoclet.50438206_86244">
-    <title><indexterm><primary>mount</primary></indexterm>
+    <title>
+      <indexterm>
+        <primary>mount</primary>
+      </indexterm>
       <literal>mount</literal>
     </title>
     <para>The standard <literal>mount(8)</literal> Linux command is used to mount a Lustre file
@@ -943,17 +1140,23 @@ File size of /mnt/lustre/foo is 1468297786 (1433888 blocks of 1024 bytes)
         <thead>
           <row>
             <entry>
-              <para><emphasis role="bold">Server options</emphasis></para>
+              <para>
+                <emphasis role="bold">Server options</emphasis>
+              </para>
             </entry>
             <entry>
-              <para><emphasis role="bold">Description</emphasis></para>
+              <para>
+                <emphasis role="bold">Description</emphasis>
+              </para>
             </entry>
           </row>
         </thead>
         <tbody>
           <row>
             <entry>
-              <para> <literal>abort_recov</literal></para>
+              <para>
+                <literal>abort_recov</literal>
+              </para>
             </entry>
             <entry>
               <para>Aborts recovery when starting a target</para>
@@ -961,7 +1164,9 @@ File size of /mnt/lustre/foo is 1468297786 (1433888 blocks of 1024 bytes)
           </row>
           <row>
             <entry>
-              <para> <literal>nosvc</literal></para>
+              <para>
+                <literal>nosvc</literal>
+              </para>
             </entry>
             <entry>
               <para>Starts only MGS/MGC servers</para>
@@ -969,7 +1174,9 @@ File size of /mnt/lustre/foo is 1468297786 (1433888 blocks of 1024 bytes)
           </row>
           <row>
             <entry>
-              <para> <literal>nomgs</literal></para>
+              <para>
+                <literal>nomgs</literal>
+              </para>
             </entry>
             <entry>
               <para>Start a MDT with a co-located MGS without starting the MGS</para>
@@ -977,7 +1184,9 @@ File size of /mnt/lustre/foo is 1468297786 (1433888 blocks of 1024 bytes)
           </row>
           <row>
             <entry>
-              <para> <literal>exclude</literal></para>
+              <para>
+                <literal>exclude</literal>
+              </para>
             </entry>
             <entry>
               <para>Starts with a dead OST</para>
@@ -985,7 +1194,9 @@ File size of /mnt/lustre/foo is 1468297786 (1433888 blocks of 1024 bytes)
           </row>
           <row>
             <entry>
-              <para> <literal>md_stripe_cache_size</literal></para>
+              <para>
+                <literal>md_stripe_cache_size</literal>
+              </para>
             </entry>
             <entry>
               <para>Sets the stripe cache size for server side disk with a striped raid configuration</para>
@@ -1001,17 +1212,23 @@ File size of /mnt/lustre/foo is 1468297786 (1433888 blocks of 1024 bytes)
         <thead>
           <row>
             <entry>
-              <para><emphasis role="bold">Client options</emphasis></para>
+              <para>
+                <emphasis role="bold">Client options</emphasis>
+              </para>
             </entry>
             <entry>
-              <para><emphasis role="bold">Description</emphasis></para>
+              <para>
+                <emphasis role="bold">Description</emphasis>
+              </para>
             </entry>
           </row>
         </thead>
         <tbody>
           <row>
             <entry>
-              <para> <literal>flock/noflock/localflock</literal></para>
+              <para>
+                <literal>flock/noflock/localflock</literal>
+              </para>
             </entry>
             <entry>
               <para>Enables/disables global flock or local flock support</para>
@@ -1019,7 +1236,9 @@ File size of /mnt/lustre/foo is 1468297786 (1433888 blocks of 1024 bytes)
           </row>
           <row>
             <entry>
-              <para> <literal>user_xattr/nouser_xattr</literal></para>
+              <para>
+                <literal>user_xattr/nouser_xattr</literal>
+              </para>
             </entry>
             <entry>
               <para>Enables/disables user-extended attributes</para>
@@ -1027,15 +1246,19 @@ File size of /mnt/lustre/foo is 1468297786 (1433888 blocks of 1024 bytes)
           </row>
           <row>
             <entry>
-              <para> <literal>user_fid2path/nouser_fid2path</literal></para>
+              <para>
+                <literal>user_fid2path/nouser_fid2path</literal>
+              </para>
             </entry>
             <entry>
-              <para condition='l23'>Enables/disables FID to path translation by regular users</para>
+              <para condition="l23">Enables/disables FID to path translation by regular users</para>
             </entry>
           </row>
           <row>
             <entry>
-              <para> <literal>retry=</literal></para>
+              <para>
+                <literal>retry=</literal>
+              </para>
             </entry>
             <entry>
               <para>Number of times a client will retry to mount the file system</para>
