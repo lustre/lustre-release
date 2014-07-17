@@ -14,6 +14,6 @@ Clients since 2.6.18 DO NOT need any patches.
 
 PATCH SERIES FOR SERVER KERNELS:
 2.6-rhel6.series	2.6.32-431.23.3.el6
-3.0-sles11sp3.series	3.0.101-0.31
+3.0-sles11sp3.series	3.0.101-0.35
 
 See lustre/ChangeLog for supported client kernel versions.

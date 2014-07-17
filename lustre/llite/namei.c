@@ -439,7 +439,7 @@ struct dentry *ll_splice_alias(struct inode *inode, struct dentry *de)
 			iput(inode);
 			CDEBUG(D_DENTRY,
 			       "Reuse dentry %p inode %p refc %d flags %#x\n",
-			      new, new->d_inode, d_count(new), new->d_flags);
+			      new, new->d_inode, ll_d_count(new), new->d_flags);
 			return new;
 		}
 	}
@@ -448,7 +448,7 @@ struct dentry *ll_splice_alias(struct inode *inode, struct dentry *de)
 		return ERR_PTR(rc);
 	d_add(de, inode);
 	CDEBUG(D_DENTRY, "Add dentry %p inode %p refc %d flags %#x\n",
-	       de, de->d_inode, d_count(de), de->d_flags);
+	       de, de->d_inode, ll_d_count(de), de->d_flags);
         return de;
 }
 

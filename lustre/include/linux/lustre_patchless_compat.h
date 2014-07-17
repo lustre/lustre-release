@@ -95,9 +95,11 @@ truncate_complete_page(struct address_space *mapping, struct page *page)
 
 #ifdef HAVE_DCACHE_LOCK
 #  define dget_dlock(d)			dget_locked(d)
-#  define d_count(d)			atomic_read(&(d)->d_count)
-#elif !defined(HAVE_D_COUNT)
-#  define d_count(d)			((d)->d_count)
+#  define ll_d_count(d)			atomic_read(&(d)->d_count)
+#elif defined(HAVE_D_COUNT)
+#  define ll_d_count(d)			d_count(d)
+#else
+#  define ll_d_count(d)			((d)->d_count)
 #endif /* HAVE_DCACHE_LOCK */
 
 #ifdef ATTR_OPEN
