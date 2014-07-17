@@ -3893,12 +3893,16 @@ test_69() {
 	touch $DIR/$tdir/$tfile-last || error "create file after reformat"
 	local idx=$($LFS getstripe -c $DIR/$tdir/$tfile-last)
 	[ $idx -ne 0 ] && error "$DIR/$tdir/$tfile-last on $idx not 0" || true
+
+	cleanup
 }
 run_test 68 "replace an OST with the same index"
 
 test_70a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	local MDTIDX=1
+
+	cleanup
 
 	start_mdt 1 || error "MDT0 start fail"
 
