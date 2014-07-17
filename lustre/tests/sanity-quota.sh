@@ -138,7 +138,7 @@ quota_scan() {
 	fi
 
 	if [ "$LOCAL_UG" == "a" -o "$LOCAL_UG" == "g" ]; then
-		$LFS quota -v -u $LOCAL_ID $DIR
+		$LFS quota -v -g $LOCAL_ID $DIR
 		log "Files for group ($LOCAL_ID):"
 		($LFS find -group $LOCAL_ID $DIR | head -n 4 |
 			xargs stat 2>/dev/null)
