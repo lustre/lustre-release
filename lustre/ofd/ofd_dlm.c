@@ -225,11 +225,11 @@ int ofd_intent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
 	}
 
 	/*
-	 * This check is for lock taken in ofd_prepare_destroy() that does
+	 * This check is for lock taken in ofd_destroy_by_fid() that does
 	 * not have l_glimpse_ast set. So the logic is: if there is a lock
 	 * with no l_glimpse_ast set, this object is being destroyed already.
 	 * Hence, if you are grabbing DLM locks on the server, always set
-	 * non-NULL glimpse_ast (e.g., ldlm_request.c:ldlm_glimpse_ast()).
+	 * non-NULL glimpse_ast (e.g., ldlm_request.c::ldlm_glimpse_ast()).
 	 */
 	if (l->l_glimpse_ast == NULL) {
 		/* We are racing with unlink(); just return -ENOENT */

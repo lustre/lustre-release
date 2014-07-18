@@ -378,29 +378,36 @@ int ldlm_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 EXPORT_SYMBOL(ldlm_blocking_ast);
 
 /**
- * ->l_glimpse_ast() for DLM extent locks acquired on the server-side. See
- * comment in filter_intent_policy() on why you may need this.
+ * Implements ldlm_lock::l_glimpse_ast for extent locks acquired on the server.
+ *
+ * Returning -ELDLM_NO_LOCK_DATA actually works, but the reason for that is
+ * rather subtle: with OST-side locking, it may so happen that _all_ extent
+ * locks are held by the OST. If client wants to obtain the current file size
+ * it calls ll_glimpse_size(), and (as all locks are held only on the server),
+ * this dummy glimpse callback fires and does nothing. The client still
+ * receives the correct file size due to the following fragment of code in
+ * ldlm_cb_interpret():
+ *
+ *	if (rc == -ELDLM_NO_LOCK_DATA) {
+ *		LDLM_DEBUG(lock, "lost race - client has a lock but no"
+ *			   "inode");
+ *		ldlm_res_lvbo_update(lock->l_resource, NULL, 1);
+ *	}
+ *
+ * That is, after the glimpse returns this error, ofd_lvbo_update() is called
+ * and returns the updated file attributes from the inode to the client.
+ *
+ * See also comment in ofd_intent_policy() on why servers must set a non-NULL
+ * l_glimpse_ast when grabbing DLM locks.  Otherwise, the server will assume
+ * that the object is in the process of being destroyed.
+ *
+ * \param[in] lock	DLM lock being glimpsed, unused
+ * \param[in] reqp	pointer to ptlrpc_request, unused
+ *
+ * \retval		-ELDLM_NO_LOCK_DATA to get attributes from disk object
  */
 int ldlm_glimpse_ast(struct ldlm_lock *lock, void *reqp)
 {
-        /*
-         * Returning -ELDLM_NO_LOCK_DATA actually works, but the reason for
-         * that is rather subtle: with OST-side locking, it may so happen that
-         * _all_ extent locks are held by the OST. If client wants to obtain
-         * current file size it calls ll{,u}_glimpse_size(), and (as locks are
-         * on the server), dummy glimpse callback fires and does
-         * nothing. Client still receives correct file size due to the
-         * following fragment in filter_intent_policy():
-         *
-         * rc = l->l_glimpse_ast(l, NULL); // this will update the LVB
-         * if (rc != 0 && res->lr_namespace->ns_lvbo &&
-         *     res->lr_namespace->ns_lvbo->lvbo_update) {
-         *         res->lr_namespace->ns_lvbo->lvbo_update(res, NULL, 0, 1);
-         * }
-         *
-         * that is, after glimpse_ast() fails, filter_lvbo_update() runs, and
-         * returns correct file size to the client.
-         */
         return -ELDLM_NO_LOCK_DATA;
 }
 EXPORT_SYMBOL(ldlm_glimpse_ast);
