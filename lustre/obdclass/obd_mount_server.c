@@ -1620,6 +1620,7 @@ static int osd_start(struct lustre_sb_info *lsi, unsigned long mflags)
 	struct dt_device_param    p;
 	char			  flagstr[16];
 	int			  rc;
+	bool			 already_started = 0;
 	ENTRY;
 
 	CDEBUG(D_MOUNT,
@@ -1642,15 +1643,27 @@ static int osd_start(struct lustre_sb_info *lsi, unsigned long mflags)
 			GOTO(out, rc);
 		obd = class_name2obd(lsi->lsi_osd_obdname);
 		LASSERT(obd);
+	} else {
+		CDEBUG(D_MOUNT, "%s already started\n", lsi->lsi_osd_obdname);
+		already_started = 1;
+		/* but continue setup to allow special case of MDT and internal
+		 * MGT being started separately, that will be identified in
+		 * caller server_fill_super().
+		 */
 	}
 
 	rc = obd_connect(NULL, &lsi->lsi_osd_exp,
 			 obd, &obd->obd_uuid, NULL, NULL);
+
+	OBD_FAIL_TIMEOUT(OBD_FAIL_TGT_DELAY_CONNECT, 10);
+
 	if (rc) {
-		obd->obd_force = 1;
-		class_manual_cleanup(obd);
-		lsi->lsi_dt_dev = NULL;
-		RETURN(rc);
+		if (!already_started) {
+			obd->obd_force = 1;
+			class_manual_cleanup(obd);
+			lsi->lsi_dt_dev = NULL;
+		}
+		GOTO(out, rc);
 	}
 
 	LASSERT(obd->obd_lu_dev);
@@ -1664,7 +1677,7 @@ static int osd_start(struct lustre_sb_info *lsi, unsigned long mflags)
 
 	dt_conf_get(NULL, lsi->lsi_dt_dev, &p);
 out:
-	RETURN(rc);
+	RETURN(already_started ? -EALREADY : rc);
 }
 
 /** Fill in the superblock info for a Lustre server.
@@ -1684,7 +1697,9 @@ int server_fill_super(struct super_block *sb)
 
 	/* Start low level OSD */
 	rc = osd_start(lsi, sb->s_flags);
-	if (rc) {
+	/* Handle separate nosvc and nomgs case */
+	if (rc && ((rc != -EALREADY) || !(lsi->lsi_lmd->lmd_flags &
+					(LMD_FLG_NOSVC|LMD_FLG_NOMGS)))) {
 		CERROR("Unable to start osd on %s: %d\n",
 		       lsi->lsi_lmd->lmd_dev, rc);
 		lustre_put_lsi(sb);

@@ -2564,6 +2564,94 @@ test_41b() {
 }
 run_test 41b "mount mds with --nosvc and --nomgs on first mount"
 
+test_41c() {
+	cleanup
+	# MDT concurent start
+	#define OBD_FAIL_TGT_DELAY_CONNECT 0x703
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x703"
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS &
+	local pid=$!
+	sleep 2
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x0"
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS &
+	local pid2=$!
+	wait $pid2
+	local rc2=$?
+	wait $pid
+	local rc=$?
+	if [ $rc == 0 ] && [ $rc2 == 114 ]; then
+		echo "1st MDT start succeed"
+		echo "2nd MDT start failed with EALREADY"
+	elif [ $rc2 == 0 ] && [ $rc == 114 ]; then
+		echo "1st MDT start failed with EALREADY"
+		echo "2nd MDT start succeed"
+	else
+		stop mds1 -f
+		error "unexpected concurent MDT mounts result, rc=$rc rc2=$rc2"
+	fi
+
+	# OST concurent start
+	#define OBD_FAIL_TGT_DELAY_CONNECT 0x703
+	do_facet ost1 "lctl set_param fail_loc=0x703"
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS &
+	pid=$!
+	sleep 2
+	do_facet ost1 "lctl set_param fail_loc=0x0"
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS &
+	pid2=$!
+	wait $pid2
+	rc2=$?
+	wait $pid
+	rc=$?
+	if [ $rc == 0 ] && [ $rc2 == 114 ]; then
+		echo "1st OST start succeed"
+		echo "2nd OST start failed with EALREADY"
+	elif [ $rc2 == 0 ] && [ $rc == 114 ]; then
+		echo "1st OST start failed with EALREADY"
+		echo "2nd OST start succeed"
+	else
+		stop mds1 -f
+		stop ost1 -f
+		error "unexpected concurent OST mounts result, rc=$rc rc2=$rc2"
+	fi
+	# cleanup
+	stop mds1 -f
+	stop ost1 -f
+
+	# verify everything ok
+	start_mds
+	if [ $? != 0 ]
+	then
+		stop mds1 -f
+		error "MDT(s) start failed"
+	fi
+
+	start_ost
+	if [ $? != 0 ]
+	then
+		stop mds1 -f
+		stop ost1 -f
+		error "OST(s) start failed"
+	fi
+
+	mount_client $MOUNT
+	if [ $? != 0 ]
+	then
+		stop mds1 -f
+		stop ost1 -f
+		error "client start failed"
+	fi
+	check_mount
+	if [ $? != 0 ]
+	then
+		stop mds1 -f
+		stop ost1 -f
+		error "client mount failed"
+	fi
+	cleanup
+}
+run_test 41c "concurent mounts of MDT/OST should all fail but one"
+
 test_42() { #bug 14693
 	setup
 	check_mount || error "client was not mounted"
