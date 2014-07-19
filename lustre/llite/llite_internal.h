@@ -828,7 +828,7 @@ int ll_fsync(struct file *file, int data);
 int ll_fsync(struct file *file, struct dentry *dentry, int data);
 #endif
 int ll_merge_lvb(const struct lu_env *env, struct inode *inode);
-int ll_fid2path(struct inode *inode, void *arg);
+int ll_fid2path(struct inode *inode, void __user *arg);
 int ll_data_version(struct inode *inode, __u64 *data_version, int flags);
 int ll_hsm_release(struct inode *inode);
 

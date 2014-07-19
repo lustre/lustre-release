@@ -1893,38 +1893,36 @@ out:
 	RETURN(rc);
 }
 
-int ll_fid2path(struct inode *inode, void *arg)
+int ll_fid2path(struct inode *inode, void __user *arg)
 {
 	struct obd_export	*exp = ll_i2mdexp(inode);
-	struct getinfo_fid2path	*gfout, *gfin;
-	int			 outsize, rc;
+	const struct getinfo_fid2path __user *gfin = arg;
+	__u32			 pathlen;
+	struct getinfo_fid2path	*gfout;
+	size_t			 outsize;
+	int			 rc;
+
 	ENTRY;
 
 	if (!cfs_capable(CFS_CAP_DAC_READ_SEARCH) &&
 	    !(ll_i2sbi(inode)->ll_flags & LL_SBI_USER_FID2PATH))
 		RETURN(-EPERM);
 
-	/* Need to get the buflen */
-	OBD_ALLOC_PTR(gfin);
-	if (gfin == NULL)
-		RETURN(-ENOMEM);
-	if (copy_from_user(gfin, arg, sizeof(*gfin))) {
-		OBD_FREE_PTR(gfin);
+	/* Only need to get the buflen */
+	if (get_user(pathlen, &gfin->gf_pathlen))
 		RETURN(-EFAULT);
-	}
 
-	outsize = sizeof(*gfout) + gfin->gf_pathlen;
+	outsize = sizeof(*gfout) + pathlen;
 	OBD_ALLOC(gfout, outsize);
-	if (gfout == NULL) {
-		OBD_FREE_PTR(gfin);
+	if (gfout == NULL)
 		RETURN(-ENOMEM);
-	}
-	memcpy(gfout, gfin, sizeof(*gfout));
-	OBD_FREE_PTR(gfin);
+
+	if (copy_from_user(gfout, arg, sizeof(*gfout)))
+		GOTO(gf_free, rc = -EFAULT);
 
 	/* Call mdc_iocontrol */
 	rc = obd_iocontrol(OBD_IOC_FID2PATH, exp, outsize, gfout, NULL);
-	if (rc)
+	if (rc != 0)
 		GOTO(gf_free, rc);
 
 	if (copy_to_user(arg, gfout, outsize))
