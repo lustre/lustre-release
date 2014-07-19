@@ -94,16 +94,40 @@ static void osp_sync_remove_from_tracker(struct osp_device *d);
 
 #define OSP_JOB_MAGIC		0x26112005
 
+/**
+ * Return status: whether OSP thread should keep running
+ *
+ * \param[in] d		OSP device
+ *
+ * \retval 1		should keep running
+ * \retval 0		should stop
+ */
 static inline int osp_sync_running(struct osp_device *d)
 {
 	return !!(d->opd_syn_thread.t_flags & SVC_RUNNING);
 }
 
+/**
+ * Check status: whether OSP thread has stopped
+ *
+ * \param[in] d		OSP device
+ *
+ * \retval 0		still running
+ * \retval 1		stopped
+ */
 static inline int osp_sync_stopped(struct osp_device *d)
 {
 	return !!(d->opd_syn_thread.t_flags & SVC_STOPPED);
 }
 
+/*
+ ** Check for new changes to sync
+ *
+ * \param[in] d		OSP device
+ *
+ * \retval 1		there are changes
+ * \retval 0		there are no changes
+ */
 static inline int osp_sync_has_new_job(struct osp_device *d)
 {
 	return ((d->opd_syn_last_processed_id < d->opd_syn_last_used_id) &&
@@ -116,11 +140,27 @@ static inline int osp_sync_low_in_progress(struct osp_device *d)
 	return d->opd_syn_rpc_in_progress < d->opd_syn_max_rpc_in_progress;
 }
 
+/**
+ * Check for room in the network pipe to OST
+ *
+ * \param[in] d		OSP device
+ *
+ * \retval 1		there is room
+ * \retval 0		no room, the pipe is full
+ */
 static inline int osp_sync_low_in_flight(struct osp_device *d)
 {
 	return d->opd_syn_rpc_in_flight < d->opd_syn_max_rpc_in_flight;
 }
 
+/**
+ * Wake up check for the main sync thread
+ *
+ * \param[in] d		OSP device
+ *
+ * \retval 1		time to wake up
+ * \retval 0		no need to wake up
+ */
 static inline int osp_sync_has_work(struct osp_device *d)
 {
 	/* has new/old changes and low in-progress? */
@@ -147,6 +187,20 @@ void __osp_sync_check_for_work(struct osp_device *d)
 	osp_sync_check_for_work(d);
 }
 
+/**
+ * Check and return ready-for-new status.
+ *
+ * The thread processing llog record uses this function to check whether
+ * it's time to take another record and process it. The number of conditions
+ * must be met: the connection should be ready, RPCs in flight not exceeding
+ * the limit, the record is committed locally, etc (see the lines below).
+ *
+ * \param[in] d		OSP device
+ * \param[in] rec	next llog record to process
+ *
+ * \retval 0		not ready
+ * \retval 1		ready
+ */
 static inline int osp_sync_can_process_new(struct osp_device *d,
 					   struct llog_rec_hdr *rec)
 {
@@ -169,6 +223,21 @@ static inline int osp_sync_can_process_new(struct osp_device *d,
 	return 0;
 }
 
+/**
+ * Declare intention to add a new change.
+ *
+ * With regard to OSD API, we have to declare any changes ahead. In this
+ * case we declare an intention to add a llog record representing the
+ * change on the local storage.
+ *
+ * \param[in] env	LU environment provided by the caller
+ * \param[in] o		OSP object
+ * \param[in] type	type of change: MDS_UNLINK64_REC or MDS_SETATTR64_REC
+ * \param[in] th	transaction handle (local)
+ *
+ * \retval 0		on success
+ * \retval negative	negated errno on error
+ */
 int osp_sync_declare_add(const struct lu_env *env, struct osp_object *o,
 			 llog_op_type type, struct thandle *th)
 {
@@ -206,6 +275,27 @@ int osp_sync_declare_add(const struct lu_env *env, struct osp_object *o,
 	RETURN(rc);
 }
 
+/**
+ * Generate a llog record for a given change.
+ *
+ * Generates a llog record for the change passed. The change can be of two
+ * types: unlink and setattr. The record gets an ID which later will be
+ * used to track commit status of the change. For unlink changes, the caller
+ * can supply a starting FID and the count of the objects to destroy. For
+ * setattr the caller should apply attributes to apply.
+ *
+ *
+ * \param[in] env	LU environment provided by the caller
+ * \param[in] d		OSP device
+ * \param[in] fid	fid of the object the change should be applied to
+ * \param[in] type	type of change: MDS_UNLINK64_REC or MDS_SETATTR64_REC
+ * \param[in] count	count of objects to destroy
+ * \param[in] th	transaction handle (local)
+ * \param[in] attr	attributes for setattr
+ *
+ * \retval 0		on success
+ * \retval negative	negated errno on error
+ */
 static int osp_sync_add_rec(const struct lu_env *env, struct osp_device *d,
 			    const struct lu_fid *fid, llog_op_type type,
 			    int count, struct thandle *th,
@@ -304,14 +394,18 @@ int osp_sync_gap(const struct lu_env *env, struct osp_device *d,
  *  subsequent commit callback (at the most)
  */
 
-/*
- * called for each atomic on-disk change (not once per transaction batch)
- * and goes over the list
- * XXX: should be optimized?
- */
-
 /**
- * called for each RPC reported committed
+ * ptlrpc commit callback.
+ *
+ * The callback is called by PTLRPC when a RPC is reported committed by the
+ * target (OST). We register the callback for the every RPC applying a change
+ * from the llog. This way we know then the llog records can be cancelled.
+ * Notice the callback can be called when OSP is finishing. We can detect this
+ * checking that actual transno in the request is less or equal of known
+ * committed transno (see osp_sync_process_committed() for the details).
+ * XXX: this is pretty expensive and can be improved later using batching.
+ *
+ * \param[in] req	request
  */
 static void osp_sync_request_commit_cb(struct ptlrpc_request *req)
 {
@@ -339,6 +433,23 @@ static void osp_sync_request_commit_cb(struct ptlrpc_request *req)
 	wake_up(&d->opd_syn_waitq);
 }
 
+/**
+ * RPC interpretation callback.
+ *
+ * The callback is called by ptlrpc when RPC is replied. Now we have to decide
+ * whether we should:
+ *  - put request on a special list to wait until it's committed by the target,
+ *    if the request is succesful
+ *  - schedule llog record cancel if no target object is found
+ *  - try later (essentially after reboot) in case of unexpected error
+ *
+ * \param[in] env	LU environment provided by the caller
+ * \param[in] req	request replied
+ * \param[in] aa	callback data
+ * \param[in] rc	result of RPC
+ *
+ * \retval 0		always
+ */
 static int osp_sync_interpret(const struct lu_env *env,
 			      struct ptlrpc_request *req, void *aa, int rc)
 {
@@ -416,8 +527,12 @@ static int osp_sync_interpret(const struct lu_env *env,
 }
 
 /*
- * the function walks through list of committed locally changes
- * and send them to RPC until the pipe is full
+ ** Add request to ptlrpc queue.
+ *
+ * This is just a tiny helper function to put the request on the sending list
+ *
+ * \param[in] d		OSP device
+ * \param[in] req	request
  */
 static void osp_sync_send_new_rpc(struct osp_device *d,
 				  struct ptlrpc_request *req)
@@ -428,6 +543,24 @@ static void osp_sync_send_new_rpc(struct osp_device *d,
 	ptlrpcd_add_req(req, PDL_POLICY_ROUND, -1);
 }
 
+
+/**
+ * Allocate and prepare RPC for a new change.
+ *
+ * The function allocates and initializes an RPC which will be sent soon to
+ * apply the change to the target OST. The request is initialized from the
+ * llog record passed. Notice only the fields common to all type of changes
+ * are initialized.
+ *
+ * \param[in] d		OSP device
+ * \param[in] llh	llog handle where the record is stored
+ * \param[in] h		llog record
+ * \param[in] op	type of the change
+ * \param[in] format	request format to be used
+ *
+ * \retval pointer		new request on success
+ * \retval ERR_PTR(errno)	on error
+ */
 static struct ptlrpc_request *osp_sync_new_job(struct osp_device *d,
 					       struct llog_handle *llh,
 					       struct llog_rec_hdr *h,
@@ -475,6 +608,19 @@ static struct ptlrpc_request *osp_sync_new_job(struct osp_device *d,
 	return req;
 }
 
+/**
+ * Generate a request for setattr change.
+ *
+ * The function prepares a new RPC, initializes it with setattr specific
+ * bits and send the RPC.
+ *
+ * \param[in] d		OSP device
+ * \param[in] llh	llog handle where the record is stored
+ * \param[in] h		llog record
+ *
+ * \retval 0		on success
+ * \retval negative	negated errno on error
+ */
 static int osp_sync_new_setattr_job(struct osp_device *d,
 				    struct llog_handle *llh,
 				    struct llog_rec_hdr *h)
@@ -517,6 +663,21 @@ static int osp_sync_new_setattr_job(struct osp_device *d,
 	RETURN(1);
 }
 
+/**
+ * Generate a request for unlink change.
+ *
+ * The function prepares a new RPC, initializes it with unlink(destroy)
+ * specific bits and sends the RPC. The function is used to handle
+ * llog_unlink_rec which were used in the older versions of Lustre.
+ * Current version uses llog_unlink_rec64.
+ *
+ * \param[in] d		OSP device
+ * \param[in] llh	llog handle where the record is stored
+ * \param[in] h		llog record
+ *
+ * \retval 0		on success
+ * \retval negative	negated errno on error
+ */
 static int osp_sync_new_unlink_job(struct osp_device *d,
 				   struct llog_handle *llh,
 				   struct llog_rec_hdr *h)
@@ -545,6 +706,22 @@ static int osp_sync_new_unlink_job(struct osp_device *d,
 	RETURN(1);
 }
 
+/**
+ * Prepare OUT-based object destroy RPC.
+ *
+ * The function allocates a new RPC with OUT format. Then initializes the RPC
+ * to contain OUT_DESTROY update against the object specified in the llog
+ * record provided by the caller.
+ *
+ * \param[in] env	LU environment provided by the caller
+ * \param[in] osp	OSP device
+ * \param[in] llh	llog handle where the record is stored
+ * \param[in] h		llog record
+ * \param[out] reqp	request prepared
+ *
+ * \retval 0		on success
+ * \retval negative	negated errno on error
+ */
 static int osp_prep_unlink_update_req(const struct lu_env *env,
 				      struct osp_device *osp,
 				      struct llog_handle *llh,
@@ -608,6 +785,25 @@ out:
 	RETURN(rc);
 }
 
+/**
+ * Generate a request for unlink change.
+ *
+ * The function prepares a new RPC, initializes it with unlink(destroy)
+ * specific bits and sends the RPC. Depending on the target (MDT or OST)
+ * two different protocols are used. For MDT we use OUT (basically OSD API
+ * updates transferred via a network). For OST we still use the old
+ * protocol (OBD?), originally for compatibility. Later we can start to
+ * use OUT for OST as well, this will allow batching and better code
+ * unification.
+ *
+ * \param[in] env	LU environment provided by the caller
+ * \param[in] d		OSP device
+ * \param[in] llh	llog handle where the record is stored
+ * \param[in] h		llog record
+ *
+ * \retval 0		on success
+ * \retval negative	negated errno on error
+ */
 static int osp_sync_new_unlink64_job(const struct lu_env *env,
 				     struct osp_device *d,
 				     struct llog_handle *llh,
@@ -645,6 +841,25 @@ static int osp_sync_new_unlink64_job(const struct lu_env *env,
 	RETURN(1);
 }
 
+/**
+ * Process llog records.
+ *
+ * This function is called to process the llog records committed locally.
+ * In the recovery model used by OSP we can apply a change to a remote
+ * target once corresponding transaction (like posix unlink) is committed
+ * locally so can't revert.
+ * Depending on the llog record type, a given handler is called that is
+ * responsible for preparing and sending the RPC to apply the change.
+ * Special record type LLOG_GEN_REC marking a reboot is cancelled right away.
+ *
+ * \param[in] env	LU environment provided by the caller
+ * \param[in] d		OSP device
+ * \param[in] llh	llog handle where the record is stored
+ * \param[in] rec	llog record
+ *
+ * \retval 0		on success
+ * \retval negative	negated errno on error
+ */
 static int osp_sync_process_record(const struct lu_env *env,
 				   struct osp_device *d,
 				   struct llog_handle *llh,
@@ -738,6 +953,16 @@ static int osp_sync_process_record(const struct lu_env *env,
 	return rc;
 }
 
+/**
+ * Cancel llog records for the committed changes.
+ *
+ * The function walks through the list of the committed RPCs and cancels
+ * corresponding llog records. see osp_sync_request_commit_cb() for the
+ * details.
+ *
+ * \param[in] env	LU environment provided by the caller
+ * \param[in] d		OSP device
+ */
 static void osp_sync_process_committed(const struct lu_env *env,
 				       struct osp_device *d)
 {
@@ -845,8 +1070,21 @@ static void osp_sync_process_committed(const struct lu_env *env,
 	EXIT;
 }
 
-/*
- * this is where most of queues processing happens
+/**
+ * The core of the syncing mechanism.
+ *
+ * This is a callback called by the llog processing function. Essentially it
+ * suspends llog processing until there is a record to process (it's supposed
+ * to be committed locally). The function handles RPCs committed by the target
+ * and cancels corresponding llog records.
+ *
+ * \param[in] env	LU environment provided by the caller
+ * \param[in] llh	llog handle we're processing
+ * \param[in] rec	current llog record
+ * \param[in] data	callback data containing a pointer to the device
+ *
+ * \retval 0			to ask the caller (llog_process()) to continue
+ * \retval LLOG_PROC_BREAK	to ask the caller to break
  */
 static int osp_sync_process_queues(const struct lu_env *env,
 				   struct llog_handle *llh,
@@ -872,7 +1110,8 @@ static int osp_sync_process_queues(const struct lu_env *env,
 		if (osp_sync_can_process_new(d, rec)) {
 			if (llh == NULL) {
 				/* ask llog for another record */
-				CDEBUG(D_HA, "%lu changes, %u in progress, %u in flight\n",
+				CDEBUG(D_HA, "%lu changes, %u in progress,"
+				       " %u in flight\n",
 				       d->opd_syn_changes,
 				       d->opd_syn_rpc_in_progress,
 				       d->opd_syn_rpc_in_flight);
@@ -914,8 +1153,10 @@ static int osp_sync_process_queues(const struct lu_env *env,
 	} while (1);
 }
 
-/*
- * this thread runs llog_cat_process() scanner calling our callback
+/**
+ * OSP sync thread.
+ *
+ * This thread runs llog_cat_process() scanner calling our callback
  * to process llog records. in the callback we implement tricky
  * state machine as we don't want to start scanning of the llog again
  * and again, also we don't want to process too many records and send
@@ -923,9 +1164,14 @@ static int osp_sync_process_queues(const struct lu_env *env,
  * being synced to OST) the callback can suspend awaiting for some
  * new conditions, like syncs completed.
  *
- * in order to process llog records left by previous boots and to allow
+ * In order to process llog records left by previous boots and to allow
  * llog_process_thread() to find something (otherwise it'd just exit
  * immediately) we add a special GENERATATION record on each boot.
+ *
+ * \param[in] _arg	a pointer to thread's arguments
+ *
+ * \retval 0		on success
+ * \retval negative	negated errno on error
  */
 static int osp_sync_thread(void *_arg)
 {
@@ -1015,6 +1261,20 @@ out:
 	RETURN(0);
 }
 
+/**
+ * Initialize llog.
+ *
+ * Initializes the llog. Specific llog to be used depends on the type of the
+ * target OSP represents (OST or MDT). The function adds appends a new llog
+ * record to mark the place where the records associated with this boot
+ * start.
+ *
+ * \param[in] env	LU environment provided by the caller
+ * \param[in] d		OSP device
+ *
+ * \retval 0		on success
+ * \retval negative	negated errno on error
+ */
 static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 {
 	struct osp_thread_info	*osi = osp_env_info(env);
@@ -1114,6 +1374,15 @@ out_cleanup:
 	RETURN(rc);
 }
 
+/**
+ * Cleanup llog used for syncing.
+ *
+ * Closes and cleanups the llog. The function is called when the device is
+ * shutting down.
+ *
+ * \param[in] env	LU environment provided by the caller
+ * \param[in] d		OSP device
+ */
 static void osp_sync_llog_fini(const struct lu_env *env, struct osp_device *d)
 {
 	struct llog_ctxt *ctxt;
@@ -1124,8 +1393,17 @@ static void osp_sync_llog_fini(const struct lu_env *env, struct osp_device *d)
 	llog_cleanup(env, ctxt);
 }
 
-/*
- * initializes sync component of OSP
+/**
+ * Initialization of the sync component of OSP.
+ *
+ * Initializes the llog and starts a new thread to handle the changes to
+ * the remote target (OST or MDT).
+ *
+ * \param[in] env	LU environment provided by the caller
+ * \param[in] d		OSP device
+ *
+ * \retval 0		on success
+ * \retval negative	negated errno on error
  */
 int osp_sync_init(const struct lu_env *env, struct osp_device *d)
 {
@@ -1180,6 +1458,15 @@ err_id:
 	return rc;
 }
 
+/**
+ * Stop the syncing thread.
+ *
+ * Asks the syncing thread to stop and wait until it's stopped.
+ *
+ * \param[in] d		OSP device
+ *
+ * \retval		0
+ */
 int osp_sync_fini(struct osp_device *d)
 {
 	struct ptlrpc_thread *thread = &d->opd_syn_thread;
@@ -1203,6 +1490,15 @@ static DEFINE_MUTEX(osp_id_tracker_sem);
 static struct list_head osp_id_tracker_list =
 		LIST_HEAD_INIT(osp_id_tracker_list);
 
+/**
+ * OSD commit callback.
+ *
+ * The function is used as a local OSD commit callback to track the highest
+ * committed llog record id. see osp_sync_id_traction_init() for the details.
+ *
+ * \param[in] th	local transaction handle committed
+ * \param[in] cookie	commit callback data (our private structure)
+ */
 static void osp_sync_tracker_commit_cb(struct thandle *th, void *cookie)
 {
 	struct osp_id_tracker	*tr = cookie;
@@ -1230,6 +1526,25 @@ static void osp_sync_tracker_commit_cb(struct thandle *th, void *cookie)
 	spin_unlock(&tr->otr_lock);
 }
 
+/**
+ * Initialize commit tracking mechanism.
+ *
+ * Some setups may have thousands of OSTs and each will be represented by OSP.
+ * Meaning order of magnitute many more changes to apply every second. In order
+ * to keep the number of commit callbacks low this mechanism was introduced.
+ * The mechanism is very similar to transno used by MDT service: it's an single
+ * ID stream which can be assigned by any OSP to its llog records. The tricky
+ * part is that ID is stored in per-transaction data and re-used by all the OSPs
+ * involved in that transaction. Then all these OSPs are woken up utilizing a single OSD commit callback.
+ *
+ * The function initializes the data used by the tracker described above.
+ * A singler tracker per OSD device is created.
+ *
+ * \param[in] d		OSP device
+ *
+ * \retval 0		on success
+ * \retval negative	negated errno on error
+ */
 static int osp_sync_id_traction_init(struct osp_device *d)
 {
 	struct osp_id_tracker	*tr, *found = NULL;
@@ -1276,6 +1591,14 @@ static int osp_sync_id_traction_init(struct osp_device *d)
 	return rc;
 }
 
+/**
+ * Release commit tracker.
+ *
+ * Decrease a refcounter on the tracker used by the given OSP device \a d.
+ * If no more users left, then the tracker is released.
+ *
+ * \param[in] d		OSP device
+ */
 static void osp_sync_id_traction_fini(struct osp_device *d)
 {
 	struct osp_id_tracker *tr;
@@ -1304,8 +1627,18 @@ static void osp_sync_id_traction_fini(struct osp_device *d)
 	EXIT;
 }
 
-/*
- * generates id for the tracker
+/**
+ * Generate a new ID on a tracker.
+ *
+ * Generates a new ID using the tracker associated with the given OSP device
+ * \a d, if the given ID \a id is non-zero. Unconditially adds OSP device to
+ * the wakeup list, so OSP won't miss when a transaction using the ID is
+ * committed. Notice ID is 32bit, but llog doesn't support >2^32 records anyway.
+ *
+ * \param[in] d		OSP device
+ * \param[in] id	0 or ID generated previously
+ *
+ * \retval		ID the caller should use
  */
 static __u32 osp_sync_id_get(struct osp_device *d, __u32 id)
 {
@@ -1336,6 +1669,15 @@ static __u32 osp_sync_id_get(struct osp_device *d, __u32 id)
 	return id;
 }
 
+/**
+ * Stop to propagate commit status to OSP.
+ *
+ * If the OSP does not have any llog records she's waiting to commit, then
+ * it is possible to unsubscribe from wakeups from the tracking using this
+ * method.
+ *
+ * \param[in] d		OSP device not willing to wakeup
+ */
 static void osp_sync_remove_from_tracker(struct osp_device *d)
 {
 	struct osp_id_tracker *tr;
