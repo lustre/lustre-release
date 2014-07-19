@@ -15,11 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * version 2 along with this program; If not, see
- * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
- *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * http://www.gnu.org/licenses/gpl-2.0.html
  *
  * GPL HEADER END
  */
@@ -27,13 +23,20 @@
  * Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
- * Copyright (c) 2012, 2013, Intel Corporation.
+ * Copyright (c) 2012, 2014 Intel Corporation.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
  * lustre/ofd/lproc_ofd.c
+ *
+ * This file provides functions of procfs interface for OBD Filter Device (OFD).
+ *
+ * Author: Andreas Dilger <andreas.dilger@intel.com>
+ * Author: Mikhail Pershin <mike.pershin@intel.com>
+ * Author: Johann Lombardi <johann.lombardi@intel.com>
+ * Author: Fan Yong <fan.yong@intel.com>
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
@@ -47,6 +50,15 @@
 
 #ifdef LPROCFS
 
+/**
+ * Show number of FID allocation sequences.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_seqs_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -56,6 +68,15 @@ static int ofd_seqs_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(ofd_seqs);
 
+/**
+ * Show estimate of total amount of dirty data on clients.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_tot_dirty_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -67,6 +88,15 @@ static int ofd_tot_dirty_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(ofd_tot_dirty);
 
+/**
+ * Show total amount of space granted to clients.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_tot_granted_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -78,6 +108,15 @@ static int ofd_tot_granted_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(ofd_tot_granted);
 
+/**
+ * Show total amount of space used by IO in progress.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_tot_pending_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -89,6 +128,15 @@ static int ofd_tot_pending_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(ofd_tot_pending);
 
+/**
+ * Show total number of grants for precreate.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_grant_precreate_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -99,6 +147,15 @@ static int ofd_grant_precreate_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(ofd_grant_precreate);
 
+/**
+ * Show total amount of free space reserved for grants.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_grant_ratio_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -110,6 +167,17 @@ static int ofd_grant_ratio_seq_show(struct seq_file *m, void *data)
 			  (int) ofd_grant_reserved(ofd, 100));
 }
 
+/**
+ * Change amount of free space reserved for grants.
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string which represents maximum number
+ * \param[in] count	\a buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
 static ssize_t
 ofd_grant_ratio_seq_write(struct file *file, const char __user *buffer,
 			  size_t count, loff_t *off)
@@ -141,6 +209,15 @@ ofd_grant_ratio_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(ofd_grant_ratio);
 
+/**
+ * Show number of precreates allowed in a single transaction.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_precreate_batch_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -151,6 +228,17 @@ static int ofd_precreate_batch_seq_show(struct seq_file *m, void *data)
 	return seq_printf(m, "%d\n", ofd->ofd_precreate_batch);
 }
 
+/**
+ * Change number of precreates allowed in a single transaction.
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string which represents maximum number
+ * \param[in] count	\a buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
 static ssize_t
 ofd_precreate_batch_seq_write(struct file *file, const char __user *buffer,
 			      size_t count, loff_t *off)
@@ -175,6 +263,15 @@ ofd_precreate_batch_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(ofd_precreate_batch);
 
+/**
+ * Show the last used ID for each FID sequence used by OFD.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_last_id_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device	*obd = m->private;
@@ -207,6 +304,15 @@ static int ofd_last_id_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(ofd_last_id);
 
+/**
+ * Show maximum number of Filter Modification Data (FMD) maintained by OFD.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_fmd_max_num_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -215,6 +321,19 @@ static int ofd_fmd_max_num_seq_show(struct seq_file *m, void *data)
 	return seq_printf(m, "%u\n", ofd->ofd_fmd_max_num);
 }
 
+/**
+ * Change number of FMDs maintained by OFD.
+ *
+ * This defines how large the list of FMDs can be.
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string which represents maximum number
+ * \param[in] count	\a buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
 static ssize_t
 ofd_fmd_max_num_seq_write(struct file *file, const char __user *buffer,
 			  size_t count, loff_t *off)
@@ -237,6 +356,18 @@ ofd_fmd_max_num_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(ofd_fmd_max_num);
 
+/**
+ * Show the maximum age of FMD data in seconds.
+ *
+ * Though it is shown in seconds, it is stored internally in units
+ * of jiffies for efficiency.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_fmd_max_age_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -245,6 +376,20 @@ static int ofd_fmd_max_age_seq_show(struct seq_file *m, void *data)
 	return seq_printf(m, "%ld\n", ofd->ofd_fmd_max_age / HZ);
 }
 
+/**
+ * Set the maximum age of FMD data in seconds.
+ *
+ * This defines how long FMD data stays in the FMD list.
+ * It is stored internally in units of jiffies for efficiency.
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string which represents maximum number
+ * \param[in] count	\a buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
 static ssize_t
 ofd_fmd_max_age_seq_write(struct file *file, const char __user *buffer,
 			  size_t count, loff_t *off)
@@ -267,6 +412,15 @@ ofd_fmd_max_age_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(ofd_fmd_max_age);
 
+/**
+ * Show if OSS FID capability is enabled or disabled
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_capa_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device	*obd = m->private;
@@ -275,6 +429,19 @@ static int ofd_capa_seq_show(struct seq_file *m, void *data)
 			  obd->u.filter.fo_fl_oss_capa ? "oss" : "");
 }
 
+/**
+ * Enable or disable OSS FID capability mode.
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string which represents mode
+ *			1: enable mode
+ *			0: disable mode
+ * \param[in] count	\a buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
 static ssize_t
 ofd_capa_seq_write(struct file *file, const char *__user buffer, size_t count,
 		   loff_t *off)
@@ -301,6 +468,15 @@ ofd_capa_seq_write(struct file *file, const char *__user buffer, size_t count,
 }
 LPROC_SEQ_FOPS(ofd_capa);
 
+/**
+ * Show capability count on client and server side.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_capa_count_seq_show(struct seq_file *m, void *data)
 {
 	return seq_printf(m, "%d %d\n", capa_count[CAPA_SITE_CLIENT],
@@ -308,6 +484,21 @@ static int ofd_capa_count_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(ofd_capa_count);
 
+/**
+ * Show if the OFD is in degraded mode.
+ *
+ * Degraded means OFD has a failed drive or is undergoing RAID rebuild.
+ * The MDS will try to avoid using this OST for new object allocations
+ * to reduce the impact to global IO performance when clients writing to
+ * this OST are slowed down.  It also reduces the contention on the OST
+ * RAID device, allowing it to rebuild more quickly.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_degraded_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -316,6 +507,23 @@ static int ofd_degraded_seq_show(struct seq_file *m, void *data)
 	return seq_printf(m, "%u\n", ofd->ofd_raid_degraded);
 }
 
+/**
+ * Set OFD to degraded mode.
+ *
+ * This is used to interface to userspace administrative tools for
+ * the underlying RAID storage, so that they can mark an OST
+ * as having degraded performance.
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string which represents mode
+ *			1: set degraded mode
+ *			0: unset degraded mode
+ * \param[in] count	\a buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
 static ssize_t
 ofd_degraded_seq_write(struct file *file, const char __user *buffer,
 		       size_t count, loff_t *off)
@@ -336,6 +544,15 @@ ofd_degraded_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(ofd_degraded);
 
+/**
+ * Show OFD filesystem type.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_fstype_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -349,6 +566,23 @@ static int ofd_fstype_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(ofd_fstype);
 
+/**
+ * Show journal handling mode: synchronous or asynchronous.
+ *
+ * When running in asynchronous mode the journal transactions are not
+ * committed to disk before the RPC is replied back to the client.
+ * This will typically improve client performance when only a small number
+ * of clients are writing, since the client(s) can have more write RPCs
+ * in flight. However, it also means that the client has to handle recovery
+ * on bulk RPCs, and will have to keep more dirty pages in cache before they
+ * are committed on the OST.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_syncjournal_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device	*obd = m->private;
@@ -357,6 +591,19 @@ static int ofd_syncjournal_seq_show(struct seq_file *m, void *data)
 	return seq_printf(m, "%u\n", ofd->ofd_syncjournal);
 }
 
+/**
+ * Set journal mode to synchronous or asynchronous.
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string which represents mode
+ *			1: synchronous mode
+ *			0: asynchronous mode
+ * \param[in] count	\a buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
 static ssize_t
 ofd_syncjournal_seq_write(struct file *file, const char __user *buffer,
 			  size_t count, loff_t *off)
@@ -389,6 +636,15 @@ static char *sync_on_cancel_states[] = {"never",
 					"blocking",
 					"always" };
 
+/**
+ * Show OFD policy for handling dirty data under a lock being cancelled.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_sync_lock_cancel_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device	*obd = m->private;
@@ -398,6 +654,27 @@ static int ofd_sync_lock_cancel_seq_show(struct seq_file *m, void *data)
 			  sync_on_cancel_states[tgt->lut_sync_lock_cancel]);
 }
 
+/**
+ * Change OFD policy for handling dirty data under a lock being cancelled.
+ *
+ * This variable defines what action OFD takes upon lock cancel
+ * There are three possible modes:
+ * 1) never - never do sync upon lock cancel. This can lead to data
+ *    inconsistencies if both the OST and client crash while writing a file
+ *    that is also concurrently being read by another client. In these cases,
+ *    this may allow the file data to "rewind" to an earlier state.
+ * 2) blocking - do sync only if there is blocking lock, e.g. if another
+ *    client is trying to access this same object
+ * 3) always - do sync always
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string which represents policy
+ * \param[in] count	\a buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
 static ssize_t
 ofd_sync_lock_cancel_seq_write(struct file *file, const char __user *buffer,
 			       size_t count, loff_t *off)
@@ -447,6 +724,21 @@ ofd_sync_lock_cancel_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(ofd_sync_lock_cancel);
 
+/**
+ * Show if grants compatibility mode is disabled.
+ *
+ * When ofd_grant_compat_disable is set, we don't grant any space to clients
+ * not supporting OBD_CONNECT_GRANT_PARAM. Otherwise, space granted to such
+ * a client is inflated since it consumes PAGE_CACHE_SIZE of grant space per
+ * block, (i.e. typically 4kB units), but underlaying file system might have
+ * block size bigger than page size, e.g. ZFS. See LU-2049 for details.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_grant_compat_disable_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -455,6 +747,22 @@ static int ofd_grant_compat_disable_seq_show(struct seq_file *m, void *data)
 	return seq_printf(m, "%u\n", ofd->ofd_grant_compat_disable);
 }
 
+/**
+ * Change grant compatibility mode.
+ *
+ * Setting ofd_grant_compat_disable prohibit any space granting to clients
+ * not supporting OBD_CONNECT_GRANT_PARAM. See details above.
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string which represents mode
+ *			1: disable compatibility mode
+ *			0: enable compatibility mode
+ * \param[in] count	\a buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
 static ssize_t
 ofd_grant_compat_disable_seq_write(struct file *file,
 				   const char __user *buffer,
@@ -481,6 +789,18 @@ ofd_grant_compat_disable_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(ofd_grant_compat_disable);
 
+/**
+ * Show the limit of soft sync RPCs.
+ *
+ * This value defines how many IO RPCs with OBD_BRW_SOFT_SYNC flag
+ * are allowed before sync update will be triggered.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_soft_sync_limit_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device	*obd = m->private;
@@ -489,6 +809,22 @@ static int ofd_soft_sync_limit_seq_show(struct seq_file *m, void *data)
 	return lprocfs_uint_seq_show(m, &ofd->ofd_soft_sync_limit);
 }
 
+/**
+ * Change the limit of soft sync RPCs.
+ *
+ * Define how many IO RPCs with OBD_BRW_SOFT_SYNC flag
+ * allowed before sync update will be done.
+ *
+ * This limit is global across all exports.
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string which represents limit
+ * \param[in] count	\a buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
 static ssize_t
 ofd_soft_sync_limit_seq_write(struct file *file, const char __user *buffer,
 			      size_t count, loff_t *off)
@@ -502,6 +838,17 @@ ofd_soft_sync_limit_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(ofd_soft_sync_limit);
 
+/**
+ * Show the LFSCK speed limit.
+ *
+ * The maximum number of items scanned per second.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_lfsck_speed_limit_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device       *obd = m->private;
@@ -510,6 +857,19 @@ static int ofd_lfsck_speed_limit_seq_show(struct seq_file *m, void *data)
 	return lfsck_get_speed(m, ofd->ofd_osd);
 }
 
+/**
+ * Change the LFSCK speed limit.
+ *
+ * Limit number of items that may be scanned per second.
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string which represents limit
+ * \param[in] count	\a buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
 static ssize_t
 ofd_lfsck_speed_limit_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off)
@@ -530,6 +890,15 @@ ofd_lfsck_speed_limit_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(ofd_lfsck_speed_limit);
 
+/**
+ * Show LFSCK layout verification stats from the most recent LFSCK run.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_lfsck_layout_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -539,6 +908,15 @@ static int ofd_lfsck_layout_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(ofd_lfsck_layout);
 
+/**
+ * Show if LFSCK performed parent FID verification.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int ofd_lfsck_verify_pfid_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -551,6 +929,22 @@ static int ofd_lfsck_verify_pfid_seq_show(struct seq_file *m, void *data)
 			  ofd->ofd_inconsistency_self_repaired);
 }
 
+/**
+ * Set the LFSCK behavior to verify parent FID correctness.
+ *
+ * If flag ofd_lfsck_verify_pfid is set then LFSCK does parent FID
+ * verification during read/write operations.
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string which represents behavior
+ *			1: verify parent FID
+ *			0: don't verify parent FID
+ * \param[in] count	\a buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
 static ssize_t
 ofd_lfsck_verify_pfid_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off)
@@ -664,6 +1058,11 @@ struct lprocfs_seq_vars lprocfs_ofd_obd_vars[] = {
 	{ 0 }
 };
 
+/**
+ * Initialize OFD statistics counters
+ *
+ * param[in] stats	statistics counters
+ */
 void ofd_stats_counter_init(struct lprocfs_stats *stats)
 {
 	LASSERT(stats && stats->ls_num >= LPROC_OFD_STATS_LAST);
