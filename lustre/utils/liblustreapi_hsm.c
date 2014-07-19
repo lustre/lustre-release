@@ -171,7 +171,7 @@ static inline const char *llapi_hsm_ct_ev2str(int type)
  * \retval 0 on success.
  * \retval -errno on error.
  */
-int llapi_hsm_write_json_event(struct llapi_json_item_list **event)
+static int llapi_hsm_write_json_event(struct llapi_json_item_list **event)
 {
 	int				rc;
 	char				time_string[40];
@@ -239,13 +239,17 @@ int llapi_hsm_write_json_event(struct llapi_json_item_list **event)
  * \retval 0 on success.
  * \retval -errno on error.
  */
-int llapi_hsm_log_ct_registration(struct hsm_copytool_private **priv,
-				  __u32 event_type)
+static int llapi_hsm_log_ct_registration(struct hsm_copytool_private **priv,
+					 __u32 event_type)
 {
 	int				rc;
 	char				agent_uuid[UUID_MAX];
 	struct hsm_copytool_private	*ct;
 	struct llapi_json_item_list	*json_items;
+
+	/* Noop unless the event fd was initialized */
+	if (llapi_hsm_event_fd < 0)
+		return 0;
 
 	if (priv == NULL || *priv == NULL)
 		return -EINVAL;
@@ -332,9 +336,10 @@ out_free:
  * \retval 0 on success.
  * \retval -errno on error.
  */
-int llapi_hsm_log_ct_progress(struct hsm_copyaction_private **phcp,
-		    const struct hsm_action_item *hai, __u32 progress_type,
-		    __u64 total, __u64 current)
+static int llapi_hsm_log_ct_progress(struct hsm_copyaction_private **phcp,
+				     const struct hsm_action_item *hai,
+				     __u32 progress_type,
+				     __u64 total, __u64 current)
 {
 	int				rc;
 	int				linkno = 0;
@@ -343,6 +348,10 @@ int llapi_hsm_log_ct_progress(struct hsm_copyaction_private **phcp,
 	char				strfid[FID_NOBRACE_LEN + 1];
 	struct hsm_copyaction_private	*hcp;
 	struct llapi_json_item_list	*json_items;
+
+	/* Noop unless the event fd was initialized */
+	if (llapi_hsm_event_fd < 0)
+		return 0;
 
 	if (phcp == NULL || *phcp == NULL)
 		return -EINVAL;
