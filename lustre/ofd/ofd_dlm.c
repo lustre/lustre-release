@@ -15,11 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * version 2 along with this program; If not, see
- * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
- *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * http://www.gnu.org/licenses/gpl-2.0.html
  *
  * GPL HEADER END
  */
@@ -27,7 +23,7 @@
  * Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
- * Copyright (c) 2012, Intel Corporation.
+ * Copyright (c) 2014 Intel Corporation.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -35,8 +31,13 @@
  *
  * lustre/ofd/ofd_dlm.c
  *
- * Author: Mike Pershin <tappro@whamcloud.com>
- * Author: Alex Zhuravlev <bzzz@whamcloud.com>
+ * This file contains OBD Filter Device (OFD) LDLM-related code which is just
+ * intent handling for glimpse lock.
+ *
+ * Author: Andreas Dilger <andreas.dilger@intel.com>
+ * Author: Jinshan Xiong <jinshan.xiong@intel.com>
+ * Author: Alexey Zhuravlev <alexey.zhuravlev@intel.com>
+ * Author: Mikhail Pershin <mike.pershin@intel.com>
  */
 
 #define DEBUG_SUBSYSTEM S_FILTER
@@ -49,6 +50,22 @@ struct ofd_intent_args {
 	int			*liblustre;
 };
 
+/**
+ * OFD interval callback.
+ *
+ * The interval_callback_t is part of interval_iterate_reverse() and is called
+ * for each interval in tree. The OFD interval callback searches for locks
+ * covering extents beyond the given args->size. This is used to decide if LVB
+ * data is outdated.
+ *
+ * \param[in] n		interval node
+ * \param[in] args	intent arguments
+ *
+ * \retval		INTERVAL_ITER_STOP if the interval is lower than
+ *			file size, caller stops execution
+ * \retval		INTERVAL_ITER_CONT if callback finished successfully
+ *			and caller may continue execution
+ */
 static enum interval_iter ofd_intent_cb(struct interval_node *n, void *args)
 {
 	struct ldlm_interval	 *node = (struct ldlm_interval *)n;
@@ -87,6 +104,28 @@ static enum interval_iter ofd_intent_cb(struct interval_node *n, void *args)
 	return INTERVAL_ITER_CONT;
 }
 
+/**
+ * OFD lock intent policy
+ *
+ * This defines ldlm_namespace::ns_policy interface for OFD.
+ * Intent policy is called when lock has an intent, for OFD that
+ * means glimpse lock and policy fills Lock Value Block (LVB).
+ *
+ * If already granted lock is found it will be placed in \a lockp and
+ * returned back to caller function.
+ *
+ * \param[in] ns	 namespace
+ * \param[in,out] lockp	 pointer to the lock
+ * \param[in] req_cookie incoming request
+ * \param[in] mode	 LDLM mode
+ * \param[in] flags	 LDLM flags
+ * \param[in] data	 opaque data, not used in OFD policy
+ *
+ * \retval		ELDLM_LOCK_REPLACED if already granted lock was found
+ *			and placed in \a lockp
+ * \retval		ELDLM_LOCK_ABORTED in other cases except error
+ * \retval		negative value on error
+ */
 int ofd_intent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
 		      void *req_cookie, ldlm_mode_t mode, __u64 flags,
 		      void *data)
