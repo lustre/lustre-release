@@ -143,6 +143,43 @@ int get_param(char *buf, char *key, char **val)
 	return ENOENT;
 }
 
+int append_param(char *buf, char *key, char *val, char sep)
+{
+	int key_len, i, offset, old_val_len;
+	char *ptr = NULL, str[1024];
+
+	if (key)
+		ptr = strstr(buf, key);
+
+	/* key doesn't exist yet, so just add it */
+	if (ptr == NULL)
+		return add_param(buf, key, val);
+
+	key_len = strlen(key);
+
+	/* Copy previous values to str */
+	for (i = 0; i < sizeof(str); ++i) {
+		if ((ptr[i+key_len] == ' ') || (ptr[i+key_len] == '\0'))
+			break;
+		str[i] = ptr[i+key_len];
+	}
+	if (i == sizeof(str))
+		return E2BIG;
+	old_val_len = i;
+
+	offset = old_val_len+key_len;
+
+	/* Move rest of buf to overwrite previous key and value */
+	for (i = 0; ptr[i+offset] != '\0'; ++i)
+		ptr[i] = ptr[i+offset];
+
+	ptr[i] = '\0';
+
+	snprintf(str+old_val_len, sizeof(str)-old_val_len, "%c%s", sep, val);
+
+	return add_param(buf, key, str);
+}
+
 char *strscat(char *dst, char *src, int buflen)
 {
 	dst[buflen - 1] = 0;
