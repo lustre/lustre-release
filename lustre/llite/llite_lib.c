@@ -2170,7 +2170,7 @@ void ll_delete_inode(struct inode *inode)
 		spin_unlock_irq(&inode->i_data.tree_lock);
                 LASSERTF(inode->i_data.nrpages == 0,
 			 "inode="DFID"(%p) nrpages=%lu, see "
-			 "http://jira.whamcloud.com/browse/LU-118\n",
+			 "https://jira.hpdd.intel.com/browse/LU-118\n",
 			 PFID(ll_inode2fid(inode)), inode,
                          inode->i_data.nrpages);
         }

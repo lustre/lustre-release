@@ -2,7 +2,7 @@
 
 # Script to cleanup libcfs macros, it runs against the tree at build time.
 # Migrate libcfs to emulate Linux kernel APIs.
-# http://jira.whamcloud.com/browse/LU-1346
+# https://jira.hpdd.intel.com/browse/LU-1346
 
 # Run this script like:
 #	find libcfs lnet lustre -name "*.[ch]" | grep -v gnilnd |

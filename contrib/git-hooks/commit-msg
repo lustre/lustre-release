@@ -168,7 +168,7 @@ usage() {
         exec 1>&2
         cat <<- EOF
 
-	See http://wiki.whamcloud.com/display/PUB/Commit+Comments
+	See https://wiki.hpdd.intel.com/display/PUB/Commit+Comments
 	for full details.  An example valid commit comment is:
 
 	LU-nnn component: short description of change under 64 columns

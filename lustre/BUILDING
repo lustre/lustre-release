@@ -4,7 +4,7 @@ BUILDING LUSTRE
 You must already have a Lustre-patched kernel, which is outside of the
 scope of this document.  For more information on this process, see the
 web sites below.  Also consider downloading a pre-packaged Lustre
-kernel and utilities from http://downloads.lustre.org/
+kernel and utilities from https://downloads.hpdd.intel.com/
 
 To build:
   sh autogen.sh

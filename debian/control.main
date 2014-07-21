@@ -16,8 +16,8 @@ Depends: ${kpatch:Depends}
 Recommends: kernel-package, quilt
 Description: Linux kernel patch for the Lustre Filesystem
  Lustre is a scalable, secure, robust, highly-available
- cluster file system. This release is maintained by Whamcloud, Inc.
- and available from http://wiki.whamcloud.com/
+ cluster file system. This release is maintained by Intel Corporation
+ and available from https://wiki.hpdd.intel.com/
  .
  Lustre servers require a number of patches to the core Linux kernel,
  mostly to export new functions, add features to ext3, and add
@@ -35,8 +35,8 @@ Priority: optional
 Depends: module-assistant, bzip2, debhelper (>= 5.0.0), libsnmp-dev, dpatch
 Description: source for Lustre filesystem client kernel modules
  Lustre is a scalable, secure, robust, highly-available cluster file system.
- This release is maintained by Whamcloud, Inc. and available from
- http://wiki.whamcloud.com/
+ This release is maintained by Intel Corporation and available from
+ https://wiki.hpdd.intel.com/
  .
  This package contains the module source. The client kernel modules
  can be built for kernels from 2.6.18 - 2.6.26 from it using
@@ -49,8 +49,8 @@ Priority: optional
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Userspace utilities for the Lustre filesystem
  Lustre is a scalable, secure, robust, highly-available cluster file system.
- This release is maintained by Whamcloud, Inc. and available from
- http://wiki.whamcloud.com/
+ This release is maintained by Intel Corporation and available from
+ https://wiki.hpdd.intel.com/
  .
  This package provides a number of userspace utilities for
  maintaining Lustre filesystems.
@@ -62,8 +62,8 @@ Priority: optional
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Test suite for the Lustre filesystem
  Lustre is a scalable, secure, robust, highly-available cluster file system.
- This release is maintained by Whamcloud, Inc. and available from 
- http://wiki.whamcloud.com/
+ This release is maintained by Intel Corporation and available from 
+ https://wiki.hpdd.intel.com/
  .
  This package provides a number of test utilities for the Lustre filesystem.
 
@@ -74,7 +74,7 @@ Architecture: i386 powerpc amd64 ia64
 Depends: lustre-utils (= ${binary:Version})
 Description: Development files for the Lustre filesystem
  Lustre is a scalable, secure, robust, highly-available cluster file system.
- This release is maintained by Whamcloud, Inc. and available from
- http://wiki.whamcloud.com/
+ This release is maintained by Intel Corporation and available from
+ https://wiki.hpdd.intel.com/
  .
  This package provides development libraries for the Lustre filesystem.

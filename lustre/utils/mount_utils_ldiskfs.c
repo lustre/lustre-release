@@ -409,7 +409,7 @@ static void disp_old_e2fsprogs_msg(const char *feature, int make_backfs)
 		E2FSPROGS, feature);
 #if !(HAVE_LDISKFSPROGS)
 	fprintf(stderr, "Please install the latest version of e2fsprogs from\n"
-		"http://downloads.whamcloud.com/public/e2fsprogs/latest/\n"
+		"https://downloads.hpdd.intel.com/public/e2fsprogs/latest/\n"
 		"to enable this feature.\n");
 #endif
 	if (make_backfs)

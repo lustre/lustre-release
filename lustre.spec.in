@@ -97,7 +97,7 @@ Release: %{fullrelease}
 License: GPL
 Group: Utilities/System
 Source: lustre-%{version}.tar.gz
-URL: http://wiki.whamcloud.com/
+URL: https://wiki.hpdd.intel.com/
 BuildRoot: %{_tmppath}/lustre-%{version}-root
 Obsoletes: lustre-lite, lustre-lite-utils, lustre-ldap nfs-utils-lustre
 Provides: lustre-lite = %{version}, lustre-lite-utils = %{version}

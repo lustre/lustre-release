@@ -1,4 +1,4 @@
-TBD       Whamcloud, Inc.
+TBD       Intel Corporation
 	* version 2.2.0
 	* Support for networks:
 	 socklnd   - any kernel supported by Lustre,

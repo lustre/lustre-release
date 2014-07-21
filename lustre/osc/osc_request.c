@@ -1162,7 +1162,7 @@ static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
                  * safe to combine */
                 if (unlikely((p1->flag & mask) != (p2->flag & mask))) {
                         CWARN("Saw flags 0x%x and 0x%x in the same brw, please "
-                              "report this at http://bugs.whamcloud.com/\n",
+                              "report this at https://jira.hpdd.intel.com/\n",
                               p1->flag, p2->flag);
                 }
                 return 0;

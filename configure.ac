@@ -1,5 +1,5 @@
 AC_PREREQ([2.57])
-AC_INIT([Lustre], [LUSTRE_VERSION], [http://bugs.whamcloud.com/], [lustre])
+AC_INIT([Lustre], [LUSTRE_VERSION], [https://jira.hpdd.intel.com/], [lustre])
 sinclude(lustre/autoconf/lustre-version.ac)
 
 AC_CONFIG_AUX_DIR([config])

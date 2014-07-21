@@ -174,7 +174,7 @@ References
 
 source code: 	   file:/lustre/lfsck/
 
-operations manual: http://build.whamcloud.com/job/lustre-manual/lastSuccessfulBuild/artifact/lustre_manual.xhtml#dbdoclet.lfsckadmin
+operations manual: https://build.hpdd.intel.com/job/lustre-manual/lastSuccessfulBuild/artifact/lustre_manual.xhtml#dbdoclet.lfsckadmin
 
 useful links:      http://insidehpc.com/2013/05/02/video-lfsck-online-lustre-file-system-checker/
                    http://www.opensfs.org/wp-content/uploads/2013/04/Zhuravlev_LFSCK.pdf
