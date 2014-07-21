@@ -1579,6 +1579,14 @@ ptlrpc_lprocfs_nrs_tbf_rule_seq_show(struct seq_file *m, void *data)
 				       false, m);
 	if (rc == 0) {
 		/**
+		 * -ENOSPC means buf in the parameter m is overflow, return 0
+		 * here to let upper layer function seq_read alloc a larger
+		 * memory area and do this process again.
+		 */
+	} else if (rc == -ENOSPC) {
+		return 0;
+
+		/**
 		 * Ignore -ENODEV as the regular NRS head's policy may be in the
 		 * ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state.
 		 */
@@ -1596,11 +1604,12 @@ ptlrpc_lprocfs_nrs_tbf_rule_seq_show(struct seq_file *m, void *data)
 				       false, m);
 	if (rc == 0) {
 		/**
-		 * Ignore -ENODEV as the high priority NRS head's policy may be
-		 * in the ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state.
+		 * -ENOSPC means buf in the parameter m is overflow, return 0
+		 * here to let upper layer function seq_read alloc a larger
+		 * memory area and do this process again.
 		 */
-	} else if (rc != -ENODEV) {
-		return rc;
+	} else if (rc == -ENOSPC) {
+		return 0;
 	}
 
 no_hp:
