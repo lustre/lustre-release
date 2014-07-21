@@ -376,8 +376,8 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         nids = convert_hostnames(optarg);
                         if (!nids)
                                 return 1;
-                        rc = add_param(mop->mo_ldd.ldd_params, PARAM_FAILNODE,
-                                       nids);
+			rc = append_param(mop->mo_ldd.ldd_params,
+					  PARAM_FAILNODE, nids, ':');
                         free(nids);
                         if (rc)
                                 return rc;
@@ -442,8 +442,8 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         char *nids = convert_hostnames(optarg);
                         if (!nids)
                                 return 1;
-                        rc = add_param(mop->mo_ldd.ldd_params, PARAM_MGSNODE,
-                                       nids);
+			rc = append_param(mop->mo_ldd.ldd_params,
+					  PARAM_MGSNODE, nids, ':');
                         free(nids);
                         if (rc)
                                 return rc;

@@ -113,6 +113,7 @@ void fatal(void);
 int run_command_err(char *cmd, int cmdsz, char *error_msg);
 int run_command(char *cmd, int cmdsz);
 int add_param(char *buf, char *key, char *val);
+int append_param(char *buf, char *key, char *val, char sep);
 int get_param(char *buf, char *key, char **val);
 char *strscat(char *dst, char *src, int buflen);
 char *strscpy(char *dst, char *src, int buflen);
