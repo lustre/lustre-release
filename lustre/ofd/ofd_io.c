@@ -15,11 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * version 2 along with this program; If not, see
- * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
- *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * http://www.gnu.org/licenses/gpl-2.0.html
  *
  * GPL HEADER END
  */
@@ -27,7 +23,7 @@
  * Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
- * Copyright (c) 2012, 2013, Intel Corporation.
+ * Copyright (c) 2012, 2014 Intel Corporation.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -35,7 +31,11 @@
  *
  * lustre/ofd/ofd_io.c
  *
- * Author: Alex Tomas <bzzz@whamcloud.com>
+ * This file provides functions to handle IO requests from clients and
+ * also LFSCK routines to check parent file identifier (PFID) consistency.
+ *
+ * Author: Alexey Zhuravlev <alexey.zhuravlev@intel.com>
+ * Author: Fan Yong <fan.yong@intel.com>
  */
 
 #define DEBUG_SUBSYSTEM S_FILTER
@@ -48,6 +48,19 @@ struct ofd_inconsistency_item {
 	struct lu_fid		 oii_pfid;
 };
 
+/**
+ * Verify single object for parent FID consistency.
+ *
+ * Part of LFSCK processing which checks single object PFID stored in extended
+ * attribute (XATTR) against real FID of MDT parent object received by LFSCK.
+ * This verifies that the OST object is being referenced by only a single MDT
+ * object.
+ *
+ * \param[in] env	execution environment
+ * \param[in] ofd	OFD device
+ * \param[in] oii	object-related local data
+ * \param[in] lr	LFSCK request data
+ */
 static void ofd_inconsistency_verify_one(const struct lu_env *env,
 					 struct ofd_device *ofd,
 					 struct ofd_inconsistency_item *oii,
@@ -126,6 +139,17 @@ static void ofd_inconsistency_verify_one(const struct lu_env *env,
 	OBD_FREE_PTR(oii);
 }
 
+/**
+ * Verification thread to check parent FID consistency.
+ *
+ * Kernel thread to check consistency of parent FID for any
+ * new item added for checking by ofd_add_inconsistency_item().
+ *
+ * \param[in] args	OFD device
+ *
+ * \retval		0 on successful thread termination
+ * \retval		negative value if thread can't start
+ */
 static int ofd_inconsistency_verification_main(void *args)
 {
 	struct lu_env		       env;
@@ -207,6 +231,16 @@ out:
 	return rc;
 }
 
+/**
+ * Start parent FID verification thread.
+ *
+ * See ofd_inconsistency_verification_main().
+ *
+ * \param[in] ofd	OFD device
+ *
+ * \retval		0 on successful start of thread
+ * \retval		negative value on error
+ */
 int ofd_start_inconsistency_verification_thread(struct ofd_device *ofd)
 {
 	struct ptlrpc_thread	*thread = &ofd->ofd_inconsistency_thread;
@@ -240,6 +274,14 @@ int ofd_start_inconsistency_verification_thread(struct ofd_device *ofd)
 	return rc;
 }
 
+/**
+ * Stop parent FID verification thread.
+ *
+ * \param[in] ofd	OFD device
+ *
+ * \retval		0 on successful start of thread
+ * \retval		-EALREADY if thread is already stopped
+ */
 int ofd_stop_inconsistency_verification_thread(struct ofd_device *ofd)
 {
 	struct ptlrpc_thread	*thread = &ofd->ofd_inconsistency_thread;
@@ -262,6 +304,16 @@ int ofd_stop_inconsistency_verification_thread(struct ofd_device *ofd)
 	return 0;
 }
 
+/**
+ * Add new item for parent FID verification.
+ *
+ * Prepare new verification item and pass it to the dedicated
+ * verification thread for further processing.
+ *
+ * \param[in] env	execution environment
+ * \param[in] fo	OFD object
+ * \param[in] oa	OBDO structure with PFID
+ */
 static void ofd_add_inconsistency_item(const struct lu_env *env,
 				       struct ofd_object *fo, struct obdo *oa)
 {
@@ -306,6 +358,20 @@ static void ofd_add_inconsistency_item(const struct lu_env *env,
 	 *	inconsistency within the whole system. */
 }
 
+/**
+ * Verify parent FID of an object.
+ *
+ * Check the parent FID is sane and start extended
+ * verification procedure otherwise.
+ *
+ * \param[in] env	execution environment
+ * \param[in] fo	OFD object
+ * \param[in] oa	OBDO structure with PFID
+ *
+ * \retval		0 on successful verification
+ * \retval		-EINPROGRESS if PFID is being repaired
+ * \retval		-EPERM if PFID was verified but still insane
+ */
 int ofd_verify_ff(const struct lu_env *env, struct ofd_object *fo,
 		  struct obdo *oa)
 {
@@ -347,6 +413,27 @@ int ofd_verify_ff(const struct lu_env *env, struct ofd_object *fo,
 	RETURN(-EINPROGRESS);
 }
 
+/**
+ * Prepare buffers for read request processing.
+ *
+ * This function converts remote buffers from client to local buffers
+ * and prepares the latter.
+ *
+ * \param[in] env	execution environment
+ * \param[in] exp	OBD export of client
+ * \param[in] ofd	OFD device
+ * \param[in] fid	FID of object
+ * \param[in] la	object attributes
+ * \param[in] oa	OBDO structure from client
+ * \param[in] niocount	number of remote buffers
+ * \param[in] rnb	remote buffers
+ * \param[in] nr_local	number of local buffers
+ * \param[in] lnb	local buffers
+ * \param[in] jobid	job ID name
+ *
+ * \retval		0 on successful prepare
+ * \retval		negative value on error
+ */
 static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 			   struct ofd_device *ofd, const struct lu_fid *fid,
 			   struct lu_attr *la, struct obdo *oa, int niocount,
@@ -374,7 +461,6 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 			GOTO(unlock, rc);
 	}
 
-	/* parse remote buffers to local buffers and prepare the latter */
 	*nr_local = 0;
 	for (i = 0, j = 0; i < niocount; i++) {
 		rc = dt_bufs_get(env, ofd_object_child(fo), rnb + i,
@@ -410,6 +496,29 @@ unlock:
 	return rc;
 }
 
+/**
+ * Prepare buffers for write request processing.
+ *
+ * This function converts remote buffers from client to local buffers
+ * and prepares the latter. If there is recovery in progress and required
+ * object is missing then it can be re-created before write.
+ *
+ * \param[in] env	execution environment
+ * \param[in] exp	OBD export of client
+ * \param[in] ofd	OFD device
+ * \param[in] fid	FID of object
+ * \param[in] la	object attributes
+ * \param[in] oa	OBDO structure from client
+ * \param[in] objcount	always 1
+ * \param[in] obj	object data
+ * \param[in] rnb	remote buffers
+ * \param[in] nr_local	number of local buffers
+ * \param[in] lnb	local buffers
+ * \param[in] jobid	job ID name
+ *
+ * \retval		0 on successful prepare
+ * \retval		negative value on error
+ */
 static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 			    struct ofd_device *ofd, const struct lu_fid *fid,
 			    struct lu_attr *la, struct obdo *oa,
@@ -552,6 +661,27 @@ out:
 	return rc;
 }
 
+/**
+ * Prepare bulk IO requests for processing.
+ *
+ * This function does initial checks of IO and calls corresponding
+ * functions for read/write processing.
+ *
+ * \param[in] env	execution environment
+ * \param[in] cmd	IO type (read/write)
+ * \param[in] exp	OBD export of client
+ * \param[in] oa	OBDO structure from request
+ * \param[in] objcount	always 1
+ * \param[in] obj	object data
+ * \param[in] rnb	remote buffers
+ * \param[in] nr_local	number of local buffers
+ * \param[in] lnb	local buffers
+ * \param[in] oti	request data from OST
+ * \param[in] capa	capability
+ *
+ * \retval		0 on successful prepare
+ * \retval		negative value on error
+ */
 int ofd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	       struct obdo *oa, int objcount, struct obd_ioobj *obj,
 	       struct niobuf_remote *rnb, int *nr_local,
@@ -636,6 +766,21 @@ int ofd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	RETURN(rc);
 }
 
+/**
+ * Drop reference on local buffers for read bulk IO.
+ *
+ * This will free all local buffers use by this read request.
+ *
+ * \param[in] env	execution environment
+ * \param[in] ofd	OFD device
+ * \param[in] fid	object FID
+ * \param[in] objcount	always 1
+ * \param[in] niocount	number of local buffers
+ * \param[in] lnb	local buffers
+ *
+ * \retval		0 on successful execution
+ * \retval		negative value on error
+ */
 static int
 ofd_commitrw_read(const struct lu_env *env, struct ofd_device *ofd,
 		  const struct lu_fid *fid, int objcount, int niocount,
@@ -662,6 +807,21 @@ ofd_commitrw_read(const struct lu_env *env, struct ofd_device *ofd,
 	RETURN(0);
 }
 
+/**
+ * Set attributes of object during write bulk IO processing.
+ *
+ * Change object attributes and write parent FID into extended
+ * attributes when needed.
+ *
+ * \param[in] env	execution environment
+ * \param[in] ofd	OFD device
+ * \param[in] ofd_obj	OFD object
+ * \param[in] la	object attributes
+ * \param[in] ff	parent FID
+ *
+ * \retval		0 on successful attributes update
+ * \retval		negative value on error
+ */
 static int
 ofd_write_attr_set(const struct lu_env *env, struct ofd_device *ofd,
 		   struct ofd_object *ofd_obj, struct lu_attr *la,
@@ -771,6 +931,17 @@ struct ofd_soft_sync_callback {
 	struct obd_export	*ossc_exp;
 };
 
+/**
+ * Callback function for "soft sync" update.
+ *
+ * Reset fed_soft_sync_count upon committing the "soft_sync" update.
+ * See ofd_soft_sync_cb_add() below for more details on soft sync.
+ *
+ * \param[in] env	execution environment
+ * \param[in] th	transaction handle
+ * \param[in] cb	callback data
+ * \param[in] err	error code
+ */
 static void ofd_cb_soft_sync(struct lu_env *env, struct thandle *th,
 			     struct dt_txn_commit_cb *cb, int err)
 {
@@ -785,6 +956,22 @@ static void ofd_cb_soft_sync(struct lu_env *env, struct thandle *th,
 	OBD_FREE_PTR(ossc);
 }
 
+/**
+ * Add callback for "soft sync" processing.
+ *
+ * The "soft sync" mechanism does asynchronous commit when OBD_BRW_SOFT_SYNC
+ * flag is set in client buffers. The intention is for this operation to
+ * commit pages belonging to a client which has "too many" outstanding
+ * unstable pages in its cache. See LU-2139 for details.
+ *
+ * This function adds callback to be called when commit is done.
+ *
+ * \param[in] th	transaction handle
+ * \param[in] exp	OBD export of client
+ *
+ * \retval		0 on successful callback adding
+ * \retval		negative value on error
+ */
 static int ofd_soft_sync_cb_add(struct thandle *th, struct obd_export *exp)
 {
 	struct ofd_soft_sync_callback		*ossc;
@@ -811,6 +998,26 @@ static int ofd_soft_sync_cb_add(struct thandle *th, struct obd_export *exp)
 	return rc;
 }
 
+/**
+ * Commit bulk IO buffers to the storage.
+ *
+ * This function finalizes write IO processing by writing data to the disk.
+ * That write can be synchronous or asynchronous depending on buffers flags.
+ *
+ * \param[in] env	execution environment
+ * \param[in] exp	OBD export of client
+ * \param[in] ofd	OFD device
+ * \param[in] fid	FID of object
+ * \param[in] la	object attributes
+ * \param[in] ff	parent FID of object
+ * \param[in] objcount	always 1
+ * \param[in] niocount	number of local buffers
+ * \param[in] lnb	local buffers
+ * \param[in] old_rc	result of processing at this point
+ *
+ * \retval		0 on successful commit
+ * \retval		negative value on error
+ */
 static int
 ofd_commitrw_write(const struct lu_env *env, struct obd_export *exp,
 		   struct ofd_device *ofd, const struct lu_fid *fid,
@@ -938,6 +1145,29 @@ out:
 	RETURN(rc);
 }
 
+/**
+ * Commit bulk IO to the storage.
+ *
+ * This is companion function to the ofd_preprw(). It finishes bulk IO
+ * request processing by committing buffers to the storage (WRITE) and/or
+ * freeing those buffers (read/write). See ofd_commitrw_read() and
+ * ofd_commitrw_write() for details about each type of IO.
+ *
+ * \param[in] env	execution environment
+ * \param[in] cmd	IO type (READ/WRITE)
+ * \param[in] exp	OBD export of client
+ * \param[in] oa	OBDO structure from client
+ * \param[in] objcount	always 1
+ * \param[in] obj	object data
+ * \param[in] rnb	remote buffers
+ * \param[in] npages	number of local buffers
+ * \param[in] lnb	local buffers
+ * \param[in] oti	request data from OST
+ * \param[in] old_rc	result of processing at this point
+ *
+ * \retval		0 on successful commit
+ * \retval		negative value on error
+ */
 int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		 struct obdo *oa, int objcount, struct obd_ioobj *obj,
 		 struct niobuf_remote *rnb, int npages,
