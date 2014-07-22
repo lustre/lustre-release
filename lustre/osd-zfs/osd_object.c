@@ -1288,7 +1288,9 @@ int __osd_zap_create(const struct lu_env *env, udmu_objset_t *uos,
 	LASSERT(tx->tx_txg != 0);
 
 	oid = zap_create_flags(uos->os, 0, flags | ZAP_FLAG_HASH64,
-			       DMU_OT_DIRECTORY_CONTENTS, 12, 12,
+			       DMU_OT_DIRECTORY_CONTENTS,
+			       14, /* == ZFS fzap_default_block_shift */
+			       DN_MAX_INDBLKSHIFT, /* indirect block shift */
 			       DMU_OT_SA, DN_MAX_BONUSLEN, tx);
 
 	rc = -sa_buf_hold(uos->os, oid, tag, zap_dbp);
