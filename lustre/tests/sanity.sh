@@ -9670,6 +9670,17 @@ test_154d() {
 }
 run_test 154d "Verify open file fid"
 
+test_154e()
+{
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.50) ]] &&
+		skip "Need MDS version at least 2.6.50" && return
+
+	if ls -a $MOUNT | grep -q '^\.lustre$'; then
+		error ".lustre returned by readdir"
+	fi
+}
+run_test 154e ".lustre is not returned by readdir"
+
 test_155_small_load() {
     local temp=$TMP/$tfile
     local file=$DIR/$tfile

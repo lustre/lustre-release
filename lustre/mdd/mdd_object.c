@@ -1849,6 +1849,7 @@ static int mdd_dir_page_build(const struct lu_env *env, union lu_page *lp,
 	__u64			 hash = 0;
 	struct lu_dirent	*ent;
 	struct lu_dirent	*last = NULL;
+	struct lu_fid		 fid;
 	int			 first = 1;
 
         memset(area, 0, sizeof (*dp));
@@ -1885,6 +1886,12 @@ static int mdd_dir_page_build(const struct lu_env *env, union lu_page *lp,
                         /* osd might not able to pack all attributes,
                          * so recheck rec length */
                         recsize = le16_to_cpu(ent->lde_reclen);
+
+			if (le32_to_cpu(ent->lde_attrs) & LUDA_FID) {
+				fid_le_to_cpu(&fid, &ent->lde_fid);
+				if (fid_is_dot_lustre(&fid))
+					goto next;
+			}
                 } else {
                         result = (last != NULL) ? 0 :-EINVAL;
                         goto out;
