@@ -8,10 +8,11 @@ Version:        %ver
 Release:        %rel
 License:        GPL
 Group:          Networking/Utilities
-Source:         http://www.whamcloud.com/download/automated/src/%{name}-%{version}.tar.bz2
-URL:            http://www.whamcloud.com/
-BuildRoot:      XXX-TOP-LEVEL-BUILD-DIR-XXX/lustre-wireshark-%{PACKAGE_VERSION}-root
-Requires:       wireshark
+Source:         %{name}-%{version}.tar.bz2
+URL:            https://wiki.hpdd.intel.com/
+BuildRoot:      %{_tmpdir}/lustre-wireshark-%{PACKAGE_VERSION}-root
+Requires:       wireshark >= 1.6.8
+BuildRequires:	wireshark-devel
 
 %description
 Plugins for wireshark to enable monitoring of Lustre/LNet network traffic.
@@ -29,7 +30,7 @@ rm -rf \${RPM_BUILD_ROOT}
 
 %files
 %defattr(-, root, root)
-%doc README*
-XXX-LUSTRE-PLUGIN-LIBDIR-XXX
+%doc README
+%{_libdir}/wireshark/plugins/*/*.so
 
 %changelog
