@@ -297,7 +297,7 @@ static int ll_read_ahead_page(const struct lu_env *env, struct cl_io *io,
         struct page      *vmpage;
         struct cl_page   *page;
         enum ra_stat      which = _NR_RA_STAT; /* keep gcc happy */
-        unsigned int      gfp_mask;
+	gfp_t		  gfp_mask;
         int               rc    = 0;
         const char       *msg   = NULL;
 

@@ -43,7 +43,7 @@
 
 void *
 cfs_cpt_malloc(struct cfs_cpt_table *cptab, int cpt,
-	       size_t nr_bytes, unsigned int flags)
+	       size_t nr_bytes, gfp_t flags)
 {
 	return kmalloc_node(nr_bytes, flags,
 			    cfs_cpt_spread_node(cptab, cpt));
@@ -66,7 +66,7 @@ cfs_cpt_vzalloc(struct cfs_cpt_table *cptab, int cpt, size_t nr_bytes)
 EXPORT_SYMBOL(cfs_cpt_vzalloc);
 
 struct page *
-cfs_page_cpt_alloc(struct cfs_cpt_table *cptab, int cpt, unsigned int flags)
+cfs_page_cpt_alloc(struct cfs_cpt_table *cptab, int cpt, gfp_t flags)
 {
 	return alloc_pages_node(cfs_cpt_spread_node(cptab, cpt), flags, 0);
 }
@@ -74,7 +74,7 @@ EXPORT_SYMBOL(cfs_page_cpt_alloc);
 
 void *
 cfs_mem_cache_cpt_alloc(struct kmem_cache *cachep, struct cfs_cpt_table *cptab,
-			int cpt, unsigned int flags)
+			int cpt, gfp_t flags)
 {
 	return kmem_cache_alloc_node(cachep, flags,
 				     cfs_cpt_spread_node(cptab, cpt));
