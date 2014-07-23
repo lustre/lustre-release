@@ -732,7 +732,7 @@ lstcon_group_refresh(char *name, struct list_head *result_up)
 }
 
 int
-lstcon_group_list(int index, int len, char *name_up)
+lstcon_group_list(int index, int len, char __user *name_up)
 {
 	lstcon_group_t *grp;
 
@@ -919,7 +919,7 @@ lstcon_batch_add(char *name)
 }
 
 int
-lstcon_batch_list(int index, int len, char *name_up)
+lstcon_batch_list(int index, int len, char __user *name_up)
 {
 	lstcon_batch_t *bat;
 

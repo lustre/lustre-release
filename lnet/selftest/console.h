@@ -222,7 +222,7 @@ extern int lstcon_nodes_remove(char *name, int nnd, lnet_process_id_t *nds_up,
 			       struct list_head *result_up);
 extern int lstcon_group_info(char *name, lstcon_ndlist_ent_t *gent_up, 
                              int *index_p, int *ndent_p, lstcon_node_ent_t *ndents_up);
-extern int lstcon_group_list(int idx, int len, char *name_up);
+extern int lstcon_group_list(int idx, int len, char __user *name_up);
 extern int lstcon_batch_add(char *name);
 extern int lstcon_batch_run(char *name, int timeout,
 			    struct list_head *result_up);
@@ -232,7 +232,7 @@ extern int lstcon_test_batch_query(char *name, int testidx,
 				   int client, int timeout,
 				   struct list_head *result_up);
 extern int lstcon_batch_del(char *name);
-extern int lstcon_batch_list(int idx, int namelen, char *name_up);
+extern int lstcon_batch_list(int idx, int namelen, char __user *name_up);
 extern int lstcon_batch_info(char *name, lstcon_test_batch_ent_t *ent_up,
                              int server, int testidx, int *index_p,
                              int *ndent_p, lstcon_node_ent_t *dents_up);
