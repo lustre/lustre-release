@@ -703,10 +703,15 @@ do {									      \
 #define OBD_CPT_ALLOC_PTR(ptr, cptab, cpt)				      \
 	OBD_CPT_ALLOC(ptr, cptab, cpt, sizeof *(ptr))
 
+/* Direct use of __vmalloc() allows for protection flag specification
+ * (and particularly to not set __GFP_FS, which is likely to cause some
+ * deadlock situations in our code).
+ */
 # define __OBD_VMALLOC_VERBOSE(ptr, cptab, cpt, size)			      \
 do {									      \
 	(ptr) = cptab == NULL ?						      \
-		vzalloc(size) :					      \
+		__vmalloc(size, GFP_NOFS | __GFP_HIGHMEM | __GFP_ZERO,	      \
+			  PAGE_KERNEL) :				      \
 		cfs_cpt_vzalloc(cptab, cpt, size);			      \
 	if (unlikely((ptr) == NULL)) {                                        \
 		CERROR("vmalloc of '" #ptr "' (%d bytes) failed\n",           \
