@@ -66,9 +66,9 @@ struct libcfs_ioctl_data {
 	char *ioc_inlbuf2;
 
 	__u32 ioc_plen1; /* buffers in userspace */
-	char *ioc_pbuf1;
+	char __user *ioc_pbuf1;
 	__u32 ioc_plen2; /* buffers in userspace */
-	char *ioc_pbuf2;
+	char __user *ioc_pbuf2;
 
 	char ioc_bulk[0];
 };
@@ -255,7 +255,7 @@ extern int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr *buf, __u32 buf_len,
 				const void __user *arg);
 extern int libcfs_ioctl_getdata_len(const struct libcfs_ioctl_hdr __user *arg,
 				    __u32 *buf_len);
-extern int libcfs_ioctl_popdata(void *arg, void *buf, int size);
+extern int libcfs_ioctl_popdata(void __user *arg, void *buf, int size);
 #endif
 
 extern int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data);

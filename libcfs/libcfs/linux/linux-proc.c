@@ -76,9 +76,10 @@ extern char lnet_upcall[1024];
  */
 extern char lnet_debug_log_upcall[1024];
 
-int lprocfs_call_handler(void *data, int write, loff_t *ppos, void *buffer,
-			 size_t *lenp, int (*handler)(void *data, int write,
-			 loff_t pos, void *buffer, int len))
+int lprocfs_call_handler(void *data, int write, loff_t *ppos,
+			 void __user *buffer, size_t *lenp,
+			 int (*handler)(void *data, int write, loff_t pos,
+					void __user *buffer, int len))
 {
         int rc = handler(data, write, *ppos, buffer, *lenp);
 
@@ -96,7 +97,7 @@ int lprocfs_call_handler(void *data, int write, loff_t *ppos, void *buffer,
 EXPORT_SYMBOL(lprocfs_call_handler);
 
 static int __proc_dobitmasks(void *data, int write,
-                             loff_t pos, void *buffer, int nob)
+			     loff_t pos, void __user *buffer, int nob)
 {
         const int     tmpstrlen = 512;
         char         *tmpstr;
@@ -148,7 +149,7 @@ static int min_watchdog_ratelimit = 0;          /* disable ratelimiting */
 static int max_watchdog_ratelimit = (24*60*60); /* limit to once per day */
 
 static int __proc_dump_kernel(void *data, int write,
-                              loff_t pos, void *buffer, int nob)
+			      loff_t pos, void __user *buffer, int nob)
 {
         if (!write)
                 return 0;
@@ -165,7 +166,7 @@ proc_dump_kernel(struct ctl_table *table, int write, void __user *buffer,
 }
 
 static int __proc_daemon_file(void *data, int write,
-                              loff_t pos, void *buffer, int nob)
+			      loff_t pos, void __user *buffer, int nob)
 {
         if (!write) {
                 int len = strlen(cfs_tracefile);
@@ -189,7 +190,7 @@ proc_daemon_file(struct ctl_table *table, int write, void __user *buffer,
 }
 
 static int __proc_debug_mb(void *data, int write,
-                           loff_t pos, void *buffer, int nob)
+			   loff_t pos, void __user *buffer, int nob)
 {
         if (!write) {
                 char tmpstr[32];
@@ -332,7 +333,7 @@ proc_fail_loc(struct ctl_table *table, int write, void __user *buffer,
 }
 
 static int __proc_cpt_table(void *data, int write,
-			    loff_t pos, void *buffer, int nob)
+			    loff_t pos, void __user *buffer, int nob)
 {
 	char *buf = NULL;
 	int   len = 4096;

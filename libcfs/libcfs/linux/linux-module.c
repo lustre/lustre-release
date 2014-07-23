@@ -89,9 +89,9 @@ int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr *buf, __u32 buf_len,
 	RETURN(0);
 }
 
-int libcfs_ioctl_popdata(void *arg, void *data, int size)
+int libcfs_ioctl_popdata(void __user *arg, void *data, int size)
 {
-	if (copy_to_user((char *)arg, data, size))
+	if (copy_to_user(arg, data, size))
 		return -EFAULT;
 	return 0;
 }
@@ -164,7 +164,7 @@ static long libcfs_ioctl(struct file *file,
 	pfile.off = 0;
 	pfile.private_data = file->private_data;
 	if (libcfs_psdev_ops.p_ioctl != NULL)
-		rc = libcfs_psdev_ops.p_ioctl(&pfile, cmd, (void *)arg);
+		rc = libcfs_psdev_ops.p_ioctl(&pfile, cmd, (void __user *)arg);
 	else
 		rc = -EPERM;
 	return (rc);
