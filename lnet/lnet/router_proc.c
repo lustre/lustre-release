@@ -80,7 +80,7 @@ static struct ctl_table_header *lnet_table_header = NULL;
 #define LNET_PROC_VERSION(v)	((unsigned int)((v) & LNET_PROC_VER_MASK))
 
 static int __proc_lnet_stats(void *data, int write,
-                             loff_t pos, void *buffer, int nob)
+			     loff_t pos, void __user *buffer, int nob)
 {
         int              rc;
         lnet_counters_t *ctrs;
@@ -568,7 +568,7 @@ proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
 }
 
 static int __proc_lnet_buffers(void *data, int write,
-                               loff_t pos, void *buffer, int nob)
+			       loff_t pos, void __user *buffer, int nob)
 {
 	char            *s;
 	char            *tmpstr;
@@ -793,7 +793,7 @@ static struct lnet_portal_rotors	portal_rotors[] = {
 extern int portal_rotor;
 
 static int __proc_lnet_portal_rotor(void *data, int write,
-				    loff_t pos, void *buffer, int nob)
+				    loff_t pos, void __user *buffer, int nob)
 {
 	const int	buf_len	= 128;
 	char		*buf;

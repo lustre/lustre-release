@@ -470,11 +470,11 @@ lstcon_rpc_trans_stat(lstcon_rpc_trans_t *trans, lstcon_trans_stat_t *stat)
 
 int
 lstcon_rpc_trans_interpreter(lstcon_rpc_trans_t *trans,
-			     struct list_head *head_up,
+			     struct list_head __user *head_up,
 			     lstcon_rpc_readent_func_t readent)
 {
 	struct list_head      tmp;
-	struct list_head     *next;
+	struct list_head     __user *next;
         lstcon_rpc_ent_t     *ent;
         srpc_generic_reply_t *rep;
         lstcon_rpc_t         *crpc;
@@ -711,7 +711,7 @@ lstcon_next_id(int idx, int nkiov, lnet_kiov_t *kiov)
         int                       i;
 
         i = idx / SFW_ID_PER_PAGE;
-        
+
         LASSERT (i < nkiov);
 
 	pid = (lnet_process_id_packed_t *)page_address(kiov[i].kiov_page);
@@ -883,7 +883,7 @@ lstcon_testrpc_prep(lstcon_node_t *nd, int transop, unsigned feats,
 
                 trq->tsr_ndest = test->tes_span;
                 trq->tsr_loop  = test->tes_loop;
-        } 
+	}
 
         trq->tsr_sid        = console_session.ses_id;
         trq->tsr_bid        = test->tes_hdr.tsb_id;
@@ -1023,7 +1023,7 @@ lstcon_rpc_stat_reply(lstcon_rpc_trans_t *trans, srpc_msg_t *msg,
                         return;
                 }
 
-                if (bat_rep->bar_status == EPERM && 
+		if (bat_rep->bar_status == EPERM &&
 		    trans->tas_opc == LST_TRANS_TSBSTOP) {
                         lstcon_tsbop_stat_success(stat, 1);
                         return;
@@ -1037,12 +1037,12 @@ lstcon_rpc_stat_reply(lstcon_rpc_trans_t *trans, srpc_msg_t *msg,
         case LST_TRANS_TSBSRVQRY:
                 bat_rep = &msg->msg_body.bat_reply;
 
-                if (bat_rep->bar_active != 0) 
+		if (bat_rep->bar_active != 0)
                         lstcon_tsbqry_stat_run(stat, 1);
                 else
                         lstcon_tsbqry_stat_idle(stat, 1);
 
-                if (bat_rep->bar_status == 0) 
+		if (bat_rep->bar_status == 0)
                         return;
 
                 lstcon_tsbqry_stat_failure(stat, 1);

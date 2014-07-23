@@ -884,7 +884,7 @@ void lnet_copy_kiov2kiov (unsigned int ndkiov, lnet_kiov_t *dkiov,
                           unsigned int soffset, unsigned int nob);
 
 static inline void
-lnet_copy_iov2flat(int dlen, void *dest, unsigned int doffset,
+lnet_copy_iov2flat(int dlen, __user void *dest, unsigned int doffset,
                    unsigned int nsiov, struct iovec *siov, unsigned int soffset,
                    unsigned int nob)
 {
@@ -895,9 +895,9 @@ lnet_copy_iov2flat(int dlen, void *dest, unsigned int doffset,
 }
 
 static inline void
-lnet_copy_kiov2flat(int dlen, void *dest, unsigned int doffset,
-                    unsigned int nsiov, lnet_kiov_t *skiov, unsigned int soffset,
-                    unsigned int nob)
+lnet_copy_kiov2flat(int dlen, void __user *dest, unsigned int doffset,
+		    unsigned int nsiov, lnet_kiov_t *skiov,
+		    unsigned int soffset, unsigned int nob)
 {
         struct iovec diov = {/* .iov_base = */ dest, /* .iov_len = */ dlen};
 
@@ -907,7 +907,8 @@ lnet_copy_kiov2flat(int dlen, void *dest, unsigned int doffset,
 
 static inline void
 lnet_copy_flat2iov(unsigned int ndiov, struct iovec *diov, unsigned int doffset,
-                   int slen, void *src, unsigned int soffset, unsigned int nob)
+		   int slen, void __user *src, unsigned int soffset,
+		   unsigned int nob)
 {
         struct iovec siov = {/*.iov_base = */ src, /*.iov_len = */slen};
         lnet_copy_iov2iov(ndiov, diov, doffset,
@@ -915,8 +916,9 @@ lnet_copy_flat2iov(unsigned int ndiov, struct iovec *diov, unsigned int doffset,
 }
 
 static inline void
-lnet_copy_flat2kiov(unsigned int ndiov, lnet_kiov_t *dkiov, unsigned int doffset,
-                    int slen, void *src, unsigned int soffset, unsigned int nob)
+lnet_copy_flat2kiov(unsigned int ndiov, lnet_kiov_t *dkiov,
+		    unsigned int doffset, int slen, void __user *src,
+		    unsigned int soffset, unsigned int nob)
 {
         struct iovec siov = {/* .iov_base = */ src, /* .iov_len = */ slen};
         lnet_copy_iov2kiov(ndiov, dkiov, doffset,

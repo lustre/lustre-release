@@ -2220,7 +2220,7 @@ LNetCtl(unsigned int cmd, void *arg)
 		id.nid = data->ioc_nid;
 		id.pid = data->ioc_u32[0];
 		rc = lnet_ping(id, data->ioc_u32[1], /* timeout */
-			       (lnet_process_id_t *)data->ioc_pbuf1,
+			       (lnet_process_id_t __user *)data->ioc_pbuf1,
 			       data->ioc_plen1/sizeof(lnet_process_id_t));
 		if (rc < 0)
 			return rc;
@@ -2320,7 +2320,7 @@ LNetSnprintHandle(char *str, int len, lnet_handle_any_t h)
 EXPORT_SYMBOL(LNetSnprintHandle);
 
 static int
-lnet_ping(lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids,
+lnet_ping(lnet_process_id_t id, int timeout_ms, lnet_process_id_t __user *ids,
 	  int n_ids)
 {
 	lnet_handle_eq_t     eqh;
