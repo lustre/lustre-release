@@ -2225,15 +2225,15 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 
                 ptlrpc_req_finished(req);
 
-                RETURN(put_user(flags, (int *)arg));
+		RETURN(put_user(flags, (int __user *)arg));
         }
         case FSFILT_IOC_SETFLAGS: {
 		struct lov_stripe_md *lsm;
                 struct obd_info oinfo = { { { 0 } } };
                 struct md_op_data *op_data;
 
-                if (get_user(flags, (int *)arg))
-                        RETURN(-EFAULT);
+		if (get_user(flags, (int __user *)arg))
+			RETURN(-EFAULT);
 
                 op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
                                              LUSTRE_OPC_ANY, NULL);
@@ -2462,14 +2462,14 @@ out:
 	RETURN(rc);
 }
 
-int ll_obd_statfs(struct inode *inode, void *arg)
+int ll_obd_statfs(struct inode *inode, void __user *arg)
 {
         struct ll_sb_info *sbi = NULL;
         struct obd_export *exp;
         char *buf = NULL;
         struct obd_ioctl_data *data = NULL;
         __u32 type;
-	__u32 flags;
+	__u32 __user flags;	/* not user, but obd_iocontrol is abused */
         int len = 0, rc;
 
         if (!inode || !(sbi = ll_i2sbi(inode)))
@@ -2669,7 +2669,7 @@ int ll_get_obd_name(struct inode *inode, unsigned int cmd, unsigned long arg)
         if (!obd)
                 RETURN(-ENOENT);
 
-	if (copy_to_user((void *)arg, obd->obd_name,
+	if (copy_to_user((void __user *)arg, obd->obd_name,
 			 strlen(obd->obd_name) + 1))
 		RETURN(-EFAULT);
 
@@ -2786,5 +2786,3 @@ void ll_compute_rootsquash_state(struct ll_sb_info *sbi)
 	}
 	up_write(&squash->rsi_sem);
 }
-
-

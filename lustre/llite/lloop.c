@@ -679,9 +679,10 @@ static int lo_ioctl(struct block_device *bdev, fmode_t mode,
                 else
                         fid_zero(&fid);
 
-                if (copy_to_user((struct lu_fid *)arg, &fid, sizeof(fid)))
-                        err = -EFAULT;
-                break;
+		if (copy_to_user((struct lu_fid __user *)arg,
+				 &fid, sizeof(fid)))
+			err = -EFAULT;
+		break;
         }
 
         default:
@@ -748,8 +749,8 @@ static enum llioc_iter lloop_ioctl(struct inode *unused, struct file *file,
                 dev = MKDEV(lloop_major, lo->lo_number);
 
                 /* quit if the used pointer is writable */
-                if (put_user((long)old_encode_dev(dev), (long*)arg))
-                        GOTO(out, err = -EFAULT);
+		if (put_user((long)old_encode_dev(dev), (long __user *)arg))
+			GOTO(out, err = -EFAULT);
 
                 bdev = blkdev_get_by_dev(dev, file->f_mode, NULL);
                 if (IS_ERR(bdev))

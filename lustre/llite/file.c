@@ -1308,7 +1308,7 @@ static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
         RETURN(result);
 }
 
-static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
+static ssize_t ll_file_read(struct file *file, char __user *buf, size_t count,
                             loff_t *ppos)
 {
         struct lu_env *env;
@@ -1374,8 +1374,8 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
         RETURN(result);
 }
 
-static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
-                             loff_t *ppos)
+static ssize_t ll_file_write(struct file *file, const char __user *buf,
+			     size_t count, loff_t *ppos)
 {
         struct lu_env *env;
         struct iovec  *local_iov;
@@ -1488,7 +1488,7 @@ static int ll_lov_recreate_obj(struct inode *inode, unsigned long arg)
 	if (!cfs_capable(CFS_CAP_SYS_ADMIN))
 		RETURN(-EPERM);
 
-	if (copy_from_user(&ucreat, (struct ll_recreate_obj *)arg,
+	if (copy_from_user(&ucreat, (struct ll_recreate_obj __user *)arg,
 			   sizeof(ucreat)))
 		RETURN(-EFAULT);
 
@@ -1507,7 +1507,7 @@ static int ll_lov_recreate_fid(struct inode *inode, unsigned long arg)
 	if (!cfs_capable(CFS_CAP_SYS_ADMIN))
 		RETURN(-EPERM);
 
-	if (copy_from_user(&fid, (struct lu_fid *)arg, sizeof(fid)))
+	if (copy_from_user(&fid, (struct lu_fid __user *)arg, sizeof(fid)))
 		RETURN(-EFAULT);
 
 	fid_to_ostid(&fid, &oi);
@@ -1657,7 +1657,7 @@ static int ll_lov_setea(struct inode *inode, struct file *file,
 	if (lump == NULL)
                 RETURN(-ENOMEM);
 
-	if (copy_from_user(lump, (struct lov_user_md  *)arg, lum_size)) {
+	if (copy_from_user(lump, (struct lov_user_md __user *)arg, lum_size)) {
 		OBD_FREE_LARGE(lump, lum_size);
 		RETURN(-EFAULT);
 	}
@@ -1673,8 +1673,10 @@ static int ll_lov_setstripe(struct inode *inode, struct file *file,
 {
 	struct lov_user_md_v3	 lumv3;
 	struct lov_user_md_v1	*lumv1 = (struct lov_user_md_v1 *)&lumv3;
-	struct lov_user_md_v1	*lumv1p = (struct lov_user_md_v1 *)arg;
-	struct lov_user_md_v3	*lumv3p = (struct lov_user_md_v3 *)arg;
+	struct lov_user_md_v1 __user *lumv1p =
+		(struct lov_user_md_v1 __user *)arg;
+	struct lov_user_md_v3 __user *lumv3p =
+		(struct lov_user_md_v3 __user *)arg;
 	int			 lum_size, rc;
 	__u64			 flags = FMODE_WRITE;
 	ENTRY;
@@ -1700,7 +1702,7 @@ static int ll_lov_setstripe(struct inode *inode, struct file *file,
 		ll_layout_refresh(inode, &gen);
 		lsm = ccc_inode_lsm_get(inode);
 		rc = obd_iocontrol(LL_IOC_LOV_GETSTRIPE, ll_i2dtexp(inode),
-				   0, lsm, (void *)arg);
+				   0, lsm, (void __user *)arg);
 		ccc_inode_lsm_put(inode, lsm);
 	}
 	RETURN(rc);
@@ -1715,7 +1717,7 @@ static int ll_lov_getstripe(struct inode *inode, unsigned long arg)
 	lsm = ccc_inode_lsm_get(inode);
 	if (lsm != NULL)
 		rc = obd_iocontrol(LL_IOC_LOV_GETSTRIPE, ll_i2dtexp(inode), 0,
-				   lsm, (void *)arg);
+				   lsm, (void __user *)arg);
 	ccc_inode_lsm_put(inode, lsm);
 	RETURN(rc);
 }
@@ -1992,7 +1994,7 @@ static int ll_ioctl_fiemap(struct inode *inode, unsigned long arg)
                 ret_bytes += (fiemap_s->fm_mapped_extents *
                                  sizeof(struct ll_fiemap_extent));
 
-	if (copy_to_user((void *)arg, fiemap_s, ret_bytes))
+	if (copy_to_user((void __user *)arg, fiemap_s, ret_bytes))
 		rc = -EFAULT;
 
 error:
@@ -2363,14 +2365,14 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
         switch(cmd) {
         case LL_IOC_GETFLAGS:
                 /* Get the current value of the file flags */
-                return put_user(fd->fd_flags, (int *)arg);
+		return put_user(fd->fd_flags, (int __user *)arg);
         case LL_IOC_SETFLAGS:
         case LL_IOC_CLRFLAGS:
                 /* Set or clear specific file flags */
                 /* XXX This probably needs checks to ensure the flags are
                  *     not abused, and to handle any flag side effects.
                  */
-                if (get_user(flags, (int *) arg))
+		if (get_user(flags, (int __user *) arg))
                         RETURN(-EFAULT);
 
                 if (cmd == LL_IOC_SETFLAGS) {
@@ -2394,7 +2396,7 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		struct file *file2;
 		struct lustre_swap_layouts lsl;
 
-		if (copy_from_user(&lsl, (char *)arg,
+		if (copy_from_user(&lsl, (char __user *)arg,
 				       sizeof(struct lustre_swap_layouts)))
 			RETURN(-EFAULT);
 
@@ -2424,13 +2426,13 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
                 RETURN(ll_iocontrol(inode, file, cmd, arg));
         case FSFILT_IOC_GETVERSION_OLD:
         case FSFILT_IOC_GETVERSION:
-                RETURN(put_user(inode->i_generation, (int *)arg));
+		RETURN(put_user(inode->i_generation, (int __user *)arg));
         case LL_IOC_GROUP_LOCK:
                 RETURN(ll_get_grouplock(inode, file, arg));
         case LL_IOC_GROUP_UNLOCK:
                 RETURN(ll_put_grouplock(inode, file, arg));
         case IOC_OBD_STATFS:
-                RETURN(ll_obd_statfs(inode, (void *)arg));
+		RETURN(ll_obd_statfs(inode, (void __user *)arg));
 
         /* We need to special case any other ioctls we want to handle,
          * to send them to the MDS/OST as appropriate and to properly
@@ -2441,25 +2443,26 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case LL_IOC_FLUSHCTX:
 		RETURN(ll_flush_ctx(inode));
 	case LL_IOC_PATH2FID: {
-		if (copy_to_user((void *)arg, ll_inode2fid(inode),
+		if (copy_to_user((void __user *)arg, ll_inode2fid(inode),
 				 sizeof(struct lu_fid)))
 			RETURN(-EFAULT);
 
 		RETURN(0);
 	}
 	case OBD_IOC_FID2PATH:
-		RETURN(ll_fid2path(inode, (void *)arg));
+		RETURN(ll_fid2path(inode, (void __user *)arg));
 	case LL_IOC_DATA_VERSION: {
 		struct ioc_data_version	idv;
 		int rc;
 
-		if (copy_from_user(&idv, (char *)arg, sizeof(idv)))
+		if (copy_from_user(&idv, (char __user *)arg, sizeof(idv)))
 			RETURN(-EFAULT);
 
 		idv.idv_flags &= LL_DV_RD_FLUSH | LL_DV_WR_FLUSH;
 		rc = ll_data_version(inode, &idv.idv_version, idv.idv_flags);
 
-		if (rc == 0 && copy_to_user((char *) arg, &idv, sizeof(idv)))
+		if (rc == 0 &&
+		    copy_to_user((char __user *)arg, &idv, sizeof(idv)))
 			RETURN(-EFAULT);
 
 		RETURN(rc);
@@ -2472,7 +2475,7 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
                 if (mdtidx < 0)
                         RETURN(mdtidx);
 
-                if (put_user((int)mdtidx, (int*)arg))
+		if (put_user((int)mdtidx, (int __user *)arg))
                         RETURN(-EFAULT);
 
                 RETURN(0);
@@ -2499,7 +2502,7 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		rc = obd_iocontrol(cmd, ll_i2mdexp(inode), sizeof(*op_data),
 				   op_data, NULL);
 
-		if (copy_to_user((void *)arg, hus, sizeof(*hus)))
+		if (copy_to_user((void __user *)arg, hus, sizeof(*hus)))
 			rc = -EFAULT;
 
 		ll_finish_md_op_data(op_data);
@@ -2514,7 +2517,7 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		if (hss == NULL)
 			RETURN(-ENOMEM);
 
-		if (copy_from_user(hss, (char *)arg, sizeof(*hss))) {
+		if (copy_from_user(hss, (char __user *)arg, sizeof(*hss))) {
 			OBD_FREE_PTR(hss);
 			RETURN(-EFAULT);
 		}
@@ -2543,7 +2546,7 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		rc = obd_iocontrol(cmd, ll_i2mdexp(inode), sizeof(*op_data),
 				   op_data, NULL);
 
-		if (copy_to_user((char *)arg, hca, sizeof(*hca)))
+		if (copy_to_user((char __user *)arg, hca, sizeof(*hca)))
 			rc = -EFAULT;
 
 		ll_finish_md_op_data(op_data);
@@ -2642,7 +2645,7 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		if (hui == NULL)
 			RETURN(-ENOMEM);
 
-		if (copy_from_user(hui, (void *)arg, sizeof(*hui))) {
+		if (copy_from_user(hui, (void __user *)arg, sizeof(*hui))) {
 			OBD_FREE_PTR(hui);
 			RETURN(-EFAULT);
 		}
@@ -2661,7 +2664,7 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			RETURN(err);
 
 		RETURN(obd_iocontrol(cmd, ll_i2dtexp(inode), 0, NULL,
-				     (void *)arg));
+				     (void __user *)arg));
 	}
 	}
 }
