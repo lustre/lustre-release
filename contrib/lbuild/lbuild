@@ -552,17 +552,16 @@ download_ofed() {
     if [[ $OFED_VERSION = *-[rR][cC][0-9] ]]; then
         local Mmv
         Mmv=${OFED_VERSION%%-[rR][cC][0-9]}
-        location="http://www.openfabrics.org/downloads/OFED/ofed-${Mmv}/"
+        location="https://www.openfabrics.org/downloads/OFED/ofed-${Mmv}/"
     fi
 
     if [[ $OFED_VERSION = daily-* ]]; then
-        local Mmv daily
-        OFED_VERSION=${OFED_VERSION/daily-/}
-        Mmv=${OFED_VERSION%%-*}
+        local Mmv
+        Mmv=${OFED_VERSION/daily-/}
         daily=${OFED_VERSION##$Mmv-}
-        location="http://www.openfabrics.org/downloads/OFED/ofed-${Mmv}-daily/"
+        location="https://www.openfabrics.org/downloads/OFED/ofed-${Mmv}-daily/"
         # find the filename for the version for the date specified
-        OFED_VERSION=$(curl -s "$location" | sed -nre "/${daily}-/s/.*href=\"OFED-(${Mmv//./\\.}-${daily}-[0-9]{4,4}).tgz.*$/\1/p" | tail -1)
+        OFED_VERSION=$(curl -s "$location" | sed -nre "/${Mmv}-/s/.*href=\"OFED-(${Mmv}-[0-9]{8,8}-[0-9]{4,4}).tgz.*$/\1/p" | tail -1)
         if [ -z "$OFED_VERSION" ]; then
             fatal 1 "Could not determine the filename of the OFED snapshot for ${daily}"
         fi
@@ -1324,13 +1323,13 @@ build_kernel_ib() {
         K_SRC="KSRC"
     fi
 
-    local OFED_CORE="--with-core-mod --with-ipoib-mod --with-sdp-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod"
-    local OFED_HARDWARE="--with-mthca-mod --with-mlx4-mod --with-mlx4_en-mod --with-cxgb3-mod --with-nes-mod"
+    local OFED_CORE="--with-core-mod --with-ipoib-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod"
+    local OFED_HARDWARE="--with-mthca-mod --with-mlx4-mod --with-mlx4_en-mod --with-cxgb3-mod --with-nes-mod --with-qib-mod"
 
     if compare_version $OFED_VERSION 3.0; then
 	OFED_CORE="$OFED_CORE --with-madeye-mod --with-rds-mod"
     else
-	OFED_HARDWARE="$OFED_HARDWARE --with-cxgb4-mod"
+	OFED_HARDWARE="$OFED_HARDWARE --with-mlx5-mod --with-cxgb4-mod --with-ocrdma-mod --with-qib-mod"
     fi
 
     # some I/B drivers are architecture dependent and kernel-ib's configure
