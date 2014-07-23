@@ -1258,8 +1258,11 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
 				dlm_req->lock_desc.l_resource.lr_type,
 				dlm_req->lock_desc.l_req_mode,
 				cbs, NULL, 0, LVB_T_NONE);
-	if (IS_ERR(lock))
-		GOTO(out, rc = PTR_ERR(lock));
+	if (IS_ERR(lock)) {
+		rc = PTR_ERR(lock);
+		lock = NULL;
+		GOTO(out, rc);
+	}
 
         lock->l_last_activity = cfs_time_current_sec();
         lock->l_remote_handle = dlm_req->lock_handle[0];
@@ -1396,7 +1399,7 @@ existing_lock:
 
         /* The LOCK_CHANGED code in ldlm_lock_enqueue depends on this
          * ldlm_reprocess_all.  If this moves, revisit that code. -phil */
-	if (!IS_ERR(lock)) {
+	if (lock != NULL) {
 		LDLM_DEBUG(lock, "server-side enqueue handler, sending reply"
 			   "(err=%d, rc=%d)", err, rc);
 
