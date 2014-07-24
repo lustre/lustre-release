@@ -3,10 +3,10 @@ TBD Intel Corporation
        * See https://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix
          for currently supported client and server kernel versions.
        * Server known to build on patched kernels:
-         2.6.32-431.20.3.el6 (RHEL6.5)
+         2.6.32-431.23.3.el6 (RHEL6.5)
          3.0.101-0.31        (SLES11 SP3)
        * Client known to build on unpatched kernels:
-         2.6.32-431.20.3.el6 (RHEL6.5)
+         2.6.32-431.23.3.el6 (RHEL6.5)
          3.0.101-0.31        (SLES11 SP3)
          3.6.10-4.fc18       (FC18)
          3.10                (kernel.org)
