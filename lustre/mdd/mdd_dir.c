@@ -1823,15 +1823,20 @@ static int mdd_declare_object_initialize(const struct lu_env *env,
 	attr->la_valid &= ~(LA_MODE | LA_TYPE);
 	rc = mdo_declare_attr_set(env, child, attr, handle);
 	attr->la_valid |= LA_MODE | LA_TYPE;
-	if (rc == 0 && S_ISDIR(attr->la_mode)) {
-		rc = mdo_declare_index_insert(env, child, mdo2fid(child),
-					      S_IFDIR, dot, handle);
-		if (rc == 0)
-			rc = mdo_declare_ref_add(env, child, handle);
+	if (rc != 0 || !S_ISDIR(attr->la_mode))
+		RETURN(rc);
 
-		rc = mdo_declare_index_insert(env, child, mdo2fid(parent),
-					      S_IFDIR, dotdot, handle);
-	}
+	rc = mdo_declare_index_insert(env, child, mdo2fid(child), S_IFDIR,
+				      dot, handle);
+	if (rc != 0)
+		RETURN(rc);
+
+	rc = mdo_declare_ref_add(env, child, handle);
+	if (rc != 0)
+		RETURN(rc);
+
+	rc = mdo_declare_index_insert(env, child, mdo2fid(parent), S_IFDIR,
+				      dotdot, handle);
 
 	RETURN(rc);
 }
