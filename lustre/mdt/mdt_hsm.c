@@ -319,7 +319,7 @@ int mdt_hsm_state_set(struct mdt_thread_info *info)
 		CDEBUG(D_HSM, "Incompatible flag change on "DFID
 			      "flags="LPX64"\n",
 		       PFID(&info->mti_body->fid1), flags);
-		GOTO(out_ucred, rc = -EINVAL);
+		GOTO(out_unlock, rc = -EINVAL);
 	}
 
 	/* Save the modified flags */
