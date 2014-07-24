@@ -979,7 +979,7 @@ void osc_dec_unstable_pages(struct ptlrpc_request *req)
 {
 	struct ptlrpc_bulk_desc *desc       = req->rq_bulk;
 	struct client_obd       *cli        = &req->rq_import->imp_obd->u.cli;
-	obd_count                page_count = desc->bd_iov_count;
+	int			 page_count = desc->bd_iov_count;
 	int			 unstable_count;
 
 	LASSERT(page_count >= 0);

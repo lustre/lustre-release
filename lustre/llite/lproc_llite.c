@@ -843,7 +843,7 @@ static ssize_t ll_unstable_stats_seq_write(struct file *file,
 
 	if (count == 0)
 		return 0;
-	if (count < 0 || count >= sizeof(kernbuf))
+	if (count >= sizeof(kernbuf))
 		return -EINVAL;
 
 	if (copy_from_user(kernbuf, buffer, count))
