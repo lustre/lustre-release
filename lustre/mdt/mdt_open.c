@@ -1392,7 +1392,7 @@ static void mdt_object_open_unlock(struct mdt_thread_info *info,
 		up_read(&obj->mot_open_sem);
 
 	/* Cross-ref case, the lock should be returned to the client */
-	if (ibits == 0 || rc == -EREMOTE)
+	if (ibits == 0 || rc == -MDT_EREMOTE_OPEN)
 		RETURN_EXIT;
 
 	if (!(open_flags & MDS_OPEN_LOCK) && !(ibits & MDS_INODELOCK_LAYOUT)) {
@@ -1817,7 +1817,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                         if (rc != 0)
                                 result = rc;
 			else
-				result = -EREMOTE;
+				result = -MDT_EREMOTE_OPEN;
                         GOTO(out_child, result);
 		} else if (mdt_object_exists(child)) {
 			/* We have to get attr & LOV EA & HSM for this

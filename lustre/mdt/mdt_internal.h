@@ -307,6 +307,13 @@ enum {
         MDT_CROSS_LOCK
 };
 
+/* Special magical errno for communicaiton between mdt_reint_open()
+ * and mdt_intent_reint() which means return the lock to the client
+ * for subsequent cross ref open. Previously we used plain -EREMOTE
+ * but other functions called in that path might return it too and
+ * confuse us. This is not returned to the client. See LU-5370. */
+#define MDT_EREMOTE_OPEN (EREMOTE + 1024)
+
 struct mdt_reint_record {
 	mdt_reint_t			 rr_opcode;
 	const struct lustre_handle	*rr_handle;
