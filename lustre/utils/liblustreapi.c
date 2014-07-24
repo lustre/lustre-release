@@ -3172,7 +3172,7 @@ static int cb_mv_init(char *path, DIR *parent, DIR **dirp,
 			*dirp = NULL;
 			ret = -errno;
 			llapi_error(LLAPI_MSG_ERROR, ret,
-				    "can not open %s\n", path);
+				    "can not open %s", path);
 			return ret;
 		}
 	}
@@ -3741,7 +3741,7 @@ static int rmtacl_notify(int ops)
                 if (fd < 0) {
                         rc = -errno;
                         llapi_error(LLAPI_MSG_ERROR, rc,
-                                    "Can't open '%s'\n", mnt->mnt_dir);
+				    "Can't open '%s'", mnt->mnt_dir);
 			goto out;
                 }
 
@@ -3750,7 +3750,7 @@ static int rmtacl_notify(int ops)
                 if (rc < 0) {
                         rc = -errno;
 			llapi_error(LLAPI_MSG_ERROR, rc,
-				    "ioctl RMTACL on '%s' err %d\n",
+				    "ioctl RMTACL on '%s' err %d",
 				    mnt->mnt_dir, rc);
 			goto out;
                 }
@@ -3915,14 +3915,14 @@ static int do_rmtacl(int argc, char *argv[], int ops, int (output_func)(char *))
         if (output_func) {
                 if (pipe(fd) < 0) {
                         rc = -errno;
-                        llapi_error(LLAPI_MSG_ERROR, rc, "Can't create pipe\n");
+			llapi_error(LLAPI_MSG_ERROR, rc, "Can't create pipe");
                         return rc;
                 }
 
                 pid = fork();
                 if (pid < 0) {
                         rc = -errno;
-                        llapi_error(LLAPI_MSG_ERROR, rc, "Can't fork\n");
+			llapi_error(LLAPI_MSG_ERROR, rc, "Can't fork");
                         close(fd[0]);
                         close(fd[1]);
                         return rc;
@@ -3933,7 +3933,7 @@ static int do_rmtacl(int argc, char *argv[], int ops, int (output_func)(char *))
                         if (dup2(fd[1], 1) < 0) {
                                 rc = -errno;
                                 llapi_error(LLAPI_MSG_ERROR, rc,
-                                            "Can't dup2 %d\n", fd[1]);
+					    "Can't dup2 %d", fd[1]);
                                 close(fd[1]);
                                 return rc;
                         }
@@ -3954,7 +3954,7 @@ static int do_rmtacl(int argc, char *argv[], int ops, int (output_func)(char *))
         fp = fdopen(fd[0], "r");
         if (fp == NULL) {
                 rc = -errno;
-                llapi_error(LLAPI_MSG_ERROR, rc, "fdopen %d failed\n", fd[0]);
+		llapi_error(LLAPI_MSG_ERROR, rc, "fdopen %d failed", fd[0]);
                 kill(pid, SIGKILL);
                 close(fd[0]);
                 return rc;
@@ -3970,7 +3970,7 @@ static int do_rmtacl(int argc, char *argv[], int ops, int (output_func)(char *))
 
         if (waitpid(pid, &status, 0) < 0) {
                 rc = -errno;
-                llapi_error(LLAPI_MSG_ERROR, rc, "waitpid %d failed\n", pid);
+		llapi_error(LLAPI_MSG_ERROR, rc, "waitpid %d failed", pid);
                 return rc;
         }
 
@@ -4523,7 +4523,7 @@ int llapi_create_volatile_idx(char *directory, int idx, int open_flags)
 	fd = open("/dev/urandom", O_RDONLY);
 	if (fd < 0) {
 		llapi_error(LLAPI_MSG_ERROR, errno,
-			    "Cannot open /dev/urandom\n");
+			    "Cannot open /dev/urandom");
 		return -errno;
 	}
 	rc = read(fd, &random, sizeof(random));
@@ -4549,7 +4549,7 @@ int llapi_create_volatile_idx(char *directory, int idx, int open_flags)
 	fd = open(file_path, O_RDWR | O_CREAT | open_flags, S_IRUSR | S_IWUSR);
 	if (fd < 0) {
 		llapi_error(LLAPI_MSG_ERROR, errno,
-			    "Cannot create volatile file '%s' in '%s'\n",
+			    "Cannot create volatile file '%s' in '%s'",
 			    filename + LUSTRE_VOLATILE_HDR_LEN,
 			    directory);
 		return -errno;
@@ -4613,7 +4613,7 @@ int llapi_swap_layouts(const char *path1, const char *path2,
 	rc = llapi_fswap_layouts(fd1, fd2, dv1, dv2, flags);
 	if (rc < 0)
 		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "error: cannot swap layout between '%s' and '%s'\n",
+			    "error: cannot swap layout between '%s' and '%s'",
 			    path1, path2);
 
 	close(fd2);

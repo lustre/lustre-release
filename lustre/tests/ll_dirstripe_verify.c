@@ -233,13 +233,13 @@ int main(int argc, char **argv)
                 return 1;
         }
 
-        dir = opendir(argv[1]);
-        if (dir == NULL) {
-                rc = -errno;
-                llapi_error(LLAPI_MSG_ERROR, rc,
-                            "error: %s opendir failed\n", argv[1]);
-                return rc;
-        }
+	dir = opendir(argv[1]);
+	if (dir == NULL) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "error: %s opendir failed", argv[1]);
+		return rc;
+	}
 
 	lum_size = lov_user_md_size(MAX_LOV_UUID_COUNT, LOV_USER_MAGIC);
 	lum_dir = (struct lov_user_md *)malloc(lum_size);
@@ -251,61 +251,62 @@ int main(int argc, char **argv)
 		goto cleanup;
 	}
 
-        rc = llapi_file_get_stripe(argv[1], lum_dir);
-        if (rc) {
-                if (rc == -ENODATA) {
-                        free(lum_dir);
-                        lum_dir = NULL;
-                } else {
-                        llapi_error(LLAPI_MSG_ERROR, rc,
-                                    "error: can't get EA for %s\n", argv[1]);
-                        goto cleanup;
-                }
-        }
+	rc = llapi_file_get_stripe(argv[1], lum_dir);
+	if (rc) {
+		if (rc == -ENODATA) {
+			free(lum_dir);
+			lum_dir = NULL;
+		} else {
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "error: can't get EA for %s", argv[1]);
+			goto cleanup;
+		}
+	}
 
-        /* XXX should be llapi_lov_getname() */
-        rc = llapi_file_get_lov_uuid(argv[1], &lov_uuid);
-        if (rc) {
-                llapi_error(LLAPI_MSG_ERROR, rc,
-                            "error: can't get lov name for %s\n",
-                            argv[1]);
-                return rc;
-        }
+	/* XXX should be llapi_lov_getname() */
+	rc = llapi_file_get_lov_uuid(argv[1], &lov_uuid);
+	if (rc) {
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "error: can't get lov name for %s",
+			    argv[1]);
+		return rc;
+	}
 
-        if ((lum_file1 = (struct lov_user_md *)malloc(lum_size)) == NULL) {
-                rc = -ENOMEM;
-                llapi_error(LLAPI_MSG_ERROR, rc,
-                            "error: can't allocate %d bytes for EA\n",
-                            lum_size);
-                goto cleanup;
-        }
+	lum_file1 = malloc(lum_size);
+	if (lum_file1 == NULL) {
+		rc = -ENOMEM;
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "error: can't allocate %d bytes for EA",
+			    lum_size);
+		goto cleanup;
+	}
 
-        rc = llapi_file_get_stripe(argv[2], lum_file1);
-        if (rc) {
-                llapi_error(LLAPI_MSG_ERROR, rc,
-                            "error: unable to get EA for %s\n", argv[2]);
-                goto cleanup;
-        }
+	rc = llapi_file_get_stripe(argv[2], lum_file1);
+	if (rc) {
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "error: unable to get EA for %s", argv[2]);
+		goto cleanup;
+	}
 
-        if (argc == 4) {
-                lum_file2 = (struct lov_user_md *)malloc(lum_size);
-                if (lum_file2 == NULL) {
-                        rc = -ENOMEM;
-                        llapi_error(LLAPI_MSG_ERROR, rc,
-                                    "error: can't allocate %d "
-                                    "bytes for file2 EA\n", lum_size);
-                        goto cleanup;
-                }
+	if (argc == 4) {
+		lum_file2 = (struct lov_user_md *)malloc(lum_size);
+		if (lum_file2 == NULL) {
+			rc = -ENOMEM;
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "error: can't allocate %d "
+				    "bytes for file2 EA", lum_size);
+			goto cleanup;
+		}
 
-                rc = llapi_file_get_stripe(argv[3], lum_file2);
-                if (rc) {
-                        llapi_error(LLAPI_MSG_ERROR, rc,
-                                    "error: can't get EA for %s\n", argv[3]);
-                        goto cleanup;
-                }
-        }
+		rc = llapi_file_get_stripe(argv[3], lum_file2);
+		if (rc) {
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "error: can't get EA for %s", argv[3]);
+			goto cleanup;
+		}
+	}
 
-        rc = compare(lum_dir, lum_file1, lum_file2);
+	rc = compare(lum_dir, lum_file1, lum_file2);
 
 cleanup:
         closedir(dir);
