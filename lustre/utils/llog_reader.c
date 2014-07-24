@@ -50,7 +50,7 @@
 #include <fcntl.h>
 #include <sys/vfs.h>
 #include <linux/magic.h>
-
+#include <errno.h>
 #include <time.h>
 #include <lnet/nidstr.h>
 #include <lustre/lustre_idl.h>
@@ -208,8 +208,8 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 		     struct llog_rec_hdr ***recs,
 		     int *recs_number)
 {
-	int rc = 0, recs_num, rd;
-	off_t file_size;
+	int rc = 0, recs_num, rd = 0;
+	long long file_size;
 	struct stat st;
 	char *file_buf = NULL, *recs_buf = NULL;
 	struct llog_rec_hdr **recs_pr = NULL;
@@ -222,10 +222,14 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 		llapi_error(LLAPI_MSG_ERROR, rc, "Got file stat error.");
 		goto out;
 	}
+
 	file_size = st.st_size;
-	if (file_size == 0) {
-		rc = -1;
-		llapi_error(LLAPI_MSG_ERROR, rc, "File is empty.");
+	if (file_size < sizeof(**llog)) {
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "File too small for llog header: "
+			    "need %zd, size %lld\n",
+			    sizeof(**llog), file_size);
+		rc = -EIO;
 		goto out;
 	}
 
@@ -237,20 +241,29 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 	}
 	*llog = (struct llog_log_hdr *)file_buf;
 
-	rd = read(fd, file_buf, file_size);
+	do {
+		rc = read(fd, file_buf + rd, file_size - rd);
+		if (rc > 0)
+			rd += rc;
+	} while (rc > 0 && rd < file_size);
+
 	if (rd < file_size) {
-		rc = -EIO; /*FIXME*/
-		llapi_error(LLAPI_MSG_ERROR, rc, "Read file error.");
+		rc = rc < 0 ? -errno : -EIO;
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "Error reading llog header: need %zd, got %d",
+			    sizeof(**llog), rd);
 		goto clear_file_buf;
 	}
 
 	/* the llog header not countable here.*/
 	recs_num = le32_to_cpu((*llog)->llh_count) - 1;
 
-	recs_buf = malloc(recs_num * sizeof(struct llog_rec_hdr *));
+	recs_buf = malloc(recs_num * sizeof(**recs_pr));
 	if (recs_buf == NULL) {
 		rc = -ENOMEM;
-		llapi_error(LLAPI_MSG_ERROR, rc, "Memory Alloc for recs_buf.");
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "Error allocating %zd bytes for recs_buf",
+			    recs_num * sizeof(**recs_pr));
 		goto clear_file_buf;
 	}
 	recs_pr = (struct llog_rec_hdr **)recs_buf;
@@ -263,8 +276,7 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 		int idx;
 		unsigned long offset;
 
-		if (ptr + sizeof(struct llog_rec_hdr) >
-		    file_buf + file_size) {
+		if (ptr + sizeof(**recs_pr) > file_buf + file_size) {
 			rc = -EINVAL;
 			llapi_error(LLAPI_MSG_ERROR, rc,
 				    "The log is corrupt (too big at %d)", i);
