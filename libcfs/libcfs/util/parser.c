@@ -220,7 +220,7 @@ static char * command_generator(const char * text, int state)
 }
 
 /* probably called by readline */
-static char **command_completion(char * text, int start, int end)
+static char **command_completion(const char *text, int start, int end)
 {
         command_t   * table;
         char        * pos;
@@ -283,32 +283,28 @@ int execute_line(char * line)
         return rc;
 }
 
-int
-noop_fn ()
-{
-        return (0);
-}
+static void noop_int_fn(int unused) { }
+static void noop_void_fn(void) { }
 
 /* just in case you're ever in an airplane and discover you
-   forgot to install readline-dev. :) */
-int init_input()
+ * forgot to install readline-dev. :) */
+static int init_input(void)
 {
-        int   interactive = isatty (fileno (stdin));
+	int interactive = isatty(fileno(stdin));
 
 #ifdef HAVE_LIBREADLINE
-        using_history();
-        stifle_history(HISTORY);
+	using_history();
+	stifle_history(HISTORY);
 
-        if (!interactive)
-        {
-                rl_prep_term_function = (rl_vintfunc_t *)noop_fn;
-                rl_deprep_term_function = (rl_voidfunc_t *)noop_fn;
-        }
+	if (!interactive) {
+		rl_prep_term_function = noop_int_fn;
+		rl_deprep_term_function = noop_void_fn;
+	}
 
-        rl_attempted_completion_function = (CPPFunction *)command_completion;
-        rl_completion_entry_function = (void *)command_generator;
+	rl_attempted_completion_function = command_completion;
+	rl_completion_entry_function = command_generator;
 #endif
-        return interactive;
+	return interactive;
 }
 
 #ifndef HAVE_LIBREADLINE
