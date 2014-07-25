@@ -594,8 +594,12 @@ parse_mpss_info() {
     for url in $urls; do
         local ver2=""
         local ver3=""
+        # Try to match with MPSS 3.3 package
+        if [[ $url =~ mpss-[0-9].[0-9](.[0-9]*)?-linux.tar ]]; then
+            ver3=${url##*mpss-}
+            ver3=${ver3%%-linux.tar}
         # Try to match with MPSS 3.x or 3.x.x distro package
-        if [[ $url =~ mpss-[0-9].[0-9](.[0-9]*)?-$distro.tar ]]; then
+        elif [[ $url =~ mpss-[0-9].[0-9](.[0-9]*)?-$distro.tar ]]; then
             ver3=${url##*mpss-}
             ver3=${ver3%%-$distro.tar}
         # Try to match with MPSS 3.x or 3.x.x source package
@@ -613,15 +617,10 @@ parse_mpss_info() {
         fi
 
         if [ -n "$ver3" ]; then
-            # Check for MPSS 3.x or MPSS 3.x.x
-            if [[ $ver3 =~ [0-9].[0-9].[0-9]* ]]; then
-                ver3="${ver3}-0"
-            else
-                ver3="${ver3}.0-0"
-            fi
+            ver3="${ver3}-0"
             if [ -z "$build" ]; then
                 res3="$ver3"
-            elif [ "$build" = "$ver3" ]; then
+            elif [ "${build%%-*}" = "${ver3%%-*}" ]; then
                 res3="$res3 $url"
             fi
         elif [ -n "$ver2" ]; then
@@ -642,24 +641,8 @@ parse_mpss_info() {
             echo "$res2"
         fi
     elif [ "${build%%.*}" = "3" ]; then
-        local ver=${build%%-*}
-        local bid=${build##*-}
-        if [ $bid -eq 0 ]; then
-            # return URLs from MPSS info file
-            echo "$res3"
-        else
-            # Check for MPSS 3.x or MPSS 3.x.x
-            if [ ${ver##*.} -eq 0 ]; then
-                ver=${ver%.*}
-            fi
-            # return URLs from internal site with MPSS builds
-            # kernel sources:
-            echo "${MPSS_BUILDS:-"http://mic-bld.pdx.intel.com/release"}/$ver/$bid/release/knightscorner/package/mpss-src-$ver.tar"
-            # kernel configs:
-            echo "${MPSS_BUILDS:-"http://mic-bld.pdx.intel.com/release"}/$ver/$bid/release/knightscorner/package/mpss-$ver-k1om.tar"
-            # OFED headers:
-            echo "${MPSS_BUILDS:-"http://mic-bld.pdx.intel.com/release"}/$ver/$bid/release/knightscorner/package/mpss-$ver-$distro.tar"
-        fi
+        # return URLs from MPSS info file
+        echo "$res3"
     else
         # return URLs from MPSS info file
         echo "$res2"
@@ -681,15 +664,12 @@ download_mpss() {
     local force="${2:-false}"
     local urls=$(parse_mpss_info "$file" ${MPSS_VERSION} ${MPSS_DISTRO})
 
-    [ -z "$urls" ] && fatal 1 "Could not determine the URLs of MPSS $MPSS_VERSION"
-
-    # force re-download if build number is zero
-    [[ $MPSS_VERSION = [0-9].[0-9].[0-9]*-0 ]] && force=true
+    [ -z "$urls" ] && return 0
 
     local url
     local i=0
     for url in $urls; do
-        file="$KERNELTREE/mpss_src-${MPSS_VERSION}-${MPSS_DISTRO}-part$i.tar"
+        file="$KERNELTREE/mpss_src-${MPSS_VER}-${MPSS_BLD}-${MPSS_DISTRO}-part$i.tar"
         download_file "$url" "$file" "$force"
         i=$((i+1))
     done
@@ -849,51 +829,51 @@ unpack_mpss() {
 
     [ -d mpss ] && return 0
 
-    if [ "${MPSS_VERSION%%.*}" = "3" ]; then
-        local ver=${MPSS_VERSION%%-*}
+    if [ "$MPSS_MAJ" = "3" ]; then
         local file
         local i
-        # Check for MPSS 3.x or MPSS 3.x.x
-        if [ ${ver##*.} -eq 0 ]; then
-            ver=${ver%.*}
-        fi
         for i in $(seq 0 9); do
-            file="$KERNELTREE/mpss_src-${MPSS_VERSION}-${MPSS_DISTRO}-part$i.tar"
+            file="$KERNELTREE/mpss_src-${MPSS_VER}-${MPSS_BLD}-${MPSS_DISTRO}-part$i.tar"
             if [ -r "$file" ]; then
                 untar "$file" \
-                    "mpss-$ver/*/linux-*.tar.bz2" \
-                    "mpss-$ver/*/kernel-dev-*.rpm" \
-                    "mpss-$ver/*/ofed-driver-*-devel-*.rpm"
+                    "mpss-$MPSS_VER/*/linux-*.tar.bz2" \
+                    "mpss-$MPSS_VER/*/kernel-dev-*.rpm" \
+                    "mpss-$MPSS_VER/*/ofed-driver-devel-*.rpm" \
+                    "mpss-$MPSS_VER/*/ofed-driver-*-devel-*.rpm"
             fi
         done
         # Extract kernel configs
-        file=$(find mpss-$ver -type f -path "*/kernel-dev-*.rpm")
+        file=$(find mpss-$MPSS_VER -type f -path "*/kernel-dev-*.rpm" -print -quit)
         if ! rpm2cpio "$file" | cpio -idm; then
             echo "Error extracting MPSS kernel configs"
             return 1
         fi
         # Unpack kernel sources
-        file=$(find mpss-$ver -type f -path "*/linux-*.tar.bz2")
+        file=$(find mpss-$MPSS_VER -type f -path "*/linux-*.tar.bz2" -print -quit)
         if ! untar "$file"; then
             echo "Error unpacking MPSS kernel sources"
             return 1
         fi
         # Extract OFED headers
-        file=$(find mpss-$ver -type f -path "*/ofed-driver-*-devel-*.rpm")
+        file=$(find mpss-$MPSS_VER -type f -path "*/ofed-driver-*-devel-*.rpm" -print -quit)
         if ! rpm2cpio "$file" | cpio -idm; then
-            echo "Error extracting MPSS OFED headers"
-            return 1
+            # Name was changed in MPSS 3.3
+            file=$(find mpss-$MPSS_VER -type f -path "*/ofed-driver-devel-*.rpm" -print -quit)
+            if ! rpm2cpio "$file" | cpio -idm; then
+                echo "Error extracting MPSS OFED headers"
+                return 1
+            fi
         fi
         # Remove unpacked archives to save space
-        rm -rf mpss-$ver
+        rm -rf mpss-$MPSS_VER
         # Make link to MPSS kernel sources
         ln -sf linux-* mpss
     else
-        local dir="mpss-${MPSS_VERSION}-${MPSS_DISTRO%%-*}"
+        local dir="mpss-${MPSS_VER}-${MPSS_BLD}-${MPSS_DISTRO%%-*}"
 
         mkdir $dir || return 255
         pushd $dir >/dev/null || return 255
-        if ! untar "$KERNELTREE/mpss_src-${MPSS_VERSION}-${MPSS_DISTRO}-part0.tar" "*/gpl/*full_src*"; then
+        if ! untar "$KERNELTREE/mpss_src-${MPSS_VER}-${MPSS_BLD}-${MPSS_DISTRO}-part0.tar" "*/gpl/*full_src*"; then
             popd >/dev/null
             rm -rf $dir
             echo "Error unpacking MPSS tarball 1"
@@ -1188,7 +1168,7 @@ build_spl_zfs() {
 prepare_mpss() {
 
     pushd mpss >/dev/null || return 255
-    if [ "${MPSS_VERSION%%.*}" = "3" ]; then
+    if [ "$MPSS_MAJ" = "3" ]; then
         cp -f ../boot/config-* .config
         if ! make ARCH=k1om silentoldconfig ; then
             popd >/dev/null
@@ -2158,14 +2138,19 @@ if [ -n "$MPSS_VERSION" ]; then
             fatal 1 "Could not determine the last MPSS version"
     fi
 
+    MPSS_MAJ=${MPSS_VERSION%%.*}
+    MPSS_VER=${MPSS_VERSION%%-*}
+    MPSS_BLD=${MPSS_VERSION##*-}
+    [ "$MPSS_VER" = "$MPSS_BLD" ] && MPSS_BLD=0
+
     download_mpss "$MPSS_INFO"
     [ -r "$MPSS_INFO" ] && rm -f "$MPSS_INFO"
-    echo "Building with MPSS $MPSS_VERSION"
+    echo "Building with MPSS $MPSS_VER-$MPSS_BLD"
     unpack_mpss  || fatal 1 "Error unpacking MPSS tarballs"
     prepare_mpss || fatal 1 "Error preparing MPSS for kernel modules build"
 
     if [ -z "$MPSS_OFED" ]; then
-        MPSS_OFED=$(find $PWD -type f -path "*/ofed-driver-*/Module.symvers")
+        MPSS_OFED=$(find $PWD -type f -path "*/ofed-driver*/Module.symvers" -print -quit)
         if [ -n "$MPSS_OFED" ]; then
             MPSS_OFED="--with-o2ib=$(dirname $MPSS_OFED)"
         else
@@ -2181,14 +2166,14 @@ if [ -n "$MPSS_VERSION" ]; then
 
     # define variables for cross compilation:
     CROSS_SUFFIX="-mic"
-    if [ "${MPSS_VERSION%%.*}" = "3" ]; then
+    if [ "$MPSS_MAJ" = "3" ]; then
         CC_TARGET_ARCH=k1om-mpss-linux
         LINUX="$TOPDIR/mpss"
         RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"cross_requires /bin/sh\""
     else
         CC_TARGET_ARCH=x86_64-k1om-linux
         LINUX="$TOPDIR/mpss/card/kernel"
-        RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"cross_requires intel-mic-gpl = ${MPSS_VERSION%%-*}\""
+        RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"cross_requires intel-mic-gpl = $MPSS_VER\""
     fi
     LUSTRE_VERSION=$(sed -n -e 's/^VERSION = //p' lustre/META)
     CONFIGURE_FLAGS="$CONFIGURE_FLAGS $MPSS_OFED --host=$CC_TARGET_ARCH --build=x86_64-pc-linux"
