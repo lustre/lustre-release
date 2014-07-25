@@ -1678,7 +1678,9 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 	}
 	EXIT;
 cleanup:
-	mdd_write_unlock(env, mdd_cobj);
+	if (likely(mdd_cobj != NULL))
+		mdd_write_unlock(env, mdd_cobj);
+
 	if (rc == 0) {
 		int cl_flags = 0;
 
@@ -3866,17 +3868,19 @@ static int mdd_migrate_update_name(const struct lu_env *env,
 	rc = mdd_la_get(env, mdd_sobj, so_attr,
 			mdd_object_capa(env, mdd_sobj));
 	if (rc != 0)
-		GOTO(stop_trans, rc);
+		GOTO(out_unlock, rc);
+
 	ma->ma_attr = *so_attr;
 	ma->ma_valid |= MA_INODE;
 	rc = mdd_finish_unlink(env, mdd_sobj, ma, mdd_pobj, lname, handle);
 	if (rc != 0)
-		GOTO(stop_trans, rc);
+		GOTO(out_unlock, rc);
 
 	rc = mdd_attr_set_internal(env, mdd_pobj, p_la, handle, 0);
 	if (rc != 0)
-		GOTO(stop_trans, rc);
+		GOTO(out_unlock, rc);
 
+out_unlock:
 	mdd_write_unlock(env, mdd_sobj);
 
 stop_trans:
