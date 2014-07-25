@@ -1,0 +1,333 @@
+module: Fix a few concurrent module loading races
+
+Concurrently starting multiple OSTs on a single OSS frequently
+triggers 30s deadlocks on module_mutex.  This RHEL 6 kernel bug
+applies to any module that results in additional request_module()
+calls in its init callback.  In Lustre, at least ptlrpc and libcfs are
+affected.  This patch adapts fixes from the following upstream
+commits:
+
+  9bea7f2 module: fix bne2 "gave up waiting for init of module
+		  libcrc32c"
+  be593f4 module: verify_export_symbols under the lock
+  3bafeb6 module: move find_module check to end
+  80a3d1b module: move sysfs exposure to end of load_module
+
+diff -rNup linux-2.6.32-431.20.3.el6.orig/kernel/module.c linux-2.6.32-431.20.3.el6/kernel/module.c
+--- linux-2.6.32-431.20.3.el6.orig/kernel/module.c	2014-06-07 05:42:39.000000000 +0800
++++ linux-2.6.32-431.20.3.el6/kernel/module.c	2014-07-28 00:04:43.000000000 +0800
+@@ -658,6 +658,33 @@ static int already_uses(struct module *a
+ }
+ 
+ /* Module a uses b */
++static int ref_module(struct module *a, struct module *b)
++{
++	struct module_use *use;
++	int err;
++
++	if (b == NULL || already_uses(a, b))
++		return 0;
++
++	/* If module isn't available, we fail. */
++	err = strong_try_module_get(b);
++	if (err)
++		return err;
++
++	DEBUGP("Allocating new usage for %s.\n", a->name);
++	use = kmalloc(sizeof(*use), GFP_ATOMIC);
++	if (!use) {
++		printk("%s: out of memory loading\n", a->name);
++		module_put(b);
++		return -ENOMEM;
++	}
++
++	use->module_which_uses = a;
++	list_add(&use->list, &b->modules_which_use_me);
++	return 0;
++}
++
++/* Module a uses b */
+ int use_module(struct module *a, struct module *b)
+ {
+ 	struct module_use *use;
+@@ -707,7 +734,6 @@ static void module_unload_free(struct mo
+ 				module_put(i);
+ 				list_del(&use->list);
+ 				kfree(use);
+-				sysfs_remove_link(i->holders_dir, mod->name);
+ 				/* There can be at most one match. */
+ 				break;
+ 			}
+@@ -962,6 +988,11 @@ static inline void module_unload_free(st
+ {
+ }
+ 
++static inline int ref_module(struct module *a, struct module *b)
++{
++	return strong_try_module_get(b);
++}
++
+ int use_module(struct module *a, struct module *b)
+ {
+ 	return strong_try_module_get(b) == 0;
+@@ -1130,24 +1161,60 @@ static inline int same_magic(const char 
+ static const struct kernel_symbol *resolve_symbol(Elf_Shdr *sechdrs,
+ 						  unsigned int versindex,
+ 						  const char *name,
+-						  struct module *mod)
++						  struct module *mod,
++						  char ownername[])
+ {
+ 	struct module *owner;
+ 	const struct kernel_symbol *sym;
+ 	const unsigned long *crc;
++	int err;
+ 
++	mutex_lock(&module_mutex);
+ 	sym = find_symbol(name, &owner, &crc,
+ 			  !(mod->taints & (1 << TAINT_PROPRIETARY_MODULE)), true);
+-	/* use_module can fail due to OOM,
+-	   or module initialization or unloading */
+-	if (sym) {
+-		if (!check_version(sechdrs, versindex, name, mod, crc, owner)
+-		    || !use_module(mod, owner))
+-			sym = NULL;
++	if (!sym)
++		goto unlock;
++
++	if (!check_version(sechdrs, versindex, name, mod, crc, owner)) {
++		sym = ERR_PTR(-EINVAL);
++		goto getname;
+ 	}
++
++	err = ref_module(mod, owner);
++	if (err) {
++		sym = ERR_PTR(err);
++		goto getname;
++	}
++
++getname:
++	/* We must make copy under the lock if we failed to get ref. */
++	strncpy(ownername, module_name(owner), MODULE_NAME_LEN);
++unlock:
++	mutex_unlock(&module_mutex);
+ 	return sym;
+ }
+ 
++static const struct kernel_symbol *resolve_symbol_wait(Elf_Shdr *sechdrs,
++						       unsigned int versindex,
++						       const char *name,
++						       struct module *mod)
++{
++	const struct kernel_symbol *ksym;
++	char ownername[MODULE_NAME_LEN];
++
++	mutex_unlock(&module_mutex);
++	if (wait_event_interruptible_timeout(module_wq,
++			!IS_ERR(ksym = resolve_symbol(sechdrs, versindex, name,
++						      mod, ownername)) ||
++			PTR_ERR(ksym) != -EBUSY,
++					     30 * HZ) <= 0) {
++		printk(KERN_WARNING "%s: gave up waiting for init of module %s.\n",
++		       mod->name, ownername);
++	}
++	mutex_lock(&module_mutex);
++	return ksym;
++}
++
+ /*
+  * /sys/module/foo/sections stuff
+  * J. Corbet <corbet@lwn.net>
+@@ -1375,6 +1442,30 @@ static inline void remove_notes_attrs(st
+ #endif
+ 
+ #ifdef CONFIG_SYSFS
++static void add_usage_links(struct module *mod)
++{
++#ifdef CONFIG_MODULE_UNLOAD
++	struct module_use *use;
++	int nowarn;
++
++	list_for_each_entry(use, &mod->modules_which_use_me, list) {
++		nowarn = sysfs_create_link(use->module_which_uses->holders_dir,
++					   &mod->mkobj.kobj, mod->name);
++	}
++#endif
++}
++
++static void del_usage_links(struct module *mod)
++{
++#ifdef CONFIG_MODULE_UNLOAD
++	struct module_use *use;
++
++	list_for_each_entry(use, &mod->modules_which_use_me, list)
++		sysfs_remove_link(use->module_which_uses->holders_dir, mod->name);
++#endif
++}
++
++
+ int module_add_modinfo_attrs(struct module *mod)
+ {
+ 	struct module_attribute *attr;
+@@ -1456,6 +1547,10 @@ int mod_sysfs_setup(struct module *mod,
+ {
+ 	int err;
+ 
++	err = mod_sysfs_init(mod);
++	if (err)
++		goto out;
++
+ 	mod->holders_dir = kobject_create_and_add("holders", &mod->mkobj.kobj);
+ 	if (!mod->holders_dir) {
+ 		err = -ENOMEM;
+@@ -1470,6 +1565,8 @@ int mod_sysfs_setup(struct module *mod,
+ 	if (err)
+ 		goto out_unreg_param;
+ 
++	add_usage_links(mod);
++
+ 	kobject_uevent(&mod->mkobj.kobj, KOBJ_ADD);
+ 	return 0;
+ 
+@@ -1479,6 +1576,7 @@ out_unreg_holders:
+ 	kobject_put(mod->holders_dir);
+ out_unreg:
+ 	kobject_put(&mod->mkobj.kobj);
++out:
+ 	return err;
+ }
+ 
+@@ -1493,10 +1591,15 @@ static void mod_sysfs_fini(struct module
+ {
+ }
+ 
++static void del_usage_links(struct module *mod)
++{
++}
++
+ #endif /* CONFIG_SYSFS */
+ 
+ static void mod_kobject_remove(struct module *mod)
+ {
++	del_usage_links(mod);
+ 	module_remove_modinfo_attrs(mod);
+ 	module_param_sysfs_remove(mod);
+ 	kobject_put(mod->mkobj.drivers_dir);
+@@ -1576,6 +1679,8 @@ EXPORT_SYMBOL_GPL(__symbol_get);
+ /*
+  * Ensure that an exported symbol [global namespace] does not already exist
+  * in the kernel or in some other module's exported symbol table.
++ *
++ * You must hold the module_mutex.
+  */
+ static int verify_export_symbols(struct module *mod)
+ {
+@@ -1641,21 +1746,23 @@ static int simplify_symbols(Elf_Shdr *se
+ 			break;
+ 
+ 		case SHN_UNDEF:
+-			ksym = resolve_symbol(sechdrs, versindex,
+-					      strtab + sym[i].st_name, mod);
++			ksym = resolve_symbol_wait(sechdrs, versindex,
++						   strtab + sym[i].st_name,
++						   mod);
+ 			/* Ok if resolved.  */
+-			if (ksym) {
++			if (ksym && !IS_ERR(ksym)) {
+ 				sym[i].st_value = ksym->value;
+ 				break;
+ 			}
+ 
+ 			/* Ok if weak.  */
+-			if (ELF_ST_BIND(sym[i].st_info) == STB_WEAK)
++			if (!ksym && ELF_ST_BIND(sym[i].st_info) == STB_WEAK)
+ 				break;
+ 
+-			printk(KERN_WARNING "%s: Unknown symbol %s\n",
+-			       mod->name, strtab + sym[i].st_name);
+-			ret = -ENOENT;
++			printk(KERN_WARNING "%s: Unknown symbol %s (err %li)\n",
++			       mod->name, strtab + sym[i].st_name,
++			       PTR_ERR(ksym));
++			ret = PTR_ERR(ksym) ?: -ENOENT;
+ 			break;
+ 
+ 		default:
+@@ -2240,11 +2347,6 @@ static noinline struct module *load_modu
+ 		goto free_mod;
+ 	}
+ 
+-	if (find_module(mod->name)) {
+-		err = -EEXIST;
+-		goto free_mod;
+-	}
+-
+ 	mod->state = MODULE_STATE_COMING;
+ 
+ 	/* Allow arches to frob section contents and sizes.  */
+@@ -2338,11 +2440,6 @@ static noinline struct module *load_modu
+ 	/* Now we've moved module, initialize linked lists, etc. */
+ 	module_unload_init(mod);
+ 
+-	/* add kobject, so we can reference it. */
+-	err = mod_sysfs_init(mod);
+-	if (err)
+-		goto free_unload;
+-
+ 	/* Set up license info based on the info section */
+ 	set_license(mod, get_modinfo(sechdrs, infoindex, "license"));
+ 
+@@ -2461,11 +2558,6 @@ static noinline struct module *load_modu
+ 			goto cleanup;
+ 	}
+ 
+-        /* Find duplicate symbols */
+-	err = verify_export_symbols(mod);
+-	if (err < 0)
+-		goto cleanup;
+-
+   	/* Set up and sort exception table */
+ 	mod->extable = section_objs(hdr, sechdrs, secstrings, "__ex_table",
+ 				    sizeof(*mod->extable), &mod->num_exentries);
+@@ -2521,6 +2613,16 @@ static noinline struct module *load_modu
+ 	 * function to insert in a way safe to concurrent readers.
+ 	 * The mutex protects against concurrent writers.
+ 	 */
++	if (find_module(mod->name)) {
++		err = -EEXIST;
++		goto already_exists;
++	}
++
++        /* Find duplicate symbols */
++	err = verify_export_symbols(mod);
++	if (err < 0)
++		goto already_exists;
++
+ 	list_add_rcu(&mod->list, &modules);
+ 
+ 	err = parse_args(mod->name, mod->args, mod->kp, mod->num_kp, NULL);
+@@ -2530,6 +2632,7 @@ static noinline struct module *load_modu
+ 	err = mod_sysfs_setup(mod, mod->kp, mod->num_kp);
+ 	if (err < 0)
+ 		goto unlink;
++
+ 	add_sect_attrs(mod, hdr->e_shnum, secstrings, sechdrs);
+ 	add_notes_attrs(mod, hdr->e_shnum, secstrings, sechdrs);
+ 
+@@ -2544,15 +2647,13 @@ static noinline struct module *load_modu
+  unlink:
+ 	/* Unlink carefully: kallsyms could be walking list. */
+ 	list_del_rcu(&mod->list);
++ already_exists:
+ 	synchronize_sched();
+ 	module_arch_cleanup(mod);
+  ddebug:
+ 	dynamic_debug_remove(debug);
+  cleanup:
+ 	free_modinfo(mod);
+-	kobject_del(&mod->mkobj.kobj);
+-	kobject_put(&mod->mkobj.kobj);
+- free_unload:
+ 	module_unload_free(mod);
+ #if defined(CONFIG_MODULE_UNLOAD) && defined(CONFIG_SMP)
+ 	percpu_modfree(mod->refptr);
