@@ -892,7 +892,7 @@ static int lfsck_namespace_exec_dir(const struct lu_env *env,
 	if (ent->lde_name[0] == '.' &&
 	    (ent->lde_namelen == 1 ||
 	     (ent->lde_namelen == 2 && ent->lde_name[1] == '.') ||
-	     fid_seq_is_dot_lustre(fid_seq(&ent->lde_fid))))
+	     fid_seq_is_dot(fid_seq(&ent->lde_fid))))
 		GOTO(out, rc = 0);
 
 	if (!(bk->lb_param & LPF_DRYRUN) &&
@@ -1674,6 +1674,206 @@ int lfsck_verify_linkea(const struct lu_env *env, struct dt_device *dev,
 
 stop:
 	dt_trans_stop(env, dev, th);
+	return rc;
+}
+
+/**
+ * Get the name and parent directory's FID from the first linkEA entry.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] obj	pointer to the object which get linkEA from
+ * \param[out] name	pointer to the buffer to hold the name
+ *			in the first linkEA entry
+ * \param[out] pfid	pointer to the buffer to hold the parent
+ *			directory's FID in the first linkEA entry
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
+int lfsck_links_get_first(const struct lu_env *env, struct dt_object *obj,
+			  char *name, struct lu_fid *pfid)
+{
+	struct lu_name		 *cname = &lfsck_env_info(env)->lti_name;
+	struct linkea_data	  ldata = { 0 };
+	int			  rc;
+
+	rc = lfsck_links_read(env, obj, &ldata);
+	if (rc != 0)
+		return rc;
+
+	linkea_first_entry(&ldata);
+	if (ldata.ld_lee == NULL)
+		return -ENODATA;
+
+	linkea_entry_unpack(ldata.ld_lee, &ldata.ld_reclen, cname, pfid);
+	/* To guarantee the 'name' is terminated with '0'. */
+	memcpy(name, cname->ln_name, cname->ln_namelen);
+	name[cname->ln_namelen] = 0;
+
+	return 0;
+}
+
+/**
+ * Remove the name entry from the parent directory.
+ *
+ * No need to care about the object referenced by the name entry,
+ * either the name entry is invalid or redundant, or the referenced
+ * object has been processed has been or will be handled by others.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] lfsck	pointer to the lfsck instance
+ * \param[in] parent	pointer to the lost+found object
+ * \param[in] name	the name for the name entry to be removed
+ * \param[in] type	the type for the name entry to be removed
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
+int lfsck_remove_name_entry(const struct lu_env *env,
+			    struct lfsck_instance *lfsck,
+			    struct dt_object *parent,
+			    const char *name, __u32 type)
+{
+	struct dt_device	*dev	= lfsck->li_next;
+	struct thandle		*th;
+	struct lustre_handle	 lh	= { 0 };
+	int			 rc;
+	ENTRY;
+
+	rc = lfsck_ibits_lock(env, lfsck, parent, &lh,
+			      MDS_INODELOCK_UPDATE, LCK_EX);
+	if (rc != 0)
+		RETURN(rc);
+
+	th = dt_trans_create(env, dev);
+	if (IS_ERR(th))
+		GOTO(unlock, rc = PTR_ERR(th));
+
+	rc = dt_declare_delete(env, parent, (const struct dt_key *)name, th);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	if (S_ISDIR(type)) {
+		rc = dt_declare_ref_del(env, parent, th);
+		if (rc != 0)
+			GOTO(stop, rc);
+	}
+
+	rc = dt_trans_start(env, dev, th);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	rc = dt_delete(env, parent, (const struct dt_key *)name, th,
+		       BYPASS_CAPA);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	if (S_ISDIR(type)) {
+		dt_write_lock(env, parent, 0);
+		rc = dt_ref_del(env, parent, th);
+		dt_write_unlock(env, parent);
+	}
+
+	GOTO(stop, rc);
+
+stop:
+	dt_trans_stop(env, dev, th);
+
+unlock:
+	lfsck_ibits_unlock(&lh, LCK_EX);
+
+	CDEBUG(D_LFSCK, "%s: remove name entry "DFID"/%s "
+	       "with type %o: rc = %d\n", lfsck_lfsck2name(lfsck),
+	       PFID(lfsck_dto2fid(parent)), name, type, rc);
+
+	return rc;
+}
+
+/**
+ * Update the object's name entry with the given FID.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] lfsck	pointer to the lfsck instance
+ * \param[in] parent	pointer to the parent directory that holds
+ *			the name entry
+ * \param[in] name	the name for the entry to be updated
+ * \param[in] pfid	the new PFID for the name entry
+ * \param[in] type	the type for the name entry to be updated
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
+int lfsck_update_name_entry(const struct lu_env *env,
+			    struct lfsck_instance *lfsck,
+			    struct dt_object *parent, const char *name,
+			    const struct lu_fid *pfid, __u32 type)
+{
+	struct dt_insert_rec	*rec	= &lfsck_env_info(env)->lti_dt_rec;
+	struct dt_device	*dev	= lfsck->li_next;
+	struct lustre_handle	 lh	= { 0 };
+	struct thandle		*th;
+	int			 rc;
+	bool			 exists = true;
+	ENTRY;
+
+	rc = lfsck_ibits_lock(env, lfsck, parent, &lh,
+			      MDS_INODELOCK_UPDATE, LCK_EX);
+	if (rc != 0)
+		RETURN(rc);
+
+	th = dt_trans_create(env, dev);
+	if (IS_ERR(th))
+		GOTO(unlock, rc = PTR_ERR(th));
+
+	rc = dt_declare_delete(env, parent, (const struct dt_key *)name, th);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	rec->rec_type = type;
+	rec->rec_fid = pfid;
+	rc = dt_declare_insert(env, parent, (const struct dt_rec *)rec,
+			       (const struct dt_key *)name, th);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	rc = dt_declare_ref_add(env, parent, th);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	rc = dt_trans_start(env, dev, th);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	rc = dt_delete(env, parent, (const struct dt_key *)name, th,
+		       BYPASS_CAPA);
+	if (rc == -ENOENT) {
+		exists = false;
+		rc = 0;
+	}
+
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	rc = dt_insert(env, parent, (const struct dt_rec *)rec,
+		       (const struct dt_key *)name, th, BYPASS_CAPA, 1);
+	if (rc == 0 && S_ISDIR(type) && !exists) {
+		dt_write_lock(env, parent, 0);
+		rc = dt_ref_add(env, parent, th);
+		dt_write_unlock(env, parent);
+	}
+
+	GOTO(stop, rc);
+
+stop:
+	dt_trans_stop(env, dev, th);
+
+unlock:
+	lfsck_ibits_unlock(&lh, LCK_EX);
+
+	CDEBUG(D_LFSCK, "%s: update name entry "DFID"/%s with the FID "DFID
+	       " and the type %o: rc = %d\n", lfsck_lfsck2name(lfsck),
+	       PFID(lfsck_dto2fid(parent)), name, PFID(pfid), type, rc);
+
 	return rc;
 }
 

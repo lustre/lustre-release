@@ -127,7 +127,7 @@ test_0() {
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_NAMESPACE
 		error "(9) unexpected status"
 	}
@@ -141,7 +141,7 @@ test_0() {
 	$START_NAMESPACE -r || error "(11) Fail to reset LFSCK!"
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_NAMESPACE
 		error "(12) unexpected status"
 	}
@@ -170,7 +170,7 @@ test_1a() {
 	$START_NAMESPACE -r || error "(3) Fail to start LFSCK for namespace!"
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_NAMESPACE
 		error "(4) unexpected status"
 	}
@@ -213,7 +213,7 @@ test_1b()
 	$START_NAMESPACE -r || error "(3) Fail to start LFSCK for namespace!"
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_NAMESPACE
 		error "(4) unexpected status"
 	}
@@ -251,7 +251,7 @@ test_2a() {
 	$START_NAMESPACE -r || error "(3) Fail to start LFSCK for namespace!"
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_NAMESPACE
 		error "(4) unexpected status"
 	}
@@ -291,7 +291,7 @@ test_2b()
 	$START_NAMESPACE -r || error "(3) Fail to start LFSCK for namespace!"
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_NAMESPACE
 		error "(4) unexpected status"
 	}
@@ -326,7 +326,7 @@ test_2c()
 	$START_NAMESPACE -r || error "(3) Fail to start LFSCK for namespace!"
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_NAMESPACE
 		error "(4) unexpected status"
 	}
@@ -367,7 +367,7 @@ test_4()
 	$START_NAMESPACE -r || error "(4) Fail to start LFSCK for namespace!"
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^flags/ { print \\\$2 }'" "inconsistent" 6 || {
+		awk '/^flags/ { print \\\$2 }'" "inconsistent" 32 || {
 		$SHOW_NAMESPACE
 		error "(5) unexpected status"
 	}
@@ -379,7 +379,7 @@ test_4()
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_NAMESPACE
 		error "(7) unexpected status"
 	}
@@ -425,7 +425,7 @@ test_5()
 	$START_NAMESPACE -r || error "(4) Fail to start LFSCK for namespace!"
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^flags/ { print \\\$2 }'" "inconsistent,upgrade" 6 || {
+		awk '/^flags/ { print \\\$2 }'" "inconsistent,upgrade" 32 || {
 		$SHOW_NAMESPACE
 		error "(5) unexpected status"
 	}
@@ -437,7 +437,7 @@ test_5()
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_NAMESPACE
 		error "(7) unexpected status"
 	}
@@ -489,7 +489,7 @@ test_6a() {
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x80001608
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "failed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "failed" 32 || {
 		$SHOW_NAMESPACE
 		error "(4) unexpected status"
 	}
@@ -515,7 +515,7 @@ test_6a() {
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_NAMESPACE
 		error "(8) unexpected status"
 	}
@@ -540,7 +540,7 @@ test_6b() {
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x80001609
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "failed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "failed" 32 || {
 		$SHOW_NAMESPACE
 		error "(4) unexpected status"
 	}
@@ -577,7 +577,7 @@ test_6b() {
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_NAMESPACE
 		error "(8) unexpected status"
 	}
@@ -631,7 +631,7 @@ test_7b()
 	$START_NAMESPACE -r || error "(3) Fail to start LFSCK for namespace!"
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "scanning-phase2" 6 || {
+		awk '/^status/ { print \\\$2 }'" "scanning-phase2" 32 || {
 		$SHOW_NAMESPACE
 		error "(4) unexpected status"
 	}
@@ -702,7 +702,7 @@ test_8()
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x80001609
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "failed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "failed" 32 || {
 		$SHOW_NAMESPACE
 		error "(10) unexpected status"
 	}
@@ -789,7 +789,7 @@ test_8()
 	$START_NAMESPACE || error "(21) Fail to start LFSCK for namespace!"
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "scanning-phase2" 6 || {
+		awk '/^status/ { print \\\$2 }'" "scanning-phase2" 32 || {
 		$SHOW_NAMESPACE
 		error "(22) unexpected status"
 	}
@@ -801,7 +801,7 @@ test_8()
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_NAMESPACE
 		error "(24) unexpected status"
 	}
@@ -949,7 +949,7 @@ test_9b() {
 		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit 0
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_NAMESPACE
 		error "(11) unexpected status"
 	}
@@ -1022,7 +1022,7 @@ test_10()
 		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit 0
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_NAMESPACE
 		error "(16) unexpected status"
 	}
@@ -1075,7 +1075,7 @@ test_11a() {
 
 	wait_update_facet ost1 "$LCTL get_param -n \
 		obdfilter.${OST_DEV}.lfsck_layout |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_LAYOUT_ON_OST
 		error "(6) unexpected status"
 	}
@@ -1124,7 +1124,7 @@ test_11b() {
 
 	wait_update_facet ost1 "$LCTL get_param -n \
 		obdfilter.${OST_DEV}.lfsck_layout |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_LAYOUT_ON_OST
 		error "(6) unexpected status"
 	}
@@ -1267,7 +1267,7 @@ test_13() {
 
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_layout |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_LAYOUT
 		error "(2) unexpected status"
 	}
@@ -1312,7 +1312,7 @@ test_14() {
 
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_layout |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_LAYOUT
 		error "(3) unexpected status"
 	}
@@ -1330,7 +1330,7 @@ test_14() {
 
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_layout |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_LAYOUT
 		error "(7) unexpected status"
 	}
@@ -1340,7 +1340,7 @@ test_14() {
 
 	echo "'stat' should success after layout LFSCK repairing"
 	wait_update_facet client "stat $DIR/$tdir/guard |
-		awk '/Size/ { print \\\$2 }'" "0" 6 || {
+		awk '/Size/ { print \\\$2 }'" "0" 32 || {
 		stat $DIR/$tdir/guard
 		$SHOW_LAYOUT
 		error "(8) unexpected size"
@@ -1379,7 +1379,7 @@ test_15a() {
 
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_layout |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_LAYOUT
 		error "(2) unexpected status"
 	}
@@ -1418,7 +1418,7 @@ test_15b() {
 
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_layout |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_LAYOUT
 		error "(2) unexpected status"
 	}
@@ -1455,7 +1455,7 @@ test_16() {
 
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_layout |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_LAYOUT
 		error "(2) unexpected status"
 	}
@@ -1506,7 +1506,7 @@ test_17() {
 
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_layout |
-		awk '/^status/ { print \\\$2 }'" "completed" 6 || {
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_LAYOUT
 		error "(3) unexpected status"
 	}
@@ -1905,7 +1905,7 @@ test_18d() {
 
 	wait_update_facet mds1 "$LCTL get_param -n \
 		mdd.$(facet_svc mds1).lfsck_layout |
-		awk '/^status/ { print \\\$2 }'" "scanning-phase2" 6 ||
+		awk '/^status/ { print \\\$2 }'" "scanning-phase2" 32 ||
 		error "(3.0) MDS1 is not the expected 'scanning-phase2'"
 
 	do_facet $SINGLEMDS $LCTL set_param fail_val=0 fail_loc=0
@@ -1999,7 +1999,7 @@ test_18e() {
 
 	wait_update_facet mds1 "$LCTL get_param -n \
 		mdd.$(facet_svc mds1).lfsck_layout |
-		awk '/^status/ { print \\\$2 }'" "scanning-phase2" 6 ||
+		awk '/^status/ { print \\\$2 }'" "scanning-phase2" 32 ||
 		error "(3) MDS1 is not the expected 'scanning-phase2'"
 
 	# to guarantee all updates are synced.

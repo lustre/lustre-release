@@ -260,11 +260,6 @@ static inline int fid_is_root(const struct lu_fid *fid)
 			 fid_oid(fid) == 1));
 }
 
-static inline int fid_seq_is_dot_lustre(__u64 seq)
-{
-	return unlikely(seq == FID_SEQ_DOT_LUSTRE);
-}
-
 static inline int fid_is_dot_lustre(const struct lu_fid *fid)
 {
 	return unlikely(fid_seq(fid) == FID_SEQ_DOT_LUSTRE &&
@@ -309,7 +304,7 @@ static inline int fid_is_namespace_visible(const struct lu_fid *fid)
 	 * object or not. It is caller's duty to check more if needed. */
 	return (!fid_is_last_id(fid) &&
 		(fid_seq_is_norm(seq) || fid_seq_is_igif(seq))) ||
-	       fid_is_root(fid) || fid_seq_is_dot_lustre(seq);
+	       fid_is_root(fid) || fid_seq_is_dot(seq);
 }
 
 static inline int fid_seq_in_fldb(__u64 seq)

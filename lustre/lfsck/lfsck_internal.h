@@ -586,6 +586,7 @@ int lfsck_ibits_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
 		     __u64 bits, ldlm_mode_t mode);
 void lfsck_ibits_unlock(struct lustre_handle *lh, ldlm_mode_t mode);
 int lfsck_create_lpf(const struct lu_env *env, struct lfsck_instance *lfsck);
+int lfsck_verify_lpf(const struct lu_env *env, struct lfsck_instance *lfsck);
 struct lfsck_instance *lfsck_instance_find(struct dt_device *key, bool ref,
 					   bool unlink);
 struct lfsck_component *lfsck_component_find(struct lfsck_instance *lfsck,
@@ -632,6 +633,16 @@ int lfsck_set_param(const struct lu_env *env, struct lfsck_instance *lfsck,
 int lfsck_verify_linkea(const struct lu_env *env, struct dt_device *dev,
 			struct dt_object *obj, const struct lu_name *cname,
 			const struct lu_fid *pfid);
+int lfsck_links_get_first(const struct lu_env *env, struct dt_object *obj,
+			  char *name, struct lu_fid *pfid);
+int lfsck_remove_name_entry(const struct lu_env *env,
+			    struct lfsck_instance *lfsck,
+			    struct dt_object *parent,
+			    const char *name, __u32 type);
+int lfsck_update_name_entry(const struct lu_env *env,
+			    struct lfsck_instance *lfsck,
+			    struct dt_object *parent, const char *name,
+			    const struct lu_fid *pfid, __u32 type);
 int lfsck_namespace_setup(const struct lu_env *env,
 			  struct lfsck_instance *lfsck);
 

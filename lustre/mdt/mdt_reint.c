@@ -1978,8 +1978,8 @@ static int mdt_reint_rename_or_migrate(struct mdt_thread_info *info,
 	if (info->mti_dlm_req)
 		ldlm_request_cancel(req, info->mti_dlm_req, 0);
 
-	if (fid_is_obf(rr->rr_fid1) || fid_is_dot_lustre(rr->rr_fid1) ||
-	    fid_is_obf(rr->rr_fid2) || fid_is_dot_lustre(rr->rr_fid2))
+	if (!fid_is_md_operative(rr->rr_fid1) ||
+	    !fid_is_md_operative(rr->rr_fid2))
 		RETURN(-EPERM);
 
 	rc = mdt_rename_lock(info, &rename_lh, rename_lock);

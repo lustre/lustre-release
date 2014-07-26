@@ -98,6 +98,11 @@ const char *lfsck_param_names[] = {
 	NULL
 };
 
+enum lfsck_verify_lpf_types {
+	LVLT_BY_BOOKMARK	= 0,
+	LVLT_BY_NAMEENTRY	= 1,
+};
+
 const char *lfsck_status2names(enum lfsck_status status)
 {
 	if (unlikely(status < 0 || status >= LS_MAX))
@@ -859,6 +864,484 @@ unlock:
 	if (rc != 0 && child != NULL && !IS_ERR(child))
 		lu_object_put(env, &child->do_lu);
 out:
+	if (parent != NULL && !IS_ERR(parent))
+		lu_object_put(env, &parent->do_lu);
+
+	return rc;
+}
+
+/**
+ * Scan .lustre/lost+found for bad name entries and remove them.
+ *
+ * The valid name entry should be "MDTxxxx", the "xxxx" is the MDT device
+ * index in the system. Any other formatted name is invalid and should be
+ * removed.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] lfsck	pointer to the lfsck instance
+ * \param[in] parent	pointer to the lost+found object
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
+static int lfsck_scan_lpf_bad_entries(const struct lu_env *env,
+				      struct lfsck_instance *lfsck,
+				      struct dt_object *parent)
+{
+	struct lu_dirent	*ent	=
+			(struct lu_dirent *)lfsck_env_info(env)->lti_key;
+	const struct dt_it_ops	*iops	= &parent->do_index_ops->dio_it;
+	struct dt_it		*it;
+	int			 rc;
+	ENTRY;
+
+	it = iops->init(env, parent, LUDA_64BITHASH, BYPASS_CAPA);
+	if (IS_ERR(it))
+		RETURN(PTR_ERR(it));
+
+	rc = iops->load(env, it, 0);
+	if (rc == 0)
+		rc = iops->next(env, it);
+	else if (rc > 0)
+		rc = 0;
+
+	while (rc == 0) {
+		int off = 3;
+
+		rc = iops->rec(env, it, (struct dt_rec *)ent, LUDA_64BITHASH);
+		if (rc != 0)
+			break;
+
+		ent->lde_namelen = le16_to_cpu(ent->lde_namelen);
+		if (ent->lde_name[0] == '.') {
+			if (ent->lde_namelen == 1)
+				goto next;
+
+			if (ent->lde_namelen == 2 && ent->lde_name[1] == '.')
+				goto next;
+		}
+
+		/* name length must be strlen("MDTxxxx") */
+		if (ent->lde_namelen != 7)
+			goto remove;
+
+		if (memcmp(ent->lde_name, "MDT", off) != 0)
+			goto remove;
+
+		while (off < 7 && isxdigit(ent->lde_name[off]))
+			off++;
+
+		if (off != 7) {
+
+remove:
+			rc = lfsck_remove_name_entry(env, lfsck, parent,
+						     ent->lde_name, S_IFDIR);
+			if (rc != 0)
+				break;
+		}
+
+next:
+		rc = iops->next(env, it);
+	}
+
+	iops->put(env, it);
+	iops->fini(env, it);
+
+	RETURN(rc > 0 ? 0 : rc);
+}
+
+static int lfsck_update_lpf_entry(const struct lu_env *env,
+				  struct lfsck_instance *lfsck,
+				  struct dt_object *parent,
+				  struct dt_object *child,
+				  const char *name,
+				  enum lfsck_verify_lpf_types type)
+{
+	int rc;
+
+	if (type == LVLT_BY_BOOKMARK) {
+		rc = lfsck_update_name_entry(env, lfsck, parent, name,
+					     lfsck_dto2fid(child), S_IFDIR);
+	} else /* if (type == LVLT_BY_NAMEENTRY) */ {
+		lfsck->li_bookmark_ram.lb_lpf_fid = *lfsck_dto2fid(child);
+		rc = lfsck_bookmark_store(env, lfsck);
+
+		CDEBUG(D_LFSCK, "%s: update LPF fid "DFID
+		       " in the bookmark file: rc = %d\n",
+		       lfsck_lfsck2name(lfsck),
+		       PFID(lfsck_dto2fid(child)), rc);
+	}
+
+	return rc;
+}
+
+/**
+ * Check whether the @child back references the @parent.
+ *
+ * Two cases:
+ * 1) The child's FID is stored in the bookmark file. If the child back
+ *    references the parent (LU_LPF_FID object) via its ".." entry, then
+ *    insert the name (MDTxxxx) to the .lustre/lost+found; otherwise, if
+ *    the child back references another parent2, then:
+ * 1.1) If the parent2 recognizes the child, then update the bookmark file;
+ * 1.2) Otherwise, the LFSCK cannot know whether there will be parent3 that
+ *	references the child. So keep them there. As the LFSCK processing,
+ *	the parent3 may be found, then when the LFSCK run next time, the
+ *	inconsistency can be repaired.
+ *
+ * 2) The child's FID is stored in the .lustre/lost+found/ sub-directory name
+ *    entry (MDTxxxx). If the child back references the parent (LU_LPF_FID obj)
+ *    via its ".." entry, then update the bookmark file, otherwise, if the child
+ *    back references another parent2, then:
+ * 2.1) If the parent2 recognizes the child, then remove the sub-directory
+ *	from .lustre/lost+found/;
+ * 2.2) Otherwise, if the parent2 does not recognizes the child, trust the
+ *	sub-directory name entry and update the child;
+ * 2.3) Otherwise, if we do not know whether the parent2 recognizes the child
+ *	or not, then keep them there.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] lfsck	pointer to the lfsck instance
+ * \param[in] parent	pointer to the lost+found object
+ * \param[in] child	pointer to the lost+found sub-directory object
+ * \param[in] name	the name for lost+found sub-directory object
+ * \param[out] fid	pointer to the buffer to hold the FID of the object
+ *			(called it as parent2) that is referenced via the
+ *			child's dotdot entry; it also can be the FID that
+ *			is referenced by the name entry under the parent2.
+ * \param[in] type	to indicate where the child's FID is stored in
+ *
+ * \retval		positive number for uncertain inconsistency
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
+static int lfsck_verify_lpf_pairs(const struct lu_env *env,
+				  struct lfsck_instance *lfsck,
+				  struct dt_object *parent,
+				  struct dt_object *child, const char *name,
+				  struct lu_fid *fid,
+				  enum lfsck_verify_lpf_types type)
+{
+	struct lfsck_thread_info *info    = lfsck_env_info(env);
+	char			 *name2   = info->lti_key;
+	struct lu_fid		 *fid2    = &info->lti_fid3;
+	struct dt_object	 *parent2 = NULL;
+	struct lustre_handle	  lh      = { 0 };
+	int			  rc;
+	ENTRY;
+
+	fid_zero(fid);
+	rc = dt_lookup(env, child, (struct dt_rec *)fid,
+		       (const struct dt_key *)dotdot, BYPASS_CAPA);
+	if (rc != 0)
+		GOTO(linkea, rc);
+
+	if (!fid_is_sane(fid))
+		GOTO(linkea, rc = -EINVAL);
+
+	if (lu_fid_eq(fid, &LU_LPF_FID)) {
+		const struct lu_name *cname;
+
+		if (lfsck->li_lpf_obj == NULL) {
+			lu_object_get(&child->do_lu);
+			lfsck->li_lpf_obj = child;
+		}
+
+		cname = lfsck_name_get_const(env, name, strlen(name));
+		rc = lfsck_verify_linkea(env, lfsck->li_bottom, child, cname,
+					 &LU_LPF_FID);
+		if (rc == 0)
+			rc = lfsck_update_lpf_entry(env, lfsck, parent, child,
+						    name, type);
+
+		GOTO(out_done, rc);
+	}
+
+	parent2 = lfsck_object_find_by_dev(env, lfsck->li_next, fid);
+	if (IS_ERR(parent2))
+		GOTO(linkea, parent2);
+
+	if (!dt_object_exists(parent2)) {
+		lu_object_put(env, &parent2->do_lu);
+
+		GOTO(linkea, parent2 = ERR_PTR(-ENOENT));
+	}
+
+	if (!dt_try_as_dir(env, parent2)) {
+		lu_object_put(env, &parent2->do_lu);
+
+		GOTO(linkea, parent2 = ERR_PTR(-ENOTDIR));
+	}
+
+linkea:
+	/* To prevent rename/unlink race */
+	rc = lfsck_ibits_lock(env, lfsck, child, &lh,
+			      MDS_INODELOCK_UPDATE, LCK_PR);
+	if (rc != 0)
+		GOTO(out_put, rc);
+
+	dt_read_lock(env, child, 0);
+	rc = lfsck_links_get_first(env, child, name2, fid2);
+	if (rc != 0) {
+		dt_read_unlock(env, child);
+		lfsck_ibits_unlock(&lh, LCK_PR);
+
+		GOTO(out_put, rc = 1);
+	}
+
+	/* It is almost impossible that the bookmark file (or the name entry)
+	 * and the linkEA hit the same data corruption. Trust the linkEA. */
+	if (lu_fid_eq(fid2, &LU_LPF_FID) && strcmp(name, name2) == 0) {
+		dt_read_unlock(env, child);
+		lfsck_ibits_unlock(&lh, LCK_PR);
+
+		*fid = *fid2;
+		if (lfsck->li_lpf_obj == NULL) {
+			lu_object_get(&child->do_lu);
+			lfsck->li_lpf_obj = child;
+		}
+
+		/* Update the child's dotdot entry */
+		rc = lfsck_update_name_entry(env, lfsck, child, dotdot,
+					     &LU_LPF_FID, S_IFDIR);
+		if (rc == 0)
+			rc = lfsck_update_lpf_entry(env, lfsck, parent, child,
+						    name, type);
+
+		GOTO(out_put, rc);
+	}
+
+	if (parent2 == NULL || IS_ERR(parent2)) {
+		dt_read_unlock(env, child);
+		lfsck_ibits_unlock(&lh, LCK_PR);
+
+		GOTO(out_done, rc = 1);
+	}
+
+	rc = dt_lookup(env, parent2, (struct dt_rec *)fid,
+		       (const struct dt_key *)name2, BYPASS_CAPA);
+	dt_read_unlock(env, child);
+	lfsck_ibits_unlock(&lh, LCK_PR);
+	if (rc != 0 && rc != -ENOENT)
+		GOTO(out_put, rc);
+
+	if (rc == -ENOENT || !lu_fid_eq(fid, lfsck_dto2fid(child))) {
+		if (type == LVLT_BY_BOOKMARK)
+			GOTO(out_put, rc = 1);
+
+		/* Trust the name entry, update the child's dotdot entry. */
+		rc = lfsck_update_name_entry(env, lfsck, child, dotdot,
+					     &LU_LPF_FID, S_IFDIR);
+
+		GOTO(out_put, rc);
+	}
+
+	if (type == LVLT_BY_BOOKMARK) {
+		/* Invalid FID record in the bookmark file, reset it. */
+		fid_zero(&lfsck->li_bookmark_ram.lb_lpf_fid);
+		rc = lfsck_bookmark_store(env, lfsck);
+
+		CDEBUG(D_LFSCK, "%s: reset invalid LPF fid "DFID
+		       " in the bookmark file: rc = %d\n",
+		       lfsck_lfsck2name(lfsck), PFID(lfsck_dto2fid(child)), rc);
+	} else /* if (type == LVLT_BY_NAMEENTRY) */ {
+		/* The name entry is wrong, remove it. */
+		rc = lfsck_remove_name_entry(env, lfsck, parent, name, S_IFDIR);
+	}
+
+	GOTO(out_put, rc);
+
+out_put:
+	if (parent2 != NULL && !IS_ERR(parent2))
+		lu_object_put(env, &parent2->do_lu);
+
+out_done:
+	return rc;
+}
+
+/**
+ * Verify the /ROOT/.lustre/lost+found/ directory.
+ *
+ * /ROOT/.lustre/lost+found/ is a special directory to hold the objects that
+ * the LFSCK does not exactly know how to handle, such as orphans. So before
+ * the LFSCK scanning the system, the consistency of such directory needs to
+ * be verified firstly to allow the users to use it during the LFSCK.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] lfsck	pointer to the lfsck instance
+ *
+ * \retval		positive number for uncertain inconsistency
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
+int lfsck_verify_lpf(const struct lu_env *env, struct lfsck_instance *lfsck)
+{
+	struct lfsck_thread_info *info	 = lfsck_env_info(env);
+	struct lu_fid		 *pfid	 = &info->lti_fid;
+	struct lu_fid		 *cfid	 = &info->lti_fid2;
+	struct lfsck_bookmark	 *bk	 = &lfsck->li_bookmark_ram;
+	struct dt_object	 *parent = NULL;
+	/* child1's FID is in the bookmark file. */
+	struct dt_object	 *child1 = NULL;
+	/* child2's FID is in the name entry MDTxxxx. */
+	struct dt_object	 *child2 = NULL;
+	struct dt_device	 *dev	 = lfsck->li_bottom;
+	const struct lu_name	 *cname;
+	char			  name[8];
+	int			  node   = lfsck_dev_idx(dev);
+	int			  rc	 = 0;
+	ENTRY;
+
+	LASSERT(lfsck->li_master);
+
+	if (node == 0) {
+		parent = lfsck_object_find_by_dev(env, dev, &LU_LPF_FID);
+	} else {
+		struct lfsck_tgt_desc *ltd;
+
+		ltd = lfsck_tgt_get(&lfsck->li_mdt_descs, 0);
+		if (unlikely(ltd == NULL))
+			RETURN(-ENXIO);
+
+		parent = lfsck_object_find_by_dev(env, ltd->ltd_tgt,
+						  &LU_LPF_FID);
+		lfsck_tgt_put(ltd);
+	}
+
+	if (IS_ERR(parent))
+		RETURN(PTR_ERR(parent));
+
+	LASSERT(dt_object_exists(parent));
+
+	if (unlikely(!dt_try_as_dir(env, parent)))
+		GOTO(put, rc = -ENOTDIR);
+
+	if (node == 0) {
+		rc = lfsck_scan_lpf_bad_entries(env, lfsck, parent);
+		if (rc != 0)
+			CDEBUG(D_LFSCK, "%s: scan .lustre/lost+found/ "
+			       "for bad sub-directories: rc = %d\n",
+			       lfsck_lfsck2name(lfsck), rc);
+	}
+
+	if (!fid_is_zero(&bk->lb_lpf_fid)) {
+		if (unlikely(!fid_is_norm(&bk->lb_lpf_fid))) {
+			struct lu_fid tfid = bk->lb_lpf_fid;
+
+			/* Invalid FID record in the bookmark file, reset it. */
+			fid_zero(&bk->lb_lpf_fid);
+			rc = lfsck_bookmark_store(env, lfsck);
+
+			CDEBUG(D_LFSCK, "%s: reset invalid LPF fid "DFID
+			       " in the bookmark file: rc = %d\n",
+			       lfsck_lfsck2name(lfsck), PFID(&tfid), rc);
+
+			if (rc != 0)
+				GOTO(put, rc);
+		} else {
+			child1 = lfsck_object_find_by_dev(env, dev,
+							  &bk->lb_lpf_fid);
+			if (IS_ERR(child1))
+				GOTO(put, rc = PTR_ERR(child1));
+
+			if (unlikely(!dt_object_exists(child1) ||
+				     dt_object_remote(child1)) ||
+				     !S_ISDIR(lfsck_object_type(child1))) {
+				/* Invalid FID record in the bookmark file,
+				 * reset it. */
+				fid_zero(&bk->lb_lpf_fid);
+				rc = lfsck_bookmark_store(env, lfsck);
+
+				CDEBUG(D_LFSCK, "%s: reset invalid LPF fid "DFID
+				       " in the bookmark file: rc = %d\n",
+				       lfsck_lfsck2name(lfsck),
+				       PFID(lfsck_dto2fid(child1)), rc);
+
+				if (rc != 0)
+					GOTO(put, rc);
+
+				lu_object_put(env, &child1->do_lu);
+				child1 = NULL;
+			} else if (unlikely(!dt_try_as_dir(env, child1))) {
+				GOTO(put, rc = -ENOTDIR);
+			}
+		}
+	}
+
+	snprintf(name, 8, "MDT%04x", node);
+	rc = dt_lookup(env, parent, (struct dt_rec *)cfid,
+		       (const struct dt_key *)name, BYPASS_CAPA);
+	if (rc == -ENOENT)
+		goto check_child1;
+
+	if (rc != 0)
+		GOTO(put, rc);
+
+	/* Invalid FID in the name entry, remove the name entry. */
+	if (!fid_is_norm(cfid)) {
+		rc = lfsck_remove_name_entry(env, lfsck, parent, name, S_IFDIR);
+		if (rc != 0)
+			GOTO(put, rc);
+
+		goto check_child1;
+	}
+
+	child2 = lfsck_object_find_by_dev(env, dev, cfid);
+	if (IS_ERR(child2))
+		GOTO(put, rc = PTR_ERR(child2));
+
+	if (unlikely(!dt_object_exists(child2) ||
+		     dt_object_remote(child2)) ||
+		     !S_ISDIR(lfsck_object_type(child2))) {
+		rc = lfsck_remove_name_entry(env, lfsck, parent, name,
+					     S_IFDIR);
+		if (rc != 0)
+			GOTO(put, rc);
+
+		goto check_child1;
+	}
+
+	if (unlikely(!dt_try_as_dir(env, child2)))
+		GOTO(put, rc = -ENOTDIR);
+
+	if (child1 == NULL) {
+		rc = lfsck_verify_lpf_pairs(env, lfsck, parent, child2, name,
+					    pfid, LVLT_BY_NAMEENTRY);
+	} else if (!lu_fid_eq(cfid, &bk->lb_lpf_fid)) {
+		rc = lfsck_verify_lpf_pairs(env, lfsck, parent, child1, name,
+					    pfid, LVLT_BY_BOOKMARK);
+		if (!lu_fid_eq(pfid, &LU_LPF_FID))
+			rc = lfsck_verify_lpf_pairs(env, lfsck, parent, child2,
+						    name, pfid,
+						    LVLT_BY_NAMEENTRY);
+	} else {
+		if (lfsck->li_lpf_obj == NULL) {
+			lu_object_get(&child2->do_lu);
+			lfsck->li_lpf_obj = child2;
+		}
+
+		cname = lfsck_name_get_const(env, name, strlen(name));
+		rc = lfsck_verify_linkea(env, dev, child2, cname, &LU_LPF_FID);
+	}
+
+	GOTO(put, rc);
+
+check_child1:
+	if (child1 != NULL)
+		rc = lfsck_verify_lpf_pairs(env, lfsck, parent, child1, name,
+					    pfid, LVLT_BY_BOOKMARK);
+
+	GOTO(put, rc);
+
+put:
+	if (lfsck->li_lpf_obj != NULL &&
+	    unlikely(!dt_try_as_dir(env, lfsck->li_lpf_obj)))
+		rc = -ENOTDIR;
+
+	if (child2 != NULL && !IS_ERR(child2))
+		lu_object_put(env, &child2->do_lu);
+	if (child1 != NULL && !IS_ERR(child1))
+		lu_object_put(env, &child1->do_lu);
 	if (parent != NULL && !IS_ERR(parent))
 		lu_object_put(env, &parent->do_lu);
 
