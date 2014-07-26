@@ -194,6 +194,7 @@ int osp_md_object_create(const struct lu_env *env, struct dt_object *dt,
 	 * if creation reaches here, it means the object has been created
 	 * successfully */
 	dt->do_lu.lo_header->loh_attr |= LOHA_EXISTS | (attr->la_mode & S_IFMT);
+	dt2osp_obj(dt)->opo_non_exist = 0;
 
 	return 0;
 }
