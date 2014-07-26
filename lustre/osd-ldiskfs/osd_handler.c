@@ -73,6 +73,7 @@
 #include <lustre_quota.h>
 
 #include <ldiskfs/xattr.h>
+#include <lustre_linkea.h>
 
 int ldiskfs_pdo = 1;
 CFS_MODULE_PARM(ldiskfs_pdo, "i", int, 0644,
@@ -4131,6 +4132,83 @@ int osd_add_oi_cache(struct osd_thread_info *info, struct osd_device *osd,
 }
 
 /**
+ * Get parent FID from the linkEA.
+ *
+ * For a directory which parent resides on remote MDT, to satisfy the
+ * local e2fsck, we insert it into the /REMOTE_PARENT_DIR locally. On
+ * the other hand, to make the lookup(..) on the directory can return
+ * the real parent FID, we append the real parent FID after its ".."
+ * name entry in the /REMOTE_PARENT_DIR.
+ *
+ * Unfortunately, such PFID-in-dirent cannot be preserved via file-level
+ * backup. So after the restore, we cannot get the right parent FID from
+ * its ".." name entry in the /REMOTE_PARENT_DIR. Under such case, since
+ * we have stored the real parent FID in the directory object's linkEA,
+ * we can parse the linkEA for the real parent FID.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] obj	pointer to the object to be handled
+ * \param[out]fid	pointer to the buffer to hold the parent FID
+ *
+ * \retval		0 for getting the real parent FID successfully
+ * \retval		negative error number on failure
+ */
+static int osd_get_pfid_from_linkea(const struct lu_env *env,
+				    struct osd_object *obj,
+				    struct lu_fid *fid)
+{
+	struct osd_thread_info	*oti	= osd_oti_get(env);
+	struct lu_buf		*buf	= &oti->oti_big_buf;
+	struct dentry		*dentry	= &oti->oti_obj_dentry;
+	struct inode		*inode	= obj->oo_inode;
+	struct linkea_data	 ldata	= { 0 };
+	int			 rc;
+	ENTRY;
+
+	fid_zero(fid);
+	if (!S_ISDIR(inode->i_mode))
+		RETURN(-EIO);
+
+again:
+	rc = __osd_xattr_get(inode, dentry, XATTR_NAME_LINK,
+			     buf->lb_buf, buf->lb_len);
+	if (rc == -ERANGE) {
+		rc = __osd_xattr_get(inode, dentry, XATTR_NAME_LINK,
+				     NULL, 0);
+		if (rc > 0) {
+			lu_buf_realloc(buf, rc);
+			if (buf->lb_buf == NULL)
+				RETURN(-ENOMEM);
+
+			goto again;
+		}
+	}
+
+	if (unlikely(rc == 0))
+		RETURN(-ENODATA);
+
+	if (rc < 0)
+		RETURN(rc);
+
+	if (unlikely(buf->lb_buf == NULL)) {
+		lu_buf_realloc(buf, rc);
+		if (buf->lb_buf == NULL)
+			RETURN(-ENOMEM);
+
+		goto again;
+	}
+
+	ldata.ld_buf = buf;
+	rc = linkea_init(&ldata);
+	if (rc == 0) {
+		linkea_first_entry(&ldata);
+		linkea_entry_unpack(ldata.ld_lee, &ldata.ld_reclen, NULL, fid);
+	}
+
+	RETURN(rc);
+}
+
+/**
  * Calls ->lookup() to find dentry. From dentry get inode and
  * read inode's ea to get fid. This is required for  interoperability
  * mode (b11826)
@@ -4184,10 +4262,18 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 
 		/* done with de, release bh */
 		brelse(bh);
-		if (rc != 0)
-			rc = osd_ea_fid_get(env, obj, ino, fid, id);
-		else
+		if (rc != 0) {
+			if (unlikely(ino == osd_remote_parent_ino(dev)))
+				/* If the parent is on remote MDT, and there
+				 * is no FID-in-dirent, then we have to get
+				 * the parent FID from the linkEA.  */
+				rc = osd_get_pfid_from_linkea(env, obj, fid);
+			else
+				rc = osd_ea_fid_get(env, obj, ino, fid, id);
+		} else {
 			osd_id_gen(id, ino, OSD_OII_NOGEN);
+		}
+
 		if (rc != 0) {
 			fid_zero(&oic->oic_fid);
 			GOTO(out, rc);
@@ -5225,10 +5311,6 @@ again:
 		GOTO(out_journal, rc);
 	}
 
-	/* skip the REMOTE_PARENT_DIR. */
-	if (inode == dev->od_mdt_map->omm_remote_parent->d_inode)
-		GOTO(out_inode, rc = 0);
-
 	rc = osd_get_lma(info, inode, &info->oti_obj_dentry, lma);
 	if (rc == 0) {
 		LASSERT(!(lma->lma_compat & LMAC_NOT_IN_OI));
@@ -5408,11 +5490,15 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 	int			rc    = 0;
 	ENTRY;
 
+	LASSERT(obj->oo_inode != dev->od_mdt_map->omm_remote_parent->d_inode);
+
 	if (attr & LUDA_VERIFY) {
-		attr |= LUDA_TYPE;
-		if (unlikely(ino == osd_sb(dev)->s_root->d_inode->i_ino)) {
+		if (unlikely(ino == osd_remote_parent_ino(dev))) {
 			attr |= LUDA_IGNORE;
-			rc = 0;
+			/* If the parent is on remote MDT, and there
+			 * is no FID-in-dirent, then we have to get
+			 * the parent FID from the linkEA.  */
+			osd_get_pfid_from_linkea(env, obj, fid);
 		} else {
 			rc = osd_dirent_check_repair(env, obj, it, fid, id,
 						     &attr);
@@ -5426,7 +5512,13 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 				   it->oie_dirent->oied_name[1] != '.'))
 				RETURN(-ENOENT);
 
-			rc = osd_ea_fid_get(env, obj, ino, fid, id);
+			if (unlikely(ino == osd_remote_parent_ino(dev)))
+				/* If the parent is on remote MDT, and there
+				 * is no FID-in-dirent, then we have to get
+				 * the parent FID from the linkEA.  */
+				rc = osd_get_pfid_from_linkea(env, obj, fid);
+			else
+				rc = osd_ea_fid_get(env, obj, ino, fid, id);
 		} else {
 			osd_id_gen(id, ino, OSD_OII_NOGEN);
 		}
@@ -5614,6 +5706,7 @@ static void osd_key_fini(const struct lu_context *ctx,
 	OBD_FREE(info->oti_it_ea_buf, OSD_IT_EA_BUFSIZE);
 	lu_buf_free(&info->oti_iobuf.dr_pg_buf);
 	lu_buf_free(&info->oti_iobuf.dr_bl_buf);
+	lu_buf_free(&info->oti_big_buf);
 	OBD_FREE_PTR(info);
 }
 

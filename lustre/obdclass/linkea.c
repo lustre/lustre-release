@@ -97,8 +97,10 @@ void linkea_entry_unpack(const struct link_ea_entry *lee, int *reclen,
 	*reclen = (lee->lee_reclen[0] << 8) | lee->lee_reclen[1];
 	memcpy(pfid, &lee->lee_parent_fid, sizeof(*pfid));
 	fid_be_to_cpu(pfid, pfid);
-	lname->ln_name = lee->lee_name;
-	lname->ln_namelen = *reclen - sizeof(struct link_ea_entry);
+	if (lname != NULL) {
+		lname->ln_name = lee->lee_name;
+		lname->ln_namelen = *reclen - sizeof(struct link_ea_entry);
+	}
 }
 EXPORT_SYMBOL(linkea_entry_unpack);
 

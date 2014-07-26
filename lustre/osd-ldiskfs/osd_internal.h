@@ -549,6 +549,7 @@ struct osd_thread_info {
         int                    oti_txns;
         /** used in osd_fid_set() to put xattr */
         struct lu_buf          oti_buf;
+	struct lu_buf	       oti_big_buf;
         /** used in osd_ea_fid_set() to set fid into common ea */
 	union {
 		struct lustre_mdt_attrs oti_mdt_attrs;
@@ -1079,6 +1080,11 @@ static inline loff_t ldiskfs_get_htree_eof(struct file *filp)
 static inline int fid_is_internal(const struct lu_fid *fid)
 {
 	return (!fid_is_namespace_visible(fid) && !fid_is_idif(fid));
+}
+
+static inline unsigned long osd_remote_parent_ino(struct osd_device *dev)
+{
+	return dev->od_mdt_map->omm_remote_parent->d_inode->i_ino;
 }
 
 #ifdef JOURNAL_START_HAS_3ARGS
