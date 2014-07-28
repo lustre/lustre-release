@@ -2,10 +2,10 @@
        * version 2.5.2
        * See http://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
        * Server support for kernels:
-	 2.6.32-431.17.1.el6 (RHEL6)
+	 2.6.32-431.23.3.el6 (RHEL6)
 	 3.0.101-0.29	     (SLES11SP3)
        * Client support for unpatched kernels:
-         2.6.32-431.17.1.el6 (RHEL6)
+         2.6.32-431.23.3.el6 (RHEL6)
          3.0.101-0.29        (SLES11SP3)
          3.6.10-2.fc17       (FC17)
        * Recommended e2fsprogs version: 1.42.9.wc1 or newer
