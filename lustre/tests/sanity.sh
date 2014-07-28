@@ -13137,6 +13137,58 @@ test_251() {
 }
 run_test 251 "Handling short read and write correctly"
 
+test_252() {
+	local tgt
+	local dev
+	local out
+	local uuid
+	local num
+	local gen
+
+	if [ "$(facet_fstype ost1)" != "ldiskfs" -o \
+	     "$(facet_fstype mds1)" != "ldiskfs" ]; then
+		skip "can only run lr_reader on ldiskfs target"
+		return
+	fi
+
+	# check lr_reader on OST0000
+	tgt=ost1
+	dev=$(facet_device $tgt)
+	out=$(do_facet $tgt $LR_READER $dev)
+	[ $? -eq 0 ] || error "$LR_READER failed on target $tgt device $dev"
+	echo "$out"
+	uuid=$(echo "$out" | grep -i uuid | awk '{ print $2 }')
+	[ "$uuid" == "$(ostuuid_from_index 0)" ] ||
+		error "Invalid uuid returned by $LR_READER on target $tgt"
+	echo -e "uuid returned by $LR_READER is '$uuid'\n"
+
+	# check lr_reader -c on MDT0000
+	tgt=mds1
+	dev=$(facet_device $tgt)
+	if ! do_facet $tgt $LR_READER -h | grep -q OPTIONS; then
+		echo "$LR_READER does not support additional options"
+		return 0
+	fi
+	out=$(do_facet $tgt $LR_READER -c $dev)
+	[ $? -eq 0 ] || error "$LR_READER failed on target $tgt device $dev"
+	echo "$out"
+	num=$(echo "$out" | grep -c "mdtlov")
+	[ "$num" -eq $((MDSCOUNT - 1)) ] ||
+		error "Invalid number of mdtlov clients returned by $LR_READER"
+	echo -e "Number of mdtlov clients returned by $LR_READER is '$num'\n"
+
+	# check lr_reader -cr on MDT0000
+	out=$(do_facet $tgt $LR_READER -cr $dev)
+	[ $? -eq 0 ] || error "$LR_READER failed on target $tgt device $dev"
+	echo "$out"
+	echo "$out" | grep -q "^reply_data:$" ||
+		error "$LR_READER should have returned 'reply_data' section"
+	num=$(echo "$out" | grep -c "client_generation")
+	echo -e "Number of reply data returned by $LR_READER is '$num'\n"
+}
+run_test 252 "check lr_reader tool"
+
+
 cleanup_test_300() {
 	trap 0
 	umask $SAVE_UMASK

@@ -268,6 +268,9 @@ init_test_env() {
     export LFS_MIGRATE=${LFS_MIGRATE:-$LUSTRE/scripts/lfs_migrate}
     [ ! -f "$LFS_MIGRATE" ] &&
         export LFS_MIGRATE=$(which lfs_migrate 2> /dev/null)
+    export LR_READER=${LR_READER:-"$LUSTRE/utils/lr_reader"}
+    [ ! -f "$LR_READER" ] && export LR_READER=$(which lr_reader 2> /dev/null)
+    [ -z "$LR_READER" ] && export LR_READER="/usr/sbin/lr_reader"
     export NAME=${NAME:-local}
     export LGSSD=${LGSSD:-"$LUSTRE/utils/gss/lgssd"}
     [ "$GSS_PIPEFS" = "true" ] && [ ! -f "$LGSSD" ] && \
