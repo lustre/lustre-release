@@ -538,6 +538,33 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 /* LMV */
 #define OBD_FAIL_UNKNOWN_LMV_STRIPE		0x1901
 
+/* DT */
+#define OBD_FAIL_DT_DECLARE_ATTR_GET		0x2000
+#define OBD_FAIL_DT_ATTR_GET			0x2001
+#define OBD_FAIL_DT_DECLARE_ATTR_SET		0x2002
+#define OBD_FAIL_DT_ATTR_SET			0x2003
+#define OBD_FAIL_DT_DECLARE_XATTR_GET		0x2004
+#define OBD_FAIL_DT_XATTR_GET			0x2005
+#define OBD_FAIL_DT_DECLARE_XATTR_SET		0x2006
+#define OBD_FAIL_DT_XATTR_SET			0x2007
+#define OBD_FAIL_DT_DECLARE_XATTR_DEL		0x2008
+#define OBD_FAIL_DT_XATTR_DEL			0x2009
+#define OBD_FAIL_DT_XATTR_LIST			0x200a
+#define OBD_FAIL_DT_DECLARE_CREATE		0x200b
+#define OBD_FAIL_DT_CREATE			0x200c
+#define OBD_FAIL_DT_DECLARE_DESTROY		0x200d
+#define OBD_FAIL_DT_DESTROY			0x200e
+#define OBD_FAIL_DT_INDEX_TRY			0x200f
+#define OBD_FAIL_DT_DECLARE_REF_ADD		0x2010
+#define OBD_FAIL_DT_REF_ADD			0x2011
+#define OBD_FAIL_DT_DECLARE_REF_DEL		0x2012
+#define OBD_FAIL_DT_REF_DEL			0x2013
+#define OBD_FAIL_DT_DECLARE_INSERT		0x2014
+#define OBD_FAIL_DT_INSERT			0x2015
+#define OBD_FAIL_DT_DECLARE_DELETE		0x2016
+#define OBD_FAIL_DT_DELETE			0x2017
+#define OBD_FAIL_DT_LOOKUP			0x2018
+
 /* Assign references to moved code to reduce code changes */
 #define OBD_FAIL_PRECHECK(id)                   CFS_FAIL_PRECHECK(id)
 #define OBD_FAIL_CHECK(id)                      CFS_FAIL_CHECK(id)

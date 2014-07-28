@@ -38,6 +38,7 @@
 
 extern unsigned long cfs_fail_loc;
 extern unsigned int cfs_fail_val;
+extern int cfs_fail_err;
 
 extern wait_queue_head_t cfs_race_waitq;
 extern int cfs_race_state;
@@ -70,9 +71,15 @@ enum {
 #define CFS_FAIL_RAND        0x08000000 /* fail 1/N of the times */
 #define CFS_FAIL_USR1        0x04000000 /* user flag */
 
-#define CFS_FAIL_PRECHECK(id) (cfs_fail_loc &&                                \
-                              (cfs_fail_loc & CFS_FAIL_MASK_LOC) ==           \
-                              ((id) & CFS_FAIL_MASK_LOC))
+/* CFS_FAULT may be combined with any one of the above flags. */
+#define CFS_FAULT	     0x02000000 /* match any CFS_FAULT_CHECK */
+
+static inline bool CFS_FAIL_PRECHECK(__u32 id)
+{
+	return cfs_fail_loc != 0 &&
+	      ((cfs_fail_loc & CFS_FAIL_MASK_LOC) == (id & CFS_FAIL_MASK_LOC) ||
+	       (cfs_fail_loc & id & CFS_FAULT));
+}
 
 static inline int cfs_fail_check_set(__u32 id, __u32 value,
 				     int set, int quiet)
@@ -145,6 +152,9 @@ static inline int cfs_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
 
 #define CFS_FAIL_TIMEOUT_MS_ORSET(id, value, ms) \
         cfs_fail_timeout_set(id, value, ms, CFS_FAIL_LOC_ORSET)
+
+#define CFS_FAULT_CHECK(id)			\
+	CFS_FAIL_CHECK(CFS_FAULT | (id))
 
 #ifdef __KERNEL__
 /* The idea here is to synchronise two threads to force a race. The

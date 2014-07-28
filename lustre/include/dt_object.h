@@ -1067,6 +1067,10 @@ static inline int dt_declare_create(const struct lu_env *env,
         LASSERT(dt);
         LASSERT(dt->do_ops);
         LASSERT(dt->do_ops->do_declare_create);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_CREATE))
+		return cfs_fail_err;
+
         return dt->do_ops->do_declare_create(env, dt, attr, hint, dof, th);
 }
 
@@ -1080,6 +1084,10 @@ static inline int dt_create(const struct lu_env *env,
         LASSERT(dt);
         LASSERT(dt->do_ops);
         LASSERT(dt->do_ops->do_create);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_CREATE))
+		return cfs_fail_err;
+
         return dt->do_ops->do_create(env, dt, attr, hint, dof, th);
 }
 
@@ -1090,6 +1098,10 @@ static inline int dt_declare_destroy(const struct lu_env *env,
         LASSERT(dt);
         LASSERT(dt->do_ops);
         LASSERT(dt->do_ops->do_declare_destroy);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_DESTROY))
+		return cfs_fail_err;
+
         return dt->do_ops->do_declare_destroy(env, dt, th);
 }
 
@@ -1100,6 +1112,10 @@ static inline int dt_destroy(const struct lu_env *env,
         LASSERT(dt);
         LASSERT(dt->do_ops);
         LASSERT(dt->do_ops->do_destroy);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DESTROY))
+		return cfs_fail_err;
+
         return dt->do_ops->do_destroy(env, dt, th);
 }
 
@@ -1157,6 +1173,10 @@ static inline int dt_declare_attr_get(const struct lu_env *env,
 	LASSERT(dt);
 	LASSERT(dt->do_ops);
 	LASSERT(dt->do_ops->do_declare_attr_get);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_ATTR_GET))
+		return cfs_fail_err;
+
 	return dt->do_ops->do_declare_attr_get(env, dt, capa);
 }
 
@@ -1166,6 +1186,10 @@ static inline int dt_attr_get(const struct lu_env *env, struct dt_object *dt,
         LASSERT(dt);
         LASSERT(dt->do_ops);
         LASSERT(dt->do_ops->do_attr_get);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_ATTR_GET))
+		return cfs_fail_err;
+
         return dt->do_ops->do_attr_get(env, dt, la, arg);
 }
 
@@ -1177,6 +1201,10 @@ static inline int dt_declare_attr_set(const struct lu_env *env,
         LASSERT(dt);
         LASSERT(dt->do_ops);
         LASSERT(dt->do_ops->do_declare_attr_set);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_ATTR_SET))
+		return cfs_fail_err;
+
         return dt->do_ops->do_declare_attr_set(env, dt, la, th);
 }
 
@@ -1187,6 +1215,10 @@ static inline int dt_attr_set(const struct lu_env *env, struct dt_object *dt,
         LASSERT(dt);
         LASSERT(dt->do_ops);
         LASSERT(dt->do_ops->do_attr_set);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_ATTR_SET))
+		return cfs_fail_err;
+
         return dt->do_ops->do_attr_set(env, dt, la, th, capa);
 }
 
@@ -1196,6 +1228,10 @@ static inline int dt_declare_ref_add(const struct lu_env *env,
         LASSERT(dt);
         LASSERT(dt->do_ops);
         LASSERT(dt->do_ops->do_declare_ref_add);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_REF_ADD))
+		return cfs_fail_err;
+
         return dt->do_ops->do_declare_ref_add(env, dt, th);
 }
 
@@ -1205,6 +1241,10 @@ static inline int dt_ref_add(const struct lu_env *env,
         LASSERT(dt);
         LASSERT(dt->do_ops);
         LASSERT(dt->do_ops->do_ref_add);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_REF_ADD))
+		return cfs_fail_err;
+
         return dt->do_ops->do_ref_add(env, dt, th);
 }
 
@@ -1214,6 +1254,10 @@ static inline int dt_declare_ref_del(const struct lu_env *env,
         LASSERT(dt);
         LASSERT(dt->do_ops);
         LASSERT(dt->do_ops->do_declare_ref_del);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_REF_DEL))
+		return cfs_fail_err;
+
         return dt->do_ops->do_declare_ref_del(env, dt, th);
 }
 
@@ -1223,6 +1267,10 @@ static inline int dt_ref_del(const struct lu_env *env,
         LASSERT(dt);
         LASSERT(dt->do_ops);
         LASSERT(dt->do_ops->do_ref_del);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_REF_DEL))
+		return cfs_fail_err;
+
         return dt->do_ops->do_ref_del(env, dt, th);
 }
 
@@ -1380,6 +1428,10 @@ static inline int dt_declare_insert(const struct lu_env *env,
         LASSERT(dt);
         LASSERT(dt->do_index_ops);
         LASSERT(dt->do_index_ops->dio_declare_insert);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_INSERT))
+		return cfs_fail_err;
+
         return dt->do_index_ops->dio_declare_insert(env, dt, rec, key, th);
 }
 
@@ -1394,6 +1446,10 @@ static inline int dt_insert(const struct lu_env *env,
         LASSERT(dt);
         LASSERT(dt->do_index_ops);
         LASSERT(dt->do_index_ops->dio_insert);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_INSERT))
+		return cfs_fail_err;
+
         return dt->do_index_ops->dio_insert(env, dt, rec, key, th,
                                             capa, noquota);
 }
@@ -1406,6 +1462,10 @@ static inline int dt_declare_xattr_del(const struct lu_env *env,
         LASSERT(dt);
         LASSERT(dt->do_ops);
         LASSERT(dt->do_ops->do_declare_xattr_del);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_XATTR_DEL))
+		return cfs_fail_err;
+
         return dt->do_ops->do_declare_xattr_del(env, dt, name, th);
 }
 
@@ -1417,6 +1477,10 @@ static inline int dt_xattr_del(const struct lu_env *env,
         LASSERT(dt);
         LASSERT(dt->do_ops);
         LASSERT(dt->do_ops->do_xattr_del);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_XATTR_DEL))
+		return cfs_fail_err;
+
         return dt->do_ops->do_xattr_del(env, dt, name, th, capa);
 }
 
@@ -1429,6 +1493,10 @@ static inline int dt_declare_xattr_set(const struct lu_env *env,
         LASSERT(dt);
         LASSERT(dt->do_ops);
         LASSERT(dt->do_ops->do_declare_xattr_set);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_XATTR_SET))
+		return cfs_fail_err;
+
         return dt->do_ops->do_declare_xattr_set(env, dt, buf, name, fl, th);
 }
 
@@ -1440,6 +1508,10 @@ static inline int dt_xattr_set(const struct lu_env *env,
         LASSERT(dt);
         LASSERT(dt->do_ops);
         LASSERT(dt->do_ops->do_xattr_set);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_XATTR_SET))
+		return cfs_fail_err;
+
         return dt->do_ops->do_xattr_set(env, dt, buf, name, fl, th, capa);
 }
 
@@ -1452,6 +1524,10 @@ static inline int dt_declare_xattr_get(const struct lu_env *env,
 	LASSERT(dt);
 	LASSERT(dt->do_ops);
 	LASSERT(dt->do_ops->do_declare_xattr_get);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_XATTR_GET))
+		return cfs_fail_err;
+
 	return dt->do_ops->do_declare_xattr_get(env, dt, buf, name, capa);
 }
 
@@ -1462,6 +1538,10 @@ static inline int dt_xattr_get(const struct lu_env *env,
         LASSERT(dt);
         LASSERT(dt->do_ops);
         LASSERT(dt->do_ops->do_xattr_get);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_XATTR_GET))
+		return cfs_fail_err;
+
         return dt->do_ops->do_xattr_get(env, dt, buf, name, capa);
 }
 
@@ -1472,6 +1552,10 @@ static inline int dt_xattr_list(const struct lu_env *env,
         LASSERT(dt);
         LASSERT(dt->do_ops);
         LASSERT(dt->do_ops->do_xattr_list);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_XATTR_LIST))
+		return cfs_fail_err;
+
         return dt->do_ops->do_xattr_list(env, dt, buf, capa);
 }
 
@@ -1483,6 +1567,10 @@ static inline int dt_declare_delete(const struct lu_env *env,
         LASSERT(dt);
         LASSERT(dt->do_index_ops);
         LASSERT(dt->do_index_ops->dio_declare_delete);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_DELETE))
+		return cfs_fail_err;
+
         return dt->do_index_ops->dio_declare_delete(env, dt, key, th);
 }
 
@@ -1495,6 +1583,10 @@ static inline int dt_delete(const struct lu_env *env,
         LASSERT(dt);
         LASSERT(dt->do_index_ops);
         LASSERT(dt->do_index_ops->dio_delete);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DELETE))
+		return cfs_fail_err;
+
         return dt->do_index_ops->dio_delete(env, dt, key, th, capa);
 }
 
@@ -1530,6 +1622,9 @@ static inline int dt_lookup(const struct lu_env *env,
         LASSERT(dt);
         LASSERT(dt->do_index_ops);
         LASSERT(dt->do_index_ops->dio_lookup);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_LOOKUP))
+		return cfs_fail_err;
 
         ret = dt->do_index_ops->dio_lookup(env, dt, rec, key, capa);
         if (ret > 0)

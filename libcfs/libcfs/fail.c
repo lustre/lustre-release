@@ -37,11 +37,13 @@
 
 unsigned long cfs_fail_loc = 0;
 unsigned int cfs_fail_val = 0;
+int cfs_fail_err;
 wait_queue_head_t cfs_race_waitq;
 int cfs_race_state;
 
 EXPORT_SYMBOL(cfs_fail_loc);
 EXPORT_SYMBOL(cfs_fail_val);
+EXPORT_SYMBOL(cfs_fail_err);
 EXPORT_SYMBOL(cfs_race_waitq);
 EXPORT_SYMBOL(cfs_race_state);
 
