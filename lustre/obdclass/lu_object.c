@@ -1098,8 +1098,6 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
 	int i;
 	ENTRY;
 
-	INIT_LIST_HEAD(&lu_sites);
-
 	memset(s, 0, sizeof *s);
 	mutex_init(&s->ls_purge_mutex);
 	bits = lu_htable_order(top);
@@ -2112,6 +2110,7 @@ int lu_global_init(void)
 
 	INIT_LIST_HEAD(&lu_device_types);
 	INIT_LIST_HEAD(&lu_context_remembered);
+	INIT_LIST_HEAD(&lu_sites);
 
         result = lu_ref_global_init();
         if (result != 0)
