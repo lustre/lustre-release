@@ -283,8 +283,10 @@ int execute_line(char * line)
         return rc;
 }
 
+#ifdef HAVE_LIBREADLINE
 static void noop_int_fn(int unused) { }
 static void noop_void_fn(void) { }
+#endif
 
 /* just in case you're ever in an airplane and discover you
  * forgot to install readline-dev. :) */
