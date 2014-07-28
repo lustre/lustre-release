@@ -123,9 +123,6 @@ static int mdt_create_data(struct mdt_thread_info *info,
 	ma->ma_valid = 0;
 	mutex_lock(&o->mot_lov_mutex);
 	if (!(o->mot_flags & MOF_LOV_CREATED)) {
-		if (p != NULL && !fid_is_md_operative(mdt_object_fid(p)))
-			GOTO(unlock, rc = -EPERM);
-
 		rc = mdo_create_data(info->mti_env,
 				     p ? mdt_object_child(p) : NULL,
 				     mdt_object_child(o), spec, ma);
@@ -135,7 +132,7 @@ static int mdt_create_data(struct mdt_thread_info *info,
 		if (rc == 0 && ma->ma_valid & MA_LOV)
 			o->mot_flags |= MOF_LOV_CREATED;
 	}
-unlock:
+
 	mutex_unlock(&o->mot_lov_mutex);
 	RETURN(rc);
 }
