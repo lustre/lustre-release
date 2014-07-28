@@ -1130,7 +1130,7 @@ static int mdt_getattr(struct tgt_session_info *tsi)
 	}
 
 	if (rc < 0)
-		GOTO(out_shrink, rc);
+		GOTO(out, rc = err_serious(rc));
 
 	req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER, rc);
 
