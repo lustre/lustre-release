@@ -824,7 +824,7 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode, struct page **page,
 {
 	int rc;
 
-	if (ldiskfs_test_inode_flag(inode, LDISKFS_INODE_EXTENTS)) {
+	if (LDISKFS_I(inode)->i_flags & LDISKFS_EXTENTS_FL) {
 		rc = osd_ldiskfs_map_ext_inode_pages(inode, page, pages,
 						     blocks, create);
 		return rc;
@@ -992,7 +992,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
          * 5 is max tree depth: inode + 4 index blocks
          * with blockmaps, depth is 3 at most
          */
-	if (ldiskfs_test_inode_flag(inode, LDISKFS_INODE_EXTENTS)) {
+        if (LDISKFS_I(inode)->i_flags & LDISKFS_EXTENTS_FL) {
                 /*
                  * many concurrent threads may grow tree by the time
                  * our transaction starts. so, consider 2 is a min depth
@@ -1315,11 +1315,11 @@ static inline int osd_extents_enabled(struct super_block *sb,
 				      struct inode *inode)
 {
 	if (inode != NULL) {
-		if (ldiskfs_test_inode_flag(inode, LDISKFS_INODE_EXTENTS))
+		if (LDISKFS_I(inode)->i_flags & LDISKFS_EXTENTS_FL)
 			return 1;
-	} else if (LDISKFS_HAS_INCOMPAT_FEATURE(sb,
-					LDISKFS_FEATURE_INCOMPAT_EXTENTS))
+	} else if (test_opt(sb, EXTENTS)) {
 		return 1;
+	}
 	return 0;
 }
 

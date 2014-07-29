@@ -1,8 +1,8 @@
-Index: linux-2.6.32-431.17.1.el6.x86_64/fs/ext4/ext4.h
+Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
---- linux-2.6.32-431.17.1.el6.x86_64.orig/fs/ext4/ext4.h
-+++ linux-2.6.32-431.17.1.el6.x86_64/fs/ext4/ext4.h
-@@ -874,7 +874,8 @@ struct ext4_inode_info {
+--- linux-stage.orig/fs/ext4/ext4.h	2011-03-14 16:16:45.000000000 +0800
++++ linux-stage/fs/ext4/ext4.h	2011-03-14 16:17:08.732676431 +0800
+@@ -758,7 +758,8 @@
  /*
   * Mount flags
   */
@@ -12,29 +12,29 @@ Index: linux-2.6.32-431.17.1.el6.x86_64/fs/ext4/ext4.h
  #define EXT4_MOUNT_GRPID		0x00004	/* Create files with directory's group */
  #define EXT4_MOUNT_DEBUG		0x00008	/* Some debugging messages */
  #define EXT4_MOUNT_ERRORS_CONT		0x00010	/* Continue on errors */
-Index: linux-2.6.32-431.17.1.el6.x86_64/fs/ext4/super.c
+Index: linux-stage/fs/ext4/super.c
 ===================================================================
---- linux-2.6.32-431.17.1.el6.x86_64.orig/fs/ext4/super.c
-+++ linux-2.6.32-431.17.1.el6.x86_64/fs/ext4/super.c
-@@ -1216,6 +1216,7 @@ enum {
- 	Opt_block_validity, Opt_noblock_validity,
+--- linux-stage.orig/fs/ext4/super.c	2011-03-14 16:16:45.000000000 +0800
++++ linux-stage/fs/ext4/super.c	2011-03-14 16:18:13.831956469 +0800
+@@ -1502,6 +1502,7 @@
  	Opt_inode_readahead_blks, Opt_journal_ioprio,
  	Opt_mballoc, Opt_bigendian_extents, Opt_force_over_128tb,
+ 	Opt_extents, Opt_noextents,
 +	Opt_no_mbcache,
  	Opt_discard, Opt_nodiscard,
- 	Opt_init_itable, Opt_noinit_itable,
+	Opt_init_inode_table, Opt_noinit_inode_table,
  };
-@@ -1291,6 +1292,7 @@ static const match_table_t tokens = {
- 	{Opt_bigendian_extents, "bigendian_extents"},
- 	{Opt_force_over_128tb, "force_over_128tb"},
+@@ -1574,6 +1575,7 @@
+	{Opt_noauto_da_alloc, "noauto_da_alloc"},
+	{Opt_bigendian_extents, "bigendian_extents"},
  	{Opt_mballoc, "mballoc"},
 +	{Opt_no_mbcache, "no_mbcache"},
+	{Opt_extents, "extents"},
+	{Opt_noextents, "noextents"},
  	{Opt_discard, "discard"},
- 	{Opt_nodiscard, "nodiscard"},
- 	{Opt_init_itable, "init_itable=%u"},
-@@ -1763,6 +1765,9 @@ set_qf_format:
- 		case Opt_force_over_128tb:
- 			force_over_128tb = 1;
+@@ -2049,6 +2051,9 @@
+ 			}
+ 			clear_opt(sbi->s_mount_opt, EXTENTS);
  			break;
 +		case Opt_no_mbcache:
 +			set_opt(sbi->s_mount_opt, NO_MBCACHE);
@@ -42,10 +42,10 @@ Index: linux-2.6.32-431.17.1.el6.x86_64/fs/ext4/super.c
  		default:
  			ext4_msg(sb, KERN_ERR,
  			       "Unrecognized mount option \"%s\" "
-Index: linux-2.6.32-431.17.1.el6.x86_64/fs/ext4/xattr.c
+Index: linux-stage/fs/ext4/xattr.c
 ===================================================================
---- linux-2.6.32-431.17.1.el6.x86_64.orig/fs/ext4/xattr.c
-+++ linux-2.6.32-431.17.1.el6.x86_64/fs/ext4/xattr.c
+--- linux-stage.orig/fs/ext4/xattr.c	2011-03-14 16:16:43.000000000 +0800
++++ linux-stage/fs/ext4/xattr.c	2011-03-14 16:17:08.806677883 +0800
 @@ -86,7 +86,8 @@
  # define ea_bdebug(f...)
  #endif
@@ -56,16 +56,16 @@ Index: linux-2.6.32-431.17.1.el6.x86_64/fs/ext4/xattr.c
  static struct buffer_head *ext4_xattr_cache_find(struct inode *,
  						 struct ext4_xattr_header *,
  						 struct mb_cache_entry **);
-@@ -333,7 +334,7 @@ bad_block:
+@@ -234,7 +235,7 @@
  		error = -EIO;
  		goto cleanup;
  	}
 -	ext4_xattr_cache_insert(bh);
 +	ext4_xattr_cache_insert(inode->i_sb, bh);
  	entry = BFIRST(bh);
- 	error = ext4_xattr_find_entry(&entry, name_index, name, bh->b_size, 1,
- 				      inode);
-@@ -492,7 +493,7 @@ ext4_xattr_block_list(struct inode *inod
+ 	error = ext4_xattr_find_entry(&entry, name_index, name, bh->b_size, 1);
+ 	if (error == -EIO)
+@@ -376,7 +377,7 @@
  		error = -EIO;
  		goto cleanup;
  	}
@@ -74,7 +74,7 @@ Index: linux-2.6.32-431.17.1.el6.x86_64/fs/ext4/xattr.c
  	error = ext4_xattr_list_entries(inode, BFIRST(bh), buffer, buffer_size);
  
  cleanup:
-@@ -589,7 +590,9 @@ ext4_xattr_release_block(handle_t *handl
+@@ -473,7 +474,9 @@
  	struct mb_cache_entry *ce = NULL;
  	int error = 0;
  
@@ -85,9 +85,9 @@ Index: linux-2.6.32-431.17.1.el6.x86_64/fs/ext4/xattr.c
  	error = ext4_journal_get_write_access(handle, bh);
  	if (error)
  		goto out;
-@@ -988,8 +991,10 @@ ext4_xattr_block_set(handle_t *handle, s
- #define header(x) ((struct ext4_xattr_header *)(x))
- 
+@@ -700,8 +703,10 @@
+ 	if (i->value && i->value_len > sb->s_blocksize)
+ 		return -ENOSPC;
  	if (s->base) {
 -		ce = mb_cache_entry_get(ext4_xattr_cache, bs->bh->b_bdev,
 -					bs->bh->b_blocknr);
@@ -98,7 +98,7 @@ Index: linux-2.6.32-431.17.1.el6.x86_64/fs/ext4/xattr.c
  		error = ext4_journal_get_write_access(handle, bs->bh);
  		if (error)
  			goto cleanup;
-@@ -1006,7 +1011,7 @@ ext4_xattr_block_set(handle_t *handle, s
+@@ -718,7 +723,7 @@
  				if (!IS_LAST_ENTRY(s->first))
  					ext4_xattr_rehash(header(s->base),
  							  s->here);
@@ -107,7 +107,7 @@ Index: linux-2.6.32-431.17.1.el6.x86_64/fs/ext4/xattr.c
  			}
  			unlock_buffer(bs->bh);
  			if (error == -EIO)
-@@ -1089,7 +1094,8 @@ inserted:
+@@ -801,7 +806,8 @@
  				if (error)
  					goto cleanup_dquot;
  			}
@@ -117,7 +117,7 @@ Index: linux-2.6.32-431.17.1.el6.x86_64/fs/ext4/xattr.c
  			ce = NULL;
  		} else if (bs->bh && s->base == bs->bh->b_data) {
  			/* We were modifying this block in-place. */
-@@ -1140,7 +1146,7 @@ getblk_failed:
+@@ -845,7 +851,7 @@
  			memcpy(new_bh->b_data, s->base, new_bh->b_size);
  			set_buffer_uptodate(new_bh);
  			unlock_buffer(new_bh);
@@ -126,7 +126,7 @@ Index: linux-2.6.32-431.17.1.el6.x86_64/fs/ext4/xattr.c
  			error = ext4_handle_dirty_metadata(handle,
  							   inode, new_bh);
  			if (error)
-@@ -1758,12 +1764,15 @@ ext4_xattr_put_super(struct super_block
+@@ -1403,12 +1409,15 @@
   * Returns 0, or a negative error number on failure.
   */
  static void
@@ -143,7 +143,7 @@ Index: linux-2.6.32-431.17.1.el6.x86_64/fs/ext4/xattr.c
  	ce = mb_cache_entry_alloc(ext4_xattr_cache, GFP_NOFS);
  	if (!ce) {
  		ea_bdebug(bh, "out of memory");
-@@ -1836,6 +1845,8 @@ ext4_xattr_cache_find(struct inode *inod
+@@ -1482,6 +1491,8 @@
  	__u32 hash = le32_to_cpu(header->h_hash);
  	struct mb_cache_entry *ce;
  
