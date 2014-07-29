@@ -254,8 +254,16 @@ struct lfsck_layout {
 	 * MDT(s)/OST(s) do not participate in the LFSCK */
 	__u64	ll_objs_skipped;
 
+	/* The size of ll_ost_bitmap with nbits. */
+	__u32	ll_bitmap_size;
+
 	/* For further using. 256-bytes aligned now. */
-	__u64	ll_reserved[12];
+	__u32	ll_reserved_1;
+	__u64	ll_reserved_2[11];
+
+	/* The OST targets bitmap to record the OSTs that contain
+	 * non-verified OST-objects. */
+	__u8	ll_ost_bitmap[0];
 };
 
 struct lfsck_component;
@@ -517,6 +525,7 @@ struct lfsck_async_interpret_args {
 	struct lfsck_tgt_descs		*laia_ltds;
 	struct lfsck_tgt_desc		*laia_ltd;
 	struct lfsck_request		*laia_lr;
+	atomic_t			*laia_count;
 	int				 laia_result;
 	unsigned int			 laia_shared:1;
 };
@@ -550,6 +559,10 @@ struct lfsck_assistant_operations {
 
 	void (*la_req_fini)(const struct lu_env *env,
 			    struct lfsck_assistant_req *lar);
+
+	void (*la_sync_failures)(const struct lu_env *env,
+				 struct lfsck_component *com,
+				 struct lfsck_request *lr);
 };
 
 struct lfsck_assistant_data {
@@ -579,6 +592,8 @@ struct lfsck_assistant_data {
 
 	struct lfsck_assistant_operations	*lad_ops;
 
+	cfs_bitmap_t				*lad_bitmap;
+
 	__u32					 lad_touch_gen;
 	int					 lad_prefetched;
 	int					 lad_assistant_status;
@@ -586,7 +601,8 @@ struct lfsck_assistant_data {
 	unsigned int				 lad_to_post:1,
 						 lad_to_double_scan:1,
 						 lad_in_double_scan:1,
-						 lad_exit:1;
+						 lad_exit:1,
+						 lad_incomplete:1;
 };
 
 #define LFSCK_TMPBUF_LEN	64
@@ -614,6 +630,7 @@ struct lfsck_thread_info {
 	char			lti_tmpbuf[LFSCK_TMPBUF_LEN];
 	struct lfsck_request	lti_lr;
 	struct lfsck_async_interpret_args lti_laia;
+	struct lfsck_async_interpret_args lti_laia2;
 	struct lfsck_start	lti_start;
 	struct lfsck_stop	lti_stop;
 	ldlm_policy_data_t	lti_policy;
@@ -971,6 +988,22 @@ static inline bool lfsck_phase2_next_ready(struct lfsck_assistant_data *lad)
 	return list_empty(&lad->lad_mdt_phase1_list) &&
 	       (!list_empty(&lad->lad_ost_phase2_list) ||
 		list_empty(&lad->lad_ost_phase1_list));
+}
+
+static inline void lfsck_lad_set_bitmap(const struct lu_env *env,
+					struct lfsck_component *com,
+					__u32 index)
+{
+	struct lfsck_assistant_data	*lad	= com->lc_data;
+	cfs_bitmap_t			*bitmap	= lad->lad_bitmap;
+
+	LASSERT(com->lc_lfsck->li_master);
+	LASSERT(bitmap != NULL);
+	LASSERTF(bitmap->size > index, "invalid index: nbits %d, index %u\n",
+		 bitmap->size, index);
+
+	cfs_bitmap_set(bitmap, index);
+	lad->lad_incomplete = 1;
 }
 
 #endif /* _LFSCK_INTERNAL_H */

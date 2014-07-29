@@ -1296,6 +1296,8 @@ static void lfsck_namespace_data_release(const struct lu_env *env,
 	}
 	spin_unlock(&ltds->ltd_lock);
 
+	CFS_FREE_BITMAP(lad->lad_bitmap);
+
 	OBD_FREE_PTR(lad);
 }
 
@@ -1829,12 +1831,20 @@ static int lfsck_namespace_double_scan_result(const struct lu_env *env,
 	return rc;
 }
 
+static void lfsck_namespace_assistant_sync_failures(const struct lu_env *env,
+						    struct lfsck_component *com,
+						    struct lfsck_request *lr)
+{
+	/* XXX: TBD */
+}
+
 struct lfsck_assistant_operations lfsck_namespace_assistant_ops = {
 	.la_handler_p1		= lfsck_namespace_assistant_handler_p1,
 	.la_handler_p2		= lfsck_namespace_assistant_handler_p2,
 	.la_fill_pos		= lfsck_namespace_assistant_fill_pos,
 	.la_double_scan_result	= lfsck_namespace_double_scan_result,
 	.la_req_fini		= lfsck_namespace_assistant_req_fini,
+	.la_sync_failures	= lfsck_namespace_assistant_sync_failures,
 };
 
 /**

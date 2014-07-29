@@ -4685,10 +4685,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lfsck_request, lr_async_windows));
 	LASSERTF((int)sizeof(((struct lfsck_request *)0)->lr_async_windows) == 2, "found %lld\n",
 		 (long long)(int)sizeof(((struct lfsck_request *)0)->lr_async_windows));
-	LASSERTF((int)offsetof(struct lfsck_request, lr_padding_1) == 28, "found %lld\n",
-		 (long long)(int)offsetof(struct lfsck_request, lr_padding_1));
-	LASSERTF((int)sizeof(((struct lfsck_request *)0)->lr_padding_1) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct lfsck_request *)0)->lr_padding_1));
+	LASSERTF((int)offsetof(struct lfsck_request, lr_flags) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct lfsck_request, lr_flags));
+	LASSERTF((int)sizeof(((struct lfsck_request *)0)->lr_flags) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lfsck_request *)0)->lr_flags));
 	LASSERTF((int)offsetof(struct lfsck_request, lr_fid) == 32, "found %lld\n",
 		 (long long)(int)offsetof(struct lfsck_request, lr_fid));
 	LASSERTF((int)sizeof(((struct lfsck_request *)0)->lr_fid) == 16, "found %lld\n",

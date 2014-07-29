@@ -66,6 +66,16 @@ cfs_bitmap_t *CFS_ALLOCATE_BITMAP(int size)
 	RETURN(ptr);
 }
 
+static inline void CFS_RESET_BITMAP(cfs_bitmap_t *bitmap)
+{
+	if (bitmap->size > 0) {
+		int nbits = bitmap->size;
+
+		memset(bitmap, 0, CFS_BITMAP_SIZE(nbits));
+		bitmap->size = nbits;
+	}
+}
+
 #define CFS_FREE_BITMAP(ptr)	LIBCFS_FREE(ptr, CFS_BITMAP_SIZE(ptr->size))
 
 static inline

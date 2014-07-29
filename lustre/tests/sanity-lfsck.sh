@@ -2056,6 +2056,150 @@ test_18e() {
 }
 run_test 18e "Find out orphan OST-object and repair it (5)"
 
+test_18f() {
+	[ $OSTCOUNT -lt 2 ] &&
+		skip "The test needs at least 2 OSTs" && return
+
+	echo "#####"
+	echo "The target MDT-object is lost. The LFSCK should re-create the"
+	echo "MDT-object under .lustre/lost+found/MDTxxxx. If some OST fail"
+	echo "to verify some OST-object(s) during the first stage-scanning,"
+	echo "the LFSCK should skip orphan OST-objects for such OST. Others"
+	echo "should not be affected."
+	echo "#####"
+
+	check_mount_and_prep
+	$LFS mkdir -i 0 $DIR/$tdir/a1
+	$LFS setstripe -c 1 -i 0 -s 1M $DIR/$tdir/a1
+	dd if=/dev/zero of=$DIR/$tdir/a1/guard bs=1M count=2
+	dd if=/dev/zero of=$DIR/$tdir/a1/f1 bs=1M count=2
+	$LFS mkdir -i 0 $DIR/$tdir/a2
+	$LFS setstripe -c 2 -i 0 -s 1M $DIR/$tdir/a2
+	dd if=/dev/zero of=$DIR/$tdir/a2/f2 bs=1M count=2
+	$LFS getstripe $DIR/$tdir/a1/f1
+	$LFS getstripe $DIR/$tdir/a2/f2
+
+	if [ $MDSCOUNT -ge 2 ]; then
+		$LFS mkdir -i 1 $DIR/$tdir/a3
+		$LFS setstripe -c 1 -i 0 -s 1M $DIR/$tdir/a3
+		dd if=/dev/zero of=$DIR/$tdir/a3/guard bs=1M count=2
+		dd if=/dev/zero of=$DIR/$tdir/a3/f3 bs=1M count=2
+		$LFS mkdir -i 1 $DIR/$tdir/a4
+		$LFS setstripe -c 2 -i 0 -s 1M $DIR/$tdir/a4
+		dd if=/dev/zero of=$DIR/$tdir/a4/f4 bs=1M count=2
+		$LFS getstripe $DIR/$tdir/a3/f3
+		$LFS getstripe $DIR/$tdir/a4/f4
+	fi
+
+	cancel_lru_locks osc
+
+	echo "Inject failure, to simulate the case of missing the MDT-object"
+	#define OBD_FAIL_LFSCK_LOST_MDTOBJ	0x1616
+	do_facet mds1 $LCTL set_param fail_loc=0x1616
+	rm -f $DIR/$tdir/a1/f1
+	rm -f $DIR/$tdir/a2/f2
+
+	if [ $MDSCOUNT -ge 2 ]; then
+		do_facet mds2 $LCTL set_param fail_loc=0x1616
+		rm -f $DIR/$tdir/a3/f3
+		rm -f $DIR/$tdir/a4/f4
+	fi
+
+	sync
+	sleep 2
+
+	do_facet mds1 $LCTL set_param fail_loc=0
+	if [ $MDSCOUNT -ge 2 ]; then
+		do_facet mds2 $LCTL set_param fail_loc=0
+	fi
+
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+
+	echo "Inject failure, to simulate the OST0 fail to handle"
+	echo "MDT0 LFSCK request during the first-stage scanning."
+	#define OBD_FAIL_LFSCK_BAD_NETWORK	0x161c
+	do_facet mds1 $LCTL set_param fail_loc=0x161c fail_val=0
+
+	echo "Trigger layout LFSCK on all devices to find out orphan OST-object"
+	$START_LAYOUT -r -o || error "(1) Fail to start LFSCK for layout!"
+
+	for k in $(seq $MDSCOUNT); do
+		# The LFSCK status query internal is 30 seconds. For the case
+		# of some LFSCK_NOTIFY RPCs failure/lost, we will wait enough
+		# time to guarantee the status sync up.
+		wait_update_facet mds${k} "$LCTL get_param -n \
+			mdd.$(facet_svc mds${k}).lfsck_layout |
+			awk '/^status/ { print \\\$2 }'" "partial" 32 ||
+			error "(2) MDS${k} is not the expected 'partial'"
+	done
+
+	wait_update_facet ost1 "$LCTL get_param -n \
+		obdfilter.$(facet_svc ost1).lfsck_layout |
+		awk '/^status/ { print \\\$2 }'" "partial" 32 || {
+		error "(3) OST1 is not the expected 'partial'"
+	}
+
+	wait_update_facet ost2 "$LCTL get_param -n \
+		obdfilter.$(facet_svc ost2).lfsck_layout |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		error "(4) OST2 is not the expected 'completed'"
+	}
+
+	do_facet mds1 $LCTL set_param fail_loc=0 fail_val=0
+
+	local repaired=$(do_facet mds1 $LCTL get_param -n \
+			 mdd.$(facet_svc mds1).lfsck_layout |
+			 awk '/^repaired_orphan/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(5) Expect 1 fixed on mds{1}, but got: $repaired"
+
+	if [ $MDSCOUNT -ge 2 ]; then
+		repaired=$(do_facet mds2 $LCTL get_param -n \
+			 mdd.$(facet_svc mds2).lfsck_layout |
+			 awk '/^repaired_orphan/ { print $2 }')
+		[ $repaired -eq 1 ] ||
+		error "(6) Expect 1 fixed on mds{2}, but got: $repaired"
+	fi
+
+	echo "Trigger layout LFSCK on all devices again to cleanup"
+	$START_LAYOUT -r -o || error "(7) Fail to start LFSCK for layout!"
+
+	for k in $(seq $MDSCOUNT); do
+		# The LFSCK status query internal is 30 seconds. For the case
+		# of some LFSCK_NOTIFY RPCs failure/lost, we will wait enough
+		# time to guarantee the status sync up.
+		wait_update_facet mds${k} "$LCTL get_param -n \
+			mdd.$(facet_svc mds${k}).lfsck_layout |
+			awk '/^status/ { print \\\$2 }'" "completed" 32 ||
+			error "(8) MDS${k} is not the expected 'completed'"
+	done
+
+	for k in $(seq $OSTCOUNT); do
+		cur_status=$(do_facet ost${k} $LCTL get_param -n \
+			     obdfilter.$(facet_svc ost${k}).lfsck_layout |
+			     awk '/^status/ { print $2 }')
+		[ "$cur_status" == "completed" ] ||
+		error "(9) OST${k} Expect 'completed', but got '$cur_status'"
+
+	done
+
+	local repaired=$(do_facet mds1 $LCTL get_param -n \
+			 mdd.$(facet_svc mds1).lfsck_layout |
+			 awk '/^repaired_orphan/ { print $2 }')
+	[ $repaired -eq 2 ] ||
+		error "(10) Expect 2 fixed on mds{1}, but got: $repaired"
+
+	if [ $MDSCOUNT -ge 2 ]; then
+		repaired=$(do_facet mds2 $LCTL get_param -n \
+			 mdd.$(facet_svc mds2).lfsck_layout |
+			 awk '/^repaired_orphan/ { print $2 }')
+		[ $repaired -eq 2 ] ||
+		error "(11) Expect 2 fixed on mds{2}, but got: $repaired"
+	fi
+}
+run_test 18f "Skip the failed OST(s) when handle orphan OST-objects"
+
 test_19a() {
 	check_mount_and_prep
 	$LFS setstripe -c 1 -i 0 $DIR/$tdir

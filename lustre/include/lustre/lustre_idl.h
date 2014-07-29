@@ -3556,7 +3556,7 @@ struct lfsck_request {
 	__u16		lr_active;
 	__u16		lr_param;
 	__u16		lr_async_windows;
-	__u32		lr_padding_1;
+	__u32		lr_flags2;
 	struct lu_fid	lr_fid;
 	struct lu_fid	lr_fid2;
 	struct lu_fid	lr_fid3;

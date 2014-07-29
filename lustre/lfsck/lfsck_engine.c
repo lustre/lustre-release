@@ -1110,9 +1110,7 @@ static int lfsck_assistant_notify_others(const struct lu_env *env,
 					lfsck_async_interpret_common,
 					laia, LFSCK_NOTIFY);
 			if (rc != 0) {
-				struct lfsck_layout *lo = com->lc_file_ram;
-
-				lo->ll_flags |= LF_INCOMPLETE;
+				lfsck_lad_set_bitmap(env, com, idx);
 				CDEBUG(D_LFSCK, "%s: LFSCK assistant fail to "
 				       "notify OST %x for %s start: rc = %d\n",
 				       lfsck_lfsck2name(lfsck), idx,
@@ -1271,6 +1269,7 @@ again:
 		break;
 	}
 	case LE_PHASE1_DONE:
+		lad->lad_ops->la_sync_failures(env, com, lr);
 		lad->lad_touch_gen++;
 		ltds = &lfsck->li_mdt_descs;
 		laia->laia_ltds = ltds;

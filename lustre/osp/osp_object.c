@@ -45,6 +45,11 @@
 
 #include "osp_internal.h"
 
+static inline __u32 osp_dev2node(struct osp_device *osp)
+{
+	return osp->opd_storage->dd_lu_dev.ld_site->ld_seq_site->ss_node_id;
+}
+
 static inline bool is_ost_obj(struct lu_object *lo)
 {
 	return !lu2osp_dev(lo->lo_dev)->opd_connect_mdt;
@@ -660,6 +665,11 @@ int osp_xattr_get(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(buf != NULL);
 	LASSERT(name != NULL);
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_NETWORK) &&
+	    osp->opd_index == cfs_fail_val &&
+	    osp_dev2node(osp) == cfs_fail_val)
+		RETURN(-ENOTCONN);
 
 	if (unlikely(obj->opo_non_exist))
 		RETURN(-ENOENT);
@@ -1337,8 +1347,7 @@ static int osp_it_fetch(const struct lu_env *env, struct osp_it *it)
 	ii->ii_magic = IDX_INFO_MAGIC;
 	ii->ii_count = npages * LU_PAGE_COUNT;
 	ii->ii_hash_start = it->ooi_next;
-	ii->ii_attrs =
-		osp->opd_storage->dd_lu_dev.ld_site->ld_seq_site->ss_node_id;
+	ii->ii_attrs = osp_dev2node(osp);
 
 	ptlrpc_at_set_req_timeout(req);
 

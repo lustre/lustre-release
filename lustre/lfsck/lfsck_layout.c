@@ -48,7 +48,10 @@
 
 #include "lfsck_internal.h"
 
-#define LFSCK_LAYOUT_MAGIC		0xB173AE14
+#define LFSCK_LAYOUT_MAGIC_V1		0xB173AE14
+#define LFSCK_LAYOUT_MAGIC_V2		0xB1734D76
+
+#define LFSCK_LAYOUT_MAGIC		LFSCK_LAYOUT_MAGIC_V2
 
 static const char lfsck_layout_name[] = "lfsck_layout";
 
@@ -260,6 +263,117 @@ static void lfsck_layout_assistant_req_fini(const struct lu_env *env,
 	lu_object_put(env, &llr->llr_child->do_lu);
 	lfsck_layout_object_put(env, llr->llr_parent);
 	OBD_FREE_PTR(llr);
+}
+
+static int
+lfsck_layout_assistant_sync_failures_interpret(const struct lu_env *env,
+					       struct ptlrpc_request *req,
+					       void *args, int rc)
+{
+	struct lfsck_async_interpret_args *laia = args;
+
+	if (rc == 0)
+		atomic_dec(laia->laia_count);
+
+	return 0;
+}
+
+/**
+ * Notify remote LFSCK instances about former failures.
+ *
+ * The local LFSCK instance has recorded which OSTs have ever failed to respond
+ * some LFSCK verification requests (maybe because of network issues or the OST
+ * itself trouble). During the respond gap, the OST may missed some OST-objects
+ * verification, then the OST cannot know whether related OST-objects have been
+ * referenced by related MDT-objects or not, then in the second-stage scanning,
+ * these OST-objects will be regarded as orphan, if the OST-object contains bad
+ * parent FID for back reference, then it will misguide the LFSCK to make wrong
+ * fixing for the fake orphan.
+ *
+ * To avoid above trouble, when layout LFSCK finishes the first-stage scanning,
+ * it will scan the bitmap for the ever failed OTs, and notify them that it has
+ * ever missed some OST-object verification and should skip orphan handling for
+ * all MDTs that are in layout LFSCK.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] com	pointer to the lfsck component
+ * \param[in] lr	pointer to the lfsck request
+ */
+static void lfsck_layout_assistant_sync_failures(const struct lu_env *env,
+						 struct lfsck_component *com,
+						 struct lfsck_request *lr)
+{
+	struct lfsck_async_interpret_args *laia  =
+				&lfsck_env_info(env)->lti_laia2;
+	struct lfsck_assistant_data	  *lad   = com->lc_data;
+	struct lfsck_layout		  *lo    = com->lc_file_ram;
+	struct lfsck_instance		  *lfsck = com->lc_lfsck;
+	struct lfsck_tgt_descs		  *ltds  = &lfsck->li_ost_descs;
+	struct lfsck_tgt_desc		  *ltd;
+	struct ptlrpc_request_set	  *set;
+	atomic_t			   count;
+	__u32				   idx;
+	int				   rc    = 0;
+	ENTRY;
+
+	if (!lad->lad_incomplete || lo->ll_flags & LF_INCOMPLETE)
+		RETURN_EXIT;
+
+	/* If the MDT has ever failed to verfiy some OST-objects,
+	 * then sync failures with them firstly. */
+	lr->lr_flags2 = lo->ll_flags | LF_INCOMPLETE;
+
+	atomic_set(&count, 0);
+	memset(laia, 0, sizeof(*laia));
+	laia->laia_count = &count;
+	set = ptlrpc_prep_set();
+	if (set == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	down_read(&ltds->ltd_rw_sem);
+	cfs_foreach_bit(lad->lad_bitmap, idx) {
+		ltd = LTD_TGT(ltds, idx);
+		LASSERT(ltd != NULL);
+
+		spin_lock(&ltds->ltd_lock);
+		list_del_init(&ltd->ltd_layout_phase_list);
+		list_del_init(&ltd->ltd_layout_list);
+		spin_unlock(&ltds->ltd_lock);
+
+		rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
+				lfsck_layout_assistant_sync_failures_interpret,
+				laia, LFSCK_NOTIFY);
+		if (rc != 0) {
+			CDEBUG(D_LFSCK, "%s: LFSCK assistant fail to "
+			       "notify target %x for %s phase1 done: "
+			       "rc = %d\n", lfsck_lfsck2name(com->lc_lfsck),
+			       ltd->ltd_index, lad->lad_name, rc);
+
+			break;
+		}
+
+		atomic_inc(&count);
+	}
+	up_read(&ltds->ltd_rw_sem);
+
+	if (rc == 0 && atomic_read(&count) > 0)
+		rc = ptlrpc_set_wait(set);
+
+	ptlrpc_set_destroy(set);
+
+	if (rc == 0 && atomic_read(&count) > 0)
+		rc = -EINVAL;
+
+	GOTO(out, rc);
+
+out:
+	if (rc != 0)
+		/* If failed to sync failures with the OSTs, then have to
+		 * mark the whole LFSCK as LF_INCOMPLETE to skip the whole
+		 * subsequent orphan OST-object handling. */
+		lo->ll_flags |= LF_INCOMPLETE;
+
+	lr->lr_flags2 = lo->ll_flags;
 }
 
 static int lfsck_layout_get_lovea(const struct lu_env *env,
@@ -658,6 +772,7 @@ static void lfsck_layout_le_to_cpu(struct lfsck_layout *des,
 		des->ll_objs_repaired[i] =
 				le64_to_cpu(src->ll_objs_repaired[i]);
 	des->ll_objs_skipped = le64_to_cpu(src->ll_objs_skipped);
+	des->ll_bitmap_size = le32_to_cpu(src->ll_bitmap_size);
 }
 
 static void lfsck_layout_cpu_to_le(struct lfsck_layout *des,
@@ -687,12 +802,103 @@ static void lfsck_layout_cpu_to_le(struct lfsck_layout *des,
 		des->ll_objs_repaired[i] =
 				cpu_to_le64(src->ll_objs_repaired[i]);
 	des->ll_objs_skipped = cpu_to_le64(src->ll_objs_skipped);
+	des->ll_bitmap_size = cpu_to_le32(src->ll_bitmap_size);
 }
 
 /**
- * \retval +ve: the lfsck_layout is broken, the caller should reset it.
- * \retval 0: succeed.
- * \retval -ve: failed cases.
+ * Load the OST bitmap from the lfsck_layout tracing file.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] com	pointer to the lfsck component
+ *
+ * \retval		positive number for data corruption
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
+static int lfsck_layout_load_bitmap(const struct lu_env *env,
+				    struct lfsck_component *com)
+{
+	struct dt_object		*obj	= com->lc_obj;
+	struct lfsck_assistant_data	*lad	= com->lc_data;
+	struct lfsck_layout		*lo	= com->lc_file_ram;
+	const struct dt_body_operations *dbo	= obj->do_body_ops;
+	cfs_bitmap_t			*bitmap = lad->lad_bitmap;
+	loff_t				 pos	= com->lc_file_size;
+	ssize_t				 size;
+	__u32				 nbits;
+	int				 rc;
+	ENTRY;
+
+	if (com->lc_lfsck->li_ost_descs.ltd_tgts_bitmap->size >
+	    lo->ll_bitmap_size)
+		nbits = com->lc_lfsck->li_ost_descs.ltd_tgts_bitmap->size;
+	else
+		nbits = lo->ll_bitmap_size;
+
+	if (unlikely(nbits < BITS_PER_LONG))
+		nbits = BITS_PER_LONG;
+
+	if (nbits > bitmap->size) {
+		__u32 new_bits = bitmap->size;
+		cfs_bitmap_t *new_bitmap;
+
+		while (new_bits < nbits)
+			new_bits <<= 1;
+
+		new_bitmap = CFS_ALLOCATE_BITMAP(new_bits);
+		if (new_bitmap == NULL)
+			RETURN(-ENOMEM);
+
+		lad->lad_bitmap = new_bitmap;
+		CFS_FREE_BITMAP(bitmap);
+		bitmap = new_bitmap;
+	}
+
+	if (lo->ll_bitmap_size == 0) {
+		lad->lad_incomplete = 0;
+		CFS_RESET_BITMAP(bitmap);
+
+		RETURN(0);
+	}
+
+	size = (lo->ll_bitmap_size + 7) >> 3;
+	rc = dbo->dbo_read(env, obj,
+			   lfsck_buf_get(env, bitmap->data, size), &pos,
+			   BYPASS_CAPA);
+	if (rc == 0) {
+		RETURN(-ENOENT);
+	} else if (rc != size) {
+		CDEBUG(D_LFSCK, "%s: lfsck_layout bitmap size %u != %u\n",
+		       lfsck_lfsck2name(com->lc_lfsck),
+		       (unsigned int)size, rc);
+
+		RETURN(rc);
+	}
+
+	if (cfs_bitmap_check_empty(bitmap))
+		lad->lad_incomplete = 0;
+	else
+		lad->lad_incomplete = 1;
+
+	RETURN(0);
+}
+
+/**
+ * Load the layout LFSCK tracing file from disk.
+ *
+ * The layout LFSCK tracing file records the layout LFSCK status information
+ * and other statistics, such as how many objects have been scanned, and how
+ * many objects have been repaired, and etc. It also contains the bitmap for
+ * failed OSTs during the layout LFSCK. All these information will be loaded
+ * from disk to RAM when the layout LFSCK component setup.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] com	pointer to the lfsck component
+ *
+ * \retval		positive number for file data corruption, the caller
+ *			should reset the layout LFSCK tracing file
+ * \retval		0 for success
+ * \retval		negative error number on failure
  */
 static int lfsck_layout_load(const struct lu_env *env,
 			     struct lfsck_component *com)
@@ -729,44 +935,92 @@ static int lfsck_layout_load(const struct lu_env *env,
 	return 0;
 }
 
+/**
+ * Store the layout LFSCK tracing file on disk.
+ *
+ * The layout LFSCK tracing file records the layout LFSCK status information
+ * and other statistics, such as how many objects have been scanned, and how
+ * many objects have been repaired, and etc. It also contains the bitmap for
+ * failed OSTs during the layout LFSCK. All these information will be synced
+ * from RAM to disk periodically.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] com	pointer to the lfsck component
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 static int lfsck_layout_store(const struct lu_env *env,
 			      struct lfsck_component *com)
 {
-	struct dt_object	 *obj		= com->lc_obj;
-	struct lfsck_instance	 *lfsck		= com->lc_lfsck;
-	struct lfsck_layout	 *lo		= com->lc_file_disk;
-	struct thandle		 *handle;
-	ssize_t			  size		= com->lc_file_size;
-	loff_t			  pos		= 0;
-	int			  rc;
+	struct dt_object	*obj	= com->lc_obj;
+	struct lfsck_instance	*lfsck	= com->lc_lfsck;
+	struct lfsck_layout	*lo_ram	= com->lc_file_ram;
+	struct lfsck_layout	*lo	= com->lc_file_disk;
+	struct thandle		*th;
+	struct dt_device	*dev	= lfsck->li_bottom;
+	cfs_bitmap_t		*bitmap = NULL;
+	loff_t			 pos;
+	ssize_t			 size	= com->lc_file_size;
+	__u32			 nbits	= 0;
+	int			 rc;
 	ENTRY;
 
-	lfsck_layout_cpu_to_le(lo, com->lc_file_ram);
-	handle = dt_trans_create(env, lfsck->li_bottom);
-	if (IS_ERR(handle))
-		GOTO(log, rc = PTR_ERR(handle));
+	if (lfsck->li_master) {
+		struct lfsck_assistant_data *lad = com->lc_data;
+
+		bitmap = lad->lad_bitmap;
+		nbits = bitmap->size;
+
+		LASSERT(nbits > 0);
+		LASSERTF((nbits & 7) == 0, "Invalid nbits %u\n", nbits);
+	}
+
+	lo_ram->ll_bitmap_size = nbits;
+	lfsck_layout_cpu_to_le(lo, lo_ram);
+	th = dt_trans_create(env, dev);
+	if (IS_ERR(th))
+		GOTO(log, rc = PTR_ERR(th));
 
 	rc = dt_declare_record_write(env, obj, lfsck_buf_get(env, lo, size),
-				     pos, handle);
+				     (loff_t)0, th);
 	if (rc != 0)
 		GOTO(out, rc);
 
-	rc = dt_trans_start_local(env, lfsck->li_bottom, handle);
+	if (bitmap != NULL) {
+		rc = dt_declare_record_write(env, obj,
+				lfsck_buf_get(env, bitmap->data, nbits >> 3),
+				(loff_t)size, th);
+		if (rc != 0)
+			GOTO(out, rc);
+	}
+
+	rc = dt_trans_start_local(env, dev, th);
 	if (rc != 0)
 		GOTO(out, rc);
 
-	rc = dt_record_write(env, obj, lfsck_buf_get(env, lo, size), &pos,
-			     handle);
+	pos = 0;
+	rc = dt_record_write(env, obj, lfsck_buf_get(env, lo, size), &pos, th);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	if (bitmap != NULL) {
+		pos = size;
+		rc = dt_record_write(env, obj,
+				lfsck_buf_get(env, bitmap->data, nbits >> 3),
+				&pos, th);
+	}
 
 	GOTO(out, rc);
 
 out:
-	dt_trans_stop(env, lfsck->li_bottom, handle);
+	dt_trans_stop(env, dev, th);
 
 log:
 	if (rc != 0)
 		CDEBUG(D_LFSCK, "%s: fail to store lfsck_layout: rc = %d\n",
 		       lfsck_lfsck2name(lfsck), rc);
+
 	return rc;
 }
 
@@ -1150,10 +1404,20 @@ static int lfsck_layout_double_scan_result(const struct lu_env *env,
 
 	if (rc > 0) {
 		com->lc_journal = 0;
-		if (lo->ll_flags & LF_INCOMPLETE)
+		if (lo->ll_flags & LF_INCOMPLETE) {
 			lo->ll_status = LS_PARTIAL;
-		else
-			lo->ll_status = LS_COMPLETED;
+		} else {
+			if (lfsck->li_master) {
+				struct lfsck_assistant_data *lad = com->lc_data;
+
+				if (lad->lad_incomplete)
+					lo->ll_status = LS_PARTIAL;
+				else
+					lo->ll_status = LS_COMPLETED;
+			} else {
+				lo->ll_status = LS_COMPLETED;
+			}
+		}
 		if (!(lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN))
 			lo->ll_flags &= ~(LF_SCANNED_ONCE | LF_INCONSISTENT);
 		lo->ll_time_last_complete = lo->ll_time_last_checkpoint;
@@ -2302,7 +2566,7 @@ static int lfsck_layout_scan_orphan(const struct lu_env *env,
 				    struct lfsck_component *com,
 				    struct lfsck_tgt_desc *ltd)
 {
-	struct lfsck_layout		*lo	= com->lc_file_ram;
+	struct lfsck_assistant_data	*lad	= com->lc_data;
 	struct lfsck_instance		*lfsck	= com->lc_lfsck;
 	struct lfsck_bookmark		*bk	= &lfsck->li_bookmark_ram;
 	struct lfsck_thread_info	*info	= lfsck_env_info(env);
@@ -2317,6 +2581,15 @@ static int lfsck_layout_scan_orphan(const struct lu_env *env,
 	CDEBUG(D_LFSCK, "%s: layout LFSCK assistant starts the orphan "
 	       "scanning for OST%04x\n",
 	       lfsck_lfsck2name(lfsck), ltd->ltd_index);
+
+	if (lad->lad_incomplete &&
+	    cfs_bitmap_check(lad->lad_bitmap, ltd->ltd_index)) {
+		CDEBUG(D_LFSCK, "%s: layout LFSCK assistant skip the orphan "
+		       "scanning for OST%04x\n",
+		       lfsck_lfsck2name(lfsck), ltd->ltd_index);
+
+		RETURN(0);
+	}
 
 	ostid_set_seq(oi, FID_SEQ_IDIF);
 	ostid_set_id(oi, 0);
@@ -2341,7 +2614,7 @@ static int lfsck_layout_scan_orphan(const struct lu_env *env,
 	if (rc == -ESRCH) {
 		/* -ESRCH means that the orphan OST-objects rbtree has been
 		 * cleanup because of the OSS server restart or other errors. */
-		lo->ll_flags |= LF_INCOMPLETE;
+		lfsck_lad_set_bitmap(env, com, ltd->ltd_index);
 		GOTO(fini, rc);
 	}
 
@@ -3046,7 +3319,7 @@ out:
 			CDEBUG(D_LFSCK, "%s: layout LFSCK assistant fail to "
 			       "talk with OST %x: rc = %d\n",
 			       lfsck_lfsck2name(lfsck), llr->llr_ost_idx, rc);
-			lo->ll_flags |= LF_INCOMPLETE;
+			lfsck_lad_set_bitmap(env, com, llr->llr_ost_idx);
 			lo->ll_objs_skipped++;
 			rc = 0;
 		} else {
@@ -3291,6 +3564,7 @@ lfsck_layout_slave_notify_master(const struct lu_env *env,
 				 struct lfsck_component *com,
 				 enum lfsck_events event, int result)
 {
+	struct lfsck_layout		 *lo    = com->lc_file_ram;
 	struct lfsck_instance		 *lfsck = com->lc_lfsck;
 	struct lfsck_layout_slave_data	 *llsd  = com->lc_data;
 	struct lfsck_request		 *lr    = &lfsck_env_info(env)->lti_lr;
@@ -3313,6 +3587,7 @@ lfsck_layout_slave_notify_master(const struct lu_env *env,
 	lr->lr_status = result;
 	lr->lr_index = lfsck_dev_idx(lfsck->li_bottom);
 	lr->lr_active = LFSCK_TYPE_LAYOUT;
+	lr->lr_flags2 = lo->ll_flags;
 	llsd->llsd_touch_gen++;
 	spin_lock(&llsd->llsd_lock);
 	while (!list_empty(&llsd->llsd_master_list)) {
@@ -3592,6 +3867,13 @@ static int lfsck_layout_reset(const struct lu_env *env,
 	lo->ll_magic = LFSCK_LAYOUT_MAGIC;
 	lo->ll_status = LS_INIT;
 
+	if (com->lc_lfsck->li_master) {
+		struct lfsck_assistant_data *lad = com->lc_data;
+
+		lad->lad_incomplete = 0;
+		CFS_RESET_BITMAP(lad->lad_bitmap);
+	}
+
 	rc = lfsck_layout_store(env, com);
 	up_write(&com->lc_sem);
 
@@ -3800,17 +4082,31 @@ static int lfsck_layout_master_prep(const struct lu_env *env,
 	int rc;
 	ENTRY;
 
+	rc = lfsck_layout_load_bitmap(env, com);
+	if (rc > 0) {
+		rc = lfsck_layout_reset(env, com, false);
+		if (rc == 0)
+			rc = lfsck_set_param(env, com->lc_lfsck,
+					     lsp->lsp_start, true);
+	}
+
+	if (rc != 0)
+		GOTO(log, rc);
+
 	rc = lfsck_layout_prep(env, com, lsp->lsp_start);
 	if (rc != 0)
 		RETURN(rc);
 
 	rc = lfsck_start_assistant(env, com, lsp);
 
+	GOTO(log, rc);
+
+log:
 	CDEBUG(D_LFSCK, "%s: layout LFSCK master prep done, start pos ["
 	       LPU64"\n", lfsck_lfsck2name(com->lc_lfsck),
 	       com->lc_pos_start.lp_oit_cookie);
 
-	RETURN(rc);
+	return 0;
 }
 
 /* Pre-fetch the attribute for each stripe in the given layout EA. */
@@ -3895,7 +4191,7 @@ static int lfsck_layout_scan_stripes(const struct lu_env *env,
 			CDEBUG(D_LFSCK, "%s: cannot talk with OST %x which "
 			       "did not join the layout LFSCK\n",
 			       lfsck_lfsck2name(lfsck), index);
-			lo->ll_flags |= LF_INCOMPLETE;
+			lfsck_lad_set_bitmap(env, com, index);
 			goto next;
 		}
 
@@ -4293,7 +4589,10 @@ static int lfsck_layout_master_post(const struct lu_env *env,
 				lfsck->li_pos_checkpoint.lp_oit_cookie;
 
 	if (result > 0) {
-		lo->ll_status = LS_SCANNING_PHASE2;
+		if (lo->ll_flags & LF_INCOMPLETE)
+			lo->ll_status = LS_PARTIAL;
+		else
+			lo->ll_status = LS_SCANNING_PHASE2;
 		lo->ll_flags |= LF_SCANNED_ONCE;
 		lo->ll_flags &= ~LF_UPGRADE;
 		list_move_tail(&com->lc_link, &lfsck->li_list_double_scan);
@@ -4349,7 +4648,10 @@ static int lfsck_layout_slave_post(const struct lu_env *env,
 				lfsck->li_pos_checkpoint.lp_oit_cookie;
 
 	if (result > 0) {
-		lo->ll_status = LS_SCANNING_PHASE2;
+		if (lo->ll_flags & LF_INCOMPLETE)
+			lo->ll_status = LS_PARTIAL;
+		else
+			lo->ll_status = LS_SCANNING_PHASE2;
 		lo->ll_flags |= LF_SCANNED_ONCE;
 		if (lo->ll_flags & LF_CRASHED_LASTID) {
 			done = true;
@@ -4706,6 +5008,8 @@ static void lfsck_layout_master_data_release(const struct lu_env *env,
 	}
 	spin_unlock(&ltds->ltd_lock);
 
+	CFS_FREE_BITMAP(lad->lad_bitmap);
+
 	OBD_FREE_PTR(lad);
 }
 
@@ -4790,10 +5094,16 @@ static int lfsck_layout_master_in_notify(const struct lu_env *env,
 	list_del_init(&ltd->ltd_layout_phase_list);
 	switch (lr->lr_event) {
 	case LE_PHASE1_DONE:
-		if (lr->lr_status <= 0) {
+		if (lr->lr_status <= 0 || lr->lr_flags2 & LF_INCOMPLETE) {
+			if (lr->lr_flags2 & LF_INCOMPLETE) {
+				if (lr->lr_flags & LEF_FROM_OST)
+					lfsck_lad_set_bitmap(env, com,
+							     ltd->ltd_index);
+				else
+					lo->ll_flags |= LF_INCOMPLETE;
+			}
 			ltd->ltd_layout_done = 1;
 			list_del_init(&ltd->ltd_layout_list);
-			lo->ll_flags |= LF_INCOMPLETE;
 			fail = true;
 			break;
 		}
@@ -4820,8 +5130,9 @@ static int lfsck_layout_master_in_notify(const struct lu_env *env,
 		fail = true;
 		ltd->ltd_layout_done = 1;
 		list_del_init(&ltd->ltd_layout_list);
-		if (!(lfsck->li_bookmark_ram.lb_param & LPF_FAILOUT))
-			lo->ll_flags |= LF_INCOMPLETE;
+		if (!(lfsck->li_bookmark_ram.lb_param & LPF_FAILOUT) &&
+		    !(lr->lr_flags & LEF_FROM_OST))
+				lo->ll_flags |= LF_INCOMPLETE;
 		break;
 	default:
 		break;
@@ -4892,6 +5203,24 @@ static int lfsck_layout_slave_in_notify(const struct lu_env *env,
 
 		RETURN(rc);
 	}
+	case LE_PHASE1_DONE: {
+		if (lr->lr_flags2 & LF_INCOMPLETE) {
+			struct lfsck_layout *lo = com->lc_file_ram;
+
+			lo->ll_flags |= LF_INCOMPLETE;
+			llst = lfsck_layout_llst_find_and_del(llsd,
+							      lr->lr_index,
+							      true);
+			if (llst != NULL) {
+				lfsck_layout_llst_put(llst);
+				if (list_empty(&llsd->llsd_master_list))
+					wake_up_all(
+						&lfsck->li_thread.t_ctl_waitq);
+			}
+		}
+
+		RETURN(0);
+	}
 	case LE_PHASE2_DONE:
 	case LE_PEER_EXIT:
 		CDEBUG(D_LFSCK, "%s: layout LFSCK slave handle notify %u "
@@ -4904,7 +5233,7 @@ static int lfsck_layout_slave_in_notify(const struct lu_env *env,
 
 	llst = lfsck_layout_llst_find_and_del(llsd, lr->lr_index, true);
 	if (llst == NULL)
-		RETURN(-ENXIO);
+		RETURN(0);
 
 	lfsck_layout_llst_put(llst);
 	if (list_empty(&llsd->llsd_master_list))
@@ -5029,6 +5358,7 @@ struct lfsck_assistant_operations lfsck_layout_assistant_ops = {
 	.la_fill_pos		= lfsck_layout_assistant_fill_pos,
 	.la_double_scan_result	= lfsck_layout_double_scan_result,
 	.la_req_fini		= lfsck_layout_assistant_req_fini,
+	.la_sync_failures	= lfsck_layout_assistant_sync_failures,
 };
 
 int lfsck_layout_setup(const struct lu_env *env, struct lfsck_instance *lfsck)
@@ -5125,7 +5455,8 @@ int lfsck_layout_setup(const struct lu_env *env, struct lfsck_instance *lfsck)
 		 * If the system crashed before the status stored,
 		 * it will be loaded back when next time. */
 		lo->ll_status = LS_CRASHED;
-		lo->ll_flags |= LF_INCOMPLETE;
+		if (!lfsck->li_master)
+			lo->ll_flags |= LF_INCOMPLETE;
 		/* fall through */
 	case LS_PAUSED:
 	case LS_CRASHED:
@@ -5305,6 +5636,7 @@ static struct dt_it *lfsck_orphan_it_init(const struct lu_env *env,
 	struct lfsck_component		*com	= NULL;
 	struct lfsck_layout_slave_data	*llsd;
 	struct lfsck_orphan_it		*it	= NULL;
+	struct lfsck_layout		*lo;
 	int				 rc	= 0;
 	ENTRY;
 
@@ -5315,6 +5647,10 @@ static struct dt_it *lfsck_orphan_it_init(const struct lu_env *env,
 	com = lfsck_component_find(lfsck, LFSCK_TYPE_LAYOUT);
 	if (unlikely(com == NULL))
 		GOTO(out, rc = -ENOENT);
+
+	lo = com->lc_file_ram;
+	if (lo->ll_flags & LF_INCOMPLETE)
+		GOTO(out, rc = -ESRCH);
 
 	llsd = com->lc_data;
 	if (!llsd->llsd_rbtree_valid)

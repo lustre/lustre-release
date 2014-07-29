@@ -1701,6 +1701,12 @@ lfsck_assistant_data_init(struct lfsck_assistant_operations *lao,
 
 	OBD_ALLOC_PTR(lad);
 	if (lad != NULL) {
+		lad->lad_bitmap = CFS_ALLOCATE_BITMAP(BITS_PER_LONG);
+		if (lad->lad_bitmap == NULL) {
+			OBD_FREE_PTR(lad);
+			return NULL;
+		}
+
 		INIT_LIST_HEAD(&lad->lad_req_list);
 		spin_lock_init(&lad->lad_lock);
 		INIT_LIST_HEAD(&lad->lad_ost_list);
@@ -1755,10 +1761,22 @@ int lfsck_async_interpret_common(const struct lu_env *env,
 			if (com->lc_type == LFSCK_TYPE_LAYOUT) {
 				struct lfsck_layout *lo = com->lc_file_ram;
 
-				lo->ll_flags |= LF_INCOMPLETE;
+				if (lr->lr_flags & LEF_TO_OST)
+					lfsck_lad_set_bitmap(env, com,
+							     ltd->ltd_index);
+				else
+					lo->ll_flags |= LF_INCOMPLETE;
 			} else {
 				struct lfsck_namespace *ns = com->lc_file_ram;
 
+				/* If some MDT does not join the namespace
+				 * LFSCK, then we cannot know whether there
+				 * is some name entry on such MDT that with
+				 * the referenced MDT-object on this MDT or
+				 * not. So the namespace LFSCK on this MDT
+				 * cannot handle orphan MDT-objects properly.
+				 * So we mark the LFSCK as LF_INCOMPLETE and
+				 * skip orphan MDT-objects handling. */
 				ns->ln_flags |= LF_INCOMPLETE;
 			}
 			break;
