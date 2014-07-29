@@ -91,48 +91,16 @@ struct lfsck_layout_object {
 	struct dt_object	*llo_obj;
 	struct lu_attr		 llo_attr;
 	atomic_t		 llo_ref;
+	__u64			 llo_cookie;
 	__u16			 llo_gen;
 };
 
 struct lfsck_layout_req {
-	struct list_head		 llr_list;
+	struct lfsck_assistant_req	 llr_lar;
 	struct lfsck_layout_object	*llr_parent;
 	struct dt_object		*llr_child;
 	__u32				 llr_ost_idx;
 	__u32				 llr_lov_idx; /* offset in LOV EA */
-};
-
-struct lfsck_layout_master_data {
-	spinlock_t		llmd_lock;
-	struct list_head	llmd_req_list;
-
-	/* list for the ost targets involve layout verification. */
-	struct list_head	llmd_ost_list;
-
-	/* list for the ost targets in phase1 scanning. */
-	struct list_head	llmd_ost_phase1_list;
-
-	/* list for the ost targets in phase1 scanning. */
-	struct list_head	llmd_ost_phase2_list;
-
-	/* list for the mdt targets involve layout verification. */
-	struct list_head	llmd_mdt_list;
-
-	/* list for the mdt targets in phase1 scanning. */
-	struct list_head	llmd_mdt_phase1_list;
-
-	/* list for the mdt targets in phase1 scanning. */
-	struct list_head	llmd_mdt_phase2_list;
-
-	struct ptlrpc_thread	llmd_thread;
-	__u32			llmd_touch_gen;
-	int			llmd_prefetched;
-	int			llmd_assistant_status;
-	int			llmd_post_result;
-	unsigned int		llmd_to_post:1,
-				llmd_to_double_scan:1,
-				llmd_in_double_scan:1,
-				llmd_exit:1;
 };
 
 struct lfsck_layout_slave_async_args {
@@ -143,7 +111,7 @@ struct lfsck_layout_slave_async_args {
 
 static struct lfsck_layout_object *
 lfsck_layout_object_init(const struct lu_env *env, struct dt_object *obj,
-			 __u16 gen)
+			 __u64 cookie, __u16 gen)
 {
 	struct lfsck_layout_object *llo;
 	int			    rc;
@@ -161,6 +129,7 @@ lfsck_layout_object_init(const struct lu_env *env, struct dt_object *obj,
 
 	lu_object_get(&obj->do_lu);
 	llo->llo_obj = obj;
+	llo->llo_cookie = cookie;
 	/* The gen can be used to check whether some others have changed the
 	 * file layout after LFSCK pre-fetching but before real verification. */
 	llo->llo_gen = gen;
@@ -262,8 +231,9 @@ static inline void lfsck_layout_object_put(const struct lu_env *env,
 }
 
 static struct lfsck_layout_req *
-lfsck_layout_req_init(struct lfsck_layout_object *parent,
-		      struct dt_object *child, __u32 ost_idx, __u32 lov_idx)
+lfsck_layout_assistant_req_init(struct lfsck_layout_object *parent,
+				struct dt_object *child, __u32 ost_idx,
+				__u32 lov_idx)
 {
 	struct lfsck_layout_req *llr;
 
@@ -271,7 +241,7 @@ lfsck_layout_req_init(struct lfsck_layout_object *parent,
 	if (llr == NULL)
 		return ERR_PTR(-ENOMEM);
 
-	INIT_LIST_HEAD(&llr->llr_list);
+	INIT_LIST_HEAD(&llr->llr_lar.lar_list);
 	atomic_inc(&parent->llo_ref);
 	llr->llr_parent = parent;
 	llr->llr_child = child;
@@ -281,24 +251,15 @@ lfsck_layout_req_init(struct lfsck_layout_object *parent,
 	return llr;
 }
 
-static inline void lfsck_layout_req_fini(const struct lu_env *env,
-					 struct lfsck_layout_req *llr)
+static void lfsck_layout_assistant_req_fini(const struct lu_env *env,
+					    struct lfsck_assistant_req *lar)
 {
+	struct lfsck_layout_req *llr =
+			container_of0(lar, struct lfsck_layout_req, llr_lar);
+
 	lu_object_put(env, &llr->llr_child->do_lu);
 	lfsck_layout_object_put(env, llr->llr_parent);
 	OBD_FREE_PTR(llr);
-}
-
-static inline bool lfsck_layout_req_empty(struct lfsck_layout_master_data *llmd)
-{
-	bool empty = false;
-
-	spin_lock(&llmd->llmd_lock);
-	if (list_empty(&llmd->llmd_req_list))
-		empty = true;
-	spin_unlock(&llmd->llmd_lock);
-
-	return empty;
 }
 
 static int lfsck_layout_get_lovea(const struct lu_env *env,
@@ -1155,14 +1116,17 @@ out:
 }
 
 static void lfsck_layout_record_failure(const struct lu_env *env,
-						 struct lfsck_instance *lfsck,
-						 struct lfsck_layout *lo)
+					struct lfsck_instance *lfsck,
+					struct lfsck_layout *lo)
 {
+	__u64 cookie;
+
 	lo->ll_objs_failed_phase1++;
-	if (unlikely(lo->ll_pos_first_inconsistent == 0)) {
-		lo->ll_pos_first_inconsistent =
-			lfsck->li_obj_oit->do_index_ops->dio_it.store(env,
+	cookie = lfsck->li_obj_oit->do_index_ops->dio_it.store(env,
 							lfsck->li_di_oit);
+	if (lo->ll_pos_first_inconsistent == 0 ||
+	    lo->ll_pos_first_inconsistent < cookie) {
+		lo->ll_pos_first_inconsistent = cookie;
 
 		CDEBUG(D_LFSCK, "%s: layout LFSCK hit first non-repaired "
 		       "inconsistency at the pos ["LPU64"]\n",
@@ -1171,429 +1135,12 @@ static void lfsck_layout_record_failure(const struct lu_env *env,
 	}
 }
 
-static int lfsck_layout_master_async_interpret(const struct lu_env *env,
-					       struct ptlrpc_request *req,
-					       void *args, int rc)
-{
-	struct lfsck_async_interpret_args *laia = args;
-	struct lfsck_component		  *com  = laia->laia_com;
-	struct lfsck_layout_master_data	  *llmd = com->lc_data;
-	struct lfsck_tgt_descs		  *ltds = laia->laia_ltds;
-	struct lfsck_tgt_desc		  *ltd  = laia->laia_ltd;
-	struct lfsck_request		  *lr   = laia->laia_lr;
-
-	switch (lr->lr_event) {
-	case LE_START:
-		if (rc != 0) {
-			struct lfsck_layout *lo = com->lc_file_ram;
-
-			CDEBUG(D_LFSCK, "%s: fail to notify %s %x for layout "
-			       "start: rc = %d\n",
-			       lfsck_lfsck2name(com->lc_lfsck),
-			       (lr->lr_flags & LEF_TO_OST) ? "OST" : "MDT",
-			       ltd->ltd_index, rc);
-			lo->ll_flags |= LF_INCOMPLETE;
-			break;
-		}
-
-		spin_lock(&ltds->ltd_lock);
-		if (ltd->ltd_dead || ltd->ltd_layout_done) {
-			spin_unlock(&ltds->ltd_lock);
-			break;
-		}
-
-		if (lr->lr_flags & LEF_TO_OST) {
-			if (list_empty(&ltd->ltd_layout_list))
-				list_add_tail(&ltd->ltd_layout_list,
-					      &llmd->llmd_ost_list);
-			if (list_empty(&ltd->ltd_layout_phase_list))
-				list_add_tail(&ltd->ltd_layout_phase_list,
-					      &llmd->llmd_ost_phase1_list);
-		} else {
-			if (list_empty(&ltd->ltd_layout_list))
-				list_add_tail(&ltd->ltd_layout_list,
-					      &llmd->llmd_mdt_list);
-			if (list_empty(&ltd->ltd_layout_phase_list))
-				list_add_tail(&ltd->ltd_layout_phase_list,
-					      &llmd->llmd_mdt_phase1_list);
-		}
-		spin_unlock(&ltds->ltd_lock);
-		break;
-	case LE_STOP:
-	case LE_PHASE1_DONE:
-	case LE_PHASE2_DONE:
-	case LE_PEER_EXIT:
-		if (rc != 0 && rc != -EALREADY)
-			CDEBUG(D_LFSCK, "%s: fail to notify %s %x for layout: "
-			       "event = %d, rc = %d\n",
-			       lfsck_lfsck2name(com->lc_lfsck),
-			       (lr->lr_flags & LEF_TO_OST) ? "OST" : "MDT",
-			       ltd->ltd_index, lr->lr_event, rc);
-		break;
-	case LE_QUERY: {
-		struct lfsck_reply *reply;
-
-		if (rc != 0) {
-			spin_lock(&ltds->ltd_lock);
-			list_del_init(&ltd->ltd_layout_phase_list);
-			list_del_init(&ltd->ltd_layout_list);
-			spin_unlock(&ltds->ltd_lock);
-			break;
-		}
-
-		reply = req_capsule_server_get(&req->rq_pill,
-					       &RMF_LFSCK_REPLY);
-		if (reply == NULL) {
-			rc = -EPROTO;
-			CDEBUG(D_LFSCK, "%s:  invalid query reply: rc = %d\n",
-			       lfsck_lfsck2name(com->lc_lfsck), rc);
-			spin_lock(&ltds->ltd_lock);
-			list_del_init(&ltd->ltd_layout_phase_list);
-			list_del_init(&ltd->ltd_layout_list);
-			spin_unlock(&ltds->ltd_lock);
-			break;
-		}
-
-		switch (reply->lr_status) {
-		case LS_SCANNING_PHASE1:
-			break;
-		case LS_SCANNING_PHASE2:
-			spin_lock(&ltds->ltd_lock);
-			list_del_init(&ltd->ltd_layout_phase_list);
-			if (ltd->ltd_dead || ltd->ltd_layout_done) {
-				spin_unlock(&ltds->ltd_lock);
-				break;
-			}
-
-			if (lr->lr_flags & LEF_TO_OST)
-				list_add_tail(&ltd->ltd_layout_phase_list,
-					      &llmd->llmd_ost_phase2_list);
-			else
-				list_add_tail(&ltd->ltd_layout_phase_list,
-					      &llmd->llmd_mdt_phase2_list);
-			spin_unlock(&ltds->ltd_lock);
-			break;
-		default:
-			spin_lock(&ltds->ltd_lock);
-			list_del_init(&ltd->ltd_layout_phase_list);
-			list_del_init(&ltd->ltd_layout_list);
-			spin_unlock(&ltds->ltd_lock);
-			break;
-		}
-		break;
-	}
-	default:
-		CDEBUG(D_LFSCK, "%s: layout LFSCK unexpected event: rc = %d\n",
-		       lfsck_lfsck2name(com->lc_lfsck), lr->lr_event);
-		break;
-	}
-
-	if (!laia->laia_shared) {
-		lfsck_tgt_put(ltd);
-		lfsck_component_put(env, com);
-	}
-
-	return 0;
-}
-
-static int lfsck_layout_master_query_others(const struct lu_env *env,
-					    struct lfsck_component *com)
-{
-	struct lfsck_thread_info	  *info  = lfsck_env_info(env);
-	struct lfsck_request		  *lr	 = &info->lti_lr;
-	struct lfsck_async_interpret_args *laia  = &info->lti_laia;
-	struct lfsck_instance		  *lfsck = com->lc_lfsck;
-	struct lfsck_layout_master_data	  *llmd  = com->lc_data;
-	struct ptlrpc_request_set	  *set;
-	struct lfsck_tgt_descs		  *ltds;
-	struct lfsck_tgt_desc		  *ltd;
-	struct list_head		  *head;
-	int				   rc    = 0;
-	int				   rc1   = 0;
-	ENTRY;
-
-	set = ptlrpc_prep_set();
-	if (set == NULL)
-		RETURN(-ENOMEM);
-
-	llmd->llmd_touch_gen++;
-	memset(lr, 0, sizeof(*lr));
-	lr->lr_index = lfsck_dev_idx(lfsck->li_bottom);
-	lr->lr_event = LE_QUERY;
-	lr->lr_active = LFSCK_TYPE_LAYOUT;
-	laia->laia_com = com;
-	laia->laia_lr = lr;
-	laia->laia_shared = 0;
-
-	if (!list_empty(&llmd->llmd_mdt_phase1_list)) {
-		ltds = &lfsck->li_mdt_descs;
-		lr->lr_flags = 0;
-		head = &llmd->llmd_mdt_phase1_list;
-	} else {
-
-again:
-		ltds = &lfsck->li_ost_descs;
-		lr->lr_flags = LEF_TO_OST;
-		head = &llmd->llmd_ost_phase1_list;
-	}
-
-	laia->laia_ltds = ltds;
-	spin_lock(&ltds->ltd_lock);
-	while (!list_empty(head)) {
-		ltd = list_entry(head->next,
-				 struct lfsck_tgt_desc,
-				 ltd_layout_phase_list);
-		if (ltd->ltd_layout_gen == llmd->llmd_touch_gen)
-			break;
-
-		ltd->ltd_layout_gen = llmd->llmd_touch_gen;
-		list_move_tail(&ltd->ltd_layout_phase_list, head);
-		atomic_inc(&ltd->ltd_ref);
-		laia->laia_ltd = ltd;
-		spin_unlock(&ltds->ltd_lock);
-		rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
-					 lfsck_layout_master_async_interpret,
-					 laia, LFSCK_QUERY);
-		if (rc != 0) {
-			CDEBUG(D_LFSCK, "%s: layout LFSCK fail to query %s %x: "
-			       "rc = %d\n", lfsck_lfsck2name(lfsck),
-			       (lr->lr_flags & LEF_TO_OST) ? "OST" : "MDT",
-			       ltd->ltd_index, rc);
-			lfsck_tgt_put(ltd);
-			rc1 = rc;
-		}
-		spin_lock(&ltds->ltd_lock);
-	}
-	spin_unlock(&ltds->ltd_lock);
-
-	rc = ptlrpc_set_wait(set);
-	if (rc < 0) {
-		ptlrpc_set_destroy(set);
-		RETURN(rc);
-	}
-
-	if (!(lr->lr_flags & LEF_TO_OST) &&
-	    list_empty(&llmd->llmd_mdt_phase1_list))
-		goto again;
-
-	ptlrpc_set_destroy(set);
-
-	RETURN(rc1 != 0 ? rc1 : rc);
-}
-
-static inline bool
-lfsck_layout_master_to_orphan(struct lfsck_layout_master_data *llmd)
-{
-	return list_empty(&llmd->llmd_mdt_phase1_list) &&
-	       (!list_empty(&llmd->llmd_ost_phase2_list) ||
-		list_empty(&llmd->llmd_ost_phase1_list));
-}
-
-static int lfsck_layout_master_notify_others(const struct lu_env *env,
-					     struct lfsck_component *com,
-					     struct lfsck_request *lr)
-{
-	struct lfsck_thread_info	  *info  = lfsck_env_info(env);
-	struct lfsck_async_interpret_args *laia  = &info->lti_laia;
-	struct lfsck_instance		  *lfsck = com->lc_lfsck;
-	struct lfsck_layout_master_data	  *llmd  = com->lc_data;
-	struct lfsck_layout		  *lo	 = com->lc_file_ram;
-	struct lfsck_bookmark		  *bk    = &lfsck->li_bookmark_ram;
-	struct ptlrpc_request_set	  *set;
-	struct lfsck_tgt_descs		  *ltds;
-	struct lfsck_tgt_desc		  *ltd;
-	struct lfsck_tgt_desc		  *next;
-	struct list_head		  *head;
-	__u32				   idx;
-	int				   rc    = 0;
-	ENTRY;
-
-	set = ptlrpc_prep_set();
-	if (set == NULL)
-		RETURN(-ENOMEM);
-
-	lr->lr_index = lfsck_dev_idx(lfsck->li_bottom);
-	lr->lr_active = LFSCK_TYPE_LAYOUT;
-	laia->laia_com = com;
-	laia->laia_lr = lr;
-	laia->laia_shared = 0;
-	switch (lr->lr_event) {
-	case LE_START:
-		/* Notify OSTs firstly, then handle other MDTs if needed. */
-		ltds = &lfsck->li_ost_descs;
-		laia->laia_ltds = ltds;
-		down_read(&ltds->ltd_rw_sem);
-		cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
-			ltd = lfsck_tgt_get(ltds, idx);
-			LASSERT(ltd != NULL);
-
-			laia->laia_ltd = ltd;
-			ltd->ltd_layout_done = 0;
-			rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
-					lfsck_layout_master_async_interpret,
-					laia, LFSCK_NOTIFY);
-			if (rc != 0) {
-				CDEBUG(D_LFSCK, "%s: layout LFSCK fail to "
-				       "notify %s %x for start: rc = %d\n",
-				       lfsck_lfsck2name(lfsck),
-				       (lr->lr_flags & LEF_TO_OST) ? "OST" :
-				       "MDT", idx, rc);
-				lfsck_tgt_put(ltd);
-				lo->ll_flags |= LF_INCOMPLETE;
-			}
-		}
-		up_read(&ltds->ltd_rw_sem);
-
-		/* Sync up */
-		rc = ptlrpc_set_wait(set);
-		if (rc < 0) {
-			ptlrpc_set_destroy(set);
-			RETURN(rc);
-		}
-
-		if (!(bk->lb_param & LPF_ALL_TGT))
-			break;
-
-		/* link other MDT targets locallly. */
-		ltds = &lfsck->li_mdt_descs;
-		spin_lock(&ltds->ltd_lock);
-		cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
-			ltd = LTD_TGT(ltds, idx);
-			LASSERT(ltd != NULL);
-
-			if (!list_empty(&ltd->ltd_layout_list))
-				continue;
-
-			list_add_tail(&ltd->ltd_layout_list,
-				      &llmd->llmd_mdt_list);
-			list_add_tail(&ltd->ltd_layout_phase_list,
-				      &llmd->llmd_mdt_phase1_list);
-		}
-		spin_unlock(&ltds->ltd_lock);
-		break;
-	case LE_STOP:
-	case LE_PHASE2_DONE:
-	case LE_PEER_EXIT: {
-		/* Handle other MDTs firstly if needed, then notify the OSTs. */
-		if (bk->lb_param & LPF_ALL_TGT) {
-			head = &llmd->llmd_mdt_list;
-			ltds = &lfsck->li_mdt_descs;
-			if (lr->lr_event == LE_STOP) {
-				/* unlink other MDT targets locallly. */
-				spin_lock(&ltds->ltd_lock);
-				list_for_each_entry_safe(ltd, next, head,
-							 ltd_layout_list) {
-					list_del_init(&ltd->ltd_layout_phase_list);
-					list_del_init(&ltd->ltd_layout_list);
-				}
-				spin_unlock(&ltds->ltd_lock);
-
-				lr->lr_flags |= LEF_TO_OST;
-				head = &llmd->llmd_ost_list;
-				ltds = &lfsck->li_ost_descs;
-			} else {
-				lr->lr_flags &= ~LEF_TO_OST;
-			}
-		} else {
-			lr->lr_flags |= LEF_TO_OST;
-			head = &llmd->llmd_ost_list;
-			ltds = &lfsck->li_ost_descs;
-		}
-
-again:
-		laia->laia_ltds = ltds;
-		spin_lock(&ltds->ltd_lock);
-		while (!list_empty(head)) {
-			ltd = list_entry(head->next, struct lfsck_tgt_desc,
-					 ltd_layout_list);
-			if (!list_empty(&ltd->ltd_layout_phase_list))
-				list_del_init(&ltd->ltd_layout_phase_list);
-			list_del_init(&ltd->ltd_layout_list);
-			atomic_inc(&ltd->ltd_ref);
-			laia->laia_ltd = ltd;
-			spin_unlock(&ltds->ltd_lock);
-			rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
-					lfsck_layout_master_async_interpret,
-					laia, LFSCK_NOTIFY);
-			if (rc != 0) {
-				CDEBUG(D_LFSCK, "%s: layout LFSCK fail to "
-				       "notify %s %x for stop/phase2_done/"
-				       "peer_exit: rc = %d\n",
-				       lfsck_lfsck2name(lfsck),
-				       (lr->lr_flags & LEF_TO_OST) ? "OST" :
-				       "MDT", ltd->ltd_index, rc);
-				lfsck_tgt_put(ltd);
-			}
-			spin_lock(&ltds->ltd_lock);
-		}
-		spin_unlock(&ltds->ltd_lock);
-
-		rc = ptlrpc_set_wait(set);
-		if (rc < 0) {
-			ptlrpc_set_destroy(set);
-			RETURN(rc);
-		}
-
-		if (!(lr->lr_flags & LEF_TO_OST)) {
-			lr->lr_flags |= LEF_TO_OST;
-			head = &llmd->llmd_ost_list;
-			ltds = &lfsck->li_ost_descs;
-			goto again;
-		}
-		break;
-	}
-	case LE_PHASE1_DONE:
-		llmd->llmd_touch_gen++;
-		ltds = &lfsck->li_mdt_descs;
-		laia->laia_ltds = ltds;
-		spin_lock(&ltds->ltd_lock);
-		while (!list_empty(&llmd->llmd_mdt_phase1_list)) {
-			ltd = list_entry(llmd->llmd_mdt_phase1_list.next,
-					 struct lfsck_tgt_desc,
-					 ltd_layout_phase_list);
-			if (ltd->ltd_layout_gen == llmd->llmd_touch_gen)
-				break;
-
-			ltd->ltd_layout_gen = llmd->llmd_touch_gen;
-			list_move_tail(&ltd->ltd_layout_phase_list,
-				       &llmd->llmd_mdt_phase1_list);
-			atomic_inc(&ltd->ltd_ref);
-			laia->laia_ltd = ltd;
-			spin_unlock(&ltds->ltd_lock);
-			rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
-					lfsck_layout_master_async_interpret,
-					laia, LFSCK_NOTIFY);
-			if (rc != 0) {
-				CDEBUG(D_LFSCK, "%s: layout LFSCK fail to "
-				       "notify MDT %x for phase1_done: "
-				       "rc = %d\n", lfsck_lfsck2name(lfsck),
-				       ltd->ltd_index, rc);
-				lfsck_tgt_put(ltd);
-			}
-			spin_lock(&ltds->ltd_lock);
-		}
-		spin_unlock(&ltds->ltd_lock);
-		break;
-	default:
-		CDEBUG(D_LFSCK, "%s: layout LFSCK unexpected event: rc = %d\n",
-		       lfsck_lfsck2name(lfsck), lr->lr_event);
-		rc = -EINVAL;
-		break;
-	}
-
-	rc = ptlrpc_set_wait(set);
-	ptlrpc_set_destroy(set);
-
-	RETURN(rc);
-}
-
 static int lfsck_layout_double_scan_result(const struct lu_env *env,
 					   struct lfsck_component *com,
 					   int rc)
 {
 	struct lfsck_instance	*lfsck = com->lc_lfsck;
 	struct lfsck_layout	*lo    = com->lc_file_ram;
-	struct lfsck_bookmark	*bk    = &lfsck->li_bookmark_ram;
 
 	down_write(&com->lc_sem);
 	lo->ll_run_time_phase2 += cfs_duration_sec(cfs_time_current() +
@@ -1607,7 +1154,7 @@ static int lfsck_layout_double_scan_result(const struct lu_env *env,
 			lo->ll_status = LS_PARTIAL;
 		else
 			lo->ll_status = LS_COMPLETED;
-		if (!(bk->lb_param & LPF_DRYRUN))
+		if (!(lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN))
 			lo->ll_flags &= ~(LF_SCANNED_ONCE | LF_INCONSISTENT);
 		lo->ll_time_last_complete = lo->ll_time_last_checkpoint;
 		lo->ll_success_count++;
@@ -1911,7 +1458,7 @@ out:
  *
  *  type "R":		The orphan OST-object knows its parent MDT-object FID,
  *			but does not know the position (the file name) in the
- *			namespace.
+ *			layout.
  *
  * The orphan name will be like:
  * ${FID}-${infix}-${type}-${conflict_version}
@@ -3375,10 +2922,12 @@ out:
 	return rc;
 }
 
-static int lfsck_layout_assistant_handle_one(const struct lu_env *env,
+static int lfsck_layout_assistant_handler_p1(const struct lu_env *env,
 					     struct lfsck_component *com,
-					     struct lfsck_layout_req *llr)
+					     struct lfsck_assistant_req *lar)
 {
+	struct lfsck_layout_req		     *llr    =
+			container_of0(lar, struct lfsck_layout_req, llr_lar);
 	struct lfsck_layout		     *lo     = com->lc_file_ram;
 	struct lfsck_thread_info	     *info   = lfsck_env_info(env);
 	struct filter_fid_old		     *pea    = &info->lti_old_pfid;
@@ -3485,9 +3034,9 @@ repair:
 out:
 	down_write(&com->lc_sem);
 	if (rc < 0) {
-		struct lfsck_layout_master_data *llmd = com->lc_data;
+		struct lfsck_assistant_data *lad = com->lc_data;
 
-		if (unlikely(llmd->llmd_exit)) {
+		if (unlikely(lad->lad_exit)) {
 			rc = 0;
 		} else if (rc == -ENOTCONN || rc == -ESHUTDOWN ||
 			   rc == -ETIMEDOUT || rc == -EHOSTDOWN ||
@@ -3519,302 +3068,43 @@ out:
 	return rc;
 }
 
-static int lfsck_layout_assistant(void *args)
+static int lfsck_layout_assistant_handler_p2(const struct lu_env *env,
+					     struct lfsck_component *com)
 {
-	struct lfsck_thread_args	*lta	 = args;
-	struct lu_env			*env	 = &lta->lta_env;
-	struct lfsck_component		*com     = lta->lta_com;
-	struct lfsck_instance		*lfsck   = lta->lta_lfsck;
-	struct lfsck_bookmark		*bk	 = &lfsck->li_bookmark_ram;
-	struct lfsck_position		*pos	 = &com->lc_pos_start;
-	struct lfsck_thread_info	*info	 = lfsck_env_info(env);
-	struct lfsck_request		*lr	 = &info->lti_lr;
-	struct lfsck_layout_master_data *llmd    = com->lc_data;
-	struct ptlrpc_thread		*mthread = &lfsck->li_thread;
-	struct ptlrpc_thread		*athread = &llmd->llmd_thread;
-	struct lfsck_layout_req		*llr;
-	struct l_wait_info		 lwi     = { 0 };
-	int				 rc	 = 0;
-	int				 rc1	 = 0;
+	struct lfsck_assistant_data	*lad	= com->lc_data;
+	struct lfsck_instance		*lfsck	= com->lc_lfsck;
+	struct lfsck_bookmark		*bk     = &lfsck->li_bookmark_ram;
+	struct lfsck_tgt_descs		*ltds	= &lfsck->li_ost_descs;
+	struct lfsck_tgt_desc		*ltd;
+	int				 rc	= 0;
 	ENTRY;
 
-	memset(lr, 0, sizeof(*lr));
-	lr->lr_event = LE_START;
-	lr->lr_valid = LSV_SPEED_LIMIT | LSV_ERROR_HANDLE | LSV_DRYRUN |
-		       LSV_ASYNC_WINDOWS | LSV_CREATE_OSTOBJ;
-	lr->lr_speed = bk->lb_speed_limit;
-	lr->lr_version = bk->lb_version;
-	lr->lr_param = bk->lb_param;
-	lr->lr_async_windows = bk->lb_async_windows;
-	lr->lr_flags = LEF_TO_OST;
-	if (pos->lp_oit_cookie <= 1)
-		lr->lr_param |= LPF_RESET;
+	spin_lock(&ltds->ltd_lock);
+	while (!list_empty(&lad->lad_ost_phase2_list)) {
+		ltd = list_entry(lad->lad_ost_phase2_list.next,
+				 struct lfsck_tgt_desc,
+				 ltd_layout_phase_list);
+		list_del_init(&ltd->ltd_layout_phase_list);
+		if (bk->lb_param & LPF_ALL_TGT) {
+			spin_unlock(&ltds->ltd_lock);
+			rc = lfsck_layout_scan_orphan(env, com, ltd);
+			if (rc != 0 && bk->lb_param & LPF_FAILOUT)
+				RETURN(rc);
 
-	rc = lfsck_layout_master_notify_others(env, com, lr);
-	if (rc != 0) {
-		CDEBUG(D_LFSCK, "%s: layout LFSCK assistant failed to notify "
-		       "others for LFSCK start: rc = %d\n",
-		       lfsck_lfsck2name(lfsck), rc);
-		GOTO(fini, rc);
-	}
-
-	spin_lock(&llmd->llmd_lock);
-	thread_set_flags(athread, SVC_RUNNING);
-	spin_unlock(&llmd->llmd_lock);
-	wake_up_all(&mthread->t_ctl_waitq);
-
-	while (1) {
-		while (!list_empty(&llmd->llmd_req_list)) {
-			bool wakeup = false;
-
-			if (unlikely(llmd->llmd_exit ||
-				     !thread_is_running(mthread)))
-				GOTO(cleanup1, rc = llmd->llmd_post_result);
-
-			llr = list_entry(llmd->llmd_req_list.next,
-					 struct lfsck_layout_req,
-					 llr_list);
-			/* Only the lfsck_layout_assistant thread itself can
-			 * remove the "llr" from the head of the list, LFSCK
-			 * engine thread only inserts other new "lld" at the
-			 * end of the list. So it is safe to handle current
-			 * "llr" without the spin_lock. */
-			rc = lfsck_layout_assistant_handle_one(env, com, llr);
-			spin_lock(&llmd->llmd_lock);
-			list_del_init(&llr->llr_list);
-			llmd->llmd_prefetched--;
-			/* Wake up the main engine thread only when the list
-			 * is empty or half of the prefetched items have been
-			 * handled to avoid too frequent thread schedule. */
-			if (llmd->llmd_prefetched == 0 ||
-			    (bk->lb_async_windows != 0 &&
-			     bk->lb_async_windows / 2 ==
-			     llmd->llmd_prefetched))
-				wakeup = true;
-			spin_unlock(&llmd->llmd_lock);
-			if (wakeup)
-				wake_up_all(&mthread->t_ctl_waitq);
-
-			lfsck_layout_req_fini(env, llr);
-			if (rc < 0 && bk->lb_param & LPF_FAILOUT)
-				GOTO(cleanup1, rc);
-		}
-
-		l_wait_event(athread->t_ctl_waitq,
-			     !lfsck_layout_req_empty(llmd) ||
-			     llmd->llmd_exit ||
-			     llmd->llmd_to_post ||
-			     llmd->llmd_to_double_scan,
-			     &lwi);
-
-		if (unlikely(llmd->llmd_exit))
-			GOTO(cleanup1, rc = llmd->llmd_post_result);
-
-		if (!list_empty(&llmd->llmd_req_list))
-			continue;
-
-		if (llmd->llmd_to_post) {
-			llmd->llmd_to_post = 0;
-			LASSERT(llmd->llmd_post_result > 0);
-
-			memset(lr, 0, sizeof(*lr));
-			lr->lr_event = LE_PHASE1_DONE;
-			lr->lr_status = llmd->llmd_post_result;
-			rc = lfsck_layout_master_notify_others(env, com, lr);
-			if (rc != 0)
-				CDEBUG(D_LFSCK, "%s: layout LFSCK assistant "
-				       "failed to notify others for LFSCK "
-				       "post: rc = %d\n",
-				       lfsck_lfsck2name(lfsck), rc);
-
-			/* Wakeup the master engine to go ahead. */
-			wake_up_all(&mthread->t_ctl_waitq);
-		}
-
-		if (llmd->llmd_to_double_scan) {
-			llmd->llmd_to_double_scan = 0;
-			atomic_inc(&lfsck->li_double_scan_count);
-			llmd->llmd_in_double_scan = 1;
-			wake_up_all(&mthread->t_ctl_waitq);
-
-			CDEBUG(D_LFSCK, "%s: layout LFSCK assistant phase2 "
-			       "scan start\n", lfsck_lfsck2name(lfsck));
-
-			com->lc_new_checked = 0;
-			com->lc_new_scanned = 0;
-			com->lc_time_last_checkpoint = cfs_time_current();
-			com->lc_time_next_checkpoint =
-				com->lc_time_last_checkpoint +
-				cfs_time_seconds(LFSCK_CHECKPOINT_INTERVAL);
-
-			/* flush all async updating before handling orphan. */
-			dt_sync(env, lfsck->li_next);
-
-			while (llmd->llmd_in_double_scan) {
-				struct lfsck_tgt_descs	*ltds =
-							&lfsck->li_ost_descs;
-				struct lfsck_tgt_desc	*ltd;
-
-				rc = lfsck_layout_master_query_others(env, com);
-				if (lfsck_layout_master_to_orphan(llmd))
-					goto orphan;
-
-				if (rc < 0)
-					GOTO(cleanup2, rc);
-
-				/* Pull LFSCK status on related targets once
-				 * per 30 seconds if we are not notified. */
-				lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(30),
-							   cfs_time_seconds(1),
-							   NULL, NULL);
-				rc = l_wait_event(athread->t_ctl_waitq,
-					lfsck_layout_master_to_orphan(llmd) ||
-					llmd->llmd_exit ||
-					!thread_is_running(mthread),
-					&lwi);
-
-				if (unlikely(llmd->llmd_exit ||
-					     !thread_is_running(mthread)))
-					GOTO(cleanup2, rc = 0);
-
-				if (rc == -ETIMEDOUT)
-					continue;
-
-				if (rc < 0)
-					GOTO(cleanup2, rc);
-
-orphan:
-				spin_lock(&ltds->ltd_lock);
-				while (!list_empty(
-						&llmd->llmd_ost_phase2_list)) {
-					ltd = list_entry(
-					      llmd->llmd_ost_phase2_list.next,
-					      struct lfsck_tgt_desc,
-					      ltd_layout_phase_list);
-					list_del_init(
-						&ltd->ltd_layout_phase_list);
-					spin_unlock(&ltds->ltd_lock);
-
-					if (bk->lb_param & LPF_ALL_TGT) {
-						rc = lfsck_layout_scan_orphan(
-								env, com, ltd);
-						if (rc != 0 &&
-						    bk->lb_param & LPF_FAILOUT)
-							GOTO(cleanup2, rc);
-					}
-
-					if (unlikely(llmd->llmd_exit ||
-						!thread_is_running(mthread)))
-						GOTO(cleanup2, rc = 0);
-
-					spin_lock(&ltds->ltd_lock);
-				}
-
-				if (list_empty(&llmd->llmd_ost_phase1_list)) {
-					spin_unlock(&ltds->ltd_lock);
-					GOTO(cleanup2, rc = 1);
-				}
-				spin_unlock(&ltds->ltd_lock);
-			}
+			if (unlikely(lad->lad_exit ||
+				     !thread_is_running(&lfsck->li_thread)))
+				RETURN(0);
+			spin_lock(&ltds->ltd_lock);
 		}
 	}
 
-cleanup1:
-	/* Cleanup the unfinished requests. */
-	spin_lock(&llmd->llmd_lock);
-	if (rc < 0)
-		llmd->llmd_assistant_status = rc;
+	if (list_empty(&lad->lad_ost_phase1_list))
+		rc = 1;
+	else
+		rc = 0;
+	spin_unlock(&ltds->ltd_lock);
 
-	while (!list_empty(&llmd->llmd_req_list)) {
-		llr = list_entry(llmd->llmd_req_list.next,
-				 struct lfsck_layout_req,
-				 llr_list);
-		list_del_init(&llr->llr_list);
-		llmd->llmd_prefetched--;
-		spin_unlock(&llmd->llmd_lock);
-		lfsck_layout_req_fini(env, llr);
-		spin_lock(&llmd->llmd_lock);
-	}
-	spin_unlock(&llmd->llmd_lock);
-
-	LASSERTF(llmd->llmd_prefetched == 0, "unmatched prefeteched objs %d\n",
-		 llmd->llmd_prefetched);
-
-cleanup2:
-	memset(lr, 0, sizeof(*lr));
-	if (rc > 0) {
-		lr->lr_event = LE_PHASE2_DONE;
-		lr->lr_status = rc;
-	} else if (rc == 0) {
-		if (lfsck->li_flags & LPF_ALL_TGT) {
-			lr->lr_event = LE_STOP;
-			lr->lr_status = LS_STOPPED;
-		} else {
-			lr->lr_event = LE_PEER_EXIT;
-			switch (lfsck->li_status) {
-			case LS_PAUSED:
-			case LS_CO_PAUSED:
-				lr->lr_status = LS_CO_PAUSED;
-				break;
-			case LS_STOPPED:
-			case LS_CO_STOPPED:
-				lr->lr_status = LS_CO_STOPPED;
-				break;
-			default:
-				CDEBUG(D_LFSCK, "%s: unknown status: rc = %d\n",
-				       lfsck_lfsck2name(lfsck),
-				       lfsck->li_status);
-				lr->lr_status = LS_CO_FAILED;
-				break;
-			}
-		}
-	} else {
-		if (lfsck->li_flags & LPF_ALL_TGT) {
-			lr->lr_event = LE_STOP;
-			lr->lr_status = LS_FAILED;
-		} else {
-			lr->lr_event = LE_PEER_EXIT;
-			lr->lr_status = LS_CO_FAILED;
-		}
-	}
-
-	rc1 = lfsck_layout_master_notify_others(env, com, lr);
-	if (rc1 != 0) {
-		CDEBUG(D_LFSCK, "%s: layout LFSCK assistant failed to "
-		       "notify others for LFSCK quit: rc = %d\n",
-		       lfsck_lfsck2name(lfsck), rc1);
-		rc = rc1;
-	}
-
-	/* flush all async updating before exit. */
-	dt_sync(env, lfsck->li_next);
-
-	/* Under force exit case, some requests may be just freed without
-	 * verification, those objects should be re-handled when next run.
-	 * So not update the on-disk tracing file under such case. */
-	if (llmd->llmd_in_double_scan) {
-		struct lfsck_layout *lo = com->lc_file_ram;
-
-		if (!llmd->llmd_exit)
-			rc1 = lfsck_layout_double_scan_result(env, com, rc);
-
-		CDEBUG(D_LFSCK, "%s: layout LFSCK assistant phase2 scan "
-		       "finished, status %d: rc = %d\n",
-		       lfsck_lfsck2name(lfsck), lo->ll_status, rc1);
-	}
-
-fini:
-	if (llmd->llmd_in_double_scan)
-		atomic_dec(&lfsck->li_double_scan_count);
-
-	spin_lock(&llmd->llmd_lock);
-	llmd->llmd_assistant_status = (rc1 != 0 ? rc1 : rc);
-	thread_set_flags(athread, SVC_STOPPED);
-	wake_up_all(&mthread->t_ctl_waitq);
-	spin_unlock(&llmd->llmd_lock);
-	lfsck_thread_args_fini(lta);
-
-	return rc;
+	RETURN(rc);
 }
 
 static int
@@ -4326,32 +3616,23 @@ static void lfsck_layout_fail(const struct lu_env *env,
 static int lfsck_layout_master_checkpoint(const struct lu_env *env,
 					  struct lfsck_component *com, bool init)
 {
-	struct lfsck_instance		*lfsck	 = com->lc_lfsck;
-	struct lfsck_layout		*lo	 = com->lc_file_ram;
-	struct lfsck_layout_master_data *llmd	 = com->lc_data;
-	struct ptlrpc_thread		*mthread = &lfsck->li_thread;
-	struct ptlrpc_thread		*athread = &llmd->llmd_thread;
-	struct l_wait_info		 lwi	 = { 0 };
-	int				 rc;
+	struct lfsck_instance	*lfsck	 = com->lc_lfsck;
+	struct lfsck_layout	*lo	 = com->lc_file_ram;
+	int			 rc;
 
-	if (com->lc_new_checked == 0 && !init)
-		return 0;
-
-	l_wait_event(mthread->t_ctl_waitq,
-		     list_empty(&llmd->llmd_req_list) ||
-		     !thread_is_running(mthread) ||
-		     thread_is_stopped(athread),
-		     &lwi);
-
-	if (!thread_is_running(mthread) || thread_is_stopped(athread))
-		return 0;
+	if (!init) {
+		rc = lfsck_checkpoint_generic(env, com);
+		if (rc != 0)
+			return rc > 0 ? 0 : rc;
+	}
 
 	down_write(&com->lc_sem);
 	if (init) {
-		lo->ll_pos_latest_start = lfsck->li_pos_current.lp_oit_cookie;
+		lo->ll_pos_latest_start =
+				lfsck->li_pos_checkpoint.lp_oit_cookie;
 	} else {
 		lo->ll_pos_last_checkpoint =
-					lfsck->li_pos_current.lp_oit_cookie;
+				lfsck->li_pos_checkpoint.lp_oit_cookie;
 		lo->ll_run_time_phase1 += cfs_duration_sec(cfs_time_current() +
 				HALF_SEC - lfsck->li_time_last_checkpoint);
 		lo->ll_time_last_checkpoint = cfs_time_current_sec();
@@ -4381,10 +3662,11 @@ static int lfsck_layout_slave_checkpoint(const struct lu_env *env,
 
 	down_write(&com->lc_sem);
 	if (init) {
-		lo->ll_pos_latest_start = lfsck->li_pos_current.lp_oit_cookie;
+		lo->ll_pos_latest_start =
+				lfsck->li_pos_checkpoint.lp_oit_cookie;
 	} else {
 		lo->ll_pos_last_checkpoint =
-					lfsck->li_pos_current.lp_oit_cookie;
+				lfsck->li_pos_checkpoint.lp_oit_cookie;
 		lo->ll_run_time_phase1 += cfs_duration_sec(cfs_time_current() +
 				HALF_SEC - lfsck->li_time_last_checkpoint);
 		lo->ll_time_last_checkpoint = cfs_time_current_sec();
@@ -4515,52 +3797,17 @@ static int lfsck_layout_master_prep(const struct lu_env *env,
 				    struct lfsck_component *com,
 				    struct lfsck_start_param *lsp)
 {
-	struct lfsck_instance		*lfsck   = com->lc_lfsck;
-	struct lfsck_layout_master_data *llmd    = com->lc_data;
-	struct ptlrpc_thread		*mthread = &lfsck->li_thread;
-	struct ptlrpc_thread		*athread = &llmd->llmd_thread;
-	struct lfsck_thread_args	*lta;
-	struct task_struct		*task;
-	int				 rc;
+	int rc;
 	ENTRY;
 
 	rc = lfsck_layout_prep(env, com, lsp->lsp_start);
 	if (rc != 0)
 		RETURN(rc);
 
-	llmd->llmd_assistant_status = 0;
-	llmd->llmd_post_result = 0;
-	llmd->llmd_to_post = 0;
-	llmd->llmd_to_double_scan = 0;
-	llmd->llmd_in_double_scan = 0;
-	llmd->llmd_exit = 0;
-	thread_set_flags(athread, 0);
-
-	lta = lfsck_thread_args_init(lfsck, com, lsp);
-	if (IS_ERR(lta))
-		RETURN(PTR_ERR(lta));
-
-	task = kthread_run(lfsck_layout_assistant, lta, "lfsck_layout");
-	if (IS_ERR(task)) {
-		rc = PTR_ERR(task);
-		CERROR("%s: cannot start LFSCK layout assistant thread: "
-		       "rc = %d\n", lfsck_lfsck2name(lfsck), rc);
-		lfsck_thread_args_fini(lta);
-	} else {
-		struct l_wait_info lwi = { 0 };
-
-		l_wait_event(mthread->t_ctl_waitq,
-			     thread_is_running(athread) ||
-			     thread_is_stopped(athread),
-			     &lwi);
-		if (unlikely(!thread_is_running(athread)))
-			rc = llmd->llmd_assistant_status;
-		else
-			rc = 0;
-	}
+	rc = lfsck_start_assistant(env, com, lsp);
 
 	CDEBUG(D_LFSCK, "%s: layout LFSCK master prep done, start pos ["
-	       LPU64"\n", lfsck_lfsck2name(lfsck),
+	       LPU64"\n", lfsck_lfsck2name(com->lc_lfsck),
 	       com->lc_pos_start.lp_oit_cookie);
 
 	RETURN(rc);
@@ -4576,13 +3823,13 @@ static int lfsck_layout_scan_stripes(const struct lu_env *env,
 	struct lfsck_instance		*lfsck	 = com->lc_lfsck;
 	struct lfsck_bookmark		*bk	 = &lfsck->li_bookmark_ram;
 	struct lfsck_layout		*lo	 = com->lc_file_ram;
-	struct lfsck_layout_master_data *llmd	 = com->lc_data;
+	struct lfsck_assistant_data	*lad	 = com->lc_data;
 	struct lfsck_layout_object	*llo 	 = NULL;
 	struct lov_ost_data_v1		*objs;
 	struct lfsck_tgt_descs		*ltds	 = &lfsck->li_ost_descs;
 	struct ptlrpc_thread		*mthread = &lfsck->li_thread;
-	struct ptlrpc_thread		*athread = &llmd->llmd_thread;
-		struct l_wait_info	 lwi	 = { 0 };
+	struct ptlrpc_thread		*athread = &lad->lad_thread;
+	struct l_wait_info		 lwi	 = { 0 };
 	struct lu_buf			 buf;
 	int				 rc	 = 0;
 	int				 i;
@@ -4621,7 +3868,7 @@ static int lfsck_layout_scan_stripes(const struct lu_env *env,
 
 		l_wait_event(mthread->t_ctl_waitq,
 			     bk->lb_async_windows == 0 ||
-			     llmd->llmd_prefetched < bk->lb_async_windows ||
+			     lad->lad_prefetched < bk->lb_async_windows ||
 			     !thread_is_running(mthread) ||
 			     thread_is_stopped(athread),
 			     &lwi);
@@ -4704,34 +3951,35 @@ static int lfsck_layout_scan_stripes(const struct lu_env *env,
 			goto next;
 
 		if (llo == NULL) {
-			llo = lfsck_layout_object_init(env, parent, gen);
+			llo = lfsck_layout_object_init(env, parent,
+				lfsck->li_pos_current.lp_oit_cookie, gen);
 			if (IS_ERR(llo)) {
 				rc = PTR_ERR(llo);
 				goto next;
 			}
 		}
 
-		llr = lfsck_layout_req_init(llo, cobj, index, i);
+		llr = lfsck_layout_assistant_req_init(llo, cobj, index, i);
 		if (IS_ERR(llr)) {
 			rc = PTR_ERR(llr);
 			goto next;
 		}
 
 		cobj = NULL;
-		spin_lock(&llmd->llmd_lock);
-		if (llmd->llmd_assistant_status < 0) {
-			spin_unlock(&llmd->llmd_lock);
-			lfsck_layout_req_fini(env, llr);
+		spin_lock(&lad->lad_lock);
+		if (lad->lad_assistant_status < 0) {
+			spin_unlock(&lad->lad_lock);
+			lfsck_layout_assistant_req_fini(env, &llr->llr_lar);
 			lfsck_tgt_put(tgt);
-			RETURN(llmd->llmd_assistant_status);
+			RETURN(lad->lad_assistant_status);
 		}
 
-		list_add_tail(&llr->llr_list, &llmd->llmd_req_list);
-		if (llmd->llmd_prefetched == 0)
+		list_add_tail(&llr->llr_lar.lar_list, &lad->lad_req_list);
+		if (lad->lad_prefetched == 0)
 			wakeup = true;
 
-		llmd->llmd_prefetched++;
-		spin_unlock(&llmd->llmd_lock);
+		lad->lad_prefetched++;
+		spin_unlock(&lad->lad_lock);
 		if (wakeup)
 			wake_up_all(&athread->t_ctl_waitq);
 
@@ -4763,7 +4011,7 @@ out:
 
 /* For the given object, read its layout EA locally. For each stripe, pre-fetch
  * the OST-object's attribute and generate an structure lfsck_layout_req on the
- * list ::llmd_req_list.
+ * list ::lad_req_list.
  *
  * For each request on above list, the lfsck_layout_assistant thread compares
  * the OST side attribute with local attribute, if inconsistent, then repair it.
@@ -4776,7 +4024,7 @@ static int lfsck_layout_master_exec_oit(const struct lu_env *env,
 	struct lfsck_thread_info	*info	= lfsck_env_info(env);
 	struct ost_id			*oi	= &info->lti_oi;
 	struct lfsck_layout		*lo	= com->lc_file_ram;
-	struct lfsck_layout_master_data *llmd	= com->lc_data;
+	struct lfsck_assistant_data	*lad	= com->lc_data;
 	struct lfsck_instance		*lfsck	= com->lc_lfsck;
 	struct lfsck_bookmark		*bk	= &lfsck->li_bookmark_ram;
 	struct thandle			*handle = NULL;
@@ -4795,7 +4043,7 @@ static int lfsck_layout_master_exec_oit(const struct lu_env *env,
 	if (!S_ISREG(lfsck_object_type(obj)))
 		GOTO(out, rc = 0);
 
-	if (llmd->llmd_assistant_status < 0)
+	if (lad->lad_assistant_status < 0)
 		GOTO(out, rc = -ESRCH);
 
 	fid_to_lmm_oi(lfsck_dto2fid(obj), oi);
@@ -5022,8 +4270,7 @@ unlock:
 
 static int lfsck_layout_exec_dir(const struct lu_env *env,
 				 struct lfsck_component *com,
-				 struct dt_object *obj,
-				 struct lu_dirent *ent)
+				 struct lu_dirent *ent, __u16 type)
 {
 	return 0;
 }
@@ -5032,38 +4279,18 @@ static int lfsck_layout_master_post(const struct lu_env *env,
 				    struct lfsck_component *com,
 				    int result, bool init)
 {
-	struct lfsck_instance		*lfsck   = com->lc_lfsck;
-	struct lfsck_layout		*lo	 = com->lc_file_ram;
-	struct lfsck_layout_master_data *llmd	 = com->lc_data;
-	struct ptlrpc_thread		*mthread = &lfsck->li_thread;
-	struct ptlrpc_thread		*athread = &llmd->llmd_thread;
-	struct l_wait_info		 lwi	 = { 0 };
-	int				 rc;
+	struct lfsck_instance	*lfsck	= com->lc_lfsck;
+	struct lfsck_layout	*lo	= com->lc_file_ram;
+	int			 rc;
 	ENTRY;
 
-
-	llmd->llmd_post_result = result;
-	llmd->llmd_to_post = 1;
-	if (llmd->llmd_post_result <= 0)
-		llmd->llmd_exit = 1;
-
-	wake_up_all(&athread->t_ctl_waitq);
-	l_wait_event(mthread->t_ctl_waitq,
-		     (result > 0 && list_empty(&llmd->llmd_req_list)) ||
-		     thread_is_stopped(athread),
-		     &lwi);
-
-	if (llmd->llmd_assistant_status < 0)
-		result = llmd->llmd_assistant_status;
+	lfsck_post_generic(env, com, &result);
 
 	down_write(&com->lc_sem);
 	spin_lock(&lfsck->li_lock);
-	/* When LFSCK failed, there may be some prefetched objects those are
-	 * not been processed yet, we do not know the exactly position, then
-	 * just restart from last check-point next time. */
-	if (!init && !llmd->llmd_exit)
+	if (!init)
 		lo->ll_pos_last_checkpoint =
-					lfsck->li_pos_current.lp_oit_cookie;
+				lfsck->li_pos_checkpoint.lp_oit_cookie;
 
 	if (result > 0) {
 		lo->ll_status = LS_SCANNING_PHASE2;
@@ -5119,7 +4346,8 @@ static int lfsck_layout_slave_post(const struct lu_env *env,
 	spin_lock(&lfsck->li_lock);
 	if (!init)
 		lo->ll_pos_last_checkpoint =
-					lfsck->li_pos_current.lp_oit_cookie;
+				lfsck->li_pos_checkpoint.lp_oit_cookie;
+
 	if (result > 0) {
 		lo->ll_status = LS_SCANNING_PHASE2;
 		lo->ll_flags |= LF_SCANNED_ONCE;
@@ -5353,25 +4581,9 @@ out:
 static int lfsck_layout_master_double_scan(const struct lu_env *env,
 					   struct lfsck_component *com)
 {
-	struct lfsck_layout_master_data *llmd    = com->lc_data;
-	struct ptlrpc_thread		*mthread = &com->lc_lfsck->li_thread;
-	struct ptlrpc_thread		*athread = &llmd->llmd_thread;
-	struct lfsck_layout		*lo	 = com->lc_file_ram;
-	struct l_wait_info		 lwi	 = { 0 };
+	struct lfsck_layout *lo = com->lc_file_ram;
 
-	if (unlikely(lo->ll_status != LS_SCANNING_PHASE2))
-		return 0;
-
-	llmd->llmd_to_double_scan = 1;
-	wake_up_all(&athread->t_ctl_waitq);
-	l_wait_event(mthread->t_ctl_waitq,
-		     llmd->llmd_in_double_scan ||
-		     thread_is_stopped(athread),
-		     &lwi);
-	if (llmd->llmd_assistant_status < 0)
-		return llmd->llmd_assistant_status;
-
-	return 0;
+	return lfsck_double_scan_generic(env, com, lo->ll_status);
 }
 
 static int lfsck_layout_slave_double_scan(const struct lu_env *env,
@@ -5449,30 +4661,30 @@ done:
 static void lfsck_layout_master_data_release(const struct lu_env *env,
 					     struct lfsck_component *com)
 {
-	struct lfsck_layout_master_data	*llmd   = com->lc_data;
+	struct lfsck_assistant_data	*lad	= com->lc_data;
 	struct lfsck_instance		*lfsck	= com->lc_lfsck;
 	struct lfsck_tgt_descs		*ltds;
 	struct lfsck_tgt_desc		*ltd;
 	struct lfsck_tgt_desc		*next;
 
-	LASSERT(llmd != NULL);
-	LASSERT(thread_is_init(&llmd->llmd_thread) ||
-		thread_is_stopped(&llmd->llmd_thread));
-	LASSERT(list_empty(&llmd->llmd_req_list));
+	LASSERT(lad != NULL);
+	LASSERT(thread_is_init(&lad->lad_thread) ||
+		thread_is_stopped(&lad->lad_thread));
+	LASSERT(list_empty(&lad->lad_req_list));
 
 	com->lc_data = NULL;
 
 	ltds = &lfsck->li_ost_descs;
 	spin_lock(&ltds->ltd_lock);
-	list_for_each_entry_safe(ltd, next, &llmd->llmd_ost_phase1_list,
+	list_for_each_entry_safe(ltd, next, &lad->lad_ost_phase1_list,
 				 ltd_layout_phase_list) {
 		list_del_init(&ltd->ltd_layout_phase_list);
 	}
-	list_for_each_entry_safe(ltd, next, &llmd->llmd_ost_phase2_list,
+	list_for_each_entry_safe(ltd, next, &lad->lad_ost_phase2_list,
 				 ltd_layout_phase_list) {
 		list_del_init(&ltd->ltd_layout_phase_list);
 	}
-	list_for_each_entry_safe(ltd, next, &llmd->llmd_ost_list,
+	list_for_each_entry_safe(ltd, next, &lad->lad_ost_list,
 				 ltd_layout_list) {
 		list_del_init(&ltd->ltd_layout_list);
 	}
@@ -5480,21 +4692,21 @@ static void lfsck_layout_master_data_release(const struct lu_env *env,
 
 	ltds = &lfsck->li_mdt_descs;
 	spin_lock(&ltds->ltd_lock);
-	list_for_each_entry_safe(ltd, next, &llmd->llmd_mdt_phase1_list,
+	list_for_each_entry_safe(ltd, next, &lad->lad_mdt_phase1_list,
 				 ltd_layout_phase_list) {
 		list_del_init(&ltd->ltd_layout_phase_list);
 	}
-	list_for_each_entry_safe(ltd, next, &llmd->llmd_mdt_phase2_list,
+	list_for_each_entry_safe(ltd, next, &lad->lad_mdt_phase2_list,
 				 ltd_layout_phase_list) {
 		list_del_init(&ltd->ltd_layout_phase_list);
 	}
-	list_for_each_entry_safe(ltd, next, &llmd->llmd_mdt_list,
+	list_for_each_entry_safe(ltd, next, &lad->lad_mdt_list,
 				 ltd_layout_list) {
 		list_del_init(&ltd->ltd_layout_list);
 	}
 	spin_unlock(&ltds->ltd_lock);
 
-	OBD_FREE_PTR(llmd);
+	OBD_FREE_PTR(lad);
 }
 
 static void lfsck_layout_slave_data_release(const struct lu_env *env,
@@ -5526,22 +4738,6 @@ static void lfsck_layout_slave_data_release(const struct lu_env *env,
 	OBD_FREE_PTR(llsd);
 }
 
-static void lfsck_layout_master_quit(const struct lu_env *env,
-				     struct lfsck_component *com)
-{
-	struct lfsck_layout_master_data *llmd	 = com->lc_data;
-	struct ptlrpc_thread		*mthread = &com->lc_lfsck->li_thread;
-	struct ptlrpc_thread		*athread = &llmd->llmd_thread;
-	struct l_wait_info		 lwi     = { 0 };
-
-	llmd->llmd_exit = 1;
-	wake_up_all(&athread->t_ctl_waitq);
-	l_wait_event(mthread->t_ctl_waitq,
-		     thread_is_init(athread) ||
-		     thread_is_stopped(athread),
-		     &lwi);
-}
-
 static void lfsck_layout_slave_quit(const struct lu_env *env,
 				    struct lfsck_component *com)
 {
@@ -5554,7 +4750,7 @@ static int lfsck_layout_master_in_notify(const struct lu_env *env,
 {
 	struct lfsck_instance		*lfsck = com->lc_lfsck;
 	struct lfsck_layout		*lo    = com->lc_file_ram;
-	struct lfsck_layout_master_data *llmd  = com->lc_data;
+	struct lfsck_assistant_data	*lad   = com->lc_data;
 	struct lfsck_tgt_descs		*ltds;
 	struct lfsck_tgt_desc		*ltd;
 	bool				 fail  = false;
@@ -5569,7 +4765,7 @@ static int lfsck_layout_master_in_notify(const struct lu_env *env,
 		RETURN(rc);
 	}
 
-	CDEBUG(D_LFSCK, "%s: layout LFSCK master handle notify %u "
+	CDEBUG(D_LFSCK, "%s: layout LFSCK master handles notify %u "
 	       "from %s %x, status %d\n", lfsck_lfsck2name(lfsck),
 	       lr->lr_event, (lr->lr_flags & LEF_TO_OST) ? "OST" : "MDT",
 	       lr->lr_index, lr->lr_status);
@@ -5605,15 +4801,15 @@ static int lfsck_layout_master_in_notify(const struct lu_env *env,
 		if (lr->lr_flags & LEF_FROM_OST) {
 			if (list_empty(&ltd->ltd_layout_list))
 				list_add_tail(&ltd->ltd_layout_list,
-					      &llmd->llmd_ost_list);
+					      &lad->lad_ost_list);
 			list_add_tail(&ltd->ltd_layout_phase_list,
-				      &llmd->llmd_ost_phase2_list);
+				      &lad->lad_ost_phase2_list);
 		} else {
 			if (list_empty(&ltd->ltd_layout_list))
 				list_add_tail(&ltd->ltd_layout_list,
-					      &llmd->llmd_mdt_list);
+					      &lad->lad_mdt_list);
 			list_add_tail(&ltd->ltd_layout_phase_list,
-				      &llmd->llmd_mdt_phase2_list);
+				      &lad->lad_mdt_phase2_list);
 		}
 		break;
 	case LE_PHASE2_DONE:
@@ -5639,8 +4835,8 @@ static int lfsck_layout_master_in_notify(const struct lu_env *env,
 		stop->ls_status = lr->lr_status;
 		stop->ls_flags = lr->lr_param & ~LPF_BROADCAST;
 		lfsck_stop(env, lfsck->li_bottom, stop);
-	} else if (lfsck_layout_master_to_orphan(llmd)) {
-		wake_up_all(&llmd->llmd_thread.t_ctl_waitq);
+	} else if (lfsck_phase2_next_ready(lad)) {
+		wake_up_all(&lad->lad_thread.t_ctl_waitq);
 	}
 
 	RETURN(0);
@@ -5715,7 +4911,10 @@ static int lfsck_layout_slave_in_notify(const struct lu_env *env,
 		wake_up_all(&lfsck->li_thread.t_ctl_waitq);
 
 	if (lr->lr_event == LE_PEER_EXIT &&
-	    lfsck->li_bookmark_ram.lb_param & LPF_FAILOUT) {
+	    (lfsck->li_bookmark_ram.lb_param & LPF_FAILOUT ||
+	     (list_empty(&llsd->llsd_master_list) &&
+	      (lr->lr_status == LS_STOPPED ||
+	       lr->lr_status == LS_CO_STOPPED)))) {
 		struct lfsck_stop *stop = &lfsck_env_info(env)->lti_stop;
 
 		memset(stop, 0, sizeof(*stop));
@@ -5733,60 +4932,6 @@ static int lfsck_layout_query(const struct lu_env *env,
 	struct lfsck_layout *lo = com->lc_file_ram;
 
 	return lo->ll_status;
-}
-
-static int lfsck_layout_master_stop_notify(const struct lu_env *env,
-					   struct lfsck_component *com,
-					   struct lfsck_tgt_descs *ltds,
-					   struct lfsck_tgt_desc *ltd,
-					   struct ptlrpc_request_set *set)
-{
-	struct lfsck_thread_info	  *info  = lfsck_env_info(env);
-	struct lfsck_async_interpret_args *laia  = &info->lti_laia;
-	struct lfsck_request		  *lr	 = &info->lti_lr;
-	struct lfsck_instance		  *lfsck = com->lc_lfsck;
-	int				   rc;
-
-	spin_lock(&ltds->ltd_lock);
-	if (list_empty(&ltd->ltd_layout_list)) {
-		LASSERT(list_empty(&ltd->ltd_layout_phase_list));
-		spin_unlock(&ltds->ltd_lock);
-
-		return 0;
-	}
-
-	list_del_init(&ltd->ltd_layout_phase_list);
-	list_del_init(&ltd->ltd_layout_list);
-	spin_unlock(&ltds->ltd_lock);
-
-	memset(lr, 0, sizeof(*lr));
-	lr->lr_index = lfsck_dev_idx(lfsck->li_bottom);
-	lr->lr_event = LE_PEER_EXIT;
-	lr->lr_active = LFSCK_TYPE_LAYOUT;
-	lr->lr_status = LS_CO_PAUSED;
-	if (ltds == &lfsck->li_ost_descs)
-		lr->lr_flags = LEF_TO_OST;
-
-	laia->laia_com = com;
-	laia->laia_ltds = ltds;
-	atomic_inc(&ltd->ltd_ref);
-	laia->laia_ltd = ltd;
-	laia->laia_lr = lr;
-	laia->laia_shared = 0;
-
-	rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
-				 lfsck_layout_master_async_interpret,
-				 laia, LFSCK_NOTIFY);
-	if (rc != 0) {
-		CDEBUG(D_LFSCK, "%s: layout LFSCK fail to notify %s %x "
-		       "for co-stop: rc = %d\n",
-		       lfsck_lfsck2name(lfsck),
-		       (lr->lr_flags & LEF_TO_OST) ? "OST" : "MDT",
-		       ltd->ltd_index, rc);
-		lfsck_tgt_put(ltd);
-	}
-
-	return rc;
 }
 
 /* with lfsck::li_lock held */
@@ -5837,14 +4982,12 @@ static struct lfsck_operations lfsck_layout_master_ops = {
 	.lfsck_exec_oit		= lfsck_layout_master_exec_oit,
 	.lfsck_exec_dir		= lfsck_layout_exec_dir,
 	.lfsck_post		= lfsck_layout_master_post,
-	.lfsck_interpret	= lfsck_layout_master_async_interpret,
 	.lfsck_dump		= lfsck_layout_dump,
 	.lfsck_double_scan	= lfsck_layout_master_double_scan,
 	.lfsck_data_release	= lfsck_layout_master_data_release,
-	.lfsck_quit		= lfsck_layout_master_quit,
+	.lfsck_quit		= lfsck_quit_generic,
 	.lfsck_in_notify	= lfsck_layout_master_in_notify,
 	.lfsck_query		= lfsck_layout_query,
-	.lfsck_stop_notify	= lfsck_layout_master_stop_notify,
 };
 
 static struct lfsck_operations lfsck_layout_slave_ops = {
@@ -5862,6 +5005,30 @@ static struct lfsck_operations lfsck_layout_slave_ops = {
 	.lfsck_in_notify	= lfsck_layout_slave_in_notify,
 	.lfsck_query		= lfsck_layout_query,
 	.lfsck_join		= lfsck_layout_slave_join,
+};
+
+static void lfsck_layout_assistant_fill_pos(const struct lu_env *env,
+					    struct lfsck_component *com,
+					    struct lfsck_position *pos)
+{
+	struct lfsck_assistant_data	*lad = com->lc_data;
+	struct lfsck_layout_req		*llr;
+
+	if (list_empty(&lad->lad_req_list))
+		return;
+
+	llr = list_entry(lad->lad_req_list.next,
+			 struct lfsck_layout_req,
+			 llr_lar.lar_list);
+	pos->lp_oit_cookie = llr->llr_parent->llo_cookie - 1;
+}
+
+struct lfsck_assistant_operations lfsck_layout_assistant_ops = {
+	.la_handler_p1		= lfsck_layout_assistant_handler_p1,
+	.la_handler_p2		= lfsck_layout_assistant_handler_p2,
+	.la_fill_pos		= lfsck_layout_assistant_fill_pos,
+	.la_double_scan_result	= lfsck_layout_double_scan_result,
+	.la_req_fini		= lfsck_layout_assistant_req_fini,
 };
 
 int lfsck_layout_setup(const struct lu_env *env, struct lfsck_instance *lfsck)
@@ -5884,23 +5051,12 @@ int lfsck_layout_setup(const struct lu_env *env, struct lfsck_instance *lfsck)
 	com->lc_lfsck = lfsck;
 	com->lc_type = LFSCK_TYPE_LAYOUT;
 	if (lfsck->li_master) {
-		struct lfsck_layout_master_data *llmd;
-
 		com->lc_ops = &lfsck_layout_master_ops;
-		OBD_ALLOC_PTR(llmd);
-		if (llmd == NULL)
+		com->lc_data = lfsck_assistant_data_init(
+				&lfsck_layout_assistant_ops,
+				"lfsck_layout");
+		if (com->lc_data == NULL)
 			GOTO(out, rc = -ENOMEM);
-
-		INIT_LIST_HEAD(&llmd->llmd_req_list);
-		spin_lock_init(&llmd->llmd_lock);
-		INIT_LIST_HEAD(&llmd->llmd_ost_list);
-		INIT_LIST_HEAD(&llmd->llmd_ost_phase1_list);
-		INIT_LIST_HEAD(&llmd->llmd_ost_phase2_list);
-		INIT_LIST_HEAD(&llmd->llmd_mdt_list);
-		INIT_LIST_HEAD(&llmd->llmd_mdt_phase1_list);
-		INIT_LIST_HEAD(&llmd->llmd_mdt_phase2_list);
-		init_waitqueue_head(&llmd->llmd_thread.t_ctl_waitq);
-		com->lc_data = llmd;
 	} else {
 		struct lfsck_layout_slave_data *llsd;
 

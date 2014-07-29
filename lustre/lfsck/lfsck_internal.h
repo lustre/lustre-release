@@ -50,10 +50,6 @@
 #define HALF_SEC			(HZ >> 1)
 #define LFSCK_CHECKPOINT_INTERVAL	60
 
-#define LFSCK_NAMEENTRY_DEAD    	1 /* The object has been unlinked. */
-#define LFSCK_NAMEENTRY_REMOVED 	2 /* The entry has been removed. */
-#define LFSCK_NAMEENTRY_RECREATED	3 /* The entry has been recreated. */
-
 enum lfsck_flags {
 	/* Finish the first cycle scanning. */
 	LF_SCANNED_ONCE		= 0x00000001ULL,
@@ -289,18 +285,13 @@ struct lfsck_operations {
 
 	int (*lfsck_exec_dir)(const struct lu_env *env,
 			      struct lfsck_component *com,
-			      struct dt_object *obj,
-			      struct lu_dirent *ent);
+			      struct lu_dirent *ent,
+			      __u16 type);
 
 	int (*lfsck_post)(const struct lu_env *env,
 			  struct lfsck_component *com,
 			  int result,
 			  bool init);
-
-	int (*lfsck_interpret)(const struct lu_env *env,
-			       struct ptlrpc_request *req,
-			       void *args,
-			       int rc);
 
 	int (*lfsck_dump)(const struct lu_env *env,
 			  struct lfsck_component *com,
@@ -322,12 +313,6 @@ struct lfsck_operations {
 	int (*lfsck_query)(const struct lu_env *env,
 			   struct lfsck_component *com);
 
-	int (*lfsck_stop_notify)(const struct lu_env *env,
-				 struct lfsck_component *com,
-				 struct lfsck_tgt_descs *ltds,
-				 struct lfsck_tgt_desc *ltd,
-				 struct ptlrpc_request_set *set);
-
 	int (*lfsck_join)(const struct lu_env *env,
 			  struct lfsck_component *com,
 			  struct lfsck_start_param *lsp);
@@ -343,11 +328,15 @@ struct lfsck_tgt_desc {
 	struct obd_export *ltd_exp;
 	struct list_head   ltd_layout_list;
 	struct list_head   ltd_layout_phase_list;
+	struct list_head   ltd_namespace_list;
+	struct list_head   ltd_namespace_phase_list;
 	atomic_t	   ltd_ref;
 	__u32              ltd_index;
 	__u32		   ltd_layout_gen;
+	__u32		   ltd_namespace_gen;
 	unsigned int	   ltd_dead:1,
-			   ltd_layout_done:1;
+			   ltd_layout_done:1,
+			   ltd_namespace_done:1;
 };
 
 struct lfsck_tgt_desc_idx {
@@ -464,6 +453,7 @@ struct lfsck_instance {
 	struct lfsck_bookmark	  li_bookmark_ram;
 	struct lfsck_bookmark	  li_bookmark_disk;
 	struct lfsck_position	  li_pos_current;
+	struct lfsck_position	  li_pos_checkpoint;
 
 	/* Obj for otable-based iteration */
 	struct dt_object	 *li_obj_oit;
@@ -538,6 +528,67 @@ struct lfsck_thread_args {
 	struct lfsck_start_param	*lta_lsp;
 };
 
+struct lfsck_assistant_req {
+	struct list_head	lar_list;
+};
+
+struct lfsck_assistant_operations {
+	int (*la_handler_p1)(const struct lu_env *env,
+			     struct lfsck_component *com,
+			     struct lfsck_assistant_req *lar);
+
+	int (*la_handler_p2)(const struct lu_env *env,
+			     struct lfsck_component *com);
+
+	void (*la_fill_pos)(const struct lu_env *env,
+			    struct lfsck_component *com,
+			    struct lfsck_position *pos);
+
+	int (*la_double_scan_result)(const struct lu_env *env,
+				     struct lfsck_component *com,
+				     int rc);
+
+	void (*la_req_fini)(const struct lu_env *env,
+			    struct lfsck_assistant_req *lar);
+};
+
+struct lfsck_assistant_data {
+	spinlock_t				 lad_lock;
+	struct list_head			 lad_req_list;
+
+	/* list for the ost targets involve LFSCK. */
+	struct list_head			 lad_ost_list;
+
+	/* list for the ost targets in phase1 scanning. */
+	struct list_head			 lad_ost_phase1_list;
+
+	/* list for the ost targets in phase1 scanning. */
+	struct list_head			 lad_ost_phase2_list;
+
+	/* list for the mdt targets involve LFSCK. */
+	struct list_head			 lad_mdt_list;
+
+	/* list for the mdt targets in phase1 scanning. */
+	struct list_head			 lad_mdt_phase1_list;
+
+	/* list for the mdt targets in phase1 scanning. */
+	struct list_head			 lad_mdt_phase2_list;
+
+	const char				*lad_name;
+	struct ptlrpc_thread			 lad_thread;
+
+	struct lfsck_assistant_operations	*lad_ops;
+
+	__u32					 lad_touch_gen;
+	int					 lad_prefetched;
+	int					 lad_assistant_status;
+	int					 lad_post_result;
+	unsigned int				 lad_to_post:1,
+						 lad_to_double_scan:1,
+						 lad_in_double_scan:1,
+						 lad_exit:1;
+};
+
 #define LFSCK_TMPBUF_LEN	64
 
 struct lfsck_thread_info {
@@ -606,18 +657,32 @@ void lfsck_pos_fill(const struct lu_env *env, struct lfsck_instance *lfsck,
 bool __lfsck_set_speed(struct lfsck_instance *lfsck, __u32 limit);
 void lfsck_control_speed(struct lfsck_instance *lfsck);
 void lfsck_control_speed_by_self(struct lfsck_component *com);
-struct lfsck_thread_args *lfsck_thread_args_init(struct lfsck_instance *lfsck,
-						 struct lfsck_component *com,
-						 struct lfsck_start_param *lsp);
 void lfsck_thread_args_fini(struct lfsck_thread_args *lta);
+struct lfsck_assistant_data *
+lfsck_assistant_data_init(struct lfsck_assistant_operations *lao,
+			  const char *name);
+int lfsck_async_interpret_common(const struct lu_env *env,
+				 struct ptlrpc_request *req,
+				 void *args, int rc);
 int lfsck_async_request(const struct lu_env *env, struct obd_export *exp,
 			struct lfsck_request *lr,
 			struct ptlrpc_request_set *set,
 			ptlrpc_interpterer_t interpterer,
 			void *args, int request);
+int lfsck_start_assistant(const struct lu_env *env, struct lfsck_component *com,
+			  struct lfsck_start_param *lsp);
+int lfsck_checkpoint_generic(const struct lu_env *env,
+			     struct lfsck_component *com);
+void lfsck_post_generic(const struct lu_env *env,
+			struct lfsck_component *com, int *result);
+int lfsck_double_scan_generic(const struct lu_env *env,
+			      struct lfsck_component *com, int status);
+void lfsck_quit_generic(const struct lu_env *env,
+			struct lfsck_component *com);
 
 /* lfsck_engine.c */
 int lfsck_master_engine(void *args);
+int lfsck_assistant_engine(void *args);
 
 /* lfsck_bookmark.c */
 void lfsck_bookmark_cpu_to_le(struct lfsck_bookmark *des,
@@ -899,6 +964,13 @@ static inline void lfsck_instance_put(const struct lu_env *env,
 static inline u32 lfsck_dev_idx(struct dt_device *dev)
 {
 	return dev->dd_lu_dev.ld_site->ld_seq_site->ss_node_id;
+}
+
+static inline bool lfsck_phase2_next_ready(struct lfsck_assistant_data *lad)
+{
+	return list_empty(&lad->lad_mdt_phase1_list) &&
+	       (!list_empty(&lad->lad_ost_phase2_list) ||
+		list_empty(&lad->lad_ost_phase1_list));
 }
 
 #endif /* _LFSCK_INTERNAL_H */

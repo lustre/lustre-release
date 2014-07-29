@@ -39,18 +39,31 @@
 
 #include "lfsck_internal.h"
 
-static void lfsck_unpack_ent(struct lu_dirent *ent, __u64 *cookie)
+static int lfsck_unpack_ent(struct lu_dirent *ent, __u64 *cookie, __u16 *type)
 {
+	struct luda_type	*lt;
+	int			 align = sizeof(*lt) - 1;
+	int			 len;
+
 	fid_le_to_cpu(&ent->lde_fid, &ent->lde_fid);
 	*cookie = le64_to_cpu(ent->lde_hash);
 	ent->lde_reclen = le16_to_cpu(ent->lde_reclen);
 	ent->lde_namelen = le16_to_cpu(ent->lde_namelen);
 	ent->lde_attrs = le32_to_cpu(ent->lde_attrs);
 
-	/* Make sure the name is terminated with '0'.
-	 * The data (type) after ent::lde_name maybe
-	 * broken, but we do not care. */
-	ent->lde_name[ent->lde_namelen] = 0;
+	if (unlikely(!(ent->lde_attrs & LUDA_TYPE)))
+		return -EINVAL;
+
+	len = (ent->lde_namelen + align) & ~align;
+	lt = (struct luda_type *)(ent->lde_name + len);
+	*type = le16_to_cpu(lt->lt_type);
+
+	/* Make sure the name is terminated with '\0'. The data (object type)
+	 * after ent::lde_name maybe broken, but we have stored such data in
+	 * the output parameter @type as above. */
+	ent->lde_name[ent->lde_namelen] = '\0';
+
+	return 0;
 }
 
 static void lfsck_di_oit_put(const struct lu_env *env, struct lfsck_instance *lfsck)
@@ -274,7 +287,7 @@ static int lfsck_checkpoint(const struct lu_env *env,
 				    lfsck->li_time_next_checkpoint)))
 		return 0;
 
-	lfsck_pos_fill(env, lfsck, &lfsck->li_pos_current, false);
+	lfsck_pos_fill(env, lfsck, &lfsck->li_pos_checkpoint, false);
 	list_for_each_entry(com, &lfsck->li_list_scan, lc_link) {
 		rc = com->lc_ops->lfsck_checkpoint(env, com, false);
 		if (rc != 0)
@@ -394,7 +407,8 @@ out:
 	}
 
 	rc = 0;
-	lfsck_pos_fill(env, lfsck, &lfsck->li_pos_current, true);
+	lfsck_pos_fill(env, lfsck, &lfsck->li_pos_checkpoint, true);
+	lfsck->li_pos_current = lfsck->li_pos_checkpoint;
 	list_for_each_entry(com, &lfsck->li_list_scan, lc_link) {
 		rc = com->lc_ops->lfsck_checkpoint(env, com, true);
 		if (rc != 0)
@@ -464,13 +478,13 @@ out:
 
 static int lfsck_exec_dir(const struct lu_env *env,
 			  struct lfsck_instance *lfsck,
-			  struct dt_object *obj, struct lu_dirent *ent)
+			  struct lu_dirent *ent, __u16 type)
 {
 	struct lfsck_component *com;
 	int			rc;
 
 	list_for_each_entry(com, &lfsck->li_list_scan, lc_link) {
-		rc = com->lc_ops->lfsck_exec_dir(env, com, obj, ent);
+		rc = com->lc_ops->lfsck_exec_dir(env, com, ent, type);
 		if (rc != 0)
 			return rc;
 	}
@@ -485,7 +499,7 @@ static int lfsck_post(const struct lu_env *env, struct lfsck_instance *lfsck,
 	int			rc  = 0;
 	int			rc1 = 0;
 
-	lfsck_pos_fill(env, lfsck, &lfsck->li_pos_current, false);
+	lfsck_pos_fill(env, lfsck, &lfsck->li_pos_checkpoint, false);
 	list_for_each_entry_safe(com, next, &lfsck->li_list_scan, lc_link) {
 		rc = com->lc_ops->lfsck_post(env, com, result, false);
 		if (rc != 0)
@@ -573,15 +587,13 @@ static int lfsck_master_dir_engine(const struct lu_env *env,
 	struct dt_it			*di	= lfsck->li_di_dir;
 	struct lu_dirent		*ent	=
 			(struct lu_dirent *)info->lti_key;
-	struct lu_fid			*fid	= &info->lti_fid;
 	struct lfsck_bookmark		*bk	= &lfsck->li_bookmark_ram;
 	struct ptlrpc_thread		*thread = &lfsck->li_thread;
 	int				 rc;
+	__u16				 type;
 	ENTRY;
 
 	do {
-		struct dt_object *child;
-
 		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DELAY2) &&
 		    cfs_fail_val > 0) {
 			struct l_wait_info lwi;
@@ -596,7 +608,10 @@ static int lfsck_master_dir_engine(const struct lu_env *env,
 		lfsck->li_new_scanned++;
 		rc = iops->rec(env, di, (struct dt_rec *)ent,
 			       lfsck->li_args_dir);
-		lfsck_unpack_ent(ent, &lfsck->li_cookie_dir);
+		if (rc == 0)
+			rc = lfsck_unpack_ent(ent, &lfsck->li_cookie_dir,
+					      &type);
+
 		if (rc != 0) {
 			CDEBUG(D_LFSCK, "%s: scan dir failed at rec(), "
 			       "parent "DFID", cookie "LPX64": rc = %d\n",
@@ -613,27 +628,9 @@ static int lfsck_master_dir_engine(const struct lu_env *env,
 		if (ent->lde_attrs & LUDA_IGNORE)
 			goto checkpoint;
 
-		*fid = ent->lde_fid;
-		child = lfsck_object_find(env, lfsck, fid);
-		if (IS_ERR(child)) {
-			CDEBUG(D_LFSCK, "%s: scan dir failed at find target, "
-			       "parent "DFID", child %.*s "DFID": rc = %d\n",
-			       lfsck_lfsck2name(lfsck),
-			       PFID(lfsck_dto2fid(dir)),
-			       ent->lde_namelen, ent->lde_name,
-			       PFID(&ent->lde_fid), rc);
-			lfsck_fail(env, lfsck, true);
-			if (bk->lb_param & LPF_FAILOUT)
-				RETURN(PTR_ERR(child));
-			else
-				goto checkpoint;
-		}
-
-		/* XXX: Currently, skip remote object, the consistency for
-		 *	remote object will be processed in LFSCK phase III. */
-		if (dt_object_exists(child) && !dt_object_remote(child))
-			rc = lfsck_exec_dir(env, lfsck, child, ent);
-		lfsck_object_put(env, child);
+		/* The type in the @ent structure may has been overwritten,
+		 * so we need to pass the @type parameter independently. */
+		rc = lfsck_exec_dir(env, lfsck, ent, type);
 		if (rc != 0 && bk->lb_param & LPF_FAILOUT)
 			RETURN(rc);
 
@@ -713,6 +710,7 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 
 		lfsck->li_current_oit_processed = 1;
 		lfsck->li_new_scanned++;
+		lfsck->li_pos_current.lp_oit_cookie = iops->store(env, di);
 		rc = iops->rec(env, di, (struct dt_rec *)fid, 0);
 		if (rc != 0) {
 			CDEBUG(D_LFSCK, "%s: OIT scan failed at rec(): "
@@ -855,9 +853,9 @@ int lfsck_master_engine(void *args)
 	CDEBUG(D_LFSCK, "LFSCK entry: oit_flags = %#x, dir_flags = %#x, "
 	       "oit_cookie = "LPU64", dir_cookie = "LPX64", parent = "DFID
 	       ", pid = %d\n", lfsck->li_args_oit, lfsck->li_args_dir,
-	       lfsck->li_pos_current.lp_oit_cookie,
-	       lfsck->li_pos_current.lp_dir_cookie,
-	       PFID(&lfsck->li_pos_current.lp_dir_parent),
+	       lfsck->li_pos_checkpoint.lp_oit_cookie,
+	       lfsck->li_pos_checkpoint.lp_dir_cookie,
+	       PFID(&lfsck->li_pos_checkpoint.lp_dir_parent),
 	       current_pid());
 
 	spin_lock(&lfsck->li_lock);
@@ -881,9 +879,9 @@ int lfsck_master_engine(void *args)
 	CDEBUG(D_LFSCK, "LFSCK exit: oit_flags = %#x, dir_flags = %#x, "
 	       "oit_cookie = "LPU64", dir_cookie = "LPX64", parent = "DFID
 	       ", pid = %d, rc = %d\n", lfsck->li_args_oit, lfsck->li_args_dir,
-	       lfsck->li_pos_current.lp_oit_cookie,
-	       lfsck->li_pos_current.lp_dir_cookie,
-	       PFID(&lfsck->li_pos_current.lp_dir_parent),
+	       lfsck->li_pos_checkpoint.lp_oit_cookie,
+	       lfsck->li_pos_checkpoint.lp_dir_cookie,
+	       PFID(&lfsck->li_pos_checkpoint.lp_dir_parent),
 	       current_pid(), rc);
 
 	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_CRASH))
@@ -912,5 +910,720 @@ fini_args:
 	spin_unlock(&lfsck->li_lock);
 	wake_up_all(&thread->t_ctl_waitq);
 	lfsck_thread_args_fini(lta);
+	return rc;
+}
+
+static inline bool lfsck_assistant_req_empty(struct lfsck_assistant_data *lad)
+{
+	bool empty = false;
+
+	spin_lock(&lad->lad_lock);
+	if (list_empty(&lad->lad_req_list))
+		empty = true;
+	spin_unlock(&lad->lad_lock);
+
+	return empty;
+}
+
+/**
+ * Query the LFSCK status from the instatnces on remote servers.
+ *
+ * The LFSCK assistant thread queries the LFSCK instances on other
+ * servers (MDT/OST) about their status, such as whether they have
+ * finished the phase1/phase2 scanning or not, and so on.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] com	pointer to the lfsck component
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
+static int lfsck_assistant_query_others(const struct lu_env *env,
+					struct lfsck_component *com)
+{
+	struct lfsck_thread_info	  *info  = lfsck_env_info(env);
+	struct lfsck_request		  *lr	 = &info->lti_lr;
+	struct lfsck_async_interpret_args *laia  = &info->lti_laia;
+	struct lfsck_instance		  *lfsck = com->lc_lfsck;
+	struct lfsck_assistant_data	  *lad   = com->lc_data;
+	struct ptlrpc_request_set	  *set;
+	struct lfsck_tgt_descs		  *ltds;
+	struct lfsck_tgt_desc		  *ltd;
+	struct list_head		  *phase_head;
+	int				   rc    = 0;
+	int				   rc1   = 0;
+	ENTRY;
+
+	set = ptlrpc_prep_set();
+	if (set == NULL)
+		RETURN(-ENOMEM);
+
+	lad->lad_touch_gen++;
+	memset(lr, 0, sizeof(*lr));
+	lr->lr_index = lfsck_dev_idx(lfsck->li_bottom);
+	lr->lr_event = LE_QUERY;
+	lr->lr_active = com->lc_type;
+	laia->laia_com = com;
+	laia->laia_lr = lr;
+	laia->laia_shared = 0;
+
+	if (!list_empty(&lad->lad_mdt_phase1_list)) {
+		ltds = &lfsck->li_mdt_descs;
+		lr->lr_flags = 0;
+		phase_head = &lad->lad_mdt_phase1_list;
+	} else if (com->lc_type != LFSCK_TYPE_LAYOUT) {
+		goto out;
+	} else {
+
+again:
+		ltds = &lfsck->li_ost_descs;
+		lr->lr_flags = LEF_TO_OST;
+		phase_head = &lad->lad_ost_phase1_list;
+	}
+
+	laia->laia_ltds = ltds;
+	spin_lock(&ltds->ltd_lock);
+	while (!list_empty(phase_head)) {
+		struct list_head *phase_list;
+		__u32		 *gen;
+
+		if (com->lc_type == LFSCK_TYPE_LAYOUT) {
+			ltd = list_entry(phase_head->next,
+					 struct lfsck_tgt_desc,
+					 ltd_layout_phase_list);
+			phase_list = &ltd->ltd_layout_phase_list;
+			gen = &ltd->ltd_layout_gen;
+		} else {
+			ltd = list_entry(phase_head->next,
+					 struct lfsck_tgt_desc,
+					 ltd_namespace_phase_list);
+			phase_list = &ltd->ltd_namespace_phase_list;
+			gen = &ltd->ltd_namespace_gen;
+		}
+
+		if (*gen == lad->lad_touch_gen)
+			break;
+
+		*gen = lad->lad_touch_gen;
+		list_move_tail(phase_list, phase_head);
+		atomic_inc(&ltd->ltd_ref);
+		laia->laia_ltd = ltd;
+		spin_unlock(&ltds->ltd_lock);
+		rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
+					 lfsck_async_interpret_common,
+					 laia, LFSCK_QUERY);
+		if (rc != 0) {
+			CDEBUG(D_LFSCK, "%s: LFSCK assistant fail to query "
+			       "%s %x for %s: rc = %d\n",
+			       lfsck_lfsck2name(lfsck),
+			       (lr->lr_flags & LEF_TO_OST) ? "OST" : "MDT",
+			       ltd->ltd_index, lad->lad_name, rc);
+			lfsck_tgt_put(ltd);
+			rc1 = rc;
+		}
+		spin_lock(&ltds->ltd_lock);
+	}
+	spin_unlock(&ltds->ltd_lock);
+
+	rc = ptlrpc_set_wait(set);
+	if (rc < 0) {
+		ptlrpc_set_destroy(set);
+		RETURN(rc);
+	}
+
+	if (com->lc_type == LFSCK_TYPE_LAYOUT && !(lr->lr_flags & LEF_TO_OST) &&
+	    list_empty(&lad->lad_mdt_phase1_list))
+		goto again;
+
+out:
+	ptlrpc_set_destroy(set);
+
+	RETURN(rc1 != 0 ? rc1 : rc);
+}
+
+/**
+ * Notify the LFSCK event to the instatnces on remote servers.
+ *
+ * The LFSCK assistant thread notifies the LFSCK instances on other
+ * servers (MDT/OST) about some events, such as start new scanning,
+ * stop the scanning, this LFSCK instance will exit, and so on.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] com	pointer to the lfsck component
+ * \param[in] lr	pointer to the LFSCK event request
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
+static int lfsck_assistant_notify_others(const struct lu_env *env,
+					 struct lfsck_component *com,
+					 struct lfsck_request *lr)
+{
+	struct lfsck_thread_info	  *info  = lfsck_env_info(env);
+	struct lfsck_async_interpret_args *laia  = &info->lti_laia;
+	struct lfsck_instance		  *lfsck = com->lc_lfsck;
+	struct lfsck_assistant_data	  *lad   = com->lc_data;
+	struct lfsck_bookmark		  *bk    = &lfsck->li_bookmark_ram;
+	struct ptlrpc_request_set	  *set;
+	struct lfsck_tgt_descs		  *ltds;
+	struct lfsck_tgt_desc		  *ltd;
+	struct lfsck_tgt_desc		  *next;
+	__u32				   idx;
+	int				   rc    = 0;
+	int				   rc1	 = 0;
+	ENTRY;
+
+	set = ptlrpc_prep_set();
+	if (set == NULL)
+		RETURN(-ENOMEM);
+
+	lr->lr_index = lfsck_dev_idx(lfsck->li_bottom);
+	lr->lr_active = com->lc_type;
+	laia->laia_com = com;
+	laia->laia_lr = lr;
+	laia->laia_shared = 0;
+
+	switch (lr->lr_event) {
+	case LE_START:
+		if (com->lc_type != LFSCK_TYPE_LAYOUT)
+			goto next;
+
+		lr->lr_valid = LSV_SPEED_LIMIT | LSV_ERROR_HANDLE | LSV_DRYRUN |
+			       LSV_ASYNC_WINDOWS | LSV_CREATE_OSTOBJ;
+		lr->lr_speed = bk->lb_speed_limit;
+		lr->lr_version = bk->lb_version;
+		lr->lr_param |= bk->lb_param;
+		lr->lr_async_windows = bk->lb_async_windows;
+		lr->lr_flags = LEF_TO_OST;
+
+		/* Notify OSTs firstly, then handle other MDTs if needed. */
+		ltds = &lfsck->li_ost_descs;
+		laia->laia_ltds = ltds;
+		down_read(&ltds->ltd_rw_sem);
+		cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+			ltd = lfsck_tgt_get(ltds, idx);
+			LASSERT(ltd != NULL);
+
+			laia->laia_ltd = ltd;
+			ltd->ltd_layout_done = 0;
+			rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
+					lfsck_async_interpret_common,
+					laia, LFSCK_NOTIFY);
+			if (rc != 0) {
+				struct lfsck_layout *lo = com->lc_file_ram;
+
+				lo->ll_flags |= LF_INCOMPLETE;
+				CDEBUG(D_LFSCK, "%s: LFSCK assistant fail to "
+				       "notify OST %x for %s start: rc = %d\n",
+				       lfsck_lfsck2name(lfsck), idx,
+				       lad->lad_name, rc);
+				lfsck_tgt_put(ltd);
+			}
+		}
+		up_read(&ltds->ltd_rw_sem);
+
+		/* Sync up */
+		rc = ptlrpc_set_wait(set);
+		if (rc < 0) {
+			ptlrpc_set_destroy(set);
+			RETURN(rc);
+		}
+
+next:
+		if (!(bk->lb_param & LPF_ALL_TGT))
+			break;
+
+		/* link other MDT targets locallly. */
+		ltds = &lfsck->li_mdt_descs;
+		spin_lock(&ltds->ltd_lock);
+		if (com->lc_type == LFSCK_TYPE_LAYOUT) {
+			cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+				ltd = LTD_TGT(ltds, idx);
+				LASSERT(ltd != NULL);
+
+				if (!list_empty(&ltd->ltd_layout_list))
+					continue;
+
+				list_add_tail(&ltd->ltd_layout_list,
+					      &lad->lad_mdt_list);
+				list_add_tail(&ltd->ltd_layout_phase_list,
+					      &lad->lad_mdt_phase1_list);
+			}
+		} else {
+			cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+				ltd = LTD_TGT(ltds, idx);
+				LASSERT(ltd != NULL);
+
+				if (!list_empty(&ltd->ltd_namespace_list))
+					continue;
+
+				list_add_tail(&ltd->ltd_namespace_list,
+					      &lad->lad_mdt_list);
+				list_add_tail(&ltd->ltd_namespace_phase_list,
+					      &lad->lad_mdt_phase1_list);
+			}
+		}
+		spin_unlock(&ltds->ltd_lock);
+		break;
+	case LE_STOP:
+	case LE_PHASE2_DONE:
+	case LE_PEER_EXIT: {
+		struct list_head *phase_head;
+
+		/* Handle other MDTs firstly if needed, then notify the OSTs. */
+		if (bk->lb_param & LPF_ALL_TGT) {
+			phase_head = &lad->lad_mdt_list;
+			ltds = &lfsck->li_mdt_descs;
+			if (lr->lr_event == LE_STOP) {
+				/* unlink other MDT targets locallly. */
+				spin_lock(&ltds->ltd_lock);
+				if (com->lc_type == LFSCK_TYPE_LAYOUT) {
+					list_for_each_entry_safe(ltd, next,
+						phase_head, ltd_layout_list) {
+						list_del_init(
+						&ltd->ltd_layout_phase_list);
+						list_del_init(
+						&ltd->ltd_layout_list);
+					}
+				} else {
+					list_for_each_entry_safe(ltd, next,
+							phase_head,
+							ltd_namespace_list) {
+						list_del_init(
+						&ltd->ltd_namespace_phase_list);
+						list_del_init(
+						&ltd->ltd_namespace_list);
+					}
+				}
+				spin_unlock(&ltds->ltd_lock);
+
+				if (com->lc_type != LFSCK_TYPE_LAYOUT)
+					break;
+
+				lr->lr_flags |= LEF_TO_OST;
+				phase_head = &lad->lad_ost_list;
+				ltds = &lfsck->li_ost_descs;
+			} else {
+				lr->lr_flags &= ~LEF_TO_OST;
+			}
+		} else if (com->lc_type != LFSCK_TYPE_LAYOUT) {
+			break;
+		} else {
+			lr->lr_flags |= LEF_TO_OST;
+			phase_head = &lad->lad_ost_list;
+			ltds = &lfsck->li_ost_descs;
+		}
+
+again:
+		laia->laia_ltds = ltds;
+		spin_lock(&ltds->ltd_lock);
+		while (!list_empty(phase_head)) {
+			if (com->lc_type == LFSCK_TYPE_LAYOUT) {
+				ltd = list_entry(phase_head->next,
+						 struct lfsck_tgt_desc,
+						 ltd_layout_list);
+				if (!list_empty(&ltd->ltd_layout_phase_list))
+					list_del_init(
+						&ltd->ltd_layout_phase_list);
+				list_del_init(&ltd->ltd_layout_list);
+			} else {
+				ltd = list_entry(phase_head->next,
+						 struct lfsck_tgt_desc,
+						 ltd_namespace_list);
+				if (!list_empty(&ltd->ltd_namespace_phase_list))
+					list_del_init(
+						&ltd->ltd_namespace_phase_list);
+				list_del_init(&ltd->ltd_namespace_list);
+			}
+			atomic_inc(&ltd->ltd_ref);
+			laia->laia_ltd = ltd;
+			spin_unlock(&ltds->ltd_lock);
+			rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
+					lfsck_async_interpret_common,
+					laia, LFSCK_NOTIFY);
+			if (rc != 0) {
+				CDEBUG(D_LFSCK, "%s: LFSCK assistant fail to "
+				       "notify %s %x for %s stop/phase2_done/"
+				       "peer_exit: rc = %d\n",
+				       lfsck_lfsck2name(lfsck),
+				       (lr->lr_flags & LEF_TO_OST) ?
+				       "OST" : "MDT", ltd->ltd_index,
+				       lad->lad_name, rc);
+				lfsck_tgt_put(ltd);
+			}
+			spin_lock(&ltds->ltd_lock);
+		}
+		spin_unlock(&ltds->ltd_lock);
+
+		rc = ptlrpc_set_wait(set);
+		if (rc < 0) {
+			ptlrpc_set_destroy(set);
+			RETURN(rc);
+		}
+
+		if (com->lc_type == LFSCK_TYPE_LAYOUT &&
+		    !(lr->lr_flags & LEF_TO_OST)) {
+			lr->lr_flags |= LEF_TO_OST;
+			phase_head = &lad->lad_ost_list;
+			ltds = &lfsck->li_ost_descs;
+			goto again;
+		}
+		break;
+	}
+	case LE_PHASE1_DONE:
+		lad->lad_touch_gen++;
+		ltds = &lfsck->li_mdt_descs;
+		laia->laia_ltds = ltds;
+		spin_lock(&ltds->ltd_lock);
+		while (!list_empty(&lad->lad_mdt_list)) {
+			struct list_head *list;
+			__u32		 *gen;
+
+			if (com->lc_type == LFSCK_TYPE_LAYOUT) {
+				ltd = list_entry(lad->lad_mdt_list.next,
+						 struct lfsck_tgt_desc,
+						 ltd_layout_list);
+				list = &ltd->ltd_layout_list;
+				gen = &ltd->ltd_layout_gen;
+			} else {
+				ltd = list_entry(lad->lad_mdt_list.next,
+						 struct lfsck_tgt_desc,
+						 ltd_namespace_list);
+				list = &ltd->ltd_namespace_list;
+				gen = &ltd->ltd_namespace_gen;
+			}
+
+			if (*gen == lad->lad_touch_gen)
+				break;
+
+			*gen = lad->lad_touch_gen;
+			list_move_tail(list, &lad->lad_mdt_list);
+			atomic_inc(&ltd->ltd_ref);
+			laia->laia_ltd = ltd;
+			spin_unlock(&ltds->ltd_lock);
+			rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
+					lfsck_async_interpret_common,
+					laia, LFSCK_NOTIFY);
+			if (rc != 0) {
+				CDEBUG(D_LFSCK, "%s: LFSCK assistant fail to "
+				       "notify MDT %x for %s phase1 done: "
+				       "rc = %d\n", lfsck_lfsck2name(lfsck),
+				       ltd->ltd_index, lad->lad_name, rc);
+				lfsck_tgt_put(ltd);
+			}
+			spin_lock(&ltds->ltd_lock);
+		}
+		spin_unlock(&ltds->ltd_lock);
+		break;
+	default:
+		CDEBUG(D_LFSCK, "%s: LFSCK assistant unexpected LFSCK event: "
+		       "rc = %d\n", lfsck_lfsck2name(lfsck), lr->lr_event);
+		rc = -EINVAL;
+		break;
+	}
+
+	rc1 = ptlrpc_set_wait(set);
+	ptlrpc_set_destroy(set);
+
+	RETURN(rc != 0 ? rc : rc1);
+}
+
+/**
+ * The LFSCK assistant thread is triggered by the LFSCK main engine.
+ * They co-work together as an asynchronous pipeline: the LFSCK main
+ * engine scans the system and pre-fetches the objects, attributes,
+ * or name entries, etc, and pushes them into the pipeline as input
+ * requests for the LFSCK assistant thread; on the other end of the
+ * pipeline, the LFSCK assistant thread performs the real check and
+ * repair for every request from the main engine.
+ *
+ * Generally, the assistant engine may be blocked when check/repair
+ * something, so the LFSCK main engine will run some faster. On the
+ * other hand, the LFSCK main engine will drive multiple assistant
+ * threads in parallel, means for each LFSCK component on the master
+ * (such as layout LFSCK, namespace LFSCK), there is an independent
+ * LFSCK assistant thread. So under such 1:N multiple asynchronous
+ * pipelines mode, the whole LFSCK performance will be much better
+ * than check/repair everything by the LFSCK main engine itself.
+ */
+int lfsck_assistant_engine(void *args)
+{
+	struct lfsck_thread_args	  *lta	   = args;
+	struct lu_env			  *env	   = &lta->lta_env;
+	struct lfsck_component		  *com     = lta->lta_com;
+	struct lfsck_instance		  *lfsck   = lta->lta_lfsck;
+	struct lfsck_bookmark		  *bk	   = &lfsck->li_bookmark_ram;
+	struct lfsck_position		  *pos     = &com->lc_pos_start;
+	struct lfsck_thread_info	  *info    = lfsck_env_info(env);
+	struct lfsck_request		  *lr      = &info->lti_lr;
+	struct lfsck_assistant_data	  *lad     = com->lc_data;
+	struct ptlrpc_thread		  *mthread = &lfsck->li_thread;
+	struct ptlrpc_thread		  *athread = &lad->lad_thread;
+	struct lfsck_assistant_operations *lao     = lad->lad_ops;
+	struct lfsck_assistant_req	  *lar;
+	struct l_wait_info		   lwi     = { 0 };
+	int				   rc      = 0;
+	int				   rc1	   = 0;
+	ENTRY;
+
+	CDEBUG(D_LFSCK, "%s: %s LFSCK assistant thread start\n",
+	       lfsck_lfsck2name(lfsck), lad->lad_name);
+
+	memset(lr, 0, sizeof(*lr));
+	lr->lr_event = LE_START;
+	if (pos->lp_oit_cookie <= 1)
+		lr->lr_param = LPF_RESET;
+	rc = lfsck_assistant_notify_others(env, com, lr);
+	if (rc != 0) {
+		CDEBUG(D_LFSCK, "%s: LFSCK assistant fail to notify others "
+		       "to start %s: rc = %d\n",
+		       lfsck_lfsck2name(lfsck), lad->lad_name, rc);
+		GOTO(fini, rc);
+	}
+
+	spin_lock(&lad->lad_lock);
+	thread_set_flags(athread, SVC_RUNNING);
+	spin_unlock(&lad->lad_lock);
+	wake_up_all(&mthread->t_ctl_waitq);
+
+	while (1) {
+		while (!list_empty(&lad->lad_req_list)) {
+			bool wakeup = false;
+
+			if (unlikely(lad->lad_exit ||
+				     !thread_is_running(mthread)))
+				GOTO(cleanup1, rc = lad->lad_post_result);
+
+			lar = list_entry(lad->lad_req_list.next,
+					 struct lfsck_assistant_req,
+					 lar_list);
+			/* Only the lfsck_assistant_engine thread itself can
+			 * remove the "lar" from the head of the list, LFSCK
+			 * engine thread only inserts other new "lar" at the
+			 * end of the list. So it is safe to handle current
+			 * "lar" without the spin_lock. */
+			rc = lao->la_handler_p1(env, com, lar);
+			spin_lock(&lad->lad_lock);
+			list_del_init(&lar->lar_list);
+			lad->lad_prefetched--;
+			/* Wake up the main engine thread only when the list
+			 * is empty or half of the prefetched items have been
+			 * handled to avoid too frequent thread schedule. */
+			if (lad->lad_prefetched == 0 ||
+			    (bk->lb_async_windows != 0 &&
+			     bk->lb_async_windows / 2 ==
+			     lad->lad_prefetched))
+				wakeup = true;
+			spin_unlock(&lad->lad_lock);
+			if (wakeup)
+				wake_up_all(&mthread->t_ctl_waitq);
+
+			lao->la_req_fini(env, lar);
+			if (rc < 0 && bk->lb_param & LPF_FAILOUT)
+				GOTO(cleanup1, rc);
+		}
+
+		l_wait_event(athread->t_ctl_waitq,
+			     !lfsck_assistant_req_empty(lad) ||
+			     lad->lad_exit ||
+			     lad->lad_to_post ||
+			     lad->lad_to_double_scan,
+			     &lwi);
+
+		if (unlikely(lad->lad_exit))
+			GOTO(cleanup1, rc = lad->lad_post_result);
+
+		if (!list_empty(&lad->lad_req_list))
+			continue;
+
+		if (lad->lad_to_post) {
+			CDEBUG(D_LFSCK, "%s: %s LFSCK assistant thread post\n",
+			       lfsck_lfsck2name(lfsck), lad->lad_name);
+
+			if (unlikely(lad->lad_exit))
+				GOTO(cleanup1, rc = lad->lad_post_result);
+
+			lad->lad_to_post = 0;
+			LASSERT(lad->lad_post_result > 0);
+
+			memset(lr, 0, sizeof(*lr));
+			lr->lr_event = LE_PHASE1_DONE;
+			lr->lr_status = lad->lad_post_result;
+			rc = lfsck_assistant_notify_others(env, com, lr);
+			if (rc != 0)
+				CDEBUG(D_LFSCK, "%s: LFSCK assistant failed to "
+				       "notify others for %s post: rc = %d\n",
+				       lfsck_lfsck2name(lfsck),
+				       lad->lad_name, rc);
+
+			/* Wakeup the master engine to go ahead. */
+			wake_up_all(&mthread->t_ctl_waitq);
+		}
+
+		if (lad->lad_to_double_scan) {
+			lad->lad_to_double_scan = 0;
+			atomic_inc(&lfsck->li_double_scan_count);
+			lad->lad_in_double_scan = 1;
+			wake_up_all(&mthread->t_ctl_waitq);
+
+			com->lc_new_checked = 0;
+			com->lc_new_scanned = 0;
+			com->lc_time_last_checkpoint = cfs_time_current();
+			com->lc_time_next_checkpoint =
+				com->lc_time_last_checkpoint +
+				cfs_time_seconds(LFSCK_CHECKPOINT_INTERVAL);
+
+			/* Flush async updates before handling orphan. */
+			dt_sync(env, lfsck->li_next);
+
+			CDEBUG(D_LFSCK, "%s: LFSCK assistant phase2 "
+			       "scan start\n", lfsck_lfsck2name(lfsck));
+
+			if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_DOUBLESCAN))
+				GOTO(cleanup2, rc = 0);
+
+			while (lad->lad_in_double_scan) {
+				rc = lfsck_assistant_query_others(env, com);
+				if (lfsck_phase2_next_ready(lad))
+					goto p2_next;
+
+				if (rc < 0)
+					GOTO(cleanup2, rc);
+
+				/* Pull LFSCK status on related targets once
+				 * per 30 seconds if we are not notified. */
+				lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(30),
+							   cfs_time_seconds(1),
+							   NULL, NULL);
+				rc = l_wait_event(athread->t_ctl_waitq,
+					lfsck_phase2_next_ready(lad) ||
+					lad->lad_exit ||
+					!thread_is_running(mthread),
+					&lwi);
+
+				if (unlikely(lad->lad_exit ||
+					     !thread_is_running(mthread)))
+					GOTO(cleanup2, rc = 0);
+
+				if (rc == -ETIMEDOUT)
+					continue;
+
+				if (rc < 0)
+					GOTO(cleanup2, rc);
+
+p2_next:
+				rc = lao->la_handler_p2(env, com);
+				if (rc != 0)
+					GOTO(cleanup2, rc);
+
+				if (unlikely(lad->lad_exit ||
+					     !thread_is_running(mthread)))
+					GOTO(cleanup2, rc = 0);
+			}
+		}
+	}
+
+cleanup1:
+	/* Cleanup the unfinished requests. */
+	spin_lock(&lad->lad_lock);
+	if (rc < 0)
+		lad->lad_assistant_status = rc;
+
+	if (lad->lad_exit && lad->lad_post_result <= 0)
+		lao->la_fill_pos(env, com, &lfsck->li_pos_checkpoint);
+
+	while (!list_empty(&lad->lad_req_list)) {
+		lar = list_entry(lad->lad_req_list.next,
+				 struct lfsck_assistant_req,
+				 lar_list);
+		list_del_init(&lar->lar_list);
+		lad->lad_prefetched--;
+		spin_unlock(&lad->lad_lock);
+		lao->la_req_fini(env, lar);
+		spin_lock(&lad->lad_lock);
+	}
+	spin_unlock(&lad->lad_lock);
+
+	LASSERTF(lad->lad_prefetched == 0, "unmatched prefeteched objs %d\n",
+		 lad->lad_prefetched);
+
+cleanup2:
+	memset(lr, 0, sizeof(*lr));
+	if (rc > 0) {
+		lr->lr_event = LE_PHASE2_DONE;
+		lr->lr_status = rc;
+	} else if (rc == 0) {
+		if (lfsck->li_flags & LPF_ALL_TGT) {
+			lr->lr_event = LE_STOP;
+			lr->lr_status = LS_STOPPED;
+		} else {
+			lr->lr_event = LE_PEER_EXIT;
+			switch (lfsck->li_status) {
+			case LS_PAUSED:
+			case LS_CO_PAUSED:
+				lr->lr_status = LS_CO_PAUSED;
+				break;
+			case LS_STOPPED:
+			case LS_CO_STOPPED:
+				lr->lr_status = LS_CO_STOPPED;
+				break;
+			default:
+				CDEBUG(D_LFSCK, "%s: LFSCK assistant unknown "
+				       "status: rc = %d\n",
+				       lfsck_lfsck2name(lfsck),
+				       lfsck->li_status);
+				lr->lr_status = LS_CO_FAILED;
+				break;
+			}
+		}
+	} else {
+		if (lfsck->li_flags & LPF_ALL_TGT) {
+			lr->lr_event = LE_STOP;
+			lr->lr_status = LS_FAILED;
+		} else {
+			lr->lr_event = LE_PEER_EXIT;
+			lr->lr_status = LS_CO_FAILED;
+		}
+	}
+
+	rc1 = lfsck_assistant_notify_others(env, com, lr);
+	if (rc1 != 0) {
+		CDEBUG(D_LFSCK, "%s: LFSCK assistant failed to notify "
+		       "others for %s quit: rc = %d\n",
+		       lfsck_lfsck2name(lfsck), lad->lad_name, rc1);
+		rc = rc1;
+	}
+
+	/* Flush async updates before exit. */
+	dt_sync(env, lfsck->li_next);
+
+	/* Under force exit case, some requests may be just freed without
+	 * verification, those objects should be re-handled when next run.
+	 * So not update the on-disk tracing file under such case. */
+	if (lad->lad_in_double_scan) {
+		if (!lad->lad_exit)
+			rc1 = lao->la_double_scan_result(env, com, rc);
+
+		CDEBUG(D_LFSCK, "%s: LFSCK assistant phase2 scan "
+		       "finished: rc = %d\n",
+		       lfsck_lfsck2name(lfsck), rc1 != 0 ? rc1 : rc);
+	}
+
+fini:
+	if (lad->lad_in_double_scan)
+		atomic_dec(&lfsck->li_double_scan_count);
+
+	spin_lock(&lad->lad_lock);
+	lad->lad_assistant_status = (rc1 != 0 ? rc1 : rc);
+	thread_set_flags(athread, SVC_STOPPED);
+	wake_up_all(&mthread->t_ctl_waitq);
+	spin_unlock(&lad->lad_lock);
+
+	CDEBUG(D_LFSCK, "%s: %s LFSCK assistant thread exit: rc = %d\n",
+	       lfsck_lfsck2name(lfsck), lad->lad_name,
+	       lad->lad_assistant_status);
+
+	lfsck_thread_args_fini(lta);
+
 	return rc;
 }
