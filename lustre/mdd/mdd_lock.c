@@ -47,38 +47,38 @@
 #include "mdd_internal.h"
 
 void mdd_write_lock(const struct lu_env *env, struct mdd_object *obj,
-                    enum mdd_object_role role)
+		    enum mdd_object_role role)
 {
-        struct dt_object  *next = mdd_object_child(obj);
+	struct dt_object *next = mdd_object_child(obj);
 
-        next->do_ops->do_write_lock(env, next, role);
+	dt_write_lock(env, next, role);
 }
 
 void mdd_read_lock(const struct lu_env *env, struct mdd_object *obj,
-                   enum mdd_object_role role)
+		   enum mdd_object_role role)
 {
-        struct dt_object  *next = mdd_object_child(obj);
+	struct dt_object *next = mdd_object_child(obj);
 
-        next->do_ops->do_read_lock(env, next, role);
+	dt_read_lock(env, next, role);
 }
 
 void mdd_write_unlock(const struct lu_env *env, struct mdd_object *obj)
 {
-        struct dt_object  *next = mdd_object_child(obj);
+	struct dt_object *next = mdd_object_child(obj);
 
-        next->do_ops->do_write_unlock(env, next);
+	dt_write_unlock(env, next);
 }
 
 void mdd_read_unlock(const struct lu_env *env, struct mdd_object *obj)
 {
-        struct dt_object  *next = mdd_object_child(obj);
+	struct dt_object *next = mdd_object_child(obj);
 
-        next->do_ops->do_read_unlock(env, next);
+	dt_read_unlock(env, next);
 }
 
 int mdd_write_locked(const struct lu_env *env, struct mdd_object *obj)
 {
-        struct dt_object  *next = mdd_object_child(obj);
+	struct dt_object *next = mdd_object_child(obj);
 
-        return next->do_ops->do_write_locked(env, next);
+	return dt_write_locked(env, next);
 }

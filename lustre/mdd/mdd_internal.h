@@ -515,10 +515,10 @@ static inline int mdd_permission_internal_locked(const struct lu_env *env,
 
 /* mdd inline func for calling osd_dt_object ops */
 static inline int mdo_attr_get(const struct lu_env *env, struct mdd_object *obj,
-                               struct lu_attr *la, struct lustre_capa *capa)
+			       struct lu_attr *la, struct lustre_capa *capa)
 {
-        struct dt_object *next = mdd_object_child(obj);
-        return next->do_ops->do_attr_get(env, next, la, capa);
+	struct dt_object *next = mdd_object_child(obj);
+	return dt_attr_get(env, next, la, capa);
 }
 
 static inline int mdo_declare_attr_set(const struct lu_env *env,
@@ -531,26 +531,25 @@ static inline int mdo_declare_attr_set(const struct lu_env *env,
 }
 
 static inline int mdo_attr_set(const struct lu_env *env,
-                               struct mdd_object *obj,
-                               const struct lu_attr *la,
-                               struct thandle *handle,
-                               struct lustre_capa *capa)
+			       struct mdd_object *obj,
+			       const struct lu_attr *la,
+			       struct thandle *handle,
+			       struct lustre_capa *capa)
 {
-        struct dt_object *next = mdd_object_child(obj);
-        if (mdd_object_exists(obj) == 0) {
-                CERROR("%s: object "DFID" not found: rc = -2\n",
-                       mdd_obj_dev_name(obj), PFID(mdd_object_fid(obj)));
-                return -ENOENT;
-        }
-        return next->do_ops->do_attr_set(env, next, la, handle, capa);
+	struct dt_object *next = mdd_object_child(obj);
+
+	if (!mdd_object_exists(obj))
+		return -ENOENT;
+
+	return dt_attr_set(env, next, la, handle, capa);
 }
 
 static inline int mdo_xattr_get(const struct lu_env *env,struct mdd_object *obj,
-                                struct lu_buf *buf, const char *name,
-                                struct lustre_capa *capa)
+				struct lu_buf *buf, const char *name,
+				struct lustre_capa *capa)
 {
-        struct dt_object *next = mdd_object_child(obj);
-        return next->do_ops->do_xattr_get(env, next, buf, name, capa);
+	struct dt_object *next = mdd_object_child(obj);
+	return dt_xattr_get(env, next, buf, name, capa);
 }
 
 static inline int mdo_declare_xattr_set(const struct lu_env *env,
@@ -564,18 +563,16 @@ static inline int mdo_declare_xattr_set(const struct lu_env *env,
 }
 
 static inline int mdo_xattr_set(const struct lu_env *env,struct mdd_object *obj,
-                                const struct lu_buf *buf, const char *name,
-                                int fl, struct thandle *handle,
-                                struct lustre_capa *capa)
+				const struct lu_buf *buf, const char *name,
+				int fl, struct thandle *handle,
+				struct lustre_capa *capa)
 {
-        struct dt_object *next = mdd_object_child(obj);
-        if (mdd_object_exists(obj) == 0) {
-                CERROR("%s: object "DFID" not found: rc = -2\n",
-                       mdd_obj_dev_name(obj), PFID(mdd_object_fid(obj)));
-                return -ENOENT;
-        }
-        return next->do_ops->do_xattr_set(env, next, buf, name, fl, handle,
-                                          capa);
+	struct dt_object *next = mdd_object_child(obj);
+
+	if (!mdd_object_exists(obj))
+		return -ENOENT;
+
+	return dt_xattr_set(env, next, buf, name, fl, handle, capa);
 }
 
 static inline int mdo_declare_xattr_del(const struct lu_env *env,
@@ -588,29 +585,27 @@ static inline int mdo_declare_xattr_del(const struct lu_env *env,
 }
 
 static inline int mdo_xattr_del(const struct lu_env *env,struct mdd_object *obj,
-                                const char *name, struct thandle *handle,
-                                struct lustre_capa *capa)
+				const char *name, struct thandle *handle,
+				struct lustre_capa *capa)
 {
-        struct dt_object *next = mdd_object_child(obj);
-        if (mdd_object_exists(obj) == 0) {
-                CERROR("%s: object "DFID" not found: rc = -2\n",
-                       mdd_obj_dev_name(obj), PFID(mdd_object_fid(obj)));
-                return -ENOENT;
-        }
-        return next->do_ops->do_xattr_del(env, next, name, handle, capa);
+	struct dt_object *next = mdd_object_child(obj);
+
+	if (!mdd_object_exists(obj))
+		return -ENOENT;
+
+	return dt_xattr_del(env, next, name, handle, capa);
 }
 
-static inline
-int mdo_xattr_list(const struct lu_env *env, struct mdd_object *obj,
-                   struct lu_buf *buf, struct lustre_capa *capa)
+static inline int
+mdo_xattr_list(const struct lu_env *env, struct mdd_object *obj,
+	       struct lu_buf *buf, struct lustre_capa *capa)
 {
-        struct dt_object *next = mdd_object_child(obj);
-        if (mdd_object_exists(obj) == 0) {
-                CERROR("%s: object "DFID" not found: rc = -2\n",
-                       mdd_obj_dev_name(obj), PFID(mdd_object_fid(obj)));
-                return -ENOENT;
-        }
-        return next->do_ops->do_xattr_list(env, next, buf, capa);
+	struct dt_object *next = mdd_object_child(obj);
+
+	if (!mdd_object_exists(obj))
+		return -ENOENT;
+
+	return dt_xattr_list(env, next, buf, capa);
 }
 
 static inline
@@ -672,15 +667,14 @@ static inline int mdo_declare_ref_add(const struct lu_env *env,
 }
 
 static inline int mdo_ref_add(const struct lu_env *env, struct mdd_object *obj,
-                              struct thandle *handle)
+			      struct thandle *handle)
 {
-        struct dt_object *next = mdd_object_child(obj);
-        if (mdd_object_exists(obj) == 0) {
-                CERROR("%s: object "DFID" not found: rc = -2\n",
-                       mdd_obj_dev_name(obj), PFID(mdd_object_fid(obj)));
-                return -ENOENT;
-        }
-        return next->do_ops->do_ref_add(env, next, handle);
+	struct dt_object *next = mdd_object_child(obj);
+
+	if (!mdd_object_exists(obj))
+		return -ENOENT;
+
+	return dt_ref_add(env, next, handle);
 }
 
 static inline int mdo_declare_ref_del(const struct lu_env *env,
@@ -692,42 +686,36 @@ static inline int mdo_declare_ref_del(const struct lu_env *env,
 }
 
 static inline int mdo_ref_del(const struct lu_env *env, struct mdd_object *obj,
-                              struct thandle *handle)
+			      struct thandle *handle)
 {
-        struct dt_object *next = mdd_object_child(obj);
-        if (mdd_object_exists(obj) == 0) {
-                CERROR("%s: object "DFID" not found: rc = -2\n",
-                       mdd_obj_dev_name(obj), PFID(mdd_object_fid(obj)));
-                return -ENOENT;
-        }
-        return next->do_ops->do_ref_del(env, next, handle);
+	struct dt_object *next = mdd_object_child(obj);
+
+	if (!mdd_object_exists(obj))
+		return -ENOENT;
+
+	return dt_ref_del(env, next, handle);
 }
 
-static inline
-int mdo_declare_create_obj(const struct lu_env *env, struct mdd_object *o,
-                           struct lu_attr *attr,
-                           struct dt_allocation_hint *hint,
-                           struct dt_object_format *dof,
-                           struct thandle *handle)
+static inline int
+mdo_declare_create_obj(const struct lu_env *env, struct mdd_object *o,
+		       struct lu_attr *attr,
+		       struct dt_allocation_hint *hint,
+		       struct dt_object_format *dof,
+		       struct thandle *handle)
 {
-        struct dt_object *next = mdd_object_child(o);
-        return next->do_ops->do_declare_create(env, next, attr, hint,
-                                               dof, handle);
+	struct dt_object *next = mdd_object_child(o);
+	return dt_declare_create(env, next, attr, hint, dof, handle);
 }
 
-static inline
-int mdo_create_obj(const struct lu_env *env, struct mdd_object *o,
-                   struct lu_attr *attr,
-                   struct dt_allocation_hint *hint,
-                   struct dt_object_format *dof,
-                   struct thandle *handle)
+static inline int
+mdo_create_obj(const struct lu_env *env, struct mdd_object *o,
+	       struct lu_attr *attr,
+	       struct dt_allocation_hint *hint,
+	       struct dt_object_format *dof,
+	       struct thandle *handle)
 {
-        struct dt_object *next = mdd_object_child(o);
-	int rc;
-
-	rc = next->do_ops->do_create(env, next, attr, hint, dof, handle);
-
-	return rc;
+	struct dt_object *next = mdd_object_child(o);
+	return dt_create(env, next, attr, hint, dof, handle);
 }
 
 static inline
@@ -746,18 +734,16 @@ int mdo_destroy(const struct lu_env *env, struct mdd_object *o,
         return dt_destroy(env, next, handle);
 }
 
-static inline struct obd_capa *mdo_capa_get(const struct lu_env *env,
-                                            struct mdd_object *obj,
-                                            struct lustre_capa *old,
-                                            __u64 opc)
+static inline struct obd_capa *
+mdo_capa_get(const struct lu_env *env, struct mdd_object *obj,
+	     struct lustre_capa *old, __u64 opc)
 {
-        struct dt_object *next = mdd_object_child(obj);
-        if (mdd_object_exists(obj) == 0) {
-                CERROR("%s: object "DFID" not found: rc = -2\n",
-                       mdd_obj_dev_name(obj), PFID(mdd_object_fid(obj)));
-                return ERR_PTR(-ENOENT);
-        }
-        return next->do_ops->do_capa_get(env, next, old, opc);
+	struct dt_object *next = mdd_object_child(obj);
+
+	if (!mdd_object_exists(obj))
+		return ERR_PTR(-ENOENT);
+
+	return dt_capa_get(env, next, old, opc);
 }
 
 #endif
