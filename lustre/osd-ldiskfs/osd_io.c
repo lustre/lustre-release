@@ -499,6 +499,8 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 	RETURN(0);
 }
 
+#ifndef HAVE_LDISKFS_MAP_BLOCKS
+
 #ifdef HAVE_EXT_PBLOCK /* Name changed to ext4_ext_pblock for kernel 2.6.35 */
 #define ldiskfs_ext_pblock(ex) ext_pblock((ex))
 #endif
@@ -618,7 +620,8 @@ static int ldiskfs_ext_new_extent_cb(struct inode *inode,
 	tgen = LDISKFS_I(inode)->i_ext_generation;
 	count = ldiskfs_ext_calc_credits_for_insert(inode, path);
 
-	handle = ldiskfs_journal_start(inode, count + LDISKFS_ALLOC_NEEDED + 1);
+	handle = osd_journal_start(inode, LDISKFS_HT_MISC,
+				   count + LDISKFS_ALLOC_NEEDED + 1);
 	if (IS_ERR(handle)) {
 		return PTR_ERR(handle);
 	}
@@ -748,6 +751,26 @@ int osd_ldiskfs_map_nblocks(struct inode *inode, unsigned long block,
 	return err;
 }
 
+int osd_ldiskfs_map_bm_inode_pages(struct inode *inode, struct page **page,
+				   int pages, unsigned long *blocks,
+				   int create)
+{
+	int blocks_per_page = PAGE_CACHE_SIZE >> inode->i_blkbits;
+	unsigned long *b;
+	int rc = 0, i;
+
+	for (i = 0, b = blocks; i < pages; i++, page++) {
+		rc = ldiskfs_map_inode_page(inode, *page, b, create);
+		if (rc) {
+			CERROR("ino %lu, blk %lu create %d: rc %d\n",
+			       inode->i_ino, *b, create, rc);
+			break;
+		}
+		b += blocks_per_page;
+	}
+	return rc;
+}
+
 int osd_ldiskfs_map_ext_inode_pages(struct inode *inode, struct page **page,
 				    int pages, unsigned long *blocks,
 				    int create)
@@ -797,27 +820,6 @@ cleanup:
 	return rc;
 }
 
-int osd_ldiskfs_map_bm_inode_pages(struct inode *inode, struct page **page,
-				   int pages, unsigned long *blocks,
-				   int create)
-{
-	int blocks_per_page = PAGE_CACHE_SIZE >> inode->i_blkbits;
-	unsigned long *b;
-	int rc = 0, i;
-
-	for (i = 0, b = blocks; i < pages; i++, page++) {
-		rc = ldiskfs_map_inode_page(inode, *page, b, create);
-		if (rc) {
-			CERROR("ino %lu, blk %lu create %d: rc %d\n",
-			       inode->i_ino, *b, create, rc);
-			break;
-		}
-
-		b += blocks_per_page;
-	}
-	return rc;
-}
-
 static int osd_ldiskfs_map_inode_pages(struct inode *inode, struct page **page,
 				       int pages, unsigned long *blocks,
 				       int create)
@@ -833,6 +835,85 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode, struct page **page,
 
 	return rc;
 }
+#else
+static int osd_ldiskfs_map_inode_pages(struct inode *inode, struct page **page,
+				       int pages, unsigned long *blocks,
+				       int create)
+{
+	int blocks_per_page = PAGE_CACHE_SIZE >> inode->i_blkbits;
+	int rc = 0, i = 0;
+	struct page *fp = NULL;
+	int clen = 0;
+
+	CDEBUG(D_OTHER, "inode %lu: map %d pages from %lu\n",
+		inode->i_ino, pages, (*page)->index);
+
+	/* pages are sorted already. so, we just have to find
+	 * contig. space and process them properly */
+	while (i < pages) {
+		long blen, total = 0;
+		handle_t *handle = NULL;
+		struct ldiskfs_map_blocks map = { 0 };
+
+		if (fp == NULL) { /* start new extent */
+			fp = *page++;
+			clen = 1;
+			if (++i != pages)
+				continue;
+		} else if (fp->index + clen == (*page)->index) {
+			/* continue the extent */
+			page++;
+			clen++;
+			if (++i != pages)
+				continue;
+		}
+		/* process found extent */
+		map.m_lblk = fp->index * blocks_per_page;
+		map.m_len = blen = clen * blocks_per_page;
+		if (create) {
+			create = LDISKFS_GET_BLOCKS_CREATE;
+			handle = ldiskfs_journal_current_handle();
+			LASSERT(handle != NULL);
+		}
+cont_map:
+		rc = ldiskfs_map_blocks(handle, inode, &map, create);
+		if (rc >= 0) {
+			int c = 0;
+			for (; total < blen && c < map.m_len; c++, total++) {
+				if (rc == 0) {
+					*(blocks + total) = 0;
+					total++;
+					break;
+				} else {
+					*(blocks + total) = map.m_pblk + c;
+					/* unmap any possible underlying
+					 * metadata from the block device
+					 * mapping.  bug 6998. */
+					if ((map.m_flags & LDISKFS_MAP_NEW) &&
+					    create)
+						unmap_underlying_metadata(
+							inode->i_sb->s_bdev,
+							map.m_pblk + c);
+				}
+			}
+			rc = 0;
+		}
+		if (rc == 0 && total < blen) {
+			map.m_lblk = fp->index * blocks_per_page + total;
+			map.m_len = blen - total;
+			goto cont_map;
+		}
+		if (rc != 0)
+			GOTO(cleanup, rc);
+
+		/* look for next extent */
+		fp = NULL;
+		blocks += blocks_per_page * clen;
+	}
+cleanup:
+	return rc;
+}
+#endif /* HAVE_LDISKFS_MAP_BLOCKS */
 
 static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
                           struct niobuf_local *lnb, int npages)

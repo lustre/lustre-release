@@ -85,6 +85,25 @@ ext4_journal_start, [
 ]) # LB_EXT4_JOURNAL_START_3ARGS
 
 #
+# LB_LDISKFS_MAP_BLOCKS
+#
+# Since 2.6.35 brought ext4_map_blocks() for IO.
+# We just check this function whether existed.
+# it must be exported by ldiskfs patches.
+#
+AC_DEFUN([LB_LDISKFS_MAP_BLOCKS], [
+LB_CHECK_COMPILE([if kernel has ext4_map_blocks],
+ext4_map_blocks, [
+	#include <linux/fs.h>
+	#include "$EXT4_SRC_DIR/ext4.h"
+],[
+	ext4_map_blocks(NULL, NULL, NULL, 0);
+],[
+	AC_DEFINE(HAVE_LDISKFS_MAP_BLOCKS, 1, [kernel has ext4_map_blocks])
+])
+])
+
+#
 # LDISKFS_AC_PATCH_PROGRAM
 #
 # Determine which program should be used to apply the patches to
@@ -162,6 +181,7 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD
 	LB_EXT_PBLOCK
 	LB_EXT4_JOURNAL_START_3ARGS
+	LB_LDISKFS_MAP_BLOCKS
 	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [posix acls for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [fs security for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [extened attributes for ldiskfs])
