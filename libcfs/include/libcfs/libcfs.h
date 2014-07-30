@@ -81,6 +81,17 @@ static inline int __is_po2(unsigned long long val)
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
 
+/* Sparse annotations */
+#ifdef __KERNEL__
+# if !defined(__must_hold)
+#  ifdef __CHECKER__
+#   define __must_hold(x) __attribute__((context(x, 1, 1)))
+#  else	/* __CHECKER__ */
+#   define __must_hold(x)
+#  endif /* !__CHECKER__ */
+# endif /* !__must_hold */
+#endif /* __KERNEL__ */
+
 /*
  * Lustre Error Checksum: calculates checksum
  * of Hex number by XORing each bit.
