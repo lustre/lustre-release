@@ -1,6 +1,7 @@
-.TH lustreapi 3 "2012 Dec 21" Lustre "Lustre Application Interface Library"
+.TH lustreapi 3 "2014 Sep 22" Lustre "Lustre Application Interface Library"
 .SH NAME
-llapi_hsm_state_get llapi_hsm_state_get_fd \- get HSM state information for a file on Lustre filesystem
+llapi_hsm_state_get, llapi_hsm_state_get_fd \- get HSM state
+information for a file on a Lustre filesystem
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
@@ -12,91 +13,91 @@ llapi_hsm_state_get llapi_hsm_state_get_fd \- get HSM state information for a fi
 .fi
 .SH DESCRIPTION
 .LP
-.B llapi_hsm_state_get(\|)
-.B llapi_hsm_state_get_fd(\|)
-read HSM state information like HSM flags and HSM archive ID for file pointed by
+These functions return the HSM state flags and HSM archive ID for the
+file referred to by
 .IR path
 or
 .IR fd .
-Information is returned in
+Information is returned in the
 .I hus
-which should already be allocated.
-
+argument which should already be allocated.
 .nf
+.LP
 struct hsm_user_state {
 	__u32	hus_states;
 	__u32	hus_archive_id;
 };
 .fi
-.TP 20
-.I hus_states
-Flag mask for different HSM states and policy hints. See
-.I hsm_states
-enum for full list.
-.TP 20
+.TP 7
 .I hus_archive_id
-External HSM ID used for this file.
+External HSM archive ID associated with this file.
+.TP
+.I hus_states
+Flag mask for different HSM states and policy hints.
 .LP
 
-.nf
-enum hsm_states {
-	HS_EXISTS,
-	HS_DIRTY,
-	HS_RELEASED,
-	HS_ARCHIVED,
-	HS_NORELEASE,
-	HS_NOARCHIVE,
-	HS_LOST,
-};
-.fi
+The value of
+.I hus_states
+is formed by bitwise or'ing the following possible states:
 
-.TP 20
-.I HS_EXISTS
-A file copy exists in HSM backend.
+.TP 7
+.B HS_EXISTS
+The file has been assigned to an archive and provided to the backend
+for archiving. Partial copies may exist in the HSM archive and will
+need to be deleted when the file is removed.
 .TP
-.I HS_DIRTY
-File content is not in sync with HSM backend.
+.B HS_DIRTY
+The file content is not in sync with the HSM archive. This flag is
+set automatically when a file with HS_EXISTS set is changed, and can
+be set explicitly by a user.
 .TP
-.I HS_RELEASED
-File content is no more present in Lustre and should be restored to be access.
+.B HS_RELEASED
+The file content is not present in Lustre, and must be restored from
+the HSM archive before the file can be accessed. File must also be
+HS_ARCHIVED state and not HS_DIRTY.
 .TP
-.I HS_ARCHIVED
-An up-to-date file copy exists in HSM backend.
+.B HS_ARCHIVED
+A complete copy of the file content exists in the HSM archive.
 .TP
-.I HS_NORELEASE
-File should never be released. File data will stay in Lustre even if a copy exists in HSM backend.
+.B HS_NORELEASE
+This flag indicates the file content should never be released. File
+content will stay in Lustre even if a copy exists in HSM backend.
+This can be set by a user.
 .TP
-.I HS_NOARCHIVE
-File should never be archived. Useful if this is a temporary file by example.
+.B HS_NOARCHIVE
+The file will not be archived. This might be used for a large temporary
+file, for example. This can be set by a user.
 .TP
-.I HS_LOST
-File copy in backend is not usable anymore and file could not be restore.
+.B HS_LOST
+The file content in the archive is not available, and file can not be
+restored. If this file is also HS_RELEASED, then attempts to access
+the file will fail. This flag can be set by an administrator.
+
 .SH RETURN VALUES
 .LP
 .B llapi_hsm_state_get(\|)
+and
 .B llapi_hsm_state_get_fd(\|)
 return:
-.TP
-0
+.TP 7
+.B 0
 on success
 .TP
-!= 0
-on failure,
-.I errno
-is set appropriately.
+.B -errno
+on failure
 .SH ERRORS
-.TP 15
+.TP 7
 .SM ENOMEM
 failed to allocate memory.
-.TP 15
+.TP
 .SM ENAMETOOLONG
 .I path
 was too long.
-.TP 15
+.TP
 .SM ENOENT
 .I path
 does not point to a file or a directory.
-.TP 15
+.TP
 .SM ENOTTY
 .I path
 does not point to a Lustre filesystem.
@@ -121,7 +122,7 @@ int main(int argc, char **argv)
 	rc = llapi_hsm_state_get(argv[1], &hus);
 	if (rc) {
 		fprintf(stderr, "can't get hsm state for %s: %s\\n",
-			argv[1], strerror(errno = -rc));
+			argv[1], strerror(-rc));
 		exit(rc);
 	}
 
@@ -129,16 +130,16 @@ int main(int argc, char **argv)
 		printf(" released");
 	if (hus.hus_states & HS_EXISTS)
 		printf(" exists");
-	if (hus.hus_states & HS_DIRTY)
-		printf(" dirty");
 	if (hus.hus_states & HS_ARCHIVED)
 		printf(" archived");
 
-	/* Display user-settable flags */
+	/* Display settable flags */
 	if (hus.hus_states & HS_NORELEASE)
 		printf(" never_release");
 	if (hus.hus_states & HS_NOARCHIVE)
 		printf(" never_archive");
+	if (hus.hus_states & HS_DIRTY)
+		printf(" dirty");
 	if (hus.hus_states & HS_LOST)
 		printf(" lost_from_hsm");
 
@@ -153,5 +154,6 @@ int main(int argc, char **argv)
 .SH "SEE ALSO"
 .BR lustre (7),
 .BR lustreapi (7),
-.BR llapi_hsm_state_set (3)
-.BR llapi_hsm_state_set_fd (3)
+.BR llapi_hsm_state_set (3),
+.BR llapi_hsm_state_set_fd (3),
+.BR lfs-hsm (1)
