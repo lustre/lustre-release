@@ -216,6 +216,8 @@ struct lquota_site {
 #define LQUOTA_BUMP_VER 0x1
 #define LQUOTA_SET_VER  0x2
 
+extern struct kmem_cache *lqe_kmem;
+
 /* helper routine to get/put reference on lquota_entry */
 static inline void lqe_getref(struct lquota_entry *lqe)
 {
@@ -228,7 +230,7 @@ static inline void lqe_putref(struct lquota_entry *lqe)
 	LASSERT(lqe != NULL);
 	LASSERT(atomic_read(&lqe->lqe_ref) > 0);
 	if (atomic_dec_and_test(&lqe->lqe_ref))
-		OBD_FREE_PTR(lqe);
+		OBD_SLAB_FREE_PTR(lqe, lqe_kmem);
 }
 
 static inline int lqe_is_master(struct lquota_entry *lqe)
@@ -368,7 +370,6 @@ struct dt_object *acct_obj_lookup(const struct lu_env *, struct dt_device *,
 void lquota_generate_fid(struct lu_fid *, int, int, int);
 int lquota_extract_fid(const struct lu_fid *, int *, int *, int *);
 const struct dt_index_features *glb_idx_feature(struct lu_fid *);
-extern struct kmem_cache *lqe_kmem;
 
 /* lquota_entry.c */
 /* site create/destroy */

@@ -311,7 +311,7 @@ static int qsd_id_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *de
 		struct lu_env           *env;
 		struct lquota_entry	*lqe;
 
-		LDLM_DEBUG(lock, "canceling global quota lock");
+		LDLM_DEBUG(lock, "canceling ID quota lock");
 		lqe = qsd_id_ast_data_get(lock, true);
 		if (lqe == NULL)
 			break;

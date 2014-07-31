@@ -497,7 +497,7 @@ static int qsd_reint_main(void *args)
 	if (qqi->qqi_slv_ver != qti->qti_slv_ver) {
 		rc = qsd_reint_index(env, qqi, false);
 		if (rc) {
-			CWARN("%s: Reint slave for "DFID" failed. %d\n",
+			CWARN("%s: reintegration for "DFID" failed with %d\n",
 			      qsd->qsd_svname, PFID(&qqi->qqi_slv_fid), rc);
 			GOTO(out_lock, rc);
 		}
@@ -515,8 +515,8 @@ static int qsd_reint_main(void *args)
 	/* Step 4: start reconciliation for each enforced ID */
 	rc = qsd_reconciliation(env, qqi);
 	if (rc)
-		CWARN("%s: reconciliation failed. "DFID", %d\n",
-		      qsd->qsd_svname, PFID(&qti->qti_fid), rc);
+		CWARN("%s: reconciliation for "DFID" failed with %d\n",
+		      qsd->qsd_svname, PFID(&qqi->qqi_slv_fid), rc);
 
 	EXIT;
 out_lock:
