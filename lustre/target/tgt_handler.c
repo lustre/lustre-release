@@ -1417,7 +1417,7 @@ static int tgt_handle_lfsck_query(struct tgt_session_info *tsi)
 {
 	struct lfsck_request	*request;
 	struct lfsck_reply	*reply;
-	int			 rc	 = 0;
+	int			 rc;
 	ENTRY;
 
 	request = req_capsule_client_get(tsi->tsi_pill, &RMF_LFSCK_REQUEST);
@@ -1428,12 +1428,10 @@ static int tgt_handle_lfsck_query(struct tgt_session_info *tsi)
 	if (reply == NULL)
 		RETURN(-ENOMEM);
 
-	reply->lr_status = tgt_lfsck_query(tsi->tsi_env,
-					   tsi->tsi_tgt->lut_bottom, request);
-	if (reply->lr_status < 0)
-		rc = reply->lr_status;
+	rc = tgt_lfsck_query(tsi->tsi_env, tsi->tsi_tgt->lut_bottom, request);
+	reply->lr_status = rc;
 
-	RETURN(rc);
+	RETURN(rc < 0 ? rc : 0);
 }
 
 struct tgt_handler tgt_lfsck_handlers[] = {
