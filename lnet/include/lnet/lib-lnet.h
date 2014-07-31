@@ -960,9 +960,6 @@ int lnet_router_checker_start(void);
 void lnet_router_checker_stop(void);
 void lnet_swap_pinginfo(lnet_ping_info_t *info);
 
-int lnet_ping(lnet_process_id_t id, int timeout_ms,
-              lnet_process_id_t *ids, int n_ids);
-
 int lnet_parse_ip2nets(char **networksp, char *ip2nets);
 int lnet_parse_routes(char *route_str, int *im_a_router);
 int lnet_parse_networks(struct list_head *nilist, char *networks);
