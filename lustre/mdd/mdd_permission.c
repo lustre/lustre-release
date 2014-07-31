@@ -212,31 +212,35 @@ static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
 {
 #ifdef CONFIG_FS_POSIX_ACL
 	struct lu_ucred  *uc  = lu_ucred_assert(env);
-        posix_acl_xattr_header *head;
-        posix_acl_xattr_entry *entry;
-        struct lu_buf   *buf;
-        int entry_count;
-        int rc;
-        ENTRY;
+	posix_acl_xattr_header *head;
+	posix_acl_xattr_entry *entry;
+	struct lu_buf   *buf;
+	int entry_count;
+	int rc;
+	ENTRY;
 
-        buf = mdd_buf_get(env, mdd_env_info(env)->mti_xattr_buf,
-                          sizeof(mdd_env_info(env)->mti_xattr_buf));
-        rc = mdo_xattr_get(env, obj, buf, XATTR_NAME_ACL_ACCESS,
-                           mdd_object_capa(env, obj));
-        if (rc <= 0)
-                RETURN(rc ? : -EACCES);
+	buf = mdd_buf_get(env, mdd_env_info(env)->mti_xattr_buf,
+			  sizeof(mdd_env_info(env)->mti_xattr_buf));
+	rc = mdo_xattr_get(env, obj, buf, XATTR_NAME_ACL_ACCESS,
+			   mdd_object_capa(env, obj));
+	if (rc <= 0)
+		RETURN(rc ? : -EACCES);
 
-        buf->lb_len = rc;
-        head = (posix_acl_xattr_header *)(buf->lb_buf);
-        entry = head->a_entries;
-        entry_count = (buf->lb_len - sizeof(head->a_version)) /
-                      sizeof(posix_acl_xattr_entry);
+	buf->lb_len = rc;
+	head = (posix_acl_xattr_header *)(buf->lb_buf);
+	entry = head->a_entries;
+	entry_count = posix_acl_xattr_count(buf->lb_len);
 
-        rc = lustre_posix_acl_permission(uc, la, mask, entry, entry_count);
-        RETURN(rc);
+	/* Disregard empty ACLs and fall back to
+	 * standard UNIX permissions. See LU-5434 */
+	if (entry_count <= 0)
+		RETURN(-EAGAIN);
+
+	rc = lustre_posix_acl_permission(uc, la, mask, entry, entry_count);
+	RETURN(rc);
 #else
-        ENTRY;
-        RETURN(-EAGAIN);
+	ENTRY;
+	RETURN(-EAGAIN);
 #endif
 }
 
