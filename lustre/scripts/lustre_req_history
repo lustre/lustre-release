@@ -45,10 +45,10 @@ fi
 
 TMP_DIR_CLIENT=`mktemp -d /tmp/src_req_history.XXXXX`
 chmod ugo+rwx $TMP_DIR_CLIENT
-MDS_NODE=`cat /proc/fs/lustre/mdc/*/mds_conn_uuid | cut -d @ -f1`
+MDS_NODE=$(lctl get_param -n mdc.*.mds_conn_uuid | cut -d @ -f1)
 TARGET="OSS"
 i=0
-for NODE in `cat /proc/fs/lustre/osc/*-osc-*/ost_conn_uuid | cut -d @ -f1` ; do
+for NODE in $(lctl get_param -n osc.*-osc-*.ost_conn_uuid | cut -d @ -f1) ; do
 	NODE_ARRAY[$i]=$NODE
 	i=`expr $i + 1`
 done
@@ -56,7 +56,7 @@ done
 # Get the Histories from all the OSS's
 
 k=0
-for NODE in `cat /proc/fs/lustre/osc/*-osc-*/ost_conn_uuid | cut -d @ -f1` ; do
+for NODE in $(lctl get_param -n osc.*-osc-*.ost_conn_uuid | cut -d @ -f1) ; do
 
 	SAME_OST=0
 	j=0
@@ -77,18 +77,17 @@ for NODE in `cat /proc/fs/lustre/osc/*-osc-*/ost_conn_uuid | cut -d @ -f1` ; do
 	TMPFILE2=`mktemp /tmp/temp_histories_$NODE.XXXXXXXXXX`
 	rm -f $TMPFILE1
 	rm -f $TMPFILE2
-	( echo cd /proc/fs/lustre
-	echo touch $TMPFILE1
+	( echo touch $TMPFILE1
 	echo touch $TMPFILE2
 	echo chmod go+rw $TMPFILE1
 	echo chmod go+rw $TMPFILE2
 	for FILE in $REQ_FILES_OST; do
 		SERVICE=`echo $FILE | cut -d "/" -f3`
-		echo "cat $FILE |cut -d\" \" -f1 | sed s/$/:$TARGET/| sed s/$/:$SERVICE/ >> $TMPFILE1"
+		echo "lctl get_param -n $FILE |cut -d\" \" -f1 | sed s/$/:$TARGET/| sed s/$/:$SERVICE/ >> $TMPFILE1"
 	done
 	for FILE in $REQ_FILES_CLIENT; do
                 SERVICE=`echo $FILE | cut -d "/" -f3`
-                echo "cat $FILE | sed s/$/:$TARGET/ | sed s/$/:$SERVICE/ >> $TMPFILE1"
+                echo "lctl get_param -n $FILE | sed s/$/:$TARGET/ | sed s/$/:$SERVICE/ >> $TMPFILE1"
         done
 	if [ $CLIENT = $NODE ]
 	then
@@ -104,19 +103,18 @@ done
 # Get the Histories from the MDS
 
 TARGET="MDS"
-for NODE in `cat /proc/fs/lustre/mdc/*/mds_conn_uuid | cut -d @ -f1`; do
+for NODE in $(lctl get_param -n mdc.*.mds_conn_uuid | cut -d @ -f1); do
 	TMPFILE1=`mktemp /tmp/temp_histories_$NODE.XXXXXXXXXX`
         rm -f $TMPFILE1
 	TMPFILE2=`mktemp /tmp/temp_histories_$NODE.XXXXXXXXXX`
         rm -f $TMPFILE2
-	( echo cd /proc/fs/lustre
-	echo touch $TMPFILE1
+	( echo touch $TMPFILE1
 	echo touch $TMPFILE2
 	echo chmod go+rw $TMPFILE1
 	echo chmod go+rw $TMPFILE2
 	for FILE in $REQ_FILES_MDT; do
 		SERVICE=`echo $FILE | cut -d "/" -f3`
-		echo "cat $FILE | sed s/$/:$TARGET/ | sed s/$/:$SERVICE/ >> $TMPFILE1"
+		echo "lctl get_param -n $FILE | sed s/$/:$TARGET/ | sed s/$/:$SERVICE/ >> $TMPFILE1"
 	done
 	if [ $CLIENT = $NODE ]
         then
@@ -137,7 +135,7 @@ TARGET="CLIENT"
 
 for FILE in $REQ_FILES_CLIENT; do
 	SERVICE=`echo $FILE | cut -d "/" -f3`
-	cat /proc/fs/lustre/$FILE | sed s/$/:$TARGET/ | sed s/$/:$SERVICE/ >> $TMPFILE1
+	lctl get_param -n $FILE | sed s/$/:$TARGET/ | sed s/$/:$SERVICE/ >> $TMPFILE1
 done
 
 grep -r 0@lo $TMPFILE1 >> $TMPFILE2

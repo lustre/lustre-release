@@ -26,20 +26,19 @@ Display help information.
 Either the full path to a stats file, or the shorthand:
 \fImds\fR or \fIost\fR.
 .SH EXAMPLE
-To monitor /proc/fs/lustre/ost/OSS/ost/stats every second:
+To monitor the OST RPC stats every second:
 .IP
 llstat -i 1 ost
 .SH FILES
 .nf
-/proc/fs/lustre/mdt/MDS/*/stats
-/proc/fs/lustre/mds/*/exports/*/stats
-/proc/fs/lustre/mdc/*/stats
-/proc/fs/lustre/ldlm/services/*/stats
-/proc/fs/lustre/ldlm/namespaces/*/pool/stats
-/proc/fs/lustre/mgs/MGS/exports/*/stats
-/proc/fs/lustre/ost/OSS/*/stats
-/proc/fs/lustre/osc/*/stats
-/proc/fs/lustre/obdfilter/*/exports/*/stats
-/proc/fs/lustre/obdfilter/*/stats
-/proc/fs/lustre/llite/*/stats
+llite.*.stats
+lwp.*.stats
+mdc.*.stats
+obdfilter.*.stats
+osc.*.stats
+osd-ldiskfs.*.stats
+osp.*.stats
+ldlm.services.*.stats
+mds.MDS.*.stats
+ost.OSS.*.stats
 .fi

@@ -173,17 +173,15 @@ function brw_collector()
 	echo "brw_* for $filter " $(date)
 
 	# clear old stats
-	for i in /proc/fs/lustre/obdfilter/${filter}/brw_*; do
-		echo 0 >$i
-	done
+	lctl set_param -n obdfilter.${filter}.brw_*=0
 
 	if let "BRW_INTERVAL==0"; then
-		cat /proc/fs/lustre/obdfilter/${filter}/brw_*
+		lctl get_param -n obdfilter.${filter}.brw_*
 		idle_collector
-		cat /proc/fs/lustre/obdfilter/${filter}/brw_*
+		lctl get_param -n obdfilter.${filter}.brw_*
 	elif let "BRW_INTERVAL>0"; then
 		while [ "$stop_collector" != "1" ]; do
-			cat /proc/fs/lustre/obdfilter/${filter}/brw_*
+			lctl get_param -n obdfilter.${filter}.brw_*
 			sleep $BRW_INTERVAL
 		done
 	else
@@ -199,8 +197,8 @@ function brw_start()
 	fi
 
 	# find all obdfilters
-	for i in /proc/fs/lustre/obdfilter/*; do
-		local filter=$(basename $i)
+	for i in $(lctl list_param obdfilter.*); do
+		filter=$(echo "$i" | awk -F"." '{print $2}')
 		if [ "$filter" == "num_refs" ]; then
 			continue;
 		fi
@@ -224,15 +222,15 @@ function service_collector()
 	echo "service stats for ${target}/${srv} " $(date)
 
 	# clear old stats
-	echo 0 >$file
+	lctl set_param -n $file=0
 
 	if let "SERVICE_INTERVAL==0"; then
-		grep -v "^[^ ]*[^0-9]*0 samples" $file
+		lctl get_param -n $file | grep -v "^[^ ]*[^0-9]*0 samples"
 		idle_collector
-		grep -v "^[^ ]*[^0-9]*0 samples" $file
+		lctl get_param -n $file | grep -v "^[^ ]*[^0-9]*0 samples"
 	elif let "SERVICE_INTERVAL>0"; then
 		while [ "$stop_collector" != "1" ]; do
-			grep -v "^[^ ]*[^0-9]*0 samples" $file
+			lctl get_param -n $file | grep -v "^[^ ]*[^0-9]*0 samples"
 			sleep $SERVICE_INTERVAL
 		done
 	else
@@ -248,25 +246,25 @@ function service_start()
 	fi
 
 	# find all OSTs and MDTs
-	for i in /proc/fs/lustre/ost/* /proc/fs/lustre/mdt/*; do
-		target=$(basename $i)
+	for i in $(lctl list_param ost.* mdt.*); do
+		target=$(echo "$i" | awk -F"." '{print $2}')
 		if [ "$target" == "num_refs" ]; then
 			continue;
 		fi
-		for j in ${i}/*; do
-			srv=$(basename $j)
+		for j in $(lctl list_param ${i}.*); do
+			srv=$(echo "$j" | awk -F"." '{print $3}')
 			if [ "$srv" == "uuid" ]; then
 				continue;
 			fi
 			run_collector "service-${srv}" service_collector \
-				${j}/stats $target $srv &
+				${j}.stats $target $srv &
 		done
 	done
 
 	# find all LDLM services
-	for i in /proc/fs/lustre/ldlm/services/*; do
-		srv=$(basename $i)
-		run_collector "service" service_collector ${i}/stats "ldlm" $srv &
+	for i in $(lctl list_param ldlm.services.*); do
+		srv=$(echo "$i" | awk -F"." '{print $3}')
+		run_collector "service" service_collector ${i}.stats "ldlm" $srv &
 	done
 
 }
@@ -311,11 +309,12 @@ function client_start()
 	fi
 
 	# find all osc
-	for i in /proc/fs/lustre/osc/* ; do
-		local target=$(basename $i)
+	for i in $(lctl list_param osc.*); do
+		target=$(echo "$i" | awk -F"." '{print $2}')
 		if [ "$target" == "num_refs" ]; then
 			continue;
 		fi
+		i=$(echo "$i" |awk '{gsub(/\./,"/");print}')
 		for j in ${i}/*; do
 			local stats=$(basename $j)
 			if [ "$stats" == "stats" -o "$stats" == "rpc_stats" ]; then
@@ -325,8 +324,9 @@ function client_start()
 		done
 	done
 	# find all llite stats
-	for i in /proc/fs/lustre/llite/* ; do
-		target=$(basename $i)
+	for i in $(lctl list_param llite.*); do
+		target=$(echo "$i" | awk -F"." '{print $2}')
+		i=$(echo "$i" |awk '{gsub(/\./,"/");print}')
 		for j in ${i}/*; do
 			stats=$(basename $j)
 			if [ "$stats" == "stats" -o "$stats" == "vfs_ops_stats" ]; then
@@ -347,8 +347,8 @@ function client_start()
 function sdio_collector()
 {
 	local obd=$1
-	local uuid=$(cat $obd/uuid)
-	local tmp=$(cat $obd/mntdev)
+	local uuid=$(lctl get_param -n obd.uuid 2>&1)
+	local tmp=$(lctl get_param -n obd.mntdev 2>&1)
 	local disk=$(basename $tmp)
 	local file="/proc/scsi/sd_iostats/${disk}"
 
@@ -379,15 +379,15 @@ function sdio_start()
 	fi
 
 	# find all obdfilters and MDSs
-	for i in /proc/fs/lustre/obdfilter/* /proc/fs/lustre/mds/*; do
-		local obd=$(basename $i)
+	for i in $(lctl list_param obdfilter.* mds.*); do
+		obd=$(echo "$i" | awk -F"." '{print $2}')
 		if [ "$obd" == "num_refs" ]; then
 			continue;
 		fi
-		if [ ! -f ${i}/mntdev ]; then
+		tmp=$(lctl get_param -n ${i}.mntdev 2>&1)
+		if [ $? != 0 ]; then
 			continue;
 		fi
-		local tmp=$(cat ${i}/mntdev)
 		local disk=$(basename $tmp)
 		if [ ! -f /proc/scsi/sd_iostats/${disk} ]; then
 			continue;
@@ -406,8 +406,8 @@ function sdio_start()
 function mballoc_collector()
 {
 	local obd=$1
-	local uuid=$(cat $obd/uuid)
-	local tmp=$(cat $obd/mntdev)
+	local uuid=$(lctl get_param -n obd.uuid 2>&1)
+	local tmp=$(lctl get_param -n obd.mntdev 2>&1)
 	local disk=$(basename $tmp)
 	local file="/proc/fs/ldiskfs*/${disk}/mb_history"
 
@@ -437,15 +437,15 @@ function mballoc_start()
 	fi
 
 	# find all obdfilters and MDSs
-	for i in /proc/fs/lustre/obdfilter/* /proc/fs/lustre/mds/*; do
-		obd=$(basename $i)
+	for i in $(lctl list_param obdfilter.* mds.*); do
+		obd=$(echo "$i" | awk -F"." '{print $2}')
 		if [ "$obd" == "num_refs" ]; then
 			continue;
 		fi
-		if [ ! -f ${i}/mntdev ]; then
+		tmp=$(lctl get_param -n ${i}.mntdev 2>&1)
+		if [ $? != 0 ]; then
 			continue;
 		fi
-		tmp=$(cat ${i}/mntdev)
 		disk=$(basename $tmp)
 		if [ ! -f /proc/fs/ldiskfs*/${disk}/mb_history ]; then
 			continue;
@@ -464,8 +464,8 @@ function mballoc_start()
 function io_collector()
 {
 	local obd=$1
-	local uuid=$(cat $obd/uuid)
-	local tmp=$(cat $obd/mntdev)
+	local uuid=$(lctl get_param -n obd.uuid 2>&1)
+	local tmp=$(lctl get_param -n obd.mntdev 2>&1)
 	local disk=$(basename $tmp)
 	local file="/sys/block/${disk}/stat"
 
@@ -493,15 +493,15 @@ function io_start()
 	fi
 
 	# find all obdfilters and MDSs
-	for i in /proc/fs/lustre/obdfilter/* /proc/fs/lustre/mds/*; do
-		local obd=$(basename $i)
+	for i in $(lctl list_param obdfilter.* mds.*); do
+		obd=$(echo "$i" | awk -F"." '{print $2}')
 		if [ "$obd" == "num_refs" ]; then
 			continue;
 		fi
-		if [ ! -f ${i}/mntdev ]; then
+		local tmp=$(lctl get_param -n ${i}.mntdev 2>&1)
+		if [ $? != 0 ]; then
 			continue;
 		fi
-		local tmp=$(cat ${i}/mntdev)
 		local disk=$(basename $tmp)
 		if [ ! -f /sys/block/${disk}/stat ]; then
 			continue;
@@ -520,8 +520,8 @@ function io_start()
 function jbd_collector()
 {
 	local obd=$1
-	local uuid=$(cat $obd/uuid)
-	local tmp=$(cat $obd/mntdev)
+	local uuid=$(lctl get_param -n obd.uuid 2>&1)
+	local tmp=$(lctl get_param -n obd.mntdev 2>&1)
 	local disk=$(basename $tmp)
 	local file="/proc/fs/jbd/${disk}/history"
 
@@ -546,15 +546,15 @@ function jbd_start()
 	fi
 
 	# find all obdfilters and MDSs
-	for i in /proc/fs/lustre/obdfilter/* /proc/fs/lustre/mds/*; do
-		local obd=$(basename $i)
+	for i in $(lctl list_param obdfilter.* mds.*); do
+		obd=$(echo "$i" | awk -F"." '{print $2}')
 		if [ "$obd" == "num_refs" ]; then
 			continue;
 		fi
-		if [ ! -f ${i}/mntdev ]; then
+		local tmp=$(lctl get_param -n ${i}.mntdev 2>&1)
+		if [ $? != 0 ]; then
 			continue;
 		fi
-		local tmp=$(cat ${i}/mntdev)
 		local disk=$(basename $tmp)
 		if [ ! -f /proc/fs/jbd/${disk}/history ]; then
 			continue;

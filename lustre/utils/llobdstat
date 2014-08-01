@@ -5,13 +5,12 @@
 
 my $pname = $0;
 
-my $defaultpath = "/proc/fs/lustre";
 my $obdstats = "stats";
 
 sub usage()
 {
     print STDERR "Usage: $pname <ost_name> [<interval> [<count>}]\n";
-    print STDERR "where  ost_name  : ost name under $defaultpath/obdfilter\n";
+    print STDERR "where  ost_name  : ost name under /{proc,sys}/fs/lustre/obdfilter\n";
     print STDERR "       interval  : sample interaval in seconds\n";
     print STDERR "example: $pname lustre-OST0000 2\n";
     print STDERR "Use CTRL + C to stop statistics printing\n";
@@ -33,9 +32,14 @@ if (($#ARGV < 0) || ($#ARGV > 2)) {
     } elsif ( -f "$ARGV[0]/$obdstats" ) {
         $statspath = "$ARGV[0]/$obdstats";
     } else {
-	my $st = "$defaultpath/obdfilter/$ARGV[0]/$obdstats";
+	my $st = glob ("/{proc,sys}/fs/lustre/obdfilter/$ARGV[0]");
 	if ( -f "$st" ) {
 	    $statspath = $st;
+	} else {
+	    my $st = glob("/{proc,sys}/fs/lustre/obdfilter/$ARGV[0]/$obdstats");
+	    if ( -f "$st" ) {
+		$statspath = $st;
+	    }
 	}
     }
     if ( $statspath =~ /^None$/ ) {
@@ -49,7 +53,7 @@ if (($#ARGV < 0) || ($#ARGV > 2)) {
     }
 }
 
-print "$pname on $statspath\n";
+print "$pname on $ARGV[0]\n";
 
 my %cur;
 my %last;

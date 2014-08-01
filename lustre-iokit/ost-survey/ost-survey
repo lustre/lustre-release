@@ -30,27 +30,30 @@ sub usage () {
 # ost_count subroutine ets globle variable $OST with Number of OST's
 # Also fills 1 for active OST indexes in ACTIVEOST_INX array.
 sub ost_count () {
-	# numobd gives number of ost's and activeobd gives number of active ost's
-	my $tempfile = glob ("/proc/fs/lustre/lov/*-clilov-*/activeobd"); 
-	open(PTR, $tempfile) || die "Cannot open $tempfile: $!\n";    
-	$OSTS = <PTR>;
-	close PTR;
+	$OSTS = `lctl get_param -n lov.*-clilov-*.activeobd`;
+	if ( $? ) {
+		die "Read lov.*-clilov-*.activeobd error: $?\n";
+	}
 	print "Number of Active OST devices : $OSTS";
-	my $tempfile = glob ("/proc/fs/lustre/lov/*-clilov-*/numobd"); 
-	open(PTR, $tempfile) || die "Cannot open $tempfile: $!\n";    
-	$numost = <PTR>;
-	close PTR;
+
+	$numost = `lctl get_param -n lov.*-clilov-*.numobd`;
+	if ( $? ) {
+		die "Read lov.*-clilov-*.numobd error: $?\n";
+	}
+
 	if ( $numost != $OSTS ) {
 		printf "Number of non active ots(s): %d\n", ( $numost - $OSTS );
 		$OSTS = $numost;
 	}
-	my $tempfile = glob ("/proc/fs/lustre/lov/*-clilov-*/target_obd");
-	open(PTR, $tempfile) || die "Cannot open $tempfile: $!\n";
+
+	$targets = `lctl get_param -n lov.*-clilov-*.target_obd`;
+	if ( $? ) {
+		die "Read lov.*-clilov-*.target_obd error: $?\n";
+	}
+
 	my $count = 0;
-	my $temp;
-	while (<PTR>) {
-		chop;
-		my ($ost_num, $ost_name, $ost_status) = split(/\s+/, $_);
+	foreach $line (split /\n/, $targets) {
+		my ($ost_num, $ost_name, $ost_status) = split(/\s+/, $line);
 		if ( $ost_status eq "ACTIVE" ) {
 			$ACTIVEOST_INX[$count] = 1;
 		}
@@ -59,15 +62,18 @@ sub ost_count () {
 }
 
 sub cache_off () {
-	$CACHEFILE = glob ("/proc/fs/lustre/llite/*/max_cached_mb"); 
-	open(PTR, $CACHEFILE) || die "Cannot open $tempfile: $!\n";    
-	$CACHESZ = 0 + <PTR>;
-	close PTR;
-	system("echo 0 >> $CACHEFILE");
+	$CACHESZ = `lctl get_param -n llite.*.max_cached_mb`;
+	if ( $? ) {
+		die "Read llite.*.max_cached_mb error: $?\n";
+	}
+
+	$CACHESZ = `echo "$CACHESZ" | grep max_cached_mb | awk '{print \$2}'`;
+
+	system("lctl set_param -n llite.*.max_cached_mb=0");
 }
 
 sub cache_on () {
-	system("echo $CACHESZ >> $CACHEFILE");
+	system("lctl set_param -n llite.*.max_cached_mb=$CACHESZ");
 }
 
 # make_dummy subroutine creates a dummy file that will be used for read operation.

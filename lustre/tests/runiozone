@@ -8,7 +8,7 @@
 [ $1 ] && SIZE=$1
 LOOP=0
 rm -f endiozone
-echo 0 > /proc/sys/lnet/debug
+lctl set_param -n debug=0
 while date; do
 	LOOP=`expr $LOOP + 1`
 	echo "Test #$LOOP"

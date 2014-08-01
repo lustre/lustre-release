@@ -181,17 +181,16 @@ list_mounts() {
 
 lustre_health_check()
 {
-        proc="/proc/fs/lustre/health_check"
+	check=$(lctl get_param -n health_check 2>&1)
         # on first check the lustre modules are not loaded yet
-        if [ ! -e $proc ]; then
+        if [ $? != 0 ]; then
                 return 0
         fi
 
-        check=`cat $proc`
         if [ "$check" = "healthy" ]; then
                 return 0
         else
-                ocf_log err "$proc is $check"
+                ocf_log err "health_check is $check"
                 return 1
         fi
 }
@@ -298,19 +297,20 @@ lustre_server_mounted()
         # check in all mntdevs if really not mounted
         # lustre bug 21359 (https://bugzilla.lustre.org/show_bug.cgi?id=21359)
         if [ $rc -eq $OCF_NOT_RUNNING ]; then
-                local list="/proc/fs/lustre/mds/* /proc/fs/lustre/obdfilter/*"
-                for i in $list ; do
-                        if [ -f ${i}/mntdev ]; then
-                                MNTDEVS="$MNTDEVS ${i}/mntdev"
-                        fi
-                done
-                local mgsdev=/proc/fs/lustre/mgs/MGS/mntdev
-                if [ -f $mgsdev ]; then
-                        MNTDEVS="$MNTDEVS $mgsdev"
-                fi
-                for i in $MNTDEVS; do
-                        local dev=`cat $i`
-                        if [ "$dev" = "$DEVICE" ]; then
+		dev=$(lctl get_param -n mds.*.mntdev 2>&1)
+		if [ $? = 0 ]; then
+			MNTDEVS=$dev
+		fi
+		dev=$(lctl get_param -n obdfilter.*.mntdev 2>&1)
+		if [ $? = 0 ]; then
+			MNTDEVS="$MNTDEVS $dev"
+		fi
+		dev=$(lctl get_param -n mgs.MGS.mntdev 2>&1)
+		if [ $? = 0 ]; then
+			MNTDEVS="$MNTDEVS $dev"
+		fi
+		for i in $MNTDEVS; do
+			if [ "$i" = "$DEVICE" ]; then
                                 ocf_log err "Bug21359, /proc/mounts claims device is not mounted, but $i proves this is wrong"
                                 rc=$OCF_ERR_GENERIC
                         fi
@@ -357,19 +357,25 @@ lustre_server_status()
 #
 lustre_server_validate_all()
 {
-        proc="/proc/fs/lustre"
-        if [ ! -d $proc ]; then
-                modprobe lustre
-                count=0
-                while [ ! -d $proc -o $count -gt 10 ]; do
-                        sleep 1
-                done
+	var=$(lctl get_param -n version 2>&1)
+	if [ $? != 0 ]; then
+		modprobe lustre
 
-                if [ ! -d $proc ];  then
-                        ocf_log err "Failed to load the lustre module"
-                        return $OCF_ERR_GENERIC
-                fi
-        fi
+		for i in `seq 1 10`; do
+			var=$(lctl get_param -n version 2>&1)
+			if [ $? != 0 ]; then
+				sleep 1
+			else
+				break
+			fi
+		done
+
+		var=$(lctl get_param -n version 2>&1)
+		if [ $? != 0 ]; then
+			ocf_log err "Failed to load the lustre module"
+			return $OCF_ERR_GENERIC
+		fi
+	fi
 
         return $OCF_SUCCESS
 }

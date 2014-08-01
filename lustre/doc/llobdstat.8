@@ -15,7 +15,7 @@ Type control-C to stop statistics printing.
 .SH EXAMPLE
 .nf
 # llobdstat liane-OST0002 1
-/usr/bin/llobdstat on /proc/fs/lustre/obdfilter/liane-OST0002/stats
+/usr/bin/llobdstat on liane-OST0002
 Processor counters run at 2800.189 MHz
 Read: 1.21431e+07, Write: 9.93363e+08, create/destroy: 24/1499, stat: 34, punch: 18
 [NOTE: cx: create, dx: destroy, st: statfs, pu: punch ]
@@ -31,5 +31,3 @@ Timestamp   Read-delta  ReadRate  Write-delta  WriteRate
 1217026059    0.00MB    0.00MB/s     0.00MB    0.00MB/s st:1
 ...
 .fi
-.SH FILES
-/proc/fs/lustre/obdfilter/<ostname>/stats.

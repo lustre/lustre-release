@@ -10,7 +10,6 @@ export EJOURNAL=${EJOURNAL:-""}
 export REFORMAT=${REFORMAT:-""}
 export WRITECONF=${WRITECONF:-""}
 export VERBOSE=${VERBOSE:-false}
-export CATASTROPHE=${CATASTROPHE:-/proc/sys/lnet/catastrophe}
 export GSS=false
 export GSS_KRB5=false
 export GSS_PIPEFS=false
@@ -719,7 +718,8 @@ init_gss() {
         fi
 
         if [ -n "$LGSS_KEYRING_DEBUG" ]; then
-            echo $LGSS_KEYRING_DEBUG > /proc/fs/lustre/sptlrpc/gss/lgss_keyring/debug_level
+		lctl set_param -n \
+		    sptlrpc.gss.lgss_keyring.debug_level=$LGSS_KEYRING_DEBUG
         fi
     fi
 }
@@ -1947,8 +1947,12 @@ stop_client_loads() {
 
 # verify that lustre actually cleaned up properly
 cleanup_check() {
-	[ -f "$CATASTROPHE" ] && [[ $(< $CATASTROPHE) -ne 0 ]] &&
-		error "LBUG/LASSERT detected"
+	VAR=$(lctl get_param -n catastrophe 2>&1)
+	if [ $? = 0 ] ; then
+		if [ $VAR != 0 ]; then
+			error "LBUG/LASSERT detected"
+		fi
+	fi
 	BUSY=$(dmesg | grep -i destruct || true)
 	if [ -n "$BUSY" ]; then
 		echo "$BUSY" 1>&2
@@ -4415,10 +4419,31 @@ set_nodes_failloc () {
 
 cancel_lru_locks() {
     $LCTL mark "cancel_lru_locks $1 start"
-    for d in `lctl get_param -N ldlm.namespaces.*.lru_size | egrep -i $1`; do
-        $LCTL set_param -n $d=clear
-    done
-    $LCTL get_param ldlm.namespaces.*.lock_unused_count | egrep -i $1 | grep -v '=0'
+
+    if [ $1 != "MGC" ]; then
+	for d in $(lctl get_param -N ldlm.namespaces.*.lru_size |
+		 egrep -i $1); do
+	    $LCTL set_param -n $d=clear
+	done
+	$LCTL get_param ldlm.namespaces.*.lock_unused_count | egrep -i $1 |
+		grep -v '=0'
+    else
+	for d in $(find \
+		/{proc,sys}/fs/lustre/ldlm/namespaces/*$1*/lru_size \
+		2> /dev/null); do
+	    echo "clear" > $d
+	done
+
+	for d in $(find \
+		/{proc,sys}/fs/lustre/ldlm/namespaces/*$1*/lock_unused_count \
+		2> /dev/null); do
+	    if [ $(cat $d) != 0 ]; then
+		echo "ldlm.namespaces.$(echo "$d" |
+			cut -f 7 -d'/').lock_unused_count=$(cat $d)"
+	    fi
+	done
+    fi
+
     $LCTL mark "cancel_lru_locks $1 stop"
 }
 
@@ -5500,14 +5525,17 @@ restore_lustre_params() {
 
 check_catastrophe() {
 	local rnodes=${1:-$(comma_list $(remote_nodes_list))}
-	local C=$CATASTROPHE
-	[ -f $C ] && [ $(cat $C) -ne 0 ] && return 1
+	VAR=$(lctl get_param -n catastrophe 2>&1)
+	if [ $? = 0 ] ; then
+		if [ $VAR != 0 ]; then
+			return 1
+		fi
+	fi
 
 	[ -z "$rnodes" ] && return 0
 
 	local data
-	data=$(do_nodes "$rnodes" "rc=\\\$([ -f $C ] &&
-		echo \\\$(< $C) || echo 0);
+	data=$(do_nodes "$rnodes" "rc=\\\$(lctl get_param -n catastrophe);
 		if [ \\\$rc -ne 0 ]; then echo \\\$(hostname): \\\$rc; fi
 		exit \\\$rc")
 	local rc=$?

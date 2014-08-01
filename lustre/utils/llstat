@@ -10,12 +10,12 @@
 sub usage()
 {
 	print STDERR "Usage: $pname [-c] [-g] [-i <interval>] [-h <help>] <stats_file>\n";
-	print STDERR "       stats_file : /proc/fs/lustre/.../stat\n";
+	print STDERR "       stats_file : lustre/.../stat\n";
 	print STDERR "       -i interval: polling period\n";
 	print STDERR "       -c         : clear stats file first\n";
 	print STDERR "       -g         : graphable output format\n";
 	print STDERR "       -h         : help, display this information\n";
-	print STDERR "example: $pname -i 1 ost (monitors /proc/fs/lustre/ost/OSS/ost/stats)\n";
+	print STDERR "example: $pname -i 1 ost (monitors lustre/ost/OSS/ost/stats)\n";
 	print STDERR "Use CTRL + C to stop statistics printing\n";
 	exit 1;
 }
@@ -125,7 +125,6 @@ sub readstat()
 
 #Globals
 $pname = $0;
-$defaultpath = "/proc/fs/lustre";
 $obdstats = "stats";
 $clear = 0;
 $graphable = 0;
@@ -168,11 +167,11 @@ if ( -f $obddev ) {
 } elsif ( -f "$obddev/$obdstats" ) {
 	$statspath = "$obddev/$obdstats";
 } else {
-	my $st = glob("$defaultpath/*/$obddev/$obdstats");
+	my $st = glob("/{proc,sys}/fs/lustre/*/$obddev/$obdstats");
 	if ( -f "$st" ) {
 		$statspath = $st;
 	} else {
-		$st = glob("$defaultpath/*/*/$obddev/$obdstats");
+		$st = glob("/{proc,sys}/fs/lustre/*/*/$obddev/$obdstats");
 		if ( -f "$st" ) {
 			$statspath = $st;
 		}

@@ -1,11 +1,13 @@
 #!/bin/bash
 
 echo "=== Router Buffers ======="
-test -e /proc/sys/lnet/buffers && cat /proc/sys/lnet/buffers
+lctl get_param -n buffers 2> /dev/null
 echo
+
 echo "=== NIs ============================================"
-test -e /proc/sys/lnet/nis && cat /proc/sys/lnet/nis
+lctl get_param -n nis 2> /dev/null
 echo
+
 echo "=== Peers ============================================================="
-test -e /proc/sys/lnet/peers && cat /proc/sys/lnet/peers
+lctl get_param -n peers 2> /dev/null
 echo

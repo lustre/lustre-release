@@ -17,20 +17,16 @@ rm -fr $MOUNT/*
 sleep 1		# to ensure we get up-to-date statfs info
 
 set_qos() {
-	for i in `ls /proc/fs/lustre/lov/*/qos_threshold`; do
-		echo $(($1/1024)) > $i 
-	done
-	for i in `ls /proc/fs/lustre/lov/*/qos_maxage`; do
-		echo $2 > $i
-	done
+	lctl set_param lov.*.qos_threshold=$(($1/1024))
+	lctl set_param lov.*.qos_maxage=$2
 }
 
 # assume all osts has same free space 
-OSTCOUNT=`cat /proc/fs/lustre/lov/*/activeobd | head -n 1`
-TOTALAVAIL=`cat /proc/fs/lustre/llite/*/kbytesavail | head -n 1`
+OSTCOUNT=$(lctl get_param -n lov.*.activeobd | head -n 1)
+TOTALAVAIL=$(lctl get_param -n llite.*.kbytesavail | head -n 1)
 SINGLEAVAIL=$(($TOTALAVAIL/$OSTCOUNT))
 MINFREE=$((1024 * 4))	# 4M
-TOTALFFREE=`cat /proc/fs/lustre/llite/*/filesfree | head -n 1`
+TOTALFFREE=$(lctl get_param -n llite.*.filesfree | head -n 1)
 
 if [ $SINGLEAVAIL -lt $MINFREE ]; then
 	echo "ERROR: single ost free size($SINGLEAVAIL kb) is too low!"

@@ -1027,8 +1027,9 @@ run_test 34 "no lock timeout under IO"
 test_35() { # bug 17645
         local generation=[]
         local count=0
-        for imp in /proc/fs/lustre/mdc/$FSNAME-MDT*-mdc-*; do
-            g=$(awk '/generation/{print $2}' $imp/import)
+	gen=$(lctl get_param mdc.$FSNAME-MDT*-mdc-*.import | grep generation |
+		awk '/generation/{print $2}')
+	for g in $gen; do
             generation[count]=$g
             let count=count+1
         done
@@ -1070,10 +1071,20 @@ test_35() { # bug 17645
         do_facet client "lctl set_param fail_loc=0x0"
         df -h $MOUNT1 $MOUNT2
         count=0
-        for imp in /proc/fs/lustre/mdc/$FSNAME-MDT*-mdc-*; do
-            g=$(awk '/generation/{print $2}' $imp/import)
-            if ! test "$g" -eq "${generation[count]}"; then
-                error "Eviction happened on import $(basename $imp)"
+	gen=$(lctl get_param mdc.$FSNAME-MDT*-mdc-*.import | grep generation |
+		awk '/generation/{print $2}')
+	for g in $gen; do
+	    if ! test "$g" -eq "${generation[count]}"; then
+		list=$(lctl list_param mdc.$FSNAME-MDT*-mdc-*.import)
+		local c = 0
+		for imp in $list; do
+			if [ $c = $count ]; then
+				break
+			fi
+			c=c+1
+		done
+		imp=$(echo "$imp" | awk -F"." '{print $2}')
+		error "Eviction happened on import $imp"
             fi
             let count=count+1
         done

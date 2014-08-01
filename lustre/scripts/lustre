@@ -608,38 +608,54 @@ health_check ()
 	egrep -q "libcfs|lvfs|portals" /proc/modules && STATE="loaded"
 
 	# check for any configured devices (may indicate partial startup)
-	if [ -d /proc/fs/lustre ]; then
-		if [ -n "`cat /proc/fs/lustre/devices 2> /dev/null`" ] ; then
+	VAR=$(lctl get_param version 2>&1)
+	if [ $? = 0 ] ; then
+		VAR=$(lctl get_param -n devices 2>&1)
+		if [ $? = 0 ] ; then
 			STATE="partial"
 			RETVAL=150
 		fi
 
 		# check for either a server or a client filesystem
-		MDT="`ls /proc/fs/lustre/mdt/*/recovery_status 2> /dev/null`"
-		OST="`ls /proc/fs/lustre/obdfilter/*/recovery_status \
-			2> /dev/null`"
-		LLITE="`ls /proc/fs/lustre/llite/fs* 2> /dev/null`"
-		if [ "$MDT" -o "$OST" -o "$LLITE" ]; then
-			STATE="running"
-			RETVAL=0
+		MDT=""
+		OST=""
+		LLITE=""
+
+		VAR=$(lctl get_param -n mdt.*.recovery_status 2>&1)
+		if [ $? = 0 ] ; then
+			MDT="YES"
 		fi
+
+		VAR=$(lctl get_param -n obdfilter.*.recovery_status 2>&1)
+		if [ $? = 0 ] ; then
+                        OST="YES"
+                fi
+
+                VAR=$(lctl get_param -n llite.fs* 2>&1)
+		if [ $? = 0 ] ; then
+                        LLITE="YES"
+                fi
+
+                if [ "$MDT" -o "$OST" -o "$LLITE" ]; then
+                        STATE="running"
+                        RETVAL=0
+                fi
 	else
 		# check if this is a router
-		if [ -d /proc/sys/lnet ]; then
-			ROUTER="`cat /proc/sys/lnet/routes | head -1 |
-				grep -i -c \"Routing enabled\"`"
-			if [[ ! -z ${ROUTER} && ${ROUTER} -ge 1 ]]; then
-				STATE="running"
-				RETVAL=0
-			fi
+		if [[ "$(lctl get_param -n routes)" =~ "Routing enabled" ]]; then
+			STATE="running"
+			RETVAL=0
 		fi
 	fi
 
 	# check for server disconnections
-	DISCON="`grep -v FULL /proc/fs/lustre/*c/*/*server_uuid 2> /dev/null`"
-	if [ -n "$DISCON" ] ; then
-		STATE="disconnected"
-		RETVAL=0
+        VAR=$(lctl get_param -n *c.*.*server_uuid 2>&1)
+	if [ $? = 0 ] ; then
+		DISCON="$(echo $VAR | grep -v FULL)"
+	        if [ -n "$DISCON" ] ; then
+			STATE="disconnected"
+			RETVAL=0
+		fi
 	fi
 
 	# check for servers in recovery
@@ -649,14 +665,14 @@ health_check ()
 	fi
 
 	# check for error in health_check
-	HEALTH="/proc/fs/lustre/health_check"
-	if [ -f "$HEALTH" ] && grep -q "NOT HEALTHY" $HEALTH ; then
+	local health_check=$(lctl get_param -n health_check)
+	if [[ "$health_check" =~ "NOT HEALTHY" ]]; then
 		STATE="unhealthy"
 		RETVAL=1
 	fi
 
 	# check for LBUG
-	if [ -f  "$HEALTH" ] && grep -q "LBUG" $HEALTH ; then
+	if [[ "$health_check" =~ "LBUG" ]]; then
 		STATE="LBUG"
 		RETVAL=152
 	fi

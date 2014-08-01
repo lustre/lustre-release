@@ -38,7 +38,7 @@ sbinscripts = lc_servip lustre_up14 lustre_rmmod lhbadm ldev
 sbinscripts += lustre_routes_config lustre_routes_conversion
 
 # These are scripts that are generated from .in files
-genscripts = lustre_config lc_modprobe lc_net lc_hb lc_cluman lustre_createcsv \
+genscripts = lustre_config lc_modprobe lc_net lc_hb lc_cluman \
     lc_md lc_lvm lustre_start
 
 if INIT_SCRIPTS

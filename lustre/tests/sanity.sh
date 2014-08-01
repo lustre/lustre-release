@@ -9187,7 +9187,17 @@ test_133e() {
 run_test 133e "Verifying OST {read,write}_bytes nid stats ================="
 
 test_133f() {
-	local proc_dirs="/proc/fs/lustre/ /proc/sys/lnet/ /proc/sys/lustre/"
+	local proc_dirs
+
+	local dirs="/proc/fs/lustre/ /proc/sys/lnet/ /proc/sys/lustre/ \
+/sys/fs/lustre/ /sys/fs/lnet/"
+	local dir
+	for dir in $dirs; do
+		if [ -d $dir ]; then
+			proc_dirs="$proc_dirs $dir"
+		fi
+	done
+
 	local facet
 
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
@@ -9216,7 +9226,17 @@ test_133f() {
 run_test 133f "Check for LBUGs/Oopses/unreadable files in /proc"
 
 test_133g() {
-	local proc_dirs="/proc/fs/lustre/ /proc/sys/lnet/ /proc/sys/lustre/"
+	local proc_dirs
+
+	local dirs="/proc/fs/lustre/ /proc/sys/lnet/ /proc/sys/lustre/ \
+/sys/fs/lustre/ /sys/fs/lnet/"
+	local dir
+	for dir in $dirs; do
+		if [ -d $dir ]; then
+			proc_dirs="$proc_dirs $dir"
+		fi
+	done
+
 	local facet
 
 	# Second verifying readability.
@@ -11411,7 +11431,7 @@ run_test 214 "hash-indexed directory test - bug 20133"
 
 # having "abc" as 1st arg, creates $TMP/lnet_abc.out and $TMP/lnet_abc.sys
 create_lnet_proc_files() {
-	cat /proc/sys/lnet/$1 >$TMP/lnet_$1.out || error "cannot read /proc/sys/lnet/$1"
+	lctl get_param -n $1 >$TMP/lnet_$1.out || error "cannot read lnet.$1"
 	sysctl lnet.$1 >$TMP/lnet_$1.sys_tmp || error "cannot read lnet.$1"
 
 	sed "s/^lnet.$1\ =\ //g" "$TMP/lnet_$1.sys_tmp" >$TMP/lnet_$1.sys
@@ -11467,14 +11487,13 @@ test_215() { # for bugs 18102, 21079, 21517
 	local L2 # regexp for 2nd line (optional)
 	local BR # regexp for the rest (body)
 
-	# /proc/sys/lnet/stats should look as 11 space-separated non-negative numerics
+	# lnet.stats should look as 11 space-separated non-negative numerics
 	BR="^$N $N $N $N $N $N $N $N $N $N $N$"
 	create_lnet_proc_files "stats"
-	check_lnet_proc_stats "stats.out" "/proc/sys/lnet/stats" "$BR"
 	check_lnet_proc_stats "stats.sys" "lnet.stats" "$BR"
 	remove_lnet_proc_files "stats"
 
-	# /proc/sys/lnet/routes should look like this:
+	# lnet.routes should look like this:
 	# Routing disabled/enabled
 	# net hops priority state router
 	# where net is a string like tcp0, hops > 0, priority >= 0,
@@ -11484,11 +11503,10 @@ test_215() { # for bugs 18102, 21079, 21517
 	L2="^net +hops +priority +state +router$"
 	BR="^$NET +$N +(0|1) +(up|down) +$NID$"
 	create_lnet_proc_files "routes"
-	check_lnet_proc_entry "routes.out" "/proc/sys/lnet/routes" "$BR" "$L1" "$L2"
 	check_lnet_proc_entry "routes.sys" "lnet.routes" "$BR" "$L1" "$L2"
 	remove_lnet_proc_files "routes"
 
-	# /proc/sys/lnet/routers should look like this:
+	# lnet.routers should look like this:
 	# ref rtr_ref alive_cnt state last_ping ping_sent deadline down_ni router
 	# where ref > 0, rtr_ref > 0, alive_cnt >= 0, state is up/down,
 	# last_ping >= 0, ping_sent is boolean (0/1), deadline and down_ni are
@@ -11496,11 +11514,10 @@ test_215() { # for bugs 18102, 21079, 21517
 	L1="^ref +rtr_ref +alive_cnt +state +last_ping +ping_sent +deadline +down_ni +router$"
 	BR="^$P +$P +$N +(up|down) +$N +(0|1) +$I +$I +$NID$"
 	create_lnet_proc_files "routers"
-	check_lnet_proc_entry "routers.out" "/proc/sys/lnet/routers" "$BR" "$L1"
 	check_lnet_proc_entry "routers.sys" "lnet.routers" "$BR" "$L1"
 	remove_lnet_proc_files "routers"
 
-	# /proc/sys/lnet/peers should look like this:
+	# lnet.peers should look like this:
 	# nid refs state last max rtr min tx min queue
 	# where nid is a string like 192.168.1.1@tcp2, refs > 0,
 	# state is up/down/NA, max >= 0. last, rtr, min, tx, min are
@@ -11508,21 +11525,19 @@ test_215() { # for bugs 18102, 21079, 21517
 	L1="^nid +refs +state +last +max +rtr +min +tx +min +queue$"
 	BR="^$NID +$P +(up|down|NA) +$I +$N +$I +$I +$I +$I +$N$"
 	create_lnet_proc_files "peers"
-	check_lnet_proc_entry "peers.out" "/proc/sys/lnet/peers" "$BR" "$L1"
 	check_lnet_proc_entry "peers.sys" "lnet.peers" "$BR" "$L1"
 	remove_lnet_proc_files "peers"
 
-	# /proc/sys/lnet/buffers  should look like this:
+	# lnet.buffers  should look like this:
 	# pages count credits min
 	# where pages >=0, count >=0, credits and min are numeric (0 or >0 or <0)
 	L1="^pages +count +credits +min$"
 	BR="^ +$N +$N +$I +$I$"
 	create_lnet_proc_files "buffers"
-	check_lnet_proc_entry "buffers.out" "/proc/sys/lnet/buffers" "$BR" "$L1"
 	check_lnet_proc_entry "buffers.sys" "lnet.buffers" "$BR" "$L1"
 	remove_lnet_proc_files "buffers"
 
-	# /proc/sys/lnet/nis should look like this:
+	# lnet.nis should look like this:
 	# nid status alive refs peer rtr max tx min
 	# where nid is a string like 192.168.1.1@tcp2, status is up/down,
 	# alive is numeric (0 or >0 or <0), refs >= 0, peer >= 0,
@@ -11530,15 +11545,14 @@ test_215() { # for bugs 18102, 21079, 21517
 	L1="^nid +status +alive +refs +peer +rtr +max +tx +min$"
 	BR="^$NID +(up|down) +$I +$N +$N +$N +$N +$I +$I$"
 	create_lnet_proc_files "nis"
-	check_lnet_proc_entry "nis.out" "/proc/sys/lnet/nis" "$BR" "$L1"
 	check_lnet_proc_entry "nis.sys" "lnet.nis" "$BR" "$L1"
 	remove_lnet_proc_files "nis"
 
-	# can we successfully write to /proc/sys/lnet/stats?
-	echo "0" >/proc/sys/lnet/stats || error "cannot write to /proc/sys/lnet/stats"
+	# can we successfully write to lnet.stats?
+	lctl set_param -n stats=0 || error "cannot write to lnet.stats"
 	sysctl -w lnet.stats=0 || error "cannot write to lnet.stats"
 }
-run_test 215 "/proc/sys/lnet exists and has proper content - bugs 18102, 21079, 21517"
+run_test 215 "lnet exists and has proper content - bugs 18102, 21079, 21517"
 
 test_216() { # bug 20317
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
@@ -12971,10 +12985,9 @@ test_900() {
         local ls
         #define OBD_FAIL_MGC_PAUSE_PROCESS_LOG   0x903
         $LCTL set_param fail_loc=0x903
-        # cancel_lru_locks mgc - does not work due to lctl set_param syntax
-        for ls in /proc/fs/lustre/ldlm/namespaces/MGC*/lru_size; do
-                echo "clear" > $ls
-        done
+
+        cancel_lru_locks MGC
+
 	FAIL_ON_ERROR=true cleanup
 	FAIL_ON_ERROR=true setup
 }

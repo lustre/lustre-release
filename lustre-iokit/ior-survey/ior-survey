@@ -100,8 +100,7 @@ dump_cache() {
 	# we are assuming mpi uses will also have pdsh
 	local clients=$1;shift
 	local tmpfile=$1;shift
-	clear_cache='for LRU in /proc/fs/lustre/ldlm/namespaces/*/lru_size; 
-		do sudo /bin/bash -c "echo clear > $LRU"; done'
+	clear_cache='lctl set_param ldlm.namespaces.*.lru_size=clear'
         echo "=> $clear_cache" >> $tmpfile
         $pdsh $pdsh_args "$test_clients" "$clear_cache" >> $tmpfile 2>&1 
         status=$?
