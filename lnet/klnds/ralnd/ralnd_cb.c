@@ -919,15 +919,16 @@ kranal_check_conn_timeouts (kra_conn_t *conn)
                  conn->rac_state == RANAL_CONN_CLOSING);
 
 	if (!conn->rac_close_sent &&
-	    cfs_time_aftereq(now, conn->rac_last_tx + conn->rac_keepalive *
-			     HZ)) {
+	    cfs_time_aftereq(now, conn->rac_last_tx +
+			     msecs_to_jiffies(conn->rac_keepalive *
+					      MSEC_PER_SEC))) {
 		/* not sent in a while; schedule conn so scheduler sends a keepalive */
 		CDEBUG(D_NET, "Scheduling keepalive %p->%s\n",
 		       conn, libcfs_nid2str(conn->rac_peer->rap_nid));
 		kranal_schedule_conn(conn);
 	}
 
-	timeout = conn->rac_timeout * HZ;
+	timeout = msecs_to_jiffies(conn->rac_timeout * MSEC_PER_SEC);
 
 	if (!conn->rac_close_recvd &&
 	    cfs_time_aftereq(now, conn->rac_last_rx + timeout)) {
@@ -935,7 +936,7 @@ kranal_check_conn_timeouts (kra_conn_t *conn)
 		       (conn->rac_state == RANAL_CONN_ESTABLISHED) ?
 		       "Nothing" : "CLOSE not",
 		       libcfs_nid2str(conn->rac_peer->rap_nid),
-		       (now - conn->rac_last_rx)/HZ);
+		       jiffies_to_msecs(now - conn->rac_last_rx)/MSEC_PER_SEC);
 		return -ETIMEDOUT;
 	}
 
@@ -955,7 +956,7 @@ kranal_check_conn_timeouts (kra_conn_t *conn)
 			spin_unlock_irqrestore(&conn->rac_lock, flags);
 			CERROR("tx on fmaq for %s blocked %lu seconds\n",
 			       libcfs_nid2str(conn->rac_peer->rap_nid),
-			       (now - tx->tx_qtime)/HZ);
+			       jiffies_to_msecs(now-tx->tx_qtime)/MSEC_PER_SEC);
 			return -ETIMEDOUT;
 		}
 	}
@@ -967,7 +968,7 @@ kranal_check_conn_timeouts (kra_conn_t *conn)
 			spin_unlock_irqrestore(&conn->rac_lock, flags);
 			CERROR("tx on rdmaq for %s blocked %lu seconds\n",
 			       libcfs_nid2str(conn->rac_peer->rap_nid),
-			       (now - tx->tx_qtime)/HZ);
+			       jiffies_to_msecs(now-tx->tx_qtime)/MSEC_PER_SEC);
 			return -ETIMEDOUT;
 		}
 	}
@@ -979,7 +980,7 @@ kranal_check_conn_timeouts (kra_conn_t *conn)
 			spin_unlock_irqrestore(&conn->rac_lock, flags);
 			CERROR("tx on replyq for %s blocked %lu seconds\n",
 			       libcfs_nid2str(conn->rac_peer->rap_nid),
-			       (now - tx->tx_qtime)/HZ);
+			       jiffies_to_msecs(now-tx->tx_qtime)/MSEC_PER_SEC);
 			return -ETIMEDOUT;
 		}
 	}
@@ -1231,7 +1232,7 @@ kranal_reaper (void *arg)
 			conn_index = (conn_index + 1) % conn_entries;
 		}
 
-		next_check_time += p * HZ;
+		next_check_time += msecs_to_jiffies(p * MSEC_PER_SEC);
 
 		spin_lock_irqsave(&kranal_data.kra_reaper_lock, flags);
 
@@ -1420,11 +1421,13 @@ kranal_sendmsg(kra_conn_t *conn, kra_msg_t *msg,
 
         case RAP_NOT_DONE:
 		if (cfs_time_aftereq(jiffies,
-				     conn->rac_last_tx + conn->rac_keepalive *
-				     HZ))
+				     conn->rac_last_tx +
+				     msecs_to_jiffies(conn->rac_keepalive *
+						      MSEC_PER_SEC)))
 			CWARN("EAGAIN sending %02x (idle %lu secs)\n",
 			      msg->ram_type,
-			      (jiffies - conn->rac_last_tx)/HZ);
+			      jiffies_to_msecs(jiffies - conn->rac_last_tx) /
+			      MSEC_PER_SEC);
 		return -EAGAIN;
         }
 }
@@ -1456,7 +1459,8 @@ kranal_process_fmaq (kra_conn_t *conn)
 
 			if (cfs_time_aftereq(jiffies,
 					     conn->rac_last_tx +
-					     conn->rac_keepalive * HZ)) {
+					     msecs_to_jiffies(conn->rac_keepalive *
+							      MSEC_PER_SEC))) {
 				CDEBUG(D_NET, "sending NOOP (rdma in progress)\n");
 				kranal_init_msg(&conn->rac_msg, RANAL_MSG_NOOP);
 				kranal_sendmsg(conn, &conn->rac_msg, NULL, 0);
@@ -1495,11 +1499,13 @@ kranal_process_fmaq (kra_conn_t *conn)
 		spin_unlock_irqrestore(&conn->rac_lock, flags);
 
 		if (cfs_time_aftereq(jiffies,
-				     conn->rac_last_tx + conn->rac_keepalive *
-				     HZ)) {
+				     conn->rac_last_tx +
+				     msecs_to_jiffies(conn->rac_keepalive *
+						      MSEC_PER_SEC))) {
 			CDEBUG(D_NET, "sending NOOP -> %s (%p idle %lu(%ld))\n",
 			       libcfs_nid2str(conn->rac_peer->rap_nid), conn,
-			       (jiffies - conn->rac_last_tx)/HZ,
+			       jiffies_to_msecs(jiffies - conn->rac_last_tx) /
+			       MSEC_PER_SEC,
 			       conn->rac_keepalive);
 			kranal_init_msg(&conn->rac_msg, RANAL_MSG_NOOP);
 			kranal_sendmsg(conn, &conn->rac_msg, NULL, 0);
@@ -1911,7 +1917,7 @@ int kranal_process_new_conn (kra_conn_t *conn)
 
 	LASSERT (rrc == RAP_NOT_DONE);
 	if (!cfs_time_aftereq(jiffies, conn->rac_last_tx +
-			      conn->rac_timeout * HZ))
+			      msecs_to_jiffies(conn->rac_timeout*MSEC_PER_SEC)))
 		return -EAGAIN;
 
 	/* Too late */
@@ -2021,10 +2027,12 @@ kranal_scheduler (void *arg)
 				/* retry with exponential backoff until HZ */
 				if (conn->rac_keepalive == 0)
 					conn->rac_keepalive = 1;
-				else if (conn->rac_keepalive <= HZ)
+				else if (conn->rac_keepalive <=
+					 msecs_to_jiffies(MSEC_PER_SEC))
 					conn->rac_keepalive *= 2;
 				else
-					conn->rac_keepalive += HZ;
+					conn->rac_keepalive +=
+						msecs_to_jiffies(MSEC_PER_SEC);
 
 				deadline = conn->rac_last_tx + conn->rac_keepalive;
 				spin_lock_irqsave(&dev->rad_lock, flags);

@@ -838,7 +838,8 @@ kranal_connect (kra_peer_t *peer)
                 MIN(peer->rap_reconnect_interval,
                     *kranal_tunables.kra_max_reconnect_interval);
 
-	peer->rap_reconnect_time = jiffies + peer->rap_reconnect_interval * HZ;
+	peer->rap_reconnect_time = jiffies +
+		msecs_to_jiffies(peer->rap_reconnect_interval * MSEC_PER_SEC);
 
         /* Grab all blocked packets while we have the global lock */
         cfs_list_add(&zombies, &peer->rap_tx_queue);

@@ -1042,8 +1042,7 @@ do {									\
 	atomic_inc(&kgnilnd_data.kgn_nquiesce);				\
 	CDEBUG(D_NET, "Waiting for thread pause to be over...\n");	\
 	while (kgnilnd_data.kgn_quiesce_trigger) {			\
-		set_current_state(TASK_INTERRUPTIBLE);			\
-		schedule_timeout(HZ);				\
+		msleep_interruptible(MSEC_PER_SEC);			\
 	}								\
 	/* Mom, my homework is done */					\
 	CDEBUG(D_NET, "Waking up from thread pause\n");			\

@@ -345,7 +345,8 @@ mxlnd_init_mx(lnet_ni_t *ni)
 	mx_get_endpoint_addr(kmxlnd_data.kmx_endpt, &kmxlnd_data.kmx_epa);
 	mx_decompose_endpoint_addr(kmxlnd_data.kmx_epa, &nic_id, &ep_id);
 	mxret = mx_connect(kmxlnd_data.kmx_endpt, nic_id, ep_id,
-			   MXLND_MSG_MAGIC, MXLND_CONNECT_TIMEOUT/HZ*1000,
+			   MXLND_MSG_MAGIC,
+			   jiffies_to_msecs(MXLND_CONNECT_TIMEOUT),
 			   &kmxlnd_data.kmx_epa);
 	if (mxret != MX_SUCCESS) {
 		CNETERR("unable to connect to myself (%s)\n", mx_strerror(mxret));
@@ -365,7 +366,7 @@ mxlnd_init_mx(lnet_ni_t *ni)
                 goto failed_with_endpoint;
         }
 	mxret = mx_set_request_timeout(kmxlnd_data.kmx_endpt, NULL,
-				       MXLND_COMM_TIMEOUT/HZ*1000);
+				       jiffies_to_msecs(MXLND_COMM_TIMEOUT));
 	if (mxret != MX_SUCCESS) {
 		CERROR("mx_set_request_timeout() failed with %s\n",
 			mx_strerror(mxret));
@@ -455,7 +456,7 @@ mxlnd_shutdown (lnet_ni_t *ni)
 		mx_wakeup(kmxlnd_data.kmx_endpt);
 		up(&kmxlnd_data.kmx_tx_queue_sem);
 		up(&kmxlnd_data.kmx_conn_sem);
-		mxlnd_sleep(2 * HZ);
+		mxlnd_sleep(msecs_to_jiffies(2 * MSEC_PER_SEC));
 
                 /* fall through */
 
