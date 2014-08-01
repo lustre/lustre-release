@@ -655,6 +655,99 @@ ost.OSS.ost_io.nrs_orr_supported=reg_supported:reads_and_writes
 	</listitem>
       </itemizedlist>
     </section>
+    <section condition='l26'>
+      <title><indexterm>
+          <primary>tuning</primary>
+          <secondary>Network Request Scheduler (NRS) Tuning</secondary>
+          <tertiary>Token Bucket Filter (TBF) policy</tertiary>
+        </indexterm>Token Bucket Filter (TBF) policy</title>
+	<para>The TBF (Token Bucket Filter) is a Lustre NRS policy which enables Lustre services
+		to enforce the RPC rate limit on clients/jobs for QoS (Quality of Service) purposes.</para>
+      <figure>
+        <title> The internal structure of TBF policy </title>
+        <mediaobject>
+          <imageobject>
+            <imagedata scalefit="1" width="100%" fileref="figures/TBF_policy.svg"/>
+          </imageobject>
+          <textobject>
+            <phrase>The internal structure of TBF policy</phrase>
+          </textobject>
+        </mediaobject>
+      </figure>
+      <para>When a RPC request arrives, TBF policy puts it to a waiting queue according to its
+	classification. The classification of RPC requests is based on either NID or JobID of the
+	RPC according to the configure of TBF. TBF policy maintains multiple queues in the system,
+	one queue for each category in the classification of RPC requests. The requests waits for
+	tokens in the FIFO queue before they have been handled so as to keep the RPC rates under the limits.</para>
+<para>When Lustre services are too busy to handle all of the requests in time, all of the
+	specified rates of the queues will not be satisfied. Nothing bad will happen except
+	some of the RPC rates are slower than configured. In this case, the queue with higher
+	rate will have an advantage over the queues with lower rates, but none of them will be starved.</para>
+<para>To manage the RPC rate of queues, we don't need to set the rate of each queue manually.
+	Instead, we define rules which TBF policy matches to determine RPC rate limits. All of
+	the defined rules are organized as an ordered list. Whenever a queue is newly created,
+	it goes though the rule list and takes the first matched rule as its rule, so that the
+	queue knows its RPC token rate. A rule can be added to or removed from the list at run
+	time. Whenever the list of rules is changed, the queues will update their matched rules.</para>
+      <itemizedlist>
+	<listitem>
+	  <para><literal>ost.OSS.ost_io.nrs_tbf_rule</literal></para>
+	  <para>The format of the rule start command of TBF policy is as follows:</para>
+	  <screen>$ lctl set_param x.x.x.nrs_tbf_rule=
+		  "[reg|hp] start <replaceable>rule_name</replaceable> <replaceable>arguments</replaceable>..."</screen>
+	  <para>The '<replaceable>rule_name</replaceable>' argument is a string which identifies a rule.
+		  The format of the '<replaceable>arguments</replaceable>' is changing according to the
+		  type of the TBF policy. For the NID based TBF policy, its format is as follows:</para>
+	  <screen>$ lctl set_param x.x.x.nrs_tbf_rule=
+		  "[reg|hp] start <replaceable>rule_name</replaceable> {<replaceable>nidlist</replaceable>} <replaceable>rate</replaceable>"</screen>
+	  <para>The format of '<replaceable>nidlist</replaceable>' argument is the same as the
+		  format when configuring LNET route. The '<replaceable>rate</replaceable>' argument is
+		  the RPC rate of the rule, means the upper limit number of requests per second.</para>
+	  <para>Following commands are valid. Please note that a newly started rule is prior to old rules,
+		so the order of starting rules is critical too.</para>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+		  "start other_clients {192.168.*.*@tcp} 50"</screen>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+		  "start loginnode {192.168.1.1@tcp} 100"</screen>
+	  <para>General rule can be replaced by two rules (reg and hp) as follows:</para>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+		  "reg start loginnode {192.168.1.1@tcp} 100"</screen>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+		  "hp start loginnode {192.168.1.1@tcp} 100"</screen>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+		  "start computes {192.168.1.[2-128]@tcp} 500"</screen>
+	  <para>The above rules will put an upper limit for servers to process at most 5x as many RPCs
+		  from compute nodes as login nodes.</para>
+	  <para>For the JobID (please see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+		linkend="dbdoclet.jobstats"/> for more details) based TBF policy, its format is as follows:</para>
+	  <screen>$ lctl set_param x.x.x.nrs_tbf_rule=
+		  "[reg|hp] start <replaceable>name</replaceable> {<replaceable>jobid_list</replaceable>} <replaceable>rate</replaceable>"</screen>
+	  <para>Following commands are valid:</para>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+		  "start user1 {iozone.500 dd.500} 100"</screen>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+		  "start iozone_user1 {iozone.500} 100"</screen>
+	  <para>Same as nid, could use reg and hp rules separately:</para>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+		  "hp start iozone_user1 {iozone.500} 100"</screen>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+		  "reg start iozone_user1 {iozone.500} 100"</screen>
+	  <para>The format of the rule change command of TBF policy is as follows:</para>
+	  <screen>$ lctl set_param x.x.x.nrs_tbf_rule=
+		  "[reg|hp] change <replaceable>rule_name</replaceable> <replaceable>rate</replaceable>"</screen>
+	  <para>Following commands are valid:</para>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="change loginnode 200"</screen>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="reg change loginnode 200"</screen>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="hp change loginnode 200"</screen>
+	  <para>The format of the rule stop command of TBF policy is as follows:</para>
+	  <screen>$ lctl set_param x.x.x.nrs_tbf_rule="[reg|hp] stop <replaceable>rule_name</replaceable>"</screen>
+	  <para>Following commands are valid:</para>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop loginnode"</screen>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="reg stop loginnode"</screen>
+	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="hp stop loginnode"</screen>
+	</listitem>
+      </itemizedlist>
+    </section>
   </section>
   <section xml:id="dbdoclet.50438272_25884">
       <title><indexterm><primary>tuning</primary><secondary>lockless I/O</secondary></indexterm>Lockless I/O Tunables</title>
