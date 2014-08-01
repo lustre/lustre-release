@@ -91,13 +91,8 @@
 #ifndef _LUSTRE_IDL_H_
 #define _LUSTRE_IDL_H_
 
-#if !defined(LPU64)
 #include <libcfs/libcfs.h> /* for LPUX64, etc */
-#endif
-
-/* Defn's shared with user-space. */
-#include <lustre/lustre_user.h>
-
+#include <lustre/lustre_user.h> /* Defn's shared with user-space. */
 #include <lustre/lustre_errno.h>
 #include <lustre_ver.h>
 
