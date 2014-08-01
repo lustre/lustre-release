@@ -50,8 +50,8 @@ enum lfsck_param_flags {
 	/* Broadcast the command to other MDTs. Only valid on the sponsor MDT */
 	LPF_BROADCAST		= 0x0010,
 
-	/* Handle orphan objects. */
-	LPF_ORPHAN		= 0x0020,
+	/* Handle orphan OST-objects. */
+	LPF_OST_ORPHAN		= 0x0020,
 
 	/* Create OST-object for dangling LOV EA. */
 	LPF_CREATE_OSTOBJ	= 0x0040,
@@ -63,9 +63,6 @@ enum lfsck_type {
 
 	/* For MDT-OST (layout, object) consistency check/repair. */
 	LFSCK_TYPE_LAYOUT	= 0x0001,
-
-	/* For MDT-MDT (remote object) consistency check/repair. */
-	LFSCK_TYPE_DNE		= 0x0002,
 
 	/* For MDT (FID-in-dirent, linkEA) consistency check/repair. */
 	LFSCK_TYPE_NAMESPACE	= 0x0004,

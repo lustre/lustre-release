@@ -4713,8 +4713,6 @@ void lustre_assert_wire_constants(void)
 		(unsigned)LFSCK_TYPE_SCRUB);
 	LASSERTF(LFSCK_TYPE_LAYOUT == 0x00000001UL, "found 0x%.8xUL\n",
 		(unsigned)LFSCK_TYPE_LAYOUT);
-	LASSERTF(LFSCK_TYPE_DNE == 0x00000002UL, "found 0x%.8xUL\n",
-		(unsigned)LFSCK_TYPE_DNE);
 	LASSERTF(LFSCK_TYPE_NAMESPACE == 0x00000004UL, "found 0x%.8xUL\n",
 		(unsigned)LFSCK_TYPE_NAMESPACE);
 	LASSERTF(LE_LASTID_REBUILDING == 1, "found %lld\n",

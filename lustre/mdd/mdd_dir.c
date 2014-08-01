@@ -1185,6 +1185,10 @@ int mdd_links_write(const struct lu_env *env, struct mdd_object *mdd_obj,
 {
 	const struct lu_buf *buf = mdd_buf_get_const(env, ldata->ld_buf->lb_buf,
 						     ldata->ld_leh->leh_len);
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_LINKEA))
+		return 0;
+
 	return mdo_xattr_set(env, mdd_obj, buf, XATTR_NAME_LINK, 0, handle,
 			     mdd_object_capa(env, mdd_obj));
 }

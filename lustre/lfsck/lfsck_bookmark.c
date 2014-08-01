@@ -219,8 +219,8 @@ int lfsck_set_param(const struct lu_env *env, struct lfsck_instance *lfsck,
 			dirty = true;
 		}
 
-		if (bk->lb_param & LPF_ORPHAN) {
-			bk->lb_param &= ~LPF_ORPHAN;
+		if (bk->lb_param & LPF_OST_ORPHAN) {
+			bk->lb_param &= ~LPF_OST_ORPHAN;
 			dirty = true;
 		}
 
@@ -279,13 +279,13 @@ int lfsck_set_param(const struct lu_env *env, struct lfsck_instance *lfsck,
 			}
 		}
 
-		if ((bk->lb_param & LPF_ORPHAN) &&
-		    !(start->ls_flags & LPF_ORPHAN)) {
-			bk->lb_param &= ~LPF_ORPHAN;
+		if ((bk->lb_param & LPF_OST_ORPHAN) &&
+		    !(start->ls_flags & LPF_OST_ORPHAN)) {
+			bk->lb_param &= ~LPF_OST_ORPHAN;
 			dirty = true;
-		} else if (!(bk->lb_param & LPF_ORPHAN) &&
-			   (start->ls_flags & LPF_ORPHAN)) {
-			bk->lb_param |= LPF_ORPHAN;
+		} else if (!(bk->lb_param & LPF_OST_ORPHAN) &&
+			   (start->ls_flags & LPF_OST_ORPHAN)) {
+			bk->lb_param |= LPF_OST_ORPHAN;
 			dirty = true;
 		}
 

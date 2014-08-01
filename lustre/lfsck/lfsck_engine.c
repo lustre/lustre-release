@@ -175,93 +175,127 @@ static int lfsck_parent_fid(const struct lu_env *env, struct dt_object *obj,
 			 (const struct dt_key *)"..", BYPASS_CAPA);
 }
 
+/**
+ * Check whether needs to scan the directory or not.
+ *
+ * 1) If we are not doing namespace LFSCK, or the given @obj is not directory,
+ *    then needs not to scan the @obj. Otherwise,
+ * 2) Global /ROOT needs to be scanned, backend root needs not to be scanned.
+ * 3) If the @obj is neither IGIF nor normal FID (including .lustre and its
+ *    sub-directories that have been scanned when the LFSCK engine start),
+ *    then needs not to be scanned.
+ * 4) If it is a remote object, then scanning the object will be done on the
+ *    MDT on which the object really resides.
+ * 5) If the local object has normal FID, then needs to be scanned. Otherwise,
+ * 6) If the object has linkEA, then needs to be scanned. Otherwise,
+ * 7) If none of the previous conditions are true, we need to check the parent
+ *    directories whether this subdirectory is in a tree that should be scanned.
+ *    Set the parent as current @obj, repeat 2)-7).
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] lfsck	pointer to the lfsck instance
+ * \param[in] obj	pointer to the object to be checked
+ *
+ * \retval		positive number if the directory needs to be scanned
+ * \retval		0 if the directory needs NOT to be scanned
+ * \retval		negative error number on failure
+ */
 static int lfsck_needs_scan_dir(const struct lu_env *env,
 				struct lfsck_instance *lfsck,
 				struct dt_object *obj)
 {
-	struct lu_fid *fid   = &lfsck_env_info(env)->lti_fid;
-	int	       depth = 0;
-	int	       rc;
+	struct lfsck_thread_info *info    = lfsck_env_info(env);
+	struct lu_fid		 *fid     = &info->lti_fid;
+	struct lu_seq_range	 *range   = &info->lti_range;
+	struct dt_device	 *dev	  = lfsck->li_bottom;
+	struct seq_server_site	 *ss	  = lu_site2seq(dev->dd_lu_dev.ld_site);
+	__u32			  idx	  = lfsck_dev_idx(dev);
+	int			  depth   = 0;
+	int			  rc      = 0;
 
 	if (list_empty(&lfsck->li_list_dir) || !S_ISDIR(lfsck_object_type(obj)))
-		RETURN(0);
+		return 0;
 
+	LASSERT(ss != NULL);
+
+	*fid = *lfsck_dto2fid(obj);
 	while (1) {
-		/* XXX: Currently, we do not scan the "/REMOTE_PARENT_DIR",
-		 *	which is the agent directory to manage the objects
-		 *	which name entries reside on remote MDTs. Related
-		 *	consistency verification will be processed in LFSCK
-		 *	phase III. */
-		if (lu_fid_eq(lfsck_dto2fid(obj), &lfsck->li_global_root_fid)) {
-			if (depth > 0)
-				lfsck_object_put(env, obj);
+		/* Global /ROOT is visible. */
+		if (unlikely(lu_fid_eq(fid, &lfsck->li_global_root_fid)))
+			return 1;
+
+		/* Backend root is invisible. */
+		if (unlikely(lu_fid_eq(fid, &lfsck->li_local_root_fid)))
+			return 0;
+
+		if (!fid_is_norm(fid) && !fid_is_igif(fid))
+			return 0;
+
+		fld_range_set_mdt(range);
+		rc = fld_local_lookup(env, ss->ss_server_fld,
+				      fid_seq(fid), range);
+		if (rc != 0 || range->lsr_index != idx) {
+			/* Current FID should NOT be for the input parameter
+			 * @obj, because the lfsck_master_oit_engine() has
+			 * filtered out agent object. So current FID is for
+			 * the ancestor of the original input parameter @obj.
+			 * So he ancestor is a remote directory. The input
+			 * parameter @obj is local directory, and should be
+			 * scanned under such case. */
+			LASSERT(depth > 0);
+
 			return 1;
 		}
 
-		/* No need to check .lustre and its children. */
-		if (fid_seq_is_dot(fid_seq(lfsck_dto2fid(obj)))) {
-			if (depth > 0)
-				lfsck_object_put(env, obj);
-			return 0;
+		/* normal FID on this target (locally) must be for the
+		 * client-side visiable object. */
+		if (fid_is_norm(fid))
+			return 1;
+
+		if (obj == NULL) {
+			obj = lfsck_object_find(env, lfsck, fid);
+			if (IS_ERR(obj))
+				return PTR_ERR(obj);
+
+			depth++;
+			if (!dt_object_exists(obj))
+				GOTO(out, rc = 0);
 		}
 
 		dt_read_lock(env, obj, MOR_TGT_CHILD);
 		if (unlikely(lfsck_is_dead_obj(obj))) {
 			dt_read_unlock(env, obj);
-			if (depth > 0)
-				lfsck_object_put(env, obj);
-			return 0;
+
+			GOTO(out, rc = 0);
 		}
 
 		rc = dt_xattr_get(env, obj,
 				  lfsck_buf_get(env, NULL, 0), XATTR_NAME_LINK,
 				  BYPASS_CAPA);
 		dt_read_unlock(env, obj);
-		if (rc >= 0) {
-			if (depth > 0)
-				lfsck_object_put(env, obj);
-			return 1;
-		}
+		if (rc >= 0)
+			GOTO(out, rc = 1);
 
-		if (rc < 0 && rc != -ENODATA) {
-			if (depth > 0)
-				lfsck_object_put(env, obj);
-			return rc;
-		}
+		if (rc < 0 && rc != -ENODATA)
+			GOTO(out, rc);
 
 		rc = lfsck_parent_fid(env, obj, fid);
 		if (depth > 0)
 			lfsck_object_put(env, obj);
+
+		obj = NULL;
 		if (rc != 0)
 			return rc;
 
-		if (unlikely(lu_fid_eq(fid, &lfsck->li_local_root_fid)))
+		if (!fid_is_sane(fid))
 			return 0;
-
-		obj = lfsck_object_find(env, lfsck, fid);
-		if (IS_ERR(obj))
-			return PTR_ERR(obj);
-
-		if (!dt_object_exists(obj)) {
-			lfsck_object_put(env, obj);
-			return 0;
-		}
-
-		if (dt_object_remote(obj)) {
-			/* .lustre/lost+found/MDTxxx can be remote directory. */
-			if (fid_seq_is_dot(fid_seq(lfsck_dto2fid(obj))))
-				rc = 0;
-			else
-				/* Other remote directory should be client
-				 * visible and need to be checked. */
-				rc = 1;
-			lfsck_object_put(env, obj);
-			return rc;
-		}
-
-		depth++;
 	}
-	return 0;
+
+out:
+	if (depth > 0 && obj != NULL)
+		lfsck_object_put(env, obj);
+
+	return rc;
 }
 
 /* LFSCK wrap functions */
@@ -319,9 +353,6 @@ static int lfsck_prep(const struct lu_env *env, struct lfsck_instance *lfsck,
 	lfsck->li_current_oit_processed = 0;
 	list_for_each_entry_safe(com, next, &lfsck->li_list_scan, lc_link) {
 		com->lc_new_checked = 0;
-		if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
-			com->lc_journal = 0;
-
 		rc = com->lc_ops->lfsck_prep(env, com, lsp);
 		if (rc != 0)
 			GOTO(out, rc);
@@ -357,8 +388,8 @@ static int lfsck_prep(const struct lu_env *env, struct lfsck_instance *lfsck,
 	if (IS_ERR(obj))
 		RETURN(PTR_ERR(obj));
 
-	/* XXX: Currently, skip remote object, the consistency for
-	 *	remote object will be processed in LFSCK phase III. */
+	/* Remote directory will be scanned by the LFSCK instance
+	 * on the MDT where the remote object really resides on. */
 	if (!dt_object_exists(obj) || dt_object_remote(obj) ||
 	    unlikely(!S_ISDIR(lfsck_object_type(obj))))
 		GOTO(out, rc = 0);
@@ -524,9 +555,6 @@ static int lfsck_double_scan(const struct lu_env *env,
 	int			rc1 = 0;
 
 	list_for_each_entry(com, &lfsck->li_list_double_scan, lc_link) {
-		if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
-			com->lc_journal = 0;
-
 		rc = com->lc_ops->lfsck_double_scan(env, com);
 		if (rc != 0)
 			rc1 = rc;
@@ -603,6 +631,15 @@ static int lfsck_master_dir_engine(const struct lu_env *env,
 			l_wait_event(thread->t_ctl_waitq,
 				     !thread_is_running(thread),
 				     &lwi);
+
+			if (unlikely(!thread_is_running(thread))) {
+				CDEBUG(D_LFSCK, "%s: scan dir exit for engine "
+				       "stop, parent "DFID", cookie "LPX64"\n",
+				       lfsck_lfsck2name(lfsck),
+				       PFID(lfsck_dto2fid(dir)),
+				       lfsck->li_cookie_dir);
+				RETURN(0);
+			}
 		}
 
 		lfsck->li_new_scanned++;
@@ -666,20 +703,46 @@ checkpoint:
 	RETURN(rc);
 }
 
+/**
+ * Object-table based iteration engine.
+ *
+ * Object-table based iteration is the basic linear engine to scan all the
+ * objects on current device in turn. For each object, it calls all the
+ * registered LFSCK component(s)' API to perform related consistency
+ * verification.
+ *
+ * It flushes related LFSCK tracing files to disk via making checkpoint
+ * periodically. Then if the server crashed or the LFSCK is paused, the
+ * LFSCK can resume from the latest checkpoint.
+ *
+ * It also controls the whole LFSCK speed via lfsck_control_speed() to
+ * avoid the server to become overload.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] lfsck	pointer to the lfsck instance
+ *
+ * \retval		positive number if all objects have been scanned
+ * \retval		0 if the iteration is stopped or paused
+ * \retval		negative error number on failure
+ */
 static int lfsck_master_oit_engine(const struct lu_env *env,
 				   struct lfsck_instance *lfsck)
 {
-	struct lfsck_thread_info	*info	= lfsck_env_info(env);
-	const struct dt_it_ops		*iops	=
+	struct lfsck_thread_info *info	= lfsck_env_info(env);
+	const struct dt_it_ops	 *iops	=
 				&lfsck->li_obj_oit->do_index_ops->dio_it;
-	struct dt_it			*di	= lfsck->li_di_oit;
-	struct lu_fid			*fid	= &info->lti_fid;
-	struct lfsck_bookmark		*bk	= &lfsck->li_bookmark_ram;
-	struct ptlrpc_thread		*thread = &lfsck->li_thread;
-	__u32				 idx	=
-				lfsck_dev_idx(lfsck->li_bottom);
-	int				 rc;
+	struct dt_it		 *di	= lfsck->li_di_oit;
+	struct lu_fid		 *fid	= &info->lti_fid;
+	struct lfsck_bookmark	 *bk	= &lfsck->li_bookmark_ram;
+	struct ptlrpc_thread	 *thread = &lfsck->li_thread;
+	struct dt_device	 *dev	= lfsck->li_bottom;
+	struct seq_server_site	 *ss	= lu_site2seq(dev->dd_lu_dev.ld_site);
+	__u32			 idx	= lfsck_dev_idx(dev);
+	int			 rc;
 	ENTRY;
+
+	if (unlikely(ss == NULL))
+		RETURN(-EIO);
 
 	do {
 		struct dt_object *target;
@@ -703,6 +766,14 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 			l_wait_event(thread->t_ctl_waitq,
 				     !thread_is_running(thread),
 				     &lwi);
+
+			if (unlikely(!thread_is_running(thread))) {
+				CDEBUG(D_LFSCK, "%s: OIT scan exit for engine "
+				       "stop, cookie "LPU64"\n",
+				       lfsck_lfsck2name(lfsck),
+				       iops->store(env, di));
+				RETURN(0);
+			}
 		}
 
 		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_CRASH))
@@ -736,11 +807,30 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 				update_lma = true;
 			}
 		} else if (!fid_is_norm(fid) && !fid_is_igif(fid) &&
-			   !fid_is_last_id(fid) && !fid_is_root(fid) &&
-			   !fid_seq_is_dot(fid_seq(fid))) {
+			   !fid_is_last_id(fid) &&
+			   !lu_fid_eq(fid, &lfsck->li_global_root_fid)) {
+
 			/* If the FID/object is only used locally and invisible
-			 * to external nodes, then LFSCK will not handle it. */
+			 * to external nodes, then LFSCK will not handle it.
+			 *
+			 * dot_lustre sequence has been handled specially. */
 			goto checkpoint;
+		} else {
+			struct lu_seq_range *range = &info->lti_range;
+
+			if (lfsck->li_master)
+				fld_range_set_mdt(range);
+			else
+				fld_range_set_ost(range);
+			rc = fld_local_lookup(env, ss->ss_server_fld,
+					      fid_seq(fid), range);
+			if (rc != 0 || range->lsr_index != idx) {
+				/* Remote object will be handled by the LFSCK
+				 * instance on the MDT where the remote object
+				 * really resides on. */
+				rc = 0;
+				goto checkpoint;
+			}
 		}
 
 		target = lfsck_object_find(env, lfsck, fid);
@@ -756,9 +846,7 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 				goto checkpoint;
 		}
 
-		/* XXX: Currently, skip remote object, the consistency for
-		 *	remote object will be processed in LFSCK phase III. */
-		if (dt_object_exists(target) && !dt_object_remote(target)) {
+		if (dt_object_exists(target)) {
 			if (update_lma) {
 				rc = lfsck_update_lma(env, lfsck, target);
 				if (rc != 0)

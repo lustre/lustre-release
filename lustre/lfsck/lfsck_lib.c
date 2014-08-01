@@ -53,6 +53,7 @@ static void lfsck_key_fini(const struct lu_context *ctx,
 	struct lfsck_thread_info *info = data;
 
 	lu_buf_free(&info->lti_linkea_buf);
+	lu_buf_free(&info->lti_linkea_buf2);
 	lu_buf_free(&info->lti_big_buf);
 	OBD_FREE_PTR(info);
 }
@@ -421,6 +422,23 @@ void lfsck_ibits_unlock(struct lustre_handle *lh, ldlm_mode_t mode)
 	}
 }
 
+int lfsck_find_mdt_idx_by_fid(const struct lu_env *env,
+			      struct lfsck_instance *lfsck,
+			      const struct lu_fid *fid)
+{
+	struct seq_server_site	*ss	=
+			lu_site2seq(lfsck->li_bottom->dd_lu_dev.ld_site);
+	struct lu_seq_range	*range	= &lfsck_env_info(env)->lti_range;
+	int			 rc;
+
+	fld_range_set_mdt(range);
+	rc = fld_server_lookup(env, ss->ss_server_fld, fid_seq(fid), range);
+	if (rc == 0)
+		rc = range->lsr_index;
+
+	return rc;
+}
+
 static const char dot[] = ".";
 static const char dotdot[] = "..";
 static const char dotlustre[] = ".lustre";
@@ -449,7 +467,7 @@ static int lfsck_create_lpf_local(const struct lu_env *env,
 	ENTRY;
 
 	rc = linkea_data_new(&ldata,
-			     &lfsck_env_info(env)->lti_linkea_buf);
+			     &lfsck_env_info(env)->lti_linkea_buf2);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -593,7 +611,7 @@ static int lfsck_create_lpf_remote(const struct lu_env *env,
 	ENTRY;
 
 	rc = linkea_data_new(&ldata,
-			     &lfsck_env_info(env)->lti_linkea_buf);
+			     &lfsck_env_info(env)->lti_linkea_buf2);
 	if (rc != 0)
 		RETURN(rc);
 

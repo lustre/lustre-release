@@ -75,7 +75,6 @@ struct lfsck_type_name {
 static struct lfsck_type_name lfsck_types_names[] = {
 	{ "scrub",	LFSCK_TYPE_SCRUB },
 	{ "layout",	LFSCK_TYPE_LAYOUT },
-/*	{ "dne",	LFSCK_TYPE_DNE }, */
 	{ "namespace",	LFSCK_TYPE_NAMESPACE },
 	{ "default",	LFSCK_TYPES_DEF },
 	{ "all",	LFSCK_TYPES_SUPPORTED },
@@ -112,7 +111,7 @@ static void usage_start(void)
 		"-e: error handle mode (default 'continue', or 'abort')\n"
 		"-h: this help message\n"
 		"-n: check with no modification (default 'off', or 'on')\n"
-		"-o: repair orphan objects\n"
+		"-o: repair orphan OST-objects\n"
 		"-r: reset scanning to the start of the device\n"
 		"-s: maximum items to be scanned per second "
 		    "(default '%d' = no limit)\n"
@@ -221,7 +220,7 @@ int jt_lfsck_start(int argc, char **argv)
 			break;
 		case 'o':
 			start.ls_flags |= LPF_ALL_TGT | LPF_BROADCAST |
-					  LPF_ORPHAN;
+					  LPF_OST_ORPHAN;
 			break;
 		case 'r':
 			start.ls_flags |= LPF_RESET;
