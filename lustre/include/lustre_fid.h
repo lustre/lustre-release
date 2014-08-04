@@ -768,7 +768,7 @@ range_be_to_cpu(struct lu_seq_range *dst, const struct lu_seq_range *src)
 static inline void range_array_cpu_to_le(struct lu_seq_range_array *dst,
 					 const struct lu_seq_range_array *src)
 {
-	int i;
+	__u32 i;
 
 	for (i = 0; i < src->lsra_count; i++)
 		range_cpu_to_le(&dst->lsra_lsr[i], &src->lsra_lsr[i]);
@@ -779,7 +779,7 @@ static inline void range_array_cpu_to_le(struct lu_seq_range_array *dst,
 static inline void range_array_le_to_cpu(struct lu_seq_range_array *dst,
 					 const struct lu_seq_range_array *src)
 {
-	int i;
+	__u32 i;
 
 	dst->lsra_count = le32_to_cpu(src->lsra_count);
 	for (i = 0; i < dst->lsra_count; i++)

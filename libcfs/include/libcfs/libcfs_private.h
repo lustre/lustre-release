@@ -599,30 +599,30 @@ struct libcfs_device_userstate
 
 #define MKSTR(ptr) ((ptr))? (ptr) : ""
 
-static inline int cfs_size_round4 (int val)
+static inline size_t cfs_size_round4(size_t val)
 {
         return (val + 3) & (~0x3);
 }
 
 #ifndef HAVE_CFS_SIZE_ROUND
-static inline int cfs_size_round (int val)
+static inline size_t cfs_size_round(size_t val)
 {
         return (val + 7) & (~0x7);
 }
 #define HAVE_CFS_SIZE_ROUND
 #endif
 
-static inline int cfs_size_round16(int val)
+static inline size_t cfs_size_round16(size_t val)
 {
         return (val + 0xf) & (~0xf);
 }
 
-static inline int cfs_size_round32(int val)
+static inline size_t cfs_size_round32(size_t val)
 {
         return (val + 0x1f) & (~0x1f);
 }
 
-static inline int cfs_size_round0(int val)
+static inline size_t cfs_size_round0(size_t val)
 {
         if (!val)
                 return 0;
@@ -631,11 +631,11 @@ static inline int cfs_size_round0(int val)
 
 static inline size_t cfs_round_strlen(char *fset)
 {
-        return (size_t)cfs_size_round((int)strlen(fset) + 1);
+	return cfs_size_round(strlen(fset) + 1);
 }
 
 /* roundup \a val to power2 */
-static inline unsigned int cfs_power2_roundup(unsigned int val)
+static inline size_t cfs_power2_roundup(size_t val)
 {
 	if (val != LOWEST_BIT_SET(val)) { /* not a power of 2 already */
 		do {

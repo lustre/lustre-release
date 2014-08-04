@@ -112,9 +112,9 @@ struct obd_ioctl_hdr {
 	__u32		ioc_version;
 };
 
-static inline int obd_ioctl_packlen(struct obd_ioctl_data *data)
+static inline __u32 obd_ioctl_packlen(struct obd_ioctl_data *data)
 {
-	int len = cfs_size_round(sizeof(*data));
+	__u32 len = cfs_size_round(sizeof(*data));
 
 	len += cfs_size_round(data->ioc_inllen1);
 	len += cfs_size_round(data->ioc_inllen2);
@@ -205,7 +205,7 @@ static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
 int obd_ioctl_getdata(char **buf, int *len, void *arg);
 int obd_ioctl_popdata(void *arg, void *data, int len);
 
-static inline void obd_ioctl_freedata(char *buf, int len)
+static inline void obd_ioctl_freedata(char *buf, size_t len)
 {
 	ENTRY;
 

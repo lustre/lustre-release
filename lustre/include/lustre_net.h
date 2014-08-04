@@ -2097,7 +2097,7 @@ static inline bool ptlrpc_nrs_req_can_move(struct ptlrpc_request *req)
 /**
  * Returns 1 if request buffer at offset \a index was already swabbed
  */
-static inline int lustre_req_swabbed(struct ptlrpc_request *req, int index)
+static inline int lustre_req_swabbed(struct ptlrpc_request *req, size_t index)
 {
         LASSERT(index < sizeof(req->rq_req_swab_mask) * 8);
         return req->rq_req_swab_mask & (1 << index);
@@ -2106,7 +2106,7 @@ static inline int lustre_req_swabbed(struct ptlrpc_request *req, int index)
 /**
  * Returns 1 if request reply buffer at offset \a index was already swabbed
  */
-static inline int lustre_rep_swabbed(struct ptlrpc_request *req, int index)
+static inline int lustre_rep_swabbed(struct ptlrpc_request *req, size_t index)
 {
         LASSERT(index < sizeof(req->rq_rep_swab_mask) * 8);
         return req->rq_rep_swab_mask & (1 << index);
@@ -2131,7 +2131,8 @@ static inline int ptlrpc_rep_need_swab(struct ptlrpc_request *req)
 /**
  * Mark request buffer at offset \a index that it was already swabbed
  */
-static inline void lustre_set_req_swabbed(struct ptlrpc_request *req, int index)
+static inline void lustre_set_req_swabbed(struct ptlrpc_request *req,
+					  size_t index)
 {
         LASSERT(index < sizeof(req->rq_req_swab_mask) * 8);
         LASSERT((req->rq_req_swab_mask & (1 << index)) == 0);
@@ -2141,7 +2142,8 @@ static inline void lustre_set_req_swabbed(struct ptlrpc_request *req, int index)
 /**
  * Mark request reply buffer at offset \a index that it was already swabbed
  */
-static inline void lustre_set_rep_swabbed(struct ptlrpc_request *req, int index)
+static inline void lustre_set_rep_swabbed(struct ptlrpc_request *req,
+					  size_t index)
 {
         LASSERT(index < sizeof(req->rq_rep_swab_mask) * 8);
         LASSERT((req->rq_rep_swab_mask & (1 << index)) == 0);

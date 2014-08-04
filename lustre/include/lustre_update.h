@@ -60,7 +60,7 @@ object_update_size(const struct object_update *update)
 {
 	const struct	object_update_param *param;
 	unsigned long	size;
-	int		i;
+	size_t		i;
 
 	size = offsetof(struct object_update, ou_params[0]);
 	for (i = 0; i < update->ou_params_count; i++) {
@@ -72,11 +72,11 @@ object_update_size(const struct object_update *update)
 }
 
 static inline void
-*object_update_param_get(const struct object_update *update, int index,
-			 int *size)
+*object_update_param_get(const struct object_update *update, size_t index,
+			 size_t *size)
 {
 	const struct	object_update_param *param;
-	int		i;
+	size_t		i;
 
 	if (index >= update->ou_params_count)
 		return NULL;
@@ -98,8 +98,8 @@ static inline void
 static inline unsigned long
 object_update_request_size(const struct object_update_request *our)
 {
-	unsigned long size;
-	int	   i = 0;
+	unsigned long	size;
+	size_t		i = 0;
 
 	size = offsetof(struct object_update_request, ourq_updates[0]);
 	for (i = 0; i < our->ourq_count; i++) {
@@ -113,10 +113,10 @@ object_update_request_size(const struct object_update_request *our)
 
 static inline struct object_update
 *object_update_request_get(const struct object_update_request *our,
-			   int index, int *size)
+			   size_t index, size_t *size)
 {
 	void	*ptr;
-	int	i;
+	size_t	i;
 
 	if (index >= our->ourq_count)
 		return NULL;
@@ -133,7 +133,7 @@ static inline struct object_update
 }
 
 static inline void
-object_update_reply_init(struct object_update_reply *reply, int count)
+object_update_reply_init(struct object_update_reply *reply, size_t count)
 {
 	reply->ourp_magic = UPDATE_REPLY_MAGIC;
 	reply->ourp_count = count;
@@ -141,11 +141,11 @@ object_update_reply_init(struct object_update_reply *reply, int count)
 
 static inline struct object_update_result
 *object_update_result_get(const struct object_update_reply *reply,
-			  int index, int *size)
+			  size_t index, size_t *size)
 {
 	char *ptr;
-	int count = reply->ourp_count;
-	int i;
+	size_t count = reply->ourp_count;
+	size_t i;
 
 	if (index >= count)
 		return NULL;
@@ -166,7 +166,7 @@ static inline struct object_update_result
 
 static inline void
 object_update_result_insert(struct object_update_reply *reply,
-			    void *data, int data_len, int index,
+			    void *data, size_t data_len, size_t index,
 			    int rc)
 {
 	struct object_update_result *update_result;
@@ -190,11 +190,11 @@ object_update_result_insert(struct object_update_reply *reply,
 
 static inline int
 object_update_result_data_get(const struct object_update_reply *reply,
-			      struct lu_buf *lbuf, int index)
+			      struct lu_buf *lbuf, size_t index)
 {
 	struct object_update_result *update_result;
-	int  size = 0;
-	int  result;
+	size_t size = 0;
+	int    result;
 
 	LASSERT(lbuf != NULL);
 	update_result = object_update_result_get(reply, index, &size);

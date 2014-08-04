@@ -250,7 +250,7 @@ static int out_create(struct tgt_session_info *tsi)
 	struct lu_attr		*attr = &tti->tti_attr;
 	struct lu_fid		*fid = NULL;
 	struct obdo		*wobdo;
-	int			size;
+	size_t			size;
 	int			rc;
 
 	ENTRY;
@@ -269,8 +269,6 @@ static int out_create(struct tgt_session_info *tsi)
 
 	dof->dof_type = dt_mode_to_dft(attr->la_mode);
 	if (update->ou_params_count > 1) {
-		int size;
-
 		fid = object_update_param_get(update, 1, &size);
 		if (fid == NULL || size != sizeof(*fid)) {
 			CERROR("%s: invalid fid: rc = %d\n",
@@ -364,7 +362,7 @@ static int out_attr_set(struct tgt_session_info *tsi)
 	struct dt_object        *obj = tti->tti_u.update.tti_dt_object;
 	struct obdo		*lobdo = &tti->tti_u.update.tti_obdo;
 	struct obdo		*wobdo;
-	int			 size;
+	size_t			 size;
 	int			 rc;
 
 	ENTRY;
@@ -622,9 +620,9 @@ static int out_xattr_set(struct tgt_session_info *tsi)
 	char			*name;
 	char			*buf;
 	__u32			*tmp;
-	int			 buf_len = 0;
+	size_t			 buf_len = 0;
 	int			 flag;
-	int			 size = 0;
+	size_t			 size = 0;
 	int			 rc;
 	ENTRY;
 
@@ -647,7 +645,7 @@ static int out_xattr_set(struct tgt_session_info *tsi)
 
 	tmp = object_update_param_get(update, 2, &size);
 	if (tmp == NULL || size != sizeof(*tmp)) {
-		CERROR("%s: emptry or wrong size %d flag: rc = %d\n",
+		CERROR("%s: emptry or wrong size %zd flag: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), size, -EPROTO);
 		RETURN(err_serious(-EPROTO));
 	}
@@ -1005,7 +1003,7 @@ static int out_index_insert(struct tgt_session_info *tsi)
 	char			*name;
 	__u32			*ptype;
 	int			 rc	= 0;
-	int			 size;
+	size_t			 size;
 	ENTRY;
 
 	name = object_update_param_get(update, 0, NULL);
@@ -1264,8 +1262,8 @@ static int out_write(struct tgt_session_info *tsi)
 	struct lu_buf		*lbuf = &tti->tti_buf;
 	char			*buf;
 	__u64			*tmp;
-	int			size = 0;
-	int			buf_len = 0;
+	size_t			size = 0;
+	size_t			buf_len = 0;
 	loff_t			pos;
 	int			 rc;
 	ENTRY;
@@ -1281,7 +1279,7 @@ static int out_write(struct tgt_session_info *tsi)
 
 	tmp = object_update_param_get(update, 1, &size);
 	if (tmp == NULL || size != sizeof(*tmp)) {
-		CERROR("%s: empty or wrong size %d pos: rc = %d\n",
+		CERROR("%s: empty or wrong size %zd pos: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), size, -EPROTO);
 		RETURN(err_serious(-EPROTO));
 	}

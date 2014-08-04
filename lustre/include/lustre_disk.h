@@ -364,7 +364,7 @@ struct lsd_client_data {
 static inline void check_lcd(char *obd_name, int index,
                              struct lsd_client_data *lcd)
 {
-        int length = sizeof(lcd->lcd_uuid);
+	size_t length = sizeof(lcd->lcd_uuid);
         if (strnlen((char*)lcd->lcd_uuid, length) == length) {
                 lcd->lcd_uuid[length - 1] = '\0';
 

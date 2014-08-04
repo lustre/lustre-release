@@ -1930,7 +1930,7 @@ EXPORT_SYMBOL(lustre_swab_mgs_target_info);
 
 void lustre_swab_mgs_nidtbl_entry(struct mgs_nidtbl_entry *entry)
 {
-        int i;
+	__u8 i;
 
         __swab64s(&entry->mne_version);
         __swab32s(&entry->mne_instance);
@@ -2032,7 +2032,7 @@ void lustre_swab_fiemap_extent(struct ll_fiemap_extent *fm_extent)
 
 void lustre_swab_fiemap(struct ll_user_fiemap *fiemap)
 {
-        int i;
+	__u32 i;
 
         __swab64s(&fiemap->fm_start);
         __swab64s(&fiemap->fm_length);
@@ -2571,7 +2571,7 @@ EXPORT_SYMBOL(lustre_swab_hsm_request);
 void lustre_swab_object_update(struct object_update *ou)
 {
 	struct object_update_param *param;
-	int	i;
+	size_t	i;
 
 	__swab16s(&ou->ou_type);
 	__swab16s(&ou->ou_params_count);
@@ -2593,7 +2593,7 @@ EXPORT_SYMBOL(lustre_swab_object_update);
 
 void lustre_swab_object_update_request(struct object_update_request *our)
 {
-	int i;
+	size_t i;
 	__swab32s(&our->ourq_magic);
 	__swab16s(&our->ourq_count);
 	__swab16s(&our->ourq_padding);
@@ -2618,7 +2618,7 @@ EXPORT_SYMBOL(lustre_swab_object_update_result);
 
 void lustre_swab_object_update_reply(struct object_update_reply *our)
 {
-	int i;
+	size_t i;
 
 	__swab32s(&our->ourp_magic);
 	__swab16s(&our->ourp_count);
