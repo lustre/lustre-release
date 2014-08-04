@@ -44,7 +44,7 @@ setupall
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14 15 16 17 18 19 20 21"
 
 [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.50) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2d 3"
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2d 2e 3 22"
 
 build_test_filter
 
@@ -385,6 +385,40 @@ test_2d()
 		error "(8) Fail to repair linkEA: $dummyfid $dummyname"
 }
 run_test 2d "LFSCK can recover the missed linkEA entry"
+
+test_2e()
+{
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "We need at least 2 MDSes for this test" && exit 0
+
+	check_mount_and_prep
+
+	$LFS mkdir -i 1 $DIR/$tdir/d0 || error "(1) Fail to mkdir d0 on MDT1"
+
+	#define OBD_FAIL_LFSCK_LINKEA_CRASH	0x1603
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1603
+	$LFS mkdir -i 0 $DIR/$tdir/d0/d1 || error "(2) Fail to mkdir d1 on MDT0"
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+
+	$START_NAMESPACE -r -A || error "(3) Fail to start LFSCK for namespace!"
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(4) unexpected status"
+	}
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^linkea_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(5) Fail to repair crashed linkEA: $repaired"
+
+	local fid=$($LFS path2fid $DIR/$tdir/d0/d1)
+	local name=$($LFS fid2path $DIR $fid)
+	[ "$name" == "$DIR/$tdir/d0/d1" ] ||
+		error "(6) Fail to repair linkEA: $fid $name"
+}
+run_test 2e "namespace LFSCK can verify remote object linkEA"
 
 test_3()
 {
@@ -2701,6 +2735,109 @@ test_21() {
 		error "Fail to stop LFSCK"
 }
 run_test 21 "run all LFSCK components by default"
+
+test_22a() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "We need at least 2 MDSes for this test" && exit 0
+
+	echo "#####"
+	echo "The parent_A references the child directory via some name entry,"
+	echo "but the child directory back references another parent_B via its"
+	echo "".." name entry. The parent_A does not exist. Then the namesapce"
+	echo "LFSCK will repair the child directory's ".." name entry."
+	echo "#####"
+
+	check_mount_and_prep
+
+	$LFS mkdir -i 1 $DIR/$tdir/guard || error "(1) Fail to mkdir on MDT1"
+	$LFS mkdir -i 1 $DIR/$tdir/foo || error "(2) Fail to mkdir on MDT1"
+
+	echo "Inject failure stub on MDT0 to simulate bad dotdot name entry"
+	echo "The dummy's dotdot name entry references the guard."
+	#define OBD_FAIL_LFSCK_BAD_PARENT	0x161e
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x161e
+	$LFS mkdir -i 0 $DIR/$tdir/foo/dummy ||
+		error "(3) Fail to mkdir on MDT0"
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+
+	rmdir $DIR/$tdir/guard || error "(4) Fail to rmdir $DIR/$tdir/guard"
+
+	echo "Trigger namespace LFSCK to repair unmatched pairs"
+	$START_NAMESPACE -A -r ||
+		error "(5) Fail to start LFSCK for namespace"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(6) unexpected status"
+	}
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^unmatched_pairs_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(7) Fail to repair unmatched pairs: $repaired"
+
+	echo "'ls' should success after namespace LFSCK repairing"
+	ls -ail $DIR/$tdir/foo/dummy > /dev/null ||
+		error "(8) ls should success."
+}
+run_test 22a "LFSCK can repair unmatched pairs (1)"
+
+test_22b() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "We need at least 2 MDSes for this test" && exit 0
+
+	echo "#####"
+	echo "The parent_A references the child directory via the name entry_B,"
+	echo "but the child directory back references another parent_C via its"
+	echo "".." name entry. The parent_C exists, but there is no the name"
+	echo "entry_B under the parent_B. Then the namesapce LFSCK will repair"
+	echo "the child directory's ".." name entry and its linkEA."
+	echo "#####"
+
+	check_mount_and_prep
+
+	$LFS mkdir -i 1 $DIR/$tdir/guard || error "(1) Fail to mkdir on MDT1"
+	$LFS mkdir -i 1 $DIR/$tdir/foo || error "(2) Fail to mkdir on MDT1"
+
+	echo "Inject failure stub on MDT0 to simulate bad dotdot name entry"
+	echo "and bad linkEA. The dummy's dotdot name entry references the"
+	echo "guard. The dummy's linkEA references n non-exist name entry."
+	#define OBD_FAIL_LFSCK_BAD_PARENT2	0x161f
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x161f
+	$LFS mkdir -i 0 $DIR/$tdir/foo/dummy ||
+		error "(3) Fail to mkdir on MDT0"
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+
+	local dummyfid=$($LFS path2fid $DIR/$tdir/foo/dummy)
+	echo "fid2path should NOT work on the dummy's FID $dummyfid"
+	local dummyname=$($LFS fid2path $DIR $dummyfid)
+	[ "$dummyname" != "$DIR/$tdir/foo/dummy" ] ||
+		error "(4) fid2path works unexpectedly."
+
+	echo "Trigger namespace LFSCK to repair unmatched pairs"
+	$START_NAMESPACE -A -r ||
+		error "(5) Fail to start LFSCK for namespace"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(6) unexpected status"
+	}
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^unmatched_pairs_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(7) Fail to repair unmatched pairs: $repaired"
+
+	echo "fid2path should work on the dummy's FID $dummyfid after LFSCK"
+	local dummyname=$($LFS fid2path $DIR $dummyfid)
+	[ "$dummyname" == "$DIR/$tdir/foo/dummy" ] ||
+		error "(8) fid2path does not work"
+}
+run_test 22b "LFSCK can repair unmatched pairs (2)"
 
 $LCTL set_param debug=-lfsck > /dev/null || true
 

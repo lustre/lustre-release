@@ -439,8 +439,8 @@ int lfsck_find_mdt_idx_by_fid(const struct lu_env *env,
 	return rc;
 }
 
-static const char dot[] = ".";
-static const char dotdot[] = "..";
+const char dot[] = ".";
+const char dotdot[] = "..";
 static const char dotlustre[] = ".lustre";
 static const char lostfound[] = "lost+found";
 

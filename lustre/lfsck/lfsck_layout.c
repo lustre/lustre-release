@@ -4371,9 +4371,7 @@ again:
 	lmm->lmm_oi = *oi;
 
 	if (bk->lb_param & LPF_DRYRUN) {
-		down_write(&com->lc_sem);
 		lo->ll_objs_repaired[LLIT_OTHERS - 1]++;
-		up_write(&com->lc_sem);
 
 		GOTO(out, stripe = true);
 	}
@@ -4412,9 +4410,7 @@ again:
 	if (rc != 0)
 		GOTO(out, rc);
 
-	down_write(&com->lc_sem);
 	lo->ll_objs_repaired[LLIT_OTHERS - 1]++;
-	up_write(&com->lc_sem);
 
 	GOTO(out, stripe = true);
 

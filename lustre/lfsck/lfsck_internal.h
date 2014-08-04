@@ -114,6 +114,12 @@ enum lfsck_namespace_trace_flags {
 	LNTF_ALL		= 0xff
 };
 
+enum lfsck_namespace_inconsistency_type {
+	LNIT_NONE		= 0,
+	LNIT_BAD_LINKEA		= 1,
+	LNIT_UNMATCHED_PAIRS	= 2,
+};
+
 struct lfsck_namespace {
 	/* Magic number to detect that this struct contains valid data. */
 	__u32	ln_magic;
@@ -193,8 +199,14 @@ struct lfsck_namespace {
 	/* How many multiple-linked objects have been repaired. */
 	__u64	ln_mul_linked_repaired;
 
+	/* How many undefined inconsistency found in phase2. */
+	__u64	ln_unknown_inconsistency;
+
+	/* How many unmatched pairs have been repaired. */
+	__u64	ln_unmatched_pairs_repaired;
+
 	/* For further using. 256-bytes aligned now. */
-	__u64   ln_reserved[31];
+	__u64   ln_reserved[29];
 };
 
 enum lfsck_layout_inconsistency_type {
@@ -620,6 +632,7 @@ struct lfsck_thread_info {
 	struct lu_fid		lti_fid;
 	struct lu_fid		lti_fid2;
 	struct lu_fid		lti_fid3;
+	struct lu_fid		lti_fid4;
 	struct lu_attr		lti_la;
 	struct lu_attr		lti_la2;
 	struct lu_attr		lti_la3;
@@ -727,6 +740,10 @@ int lfsck_namespace_trace_update(const struct lu_env *env,
 				 const __u8 flags, bool add);
 int __lfsck_links_read(const struct lu_env *env, struct dt_object *obj,
 		       struct linkea_data *ldata);
+int lfsck_namespace_rebuild_linkea(const struct lu_env *env,
+				   struct lfsck_component *com,
+				   struct dt_object *obj,
+				   struct linkea_data *ldata);
 int lfsck_verify_linkea(const struct lu_env *env, struct dt_device *dev,
 			struct dt_object *obj, const struct lu_name *cname,
 			const struct lu_fid *pfid);
@@ -746,6 +763,8 @@ int lfsck_namespace_setup(const struct lu_env *env,
 /* lfsck_layout.c */
 int lfsck_layout_setup(const struct lu_env *env, struct lfsck_instance *lfsck);
 
+extern const char dot[];
+extern const char dotdot[];
 extern const char *lfsck_flags_names[];
 extern const char *lfsck_param_names[];
 extern struct lu_context_key lfsck_thread_key;
@@ -897,6 +916,11 @@ static inline void lfsck_object_put(const struct lu_env *env,
 	lu_object_put(env, &obj->do_lu);
 }
 
+static inline u32 lfsck_dev_idx(struct dt_device *dev)
+{
+	return dev->dd_lu_dev.ld_site->ld_seq_site->ss_node_id;
+}
+
 static inline struct dt_object *
 lfsck_object_find_by_dev_nowait(const struct lu_env *env, struct dt_device *dev,
 				const struct lu_fid *fid)
@@ -930,6 +954,32 @@ static inline struct dt_object *lfsck_object_find(const struct lu_env *env,
 						  const struct lu_fid *fid)
 {
 	return lfsck_object_find_by_dev(env, lfsck->li_next, fid);
+}
+
+static inline struct dt_object *
+lfsck_object_find_bottom(const struct lu_env *env, struct lfsck_instance *lfsck,
+			 const struct lu_fid *fid)
+{
+	struct dt_device *dev;
+	int		  idx;
+
+	idx = lfsck_find_mdt_idx_by_fid(env, lfsck, fid);
+	if (idx < 0)
+		return ERR_PTR(idx);
+
+	if (idx == lfsck_dev_idx(lfsck->li_bottom)) {
+		dev = lfsck->li_bottom;
+	} else {
+		struct lfsck_tgt_desc *ltd;
+
+		ltd = LTD_TGT(&lfsck->li_mdt_descs, idx);
+		if (unlikely(ltd == NULL))
+			return ERR_PTR(-ENODEV);
+
+		dev = ltd->ltd_tgt;
+	}
+
+	return lfsck_object_find_by_dev(env, dev, fid);
 }
 
 static inline struct lfsck_tgt_desc *lfsck_tgt_get(struct lfsck_tgt_descs *ltds,
@@ -991,11 +1041,6 @@ static inline void lfsck_instance_put(const struct lu_env *env,
 {
 	if (atomic_dec_and_test(&lfsck->li_ref))
 		lfsck_instance_cleanup(env, lfsck);
-}
-
-static inline u32 lfsck_dev_idx(struct dt_device *dev)
-{
-	return dev->dd_lu_dev.ld_site->ld_seq_site->ss_node_id;
 }
 
 static inline bool lfsck_phase2_next_ready(struct lfsck_assistant_data *lad)

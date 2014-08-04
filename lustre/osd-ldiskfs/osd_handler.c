@@ -3994,9 +3994,20 @@ static int osd_add_dot_dotdot(struct osd_thread_info *info,
 						dot_dot_fid, NULL, th);
 		}
 
-		result = osd_add_dot_dotdot_internal(info, dir->oo_inode,
-						     parent_dir, dot_fid,
-						     dot_dot_fid, oth);
+		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PARENT) ||
+		    OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PARENT2)) {
+			struct lu_fid tfid = *dot_dot_fid;
+
+			tfid.f_oid--;
+			result = osd_add_dot_dotdot_internal(info,
+					dir->oo_inode, parent_dir, dot_fid,
+					&tfid, oth);
+		} else {
+			result = osd_add_dot_dotdot_internal(info,
+					dir->oo_inode, parent_dir, dot_fid,
+					dot_dot_fid, oth);
+		}
+
 		if (result == 0)
 			dir->oo_compat_dotdot_created = 1;
 	}

@@ -2346,9 +2346,17 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	mdd_object_make_hint(env, mdd_pobj, son, attr, spec, hint);
 
 	memset(ldata, 0, sizeof(*ldata));
-	rc = mdd_linkea_prepare(env, son, NULL, NULL,
-				mdd_object_fid(mdd_pobj),
-				lname, 1, 0, ldata);
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PARENT2)) {
+		struct lu_fid tfid = *mdd_object_fid(mdd_pobj);
+
+		tfid.f_oid--;
+		rc = mdd_linkea_prepare(env, son, NULL, NULL,
+					&tfid, lname, 1, 0, ldata);
+	} else {
+		rc = mdd_linkea_prepare(env, son, NULL, NULL,
+					mdd_object_fid(mdd_pobj),
+					lname, 1, 0, ldata);
+	}
 
 	rc = mdd_declare_create(env, mdd, mdd_pobj, son, lname, attr,
 				handle, spec, ldata, &def_acl_buf, &acl_buf,

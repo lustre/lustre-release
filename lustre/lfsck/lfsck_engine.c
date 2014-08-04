@@ -239,7 +239,7 @@ static int lfsck_needs_scan_dir(const struct lu_env *env,
 			 * @obj, because the lfsck_master_oit_engine() has
 			 * filtered out agent object. So current FID is for
 			 * the ancestor of the original input parameter @obj.
-			 * So he ancestor is a remote directory. The input
+			 * So the ancestor is a remote directory. The input
 			 * parameter @obj is local directory, and should be
 			 * scanned under such case. */
 			LASSERT(depth > 0);
@@ -662,7 +662,8 @@ static int lfsck_master_dir_engine(const struct lu_env *env,
 				goto checkpoint;
 		}
 
-		if (ent->lde_attrs & LUDA_IGNORE)
+		if (ent->lde_attrs & LUDA_IGNORE &&
+		    strcmp(ent->lde_name, dotdot) != 0)
 			goto checkpoint;
 
 		/* The type in the @ent structure may has been overwritten,
