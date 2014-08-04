@@ -220,9 +220,9 @@ struct osp_xattr_entry {
 	struct list_head	 oxe_list;
 	atomic_t		 oxe_ref;
 	void			*oxe_value;
-	int			 oxe_buflen;
-	int			 oxe_namelen;
-	int			 oxe_vallen;
+	size_t			 oxe_buflen;
+	size_t			 oxe_namelen;
+	size_t			 oxe_vallen;
 	unsigned int		 oxe_exist:1,
 				 oxe_ready:1;
 	char			 oxe_buf[0];

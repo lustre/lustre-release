@@ -87,7 +87,7 @@ static int osp_oac_init(struct osp_object *obj)
 
 static struct osp_xattr_entry *
 osp_oac_xattr_find_locked(struct osp_object_attr *ooa,
-			  const char *name, int namelen, bool unlink)
+			  const char *name, size_t namelen, bool unlink)
 {
 	struct osp_xattr_entry *oxe;
 
@@ -121,13 +121,13 @@ static struct osp_xattr_entry *osp_oac_xattr_find(struct osp_object *obj,
 }
 
 static struct osp_xattr_entry *
-osp_oac_xattr_find_or_add(struct osp_object *obj, const char *name, int len)
+osp_oac_xattr_find_or_add(struct osp_object *obj, const char *name, size_t len)
 {
 	struct osp_object_attr *ooa	= obj->opo_ooa;
 	struct osp_xattr_entry *oxe;
 	struct osp_xattr_entry *tmp	= NULL;
-	int			namelen = strlen(name);
-	int			size	= sizeof(*oxe) + namelen + 1 + len;
+	size_t			namelen = strlen(name);
+	size_t			size	= sizeof(*oxe) + namelen + 1 + len;
 
 	LASSERT(ooa != NULL);
 
@@ -163,14 +163,14 @@ osp_oac_xattr_find_or_add(struct osp_object *obj, const char *name, int len)
 
 static struct osp_xattr_entry *
 osp_oac_xattr_replace(struct osp_object *obj,
-		      struct osp_xattr_entry **poxe, int len)
+		      struct osp_xattr_entry **poxe, size_t len)
 {
 	struct osp_object_attr *ooa	= obj->opo_ooa;
 	struct osp_xattr_entry *old	= *poxe;
 	struct osp_xattr_entry *oxe;
 	struct osp_xattr_entry *tmp	= NULL;
-	int			namelen = old->oxe_namelen;
-	int			size	= sizeof(*oxe) + namelen + 1 + len;
+	size_t			namelen = old->oxe_namelen;
+	size_t			size	= sizeof(*oxe) + namelen + 1 + len;
 
 	LASSERT(ooa != NULL);
 
@@ -504,7 +504,7 @@ static int osp_xattr_get_interpterer(const struct lu_env *env,
 	LASSERT(ooa != NULL);
 
 	if (rc == 0) {
-		int len = sizeof(*oxe) + oxe->oxe_namelen + 1;
+		size_t len = sizeof(*oxe) + oxe->oxe_namelen + 1;
 
 		rc = object_update_result_data_get(reply, rbuf, index);
 		if (rc < 0 || rbuf->lb_len > (oxe->oxe_buflen - len)) {
@@ -1579,7 +1579,7 @@ static void osp_object_free(const struct lu_env *env, struct lu_object *o)
 			count = atomic_read(&oxe->oxe_ref);
 			LASSERTF(count == 1,
 				 "Still has %d users on the xattr entry %.*s\n",
-				 count - 1, oxe->oxe_namelen, oxe->oxe_buf);
+				 count-1, (int)oxe->oxe_namelen, oxe->oxe_buf);
 
 			OBD_FREE(oxe, oxe->oxe_buflen);
 		}
