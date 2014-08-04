@@ -80,15 +80,13 @@ int proc_version;
 /* buffer MUST be at least the size of obd_ioctl_hdr */
 int obd_ioctl_getdata(char **buf, int *len, void __user *arg)
 {
-        struct obd_ioctl_hdr hdr;
-        struct obd_ioctl_data *data;
-        int err;
-        int offset = 0;
-        ENTRY;
+	struct obd_ioctl_hdr hdr;
+	struct obd_ioctl_data *data;
+	int offset = 0;
+	ENTRY;
 
-	err = copy_from_user(&hdr, arg, sizeof(hdr));
-        if ( err )
-                RETURN(err);
+	if (copy_from_user(&hdr, arg, sizeof(hdr)))
+		RETURN(-EFAULT);
 
         if (hdr.ioc_version != OBD_IOCTL_VERSION) {
                 CERROR("Version mismatch kernel (%x) vs application (%x)\n",
@@ -120,11 +118,10 @@ int obd_ioctl_getdata(char **buf, int *len, void __user *arg)
         *len = hdr.ioc_len;
         data = (struct obd_ioctl_data *)*buf;
 
-	err = copy_from_user(*buf, arg, hdr.ioc_len);
-        if ( err ) {
-                OBD_FREE_LARGE(*buf, hdr.ioc_len);
-                RETURN(err);
-        }
+	if (copy_from_user(*buf, arg, hdr.ioc_len)) {
+		OBD_FREE_LARGE(*buf, hdr.ioc_len);
+		RETURN(-EFAULT);
+	}
 
         if (obd_ioctl_is_invalid(data)) {
                 CERROR("ioctl not correctly formatted\n");
@@ -147,23 +144,20 @@ int obd_ioctl_getdata(char **buf, int *len, void __user *arg)
                 offset += cfs_size_round(data->ioc_inllen3);
         }
 
-        if (data->ioc_inllen4) {
-                data->ioc_inlbuf4 = &data->ioc_bulk[0] + offset;
-        }
+	if (data->ioc_inllen4)
+		data->ioc_inlbuf4 = &data->ioc_bulk[0] + offset;
 
-        EXIT;
-        return 0;
+	RETURN(0);
 }
 EXPORT_SYMBOL(obd_ioctl_getdata);
 
 int obd_ioctl_popdata(void __user *arg, void *data, int len)
 {
 	int err;
+	ENTRY;
 
-	err = copy_to_user(arg, data, len);
-	if (err)
-		err = -EFAULT;
-	return err;
+	err = copy_to_user(arg, data, len) ? -EFAULT : 0;
+	RETURN(err);
 }
 EXPORT_SYMBOL(obd_ioctl_popdata);
 

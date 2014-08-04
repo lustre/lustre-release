@@ -35,8 +35,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LNET
-#define LNET_MAX_IOCTL_BUF_LEN (sizeof(struct lnet_ioctl_net_config) + \
-				 sizeof(struct lnet_ioctl_config_data))
 
 #include <libcfs/libcfs.h>
 #include <libcfs/libcfs_crypto.h>
@@ -222,70 +220,64 @@ int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand)
 }
 EXPORT_SYMBOL(libcfs_deregister_ioctl);
 
-static int libcfs_ioctl_handle(struct cfs_psdev_file *pfile, unsigned long cmd,
-			       void __user *arg, struct libcfs_ioctl_hdr *hdr)
+static int libcfs_ioctl(struct cfs_psdev_file *pfile,
+			unsigned long cmd, void __user *uparam)
 {
 	struct libcfs_ioctl_data *data = NULL;
-	int err;
+	struct libcfs_ioctl_hdr  *hdr;
+	int			  err;
 	ENTRY;
 
-	/* The libcfs_ioctl_data_adjust() function performs adjustment
-	 * operations on the libcfs_ioctl_data structure to make
-	 * it usable by the code.  This doesn't need to be called
-	 * for new data structures added. */
-	if (hdr->ioc_version == LIBCFS_IOCTL_VERSION) {
-		data = container_of(hdr, struct libcfs_ioctl_data, ioc_hdr);
-		err = libcfs_ioctl_data_adjust(data);
-		if (err != 0) {
-			RETURN(err);
-		}
+	/* 'cmd' and permissions get checked in our arch-specific caller */
+	err = libcfs_ioctl_getdata(&hdr, uparam);
+	if (err != 0) {
+		CDEBUG_LIMIT(D_ERROR,
+			     "libcfs ioctl: data header error %d\n", err);
+		RETURN(err);
 	}
 
+	if (hdr->ioc_version == LIBCFS_IOCTL_VERSION) {
+		/* The libcfs_ioctl_data_adjust() function performs adjustment
+		 * operations on the libcfs_ioctl_data structure to make
+		 * it usable by the code.  This doesn't need to be called
+		 * for new data structures added. */
+		data = container_of(hdr, struct libcfs_ioctl_data, ioc_hdr);
+		err = libcfs_ioctl_data_adjust(data);
+		if (err != 0)
+			GOTO(out, err);
+	}
+
+	CDEBUG(D_IOCTL, "libcfs ioctl cmd %lu\n", cmd);
 	switch (cmd) {
 	case IOC_LIBCFS_CLEAR_DEBUG:
 		libcfs_debug_clear_buffer();
-		RETURN(0);
+		break;
 	/*
 	 * case IOC_LIBCFS_PANIC:
 	 * Handled in arch/cfs_module.c
 	 */
 	case IOC_LIBCFS_MARK_DEBUG:
-		if (data->ioc_inlbuf1 == NULL ||
+		if (data == NULL ||
+		    data->ioc_inlbuf1 == NULL ||
 		    data->ioc_inlbuf1[data->ioc_inllen1 - 1] != '\0')
-			RETURN(-EINVAL);
+			GOTO(out, err = -EINVAL);
+
 		libcfs_debug_mark_buffer(data->ioc_inlbuf1);
-		RETURN(0);
-	case IOC_LIBCFS_MEMHOG:
-		if (pfile->private_data == NULL) {
-			err = -EINVAL;
-		} else {
-			kportal_memhog_free(pfile->private_data);
-			/* XXX The ioc_flags is not GFP flags now, need to
-			 * be fixed */
-			err = kportal_memhog_alloc(pfile->private_data,
-						   data->ioc_count,
-						   data->ioc_flags);
-			if (err != 0)
-				kportal_memhog_free(pfile->private_data);
-		}
 		break;
 
-	case IOC_LIBCFS_PING_TEST: {
-		extern void (kping_client)(struct libcfs_ioctl_data *);
-		void (*ping)(struct libcfs_ioctl_data *);
+	case IOC_LIBCFS_MEMHOG:
+		if (data == NULL)
+			GOTO(out, err = -EINVAL);
 
-		CDEBUG(D_IOCTL, "doing %d pings to nid %s (%s)\n",
-		       data->ioc_count, libcfs_nid2str(data->ioc_nid),
-		       libcfs_nid2str(data->ioc_nid));
-		ping = symbol_get(kping_client);
-		if (!ping) {
-			CERROR("symbol_get failed\n");
-		} else {
-			ping(data);
-			symbol_put(kping_client);
-		}
-		RETURN(0);
-	}
+		if (pfile->private_data == NULL)
+			GOTO(out, err = -EINVAL);
+
+		kportal_memhog_free(pfile->private_data);
+		err = kportal_memhog_alloc(pfile->private_data,
+					   data->ioc_count, data->ioc_flags);
+		if (err != 0)
+			kportal_memhog_free(pfile->private_data);
+		break;
 
 	default: {
 		struct libcfs_ioctl_handler *hand;
@@ -294,59 +286,20 @@ static int libcfs_ioctl_handle(struct cfs_psdev_file *pfile, unsigned long cmd,
 		down_read(&ioctl_list_sem);
 		list_for_each_entry(hand, &ioctl_list, item) {
 			err = hand->handle_ioctl(cmd, hdr);
-			if (err != -EINVAL) {
-				if (err == 0)
-					err = libcfs_ioctl_popdata(arg,
-							hdr, hdr->ioc_len);
-				break;
-			}
+			if (err == -EINVAL)
+				continue;
+
+			if (err == 0)
+				err = libcfs_ioctl_popdata(hdr, uparam);
+			break;
 		}
 		up_read(&ioctl_list_sem);
-		break;
+		break; }
 	}
-	}
-
-	RETURN(err);
-}
-
-static int libcfs_ioctl(struct cfs_psdev_file *pfile,
-			unsigned long cmd, void __user *arg)
-{
-	struct libcfs_ioctl_hdr *hdr;
-	int err = 0;
-	__u32 buf_len;
-	ENTRY;
-
-	err = libcfs_ioctl_getdata_len(arg, &buf_len);
-	if (err != 0)
-		RETURN(err);
-
-	/*
-	 * do a check here to restrict the size of the memory
-	 * to allocate to guard against DoS attacks.
-	 */
-	if (buf_len > LNET_MAX_IOCTL_BUF_LEN) {
-		CERROR("LNET: user buffer exceeds kernel buffer\n");
-		RETURN(-EINVAL);
-	}
-
-	LIBCFS_ALLOC_GFP(hdr, buf_len, GFP_IOFS);
-	if (hdr == NULL)
-		RETURN(-ENOMEM);
-
-	/* 'cmd' and permissions get checked in our arch-specific caller */
-	if (libcfs_ioctl_getdata(hdr, buf_len, arg)) {
-		CERROR("LNET ioctl: data error\n");
-		GOTO(out, err = -EINVAL);
-	}
-
-	err = libcfs_ioctl_handle(pfile, cmd, arg, hdr);
-
 out:
-	LIBCFS_FREE(hdr, buf_len);
+	libcfs_ioctl_freedata(hdr);
 	RETURN(err);
 }
-
 
 struct cfs_psdev_ops libcfs_psdev_ops = {
         libcfs_psdev_open,

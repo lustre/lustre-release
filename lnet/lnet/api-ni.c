@@ -2075,6 +2075,8 @@ LNetCtl(unsigned int cmd, void *arg)
 	lnet_ni_t                *ni;
 	int                       rc;
 
+	CLASSERT(LIBCFS_IOC_DATA_MAX >= sizeof(struct lnet_ioctl_net_config) +
+					sizeof(struct lnet_ioctl_config_data));
 	LASSERT(the_lnet.ln_init);
 
 	switch (cmd) {

@@ -340,3 +340,21 @@ int libcfs_ioctl_pack(struct libcfs_ioctl_data *data, char **pbuf,
 	return 0;
 }
 
+void
+libcfs_ioctl_unpack(struct libcfs_ioctl_data *data, char *pbuf)
+{
+	struct libcfs_ioctl_data *overlay = (struct libcfs_ioctl_data *)pbuf;
+	char *ptr;
+
+	/* Preserve the caller's buffer pointers */
+	overlay->ioc_inlbuf1 = data->ioc_inlbuf1;
+	overlay->ioc_inlbuf2 = data->ioc_inlbuf2;
+
+	memcpy(data, pbuf, sizeof(*data));
+	ptr = &overlay->ioc_bulk[0];
+
+	if (data->ioc_inlbuf1 != NULL)
+		LOGU(data->ioc_inlbuf1, data->ioc_inllen1, ptr);
+	if (data->ioc_inlbuf2 != NULL)
+		LOGU(data->ioc_inlbuf2, data->ioc_inllen2, ptr);
+}

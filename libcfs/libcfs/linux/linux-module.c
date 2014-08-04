@@ -42,8 +42,10 @@
 
 int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data)
 {
+	ENTRY;
+
 	if (libcfs_ioctl_is_invalid(data)) {
-		CERROR("LNET: ioctl not correctly formatted\n");
+		CERROR("libcfs ioctl: parameter not correctly formatted\n");
 		RETURN(-EINVAL);
 	}
 
@@ -52,48 +54,50 @@ int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data)
 
 	if (data->ioc_inllen2 != 0)
 		data->ioc_inlbuf2 = &data->ioc_bulk[0] +
-			cfs_size_round(data->ioc_inllen1);
+				    cfs_size_round(data->ioc_inllen1);
 
 	RETURN(0);
 }
 
-int libcfs_ioctl_getdata_len(const struct libcfs_ioctl_hdr __user *arg,
-			     __u32 *len)
+int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr **hdr_pp,
+			 struct libcfs_ioctl_hdr __user *uhdr)
 {
-	struct libcfs_ioctl_hdr hdr;
+	struct libcfs_ioctl_hdr   hdr;
+	int err = 0;
 	ENTRY;
 
-	if (copy_from_user(&hdr, arg, sizeof(hdr)))
+	if (copy_from_user(&hdr, uhdr, sizeof(hdr)))
 		RETURN(-EFAULT);
 
 	if (hdr.ioc_version != LIBCFS_IOCTL_VERSION &&
 	    hdr.ioc_version != LIBCFS_IOCTL_VERSION2) {
-		CERROR("LNET: version mismatch expected %#x, got %#x\n",
+		CERROR("libcfs ioctl: version mismatch expected %#x, got %#x\n",
 		       LIBCFS_IOCTL_VERSION, hdr.ioc_version);
 		RETURN(-EINVAL);
 	}
 
-	*len = hdr.ioc_len;
-
-	RETURN(0);
-}
-
-int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr *buf, __u32 buf_len,
-			 const void __user *arg)
-{
-	ENTRY;
-
-	if (copy_from_user(buf, arg, buf_len))
+	if (hdr.ioc_len < sizeof(struct libcfs_ioctl_data)) {
+		CERROR("libcfs ioctl: user buffer too small for ioctl\n");
 		RETURN(-EINVAL);
+	}
+
+	if (hdr.ioc_len > LIBCFS_IOC_DATA_MAX) {
+		CERROR("libcfs ioctl: user buffer is too large %d/%d\n",
+		       hdr.ioc_len, LIBCFS_IOC_DATA_MAX);
+		RETURN(-EINVAL);
+	}
+
+	LIBCFS_ALLOC(*hdr_pp, hdr.ioc_len);
+	if (*hdr_pp == NULL)
+		RETURN(-ENOMEM);
+
+	if (copy_from_user(*hdr_pp, uhdr, hdr.ioc_len))
+		GOTO(failed, err = -EFAULT);
 
 	RETURN(0);
-}
-
-int libcfs_ioctl_popdata(void __user *arg, void *data, int size)
-{
-	if (copy_to_user(arg, data, size))
-		return -EFAULT;
-	return 0;
+failed:
+	libcfs_ioctl_freedata(*hdr_pp);
+	RETURN(err);
 }
 
 extern struct cfs_psdev_ops          libcfs_psdev_ops;
