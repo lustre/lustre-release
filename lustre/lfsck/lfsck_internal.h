@@ -371,7 +371,7 @@ struct lfsck_tgt_descs {
 	struct list_head		 ltd_orphan;
 
 	/* number of registered TGTs */
-	int				 ltd_tgtnr;
+	__u32				 ltd_tgtnr;
 };
 
 #define LTD_TGT(ltd, index)	\

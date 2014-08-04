@@ -136,7 +136,7 @@ struct lod_tgt_descs {
 	/* Size of the lod_tgts array, granted to be a power of 2 */
 	__u32			ltd_tgts_size;
 	/* number of registered TGTs */
-	int			ltd_tgtnr;
+	__u32			ltd_tgtnr;
 	/* bitmap of TGTs available */
 	cfs_bitmap_t		*ltd_tgt_bitmap;
 	/* TGTs scheduled to be deleted */
@@ -270,7 +270,7 @@ struct lod_it {
 struct lod_thread_info {
 	/* per-thread buffer for LOV EA */
 	void             *lti_ea_store;
-	int               lti_ea_store_size;
+	__u32             lti_ea_store_size;
 	/* per-thread buffer for LMV EA */
 	struct lu_buf     lti_buf;
 	struct ost_id     lti_ostid;
@@ -431,7 +431,7 @@ int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
 			bool is_from_disk);
 int lod_generate_and_set_lovea(const struct lu_env *env,
 			       struct lod_object *mo, struct thandle *th);
-int lod_ea_store_resize(struct lod_thread_info *info, int size);
+int lod_ea_store_resize(struct lod_thread_info *info, size_t size);
 /* lod_pool.c */
 int lod_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int min_count);
 int lod_ost_pool_remove(struct ost_pool *op, __u32 idx);

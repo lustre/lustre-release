@@ -296,7 +296,8 @@ lod_qos_maxage_seq_write(struct file *file, const char *buffer,
 	struct lu_device	*next;
 	struct lustre_cfg	*lcfg;
 	char			 str[32];
-	int			 val, rc, i;
+	unsigned int		 i;
+	int			 val, rc;
 
 	LASSERT(dev != NULL);
 	lod = lu2lod_dev(dev->obd_lu_dev);

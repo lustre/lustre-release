@@ -45,8 +45,8 @@
 #endif
 
 typedef struct {
-        int             size;
-        unsigned long   data[0];
+	unsigned int  size;
+	unsigned long data[0];
 } cfs_bitmap_t;
 
 #define CFS_BITMAP_SIZE(nbits) \
@@ -102,7 +102,7 @@ int cfs_bitmap_check_empty(cfs_bitmap_t *bitmap)
 static inline
 void cfs_bitmap_copy(cfs_bitmap_t *new, cfs_bitmap_t *old)
 {
-	int newsize;
+	size_t newsize;
 
 	LASSERT(new->size >= old->size);
 	newsize = new->size;

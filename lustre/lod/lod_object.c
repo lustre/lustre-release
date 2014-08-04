@@ -705,7 +705,7 @@ int lod_load_lmv_shards(const struct lu_env *env, struct lod_object *lo,
 	const struct dt_it_ops	*iops;
 	__u32			 stripes;
 	__u32			 magic	= le32_to_cpu(lmv1->lmv_magic);
-	int			 size;
+	size_t			 size;
 	int			 rc;
 	ENTRY;
 
@@ -1217,10 +1217,10 @@ static int lod_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		struct lmv_mds_md_v1	*lmv1;
 		int			 rc1 = 0;
 
-		if (rc > sizeof(*lmv1))
+		if (rc > (typeof(rc))sizeof(*lmv1))
 			RETURN(rc);
 
-		if (rc < sizeof(*lmv1))
+		if (rc < (typeof(rc))sizeof(*lmv1))
 			RETURN(rc = rc > 0 ? -EINVAL : rc);
 
 		if (buf->lb_buf == NULL || buf->lb_len == 0) {
@@ -1373,7 +1373,7 @@ int lod_parse_dir_striping(const struct lu_env *env, struct lod_object *lo,
 	union lmv_mds_md	*lmm = buf->lb_buf;
 	struct lmv_mds_md_v1	*lmv1 = &lmm->lmv_md_v1;
 	struct lu_fid		*fid = &info->lti_fid;
-	int			i;
+	unsigned int		i;
 	int			rc = 0;
 	ENTRY;
 
@@ -1457,11 +1457,11 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 	struct lmv_mds_md_v1	*lmm;
 	struct lmv_mds_md_v1	*slave_lmm = NULL;
 	struct dt_insert_rec	*rec = &info->lti_dt_rec;
-	int			stripe_count;
+	__u32			stripe_count;
 	int			*idx_array;
 	int			rc = 0;
-	int			i;
-	int			j;
+	__u32			i;
+	__u32			j;
 	ENTRY;
 
 	/* The lum has been verifed in lod_verify_md_striping */
@@ -1507,10 +1507,10 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 		for (j = 0; j < lod->lod_remote_mdt_count;
 		     j++, idx = (idx + 1) % (lod->lod_remote_mdt_count + 1)) {
 			bool already_allocated = false;
-			int k;
+			__u32 k;
 
-			CDEBUG(D_INFO, "try idx %d, mdt cnt %d,"
-			       " allocated %d, last allocated %d\n", idx,
+			CDEBUG(D_INFO, "try idx %d, mdt cnt %u,"
+			       " allocated %u, last allocated %d\n", idx,
 			       lod->lod_remote_mdt_count, i, idx_array[i - 1]);
 
 			/* Find next available target */
@@ -1553,13 +1553,13 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 
 		/* Can not allocate more stripes */
 		if (j == lod->lod_remote_mdt_count) {
-			CDEBUG(D_INFO, "%s: require stripes %d only get %d\n",
+			CDEBUG(D_INFO, "%s: require stripes %u only get %d\n",
 			       lod2obd(lod)->obd_name, stripe_count, i - 1);
 			break;
 		}
 
-		CDEBUG(D_INFO, "idx %d, mdt cnt %d,"
-		       " allocated %d, last allocated %d\n", idx,
+		CDEBUG(D_INFO, "idx %d, mdt cnt %u,"
+		       " allocated %u, last allocated %d\n", idx,
 		       lod->lod_remote_mdt_count, i, idx_array[i - 1]);
 
 next:
@@ -1672,7 +1672,7 @@ next:
 		if (rc != 0)
 			GOTO(out_put, rc);
 
-		snprintf(stripe_name, sizeof(info->lti_key), DFID":%d",
+		snprintf(stripe_name, sizeof(info->lti_key), DFID":%u",
 			PFID(lu_object_fid(&dto->do_lu)), i);
 
 		sname = lod_name_get(env, stripe_name, strlen(stripe_name));
@@ -2458,7 +2458,7 @@ static int lod_cache_parent_lov_striping(const struct lu_env *env,
 	if (rc < 0)
 		GOTO(unlock, rc);
 
-	if (rc < sizeof(struct lov_user_md)) {
+	if (rc < (typeof(rc))sizeof(struct lov_user_md)) {
 		/* don't lookup for non-existing or invalid striping */
 		lp->ldo_def_striping_set = 0;
 		lp->ldo_striping_cached = 1;
@@ -2521,7 +2521,7 @@ static int lod_cache_parent_lmv_striping(const struct lu_env *env,
 	if (rc < 0)
 		GOTO(unlock, rc);
 
-	if (rc < sizeof(struct lmv_user_md)) {
+	if (rc < (typeof(rc))sizeof(struct lmv_user_md)) {
 		/* don't lookup for non-existing or invalid striping */
 		lp->ldo_dir_def_striping_set = 0;
 		lp->ldo_dir_striping_cached = 1;
@@ -3026,7 +3026,8 @@ static int lod_object_destroy(const struct lu_env *env,
 	struct lod_object *lo = lod_dt_obj(dt);
 	struct lod_thread_info *info = lod_env_info(env);
 	char		   *stripe_name = info->lti_key;
-	int                rc, i;
+	unsigned int       i;
+	int                rc;
 	ENTRY;
 
 	/* destroy sub-stripe of master object */

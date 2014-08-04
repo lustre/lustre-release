@@ -227,8 +227,8 @@ cfs_hash_ops_t pool_hash_operations = {
 
 #define POOL_IT_MAGIC 0xB001CEA0
 struct lod_pool_iterator {
-	int		  lpi_magic;	/* POOL_IT_MAGIC */
-	int		  lpi_idx;	/* from 0 to pool_tgt_size - 1 */
+	unsigned int	  lpi_magic;	/* POOL_IT_MAGIC */
+	unsigned int	  lpi_idx;	/* from 0 to pool_tgt_size - 1 */
 	struct pool_desc *lpi_pool;
 };
 
@@ -429,7 +429,7 @@ static struct file_operations pool_proc_operations = {
  */
 void lod_dump_pool(int level, struct pool_desc *pool)
 {
-	int i;
+	unsigned int i;
 
 	pool_getref(pool);
 
@@ -535,7 +535,8 @@ int lod_ost_pool_extend(struct ost_pool *op, unsigned int min_count)
  */
 int lod_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int min_count)
 {
-	int rc = 0, i;
+	unsigned int i;
+	int rc = 0;
 	ENTRY;
 
 	down_write(&op->op_rw_sem);
@@ -574,7 +575,7 @@ out:
  */
 int lod_ost_pool_remove(struct ost_pool *op, __u32 idx)
 {
-	int i;
+	unsigned int i;
 	ENTRY;
 
 	down_write(&op->op_rw_sem);
@@ -877,7 +878,8 @@ out:
  */
 int lod_check_index_in_pool(__u32 idx, struct pool_desc *pool)
 {
-	int i, rc;
+	unsigned int i;
+	int rc;
 	ENTRY;
 
 	pool_getref(pool);

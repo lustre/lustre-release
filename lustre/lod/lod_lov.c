@@ -67,7 +67,7 @@ void lod_putref(struct lod_device *lod, struct lod_tgt_descs *ltd)
 	ltd->ltd_refcount--;
 	if (ltd->ltd_refcount == 0 && ltd->ltd_death_row) {
 		struct lod_tgt_desc *tgt_desc, *tmp;
-		int                  idx;
+		unsigned int idx;
 		CFS_LIST_HEAD(kill);
 
 		CDEBUG(D_CONFIG, "destroying %d ltd desc\n",
@@ -394,7 +394,7 @@ static void __lod_del_device(const struct lu_env *env, struct lod_device *lod,
 int lod_fini_tgt(const struct lu_env *env, struct lod_device *lod,
 		 struct lod_tgt_descs *ltd, bool for_ost)
 {
-	int idx;
+	unsigned int idx;
 
 	if (ltd->ltd_tgts_size <= 0)
 		return 0;
@@ -479,9 +479,9 @@ out:
 	return(rc);
 }
 
-int lod_ea_store_resize(struct lod_thread_info *info, int size)
+int lod_ea_store_resize(struct lod_thread_info *info, size_t size)
 {
-	int round = size_roundup_power2(size);
+	__u32 round = size_roundup_power2(size);
 
 	LASSERT(round <=
 		lov_mds_md_size(LOV_MAX_STRIPE_COUNT, LOV_MAGIC_V3));
@@ -514,8 +514,8 @@ int lod_generate_and_set_lovea(const struct lu_env *env,
 	struct lov_mds_md_v1	*lmm;
 	struct lov_ost_data_v1	*objs;
 	__u32			 magic;
-	int			 i, rc, lmm_size;
-	int			 cplen = 0;
+	int			 i, rc;
+	size_t			 lmm_size;
 	ENTRY;
 
 	LASSERT(lo);
@@ -548,7 +548,7 @@ int lod_generate_and_set_lovea(const struct lu_env *env,
 		objs = &lmm->lmm_objects[0];
 	} else {
 		struct lov_mds_md_v3 *v3 = (struct lov_mds_md_v3 *) lmm;
-		cplen = strlcpy(v3->lmm_pool_name, lo->ldo_pool,
+		size_t cplen = strlcpy(v3->lmm_pool_name, lo->ldo_pool,
 				sizeof(v3->lmm_pool_name));
 		if (cplen >= sizeof(v3->lmm_pool_name))
 			RETURN(-E2BIG);
@@ -688,7 +688,7 @@ int lod_store_def_striping(const struct lu_env *env, struct dt_object *dt,
 	RETURN(rc);
 }
 
-static int validate_lod_and_idx(struct lod_device *md, int idx)
+static int validate_lod_and_idx(struct lod_device *md, __u32 idx)
 {
 	if (unlikely(idx >= md->lod_ost_descs.ltd_tgts_size ||
 		     !cfs_bitmap_check(md->lod_ost_bitmap, idx))) {
@@ -725,7 +725,8 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 	struct lu_device	*nd;
 	struct dt_object       **stripe;
 	int			 stripe_len;
-	int			 i, idx, rc = 0;
+	int			 i, rc = 0;
+	__u32			idx;
 	ENTRY;
 
 	LASSERT(lo != NULL);
@@ -873,7 +874,7 @@ int lod_load_striping_locked(const struct lu_env *env, struct lod_object *lo)
 		rc = lod_parse_striping(env, lo, buf);
 	} else if (S_ISDIR(lu_object_attr(lod2lu_obj(lo)))) {
 		rc = lod_get_lmv_ea(env, lo);
-		if (rc < sizeof(struct lmv_mds_md_v1))
+		if (rc < (typeof(rc))sizeof(struct lmv_mds_md_v1))
 			GOTO(out, rc = rc > 0 ? -EINVAL : rc);
 
 		buf->lb_buf = info->lti_ea_store;
