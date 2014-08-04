@@ -30,6 +30,10 @@ unsigned int libcfs_printk = D_CANTMASK;
 static int   g_net_set;
 static __u32 g_net;
 
+#define IOC_BUF_SIZE	8192
+static char local_buf[IOC_BUF_SIZE];
+static char *ioc_buf = local_buf;
+
 /* Convert a string boolean to an int; "enable" -> 1 */
 int
 lnet_parse_bool (int *b, char *str)
@@ -1271,6 +1275,350 @@ jt_ptl_print_routes (int argc, char **argv)
 			strerror(errno));
 
 	return 0;
+}
+
+static int
+fault_attr_nid_parse(char *str, lnet_nid_t *nid_p)
+{
+	lnet_nid_t nid;
+	__u32	   net;
+	int	   rc = 0;
+
+	/* NB: can't support range ipaddress except * and *@net */
+	if (strlen(str) > 2 && str[0] == '*' && str[1] == '@') {
+		net = libcfs_str2net(str + 2);
+		if (net == LNET_NIDNET(LNET_NID_ANY))
+			goto failed;
+
+		nid = LNET_MKNID(net, LNET_NIDADDR(LNET_NID_ANY));
+	} else {
+		rc = libcfs_str2anynid(&nid, str);
+		if (!rc)
+			goto failed;
+	}
+
+	*nid_p = nid;
+	return 0;
+failed:
+	fprintf(stderr, "Invalid NID : %s\n", str);
+	return -1;
+}
+
+static int
+fault_attr_msg_parse(char *msg_str, __u32 *mask_p)
+{
+	if (!strcasecmp(msg_str, "put")) {
+		*mask_p |= LNET_PUT_BIT;
+		return 0;
+
+	} else if (!strcasecmp(msg_str, "ack")) {
+		*mask_p |= LNET_ACK_BIT;
+		return 0;
+
+	} else if (!strcasecmp(msg_str, "get")) {
+		*mask_p |= LNET_GET_BIT;
+		return 0;
+
+	} else if (!strcasecmp(msg_str, "reply")) {
+		*mask_p |= LNET_REPLY_BIT;
+		return 0;
+	}
+
+	fprintf(stderr, "unknown message type %s\n", msg_str);
+	return -1;
+}
+
+static int
+fault_attr_ptl_parse(char *ptl_str, __u64 *mask_p)
+{
+	unsigned long rc = strtoul(optarg, NULL, 0);
+
+	if (rc >= 64) {
+		fprintf(stderr, "invalid portal: %lu\n", rc);
+		return -1;
+	}
+
+	*mask_p |= (1ULL << rc);
+	return 0;
+}
+
+static int
+fault_simul_rule_add(__u32 opc, char *name, int argc, char **argv)
+{
+	struct libcfs_ioctl_data  data = {{0}};
+	struct lnet_fault_attr    attr;
+	char			 *optstr;
+	int			  rc;
+
+	static struct option opts[] = {
+		{"source",	required_argument,	0,	's'},
+		{"dest",	required_argument,	0,	'd'},
+		{"rate",	required_argument,	0,	'r'},
+		{"interval",	required_argument,	0,	'i'},
+		{"portal",	required_argument,	0,	'p'},
+		{"message",	required_argument,	0,	'm'},
+		{0, 0, 0, 0}
+	};
+
+	if (argc == 1) {
+		fprintf(stderr, "Failed, please provide source, destination "
+				"and rate of rule\n");
+		return -1;
+	}
+
+	optstr = "s:d:r:i:p:m:";
+	memset(&attr, 0, sizeof(attr));
+	while (1) {
+		char c = getopt_long(argc, argv, optstr, opts, NULL);
+
+		if (c == -1)
+			break;
+
+		switch (c) {
+		case 's': /* source NID/NET */
+			rc = fault_attr_nid_parse(optarg, &attr.fa_src);
+			if (rc != 0)
+				goto getopt_failed;
+			break;
+
+		case 'd': /* dest NID/NET */
+			rc = fault_attr_nid_parse(optarg, &attr.fa_dst);
+			if (rc != 0)
+				goto getopt_failed;
+			break;
+
+		case 'r': /* drop rate */
+			attr.u.drop.da_rate = strtoul(optarg, NULL, 0);
+			break;
+
+		case 'i': /* time interval (# seconds) for message drop */
+			attr.u.drop.da_interval = strtoul(optarg, NULL, 0);
+			break;
+
+		case 'p': /* portal to filter */
+			rc = fault_attr_ptl_parse(optarg, &attr.fa_ptl_mask);
+			if (rc != 0)
+				goto getopt_failed;
+			break;
+
+		case 'm': /* message types to filter */
+			rc = fault_attr_msg_parse(optarg, &attr.fa_msg_mask);
+			if (rc != 0)
+				goto getopt_failed;
+			break;
+
+		default:
+			fprintf(stderr, "error: %s: option '%s' "
+				"unrecognized\n", argv[0], argv[optind - 1]);
+			goto getopt_failed;
+		}
+	}
+	optind = 1;
+
+	if ((attr.u.drop.da_rate == 0) == (attr.u.drop.da_interval == 0)) {
+		fprintf(stderr, "please provide drop rate or interval\n");
+		return -1;
+	}
+
+	if (attr.fa_src == 0 || attr.fa_dst == 0) {
+		fprintf(stderr, "Please provide both source and destination "
+				"of %s rule\n", name);
+		return -1;
+	}
+
+	data.ioc_flags = opc;
+	data.ioc_inllen1 = sizeof(attr);
+	data.ioc_inlbuf1 = (char *)&attr;
+	if (libcfs_ioctl_pack(&data, &ioc_buf, IOC_BUF_SIZE) != 0) {
+		fprintf(stderr, "libcfs_ioctl_pack failed\n");
+		return -1;
+	}
+
+	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_LNET_FAULT, ioc_buf);
+	if (rc != 0) {
+		fprintf(stderr, "add %s rule %s->%s failed: %s\n",
+			name, libcfs_nid2str(attr.fa_src),
+			libcfs_nid2str(attr.fa_dst), strerror(errno));
+		return -1;
+	}
+
+	printf("Added %s rule %s->%s (1/%d)\n",
+	       name, libcfs_nid2str(attr.fa_src),
+	       libcfs_nid2str(attr.fa_dst), attr.u.drop.da_rate);
+	return 0;
+
+getopt_failed:
+	optind = 1;
+	return -1;
+}
+
+int
+jt_ptl_drop_add(int argc, char **argv)
+{
+	return fault_simul_rule_add(LNET_CTL_DROP_ADD, "drop", argc, argv);
+}
+
+static int
+fault_simul_rule_del(__u32 opc, char *name, int argc, char **argv)
+{
+	struct libcfs_ioctl_data data = {{0}};
+	struct lnet_fault_attr   attr;
+	bool			 all = false;
+	int			 rc;
+
+	static struct option opts[] = {
+		{"source",	required_argument,	0,	's'},
+		{"dest",	required_argument,	0,	'd'},
+		{"all",		no_argument,		0,	'a'},
+		{0, 0, 0, 0}
+	};
+
+	if (argc == 1) {
+		fprintf(stderr, "Failed, please provide source and "
+				"destination of rule\n");
+		return -1;
+	}
+
+	memset(&attr, 0, sizeof(attr));
+	while (1) {
+		char c = getopt_long(argc, argv, "s:d:a", opts, NULL);
+
+		if (c == -1 || all)
+			break;
+
+		switch (c) {
+		case 's':
+			rc = fault_attr_nid_parse(optarg, &attr.fa_src);
+			if (rc != 0)
+				goto getopt_failed;
+			break;
+		case 'd':
+			rc = fault_attr_nid_parse(optarg, &attr.fa_dst);
+			if (rc != 0)
+				goto getopt_failed;
+			break;
+		case 'a':
+			attr.fa_src = attr.fa_dst = 0;
+			all = true;
+			break;
+		default:
+			fprintf(stderr, "error: %s: option '%s' "
+				"unrecognized\n", argv[0], argv[optind - 1]);
+			goto getopt_failed;
+		}
+	}
+	optind = 1;
+
+	data.ioc_flags = opc;
+	data.ioc_inllen1 = sizeof(attr);
+	data.ioc_inlbuf1 = (char *)&attr;
+	if (libcfs_ioctl_pack(&data, &ioc_buf, IOC_BUF_SIZE) != 0) {
+		fprintf(stderr, "libcfs_ioctl_pack failed\n");
+		return -1;
+	}
+
+	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_LNET_FAULT, ioc_buf);
+	if (rc != 0) {
+		fprintf(stderr, "remove %s rule %s->%s failed: %s\n", name,
+			all ? "all" : libcfs_nid2str(attr.fa_src),
+			all ? "all" : libcfs_nid2str(attr.fa_dst),
+			strerror(errno));
+		return -1;
+	}
+
+	libcfs_ioctl_unpack(&data, ioc_buf);
+	printf("Removed %d %s rules\n", data.ioc_count, name);
+	return 0;
+
+getopt_failed:
+	optind = 1;
+	return -1;
+}
+
+int
+jt_ptl_drop_del(int argc, char **argv)
+{
+	return fault_simul_rule_del(LNET_CTL_DROP_DEL, "drop", argc, argv);
+}
+
+static int
+fault_simul_rule_reset(__u32 opc, char *name, int argc, char **argv)
+{
+	struct libcfs_ioctl_data   data = {{0}};
+	int			   rc;
+
+	LIBCFS_IOC_INIT(data);
+	data.ioc_flags = opc;
+
+	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_LNET_FAULT, &data);
+	if (rc != 0) {
+		fprintf(stderr, "failed to reset %s stats: %s\n",
+			name, strerror(errno));
+		return -1;
+	}
+	return 0;
+}
+
+int
+jt_ptl_drop_reset(int argc, char **argv)
+{
+	return fault_simul_rule_reset(LNET_CTL_DROP_RESET, "drop", argc, argv);
+}
+
+static int
+fault_simul_rule_list(__u32 opc, char *name, int argc, char **argv)
+{
+	struct libcfs_ioctl_data data = {{0}};
+	struct lnet_fault_attr   attr;
+	struct lnet_fault_stat   stat;
+	int			 pos;
+
+	printf("LNet %s rules:\n", name);
+	for (pos = 0;; pos++) {
+		int		rc;
+
+		memset(&attr, 0, sizeof(attr));
+		memset(&stat, 0, sizeof(stat));
+
+		data.ioc_count = pos;
+		data.ioc_flags = opc;
+		data.ioc_inllen1 = sizeof(attr);
+		data.ioc_inlbuf1 = (char *)&attr;
+		data.ioc_inllen2 = sizeof(stat);
+		data.ioc_inlbuf2 = (char *)&stat;
+		if (libcfs_ioctl_pack(&data, &ioc_buf, IOC_BUF_SIZE) != 0) {
+			fprintf(stderr, "libcfs_ioctl_pack failed\n");
+			return -1;
+		}
+
+		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_LNET_FAULT, ioc_buf);
+		if (rc != 0)
+			break;
+
+		libcfs_ioctl_unpack(&data, ioc_buf);
+
+		if (opc == LNET_CTL_DROP_LIST) {
+			printf("%s->%s (1/%d | %d) ptl "LPX64", msg %x, "
+			       LPU64"/"LPU64", PUT "LPU64", ACK "LPU64", GET "
+			       LPU64", REP "LPU64"\n",
+			       libcfs_nid2str(attr.fa_src),
+			       libcfs_nid2str(attr.fa_dst),
+			       attr.u.drop.da_rate, attr.u.drop.da_interval,
+			       attr.fa_ptl_mask, attr.fa_msg_mask,
+			       stat.u.drop.ds_dropped, stat.fs_count,
+			       stat.fs_put, stat.fs_ack,
+			       stat.fs_get, stat.fs_reply);
+		}
+	}
+	printf("found total %d\n", pos);
+
+	return 0;
+}
+
+int
+jt_ptl_drop_list(int argc, char **argv)
+{
+	return fault_simul_rule_list(LNET_CTL_DROP_LIST, "drop", argc, argv);
 }
 
 double

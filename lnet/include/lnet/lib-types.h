@@ -47,6 +47,7 @@
 #include <libcfs/libcfs.h>
 #include <libcfs/list.h>
 #include <lnet/types.h>
+#include <lnet/lnetctl.h>
 
 #define WIRE_ATTR       __attribute__((packed))
 
@@ -778,6 +779,7 @@ typedef struct
 	struct lnet_peer_table		**ln_peer_tables;
 	/* failure simulation */
 	struct list_head		ln_test_peers;
+	struct list_head		ln_drop_rules;
 
 	struct list_head		ln_nis;		/* LND instances */
 	/* NIs bond on specific CPT(s) */

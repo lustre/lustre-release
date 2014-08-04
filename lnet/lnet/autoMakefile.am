@@ -2,7 +2,7 @@ my_sources =    api-ni.c config.c \
 		lib-me.c lib-msg.c lib-eq.c \
 		lib-md.c lib-ptl.c lib-move.c lo.c \
 	        router.c router_proc.c \
-		acceptor.c peer.c
+		acceptor.c peer.c net_fault.c
 
 
 if LIBLUSTRE
