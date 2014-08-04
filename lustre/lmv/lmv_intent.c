@@ -537,5 +537,27 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 	else
 		LBUG();
 
+	if (rc < 0) {
+		struct lustre_handle lock_handle;
+
+		if (it->d.lustre.it_lock_mode != 0) {
+			lock_handle.cookie = it->d.lustre.it_lock_handle;
+			ldlm_lock_decref(&lock_handle,
+					 it->d.lustre.it_lock_mode);
+		}
+
+		it->d.lustre.it_lock_handle = 0;
+		it->d.lustre.it_lock_mode = 0;
+
+		if (it->d.lustre.it_remote_lock_mode != 0) {
+			lock_handle.cookie = it->d.lustre.it_remote_lock_handle;
+			ldlm_lock_decref(&lock_handle,
+					 it->d.lustre.it_remote_lock_mode);
+		}
+
+		it->d.lustre.it_remote_lock_handle = 0;
+		it->d.lustre.it_remote_lock_mode = 0;
+	}
+
 	RETURN(rc);
 }
