@@ -352,7 +352,7 @@ int lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr)
         int                      start;
         int                      count;
         int                      bnr;
-        int                      i;
+	unsigned int             i;
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_OBD_NO_LRU))
 		RETURN(0);
@@ -950,10 +950,10 @@ EXPORT_SYMBOL(lu_site_print);
 /**
  * Return desired hash table order.
  */
-static int lu_htable_order(struct lu_device *top)
+static unsigned int lu_htable_order(struct lu_device *top)
 {
-        unsigned long cache_size;
-        int bits;
+	unsigned long cache_size;
+	unsigned int  bits;
 
 	/*
 	 * For ZFS based OSDs the cache should be disabled by default.  This
@@ -1094,15 +1094,16 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
 	struct lu_site_bkt_data *bkt;
 	cfs_hash_bd_t bd;
 	char name[16];
-	int bits;
-	int i;
+	unsigned int bits;
+	unsigned int i;
 	ENTRY;
 
 	memset(s, 0, sizeof *s);
 	mutex_init(&s->ls_purge_mutex);
 	bits = lu_htable_order(top);
 	snprintf(name, 16, "lu_site_%s", top->ld_type->ldt_name);
-	for (bits = min(max(LU_SITE_BITS_MIN, bits), LU_SITE_BITS_MAX);
+	for (bits = clamp_t(typeof(bits), bits,
+			    LU_SITE_BITS_MIN, LU_SITE_BITS_MAX);
 	     bits >= LU_SITE_BITS_MIN; bits--) {
 		s->ls_obj_hash = cfs_hash_create(name, bits, bits,
 						 bits - LU_SITE_BKT_BITS,
@@ -1429,8 +1430,8 @@ static unsigned key_set_version = 0;
  */
 int lu_context_key_register(struct lu_context_key *key)
 {
-        int result;
-        int i;
+	int result;
+	unsigned int i;
 
         LASSERT(key->lct_init != NULL);
         LASSERT(key->lct_fini != NULL);
@@ -1640,7 +1641,7 @@ EXPORT_SYMBOL(lu_context_key_revive);
 
 static void keys_fini(struct lu_context *ctx)
 {
-	int	i;
+	unsigned int i;
 
 	if (ctx->lc_value == NULL)
 		return;
@@ -1654,7 +1655,7 @@ static void keys_fini(struct lu_context *ctx)
 
 static int keys_fill(struct lu_context *ctx)
 {
-        int i;
+	unsigned int i;
 
         LINVRNT(ctx->lc_value != NULL);
         for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
@@ -1767,7 +1768,7 @@ EXPORT_SYMBOL(lu_context_enter);
  */
 void lu_context_exit(struct lu_context *ctx)
 {
-        int i;
+	unsigned int i;
 
         LINVRNT(ctx->lc_state == LCS_ENTERED);
         ctx->lc_state = LCS_LEFT;
@@ -1915,8 +1916,8 @@ typedef struct lu_site_stats{
 static void lu_site_stats_get(cfs_hash_t *hs,
                               lu_site_stats_t *stats, int populated)
 {
-        cfs_hash_bd_t bd;
-        int           i;
+	cfs_hash_bd_t bd;
+	unsigned int  i;
 
         cfs_hash_for_each_bucket(hs, &bd, i) {
                 struct lu_site_bkt_data *bkt = cfs_hash_bd_extra_get(hs, &bd);
@@ -2077,7 +2078,7 @@ int lu_debugging_setup(void)
 
 void lu_context_keys_dump(void)
 {
-        int i;
+	unsigned int i;
 
         for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
                 struct lu_context_key *key;
@@ -2333,7 +2334,7 @@ void lu_buf_free(struct lu_buf *buf)
 }
 EXPORT_SYMBOL(lu_buf_free);
 
-void lu_buf_alloc(struct lu_buf *buf, int size)
+void lu_buf_alloc(struct lu_buf *buf, size_t size)
 {
 	LASSERT(buf);
 	LASSERT(buf->lb_buf == NULL);
@@ -2344,14 +2345,14 @@ void lu_buf_alloc(struct lu_buf *buf, int size)
 }
 EXPORT_SYMBOL(lu_buf_alloc);
 
-void lu_buf_realloc(struct lu_buf *buf, int size)
+void lu_buf_realloc(struct lu_buf *buf, size_t size)
 {
 	lu_buf_free(buf);
 	lu_buf_alloc(buf, size);
 }
 EXPORT_SYMBOL(lu_buf_realloc);
 
-struct lu_buf *lu_buf_check_and_alloc(struct lu_buf *buf, int len)
+struct lu_buf *lu_buf_check_and_alloc(struct lu_buf *buf, size_t len)
 {
 	if (buf->lb_buf == NULL && buf->lb_len == 0)
 		lu_buf_alloc(buf, len);
@@ -2369,7 +2370,7 @@ EXPORT_SYMBOL(lu_buf_check_and_alloc);
  * old buffer remains unchanged on error
  * \retval 0 or -ENOMEM
  */
-int lu_buf_check_and_grow(struct lu_buf *buf, int len)
+int lu_buf_check_and_grow(struct lu_buf *buf, size_t len)
 {
 	char *ptr;
 

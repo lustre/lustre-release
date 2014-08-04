@@ -1326,8 +1326,8 @@ static inline bool lu_name_is_valid(const struct lu_name *ln)
  * methods.
  */
 struct lu_buf {
-        void   *lb_buf;
-        ssize_t lb_len;
+	void   *lb_buf;
+	size_t  lb_len;
 };
 
 #define DLUBUF "(%p %zu)"
@@ -1366,11 +1366,11 @@ struct lu_object *lu_object_anon(const struct lu_env *env,
 extern struct lu_buf LU_BUF_NULL;
 
 void lu_buf_free(struct lu_buf *buf);
-void lu_buf_alloc(struct lu_buf *buf, int size);
-void lu_buf_realloc(struct lu_buf *buf, int size);
+void lu_buf_alloc(struct lu_buf *buf, size_t size);
+void lu_buf_realloc(struct lu_buf *buf, size_t size);
 
-int lu_buf_check_and_grow(struct lu_buf *buf, int len);
-struct lu_buf *lu_buf_check_and_alloc(struct lu_buf *buf, int len);
+int lu_buf_check_and_grow(struct lu_buf *buf, size_t len);
+struct lu_buf *lu_buf_check_and_alloc(struct lu_buf *buf, size_t len);
 
 /** @} lu */
 #endif /* __LUSTRE_LU_OBJECT_H */

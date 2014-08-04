@@ -2472,6 +2472,7 @@ static int lfsck_layout_recreate_lovea(const struct lu_env *env,
 	struct lfsck_bookmark	 *bk		= &lfsck->li_bookmark_ram;
 	struct thandle		  *handle	= NULL;
 	size_t			  buflen	= buf->lb_len;
+	size_t			  lovea_size;
 	struct lov_mds_md_v1	 *lmm;
 	struct lov_ost_data_v1   *objs;
 	struct lustre_handle	  lh		= { 0 };
@@ -2510,8 +2511,9 @@ again:
 	if (rc < 0)
 		GOTO(unlock_layout, rc);
 
-	if (buf->lb_len < rc) {
-		lu_buf_realloc(buf, rc);
+	lovea_size = rc;
+	if (buf->lb_len < lovea_size) {
+		lu_buf_realloc(buf, lovea_size);
 		buflen = buf->lb_len;
 		if (buf->lb_buf == NULL)
 			GOTO(unlock_layout, rc = -ENOMEM);
@@ -2541,11 +2543,12 @@ again:
 		LASSERT(rc != 0);
 		goto again;
 	} else if (rc == -ENODATA || rc == 0) {
-		rc = lov_mds_md_size(ea_off + 1, LOV_MAGIC_V1);
+		lovea_size = lov_mds_md_size(ea_off + 1, LOV_MAGIC_V1);
 		/* If the declared is not big enough, re-try. */
-		if (buf->lb_len < rc)
+		if (buf->lb_len < lovea_size) {
+			rc = lovea_size;
 			goto again;
-
+		}
 		fl = LU_XATTR_CREATE;
 	} else if (rc < 0) {
 		GOTO(unlock_parent, rc);
@@ -2553,15 +2556,16 @@ again:
 		goto again;
 	} else {
 		fl = LU_XATTR_REPLACE;
+		lovea_size = rc;
 	}
 
 	if (fl == LU_XATTR_CREATE) {
 		if (bk->lb_param & LPF_DRYRUN)
 			GOTO(unlock_parent, rc = 1);
 
-		LASSERT(buf->lb_len >= rc);
+		LASSERT(buf->lb_len >= lovea_size);
 
-		buf->lb_len = rc;
+		buf->lb_len = lovea_size;
 		rc = lfsck_layout_extend_lovea(env, lfsck, handle, parent, cfid,
 					       buf, fl, ost_idx, ea_off, false);
 
@@ -2576,9 +2580,9 @@ again:
 		if (bk->lb_param & LPF_DRYRUN)
 			GOTO(unlock_parent, rc = 1);
 
-		LASSERT(buf->lb_len >= rc);
+		LASSERT(buf->lb_len >= lovea_size);
 
-		buf->lb_len = rc;
+		buf->lb_len = lovea_size;
 		memset(lmm, 0, buf->lb_len);
 		rc = lfsck_layout_extend_lovea(env, lfsck, handle, parent, cfid,
 					       buf, fl, ost_idx, ea_off, true);
@@ -2612,12 +2616,13 @@ again:
 		if (bk->lb_param & LPF_DRYRUN)
 			GOTO(unlock_parent, rc = 1);
 
-		rc = lov_mds_md_size(ea_off + 1, magic);
+		lovea_size = lov_mds_md_size(ea_off + 1, magic);
 		/* If the declared is not big enough, re-try. */
-		if (buf->lb_len < rc)
+		if (buf->lb_len < lovea_size) {
+			rc = lovea_size;
 			goto again;
-
-		buf->lb_len = rc;
+		}
+		buf->lb_len = lovea_size;
 		rc = lfsck_layout_extend_lovea(env, lfsck, handle, parent, cfid,
 					       buf, fl, ost_idx, ea_off, false);
 
@@ -2626,7 +2631,7 @@ again:
 
 	LASSERTF(rc > 0, "invalid rc = %d\n", rc);
 
-	buf->lb_len = rc;
+	buf->lb_len = lovea_size;
 	for (i = 0; i < count; i++, objs++) {
 		/* The MDT-object was created via lfsck_layout_recover_create()
 		 * by others before, and we fill the dummy layout EA. */
