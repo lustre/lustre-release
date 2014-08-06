@@ -127,6 +127,22 @@ command_t cmdlist[] = {
 	 "usage: net_drop_reset"},
 	{"net_drop_list", jt_ptl_drop_list, 0, "list LNet drop rules\n"
 	 "usage: net_drop_list"},
+	{"net_delay_add", jt_ptl_delay_add, 0, "Add LNet delay rule\n"
+	 "usage: net_delay_add <-s | --source NID>\n"
+	 "		       <-d | --dest NID>\n"
+	 "		       <<-r | --rate DROP_RATE> |\n"
+	 "		        <-i | --interval SECONDS>>\n"
+	 "		       <-l | --latency SECONDS>\n"
+	 "		       [<-p | --portal> PORTAL...]\n"
+	 "		       [<-m | --message> <PUT|ACK|GET|REPLY>...]\n"},
+	{"net_delay_del", jt_ptl_delay_del, 0, "remove LNet delay rule\n"
+	 "usage: net_delay_del <[-a | --all] |\n"
+	 "		       <-s | --source NID>\n"
+	 "		       <-d | --dest NID>>\n"},
+	{"net_delay_reset", jt_ptl_delay_reset, 0, "reset delay rule stats\n"
+	 "usage: net_delay_reset"},
+	{"net_delay_list", jt_ptl_delay_list, 0, "list LNet delay rules\n"
+	 "usage: net_delay_list"},
 
         /* Device selection commands */
         {"==== obd device selection ====", jt_noop, 0, "device selection"},

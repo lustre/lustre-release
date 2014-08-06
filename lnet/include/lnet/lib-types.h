@@ -208,6 +208,7 @@ typedef struct lnet_msg {
         unsigned int          msg_rtrcredit:1;    /* taken a globel router credit */
         unsigned int          msg_peerrtrcredit:1; /* taken a peer router credit */
         unsigned int          msg_onactivelist:1; /* on the activelist */
+	unsigned int	      msg_rdma_get:1;
 
         struct lnet_peer     *msg_txpeer;         /* peer I'm sending to */
         struct lnet_peer     *msg_rxpeer;         /* peer I received from */
@@ -566,6 +567,11 @@ typedef struct {
 	__u32			lrn_net;
 } lnet_remotenet_t;
 
+/** lnet message has credit and can be submitted to lnd for send/receive */
+#define LNET_CREDIT_OK		0
+/** lnet message is waiting for credit */
+#define LNET_CREDIT_WAIT	1
+
 typedef struct {
 	/* my free buffer pool */
 	struct list_head	rbp_bufs;
@@ -780,6 +786,7 @@ typedef struct
 	/* failure simulation */
 	struct list_head		ln_test_peers;
 	struct list_head		ln_drop_rules;
+	struct list_head		ln_delay_rules;
 
 	struct list_head		ln_nis;		/* LND instances */
 	/* NIs bond on specific CPT(s) */
@@ -819,6 +826,7 @@ typedef struct
 
 	struct mutex			ln_api_mutex;
 	struct mutex			ln_lnd_mutex;
+	struct mutex			ln_delay_mutex;
 #else
 # ifndef HAVE_LIBPTHREAD
 	int				ln_api_mutex;

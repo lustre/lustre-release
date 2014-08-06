@@ -30,6 +30,10 @@ enum {
 	LNET_CTL_DROP_DEL,
 	LNET_CTL_DROP_RESET,
 	LNET_CTL_DROP_LIST,
+	LNET_CTL_DELAY_ADD,
+	LNET_CTL_DELAY_DEL,
+	LNET_CTL_DELAY_RESET,
+	LNET_CTL_DELAY_LIST,
 };
 
 #define LNET_ACK_BIT		(1 << 0)
@@ -75,7 +79,17 @@ struct lnet_fault_attr {
 			 */
 			__u32			da_interval;
 		} drop;
-		/** TODO: add more */
+		/** message latency simulation */
+		struct {
+			__u32			la_rate;
+			/**
+			 * time interval of message delay, it is exclusive
+			 * with la_rate
+			 */
+			__u32			la_interval;
+			/** latency to delay */
+			__u32			la_latency;
+		} delay;
 		__u64			space[8];
 	} u;
 
@@ -98,7 +112,10 @@ struct lnet_fault_stat {
 			/** total # dropped messages */
 			__u64			ds_dropped;
 		} drop;
-		/** TODO: add more */
+		struct {
+			/** total # delayed messages */
+			__u64			ls_delayed;
+		} delay;
 		__u64			space[8];
 	} u;
 };
@@ -150,6 +167,10 @@ int jt_ptl_drop_add(int argc, char **argv);
 int jt_ptl_drop_del(int argc, char **argv);
 int jt_ptl_drop_reset(int argc, char **argv);
 int jt_ptl_drop_list(int argc, char **argv);
+int jt_ptl_delay_add(int argc, char **argv);
+int jt_ptl_delay_del(int argc, char **argv);
+int jt_ptl_delay_reset(int argc, char **argv);
+int jt_ptl_delay_list(int argc, char **argv);
 
 int dbg_initialize(int argc, char **argv);
 int jt_dbg_filter(int argc, char **argv);
