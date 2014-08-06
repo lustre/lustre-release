@@ -306,7 +306,7 @@ int libcfs_kkuc_group_put(int group, void *payload)
 	int one_success = 0;
 	ENTRY;
 
-	down_read(&kg_sem);
+	down_write(&kg_sem);
 	list_for_each_entry(reg, &kkuc_groups[group], kr_chain) {
 		if (reg->kr_fp != NULL) {
 			rc = libcfs_kkuc_msg_put(reg->kr_fp, payload);
@@ -318,7 +318,7 @@ int libcfs_kkuc_group_put(int group, void *payload)
 			}
 		}
 	}
-	up_read(&kg_sem);
+	up_write(&kg_sem);
 
 	/* don't return an error if the message has been delivered
 	 * at least to one agent */
