@@ -2165,10 +2165,10 @@ routerstat</title>
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>The routerstat utility watches LNET router statistics. If no <literal><replaceable>interval</replaceable></literal> is specified, then statistics are sampled and printed only one time. Otherwise, statistics are sampled and printed at the specified <literal><replaceable>interval</replaceable></literal> (in seconds).</para>
+      <para>The routerstat utility displays LNET router statistics. If no <literal><replaceable>interval</replaceable></literal> is specified, then statistics are sampled and printed only one time. Otherwise, statistics are sampled and printed at the specified <literal><replaceable>interval</replaceable></literal> (in seconds).</para>
     </section>
     <section remap="h5">
-      <title>Options</title>
+      <title>Output</title>
       <para>The routerstat output includes the following fields:</para>
       <informaltable frame="all">
         <tgroup cols="2">
@@ -2177,7 +2177,7 @@ routerstat</title>
           <thead>
             <row>
               <entry>
-                <para><emphasis role="bold">Option</emphasis></para>
+                <para><emphasis role="bold">Output</emphasis></para>
               </entry>
               <entry>
                 <para><emphasis role="bold">Description</emphasis></para>
@@ -2190,7 +2190,7 @@ routerstat</title>
                 <para> <literal>M</literal></para>
               </entry>
               <entry>
-                <para> msgs_alloc(msgs_max)</para>
+                <para> Number of messages currently being processed by LNET (The maximum number of messages ever processed by LNET concurrently)</para>
               </entry>
             </row>
             <row>
@@ -2198,7 +2198,7 @@ routerstat</title>
                 <para> <literal>E</literal></para>
               </entry>
               <entry>
-                <para> errors</para>
+                <para> Number of LNET errors</para>
               </entry>
             </row>
             <row>
@@ -2206,7 +2206,7 @@ routerstat</title>
                 <para> <literal>S</literal></para>
               </entry>
               <entry>
-                <para> send_count/send_length</para>
+                <para> Total size (length) of messages sent in bytes/ Number of messages sent</para>
               </entry>
             </row>
             <row>
@@ -2214,7 +2214,7 @@ routerstat</title>
                 <para> <literal>R</literal></para>
               </entry>
               <entry>
-                <para> recv_count/recv_length</para>
+                <para> Total size (length) of messages received in bytes/ Number of messages received</para>
               </entry>
             </row>
             <row>
@@ -2222,7 +2222,7 @@ routerstat</title>
                 <para> <literal>F</literal></para>
               </entry>
               <entry>
-                <para> route_count/route_length</para>
+                <para> Total size (length) of messages routed in bytes/ Number of messages routed</para>
               </entry>
             </row>
             <row>
@@ -2230,12 +2230,94 @@ routerstat</title>
                 <para> <literal>D</literal></para>
               </entry>
               <entry>
-                <para> drop_count/drop_length</para>
+                <para> Total size (length) of messages dropped in bytes/ Number of messages dropped</para>
               </entry>
             </row>
           </tbody>
         </tgroup>
       </informaltable>
+      <para>When an <literal><replaceable>interval</replaceable></literal> is specified, additional lines of statistics are printed including the following fields:</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Output</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>M</literal></para>
+              </entry>
+              <entry>
+                <para> Number of messages currently being processed by LNET (The maximum number of messages ever processed by LNET concurrently)</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>E</literal></para>
+              </entry>
+              <entry>
+                <para> Number of LNET errors per second</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>S</literal></para>
+              </entry>
+              <entry>
+                <para> Rate of data sent in Mbytes per second/ Count of messages sent per second</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>R</literal></para>
+              </entry>
+              <entry>
+                <para> Rate of data received in Mbytes per second/ Count of messages received per second</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>F</literal></para>
+              </entry>
+              <entry>
+                <para> Rate of data routed in Mbytes per second/ Count of messages routed per second</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>D</literal></para>
+              </entry>
+              <entry>
+                <para> Rate of data dropped in Mbytes per second/ Count of messages dropped per second</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section remap="h5">
+      <title>Example</title>
+      <screen># routerstat 1
+M 0(13) E 0 S 117379184/4250 R 878480/4356 F 0/0 D 0/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    8.00/     8 R    0.00/    16 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    8.00/     8 R    0.00/    16 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+...</screen>
     </section>
     <section remap="h5">
       <title>Files</title>
