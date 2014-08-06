@@ -747,8 +747,6 @@ struct mdt_file_data *mdt_mfd_new(const struct mdt_export_data *med);
 int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd);
 void mdt_mfd_free(struct mdt_file_data *mfd);
 int mdt_close(struct tgt_session_info *tsi);
-int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
-                 struct md_attr *ma, int flags);
 int mdt_add_dirty_flag(struct mdt_thread_info *info, struct mdt_object *mo,
 			struct md_attr *ma);
 int mdt_done_writing(struct tgt_session_info *tsi);

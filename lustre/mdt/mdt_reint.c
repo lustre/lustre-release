@@ -535,8 +535,8 @@ static int mdt_lock_slaves(struct mdt_thread_info *mti, struct mdt_object *obj,
 	RETURN(rc);
 }
 
-int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
-                 struct md_attr *ma, int flags)
+static int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
+			struct md_attr *ma)
 {
 	struct mdt_lock_handle  *lh;
 	int do_vbr = ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID|LA_FLAGS);
@@ -546,9 +546,6 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 	struct mdt_object	*s0_obj = NULL;
 	int rc;
 	ENTRY;
-
-	/* attr shouldn't be set on remote object */
-	LASSERT(!mdt_object_remote(mo));
 
         lh = &info->mti_lh[MDT_LH_PARENT];
         mdt_lock_reg_init(lh, LCK_PW);
@@ -565,13 +562,10 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
                 RETURN(rc);
 
 	s0_lh = &info->mti_lh[MDT_LH_LOCAL];
-	mdt_lock_reg_init(s0_lh, LCK_EX);
+	mdt_lock_reg_init(s0_lh, LCK_PW);
 	rc = mdt_lock_slaves(info, mo, LCK_PW, lockpart, s0_lh, &s0_obj, einfo);
 	if (rc != 0)
 		GOTO(out_unlock, rc);
-
-        if (mdt_object_exists(mo) == 0)
-                GOTO(out_unlock, rc = -ENOENT);
 
         /* all attrs are packed into mti_attr in unpack_setattr */
         mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
@@ -678,6 +672,12 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
         if (IS_ERR(mo))
                 GOTO(out, rc = PTR_ERR(mo));
 
+	if (!mdt_object_exists(mo))
+		GOTO(out_put, rc = -ENOENT);
+
+	if (mdt_object_remote(mo))
+		GOTO(out_put, rc = -EREMOTE);
+
         /* start a log jounal handle if needed */
         if (!(mdt_conn_flags(info) & OBD_CONNECT_SOM)) {
                 if ((ma->ma_attr.la_valid & LA_SIZE) ||
@@ -717,8 +717,8 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
         if (som_au) {
                 /* SOM Attribute update case. Find the proper mfd and update
                  * SOM attributes on the proper object. */
-                LASSERT(mdt_conn_flags(info) & OBD_CONNECT_SOM);
-                LASSERT(info->mti_ioepoch);
+		if (!(mdt_conn_flags(info) & OBD_CONNECT_SOM))
+			GOTO(out_put, rc = -EPROTO);
 
 		spin_lock(&med->med_open_lock);
 		mfd = mdt_handle2mfd(med, &info->mti_ioepoch->handle,
@@ -731,8 +731,10 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
                                info->mti_ioepoch->handle.cookie);
                         GOTO(out_put, rc = -ESTALE);
                 }
-                LASSERT(mfd->mfd_mode == MDS_FMODE_SOM);
-                LASSERT(!(info->mti_ioepoch->flags & MF_EPOCH_CLOSE));
+
+		if (mfd->mfd_mode != MDS_FMODE_SOM ||
+		    (info->mti_ioepoch->flags & MF_EPOCH_CLOSE))
+			GOTO(out_put, rc = -EPROTO);
 
 		class_handle_unhash(&mfd->mfd_handle);
 		list_del_init(&mfd->mfd_list);
@@ -740,13 +742,18 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 
                 mdt_mfd_close(info, mfd);
 	} else if ((ma->ma_valid & MA_INODE) && ma->ma_attr.la_valid) {
-		LASSERT((ma->ma_valid & MA_LOV) == 0);
-                rc = mdt_attr_set(info, mo, ma, rr->rr_flags);
+		if (ma->ma_valid & MA_LOV)
+			GOTO(out_put, rc = -EPROTO);
+
+		rc = mdt_attr_set(info, mo, ma);
                 if (rc)
                         GOTO(out_put, rc);
 	} else if ((ma->ma_valid & MA_LOV) && (ma->ma_valid & MA_INODE)) {
 		struct lu_buf *buf  = &info->mti_buf;
-		LASSERT(ma->ma_attr.la_valid == 0);
+
+		if (ma->ma_attr.la_valid != 0)
+			GOTO(out_put, rc = -EPROTO);
+
 		buf->lb_buf = ma->ma_lmm;
 		buf->lb_len = ma->ma_lmm_size;
 		rc = mo_xattr_set(info->mti_env, mdt_object_child(mo),
@@ -756,15 +763,18 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 	} else if ((ma->ma_valid & MA_LMV) && (ma->ma_valid & MA_INODE)) {
 		struct lu_buf *buf  = &info->mti_buf;
 
-		LASSERT(ma->ma_attr.la_valid == 0);
+		if (ma->ma_attr.la_valid != 0)
+			GOTO(out_put, rc = -EPROTO);
+
 		buf->lb_buf = ma->ma_lmv;
 		buf->lb_len = ma->ma_lmv_size;
 		rc = mo_xattr_set(info->mti_env, mdt_object_child(mo),
 				  buf, XATTR_NAME_DEFAULT_LMV, 0);
 		if (rc)
 			GOTO(out_put, rc);
-	} else
-		LBUG();
+	} else {
+		GOTO(out_put, rc = -EPROTO);
+	}
 
 	/* If file data is modified, add the dirty flag */
 	if (ma->ma_attr_flags & MDS_DATA_MODIFIED)
