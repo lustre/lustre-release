@@ -614,7 +614,7 @@ int ptlrpc_ni_init(void)
         rc = LNetNIInit(pid);
         if (rc < 0) {
                 CDEBUG (D_NET, "Can't init network interface: %d\n", rc);
-                return (-ENOENT);
+		return rc;
         }
 
         /* CAVEAT EMPTOR: how we process portals events is _radically_
@@ -637,7 +637,7 @@ int ptlrpc_ni_init(void)
         CERROR ("Failed to allocate event queue: %d\n", rc);
         LNetNIFini();
 
-        return (-ENOMEM);
+	return rc;
 }
 
 #ifndef __KERNEL__
@@ -804,7 +804,7 @@ int ptlrpc_init_portals(void)
 
         if (rc != 0) {
                 CERROR("network initialisation failed\n");
-                return -EIO;
+		return rc;
         }
 #ifndef __KERNEL__
 	INIT_LIST_HEAD(&liblustre_wait_callbacks);
