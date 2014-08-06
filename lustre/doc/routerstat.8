@@ -1,4 +1,4 @@
-.TH routerstat 1 "Jul 7, 2008" Lustre "utilities"
+.TH routerstat 1 "Aug 6, 2014" Lustre "utilities"
 .SH NAME
 routerstat \- print Lustre router statistics
 .SH SYNOPSIS
@@ -6,22 +6,59 @@ routerstat \- print Lustre router statistics
 .br
 .SH DESCRIPTION
 .B routerstat
-watches LNET router statistics.  If no
+displays LNET router statistics.  If no
 .I interval
-is specified, stats are sampled and printed only once;
-otherwise, stats are sampled and printed every
+is specified, the statistics are sampled and printed only once;
+otherwise, statistics are sampled and printed every
 .I interval
-seconds.
+seconds. Type Control-C to stop statistics printing.
 .LP
 Output includes the following fields:
 .LP
 .nf
-M - msgs_alloc(msgs_max)
-E - errors
-S - send_count/send_length
-R - recv_count/recv_length
-F - route_count/route_length
-D - drop_count/drop_length
+M - Number of messages currently being processed by LNET
+   (The maximum number of messages ever processed by LNET concurrently)
+E - Number of LNET errors
+S - Total size (length) of messages sent in bytes/
+    Number of messages sent
+R - Total size (length) of messages received in bytes/
+    Number of messages received
+F - Total size (length) of messages routed in bytes/
+    Number of messages routed
+D - Total size (length) of messages dropped in bytes/
+    Number of messages dropped
+.fi
+.LP
+When an
+.I interval
+is specified, additional lines of statistics are printed including the following fields:
+.LP
+.nf
+M - Number of messages currently being processed by LNET
+   (The maximum number of messages ever processed by LNET concurrently)
+E - Number of LNET errors per second
+S - Rate of data sent in Mbytes per second/
+    Count of messages sent per second
+R - Rate of data received in Mbytes per second/
+    Count of messages received per second
+F - Rate of data routed in Mbytes per second/
+    Count of messages routed per second
+D - Rate of data dropped in Mbytes per second/
+    Count of messages dropped per second
+.SH EXAMPLE
+.nf
+# routerstat 1
+M 0(13) E 0 S 117379184/4250 R 878480/4356 F 0/0 D 0/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    8.00/     8 R    0.00/    16 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    8.00/     8 R    0.00/    16 F    0.00/     0 D 0.00/0
+M   0( 13) E 0 S    7.00/     7 R    0.00/    14 F    0.00/     0 D 0.00/0
+...
 .fi
 .SH FILES
 /proc/sys/lnet/stats
