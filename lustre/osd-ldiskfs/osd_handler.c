@@ -5320,16 +5320,14 @@ again:
 	inode = osd_iget(info, dev, id);
 	if (IS_ERR(inode)) {
 		rc = PTR_ERR(inode);
-		if (rc == -ENOENT || rc == -ESTALE) {
-			*attr |= LUDA_IGNORE;
-			rc = 0;
-		} else {
+		if (rc == -ENOENT || rc == -ESTALE)
+			rc = 1;
+		else
 			CDEBUG(D_LFSCK, "%.16s: fail to iget for dirent "
 			       "check_repair, dir = %lu/%u, name = %.*s: "
 			       "rc = %d\n",
 			       devname, dir->i_ino, dir->i_generation,
 			       ent->oied_namelen, ent->oied_name, rc);
-		}
 
 		GOTO(out_journal, rc);
 	}
@@ -5559,7 +5557,7 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 	if (osd_remote_fid(env, dev, fid))
 		RETURN(0);
 
-	if (likely(!(attr & LUDA_IGNORE)))
+	if (likely(!(attr & LUDA_IGNORE) && rc == 0))
 		rc = osd_add_oi_cache(oti, dev, id, fid);
 
 	if (!(attr & LUDA_VERIFY) &&
@@ -5569,7 +5567,7 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 	     ldiskfs_test_bit(osd_oi_fid2idx(dev, fid), sf->sf_oi_bitmap)))
 		osd_consistency_check(oti, dev, oic);
 
-	RETURN(rc);
+	RETURN(rc > 0 ? 0 : rc);
 }
 
 /**

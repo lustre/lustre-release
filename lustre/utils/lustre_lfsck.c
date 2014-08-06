@@ -98,6 +98,7 @@ static void usage_start(void)
 		"usage:\n"
 		"lfsck_start <-M | --device {MDT,OST}_device>\n"
 		"	     [-A | --all] [-c | --create_ostobj [on | off]]\n"
+		"	     [-C | --create_mdtobj [on | off]]\n"
 		"	     [-e | --error {continue | abort}] [-h | --help]\n"
 		"	     [-n | --dryrun [on | off]] [-o | --orphan]\n"
 		"            [-r | --reset] [-s | --speed ops_per_sec_limit]\n"
@@ -107,6 +108,8 @@ static void usage_start(void)
 		"-M: device to start LFSCK/scrub on\n"
 		"-A: start LFSCK on all MDT devices\n"
 		"-c: create the lost OST-object for dangling LOV EA "
+		    "(default 'off', or 'on')\n"
+		"-C: create the lost MDT-object for dangling name entry "
 		    "(default 'off', or 'on')\n"
 		"-e: error handle mode (default 'continue', or 'abort')\n"
 		"-h: this help message\n"
@@ -155,7 +158,7 @@ int jt_lfsck_start(int argc, char **argv)
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
 	char device[MAX_OBD_NAME];
 	struct lfsck_start start;
-	char *optstring = "Ac::e:hM:n::ors:t:w:";
+	char *optstring = "Ac::C::e:hM:n::ors:t:w:";
 	int opt, index, rc, val, i;
 
 	memset(&data, 0, sizeof(data));
@@ -185,6 +188,19 @@ int jt_lfsck_start(int argc, char **argv)
 				return -EINVAL;
 			}
 			start.ls_valid |= LSV_CREATE_OSTOBJ;
+			break;
+		case 'C':
+			if (optarg == NULL || strcmp(optarg, "on") == 0) {
+				start.ls_flags |= LPF_CREATE_MDTOBJ;
+			} else if (strcmp(optarg, "off") != 0) {
+				fprintf(stderr, "invalid switch: -C '%s'. "
+					"valid switches are:\n"
+					"empty ('on'), or 'off' without space. "
+					"For example:\n"
+					"'-C', '-Con', '-Coff'\n", optarg);
+				return -EINVAL;
+			}
+			start.ls_valid |= LSV_CREATE_MDTOBJ;
 			break;
 		case 'e':
 			if (strcmp(optarg, "abort") == 0) {

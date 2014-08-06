@@ -118,6 +118,7 @@ enum lfsck_namespace_inconsistency_type {
 	LNIT_NONE		= 0,
 	LNIT_BAD_LINKEA		= 1,
 	LNIT_UNMATCHED_PAIRS	= 2,
+	LNIT_DANGLING		= 3,
 };
 
 struct lfsck_namespace {
@@ -205,8 +206,11 @@ struct lfsck_namespace {
 	/* How many unmatched pairs have been repaired. */
 	__u64	ln_unmatched_pairs_repaired;
 
+	/* How many dangling name entries have been found/repaired. */
+	__u64	ln_dangling_repaired;
+
 	/* For further using. 256-bytes aligned now. */
-	__u64   ln_reserved[29];
+	__u64   ln_reserved[28];
 };
 
 enum lfsck_layout_inconsistency_type {
@@ -556,6 +560,19 @@ struct lfsck_assistant_req {
 	struct list_head	lar_list;
 };
 
+struct lfsck_namespace_req {
+	struct lfsck_assistant_req	 lnr_lar;
+	struct dt_object		*lnr_obj;
+	struct lu_fid			 lnr_fid;
+	__u64				 lnr_oit_cookie;
+	__u64				 lnr_dir_cookie;
+	__u32				 lnr_attr;
+	__u32				 lnr_size;
+	__u16				 lnr_type;
+	__u16				 lnr_namelen;
+	char				 lnr_name[0];
+};
+
 struct lfsck_assistant_operations {
 	int (*la_handler_p1)(const struct lu_env *env,
 			     struct lfsck_component *com,
@@ -744,6 +761,10 @@ int lfsck_namespace_rebuild_linkea(const struct lu_env *env,
 				   struct lfsck_component *com,
 				   struct dt_object *obj,
 				   struct linkea_data *ldata);
+int lfsck_namespace_repair_dangling(const struct lu_env *env,
+				    struct lfsck_component *com,
+				    struct dt_object *child,
+				    struct lfsck_namespace_req *lnr);
 int lfsck_verify_linkea(const struct lu_env *env, struct dt_device *dev,
 			struct dt_object *obj, const struct lu_name *cname,
 			const struct lu_fid *pfid);

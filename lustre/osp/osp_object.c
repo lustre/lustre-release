@@ -713,6 +713,11 @@ unlock:
 
 	rc = out_remote_sync(env, osp->opd_obd->u.cli.cl_import, update, &req);
 	if (rc != 0) {
+		if (rc == -ENOENT) {
+			dt->do_lu.lo_header->loh_attr &= ~LOHA_EXISTS;
+			obj->opo_non_exist = 1;
+		}
+
 		if (obj->opo_ooa == NULL)
 			GOTO(out, rc);
 

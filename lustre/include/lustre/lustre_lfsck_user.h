@@ -55,6 +55,9 @@ enum lfsck_param_flags {
 
 	/* Create OST-object for dangling LOV EA. */
 	LPF_CREATE_OSTOBJ	= 0x0040,
+
+	/* Create MDT-object for dangling name entry. */
+	LPF_CREATE_MDTOBJ	= 0x0080,
 };
 
 enum lfsck_type {
@@ -86,6 +89,7 @@ enum lfsck_start_valid {
 	LSV_DRYRUN		= 0x00000004,
 	LSV_ASYNC_WINDOWS	= 0x00000008,
 	LSV_CREATE_OSTOBJ	= 0x00000010,
+	LSV_CREATE_MDTOBJ	= 0x00000020,
 };
 
 /* Arguments for starting lfsck. */

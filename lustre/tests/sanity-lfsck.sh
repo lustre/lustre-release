@@ -44,7 +44,7 @@ setupall
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14 15 16 17 18 19 20 21"
 
 [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.50) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2d 2e 3 22"
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2d 2e 3 22 23"
 
 build_test_filter
 
@@ -389,7 +389,7 @@ run_test 2d "LFSCK can recover the missed linkEA entry"
 test_2e()
 {
 	[ $MDSCOUNT -lt 2 ] &&
-		skip "We need at least 2 MDSes for this test" && exit 0
+		skip "We need at least 2 MDSes for this test" && return
 
 	check_mount_and_prep
 
@@ -1263,7 +1263,7 @@ run_test 11b "LFSCK can rebuild crashed last_id"
 
 test_12() {
 	[ $MDSCOUNT -lt 2 ] &&
-		skip "We need at least 2 MDSes for test_12" && exit 0
+		skip "We need at least 2 MDSes for test_12" && return
 
 	check_mount_and_prep
 	for k in $(seq $MDSCOUNT); do
@@ -2711,7 +2711,7 @@ run_test 20 "Handle the orphan with dummy LOV EA slot properly"
 
 test_21() {
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.59) ]] &&
-		skip "ignore the test if MDS is older than 2.5.59" && exit 0
+		skip "ignore the test if MDS is older than 2.5.59" && return
 
 	check_mount_and_prep
 	createmany -o $DIR/$tdir/f 100 || error "(0) Fail to create 100 files"
@@ -2738,7 +2738,7 @@ run_test 21 "run all LFSCK components by default"
 
 test_22a() {
 	[ $MDSCOUNT -lt 2 ] &&
-		skip "We need at least 2 MDSes for this test" && exit 0
+		skip "We need at least 2 MDSes for this test" && return
 
 	echo "#####"
 	echo "The parent_A references the child directory via some name entry,"
@@ -2786,7 +2786,7 @@ run_test 22a "LFSCK can repair unmatched pairs (1)"
 
 test_22b() {
 	[ $MDSCOUNT -lt 2 ] &&
-		skip "We need at least 2 MDSes for this test" && exit 0
+		skip "We need at least 2 MDSes for this test" && return
 
 	echo "#####"
 	echo "The parent_A references the child directory via the name entry_B,"
@@ -2838,6 +2838,195 @@ test_22b() {
 		error "(8) fid2path does not work"
 }
 run_test 22b "LFSCK can repair unmatched pairs (2)"
+
+test_23a() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "We need at least 2 MDSes for this test" && return
+
+	echo "#####"
+	echo "The name entry is there, but the MDT-object for such name "
+	echo "entry does not exist. The namespace LFSCK should find out "
+	echo "and repair the inconsistency as required."
+	echo "#####"
+
+	check_mount_and_prep
+
+	$LFS mkdir -i 0 $DIR/$tdir/d0 || error "(1) Fail to mkdir d0 on MDT0"
+	$LFS mkdir -i 1 $DIR/$tdir/d0/d1 || error "(2) Fail to mkdir d1 on MDT1"
+
+	echo "Inject failure stub on MDT1 to simulate dangling name entry"
+	#define OBD_FAIL_LFSCK_DANGLING2	0x1620
+	do_facet mds2 $LCTL set_param fail_loc=0x1620
+	rmdir $DIR/$tdir/d0/d1 || error "(3) Fail to rmdir d1"
+	do_facet mds2 $LCTL set_param fail_loc=0
+
+	echo "'ls' should fail because of dangling name entry"
+	ls -ail $DIR/$tdir/d0/d1 > /dev/null 2>&1 && error "(4) ls should fail."
+
+	echo "Trigger namespace LFSCK to find out dangling name entry"
+	$START_NAMESPACE -A -r ||
+		error "(5) Fail to start LFSCK for namespace"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(6) unexpected status"
+	}
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^dangling_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(7) Fail to repair dangling name entry: $repaired"
+
+	echo "'ls' should fail because not re-create MDT-object by default"
+	ls -ail $DIR/$tdir/d0/d1 > /dev/null 2>&1 && error "(8) ls should fail."
+
+	echo "Trigger namespace LFSCK again to repair dangling name entry"
+	$START_NAMESPACE -A -r -C ||
+		error "(9) Fail to start LFSCK for namespace"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(10) unexpected status"
+	}
+
+	repaired=$($SHOW_NAMESPACE |
+		   awk '/^dangling_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(11) Fail to repair dangling name entry: $repaired"
+
+	echo "'ls' should success after namespace LFSCK repairing"
+	ls -ail $DIR/$tdir/d0/d1 > /dev/null || error "(12) ls should success."
+}
+run_test 23a "LFSCK can repair dangling name entry (1)"
+
+test_23b() {
+	echo "#####"
+	echo "The objectA has multiple hard links, one of them corresponding"
+	echo "to the name entry_B. But there is something wrong for the name"
+	echo "entry_B and cause entry_B to references non-exist object_C."
+	echo "In the first-stage scanning, the LFSCK will think the entry_B"
+	echo "as dangling, and re-create the lost object_C. When the LFSCK"
+	echo "comes to the second-stage scanning, it will find that the"
+	echo "former re-creating object_C is not proper, and will try to"
+	echo "replace the object_C with the real object_A."
+	echo "#####"
+
+	check_mount_and_prep
+
+	$LFS mkdir -i 0 $DIR/$tdir/d0 || error "(1) Fail to mkdir d0 on MDT0"
+	echo "dummy" > $DIR/$tdir/d0/f0 || error "(2) Fail to touch on MDT0"
+	echo "dead" > $DIR/$tdir/d0/f1 || error "(3) Fail to touch on MDT0"
+
+	echo "Inject failure stub on MDT0 to simulate dangling name entry"
+	#define OBD_FAIL_LFSCK_DANGLING3	0x1621
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1621
+	ln $DIR/$tdir/d0/f0 $DIR/$tdir/d0/foo || error "(4) Fail to hard link"
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+
+	rm -f $DIR/$tdir/d0/f1 || error "(5) Fail to unlink $DIR/$tdir/d0/f1"
+
+	echo "'ls' should fail because of dangling name entry"
+	ls -ail $DIR/$tdir/d0/foo > /dev/null 2>&1 &&
+		error "(6) ls should fail."
+
+	echo "Trigger namespace LFSCK to find out dangling name entry"
+	$START_NAMESPACE -r -C ||
+		error "(7) Fail to start LFSCK for namespace"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(8) unexpected status"
+	}
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^dangling_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(9) Fail to repair dangling name entry: $repaired"
+
+	repaired=$($SHOW_NAMESPACE |
+		   awk '/^multiple_linked_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(10) Fail to drop the former created object: $repaired"
+
+	local data=$(cat $DIR/$tdir/d0/foo)
+	[ "$data" == "dummy" ] ||
+		error "(11) The $DIR/$tdir/d0/foo is not recovered: $data"
+}
+run_test 23b "LFSCK can repair dangling name entry (2)"
+
+test_23c() {
+	echo "#####"
+	echo "The objectA has multiple hard links, one of them corresponding"
+	echo "to the name entry_B. But there is something wrong for the name"
+	echo "entry_B and cause entry_B to references non-exist object_C."
+	echo "In the first-stage scanning, the LFSCK will think the entry_B"
+	echo "as dangling, and re-create the lost object_C. And then others"
+	echo "modified the re-created object_C. When the LFSCK comes to the"
+	echo "second-stage scanning, it will find that the former re-creating"
+	echo "object_C maybe wrong and try to replace the object_C with the"
+	echo "real object_A. But because object_C has been modified, so the"
+	echo "LFSCK cannot replace it."
+	echo "#####"
+
+	check_mount_and_prep
+
+	$LFS mkdir -i 0 $DIR/$tdir/d0 || error "(1) Fail to mkdir d0 on MDT0"
+	echo "dummy" > $DIR/$tdir/d0/f0 || error "(2) Fail to touch on MDT0"
+	echo "dead" > $DIR/$tdir/d0/f1 || error "(3) Fail to touch on MDT0"
+
+	echo "Inject failure stub on MDT0 to simulate dangling name entry"
+	#define OBD_FAIL_LFSCK_DANGLING3	0x1621
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1621
+	ln $DIR/$tdir/d0/f0 $DIR/$tdir/d0/foo || error "(4) Fail to hard link"
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+
+	rm -f $DIR/$tdir/d0/f1 || error "(5) Fail to unlink $DIR/$tdir/d0/f1"
+
+	echo "'ls' should fail because of dangling name entry"
+	ls -ail $DIR/$tdir/d0/foo > /dev/null 2>&1 &&
+		error "(6) ls should fail."
+
+	#define OBD_FAIL_LFSCK_DELAY3		0x1602
+	do_facet $SINGLEMDS $LCTL set_param fail_val=10 fail_loc=0x1602
+
+	echo "Trigger namespace LFSCK to find out dangling name entry"
+	$START_NAMESPACE -r -C ||
+		error "(7) Fail to start LFSCK for namespace"
+
+	wait_update_facet client "stat $DIR/$tdir/d0/foo |
+		awk '/Size/ { print \\\$2 }'" "0" 32 || {
+		stat $DIR/$tdir/guard
+		$SHOW_NAMESPACE
+		error "(8) unexpected size"
+	}
+
+	echo "data" >> $DIR/$tdir/d0/foo || error "(9) Fail to write"
+	cancel_lru_locks osc
+
+	do_facet $SINGLEMDS $LCTL set_param fail_val=0 fail_loc=0
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(10) unexpected status"
+	}
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^dangling_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(11) Fail to repair dangling name entry: $repaired"
+
+	local data=$(cat $DIR/$tdir/d0/foo)
+	[ "$data" != "dummy" ] ||
+		error "(12) The $DIR/$tdir/d0/foo should not be recovered"
+}
+run_test 23c "LFSCK can repair dangling name entry (3)"
 
 $LCTL set_param debug=-lfsck > /dev/null || true
 

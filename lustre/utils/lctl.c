@@ -381,6 +381,7 @@ command_t cmdlist[] = {
 	{"lfsck_start", jt_lfsck_start, 0, "start LFSCK\n"
 	 "usage: lfsck_start <-M | --device [MDT,OST]_device>\n"
 	 "		     [-A | --all] [-c | --create_ostobj [on | off]]\n"
+	 "		     [-C | --create_mdtobj [on | off]]\n"
 	 "		     [-e | --error {continue | abort}] [-h | --help]\n"
 	 "		     [-n | --dryrun [on | off]] [-o | --orphan]\n"
 	 "		     [-r | --reset] [-s | --speed speed_limit]\n"
