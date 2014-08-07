@@ -5,12 +5,12 @@ AC_DEFUN([LDISKFS_LINUX_SERIES], [
 LDISKFS_SERIES=
 AC_MSG_CHECKING([which ldiskfs series to use])
 AS_IF([test x$RHEL_KERNEL = xyes], [
-	AS_VERSION_COMPARE([$RHEL_KERNEL_VERSION],[2.6.32-431],[
-	AS_VERSION_COMPARE([$RHEL_KERNEL_VERSION],[2.6.32-343],[
-	AS_VERSION_COMPARE([$RHEL_KERNEL_VERSION],[2.6.32],[],
-	[LDISKFS_SERIES="2.6-rhel6.series"],  [LDISKFS_SERIES="2.6-rhel6.series"])],
-	[LDISKFS_SERIES="2.6-rhel6.4.series"],[LDISKFS_SERIES="2.6-rhel6.4.series"])],
-	[LDISKFS_SERIES="2.6-rhel6.5.series"],[LDISKFS_SERIES="2.6-rhel6.5.series"])
+	case $RHEL_RELEASE_NO in
+	70)	LDISKFS_SERIES="3.10-rhel7.series"	;;
+	65)	LDISKFS_SERIES="2.6-rhel6.5.series"	;;
+	64)	LDISKFS_SERIES="2.6-rhel6.4.series"	;;
+	6[0-3])	LDISKFS_SERIES="2.6-rhel6.series"	;;
+	esac
 ], [test x$SUSE_KERNEL = xyes], [
 	AS_VERSION_COMPARE([$LINUXRELEASE],[3.0.0],[
 	AS_VERSION_COMPARE([$LINUXRELEASE],[2.6.32], [],

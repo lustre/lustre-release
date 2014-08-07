@@ -88,17 +88,18 @@ AC_MSG_RESULT($RELEASE)
 AC_SUBST(RELEASE)
 
 # check if the kernel is one from RHEL or SUSE
-AC_CACHE_CHECK([for RedHat kernel version], lb_cv_rhel_kernel_version, [
+AC_CACHE_CHECK([for RedHat kernel release number], lb_cv_rhel_kernel_version, [
 lb_cv_rhel_kernel_version=""
-AS_IF([fgrep -q RHEL_RELEASE $LINUX_OBJ/include/$VERSION_HDIR/version.h],
-	[RHEL_RELEASE=$(expr 0$(awk -F \" '/ RHEL_RELEASE / { print [$]2 }' \
-		       $LINUX_OBJ/include/$VERSION_HDIR/version.h) + 1)
-	KERNEL_VERSION=$(sed -e 's/\(@<:@23@:>@\.@<:@0-9@:>@*\.@<:@0-9@:>@*\).*/\1/' <<< $LINUXRELEASE)
-	lb_cv_rhel_kernel_version=${KERNEL_VERSION}-${RHEL_RELEASE}])
+AS_IF([fgrep -q RHEL_RELEASE $LINUX_OBJ/include/$VERSION_HDIR/version.h], [
+	lb_cv_rhel_kernel_version=$(awk '/ RHEL_MAJOR / { print [$]3 }' \
+		$LINUX_OBJ/include/$VERSION_HDIR/version.h)$(awk \
+		'/ RHEL_MINOR / { print [$]3 }' \
+		$LINUX_OBJ/include/$VERSION_HDIR/version.h)
+])
 ])
 AS_IF([test -n "$lb_cv_rhel_kernel_version"], [
 	RHEL_KERNEL="yes"
-	RHEL_KERNEL_VERSION=$lb_cv_rhel_kernel_version
+	RHEL_RELEASE_NO=$lb_cv_rhel_kernel_version
 ], [
 	RHEL_KERNEL="no"
 	LB_CHECK_CONFIG([SUSE_KERNEL], [SUSE_KERNEL="yes"], [SUSE_KERNEL="no"])
