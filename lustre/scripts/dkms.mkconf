@@ -22,8 +22,8 @@ cat >${filename} <<EOF
 PACKAGE_NAME="${pkgname}"
 PACKAGE_VERSION="${pkgver}"
 PACKAGE_CONFIG="${pkgcfg}"
-SPL_VERSION=\$(dkms status -m spl | awk -F', ' '{print \$2; exit 0}')
-ZFS_VERSION=\$(dkms status -m zfs | awk -F', ' '{print \$2; exit 0}')
+SPL_VERSION=\$(dkms status -m spl | awk -F', ' '{print \$2; exit 0}' | sed 's/: added\$//')
+ZFS_VERSION=\$(dkms status -m zfs | awk -F', ' '{print \$2; exit 0}' | sed 's/: added\$//')
 PRE_BUILD="configure
   --prefix=/usr
   --with-linux=\${kernel_source_dir}
