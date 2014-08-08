@@ -131,6 +131,7 @@ static void lfsck_namespace_le_to_cpu(struct lfsck_namespace *dst,
 	dst->ln_bad_type_repaired = le64_to_cpu(src->ln_bad_type_repaired);
 	dst->ln_lost_dirent_repaired =
 				le64_to_cpu(src->ln_lost_dirent_repaired);
+	dst->ln_bitmap_size = le32_to_cpu(src->ln_bitmap_size);
 }
 
 static void lfsck_namespace_cpu_to_le(struct lfsck_namespace *dst,
@@ -176,6 +177,7 @@ static void lfsck_namespace_cpu_to_le(struct lfsck_namespace *dst,
 	dst->ln_bad_type_repaired = cpu_to_le64(src->ln_bad_type_repaired);
 	dst->ln_lost_dirent_repaired =
 				cpu_to_le64(src->ln_lost_dirent_repaired);
+	dst->ln_bitmap_size = cpu_to_le32(src->ln_bitmap_size);
 }
 
 static void lfsck_namespace_record_failure(const struct lu_env *env,
@@ -197,6 +199,81 @@ static void lfsck_namespace_record_failure(const struct lu_env *env,
 		       PFID(&ns->ln_pos_first_inconsistent.lp_dir_parent),
 		       ns->ln_pos_first_inconsistent.lp_dir_cookie);
 	}
+}
+
+/**
+ * Load the MDT bitmap from the lfsck_namespace tracing file.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] com	pointer to the lfsck component
+ *
+ * \retval		positive number for data corruption
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
+static int lfsck_namespace_load_bitmap(const struct lu_env *env,
+				       struct lfsck_component *com)
+{
+	struct dt_object		*obj	= com->lc_obj;
+	struct lfsck_assistant_data	*lad	= com->lc_data;
+	struct lfsck_namespace		*ns	= com->lc_file_ram;
+	cfs_bitmap_t			*bitmap = lad->lad_bitmap;
+	ssize_t				 size;
+	__u32				 nbits;
+	int				 rc;
+	ENTRY;
+
+	if (com->lc_lfsck->li_mdt_descs.ltd_tgts_bitmap->size >
+	    ns->ln_bitmap_size)
+		nbits = com->lc_lfsck->li_mdt_descs.ltd_tgts_bitmap->size;
+	else
+		nbits = ns->ln_bitmap_size;
+
+	if (unlikely(nbits < BITS_PER_LONG))
+		nbits = BITS_PER_LONG;
+
+	if (nbits > bitmap->size) {
+		__u32 new_bits = bitmap->size;
+		cfs_bitmap_t *new_bitmap;
+
+		while (new_bits < nbits)
+			new_bits <<= 1;
+
+		new_bitmap = CFS_ALLOCATE_BITMAP(new_bits);
+		if (new_bitmap == NULL)
+			RETURN(-ENOMEM);
+
+		lad->lad_bitmap = new_bitmap;
+		CFS_FREE_BITMAP(bitmap);
+		bitmap = new_bitmap;
+	}
+
+	if (ns->ln_bitmap_size == 0) {
+		lad->lad_incomplete = 0;
+		CFS_RESET_BITMAP(bitmap);
+
+		RETURN(0);
+	}
+
+	size = (ns->ln_bitmap_size + 7) >> 3;
+	rc = dt_xattr_get(env, obj,
+			  lfsck_buf_get(env, bitmap->data, size),
+			  XATTR_NAME_LFSCK_BITMAP, BYPASS_CAPA);
+	if (rc == -ERANGE || rc == -ENODATA || rc == 0)
+		RETURN(1);
+
+	if (rc < 0)
+		RETURN(rc);
+
+	if (rc != size)
+		RETURN(rc);
+
+	if (cfs_bitmap_check_empty(bitmap))
+		lad->lad_incomplete = 0;
+	else
+		lad->lad_incomplete = 1;
+
+	RETURN(0);
 }
 
 /**
@@ -237,17 +314,30 @@ static int lfsck_namespace_load(const struct lu_env *env,
 }
 
 static int lfsck_namespace_store(const struct lu_env *env,
-				 struct lfsck_component *com, bool init)
+				 struct lfsck_component *com)
 {
-	struct dt_object	*obj    = com->lc_obj;
-	struct lfsck_instance	*lfsck  = com->lc_lfsck;
-	struct thandle		*handle;
-	int			 len    = com->lc_file_size;
-	int			 rc;
+	struct dt_object		*obj	= com->lc_obj;
+	struct lfsck_instance		*lfsck	= com->lc_lfsck;
+	struct lfsck_namespace		*ns	= com->lc_file_ram;
+	struct lfsck_assistant_data	*lad	= com->lc_data;
+	cfs_bitmap_t			*bitmap	= NULL;
+	struct thandle			*handle;
+	__u32				 nbits	= 0;
+	int				 len    = com->lc_file_size;
+	int				 rc;
 	ENTRY;
 
+	if (lad != NULL) {
+		bitmap = lad->lad_bitmap;
+		nbits = bitmap->size;
+
+		LASSERT(nbits > 0);
+		LASSERTF((nbits & 7) == 0, "Invalid nbits %u\n", nbits);
+	}
+
+	ns->ln_bitmap_size = nbits;
 	lfsck_namespace_cpu_to_le((struct lfsck_namespace *)com->lc_file_disk,
-				  (struct lfsck_namespace *)com->lc_file_ram);
+				  ns);
 	handle = dt_trans_create(env, lfsck->li_bottom);
 	if (IS_ERR(handle))
 		GOTO(log, rc = PTR_ERR(handle));
@@ -258,15 +348,26 @@ static int lfsck_namespace_store(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(out, rc);
 
+	if (bitmap != NULL) {
+		rc = dt_declare_xattr_set(env, obj,
+				lfsck_buf_get(env, bitmap->data, nbits >> 3),
+				XATTR_NAME_LFSCK_BITMAP, 0, handle);
+		if (rc != 0)
+			GOTO(out, rc);
+	}
+
 	rc = dt_trans_start_local(env, lfsck->li_bottom, handle);
 	if (rc != 0)
 		GOTO(out, rc);
 
 	rc = dt_xattr_set(env, obj,
 			  lfsck_buf_get(env, com->lc_file_disk, len),
-			  XATTR_NAME_LFSCK_NAMESPACE,
-			  init ? LU_XATTR_CREATE : LU_XATTR_REPLACE,
-			  handle, BYPASS_CAPA);
+			  XATTR_NAME_LFSCK_NAMESPACE, 0, handle, BYPASS_CAPA);
+	if (rc == 0 && bitmap != NULL)
+		rc = dt_xattr_set(env, obj,
+				  lfsck_buf_get(env, bitmap->data, nbits >> 3),
+				  XATTR_NAME_LFSCK_BITMAP, 0, handle,
+				  BYPASS_CAPA);
 
 	GOTO(out, rc);
 
@@ -290,7 +391,7 @@ static int lfsck_namespace_init(const struct lu_env *env,
 	ns->ln_magic = LFSCK_NAMESPACE_MAGIC;
 	ns->ln_status = LS_INIT;
 	down_write(&com->lc_sem);
-	rc = lfsck_namespace_store(env, com, true);
+	rc = lfsck_namespace_store(env, com);
 	up_write(&com->lc_sem);
 	return rc;
 }
@@ -2068,6 +2169,7 @@ lfsck_namespace_dsd_orphan(const struct lu_env *env,
 			   enum lfsck_namespace_inconsistency_type *type)
 {
 	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lfsck_namespace	 *ns   = com->lc_file_ram;
 	int			  rc;
 	ENTRY;
 
@@ -2078,6 +2180,17 @@ lfsck_namespace_dsd_orphan(const struct lu_env *env,
 		RETURN(rc);
 
 	*type = LNIT_MUL_REF;
+
+	/* If the LFSCK is marked as LF_INCOMPLETE, then means some MDT has
+	 * ever tried to verify some remote MDT-object that resides on this
+	 * MDT, but this MDT failed to respond such request. So means there
+	 * may be some remote name entry on other MDT that references this
+	 * object with another name, so we cannot know whether this linkEA
+	 * is valid or not. So keep it there and maybe resolved when next
+	 * LFSCK run. */
+	if (ns->ln_flags & LF_INCOMPLETE)
+		RETURN(0);
+
 	/* The unique linkEA is invalid, even if the ".." name entry may be
 	 * valid, we still cannot know via which name entry this directory
 	 * will be referenced. Then handle it as pure orphan. */
@@ -2126,6 +2239,7 @@ lfsck_namespace_dsd_single(const struct lu_env *env,
 	struct lu_name		 *cname		= &info->lti_name;
 	const struct lu_fid	 *cfid		= lfsck_dto2fid(child);
 	struct lu_fid		 *tfid		= &info->lti_fid3;
+	struct lfsck_namespace	 *ns		= com->lc_file_ram;
 	struct lfsck_instance	 *lfsck		= com->lc_lfsck;
 	struct dt_object	 *parent	= NULL;
 	int			  rc		= 0;
@@ -2153,6 +2267,16 @@ lfsck_namespace_dsd_single(const struct lu_env *env,
 	 * name entry the child will be referenced, since all known entries
 	 * have been verified during the first-stage scanning. */
 	if (!dt_object_exists(parent)) {
+		/* If the LFSCK is marked as LF_INCOMPLETE, then means some MDT
+		 * has ever tried to verify some remote MDT-object that resides
+		 * on this MDT, but this MDT failed to respond such request. So
+		 * means there may be some remote name entry on other MDT that
+		 * references this object with another name, so we cannot know
+		 * whether this linkEA is valid or not. So keep it there and
+		 * maybe resolved when next LFSCK run. */
+		if (ns->ln_flags & LF_INCOMPLETE)
+			GOTO(out, rc = 0);
+
 		if (!lustre_handle_is_used(lh) && retry != NULL) {
 			*retry = true;
 
@@ -2208,6 +2332,16 @@ lost_parent:
 	rc = dt_lookup(env, parent, (struct dt_rec *)tfid,
 		       (const struct dt_key *)cname->ln_name, BYPASS_CAPA);
 	if (rc == -ENOENT) {
+		/* If the LFSCK is marked as LF_INCOMPLETE, then means some MDT
+		 * has ever tried to verify some remote MDT-object that resides
+		 * on this MDT, but this MDT failed to respond such request. So
+		 * means there may be some remote name entry on other MDT that
+		 * references this object with another name, so we cannot know
+		 * whether this linkEA is valid or not. So keep it there and
+		 * maybe resolved when next LFSCK run. */
+		if (ns->ln_flags & LF_INCOMPLETE)
+			GOTO(out, rc = 0);
+
 		if (!lustre_handle_is_used(lh) && retry != NULL) {
 			*retry = true;
 
@@ -2596,7 +2730,8 @@ static int lfsck_namespace_double_scan_dir(const struct lu_env *env,
 
 	LASSERT(!dt_object_remote(child));
 
-	if (!(lfsck->li_bookmark_ram.lb_param & LPF_ALL_TGT)) {
+	if (flags & (LNTF_CHECK_LINKEA | LNTF_CHECK_PARENT) &&
+	    !(lfsck->li_bookmark_ram.lb_param & LPF_ALL_TGT)) {
 		CDEBUG(D_LFSCK, "%s: some MDT(s) maybe NOT take part in the"
 		       "the namespace LFSCK, then the LFSCK cannot guarantee"
 		       "all the name entries have been verified in first-stage"
@@ -2681,6 +2816,20 @@ lock:
 			 *    directory, then handle it as orphan. */
 			lfsck_ibits_unlock(&lh, LCK_EX);
 			type = LNIT_MUL_REF;
+
+			/* If the LFSCK is marked as LF_INCOMPLETE,
+			 * then means some MDT has ever tried to
+			 * verify some remote MDT-object that resides
+			 * on this MDT, but this MDT failed to respond
+			 * such request. So means there may be some
+			 * remote name entry on other MDT that
+			 * references this object with another name,
+			 * so we cannot know whether this linkEA is
+			 * valid or not. So keep it there and maybe
+			 * resolved when next LFSCK run. */
+			if (ns->ln_flags & LF_INCOMPLETE)
+				GOTO(out, rc = 0);
+
 			snprintf(info->lti_tmpbuf, sizeof(info->lti_tmpbuf),
 				 "-"DFID, PFID(pfid));
 			rc = lfsck_namespace_insert_orphan(env, com, child,
@@ -2859,6 +3008,22 @@ lost_parent:
 				rc = lfsck_namespace_shrink_linkea(env, com,
 					child, &ldata, cname, pfid, true);
 			} else {
+				/* If the LFSCK is marked as LF_INCOMPLETE,
+				 * then means some MDT has ever tried to
+				 * verify some remote MDT-object that resides
+				 * on this MDT, but this MDT failed to respond
+				 * such request. So means there may be some
+				 * remote name entry on other MDT that
+				 * references this object with another name,
+				 * so we cannot know whether this linkEA is
+				 * valid or not. So keep it there and maybe
+				 * resolved when next LFSCK run. */
+				if (ns->ln_flags & LF_INCOMPLETE) {
+					lfsck_object_put(env, parent);
+
+					GOTO(out, rc = 0);
+				}
+
 				/* Create the lost parent as an orphan. */
 				rc = lfsck_namespace_create_orphan(env, com,
 								   parent);
@@ -2979,6 +3144,19 @@ lost_parent:
 			continue;
 		}
 
+		/* If the LFSCK is marked as LF_INCOMPLETE, then means some
+		 * MDT has ever tried to verify some remote MDT-object that
+		 * resides on this MDT, but this MDT failed to respond such
+		 * request. So means there may be some remote name entry on
+		 * other MDT that references this object with another name,
+		 * so we cannot know whether this linkEA is valid or not.
+		 * So keep it there and maybe resolved when next LFSCK run. */
+		if (ns->ln_flags & LF_INCOMPLETE) {
+			lfsck_object_put(env, parent);
+
+			GOTO(out, rc = 0);
+		}
+
 		/* Add the missing name entry back to the namespace. */
 		rc = lfsck_namespace_insert_normal(env, com, parent, child,
 						   cname->ln_name);
@@ -3023,7 +3201,14 @@ out:
 		count = ldata.ld_leh->leh_reccount;
 	}
 
-	if (count == 0) {
+	/* If the LFSCK is marked as LF_INCOMPLETE, then means some
+	 * MDT has ever tried to verify some remote MDT-object that
+	 * resides on this MDT, but this MDT failed to respond such
+	 * request. So means there may be some remote name entry on
+	 * other MDT that references this object with another name,
+	 * so we cannot know whether this linkEA is valid or not.
+	 * So keep it there and maybe resolved when next LFSCK run. */
+	if (count == 0 && !(ns->ln_flags & LF_INCOMPLETE)) {
 		/* If the child becomes orphan, then insert it into
 		 * the global .lustre/lost+found/MDTxxxx directory. */
 		rc = lfsck_namespace_insert_orphan(env, com, child, "", "O",
@@ -3113,11 +3298,12 @@ static void lfsck_namespace_dump_statistics(struct seq_file *m,
 static int lfsck_namespace_reset(const struct lu_env *env,
 				 struct lfsck_component *com, bool init)
 {
-	struct lfsck_instance	*lfsck = com->lc_lfsck;
-	struct lfsck_namespace	*ns    = com->lc_file_ram;
-	struct dt_object	*root;
-	struct dt_object	*dto;
-	int			 rc;
+	struct lfsck_instance		*lfsck	= com->lc_lfsck;
+	struct lfsck_namespace		*ns	= com->lc_file_ram;
+	struct lfsck_assistant_data	*lad	= com->lc_data;
+	struct dt_object		*root;
+	struct dt_object		*dto;
+	int				 rc;
 	ENTRY;
 
 	root = dt_locate(env, lfsck->li_bottom, &lfsck->li_local_root_fid);
@@ -3160,7 +3346,10 @@ static int lfsck_namespace_reset(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(out, rc);
 
-	rc = lfsck_namespace_store(env, com, true);
+	lad->lad_incomplete = 0;
+	CFS_RESET_BITMAP(lad->lad_bitmap);
+
+	rc = lfsck_namespace_store(env, com);
 
 	GOTO(out, rc);
 
@@ -3213,7 +3402,7 @@ static int lfsck_namespace_checkpoint(const struct lu_env *env,
 		com->lc_new_checked = 0;
 	}
 
-	rc = lfsck_namespace_store(env, com, false);
+	rc = lfsck_namespace_store(env, com);
 	up_write(&com->lc_sem);
 
 log:
@@ -3235,17 +3424,18 @@ static int lfsck_namespace_prep(const struct lu_env *env,
 	struct lfsck_position	*pos	= &com->lc_pos_start;
 	int			 rc;
 
-	if (ns->ln_status == LS_COMPLETED) {
+	rc = lfsck_namespace_load_bitmap(env, com);
+	if (rc > 0 || (rc == 0 && ns->ln_status == LS_COMPLETED)) {
 		rc = lfsck_namespace_reset(env, com, false);
 		if (rc == 0)
 			rc = lfsck_set_param(env, lfsck, lsp->lsp_start, true);
+	}
 
-		if (rc != 0) {
-			CDEBUG(D_LFSCK, "%s: namespace LFSCK prep failed: "
-			       "rc = %d\n", lfsck_lfsck2name(lfsck), rc);
+	if (rc != 0) {
+		CDEBUG(D_LFSCK, "%s: namespace LFSCK prep failed: rc = %d\n",
+		       lfsck_lfsck2name(lfsck), rc);
 
-			return rc;
-		}
+		return rc;
 	}
 
 	down_write(&com->lc_sem);
@@ -3513,7 +3703,7 @@ static int lfsck_namespace_post(const struct lu_env *env,
 		com->lc_new_checked = 0;
 	}
 
-	rc = lfsck_namespace_store(env, com, false);
+	rc = lfsck_namespace_store(env, com);
 	up_write(&com->lc_sem);
 
 	CDEBUG(D_LFSCK, "%s: namespace LFSCK post done: rc = %d\n",
@@ -3785,8 +3975,8 @@ out_create:
 	}
 
 	CDEBUG(D_LFSCK, "%s: namespace LFSCK handles notify %u from MDT %x, "
-	       "status %d\n", lfsck_lfsck2name(lfsck), lr->lr_event,
-	       lr->lr_index, lr->lr_status);
+	       "status %d, flags %x\n", lfsck_lfsck2name(lfsck), lr->lr_event,
+	       lr->lr_index, lr->lr_status, lr->lr_flags2);
 
 	spin_lock(&ltds->ltd_lock);
 	ltd = LTD_TGT(ltds, lr->lr_index);
@@ -3810,6 +4000,9 @@ out_create:
 			fail = true;
 			break;
 		}
+
+		if (lr->lr_flags2 & LF_INCOMPLETE)
+			ns->ln_flags |= LF_INCOMPLETE;
 
 		if (list_empty(&ltd->ltd_namespace_list))
 			list_add_tail(&ltd->ltd_namespace_list,
@@ -4095,14 +4288,14 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 	struct dt_object	   *dir      = lnr->lnr_obj;
 	struct dt_object	   *obj      = NULL;
 	const struct lu_fid	   *pfid     = lfsck_dto2fid(dir);
-	struct dt_device	   *dev;
+	struct dt_device	   *dev      = NULL;
 	struct lustre_handle	    lh       = { 0 };
 	bool			    repaired = false;
 	bool			    dtlocked = false;
 	bool			    remove;
 	bool			    newdata;
 	bool			    log      = false;
-	int			    idx;
+	int			    idx      = 0;
 	int			    count    = 0;
 	int			    rc;
 	enum lfsck_namespace_inconsistency_type type = LNIT_NONE;
@@ -4159,7 +4352,7 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 			CDEBUG(D_LFSCK, "%s: cannot talk with MDT %x which "
 			       "did not join the namespace LFSCK\n",
 			       lfsck_lfsck2name(lfsck), idx);
-			ns->ln_flags |= LF_INCOMPLETE;
+			lfsck_lad_set_bitmap(env, com, idx);
 
 			GOTO(out, rc = -ENODEV);
 		}
@@ -4410,6 +4603,12 @@ out:
 		       lnr->lnr_namelen, lnr->lnr_name, rc);
 
 		lfsck_namespace_record_failure(env, lfsck, ns);
+		if ((rc == -ENOTCONN || rc == -ESHUTDOWN || rc == -EREMCHG ||
+		     rc == -ETIMEDOUT || rc == -EHOSTDOWN ||
+		     rc == -EHOSTUNREACH || rc == -EINPROGRESS) &&
+		    dev != NULL && dev != lfsck->li_next)
+			lfsck_lad_set_bitmap(env, com, idx);
+
 		if (!(bk->lb_param & LPF_FAILOUT))
 			rc = 0;
 	} else {
@@ -4451,6 +4650,7 @@ out:
 
 	if (obj != NULL && !IS_ERR(obj))
 		lfsck_object_put(env, obj);
+
 	return rc;
 }
 
@@ -4558,7 +4758,7 @@ checkpoint:
 			ns->ln_time_last_checkpoint = cfs_time_current_sec();
 			ns->ln_objs_checked_phase2 += com->lc_new_checked;
 			com->lc_new_checked = 0;
-			rc = lfsck_namespace_store(env, com, false);
+			rc = lfsck_namespace_store(env, com);
 			up_write(&com->lc_sem);
 			if (rc != 0)
 				GOTO(put, rc);
@@ -4639,17 +4839,108 @@ static int lfsck_namespace_double_scan_result(const struct lu_env *env,
 		ns->ln_status = LS_FAILED;
 	}
 
-	rc = lfsck_namespace_store(env, com, false);
+	rc = lfsck_namespace_store(env, com);
 	up_write(&com->lc_sem);
 
 	return rc;
 }
 
+static int
+lfsck_namespace_assistant_sync_failures_interpret(const struct lu_env *env,
+						  struct ptlrpc_request *req,
+						  void *args, int rc)
+{
+	return 0;
+}
+
+/**
+ * Notify remote LFSCK instances about former failures.
+ *
+ * The local LFSCK instance has recorded which MDTs have ever failed to respond
+ * some LFSCK verification requests (maybe because of network issues or the MDT
+ * itself trouble). During the respond gap the MDT may missed some name entries
+ * verification, then the MDT cannot know whether related MDT-objects have been
+ * referenced by related name entries or not, then in the second-stage scanning,
+ * these MDT-objects will be regarded as orphan, if the MDT-object contains bad
+ * linkEA for back reference, then it will misguide the LFSCK to generate wrong
+ * name entry for repairing the orphan.
+ *
+ * To avoid above trouble, when layout LFSCK finishes the first-stage scanning,
+ * it will scan the bitmap for the ever failed MDTs, and notify them that they
+ * have ever missed some name entries verification and should skip the handling
+ * for orphan MDT-objects.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] com	pointer to the lfsck component
+ * \param[in] lr	pointer to the lfsck request
+ */
 static void lfsck_namespace_assistant_sync_failures(const struct lu_env *env,
 						    struct lfsck_component *com,
 						    struct lfsck_request *lr)
 {
-	/* XXX: TBD */
+	struct lfsck_async_interpret_args *laia  =
+				&lfsck_env_info(env)->lti_laia2;
+	struct lfsck_assistant_data	  *lad   = com->lc_data;
+	struct lfsck_namespace		  *ns    = com->lc_file_ram;
+	struct lfsck_instance		  *lfsck = com->lc_lfsck;
+	struct lfsck_tgt_descs		  *ltds  = &lfsck->li_mdt_descs;
+	struct lfsck_tgt_desc		  *ltd;
+	struct ptlrpc_request_set	  *set;
+	int				   rc    = 0;
+	ENTRY;
+
+	set = ptlrpc_prep_set();
+	if (set == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	lr->lr_flags2 = ns->ln_flags | LF_INCOMPLETE;
+	memset(laia, 0, sizeof(*laia));
+	lad->lad_touch_gen++;
+
+	spin_lock(&ltds->ltd_lock);
+	while (!list_empty(&lad->lad_mdt_list)) {
+		ltd = list_entry(lad->lad_mdt_list.next,
+				 struct lfsck_tgt_desc,
+				 ltd_namespace_list);
+		if (ltd->ltd_namespace_gen == lad->lad_touch_gen)
+			break;
+
+		ltd->ltd_namespace_gen = lad->lad_touch_gen;
+		list_move_tail(&ltd->ltd_namespace_list,
+			       &lad->lad_mdt_list);
+		if (!lad->lad_incomplete ||
+		    !cfs_bitmap_check(lad->lad_bitmap, ltd->ltd_index)) {
+			ltd->ltd_namespace_failed = 0;
+			continue;
+		}
+
+		ltd->ltd_namespace_failed = 1;
+		spin_unlock(&ltds->ltd_lock);
+		rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
+			lfsck_namespace_assistant_sync_failures_interpret,
+			laia, LFSCK_NOTIFY);
+		if (rc != 0)
+			CDEBUG(D_LFSCK, "%s: namespace LFSCK assistant fail "
+			       "to sync failure with MDT %x: rc = %d\n",
+			       lfsck_lfsck2name(lfsck), ltd->ltd_index, rc);
+
+		spin_lock(&ltds->ltd_lock);
+	}
+	spin_unlock(&ltds->ltd_lock);
+
+	rc = ptlrpc_set_wait(set);
+	ptlrpc_set_destroy(set);
+
+	GOTO(out, rc);
+
+out:
+	if (rc != 0)
+		CDEBUG(D_LFSCK, "%s: namespace LFSCK assistant fail "
+		       "to sync failure with MDTs, and related MDTs "
+		       "may handle orphan un-properly: rc = %d\n",
+		       lfsck_lfsck2name(lfsck), rc);
+
+	EXIT;
 }
 
 struct lfsck_assistant_operations lfsck_namespace_assistant_ops = {

@@ -959,9 +959,15 @@ int osp_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(name != NULL);
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_NETWORK) &&
-	    osp->opd_index == cfs_fail_val &&
-	    osp_dev2node(osp) == cfs_fail_val)
-		RETURN(-ENOTCONN);
+	    osp->opd_index == cfs_fail_val) {
+		if (is_ost_obj(&dt->do_lu)) {
+			if (osp_dev2node(osp) == cfs_fail_val)
+				RETURN(-ENOTCONN);
+		} else {
+			if (strcmp(name, XATTR_NAME_LINK) == 0)
+				RETURN(-ENOTCONN);
+		}
+	}
 
 	if (unlikely(obj->opo_non_exist))
 		RETURN(-ENOENT);

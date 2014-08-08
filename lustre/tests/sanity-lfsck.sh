@@ -46,7 +46,7 @@ setupall
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14 15 16 17 18 19 20 21"
 
 [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.50) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2d 2e 3 22 23 24 25 26 27"
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2d 2e 3 22 23 24 25 26 27 28"
 
 build_test_filter
 
@@ -3364,6 +3364,109 @@ test_27b() {
 		error "(10) .lustre/lost+found/MDT0001/ should not be empty"
 }
 run_test 27b "LFSCK can recreate the lost remote parent directory as orphan"
+
+test_28() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "The test needs at least 2 MDTs" && return
+
+	echo "#####"
+	echo "The target name entry is lost. The LFSCK should insert the"
+	echo "orphan MDT-object under .lustre/lost+found/MDTxxxx. But if"
+	echo "the MDT (on which the orphan MDT-object resides) has ever"
+	echo "failed to respond some name entry verification durin the"
+	echo "first stage-scanning, then the LFSCK should skip to handle"
+	echo "orphan MDT-object on this MDT. But other MDTs should not"
+	echo "be affected."
+	echo "#####"
+
+	check_mount_and_prep
+	$LFS mkdir -i 0 $DIR/$tdir/d1
+	$LFS mkdir -i 1 $DIR/$tdir/d1/a1
+	$LFS mkdir -i 1 $DIR/$tdir/d1/a2
+
+	$LFS mkdir -i 1 $DIR/$tdir/d2
+	$LFS mkdir -i 0 $DIR/$tdir/d2/a1
+	$LFS mkdir -i 0 $DIR/$tdir/d2/a2
+
+	echo "Inject failure stub on MDT0 to simulate the case that"
+	echo "d1/a1's name entry will be removed, but the d1/a1's object"
+	echo "and its linkEA are kept in the system. And the case that"
+	echo "d2/a2's name entry will be removed, but the d2/a2's object"
+	echo "and its linkEA are kept in the system."
+
+	#define OBD_FAIL_LFSCK_NO_NAMEENTRY	0x1624
+	do_facet mds1 $LCTL set_param fail_loc=0x1624
+	do_facet mds2 $LCTL set_param fail_loc=0x1624
+	rmdir $DIR/$tdir/d1/a1 || error "(1) Fail to rmdir $DIR/$tdir/d1/a1"
+	rmdir $DIR/$tdir/d2/a2 || error "(2) Fail to rmdir $DIR/$tdir/d2/a2"
+	do_facet mds1 $LCTL set_param fail_loc=0
+	do_facet mds2 $LCTL set_param fail_loc=0
+
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+
+	echo "Inject failure, to simulate the MDT0 fail to handle"
+	echo "MDT1 LFSCK request during the first-stage scanning."
+	#define OBD_FAIL_LFSCK_BAD_NETWORK	0x161c
+	do_facet mds2 $LCTL set_param fail_loc=0x161c fail_val=0
+
+	echo "Trigger namespace LFSCK on all devices to find out orphan object"
+	$START_NAMESPACE -r -A ||
+		error "(3) Fail to start LFSCK for namespace"
+
+	wait_update_facet mds1 "$LCTL get_param -n \
+		mdd.$(facet_svc mds1).lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "partial" 32 || {
+		error "(4) mds1 is not the expected 'partial'"
+	}
+
+	wait_update_facet mds2 "$LCTL get_param -n \
+		mdd.$(facet_svc mds2).lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		error "(5) mds2 is not the expected 'completed'"
+	}
+
+	do_facet mds2 $LCTL set_param fail_loc=0 fail_val=0
+
+	local repaired=$(do_facet mds1 $LCTL get_param -n \
+			 mdd.$(facet_svc mds1).lfsck_namespace |
+			 awk '/^lost_dirent_repaired/ { print $2 }')
+	[ $repaired -eq 0 ] ||
+		error "(6) Expect 0 fixed on mds1, but got: $repaired"
+
+	repaired=$(do_facet mds2 $LCTL get_param -n \
+		   mdd.$(facet_svc mds2).lfsck_namespace |
+		   awk '/^lost_dirent_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(7) Expect 1 fixed on mds2, but got: $repaired"
+
+	echo "Trigger namespace LFSCK on all devices again to cleanup"
+	$START_NAMESPACE -r -A ||
+		error "(8) Fail to start LFSCK for namespace"
+
+	for k in $(seq $MDSCOUNT); do
+		# The LFSCK status query internal is 30 seconds. For the case
+		# of some LFSCK_NOTIFY RPCs failure/lost, we will wait enough
+		# time to guarantee the status sync up.
+		wait_update_facet mds${k} "$LCTL get_param -n \
+			mdd.$(facet_svc mds${k}).lfsck_namespace |
+			awk '/^status/ { print \\\$2 }'" "completed" 32 ||
+			error "(9) MDS${k} is not the expected 'completed'"
+	done
+
+	local repaired=$(do_facet mds1 $LCTL get_param -n \
+			 mdd.$(facet_svc mds1).lfsck_namespace |
+			 awk '/^lost_dirent_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(10) Expect 1 fixed on mds1, but got: $repaired"
+
+	repaired=$(do_facet mds2 $LCTL get_param -n \
+		   mdd.$(facet_svc mds2).lfsck_namespace |
+		   awk '/^lost_dirent_repaired/ { print $2 }')
+	[ $repaired -eq 0 ] ||
+		error "(11) Expect 0 fixed on mds2, but got: $repaired"
+}
+run_test 28 "Skip the failed MDT(s) when handle orphan MDT-objects"
 
 $LCTL set_param debug=-lfsck > /dev/null || true
 

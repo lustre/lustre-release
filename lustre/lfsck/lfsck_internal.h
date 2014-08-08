@@ -219,8 +219,13 @@ struct lfsck_namespace {
 	/* How many lost name entries have been re-inserted. */
 	__u64	ln_lost_dirent_repaired;
 
+	/* The size of MDT targets bitmap with nbits. Such bitmap records
+	 * the MDTs that contain non-verified MDT-objects. */
+	__u32	ln_bitmap_size;
+
+	__u32	ln_reserved_1;
 	/* For further using. 256-bytes aligned now. */
-	__u64   ln_reserved[26];
+	__u64   ln_reserved[25];
 };
 
 enum lfsck_layout_inconsistency_type {
@@ -382,7 +387,8 @@ struct lfsck_tgt_desc {
 	__u32		   ltd_namespace_gen;
 	unsigned int	   ltd_dead:1,
 			   ltd_layout_done:1,
-			   ltd_namespace_done:1;
+			   ltd_namespace_done:1,
+			   ltd_namespace_failed:1;
 };
 
 struct lfsck_tgt_desc_idx {
