@@ -939,6 +939,9 @@ static int out_tx_index_insert_exec(const struct lu_env *env,
 	struct dt_object *dt_obj = arg->object;
 	int rc;
 
+	if (unlikely(!dt_object_exists(dt_obj)))
+		RETURN(-ESTALE);
+
 	rc = out_obj_index_insert(env, dt_obj,
 				  (const struct dt_rec *)&arg->u.insert.rec,
 				  arg->u.insert.key, th);

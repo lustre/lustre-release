@@ -4749,6 +4749,8 @@ void lustre_assert_wire_constants(void)
 		 (long long)LE_CONDITIONAL_DESTROY);
 	LASSERTF(LE_PAIRS_VERIFY == 11, "found %lld\n",
 		 (long long)LE_PAIRS_VERIFY);
+	LASSERTF(LE_CREATE_ORPHAN == 12, "found %lld\n",
+		 (long long)LE_CREATE_ORPHAN);
 	LASSERTF(LEF_TO_OST == 0x00000001UL, "found 0x%.8xUL\n",
 		(unsigned)LEF_TO_OST);
 	LASSERTF(LEF_FROM_OST == 0x00000002UL, "found 0x%.8xUL\n",

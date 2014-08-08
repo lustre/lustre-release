@@ -46,7 +46,7 @@ setupall
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14 15 16 17 18 19 20 21"
 
 [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.50) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2d 2e 3 22 23 24 25 26"
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2d 2e 3 22 23 24 25 26 27"
 
 build_test_filter
 
@@ -3248,6 +3248,122 @@ test_26b() {
 		error "(9) foo's FID changed: $foofid, $foofid2"
 }
 run_test 26b "LFSCK can add the missing remote name entry back to the namespace"
+
+test_27a() {
+	echo "#####"
+	echo "The local parent referenced by the MDT-object linkEA is lost."
+	echo "The namespace LFSCK will re-create the lost parent as orphan."
+	echo "#####"
+
+	check_mount_and_prep
+
+	$LFS mkdir -i 0 $DIR/$tdir/d0 || error "(1) Fail to mkdir d0"
+	touch $DIR/$tdir/d0/foo || error "(2) Fail to create foo"
+	ln $DIR/$tdir/d0/foo $DIR/$tdir/d0/dummy ||
+		error "(3) Fail to hard link to $DIR/$tdir/d0/foo"
+
+	echo "Inject failure stub on MDT0 to simulate the case that"
+	echo "foo's name entry will be removed, but the foo's object"
+	echo "and its linkEA are kept in the system. And then remove"
+	echo "another hard link and the parent directory."
+
+	#define OBD_FAIL_LFSCK_NO_NAMEENTRY	0x1624
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1624
+	rm -f $DIR/$tdir/d0/foo ||
+		error "(4) Fail to unlink $DIR/$tdir/d0/foo"
+	rm -f $DIR/$tdir/d0/dummy ||
+		error "(5) Fail to unlink $DIR/$tdir/d0/dummy"
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+
+	rm -rf $DIR/$tdir/d0 || error "(5) Fail to unlink the dir d0"
+	ls -ail $DIR/$tdir/d0 > /dev/null 2>&1 && "(6) 'ls' should fail"
+
+	echo "Trigger namespace LFSCK to repair the lost parent"
+	$START_NAMESPACE -r -A ||
+		error "(6) Fail to start LFSCK for namespace"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(7) unexpected status"
+	}
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^lost_dirent_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(8) Fail to repair lost dirent: $repaired"
+
+	echo "There should be an orphan under .lustre/lost+found/MDT0000/"
+	[ -d $MOUNT/.lustre/lost+found/MDT0000 ] ||
+		error "(9) $MOUNT/.lustre/lost+found/MDT0000/ should be there"
+
+	ls -ail $MOUNT/.lustre/lost+found/MDT0000/
+
+	cname=$(find $MOUNT/.lustre/lost+found/MDT0000/ -name *-P-*)
+	[ ! -z "$cname" ] ||
+		error "(10) .lustre/lost+found/MDT0000/ should not be empty"
+}
+run_test 27a "LFSCK can recreate the lost local parent directory as orphan"
+
+test_27b() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "We need at least 2 MDSes for this test" && return
+
+	echo "#####"
+	echo "The remote parent referenced by the MDT-object linkEA is lost."
+	echo "The namespace LFSCK will re-create the lost parent as orphan."
+	echo "#####"
+
+	check_mount_and_prep
+
+	$LFS mkdir -i 1 $DIR/$tdir/d0 || error "(1) Fail to mkdir d0"
+	$LFS mkdir -i 0 $DIR/$tdir/d0/foo || error "(2) Fail to mkdir foo"
+
+	$LFS path2fid $DIR/$tdir/d0
+
+	echo "Inject failure stub on MDT0 to simulate the case that"
+	echo "foo's name entry will be removed, but the foo's object"
+	echo "and its linkEA are kept in the system. And then remove"
+	echo "the parent directory."
+
+	#define OBD_FAIL_LFSCK_NO_NAMEENTRY	0x1624
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1624
+	rmdir $DIR/$tdir/d0/foo || error "(3) Fail to rmdir $DIR/$tdir/d0/foo"
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+
+	rmdir $DIR/$tdir/d0 || error "(4) Fail to unlink the dir d0"
+	ls -ail $DIR/$tdir/d0 > /dev/null 2>&1 && "(5) 'ls' should fail"
+
+	echo "Trigger namespace LFSCK to repair the missing remote name entry"
+	$START_NAMESPACE -r -A ||
+		error "(6) Fail to start LFSCK for namespace"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(7) unexpected status"
+	}
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^lost_dirent_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(8) Fail to repair lost dirent: $repaired"
+
+	ls -ail $MOUNT/.lustre/lost+found/
+
+	echo "There should be an orphan under .lustre/lost+found/MDT0001/"
+	[ -d $MOUNT/.lustre/lost+found/MDT0001 ] ||
+		error "(9) $MOUNT/.lustre/lost+found/MDT0001/ should be there"
+
+	ls -ail $MOUNT/.lustre/lost+found/MDT0001/
+
+	cname=$(find $MOUNT/.lustre/lost+found/MDT0001/ -name *-P-*)
+	[ ! -z "$cname" ] ||
+		error "(10) .lustre/lost+found/MDT0001/ should not be empty"
+}
+run_test 27b "LFSCK can recreate the lost remote parent directory as orphan"
 
 $LCTL set_param debug=-lfsck > /dev/null || true
 

@@ -2082,7 +2082,7 @@ static int lfsck_layout_slave_conditional_destroy(const struct lu_env *env,
 	if (rc == 0)
 		CDEBUG(D_LFSCK, "%s: layout LFSCK destroyed the empty "
 		       "OST-object "DFID" that was created for reparing "
-		       "dangling referenced case. But the original missed "
+		       "dangling referenced case. But the original missing "
 		       "OST-object is found now.\n",
 		       lfsck_lfsck2name(lfsck), PFID(fid));
 
@@ -2677,7 +2677,7 @@ log:
  *    and the users can make the decision about how to handle it with
  *    more human knownledge. (by default)
  *
- * 2) Re-create the missed OST-object with the FID/owner information. */
+ * 2) Re-create the missing OST-object with the FID/owner information. */
 static int lfsck_layout_repair_dangling(const struct lu_env *env,
 					struct lfsck_component *com,
 					struct lfsck_layout_req *llr,
