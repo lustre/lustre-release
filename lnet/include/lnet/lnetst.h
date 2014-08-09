@@ -499,11 +499,6 @@ typedef struct {
         int                     png_flags;              /* reserved flags */
 } lst_test_ping_param_t;
 
-/* more tests */
-#ifdef __WINNT__
-#include <libcfs/libcfs_pack.h>
-#include <libcfs/libcfs_unpack.h>
-#endif
 typedef struct {
         __u32 errors;
         __u32 rpcs_sent;

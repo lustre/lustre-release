@@ -44,8 +44,6 @@
 #include <linux/obd.h>
 #elif defined(__APPLE__)
 #include <darwin/obd.h>
-#elif defined(__WINNT__)
-#include <winnt/obd.h>
 #else
 #error Unsupported operating system.
 #endif

@@ -238,41 +238,10 @@ struct group_info{ };
 #define get_random_bytes(val, size)     (*val) = 0
 
 /* utility libcfs init/fini entries */
-#ifdef __WINNT__
-extern int libcfs_arch_init(void);
-extern void libcfs_arch_cleanup(void);
-#else /* !__WINNT__ */
 static inline int libcfs_arch_init(void) {
         return 0;
 }
 static inline void libcfs_arch_cleanup(void) {
 }
-/* __WINNT__ */
-#endif
 
-/* proc interface wrappers for non-win OS */
-#ifndef __WINNT__
-#define cfs_proc_open   open
-#define cfs_proc_mknod  mknod
-#define cfs_proc_ioctl  ioctl
-#define cfs_proc_close  close
-#define cfs_proc_read   read
-#define cfs_proc_write  write
-#define cfs_proc_fopen  fopen
-#define cfs_proc_fclose fclose
-#define cfs_proc_fgets  fgets
-/* !__WINNT__ */
-#endif
-
-
-/* __LIBCFS_USER_PRIM_H__ */
-#endif
-/*
- * Local variables:
- * c-indentation-style: "K&R"
- * c-basic-offset: 8
- * tab-width: 8
- * fill-column: 80
- * scroll-step: 1
- * End:
- */
+#endif /* __LIBCFS_USER_PRIM_H__ */

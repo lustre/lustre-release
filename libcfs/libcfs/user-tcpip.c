@@ -53,9 +53,7 @@
 #if defined(__sun__) || defined(__sun)
 #include <sys/sockio.h>
 #endif
-#ifndef __CYGWIN__
 #include <sys/syscall.h>
-#endif
 
 /*
  * Functions to get network interfaces info

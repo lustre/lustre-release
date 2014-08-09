@@ -46,8 +46,6 @@
 #include <linux/lustre_lite.h>
 #elif defined(__APPLE__)
 #include <darwin/lustre_lite.h>
-#elif defined(__WINNT__)
-#include <winnt/lustre_lite.h>
 #else
 #error Unsupported operating system.
 #endif

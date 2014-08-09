@@ -46,10 +46,6 @@
 #include <lnet/linux/lib-types.h>
 #elif defined(__APPLE__)
 #include <lnet/darwin/lib-types.h>
-#elif defined(__WINNT__)
-#include <lnet/winnt/lib-types.h>
-#include <libcfs/libcfs_pack.h>
-#include <libcfs/libcfs_unpack.h>
 #else
 #error Unsupported Operating System
 #endif

@@ -41,9 +41,6 @@
 #include <linux/lustre_acl.h>
 #elif defined(__APPLE__)
 #include <darwin/lustre_acl.h>
-#elif defined(__WINNT__)
-#include <winnt/lustre_acl.h>
-#error Unsupported operating system.
 #endif
 
 #endif

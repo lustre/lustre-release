@@ -46,11 +46,6 @@
 #include <lustre_net.h>
 #include <lustre/lustre_user.h>
 #include <obd_cksum.h>
-
-#ifdef  __CYGWIN__
-# include <ctype.h>
-#endif
-
 #include <lustre_ha.h>
 #include <lprocfs_status.h>
 #include <lustre_ioctl.h>

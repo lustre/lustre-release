@@ -50,10 +50,6 @@
 
 #define SOCKLND_CONN_ACK        SOCKLND_CONN_BULK_IN
 
-#ifdef __WINNT__
-#include <libcfs/libcfs_pack.h>
-#include <libcfs/libcfs_unpack.h>
-#endif
 typedef struct {
         __u32                   kshm_magic;     /* magic number of socklnd message */
         __u32                   kshm_version;   /* version of socklnd message */

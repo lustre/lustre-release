@@ -58,8 +58,6 @@ struct page *alloc_page(unsigned int flags)
 
 #if defined (__DARWIN__)
 	pg->addr = valloc(PAGE_CACHE_SIZE);
-#elif defined (__WINNT__)
-        pg->addr = pgalloc(0);
 #else
 	rc = posix_memalign(&pg->addr, PAGE_CACHE_SIZE, PAGE_CACHE_SIZE);
 #endif
@@ -72,11 +70,7 @@ struct page *alloc_page(unsigned int flags)
 
 void __free_page(struct page *pg)
 {
-#if defined (__WINNT__)
-        pgfree(pg->addr);
-#else
         free(pg->addr);
-#endif
 
         free(pg);
 }

@@ -43,14 +43,12 @@
 
 #include <libcfs/types.h>
 
-#if !defined(__WINNT__) && !defined(__KERNEL__)
+#if !defined(__KERNEL__)
 #include <libcfs/posix/libcfs.h>
 #elif defined(__linux__)
 #include <libcfs/linux/libcfs.h>
 #elif defined(__APPLE__)
 #include <libcfs/darwin/libcfs.h>
-#elif defined(__WINNT__)
-#include <libcfs/winnt/libcfs.h>
 #else
 #error Unsupported operating system.
 #endif

@@ -338,13 +338,6 @@ do {									\
 } while (0)
 #endif /* BITS_PER_LONG > 32 */
 
-#elif defined(_MSC_VER)
-#define RETURN(rc)                                                      \
-do {                                                                    \
-        CDEBUG(D_TRACE, "Process leaving.\n");                          \
-        EXIT_NESTING;                                                   \
-        return (rc);                                                    \
-} while (0)
 #else
 # error "Unkown compiler"
 #endif /* __GNUC__ */
@@ -395,10 +388,6 @@ extern int cfs_trace_copyin_string(char *knl_buffer, int knl_buffer_nob,
 extern int cfs_trace_copyout_string(char *usr_buffer, int usr_buffer_nob,
 				    const char *knl_buffer, char *append);
 
-#if defined(__WINNT__)
-#define LIBCFS_DEBUG_FILE_PATH_DEFAULT "\\SystemRoot\\temp\\lustre-log"
-#else
 #define LIBCFS_DEBUG_FILE_PATH_DEFAULT "/tmp/lustre-log"
-#endif
 
 #endif	/* __LIBCFS_DEBUG_H__ */

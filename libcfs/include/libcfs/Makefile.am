@@ -23,12 +23,10 @@ EXTRA_DIST = \
 	libcfs_heap.h \
 	libcfs_ioctl.h \
 	libcfs_kernelcomm.h \
-	libcfs_pack.h \
 	libcfs_prim.h \
 	libcfs_private.h \
 	libcfs_string.h \
 	libcfs_time.h \
-	libcfs_unpack.h \
 	libcfs_workitem.h \
 	libcfsutil.h \
 	list.h \

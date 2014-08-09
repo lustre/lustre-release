@@ -46,8 +46,6 @@
 #include <linux/lprocfs_status.h>
 #elif defined(__APPLE__)
 #include <darwin/lprocfs_status.h>
-#elif defined(__WINNT__)
-#include <winnt/lprocfs_status.h>
 #else
 #error Unsupported operating system.
 #endif

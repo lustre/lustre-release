@@ -32,8 +32,6 @@
 #include "socklnd_lib-linux.h"
 #elif defined(__APPLE__)
 #include "socklnd_lib-darwin.h"
-#elif defined(__WINNT__)
-#include "socklnd_lib-winnt.h"
 #else
 #error Unsupported Operating System
 #endif

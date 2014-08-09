@@ -36,9 +36,6 @@
 #include <linux/lustre_quota.h>
 #elif defined(__APPLE__)
 #include <darwin/lustre_quota.h>
-#elif defined(__WINNT__)
-#include <winnt/lustre_quota.h>
-#error Unsupported operating system.
 #endif
 
 #include <dt_object.h>

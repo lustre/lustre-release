@@ -45,8 +45,6 @@
 #include <linux/lvfs.h>
 #elif defined(__APPLE__)
 #include <darwin/lvfs.h>
-#elif defined(__WINNT__)
-#include <winnt/lvfs.h>
 #else
 #error Unsupported operating system.
 #endif

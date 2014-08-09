@@ -247,10 +247,8 @@ static inline void l_cond_broadcast(l_cond_t *cond)
 #include <errno.h>
 #include <string.h>
 #if HAVE_LIBPTHREAD
-#ifndef __WINNT__
 #include <sys/ipc.h>
 #include <sys/shm.h>
-#endif
 #include <pthread.h>
 
 typedef pthread_mutex_t	l_mutex_t;

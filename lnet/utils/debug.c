@@ -134,40 +134,6 @@ dbg_write_cmd(int fd, char *str, int len)
         return (rc == 0 ? 0: 1);
 }
 
-#elif defined(__WINNT__)
-
-#define DAEMON_CTL_NAME         "/proc/sys/lnet/daemon_file"
-#define SUBSYS_DEBUG_CTL_NAME   "/proc/sys/lnet/subsystem_debug"
-#define DEBUG_CTL_NAME          "/proc/sys/lnet/debug"
-#define DUMP_KERNEL_CTL_NAME    "/proc/sys/lnet/dump_kernel"
-
-static int
-dbg_open_ctlhandle(const char *str)
-{
-        int fd;
-        fd = cfs_proc_open((char *)str, (int)O_WRONLY);
-        if (fd < 0) {
-                fprintf(stderr, "open %s failed: %s\n", str,
-                        strerror(errno));
-                return -1;
-        }
-        return fd;
-}
-
-static void
-dbg_close_ctlhandle(int fd)
-{
-        cfs_proc_close(fd);
-}
-
-static int
-dbg_write_cmd(int fd, char *str, int len)
-{
-        int    rc  = cfs_proc_write(fd, str, len);
-
-        return (rc == len ? 0 : 1);
-}
-
 #else
 #error - Unknown sysctl convention.
 #endif

@@ -74,15 +74,14 @@ open_ioc_dev(int dev_id)
         }
 
         if (ioc_dev_list[dev_id].dev_fd < 0) {
-                int fd = cfs_proc_open((char *)dev_name, O_RDWR);
+		int fd = open(dev_name, O_RDWR);
 
-                /* Make the /dev/ node if we need to */
-                if (fd < 0 && errno == ENOENT) {
-                        if (cfs_proc_mknod(dev_name, 
-                                  S_IFCHR|S_IWUSR|S_IRUSR,
-                                  MKDEV(ioc_dev_list[dev_id].dev_major,
-                                        ioc_dev_list[dev_id].dev_minor)) == 0)
-                                fd = cfs_proc_open((char *)dev_name, O_RDWR);
+		/* Make the /dev/ node if we need to */
+		if (fd < 0 && errno == ENOENT) {
+			if (mknod(dev_name, S_IFCHR|S_IWUSR|S_IRUSR,
+				  MKDEV(ioc_dev_list[dev_id].dev_major,
+					ioc_dev_list[dev_id].dev_minor)) == 0)
+				fd = open(dev_name, O_RDWR);
                         else
                                 fprintf(stderr, "mknod %s failed: %s\n",
                                         dev_name, strerror(errno));
@@ -110,9 +109,9 @@ do_ioctl(int dev_id, unsigned int opc, void *buf)
         if (fd < 0) 
                 return fd;
 
-        rc = cfs_proc_ioctl(fd, opc, buf);
-        return rc;
-        
+	rc = ioctl(fd, opc, buf);
+
+	return rc;
 }
 
 static FILE *
@@ -188,16 +187,16 @@ register_ioc_dev(int dev_id, const char * dev_name, int major, int minor)
 void
 unregister_ioc_dev(int dev_id) 
 {
+	if (dev_id < 0 ||
+	    dev_id >= sizeof(ioc_dev_list) / sizeof(ioc_dev_list[0]))
+		return;
 
-        if (dev_id < 0 || 
-            dev_id >= sizeof(ioc_dev_list) / sizeof(ioc_dev_list[0]))
-                return;
-        if (ioc_dev_list[dev_id].dev_name != NULL &&
-            ioc_dev_list[dev_id].dev_fd >= 0) 
-                cfs_proc_close(ioc_dev_list[dev_id].dev_fd);
+	if (ioc_dev_list[dev_id].dev_name != NULL &&
+	    ioc_dev_list[dev_id].dev_fd >= 0)
+		close(ioc_dev_list[dev_id].dev_fd);
 
-        ioc_dev_list[dev_id].dev_name = NULL;
-        ioc_dev_list[dev_id].dev_fd = -1;
+	ioc_dev_list[dev_id].dev_name = NULL;
+	ioc_dev_list[dev_id].dev_fd = -1;
 }
 
 /* If this file is set, then all ioctl buffers will be 
@@ -235,49 +234,6 @@ parse_dump(char * dump_file, ioc_handler_t ioc_func)
 {
         int line =0;
         char *start, *buf, *end;
-
-#if defined(__CYGWIN__) || defined(__WINNT__)
-
-        HANDLE fd, hmap;
-        DWORD size;
-
-        fd = CreateFile(dump_file, GENERIC_READ, FILE_SHARE_READ, NULL,
-                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-        if (fd == INVALID_HANDLE_VALUE) {
-                fprintf(stderr, "couldn't open %s (error code: %u)\n",
-                                dump_file, GetLastError());
-                exit(1);
-        }
-        size = GetFileSize(fd, NULL);
-        if (size < 1 || size == 0xFFFFFFFF) {
-                fprintf(stderr, "KML is empty\n");
-                CloseHandle(fd);
-                exit(1);
-        }
-
-        hmap = CreateFileMapping(fd, NULL, PAGE_READONLY, 0,0, NULL);
-        if (hmap == NULL) {
-                fprintf(stderr, "can't create file mapping\n");
-                CloseHandle(fd);
-                exit(1);
-        }
-        start = buf = MapViewOfFile(hmap, FILE_MAP_READ, 0, 0, 0);
-        if (start == NULL) {
-                fprintf(stderr, "can't map file content\n");
-                CloseHandle(hmap);
-                CloseHandle(fd);
-                exit(1);
-        }
-        end = buf + size;
-        CloseHandle(fd);
-        if (start == NULL) {
-                fprintf(stderr, "can't create file mapping\n");
-                UnmapViewOfFile(start);
-                CloseHandle(hmap);
-                exit(1);
-        }
-#else
-
         struct stat st;
         int fd;
 
@@ -305,7 +261,6 @@ parse_dump(char * dump_file, ioc_handler_t ioc_func)
                 fprintf(stderr, "can't create file mapping\n");
                 exit(1);
         }
-#endif
 
         while (buf < end) {
                 struct dump_hdr *dump_hdr = (struct dump_hdr *) buf;
@@ -340,14 +295,9 @@ parse_dump(char * dump_file, ioc_handler_t ioc_func)
                 buf += data->ioc_len + sizeof(*dump_hdr);
         }
 
-#if defined(__CYGWIN__) || defined(__WINNT__)
-        UnmapViewOfFile(start);
-        CloseHandle(hmap);
-#else
-        munmap(start, end - start);
-#endif
+	munmap(start, end - start);
 
-        return 0;
+	return 0;
 }
 
 int 

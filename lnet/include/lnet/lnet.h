@@ -44,8 +44,6 @@
 #include <lnet/linux/lnet.h>
 #elif defined(__APPLE__)
 #include <lnet/darwin/lnet.h>
-#elif defined(__WINNT__)
-#include <lnet/winnt/lnet.h>
 #else
 #error Unsupported Operating System
 #endif

@@ -824,12 +824,10 @@ int cfs_trace_dump_debug_buffer_usrstr(void *usr_str, int usr_str_nob)
         if (rc != 0)
                 goto out;
 
-#if !defined(__WINNT__)
         if (str[0] != '/') {
                 rc = -EINVAL;
                 goto out;
         }
-#endif
         rc = cfs_tracefile_dump_all_pages(str);
 out:
         cfs_trace_free_string_buffer(str, usr_str_nob + 1);
@@ -857,10 +855,8 @@ int cfs_trace_daemon_command(char *str)
 
         } else if (strlen(str) >= sizeof(cfs_tracefile)) {
                 rc = -ENAMETOOLONG;
-#ifndef __WINNT__
         } else if (str[0] != '/') {
                 rc = -EINVAL;
-#endif
         } else {
 		strcpy(cfs_tracefile, str);
 
