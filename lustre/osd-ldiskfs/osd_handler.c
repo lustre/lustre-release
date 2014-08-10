@@ -133,10 +133,6 @@ static int osd_object_invariant(const struct lu_object *l)
 /*
  * Concurrency: doesn't matter
  */
-static int osd_read_locked(const struct lu_env *env, struct osd_object *o)
-{
-        return osd_oti_get(env)->oti_r_locks > 0;
-}
 
 /*
  * Concurrency: doesn't matter
@@ -3006,7 +3002,6 @@ static int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
         LASSERT(inode->i_op != NULL && inode->i_op->listxattr != NULL);
-        LASSERT(osd_read_locked(env, obj) || osd_write_locked(env, obj));
 
         if (osd_object_auth(env, dt, capa, CAPA_OPC_META_READ))
                 return -EACCES;
@@ -4179,15 +4174,17 @@ struct osd_object *osd_object_find(const struct lu_env *env,
 	 * in the cache, otherwise lu_object_alloc() crashes
 	 * -bzzz
 	 */
-	luch = lu_object_find_at(env, ludev, fid, NULL);
-        if (!IS_ERR(luch)) {
-                if (lu_object_exists(luch)) {
-                        lo = lu_object_locate(luch->lo_header, ludev->ld_type);
-                        if (lo != NULL)
-                                child = osd_obj(lo);
-                        else
-                                LU_OBJECT_DEBUG(D_ERROR, env, luch,
-                                                "lu_object can't be located"
+	luch = lu_object_find_at(env, ludev->ld_site->ls_top_dev == NULL ?
+				 ludev : ludev->ld_site->ls_top_dev,
+				 fid, NULL);
+	if (!IS_ERR(luch)) {
+		if (lu_object_exists(luch)) {
+			lo = lu_object_locate(luch->lo_header, ludev->ld_type);
+			if (lo != NULL)
+				child = osd_obj(lo);
+			else
+				LU_OBJECT_DEBUG(D_ERROR, env, luch,
+						"lu_object can't be located"
 						DFID"\n", PFID(fid));
 
                         if (child == NULL) {
@@ -4232,7 +4229,7 @@ static int osd_index_declare_ea_insert(const struct lu_env *env,
 	int			rc;
 	ENTRY;
 
-	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
+	LASSERT(!dt_object_remote(dt));
 	LASSERT(handle != NULL);
 
 	oh = container_of0(handle, struct osd_thandle, ot_super);

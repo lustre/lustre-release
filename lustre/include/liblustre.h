@@ -229,6 +229,21 @@ struct lookup_intent {
 	} d;
 };
 
+static inline int it_disposition(const struct lookup_intent *it, int flag)
+{
+	return it->d.lustre.it_disposition & flag;
+}
+
+static inline void it_set_disposition(struct lookup_intent *it, int flag)
+{
+	it->d.lustre.it_disposition |= flag;
+}
+
+static inline void it_clear_disposition(struct lookup_intent *it, int flag)
+{
+	it->d.lustre.it_disposition &= ~flag;
+}
+
 static inline void intent_init(struct lookup_intent *it, int op, int flags)
 {
         memset(it, 0, sizeof(*it));

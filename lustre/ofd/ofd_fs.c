@@ -57,7 +57,7 @@ int ofd_record_write(const struct lu_env *env, struct ofd_device *ofd,
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
 
-	rc = dt_declare_record_write(env, dt, buf->lb_len, *off, th);
+	rc = dt_declare_record_write(env, dt, buf, *off, th);
 	if (rc == 0) {
 		rc = dt_trans_start_local(env, ofd->ofd_osd, th);
 		if (rc == 0)

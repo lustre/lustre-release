@@ -108,11 +108,11 @@ struct mdd_device {
 };
 
 enum mod_flags {
-        /* The dir object has been unlinked */
-        DEAD_OBJ   = 1 << 0,
-        APPEND_OBJ = 1 << 1,
-        IMMUTE_OBJ = 1 << 2,
-        ORPHAN_OBJ = 1 << 3,
+	/* The dir object has been unlinked */
+	DEAD_OBJ   = 1 << 0,
+	APPEND_OBJ = 1 << 1,
+	IMMUTE_OBJ = 1 << 2,
+	ORPHAN_OBJ = 1 << 3,
 };
 
 struct mdd_object {
@@ -164,6 +164,7 @@ struct mdd_thread_info {
 	struct dt_object_format   mti_dof;
 	struct obd_quotactl       mti_oqctl;
 	struct linkea_data	  mti_link_data;
+	struct md_op_spec	  mti_spec;
 };
 
 extern const char orph_index_name[];
@@ -216,6 +217,7 @@ int mdd_get_md_locked(const struct lu_env *env, struct mdd_object *obj,
 int mdd_data_get(const struct lu_env *env, struct mdd_object *obj, void **data);
 int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
                struct lu_attr *la, struct lustre_capa *capa);
+void mdd_flags_xlate(struct mdd_object *obj, __u32 flags);
 int mdd_attr_get(const struct lu_env *env, struct md_object *obj,
 		 struct md_attr *ma);
 int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
@@ -237,7 +239,8 @@ int mdd_iattr_get(const struct lu_env *env, struct mdd_object *mdd_obj,
 int mdd_object_create_internal(const struct lu_env *env, struct mdd_object *p,
 			       struct mdd_object *c, struct lu_attr *attr,
 			       struct thandle *handle,
-			       const struct md_op_spec *spec);
+			       const struct md_op_spec *spec,
+			       struct dt_allocation_hint *hint);
 int mdd_lmm_get_locked(const struct lu_env *env, struct mdd_object *mdd_obj,
                        struct md_attr *ma);
 
@@ -356,7 +359,8 @@ struct lu_buf *mdd_link_buf_alloc(const struct lu_env *env, ssize_t len);
 int mdd_link_buf_grow(const struct lu_env *env, ssize_t len);
 extern const struct md_dir_operations    mdd_dir_ops;
 extern const struct md_object_operations mdd_obj_ops;
-
+int mdd_readlink(const struct lu_env *env, struct md_object *obj,
+		 struct lu_buf *buf);
 int accmode(const struct lu_env *env, const struct lu_attr *la, int flags);
 extern struct lu_context_key mdd_thread_key;
 extern const struct lu_device_operations mdd_lu_ops;
@@ -386,7 +390,10 @@ int mdd_declare_object_create_internal(const struct lu_env *env,
 				       struct mdd_object *c,
 				       struct lu_attr *attr,
 				       struct thandle *handle,
-				       const struct md_op_spec *spec);
+				       const struct md_op_spec *spec,
+				       struct dt_allocation_hint *hint);
+int mdd_get_lov_ea(const struct lu_env *env, struct mdd_object *obj,
+		   struct lu_buf *lmm_buf);
 
 /* mdd_trans.c */
 int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
@@ -394,7 +401,8 @@ int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
 
 void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
 			  struct mdd_object *child, const struct lu_attr *attr,
-			  const struct md_op_spec *spec);
+			  const struct md_op_spec *spec,
+			  struct dt_allocation_hint *hint);
 
 static inline void mdd_object_get(struct mdd_object *o)
 {

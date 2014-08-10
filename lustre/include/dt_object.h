@@ -487,17 +487,17 @@ struct dt_body_operations {
         ssize_t (*dbo_read)(const struct lu_env *env, struct dt_object *dt,
                             struct lu_buf *buf, loff_t *pos,
                             struct lustre_capa *capa);
-        /**
-         * precondition: dt_object_exists(dt);
-         */
-        ssize_t (*dbo_declare_write)(const struct lu_env *env,
-                                     struct dt_object *dt,
-                                     const loff_t size, loff_t pos,
-                                     struct thandle *handle);
-        ssize_t (*dbo_write)(const struct lu_env *env, struct dt_object *dt,
-                             const struct lu_buf *buf, loff_t *pos,
-                             struct thandle *handle, struct lustre_capa *capa,
-                             int ignore_quota);
+	/**
+	 * precondition: dt_object_exists(dt);
+	 */
+	ssize_t (*dbo_declare_write)(const struct lu_env *env,
+				     struct dt_object *dt,
+				     const struct lu_buf *buf, loff_t pos,
+				     struct thandle *handle);
+	ssize_t (*dbo_write)(const struct lu_env *env, struct dt_object *dt,
+			     const struct lu_buf *buf, loff_t *pos,
+			     struct thandle *handle, struct lustre_capa *capa,
+			     int ignore_quota);
         /*
          * methods for zero-copy IO
          */
@@ -1038,18 +1038,19 @@ static inline int dt_trans_cb_add(struct thandle *th,
 
 
 static inline int dt_declare_record_write(const struct lu_env *env,
-                                          struct dt_object *dt,
-                                          int size, loff_t pos,
-                                          struct thandle *th)
+					  struct dt_object *dt,
+					  const struct lu_buf *buf,
+					  loff_t pos,
+					  struct thandle *th)
 {
-        int rc;
+	int rc;
 
-        LASSERTF(dt != NULL, "dt is NULL when we want to write record\n");
-        LASSERT(th != NULL);
-        LASSERT(dt->do_body_ops);
-        LASSERT(dt->do_body_ops->dbo_declare_write);
-        rc = dt->do_body_ops->dbo_declare_write(env, dt, size, pos, th);
-        return rc;
+	LASSERTF(dt != NULL, "dt is NULL when we want to write record\n");
+	LASSERT(th != NULL);
+	LASSERT(dt->do_body_ops);
+	LASSERT(dt->do_body_ops->dbo_declare_write);
+	rc = dt->do_body_ops->dbo_declare_write(env, dt, buf, pos, th);
+	return rc;
 }
 
 static inline int dt_declare_create(const struct lu_env *env,

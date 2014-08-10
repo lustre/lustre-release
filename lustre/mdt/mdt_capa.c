@@ -91,7 +91,8 @@ static int write_capa_keys(const struct lu_env *env,
 		RETURN(PTR_ERR(th));
 
 	rc = dt_declare_record_write(env, mdt->mdt_ck_obj,
-				     sizeof(*tmp) * 3, 0, th);
+				     mdt_buf_const(env, NULL,
+				     sizeof(*tmp) * 3), 0, th);
 	if (rc)
 		goto stop;
 

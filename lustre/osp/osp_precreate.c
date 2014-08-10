@@ -288,12 +288,12 @@ int osp_write_last_oid_seq_files(struct lu_env *env, struct osp_device *osp,
 
 	th->th_sync |= sync;
 	rc = dt_declare_record_write(env, osp->opd_last_used_oid_file,
-				     lb_oid->lb_len, oid_off, th);
+				     lb_oid, oid_off, th);
 	if (rc != 0)
 		GOTO(out, rc);
 
 	rc = dt_declare_record_write(env, osp->opd_last_used_seq_file,
-				     lb_oseq->lb_len, oseq_off, th);
+				     lb_oseq, oseq_off, th);
 	if (rc != 0)
 		GOTO(out, rc);
 

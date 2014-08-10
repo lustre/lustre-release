@@ -614,6 +614,7 @@ repeat:
 		info->lti_buf.lb_len = info->lti_ea_store_size;
 		rc = dt_xattr_get(env, next, &info->lti_buf, name, BYPASS_CAPA);
 	}
+
 	/* if object is not striped or inaccessible */
 	if (rc == -ENODATA || rc == -ENOENT)
 		RETURN(0);

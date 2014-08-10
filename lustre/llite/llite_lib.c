@@ -1333,9 +1333,32 @@ static void ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct lmv_stripe_md *lsm = md->lmv;
 	int idx;
+	ENTRY;
 
-	LASSERT(lsm != NULL);
 	LASSERT(S_ISDIR(inode->i_mode));
+	CDEBUG(D_INODE, "update lsm %p of "DFID"\n", lli->lli_lsm_md,
+	       PFID(ll_inode2fid(inode)));
+
+	/* no striped information from request. */
+	if (lsm == NULL) {
+		if (lli->lli_lsm_md == NULL) {
+			RETURN_EXIT;
+		} else if (lli->lli_lsm_md->lsm_md_magic == LMV_MAGIC_MIGRATE) {
+			/* migration is done, the temporay MIGRATE layout has
+			 * been removed */
+			CDEBUG(D_INODE, DFID" finish migration.\n",
+			       PFID(ll_inode2fid(inode)));
+			lmv_free_memmd(lli->lli_lsm_md);
+			lli->lli_lsm_md = NULL;
+			RETURN_EXIT;
+		} else {
+			/* The lustre_md from req does not include stripeEA,
+			 * see ll_md_setattr */
+			RETURN_EXIT;
+		}
+	}
+
+	/* set the directory layout */
 	if (lli->lli_lsm_md == NULL) {
 		int rc;
 
@@ -1350,7 +1373,9 @@ static void ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 		/* set lsm_md to NULL, so the following free lustre_md
 		 * will not free this lsm */
 		md->lmv = NULL;
-		return;
+		CDEBUG(D_INODE, "Set lsm %p magic %x to "DFID"\n", lsm,
+		       lsm->lsm_md_magic, PFID(ll_inode2fid(inode)));
+		RETURN_EXIT;
 	}
 
 	/* Compare the old and new stripe information */
@@ -1391,6 +1416,8 @@ static void ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 
 	md_update_lsm_md(ll_i2mdexp(inode), ll_i2info(inode)->lli_lsm_md,
 			 md->body, ll_md_blocking_ast);
+
+	RETURN_EXIT;
 }
 
 void ll_clear_inode(struct inode *inode)
@@ -1920,7 +1947,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 			lli->lli_maxbytes = MAX_LFS_FILESIZE;
 	}
 
-	if (S_ISDIR(inode->i_mode) && md->lmv != NULL)
+	if (S_ISDIR(inode->i_mode))
 		ll_update_lsm_md(inode, md);
 
 	if (sbi->ll_flags & LL_SBI_RMT_CLIENT) {
@@ -2534,7 +2561,6 @@ struct md_op_data * ll_prep_md_op_data(struct md_op_data *op_data,
 	if ((opc == LUSTRE_OPC_CREATE) && (name != NULL) &&
 	     filename_is_volatile(name, namelen, NULL))
 		op_data->op_bias |= MDS_CREATE_VOLATILE;
-	op_data->op_opc = opc;
 	op_data->op_mds = 0;
 	op_data->op_data = data;
 

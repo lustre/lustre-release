@@ -1256,8 +1256,10 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
 
         info->mti_spec.no_create = !!req_is_replay(mdt_info_req(info));
 
-        rc = mdt_dlmreq_unpack(info);
-        RETURN(rc);
+
+	rc = mdt_dlmreq_unpack(info);
+
+	RETURN(rc);
 }
 
 /*
@@ -1450,6 +1452,7 @@ static reint_unpacker mdt_reint_unpackers[REINT_MAX] = {
 	[REINT_OPEN]     = mdt_open_unpack,
 	[REINT_SETXATTR] = mdt_setxattr_unpack,
 	[REINT_RMENTRY]  = mdt_rmentry_unpack,
+	[REINT_MIGRATE]  = mdt_rename_unpack,
 };
 
 int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op)

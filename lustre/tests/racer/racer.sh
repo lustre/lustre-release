@@ -16,7 +16,7 @@ RACER_PROGS="file_create dir_create file_rm file_rename file_link file_symlink \
 file_list file_concat file_exec"
 
 if [ $MDSCOUNT -gt 1 ]; then
-	RACER_PROGS="${RACER_PROGS} dir_remote"
+	RACER_PROGS="${RACER_PROGS} dir_remote dir_migrate"
 fi
 
 racer_cleanup()

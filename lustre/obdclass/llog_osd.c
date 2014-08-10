@@ -287,8 +287,10 @@ static int llog_osd_declare_write_rec(const struct lu_env *env,
 	o = loghandle->lgh_obj;
 	LASSERT(o);
 
+	lgi->lgi_buf.lb_len = sizeof(struct llog_log_hdr);
+	lgi->lgi_buf.lb_buf = NULL;
 	/* each time we update header */
-	rc = dt_declare_record_write(env, o, sizeof(struct llog_log_hdr), 0,
+	rc = dt_declare_record_write(env, o, &lgi->lgi_buf, 0,
 				     th);
 	if (rc || idx == 0) /* if error or just header */
 		RETURN(rc);
@@ -307,8 +309,10 @@ static int llog_osd_declare_write_rec(const struct lu_env *env,
 		lgi->lgi_off = 0;
 	}
 
+	lgi->lgi_buf.lb_len = 32 * 1024;
+	lgi->lgi_buf.lb_buf = NULL;
 	/* XXX: implement declared window or multi-chunks approach */
-	rc = dt_declare_record_write(env, o, 32 * 1024, lgi->lgi_off, th);
+	rc = dt_declare_record_write(env, o, &lgi->lgi_buf, lgi->lgi_off, th);
 
 	RETURN(rc);
 }
@@ -909,7 +913,9 @@ static int llog_osd_declare_create(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
-	rc = dt_declare_record_write(env, o, LLOG_CHUNK_SIZE, 0, th);
+	lgi->lgi_buf.lb_len = LLOG_CHUNK_SIZE;
+	lgi->lgi_buf.lb_buf = NULL;
+	rc = dt_declare_record_write(env, o, &lgi->lgi_buf, 0, th);
 	if (rc)
 		RETURN(rc);
 
@@ -1302,7 +1308,9 @@ int llog_osd_put_cat_list(const struct lu_env *env, struct dt_device *d,
 	if (IS_ERR(th))
 		GOTO(out, rc = PTR_ERR(th));
 
-	rc = dt_declare_record_write(env, o, size, lgi->lgi_off, th);
+	lgi->lgi_buf.lb_len = size;
+	lgi->lgi_buf.lb_buf = idarray;
+	rc = dt_declare_record_write(env, o, &lgi->lgi_buf, lgi->lgi_off, th);
 	if (rc)
 		GOTO(out, rc);
 
@@ -1310,8 +1318,6 @@ int llog_osd_put_cat_list(const struct lu_env *env, struct dt_device *d,
 	if (rc)
 		GOTO(out_trans, rc);
 
-	lgi->lgi_buf.lb_buf = idarray;
-	lgi->lgi_buf.lb_len = size;
 	rc = dt_record_write(env, o, &lgi->lgi_buf, &lgi->lgi_off, th);
 	if (rc)
 		CDEBUG(D_INODE, "error writeing CATALOGS: rc = %d\n", rc);

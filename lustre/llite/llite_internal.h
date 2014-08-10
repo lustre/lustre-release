@@ -729,6 +729,7 @@ extern struct inode_operations ll_dir_inode_operations;
 int ll_dir_read(struct inode *inode, struct md_op_data *op_data,
 		void *cookie, filldir_t filldir);
 int ll_get_mdt_idx(struct inode *inode);
+int ll_get_mdt_idx_by_fid(struct ll_sb_info *sbi, const struct lu_fid *fid);
 
 struct lu_dirent *ll_dir_entry_start(struct inode *dir,
 				     struct md_op_data *op_data,
@@ -752,6 +753,9 @@ struct lookup_intent *ll_convert_intent(struct open_intent *oit,
 #endif
 struct dentry *ll_splice_alias(struct inode *inode, struct dentry *de);
 int ll_rmdir_entry(struct inode *dir, char *name, int namelen);
+int ll_d_mountpoint(struct dentry *dparent, struct dentry *dchild,
+		    struct qstr *name);
+void ll_update_times(struct ptlrpc_request *request, struct inode *inode);
 
 /* llite/rw.c */
 int ll_writepage(struct page *page, struct writeback_control *wbc);
@@ -819,7 +823,8 @@ int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
 int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
 struct ll_file_data *ll_file_data_get(void);
 struct posix_acl * ll_get_acl(struct inode *inode, int type);
-
+int ll_migrate(struct inode *parent, struct file *file, int mdtidx,
+	       const char *name, int namelen);
 #ifdef HAVE_GENERIC_PERMISSION_4ARGS
 int ll_inode_permission(struct inode *inode, int mask, unsigned int flags);
 #else

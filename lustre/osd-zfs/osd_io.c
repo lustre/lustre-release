@@ -108,7 +108,7 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
 }
 
 static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
-				const loff_t size, loff_t pos,
+				const struct lu_buf *buf, loff_t pos,
 				struct thandle *th)
 {
 	struct osd_object  *obj  = osd_dt_obj(dt);
@@ -137,7 +137,7 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 		dmu_tx_hold_sa_create(oh->ot_tx, ZFS_SA_BASE_ATTR_SIZE);
 	}
 
-	dmu_tx_hold_write(oh->ot_tx, oid, pos, size);
+	dmu_tx_hold_write(oh->ot_tx, oid, pos, buf->lb_len);
 
 	/* dt_declare_write() is usually called for system objects, such
 	 * as llog or last_rcvd files. We needn't enforce quota on those

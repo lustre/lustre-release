@@ -123,8 +123,7 @@ static int mdt_create_data(struct mdt_thread_info *info,
 	ma->ma_valid = 0;
 	mutex_lock(&o->mot_lov_mutex);
 	if (!(o->mot_flags & MOF_LOV_CREATED)) {
-		if (p != NULL && (fid_is_obf(mdt_object_fid(p)) ||
-				  fid_is_dot_lustre(mdt_object_fid(p))))
+		if (p != NULL && !fid_is_md_operative(mdt_object_fid(p)))
 			GOTO(unlock, rc = -EPERM);
 
 		rc = mdo_create_data(info->mti_env,
@@ -1757,7 +1756,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         mdt_set_capainfo(info, 1, child_fid, BYPASS_CAPA);
         if (result == -ENOENT) {
 		/* Create under OBF and .lustre is not permitted */
-		if (fid_is_obf(rr->rr_fid1) || fid_is_dot_lustre(rr->rr_fid1))
+		if (!fid_is_md_operative(rr->rr_fid1))
 			GOTO(out_child, result = -EPERM);
 
 		/* save versions in reply */

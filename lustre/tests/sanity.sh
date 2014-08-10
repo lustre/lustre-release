@@ -58,7 +58,7 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/${NAME}.sh}
 init_logging
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 64b 68 71 77f 78 115 124b"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 64b 68 71 77f 78 115 124b 230d"
 
 [ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
 # bug number for skipped test:        LU-1593 LU-2610 LU-2833 LU-1957 LU-2805
@@ -650,14 +650,35 @@ test_17n() {
 			error "create files under remote dir failed $i"
 	done
 
-	check_fs_consistency_17n || error "e2fsck report error"
+	check_fs_consistency_17n ||
+		error "e2fsck report error after create files under remote dir"
 
 	for ((i=0;i<10;i++)); do
 		rm -rf $DIR/$tdir/remote_dir_${i} ||
 			error "destroy remote dir error $i"
 	done
 
-	check_fs_consistency_17n || error "e2fsck report error"
+	check_fs_consistency_17n ||
+		error "e2fsck report error after unlink files under remote dir"
+
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.50) ] &&
+		skip "lustre < 2.4.50 does not support migrate mv " && return
+
+	for ((i=0; i<10; i++)); do
+		mkdir -p $DIR/$tdir/remote_dir_${i}
+		createmany -o $DIR/$tdir/remote_dir_${i}/f 10 ||
+			error "create files under remote dir failed $i"
+		$LFS mv -M 1 $DIR/$tdir/remote_dir_${i} ||
+			error "migrate remote dir error $i"
+	done
+	check_fs_consistency_17n || error "e2fsck report error after migration"
+
+	for ((i=0;i<10;i++)); do
+		rm -rf $DIR/$tdir/remote_dir_${i} ||
+			error "destroy remote dir error $i"
+	done
+
+	check_fs_consistency_17n || error "e2fsck report error after unlink"
 }
 run_test 17n "run e2fsck against master/slave MDT which contains remote dir"
 
@@ -11804,6 +11825,202 @@ test_230a() {
 	rm -r $DIR/$tdir || error "unlink remote directory failed"
 }
 run_test 230a "Create remote directory and files under the remote directory"
+
+test_230b() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local MDTIDX=1
+	local mdt_index
+	local i
+	local file
+	local pid
+	local stripe_count
+	local migrate_dir=$DIR/$tdir/migrate_dir
+	local other_dir=$DIR/$tdir/other_dir
+
+	mkdir -p $migrate_dir
+	mkdir -p $other_dir
+	for ((i=0; i<10; i++)); do
+		mkdir -p $migrate_dir/dir_${i}
+		createmany -o $migrate_dir/dir_${i}/f 10 ||
+			error "create files under remote dir failed $i"
+	done
+
+	cp /etc/passwd $migrate_dir/$tfile
+	cp /etc/passwd $other_dir/$tfile
+	mkdir -p $migrate_dir/dir_default_stripe2
+	$LFS setstripe -c 2 $migrate_dir/dir_default_stripe2
+	$LFS setstripe -c 2 $migrate_dir/${tfile}_stripe2
+
+	mkdir -p $other_dir
+	ln $migrate_dir/$tfile $other_dir/luna
+	ln $migrate_dir/$tfile $migrate_dir/sofia
+	ln $other_dir/$tfile $migrate_dir/david
+	ln -s $migrate_dir/$tfile $other_dir/zachary
+	ln -s $migrate_dir/$tfile $migrate_dir/${tfile}_ln
+	ln -s $other_dir/$tfile $migrate_dir/${tfile}_ln_other
+
+	$LFS mv -v -M $MDTIDX $migrate_dir ||
+			error "migrate remote dir error"
+
+	echo "migratate to MDT1, then checking.."
+	for ((i=0; i<10; i++)); do
+		for file in $(find $migrate_dir/dir_${i}); do
+			mdt_index=$($LFS getstripe -M $file)
+			[ $mdt_index == $MDTIDX ] ||
+				error "$file is not on MDT${MDTIDX}"
+		done
+	done
+
+	# the multiple link file should still in MDT0
+	mdt_index=$($LFS getstripe -M $migrate_dir/$tfile)
+	[ $mdt_index == 0 ] ||
+		error "$file is not on MDT${MDTIDX}"
+
+	diff /etc/passwd $migrate_dir/$tfile ||
+		error "$tfile different after migration"
+
+	diff /etc/passwd $other_dir/luna ||
+		error "luna different after migration"
+
+	diff /etc/passwd $migrate_dir/sofia ||
+		error "sofia different after migration"
+
+	diff /etc/passwd $migrate_dir/david ||
+		error "david different after migration"
+
+	diff /etc/passwd $other_dir/zachary ||
+		error "zachary different after migration"
+
+	diff /etc/passwd $migrate_dir/${tfile}_ln ||
+		error "${tfile}_ln different after migration"
+
+	diff /etc/passwd $migrate_dir/${tfile}_ln_other ||
+		error "${tfile}_ln_other different after migration"
+
+	stripe_count=$($LFS getstripe -c $migrate_dir/dir_default_stripe2)
+	[ $stripe_count = 2 ] ||
+			error "dir strpe_count $d != 2 after migration."
+
+	stripe_count=$($LFS getstripe -c $migrate_dir/${tfile}_stripe2)
+	[ $stripe_count = 2 ] ||
+			error "file strpe_count $d != 2 after migration."
+
+	#migrate back to MDT0
+	MDTIDX=0
+	$LFS mv -v -M $MDTIDX $migrate_dir ||
+			error "migrate remote dir error"
+
+	echo "migrate back to MDT0, checking.."
+	for file in $(find $migrate_dir); do
+		mdt_index=$($LFS getstripe -M $file)
+		[ $mdt_index == $MDTIDX ] ||
+			error "$file is not on MDT${MDTIDX}"
+	done
+
+	diff /etc/passwd ${migrate_dir}/$tfile ||
+		error "$tfile different after migration"
+
+	diff /etc/passwd ${other_dir}/luna ||
+		error "luna different after migration"
+
+	diff /etc/passwd ${migrate_dir}/sofia ||
+		error "sofia different after migration"
+
+	diff /etc/passwd ${other_dir}/zachary ||
+		error "zachary different after migration"
+
+	diff /etc/passwd $migrate_dir/${tfile}_ln ||
+		error "${tfile}_ln different after migration"
+
+	diff /etc/passwd $migrate_dir/${tfile}_ln_other ||
+		error "${tfile}_ln_other different after migration"
+
+	stripe_count=$($LFS getstripe -c ${migrate_dir}/dir_default_stripe2)
+	[ $stripe_count = 2 ] ||
+		error "dir strpe_count $d != 2 after migration."
+
+	stripe_count=$($LFS getstripe -c ${migrate_dir}/${tfile}_stripe2)
+	[ $stripe_count = 2 ] ||
+		error "file strpe_count $d != 2 after migration."
+
+	rm -rf $DIR/$tdir || error "rm dir failed after migration"
+}
+run_test 230b "migrate directory"
+
+test_230c() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local MDTIDX=1
+	local mdt_index
+	local file
+
+	#If migrating directory fails in the middle, all entries of
+	#the directory is still accessiable.
+	mkdir -p $DIR/$tdir
+	stat $DIR/$tdir
+	createmany -o $DIR/$tdir/f 10 ||
+		error "create files under ${tdir} failed"
+
+	#failed after migrating 5 entries
+	#OBD_FAIL_MIGRATE_ENTRIES	0x1801
+	do_facet mds1 lctl set_param fail_loc=0x20001801
+	do_facet mds1 lctl  set_param fail_val=5
+	local t=`ls $DIR/$tdir | wc -l`
+	$LFS mv -M $MDTIDX $DIR/$tdir &&
+		error "migrate should failed after 5 entries"
+	local u=`ls $DIR/$tdir | wc -l`
+	[ "$u" == "$t" ] || error "$u != $t during migration"
+
+	for file in $(find $DIR/$tdir); do
+		stat $file || error "stat $file failed"
+	done
+
+	do_facet mds1 lctl set_param fail_loc=0
+	do_facet mds1 lctl set_param fail_val=0
+
+	$LFS mv -M $MDTIDX $DIR/$tdir ||
+		error "migrate open files should failed with open files"
+
+	echo "Finish migration, then checking.."
+	for file in $(find $DIR/$tdir); do
+		mdt_index=$($LFS getstripe -M $file)
+		[ $mdt_index == $MDTIDX ] ||
+			error "$file is not on MDT${MDTIDX}"
+	done
+
+	rm -rf $DIR/$tdir || error "rm dir failed after migration"
+}
+run_test 230c "check directory accessiblity if migration is failed"
+
+test_230d() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local MDTIDX=1
+	local mdt_index
+	local i
+	local j
+
+	mkdir -p $DIR/$tdir
+
+	for ((i=0; i<100; i++)); do
+		mkdir -p $DIR/$tdir/dir_${i}
+		createmany -o $DIR/$tdir/dir_${i}/f 100 ||
+			error "create files under remote dir failed $i"
+	done
+
+	$LFS mv -M $MDTIDX -v $DIR/$tdir || error "migrate remote dir error"
+
+	echo "Finish migration, then checking.."
+	for file in $(find $DIR/$tdir); do
+		mdt_index=$($LFS getstripe -M $file)
+		[ $mdt_index == $MDTIDX ] ||
+			error "$file is not on MDT${MDTIDX}"
+	done
+
+	rm -rf $DIR/$tdir || error "rm dir failed after migration"
+}
+run_test 230d "check migrate big directory"
 
 test_231a()
 {

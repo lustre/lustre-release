@@ -58,24 +58,6 @@ struct mdc_getattr_args {
         struct ldlm_enqueue_info    *ga_einfo;
 };
 
-int it_disposition(struct lookup_intent *it, int flag)
-{
-        return it->d.lustre.it_disposition & flag;
-}
-EXPORT_SYMBOL(it_disposition);
-
-void it_set_disposition(struct lookup_intent *it, int flag)
-{
-        it->d.lustre.it_disposition |= flag;
-}
-EXPORT_SYMBOL(it_set_disposition);
-
-void it_clear_disposition(struct lookup_intent *it, int flag)
-{
-        it->d.lustre.it_disposition &= ~flag;
-}
-EXPORT_SYMBOL(it_clear_disposition);
-
 int it_open_error(int phase, struct lookup_intent *it)
 {
 	if (it_disposition(it, DISP_OPEN_LEASE)) {

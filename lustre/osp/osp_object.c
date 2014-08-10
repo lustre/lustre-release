@@ -906,9 +906,10 @@ static int osp_declare_object_create(const struct lu_env *env,
 	if (unlikely(!fid_is_zero(fid))) {
 		/* replay case: caller knows fid */
 		osi->osi_off = sizeof(osi->osi_id) * d->opd_index;
+		osi->osi_lb.lb_len = sizeof(osi->osi_id);
+		osi->osi_lb.lb_buf = NULL;
 		rc = dt_declare_record_write(env, d->opd_last_used_oid_file,
-					     sizeof(osi->osi_id), osi->osi_off,
-					     th);
+					     &osi->osi_lb, osi->osi_off, th);
 		RETURN(rc);
 	}
 
@@ -930,9 +931,10 @@ static int osp_declare_object_create(const struct lu_env *env,
 
 		/* common for all OSPs file hystorically */
 		osi->osi_off = sizeof(osi->osi_id) * d->opd_index;
+		osi->osi_lb.lb_len = sizeof(osi->osi_id);
+		osi->osi_lb.lb_buf = NULL;
 		rc = dt_declare_record_write(env, d->opd_last_used_oid_file,
-					     sizeof(osi->osi_id), osi->osi_off,
-					     th);
+					     &osi->osi_lb, osi->osi_off, th);
 	} else {
 		/* not needed in the cache anymore */
 		set_bit(LU_OBJECT_HEARD_BANSHEE,
@@ -1521,6 +1523,7 @@ static int osp_object_init(const struct lu_env *env, struct lu_object *o,
 		struct lu_attr *la = &osp_env_info(env)->osi_attr;
 
 		po->opo_obj.do_ops = &osp_md_obj_ops;
+		po->opo_obj.do_body_ops = &osp_md_body_ops;
 		rc = po->opo_obj.do_ops->do_attr_get(env, lu2dt_obj(o),
 						     la, NULL);
 		if (rc == 0)

@@ -1113,7 +1113,7 @@ static int ofd_health_check(const struct lu_env *nul, struct obd_device *obd)
 		GOTO(out, rc = PTR_ERR(th));
 
 	rc = dt_declare_record_write(&env, ofd->ofd_health_check_file,
-				     info->fti_buf.lb_len, info->fti_off, th);
+				     &info->fti_buf, info->fti_off, th);
 	if (rc == 0) {
 		th->th_sync = 1; /* sync IO is needed */
 		rc = dt_trans_start_local(&env, ofd->ofd_osd, th);

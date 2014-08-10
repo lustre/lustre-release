@@ -120,6 +120,7 @@ static int lfs_hsm_release(int argc, char **argv);
 static int lfs_hsm_remove(int argc, char **argv);
 static int lfs_hsm_cancel(int argc, char **argv);
 static int lfs_swap_layouts(int argc, char **argv);
+static int lfs_mv(int argc, char **argv);
 
 #define SETSTRIPE_USAGE(_cmd, _tgt) \
 	"usage: "_cmd" [--stripe-count|-c <stripe_count>]\n"\
@@ -324,13 +325,17 @@ command_t cmdlist[] = {
 	 "usage: hsm_cancel [--filelist FILELIST] [--data DATA] <file> ..."},
 	{"swap_layouts", lfs_swap_layouts, 0, "Swap layouts between 2 files.\n"
 	 "usage: swap_layouts <path1> <path2>"},
-	{"migrate", lfs_setstripe, 0, "migrate file from one layout to "
+	{"migrate", lfs_setstripe, 0, "migrate file from one OST layout to "
 	 "another (may be not safe with concurent writes).\n"
 	 SETSTRIPE_USAGE("migrate  ", "<filename>")},
-        {"help", Parser_help, 0, "help"},
-        {"exit", Parser_quit, 0, "quit"},
-        {"quit", Parser_quit, 0, "quit"},
-        { 0, 0, 0, NULL }
+	{"mv", lfs_mv, 0,
+	 "To move directories between MDTs.\n"
+	 "usage: mv <directory|filename> [--mdt-index|-M] <mdt_index> "
+	 "[--verbose|-v]\n"},
+	{"help", Parser_help, 0, "help"},
+	{"exit", Parser_quit, 0, "quit"},
+	{"quit", Parser_quit, 0, "quit"},
+	{ 0, 0, 0, NULL }
 };
 
 #define MIGRATION_BLOCKS 1
@@ -1594,6 +1599,58 @@ static int lfs_rmentry(int argc, char **argv)
 		dname = argv[++index];
 	}
 	return result;
+}
+
+static int lfs_mv(int argc, char **argv)
+{
+	struct  find_param param = { .maxdepth = -1, .mdtindex = -1};
+	char   *end;
+	int     c;
+	int     rc = 0;
+	struct option long_opts[] = {
+		{"--mdt-index", required_argument, 0, 'M'},
+		{"verbose",	no_argument,	   0, 'v'},
+		{0, 0, 0, 0}
+	};
+
+	while ((c = getopt_long(argc, argv, "M:v", long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'M': {
+			param.mdtindex = strtoul(optarg, &end, 0);
+			if (*end != '\0') {
+				fprintf(stderr, "%s: invalid MDT index'%s'\n",
+					argv[0], optarg);
+				return CMD_HELP;
+			}
+			break;
+		}
+		case 'v': {
+			param.verbose = VERBOSE_DETAIL;
+			break;
+		}
+		default:
+			fprintf(stderr, "error: %s: unrecognized option '%s'\n",
+				argv[0], argv[optind - 1]);
+			return CMD_HELP;
+		}
+	}
+
+	if (param.mdtindex == -1) {
+		fprintf(stderr, "%s MDT index must be indicated\n", argv[0]);
+		return CMD_HELP;
+	}
+
+	if (optind >= argc) {
+		fprintf(stderr, "%s missing operand path\n", argv[0]);
+		return CMD_HELP;
+	}
+
+	param.migrate = 1;
+	rc = llapi_mv(argv[optind], &param);
+	if (rc != 0)
+		fprintf(stderr, "cannot migrate '%s' to MDT%04x: %s\n",
+			argv[optind], param.mdtindex, strerror(-rc));
+	return rc;
 }
 
 static int lfs_osts(int argc, char **argv)

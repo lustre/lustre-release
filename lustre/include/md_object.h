@@ -302,6 +302,9 @@ struct md_dir_operations {
 			  struct md_object *cobj, const struct lu_name *lname,
 			  struct md_attr *ma, int no_name);
 
+	int (*mdo_migrate)(const struct lu_env *env, struct md_object *pobj,
+			   const struct lu_fid *lf, const struct lu_name *lname,
+			   struct md_object *tobj, struct md_attr *ma);
         /** This method is used to compare a requested layout to an existing
          * layout (struct lov_mds_md_v1/3 vs struct lov_mds_md_v1/3) */
         int (*mdo_lum_lmm_cmp)(const struct lu_env *env,
@@ -742,6 +745,17 @@ static inline int mdo_rename(const struct lu_env *env,
         LASSERT(tp->mo_dir_ops->mdo_rename);
         return tp->mo_dir_ops->mdo_rename(env, sp, tp, lf, lsname, t, ltname,
                                           ma);
+}
+
+static inline int mdo_migrate(const struct lu_env *env,
+			     struct md_object *pobj,
+			     const struct lu_fid *lf,
+			     const struct lu_name *lname,
+			     struct md_object *tobj,
+			     struct md_attr *ma)
+{
+	LASSERT(pobj->mo_dir_ops->mdo_migrate);
+	return pobj->mo_dir_ops->mdo_migrate(env, pobj, lf, lname, tobj, ma);
 }
 
 static inline int mdo_is_subdir(const struct lu_env *env,

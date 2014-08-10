@@ -455,11 +455,20 @@ struct cl_client_cache {
 	wait_queue_head_t	ccc_unstable_waitq; /* Signaled on BRW commit */
 };
 
+enum {
+	LUSTRE_OPC_MKDIR    = 0,
+	LUSTRE_OPC_SYMLINK  = 1,
+	LUSTRE_OPC_MKNOD    = 2,
+	LUSTRE_OPC_CREATE   = 3,
+	LUSTRE_OPC_ANY      = 5
+};
+
 enum op_cli_flags {
 	CLI_SET_MEA	= 1 << 0,
 	CLI_RM_ENTRY	= 1 << 1,
 	CLI_HASH64	= 1 << 2,
 	CLI_API32	= 1 << 3,
+	CLI_MIGRATE	= 1 << 4,
 };
 
 #endif /*LCLIENT_H */

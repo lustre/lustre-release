@@ -117,7 +117,10 @@ int lfsck_bookmark_store(const struct lu_env *env, struct lfsck_instance *lfsck)
 		RETURN(rc);
 	}
 
-	rc = dt_declare_record_write(env, obj, len, 0, handle);
+	rc = dt_declare_record_write(env, obj,
+				     lfsck_buf_get(env,
+				     &lfsck->li_bookmark_disk, len),
+				     0, handle);
 	if (rc != 0) {
 		CERROR("%s: fail to declare trans for storing lfsck_bookmark: "
 		       "rc = %d\n", lfsck_lfsck2name(lfsck), rc);

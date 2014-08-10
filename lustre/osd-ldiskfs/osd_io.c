@@ -1315,8 +1315,8 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
 }
 
 static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
-                                 const loff_t size, loff_t pos,
-                                 struct thandle *handle)
+				 const struct lu_buf *buf, loff_t pos,
+				 struct thandle *handle)
 {
         struct osd_thandle *oh;
         int                 credits;

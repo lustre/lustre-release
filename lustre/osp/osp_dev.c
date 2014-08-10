@@ -140,7 +140,7 @@ static int osp_write_local_file(const struct lu_env *env,
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
 
-	rc = dt_declare_record_write(env, dt_obj, buf->lb_len, offset, th);
+	rc = dt_declare_record_write(env, dt_obj, buf, offset, th);
 	if (rc)
 		GOTO(out, rc);
 	rc = dt_trans_start_local(env, osp->opd_storage, th);

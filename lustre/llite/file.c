@@ -384,7 +384,8 @@ int ll_file_release(struct inode *inode, struct file *file)
         }
 
         if (!S_ISDIR(inode->i_mode)) {
-		lov_read_and_clear_async_rc(lli->lli_clob);
+		if (lli->lli_clob != NULL)
+			lov_read_and_clear_async_rc(lli->lli_clob);
                 lli->lli_async_rc = 0;
         }
 
@@ -2604,6 +2605,7 @@ long ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		OBD_FREE_PTR(hui);
 		RETURN(rc);
 	}
+
 	default: {
 		int err;
 
@@ -2722,9 +2724,11 @@ int ll_flush(struct file *file, fl_owner_t id)
 	 * failed for pages in this mapping. */
 	rc = lli->lli_async_rc;
 	lli->lli_async_rc = 0;
-	err = lov_read_and_clear_async_rc(lli->lli_clob);
-	if (rc == 0)
-		rc = err;
+	if (lli->lli_clob != NULL) {
+		err = lov_read_and_clear_async_rc(lli->lli_clob);
+		if (rc == 0)
+			rc = err;
+	}
 
 	/* The application has been told write failure already.
 	 * Do not report failure again. */
@@ -2994,6 +2998,109 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 	ll_finish_md_op_data(op_data);
 
         RETURN(rc);
+}
+
+static int ll_get_fid_by_name(struct inode *parent, const char *name,
+			      int namelen, struct lu_fid *fid)
+{
+	struct md_op_data	*op_data = NULL;
+	struct mdt_body		*body;
+	struct ptlrpc_request	*req;
+	int			rc;
+
+	op_data = ll_prep_md_op_data(NULL, parent, NULL, name, namelen, 0,
+				     LUSTRE_OPC_ANY, NULL);
+	if (IS_ERR(op_data))
+		return PTR_ERR(op_data);
+
+	op_data->op_valid = OBD_MD_FLID;
+	rc = md_getattr_name(ll_i2sbi(parent)->ll_md_exp, op_data, &req);
+	if (rc < 0)
+		GOTO(out_free, rc);
+
+	body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+	if (body == NULL)
+		GOTO(out_req, rc = -EFAULT);
+
+	*fid = body->fid1;
+out_req:
+	ptlrpc_req_finished(req);
+out_free:
+	if (op_data != NULL)
+		ll_finish_md_op_data(op_data);
+	return rc;
+}
+
+int ll_migrate(struct inode *parent, struct file *file, int mdtidx,
+	       const char *name, int namelen)
+{
+	struct dentry         *dchild = NULL;
+	struct md_op_data     *op_data;
+	struct ptlrpc_request *request = NULL;
+	struct qstr           qstr;
+	int                    rc;
+	ENTRY;
+
+	CDEBUG(D_VFSTRACE, "migrate %s under"DFID" to MDT%d\n",
+	       name, PFID(ll_inode2fid(parent)), mdtidx);
+
+	op_data = ll_prep_md_op_data(NULL, parent, NULL, name, namelen,
+				     0, LUSTRE_OPC_ANY, NULL);
+	if (IS_ERR(op_data))
+		RETURN(PTR_ERR(op_data));
+
+	/* Get child FID first */
+	qstr.hash = full_name_hash(name, namelen);
+	qstr.name = name;
+	qstr.len = namelen;
+	dchild = d_lookup(file->f_dentry, &qstr);
+	if (dchild != NULL && dchild->d_inode != NULL) {
+		op_data->op_fid3 = *ll_inode2fid(dchild->d_inode);
+	} else {
+		rc = ll_get_fid_by_name(parent, name, strnlen(name, namelen),
+					&op_data->op_fid3);
+		if (rc != 0)
+			GOTO(out_free, rc);
+	}
+
+	if (!fid_is_sane(&op_data->op_fid3)) {
+		CERROR("%s: migrate %s , but fid "DFID" is insane\n",
+		       ll_get_fsname(parent->i_sb, NULL, 0), name,
+		       PFID(&op_data->op_fid3));
+		GOTO(out_free, rc);
+	}
+
+	rc = ll_get_mdt_idx_by_fid(ll_i2sbi(parent), &op_data->op_fid3);
+	if (rc < 0)
+		GOTO(out_free, rc);
+
+	if (rc == mdtidx) {
+		CDEBUG(D_INFO, "%s:"DFID" is already on MDT%d.\n", name,
+		       PFID(&op_data->op_fid3), mdtidx);
+		GOTO(out_free, rc = 0);
+	}
+
+	op_data->op_mds = mdtidx;
+	op_data->op_cli_flags = CLI_MIGRATE;
+	rc = md_rename(ll_i2sbi(parent)->ll_md_exp, op_data, name,
+		       strnlen(name, namelen), name, strnlen(name, namelen),
+		       &request);
+	if (rc == 0)
+		ll_update_times(request, parent);
+
+	ptlrpc_req_finished(request);
+	if (rc != 0)
+		GOTO(out_free, rc);
+
+out_free:
+	if (dchild != NULL) {
+		if (dchild->d_inode != NULL)
+			ll_delete_inode(dchild->d_inode);
+		dput(dchild);
+	}
+
+	ll_finish_md_op_data(op_data);
+	RETURN(rc);
 }
 
 int ll_file_noflock(struct file *file, int cmd, struct file_lock *file_lock)

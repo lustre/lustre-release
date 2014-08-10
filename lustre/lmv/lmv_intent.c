@@ -54,6 +54,7 @@
 #include <lustre_lib.h>
 #include <lustre_net.h>
 #include <lustre_dlm.h>
+#include <lustre_mdc.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
 #include "lmv_internal.h"
@@ -357,6 +358,8 @@ int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
 
 			oinfo = lsm_name_to_stripe_info(lsm, op_data->op_name,
 							op_data->op_namelen);
+			if (IS_ERR(oinfo))
+				RETURN(PTR_ERR(oinfo));
 			op_data->op_fid1 = oinfo->lmo_fid;
 		}
 
@@ -431,11 +434,12 @@ int lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
                       ldlm_blocking_callback cb_blocking,
 		      __u64 extra_lock_flags)
 {
-	struct obd_device      *obd = exp->exp_obd;
-	struct lmv_obd         *lmv = &obd->u.lmv;
-	struct lmv_tgt_desc    *tgt = NULL;
-	struct mdt_body        *body;
-	int                     rc = 0;
+	struct obd_device	*obd = exp->exp_obd;
+	struct lmv_obd		*lmv = &obd->u.lmv;
+	struct lmv_tgt_desc	*tgt = NULL;
+	struct mdt_body		*body;
+	struct lmv_stripe_md	*lsm = op_data->op_mea1;
+	int			rc = 0;
 	ENTRY;
 
 	tgt = lmv_locate_mds(lmv, op_data, &op_data->op_fid1);
@@ -446,16 +450,15 @@ int lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
 		fid_zero(&op_data->op_fid2);
 
 	CDEBUG(D_INODE, "LOOKUP_INTENT with fid1="DFID", fid2="DFID
-	       ", name='%s' -> mds #%d\n", PFID(&op_data->op_fid1),
-	       PFID(&op_data->op_fid2),
+	       ", name='%s' -> mds #%d lsm=%p lsm_magic=%x\n",
+	       PFID(&op_data->op_fid1), PFID(&op_data->op_fid2),
 	       op_data->op_name ? op_data->op_name : "<NULL>",
-	       tgt->ltd_idx);
+	       tgt->ltd_idx, lsm, lsm == NULL ? -1 : lsm->lsm_md_magic);
 
 	op_data->op_bias &= ~MDS_CROSS_REF;
 
 	rc = md_intent_lock(tgt->ltd_exp, op_data, lmm, lmmsize, it,
 			     flags, reqp, cb_blocking, extra_lock_flags);
-
 	if (rc < 0)
 		RETURN(rc);
 
@@ -464,13 +467,31 @@ int lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
 		 * during update_inode process (see ll_update_lsm_md) */
 		if (op_data->op_mea2 != NULL) {
 			rc = lmv_revalidate_slaves(exp, NULL, op_data->op_mea2,
-						cb_blocking, extra_lock_flags);
+						   cb_blocking,
+						   extra_lock_flags);
 			if (rc != 0)
 				RETURN(rc);
 		}
 		RETURN(rc);
-	}
+	} else if (it_disposition(it, DISP_LOOKUP_NEG) &&
+		   lsm != NULL && lsm->lsm_md_magic == LMV_MAGIC_MIGRATE) {
+		/* For migrating directory, if it can not find the child in
+		 * the source directory(master stripe), try the targeting
+		 * directory(stripe 1) */
+		tgt = lmv_find_target(lmv, &lsm->lsm_md_oinfo[1].lmo_fid);
+		if (IS_ERR(tgt))
+			RETURN(PTR_ERR(tgt));
 
+		ptlrpc_req_finished(*reqp);
+		CDEBUG(D_INODE, "For migrating dir, try target dir "DFID"\n",
+		       PFID(&lsm->lsm_md_oinfo[1].lmo_fid));
+
+		op_data->op_fid1 = lsm->lsm_md_oinfo[1].lmo_fid;
+		it->d.lustre.it_disposition &= ~DISP_ENQ_COMPLETE;
+		rc = md_intent_lock(tgt->ltd_exp, op_data, lmm, lmmsize, it,
+				    flags, reqp, cb_blocking, extra_lock_flags);
+		RETURN(rc);
+	}
 	/*
 	 * MDS has returned success. Probably name has been resolved in
 	 * remote inode. Let's check this.

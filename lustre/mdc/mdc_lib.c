@@ -41,6 +41,7 @@
 #endif
 #include <lustre_net.h>
 #include <lustre/lustre_idl.h>
+#include <obd_class.h>
 #include <obd.h>
 #include <cl_object.h>
 #include <lclient.h>
@@ -455,7 +456,8 @@ void mdc_rename_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
         rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
 
         /* XXX do something about time, uid, gid */
-        rec->rn_opcode   = REINT_RENAME;
+	rec->rn_opcode  = op_data->op_cli_flags & CLI_MIGRATE ?
+					REINT_MIGRATE : REINT_RENAME;
         rec->rn_fsuid    = op_data->op_fsuid;
         rec->rn_fsgid    = op_data->op_fsgid;
         rec->rn_cap      = op_data->op_cap;
@@ -467,7 +469,7 @@ void mdc_rename_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
         rec->rn_mode     = op_data->op_mode;
         rec->rn_bias     = op_data->op_bias;
 
-        mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
+	mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
         mdc_pack_capa(req, &RMF_CAPA2, op_data->op_capa2);
 
         tmp = req_capsule_client_get(&req->rq_pill, &RMF_NAME);

@@ -975,9 +975,6 @@ struct md_op_data {
 	/* Various operation flags. */
 	enum mds_op_bias        op_bias;
 
-	/* Operation type */
-	__u32                   op_opc;
-
 	/* Used by readdir */
 	__u64                   op_hash_offset;
 
@@ -1190,14 +1187,6 @@ struct obd_ops {
          * NOTE: If adding ops, add another LPROCFS_OBD_OP_INIT() line
          * to lprocfs_alloc_obd_stats() in obdclass/lprocfs_status.c.
          * Also, add a wrapper function in include/linux/obd_class.h. */
-};
-
-enum {
-        LUSTRE_OPC_MKDIR    = (1 << 0),
-        LUSTRE_OPC_SYMLINK  = (1 << 1),
-        LUSTRE_OPC_MKNOD    = (1 << 2),
-        LUSTRE_OPC_CREATE   = (1 << 3),
-        LUSTRE_OPC_ANY      = (1 << 4)
 };
 
 /* lmv structures */

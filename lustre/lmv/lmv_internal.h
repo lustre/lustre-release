@@ -138,7 +138,13 @@ lsm_name_to_stripe_info(const struct lmv_stripe_md *lsm, const char *name,
 	stripe_index = lmv_name_to_stripe_index(lsm->lsm_md_hash_type,
 						lsm->lsm_md_stripe_count,
 						name, namelen);
-	LASSERT(stripe_index < lsm->lsm_md_stripe_count);
+	if (stripe_index < 0)
+		return ERR_PTR(stripe_index);
+
+	LASSERTF(stripe_index < lsm->lsm_md_stripe_count,
+		 "stripe_index = %d, stripe_count = %d hash_type = %x"
+		 "name = %.*s\n", stripe_index, lsm->lsm_md_stripe_count,
+		 lsm->lsm_md_hash_type, namelen, name);
 
 	return &lsm->lsm_md_oinfo[stripe_index];
 }

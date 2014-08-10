@@ -349,6 +349,7 @@ int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	int rc = 0;
 
 	LASSERT(tu != NULL);
+        LASSERT(tu != LP_POISON);
 	/* Check whether there are updates related with this OSP */
 	dt_update = out_find_update(tu, dt);
 	if (dt_update == NULL) {

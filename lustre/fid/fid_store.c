@@ -121,8 +121,11 @@ int seq_store_update(const struct lu_env *env, struct lu_server_seq *seq,
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
 
+	/* Store ranges in le format. */
+	range_cpu_to_le(&info->sti_space, &seq->lss_space);
+
 	rc = dt_declare_record_write(env, seq->lss_obj,
-				     sizeof(struct lu_seq_range), 0, th);
+				     seq_store_buf(info), 0, th);
 	if (rc)
 		GOTO(exit, rc);
 
@@ -137,9 +140,6 @@ int seq_store_update(const struct lu_env *env, struct lu_server_seq *seq,
 	rc = dt_trans_start_local(env, dt_dev, th);
 	if (rc)
 		GOTO(exit, rc);
-
-	/* Store ranges in le format. */
-	range_cpu_to_le(&info->sti_space, &seq->lss_space);
 
 	rc = dt_record_write(env, seq->lss_obj, seq_store_buf(info), &pos, th);
 	if (rc) {

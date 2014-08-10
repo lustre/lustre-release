@@ -202,6 +202,9 @@ int out_handle(struct tgt_session_info *tsi);
 #define out_tx_destroy(info, obj, th, reply, idx) \
 	__out_tx_destroy(info, obj, th, reply, idx, __FILE__, __LINE__)
 
+#define out_tx_write(info, obj, buf, pos, th, reply, idx) \
+	__out_tx_write(info, obj, buf, pos, th, reply, idx, __FILE__, __LINE__)
+
 extern struct page *tgt_page_to_corrupt;
 
 struct tgt_thread_big_cache {

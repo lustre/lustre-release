@@ -58,8 +58,8 @@ static int ll_create_it(struct inode *, struct dentry *,
  * Check if we have something mounted at the named dchild.
  * In such a case there would always be dentry present.
  */
-static int ll_d_mountpoint(struct dentry *dparent, struct dentry *dchild,
-                           struct qstr *name)
+int ll_d_mountpoint(struct dentry *dparent, struct dentry *dchild,
+		    struct qstr *name)
 {
         int mounted = 0;
 
@@ -909,8 +909,7 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
 	RETURN(0);
 }
 
-static void ll_update_times(struct ptlrpc_request *request,
-                            struct inode *inode)
+void ll_update_times(struct ptlrpc_request *request, struct inode *inode)
 {
         struct mdt_body *body = req_capsule_server_get(&request->rq_pill,
                                                        &RMF_MDT_BODY);

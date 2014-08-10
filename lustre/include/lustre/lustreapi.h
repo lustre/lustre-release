@@ -161,7 +161,8 @@ struct find_param {
 				 exclude_stripecount:1,
 				 check_layout:1,
 				 exclude_layout:1,
-				 get_default_lmv:1; /* Get default LMV */
+				 get_default_lmv:1, /* Get default LMV */
+				 migrate:1;
 
 	int			 verbose;
 	int			 quiet;
@@ -247,6 +248,7 @@ extern void llapi_ping_target(char *obd_type, char *obd_name,
 
 extern int llapi_search_rootpath(char *pathname, const char *fsname);
 extern int llapi_nodemap_exists(const char *name);
+extern int llapi_mv(char *path, struct find_param *param);
 
 struct mntent;
 #define HAVE_LLAPI_IS_LUSTRE_MNT

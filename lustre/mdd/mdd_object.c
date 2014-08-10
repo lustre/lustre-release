@@ -88,7 +88,7 @@ int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
         return mdo_attr_get(env, obj, la, capa);
 }
 
-static void mdd_flags_xlate(struct mdd_object *obj, __u32 flags)
+void mdd_flags_xlate(struct mdd_object *obj, __u32 flags)
 {
         obj->mod_flags &= ~(APPEND_OBJ|IMMUTE_OBJ);
 
@@ -286,8 +286,8 @@ static int mdd_xattr_get(const struct lu_env *env,
  * Permission check is done when open,
  * no need check again.
  */
-static int mdd_readlink(const struct lu_env *env, struct md_object *obj,
-                        struct lu_buf *buf)
+int mdd_readlink(const struct lu_env *env, struct md_object *obj,
+		 struct lu_buf *buf)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct dt_object  *next;
@@ -302,7 +302,10 @@ static int mdd_readlink(const struct lu_env *env, struct md_object *obj,
         }
 
         next = mdd_object_child(mdd_obj);
-        mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
+	LASSERT(next != NULL);
+	LASSERT(next->do_body_ops != NULL);
+	LASSERT(next->do_body_ops->dbo_read != NULL);
+	mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
         rc = next->do_body_ops->dbo_read(env, next, buf, &pos,
                                          mdd_object_capa(env, mdd_obj));
         mdd_read_unlock(env, mdd_obj);
@@ -332,10 +335,10 @@ int mdd_declare_object_create_internal(const struct lu_env *env,
 				       struct mdd_object *c,
 				       struct lu_attr *attr,
 				       struct thandle *handle,
-				       const struct md_op_spec *spec)
+				       const struct md_op_spec *spec,
+				       struct dt_allocation_hint *hint)
 {
         struct dt_object_format *dof = &mdd_env_info(env)->mti_dof;
-	struct dt_allocation_hint *hint = &mdd_env_info(env)->mti_hint;
         const struct dt_index_features *feat = spec->sp_feat;
         int rc;
         ENTRY;
@@ -364,10 +367,10 @@ int mdd_declare_object_create_internal(const struct lu_env *env,
 
 int mdd_object_create_internal(const struct lu_env *env, struct mdd_object *p,
 			       struct mdd_object *c, struct lu_attr *attr,
-                               struct thandle *handle,
-                               const struct md_op_spec *spec)
+			       struct thandle *handle,
+			       const struct md_op_spec *spec,
+			       struct dt_allocation_hint *hint)
 {
-        struct dt_allocation_hint *hint = &mdd_env_info(env)->mti_hint;
         struct dt_object_format *dof = &mdd_env_info(env)->mti_dof;
         int rc;
         ENTRY;
@@ -1175,12 +1178,11 @@ stop:
  * read lov EA of an object
  * return the lov EA in an allocated lu_buf
  */
-static int mdd_get_lov_ea(const struct lu_env *env,
-			  struct mdd_object *obj,
-			  struct lu_buf *lmm_buf)
+int mdd_get_lov_ea(const struct lu_env *env, struct mdd_object *obj,
+		   struct lu_buf *lmm_buf)
 {
 	struct lu_buf	*buf = &mdd_env_info(env)->mti_big_buf;
-	int		 rc, sz;
+	int		 rc, bufsize;
 	ENTRY;
 
 repeat:
@@ -1198,27 +1200,27 @@ repeat:
 	}
 
 	if (rc < 0)
-		GOTO(out, rc);
+		RETURN(rc);
 
 	if (rc == 0)
-		GOTO(out, rc = -ENODATA);
+		RETURN(-ENODATA);
 
-	sz = rc;
+	bufsize = rc;
 	if (memcmp(buf, &LU_BUF_NULL, sizeof(*buf)) == 0) {
 		/* mti_big_buf was not allocated, so we have to
 		 * allocate it based on the ea size */
 		buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_big_buf,
-					     sz);
+					     bufsize);
 		if (buf->lb_buf == NULL)
 			GOTO(out, rc = -ENOMEM);
 		goto repeat;
 	}
 
-	lu_buf_alloc(lmm_buf, sz);
+	lu_buf_alloc(lmm_buf, bufsize);
 	if (lmm_buf->lb_buf == NULL)
 		GOTO(out, rc = -ENOMEM);
 
-	memcpy(lmm_buf->lb_buf, buf->lb_buf, sz);
+	memcpy(lmm_buf->lb_buf, buf->lb_buf, bufsize);
 	rc = 0;
 	EXIT;
 
@@ -1564,9 +1566,9 @@ stop:
 
 void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
 			  struct mdd_object *child, const struct lu_attr *attr,
-			  const struct md_op_spec *spec)
+			  const struct md_op_spec *spec,
+			  struct dt_allocation_hint *hint)
 {
-	struct dt_allocation_hint *hint = &mdd_env_info(env)->mti_hint;
 	struct dt_object *np = parent ?  mdd_object_child(parent) : NULL;
 	struct dt_object *nc = mdd_object_child(child);
 
@@ -1583,7 +1585,7 @@ void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
 		hint->dah_eadata_len = 0;
 	}
 
-	CDEBUG(D_INFO, DFID" eadata %p, len %d\n", PFID(mdd_object_fid(child)),
+	CDEBUG(D_INFO, DFID" eadata %p len %d\n", PFID(mdd_object_fid(child)),
 	       hint->dah_eadata, hint->dah_eadata_len);
 	/* @hint will be initialized by underlying device. */
 	nc->do_ops->do_ah_init(env, hint, np, nc, attr->la_mode & S_IFMT);

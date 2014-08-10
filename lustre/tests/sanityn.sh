@@ -2623,6 +2623,48 @@ test_76() { #LU-946
 }
 run_test 76 "Verify open file for 2048 files"
 
+test_80() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local MDTIDX=1
+	local mdt_index
+	local i
+	local file
+	local pid
+
+	mkdir -p $DIR1/$tdir/dir
+	createmany -o $DIR1/$tdir/dir/f 10 ||
+		error "create files under remote dir failed $i"
+
+	cp /etc/passwd $DIR1/$tdir/$tfile
+
+	#migrate open file should fails
+	multiop_bg_pause $DIR2/$tdir/$tfile O_c || error "open $file failed"
+	pid=$!
+	# give multiop a chance to open
+	sleep 1
+
+	$LFS mv -M $MDTIDX $DIR1/$tdir &&
+		error "migrate open files should failed with open files"
+
+	kill -USR1 $pid
+
+	$LFS mv -M $MDTIDX $DIR1/$tdir ||
+			error "migrate remote dir error"
+
+	echo "Finish migration, then checking.."
+	for file in $(find $DIR1/$tdir); do
+		mdt_index=$($LFS getstripe -M $file)
+		[ $mdt_index == $MDTIDX ] ||
+			error "$file is not on MDT${MDTIDX}"
+	done
+
+	diff /etc/passwd $DIR1/$tdir/$tfile ||
+		error "file different after migration"
+
+	rm -rf $DIR1/$tdir || error "rm dir failed after migration"
+}
+run_test 80 "migrate directory when some children is being opened"
+
 log "cleanup: ======================================================"
 
 [ "$(mount | grep $MOUNT2)" ] && umount $MOUNT2

@@ -162,8 +162,9 @@ int tgt_client_data_update(const struct lu_env *env, struct obd_export *exp)
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
 
+	tti_buf_lcd(tti);
 	rc = dt_declare_record_write(env, tgt->lut_last_rcvd,
-				     sizeof(struct lsd_client_data),
+				     &tti->tti_buf,
 				     ted->ted_lr_off, th);
 	if (rc)
 		GOTO(out, rc);
@@ -269,9 +270,9 @@ int tgt_server_data_update(const struct lu_env *env, struct lu_target *tgt,
 
 	th->th_sync = sync;
 
+	tti_buf_lsd(tti);
 	rc = dt_declare_record_write(env, tgt->lut_last_rcvd,
-				     sizeof(struct lr_server_data),
-				     tti->tti_off, th);
+				     &tti->tti_buf, tti->tti_off, th);
 	if (rc)
 		GOTO(out, rc);
 
@@ -1170,6 +1171,7 @@ int tgt_txn_start_cb(const struct lu_env *env, struct thandle *th,
 {
 	struct lu_target	*tgt = cookie;
 	struct tgt_session_info	*tsi;
+	struct tgt_thread_info	*tti = tgt_th_info(env);
 	int			 rc;
 
 	/* if there is no session, then this transaction is not result of
@@ -1183,15 +1185,17 @@ int tgt_txn_start_cb(const struct lu_env *env, struct thandle *th,
 	if (tsi->tsi_exp == NULL)
 		return 0;
 
+	tti_buf_lcd(tti);
 	rc = dt_declare_record_write(env, tgt->lut_last_rcvd,
-				     sizeof(struct lsd_client_data),
+				     &tti->tti_buf,
 				     tsi->tsi_exp->exp_target_data.ted_lr_off,
 				     th);
 	if (rc)
 		return rc;
 
+	tti_buf_lsd(tti);
 	rc = dt_declare_record_write(env, tgt->lut_last_rcvd,
-				     sizeof(struct lr_server_data), 0, th);
+				     &tti->tti_buf, 0, th);
 	if (rc)
 		return rc;
 

@@ -780,7 +780,8 @@ static int lfsck_layout_store(const struct lu_env *env,
 		RETURN(rc);
 	}
 
-	rc = dt_declare_record_write(env, obj, size, pos, handle);
+	rc = dt_declare_record_write(env, obj, lfsck_buf_get(env, lo, size),
+				     pos, handle);
 	if (rc != 0) {
 		CERROR("%s: fail to declare trans for storing lfsck_layout(1): "
 		       "rc = %d\n", lfsck_lfsck2name(lfsck), rc);
@@ -922,7 +923,10 @@ lfsck_layout_lastid_create(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	rc = dt_declare_record_write(env, obj, sizeof(lastid), pos, th);
+	rc = dt_declare_record_write(env, obj,
+				     lfsck_buf_get(env, &lastid,
+						   sizeof(lastid)),
+				     pos, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
@@ -1042,8 +1046,10 @@ lfsck_layout_lastid_store(const struct lu_env *env,
 			continue;
 		}
 
+		lastid = cpu_to_le64(lls->lls_lastid);
 		rc = dt_declare_record_write(env, lls->lls_lastid_obj,
-					     sizeof(lastid), pos, th);
+					     lfsck_buf_get(env, &lastid,
+					     sizeof(lastid)), pos, th);
 		if (rc != 0)
 			goto stop;
 
@@ -1051,7 +1057,6 @@ lfsck_layout_lastid_store(const struct lu_env *env,
 		if (rc != 0)
 			goto stop;
 
-		lastid = cpu_to_le64(lls->lls_lastid);
 		dt_write_lock(env, lls->lls_lastid_obj, 0);
 		rc = dt_record_write(env, lls->lls_lastid_obj,
 				     lfsck_buf_get(env, &lastid,

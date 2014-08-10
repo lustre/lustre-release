@@ -326,6 +326,12 @@ static inline void lu_last_id_fid(struct lu_fid *fid, __u64 seq, __u32 ost_idx)
 	fid->f_ver = 0;
 }
 
+static inline bool fid_is_md_operative(const struct lu_fid *fid)
+{
+	return fid_is_mdt0(fid) || fid_is_igif(fid) ||
+	       fid_is_norm(fid) || fid_is_root(fid);
+}
+
 /* seq client type */
 enum lu_cli_type {
 	LUSTRE_SEQ_METADATA = 1,

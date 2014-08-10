@@ -232,7 +232,7 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 
 	th->th_sync |= sync;
 
-	rc = dt_declare_record_write(env, oseq->os_lastid_obj, sizeof(tmp),
+	rc = dt_declare_record_write(env, oseq->os_lastid_obj, &info->fti_buf,
 				     info->fti_off, th);
 	if (rc)
 		GOTO(trans_stop, rc);

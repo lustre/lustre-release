@@ -229,8 +229,10 @@ int local_object_declare_create(const struct lu_env *env,
 	/* update fid generation file */
 	if (los != NULL) {
 		LASSERT(dt_object_exists(los->los_obj));
+		dti->dti_lb.lb_buf = NULL;
+		dti->dti_lb.lb_len = sizeof(struct los_ondisk);
 		rc = dt_declare_record_write(env, los->los_obj,
-					     sizeof(struct los_ondisk), 0, th);
+					     &dti->dti_lb, 0, th);
 		if (rc)
 			RETURN(rc);
 	}
@@ -824,7 +826,13 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 		if (rc)
 			GOTO(out_trans, rc);
 
-		rc = dt_declare_record_write(env, o, sizeof(lastid), 0, th);
+		lastid = cpu_to_le64(first_oid);
+
+		dti->dti_off = 0;
+		dti->dti_lb.lb_buf = &lastid;
+		dti->dti_lb.lb_len = sizeof(lastid);
+		rc = dt_declare_record_write(env, o, &dti->dti_lb, dti->dti_off,
+					     th);
 		if (rc)
 			GOTO(out_trans, rc);
 
@@ -841,11 +849,6 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 		if (rc)
 			GOTO(out_lock, rc);
 
-		lastid = cpu_to_le64(first_oid);
-
-		dti->dti_off = 0;
-		dti->dti_lb.lb_buf = &lastid;
-		dti->dti_lb.lb_len = sizeof(lastid);
 		rc = dt_record_write(env, o, &dti->dti_lb, &dti->dti_off, th);
 		if (rc)
 			GOTO(out_lock, rc);

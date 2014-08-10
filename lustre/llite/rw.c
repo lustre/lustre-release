@@ -1163,6 +1163,10 @@ int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 		 * evicted to avoid hitting LBUG when truncate_inode_pages()
 		 * is called later on. */
 		ignore_layout = 1;
+
+	if (cl_i2info(inode)->lli_clob == NULL)
+		RETURN(0);
+
 	result = cl_sync_file_range(inode, start, end, mode, ignore_layout);
 	if (result > 0) {
 		wbc->nr_to_write -= result;

@@ -897,7 +897,7 @@ static int truncate_quota_index(const struct lu_env *env, struct dt_object *dt,
 	inode = osd_dt_obj(dt)->oo_inode;
 	LASSERT(inode);
 
-	rc = dt_declare_record_write(env, dt, inode->i_sb->s_blocksize * 2, 0, th);
+	rc = dt_declare_record_write(env, dt, NULL, 0, th);
 	if (rc)
 		GOTO(out, rc);
 

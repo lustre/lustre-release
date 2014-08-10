@@ -64,6 +64,7 @@
 #include <lustre_idmap.h>
 #include <lustre_eacl.h>
 #include <lustre_quota.h>
+#include <lustre_linkea.h>
 
 /* check if request's xid is equal to last one or not*/
 static inline int req_xid_is_last(struct ptlrpc_request *req)
@@ -745,8 +746,8 @@ enum {
 int mdt_get_info(struct tgt_session_info *tsi);
 int mdt_attr_get_complex(struct mdt_thread_info *info,
 			 struct mdt_object *o, struct md_attr *ma);
-int mdt_xattr_get(struct mdt_thread_info *info, struct mdt_object *o,
-		  struct md_attr *ma, const char *name);
+int mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,
+		   struct md_attr *ma, const char *name);
 int mdt_ioepoch_open(struct mdt_thread_info *info, struct mdt_object *o,
                      int created);
 int mdt_object_is_som_enabled(struct mdt_object *mo);
@@ -795,6 +796,9 @@ int mdt_hsm_attr_set(struct mdt_thread_info *info, struct mdt_object *obj,
 
 int mdt_remote_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 			    void *data, int flag);
+int mdt_links_read(struct mdt_thread_info *info,
+		   struct mdt_object *mdt_obj,
+		   struct linkea_data *ldata);
 /* mdt_idmap.c */
 int mdt_init_idmap(struct tgt_session_info *tsi);
 void mdt_cleanup_idmap(struct mdt_export_data *);

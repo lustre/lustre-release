@@ -95,7 +95,6 @@ void llu_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
         else
                 fid_zero(&op_data->op_fid2);
 
-        op_data->op_opc = opc;
         op_data->op_name = name;
         op_data->op_mode = mode;
         op_data->op_namelen = namelen;

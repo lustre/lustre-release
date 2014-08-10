@@ -222,7 +222,6 @@ static void osp_md_ah_init(const struct lu_env *env,
 {
 	LASSERT(ah);
 
-	memset(ah, 0, sizeof(*ah));
 	ah->dah_parent = parent;
 	ah->dah_mode = child_mode;
 }
@@ -672,4 +671,48 @@ struct dt_object_operations osp_md_obj_ops = {
 	.do_index_try         = osp_md_index_try,
 	.do_object_lock       = osp_md_object_lock,
 	.do_object_unlock     = osp_md_object_unlock,
+};
+
+static ssize_t osp_md_declare_write(const struct lu_env *env,
+				    struct dt_object *dt,
+				    const struct lu_buf *buf,
+				    loff_t pos, struct thandle *th)
+{
+	struct dt_update_request  *update;
+	struct lu_fid		  *fid;
+	int			  sizes[2] = {buf->lb_len, sizeof(pos)};
+	const char		  *bufs[2] = {(char *)buf->lb_buf,
+					      (char *)&pos};
+	ssize_t			  rc;
+
+	update = out_find_create_update_loc(th, dt);
+	if (IS_ERR(update)) {
+		CERROR("%s: Get OSP update buf failed: rc = %d\n",
+		       dt->do_lu.lo_dev->ld_obd->obd_name,
+		       (int)PTR_ERR(update));
+		return PTR_ERR(update);
+	}
+
+	pos = cpu_to_le64(pos);
+	bufs[1] = (char *)&pos;
+	fid = (struct lu_fid *)lu_object_fid(&dt->do_lu);
+	rc = out_insert_update(env, update, OUT_WRITE, fid,
+			       ARRAY_SIZE(sizes), sizes, bufs);
+
+	return rc;
+
+}
+
+static ssize_t osp_md_write(const struct lu_env *env, struct dt_object *dt,
+			    const struct lu_buf *buf, loff_t *pos,
+			    struct thandle *handle,
+			    struct lustre_capa *capa, int ignore_quota)
+{
+	return buf->lb_len;
+}
+
+/* These body operation will be used to write symlinks during migration etc */
+struct dt_body_operations osp_md_body_ops = {
+	.dbo_declare_write	= osp_md_declare_write,
+	.dbo_write		= osp_md_write,
 };
