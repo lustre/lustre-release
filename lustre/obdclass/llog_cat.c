@@ -563,6 +563,17 @@ int llog_cat_process_cb(const struct lu_env *env, struct llog_handle *cat_llh,
 		CERROR("%s: cannot find handle for llog "DOSTID": %d\n",
 		       cat_llh->lgh_ctxt->loc_obd->obd_name,
 		       POSTID(&lir->lid_id.lgl_oi), rc);
+		if (rc == -ENOENT || rc == -ESTALE) {
+			/* After a server crash, a stub of index
+			 * record in catlog could be kept, because
+			 * plain log destroy + catlog index record
+			 * deletion are not atomic. So we end up with
+			 * an index but no actual record. Destroy the
+			 * index and move on. */
+			rc = llog_cat_cleanup(env, cat_llh, NULL,
+					      rec->lrh_index);
+		}
+
 		RETURN(rc);
 	}
 
@@ -664,6 +675,17 @@ static int llog_cat_reverse_process_cb(const struct lu_env *env,
 		CERROR("%s: cannot find handle for llog "DOSTID": %d\n",
 		       cat_llh->lgh_ctxt->loc_obd->obd_name,
 		       POSTID(&lir->lid_id.lgl_oi), rc);
+		if (rc == -ENOENT || rc == -ESTALE) {
+			/* After a server crash, a stub of index
+			 * record in catlog could be kept, because
+			 * plain log destroy + catlog index record
+			 * deletion are not atomic. So we end up with
+			 * an index but no actual record. Destroy the
+			 * index and move on. */
+			rc = llog_cat_cleanup(env, cat_llh, NULL,
+					      rec->lrh_index);
+		}
+
 		RETURN(rc);
 	}
 
