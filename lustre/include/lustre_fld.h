@@ -95,6 +95,10 @@ struct lu_server_fld {
          * Fld service name in form "fld-srv-lustre-MDTXXX" */
         char                     lsf_name[80];
 
+	int (*lsf_seq_lookup)(const struct lu_env *env,
+			      struct lu_server_fld *fld, u64 seq,
+			      struct lu_seq_range *range);
+
 	/**
 	 * Just reformatted or upgraded, and this flag is being
 	 * used to check whether the local FLDB is needs to be

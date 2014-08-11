@@ -1233,7 +1233,8 @@ static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 	       POSTID(&osi->osi_cid.lci_logid.lgl_oi),
 	       osi->osi_cid.lci_logid.lgl_ogen);
 
-	rc = llog_setup(env, obd, &obd->obd_olg, LLOG_MDS_OST_ORIG_CTXT, obd,
+	rc = llog_setup(env, obd, &obd->obd_olg, LLOG_MDS_OST_ORIG_CTXT,
+			d->opd_storage->dd_lu_dev.ld_obd,
 			&osp_mds_ost_orig_logops);
 	if (rc)
 		RETURN(rc);

@@ -472,6 +472,7 @@ int fld_server_init(const struct lu_env *env, struct lu_server_fld *fld,
 		GOTO(out_index, rc);
 
 	fld->lsf_control_exp = NULL;
+	fld->lsf_seq_lookup = fld_server_lookup;
 
 	RETURN(0);
 out_index:

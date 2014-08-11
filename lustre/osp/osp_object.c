@@ -168,7 +168,7 @@ static void osp_object_assign_fid(const struct lu_env *env,
  * \retval		0 for success
  * \retval		negative error number on failure
  */
-static int osp_oac_init(struct osp_object *obj)
+int osp_oac_init(struct osp_object *obj)
 {
 	struct osp_object_attr *ooa;
 

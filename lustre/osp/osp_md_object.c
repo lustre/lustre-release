@@ -86,6 +86,18 @@ static int osp_object_create_interpreter(const struct lu_env *env,
 		obj->opo_obj.do_lu.lo_header->loh_attr &= ~LOHA_EXISTS;
 		obj->opo_non_exist = 1;
 	}
+
+	/* Invalid the opo cache for the object after the object
+	 * is being created, so attr_get will try to get attr
+	 * from the remote object. XXX this can be improved when
+	 * we have object lock/cache invalidate mechanism in OSP
+	 * layer */
+	if (obj->opo_ooa != NULL) {
+		spin_lock(&obj->opo_lock);
+		obj->opo_ooa->ooa_attr.la_valid = 0;
+		spin_unlock(&obj->opo_lock);
+	}
+
 	return 0;
 }
 
@@ -112,6 +124,15 @@ int osp_md_declare_object_create(const struct lu_env *env,
 				 struct dt_object_format *dof,
 				 struct thandle *th)
 {
+	struct osp_object *obj = dt2osp_obj(dt);
+	int		  rc;
+
+	if (obj->opo_ooa == NULL) {
+		rc = osp_oac_init(obj);
+		if (rc != 0)
+			return rc;
+	}
+
 	return osp_trans_update_request_create(th);
 }
 
@@ -177,11 +198,13 @@ int osp_md_object_create(const struct lu_env *env, struct dt_object *dt,
 			 struct dt_object_format *dof, struct thandle *th)
 {
 	struct dt_update_request	*update;
+	struct osp_object		*obj = dt2osp_obj(dt);
 	int				rc;
 
 	update = thandle_to_dt_update_request(th);
 	LASSERT(update != NULL);
 
+	LASSERT(attr->la_valid & LA_TYPE);
 	rc = osp_update_rpc_pack(env, create, update, OUT_CREATE,
 				 lu_object_fid(&dt->do_lu), attr, hint, dof);
 	if (rc != 0)
@@ -195,6 +218,9 @@ int osp_md_object_create(const struct lu_env *env, struct dt_object *dt,
 
 	dt->do_lu.lo_header->loh_attr |= LOHA_EXISTS | (attr->la_mode & S_IFMT);
 	dt2osp_obj(dt)->opo_non_exist = 0;
+
+	LASSERT(obj->opo_ooa != NULL);
+	obj->opo_ooa->ooa_attr = *attr;
 out:
 	return rc;
 }
@@ -1091,8 +1117,10 @@ static ssize_t osp_md_write(const struct lu_env *env, struct dt_object *dt,
 			    const struct lu_buf *buf, loff_t *pos,
 			    struct thandle *th, int ignore_quota)
 {
+	struct osp_object *obj = dt2osp_obj(dt);
 	struct dt_update_request  *update;
 	ssize_t			  rc;
+	ENTRY;
 
 	update = thandle_to_dt_update_request(th);
 	LASSERT(update != NULL);
@@ -1100,15 +1128,94 @@ static ssize_t osp_md_write(const struct lu_env *env, struct dt_object *dt,
 	rc = osp_update_rpc_pack(env, write, update, OUT_WRITE,
 				 lu_object_fid(&dt->do_lu), buf, *pos);
 	if (rc < 0)
-		return rc;
+		RETURN(rc);
+
+	CDEBUG(D_INFO, "write "DFID" offset = "LPU64" length = %zu\n",
+	       PFID(lu_object_fid(&dt->do_lu)), *pos, buf->lb_len);
 
 	/* XXX: how about the write error happened later? */
 	*pos += buf->lb_len;
-	return buf->lb_len;
+
+	if (obj->opo_ooa != NULL &&
+	    obj->opo_ooa->ooa_attr.la_valid & LA_SIZE &&
+	    obj->opo_ooa->ooa_attr.la_size < *pos)
+		obj->opo_ooa->ooa_attr.la_size = *pos;
+
+	RETURN(buf->lb_len);
+}
+
+static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
+			   struct lu_buf *rbuf, loff_t *pos)
+{
+	struct osp_device	*osp	= lu2osp_dev(dt->do_lu.lo_dev);
+	struct dt_device	*dt_dev	= &osp->opd_dt_dev;
+	struct lu_buf		*lbuf	= &osp_env_info(env)->osi_lb2;
+	struct dt_update_request   *update;
+	struct object_update_reply *reply;
+	struct out_read_reply	   *orr;
+	struct ptlrpc_request	   *req = NULL;
+	int			   rc;
+	ENTRY;
+
+	/* Because it needs send the update buffer right away,
+	 * just create an update buffer, instead of attaching the
+	 * update_remote list of the thandle. */
+	update = dt_update_request_create(dt_dev);
+	if (IS_ERR(update))
+		RETURN(PTR_ERR(update));
+
+	rc = osp_update_rpc_pack(env, read, update, OUT_READ,
+				 lu_object_fid(&dt->do_lu), rbuf->lb_len, *pos);
+	if (rc != 0) {
+		CERROR("%s: cannot insert update: rc = %d\n",
+		       dt_dev->dd_lu_dev.ld_obd->obd_name, rc);
+		GOTO(out, rc);
+	}
+
+	rc = osp_remote_sync(env, osp, update, &req);
+	if (rc < 0)
+		GOTO(out, rc);
+
+	reply = req_capsule_server_sized_get(&req->rq_pill,
+					     &RMF_OUT_UPDATE_REPLY,
+					     OUT_UPDATE_REPLY_SIZE);
+	if (reply->ourp_magic != UPDATE_REPLY_MAGIC) {
+		CERROR("%s: invalid update reply magic %x expected %x:"
+		       " rc = %d\n", dt_dev->dd_lu_dev.ld_obd->obd_name,
+		       reply->ourp_magic, UPDATE_REPLY_MAGIC, -EPROTO);
+		GOTO(out, rc = -EPROTO);
+	}
+
+	rc = object_update_result_data_get(reply, lbuf, 0);
+	if (rc < 0)
+		GOTO(out, rc);
+
+	if (lbuf->lb_len < sizeof(*orr))
+		GOTO(out, rc = -EPROTO);
+
+	orr = lbuf->lb_buf;
+	orr_le_to_cpu(orr, orr);
+
+	*pos = orr->orr_offset;
+
+	if (orr->orr_size > rbuf->lb_len)
+		GOTO(out, rc = -EPROTO);
+
+	memcpy(rbuf->lb_buf, orr->orr_data, orr->orr_size);
+
+	GOTO(out, rc = orr->orr_size);
+out:
+	if (req != NULL)
+		ptlrpc_req_finished(req);
+
+	dt_update_request_destroy(update);
+
+	return rc;
 }
 
 /* These body operation will be used to write symlinks during migration etc */
 struct dt_body_operations osp_md_body_ops = {
 	.dbo_declare_write	= osp_md_declare_write,
 	.dbo_write		= osp_md_write,
+	.dbo_read		= osp_md_read,
 };

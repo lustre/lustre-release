@@ -165,28 +165,32 @@ int llog_setup(const struct lu_env *env, struct obd_device *obd,
         ctxt->loc_idx = index;
         ctxt->loc_logops = op;
 	mutex_init(&ctxt->loc_mutex);
-        ctxt->loc_exp = class_export_get(disk_obd->obd_self_export);
-        ctxt->loc_flags = LLOG_CTXT_FLAG_UNINITIALIZED;
+	if (disk_obd != NULL)
+		ctxt->loc_exp = class_export_get(disk_obd->obd_self_export);
+	else
+		ctxt->loc_exp = class_export_get(obd->obd_self_export);
+
+	ctxt->loc_flags = LLOG_CTXT_FLAG_UNINITIALIZED;
 
         rc = llog_group_set_ctxt(olg, ctxt, index);
         if (rc) {
                 llog_ctxt_destroy(ctxt);
                 if (rc == -EEXIST) {
                         ctxt = llog_group_get_ctxt(olg, index);
-                        if (ctxt) {
-                                /*
-                                 * mds_lov_update_desc() might call here multiple
-                                 * times. So if the llog is already set up then
-                                 * don't to do it again. 
-                                 */
-                                CDEBUG(D_CONFIG, "obd %s ctxt %d already set up\n",
-                                       obd->obd_name, index);
-                                LASSERT(ctxt->loc_olg == olg);
-                                LASSERT(ctxt->loc_obd == obd);
-                                LASSERT(ctxt->loc_exp == disk_obd->obd_self_export);
-                                LASSERT(ctxt->loc_logops == op);
-                                llog_ctxt_put(ctxt);
-                        }
+			if (ctxt) {
+				CDEBUG(D_CONFIG, "%s: ctxt %d already set up\n",
+				       obd->obd_name, index);
+				LASSERT(ctxt->loc_olg == olg);
+				LASSERT(ctxt->loc_obd == obd);
+				if (disk_obd != NULL)
+					LASSERT(ctxt->loc_exp ==
+						disk_obd->obd_self_export);
+				else
+					LASSERT(ctxt->loc_exp ==
+						obd->obd_self_export);
+				LASSERT(ctxt->loc_logops == op);
+				llog_ctxt_put(ctxt);
+			}
                         rc = 0;
                 }
                 RETURN(rc);

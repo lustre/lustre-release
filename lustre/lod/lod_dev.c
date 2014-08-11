@@ -89,13 +89,18 @@
 
 #define DEBUG_SUBSYSTEM S_MDS
 
+#include <linux/kthread.h>
 #include <obd_class.h>
 #include <md_object.h>
 #include <lustre_fid.h>
 #include <lustre_param.h>
 #include <lustre_update.h>
+#include <lustre_log.h>
 
 #include "lod_internal.h"
+
+static const char lod_update_log_name[] = "update_log";
+static const char lod_update_log_dir_name[] = "update_log_dir";
 
 /*
  * Lookup target by FID.
@@ -130,6 +135,12 @@ int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
 	if (fid_is_idif(fid)) {
 		*tgt = fid_idif_ost_idx(fid);
 		*type = LU_SEQ_RANGE_OST;
+		RETURN(0);
+	}
+
+	if (fid_is_update_log(fid) || fid_is_update_log_dir(fid)) {
+		*tgt = fid_oid(fid);
+		*type = LU_SEQ_RANGE_MDT;
 		RETURN(0);
 	}
 
@@ -215,7 +226,7 @@ static struct lu_object *lod_object_alloc(const struct lu_env *env,
  * \retval 0			on success
  * \retval negative		negated errno on error
  **/
-static int lod_cleanup_desc_tgts(const struct lu_env *env,
+static int lod_sub_process_config(const struct lu_env *env,
 				 struct lod_device *lod,
 				 struct lod_tgt_descs *ltd,
 				 struct lustre_cfg *lcfg)
@@ -248,21 +259,87 @@ static int lod_cleanup_desc_tgts(const struct lu_env *env,
 	return rc;
 }
 
+struct lod_recovery_data {
+	struct lod_device	*lrd_lod;
+	struct lod_tgt_desc	*lrd_ltd;
+	struct ptlrpc_thread	*lrd_thread;
+	__u32			lrd_idx;
+};
+
+/**
+ * recovery thread for update log
+ *
+ * Start recovery thread and prepare the sub llog, then it will retrieve
+ * the update records from the correpondent MDT and do recovery.
+ *
+ * \param[in] arg	pointer to the recovery data
+ *
+ * \retval		0 if recovery succeeds
+ * \retval		negative errno if recovery failed.
+ */
+static int lod_sub_recovery_thread(void *arg)
+{
+	struct lod_recovery_data	*lrd = arg;
+	struct lod_device		*lod = lrd->lrd_lod;
+	struct dt_device		*dt;
+	struct ptlrpc_thread		*thread = lrd->lrd_thread;
+	struct lu_env			env;
+	int				rc;
+	ENTRY;
+
+	thread->t_flags = SVC_RUNNING;
+	wake_up(&thread->t_ctl_waitq);
+
+	rc = lu_env_init(&env, LCT_LOCAL | LCT_MD_THREAD);
+	if (rc != 0) {
+		OBD_FREE_PTR(lrd);
+		CERROR("%s: can't initialize env: rc = %d\n",
+		       lod2obd(lod)->obd_name, rc);
+		RETURN(rc);
+	}
+
+	if (lrd->lrd_ltd == NULL)
+		dt = lod->lod_child;
+	else
+		dt = lrd->lrd_ltd->ltd_tgt;
+
+	rc = lod_sub_prep_llog(&env, lod, dt, lrd->lrd_idx);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	/* XXX do recovery in the following patches */
+
+out:
+	OBD_FREE_PTR(lrd);
+	thread->t_flags = SVC_STOPPED;
+	wake_up(&thread->t_ctl_waitq);
+	lu_env_fini(&env);
+	RETURN(rc);
+}
+
 /**
  * Extract MDT target index from a device name.
  *
  * a helper function to extract index from the given device name
  * like "fsname-MDTxxxx-mdtlov"
  *
- * \param[in] lodname	device name
- * \param[out] index	extracted index
+ * \param[in] lodname		device name
+ * \param[out] mdt_index	extracted index
  *
  * \retval 0		on success
  * \retval -EINVAL	if the name is invalid
  */
-static int lodname2mdt_index(char *lodname, long *index)
+int lodname2mdt_index(char *lodname, __u32 *mdt_index)
 {
+	unsigned long index;
 	char *ptr, *tmp;
+
+	/* 1.8 configs don't have "-MDT0000" at the end */
+	ptr = strstr(lodname, "-MDT");
+	if (ptr == NULL) {
+		*mdt_index = 0;
+		return 0;
+	}
 
 	ptr = strrchr(lodname, '-');
 	if (ptr == NULL) {
@@ -285,12 +362,179 @@ static int lodname2mdt_index(char *lodname, long *index)
 		return -EINVAL;
 	}
 
-	*index = simple_strtol(ptr - 4, &tmp, 16);
-	if (*tmp != '-' || *index > INT_MAX || *index < 0) {
+	index = simple_strtol(ptr - 4, &tmp, 16);
+	if (*tmp != '-' || index > INT_MAX) {
 		CERROR("invalid MDT index in '%s'\n", lodname);
 		return -EINVAL;
 	}
+	*mdt_index = index;
 	return 0;
+}
+
+/**
+ * Init sub llog context
+ *
+ * Setup update llog ctxt for update recovery threads, then start the
+ * recovery thread (lod_sub_recovery_thread) to read update llog from
+ * the correspondent MDT to do update recovery.
+ *
+ * \param[in] env	execution environment
+ * \param[in] lod	lod device to do update recovery
+ * \param[in] dt	sub dt device for which the recovery thread is
+ *
+ * \retval		0 if initialization succeeds.
+ * \retval		negative errno if initialization fails.
+ */
+int lod_sub_init_llog(const struct lu_env *env, struct lod_device *lod,
+		      struct dt_device *dt)
+{
+	struct obd_device		*obd;
+	struct lod_recovery_data	*lrd = NULL;
+	struct ptlrpc_thread		*thread;
+	struct task_struct		*task;
+	struct l_wait_info		lwi = { 0 };
+	struct lod_tgt_desc		*sub_ltd = NULL;
+	__u32				index;
+	int				rc;
+	ENTRY;
+
+	OBD_ALLOC_PTR(lrd);
+	if (lrd == NULL)
+		RETURN(-ENOMEM);
+
+	if (lod->lod_child == dt) {
+		thread = &lod->lod_child_recovery_thread;
+		rc = lodname2mdt_index(lod2obd(lod)->obd_name, &index);
+		if (rc != 0) {
+			OBD_FREE_PTR(lrd);
+			RETURN(rc);
+		}
+	} else {
+		struct lod_tgt_descs	*ltd = &lod->lod_mdt_descs;
+		struct lod_tgt_desc	*tgt = NULL;
+		unsigned int		i;
+
+		mutex_lock(&ltd->ltd_mutex);
+		cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
+			tgt = LTD_TGT(ltd, i);
+			if (tgt->ltd_tgt == dt) {
+				index = tgt->ltd_index;
+				sub_ltd = tgt;
+				break;
+			}
+		}
+		mutex_unlock(&ltd->ltd_mutex);
+		OBD_ALLOC_PTR(tgt->ltd_recovery_thread);
+		if (tgt->ltd_recovery_thread == NULL) {
+			OBD_FREE_PTR(lrd);
+			RETURN(-ENOMEM);
+		}
+		thread = tgt->ltd_recovery_thread;
+	}
+
+	lrd->lrd_lod = lod;
+	lrd->lrd_ltd = sub_ltd;
+	lrd->lrd_thread = thread;
+	lrd->lrd_idx = index;
+	init_waitqueue_head(&thread->t_ctl_waitq);
+
+	obd = dt->dd_lu_dev.ld_obd;
+	obd->obd_lvfs_ctxt.dt = dt;
+	rc = llog_setup(env, obd, &obd->obd_olg, LLOG_UPDATELOG_ORIG_CTXT,
+			NULL, &llog_common_cat_ops);
+	if (rc < 0) {
+		CERROR("%s: cannot setup updatelog llog: rc = %d\n",
+		       obd->obd_name, rc);
+		OBD_FREE_PTR(lrd);
+		RETURN(rc);
+	}
+
+	/* Start the recovery thread */
+	task = kthread_run(lod_sub_recovery_thread, lrd, "lod_recov_%04x",
+			   index);
+	if (IS_ERR(task)) {
+		rc = PTR_ERR(task);
+		OBD_FREE_PTR(lrd);
+		CERROR("%s: cannot start recovery thread: rc = %d\n",
+		       obd->obd_name, rc);
+		GOTO(out_llog, rc);
+	}
+
+	l_wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_RUNNING ||
+					  thread->t_flags & SVC_STOPPED, &lwi);
+out_llog:
+	if (rc != 0)
+		lod_sub_fini_llog(env, dt, thread);
+
+	RETURN(rc);
+}
+
+/**
+ * finish sub llog context
+ *
+ * Stop update recovery thread for the sub device, then cleanup the
+ * correspondent llog ctxt.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	dt device(lod) to do update recovery
+ * \param[in] thread	recovery thread on this sub device
+ */
+void lod_sub_fini_llog(const struct lu_env *env,
+		       struct dt_device *dt, struct ptlrpc_thread *thread)
+{
+	struct obd_device	*obd;
+	struct llog_ctxt	*ctxt;
+
+	CDEBUG(D_INFO, "%s: finish sub llog\n", dt->dd_lu_dev.ld_obd->obd_name);
+	/* Stop recovery thread first */
+	if (thread != NULL && thread->t_flags & SVC_RUNNING) {
+		thread->t_flags = SVC_STOPPING;
+		wake_up(&thread->t_ctl_waitq);
+		wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_STOPPED);
+	}
+
+	obd = dt->dd_lu_dev.ld_obd;
+	ctxt = llog_get_context(obd, LLOG_UPDATELOG_ORIG_CTXT);
+	if (ctxt == NULL)
+		return;
+
+	if (ctxt->loc_handle != NULL)
+		llog_cat_close(env, ctxt->loc_handle);
+
+	llog_cleanup(env, ctxt);
+}
+
+/**
+ * finish all sub llog
+ *
+ * cleanup all of sub llog ctxt on the LOD.
+ *
+ * \param[in] env	execution environment
+ * \param[in] lod	lod device to do update recovery
+ */
+void lod_sub_fini_all_llogs(const struct lu_env *env, struct lod_device *lod)
+{
+	struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
+	unsigned int i;
+
+	/* Stop the update log commit cancel threads and finish master
+	 * llog ctxt */
+	lod_sub_fini_llog(env, lod->lod_child, &lod->lod_child_recovery_thread);
+
+	lod_getref(ltd);
+	cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
+		struct lod_tgt_desc	*tgt;
+
+		tgt = LTD_TGT(ltd, i);
+		if (tgt->ltd_recovery_thread != NULL) {
+			lod_sub_fini_llog(env, tgt->ltd_tgt,
+					  tgt->ltd_recovery_thread);
+			OBD_FREE_PTR(tgt->ltd_recovery_thread);
+			tgt->ltd_recovery_thread = NULL;
+		}
+	}
+
+	lod_putref(lod, ltd);
 }
 
 /**
@@ -356,20 +600,13 @@ static int lod_process_config(const struct lu_env *env,
 			GOTO(out, rc = -EINVAL);
 
 		if (lcfg->lcfg_command == LCFG_LOV_ADD_OBD) {
-			char *mdt;
-			mdt = strstr(lustre_cfg_string(lcfg, 0), "-MDT");
-			/* 1.8 configs don't have "-MDT0000" at the end */
-			if (mdt == NULL) {
-				mdt_index = 0;
-			} else {
-				long long_index;
-				rc = lodname2mdt_index(
-					lustre_cfg_string(lcfg, 0),
-					&long_index);
-				if (rc != 0)
-					GOTO(out, rc);
-				mdt_index = long_index;
-			}
+			__u32 mdt_index;
+
+			rc = lodname2mdt_index(lustre_cfg_string(lcfg, 0),
+					       &mdt_index);
+			if (rc != 0)
+				GOTO(out, rc);
+
 			rc = lod_add_device(env, lod, arg1, index, gen,
 					    mdt_index, LUSTRE_OSC_NAME, 1);
 		} else if (lcfg->lcfg_command == LCFG_ADD_MDC) {
@@ -399,17 +636,26 @@ static int lod_process_config(const struct lu_env *env,
 			rc = 0;
 		GOTO(out, rc);
 	}
-	case LCFG_CLEANUP:
 	case LCFG_PRE_CLEANUP: {
-		lu_dev_del_linkage(dev->ld_site, dev);
-		lod_cleanup_desc_tgts(env, lod, &lod->lod_mdt_descs, lcfg);
-		lod_cleanup_desc_tgts(env, lod, &lod->lod_ost_descs, lcfg);
-		if (lcfg->lcfg_command == LCFG_PRE_CLEANUP)
-			break;
+		lod_sub_process_config(env, lod, &lod->lod_mdt_descs, lcfg);
+		lod_sub_process_config(env, lod, &lod->lod_ost_descs, lcfg);
+		next = &lod->lod_child->dd_lu_dev;
+		rc = next->ld_ops->ldo_process_config(env, next, lcfg);
+		if (rc != 0)
+			CDEBUG(D_HA, "%s: can't process %u: %d\n",
+			       lod2obd(lod)->obd_name, lcfg->lcfg_command, rc);
+
+		lod_sub_fini_all_llogs(env, lod);
+		break;
+	}
+	case LCFG_CLEANUP: {
 		/*
 		 * do cleanup on underlying storage only when
 		 * all OSPs are cleaned up, as they use that OSD as well
 		 */
+		lu_dev_del_linkage(dev->ld_site, dev);
+		lod_sub_process_config(env, lod, &lod->lod_mdt_descs, lcfg);
+		lod_sub_process_config(env, lod, &lod->lod_ost_descs, lcfg);
 		next = &lod->lod_child->dd_lu_dev;
 		rc = next->ld_ops->ldo_process_config(env, next, lcfg);
 		if (rc)
@@ -472,6 +718,46 @@ static int lod_recovery_complete(const struct lu_env *env,
 }
 
 /**
+ * Init update logs on all sub device
+ *
+ * LOD initialize update logs on all of sub devices. Because the initialization
+ * process might need FLD lookup, see llog_osd_open()->dt_locate()->...->
+ * lod_object_init(), this API has to be called after LOD is initialized.
+ * \param[in] env	execution environment
+ * \param[in] lod	lod device
+ *
+ * \retval		0 if update log is initialized successfully.
+ * \retval		negative errno if initialization fails.
+ */
+static int lod_sub_init_llogs(const struct lu_env *env, struct lod_device *lod)
+{
+	struct lod_tgt_descs	*ltd = &lod->lod_mdt_descs;
+	int			rc;
+	unsigned int		i;
+	ENTRY;
+
+	/* llog must be setup after LOD is initialized, because llog
+	 * initialization include FLD lookup */
+	LASSERT(lod->lod_initialized);
+
+	/* Init the llog in its own stack */
+	rc = lod_sub_init_llog(env, lod, lod->lod_child);
+	if (rc < 0)
+		RETURN(rc);
+
+	cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
+		struct lod_tgt_desc	*tgt;
+
+		tgt = LTD_TGT(ltd, i);
+		rc = lod_sub_init_llog(env, lod, tgt->ltd_tgt);
+		if (rc != 0)
+			break;
+	}
+
+	RETURN(rc);
+}
+
+/**
  * Implementation of lu_device_operations::ldo_prepare() for LOD
  *
  * see include/lu_object.h for the details.
@@ -479,9 +765,13 @@ static int lod_recovery_complete(const struct lu_env *env,
 static int lod_prepare(const struct lu_env *env, struct lu_device *pdev,
 		       struct lu_device *cdev)
 {
-	struct lod_device   *lod = lu2lod_dev(cdev);
-	struct lu_device    *next = &lod->lod_child->dd_lu_dev;
-	int		     rc;
+	struct lod_device	*lod = lu2lod_dev(cdev);
+	struct lu_device	*next = &lod->lod_child->dd_lu_dev;
+	struct lu_fid		*fid = &lod_env_info(env)->lti_fid;
+	int			rc;
+	struct dt_object	*root;
+	struct dt_object	*dto;
+	__u32			index;
 	ENTRY;
 
 	rc = next->ld_ops->ldo_prepare(env, pdev, next);
@@ -492,6 +782,45 @@ static int lod_prepare(const struct lu_env *env, struct lu_device *pdev,
 	}
 
 	lod->lod_initialized = 1;
+
+	rc = dt_root_get(env, lod->lod_child, fid);
+	if (rc < 0)
+		RETURN(rc);
+
+	root = dt_locate(env, lod->lod_child, fid);
+	if (IS_ERR(root))
+		RETURN(PTR_ERR(root));
+
+	index = lu_site2seq(lod2lu_dev(lod)->ld_site)->ss_node_id;
+	lu_update_log_fid(fid, index);
+
+	/* Create update log object */
+	dto = local_file_find_or_create_with_fid(env, lod->lod_child,
+						 fid, root,
+						 lod_update_log_name,
+						 S_IFREG | S_IRUGO | S_IWUSR);
+	if (IS_ERR(dto))
+		GOTO(out_put, rc = PTR_ERR(dto));
+
+	lu_object_put(env, &dto->do_lu);
+
+	/* Create update log dir */
+	lu_update_log_dir_fid(fid, index);
+	dto = local_file_find_or_create_with_fid(env, lod->lod_child,
+						 fid, root,
+						 lod_update_log_dir_name,
+						 S_IFDIR | S_IRUGO | S_IWUSR);
+	if (IS_ERR(dto))
+		GOTO(out_put, rc = PTR_ERR(dto));
+
+	lu_object_put(env, &dto->do_lu);
+
+	rc = lod_sub_init_llogs(env, lod);
+	if (rc < 0)
+		GOTO(out_put, rc);
+
+out_put:
+	lu_object_put(env, &root->do_lu);
 
 	RETURN(rc);
 }
@@ -1077,6 +1406,8 @@ static struct lu_device_type lod_device_type = {
  *
  * Currently, there is only one supported key: KEY_OSP_CONNECTED , to provide
  * the caller binary status whether LOD has seen connection to any OST target.
+ * It will also check if the MDT update log context being initialized (if
+ * needed).
  *
  * \param[in] env		LU environment provided by the caller
  * \param[in] exp		export of the caller
@@ -1098,7 +1429,7 @@ static int lod_obd_get_info(const struct lu_env *env, struct obd_export *exp,
 	if (KEY_IS(KEY_OSP_CONNECTED)) {
 		struct obd_device	*obd = exp->exp_obd;
 		struct lod_device	*d;
-		struct lod_ost_desc	*ost;
+		struct lod_tgt_desc	*tgt;
 		unsigned int		i;
 		int			rc = 1;
 
@@ -1108,16 +1439,38 @@ static int lod_obd_get_info(const struct lu_env *env, struct obd_export *exp,
 		d = lu2lod_dev(obd->obd_lu_dev);
 		lod_getref(&d->lod_ost_descs);
 		lod_foreach_ost(d, i) {
-			ost = OST_TGT(d, i);
-			LASSERT(ost && ost->ltd_ost);
-
-			rc = obd_get_info(env, ost->ltd_exp, keylen, key,
-					  vallen, val);
+			tgt = OST_TGT(d, i);
+			LASSERT(tgt && tgt->ltd_tgt);
+			rc = obd_get_info(env, tgt->ltd_exp, keylen, key,
+ 					  vallen, val);
 			/* one healthy device is enough */
 			if (rc == 0)
 				break;
 		}
 		lod_putref(d, &d->lod_ost_descs);
+
+		lod_getref(&d->lod_mdt_descs);
+		lod_foreach_mdt(d, i) {
+			struct llog_ctxt *ctxt;
+
+			tgt = MDT_TGT(d, i);
+			LASSERT(tgt != NULL);
+			LASSERT(tgt->ltd_tgt != NULL);
+			ctxt = llog_get_context(tgt->ltd_tgt->dd_lu_dev.ld_obd,
+						LLOG_UPDATELOG_ORIG_CTXT);
+			if (ctxt == NULL) {
+				rc = -EAGAIN;
+				break;
+			}
+			if (ctxt->loc_handle == NULL) {
+				rc = -EAGAIN;
+				llog_ctxt_put(ctxt);
+				break;
+			}
+			llog_ctxt_put(ctxt);
+		}
+		lod_putref(d, &d->lod_mdt_descs);
+
 		RETURN(rc);
 	}
 

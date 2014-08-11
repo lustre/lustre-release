@@ -465,6 +465,14 @@ void lustre_assert_wire_constants(void)
 		 (long long)OUT_INDEX_INSERT);
 	LASSERTF(OUT_INDEX_DELETE == 11, "found %lld\n",
 		 (long long)OUT_INDEX_DELETE);
+	LASSERTF(OUT_WRITE == 12, "found %lld\n",
+		 (long long)OUT_WRITE);
+	LASSERTF(OUT_XATTR_DEL == 13, "found %lld\n",
+		 (long long)OUT_XATTR_DEL);
+	LASSERTF(OUT_PUNCH == 14, "found %lld\n",
+		 (long long)OUT_PUNCH);
+	LASSERTF(OUT_READ == 15, "found %lld\n",
+		 (long long)OUT_READ);
 
 	/* Checks for struct hsm_attrs */
 	LASSERTF((int)sizeof(struct hsm_attrs) == 24, "found %lld\n",
@@ -501,10 +509,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)FID_SEQ_LLOG);
 	LASSERTF(FID_SEQ_ECHO == 2, "found %lld\n",
 		 (long long)FID_SEQ_ECHO);
-	LASSERTF(FID_SEQ_OST_MDT1 == 3, "found %lld\n",
-		 (long long)FID_SEQ_OST_MDT1);
-	LASSERTF(FID_SEQ_OST_MAX == 9, "found %lld\n",
-		 (long long)FID_SEQ_OST_MAX);
+	LASSERTF(FID_SEQ_UNUSED_START == 3, "found %lld\n",
+		 (long long)FID_SEQ_UNUSED_START);
+	LASSERTF(FID_SEQ_UNUSED_END == 9, "found %lld\n",
+		 (long long)FID_SEQ_UNUSED_END);
 	LASSERTF(FID_SEQ_RSVD == 11, "found %lld\n",
 		 (long long)FID_SEQ_RSVD);
 	LASSERTF(FID_SEQ_IGIF == 12, "found %lld\n",
@@ -529,6 +537,10 @@ void lustre_assert_wire_constants(void)
 			(long long)FID_SEQ_QUOTA_GLB);
 	LASSERTF(FID_SEQ_ROOT == 0x0000000200000007ULL, "found 0x%.16llxULL\n",
 			(long long)FID_SEQ_ROOT);
+	LASSERTF(FID_SEQ_LAYOUT_RBTREE == 0x0000000200000008ULL, "found 0x%.16llxULL\n",
+			(long long)FID_SEQ_LAYOUT_RBTREE);
+	LASSERTF(FID_SEQ_UPDATE_LOG == 0x0000000200000009ULL, "found 0x%.16llxULL\n",
+			(long long)FID_SEQ_UPDATE_LOG);
 	LASSERTF(FID_SEQ_NORMAL == 0x0000000200000400ULL, "found 0x%.16llxULL\n",
 			(long long)FID_SEQ_NORMAL);
 	LASSERTF(FID_SEQ_LOV_DEFAULT == 0xffffffffffffffffULL, "found 0x%.16llxULL\n",
@@ -1479,10 +1491,10 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct lov_mds_md_v3 *)0)->lmm_layout_gen) == 2, "found %lld\n",
 		 (long long)(int)sizeof(((struct lov_mds_md_v3 *)0)->lmm_layout_gen));
 	CLASSERT(LOV_MAXPOOLNAME == 15);
-	LASSERTF((int)offsetof(struct lov_mds_md_v3, lmm_pool_name[16]) == 48, "found %lld\n",
-		 (long long)(int)offsetof(struct lov_mds_md_v3, lmm_pool_name[16]));
-	LASSERTF((int)sizeof(((struct lov_mds_md_v3 *)0)->lmm_pool_name[16]) == 1, "found %lld\n",
-		 (long long)(int)sizeof(((struct lov_mds_md_v3 *)0)->lmm_pool_name[16]));
+	LASSERTF((int)offsetof(struct lov_mds_md_v3, lmm_pool_name[15 + 1]) == 48, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_mds_md_v3, lmm_pool_name[15 + 1]));
+	LASSERTF((int)sizeof(((struct lov_mds_md_v3 *)0)->lmm_pool_name[15 + 1]) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_mds_md_v3 *)0)->lmm_pool_name[15 + 1]));
 	LASSERTF((int)offsetof(struct lov_mds_md_v3, lmm_objects[0]) == 48, "found %lld\n",
 		 (long long)(int)offsetof(struct lov_mds_md_v3, lmm_objects[0]));
 	LASSERTF((int)sizeof(((struct lov_mds_md_v3 *)0)->lmm_objects[0]) == 24, "found %lld\n",
@@ -1532,10 +1544,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lmv_mds_md_v1, lmv_padding3));
 	LASSERTF((int)sizeof(((struct lmv_mds_md_v1 *)0)->lmv_padding3) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct lmv_mds_md_v1 *)0)->lmv_padding3));
-	LASSERTF((int)offsetof(struct lmv_mds_md_v1, lmv_pool_name[16]) == 56, "found %lld\n",
-		 (long long)(int)offsetof(struct lmv_mds_md_v1, lmv_pool_name[16]));
-	LASSERTF((int)sizeof(((struct lmv_mds_md_v1 *)0)->lmv_pool_name[16]) == 1, "found %lld\n",
-		 (long long)(int)sizeof(((struct lmv_mds_md_v1 *)0)->lmv_pool_name[16]));
+	LASSERTF((int)offsetof(struct lmv_mds_md_v1, lmv_pool_name[15]) == 55, "found %lld\n",
+		 (long long)(int)offsetof(struct lmv_mds_md_v1, lmv_pool_name[15]));
+	LASSERTF((int)sizeof(((struct lmv_mds_md_v1 *)0)->lmv_pool_name[15]) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct lmv_mds_md_v1 *)0)->lmv_pool_name[15]));
 	LASSERTF((int)offsetof(struct lmv_mds_md_v1, lmv_stripe_fids[0]) == 56, "found %lld\n",
 		 (long long)(int)offsetof(struct lmv_mds_md_v1, lmv_stripe_fids[0]));
 	LASSERTF((int)sizeof(((struct lmv_mds_md_v1 *)0)->lmv_stripe_fids[0]) == 16, "found %lld\n",
@@ -3787,7 +3799,9 @@ void lustre_assert_wire_constants(void)
 	CLASSERT(LLOG_CHANGELOG_REPL_CTXT == 13);
 	CLASSERT(LLOG_CHANGELOG_USER_ORIG_CTXT == 14);
 	CLASSERT(LLOG_AGENT_ORIG_CTXT == 15);
-	CLASSERT(LLOG_MAX_CTXTS == 16);
+	CLASSERT(LLOG_UPDATELOG_ORIG_CTXT == 16);
+	CLASSERT(LLOG_UPDATELOG_REPL_CTXT == 17);
+	CLASSERT(LLOG_MAX_CTXTS == 18);
 
 	/* Checks for struct llogd_conn_body */
 	LASSERTF((int)sizeof(struct llogd_conn_body) == 40, "found %lld\n",
@@ -4728,4 +4742,3 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct lfsck_reply *)0)->lr_padding_2) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct lfsck_reply *)0)->lr_padding_2));
 }
-

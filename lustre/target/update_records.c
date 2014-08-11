@@ -913,6 +913,7 @@ int check_and_prepare_update_record(const struct lu_env *env,
 	lur->lur_update_rec.ur_master_transno = 0;
 	lur->lur_update_rec.ur_batchid = 0;
 	lur->lur_update_rec.ur_flags = 0;
+	lur->lur_hdr.lrh_len = LLOG_CHUNK_SIZE;
 
 	tur->tur_update_param_count = 0;
 
@@ -955,7 +956,8 @@ int merge_params_updates_buf(const struct lu_env *env,
 	params_size = update_params_size(tur->tur_update_params,
 					 tur->tur_update_param_count);
 	record_size = llog_update_record_size(lur);
-	if (record_size + params_size > tur->tur_update_records_buf_size) {
+	if (cfs_size_round(record_size + params_size) >
+				tur->tur_update_records_buf_size) {
 		int rc;
 
 		rc = tur_update_records_extend(tur, record_size + params_size);

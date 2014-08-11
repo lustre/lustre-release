@@ -7,7 +7,9 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-ALWAYS_EXCEPT="$SANITY_SCRUB_EXCEPT"
+#Bug number for excepting test      6380
+ALWAYS_EXCEPT="$SANITY_SCRUB_EXCEPT 1b 1c 2 3 4a 4b 4c 5 6 7 8 9 10 15"
+
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
@@ -322,8 +324,7 @@ run_test 0 "Do not auto trigger OI scrub for non-backup/restore case"
 test_1a() {
 	scrub_prep 0
 	echo "start $SINGLEMDS without disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
-		error "(1) Fail to start MDS!"
+	scrub_start_mds 1 "$MOUNT_OPTS_SCRUB"
 
 	local FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
 	[ -z "$FLAGS" ] || error "(3) Expect empty flags, but got '$FLAGS'"

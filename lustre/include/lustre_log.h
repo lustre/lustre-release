@@ -312,6 +312,7 @@ struct llog_handle {
 
 /* llog_osd.c */
 extern struct llog_operations llog_osd_ops;
+extern struct llog_operations llog_common_cat_ops;
 int llog_osd_get_cat_list(const struct lu_env *env, struct dt_device *d,
 			  int idx, int count, struct llog_catid *idarray,
 			  const struct lu_fid *fid);
@@ -321,6 +322,10 @@ int llog_osd_put_cat_list(const struct lu_env *env, struct dt_device *d,
 
 #define LLOG_CTXT_FLAG_UNINITIALIZED     0x00000001
 #define LLOG_CTXT_FLAG_STOP		 0x00000002
+
+/* Indicate the llog objects under this context are normal FID objects,
+ * instead of objects with local FID. */
+#define LLOG_CTXT_FLAG_NORMAL_FID	 0x00000004
 
 struct llog_ctxt {
         int                      loc_idx; /* my index the obd array of ctxt's */

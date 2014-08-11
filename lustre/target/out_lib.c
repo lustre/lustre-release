@@ -57,6 +57,7 @@ const char *update_op_str(__u16 opc)
 		[OUT_WRITE] = "write",
 		[OUT_XATTR_DEL] = "xattr_del",
 		[OUT_PUNCH] = "punch",
+		[OUT_READ] = "read",
 	};
 
 	if (opc < ARRAY_SIZE(opc_str) && opc_str[opc] != NULL)
@@ -385,3 +386,18 @@ int out_xattr_get_pack(const struct lu_env *env, struct object_update *update,
 			       fid, 1, &size, (const void **)&name);
 }
 EXPORT_SYMBOL(out_xattr_get_pack);
+
+int out_read_pack(const struct lu_env *env, struct object_update *update,
+		  size_t max_update_length, const struct lu_fid *fid,
+		  size_t size, loff_t pos)
+{
+	__u16		sizes[2] = {sizeof(size), sizeof(pos)};
+	const void	*bufs[2] = {&size, &pos};
+
+	size = cpu_to_le64(size);
+	pos = cpu_to_le64(pos);
+
+	return out_update_pack(env, update, max_update_length, OUT_READ, fid,
+			       ARRAY_SIZE(sizes), sizes, bufs);
+}
+EXPORT_SYMBOL(out_read_pack);

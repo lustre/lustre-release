@@ -645,6 +645,11 @@ int osp_remote_sync(const struct lu_env *env, struct osp_device *osp,
 	if (rc != 0)
 		RETURN(rc);
 
+	/* This will only be called with read-only update, and these updates
+	 * might be used to retrieve update log during recovery process, so
+	 * it will be allowed to send during recovery process */
+	req->rq_allow_replay = 1;
+
 	/* Note: some dt index api might return non-zero result here, like
 	 * osd_index_ea_lookup, so we should only check rc < 0 here */
 	rc = ptlrpc_queue_wait(req);
