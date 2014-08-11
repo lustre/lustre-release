@@ -535,6 +535,48 @@ static inline int osp_is_fid_client(struct osp_device *osp)
 	return imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_FID;
 }
 
+struct object_update *
+update_buffer_get_update(struct object_update_request *request,
+			 unsigned int index);
+
+int osp_extend_update_buffer(const struct lu_env *env,
+			     struct update_buffer *ubuf);
+
+#define osp_update_rpc_pack(env, name, update, op, ...)		\
+({								\
+	struct object_update	*object_update;			\
+	size_t			max_update_length;		\
+	struct object_update_request *ureq;			\
+	int			ret;				\
+								\
+	while (1) {							\
+		ureq = update->dur_buf.ub_req;				\
+		max_update_length = update->dur_buf.ub_req_size -	\
+				    object_update_request_size(ureq);	\
+									\
+		object_update = update_buffer_get_update(ureq,		\
+							 ureq->ourq_count);    \
+		ret = out_##name##_pack(env, object_update, max_update_length, \
+				       __VA_ARGS__);			\
+		if (ret == -E2BIG) {					\
+			int rc1;					\
+			/* extend the buffer and retry */		\
+			rc1 = osp_extend_update_buffer(env, &update->dur_buf); \
+			if (rc1 != 0) {					\
+				ret = rc1;				\
+				break;					\
+			}						\
+		} else {						\
+			if (ret == 0) {					\
+				object_update->ou_flags |= update->dur_flags; \
+				ureq->ourq_count++;			\
+			}						\
+			break;						\
+		}							\
+	}								\
+	ret;								\
+})
+
 typedef int (*osp_update_interpreter_t)(const struct lu_env *env,
 					struct object_update_reply *rep,
 					struct ptlrpc_request *req,

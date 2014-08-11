@@ -1625,6 +1625,9 @@ int out_handle(struct tgt_session_info *tsi)
 			rc = out_tx_start(env, dt, ta, tsi->tsi_exp);
 			if (rc != 0)
 				GOTO(next, rc);
+
+			if (update->ou_flags & UPDATE_FL_SYNC)
+				ta->ta_handle->th_sync = 1;
 		}
 
 		/* Stop the current update transaction, if the update has
@@ -1641,6 +1644,9 @@ int out_handle(struct tgt_session_info *tsi)
 				rc = out_tx_start(env, dt, ta, tsi->tsi_exp);
 				if (rc != 0)
 					GOTO(next, rc);
+
+				if (update->ou_flags & UPDATE_FL_SYNC)
+					ta->ta_handle->th_sync = 1;
 
 				current_batchid = update->ou_batchid;
 			}

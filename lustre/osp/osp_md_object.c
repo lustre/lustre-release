@@ -56,8 +56,8 @@
 #include <lustre_log.h>
 #include "osp_internal.h"
 
-static const char dot[] = ".";
-static const char dotdot[] = "..";
+#define OUT_UPDATE_BUFFER_SIZE_ADD	4096
+#define OUT_UPDATE_BUFFER_SIZE_MAX	(256 * 4096)  /*  1M update size now */
 
 /**
  * Interpreter call for object creation
@@ -115,6 +115,47 @@ int osp_md_declare_object_create(const struct lu_env *env,
 	return osp_trans_update_request_create(th);
 }
 
+struct object_update *
+update_buffer_get_update(struct object_update_request *request,
+			 unsigned int index)
+{
+	void	*ptr;
+	int	i;
+
+	if (index > request->ourq_count)
+		return NULL;
+
+	ptr = &request->ourq_updates[0];
+	for (i = 0; i < index; i++)
+		ptr += object_update_size(ptr);
+
+	return ptr;
+}
+
+int osp_extend_update_buffer(const struct lu_env *env,
+			     struct update_buffer *ubuf)
+{
+	struct object_update_request *ureq;
+	size_t	new_size = ubuf->ub_req_size + OUT_UPDATE_BUFFER_SIZE_ADD;
+
+	/* enlarge object update request size */
+	if (new_size > OUT_UPDATE_BUFFER_SIZE_MAX)
+		return -E2BIG;
+
+	OBD_ALLOC_LARGE(ureq, new_size);
+	if (ureq == NULL)
+		return -ENOMEM;
+
+	memcpy(ureq, ubuf->ub_req, ubuf->ub_req_size);
+
+	OBD_FREE_LARGE(ubuf->ub_req, ubuf->ub_req_size);
+
+	ubuf->ub_req = ureq;
+	ubuf->ub_req_size = new_size;
+
+	return 0;
+}
+
 /**
  * Implementation of dt_object_operations::do_create
  *
@@ -141,13 +182,12 @@ int osp_md_object_create(const struct lu_env *env, struct dt_object *dt,
 	update = thandle_to_dt_update_request(th);
 	LASSERT(update != NULL);
 
-	rc = out_create_pack(env, &update->dur_buf,
-			     lu_object_fid(&dt->do_lu), attr, hint, dof,
-			     update->dur_batchid);
+	rc = osp_update_rpc_pack(env, create, update, OUT_CREATE,
+				 lu_object_fid(&dt->do_lu), attr, hint, dof);
 	if (rc != 0)
 		GOTO(out, rc);
 
-	rc = osp_insert_update_callback(env, update, dt2osp_obj(dt), attr,
+	rc = osp_insert_update_callback(env, update, dt2osp_obj(dt), NULL,
 					osp_object_create_interpreter);
 
 	if (rc < 0)
@@ -200,9 +240,8 @@ static int osp_md_ref_del(const struct lu_env *env, struct dt_object *dt,
 	update = thandle_to_dt_update_request(th);
 	LASSERT(update != NULL);
 
-	rc = out_ref_del_pack(env, &update->dur_buf,
-			      lu_object_fid(&dt->do_lu),
-			      update->dur_batchid);
+	rc = osp_update_rpc_pack(env, ref_del, update, OUT_REF_DEL,
+				 lu_object_fid(&dt->do_lu));
 	return rc;
 }
 
@@ -247,9 +286,8 @@ static int osp_md_ref_add(const struct lu_env *env, struct dt_object *dt,
 	update = thandle_to_dt_update_request(th);
 	LASSERT(update != NULL);
 
-	rc = out_ref_add_pack(env, &update->dur_buf,
-			      lu_object_fid(&dt->do_lu),
-			      update->dur_batchid);
+	rc = osp_update_rpc_pack(env, ref_add, update, OUT_REF_ADD,
+				 lu_object_fid(&dt->do_lu));
 	return rc;
 }
 
@@ -324,10 +362,8 @@ int osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,
 	update = thandle_to_dt_update_request(th);
 	LASSERT(update != NULL);
 
-	rc = out_attr_set_pack(env, &update->dur_buf,
-			       lu_object_fid(&dt->do_lu), attr,
-			       update->dur_batchid);
-
+	rc = osp_update_rpc_pack(env, attr_set, update, OUT_ATTR_SET,
+				 lu_object_fid(&dt->do_lu), attr);
 	return rc;
 }
 
@@ -459,8 +495,8 @@ static int osp_md_index_lookup(const struct lu_env *env, struct dt_object *dt,
 	if (IS_ERR(update))
 		RETURN(PTR_ERR(update));
 
-	rc = out_index_lookup_pack(env, &update->dur_buf,
-				   lu_object_fid(&dt->do_lu), rec, key);
+	rc = osp_update_rpc_pack(env, index_lookup, update, OUT_INDEX_LOOKUP,
+				 lu_object_fid(&dt->do_lu), rec, key);
 	if (rc != 0) {
 		CERROR("%s: Insert update error: rc = %d\n",
 		       dt_dev->dd_lu_dev.ld_obd->obd_name, rc);
@@ -567,11 +603,8 @@ static int osp_md_index_insert(const struct lu_env *env,
 	struct dt_update_request *update = oth->ot_dur;
 	int			 rc;
 
-
-	rc = out_index_insert_pack(env, &update->dur_buf,
-				   lu_object_fid(&dt->do_lu), rec, key,
-				   update->dur_batchid);
-
+	rc = osp_update_rpc_pack(env, index_insert, update, OUT_INDEX_INSERT,
+				 lu_object_fid(&dt->do_lu), rec, key);
 	return rc;
 }
 
@@ -622,9 +655,9 @@ static int osp_md_index_delete(const struct lu_env *env,
 	update = thandle_to_dt_update_request(th);
 	LASSERT(update != NULL);
 
-	rc = out_index_delete_pack(env, &update->dur_buf,
-				   lu_object_fid(&dt->do_lu), key,
-				   update->dur_batchid);
+	rc = osp_update_rpc_pack(env, index_delete, update, OUT_INDEX_DELETE,
+				 lu_object_fid(&dt->do_lu), key);
+
 	return rc;
 }
 
@@ -919,6 +952,35 @@ int osp_md_declare_object_destroy(const struct lu_env *env,
 }
 
 /**
+ * Interpreter call for object destroy
+ *
+ * Object destroy interpreter, which will be called after destroying
+ * the remote object to set flags and status.
+ *
+ * \param[in] env	execution environment
+ * \param[in] reply	update reply
+ * \param[in] req	ptlrpc update request for destroying object
+ * \param[in] obj	object to be destroyed
+ * \param[in] data	data used in this function.
+ * \param[in] index	index(position) of destroy update in the whole
+ *                      updates
+ * \param[in] rc	update result on the remote MDT.
+ *
+ * \retval		only return 0 for now
+ */
+static int osp_md_object_destroy_interpreter(const struct lu_env *env,
+					     struct object_update_reply *reply,
+					     struct ptlrpc_request *req,
+					     struct osp_object *obj,
+					     void *data, int index, int rc)
+{
+	/* not needed in cache any more */
+	set_bit(LU_OBJECT_HEARD_BANSHEE,
+		&obj->opo_obj.do_lu.lo_header->loh_flags);
+	return 0;
+}
+
+/**
  * Implement OSP layer dt_object_operations::do_destroy() interface.
  *
  * Pack the destroy update into the RPC buffer, which will be sent
@@ -948,14 +1010,13 @@ int osp_md_object_destroy(const struct lu_env *env, struct dt_object *dt,
 	update = thandle_to_dt_update_request(th);
 	LASSERT(update != NULL);
 
-	rc = out_object_destroy_pack(env, &update->dur_buf,
-		       lu_object_fid(&dt->do_lu), update->dur_batchid);
+	rc = osp_update_rpc_pack(env, object_destroy, update, OUT_DESTROY,
+				 lu_object_fid(&dt->do_lu));
 	if (rc != 0)
 		RETURN(rc);
 
-	/* not needed in cache any more */
-	set_bit(LU_OBJECT_HEARD_BANSHEE, &dt->do_lu.lo_header->loh_flags);
-
+	rc = osp_insert_update_callback(env, update, dt2osp_obj(dt), NULL,
+					osp_md_object_destroy_interpreter);
 	RETURN(rc);
 }
 
@@ -1036,8 +1097,8 @@ static ssize_t osp_md_write(const struct lu_env *env, struct dt_object *dt,
 	update = thandle_to_dt_update_request(th);
 	LASSERT(update != NULL);
 
-	rc = out_write_pack(env, &update->dur_buf, lu_object_fid(&dt->do_lu),
-			    buf, *pos, update->dur_batchid);
+	rc = osp_update_rpc_pack(env, write, update, OUT_WRITE,
+				 lu_object_fid(&dt->do_lu), buf, *pos);
 	if (rc < 0)
 		return rc;
 

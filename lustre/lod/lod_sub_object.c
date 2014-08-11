@@ -55,7 +55,8 @@
 
 struct thandle *lod_sub_get_thandle(const struct lu_env *env,
 				    struct thandle *th,
-				    const struct dt_object *sub_obj)
+				    const struct dt_object *sub_obj,
+				    bool *record_update)
 {
 	struct lod_device	*lod = dt2lod_dev(th->th_dev);
 	struct top_thandle	*tth;
@@ -64,6 +65,9 @@ struct thandle *lod_sub_get_thandle(const struct lu_env *env,
 	__u32			mdt_index;
 	int			rc;
 	ENTRY;
+
+	if (record_update != NULL)
+		*record_update = false;
 
 	if (th->th_top == NULL)
 		RETURN(th);
@@ -74,8 +78,15 @@ struct thandle *lod_sub_get_thandle(const struct lu_env *env,
 	 * creation, FID is not assigned until osp_object_create(),
 	 * so if the FID of sub_obj is zero, it means OST object. */
 	if (!dt_object_remote(sub_obj) ||
-	    fid_is_zero(lu_object_fid(&sub_obj->do_lu)))
+	    fid_is_zero(lu_object_fid(&sub_obj->do_lu))) {
+		/* local MDT object */
+		if (fid_is_sane(lu_object_fid(&sub_obj->do_lu)) &&
+		    tth->tt_update_records != NULL &&
+		    record_update != NULL)
+			*record_update = true;
+
 		RETURN(tth->tt_master_sub_thandle);
+	}
 
 	rc = lod_fld_lookup(env, lod, lu_object_fid(&sub_obj->do_lu),
 			    &mdt_index, &type);
@@ -84,6 +95,9 @@ struct thandle *lod_sub_get_thandle(const struct lu_env *env,
 
 	if (type == LU_SEQ_RANGE_OST)
 		RETURN(tth->tt_master_sub_thandle);
+
+	if (tth->tt_update_records != NULL && record_update != NULL)
+		*record_update = true;
 
 	sub_th = thandle_get_sub(env, th, sub_obj);
 
@@ -114,7 +128,7 @@ int lod_sub_object_declare_create(const struct lu_env *env,
 {
 	struct thandle *sub_th;
 
-	sub_th = lod_sub_get_thandle(env, th, dt);
+	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
 	if (IS_ERR(sub_th))
 		return PTR_ERR(sub_th);
 
@@ -144,12 +158,21 @@ int lod_sub_object_create(const struct lu_env *env, struct dt_object *dt,
 			  struct thandle *th)
 {
 	struct thandle	   *sub_th;
+	bool		   record_update;
 	int		    rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
+
+	if (record_update) {
+		rc = update_record_pack(create, th,
+					lu_object_fid(&dt->do_lu),
+					attr, hint, dof);
+		if (rc < 0)
+			RETURN(rc);
+	}
 
 	rc = dt_create(env, dt, attr, hint, dof, sub_th);
 
@@ -176,7 +199,7 @@ int lod_sub_object_declare_ref_add(const struct lu_env *env,
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt);
+	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
 
@@ -202,12 +225,20 @@ int lod_sub_object_ref_add(const struct lu_env *env, struct dt_object *dt,
 			   struct thandle *th)
 {
 	struct thandle	*sub_th;
+	bool		record_update;
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
+
+	if (record_update) {
+		rc = update_record_pack(ref_add, th,
+					lu_object_fid(&dt->do_lu));
+		if (rc < 0)
+			RETURN(rc);
+	}
 
 	rc = dt_ref_add(env, dt, sub_th);
 
@@ -234,7 +265,7 @@ int lod_sub_object_declare_ref_del(const struct lu_env *env,
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt);
+	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
 
@@ -260,12 +291,20 @@ int lod_sub_object_ref_del(const struct lu_env *env, struct dt_object *dt,
 			   struct thandle *th)
 {
 	struct thandle	*sub_th;
+	bool		record_update;
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
+
+	if (record_update) {
+		rc = update_record_pack(ref_del, th,
+					lu_object_fid(&dt->do_lu));
+		if (rc < 0)
+			RETURN(rc);
+	}
 
 	rc = dt_ref_del(env, dt, sub_th);
 
@@ -292,7 +331,7 @@ int lod_sub_object_declare_destroy(const struct lu_env *env,
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt);
+	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
 
@@ -318,12 +357,20 @@ int lod_sub_object_destroy(const struct lu_env *env, struct dt_object *dt,
 			   struct thandle *th)
 {
 	struct thandle	*sub_th;
+	bool		record_update;
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
+
+	if (record_update) {
+		rc = update_record_pack(object_destroy, th,
+					lu_object_fid(&dt->do_lu));
+		if (rc < 0)
+			RETURN(rc);
+	}
 
 	rc = dt_destroy(env, dt, sub_th);
 
@@ -352,7 +399,7 @@ int lod_sub_object_declare_insert(const struct lu_env *env,
 {
 	struct thandle *sub_th;
 
-	sub_th = lod_sub_get_thandle(env, th, dt);
+	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
 	if (IS_ERR(sub_th))
 		return PTR_ERR(sub_th);
 
@@ -381,10 +428,19 @@ int lod_sub_object_index_insert(const struct lu_env *env, struct dt_object *dt,
 				int ign)
 {
 	struct thandle *sub_th;
+	int		rc;
+	bool		record_update;
 
-	sub_th = lod_sub_get_thandle(env, th, dt);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		return PTR_ERR(sub_th);
+
+	if (record_update) {
+		rc = update_record_pack(index_insert, th,
+					lu_object_fid(&dt->do_lu), rec, key);
+		if (rc < 0)
+			return rc;
+	}
 
 	return dt_insert(env, dt, rec, key, sub_th, ign);
 }
@@ -409,7 +465,7 @@ int lod_sub_object_declare_delete(const struct lu_env *env,
 {
 	struct thandle *sub_th;
 
-	sub_th = lod_sub_get_thandle(env, th, dt);
+	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
 	if (IS_ERR(sub_th))
 		return PTR_ERR(sub_th);
 
@@ -434,12 +490,20 @@ int lod_sub_object_delete(const struct lu_env *env, struct dt_object *dt,
 			  const struct dt_key *name, struct thandle *th)
 {
 	struct thandle	*sub_th;
+	bool		record_update;
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
+
+	if (record_update) {
+		rc = update_record_pack(index_delete, th,
+					lu_object_fid(&dt->do_lu), name);
+		if (rc < 0)
+			RETURN(rc);
+	}
 
 	rc = dt_delete(env, dt, name, sub_th);
 	RETURN(rc);
@@ -469,7 +533,7 @@ int lod_sub_object_declare_xattr_set(const struct lu_env *env,
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt);
+	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
 
@@ -499,12 +563,21 @@ int lod_sub_object_xattr_set(const struct lu_env *env, struct dt_object *dt,
 			     struct thandle *th)
 {
 	struct thandle	*sub_th;
+	bool		record_update;
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
+
+	if (record_update) {
+		rc = update_record_pack(xattr_set, th,
+					lu_object_fid(&dt->do_lu),
+					buf, name, fl);
+		if (rc < 0)
+			RETURN(rc);
+	}
 
 	rc = dt_xattr_set(env, dt, buf, name, fl, sub_th);
 
@@ -533,7 +606,7 @@ int lod_sub_object_declare_attr_set(const struct lu_env *env,
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt);
+	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
 
@@ -561,13 +634,21 @@ int lod_sub_object_attr_set(const struct lu_env *env,
 			    const struct lu_attr *attr,
 			    struct thandle *th)
 {
+	bool		   record_update;
 	struct thandle	   *sub_th;
 	int		    rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
+
+	if (record_update) {
+		rc = update_record_pack(attr_set, th, lu_object_fid(&dt->do_lu),
+					attr);
+		if (rc < 0)
+			RETURN(rc);
+	}
 
 	rc = dt_attr_set(env, dt, attr, sub_th);
 
@@ -596,7 +677,7 @@ int lod_sub_object_declare_xattr_del(const struct lu_env *env,
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt);
+	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
 
@@ -625,12 +706,20 @@ int lod_sub_object_xattr_del(const struct lu_env *env,
 			     struct thandle *th)
 {
 	struct thandle	*sub_th;
+	bool		record_update;
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
+
+	if (record_update) {
+		rc = update_record_pack(xattr_del, th,
+					lu_object_fid(&dt->do_lu), name);
+		if (rc < 0)
+			RETURN(rc);
+	}
 
 	rc = dt_xattr_del(env, dt, name, sub_th);
 
@@ -660,7 +749,7 @@ int lod_sub_object_declare_write(const struct lu_env *env,
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt);
+	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
 
@@ -690,12 +779,20 @@ ssize_t lod_sub_object_write(const struct lu_env *env, struct dt_object *dt,
 			     struct thandle *th, int rq)
 {
 	struct thandle	*sub_th;
+	bool		record_update;
 	ssize_t		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
+
+	if (record_update) {
+		rc = update_record_pack(write, th, lu_object_fid(&dt->do_lu),
+					buf, *pos);
+		if (rc < 0)
+			RETURN(rc);
+	}
 
 	rc = dt_write(env, dt, buf, pos, sub_th, rq);
 	RETURN(rc);

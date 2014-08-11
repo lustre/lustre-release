@@ -209,6 +209,8 @@ int out_handle(struct tgt_session_info *tsi);
 #define out_tx_write(info, obj, buf, pos, th, reply, idx) \
 	__out_tx_write(info, obj, buf, pos, th, reply, idx, __FILE__, __LINE__)
 
+const char *update_op_str(__u16 opcode);
+
 extern struct page *tgt_page_to_corrupt;
 
 struct tgt_thread_big_cache {
@@ -221,4 +223,29 @@ int tgt_txn_start_cb(const struct lu_env *env, struct thandle *th,
 int tgt_txn_stop_cb(const struct lu_env *env, struct thandle *th,
 		    void *cookie);
 
+void update_records_dump(const struct update_records *records,
+			 unsigned int mask, bool dump_updates);
+
+struct update_thread_info {
+	struct lu_attr			uti_attr;
+	struct lu_fid			uti_fid;
+	struct lu_buf			uti_buf;
+	struct thandle_update_records	uti_tur;
+	struct obdo			uti_obdo;
+};
+
+extern struct lu_context_key update_thread_key;
+
+static inline struct update_thread_info *
+update_env_info(const struct lu_env *env)
+{
+	struct update_thread_info *uti;
+
+	uti = lu_context_key_get(&env->le_ctx, &update_thread_key);
+	LASSERT(uti != NULL);
+	return uti;
+}
+
+void update_info_init(void);
+void update_info_fini(void);
 #endif /* _TG_INTERNAL_H */

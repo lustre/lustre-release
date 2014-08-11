@@ -485,7 +485,8 @@ void lod_object_free_striping(const struct lu_env *env, struct lod_object *lo);
 /* lod_sub_object.c */
 struct thandle *lod_sub_get_thandle(const struct lu_env *env,
 				    struct thandle *th,
-				    const struct dt_object *sub_obj);
+				    const struct dt_object *sub_obj,
+				    bool *record_update);
 int lod_sub_object_declare_create(const struct lu_env *env,
 				  struct dt_object *dt,
 				  struct lu_attr *attr,

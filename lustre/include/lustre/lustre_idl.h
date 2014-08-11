@@ -3192,6 +3192,7 @@ typedef enum {
 	CHANGELOG_REC		= LLOG_OP_MAGIC | 0x60000,
 	CHANGELOG_USER_REC	= LLOG_OP_MAGIC | 0x70000,
 	HSM_AGENT_REC		= LLOG_OP_MAGIC | 0x80000,
+	UPDATE_REC		= LLOG_OP_MAGIC | 0xa0000,
 	LLOG_HDR_MAGIC		= LLOG_OP_MAGIC | 0x45539,
 	LLOG_LOGID_MAGIC	= LLOG_OP_MAGIC | 0x4553b,
 } llog_op_type;
@@ -3947,9 +3948,11 @@ extern void lustre_swab_hsm_request(struct hsm_request *hr);
  */
 
 /**
- * Type of each update
+ * Type of each update, if adding/deleting update, please also update
+ * update_opcode in lustre/target/out_lib.c.
  */
 enum update_type {
+	OUT_START		= 0,
 	OUT_CREATE		= 1,
 	OUT_DESTROY		= 2,
 	OUT_REF_ADD		= 3,
@@ -4013,19 +4016,28 @@ void lustre_swab_object_update(struct object_update *ou);
 void lustre_swab_object_update_request(struct object_update_request *our);
 
 static inline size_t
-object_update_size(const struct object_update *update)
+object_update_params_size(const struct object_update *update)
 {
-	const struct	object_update_param *param;
-	size_t		size;
-	unsigned int	i;
+	const struct object_update_param *param;
+	size_t				 total_size = 0;
+	unsigned int			 i;
 
-	size = offsetof(struct object_update, ou_params[0]);
+	param = &update->ou_params[0];
 	for (i = 0; i < update->ou_params_count; i++) {
-		param = (struct object_update_param *)((char *)update + size);
-		size += object_update_param_size(param);
+		size_t size = object_update_param_size(param);
+
+		param = (struct object_update_param *)((char *)param + size);
+		total_size += size;
 	}
 
-	return size;
+	return total_size;
+}
+
+static inline size_t
+object_update_size(const struct object_update *update)
+{
+	return offsetof(struct object_update, ou_params[0]) +
+	       object_update_params_size(update);
 }
 
 static inline struct object_update *
