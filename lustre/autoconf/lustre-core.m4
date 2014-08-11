@@ -1275,6 +1275,26 @@ hlist_for_each_entry_3args, [
 ]) # LC_HAVE_HLIST_FOR_EACH_3ARG
 
 #
+# LC_HAVE_BIO_END_SECTOR
+#
+# 3.9 introduces bio_end_sector macro
+# f73a1c7d117d07a96d89475066188a2b79e53c48
+#
+AC_DEFUN([LC_HAVE_BIO_END_SECTOR], [
+LB_CHECK_COMPILE([if 'bio_end_sector is defined],
+bio_end_sector, [
+	#include <linux/bio.h>
+],[
+	struct bio bio;
+
+	bio_end_sector(&bio);
+],[
+	AC_DEFINE(HAVE_BIO_END_SECTOR, 1,
+		  [bio_end_sector is defined])
+])
+]) # LC_HAVE_BIO_END_SECTOR
+
+#
 # LC_HAVE_ONLY_PROCFS_SEQ
 #
 # 3.10+ only supports procfs seq_files handling
@@ -1585,6 +1605,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 3.9
 	LC_HAVE_HLIST_FOR_EACH_3ARG
+	LC_HAVE_BIO_END_SECTOR
 
 	# 3.10
 	LC_HAVE_ONLY_PROCFS_SEQ

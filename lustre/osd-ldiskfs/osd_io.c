@@ -147,9 +147,14 @@ void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf)
 
 static void dio_complete_routine(struct bio *bio, int error)
 {
-        struct osd_iobuf *iobuf = bio->bi_private;
-        struct bio_vec *bvl;
-        int i;
+	struct osd_iobuf *iobuf = bio->bi_private;
+#ifdef HAVE_BVEC_ITER
+	struct bvec_iter iter;
+	struct bio_vec bvl;
+#else
+	int iter;
+	struct bio_vec *bvl;
+#endif
 
         /* CAVEAT EMPTOR: possibly in IRQ context
          * DO NOT record procfs stats here!!! */
@@ -166,23 +171,23 @@ static void dio_complete_routine(struct bio *bio, int error)
 		CERROR("bi_next: %p, bi_flags: %lx, bi_rw: %lu, bi_vcnt: %d, "
 		       "bi_idx: %d, bi->size: %d, bi_end_io: %p, bi_cnt: %d, "
 		       "bi_private: %p\n", bio->bi_next, bio->bi_flags,
-		       bio->bi_rw, bio->bi_vcnt, bio->bi_idx, bio->bi_size,
-		       bio->bi_end_io, atomic_read(&bio->bi_cnt),
-		       bio->bi_private);
+			bio->bi_rw, bio->bi_vcnt, bio_idx(bio),
+			bio_sectors(bio) << 9, bio->bi_end_io,
+			atomic_read(&bio->bi_cnt), bio->bi_private);
 		return;
 	}
 
-        /* the check is outside of the cycle for performance reason -bzzz */
+	/* the check is outside of the cycle for performance reason -bzzz */
 	if (!test_bit(__REQ_WRITE, &bio->bi_rw)) {
-                bio_for_each_segment(bvl, bio, i) {
-                        if (likely(error == 0))
-                                SetPageUptodate(bvl->bv_page);
-                        LASSERT(PageLocked(bvl->bv_page));
-                }
+		bio_for_each_segment(bvl, bio, iter) {
+			if (likely(error == 0))
+				SetPageUptodate(bvec_iter_page(&bvl, iter));
+			LASSERT(PageLocked(bvec_iter_page(&bvl, iter)));
+		}
 		atomic_dec(&iobuf->dr_dev->od_r_in_flight);
-        } else {
+	} else {
 		atomic_dec(&iobuf->dr_dev->od_w_in_flight);
-        }
+	}
 
 	/* any real error is good enough -bzzz */
 	if (error != 0 && iobuf->dr_error == 0)
@@ -244,13 +249,10 @@ static void osd_submit_bio(int rw, struct bio *bio)
 
 static int can_be_merged(struct bio *bio, sector_t sector)
 {
-        unsigned int size;
+	if (bio == NULL)
+		return 0;
 
-        if (!bio)
-                return 0;
-
-        size = bio->bi_size >> 9;
-        return bio->bi_sector + size == sector ? 1 : 0;
+	return bio_end_sector(bio) == sector ? 1 : 0;
 }
 
 static int osd_do_bio(struct osd_device *osd, struct inode *inode,
@@ -316,23 +318,23 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
                                          blocksize * nblocks, page_offset) != 0)
                                 continue;       /* added this frag OK */
 
-                        if (bio != NULL) {
-                                struct request_queue *q =
-                                        bdev_get_queue(bio->bi_bdev);
+			if (bio != NULL) {
+				struct request_queue *q =
+					bdev_get_queue(bio->bi_bdev);
+				unsigned int bi_size = bio_sectors(bio) << 9;
 
-                                /* Dang! I have to fragment this I/O */
-                                CDEBUG(D_INODE, "bio++ sz %d vcnt %d(%d) "
-                                       "sectors %d(%d) psg %d(%d) hsg %d(%d)\n",
-                                       bio->bi_size,
-                                       bio->bi_vcnt, bio->bi_max_vecs,
-                                       bio->bi_size >> 9, queue_max_sectors(q),
+				/* Dang! I have to fragment this I/O */
+				CDEBUG(D_INODE, "bio++ sz %d vcnt %d(%d) "
+				       "sectors %d(%d) psg %d(%d) hsg %d(%d)\n",
+				       bi_size, bio->bi_vcnt, bio->bi_max_vecs,
+				       bio_sectors(bio),
+				       queue_max_sectors(q),
                                        bio_phys_segments(q, bio),
                                        queue_max_phys_segments(q),
 				       0, queue_max_hw_segments(q));
-
-                                record_start_io(iobuf, bio->bi_size);
-                                osd_submit_bio(iobuf->dr_rw, bio);
-                        }
+				record_start_io(iobuf, bi_size);
+				osd_submit_bio(iobuf->dr_rw, bio);
+			}
 
 			/* allocate new bio */
 			bio = bio_alloc(GFP_NOIO, min(BIO_MAX_PAGES,
@@ -346,23 +348,23 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
                                 goto out;
                         }
 
-                        bio->bi_bdev = inode->i_sb->s_bdev;
-                        bio->bi_sector = sector;
+			bio->bi_bdev = inode->i_sb->s_bdev;
+			bio_set_sector(bio, sector);
 			bio->bi_rw = (iobuf->dr_rw == 0) ? READ : WRITE;
-                        bio->bi_end_io = dio_complete_routine;
-                        bio->bi_private = iobuf;
+			bio->bi_end_io = dio_complete_routine;
+			bio->bi_private = iobuf;
 
-                        rc = bio_add_page(bio, page,
-                                          blocksize * nblocks, page_offset);
-                        LASSERT(rc != 0);
-                }
-        }
+			rc = bio_add_page(bio, page,
+					  blocksize * nblocks, page_offset);
+			LASSERT(rc != 0);
+		}
+	}
 
-        if (bio != NULL) {
-                record_start_io(iobuf, bio->bi_size);
-                osd_submit_bio(iobuf->dr_rw, bio);
-                rc = 0;
-        }
+	if (bio != NULL) {
+		record_start_io(iobuf, bio_sectors(bio) << 9);
+		osd_submit_bio(iobuf->dr_rw, bio);
+		rc = 0;
+	}
 
 out:
 	/* in order to achieve better IO throughput, we don't wait for writes

@@ -186,6 +186,19 @@ unsigned int ll_crypto_tfm_alg_min_keysize(struct crypto_blkcipher *tfm)
 # define blkdev_get_by_dev(dev, mode, holder) open_by_devnum(dev, mode)
 #endif
 
+#ifdef HAVE_BVEC_ITER
+#define bio_idx(bio)			(bio->bi_iter.bi_idx)
+#define bio_set_sector(bio, sector)	(bio->bi_iter.bi_sector = sector)
+#else
+#define bio_idx(bio)			(bio->bi_idx)
+#define bio_set_sector(bio, sector)	(bio->bi_sector = sector)
+#define bio_sectors(bio)		((bio)->bi_size >> 9)
+#ifndef HAVE_BIO_END_SECTOR
+#define bio_end_sector(bio)		(bio->bi_sector + bio_sectors(bio))
+#endif
+#define bvec_iter_page(bvec, iter)	(*bvec->bv_page)
+#endif
+
 #ifndef HAVE_BLK_QUEUE_MAX_SEGMENTS
 #define blk_queue_max_segments(rq, seg)                      \
         do { blk_queue_max_phys_segments(rq, seg);           \
