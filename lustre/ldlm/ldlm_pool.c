@@ -480,6 +480,7 @@ static void ldlm_cli_pool_pop_slv(struct ldlm_pool *pl)
 static int ldlm_cli_pool_recalc(struct ldlm_pool *pl)
 {
         time_t recalc_interval_sec;
+	int ret;
         ENTRY;
 
         recalc_interval_sec = cfs_time_current_sec() - pl->pl_recalc_time;
@@ -500,17 +501,13 @@ static int ldlm_cli_pool_recalc(struct ldlm_pool *pl)
          * Make sure that pool knows last SLV and Limit from obd.
          */
         ldlm_cli_pool_pop_slv(pl);
-
-        pl->pl_recalc_time = cfs_time_current_sec();
-        lprocfs_counter_add(pl->pl_stats, LDLM_POOL_TIMING_STAT,
-                            recalc_interval_sec);
 	spin_unlock(&pl->pl_lock);
 
         /*
          * Do not cancel locks in case lru resize is disabled for this ns.
          */
         if (!ns_connect_lru_resize(ldlm_pl2ns(pl)))
-                RETURN(0);
+		GOTO(out, ret = 0);
 
         /*
          * In the time of canceling locks on client we do not need to maintain
@@ -518,8 +515,20 @@ static int ldlm_cli_pool_recalc(struct ldlm_pool *pl)
          * It may be called when SLV has changed much, this is why we do not
          * take into account pl->pl_recalc_time here.
          */
-	RETURN(ldlm_cancel_lru(ldlm_pl2ns(pl), 0, LCF_ASYNC,
-			       LDLM_CANCEL_LRUR));
+	ret = ldlm_cancel_lru(ldlm_pl2ns(pl), 0, LCF_ASYNC,
+			       LDLM_CANCEL_LRUR);
+
+out:
+	spin_lock(&pl->pl_lock);
+	/*
+	 * Time of LRU resizing might be longer than period,
+	 * so update after LRU resizing rather than before it.
+	 */
+	pl->pl_recalc_time = cfs_time_current_sec();
+	lprocfs_counter_add(pl->pl_stats, LDLM_POOL_TIMING_STAT,
+			    recalc_interval_sec);
+	spin_unlock(&pl->pl_lock);
+	RETURN(ret);
 }
 
 /**
@@ -611,6 +620,14 @@ int ldlm_pool_recalc(struct ldlm_pool *pl)
         }
 	recalc_interval_sec = pl->pl_recalc_time - cfs_time_current_sec() +
 			      pl->pl_recalc_period;
+	if (recalc_interval_sec <= 0) {
+		/* Prevent too frequent recalculation. */
+		CDEBUG(D_DLMTRACE, "Negative interval(%ld), "
+		       "too short period(%ld)",
+		       recalc_interval_sec,
+		       pl->pl_recalc_period);
+		recalc_interval_sec = 1;
+	}
 
         return recalc_interval_sec;
 }
