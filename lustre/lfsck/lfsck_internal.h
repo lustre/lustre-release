@@ -874,7 +874,7 @@ static inline void lfsck_instance_put(const struct lu_env *env,
 		lfsck_instance_cleanup(env, lfsck);
 }
 
-static inline mdsno_t lfsck_dev_idx(struct dt_device *dev)
+static inline u32 lfsck_dev_idx(struct dt_device *dev)
 {
 	return dev->dd_lu_dev.ld_site->ld_seq_site->ss_node_id;
 }

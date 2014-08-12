@@ -53,8 +53,7 @@
 #include <lprocfs_status.h>
 #include "lmv_internal.h"
 
-int lmv_fld_lookup(struct lmv_obd *lmv, const struct lu_fid *fid,
-		   mdsno_t *mds)
+int lmv_fld_lookup(struct lmv_obd *lmv, const struct lu_fid *fid, u32 *mds)
 {
 	struct obd_device *obd = lmv2obd_dev(lmv);
 	int rc;

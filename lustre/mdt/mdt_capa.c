@@ -49,8 +49,7 @@ static inline void set_capa_key_expiry(struct mdt_device *mdt)
 	mdt->mdt_ck_expiry = jiffies + mdt->mdt_ck_timeout * HZ;
 }
 
-static void make_capa_key(struct lustre_capa_key *key,
-                          mdsno_t mdsnum, int keyid)
+static void make_capa_key(struct lustre_capa_key *key, u32 mdsnum, int keyid)
 {
         key->lk_seq = mdsnum;
         key->lk_keyid = keyid + 1;
@@ -150,7 +149,7 @@ int mdt_capa_keys_init(const struct lu_env *env, struct mdt_device *mdt)
         struct mdt_thread_info  *mti;
         struct dt_object        *obj;
         struct lu_attr          *la;
-        mdsno_t                  mdsnum;
+	u32			 mdsnum;
         unsigned long            size;
         int                      rc;
         ENTRY;
@@ -215,7 +214,7 @@ static int mdt_ck_thread_main(void *args)
 	struct mdt_thread_info *info;
 	struct md_device       *next;
 	struct l_wait_info      lwi = { 0 };
-	mdsno_t                 mdsnum;
+	u32			mdsnum;
 	int                     rc;
 	ENTRY;
 

@@ -204,7 +204,7 @@ EXPORT_SYMBOL(fld_update_from_controller);
  * Lookup sequece in local cache/fldb.
  **/
 int fld_local_lookup(const struct lu_env *env, struct lu_server_fld *fld,
-		     seqno_t seq, struct lu_seq_range *range)
+		     u64 seq, struct lu_seq_range *range)
 {
 	struct lu_seq_range *erange;
 	struct fld_thread_info *info;
@@ -240,7 +240,7 @@ EXPORT_SYMBOL(fld_local_lookup);
  *  cache fld entries, but this cache is not persistent.
  */
 int fld_server_lookup(const struct lu_env *env, struct lu_server_fld *fld,
-		      seqno_t seq, struct lu_seq_range *range)
+		      u64 seq, struct lu_seq_range *range)
 {
 	__u32 index;
 	int rc;

@@ -36,7 +36,7 @@
 
 struct lmv_oinfo {
 	struct lu_fid	lmo_fid;
-	mdsno_t		lmo_mds;
+	u32		lmo_mds;
 	struct inode	*lmo_root;
 };
 

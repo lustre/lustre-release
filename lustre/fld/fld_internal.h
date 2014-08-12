@@ -179,7 +179,7 @@ int fld_index_create(const struct lu_env *env, struct lu_server_fld *fld,
 		     const struct lu_seq_range *new_range, struct thandle *th);
 
 int fld_index_lookup(const struct lu_env *env, struct lu_server_fld *fld,
-		     seqno_t seq, struct lu_seq_range *range);
+		     u64 seq, struct lu_seq_range *range);
 
 int fld_name_to_index(const char *name, __u32 *index);
 int fld_server_mod_init(void);
@@ -220,7 +220,7 @@ void fld_cache_delete(struct fld_cache *cache,
 void fld_cache_delete_nolock(struct fld_cache *cache,
 			     const struct lu_seq_range *range);
 int fld_cache_lookup(struct fld_cache *cache,
-                     const seqno_t seq, struct lu_seq_range *range);
+		     const u64 seq, struct lu_seq_range *range);
 
 struct fld_cache_entry *
 fld_cache_entry_lookup(struct fld_cache *cache,

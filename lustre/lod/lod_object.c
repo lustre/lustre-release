@@ -3326,7 +3326,7 @@ static int lod_object_init(const struct lu_env *env, struct lu_object *lo,
 	struct lu_object	*cobj;
 	struct lod_tgt_descs	*ltd	= NULL;
 	struct lod_tgt_desc	*tgt;
-	mdsno_t			 idx	= 0;
+	u32			 idx	= 0;
 	int			 type	= LU_SEQ_RANGE_ANY;
 	int			 rc;
 	ENTRY;

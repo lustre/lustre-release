@@ -58,10 +58,8 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 
 int lmv_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
 		     void *, int);
-int lmv_fld_lookup(struct lmv_obd *lmv, const struct lu_fid *fid,
-                   mdsno_t *mds);
-int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid,
-                    mdsno_t mds);
+int lmv_fld_lookup(struct lmv_obd *lmv, const struct lu_fid *fid, u32 *mds);
+int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid, u32 mds);
 int lmv_fid_alloc(const struct lu_env *env, struct obd_export *exp,
 		  struct lu_fid *fid, struct md_op_data *op_data);
 
@@ -79,7 +77,7 @@ static inline struct obd_device *lmv2obd_dev(struct lmv_obd *lmv)
 }
 
 static inline struct lmv_tgt_desc *
-lmv_get_target(struct lmv_obd *lmv, mdsno_t mdt_idx, int *index)
+lmv_get_target(struct lmv_obd *lmv, u32 mdt_idx, int *index)
 {
 	int i;
 
@@ -101,7 +99,7 @@ static inline int
 lmv_find_target_index(struct lmv_obd *lmv, const struct lu_fid *fid)
 {
 	struct lmv_tgt_desc	*ltd;
-	mdsno_t			mdt_idx = 0;
+	u32			mdt_idx = 0;
 	int			index = 0;
 
 	if (lmv->desc.ld_tgt_count > 1) {

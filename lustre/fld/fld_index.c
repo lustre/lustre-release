@@ -79,8 +79,8 @@ static const struct lu_seq_range ROOT_FLD_RANGE = {
 
 static const struct dt_index_features fld_index_features = {
 	.dif_flags       = DT_IND_UPDATE,
-	.dif_keysize_min = sizeof(seqno_t),
-	.dif_keysize_max = sizeof(seqno_t),
+	.dif_keysize_min = sizeof(u64),
+	.dif_keysize_max = sizeof(u64),
 	.dif_recsize_min = sizeof(struct lu_seq_range),
 	.dif_recsize_max = sizeof(struct lu_seq_range),
 	.dif_ptrsize     = 4
@@ -237,7 +237,7 @@ out:
  * \retval  -ve         other error;
  */
 int fld_index_lookup(const struct lu_env *env, struct lu_server_fld *fld,
-		     seqno_t seq, struct lu_seq_range *range)
+		     u64 seq, struct lu_seq_range *range)
 {
         struct lu_seq_range     *fld_rec;
         struct fld_thread_info  *info;
