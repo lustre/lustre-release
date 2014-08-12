@@ -378,7 +378,7 @@ EXPORT_SYMBOL(lc_watchdog_add);
 
 static void lcw_update_time(struct lc_watchdog *lcw, const char *message)
 {
-        cfs_time_t newtime = cfs_time_current();;
+	cfs_time_t newtime = cfs_time_current();
 
         if (lcw->lcw_state == LC_WATCHDOG_EXPIRED) {
                 struct timeval timediff;
@@ -419,10 +419,10 @@ void lc_watchdog_touch(struct lc_watchdog *lcw, int timeout)
         lc_watchdog_del_pending(lcw);
 
         lcw_update_time(lcw, "resumed");
-        lcw->lcw_state = LC_WATCHDOG_ENABLED;
 
         cfs_timer_arm(&lcw->lcw_timer, cfs_time_current() +
                       cfs_time_seconds(timeout));
+	lcw->lcw_state = LC_WATCHDOG_ENABLED;
 
         EXIT;
 }
