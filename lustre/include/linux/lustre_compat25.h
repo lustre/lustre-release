@@ -361,4 +361,8 @@ static inline int radix_tree_exceptional_entry(void *arg)
 }
 #endif
 
+#ifndef SIZE_MAX
+#define SIZE_MAX	(~(size_t)0)
+#endif
+
 #endif /* _COMPAT25_H */

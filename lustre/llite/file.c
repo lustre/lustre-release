@@ -1949,6 +1949,10 @@ static int ll_ioctl_fiemap(struct inode *inode, unsigned long arg)
         if (get_user(extent_count,
             &((struct ll_user_fiemap __user *)arg)->fm_extent_count))
                 RETURN(-EFAULT);
+
+	if (extent_count >=
+	    (SIZE_MAX - sizeof(*fiemap_s)) / sizeof(struct ll_fiemap_extent))
+		RETURN(-EINVAL);
         num_bytes = sizeof(*fiemap_s) + (extent_count *
                                          sizeof(struct ll_fiemap_extent));
 
