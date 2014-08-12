@@ -42,8 +42,6 @@
  */
 #if defined(__linux__)
 #include <lnet/linux/lnet.h>
-#elif defined(__APPLE__)
-#include <lnet/darwin/lnet.h>
 #else
 #error Unsupported Operating System
 #endif

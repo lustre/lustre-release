@@ -30,8 +30,6 @@
 
 #if defined(__linux__)
 #include "socklnd_lib-linux.h"
-#elif defined(__APPLE__)
-#include "socklnd_lib-darwin.h"
 #else
 #error Unsupported Operating System
 #endif

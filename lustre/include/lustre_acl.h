@@ -39,8 +39,6 @@
 
 #if defined(__linux__)
 #include <linux/lustre_acl.h>
-#elif defined(__APPLE__)
-#include <darwin/lustre_acl.h>
 #endif
 
 #endif

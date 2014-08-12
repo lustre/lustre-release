@@ -38,7 +38,7 @@
 
 SUBDIRS = linux lustre
 
-DIST_SUBDIRS = linux lustre darwin
+DIST_SUBDIRS = linux lustre
 
 EXTRA_DIST = \
 	cl_object.h \

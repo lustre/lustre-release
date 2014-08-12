@@ -162,29 +162,6 @@ typedef unsigned long long cfs_cycles_t;
 #   error "Unknown byte order"
 #  endif /* __BIG_ENDIAN */
 # endif /* __LITTLE_ENDIAN */
-#elif __APPLE__
-#define __cpu_to_le64(x)                        OSSwapHostToLittleInt64(x)
-#define __cpu_to_le32(x)                        OSSwapHostToLittleInt32(x)
-#define __cpu_to_le16(x)                        OSSwapHostToLittleInt16(x)
-
-#define __le16_to_cpu(x)                        OSSwapLittleToHostInt16(x)
-#define __le32_to_cpu(x)                        OSSwapLittleToHostInt32(x)
-#define __le64_to_cpu(x)                        OSSwapLittleToHostInt64(x)
-
-#define cpu_to_le64(x)                          __cpu_to_le64(x)
-#define cpu_to_le32(x)                          __cpu_to_le32(x)
-#define cpu_to_le16(x)                          __cpu_to_le16(x)
-
-#define le64_to_cpu(x)                          __le64_to_cpu(x)
-#define le32_to_cpu(x)                          __le32_to_cpu(x)
-#define le16_to_cpu(x)                          __le16_to_cpu(x)
-
-#define __swab16(x)                             OSSwapInt16(x)
-#define __swab32(x)                             OSSwapInt32(x)
-#define __swab64(x)                             OSSwapInt64(x)
-#define __swab16s(x)                            do { *(x) = __swab16(*(x)); } while (0)
-#define __swab32s(x)                            do { *(x) = __swab32(*(x)); } while (0)
-#define __swab64s(x)                            do { *(x) = __swab64(*(x)); } while (0)
 #endif
 
 # ifndef THREAD_SIZE /* x86_64 linux has THREAD_SIZE in userspace */

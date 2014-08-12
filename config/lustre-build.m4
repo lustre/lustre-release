@@ -18,12 +18,6 @@ case $target_os in
 	linux*)
 		lb_target_os="linux"
 		;;
-	darwin*)
-		lb_target_os="darwin"
-		;;
-	solaris*)
-		lb_target_os="SunOS"
-		;;
 esac
 AC_SUBST(lb_target_os)
 ]) # LB_CANONICAL_SYSTEM
@@ -239,9 +233,6 @@ AS_IF([test "x$enable_modules" = xyes], [
 			LN_PROG_LINUX
 			AS_IF([test "x$enable_server" != xno], [LB_EXT4_SRC_DIR])
 			LC_PROG_LINUX
-		], [darwin*], [
-			LB_PROG_DARWIN
-			LIBCFS_PROG_DARWIN
 		], [*], [
 			# This is strange - Lustre supports a target we don't
 			AC_MSG_ERROR([Modules are not supported on $target_os])
@@ -433,8 +424,6 @@ AM_CONDITIONAL([TESTS], [test x$enable_tests = xyes])
 AM_CONDITIONAL([DOC], [test x$ENABLE_DOC = x1])
 AM_CONDITIONAL([INIT_SCRIPTS], [test x$ENABLE_INIT_SCRIPTS = x1])
 AM_CONDITIONAL([LINUX], [test x$lb_target_os = xlinux])
-AM_CONDITIONAL([DARWIN], [test x$lb_target_os = xdarwin])
-AM_CONDITIONAL([SUNOS], [test x$lb_target_os = xSunOS])
 AM_CONDITIONAL([USES_DPKG], [test x$uses_dpkg = xyes])
 AM_CONDITIONAL([USE_QUILT], [test x$use_quilt = xyes])
 
@@ -446,8 +435,6 @@ AM_CONDITIONAL([USE_QUILT], [test x$use_quilt = xyes])
 AM_CONDITIONAL(HAVE_PCLMULQDQ, test x$target_cpu = "xx86_64" -a x$target_vendor != "xk1om")
 AS_IF([test x$target_cpu = "xx86_64" -a x$target_vendor != "xk1om"],
 	[AC_DEFINE(HAVE_PCLMULQDQ, 1, [have PCLMULQDQ instruction])])
-
-LB_DARWIN_CONDITIONALS
 
 LIBCFS_CONDITIONALS
 LN_CONDITIONALS

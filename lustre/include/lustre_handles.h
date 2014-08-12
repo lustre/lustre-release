@@ -44,8 +44,6 @@
 
 #if defined(__linux__)
 #include <linux/lustre_handles.h>
-#elif defined(__APPLE__)
-#include <darwin/lustre_handles.h>
 #else
 #error Unsupported operating system.
 #endif

@@ -724,10 +724,6 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
                                                KSOCK_MSG_NOOP,
                 tx->tx_nob, tx->tx_niov, tx->tx_nkiov);
 
-        /*
-         * FIXME: SOCK_WMEM_QUEUED and SOCK_ERROR could block in __DARWIN8__
-         * but they're used inside spinlocks a lot.
-         */
         bufnob = libcfs_sock_wmem_queued(conn->ksnc_sock);
 	spin_lock_bh(&sched->kss_lock);
 
@@ -2265,8 +2261,6 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
                 /* Don't need the {get,put}connsock dance to deref ksnc_sock */
                 LASSERT (!conn->ksnc_closing);
 
-                /* SOCK_ERROR will reset error code of socket in
-                 * some platform (like Darwin8.x) */
                 error = libcfs_sock_error(conn->ksnc_sock);
                 if (error != 0) {
                         ksocknal_conn_addref(conn);

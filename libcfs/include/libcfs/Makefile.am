@@ -1,8 +1,5 @@
 SUBDIRS = linux posix util
-if DARWIN
-SUBDIRS += darwin
-endif
-DIST_SUBDIRS = linux posix util darwin
+DIST_SUBDIRS = linux posix util
 
 libcfsdir = $(includedir)/libcfs
 

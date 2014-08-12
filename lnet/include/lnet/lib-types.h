@@ -44,8 +44,6 @@
 
 #if defined(__linux__)
 #include <lnet/linux/lib-types.h>
-#elif defined(__APPLE__)
-#include <lnet/darwin/lib-types.h>
 #else
 #error Unsupported Operating System
 #endif

@@ -47,8 +47,6 @@
 
 #if defined(__linux__)
 #include <linux/lustre_debug.h>
-#elif defined(__APPLE__)
-#include <darwin/lustre_debug.h>
 #else
 #error Unsupported operating system.
 #endif

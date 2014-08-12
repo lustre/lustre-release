@@ -1,8 +1,5 @@
 SUBDIRS = linux
-if DARWIN
-SUBDIRS += darwin
-endif
-DIST_SUBDIRS = linux darwin
+DIST_SUBDIRS = linux
 
 if LIBLUSTRE
 noinst_LIBRARIES = liblustreclass.a
@@ -28,31 +25,7 @@ modulefs_DATA += llog_test$(KMODEXT)
 endif # TESTS
 endif # LINUX
 
-if DARWIN
-macos_PROGRAMS = obdclass
-
-obdclass_SOURCES =						\
-	darwin/darwin-module.c darwin/darwin-sysctl.c		\
-	class_obd.c genops.c lprocfs_status.c			\
-	lustre_handles.c lustre_peer.c obd_config.c		\
-	obdo.c debug.c llog_ioctl.c uuid.c			\
-	llog_swab.c llog_obd.c llog.c llog_cat.c		\
-	lu_object.c dt_object.c lu_ref.c			\
-	lprocfs_counters.c
-
-obdclass_CFLAGS := $(EXTRA_KCFLAGS)
-obdclass_LDFLAGS := $(EXTRA_KLDFLAGS)
-obdclass_LDADD := $(EXTRA_KLIBS)
-
-plist_DATA = Info.plist
-
-install_data_hook = fix-kext-ownership
-
-endif # DARWIN
-
 endif # MODULES
 
-install-data-hook: $(install_data_hook)
-
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
-MOSTLYCLEANFILES += linux/*.o darwin/*.o
+MOSTLYCLEANFILES += linux/*.o

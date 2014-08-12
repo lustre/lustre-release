@@ -34,8 +34,6 @@
 
 #if defined(__linux__)
 #include <linux/lustre_quota.h>
-#elif defined(__APPLE__)
-#include <darwin/lustre_quota.h>
 #endif
 
 #include <dt_object.h>

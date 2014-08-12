@@ -58,8 +58,6 @@
 
 #if defined(__linux__)
 #include <linux/lustre_log.h>
-#elif defined(__APPLE__)
-#include <darwin/lustre_log.h>
 #else
 #error Unsupported operating system.
 #endif

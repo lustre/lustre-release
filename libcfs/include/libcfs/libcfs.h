@@ -47,8 +47,6 @@
 #include <libcfs/posix/libcfs.h>
 #elif defined(__linux__)
 #include <libcfs/linux/libcfs.h>
-#elif defined(__APPLE__)
-#include <libcfs/darwin/libcfs.h>
 #else
 #error Unsupported operating system.
 #endif

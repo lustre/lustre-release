@@ -50,8 +50,6 @@
 
 #if defined(__linux__)
 #include <linux/obd_class.h>
-#elif defined(__APPLE__)
-#include <darwin/obd_class.h>
 #else
 #error Unsupported operating system.
 #endif

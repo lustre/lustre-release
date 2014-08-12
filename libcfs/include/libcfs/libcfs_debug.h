@@ -299,10 +299,6 @@ do {									\
 	goto label;							\
 } while (0)
 
-/*
- * if rc == NULL, we need to code as RETURN((void *)NULL), otherwise
- * there will be a warning in osx.
- */
 #if defined(__GNUC__)
 
 long libcfs_log_return(struct libcfs_debug_msg_data *, long rc);

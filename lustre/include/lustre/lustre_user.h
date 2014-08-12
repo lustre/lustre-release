@@ -56,8 +56,6 @@
 #include <lustre/ll_fiemap.h>
 #if defined(__linux__)
 #include <linux/lustre_user.h>
-#elif defined(__APPLE__)
-#include <darwin/lustre_user.h>
 #else
 #error Unsupported operating system.
 #endif

@@ -57,8 +57,6 @@
 
 #if defined(__linux__)
 #include <linux/lustre_net.h>
-#elif defined(__APPLE__)
-#include <darwin/lustre_net.h>
 #else
 #error Unsupported operating system.
 #endif

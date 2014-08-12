@@ -37,10 +37,7 @@
 #
 
 SUBDIRS = linux util posix
-if DARWIN
-SUBDIRS += darwin
-endif
-DIST_SUBDIRS = linux util posix darwin
+DIST_SUBDIRS = linux util posix
 
 noinst_LIBRARIES= libcfs.a
 libcfs_a_SOURCES= posix/posix-debug.c user-prim.c user-lock.c user-tcpip.c  \
@@ -70,33 +67,10 @@ if LINUX
 modulenet_DATA := libcfs$(KMODEXT)
 endif
 
-if DARWIN
-macos_PROGRAMS = libcfs
-
-nodist_libcfs_SOURCES = darwin/darwin-sync.c darwin/darwin-mem.c	\
-	darwin/darwin-prim.c darwin/darwin-fs.c darwin/darwin-curproc.c	\
-	darwin/darwin-tcpip.c darwin/darwin-utils.c			\
-	darwin/darwin-debug.c darwin/darwin-proc.c			\
-	darwin/darwin-tracefile.c darwin/darwin-module.c		\
-	posix/posix-debug.c module.c tracefile.c nidstrings.c watchdog.c \
-	kernel_user_comm.c hash.c posix/rbtree.c heap.c
-
-libcfs_CFLAGS := $(EXTRA_KCFLAGS)
-libcfs_LDFLAGS := $(EXTRA_KLDFLAGS)
-libcfs_LDADD := $(EXTRA_KLIBS)
-
-plist_DATA = Info.plist
-
-install_data_hook = fix-kext-ownership
-
 endif
 
-endif
-
-install-data-hook: $(install_data_hook)
-
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ linux-*.c linux/*.o darwin/*.o libcfs
-EXTRA_DIST := $(libcfs-all-objs:%.o=%.c) Info.plist tracefile.h prng.c \
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ linux-*.c linux/*.o libcfs
+EXTRA_DIST := $(libcfs-all-objs:%.o=%.c) tracefile.h prng.c \
 	      user-lock.c user-tcpip.c user-bitops.c user-prim.c workitem.c \
 	      user-mem.c kernel_user_comm.c fail.c libcfs_cpu.c heap.c \
 	      libcfs_mem.c libcfs_lock.c user-string.c linux/linux-tracefile.h

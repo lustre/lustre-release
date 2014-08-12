@@ -340,15 +340,6 @@ LIBCFS_SHRINKER_COUNT
 ]) # LIBCFS_PROG_LINUX
 
 #
-# LIBCFS_PROG_DARWIN
-#
-# Darwin checks
-#
-AC_DEFUN([LIBCFS_PROG_DARWIN], [
-LB_DARWIN_CHECK_FUNCS([get_preemption_level])
-]) # LIBCFS_PROG_DARWIN
-
-#
 # LIBCFS_PATH_DEFAULTS
 #
 # default paths for installed files
@@ -460,7 +451,5 @@ libcfs/libcfs/autoMakefile
 libcfs/libcfs/linux/Makefile
 libcfs/libcfs/posix/Makefile
 libcfs/libcfs/util/Makefile
-libcfs/include/libcfs/darwin/Makefile
-libcfs/libcfs/darwin/Makefile
 ])
 ]) # LIBCFS_CONFIG_FILES

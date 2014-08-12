@@ -595,15 +595,6 @@ LN_CONFIG_SK_DATA_READY
 ]) # LN_PROG_LINUX
 
 #
-# LN_PROG_DARWIN
-#
-# Darwin checks
-#
-AC_DEFUN([LN_PROG_DARWIN], [
-LB_DARWIN_CHECK_FUNCS([get_preemption_level])
-]) # LN_PROG_DARWIN
-
-#
 # LN_PATH_DEFAULTS
 #
 # default paths for installed files
@@ -730,6 +721,5 @@ lnet/ulnds/Makefile
 lnet/ulnds/autoMakefile
 lnet/ulnds/socklnd/Makefile
 lnet/utils/Makefile
-lnet/include/lnet/darwin/Makefile
 ])
 ]) # LN_CONFIG_FILES

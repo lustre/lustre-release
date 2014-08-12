@@ -50,8 +50,6 @@
 
 #if defined(__linux__)
 #include <linux/lustre_dlm.h>
-#elif defined(__APPLE__)
-#include <darwin/lustre_dlm.h>
 #else
 #error Unsupported operating system.
 #endif

@@ -50,9 +50,6 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
-#if defined(__sun__) || defined(__sun)
-#include <sys/sockio.h>
-#endif
 #include <sys/syscall.h>
 
 /*

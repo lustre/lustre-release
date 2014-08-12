@@ -93,47 +93,6 @@ dbg_write_cmd(int fd, char *str, int len)
         return (rc == len ? 0 : 1);
 }
 
-#elif defined(__DARWIN__)
-
-#define DAEMON_CTL_NAME         "lnet.trace_daemon"
-#define SUBSYS_DEBUG_CTL_NAME   "lnet.subsystem_debug"
-#define DEBUG_CTL_NAME          "lnet.debug"
-#define DUMP_KERNEL_CTL_NAME    "lnet.trace_dumpkernel"
-
-static char     sysctl_name[128];
-static int
-dbg_open_ctlhandle(const char *str)
-{
-
-        if (strlen(str)+1 > 128) {
-                fprintf(stderr, "sysctl name is too long: %s.\n", str);
-                return -1;
-        }
-        strcpy(sysctl_name, str);
-
-        return 0;
-}
-
-static void
-dbg_close_ctlhandle(int fd)
-{
-        sysctl_name[0] = '\0';
-        return;
-}
-
-static int
-dbg_write_cmd(int fd, char *str, int len)
-{
-        int     rc;
-
-        rc = sysctlbyname(sysctl_name, NULL, NULL, str, len+1);
-        if (rc != 0) {
-                fprintf(stderr, "sysctl %s with cmd (%s) error: %d\n",
-                        sysctl_name, str, errno);
-        }
-        return (rc == 0 ? 0: 1);
-}
-
 #else
 #error - Unknown sysctl convention.
 #endif

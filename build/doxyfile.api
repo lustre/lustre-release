@@ -112,7 +112,7 @@ EXCLUDE                = lnet/klnds/ciblnd/ \
 			 lnet/klnds/ralnd/ \
 			 lnet/klnds/viblnd/
 EXCLUDE_SYMLINKS       = NO
-EXCLUDE_PATTERNS       = */darwin/*
+EXCLUDE_PATTERNS       =
 EXCLUDE_SYMBOLS        = EXPORT_SYMBOL*
 EXAMPLE_PATH           =
 EXAMPLE_PATTERNS       = *

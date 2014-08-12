@@ -42,8 +42,6 @@
 
 #if defined(__linux__)
 #include <linux/obd_support.h>
-#elif defined(__APPLE__)
-#include <darwin/obd_support.h>
 #else
 #error Unsupported operating system.
 #endif

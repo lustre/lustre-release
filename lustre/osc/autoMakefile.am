@@ -50,31 +50,6 @@ if LINUX
 modulefs_DATA = osc$(KMODEXT)
 endif
 
-if DARWIN
-macos_PROGRAMS = osc
-
-osc_SOURCES =		\
-	osc_dev.c	\
-	osc_object.c	\
-	osc_page.c	\
-	osc_lock.c	\
-	osc_io.c	\
-	osc_request.c	\
-	osc_quota.c	\
-	osc_cache.c
-
-osc_CFLAGS := $(EXTRA_KCFLAGS)
-osc_LDFLAGS := $(EXTRA_KLDFLAGS)
-osc_LDADD := $(EXTRA_KLIBS)
-
-plist_DATA = Info.plist
-
-install_data_hook = fix-kext-ownership
-
-endif # Darwin
-
 endif
-
-install-data-hook: $(install_data_hook)
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 

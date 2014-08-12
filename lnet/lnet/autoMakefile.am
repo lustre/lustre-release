@@ -18,27 +18,7 @@ if LINUX
 modulenet_DATA = lnet$(KMODEXT)
 endif # LINUX
 
-if DARWIN
-macos_PROGRAMS = lnet
-
-lnet_SOURCES = api-ni.c config.c
-lnet_SOURCES += lib-me.c lib-msg.c lib-eq.c lib-md.c
-lnet_SOURCES += lib-move.c module.c lo.c router.c router_proc.c
-lnet_SOURCES += acceptor.c peer.c
-
-lnet_CFLAGS := $(EXTRA_KCFLAGS)
-lnet_LDFLAGS := $(EXTRA_KLDFLAGS)
-lnet_LDADD := $(EXTRA_KLIBS)
-
-plist_DATA = Info.plist
-
-install_data_hook = fix-kext-ownership
-
-endif # DARWIN
-
 endif # MODULES
 
-install-data-hook: $(install_data_hook)
-
 MOSTLYCLEANFILES = @MOSTLYCLEANFILES@ lnet
-EXTRA_DIST = $(lnet-objs:%.o=%.c) Info.plist
+EXTRA_DIST = $(lnet-objs:%.o=%.c)

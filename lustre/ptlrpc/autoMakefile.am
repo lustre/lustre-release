@@ -72,56 +72,10 @@ if LINUX
 modulefs_DATA = ptlrpc$(KMODEXT)
 endif #LINUX
 
-if DARWIN
-macos_PROGRAMS = ptlrpc
-
-ptlrpc_SOURCES =	\
-	ptlrpc_module.c	\
-	client.c	\
-	connection.c	\
-	events.c	\
-	import.c	\
-	llog_client.c	\
-	llog_net.c	\
-	llog_server.c	\
-	lproc_ptlrpc.c	\
-	niobuf.c	\
-	pack_generic.c	\
-	pers.c		\
-	pinger.c	\
-	ptlrpcd.c	\
-	recover.c	\
-	service.c	\
-	nrs.c		\
-	nrs_fifo.c	\
-	nrs_crr.c	\
-	nrs_orr.c	\
-	nrs_tbf.c       \
-	wiretest.c	\
-	sec.c		\
-	sec_bulk.c	\
-	sec_gc.c	\
-	sec_config.c	\
-	sec_lproc.c	\
-	sec_null.c	\
-	sec_plain.c	\
-	$(LDLM_COMM_SOURCES)
-
-ptlrpc_CFLAGS := $(EXTRA_KCFLAGS)
-ptlrpc_LDFLAGS := $(EXTRA_KLDFLAGS)
-ptlrpc_LDADD := $(EXTRA_KLIBS)
-
-plist_DATA = Info.plist
-
-install_data_hook = fix-kext-ownership
-
-endif # DARWIN
-
 endif # MODULES
 
 if GSS
 SUBDIRS = gss
 endif
 
-install-data-hook: $(install_data_hook)
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  ldlm_*.c l_lock.c interval_tree.c

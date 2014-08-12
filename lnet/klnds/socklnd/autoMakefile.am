@@ -8,22 +8,4 @@ endif # MODULES
 
 EXTRA_DIST := $(ksocklnd-objs:%.o=%.c) socklnd_lib-linux.h socklnd.h
 
-if DARWIN
-  macos_PROGRAMS = ksocklnd
-
-  nodist_ksocklnd_SOURCES = socklnd.c socklnd_cb.c socklnd_proto.c
-  nodist_ksocklnd_SOURCES += socklnd_modparams.c socklnd_lib-darwin.c
-  EXTRA_DIST += socklnd_lib-darwin.c socklnd_lib-darwin.h
-
-  ksocklnd_CFLAGS := $(EXTRA_KCFLAGS)
-  ksocklnd_LDFLAGS := $(EXTRA_KLDFLAGS)
-  ksocklnd_LDADD := $(EXTRA_KLIBS)
-
-  plist_DATA = Info.plist
-  install_data_hook = fix-kext-ownership
-endif # DARWIN
-
-EXTRA_DIST += $(plist_DATA)
-install-data-hook: $(install_data_hook)
-
 MOSTLYCLEANFILES = @MOSTLYCLEANFILES@ socklnd_lib.c

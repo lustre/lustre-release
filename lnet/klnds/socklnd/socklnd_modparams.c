@@ -63,12 +63,7 @@ static int max_reconnectms = 60000;
 CFS_MODULE_PARM(max_reconnectms, "i", int, 0644,
                 "max connection retry interval (mS)");
 
-#if defined(__APPLE__) && !defined(__DARWIN8__)
-# define DEFAULT_EAGER_ACK 1
-#else
-# define DEFAULT_EAGER_ACK 0
-#endif
-static int eager_ack = DEFAULT_EAGER_ACK;
+static int eager_ack;
 CFS_MODULE_PARM(eager_ack, "i", int, 0644,
                 "send tcp ack packets eagerly");
 
@@ -80,15 +75,7 @@ static int min_bulk = (1<<10);
 CFS_MODULE_PARM(min_bulk, "i", int, 0644,
                 "smallest 'large' message");
 
-#ifdef __APPLE__
-# ifdef __DARWIN8__
-#  define DEFAULT_BUFFER_SIZE (224*1024)
-# else
-#  define DEFAULT_BUFFER_SIZE (1152 * 1024)
-# endif
-#else
 # define DEFAULT_BUFFER_SIZE 0
-#endif
 static int tx_buffer_size = DEFAULT_BUFFER_SIZE;
 CFS_MODULE_PARM(tx_buffer_size, "i", int, 0644,
                 "socket tx buffer size (0 for system default)");

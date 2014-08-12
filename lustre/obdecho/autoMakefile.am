@@ -47,28 +47,6 @@ if MODULES
 if LINUX
 modulefs_DATA = obdecho$(KMODEXT)
 endif
-
-if DARWIN
-macos_PROGRAMS = obdecho
-obdecho_SOURCES =	\
-	echo_client.c
-
-if SERVER
-obdecho_SOURCES += echo.c
-endif
-
-obdecho_CFLAGS := $(EXTRA_KCFLAGS)
-obdecho_LDFLAGS := $(EXTRA_KLDFLAGS)
-obdecho_LDADD := $(EXTRA_KLIBS)
-
-plist_DATA = Info.plist
-
-install_data_hook = fix-kext-ownership
-
-endif # darwin
-
 endif # MODULES
-
-install-data-hook: $(install_data_hook)
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 

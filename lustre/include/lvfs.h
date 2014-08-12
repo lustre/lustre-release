@@ -43,8 +43,6 @@
 
 #if defined(__linux__)
 #include <linux/lvfs.h>
-#elif defined(__APPLE__)
-#include <darwin/lvfs.h>
 #else
 #error Unsupported operating system.
 #endif

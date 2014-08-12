@@ -56,11 +56,7 @@ struct page *alloc_page(unsigned int flags)
                 return NULL;
         pg->addr = NULL;
 
-#if defined (__DARWIN__)
-	pg->addr = valloc(PAGE_CACHE_SIZE);
-#else
 	rc = posix_memalign(&pg->addr, PAGE_CACHE_SIZE, PAGE_CACHE_SIZE);
-#endif
         if (rc != 0 || pg->addr == NULL) {
                 free(pg);
                 return NULL;

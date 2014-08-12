@@ -40,6 +40,4 @@ if MODULES
 modulefs_DATA = lov$(KMODEXT)
 endif # MODULES
 
-install-data-hook: $(install_data_hook)
-
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 

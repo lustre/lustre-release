@@ -37,7 +37,7 @@ AC_SUBST(pkgexampledir)
 #
 AC_DEFUN([LC_TARGET_SUPPORTED], [
 case $target_os in
-	linux* | darwin*)
+	linux*)
 $1
 		;;
 	*)
@@ -1944,7 +1944,6 @@ lustre/doc/Makefile
 lustre/include/Makefile
 lustre/include/lustre_ver.h
 lustre/include/linux/Makefile
-lustre/include/darwin/Makefile
 lustre/include/lustre/Makefile
 lustre/kernel_patches/targets/3.10-rhel7.target
 lustre/kernel_patches/targets/2.6-rhel6.target
@@ -2012,6 +2011,5 @@ lustre/osp/Makefile
 lustre/osp/autoMakefile
 lustre/lod/Makefile
 lustre/lod/autoMakefile
-lustre/obdclass/darwin/Makefile
 ])
 ]) # LC_CONFIG_FILES
