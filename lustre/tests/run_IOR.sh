@@ -39,31 +39,33 @@ TESTDIR=${TESTDIR:-$MOUNT/d0.ior-$(hostname)}
 
 CONTINUE=true
 while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
-    echoerr "$(date +'%F %H:%M:%S'): IOR run starting"
-    mkdir -p $TESTDIR
-    # need this only if TESTDIR is not default
-    chmod -R 777 $TESTDIR
+	echoerr "$(date +'%F %H:%M:%S'): IOR run starting"
+	mkdir -p $TESTDIR
+	# need this only if TESTDIR is not default
+	chmod -R 777 $TESTDIR
 
+	sync
 	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
 		-np $((NUM_CLIENTS * THREADS_PER_CLIENT)) $IOR -a POSIX -b 1g \
 		-o $TESTDIR/IOR-file -s 1 -t 1m -v -w -r 1>$LOG &
-    load_pid=$!
-    wait $load_pid
-    if [ ${PIPESTATUS[0]} -eq 0 ]; then
-        echoerr "$(date +'%F %H:%M:%S'): IOR succeeded"
-        cd $TMP
-        rm -rf $TESTDIR
-        echoerr "$(date +'%F %H:%M:%S'): IOR run finished"
-    else
-        echoerr "$(date +'%F %H:%M:%S'): IOR failed"
-        if [ -z "$ERRORS_OK" ]; then
-            echo $(hostname) >> $END_RUN_FILE
-        fi
-        if [ $BREAK_ON_ERROR ]; then
-            # break
-            CONTINUE=false
-        fi
-    fi
+
+	load_pid=$!
+	wait $load_pid
+	if [ ${PIPESTATUS[0]} -eq 0 ]; then
+		echoerr "$(date +'%F %H:%M:%S'): IOR succeeded"
+		cd $TMP
+		rm -rf $TESTDIR
+		echoerr "$(date +'%F %H:%M:%S'): IOR run finished"
+	else
+		echoerr "$(date +'%F %H:%M:%S'): IOR failed"
+		if [ -z "$ERRORS_OK" ]; then
+			echo $(hostname) >> $END_RUN_FILE
+		fi
+		if [ $BREAK_ON_ERROR ]; then
+			# break
+			CONTINUE=false
+		fi
+	fi
 done
 
 echoerr "$(date +'%F %H:%M:%S'): IOR run exiting"

@@ -32,6 +32,8 @@ while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
 	mkdir -p $TESTDIR
 	$LFS setstripe -c -1 $TESTDIR
 	cd $TESTDIR
+	sync
+
 	# suppress dd xfer stat to workaround buggy coreutils/gettext
 	# combination in RHEL5 and OEL5, see BZ 21264
 	FREE_SPACE=$($LFS df $TESTDIR|awk '/filesystem summary:/ {print $5}')
