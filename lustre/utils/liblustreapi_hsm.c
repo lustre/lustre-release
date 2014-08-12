@@ -115,6 +115,7 @@ enum ct_event {
 
 /* initialized in llapi_hsm_register_event_fifo() */
 int llapi_hsm_event_fd = -1;
+static bool created_hsm_event_fifo;
 
 static inline const char *llapi_hsm_ct_ev2str(int type)
 {
@@ -469,6 +470,8 @@ int llapi_hsm_register_event_fifo(char *path)
 				    "not a pipe or has a wrong mode", path);
 			return -errno;
 		}
+	} else {
+		created_hsm_event_fifo = true;
 	}
 
 	/* Open the FIFO for read so that the subsequent open for write
@@ -517,7 +520,10 @@ int llapi_hsm_unregister_event_fifo(char *path)
 	if (close(llapi_hsm_event_fd) < 0)
 		return -errno;
 
-	unlink(path);
+	if (created_hsm_event_fifo) {
+		unlink(path);
+		created_hsm_event_fifo = false;
+	}
 
 	llapi_hsm_event_fd = -1;
 
