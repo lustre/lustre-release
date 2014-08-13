@@ -1058,7 +1058,7 @@ static void ptlrpc_server_finish_active_request(
  * This function is only called when some export receives a message (i.e.,
  * the network is up.)
  */
-static void ptlrpc_update_export_timer(struct obd_export *exp, long extra_delay)
+void ptlrpc_update_export_timer(struct obd_export *exp, long extra_delay)
 {
         struct obd_export *oldest_exp;
         time_t oldest_time, new_time;
@@ -1133,6 +1133,7 @@ static void ptlrpc_update_export_timer(struct obd_export *exp, long extra_delay)
 
         EXIT;
 }
+EXPORT_SYMBOL(ptlrpc_update_export_timer);
 
 /**
  * Sanity check request \a req.

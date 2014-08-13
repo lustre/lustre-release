@@ -3112,6 +3112,7 @@ int ptlrpc_service_health_check(struct ptlrpc_service *);
 void ptlrpc_server_drop_request(struct ptlrpc_request *req);
 void ptlrpc_request_change_export(struct ptlrpc_request *req,
 				  struct obd_export *export);
+void ptlrpc_update_export_timer(struct obd_export *exp, long extra_delay);
 
 #ifdef __KERNEL__
 int ptlrpc_hr_init(void);

@@ -2061,7 +2061,11 @@ static int target_recovery_thread(void *arg)
 			  libcfs_nid2str(req->rq_peer.nid));
                 handle_recovery_req(thread, req,
                                     trd->trd_recovery_handler);
-                target_request_copy_put(req);
+		/* Because the waiting client can not send ping to server,
+		 * so we need refresh the last_request_time, to avoid the
+		 * export is being evicted */
+		ptlrpc_update_export_timer(req->rq_export, 0);
+		target_request_copy_put(req);
         }
 
 	delta = (jiffies - delta) / HZ;
