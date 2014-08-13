@@ -1506,7 +1506,7 @@ check_llog_setattr64_rec(void)
 	CHECK_MEMBER(llog_setattr64_rec, lsr_uid_h);
 	CHECK_MEMBER(llog_setattr64_rec, lsr_gid);
 	CHECK_MEMBER(llog_setattr64_rec, lsr_gid_h);
-	CHECK_MEMBER(llog_setattr64_rec, lsr_padding);
+	CHECK_MEMBER(llog_setattr64_rec, lsr_valid);
 	CHECK_MEMBER(llog_setattr64_rec, lsr_tail);
 }
 

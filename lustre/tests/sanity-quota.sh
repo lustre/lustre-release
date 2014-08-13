@@ -2133,6 +2133,9 @@ run_test 33 "Basic usage tracking for user & group"
 
 # usage transfer test for user & group
 test_34() {
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.3) ]] &&
+		skip "Need MDS version at least 2.5.3" && return
+
         local BLK_CNT=2 # 2MB
 
 	setup_quota_test
@@ -2143,6 +2146,9 @@ test_34() {
 	[ $USED -ne 0 ] && error "Used space ($USED) for user $TSTID isn't 0."
 	USED=$(getquota -g $TSTID global curspace)
 	[ $USED -ne 0 ] && error "Used space ($USED) for group $TSTID isn't 0."
+
+	local USED=$(getquota -u $TSTID2 global curspace)
+	[ $USED -ne 0 ] && error "Used space ($USED) for user $TSTID2 isn't 0."
 
 	echo "Write file..."
 	$DD of=$DIR/$tdir/$tfile count=$BLK_CNT 2>/dev/null ||
@@ -2179,6 +2185,24 @@ test_34() {
 	USED=$(getquota -g $TSTID global curinodes)
 	[ $USED -eq 1 ] ||
 		error "Used inodes for group $TSTID is $USED, expected 1"
+
+	# chown won't change the ost object group. LU-4345 */
+	echo "chown the file to user $TSTID2"
+	chown $TSTID2 $DIR/$tdir/$tfile || error "chown to $TSTID2 failed"
+
+	echo "Wait for setattr on objects finished..."
+	wait_delete_completed
+
+	echo "Verify disk usage for user $TSTID2/$TSTID and group $TSTID"
+	USED=$(getquota -u $TSTID2 global curspace)
+	[ $USED -lt $BLK_CNT ] &&
+		error "Used space for user $TSTID2 is $USED, expected $BLK_CNT"
+	USED=$(getquota -u $TSTID global curspace)
+	[ $USED -ne 0 ] &&
+		error "Used space for user $TSTID is $USED, expected 0"
+	USED=$(getquota -g $TSTID global curspace)
+	[ $USED -lt $BLK_CNT ] &&
+		error "Used space for group $TSTID is $USED, expected $BLK_CNT"
 
 	cleanup_quota_test
 }

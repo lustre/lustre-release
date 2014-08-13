@@ -235,6 +235,9 @@ static int osp_sync_add_rec(const struct lu_env *env, struct osp_device *d,
 		LASSERT(attr);
 		osi->osi_setattr.lsr_uid = attr->la_uid;
 		osi->osi_setattr.lsr_gid = attr->la_gid;
+		osi->osi_setattr.lsr_valid =
+			((attr->la_valid & LA_UID) ? OBD_MD_FLUID : 0) |
+			((attr->la_valid & LA_GID) ? OBD_MD_FLGID : 0);
 		break;
 	default:
 		LBUG();
@@ -477,6 +480,16 @@ static int osp_sync_new_setattr_job(struct osp_device *d,
 	ENTRY;
 	LASSERT(h->lrh_type == MDS_SETATTR64_REC);
 
+	/* lsr_valid can only be 0 or have OBD_MD_{FLUID,FLGID} set,
+	 * so no bits other than these should be set. */
+	if ((rec->lsr_valid & ~(OBD_MD_FLUID | OBD_MD_FLGID)) != 0) {
+		CERROR("%s: invalid setattr record, lsr_valid:"LPU64"\n",
+		       d->opd_obd->obd_name, rec->lsr_valid);
+		/* return 0 so that sync thread can continue processing
+		 * other records. */
+		RETURN(0);
+	}
+
 	req = osp_sync_new_job(d, llh, h, OST_SETATTR, &RQF_OST_SETATTR);
 	if (IS_ERR(req))
 		RETURN(PTR_ERR(req));
@@ -486,14 +499,18 @@ static int osp_sync_new_setattr_job(struct osp_device *d,
 	body->oa.o_oi = rec->lsr_oi;
 	body->oa.o_uid = rec->lsr_uid;
 	body->oa.o_gid = rec->lsr_gid;
-	body->oa.o_valid = OBD_MD_FLGROUP | OBD_MD_FLID |
-			   OBD_MD_FLUID | OBD_MD_FLGID;
+	body->oa.o_valid = OBD_MD_FLGROUP | OBD_MD_FLID;
+	/* old setattr record (prior 2.6.0) doesn't have 'valid' stored,
+	 * we assume that both UID and GID are valid in that case. */
+	if (rec->lsr_valid == 0)
+		body->oa.o_valid |= (OBD_MD_FLUID | OBD_MD_FLGID);
+	else
+		body->oa.o_valid |= rec->lsr_valid;
 
 	osp_sync_send_new_rpc(d, req);
-	RETURN(0);
+	RETURN(1);
 }
 
-/* Old records may be in old format, so we handle that too */
 static int osp_sync_new_unlink_job(struct osp_device *d,
 				   struct llog_handle *llh,
 				   struct llog_rec_hdr *h)
@@ -519,7 +536,7 @@ static int osp_sync_new_unlink_job(struct osp_device *d,
 		body->oa.o_valid |= OBD_MD_FLOBJCOUNT;
 
 	osp_sync_send_new_rpc(d, req);
-	RETURN(0);
+	RETURN(1);
 }
 
 static int osp_sync_new_unlink64_job(struct osp_device *d,
@@ -548,7 +565,7 @@ static int osp_sync_new_unlink64_job(struct osp_device *d,
 	body->oa.o_valid = OBD_MD_FLGROUP | OBD_MD_FLID | OBD_MD_FLOBJCOUNT;
 
 	osp_sync_send_new_rpc(d, req);
-	RETURN(0);
+	RETURN(1);
 }
 
 static int osp_sync_process_record(const struct lu_env *env,
@@ -608,10 +625,10 @@ static int osp_sync_process_record(const struct lu_env *env,
 		CERROR("%s: unknown record type: %x\n", d->opd_obd->obd_name,
 		       rec->lrh_type);
 		/* we should continue processing */
-		return 0;
 	}
 
-	if (likely(rc == 0)) {
+	/* rc > 0 means sync RPC being added to the queue */
+	if (likely(rc > 0)) {
 		spin_lock(&d->opd_syn_lock);
 		if (d->opd_syn_prev_done) {
 			LASSERT(d->opd_syn_changes > 0);
@@ -629,6 +646,7 @@ static int osp_sync_process_record(const struct lu_env *env,
 		       d->opd_obd->obd_name, d->opd_syn_rpc_in_flight,
 		       d->opd_syn_rpc_in_progress);
 		spin_unlock(&d->opd_syn_lock);
+		rc = 0;
 	} else {
 		spin_lock(&d->opd_syn_lock);
 		d->opd_syn_rpc_in_flight--;
