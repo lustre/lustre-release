@@ -12762,6 +12762,19 @@ test_241() {
 }
 run_test 241 "bio vs dio"
 
+test_242() {
+	mkdir -p $DIR/$tdir
+	touch $DIR/$tdir/$tfile
+
+	#define OBD_FAIL_MDS_READPAGE_PACK	0x105
+	do_facet mds1 lctl set_param fail_loc=0x105
+	/bin/ls $DIR/$tdir && error "ls $DIR/$tdir should fail"
+
+	do_facet mds1 lctl set_param fail_loc=0
+	/bin/ls $DIR/$tdir || error "ls $DIR/$tdir failed"
+}
+run_test 242 "mdt_readpage failure should not cause directory unreadable"
+
 cleanup_test_300() {
 	trap 0
 	umask $SAVE_UMASK

@@ -1352,6 +1352,14 @@ struct readpage_param {
 	struct md_callback	*rp_cb;
 };
 
+#ifndef HAVE_DELETE_FROM_PAGE_CACHE
+static inline void delete_from_page_cache(struct page *page)
+{
+	remove_from_page_cache(page);
+	page_cache_release(page);
+}
+#endif
+
 /**
  * Read pages from server.
  *
@@ -1401,7 +1409,10 @@ static int mdc_read_page_remote(void *data, struct page *page0)
 
 	rc = mdc_getpage(rp->rp_exp, fid, rp->rp_off, op_data->op_capa1,
 			 page_pool, npages, &req);
-	if (rc == 0) {
+	if (rc < 0) {
+		/* page0 is special, which was added into page cache early */
+		delete_from_page_cache(page0);
+	} else {
 		int lu_pgs;
 
 		rd_pgs = (req->rq_bulk->bd_nob_transferred +
@@ -1416,8 +1427,8 @@ static int mdc_read_page_remote(void *data, struct page *page0)
 
 		SetPageUptodate(page0);
 	}
-
 	unlock_page(page0);
+
 	ptlrpc_req_finished(req);
 	CDEBUG(D_CACHE, "read %d/%d pages\n", rd_pgs, npages);
 	for (i = 1; i < npages; i++) {
