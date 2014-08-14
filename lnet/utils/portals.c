@@ -19,7 +19,7 @@
  */
 
 #include <libcfs/libcfsutil.h>
-#include <lnet/api-support.h>
+#include <lnet/nidstr.h>
 #include <lnet/lnetctl.h>
 #include <lnet/socklnd.h>
 #include <lnet/lib-dlc.h>

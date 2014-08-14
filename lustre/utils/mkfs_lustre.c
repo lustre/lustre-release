@@ -64,7 +64,7 @@
 #include <getopt.h>
 #include <limits.h>
 #include <ctype.h>
-
+#include <lnet/nidstr.h>
 #include <lustre_disk.h>
 #include <lustre_param.h>
 #include <lnet/lnetctl.h>

@@ -64,7 +64,7 @@
 
 #include "obdctl.h"
 #include <libcfs/libcfs.h>
-#include <lnet/lnet.h>
+#include <lnet/nidstr.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_cfg.h>
 #include <lustre_ioctl.h>

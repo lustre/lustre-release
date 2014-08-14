@@ -41,7 +41,6 @@
  */
 #define DEBUG_SUBSYSTEM S_LNET
 #include <libcfs/libcfs.h>
-#include <lnet/lnet.h>
 
 /*
  * Convert server error code to client format. Error codes are from

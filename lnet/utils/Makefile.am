@@ -38,6 +38,8 @@
 #COMPILE = $(CC) -Wall -g -I$(srcdir)/../include -I../../include
 #LINK = $(CC) -o $@
 
+AM_CFLAGS = $(LLCFLAGS)
+
 LIBCFS= $(top_builddir)/libcfs/libcfs/libcfs.a
 LIBCFSUTIL= $(top_builddir)/libcfs/libcfs/libcfsutil.a
 

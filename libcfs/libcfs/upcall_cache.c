@@ -40,6 +40,7 @@
 #define DEBUG_SUBSYSTEM S_SEC
 
 #include <libcfs/lucache.h>
+#include <lnet/types.h>
 
 static struct upcall_cache_entry *alloc_entry(struct upcall_cache *cache,
                                               __u64 key, void *args)

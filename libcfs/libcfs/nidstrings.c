@@ -41,12 +41,15 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/libcfs.h>
-#include <lnet/lnet.h>
+#include <lnet/nidstr.h>
 #ifndef __KERNEL__
 #ifdef HAVE_GETHOSTBYNAME
 # include <netdb.h>
 #endif
 #endif
+
+/* max value for numeric network address */
+#define MAX_NUMERIC_VALUE 0xffffffff
 
 #define IPSTRING_LENGTH 16
 

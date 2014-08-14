@@ -21,7 +21,6 @@
 #define __USE_FILE_OFFSET64
 
 #include <libcfs/libcfsutil.h>
-#include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
 
 static ioc_handler_t  do_ioctl;                 /* forward ref */

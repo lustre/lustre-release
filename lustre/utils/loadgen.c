@@ -58,6 +58,7 @@
 #include <sys/time.h>
 
 #include <lnet/lnetctl.h>
+#include <lnet/nidstr.h>
 #include <libcfs/libcfsutil.h>
 #include <lustre_ioctl.h>
 #include "obdctl.h"

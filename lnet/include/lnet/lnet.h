@@ -44,8 +44,6 @@
 
 #include <lnet/types.h>
 #include <lnet/api.h>
-
-#define LNET_NIDSTR_COUNT  1024    /* # of nidstrings */
-#define LNET_NIDSTR_SIZE   32      /* size of each one (see below for usage) */
+#include <lnet/nidstr.h>
 
 #endif

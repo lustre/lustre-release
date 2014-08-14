@@ -44,6 +44,7 @@
 
 #include <time.h>
 #include <libcfs/libcfs.h>
+#include <lnet/nidstr.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_cfg.h>
 

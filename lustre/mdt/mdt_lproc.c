@@ -45,7 +45,7 @@
 #include <asm/statfs.h>
 
 #include <linux/module.h>
-
+#include <lnet/nidstr.h>
 /* LUSTRE_VERSION_CODE */
 #include <lustre_ver.h>
 /*
@@ -61,7 +61,6 @@
 #include <lustre_mds.h>
 #include <lprocfs_status.h>
 #include "mdt_internal.h"
-#include <lnet/lib-lnet.h>
 
 /**
  * The rename stats output would be YAML formats, like

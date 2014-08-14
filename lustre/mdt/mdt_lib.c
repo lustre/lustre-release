@@ -49,8 +49,7 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include "mdt_internal.h"
-#include <lnet/lib-lnet.h>
-
+#include <lnet/nidstr.h>
 
 typedef enum ucred_init_type {
         NONE_INIT       = 0,

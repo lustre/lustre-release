@@ -40,6 +40,7 @@
 #include <stdint.h>
 
 #include <libcfs/libcfs.h>
+#include <lnet/types.h>
 
 #define GSSD_CLI        (0)
 #define GSSD_SVC        (1)

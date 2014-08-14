@@ -38,6 +38,7 @@
 #define _LUCACHE_H
 
 #include <libcfs/libcfs.h>
+#include <lnet/types.h>
 
 /** \defgroup ucache ucache
  *

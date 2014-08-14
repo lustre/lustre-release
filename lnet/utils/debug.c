@@ -728,9 +728,11 @@ int jt_dbg_clear_debug_buf(int argc, char **argv)
 int jt_dbg_mark_debug_buf(int argc, char **argv)
 {
 	static char scratch[MAX_MARK_SIZE] = "";
-	struct libcfs_ioctl_data data = { 0 };
+	struct libcfs_ioctl_data data;
 	char *text;
 	int rc;
+
+	memset(&data, 0, sizeof(data));
 
 	if (argc > 1) {
 		int count, max_size = sizeof(scratch) - 1;

@@ -38,11 +38,10 @@
  * Author: Liang Zhen <liangzhen@clusterfs.com>
  */
 
-#define _GNU_SOURCE
-
 #include <libcfs/libcfsutil.h>
 #include <lnet/lnetctl.h>
 #include <lnet/lnetst.h>
+#include <lnet/nidstr.h>
 /* NB: these includes are layering violation */
 #include <lustre_ver.h>
 #include <lustre/lustre_idl.h>

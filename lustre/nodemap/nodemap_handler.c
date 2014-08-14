@@ -24,6 +24,7 @@
  * Author: Joshua Walgenbach <jjw@iu.edu>
  */
 #include <linux/module.h>
+#include <lnet/nidstr.h>
 #include <lustre_net.h>
 #include "nodemap_internal.h"
 

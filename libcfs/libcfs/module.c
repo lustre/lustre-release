@@ -43,6 +43,7 @@
 #include <lnet/lib-lnet.h>
 #include <lnet/lib-dlc.h>
 #include <lnet/lnet.h>
+#include <lnet/nidstr.h>
 #include "tracefile.h"
 
 void
