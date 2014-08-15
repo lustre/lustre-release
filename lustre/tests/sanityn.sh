@@ -2496,22 +2496,18 @@ test_55d()
 
 #define OBD_FAIL_MDS_RENAME3              0x155
 	do_facet mds $LCTL set_param fail_loc=0x155
-	mv $DIR/f1 $DIR/d1 &
+	mv $DIR/f1 $DIR/$tdir &
 	PID1=$!
 	sleep 2
 
-	# while rename is sleeping, create d2, but as a directory
-	mkdir -p $DIR2/d1 || error "(1) mkdir failed"
+	# while rename is sleeping, create $tdir, but as a directory
+	mkdir -p $DIR2/$tdir || error "(1) mkdir failed"
 
 	# link in reverse locking order
-	ln $DIR2/f1 $DIR2/d1/
+	ln $DIR2/f1 $DIR2/$tdir/
 
 	wait $PID1 && error "(2) mv succeeded"
-	lctl dk > ../log1
-	ls -la $DIR/
-	ls -la $DIR/d1
-
-	rm -rf $DIR/d1
+	rm -rf $DIR/f1
 }
 run_test 55d "rename file vs link"
 
