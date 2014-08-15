@@ -569,23 +569,22 @@ typedef struct hlist_node cfs_hlist_node_t;
 	hlist_for_each_safe(pos, n, head)
 #ifdef HAVE_HLIST_FOR_EACH_3ARG
 #define cfs_hlist_for_each_entry(tpos, pos, head, member) \
-	pos = NULL; hlist_for_each_entry(tpos, head, member)
-#else
-#define cfs_hlist_for_each_entry(tpos, pos, head, member) \
-	hlist_for_each_entry(tpos, pos, head, member)
-#endif
-#define cfs_hlist_for_each_entry_continue(tpos, pos, member) \
-	hlist_for_each_entry_continue(tpos, pos, member)
-#define cfs_hlist_for_each_entry_from(tpos, pos, member) \
-	hlist_for_each_entry_from(tpos, pos, member)
-#ifdef HAVE_HLIST_FOR_EACH_3ARG
+	hlist_for_each_entry(tpos, head, member)
 #define cfs_hlist_for_each_entry_safe(tpos, pos, n, head, member) \
-	pos = NULL; hlist_for_each_entry_safe(tpos, n, head, member)
+	hlist_for_each_entry_safe(tpos, n, head, member)
+#define cfs_hlist_for_each_entry_continue(tpos, pos, member) \
+	hlist_for_each_entry_continue(tpos, member)
+#define cfs_hlist_for_each_entry_from(tpos, pos, member) \
+	hlist_for_each_entry_from(tpos, member)
 #else
 #define cfs_hlist_for_each_entry(tpos, pos, head, member) \
 	hlist_for_each_entry(tpos, pos, head, member)
 #define cfs_hlist_for_each_entry_safe(tpos, pos, n, head, member) \
 	hlist_for_each_entry_safe(tpos, pos, n, head, member)
+#define cfs_hlist_for_each_entry_continue(tpos, pos, member) \
+	hlist_for_each_entry_continue(tpos, pos, member)
+#define cfs_hlist_for_each_entry_from(tpos, pos, member) \
+	hlist_for_each_entry_from(tpos, pos, member)
 #endif
 
 #define cfs_list_for_each_entry_typed(pos, head, type, member)	\

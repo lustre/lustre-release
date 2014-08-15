@@ -119,9 +119,10 @@ static inline void capa_delete(struct obd_capa *ocapa)
 
 void cleanup_capa_hash(struct hlist_head *hash)
 {
-	int i;
-	struct hlist_node *pos, *next;
+	struct hlist_node __maybe_unused *pos;
+	struct hlist_node *next;
 	struct obd_capa *oc;
+	int i;
 
 	spin_lock(&capa_lock);
 	for (i = 0; i < NR_CAPAHASH; i++) {
@@ -153,16 +154,16 @@ static inline int capa_is_to_expire(struct obd_capa *oc)
 static struct obd_capa *find_capa(struct lustre_capa *capa,
 				  struct hlist_head *head, int alive)
 {
-	struct hlist_node *pos;
-        struct obd_capa *ocapa;
-        int len = alive ? offsetof(struct lustre_capa, lc_keyid):sizeof(*capa);
+	struct hlist_node __maybe_unused *pos;
+	struct obd_capa *ocapa;
+	int len = alive ? offsetof(struct lustre_capa, lc_keyid):sizeof(*capa);
 
-        cfs_hlist_for_each_entry(ocapa, pos, head, u.tgt.c_hash) {
-                if (memcmp(&ocapa->c_capa, capa, len))
-                        continue;
-                /* don't return one that will expire soon in this case */
-                if (alive && capa_is_to_expire(ocapa))
-                        continue;
+	cfs_hlist_for_each_entry(ocapa, pos, head, u.tgt.c_hash) {
+		if (memcmp(&ocapa->c_capa, capa, len))
+			continue;
+		/* don't return one that will expire soon in this case */
+		if (alive && capa_is_to_expire(ocapa))
+			continue;
 
                 LASSERT(capa_on_server(ocapa));
 

@@ -444,12 +444,12 @@ static void kill_key_locked(struct key *key)
  */
 static void dispose_ctx_list_kr(cfs_hlist_head_t *freelist)
 {
-        cfs_hlist_node_t       *pos, *next;
-        struct ptlrpc_cli_ctx  *ctx;
-        struct gss_cli_ctx     *gctx;
+	struct hlist_node	__maybe_unused *pos, *next;
+	struct ptlrpc_cli_ctx	*ctx;
+	struct gss_cli_ctx	*gctx;
 
-        cfs_hlist_for_each_entry_safe(ctx, pos, next, freelist, cc_cache) {
-                cfs_hlist_del_init(&ctx->cc_cache);
+	cfs_hlist_for_each_entry_safe(ctx, pos, next, freelist, cc_cache) {
+		hlist_del_init(&ctx->cc_cache);
 
 		/* reverse ctx: update current seq to buddy svcctx if exist.
 		 * ideally this should be done at gss_cli_ctx_finalize(), but
@@ -491,8 +491,8 @@ struct ptlrpc_cli_ctx * sec_lookup_root_ctx_kr(struct ptlrpc_sec *sec)
         ctx = gsec_kr->gsk_root_ctx;
 
         if (ctx == NULL && unlikely(sec_is_reverse(sec))) {
-                cfs_hlist_node_t       *node;
-                struct ptlrpc_cli_ctx  *tmp;
+		struct hlist_node	__maybe_unused *node;
+		struct ptlrpc_cli_ctx	*tmp;
 
                 /* reverse ctx, search root ctx in list, choose the one
                  * with shortest expire time, which is most possibly have
@@ -526,11 +526,11 @@ void rvs_sec_install_root_ctx_kr(struct ptlrpc_sec *sec,
                                  struct ptlrpc_cli_ctx *new_ctx,
                                  struct key *key)
 {
-        struct gss_sec_keyring *gsec_kr = sec2gsec_keyring(sec);
-        cfs_hlist_node_t       *hnode;
-        struct ptlrpc_cli_ctx  *ctx;
-        cfs_time_t              now;
-        ENTRY;
+	struct gss_sec_keyring	*gsec_kr = sec2gsec_keyring(sec);
+	struct hlist_node	__maybe_unused *hnode;
+	struct ptlrpc_cli_ctx	*ctx;
+	cfs_time_t		now;
+	ENTRY;
 
         LASSERT(sec_is_reverse(sec));
 
@@ -893,11 +893,11 @@ void flush_spec_ctx_cache_kr(struct ptlrpc_sec *sec,
                              uid_t uid,
                              int grace, int force)
 {
-        struct gss_sec_keyring *gsec_kr;
-        cfs_hlist_head_t        freelist = CFS_HLIST_HEAD_INIT;
-        cfs_hlist_node_t       *pos, *next;
-        struct ptlrpc_cli_ctx  *ctx;
-        ENTRY;
+	struct gss_sec_keyring	*gsec_kr;
+	struct hlist_head	 freelist = CFS_HLIST_HEAD_INIT;
+	struct hlist_node	__maybe_unused *pos, *next;
+	struct ptlrpc_cli_ctx	*ctx;
+	ENTRY;
 
         gsec_kr = sec2gsec_keyring(sec);
 
@@ -962,8 +962,8 @@ static
 void gss_sec_gc_ctx_kr(struct ptlrpc_sec *sec)
 {
 	struct gss_sec_keyring	*gsec_kr = sec2gsec_keyring(sec);
-	cfs_hlist_head_t	freelist = CFS_HLIST_HEAD_INIT;
-	cfs_hlist_node_t	*pos, *next;
+	struct hlist_head	 freelist = CFS_HLIST_HEAD_INIT;
+	struct hlist_node	__maybe_unused *pos, *next;
 	struct ptlrpc_cli_ctx	*ctx;
 	ENTRY;
 
@@ -994,16 +994,16 @@ void gss_sec_gc_ctx_kr(struct ptlrpc_sec *sec)
 static
 int gss_sec_display_kr(struct ptlrpc_sec *sec, struct seq_file *seq)
 {
-        struct gss_sec_keyring *gsec_kr = sec2gsec_keyring(sec);
-        cfs_hlist_node_t       *pos, *next;
-        struct ptlrpc_cli_ctx  *ctx;
-        struct gss_cli_ctx     *gctx;
-        time_t                  now = cfs_time_current_sec();
-        ENTRY;
+	struct gss_sec_keyring	*gsec_kr = sec2gsec_keyring(sec);
+	struct hlist_node	__maybe_unused *pos, *next;
+	struct ptlrpc_cli_ctx	*ctx;
+	struct gss_cli_ctx	*gctx;
+	time_t			 now = cfs_time_current_sec();
+	ENTRY;
 
 	spin_lock(&sec->ps_lock);
         cfs_hlist_for_each_entry_safe(ctx, pos, next,
-                                  &gsec_kr->gsk_clist, cc_cache) {
+				      &gsec_kr->gsk_clist, cc_cache) {
                 struct key             *key;
                 char                    flags_str[40];
                 char                    mech[40];

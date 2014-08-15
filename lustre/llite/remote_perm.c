@@ -97,9 +97,10 @@ static struct hlist_head *alloc_rmtperm_hash(void)
 
 void free_rmtperm_hash(struct hlist_head *hash)
 {
-        int i;
-        struct ll_remote_perm *lrp;
-	struct hlist_node *node, *next;
+	int i;
+	struct ll_remote_perm *lrp;
+	struct hlist_node __maybe_unused *node;
+	struct hlist_node *next;
 
         if(!hash)
                 return;
@@ -122,10 +123,10 @@ static inline int remote_perm_hashfunc(uid_t uid)
 static int do_check_remote_perm(struct ll_inode_info *lli, int mask)
 {
 	struct hlist_head *head;
-        struct ll_remote_perm *lrp;
-	struct hlist_node *node;
-        int found = 0, rc;
-        ENTRY;
+	struct ll_remote_perm *lrp;
+	struct hlist_node __maybe_unused *node;
+	int found = 0, rc;
+	ENTRY;
 
 	if (!lli->lli_remote_perms)
 		RETURN(-ENOENT);
@@ -162,11 +163,11 @@ out:
 
 int ll_update_remote_perm(struct inode *inode, struct mdt_remote_perm *perm)
 {
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct ll_remote_perm *lrp = NULL, *tmp = NULL;
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct ll_remote_perm *lrp = NULL, *tmp = NULL;
 	struct hlist_head *head, *perm_hash = NULL;
-	struct hlist_node *node;
-        ENTRY;
+	struct hlist_node __maybe_unused *node;
+	ENTRY;
 
         LASSERT(ll_i2sbi(inode)->ll_flags & LL_SBI_RMT_CLIENT);
 
