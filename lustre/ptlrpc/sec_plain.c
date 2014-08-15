@@ -40,9 +40,6 @@
 
 #define DEBUG_SUBSYSTEM S_SEC
 
-#ifndef __KERNEL__
-#include <liblustre.h>
-#endif
 
 #include <obd_support.h>
 #include <obd_cksum.h>
@@ -155,7 +152,6 @@ static int plain_verify_bulk_csum(struct ptlrpc_bulk_desc *desc,
         return 0;
 }
 
-#ifdef __KERNEL__
 static void corrupt_bulk_data(struct ptlrpc_bulk_desc *desc)
 {
 	char           *ptr;
@@ -172,20 +168,6 @@ static void corrupt_bulk_data(struct ptlrpc_bulk_desc *desc)
 		return;
 	}
 }
-#else
-static void corrupt_bulk_data(struct ptlrpc_bulk_desc *desc)
-{
-        unsigned int    i;
-
-        for (i = 0; i < desc->bd_iov_count; i++) {
-                if (desc->bd_iov[i].iov_len == 0)
-                        continue;
-
-                ((char *)desc->bd_iov[i].iov_base)[i] ^= 0x1;
-                return;
-        }
-}
-#endif /* __KERNEL__ */
 
 /****************************************
  * cli_ctx apis                         *
@@ -355,9 +337,7 @@ int plain_cli_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
         struct ptlrpc_bulk_sec_desc *bsdv;
         struct plain_bulk_token     *tokenv;
         int                          rc;
-#ifdef __KERNEL__
         int                          i, nob;
-#endif
 
         LASSERT(req->rq_pack_bulk);
         LASSERT(req->rq_reqbuf->lm_bufcount == PLAIN_PACK_SEGMENTS);
@@ -372,7 +352,6 @@ int plain_cli_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
                 return 0;
         }
 
-#ifdef __KERNEL__
         /* fix the actual data size */
         for (i = 0, nob = 0; i < desc->bd_iov_count; i++) {
                 if (desc->bd_iov[i].kiov_len + nob > desc->bd_nob_transferred) {
@@ -381,7 +360,6 @@ int plain_cli_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
                 }
                 nob += desc->bd_iov[i].kiov_len;
         }
-#endif
 
         rc = plain_verify_bulk_csum(desc, req->rq_flvr.u_bulk.hash.hash_alg,
                                     tokenv);

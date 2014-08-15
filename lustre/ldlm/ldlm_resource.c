@@ -40,12 +40,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
-#ifdef __KERNEL__
-# include <lustre_dlm.h>
-#else
-# include <liblustre.h>
-#endif
-
+#include <lustre_dlm.h>
 #include <lustre_fid.h>
 #include <obd_class.h>
 #include "ldlm_internal.h"

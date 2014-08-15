@@ -41,6 +41,7 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#include <linux/sched.h>
 #include <obd_class.h>
 #include <obd_support.h>
 #include <lustre_fid.h>
@@ -1558,14 +1559,6 @@ void cl_req_attr_set(const struct lu_env *env, struct cl_req *req,
 }
 EXPORT_SYMBOL(cl_req_attr_set);
 
-/* XXX complete(), init_completion(), and wait_for_completion(), until they are
- * implemented in libcfs. */
-#ifdef __KERNEL__
-# include <linux/sched.h>
-#else /* __KERNEL__ */
-# include <liblustre.h>
-#endif
-
 /**
  * Initialize synchronous io wait anchor, for transfer of \a nrpages pages.
  */
@@ -1617,9 +1610,7 @@ int cl_sync_io_wait(const struct lu_env *env, struct cl_io *io,
 
 	/* wait until cl_sync_io_note() has done wakeup */
 	while (unlikely(atomic_read(&anchor->csi_barrier) != 0)) {
-#ifdef __KERNEL__
 		cpu_relax();
-#endif
 	}
 
 	POISON(anchor, 0x5a, sizeof *anchor);

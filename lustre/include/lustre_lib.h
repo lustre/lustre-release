@@ -50,11 +50,7 @@
 #include <lustre/lustre_idl.h>
 #include <lustre_ver.h>
 #include <lustre_cfg.h>
-#if defined(__linux__)
 #include <linux/lustre_lib.h>
-#else
-#error Unsupported operating system.
-#endif
 
 /* target.c */
 struct ptlrpc_request;
@@ -245,7 +241,6 @@ struct l_wait_info {
 
 #define LWI_INTR(cb, data)  LWI_TIMEOUT_INTR(0, NULL, cb, data)
 
-#ifdef __KERNEL__
 
 /*
  * wait for @condition to become true, but no longer than timeout, specified
@@ -334,53 +329,6 @@ do {                                                                           \
 	remove_wait_queue(&wq, &__wait);                                       \
 } while (0)
 
-#else /* !__KERNEL__ */
-
-#define __l_wait_event(wq, condition, info, ret, l_add_wait)            \
-do {                                                                    \
-        long __timeout = info->lwi_timeout;                             \
-        long __now;                                                     \
-        long __then = 0;                                                \
-        int  __timed_out = 0;                                           \
-        int  __interval = obd_timeout;                                  \
-                                                                        \
-        ret = 0;                                                        \
-        if (condition)                                                  \
-                break;                                                  \
-                                                                        \
-        if (__timeout != 0)                                             \
-                __then = time(NULL);                                    \
-                                                                        \
-        if (__timeout && __timeout < __interval)                        \
-                __interval = __timeout;                                 \
-        if (info->lwi_interval && info->lwi_interval < __interval)      \
-                __interval = info->lwi_interval;                        \
-                                                                        \
-        while (!(condition)) {                                          \
-                liblustre_wait_event(__interval);                       \
-                if (condition)                                          \
-                        break;                                          \
-                                                                        \
-                if (!__timed_out && info->lwi_timeout != 0) {           \
-                        __now = time(NULL);                             \
-                        __timeout -= __now - __then;                    \
-                        __then = __now;                                 \
-                                                                        \
-                        if (__timeout > 0)                              \
-                                continue;                               \
-                                                                        \
-                        __timeout = 0;                                  \
-                        __timed_out = 1;                                \
-                        if (info->lwi_on_timeout == NULL ||             \
-                            info->lwi_on_timeout(info->lwi_cb_data)) {  \
-                                ret = -ETIMEDOUT;                       \
-                                break;                                  \
-                        }                                               \
-                }                                                       \
-        }                                                               \
-} while (0)
-
-#endif /* __KERNEL__ */
 
 
 #define l_wait_event(wq, condition, info)                       \
@@ -430,12 +378,6 @@ do {                                                                    \
         struct l_wait_info lwi = { 0 };                         \
         l_wait_event_exclusive_head(wq, condition, &lwi);       \
 })
-
-#ifdef __KERNEL__
-#define LIBLUSTRE_CLIENT (0)
-#else
-#define LIBLUSTRE_CLIENT (1)
-#endif
 
 /** @} lib */
 

@@ -23,11 +23,9 @@
 #ifndef __LIBCFS_LIST_H__
 #define __LIBCFS_LIST_H__
 
-#if defined (__linux__) && defined(__KERNEL__)
-
-#include <linux/list.h>
-
-#else /* !defined (__linux__) || !defined(__KERNEL__) */
+#ifdef __KERNEL__
+# include <linux/list.h>
+#else /* __KERNEL__ */
 
 /*
  * Simple doubly linked list implementation.
@@ -443,7 +441,7 @@ static inline void hlist_add_after(struct hlist_node *n,
 
 /* @} */
 
-#endif /* __linux__ && __KERNEL__ */
+#endif /* __KERNEL__ */
 
 #ifndef list_for_each_prev
 /**

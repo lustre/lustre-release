@@ -299,7 +299,6 @@ do {									\
 	goto label;							\
 } while (0)
 
-#if defined(__GNUC__)
 
 long libcfs_log_return(struct libcfs_debug_msg_data *, long rc);
 #if BITS_PER_LONG > 32
@@ -334,9 +333,6 @@ do {									\
 } while (0)
 #endif /* BITS_PER_LONG > 32 */
 
-#else
-# error "Unkown compiler"
-#endif /* __GNUC__ */
 
 #define ENTRY                                                           \
 ENTRY_NESTING;                                                          \

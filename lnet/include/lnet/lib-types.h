@@ -42,11 +42,7 @@
 #ifndef __LNET_LIB_TYPES_H__
 #define __LNET_LIB_TYPES_H__
 
-#if defined(__linux__)
 #include <lnet/linux/lib-types.h>
-#else
-#error Unsupported Operating System
-#endif
 
 #include <libcfs/libcfs.h>
 #include <libcfs/list.h>

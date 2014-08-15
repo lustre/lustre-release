@@ -45,13 +45,8 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <libcfs/libcfs.h>
-
-#ifdef __KERNEL__
-# include <linux/module.h>
-#endif
-
-/* hash_long() */
-#include <libcfs/libcfs_hash.h>
+#include <linux/module.h>
+#include <libcfs/libcfs_hash.h> /* hash_long() */
 #include <obd_class.h>
 #include <obd_support.h>
 #include <lustre_disk.h>
@@ -1941,7 +1936,6 @@ static void lu_site_stats_get(cfs_hash_t *hs,
         }
 }
 
-#ifdef __KERNEL__
 
 static unsigned long lu_cache_shrink_count(struct shrinker *sk,
 					   struct shrink_control *sc)
@@ -2096,7 +2090,6 @@ void lu_context_keys_dump(void)
         }
 }
 EXPORT_SYMBOL(lu_context_keys_dump);
-#endif /* __KERNEL__ */
 
 /**
  * Initialization of global lu_* data.

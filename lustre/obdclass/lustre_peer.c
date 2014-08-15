@@ -36,9 +36,6 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
-#ifndef __KERNEL__
-# include <liblustre.h>
-#endif
 #include <obd.h>
 #include <obd_support.h>
 #include <obd_class.h>

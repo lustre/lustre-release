@@ -40,9 +40,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
-#ifndef __KERNEL__
-#include <liblustre.h>
-#endif
 #include <obd_class.h>
 #include <lprocfs_status.h>
 
@@ -1767,7 +1764,6 @@ void obd_zombie_barrier(void)
 }
 EXPORT_SYMBOL(obd_zombie_barrier);
 
-#ifdef __KERNEL__
 
 /**
  * destroy zombie export/import thread.
@@ -1798,34 +1794,13 @@ static int obd_zombie_impexp_thread(void *unused)
 	RETURN(0);
 }
 
-#else /* ! KERNEL */
-
-static atomic_t zombie_recur = ATOMIC_INIT(0);
-static void *obd_zombie_impexp_work_cb;
-static void *obd_zombie_impexp_idle_cb;
-
-int obd_zombie_impexp_kill(void *arg)
-{
-        int rc = 0;
-
-	if (atomic_inc_return(&zombie_recur) == 1) {
-                obd_zombie_impexp_cull();
-                rc = 1;
-        }
-	atomic_dec(&zombie_recur);
-        return rc;
-}
-
-#endif
 
 /**
  * start destroy zombie import/export thread
  */
 int obd_zombie_impexp_init(void)
 {
-#ifdef __KERNEL__
 	struct task_struct *task;
-#endif
 
 	INIT_LIST_HEAD(&obd_zombie_imports);
 
@@ -1836,22 +1811,11 @@ int obd_zombie_impexp_init(void)
 	init_waitqueue_head(&obd_zombie_waitq);
 	obd_zombie_pid = 0;
 
-#ifdef __KERNEL__
 	task = kthread_run(obd_zombie_impexp_thread, NULL, "obd_zombid");
 	if (IS_ERR(task))
 		RETURN(PTR_ERR(task));
 
 	wait_for_completion(&obd_zombie_start);
-#else
-
-        obd_zombie_impexp_work_cb =
-                liblustre_register_wait_callback("obd_zombi_impexp_kill",
-                                                 &obd_zombie_impexp_kill, NULL);
-
-        obd_zombie_impexp_idle_cb =
-                liblustre_register_idle_callback("obd_zombi_impexp_check",
-                                                 &obd_zombie_impexp_check, NULL);
-#endif
 	RETURN(0);
 }
 /**
@@ -1861,12 +1825,7 @@ void obd_zombie_impexp_stop(void)
 {
 	set_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags);
         obd_zombie_impexp_notify();
-#ifdef __KERNEL__
 	wait_for_completion(&obd_zombie_stop);
-#else
-        liblustre_deregister_wait_callback(obd_zombie_impexp_work_cb);
-        liblustre_deregister_idle_callback(obd_zombie_impexp_idle_cb);
-#endif
 }
 
 /***** Kernel-userspace comm helpers *******/

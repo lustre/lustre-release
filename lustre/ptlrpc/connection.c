@@ -35,13 +35,9 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
-#ifdef __KERNEL__
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_net.h>
-#else
-#include <liblustre.h>
-#endif
 
 #include "ptlrpc_internal.h"
 

@@ -37,19 +37,13 @@
 #ifndef __LIBCFS_LIBCFS_H__
 #define __LIBCFS_LIBCFS_H__
 
-#if !__GNUC__
-#define __attribute__(x)
-#endif
-
 #include <libcfs/types.h>
 
-#if !defined(__KERNEL__)
-#include <libcfs/posix/libcfs.h>
-#elif defined(__linux__)
-#include <libcfs/linux/libcfs.h>
-#else
-#error Unsupported operating system.
-#endif
+#ifdef __KERNEL__
+# include <libcfs/linux/libcfs.h>
+#else /* __KERNEL__ */
+# include <libcfs/posix/libcfs.h>
+#endif /* !__KERNEL__ */
 
 #include "curproc.h"
 

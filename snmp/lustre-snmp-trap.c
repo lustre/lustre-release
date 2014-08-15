@@ -49,9 +49,7 @@
  */ 
 
 #include <sys/types.h>
-#if defined (__linux__)
 #include <sys/vfs.h>
-#endif
 #include <dirent.h>
 #include <sys/stat.h>
 #include <unistd.h>

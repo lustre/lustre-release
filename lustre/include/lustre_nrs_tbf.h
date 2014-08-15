@@ -185,9 +185,7 @@ struct nrs_tbf_head {
 	/**
 	 * Timer for next token.
 	 */
-#if defined(__KERNEL__) && defined(__linux__)
 	struct hrtimer			 th_timer;
-#endif
 	/**
 	 * Deadline of the timer.
 	 */

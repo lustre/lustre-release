@@ -55,16 +55,9 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
-#ifdef __KERNEL__
-# include <libcfs/libcfs.h>
-#else /* __KERNEL__ */
-# include <liblustre.h>
-# include <ctype.h>
-#endif
-
+#include <libcfs/libcfs.h>
 #include <lustre_net.h>
-# include <lustre_lib.h>
-
+#include <lustre_lib.h>
 #include <lustre_ha.h>
 #include <obd_class.h>   /* for obd_zombie */
 #include <obd_support.h> /* for OBD_FAIL_CHECK */
@@ -81,7 +74,6 @@ struct ptlrpcd {
         struct ptlrpcd_ctl pd_threads[0];
 };
 
-#ifdef __KERNEL__
 static int max_ptlrpcds;
 CFS_MODULE_PARM(max_ptlrpcds, "i", int, 0644,
                 "Max ptlrpcd thread count to be started.");
@@ -89,7 +81,6 @@ CFS_MODULE_PARM(max_ptlrpcds, "i", int, 0644,
 static int ptlrpcd_bind_policy = PDB_POLICY_PAIR;
 CFS_MODULE_PARM(ptlrpcd_bind_policy, "i", int, 0644,
                 "Ptlrpcd threads binding mode.");
-#endif
 static struct ptlrpcd *ptlrpcds;
 
 struct mutex ptlrpcd_mutex;
@@ -113,7 +104,6 @@ ptlrpcd_select_pc(struct ptlrpc_request *req, pdl_policy_t policy, int index)
         if (req != NULL && req->rq_send_state != LUSTRE_IMP_FULL)
                 return &ptlrpcds->pd_thread_rcv;
 
-#ifdef __KERNEL__
 	switch (policy) {
 	case PDL_POLICY_SAME:
 		idx = smp_processor_id() % ptlrpcds->pd_nthreads;
@@ -144,7 +134,6 @@ ptlrpcd_select_pc(struct ptlrpc_request *req, pdl_policy_t policy, int index)
                 ptlrpcds->pd_index = idx;
                 break;
         }
-#endif /* __KERNEL__ */
 
         return &ptlrpcds->pd_threads[idx];
 }
@@ -156,14 +145,12 @@ ptlrpcd_select_pc(struct ptlrpc_request *req, pdl_policy_t policy, int index)
 void ptlrpcd_add_rqset(struct ptlrpc_request_set *set)
 {
 	struct list_head *tmp, *pos;
-#ifdef __KERNEL__
         struct ptlrpcd_ctl *pc;
         struct ptlrpc_request_set *new;
         int count, i;
 
         pc = ptlrpcd_select_pc(NULL, PDL_POLICY_LOCAL, -1);
         new = pc->pc_set;
-#endif
 
 	list_for_each_safe(pos, tmp, &set->set_requests) {
 		struct ptlrpc_request *req =
@@ -171,18 +158,10 @@ void ptlrpcd_add_rqset(struct ptlrpc_request_set *set)
 				   rq_set_chain);
 
 		LASSERT(req->rq_phase == RQ_PHASE_NEW);
-#ifdef __KERNEL__
 		req->rq_set = new;
 		req->rq_queued_time = cfs_time_current();
-#else
-		list_del_init(&req->rq_set_chain);
-		req->rq_set = NULL;
-		ptlrpcd_add_req(req, PDL_POLICY_LOCAL, -1);
-		atomic_dec(&set->set_remaining);
-#endif
 	}
 
-#ifdef __KERNEL__
 	spin_lock(&new->set_new_req_lock);
 	list_splice_init(&set->set_requests, &new->set_new_requests);
 	i = atomic_read(&set->set_remaining);
@@ -198,11 +177,9 @@ void ptlrpcd_add_rqset(struct ptlrpc_request_set *set)
 		for (i = 0; i < pc->pc_npartners; i++)
 			wake_up(&pc->pc_partners[i]->pc_set->set_waitq);
 	}
-#endif
 }
 EXPORT_SYMBOL(ptlrpcd_add_rqset);
 
-#ifdef __KERNEL__
 /**
  * Return transferred RPCs count.
  */
@@ -229,7 +206,6 @@ static int ptlrpcd_steal_rqset(struct ptlrpc_request_set *des,
 	spin_unlock(&src->set_new_req_lock);
 	return rc;
 }
-#endif
 
 /**
  * Requests that are added to the ptlrpcd queue are sent via
@@ -353,7 +329,6 @@ static int ptlrpcd_check(struct lu_env *env, struct ptlrpcd_ctl *pc)
 		 */
 		rc = atomic_read(&set->set_new_count);
 
-#ifdef __KERNEL__
                 /* If we have nothing to do, check whether we can take some
                  * work from our partner threads. */
                 if (rc == 0 && pc->pc_npartners > 0) {
@@ -389,13 +364,11 @@ static int ptlrpcd_check(struct lu_env *env, struct ptlrpcd_ctl *pc)
 				ptlrpc_reqset_put(ps);
 			} while (rc == 0 && pc->pc_cursor != first);
 		}
-#endif
 	}
 
 	RETURN(rc);
 }
 
-#ifdef __KERNEL__
 /**
  * Main ptlrpcd thread.
  * ptlrpc's code paths like to execute in process context, so we have this
@@ -630,52 +603,6 @@ static int ptlrpcd_bind(int index, int max)
         RETURN(rc);
 }
 
-#else /* !__KERNEL__ */
-
-/**
- * In liblustre we do not have separate threads, so this function
- * is called from time to time all across common code to see
- * if something needs to be processed on ptlrpcd set.
- */
-int ptlrpcd_check_async_rpcs(void *arg)
-{
-        struct ptlrpcd_ctl *pc = arg;
-        int                 rc = 0;
-
-        /*
-         * Single threaded!!
-         */
-        pc->pc_recurred++;
-
-        if (pc->pc_recurred == 1) {
-                rc = lu_env_refill(&pc->pc_env);
-                if (rc == 0) {
-                        lu_context_enter(&pc->pc_env.le_ctx);
-                        rc = ptlrpcd_check(&pc->pc_env, pc);
-                        if (!rc)
-                                ptlrpc_expired_set(pc->pc_set);
-                        /*
-                         * XXX: send replay requests.
-                         */
-			if (test_bit(LIOD_RECOVERY, &pc->pc_flags))
-                                rc = ptlrpcd_check(&pc->pc_env, pc);
-                        lu_context_exit(&pc->pc_env.le_ctx);
-                }
-        }
-
-        pc->pc_recurred--;
-        return rc;
-}
-
-int ptlrpcd_idle(void *arg)
-{
-	struct ptlrpcd_ctl *pc = arg;
-
-	return (atomic_read(&pc->pc_set->set_new_count) == 0 &&
-		atomic_read(&pc->pc_set->set_remaining) == 0);
-}
-
-#endif
 
 int ptlrpcd_start(int index, int max, const char *name, struct ptlrpcd_ctl *pc)
 {
@@ -700,15 +627,6 @@ int ptlrpcd_start(int index, int max, const char *name, struct ptlrpcd_ctl *pc)
         if (pc->pc_set == NULL)
                 GOTO(out, rc = -ENOMEM);
 
-#ifndef __KERNEL__
-        pc->pc_wait_callback =
-                liblustre_register_wait_callback("ptlrpcd_check_async_rpcs",
-                                                 &ptlrpcd_check_async_rpcs, pc);
-        pc->pc_idle_callback =
-                liblustre_register_idle_callback("ptlrpcd_check_idle_rpcs",
-                                                 &ptlrpcd_idle, pc);
-	RETURN(0);
-#else
         /*
          * So far only "client" ptlrpcd uses an environment. In the future,
          * ptlrpcd thread (or a thread-set) has to be given an argument,
@@ -747,7 +665,6 @@ out_set:
 		ptlrpc_set_destroy(set);
 	}
 	clear_bit(LIOD_BIND, &pc->pc_flags);
-#endif
 out:
 	clear_bit(LIOD_START, &pc->pc_flags);
 	RETURN(rc);
@@ -781,12 +698,7 @@ void ptlrpcd_free(struct ptlrpcd_ctl *pc)
 		goto out;
 	}
 
-#ifdef __KERNEL__
 	wait_for_completion(&pc->pc_finishing);
-#else
-	liblustre_deregister_wait_callback(pc->pc_wait_callback);
-	liblustre_deregister_idle_callback(pc->pc_idle_callback);
-#endif
 	lu_context_fini(&pc->pc_env.le_ctx);
 
 	spin_lock(&pc->pc_lock);
@@ -800,7 +712,6 @@ void ptlrpcd_free(struct ptlrpcd_ctl *pc)
 	clear_bit(LIOD_BIND, &pc->pc_flags);
 
 out:
-#ifdef __KERNEL__
         if (pc->pc_npartners > 0) {
                 LASSERT(pc->pc_partners != NULL);
 
@@ -809,7 +720,6 @@ out:
                 pc->pc_partners = NULL;
         }
         pc->pc_npartners = 0;
-#endif
         EXIT;
 }
 
@@ -839,7 +749,6 @@ static int ptlrpcd_init(void)
 	int	size, i = -1, j, rc = 0;
 	ENTRY;
 
-#ifdef __KERNEL__
         if (max_ptlrpcds > 0 && max_ptlrpcds < nthreads)
                 nthreads = max_ptlrpcds;
         if (nthreads < 2)
@@ -848,9 +757,6 @@ static int ptlrpcd_init(void)
                 ptlrpcd_bind_policy = PDB_POLICY_PAIR;
         else if (nthreads % 2 != 0 && ptlrpcd_bind_policy == PDB_POLICY_PAIR)
                 nthreads &= ~1; /* make sure it is even */
-#else
-        nthreads = 1;
-#endif
 
         size = offsetof(struct ptlrpcd, pd_threads[nthreads]);
         OBD_ALLOC(ptlrpcds, size);

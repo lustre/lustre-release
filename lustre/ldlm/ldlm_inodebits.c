@@ -52,9 +52,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
-#ifndef __KERNEL__
-# include <liblustre.h>
-#endif
 
 #include <lustre_dlm.h>
 #include <obd_support.h>

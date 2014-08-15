@@ -50,12 +50,8 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
-#ifndef __KERNEL__
-# include <liblustre.h>
-#else
-# include <libcfs/libcfs.h>
-#endif
 
+#include <libcfs/libcfs.h>
 #include <lustre_dlm.h>
 #include <obd_support.h>
 #include <obd.h>

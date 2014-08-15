@@ -26,7 +26,6 @@
  * in that lockspace
  *
  */
-#ifdef __KERNEL__
 
 #include <linux/module.h>
 #include <linux/slab.h>
@@ -219,4 +218,3 @@ int dynlock_is_locked(struct dynlock *dl, unsigned long value)
 	spin_unlock(&dl->dl_list_lock);
 	return result;
 }
-#endif

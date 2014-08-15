@@ -148,7 +148,6 @@ enum {
 
 extern struct lu_fld_hash fld_hash[];
 
-#ifdef __KERNEL__
 
 #ifdef LPROCFS
 extern struct proc_dir_entry *fld_type_proc_dir;
@@ -198,7 +197,6 @@ extern struct lprocfs_seq_vars fld_server_proc_list[];
 int fld_client_rpc(struct obd_export *exp,
                    struct lu_seq_range *range, __u32 fld_op,
 		   struct ptlrpc_request **reqp);
-#endif /* __KERNEL__ */
 
 struct fld_cache *fld_cache_init(const char *name,
                                  int cache_size, int cache_threshold);

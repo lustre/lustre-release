@@ -92,7 +92,6 @@ enum {
         DX_FMT_NAME_LEN    = 16,
 };
 
-#ifdef __KERNEL__
 
 /*
  * Debugging.
@@ -1131,7 +1130,6 @@ static inline int ldiskfs_check_dir_entry(const char * function,
 */
 
 /* __KERNEL__ */
-#endif
 
 /*
  * User level API. Copy exists in lustre/lustre/tests/iam_ut.c

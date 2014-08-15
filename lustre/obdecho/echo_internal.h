@@ -43,18 +43,10 @@
 /* block size to use for data verification */
 #define OBD_ECHO_BLOCK_SIZE	(4<<10)
 
-#ifdef __KERNEL__
-# ifdef HAVE_SERVER_SUPPORT
+#ifdef HAVE_SERVER_SUPPORT
 extern struct obd_ops echo_obd_ops;
 int echo_persistent_pages_init(void);
 void echo_persistent_pages_fini(void);
-# endif
-#else /* ! __KERNEL__ */
-/* Kludge here, define some functions and macros needed by liblustre -jay */
-
-#define READ    0
-#define WRITE   1
-
-#endif /* ifdef __KERNEL__ */
+#endif /* HAVE_SERVER_SUPPORT */
 
 #endif

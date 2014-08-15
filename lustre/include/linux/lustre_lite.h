@@ -39,20 +39,14 @@
 #error Do not #include this file directly. #include <lustre_lite.h> instead
 #endif
 
-#ifdef __KERNEL__
-
 #include <linux/version.h>
-
 #include <asm/statfs.h>
-
 #include <linux/fs.h>
 #include <linux/dcache.h>
 #include <linux/proc_fs.h>
-
 #include <obd_class.h>
 #include <lustre_net.h>
 #include <lustre_ha.h>
-
 #include <linux/rbtree.h>
 #include <linux/lustre_compat25.h>
 #include <linux/lustre_common.h>
@@ -97,9 +91,5 @@ enum {
          LPROC_LL_INODE_PERM,
          LPROC_LL_FILE_OPCODES
 };
-
-#else
-#include <lustre/lustre_idl.h>
-#endif /* __KERNEL__ */
 
 #endif

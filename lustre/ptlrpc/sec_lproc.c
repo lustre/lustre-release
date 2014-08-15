@@ -39,12 +39,7 @@
 #define DEBUG_SUBSYSTEM S_SEC
 
 #include <libcfs/libcfs.h>
-#ifndef __KERNEL__
-#include <liblustre.h>
-#include <libcfs/list.h>
-#else
 #include <linux/crypto.h>
-#endif
 
 #include <obd.h>
 #include <obd_class.h>
@@ -56,7 +51,6 @@
 
 #include "ptlrpc_internal.h"
 
-#ifdef __KERNEL__
 
 struct proc_dir_entry *sptlrpc_proc_root = NULL;
 EXPORT_SYMBOL(sptlrpc_proc_root);
@@ -205,20 +199,3 @@ void sptlrpc_lproc_fini(void)
         }
 }
 
-#else /* !__KERNEL__ */
-
-int sptlrpc_lprocfs_cliobd_attach(struct obd_device *dev)
-{
-        return 0;
-}
-
-int sptlrpc_lproc_init(void)
-{
-        return 0;
-}
-
-void sptlrpc_lproc_fini(void)
-{
-}
-
-#endif

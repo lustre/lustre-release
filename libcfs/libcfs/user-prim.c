@@ -362,7 +362,6 @@ void cfs_clear_sigpending(void)
         return;
 }
 
-#ifdef __linux__
 
 /*
  * In glibc (NOT in Linux, so check above is not right), implement
@@ -383,17 +382,6 @@ void *cfs_stack_trace_frame(struct cfs_stack_trace *trace, int frame_no)
                 return NULL;
 }
 
-#else
-
-void cfs_stack_trace_fill(struct cfs_stack_trace *trace)
-{}
-void *cfs_stack_trace_frame(struct cfs_stack_trace *trace, int frame_no)
-{
-        return NULL;
-}
-
-/* __linux__ */
-#endif
 
 void lbug_with_loc(struct libcfs_debug_msg_data *msgdata)
 {

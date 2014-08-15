@@ -39,7 +39,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_SEC
-#ifdef __KERNEL__
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/slab.h>
@@ -51,9 +50,6 @@
 #include <linux/key-type.h>
 #include <linux/mutex.h>
 #include <asm/atomic.h>
-#else
-#include <liblustre.h>
-#endif
 
 #include <obd.h>
 #include <obd_class.h>

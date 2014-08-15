@@ -33,11 +33,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
-#ifndef __KERNEL__
-#include <errno.h>
-#include <signal.h>
-#include <liblustre.h>
-#endif
 
 #include <obd_support.h>
 #include <obd_class.h>
@@ -47,7 +42,6 @@
 
 #include "ptlrpc_internal.h"
 
-#ifdef __KERNEL__
 
 void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc,
 			 int mdidx)
@@ -80,53 +74,3 @@ void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page,
         desc->bd_iov_count++;
 }
 
-#else /* !__KERNEL__ */
-
-void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc,
-			 int mdidx)
-{
-	LASSERT(mdidx < desc->bd_md_max_brw);
-	LASSERT(desc->bd_iov_count > mdidx * LNET_MAX_IOV);
-	LASSERT(!(md->options & (LNET_MD_IOVEC | LNET_MD_KIOV | LNET_MD_PHYS)));
-
-	if (desc->bd_iov_count == 1) {
-		md->start = desc->bd_iov[0].iov_base;
-		md->length = desc->bd_iov[0].iov_len;
-		return;
-	}
-
-	md->options |= LNET_MD_IOVEC;
-	md->start = &desc->bd_iov[mdidx * LNET_MAX_IOV];
-	md->length = min(LNET_MAX_IOV, desc->bd_iov_count - mdidx *
-				       LNET_MAX_IOV);
-}
-
-static int can_merge_iovs(lnet_md_iovec_t *existing, lnet_md_iovec_t *candidate)
-{
-        if (existing->iov_base + existing->iov_len == candidate->iov_base)
-                return 1;
-#if 0
-        /* Enable this section to provide earlier evidence of fragmented bulk */
-        CERROR("Can't merge iovs %p for %x, %p for %x\n",
-               existing->iov_base, existing->iov_len,
-               candidate->iov_base, candidate->iov_len);
-#endif
-        return 0;
-}
-
-void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page,
-                          int pageoffset, int len)
-{
-        lnet_md_iovec_t *iov = &desc->bd_iov[desc->bd_iov_count];
-
-        iov->iov_base = page->addr + pageoffset;
-        iov->iov_len = len;
-
-        if (desc->bd_iov_count > 0 && can_merge_iovs(iov - 1, iov)) {
-                (iov - 1)->iov_len += len;
-        } else {
-                desc->bd_iov_count++;
-        }
-}
-
-#endif /* !__KERNEL__ */

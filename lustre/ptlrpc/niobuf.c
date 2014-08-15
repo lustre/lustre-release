@@ -35,9 +35,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
-#ifndef __KERNEL__
-#include <liblustre.h>
-#endif
 #include <obd_support.h>
 #include <lustre_net.h>
 #include <lustre_lib.h>
@@ -458,12 +455,10 @@ int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async)
                 RETURN(0);
 
         for (;;) {
-#ifdef __KERNEL__
 		/* The wq argument is ignored by user-space wait_event macros */
 		wait_queue_head_t *wq = (req->rq_set != NULL) ?
 					&req->rq_set->set_waitq :
 					&req->rq_reply_waitq;
-#endif
                 /* Network access will complete in finite time but the HUGE
                  * timeout lets us CWARN for visibility of sluggish NALs */
                 lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(LONG_UNLINK),

@@ -105,69 +105,61 @@
 #include <libcfs/user-tcpip.h>
 #include <libcfs/user-bitops.h>
 
-# define do_gettimeofday(tv) gettimeofday(tv, NULL);
+#define do_gettimeofday(tv) gettimeofday(tv, NULL);
 typedef unsigned long long cfs_cycles_t;
 
 /* this goes in posix-fs.h */
 #include <sys/mount.h>
 
-#ifdef __linux__
 #include <mntent.h>
-#endif
 
 #define fget(x) NULL
 #define fput(f) do {} while (0)
 
-#ifdef __linux__
 /* Userpace byte flipping */
-# include <endian.h>
-# include <byteswap.h>
-# define __swab16(x) bswap_16(x)
-# define __swab32(x) bswap_32(x)
-# define __swab64(x) bswap_64(x)
-# define __swab16s(x) do {*(x) = bswap_16(*(x));} while (0)
-# define __swab32s(x) do {*(x) = bswap_32(*(x));} while (0)
-# define __swab64s(x) do {*(x) = bswap_64(*(x));} while (0)
-# if __BYTE_ORDER == __LITTLE_ENDIAN
-#  define le16_to_cpu(x) (x)
-#  define cpu_to_le16(x) (x)
-#  define le32_to_cpu(x) (x)
-#  define cpu_to_le32(x) (x)
-#  define le64_to_cpu(x) (x)
-#  define cpu_to_le64(x) (x)
+#include <endian.h>
+#include <byteswap.h>
+#define __swab16(x) bswap_16(x)
+#define __swab32(x) bswap_32(x)
+#define __swab64(x) bswap_64(x)
+#define __swab16s(x) do {*(x) = bswap_16(*(x));} while (0)
+#define __swab32s(x) do {*(x) = bswap_32(*(x));} while (0)
+#define __swab64s(x) do {*(x) = bswap_64(*(x));} while (0)
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+# define le16_to_cpu(x) (x)
+# define cpu_to_le16(x) (x)
+# define le32_to_cpu(x) (x)
+# define cpu_to_le32(x) (x)
+# define le64_to_cpu(x) (x)
+# define cpu_to_le64(x) (x)
 
-#  define be16_to_cpu(x) bswap_16(x)
-#  define cpu_to_be16(x) bswap_16(x)
-#  define be32_to_cpu(x) bswap_32(x)
-#  define cpu_to_be32(x) bswap_32(x)
-#  define be64_to_cpu(x) (__u64)bswap_64(x)
-#  define cpu_to_be64(x) (__u64)bswap_64(x)
-# else
-#  if __BYTE_ORDER == __BIG_ENDIAN
-#   define le16_to_cpu(x) bswap_16(x)
-#   define cpu_to_le16(x) bswap_16(x)
-#   define le32_to_cpu(x) bswap_32(x)
-#   define cpu_to_le32(x) bswap_32(x)
-#   define le64_to_cpu(x) (__u64)bswap_64(x)
-#   define cpu_to_le64(x) (__u64)bswap_64(x)
+# define be16_to_cpu(x) bswap_16(x)
+# define cpu_to_be16(x) bswap_16(x)
+# define be32_to_cpu(x) bswap_32(x)
+# define cpu_to_be32(x) bswap_32(x)
+# define be64_to_cpu(x) ((__u64)bswap_64(x))
+# define cpu_to_be64(x) ((__u64)bswap_64(x))
+#elif __BYTE_ORDER == __BIG_ENDIAN
+# define le16_to_cpu(x) bswap_16(x)
+# define cpu_to_le16(x) bswap_16(x)
+# define le32_to_cpu(x) bswap_32(x)
+# define cpu_to_le32(x) bswap_32(x)
+# define le64_to_cpu(x) ((__u64)bswap_64(x))
+# define cpu_to_le64(x) ((__u64)bswap_64(x))
 
-#   define be16_to_cpu(x) (x)
-#   define cpu_to_be16(x) (x)
-#   define be32_to_cpu(x) (x)
-#   define cpu_to_be32(x) (x)
-#   define be64_to_cpu(x) (x)
-#   define cpu_to_be64(x) (x)
+# define be16_to_cpu(x) (x)
+# define cpu_to_be16(x) (x)
+# define be32_to_cpu(x) (x)
+# define cpu_to_be32(x) (x)
+# define be64_to_cpu(x) (x)
+# define cpu_to_be64(x) (x)
+#else /*  __BYTE_ORDER == __BIG_ENDIAN */
+# error "Unknown byte order"
+#endif /* __BYTE_ORDER != __BIG_ENDIAN */
 
-#  else
-#   error "Unknown byte order"
-#  endif /* __BIG_ENDIAN */
-# endif /* __LITTLE_ENDIAN */
-#endif
-
-# ifndef THREAD_SIZE /* x86_64 linux has THREAD_SIZE in userspace */
-#  define THREAD_SIZE 8192
-# else
-# endif
+#ifndef THREAD_SIZE /* x86_64 linux has THREAD_SIZE in userspace */
+# define THREAD_SIZE 8192
+#endif /* THREAD_SIZE */
 
 #define CFS_CHECK_STACK(msgdata, mask, cdls) do {} while(0)
 #define CDEBUG_STACK() (0L)

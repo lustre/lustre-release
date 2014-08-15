@@ -77,7 +77,7 @@
 
 #ifndef HAVE_LIBCFS_CPT
 
-#if !defined(__linux__) || !defined(__KERNEL__)
+#ifndef __KERNEL__
 typedef struct nodemask { DECLARE_BITMAP(bits, 1); } nodemask_t;
 typedef struct cpumask  { DECLARE_BITMAP(bits, 1); } cpumask_t;
 
@@ -86,7 +86,7 @@ static __always_inline void __node_set(int node, nodemask_t *dstp)
 {
 	set_bit(node, dstp->bits);
 }
-#endif
+#endif /* __KERNEL__ */
 
 struct cfs_cpt_table {
 	/* # of CPU partitions */

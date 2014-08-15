@@ -99,13 +99,8 @@
  */
 #include <libcfs/libcfs.h>
 #include <lu_object.h>
-
-#ifdef __KERNEL__
-# include <linux/mutex.h>
-# include <linux/radix-tree.h>
-#else
-# include <liblustre.h>
-#endif
+#include <linux/mutex.h>
+#include <linux/radix-tree.h>
 
 struct inode;
 

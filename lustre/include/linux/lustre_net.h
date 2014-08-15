@@ -39,14 +39,7 @@
 #error Do not #include this file directly. #include <lustre_net.h> instead
 #endif
 
-#ifdef __KERNEL__
 #include <linux/version.h>
 #include <linux/workqueue.h>
-#endif
-
-/* XXX Liang: should be moved to other header instead of here */
-#ifndef WITH_GROUP_INFO
-#define WITH_GROUP_INFO
-#endif
 
 #endif

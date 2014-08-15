@@ -35,11 +35,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
-#ifndef __KERNEL__
-# include <liblustre.h>
-#else
-# include <asm/atomic.h>
-#endif
+#include <asm/atomic.h>
 
 #include <obd_support.h>
 #include <obd_class.h>
@@ -56,10 +52,6 @@
 #include <lustre_ioctl.h>
 #include "llog_internal.h"
 
-#ifndef __KERNEL__
-/* liblustre workaround */
-atomic_t libcfs_kmemory = {0};
-#endif
 
 struct obd_device *obd_devs[MAX_OBD_DEVICES];
 EXPORT_SYMBOL(obd_devs);
@@ -68,10 +60,7 @@ DEFINE_RWLOCK(obd_dev_lock);
 
 __u64 obd_max_pages = 0;
 __u64 obd_max_alloc = 0;
-#ifndef __KERNEL__
-__u64 obd_alloc;
-__u64 obd_pages;
-#endif
+
 static DEFINE_SPINLOCK(obd_updatemax_lock);
 
 /* The following are visible and mutable through /proc/sys/lustre/. */
@@ -435,11 +424,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
         RETURN(err);
 } /* class_handle_ioctl */
 
-#ifdef __KERNEL__
 extern struct miscdevice obd_psdev;
-#else
-struct miscdevice obd_psdev;
-#endif
 
 #define OBD_INIT_CHECK
 #ifdef OBD_INIT_CHECK
@@ -517,19 +502,13 @@ static int obd_init_checks(void)
 extern int class_procfs_init(void);
 extern int class_procfs_clean(void);
 
-#ifdef __KERNEL__
 static int __init init_obdclass(void)
-#else
-int init_obdclass(void)
-#endif
 {
         int i, err;
-#ifdef __KERNEL__
         int lustre_register_fs(void);
 
         for (i = CAPA_SITE_CLIENT; i < CAPA_SITE_MAX; i++)
 		INIT_LIST_HEAD(&capa_list[i]);
-#endif
 
         LCONSOLE_INFO("Lustre: Build Version: "BUILD_VERSION"\n");
 
@@ -583,11 +562,9 @@ int init_obdclass(void)
         err = obd_init_caches();
         if (err)
                 return err;
-#ifdef __KERNEL__
         err = class_procfs_init();
         if (err)
                 return err;
-#endif
 
 	err = lu_global_init();
 	if (err)
@@ -601,7 +578,7 @@ int init_obdclass(void)
 	if (err != 0)
 		return err;
 
-#if defined(__KERNEL__) && defined(HAVE_SERVER_SUPPORT)
+#ifdef HAVE_SERVER_SUPPORT
 	err = dt_global_init();
 	if (err != 0)
 		return err;
@@ -609,15 +586,13 @@ int init_obdclass(void)
 	err = lu_ucred_global_init();
 	if (err != 0)
 		return err;
-#endif
+#endif /* HAVE_SERVER_SUPPORT */
 
 	err = llog_info_init();
 	if (err)
 		return err;
 
-#ifdef __KERNEL__
         err = lustre_register_fs();
-#endif
 
         return err;
 }
@@ -662,11 +637,10 @@ __u64 obd_pages_max(void)
 	return ret;
 }
 EXPORT_SYMBOL(obd_pages_max);
-#endif
+#endif /* LPROCFS */
 
 /* liblustre doesn't call cleanup_obdclass, apparently.  we carry on in this
  * ifdef to the end of the file to cover module and versioning goo.*/
-#ifdef __KERNEL__
 static void cleanup_obdclass(void)
 {
         int lustre_unregister_fs(void);
@@ -681,7 +655,7 @@ static void cleanup_obdclass(void)
 #ifdef HAVE_SERVER_SUPPORT
 	lu_ucred_global_fini();
 	dt_global_fini();
-#endif
+#endif /* HAVE_SERVER_SUPPORT */
 	cl_global_fini();
 	lu_capainfo_fini();
 	lu_global_fini();
@@ -717,4 +691,3 @@ MODULE_DESCRIPTION("Lustre Class Driver Build Version: " BUILD_VERSION);
 MODULE_LICENSE("GPL");
 
 cfs_module(obdclass, LUSTRE_VERSION_STRING, init_obdclass, cleanup_obdclass);
-#endif

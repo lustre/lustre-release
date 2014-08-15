@@ -57,7 +57,6 @@
  * bulk encryption page pools           *
  ****************************************/
 
-#ifdef __KERNEL__
 
 #define PTRS_PER_PAGE   (PAGE_CACHE_SIZE / sizeof(void *))
 #define PAGES_PER_POOL  (PTRS_PER_PAGE)
@@ -812,26 +811,6 @@ void sptlrpc_enc_pool_fini(void)
 	}
 }
 
-#else /* !__KERNEL__ */
-
-int sptlrpc_enc_pool_get_pages(struct ptlrpc_bulk_desc *desc)
-{
-        return 0;
-}
-
-void sptlrpc_enc_pool_put_pages(struct ptlrpc_bulk_desc *desc)
-{
-}
-
-int sptlrpc_enc_pool_init(void)
-{
-        return 0;
-}
-
-void sptlrpc_enc_pool_fini(void)
-{
-}
-#endif
 
 static int cfs_hash_alg_id[] = {
 	[BULK_HASH_ALG_NULL]	= CFS_HASH_ALG_NULL,
@@ -920,14 +899,9 @@ int sptlrpc_get_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u8 alg,
 	hashsize = cfs_crypto_hash_digestsize(cfs_hash_alg_id[alg]);
 
 	for (i = 0; i < desc->bd_iov_count; i++) {
-#ifdef __KERNEL__
 		cfs_crypto_hash_update_page(hdesc, desc->bd_iov[i].kiov_page,
 				  desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK,
 				  desc->bd_iov[i].kiov_len);
-#else
-		cfs_crypto_hash_update(hdesc, desc->bd_iov[i].iov_base,
-				  desc->bd_iov[i].iov_len);
-#endif
 	}
 
 	if (hashsize > buflen) {

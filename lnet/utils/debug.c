@@ -59,7 +59,6 @@ static int debug_mask = ~0;
 static const char *libcfs_debug_subsystems[] = LIBCFS_DEBUG_SUBSYS_NAMES;
 static const char *libcfs_debug_masks[] = LIBCFS_DEBUG_MASKS_NAMES;
 
-#ifdef __linux__
 
 #define DAEMON_CTL_NAME         "/proc/sys/lnet/daemon_file"
 #define SUBSYS_DEBUG_CTL_NAME   "/proc/sys/lnet/subsystem_debug"
@@ -93,9 +92,6 @@ dbg_write_cmd(int fd, char *str, int len)
         return (rc == len ? 0 : 1);
 }
 
-#else
-#error - Unknown sysctl convention.
-#endif
 
 static int do_debug_mask(char *name, int enable)
 {

@@ -41,13 +41,8 @@
 
 #define DEBUG_SUBSYSTEM S_LDLM
 
-#ifdef __KERNEL__
-# include <libcfs/libcfs.h>
-# include <linux/lustre_intent.h>
-#else
-# include <liblustre.h>
-#endif
-
+#include <libcfs/libcfs.h>
+#include <linux/lustre_intent.h>
 #include <obd_class.h>
 #include "ldlm_internal.h"
 
@@ -162,9 +157,7 @@ extern struct kmem_cache *ldlm_lock_slab;
 static ldlm_processing_policy ldlm_processing_policy_table[] = {
 	[LDLM_PLAIN]	= ldlm_process_plain_lock,
 	[LDLM_EXTENT]	= ldlm_process_extent_lock,
-# ifdef __KERNEL__
 	[LDLM_FLOCK]	= ldlm_process_flock_lock,
-# endif
 	[LDLM_IBITS]	= ldlm_process_inodebits_lock,
 };
 

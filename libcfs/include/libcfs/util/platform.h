@@ -40,7 +40,6 @@
 #ifndef __LUSTRE_UTILS_PLATFORM_H
 #define __LUSTRE_UTILS_PLATFORM_H
 
-#ifdef __linux__
 
 #ifdef HAVE_LIBREADLINE
 #define READLINE_LIBRARY
@@ -73,29 +72,5 @@ typedef pthread_cond_t	l_cond_t;
 #define l_cond_wait(c, s)	pthread_cond_wait(c, s)
 #endif
 
-#else /* other platform */
-
-#ifdef HAVE_LIBREADLINE
-#define READLINE_LIBRARY
-#include <readline/readline.h>
-#endif /* HAVE_LIBREADLINE */
-#include <errno.h>
-#include <string.h>
-#if HAVE_LIBPTHREAD
-#include <sys/ipc.h>
-#include <sys/shm.h>
-#include <pthread.h>
-
-typedef pthread_mutex_t	l_mutex_t;
-typedef pthread_cond_t	l_cond_t;
-#define l_mutex_init(s)		pthread_mutex_init(s, NULL)
-#define l_mutex_lock(s)		pthread_mutex_lock(s)
-#define l_mutex_unlock(s)	pthread_mutex_unlock(s)
-#define l_cond_init(c)		pthread_cond_init(c, NULL)
-#define l_cond_broadcast(c)	pthread_cond_broadcast(c)
-#define l_cond_wait(c, s)	pthread_cond_wait(c, s)
-#endif /* HAVE_LIBPTHREAD */
-
-#endif /* __linux__  */
 
 #endif

@@ -37,11 +37,6 @@
 /** Implementation of client-side PortalRPC interfaces */
 
 #define DEBUG_SUBSYSTEM S_RPC
-#ifndef __KERNEL__
-#include <errno.h>
-#include <signal.h>
-#include <liblustre.h>
-#endif
 
 #include <obd_support.h>
 #include <obd_class.h>
@@ -2419,12 +2414,10 @@ int ptlrpc_unregister_reply(struct ptlrpc_request *request, int async)
          * unlinked before returning a req to the pool.
          */
         for (;;) {
-#ifdef __KERNEL__
 		/* The wq argument is ignored by user-space wait_event macros */
 		wait_queue_head_t *wq = (request->rq_set != NULL) ?
 					&request->rq_set->set_waitq :
 					&request->rq_reply_waitq;
-#endif
                 /* Network access will complete in finite time but the HUGE
                  * timeout lets us CWARN for visibility of sluggish NALs */
                 lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(LONG_UNLINK),

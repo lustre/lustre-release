@@ -39,10 +39,8 @@
 #error Do not #include this file directly. #include <lprocfs_status.h> instead
 #endif
 
-#ifdef __KERNEL__
-# include <linux/proc_fs.h>
-# include <asm/processor.h>
-# include <linux/bit_spinlock.h>
-#endif
+#include <linux/proc_fs.h>
+#include <asm/processor.h>
+#include <linux/bit_spinlock.h>
 
 #endif

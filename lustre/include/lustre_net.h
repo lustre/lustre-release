@@ -55,14 +55,8 @@
  * @{
  */
 
-#if defined(__linux__)
 #include <linux/lustre_net.h>
-#else
-#error Unsupported operating system.
-#endif
-
 #include <libcfs/libcfs.h>
-// #include <obd.h>
 #include <lnet/lnet.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_ha.h>
@@ -71,7 +65,6 @@
 #include <lprocfs_status.h>
 #include <lu_object.h>
 #include <lustre_req_layout.h>
-
 #include <obd_support.h>
 #include <lustre_ver.h>
 
@@ -114,20 +107,18 @@
 #define OFD_MAX_BRW_SIZE	(1 << LNET_MTU_BITS)
 
 /* When PAGE_SIZE is a constant, we can check our arithmetic here with cpp! */
-#ifdef __KERNEL__
-# if ((PTLRPC_MAX_BRW_PAGES & (PTLRPC_MAX_BRW_PAGES - 1)) != 0)
-#  error "PTLRPC_MAX_BRW_PAGES isn't a power of two"
-# endif
-# if (PTLRPC_MAX_BRW_SIZE != (PTLRPC_MAX_BRW_PAGES * PAGE_CACHE_SIZE))
-#  error "PTLRPC_MAX_BRW_SIZE isn't PTLRPC_MAX_BRW_PAGES * PAGE_CACHE_SIZE"
-# endif
-# if (PTLRPC_MAX_BRW_SIZE > LNET_MTU * PTLRPC_BULK_OPS_COUNT)
-#  error "PTLRPC_MAX_BRW_SIZE too big"
-# endif
-# if (PTLRPC_MAX_BRW_PAGES > LNET_MAX_IOV * PTLRPC_BULK_OPS_COUNT)
-#  error "PTLRPC_MAX_BRW_PAGES too big"
-# endif
-#endif /* __KERNEL__ */
+#if ((PTLRPC_MAX_BRW_PAGES & (PTLRPC_MAX_BRW_PAGES - 1)) != 0)
+# error "PTLRPC_MAX_BRW_PAGES isn't a power of two"
+#endif
+#if (PTLRPC_MAX_BRW_SIZE != (PTLRPC_MAX_BRW_PAGES * PAGE_CACHE_SIZE))
+# error "PTLRPC_MAX_BRW_SIZE isn't PTLRPC_MAX_BRW_PAGES * PAGE_CACHE_SIZE"
+#endif
+#if (PTLRPC_MAX_BRW_SIZE > LNET_MTU * PTLRPC_BULK_OPS_COUNT)
+# error "PTLRPC_MAX_BRW_SIZE too big"
+#endif
+#if (PTLRPC_MAX_BRW_PAGES > LNET_MAX_IOV * PTLRPC_BULK_OPS_COUNT)
+# error "PTLRPC_MAX_BRW_PAGES too big"
+#endif
 
 #define PTLRPC_NTHRS_INIT	2
 
@@ -2303,16 +2294,12 @@ struct ptlrpc_bulk_desc {
 	/** array of associated MDs */
 	lnet_handle_md_t	bd_mds[PTLRPC_BULK_OPS_COUNT];
 
-#if defined(__KERNEL__)
 	/*
 	 * encrypt iov, size is either 0 or bd_iov_count.
 	 */
 	lnet_kiov_t           *bd_enc_iov;
 
 	lnet_kiov_t            bd_iov[0];
-#else
-	lnet_md_iovec_t        bd_iov[0];
-#endif
 };
 
 enum {
@@ -2671,10 +2658,6 @@ struct ptlrpc_service_part {
 	spinlock_t			scp_rep_lock __cfs_cacheline_aligned;
 	/** all the active replies */
 	struct list_head		scp_rep_active;
-#ifndef __KERNEL__
-	/** replies waiting for service */
-	struct list_head		scp_rep_queue;
-#endif
 	/** List of free reply_states */
 	struct list_head		scp_rep_idle;
 	/** waitq to run, when adding stuff to srv_free_rs_list */
@@ -2737,25 +2720,6 @@ struct ptlrpcd_ctl {
          * Record the partner index to be processed next.
          */
         int                         pc_cursor;
-#ifndef __KERNEL__
-        /**
-         * Async rpcs flag to make sure that ptlrpcd_check() is called only
-         * once.
-         */
-        int                         pc_recurred;
-        /**
-         * Currently not used.
-         */
-        void                       *pc_callback;
-        /**
-         * User-space async rpcs callback.
-         */
-        void                       *pc_wait_callback;
-        /**
-         * User-space check idle rpcs callback.
-         */
-        void                       *pc_idle_callback;
-#endif
 };
 
 /* Bits for pc_flags */
@@ -3114,13 +3078,8 @@ void ptlrpc_request_change_export(struct ptlrpc_request *req,
 				  struct obd_export *export);
 void ptlrpc_update_export_timer(struct obd_export *exp, long extra_delay);
 
-#ifdef __KERNEL__
 int ptlrpc_hr_init(void);
 void ptlrpc_hr_fini(void);
-#else
-# define ptlrpc_hr_init() (0)
-# define ptlrpc_hr_fini() do {} while(0)
-#endif
 
 /** @} */
 
@@ -3481,13 +3440,8 @@ int ptlrpc_del_timeout_client(struct list_head *obd_list,
                               enum timeout_event event);
 struct ptlrpc_request * ptlrpc_prep_ping(struct obd_import *imp);
 int ptlrpc_obd_ping(struct obd_device *obd);
-#ifdef __KERNEL__
 void ping_evictor_start(void);
 void ping_evictor_stop(void);
-#else
-#define ping_evictor_start()    do {} while (0)
-#define ping_evictor_stop()     do {} while (0)
-#endif
 void ptlrpc_pinger_ir_up(void);
 void ptlrpc_pinger_ir_down(void);
 /** @} */

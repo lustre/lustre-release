@@ -43,11 +43,7 @@
 
 #define DEBUG_SUBSYSTEM S_LDLM
 
-#ifdef __KERNEL__
-# include <libcfs/libcfs.h>
-#else
-# include <liblustre.h>
-#endif
+#include <libcfs/libcfs.h>
 #include <obd.h>
 #include <obd_class.h>
 #include <lustre_dlm.h>
@@ -758,17 +754,9 @@ void target_client_add_cb(struct obd_device *obd, __u64 transno, void *cb_data,
 }
 EXPORT_SYMBOL(target_client_add_cb);
 
-#ifdef __KERNEL__
 static void
 check_and_start_recovery_timer(struct obd_device *obd,
                                struct ptlrpc_request *req, int new_client);
-#else
-static inline void
-check_and_start_recovery_timer(struct obd_device *obd,
-                               struct ptlrpc_request *req, int new_client)
-{
-}
-#endif
 
 int target_handle_connect(struct ptlrpc_request *req)
 {
@@ -1382,7 +1370,6 @@ static void target_exp_dequeue_req_replay(struct ptlrpc_request *req)
 	spin_unlock(&req->rq_export->exp_lock);
 }
 
-#ifdef __KERNEL__
 static void target_finish_recovery(struct obd_device *obd)
 {
         ENTRY;
@@ -2171,7 +2158,6 @@ void target_recovery_init(struct lu_target *lut, svc_handler_t handler)
 }
 EXPORT_SYMBOL(target_recovery_init);
 
-#endif /* __KERNEL__ */
 
 static int target_process_req_flags(struct obd_device *obd,
                                     struct ptlrpc_request *req)

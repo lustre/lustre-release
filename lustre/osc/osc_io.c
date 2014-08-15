@@ -395,7 +395,6 @@ static int osc_async_upcall(void *a, int rc)
         return 0;
 }
 
-#if defined(__KERNEL__)
 /**
  * Checks that there are no pages being written in the extent being truncated.
  */
@@ -412,11 +411,9 @@ static int trunc_check_cb(const struct lu_env *env, struct cl_io *io,
 		CL_PAGE_DEBUG(D_ERROR, env, page, "exists " LPU64 "/%s.\n",
 				start, current->comm);
 
-#ifdef __linux__
 	if (PageLocked(page->cp_vmpage))
 		CDEBUG(D_CACHE, "page %p index %lu locked for %d.\n",
 		       ops, osc_index(ops), oap->oap_cmd & OBD_BRW_RWMASK);
-#endif
 
 	return CLP_GANG_OKAY;
 }
@@ -439,13 +436,6 @@ static void osc_trunc_check(const struct lu_env *env, struct cl_io *io,
 				start + partial, CL_PAGE_EOF,
 				trunc_check_cb, (void *)&size);
 }
-#else /* __KERNEL__ */
-static void osc_trunc_check(const struct lu_env *env, struct cl_io *io,
-			    struct osc_io *oio, __u64 size)
-{
-	return;
-}
-#endif
 
 static int osc_io_setattr_start(const struct lu_env *env,
                                 const struct cl_io_slice *slice)

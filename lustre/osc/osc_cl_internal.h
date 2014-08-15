@@ -46,12 +46,7 @@
 #ifndef OSC_CL_INTERNAL_H
 #define OSC_CL_INTERNAL_H
 
-#ifdef __KERNEL__
-# include <libcfs/libcfs.h>
-#else
-# include <liblustre.h>
-#endif
-
+#include <libcfs/libcfs.h>
 #include <obd.h>
 /* osc_build_res_name() */
 #include <cl_object.h>

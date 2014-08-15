@@ -37,13 +37,8 @@
 #define DEBUG_SUBSYSTEM S_SEC
 
 #include <libcfs/libcfs.h>
-#ifndef __KERNEL__
-#include <liblustre.h>
-#include <libcfs/list.h>
-#else
 #include <linux/crypto.h>
 #include <linux/key.h>
-#endif
 
 #include <obd.h>
 #include <obd_class.h>
@@ -938,7 +933,6 @@ void sptlrpc_conf_client_adapt(struct obd_device *obd)
 }
 EXPORT_SYMBOL(sptlrpc_conf_client_adapt);
 
-#ifdef __KERNEL__
 
 static void rule2string(struct sptlrpc_rule *r, char *buf, int buflen)
 {
@@ -1151,7 +1145,6 @@ out_pop:
 	RETURN(rc);
 }
 
-#endif /* __KRENEL__ */
 
 /**
  * called by target devices, extract sptlrpc rules which applies to
@@ -1188,7 +1181,6 @@ int sptlrpc_conf_target_get_rules(struct obd_device *obd,
                 GOTO(out, rc);
         }
 
-#ifdef __KERNEL__
         if (conf->sc_updated  == 0) {
                 /*
                  * always read from local copy. here another option is
@@ -1208,7 +1200,6 @@ int sptlrpc_conf_target_get_rules(struct obd_device *obd,
                 else
                         CDEBUG(D_SEC, "unchanged, skip updating local copy\n");
         }
-#endif
 
         /* extract rule set for this target */
         conf_tgt = sptlrpc_conf_get_tgt(conf, obd->obd_name, 0);

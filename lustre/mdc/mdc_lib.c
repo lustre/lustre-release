@@ -35,10 +35,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_MDC
-#ifndef __KERNEL__
-# include <fcntl.h>
-# include <liblustre.h>
-#endif
 #include <lustre_net.h>
 #include <lustre/lustre_idl.h>
 #include <obd_class.h>
@@ -47,12 +43,6 @@
 #include <lclient.h>
 #include "mdc_internal.h"
 
-#ifndef __KERNEL__
-/* some liblustre hackings here */
-#ifndef O_DIRECTORY
-#define O_DIRECTORY     0
-#endif
-#endif
 
 static void __mdc_pack_body(struct mdt_body *b, __u32 suppgid)
 {
@@ -274,10 +264,6 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 			if (op_data->op_bias & MDS_CREATE_VOLATILE)
 				cr_flags |= MDS_OPEN_VOLATILE;
 		}
-#ifndef __KERNEL__
-		/*XXX a hack for liblustre to set EA (LL_IOC_LOV_SETSTRIPE) */
-		rec->cr_fid2 = op_data->op_fid2;
-#endif
 	}
 
 	if (lmm) {

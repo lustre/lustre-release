@@ -44,10 +44,8 @@
 # include <linux/fiemap.h>
 #endif
 
-#ifdef __linux__
-# ifndef FS_IOC_FIEMAP
-#  define FS_IOC_FIEMAP (_IOWR('f', 11, struct fiemap))
-# endif
+#ifndef FS_IOC_FIEMAP
+# define FS_IOC_FIEMAP (_IOWR('f', 11, struct fiemap))
 #endif
 
 #define ONEMB 1048576

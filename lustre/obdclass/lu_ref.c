@@ -42,12 +42,7 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
-#ifdef __KERNEL__
-# include <libcfs/libcfs.h>
-#else
-# include <liblustre.h>
-#endif
-
+#include <libcfs/libcfs.h>
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_support.h>
@@ -296,7 +291,7 @@ void lu_ref_del_at(struct lu_ref *ref, struct lu_ref_link *link,
 }
 EXPORT_SYMBOL(lu_ref_del_at);
 
-#if defined(__KERNEL__) && defined(LPROCFS)
+#ifdef LPROCFS
 
 static void *lu_ref_seq_start(struct seq_file *seq, loff_t *pos)
 {
@@ -420,7 +415,7 @@ static struct file_operations lu_ref_dump_fops = {
         .release = lu_ref_seq_release
 };
 
-#endif
+#endif /* LPROCFS */
 
 int lu_ref_global_init(void)
 {
@@ -433,23 +428,23 @@ int lu_ref_global_init(void)
 	spin_lock_init(&lu_ref_refs_guard);
         result = lu_kmem_init(lu_ref_caches);
 
-#if defined(__KERNEL__) && defined(LPROCFS)
+#ifdef LPROCFS
         if (result == 0) {
                 result = lprocfs_seq_create(proc_lustre_root, "lu_refs",
                                             0444, &lu_ref_dump_fops, NULL);
                 if (result)
                         lu_kmem_fini(lu_ref_caches);
         }
-#endif
+#endif /* LPROCFS */
 
         return result;
 }
 
 void lu_ref_global_fini(void)
 {
-#if defined(__KERNEL__) && defined(LPROCFS)
+#ifdef LPROCFS
         lprocfs_remove_proc_entry("lu_refs", proc_lustre_root);
-#endif
+#endif /* LPROCFS */
         lu_kmem_fini(lu_ref_caches);
 }
 

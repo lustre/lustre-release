@@ -42,19 +42,10 @@
  * @{
  */
 
-#if defined(__linux__)
 #include <linux/lustre_handles.h>
-#else
-#error Unsupported operating system.
-#endif
 
 #include <libcfs/libcfs.h>
 
-#ifndef __KERNEL__
-typedef struct {
-	int foo;
-} cfs_rcu_head_t;
-#endif
 
 struct portals_handle_ops {
 	void (*hop_addref)(void *object);

@@ -56,16 +56,11 @@
 
 #define DEBUG_SUBSYSTEM S_LDLM
 
-#ifdef __KERNEL__
 #include <lustre_dlm.h>
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_lib.h>
 #include <libcfs/list.h>
-#else
-#include <liblustre.h>
-#include <obd_class.h>
-#endif
 
 #include "ldlm_internal.h"
 

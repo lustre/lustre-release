@@ -40,11 +40,7 @@
 
 #define DEBUG_SUBSYSTEM S_SEC
 
-#ifndef __KERNEL__
-#include <liblustre.h>
-#else
 #include <libcfs/libcfs.h>
-#endif
 
 #include <obd_support.h>
 #include <obd_class.h>
@@ -53,7 +49,6 @@
 
 #define SEC_GC_INTERVAL (30 * 60)
 
-#ifdef __KERNEL__
 
 static struct mutex sec_gc_mutex;
 static spinlock_t sec_gc_list_lock;
@@ -257,20 +252,3 @@ void sptlrpc_gc_fini(void)
 		     thread_is_stopped(&sec_gc_thread), &lwi);
 }
 
-#else /* !__KERNEL__ */
-
-void sptlrpc_gc_add_sec(struct ptlrpc_sec *sec)
-{
-}
-void sptlrpc_gc_del_sec(struct ptlrpc_sec *sec)
-{
-}
-int sptlrpc_gc_init(void)
-{
-        return 0;
-}
-void sptlrpc_gc_fini(void)
-{
-}
-
-#endif /* __KERNEL__ */

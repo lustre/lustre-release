@@ -56,11 +56,7 @@
  * @{
  */
 
-#if defined(__linux__)
 #include <linux/lustre_log.h>
-#else
-#error Unsupported operating system.
-#endif
 
 #include <obd_class.h>
 #include <lustre/lustre_idl.h>

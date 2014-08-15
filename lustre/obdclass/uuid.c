@@ -38,15 +38,9 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
-#ifndef __KERNEL__
-# include <liblustre.h>
-#else
-# include <libcfs/libcfs.h>
-#endif
-
+#include <libcfs/libcfs.h>
 #include <obd_support.h>
 #include <obd_class.h>
-
 
 static inline __u32 consume(int nob, __u8 **ptr)
 {

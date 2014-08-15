@@ -45,17 +45,12 @@
 #error Do not #include this file directly. #include <lustre_lib.h> instead
 #endif
 
-#ifndef __KERNEL__
-# include <string.h>
-# include <sys/types.h>
-#else
-# include <linux/rwsem.h>
-# include <linux/sched.h>
-# include <linux/signal.h>
-# include <linux/types.h>
-# include <linux/lustre_compat25.h>
-# include <linux/lustre_common.h>
-#endif
+#include <linux/rwsem.h>
+#include <linux/sched.h>
+#include <linux/signal.h>
+#include <linux/types.h>
+#include <linux/lustre_compat25.h>
+#include <linux/lustre_common.h>
 
 #ifndef LP_POISON
 #if BITS_PER_LONG > 32
@@ -73,7 +68,6 @@
                            sigmask(SIGTERM) | sigmask(SIGQUIT) |               \
                            sigmask(SIGALRM))
 
-#ifdef __KERNEL__
 /* initialize ost_lvb according to inode */
 static inline void inode_init_lvb(struct inode *inode, struct ost_lvb *lvb)
 {
@@ -83,8 +77,5 @@ static inline void inode_init_lvb(struct inode *inode, struct ost_lvb *lvb)
         lvb->lvb_atime = LTIME_S(inode->i_atime);
         lvb->lvb_ctime = LTIME_S(inode->i_ctime);
 }
-#else
-/* defined in liblustre/llite_lib.h */
-#endif
 
 #endif /* _LUSTRE_LIB_H */

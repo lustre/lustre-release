@@ -36,13 +36,8 @@
 
 #define DEBUG_SUBSYSTEM S_MDC
 
-#ifdef __KERNEL__
-# include <linux/module.h>
-# include <linux/lustre_intent.h>
-#else
-# include <liblustre.h>
-#endif
-
+#include <linux/module.h>
+#include <linux/lustre_intent.h>
 #include <obd.h>
 #include <obd_class.h>
 #include <lustre_dlm.h>
@@ -118,7 +113,6 @@ int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data,
 
         LASSERT(lock != NULL);
         lock_res_and_lock(lock);
-#ifdef __KERNEL__
 	if (lock->l_resource->lr_lvb_inode &&
 	    lock->l_resource->lr_lvb_inode != data) {
 		struct inode *old_inode = lock->l_resource->lr_lvb_inode;
@@ -129,7 +123,6 @@ int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data,
 			 old_inode->i_state,
 			 new_inode, new_inode->i_ino, new_inode->i_generation);
 	}
-#endif
 	lock->l_resource->lr_lvb_inode = new_inode;
         if (bits)
                 *bits = lock->l_policy_data.l_inodebits.bits;

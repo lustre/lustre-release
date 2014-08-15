@@ -311,13 +311,8 @@ int libcfs_debug_cleanup(void);
  * build go below this comment. Actual compiler/compiler version
  * specific implementations come from the above header files
  */
-#ifdef __GNUC__
 #define likely(x)      __builtin_expect(!!(x), 1)
 #define unlikely(x)    __builtin_expect(!!(x), 0)
-#else
-#define likely(x)	(!!(x))
-#define unlikely(x)	(!!(x))
-#endif
 /* !__KERNEL__ */
 #endif
 

@@ -63,27 +63,27 @@
  * we'll need to move the functions to archi specific headers.
  */
 
-#if (defined __linux__ && defined __KERNEL__)
-#include <linux/hash.h>
-#else
+#ifdef __KERNEL__
+# include <linux/hash.h>
+#else /* __KERNEL__ */
 /* Fast hashing routine for a long.
    (C) 2002 William Lee Irwin III, IBM */
 
-#if BITS_PER_LONG == 32
+# if BITS_PER_LONG == 32
 /* 2^31 + 2^29 - 2^25 + 2^22 - 2^19 - 2^16 + 1 */
-#define CFS_GOLDEN_RATIO_PRIME          CFS_GOLDEN_RATIO_PRIME_32
-#elif BITS_PER_LONG == 64
+#  define CFS_GOLDEN_RATIO_PRIME          CFS_GOLDEN_RATIO_PRIME_32
+# elif BITS_PER_LONG == 64
 /*  2^63 + 2^61 - 2^57 + 2^54 - 2^51 - 2^18 + 1 */
-#define CFS_GOLDEN_RATIO_PRIME          CFS_GOLDEN_RATIO_PRIME_64
-#else
-#error Define CFS_GOLDEN_RATIO_PRIME for your wordsize.
-#endif
+#  define CFS_GOLDEN_RATIO_PRIME          CFS_GOLDEN_RATIO_PRIME_64
+# else
+#  error Define CFS_GOLDEN_RATIO_PRIME for your wordsize.
+# endif /* BITS_PER_LONG == 64 */
 
 static inline unsigned long hash_long(unsigned long val, unsigned int bits)
 {
 	unsigned long hash = val;
 
-#if BITS_PER_LONG == 64
+# if BITS_PER_LONG == 64
 	/*  Sigh, gcc can't optimise this alone like it does for 32 bits. */
 	unsigned long n = hash;
 	n <<= 18;
@@ -98,23 +98,15 @@ static inline unsigned long hash_long(unsigned long val, unsigned int bits)
 	hash += n;
 	n <<= 2;
 	hash += n;
-#else
+# else /* BITS_PER_LONG == 64 */
 	/* On some cpus multiply is faster, on others gcc will do shifts */
 	hash *= CFS_GOLDEN_RATIO_PRIME;
-#endif
+# endif /* BITS_PER_LONG != 64 */
 
 	/* High bits are more random, so use them. */
 	return hash >> (BITS_PER_LONG - bits);
 }
-#if 0
-static inline unsigned long hash_ptr(void *ptr, unsigned int bits)
-{
-	return hash_long((unsigned long)ptr, bits);
-}
-#endif
-
-/* !(__linux__ && __KERNEL__) */
-#endif
+#endif /* !__KERNEL__ */
 
 /** disable debug */
 #define CFS_HASH_DEBUG_NONE         0

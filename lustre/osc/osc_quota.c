@@ -27,9 +27,6 @@
  *
  * Code originally extracted from quota directory
  */
-#ifndef __KERNEL__
-# include <liblustre.h>
-#endif
 
 #include <obd.h>
 #include "osc_internal.h"

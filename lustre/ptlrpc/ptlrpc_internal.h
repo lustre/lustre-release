@@ -247,11 +247,7 @@ void ptlrpc_pinger_sending_on_import(struct obd_import *imp);
 void ptlrpc_pinger_commit_expected(struct obd_import *imp);
 void ptlrpc_pinger_wake_up(void);
 void ptlrpc_ping_import_soon(struct obd_import *imp);
-#ifdef __KERNEL__
 int ping_evictor_wake(struct obd_export *exp);
-#else
-#define ping_evictor_wake(exp)     1
-#endif
 
 /* sec_null.c */
 int  sptlrpc_null_init(void);
@@ -297,10 +293,10 @@ static inline int ll_rpc_recoverable_error(int rc)
 	return (rc == -ENOTCONN || rc == -ENODEV);
 }
 
-#if defined HAVE_SERVER_SUPPORT && defined(__KERNEL__)
+#ifdef HAVE_SERVER_SUPPORT
 int tgt_mod_init(void);
 void tgt_mod_exit(void);
-#else
+#else /* HAVE_SERVER_SUPPORT */
 static inline int tgt_mod_init(void)
 {
 	return 0;
@@ -310,7 +306,7 @@ static inline void tgt_mod_exit(void)
 {
 	return;
 }
-#endif
+#endif /* !HAVE_SERVER_SUPPORT */
 
 static inline void ptlrpc_reqset_put(struct ptlrpc_request_set *set)
 {

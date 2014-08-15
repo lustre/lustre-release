@@ -41,13 +41,8 @@
 #define DEBUG_SUBSYSTEM S_SEC
 
 #include <libcfs/libcfs.h>
-#ifndef __KERNEL__
-#include <liblustre.h>
-#include <libcfs/list.h>
-#else
 #include <linux/crypto.h>
 #include <linux/key.h>
-#endif
 
 #include <obd.h>
 #include <obd_class.h>
@@ -2411,14 +2406,10 @@ int sptlrpc_current_user_desc_size(void)
 {
         int ngroups;
 
-#ifdef __KERNEL__
         ngroups = current_ngroups;
 
         if (ngroups > LUSTRE_MAX_GROUPS)
                 ngroups = LUSTRE_MAX_GROUPS;
-#else
-        ngroups = 0;
-#endif
         return sptlrpc_user_desc_size(ngroups);
 }
 EXPORT_SYMBOL(sptlrpc_current_user_desc_size);
@@ -2436,14 +2427,12 @@ int sptlrpc_pack_user_desc(struct lustre_msg *msg, int offset)
 	pud->pud_cap = cfs_curproc_cap_pack();
 	pud->pud_ngroups = (msg->lm_buflens[offset] - sizeof(*pud)) / 4;
 
-#ifdef __KERNEL__
 	task_lock(current);
 	if (pud->pud_ngroups > current_ngroups)
 		pud->pud_ngroups = current_ngroups;
 	memcpy(pud->pud_groups, current_cred()->group_info->blocks[0],
 	       pud->pud_ngroups * sizeof(__u32));
 	task_unlock(current);
-#endif
 
 	return 0;
 }

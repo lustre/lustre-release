@@ -41,11 +41,7 @@
 #ifndef __LNET_LIB_LNET_H__
 #define __LNET_LIB_LNET_H__
 
-#if defined(__linux__)
 #include <lnet/linux/lib-lnet.h>
-#else
-#error Unsupported Operating System
-#endif
 
 #include <libcfs/libcfs.h>
 #include <lnet/types.h>

@@ -36,15 +36,8 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
-#ifndef __KERNEL__
-# include <liblustre.h>
-#else
-# include <libcfs/libcfs.h>
-# ifdef __mips64__
-#  include <linux/kernel.h>
-# endif
-#endif
-
+#include <libcfs/libcfs.h>
+#include <linux/kernel.h>
 #include <obd_class.h>
 #include <lustre_net.h>
 #include <lustre_sec.h>
@@ -594,11 +587,7 @@ lnet_pid_t ptl_get_pid(void)
 {
         lnet_pid_t        pid;
 
-#ifndef  __KERNEL__
-        pid = getpid();
-#else
         pid = LUSTRE_SRV_LNET_PID;
-#endif
         return pid;
 }
 
@@ -619,18 +608,11 @@ int ptlrpc_ni_init(void)
 
         /* CAVEAT EMPTOR: how we process portals events is _radically_
          * different depending on... */
-#ifdef __KERNEL__
 	/* kernel LNet calls our master callback when there are new event,
 	 * because we are guaranteed to get every event via callback,
 	 * so we just set EQ size to 0 to avoid overhread of serializing
 	 * enqueue/dequeue operations in LNet. */
 	rc = LNetEQAlloc(0, ptlrpc_master_callback, &ptlrpc_eq_h);
-#else
-        /* liblustre calls the master callback when it removes events from the
-         * event queue.  The event queue has to be big enough not to drop
-         * anything */
-        rc = LNetEQAlloc(10240, LNET_EQ_HANDLER_NONE, &ptlrpc_eq_h);
-#endif
         if (rc == 0)
                 return 0;
 
@@ -640,163 +622,6 @@ int ptlrpc_ni_init(void)
 	return rc;
 }
 
-#ifndef __KERNEL__
-struct list_head liblustre_wait_callbacks;
-struct list_head liblustre_idle_callbacks;
-void *liblustre_services_callback;
-
-void *
-liblustre_register_waitidle_callback(struct list_head *callback_list,
-				     const char *name,
-				     int (*fn)(void *arg), void *arg)
-{
-        struct liblustre_wait_callback *llwc;
-
-        OBD_ALLOC(llwc, sizeof(*llwc));
-        LASSERT (llwc != NULL);
-
-        llwc->llwc_name = name;
-        llwc->llwc_fn = fn;
-        llwc->llwc_arg = arg;
-	list_add_tail(&llwc->llwc_list, callback_list);
-
-        return (llwc);
-}
-
-void
-liblustre_deregister_waitidle_callback (void *opaque)
-{
-	struct liblustre_wait_callback *llwc = opaque;
-
-	list_del(&llwc->llwc_list);
-	OBD_FREE(llwc, sizeof(*llwc));
-}
-
-void *
-liblustre_register_wait_callback (const char *name,
-                                  int (*fn)(void *arg), void *arg)
-{
-        return liblustre_register_waitidle_callback(&liblustre_wait_callbacks,
-                                                    name, fn, arg);
-}
-
-void
-liblustre_deregister_wait_callback (void *opaque)
-{
-        liblustre_deregister_waitidle_callback(opaque);
-}
-
-void *
-liblustre_register_idle_callback (const char *name,
-                                  int (*fn)(void *arg), void *arg)
-{
-        return liblustre_register_waitidle_callback(&liblustre_idle_callbacks,
-                                                    name, fn, arg);
-}
-
-void
-liblustre_deregister_idle_callback (void *opaque)
-{
-        liblustre_deregister_waitidle_callback(opaque);
-}
-
-int
-liblustre_check_events (int timeout)
-{
-        lnet_event_t ev;
-        int         rc;
-        int         i;
-        ENTRY;
-
-        rc = LNetEQPoll(&ptlrpc_eq_h, 1, timeout * 1000, &ev, &i);
-        if (rc == 0)
-                RETURN(0);
-
-        LASSERT (rc == -EOVERFLOW || rc == 1);
-
-        /* liblustre: no asynch callback so we can't afford to miss any
-         * events... */
-        if (rc == -EOVERFLOW) {
-                CERROR ("Dropped an event!!!\n");
-                abort();
-        }
-
-        ptlrpc_master_callback (&ev);
-        RETURN(1);
-}
-
-int liblustre_waiting = 0;
-
-int
-liblustre_wait_event (int timeout)
-{
-	struct list_head                     *tmp;
-        struct liblustre_wait_callback *llwc;
-        int                             found_something = 0;
-
-        /* single threaded recursion check... */
-        liblustre_waiting = 1;
-
-        for (;;) {
-                /* Deal with all pending events */
-                while (liblustre_check_events(0))
-                        found_something = 1;
-
-                /* Give all registered callbacks a bite at the cherry */
-		list_for_each(tmp, &liblustre_wait_callbacks) {
-			llwc = list_entry(tmp,
-                                              struct liblustre_wait_callback,
-                                              llwc_list);
-
-                        if (llwc->llwc_fn(llwc->llwc_arg))
-                                found_something = 1;
-                }
-
-                if (found_something || timeout == 0)
-                        break;
-
-                /* Nothing so far, but I'm allowed to block... */
-                found_something = liblustre_check_events(timeout);
-                if (!found_something)           /* still nothing */
-                        break;                  /* I timed out */
-        }
-
-        liblustre_waiting = 0;
-
-        return found_something;
-}
-
-void
-liblustre_wait_idle(void)
-{
-        static int recursed = 0;
-	struct list_head		*tmp;
-	struct liblustre_wait_callback	*llwc;
-	int				 idle = 0;
-
-        LASSERT(!recursed);
-        recursed = 1;
-
-        do {
-                liblustre_wait_event(0);
-
-                idle = 1;
-
-		list_for_each(tmp, &liblustre_idle_callbacks) {
-			llwc = list_entry(tmp, struct liblustre_wait_callback,
-					  llwc_list);
-                        if (!llwc->llwc_fn(llwc->llwc_arg)) {
-                                idle = 0;
-                                break;
-                        }
-                }
-
-        } while (!idle);
-
-        recursed = 0;
-}
-
-#endif /* __KERNEL__ */
 
 int ptlrpc_init_portals(void)
 {
@@ -806,33 +631,17 @@ int ptlrpc_init_portals(void)
                 CERROR("network initialisation failed\n");
 		return rc;
         }
-#ifndef __KERNEL__
-	INIT_LIST_HEAD(&liblustre_wait_callbacks);
-	INIT_LIST_HEAD(&liblustre_idle_callbacks);
-
-        liblustre_services_callback =
-                liblustre_register_wait_callback("liblustre_check_services",
-                                                 &liblustre_check_services,
-                                                 NULL);
-	init_completion_module(liblustre_wait_event);
-#endif
         rc = ptlrpcd_addref();
         if (rc == 0)
                 return 0;
 
         CERROR("rpcd initialisation failed\n");
-#ifndef __KERNEL__
-        liblustre_deregister_wait_callback(liblustre_services_callback);
-#endif
         ptlrpc_ni_fini();
         return rc;
 }
 
 void ptlrpc_exit_portals(void)
 {
-#ifndef __KERNEL__
-        liblustre_deregister_wait_callback(liblustre_services_callback);
-#endif
         ptlrpcd_decref();
         ptlrpc_ni_fini();
 }

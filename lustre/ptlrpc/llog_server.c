@@ -42,16 +42,11 @@
 
 #define DEBUG_SUBSYSTEM S_LOG
 
-#ifndef __KERNEL__
-#include <liblustre.h>
-#endif
-
 #include <obd_class.h>
 #include <lu_target.h>
 #include <lustre_log.h>
 #include <lustre_net.h>
 
-#if defined(__KERNEL__) && defined(LUSTRE_LOG_SERVER)
 static int llog_origin_close(const struct lu_env *env, struct llog_handle *lgh)
 {
 	if (lgh->lgh_hdr != NULL && lgh->lgh_hdr->llh_flags & LLOG_F_IS_CAT)
@@ -350,38 +345,3 @@ int llog_origin_handle_close(struct ptlrpc_request *req)
 	RETURN(0);
 }
 EXPORT_SYMBOL(llog_origin_handle_close);
-
-#else /* !__KERNEL__ */
-int llog_origin_handle_open(struct ptlrpc_request *req)
-{
-        LBUG();
-        return 0;
-}
-
-int llog_origin_handle_destroy(struct ptlrpc_request *req)
-{
-        LBUG();
-        return 0;
-}
-
-int llog_origin_handle_next_block(struct ptlrpc_request *req)
-{
-        LBUG();
-        return 0;
-}
-int llog_origin_handle_prev_block(struct ptlrpc_request *req)
-{
-        LBUG();
-        return 0;
-}
-int llog_origin_handle_read_header(struct ptlrpc_request *req)
-{
-        LBUG();
-        return 0;
-}
-int llog_origin_handle_close(struct ptlrpc_request *req)
-{
-        LBUG();
-        return 0;
-}
-#endif

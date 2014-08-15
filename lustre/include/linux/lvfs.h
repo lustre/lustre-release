@@ -45,13 +45,9 @@
 #error Do not #include this file directly. #include <lvfs.h> instead
 #endif
 
-#if defined __KERNEL__
 #include <linux/lustre_compat25.h>
 #include <linux/lustre_common.h>
 #include <linux/fs.h>
-#else
-#include <liblustre.h>
-#endif
 
 #define OBD_RUN_CTXT_MAGIC	0xC0FFEEAA
 #define OBD_CTXT_DEBUG		/* development-only debugging */
@@ -75,7 +71,6 @@ struct lvfs_run_ctxt {
 #define OBD_SET_CTXT_MAGIC(ctxt) do {} while(0)
 #endif
 
-#ifdef __KERNEL__
 
 /* We need to hold the inode semaphore over the dcache lookup itself, or we
  * run the risk of entering the filesystem lookup path concurrently on SMP
@@ -104,6 +99,5 @@ static inline struct dentry *ll_lookup_one_len(const char *fid_name,
 	return dchild;
 }
 
-#endif
 
 #endif

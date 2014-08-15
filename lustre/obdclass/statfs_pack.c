@@ -40,9 +40,6 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
-#ifndef __KERNEL__
-#include <liblustre.h>
-#endif
 
 #include <lustre_export.h>
 #include <lustre_net.h>

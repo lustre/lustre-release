@@ -48,11 +48,7 @@
 #ifndef _LUSTRE_DLM_H__
 #define _LUSTRE_DLM_H__
 
-#if defined(__linux__)
 #include <linux/lustre_dlm.h>
-#else
-#error Unsupported operating system.
-#endif
 
 #include <lustre_lib.h>
 #include <lustre_net.h>

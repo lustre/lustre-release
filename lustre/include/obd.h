@@ -36,15 +36,8 @@
 
 #ifndef __OBD_H
 #define __OBD_H
-#ifndef __KERNEL__
-# error "userspace should not include <obd.h>"
-#endif
 
-#if defined(__linux__)
 #include <linux/obd.h>
-#else
-#error Unsupported operating system.
-#endif
 
 #include <lustre/lustre_idl.h>
 #include <lustre_lib.h>

@@ -39,23 +39,11 @@
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
-#ifndef __KERNEL__
-# include <liblustre.h>
-#endif
 
 #include <obd_support.h>
 #include <lustre_handles.h>
 #include <lustre_lib.h>
 
-#ifndef __KERNEL__
-# define list_add_rcu            list_add
-# define list_del_rcu            list_del
-# define list_for_each_rcu       list_for_each
-# define list_for_each_safe_rcu  list_for_each_safe
-# define list_for_each_entry_rcu list_for_each_entry
-# define rcu_read_lock()         spin_lock(&bucket->lock)
-# define rcu_read_unlock()       spin_unlock(&bucket->lock)
-#endif /* !__KERNEL__ */
 
 static __u64 handle_base;
 #define HANDLE_INCR 7

@@ -36,11 +36,7 @@
  *
  * Author: Andreas Dilger <andreas.dilger@intel.com>
  */
-#ifdef __KERNEL__
 #include <linux/module.h>
-#else
-#include <liblustre.h>
-#endif
 #include <lustre_lib.h>
 #include <lprocfs_status.h>
 

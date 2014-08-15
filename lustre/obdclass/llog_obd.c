@@ -36,9 +36,6 @@
 
 #define DEBUG_SUBSYSTEM S_LOG
 
-#ifndef __KERNEL__
-#include <liblustre.h>
-#endif
 
 #include <obd_class.h>
 #include <lustre_log.h>

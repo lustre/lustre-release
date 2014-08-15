@@ -170,10 +170,8 @@ static inline int mdc_prep_elc_req(struct obd_export *exp,
 
 static inline unsigned long hash_x_index(__u64 hash, int hash64)
 {
-#ifdef __KERNEL__
 	if (BITS_PER_LONG == 32 && hash64)
 		hash >>= 32;
-#endif
 	/* save hash 0 with hash 1 */
 	return ~0UL - (hash + !hash);
 }

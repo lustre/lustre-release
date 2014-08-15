@@ -35,7 +35,5 @@
 #ifndef _OBD_CACHE_H__
 #define _OBD_CACHE_H__
 
-#ifdef __KERNEL__
 
-#endif
 #endif

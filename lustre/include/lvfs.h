@@ -41,11 +41,7 @@
 
 #include <libcfs/libcfs.h>
 
-#if defined(__linux__)
 #include <linux/lvfs.h>
-#else
-#error Unsupported operating system.
-#endif
 
 /* ptlrpc_sec_ctx.c */
 void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx);

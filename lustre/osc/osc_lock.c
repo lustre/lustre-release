@@ -41,11 +41,7 @@
 
 #define DEBUG_SUBSYSTEM S_OSC
 
-#ifdef __KERNEL__
-# include <libcfs/libcfs.h>
-#else
-# include <liblustre.h>
-#endif
+#include <libcfs/libcfs.h>
 /* fid_build_reg_res_name() */
 #include <lustre_fid.h>
 
@@ -912,9 +908,7 @@ static int weigh_cb(const struct lu_env *env, struct cl_io *io,
 	struct cl_page *page = ops->ops_cl.cpl_page;
 
 	if (cl_page_is_vmlocked(env, page)
-#if defined(__KERNEL__)
 	    || PageDirty(page->cp_vmpage) || PageWriteback(page->cp_vmpage)
-#endif
 	   ) {
 		(*(unsigned long *)cbdata)++;
 		return CLP_GANG_ABORT;

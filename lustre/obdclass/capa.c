@@ -42,7 +42,6 @@
 
 #define DEBUG_SUBSYSTEM S_SEC
 
-#ifdef __KERNEL__
 #include <linux/version.h>
 #include <linux/fs.h>
 #include <asm/unistd.h>
@@ -53,9 +52,6 @@
 #include <obd_class.h>
 #include <lustre_debug.h>
 #include <lustre/lustre_idl.h>
-#else
-#include <liblustre.h>
-#endif
 
 #include <libcfs/list.h>
 #include <lustre_capa.h>
@@ -65,7 +61,6 @@
 
 struct kmem_cache *capa_cachep;
 
-#ifdef __KERNEL__
 /* lock for capa hash/capa_list/fo_capa_keys */
 DEFINE_SPINLOCK(capa_lock);
 
@@ -74,7 +69,6 @@ struct list_head capa_list[CAPA_SITE_MAX];
 static struct capa_hmac_alg capa_hmac_algs[] = {
         DEF_CAPA_HMAC_ALG("sha1", SHA1, 20, 20),
 };
-#endif
 /* capa count */
 int capa_count[CAPA_SITE_MAX] = { 0, };
 
@@ -101,7 +95,6 @@ struct hlist_head *init_capa_hash(void)
 }
 EXPORT_SYMBOL(init_capa_hash);
 
-#ifdef __KERNEL__
 static inline int capa_on_server(struct obd_capa *ocapa)
 {
         return ocapa->c_site == CAPA_SITE_SERVER;
@@ -387,7 +380,6 @@ out:
         return rc;
 }
 EXPORT_SYMBOL(capa_decrypt_id);
-#endif
 
 void capa_cpy(void *capa, struct obd_capa *ocapa)
 {

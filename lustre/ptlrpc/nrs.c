@@ -40,9 +40,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
-#ifndef __KERNEL__
-#include <liblustre.h>
-#endif
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_net.h>
@@ -1762,14 +1759,14 @@ out:
 
 /* ptlrpc/nrs_fifo.c */
 extern struct ptlrpc_nrs_pol_conf nrs_conf_fifo;
-#if defined HAVE_SERVER_SUPPORT && defined(__KERNEL__)
+#ifdef HAVE_SERVER_SUPPORT
 /* ptlrpc/nrs_crr.c */
 extern struct ptlrpc_nrs_pol_conf nrs_conf_crrn;
 /* ptlrpc/nrs_orr.c */
 extern struct ptlrpc_nrs_pol_conf nrs_conf_orr;
 extern struct ptlrpc_nrs_pol_conf nrs_conf_trr;
 extern struct ptlrpc_nrs_pol_conf nrs_conf_tbf;
-#endif
+#endif /* HAVE_SERVER_SUPPORT */
 
 /**
  * Adds all policies that ship with the ptlrpc module, to NRS core's list of
@@ -1790,7 +1787,7 @@ int ptlrpc_nrs_init(void)
 	if (rc != 0)
 		GOTO(fail, rc);
 
-#if defined HAVE_SERVER_SUPPORT && defined(__KERNEL__)
+#ifdef HAVE_SERVER_SUPPORT
 	rc = ptlrpc_nrs_policy_register(&nrs_conf_crrn);
 	if (rc != 0)
 		GOTO(fail, rc);
@@ -1805,7 +1802,7 @@ int ptlrpc_nrs_init(void)
 	rc = ptlrpc_nrs_policy_register(&nrs_conf_tbf);
 	if (rc != 0)
 		GOTO(fail, rc);
-#endif
+#endif /* HAVE_SERVER_SUPPORT */
 
 	RETURN(rc);
 fail:

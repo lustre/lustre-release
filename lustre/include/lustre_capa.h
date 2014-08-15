@@ -49,9 +49,7 @@
 /*
  * capability
  */
-#ifdef __KERNEL__
 #include <linux/crypto.h>
-#endif
 #include <lustre/lustre_idl.h>
 
 #define CAPA_TIMEOUT 1800                /* sec, == 30 min */
@@ -195,7 +193,6 @@ int capa_decrypt_id(__u32 *d, __u32 *s, __u8 *key, int keylen);
 void capa_cpy(void *dst, struct obd_capa *ocapa);
 static inline struct obd_capa *alloc_capa(int site)
 {
-#ifdef __KERNEL__
         struct obd_capa *ocapa;
 
         if (unlikely(site != CAPA_SITE_CLIENT && site != CAPA_SITE_SERVER))
@@ -215,9 +212,6 @@ static inline struct obd_capa *alloc_capa(int site)
 		INIT_HLIST_NODE(&ocapa->u.tgt.c_hash);
 
 	return ocapa;
-#else
-	return ERR_PTR(-EOPNOTSUPP);
-#endif
 }
 
 static inline struct obd_capa *capa_get(struct obd_capa *ocapa)

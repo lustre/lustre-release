@@ -49,7 +49,6 @@
 #ifndef _OSD_OI_H
 #define _OSD_OI_H
 
-#if defined(__KERNEL__)
 
 /* struct rw_semaphore */
 #include <linux/rwsem.h>
@@ -155,5 +154,4 @@ int  osd_oi_update(struct osd_thread_info *info, struct osd_device *osd,
 
 int fid_is_on_ost(struct osd_thread_info *info, struct osd_device *osd,
 		  const struct lu_fid *fid, enum oi_check_flags flags);
-#endif /* __KERNEL__ */
 #endif /* _OSD_OI_H */

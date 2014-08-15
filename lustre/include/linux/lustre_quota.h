@@ -39,11 +39,9 @@
 #error Do not #include this file directly. #include <lustre_quota.h> instead
 #endif
 
-#ifdef __KERNEL__
 #include <linux/version.h>
 #include <linux/fs.h>
 #include <linux/quota.h>
 #include <linux/quotaops.h>
-#endif
 
 #endif /* _LUSTRE_QUOTA_H */

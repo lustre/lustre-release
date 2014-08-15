@@ -42,7 +42,6 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
-#ifdef __KERNEL__
 #include <linux/module.h>
 #include <linux/errno.h>
 #include <linux/kernel.h>
@@ -66,9 +65,6 @@
 #include <asm/uaccess.h>
 #include <linux/miscdevice.h>
 #include <linux/seq_file.h>
-#else
-# include <liblustre.h>
-#endif
 
 #include <libcfs/libcfs.h>
 #include <obd_support.h>
@@ -78,7 +74,6 @@
 #include <lustre_ioctl.h>
 #include <lustre_ver.h>
 #include <lustre/lustre_build_version.h>
-#ifdef __KERNEL__
 
 int proc_version;
 
@@ -223,7 +218,6 @@ struct miscdevice obd_psdev = {
         .fops  = &obd_psdev_fops,
 };
 
-#endif
 
 #ifdef LPROCFS
 static int obd_proc_version_seq_show(struct seq_file *m, void *v)
@@ -340,7 +334,6 @@ struct lprocfs_seq_vars lprocfs_base[] = {
 #define lprocfs_base NULL
 #endif /* LPROCFS */
 
-#ifdef __KERNEL__
 static void *obd_device_list_seq_start(struct seq_file *p, loff_t *pos)
 {
         if (*pos >= class_devno_max())
@@ -416,11 +409,9 @@ struct file_operations obd_device_list_fops = {
         .llseek  = seq_lseek,
         .release = seq_release,
 };
-#endif
 
 int class_procfs_init(void)
 {
-#ifdef __KERNEL__
 	int rc;
 	ENTRY;
 
@@ -431,13 +422,9 @@ int class_procfs_init(void)
 				&obd_device_list_fops, NULL);
 	if (rc)
 		CERROR("error adding /proc/fs/lustre/devices file\n");
-#else
-	ENTRY;
-#endif
 	RETURN(0);
 }
 
-#ifdef __KERNEL__
 int class_procfs_clean(void)
 {
         ENTRY;
@@ -446,4 +433,3 @@ int class_procfs_clean(void)
         }
         RETURN(0);
 }
-#endif

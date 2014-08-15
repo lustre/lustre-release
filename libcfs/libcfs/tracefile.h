@@ -40,14 +40,10 @@
 #include <libcfs/libcfs.h>
 
 #ifdef __KERNEL__
-#if defined(__linux__)
-#include "linux/linux-tracefile.h"
-#else
-#error Unsupported operating system.
-#endif
-#else
-#include "posix/posix-tracefile.h"
-#endif
+# include "linux/linux-tracefile.h"
+#else /* __KERNEL__ */
+# include "posix/posix-tracefile.h"
+#endif /* !__KERNEL__ */
 /* trace file lock routines */
 
 #define TRACEFILE_NAME_SIZE 1024

@@ -40,9 +40,6 @@
 
 #define DEBUG_SUBSYSTEM S_SEC
 
-#ifndef __KERNEL__
-#include <liblustre.h>
-#endif
 
 #include <obd_support.h>
 #include <obd_cksum.h>

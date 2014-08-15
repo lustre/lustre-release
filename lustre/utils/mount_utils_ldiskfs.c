@@ -66,7 +66,6 @@
 #include <limits.h>
 #include <ctype.h>
 
-#ifdef __linux__
 /* libcfs.h is not really needed here, but on SLES10/PPC, fs.h includes idr.h
  * which requires BITS_PER_LONG to be defined */
 #include <libcfs/libcfs.h>
@@ -74,7 +73,6 @@
 #include <linux/fs.h> /* for BLKGETSIZE64 */
 #endif
 #include <linux/version.h>
-#endif
 #include <lustre_disk.h>
 #include <lustre_param.h>
 #include <lnet/lnetctl.h>

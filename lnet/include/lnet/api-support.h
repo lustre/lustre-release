@@ -35,11 +35,7 @@
 #ifndef __LNET_API_SUPPORT_H__
 #define __LNET_API_SUPPORT_H__
 
-#if defined(__linux__)
 #include <lnet/linux/api-support.h>
-#else
-#error Unsupported Operating System
-#endif
 
 #include <libcfs/libcfs.h>
 #include <lnet/types.h>

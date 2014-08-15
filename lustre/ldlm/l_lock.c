@@ -35,11 +35,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
-#ifdef __KERNEL__
 #include <libcfs/libcfs.h>
-#else
-#include <liblustre.h>
-#endif
 
 #include <lustre_dlm.h>
 #include <lustre_lib.h>

@@ -39,15 +39,9 @@
 #error Do not #include this file directly. #include <lprocfs_status.h> instead
 #endif
 
-#ifdef __KERNEL__
 #define LL_CDEBUG_PAGE(mask, page, fmt, arg...)                               \
         CDEBUG(mask, "page %p map %p index %lu flags %lx count %u priv %0lx: "\
                fmt, page, page->mapping, page->index, (long)page->flags,      \
                page_count(page), page_private(page), ## arg)
-#else
-#define LL_CDEBUG_PAGE(mask, page, fmt, arg...)                               \
-        CDEBUG(mask, "page %p index %lu priv %0lx: "\
-               fmt, page, page->index, page_private(page), ## arg)
-#endif
 
 #endif

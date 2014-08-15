@@ -47,7 +47,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_SEC
-#ifdef __KERNEL__
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/slab.h>
@@ -58,9 +57,6 @@
 #include <asm/atomic.h>
 struct rpc_clnt; /* for rpc_pipefs */
 #include <linux/sunrpc/rpc_pipe_fs.h>
-#else
-#include <liblustre.h>
-#endif
 
 #include <obd.h>
 #include <obd_class.h>

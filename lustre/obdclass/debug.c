@@ -40,9 +40,6 @@
 
 #define DEBUG_SUBSYSTEM D_OTHER
 
-#ifndef __KERNEL__
-# include <liblustre.h>
-#endif
 
 #include <obd_support.h>
 #include <lustre_debug.h>

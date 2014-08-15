@@ -47,9 +47,6 @@
 
 #define DEBUG_SUBSYSTEM S_LOG
 
-#ifndef __KERNEL__
-#include <liblustre.h>
-#endif
 
 #include <obd_class.h>
 #include <lustre_log.h>
@@ -418,7 +415,6 @@ out:
         return 0;
 }
 
-#ifdef __KERNEL__
 static int llog_process_thread_daemonize(void *arg)
 {
 	struct llog_process_info	*lpi = arg;
@@ -440,7 +436,6 @@ out:
 	complete(&lpi->lpi_completion);
 	return rc;
 }
-#endif
 
 int llog_process_or_fork(const struct lu_env *env,
 			 struct llog_handle *loghandle,
@@ -461,7 +456,6 @@ int llog_process_or_fork(const struct lu_env *env,
         lpi->lpi_cbdata    = data;
         lpi->lpi_catdata   = catdata;
 
-#ifdef __KERNEL__
 	if (fork) {
 		struct task_struct *task;
 
@@ -482,15 +476,9 @@ int llog_process_or_fork(const struct lu_env *env,
 		lpi->lpi_env = env;
 		llog_process_thread(lpi);
 	}
-#else
-	lpi->lpi_env = env;
-	llog_process_thread(lpi);
-#endif
 	rc = lpi->lpi_rc;
 
-#ifdef __KERNEL__
 out_lpi:
-#endif
 	OBD_FREE_PTR(lpi);
 	RETURN(rc);
 }

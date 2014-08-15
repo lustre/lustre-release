@@ -41,12 +41,7 @@
 
 #define DEBUG_SUBSYSTEM S_LDLM
 
-#ifdef __KERNEL__
-# include <libcfs/libcfs.h>
-#else
-# include <liblustre.h>
-#endif
-
+#include <libcfs/libcfs.h>
 #include <lustre_dlm.h>
 #include <obd_class.h>
 #include <libcfs/list.h>
@@ -128,7 +123,7 @@ struct ldlm_bl_work_item {
         int                     blwi_mem_pressure;
 };
 
-#if defined(HAVE_SERVER_SUPPORT) && defined(__KERNEL__)
+#ifdef HAVE_SERVER_SUPPORT
 
 /**
  * Protects both waiting_locks_list and expired_lock_thread.
@@ -557,7 +552,7 @@ int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, int timeout)
 }
 EXPORT_SYMBOL(ldlm_refresh_waiting_lock);
 
-#else /* !HAVE_SERVER_SUPPORT ||  !__KERNEL__ */
+#else /* HAVE_SERVER_SUPPORT */
 
 int ldlm_del_waiting_lock(struct ldlm_lock *lock)
 {
@@ -569,15 +564,7 @@ int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, int timeout)
         RETURN(0);
 }
 
-# ifdef HAVE_SERVER_SUPPORT
-static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
-{
-	LASSERT(ldlm_is_res_locked(lock) && !ldlm_is_cancel_on_block(lock));
-	RETURN(1);
-}
-
-# endif
-#endif /* HAVE_SERVER_SUPPORT && __KERNEL__ */
+#endif /* !HAVE_SERVER_SUPPORT */
 
 #ifdef HAVE_SERVER_SUPPORT
 
@@ -594,7 +581,6 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
 
         if (obd_dump_on_timeout)
                 libcfs_debug_dumplog();
-#ifdef __KERNEL__
 	spin_lock_bh(&waiting_locks_spinlock);
 	if (__ldlm_del_waiting_lock(lock) == 0)
 		/* the lock was not in any list, grab an extra ref before adding
@@ -604,9 +590,6 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
 		     &expired_lock_thread.elt_expired_locks);
 	wake_up(&expired_lock_thread.elt_waitq);
 	spin_unlock_bh(&waiting_locks_spinlock);
-#else
-	class_fail_export(lock->l_export);
-#endif
 }
 
 /**
@@ -1929,7 +1912,6 @@ static int ldlm_callback_reply(struct ptlrpc_request *req, int rc)
         return ptlrpc_reply(req);
 }
 
-#ifdef __KERNEL__
 static int __ldlm_bl_to_thread(struct ldlm_bl_work_item *blwi,
 			       ldlm_cancel_flags_t cancel_flags)
 {
@@ -2024,27 +2006,18 @@ static int ldlm_bl_to_thread(struct ldlm_namespace *ns,
 	}
 }
 
-#endif
 
 int ldlm_bl_to_thread_lock(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
 			   struct ldlm_lock *lock)
 {
-#ifdef __KERNEL__
 	return ldlm_bl_to_thread(ns, ld, lock, NULL, 0, LCF_ASYNC);
-#else
-	return -ENOSYS;
-#endif
 }
 
 int ldlm_bl_to_thread_list(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
 			   struct list_head *cancels, int count,
 			   ldlm_cancel_flags_t cancel_flags)
 {
-#ifdef __KERNEL__
 	return ldlm_bl_to_thread(ns, ld, NULL, cancels, count, cancel_flags);
-#else
-	return -ENOSYS;
-#endif
 }
 
 /* Setinfo coming from Server (eg MDT) to Client (eg MDC)! */
@@ -2527,7 +2500,6 @@ void ldlm_revoke_export_locks(struct obd_export *exp)
 EXPORT_SYMBOL(ldlm_revoke_export_locks);
 #endif /* HAVE_SERVER_SUPPORT */
 
-#ifdef __KERNEL__
 static struct ldlm_bl_work_item *ldlm_bl_get_work(struct ldlm_bl_pool *blp)
 {
 	struct ldlm_bl_work_item *blwi = NULL;
@@ -2669,7 +2641,6 @@ static int ldlm_bl_thread_main(void *arg)
 	RETURN(0);
 }
 
-#endif
 
 static int ldlm_setup(void);
 static int ldlm_cleanup(void);
@@ -2821,12 +2792,10 @@ static int ldlm_setup(void)
 {
 	static struct ptlrpc_service_conf	conf;
 	struct ldlm_bl_pool		       *blp = NULL;
-#ifdef __KERNEL__
-# ifdef HAVE_SERVER_SUPPORT
+#ifdef HAVE_SERVER_SUPPORT
 	struct task_struct *task;
-# endif
+#endif /* HAVE_SERVER_SUPPORT */
 	int i;
-#endif
 	int rc = 0;
 
         ENTRY;
@@ -2842,7 +2811,7 @@ static int ldlm_setup(void)
         rc = ldlm_proc_setup();
         if (rc != 0)
 		GOTO(out, rc);
-#endif
+#endif /* LPROCFS */
 
 	memset(&conf, 0, sizeof(conf));
 	conf = (typeof(conf)) {
@@ -2924,7 +2893,7 @@ static int ldlm_setup(void)
 		ldlm_state->ldlm_cancel_service = NULL;
 		GOTO(out, rc);
 	}
-#endif
+#endif /* HAVE_SERVER_SUPPORT */
 
 	OBD_ALLOC(blp, sizeof(*blp));
 	if (blp == NULL)
@@ -2938,7 +2907,6 @@ static int ldlm_setup(void)
 	atomic_set(&blp->blp_num_threads, 0);
 	atomic_set(&blp->blp_busy_threads, 0);
 
-#ifdef __KERNEL__
 	if (ldlm_num_threads == 0) {
 		blp->blp_min_threads = LDLM_NTHRS_INIT;
 		blp->blp_max_threads = LDLM_NTHRS_MAX;
@@ -2954,7 +2922,7 @@ static int ldlm_setup(void)
 			GOTO(out, rc);
 	}
 
-# ifdef HAVE_SERVER_SUPPORT
+#ifdef HAVE_SERVER_SUPPORT
 	INIT_LIST_HEAD(&expired_lock_thread.elt_expired_locks);
 	expired_lock_thread.elt_state = ELT_STOPPED;
 	init_waitqueue_head(&expired_lock_thread.elt_waitq);
@@ -2972,14 +2940,13 @@ static int ldlm_setup(void)
 
 	wait_event(expired_lock_thread.elt_waitq,
 		       expired_lock_thread.elt_state == ELT_READY);
-# endif /* HAVE_SERVER_SUPPORT */
+#endif /* HAVE_SERVER_SUPPORT */
 
 	rc = ldlm_pools_init();
 	if (rc) {
 		CERROR("Failed to initialize LDLM pools: %d\n", rc);
 		GOTO(out, rc);
 	}
-#endif
 	RETURN(0);
 
  out:
@@ -2999,7 +2966,6 @@ static int ldlm_cleanup(void)
                 RETURN(-EBUSY);
         }
 
-#ifdef __KERNEL__
         ldlm_pools_fini();
 
 	if (ldlm_state->ldlm_bl_pool != NULL) {
@@ -3020,27 +2986,24 @@ static int ldlm_cleanup(void)
 
 		OBD_FREE(blp, sizeof(*blp));
 	}
-#endif /* __KERNEL__ */
 
 	if (ldlm_state->ldlm_cb_service != NULL)
 		ptlrpc_unregister_service(ldlm_state->ldlm_cb_service);
-# ifdef HAVE_SERVER_SUPPORT
+#ifdef HAVE_SERVER_SUPPORT
 	if (ldlm_state->ldlm_cancel_service != NULL)
 		ptlrpc_unregister_service(ldlm_state->ldlm_cancel_service);
-# endif
+#endif
 
-#ifdef __KERNEL__
 	ldlm_proc_cleanup();
 
-# ifdef HAVE_SERVER_SUPPORT
+#ifdef HAVE_SERVER_SUPPORT
 	if (expired_lock_thread.elt_state != ELT_STOPPED) {
 		expired_lock_thread.elt_state = ELT_TERMINATE;
 		wake_up(&expired_lock_thread.elt_waitq);
 		wait_event(expired_lock_thread.elt_waitq,
 			       expired_lock_thread.elt_state == ELT_STOPPED);
 	}
-# endif
-#endif /* __KERNEL__ */
+#endif
 
         OBD_FREE(ldlm_state, sizeof(*ldlm_state));
         ldlm_state = NULL;
@@ -3091,12 +3054,10 @@ void ldlm_exit(void)
 	if (ldlm_refcount)
 		CERROR("ldlm_refcount is %d in ldlm_exit!\n", ldlm_refcount);
 	kmem_cache_destroy(ldlm_resource_slab);
-#ifdef __KERNEL__
 	/* ldlm_lock_put() use RCU to call ldlm_lock_free, so need call
 	 * synchronize_rcu() to wait a grace period elapsed, so that
 	 * ldlm_lock_free() get a chance to be called. */
 	synchronize_rcu();
-#endif
 	kmem_cache_destroy(ldlm_lock_slab);
 	kmem_cache_destroy(ldlm_interval_slab);
 }

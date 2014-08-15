@@ -20,7 +20,6 @@
  *
  * GPL HEADER END
  */
-#ifdef __KERNEL__
 
 #define DEBUG_SUBSYSTEM S_FILTER
 
@@ -123,4 +122,3 @@ put_old:
 	dput(dchild_old);
 	RETURN(err);
 }
-#endif /* __KERNEL__ */

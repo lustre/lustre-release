@@ -39,12 +39,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
-#ifdef __KERNEL__
-# include <libcfs/libcfs.h>
-#else
-# include <liblustre.h>
-#endif
-
+#include <libcfs/libcfs.h>
 #include <obd_support.h>
 #include <lustre_ha.h>
 #include <lustre_net.h>

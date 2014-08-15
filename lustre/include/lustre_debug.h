@@ -45,11 +45,7 @@
 #include <lustre_net.h>
 #include <obd.h>
 
-#if defined(__linux__)
 #include <linux/lustre_debug.h>
-#else
-#error Unsupported operating system.
-#endif
 
 #define ASSERT_MAX_SIZE_MB 60000ULL
 #define ASSERT_PAGE_INDEX(index, OP)                                    \

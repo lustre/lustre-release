@@ -40,11 +40,7 @@
  *
  * User application interface file
  */
-#if defined(__linux__)
 #include <lnet/linux/lnet.h>
-#else
-#error Unsupported Operating System
-#endif
 
 #include <lnet/types.h>
 #include <lnet/api.h>

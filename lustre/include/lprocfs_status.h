@@ -42,11 +42,7 @@
 #ifndef _LPROCFS_SNMP_H
 #define _LPROCFS_SNMP_H
 
-#if defined(__linux__)
 #include <linux/lprocfs_status.h>
-#else
-#error Unsupported operating system.
-#endif
 #include <lustre/lustre_idl.h>
 #include <libcfs/params_tree.h>
 
@@ -178,9 +174,6 @@ struct lprocfs_counter {
 #define lc_sum_irq	lc_array_sum[1]
 
 struct lprocfs_percpu {
-#ifndef __GNUC__
-	__s64			pad;
-#endif
         struct lprocfs_counter lp_cntr[0];
 };
 

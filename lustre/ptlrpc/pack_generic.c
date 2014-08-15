@@ -43,9 +43,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
-#ifndef __KERNEL__
-# include <liblustre.h>
-#endif
 
 #include <libcfs/libcfs.h>
 

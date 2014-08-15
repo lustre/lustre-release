@@ -43,7 +43,6 @@
 #ifndef _OSD_INTERNAL_H
 #define _OSD_INTERNAL_H
 
-#if defined(__KERNEL__)
 
 /* struct mutex */
 #include <linux/mutex.h>
@@ -1108,5 +1107,4 @@ void ldiskfs_dec_count(handle_t *handle, struct inode *inode);
 
 void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf);
 
-#endif /* __KERNEL__ */
 #endif /* _OSD_INTERNAL_H */

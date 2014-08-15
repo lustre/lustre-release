@@ -43,9 +43,7 @@
 #define DEBUG_SUBSYSTEM S_MGS
 #define D_MGS D_CONFIG
 
-#ifdef __KERNEL__
 #include <linux/pagemap.h>
-#endif
 
 #include <obd.h>
 #include <obd_class.h>

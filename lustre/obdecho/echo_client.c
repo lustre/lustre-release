@@ -35,11 +35,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_ECHO
-#ifdef __KERNEL__
 #include <libcfs/libcfs.h>
-#else
-#include <liblustre.h>
-#endif
 
 #include <obd.h>
 #include <obd_support.h>
@@ -3034,7 +3030,6 @@ void echo_client_exit(void)
         lu_kmem_fini(echo_caches);
 }
 
-#ifdef __KERNEL__
 static int __init obdecho_init(void)
 {
         int rc;
@@ -3087,6 +3082,5 @@ MODULE_DESCRIPTION("Lustre Testing Echo OBD driver");
 MODULE_LICENSE("GPL");
 
 cfs_module(obdecho, LUSTRE_VERSION_STRING, obdecho_init, obdecho_exit);
-#endif /* __KERNEL__ */
 
 /** @} echo_client */

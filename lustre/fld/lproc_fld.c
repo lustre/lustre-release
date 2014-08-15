@@ -43,13 +43,8 @@
 
 #define DEBUG_SUBSYSTEM S_FLD
 
-#ifdef __KERNEL__
-# include <libcfs/libcfs.h>
-# include <linux/module.h>
-#else /* __KERNEL__ */
-# include <liblustre.h>
-#endif
-
+#include <libcfs/libcfs.h>
+#include <linux/module.h>
 #include <dt_object.h>
 #include <obd_support.h>
 #include <lustre_fld.h>

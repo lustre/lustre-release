@@ -36,9 +36,6 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
-#ifndef __KERNEL__
-# include <liblustre.h>
-#endif
 
 #include <obd_support.h>
 #include <obd_class.h>
@@ -134,7 +131,6 @@ err_layout:
 	return rc;
 }
 
-#ifdef __KERNEL__
 static void __exit ptlrpc_exit(void)
 {
 	ptlrpc_nrs_fini();
@@ -154,4 +150,3 @@ MODULE_DESCRIPTION("Lustre Request Processor and Lock Management");
 MODULE_LICENSE("GPL");
 
 cfs_module(ptlrpc, "1.0.0", ptlrpc_init, ptlrpc_exit);
-#endif

@@ -39,9 +39,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
-#ifndef __KERNEL__
-# include <liblustre.h>
-#endif
 
 #include <obd_support.h>
 #include <lustre_ha.h>
@@ -720,9 +717,6 @@ int ptlrpc_connect_import(struct obd_import *imp)
         request->rq_timeout = INITIAL_CONNECT_TIMEOUT;
         lustre_msg_set_timeout(request->rq_reqmsg, request->rq_timeout);
 
-#ifndef __KERNEL__
-        lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_LIBCLIENT);
-#endif
         lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_NEXT_VER);
 
         request->rq_no_resend = request->rq_no_delay = 1;
@@ -767,7 +761,6 @@ EXPORT_SYMBOL(ptlrpc_connect_import);
 
 static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
 {
-#ifdef __KERNEL__
 	int force_verify;
 
 	spin_lock(&imp->imp_lock);
@@ -776,10 +769,6 @@ static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
 
 	if (force_verify)
 		ptlrpc_pinger_wake_up();
-#else
-        /* liblustre has no pinger thread, so we wakeup pinger anyway */
-	ptlrpc_pinger_wake_up();
-#endif
 }
 
 static int ptlrpc_busy_reconnect(int rc)
@@ -1069,13 +1058,8 @@ finish:
 			   of macro arguments */
 			const char *older = "older than client. "
 					    "Consider upgrading server";
-#ifdef __KERNEL__
 			const char *newer = "newer than client. "
 					    "Consider recompiling application";
-#else
-			const char *newer = "newer than client. "
-					    "Consider upgrading client";
-#endif
 
 			LCONSOLE_WARN("Server %s version (%d.%d.%d.%d) "
 				      "is much %s (%s)\n",
@@ -1304,7 +1288,6 @@ static int signal_completed_replay(struct obd_import *imp)
 	RETURN(0);
 }
 
-#ifdef __KERNEL__
 /**
  * In kernel code all import invalidation happens in its own
  * separate thread, so that whatever application happened to encounter
@@ -1335,7 +1318,6 @@ static int ptlrpc_invalidate_import_thread(void *data)
         class_import_put(imp);
         RETURN(0);
 }
-#endif
 
 /**
  * This is the state machine for client-side recovery on import.
@@ -1385,7 +1367,6 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 		imp->imp_vbr_failed = 0;
 		spin_unlock(&imp->imp_lock);
 
-#ifdef __KERNEL__
 		{
 		struct task_struct *task;
 		/* bug 17802:  XXX client_disconnect_export vs connect request
@@ -1404,11 +1385,6 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 		}
 		RETURN(rc);
 		}
-#else
-                ptlrpc_invalidate_import(imp);
-
-                IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
-#endif
         }
 
 	if (imp->imp_state == LUSTRE_IMP_REPLAY) {

@@ -28,11 +28,7 @@
 #define DEBUG_PORTAL_ALLOC
 #define DEBUG_SUBSYSTEM S_LND
 
-#if defined(__linux__)
 #include "socklnd_lib-linux.h"
-#else
-#error Unsupported Operating System
-#endif
 
 #include <libcfs/libcfs.h>
 #include <lnet/lnet.h>

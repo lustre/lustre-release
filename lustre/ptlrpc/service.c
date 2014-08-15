@@ -35,9 +35,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
-#ifndef __KERNEL__
-#include <liblustre.h>
-#endif
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_net.h>
@@ -204,7 +201,6 @@ ptlrpc_save_lock(struct ptlrpc_request *req,
 }
 EXPORT_SYMBOL(ptlrpc_save_lock);
 
-#ifdef __KERNEL__
 
 struct ptlrpc_hr_partition;
 
@@ -365,14 +361,6 @@ static void rs_batch_fini(struct rs_batch *b)
 
 #define DECLARE_RS_BATCH(b)     struct rs_batch b
 
-#else /* __KERNEL__ */
-
-#define rs_batch_init(b)        do{}while(0)
-#define rs_batch_fini(b)        do{}while(0)
-#define rs_batch_add(b, r)      ptlrpc_schedule_difficult_reply(r)
-#define DECLARE_RS_BATCH(b)
-
-#endif /* __KERNEL__ */
 
 /**
  * Put reply state into a queue for processing because we received
@@ -380,7 +368,6 @@ static void rs_batch_fini(struct rs_batch *b)
  */
 void ptlrpc_dispatch_difficult_reply(struct ptlrpc_reply_state *rs)
 {
-#ifdef __KERNEL__
 	struct ptlrpc_hr_thread *hrt;
 	ENTRY;
 
@@ -394,9 +381,6 @@ void ptlrpc_dispatch_difficult_reply(struct ptlrpc_reply_state *rs)
 
 	wake_up(&hrt->hrt_waitq);
 	EXIT;
-#else
-	list_add_tail(&rs->rs_list, &rs->rs_svcpt->scp_rep_queue);
-#endif
 }
 
 void
@@ -511,7 +495,6 @@ static void
 ptlrpc_server_nthreads_check(struct ptlrpc_service *svc,
 			     struct ptlrpc_service_conf *conf)
 {
-#ifdef __KERNEL__
 	struct ptlrpc_service_thr_conf	*tc = &conf->psc_thr;
 	unsigned			init;
 	unsigned			total;
@@ -608,7 +591,6 @@ ptlrpc_server_nthreads_check(struct ptlrpc_service *svc,
 		       svc->srv_name, nthrs * svc->srv_ncpts,
 		       tc->tc_nthrs_max);
 	}
-#endif
 }
 
 /**
@@ -642,9 +624,6 @@ ptlrpc_service_part_init(struct ptlrpc_service *svc,
 	/* reply states */
 	spin_lock_init(&svcpt->scp_rep_lock);
 	INIT_LIST_HEAD(&svcpt->scp_rep_active);
-#ifndef __KERNEL__
-	INIT_LIST_HEAD(&svcpt->scp_rep_queue);
-#endif
 	INIT_LIST_HEAD(&svcpt->scp_rep_idle);
 	init_waitqueue_head(&svcpt->scp_rep_waitq);
 	atomic_set(&svcpt->scp_nreps_difficult, 0);
@@ -837,14 +816,12 @@ ptlrpc_register_service(struct ptlrpc_service_conf *conf,
 	CDEBUG(D_NET, "%s: Started, listening on portal %d\n",
 	       service->srv_name, service->srv_req_portal);
 
-#ifdef __KERNEL__
 	rc = ptlrpc_start_threads(service);
 	if (rc != 0) {
 		CERROR("Failed to start threads for service %s: %d\n",
 		       service->srv_name, rc);
 		GOTO(failed, rc);
 	}
-#endif
 
 	RETURN(service);
 failed:
@@ -1749,10 +1726,6 @@ static bool ptlrpc_server_allow_normal(struct ptlrpc_service_part *svcpt,
 				       bool force)
 {
 	int running = svcpt->scp_nthrs_running;
-#ifndef __KERNEL__
-	if (1) /* always allow to handle normal request for liblustre */
-		return true;
-#endif
 	if (unlikely(svcpt->scp_service->srv_req_portal == MDS_REQUEST_PORTAL &&
 		     CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CANCEL_RESEND))) {
 		/* leave just 1 thread for normal RPCs */
@@ -1810,13 +1783,6 @@ ptlrpc_server_request_get(struct ptlrpc_service_part *svcpt, bool force)
 	ENTRY;
 
 	spin_lock(&svcpt->scp_req_lock);
-#ifndef __KERNEL__
-	/* !@%$# liblustre only has 1 thread */
-	if (atomic_read(&svcpt->scp_nreps_difficult) != 0) {
-		spin_unlock(&svcpt->scp_req_lock);
-		RETURN(NULL);
-	}
-#endif
 
 	if (ptlrpc_server_high_pending(svcpt, force)) {
 		req = ptlrpc_nrs_req_get_nolock(svcpt, true, force);
@@ -2270,81 +2236,6 @@ ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
 	RETURN(1);
 }
 
-#ifndef __KERNEL__
-
-/**
- * Check whether given service has a reply available for processing
- * and process it.
- *
- * \param svc a ptlrpc service
- * \retval 0 no replies processed
- * \retval 1 one reply processed
- */
-static int
-ptlrpc_server_handle_reply(struct ptlrpc_service_part *svcpt)
-{
-	struct ptlrpc_reply_state *rs = NULL;
-	ENTRY;
-
-	spin_lock(&svcpt->scp_rep_lock);
-	if (!list_empty(&svcpt->scp_rep_queue)) {
-		rs = list_entry(svcpt->scp_rep_queue.prev,
-				    struct ptlrpc_reply_state,
-				    rs_list);
-		list_del_init(&rs->rs_list);
-	}
-	spin_unlock(&svcpt->scp_rep_lock);
-	if (rs != NULL)
-		ptlrpc_handle_rs(rs);
-	RETURN(rs != NULL);
-}
-
-/* FIXME make use of timeout later */
-int
-liblustre_check_services (void *arg)
-{
-	int  did_something = 0;
-	int  rc;
-	struct list_head *tmp, *nxt;
-	ENTRY;
-
-	/* I'm relying on being single threaded, not to have to lock
-	 * ptlrpc_all_services etc */
-	list_for_each_safe(tmp, nxt, &ptlrpc_all_services) {
-		struct ptlrpc_service *svc =
-			list_entry(tmp, struct ptlrpc_service, srv_list);
-		struct ptlrpc_service_part *svcpt;
-
-		LASSERT(svc->srv_ncpts == 1);
-		svcpt = svc->srv_parts[0];
-
-		if (svcpt->scp_nthrs_running != 0)     /* I've recursed */
-			continue;
-
-		/* service threads can block for bulk, so this limits us
-		 * (arbitrarily) to recursing 1 stack frame per service.
-		 * Note that the problem with recursion is that we have to
-		 * unwind completely before our caller can resume. */
-
-		svcpt->scp_nthrs_running++;
-
-		do {
-			rc = ptlrpc_server_handle_req_in(svcpt, NULL);
-			rc |= ptlrpc_server_handle_reply(svcpt);
-			rc |= ptlrpc_at_check_timed(svcpt);
-			rc |= ptlrpc_server_handle_request(svcpt, NULL);
-			rc |= (ptlrpc_server_post_idle_rqbds(svcpt) > 0);
-			did_something |= rc;
-		} while (rc);
-
-		svcpt->scp_nthrs_running--;
-	}
-
-	RETURN(did_something);
-}
-#define ptlrpc_stop_all_threads(s) do {} while (0)
-
-#else /* __KERNEL__ */
 
 static void
 ptlrpc_check_rqbd_pool(struct ptlrpc_service_part *svcpt)
@@ -2479,9 +2370,7 @@ static int ptlrpc_main(void *arg)
 	struct ptlrpc_service_part	*svcpt = thread->t_svcpt;
 	struct ptlrpc_service		*svc = svcpt->scp_service;
 	struct ptlrpc_reply_state	*rs;
-#ifdef WITH_GROUP_INFO
 	struct group_info *ginfo = NULL;
-#endif
 	struct lu_env *env;
 	int counter = 0, rc = 0;
 	ENTRY;
@@ -2498,7 +2387,6 @@ static int ptlrpc_main(void *arg)
 		      svc->srv_name, thread->t_name, svcpt->scp_cpt);
 	}
 
-#ifdef WITH_GROUP_INFO
 	ginfo = groups_alloc(0);
 	if (!ginfo) {
 		rc = -ENOMEM;
@@ -2507,7 +2395,6 @@ static int ptlrpc_main(void *arg)
 
 	set_current_groups(ginfo);
 	put_group_info(ginfo);
-#endif
 
 	if (svc->srv_ops.so_thr_init != NULL) {
 		rc = svc->srv_ops.so_thr_init(thread);
@@ -3062,7 +2949,6 @@ void ptlrpc_hr_fini(void)
 	ptlrpc_hr.hr_partitions = NULL;
 }
 
-#endif /* __KERNEL__ */
 
 /**
  * Wait until all already scheduled replies are processed.

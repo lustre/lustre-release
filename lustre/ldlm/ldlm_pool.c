@@ -97,14 +97,8 @@
 
 #define DEBUG_SUBSYSTEM S_LDLM
 
-#ifdef __KERNEL__
-# include <lustre_dlm.h>
-#else
-# include <liblustre.h>
-#endif
-
+#include <lustre_dlm.h>
 #include <cl_object.h>
-
 #include <obd_class.h>
 #include <obd_support.h>
 #include "ldlm_internal.h"
@@ -147,9 +141,7 @@
  */
 #define LDLM_POOL_SLV_SHIFT (10)
 
-#ifdef __KERNEL__
 extern struct proc_dir_entry *ldlm_ns_proc_dir;
-#endif
 
 static inline __u64 dru(__u64 val, __u32 shift, int round_up)
 {
@@ -559,15 +551,10 @@ static int ldlm_cli_pool_shrink(struct ldlm_pool *pl,
 	unused = ns->ns_nr_unused;
 	spin_unlock(&ns->ns_lock);
 
-#ifdef __KERNEL__
 	if (nr == 0)
 		return (unused / 100) * sysctl_vfs_cache_pressure;
 	else
 		return ldlm_cancel_lru(ns, nr, LCF_ASYNC, LDLM_CANCEL_SHRINK);
-#else
-	return unused - (nr ? ldlm_cancel_lru(ns, nr, LCF_ASYNC,
-					      LDLM_CANCEL_SHRINK) : 0);
-#endif
 }
 
 struct ldlm_pool_ops ldlm_srv_pool_ops = {
@@ -668,7 +655,6 @@ int ldlm_pool_setup(struct ldlm_pool *pl, int limit)
 }
 EXPORT_SYMBOL(ldlm_pool_setup);
 
-#ifdef __KERNEL__
 static int lprocfs_pool_state_seq_show(struct seq_file *m, void *unused)
 {
 	int granted, grant_rate, cancel_rate, grant_step;
@@ -853,10 +839,6 @@ static void ldlm_pool_proc_fini(struct ldlm_pool *pl)
                 pl->pl_proc_dir = NULL;
         }
 }
-#else /* !__KERNEL__*/
-#define ldlm_pool_proc_init(pl) (0)
-#define ldlm_pool_proc_fini(pl) while (0) {}
-#endif
 
 int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns,
 		   int idx, ldlm_side_t client)
@@ -1046,7 +1028,6 @@ __u32 ldlm_pool_get_lvf(struct ldlm_pool *pl)
 }
 EXPORT_SYMBOL(ldlm_pool_get_lvf);
 
-#ifdef __KERNEL__
 static unsigned int ldlm_pool_granted(struct ldlm_pool *pl)
 {
 	return atomic_read(&pl->pl_granted);
@@ -1518,7 +1499,6 @@ void ldlm_pools_fini(void)
 	ldlm_pools_thread_stop();
 }
 EXPORT_SYMBOL(ldlm_pools_fini);
-#endif /* __KERNEL__ */
 
 #else /* !HAVE_LRU_RESIZE_SUPPORT */
 int ldlm_pool_setup(struct ldlm_pool *pl, int limit)

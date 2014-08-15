@@ -42,12 +42,8 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
-#ifndef __KERNEL__
-#include "../liblustre/llite_lib.h"
-#else
 #include <obd_class.h>
 #include <lustre/lustre_idl.h>
-#endif
 
 void obdo_set_parent_fid(struct obdo *dst, const struct lu_fid *parent)
 {
@@ -121,10 +117,8 @@ EXPORT_SYMBOL(obdo_from_inode);
 
 void obdo_cpy_md(struct obdo *dst, const struct obdo *src, obd_flag valid)
 {
-#ifdef __KERNEL__
         CDEBUG(D_INODE, "src obdo "DOSTID" valid "LPX64", dst obdo "DOSTID"\n",
                POSTID(&src->o_oi), src->o_valid, POSTID(&dst->o_oi));
-#endif
         if (valid & OBD_MD_FLATIME)
                 dst->o_atime = src->o_atime;
         if (valid & OBD_MD_FLMTIME)

@@ -35,16 +35,11 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
-#ifndef __KERNEL__
-# include <liblustre.h>
-#endif
 
-#ifdef __KERNEL__
-# ifdef CONFIG_FS_POSIX_ACL
-#  include <linux/fs.h>
-#  include <linux/posix_acl_xattr.h>
-# endif
-#endif
+#ifdef CONFIG_FS_POSIX_ACL
+# include <linux/fs.h>
+# include <linux/posix_acl_xattr.h>
+#endif /* CONFIG_FS_POSIX_ACL */
 
 #include <obd_support.h>
 #include <obd_class.h>

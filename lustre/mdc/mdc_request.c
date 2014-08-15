@@ -36,15 +36,11 @@
 
 #define DEBUG_SUBSYSTEM S_MDC
 
-#ifdef __KERNEL__
-# include <linux/module.h>
-# include <linux/pagemap.h>
-# include <linux/miscdevice.h>
-# include <linux/init.h>
-# include <linux/utsname.h>
-#else
-# include <liblustre.h>
-#endif
+#include <linux/module.h>
+#include <linux/pagemap.h>
+#include <linux/miscdevice.h>
+#include <linux/init.h>
+#include <linux/utsname.h>
 
 #include <lustre_acl.h>
 #include <lustre_ioctl.h>
@@ -1156,7 +1152,6 @@ restart_bulk:
 	RETURN(0);
 }
 
-#ifdef __KERNEL__
 static void mdc_release_page(struct page *page, int remove)
 {
 	if (remove) {
@@ -1609,53 +1604,6 @@ fail:
 	goto out_unlock;
 }
 
-#else /* __KERNEL__ */
-
-static struct page
-*mdc_read_page_remote(struct obd_export *exp, const struct lmv_oinfo *lmo,
-		      const __u64 hash, struct obd_capa *oc)
-{
-	struct ptlrpc_request *req = NULL;
-	struct page *page;
-	int rc;
-
-	OBD_PAGE_ALLOC(page, 0);
-	if (page == NULL)
-		return ERR_PTR(-ENOMEM);
-
-	rc = mdc_getpage(exp, &lmo->lmo_fid, hash, oc, &page, 1, &req);
-	if (req != NULL)
-		ptlrpc_req_finished(req);
-
-	if (unlikely(rc)) {
-		OBD_PAGE_FREE(page);
-		return ERR_PTR(rc);
-	}
-	return page;
-}
-
-
-static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
-			struct md_callback *cb_op, __u64 hash_offset,
-			struct page **ppage)
-{
-	struct page *page;
-	struct lmv_oinfo *lmo;
-	int rc = 0;
-
-	/* No local cache for liblustre, always read entry remotely */
-	lmo = &op_data->op_mea1->lsm_md_oinfo[op_data->op_stripe_offset];
-	page = mdc_read_page_remote(exp, lmo, hash_offset,
-				    op_data->op_capa1);
-	if (IS_ERR(page))
-		return PTR_ERR(page);
-
-	*ppage = page;
-
-	return rc;
-}
-
-#endif
 
 static int mdc_statfs(const struct lu_env *env,
                       struct obd_export *exp, struct obd_statfs *osfs,
@@ -3227,7 +3175,6 @@ int __init mdc_init(void)
 				   LUSTRE_MDC_NAME, NULL);
 }
 
-#ifdef __KERNEL__
 static void /*__exit*/ mdc_exit(void)
 {
         class_unregister_type(LUSTRE_MDC_NAME);
@@ -3239,4 +3186,3 @@ MODULE_LICENSE("GPL");
 
 module_init(mdc_init);
 module_exit(mdc_exit);
-#endif

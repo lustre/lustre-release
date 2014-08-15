@@ -39,7 +39,6 @@
 #error Do not #include this file directly. #include <lustre_handles.h> instead
 #endif
 
-#ifdef __KERNEL__
 #include <asm/types.h>
 #include <asm/atomic.h>
 #include <linux/list.h>
@@ -50,6 +49,5 @@
 #include <linux/rcupdate.h> /* for rcu_head{} */
 typedef struct rcu_head cfs_rcu_head_t;
 
-#endif /* ifdef __KERNEL__ */
 
 #endif

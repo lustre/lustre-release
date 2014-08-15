@@ -50,11 +50,7 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
-#ifdef __KERNEL__
 #include <linux/module.h>
-#else
-# include <liblustre.h>
-#endif
 
 /* LUSTRE_VERSION_CODE */
 #include <lustre_ver.h>

@@ -26,7 +26,7 @@
 #ifndef LIBCFS_ERR_H_
 #define LIBCFS_ERR_H_
 
-#if defined(__linux__) && defined(__KERNEL__)
+#ifdef __KERNEL__
 # include <linux/err.h>
 #else /* __KERNEL__ */
 

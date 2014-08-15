@@ -43,23 +43,19 @@
 
 #include <obd_support.h>
 
-#ifdef __KERNEL__
-# include <linux/fs.h>
-# include <linux/list.h>
-# include <linux/sched.h>  /* for struct task_struct, for current.h */
-# include <linux/proc_fs.h>
-# include <linux/mount.h>
-# include <linux/lustre_intent.h>
-#endif
+#include <linux/fs.h>
+#include <linux/list.h>
+#include <linux/sched.h>  /* for struct task_struct, for current.h */
+#include <linux/proc_fs.h>
+#include <linux/mount.h>
+#include <linux/lustre_intent.h>
 
 struct ll_iattr {
 	struct iattr	iattr;
 	unsigned int	ia_attr_flags;
 };
 
-#ifdef __KERNEL__
 #define CLIENT_OBD_LIST_LOCK_DEBUG 1
-#endif
 
 typedef struct {
 	spinlock_t		lock;
@@ -123,7 +119,7 @@ static inline void client_obd_list_unlock(client_obd_lock_t *lock)
 	spin_unlock(&lock->lock);
 }
 
-#else /* ifdef CLIENT_OBD_LIST_LOCK_DEBUG */
+#else /* CLIENT_OBD_LIST_LOCK_DEBUG */
 static inline void client_obd_list_lock(client_obd_lock_t *lock)
 {
 	spin_lock(&lock->lock);
@@ -134,7 +130,7 @@ static inline void client_obd_list_unlock(client_obd_lock_t *lock)
 	spin_unlock(&lock->lock);
 }
 
-#endif /* ifdef CLIENT_OBD_LIST_LOCK_DEBUG */
+#endif /* !CLIENT_OBD_LIST_LOCK_DEBUG */
 
 static inline void client_obd_list_lock_init(client_obd_lock_t *lock)
 {
@@ -144,8 +140,8 @@ static inline void client_obd_list_lock_init(client_obd_lock_t *lock)
 static inline void client_obd_list_lock_done(client_obd_lock_t *lock)
 {}
 
-#if defined(__KERNEL__) && !defined(HAVE_ADLER)
+#ifndef HAVE_ADLER
 /* zlib_adler() is an inline function defined in zutil.h */
-#define HAVE_ADLER
-#endif
+# define HAVE_ADLER
+#endif /* !HAVE_ADLER */
 #endif /* __LINUX_OBD_H */
