@@ -90,7 +90,11 @@ static inline int __is_po2(unsigned long long val)
 #   define __must_hold(x)
 #  endif /* !__CHECKER__ */
 # endif /* !__must_hold */
-#endif /* __KERNEL__ */
+#else /* __KERNEL__ */
+# define __acquires(x)
+# define __releases(x)
+# define __must_hold(x)
+#endif /* !__KERNEL__ */
 
 /*
  * Lustre Error Checksum: calculates checksum
