@@ -523,6 +523,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_LFSCK_DANGLING3	0x1621
 #define OBD_FAIL_LFSCK_MUL_REF		0x1622
 #define OBD_FAIL_LFSCK_BAD_TYPE		0x1623
+#define OBD_FAIL_LFSCK_NO_NAMEENTRY	0x1624
 
 #define OBD_FAIL_LFSCK_NOTIFY_NET	0x16f0
 #define OBD_FAIL_LFSCK_QUERY_NET	0x16f1

@@ -46,7 +46,7 @@ setupall
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14 15 16 17 18 19 20 21"
 
 [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.50) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2d 2e 3 22 23 24 25"
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2d 2e 3 22 23 24 25 26"
 
 build_test_filter
 
@@ -231,7 +231,7 @@ test_1b()
 			 awk '/^updated_phase1/ { print $2 }')
 
 	[ $repaired -eq 1 ] ||
-		error "(5) Fail to repair missed FID-in-LMA: $repaired"
+		error "(5) Fail to repair the missing FID-in-LMA: $repaired"
 
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
 	mount_client $MOUNT || error "(6) Fail to start client!"
@@ -242,7 +242,7 @@ test_1b()
 
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
 }
-run_test 1b "LFSCK can find out and repair missed FID-in-LMA"
+run_test 1b "LFSCK can find out and repair the missing FID-in-LMA"
 
 test_2a() {
 	lfsck_prep 1 1
@@ -386,7 +386,7 @@ test_2d()
 	[ "$dummyname" == "$DIR/$tdir/dummy" ] ||
 		error "(8) Fail to repair linkEA: $dummyfid $dummyname"
 }
-run_test 2d "LFSCK can recover the missed linkEA entry"
+run_test 2d "LFSCK can recover the missing linkEA entry"
 
 test_2e()
 {
@@ -1398,7 +1398,7 @@ run_test 13 "LFSCK can repair crashed lmm_oi"
 test_14() {
 	echo "#####"
 	echo "The OST-object referenced by the MDT-object should be there;"
-	echo "otherwise, the LFSCK should re-create the missed OST-object."
+	echo "otherwise, the LFSCK should re-create the missing OST-object."
 	echo "#####"
 
 	check_mount_and_prep
@@ -1644,7 +1644,7 @@ run_test 17 "LFSCK can repair multiple references"
 test_18a() {
 	echo "#####"
 	echo "The target MDT-object is there, but related stripe information"
-	echo "is lost or partly lost. The LFSCK should regenerate the missed"
+	echo "is lost or partly lost. The LFSCK should regenerate the missing"
 	echo "layout EA entries."
 	echo "#####"
 
@@ -3144,6 +3144,110 @@ test_25() {
 	ls -ail $DIR/$tdir/d0 || error "(6) Fail to 'ls' the $DIR/$tdir/d0"
 }
 run_test 25 "LFSCK can repair bad file type in the name entry"
+
+test_26a() {
+	echo "#####"
+	echo "The local name entry back referenced by the MDT-object is lost."
+	echo "The namespace LFSCK will add the missing local name entry back"
+	echo "to the normal namespace."
+	echo "#####"
+
+	check_mount_and_prep
+
+	$LFS mkdir -i 0 $DIR/$tdir/d0 || error "(1) Fail to mkdir d0"
+	touch $DIR/$tdir/d0/foo || error "(2) Fail to create foo"
+	local foofid=$($LFS path2fid $DIR/$tdir/d0/foo)
+
+	ln $DIR/$tdir/d0/foo $DIR/$tdir/d0/dummy ||
+		error "(3) Fail to hard link to $DIR/$tdir/d0/foo"
+
+	echo "Inject failure stub on MDT0 to simulate the case that"
+	echo "foo's name entry will be removed, but the foo's object"
+	echo "and its linkEA are kept in the system."
+
+	#define OBD_FAIL_LFSCK_NO_NAMEENTRY	0x1624
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1624
+	rm -f $DIR/$tdir/d0/foo || error "(4) Fail to unlink $DIR/$tdir/d0/foo"
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+
+	ls -ail $DIR/$tdir/d0/foo > /dev/null 2>&1 && "(5) 'ls' should fail"
+
+	echo "Trigger namespace LFSCK to repair the missing remote name entry"
+	$START_NAMESPACE -r -A ||
+		error "(6) Fail to start LFSCK for namespace"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(7) unexpected status"
+	}
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^lost_dirent_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(8) Fail to repair lost dirent: $repaired"
+
+	ls -ail $DIR/$tdir/d0/foo ||
+		error "(9) Fail to 'ls' $DIR/$tdir/d0/foo"
+
+	local foofid2=$($LFS path2fid $DIR/$tdir/d0/foo)
+	[ "$foofid" == "$foofid2" ] ||
+		error "(10) foo's FID changed: $foofid, $foofid2"
+}
+run_test 26a "LFSCK can add the missing local name entry back to the namespace"
+
+test_26b() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "We need at least 2 MDSes for this test" && return
+
+	echo "#####"
+	echo "The remote name entry back referenced by the MDT-object is lost."
+	echo "The namespace LFSCK will add the missing remote name entry back"
+	echo "to the normal namespace."
+	echo "#####"
+
+	check_mount_and_prep
+
+	$LFS mkdir -i 1 $DIR/$tdir/d0 || error "(1) Fail to mkdir d0"
+	$LFS mkdir -i 0 $DIR/$tdir/d0/foo || error "(2) Fail to mkdir foo"
+	local foofid=$($LFS path2fid $DIR/$tdir/d0/foo)
+
+	echo "Inject failure stub on MDT0 to simulate the case that"
+	echo "foo's name entry will be removed, but the foo's object"
+	echo "and its linkEA are kept in the system."
+
+	#define OBD_FAIL_LFSCK_NO_NAMEENTRY	0x1624
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1624
+	rmdir $DIR/$tdir/d0/foo || error "(3) Fail to rmdir $DIR/$tdir/d0/foo"
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+
+	ls -ail $DIR/$tdir/d0/foo > /dev/null 2>&1 && "(4) 'ls' should fail"
+
+	echo "Trigger namespace LFSCK to repair the missing remote name entry"
+	$START_NAMESPACE -r -A ||
+		error "(5) Fail to start LFSCK for namespace"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(6) unexpected status"
+	}
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^lost_dirent_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(7) Fail to repair lost dirent: $repaired"
+
+	ls -ail $DIR/$tdir/d0/foo ||
+		error "(8) Fail to 'ls' $DIR/$tdir/d0/foo"
+
+	local foofid2=$($LFS path2fid $DIR/$tdir/d0/foo)
+	[ "$foofid" == "$foofid2" ] ||
+		error "(9) foo's FID changed: $foofid, $foofid2"
+}
+run_test 26b "LFSCK can add the missing remote name entry back to the namespace"
 
 $LCTL set_param debug=-lfsck > /dev/null || true
 

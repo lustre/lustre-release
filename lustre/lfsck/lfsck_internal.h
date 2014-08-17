@@ -185,9 +185,6 @@ struct lfsck_namespace {
 	/* How many objects with nlink fixed. */
 	__u64	ln_objs_nlink_repaired;
 
-	/* How many objects were lost before, but found back now. */
-	__u64	ln_objs_lost_found;
-
 	/* The latest object has been processed (failed) during double scan. */
 	struct lu_fid	ln_fid_latest_scanned_phase2;
 
@@ -218,6 +215,9 @@ struct lfsck_namespace {
 
 	/* How many name entries with bad file type have been repaired. */
 	__u64	ln_bad_type_repaired;
+
+	/* How many lost name entries have been re-inserted. */
+	__u64	ln_lost_dirent_repaired;
 
 	/* For further using. 256-bytes aligned now. */
 	__u64   ln_reserved[26];
