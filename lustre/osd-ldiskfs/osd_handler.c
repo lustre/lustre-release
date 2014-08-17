@@ -3946,6 +3946,29 @@ static int __osd_ea_add_rec(struct osd_thread_info *info,
 	child->d_fsdata = (void *)ldp;
 	ll_vfs_dq_init(pobj->oo_inode);
 	rc = osd_ldiskfs_add_entry(oth->ot_handle, child, cinode, hlock);
+	if (rc == 0 && OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_TYPE)) {
+		struct ldiskfs_dir_entry_2	*de;
+		struct buffer_head		*bh;
+		int				 rc1;
+
+		bh = osd_ldiskfs_find_entry(pobj->oo_inode, &child->d_name, &de,
+					    NULL, hlock);
+		if (bh != NULL) {
+			rc1 = ldiskfs_journal_get_write_access(oth->ot_handle,
+							       bh);
+			if (rc1 == 0) {
+				if (S_ISDIR(cinode->i_mode))
+					de->file_type = LDISKFS_DIRENT_LUFID |
+							LDISKFS_FT_REG_FILE;
+				else
+					de->file_type = LDISKFS_DIRENT_LUFID |
+							LDISKFS_FT_DIR;
+				ldiskfs_journal_dirty_metadata(oth->ot_handle,
+							       bh);
+				brelse(bh);
+			}
+		}
+	}
 
 	RETURN(rc);
 }

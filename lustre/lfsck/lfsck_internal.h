@@ -120,6 +120,8 @@ enum lfsck_namespace_inconsistency_type {
 	LNIT_UNMATCHED_PAIRS	= 2,
 	LNIT_DANGLING		= 3,
 	LNIT_MUL_REF		= 4,
+	LNIT_BAD_TYPE		= 5,
+	LNIT_BAD_DIRENT		= 6,
 };
 
 struct lfsck_namespace {
@@ -214,8 +216,11 @@ struct lfsck_namespace {
 	 * found/repaired. */
 	__u64	ln_mul_ref_repaired;
 
+	/* How many name entries with bad file type have been repaired. */
+	__u64	ln_bad_type_repaired;
+
 	/* For further using. 256-bytes aligned now. */
-	__u64   ln_reserved[27];
+	__u64   ln_reserved[26];
 };
 
 enum lfsck_layout_inconsistency_type {
@@ -771,6 +776,12 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 				    struct lfsck_component *com,
 				    struct dt_object *child,
 				    struct lfsck_namespace_req *lnr);
+int lfsck_namespace_repair_dirent(const struct lu_env *env,
+				  struct lfsck_component *com,
+				  struct dt_object *parent,
+				  struct dt_object *child,
+				  const char *name, const char *name2,
+				  __u16 type, bool update, bool dec);
 int lfsck_verify_linkea(const struct lu_env *env, struct dt_device *dev,
 			struct dt_object *obj, const struct lu_name *cname,
 			const struct lu_fid *pfid);

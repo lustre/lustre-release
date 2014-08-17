@@ -46,7 +46,7 @@ setupall
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14 15 16 17 18 19 20 21"
 
 [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.50) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2d 2e 3 22 23 24"
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2d 2e 3 22 23 24 25"
 
 build_test_filter
 
@@ -3103,6 +3103,47 @@ test_24() {
 		error "(11) .lustre/lost+found/MDT0000/ should not be empty"
 }
 run_test 24 "LFSCK can repair multiple-referenced name entry"
+
+test_25() {
+	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
+		skip "Only support to inject failure on ldiskfs" && return
+
+	echo "#####"
+	echo "The file type in the name entry does not match the file type"
+	echo "claimed by the referenced object. Then the LFSCK will update"
+	echo "the file type in the name entry."
+	echo "#####"
+
+	check_mount_and_prep
+
+	$LFS mkdir -i 0 $DIR/$tdir/d0 || error "(1) Fail to mkdir d0"
+
+	echo "Inject failure stub on MDT0 to simulate the case that"
+	echo "the file type stored in the name entry is wrong."
+
+	#define OBD_FAIL_LFSCK_BAD_TYPE		0x1623
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1623
+	touch $DIR/$tdir/d0/foo || error "(2) Fail to touch $DIR/$tdir/d0/foo"
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+
+	echo "Trigger namespace LFSCK to repair bad file type in the name entry"
+	$START_NAMESPACE -r || error "(3) Fail to start LFSCK for namespace"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(4) unexpected status"
+	}
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^bad_file_type_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+	error "(5) Fail to repair bad file type in name entry: $repaired"
+
+	ls -ail $DIR/$tdir/d0 || error "(6) Fail to 'ls' the $DIR/$tdir/d0"
+}
+run_test 25 "LFSCK can repair bad file type in the name entry"
 
 $LCTL set_param debug=-lfsck > /dev/null || true
 
