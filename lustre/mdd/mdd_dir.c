@@ -1641,6 +1641,9 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 			GOTO(cleanup, rc);
 	}
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_MUL_REF))
+		GOTO(cleanup, rc = 0);
+
 	if (likely(mdd_cobj != NULL)) {
 		rc = mdo_ref_del(env, mdd_cobj, handle);
 		if (rc != 0) {
