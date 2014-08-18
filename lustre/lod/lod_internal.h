@@ -58,7 +58,7 @@ struct pool_desc {
 	struct ost_pool		 pool_obds;	/* pool members */
 	atomic_t		 pool_refcount;
 	struct lod_qos_rr	 pool_rr;
-	cfs_hlist_node_t	 pool_hash;	/* access by poolname */
+	struct hlist_node	 pool_hash;	/* access by poolname */
 	struct list_head	 pool_list;
 	struct proc_dir_entry	*pool_proc_entry;
 	struct obd_device	*pool_lobd;	/* owner */
@@ -182,15 +182,15 @@ struct lod_device {
 	struct lod_qos	      lod_qos; /* qos info per lod */
 
 	/* OST pool data */
-	struct ost_pool	      lod_pool_info; /* all OSTs in a packed array */
-	int		      lod_pool_count;
-	cfs_hash_t	     *lod_pools_hash_body; /* used for key access */
-	cfs_list_t	      lod_pool_list; /* used for sequential access */
-	cfs_proc_dir_entry_t *lod_pool_proc_entry;
+	struct ost_pool		lod_pool_info; /* all OSTs in a packed array */
+	int			lod_pool_count;
+	cfs_hash_t	       *lod_pools_hash_body; /* used for key access */
+	struct list_head	lod_pool_list; /* used for sequential access */
+	struct proc_dir_entry  *lod_pool_proc_entry;
 
 	enum lustre_sec_part   lod_sp_me;
 
-	cfs_proc_dir_entry_t *lod_symlink;
+	struct proc_dir_entry *lod_symlink;
 };
 
 #define lod_osts	lod_ost_descs.ltd_tgts

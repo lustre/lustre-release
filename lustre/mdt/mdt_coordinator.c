@@ -868,9 +868,9 @@ int mdt_hsm_cdt_init(struct mdt_device *mdt)
 	init_rwsem(&cdt->cdt_request_lock);
 	mutex_init(&cdt->cdt_restore_lock);
 
-	CFS_INIT_LIST_HEAD(&cdt->cdt_requests);
-	CFS_INIT_LIST_HEAD(&cdt->cdt_agents);
-	CFS_INIT_LIST_HEAD(&cdt->cdt_restore_hdl);
+	INIT_LIST_HEAD(&cdt->cdt_requests);
+	INIT_LIST_HEAD(&cdt->cdt_agents);
+	INIT_LIST_HEAD(&cdt->cdt_restore_hdl);
 
 	rc = lu_env_init(&cdt->cdt_env, LCT_MD_THREAD);
 	if (rc < 0)

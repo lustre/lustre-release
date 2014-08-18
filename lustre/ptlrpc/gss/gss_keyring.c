@@ -310,7 +310,7 @@ static void ctx_enlist_kr(struct ptlrpc_cli_ctx *ctx, int is_root, int locked)
 
 	atomic_inc(&ctx->cc_refcount);
 	set_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags);
-	cfs_hlist_add_head(&ctx->cc_cache, &gsec_kr->gsk_clist);
+	hlist_add_head(&ctx->cc_cache, &gsec_kr->gsk_clist);
 	if (is_root)
 		gsec_kr->gsk_root_ctx = ctx;
 
@@ -338,7 +338,7 @@ static int ctx_unlist_kr(struct ptlrpc_cli_ctx *ctx, int locked)
 
 	if (gsec_kr->gsk_root_ctx == ctx)
 		gsec_kr->gsk_root_ctx = NULL;
-	cfs_hlist_del_init(&ctx->cc_cache);
+	hlist_del_init(&ctx->cc_cache);
 	atomic_dec(&ctx->cc_refcount);
 
 	spin_unlock_if(&sec->ps_lock, !locked);
@@ -442,7 +442,7 @@ static void kill_key_locked(struct key *key)
 /*
  * caller should hold one ref on contexts in freelist.
  */
-static void dispose_ctx_list_kr(cfs_hlist_head_t *freelist)
+static void dispose_ctx_list_kr(struct hlist_head *freelist)
 {
 	struct hlist_node	__maybe_unused *pos, *next;
 	struct ptlrpc_cli_ctx	*ctx;
@@ -510,7 +510,7 @@ struct ptlrpc_cli_ctx * sec_lookup_root_ctx_kr(struct ptlrpc_sec *sec)
 
 	if (ctx) {
 		LASSERT(atomic_read(&ctx->cc_refcount) > 0);
-		LASSERT(!cfs_hlist_empty(&gsec_kr->gsk_clist));
+		LASSERT(!hlist_empty(&gsec_kr->gsk_clist));
 		atomic_inc(&ctx->cc_refcount);
 	}
 
@@ -581,7 +581,7 @@ struct ptlrpc_sec * gss_sec_create_kr(struct obd_import *imp,
         if (gsec_kr == NULL)
                 RETURN(NULL);
 
-        CFS_INIT_HLIST_HEAD(&gsec_kr->gsk_clist);
+	INIT_HLIST_HEAD(&gsec_kr->gsk_clist);
         gsec_kr->gsk_root_ctx = NULL;
 	mutex_init(&gsec_kr->gsk_root_uc_lock);
 #ifdef HAVE_KEYRING_UPCALL_SERIALIZED
@@ -613,7 +613,7 @@ void gss_sec_destroy_kr(struct ptlrpc_sec *sec)
 
         CDEBUG(D_SEC, "destroy %s@%p\n", sec->ps_policy->sp_name, sec);
 
-        LASSERT(cfs_hlist_empty(&gsec_kr->gsk_clist));
+	LASSERT(hlist_empty(&gsec_kr->gsk_clist));
         LASSERT(gsec_kr->gsk_root_ctx == NULL);
 
         gss_sec_destroy_common(gsec);
@@ -889,12 +889,11 @@ void flush_user_ctx_cache_kr(struct ptlrpc_sec *sec,
  * flush context of root or all, we iterate through the list.
  */
 static
-void flush_spec_ctx_cache_kr(struct ptlrpc_sec *sec,
-                             uid_t uid,
-                             int grace, int force)
+void flush_spec_ctx_cache_kr(struct ptlrpc_sec *sec, uid_t uid, int grace,
+			     int force)
 {
 	struct gss_sec_keyring	*gsec_kr;
-	struct hlist_head	 freelist = CFS_HLIST_HEAD_INIT;
+	struct hlist_head	 freelist = HLIST_HEAD_INIT;
 	struct hlist_node	__maybe_unused *pos, *next;
 	struct ptlrpc_cli_ctx	*ctx;
 	ENTRY;
@@ -927,7 +926,7 @@ void flush_spec_ctx_cache_kr(struct ptlrpc_sec *sec,
 		atomic_inc(&ctx->cc_refcount);
 
 		if (ctx_unlist_kr(ctx, 1)) {
-			cfs_hlist_add_head(&ctx->cc_cache, &freelist);
+			hlist_add_head(&ctx->cc_cache, &freelist);
 		} else {
 			LASSERT(atomic_read(&ctx->cc_refcount) >= 2);
 			atomic_dec(&ctx->cc_refcount);
@@ -962,7 +961,7 @@ static
 void gss_sec_gc_ctx_kr(struct ptlrpc_sec *sec)
 {
 	struct gss_sec_keyring	*gsec_kr = sec2gsec_keyring(sec);
-	struct hlist_head	 freelist = CFS_HLIST_HEAD_INIT;
+	struct hlist_head	freelist = HLIST_HEAD_INIT;
 	struct hlist_node	__maybe_unused *pos, *next;
 	struct ptlrpc_cli_ctx	*ctx;
 	ENTRY;
@@ -977,7 +976,7 @@ void gss_sec_gc_ctx_kr(struct ptlrpc_sec *sec)
 		atomic_inc(&ctx->cc_refcount);
 
 		if (cli_ctx_check_death(ctx) && ctx_unlist_kr(ctx, 1)) {
-			cfs_hlist_add_head(&ctx->cc_cache, &freelist);
+			hlist_add_head(&ctx->cc_cache, &freelist);
 			CWARN("unhashed ctx %p\n", ctx);
 		} else {
 			LASSERT(atomic_read(&ctx->cc_refcount) >= 2);

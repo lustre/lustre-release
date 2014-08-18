@@ -80,7 +80,7 @@ void mdt_exit_ucred(struct mdt_thread_info *info)
 }
 
 static int match_nosquash_list(struct rw_semaphore *sem,
-			       cfs_list_t *nidlist,
+			       struct list_head *nidlist,
 			       lnet_nid_t peernid)
 {
 	int rc;

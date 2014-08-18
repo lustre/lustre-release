@@ -64,7 +64,7 @@ int qos_add_tgt(struct lod_device *lod, struct lod_tgt_desc *ost_desc)
 	struct lod_qos_oss *oss = NULL, *temposs;
 	struct obd_export  *exp = ost_desc->ltd_exp;
 	int		    rc = 0, found = 0;
-	cfs_list_t	   *list;
+	struct list_head   *list;
 	ENTRY;
 
 	down_write(&lod->lod_qos.lq_rw_sem);
@@ -73,7 +73,7 @@ int qos_add_tgt(struct lod_device *lod, struct lod_tgt_desc *ost_desc)
 	 * but there is no official API to access information like this
 	 * with OSD API.
 	 */
-	cfs_list_for_each_entry(oss, &lod->lod_qos.lq_oss_list, lqo_oss_list) {
+	list_for_each_entry(oss, &lod->lod_qos.lq_oss_list, lqo_oss_list) {
 		if (obd_uuid_equals(&oss->lqo_uuid,
 				    &exp->exp_connection->c_remote_uuid)) {
 			found++;
@@ -89,7 +89,7 @@ int qos_add_tgt(struct lod_device *lod, struct lod_tgt_desc *ost_desc)
 		       sizeof(oss->lqo_uuid));
 	} else {
 		/* Assume we have to move this one */
-		cfs_list_del(&oss->lqo_oss_list);
+		list_del(&oss->lqo_oss_list);
 	}
 
 	oss->lqo_ost_count++;
@@ -102,13 +102,13 @@ int qos_add_tgt(struct lod_device *lod, struct lod_tgt_desc *ost_desc)
 	/* Add sorted by # of OSTs.  Find the first entry that we're
 	   bigger than... */
 	list = &lod->lod_qos.lq_oss_list;
-	cfs_list_for_each_entry(temposs, list, lqo_oss_list) {
+	list_for_each_entry(temposs, list, lqo_oss_list) {
 		if (oss->lqo_ost_count > temposs->lqo_ost_count)
 			break;
 	}
 	/* ...and add before it.  If we're the first or smallest, temposs
 	   points to the list head, and we add to the end. */
-	cfs_list_add_tail(&oss->lqo_oss_list, &temposs->lqo_oss_list);
+	list_add_tail(&oss->lqo_oss_list, &temposs->lqo_oss_list);
 
 	lod->lod_qos.lq_dirty = 1;
 	lod->lod_qos.lq_rr.lqr_dirty = 1;
@@ -133,7 +133,7 @@ int qos_del_tgt(struct lod_device *lod, struct lod_tgt_desc *ost_desc)
 	if (oss->lqo_ost_count == 0) {
 		CDEBUG(D_QOS, "removing OSS %s\n",
 		       obd_uuid2str(&oss->lqo_uuid));
-		cfs_list_del(&oss->lqo_oss_list);
+		list_del(&oss->lqo_oss_list);
 		ost_desc->ltd_qos.ltq_oss = NULL;
 		OBD_FREE_PTR(oss);
 	}
@@ -255,7 +255,7 @@ static int lod_qos_calc_ppo(struct lod_device *lod)
 		GOTO(out, rc = -EAGAIN);
 
 	/* find bavail on each OSS */
-	cfs_list_for_each_entry(oss, &lod->lod_qos.lq_oss_list, lqo_oss_list)
+	list_for_each_entry(oss, &lod->lod_qos.lq_oss_list, lqo_oss_list)
 				oss->lqo_bavail = 0;
 	lod->lod_qos.lq_active_oss_count = 0;
 
@@ -314,7 +314,7 @@ static int lod_qos_calc_ppo(struct lod_device *lod)
 	}
 
 	/* Per-OSS penalty is prio * oss_avail / oss_osts / (num_oss - 1) / 2 */
-	cfs_list_for_each_entry(oss, &lod->lod_qos.lq_oss_list, lqo_oss_list) {
+	list_for_each_entry(oss, &lod->lod_qos.lq_oss_list, lqo_oss_list) {
 		temp = oss->lqo_bavail >> 1;
 		do_div(temp, oss->lqo_ost_count * num_active);
 		oss->lqo_penalty_per_obj = (temp * prio_wide) >> 8;
@@ -400,7 +400,7 @@ static int lod_qos_used(struct lod_device *lod, struct ost_pool *osts,
 		lod->lod_qos.lq_active_oss_count;
 
 	/* Decrease all OSS penalties */
-	cfs_list_for_each_entry(oss, &lod->lod_qos.lq_oss_list, lqo_oss_list) {
+	list_for_each_entry(oss, &lod->lod_qos.lq_oss_list, lqo_oss_list) {
 		if (oss->lqo_penalty < oss->lqo_penalty_per_obj)
 			oss->lqo_penalty = 0;
 		else
@@ -493,7 +493,7 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct ost_pool *src_pool,
 
 	/* Place all the OSTs from 1 OSS at the same time. */
 	placed = 0;
-	cfs_list_for_each_entry(oss, &lod->lod_qos.lq_oss_list, lqo_oss_list) {
+	list_for_each_entry(oss, &lod->lod_qos.lq_oss_list, lqo_oss_list) {
 		int j = 0;
 
 		for (i = 0; i < lqr->lqr_pool.op_count; i++) {

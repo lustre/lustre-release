@@ -1128,7 +1128,7 @@ int gss_sec_create_common(struct gss_sec *gsec,
 	sec->ps_flvr = *sf;
 	sec->ps_import = class_import_get(imp);
 	spin_lock_init(&sec->ps_lock);
-	CFS_INIT_LIST_HEAD(&sec->ps_gc_list);
+	INIT_LIST_HEAD(&sec->ps_gc_list);
 
         if (!svcctx) {
                 sec->ps_gc_interval = GSS_GC_INTERVAL;
@@ -1184,7 +1184,7 @@ int gss_cli_ctx_init_common(struct ptlrpc_sec *sec,
 	gctx->gc_win = 0;
 	atomic_set(&gctx->gc_seq, 0);
 
-	CFS_INIT_HLIST_NODE(&ctx->cc_cache);
+	INIT_HLIST_NODE(&ctx->cc_cache);
 	atomic_set(&ctx->cc_refcount, 0);
 	ctx->cc_sec = sec;
 	ctx->cc_ops = ctxops;
@@ -1192,8 +1192,8 @@ int gss_cli_ctx_init_common(struct ptlrpc_sec *sec,
 	ctx->cc_flags = PTLRPC_CTX_NEW;
 	ctx->cc_vcred = *vcred;
 	spin_lock_init(&ctx->cc_lock);
-	CFS_INIT_LIST_HEAD(&ctx->cc_req_list);
-	CFS_INIT_LIST_HEAD(&ctx->cc_gc_chain);
+	INIT_LIST_HEAD(&ctx->cc_req_list);
+	INIT_LIST_HEAD(&ctx->cc_gc_chain);
 
 	/* take a ref on belonging sec, balanced in ctx destroying */
 	atomic_inc(&sec->ps_refcount);

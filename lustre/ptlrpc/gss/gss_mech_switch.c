@@ -65,13 +65,13 @@
 #include "gss_internal.h"
 #include "gss_api.h"
 
-static CFS_LIST_HEAD(registered_mechs);
+static struct list_head registered_mechs = LIST_HEAD_INIT(registered_mechs);
 static DEFINE_SPINLOCK(registered_mechs_lock);
 
 int lgss_mech_register(struct gss_api_mech *gm)
 {
 	spin_lock(&registered_mechs_lock);
-	cfs_list_add(&gm->gm_list, &registered_mechs);
+	list_add(&gm->gm_list, &registered_mechs);
 	spin_unlock(&registered_mechs_lock);
 	CWARN("Register %s mechanism\n", gm->gm_name);
 	return 0;
@@ -80,7 +80,7 @@ int lgss_mech_register(struct gss_api_mech *gm)
 void lgss_mech_unregister(struct gss_api_mech *gm)
 {
 	spin_lock(&registered_mechs_lock);
-	cfs_list_del(&gm->gm_list);
+	list_del(&gm->gm_list);
 	spin_unlock(&registered_mechs_lock);
 	CWARN("Unregister %s mechanism\n", gm->gm_name);
 }
@@ -97,7 +97,7 @@ struct gss_api_mech *lgss_name_to_mech(char *name)
 	struct gss_api_mech *pos, *gm = NULL;
 
 	spin_lock(&registered_mechs_lock);
-	cfs_list_for_each_entry(pos, &registered_mechs, gm_list) {
+	list_for_each_entry(pos, &registered_mechs, gm_list) {
 		if (0 == strcmp(name, pos->gm_name)) {
 			if (!try_module_get(pos->gm_owner))
 				continue;
@@ -127,7 +127,7 @@ struct gss_api_mech *lgss_subflavor_to_mech(__u32 subflavor)
 	struct gss_api_mech *pos, *gm = NULL;
 
 	spin_lock(&registered_mechs_lock);
-	cfs_list_for_each_entry(pos, &registered_mechs, gm_list) {
+	list_for_each_entry(pos, &registered_mechs, gm_list) {
 		if (!try_module_get(pos->gm_owner))
 			continue;
 		if (!mech_supports_subflavor(pos, subflavor)) {

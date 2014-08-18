@@ -736,10 +736,10 @@ mdt_som_seq_write(struct file *file, const char __user *buffer,
                 return count;
         }
 
-        /* 1 stands for self export. */
-        cfs_list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
-                if (exp == obd->obd_self_export)
-                        continue;
+	/* 1 stands for self export. */
+	list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
+		if (exp == obd->obd_self_export)
+			continue;
 		if (exp_connect_flags(exp) & OBD_CONNECT_MDS_MDS)
 			continue;
                 /* Some clients are already connected, skip the change */
@@ -883,7 +883,7 @@ static struct lprocfs_seq_vars lprocfs_mdt_obd_vars[] = {
 };
 
 int lprocfs_mdt_print_open_files(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-				 cfs_hlist_node_t *hnode, void *v)
+				 struct hlist_node *hnode, void *v)
 {
 	struct obd_export	*exp = cfs_hash_object(hs, hnode);
 	struct seq_file		*seq = v;
@@ -893,7 +893,7 @@ int lprocfs_mdt_print_open_files(cfs_hash_t *hs, cfs_hash_bd_t *bd,
 		struct mdt_file_data	*mfd;
 
 		spin_lock(&med->med_open_lock);
-		cfs_list_for_each_entry(mfd, &med->med_open_head, mfd_list) {
+		list_for_each_entry(mfd, &med->med_open_head, mfd_list) {
 			seq_printf(seq, DFID"\n",
 				   PFID(mdt_object_fid(mfd->mfd_object)));
 		}

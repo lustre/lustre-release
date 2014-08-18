@@ -67,11 +67,13 @@ void lod_putref(struct lod_device *lod, struct lod_tgt_descs *ltd)
 	ltd->ltd_refcount--;
 	if (ltd->ltd_refcount == 0 && ltd->ltd_death_row) {
 		struct lod_tgt_desc *tgt_desc, *tmp;
+		struct list_head kill;
 		unsigned int idx;
-		CFS_LIST_HEAD(kill);
 
 		CDEBUG(D_CONFIG, "destroying %d ltd desc\n",
 		       ltd->ltd_death_row);
+
+		INIT_LIST_HEAD(&kill);
 
 		cfs_foreach_bit(ltd->ltd_tgt_bitmap, idx) {
 			tgt_desc = LTD_TGT(ltd, idx);
@@ -80,7 +82,7 @@ void lod_putref(struct lod_device *lod, struct lod_tgt_descs *ltd)
 			if (!tgt_desc->ltd_reap)
 				continue;
 
-			cfs_list_add(&tgt_desc->ltd_kill, &kill);
+			list_add(&tgt_desc->ltd_kill, &kill);
 			LTD_TGT(ltd, idx) = NULL;
 			/*FIXME: only support ost pool for now */
 			if (ltd == &lod->lod_ost_descs) {
@@ -95,9 +97,9 @@ void lod_putref(struct lod_device *lod, struct lod_tgt_descs *ltd)
 		mutex_unlock(&ltd->ltd_mutex);
 		up_read(&ltd->ltd_rw_sem);
 
-		cfs_list_for_each_entry_safe(tgt_desc, tmp, &kill, ltd_kill) {
+		list_for_each_entry_safe(tgt_desc, tmp, &kill, ltd_kill) {
 			int rc;
-			cfs_list_del(&tgt_desc->ltd_kill);
+			list_del(&tgt_desc->ltd_kill);
 			if (ltd == &lod->lod_ost_descs) {
 				/* remove from QoS structures */
 				rc = qos_del_tgt(lod, tgt_desc);
@@ -1134,7 +1136,7 @@ int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 	lod->lod_sp_me = LUSTRE_SP_CLI;
 
 	/* Set up allocation policy (QoS and RR) */
-	CFS_INIT_LIST_HEAD(&lod->lod_qos.lq_oss_list);
+	INIT_LIST_HEAD(&lod->lod_qos.lq_oss_list);
 	init_rwsem(&lod->lod_qos.lq_rw_sem);
 	lod->lod_qos.lq_dirty = 1;
 	lod->lod_qos.lq_rr.lqr_dirty = 1;
@@ -1155,7 +1157,7 @@ int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 	if (lod->lod_pools_hash_body == NULL)
 		RETURN(-ENOMEM);
 
-	CFS_INIT_LIST_HEAD(&lod->lod_pool_list);
+	INIT_LIST_HEAD(&lod->lod_pool_list);
 	lod->lod_pool_count = 0;
 	rc = lod_ost_pool_init(&lod->lod_pool_info, 0);
 	if (rc)
@@ -1177,12 +1179,10 @@ out_hash:
 int lod_pools_fini(struct lod_device *lod)
 {
 	struct obd_device   *obd = lod2obd(lod);
-	cfs_list_t	    *pos, *tmp;
-	struct pool_desc    *pool;
+	struct pool_desc    *pool, *tmp;
 	ENTRY;
 
-	cfs_list_for_each_safe(pos, tmp, &lod->lod_pool_list) {
-		pool = cfs_list_entry(pos, struct pool_desc, pool_list);
+	list_for_each_entry_safe(pool, tmp, &lod->lod_pool_list, pool_list) {
 		/* free pool structs */
 		CDEBUG(D_INFO, "delete pool %p\n", pool);
 		/* In the function below, .hs_keycmp resolves to

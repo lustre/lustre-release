@@ -5100,25 +5100,26 @@ static int mdt_ctxt_add_dirty_flag(struct lu_env *env,
 
 static int mdt_export_cleanup(struct obd_export *exp)
 {
-        struct mdt_export_data *med = &exp->exp_mdt_data;
-        struct obd_device      *obd = exp->exp_obd;
-        struct mdt_device      *mdt;
-        struct mdt_thread_info *info;
-        struct lu_env           env;
-        CFS_LIST_HEAD(closing_list);
-        struct mdt_file_data *mfd, *n;
-        int rc = 0;
-        ENTRY;
+	struct list_head	 closing_list;
+	struct mdt_export_data	*med = &exp->exp_mdt_data;
+	struct obd_device	*obd = exp->exp_obd;
+	struct mdt_device	*mdt;
+	struct mdt_thread_info	*info;
+	struct lu_env		 env;
+	struct mdt_file_data	*mfd, *n;
+	int rc = 0;
+	ENTRY;
 
+	INIT_LIST_HEAD(&closing_list);
 	spin_lock(&med->med_open_lock);
-	while (!cfs_list_empty(&med->med_open_head)) {
-		cfs_list_t *tmp = med->med_open_head.next;
-		mfd = cfs_list_entry(tmp, struct mdt_file_data, mfd_list);
+	while (!list_empty(&med->med_open_head)) {
+		struct list_head *tmp = med->med_open_head.next;
+		mfd = list_entry(tmp, struct mdt_file_data, mfd_list);
 
 		/* Remove mfd handle so it can't be found again.
 		 * We are consuming the mfd_list reference here. */
 		class_handle_unhash(&mfd->mfd_handle);
-		cfs_list_move_tail(&mfd->mfd_list, &closing_list);
+		list_move_tail(&mfd->mfd_list, &closing_list);
 	}
 	spin_unlock(&med->med_open_lock);
         mdt = mdt_dev(obd->obd_lu_dev);
@@ -5135,12 +5136,13 @@ static int mdt_export_cleanup(struct obd_export *exp)
         info->mti_mdt = mdt;
         info->mti_exp = exp;
 
-        if (!cfs_list_empty(&closing_list)) {
-                struct md_attr *ma = &info->mti_attr;
+	if (!list_empty(&closing_list)) {
+		struct md_attr *ma = &info->mti_attr;
 
-                /* Close any open files (which may also cause orphan unlinking). */
-                cfs_list_for_each_entry_safe(mfd, n, &closing_list, mfd_list) {
-                        cfs_list_del_init(&mfd->mfd_list);
+		/* Close any open files (which may also cause orphan
+		 * unlinking). */
+		list_for_each_entry_safe(mfd, n, &closing_list, mfd_list) {
+			list_del_init(&mfd->mfd_list);
 			ma->ma_need = ma->ma_valid = 0;
 
 			/* This file is being closed due to an eviction, it
@@ -5198,11 +5200,11 @@ static int mdt_obd_disconnect(struct obd_export *exp)
 /* FIXME: Can we avoid using these two interfaces? */
 static int mdt_init_export(struct obd_export *exp)
 {
-        struct mdt_export_data *med = &exp->exp_mdt_data;
-        int                     rc;
-        ENTRY;
+	struct mdt_export_data *med = &exp->exp_mdt_data;
+	int			rc;
+	ENTRY;
 
-        CFS_INIT_LIST_HEAD(&med->med_open_head);
+	INIT_LIST_HEAD(&med->med_open_head);
 	spin_lock_init(&med->med_open_lock);
 	mutex_init(&med->med_idmap_mutex);
 	med->med_idmap = NULL;
@@ -5247,13 +5249,13 @@ static int mdt_destroy_export(struct obd_export *exp)
                                      &exp->exp_client_uuid)))
                 RETURN(0);
 
-        ldlm_destroy_export(exp);
-        tgt_client_free(exp);
+	ldlm_destroy_export(exp);
+	tgt_client_free(exp);
 
-        LASSERT(cfs_list_empty(&exp->exp_outstanding_replies));
-        LASSERT(cfs_list_empty(&exp->exp_mdt_data.med_open_head));
+	LASSERT(list_empty(&exp->exp_outstanding_replies));
+	LASSERT(list_empty(&exp->exp_mdt_data.med_open_head));
 
-        RETURN(0);
+	RETURN(0);
 }
 
 /** The maximum depth that fid2path() will search.

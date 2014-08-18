@@ -286,9 +286,9 @@ struct gss_sec {
 };
 
 struct gss_sec_pipefs {
-        struct gss_sec          gsp_base;
-        int                     gsp_chash_size;  /* must be 2^n */
-        cfs_hlist_head_t        gsp_chash[0];
+	struct gss_sec		gsp_base;
+	int			gsp_chash_size;	/* must be 2^n */
+	struct hlist_head	gsp_chash[0];
 };
 
 /*
@@ -301,7 +301,7 @@ struct gss_sec_keyring {
         /*
          * all contexts listed here. access is protected by sec spinlock.
          */
-        cfs_hlist_head_t        gsk_clist;
+	struct hlist_head	gsk_clist;
         /*
          * specially point to root ctx (only one at a time). access is
          * protected by sec spinlock.

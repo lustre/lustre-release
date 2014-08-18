@@ -78,12 +78,18 @@ struct mdt_object;
 
 /* file data for open files on MDS */
 struct mdt_file_data {
-	struct portals_handle mfd_handle; /* must be first */
-	__u64		      mfd_mode;   /* open mode provided by client */
-	cfs_list_t            mfd_list;   /* protected by med_open_lock */
-	__u64                 mfd_xid;    /* xid of the open request */
-	struct lustre_handle  mfd_old_handle; /* old handle in replay case */
-	struct mdt_object    *mfd_object; /* point to opened object */
+	/**  portals handle must be first */
+	struct portals_handle	mfd_handle;
+	/** open mode provided by client */
+	__u64			mfd_mode;
+	/** protected by med_open_lock */
+	struct list_head	mfd_list;
+	/** xid of the open request */
+	__u64			mfd_xid;
+	/** old handle in replay case */
+	struct lustre_handle	mfd_old_handle;
+	/** point to opened object */
+	struct mdt_object	*mfd_object;
 };
 
 #define CDT_NONBLOCKING_RESTORE		(1ULL << 0)
@@ -488,7 +494,7 @@ struct cdt_req_progress {
 };
 
 struct cdt_agent_req {
-	cfs_list_t		 car_request_list; /**< to chain all the req. */
+	struct list_head	 car_request_list; /**< to chain all the req. */
 	atomic_t		 car_refcount;     /**< reference counter */
 	__u64			 car_compound_id;  /**< compound id */
 	__u64			 car_flags;        /**< request original flags */
@@ -504,7 +510,7 @@ struct cdt_agent_req {
 extern struct kmem_cache *mdt_hsm_car_kmem;
 
 struct hsm_agent {
-	cfs_list_t	 ha_list;		/**< to chain the agents */
+	struct list_head ha_list;		/**< to chain the agents */
 	struct obd_uuid	 ha_uuid;		/**< agent uuid */
 	__u32		*ha_archive_id;		/**< archive id */
 	int		 ha_archive_cnt;	/**< number of archive entries
@@ -516,10 +522,10 @@ struct hsm_agent {
 };
 
 struct cdt_restore_handle {
-	cfs_list_t		 crh_list;	/**< to chain the handle */
-	struct lu_fid		 crh_fid;	/**< fid of the object */
-	struct ldlm_extent	 crh_extent;	/**< extent of the restore */
-	struct mdt_lock_handle	 crh_lh;	/**< lock handle */
+	struct list_head	crh_list;	/**< to chain the handle */
+	struct lu_fid		crh_fid;	/**< fid of the object */
+	struct ldlm_extent	crh_extent;	/**< extent of the restore */
+	struct mdt_lock_handle	crh_lh;		/**< lock handle */
 };
 extern struct kmem_cache *mdt_hsm_cdt_kmem;	/** restore handle slab cache */
 
