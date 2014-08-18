@@ -54,7 +54,6 @@
 #include <lprocfs_status.h>
 #include <cl_object.h>
 #include <lclient.h>
-#include <lustre_lite.h>
 #include <lustre_fid.h>
 #include <lustre_ioctl.h>
 #include "lmv_internal.h"

@@ -36,7 +36,6 @@
 #define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/version.h>
-#include <lustre_lite.h>
 #include <lustre_param.h>
 #include <lprocfs_status.h>
 #include <obd_support.h>

@@ -53,7 +53,6 @@
 #include <obd_class.h>
 #include <lustre_ioctl.h>
 #include <lustre_lib.h>
-#include <lustre_lite.h>
 #include <lustre_dlm.h>
 #include <lustre_fid.h>
 #include "llite_internal.h"

@@ -44,7 +44,6 @@
 
 #ifdef CONFIG_FS_POSIX_ACL
 
-#include <lustre_lite.h>
 #include <lustre_eacl.h>
 #include "llite_internal.h"
 

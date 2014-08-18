@@ -44,8 +44,6 @@
 #include <libcfs/libcfs.h>
 
 #include <obd.h>
-#include <lustre_lite.h>
-
 #include "vvp_internal.h"
 
 /*****************************************************************************

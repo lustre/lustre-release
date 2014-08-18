@@ -46,7 +46,6 @@
 #include <obd.h>
 
 #include <lustre_dlm.h>
-#include <lustre_lite.h>
 #include <lustre_mdc.h>
 #include <linux/pagemap.h>
 #include <linux/file.h>

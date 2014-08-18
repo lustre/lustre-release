@@ -39,7 +39,6 @@
 #include <linux/module.h>
 #include <linux/types.h>
 #include <linux/version.h>
-#include <lustre_lite.h>
 #include <lustre_ha.h>
 #include <lustre_dlm.h>
 #include <linux/init.h>

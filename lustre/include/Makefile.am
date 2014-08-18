@@ -69,7 +69,6 @@ EXTRA_DIST = \
 	lustre_lfsck.h \
 	lustre_lib.h \
 	lustre_linkea.h \
-	lustre_lite.h \
 	lustre_lmv.h \
 	lustre_log.h \
 	lustre_mdc.h \

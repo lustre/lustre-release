@@ -43,6 +43,9 @@
 #ifndef _LUSTRE_PARAM_H
 #define _LUSTRE_PARAM_H
 
+#include <libcfs/libcfs.h>
+#include <lnet/types.h>
+
 /** \defgroup param param
  *
  * @{

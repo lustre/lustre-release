@@ -43,8 +43,6 @@
 
 
 #include <obd.h>
-#include <lustre_lite.h>
-
 #include "vvp_internal.h"
 
 static struct vvp_io *cl2vvp_io(const struct lu_env *env,

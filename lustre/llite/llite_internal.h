@@ -69,6 +69,9 @@
 #define LL_DIR_END_OFF          0x7fffffffffffffffULL
 #define LL_DIR_END_OFF_32BIT    0x7fffffffUL
 
+/* 4UL * 1024 * 1024 */
+#define LL_MAX_BLKSIZE_BITS 22
+
 #define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
 #define LUSTRE_FPRIVATE(file) ((file)->private_data)
 
@@ -491,6 +494,20 @@ struct eacl_table {
 	struct list_head	et_entries[EE_HASHES];
 };
 
+
+/* This is embedded into llite super-blocks to keep track of connect
+ * flags (capabilities) supported by all imports given mount is
+ * connected to. */
+struct lustre_client_ocd {
+	/* This is conjunction of connect_flags across all imports
+	 * (LOVs) this mount is connected to. This field is updated by
+	 * cl_ocd_update() under ->lco_lock. */
+	__u64			 lco_flags;
+	struct mutex		 lco_lock;
+	struct obd_export	*lco_md_exp;
+	struct obd_export	*lco_dt_exp;
+};
+
 struct ll_sb_info {
 	struct list_head		  ll_list;
 	/* this protects pglist and ra_info.  It isn't safe to
@@ -725,8 +742,57 @@ static inline void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi) {}
 static void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count) {}
 #endif
 
+enum {
+	LPROC_LL_DIRTY_HITS,
+	LPROC_LL_DIRTY_MISSES,
+	LPROC_LL_READ_BYTES,
+	LPROC_LL_WRITE_BYTES,
+	LPROC_LL_BRW_READ,
+	LPROC_LL_BRW_WRITE,
+	LPROC_LL_OSC_READ,
+	LPROC_LL_OSC_WRITE,
+	LPROC_LL_IOCTL,
+	LPROC_LL_OPEN,
+	LPROC_LL_RELEASE,
+	LPROC_LL_MAP,
+	LPROC_LL_LLSEEK,
+	LPROC_LL_FSYNC,
+	LPROC_LL_READDIR,
+	LPROC_LL_SETATTR,
+	LPROC_LL_TRUNC,
+	LPROC_LL_FLOCK,
+	LPROC_LL_GETATTR,
+	LPROC_LL_CREATE,
+	LPROC_LL_LINK,
+	LPROC_LL_UNLINK,
+	LPROC_LL_SYMLINK,
+	LPROC_LL_MKDIR,
+	LPROC_LL_RMDIR,
+	LPROC_LL_MKNOD,
+	LPROC_LL_RENAME,
+	LPROC_LL_STAFS,
+	LPROC_LL_ALLOC_INODE,
+	LPROC_LL_SETXATTR,
+	LPROC_LL_GETXATTR,
+	LPROC_LL_GETXATTR_HITS,
+	LPROC_LL_LISTXATTR,
+	LPROC_LL_REMOVEXATTR,
+	LPROC_LL_INODE_PERM,
+	LPROC_LL_FILE_OPCODES
+};
 
 /* llite/dir.c */
+struct ll_dir_chain {
+};
+
+static inline void ll_dir_chain_init(struct ll_dir_chain *chain)
+{
+}
+
+static inline void ll_dir_chain_fini(struct ll_dir_chain *chain)
+{
+}
+
 extern const struct file_operations ll_dir_operations;
 extern const struct inode_operations ll_dir_inode_operations;
 #ifdef HAVE_DIR_CONTEXT

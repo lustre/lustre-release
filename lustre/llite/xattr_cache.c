@@ -34,7 +34,6 @@
 #include <linux/sched.h>
 #include <linux/mm.h>
 #include <obd_support.h>
-#include <lustre_lite.h>
 #include <lustre_dlm.h>
 #include <lustre_ver.h>
 #include "llite_internal.h"

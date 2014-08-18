@@ -49,8 +49,8 @@
  */
 
 #ifdef CONFIG_FS_POSIX_ACL
-
-#include <linux/posix_acl_xattr.h>
+# include <linux/fs.h>
+# include <linux/posix_acl_xattr.h>
 
 typedef struct {
         __u16                   e_tag;

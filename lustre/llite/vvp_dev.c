@@ -43,7 +43,6 @@
 
 
 #include <obd.h>
-#include <lustre_lite.h>
 #include "llite_internal.h"
 #include "vvp_internal.h"
 

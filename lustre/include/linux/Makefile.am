@@ -44,5 +44,5 @@ endif
 
 EXTRA_DIST = \
 	lustre_net.h obd_class.h obd_support.h \
-	obd.h lvfs.h lustre_log.h lustre_compat25.h lustre_lite.h lustre_quota.h \
+	obd.h lvfs.h lustre_log.h lustre_compat25.h lustre_quota.h \
 	lustre_user.h lustre_patchless_compat.h
