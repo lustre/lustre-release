@@ -45,6 +45,7 @@
 
 #define DEBUG_SUBSYSTEM S_MDS
 
+#include <linux/xattr.h>
 #include <lustre_acl.h>
 #include "mdt_internal.h"
 

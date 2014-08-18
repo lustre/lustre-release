@@ -37,6 +37,20 @@
 #ifndef _LUSTRE_ACL_H
 #define _LUSTRE_ACL_H
 
-#include <linux/lustre_acl.h>
+#ifdef __KERNEL__
+# include <linux/fs.h>
+# include <linux/dcache.h>
+# ifdef CONFIG_FS_POSIX_ACL
+#  include <linux/posix_acl_xattr.h>
+#  define LUSTRE_POSIX_ACL_MAX_ENTRIES 32
+#  define LUSTRE_POSIX_ACL_MAX_SIZE					\
+	(sizeof(posix_acl_xattr_header) +				\
+	 LUSTRE_POSIX_ACL_MAX_ENTRIES * sizeof(posix_acl_xattr_entry))
+# endif /* CONFIG_FS_POSIX_ACL */
+#endif /* __KERNEL__ */
+
+#ifndef LUSTRE_POSIX_ACL_MAX_SIZE
+# define LUSTRE_POSIX_ACL_MAX_SIZE 0
+#endif /* LUSTRE_POSIX_ACL_MAX_SIZE */
 
 #endif
