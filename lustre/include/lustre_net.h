@@ -55,7 +55,6 @@
  * @{
  */
 
-#include <linux/lustre_net.h>
 #include <libcfs/libcfs.h>
 #include <lnet/lnet.h>
 #include <lustre/lustre_idl.h>
