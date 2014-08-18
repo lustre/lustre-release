@@ -40,7 +40,7 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
-
+#include <linux/statfs.h>
 #include <lustre_export.h>
 #include <lustre_net.h>
 #include <obd_support.h>

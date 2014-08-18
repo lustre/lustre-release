@@ -52,7 +52,7 @@
 #include <linux/dcache.h>
 /* struct dirent64 */
 #include <linux/dirent.h>
-
+#include <linux/statfs.h>
 #include <ldiskfs/ldiskfs.h>
 #include <ldiskfs/ldiskfs_jbd2.h>
 

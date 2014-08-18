@@ -46,6 +46,7 @@
 #define PRINT_CMD CDEBUG
 #define PRINT_MASK (D_SUPER | D_CONFIG)
 
+#include <linux/statfs.h>
 #include <obd.h>
 #include <obd_class.h>
 #include <lustre/lustre_user.h>
