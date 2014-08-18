@@ -37,11 +37,11 @@
 #define DEBUG_SUBSYSTEM S_MDC
 
 #include <linux/module.h>
-#include <linux/lustre_intent.h>
 #include <obd.h>
 #include <obd_class.h>
 #include <lustre_dlm.h>
 #include <lustre_fid.h> /* fid_res_name_eq() */
+#include <lustre_intent.h>
 #include <lustre_mdc.h>
 #include <lustre_net.h>
 #include <lustre_req_layout.h>

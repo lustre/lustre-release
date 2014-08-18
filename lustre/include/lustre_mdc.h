@@ -53,8 +53,8 @@
 #ifdef CONFIG_FS_POSIX_ACL
 # include <linux/posix_acl_xattr.h>
 #endif /* CONFIG_FS_POSIX_ACL */
-#include <linux/lustre_intent.h>
 #include <lustre_handles.h>
+#include <lustre_intent.h>
 #include <libcfs/libcfs.h>
 #include <obd_class.h>
 #include <lustre/lustre_idl.h>
@@ -192,9 +192,6 @@ static inline void mdc_update_max_ea_from_body(struct obd_export *exp,
 
 
 /* mdc/mdc_locks.c */
-int it_disposition(const struct lookup_intent *it, int flag);
-void it_clear_disposition(struct lookup_intent *it, int flag);
-void it_set_disposition(struct lookup_intent *it, int flag);
 int it_open_error(int phase, struct lookup_intent *it);
 #ifdef HAVE_SPLIT_SUPPORT
 int mdc_sendpage(struct obd_export *exp, const struct lu_fid *fid,

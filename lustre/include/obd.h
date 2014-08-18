@@ -50,6 +50,7 @@
 #include <lustre_export.h>
 #include <lustre_fid.h>
 #include <lustre_fld.h>
+#include <lustre_intent.h>
 #include <lustre_capa.h>
 #include <lvfs.h>
 
