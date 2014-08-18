@@ -27,15 +27,63 @@
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
- * Copyright (c) 2012, 2013, Intel Corporation.
+ * Copyright (c) 2014, Intel Corporation.
  */
 /*
- * This file is part of Lustre, http://www.lustre.org/
- * Lustre is a trademark of Sun Microsystems, Inc.
- *
  * lustre/osp/osp_object.c
  *
- * Lustre OST Proxy Device
+ * Lustre OST Proxy Device (OSP) is the agent on the local MDT for the OST
+ * or remote MDT.
+ *
+ * OSP object attributes cache
+ * ---------------------------
+ * OSP object is the stub of the remote OST-object or MDT-object. Both the
+ * attribute and the extended attributes are stored on the peer side remotely.
+ * It is inefficient to send RPC to peer to fetch those attributes when every
+ * get_attr()/get_xattr() called. For a large system, the LFSCK synchronous
+ * mode scanning is prohibitively inefficient.
+ *
+ * So the OSP maintains the OSP object attributes cache to cache some
+ * attributes on the local MDT. The cache is organized against the OSP
+ * object as follows:
+ *
+ * struct osp_xattr_entry {
+ *	struct list_head	 oxe_list;
+ *	atomic_t		 oxe_ref;
+ *	void			*oxe_value;
+ *	int			 oxe_buflen;
+ *	int			 oxe_namelen;
+ *	int			 oxe_vallen;
+ *	unsigned int		 oxe_exist:1,
+ *				 oxe_ready:1;
+ *	char			 oxe_buf[0];
+ * };
+ *
+ * struct osp_object_attr {
+ *	struct lu_attr		ooa_attr;
+ *	struct list_head	ooa_xattr_list;
+ * };
+ *
+ * struct osp_object {
+ *	...
+ *	struct osp_object_attr *opo_ooa;
+ *	spinlock_t		opo_lock;
+ *	...
+ * };
+ *
+ * The basic attributes, such as owner/mode/flags, are stored in the
+ * osp_object_attr::ooa_attr. The extended attributes will be stored
+ * as osp_xattr_entry. Every extended attribute has an independent
+ * osp_xattr_entry, and all the osp_xattr_entry are linked into the
+ * osp_object_attr::ooa_xattr_list. The OSP object attributes cache
+ * is protected by the osp_object::opo_lock.
+ *
+ * Not all OSP objects have an attributes cache because maintaining
+ * the cache requires some resources. Currently, the OSP object
+ * attributes cache will be initialized when the attributes or the
+ * extended attributes are pre-fetched via osp_declare_attr_get()
+ * or osp_declare_xattr_get(). That is usually for LFSCK purpose,
+ * but it also can be shared by others.
  *
  * Author: Alex Zhuravlev <alexey.zhuravlev@intel.com>
  * Author: Mikhail Pershin <mike.tappro@intel.com>
@@ -55,6 +103,16 @@ static inline bool is_ost_obj(struct lu_object *lo)
 	return !lu2osp_dev(lo->lo_dev)->opd_connect_mdt;
 }
 
+/**
+ * Assign FID to the OST object.
+ *
+ * This function will assign the FID to the OST object of a striped file.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] d		pointer to the OSP device
+ * \param[in] o		pointer to the OSP object that the FID will be
+ *			assigned to
+ */
 static void osp_object_assign_fid(const struct lu_env *env,
 				  struct osp_device *d, struct osp_object *o)
 {
@@ -69,6 +127,14 @@ static void osp_object_assign_fid(const struct lu_env *env,
 	lu_object_assign_fid(env, &o->opo_obj.do_lu, &osi->osi_fid);
 }
 
+/**
+ * Initialize the OSP object attributes cache.
+ *
+ * \param[in] obj	pointer to the OSP object
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 static int osp_oac_init(struct osp_object *obj)
 {
 	struct osp_object_attr *ooa;
@@ -90,6 +156,20 @@ static int osp_oac_init(struct osp_object *obj)
 	return 0;
 }
 
+/**
+ * Find the named extended attribute in the OSP object attributes cache.
+ *
+ * The caller should take the osp_object::opo_lock before calling
+ * this function.
+ *
+ * \param[in] ooa	pointer to the OSP object attributes cache
+ * \param[in] name	the name of the extended attribute
+ * \param[in] namelen	the name length of the extended attribute
+ *
+ * \retval		pointer to the found extended attribute entry
+ * \retval		NULL if the specified extended attribute is not
+ *			in the cache
+ */
 static struct osp_xattr_entry *
 osp_oac_xattr_find_locked(struct osp_object_attr *ooa,
 			  const char *name, size_t namelen)
@@ -105,6 +185,20 @@ osp_oac_xattr_find_locked(struct osp_object_attr *ooa,
 	return NULL;
 }
 
+/**
+ * Find the named extended attribute in the OSP object attributes cache.
+ *
+ * Call osp_oac_xattr_find_locked() with the osp_object::opo_lock held.
+ *
+ * \param[in] obj	pointer to the OSP object
+ * \param[in] name	the name of the extended attribute
+ * \param[in] unlink	true if the extended attribute entry is to be removed
+ *			from the cache
+ *
+ * \retval		pointer to the found extended attribute entry
+ * \retval		NULL if the specified extended attribute is not
+ *			in the cache
+ */
 static struct osp_xattr_entry *osp_oac_xattr_find(struct osp_object *obj,
 						  const char *name, bool unlink)
 {
@@ -126,6 +220,21 @@ static struct osp_xattr_entry *osp_oac_xattr_find(struct osp_object *obj,
 	return oxe;
 }
 
+/**
+ * Find the named extended attribute in the OSP object attributes cache.
+ *
+ * If it is not in the cache, then add an empty entry (that will be
+ * filled later) to cache with the given name.
+ *
+ * \param[in] obj	pointer to the OSP object
+ * \param[in] name	the name of the extended attribute
+ * \param[in] len	the length of the extended attribute value
+ *
+ * \retval		pointer to the found or new-created extended
+ *			attribute entry
+ * \retval		NULL if the specified extended attribute is not in the
+ *			cache or fail to add new empty entry to the cache.
+ */
 static struct osp_xattr_entry *
 osp_oac_xattr_find_or_add(struct osp_object *obj, const char *name, size_t len)
 {
@@ -169,6 +278,23 @@ osp_oac_xattr_find_or_add(struct osp_object *obj, const char *name, size_t len)
 	return oxe;
 }
 
+/**
+ * Add the given extended attribute to the OSP object attributes cache.
+ *
+ * If there is an old extended attributed entry with the same name,
+ * remove it from the cache and return it via the parameter \a poxe.
+ *
+ * \param[in] obj	pointer to the OSP object
+ * \param[in,out] poxe	double pointer to the OSP object extended attribute
+ *			entry: the new extended attribute entry is transfered
+ *			via such pointer target, and if old the extended
+ *			attribute entry exists, then it will be returned back
+ *			via such pointer target.
+ * \param[in] len	the length of the (new) extended attribute value
+ *
+ * \retval		pointer to the new extended attribute entry
+ * \retval		NULL for failure cases.
+ */
 static struct osp_xattr_entry *
 osp_oac_xattr_replace(struct osp_object *obj,
 		      struct osp_xattr_entry **poxe, size_t len)
@@ -203,6 +329,13 @@ osp_oac_xattr_replace(struct osp_object *obj,
 	return oxe;
 }
 
+/**
+ * Release reference from the OSP object extended attribute entry.
+ *
+ * If it is the last reference, then free the entry.
+ *
+ * \param[in] oxe	pointer to the OSP object extended attribute entry.
+ */
 static inline void osp_oac_xattr_put(struct osp_xattr_entry *oxe)
 {
 	if (atomic_dec_and_test(&oxe->oxe_ref)) {
@@ -212,6 +345,22 @@ static inline void osp_oac_xattr_put(struct osp_xattr_entry *oxe)
 	}
 }
 
+/**
+ * Parse the OSP object attribute from the RPC reply.
+ *
+ * If the attribute is valid, then it will be added to the OSP object
+ * attributes cache.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] reply	pointer to the RPC reply
+ * \param[in] req	pointer to the RPC request
+ * \param[out] attr	pointer to buffer to hold the output attribute
+ * \param[in] obj	pointer to the OSP object
+ * \param[in] index	the index of the attribute buffer in the reply
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 static int osp_get_attr_from_reply(const struct lu_env *env,
 				   struct object_update_reply *reply,
 				   struct ptlrpc_request *req,
@@ -252,6 +401,23 @@ static int osp_get_attr_from_reply(const struct lu_env *env,
 	return 0;
 }
 
+/**
+ * Interpreter function for getting OSP object attribute asynchronously.
+ *
+ * Called to interpret the result of an async mode RPC for getting the
+ * OSP object attribute.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] reply	pointer to the RPC reply
+ * \param[in] req	pointer to the RPC request
+ * \param[in] obj	pointer to the OSP object
+ * \param[out] data	pointer to buffer to hold the output attribute
+ * \param[in] index	the index of the attribute buffer in the reply
+ * \param[in] rc	the result for handling the RPC
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 static int osp_attr_get_interpterer(const struct lu_env *env,
 				    struct object_update_reply *reply,
 				    struct ptlrpc_request *req,
@@ -282,6 +448,23 @@ static int osp_attr_get_interpterer(const struct lu_env *env,
 	return 0;
 }
 
+/**
+ * Implement OSP layer dt_object_operations::do_declare_attr_get() interface.
+ *
+ * Declare that the caller will get attribute from the specified OST object.
+ *
+ * This function adds an Object Unified Target (OUT) sub-request to the per-OSP
+ * based shared asynchronous request queue. The osp_attr_get_interpterer()
+ * is registered as the interpreter function to handle the result of this
+ * sub-request.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] dt	pointer to the OSP layer dt_object
+ * \param[in] capa	the capability for this operation
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 static int osp_declare_attr_get(const struct lu_env *env, struct dt_object *dt,
 				struct lustre_capa *capa)
 {
@@ -304,6 +487,24 @@ static int osp_declare_attr_get(const struct lu_env *env, struct dt_object *dt,
 	return rc;
 }
 
+/**
+ * Implement OSP layer dt_object_operations::do_attr_get() interface.
+ *
+ * Get attribute from the specified MDT/OST object.
+ *
+ * If the attribute is in the OSP object attributes cache, then return
+ * the cached attribute directly. Otherwise it will trigger an OUT RPC
+ * to the peer to get the attribute synchronously, if successful, add it
+ * to the OSP attributes cache. (\see lustre/osp/osp_trans.c for OUT RPC.)
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] dt	pointer to the OSP layer dt_object
+ * \param[out] attr	pointer to the buffer to hold the output attribute
+ * \param[in] capa	the capability for this operation
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 		 struct lu_attr *attr, struct lustre_capa *capa)
 {
@@ -393,7 +594,7 @@ static int __osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 	/*
 	 * Usually we don't allow server stack to manipulate size
 	 * but there is a special case when striping is created
-	 * late, after stripless file got truncated to non-zero.
+	 * late, after stripeless file got truncated to non-zero.
 	 *
 	 * In this case we do the following:
 	 *
@@ -460,6 +661,7 @@ static int __osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
+ * Implement OSP layer dt_object_operations::do_declare_attr_set() interface.
  * XXX: NOT prepare set_{attr,xattr} RPC for remote transaction.
  *
  * According to our current transaction/dt_object_lock framework (to make
@@ -489,6 +691,14 @@ static int __osp_attr_set(const struct lu_env *env, struct dt_object *dt,
  * In fact, above solution for remote transaction should be the normal
  * model without considering DNE1. The trouble brought by DNE1 will be
  * resolved in DNE2. At that time, this patch can be removed.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] dt	pointer to the OSP layer dt_object
+ * \param[in] attr	pointer to the attribute to be set
+ * \param[in] th	pointer to the transaction handler
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
  */
 static int osp_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 				const struct lu_attr *attr, struct thandle *th)
@@ -501,6 +711,29 @@ static int osp_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 	return rc;
 }
 
+/**
+ * Implement OSP layer dt_object_operations::do_attr_set() interface.
+ *
+ * Set attribute to the specified OST object.
+ *
+ * If the transaction is a remote transaction, then related modification
+ * sub-request has been added in the declare phase and related OUT RPC
+ * has been triggered at transaction start. Otherwise it will generate
+ * a MDS_SETATTR64_REC record in the llog. There is a dedicated thread
+ * to handle the llog asynchronously.
+ *
+ * If the attribute entry exists in the OSP object attributes cache,
+ * then update the cached attribute according to given attribute.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] dt	pointer to the OSP layer dt_object
+ * \param[in] attr	pointer to the attribute to be set
+ * \param[in] th	pointer to the transaction handler
+ * \param[in] capa	the capability for this operation
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 			const struct lu_attr *attr, struct thandle *th,
 			struct lustre_capa *capa)
@@ -543,6 +776,23 @@ static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 	RETURN(rc);
 }
 
+/**
+ * Interpreter function for getting OSP object extended attribute asynchronously
+ *
+ * Called to interpret the result of an async mode RPC for getting the
+ * OSP object extended attribute.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] reply	pointer to the RPC reply
+ * \param[in] req	pointer to the RPC request
+ * \param[in] obj	pointer to the OSP object
+ * \param[out] data	pointer to OSP object attributes cache
+ * \param[in] index	the index of the attribute buffer in the reply
+ * \param[in] rc	the result for handling the RPC
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 static int osp_xattr_get_interpterer(const struct lu_env *env,
 				     struct object_update_reply *reply,
 				     struct ptlrpc_request *req,
@@ -590,6 +840,25 @@ static int osp_xattr_get_interpterer(const struct lu_env *env,
 	return 0;
 }
 
+/**
+ * Implement OSP dt_object_operations::do_declare_xattr_get() interface.
+ *
+ * Declare that the caller will get extended attribute from the specified
+ * OST object.
+ *
+ * This function will add an OUT_XATTR_GET sub-request to the per OSP
+ * based shared asynchronous request queue with the interpreter function:
+ * osp_xattr_get_interpterer().
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] dt	pointer to the OSP layer dt_object
+ * \param[out] buf	pointer to the lu_buf to hold the extended attribute
+ * \param[in] name	the name for the expected extended attribute
+ * \param[in] capa	the capability for this operation
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 static int osp_declare_xattr_get(const struct lu_env *env, struct dt_object *dt,
 				 struct lu_buf *buf, const char *name,
 				 struct lustre_capa *capa)
@@ -646,6 +915,30 @@ static int osp_declare_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	return rc;
 }
 
+/**
+ * Implement OSP layer dt_object_operations::do_xattr_get() interface.
+ *
+ * Get extended attribute from the specified MDT/OST object.
+ *
+ * If the extended attribute is in the OSP object attributes cache, then
+ * return the cached extended attribute directly. Otherwise it will get
+ * the extended attribute synchronously, if successful, add it to the OSP
+ * attributes cache. (\see lustre/osp/osp_trans.c for OUT RPC.)
+ *
+ * There is a race condition: some other thread has added the named extended
+ * attributed entry to the OSP object attributes cache during the current
+ * OUT_XATTR_GET handling. If such case happens, the OSP will replace the
+ * (just) existing extended attribute entry with the new replied one.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] dt	pointer to the OSP layer dt_object
+ * \param[out] buf	pointer to the lu_buf to hold the extended attribute
+ * \param[in] name	the name for the expected extended attribute
+ * \param[in] capa	the capability for this operation
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 int osp_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		  struct lu_buf *buf, const char *name,
 		  struct lustre_capa *capa)
@@ -895,6 +1188,27 @@ static int __osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	RETURN(0);
 }
 
+/**
+ * Implement OSP layer dt_object_operations::do_declare_xattr_set() interface.
+ *
+ * Declare that the caller will set extended attribute to the specified
+ * MDT/OST object.
+ *
+ * This function will add an OUT_XATTR_SET sub-request to the per
+ * OSP-transaction based request queue which will be flushed when
+ * the transaction starts.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] dt	pointer to the OSP layer dt_object
+ * \param[in] buf	pointer to the lu_buf to hold the extended attribute
+ * \param[in] name	the name of the extended attribute to be set
+ * \param[in] flag	to indicate the detailed set operation: LU_XATTR_CREATE
+ *			or LU_XATTR_REPLACE or others
+ * \param[in] th	pointer to the transaction handler
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 int osp_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
 			  const struct lu_buf *buf, const char *name,
 			  int flag, struct thandle *th)
@@ -909,6 +1223,30 @@ int osp_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	return rc;
 }
 
+/**
+ * Implement OSP layer dt_object_operations::do_xattr_set() interface.
+ *
+ * Set extended attribute to the specified MDT/OST object.
+ *
+ * The real modification sub-request has been added in the declare phase
+ * and related (OUT) RPC has been triggered when transaction start.
+ *
+ * If the OSP attributes cache is initialized, then check whether the name
+ * extended attribute entry exists in the cache or not. If yes, replace it;
+ * otherwise, add the extended attribute to the cache.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] dt	pointer to the OSP layer dt_object
+ * \param[in] buf	pointer to the lu_buf to hold the extended attribute
+ * \param[in] name	the name of the extended attribute to be set
+ * \param[in] fl	to indicate the detailed set operation: LU_XATTR_CREATE
+ *			or LU_XATTR_REPLACE or others
+ * \param[in] th	pointer to the transaction handler
+ * \param[in] capa	the capability for this operation
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 int osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
 		  const struct lu_buf *buf, const char *name, int fl,
 		  struct thandle *th, struct lustre_capa *capa)
@@ -955,6 +1293,24 @@ static int __osp_xattr_del(const struct lu_env *env, struct dt_object *dt,
 	return 0;
 }
 
+/**
+ * Implement OSP layer dt_object_operations::do_declare_xattr_del() interface.
+ *
+ * Declare that the caller will delete extended attribute on the specified
+ * MDT/OST object.
+ *
+ * This function will add an OUT_XATTR_DEL sub-request to the per
+ * OSP-transaction based request queue which will be flushed when
+ * transaction start.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] dt	pointer to the OSP layer dt_object
+ * \param[in] name	the name of the extended attribute to be set
+ * \param[in] th	pointer to the transaction handler
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 int osp_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
 			  const char *name, struct thandle *th)
 {
@@ -968,6 +1324,26 @@ int osp_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
 	return rc;
 }
 
+/**
+ * Implement OSP layer dt_object_operations::do_xattr_del() interface.
+ *
+ * Delete extended attribute on the specified MDT/OST object.
+ *
+ * The real modification sub-request has been added in the declare phase
+ * and related (OUT) RPC has been triggered when transaction start.
+ *
+ * If the name extended attribute entry exists in the OSP attributes
+ * cache, then remove it from the cache.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] dt	pointer to the OSP layer dt_object
+ * \param[in] name	the name of the extended attribute to be set
+ * \param[in] th	pointer to the transaction handler
+ * \param[in] capa	the capability for this operation
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 int osp_xattr_del(const struct lu_env *env, struct dt_object *dt,
 		  const char *name, struct thandle *th,
 		  struct lustre_capa *capa)
@@ -985,6 +1361,32 @@ int osp_xattr_del(const struct lu_env *env, struct dt_object *dt,
 	return rc;
 }
 
+/**
+ * Implement OSP layer dt_object_operations::do_declare_create() interface.
+ *
+ * Declare that the caller will create the OST object.
+ *
+ * If the transaction is a remote transaction (please refer to the
+ * comment of osp_trans_create() for remote transaction), then the FID
+ * for the OST object has been assigned already, and will be handled
+ * as create (remote) MDT object via osp_md_declare_object_create().
+ * This function is usually used for LFSCK to re-create the lost OST
+ * object. Otherwise, if it is not replay case, the OSP will reserve
+ * pre-created object for the subsequent create operation; if the MDT
+ * side cached pre-created objects are less than some threshold, then
+ * it will wakeup the pre-create thread.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] dt	pointer to the OSP layer dt_object
+ * \param[in] attr	the attribute for the object to be created
+ * \param[in] hint	pointer to the hint for creating the object, such as
+ *			the parent object
+ * \param[in] dof	pointer to the dt_object_format for help the creation
+ * \param[in] th	pointer to the transaction handler
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 static int osp_declare_object_create(const struct lu_env *env,
 				     struct dt_object *dt,
 				     struct lu_attr *attr,
@@ -1064,6 +1466,30 @@ static int osp_declare_object_create(const struct lu_env *env,
 	RETURN(rc);
 }
 
+/**
+ * Implement OSP layer dt_object_operations::do_create() interface.
+ *
+ * Create the OST object.
+ *
+ * For remote transaction case, the real create sub-request has been
+ * added in the declare phase and related (OUT) RPC has been triggered
+ * at transaction start. Here, like creating (remote) MDT object, the
+ * OSP will mark the object existence via osp_md_object_create().
+ *
+ * For non-remote transaction case, the OSP will assign FID to the
+ * object to be created, and update last_used Object ID (OID) file.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] dt	pointer to the OSP layer dt_object
+ * \param[in] attr	the attribute for the object to be created
+ * \param[in] hint	pointer to the hint for creating the object, such as
+ *			the parent object
+ * \param[in] dof	pointer to the dt_object_format for help the creation
+ * \param[in] th	pointer to the transaction handler
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 			     struct lu_attr *attr,
 			     struct dt_allocation_hint *hint,
@@ -1088,7 +1514,7 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 
 	o->opo_non_exist = 0;
 	if (o->opo_reserved) {
-		/* regular case, fid is assigned holding trunsaction open */
+		/* regular case, fid is assigned holding transaction open */
 		 osp_object_assign_fid(env, d, o);
 	}
 
@@ -1134,7 +1560,7 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 			d->opd_gap_count = 0;
 			spin_unlock(&d->opd_pre_lock);
 
-			CDEBUG(D_HA, "Writting gap "DFID"+%d in llog\n",
+			CDEBUG(D_HA, "Writing gap "DFID"+%d in llog\n",
 			       PFID(&d->opd_gap_start_fid), count);
 			/* real gap handling is disabled intil ORI-692 will be
 			 * fixed, now we only report gaps */
@@ -1161,6 +1587,21 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 	RETURN(rc);
 }
 
+/**
+ * Implement OSP layer dt_object_operations::do_declare_destroy() interface.
+ *
+ * Declare that the caller will destroy the specified OST object.
+ *
+ * The OST object destroy will be handled via llog asynchronously. This
+ * function will declare the credits for generating MDS_UNLINK64_REC llog.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] dt	pointer to the OSP layer dt_object to be destroyed
+ * \param[in] th	pointer to the transaction handler
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 int osp_declare_object_destroy(const struct lu_env *env,
 			       struct dt_object *dt, struct thandle *th)
 {
@@ -1177,6 +1618,23 @@ int osp_declare_object_destroy(const struct lu_env *env,
 	RETURN(rc);
 }
 
+/**
+ * Implement OSP layer dt_object_operations::do_destroy() interface.
+ *
+ * Destroy the specified OST object.
+ *
+ * The OSP generates a MDS_UNLINK64_REC record in the llog. There
+ * will be some dedicated thread to handle the llog asynchronously.
+ *
+ * It also marks the object as non-cached.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] dt	pointer to the OSP layer dt_object to be destroyed
+ * \param[in] th	pointer to the transaction handler
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 int osp_object_destroy(const struct lu_env *env, struct dt_object *dt,
 		       struct thandle *th)
 {
@@ -1244,6 +1702,17 @@ static int osp_orphan_index_delete(const struct lu_env *env,
 	return -EOPNOTSUPP;
 }
 
+/**
+ * Initialize the OSP layer index iteration.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] dt	pointer to the index object to be iterated
+ * \param[in] attr	unused
+ * \param[in] capa	the capability for this operation
+ *
+ * \retval		pointer to the iteration structure
+ * \retval		negative error number on failure
+ */
 struct dt_it *osp_it_init(const struct lu_env *env, struct dt_object *dt,
 			  __u32 attr, struct lustre_capa *capa)
 {
@@ -1259,6 +1728,12 @@ struct dt_it *osp_it_init(const struct lu_env *env, struct dt_object *dt,
 	return (struct dt_it *)it;
 }
 
+/**
+ * Finalize the OSP layer index iteration.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] di	pointer to the iteration structure
+ */
 void osp_it_fini(const struct lu_env *env, struct dt_it *di)
 {
 	struct osp_it	*it = (struct osp_it *)di;
@@ -1281,6 +1756,18 @@ void osp_it_fini(const struct lu_env *env, struct dt_it *di)
 	OBD_FREE_PTR(it);
 }
 
+/**
+ * Get more records for the iteration from peer.
+ *
+ * The new records will be filled in an array of pages. The OSP side
+ * allows 1MB bulk data to be transfered.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] it	pointer to the iteration structure
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 static int osp_it_fetch(const struct lu_env *env, struct osp_it *it)
 {
 	struct lu_device	 *dev	= it->ooi_obj->do_lu.lo_dev;
@@ -1389,6 +1876,23 @@ out:
 	return rc;
 }
 
+/**
+ * Move the iteration cursor to the next lu_page.
+ *
+ * One system page (PAGE_SIZE) may contain multiple lu_page (4KB),
+ * that depends on the LU_PAGE_COUNT. If it is not the last lu_page
+ * in current system page, then move the iteration cursor to the next
+ * lu_page in current system page. Otherwise, if there are more system
+ * pages in the cache, then move the iteration cursor to the next system
+ * page. If all the cached records (pages) have been iterated, then fetch
+ * more records via osp_it_fetch().
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] di	pointer to the iteration structure
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 int osp_it_next_page(const struct lu_env *env, struct dt_it *di)
 {
 	struct osp_it		*it = (struct osp_it *)di;
@@ -1473,6 +1977,19 @@ again0:
 	RETURN(rc);
 }
 
+/**
+ * Move the iteration cursor to the next record.
+ *
+ * If there are more records in the lu_page, then move the iteration
+ * cursor to the next record directly. Otherwise, move the iteration
+ * cursor to the record in the next lu_page via osp_it_next_page()
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] di	pointer to the iteration structure
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 int osp_orphan_it_next(const struct lu_env *env, struct dt_it *di)
 {
 	struct osp_it		*it = (struct osp_it *)di;
@@ -1553,10 +2070,16 @@ __u64 osp_it_store(const struct lu_env *env, const struct dt_it *di)
 }
 
 /**
- * \retval	 +1: locate to the exactly position
- * \retval	  0: cannot locate to the exactly position,
- *		     call next() to move to a valid position.
- * \retval	-ve: on error
+ * Locate the iteration cursor to the specified position (cookie).
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] di	pointer to the iteration structure
+ * \param[in] hash	the specified position
+ *
+ * \retval		positive number for locating to the exactly position
+ *			or the next
+ * \retval		0 for arriving at the end of the iteration
+ * \retval		negative error number on failure
  */
 int osp_orphan_it_load(const struct lu_env *env, const struct dt_it *di,
 		       __u64 hash)
@@ -1602,6 +2125,21 @@ static const struct dt_index_operations osp_orphan_index_ops = {
 	}
 };
 
+/**
+ * Implement OSP layer dt_object_operations::do_index_try() interface.
+ *
+ * Negotiate the index type.
+ *
+ * If the target index is an IDIF object, then use osp_orphan_index_ops.
+ * Otherwise, assign osp_md_index_ops to the dt_object::do_index_ops.
+ * (\see lustre/include/lustre_fid.h for IDIF.)
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] dt	pointer to the OSP layer dt_object
+ * \param[in] feat	unused
+ *
+ * \retval		0 for success
+ */
 static int osp_index_try(const struct lu_env *env,
 			 struct dt_object *dt,
 			 const struct dt_index_features *feat)
@@ -1631,6 +2169,21 @@ struct dt_object_operations osp_obj_ops = {
 	.do_index_try		= osp_index_try,
 };
 
+/**
+ * Implement OSP layer lu_object_operations::loo_object_init() interface.
+ *
+ * Initialize the object.
+ *
+ * If it is a remote MDT object, then call do_attr_get() to fetch
+ * the attribute from the peer.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] o		pointer to the OSP layer lu_object
+ * \param[in] conf	unused
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
 static int osp_object_init(const struct lu_env *env, struct lu_object *o,
 			   const struct lu_object_conf *conf)
 {
@@ -1662,6 +2215,17 @@ static int osp_object_init(const struct lu_env *env, struct lu_object *o,
 	RETURN(rc);
 }
 
+/**
+ * Implement OSP layer lu_object_operations::loo_object_free() interface.
+ *
+ * Finalize the object.
+ *
+ * If the OSP object has attributes cache, then destroy the cache.
+ * Free the object finally.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] o		pointer to the OSP layer lu_object
+ */
 static void osp_object_free(const struct lu_env *env, struct lu_object *o)
 {
 	struct osp_object	*obj = lu2osp_obj(o);
@@ -1690,6 +2254,17 @@ static void osp_object_free(const struct lu_env *env, struct lu_object *o)
 	OBD_SLAB_FREE_PTR(obj, osp_object_kmem);
 }
 
+/**
+ * Implement OSP layer lu_object_operations::loo_object_release() interface.
+ *
+ * Cleanup (not free) the object.
+ *
+ * If it is a reserved object but failed to be created, or it is an OST
+ * object, then mark the object as non-cached.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] o		pointer to the OSP layer lu_object
+ */
 static void osp_object_release(const struct lu_env *env, struct lu_object *o)
 {
 	struct osp_object	*po = lu2osp_obj(o);
