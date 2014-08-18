@@ -46,7 +46,6 @@
 #endif
 
 #include <linux/lustre_compat25.h>
-#include <linux/lustre_common.h>
 #include <linux/fs.h>
 
 #define OBD_RUN_CTXT_MAGIC	0xC0FFEEAA

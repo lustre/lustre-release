@@ -45,4 +45,4 @@ endif
 EXTRA_DIST = lustre_debug.h lustre_lib.h \
 	lustre_dlm.h  lustre_handles.h lustre_net.h obd_class.h obd_support.h \
 	obd.h lvfs.h lustre_log.h lustre_compat25.h lustre_lite.h lustre_quota.h \
-	lustre_user.h lustre_patchless_compat.h lustre_intent.h lustre_common.h
+	lustre_user.h lustre_patchless_compat.h lustre_intent.h

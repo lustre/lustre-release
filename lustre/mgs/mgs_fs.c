@@ -113,11 +113,6 @@ int mgs_fs_setup(const struct lu_env *env, struct mgs_device *mgs)
 
 	ENTRY;
 
-	/* FIXME what's this?  Do I need it? */
-	rc = cfs_cleanup_group_info();
-	if (rc)
-		RETURN(rc);
-
 	OBD_SET_CTXT_MAGIC(&mgs->mgs_obd->obd_lvfs_ctxt);
 	mgs->mgs_obd->obd_lvfs_ctxt.dt = mgs->mgs_bottom;
 

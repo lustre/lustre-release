@@ -711,8 +711,6 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb)
 	/* The mgc fs exclusion mutex. Only one fs can be setup at a time. */
 	mutex_lock(&cli->cl_mgc_mutex);
 
-	cfs_cleanup_group_info();
-
 	/* Setup the configs dir */
 	rc = lu_env_init(env, LCT_MG_THREAD);
 	if (rc)

@@ -90,10 +90,6 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 	int rc;
 	ENTRY;
 
-        rc = cfs_cleanup_group_info();
-        if (rc)
-                RETURN(rc);
-
 #ifdef LPROCFS
 	obd->obd_vars = lprocfs_ost_obd_vars;
 	lprocfs_seq_obd_setup(obd);
