@@ -968,9 +968,15 @@ test_9a() {
 	local MIN_SPEED=$(((BASE_SPEED1 * (RUN_TIME1 - TIME_DIFF) + \
 			    BASE_SPEED2 * (RUN_TIME2 - TIME_DIFF)) / \
 			   (RUN_TIME1 + RUN_TIME2) * 8 / 10))
-	# Account for slow ZFS performance - LU-4934
-	[ $SPEED -gt $MIN_SPEED ] || [ $(facet_fstype $SINGLEMDS) -eq zfs ] ||
-		error "(5) Got speed $SPEED, expected more than $MIN_SPEED"
+	[ $SPEED -gt $MIN_SPEED ] || {
+		if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+			error_ignore LU-5624 \
+			"(5.1) Got speed $SPEED, expected more than $MIN_SPEED"
+		else
+			error \
+			"(5.2) Got speed $SPEED, expected more than $MIN_SPEED"
+		fi
+	}
 
 	# MAX_MARGIN = 1.2 = 12 / 10
 	MAX_SPEED=$(((BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) + \
@@ -1051,8 +1057,15 @@ test_9b() {
 	local MIN_SPEED=$(((BASE_SPEED1 * (RUN_TIME1 - TIME_DIFF) + \
 			    BASE_SPEED2 * (RUN_TIME2 - TIME_DIFF)) / \
 			   (RUN_TIME1 + RUN_TIME2) * 8 / 10))
-	[ $SPEED -gt $MIN_SPEED ] ||[ $(facet_fstype $SINGLEMDS) -eq zfs ] ||
-		error "(9) Got speed $SPEED, expected more than $MIN_SPEED"
+	[ $SPEED -gt $MIN_SPEED ] || {
+		if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+			error_ignore LU-5624 \
+			"(9.1) Got speed $SPEED, expected more than $MIN_SPEED"
+		else
+			error \
+			"(9.2) Got speed $SPEED, expected more than $MIN_SPEED"
+		fi
+	}
 
 	# MAX_MARGIN = 1.2 = 12 / 10
 	MAX_SPEED=$(((BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) + \
