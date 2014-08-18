@@ -45,6 +45,13 @@
 #define LOV_USES_ASSIGNED_STRIPE        0
 #define LOV_USES_DEFAULT_STRIPE         1
 
+/* Special values to remove LOV EA from disk */
+#define LOVEA_DELETE_VALUES(size, count, offset)			\
+	((size) == 0 && (count) == 0 && (offset) == (typeof(offset))(-1))
+
+#define LMVEA_DELETE_VALUES(count, offset)				\
+	((count) == 0 && (offset) == (typeof(offset))(-1))
+
 struct lod_qos_rr {
 	__u32			 lqr_start_idx;	/* start index of new inode */
 	__u32			 lqr_offset_idx; /* aliasing for start_idx */
