@@ -852,24 +852,25 @@ struct changelog_ext_rec {
 #define CHANGELOG_REC_EXTENDED(rec) \
 	(((rec)->cr_flags & CLF_VERMASK) == CLF_EXT_VERSION)
 
-static inline int changelog_rec_size(struct changelog_rec *rec)
+static inline int changelog_rec_size(const struct changelog_rec *rec)
 {
 	return CHANGELOG_REC_EXTENDED(rec) ? sizeof(struct changelog_ext_rec):
 					     sizeof(*rec);
 }
 
-static inline char *changelog_rec_name(struct changelog_rec *rec)
+static inline const char *changelog_rec_name(const struct changelog_rec *rec)
 {
 	return CHANGELOG_REC_EXTENDED(rec) ?
 		((struct changelog_ext_rec *)rec)->cr_name: rec->cr_name;
 }
 
-static inline int changelog_rec_snamelen(struct changelog_ext_rec *rec)
+static inline int changelog_rec_snamelen(const struct changelog_ext_rec *rec)
 {
 	return rec->cr_namelen - strlen(rec->cr_name) - 1;
 }
 
-static inline char *changelog_rec_sname(struct changelog_ext_rec *rec)
+static inline const char *changelog_rec_sname(const struct changelog_ext_rec
+					      *rec)
 {
 	return rec->cr_name + strlen(rec->cr_name) + 1;
 }
