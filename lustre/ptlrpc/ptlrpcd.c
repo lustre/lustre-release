@@ -330,22 +330,17 @@ static int ptlrpcd_check(struct lu_env *env, struct ptlrpcd_ctl *pc)
         if (cfs_atomic_read(&set->set_remaining))
                 rc |= ptlrpc_check_set(env, set);
 
-        if (!cfs_list_empty(&set->set_requests)) {
-                /*
-                 * XXX: our set never completes, so we prune the completed
-                 * reqs after each iteration. boy could this be smarter.
-                 */
-                cfs_list_for_each_safe(pos, tmp, &set->set_requests) {
-                        req = cfs_list_entry(pos, struct ptlrpc_request,
-                                             rq_set_chain);
-                        if (req->rq_phase != RQ_PHASE_COMPLETE)
-                                continue;
+	/* NB: ptlrpc_check_set has already moved completed request at the
+	 * head of seq::set_requests */
+	cfs_list_for_each_safe(pos, tmp, &set->set_requests) {
+		req = cfs_list_entry(pos, struct ptlrpc_request, rq_set_chain);
+		if (req->rq_phase != RQ_PHASE_COMPLETE)
+			break;
 
-                        cfs_list_del_init(&req->rq_set_chain);
-                        req->rq_set = NULL;
-                        ptlrpc_req_finished(req);
-                }
-        }
+		cfs_list_del_init(&req->rq_set_chain);
+		req->rq_set = NULL;
+		ptlrpc_req_finished(req);
+	}
 
         if (rc == 0) {
                 /*
