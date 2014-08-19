@@ -772,14 +772,6 @@ static int client_lwp_config_process(const struct lu_env *env,
 		if (!tgt_is_mdt0(marker->cm_tgtname))
 			GOTO(out, rc = 0);
 
-		/* Don't try to connect old MDT server without LWP support,
-		 * otherwise, the old MDT could regard this LWP client as
-		 * a normal client and save the export on disk for recovery.
-		 *
-		 * This usually happen when rolling upgrade. LU-3929 */
-		if (marker->cm_vers < OBD_OCD_VERSION(2, 3, 60, 0))
-			GOTO(out, rc = 0);
-
 		if (!strncmp(marker->cm_comment, "add mdc", 7) ||
 		    !strncmp(marker->cm_comment, "add failnid", 11)) {
 			if (marker->cm_flags & CM_START) {
@@ -812,16 +804,8 @@ static int client_lwp_config_process(const struct lu_env *env,
 		break;
 	}
 	case LCFG_ADD_CONN: {
-		if (is_mdc_for_mdt0(lustre_cfg_string(lcfg, 0)) &&
-		    (clli->cfg_flags & CFG_F_MARKER) != 0) {
+		if (is_mdc_for_mdt0(lustre_cfg_string(lcfg, 0)))
 			rc = lustre_lwp_add_conn(lcfg, lsi);
-			/* When the 'add mdc' record is old (< 2.3.60) but
-			 * 'add failnid' record is new (>= 2.3.60), add
-			 * connection should fail with -ENOENT since LWP
-			 * device wasn't setup, we'd ignore such error. */
-			if (rc == -ENOENT && clli->cfg_flags & CFG_F_SKIP)
-				rc = 0;
-		}
 		break;
 	}
 	default:
