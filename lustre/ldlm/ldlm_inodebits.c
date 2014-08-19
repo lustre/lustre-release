@@ -79,10 +79,10 @@
  * locks if first lock of the bunch is not conflicting with us.
  */
 static int
-ldlm_inodebits_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
-                            cfs_list_t *work_list)
+ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
+			    struct list_head *work_list)
 {
-        cfs_list_t *tmp;
+	struct list_head *tmp;
         struct ldlm_lock *lock;
         ldlm_mode_t req_mode = req->l_req_mode;
         __u64 req_bits = req->l_policy_data.l_inodebits.bits;
@@ -93,10 +93,10 @@ ldlm_inodebits_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
                               I think. Also such a lock would be compatible
                                with any other bit lock */
 
-        cfs_list_for_each(tmp, queue) {
-                cfs_list_t *mode_tail;
+	list_for_each(tmp, queue) {
+		struct list_head *mode_tail;
 
-                lock = cfs_list_entry(tmp, struct ldlm_lock, l_res_link);
+		lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
 		/* We stop walking the queue if we hit ourselves so we don't
 		 * take conflicting locks enqueued after us into account,
@@ -106,7 +106,7 @@ ldlm_inodebits_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
 
                 /* last lock in mode group */
                 LASSERT(lock->l_sl_mode.prev != NULL);
-                mode_tail = &cfs_list_entry(lock->l_sl_mode.prev,
+		mode_tail = &list_entry(lock->l_sl_mode.prev,
                                             struct ldlm_lock,
                                             l_sl_mode)->l_res_link;
 
@@ -118,10 +118,10 @@ ldlm_inodebits_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
                 }
 
                 for (;;) {
-                        cfs_list_t *head;
+			struct list_head *head;
 
 			/* Advance loop cursor to last lock in policy group. */
-			tmp = &cfs_list_entry(lock->l_sl_policy.prev,
+			tmp = &list_entry(lock->l_sl_policy.prev,
 					      struct ldlm_lock,
 					      l_sl_policy)->l_res_link;
 
@@ -145,7 +145,7 @@ ldlm_inodebits_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
                                         ldlm_add_ast_work_item(lock, req,
                                                                work_list);
                                 head = &lock->l_sl_policy;
-                                cfs_list_for_each_entry(lock, head, l_sl_policy)
+				list_for_each_entry(lock, head, l_sl_policy)
                                         if (lock->l_blocking_ast)
                                                 ldlm_add_ast_work_item(lock, req,
                                                                        work_list);
@@ -155,7 +155,7 @@ ldlm_inodebits_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
                                 break;
 
                         tmp = tmp->next;
-                        lock = cfs_list_entry(tmp, struct ldlm_lock,
+			lock = list_entry(tmp, struct ldlm_lock,
                                               l_res_link);
 		} /* Loop over policy groups within one mode group. */
 	} /* Loop over mode groups within @queue. */
@@ -180,16 +180,17 @@ ldlm_inodebits_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
  */
 int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
                                 int first_enq, ldlm_error_t *err,
-                                cfs_list_t *work_list)
+				struct list_head *work_list)
 {
-        struct ldlm_resource *res = lock->l_resource;
-        CFS_LIST_HEAD(rpc_list);
-        int rc;
-        ENTRY;
+	struct ldlm_resource *res = lock->l_resource;
+	struct list_head rpc_list;
+	int rc;
+	ENTRY;
 
 	LASSERT(lock->l_granted_mode != lock->l_req_mode);
-        LASSERT(cfs_list_empty(&res->lr_converting));
-        check_res_locked(res);
+	LASSERT(list_empty(&res->lr_converting));
+	INIT_LIST_HEAD(&rpc_list);
+	check_res_locked(res);
 
 	/* (*flags & LDLM_FL_BLOCK_NOWAIT) is for layout lock right now. */
         if (!first_enq || (*flags & LDLM_FL_BLOCK_NOWAIT)) {
@@ -222,7 +223,7 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
                  * bug 2322: we used to unlink and re-add here, which was a
                  * terrible folly -- if we goto restart, we could get
                  * re-ordered!  Causes deadlock, because ASTs aren't sent! */
-                if (cfs_list_empty(&lock->l_res_link))
+		if (list_empty(&lock->l_res_link))
                         ldlm_resource_add_lock(res, &res->lr_waiting, lock);
                 unlock_res(res);
                 rc = ldlm_run_ast_work(ldlm_res_to_ns(res), &rpc_list,

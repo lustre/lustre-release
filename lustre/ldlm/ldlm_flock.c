@@ -107,7 +107,7 @@ static inline void ldlm_flock_blocking_link(struct ldlm_lock *req,
         if (req->l_export == NULL)
 		return;
 
-	LASSERT(cfs_hlist_unhashed(&req->l_exp_flock_hash));
+	LASSERT(hlist_unhashed(&req->l_exp_flock_hash));
 
         req->l_policy_data.l_flock.blocking_owner =
                 lock->l_policy_data.l_flock.owner;
@@ -128,7 +128,7 @@ static inline void ldlm_flock_blocking_unlink(struct ldlm_lock *req)
 
 	check_res_locked(req->l_resource);
 	if (req->l_export->exp_flock_hash != NULL &&
-	    !cfs_hlist_unhashed(&req->l_exp_flock_hash))
+	    !hlist_unhashed(&req->l_exp_flock_hash))
 		cfs_hash_del(req->l_export->exp_flock_hash,
 			     &req->l_policy_data.l_flock.owner,
 			     &req->l_exp_flock_hash);
@@ -143,9 +143,9 @@ ldlm_flock_destroy(struct ldlm_lock *lock, ldlm_mode_t mode, __u64 flags)
 		   mode, flags);
 
 	/* Safe to not lock here, since it should be empty anyway */
-	LASSERT(cfs_hlist_unhashed(&lock->l_exp_flock_hash));
+	LASSERT(hlist_unhashed(&lock->l_exp_flock_hash));
 
-	cfs_list_del_init(&lock->l_res_link);
+	list_del_init(&lock->l_res_link);
 	if (flags == LDLM_FL_WAIT_NOREPROC) {
 		/* client side - set a flag to prevent sending a CANCEL */
 		lock->l_flags |= LDLM_FL_LOCAL_ONLY | LDLM_FL_CBPENDING;
@@ -176,7 +176,7 @@ struct ldlm_flock_lookup_cb_data {
 };
 
 static int ldlm_flock_lookup_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-				cfs_hlist_node_t *hnode, void *data)
+				struct hlist_node *hnode, void *data)
 {
 	struct ldlm_flock_lookup_cb_data *cb_data = data;
 	struct obd_export *exp = cfs_hash_object(hs, hnode);
@@ -253,7 +253,7 @@ ldlm_flock_deadlock(struct ldlm_lock *req, struct ldlm_lock *bl_lock)
 }
 
 static void ldlm_flock_cancel_on_deadlock(struct ldlm_lock *lock,
-                                                cfs_list_t *work_list)
+					  struct list_head *work_list)
 {
 	CDEBUG(D_INFO, "reprocess deadlock req=%p\n", lock);
 
@@ -292,12 +292,12 @@ static void ldlm_flock_cancel_on_deadlock(struct ldlm_lock *lock,
  */
 int
 ldlm_process_flock_lock(struct ldlm_lock *req, __u64 *flags, int first_enq,
-			ldlm_error_t *err, cfs_list_t *work_list)
+			ldlm_error_t *err, struct list_head *work_list)
 {
         struct ldlm_resource *res = req->l_resource;
         struct ldlm_namespace *ns = ldlm_res_to_ns(res);
-        cfs_list_t *tmp;
-        cfs_list_t *ownlocks = NULL;
+	struct list_head *tmp;
+	struct list_head *ownlocks = NULL;
         struct ldlm_lock *lock = NULL;
         struct ldlm_lock *new = req;
         struct ldlm_lock *new2 = NULL;
@@ -331,8 +331,8 @@ reprocess:
         if ((*flags == LDLM_FL_WAIT_NOREPROC) || (mode == LCK_NL)) {
                 /* This loop determines where this processes locks start
                  * in the resource lr_granted list. */
-                cfs_list_for_each(tmp, &res->lr_granted) {
-                        lock = cfs_list_entry(tmp, struct ldlm_lock,
+		list_for_each(tmp, &res->lr_granted) {
+			lock = list_entry(tmp, struct ldlm_lock,
                                               l_res_link);
                         if (ldlm_same_flock_owner(lock, req)) {
                                 ownlocks = tmp;
@@ -345,8 +345,8 @@ reprocess:
 
                 /* This loop determines if there are existing locks
                  * that conflict with the new lock request. */
-                cfs_list_for_each(tmp, &res->lr_granted) {
-                        lock = cfs_list_entry(tmp, struct ldlm_lock,
+		list_for_each(tmp, &res->lr_granted) {
+			lock = list_entry(tmp, struct ldlm_lock,
                                               l_res_link);
 
                         if (ldlm_same_flock_owner(lock, req)) {
@@ -428,7 +428,7 @@ reprocess:
                 ownlocks = &res->lr_granted;
 
         list_for_remaining_safe(ownlocks, tmp, &res->lr_granted) {
-                lock = cfs_list_entry(ownlocks, struct ldlm_lock, l_res_link);
+		lock = list_entry(ownlocks, struct ldlm_lock, l_res_link);
 
                 if (!ldlm_same_flock_owner(lock, new))
                         break;
@@ -548,7 +548,7 @@ reprocess:
                 if (lock->l_export != NULL) {
                         new2->l_export = class_export_lock_get(lock->l_export, new2);
                         if (new2->l_export->exp_lock_hash &&
-                            cfs_hlist_unhashed(&new2->l_exp_hash))
+			    hlist_unhashed(&new2->l_exp_hash))
                                 cfs_hash_add(new2->l_export->exp_lock_hash,
                                              &new2->l_remote_handle,
                                              &new2->l_exp_hash);
@@ -572,7 +572,7 @@ reprocess:
 
         /* Add req to the granted queue before calling ldlm_reprocess_all(). */
         if (!added) {
-                cfs_list_del_init(&req->l_res_link);
+		list_del_init(&req->l_res_link);
                 /* insert new lock before ownlocks in list. */
                 ldlm_resource_add_lock(res, ownlocks, req);
         }
@@ -589,9 +589,11 @@ reprocess:
                          * note that ldlm_process_flock_lock() will recurse,
                          * but only once because first_enq will be false from
                          * ldlm_reprocess_queue. */
-                        if ((mode == LCK_NL) && overlaps) {
-                                CFS_LIST_HEAD(rpc_list);
+			if ((mode == LCK_NL) && overlaps) {
+				struct list_head rpc_list;
                                 int rc;
+
+				INIT_LIST_HEAD(&rpc_list);
 restart:
                                 ldlm_reprocess_queue(res, &res->lr_waiting,
                                                      &rpc_list);
@@ -888,33 +890,33 @@ ldlm_export_flock_hash(cfs_hash_t *hs, const void *key, unsigned mask)
 }
 
 static void *
-ldlm_export_flock_key(cfs_hlist_node_t *hnode)
+ldlm_export_flock_key(struct hlist_node *hnode)
 {
 	struct ldlm_lock *lock;
 
-	lock = cfs_hlist_entry(hnode, struct ldlm_lock, l_exp_flock_hash);
+	lock = hlist_entry(hnode, struct ldlm_lock, l_exp_flock_hash);
 	return &lock->l_policy_data.l_flock.owner;
 }
 
 static int
-ldlm_export_flock_keycmp(const void *key, cfs_hlist_node_t *hnode)
+ldlm_export_flock_keycmp(const void *key, struct hlist_node *hnode)
 {
 	return !memcmp(ldlm_export_flock_key(hnode), key, sizeof(__u64));
 }
 
 static void *
-ldlm_export_flock_object(cfs_hlist_node_t *hnode)
+ldlm_export_flock_object(struct hlist_node *hnode)
 {
-	return cfs_hlist_entry(hnode, struct ldlm_lock, l_exp_flock_hash);
+	return hlist_entry(hnode, struct ldlm_lock, l_exp_flock_hash);
 }
 
 static void
-ldlm_export_flock_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+ldlm_export_flock_get(cfs_hash_t *hs, struct hlist_node *hnode)
 {
 	struct ldlm_lock *lock;
 	struct ldlm_flock *flock;
 
-	lock = cfs_hlist_entry(hnode, struct ldlm_lock, l_exp_flock_hash);
+	lock = hlist_entry(hnode, struct ldlm_lock, l_exp_flock_hash);
 	LDLM_LOCK_GET(lock);
 
 	flock = &lock->l_policy_data.l_flock;
@@ -924,12 +926,12 @@ ldlm_export_flock_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 }
 
 static void
-ldlm_export_flock_put(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+ldlm_export_flock_put(cfs_hash_t *hs, struct hlist_node *hnode)
 {
 	struct ldlm_lock *lock;
 	struct ldlm_flock *flock;
 
-	lock = cfs_hlist_entry(hnode, struct ldlm_lock, l_exp_flock_hash);
+	lock = hlist_entry(hnode, struct ldlm_lock, l_exp_flock_hash);
 	LDLM_LOCK_RELEASE(lock);
 
 	flock = &lock->l_policy_data.l_flock;
