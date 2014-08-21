@@ -48,6 +48,8 @@ TRACE=${TRACE:-""}
 
 check_and_setup_lustre
 
+OSC=${OSC:-"osc"}
+
 assert_DIR
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk $DIR/[df].${TESTSUITE}*
 
@@ -432,6 +434,8 @@ run_test 18 "mmap sanity check ================================="
 test_19() { # bug3811
 	local node=$(facet_active_host ost1)
 
+	[ "x$DOM" = "xyes" ] && node=$(facet_active_host $SINGLEMDS)
+
 	# check whether obdfilter is cache capable at all
 	if ! get_osd_param $node '' read_cache_enable >/dev/null; then
 		echo "not cache-capable obdfilter"
@@ -446,7 +450,7 @@ test_19() { # bug3811
 	cp $TMP/$tfile $DIR1/$tfile
 	for i in `seq 1 20`; do
 		[ $((i % 5)) -eq 0 ] && log "$testname loop $i"
-		cancel_lru_locks osc > /dev/null
+		cancel_lru_locks $OSC > /dev/null
 		cksum $DIR1/$tfile | cut -d" " -f 1,2 > $TMP/sum1 & \
 		cksum $DIR2/$tfile | cut -d" " -f 1,2 > $TMP/sum2
 		wait
@@ -462,12 +466,12 @@ run_test 19 "test concurrent uncached read races ==============="
 
 test_20() {
 	test_mkdir $DIR1/d20
-	cancel_lru_locks osc
+	cancel_lru_locks $OSC
 	CNT=$((`lctl get_param -n llite.*.dump_page_cache | wc -l`))
 	$MULTIOP $DIR1/f20 Ow8190c
 	$MULTIOP $DIR2/f20 Oz8194w8190c
 	$MULTIOP $DIR1/f20 Oz0r8190c
-	cancel_lru_locks osc
+	cancel_lru_locks $OSC
 	CNTD=$((`lctl get_param -n llite.*.dump_page_cache | wc -l` - $CNT))
 	[ $CNTD -gt 0 ] && \
 	    error $CNTD" page left in cache after lock cancel" || true
@@ -498,7 +502,7 @@ test_23() { # Bug 5972
 	echo "atime should be updated while another read" > $DIR1/$tfile
 
 	# clear the lock(mode: LCK_PW) gotten from creating operation
-	cancel_lru_locks osc
+	cancel_lru_locks $OSC
 	time1=$(date +%s)
 	echo "now is $time1"
 	sleep $((at_diff + 1))
@@ -530,9 +534,9 @@ test_24a() {
 
 	OSC=`lctl dl | awk '/-osc-|OSC.*MNT/ {print $4}' | head -n 1`
 #	OSC=`lctl dl | awk '/-osc-/ {print $4}' | head -n 1`
-	lctl --device %$OSC deactivate
+	lctl --device %osc deactivate
 	lfs df -i || error "lfs df -i with deactivated OSC failed"
-	lctl --device %$OSC activate
+	lctl --device %osc activate
 	lfs df || error "lfs df with reactivated OSC failed"
 }
 run_test 24a "lfs df [-ih] [path] test ========================="
@@ -622,7 +626,7 @@ test_26b() {
 run_test 26b "sync mtime between ost and mds"
 
 test_27() {
-	cancel_lru_locks osc
+	cancel_lru_locks $OSC
 	lctl clear
 	dd if=/dev/zero of=$DIR2/$tfile bs=$((4096+4))k conv=notrunc count=4 seek=3 &
 	DD2_PID=$!
@@ -741,38 +745,39 @@ run_test 31b "voluntary OST cancel / blocking ast race=============="
 
 # enable/disable lockless truncate feature, depending on the arg 0/1
 enable_lockless_truncate() {
-        lctl set_param -n osc.*.lockless_truncate $1
+	lctl set_param -n $OSC.*.lockless_truncate $1
 }
 
 test_32a() { # bug 11270
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
-	save_lustre_params client "osc.*.lockless_truncate" > $p
-	cancel_lru_locks osc
+
+	save_lustre_params client "$OSC.*.lockless_truncate" > $p
+	cancel_lru_locks $OSC
 	enable_lockless_truncate 1
 	rm -f $DIR1/$tfile
 	lfs setstripe -c -1 $DIR1/$tfile
 	dd if=/dev/zero of=$DIR1/$tfile count=$OSTCOUNT bs=$STRIPE_BYTES > \
 		/dev/null 2>&1
-	clear_stats osc.*.osc_stats
+	clear_stats $OSC.*.${OSC}_stats
 
 	log "checking cached lockless truncate"
 	$TRUNCATE $DIR1/$tfile 8000000
 	$CHECKSTAT -s 8000000 $DIR2/$tfile || error "wrong file size"
-	[ $(calc_stats osc.*.osc_stats lockless_truncate) -ne 0 ] ||
+	[ $(calc_stats $OSC.*.${OSC}_stats lockless_truncate) -ne 0 ] ||
 		error "cached truncate isn't lockless"
 
 	log "checking not cached lockless truncate"
 	$TRUNCATE $DIR2/$tfile 5000000
 	$CHECKSTAT -s 5000000 $DIR1/$tfile || error "wrong file size"
-	[ $(calc_stats osc.*.osc_stats lockless_truncate) -ne 0 ] ||
+	[ $(calc_stats $OSC.*.${OSC}_stats lockless_truncate) -ne 0 ] ||
 		error "not cached truncate isn't lockless"
 
 	log "disabled lockless truncate"
 	enable_lockless_truncate 0
-	clear_stats osc.*.osc_stats
+	clear_stats $OSC.*.${OSC}_stats
 	$TRUNCATE $DIR2/$tfile 3000000
 	$CHECKSTAT -s 3000000 $DIR1/$tfile || error "wrong file size"
-	[ $(calc_stats osc.*.osc_stats lockless_truncate) -eq 0 ] ||
+	[ $(calc_stats $OSC.*.${OSC}_stats lockless_truncate) -eq 0 ] ||
 		error "lockless truncate disabling failed"
 	rm $DIR1/$tfile
 	# restore lockless_truncate default values
@@ -795,21 +800,21 @@ test_32b() { # bug 11270
 		"ldlm.namespaces.filter-*.contended_locks" >> $p
 	save_lustre_params $facets \
 		"ldlm.namespaces.filter-*.contention_seconds" >> $p
-	clear_stats osc.*.osc_stats
+	clear_stats $OSC.*.${OSC}_stats
 
 	# agressive lockless i/o settings
 	do_nodes $(comma_list $(osts_nodes)) \
 		"lctl set_param -n ldlm.namespaces.*.max_nolock_bytes=2000000 \
 			ldlm.namespaces.filter-*.contended_locks=0 \
 			ldlm.namespaces.filter-*.contention_seconds=60"
-	lctl set_param -n osc.*.contention_seconds=60
+	lctl set_param -n $OSC.*.contention_seconds=60
 	for i in {1..5}; do
 		dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1 conv=notrunc > \
 			/dev/null 2>&1
 		dd if=/dev/zero of=$DIR2/$tfile bs=4k count=1 conv=notrunc > \
 			/dev/null 2>&1
 	done
-	[ $(calc_stats osc.*.osc_stats lockless_write_bytes) -ne 0 ] ||
+	[ $(calc_stats $OSC.*.${OSC}_stats lockless_write_bytes) -ne 0 ] ||
 		error "lockless i/o was not triggered"
 	# disable lockless i/o (it is disabled by default)
 	do_nodes $(comma_list $(osts_nodes)) \
@@ -818,15 +823,15 @@ test_32b() { # bug 11270
 			ldlm.namespaces.filter-*.contention_seconds=0"
 	# set contention_seconds to 0 at client too, otherwise Lustre still
 	# remembers lock contention
-	lctl set_param -n osc.*.contention_seconds=0
-	clear_stats osc.*.osc_stats
+	lctl set_param -n $OSC.*.contention_seconds=0
+	clear_stats $OSC.*.${OSC}_stats
 	for i in {1..1}; do
 		dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1 conv=notrunc > \
 			/dev/null 2>&1
 		dd if=/dev/zero of=$DIR2/$tfile bs=4k count=1 conv=notrunc > \
 			/dev/null 2>&1
 	done
-	[ $(calc_stats osc.*.osc_stats lockless_write_bytes) -eq 0 ] ||
+	[ $(calc_stats $OSC.*.${OSC}_stats lockless_write_bytes) -eq 0 ] ||
 		error "lockless i/o works when disabled"
 	rm -f $DIR1/$tfile
 	restore_lustre_params <$p
@@ -1380,7 +1385,7 @@ test_39d() { # LU-7310
 
 	$LCTL set_param fail_loc=0
 
-	cancel_lru_locks osc
+	cancel_lru_locks $OSC
 
 	local mtime2=$(stat -c %Y $DIR2/$tfile)
 	[ "$mtime2" -ge "$d1" ] && [ "$mtime2" -le "$d2" ] ||

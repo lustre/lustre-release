@@ -40,6 +40,7 @@ SRCDIR=$(cd $(dirname $0); echo $PWD)
 export PATH=$PATH:/sbin
 
 TMP=${TMP:-/tmp}
+OSC=${OSC:-"osc"}
 
 CC=${CC:-cc}
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
@@ -3587,7 +3588,7 @@ test_41() {
 run_test 41 "test small file write + fstat ====================="
 
 count_ost_writes() {
-	lctl get_param -n osc.*.stats |
+	lctl get_param -n ${OSC}.*.stats |
 		awk -vwrites=0 '/ost_write/ { writes += $2 } \
 			END { printf("%0.0f", writes) }'
 }
@@ -3647,7 +3648,7 @@ setup_test42() {
 test_42a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	setup_test42
-	cancel_lru_locks osc
+	cancel_lru_locks $OSC
 	stop_writeback
 	sync; sleep 1; sync # just to be safe
 	BEFOREWRITES=`count_ost_writes`
@@ -3663,7 +3664,7 @@ run_test 42a "ensure that we don't flush on close"
 test_42b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	setup_test42
-	cancel_lru_locks osc
+	cancel_lru_locks $OSC
 	stop_writeback
 	sync
 	dd if=/dev/zero of=$DIR/f42b bs=1024 count=100
@@ -3699,21 +3700,21 @@ run_test 42b "test destroy of file with cached dirty data ======"
 # start the file with a full-file pw lock to match against
 # until the truncate.
 trunc_test() {
-        test=$1
-        file=$DIR/$test
-        offset=$2
-	cancel_lru_locks osc
+	test=$1
+	file=$DIR/$test
+	offset=$2
+	cancel_lru_locks $OSC
 	stop_writeback
 	# prime the file with 0,EOF PW to match
 	touch $file
         $TRUNCATE $file 0
         sync; sync
 	# now the real test..
-        dd if=/dev/zero of=$file bs=1024 count=100
-        BEFOREWRITES=`count_ost_writes`
-        $TRUNCATE $file $offset
-        cancel_lru_locks osc
-        AFTERWRITES=`count_ost_writes`
+	dd if=/dev/zero of=$file bs=1024 count=100
+	BEFOREWRITES=`count_ost_writes`
+	$TRUNCATE $file $offset
+	cancel_lru_locks $OSC
+	AFTERWRITES=`count_ost_writes`
 	start_writeback
 }
 
@@ -3912,7 +3913,7 @@ run_test 44a "test sparse pwrite ==============================="
 
 dirty_osc_total() {
 	tot=0
-	for d in `lctl get_param -n osc.*.cur_dirty_bytes`; do
+	for d in `lctl get_param -n ${OSC}.*.cur_dirty_bytes`; do
 		tot=$(($tot + $d))
 	done
 	echo $tot
@@ -6784,7 +6785,7 @@ test_101e() {
 	done
 
 	echo "Cancel LRU locks on lustre client to flush the client cache"
-	cancel_lru_locks osc
+	cancel_lru_locks $OSC
 
 	echo "Reset readahead stats"
 	$LCTL set_param -n llite.*.read_ahead_stats 0
@@ -10078,31 +10079,31 @@ test_150() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	local TF="$TMP/$tfile"
 
-        dd if=/dev/urandom of=$TF bs=6096 count=1 || error "dd failed"
-        cp $TF $DIR/$tfile
-        cancel_lru_locks osc
-        cmp $TF $DIR/$tfile || error "$TMP/$tfile $DIR/$tfile differ"
-        remount_client $MOUNT
-        df -P $MOUNT
-        cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (remount)"
+	dd if=/dev/urandom of=$TF bs=6096 count=1 || error "dd failed"
+	cp $TF $DIR/$tfile
+	cancel_lru_locks $OSC
+	cmp $TF $DIR/$tfile || error "$TMP/$tfile $DIR/$tfile differ"
+	remount_client $MOUNT
+	df -P $MOUNT
+	cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (remount)"
 
-        $TRUNCATE $TF 6000
-        $TRUNCATE $DIR/$tfile 6000
-        cancel_lru_locks osc
-        cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (truncate1)"
+	$TRUNCATE $TF 6000
+	$TRUNCATE $DIR/$tfile 6000
+	cancel_lru_locks $OSC
+	cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (truncate1)"
 
-        echo "12345" >>$TF
-        echo "12345" >>$DIR/$tfile
-        cancel_lru_locks osc
-        cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (append1)"
+	echo "12345" >>$TF
+	echo "12345" >>$DIR/$tfile
+	cancel_lru_locks $OSC
+	cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (append1)"
 
-        echo "12345" >>$TF
-        echo "12345" >>$DIR/$tfile
-        cancel_lru_locks osc
-        cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (append2)"
+	echo "12345" >>$TF
+	echo "12345" >>$DIR/$tfile
+	cancel_lru_locks $OSC
+	cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (append2)"
 
-        rm -f $TF
-        true
+	rm -f $TF
+	true
 }
 run_test 150 "truncate/append tests"
 
@@ -10650,7 +10651,7 @@ test_155_small_load() {
     dd if=/dev/urandom of=$temp bs=6096 count=1 || \
         error "dd of=$temp bs=6096 count=1 failed"
     cp $temp $file
-    cancel_lru_locks osc
+    cancel_lru_locks $OSC
     cmp $temp $file || error "$temp $file differ"
 
     $TRUNCATE $temp 6000
@@ -14026,7 +14027,7 @@ run_test 240 "race between ldlm enqueue and the connection RPC (no ASSERT)"
 test_241_bio() {
 	for LOOP in $(seq $1); do
 		dd if=$DIR/$tfile of=/dev/null bs=40960 count=1 2>/dev/null
-		cancel_lru_locks osc || true
+		cancel_lru_locks $OSC || true
 	done
 }
 
@@ -14040,7 +14041,7 @@ test_241_dio() {
 test_241a() { # was test_241
 	dd if=/dev/zero of=$DIR/$tfile count=1 bs=40960
 	ls -la $DIR/$tfile
-	cancel_lru_locks osc
+	cancel_lru_locks $OSC
 	test_241_bio 1000 &
 	PID=$!
 	test_241_dio 1000
@@ -14995,6 +14996,283 @@ test_260() {
 
 }
 run_test 260 "Check mdc_close fail"
+
+### Data-on-MDT sanity tests ###
+test_270a() {
+	# create DoM file
+	local dom=$DIR/$tdir/dom_file
+	local tmp=$DIR/$tdir/tmp_file
+
+	mkdir -p $DIR/$tdir
+
+	# basic checks for DoM component creation
+	$SETSTRIPE -E 1024K -E 1024K -L mdt $dom 2>/dev/null &&
+		error "Can set MDT layout to non-first entry"
+
+	$SETSTRIPE -E 1024K -L mdt -E 1024K -L mdt $dom 2>/dev/null &&
+		error "Can define multiple entries as MDT layout"
+
+	$SETSTRIPE -E 1M -L mdt $dom ||
+		error "Can't create DoM layout"
+
+	[ $($GETSTRIPE -L $dom) == 100 ] || error "bad pattern"
+	[ $($GETSTRIPE -c $dom) == 0 ] || error "bad stripe count"
+	[ $($GETSTRIPE -S $dom) == 1048576 ] || error "bad stripe size"
+
+	local mdtidx=$($GETSTRIPE -M $dom)
+	local mdtname=MDT$(printf %04x $mdtidx)
+	local facet=mds$((mdtidx + 1))
+	local space_check=1
+
+	# Skip free space checks with ZFS
+	if [ "$(facet_fstype $facet)" == "zfs" ]; then
+		space_check=0
+	fi
+
+	# write
+	sync
+	local mdtfree1=$(do_facet $facet \
+		lctl get_param -n osd*.*$mdtname.kbytesfree)
+	dd if=/dev/urandom of=$tmp bs=1024 count=100
+	# check also direct IO along write
+	dd if=$tmp of=$dom bs=102400 count=1 oflag=direct
+	sync
+	cmp $tmp $dom || error "file data is different"
+	[ $(stat -c%s $dom) == 102400 ] || error "bad size after write"
+	if [ $space_check == 1 ]; then
+		local mdtfree2=$(do_facet $facet \
+				lctl get_param -n osd*.*$mdtname.kbytesfree)
+		[ $(($mdtfree1 - $mdtfree2)) -ge 102 ] ||
+			error "MDT free space is wrong after write"
+	fi
+
+	# truncate
+	$TRUNCATE $dom 10000
+	[ $(stat -c%s $dom) == 10000 ] || error "bad size after truncate"
+	if [ $space_check == 1 ]; then
+		mdtfree1=$(do_facet $facet \
+				lctl get_param -n osd*.*$mdtname.kbytesfree)
+		[ $(($mdtfree1 - $mdtfree2)) -ge 92 ] ||
+			error "MDT free space is wrong after truncate"
+	fi
+
+	# append
+	cat $tmp >> $dom
+	sync
+	[ $(stat -c%s $dom) == 112400 ] || error "bad size after append"
+	if [ $space_check == 1 ]; then
+		mdtfree2=$(do_facet $facet \
+				lctl get_param -n osd*.*$mdtname.kbytesfree)
+		[ $(($mdtfree1 - $mdtfree2)) -ge 102 ] ||
+			error "MDT free space is wrong after append"
+	fi
+
+	# delete
+	rm $dom
+	if [ $space_check == 1 ]; then
+		mdtfree1=$(do_facet $facet \
+				lctl get_param -n osd*.*$mdtname.kbytesfree)
+		[ $(($mdtfree1 - $mdtfree2)) -ge 112 ] ||
+			error "MDT free space is wrong after removal"
+	fi
+
+	# combined striping
+	$SETSTRIPE -E 1024K -L mdt -E EOF $dom ||
+		error "Can't create DoM + OST striping"
+
+	dd if=/dev/urandom of=$tmp bs=1024 count=2000
+	# check also direct IO along write
+	dd if=$tmp of=$dom bs=102400 count=20 oflag=direct
+	sync
+	cmp $tmp $dom || error "file data is different"
+	[ $(stat -c%s $dom) == 2048000 ] || error "bad size after write"
+	rm $dom
+	rm $tmp
+
+	return 0
+}
+run_test 270a "DoM: basic functionality tests"
+
+test_270b() {
+	local dom=$DIR/$tdir/dom_file
+	local max_size=1048576
+
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE -E $max_size -L mdt $dom
+
+	# truncate over the limit
+	$TRUNCATE $dom $(($max_size + 1)) &&
+		error "successful truncate over the maximum size"
+	# write over the limit
+	dd if=/dev/zero of=$dom bs=$max_size seek=1 count=1 &&
+		error "successful write over the maximum size"
+	# append over the limit
+	dd if=/dev/zero of=$dom bs=$(($max_size - 3)) count=1
+	echo "12345" >> $dom && error "successful append over the maximum size"
+	rm $dom
+
+	return 0
+}
+run_test 270b "DoM: maximum size overflow checks for DoM-only file"
+
+test_270c() {
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE -E 1024K -L mdt $DIR/$tdir
+
+	# check files inherit DoM EA
+	touch $DIR/$tdir/first
+	[ $($GETSTRIPE -L $DIR/$tdir/first) == 100 ] ||
+		error "bad pattern"
+	[ $($GETSTRIPE -c $DIR/$tdir/first) == 0 ] ||
+		error "bad stripe count"
+	[ $($GETSTRIPE -S $DIR/$tdir/first) == 1048576 ] ||
+		error "bad stripe size"
+
+	# check directory inherits DoM EA and uses it as default
+	mkdir $DIR/$tdir/subdir
+	touch $DIR/$tdir/subdir/second
+	[ $($GETSTRIPE -L $DIR/$tdir/subdir/second) == 100 ] ||
+		error "bad pattern in sub-directory"
+	[ $($GETSTRIPE -c $DIR/$tdir/subdir/second) == 0 ] ||
+		error "bad stripe count in sub-directory"
+	[ $($GETSTRIPE -S $DIR/$tdir/subdir/second) == 1048576 ] ||
+		error "bad stripe size in sub-directory"
+	return 0
+}
+run_test 270c "DoM: DoM EA inheritance tests"
+
+test_270d() {
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE -E 1024K -L mdt $DIR/$tdir
+
+	# inherit default DoM striping
+	mkdir $DIR/$tdir/subdir
+	touch $DIR/$tdir/subdir/f1
+
+	# change default directory striping
+	$SETSTRIPE -c 1 $DIR/$tdir/subdir
+	touch $DIR/$tdir/subdir/f2
+	[ $($GETSTRIPE -c $DIR/$tdir/subdir/f2) == 1 ] ||
+		error "wrong default striping in file 2"
+	[ $($GETSTRIPE -L $DIR/$tdir/subdir/f2) == 1 ] ||
+		error "bad pattern in file 2"
+	return 0
+}
+run_test 270d "DoM: change striping from DoM to RAID0"
+
+test_270e() {
+	mkdir -p $DIR/$tdir/dom
+	mkdir -p $DIR/$tdir/norm
+	DOMFILES=20
+	NORMFILES=10
+	$SETSTRIPE -E 1M -L mdt $DIR/$tdir/dom
+	$SETSTRIPE -i 0 -S 2M $DIR/$tdir/norm
+
+	createmany -o $DIR/$tdir/dom/dom- $DOMFILES
+	createmany -o $DIR/$tdir/norm/norm- $NORMFILES
+
+	# find DoM files by layout
+	NUM=$($LFIND -L mdt -type f $DIR/$tdir 2>/dev/null | wc -l)
+	[ $NUM -eq  $DOMFILES ] ||
+		error "lfs find -L: found $NUM, expected $DOMFILES"
+	echo "Test 1: lfs find 20 DOM files by layout: OK"
+
+	# there should be 1 dir with default DOM striping
+	NUM=$($LFIND -L mdt -type d $DIR/$tdir 2>/dev/null | wc -l)
+	[ $NUM -eq  1 ] ||
+		error "lfs find -L: found $NUM, expected 1 dir"
+	echo "Test 2: lfs find 1 DOM dir by layout: OK"
+
+	# find DoM files by stripe size
+	NUM=$($LFIND -S -1200K -type f $DIR/$tdir 2>/dev/null | wc -l)
+	[ $NUM -eq  $DOMFILES ] ||
+		error "lfs find -S: found $NUM, expected $DOMFILES"
+	echo "Test 4: lfs find 20 DOM files by stripe size: OK"
+
+	# find files by stripe offset except DoM files
+	NUM=$($LFIND -i 0 -type f $DIR/$tdir 2>/dev/null | wc -l)
+	[ $NUM -eq  $NORMFILES ] ||
+		error "lfs find -i: found $NUM, expected $NORMFILES"
+	echo "Test 5: lfs find no DOM files by stripe index: OK"
+	return 0
+}
+run_test 270e "DoM: lfs find with DoM files test"
+
+test_270f() {
+	local mdtname=${FSNAME}-MDT0000-mdtlov
+	local dom=$DIR/$tdir/dom_file
+	local dom_limit_saved=$(do_facet mds1 $LCTL get_param -n \
+						lod.$mdtname.dom_stripesize)
+	local dom_limit=131072
+
+	do_facet mds1 $LCTL set_param -n lod.$mdtname.dom_stripesize=$dom_limit
+	local dom_current=$(do_facet mds1 $LCTL get_param -n \
+						lod.$mdtname.dom_stripesize)
+	[ ${dom_limit} -eq ${dom_current} ] ||
+		error "Cannot change per-MDT DoM stripe limit to $dom_limit"
+
+	$LFS mkdir -i 0 -c 1 $DIR/$tdir
+	$SETSTRIPE -d $DIR/$tdir
+	$SETSTRIPE -E $dom_limit -L mdt $DIR/$tdir ||
+		error "Can't set directory default striping"
+
+	# exceed maximum stripe size
+	$SETSTRIPE -E $(($dom_limit * 2)) -L mdt $dom &&
+		error "Able to create DoM component size more than LOD limit"
+
+	do_facet mds1 $LCTL set_param -n lod.$mdtname.dom_stripesize=0
+	dom_current=$(do_facet mds1 $LCTL get_param -n \
+						lod.$mdtname.dom_stripesize)
+	[ 0 -eq ${dom_current} ] ||
+		error "Can't set zero DoM stripe limit"
+
+	# too low values to be aligned with smallest stripe size 64K
+	do_facet mds1 $LCTL set_param -n lod.$mdtname.dom_stripesize=30000
+	dom_current=$(do_facet mds1 $LCTL get_param -n \
+						lod.$mdtname.dom_stripesize)
+	[ 30000 -eq ${dom_current} ] &&
+		error "Can set too small DoM stripe limit"
+
+	do_facet mds1 $LCTL set_param -n lod.$mdtname.dom_stripesize=2147483648
+	dom_current=$(do_facet mds1 $LCTL get_param -n \
+						lod.$mdtname.dom_stripesize)
+	echo $dom_current
+	[ 2147483648 -eq ${dom_current} ] &&
+		error "Can set too large DoM stripe limit"
+
+	do_facet mds1 $LCTL set_param -n \
+				lod.$mdtname.dom_stripesize=$((dom_limit * 2))
+	$SETSTRIPE -E $((dom_limit * 2)) -L mdt $dom ||
+		error "Can't create DoM component size after limit change"
+	do_facet mds1 $LCTL set_param -n \
+				lod.$mdtname.dom_stripesize=$((dom_limit / 2))
+	$SETSTRIPE -E $dom_limit -L mdt ${dom}_big &&
+		error "Can create big DoM component after limit decrease"
+	touch ${dom}_def ||
+		error "Can't create file with old default layout"
+
+	do_facet mds1 $LCTL set_param -n lod.*.dom_stripesize=$dom_limit_saved
+	return 0
+}
+run_test 270f "DoM: maximum DoM stripe size checks"
+
+test_271a() {
+	local dom=$DIR/$tdir/dom
+
+	mkdir -p $DIR/$tdir
+
+	$SETSTRIPE -E 1024K -L mdt $dom
+
+	lctl set_param -n mdc.*.stats=clear
+	dd if=/dev/zero of=$dom bs=4096 count=1 || return 1
+	cat $dom > /dev/null
+	local reads=$(lctl get_param -n mdc.*.stats | \
+		awk '/ost_read/ {print $2}')
+	[ -z $reads ] || error "Unexpected $reads READ RPCs"
+	ls $dom
+	rm -f $dom
+}
+run_test 271a "DoM: data is cached for read after write"
 
 cleanup_test_300() {
 	trap 0

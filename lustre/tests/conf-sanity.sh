@@ -1687,6 +1687,7 @@ t32_test() {
 	local tarball=$1
 	local writeconf=$2
 	local dne_upgrade=${dne_upgrade:-"no"}
+	local dom_upgrade=${dom_upgrade:-"no"}
 	local ff_convert=${ff_convert:-"no"}
 	local shall_cleanup_mdt=false
 	local shall_cleanup_mdt1=false
@@ -2023,11 +2024,6 @@ t32_test() {
 		shall_cleanup_lustre=true
 		$r $LCTL set_param debug="$PTLDEBUG"
 
-		t32_verify_quota $node $fsname $tmp/mnt/lustre || {
-			error_noexit "verify quota failed"
-			return 1
-		}
-
 		if $r test -f $tmp/list; then
 			#
 			# There is not a Test Framework API to copy files to or
@@ -2077,6 +2073,43 @@ t32_test() {
 			fi
 		else
 			echo "list verification skipped"
+		fi
+
+		if [ "$dom_upgrade" != "no" ]; then
+			echo "Check DoM file can be created"
+			$SETSTRIPE -E 1M -L mdt -E EOF $tmp/mnt/lustre/dom || {
+				error_noexit "Verify DoM creation"
+				return 1
+			}
+			[ $($GETSTRIPE -L $tmp/mnt/lustre/dom) == 100 ] || {
+				error_noexit "Verify a DoM file"
+				return 1
+			}
+			dd if=/dev/urandom of=$tmp/mnt/lustre/dom bs=4096 \
+				count=1 conv=fsync || {
+				error_noexit "Cannot write to DoM file"
+				return 1
+			}
+			[ $(stat -c%s $tmp/mnt/lustre/dom) == 4096 ] || {
+				error_noexit "DoM: bad size after write"
+				return 1
+			}
+			rm $tmp/mnt/lustre/dom
+
+			$r $LCTL get_param -n lod.*MDT0000*.dom_stripesize || {
+				error_noexit "Getting \"dom_stripesize\""
+				return 1
+			}
+			$r $LCTL conf_param \
+				$fsname-MDT0000.lod.dom_stripesize=0 || {
+				error_noexit "Changing \"dom_stripesize\""
+				return 1
+			}
+			wait_update $(facet_host mds) "$LCTL get_param \
+				-n lod.*MDT0000*.dom_stripesize" 0 || {
+				error_noexit "Verifying \"dom_stripesize\""
+				return 1
+			}
 		fi
 
 		if [ "$dne_upgrade" != "no" ]; then
@@ -2382,6 +2415,21 @@ test_32d() {
 	return $rc
 }
 run_test 32d "convert ff test"
+
+test_32e() {
+	local tarballs
+	local tarball
+	local rc=0
+
+	t32_check
+	for tarball in $tarballs; do
+		echo $tarball | grep "2_9" || continue
+		#load_modules
+		dom_upgrade=yes t32_test $tarball writeconf || let "rc += $?"
+	done
+	return $rc
+}
+run_test 32e "dom upgrade test"
 
 test_33a() { # bug 12333, was test_33
 	local FSNAME2=test-123
