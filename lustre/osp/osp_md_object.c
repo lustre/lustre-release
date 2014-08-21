@@ -1203,7 +1203,10 @@ static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
 
 	memcpy(rbuf->lb_buf, orr->orr_data, orr->orr_size);
 
-	GOTO(out, rc = orr->orr_size);
+	CDEBUG(D_INFO, "%s: read "DFID" pos "LPU64" len %u\n",
+	       osp->opd_obd->obd_name, PFID(lu_object_fid(&dt->do_lu)),
+	       *pos, orr->orr_size);
+	GOTO(out, rc = (int)orr->orr_size);
 out:
 	if (req != NULL)
 		ptlrpc_req_finished(req);

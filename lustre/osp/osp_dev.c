@@ -791,6 +791,7 @@ const struct dt_device_operations osp_dt_ops = {
 	.dt_trans_create = osp_trans_create,
 	.dt_trans_start  = osp_trans_start,
 	.dt_trans_stop   = osp_trans_stop,
+	.dt_trans_cb_add   = osp_trans_cb_add,
 };
 
 /**

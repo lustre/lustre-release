@@ -43,9 +43,31 @@
 #include <lustre_disk.h>
 #include <lustre_lfsck.h>
 
+struct target_distribute_txn_data {
+	/* Distribution ID is used to identify updates log on different
+	 * MDTs for one operation */
+	spinlock_t		tdtd_batchid_lock;
+	__u64			tdtd_batchid;
+	struct lu_target	*tdtd_lut;
+	struct dt_object	*tdtd_batchid_obj;
+
+	/* Committed batchid for distribute transaction */
+	__u64                   tdtd_committed_batchid;
+
+	/* List for distribute transaction */
+	struct list_head	tdtd_list;
+
+	/* Threads to manage distribute transaction */
+	wait_queue_head_t	tdtd_commit_thread_waitq;
+	atomic_t		tdtd_refcount;
+};
+
 struct lu_target {
 	struct obd_device	*lut_obd;
 	struct dt_device	*lut_bottom;
+
+	struct target_distribute_txn_data *lut_tdtd;
+	struct ptlrpc_thread	lut_tdtd_commit_thread;
 
 	/* supported opcodes and handlers for this target */
 	struct tgt_opc_slice	*lut_slice;
@@ -332,6 +354,15 @@ int tgt_server_data_update(const struct lu_env *env, struct lu_target *tg,
 			   int sync);
 int tgt_truncate_last_rcvd(const struct lu_env *env, struct lu_target *tg,
 			   loff_t off);
+
+/* target/update_trans.c */
+int distribute_txn_init(const struct lu_env *env,
+			struct lu_target *lut,
+			struct target_distribute_txn_data *tdtd,
+			__u32 index);
+void distribute_txn_fini(const struct lu_env *env,
+			 struct target_distribute_txn_data *tdtd);
+
 
 enum {
 	ESERIOUS = 0x0001000

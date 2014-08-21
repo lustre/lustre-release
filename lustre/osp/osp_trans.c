@@ -522,6 +522,17 @@ int osp_trans_update_request_create(struct thandle *th)
 	return 0;
 }
 
+static void osp_thandle_get(struct osp_thandle *oth)
+{
+	atomic_inc(&oth->ot_refcount);
+}
+
+static void osp_thandle_put(struct osp_thandle *oth)
+{
+	if (atomic_dec_and_test(&oth->ot_refcount))
+		OBD_FREE_PTR(oth);
+}
+
 /**
  * The OSP layer dt_device_operations::dt_trans_create() interface
  * to create a transaction.
@@ -563,6 +574,9 @@ struct thandle *osp_trans_create(const struct lu_env *env, struct dt_device *d)
 	th->th_dev = d;
 	th->th_tags = LCT_TX_HANDLE;
 
+	atomic_set(&oth->ot_refcount, 1);
+	INIT_LIST_HEAD(&oth->ot_dcb_list);
+
 	RETURN(th);
 }
 
@@ -572,22 +586,22 @@ struct thandle *osp_trans_create(const struct lu_env *env, struct dt_device *d)
  * Prepare OUT update ptlrpc request, and the request usually includes
  * all of updates (stored in \param ureq) from one operation.
  *
- * \param[in] env	execution environment
- * \param[in] imp	import on which ptlrpc request will be sent
- * \param[in] ureq	hold all of updates which will be packed into the req
- * \param[in] reqp	request to be created
+ * \param[in] env      execution environment
+ * \param[in] imp      import on which ptlrpc request will be sent
+ * \param[in] ureq     hold all of updates which will be packed into the req
+ * \param[in] reqp     request to be created
  *
- * \retval		0 if preparation succeeds.
- * \retval		negative errno if preparation fails.
+ * \retval             0 if preparation succeeds.
+ * \retval             negative errno if preparation fails.
  */
 int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
 			const struct object_update_request *ureq,
 			struct ptlrpc_request **reqp)
 {
-	struct ptlrpc_request		*req;
-	struct object_update_request	*tmp;
-	int				ureq_len;
-	int				rc;
+	struct ptlrpc_request           *req;
+	struct object_update_request    *tmp;
+	int                             ureq_len;
+	int                             rc;
 	ENTRY;
 
 	object_update_request_dump(ureq, D_INFO);
@@ -606,7 +620,7 @@ int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
 	}
 
 	req_capsule_set_size(&req->rq_pill, &RMF_OUT_UPDATE_REPLY,
-			     RCL_SERVER, OUT_UPDATE_REPLY_SIZE);
+			    RCL_SERVER, OUT_UPDATE_REPLY_SIZE);
 
 	tmp = req_capsule_client_get(&req->rq_pill, &RMF_OUT_UPDATE);
 	memcpy(tmp, ureq, ureq_len);
@@ -620,18 +634,18 @@ int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
 }
 
 /**
- * Send update RPC.
- *
- * Send update request to the remote MDT synchronously.
- *
- * \param[in] env	execution environment
- * \param[in] imp	import on which ptlrpc request will be sent
- * \param[in] dt_update	hold all of updates which will be packed into the req
- * \param[in] reqp	request to be created
- *
- * \retval		0 if RPC succeeds.
- * \retval		negative errno if RPC fails.
- */
+* Send update RPC.
+*
+* Send update request to the remote MDT synchronously.
+*
+* \param[in] env	execution environment
+* \param[in] imp	import on which ptlrpc request will be sent
+* \param[in] dt_update	hold all of updates which will be packed into the req
+* \param[in] reqp	request to be created
+*
+* \retval		0 if RPC succeeds.
+* \retval		negative errno if RPC fails.
+*/
 int osp_remote_sync(const struct lu_env *env, struct osp_device *osp,
 		    struct dt_update_request *dt_update,
 		    struct ptlrpc_request **reqp)
@@ -672,6 +686,76 @@ int osp_remote_sync(const struct lu_env *env, struct osp_device *osp,
 }
 
 /**
+ * Add commit callback to transaction.
+ *
+ * Add commit callback to the osp thandle, which will be called
+ * when the thandle is committed remotely.
+ *
+ * \param[in] th	the thandle
+ * \param[in] dcb	commit callback structure
+ *
+ * \retval		only return 0 for now.
+ */
+int osp_trans_cb_add(struct thandle *th, struct dt_txn_commit_cb *dcb)
+{
+	struct osp_thandle *oth = thandle_to_osp_thandle(th);
+
+	LASSERT(dcb->dcb_magic == TRANS_COMMIT_CB_MAGIC);
+	LASSERT(&dcb->dcb_func != NULL);
+	list_add(&dcb->dcb_linkage, &oth->ot_dcb_list);
+
+	return 0;
+}
+
+static void osp_trans_commit_cb(struct osp_thandle *oth, int result)
+{
+	struct dt_txn_commit_cb *dcb;
+	struct dt_txn_commit_cb *tmp;
+
+	LASSERT(atomic_read(&oth->ot_refcount) > 0);
+	/* call per-transaction callbacks if any */
+	list_for_each_entry_safe(dcb, tmp, &oth->ot_dcb_list,
+				 dcb_linkage) {
+		LASSERTF(dcb->dcb_magic == TRANS_COMMIT_CB_MAGIC,
+			 "commit callback entry: magic=%x name='%s'\n",
+			 dcb->dcb_magic, dcb->dcb_name);
+		list_del_init(&dcb->dcb_linkage);
+		dcb->dcb_func(NULL, &oth->ot_super, dcb, result);
+	}
+}
+
+static void osp_request_commit_cb(struct ptlrpc_request *req)
+{
+	struct thandle *th = req->rq_cb_data;
+	struct osp_thandle *oth = thandle_to_osp_thandle(th);
+	__u64			last_committed_transno = 0;
+	int			result = req->rq_status;
+	ENTRY;
+
+	if (lustre_msg_get_last_committed(req->rq_repmsg))
+		last_committed_transno =
+			lustre_msg_get_last_committed(req->rq_repmsg);
+
+	if (last_committed_transno <
+		req->rq_import->imp_peer_committed_transno)
+		last_committed_transno =
+			req->rq_import->imp_peer_committed_transno;
+
+	CDEBUG(D_HA, "trans no "LPU64" committed transno "LPU64"\n",
+	       req->rq_transno, last_committed_transno);
+
+	/* If the transaction is not really committed, mark result = 1 */
+	if (req->rq_transno != 0 &&
+	    (req->rq_transno > last_committed_transno) && result == 0)
+		result = 1;
+
+	osp_trans_commit_cb(oth, result);
+	req->rq_committed = 1;
+	osp_thandle_put(oth);
+	EXIT;
+}
+
+/**
  * Trigger the request for remote updates.
  *
  * If th_sync is set, then the request will be sent synchronously,
@@ -706,7 +790,8 @@ static int osp_trans_trigger(const struct lu_env *env, struct osp_device *osp,
 	req->rq_interpret_reply = osp_update_interpret;
 	args = ptlrpc_req_async_args(req);
 	args->oaua_update = dt_update;
-	if (is_only_remote_trans(th) && !th->th_sync) {
+
+	if (!th->th_wait_submit && is_only_remote_trans(th) && !th->th_sync) {
 		args->oaua_flow_control = true;
 
 		if (!osp->opd_connect_mdt) {
@@ -719,10 +804,30 @@ static int osp_trans_trigger(const struct lu_env *env, struct osp_device *osp,
 
 		ptlrpcd_add_req(req, PDL_POLICY_LOCAL, -1);
 	} else {
-		osp_get_rpc_lock(osp);
+		struct osp_thandle *oth = thandle_to_osp_thandle(th);
+		struct lu_device *top_device;
+
+		/* If the transaction is created during MDT recoverying
+		 * process, it means this is an recovery update, we need
+		 * to let OSP send it anyway without checking recoverying
+		 * status, in case the other target is being recoveried
+		 * at the same time, and if we wait here for the import
+		 * to be recoveryed, it might cause deadlock */
+		top_device = osp->opd_dt_dev.dd_lu_dev.ld_site->ls_top_dev;
+		if (top_device->ld_obd->obd_recovering)
+			req->rq_allow_replay = 1;
+
 		args->oaua_flow_control = false;
+		req->rq_commit_cb = osp_request_commit_cb;
+		req->rq_cb_data = th;
+		osp_thandle_get(oth); /* for commit callback */
+		osp_get_rpc_lock(osp);
 		rc = ptlrpc_queue_wait(req);
 		osp_put_rpc_lock(osp);
+		if (req->rq_transno == 0 && !req->rq_committed)
+			osp_thandle_put(oth);
+		else
+			oth->ot_dur = NULL;
 		ptlrpc_req_finished(req);
 	}
 
@@ -842,17 +947,17 @@ int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	}
 
 	dt_update = oth->ot_dur;
-	if (dt_update == NULL)
+	if (dt_update == NULL || th->th_result != 0) {
+		rc = th->th_result;
 		GOTO(out, rc);
+	}
 
 	LASSERT(dt_update != LP_POISON);
 
 	/* If there are no updates, destroy dt_update and thandle */
 	if (dt_update->dur_buf.ub_req == NULL ||
-	    dt_update->dur_buf.ub_req->ourq_count == 0) {
-		dt_update_request_destroy(dt_update);
+	    dt_update->dur_buf.ub_req->ourq_count == 0)
 		GOTO(out, rc);
-	}
 
 	if (is_only_remote_trans(th) && !th->th_sync) {
 		struct osp_device *osp = dt2osp_dev(th->th_dev);
@@ -879,24 +984,29 @@ int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 out:
 	/* If RPC is triggered successfully, dt_update will be freed in
 	 * osp_update_interpreter() */
-	if (rc != 0 && dt_update != NULL && sent == 0) {
+	if (sent == 0) {
 		struct osp_update_callback *ouc;
 		struct osp_update_callback *next;
 
-		list_for_each_entry_safe(ouc, next, &dt_update->dur_cb_items,
-				 ouc_list) {
-			list_del_init(&ouc->ouc_list);
-			if (ouc->ouc_interpreter != NULL)
-				ouc->ouc_interpreter(env, NULL, NULL,
-						     ouc->ouc_obj,
-						     ouc->ouc_data, 0, rc);
-			osp_update_callback_fini(env, ouc);
+		if (dt_update != NULL) {
+			list_for_each_entry_safe(ouc, next,
+						 &dt_update->dur_cb_items,
+						 ouc_list) {
+				list_del_init(&ouc->ouc_list);
+				if (ouc->ouc_interpreter != NULL)
+					ouc->ouc_interpreter(env, NULL, NULL,
+							   ouc->ouc_obj,
+							   ouc->ouc_data, 0,
+							   rc);
+				osp_update_callback_fini(env, ouc);
+			}
 		}
-
+		osp_trans_commit_cb(oth, rc);
 		dt_update_request_destroy(dt_update);
+		oth->ot_dur = NULL;
 	}
 
-	OBD_FREE_PTR(oth);
+	osp_thandle_put(oth);
 
 	RETURN(rc);
 }

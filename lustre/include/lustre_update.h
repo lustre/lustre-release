@@ -333,35 +333,49 @@ struct thandle_update_records {
 };
 
 #define TOP_THANDLE_MAGIC	0x20140917
+struct top_multiple_thandle {
+	struct dt_device	*tmt_master_sub_dt;
+	atomic_t		tmt_refcount;
+	/* Other sub transactions will be listed here. */
+	struct list_head	tmt_sub_thandle_list;
+
+	struct list_head	tmt_commit_list;
+	/* All of update records will packed here */
+	struct thandle_update_records *tmt_update_records;
+
+	__u64			tmt_batchid;
+	int			tmt_result;
+	__u32			tmt_magic;
+	__u32			tmt_committed:1;
+};
+
 /* {top,sub}_thandle are used to manage distributed transactions which
  * include updates on several nodes. A top_handle represents the
  * whole operation, and sub_thandle represents updates on each node. */
 struct top_thandle {
 	struct thandle		tt_super;
-	__u32			tt_magic;
-	atomic_t		tt_refcount;
 	/* The master sub transaction. */
 	struct thandle		*tt_master_sub_thandle;
 
-	/* Other sub thandle will be listed here. */
-	struct list_head	tt_sub_thandle_list;
-
-	/* All of update records will packed here */
-	struct thandle_update_records *tt_update_records;
+	struct top_multiple_thandle *tt_multiple_thandle;
 };
 
+/* Sub thandle is used to track multiple sub thandles under one parent
+ * thandle */
 struct sub_thandle {
-	/* point to the osd/osp_thandle */
 	struct thandle		*st_sub_th;
+	struct dt_device	*st_dt;
+	struct list_head	st_list;
+	struct llog_cookie	st_cookie;
+	struct dt_txn_commit_cb	st_commit_dcb;
+	int			st_result;
 
 	/* linked to top_thandle */
 	struct list_head	st_sub_list;
 
 	/* If this sub thandle is committed */
-	bool			st_committed:1,
-				st_record_update:1;
+	bool			st_committed:1;
 };
-
 
 /* target/out_lib.c */
 int out_update_pack(const struct lu_env *env, struct object_update *update,
@@ -433,14 +447,25 @@ thandle_get_sub(const struct lu_env *env, struct thandle *th,
 
 struct thandle *
 top_trans_create(const struct lu_env *env, struct dt_device *master_dev);
-
 int top_trans_start(const struct lu_env *env, struct dt_device *master_dev,
 		    struct thandle *th);
-
 int top_trans_stop(const struct lu_env *env, struct dt_device *master_dev,
 		   struct thandle *th);
+void top_multiple_thandle_destroy(struct top_multiple_thandle *tmt);
 
-void top_thandle_destroy(struct top_thandle *top_th);
+static inline void top_multiple_thandle_get(struct top_multiple_thandle *tmt)
+{
+	atomic_inc(&tmt->tmt_refcount);
+}
+
+static inline void top_multiple_thandle_put(struct top_multiple_thandle *tmt)
+{
+	if (atomic_dec_and_test(&tmt->tmt_refcount))
+		top_multiple_thandle_destroy(tmt);
+}
+
+struct sub_thandle *lookup_sub_thandle(struct top_multiple_thandle *tmt,
+				       struct dt_device *dt_dev);
 
 /* update_records.c */
 int update_records_create_pack(const struct lu_env *env,
@@ -549,16 +574,13 @@ int tur_update_records_extend(struct thandle_update_records *tur,
 			      size_t new_size);
 int tur_update_params_extend(struct thandle_update_records *tur,
 			     size_t new_size);
-int check_and_prepare_update_record(const struct lu_env *env,
-				    struct thandle *th);
-int merge_params_updates_buf(const struct lu_env *env,
-			     struct thandle_update_records *tur);
 int tur_update_extend(struct thandle_update_records *tur,
 		      size_t new_op_size, size_t new_param_size);
 
 #define update_record_pack(name, th, ...)				\
 ({									\
 	struct top_thandle *top_th;					\
+	struct top_multiple_thandle *tmt;				\
 	struct thandle_update_records *tur;				\
 	struct llog_update_record     *lur;				\
 	size_t		avail_param_size;				\
@@ -567,7 +589,8 @@ int tur_update_extend(struct thandle_update_records *tur,
 									\
 	while (1) {							\
 		top_th = container_of(th, struct top_thandle, tt_super);\
-		tur = top_th->tt_update_records;			\
+		tmt = top_th->tt_multiple_thandle;			\
+		tur = tmt->tmt_update_records;				\
 		lur = tur->tur_update_records;				\
 		avail_param_size = tur->tur_update_params_buf_size -	\
 			     update_params_size(tur->tur_update_params,	\

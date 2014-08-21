@@ -3505,20 +3505,26 @@ static int mdt_register_lwp_callback(void *data)
 
 	LASSERT(mdt_seq_site(mdt)->ss_node_id != 0);
 
-	if (!likely(fld->lsf_new))
-		RETURN(0);
-
 	rc = lu_env_init(&env, LCT_MD_THREAD);
-	if (rc) {
+	if (rc < 0) {
 		CERROR("%s: cannot init env: rc = %d\n", mdt_obd_name(mdt), rc);
 		RETURN(rc);
 	}
 
-	rc = fld_update_from_controller(&env, fld);
-	if (rc != 0) {
-		CERROR("%s: cannot update controller: rc = %d\n",
-		       mdt_obd_name(mdt), rc);
+	/* Allocate new sequence now to avoid creating local transaction
+	 * in the normal transaction process */
+	rc = seq_server_check_and_alloc_super(&env,
+					      mdt_seq_site(mdt)->ss_server_seq);
+	if (rc < 0)
 		GOTO(out, rc);
+
+	if (fld->lsf_new) {
+		rc = fld_update_from_controller(&env, fld);
+		if (rc != 0) {
+			CERROR("%s: cannot update controller: rc = %d\n",
+			       mdt_obd_name(mdt), rc);
+			GOTO(out, rc);
+		}
 	}
 out:
 	lu_env_fini(&env);

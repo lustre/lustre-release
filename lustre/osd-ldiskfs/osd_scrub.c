@@ -1654,6 +1654,10 @@ static const struct osd_lf_map osd_lf_maps[] = {
 	{ "LAST_GROUP", { FID_SEQ_LOCAL_FILE, OFD_LAST_GROUP_OID, 0 },
 		OLF_SHOW_NAME, sizeof("LAST_GROUP") - 1, NULL, NULL },
 
+	/* committed batchid for cross-MDT operation */
+	{ "BATCHID", { FID_SEQ_LOCAL_FILE, BATCHID_COMMITTED_OID, 0 },
+		OLF_SHOW_NAME, sizeof("BATCHID") - 1, NULL, NULL },
+
 	/* lost+found */
 	{ "lost+found", { FID_SEQ_LOCAL_FILE, OSD_LPF_OID, 0 },
 		OLF_SCAN_SUBITEMS, sizeof("lost+found") - 1,

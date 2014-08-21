@@ -1552,6 +1552,7 @@ static int osp_object_destroy(const struct lu_env *env, struct dt_object *dt,
 	int			 rc = 0;
 
 	ENTRY;
+
 	o->opo_non_exist = 1;
 
 	LASSERT(!osp->opd_connect_mdt);

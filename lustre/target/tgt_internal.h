@@ -225,6 +225,8 @@ int tgt_txn_stop_cb(const struct lu_env *env, struct thandle *th,
 
 void update_records_dump(const struct update_records *records,
 			 unsigned int mask, bool dump_updates);
+int check_and_prepare_update_record(const struct lu_env *env,
+				    struct thandle_update_records *tur);
 
 struct update_thread_info {
 	struct lu_attr			uti_attr;

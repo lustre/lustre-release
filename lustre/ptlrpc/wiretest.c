@@ -532,6 +532,8 @@ void lustre_assert_wire_constants(void)
 			(long long)FID_SEQ_LAYOUT_RBTREE);
 	LASSERTF(FID_SEQ_UPDATE_LOG == 0x0000000200000009ULL, "found 0x%.16llxULL\n",
 			(long long)FID_SEQ_UPDATE_LOG);
+	LASSERTF(FID_SEQ_UPDATE_LOG_DIR == 0x000000020000000aULL, "found 0x%.16llxULL\n",
+			(long long)FID_SEQ_UPDATE_LOG_DIR);
 	LASSERTF(FID_SEQ_NORMAL == 0x0000000200000400ULL, "found 0x%.16llxULL\n",
 			(long long)FID_SEQ_NORMAL);
 	LASSERTF(FID_SEQ_LOV_DEFAULT == 0xffffffffffffffffULL, "found 0x%.16llxULL\n",

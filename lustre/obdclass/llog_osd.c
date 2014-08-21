@@ -1377,12 +1377,15 @@ static int llog_osd_close(const struct lu_env *env, struct llog_handle *handle)
 
 	LASSERT(handle->lgh_obj);
 
-	lu_object_put(env, &handle->lgh_obj->do_lu);
-
-	if (handle->lgh_ctxt->loc_flags &
-	    LLOG_CTXT_FLAG_NORMAL_FID)
+	if (handle->lgh_ctxt->loc_flags & LLOG_CTXT_FLAG_NORMAL_FID) {
+		/* Remove the object from the cache, otherwise it may
+		 * hold LOD being released during cleanup process */
+		lu_object_put_nocache(env, &handle->lgh_obj->do_lu);
+		LASSERT(handle->private_data == NULL);
 		RETURN(rc);
-
+	} else {
+		lu_object_put(env, &handle->lgh_obj->do_lu);
+	}
 	los = handle->private_data;
 	LASSERT(los);
 	dt_los_put(los);
@@ -1510,6 +1513,8 @@ static int llog_osd_destroy(const struct lu_env *env,
 	rc = dt_trans_start_local(env, d, th);
 	if (rc)
 		GOTO(out_trans, rc);
+
+	th->th_wait_submit = 1;
 
 	dt_write_lock(env, o, 0);
 	if (dt_object_exists(o)) {
@@ -1722,6 +1727,12 @@ int llog_osd_get_cat_list(const struct lu_env *env, struct dt_device *d,
 		lgi->lgi_attr.la_mode = S_IFREG | S_IRUGO | S_IWUSR;
 		lgi->lgi_dof.dof_type = dt_mode_to_dft(S_IFREG);
 
+		th->th_wait_submit = 1;
+		/* Make the llog object creation synchronization, so
+		 * it will be reliable to the reference, especially
+		 * for remote reference */
+		th->th_sync = 1;
+
 		rc = dt_declare_create(env, o, &lgi->lgi_attr, NULL,
 				       &lgi->lgi_dof, th);
 		if (rc)
@@ -1853,6 +1864,8 @@ int llog_osd_put_cat_list(const struct lu_env *env, struct dt_device *d,
 	rc = dt_trans_start_local(env, d, th);
 	if (rc)
 		GOTO(out_trans, rc);
+
+	th->th_wait_submit = 1;
 
 	rc = dt_record_write(env, o, &lgi->lgi_buf, &lgi->lgi_off, th);
 	if (rc)

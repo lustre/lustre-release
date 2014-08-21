@@ -239,6 +239,7 @@ enum local_oid {
 	/* This definition is obsolete
 	 * SLAVE_LLOG_CATALOGS_OID	= 4124UL,
 	 */
+	BATCHID_COMMITTED_OID   = 4125UL,
 };
 
 static inline void lu_local_obj_fid(struct lu_fid *fid, __u32 oid)
@@ -501,6 +502,8 @@ int seq_server_set_cli(const struct lu_env *env,
 		       struct lu_server_seq *seq,
 		       struct lu_client_seq *cli);
 
+int seq_server_check_and_alloc_super(const struct lu_env *env,
+				     struct lu_server_seq *seq);
 /* Client methods */
 int seq_client_init(struct lu_client_seq *seq,
                     struct obd_export *exp,

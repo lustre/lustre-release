@@ -514,6 +514,9 @@ int fid_is_on_ost(struct osd_thread_info *info, struct osd_device *osd,
 	if (!(flags & OI_CHECK_FLD))
 		RETURN(0);
 
+	if (osd_seq_site(osd)->ss_server_fld == NULL)
+		RETURN(0);
+
 	rc = osd_fld_lookup(info->oti_env, osd, fid_seq(fid), range);
 	if (rc != 0) {
 		if (rc != -ENOENT)

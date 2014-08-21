@@ -870,31 +870,11 @@ EXPORT_SYMBOL(tur_update_params_extend);
  * \retval		negative errno if updates recording fails.
  */
 int check_and_prepare_update_record(const struct lu_env *env,
-				    struct thandle *th)
+				    struct thandle_update_records *tur)
 {
-	struct thandle_update_records	*tur;
 	struct llog_update_record	*lur;
-	struct top_thandle		*top_th;
-	struct sub_thandle		*lst;
-	int				rc;
-	bool				record_update = false;
-	ENTRY;
+	int rc;
 
-	top_th = container_of(th, struct top_thandle, tt_super);
-	/* Check if it needs to record updates for this transaction */
-	list_for_each_entry(lst, &top_th->tt_sub_thandle_list, st_sub_list) {
-		if (lst->st_record_update) {
-			record_update = true;
-			break;
-		}
-	}
-	if (!record_update)
-		RETURN(0);
-
-	if (top_th->tt_update_records != NULL)
-		RETURN(0);
-
-	tur = &update_env_info(env)->uti_tur;
 	if (tur->tur_update_records == NULL) {
 		rc = tur_update_records_create(tur);
 		if (rc < 0)
@@ -917,61 +897,8 @@ int check_and_prepare_update_record(const struct lu_env *env,
 
 	tur->tur_update_param_count = 0;
 
-	top_th->tt_update_records = tur;
-
 	RETURN(0);
 }
-EXPORT_SYMBOL(check_and_prepare_update_record);
-
-/**
- * Merge params into the update records
- *
- * Merge params and ops into the update records attached to top th.
- * During transaction execution phase, parameters and update ops
- * are collected in two different buffers (see lod_updates_pack()),
- * then in transaction stop, it needs to be merged them in one
- * buffer, then being written into the update log.
- *
- * \param[in] env	execution environment
- * \param[in] tur	thandle update records whose updates and
- *                      parameters are merged
- *
- * \retval		0 if merging succeeds.
- * \retval		negaitive errno if merging fails.
- */
-int merge_params_updates_buf(const struct lu_env *env,
-			     struct thandle_update_records *tur)
-{
-	struct llog_update_record *lur;
-	struct update_params *params;
-	size_t params_size;
-	size_t record_size;
-
-	if (tur->tur_update_records == NULL ||
-	    tur->tur_update_params == NULL)
-		return 0;
-
-	lur = tur->tur_update_records;
-	/* Extends the update records buffer if needed */
-	params_size = update_params_size(tur->tur_update_params,
-					 tur->tur_update_param_count);
-	record_size = llog_update_record_size(lur);
-	if (cfs_size_round(record_size + params_size) >
-				tur->tur_update_records_buf_size) {
-		int rc;
-
-		rc = tur_update_records_extend(tur, record_size + params_size);
-		if (rc < 0)
-			return rc;
-		lur = tur->tur_update_records;
-	}
-
-	params = update_records_get_params(&lur->lur_update_rec);
-	memcpy(params, tur->tur_update_params, params_size);
-	lur->lur_update_rec.ur_param_count = tur->tur_update_param_count;
-	return 0;
-}
-EXPORT_SYMBOL(merge_params_updates_buf);
 
 static void update_key_fini(const struct lu_context *ctx,
 			    struct lu_context_key *key, void *data)

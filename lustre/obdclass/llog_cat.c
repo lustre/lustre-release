@@ -72,6 +72,14 @@ static int llog_cat_new_log(const struct lu_env *env,
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_LLOG_CREATE_FAILED))
 		RETURN(-ENOSPC);
 
+	if (loghandle->lgh_hdr != NULL) {
+		/* If llog object is remote and creation is failed, lgh_hdr
+		 * might be left over here, free it first */
+		LASSERT(!llog_exist(loghandle));
+		OBD_FREE_PTR(loghandle->lgh_hdr);
+		loghandle->lgh_hdr = NULL;
+	}
+
 	rc = llog_create(env, loghandle, th);
 	/* if llog is already created, no need to initialize it */
 	if (rc == -EEXIST) {

@@ -302,6 +302,8 @@ struct osp_thandle {
 
 	/* OSP will use this thandle to update last oid*/
 	struct thandle		*ot_storage_th;
+	struct list_head	 ot_dcb_list;
+	atomic_t		 ot_refcount;
 };
 
 static inline struct osp_thandle *
@@ -639,6 +641,7 @@ int osp_xattr_del(const struct lu_env *env, struct dt_object *dt,
 
 int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 		   struct thandle *th);
+int osp_trans_cb_add(struct thandle *th, struct dt_txn_commit_cb *dcb);
 
 struct dt_it *osp_it_init(const struct lu_env *env, struct dt_object *dt,
 			  __u32 attr);

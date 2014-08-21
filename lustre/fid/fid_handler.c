@@ -258,16 +258,26 @@ static int range_alloc_set(const struct lu_env *env,
         RETURN(rc);
 }
 
-static int __seq_server_alloc_meta(struct lu_server_seq *seq,
-                                   struct lu_seq_range *out,
-                                   const struct lu_env *env)
+/**
+ * Check if the sequence server has sequence avaible
+ *
+ * Check if the sequence server has sequence avaible, if not, then
+ * allocating super sequence from sequence manager (MDT0).
+ *
+ * \param[in] env	execution environment
+ * \param[in] seq	server sequence
+ *
+ * \retval		negative errno if allocating new sequence fails
+ * \retval		0 if there is enough sequence or allocating
+ *                      new sequence succeeds
+ */
+int seq_server_check_and_alloc_super(const struct lu_env *env,
+				     struct lu_server_seq *seq)
 {
 	struct lu_seq_range *space = &seq->lss_space;
 	int rc = 0;
 
 	ENTRY;
-
-	LASSERT(range_is_sane(space));
 
 	/* Check if available space ends and allocate new super seq */
 	if (range_is_exhausted(space)) {
@@ -279,8 +289,8 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
 
 		rc = seq_client_alloc_super(seq->lss_cli, env);
 		if (rc) {
-			CERROR("%s: Can't allocate super-sequence, rc %d\n",
-			       seq->lss_name, rc);
+			CDEBUG(D_HA, "%s: Can't allocate super-sequence:"
+			      " rc %d\n", seq->lss_name, rc);
 			RETURN(rc);
 		}
 
@@ -296,6 +306,31 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
 			rc = fld_insert_entry(env, fld, space);
 			mutex_unlock(&fld->lsf_lock);
 		}
+	}
+
+	if (range_is_zero(&seq->lss_lowater_set))
+		__seq_set_init(env, seq);
+
+	RETURN(rc);
+}
+EXPORT_SYMBOL(seq_server_check_and_alloc_super);
+
+static int __seq_server_alloc_meta(struct lu_server_seq *seq,
+				   struct lu_seq_range *out,
+				   const struct lu_env *env)
+{
+	struct lu_seq_range *space = &seq->lss_space;
+	int rc = 0;
+
+	ENTRY;
+
+	LASSERT(range_is_sane(space));
+
+	rc = seq_server_check_and_alloc_super(env, seq);
+	if (rc < 0) {
+		CERROR("%s: Allocated super-sequence failed: rc = %d\n",
+			seq->lss_name, rc);
+		RETURN(rc);
 	}
 
 	rc = range_alloc_set(env, out, seq);
@@ -324,6 +359,7 @@ int seq_server_alloc_meta(struct lu_server_seq *seq,
 
         RETURN(rc);
 }
+EXPORT_SYMBOL(seq_server_alloc_meta);
 
 static int seq_server_handle(struct lu_site *site,
                              const struct lu_env *env,
