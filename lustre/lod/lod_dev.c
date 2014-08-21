@@ -37,6 +37,56 @@
  * Author: Alex Zhuravlev <alexey.zhuravlev@intel.com>
  * Author: Mikhail Pershin <mike.pershin@intel.com>
  */
+/**
+ * The Logical Object Device (LOD) layer manages access to striped
+ * objects (both regular files and directories). It implements the DT
+ * device and object APIs and is responsible for creating, storing,
+ * and loading striping information as an extended attribute of the
+ * underlying OSD object. LOD is the server side analog of the LOV and
+ * LMV layers on the client side.
+ *
+ * Metadata LU object stack (layers of the same compound LU object,
+ * all have the same FID):
+ *
+ *        MDT
+ *         |      MD API
+ *        MDD
+ *         |      DT API
+ *        LOD
+ *       /   \    DT API
+ *     OSD   OSP
+ *
+ * During LOD object initialization the localness or remoteness of the
+ * object FID dictates the choice between OSD and OSP.
+ *
+ * An LOD object (file or directory) with N stripes (each has a
+ * different FID):
+ *
+ *          LOD
+ *           |
+ *   +---+---+---+...+
+ *   |   |   |   |   |
+ *   S0  S1  S2  S3  S(N-1)  OS[DP] objects, seen as DT objects by LOD
+ *
+ * When upper layers must access an object's stripes (which are
+ * themselves OST or MDT LU objects) LOD finds these objects by their
+ * FIDs and stores them as an array of DT object pointers on the
+ * object. Declarations and operations on LOD objects are received by
+ * LOD (as DT object operations) and performed on the underlying
+ * OS[DP] object and (as needed) on the stripes. From the perspective
+ * of LOD, a stripe-less file (created by mknod() or open with
+ * O_LOV_DELAY_CREATE) is an object which does not yet have stripes,
+ * while a non-striped directory (created by mkdir()) is an object
+ * which will never have stripes.
+ *
+ * The LOD layer also implements a small subset of the OBD device API
+ * to support MDT stack initialization and finalization (an MDD device
+ * connects and disconnects itself to and from the underlying LOD
+ * device), and pool management. In turn LOD uses the OBD device API
+ * to connect it self to the underlying OSD, and to connect itself to
+ * OSP devices representing the MDTs and OSTs that bear the stripes of
+ * its objects.
+ */
 
 #define DEBUG_SUBSYSTEM S_MDS
 
