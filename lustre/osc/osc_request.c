@@ -1413,7 +1413,11 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         if (ocapa && reserve)
                 aa->aa_ocapa = capa_get(ocapa);
 
-        *reqp = req;
+	*reqp = req;
+	niobuf = req_capsule_client_get(pill, &RMF_NIOBUF_REMOTE);
+	CDEBUG(D_RPCTRACE, "brw rpc %p - object "DOSTID" offset %lld<>%lld\n",
+		req, POSTID(&oa->o_oi), niobuf[0].rnb_offset,
+		niobuf[niocount - 1].rnb_offset + niobuf[niocount - 1].rnb_len);
         RETURN(0);
 
  out:
