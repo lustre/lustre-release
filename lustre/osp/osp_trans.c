@@ -63,6 +63,8 @@
 
 struct osp_async_update_args {
 	struct dt_update_request *oaua_update;
+	atomic_t		 *oaua_count;
+	wait_queue_head_t	 *oaua_waitq;
 	bool			  oaua_flow_control;
 };
 
@@ -195,6 +197,9 @@ static int osp_async_update_interpret(const struct lu_env *env,
 		index++;
 	}
 
+	if (oaua->oaua_count != NULL && atomic_dec_and_test(oaua->oaua_count))
+		wake_up_all(oaua->oaua_waitq);
+
 	dt_update_request_destroy(dt_update);
 
 	return 0;
@@ -238,6 +243,9 @@ int osp_unplug_async_request(const struct lu_env *env,
 
 		args = ptlrpc_req_async_args(req);
 		args->oaua_update = update;
+		args->oaua_count = NULL;
+		args->oaua_waitq = NULL;
+		args->oaua_flow_control = false;
 		req->rq_interpret_reply = osp_async_update_interpret;
 		ptlrpcd_add_req(req, PDL_POLICY_LOCAL, -1);
 	}
@@ -453,11 +461,19 @@ static int osp_trans_trigger(const struct lu_env *env, struct osp_device *osp,
 		rc = out_prep_update_req(env, osp->opd_obd->u.cli.cl_import,
 					 dt_update->dur_buf.ub_req, &req);
 		if (rc == 0) {
+			down_read(&osp->opd_async_updates_rwsem);
+
 			args = ptlrpc_req_async_args(req);
 			args->oaua_update = dt_update;
+			args->oaua_count = &osp->opd_async_updates_count;
+			args->oaua_waitq = &osp->opd_syn_barrier_waitq;
 			args->oaua_flow_control = flow_control;
 			req->rq_interpret_reply =
 				osp_async_update_interpret;
+
+			atomic_inc(args->oaua_count);
+			up_read(&osp->opd_async_updates_rwsem);
+
 			ptlrpcd_add_req(req, PDL_POLICY_LOCAL, -1);
 		} else {
 			dt_update_request_destroy(dt_update);

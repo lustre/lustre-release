@@ -198,6 +198,9 @@ struct osp_device {
 	struct dt_update_request	*opd_async_requests;
 	/* Protect current operations on opd_async_requests. */
 	struct mutex			 opd_async_requests_mutex;
+	struct list_head		 opd_async_updates;
+	struct rw_semaphore		 opd_async_updates_rwsem;
+	atomic_t			 opd_async_updates_count;
 };
 
 #define opd_pre_lock			opd_pre->osp_pre_lock

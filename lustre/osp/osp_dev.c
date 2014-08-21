@@ -694,6 +694,20 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 		RETURN(-ENOTCONN);
 
 	id = d->opd_syn_last_used_id;
+	down_write(&d->opd_async_updates_rwsem);
+
+	CDEBUG(D_OTHER, "%s: async updates %d\n", d->opd_obd->obd_name,
+	       atomic_read(&d->opd_async_updates_count));
+
+	/* make sure the connection is fine */
+	expire = cfs_time_shift(obd_timeout);
+	lwi = LWI_TIMEOUT(expire - cfs_time_current(), osp_sync_timeout, d);
+	rc = l_wait_event(d->opd_syn_barrier_waitq,
+			  atomic_read(&d->opd_async_updates_count) == 0,
+			  &lwi);
+	up_write(&d->opd_async_updates_rwsem);
+	if (rc != 0)
+		GOTO(out, rc);
 
 	CDEBUG(D_OTHER, "%s: id: used %lu, processed %lu\n",
 	       d->opd_obd->obd_name, id, d->opd_syn_last_processed_id);
@@ -867,6 +881,9 @@ static int osp_init0(const struct lu_env *env, struct osp_device *osp,
 	ENTRY;
 
 	mutex_init(&osp->opd_async_requests_mutex);
+	INIT_LIST_HEAD(&osp->opd_async_updates);
+	init_rwsem(&osp->opd_async_updates_rwsem);
+	atomic_set(&osp->opd_async_updates_count, 0);
 
 	obd = class_name2obd(lustre_cfg_string(cfg, 0));
 	if (obd == NULL) {
