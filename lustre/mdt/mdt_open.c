@@ -1697,15 +1697,22 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 		}
         }
 
-        LASSERT(!lustre_handle_is_used(&lhc->mlh_reg_lh));
-
-	/* get openlock if this is not replay and if a client requested it */
-	if (!req_is_replay(req)) {
-		rc = mdt_object_open_lock(info, child, lhc, &ibits);
-		if (rc != 0)
-			GOTO(out_child, result = rc);
-		else if (create_flags & MDS_OPEN_LOCK)
+	if (lustre_handle_is_used(&lhc->mlh_reg_lh)) {
+		/* the open lock might already be gotten in
+		 * mdt_intent_fixup_resent */
+		LASSERT(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT);
+		if (create_flags & MDS_OPEN_LOCK)
 			mdt_set_disposition(info, ldlm_rep, DISP_OPEN_LOCK);
+	} else {
+		/* get openlock if this isn't replay and client requested it */
+		if (!req_is_replay(req)) {
+			rc = mdt_object_open_lock(info, child, lhc, &ibits);
+			if (rc != 0)
+				GOTO(out_child, result = rc);
+			else if (create_flags & MDS_OPEN_LOCK)
+				mdt_set_disposition(info, ldlm_rep,
+						    DISP_OPEN_LOCK);
+		}
 	}
 
 	/* Try to open it now. */
