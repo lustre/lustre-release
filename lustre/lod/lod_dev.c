@@ -122,7 +122,11 @@ int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
 	int rc = 0;
 	ENTRY;
 
-	LASSERTF(fid_is_sane(fid), "Invalid FID "DFID"\n", PFID(fid));
+	if (!fid_is_sane(fid)) {
+		CERROR("%s: invalid FID "DFID"\n", lod2obd(lod)->obd_name,
+		       PFID(fid));
+		RETURN(-EIO);
+	}
 
 	if (fid_is_idif(fid)) {
 		*tgt = fid_idif_ost_idx(fid);
