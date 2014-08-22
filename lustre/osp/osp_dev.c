@@ -35,17 +35,41 @@
  *
  * lustre/osp/osp_dev.c
  *
- * Lustre OST/MDT Proxy Device (OSP) is in the MDS stack, and used as
- * a proxy device to communicate with other MDTs and OSTs.
- *
- * The purpose is to export the OSD API from the remote MDT or OST's underlying
- * OSD for access and modification by the local service (typically MDD/LOD, or
- * LFSCK) as if it were a local OSD. The goal is that the OSP provides a
- * transparent interface for access to the remote OSD.
- *
  * Author: Alex Zhuravlev <alexey.zhuravlev@intel.com>
  * Author: Mikhail Pershin <mike.pershin@intel.com>
  * Author: Di Wang <di.wang@intel.com>
+ */
+/*
+ * The Object Storage Proxy (OSP) module provides an implementation of
+ * the DT API for remote MDTs and OSTs. Every local OSP device (or
+ * object) is a proxy for a remote OSD device (or object). Thus OSP
+ * converts DT operations into RPCs, which are sent to the OUT service
+ * on a remote target, converted back to DT operations, and
+ * executed. Of course there are many ways in which this description
+ * is inaccurate but it's a good enough mental model. OSP is used by
+ * the MDT stack in several ways:
+ *
+ * - OSP devices allocate FIDs for the stripe sub-objects of a striped
+ *   file or directory.
+ *
+ * - OSP objects represent the remote MDT and OST objects that are
+ *   the stripes of a striped object.
+ *
+ * - OSP devices log, send, and track synchronous operations (setattr
+ *   and unlink) to remote targets.
+ *
+ * - OSP objects are the bottom slice of the compound LU object
+ *   representing a remote MDT object: MDT/MDD/LOD/OSP.
+ *
+ * - OSP objects are used by LFSCK to represent remote OST objects
+ *   during the verification of MDT-OST consistency.
+ *
+ * - OSP devices batch idempotent requests (declare_attr_get() and
+ *   declare_xattr_get()) to the remote target and cache their results.
+ *
+ * In addition the OSP layer implements a subset of the OBD device API
+ * to support being a client of a remote target, connecting to other
+ * layers, and FID allocation.
  */
 
 #define DEBUG_SUBSYSTEM S_MDS
