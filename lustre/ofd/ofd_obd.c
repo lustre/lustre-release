@@ -1591,7 +1591,7 @@ int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		rc = ofd_ioc_get_obj_version(&env, ofd, karg);
 		break;
 	default:
-		CERROR("%s: not supported cmd = %d\n", obd->obd_name, cmd);
+		CERROR("%s: not supported cmd = %#x\n", obd->obd_name, cmd);
 		rc = -ENOTTY;
 	}
 
