@@ -39,6 +39,33 @@
  * Author: Mike Pershin <tappro@whamcloud.com>
  * Author: Johann Lombardi <johann@whamcloud.com>
  */
+/*
+ * The OBD Filter Device (OFD) module belongs to the Object Storage
+ * Server stack and connects the RPC oriented Unified Target (TGT)
+ * layer (see lustre/include/lu_target.h) to the storage oriented OSD
+ * layer (see lustre/doc/osd-api.txt).
+ *
+ *     TGT
+ *      |      DT and OBD APIs
+ *     OFD
+ *      |      DT API
+ *     OSD
+ *
+ * OFD implements the LU and OBD device APIs and is responsible for:
+ *
+ * - Handling client requests (create, destroy, bulk IO, setattr,
+ *   get_info, set_info, statfs) for the objects belonging to the OST
+ *   (together with TGT).
+ *
+ * - Providing grant space management which allows clients to reserve
+ *   disk space for data writeback. OFD tracks grants on global and
+ *   per client levels.
+ *
+ * - Handling object precreation requests from MDTs.
+ *
+ * - Operating the LDLM service that allows clients to maintain object
+ *   data cache coherence.
+ */
 
 #define DEBUG_SUBSYSTEM S_FILTER
 
