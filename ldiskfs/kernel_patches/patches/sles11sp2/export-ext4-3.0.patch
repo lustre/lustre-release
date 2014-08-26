@@ -75,7 +75,7 @@ Index: linux-stage/fs/ext4/extents.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/extents.c
 +++ linux-stage/fs/ext4/extents.c
-@@ -1233,9 +1233,9 @@ out:
+@@ -1236,9 +1236,9 @@ out:
   * returns 0 at @phys
   * return value contains 0 (success) or error code
   */
@@ -88,7 +88,7 @@ Index: linux-stage/fs/ext4/extents.c
  {
  	struct ext4_extent_idx *ix;
  	struct ext4_extent *ex;
-@@ -1298,9 +1298,9 @@ static int ext4_ext_search_left(struct i
+@@ -1301,9 +1301,9 @@ static int ext4_ext_search_left(struct i
   * returns 0 at @phys
   * return value contains 0 (success) or error code
   */
@@ -101,7 +101,7 @@ Index: linux-stage/fs/ext4/extents.c
  {
  	struct buffer_head *bh = NULL;
  	struct ext4_extent_header *eh;
-@@ -1875,7 +1875,7 @@ cleanup:
+@@ -1878,7 +1878,7 @@ cleanup:
  	return err;
  }
  
@@ -110,7 +110,7 @@ Index: linux-stage/fs/ext4/extents.c
  			       ext4_lblk_t num, ext_prepare_callback func,
  			       void *cbdata)
  {
-@@ -4380,3 +4380,12 @@ int ext4_fiemap(struct inode *inode, str
+@@ -4415,3 +4415,12 @@ int ext4_fiemap(struct inode *inode, str
  
  	return error;
  }
@@ -148,7 +148,15 @@ Index: linux-stage/fs/ext4/inode.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/inode.c
 +++ linux-stage/fs/ext4/inode.c
-@@ -4685,6 +4685,7 @@ out_stop:
+@@ -1393,6 +1393,7 @@ int ext4_map_blocks(handle_t *handle, st
+ 	}
+ 	return retval;
+ }
++EXPORT_SYMBOL(ext4_map_blocks);
+ 
+ /* Maximum number of blocks we map for direct IO at once. */
+ #define DIO_MAX_BLOCKS 4096
+@@ -4689,6 +4690,7 @@ out_stop:
  	ext4_journal_stop(handle);
  	trace_ext4_truncate_exit(inode);
  }
@@ -156,7 +164,7 @@ Index: linux-stage/fs/ext4/inode.c
  
  /*
   * ext4_get_inode_loc returns with an extra refcount against the inode's
-@@ -5098,6 +5099,7 @@ bad_inode:
+@@ -5102,6 +5104,7 @@ bad_inode:
  	iget_failed(inode);
  	return ERR_PTR(ret);
  }
@@ -168,7 +176,7 @@ Index: linux-stage/fs/ext4/mballoc.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/mballoc.c
 +++ linux-stage/fs/ext4/mballoc.c
-@@ -3852,6 +3852,7 @@ repeat:
+@@ -3856,6 +3856,7 @@ repeat:
  		call_rcu(&(pa)->u.pa_rcu, ext4_mb_pa_callback);
  	}
  }
@@ -176,7 +184,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  
  #ifdef CONFIG_EXT4_DEBUG
  static void ext4_mb_show_ac(struct ext4_allocation_context *ac)
-@@ -4972,3 +4973,6 @@ int ext4_trim_fs(struct super_block *sb,
+@@ -4976,3 +4977,6 @@ int ext4_trim_fs(struct super_block *sb,
  
  	return ret;
  }
@@ -187,7 +195,7 @@ Index: linux-stage/fs/ext4/super.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/super.c
 +++ linux-stage/fs/ext4/super.c
-@@ -194,6 +194,7 @@ __u32 ext4_itable_unused_count(struct su
+@@ -202,6 +202,7 @@ __u32 ext4_itable_unused_count(struct su
  		(EXT4_DESC_SIZE(sb) >= EXT4_MIN_DESC_SIZE_64BIT ?
  		 (__u32)le16_to_cpu(bg->bg_itable_unused_hi) << 16 : 0);
  }
@@ -195,7 +203,7 @@ Index: linux-stage/fs/ext4/super.c
  
  void ext4_block_bitmap_set(struct super_block *sb,
  			   struct ext4_group_desc *bg, ext4_fsblk_t blk)
-@@ -378,6 +379,7 @@ void ext4_journal_abort_handle(const cha
+@@ -386,6 +387,7 @@ void ext4_journal_abort_handle(const cha
  
  	jbd2_journal_abort_handle(handle);
  }
@@ -203,7 +211,7 @@ Index: linux-stage/fs/ext4/super.c
  
  static void __save_error_info(struct super_block *sb, const char *func,
  			    unsigned int line)
-@@ -4270,6 +4272,7 @@ int ext4_force_commit(struct super_block
+@@ -4280,6 +4282,7 @@ int ext4_force_commit(struct super_block
  
  	return ret;
  }
@@ -211,7 +219,7 @@ Index: linux-stage/fs/ext4/super.c
  
  static void ext4_write_super(struct super_block *sb)
  {
-@@ -5198,6 +5201,12 @@ static void __exit ext4_exit_fs(void)
+@@ -5210,6 +5213,12 @@ static void __exit ext4_exit_fs(void)
  	ext4_exit_pageio();
  }
  
