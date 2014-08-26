@@ -429,6 +429,12 @@ again:
 	obd_get_request_slot(&exp->exp_obd->u.cli);
 	rc = ptlrpc_queue_wait(req);
 	obd_put_request_slot(&exp->exp_obd->u.cli);
+
+	if (rc == -ENOENT) {
+		/* Don't loop forever on non-existing FID sequences. */
+		GOTO(out_req, rc);
+	}
+
 	if (rc != 0) {
 		if (imp->imp_state != LUSTRE_IMP_CLOSED) {
 			/* Since LWP is not replayable, so it will keep
