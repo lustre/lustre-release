@@ -93,13 +93,13 @@ static struct ll_sb_info *ll_init_sbi(void)
 	/* initialize ll_cache data */
 	atomic_set(&sbi->ll_cache.ccc_users, 0);
 	sbi->ll_cache.ccc_lru_max = lru_page_max;
-	atomic_set(&sbi->ll_cache.ccc_lru_left, lru_page_max);
+	atomic_long_set(&sbi->ll_cache.ccc_lru_left, lru_page_max);
 	spin_lock_init(&sbi->ll_cache.ccc_lru_lock);
 	INIT_LIST_HEAD(&sbi->ll_cache.ccc_lru);
 
 	/* turn unstable check off by default as it impacts performance */
 	sbi->ll_cache.ccc_unstable_check = 0;
-	atomic_set(&sbi->ll_cache.ccc_unstable_nr, 0);
+	atomic_long_set(&sbi->ll_cache.ccc_unstable_nr, 0);
 	init_waitqueue_head(&sbi->ll_cache.ccc_unstable_waitq);
 
 	sbi->ll_ra_info.ra_max_pages_per_file = min(pages / 32,
@@ -1115,7 +1115,8 @@ void ll_put_super(struct super_block *sb)
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         char *profilenm = get_profile_name(sb);
-	int ccc_count, next, force = 1, rc = 0;
+	long ccc_count;
+	int next, force = 1, rc = 0;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p - %s\n", sb, profilenm);
@@ -1138,13 +1139,13 @@ void ll_put_super(struct super_block *sb)
 	if (force == 0) {
 		struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
 		rc = l_wait_event(sbi->ll_cache.ccc_unstable_waitq,
-			atomic_read(&sbi->ll_cache.ccc_unstable_nr) == 0,
+			atomic_long_read(&sbi->ll_cache.ccc_unstable_nr) == 0,
 			&lwi);
 	}
 
-	ccc_count = atomic_read(&sbi->ll_cache.ccc_unstable_nr);
+	ccc_count = atomic_long_read(&sbi->ll_cache.ccc_unstable_nr);
 	if (force == 0 && rc != -EINTR)
-		LASSERTF(ccc_count == 0, "count: %i\n", ccc_count);
+		LASSERTF(ccc_count == 0, "count: %li\n", ccc_count);
 
 
         /* We need to set force before the lov_disconnect in

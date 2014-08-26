@@ -264,12 +264,19 @@ ll_max_readahead_mb_seq_write(struct file *file, const char *buffer,
 {
 	struct seq_file *m = file->private_data;
 	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
-	int mult, rc, pages_number;
+	__u64 val;
+	long pages_number;
+	int mult;
+	int rc;
 
 	mult = 1 << (20 - PAGE_CACHE_SHIFT);
-	rc = lprocfs_write_frac_helper(buffer, count, &pages_number, mult);
+	rc = lprocfs_write_frac_u64_helper(buffer, count, &val, mult);
 	if (rc)
 		return rc;
+
+	if (val > LONG_MAX)
+		return -ERANGE;
+	pages_number = (long)val;
 
 	if (pages_number < 0 || pages_number > totalram_pages / 2) {
 		/* 1/2 of RAM */
@@ -380,16 +387,16 @@ static int ll_max_cached_mb_seq_show(struct seq_file *m, void *v)
 	struct ll_sb_info      *sbi   = ll_s2sbi(sb);
 	struct cl_client_cache *cache = &sbi->ll_cache;
 	int shift = 20 - PAGE_CACHE_SHIFT;
-	int max_cached_mb;
-	int unused_mb;
+	long max_cached_mb;
+	long unused_mb;
 
 	max_cached_mb = cache->ccc_lru_max >> shift;
-	unused_mb = atomic_read(&cache->ccc_lru_left) >> shift;
+	unused_mb = atomic_long_read(&cache->ccc_lru_left) >> shift;
 	return seq_printf(m,
 			"users: %d\n"
-			"max_cached_mb: %d\n"
-			"used_mb: %d\n"
-			"unused_mb: %d\n"
+			"max_cached_mb: %ld\n"
+			"used_mb: %ld\n"
+			"unused_mb: %ld\n"
 			"reclaim_count: %u\n",
 			atomic_read(&cache->ccc_users),
 			max_cached_mb,
@@ -407,10 +414,13 @@ ll_max_cached_mb_seq_write(struct file *file, const char __user *buffer,
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 	struct cl_client_cache *cache = &sbi->ll_cache;
 	struct lu_env *env;
+	__u64 val;
+	long diff = 0;
+	long nrpages = 0;
+	long pages_number;
 	int refcheck;
-	int mult, rc, pages_number;
-	int diff = 0;
-	int nrpages = 0;
+	int mult;
+	long rc;
 	char kernbuf[128];
 	ENTRY;
 
@@ -424,9 +434,13 @@ ll_max_cached_mb_seq_write(struct file *file, const char __user *buffer,
 	mult = 1 << (20 - PAGE_CACHE_SHIFT);
 	buffer += lprocfs_find_named_value(kernbuf, "max_cached_mb:", &count) -
 		  kernbuf;
-	rc = lprocfs_write_frac_helper(buffer, count, &pages_number, mult);
+	rc = lprocfs_write_frac_u64_helper(buffer, count, &val, mult);
 	if (rc)
 		RETURN(rc);
+
+	if (val > LONG_MAX)
+		return -ERANGE;
+	pages_number = (long)val;
 
 	if (pages_number < 0 || pages_number > totalram_pages) {
 		CERROR("%s: can't set max cache more than %lu MB\n",
@@ -441,7 +455,7 @@ ll_max_cached_mb_seq_write(struct file *file, const char __user *buffer,
 
 	/* easy - add more LRU slots. */
 	if (diff >= 0) {
-		atomic_add(diff, &cache->ccc_lru_left);
+		atomic_long_add(diff, &cache->ccc_lru_left);
 		GOTO(out, rc = 0);
 	}
 
@@ -451,18 +465,18 @@ ll_max_cached_mb_seq_write(struct file *file, const char __user *buffer,
 
 	diff = -diff;
 	while (diff > 0) {
-		int tmp;
+		long tmp;
 
 		/* reduce LRU budget from free slots. */
 		do {
-			int ov, nv;
+			long ov, nv;
 
-			ov = atomic_read(&cache->ccc_lru_left);
+			ov = atomic_long_read(&cache->ccc_lru_left);
 			if (ov == 0)
 				break;
 
 			nv = ov > diff ? ov - diff : 0;
-			rc = atomic_cmpxchg(&cache->ccc_lru_left, ov, nv);
+			rc = atomic_long_cmpxchg(&cache->ccc_lru_left, ov, nv);
 			if (likely(ov == rc)) {
 				diff -= ov - nv;
 				nrpages += ov - nv;
@@ -496,7 +510,7 @@ out:
 		spin_unlock(&sbi->ll_lock);
 		rc = count;
 	} else {
-		atomic_add(nrpages, &cache->ccc_lru_left);
+		atomic_long_add(nrpages, &cache->ccc_lru_left);
 	}
 	return rc;
 }
@@ -822,14 +836,15 @@ static int ll_unstable_stats_seq_show(struct seq_file *m, void *v)
 	struct super_block	*sb    = m->private;
 	struct ll_sb_info	*sbi   = ll_s2sbi(sb);
 	struct cl_client_cache	*cache = &sbi->ll_cache;
-	int pages, mb;
+	long pages;
+	int mb;
 
-	pages = atomic_read(&cache->ccc_unstable_nr);
+	pages = atomic_long_read(&cache->ccc_unstable_nr);
 	mb    = (pages * PAGE_CACHE_SIZE) >> 20;
 
-	return seq_printf(m, "unstable_check: %8d\n"
-			     "unstable_pages: %8d\n"
-			     "unstable_mb:    %8d\n",
+	return seq_printf(m, "unstable_check:     %8d\n"
+			     "unstable_pages: %12ld\n"
+			     "unstable_mb:        %8d\n",
 			  cache->ccc_unstable_check, pages, mb);
 }
 

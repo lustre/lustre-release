@@ -274,6 +274,28 @@ typedef struct { volatile int counter; } atomic_t;
 #define atomic_cmpxchg(v, ov, nv) \
 	((v)->counter == ov ? ((v)->counter = nv, ov) : (v)->counter)
 
+typedef struct { volatile long counter; } atomic_long_t;
+
+#define ATOMIC_LONG_INIT(i) { (i) }
+
+#define atomic_long_read(a) ((a)->counter)
+#define atomic_long_set(a, b) do {(a)->counter = b; } while (0)
+#define atomic_long_dec_and_test(a) ((--((a)->counter)) == 0)
+#define atomic_long_dec_and_lock(a, b) ((--((a)->counter)) == 0)
+#define atomic_long_inc(a)  (((a)->counter)++)
+#define atomic_long_dec(a)  do { (a)->counter--; } while (0)
+#define atomic_long_add(b, a)  do {(a)->counter += b; } while (0)
+#define atomic_long_add_return(n, a) ((a)->counter += n)
+#define atomic_long_inc_return(a) atomic_long_add_return(1, a)
+#define atomic_long_sub(b, a)  do {(a)->counter -= b; } while (0)
+#define atomic_long_sub_return(n, a) ((a)->counter -= n)
+#define atomic_long_dec_return(a)  atomic_long_sub_return(1, a)
+#define atomic_long_add_unless(v, a, u) \
+	((v)->counter != u ? (v)->counter += a : 0)
+#define atomic_long_inc_not_zero(v) atomic_long_add_unless((v), 1, 0)
+#define atomic_long_cmpxchg(v, ov, nv) \
+	((v)->counter == ov ? ((v)->counter = nv, ov) : (v)->counter)
+
 #ifdef HAVE_LIBPTHREAD
 #include <pthread.h>
 

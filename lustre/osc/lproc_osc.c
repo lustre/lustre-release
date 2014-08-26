@@ -168,11 +168,11 @@ static int osc_cached_mb_seq_show(struct seq_file *m, void *v)
 	int rc;
 
 	rc = seq_printf(m,
-		      "used_mb: %d\n"
-		      "busy_cnt: %d\n",
-		      (atomic_read(&cli->cl_lru_in_list) +
-			atomic_read(&cli->cl_lru_busy)) >> shift,
-		      atomic_read(&cli->cl_lru_busy));
+		      "used_mb: %ld\n"
+		      "busy_cnt: %ld\n",
+		      (atomic_long_read(&cli->cl_lru_in_list) +
+			atomic_long_read(&cli->cl_lru_busy)) >> shift,
+		      atomic_long_read(&cli->cl_lru_busy));
 
 	return rc;
 }
@@ -184,7 +184,10 @@ osc_cached_mb_seq_write(struct file *file, const char __user *buffer,
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
 	struct client_obd *cli = &dev->u.cli;
-	int pages_number, mult, rc;
+	__u64 val;
+	long pages_number;
+	long rc;
+	int mult;
 	char kernbuf[128];
 
 	if (count >= sizeof(kernbuf))
@@ -197,14 +200,19 @@ osc_cached_mb_seq_write(struct file *file, const char __user *buffer,
 	mult = 1 << (20 - PAGE_CACHE_SHIFT);
 	buffer += lprocfs_find_named_value(kernbuf, "used_mb:", &count) -
 		  kernbuf;
-	rc = lprocfs_write_frac_helper(buffer, count, &pages_number, mult);
+	rc = lprocfs_write_frac_u64_helper(buffer, count, &val, mult);
+
 	if (rc)
 		return rc;
+
+	if (val > LONG_MAX)
+		return -ERANGE;
+	pages_number = (long)val;
 
 	if (pages_number < 0)
 		return -ERANGE;
 
-	rc = atomic_read(&cli->cl_lru_in_list) - pages_number;
+	rc = atomic_long_read(&cli->cl_lru_in_list) - pages_number;
 	if (rc > 0) {
 		struct lu_env *env;
 		int refcheck;
@@ -524,13 +532,14 @@ static int osc_unstable_stats_seq_show(struct seq_file *m, void *v)
 {
 	struct obd_device *dev = m->private;
 	struct client_obd *cli = &dev->u.cli;
-	int pages, mb;
+	long pages;
+	int mb;
 
-	pages = atomic_read(&cli->cl_unstable_count);
+	pages = atomic_long_read(&cli->cl_unstable_count);
 	mb    = (pages * PAGE_CACHE_SIZE) >> 20;
 
-	return seq_printf(m, "unstable_pages: %8d\n"
-			"unstable_mb:    %8d\n",
+	return seq_printf(m, "unstable_pages: %20ld\n"
+			  "unstable_mb:              %10d\n",
 			pages, mb);
 }
 LPROC_SEQ_FOPS_RO(osc_unstable_stats);

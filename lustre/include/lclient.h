@@ -463,9 +463,13 @@ struct cl_client_cache {
 	 */
 	atomic_t		ccc_users;
 	/**
+	 * # of threads are doing shrinking
+	 */
+	unsigned int		ccc_lru_shrinkers;
+	/**
 	 * # of LRU entries available
 	 */
-	atomic_t		ccc_lru_left;
+	atomic_long_t		ccc_lru_left;
 	/**
 	 * List of entities(OSCs) for this LRU cache
 	 */
@@ -479,22 +483,18 @@ struct cl_client_cache {
 	 */
 	spinlock_t		ccc_lru_lock;
 	/**
-	 * # of threads are doing shrinking
-	 */
-	unsigned int		ccc_lru_shrinkers;
-	/**
 	 * Set if unstable check is enabled
 	 */
 	unsigned int		ccc_unstable_check:1;
+	/**
+	 * # of unstable pages for this mount point
+	 */
+	atomic_long_t		ccc_unstable_nr;
 	/**
 	 * Waitq for awaiting unstable pages to reach zero.
 	 * Used at umounting time and signaled on BRW commit
 	 */
 	wait_queue_head_t	ccc_unstable_waitq;
-	/**
-	 * # of unstable pages for this mount point
-	 */
-	atomic_t		ccc_unstable_nr;
 };
 
 enum {

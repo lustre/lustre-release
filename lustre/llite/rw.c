@@ -101,7 +101,8 @@ static unsigned long ll_ra_count_get(struct ll_sb_info *sbi,
         /* If read-ahead pages left are less than 1M, do not do read-ahead,
          * otherwise it will form small read RPC(< 1M), which hurt server
          * performance a lot. */
-	ret = min(ra->ra_max_pages - atomic_read(&ra->ra_cur_pages), pages);
+	ret = min(ra->ra_max_pages - atomic_read(&ra->ra_cur_pages),
+		  pages);
         if (ret < 0 || ret < min_t(long, PTLRPC_MAX_BRW_PAGES, pages))
                 GOTO(out, ret = 0);
 
