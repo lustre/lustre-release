@@ -4884,6 +4884,7 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 	bool			    remove;
 	bool			    newdata;
 	bool			    log      = false;
+	bool			    bad_hash = false;
 	int			    idx      = 0;
 	int			    count    = 0;
 	int			    rc;
@@ -4908,6 +4909,12 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 						LNTF_CHECK_PARENT, true);
 
 		GOTO(out, rc);
+	}
+
+	if (unlikely(lnr->lnr_dir_cookie == MDS_DIR_END_OFF)) {
+		rc = lfsck_namespace_striped_dir_rescan(env, com, lnr);
+
+		RETURN(rc);
 	}
 
 	if (lnr->lnr_name[0] == '.' &&
@@ -5200,6 +5207,19 @@ stop:
 out:
 	lfsck_ibits_unlock(&lh, LCK_EX);
 
+	if (!name_is_dot_or_dotdot(lnr->lnr_name, lnr->lnr_namelen) &&
+	    !lfsck_is_valid_slave_name_entry(env, lnr->lnr_lmv,
+					     lnr->lnr_name, lnr->lnr_namelen) &&
+	    type != LNIT_BAD_DIRENT) {
+		ns->ln_flags |= LF_INCONSISTENT;
+
+		log = false;
+		rc = lfsck_namespace_repair_bad_name_hash(env, com, dir,
+						lnr->lnr_lmv, lnr->lnr_name);
+		if (rc >= 0)
+			bad_hash = true;
+	}
+
 	if (rc >= 0) {
 		switch (type) {
 		case LNIT_BAD_TYPE:
@@ -5276,6 +5296,21 @@ out:
 					       &ns->ln_pos_first_inconsistent,
 					       false);
 		}
+
+		if (bad_hash) {
+			ns->ln_name_hash_repaired++;
+
+			/* Not count repeatedly. */
+			if (!repaired)
+				ns->ln_items_repaired++;
+
+			if (bk->lb_param & LPF_DRYRUN &&
+			    lfsck_pos_is_zero(&ns->ln_pos_first_inconsistent))
+				lfsck_pos_fill(env, lfsck,
+					       &ns->ln_pos_first_inconsistent,
+					       false);
+		}
+
 
 		rc = 0;
 	}

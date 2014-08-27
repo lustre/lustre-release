@@ -1561,6 +1561,7 @@ void lustre_assert_wire_constants(void)
 	CLASSERT(LMV_HASH_TYPE_MASK == 0x0000ffff);
 	CLASSERT(LMV_HASH_FLAG_MIGRATION == 0x80000000);
 	CLASSERT(LMV_HASH_FLAG_DEAD == 0x40000000);
+	CLASSERT(LMV_HASH_FLAG_BAD_TYPE == 0x20000000);
 
 	/* Checks for struct obd_statfs */
 	LASSERTF((int)sizeof(struct obd_statfs) == 144, "found %lld\n",
@@ -4727,6 +4728,8 @@ void lustre_assert_wire_constants(void)
 		(unsigned)LEF_TO_OST);
 	LASSERTF(LEF_FROM_OST == 0x00000002UL, "found 0x%.8xUL\n",
 		(unsigned)LEF_FROM_OST);
+	LASSERTF(LEF_SET_LMV_HASH == 0x00000004UL, "found 0x%.8xUL\n",
+		(unsigned)LEF_SET_LMV_HASH);
 
 	/* Checks for struct lfsck_reply */
 	LASSERTF((int)sizeof(struct lfsck_reply) == 16, "found %lld\n",

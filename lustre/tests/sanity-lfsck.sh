@@ -46,7 +46,7 @@ setupall
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14 15 16 17 18 19 20 21"
 
 [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.50) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2d 2e 3 22 23 24 25 26 27 28 29 30"
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2d 2e 3 22 23 24 25 26 27 28 29 30 31"
 
 build_test_filter
 
@@ -3722,6 +3722,117 @@ test_30() {
 	stat ${cname}/f1 || error "(22) f1 is not recovered"
 }
 run_test 30 "LFSCK can recover the orphans from backend /lost+found"
+
+test_31a() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "The test needs at least 2 MDTs" && return
+
+	echo "#####"
+	echo "For the name entry under a striped directory, if the name"
+	echo "hash does not match the shard, then the LFSCK will repair"
+	echo "the bad name entry"
+	echo "#####"
+
+	check_mount_and_prep
+
+	$LFS setdirstripe -i 0 -c $MDSCOUNT $DIR/$tdir/striped_dir ||
+		error "(1) Fail to create striped directory"
+
+	echo "Inject failure stub on client to simulate the case that"
+	echo "some name entry should be inserted into other non-first"
+	echo "shard, but inserted into the first shard by wrong"
+
+	#define OBD_FAIL_LFSCK_BAD_NAME_HASH	0x1628
+	$LCTL set_param fail_loc=0x1628 fail_val=0
+	createmany -d $DIR/$tdir/striped_dir/d $MDSCOUNT ||
+		error "(2) Fail to create file under striped directory"
+	$LCTL set_param fail_loc=0 fail_val=0
+
+	echo "Trigger namespace LFSCK to repair bad name hash"
+	$START_NAMESPACE -r -A ||
+		error "(3) Fail to start LFSCK for namespace"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(4) unexpected status"
+	}
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^name_hash_repaired/ { print $2 }')
+	[ $repaired -ge 1 ] ||
+		error "(5) Fail to repair bad name hash: $repaired"
+
+	umount_client $MOUNT || error "(6) umount failed"
+	mount_client $MOUNT || error "(7) mount failed"
+
+	for ((i = 0; i < $MDSCOUNT; i++)); do
+		stat $DIR/$tdir/striped_dir/d$i ||
+			error "(8) Fail to stat d$i after LFSCK"
+		rmdir $DIR/$tdir/striped_dir/d$i ||
+			error "(9) Fail to unlink d$i after LFSCK"
+	done
+
+	rmdir $DIR/$tdir/striped_dir ||
+		error "(10) Fail to remove the striped directory after LFSCK"
+}
+run_test 31a "The LFSCK can find/repair the name entry with bad name hash (1)"
+
+test_31b() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "The test needs at least 2 MDTs" && return
+
+	echo "#####"
+	echo "For the name entry under a striped directory, if the name"
+	echo "hash does not match the shard, then the LFSCK will repair"
+	echo "the bad name entry"
+	echo "#####"
+
+	check_mount_and_prep
+
+	$LFS setdirstripe -i 0 -c $MDSCOUNT $DIR/$tdir/striped_dir ||
+		error "(1) Fail to create striped directory"
+
+	echo "Inject failure stub on client to simulate the case that"
+	echo "some name entry should be inserted into other non-second"
+	echo "shard, but inserted into the secod shard by wrong"
+
+	#define OBD_FAIL_LFSCK_BAD_NAME_HASH	0x1628
+	$LCTL set_param fail_loc=0x1628 fail_val=1
+	createmany -d $DIR/$tdir/striped_dir/d $MDSCOUNT ||
+		error "(2) Fail to create file under striped directory"
+	$LCTL set_param fail_loc=0 fail_val=0
+
+	echo "Trigger namespace LFSCK to repair bad name hash"
+	$START_NAMESPACE -r -A ||
+		error "(3) Fail to start LFSCK for namespace"
+
+	wait_update_facet mds2 "$LCTL get_param -n \
+		mdd.$(facet_svc mds2).lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 ||
+		error "(4) unexpected status"
+
+	local repaired=$(do_facet mds2 $LCTL get_param -n \
+			 mdd.$(facet_svc mds2).lfsck_namespace |
+			 awk '/^name_hash_repaired/ { print $2 }')
+	[ $repaired -ge 1 ] ||
+		error "(5) Fail to repair bad name hash: $repaired"
+
+	umount_client $MOUNT || error "(6) umount failed"
+	mount_client $MOUNT || error "(7) mount failed"
+
+	for ((i = 0; i < $MDSCOUNT; i++)); do
+		stat $DIR/$tdir/striped_dir/d$i ||
+			error "(8) Fail to stat d$i after LFSCK"
+		rmdir $DIR/$tdir/striped_dir/d$i ||
+			error "(9) Fail to unlink d$i after LFSCK"
+	done
+
+	rmdir $DIR/$tdir/striped_dir ||
+		error "(10) Fail to remove the striped directory after LFSCK"
+}
+run_test 31b "The LFSCK can find/repair the name entry with bad name hash (2)"
 
 $LCTL set_param debug=-lfsck > /dev/null || true
 

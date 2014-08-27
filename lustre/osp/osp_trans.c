@@ -413,9 +413,9 @@ out:
 /**
  * Trigger the request for remote updates.
  *
- * If the transaction is a remote transaction, then related remote updates
- * will be sent asynchronously; otherwise, the cross MDTs transaction will
- * be synchronized.
+ * If the transaction is not a remote one or it is required to be sync mode
+ * (th->th_sync is set), then it will be sent synchronously; otherwise, the
+ * RPC will be sent asynchronously.
  *
  * Please refer to osp_trans_create() for transaction type.
  *
@@ -442,6 +442,14 @@ static int osp_trans_trigger(const struct lu_env *env, struct osp_device *osp,
 		struct ptlrpc_request		*req;
 
 		list_del_init(&dt_update->dur_list);
+		if (th->th_sync) {
+			rc = out_remote_sync(env, osp->opd_obd->u.cli.cl_import,
+					     dt_update, NULL);
+			dt_update_request_destroy(dt_update);
+
+			return rc;
+		}
+
 		rc = out_prep_update_req(env, osp->opd_obd->u.cli.cl_import,
 					 dt_update->dur_buf.ub_req, &req);
 		if (rc == 0) {
@@ -538,6 +546,7 @@ int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	struct thandle_update		*tu = th->th_update;
 	struct dt_update_request	*dt_update;
 	int				 rc = 0;
+	ENTRY;
 
 	LASSERT(tu != NULL);
 	LASSERT(tu != LP_POISON);
@@ -546,14 +555,15 @@ int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	dt_update = out_find_update(tu, dt);
 	if (dt_update == NULL) {
 		if (!is_only_remote_trans(th))
-			return rc;
-		goto put;
+			RETURN(rc);
+
+		GOTO(put, rc);
 	}
 
 	if (dt_update->dur_buf.ub_req == NULL ||
 	    dt_update->dur_buf.ub_req->ourq_count == 0) {
 		dt_update_request_destroy(dt_update);
-		goto put;
+		GOTO(put, rc);
 	}
 
 	if (is_only_remote_trans(th)) {
@@ -562,7 +572,7 @@ int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 			struct client_obd *cli = &osp->opd_obd->u.cli;
 
 			rc = obd_get_request_slot(cli);
-			if (!osp->opd_imp_active || osp->opd_got_disconnected) {
+			if (!osp->opd_imp_active || !osp->opd_imp_connected) {
 				if (rc == 0)
 					obd_put_request_slot(cli);
 
@@ -571,7 +581,7 @@ int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 
 			if (rc != 0) {
 				dt_update_request_destroy(dt_update);
-				goto put;
+				GOTO(put, rc);
 			}
 
 			rc = osp_trans_trigger(env, dt2osp_dev(dt),
@@ -589,6 +599,8 @@ int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 		rc = dt_update->dur_rc;
 		dt_update_request_destroy(dt_update);
 	}
+
+	GOTO(put, rc);
 
 put:
 	thandle_put(th);

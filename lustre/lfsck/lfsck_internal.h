@@ -113,6 +113,8 @@ enum lfsck_namespace_trace_flags {
 	LNTF_CHECK_PARENT	= 0x02,
 	LNTF_SKIP_NLINK		= 0x04,
 	LNTF_CHECK_ORPHAN	= 0x08,
+	LNTF_UNCERTAIN_LMV	= 0x10,
+	LNTF_RECHECK_NAME_HASH	= 0x20,
 	LNTF_ALL		= 0xff
 };
 
@@ -914,10 +916,22 @@ int lfsck_namespace_check_name(const struct lu_env *env,
 			       struct dt_object *parent,
 			       struct dt_object *child,
 			       const struct lu_name *cname);
+int lfsck_namespace_update_lmv(const struct lu_env *env,
+			       struct lfsck_component *com,
+			       struct dt_object *obj,
+			       struct lmv_mds_md_v1 *lmv, bool locked);
 int lfsck_namespace_verify_stripe_slave(const struct lu_env *env,
 					struct lfsck_component *com,
 					struct dt_object *obj,
 					struct lfsck_lmv *llmv);
+int lfsck_namespace_repair_bad_name_hash(const struct lu_env *env,
+					 struct lfsck_component *com,
+					 struct dt_object *shard,
+					 struct lfsck_lmv *llmv,
+					 const char *name);
+int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
+				       struct lfsck_component *com,
+				       struct lfsck_namespace_req *lnr);
 
 /* lfsck_layout.c */
 int lfsck_layout_setup(const struct lu_env *env, struct lfsck_instance *lfsck);
