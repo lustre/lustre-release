@@ -135,10 +135,6 @@ static inline int lmv_stripe_md_size(int stripe_count)
 	return sizeof(*lsm) + stripe_count * sizeof(lsm->lsm_md_oinfo[0]);
 }
 
-int lmv_name_to_stripe_index(enum lmv_hash_type hashtype,
-			     unsigned int max_mdt_index,
-			     const char *name, int namelen);
-
 static inline const struct lmv_oinfo *
 lsm_name_to_stripe_info(const struct lmv_stripe_md *lsm, const char *name,
 			int namelen)
@@ -159,15 +155,9 @@ lsm_name_to_stripe_info(const struct lmv_stripe_md *lsm, const char *name,
 	return &lsm->lsm_md_oinfo[stripe_index];
 }
 
-static inline bool lmv_is_known_hash_type(const struct lmv_stripe_md *lsm)
-{
-	return lsm->lsm_md_hash_type == LMV_HASH_TYPE_FNV_1A_64 ||
-	       lsm->lsm_md_hash_type == LMV_HASH_TYPE_ALL_CHARS;
-}
-
 static inline bool lmv_need_try_all_stripes(const struct lmv_stripe_md *lsm)
 {
-	return !lmv_is_known_hash_type(lsm) ||
+	return !lmv_is_known_hash_type(lsm->lsm_md_hash_type) ||
 	       lsm->lsm_md_hash_type & LMV_HASH_FLAG_MIGRATION;
 }
 

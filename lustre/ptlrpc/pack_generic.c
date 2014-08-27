@@ -2653,7 +2653,8 @@ void lustre_swab_lfsck_request(struct lfsck_request *lr)
 	lustre_swab_lu_fid(&lr->lr_fid);
 	lustre_swab_lu_fid(&lr->lr_fid2);
 	lustre_swab_lu_fid(&lr->lr_fid3);
-	CLASSERT(offsetof(typeof(*lr), lr_padding_2) != 0);
+	__swab32s(&lr->lr_stripe_count);
+	__swab32s(&lr->lr_hash_type);
 	CLASSERT(offsetof(typeof(*lr), lr_padding_3) != 0);
 }
 EXPORT_SYMBOL(lustre_swab_lfsck_request);

@@ -58,65 +58,6 @@
 #include <lustre_ioctl.h>
 #include "lmv_internal.h"
 
-/* This hash is only for testing purpose */
-static inline unsigned int
-lmv_hash_all_chars(unsigned int count, const char *name, int namelen)
-{
-	unsigned int c = 0;
-	const unsigned char *p = (const unsigned char *)name;
-
-	while (--namelen >= 0)
-		c += p[namelen];
-
-	c = c % count;
-
-	return c;
-}
-
-static inline unsigned int
-lmv_hash_fnv1a(unsigned int count, const char *name, int namelen)
-{
-	__u64	hash;
-
-	hash = lustre_hash_fnv_1a_64(name, namelen);
-
-	hash = hash % count;
-
-	return hash;
-}
-
-int lmv_name_to_stripe_index(__u32 lmv_hash_type, unsigned int stripe_count,
-			     const char *name, int namelen)
-{
-	int	idx;
-	__u32	hash_type = lmv_hash_type & LMV_HASH_TYPE_MASK;
-
-	LASSERT(namelen > 0);
-	if (stripe_count <= 1)
-		return 0;
-
-	/* for migrating object, always start from 0 stripe */
-	if (lmv_hash_type & LMV_HASH_FLAG_MIGRATION)
-		return 0;
-
-	switch (hash_type) {
-	case LMV_HASH_TYPE_ALL_CHARS:
-		idx = lmv_hash_all_chars(stripe_count, name, namelen);
-		break;
-	case LMV_HASH_TYPE_FNV_1A_64:
-		idx = lmv_hash_fnv1a(stripe_count, name, namelen);
-		break;
-	default:
-		idx = -EBADFD;
-		break;
-	}
-
-	CDEBUG(D_INFO, "name %.*s hash_type %d idx %d\n", namelen, name,
-	       hash_type, idx);
-
-	return idx;
-}
-
 static void lmv_activate_target(struct lmv_obd *lmv,
                                 struct lmv_tgt_desc *tgt,
                                 int activate)
@@ -2654,7 +2595,7 @@ retry_unlink:
 		 * name from stripe 0, but migrating dir is already handled
 		 * inside lmv_locate_target_for_name(), so we only check
 		 * unknown hash type directory here */
-		if (!lmv_is_known_hash_type(lsm)) {
+		if (!lmv_is_known_hash_type(lsm->lsm_md_hash_type)) {
 			struct lmv_oinfo *oinfo;
 
 			oinfo = &lsm->lsm_md_oinfo[stripe_index];

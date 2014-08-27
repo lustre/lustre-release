@@ -935,13 +935,8 @@ static int lfsck_scan_lpf_bad_entries(const struct lu_env *env,
 			break;
 
 		ent->lde_namelen = le16_to_cpu(ent->lde_namelen);
-		if (ent->lde_name[0] == '.') {
-			if (ent->lde_namelen == 1)
-				goto next;
-
-			if (ent->lde_namelen == 2 && ent->lde_name[1] == '.')
-				goto next;
-		}
+		if (name_is_dot_or_dotdot(ent->lde_name, ent->lde_namelen))
+			goto next;
 
 		/* name length must be strlen("MDTxxxx") */
 		if (ent->lde_namelen != 7)

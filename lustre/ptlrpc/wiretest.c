@@ -4677,10 +4677,14 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lfsck_request, lr_fid3));
 	LASSERTF((int)sizeof(((struct lfsck_request *)0)->lr_fid3) == 16, "found %lld\n",
 		 (long long)(int)sizeof(((struct lfsck_request *)0)->lr_fid3));
-	LASSERTF((int)offsetof(struct lfsck_request, lr_padding_2) == 80, "found %lld\n",
-		 (long long)(int)offsetof(struct lfsck_request, lr_padding_2));
-	LASSERTF((int)sizeof(((struct lfsck_request *)0)->lr_padding_2) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct lfsck_request *)0)->lr_padding_2));
+	LASSERTF((int)offsetof(struct lfsck_request, lr_stripe_count) == 80, "found %lld\n",
+		 (long long)(int)offsetof(struct lfsck_request, lr_stripe_count));
+	LASSERTF((int)sizeof(((struct lfsck_request *)0)->lr_stripe_count) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lfsck_request *)0)->lr_stripe_count));
+	LASSERTF((int)offsetof(struct lfsck_request, lr_hash_type) == 84, "found %lld\n",
+		 (long long)(int)offsetof(struct lfsck_request, lr_hash_type));
+	LASSERTF((int)sizeof(((struct lfsck_request *)0)->lr_hash_type) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lfsck_request *)0)->lr_hash_type));
 	LASSERTF((int)offsetof(struct lfsck_request, lr_padding_3) == 88, "found %lld\n",
 		 (long long)(int)offsetof(struct lfsck_request, lr_padding_3));
 	LASSERTF((int)sizeof(((struct lfsck_request *)0)->lr_padding_3) == 8, "found %lld\n",

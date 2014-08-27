@@ -3554,11 +3554,18 @@ struct lfsck_request {
 	__u16		lr_active;
 	__u16		lr_param;
 	__u16		lr_async_windows;
-	__u32		lr_flags2;
+	union {
+		__u32	lr_flags2;
+		__u32	lr_layout_version;
+	};
 	struct lu_fid	lr_fid;
 	struct lu_fid	lr_fid2;
-	struct lu_fid	lr_fid3;
-	__u64		lr_padding_2;
+	union {
+		struct lu_fid	lr_fid3;
+		char		lr_pool_name[LOV_MAXPOOLNAME];
+	};
+	__u32		lr_stripe_count;
+	__u32		lr_hash_type;
 	__u64		lr_padding_3;
 };
 
