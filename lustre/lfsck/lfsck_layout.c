@@ -806,7 +806,7 @@ static void lfsck_layout_cpu_to_le(struct lfsck_layout *des,
 }
 
 /**
- * Load the OST bitmap from the lfsck_layout tracing file.
+ * Load the OST bitmap from the lfsck_layout trace file.
  *
  * \param[in] env	pointer to the thread context
  * \param[in] com	pointer to the lfsck component
@@ -873,9 +873,9 @@ static int lfsck_layout_load_bitmap(const struct lu_env *env,
 }
 
 /**
- * Load the layout LFSCK tracing file from disk.
+ * Load the layout LFSCK trace file from disk.
  *
- * The layout LFSCK tracing file records the layout LFSCK status information
+ * The layout LFSCK trace file records the layout LFSCK status information
  * and other statistics, such as how many objects have been scanned, and how
  * many objects have been repaired, and etc. It also contains the bitmap for
  * failed OSTs during the layout LFSCK. All these information will be loaded
@@ -885,7 +885,7 @@ static int lfsck_layout_load_bitmap(const struct lu_env *env,
  * \param[in] com	pointer to the lfsck component
  *
  * \retval		positive number for file data corruption, the caller
- *			should reset the layout LFSCK tracing file
+ *			should reset the layout LFSCK trace file
  * \retval		0 for success
  * \retval		negative error number on failure
  */
@@ -923,9 +923,9 @@ static int lfsck_layout_load(const struct lu_env *env,
 }
 
 /**
- * Store the layout LFSCK tracing file on disk.
+ * Store the layout LFSCK trace file on disk.
  *
- * The layout LFSCK tracing file records the layout LFSCK status information
+ * The layout LFSCK trace file records the layout LFSCK status information
  * and other statistics, such as how many objects have been scanned, and how
  * many objects have been repaired, and etc. It also contains the bitmap for
  * failed OSTs during the layout LFSCK. All these information will be synced

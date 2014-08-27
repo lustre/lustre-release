@@ -1430,8 +1430,8 @@ static const struct osd_lf_map osd_lf_maps[] = {
 	       OLF_SHOW_NAME, NULL, NULL },
 
 	/* lost+found */
-	{ "lost+found", { 0, 0, 0 }, OLF_SCAN_SUBITEMS | OLF_NO_OI,
-		osd_ios_general_scan, osd_ios_lf_fill },
+	{ "lost+found", { FID_SEQ_LOCAL_FILE, OSD_LPF_OID, 0 },
+		OLF_SCAN_SUBITEMS, osd_ios_general_scan, osd_ios_lf_fill },
 
 	{ NULL, { 0, 0, 0 }, 0, NULL, NULL }
 };

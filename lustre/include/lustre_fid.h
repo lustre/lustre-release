@@ -168,6 +168,7 @@ extern const struct lu_fid LUSTRE_BFL_FID;
 extern const struct lu_fid LU_OBF_FID;
 extern const struct lu_fid LU_LPF_FID;
 extern const struct lu_fid LU_DOT_LUSTRE_FID;
+extern const struct lu_fid LU_BACKEND_LPF_FID;
 
 enum {
 	/*
@@ -223,6 +224,7 @@ enum local_oid {
 	ACCT_GROUP_OID		= 16UL,
 	LFSCK_BOOKMARK_OID	= 17UL,
 	OTABLE_IT_OID		= 18UL,
+	OSD_LPF_OID		= 19UL,
 	/* These two definitions are obsolete
 	 * OFD_GROUP0_LAST_OID     = 20UL,
 	 * OFD_GROUP4K_LAST_OID    = 20UL+4096,

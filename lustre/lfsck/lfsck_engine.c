@@ -39,7 +39,7 @@
 
 #include "lfsck_internal.h"
 
-static int lfsck_unpack_ent(struct lu_dirent *ent, __u64 *cookie, __u16 *type)
+int lfsck_unpack_ent(struct lu_dirent *ent, __u64 *cookie, __u16 *type)
 {
 	struct luda_type	*lt;
 	int			 align = sizeof(*lt) - 1;
@@ -712,7 +712,7 @@ checkpoint:
  * registered LFSCK component(s)' API to perform related consistency
  * verification.
  *
- * It flushes related LFSCK tracing files to disk via making checkpoint
+ * It flushes related LFSCK trace files to disk via making checkpoint
  * periodically. Then if the server crashed or the LFSCK is paused, the
  * LFSCK can resume from the latest checkpoint.
  *
@@ -1693,7 +1693,7 @@ cleanup2:
 
 	/* Under force exit case, some requests may be just freed without
 	 * verification, those objects should be re-handled when next run.
-	 * So not update the on-disk tracing file under such case. */
+	 * So not update the on-disk trace file under such case. */
 	if (lad->lad_in_double_scan) {
 		if (!lad->lad_exit)
 			rc1 = lao->la_double_scan_result(env, com, rc);

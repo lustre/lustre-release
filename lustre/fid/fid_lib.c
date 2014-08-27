@@ -99,3 +99,9 @@ const struct lu_fid LU_LPF_FID = { .f_seq = FID_SEQ_DOT_LUSTRE,
 				   .f_oid = FID_OID_DOT_LUSTRE_LPF,
 				   .f_ver = 0x0000000000000000 };
 EXPORT_SYMBOL(LU_LPF_FID);
+
+/** "/lost+found" - special FID for ldiskfs backend, invislbe to client. */
+const struct lu_fid LU_BACKEND_LPF_FID = { .f_seq = FID_SEQ_LOCAL_FILE,
+					   .f_oid = OSD_LPF_OID,
+					   .f_ver = 0x0000000000000000 };
+EXPORT_SYMBOL(LU_BACKEND_LPF_FID);
