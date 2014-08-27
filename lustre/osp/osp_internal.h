@@ -280,6 +280,7 @@ struct osp_thread_info {
 struct osp_it {
 	__u32			  ooi_pos_page;
 	__u32			  ooi_pos_lu_page;
+	__u32			  ooi_attr;
 	int			  ooi_pos_ent;
 	int			  ooi_total_npages;
 	int			  ooi_valid_npages;

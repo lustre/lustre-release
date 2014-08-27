@@ -1724,6 +1724,7 @@ struct dt_it *osp_it_init(const struct lu_env *env, struct dt_object *dt,
 
 	it->ooi_pos_ent = -1;
 	it->ooi_obj = dt;
+	it->ooi_attr = attr;
 
 	return (struct dt_it *)it;
 }
@@ -1819,15 +1820,16 @@ static int osp_it_fetch(const struct lu_env *env, struct osp_it *it)
 		ii->ii_fid.f_oid = osp->opd_index;
 		ii->ii_fid.f_ver = 0;
 		ii->ii_flags = II_FL_NOHASH;
+		ii->ii_attrs = osp_dev2node(osp);
 	} else {
 		ii->ii_fid = *lu_object_fid(&it->ooi_obj->do_lu);
 		ii->ii_flags = II_FL_NOHASH | II_FL_NOKEY | II_FL_VARKEY |
 			       II_FL_VARREC;
+		ii->ii_attrs = it->ooi_attr;
 	}
 	ii->ii_magic = IDX_INFO_MAGIC;
 	ii->ii_count = npages * LU_PAGE_COUNT;
 	ii->ii_hash_start = it->ooi_next;
-	ii->ii_attrs = osp_dev2node(osp);
 
 	ptlrpc_at_set_req_timeout(req);
 
@@ -1890,6 +1892,7 @@ out:
  * \param[in] env	pointer to the thread context
  * \param[in] di	pointer to the iteration structure
  *
+ * \retval		positive for end of the directory
  * \retval		0 for success
  * \retval		negative error number on failure
  */
@@ -1915,6 +1918,7 @@ again2:
 		}
 		it->ooi_cur_idxpage = NULL;
 		it->ooi_pos_lu_page++;
+
 again1:
 		if (it->ooi_pos_lu_page < LU_PAGE_COUNT) {
 			it->ooi_cur_idxpage = (void *)it->ooi_cur_page +
@@ -1987,6 +1991,7 @@ again0:
  * \param[in] env	pointer to the thread context
  * \param[in] di	pointer to the iteration structure
  *
+ * \retval		positive for end of the directory
  * \retval		0 for success
  * \retval		negative error number on failure
  */

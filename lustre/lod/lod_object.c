@@ -2513,8 +2513,9 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 			GOTO(out, rc);
 	}
 
-	rc = dt_xattr_set(env, dt_object_child(dt), &lmv_buf, XATTR_NAME_LMV,
-			  fl, th, capa);
+	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MASTER_LMV))
+		rc = dt_xattr_set(env, dt_object_child(dt), &lmv_buf,
+				  XATTR_NAME_LMV, fl, th, capa);
 
 out:
 	if (slave_lmm != NULL)

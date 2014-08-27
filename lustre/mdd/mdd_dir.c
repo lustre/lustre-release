@@ -380,17 +380,16 @@ int mdd_may_unlink(const struct lu_env *env, struct mdd_object *pobj,
 	if (mdd_is_dead_obj(pobj))
 		RETURN(-ENOENT);
 
-	if ((attr->la_valid & LA_FLAGS) &&
-	    (attr->la_flags & (LUSTRE_APPEND_FL | LUSTRE_IMMUTABLE_FL)))
+	if (attr->la_flags & (LUSTRE_APPEND_FL | LUSTRE_IMMUTABLE_FL))
 		RETURN(-EPERM);
 
 	rc = mdd_permission_internal_locked(env, pobj, pattr,
 					    MAY_WRITE | MAY_EXEC,
 					    MOR_TGT_PARENT);
-	if (rc)
+	if (rc != 0)
 		RETURN(rc);
 
-	if (mdd_is_append(pobj))
+	if (pattr->la_flags & LUSTRE_APPEND_FL)
 		RETURN(-EPERM);
 
 	RETURN(rc);
@@ -445,7 +444,7 @@ static int mdd_may_delete_entry(const struct lu_env *env,
 			RETURN(rc);
 	}
 
-	if (mdd_is_append(pobj))
+	if (pattr->la_flags & LUSTRE_APPEND_FL)
 		RETURN(-EPERM);
 
 	RETURN(0);
@@ -482,11 +481,7 @@ int mdd_may_delete(const struct lu_env *env, struct mdd_object *tpobj,
 	if (mdd_is_sticky(env, tpobj, tpattr, tobj, tattr))
 		RETURN(-EPERM);
 
-	if (mdd_is_immutable(tobj) || mdd_is_append(tobj))
-		RETURN(-EPERM);
-
-	if ((tattr->la_valid & LA_FLAGS) &&
-	    (tattr->la_flags & (LUSTRE_APPEND_FL | LUSTRE_IMMUTABLE_FL)))
+	if (tattr->la_flags & (LUSTRE_APPEND_FL | LUSTRE_IMMUTABLE_FL))
 		RETURN(-EPERM);
 
 	/* additional check the rename case */
@@ -546,11 +541,11 @@ static int mdd_link_sanity_check(const struct lu_env *env,
 	if (rc < 0)
 		RETURN(rc);
 
-        if (mdd_is_immutable(src_obj) || mdd_is_append(src_obj))
-                RETURN(-EPERM);
+	if (cattr->la_flags & (LUSTRE_IMMUTABLE_FL | LUSTRE_APPEND_FL))
+		RETURN(-EPERM);
 
-        if (S_ISDIR(mdd_object_type(src_obj)))
-                RETURN(-EPERM);
+	if (S_ISDIR(mdd_object_type(src_obj)))
+		RETURN(-EPERM);
 
 	LASSERT(src_obj != tgt_obj);
 	rc = mdd_may_create(env, tgt_obj, tattr, NULL, true);
@@ -3351,7 +3346,6 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 
 	la_flag->la_valid = LA_FLAGS;
 	la_flag->la_flags = la->la_flags | LUSTRE_IMMUTABLE_FL;
-	mdd_flags_xlate(mdd_sobj, la_flag->la_flags);
 	rc = mdo_declare_attr_set(env, mdd_sobj, la_flag, handle);
 
 	return rc;
@@ -3461,7 +3455,6 @@ static int mdd_migrate_create(const struct lu_env *env,
 	 * flag and approve the migration */
 	la_flag->la_valid = LA_FLAGS;
 	la_flag->la_flags = la->la_flags | LUSTRE_IMMUTABLE_FL;
-	mdd_flags_xlate(mdd_sobj, la_flag->la_flags);
 	rc = mdo_attr_set(env, mdd_sobj, la_flag, handle,
 			  mdd_object_capa(env, mdd_sobj));
 stop_trans:
@@ -3719,7 +3712,6 @@ static int mdd_declare_migrate_update_name(const struct lu_env *env,
 	/* Revert IMMUTABLE flag */
 	la_flag->la_valid = LA_FLAGS;
 	la_flag->la_flags = la->la_flags & ~LUSTRE_IMMUTABLE_FL;
-	mdd_flags_xlate(mdd_sobj, la_flag->la_flags);
 	rc = mdo_declare_attr_set(env, mdd_sobj, la_flag, handle);
 	if (rc != 0)
 		return rc;
@@ -3838,7 +3830,6 @@ static int mdd_migrate_update_name(const struct lu_env *env,
 	/* Revert IMMUTABLE flag */
 	la_flag->la_valid = LA_FLAGS;
 	la_flag->la_flags = so_attr->la_flags & ~LUSTRE_IMMUTABLE_FL;
-	mdd_flags_xlate(mdd_sobj, la_flag->la_flags);
 	rc = mdo_attr_set(env, mdd_sobj, la_flag, handle,
 			  mdd_object_capa(env, mdd_pobj));
 	if (rc != 0)
@@ -3949,7 +3940,6 @@ static int mdd_migrate_sanity_check(const struct lu_env *env,
 			struct mdd_device *mdd = mdo2mdd(&sobj->mod_obj);
 
 			sattr->la_flags &= ~LUSTRE_IMMUTABLE_FL;
-			sobj->mod_flags &= ~IMMUTE_OBJ;
 			CDEBUG(D_HA, "%s: "DFID" override IMMUTE FLAG\n",
 			       mdd2obd_dev(mdd)->obd_name,
 			       PFID(mdd_object_fid(sobj)));

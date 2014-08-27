@@ -74,17 +74,6 @@ int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
         return mdo_attr_get(env, obj, la, capa);
 }
 
-void mdd_flags_xlate(struct mdd_object *obj, __u32 flags)
-{
-        obj->mod_flags &= ~(APPEND_OBJ|IMMUTE_OBJ);
-
-        if (flags & LUSTRE_APPEND_FL)
-                obj->mod_flags |= APPEND_OBJ;
-
-        if (flags & LUSTRE_IMMUTABLE_FL)
-                obj->mod_flags |= IMMUTE_OBJ;
-}
-
 struct mdd_thread_info *mdd_env_info(const struct lu_env *env)
 {
         struct mdd_thread_info *info;
@@ -167,8 +156,6 @@ static int mdd_object_start(const struct lu_env *env, struct lu_object *o)
 		struct lu_attr *attr = MDD_ENV_VAR(env, la_for_start);
 
 		rc = mdd_la_get(env, mdd_obj, attr, BYPASS_CAPA);
-		if (rc == 0)
-			mdd_flags_xlate(mdd_obj, attr->la_flags);
 	}
 
 	return rc;
@@ -455,7 +442,8 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 
 	/* Check if flags change. */
 	if (la->la_valid & LA_FLAGS) {
-		unsigned int oldflags = 0;
+		unsigned int oldflags = oattr->la_flags &
+				(LUSTRE_IMMUTABLE_FL | LUSTRE_APPEND_FL);
 		unsigned int newflags = la->la_flags &
 				(LUSTRE_IMMUTABLE_FL | LUSTRE_APPEND_FL);
 
@@ -463,12 +451,8 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 		    !md_capable(uc, CFS_CAP_FOWNER))
 			RETURN(-EPERM);
 
-		/* XXX: the IMMUTABLE and APPEND_ONLY flags can
+		/* The IMMUTABLE and APPEND_ONLY flags can
 		 * only be changed by the relevant capability. */
-		if (mdd_is_immutable(obj))
-			oldflags |= LUSTRE_IMMUTABLE_FL;
-		if (mdd_is_append(obj))
-			oldflags |= LUSTRE_APPEND_FL;
 		if ((oldflags ^ newflags) &&
 		    !md_capable(uc, CFS_CAP_LINUX_IMMUTABLE))
 			RETURN(-EPERM);
@@ -477,7 +461,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 			la->la_flags &= ~LUSTRE_DIRSYNC_FL;
 	}
 
-	if ((mdd_is_immutable(obj) || mdd_is_append(obj)) &&
+	if (oattr->la_flags & (LUSTRE_IMMUTABLE_FL | LUSTRE_APPEND_FL) &&
 	    (la->la_valid & ~LA_FLAGS) &&
 	    !(flags & MDS_PERM_BYPASS))
 		RETURN(-EPERM);
@@ -875,13 +859,10 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 		       la->la_mtime, la->la_ctime);
 
 	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
-	if (la_copy->la_valid & LA_FLAGS) {
+	if (la_copy->la_valid & LA_FLAGS)
 		rc = mdd_attr_set_internal(env, mdd_obj, la_copy, handle, 1);
-		if (rc == 0)
-			mdd_flags_xlate(mdd_obj, la_copy->la_flags);
-	} else if (la_copy->la_valid) { /* setattr */
+	else if (la_copy->la_valid) /* setattr */
 		rc = mdd_attr_set_internal(env, mdd_obj, la_copy, handle, 1);
-	}
 	mdd_write_unlock(env, mdd_obj);
 
 	if (rc == 0)
@@ -901,7 +882,7 @@ static int mdd_xattr_sanity_check(const struct lu_env *env,
 	struct lu_ucred *uc     = lu_ucred_assert(env);
 	ENTRY;
 
-	if (mdd_is_immutable(obj) || mdd_is_append(obj))
+	if (attr->la_flags & (LUSTRE_IMMUTABLE_FL | LUSTRE_APPEND_FL))
 		RETURN(-EPERM);
 
 	if ((uc->uc_fsuid != attr->la_uid) && !md_capable(uc, CFS_CAP_FOWNER))
@@ -1650,7 +1631,7 @@ static int mdd_open_sanity_check(const struct lu_env *env,
 		flag &= ~MDS_OPEN_TRUNC;
 
 	/* For writing append-only file must open it with append mode. */
-	if (mdd_is_append(obj)) {
+	if (attr->la_flags & LUSTRE_APPEND_FL) {
 		if ((flag & FMODE_WRITE) && !(flag & MDS_OPEN_APPEND))
 			RETURN(-EPERM);
 		if (flag & MDS_OPEN_TRUNC)

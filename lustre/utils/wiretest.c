@@ -1574,6 +1574,7 @@ void lustre_assert_wire_constants(void)
 	CLASSERT(LMV_HASH_FLAG_MIGRATION == 0x80000000);
 	CLASSERT(LMV_HASH_FLAG_DEAD == 0x40000000);
 	CLASSERT(LMV_HASH_FLAG_BAD_TYPE == 0x20000000);
+	CLASSERT(LMV_HASH_FLAG_LOST_LMV == 0x10000000);
 
 	/* Checks for struct obd_statfs */
 	LASSERTF((int)sizeof(struct obd_statfs) == 144, "found %lld\n",
@@ -4736,12 +4737,16 @@ void lustre_assert_wire_constants(void)
 		 (long long)LE_SKIP_NLINK_DECLARE);
 	LASSERTF(LE_SKIP_NLINK == 14, "found %lld\n",
 		 (long long)LE_SKIP_NLINK);
+	LASSERTF(LE_SET_LMV_MASTER == 15, "found %lld\n",
+		 (long long)LE_SET_LMV_MASTER);
 	LASSERTF(LEF_TO_OST == 0x00000001UL, "found 0x%.8xUL\n",
 		(unsigned)LEF_TO_OST);
 	LASSERTF(LEF_FROM_OST == 0x00000002UL, "found 0x%.8xUL\n",
 		(unsigned)LEF_FROM_OST);
 	LASSERTF(LEF_SET_LMV_HASH == 0x00000004UL, "found 0x%.8xUL\n",
 		(unsigned)LEF_SET_LMV_HASH);
+	LASSERTF(LEF_SET_LMV_ALL == 0x00000008UL, "found 0x%.8xUL\n",
+		(unsigned)LEF_SET_LMV_ALL);
 
 	/* Checks for struct lfsck_reply */
 	LASSERTF((int)sizeof(struct lfsck_reply) == 16, "found %lld\n",

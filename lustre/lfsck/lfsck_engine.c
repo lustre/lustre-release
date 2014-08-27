@@ -368,9 +368,8 @@ static void lfsck_fail(const struct lu_env *env, struct lfsck_instance *lfsck,
 	}
 }
 
-static void lfsck_close_dir(const struct lu_env *env,
-			    struct lfsck_instance *lfsck,
-			    int result)
+void lfsck_close_dir(const struct lu_env *env,
+		     struct lfsck_instance *lfsck, int result)
 {
 	struct lfsck_component *com;
 	ENTRY;
@@ -407,8 +406,8 @@ static void lfsck_close_dir(const struct lu_env *env,
 	EXIT;
 }
 
-static int lfsck_open_dir(const struct lu_env *env,
-			  struct lfsck_instance *lfsck, __u64 cookie)
+int lfsck_open_dir(const struct lu_env *env,
+		   struct lfsck_instance *lfsck, __u64 cookie)
 {
 	struct dt_object	*obj	= lfsck->li_obj_dir;
 	struct dt_it		*di	= lfsck->li_di_dir;
@@ -633,20 +632,46 @@ static int lfsck_exec_dir(const struct lu_env *env,
 	return 0;
 }
 
+static int lfsck_master_dir_engine(const struct lu_env *env,
+				   struct lfsck_instance *lfsck);
+
 static int lfsck_post(const struct lu_env *env, struct lfsck_instance *lfsck,
 		      int result)
 {
 	struct lfsck_component *com;
 	struct lfsck_component *next;
-	int			rc  = 0;
-	int			rc1 = 0;
+	int			rc  = result;
 
 	lfsck_pos_fill(env, lfsck, &lfsck->li_pos_checkpoint, false);
 	lfsck_close_dir(env, lfsck, result);
+
+	while (thread_is_running(&lfsck->li_thread) && rc > 0 &&
+	       !list_empty(&lfsck->li_list_lmv)) {
+		struct lfsck_lmv_unit *llu;
+
+		spin_lock(&lfsck->li_lock);
+		llu = list_entry(lfsck->li_list_lmv.next,
+				 struct lfsck_lmv_unit, llu_link);
+		list_del_init(&llu->llu_link);
+		spin_unlock(&lfsck->li_lock);
+
+		lfsck->li_lmv = &llu->llu_lmv;
+		lfsck->li_obj_dir = lfsck_object_get(llu->llu_obj);
+		rc = lfsck_open_dir(env, lfsck, 0);
+		if (rc == 0) {
+			rc = lfsck_master_dir_engine(env, lfsck);
+			lfsck_close_dir(env, lfsck, result);
+		}
+	}
+
+	result = rc;
+
 	list_for_each_entry_safe(com, next, &lfsck->li_list_scan, lc_link) {
 		rc = com->lc_ops->lfsck_post(env, com, result, false);
 		if (rc != 0)
-			rc1 = rc;
+			CDEBUG(D_LFSCK, "%s: lfsck_post at the component %u: "
+			       "rc = %d\n", lfsck_lfsck2name(lfsck),
+			       (__u32)com->lc_type, rc);
 	}
 
 	lfsck->li_time_last_checkpoint = cfs_time_current();
@@ -893,6 +918,26 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 			RETURN(0);
 
 		lfsck->li_current_oit_processed = 1;
+
+		if (!list_empty(&lfsck->li_list_lmv)) {
+			struct lfsck_lmv_unit *llu;
+
+			spin_lock(&lfsck->li_lock);
+			llu = list_entry(lfsck->li_list_lmv.next,
+					 struct lfsck_lmv_unit, llu_link);
+			list_del_init(&llu->llu_link);
+			spin_unlock(&lfsck->li_lock);
+
+			lfsck->li_lmv = &llu->llu_lmv;
+			lfsck->li_obj_dir = lfsck_object_get(llu->llu_obj);
+			rc = lfsck_open_dir(env, lfsck, 0);
+			if (rc == 0)
+				rc = lfsck_master_dir_engine(env, lfsck);
+
+			if (rc <= 0)
+				RETURN(rc);
+		}
+
 		lfsck->li_new_scanned++;
 		lfsck->li_pos_current.lp_oit_cookie = iops->store(env, di);
 		rc = iops->rec(env, di, (struct dt_rec *)fid, 0);

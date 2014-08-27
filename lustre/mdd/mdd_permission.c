@@ -241,15 +241,15 @@ static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
 }
 
 int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
-				const struct lu_attr *la, int mask, int role)
+			      const struct lu_attr *la, int mask, int role)
 {
 	struct lu_ucred *uc = lu_ucred(env);
-        __u32 mode;
-        int rc;
-        ENTRY;
+	__u32 mode;
+	int rc;
+	ENTRY;
 
-        if (mask == 0)
-                RETURN(0);
+	if (mask == 0)
+		RETURN(0);
 
 	/* These means unnecessary for permission check */
 	if ((uc == NULL) || (uc->uc_valid == UCRED_INIT))
@@ -259,15 +259,15 @@ int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
 	if (uc->uc_valid == UCRED_INVALID)
 		RETURN(-EACCES);
 
-        /*
-         * Nobody gets write access to an immutable file.
-         */
-        if ((mask & MAY_WRITE) && mdd_is_immutable(obj))
-                RETURN(-EACCES);
+	/*
+	 * Nobody gets write access to an immutable file.
+	 */
+	if (mask & MAY_WRITE && la->la_flags & LUSTRE_IMMUTABLE_FL)
+		RETURN(-EACCES);
 
 	LASSERT(la != NULL);
 
-        mode = la->la_mode;
+	mode = la->la_mode;
 	if (uc->uc_fsuid == la->la_uid) {
 		mode >>= 6;
         } else {

@@ -519,6 +519,13 @@ struct lfsck_component {
 #define LFSCK_LMV_MAX_STRIPES	LMV_MAX_STRIPE_COUNT
 #define LFSCK_LMV_DEF_STRIPES	4
 
+/* When the namespace LFSCK scans a striped directory, it will record all
+ * the known shards' information in the structure "lfsck_slave_lmv_rec",
+ * including the shard's FID, index, slave LMV EA, and so on. Each shard
+ * will take one lfsck_slave_lmv_rec slot. After the 1st cycle scanning
+ * the striped directory, the LFSCK will get all the information about
+ * whether there are some inconsistency, and then it can repair them in
+ * the 2nd cycle scanning. */
 struct lfsck_slave_lmv_rec {
 	struct lu_fid	lslr_fid;
 	__u32		lslr_stripe_count;
@@ -546,6 +553,20 @@ struct lfsck_lmv {
 	struct lfsck_slave_lmv_rec	*ll_lslr;
 };
 
+/* If the namespace LFSCK finds that the master MDT-object of a striped
+ * directory lost its master LMV EA, it will re-generate the master LMV
+ * EA and notify the LFSCK instance on the MDT on which the striped dir
+ * master MDT-object resides to rescan the striped directory. To do that,
+ * the notify handler will insert a "lfsck_lmv_unit" structure into the
+ * lfsck::li_list_lmv. The LFSCK instance will scan such list from time
+ * to time to check whether needs to rescan some stirped directories. */
+struct lfsck_lmv_unit {
+	struct list_head	 llu_link;
+	struct lfsck_lmv	 llu_lmv;
+	struct dt_object	*llu_obj;
+	struct lfsck_instance	*llu_lfsck;
+};
+
 struct lfsck_instance {
 	struct mutex		  li_mutex;
 	spinlock_t		  li_lock;
@@ -566,6 +587,9 @@ struct lfsck_instance {
 
 	/* For the components those are not scanning now. */
 	struct list_head	  li_list_idle;
+
+	/* For the lfsck_lmv_unit to be handled. */
+	struct list_head	  li_list_lmv;
 
 	atomic_t		  li_ref;
 	atomic_t		  li_double_scan_count;
@@ -779,6 +803,7 @@ struct lfsck_thread_info {
 	struct lfsck_start	lti_start;
 	struct lfsck_stop	lti_stop;
 	ldlm_policy_data_t	lti_policy;
+	struct ldlm_enqueue_info lti_einfo;
 	struct ldlm_res_id	lti_resid;
 	union {
 		struct filter_fid_old	lti_old_pfid;
@@ -852,6 +877,10 @@ void lfsck_quit_generic(const struct lu_env *env,
 
 /* lfsck_engine.c */
 int lfsck_unpack_ent(struct lu_dirent *ent, __u64 *cookie, __u16 *type);
+void lfsck_close_dir(const struct lu_env *env,
+		     struct lfsck_instance *lfsck, int result);
+int lfsck_open_dir(const struct lu_env *env,
+		   struct lfsck_instance *lfsck, __u64 cookie);
 int lfsck_master_engine(void *args);
 int lfsck_assistant_engine(void *args);
 
@@ -924,6 +953,12 @@ int lfsck_namespace_verify_stripe_slave(const struct lu_env *env,
 					struct lfsck_component *com,
 					struct dt_object *obj,
 					struct lfsck_lmv *llmv);
+int lfsck_namespace_scan_shard(const struct lu_env *env,
+			       struct lfsck_component *com,
+			       struct dt_object *child);
+int lfsck_namespace_notify_lmv_master_local(const struct lu_env *env,
+					    struct lfsck_component *com,
+					    struct dt_object *obj);
 int lfsck_namespace_repair_bad_name_hash(const struct lu_env *env,
 					 struct lfsck_component *com,
 					 struct dt_object *shard,

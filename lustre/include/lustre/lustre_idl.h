@@ -2757,6 +2757,11 @@ struct lmv_mds_md_v1 {
 #define LMV_HASH_FLAG_DEAD	0x40000000
 #define LMV_HASH_FLAG_BAD_TYPE	0x20000000
 
+/* The striped directory has ever lost its master LMV EA, then LFSCK
+ * re-generated it. This flag is used to indicate such case. It is an
+ * on-disk flag. */
+#define LMV_HASH_FLAG_LOST_LMV	0x10000000
+
 /**
  * The FNV-1a hash algorithm is as follows:
  *	hash = FNV_offset_basis
@@ -3595,12 +3600,14 @@ enum lfsck_events {
 	LE_CREATE_ORPHAN	= 12,
 	LE_SKIP_NLINK_DECLARE	= 13,
 	LE_SKIP_NLINK		= 14,
+	LE_SET_LMV_MASTER	= 15,
 };
 
 enum lfsck_event_flags {
 	LEF_TO_OST		= 0x00000001,
 	LEF_FROM_OST		= 0x00000002,
 	LEF_SET_LMV_HASH	= 0x00000004,
+	LEF_SET_LMV_ALL		= 0x00000008,
 };
 
 static inline void lustre_set_wire_obdo(const struct obd_connect_data *ocd,

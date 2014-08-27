@@ -544,6 +544,7 @@ struct osd_thread_info {
 
 	struct osd_idmap_cache oti_cache;
 
+	unsigned int	       oti_it_inline:1;
         int                    oti_r_locks;
         int                    oti_w_locks;
         int                    oti_txns;

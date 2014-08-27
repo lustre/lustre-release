@@ -119,9 +119,7 @@ struct mdd_device {
 enum mod_flags {
 	/* The dir object has been unlinked */
 	DEAD_OBJ   = 1 << 0,
-	APPEND_OBJ = 1 << 1,
-	IMMUTE_OBJ = 1 << 2,
-	ORPHAN_OBJ = 1 << 3,
+	ORPHAN_OBJ = 1 << 1,
 };
 
 struct mdd_object {
@@ -173,7 +171,6 @@ extern const char orph_index_name[];
 
 int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
                struct lu_attr *la, struct lustre_capa *capa);
-void mdd_flags_xlate(struct mdd_object *obj, __u32 flags);
 int mdd_attr_get(const struct lu_env *env, struct md_object *obj,
 		 struct md_attr *ma);
 int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
@@ -437,19 +434,9 @@ static inline umode_t mdd_object_type(const struct mdd_object *obj)
         return lu_object_attr(&obj->mod_obj.mo_lu);
 }
 
-static inline int mdd_is_immutable(struct mdd_object *obj)
-{
-        return obj->mod_flags & IMMUTE_OBJ;
-}
-
 static inline int mdd_is_dead_obj(struct mdd_object *obj)
 {
         return obj && obj->mod_flags & DEAD_OBJ;
-}
-
-static inline int mdd_is_append(struct mdd_object *obj)
-{
-        return obj->mod_flags & APPEND_OBJ;
 }
 
 static inline int mdd_object_exists(struct mdd_object *obj)

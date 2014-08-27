@@ -3834,6 +3834,115 @@ test_31b() {
 }
 run_test 31b "The LFSCK can find/repair the name entry with bad name hash (2)"
 
+test_31c() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "The test needs at least 2 MDTs" && return
+
+	echo "#####"
+	echo "For some reason, the master MDT-object of the striped directory"
+	echo "may lost its master LMV EA. If nobody created files under the"
+	echo "master directly after the master LMV EA lost, then the LFSCK"
+	echo "should re-generate the master LMV EA."
+	echo "#####"
+
+	check_mount_and_prep
+
+	echo "Inject failure stub on MDT0 to simulate the case that the"
+	echo "master MDT-object of the striped directory lost the LMV EA."
+
+	#define OBD_FAIL_LFSCK_LOST_MASTER_LMV	0x1629
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1629
+	$LFS setdirstripe -i 0 -c $MDSCOUNT $DIR/$tdir/striped_dir ||
+		error "(1) Fail to create striped directory"
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+
+	echo "Trigger namespace LFSCK to re-generate master LMV EA"
+	$START_NAMESPACE -r -A ||
+		error "(2) Fail to start LFSCK for namespace"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(3) unexpected status"
+	}
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^striped_dirs_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(4) Fail to re-generate master LMV EA: $repaired"
+
+	umount_client $MOUNT || error "(5) umount failed"
+	mount_client $MOUNT || error "(6) mount failed"
+
+	local empty=$(ls $DIR/$tdir/striped_dir/)
+	[ -z "$empty" ] || error "(7) The master LMV EA is not repaired: $empty"
+
+	rmdir $DIR/$tdir/striped_dir ||
+		error "(8) Fail to remove the striped directory after LFSCK"
+}
+run_test 31c "Re-generate the lost master LMV EA for striped directory"
+
+test_31d() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "The test needs at least 2 MDTs" && return
+
+	echo "#####"
+	echo "For some reason, the master MDT-object of the striped directory"
+	echo "may lost its master LMV EA. If somebody created files under the"
+	echo "master directly after the master LMV EA lost, then the LFSCK"
+	echo "should NOT re-generate the master LMV EA, instead, it should"
+	echo "change the broken striped dirctory as read-only to prevent"
+	echo "further damage"
+	echo "#####"
+
+	check_mount_and_prep
+
+	echo "Inject failure stub on MDT0 to simulate the case that the"
+	echo "master MDT-object of the striped directory lost the LMV EA."
+
+	#define OBD_FAIL_LFSCK_LOST_MASTER_LMV	0x1629
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1629
+	$LFS setdirstripe -i 0 -c $MDSCOUNT $DIR/$tdir/striped_dir ||
+		error "(1) Fail to create striped directory"
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x0
+
+	umount_client $MOUNT || error "(2) umount failed"
+	mount_client $MOUNT || error "(3) mount failed"
+
+	touch $DIR/$tdir/striped_dir/dummy ||
+		error "(4) Fail to touch under broken striped directory"
+
+	echo "Trigger namespace LFSCK to find out the inconsistency"
+	$START_NAMESPACE -r -A ||
+		error "(5) Fail to start LFSCK for namespace"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(6) unexpected status"
+	}
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^striped_dirs_repaired/ { print $2 }')
+	[ $repaired -eq 0 ] ||
+		error "(7) Re-generate master LMV EA unexpected: $repaired"
+
+	stat $DIR/$tdir/striped_dir/dummy ||
+		error "(8) Fail to stat $DIR/$tdir/striped_dir/dummy"
+
+	touch $DIR/$tdir/striped_dir/foo &&
+		error "(9) The broken striped directory should be read-only"
+
+	chattr -i $DIR/$tdir/striped_dir ||
+		error "(10) Fail to chattr on the broken striped directory"
+
+	rmdir $DIR/$tdir/striped_dir ||
+		error "(11) Fail to remove the striped directory after LFSCK"
+}
+run_test 31d "Set broken striped directory (modified after broken) as read-only"
+
 $LCTL set_param debug=-lfsck > /dev/null || true
 
 # restore MDS/OST size

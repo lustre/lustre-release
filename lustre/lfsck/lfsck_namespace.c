@@ -3003,6 +3003,22 @@ static int lfsck_namespace_double_scan_dir(const struct lu_env *env,
 
 	LASSERT(!dt_object_remote(child));
 
+	if (flags & LNTF_UNCERTAIN_LMV) {
+		if (flags & LNTF_RECHECK_NAME_HASH) {
+			rc = lfsck_namespace_scan_shard(env, com, child);
+			if (rc < 0)
+				RETURN(rc);
+
+			ns->ln_striped_shards_scanned++;
+		} else {
+			ns->ln_striped_shards_skipped++;
+		}
+	}
+
+	flags &= ~(LNTF_RECHECK_NAME_HASH | LNTF_UNCERTAIN_LMV);
+	if (flags == 0)
+		RETURN(0);
+
 	if (flags & (LNTF_CHECK_LINKEA | LNTF_CHECK_PARENT) &&
 	    !(lfsck->li_bookmark_ram.lb_param & LPF_ALL_TGT)) {
 		CDEBUG(D_LFSCK, "%s: some MDT(s) maybe NOT take part in the"
@@ -3622,6 +3638,29 @@ static void lfsck_namespace_dump_statistics(struct seq_file *m,
 		      time_phase2);
 }
 
+static void lfsck_namespace_release_lmv(const struct lu_env *env,
+					struct lfsck_component *com)
+{
+	struct lfsck_instance		*lfsck	= com->lc_lfsck;
+	struct lfsck_namespace		*ns	= com->lc_file_ram;
+
+	while (!list_empty(&lfsck->li_list_lmv)) {
+		struct lfsck_lmv_unit	*llu;
+		struct lfsck_lmv	*llmv;
+
+		llu = list_entry(lfsck->li_list_lmv.next,
+				 struct lfsck_lmv_unit, llu_link);
+		llmv = &llu->llu_lmv;
+
+		LASSERTF(atomic_read(&llmv->ll_ref) == 1,
+			 "still in using: %u\n",
+			 atomic_read(&llmv->ll_ref));
+
+		ns->ln_striped_dirs_skipped++;
+		lfsck_lmv_put(env, llmv);
+	}
+}
+
 /* namespace APIs */
 
 static int lfsck_namespace_reset(const struct lu_env *env,
@@ -4100,6 +4139,8 @@ static int lfsck_namespace_post(const struct lu_env *env,
 	lfsck_post_generic(env, com, &result);
 
 	down_write(&com->lc_sem);
+	lfsck_namespace_release_lmv(env, com);
+
 	spin_lock(&lfsck->li_lock);
 	if (!init)
 		ns->ln_pos_last_checkpoint = lfsck->li_pos_checkpoint;
@@ -4348,6 +4389,7 @@ static void lfsck_namespace_data_release(const struct lu_env *env,
 	LASSERT(list_empty(&lad->lad_req_list));
 
 	com->lc_data = NULL;
+	lfsck_namespace_release_lmv(env, com);
 
 	spin_lock(&ltds->ltd_lock);
 	list_for_each_entry_safe(ltd, next, &lad->lad_mdt_phase1_list,
@@ -4385,6 +4427,8 @@ static void lfsck_namespace_quit(const struct lu_env *env,
 	LASSERT(thread_is_init(&lad->lad_thread) ||
 		thread_is_stopped(&lad->lad_thread));
 	LASSERT(list_empty(&lad->lad_req_list));
+
+	lfsck_namespace_release_lmv(env, com);
 
 	spin_lock(&ltds->ltd_lock);
 	list_for_each_entry_safe(ltd, next, &lad->lad_mdt_phase1_list,
@@ -4520,6 +4564,19 @@ log:
 			ns->ln_flags |= LF_INCOMPLETE;
 
 		return 0;
+	}
+	case LE_SET_LMV_MASTER: {
+		struct dt_object	*obj;
+
+		obj = lfsck_object_find_by_dev(env, lfsck->li_bottom,
+					       &lr->lr_fid);
+		if (IS_ERR(obj))
+			RETURN(PTR_ERR(obj));
+
+		rc = lfsck_namespace_notify_lmv_master_local(env, com, obj);
+		lfsck_object_put(env, obj);
+
+		RETURN(rc > 0 ? 0 : rc);
 	}
 	case LE_PHASE1_DONE:
 	case LE_PHASE2_DONE:
@@ -5648,6 +5705,117 @@ out:
 	lu_object_put(env, &parent->do_lu);
 }
 
+/**
+ * Rescan the striped directory after the master LMV EA reset.
+ *
+ * Sometimes, the master LMV EA of the striped directory maybe lost, so when
+ * the namespace LFSCK engine scan the striped directory for the first time,
+ * it will be reguarded as a normal directory. As the LFSCK processing, some
+ * other LFSCK instance on other MDT will find the shard of this striped dir,
+ * and find that the master MDT-object of the striped directory lost its LMV
+ * EA, then such remote LFSCK instance will regenerate the master LMV EA and
+ * notify the LFSCK instance on this MDT to rescan the striped directory.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] com	pointer to the lfsck component
+ * \param[in] llu	the lfsck_lmv_unit that contains the striped directory
+ *			to be rescanned.
+ *
+ * \retval		positive number for success
+ * \retval		0 for LFSCK stopped/paused
+ * \retval		negative error number on failure
+ */
+static int lfsck_namespace_rescan_striped_dir(const struct lu_env *env,
+					      struct lfsck_component *com,
+					      struct lfsck_lmv_unit *llu)
+{
+	struct lfsck_thread_info	*info	= lfsck_env_info(env);
+	struct lfsck_instance		*lfsck	= com->lc_lfsck;
+	struct lfsck_assistant_data	*lad	= com->lc_data;
+	struct dt_object		*dir;
+	const struct dt_it_ops		*iops;
+	struct dt_it			*di;
+	struct lu_dirent		*ent	=
+			(struct lu_dirent *)info->lti_key;
+	struct lfsck_bookmark		*bk	= &lfsck->li_bookmark_ram;
+	struct ptlrpc_thread		*thread = &lfsck->li_thread;
+	struct lfsck_namespace_req	*lnr;
+	struct lfsck_assistant_req	*lar;
+	int				 rc;
+	__u16				 type;
+	ENTRY;
+
+	LASSERT(list_empty(&lad->lad_req_list));
+
+	lfsck->li_lmv = &llu->llu_lmv;
+	lfsck->li_obj_dir = lfsck_object_get(llu->llu_obj);
+	rc = lfsck_open_dir(env, lfsck, 0);
+	if (rc != 0)
+		RETURN(rc);
+
+	dir = lfsck->li_obj_dir;
+	di = lfsck->li_di_dir;
+	iops = &dir->do_index_ops->dio_it;
+	do {
+		rc = iops->rec(env, di, (struct dt_rec *)ent,
+			       lfsck->li_args_dir);
+		if (rc == 0)
+			rc = lfsck_unpack_ent(ent, &lfsck->li_cookie_dir,
+					      &type);
+
+		if (rc != 0) {
+			if (bk->lb_param & LPF_FAILOUT)
+				GOTO(out, rc);
+
+			goto next;
+		}
+
+		if (ent->lde_attrs & LUDA_IGNORE &&
+		    strcmp(ent->lde_name, dotdot) != 0)
+			goto next;
+
+		lnr = lfsck_namespace_assistant_req_init(lfsck, ent, type);
+		if (IS_ERR(lnr)) {
+			if (bk->lb_param & LPF_FAILOUT)
+				GOTO(out, rc = PTR_ERR(lnr));
+
+			goto next;
+		}
+
+		lar = &lnr->lnr_lar;
+		rc = lfsck_namespace_assistant_handler_p1(env, com, lar);
+		lfsck_namespace_assistant_req_fini(env, lar);
+		if (rc != 0 && bk->lb_param & LPF_FAILOUT)
+			GOTO(out, rc);
+
+		if (unlikely(!thread_is_running(thread)))
+			GOTO(out, rc = 0);
+
+next:
+		rc = iops->next(env, di);
+	} while (rc == 0);
+
+out:
+	lfsck_close_dir(env, lfsck, rc);
+	if (rc <= 0)
+		RETURN(rc);
+
+	/* The close_dir() may insert a dummy lnr in the lad->lad_req_list. */
+	if (list_empty(&lad->lad_req_list))
+		RETURN(1);
+
+	spin_lock(&lad->lad_lock);
+	lar = list_entry(lad->lad_req_list.next, struct lfsck_assistant_req,
+			  lar_list);
+	list_del_init(&lar->lar_list);
+	spin_unlock(&lad->lad_lock);
+
+	rc = lfsck_namespace_assistant_handler_p1(env, com, lar);
+	lfsck_namespace_assistant_req_fini(env, lar);
+
+	RETURN(rc == 0 ? 1 : rc);
+}
+
 static int lfsck_namespace_assistant_handler_p2(const struct lu_env *env,
 						struct lfsck_component *com)
 {
@@ -5664,6 +5832,20 @@ static int lfsck_namespace_assistant_handler_p2(const struct lu_env *env,
 	int			 rc;
 	__u8			 flags	= 0;
 	ENTRY;
+
+	while (!list_empty(&lfsck->li_list_lmv)) {
+		struct lfsck_lmv_unit *llu;
+
+		spin_lock(&lfsck->li_lock);
+		llu = list_entry(lfsck->li_list_lmv.next,
+				 struct lfsck_lmv_unit, llu_link);
+		list_del_init(&llu->llu_link);
+		spin_unlock(&lfsck->li_lock);
+
+		rc = lfsck_namespace_rescan_striped_dir(env, com, llu);
+		if (rc <= 0)
+			RETURN(rc);
+	}
 
 	CDEBUG(D_LFSCK, "%s: namespace LFSCK phase2 scan start\n",
 	       lfsck_lfsck2name(lfsck));
