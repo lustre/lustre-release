@@ -623,22 +623,23 @@ static int __osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 			RETURN(rc);
 	}
 
-	if (o->opo_new)
-		/* no need in logging for new objects being created */
-		RETURN(0);
-
 	if (!(attr->la_valid & (LA_UID | LA_GID)))
 		RETURN(0);
 
-	if (!is_only_remote_trans(th))
+	if (!is_only_remote_trans(th)) {
+		if (o->opo_new)
+			/* no need in logging for new objects being created */
+			RETURN(0);
+
 		/*
 		 * track all UID/GID changes via llog
 		 */
 		rc = osp_sync_declare_add(env, o, MDS_SETATTR64_REC, th);
-	else
+	} else {
 		/* It is for OST-object attr_set directly without updating
 		 * local MDT-object attribute. It is usually used by LFSCK. */
-		rc = osp_md_declare_attr_set(env, dt, attr, th);
+		rc = __osp_md_attr_set(env, dt, attr, th);
+	}
 
 	if (rc != 0 || o->opo_ooa == NULL)
 		RETURN(rc);
@@ -744,8 +745,10 @@ static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 
 	if (is_only_remote_trans(th)) {
 		rc = __osp_attr_set(env, dt, attr, th);
-		if (rc != 0)
-			RETURN(rc);
+		if (rc == 0 && o->opo_new)
+			o->opo_new = 0;
+
+		RETURN(rc);
 	}
 
 	/* we're interested in uid/gid changes only */
@@ -761,17 +764,8 @@ static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 		RETURN(0);
 	}
 
-	if (!is_only_remote_trans(th))
-		/*
-		 * once transaction is committed put proper command on
-		 * the queue going to our OST
-		 */
-		rc = osp_sync_add(env, o, MDS_SETATTR64_REC, th, attr);
-		/* XXX: send new uid/gid to OST ASAP? */
-	else
-		/* It is for OST-object attr_set directly without updating
-		 * local MDT-object attribute. It is usually used by LFSCK. */
-		rc = osp_md_attr_set(env, dt, attr, th, capa);
+	rc = osp_sync_add(env, o, MDS_SETATTR64_REC, th, attr);
+	/* XXX: send new uid/gid to OST ASAP? */
 
 	RETURN(rc);
 }

@@ -144,7 +144,7 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 	       struct lfsck_stop *stop);
 int lfsck_in_notify(const struct lu_env *env, struct dt_device *key,
-		    struct lfsck_request *lr);
+		    struct lfsck_request *lr, struct thandle *th);
 int lfsck_query(const struct lu_env *env, struct dt_device *key,
 		struct lfsck_request *lr);
 
@@ -156,12 +156,13 @@ int lfsck_set_windows(struct dt_device *key, int val);
 int lfsck_dump(struct seq_file *m, struct dt_device *key, enum lfsck_type type);
 
 static inline void lfsck_pack_rfa(struct lfsck_request *lr,
-				  const struct lu_fid *fid)
+				  const struct lu_fid *fid,
+				  __u32 event, __u16 com)
 {
 	memset(lr, 0, sizeof(*lr));
-	lr->lr_event = LE_FID_ACCESSED;
-	lr->lr_active = LFSCK_TYPE_LAYOUT;
 	lr->lr_fid = *fid;
+	lr->lr_event = event;
+	lr->lr_active = com;
 }
 
 #endif /* _LUSTRE_LFSCK_H */

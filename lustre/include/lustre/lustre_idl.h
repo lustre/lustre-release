@@ -3585,6 +3585,8 @@ enum lfsck_events {
 	LE_CONDITIONAL_DESTROY	= 10,
 	LE_PAIRS_VERIFY 	= 11,
 	LE_CREATE_ORPHAN	= 12,
+	LE_SKIP_NLINK_DECLARE	= 13,
+	LE_SKIP_NLINK		= 14,
 };
 
 enum lfsck_event_flags {

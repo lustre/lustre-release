@@ -3055,6 +3055,10 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 			RETURN(rc);
 	}
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LINKEA_OVERFLOW) &&
+	    strcmp(name, XATTR_NAME_LINK) == 0)
+		return -ENOSPC;
+
 	return __osd_xattr_set(info, inode, name, buf->lb_buf, buf->lb_len,
 			       fs_flags);
 }

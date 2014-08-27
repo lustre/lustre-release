@@ -2875,7 +2875,7 @@ out:
 EXPORT_SYMBOL(lfsck_stop);
 
 int lfsck_in_notify(const struct lu_env *env, struct dt_device *key,
-		    struct lfsck_request *lr)
+		    struct lfsck_request *lr, struct thandle *th)
 {
 	int rc = -EOPNOTSUPP;
 	ENTRY;
@@ -2914,6 +2914,8 @@ int lfsck_in_notify(const struct lu_env *env, struct dt_device *key,
 	case LE_PEER_EXIT:
 	case LE_CONDITIONAL_DESTROY:
 	case LE_CREATE_ORPHAN:
+	case LE_SKIP_NLINK_DECLARE:
+	case LE_SKIP_NLINK:
 	case LE_PAIRS_VERIFY: {
 		struct lfsck_instance  *lfsck;
 		struct lfsck_component *com;
@@ -2924,7 +2926,7 @@ int lfsck_in_notify(const struct lu_env *env, struct dt_device *key,
 
 		com = lfsck_component_find(lfsck, lr->lr_active);
 		if (likely(com != NULL)) {
-			rc = com->lc_ops->lfsck_in_notify(env, com, lr);
+			rc = com->lc_ops->lfsck_in_notify(env, com, lr, th);
 			lfsck_component_put(env, com);
 		}
 

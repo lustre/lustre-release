@@ -350,10 +350,12 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 
 		/* Only the new created objects need to be recorded. */
 		if (ofd->ofd_osd->dd_record_fid_accessed) {
-			lfsck_pack_rfa(&ofd_info(env)->fti_lr,
-				       lu_object_fid(&fo->ofo_obj.do_lu));
-			lfsck_in_notify(env, ofd->ofd_osd,
-					&ofd_info(env)->fti_lr);
+			struct lfsck_request *lr = &ofd_info(env)->fti_lr;
+
+			lfsck_pack_rfa(lr, lu_object_fid(&fo->ofo_obj.do_lu),
+				       LE_FID_ACCESSED,
+				       LFSCK_TYPE_LAYOUT);
+			lfsck_in_notify(env, ofd->ofd_osd, lr, NULL);
 		}
 
 		if (likely(!ofd_object_exists(fo) &&

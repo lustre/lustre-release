@@ -563,11 +563,8 @@ int osp_md_declare_object_create(const struct lu_env *env,
 int osp_md_object_create(const struct lu_env *env, struct dt_object *dt,
 			 struct lu_attr *attr, struct dt_allocation_hint *hint,
 			 struct dt_object_format *dof, struct thandle *th);
-int osp_md_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
-			    const struct lu_attr *attr, struct thandle *th);
-int osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,
-		    const struct lu_attr *attr, struct thandle *th,
-		    struct lustre_capa *capa);
+int __osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,
+		      const struct lu_attr *attr, struct thandle *th);
 extern const struct dt_index_operations osp_md_index_ops;
 
 /* osp_precreate.c */

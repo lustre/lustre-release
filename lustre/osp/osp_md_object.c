@@ -326,10 +326,7 @@ static void osp_md_ah_init(const struct lu_env *env,
 }
 
 /**
- * Implementation of dt_object_operations::do_declare_attr_get
- *
- * Declare setting attributes of the remote object, i.e. insert remote
- * object attr_set update into RPC.
+ * Add attr_set sub-request into the OUT RPC.
  *
  * \param[in] env	execution environment
  * \param[in] dt	object on which to set attributes
@@ -339,8 +336,8 @@ static void osp_md_ah_init(const struct lu_env *env,
  * \retval		0 if the insertion succeeds.
  * \retval		negative errno if the insertion fails.
  */
-int osp_md_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
-			    const struct lu_attr *attr, struct thandle *th)
+int __osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,
+		      const struct lu_attr *attr, struct thandle *th)
 {
 	struct dt_update_request	*update;
 	int				rc;
@@ -361,11 +358,46 @@ int osp_md_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 }
 
 /**
+ * Implementation of dt_object_operations::do_declare_attr_get
+ *
+ * Declare setting attributes to the specified remote object.
+ *
+ * If the transaction is a remote transaction, then add the modification
+ * sub-request into the OUT RPC here, and such OUT RPC will be triggered
+ * when transaction start.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object on which to set attributes
+ * \param[in] attr	attributes to be set
+ * \param[in] th	the transaction handle
+ *
+ * \retval		0 if the insertion succeeds.
+ * \retval		negative errno if the insertion fails.
+ */
+int osp_md_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
+			    const struct lu_attr *attr, struct thandle *th)
+{
+	int rc = 0;
+
+	CDEBUG(D_INFO, "declare attr set object "DFID"\n",
+	       PFID(&dt->do_lu.lo_header->loh_fid));
+
+	if (!is_only_remote_trans(th))
+		rc = __osp_md_attr_set(env, dt, attr, th);
+
+	return rc;
+}
+
+/**
  * Implementation of dt_object_operations::do_attr_set
  *
- * Do nothing in this method for now. In DNE phase I, remote updates
- * are actually executed during transaction start, i.e. object attributes
- * have already been set when calling this method.
+ * Set attributes to the specified remote object.
+ *
+ * If the transaction is a remote transaction, then related modification
+ * sub-request has been added in the declare phase and related OUT RPC
+ * has been triggered at transaction start. Otherwise, the modification
+ * sub-request will be added here, and related OUT RPC will be triggered
+ * when transaction stop.
  *
  * \param[in] env	execution environment
  * \param[in] dt	object to set attributes
@@ -379,10 +411,15 @@ int osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,
 		    const struct lu_attr *attr, struct thandle *th,
 		    struct lustre_capa *capa)
 {
+	int rc = 0;
+
 	CDEBUG(D_INFO, "attr set object "DFID"\n",
 	       PFID(&dt->do_lu.lo_header->loh_fid));
 
-	RETURN(0);
+	if (is_only_remote_trans(th))
+		rc = __osp_md_attr_set(env, dt, attr, th);
+
+	RETURN(rc);
 }
 
 /**

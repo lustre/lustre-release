@@ -111,6 +111,7 @@ struct lfsck_bookmark {
 enum lfsck_namespace_trace_flags {
 	LNTF_CHECK_LINKEA	= 0x01,
 	LNTF_CHECK_PARENT	= 0x02,
+	LNTF_SKIP_NLINK		= 0x04,
 	LNTF_ALL		= 0xff
 };
 
@@ -359,7 +360,8 @@ struct lfsck_operations {
 
 	int (*lfsck_in_notify)(const struct lu_env *env,
 			       struct lfsck_component *com,
-			       struct lfsck_request *lr);
+			       struct lfsck_request *lr,
+			       struct thandle *th);
 
 	int (*lfsck_query)(const struct lu_env *env,
 			   struct lfsck_component *com);
@@ -1104,11 +1106,15 @@ static inline void lfsck_lad_set_bitmap(const struct lu_env *env,
 
 	LASSERT(com->lc_lfsck->li_master);
 	LASSERT(bitmap != NULL);
-	LASSERTF(bitmap->size > index, "invalid index: nbits %d, index %u\n",
-		 bitmap->size, index);
 
-	cfs_bitmap_set(bitmap, index);
-	lad->lad_incomplete = 1;
+	if (likely(bitmap->size > index)) {
+		cfs_bitmap_set(bitmap, index);
+		lad->lad_incomplete = 1;
+	} else if (com->lc_type == LFSCK_TYPE_NAMESPACE) {
+		struct lfsck_namespace *ns = com->lc_file_ram;
+
+		ns->ln_flags |= LF_INCOMPLETE;
+	}
 }
 
 static inline int lfsck_links_read(const struct lu_env *env,

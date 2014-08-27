@@ -77,7 +77,7 @@ static void ofd_inconsistency_verify_one(const struct lu_env *env,
 	lr->lr_fid2 = oii->oii_pfid; /* client given PFID. */
 	lr->lr_fid3 = *pfid; /* OST local stored PFID. */
 
-	rc = lfsck_in_notify(env, ofd->ofd_osd, lr);
+	rc = lfsck_in_notify(env, ofd->ofd_osd, lr, NULL);
 	ofd_write_lock(env, fo);
 	switch (lr->lr_status) {
 	case LPVS_INIT:

@@ -565,12 +565,30 @@ static int out_tx_xattr_set_exec(const struct lu_env *env,
 	rc = dt_xattr_set(env, dt_obj, &arg->u.xattr_set.buf,
 			  arg->u.xattr_set.name, arg->u.xattr_set.flags,
 			  th, NULL);
-	dt_write_unlock(env, dt_obj);
 	/**
 	 * Ignore errors if this is LINK EA
 	 **/
-	if (unlikely(rc && !strcmp(arg->u.xattr_set.name, XATTR_NAME_LINK)))
+	if (unlikely(rc != 0 &&
+		     strcmp(arg->u.xattr_set.name, XATTR_NAME_LINK) == 0)) {
+		/* XXX: If the linkEA is overflow, then we need to notify the
+		 *	namespace LFSCK to skip "nlink" attribute verification
+		 *	on this object to avoid the "nlink" to be shrinked by
+		 *	wrong. It may be not good an interaction with LFSCK
+		 *	like this. We will consider to replace it with other
+		 *	mechanism in future. LU-5802. */
+		if (rc == -ENOSPC) {
+			struct lfsck_request *lr = &tgt_th_info(env)->tti_lr;
+
+			lfsck_pack_rfa(lr, lu_object_fid(&dt_obj->do_lu),
+				       LE_SKIP_NLINK, LFSCK_TYPE_NAMESPACE);
+			tgt_lfsck_in_notify(env,
+				tgt_ses_info(env)->tsi_tgt->lut_bottom, lr, th);
+		}
+
 		rc = 0;
+	}
+	dt_write_unlock(env, dt_obj);
+
 out:
 	CDEBUG(D_INFO, "%s: insert xattr set reply %p index %d: rc = %d\n",
 	       dt_obd_name(th->th_dev), arg->reply, arg->index, rc);
@@ -595,6 +613,24 @@ static int __out_tx_xattr_set(const struct lu_env *env,
 	rc = dt_declare_xattr_set(env, dt_obj, buf, name, flags, ta->ta_handle);
 	if (rc != 0)
 		return rc;
+
+	if (strcmp(name, XATTR_NAME_LINK) == 0) {
+		struct lfsck_request *lr = &tgt_th_info(env)->tti_lr;
+
+		/* XXX: If the linkEA is overflow, then we need to notify the
+		 *	namespace LFSCK to skip "nlink" attribute verification
+		 *	on this object to avoid the "nlink" to be shrinked by
+		 *	wrong. It may be not good an interaction with LFSCK
+		 *	like this. We will consider to replace it with other
+		 *	mechanism in future. LU-5802. */
+		lfsck_pack_rfa(lr, lu_object_fid(&dt_obj->do_lu),
+			       LE_SKIP_NLINK_DECLARE, LFSCK_TYPE_NAMESPACE);
+		rc = tgt_lfsck_in_notify(env,
+					 tgt_ses_info(env)->tsi_tgt->lut_bottom,
+					 lr, ta->ta_handle);
+		if (rc != 0)
+			return rc;
+	}
 
 	arg = tx_add_exec(ta, out_tx_xattr_set_exec, NULL, file, line);
 	if (IS_ERR(arg))
@@ -1566,8 +1602,10 @@ int out_handle(struct tgt_session_info *tsi)
 
 		if (dt->dd_record_fid_accessed) {
 			lfsck_pack_rfa(&tti->tti_lr,
-				       lu_object_fid(&dt_obj->do_lu));
-			tgt_lfsck_in_notify(env, dt, &tti->tti_lr);
+				       lu_object_fid(&dt_obj->do_lu),
+				       LE_FID_ACCESSED,
+				       LFSCK_TYPE_LAYOUT);
+			tgt_lfsck_in_notify(env, dt, &tti->tti_lr, NULL);
 		}
 
 		tti->tti_u.update.tti_dt_object = dt_obj;

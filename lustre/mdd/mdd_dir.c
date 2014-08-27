@@ -1113,16 +1113,35 @@ int mdd_links_write(const struct lu_env *env, struct mdd_object *mdd_obj,
 {
 	const struct lu_buf *buf = mdd_buf_get_const(env, ldata->ld_buf->lb_buf,
 						     ldata->ld_leh->leh_len);
+	int		    rc;
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_LINKEA))
 		return 0;
 
-	return mdo_xattr_set(env, mdd_obj, buf, XATTR_NAME_LINK, 0, handle,
-			     mdd_object_capa(env, mdd_obj));
+	rc = mdo_xattr_set(env, mdd_obj, buf, XATTR_NAME_LINK, 0, handle,
+			   mdd_object_capa(env, mdd_obj));
+	if (unlikely(rc == -ENOSPC) && S_ISREG(mdd_object_type(mdd_obj)) &&
+	    mdd_object_remote(mdd_obj) == 0) {
+		struct lfsck_request *lr = &mdd_env_info(env)->mti_lr;
+
+		/* XXX: If the linkEA is overflow, then we need to notify the
+		 *	namespace LFSCK to skip "nlink" attribute verification
+		 *	on this object to avoid the "nlink" to be shrinked by
+		 *	wrong. It may be not good an interaction with LFSCK
+		 *	like this. We will consider to replace it with other
+		 *	mechanism in future. LU-5802. */
+		lfsck_pack_rfa(lr, mdo2fid(mdd_obj), LE_SKIP_NLINK,
+			       LFSCK_TYPE_NAMESPACE);
+		lfsck_in_notify(env, mdo2mdd(&mdd_obj->mod_obj)->mdd_bottom,
+				lr, handle);
+	}
+
+	return rc;
 }
 
 int mdd_declare_links_add(const struct lu_env *env, struct mdd_object *mdd_obj,
-			  struct thandle *handle, struct linkea_data *ldata)
+			  struct thandle *handle, struct linkea_data *ldata,
+			  enum mdd_links_add_overflow overflow)
 {
 	int	rc;
 	int	ea_len;
@@ -1140,6 +1159,25 @@ int mdd_declare_links_add(const struct lu_env *env, struct mdd_object *mdd_obj,
 	rc = mdo_declare_xattr_set(env, mdd_obj,
 				   mdd_buf_get_const(env, linkea, ea_len),
 				   XATTR_NAME_LINK, 0, handle);
+	if (rc != 0)
+		return rc;
+
+	if (mdd_object_remote(mdd_obj) == 0 && overflow == MLAO_CHECK) {
+		struct lfsck_request *lr = &mdd_env_info(env)->mti_lr;
+
+		/* XXX: If the linkEA is overflow, then we need to notify the
+		 *	namespace LFSCK to skip "nlink" attribute verification
+		 *	on this object to avoid the "nlink" to be shrinked by
+		 *	wrong. It may be not good an interaction with LFSCK
+		 *	like this. We will consider to replace it with other
+		 *	mechanism in future. LU-5802. */
+		lfsck_pack_rfa(lr, mdo2fid(mdd_obj), LE_SKIP_NLINK_DECLARE,
+			       LFSCK_TYPE_NAMESPACE);
+		rc = lfsck_in_notify(env,
+				     mdo2mdd(&mdd_obj->mod_obj)->mdd_bottom,
+				     lr, handle);
+	}
+
 	return rc;
 }
 
@@ -1152,7 +1190,7 @@ static inline int mdd_declare_links_del(const struct lu_env *env,
 	/* For directory, the linkEA will be removed together
 	 * with the object. */
 	if (!S_ISDIR(mdd_object_type(c)))
-		rc = mdd_declare_links_add(env, c, handle, NULL);
+		rc = mdd_declare_links_add(env, c, handle, NULL, MLAO_IGNORE);
 
 	return rc;
 }
@@ -1174,8 +1212,14 @@ static int mdd_declare_link(const struct lu_env *env,
 		return rc;
 
 	rc = mdo_declare_ref_add(env, c, handle);
-	if (rc)
+	if (rc != 0)
 		return rc;
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_MORE_NLINK)) {
+		rc = mdo_declare_ref_add(env, c, handle);
+		if (rc != 0)
+			return rc;
+	}
 
 	la->la_valid = LA_CTIME | LA_MTIME;
 	rc = mdo_declare_attr_set(env, p, la, handle);
@@ -1184,11 +1228,12 @@ static int mdd_declare_link(const struct lu_env *env,
 
 	la->la_valid = LA_CTIME;
 	rc = mdo_declare_attr_set(env, c, la, handle);
-	if (rc)
+	if (rc != 0)
 		return rc;
 
-	rc = mdd_declare_links_add(env, c, handle, data);
-	if (rc)
+	rc = mdd_declare_links_add(env, c, handle, data,
+			S_ISREG(mdd_object_type(c)) ? MLAO_CHECK : MLAO_IGNORE);
+	if (rc != 0)
 		return rc;
 
 	rc = mdd_declare_changelog_store(env, mdd, name, NULL, handle);
@@ -1244,10 +1289,17 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 	if (rc)
 		GOTO(out_unlock, rc);
 
-	rc = mdo_ref_add(env, mdd_sobj, handle);
-	if (rc)
-		GOTO(out_unlock, rc);
+	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LESS_NLINK)) {
+		rc = mdo_ref_add(env, mdd_sobj, handle);
+		if (rc != 0)
+			GOTO(out_unlock, rc);
+	}
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_MORE_NLINK)) {
+		rc = mdo_ref_add(env, mdd_sobj, handle);
+		if (rc != 0)
+			GOTO(out_unlock, rc);
+	}
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING3)) {
 		struct lu_fid tfid = *mdo2fid(mdd_sobj);
@@ -2027,7 +2079,7 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
 		if (rc != 0)
 			return rc;
 
-		rc = mdd_declare_links_add(env, c, handle, ldata);
+		rc = mdd_declare_links_add(env, c, handle, ldata, MLAO_IGNORE);
 		if (rc)
 			return rc;
 
@@ -2564,7 +2616,8 @@ static int mdd_declare_rename(const struct lu_env *env,
 	if (rc)
 		return rc;
 
-	rc = mdd_declare_links_add(env, mdd_sobj, handle, ldata);
+	rc = mdd_declare_links_add(env, mdd_sobj, handle, ldata,
+		S_ISREG(mdd_object_type(mdd_sobj)) ? MLAO_CHECK : MLAO_IGNORE);
 	if (rc)
 		return rc;
 
@@ -2981,7 +3034,8 @@ static int mdd_linkea_update_child_internal(const struct lu_env *env,
 		linkea_entry_pack(ldata.ld_lee, &lname,
 				  mdd_object_fid(parent));
 		if (declare)
-			rc = mdd_declare_links_add(env, child, handle, &ldata);
+			rc = mdd_declare_links_add(env, child, handle, &ldata,
+						   MLAO_IGNORE);
 		else
 			rc = mdd_links_write(env, child, &ldata, handle);
 		break;
@@ -3031,7 +3085,8 @@ static int mdd_update_linkea_internal(const struct lu_env *env,
 	}
 
 	if (declare)
-		rc = mdd_declare_links_add(env, mdd_tobj, handle, ldata);
+		rc = mdd_declare_links_add(env, mdd_tobj, handle, ldata,
+					   MLAO_IGNORE);
 	else
 		rc = mdd_links_write(env, mdd_tobj, ldata, handle);
 

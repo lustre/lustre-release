@@ -110,7 +110,7 @@ static int mdd_convert_linkea(const struct lu_env *env,
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
 
-	rc = mdd_declare_links_add(env, o, th, NULL);
+	rc = mdd_declare_links_add(env, o, th, NULL, MLAO_IGNORE);
 	if (rc)
 		GOTO(out, rc);
 	rc = dt_trans_start_local(env, mdd->mdd_child, th);
