@@ -237,6 +237,10 @@ static int expired_lock_main(void *arg)
 			export = class_export_lock_get(lock->l_export, lock);
 			spin_unlock_bh(&waiting_locks_spinlock);
 
+			spin_lock_bh(&export->exp_bl_list_lock);
+			list_del_init(&lock->l_exp_list);
+			spin_unlock_bh(&export->exp_bl_list_lock);
+
 			do_dump++;
 			class_fail_export(export);
 			class_export_lock_put(export, lock);
