@@ -3168,9 +3168,6 @@ struct md_ops mdc_md_ops = {
 int __init mdc_init(void)
 {
 	return class_register_type(&mdc_obd_ops, &mdc_md_ops, true, NULL,
-#ifndef HAVE_ONLY_PROCFS_SEQ
-				   NULL,
-#endif
 				   LUSTRE_MDC_NAME, NULL);
 }
 

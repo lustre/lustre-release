@@ -1606,9 +1606,6 @@ static int __init mdd_mod_init(void)
 	hsm_actions_logops.lop_declare_add = llog_cat_declare_add_rec;
 
 	rc = class_register_type(&mdd_obd_device_ops, NULL, true, NULL,
-#ifndef HAVE_ONLY_PROCFS_SEQ
-				 NULL,
-#endif
 				 LUSTRE_MDD_NAME, &mdd_device_type);
 	if (rc)
 		lu_kmem_fini(mdd_caches);

@@ -951,9 +951,6 @@ static int __init lod_mod_init(void)
 		return rc;
 
 	rc = class_register_type(&lod_obd_device_ops, NULL, true, NULL,
-#ifndef HAVE_ONLY_PROCFS_SEQ
-				 NULL,
-#endif
 				 LUSTRE_LOD_NAME, &lod_device_type);
 	if (rc) {
 		lu_kmem_fini(lod_caches);

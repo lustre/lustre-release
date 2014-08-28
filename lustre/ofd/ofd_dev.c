@@ -2433,9 +2433,6 @@ int __init ofd_init(void)
 	}
 
 	rc = class_register_type(&ofd_obd_ops, NULL, true, NULL,
-#ifndef HAVE_ONLY_PROCFS_SEQ
-				 NULL,
-#endif
 				 LUSTRE_OST_NAME, &ofd_device_type);
 	return rc;
 }

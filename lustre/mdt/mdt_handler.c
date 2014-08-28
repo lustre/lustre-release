@@ -5942,9 +5942,6 @@ static int __init mdt_mod_init(void)
 		GOTO(lu_fini, rc);
 
 	rc = class_register_type(&mdt_obd_device_ops, NULL, true, NULL,
-#ifndef HAVE_ONLY_PROCFS_SEQ
-				 NULL,
-#endif
 				 LUSTRE_MDT_NAME, &mdt_device_type);
 	if (rc)
 		GOTO(mds_fini, rc);

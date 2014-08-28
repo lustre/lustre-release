@@ -78,9 +78,6 @@ struct lu_device_type;
 struct obd_export *class_conn2export(struct lustre_handle *);
 int class_register_type(struct obd_ops *, struct md_ops *, bool enable_proc,
 			struct lprocfs_seq_vars *module_vars,
-#ifndef HAVE_ONLY_PROCFS_SEQ
-			struct lprocfs_vars *,
-#endif
 			const char *nm, struct lu_device_type *ldt);
 int class_unregister_type(const char *nm);
 

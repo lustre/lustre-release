@@ -6176,9 +6176,6 @@ static int __init osd_mod_init(void)
 
 	rc = class_register_type(&osd_obd_device_ops, NULL, true,
 				 lprocfs_osd_module_vars,
-#ifndef HAVE_ONLY_PROCFS_SEQ
-				 NULL,
-#endif
 				 LUSTRE_OSD_LDISKFS_NAME, &osd_device_type);
 	if (rc)
 		lu_kmem_fini(ldiskfs_caches);

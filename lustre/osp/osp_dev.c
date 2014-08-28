@@ -1729,9 +1729,6 @@ static int __init osp_mod_init(void)
 
 
 	rc = class_register_type(&osp_obd_device_ops, NULL, true, NULL,
-#ifndef HAVE_ONLY_PROCFS_SEQ
-				 NULL,
-#endif
 				 LUSTRE_OSP_NAME, &osp_device_type);
 	if (rc != 0) {
 		lu_kmem_fini(osp_caches);
@@ -1739,9 +1736,6 @@ static int __init osp_mod_init(void)
 	}
 
 	rc = class_register_type(&lwp_obd_device_ops, NULL, true, NULL,
-#ifndef HAVE_ONLY_PROCFS_SEQ
-				 NULL,
-#endif
 				 LUSTRE_LWP_NAME, &lwp_device_type);
 	if (rc != 0) {
 		class_unregister_type(LUSTRE_OSP_NAME);

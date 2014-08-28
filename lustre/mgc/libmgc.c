@@ -159,8 +159,5 @@ struct obd_ops mgc_obd_ops = {
 int __init mgc_init(void)
 {
 	return class_register_type(&mgc_obd_ops, NULL, true, NULL,
-#ifndef HAVE_ONLY_PROCFS_SEQ
-				   NULL,
-#endif
 				   LUSTRE_MGC_NAME, NULL);
 }

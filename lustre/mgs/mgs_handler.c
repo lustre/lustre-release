@@ -1530,9 +1530,6 @@ static struct obd_ops mgs_obd_device_ops = {
 static int __init mgs_init(void)
 {
 	return class_register_type(&mgs_obd_device_ops, NULL, true, NULL,
-#ifndef HAVE_ONLY_PROCFS_SEQ
-				   NULL,
-#endif
 				   LUSTRE_MGS_NAME, &mgs_device_type);
 }
 

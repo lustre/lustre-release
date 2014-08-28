@@ -548,9 +548,6 @@ int mds_mod_init(void)
 	}
 
 	return class_register_type(&mds_obd_device_ops, NULL, true, NULL,
-#ifndef HAVE_ONLY_PROCFS_SEQ
-				   NULL,
-#endif
 				   LUSTRE_MDS_NAME, &mds_device_type);
 }
 

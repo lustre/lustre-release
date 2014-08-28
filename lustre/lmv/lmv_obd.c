@@ -3614,9 +3614,6 @@ struct md_ops lmv_md_ops = {
 int __init lmv_init(void)
 {
 	return class_register_type(&lmv_obd_ops, &lmv_md_ops, true, NULL,
-#ifndef HAVE_ONLY_PROCFS_SEQ
-				   NULL,
-#endif
 				   LUSTRE_LMV_NAME, NULL);
 }
 

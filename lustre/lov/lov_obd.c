@@ -2452,9 +2452,6 @@ int __init lov_init(void)
 		enable_proc = false;
 
 	rc = class_register_type(&lov_obd_ops, NULL, enable_proc, NULL,
-#ifndef HAVE_ONLY_PROCFS_SEQ
-				 NULL,
-#endif
 				 LUSTRE_LOV_NAME, &lov_device_type);
 
         if (rc) {
