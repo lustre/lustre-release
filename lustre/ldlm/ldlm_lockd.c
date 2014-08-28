@@ -1284,6 +1284,11 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
                              &lock->l_remote_handle,
                              &lock->l_exp_hash);
 
+	/* Inherit the enqueue flags before the operation, because we do not
+	 * keep the res lock on return and next operations (BL AST) may proceed
+	 * without them. */
+	lock->l_flags |= ldlm_flags_from_wire(dlm_req->lock_flags &
+					      LDLM_FL_INHERIT_MASK);
 existing_lock:
 
         if (flags & LDLM_FL_HAS_INTENT) {
@@ -1321,7 +1326,6 @@ existing_lock:
 	}
 
         dlm_rep = req_capsule_server_get(&req->rq_pill, &RMF_DLM_REP);
-	dlm_rep->lock_flags = ldlm_flags_to_wire(flags);
 
         ldlm_lock2desc(lock, &dlm_rep->lock_desc);
         ldlm_lock2handle(lock, &dlm_rep->lock_handle);
@@ -1332,9 +1336,8 @@ existing_lock:
 
         /* Now take into account flags to be inherited from original lock
            request both in reply to client and in our own lock flags. */
-	dlm_rep->lock_flags |= dlm_req->lock_flags & LDLM_FL_INHERIT_MASK;
-	lock->l_flags |= ldlm_flags_from_wire(dlm_req->lock_flags &
-					      LDLM_FL_INHERIT_MASK);
+	dlm_rep->lock_flags = ldlm_flags_to_wire(flags);
+	lock->l_flags |= flags & LDLM_FL_INHERIT_MASK;
 
         /* Don't move a pending lock onto the export if it has already been
          * disconnected due to eviction (bug 5683) or server umount (bug 24324).
