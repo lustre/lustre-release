@@ -131,12 +131,8 @@ typedef int (*llog_cb_t)(const struct lu_env *, struct llog_handle *,
 struct lustre_cfg *lustre_cfg_rename(struct lustre_cfg *cfg,
 				     const char *new_name);
 int class_process_config(struct lustre_cfg *lcfg);
-#ifndef HAVE_ONLY_PROCFS_SEQ
-int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
-                             struct lustre_cfg *lcfg, void *data);
-#endif
-int class_process_proc_seq_param(char *prefix, struct lprocfs_seq_vars *lvars,
-				 struct lustre_cfg *lcfg, void *data);
+int class_process_proc_param(char *prefix, struct lprocfs_seq_vars *lvars,
+			     struct lustre_cfg *lcfg, void *data);
 int class_attach(struct lustre_cfg *lcfg);
 int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
 int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg);

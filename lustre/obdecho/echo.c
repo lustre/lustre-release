@@ -596,7 +596,7 @@ static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         LASSERT (rc == ELDLM_OK);
 
 	obd->obd_vars = lprocfs_echo_obd_vars;
-	if (lprocfs_seq_obd_setup(obd) == 0 &&
+	if (lprocfs_obd_setup(obd) == 0 &&
             lprocfs_alloc_obd_stats(obd, LPROC_ECHO_LAST) == 0) {
                 lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_READ_BYTES,
                                      LPROCFS_CNTR_AVGMINMAX,
@@ -606,8 +606,8 @@ static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                                      "write_bytes", "bytes");
         }
 
-        ptlrpc_init_client (LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
-                            "echo_ldlm_cb_client", &obd->obd_ldlm_client);
+	ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
+			   "echo_ldlm_cb_client", &obd->obd_ldlm_client);
         RETURN(0);
 }
 

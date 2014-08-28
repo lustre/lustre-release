@@ -304,7 +304,7 @@ static int ofd_process_config(const struct lu_env *env, struct lu_device *d,
 			break;
 		}
 
-		rc = class_process_proc_seq_param(PARAM_OST, obd->obd_vars, cfg,
+		rc = class_process_proc_param(PARAM_OST, obd->obd_vars, cfg,
 					      d->ld_obd);
 		if (rc > 0 || rc == -ENOSYS) {
 			CDEBUG(D_CONFIG, "pass param %s down the stack.\n",
@@ -525,7 +525,7 @@ static int ofd_procfs_init(struct ofd_device *ofd)
 	/* lprocfs must be setup before the ofd so state can be safely added
 	 * to /proc incrementally as the ofd is setup */
 	obd->obd_vars = lprocfs_ofd_obd_vars;
-	rc = lprocfs_seq_obd_setup(obd);
+	rc = lprocfs_obd_setup(obd);
 	if (rc) {
 		CERROR("%s: lprocfs_obd_setup failed: %d.\n",
 		       obd->obd_name, rc);

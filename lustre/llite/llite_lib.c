@@ -2520,8 +2520,8 @@ int ll_process_config(struct lustre_cfg *lcfg)
 
 	/* Note we have not called client_common_fill_super yet, so
 	   proc fns must be able to handle that! */
-	rc = class_process_proc_seq_param(PARAM_LLITE, lprocfs_llite_obd_vars,
-					  lcfg, sb);
+	rc = class_process_proc_param(PARAM_LLITE, lprocfs_llite_obd_vars,
+				      lcfg, sb);
 	if (rc > 0)
 		rc = 0;
 	return rc;

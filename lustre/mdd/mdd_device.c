@@ -888,8 +888,7 @@ static int mdd_process_config(const struct lu_env *env,
 	case LCFG_PARAM: {
 		struct obd_device *obd = mdd2obd_dev(m);
 
-		rc = class_process_proc_seq_param(PARAM_MDD, obd->obd_vars,
-						  cfg, m);
+		rc = class_process_proc_param(PARAM_MDD, obd->obd_vars, cfg, m);
 		if (rc > 0 || rc == -ENOSYS)
 			/* we don't understand; pass it on */
 			rc = next->ld_ops->ldo_process_config(env, next, cfg);

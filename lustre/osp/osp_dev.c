@@ -544,8 +544,8 @@ static int osp_process_config(const struct lu_env *env,
 		break;
 	case LCFG_PARAM:
 		LASSERT(obd);
-		rc = class_process_proc_seq_param(PARAM_OSC, obd->obd_vars,
-						  lcfg, obd);
+		rc = class_process_proc_param(PARAM_OSC, obd->obd_vars,
+					      lcfg, obd);
 		if (rc > 0)
 			rc = 0;
 		if (rc == -ENOSYS) {

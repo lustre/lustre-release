@@ -6008,13 +6008,12 @@ static int osd_process_config(const struct lu_env *env,
 		break;
 	case LCFG_PARAM:
 		LASSERT(&o->od_dt_dev);
-		rc = class_process_proc_seq_param(PARAM_OSD,
-						  lprocfs_osd_obd_vars,
-						  cfg, &o->od_dt_dev);
+		rc = class_process_proc_param(PARAM_OSD, lprocfs_osd_obd_vars,
+					      cfg, &o->od_dt_dev);
 		if (rc > 0 || rc == -ENOSYS)
-			rc = class_process_proc_seq_param(PARAM_OST,
-							  lprocfs_osd_obd_vars,
-							  cfg, &o->od_dt_dev);
+			rc = class_process_proc_param(PARAM_OST,
+						      lprocfs_osd_obd_vars,
+						      cfg, &o->od_dt_dev);
 		break;
 	default:
 		rc = -ENOSYS;

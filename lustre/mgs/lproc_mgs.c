@@ -229,7 +229,7 @@ int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name)
 	int		   rc;
 
 	obd->obd_vars = lprocfs_mgs_obd_vars;
-	rc = lprocfs_seq_obd_setup(obd);
+	rc = lprocfs_obd_setup(obd);
 	if (rc != 0)
 		GOTO(out, rc);
 

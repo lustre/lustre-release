@@ -2873,7 +2873,7 @@ static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
                 GOTO(err_close_lock, rc);
 #ifdef LPROCFS
 	obd->obd_vars = lprocfs_mdc_obd_vars;
-	lprocfs_seq_obd_setup(obd);
+	lprocfs_obd_setup(obd);
 	lprocfs_alloc_md_stats(obd, 0);
 #endif
 	sptlrpc_lprocfs_cliobd_attach(obd);
@@ -3007,8 +3007,7 @@ static int mdc_llog_finish(struct obd_device *obd, int count)
 static int mdc_process_config(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lustre_cfg *lcfg = buf;
-	int rc = class_process_proc_seq_param(PARAM_MDC, obd->obd_vars,
-					      lcfg, obd);
+	int rc = class_process_proc_param(PARAM_MDC, obd->obd_vars, lcfg, obd);
 	return (rc > 0 ? 0: rc);
 }
 

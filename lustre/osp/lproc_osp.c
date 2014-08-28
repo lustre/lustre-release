@@ -812,7 +812,7 @@ void osp_lprocfs_init(struct osp_device *osp)
 	int			 rc;
 
 	obd->obd_vars = lprocfs_osp_obd_vars;
-	if (lprocfs_seq_obd_setup(obd) != 0)
+	if (lprocfs_obd_setup(obd) != 0)
 		return;
 
 	rc = lprocfs_seq_add_vars(obd->obd_proc_entry, lprocfs_osp_osd_vars,

@@ -608,13 +608,6 @@ lprocfs_add_symlink(const char *name, struct proc_dir_entry *parent,
                     const char *format, ...);
 extern void lprocfs_free_per_client_stats(struct obd_device *obd);
 #ifdef HAVE_SERVER_SUPPORT
-#ifndef HAVE_ONLY_PROCFS_SEQ
-extern int
-lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
-                              unsigned long count, void *data);
-extern int lprocfs_nid_stats_clear_read(char *page, char **start, off_t off,
-                                        int count, int *eof,  void *data);
-#endif
 extern ssize_t
 lprocfs_nid_stats_clear_seq_write(struct file *file, const char *buffer,
 					size_t count, loff_t *off);
@@ -650,9 +643,8 @@ extern void lprocfs_try_remove_proc_entry(const char *name,
 
 extern cfs_proc_dir_entry_t *lprocfs_srch(cfs_proc_dir_entry_t *root,
                                           const char *name);
-extern int lprocfs_obd_setup(struct obd_device *obd, struct lprocfs_vars *list);
 #endif
-extern int lprocfs_seq_obd_setup(struct obd_device *dev);
+extern int lprocfs_obd_setup(struct obd_device *dev);
 extern int lprocfs_obd_cleanup(struct obd_device *obd);
 #ifdef HAVE_SERVER_SUPPORT
 extern const struct file_operations lprocfs_evict_client_fops;
@@ -667,34 +659,6 @@ extern int lprocfs_obd_seq_create(struct obd_device *dev, const char *name,
 				  void *data);
 
 /* Generic callbacks */
-#ifndef HAVE_ONLY_PROCFS_SEQ
-extern int lprocfs_rd_u64(char *page, char **start, off_t off,
-                          int count, int *eof, void *data);
-extern int lprocfs_rd_atomic(char *page, char **start, off_t off,
-                             int count, int *eof, void *data);
-extern int lprocfs_wr_atomic(struct file *file, const char *buffer,
-                             unsigned long count, void *data);
-extern int lprocfs_rd_uint(char *page, char **start, off_t off,
-                           int count, int *eof, void *data);
-extern int lprocfs_rd_uuid(char *page, char **start, off_t off,
-                           int count, int *eof, void *data);
-extern int lprocfs_rd_name(char *page, char **start, off_t off,
-                           int count, int *eof, void *data);
-extern int lprocfs_rd_server_uuid(char *page, char **start, off_t off,
-                                  int count, int *eof, void *data);
-extern int lprocfs_rd_conn_uuid(char *page, char **start, off_t off,
-                                int count, int *eof, void *data);
-extern int lprocfs_rd_import(char *page, char **start, off_t off, int count,
-                             int *eof, void *data);
-extern int lprocfs_rd_state(char *page, char **start, off_t off, int count,
-                            int *eof, void *data);
-extern int lprocfs_rd_connect_flags(char *page, char **start, off_t off,
-                                    int count, int *eof, void *data);
-extern int lprocfs_rd_num_exports(char *page, char **start, off_t off,
-                                  int count, int *eof, void *data);
-extern int lprocfs_rd_numrefs(char *page, char **start, off_t off,
-                              int count, int *eof, void *data);
-#endif
 extern int lprocfs_u64_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_atomic_seq_show(struct seq_file *m, void *data);
 extern ssize_t lprocfs_atomic_seq_write(struct file *file, const char *buffer,
@@ -715,39 +679,19 @@ extern int lprocfs_connect_flags_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_num_exports_seq_show(struct seq_file *m, void *data);
 #endif
 struct adaptive_timeout;
-#ifndef HAVE_ONLY_PROCFS_SEQ
-extern int lprocfs_at_hist_helper(char *page, int count, int rc,
-                                  struct adaptive_timeout *at);
-extern int lprocfs_rd_timeouts(char *page, char **start, off_t off,
-                               int count, int *eof, void *data);
-extern int lprocfs_wr_timeouts(struct file *file, const char *buffer,
-                               unsigned long count, void *data);
-#endif
 extern int lprocfs_seq_at_hist_helper(struct seq_file *m,
 				      struct adaptive_timeout *at);
 extern int lprocfs_timeouts_seq_show(struct seq_file *m, void *data);
 extern ssize_t
 lprocfs_timeouts_seq_write(struct file *file, const char *buffer,
 			   size_t count, loff_t *off);
-#ifndef HAVE_ONLY_PROCFS_SEQ
 #ifdef HAVE_SERVER_SUPPORT
+#ifndef HAVE_ONLY_PROCFS_SEQ
 extern ssize_t lprocfs_fops_read(struct file *f, char __user *buf,
 				 size_t size, loff_t *ppos);
 extern ssize_t lprocfs_fops_write(struct file *f, const char __user *buf,
 				  size_t size, loff_t *ppos);
-extern int lprocfs_wr_evict_client(struct file *file, const char *buffer,
-                                   unsigned long count, void *data);
 #endif
-extern int lprocfs_wr_ping(struct file *file, const char *buffer,
-                           unsigned long count, void *data);
-extern int lprocfs_wr_import(struct file *file, const char *buffer,
-                             unsigned long count, void *data);
-extern int lprocfs_rd_pinger_recov(char *page, char **start, off_t off,
-                                   int count, int *eof, void *data);
-extern int lprocfs_wr_pinger_recov(struct file *file, const char *buffer,
-                                   unsigned long count, void *data);
-#endif
-#ifdef HAVE_SERVER_SUPPORT
 extern ssize_t
 lprocfs_evict_client_seq_write(struct file *file, const char *buffer,
 				size_t count, loff_t *off);
@@ -764,22 +708,6 @@ lprocfs_pinger_recov_seq_write(struct file *file, const char *buffer,
 			       size_t count, loff_t *off);
 
 /* Statfs helpers */
-#ifndef HAVE_ONLY_PROCFS_SEQ
-extern int lprocfs_rd_blksize(char *page, char **start, off_t off,
-                              int count, int *eof, void *data);
-extern int lprocfs_rd_kbytestotal(char *page, char **start, off_t off,
-                                  int count, int *eof, void *data);
-extern int lprocfs_rd_kbytesfree(char *page, char **start, off_t off,
-                                 int count, int *eof, void *data);
-extern int lprocfs_rd_kbytesavail(char *page, char **start, off_t off,
-                                 int count, int *eof, void *data);
-extern int lprocfs_rd_filestotal(char *page, char **start, off_t off,
-                                 int count, int *eof, void *data);
-extern int lprocfs_rd_filesfree(char *page, char **start, off_t off,
-                                int count, int *eof, void *data);
-extern int lprocfs_rd_filegroups(char *page, char **start, off_t off,
-                                 int count, int *eof, void *data);
-#endif
 extern int lprocfs_blksize_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_kbytestotal_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_kbytesfree_seq_show(struct seq_file *m, void *data);
@@ -810,20 +738,6 @@ void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
                            struct lprocfs_counter *cnt);
 
 #ifdef HAVE_SERVER_SUPPORT
-#ifndef HAVE_ONLY_PROCFS_SEQ
-/* lprocfs_status.c: recovery status */
-int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
-                                   int count, int *eof, void *data);
-/* lprocfs_statuc.c: hash statistics */
-int lprocfs_obd_rd_hash(char *page, char **start, off_t off,
-                        int count, int *eof, void *data);
-
-/* lprocfs_status.c: IR factor */
-int lprocfs_obd_rd_ir_factor(char *page, char **start, off_t off,
-                             int count, int *eof, void *data);
-int lprocfs_obd_wr_ir_factor(struct file *file, const char *buffer,
-                             unsigned long count, void *data);
-#endif
 /* lprocfs_status.c: recovery status */
 int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data);
 
@@ -922,26 +836,6 @@ int lprocfs_job_stats_log(struct obd_device *obd, char *jobid,
 void lprocfs_job_stats_fini(struct obd_device *obd);
 int lprocfs_job_stats_init(struct obd_device *obd, int cntr_num,
 			   cntr_init_callback fn);
-#ifndef HAVE_ONLY_PROCFS_SEQ
-int lprocfs_rd_job_interval(char *page, char **start, off_t off,
-			    int count, int *eof, void *data);
-int lprocfs_wr_job_interval(struct file *file, const char *buffer,
-			    unsigned long count, void *data);
-
-/* lproc_status.c */
-int lprocfs_obd_rd_recovery_time_soft(char *page, char **start, off_t off,
-                                      int count, int *eof, void *data);
-int lprocfs_obd_wr_recovery_time_soft(struct file *file,
-                                      const char *buffer,
-                                      unsigned long count, void *data);
-int lprocfs_obd_rd_recovery_time_hard(char *page, char **start, off_t off,
-                                      int count, int *eof, void *data);
-int lprocfs_obd_wr_recovery_time_hard(struct file *file,
-                                      const char *buffer,
-                                      unsigned long count, void *data);
-int lprocfs_target_rd_instance(char *page, char **start, off_t off,
-			       int count, int *eof, void *data);
-#endif
 int lprocfs_job_interval_seq_show(struct seq_file *m, void *data);
 ssize_t
 lprocfs_job_interval_seq_write(struct file *file, const char *buffer,
@@ -956,12 +850,6 @@ ssize_t
 lprocfs_recovery_time_hard_seq_write(struct file *file, const char *buffer,
 					size_t count, loff_t *off);
 int lprocfs_target_instance_seq_show(struct seq_file *m, void *data);
-#endif
-#ifndef HAVE_ONLY_PROCFS_SEQ
-int lprocfs_obd_rd_max_pages_per_rpc(char *page, char **start, off_t off,
-                                     int count, int *eof, void *data);
-int lprocfs_obd_wr_max_pages_per_rpc(struct file *file, const char *buffer,
-                                     unsigned long count, void *data);
 #endif
 int lprocfs_obd_max_pages_per_rpc_seq_show(struct seq_file *m, void *data);
 ssize_t
@@ -1096,16 +984,6 @@ static inline int lprocfs_add_clear_entry(struct obd_export *exp)
 static inline void lprocfs_free_per_client_stats(struct obd_device *obd)
 { return; }
 #ifdef HAVE_SERVER_SUPPORT
-#ifndef HAVE_ONLY_PROCFS_SEQ
-static inline
-int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
-				  unsigned long count, void *data)
-{return count;}
-static inline
-int lprocfs_nid_stats_clear_read(char *page, char **start, off_t off,
-				 int count, int *eof,  void *data)
-{return count;}
-#endif
 static inline
 ssize_t lprocfs_nid_stats_seq_write(struct file *file, const char *buffer,
 					size_t count, loff_t *off)
@@ -1160,74 +1038,11 @@ static inline void lprocfs_try_remove_proc_entry(const char *name,
 static inline cfs_proc_dir_entry_t *lprocfs_srch(cfs_proc_dir_entry_t *head,
                                                  const char *name)
 { return 0; }
-static inline int lprocfs_obd_setup(struct obd_device *dev,
-				    struct lprocfs_vars *list)
-{ return 0; }
 #endif
-static inline int lprocfs_seq_obd_setup(struct obd_device *dev)
+static inline int lprocfs_obd_setup(struct obd_device *dev)
 { return 0; }
 static inline int lprocfs_obd_cleanup(struct obd_device *dev)
 { return 0; }
-static inline int lprocfs_rd_u64(char *page, char **start, off_t off,
-                                 int count, int *eof, void *data)
-{ return 0; }
-#ifndef HAVE_ONLY_PROCFS_SEQ
-static inline int lprocfs_rd_uuid(char *page, char **start, off_t off,
-                                  int count, int *eof, void *data)
-{ return 0; }
-static inline int lprocfs_rd_name(char *page, char **start, off_t off,
-                                  int count, int *eof, void *data)
-{ return 0; }
-static inline int lprocfs_rd_server_uuid(char *page, char **start, off_t off,
-                                         int count, int *eof, void *data)
-{ return 0; }
-static inline int lprocfs_rd_conn_uuid(char *page, char **start, off_t off,
-                                       int count, int *eof, void *data)
-{ return 0; }
-static inline int lprocfs_rd_import(char *page, char **start, off_t off,
-                                    int count, int *eof, void *data)
-{ return 0; }
-static inline int lprocfs_rd_pinger_recov(char *page, char **start, off_t off,
-                                          int count, int *eof, void *data)
-{ return 0; }
-static inline int lprocfs_rd_state(char *page, char **start, off_t off,
-                                   int count, int *eof, void *data)
-{ return 0; }
-static inline int lprocfs_rd_connect_flags(char *page, char **start, off_t off,
-                                           int count, int *eof, void *data)
-{ return 0; }
-static inline int lprocfs_rd_num_exports(char *page, char **start, off_t off,
-                                         int count, int *eof, void *data)
-{ return 0; }
-static inline int lprocfs_rd_numrefs(struct seq_file *m, void *data)
-{ return 0; }
-struct adaptive_timeout;
-static inline int lprocfs_at_hist_helper(char *page, int count, int rc,
-                                         struct adaptive_timeout *at)
-{ return 0; }
-static inline int lprocfs_rd_timeouts(char *page, char **start, off_t off,
-                                      int count, int *eof, void *data)
-{ return 0; }
-static inline int lprocfs_wr_timeouts(struct file *file,
-                                      const char *buffer,
-                                      unsigned long count, void *data)
-{ return 0; }
-#ifdef HAVE_SERVER_SUPPORT
-static inline int lprocfs_wr_evict_client(struct file *file,
-                                          const char *buffer,
-                                          unsigned long count, void *data)
-{ return 0; }
-#endif
-static inline int lprocfs_wr_ping(struct file *file, const char *buffer,
-                                  unsigned long count, void *data)
-{ return 0; }
-static inline int lprocfs_wr_import(struct file *file, const char *buffer,
-                                    unsigned long count, void *data)
-{ return 0; }
-static inline int lprocfs_wr_pinger_recov(struct file *file, const char *buffer,
-                                    unsigned long count, void *data)
-{ return 0; }
-#endif
 static inline int lprocfs_uuid_seq_show(struct seq_file *m, void *data)
 { return 0; }
 static inline int lprocfs_name_seq_show(struct seq_file *m, void *data)
@@ -1279,32 +1094,6 @@ lprocfs_pinger_recov_seq_write(struct file *file, const char *buffer,
 { return 0; }
 
 /* Statfs helpers */
-#ifndef HAVE_ONLY_PROCFS_SEQ
-static inline
-int lprocfs_rd_blksize(char *page, char **start, off_t off,
-                       int count, int *eof, void *data)
-{ return 0; }
-static inline
-int lprocfs_rd_kbytestotal(char *page, char **start, off_t off,
-                           int count, int *eof, void *data)
-{ return 0; }
-static inline
-int lprocfs_rd_kbytesfree(char *page, char **start, off_t off,
-                          int count, int *eof, void *data)
-{ return 0; }
-static inline
-int lprocfs_rd_kbytesavail(char *page, char **start, off_t off,
-                           int count, int *eof, void *data)
-{ return 0; }
-static inline
-int lprocfs_rd_filestotal(char *page, char **start, off_t off,
-                          int count, int *eof, void *data)
-{ return 0; }
-static inline
-int lprocfs_rd_filesfree(char *page, char **start, off_t off,
-                         int count, int *eof, void *data)
-{ return 0; }
-#endif
 static inline
 int lprocfs_blksize_seq_show(struct seq_file *m, void *data)
 { return 0; }

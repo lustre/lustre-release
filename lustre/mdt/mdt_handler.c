@@ -4694,13 +4694,13 @@ static int mdt_process_config(const struct lu_env *env,
 			}
 		}
 
-		rc = class_process_proc_seq_param(PARAM_MDT, obd->obd_vars,
-							cfg, obd);
+		rc = class_process_proc_param(PARAM_MDT, obd->obd_vars,
+					      cfg, obd);
 		if (rc > 0 || rc == -ENOSYS) {
 			/* is it an HSM var ? */
-			rc = class_process_proc_seq_param(PARAM_HSM,
-							hsm_cdt_get_proc_vars(),
-							cfg, obd);
+			rc = class_process_proc_param(PARAM_HSM,
+						      hsm_cdt_get_proc_vars(),
+						      cfg, obd);
 			if (rc > 0 || rc == -ENOSYS)
 				/* we don't understand; pass it on */
 				rc = next->ld_ops->ldo_process_config(env, next,

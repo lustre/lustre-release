@@ -529,7 +529,7 @@ int lod_procfs_init(struct lod_device *lod)
 	int			 rc;
 
 	obd->obd_vars = lprocfs_lod_obd_vars;
-	rc = lprocfs_seq_obd_setup(obd);
+	rc = lprocfs_obd_setup(obd);
 	if (rc) {
 		CERROR("%s: cannot setup procfs entry: %d\n",
 		       obd->obd_name, rc);

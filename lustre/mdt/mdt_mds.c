@@ -495,7 +495,7 @@ static struct lu_device *mds_device_alloc(const struct lu_env *env,
 	obd->obd_lu_dev = l;
 
 	obd->obd_vars = lprocfs_mds_obd_vars;
-	rc = lprocfs_seq_obd_setup(obd);
+	rc = lprocfs_obd_setup(obd);
 	if (rc != 0) {
 		mds_device_free(env, l);
 		l = ERR_PTR(rc);

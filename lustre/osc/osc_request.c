@@ -3126,7 +3126,7 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 			obd->obd_proc_entry = NULL;
 		}
 	} else {
-		rc = lprocfs_seq_obd_setup(obd);
+		rc = lprocfs_obd_setup(obd);
 	}
 
 	/* If the basic OSC proc tree construction succeeded then
@@ -3245,8 +3245,7 @@ int osc_cleanup(struct obd_device *obd)
 
 int osc_process_config_base(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
-	int rc = class_process_proc_seq_param(PARAM_OSC, obd->obd_vars,
-					      lcfg, obd);
+	int rc = class_process_proc_param(PARAM_OSC, obd->obd_vars, lcfg, obd);
 	return rc > 0 ? 0: rc;
 }
 

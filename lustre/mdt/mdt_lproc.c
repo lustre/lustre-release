@@ -975,7 +975,7 @@ int mdt_procfs_init(struct mdt_device *mdt, const char *name)
 	LASSERT(name != NULL);
 
 	obd->obd_vars = lprocfs_mdt_obd_vars;
-	rc = lprocfs_seq_obd_setup(obd);
+	rc = lprocfs_obd_setup(obd);
 	if (rc) {
 		CERROR("%s: cannot create proc entries: rc = %d\n",
 		       mdt_obd_name(mdt), rc);

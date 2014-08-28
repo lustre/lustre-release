@@ -858,7 +858,7 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 			obd->obd_proc_entry = NULL;
 		}
 	} else {
-		rc = lprocfs_seq_obd_setup(obd);
+		rc = lprocfs_obd_setup(obd);
 	}
 
 	if (rc == 0) {
@@ -995,8 +995,8 @@ int lov_process_config_base(struct obd_device *obd, struct lustre_cfg *lcfg,
 		if (!desc)
 			GOTO(out, rc = -EINVAL);
 
-		rc = class_process_proc_seq_param(PARAM_LOV, obd->obd_vars,
-						  lcfg, obd);
+		rc = class_process_proc_param(PARAM_LOV, obd->obd_vars,
+					      lcfg, obd);
 		if (rc > 0)
 			rc = 0;
                 GOTO(out, rc);

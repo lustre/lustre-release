@@ -2761,20 +2761,6 @@ int dt_global_init(void);
 void dt_global_fini(void);
 
 # ifdef LPROCFS
-#ifndef HAVE_ONLY_PROCFS_SEQ
-int lprocfs_dt_rd_blksize(char *page, char **start, off_t off,
-			  int count, int *eof, void *data);
-int lprocfs_dt_rd_kbytestotal(char *page, char **start, off_t off,
-			      int count, int *eof, void *data);
-int lprocfs_dt_rd_kbytesfree(char *page, char **start, off_t off,
-			     int count, int *eof, void *data);
-int lprocfs_dt_rd_kbytesavail(char *page, char **start, off_t off,
-			      int count, int *eof, void *data);
-int lprocfs_dt_rd_filestotal(char *page, char **start, off_t off,
-			     int count, int *eof, void *data);
-int lprocfs_dt_rd_filesfree(char *page, char **start, off_t off,
-			    int count, int *eof, void *data);
-#endif
 int lprocfs_dt_blksize_seq_show(struct seq_file *m, void *v);
 int lprocfs_dt_kbytestotal_seq_show(struct seq_file *m, void *v);
 int lprocfs_dt_kbytesfree_seq_show(struct seq_file *m, void *v);

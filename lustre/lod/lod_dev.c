@@ -341,8 +341,8 @@ static int lod_process_config(const struct lu_env *env,
 	case LCFG_PARAM: {
 		struct obd_device *obd = lod2obd(lod);
 
-		rc = class_process_proc_seq_param(PARAM_LOV, obd->obd_vars,
-						  lcfg, obd);
+		rc = class_process_proc_param(PARAM_LOV, obd->obd_vars,
+					      lcfg, obd);
 		if (rc > 0)
 			rc = 0;
 		GOTO(out, rc);

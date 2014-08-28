@@ -529,42 +529,6 @@ int lprocfs_job_stats_init(struct obd_device *obd, int cntr_num,
 }
 EXPORT_SYMBOL(lprocfs_job_stats_init);
 
-#ifndef HAVE_ONLY_PROCFS_SEQ
-int lprocfs_rd_job_interval(char *page, char **start, off_t off,
-			    int count, int *eof, void *data)
-{
-	struct obd_device *obd = (struct obd_device *)data;
-	struct obd_job_stats *stats;
-
-	LASSERT(obd != NULL);
-	stats = &obd->u.obt.obt_jobstats;
-	*eof = 1;
-	return snprintf(page, count, "%d\n", stats->ojs_cleanup_interval);
-}
-EXPORT_SYMBOL(lprocfs_rd_job_interval);
-
-int lprocfs_wr_job_interval(struct file *file, const char __user *buffer,
-			    unsigned long count, void *data)
-{
-	struct obd_device *obd = (struct obd_device *)data;
-	struct obd_job_stats *stats;
-	int val, rc;
-
-	LASSERT(obd != NULL);
-	stats = &obd->u.obt.obt_jobstats;
-
-	rc = lprocfs_write_helper(buffer, count, &val);
-	if (rc)
-		return rc;
-
-	stats->ojs_cleanup_interval = val;
-	lprocfs_job_cleanup(stats, true);
-
-	return count;
-
-}
-EXPORT_SYMBOL(lprocfs_wr_job_interval);
-#endif
 int lprocfs_job_interval_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;

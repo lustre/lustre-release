@@ -92,7 +92,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 
 #ifdef LPROCFS
 	obd->obd_vars = lprocfs_ost_obd_vars;
-	lprocfs_seq_obd_setup(obd);
+	lprocfs_obd_setup(obd);
 #endif
 	mutex_init(&ost->ost_health_mutex);
 
