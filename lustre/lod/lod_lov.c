@@ -432,6 +432,13 @@ static void __lod_del_device(const struct lu_env *env, struct lod_device *lod,
 	lfsck_del_target(env, lod->lod_child, LTD_TGT(ltd, idx)->ltd_tgt,
 			 idx, for_ost);
 
+	if (!for_ost && LTD_TGT(ltd, idx)->ltd_recovery_thread != NULL) {
+		struct ptlrpc_thread *thread;
+
+		thread = LTD_TGT(ltd, idx)->ltd_recovery_thread;
+		OBD_FREE_PTR(thread);
+	}
+
 	if (LTD_TGT(ltd, idx)->ltd_reap == 0) {
 		LTD_TGT(ltd, idx)->ltd_reap = 1;
 		ltd->ltd_death_row++;

@@ -43,6 +43,37 @@
 #include <lustre_disk.h>
 #include <lustre_lfsck.h>
 
+/* Each one represents a distribute transaction replay
+ * operation, and updates on each MDTs are linked to
+ * dtr_sub_list */
+struct distribute_txn_replay_req {
+	/* update record */
+	struct llog_update_record *dtrq_lur;
+	int			dtrq_lur_size;
+
+	/* linked to the distribute transaction replay
+	 * list (tdtd_replay_list) */
+	struct list_head	dtrq_list;
+
+	/* all of sub updates are linked here */
+	struct list_head	dtrq_sub_list;
+	spinlock_t		dtrq_sub_list_lock;
+};
+
+/* Each one represents a sub replay item under a distribute
+ * transaction. A distribute transaction will be operated in
+ * two or more MDTs, and updates on each MDT will be represented
+ * by this structure */
+struct distribute_txn_replay_req_sub {
+	__u32			dtrqs_mdt_index;
+	struct llog_cookie	dtrqs_llog_cookie;
+	struct list_head	dtrqs_list;
+};
+
+struct target_distribute_txn_data;
+typedef int (*distribute_txn_replay_handler_t)(struct lu_env *env,
+				       struct target_distribute_txn_data *tdtd,
+				       struct distribute_txn_replay_req *dtrq);
 struct target_distribute_txn_data {
 	/* Distribution ID is used to identify updates log on different
 	 * MDTs for one operation */
@@ -50,6 +81,7 @@ struct target_distribute_txn_data {
 	__u64			tdtd_batchid;
 	struct lu_target	*tdtd_lut;
 	struct dt_object	*tdtd_batchid_obj;
+	struct dt_device	*tdtd_dt;
 
 	/* Committed batchid for distribute transaction */
 	__u64                   tdtd_committed_batchid;
@@ -60,6 +92,15 @@ struct target_distribute_txn_data {
 	/* Threads to manage distribute transaction */
 	wait_queue_head_t	tdtd_commit_thread_waitq;
 	atomic_t		tdtd_refcount;
+
+	/* recovery update */
+	distribute_txn_replay_handler_t	tdtd_replay_handler;
+	struct list_head		tdtd_replay_list;
+	spinlock_t			tdtd_replay_list_lock;
+	/* last replay update transno */
+	__u64				tdtd_last_update_transno;
+	__u32				tdtd_replay_ready:1;
+
 };
 
 struct lu_target {
@@ -363,6 +404,22 @@ int distribute_txn_init(const struct lu_env *env,
 void distribute_txn_fini(const struct lu_env *env,
 			 struct target_distribute_txn_data *tdtd);
 
+/* target/update_recovery.c */
+int insert_update_records_to_replay_list(struct target_distribute_txn_data *,
+					 struct llog_update_record *,
+					 struct llog_cookie *, __u32);
+void dtrq_list_dump(struct target_distribute_txn_data *tdtd,
+		    unsigned int mask);
+void dtrq_list_destroy(struct target_distribute_txn_data *tdtd);
+int distribute_txn_replay_handle(struct lu_env *env,
+			   struct target_distribute_txn_data *tdtd,
+			   struct distribute_txn_replay_req *dtrq);
+__u64 distribute_txn_get_next_transno(struct target_distribute_txn_data *tdtd);
+struct distribute_txn_replay_req *
+distribute_txn_get_next_req(struct target_distribute_txn_data *tdtd);
+void dtrq_destory(struct distribute_txn_replay_req *dtrq);
+struct distribute_txn_replay_req_sub *
+dtrq_sub_lookup(struct distribute_txn_replay_req *dtrq, __u32 mdt_index);
 
 enum {
 	ESERIOUS = 0x0001000

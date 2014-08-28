@@ -47,58 +47,6 @@ extern int (*tgt_lfsck_in_notify)(const struct lu_env *env,
 				  struct dt_device *key,
 				  struct lfsck_request *lr,
 				  struct thandle *th);
-
-struct tx_arg;
-typedef int (*tx_exec_func_t)(const struct lu_env *env, struct thandle *th,
-			      struct tx_arg *ta);
-
-struct tx_arg {
-	tx_exec_func_t		 exec_fn;
-	tx_exec_func_t		 undo_fn;
-	struct dt_object	*object;
-	const char		*file;
-	struct object_update_reply *reply;
-	int			 line;
-	int			 index;
-	union {
-		struct {
-			struct dt_insert_rec	 rec;
-			const struct dt_key	*key;
-		} insert;
-		struct {
-		} ref;
-		struct {
-			struct lu_attr	 attr;
-		} attr_set;
-		struct {
-			struct lu_buf	 buf;
-			const char	*name;
-			int		 flags;
-			__u32		 csum;
-		} xattr_set;
-		struct {
-			struct lu_attr			attr;
-			struct dt_allocation_hint	hint;
-			struct dt_object_format		dof;
-			struct lu_fid			fid;
-		} create;
-		struct {
-			struct lu_buf	buf;
-			loff_t		pos;
-		} write;
-		struct {
-			struct ost_body	    *body;
-		} destroy;
-	} u;
-};
-
-struct thandle_exec_args {
-	struct thandle		*ta_handle;
-	int			ta_argno;   /* used args */
-	int			ta_alloc_args; /* allocated args count */
-	struct tx_arg		**ta_args;
-};
-
 /**
  * Common data shared by tg-level handlers. This is allocated per-thread to
  * reduce stack consumption.
@@ -170,44 +118,119 @@ static inline char *dt_obd_name(struct dt_device *dt)
 	return dt->dd_lu_dev.ld_obd->obd_name;
 }
 
+/* out_lib.c */
+int out_tx_create_exec(const struct lu_env *env, struct thandle *th,
+		       struct tx_arg *arg);
+struct tx_arg *tx_add_exec(struct thandle_exec_args *ta,
+			   tx_exec_func_t func, tx_exec_func_t undo,
+			   const char *file, int line);
+
+int out_create_add_exec(const struct lu_env *env, struct dt_object *obj,
+			struct lu_attr *attr, struct lu_fid *parent_fid,
+			struct dt_object_format *dof,
+			struct thandle_exec_args *ta, struct thandle *th,
+			struct object_update_reply *reply,
+			int index, const char *file, int line);
+
+int out_attr_set_add_exec(const struct lu_env *env, struct dt_object *dt_obj,
+			  const struct lu_attr *attr,
+			  struct thandle_exec_args *ta, struct thandle *th,
+			  struct object_update_reply *reply, int index,
+			  const char *file, int line);
+
+int out_write_add_exec(const struct lu_env *env, struct dt_object *dt_obj,
+		       const struct lu_buf *buf, loff_t pos,
+		       struct thandle_exec_args *ta, struct thandle *th,
+		       struct object_update_reply *reply, int index,
+		       const char *file, int line);
+
+int out_xattr_set_add_exec(const struct lu_env *env, struct dt_object *dt_obj,
+			   const struct lu_buf *buf, const char *name,
+			   int flags, struct thandle_exec_args *ta,
+			   struct thandle *th,
+			   struct object_update_reply *reply, int index,
+			   const char *file, int line);
+
+int out_xattr_del_add_exec(const struct lu_env *env, struct dt_object *dt_obj,
+			   const char *name, struct thandle_exec_args *ta,
+			   struct thandle *th,
+			   struct object_update_reply *reply, int index,
+			   const char *file, int line);
+
+int out_ref_add_add_exec(const struct lu_env *env, struct dt_object *dt_obj,
+			 struct thandle_exec_args *ta, struct thandle *th,
+			 struct object_update_reply *reply, int index,
+			 const char *file, int line);
+
+int out_ref_del_add_exec(const struct lu_env *env, struct dt_object *dt_obj,
+			 struct thandle_exec_args *ta, struct thandle *th,
+			 struct object_update_reply *reply, int index,
+			 const char *file, int line);
+
+int out_index_insert_add_exec(const struct lu_env *env,
+			      struct dt_object *dt_obj,
+			      const struct dt_rec *rec,
+			      const struct dt_key *key,
+			      struct thandle_exec_args *ta,
+			      struct thandle *th,
+			      struct object_update_reply *reply,
+			      int index, const char *file, int line);
+
+int out_index_delete_add_exec(const struct lu_env *env,
+			      struct dt_object *dt_obj,
+			      const struct dt_key *key,
+			      struct thandle_exec_args *ta,
+			      struct thandle *th,
+			      struct object_update_reply *reply,
+			      int index, const char *file, int line);
+
+int out_destroy_add_exec(const struct lu_env *env, struct dt_object *dt_obj,
+			 struct thandle_exec_args *ta, struct thandle *th,
+			 struct object_update_reply *reply,
+			 int index, const char *file, int line);
+
 /* Update handlers */
 int out_handle(struct tgt_session_info *tsi);
 
-#define out_tx_create(info, obj, attr, fid, dof, th, reply, idx) \
-	__out_tx_create(info, obj, attr, fid, dof, th, reply, idx, \
-			__FILE__, __LINE__)
+#define out_tx_create(env, obj, attr, fid, dof, ta, th, reply, idx) \
+	out_create_add_exec(env, obj, attr, fid, dof, ta, th, reply, idx, \
+			    __FILE__, __LINE__)
 
-#define out_tx_attr_set(info, obj, attr, th, reply, idx) \
-	__out_tx_attr_set(info, obj, attr, th, reply, idx, \
-			  __FILE__, __LINE__)
-
-#define out_tx_xattr_set(info, obj, buf, name, fl, th, reply, idx)	\
-	__out_tx_xattr_set(info, obj, buf, name, fl, th, reply, idx,	\
-			   __FILE__, __LINE__)
-
-#define out_tx_xattr_del(info, obj, name, th, reply, idx)	\
-	__out_tx_xattr_del(info, obj, name, th, reply, idx,	\
-			   __FILE__, __LINE__)
-
-#define out_tx_ref_add(info, obj, th, reply, idx) \
-	__out_tx_ref_add(info, obj, th, reply, idx, __FILE__, __LINE__)
-
-#define out_tx_ref_del(info, obj, th, reply, idx) \
-	__out_tx_ref_del(info, obj, th, reply, idx, __FILE__, __LINE__)
-
-#define out_tx_index_insert(info, obj, rec, key, th, reply, idx) \
-	__out_tx_index_insert(info, obj, rec, key, th, reply, idx, \
+#define out_tx_attr_set(env, obj, attr, ta, th, reply, idx) \
+	out_attr_set_add_exec(env, obj, attr, ta, th, reply, idx, \
 			      __FILE__, __LINE__)
 
-#define out_tx_index_delete(info, obj, key, th, reply, idx) \
-	__out_tx_index_delete(info, obj, key, th, reply, idx, \
-			      __FILE__, __LINE__)
+#define out_tx_xattr_set(env, obj, buf, name, fl, ta, th, reply, idx)	\
+	out_xattr_set_add_exec(env, obj, buf, name, fl, ta, th, reply, idx, \
+			       __FILE__, __LINE__)
 
-#define out_tx_destroy(info, obj, th, reply, idx) \
-	__out_tx_destroy(info, obj, th, reply, idx, __FILE__, __LINE__)
+#define out_tx_xattr_del(env, obj, name, ta, th, reply, idx)	\
+	out_xattr_del_add_exec(env, obj, name, ta, th, reply, idx,	\
+			       __FILE__, __LINE__)
 
-#define out_tx_write(info, obj, buf, pos, th, reply, idx) \
-	__out_tx_write(info, obj, buf, pos, th, reply, idx, __FILE__, __LINE__)
+#define out_tx_ref_add(env, obj, ta, th, reply, idx) \
+	out_ref_add_add_exec(env, obj, ta, th, reply, idx,	\
+			     __FILE__, __LINE__)
+
+#define out_tx_ref_del(env, obj, ta, th, reply, idx) \
+	out_ref_del_add_exec(env, obj, ta, th, reply, idx,	\
+			     __FILE__, __LINE__)
+
+#define out_tx_index_insert(env, obj, rec, key, ta, th, reply, idx) \
+	out_index_insert_add_exec(env, obj, rec, key, ta, th, reply, idx, \
+				  __FILE__, __LINE__)
+
+#define out_tx_index_delete(env, obj, key, ta, th, reply, idx) \
+	out_index_delete_add_exec(env, obj, key, ta, th, reply, idx, \
+				  __FILE__, __LINE__)
+
+#define out_tx_destroy(env, obj, ta, th, reply, idx) \
+	out_destroy_add_exec(env, obj, ta, th, reply, idx,	\
+			     __FILE__, __LINE__)
+
+#define out_tx_write(env, obj, buf, pos, ta, th, reply, idx) \
+	out_write_add_exec(env, obj, buf, pos, ta, th, reply, idx,\
+			   __FILE__, __LINE__)
 
 const char *update_op_str(__u16 opcode);
 
@@ -227,13 +250,15 @@ void update_records_dump(const struct update_records *records,
 			 unsigned int mask, bool dump_updates);
 int check_and_prepare_update_record(const struct lu_env *env,
 				    struct thandle_update_records *tur);
-
 struct update_thread_info {
 	struct lu_attr			uti_attr;
 	struct lu_fid			uti_fid;
 	struct lu_buf			uti_buf;
 	struct thandle_update_records	uti_tur;
 	struct obdo			uti_obdo;
+	struct thandle_exec_args	uti_tea;
+	struct dt_insert_rec		uti_rec;
+	struct distribute_txn_replay_req *uti_dtrq;
 };
 
 extern struct lu_context_key update_thread_key;
@@ -250,4 +275,12 @@ update_env_info(const struct lu_env *env)
 
 void update_info_init(void);
 void update_info_fini(void);
+struct sub_thandle *create_sub_thandle(struct top_multiple_thandle *tmt,
+				       struct dt_device *dt_dev);
+int sub_thandle_trans_create(const struct lu_env *env,
+			     struct top_thandle *top_th,
+			     struct sub_thandle *st);
+void distribute_txn_insert_by_batchid(struct top_multiple_thandle *new);
+int top_trans_create_tmt(const struct lu_env *env,
+			 struct top_thandle *top_th);
 #endif /* _TG_INTERNAL_H */

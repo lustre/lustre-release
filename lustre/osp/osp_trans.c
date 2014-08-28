@@ -791,7 +791,8 @@ static int osp_trans_trigger(const struct lu_env *env, struct osp_device *osp,
 	args = ptlrpc_req_async_args(req);
 	args->oaua_update = dt_update;
 
-	if (!th->th_wait_submit && is_only_remote_trans(th) && !th->th_sync) {
+	if (is_only_remote_trans(th) && !th->th_sync &&
+	    !th->th_wait_submit) {
 		args->oaua_flow_control = true;
 
 		if (!osp->opd_connect_mdt) {
@@ -959,7 +960,8 @@ int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	    dt_update->dur_buf.ub_req->ourq_count == 0)
 		GOTO(out, rc);
 
-	if (is_only_remote_trans(th) && !th->th_sync) {
+	if (is_only_remote_trans(th) && !th->th_sync &&
+	    !th->th_wait_submit) {
 		struct osp_device *osp = dt2osp_dev(th->th_dev);
 		struct client_obd *cli = &osp->opd_obd->u.cli;
 

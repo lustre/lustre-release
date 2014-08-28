@@ -983,6 +983,9 @@ struct lu_orphan_ent {
 };
 void lustre_swab_orphan_ent(struct lu_orphan_ent *ent);
 
+struct update_ops;
+void lustre_swab_update_ops(struct update_ops *uops, unsigned int op_count);
+
 /** @} lu_fid */
 
 /** \defgroup lu_dir lu_dir

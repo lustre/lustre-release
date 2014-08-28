@@ -106,6 +106,7 @@ struct lu_server_fld {
 	 * if the MDT is upgraded from < 2.6 to 2.6, i.e. when the
 	 * local FLDB is being invited */
 	unsigned int		 lsf_new:1;
+
 };
 
 struct lu_client_fld {

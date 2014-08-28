@@ -110,6 +110,9 @@ static int seq_client_rpc(struct lu_client_seq *seq,
 		debug_mask = D_INFO;
 	}
 
+	/* Allow seq client RPC during recovery time. */
+	req->rq_allow_replay = 1;
+
 	ptlrpc_at_set_req_timeout(req);
 
 	if (opc != SEQ_ALLOC_SUPER && seq->lcs_type == LUSTRE_SEQ_METADATA)

@@ -370,11 +370,6 @@ static inline struct dt_object* mgs_object_child(struct mgs_object *o)
 			     struct dt_object, do_lu);
 }
 
-static inline struct dt_object *dt_object_child(struct dt_object *o)
-{
-	return container_of0(lu_object_next(&(o)->do_lu),
-			     struct dt_object, do_lu);
-}
 struct mgs_direntry {
 	struct list_head	 mde_list;
 	char			*mde_name;

@@ -684,18 +684,17 @@ test_17o() {
 
 	local WDIR=$DIR/${tdir}o
 	local mdt_index
-	local mdtdevname
 	local rc=0
 
 	mkdir -p $WDIR
 	mdt_index=$($LFS getstripe -M $WDIR)
 	mdt_index=$((mdt_index+1))
-	mdtdevname=$(mdsdevname $mdt_index)
 
 	touch $WDIR/$tfile
-	stop mds${mdt_index}
-	start mds${mdt_index} $mdtdevname $MDS_MOUNT_OPTS ||
-		error "mount mds${mdt_index} failed"
+
+	#fail mds will wait the failover finish then set
+	#following fail_loc to avoid interfer the recovery process.
+	fail mds${mdt_index}
 
 	#define OBD_FAIL_OSD_LMA_INCOMPAT 0x194
 	do_facet mds${mdt_index} lctl set_param fail_loc=0x194

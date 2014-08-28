@@ -321,7 +321,7 @@ test_1() {
 run_test 1 "start up ost twice (should return errors)"
 
 test_2() {
-	start_mds || error "MDT0 start fail"
+	start_mds || error "MDT start failed"
 	echo "start mds second time.."
 	start_mds && error "2nd MDT start should fail"
 	start_ost || error "OST start failed"

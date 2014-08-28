@@ -944,8 +944,8 @@ out_close:
 		llog_cat_close(env, ctxt->loc_handle);
 		ctxt->loc_handle = NULL;
 	}
+
 out_put:
 	llog_ctxt_put(ctxt);
 	RETURN(rc);
 }
-

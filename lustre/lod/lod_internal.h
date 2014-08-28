@@ -125,7 +125,8 @@ struct lod_tgt_desc {
 	struct ptlrpc_thread	*ltd_recovery_thread;
 	unsigned long      ltd_active:1,/* is this target up for requests */
 			   ltd_activate:1,/* should  target be activated */
-			   ltd_reap:1;  /* should this target be deleted */
+			   ltd_reap:1,  /* should this target be deleted */
+			   ltd_got_update_log:1; /* Already got update log */
 };
 
 #define TGT_PTRS		256     /* number of pointers at 1st level */
@@ -170,7 +171,8 @@ struct lod_device {
 	int		      lod_connects;
 	unsigned int	      lod_recovery_completed:1,
 			      lod_initialized:1,
-			      lod_lmv_failout:1;
+			      lod_lmv_failout:1,
+			      lod_child_got_update_log:1;
 
 	/* lov settings descriptor storing static information */
 	struct lov_desc	      lod_desc;
@@ -301,6 +303,7 @@ struct lod_thread_info {
 	struct lu_buf	  lti_linkea_buf;
 	struct dt_insert_rec lti_dt_rec;
 	struct llog_catid lti_cid;
+	struct llog_cookie lti_cookie;
 };
 
 extern const struct lu_device_operations lod_lu_ops;
@@ -357,12 +360,6 @@ static inline struct lod_object *lod_dt_obj(const struct dt_object *d)
 static inline struct dt_object* lod_object_child(struct lod_object *o)
 {
 	return container_of0(lu_object_next(lod2lu_obj(o)),
-			struct dt_object, do_lu);
-}
-
-static inline struct dt_object *dt_object_child(struct dt_object *o)
-{
-	return container_of0(lu_object_next(&(o)->do_lu),
 			struct dt_object, do_lu);
 }
 

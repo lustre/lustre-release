@@ -1779,6 +1779,12 @@ static inline struct dt_object *lu2dt_obj(struct lu_object *o)
 	return container_of0(o, struct dt_object, do_lu);
 }
 
+static inline struct dt_object *dt_object_child(struct dt_object *o)
+{
+	return container_of0(lu_object_next(&(o)->do_lu),
+			     struct dt_object, do_lu);
+}
+
 /**
  * This is the general purpose transaction handle.
  * 1. Transaction Life Cycle

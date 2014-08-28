@@ -533,7 +533,8 @@ struct obd_device {
 					 * (for /proc/status only!!) */
 		obd_no_ir:1,		/* no imperative recovery. */
 		obd_process_conf:1,	/* device is processing mgs config */
-		obd_uses_nid_stats:1;	/* maintain per-client OBD stats */
+		obd_uses_nid_stats:1,	/* maintain per-client OBD stats */
+		obd_force_abort_recovery:1; /* abort recovery forcely */
 
         /* use separate field as it is set in interrupt to don't mess with
          * protection of other bits using _bh lock */

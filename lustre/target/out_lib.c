@@ -32,9 +32,11 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <lu_target.h>
+#include <md_object.h>
 #include <lustre_update.h>
 #include <obd.h>
 #include <obd_class.h>
+#include "tgt_internal.h"
 
 #define OUT_UPDATE_BUFFER_SIZE_ADD	4096
 #define OUT_UPDATE_BUFFER_SIZE_MAX	(256 * 4096)  /* 1MB update size now */
@@ -401,3 +403,799 @@ int out_read_pack(const struct lu_env *env, struct object_update *update,
 			       ARRAY_SIZE(sizes), sizes, bufs);
 }
 EXPORT_SYMBOL(out_read_pack);
+
+static int tx_extend_args(struct thandle_exec_args *ta, int new_alloc_ta)
+{
+	struct tx_arg	**new_ta;
+	int		i;
+	int		rc = 0;
+
+	if (ta->ta_alloc_args >= new_alloc_ta)
+		return 0;
+
+	OBD_ALLOC(new_ta, sizeof(*new_ta) * new_alloc_ta);
+	if (new_ta == NULL)
+		return -ENOMEM;
+
+	for (i = 0; i < new_alloc_ta; i++) {
+		if (i < ta->ta_alloc_args) {
+			/* copy the old args to new one */
+			new_ta[i] = ta->ta_args[i];
+		} else {
+			OBD_ALLOC_PTR(new_ta[i]);
+			if (new_ta[i] == NULL)
+				GOTO(out, rc = -ENOMEM);
+		}
+	}
+
+	/* free the old args */
+	if (ta->ta_args != NULL)
+		OBD_FREE(ta->ta_args, sizeof(ta->ta_args[0]) *
+				      ta->ta_alloc_args);
+
+	ta->ta_args = new_ta;
+	ta->ta_alloc_args = new_alloc_ta;
+out:
+	if (rc != 0) {
+		for (i = 0; i < new_alloc_ta; i++) {
+			if (new_ta[i] != NULL)
+				OBD_FREE_PTR(new_ta[i]);
+		}
+		OBD_FREE(new_ta, sizeof(*new_ta) * new_alloc_ta);
+	}
+	return rc;
+}
+
+#define TX_ALLOC_STEP	8
+struct tx_arg *tx_add_exec(struct thandle_exec_args *ta,
+			   tx_exec_func_t func, tx_exec_func_t undo,
+			   const char *file, int line)
+{
+	int rc;
+	int i;
+
+	LASSERT(ta != NULL);
+	LASSERT(func != NULL);
+
+	if (ta->ta_argno + 1 >= ta->ta_alloc_args) {
+		rc = tx_extend_args(ta, ta->ta_alloc_args + TX_ALLOC_STEP);
+		if (rc != 0)
+			return ERR_PTR(rc);
+	}
+
+	i = ta->ta_argno;
+
+	ta->ta_argno++;
+
+	ta->ta_args[i]->exec_fn = func;
+	ta->ta_args[i]->undo_fn = undo;
+	ta->ta_args[i]->file    = file;
+	ta->ta_args[i]->line    = line;
+
+	return ta->ta_args[i];
+}
+
+static int out_obj_destroy(const struct lu_env *env, struct dt_object *dt_obj,
+			   struct thandle *th)
+{
+	int rc;
+
+	CDEBUG(D_INFO, "%s: destroy "DFID"\n", dt_obd_name(th->th_dev),
+	       PFID(lu_object_fid(&dt_obj->do_lu)));
+
+	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+	rc = dt_destroy(env, dt_obj, th);
+	dt_write_unlock(env, dt_obj);
+
+	return rc;
+}
+
+/**
+ * All of the xxx_undo will be used once execution failed,
+ * But because all of the required resource has been reserved in
+ * declare phase, i.e. if declare succeed, it should make sure
+ * the following executing phase succeed in anyway, so these undo
+ * should be useless for most of the time in Phase I
+ */
+static int out_tx_create_undo(const struct lu_env *env, struct thandle *th,
+			      struct tx_arg *arg)
+{
+	int rc;
+
+	rc = out_obj_destroy(env, arg->object, th);
+	if (rc != 0)
+		CERROR("%s: undo failure, we are doomed!: rc = %d\n",
+		       dt_obd_name(th->th_dev), rc);
+	return rc;
+}
+
+int out_tx_create_exec(const struct lu_env *env, struct thandle *th,
+		       struct tx_arg *arg)
+{
+	struct dt_object	*dt_obj = arg->object;
+	int			 rc;
+
+	CDEBUG(D_OTHER, "%s: create "DFID": dof %u, mode %o\n",
+	       dt_obd_name(th->th_dev),
+	       PFID(lu_object_fid(&arg->object->do_lu)),
+	       arg->u.create.dof.dof_type,
+	       arg->u.create.attr.la_mode & S_IFMT);
+
+	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+	rc = dt_create(env, dt_obj, &arg->u.create.attr,
+		       &arg->u.create.hint, &arg->u.create.dof, th);
+
+	dt_write_unlock(env, dt_obj);
+
+	CDEBUG(D_INFO, "%s: insert create reply %p index %d: rc = %d\n",
+	       dt_obd_name(th->th_dev), arg->reply, arg->index, rc);
+
+	if (arg->reply != NULL)
+		object_update_result_insert(arg->reply, NULL, 0, arg->index,
+					    rc);
+
+	return rc;
+}
+
+/**
+ * Add create update to thandle
+ *
+ * Declare create updates and add the update to the thandle updates
+ * exec array.
+ *
+ * \param [in] env	execution environment
+ * \param [in] obj	object to be created
+ * \param [in] attr	attributes of the creation
+ * \param [in] parent_fid the fid of the parent
+ * \param [in] dof	dt object format of the creation
+ * \param [in] ta	thandle execuation args where all of updates
+ *                      of the transaction are stored
+ * \param [in] th	thandle for this update
+ * \param [in] reply	reply of the updates
+ * \param [in] index	index of the reply
+ * \param [in] file	the file name where the function is called,
+ *                      which is only for debugging purpose.
+ * \param [in] line	the line number where the funtion is called,
+ *                      which is only for debugging purpose.
+ *
+ * \retval		0 if updates is added successfully.
+ * \retval		negative errno if update adding fails.
+ */
+int out_create_add_exec(const struct lu_env *env, struct dt_object *obj,
+			struct lu_attr *attr, struct lu_fid *parent_fid,
+			struct dt_object_format *dof,
+			struct thandle_exec_args *ta,
+			struct thandle	*th,
+			struct object_update_reply *reply,
+			int index, const char *file, int line)
+{
+	struct tx_arg *arg;
+	int rc;
+
+	rc = dt_declare_create(env, obj, attr, NULL, dof, th);
+	if (rc != 0)
+		return rc;
+
+	arg = tx_add_exec(ta, out_tx_create_exec, out_tx_create_undo, file,
+			  line);
+	if (IS_ERR(arg))
+		return PTR_ERR(arg);
+
+	/* release the object in out_trans_stop */
+	lu_object_get(&obj->do_lu);
+	arg->object = obj;
+	arg->u.create.attr = *attr;
+	if (parent_fid != NULL)
+		arg->u.create.fid = *parent_fid;
+	memset(&arg->u.create.hint, 0, sizeof(arg->u.create.hint));
+	arg->u.create.dof  = *dof;
+	arg->reply = reply;
+	arg->index = index;
+
+	return 0;
+}
+
+static int out_tx_attr_set_undo(const struct lu_env *env,
+				struct thandle *th, struct tx_arg *arg)
+{
+	CERROR("%s: attr set undo "DFID" unimplemented yet!: rc = %d\n",
+	       dt_obd_name(th->th_dev),
+	       PFID(lu_object_fid(&arg->object->do_lu)), -ENOTSUPP);
+
+	return -ENOTSUPP;
+}
+
+static int out_tx_attr_set_exec(const struct lu_env *env, struct thandle *th,
+				struct tx_arg *arg)
+{
+	struct dt_object	*dt_obj = arg->object;
+	int			rc;
+
+	CDEBUG(D_OTHER, "%s: attr set "DFID"\n", dt_obd_name(th->th_dev),
+	       PFID(lu_object_fid(&dt_obj->do_lu)));
+
+	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+	rc = dt_attr_set(env, dt_obj, &arg->u.attr_set.attr, th);
+	dt_write_unlock(env, dt_obj);
+
+	CDEBUG(D_INFO, "%s: insert attr_set reply %p index %d: rc = %d\n",
+	       dt_obd_name(th->th_dev), arg->reply, arg->index, rc);
+
+	if (arg->reply != NULL)
+		object_update_result_insert(arg->reply, NULL, 0,
+					    arg->index, rc);
+
+	return rc;
+}
+
+int out_attr_set_add_exec(const struct lu_env *env, struct dt_object *dt_obj,
+			  const struct lu_attr *attr,
+			  struct thandle_exec_args *ta,
+			  struct thandle *th, struct object_update_reply *reply,
+			  int index, const char *file, int line)
+{
+	struct tx_arg	*arg;
+	int		rc;
+
+	rc = dt_declare_attr_set(env, dt_obj, attr, th);
+	if (rc != 0)
+		return rc;
+
+	arg = tx_add_exec(ta, out_tx_attr_set_exec, out_tx_attr_set_undo,
+			  file, line);
+	if (IS_ERR(arg))
+		return PTR_ERR(arg);
+
+	lu_object_get(&dt_obj->do_lu);
+	arg->object = dt_obj;
+	arg->u.attr_set.attr = *attr;
+	arg->reply = reply;
+	arg->index = index;
+	return 0;
+}
+
+static int out_tx_write_exec(const struct lu_env *env, struct thandle *th,
+			     struct tx_arg *arg)
+{
+	struct dt_object *dt_obj = arg->object;
+	int rc;
+
+	CDEBUG(D_INFO, "write "DFID" pos "LPU64" buf %p, len %lu\n",
+	       PFID(lu_object_fid(&dt_obj->do_lu)), arg->u.write.pos,
+	       arg->u.write.buf.lb_buf, (unsigned long)arg->u.write.buf.lb_len);
+
+	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+	rc = dt_record_write(env, dt_obj, &arg->u.write.buf,
+			     &arg->u.write.pos, th);
+	dt_write_unlock(env, dt_obj);
+
+	if (rc == 0)
+		rc = arg->u.write.buf.lb_len;
+
+	if (arg->reply != NULL)
+		object_update_result_insert(arg->reply, NULL, 0, arg->index,
+					    rc);
+
+	return rc > 0 ? 0 : rc;
+}
+
+int out_write_add_exec(const struct lu_env *env, struct dt_object *dt_obj,
+		       const struct lu_buf *buf, loff_t pos,
+		       struct thandle_exec_args *ta, struct thandle *th,
+		       struct object_update_reply *reply, int index,
+		       const char *file, int line)
+{
+	struct tx_arg	*arg;
+	int		rc;
+
+	rc = dt_declare_record_write(env, dt_obj, buf, pos, th);
+	if (rc != 0)
+		return rc;
+
+	arg = tx_add_exec(ta, out_tx_write_exec, NULL, file, line);
+	if (IS_ERR(arg))
+		return PTR_ERR(arg);
+
+	lu_object_get(&dt_obj->do_lu);
+	arg->object = dt_obj;
+	arg->u.write.buf = *buf;
+	arg->u.write.pos = pos;
+	arg->reply = reply;
+	arg->index = index;
+	return 0;
+}
+
+static int out_tx_xattr_set_exec(const struct lu_env *env,
+				 struct thandle *th,
+				 struct tx_arg *arg)
+{
+	struct dt_object *dt_obj = arg->object;
+	int rc;
+
+	CDEBUG(D_INFO, "%s: set xattr buf %p name %s flag %d\n",
+	       dt_obd_name(th->th_dev), arg->u.xattr_set.buf.lb_buf,
+	       arg->u.xattr_set.name, arg->u.xattr_set.flags);
+
+	if (!lu_object_exists(&dt_obj->do_lu))
+		GOTO(out, rc = -ENOENT);
+
+	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+	rc = dt_xattr_set(env, dt_obj, &arg->u.xattr_set.buf,
+			  arg->u.xattr_set.name, arg->u.xattr_set.flags,
+			  th);
+	/**
+	 * Ignore errors if this is LINK EA
+	 **/
+	if (unlikely(rc != 0 &&
+		     strcmp(arg->u.xattr_set.name, XATTR_NAME_LINK) == 0)) {
+		/* XXX: If the linkEA is overflow, then we need to notify the
+		 *	namespace LFSCK to skip "nlink" attribute verification
+		 *	on this object to avoid the "nlink" to be shrinked by
+		 *	wrong. It may be not good an interaction with LFSCK
+		 *	like this. We will consider to replace it with other
+		 *	mechanism in future. LU-5802. */
+		if (rc == -ENOSPC && arg->reply != NULL) {
+			struct lfsck_request *lr = &tgt_th_info(env)->tti_lr;
+
+			lfsck_pack_rfa(lr, lu_object_fid(&dt_obj->do_lu),
+				       LE_SKIP_NLINK, LFSCK_TYPE_NAMESPACE);
+			tgt_lfsck_in_notify(env,
+				tgt_ses_info(env)->tsi_tgt->lut_bottom, lr, th);
+		}
+
+		rc = 0;
+	}
+	dt_write_unlock(env, dt_obj);
+
+out:
+	CDEBUG(D_INFO, "%s: insert xattr set reply %p index %d: rc = %d\n",
+	       dt_obd_name(th->th_dev), arg->reply, arg->index, rc);
+
+	if (arg->reply != NULL)
+		object_update_result_insert(arg->reply, NULL, 0, arg->index,
+					    rc);
+
+	return rc;
+}
+
+int out_xattr_set_add_exec(const struct lu_env *env, struct dt_object *dt_obj,
+			   const struct lu_buf *buf, const char *name,
+			   int flags, struct thandle_exec_args *ta,
+			   struct thandle *th,
+			   struct object_update_reply *reply,
+			   int index, const char *file, int line)
+{
+	struct tx_arg	*arg;
+	int		rc;
+
+	rc = dt_declare_xattr_set(env, dt_obj, buf, name, flags, th);
+	if (rc != 0)
+		return rc;
+
+	if (strcmp(name, XATTR_NAME_LINK) == 0 && reply != NULL) {
+		struct lfsck_request *lr = &tgt_th_info(env)->tti_lr;
+
+		/* XXX: If the linkEA is overflow, then we need to notify the
+		 *	namespace LFSCK to skip "nlink" attribute verification
+		 *	on this object to avoid the "nlink" to be shrinked by
+		 *	wrong. It may be not good an interaction with LFSCK
+		 *	like this. We will consider to replace it with other
+		 *	mechanism in future. LU-5802. */
+		lfsck_pack_rfa(lr, lu_object_fid(&dt_obj->do_lu),
+			       LE_SKIP_NLINK_DECLARE, LFSCK_TYPE_NAMESPACE);
+		rc = tgt_lfsck_in_notify(env,
+					 tgt_ses_info(env)->tsi_tgt->lut_bottom,
+					 lr, ta->ta_handle);
+		if (rc != 0)
+			return rc;
+	}
+
+	arg = tx_add_exec(ta, out_tx_xattr_set_exec, NULL, file, line);
+	if (IS_ERR(arg))
+		return PTR_ERR(arg);
+
+	lu_object_get(&dt_obj->do_lu);
+	arg->object = dt_obj;
+	arg->u.xattr_set.name = name;
+	arg->u.xattr_set.flags = flags;
+	arg->u.xattr_set.buf = *buf;
+	arg->reply = reply;
+	arg->index = index;
+	arg->u.xattr_set.csum = 0;
+	return 0;
+}
+
+static int out_tx_xattr_del_exec(const struct lu_env *env, struct thandle *th,
+				 struct tx_arg *arg)
+{
+	struct dt_object *dt_obj = arg->object;
+	int rc;
+
+	CDEBUG(D_INFO, "%s: del xattr name '%s' on "DFID"\n",
+	       dt_obd_name(th->th_dev), arg->u.xattr_set.name,
+	       PFID(lu_object_fid(&dt_obj->do_lu)));
+
+	if (!lu_object_exists(&dt_obj->do_lu))
+		GOTO(out, rc = -ENOENT);
+
+	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+	rc = dt_xattr_del(env, dt_obj, arg->u.xattr_set.name,
+			  th);
+	dt_write_unlock(env, dt_obj);
+out:
+	CDEBUG(D_INFO, "%s: insert xattr del reply %p index %d: rc = %d\n",
+	       dt_obd_name(th->th_dev), arg->reply, arg->index, rc);
+
+	if (arg->reply != NULL)
+		object_update_result_insert(arg->reply, NULL, 0, arg->index,
+					    rc);
+
+	return rc;
+}
+
+int out_xattr_del_add_exec(const struct lu_env *env, struct dt_object *dt_obj,
+			   const char *name, struct thandle_exec_args *ta,
+			   struct thandle *th,
+			   struct object_update_reply *reply, int index,
+			   const char *file, int line)
+{
+	struct tx_arg	*arg;
+	int		rc;
+
+	rc = dt_declare_xattr_del(env, dt_obj, name, th);
+	if (rc != 0)
+		return rc;
+
+	arg = tx_add_exec(ta, out_tx_xattr_del_exec, NULL, file, line);
+	if (IS_ERR(arg))
+		return PTR_ERR(arg);
+
+	lu_object_get(&dt_obj->do_lu);
+	arg->object = dt_obj;
+	arg->u.xattr_set.name = name;
+	arg->reply = reply;
+	arg->index = index;
+	return 0;
+}
+
+static int out_obj_ref_add(const struct lu_env *env,
+			   struct dt_object *dt_obj,
+			   struct thandle *th)
+{
+	int rc;
+
+	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+	rc = dt_ref_add(env, dt_obj, th);
+	dt_write_unlock(env, dt_obj);
+
+	return rc;
+}
+
+static int out_obj_ref_del(const struct lu_env *env,
+			   struct dt_object *dt_obj,
+			   struct thandle *th)
+{
+	int rc;
+
+	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+	rc = dt_ref_del(env, dt_obj, th);
+	dt_write_unlock(env, dt_obj);
+
+	return rc;
+}
+
+static int out_tx_ref_add_exec(const struct lu_env *env, struct thandle *th,
+			       struct tx_arg *arg)
+{
+	struct dt_object *dt_obj = arg->object;
+	int rc;
+
+	rc = out_obj_ref_add(env, dt_obj, th);
+
+	CDEBUG(D_INFO, "%s: insert ref_add reply %p index %d: rc = %d\n",
+	       dt_obd_name(th->th_dev), arg->reply, arg->index, rc);
+
+	if (arg->reply != NULL)
+		object_update_result_insert(arg->reply, NULL, 0, arg->index,
+					    rc);
+	return rc;
+}
+
+static int out_tx_ref_add_undo(const struct lu_env *env, struct thandle *th,
+			       struct tx_arg *arg)
+{
+	return out_obj_ref_del(env, arg->object, th);
+}
+
+int out_ref_add_add_exec(const struct lu_env *env, struct dt_object *dt_obj,
+			 struct thandle_exec_args *ta,
+			 struct thandle *th,
+			 struct object_update_reply *reply, int index,
+			 const char *file, int line)
+{
+	struct tx_arg	*arg;
+	int		rc;
+
+	rc = dt_declare_ref_add(env, dt_obj, th);
+	if (rc != 0)
+		return rc;
+
+	arg = tx_add_exec(ta, out_tx_ref_add_exec, out_tx_ref_add_undo, file,
+			  line);
+	if (IS_ERR(arg))
+		return PTR_ERR(arg);
+
+	lu_object_get(&dt_obj->do_lu);
+	arg->object = dt_obj;
+	arg->reply = reply;
+	arg->index = index;
+	return 0;
+}
+
+static int out_tx_ref_del_exec(const struct lu_env *env, struct thandle *th,
+			       struct tx_arg *arg)
+{
+	struct dt_object	*dt_obj = arg->object;
+	int			 rc;
+
+	rc = out_obj_ref_del(env, dt_obj, th);
+
+	CDEBUG(D_INFO, "%s: insert ref_del reply %p index %d: rc = %d\n",
+	       dt_obd_name(th->th_dev), arg->reply, arg->index, 0);
+
+	if (arg->reply != NULL)
+		object_update_result_insert(arg->reply, NULL, 0, arg->index,
+					    rc);
+
+	return rc;
+}
+
+static int out_tx_ref_del_undo(const struct lu_env *env, struct thandle *th,
+			       struct tx_arg *arg)
+{
+	return out_obj_ref_add(env, arg->object, th);
+}
+
+int out_ref_del_add_exec(const struct lu_env *env, struct dt_object *dt_obj,
+			 struct thandle_exec_args *ta,
+			 struct thandle *th,
+			 struct object_update_reply *reply, int index,
+			 const char *file, int line)
+{
+	struct tx_arg	*arg;
+	int		rc;
+
+	rc = dt_declare_ref_del(env, dt_obj, th);
+	if (rc != 0)
+		return rc;
+
+	arg = tx_add_exec(ta, out_tx_ref_del_exec, out_tx_ref_del_undo, file,
+			  line);
+	if (IS_ERR(arg))
+		return PTR_ERR(arg);
+
+	lu_object_get(&dt_obj->do_lu);
+	arg->object = dt_obj;
+	arg->reply = reply;
+	arg->index = index;
+	return 0;
+}
+
+static int out_obj_index_insert(const struct lu_env *env,
+				struct dt_object *dt_obj,
+				const struct dt_rec *rec,
+				const struct dt_key *key,
+				struct thandle *th)
+{
+	int rc;
+
+	CDEBUG(D_INFO, "%s: index insert "DFID" name: %s fid "DFID", type %u\n",
+	       dt_obd_name(th->th_dev), PFID(lu_object_fid(&dt_obj->do_lu)),
+	       (char *)key, PFID(((struct dt_insert_rec *)rec)->rec_fid),
+	       ((struct dt_insert_rec *)rec)->rec_type);
+
+	if (dt_try_as_dir(env, dt_obj) == 0)
+		return -ENOTDIR;
+
+	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+	rc = dt_insert(env, dt_obj, rec, key, th, 0);
+	dt_write_unlock(env, dt_obj);
+
+	return rc;
+}
+
+static int out_obj_index_delete(const struct lu_env *env,
+				struct dt_object *dt_obj,
+				const struct dt_key *key,
+				struct thandle *th)
+{
+	int rc;
+
+	CDEBUG(D_INFO, "%s: index delete "DFID" name: %s\n",
+	       dt_obd_name(th->th_dev), PFID(lu_object_fid(&dt_obj->do_lu)),
+	       (char *)key);
+
+	if (dt_try_as_dir(env, dt_obj) == 0)
+		return -ENOTDIR;
+
+	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+	rc = dt_delete(env, dt_obj, key, th);
+	dt_write_unlock(env, dt_obj);
+
+	return rc;
+}
+
+static int out_tx_index_insert_exec(const struct lu_env *env,
+				    struct thandle *th, struct tx_arg *arg)
+{
+	struct dt_object *dt_obj = arg->object;
+	int rc;
+
+	if (unlikely(!dt_object_exists(dt_obj)))
+		RETURN(-ESTALE);
+
+	rc = out_obj_index_insert(env, dt_obj,
+				  (const struct dt_rec *)&arg->u.insert.rec,
+				  arg->u.insert.key, th);
+
+	CDEBUG(D_INFO, "%s: insert idx insert reply %p index %d: rc = %d\n",
+	       dt_obd_name(th->th_dev), arg->reply, arg->index, rc);
+
+	if (arg->reply != NULL)
+		object_update_result_insert(arg->reply, NULL, 0, arg->index,
+					    rc);
+	return rc;
+}
+
+static int out_tx_index_insert_undo(const struct lu_env *env,
+				    struct thandle *th, struct tx_arg *arg)
+{
+	return out_obj_index_delete(env, arg->object, arg->u.insert.key, th);
+}
+
+int out_index_insert_add_exec(const struct lu_env *env,
+			      struct dt_object *dt_obj,
+			      const struct dt_rec *rec,
+			      const struct dt_key *key,
+			      struct thandle_exec_args *ta,
+			      struct thandle *th,
+			      struct object_update_reply *reply,
+			      int index, const char *file, int line)
+{
+	struct tx_arg	*arg;
+	int		rc;
+
+	if (dt_try_as_dir(env, dt_obj) == 0) {
+		rc = -ENOTDIR;
+		return rc;
+	}
+
+	rc = dt_declare_insert(env, dt_obj, rec, key, th);
+	if (rc != 0)
+		return rc;
+
+	arg = tx_add_exec(ta, out_tx_index_insert_exec,
+			  out_tx_index_insert_undo, file, line);
+	if (IS_ERR(arg))
+		return PTR_ERR(arg);
+
+	lu_object_get(&dt_obj->do_lu);
+	arg->object = dt_obj;
+	arg->reply = reply;
+	arg->index = index;
+	arg->u.insert.rec = *(const struct dt_insert_rec *)rec;
+	arg->u.insert.key = key;
+
+	return 0;
+}
+
+static int out_tx_index_delete_exec(const struct lu_env *env,
+				    struct thandle *th,
+				    struct tx_arg *arg)
+{
+	int rc;
+
+	rc = out_obj_index_delete(env, arg->object, arg->u.insert.key, th);
+
+	CDEBUG(D_INFO, "%s: delete idx insert reply %p index %d: rc = %d\n",
+	       dt_obd_name(th->th_dev), arg->reply, arg->index, rc);
+
+	if (arg->reply != NULL)
+		object_update_result_insert(arg->reply, NULL, 0, arg->index,
+					    rc);
+
+	return rc;
+}
+
+static int out_tx_index_delete_undo(const struct lu_env *env,
+				    struct thandle *th,
+				    struct tx_arg *arg)
+{
+	CERROR("%s: Oops, can not rollback index_delete yet: rc = %d\n",
+	       dt_obd_name(th->th_dev), -ENOTSUPP);
+	return -ENOTSUPP;
+}
+
+int out_index_delete_add_exec(const struct lu_env *env,
+			      struct dt_object *dt_obj,
+			      const struct dt_key *key,
+			      struct thandle_exec_args *ta,
+			      struct thandle *th,
+			      struct object_update_reply *reply,
+			      int index, const char *file, int line)
+{
+	struct tx_arg	*arg;
+	int		rc;
+
+	if (dt_try_as_dir(env, dt_obj) == 0) {
+		rc = -ENOTDIR;
+		return rc;
+	}
+
+	LASSERT(ta->ta_handle != NULL);
+	rc = dt_declare_delete(env, dt_obj, key, th);
+	if (rc != 0)
+		return rc;
+
+	arg = tx_add_exec(ta, out_tx_index_delete_exec,
+			  out_tx_index_delete_undo, file, line);
+	if (IS_ERR(arg))
+		return PTR_ERR(arg);
+
+	lu_object_get(&dt_obj->do_lu);
+	arg->object = dt_obj;
+	arg->reply = reply;
+	arg->index = index;
+	arg->u.insert.key = key;
+	return 0;
+}
+
+static int out_tx_destroy_exec(const struct lu_env *env, struct thandle *th,
+			       struct tx_arg *arg)
+{
+	struct dt_object *dt_obj = arg->object;
+	int rc;
+
+	rc = out_obj_destroy(env, dt_obj, th);
+
+	CDEBUG(D_INFO, "%s: insert destroy reply %p index %d: rc = %d\n",
+	       dt_obd_name(th->th_dev), arg->reply, arg->index, rc);
+
+	if (arg->reply != NULL)
+		object_update_result_insert(arg->reply, NULL, 0, arg->index,
+					    rc);
+
+	RETURN(rc);
+}
+
+static int out_tx_destroy_undo(const struct lu_env *env, struct thandle *th,
+			       struct tx_arg *arg)
+{
+	CERROR("%s: not support destroy undo yet!: rc = %d\n",
+	       dt_obd_name(th->th_dev), -ENOTSUPP);
+	return -ENOTSUPP;
+}
+
+int out_destroy_add_exec(const struct lu_env *env, struct dt_object *dt_obj,
+			 struct thandle_exec_args *ta, struct thandle *th,
+			 struct object_update_reply *reply,
+			 int index, const char *file, int line)
+{
+	struct tx_arg	*arg;
+	int		rc;
+
+	rc = dt_declare_destroy(env, dt_obj, th);
+	if (rc != 0)
+		return rc;
+
+	arg = tx_add_exec(ta, out_tx_destroy_exec, out_tx_destroy_undo,
+			  file, line);
+	if (IS_ERR(arg))
+		return PTR_ERR(arg);
+
+	lu_object_get(&dt_obj->do_lu);
+	arg->object = dt_obj;
+	arg->reply = reply;
+	arg->index = index;
+	return 0;
+}

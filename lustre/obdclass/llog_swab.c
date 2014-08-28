@@ -44,6 +44,7 @@
 
 
 #include <lustre_log.h>
+#include <lustre_update.h>
 
 static void print_llogd_body(struct llogd_body *d)
 {
@@ -126,6 +127,21 @@ void lustre_swab_lu_seq_range(struct lu_seq_range *range)
         __swab32s (&range->lsr_flags);
 }
 EXPORT_SYMBOL(lustre_swab_lu_seq_range);
+
+void lustre_swab_update_ops(struct update_ops *uops, unsigned int op_count)
+{
+	unsigned int i;
+	unsigned int j;
+
+	for (i = 0; i < op_count; i++) {
+		lustre_swab_lu_fid(&uops->uops_op[i].uop_fid);
+		__swab16s(&uops->uops_op[i].uop_type);
+		__swab16s(&uops->uops_op[i].uop_param_count);
+		for (j = 0; j < uops->uops_op[i].uop_param_count; j++)
+			__swab16s(&uops->uops_op[i].uop_params_off[j]);
+	}
+}
+EXPORT_SYMBOL(lustre_swab_update_ops);
 
 void lustre_swab_llog_rec(struct llog_rec_hdr *rec)
 {
@@ -272,6 +288,25 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec)
 	}
         case LLOG_PAD_MAGIC:
                 break;
+	case UPDATE_REC:
+	{
+		struct llog_update_record *lur =
+				(struct llog_update_record *)rec;
+		struct update_records *record = &lur->lur_update_rec;
+
+		__swab32s(&record->ur_flags);
+		__swab64s(&record->ur_batchid);
+		__swab64s(&record->ur_master_transno);
+		__swab32s(&record->ur_param_count);
+		__swab32s(&record->ur_update_count);
+		lustre_swab_update_ops(&record->ur_ops,
+				       record->ur_update_count);
+
+		/* Compute tail location. */
+		tail = (struct llog_rec_tail *)((char *)record +
+						update_records_size(record));
+		break;
+	}
         default:
                 CERROR("Unknown llog rec type %#x swabbing rec %p\n",
                        rec->lrh_type, rec);
