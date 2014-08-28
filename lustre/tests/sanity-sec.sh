@@ -7,8 +7,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 19430 19967 19967
-ALWAYS_EXCEPT="                2     5     6    $SANITY_SEC_EXCEPT"
+# bug number for skipped test: 19430 LU-5423 19967 19967
+ALWAYS_EXCEPT="                2     4       5     6    $SANITY_SEC_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && \
