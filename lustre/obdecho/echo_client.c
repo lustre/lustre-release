@@ -1335,7 +1335,7 @@ static obd_id last_object_id;
 
 static int
 echo_copyin_lsm (struct echo_device *ed, struct lov_stripe_md *lsm,
-                 void *ulsm, int ulsm_nob)
+		 void __user *ulsm, int ulsm_nob)
 {
         struct echo_client_obd *ec = ed->ed_ec;
         int                     i;
@@ -2158,8 +2158,8 @@ out_env:
 #endif /* HAVE_SERVER_SUPPORT */
 
 static int echo_create_object(const struct lu_env *env, struct echo_device *ed,
-                              int on_target, struct obdo *oa, void *ulsm,
-                              int ulsm_nob, struct obd_trans_info *oti)
+			      int on_target, struct obdo *oa, void __user *ulsm,
+			      int ulsm_nob, struct obd_trans_info *oti)
 {
         struct echo_object     *eco;
         struct echo_client_obd *ec = ed->ed_ec;

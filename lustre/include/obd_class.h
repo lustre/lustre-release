@@ -1260,7 +1260,7 @@ static inline int obd_commitrw(const struct lu_env *env, int cmd,
 }
 
 static inline int obd_iocontrol(unsigned int cmd, struct obd_export *exp,
-                                int len, void *karg, void *uarg)
+				int len, void *karg, void __user *uarg)
 {
         int rc;
         ENTRY;

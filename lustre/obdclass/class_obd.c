@@ -237,7 +237,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
         }
 
         CDEBUG(D_IOCTL, "cmd = %x\n", cmd);
-        if (obd_ioctl_getdata(&buf, &len, (void *)arg)) {
+	if (obd_ioctl_getdata(&buf, &len, (void __user *)arg)) {
                 CERROR("OBD ioctl: data error\n");
                 RETURN(-EINVAL);
         }
@@ -279,7 +279,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 memcpy(data->ioc_bulk, BUILD_VERSION,
                        strlen(BUILD_VERSION) + 1);
 
-                err = obd_ioctl_popdata((void *)arg, data, len);
+		err = obd_ioctl_popdata((void __user *)arg, data, len);
                 if (err)
                         err = -EFAULT;
                 GOTO(out, err);
@@ -296,7 +296,8 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 if (dev < 0)
                         GOTO(out, err = -EINVAL);
 
-                err = obd_ioctl_popdata((void *)arg, data, sizeof(*data));
+		err = obd_ioctl_popdata((void __user *)arg, data,
+					sizeof(*data));
                 if (err)
                         err = -EFAULT;
                 GOTO(out, err);
@@ -330,7 +331,8 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 
                 CDEBUG(D_IOCTL, "device name %s, dev %d\n", data->ioc_inlbuf1,
                        dev);
-                err = obd_ioctl_popdata((void *)arg, data, sizeof(*data));
+		err = obd_ioctl_popdata((void __user *)arg, data,
+					sizeof(*data));
                 if (err)
                         err = -EFAULT;
                 GOTO(out, err);
@@ -366,7 +368,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                          (int)index, status, obd->obd_type->typ_name,
                          obd->obd_name, obd->obd_uuid.uuid,
 			 atomic_read(&obd->obd_refcount));
-                err = obd_ioctl_popdata((void *)arg, data, len);
+		err = obd_ioctl_popdata((void __user *)arg, data, len);
 
                 GOTO(out, err = 0);
         }
@@ -414,7 +416,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 if (err)
                         GOTO(out, err);
 
-                err = obd_ioctl_popdata((void *)arg, data, len);
+		err = obd_ioctl_popdata((void __user *)arg, data, len);
                 if (err)
                         err = -EFAULT;
                 GOTO(out, err);

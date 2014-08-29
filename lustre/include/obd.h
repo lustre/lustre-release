@@ -878,7 +878,7 @@ struct md_enqueue_info {
 struct obd_ops {
 	struct module *o_owner;
 	int (*o_iocontrol)(unsigned int cmd, struct obd_export *exp, int len,
-			   void *karg, void *uarg);
+			   void *karg, void __user *uarg);
         int (*o_get_info)(const struct lu_env *env, struct obd_export *,
                           __u32 keylen, void *key, __u32 *vallen, void *val,
                           struct lov_stripe_md *lsm);
