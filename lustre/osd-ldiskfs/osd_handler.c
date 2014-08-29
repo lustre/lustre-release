@@ -2923,9 +2923,15 @@ static int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
         if (strcmp(name, XATTR_NAME_VERSION) == 0) {
                 /* for version we are just using xattr API but change inode
                  * field instead */
-                LASSERT(buf->lb_len == sizeof(dt_obj_version_t));
-                osd_object_version_get(env, dt, buf->lb_buf);
-                return sizeof(dt_obj_version_t);
+		if (buf->lb_len == 0)
+			return sizeof(dt_obj_version_t);
+
+		if (buf->lb_len < sizeof(dt_obj_version_t))
+			return -ERANGE;
+
+		osd_object_version_get(env, dt, buf->lb_buf);
+
+		return sizeof(dt_obj_version_t);
         }
 
 	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
