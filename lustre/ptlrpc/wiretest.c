@@ -4727,6 +4727,8 @@ void lustre_assert_wire_constants(void)
 		 (long long)LE_SKIP_NLINK);
 	LASSERTF(LE_SET_LMV_MASTER == 15, "found %lld\n",
 		 (long long)LE_SET_LMV_MASTER);
+	LASSERTF(LE_SET_LMV_SLAVE == 16, "found %lld\n",
+		 (long long)LE_SET_LMV_SLAVE);
 	LASSERTF(LEF_TO_OST == 0x00000001UL, "found 0x%.8xUL\n",
 		(unsigned)LEF_TO_OST);
 	LASSERTF(LEF_FROM_OST == 0x00000002UL, "found 0x%.8xUL\n",
@@ -4735,6 +4737,8 @@ void lustre_assert_wire_constants(void)
 		(unsigned)LEF_SET_LMV_HASH);
 	LASSERTF(LEF_SET_LMV_ALL == 0x00000008UL, "found 0x%.8xUL\n",
 		(unsigned)LEF_SET_LMV_ALL);
+	LASSERTF(LEF_RECHECK_NAME_HASH == 0x00000010UL, "found 0x%.8xUL\n",
+		(unsigned)LEF_RECHECK_NAME_HASH);
 
 	/* Checks for struct lfsck_reply */
 	LASSERTF((int)sizeof(struct lfsck_reply) == 16, "found %lld\n",

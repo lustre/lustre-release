@@ -282,6 +282,577 @@ static inline bool lfsck_is_valid_slave_lmv(struct lmv_mds_md_v1 *lmv)
 	       lmv_is_known_hash_type(lmv->lmv_hash_type);
 }
 
+/**
+ * Remove the striped directory's master LMV EA and mark it as read-only.
+ *
+ * Take ldlm lock on the striped directory before calling the
+ * lfsck_disable_master_lmv().
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] com	pointer to the lfsck component
+ * \param[in] lnr	pointer to the namespace request that contains the
+ *			striped directory to be handled and other information
+ *
+ * \retval		positive number if nothing to be done
+ * \retval		zero for succeed
+ * \retval		negative error number on failure
+ */
+static int lfsck_remove_lmv(const struct lu_env *env,
+			    struct lfsck_component *com,
+			    struct lfsck_namespace_req *lnr)
+{
+	struct dt_object	*obj	= lnr->lnr_obj;
+	struct lustre_handle	 lh	= { 0 };
+	int			 rc;
+
+	lnr->lnr_lmv->ll_ignore = 1;
+	rc = lfsck_ibits_lock(env, com->lc_lfsck, obj, &lh,
+			      MDS_INODELOCK_UPDATE | MDS_INODELOCK_XATTR,
+			      LCK_EX);
+	if (rc == 0) {
+		rc = lfsck_disable_master_lmv(env, com, obj, true);
+		lfsck_ibits_unlock(&lh, LCK_EX);
+	}
+
+	return rc;
+}
+
+/**
+ * Remove the name entry from the striped directory's master MDT-object.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] com	pointer to the lfsck component
+ * \param[in] dir	pointer to the striped directory
+ * \param[in] fid	the shard's FID which name entry will be removed
+ * \param[in] index	the shard's index which name entry will be removed
+ *
+ * \retval		positive number for repaired successfully
+ * \retval		0 if nothing to be repaired
+ * \retval		negative error number on failure
+ */
+static int lfsck_remove_dirent(const struct lu_env *env,
+			       struct lfsck_component *com,
+			       struct dt_object *dir,
+			       const struct lu_fid *fid, __u32 index)
+{
+	struct lfsck_thread_info	*info = lfsck_env_info(env);
+	struct dt_object		*obj;
+	int				 rc;
+
+	snprintf(info->lti_tmpbuf2, sizeof(info->lti_tmpbuf2), DFID":%u",
+		 PFID(fid), index);
+	obj = lfsck_object_find_by_dev(env, com->lc_lfsck->li_bottom, fid);
+	if (IS_ERR(obj))
+		return PTR_ERR(obj);
+
+	rc = lfsck_namespace_repair_dirent(env, com, dir, obj,
+					info->lti_tmpbuf2, info->lti_tmpbuf2,
+					S_IFDIR, false, false);
+	lfsck_object_put(env, obj);
+	if (rc > 0) {
+		struct lfsck_namespace *ns = com->lc_file_ram;
+
+		ns->ln_dirent_repaired++;
+	}
+
+	return rc;
+}
+
+/**
+ * Remove old shard's name entry and refill the @lslr slot with new shard.
+ *
+ * Some old shard held the specified @lslr slot, but it is an invalid shard.
+ * This function will remove the bad shard's name entry, and refill the @lslr
+ * slot with the new shard.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] com	pointer to the lfsck component
+ * \param[in] lslr	pointer to lfsck_disable_master_lmv slot which content
+ *			will be replaced by the given information
+ * \param[in] lnr	contain the shard's FID to be used to fill the
+ *			@lslr slot, it also records the known max filled index
+ *			and the known max stripe count
+ * \param[in] lmv	contain the slave LMV EA to be used to fill the
+ *			@lslr slot
+ * \param[in] index	the old shard's index in the striped directory
+ * \param[in] flags	the new shard's flags in the @lslr slot
+ *
+ * \retval		zero for succeed
+ * \retval		negative error number on failure
+ */
+static int lfsck_replace_lmv(const struct lu_env *env,
+			     struct lfsck_component *com,
+			     struct lfsck_slave_lmv_rec *lslr,
+			     struct lfsck_namespace_req *lnr,
+			     struct lmv_mds_md_v1 *lmv,
+			     __u32 index, __u32 flags)
+{
+	int rc;
+
+	rc = lfsck_remove_dirent(env, com, lnr->lnr_obj,
+				 &lslr->lslr_fid, index);
+	if (rc < 0)
+		return rc;
+
+	lslr->lslr_fid = lnr->lnr_fid;
+	lslr->lslr_flags = flags;
+	if (lmv != NULL) {
+		struct lfsck_lmv *llmv = lnr->lnr_lmv;
+
+		lslr->lslr_stripe_count = lmv->lmv_stripe_count;
+		lslr->lslr_index = lmv->lmv_master_mdt_index;
+		lslr->lslr_hash_type = lmv->lmv_hash_type;
+
+		if (flags == LSLF_NONE &&
+		    llmv->ll_hash_type == LMV_HASH_TYPE_UNKNOWN &&
+		    lmv_is_known_hash_type(lmv->lmv_hash_type))
+			llmv->ll_hash_type = lmv->lmv_hash_type;
+
+		if (flags == LSLF_NONE &&
+		    lslr->lslr_stripe_count <= LFSCK_LMV_MAX_STRIPES &&
+		    llmv->ll_max_stripe_count < lslr->lslr_stripe_count)
+			llmv->ll_max_stripe_count = lslr->lslr_stripe_count;
+	} else {
+		lslr->lslr_stripe_count = 0;
+		lslr->lslr_index = 0;
+		lslr->lslr_hash_type = 0;
+	}
+
+	return 0;
+}
+
+/**
+ * Record the slave LMV EA in the lfsck_lmv::ll_lslr.
+ *
+ * If the lfsck_lmv::ll_lslr slot corresponding to the given @shard_idx is free,
+ * then fill the slot with the given @lnr/@lmv/@flags directly (maybe need to
+ * extend the lfsck_lmv::ll_lslr buffer).
+ *
+ * If the lfsck_lmv::ll_lslr slot corresponding to the given @shard_idx is taken
+ * by other shard, then the LFSCK will try to resolve the conflict by checking
+ * the two conflict shards' flags, and try other possible slot (if one of them
+ * claims another possible @shard_idx).
+ *
+ * 1) If one of the two conflict shards can be recorded in another slot, then
+ *    it is OK, go ahead. Otherwise,
+ *
+ * 2) If one of them is dangling name entry, then remove (one of) the dangling
+ *    name entry (and replace related @lslr slot if needed). Otherwise,
+ *
+ * 3) If one of them has no slave LMV EA, then check whether the master LMV
+ *    EA has ever been lost and re-generated (LMV_HASH_FLAG_LOST_LMV in the
+ *    master LMV EA).
+ *
+ * 3.1) If yes, then it is possible that such object is not a real shard of
+ *	the striped directory, instead, it was created by someone after the
+ *	master LMV EA lost with the name that matches the shard naming rule.
+ *	Then the LFSCK will remove the master LMV EA and mark the striped
+ *	directory as read-only to allow those non-shard files to be visible
+ *	to client.
+ *
+ * 3.2) If no, then remove (one of) the object what has no slave LMV EA.
+ *
+ * 4) If all above efforts cannot work, then the LFSCK cannot know how to
+ *    recover the striped directory. To make the administrator can see the
+ *    conflicts, the LFSCK will remove the master LMV EA and mark the striped
+ *    directory as read-only.
+ *
+ * This function may be called recursively, to prevent overflow, we define
+ * LFSCK_REC_LMV_MAX_DEPTH to restrict the recursive call depth.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] com	pointer to the lfsck component
+ * \param[in] lnr	contain the shard's FID to fill the @lslr slot,
+ *			it also records the known max filled index and
+ *			the known max stripe count
+ * \param[in] lmv	pointer to the slave LMV EA to be recorded
+ * \param[in] shard_idx	the shard's index used for locating the @lslr slot,
+ *			it can be the index stored in the shard's name,
+ *			it also can be the index stored in the slave LMV EA
+ *			(for recursive case)
+ * \param[in] flags	the shard's flags to be recorded in the @lslr slot
+ *			to indicate the shard status, such as whether has
+ *			slave LMV EA, whether dangling name entry, whether
+ *			the name entry and slave LMV EA unmatched, and ect
+ * \param[in] flags2	when be called recursively, the @flags2 tells the
+ *			former conflict shard's flags in the @lslr slot.
+ * \param[in,out] depth	To prevent to be called recurisively too deep,
+ *			we define the max depth can be called recursively
+ *			(LFSCK_REC_LMV_MAX_DEPTH)
+ *
+ * \retval		zero for succeed
+ * \retval		"-ERANGE" for invalid @shard_idx
+ * \retval		"-EEXIST" for the required lslr slot has been
+ *			occupied by other shard
+ * \retval		other negative error number on failure
+ */
+static int lfsck_record_lmv(const struct lu_env *env,
+			    struct lfsck_component *com,
+			    struct lfsck_namespace_req *lnr,
+			    struct lmv_mds_md_v1 *lmv, __u32 shard_idx,
+			    __u32 flags, __u32 flags2, __u32 *depth)
+{
+	struct lfsck_instance	   *lfsck = com->lc_lfsck;
+	struct lfsck_lmv	   *llmv  = lnr->lnr_lmv;
+	struct dt_object	   *dir   = lnr->lnr_obj;
+	const struct lu_fid	   *fid   = &lnr->lnr_fid;
+	struct lfsck_slave_lmv_rec *lslr;
+	struct lfsck_rec_lmv_save  *lrls;
+	int			    index = shard_idx;
+	int			    rc    = 0;
+	ENTRY;
+
+	CDEBUG(D_LFSCK, "%s: record slave LMV EA for the striped directory "
+	       DFID": shard = "DFID", index = %u, flags = %u, flags2 = %u, "
+	       "depth = %d\n", lfsck_lfsck2name(lfsck),
+	       PFID(lfsck_dto2fid(dir)), PFID(fid),
+	       index, flags, flags2, *depth);
+
+	if (index < 0 || index >= LFSCK_LMV_MAX_STRIPES)
+		RETURN(-ERANGE);
+
+	if (index >= llmv->ll_stripes_allocated) {
+		struct lfsck_slave_lmv_rec *new_lslr;
+		int new_stripes = index + 1;
+		size_t old_size = sizeof(*lslr) * llmv->ll_stripes_allocated;
+
+		OBD_ALLOC_LARGE(new_lslr, sizeof(*new_lslr) * new_stripes);
+		if (new_lslr == NULL) {
+			llmv->ll_failed = 1;
+
+			RETURN(-ENOMEM);
+		}
+
+		memcpy(new_lslr, llmv->ll_lslr, old_size);
+		OBD_FREE_LARGE(llmv->ll_lslr, old_size);
+		llmv->ll_stripes_allocated = new_stripes;
+		llmv->ll_lslr = new_lslr;
+	}
+
+	lslr = llmv->ll_lslr + index;
+	if (unlikely(lu_fid_eq(&lslr->lslr_fid, fid)))
+		RETURN(0);
+
+	if (fid_is_zero(&lslr->lslr_fid)) {
+		lslr->lslr_fid = *fid;
+		if (lmv != NULL) {
+			lslr->lslr_stripe_count = lmv->lmv_stripe_count;
+			lslr->lslr_index = lmv->lmv_master_mdt_index;
+			lslr->lslr_hash_type = lmv->lmv_hash_type;
+
+			if (flags == LSLF_NONE &&
+			    llmv->ll_hash_type == LMV_HASH_TYPE_UNKNOWN &&
+			    lmv_is_known_hash_type(lmv->lmv_hash_type))
+				llmv->ll_hash_type = lmv->lmv_hash_type;
+
+			if (flags == LSLF_NONE &&
+			    lslr->lslr_stripe_count <= LFSCK_LMV_MAX_STRIPES &&
+			    llmv->ll_max_stripe_count < lslr->lslr_stripe_count)
+				llmv->ll_max_stripe_count =
+							lslr->lslr_stripe_count;
+		}
+
+		lslr->lslr_flags = flags;
+		llmv->ll_stripes_filled++;
+
+		if (llmv->ll_max_filled_off < index)
+			llmv->ll_max_filled_off = index;
+
+		RETURN(0);
+	}
+
+	(*depth)++;
+	if (flags != LSLF_BAD_INDEX2)
+		LASSERTF(*depth == 1, "depth = %d\n", *depth);
+
+	/* Handle conflict cases. */
+	switch (lslr->lslr_flags) {
+	case LSLF_NONE:
+	case LSLF_BAD_INDEX2:
+		/* The existing one is a normal valid object. */
+		switch (flags) {
+		case LSLF_NONE:
+			/* The two 'valid' name entries claims the same
+			 * index, the LFSCK cannot distinguish which one
+			 * is correct. Then remove the master LMV EA to
+			 * make all shards to be visible to client, and
+			 * mark the master MDT-object as read-only. The
+			 * administrator can handle the conflict with
+			 * more human knowledge. */
+			rc = lfsck_remove_lmv(env, com, lnr);
+			break;
+		case LSLF_BAD_INDEX2:
+			GOTO(out, rc = -EEXIST);
+		case LSLF_NO_LMVEA:
+
+no_lmvea:
+			if (llmv->ll_lmv.lmv_hash_type &
+			    LMV_HASH_FLAG_LOST_LMV) {
+				/* If the master LMV EA was re-generated
+				 * by the former LFSCK reparation, and
+				 * before such reparation, someone has
+				 * created the conflict object, but the
+				 * LFSCK did not detect such conflict,
+				 * then we have to remove the master
+				 * LMV EA and mark the master MDT-object
+				 * as read-only. The administrator can
+				 * handle the conflict with more human
+				 * knowledge. */
+				rc = lfsck_remove_lmv(env, com, lnr);
+			} else {
+				/* Otherwise, remove the current name entry,
+				 * and add its FID in the LFSCK tracing file
+				 * for further processing. */
+				rc = lfsck_namespace_trace_update(env, com, fid,
+						LNTF_CHECK_PARENT, true);
+				if (rc == 0)
+					rc = lfsck_remove_dirent(env, com, dir,
+								 fid, index);
+			}
+
+			break;
+		case LSLF_DANGLING:
+			/* Remove the current dangling name entry. */
+			rc = lfsck_remove_dirent(env, com, dir, fid, index);
+			break;
+		case LSLF_BAD_INDEX1:
+			index = lmv->lmv_master_mdt_index;
+			lmv->lmv_master_mdt_index = shard_idx;
+			/* The name entry claims an index that is conflict
+			 * with a valid existing name entry, then try the
+			 * index in the lmv recursively. */
+			rc = lfsck_record_lmv(env, com, lnr, lmv, index,
+				LSLF_BAD_INDEX2, lslr->lslr_flags, depth);
+			lmv->lmv_master_mdt_index = index;
+			if (rc == -ERANGE || rc == -EEXIST)
+				/* The index in the lmv is invalid or
+				 * also conflict with other. Then we do
+				 * not know how to resolve the conflict.
+				 * We will handle it as handle the case
+				 * of 'LSLF_NONE' vs 'LSLF_NONE'. */
+				rc = lfsck_remove_lmv(env, com, lnr);
+
+			break;
+		default:
+			break;
+		}
+
+		break;
+	case LSLF_NO_LMVEA:
+		/* The existing one has no slave LMV EA. */
+		switch (flags) {
+		case LSLF_NONE:
+
+none:
+			if (llmv->ll_lmv.lmv_hash_type &
+			    LMV_HASH_FLAG_LOST_LMV) {
+				/* If the master LMV EA was re-generated
+				 * by the former LFSCK reparation, and
+				 * before such reparation, someone has
+				 * created the conflict object, but the
+				 * LFSCK did not detect such conflict,
+				 * then we have to remove the master
+				 * LMV EA and mark the master MDT-object
+				 * as read-only. The administrator can
+				 * handle the conflict with more human
+				 * knowledge. */
+				rc = lfsck_remove_lmv(env, com, lnr);
+			} else {
+				lrls = &lfsck->li_rec_lmv_save[*depth - 1];
+				lrls->lrls_fid = lslr->lslr_fid;
+				/* Otherwise, remove the existing name entry,
+				 * and add its FID in the LFSCK tracing file
+				 * for further processing. Refill the slot
+				 * with current slave LMV EA. */
+				rc = lfsck_namespace_trace_update(env,
+						com, &lrls->lrls_fid,
+						LNTF_CHECK_PARENT, true);
+				if (rc == 0)
+					rc = lfsck_replace_lmv(env, com, lslr,
+							lnr, lmv, index, flags);
+			}
+
+			break;
+		case LSLF_BAD_INDEX2:
+			if (flags2 >= lslr->lslr_flags)
+				GOTO(out, rc = -EEXIST);
+
+			goto none;
+		case LSLF_NO_LMVEA:
+			goto no_lmvea;
+		case LSLF_DANGLING:
+			/* Remove the current dangling name entry. */
+			rc = lfsck_remove_dirent(env, com, dir, fid, index);
+			break;
+		case LSLF_BAD_INDEX1:
+			index = lmv->lmv_master_mdt_index;
+			lmv->lmv_master_mdt_index = shard_idx;
+			/* The name entry claims an index that is conflict
+			 * with a valid existing name entry, then try the
+			 * index in the lmv recursively. */
+			rc = lfsck_record_lmv(env, com, lnr, lmv, index,
+				LSLF_BAD_INDEX2, lslr->lslr_flags, depth);
+			lmv->lmv_master_mdt_index = index;
+			if (rc == -ERANGE || rc == -EEXIST) {
+				index = shard_idx;
+				goto no_lmvea;
+			}
+
+			break;
+		default:
+			break;
+		}
+
+		break;
+	case LSLF_DANGLING:
+		/* The existing one is a dangling name entry. */
+		switch (flags) {
+		case LSLF_NONE:
+		case LSLF_BAD_INDEX2:
+		case LSLF_NO_LMVEA:
+			/* Remove the existing dangling name entry.
+			 * Refill the lslr slot with the given LMV. */
+			rc = lfsck_replace_lmv(env, com, lslr, lnr,
+					       lmv, index, flags);
+			break;
+		case LSLF_DANGLING:
+			/* Two dangling name entries conflict,
+			 * remove the current one. */
+			rc = lfsck_remove_dirent(env, com, dir, fid, index);
+			break;
+		case LSLF_BAD_INDEX1:
+			index = lmv->lmv_master_mdt_index;
+			lmv->lmv_master_mdt_index = shard_idx;
+			/* The name entry claims an index that is conflict
+			 * with a valid existing name entry, then try the
+			 * index in the lmv recursively. */
+			rc = lfsck_record_lmv(env, com, lnr, lmv, index,
+				LSLF_BAD_INDEX2, lslr->lslr_flags, depth);
+			lmv->lmv_master_mdt_index = index;
+			if (rc == -ERANGE || rc == -EEXIST)
+				/* If the index in the lmv is invalid or
+				 * also conflict with other, then remove
+				 * the existing dangling name entry.
+				 * Refill the lslr slot with the given LMV. */
+				rc = lfsck_replace_lmv(env, com, lslr, lnr,
+						       lmv, shard_idx, flags);
+
+			break;
+		default:
+			break;
+		}
+
+		break;
+	case LSLF_BAD_INDEX1: {
+		if (*depth >= LFSCK_REC_LMV_MAX_DEPTH)
+			goto conflict;
+
+		lrls = &lfsck->li_rec_lmv_save[*depth - 1];
+		lrls->lrls_fid = lnr->lnr_fid;
+		lrls->lrls_lmv = *lmv;
+
+		lnr->lnr_fid = lslr->lslr_fid;
+		lmv->lmv_master_mdt_index = index;
+		lmv->lmv_stripe_count = lslr->lslr_stripe_count;
+		lmv->lmv_hash_type = lslr->lslr_hash_type;
+		index = lslr->lslr_index;
+
+		/* The existing one has another possible slot,
+		 * try it recursively. */
+		rc = lfsck_record_lmv(env, com, lnr, lmv, index,
+				      LSLF_BAD_INDEX2, flags, depth);
+		*lmv = lrls->lrls_lmv;
+		lnr->lnr_fid = lrls->lrls_fid;
+		index = shard_idx;
+		if (rc != 0) {
+			if (rc == -ERANGE || rc == -EEXIST)
+				goto conflict;
+
+			break;
+		}
+
+		lslr->lslr_fid = *fid;
+		lslr->lslr_flags = flags;
+		if (lmv != NULL) {
+			lslr->lslr_stripe_count = lmv->lmv_stripe_count;
+			lslr->lslr_index = lmv->lmv_master_mdt_index;
+			lslr->lslr_hash_type = lmv->lmv_hash_type;
+
+			if (flags == LSLF_NONE &&
+			    llmv->ll_hash_type == LMV_HASH_TYPE_UNKNOWN &&
+			    lmv_is_known_hash_type(lmv->lmv_hash_type))
+				llmv->ll_hash_type = lmv->lmv_hash_type;
+
+			if (flags == LSLF_NONE &&
+			    lslr->lslr_stripe_count <= LFSCK_LMV_MAX_STRIPES &&
+			    llmv->ll_max_stripe_count < lslr->lslr_stripe_count)
+				llmv->ll_max_stripe_count =
+							lslr->lslr_stripe_count;
+		} else {
+			lslr->lslr_stripe_count = 0;
+			lslr->lslr_index = 0;
+			lslr->lslr_hash_type = 0;
+		}
+
+		break;
+
+conflict:
+		switch (flags) {
+		case LSLF_NONE:
+			/* The two 'valid' name entries claims the same
+			 * index, the LFSCK cannot distinguish which one
+			 * is correct. Then remove the master LMV EA to
+			 * make all shards to be visible to client, and
+			 * mark the master MDT-object as read-only. The
+			 * administrator can handle the conflict with
+			 * more human knowledge. */
+			rc = lfsck_remove_lmv(env, com, lnr);
+			break;
+		case LSLF_BAD_INDEX2:
+			GOTO(out, rc = -EEXIST);
+		case LSLF_NO_LMVEA:
+			goto no_lmvea;
+		case LSLF_DANGLING:
+			/* Remove the current dangling name entry. */
+			rc = lfsck_remove_dirent(env, com, dir, fid, index);
+			break;
+		case LSLF_BAD_INDEX1:
+			index = lmv->lmv_master_mdt_index;
+			lmv->lmv_master_mdt_index = shard_idx;
+			/* The name entry claims an index that is conflict
+			 * with a valid existing name entry, then try the
+			 * index in the lmv recursively. */
+			rc = lfsck_record_lmv(env, com, lnr, lmv, index,
+				LSLF_BAD_INDEX2, lslr->lslr_flags, depth);
+			lmv->lmv_master_mdt_index = index;
+			if (rc == -ERANGE || rc == -EEXIST)
+				/* The index in the lmv is invalid or
+				 * also conflict with other. Then we do
+				 * not know how to resolve the conflict.
+				 * We will handle it as handle the case
+				 * of 'LSLF_NONE' vs 'LSLF_NONE'. */
+				rc = lfsck_remove_lmv(env, com, lnr);
+
+			break;
+		}
+
+		break;
+	}
+	default:
+		break;
+	}
+
+	if (rc < 0)
+		llmv->ll_failed = 1;
+
+	GOTO(out, rc);
+
+out:
+	(*depth)--;
+
+	return rc > 0 ? 0 : rc;
+}
+
 int lfsck_read_stripe_lmv(const struct lu_env *env, struct dt_object *obj,
 			  struct lmv_mds_md_v1 *lmv)
 {
@@ -521,13 +1092,14 @@ log:
 }
 
 /**
- * Check whether there are non-shard objects under the striped directory.
+ * Check whether allow to re-genereate the lost master LMV EA.
  *
  * If the master MDT-object of the striped directory lost its master LMV EA,
  * then before the LFSCK repaired the striped directory, some ones may have
- * created some non-shard objects under the master MDT-object. If such case
- * happend, then the LFSCK cannot re-generate the lost master LMV EA to keep
- * those non-shard objects to be visible to client.
+ * created some objects (that are not normal shards of the striped directory)
+ * under the master MDT-object. If such case happend, then the LFSCK cannot
+ * re-generate the lost master LMV EA to keep those objects to be visible to
+ * client.
  *
  * \param[in] env	pointer to the thread context
  * \param[in] com	pointer to the lfsck component
@@ -539,10 +1111,11 @@ log:
  * \retval		zero if allow to re-generate LMV EA
  * \retval		negative error number on failure
  */
-static int lfsck_allow_set_master_lmv(const struct lu_env *env,
-				      struct lfsck_component *com,
-				      struct dt_object *obj,
-				      const struct lu_fid *cfid, __u32 cidx)
+static int lfsck_allow_regenerate_master_lmv(const struct lu_env *env,
+					     struct lfsck_component *com,
+					     struct dt_object *obj,
+					     const struct lu_fid *cfid,
+					     __u32 cidx)
 {
 	struct lfsck_thread_info	*info	= lfsck_env_info(env);
 	struct lu_fid			*tfid	= &info->lti_fid3;
@@ -817,7 +1390,10 @@ static int lfsck_namespace_set_lmv_master(const struct lu_env *env,
 {
 	struct lfsck_thread_info	*info	= lfsck_env_info(env);
 	struct lmv_mds_md_v1		*lmv3	= &info->lti_lmv3;
+	struct lu_seq_range		*range	= &info->lti_range;
 	struct lfsck_instance		*lfsck	= com->lc_lfsck;
+	struct seq_server_site		*ss	=
+			lu_site2seq(lfsck->li_bottom->dd_lu_dev.ld_site);
 	struct dt_object		*obj;
 	struct lustre_handle		 lh	= { 0 };
 	int				 pidx	= -1;
@@ -830,22 +1406,13 @@ static int lfsck_namespace_set_lmv_master(const struct lu_env *env,
 	if (unlikely(obj == NULL))
 		RETURN(-ENOENT);
 
-	if (dt_object_remote(obj)) {
-		struct lu_seq_range	*range	= &info->lti_range;
-		struct seq_server_site	*ss	=
-			lu_site2seq(lfsck->li_bottom->dd_lu_dev.ld_site);
+	fld_range_set_mdt(range);
+	rc = fld_server_lookup(env, ss->ss_server_fld,
+			       fid_seq(lfsck_dto2fid(obj)), range);
+	if (rc != 0)
+		GOTO(log, rc);
 
-		fld_range_set_mdt(range);
-		rc = fld_server_lookup(env, ss->ss_server_fld,
-				       fid_seq(lfsck_dto2fid(obj)), range);
-		if (rc != 0)
-			GOTO(log, rc);
-
-		pidx = range->lsr_index;
-	} else {
-		pidx = lfsck_dev_idx(lfsck->li_bottom);
-	}
-
+	pidx = range->lsr_index;
 	rc = lfsck_ibits_lock(env, lfsck, obj, &lh,
 			      MDS_INODELOCK_UPDATE | MDS_INODELOCK_XATTR,
 			      LCK_EX);
@@ -872,7 +1439,8 @@ static int lfsck_namespace_set_lmv_master(const struct lu_env *env,
 	lmv3->lmv_master_mdt_index = pidx;
 
 	if (flags & LEF_SET_LMV_ALL) {
-		rc = lfsck_allow_set_master_lmv(env, com, obj, cfid, cidx);
+		rc = lfsck_allow_regenerate_master_lmv(env, com, obj,
+						       cfid, cidx);
 		if (rc > 0) {
 			rc = lfsck_disable_master_lmv(env, com, obj, false);
 
@@ -1255,6 +1823,19 @@ out:
 /**
  * Double scan the striped directory or the shard.
  *
+ * All the shards' under the given striped directory or its shard have
+ * been scanned, the LFSCK has got the global knownledge about the LMV
+ * EA consistency.
+ *
+ * If the target is one shard of a striped directory, then only needs to
+ * update related tracing file.
+ *
+ * If the target is the master MDT-object of a striped directory, then the
+ * LFSCK will make the decision about whether the master LMV EA is invalid
+ * or not, and repair it if inconsistenct; for every shard of the striped
+ * directory, whether the slave LMV EA is invalid or not, and repair it if
+ * inconsistent.
+ *
  * \param[in] env	pointer to the thread context
  * \param[in] com	pointer to the lfsck component
  * \param[in] lnr	pointer to the namespace request that contains the
@@ -1267,20 +1848,528 @@ int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 				       struct lfsck_component *com,
 				       struct lfsck_namespace_req *lnr)
 {
+	struct lfsck_thread_info	*info	= lfsck_env_info(env);
+	struct lfsck_instance		*lfsck	= com->lc_lfsck;
 	struct lfsck_namespace		*ns	= com->lc_file_ram;
 	struct lfsck_lmv		*llmv	= lnr->lnr_lmv;
+	struct lmv_mds_md_v1		*lmv	= &llmv->ll_lmv;
+	struct lmv_mds_md_v1		*lmv2	= &info->lti_lmv2;
 	struct dt_object		*dir	= lnr->lnr_obj;
+	const struct lu_fid		*pfid	= lfsck_dto2fid(dir);
+	struct lu_seq_range		*range	= &info->lti_range;
+	struct seq_server_site		*ss	=
+			lu_site2seq(lfsck->li_bottom->dd_lu_dev.ld_site);
+	__u32				 stripe_count;
+	__u32				 hash_type;
+	int				 rc	= 0;
+	int				 i;
 	ENTRY;
 
-	/* XXX: it will be improved with subsequent patches landed. */
-
-	if (llmv->ll_lmv_slave && llmv->ll_lmv_verified) {
-		ns->ln_striped_shards_scanned++;
-		lfsck_namespace_trace_update(env, com,
+	if (llmv->ll_lmv_slave) {
+		if (llmv->ll_lmv_verified) {
+			ns->ln_striped_shards_scanned++;
+			lfsck_namespace_trace_update(env, com,
 					lfsck_dto2fid(dir),
 					LNTF_UNCERTAIN_LMV |
 					LNTF_RECHECK_NAME_HASH, false);
+		}
+
+		RETURN(0);
 	}
 
-	RETURN(0);
+	/* Either the striped directory has been disabled or only part of
+	 * the striped directory have been scanned. The LFSCK cannot repair
+	 * something based on incompleted knowledge. So skip it. */
+	if (llmv->ll_ignore || llmv->ll_exit_value <= 0)
+		RETURN(0);
+
+	/* There ever been some failure, as to the LFSCK cannot know whether
+	 * it has got the global knowledge about the LMV EA consistency or not,
+	 * so it cannot make reparation about the incompleted knowledge. */
+	if (llmv->ll_failed) {
+		ns->ln_striped_dirs_scanned++;
+		ns->ln_striped_dirs_failed++;
+
+		RETURN(0);
+	}
+
+	if (lmv->lmv_stripe_count > LFSCK_LMV_MAX_STRIPES)
+		stripe_count = max(llmv->ll_max_filled_off + 1,
+				   llmv->ll_max_stripe_count);
+	else
+		stripe_count = max(llmv->ll_max_filled_off + 1,
+				   lmv->lmv_stripe_count);
+
+	if (lmv->lmv_stripe_count != stripe_count) {
+		lmv->lmv_stripe_count = stripe_count;
+		llmv->ll_lmv_updated = 1;
+	}
+
+	if (!lmv_is_known_hash_type(lmv->lmv_hash_type) &&
+	    !(lmv->lmv_hash_type & LMV_HASH_FLAG_BAD_TYPE) &&
+	    lmv_is_known_hash_type(llmv->ll_hash_type)) {
+		hash_type = llmv->ll_hash_type & LMV_HASH_TYPE_MASK;
+		lmv->lmv_hash_type = llmv->ll_hash_type;
+		llmv->ll_lmv_updated = 1;
+	} else {
+		hash_type = lmv->lmv_hash_type & LMV_HASH_TYPE_MASK;
+		if (!lmv_is_known_hash_type(hash_type))
+			hash_type = LMV_HASH_TYPE_UNKNOWN;
+	}
+
+	if (llmv->ll_lmv_updated) {
+		lmv->lmv_layout_version++;
+		rc = lfsck_namespace_update_lmv(env, com, dir, lmv, false);
+		if (rc != 0)
+			RETURN(rc);
+
+		ns->ln_striped_dirs_scanned++;
+		ns->ln_striped_dirs_repaired++;
+	}
+
+	fld_range_set_mdt(range);
+	for (i = 0; i <= llmv->ll_max_filled_off; i++) {
+		struct dt_object *obj = NULL;
+		struct lfsck_slave_lmv_rec *lslr = llmv->ll_lslr + i;
+		const struct lu_fid *cfid = &lslr->lslr_fid;
+		const struct lu_name *cname;
+		struct linkea_data ldata = { 0 };
+		int len;
+		int rc1 = 0;
+		bool repair_linkea = false;
+		bool repair_lmvea = false;
+		bool rename = false;
+		bool create = false;
+		bool linkea_repaired = false;
+		bool lmvea_repaired = false;
+		bool rename_repaired = false;
+		bool create_repaired = false;
+
+		/* LMV EA hole. */
+		if (fid_is_zero(cfid))
+			continue;
+
+		len = snprintf(info->lti_tmpbuf, sizeof(info->lti_tmpbuf),
+			       DFID":%u", PFID(cfid), i);
+		cname = lfsck_name_get_const(env, info->lti_tmpbuf, len);
+		memcpy(lnr->lnr_name, info->lti_tmpbuf, len);
+
+		obj = lfsck_object_find_bottom(env, lfsck, cfid);
+		if (IS_ERR(obj)) {
+			rc1 = PTR_ERR(obj);
+			goto next;
+		}
+
+		switch (lslr->lslr_flags) {
+		case LSLF_NONE:
+			if (llmv->ll_inline ||
+			    lslr->lslr_stripe_count != stripe_count ||
+			    (lslr->lslr_hash_type & LMV_HASH_TYPE_MASK) !=
+			     hash_type)
+				repair_lmvea = true;
+			break;
+		case LSLF_BAD_INDEX2:
+			/* The index in the slave LMV EA is right,
+			 * the name entry should be updated. */
+			rename = true;
+			snprintf(info->lti_tmpbuf2, sizeof(info->lti_tmpbuf2),
+				 DFID":%u", PFID(cfid), lslr->lslr_index);
+			if (llmv->ll_inline ||
+			    lslr->lslr_stripe_count != stripe_count ||
+			    (lslr->lslr_hash_type & LMV_HASH_TYPE_MASK) !=
+			     hash_type)
+				repair_lmvea = true;
+			break;
+		case LSLF_BAD_INDEX1:
+			/* The index in the name entry is right,
+			 * the slave LMV EA should be updated. */
+		case LSLF_NO_LMVEA:
+			repair_lmvea = true;
+			break;
+		case LSLF_DANGLING:
+			create = true;
+			goto repair;
+		default:
+			break;
+		}
+
+		rc1 = lfsck_links_read(env, obj, &ldata);
+		if (rc1 == -ENOENT) {
+			create = true;
+			goto repair;
+		}
+
+		if (rc1 == -EINVAL || rc1 == -ENODATA) {
+			repair_linkea = true;
+			goto repair;
+		}
+
+		if (rc1 != 0)
+			goto next;
+
+		if (ldata.ld_leh->leh_reccount != 1) {
+			repair_linkea = true;
+			goto repair;
+		}
+
+		rc1 = linkea_links_find(&ldata, cname, pfid);
+		if (rc1 != 0)
+			repair_linkea = true;
+
+repair:
+		if (create) {
+			rc1 = lfsck_namespace_repair_dangling(env, com,
+							      obj, lnr);
+			if (rc1 >= 0) {
+				create_repaired = true;
+				if (rc == 0)
+					ns->ln_dangling_repaired++;
+			}
+		}
+
+		if (repair_lmvea) {
+			*lmv2 = *lmv;
+			lmv2->lmv_magic = LMV_MAGIC_STRIPE;
+			lmv2->lmv_stripe_count = stripe_count;
+			lmv2->lmv_master_mdt_index = i;
+			lmv2->lmv_hash_type = hash_type;
+
+			rc1 = lfsck_namespace_update_lmv(env, com, obj,
+							 lmv2, false);
+			if (rc1 < 0)
+				goto next;
+
+			if (dt_object_remote(obj)) {
+				rc1 = fld_server_lookup(env, ss->ss_server_fld,
+					fid_seq(lfsck_dto2fid(obj)), range);
+				if (rc1 != 0)
+					goto next;
+
+				rc1 = lfsck_namespace_notify_lmv_remote(env,
+						com, obj, LE_SET_LMV_SLAVE, 0,
+						range->lsr_index);
+			} else {
+				ns->ln_striped_shards_repaired++;
+				rc1 = lfsck_namespace_trace_update(env, com,
+					cfid, LNTF_RECHECK_NAME_HASH, true);
+			}
+
+			if (rc1 < 0)
+				goto next;
+
+			if (rc1 >= 0)
+				lmvea_repaired = true;
+		} else if (llmv->ll_inline) {
+			if (dt_object_remote(obj)) {
+				rc1 = fld_server_lookup(env, ss->ss_server_fld,
+					fid_seq(lfsck_dto2fid(obj)), range);
+				if (rc1 != 0)
+					goto next;
+
+				/* The slave LMV EA on the remote shard is
+				 * correct, just notify the LFSCK instance
+				 * on such MDT to re-verify the name_hash. */
+				rc1 = lfsck_namespace_notify_lmv_remote(env,
+						com, obj, LE_SET_LMV_SLAVE,
+						LEF_RECHECK_NAME_HASH,
+						range->lsr_index);
+			} else {
+				rc1 = lfsck_namespace_trace_update(env, com,
+					cfid, LNTF_RECHECK_NAME_HASH, true);
+			}
+
+			if (rc1 < 0)
+				goto next;
+		}
+
+		if (rename) {
+			rc1 = lfsck_namespace_repair_dirent(env, com, dir, obj,
+					info->lti_tmpbuf2, lnr->lnr_name,
+					lnr->lnr_type, true, false);
+			if (rc1 >= 0) {
+				rename_repaired = true;
+				if (rc1 > 0) {
+					ns->ln_dirent_repaired++;
+					rc1 = lfsck_namespace_trace_update(env,
+						com, cfid,
+						LNTF_RECHECK_NAME_HASH, true);
+				}
+			}
+
+			if (rc1 < 0)
+				goto next;
+		}
+
+		if (repair_linkea) {
+			struct lustre_handle lh = { 0 };
+
+			rc1 = linkea_data_new(&ldata, &info->lti_big_buf);
+			if (rc1 != 0)
+				goto next;
+
+			rc1 = linkea_add_buf(&ldata, cname, lfsck_dto2fid(dir));
+			if (rc1 != 0)
+				goto next;
+
+			rc1 = lfsck_ibits_lock(env, lfsck, obj, &lh,
+					       MDS_INODELOCK_UPDATE |
+					       MDS_INODELOCK_XATTR, LCK_EX);
+			lfsck_ibits_unlock(&lh, LCK_EX);
+			if (rc1 != 0)
+				goto next;
+
+			rc1 = lfsck_namespace_rebuild_linkea(env, com, obj,
+							     &ldata);
+			if (rc1 >= 0) {
+				linkea_repaired = true;
+				if (rc1 > 0)
+					ns->ln_linkea_repaired++;
+			}
+		}
+
+next:
+		CDEBUG(D_LFSCK, "%s: namespace LFSCK repair the shard "
+		      "%d "DFID" of the striped directory "DFID" with "
+		      "dangling %s/%s, rename %s/%s, llinkea %s/%s, "
+		      "repair_lmvea %s/%s: rc = %d\n", lfsck_lfsck2name(lfsck),
+		      i, PFID(cfid), PFID(&lnr->lnr_fid),
+		      create ? "yes" : "no", create_repaired ? "yes" : "no",
+		      rename ? "yes" : "no", rename_repaired ? "yes" : "no",
+		      repair_linkea ? "yes" : "no",
+		      linkea_repaired ? "yes" : "no",
+		      repair_lmvea ? "yes" : "no",
+		      lmvea_repaired ? "yes" : "no", rc1);
+
+		if (obj != NULL && !IS_ERR(obj))
+			lfsck_object_put(env, obj);
+
+		if (rc1 < 0) {
+			rc = rc1;
+			ns->ln_striped_shards_failed++;
+		}
+	}
+
+	RETURN(rc);
+}
+
+/**
+ * Verify the shard's name entry under the striped directory.
+ *
+ * Before all shards of the striped directory scanned, the LFSCK cannot
+ * know whether the master LMV EA is valid or not, and also cannot know
+ * how to repair an invalid shard exactly. For example, the stripe index
+ * stored in the shard's name does not match the stripe index stored in
+ * the slave LMV EA, then the LFSCK cannot know which one is correct.
+ * If the LFSCK just assumed one is correct, and fixed the other, then
+ * as the LFSCK processing, it may find that the former reparation is
+ * wrong and have to roll back. Unfortunately, if some applications saw
+ * the changes and made further modification based on such changes, then
+ * the roll back is almost impossible.
+ *
+ * To avoid above trouble, the LFSCK will scan the master object of the
+ * striped directory twice, that is NOT the same as normal two-stages
+ * scanning, the double scanning the striped directory will happen both
+ * during the first-stage scanning:
+ *
+ * 1) When the striped directory is opened for scanning, the LFSCK will
+ *    iterate each shard in turn, and records its slave LMV EA in the
+ *    lfsck_lmv::ll_lslr. In this step, if the 'shard' (may be fake
+ *    shard) name does not match the shard naming rule, for example, it
+ *    does not contains the shard's FID, or not contains index, then we
+ *    can remove the bad name entry directly. But if the name is valid,
+ *    but the shard has no slave LMV EA or the slave LMV EA does not
+ *    match its name, then we just record related information in the
+ *    lfsck_lmv::ll_lslr in RAM.
+ *
+ * 2) When all the known shards have been scanned, then the engine will
+ *    generate a dummy request (via lfsck_namespace_close_dir) to tell
+ *    the assistant thread that all the known shards have been scanned.
+ *    Since the assistant has got the global knowledge about the index
+ *    conflict, stripe count, hash type, and so on. Then the assistant
+ *    thread will scan the lfsck_lmv::ll_lslr, and for every shard in
+ *    the record, check and repair inconsistency.
+ *
+ * Generally, the stripe directory has only several shards, and there
+ * will NOT be a lof of striped directory. So double scanning striped
+ * directory will not much affect the LFSCK performance.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] com	pointer to the lfsck component
+ * \param[in] lnr	pointer to the namespace request that contains the
+ *			shard's name, parent object, parent's LMV, and ect.
+ *
+ * \retval		zero for succeed
+ * \retval		negative error number on failure
+ */
+int lfsck_namespace_handle_striped_master(const struct lu_env *env,
+					  struct lfsck_component *com,
+					  struct lfsck_namespace_req *lnr)
+{
+	struct lfsck_thread_info   *info	= lfsck_env_info(env);
+	struct lmv_mds_md_v1	   *lmv		= &info->lti_lmv;
+	struct lfsck_instance	   *lfsck	= com->lc_lfsck;
+	struct lfsck_namespace	   *ns		= com->lc_file_ram;
+	struct lfsck_lmv	   *llmv	= lnr->lnr_lmv;
+	struct dt_object	   *dir		= lnr->lnr_obj;
+	const struct lu_fid	   *pfid	= lfsck_dto2fid(dir);
+	struct dt_object	   *obj		= NULL;
+	struct dt_device	   *dev		= NULL;
+	int			    shard_idx	= 0;
+	int			    stripe	= 0;
+	int			    rc		= 0;
+	int			    depth	= 0;
+	bool			    repaired	= false;
+	enum lfsck_namespace_inconsistency_type type = LNIT_NONE;
+	ENTRY;
+
+	if (unlikely(llmv->ll_ignore))
+		RETURN(0);
+
+	shard_idx = lfsck_find_mdt_idx_by_fid(env, lfsck, &lnr->lnr_fid);
+	if (shard_idx < 0)
+		GOTO(fail_lmv, rc = shard_idx);
+
+	if (shard_idx == lfsck_dev_idx(lfsck->li_bottom)) {
+		if (unlikely(strcmp(lnr->lnr_name, dotdot) == 0))
+			GOTO(out, rc = 0);
+
+		dev = lfsck->li_next;
+	} else {
+		struct lfsck_tgt_desc *ltd;
+
+		/* Usually, some local filesystem consistency verification
+		 * tools can guarantee the local namespace tree consistenct.
+		 * So the LFSCK will only verify the remote directory. */
+		if (unlikely(strcmp(lnr->lnr_name, dotdot) == 0)) {
+			rc = lfsck_namespace_trace_update(env, com, pfid,
+						LNTF_CHECK_PARENT, true);
+
+			GOTO(out, rc);
+		}
+
+		ltd = LTD_TGT(&lfsck->li_mdt_descs, shard_idx);
+		if (unlikely(ltd == NULL)) {
+			CDEBUG(D_LFSCK, "%s: cannot talk with MDT %x which "
+			       "did not join the namespace LFSCK\n",
+			       lfsck_lfsck2name(lfsck), shard_idx);
+			lfsck_lad_set_bitmap(env, com, shard_idx);
+
+			GOTO(fail_lmv, rc = -ENODEV);
+		}
+
+		dev = ltd->ltd_tgt;
+	}
+
+	obj = lfsck_object_find_by_dev(env, dev, &lnr->lnr_fid);
+	if (IS_ERR(obj))
+		GOTO(fail_lmv, rc = PTR_ERR(obj));
+
+	if (!dt_object_exists(obj)) {
+		stripe = lfsck_shard_name_to_index(env, lnr->lnr_name,
+				lnr->lnr_namelen, lnr->lnr_type, &lnr->lnr_fid);
+		if (stripe < 0) {
+			type = LNIT_BAD_DIRENT;
+
+			GOTO(out, rc = 0);
+		}
+
+dangling:
+		rc = lfsck_namespace_check_exist(env, dir, obj, lnr->lnr_name);
+		if (rc == 0)
+			rc = lfsck_record_lmv(env, com, lnr, NULL, stripe,
+					      LSLF_DANGLING, LSLF_NONE, &depth);
+
+		GOTO(out, rc);
+	}
+
+	stripe = lfsck_shard_name_to_index(env, lnr->lnr_name, lnr->lnr_namelen,
+					   lfsck_object_type(obj),
+					   &lnr->lnr_fid);
+	if (stripe < 0) {
+		type = LNIT_BAD_DIRENT;
+
+		GOTO(out, rc = 0);
+	}
+
+	rc = lfsck_read_stripe_lmv(env, obj, lmv);
+	if (unlikely(rc == -ENOENT))
+		/* It may happen when the remote object has been removed,
+		 * but the local MDT does not aware of that. */
+		goto dangling;
+
+	if (rc == -ENODATA)
+		rc = lfsck_record_lmv(env, com, lnr, lmv, stripe,
+				      LSLF_NO_LMVEA, LSLF_NONE, &depth);
+	else if (rc == 0)
+		rc = lfsck_record_lmv(env, com, lnr, lmv, stripe,
+				      lmv->lmv_master_mdt_index != stripe ?
+				      LSLF_BAD_INDEX1 : LSLF_NONE, LSLF_NONE,
+				      &depth);
+
+	GOTO(out, rc);
+
+fail_lmv:
+	llmv->ll_failed = 1;
+
+out:
+	if (rc >= 0 && type == LNIT_NONE && !S_ISDIR(lnr->lnr_type))
+		type = LNIT_BAD_TYPE;
+
+	switch (type) {
+	case LNIT_BAD_TYPE:
+		rc = lfsck_namespace_repair_dirent(env, com, dir, obj,
+						   lnr->lnr_name, lnr->lnr_name,
+						   lnr->lnr_type, true, false);
+		if (rc > 0)
+			repaired = true;
+		break;
+	case LNIT_BAD_DIRENT:
+		rc = lfsck_namespace_repair_dirent(env, com, dir, obj,
+						   lnr->lnr_name, lnr->lnr_name,
+						   lnr->lnr_type, false, false);
+		if (rc > 0)
+			repaired = true;
+		break;
+	default:
+		break;
+	}
+
+	if (rc < 0) {
+		CDEBUG(D_LFSCK, "%s: namespace LFSCK assistant fail to handle "
+		       "the shard: "DFID", parent "DFID", name %.*s: rc = %d\n",
+		       lfsck_lfsck2name(lfsck), PFID(&lnr->lnr_fid),
+		       PFID(lfsck_dto2fid(lnr->lnr_obj)),
+		       lnr->lnr_namelen, lnr->lnr_name, rc);
+
+		if ((rc == -ENOTCONN || rc == -ESHUTDOWN || rc == -EREMCHG ||
+		     rc == -ETIMEDOUT || rc == -EHOSTDOWN ||
+		     rc == -EHOSTUNREACH || rc == -EINPROGRESS) &&
+		    dev != NULL && dev != lfsck->li_next)
+			lfsck_lad_set_bitmap(env, com, shard_idx);
+
+		if (!(lfsck->li_bookmark_ram.lb_param & LPF_FAILOUT))
+			rc = 0;
+	} else {
+		if (repaired) {
+			ns->ln_items_repaired++;
+
+			switch (type) {
+			case LNIT_BAD_TYPE:
+				ns->ln_bad_type_repaired++;
+				break;
+			case LNIT_BAD_DIRENT:
+				ns->ln_dirent_repaired++;
+				break;
+			default:
+				break;
+			}
+		}
+
+		rc = 0;
+	}
+
+	if (obj != NULL && !IS_ERR(obj))
+		lfsck_object_put(env, obj);
+
+	return rc;
 }

@@ -547,9 +547,9 @@ unlock:
 	return rc;
 }
 
-static int lfsck_namespace_check_exist(const struct lu_env *env,
-				       struct dt_object *dir,
-				       struct dt_object *obj, const char *name)
+int lfsck_namespace_check_exist(const struct lu_env *env,
+				struct dt_object *dir,
+				struct dt_object *obj, const char *name)
 {
 	struct lu_fid	 *fid = &lfsck_env_info(env)->lti_fid;
 	int		  rc;
@@ -4578,6 +4578,15 @@ log:
 
 		RETURN(rc > 0 ? 0 : rc);
 	}
+	case LE_SET_LMV_SLAVE: {
+		if (!(lr->lr_flags & LEF_RECHECK_NAME_HASH))
+			ns->ln_striped_shards_repaired++;
+
+		rc = lfsck_namespace_trace_update(env, com, &lr->lr_fid,
+						  LNTF_RECHECK_NAME_HASH, true);
+
+		RETURN(rc > 0 ? 0 : rc);
+	}
 	case LE_PHASE1_DONE:
 	case LE_PHASE2_DONE:
 	case LE_PEER_EXIT:
@@ -4977,6 +4986,12 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 	if (lnr->lnr_name[0] == '.' &&
 	    (lnr->lnr_namelen == 1 || fid_seq_is_dot(fid_seq(&lnr->lnr_fid))))
 		GOTO(out, rc = 0);
+
+	if (lnr->lnr_lmv != NULL && lnr->lnr_lmv->ll_lmv_master) {
+		rc = lfsck_namespace_handle_striped_master(env, com, lnr);
+
+		RETURN(rc);
+	}
 
 	idx = lfsck_find_mdt_idx_by_fid(env, lfsck, &lnr->lnr_fid);
 	if (idx < 0)
@@ -5710,7 +5725,7 @@ out:
  *
  * Sometimes, the master LMV EA of the striped directory maybe lost, so when
  * the namespace LFSCK engine scan the striped directory for the first time,
- * it will be reguarded as a normal directory. As the LFSCK processing, some
+ * it will be regarded as a normal directory. As the LFSCK processing, some
  * other LFSCK instance on other MDT will find the shard of this striped dir,
  * and find that the master MDT-object of the striped directory lost its LMV
  * EA, then such remote LFSCK instance will regenerate the master LMV EA and
@@ -5770,8 +5785,7 @@ static int lfsck_namespace_rescan_striped_dir(const struct lu_env *env,
 			goto next;
 		}
 
-		if (ent->lde_attrs & LUDA_IGNORE &&
-		    strcmp(ent->lde_name, dotdot) != 0)
+		if (name_is_dot_or_dotdot(ent->lde_name, ent->lde_namelen))
 			goto next;
 
 		lnr = lfsck_namespace_assistant_req_init(lfsck, ent, type);

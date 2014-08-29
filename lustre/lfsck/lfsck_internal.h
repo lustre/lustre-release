@@ -519,6 +519,16 @@ struct lfsck_component {
 #define LFSCK_LMV_MAX_STRIPES	LMV_MAX_STRIPE_COUNT
 #define LFSCK_LMV_DEF_STRIPES	4
 
+/* Warning: NOT change the lfsck_slave_lmv_flags members order,
+ *	    otherwise the lfsck_record_lmv() may be wrong. */
+enum lfsck_slave_lmv_flags {
+	LSLF_NONE	= 0,
+	LSLF_BAD_INDEX2	= 1,
+	LSLF_NO_LMVEA	= 2,
+	LSLF_DANGLING	= 3,
+	LSLF_BAD_INDEX1	= 4,
+};
+
 /* When the namespace LFSCK scans a striped directory, it will record all
  * the known shards' information in the structure "lfsck_slave_lmv_rec",
  * including the shard's FID, index, slave LMV EA, and so on. Each shard
@@ -566,6 +576,14 @@ struct lfsck_lmv_unit {
 	struct dt_object	*llu_obj;
 	struct lfsck_instance	*llu_lfsck;
 };
+
+struct lfsck_rec_lmv_save {
+	struct lu_fid		lrls_fid;
+	struct lmv_mds_md_v1	lrls_lmv;
+};
+
+/* Allow lfsck_record_lmv() to be called recursively at most three times. */
+#define LFSCK_REC_LMV_MAX_DEPTH 3
 
 struct lfsck_instance {
 	struct mutex		  li_mutex;
@@ -667,6 +685,7 @@ struct lfsck_instance {
 				  li_master:1, /* Master instance or not. */
 				  li_current_oit_processed:1,
 				  li_start_unplug:1;
+	struct lfsck_rec_lmv_save li_rec_lmv_save[LFSCK_REC_LMV_MAX_DEPTH];
 };
 
 struct lfsck_async_interpret_args {
@@ -899,6 +918,9 @@ int lfsck_namespace_trace_update(const struct lu_env *env,
 				 struct lfsck_component *com,
 				 const struct lu_fid *fid,
 				 const __u8 flags, bool add);
+int lfsck_namespace_check_exist(const struct lu_env *env,
+				struct dt_object *dir,
+				struct dt_object *obj, const char *name);
 int __lfsck_links_read(const struct lu_env *env, struct dt_object *obj,
 		       struct linkea_data *ldata);
 int lfsck_namespace_rebuild_linkea(const struct lu_env *env,
@@ -967,6 +989,9 @@ int lfsck_namespace_repair_bad_name_hash(const struct lu_env *env,
 int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 				       struct lfsck_component *com,
 				       struct lfsck_namespace_req *lnr);
+int lfsck_namespace_handle_striped_master(const struct lu_env *env,
+					  struct lfsck_component *com,
+					  struct lfsck_namespace_req *lnr);
 
 /* lfsck_layout.c */
 int lfsck_layout_setup(const struct lu_env *env, struct lfsck_instance *lfsck);

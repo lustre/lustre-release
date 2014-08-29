@@ -3601,6 +3601,7 @@ enum lfsck_events {
 	LE_SKIP_NLINK_DECLARE	= 13,
 	LE_SKIP_NLINK		= 14,
 	LE_SET_LMV_MASTER	= 15,
+	LE_SET_LMV_SLAVE	= 16,
 };
 
 enum lfsck_event_flags {
@@ -3608,6 +3609,7 @@ enum lfsck_event_flags {
 	LEF_FROM_OST		= 0x00000002,
 	LEF_SET_LMV_HASH	= 0x00000004,
 	LEF_SET_LMV_ALL		= 0x00000008,
+	LEF_RECHECK_NAME_HASH	= 0x00000010,
 };
 
 static inline void lustre_set_wire_obdo(const struct obd_connect_data *ocd,

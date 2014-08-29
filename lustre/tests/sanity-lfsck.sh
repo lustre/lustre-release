@@ -3943,6 +3943,194 @@ test_31d() {
 }
 run_test 31d "Set broken striped directory (modified after broken) as read-only"
 
+test_31e() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "The test needs at least 2 MDTs" && return
+
+	echo "#####"
+	echo "For some reason, the slave MDT-object of the striped directory"
+	echo "may lost its slave LMV EA. The LFSCK should re-generate the"
+	echo "slave LMV EA."
+	echo "#####"
+
+	check_mount_and_prep
+
+	echo "Inject failure stub on MDT0 to simulate the case that the"
+	echo "slave MDT-object (that resides on the same MDT as the master"
+	echo "MDT-object resides on) lost the LMV EA."
+
+	#define OBD_FAIL_LFSCK_LOST_SLAVE_LMV	0x162a
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x162a fail_val=0
+	$LFS setdirstripe -i 0 -c $MDSCOUNT $DIR/$tdir/striped_dir ||
+		error "(1) Fail to create striped directory"
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x0 fail_val=0
+
+	echo "Trigger namespace LFSCK to re-generate slave LMV EA"
+	$START_NAMESPACE -r -A ||
+		error "(2) Fail to start LFSCK for namespace"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(3) unexpected status"
+	}
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^striped_shards_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(4) Fail to re-generate slave LMV EA: $repaired"
+
+	rmdir $DIR/$tdir/striped_dir ||
+		error "(5) Fail to remove the striped directory after LFSCK"
+}
+run_test 31e "Re-generate the lost slave LMV EA for striped directory (1)"
+
+test_31f() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "The test needs at least 2 MDTs" && return
+
+	echo "#####"
+	echo "For some reason, the slave MDT-object of the striped directory"
+	echo "may lost its slave LMV EA. The LFSCK should re-generate the"
+	echo "slave LMV EA."
+	echo "#####"
+
+	check_mount_and_prep
+
+	echo "Inject failure stub on MDT0 to simulate the case that the"
+	echo "slave MDT-object (that resides on differnt MDT as the master"
+	echo "MDT-object resides on) lost the LMV EA."
+
+	#define OBD_FAIL_LFSCK_LOST_SLAVE_LMV	0x162a
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x162a fail_val=1
+	$LFS setdirstripe -i 0 -c $MDSCOUNT $DIR/$tdir/striped_dir ||
+		error "(1) Fail to create striped directory"
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x0 fail_val=0
+
+	echo "Trigger namespace LFSCK to re-generate slave LMV EA"
+	$START_NAMESPACE -r -A ||
+		error "(2) Fail to start LFSCK for namespace"
+
+	wait_update_facet mds2 "$LCTL get_param -n \
+		mdd.$(facet_svc mds2).lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 ||
+		error "(3) unexpected status"
+
+	local repaired=$(do_facet mds2 $LCTL get_param -n \
+			 mdd.$(facet_svc mds2).lfsck_namespace |
+			 awk '/^striped_shards_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(4) Fail to re-generate slave LMV EA: $repaired"
+
+	rmdir $DIR/$tdir/striped_dir ||
+		error "(5) Fail to remove the striped directory after LFSCK"
+}
+run_test 31f "Re-generate the lost slave LMV EA for striped directory (2)"
+
+test_31g() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "The test needs at least 2 MDTs" && return
+
+	echo "#####"
+	echo "For some reason, the stripe index in the slave LMV EA is"
+	echo "corrupted. The LFSCK should repair the slave LMV EA."
+	echo "#####"
+
+	check_mount_and_prep
+
+	echo "Inject failure stub on MDT0 to simulate the case that the"
+	echo "slave LMV EA on the first shard of the striped directory"
+	echo "claims the same index as the second shard claims"
+
+	#define OBD_FAIL_LFSCK_BAD_SLAVE_LMV	0x162b
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x162b fail_val=0
+	$LFS setdirstripe -i 0 -c $MDSCOUNT $DIR/$tdir/striped_dir ||
+		error "(1) Fail to create striped directory"
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x0 fail_val=0
+
+	echo "Trigger namespace LFSCK to repair the slave LMV EA"
+	$START_NAMESPACE -r -A ||
+		error "(2) Fail to start LFSCK for namespace"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(3) unexpected status"
+	}
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^striped_shards_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(4) Fail to repair slave LMV EA: $repaired"
+
+	umount_client $MOUNT || error "(5) umount failed"
+	mount_client $MOUNT || error "(6) mount failed"
+
+	touch $DIR/$tdir/striped_dir/foo ||
+		error "(7) Fail to touch file after the LFSCK"
+
+	rm -f $DIR/$tdir/striped_dir/foo ||
+		error "(8) Fail to unlink file after the LFSCK"
+
+	rmdir $DIR/$tdir/striped_dir ||
+		error "(9) Fail to remove the striped directory after LFSCK"
+}
+run_test 31g "Repair the corrupted slave LMV EA"
+
+test_31h() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "The test needs at least 2 MDTs" && return
+
+	echo "#####"
+	echo "For some reason, the shard's name entry in the striped"
+	echo "directory may be corrupted. The LFSCK should repair the"
+	echo "bad shard's name entry."
+	echo "#####"
+
+	check_mount_and_prep
+
+	echo "Inject failure stub on MDT0 to simulate the case that the"
+	echo "first shard's name entry in the striped directory claims"
+	echo "the same index as the second shard's name entry claims."
+
+	#define OBD_FAIL_LFSCK_BAD_SLAVE_NAME	0x162c
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x162c fail_val=0
+	$LFS setdirstripe -i 0 -c $MDSCOUNT $DIR/$tdir/striped_dir ||
+		error "(1) Fail to create striped directory"
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x0 fail_val=0
+
+	echo "Trigger namespace LFSCK to repair the shard's name entry"
+	$START_NAMESPACE -r -A ||
+		error "(2) Fail to start LFSCK for namespace"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(3) unexpected status"
+	}
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^dirent_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(4) Fail to repair shard's name entry: $repaired"
+
+	umount_client $MOUNT || error "(5) umount failed"
+	mount_client $MOUNT || error "(6) mount failed"
+
+	touch $DIR/$tdir/striped_dir/foo ||
+		error "(7) Fail to touch file after the LFSCK"
+
+	rm -f $DIR/$tdir/striped_dir/foo ||
+		error "(8) Fail to unlink file after the LFSCK"
+
+	rmdir $DIR/$tdir/striped_dir ||
+		error "(9) Fail to remove the striped directory after LFSCK"
+}
+run_test 31h "Repair the corrupted shard's name entry"
+
 $LCTL set_param debug=-lfsck > /dev/null || true
 
 # restore MDS/OST size

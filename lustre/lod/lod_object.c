@@ -1870,14 +1870,28 @@ next:
 				GOTO(out_put, rc);
 		}
 
-		slave_lmm->lmv_master_mdt_index = cpu_to_le32(i);
-		rc = dt_declare_xattr_set(env, dto, &slave_lmv_buf,
-					  XATTR_NAME_LMV, 0, th);
-		if (rc != 0)
-			GOTO(out_put, rc);
+		if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_SLAVE_LMV) ||
+		    cfs_fail_val != i) {
+			if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_SLAVE_LMV) &&
+			    cfs_fail_val == i)
+				slave_lmm->lmv_master_mdt_index =
+							cpu_to_le32(i + 1);
+			else
+				slave_lmm->lmv_master_mdt_index =
+							cpu_to_le32(i);
+			rc = dt_declare_xattr_set(env, dto, &slave_lmv_buf,
+						  XATTR_NAME_LMV, 0, th);
+			if (rc != 0)
+				GOTO(out_put, rc);
+		}
 
-		snprintf(stripe_name, sizeof(info->lti_key), DFID":%u",
-			PFID(lu_object_fid(&dto->do_lu)), i);
+		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_SLAVE_NAME) &&
+		    cfs_fail_val == i)
+			snprintf(stripe_name, sizeof(info->lti_key), DFID":%u",
+				PFID(lu_object_fid(&dto->do_lu)), i + 1);
+		else
+			snprintf(stripe_name, sizeof(info->lti_key), DFID":%u",
+				PFID(lu_object_fid(&dto->do_lu)), i);
 
 		sname = lod_name_get(env, stripe_name, strlen(stripe_name));
 		rc = linkea_data_new(&ldata, &info->lti_linkea_buf);
@@ -2476,14 +2490,28 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 				GOTO(out, rc);
 		}
 
-		slave_lmm->lmv_master_mdt_index = cpu_to_le32(i);
-		rc = dt_xattr_set(env, dto, &slave_lmv_buf, XATTR_NAME_LMV,
-				  fl, th, capa);
-		if (rc != 0)
-			GOTO(out, rc);
+		if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_SLAVE_LMV) ||
+		    cfs_fail_val != i) {
+			if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_SLAVE_LMV) &&
+			    cfs_fail_val == i)
+				slave_lmm->lmv_master_mdt_index =
+							cpu_to_le32(i + 1);
+			else
+				slave_lmm->lmv_master_mdt_index =
+							cpu_to_le32(i);
+			rc = dt_xattr_set(env, dto, &slave_lmv_buf,
+					  XATTR_NAME_LMV, fl, th, capa);
+			if (rc != 0)
+				GOTO(out, rc);
+		}
 
-		snprintf(stripe_name, sizeof(info->lti_key), DFID":%d",
-			 PFID(lu_object_fid(&dto->do_lu)), i);
+		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_SLAVE_NAME) &&
+		    cfs_fail_val == i)
+			snprintf(stripe_name, sizeof(info->lti_key), DFID":%d",
+				 PFID(lu_object_fid(&dto->do_lu)), i + 1);
+		else
+			snprintf(stripe_name, sizeof(info->lti_key), DFID":%d",
+				 PFID(lu_object_fid(&dto->do_lu)), i);
 
 		sname = lod_name_get(env, stripe_name, strlen(stripe_name));
 		rc = linkea_data_new(&ldata, &info->lti_linkea_buf);
