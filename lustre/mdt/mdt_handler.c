@@ -3443,17 +3443,16 @@ static int mdt_intent_code(long itcode)
 static int mdt_intent_opc(long itopc, struct mdt_thread_info *info,
 			  struct ldlm_lock **lockp, __u64 flags)
 {
-        struct req_capsule   *pill;
-        struct mdt_it_flavor *flv;
-        int opc;
-        int rc;
-        ENTRY;
+	struct req_capsule	*pill = info->mti_pill;
+	struct ptlrpc_request	*req = mdt_info_req(info);
+	struct mdt_it_flavor	*flv;
+	int opc;
+	int rc;
+	ENTRY;
 
-        opc = mdt_intent_code(itopc);
-        if (opc < 0)
-                RETURN(-EINVAL);
-
-        pill = info->mti_pill;
+	opc = mdt_intent_code(itopc);
+	if (opc < 0)
+		RETURN(-EINVAL);
 
 	if (opc == MDT_IT_QUOTA) {
 		struct lu_device *qmt = info->mti_mdt->mdt_qmt_dev;
@@ -3469,33 +3468,33 @@ static int mdt_intent_opc(long itopc, struct mdt_thread_info *info,
 		RETURN(rc);
 	}
 
-	flv  = &mdt_it_flavor[opc];
-        if (flv->it_fmt != NULL)
-                req_capsule_extend(pill, flv->it_fmt);
+	flv = &mdt_it_flavor[opc];
+	if (flv->it_fmt != NULL)
+		req_capsule_extend(pill, flv->it_fmt);
 
-        rc = mdt_unpack_req_pack_rep(info, flv->it_flags);
-        if (rc == 0) {
-                struct ptlrpc_request *req = mdt_info_req(info);
-		if (flv->it_flags & MUTABOR &&
-		    exp_connect_flags(req->rq_export) & OBD_CONNECT_RDONLY)
-			RETURN(-EROFS);
-        }
-        if (rc == 0 && flv->it_act != NULL) {
+	rc = mdt_unpack_req_pack_rep(info, flv->it_flags);
+	if (rc < 0)
+		RETURN(rc);
+
+	if (flv->it_flags & MUTABOR &&
+	    exp_connect_flags(req->rq_export) & OBD_CONNECT_RDONLY)
+		RETURN(-EROFS);
+
+	if (flv->it_act != NULL) {
 		struct ldlm_reply *rep;
 
 		/* execute policy */
 		rc = flv->it_act(opc, info, lockp, flags);
 
 		/* Check whether the reply has been packed successfully. */
-		if (mdt_info_req(info)->rq_repmsg != NULL) {
+		if (req->rq_repmsg != NULL) {
 			rep = req_capsule_server_get(info->mti_pill,
 						     &RMF_DLM_REP);
 			rep->lock_policy_res2 =
 				ptlrpc_status_hton(rep->lock_policy_res2);
 		}
-	} else {
-		rc = -EPROTO;
 	}
+
 	RETURN(rc);
 }
 
