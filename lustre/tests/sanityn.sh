@@ -2378,6 +2378,163 @@ test_51d() {
 }
 run_test 51d "layout lock: losing layout lock should clean up memory map region"
 
+test_54_part1()
+{
+	echo "==> rename vs getattr vs setxattr should not deadlock"
+	mkdir -p $DIR/d1/d2/d3 || error "(1) mkdir failed"
+
+	do_facet mds $LCTL set_param fail_loc=$1
+
+	mv -T $DIR/d1/d2/d3 $DIR/d1/d3 &
+	PID1=$!
+	sleep 1
+
+	stat $DIR/d1/d2 &
+	PID2=$!
+	sleep 1
+
+	setfattr -n user.attr1 -v value1 $DIR2/d1 || error "(2) setfattr failed"
+	wait $PID1 || error "(3) mv failed"
+	wait $PID2 || error "(4) stat failed"
+	echo
+
+	rm -rf $DIR/d1
+}
+
+test_54_part2() {
+	echo "==> rename vs getattr vs open vs getattr should not deadlock"
+	mkdir -p $DIR/d1/d2/d3 || error "(1) mkdir failed"
+
+	do_facet mds $LCTL set_param fail_loc=$1
+
+	mv -T $DIR/d1/d2/d3 $DIR/d1/d3 &
+	PID1=$!
+	sleep 1
+
+	stat $DIR/d1/d2 &
+	PID2=$!
+	sleep 1
+
+	$MULTIOP $DIR2/d1/d2 Oc &
+	PID3=$!
+	sleep 1
+
+	stat $DIR/d1 || error "(2) stat failed"
+
+	wait $PID1 || error "(3) mv failed"
+	wait $PID2 || error "(4) stat failed"
+	wait $PID3 && error "(5) multiop failed"
+	echo
+	rm -rf $DIR/d1
+}
+
+test_54() {
+	local server_version=$(lustre_version_code $SINGLEMDS)
+
+	[[ $server_version -gt $(version_code 2.5.58) ]] ||
+	[[ $server_version -gt $(version_code 2.5.3) &&
+	   $server_version -lt $(version_code 2.5.50) ]] ||
+		{ skip "Need MDS version at least 2.5.59 or 2.5.4"; return; }
+
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	save_lustre_params client "llite.*.xattr_cache" > $p
+	lctl set_param llite.*.xattr_cache 1 ||
+		{ skip "xattr cache is not supported"; return 0; }
+
+#define OBD_FAIL_MDS_RENAME              0x153
+#define OBD_FAIL_MDS_RENAME2             0x154
+	test_54_part1 0x80000153 || error 10
+	test_54_part1 0x80000154 || error 11
+	test_54_part2 0x80000153 || error 12
+	test_54_part2 0x80000154 || error 13
+
+	restore_lustre_params < $p
+	rm -f $p
+}
+run_test 54 "rename locking"
+
+test_55a() {
+	local server_version=$(lustre_version_code $SINGLEMDS)
+
+	[[ $server_version -gt $(version_code 2.5.58) ]] ||
+	[[ $server_version -gt $(version_code 2.5.3) &&
+	   $server_version -lt $(version_code 2.5.50) ]] ||
+		{ skip "Need MDS version at least 2.5.59 or 2.5.4"; return; }
+
+	mkdir -p $DIR/d1/d2 $DIR/d3 || error "(1) mkdir failed"
+
+#define OBD_FAIL_MDS_RENAME4              0x156
+	do_facet mds $LCTL set_param fail_loc=0x80000156
+
+	mv -T $DIR/d1/d2 $DIR/d3/d2 &
+	PID1=$!
+	sleep 1
+
+	rm -r $DIR2/d3
+	wait $PID1 && error "(2) mv succeeded"
+
+	rm -rf $DIR/d1
+}
+run_test 55a "rename vs unlink target dir"
+
+test_55b() {
+	local server_version=$(lustre_version_code $SINGLEMDS)
+
+	[[ $server_version -gt $(version_code 2.5.58) ]] ||
+	[[ $server_version -gt $(version_code 2.5.3) &&
+	   $server_version -lt $(version_code 2.5.50) ]] ||
+		{ skip "Need MDS version at least 2.5.59 or 2.5.4"; return; }
+
+	mkdir -p $DIR/d1/d2 $DIR/d3 || error "(1) mkdir failed"
+
+#define OBD_FAIL_MDS_RENAME4             0x156
+	do_facet mds $LCTL set_param fail_loc=0x80000156
+
+	mv -T $DIR/d1/d2 $DIR/d3/d2 &
+	PID1=$!
+	sleep 1
+
+	rm -r $DIR2/d1
+	wait $PID1 && error "(2) mv succeeded"
+
+	rm -rf $DIR/d3
+}
+run_test 55b "rename vs unlink source dir"
+
+test_55c() {
+	local server_version=$(lustre_version_code $SINGLEMDS)
+
+	[[ $server_version -gt $(version_code 2.5.58) ]] ||
+	[[ $server_version -gt $(version_code 2.5.3) &&
+	   $server_version -lt $(version_code 2.5.50) ]] ||
+		{ skip "Need MDS version at least 2.5.59 or 2.5.4"; return; }
+
+	mkdir -p $DIR/d1/d2 $DIR/d3 || error "(1) mkdir failed"
+
+#define OBD_FAIL_MDS_RENAME4              0x156
+	do_facet mds $LCTL set_param fail_loc=0x156
+
+	mv -T $DIR/d1/d2 $DIR/d3/d2 &
+	PID1=$!
+	sleep 1
+
+	# while rename is sleeping, open and remove d3
+	$MULTIOP $DIR2/d3 D_c &
+	PID2=$!
+	sleep 1
+	rm -rf $DIR2/d3
+	sleep 5
+
+	# while rename is sleeping 2nd time, close d3
+	kill -USR1 $PID2
+	wait $PID2 || error "(3) multiop failed"
+
+	wait $PID1 && error "(2) mv succeeded"
+
+	rm -rf $DIR/d1
+}
+run_test 55c "rename vs unlink orphan target dir"
+
 test_60() {
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.0) ]] ||
 	{ skip "Need MDS version at least 2.3.0"; return; }
