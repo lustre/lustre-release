@@ -1605,9 +1605,15 @@ t32_test() {
 	echo "  Commit: $img_commit"
 	echo "  Kernel: $img_kernel"
 	echo "    Arch: $img_arch"
+	echo "OST version: $(get_lustre_version ost1)"
 
-	local version=$(version_code $img_commit)
-	[[ $version -ge $(version_code 2.5.0) ]] && ff_convert="no"
+	# The convertion can be made only when both of the following
+	# conditions are satisfied:
+	# - ost device img version < 2.3.64
+	# - ost server version >= 2.5
+	[ $(version_code $img_commit) -ge $(version_code 2.3.64) -o \
+		$(lustre_version_code ost1) -lt $(version_code 2.5.0) ] &&
+			ff_convert="no"
 
 	if [ $fstype == "zfs" ]; then
 		# import pool first
