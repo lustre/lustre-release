@@ -942,6 +942,8 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         if (rc)
                 GOTO(out_unlock_parent, rc);
 
+	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME3, 5);
+
         /* step 2: find & lock the source */
         lhs = &info->mti_lh[MDT_LH_CHILD];
         mdt_lock_reg_init(lhs, LCK_EX);
@@ -1400,6 +1402,14 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 			       PFID(new_fid));
 			GOTO(out_put_new, rc = -EXDEV);
 		}
+
+		/* Before locking the target dir, check we do not replace
+		* a dir with a non-dir, otherwise it may deadlock with
+		* link op which tries to create a link in this dir
+		* back to this non-dir. */
+		if (S_ISDIR(lu_object_attr(&mnew->mot_obj)) &&
+		    !S_ISDIR(lu_object_attr(&mold->mot_obj)))
+			GOTO(out_put_new, rc = -EISDIR);
 
 		/* Check if @msrcdir is subdir of @mnew, before locking child
 		 * to avoid reverse locking. */

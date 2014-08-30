@@ -2535,6 +2535,37 @@ test_55c() {
 }
 run_test 55c "rename vs unlink orphan target dir"
 
+test_55d() {
+	local server_version=$(lustre_version_code $SINGLEMDS)
+
+	[[ $server_version -gt $(version_code 2.5.58) ]] ||
+	[[ $server_version -gt $(version_code 2.5.3) &&
+	   $server_version -lt $(version_code 2.5.50) ]] ||
+		{ skip "Need MDS version at least 2.5.59 or 2.5.4"; return; }
+
+	touch $DIR/f1
+
+#define OBD_FAIL_MDS_RENAME3              0x155
+	do_facet mds $LCTL set_param fail_loc=0x155
+	mv $DIR/f1 $DIR/d1 &
+	PID1=$!
+	sleep 2
+
+	# while rename is sleeping, create d2, but as a directory
+	mkdir -p $DIR2/d1 || error "(1) mkdir failed"
+
+	# link in reverse locking order
+	ln $DIR2/f1 $DIR2/d1/
+
+	wait $PID1 && error "(2) mv succeeded"
+	lctl dk > ../log1
+	ls -la $DIR/
+	ls -la $DIR/d1
+
+	rm -rf $DIR/d1
+}
+run_test 55d "rename file vs link"
+
 test_60() {
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.0) ]] ||
 	{ skip "Need MDS version at least 2.3.0"; return; }
