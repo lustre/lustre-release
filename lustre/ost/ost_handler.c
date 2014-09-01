@@ -2010,9 +2010,12 @@ static int ost_rw_hpreq_lock_match(struct ptlrpc_request *req,
 	if (!ostid_res_name_eq(&ioo->ioo_oid, &lock->l_resource->lr_name))
 		RETURN(0);
 
-        mode = LCK_PW;
-        if (opc == OST_READ)
-                mode |= LCK_PR;
+	/* a bulk write can only hold a reference on a PW extent lock */
+	mode = LCK_PW;
+	if (opc == OST_READ)
+		/* whereas a bulk read can be protected by either a PR or PW
+		 * extent lock */
+		mode |= LCK_PR;
         if (!(lock->l_granted_mode & mode))
                 RETURN(0);
 
