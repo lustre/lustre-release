@@ -59,6 +59,7 @@ extern unsigned int obd_timeout;          /* seconds */
 extern unsigned int ldlm_timeout;         /* seconds */
 extern unsigned int obd_timeout_set;
 extern unsigned int ldlm_timeout_set;
+extern unsigned int bulk_timeout;
 extern unsigned int at_min;
 extern unsigned int at_max;
 extern unsigned int at_history;

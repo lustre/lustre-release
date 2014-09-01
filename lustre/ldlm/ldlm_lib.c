@@ -2615,6 +2615,7 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
 {
 	struct ptlrpc_request	*req = desc->bd_req;
 	time_t			 start = cfs_time_current_sec();
+	time_t			 deadline;
 	int			 rc = 0;
 
 	ENTRY;
@@ -2624,7 +2625,7 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
 		*lwi = LWI_INTR(NULL, NULL);
 		rc = l_wait_event(exp->exp_obd->obd_evict_inprogress_waitq,
 				  !atomic_read(&exp->exp_obd->
-					  	   obd_evict_inprogress),
+						   obd_evict_inprogress),
 				  lwi);
 	}
 
@@ -2650,8 +2651,13 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
 		RETURN(0);
 	}
 
+	/* limit actual bulk transfer to bulk_timeout seconds */
+	deadline = start + bulk_timeout;
+	if (deadline > req->rq_deadline)
+		deadline = req->rq_deadline;
+
 	do {
-		long timeoutl = req->rq_deadline - cfs_time_current_sec();
+		long timeoutl = deadline - cfs_time_current_sec();
 		cfs_duration_t timeout = timeoutl <= 0 ?
 					 CFS_TICK : cfs_time_seconds(timeoutl);
 
@@ -2664,14 +2670,17 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
 				  lustre_msg_get_conn_cnt(req->rq_reqmsg),
 				  lwi);
 		LASSERT(rc == 0 || rc == -ETIMEDOUT);
-		/* Wait again if we changed deadline. */
+		/* Wait again if we changed rq_deadline. */
+		deadline = start + bulk_timeout;
+		if (deadline > req->rq_deadline)
+			deadline = req->rq_deadline;
 	} while ((rc == -ETIMEDOUT) &&
-		 (req->rq_deadline > cfs_time_current_sec()));
+		 (deadline > cfs_time_current_sec()));
 
 	if (rc == -ETIMEDOUT) {
 		DEBUG_REQ(D_ERROR, req, "timeout on bulk %s after %ld%+lds",
-			  bulk2type(desc), req->rq_deadline - start,
-			  cfs_time_current_sec() - req->rq_deadline);
+			  bulk2type(desc), deadline - start,
+			  cfs_time_current_sec() - deadline);
 		ptlrpc_abort_bulk(desc);
 	} else if (exp->exp_failed) {
 		DEBUG_REQ(D_ERROR, req, "Eviction on bulk %s",
