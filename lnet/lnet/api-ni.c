@@ -1446,186 +1446,193 @@ lnet_shutdown_lndni(__u32 net)
 }
 
 static int
-lnet_startup_lndnis(struct list_head *nilist, __s32 peer_timeout,
-		    __s32 peer_cr, __s32 peer_buf_cr, __s32 credits,
-		    int *ni_count)
+lnet_startup_lndni(struct lnet_ni *ni, __s32 peer_timeout,
+		    __s32 peer_cr, __s32 peer_buf_cr, __s32 credits)
 {
 	int			rc = 0;
-	struct lnet_ni		*ni;
 	int			lnd_type;
 	lnd_t			*lnd;
 	struct lnet_tx_queue	*tq;
 	int			i;
 
-	while (!list_empty(nilist)) {
-		ni = list_entry(nilist->next, lnet_ni_t, ni_list);
-		lnd_type = LNET_NETTYP(LNET_NIDNET(ni->ni_nid));
+	lnd_type = LNET_NETTYP(LNET_NIDNET(ni->ni_nid));
+	if (!libcfs_isknown_lnd(lnd_type))
+		return -EINVAL;
 
-		if (!libcfs_isknown_lnd(lnd_type))
-			goto failed;
+	if (lnd_type == CIBLND || lnd_type == OPENIBLND ||
+	    lnd_type == IIBLND || lnd_type == VIBLND) {
+		CERROR("LND %s obsoleted\n", libcfs_lnd2str(lnd_type));
+		return -EINVAL;
+	}
 
-		if (lnd_type == CIBLND    ||
-		    lnd_type == OPENIBLND ||
-		    lnd_type == IIBLND    ||
-		    lnd_type == VIBLND) {
-			CERROR("LND %s obsoleted\n",
-			       libcfs_lnd2str(lnd_type));
-			goto failed;
-		}
-
-		/* Make sure this new NI is unique. */
-		lnet_net_lock(LNET_LOCK_EX);
-		if (!lnet_net_unique(LNET_NIDNET(ni->ni_nid),
-				     &the_lnet.ln_nis)) {
-			if (lnd_type == LOLND) {
-				lnet_net_unlock(LNET_LOCK_EX);
-				list_del(&ni->ni_list);
-				lnet_ni_free(ni);
-				continue;
-			}
-
-			CERROR("Net %s is not unique\n",
-			       libcfs_net2str(LNET_NIDNET(ni->ni_nid)));
+	/* Make sure this new NI is unique. */
+	lnet_net_lock(LNET_LOCK_EX);
+	if (!lnet_net_unique(LNET_NIDNET(ni->ni_nid),
+			     &the_lnet.ln_nis)) {
+		if (lnd_type == LOLND) {
 			lnet_net_unlock(LNET_LOCK_EX);
-			goto failed;
+			lnet_ni_free(ni);
+			return 0;
 		}
-		lnet_net_unlock(LNET_LOCK_EX);
 
-		LNET_MUTEX_LOCK(&the_lnet.ln_lnd_mutex);
-		lnd = lnet_find_lnd_by_type(lnd_type);
+		CERROR("Net %s is not unique\n",
+		       libcfs_net2str(LNET_NIDNET(ni->ni_nid)));
+		lnet_net_unlock(LNET_LOCK_EX);
+		return -EINVAL;
+	}
+	lnet_net_unlock(LNET_LOCK_EX);
+
+	LNET_MUTEX_LOCK(&the_lnet.ln_lnd_mutex);
+	lnd = lnet_find_lnd_by_type(lnd_type);
 
 #ifdef __KERNEL__
-		if (lnd == NULL) {
-			LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
-			rc = request_module("%s",
-						libcfs_lnd2modname(lnd_type));
-			LNET_MUTEX_LOCK(&the_lnet.ln_lnd_mutex);
-
-			lnd = lnet_find_lnd_by_type(lnd_type);
-			if (lnd == NULL) {
-				LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
-				CERROR("Can't load LND %s, module %s, rc=%d\n",
-				       libcfs_lnd2str(lnd_type),
-				       libcfs_lnd2modname(lnd_type), rc);
-#ifndef HAVE_MODULE_LOADING_SUPPORT
-				LCONSOLE_ERROR_MSG(0x104, "Your kernel must be "
-					 "compiled with kernel module "
-					 "loading support.");
-#endif
-				goto failed;
-			}
-		}
-#else
-		if (lnd == NULL) {
-			LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
-			CERROR("LND %s not supported\n",
-			       libcfs_lnd2str(lnd_type));
-			goto failed;
-		}
-#endif
-
-		lnet_net_lock(LNET_LOCK_EX);
-		lnd->lnd_refcount++;
-		lnet_net_unlock(LNET_LOCK_EX);
-
-		ni->ni_lnd = lnd;
-
-		rc = (lnd->lnd_startup)(ni);
-
+	if (lnd == NULL) {
 		LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
+		rc = request_module("%s",
+					libcfs_lnd2modname(lnd_type));
+		LNET_MUTEX_LOCK(&the_lnet.ln_lnd_mutex);
 
-		if (rc != 0) {
-			LCONSOLE_ERROR_MSG(0x105, "Error %d starting up LNI %s"
-					   "\n",
-					   rc, libcfs_lnd2str(lnd->lnd_type));
-			lnet_net_lock(LNET_LOCK_EX);
-			lnd->lnd_refcount--;
-			lnet_net_unlock(LNET_LOCK_EX);
-			goto failed;
+		lnd = lnet_find_lnd_by_type(lnd_type);
+		if (lnd == NULL) {
+			LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
+			CERROR("Can't load LND %s, module %s, rc=%d\n",
+			       libcfs_lnd2str(lnd_type),
+			       libcfs_lnd2modname(lnd_type), rc);
+#ifndef HAVE_MODULE_LOADING_SUPPORT
+			LCONSOLE_ERROR_MSG(0x104, "Your kernel must be "
+				 "compiled with kernel module "
+				 "loading support.");
+#endif
+			return -EINVAL;
 		}
+	}
+#else
+	if (lnd == NULL) {
+		LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
+		CERROR("LND %s not supported\n",
+		       libcfs_lnd2str(lnd_type));
+		return -EINVAL;
+	}
+#endif
 
-		/* If given some LND tunable parameters, parse those now to
-		 * override the values in the NI structure. */
-		if (peer_buf_cr >= 0)
-			ni->ni_peerrtrcredits = peer_buf_cr;
-		if (peer_timeout >= 0)
-			ni->ni_peertimeout = peer_timeout;
-		/*
-		 * TODO
-		 * Note: For now, don't allow the user to change
-		 * peertxcredits as this number is used in the
-		 * IB LND to control queue depth.
-		 * if (peer_cr != -1)
-		 *	ni->ni_peertxcredits = peer_cr;
-		 */
-		if (credits >= 0)
-			ni->ni_maxtxcredits = credits;
+	lnet_net_lock(LNET_LOCK_EX);
+	lnd->lnd_refcount++;
+	lnet_net_unlock(LNET_LOCK_EX);
 
-		LASSERT(ni->ni_peertimeout <= 0 || lnd->lnd_query != NULL);
+	ni->ni_lnd = lnd;
 
-		list_del(&ni->ni_list);
+	rc = (lnd->lnd_startup)(ni);
 
+	LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
+
+	if (rc != 0) {
+		LCONSOLE_ERROR_MSG(0x105, "Error %d starting up LNI %s"
+				   "\n",
+				   rc, libcfs_lnd2str(lnd->lnd_type));
 		lnet_net_lock(LNET_LOCK_EX);
-		/* refcount for ln_nis */
-		lnet_ni_addref_locked(ni, 0);
-		list_add_tail(&ni->ni_list, &the_lnet.ln_nis);
-		if (ni->ni_cpts != NULL) {
-			list_add_tail(&ni->ni_cptlist,
-				      &the_lnet.ln_nis_cpt);
-			lnet_ni_addref_locked(ni, 0);
-		}
-
+		lnd->lnd_refcount--;
 		lnet_net_unlock(LNET_LOCK_EX);
+		lnet_ni_free(ni);
+		return -EINVAL;
+	}
 
-		/* increment the ni_count here to account for the LOLND as
-		 * well.  If we increment past this point then the number
-		 * of count will be missing the LOLND, and then ping and
-		 * will not report the LOLND
-		 */
-		if (ni_count != NULL)
-			(*ni_count)++;
+	/* If given some LND tunable parameters, parse those now to
+	 * override the values in the NI structure. */
+	if (peer_buf_cr >= 0)
+		ni->ni_peerrtrcredits = peer_buf_cr;
+	if (peer_timeout >= 0)
+		ni->ni_peertimeout = peer_timeout;
+	/*
+	 * TODO
+	 * Note: For now, don't allow the user to change
+	 * peertxcredits as this number is used in the
+	 * IB LND to control queue depth.
+	 * if (peer_cr != -1)
+	 *	ni->ni_peertxcredits = peer_cr;
+	 */
+	if (credits >= 0)
+		ni->ni_maxtxcredits = credits;
 
-		if (lnd->lnd_type == LOLND) {
-			lnet_ni_addref(ni);
-			LASSERT(the_lnet.ln_loni == NULL);
-			the_lnet.ln_loni = ni;
-			continue;
-		}
+	LASSERT(ni->ni_peertimeout <= 0 || lnd->lnd_query != NULL);
+
+	lnet_net_lock(LNET_LOCK_EX);
+	/* refcount for ln_nis */
+	lnet_ni_addref_locked(ni, 0);
+	list_add_tail(&ni->ni_list, &the_lnet.ln_nis);
+	if (ni->ni_cpts != NULL) {
+		list_add_tail(&ni->ni_cptlist,
+			      &the_lnet.ln_nis_cpt);
+		lnet_ni_addref_locked(ni, 0);
+	}
+
+	lnet_net_unlock(LNET_LOCK_EX);
+	if (lnd->lnd_type == LOLND) {
+		lnet_ni_addref(ni);
+		LASSERT(the_lnet.ln_loni == NULL);
+		the_lnet.ln_loni = ni;
+		return 1;
+	}
 
 #ifndef __KERNEL__
-		if (lnd->lnd_wait != NULL) {
-			if (the_lnet.ln_eq_waitni == NULL) {
-				lnet_ni_addref(ni);
-				the_lnet.ln_eq_waitni = ni;
-			}
-		} else {
+	if (lnd->lnd_wait != NULL) {
+		if (the_lnet.ln_eq_waitni == NULL) {
+			lnet_ni_addref(ni);
+			the_lnet.ln_eq_waitni = ni;
+		}
+	} else {
 # ifndef HAVE_LIBPTHREAD
-			LCONSOLE_ERROR_MSG(0x106, "LND %s not supported in a "
-					   "single-threaded runtime\n",
-					   libcfs_lnd2str(lnd_type));
-			goto failed;
+		LCONSOLE_ERROR_MSG(0x106, "LND %s not supported in a "
+				   "single-threaded runtime\n",
+				   libcfs_lnd2str(lnd_type));
+		goto failed;
 # endif
-		}
+	}
 #endif
-		if (ni->ni_peertxcredits == 0 ||
-		    ni->ni_maxtxcredits == 0) {
-			LCONSOLE_ERROR_MSG(0x107, "LNI %s has no %scredits\n",
-					   libcfs_lnd2str(lnd->lnd_type),
-					   ni->ni_peertxcredits == 0 ?
-					   "" : "per-peer ");
+	if (ni->ni_peertxcredits == 0 ||
+	    ni->ni_maxtxcredits == 0) {
+		LCONSOLE_ERROR_MSG(0x107, "LNI %s has no %scredits\n",
+				   libcfs_lnd2str(lnd->lnd_type),
+				   ni->ni_peertxcredits == 0 ?
+				   "" : "per-peer ");
+		goto failed;
+	}
+
+	cfs_percpt_for_each(tq, i, ni->ni_tx_queues) {
+		tq->tq_credits_min =
+		tq->tq_credits_max =
+		tq->tq_credits = lnet_ni_tq_credits(ni);
+	}
+
+	CDEBUG(D_LNI, "Added LNI %s [%d/%d/%d/%d]\n",
+	       libcfs_nid2str(ni->ni_nid), ni->ni_peertxcredits,
+	       lnet_ni_tq_credits(ni) * LNET_CPT_NUMBER,
+	       ni->ni_peerrtrcredits, ni->ni_peertimeout);
+
+	return 1;
+failed:
+	lnet_shutdown_lndni(LNET_NIDNET(ni->ni_nid));
+	lnet_ni_free(ni);
+	return -EINVAL;
+}
+
+static int
+lnet_startup_lndnis(struct list_head *nilist, __s32 peer_timeout,
+		    __s32 peer_cr, __s32 peer_buf_cr, __s32 credits,
+		    int *ni_count)
+{
+	int			rc = 0;
+	struct lnet_ni *ni;
+
+	while (!list_empty(nilist)) {
+		ni = list_entry(nilist->next, lnet_ni_t, ni_list);
+		list_del(&ni->ni_list);
+		rc = lnet_startup_lndni(ni, peer_timeout, peer_cr,
+					peer_buf_cr, credits);
+		if (rc < 0)
 			goto failed;
-		}
 
-		cfs_percpt_for_each(tq, i, ni->ni_tx_queues) {
-			tq->tq_credits_min =
-			tq->tq_credits_max =
-			tq->tq_credits = lnet_ni_tq_credits(ni);
-		}
-
-		CDEBUG(D_LNI, "Added LNI %s [%d/%d/%d/%d]\n",
-		       libcfs_nid2str(ni->ni_nid), ni->ni_peertxcredits,
-		       lnet_ni_tq_credits(ni) * LNET_CPT_NUMBER,
-		       ni->ni_peerrtrcredits, ni->ni_peertimeout);
+		if (ni_count != NULL && rc == 1)
+			(*ni_count)++;
 	}
 
 	return 0;
@@ -1635,7 +1642,8 @@ failed:
 		list_del(&ni->ni_list);
 		lnet_ni_free(ni);
 	}
-	return -EINVAL;
+	lnet_shutdown_lndnis();
+	return rc;
 }
 
 /**
@@ -1799,7 +1807,7 @@ LNetNIInit(lnet_pid_t requested_pid)
 		LCONSOLE_ERROR_MSG(0x109, "LND %s can only run single-network"
 				   "\n",
 				   libcfs_lnd2str(lnd_type));
-		goto failed2;
+		goto failed1;
 	}
 
 	rc = lnet_parse_routes(lnet_get_routes(), &im_a_router);
@@ -2008,7 +2016,7 @@ lnet_dyn_add_ni(lnet_pid_t requested_pid, char *nets,
 
 	LNET_MUTEX_LOCK(&the_lnet.ln_api_mutex);
 
-	if (rc > 1) {
+	if (rc != 1) {
 		rc = -EINVAL; /* only add one interface per call */
 		goto failed0;
 	}
@@ -2018,10 +2026,19 @@ lnet_dyn_add_ni(lnet_pid_t requested_pid, char *nets,
 	if (rc != 0)
 		goto failed0;
 
-	rc = lnet_startup_lndnis(&net_head, peer_timeout, peer_cr,
-				 peer_buf_cr, credits, NULL);
-	if (rc != 0)
-		goto failed1;
+	/* pick up first one that is not LOLND */
+	while (!list_empty(&net_head)) {
+		ni = list_entry(net_head.next, struct lnet_ni, ni_list);
+		list_del_init(&ni->ni_list);
+		if (LNET_NIDNET(ni->ni_nid) == LOLND) {
+			lnet_ni_free(ni);
+			continue;
+		}
+		rc = lnet_startup_lndni(ni, peer_timeout, peer_cr,
+					peer_buf_cr, credits);
+		if (rc < 0)
+			goto failed1;
+	}
 
 	lnet_ping_target_update(pinfo, md_handle);
 	LNET_MUTEX_UNLOCK(&the_lnet.ln_api_mutex);
