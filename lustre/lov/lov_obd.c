@@ -1476,7 +1476,7 @@ static int lov_statfs(const struct lu_env *env, struct obd_export *exp,
 }
 
 static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
-                         void *karg, void *uarg)
+			 void *karg, void __user *uarg)
 {
         struct obd_device *obddev = class_exp2obd(exp);
         struct lov_obd *lov = &obddev->u.lov;
@@ -1512,7 +1512,7 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 				     (int)sizeof(struct obd_uuid))))
                         RETURN(-EFAULT);
 
-		flags = uarg ? *(__u32*)uarg : 0;
+		flags = uarg ? *(__u32 __user *)uarg : 0;
                 /* got statfs data */
                 rc = obd_statfs(NULL, lov->lov_tgts[index]->ltd_exp, &stat_buf,
                                 cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
@@ -1532,7 +1532,7 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 __u32 *genp;
 
                 len = 0;
-                if (obd_ioctl_getdata(&buf, &len, (void *)uarg))
+		if (obd_ioctl_getdata(&buf, &len, uarg))
                         RETURN(-EINVAL);
 
                 data = (struct obd_ioctl_data *)buf;
@@ -1565,7 +1565,7 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                         *genp = lov->lov_tgts[i]->ltd_gen;
                 }
 
-		if (copy_to_user((void *)uarg, buf, len))
+		if (copy_to_user(uarg, buf, len))
                         rc = -EFAULT;
                 obd_ioctl_freedata(buf, len);
                 break;
