@@ -388,10 +388,12 @@ void lfsck_close_dir(const struct lu_env *env,
 	}
 
 	if (lfsck->li_di_dir != NULL) {
-		const struct dt_it_ops	*dir_iops =
-				&lfsck->li_obj_dir->do_index_ops->dio_it;
+		const struct dt_it_ops	*dir_iops;
 		struct dt_it		*dir_di   = lfsck->li_di_dir;
 
+		LASSERT(lfsck->li_obj_dir != NULL);
+
+		dir_iops = &lfsck->li_obj_dir->do_index_ops->dio_it;
 		lfsck_di_dir_put(env, lfsck);
 		dir_iops->fini(env, dir_di);
 	}

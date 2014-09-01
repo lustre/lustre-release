@@ -3563,7 +3563,7 @@ struct lfsck_request {
 	struct lu_fid	lr_fid2;
 	union {
 		struct lu_fid	lr_fid3;
-		char		lr_pool_name[LOV_MAXPOOLNAME];
+		char		lr_pool_name[LOV_MAXPOOLNAME + 1];
 	};
 	__u32		lr_stripe_count;
 	__u32		lr_hash_type;
