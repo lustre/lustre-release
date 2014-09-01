@@ -131,7 +131,7 @@ ksocknal_send_iov (ksock_conn_t *conn, ksock_tx_t *tx)
                 LASSERT (tx->tx_niov > 0);
 
                 if (nob < (int) iov->iov_len) {
-                        iov->iov_base = (void *)((char *)iov->iov_base + nob);
+			iov->iov_base += nob;
                         iov->iov_len -= nob;
                         return (rc);
                 }
@@ -256,7 +256,7 @@ ksocknal_recv_iov (ksock_conn_t *conn)
 
         LASSERT (conn->ksnc_rx_niov > 0);
 
-        /* Never touch conn->ksnc_rx_iov or change connection 
+	/* Never touch conn->ksnc_rx_iov or change connection
          * status inside ksocknal_lib_recv_iov */
         rc = ksocknal_lib_recv_iov(conn);
 
@@ -280,7 +280,7 @@ ksocknal_recv_iov (ksock_conn_t *conn)
 
                 if (nob < (int)iov->iov_len) {
                         iov->iov_len -= nob;
-                        iov->iov_base = (void *)((char *)iov->iov_base + nob);
+			iov->iov_base += nob;
                         return (-EAGAIN);
                 }
 
@@ -300,7 +300,7 @@ ksocknal_recv_kiov (ksock_conn_t *conn)
         int     rc;
         LASSERT (conn->ksnc_rx_nkiov > 0);
 
-        /* Never touch conn->ksnc_rx_kiov or change connection 
+	/* Never touch conn->ksnc_rx_kiov or change connection
          * status inside ksocknal_lib_recv_iov */
         rc = ksocknal_lib_recv_kiov(conn);
 
@@ -700,16 +700,16 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
          * ksnc_sock... */
         LASSERT(!conn->ksnc_closing);
 
-        CDEBUG (D_NET, "Sending to %s ip %d.%d.%d.%d:%d\n", 
-                libcfs_id2str(conn->ksnc_peer->ksnp_id),
-                HIPQUAD(conn->ksnc_ipaddr),
-                conn->ksnc_port);
+	CDEBUG(D_NET, "Sending to %s ip %d.%d.%d.%d:%d\n",
+	       libcfs_id2str(conn->ksnc_peer->ksnp_id),
+	       HIPQUAD(conn->ksnc_ipaddr),
+	       conn->ksnc_port);
 
         ksocknal_tx_prep(conn, tx);
 
         /* Ensure the frags we've been given EXACTLY match the number of
          * bytes we want to send.  Many TCP/IP stacks disregard any total
-         * size parameters passed to them and just look at the frags. 
+	 * size parameters passed to them and just look at the frags.
          *
          * We always expect at least 1 mapped fragment containing the
          * complete ksocknal message header. */
@@ -1491,7 +1491,7 @@ int ksocknal_scheduler(void *arg)
 			spin_unlock_bh(&sched->kss_lock);
 
 			if (!list_empty(&zlist)) {
-                                /* free zombie noop txs, it's fast because 
+				/* free zombie noop txs, it's fast because
                                  * noop txs are just put in freelist */
                                 ksocknal_txlist_done(NULL, &zlist, 0);
                         }
@@ -1831,7 +1831,7 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
 
         if (ksocknal_invert_type(hello->kshm_ctype) != conn->ksnc_type) {
                 CERROR ("Mismatched types: me %d, %s ip %u.%u.%u.%u %d\n",
-                        conn->ksnc_type, libcfs_id2str(*peerid), 
+			conn->ksnc_type, libcfs_id2str(*peerid),
                         HIPQUAD(conn->ksnc_ipaddr),
                         hello->kshm_ctype);
                 return -EPROTO;

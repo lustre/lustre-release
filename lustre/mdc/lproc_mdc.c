@@ -55,7 +55,7 @@ static int mdc_max_rpcs_in_flight_seq_show(struct seq_file *m, void *v)
 }
 
 static ssize_t mdc_max_rpcs_in_flight_seq_write(struct file *file,
-						const char *buffer,
+						const char __user *buffer,
 						size_t count,
 						loff_t *off)
 {

@@ -286,7 +286,8 @@ ptlrpc_lprocfs_req_history_max_seq_show(struct seq_file *m, void *n)
 }
 
 static ssize_t
-ptlrpc_lprocfs_req_history_max_seq_write(struct file *file, const char *buffer,
+ptlrpc_lprocfs_req_history_max_seq_write(struct file *file,
+					 const char __user *buffer,
 					 size_t count, loff_t *off)
 {
 	struct seq_file		*m = file->private_data;
@@ -333,8 +334,9 @@ ptlrpc_lprocfs_threads_min_seq_show(struct seq_file *m, void *n)
 }
 
 static ssize_t
-ptlrpc_lprocfs_threads_min_seq_write(struct file *file, const char *buffer,
-					size_t count, loff_t *off)
+ptlrpc_lprocfs_threads_min_seq_write(struct file *file,
+				     const char __user *buffer,
+				     size_t count, loff_t *off)
 {
 	struct seq_file		*m = file->private_data;
 	struct ptlrpc_service	*svc = m->private;
@@ -386,7 +388,8 @@ ptlrpc_lprocfs_threads_max_seq_show(struct seq_file *m, void *n)
 }
 
 static ssize_t
-ptlrpc_lprocfs_threads_max_seq_write(struct file *file, const char *buffer,
+ptlrpc_lprocfs_threads_max_seq_write(struct file *file,
+				     const char __user *buffer,
 				     size_t count, loff_t *off)
 {
 	struct seq_file		*m = file->private_data;
@@ -640,7 +643,7 @@ out:
  * regular and high-priority (if the service has one) NRS head.
  */
 static ssize_t
-ptlrpc_lprocfs_nrs_seq_write(struct file *file, const char *buffer,
+ptlrpc_lprocfs_nrs_seq_write(struct file *file, const char __user *buffer,
 			     size_t count, loff_t *off)
 {
 	struct seq_file		       *m = file->private_data;
@@ -1033,7 +1036,7 @@ static int ptlrpc_lprocfs_hp_ratio_seq_show(struct seq_file *m, void *v)
 }
 
 static ssize_t
-ptlrpc_lprocfs_hp_ratio_seq_write(struct file *file, const char *buffer,
+ptlrpc_lprocfs_hp_ratio_seq_write(struct file *file, const char __user *buffer,
 				  size_t count, loff_t *off)
 {
 	struct seq_file		*m = file->private_data;
@@ -1211,8 +1214,8 @@ EXPORT_SYMBOL(lprocfs_ping_seq_write);
  * "echo connection=192.168.0.1@tcp0::instance > .../import".
  */
 ssize_t
-lprocfs_import_seq_write(struct file *file, const char *buffer, size_t count,
-			 loff_t *off)
+lprocfs_import_seq_write(struct file *file, const char __user *buffer,
+			 size_t count, loff_t *off)
 {
 	struct seq_file	  *m	= file->private_data;
 	struct obd_device *obd	= m->private;

@@ -73,7 +73,7 @@ unsigned int ldlm_dump_granted_max = 256;
 
 #ifdef LPROCFS
 static ssize_t
-lprocfs_dump_ns_seq_write(struct file *file, const char *buffer,
+lprocfs_dump_ns_seq_write(struct file *file, const char __user *buffer,
 			  size_t count, loff_t *off)
 {
 	ldlm_dump_all_namespaces(LDLM_NAMESPACE_SERVER, D_DLMTRACE);
@@ -195,7 +195,8 @@ static int lprocfs_lru_size_seq_show(struct seq_file *m, void *v)
 	return lprocfs_uint_seq_show(m, nr);
 }
 
-static ssize_t lprocfs_lru_size_seq_write(struct file *file, const char *buffer,
+static ssize_t lprocfs_lru_size_seq_write(struct file *file,
+					  const char __user *buffer,
 					  size_t count, loff_t *off)
 {
 	struct ldlm_namespace *ns = ((struct seq_file *)file->private_data)->private;
@@ -291,7 +292,8 @@ static int lprocfs_elc_seq_show(struct seq_file *m, void *v)
 	return lprocfs_uint_seq_show(m, &supp);
 }
 
-static ssize_t lprocfs_elc_seq_write(struct file *file, const char *buffer,
+static ssize_t lprocfs_elc_seq_write(struct file *file,
+				     const char __user *buffer,
 				     size_t count, loff_t *off)
 {
 	struct ldlm_namespace *ns = ((struct seq_file *)file->private_data)->private;

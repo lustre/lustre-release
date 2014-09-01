@@ -85,7 +85,7 @@ fld_proc_hash_seq_show(struct seq_file *m, void *unused)
 }
 
 static ssize_t
-fld_proc_hash_seq_write(struct file *file, const char *buffer,
+fld_proc_hash_seq_write(struct file *file, const char __user *buffer,
 			size_t count, loff_t *off)
 {
 	struct lu_client_fld *fld = ((struct seq_file *)file->private_data)->private;
@@ -118,7 +118,7 @@ fld_proc_hash_seq_write(struct file *file, const char *buffer,
 }
 
 static ssize_t
-lprocfs_cache_flush_seq_write(struct file *file, const char *buffer,
+lprocfs_cache_flush_seq_write(struct file *file, const char __user *buffer,
 			       size_t count, loff_t *pos)
 {
 	struct lu_client_fld *fld = ((struct seq_file *)file->private_data)->private;

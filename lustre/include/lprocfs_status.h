@@ -658,12 +658,14 @@ extern int lprocfs_obd_seq_create(struct obd_device *dev, const char *name,
 /* Generic callbacks */
 extern int lprocfs_u64_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_atomic_seq_show(struct seq_file *m, void *data);
-extern ssize_t lprocfs_atomic_seq_write(struct file *file, const char *buffer,
+extern ssize_t lprocfs_atomic_seq_write(struct file *file,
+					const char __user *buffer,
 					size_t count, loff_t *off);
 extern int lprocfs_uint_seq_show(struct seq_file *m, void *data);
-extern ssize_t lprocfs_uint_seq_write(struct file *file, const char *buffer,
+extern ssize_t lprocfs_uint_seq_write(struct file *file,
+				      const char __user *buffer,
 				      size_t count, loff_t *off);
-extern int lprocfs_wr_uint(struct file *file, const char *buffer,
+extern int lprocfs_wr_uint(struct file *file, const char __user *buffer,
 			   unsigned long count, void *data);
 extern int lprocfs_uuid_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_name_seq_show(struct seq_file *m, void *data);
@@ -697,7 +699,7 @@ extern ssize_t
 lprocfs_ping_seq_write(struct file *file, const char *buffer,
 		       size_t count, loff_t *off);
 extern ssize_t
-lprocfs_import_seq_write(struct file *file, const char *buffer,
+lprocfs_import_seq_write(struct file *file, const char __user *buffer,
 			 size_t count, loff_t *off);
 extern int lprocfs_pinger_recov_seq_show(struct seq_file *m, void *data);
 extern ssize_t
@@ -712,16 +714,17 @@ extern int lprocfs_kbytesavail_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_filestotal_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_filesfree_seq_show(struct seq_file *m, void *data);
 
-extern int lprocfs_write_helper(const char *buffer, unsigned long count,
+extern int lprocfs_write_helper(const char __user *buffer, unsigned long count,
                                 int *val);
-extern int lprocfs_write_frac_helper(const char *buffer, unsigned long count,
-                                     int *val, int mult);
+extern int lprocfs_write_frac_helper(const char __user *buffer,
+				     unsigned long count,
+				     int *val, int mult);
 extern int lprocfs_seq_read_frac_helper(struct seq_file *m, long val, int mult);
 extern int lprocfs_read_frac_helper(char *buffer, unsigned long count,
                                     long val, int mult);
-extern int lprocfs_write_u64_helper(const char *buffer, unsigned long count,
-                                    __u64 *val);
-extern int lprocfs_write_frac_u64_helper(const char *buffer,
+extern int lprocfs_write_u64_helper(const char __user *buffer,
+				    unsigned long count, __u64 *val);
+extern int lprocfs_write_frac_u64_helper(const char __user *buffer,
                                          unsigned long count,
                                          __u64 *val, int mult);
 char *lprocfs_find_named_value(const char *buffer, const char *name,
@@ -798,7 +801,8 @@ struct file_operations name##_fops = {					\
 		return lprocfs_##type##_seq_show(m, m->private);	\
 	}								\
 	static ssize_t name##_##type##_seq_write(struct file *file,	\
-			const char *buffer, size_t count, loff_t *off)	\
+			const char __user *buffer, size_t count,	\
+			loff_t *off)					\
 	{								\
 		struct seq_file *seq = file->private_data;		\
 		return lprocfs_##type##_seq_write(file, buffer,		\
@@ -808,7 +812,8 @@ struct file_operations name##_fops = {					\
 
 #define LPROC_SEQ_FOPS_WO_TYPE(name, type)				\
 	static ssize_t name##_##type##_write(struct file *file,		\
-			const char *buffer, size_t count, loff_t *off)	\
+			const char __user *buffer, size_t count,	\
+			loff_t *off)					\
 	{								\
 		return lprocfs_##type##_seq_write(file, buffer, count, off);\
 	}								\
@@ -854,9 +859,9 @@ lprocfs_obd_max_pages_per_rpc_seq_write(struct file *file, const char *buffer,
 				       size_t count, loff_t *off);
 
 struct root_squash_info;
-int lprocfs_wr_root_squash(const char *buffer, unsigned long count,
+int lprocfs_wr_root_squash(const char __user *buffer, unsigned long count,
 			   struct root_squash_info *squash, char *name);
-int lprocfs_wr_nosquash_nids(const char *buffer, unsigned long count,
+int lprocfs_wr_nosquash_nids(const char __user *buffer, unsigned long count,
 			     struct root_squash_info *squash, char *name);
 
 /* all quota proc functions */
@@ -1072,18 +1077,18 @@ lprocfs_evict_client_seq_write(struct file *file, const char *buffer,
 { return 0; }
 #endif
 static inline ssize_t
-lprocfs_ping_seq_write(struct file *file, const char *buffer,
+lprocfs_ping_seq_write(struct file *file, const char __user *buffer,
 		       size_t count, loff_t *off)
 { return 0; }
 static inline ssize_t
-lprocfs_import_seq_write(struct file *file, const char *buffer,
+lprocfs_import_seq_write(struct file *file, const char __user *buffer,
 			 size_t count, loff_t *off)
 { return 0; }
 static inline int
 lprocfs_pinger_recov_seq_show(struct seq_file *m, void *data)
 { return 0; }
 static inline ssize_t
-lprocfs_pinger_recov_seq_write(struct file *file, const char *buffer,
+lprocfs_pinger_recov_seq_write(struct file *file, const char __user *buffer,
 			       size_t count, loff_t *off)
 { return 0; }
 

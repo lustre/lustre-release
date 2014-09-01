@@ -519,7 +519,7 @@ int lprocfs_uint_seq_show(struct seq_file *m, void *data)
 }
 EXPORT_SYMBOL(lprocfs_uint_seq_show);
 
-int lprocfs_wr_uint(struct file *file, const char *buffer,
+int lprocfs_wr_uint(struct file *file, const char __user *buffer,
                     unsigned long count, void *data)
 {
         unsigned *p = data;
@@ -539,7 +539,7 @@ int lprocfs_wr_uint(struct file *file, const char *buffer,
 }
 EXPORT_SYMBOL(lprocfs_wr_uint);
 
-ssize_t lprocfs_uint_seq_write(struct file *file, const char *buffer,
+ssize_t lprocfs_uint_seq_write(struct file *file, const char __user *buffer,
 			       size_t count, loff_t *off)
 {
 	int *data = ((struct seq_file *)file->private_data)->private;
@@ -569,7 +569,7 @@ int lprocfs_atomic_seq_show(struct seq_file *m, void *data)
 EXPORT_SYMBOL(lprocfs_atomic_seq_show);
 
 ssize_t
-lprocfs_atomic_seq_write(struct file *file, const char *buffer,
+lprocfs_atomic_seq_write(struct file *file, const char __user *buffer,
 			size_t count, loff_t *off)
 {
 	atomic_t *atm = ((struct seq_file *)file->private_data)->private;
@@ -1391,8 +1391,9 @@ void lprocfs_clear_stats(struct lprocfs_stats *stats)
 }
 EXPORT_SYMBOL(lprocfs_clear_stats);
 
-static ssize_t lprocfs_stats_seq_write(struct file *file, const char *buf,
-                                       size_t len, loff_t *off)
+static ssize_t lprocfs_stats_seq_write(struct file *file,
+				       const char __user *buf,
+				       size_t len, loff_t *off)
 {
         struct seq_file *seq = file->private_data;
         struct lprocfs_stats *stats = seq->private;
@@ -1726,14 +1727,14 @@ __s64 lprocfs_read_helper(struct lprocfs_counter *lc,
 }
 EXPORT_SYMBOL(lprocfs_read_helper);
 
-int lprocfs_write_helper(const char *buffer, unsigned long count,
+int lprocfs_write_helper(const char __user *buffer, unsigned long count,
                          int *val)
 {
         return lprocfs_write_frac_helper(buffer, count, val, 1);
 }
 EXPORT_SYMBOL(lprocfs_write_helper);
 
-int lprocfs_write_frac_helper(const char *buffer, unsigned long count,
+int lprocfs_write_frac_helper(const char __user *buffer, unsigned long count,
                               int *val, int mult)
 {
         char kernbuf[20], *end, *pbuf;
@@ -1856,14 +1857,16 @@ int lprocfs_seq_read_frac_helper(struct seq_file *m, long val, int mult)
 }
 EXPORT_SYMBOL(lprocfs_seq_read_frac_helper);
 
-int lprocfs_write_u64_helper(const char *buffer, unsigned long count,__u64 *val)
+int lprocfs_write_u64_helper(const char __user *buffer, unsigned long count,
+			     __u64 *val)
 {
         return lprocfs_write_frac_u64_helper(buffer, count, val, 1);
 }
 EXPORT_SYMBOL(lprocfs_write_u64_helper);
 
-int lprocfs_write_frac_u64_helper(const char *buffer, unsigned long count,
-                              __u64 *val, int mult)
+int lprocfs_write_frac_u64_helper(const char __user *buffer,
+				  unsigned long count,
+				  __u64 *val, int mult)
 {
         char kernbuf[22], *end, *pbuf;
         __u64 whole, frac = 0, units;

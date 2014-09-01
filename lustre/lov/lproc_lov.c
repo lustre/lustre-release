@@ -54,7 +54,8 @@ static int lov_stripesize_seq_show(struct seq_file *m, void *v)
 	return seq_printf(m, LPU64"\n", desc->ld_default_stripe_size);
 }
 
-static ssize_t lov_stripesize_seq_write(struct file *file, const char *buffer,
+static ssize_t lov_stripesize_seq_write(struct file *file,
+					const char __user *buffer,
 					size_t count, loff_t *off)
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
@@ -84,7 +85,8 @@ static int lov_stripeoffset_seq_show(struct seq_file *m, void *v)
 	return seq_printf(m, LPU64"\n", desc->ld_default_stripe_offset);
 }
 
-static ssize_t lov_stripeoffset_seq_write(struct file *file, const char *buffer,
+static ssize_t lov_stripeoffset_seq_write(struct file *file,
+					  const char __user *buffer,
 					  size_t count, loff_t *off)
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
@@ -113,7 +115,8 @@ static int lov_stripetype_seq_show(struct seq_file *m, void *v)
 	return seq_printf(m, "%u\n", desc->ld_pattern);
 }
 
-static ssize_t lov_stripetype_seq_write(struct file *file, const char *buffer,
+static ssize_t lov_stripetype_seq_write(struct file *file,
+					const char __user *buffer,
 					size_t count, loff_t *off)
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
@@ -143,7 +146,8 @@ static int lov_stripecount_seq_show(struct seq_file *m, void *v)
 			  (__s16)(desc->ld_default_stripe_count + 1) - 1);
 }
 
-static ssize_t lov_stripecount_seq_write(struct file *file, const char *buffer,
+static ssize_t lov_stripecount_seq_write(struct file *file,
+					 const char __user *buffer,
 					 size_t count, loff_t *off)
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
@@ -227,9 +231,9 @@ static void *lov_tgt_seq_next(struct seq_file *p, void *v, loff_t *pos)
 static int lov_tgt_seq_show(struct seq_file *p, void *v)
 {
         struct lov_tgt_desc *tgt = v;
-        return seq_printf(p, "%d: %s %sACTIVE\n", tgt->ltd_index, 
-                          obd_uuid2str(&tgt->ltd_uuid), 
-                          tgt->ltd_active ? "" : "IN");
+	return seq_printf(p, "%d: %s %sACTIVE\n", tgt->ltd_index,
+			  obd_uuid2str(&tgt->ltd_uuid),
+			  tgt->ltd_active ? "" : "IN");
 }
 
 struct seq_operations lov_tgt_sops = {

@@ -215,7 +215,7 @@ static int lod_qos_priofree_seq_show(struct seq_file *m, void *v)
 }
 
 static ssize_t
-lod_qos_priofree_seq_write(struct file *file, const char *buffer,
+lod_qos_priofree_seq_write(struct file *file, const char __user *buffer,
 			   size_t count, loff_t *off)
 {
 	struct seq_file   *m = file->private_data;
