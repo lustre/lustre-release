@@ -527,7 +527,7 @@ static void collect_pages_on_all_cpus(struct page_collection *pc)
 	struct cfs_trace_cpu_data *tcd;
 	int i, cpu;
 
-	cfs_for_each_possible_cpu(cpu) {
+	for_each_possible_cpu(cpu) {
 		cfs_tcd_for_each_type_lock(tcd, i, cpu) {
 			list_splice_init(&tcd->tcd_pages, &pc->pc_pages);
 			tcd->tcd_cur_pages = 0;
@@ -558,7 +558,7 @@ static void put_pages_back_on_all_cpus(struct page_collection *pc)
         struct cfs_trace_page *tmp;
         int i, cpu;
 
-        cfs_for_each_possible_cpu(cpu) {
+	for_each_possible_cpu(cpu) {
                 cfs_tcd_for_each_type_lock(tcd, i, cpu) {
                         cur_head = tcd->tcd_pages.next;
 
@@ -622,7 +622,7 @@ static void put_pages_on_daemon_list(struct page_collection *pc)
         struct cfs_trace_cpu_data *tcd;
         int i, cpu;
 
-        cfs_for_each_possible_cpu(cpu) {
+	for_each_possible_cpu(cpu) {
                 cfs_tcd_for_each_type_lock(tcd, i, cpu)
                         put_pages_on_tcd_daemon_list(pc, tcd);
         }
@@ -1144,7 +1144,7 @@ static void trace_cleanup_on_all_cpus(void)
 	struct cfs_trace_page *tmp;
 	int i, cpu;
 
-	cfs_for_each_possible_cpu(cpu) {
+	for_each_possible_cpu(cpu) {
 		cfs_tcd_for_each_type_lock(tcd, i, cpu) {
 			tcd->tcd_shutting_down = 1;
 

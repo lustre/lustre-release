@@ -162,12 +162,6 @@ unsigned int ll_crypto_tfm_alg_min_keysize(struct crypto_blkcipher *tfm)
         return crypto_blkcipher_tfm(tfm)->__crt_alg->cra_blkcipher.min_keysize;
 }
 
-#ifdef for_each_possible_cpu
-#define cfs_for_each_possible_cpu(cpu) for_each_possible_cpu(cpu)
-#elif defined(for_each_cpu)
-#define cfs_for_each_possible_cpu(cpu) for_each_cpu(cpu)
-#endif
-
 #ifndef HAVE_SIMPLE_SETATTR
 #define simple_setattr(dentry, ops) inode_setattr((dentry)->d_inode, ops)
 #endif
