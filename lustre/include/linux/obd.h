@@ -49,11 +49,6 @@
 #include <linux/proc_fs.h>
 #include <linux/mount.h>
 
-struct ll_iattr {
-	struct iattr	iattr;
-	unsigned int	ia_attr_flags;
-};
-
 #define CLIENT_OBD_LIST_LOCK_DEBUG 1
 
 typedef struct {

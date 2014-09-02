@@ -802,6 +802,14 @@ static inline int it_to_lock_mode(struct lookup_intent *it)
 	return -EINVAL;
 }
 
+enum md_cli_flags {
+	CLI_SET_MEA     = 1 << 0,
+	CLI_RM_ENTRY    = 1 << 1,
+	CLI_HASH64      = 1 << 2,
+	CLI_API32       = 1 << 3,
+	CLI_MIGRATE     = 1 << 4,
+};
+
 struct md_op_data {
         struct lu_fid           op_fid1; /* operation fid1 (usualy parent) */
         struct lu_fid           op_fid2; /* operation fid2 (usualy child) */
@@ -823,13 +831,14 @@ struct md_op_data {
 	size_t			op_data_size;
 
         /* iattr fields and blocks. */
-        struct iattr            op_attr;
-	__u64                   op_valid;
+	struct iattr            op_attr;
 	loff_t                  op_attr_blocks;
+	unsigned int		op_attr_flags; /* LUSTRE_{SYNC,..}_FL */
+	__u64                   op_valid; /* OBD_MD_* */
 
 	/* Size-on-MDS epoch and flags. */
 	__u64                   op_ioepoch;
-	__u32                   op_flags;
+	enum md_op_flags	op_flags;
 
 	/* Capa fields */
 	struct obd_capa        *op_capa1;
@@ -839,19 +848,16 @@ struct md_op_data {
 	enum mds_op_bias        op_bias;
 
 	/* Used by readdir */
-	__u32                   op_npages;
+	unsigned int		op_max_pages;
 
 	/* used to transfer info between the stacks of MD client
 	 * see enum op_cli_flags */
-	__u32			op_cli_flags;
+	enum md_cli_flags	op_cli_flags;
 
 	/* File object data version for HSM release, on client */
 	__u64			op_data_version;
 	struct lustre_handle	op_lease_handle;
 };
-
-#define op_stripe_offset	op_ioepoch
-#define op_max_pages		op_valid
 
 struct md_callback {
 	int (*md_blocking_ast)(struct ldlm_lock *lock,

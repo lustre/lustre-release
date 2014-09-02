@@ -498,12 +498,4 @@ enum {
 	LUSTRE_OPC_ANY      = 5
 };
 
-enum op_cli_flags {
-	CLI_SET_MEA	= 1 << 0,
-	CLI_RM_ENTRY	= 1 << 1,
-	CLI_HASH64	= 1 << 2,
-	CLI_API32	= 1 << 3,
-	CLI_MIGRATE	= 1 << 4,
-};
-
 #endif /*LCLIENT_H */

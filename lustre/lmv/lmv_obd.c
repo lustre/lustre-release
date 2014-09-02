@@ -53,7 +53,6 @@
 #include <lustre_lmv.h>
 #include <lprocfs_status.h>
 #include <cl_object.h>
-#include <lclient.h>
 #include <lustre_fid.h>
 #include <lustre_ioctl.h>
 #include "lmv_internal.h"
@@ -2281,7 +2280,6 @@ static int lmv_get_min_striped_entry(struct obd_export *exp,
 
 		/* op_data will be shared by each stripe, so we need
 		 * reset these value for each stripe */
-		op_data->op_stripe_offset = i;
 		op_data->op_fid1 = lsm->lsm_md_oinfo[i].lmo_fid;
 		op_data->op_fid2 = lsm->lsm_md_oinfo[i].lmo_fid;
 		op_data->op_data = lsm->lsm_md_oinfo[i].lmo_root;

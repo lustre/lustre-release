@@ -1278,7 +1278,6 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 	/**
 	 *FIXME choose the start offset of the readdir
 	 */
-	op_data->op_stripe_offset = 0;
 	op_data->op_max_pages = ll_i2sbi(dir)->ll_md_brw_pages;
 
 	ll_dir_chain_init(&chain);
