@@ -551,6 +551,9 @@ static int lfsck_prep(const struct lu_env *env, struct lfsck_instance *lfsck,
 			pos->lp_dir_cookie = 0;
 
 		rc = lfsck_open_dir(env, lfsck, pos->lp_dir_cookie);
+		if (rc > 0)
+			/* The end of the directory. */
+			rc = 0;
 	}
 
 	GOTO(out, rc);
