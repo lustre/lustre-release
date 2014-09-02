@@ -67,50 +67,23 @@ EXPORT_SYMBOL(lprocfs_seq_release);
 
 struct proc_dir_entry *
 lprocfs_add_simple(struct proc_dir_entry *root, char *name,
-#ifndef HAVE_ONLY_PROCFS_SEQ
-		   read_proc_t *read_proc, write_proc_t *write_proc,
-#endif
 		   void *data, const struct file_operations *fops)
 {
 	struct proc_dir_entry *proc;
 	mode_t mode = 0;
 
-        if (root == NULL || name == NULL)
+	if (root == NULL || name == NULL || fops == NULL)
                 return ERR_PTR(-EINVAL);
 
-	if (!fops) {
-#ifndef HAVE_ONLY_PROCFS_SEQ
-		if (read_proc)
-			mode = 0444;
-		if (write_proc)
-			mode |= 0200;
-
-		LPROCFS_WRITE_ENTRY();
-		proc = create_proc_entry(name, mode, root);
-		if (!proc) {
-			CERROR("LprocFS: No memory to create /proc entry %s\n",
-			       name);
-			LPROCFS_WRITE_EXIT();
-			return ERR_PTR(-ENOMEM);
-		}
-		proc->read_proc = read_proc;
-		proc->write_proc = write_proc;
-		proc->data = data;
-		LPROCFS_WRITE_EXIT();
-#else
-		return ERR_PTR(-EINVAL);
-#endif
-	} else {
-		if (fops->read)
-			mode = 0444;
-		if (fops->write)
-			mode |= 0200;
-		proc = proc_create_data(name, mode, root, fops, data);
-		if (!proc) {
-			CERROR("LprocFS: No memory to create /proc entry %s\n",
-			       name);
-			return ERR_PTR(-ENOMEM);
-		}
+	if (fops->read)
+		mode = 0444;
+	if (fops->write)
+		mode |= 0200;
+	proc = proc_create_data(name, mode, root, fops, data);
+	if (!proc) {
+		CERROR("LprocFS: No memory to create /proc entry %s\n",
+		       name);
+		return ERR_PTR(-ENOMEM);
 	}
         return proc;
 }

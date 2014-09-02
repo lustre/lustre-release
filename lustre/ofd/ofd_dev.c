@@ -552,9 +552,6 @@ static int ofd_procfs_init(struct ofd_device *ofd)
 	obd->obd_proc_exports_entry = entry;
 
 	entry = lprocfs_add_simple(obd->obd_proc_exports_entry, "clear",
-#ifndef HAVE_ONLY_PROCFS_SEQ
-				   NULL, NULL,
-#endif
 				   obd, &lprocfs_nid_stats_clear_fops);
 	if (IS_ERR(entry)) {
 		rc = PTR_ERR(entry);

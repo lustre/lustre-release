@@ -342,22 +342,16 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
 		GOTO(destroy_new_ns, rc);
 	}
 
-	entry = lprocfs_add_simple(new_stat->nid_proc, "uuid",
-#ifndef HAVE_ONLY_PROCFS_SEQ
-				   NULL, NULL,
-#endif
-				   new_stat, &lprocfs_exp_uuid_fops);
+	entry = lprocfs_add_simple(new_stat->nid_proc, "uuid", new_stat,
+				   &lprocfs_exp_uuid_fops);
 	if (IS_ERR(entry)) {
 		CWARN("Error adding the NID stats file\n");
 		rc = PTR_ERR(entry);
 		GOTO(destroy_new_ns, rc);
 	}
 
-	entry = lprocfs_add_simple(new_stat->nid_proc, "hash",
-#ifndef HAVE_ONLY_PROCFS_SEQ
-				   NULL, NULL,
-#endif
-				   new_stat, &lprocfs_exp_hash_fops);
+	entry = lprocfs_add_simple(new_stat->nid_proc, "hash", new_stat,
+				   &lprocfs_exp_hash_fops);
 	if (IS_ERR(entry)) {
 		CWARN("Error adding the hash file\n");
 		rc = PTR_ERR(entry);

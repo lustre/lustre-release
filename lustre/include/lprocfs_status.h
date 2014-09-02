@@ -599,9 +599,6 @@ static inline int lprocfs_exp_cleanup(struct obd_export *exp)
 #endif
 extern struct proc_dir_entry *
 lprocfs_add_simple(struct proc_dir_entry *root, char *name,
-#ifndef HAVE_ONLY_PROCFS_SEQ
-		   read_proc_t *read_proc, write_proc_t *write_proc,
-#endif
 		   void *data, const struct file_operations *fops);
 extern struct proc_dir_entry *
 lprocfs_add_symlink(const char *name, struct proc_dir_entry *parent,
@@ -999,9 +996,6 @@ static inline int lprocfs_exp_cleanup(struct obd_export *exp)
 { return 0; }
 static inline struct proc_dir_entry *
 lprocfs_add_simple(struct proc_dir_entry *root, char *name,
-#ifndef HAVE_ONLY_PROCFS_SEQ
-		   read_proc_t *read_proc, write_proc_t *write_proc,
-#endif
 		   void *data, const struct file_operations *fops)
 {return 0; }
 static inline struct proc_dir_entry *
