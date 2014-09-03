@@ -333,7 +333,7 @@ struct lu_device_type {
         /**
          * Number of existing device type instances.
          */
-        unsigned                                ldt_device_nr;
+	atomic_t				ldt_device_nr;
         /**
          * Linkage into a global list of all device types.
          *
@@ -681,7 +681,6 @@ void lu_dev_del_linkage(struct lu_site *s, struct lu_device *d);
 
 int  lu_device_type_init(struct lu_device_type *ldt);
 void lu_device_type_fini(struct lu_device_type *ldt);
-void lu_types_stop(void);
 
 /** @} ctors */
 

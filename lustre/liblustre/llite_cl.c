@@ -786,11 +786,6 @@ int cl_sb_fini(struct llu_sb_info *sbi)
                 sbi->ll_site = NULL;
         }
         cl_env_put(env, &refcheck);
-        /*
-         * If mount failed (sbi->ll_cl == NULL), and this there are no other
-         * mounts, stop device types manually (this usually happens
-         * automatically when last device is destroyed).
-         */
-        lu_types_stop();
-        RETURN(0);
+
+	RETURN(0);
 }
