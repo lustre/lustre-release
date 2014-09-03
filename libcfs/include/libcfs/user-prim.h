@@ -55,8 +55,6 @@
 # define EXPORT_SYMBOL(s)
 #endif
 
-typedef struct proc_dir_entry           cfs_proc_dir_entry_t;
-
 /*
  * Just present a single processor until will add thread support.
  */

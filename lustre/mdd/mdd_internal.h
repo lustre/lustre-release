@@ -105,7 +105,7 @@ struct mdd_device {
 	struct lu_fid			 mdd_local_root_fid;
         struct dt_device_param           mdd_dt_conf;
         struct dt_object                *mdd_orphans; /* PENDING directory */
-        cfs_proc_dir_entry_t            *mdd_proc_entry;
+	struct proc_dir_entry            *mdd_proc_entry;
         struct mdd_changelog             mdd_cl;
         unsigned long                    mdd_atime_diff;
         struct mdd_object               *mdd_dot_lustre;

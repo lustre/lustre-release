@@ -138,7 +138,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 {
 	static struct ptlrpc_service_conf conf;
 	struct obd_device *obd = m->mds_md_dev.md_lu_dev.ld_obd;
-	cfs_proc_dir_entry_t *procfs_entry;
+	struct proc_dir_entry *procfs_entry;
 	int rc = 0;
 	ENTRY;
 

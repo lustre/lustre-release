@@ -53,7 +53,7 @@ struct qsd_instance {
 
 	/* procfs directory where information related to the underlying slaves
 	 * are exported */
-	cfs_proc_dir_entry_t	*qsd_proc;
+	struct proc_dir_entry	*qsd_proc;
 
 	/* export used for the connection to quota master */
 	struct obd_export	*qsd_exp;

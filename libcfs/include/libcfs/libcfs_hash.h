@@ -830,13 +830,9 @@ static inline void __cfs_hash_set_theta(cfs_hash_t *hs, int min, int max)
 }
 
 /* Generic debug formatting routines mainly for proc handler */
-#ifndef HAVE_ONLY_PROCFS_SEQ
-int cfs_hash_debug_header(char *str, int size);
-int cfs_hash_debug_str(cfs_hash_t *hs, char *str, int size);
-#endif
 struct seq_file;
-int cfs_hash_debug_header_seq(struct seq_file *m);
-int cfs_hash_debug_str_seq(cfs_hash_t *hs, struct seq_file *m);
+int cfs_hash_debug_header(struct seq_file *m);
+int cfs_hash_debug_str(cfs_hash_t *hs, struct seq_file *m);
 
 /*
  * Generic djb2 hash algorithm for character arrays.

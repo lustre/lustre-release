@@ -71,7 +71,7 @@ struct qmt_device {
 	struct list_head	 qmt_pool_list;
 
 	/* procfs root directory for this qmt */
-	cfs_proc_dir_entry_t	*qmt_proc;
+	struct proc_dir_entry	*qmt_proc;
 
 	/* dedicated thread in charge of space rebalancing */
 	struct ptlrpc_thread	 qmt_reba_thread;
@@ -130,7 +130,7 @@ struct qmt_pool_info {
 	struct lquota_entry	*qpi_grace_lqe[MAXQUOTAS];
 
 	/* procfs root directory for this pool */
-	cfs_proc_dir_entry_t	*qpi_proc;
+	struct proc_dir_entry	*qpi_proc;
 
 	/* pool directory where all indexes related to this pool instance are
 	 * stored */

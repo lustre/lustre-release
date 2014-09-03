@@ -554,7 +554,7 @@ EXPORT_SYMBOL(qsd_fini);
  */
 struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 			      struct dt_device *dev,
-			      cfs_proc_dir_entry_t *osd_proc)
+			      struct proc_dir_entry *osd_proc)
 {
 	struct qsd_thread_info	*qti = qsd_info(env);
 	struct qsd_instance	*qsd;

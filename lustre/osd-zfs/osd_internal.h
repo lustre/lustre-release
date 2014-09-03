@@ -244,7 +244,7 @@ struct osd_device {
 	struct lustre_capa_key	*od_capa_keys;
 	struct hlist_head	*od_capa_hash;
 
-	cfs_proc_dir_entry_t	*od_proc_entry;
+	struct proc_dir_entry	*od_proc_entry;
 	struct lprocfs_stats	*od_stats;
 
 	uint64_t		 od_root;

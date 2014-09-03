@@ -48,13 +48,6 @@
 #endif
 
 #ifdef LPROCFS
-typedef struct inode                            cfs_inode_t;
-typedef struct file_operations                  cfs_param_file_ops_t;
-typedef struct proc_dir_entry                   cfs_param_dentry_t;
-typedef struct poll_table_struct                cfs_poll_table_t;
-#define CFS_PARAM_MODULE                        THIS_MODULE
-#define cfs_file_private(file)                  (file->private_data)
-
 #ifndef HAVE_ONLY_PROCFS_SEQ
 /* in lprocfs_stat.c, to protect the private data for proc entries */
 extern struct rw_semaphore		_lprocfs_lock;
@@ -96,13 +89,13 @@ do {					\
 
 #else /* New proc api */
 
-static inline cfs_param_dentry_t* PDE(struct inode *inode)
+static inline struct proc_dir_entry *PDE(struct inode *inode)
 {
 	return NULL;
 }
 
 static inline
-int LPROCFS_ENTRY_CHECK(cfs_param_dentry_t *dp)
+int LPROCFS_ENTRY_CHECK(struct proc_dir_entry *dp)
 {
 	return 0;
 }
@@ -120,18 +113,22 @@ struct file {
 	unsigned int	param_flags;
 };
 
-typedef struct cfs_param_inode {
-	void    *param_private;
-} cfs_inode_t;
+struct inode {
+	void		*param_private;
+};
 
-typedef struct cfs_param_dentry {
-	void *param_data;
-} cfs_param_dentry_t;
+struct poll_table_struct {
+	void		*pad;
+};
 
-typedef struct cfs_proc_inode {
-	cfs_param_dentry_t	*param_pde;
-	cfs_inode_t		param_inode;
-} cfs_proc_inode_t;
+struct proc_dir_entry {
+	void		*param_data;
+};
+
+struct proc_inode {
+	struct proc_dir_entry	*param_pde;
+	struct inode		param_inode;
+};
 
 struct seq_operations;
 struct seq_file {
@@ -153,21 +150,7 @@ struct seq_operations {
 	int   (*show) (struct seq_file *m, void *v);
 };
 
-typedef void *cfs_poll_table_t;
-
-typedef struct cfs_param_file_ops {
-	struct module	*owner;
-	int (*open) (cfs_inode_t *, struct file *);
-	loff_t (*llseek)(struct file *, loff_t, int);
-	int (*release) (cfs_inode_t *, struct file *);
-	unsigned int (*poll) (struct file *, cfs_poll_table_t *);
-	ssize_t (*write) (struct file *, const char *, size_t, loff_t *);
-	ssize_t (*read)(struct file *, char *, size_t, loff_t *);
-} cfs_param_file_ops_t;
-typedef cfs_param_file_ops_t *cfs_lproc_filep_t;
-
-#define CFS_PARAM_MODULE	NULL
-#define seq_lseek		NULL
+#define seq_lseek	NULL
 
 static inline int seq_read(char *buf, size_t count, loff_t *ppos)
 {
@@ -191,18 +174,18 @@ seq_open(struct file *file, const struct seq_operations *fops)
 	return 0;
 }
 
-static inline cfs_proc_inode_t *FAKE_PROC_I(const cfs_inode_t *inode)
+static inline struct proc_inode *FAKE_PROC_I(const struct inode *inode)
 {
-	return container_of(inode, cfs_proc_inode_t, param_inode);
+	return container_of(inode, struct proc_inode, param_inode);
 }
 
-static inline cfs_param_dentry_t *PDE(cfs_inode_t *inode)
+static inline struct proc_dir_entry *PDE(struct inode *inode)
 {
 	return FAKE_PROC_I(inode)->param_pde;
 }
 
 static inline
-int LPROCFS_ENTRY_CHECK(cfs_param_dentry_t *dp)
+int LPROCFS_ENTRY_CHECK(struct proc_dir_entry *dp)
 {
 	return 0;
 }

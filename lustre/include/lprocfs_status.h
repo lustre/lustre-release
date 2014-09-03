@@ -371,7 +371,7 @@ enum {
 
 #define EXTRA_FIRST_OPC LDLM_GLIMPSE_ENQUEUE
 /* class_obd.c */
-extern cfs_proc_dir_entry_t *proc_lustre_root;
+extern struct proc_dir_entry *proc_lustre_root;
 
 struct obd_device;
 struct obd_histogram;
@@ -588,7 +588,7 @@ extern void lprocfs_free_md_stats(struct obd_device *obddev);
 struct obd_export;
 struct nid_stat;
 extern int lprocfs_add_clear_entry(struct obd_device * obd,
-                                   cfs_proc_dir_entry_t *entry);
+				   struct proc_dir_entry *entry);
 #ifdef HAVE_SERVER_SUPPORT
 extern int lprocfs_exp_setup(struct obd_export *exp,
                              lnet_nid_t *peer_nid, int *newnid);
@@ -610,35 +610,35 @@ lprocfs_nid_stats_clear_seq_write(struct file *file, const char *buffer,
 					size_t count, loff_t *off);
 extern int lprocfs_nid_stats_clear_seq_show(struct seq_file *file, void *data);
 #endif
-extern int lprocfs_register_stats(cfs_proc_dir_entry_t *root, const char *name,
+extern int lprocfs_register_stats(struct proc_dir_entry *root, const char *name,
                                   struct lprocfs_stats *stats);
 
 /* lprocfs_status.c */
 #ifndef HAVE_ONLY_PROCFS_SEQ
-extern int lprocfs_add_vars(cfs_proc_dir_entry_t *root,
+extern int lprocfs_add_vars(struct proc_dir_entry *root,
                             struct lprocfs_vars *var,
                             void *data);
 
-extern cfs_proc_dir_entry_t *lprocfs_register(const char *name,
-					      cfs_proc_dir_entry_t *parent,
+extern struct proc_dir_entry *lprocfs_register(const char *name,
+					      struct proc_dir_entry *parent,
 					      struct lprocfs_vars *list,
 					      void *data);
 #endif
-extern int lprocfs_seq_add_vars(cfs_proc_dir_entry_t *root,
+extern int lprocfs_seq_add_vars(struct proc_dir_entry *root,
 				struct lprocfs_seq_vars *var,
 				void *data);
 
-extern cfs_proc_dir_entry_t *
-lprocfs_seq_register(const char *name, cfs_proc_dir_entry_t *parent,
+extern struct proc_dir_entry *
+lprocfs_seq_register(const char *name, struct proc_dir_entry *parent,
 		     struct lprocfs_seq_vars *list, void *data);
-extern void lprocfs_remove(cfs_proc_dir_entry_t **root);
+extern void lprocfs_remove(struct proc_dir_entry **root);
 extern void lprocfs_remove_proc_entry(const char *name,
                                       struct proc_dir_entry *parent);
 #ifndef HAVE_ONLY_PROCFS_SEQ
 extern void lprocfs_try_remove_proc_entry(const char *name,
 					  struct proc_dir_entry *parent);
 
-extern cfs_proc_dir_entry_t *lprocfs_srch(cfs_proc_dir_entry_t *root,
+extern struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *root,
                                           const char *name);
 #endif
 extern int lprocfs_obd_setup(struct obd_device *dev);
@@ -747,8 +747,8 @@ ssize_t
 lprocfs_ir_factor_seq_write(struct file *file, const char *buffer,
 				size_t count, loff_t *off);
 #endif
-extern int lprocfs_single_release(cfs_inode_t *, struct file *);
-extern int lprocfs_seq_release(cfs_inode_t *, struct file *);
+extern int lprocfs_single_release(struct inode *, struct file *);
+extern int lprocfs_seq_release(struct inode *, struct file *);
 
 /* You must use these macros when you want to refer to
  * the import in a client obd_device for a lprocfs entry */
@@ -768,7 +768,7 @@ extern int lprocfs_seq_release(cfs_inode_t *, struct file *);
   a read-write proc entry, and then call LPROC_SEQ_SEQ instead. Finally,
   call lprocfs_obd_seq_create(obd, filename, 0444, &name#_fops, data); */
 #define __LPROC_SEQ_FOPS(name, custom_seq_write)			\
-static int name##_single_open(cfs_inode_t *inode, struct file *file)	\
+static int name##_single_open(struct inode *inode, struct file *file)	\
 {									\
 	LPROCFS_ENTRY_CHECK(PDE(inode));				\
 	return single_open(file, name##_seq_show, PDE_DATA(inode));	\
@@ -810,9 +810,9 @@ struct file_operations name##_fops = {					\
 	static ssize_t name##_##type##_write(struct file *file,		\
 			const char *buffer, size_t count, loff_t *off)	\
 	{								\
-		return lprocfs_##type##_seq_write(file, buffer, count, off);	\
+		return lprocfs_##type##_seq_write(file, buffer, count, off);\
 	}								\
-	static int name##_##type##_open(cfs_inode_t *inode, struct file *file)	\
+	static int name##_##type##_open(struct inode *inode, struct file *file)\
 	{								\
 		return single_open(file, NULL, PDE_DATA(inode));	\
 	}								\
@@ -952,7 +952,7 @@ static inline void lprocfs_clear_stats(struct lprocfs_stats *stats)
 { return; }
 static inline void lprocfs_free_stats(struct lprocfs_stats **stats)
 { return; }
-static inline int lprocfs_register_stats(cfs_proc_dir_entry_t *root,
+static inline int lprocfs_register_stats(struct proc_dir_entry *root,
                                          const char *name,
                                          struct lprocfs_stats *stats)
 { return 0; }
@@ -1003,24 +1003,24 @@ lprocfs_add_symlink(const char *name, struct proc_dir_entry *parent,
                     const char *format, ...)
 {return NULL; }
 #ifndef HAVE_ONLY_PROCFS_SEQ
-static inline cfs_proc_dir_entry_t *
-lprocfs_register(const char *name, cfs_proc_dir_entry_t *parent,
+static inline struct proc_dir_entry *
+lprocfs_register(const char *name, struct proc_dir_entry *parent,
 		 struct lprocfs_vars *list, void *data)
 { return NULL; }
-static inline int lprocfs_add_vars(cfs_proc_dir_entry_t *root,
+static inline int lprocfs_add_vars(struct proc_dir_entry *root,
                                    struct lprocfs_vars *var,
                                    void *data)
 { return 0; }
 #endif
-static inline int lprocfs_seq_add_vars(cfs_proc_dir_entry_t *root,
+static inline int lprocfs_seq_add_vars(struct proc_dir_entry *root,
 				       struct lprocfs_seq_vars *var,
 				       void *data)
 { return 0; }
-static inline cfs_proc_dir_entry_t *
-lprocfs_seq_register(const char *name, cfs_proc_dir_entry_t *parent,
+static inline struct proc_dir_entry *
+lprocfs_seq_register(const char *name, struct proc_dir_entry *parent,
 		     struct lprocfs_seq_vars *list, void *data)
 { return NULL; }
-static inline void lprocfs_remove(cfs_proc_dir_entry_t **root)
+static inline void lprocfs_remove(struct proc_dir_entry **root)
 { return; }
 static inline void lprocfs_remove_proc_entry(const char *name,
                                              struct proc_dir_entry *parent)
@@ -1029,7 +1029,7 @@ static inline void lprocfs_remove_proc_entry(const char *name,
 static inline void lprocfs_try_remove_proc_entry(const char *name,
 						 struct proc_dir_entry *parent)
 { return; }
-static inline cfs_proc_dir_entry_t *lprocfs_srch(cfs_proc_dir_entry_t *head,
+static inline struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *head,
                                                  const char *name)
 { return 0; }
 #endif

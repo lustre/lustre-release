@@ -1203,7 +1203,7 @@ The latter two actions are known as reconciliation.
 The QSD API is defined in lustre/include/lustre_quota.h as follows:
 
 struct qsd_instance *qsd_init(const struct lu_env *, char *, struct dt_device *,
-                              cfs_proc_dir_entry_t *);
+			      struct proc_dir_entry *);
 int qsd_prepare(const struct lu_env *, struct qsd_instance *);
 int qsd_start(const struct lu_env *, struct qsd_instance *);
 void qsd_fini(const struct lu_env *, struct qsd_instance *);

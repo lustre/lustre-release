@@ -96,14 +96,6 @@ LL_PROC_PROTO(name)                                     \
 }
 
 /*
- * Proc file system APIs
- */
-typedef struct proc_dir_entry           cfs_proc_dir_entry_t;
-#define cfs_create_proc_entry(n, m, p)  create_proc_entry(n, m, p)
-#define cfs_free_proc_entry(e)          free_proc_entry(e)
-#define cfs_remove_proc_entry(n, e)     remove_proc_entry(n, e)
-
-/*
  * Wait Queue
  */
 

@@ -191,8 +191,8 @@ int lprocfs_exp_print_hash_seq(cfs_hash_t *hs, cfs_hash_bd_t *bd,
 	struct obd_export *exp = cfs_hash_object(hs, hnode);
 
 	if (exp->exp_lock_hash != NULL) {
-		cfs_hash_debug_header_seq(m);
-		cfs_hash_debug_str_seq(hs, m);
+		cfs_hash_debug_header(m);
+		cfs_hash_debug_str(hs, m);
 	}
 	return 0;
 }
@@ -509,10 +509,10 @@ int lprocfs_hash_seq_show(struct seq_file *m, void *data)
 	if (obd == NULL)
 		return 0;
 
-	c += cfs_hash_debug_header_seq(m);
-	c += cfs_hash_debug_str_seq(obd->obd_uuid_hash, m);
-	c += cfs_hash_debug_str_seq(obd->obd_nid_hash, m);
-	c += cfs_hash_debug_str_seq(obd->obd_nid_stats_hash, m);
+	c += cfs_hash_debug_header(m);
+	c += cfs_hash_debug_str(obd->obd_uuid_hash, m);
+	c += cfs_hash_debug_str(obd->obd_nid_hash, m);
+	c += cfs_hash_debug_str(obd->obd_nid_stats_hash, m);
 	return c;
 }
 EXPORT_SYMBOL(lprocfs_hash_seq_show);

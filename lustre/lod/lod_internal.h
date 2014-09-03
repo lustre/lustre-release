@@ -153,7 +153,7 @@ struct lod_device {
 	struct dt_device      lod_dt_dev;
 	struct obd_export    *lod_child_exp;
 	struct dt_device     *lod_child;
-	cfs_proc_dir_entry_t *lod_proc_entry;
+	struct proc_dir_entry *lod_proc_entry;
 	struct lprocfs_stats *lod_stats;
 	spinlock_t	      lod_connects_lock;
 	int		      lod_connects;

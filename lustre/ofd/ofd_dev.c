@@ -517,7 +517,7 @@ LPROC_SEQ_FOPS(lprocfs_nid_stats_clear);
 static int ofd_procfs_init(struct ofd_device *ofd)
 {
 	struct obd_device		*obd = ofd_obd(ofd);
-	cfs_proc_dir_entry_t		*entry;
+	struct proc_dir_entry		*entry;
 	int				 rc = 0;
 
 	ENTRY;
