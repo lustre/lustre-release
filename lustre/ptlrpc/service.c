@@ -1354,6 +1354,14 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
         reqcopy->rq_reqmsg = reqmsg;
         memcpy(reqmsg, req->rq_reqmsg, req->rq_reqlen);
 
+	/*
+	 * tgt_brw_read() and tgt_brw_write() may have decided not to reply.
+	 * Without this check, we would fail the rq_no_reply assertion in
+	 * ptlrpc_send_reply().
+	 */
+	if (reqcopy->rq_no_reply)
+		GOTO(out, rc = -ETIMEDOUT);
+
 	LASSERT(atomic_read(&req->rq_refcount));
 	/** if it is last refcount then early reply isn't needed */
 	if (atomic_read(&req->rq_refcount) == 1) {
