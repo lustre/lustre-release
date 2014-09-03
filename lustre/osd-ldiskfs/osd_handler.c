@@ -890,7 +890,7 @@ static int osd_param_is_not_sane(const struct osd_device *dev,
 {
 	struct osd_thandle *oh = container_of(th, typeof(*oh), ot_super);
 
-	return oh->ot_credits > osd_journal(dev)->j_max_transaction_buffers;
+	return oh->ot_credits > osd_transaction_size(dev);
 }
 
 /*
@@ -1040,7 +1040,7 @@ int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 		 *
 		 *     This should be removed when we can calculate the
 		 *     credits precisely. */
-		oh->ot_credits = osd_journal(dev)->j_max_transaction_buffers;
+		oh->ot_credits = osd_transaction_size(dev);
 	}
 
         /*
