@@ -440,16 +440,20 @@ static int osd_declare_dir_insert(const struct lu_env *env,
 {
 	struct osd_object  *obj = osd_dt_obj(dt);
 	struct osd_thandle *oh;
+	uint64_t object;
 	ENTRY;
 
 	LASSERT(th != NULL);
 	oh = container_of0(th, struct osd_thandle, ot_super);
 
-	LASSERT(obj->oo_db);
-	LASSERT(osd_object_is_zap(obj->oo_db));
+	/* This is for inserting dot/dotdot for new created dir. */
+	if (obj->oo_db == NULL)
+		object = DMU_NEW_OBJECT;
+	else
+		object = obj->oo_db->db_object;
 
-	dmu_tx_hold_bonus(oh->ot_tx, obj->oo_db->db_object);
-	dmu_tx_hold_zap(oh->ot_tx, obj->oo_db->db_object, TRUE, (char *)key);
+	dmu_tx_hold_bonus(oh->ot_tx, object);
+	dmu_tx_hold_zap(oh->ot_tx, object, TRUE, (char *)key);
 
 	RETURN(0);
 }
@@ -633,12 +637,25 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 				 * during iteration */
 				GOTO(out, rc = 0);
 			} else if (name[1] == '.' && name[2] == 0) {
+				if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PARENT)) {
+					struct lu_fid tfid = *fid;
+
+					osd_object_put(env, child);
+					tfid.f_oid--;
+					child = osd_object_find(env, dt, &tfid);
+					if (IS_ERR(child))
+						RETURN(PTR_ERR(child));
+
+					LASSERT(child->oo_db);
+				}
+
 				/* update parent dnode in the child.
 				 * later it will be used to generate ".." */
 				rc = osd_object_sa_update(parent,
 						 SA_ZPL_PARENT(osd),
 						 &child->oo_db->db_object,
 						 8, oh);
+
 				GOTO(out, rc);
 			}
 		}
@@ -654,6 +671,12 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 	rc = -zap_add(osd->od_os, parent->oo_db->db_object,
 		      (char *)key, 8, sizeof(oti->oti_zde) / 8,
 		      (void *)&oti->oti_zde, oh->ot_tx);
+	if (unlikely(rc == -EEXIST &&
+		     name[0] == '.' && name[1] == '.' && name[2] == 0))
+		/* Update (key,oid) in ZAP */
+		rc = -zap_update(osd->od_os, parent->oo_db->db_object,
+				(char *)key, 8, sizeof(oti->oti_zde) / 8,
+				(void *)&oti->oti_zde, oh->ot_tx);
 
 out:
 	if (child != NULL)
@@ -1085,7 +1108,7 @@ static int osd_dir_it_load(const struct lu_env *env,
 	RETURN(rc);
 }
 
-static struct dt_index_operations osd_dir_ops = {
+struct dt_index_operations osd_dir_ops = {
 	.dio_lookup         = osd_dir_lookup,
 	.dio_declare_insert = osd_declare_dir_insert,
 	.dio_insert         = osd_dir_insert,

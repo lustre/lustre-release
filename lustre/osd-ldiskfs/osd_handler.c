@@ -4041,8 +4041,7 @@ static int osd_add_dot_dotdot(struct osd_thread_info *info,
 						dot_dot_fid, NULL, th);
 		}
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PARENT) ||
-		    OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PARENT2)) {
+		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PARENT)) {
 			struct lu_fid tfid = *dot_dot_fid;
 
 			tfid.f_oid--;

@@ -2334,7 +2334,7 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	mdd_object_make_hint(env, mdd_pobj, son, attr, spec, hint);
 
 	memset(ldata, 0, sizeof(*ldata));
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PARENT2)) {
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PARENT)) {
 		struct lu_fid tfid = *mdd_object_fid(mdd_pobj);
 
 		tfid.f_oid--;

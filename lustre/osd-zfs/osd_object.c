@@ -1092,6 +1092,7 @@ static int osd_declare_object_create(const struct lu_env *env,
 
 	switch (dof->dof_type) {
 		case DFT_DIR:
+			dt->do_index_ops = &osd_dir_ops;
 		case DFT_INDEX:
 			/* for zap create */
 			dmu_tx_hold_zap(oh->ot_tx, DMU_NEW_OBJECT, 1, NULL);

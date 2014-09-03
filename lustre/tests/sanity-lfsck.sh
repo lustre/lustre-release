@@ -48,6 +48,10 @@ setupall
 [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.50) ]] &&
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2d 2e 3 22 23 24 25 26 27 28 29 30 31"
 
+# DNE does not support striped directory on zfs-based backend yet.
+[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 31"
+
 build_test_filter
 
 $LCTL set_param debug=+lfsck > /dev/null || true
@@ -2758,7 +2762,7 @@ test_22a() {
 	echo "#####"
 	echo "The parent_A references the child directory via some name entry,"
 	echo "but the child directory back references another parent_B via its"
-	echo "".." name entry. The parent_A does not exist. Then the namesapce"
+	echo "".." name entry. The parent_B does not exist. Then the namesapce"
 	echo "LFSCK will repair the child directory's ".." name entry."
 	echo "#####"
 
@@ -2807,7 +2811,7 @@ test_22b() {
 	echo "The parent_A references the child directory via the name entry_B,"
 	echo "but the child directory back references another parent_C via its"
 	echo "".." name entry. The parent_C exists, but there is no the name"
-	echo "entry_B under the parent_B. Then the namesapce LFSCK will repair"
+	echo "entry_B under the parent_C. Then the namesapce LFSCK will repair"
 	echo "the child directory's ".." name entry and its linkEA."
 	echo "#####"
 
@@ -2819,8 +2823,8 @@ test_22b() {
 	echo "Inject failure stub on MDT0 to simulate bad dotdot name entry"
 	echo "and bad linkEA. The dummy's dotdot name entry references the"
 	echo "guard. The dummy's linkEA references n non-exist name entry."
-	#define OBD_FAIL_LFSCK_BAD_PARENT2	0x161f
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x161f
+	#define OBD_FAIL_LFSCK_BAD_PARENT	0x161e
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x161e
 	$LFS mkdir -i 0 $DIR/$tdir/foo/dummy ||
 		error "(3) Fail to mkdir on MDT0"
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
@@ -3065,7 +3069,13 @@ test_24() {
 
 	mkdir $DIR/$tdir/d0/dummy || error "(2) Fail to mkdir dummy"
 	$LFS path2fid $DIR/$tdir/d0/dummy
-	local pfid=$($LFS path2fid $DIR/$tdir/d0/dummy)
+
+	local pfid
+	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+		pfid=$($LFS path2fid $DIR/$tdir/d0/guard)
+	else
+		pfid=$($LFS path2fid $DIR/$tdir/d0/dummy)
+	fi
 
 	touch $DIR/$tdir/d0/guard/foo ||
 		error "(3) Fail to touch $DIR/$tdir/d0/guard/foo"
@@ -3082,6 +3092,7 @@ test_24() {
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1622
 	$LFS mkdir -i 0 $DIR/$tdir/d0/dummy/foo ||
 		error "(4) Fail to mkdir $DIR/$tdir/d0/dummy/foo"
+	$LFS path2fid $DIR/$tdir/d0/dummy/foo
 	local cfid=$($LFS path2fid $DIR/$tdir/d0/dummy/foo)
 	rmdir $DIR/$tdir/d0/dummy/foo ||
 		error "(5) Fail to remove $DIR/$tdir/d0/dummy/foo name entry"

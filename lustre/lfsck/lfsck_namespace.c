@@ -2554,6 +2554,9 @@ lost_parent:
 		GOTO(out, rc);
 	}
 
+	if (fid_is_zero(pfid))
+		GOTO(out, rc = 0);
+
 	/* The ".." name entry is wrong, update it. */
 	if (!lu_fid_eq(pfid, lfsck_dto2fid(parent))) {
 		if (!lustre_handle_is_used(lh) && retry != NULL) {
@@ -2619,7 +2622,8 @@ lfsck_namespace_dsd_multiple(const struct lu_env *env,
 	struct lfsck_bookmark	 *bk		= &lfsck->li_bookmark_ram;
 	struct dt_object	 *parent	= NULL;
 	struct linkea_data	  ldata_new	= { 0 };
-	int			  count		= 0;
+	int			  dirent_count	= 0;
+	int			  linkea_count	= 0;
 	int			  rc		= 0;
 	bool			  once		= true;
 	ENTRY;
@@ -2633,6 +2637,7 @@ again:
 		/* Drop invalid linkEA entry. */
 		if (!fid_is_sane(tfid)) {
 			linkea_del_buf(ldata, cname);
+			linkea_count++;
 			continue;
 		}
 
@@ -2666,6 +2671,7 @@ again:
 				 * child to be visible via other parent, then
 				 * remove this linkEA entry. */
 				linkea_del_buf(ldata, cname);
+				linkea_count++;
 				continue;
 			}
 
@@ -2676,6 +2682,7 @@ again:
 		if (unlikely(!dt_try_as_dir(env, parent))) {
 			lfsck_object_put(env, parent);
 			linkea_del_buf(ldata, cname);
+			linkea_count++;
 			continue;
 		}
 
@@ -2723,6 +2730,7 @@ rebuild:
 				RETURN(rc);
 
 			linkea_del_buf(ldata, cname);
+			linkea_count++;
 			linkea_first_entry(ldata);
 			/* There may be some invalid dangling name entries under
 			 * other parent directories, remove all of them. */
@@ -2759,13 +2767,13 @@ rebuild:
 					goto next;
 				}
 
-				count += rc;
+				dirent_count += rc;
 
 next:
 				linkea_del_buf(ldata, cname);
 			}
 
-			ns->ln_dirent_repaired += count;
+			ns->ln_dirent_repaired += dirent_count;
 
 			RETURN(rc);
 		}
@@ -2786,9 +2794,14 @@ next:
 		linkea_del_buf(ldata, cname);
 	}
 
+	linkea_first_entry(ldata);
 	if (ldata->ld_leh->leh_reccount == 1) {
 		rc = lfsck_namespace_dsd_single(env, com, child, pfid, ldata,
 						lh, type, NULL);
+
+		if (rc == 0 && fid_is_zero(pfid) && linkea_count > 0)
+			rc = lfsck_namespace_rebuild_linkea(env, com, child,
+							    ldata);
 
 		RETURN(rc);
 	}
@@ -2802,7 +2815,6 @@ next:
 		RETURN(rc);
 	}
 
-	linkea_first_entry(ldata);
 	/* If the dangling name entry for the orphan directory object has
 	 * been remvoed, then just check whether the directory object is
 	 * still under the .lustre/lost+found/MDTxxxx/ or not. */
@@ -3071,6 +3083,8 @@ lock:
 	} else if (lfsck->li_lpf_obj != NULL &&
 		   lu_fid_eq(pfid, lfsck_dto2fid(lfsck->li_lpf_obj))) {
 		lpf = true;
+	} else if (unlikely(!fid_is_sane(pfid))) {
+		fid_zero(pfid);
 	}
 
 	rc = lfsck_links_read(env, child, &ldata);
