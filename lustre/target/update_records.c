@@ -639,12 +639,53 @@ int update_records_write_pack(const struct lu_env *env,
 
 	pos = cpu_to_le64(pos);
 
-	return update_records_update_pack(env, fid, OUT_XATTR_DEL, ops,
+	return update_records_update_pack(env, fid, OUT_WRITE, ops,
 					  op_count, max_ops_size, params,
 					  param_count, max_param_size,
 					  2, bufs, sizes);
 }
 EXPORT_SYMBOL(update_records_write_pack);
+
+/**
+ * Pack punch
+ *
+ * Pack punch update into update records.
+ *
+ * \param[in] env	execution environment
+ * \param[in] ops	ur_ops in update records
+ * \param[in|out] op_count	pointer to the count of ops
+ * \param[in|out] max_op_size maximum size of the update
+ * \param[in] params	ur_params in update records
+ * \param[in|out] param_count	pointer to the count of params
+ * \param[in|out] max_param_size maximum size of the parameter
+ * \param[in] fid	FID of the object to write into
+ * \param[in] start	start offset of punch
+ * \param[in] end	end offet of punch
+ *
+ * \retval		0 if packing succeeds.
+ * \retval		negative errno if packing fails.
+ */
+int update_records_punch_pack(const struct lu_env *env,
+			      struct update_ops *ops,
+			      unsigned int *op_count,
+			      size_t *max_ops_size,
+			      struct update_params *params,
+			      unsigned int *param_count,
+			      size_t *max_param_size,
+			      const struct lu_fid *fid,
+			      __u64 start, __u64 end)
+{
+	size_t		sizes[2] = {sizeof(start), sizeof(end)};
+	const void	*bufs[2] = {&start, &end};
+
+	start = cpu_to_le64(start);
+	end = cpu_to_le64(end);
+
+	return update_records_update_pack(env, fid, OUT_PUNCH, ops, op_count,
+					  max_ops_size, params, param_count,
+					  max_param_size, 2, bufs, sizes);
+}
+EXPORT_SYMBOL(update_records_punch_pack);
 
 /**
  * Create update records in thandle_update_records

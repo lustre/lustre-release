@@ -559,4 +559,10 @@ int lod_sub_object_declare_write(const struct lu_env *env,
 ssize_t lod_sub_object_write(const struct lu_env *env, struct dt_object *dt,
 			     const struct lu_buf *buf, loff_t *pos,
 			     struct thandle *th, int rq);
+int lod_sub_object_declare_punch(const struct lu_env *env,
+				 struct dt_object *dt,
+				 __u64 start, __u64 end,
+				 struct thandle *th);
+int lod_sub_object_punch(const struct lu_env *env, struct dt_object *dt,
+			 __u64 start, __u64 end, struct thandle *th);
 #endif

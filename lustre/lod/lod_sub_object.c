@@ -797,3 +797,75 @@ ssize_t lod_sub_object_write(const struct lu_env *env, struct dt_object *dt,
 	rc = dt_write(env, dt, buf, pos, sub_th, rq);
 	RETURN(rc);
 }
+
+/**
+ * Declare punch
+ *
+ * Get transaction of next layer and declare punch.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object to be written
+ * \param[in] start	start offset of punch
+ * \param[in] end	end offet of punch
+ * \param[in] th	transaction handle
+ *
+ * \retval		0 if the insertion succeeds.
+ * \retval		negative errno if the insertion fails.
+ */
+int lod_sub_object_declare_punch(const struct lu_env *env,
+				 struct dt_object *dt,
+				 __u64 start, __u64 end,
+				 struct thandle *th)
+{
+	struct thandle	*sub_th;
+	int		rc;
+	ENTRY;
+
+	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
+	if (IS_ERR(sub_th))
+		RETURN(PTR_ERR(sub_th));
+
+	rc = dt_declare_punch(env, dt, start, end, sub_th);
+
+	RETURN(rc);
+}
+
+/**
+ * Punch to sub object
+ *
+ * Get transaction of next layer, records buffer write if it belongs to
+ * Cross-MDT operation, and punch object.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object to be written
+ * \param[in] start	start offset of punch
+ * \param[in] end	end offset of punch
+ * \param[in] th	transaction handle
+ * \param[in] capa	capability of the write
+ *
+ * \retval		the buffer size in bytes if it succeeds.
+ * \retval		negative errno if it fails.
+ */
+int lod_sub_object_punch(const struct lu_env *env, struct dt_object *dt,
+			 __u64 start, __u64 end, struct thandle *th)
+{
+	struct thandle	*sub_th;
+	bool		record_update;
+	int		rc;
+	ENTRY;
+
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
+	if (IS_ERR(sub_th))
+		RETURN(PTR_ERR(sub_th));
+
+	if (record_update) {
+		rc = update_record_pack(punch, th, lu_object_fid(&dt->do_lu),
+					start, end);
+		if (rc < 0)
+			RETURN(rc);
+	}
+
+	rc = dt_punch(env, dt, start, end, sub_th);
+
+	RETURN(rc);
+}

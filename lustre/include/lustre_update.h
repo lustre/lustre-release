@@ -531,6 +531,15 @@ int update_records_write_pack(const struct lu_env *env,
 			      const struct lu_fid *fid,
 			      const struct lu_buf *buf,
 			      __u64 pos);
+int update_records_punch_pack(const struct lu_env *env,
+			      struct update_ops *ops,
+			      unsigned int *op_count,
+			      size_t *max_ops_size,
+			      struct update_params *params,
+			      unsigned int *param_count,
+			      size_t *max_param_size,
+			      const struct lu_fid *fid,
+			      __u64 start, __u64 end);
 
 int tur_update_records_extend(struct thandle_update_records *tur,
 			      size_t new_size);

@@ -79,56 +79,77 @@ EXPORT_SYMBOL(dt_txn_callback_del);
 int dt_txn_hook_start(const struct lu_env *env,
                       struct dt_device *dev, struct thandle *th)
 {
-        int rc = 0;
-        struct dt_txn_callback *cb;
+	int rc = 0;
+	struct dt_txn_callback *cb;
 
-        if (th->th_local)
-                return 0;
+	if (th->th_local)
+		return 0;
 
 	list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
-                if (cb->dtc_txn_start == NULL ||
-                    !(cb->dtc_tag & env->le_ctx.lc_tags))
-                        continue;
-                rc = cb->dtc_txn_start(env, th, cb->dtc_cookie);
-                if (rc < 0)
-                        break;
-        }
-        return rc;
+		struct thandle *dtc_th = th;
+
+		if (cb->dtc_txn_start == NULL ||
+		    !(cb->dtc_tag & env->le_ctx.lc_tags))
+			continue;
+
+		/* Usually dt_txn_hook_start is called from bottom device,
+		 * and if the thandle has th_top, then we need use top
+		 * thandle for the callback in the top thandle layer */
+		if (th->th_top != NULL)
+			dtc_th = th->th_top;
+
+		rc = cb->dtc_txn_start(env, dtc_th, cb->dtc_cookie);
+		if (rc < 0)
+			break;
+	}
+	return rc;
 }
 EXPORT_SYMBOL(dt_txn_hook_start);
 
-int dt_txn_hook_stop(const struct lu_env *env, struct thandle *txn)
+int dt_txn_hook_stop(const struct lu_env *env, struct thandle *th)
 {
-        struct dt_device       *dev = txn->th_dev;
-        struct dt_txn_callback *cb;
-        int                     rc = 0;
+	struct dt_device       *dev = th->th_dev;
+	struct dt_txn_callback *cb;
+	int                     rc = 0;
 
-        if (txn->th_local)
-                return 0;
+	if (th->th_local)
+		return 0;
 
 	list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
-                if (cb->dtc_txn_stop == NULL ||
-                    !(cb->dtc_tag & env->le_ctx.lc_tags))
-                        continue;
-                rc = cb->dtc_txn_stop(env, txn, cb->dtc_cookie);
-                if (rc < 0)
-                        break;
-        }
-        return rc;
+		struct thandle *dtc_th = th;
+
+		if (cb->dtc_txn_stop == NULL ||
+		    !(cb->dtc_tag & env->le_ctx.lc_tags))
+			continue;
+
+		/* Usually dt_txn_hook_stop is called from bottom device,
+		 * and if the thandle has th_top, then we need use top
+		 * thandle for the callback in the top thandle layer */
+		if (th->th_top != NULL)
+			dtc_th = th->th_top;
+
+		rc = cb->dtc_txn_stop(env, dtc_th, cb->dtc_cookie);
+		if (rc < 0)
+			break;
+	}
+	return rc;
 }
 EXPORT_SYMBOL(dt_txn_hook_stop);
 
-void dt_txn_hook_commit(struct thandle *txn)
+void dt_txn_hook_commit(struct thandle *th)
 {
 	struct dt_txn_callback *cb;
 
-	if (txn->th_local)
+	if (th->th_local)
 		return;
 
-	list_for_each_entry(cb, &txn->th_dev->dd_txn_callbacks,
+	list_for_each_entry(cb, &th->th_dev->dd_txn_callbacks,
 			    dtc_linkage) {
+		/* Right now, the bottom device (OSD) will use this hook
+		 * commit to notify OSP, so we do not check and replace
+		 * the thandle to top thandle now */
 		if (cb->dtc_txn_commit)
-			cb->dtc_txn_commit(txn, cb->dtc_cookie);
+			cb->dtc_txn_commit(th, cb->dtc_cookie);
 	}
 }
 EXPORT_SYMBOL(dt_txn_hook_commit);

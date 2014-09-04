@@ -169,6 +169,7 @@ int top_trans_stop(const struct lu_env *env, struct dt_device *master_dev,
 			record = &tur->tur_update_records->lur_update_rec;
 			update_records_dump(record, D_INFO, false);
 		}
+		top_th->tt_update_records = NULL;
 	}
 
 	LASSERT(top_th->tt_magic == TOP_THANDLE_MAGIC);
@@ -216,11 +217,11 @@ struct thandle *thandle_get_sub_by_dt(const struct lu_env *env,
 				      struct dt_device *sub_dt)
 {
 	struct sub_thandle	*lst;
-	struct top_thandle	*top_th = container_of(th, struct top_thandle,
-						       tt_super);
+	struct top_thandle	*top_th;
 	struct thandle		*sub_th;
 	ENTRY;
 
+	top_th = container_of(th, struct top_thandle, tt_super);
 	LASSERT(top_th->tt_magic == TOP_THANDLE_MAGIC);
 	LASSERT(top_th->tt_master_sub_thandle != NULL);
 	if (likely(sub_dt == top_th->tt_master_sub_thandle->th_dev))
