@@ -12,11 +12,14 @@ obdclass-all-objs += lustre_handles.o lustre_peer.o local_storage.o
 obdclass-all-objs += statfs_pack.o obdo.o obd_config.o obd_mount.o
 obdclass-all-objs += lu_object.o dt_object.o capa.o
 obdclass-all-objs += cl_object.o cl_page.o cl_lock.o cl_io.o lu_ref.o
-obdclass-all-objs += acl.o idmap.o
-obdclass-all-objs += md_attrs.o linkea.o
-obdclass-all-objs += lu_ucred.o
+obdclass-all-objs += acl.o
+obdclass-all-objs += linkea.o
 
-@SERVER_TRUE@obdclass-all-objs += lprocfs_status_server.o lprocfs_jobstats.o
+@SERVER_TRUE@obdclass-all-objs += idmap.o
+@SERVER_TRUE@obdclass-all-objs += lprocfs_jobstats.o
+@SERVER_TRUE@obdclass-all-objs += lprocfs_status_server.o
+@SERVER_TRUE@obdclass-all-objs += lu_ucred.o
+@SERVER_TRUE@obdclass-all-objs += md_attrs.o
 @SERVER_TRUE@obdclass-all-objs += obd_mount_server.o
 
 obdclass-objs := $(obdclass-linux-objs) $(obdclass-all-objs)
@@ -25,7 +28,12 @@ EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LDISKFS_DIR@ -I@LDISKFS_DIR@/ldiskfs
 
 EXTRA_DIST = $(obdclass-all-objs:.o=.c) llog_test.c llog_internal.h
 EXTRA_DIST += cl_internal.h local_storage.h
-@SERVER_FALSE@EXTRA_DIST += lprocfs_jobstats.c lprocfs_status_server.c
+
+@SERVER_FALSE@EXTRA_DIST += idmap.c
+@SERVER_FALSE@EXTRA_DIST += lprocfs_jobstats.c
+@SERVER_FALSE@EXTRA_DIST += lprocfs_status_server.c
+@SERVER_FALSE@EXTRA_DIST += lu_ucred.c
+@SERVER_FALSE@EXTRA_DIST += md_attrs.c
 @SERVER_FALSE@EXTRA_DIST += obd_mount_server.c
 
 @INCLUDE_RULES@

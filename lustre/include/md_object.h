@@ -41,6 +41,10 @@
 #ifndef _LUSTRE_MD_OBJECT_H
 #define _LUSTRE_MD_OBJECT_H
 
+#ifndef HAVE_SERVER_SUPPORT
+# error "client code should not depend on md_object.h"
+#endif /* !HAVE_SERVER_SUPPORT */
+
 /** \defgroup md md
  * Sub-class of lu_object with methods common for "meta-data" objects in MDT
  * stack.
@@ -430,38 +434,6 @@ struct md_object {
  * temporary, and will be removed later when we have proper way to mark
  * the dead object. */
 #define LUSTRE_SLAVE_DEAD_FL		0x80000000
-
-/**
- * seq-server site.
- */
-struct seq_server_site {
-	struct lu_site	     *ss_lu;
-	/**
-	 * mds number of this site.
-	 */
-	u32		      ss_node_id;
-	/**
-	 * Fid location database
-	 */
-	struct lu_server_fld *ss_server_fld;
-	struct lu_client_fld *ss_client_fld;
-
-	/**
-	 * Server Seq Manager
-	 */
-	struct lu_server_seq *ss_server_seq;
-
-	/**
-	 * Controller Seq Manager
-	 */
-	struct lu_server_seq *ss_control_seq;
-	struct obd_export    *ss_control_exp;
-
-	/**
-	 * Client Seq Manager
-	 */
-	struct lu_client_seq *ss_client_seq;
-};
 
 static inline struct md_device *lu2md_dev(const struct lu_device *d)
 {

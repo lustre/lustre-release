@@ -444,6 +444,35 @@ struct lu_server_seq {
 	struct seq_server_site  *lss_site;
 };
 
+struct seq_server_site {
+	struct lu_site	     *ss_lu;
+	/**
+	 * mds number of this site.
+	 */
+	u32		      ss_node_id;
+	/**
+	 * Fid location database
+	 */
+	struct lu_server_fld *ss_server_fld;
+	struct lu_client_fld *ss_client_fld;
+
+	/**
+	 * Server Seq Manager
+	 */
+	struct lu_server_seq *ss_server_seq;
+
+	/**
+	 * Controller Seq Manager
+	 */
+	struct lu_server_seq *ss_control_seq;
+	struct obd_export    *ss_control_exp;
+
+	/**
+	 * Client Seq Manager
+	 */
+	struct lu_client_seq *ss_client_seq;
+};
+
 /* Server methods */
 
 int seq_server_init(const struct lu_env *env,

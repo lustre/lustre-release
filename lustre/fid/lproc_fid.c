@@ -50,7 +50,6 @@
 #include <lustre_fid.h>
 #include <lprocfs_status.h>
 #include "fid_internal.h"
-#include <md_object.h>
 
 #ifdef LPROCFS
 

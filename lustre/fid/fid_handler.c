@@ -47,7 +47,6 @@
 #include <obd.h>
 #include <obd_class.h>
 #include <dt_object.h>
-#include <md_object.h>
 #include <obd_support.h>
 #include <lustre_req_layout.h>
 #include <lustre_fid.h>

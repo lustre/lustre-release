@@ -51,7 +51,6 @@
 #include <obd_support.h>
 #include <lustre_fid.h>
 #include <lustre_fld.h>
-#include <md_object.h>
 #include <lustre_req_layout.h>
 #include <lprocfs_status.h>
 #include "fld_internal.h"
