@@ -1456,7 +1456,9 @@ struct cl_read_ahead {
 	 * This is determined DLM lock coverage, RPC and stripe boundary.
 	 * cra_end is included. */
 	pgoff_t cra_end;
-	/* Release routine. If readahead holds resources underneath, this
+	/* optimal RPC size for this read, by pages */
+	unsigned long cra_rpc_size;
+	/* Release callback. If readahead holds resources underneath, this
 	 * function should be called to release it. */
 	void    (*cra_release)(const struct lu_env *env, void *cbdata);
 	/* Callback data for cra_release routine */

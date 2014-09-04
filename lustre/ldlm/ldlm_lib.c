@@ -397,12 +397,9 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 #endif
 	atomic_set(&cli->cl_resends, OSC_DEFAULT_RESENDS);
 
-	/* This value may be reduced at connect time in
-	 * ptlrpc_connect_interpret() . We initialize it to only
-	 * 1MB until we know what the performance looks like.
-	 * In the future this should likely be increased. LU-1431 */
-	cli->cl_max_pages_per_rpc = min_t(int, PTLRPC_MAX_BRW_PAGES,
-					  LNET_MTU >> PAGE_CACHE_SHIFT);
+	/* Set it to possible maximum size. It may be reduced by ocd_brw_size
+	 * from OFD after connecting. */
+	cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES;
 
 	/* set cl_chunkbits default value to PAGE_CACHE_SHIFT,
 	 * it will be updated at OSC connection time. */
