@@ -387,7 +387,8 @@ static int lfsck_replace_lmv(const struct lu_env *env,
 			     struct lmv_mds_md_v1 *lmv,
 			     __u32 index, __u32 flags)
 {
-	int rc;
+	struct lfsck_lmv *llmv = lnr->lnr_lmv;
+	int		  rc;
 
 	rc = lfsck_remove_dirent(env, com, lnr->lnr_obj,
 				 &lslr->lslr_fid, index);
@@ -396,26 +397,17 @@ static int lfsck_replace_lmv(const struct lu_env *env,
 
 	lslr->lslr_fid = lnr->lnr_fid;
 	lslr->lslr_flags = flags;
-	if (lmv != NULL) {
-		struct lfsck_lmv *llmv = lnr->lnr_lmv;
-
-		lslr->lslr_stripe_count = lmv->lmv_stripe_count;
-		lslr->lslr_index = lmv->lmv_master_mdt_index;
-		lslr->lslr_hash_type = lmv->lmv_hash_type;
-
-		if (flags == LSLF_NONE &&
-		    llmv->ll_hash_type == LMV_HASH_TYPE_UNKNOWN &&
+	lslr->lslr_stripe_count = lmv->lmv_stripe_count;
+	lslr->lslr_index = lmv->lmv_master_mdt_index;
+	lslr->lslr_hash_type = lmv->lmv_hash_type;
+	if (flags == LSLF_NONE) {
+		if (llmv->ll_hash_type == LMV_HASH_TYPE_UNKNOWN &&
 		    lmv_is_known_hash_type(lmv->lmv_hash_type))
 			llmv->ll_hash_type = lmv->lmv_hash_type;
 
-		if (flags == LSLF_NONE &&
-		    lslr->lslr_stripe_count <= LFSCK_LMV_MAX_STRIPES &&
+		if (lslr->lslr_stripe_count <= LFSCK_LMV_MAX_STRIPES &&
 		    llmv->ll_max_stripe_count < lslr->lslr_stripe_count)
 			llmv->ll_max_stripe_count = lslr->lslr_stripe_count;
-	} else {
-		lslr->lslr_stripe_count = 0;
-		lslr->lslr_index = 0;
-		lslr->lslr_hash_type = 0;
 	}
 
 	return 0;
@@ -535,25 +527,21 @@ static int lfsck_record_lmv(const struct lu_env *env,
 
 	if (fid_is_zero(&lslr->lslr_fid)) {
 		lslr->lslr_fid = *fid;
-		if (lmv != NULL) {
-			lslr->lslr_stripe_count = lmv->lmv_stripe_count;
-			lslr->lslr_index = lmv->lmv_master_mdt_index;
-			lslr->lslr_hash_type = lmv->lmv_hash_type;
-
-			if (flags == LSLF_NONE &&
-			    llmv->ll_hash_type == LMV_HASH_TYPE_UNKNOWN &&
+		lslr->lslr_stripe_count = lmv->lmv_stripe_count;
+		lslr->lslr_index = lmv->lmv_master_mdt_index;
+		lslr->lslr_hash_type = lmv->lmv_hash_type;
+		lslr->lslr_flags = flags;
+		llmv->ll_stripes_filled++;
+		if (flags == LSLF_NONE) {
+			if (llmv->ll_hash_type == LMV_HASH_TYPE_UNKNOWN &&
 			    lmv_is_known_hash_type(lmv->lmv_hash_type))
 				llmv->ll_hash_type = lmv->lmv_hash_type;
 
-			if (flags == LSLF_NONE &&
-			    lslr->lslr_stripe_count <= LFSCK_LMV_MAX_STRIPES &&
+			if (lslr->lslr_stripe_count <= LFSCK_LMV_MAX_STRIPES &&
 			    llmv->ll_max_stripe_count < lslr->lslr_stripe_count)
 				llmv->ll_max_stripe_count =
 							lslr->lslr_stripe_count;
 		}
-
-		lslr->lslr_flags = flags;
-		llmv->ll_stripes_filled++;
 
 		if (llmv->ll_max_filled_off < index)
 			llmv->ll_max_filled_off = index;
@@ -773,25 +761,18 @@ none:
 
 		lslr->lslr_fid = *fid;
 		lslr->lslr_flags = flags;
-		if (lmv != NULL) {
-			lslr->lslr_stripe_count = lmv->lmv_stripe_count;
-			lslr->lslr_index = lmv->lmv_master_mdt_index;
-			lslr->lslr_hash_type = lmv->lmv_hash_type;
-
-			if (flags == LSLF_NONE &&
-			    llmv->ll_hash_type == LMV_HASH_TYPE_UNKNOWN &&
+		lslr->lslr_stripe_count = lmv->lmv_stripe_count;
+		lslr->lslr_index = lmv->lmv_master_mdt_index;
+		lslr->lslr_hash_type = lmv->lmv_hash_type;
+		if (flags == LSLF_NONE) {
+			if (llmv->ll_hash_type == LMV_HASH_TYPE_UNKNOWN &&
 			    lmv_is_known_hash_type(lmv->lmv_hash_type))
 				llmv->ll_hash_type = lmv->lmv_hash_type;
 
-			if (flags == LSLF_NONE &&
-			    lslr->lslr_stripe_count <= LFSCK_LMV_MAX_STRIPES &&
+			if (lslr->lslr_stripe_count <= LFSCK_LMV_MAX_STRIPES &&
 			    llmv->ll_max_stripe_count < lslr->lslr_stripe_count)
 				llmv->ll_max_stripe_count =
 							lslr->lslr_stripe_count;
-		} else {
-			lslr->lslr_stripe_count = 0;
-			lslr->lslr_index = 0;
-			lslr->lslr_hash_type = 0;
 		}
 
 		break;
@@ -2275,9 +2256,12 @@ int lfsck_namespace_handle_striped_master(const struct lu_env *env,
 
 dangling:
 		rc = lfsck_namespace_check_exist(env, dir, obj, lnr->lnr_name);
-		if (rc == 0)
-			rc = lfsck_record_lmv(env, com, lnr, NULL, stripe,
+		if (rc == 0) {
+			memset(lmv, 0, sizeof(*lmv));
+			lmv->lmv_magic = LMV_MAGIC;
+			rc = lfsck_record_lmv(env, com, lnr, lmv, stripe,
 					      LSLF_DANGLING, LSLF_NONE, &depth);
+		}
 
 		GOTO(out, rc);
 	}
