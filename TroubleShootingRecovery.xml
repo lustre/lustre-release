@@ -126,15 +126,17 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
             <section>
                 <title>Synopsis</title>
                 <screen>lctl lfsck_start -M | --device <replaceable>[MDT,OST]_device</replaceable> \
-                    [-e | --error <replaceable>error_handle</replaceable>] \
-                    [-h | --help] \
-                    [-n | --dryrun <replaceable>switch</replaceable>] \
-                    [-r | --reset] \
-                    [-s | --speed <replaceable>speed_limit</replaceable>] \
                     [-A | --all] \
+                    [-c | --create_ostobj <replaceable>[on | off]</replaceable>] \
+                    [-C | --create_mdtobj <replaceable>[on | off]</replaceable>] \
+                    [-e | --error <replaceable>{continue | abort}</replaceable>] \
+                    [-h | --help] \
+                    [-n | --dryrun <replaceable>[on | off]</replaceable>] \
+                    [-o | --orphan] \
+                    [-r | --reset] \
+                    [-s | --speed <replaceable>ops_per_sec_limit</replaceable>] \
                     [-t | --type <replaceable>lfsck_type[,lfsck_type...]</replaceable>] \
-                    [-w | --windows <replaceable>win_size</replaceable>] \
-                    [-o | --orphan]
+                    [-w | --window_size <replaceable>size</replaceable>]
                 </screen>
             </section>
             <section>
@@ -169,6 +171,30 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
                             </row>
                             <row>
                                 <entry>
+                                    <para><literal>-A | --all</literal> </para>
+                                </entry>
+                                <entry>
+                                    <para condition='l26'>Start LFSCK on all devices via a single lctl command. This applies to both layout and namespace consistency checking and repair.</para>
+                                </entry>
+                            </row>
+                            <row>
+                                <entry>
+                                    <para><literal>-c | --create_ostobj</literal> </para>
+                                </entry>
+                                <entry>
+					<para condition='l26'>Create the lost OST-object for dangling LOV EA, <literal>off</literal> (default) or <literal>on</literal>. If not specified, then the default behaviour is to keep the dangling LOV EA there without creating the lost OST-object.</para>
+                                </entry>
+                            </row>
+                            <row>
+                                <entry>
+                                    <para><literal>-C | --create_mdtobj</literal> </para>
+                                </entry>
+                                <entry>
+					<para condition='l27'>Create the lost MDT-object for dangling name entry, <literal>off</literal> (default) or <literal>on</literal>. If not specified, then the default behaviour is to keep the dangling name entry there without creating the lost MDT-object.</para>
+                                </entry>
+                            </row>
+                            <row>
+                                <entry>
                                     <para><literal>-e | --error</literal> </para>
                                 </entry>
                                 <entry>
@@ -193,6 +219,14 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
                             </row>
                             <row>
                                 <entry>
+                                    <para><literal>-o | --orphan</literal> </para>
+                                </entry>
+                                <entry>
+                                    <para condition='l26'>Repair orphan OST-objects for layout LFSCK.</para>
+                                </entry>
+                            </row>
+                            <row>
+                                <entry>
                                     <para><literal>-r | --reset</literal> </para>
                                 </entry>
                                 <entry>
@@ -209,37 +243,21 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
                             </row>
                             <row>
                                 <entry>
-                                    <para><literal>-A | --all</literal> </para>
-                                </entry>
-                                <entry>
-                                    <para condition='l26'>Start LFSCK on all devices via a single lctl command. It is not only used for layout consistency check/repair, but also for other LFSCK components, such as LFSCK for namespace consistency (LFSCK 1.5) and for DNE consistency check/repair in the future.</para>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
                                     <para><literal>-t | --type</literal> </para>
                                 </entry>
                                 <entry>
                                     <para>The type of checking/repairing that should be performed. The new LFSCK framework provides a single interface for a variety of system consistency checking/repairing operations including:</para>
 <para>Without a specified option, the LFSCK component(s) which ran last time and did not finish or the component(s) corresponding to some known system inconsistency, will be started. Anytime the LFSCK is triggered, the OI scrub will run automatically, so there is no need to specify OI_scrub.</para>
-<para condition='l24'><literal>namespace</literal>: check and repair FID-in-Dirent and LinkEA consistency.</para>
+<para condition='l24'><literal>namespace</literal>: check and repair FID-in-Dirent and LinkEA consistency. Lustre-2.7 enhances namespace consistency verification under DNE mode.</para>
 <para condition='l26'><literal>layout</literal>: check and repair MDT-OST inconsistency.</para>
                                 </entry>
                             </row>
                             <row>
                                 <entry>
-                                    <para><literal>-w | --windows</literal> </para>
+                                    <para><literal>-w | --window_size</literal> </para>
                                 </entry>
                                 <entry>
-                                    <para condition='l26'>The windows size for async requests pipeline.</para>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
-                                    <para><literal>-o | --orphan</literal> </para>
-                                </entry>
-                                <entry>
-                                    <para condition='l26'>Handle orphan objects, such as orphan OST-objects for layout LFSCK.</para>
+					<para condition='l26'>The window size for the async request pipeline. The LFSCK async request pipeline's input/output may have quite different processing speeds, and there may be too many requests in the pipeline as to cause abnormal memory/network pressure. If not specified, then the default window size for the async request pipeline is 1024.</para>
                                 </entry>
                             </row>
                         </tbody>
@@ -429,14 +447,14 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
                                         <listitem><para>Name: <literal>lfsck_namespace</literal></para></listitem>
                                         <listitem><para>LFSCK namespace magic.</para></listitem>
                                         <listitem><para>LFSCK namespace version..</para></listitem>
-                                        <listitem><para>Status: one of the status - <literal>init</literal>, <literal>scanning-phase1</literal>, <literal>scanning-phase2</literal>, <literal>completed</literal>, <literal>failed</literal>, <literal>stopped</literal>, <literal>paused</literal>, or <literal>crashed</literal>.</para></listitem>
+                                        <listitem><para>Status: one of the status - <literal>init</literal>, <literal>scanning-phase1</literal>, <literal>scanning-phase2</literal>, <literal>completed</literal>, <literal>failed</literal>, <literal>stopped</literal>, <literal>paused</literal>, <literal>partial</literal>, <literal>co-failed</literal>, <literal>co-stopped</literal> or <literal>co-paused</literal>.</para></listitem>
                                         <listitem><para>Flags: including - <literal>scanned-once</literal> (the first cycle scanning has been
                                                   completed), <literal>inconsistent</literal> (one
                                                   or more inconsistent FID-in-Dirent or LinkEA
-                                                  entries have been discovered),
+                                                  entries that have been discovered),
                                                   <literal>upgrade</literal> (from Lustre software
                                                   release 1.8 IGIF format.)</para></listitem>
-                                        <listitem><para>Parameters: including <literal>dryrun</literal>, <literal>all_targets</literal> and <literal>failout</literal>.</para></listitem>
+                                        <listitem><para>Parameters: including <literal>dryrun</literal>, <literal>all_targets</literal>, <literal>failout</literal>, <literal>broadcast</literal>, <literal>orphan</literal>, <literal>create_ostobj</literal>and<literal>create_mdtobj</literal>.</para></listitem>
                                         <listitem><para>Time Since Last Completed.</para></listitem>
                                         <listitem><para>Time Since Latest Start.</para></listitem>
                                         <listitem><para>Time Since Last Checkpoint.</para></listitem>
@@ -459,10 +477,32 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
                                         <listitem><para><literal>Updated Phase2</literal> total number of objects repaired during <literal>scanning-phase2</literal>.</para></listitem>
                                         <listitem><para><literal>Failed Phase1</literal> total number of objets that failed to be repaired during <literal>scanning-phase1</literal>.</para></listitem>
                                         <listitem><para><literal>Failed Phase2</literal> total number of objets that failed to be repaired during <literal>scanning-phase2</literal>.</para></listitem>
-                                        <listitem><para><literal>Dirs</literal> total number of directories scanned.</para></listitem>
-                                        <listitem><para><literal>M-linked</literal> total number of multiple-linked objects that have been scanned.</para></listitem>
-                                        <listitem><para><literal>Nlinks Repaired</literal> total number of objects with nlink attributes that have been repaired.</para></listitem>
-                                        <listitem><para><literal>Lost_found</literal> total number of objects that have had a name entry added back to the namespace.</para></listitem>
+                                        <listitem><para><literal>directories</literal> total number of directories scanned.</para></listitem>
+                                        <listitem><para><literal>multiple_linked_checked</literal> total number of multiple-linked objects that have been scanned.</para></listitem>
+                                        <listitem><para><literal>dirent_repaired</literal> total number of FID-in-dirent entries that have been repaired.</para></listitem>
+                                        <listitem><para><literal>linkea_repaired</literal> total number of linkEA entries that have been repaired.</para></listitem>
+                                        <listitem><para><literal>unknown_inconsistency</literal> total number of undefined inconsistencies found in scanning-phase2.</para></listitem>
+                                        <listitem><para><literal>unmatched_pairs_repaired</literal> total number of unmatched pairs that have been repaired.</para></listitem>
+                                        <listitem><para><literal>dangling_repaired</literal> total number of dangling name entries that have been found/repaired.</para></listitem>
+                                        <listitem><para><literal>multi_referenced_repaired</literal> total number of multiple referenced name entries that have been found/repaired.</para></listitem>
+                                        <listitem><para><literal>bad_file_type_repaired</literal> total number of name entries with bad file type that have been repaired.</para></listitem>
+                                        <listitem><para><literal>lost_dirent_repaired</literal> total number of lost name entries that have been re-inserted.</para></listitem>
+                                        <listitem><para><literal>striped_dirs_scanned</literal> total number of striped directories (master) that have been scanned.</para></listitem>
+                                        <listitem><para><literal>striped_dirs_repaired</literal> total number of striped directories (master) that have been repaired.</para></listitem>
+                                        <listitem><para><literal>striped_dirs_failed</literal> total number of striped directories (master) that have failed to be verified.</para></listitem>
+                                        <listitem><para><literal>striped_dirs_disabled</literal> total number of striped directories (master) that have been disabled.</para></listitem>
+                                        <listitem><para><literal>striped_dirs_skipped</literal> total number of striped directories (master) that have been skipped (for shards verification) because of lost master LMV EA.</para></listitem>
+                                        <listitem><para><literal>striped_shards_scanned</literal> total number of striped directory shards (slave) that have been scanned.</para></listitem>
+                                        <listitem><para><literal>striped_shards_repaired</literal> total number of striped directory shards (slave) that have been repaired.</para></listitem>
+                                        <listitem><para><literal>striped_shards_failed</literal> total number of striped directory shards (slave) that have failed to be verified.</para></listitem>
+                                        <listitem><para><literal>striped_shards_skipped</literal> total number of striped directory shards (slave) that have been skipped (for name hash verification) because LFSCK does not know whether the slave LMV EA is valid or not.</para></listitem>
+                                        <listitem><para><literal>name_hash_repaired</literal> total number of name entries under striped directory with bad name hash that have been repaired.</para></listitem>
+                                        <listitem><para><literal>nlinks_repaired</literal> total number of objects with nlink fixed.</para></listitem>
+                                        <listitem><para><literal>mul_linked_repaired</literal> total number of multiple-linked objects that have been repaired.</para></listitem>
+                                        <listitem><para><literal>local_lost_found_scanned</literal> total number of objects under /lost+found that have been scanned.</para></listitem>
+                                        <listitem><para><literal>local_lost_found_moved</literal> total number of objects under /lost+found that have been moved to namespace visible directory.</para></listitem>
+                                        <listitem><para><literal>local_lost_found_skipped</literal> total number of objects under /lost+found that have been skipped.</para></listitem>
+                                        <listitem><para><literal>local_lost_found_failed</literal> total number of objects under /lost+found that have failed to be processed.</para></listitem>
                                         <listitem><para><literal>Success Count</literal> the total number of completed LFSCK runs on the device.</para></listitem>
                                         <listitem><para><literal>Run Time Phase1</literal> the duration of the LFSCK run during <literal>scanning-phase1</literal>. Excluding the time spent paused between checkpoints.</para></listitem>
                                         <listitem><para><literal>Run Time Phase2</literal> the duration of the LFSCK run during <literal>scanning-phase2</literal>. Excluding the time spent paused between checkpoints.</para></listitem>
