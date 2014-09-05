@@ -67,7 +67,7 @@ int ofd_version_get_check(struct ofd_thread_info *info,
 
 	LASSERT(ofd_object_exists(fo));
 
-	if (info->fti_exp)
+	if (info->fti_exp == NULL)
 		RETURN(0);
 
 	curr_version = dt_version_get(info->fti_env, ofd_object_child(fo));
