@@ -1,6 +1,6 @@
 MODULES := mgc
 mgc-objs := mgc_request.o lproc_mgc.o
 
-EXTRA_DIST := $(mgc-objs:%.o=%.c) libmgc.c mgc_internal.h
+EXTRA_DIST := $(mgc-objs:%.o=%.c) mgc_internal.h
 
 @INCLUDE_RULES@
