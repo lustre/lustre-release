@@ -38,7 +38,6 @@
 
 #include <libcfs/libcfs.h>
 
-
 #include <lustre_dlm.h>
 #include <lustre_net.h>
 #include <lustre/lustre_user.h>
@@ -46,10 +45,10 @@
 #include <lustre_ha.h>
 #include <lprocfs_status.h>
 #include <lustre_ioctl.h>
-#include <lustre_log.h>
 #include <lustre_debug.h>
 #include <lustre_param.h>
 #include <lustre_fid.h>
+#include <obd_class.h>
 #include "osc_internal.h"
 #include "osc_cl_internal.h"
 
@@ -2935,22 +2934,8 @@ static int osc_reconnect(const struct lu_env *env,
 
 static int osc_disconnect(struct obd_export *exp)
 {
-        struct obd_device *obd = class_exp2obd(exp);
-        struct llog_ctxt  *ctxt;
-        int rc;
-
-        ctxt = llog_get_context(obd, LLOG_SIZE_REPL_CTXT);
-        if (ctxt) {
-                if (obd->u.cli.cl_conn_count == 1) {
-                        /* Flush any remaining cancel messages out to the
-                         * target */
-			llog_sync(ctxt, exp, 0);
-                }
-                llog_ctxt_put(ctxt);
-        } else {
-                CDEBUG(D_HA, "No LLOG_SIZE_REPL_CTXT found in obd %p\n",
-                       obd);
-        }
+	struct obd_device *obd = class_exp2obd(exp);
+	int rc;
 
         rc = client_disconnect_export(exp);
         /**
@@ -3211,9 +3196,6 @@ static int osc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                 obd_cleanup_client_import(obd);
                 ptlrpc_lprocfs_unregister_obd(obd);
                 lprocfs_obd_cleanup(obd);
-                rc = obd_llog_finish(obd, 0);
-                if (rc != 0)
-                        CERROR("failed to cleanup llogging subsystems\n");
                 break;
                 }
         }
