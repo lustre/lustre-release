@@ -965,11 +965,6 @@ struct obd_ops {
         int (*o_init_export)(struct obd_export *exp);
         int (*o_destroy_export)(struct obd_export *exp);
 
-        /* llog related obd_methods */
-        int (*o_llog_init)(struct obd_device *obd, struct obd_llog_group *grp,
-                           struct obd_device *disk_obd, int *idx);
-        int (*o_llog_finish)(struct obd_device *obd, int count);
-
         int (*o_import_event)(struct obd_device *, struct obd_import *,
                               enum obd_import_event);
 
