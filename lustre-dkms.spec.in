@@ -15,14 +15,22 @@ Source0:        %{module}-%{version}.tar.gz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildArch:      noarch
 
+# DKMS >= 2.2.0.3-28.git.7c3e7c5 to fully support inter-modules deps
+# (ie, "BUILD_DEPENDS[#]=<pkg>"), and have latest DKMS fixes integrated
+# for bugs that prevented our module to build/install.
 Requires:       dkms >= 2.2.0.3-28.git.7c3e7c5
 Requires:       spl-dkms >= 0.6.1
 Requires:       zfs-dkms >= 0.6.1
 Requires:       gcc, make, perl
 Requires:       python-docutils
 Requires:       kernel-devel
-Provides:       %{module}-kmod = %{version}
-Provides:       %{module}-modules = %{version}
+Requires:       @PACKAGE@-osd-zfs-mount
+Provides:       @PACKAGE@-kmod = %{version}
+Provides:       @PACKAGE@-modules = %{version}
+Provides:       @PACKAGE@-osd-zfs
+Conflicts:      @PACKAGE@-modules
+Conflicts:      @PACKAGE@-client-modules
+Conflicts:      @PACKAGE@-osd-zfs
 
 %description
 This package contains the dkms Lustre kernel modules.
