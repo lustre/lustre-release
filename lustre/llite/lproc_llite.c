@@ -436,9 +436,6 @@ ll_max_cached_mb_seq_write(struct file *file, const char __user *buffer,
 		RETURN(-ERANGE);
 	}
 
-	if (sbi->ll_dt_exp == NULL) /* being initialized */
-		GOTO(out, rc = 0);
-
 	spin_lock(&sbi->ll_lock);
 	diff = pages_number - cache->ccc_lru_max;
 	spin_unlock(&sbi->ll_lock);
@@ -476,6 +473,11 @@ ll_max_cached_mb_seq_write(struct file *file, const char __user *buffer,
 
 		if (diff <= 0)
 			break;
+
+		if (sbi->ll_dt_exp == NULL) { /* being initialized */
+			rc = -ENODEV;
+			break;
+		}
 
 		/* difficult - have to ask OSCs to drop LRU slots. */
 		tmp = diff << 1;
