@@ -3085,9 +3085,12 @@ static void lod_ah_init(const struct lu_env *env,
 	 * in case of late striping creation, ->ah_init()
 	 * can be called with local object existing
 	 */
-	if (!dt_object_exists(nextc) || dt_object_remote(nextc))
-		nextc->do_ops->do_ah_init(env, ah, dt_object_remote(nextp) ?
-					  NULL : nextp, nextc, child_mode);
+	if (!dt_object_exists(nextc) || dt_object_remote(nextc)) {
+		struct dt_object *obj;
+
+		obj = (nextp != NULL && dt_object_remote(nextp)) ? NULL : nextp;
+		nextc->do_ops->do_ah_init(env, ah, obj, nextc, child_mode);
+	}
 
 	if (S_ISDIR(child_mode)) {
 		if (lc->ldo_dir_stripe == NULL) {
