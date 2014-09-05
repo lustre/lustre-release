@@ -1368,6 +1368,8 @@ out_stop_service:
 
 static int lsi_prepare(struct lustre_sb_info *lsi)
 {
+	const char *osd_type;
+	const char *fstype;
 	__u32 index;
 	int rc;
 	ENTRY;
@@ -1381,28 +1383,26 @@ static int lsi_prepare(struct lustre_sb_info *lsi)
 		RETURN(-EINVAL);
 	}
 
-	if (strlen(lsi->lsi_lmd->lmd_profile) >= sizeof(lsi->lsi_svname))
-		RETURN(-ENAMETOOLONG);
-
-	strcpy(lsi->lsi_svname, lsi->lsi_lmd->lmd_profile);
-
 	/* Determine osd type */
-	if (lsi->lsi_lmd->lmd_osd_type != NULL) {
-		if (strlen(lsi->lsi_lmd->lmd_osd_type) >=
-		    sizeof(lsi->lsi_osd_type))
-			RETURN(-ENAMETOOLONG);
-
-		strcpy(lsi->lsi_osd_type, lsi->lsi_lmd->lmd_osd_type);
+	if (lsi->lsi_lmd->lmd_osd_type == NULL) {
+		osd_type = LUSTRE_OSD_LDISKFS_NAME;
+		fstype = "ldiskfs";
 	} else {
-		strcpy(lsi->lsi_osd_type, LUSTRE_OSD_LDISKFS_NAME);
+		osd_type = lsi->lsi_lmd->lmd_osd_type;
+		fstype = lsi->lsi_lmd->lmd_osd_type;
 	}
 
+	if (strlen(lsi->lsi_lmd->lmd_profile) >= sizeof(lsi->lsi_svname) ||
+	    strlen(osd_type) >= sizeof(lsi->lsi_osd_type) ||
+	    strlen(fstype) >= sizeof(lsi->lsi_fstype))
+		RETURN(-ENAMETOOLONG);
+
+	strlcpy(lsi->lsi_svname, lsi->lsi_lmd->lmd_profile,
+		sizeof(lsi->lsi_svname));
+	strlcpy(lsi->lsi_osd_type, osd_type, sizeof(lsi->lsi_osd_type));
 	/* XXX: a temp. solution for components using ldiskfs
 	 *      to be removed in one of the subsequent patches */
-	if (!strcmp(lsi->lsi_lmd->lmd_osd_type, "osd-ldiskfs"))
-		strcpy(lsi->lsi_fstype, "ldiskfs");
-	else
-		strcpy(lsi->lsi_fstype, lsi->lsi_lmd->lmd_osd_type);
+	strlcpy(lsi->lsi_fstype, fstype, sizeof(lsi->lsi_fstype));
 
 	/* Determine server type */
 	rc = server_name2index(lsi->lsi_svname, &index, NULL);
