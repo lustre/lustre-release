@@ -1616,6 +1616,7 @@ int lfsck_assistant_engine(void *args)
 	struct l_wait_info		   lwi     = { 0 };
 	int				   rc      = 0;
 	int				   rc1	   = 0;
+	int				   rc2;
 	ENTRY;
 
 	CDEBUG(D_LFSCK, "%s: %s LFSCK assistant thread start\n",
@@ -1725,11 +1726,16 @@ int lfsck_assistant_engine(void *args)
 				com->lc_time_last_checkpoint +
 				cfs_time_seconds(LFSCK_CHECKPOINT_INTERVAL);
 
+			CDEBUG(D_LFSCK, "%s: LFSCK assistant sync before "
+			       "the second-stage scaning\n",
+			       lfsck_lfsck2name(lfsck));
+
 			/* Flush async updates before handling orphan. */
-			dt_sync(env, lfsck->li_next);
+			rc2 = dt_sync(env, lfsck->li_next);
 
 			CDEBUG(D_LFSCK, "%s: LFSCK assistant phase2 "
-			       "scan start\n", lfsck_lfsck2name(lfsck));
+			       "scan start, synced: rc = %d\n",
+			       lfsck_lfsck2name(lfsck), rc2);
 
 			if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_DOUBLESCAN))
 				GOTO(cleanup2, rc = 0);
@@ -1846,8 +1852,14 @@ cleanup2:
 		rc = rc1;
 	}
 
+	CDEBUG(D_LFSCK, "%s: LFSCK assistant sync before exit\n",
+	       lfsck_lfsck2name(lfsck));
+
 	/* Flush async updates before exit. */
-	dt_sync(env, lfsck->li_next);
+	rc2 = dt_sync(env, lfsck->li_next);
+
+	CDEBUG(D_LFSCK, "%s: LFSCK assistant synced before exit: rc = %d\n",
+	       lfsck_lfsck2name(lfsck), rc2);
 
 	/* Under force exit case, some requests may be just freed without
 	 * verification, those objects should be re-handled when next run.

@@ -1356,8 +1356,16 @@ static void osd_conf_get(const struct lu_env *env,
  */
 static int osd_sync(const struct lu_env *env, struct dt_device *d)
 {
-	CDEBUG(D_HA, "syncing OSD %s\n", LUSTRE_OSD_LDISKFS_NAME);
-        return ldiskfs_force_commit(osd_sb(osd_dt_dev(d)));
+	int rc;
+
+	CDEBUG(D_CACHE, "syncing OSD %s\n", LUSTRE_OSD_LDISKFS_NAME);
+
+	rc = ldiskfs_force_commit(osd_sb(osd_dt_dev(d)));
+
+	CDEBUG(D_CACHE, "synced OSD %s: rc = %d\n",
+	       LUSTRE_OSD_LDISKFS_NAME, rc);
+
+	return rc;
 }
 
 /**

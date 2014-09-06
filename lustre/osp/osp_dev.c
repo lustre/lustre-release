@@ -709,7 +709,7 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 	if (rc != 0)
 		GOTO(out, rc);
 
-	CDEBUG(D_OTHER, "%s: id: used %lu, processed %lu\n",
+	CDEBUG(D_CACHE, "%s: id: used %lu, processed %lu\n",
 	       d->opd_obd->obd_name, id, d->opd_syn_last_processed_id);
 
 	/* wait till all-in-line are processed */
@@ -741,7 +741,7 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 	/* block new processing (barrier>0 - few callers are possible */
 	atomic_inc(&d->opd_syn_barrier);
 
-	CDEBUG(D_OTHER, "%s: %u in flight\n", d->opd_obd->obd_name,
+	CDEBUG(D_CACHE, "%s: %u in flight\n", d->opd_obd->obd_name,
 	       d->opd_syn_rpc_in_flight);
 
 	/* wait till all-in-flight are replied, so executed by the target */
@@ -770,12 +770,13 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 		GOTO(out, rc = -ETIMEDOUT);
 	}
 
-	CDEBUG(D_OTHER, "%s: done in %lu\n", d->opd_obd->obd_name,
-	       cfs_time_current() - start);
 out:
 	/* resume normal processing (barrier=0) */
 	atomic_dec(&d->opd_syn_barrier);
 	__osp_sync_check_for_work(d);
+
+	CDEBUG(D_CACHE, "%s: done in %lu: rc = %d\n", d->opd_obd->obd_name,
+	       cfs_time_current() - start, rc);
 
 	RETURN(rc);
 }
