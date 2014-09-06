@@ -221,7 +221,7 @@ static int lfsck_needs_scan_dir(const struct lu_env *env,
 		fld_range_set_mdt(range);
 		rc = fld_local_lookup(env, ss->ss_server_fld,
 				      fid_seq(fid), range);
-		if (rc != 0 || range->lsr_index != idx) {
+		if (rc != 0 || range->lsr_index != idx)
 			/* Current FID should NOT be for the input parameter
 			 * @obj, because the lfsck_master_oit_engine() has
 			 * filtered out agent object. So current FID is for
@@ -229,10 +229,7 @@ static int lfsck_needs_scan_dir(const struct lu_env *env,
 			 * So the ancestor is a remote directory. The input
 			 * parameter @obj is local directory, and should be
 			 * scanned under such case. */
-			LASSERT(depth > 0);
-
 			return 1;
-		}
 
 		/* normal FID on this target (locally) must be for the
 		 * client-side visiable object. */
