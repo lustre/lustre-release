@@ -104,17 +104,17 @@ static __u32 nodemap_hashfn(cfs_hash_t *hash_body,
 				  mask);
 }
 
-static void *nodemap_hs_key(cfs_hlist_node_t *hnode)
+static void *nodemap_hs_key(struct hlist_node *hnode)
 {
 	struct lu_nodemap *nodemap;
 
-	nodemap = cfs_hlist_entry(hnode, struct lu_nodemap, nm_hash);
+	nodemap = hlist_entry(hnode, struct lu_nodemap, nm_hash);
 
 	return nodemap->nm_name;
 }
 
 static int nodemap_hs_keycmp(const void *key,
-			     cfs_hlist_node_t *compared_hnode)
+			     struct hlist_node *compared_hnode)
 {
 	char *nodemap_name;
 
@@ -123,25 +123,25 @@ static int nodemap_hs_keycmp(const void *key,
 	return !strcmp(key, nodemap_name);
 }
 
-static void *nodemap_hs_hashobject(cfs_hlist_node_t *hnode)
+static void *nodemap_hs_hashobject(struct hlist_node *hnode)
 {
-	return cfs_hlist_entry(hnode, struct lu_nodemap, nm_hash);
+	return hlist_entry(hnode, struct lu_nodemap, nm_hash);
 }
 
-static void nodemap_hs_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+static void nodemap_hs_get(cfs_hash_t *hs, struct hlist_node *hnode)
 {
 	struct lu_nodemap *nodemap;
 
-	nodemap = cfs_hlist_entry(hnode, struct lu_nodemap, nm_hash);
+	nodemap = hlist_entry(hnode, struct lu_nodemap, nm_hash);
 	nodemap_getref(nodemap);
 }
 
 static void nodemap_hs_put_locked(cfs_hash_t *hs,
-				  cfs_hlist_node_t *hnode)
+				  struct hlist_node *hnode)
 {
 	struct lu_nodemap *nodemap;
 
-	nodemap = cfs_hlist_entry(hnode, struct lu_nodemap, nm_hash);
+	nodemap = hlist_entry(hnode, struct lu_nodemap, nm_hash);
 	nodemap_putref(nodemap);
 }
 
@@ -165,11 +165,11 @@ static cfs_hash_ops_t nodemap_hash_operations = {
  * \param	data		not used here
  */
 static int nodemap_cleanup_iter_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-				   cfs_hlist_node_t *hnode, void *data)
+				   struct hlist_node *hnode, void *data)
 {
 	struct lu_nodemap *nodemap;
 
-	nodemap = cfs_hlist_entry(hnode, struct lu_nodemap, nm_hash);
+	nodemap = hlist_entry(hnode, struct lu_nodemap, nm_hash);
 	nodemap_putref(nodemap);
 
 	return 0;

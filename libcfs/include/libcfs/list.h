@@ -441,9 +441,6 @@ static inline void hlist_add_after(struct hlist_node *n,
 
 /* @} */
 
-#endif /* __KERNEL__ */
-
-#ifndef list_for_each_prev
 /**
  * Iterate over a list in reverse order
  * \param pos	the &struct list_head to use as a loop counter.
@@ -453,9 +450,6 @@ static inline void hlist_add_after(struct hlist_node *n,
 	for (pos = (head)->prev, prefetch(pos->prev); pos != (head);     \
 		pos = pos->prev, prefetch(pos->prev))
 
-#endif /* list_for_each_prev */
-
-#ifndef list_for_each_entry
 /**
  * Iterate over a list of given type
  * \param pos        the type * to use as a loop counter.
@@ -468,9 +462,7 @@ static inline void hlist_add_after(struct hlist_node *n,
 	     &pos->member != (head);                                        \
 	     pos = list_entry(pos->member.next, typeof(*pos), member),  \
 	     prefetch(pos->member.next))
-#endif /* list_for_each_entry */
 
-#ifndef list_for_each_entry_reverse
 /**
  * Iterate backwards over a list of given type.
  * \param pos        the type * to use as a loop counter.
@@ -481,9 +473,7 @@ static inline void hlist_add_after(struct hlist_node *n,
 	for (pos = list_entry((head)->prev, typeof(*pos), member);      \
 	     prefetch(pos->member.prev), &pos->member != (head);            \
 	     pos = list_entry(pos->member.prev, typeof(*pos), member))
-#endif /* list_for_each_entry_reverse */
 
-#ifndef list_for_each_entry_safe
 /**
  * Iterate over a list of given type safe against removal of list entry
  * \param pos        the type * to use as a loop counter.
@@ -497,74 +487,8 @@ static inline void hlist_add_after(struct hlist_node *n,
 	     &pos->member != (head);                                         \
 	     pos = n, n = list_entry(n->member.next, typeof(*n), member))
 
-#endif /* list_for_each_entry_safe */
+#endif /* __KERNEL__ */
 
-/* Temporary until everything is moved over to linux api */
-typedef struct list_head cfs_list_t;
-
-#define __cfs_list_add(new, prev, next)		__list_add(new, prev, next)
-#define cfs_list_add(new, head)			list_add(new, head)
-
-#define cfs_list_add_tail(new, head)		list_add_tail(new, head)
-
-#define __cfs_list_del(prev, next)		__list_del(prev, next)
-#define cfs_list_del(entry)			list_del(entry)
-#define cfs_list_del_init(entry)		list_del_init(entry)
-
-#define cfs_list_move(list, head)		list_move(list, head)
-#define cfs_list_move_tail(list, head)		list_move_tail(list, head)
-
-#define cfs_list_empty(head)			list_empty(head)
-#define cfs_list_empty_careful(head)		list_empty_careful(head)
-
-#define __cfs_list_splice(list, head)		__list_splice(list, head)
-#define cfs_list_splice(list, head)		list_splice(list, head)
-#define cfs_list_splice_tail(list, head)	list_splice_tail(list, head)
-
-#define cfs_list_splice_init(list, head)	list_splice_init(list, head)
-
-#define cfs_list_entry(ptr, type, member)	list_entry(ptr, type, member)
-#define cfs_list_for_each(pos, head)		list_for_each(pos, head)
-#define cfs_list_for_each_safe(pos, n, head)	list_for_each_safe(pos, n, head)
-
-#define cfs_list_for_each_prev(pos, head)	list_for_each_prev(pos, head)
-#define cfs_list_for_each_entry(pos, head, member) \
-	list_for_each_entry(pos, head, member)
-#define cfs_list_for_each_entry_reverse(pos, head, member) \
-	list_for_each_entry_reverse(pos, head, member)
-#define cfs_list_for_each_entry_safe_reverse(pos, n, head, member) \
-	list_for_each_entry_safe_reverse(pos, n, head, member)
-#define cfs_list_for_each_entry_safe(pos, n, head, member) \
-	list_for_each_entry_safe(pos, n, head, member)
-#ifdef list_for_each_entry_safe_from
-#define cfs_list_for_each_entry_safe_from(pos, n, head, member) \
-	list_for_each_entry_safe_from(pos, n, head, member)
-#endif /* list_for_each_entry_safe_from */
-#define cfs_list_for_each_entry_continue(pos, head, member) \
-	list_for_each_entry_continue(pos, head, member)
-
-#define CFS_LIST_HEAD_INIT(n)			LIST_HEAD_INIT(n)
-#define CFS_INIT_LIST_HEAD(p)			INIT_LIST_HEAD(p)
-
-typedef struct hlist_head cfs_hlist_head_t;
-typedef struct hlist_node cfs_hlist_node_t;
-
-#define cfs_hlist_unhashed(h)			hlist_unhashed(h)
-
-#define cfs_hlist_empty(h)			hlist_empty(h)
-
-#define __cfs_hlist_del(n)			__hlist_del(n)
-#define cfs_hlist_del(n)			hlist_del(n)
-#define cfs_hlist_del_init(n)			hlist_del_init(n)
-
-#define cfs_hlist_add_head(n, next)		hlist_add_head(n, next)
-#define cfs_hlist_add_before(n, next)		hlist_add_before(n, next)
-#define cfs_hlist_add_after(n, next)		hlist_add_after(n, next)
-
-#define cfs_hlist_entry(ptr, type, member)	hlist_entry(ptr, type, member)
-#define cfs_hlist_for_each(pos, head)		hlist_for_each(pos, head)
-#define cfs_hlist_for_each_safe(pos, n, head) \
-	hlist_for_each_safe(pos, n, head)
 #ifdef HAVE_HLIST_FOR_EACH_3ARG
 #define cfs_hlist_for_each_entry(tpos, pos, head, member) \
 	hlist_for_each_entry(tpos, head, member)
@@ -584,26 +508,5 @@ typedef struct hlist_node cfs_hlist_node_t;
 #define cfs_hlist_for_each_entry_from(tpos, pos, member) \
 	hlist_for_each_entry_from(tpos, pos, member)
 #endif
-
-#define cfs_list_for_each_entry_typed(pos, head, type, member)	\
-	for (pos = list_entry((head)->next, type, member),	\
-		    prefetch(pos->member.next);			\
-	    &pos->member != (head);				\
-	    pos = list_entry(pos->member.next, type, member),	\
-	    prefetch(pos->member.next))
-
-#define cfs_list_for_each_entry_safe_typed(pos, n, head, type, member)	\
-    for (pos = list_entry((head)->next, type, member),			\
-	       n = list_entry(pos->member.next, type, member);		\
-	    &pos->member != (head);					\
-	    pos = n, n = list_entry(n->member.next, type, member))
-
-#define CFS_HLIST_HEAD_INIT		HLIST_HEAD_INIT
-#define CFS_HLIST_HEAD(n)		HLIST_HEAD(n)
-#define CFS_INIT_HLIST_HEAD(p)		INIT_HLIST_HEAD(p)
-#define CFS_INIT_HLIST_NODE(p)		INIT_HLIST_NODE(p)
-
-#define CFS_LIST_HEAD(name) \
-	struct list_head name = LIST_HEAD_INIT(name)
 
 #endif /* __LIBCFS_LUSTRE_LIST_H__ */

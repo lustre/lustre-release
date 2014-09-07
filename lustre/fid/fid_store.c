@@ -94,7 +94,7 @@ int seq_update_cb_add(struct thandle *th, struct lu_server_seq *seq)
 
 	dcb	       = &ccb->suc_cb;
 	dcb->dcb_func  = seq_update_cb;
-	CFS_INIT_LIST_HEAD(&dcb->dcb_linkage);
+	INIT_LIST_HEAD(&dcb->dcb_linkage);
 	strlcpy(dcb->dcb_name, "seq_update_cb", sizeof(dcb->dcb_name));
 
 	rc = dt_trans_cb_add(th, dcb);

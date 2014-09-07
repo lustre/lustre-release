@@ -596,80 +596,6 @@ s/\bcfs_get_random_bytes_prim\b/get_random_bytes/g
 
 ################################################################################
 # list operations
-s/\bcfs_list_t\b/struct list_head/g
-s/\b__cfs_list_add\b/__list_add/g
-/#[ \t]*define[ \t]*\b__list_add\b *(.*)[ \t]*\b__list_add\b *(.*)/d
-s/\bcfs_list_add\b/list_add/g
-/#[ \t]*define[ \t]*\blist_add\b *(.*)[ \t]*\blist_add\b *(.*)/d
-s/\bcfs_list_add_tail\b/list_add_tail/g
-/#[ \t]*define[ \t]*\blist_add_tail\b *(.*)[ \t]*\blist_add_tail\b *(.*)/d
-s/\b__cfs_list_del\b/__list_del/g
-/#[ \t]*define[ \t]*\b__list_del\b *(.*)[ \t]*\b__list_del\b *(.*)/d
-s/\bcfs_list_del\b/list_del/g
-/#[ \t]*define[ \t]*\blist_del\b *(.*)[ \t]*\blist_del\b *(.*)/d
-s/\bcfs_list_del_init\b/list_del_init/g
-/#[ \t]*define[ \t]*\blist_del_init\b *(.*)[ \t]*\blist_del_init\b *(.*)/d
-s/\bcfs_list_move\b/list_move/g
-/#[ \t]*define[ \t]*\blist_move\b *(.*)[ \t]*\blist_move\b *(.*)/d
-s/\bcfs_list_move_tail\b/list_move_tail/g
-/#[ \t]*define[ \t]*\blist_move_tail\b *(.*)[ \t]*\blist_move_tail\b *(.*)/d
-s/\bcfs_list_empty\b/list_empty/g
-/#[ \t]*define[ \t]*\blist_empty\b *(.*)[ \t]*\blist_empty\b *(.*)/d
-s/\bcfs_list_empty_careful\b/list_empty_careful/g
-/#[ \t]*define[ \t]*\blist_empty_careful\b *(.*)[ \t]*\blist_empty_careful\b *(.*)/d
-s/\b__cfs_list_splice\b/__list_splice/g
-/#[ \t]*define[ \t]*\b__list_splice\b *(.*)[ \t]*\b__list_splice\b *(.*)/d
-s/\bcfs_list_splice\b/list_splice/g
-/#[ \t]*define[ \t]*\blist_splice\b *(.*)[ \t]*\blist_splice\b *(.*)/d
-s/\bcfs_list_splice_init\b/list_splice_init/g
-/#[ \t]*define[ \t]*\blist_splice_init\b *(.*)[ \t]*\blist_splice_init\b *(.*)/d
-s/\bcfs_list_entry\b/list_entry/g
-/#[ \t]*define[ \t]*\blist_entry\b *(.*)[ \t]*\blist_entry\b *(.*)/d
-s/\bcfs_list_for_each\b/list_for_each/g
-/#[ \t]*define[ \t]*\blist_for_each\b *(.*)[ \t]*\blist_for_each\b *(.*)/d
-s/\bcfs_list_for_each_safe\b/list_for_each_safe/g
-/#[ \t]*define[ \t]*\blist_for_each_safe\b *(.*)[ \t]*\blist_for_each_safe\b *(.*)/d
-s/\bcfs_list_for_each_prev\b/list_for_each_prev/g
-/#[ \t]*define[ \t]*\blist_for_each_prev\b *(.*)[ \t]*\blist_for_each_prev\b *(.*)/d
-s/\bcfs_list_for_each_entry\b/list_for_each_entry/g
-/#[ \t]*define[ \t]*\blist_for_each_entry\b *(.*)[ \t]*\blist_for_each_entry\b *(.*)/d
-s/\bcfs_list_for_each_entry_reverse\b/list_for_each_entry_reverse/g
-/#[ \t]*define[ \t]*\blist_for_each_entry_reverse\b *(.*)[ \t]*\blist_for_each_entry_reverse\b *(.*)/d
-s/\bcfs_list_for_each_entry_safe_reverse\b/list_for_each_entry_safe_reverse/g
-/#[ \t]*define[ \t]*\blist_for_each_entry_safe_reverse\b *(.*)[ \t]*\blist_for_each_entry_safe_reverse\b *(.*)/d
-s/\bcfs_list_for_each_entry_safe\b/list_for_each_entry_safe/g
-/#[ \t]*define[ \t]*\blist_for_each_entry_safe\b *(.*)[ \t]*\blist_for_each_entry_safe\b *(.*)/d
-s/\bcfs_list_for_each_entry_safe_from\b/list_for_each_entry_safe_from/g
-/#[ \t]*define[ \t]*\blist_for_each_entry_safe_from\b *(.*)[ \t]*\blist_for_each_entry_safe_from\b *(.*)/d
-s/\bcfs_list_for_each_entry_continue\b/list_for_each_entry_continue/g
-/#[ \t]*define[ \t]*\blist_for_each_entry_continue\b *(.*)[ \t]*\blist_for_each_entry_continue\b *(.*)/d
-# LIST_HEAD defined in /usr/include/sys/queue.h
-s/\bCFS_LIST_HEAD_INIT\b/LIST_HEAD_INIT/g
-/#[ \t]*define[ \t]*\bLIST_HEAD_INIT\b *(.*)[ \t]*\bLIST_HEAD_INIT\b *(.*)/d
-s/\bCFS_LIST_HEAD\b/LIST_HEAD/g
-/#[ \t]*define[ \t]*\bLIST_HEAD\b *(.*)[ \t]*\bLIST_HEAD\b *(.*)/d
-s/\bCFS_INIT_LIST_HEAD\b/INIT_LIST_HEAD/g
-/#[ \t]*define[ \t]*\bINIT_LIST_HEAD\b *(.*)[ \t]*\bINIT_LIST_HEAD\b *(.*)/d
-s/\bcfs_hlist_head_t\b/struct hlist_head/g
-s/\bcfs_hlist_node_t\b/struct hlist_node/g
-s/\bcfs_hlist_unhashed\b/hlist_unhashed/g
-/#[ \t]*define[ \t]*\bhlist_unhashed\b *(.*)[ \t]*\bhlist_unhashed\b *(.*)/d
-s/\bcfs_hlist_empty\b/hlist_empty/g
-/#[ \t]*define[ \t]*\bhlist_empty\b *(.*)[ \t]*\bhlist_empty\b *(.*)/d
-s/\b__cfs_hlist_del\b/__hlist_del/g
-/#[ \t]*define[ \t]*\b__hlist_del\b *(.*)[ \t]*\b__hlist_del\b *(.*)/d
-s/\bcfs_hlist_del\b/hlist_del/g
-/#[ \t]*define[ \t]*\bhlist_del\b *(.*)[ \t]*\bhlist_del\b *(.*)/d
-s/\bcfs_hlist_del_init\b/hlist_del_init/g
-/#[ \t]*define[ \t]*\bhlist_del_init\b *(.*)[ \t]*\bhlist_del_init\b *(.*)/d
-s/\bcfs_hlist_add_head\b/hlist_add_head/g
-/#[ \t]*define[ \t]*\bhlist_add_head\b *(.*)[ \t]*\bhlist_add_head\b *(.*)/d
-s/\bcfs_hlist_add_before\b/hlist_add_before/g
-/#[ \t]*define[ \t]*\bhlist_add_before\b *(.*)[ \t]*\bhlist_add_before\b *(.*)/d
-s/\bcfs_hlist_add_after\b/hlist_add_after/g
-/#[ \t]*define[ \t]*\bhlist_add_after\b *(.*)[ \t]*\bhlist_add_after\b *(.*)/d
-s/\bcfs_hlist_entry\b/hlist_entry/g
-/#[ \t]*define[ \t]*\bhlist_entry\b *(.*)[ \t]*\bhlist_entry\b *(.*)/d
 s/\bcfs_hlist_for_each\b/hlist_for_each/g
 /#[ \t]*define[ \t]*\bhlist_for_each\b *(.*)[ \t]*\bhlist_for_each\b *(.*)/d
 s/\bcfs_hlist_for_each_safe\b/hlist_for_each_safe/g
@@ -678,14 +604,3 @@ s/\bcfs_hlist_for_each_entry_continue\b/hlist_for_each_entry_continue/g
 /#[ \t]*define[ \t]*\bhlist_for_each_entry_continue\b *(.*)[ \t]*\bhlist_for_each_entry_continue\b *(.*)/d
 s/\bcfs_hlist_for_each_entry_from\b/hlist_for_each_entry_from/g
 /#[ \t]*define[ \t]*\bhlist_for_each_entry_from\b *(.*)[ \t]*\bhlist_for_each_entry_from\b *(.*)/d
-s/\bCFS_HLIST_HEAD_INIT\b/HLIST_HEAD_INIT/g
-/#[ \t]*define[ \t]*\bHLIST_HEAD_INIT\b[ \t]*\bHLIST_HEAD_INIT\b/d
-s/\bCFS_HLIST_HEAD\b/HLIST_HEAD/g
-/#[ \t]*define[ \t]*\bHLIST_HEAD\b *(.*)[ \t]*\bHLIST_HEAD\b *(.*)/d
-s/\bCFS_INIT_HLIST_HEAD\b/INIT_HLIST_HEAD/g
-/#[ \t]*define[ \t]*\bINIT_HLIST_HEAD\b *(.*)[ \t]*\bINIT_HLIST_HEAD\b *(.*)/d
-s/\bCFS_INIT_HLIST_NODE\b/INIT_HLIST_NODE/g
-/#[ \t]*define[ \t]*\bINIT_HLIST_NODE\b *(.*)[ \t]*\bINIT_HLIST_NODE\b *(.*)/d
-s/\bcfs_list_for_each_entry_safe_from\b/list_for_each_entry_safe_from/g
-/cfs_list_for_each_entry_typed/{;N;s/\(cfs_list_for_each_entry_typed\)\([^,]*,\)[ ,\t,\n]*\([^,]*,\)[ ,\t,\n]*\([^,]*,\)[ ,\t,\n]*/list_for_each_entry\2 \3 /}
-/cfs_list_for_each_entry_safe_typed/{;N;s/\(cfs_list_for_each_entry_safe_typed\)\([^,]*,\)[ ,\t,\n]*\([^,]*,\)[ ,\t,\n]*\([^,]*,\)[ ,\t,\n]*\([^,]*,\)[ ,\t,\n]*/list_for_each_entry_safe\2 \3 \4 /}

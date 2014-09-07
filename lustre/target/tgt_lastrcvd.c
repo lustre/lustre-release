@@ -368,7 +368,7 @@ void tgt_boot_epoch_update(struct lu_target *tgt)
 	tgt->lut_lsd.lsd_start_epoch = start_epoch;
 	spin_unlock(&tgt->lut_translock);
 
-	CFS_INIT_LIST_HEAD(&client_list);
+	INIT_LIST_HEAD(&client_list);
 	/**
 	 * The recovery is not yet finished and final queue can still be updated
 	 * with resend requests. Move final list to separate one for processing
@@ -452,7 +452,7 @@ int tgt_last_commit_cb_add(struct thandle *th, struct lu_target *tgt,
 
 	dcb = &ccb->llcc_cb;
 	dcb->dcb_func = tgt_cb_last_committed;
-	CFS_INIT_LIST_HEAD(&dcb->dcb_linkage);
+	INIT_LIST_HEAD(&dcb->dcb_linkage);
 	strlcpy(dcb->dcb_name, "tgt_cb_last_committed", sizeof(dcb->dcb_name));
 
 	rc = dt_trans_cb_add(th, dcb);
@@ -514,7 +514,7 @@ int tgt_new_client_cb_add(struct thandle *th, struct obd_export *exp)
 
 	dcb = &ccb->lncc_cb;
 	dcb->dcb_func = tgt_cb_new_client;
-	CFS_INIT_LIST_HEAD(&dcb->dcb_linkage);
+	INIT_LIST_HEAD(&dcb->dcb_linkage);
 	strlcpy(dcb->dcb_name, "tgt_cb_new_client", sizeof(dcb->dcb_name));
 
 	rc = dt_trans_cb_add(th, dcb);

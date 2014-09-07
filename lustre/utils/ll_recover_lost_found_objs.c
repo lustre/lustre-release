@@ -638,7 +638,7 @@ int main(int argc, char **argv)
 		return 1;
         }
 
-	CFS_INIT_LIST_HEAD(&grp_info_list);
+	INIT_LIST_HEAD(&grp_info_list);
 	rc = traverse_lost_found(src_dir, mount_path);
 	if (rc) {
 		fprintf(stderr, "error: traversing lost+found looking for "

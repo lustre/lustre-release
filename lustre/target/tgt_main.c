@@ -108,7 +108,7 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	lut->lut_txn_cb.dtc_txn_commit = NULL;
 	lut->lut_txn_cb.dtc_cookie = lut;
 	lut->lut_txn_cb.dtc_tag = LCT_DT_THREAD | LCT_MD_THREAD;
-	CFS_INIT_LIST_HEAD(&lut->lut_txn_cb.dtc_linkage);
+	INIT_LIST_HEAD(&lut->lut_txn_cb.dtc_linkage);
 
 	dt_txn_callback_add(lut->lut_bottom, &lut->lut_txn_cb);
 
