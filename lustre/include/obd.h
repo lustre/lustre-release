@@ -867,7 +867,6 @@ struct md_enqueue_info {
         struct inode           *mi_dir;
         md_enqueue_cb_t         mi_cb;
         __u64                   mi_cbdata;
-        unsigned int            mi_generation;
 };
 
 struct obd_ops {

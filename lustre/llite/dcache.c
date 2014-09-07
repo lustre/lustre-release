@@ -377,7 +377,7 @@ static int ll_revalidate_dentry(struct dentry *dentry,
 	if (lookup_flags & (LOOKUP_OPEN | LOOKUP_CREATE))
 		return 0;
 
-	if (d_need_statahead(dir, dentry) <= 0)
+	if (!dentry_need_statahead(dir, dentry))
 		return 1;
 
 #ifndef HAVE_DCACHE_LOCK

@@ -383,12 +383,10 @@ int ll_file_release(struct inode *inode, struct file *file)
         fd = LUSTRE_FPRIVATE(file);
         LASSERT(fd != NULL);
 
-        /* The last ref on @file, maybe not the the owner pid of statahead.
-         * Different processes can open the same dir, "ll_opendir_key" means:
-         * it is me that should stop the statahead thread. */
-        if (S_ISDIR(inode->i_mode) && lli->lli_opendir_key == fd &&
-            lli->lli_opendir_pid != 0)
-                ll_stop_statahead(inode, lli->lli_opendir_key);
+	/* The last ref on @file, maybe not the the owner pid of statahead,
+	 * because parent and child process can share the same file handle. */
+	if (S_ISDIR(inode->i_mode) && lli->lli_opendir_key == fd)
+		ll_deauthorize_statahead(inode, fd);
 
         if (inode->i_sb->s_root == file->f_dentry) {
                 LUSTRE_FPRIVATE(file) = NULL;
@@ -555,36 +553,28 @@ static int ll_local_open(struct file *file, struct lookup_intent *it,
  */
 int ll_file_open(struct inode *inode, struct file *file)
 {
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct lookup_intent *it, oit = { .it_op = IT_OPEN,
-                                          .it_flags = file->f_flags };
-        struct obd_client_handle **och_p = NULL;
-        __u64 *och_usecount = NULL;
-        struct ll_file_data *fd;
-        int rc = 0, opendir_set = 0;
-        ENTRY;
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct lookup_intent *it, oit = { .it_op = IT_OPEN,
+					  .it_flags = file->f_flags };
+	struct obd_client_handle **och_p = NULL;
+	__u64 *och_usecount = NULL;
+	struct ll_file_data *fd;
+	int rc = 0;
+	ENTRY;
 
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p), flags %o\n",
 	       PFID(ll_inode2fid(inode)), inode, file->f_flags);
 
-        it = file->private_data; /* XXX: compat macro */
-        file->private_data = NULL; /* prevent ll_local_open assertion */
+	it = file->private_data; /* XXX: compat macro */
+	file->private_data = NULL; /* prevent ll_local_open assertion */
 
 	fd = ll_file_data_get();
 	if (fd == NULL)
 		GOTO(out_openerr, rc = -ENOMEM);
 
 	fd->fd_file = file;
-	if (S_ISDIR(inode->i_mode)) {
-		spin_lock(&lli->lli_sa_lock);
-		if (lli->lli_opendir_key == NULL && lli->lli_sai == NULL &&
-		    lli->lli_opendir_pid == 0) {
-			lli->lli_opendir_key = fd;
-			lli->lli_opendir_pid = current_pid();
-			opendir_set = 1;
-		}
-		spin_unlock(&lli->lli_sa_lock);
-	}
+	if (S_ISDIR(inode->i_mode))
+		ll_authorize_statahead(inode, fd);
 
         if (inode->i_sb->s_root == file->f_dentry) {
                 LUSTRE_FPRIVATE(file) = fd;
@@ -735,10 +725,10 @@ out_och_free:
 		mutex_unlock(&lli->lli_och_mutex);
 
 out_openerr:
-                if (opendir_set != 0)
-                        ll_stop_statahead(inode, lli->lli_opendir_key);
-                if (fd != NULL)
-                        ll_file_data_put(fd);
+		if (lli->lli_opendir_key == fd)
+			ll_deauthorize_statahead(inode, fd);
+		if (fd != NULL)
+			ll_file_data_put(fd);
         } else {
                 ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_OPEN, 1);
         }

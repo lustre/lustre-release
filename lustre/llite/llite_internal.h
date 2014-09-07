@@ -178,18 +178,24 @@ struct ll_inode_info {
 			/* serialize normal readdir and statahead-readdir. */
 			struct mutex			d_readdir_mutex;
 
-                        /* metadata statahead */
-                        /* since parent-child threads can share the same @file
-                         * struct, "opendir_key" is the token when dir close for
-                         * case of parent exit before child -- it is me should
-                         * cleanup the dir readahead. */
-                        void                           *d_opendir_key;
-                        struct ll_statahead_info       *d_sai;
-                        /* protect statahead stuff. */
+			/* metadata statahead */
+			/* since parent-child threads can share the same @file
+			 * struct, "opendir_key" is the token when dir close for
+			 * case of parent exit before child -- it is me should
+			 * cleanup the dir readahead. */
+			void			       *d_opendir_key;
+			struct ll_statahead_info       *d_sai;
+			/* protect statahead stuff. */
 			spinlock_t			d_sa_lock;
 			/* "opendir_pid" is the token when lookup/revalid
 			 * -- I am the owner of dir statahead. */
-			pid_t                           d_opendir_pid;
+			pid_t				d_opendir_pid;
+			/* stat will try to access statahead entries or start
+			 * statahead if this flag is set, and this flag will be
+			 * set upon dir open, and cleared when dir is closed,
+			 * statahead hit ratio is too low, or start statahead
+			 * thread failed. */
+			unsigned int			d_sa_enabled:1;
 			/* directory stripe information */
 			struct lmv_stripe_md		*d_lsm_md;
 			/* striped directory size */
@@ -202,6 +208,7 @@ struct ll_inode_info {
 #define lli_opendir_key         u.d.d_opendir_key
 #define lli_sai                 u.d.d_sai
 #define lli_sa_lock             u.d.d_sa_lock
+#define lli_sa_enabled		u.d.d_sa_enabled
 #define lli_opendir_pid         u.d.d_opendir_pid
 #define lli_lsm_md		u.d.d_lsm_md
 #define lli_stripe_dir_size	u.d.d_stripe_size
@@ -539,20 +546,22 @@ struct ll_sb_info {
         int                       ll_rw_stats_on;
 
 	/* metadata stat-ahead */
-	unsigned int              ll_sa_max;     /* max statahead RPCs */
-	atomic_t                  ll_sa_total;   /* statahead thread started
+	unsigned int		  ll_sa_max;     /* max statahead RPCs */
+	atomic_t		  ll_sa_total;   /* statahead thread started
 						  * count */
-	atomic_t                  ll_sa_wrong;   /* statahead thread stopped for
+	atomic_t		  ll_sa_wrong;   /* statahead thread stopped for
 						  * low hit ratio */
-	atomic_t                  ll_agl_total;  /* AGL thread started count */
+	atomic_t		  ll_sa_running; /* running statahead thread
+						  * count */
+	atomic_t		  ll_agl_total;  /* AGL thread started count */
 
-	dev_t                     ll_sdev_orig; /* save s_dev before assign for
+	dev_t			  ll_sdev_orig; /* save s_dev before assign for
 						 * clustred nfs */
-	struct rmtacl_ctl_table   ll_rct;
-	struct eacl_table         ll_et;
+	struct rmtacl_ctl_table	  ll_rct;
+	struct eacl_table	  ll_et;
 
 	/* root squash */
-	struct root_squash_info   ll_squash;
+	struct root_squash_info	  ll_squash;
 };
 
 #define LL_DEFAULT_MAX_RW_CHUNK      (32 * 1024 * 1024)
@@ -1253,7 +1262,8 @@ struct ll_statahead_info {
 
 int do_statahead_enter(struct inode *dir, struct dentry **dentry,
                        int only_unplug);
-void ll_stop_statahead(struct inode *dir, void *key);
+void ll_authorize_statahead(struct inode *dir, void *key);
+void ll_deauthorize_statahead(struct inode *dir, void *key);
 
 static inline int ll_glimpse_size(struct inode *inode)
 {
@@ -1283,25 +1293,29 @@ ll_statahead_mark(struct inode *dir, struct dentry *dentry)
 		ldd->lld_sa_generation = sai->sai_generation;
 }
 
-static inline int
-d_need_statahead(struct inode *dir, struct dentry *dentryp)
+static inline bool
+dentry_need_statahead(struct inode *dir, struct dentry *dentry)
 {
 	struct ll_inode_info  *lli;
 	struct ll_dentry_data *ldd;
 
 	if (ll_i2sbi(dir)->ll_sa_max == 0)
-		return -EAGAIN;
+		return false;
 
 	lli = ll_i2info(dir);
+
+	/* statahead is not allowed for this dir, there may be three causes:
+	 * 1. dir is not opened.
+	 * 2. statahead hit ratio is too low.
+	 * 3. previous stat started statahead thread failed. */
+	if (!lli->lli_sa_enabled)
+		return false;
+
 	/* not the same process, don't statahead */
 	if (lli->lli_opendir_pid != current_pid())
-		return -EAGAIN;
+		return false;
 
-	/* statahead has been stopped */
-	if (lli->lli_opendir_key == NULL)
-		return -EAGAIN;
-
-	ldd = ll_d2d(dentryp);
+	ldd = ll_d2d(dentry);
 	/*
 	 * When stats a dentry, the system trigger more than once "revalidate"
 	 * or "lookup", for "getattr", for "getxattr", and maybe for others.
@@ -1319,19 +1333,16 @@ d_need_statahead(struct inode *dir, struct dentry *dentryp)
 	 */
 	if (ldd && lli->lli_sai &&
 	    ldd->lld_sa_generation == lli->lli_sai->sai_generation)
-		return -EAGAIN;
+		return false;
 
-	return 1;
+	return true;
 }
 
 static inline int
 ll_statahead_enter(struct inode *dir, struct dentry **dentryp, int only_unplug)
 {
-	int ret;
-
-	ret = d_need_statahead(dir, *dentryp);
-	if (ret <= 0)
-		return ret;
+	if (!dentry_need_statahead(dir, *dentryp))
+		return -EAGAIN;
 
 	return do_statahead_enter(dir, dentryp, only_unplug);
 }

@@ -139,6 +139,7 @@ static struct ll_sb_info *ll_init_sbi(void)
 	sbi->ll_sa_max = LL_SA_RPC_DEF;
 	atomic_set(&sbi->ll_sa_total, 0);
 	atomic_set(&sbi->ll_sa_wrong, 0);
+	atomic_set(&sbi->ll_sa_running, 0);
 	atomic_set(&sbi->ll_agl_total, 0);
 	sbi->ll_flags |= LL_SBI_AGL_ENABLED;
 
@@ -773,22 +774,27 @@ static void client_common_put_super(struct super_block *sb)
 
 void ll_kill_super(struct super_block *sb)
 {
-        struct ll_sb_info *sbi;
-
-        ENTRY;
+	struct ll_sb_info *sbi;
+	ENTRY;
 
         /* not init sb ?*/
-        if (!(sb->s_flags & MS_ACTIVE))
-                return;
+	if (!(sb->s_flags & MS_ACTIVE))
+		return;
 
-        sbi = ll_s2sbi(sb);
-        /* we need restore s_dev from changed for clustred NFS before put_super
-         * because new kernels have cached s_dev and change sb->s_dev in
-         * put_super not affected real removing devices */
+	sbi = ll_s2sbi(sb);
+	/* we need restore s_dev from changed for clustred NFS before put_super
+	 * because new kernels have cached s_dev and change sb->s_dev in
+	 * put_super not affected real removing devices */
 	if (sbi) {
 		sb->s_dev = sbi->ll_sdev_orig;
 		sbi->ll_umounting = 1;
+
+		/* wait running statahead threads to quit */
+		while (atomic_read(&sbi->ll_sa_running) > 0)
+			schedule_timeout_and_set_state(TASK_UNINTERRUPTIBLE,
+							HZ >> 3);
 	}
+
 	EXIT;
 }
 
@@ -982,6 +988,7 @@ void ll_lli_init(struct ll_inode_info *lli)
 		lli->lli_sai = NULL;
 		spin_lock_init(&lli->lli_sa_lock);
 		lli->lli_opendir_pid = 0;
+		lli->lli_sa_enabled = 0;
 	} else {
 		mutex_init(&lli->lli_size_mutex);
 		lli->lli_symlink_name = NULL;
