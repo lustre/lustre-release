@@ -103,7 +103,7 @@ do {                                    \
 #define sfw_test_active(t)      (atomic_read(&(t)->tsi_nactive) != 0)
 #define sfw_batch_active(b)     (atomic_read(&(b)->bat_nactive) != 0)
 
-struct smoketest_framework {
+static struct smoketest_framework {
 	/* RPCs to be recycled */
 	struct list_head	fw_zombie_rpcs;
 	/* stopping sessions */
@@ -165,7 +165,7 @@ sfw_register_test (srpc_service_t *service, sfw_test_client_ops_t *cliops)
 	return 0;
 }
 
-void
+static void
 sfw_add_session_timer (void)
 {
         sfw_session_t *sn = sfw_data.fw_session;
@@ -185,7 +185,7 @@ sfw_add_session_timer (void)
         return;
 }
 
-int
+static int
 sfw_del_session_timer (void)
 {
         sfw_session_t *sn = sfw_data.fw_session;
@@ -261,7 +261,7 @@ sfw_session_removed (void)
 
 #endif
 
-void
+static void
 sfw_session_expired (void *data)
 {
 	sfw_session_t *sn = data;
@@ -307,7 +307,7 @@ sfw_init_session(sfw_session_t *sn, lst_sid_t sid,
 }
 
 /* completion handler for incoming framework RPCs */
-void
+static void
 sfw_server_rpc_done(struct srpc_server_rpc *rpc)
 {
 	struct srpc_service	*sv	= rpc->srpc_scd->scd_svc;
@@ -325,7 +325,7 @@ sfw_server_rpc_done(struct srpc_server_rpc *rpc)
         return;
 }
 
-void
+static void
 sfw_client_rpc_fini (srpc_client_rpc_t *rpc)
 {
 	LASSERT(rpc->crpc_bulk.bk_niov == 0);
@@ -350,7 +350,7 @@ sfw_client_rpc_fini (srpc_client_rpc_t *rpc)
 	spin_unlock(&sfw_data.fw_lock);
 }
 
-sfw_batch_t *
+static sfw_batch_t *
 sfw_find_batch (lst_bid_t bid)
 {
 	sfw_session_t *sn = sfw_data.fw_session;
@@ -366,7 +366,7 @@ sfw_find_batch (lst_bid_t bid)
 	return NULL;
 }
 
-sfw_batch_t *
+static sfw_batch_t *
 sfw_bid2batch (lst_bid_t bid)
 {
         sfw_session_t *sn = sfw_data.fw_session;
@@ -379,7 +379,7 @@ sfw_bid2batch (lst_bid_t bid)
                 return bat;
 
         LIBCFS_ALLOC(bat, sizeof(sfw_batch_t));
-        if (bat == NULL) 
+	if (bat == NULL)
                 return NULL;
 
 	bat->bat_error	 = 0;
@@ -392,7 +392,7 @@ sfw_bid2batch (lst_bid_t bid)
 	return bat;
 }
 
-int
+static int
 sfw_get_stats (srpc_stat_reqst_t *request, srpc_stat_reply_t *reply)
 {
         sfw_session_t  *sn = sfw_data.fw_session;
@@ -504,7 +504,7 @@ sfw_make_session(srpc_mksn_reqst_t *request, srpc_mksn_reply_t *reply)
 	return 0;
 }
 
-int
+static int
 sfw_remove_session (srpc_rmsn_reqst_t *request, srpc_rmsn_reply_t *reply)
 {
         sfw_session_t *sn = sfw_data.fw_session;
@@ -536,7 +536,7 @@ sfw_remove_session (srpc_rmsn_reqst_t *request, srpc_rmsn_reply_t *reply)
 	return 0;
 }
 
-int
+static int
 sfw_debug_session (srpc_debug_reqst_t *request, srpc_debug_reply_t *reply)
 {
         sfw_session_t *sn = sfw_data.fw_session;
@@ -545,7 +545,7 @@ sfw_debug_session (srpc_debug_reqst_t *request, srpc_debug_reply_t *reply)
                 reply->dbg_status = ESRCH;
                 reply->dbg_sid    = LST_INVALID_SID;
                 return 0;
-        } 
+	}
 
 	reply->dbg_status  = 0;
 	reply->dbg_sid     = sn->sn_id;
@@ -557,7 +557,7 @@ sfw_debug_session (srpc_debug_reqst_t *request, srpc_debug_reply_t *reply)
         return 0;
 }
 
-void
+static void
 sfw_test_rpc_fini (srpc_client_rpc_t *rpc)
 {
 	sfw_test_unit_t	    *tsu = rpc->crpc_priv;
@@ -585,7 +585,7 @@ sfw_test_buffers(sfw_test_instance_t *tsi)
 	return max(SFW_TEST_WI_MIN, nbuf + SFW_TEST_WI_EXTRA);
 }
 
-int
+static int
 sfw_load_test(struct sfw_test_instance *tsi)
 {
 	struct sfw_test_case	*tsc;
@@ -622,7 +622,7 @@ sfw_load_test(struct sfw_test_instance *tsi)
 	return 0;
 }
 
-void
+static void
 sfw_unload_test(struct sfw_test_instance *tsi)
 {
 	struct sfw_test_case *tsc;
@@ -642,7 +642,7 @@ sfw_unload_test(struct sfw_test_instance *tsi)
 	return;
 }
 
-void
+static void
 sfw_destroy_test_instance (sfw_test_instance_t *tsi)
 {
         srpc_client_rpc_t *rpc;
@@ -676,7 +676,7 @@ clean:
 	return;
 }
 
-void
+static void
 sfw_destroy_batch (sfw_batch_t *tsb)
 {
 	sfw_test_instance_t *tsi;
@@ -715,7 +715,7 @@ sfw_destroy_session (sfw_session_t *sn)
 	return;
 }
 
-void
+static void
 sfw_unpack_addtest_req(srpc_msg_t *msg)
 {
         srpc_test_reqst_t *req = &msg->msg_body.tes_reqst;
@@ -760,7 +760,7 @@ sfw_unpack_addtest_req(srpc_msg_t *msg)
 	return;
 }
 
-int
+static int
 sfw_add_test_instance (sfw_batch_t *tsb, srpc_server_rpc_t *rpc)
 {
         srpc_msg_t          *msg = &rpc->srpc_reqstbuf->buf_msg;
@@ -906,7 +906,7 @@ sfw_test_unit_done (sfw_test_unit_t *tsu)
 	return;
 }
 
-void
+static void
 sfw_test_rpc_done (srpc_client_rpc_t *rpc)
 {
         sfw_test_unit_t     *tsu = rpc->crpc_priv;
@@ -985,7 +985,7 @@ sfw_create_test_rpc(sfw_test_unit_t *tsu, lnet_process_id_t peer,
 	return 0;
 }
 
-int
+static int
 sfw_run_test (swi_workitem_t *wi)
 {
         sfw_test_unit_t     *tsu = wi->swi_workitem.wi_data;
@@ -1034,7 +1034,7 @@ test_done:
 	return 1;
 }
 
-int
+static int
 sfw_run_batch (sfw_batch_t *tsb)
 {
         swi_workitem_t      *wi;
@@ -1112,7 +1112,7 @@ sfw_stop_batch (sfw_batch_t *tsb, int force)
 	return 0;
 }
 
-int
+static int
 sfw_query_batch (sfw_batch_t *tsb, int testidx, srpc_batch_reply_t *reply)
 {
         sfw_test_instance_t *tsi;
@@ -1157,7 +1157,7 @@ sfw_alloc_pages(struct srpc_server_rpc *rpc, int cpt, int npages, int len,
 	return 0;
 }
 
-int
+static int
 sfw_add_test (srpc_server_rpc_t *rpc)
 {
         sfw_session_t     *sn = sfw_data.fw_session;
@@ -1227,7 +1227,7 @@ sfw_add_test (srpc_server_rpc_t *rpc)
         return 0;
 }
 
-int
+static int
 sfw_control_batch (srpc_batch_reqst_t *request, srpc_batch_reply_t *reply)
 {
         sfw_session_t *sn = sfw_data.fw_session;
@@ -1268,7 +1268,7 @@ sfw_control_batch (srpc_batch_reqst_t *request, srpc_batch_reply_t *reply)
         return 0;
 }
 
-int
+static int
 sfw_handle_server_rpc(struct srpc_server_rpc *rpc)
 {
 	struct srpc_service	*sv = rpc->srpc_scd->scd_svc;
@@ -1379,7 +1379,7 @@ sfw_handle_server_rpc(struct srpc_server_rpc *rpc)
 	return rc;
 }
 
-int
+static int
 sfw_bulk_ready(struct srpc_server_rpc *rpc, int status)
 {
 	struct srpc_service	*sv = rpc->srpc_scd->scd_svc;
@@ -1642,7 +1642,7 @@ sfw_post_rpc (srpc_client_rpc_t *rpc)
 	return;
 }
 
-static srpc_service_t sfw_services[] = 
+static srpc_service_t sfw_services[] =
 {
         {
                 /* sv_id */    SRPC_SERVICE_DEBUG,
@@ -1680,17 +1680,6 @@ static srpc_service_t sfw_services[] =
                 0
         }
 };
-
-extern sfw_test_client_ops_t ping_test_client;
-extern srpc_service_t        ping_test_service;
-extern void ping_init_test_client(void);
-extern void ping_init_test_service(void);
-
-extern sfw_test_client_ops_t brw_test_client;
-extern srpc_service_t        brw_test_service;
-extern void brw_init_test_client(void);
-extern void brw_init_test_service(void);
-
 
 int
 sfw_startup (void)

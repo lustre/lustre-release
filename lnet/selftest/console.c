@@ -62,7 +62,7 @@ do {                                                    \
 
 lstcon_session_t        console_session;
 
-void
+static void
 lstcon_node_get(lstcon_node_t *nd)
 {
         LASSERT (nd->nd_ref >= 1);
@@ -116,7 +116,7 @@ lstcon_node_find(lnet_process_id_t id, lstcon_node_t **ndpp, int create)
 	return 0;
 }
 
-void
+static void
 lstcon_node_put(lstcon_node_t *nd)
 {
 	lstcon_ndlink_t *ndl;
@@ -351,7 +351,7 @@ lstcon_group_move(lstcon_group_t *old, lstcon_group_t *new)
 	}
 }
 
-int
+static int
 lstcon_sesrpc_condition(int transop, lstcon_node_t *nd, void *arg)
 {
         lstcon_group_t *grp = (lstcon_group_t *)arg;
@@ -380,7 +380,7 @@ lstcon_sesrpc_condition(int transop, lstcon_node_t *nd, void *arg)
         return 1;
 }
 
-int
+static int
 lstcon_sesrpc_readent(int transop, srpc_msg_t *msg,
 		      lstcon_rpc_ent_t __user *ent_up)
 {
@@ -1013,7 +1013,7 @@ lstcon_batch_info(char *name, lstcon_test_batch_ent_t __user *ent_up,
 	return rc;
 }
 
-int
+static int
 lstcon_batrpc_condition(int transop, lstcon_node_t *nd, void *arg)
 {
         switch (transop) {
@@ -1156,7 +1156,7 @@ lstcon_batch_destroy(lstcon_batch_t *bat)
 	LIBCFS_FREE(bat, sizeof(lstcon_batch_t));
 }
 
-int
+static int
 lstcon_testrpc_condition(int transop, lstcon_node_t *nd, void *arg)
 {
 	lstcon_test_t	 *test;
@@ -1386,7 +1386,7 @@ out:
 	return rc;
 }
 
-int
+static int
 lstcon_test_find(lstcon_batch_t *batch, int idx, lstcon_test_t **testpp)
 {
 	lstcon_test_t *test;
@@ -1401,7 +1401,7 @@ lstcon_test_find(lstcon_batch_t *batch, int idx, lstcon_test_t **testpp)
 	return -ENOENT;
 }
 
-int
+static int
 lstcon_tsbrpc_readent(int transop, srpc_msg_t *msg,
 		      lstcon_rpc_ent_t __user *ent_up)
 {
@@ -1480,7 +1480,7 @@ lstcon_test_batch_query(char *name, int testidx, int client,
         return rc;
 }
 
-int
+static int
 lstcon_statrpc_readent(int transop, srpc_msg_t *msg,
 		       lstcon_rpc_ent_t __user *ent_up)
 {
@@ -1506,7 +1506,7 @@ lstcon_statrpc_readent(int transop, srpc_msg_t *msg,
         return 0;
 }
 
-int
+static int
 lstcon_ndlist_stat(struct list_head *ndlist,
 		   int timeout, struct list_head __user *result_up)
 {
@@ -1596,7 +1596,7 @@ lstcon_nodes_stat(int count, lnet_process_id_t __user *ids_up,
         return rc;
 }
 
-int
+static int
 lstcon_debug_ndlist(struct list_head *ndlist,
 		    struct list_head *translist,
 		    int timeout, struct list_head __user *result_up)
@@ -1725,8 +1725,6 @@ lstcon_new_session_id(lst_sid_t *sid)
         sid->ses_nid   = id.nid;
         sid->ses_stamp = cfs_time_current();
 }
-
-extern srpc_service_t lstcon_acceptor_service;
 
 int
 lstcon_session_new(char *name, int key, unsigned feats,
@@ -2012,8 +2010,8 @@ out:
         return rc;
 }
 
-srpc_service_t lstcon_acceptor_service;
-void lstcon_init_acceptor_service(void)
+static srpc_service_t lstcon_acceptor_service;
+static void lstcon_init_acceptor_service(void)
 {
         /* initialize selftest console acceptor service table */
         lstcon_acceptor_service.sv_name    = "join session";

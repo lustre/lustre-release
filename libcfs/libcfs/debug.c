@@ -57,7 +57,7 @@ CFS_MODULE_PARM(libcfs_debug, "i", int, 0644,
                 "Lustre kernel debug mask");
 EXPORT_SYMBOL(libcfs_debug);
 
-static unsigned int libcfs_debug_mb;
+unsigned int libcfs_debug_mb;
 CFS_MODULE_PARM(libcfs_debug_mb, "i", uint, 0644,
                 "Total debug buffer size.");
 EXPORT_SYMBOL(libcfs_debug_mb);
@@ -93,7 +93,7 @@ EXPORT_SYMBOL(libcfs_debug_binary);
 unsigned int libcfs_stack = 3 * THREAD_SIZE / 4;
 EXPORT_SYMBOL(libcfs_stack);
 
-static unsigned int portal_enter_debugger;
+unsigned int portal_enter_debugger;
 EXPORT_SYMBOL(portal_enter_debugger);
 
 unsigned int libcfs_catastrophe;

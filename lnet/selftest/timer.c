@@ -44,9 +44,9 @@
 
 
 /*
- * Timers are implemented as a sorted queue of expiry times. The queue 
- * is slotted, with each slot holding timers which expire in a 
- * 2**STTIMER_MINPOLL (8) second period. The timers in each slot are 
+ * Timers are implemented as a sorted queue of expiry times. The queue
+ * is slotted, with each slot holding timers which expire in a
+ * 2**STTIMER_MINPOLL (8) second period. The timers in each slot are
  * sorted by increasing expiry time. The number of slots is 2**7 (128),
  * to cover a time period of 1024 seconds into the future before wrapping.
  */
@@ -57,7 +57,7 @@
 #define STTIMER_SLOT(t)	       (&stt_data.stt_hash[(((t) >> STTIMER_MINPOLL) & \
                                                     (STTIMER_NSLOTS - 1))])
 
-struct st_timer_data {
+static struct st_timer_data {
 	spinlock_t		stt_lock;
 	/* start time of the slot processed previously */
 	cfs_time_t		stt_prev_slot;
@@ -127,7 +127,7 @@ stt_del_timer(stt_timer_t *timer)
 }
 
 /* called with stt_data.stt_lock held */
-int
+static int
 stt_expire_list(struct list_head *slot, cfs_time_t now)
 {
 	int	     expired = 0;
@@ -151,7 +151,7 @@ stt_expire_list(struct list_head *slot, cfs_time_t now)
 	return expired;
 }
 
-int
+static int
 stt_check_timers (cfs_time_t *last)
 {
         int        expired = 0;
@@ -175,7 +175,7 @@ stt_check_timers (cfs_time_t *last)
 
 #ifdef __KERNEL__
 
-int
+static int
 stt_timer_main (void *arg)
 {
         int rc = 0;
@@ -196,7 +196,7 @@ stt_timer_main (void *arg)
 	return rc;
 }
 
-int
+static int
 stt_start_timer_thread (void)
 {
 	struct task_struct *task;

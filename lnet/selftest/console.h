@@ -255,4 +255,7 @@ extern int lstcon_test_add(char *batch_name, int type, int loop,
 			   struct list_head __user *result_up);
 #endif
 
+int lstcon_console_init(void);
+int lstcon_console_fini(void);
+
 #endif

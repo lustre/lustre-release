@@ -138,7 +138,7 @@ lnet_notify_locked(lnet_peer_t *lp, int notifylnd, int alive, cfs_time_t when)
 	CDEBUG(D_NET, "set %s %d\n", libcfs_nid2str(lp->lp_nid), alive);
 }
 
-void
+static void
 lnet_ni_notify_locked(lnet_ni_t *ni, lnet_peer_t *lp)
 {
         int        alive;
@@ -276,8 +276,8 @@ static void lnet_shuffle_seed(void)
 }
 
 /* NB expects LNET_LOCK held */
-void
-lnet_add_route_to_rnet (lnet_remotenet_t *rnet, lnet_route_t *route)
+static void
+lnet_add_route_to_rnet(lnet_remotenet_t *rnet, lnet_route_t *route)
 {
 	unsigned int	  len = 0;
 	unsigned int	  offset = 0;
@@ -792,7 +792,7 @@ lnet_router_checker_event(lnet_event_t *event)
 	lnet_net_unlock(lp->lp_cpt);
 }
 
-void
+static void
 lnet_wait_known_routerstate(void)
 {
 	lnet_peer_t      *rtr;
@@ -841,7 +841,7 @@ lnet_router_ni_update_locked(lnet_peer_t *gw, __u32 net)
 	}
 }
 
-void
+static void
 lnet_update_ni_status_locked(void)
 {
 	lnet_ni_t	*ni;
@@ -881,7 +881,7 @@ lnet_update_ni_status_locked(void)
 	}
 }
 
-void
+static void
 lnet_destroy_rc_data(lnet_rc_data_t *rcd)
 {
 	LASSERT(list_empty(&rcd->rcd_list));
@@ -902,7 +902,7 @@ lnet_destroy_rc_data(lnet_rc_data_t *rcd)
 	LIBCFS_FREE(rcd, sizeof(*rcd));
 }
 
-lnet_rc_data_t *
+static lnet_rc_data_t *
 lnet_create_rc_data_locked(lnet_peer_t *gateway)
 {
 	lnet_rc_data_t		*rcd = NULL;
@@ -1360,7 +1360,7 @@ lnet_destroy_rtrbuf(lnet_rtrbuf_t *rb, int npages)
         LIBCFS_FREE(rb, sz);
 }
 
-lnet_rtrbuf_t *
+static lnet_rtrbuf_t *
 lnet_new_rtrbuf(lnet_rtrbufpool_t *rbp, int cpt)
 {
 	int            npages = rbp->rbp_npages;
@@ -1394,7 +1394,7 @@ lnet_new_rtrbuf(lnet_rtrbufpool_t *rbp, int cpt)
         return rb;
 }
 
-void
+static void
 lnet_rtrpool_free_bufs(lnet_rtrbufpool_t *rbp, int cpt)
 {
 	int		 npages = rbp->rbp_npages;
@@ -1487,7 +1487,7 @@ failed:
 	return -ENOMEM;
 }
 
-void
+static void
 lnet_rtrpool_init(lnet_rtrbufpool_t *rbp, int npages)
 {
 	INIT_LIST_HEAD(&rbp->rbp_msgs);

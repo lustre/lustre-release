@@ -44,7 +44,7 @@ CFS_MODULE_PARM(config_on_load, "i", int, 0444,
 
 static struct mutex lnet_config_mutex;
 
-int
+static int
 lnet_configure(void *arg)
 {
 	/* 'arg' only there so I can be passed to cfs_create_thread() */
@@ -64,11 +64,11 @@ lnet_configure(void *arg)
 	return rc;
 }
 
-int
+static int
 lnet_unconfigure (void)
 {
         int   refcount;
-        
+
         LNET_MUTEX_LOCK(&lnet_config_mutex);
 
         if (the_lnet.ln_niinit_self) {
@@ -84,7 +84,7 @@ lnet_unconfigure (void)
         return (refcount == 0) ? 0 : -EBUSY;
 }
 
-int
+static int
 lnet_dyn_configure(struct libcfs_ioctl_hdr *hdr)
 {
 	struct lnet_ioctl_config_data *conf =
@@ -109,7 +109,7 @@ lnet_dyn_configure(struct libcfs_ioctl_hdr *hdr)
 	return rc;
 }
 
-int
+static int
 lnet_dyn_unconfigure(struct libcfs_ioctl_hdr *hdr)
 {
 	struct lnet_ioctl_config_data *conf =
@@ -126,7 +126,7 @@ lnet_dyn_unconfigure(struct libcfs_ioctl_hdr *hdr)
 	return rc;
 }
 
-int
+static int
 lnet_ioctl(unsigned int cmd, struct libcfs_ioctl_hdr *hdr)
 {
 	int   rc;
@@ -163,7 +163,7 @@ lnet_ioctl(unsigned int cmd, struct libcfs_ioctl_hdr *hdr)
 
 DECLARE_IOCTL_HANDLER(lnet_ioctl_handler, lnet_ioctl);
 
-int
+static int
 init_lnet(void)
 {
         int                  rc;
@@ -189,7 +189,7 @@ init_lnet(void)
         RETURN(0);
 }
 
-void
+static void
 fini_lnet(void)
 {
         int rc;

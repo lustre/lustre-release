@@ -65,7 +65,7 @@ brw_client_fini (sfw_test_instance_t *tsi)
 	}
 }
 
-int
+static int
 brw_client_init (sfw_test_instance_t *tsi)
 {
 	sfw_session_t	 *sn = tsi->tsi_batch->bat_session;
@@ -130,7 +130,7 @@ brw_client_init (sfw_test_instance_t *tsi)
 #define BRW_MAGIC       0xeeb0eeb1eeb2eeb3ULL
 #define BRW_MSIZE       sizeof(__u64)
 
-int brw_inject_one_error (void)
+static int brw_inject_one_error(void)
 {
 	struct timeval tv;
 
@@ -147,8 +147,8 @@ int brw_inject_one_error (void)
 	return brw_inject_errors--;
 }
 
-void
-brw_fill_page (struct page *pg, int pattern, __u64 magic)
+static void
+brw_fill_page(struct page *pg, int pattern, __u64 magic)
 {
 	char *addr = page_address(pg);
         int   i;
@@ -177,8 +177,8 @@ brw_fill_page (struct page *pg, int pattern, __u64 magic)
         return;
 }
 
-int
-brw_check_page (struct page *pg, int pattern, __u64 magic)
+static int
+brw_check_page(struct page *pg, int pattern, __u64 magic)
 {
 	char  *addr = page_address(pg);
         __u64  data = 0; /* make compiler happy */
@@ -217,8 +217,8 @@ bad_data:
         return 1;
 }
 
-void
-brw_fill_bulk (srpc_bulk_t *bk, int pattern, __u64 magic)
+static void
+brw_fill_bulk(srpc_bulk_t *bk, int pattern, __u64 magic)
 {
         int         i;
 	struct page *pg;
@@ -234,8 +234,8 @@ brw_fill_bulk (srpc_bulk_t *bk, int pattern, __u64 magic)
         }
 }
 
-int
-brw_check_bulk (srpc_bulk_t *bk, int pattern, __u64 magic)
+static int
+brw_check_bulk(srpc_bulk_t *bk, int pattern, __u64 magic)
 {
         int         i;
 	struct page *pg;
@@ -366,8 +366,8 @@ out:
         return;
 }
 
-void
-brw_server_rpc_done (srpc_server_rpc_t *rpc)
+static void
+brw_server_rpc_done(srpc_server_rpc_t *rpc)
 {
         srpc_bulk_t *blk = rpc->srpc_bulk;
 
@@ -385,8 +385,8 @@ brw_server_rpc_done (srpc_server_rpc_t *rpc)
         sfw_free_pages(rpc);
 }
 
-int
-brw_bulk_ready (srpc_server_rpc_t *rpc, int status)
+static int
+brw_bulk_ready(srpc_server_rpc_t *rpc, int status)
 {
         __u64             magic = BRW_MAGIC;
         srpc_brw_reply_t *reply = &rpc->srpc_replymsg.msg_body.brw_reply;
@@ -421,7 +421,7 @@ brw_bulk_ready (srpc_server_rpc_t *rpc, int status)
         return 0;
 }
 
-int
+static int
 brw_server_handle(struct srpc_server_rpc *rpc)
 {
 	struct srpc_service	*sv = rpc->srpc_scd->scd_svc;

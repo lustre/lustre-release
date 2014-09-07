@@ -43,7 +43,7 @@ static int   accept_port    = 988;
 static int   accept_backlog = 127;
 static int   accept_timeout = 5;
 
-struct {
+static struct {
 	int			pta_shutdown;
 	cfs_socket_t		*pta_sock;
 	struct completion	pta_signal;
@@ -79,7 +79,7 @@ CFS_MODULE_PARM(accept_timeout, "i", int, 0644,
 
 static char *accept_type = NULL;
 
-int
+static int
 lnet_acceptor_get_tunables(void)
 {
         /* Userland acceptor uses 'accept_type' instead of 'accept', due to
@@ -259,7 +259,7 @@ lnet_acceptor_get_tunables()
 
 /* Below is the code common for both kernel and MT user-space */
 
-int
+static int
 lnet_accept(cfs_socket_t *sock, __u32 magic)
 {
         lnet_acceptor_connreq_t cr;
@@ -386,7 +386,7 @@ lnet_accept(cfs_socket_t *sock, __u32 magic)
         return rc;
 }
 
-int
+static int
 lnet_acceptor(void *arg)
 {
         cfs_socket_t  *newsock;

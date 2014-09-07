@@ -801,9 +801,9 @@ int llog_cat_cleanup(const struct lu_env *env, struct llog_handle *cathandle,
 	return rc;
 }
 
-static int cat_cancel_cb(const struct lu_env *env,
-			 struct llog_handle *cathandle,
-			 struct llog_rec_hdr *rec, void *data)
+int cat_cancel_cb(const struct lu_env *env,
+		  struct llog_handle *cathandle,
+		  struct llog_rec_hdr *rec, void *data)
 {
 	struct llog_logid_rec	*lir = (struct llog_logid_rec *)rec;
 	struct llog_handle	*loghandle;

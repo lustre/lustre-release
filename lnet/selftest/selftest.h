@@ -646,4 +646,14 @@ srpc_wait_service_shutdown(srpc_service_t *sv)
         }
 }
 
+extern sfw_test_client_ops_t ping_test_client;
+extern srpc_service_t        ping_test_service;
+void ping_init_test_client(void);
+void ping_init_test_service(void);
+
+extern sfw_test_client_ops_t brw_test_client;
+extern srpc_service_t        brw_test_service;
+void brw_init_test_client(void);
+void brw_init_test_service(void);
+
 #endif /* __SELFTEST_SELFTEST_H__ */

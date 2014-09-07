@@ -371,7 +371,7 @@ kiblnd_initstrtunable(char *space, char *str, int size)
         space[size-1] = 0;
 }
 
-void
+static void
 kiblnd_sysctl_init (void)
 {
 	kiblnd_initstrtunable(ipif_basename_space, ipif_name,
@@ -384,7 +384,7 @@ kiblnd_sysctl_init (void)
 		CWARN("Can't setup /proc tunables\n");
 }
 
-void
+static void
 kiblnd_sysctl_fini (void)
 {
 	if (kiblnd_tunables.kib_sysctl != NULL)
@@ -393,12 +393,12 @@ kiblnd_sysctl_fini (void)
 
 #else
 
-void
+static void
 kiblnd_sysctl_init (void)
 {
 }
 
-void
+static void
 kiblnd_sysctl_fini (void)
 {
 }

@@ -44,7 +44,7 @@
 
 #define LST_PING_TEST_MAGIC     0xbabeface
 
-int ping_srv_workitems = SFW_TEST_WI_MAX;
+static int ping_srv_workitems = SFW_TEST_WI_MAX;
 CFS_MODULE_PARM(ping_srv_workitems, "i", int, 0644, "# PING server workitems");
 
 typedef struct {

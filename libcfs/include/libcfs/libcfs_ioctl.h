@@ -110,7 +110,7 @@ struct libcfs_ioctl_handler {
 };
 
 #define DECLARE_IOCTL_HANDLER(ident, func)			\
-	struct libcfs_ioctl_handler ident = {			\
+	static struct libcfs_ioctl_handler ident = {		\
 		/* .item = */ LIST_HEAD_INIT(ident.item),	\
 		/* .handle_ioctl = */ func			\
 	}

@@ -68,7 +68,6 @@ static int rnet_htable_size = LNET_REMOTE_NETS_HASH_DEFAULT;
 CFS_MODULE_PARM(rnet_htable_size, "i", int, 0444,
 		"size of remote network hash table");
 
-static void lnet_ping_target_fini(void);
 static int lnet_ping(lnet_process_id_t id, int timeout_ms,
 		     lnet_process_id_t *ids, int n_ids);
 

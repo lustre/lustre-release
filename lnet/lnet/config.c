@@ -48,7 +48,7 @@ static int lnet_tbnob = 0;			/* track text buf allocation */
 #define LNET_MAX_TEXTBUF_NOB     (64<<10)	/* bound allocation */
 #define LNET_SINGLE_TEXTBUF_NOB  (4<<10)
 
-void
+static void
 lnet_syntax(char *name, char *str, int offset, int width)
 {
         static char dots[LNET_SINGLE_TEXTBUF_NOB];
@@ -65,7 +65,7 @@ lnet_syntax(char *name, char *str, int offset, int width)
                             (width < 1) ? 0 : width - 1, dashes);
 }
 
-int
+static int
 lnet_issep (char c)
 {
 	switch (c) {
@@ -400,7 +400,7 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 	return -EINVAL;
 }
 
-struct lnet_text_buf *lnet_new_text_buf(int str_len)
+static struct lnet_text_buf *lnet_new_text_buf(int str_len)
 {
 	struct lnet_text_buf *ltb;
 	int nob;
@@ -428,14 +428,14 @@ struct lnet_text_buf *lnet_new_text_buf(int str_len)
 	return ltb;
 }
 
-void
+static void
 lnet_free_text_buf(struct lnet_text_buf *ltb)
 {
 	lnet_tbnob -= ltb->ltb_size;
 	LIBCFS_FREE(ltb, ltb->ltb_size);
 }
 
-void
+static void
 lnet_free_text_bufs(struct list_head *tbs)
 {
 	struct lnet_text_buf  *ltb;
@@ -463,7 +463,7 @@ lnet_print_text_bufs(struct list_head *tbs)
 	CDEBUG(D_WARNING, "%d allocated\n", lnet_tbnob);
 }
 
-int
+static int
 lnet_str2tbs_sep(struct list_head *tbs, char *str)
 {
 	struct list_head  pending;
@@ -521,7 +521,7 @@ lnet_str2tbs_sep(struct list_head *tbs, char *str)
 	return 0;
 }
 
-int
+static int
 lnet_expand1tb(struct list_head *list,
 	       char *str, char *sep1, char *sep2,
 	       char *item, int itemlen)
@@ -546,7 +546,7 @@ lnet_expand1tb(struct list_head *list,
 	return 0;
 }
 
-int
+static int
 lnet_str2tbs_expand(struct list_head *tbs, char *str)
 {
 	char		  num[16];
@@ -626,7 +626,7 @@ lnet_str2tbs_expand(struct list_head *tbs, char *str)
 	return -1;
 }
 
-int
+static int
 lnet_parse_hops (char *str, unsigned int *hops)
 {
         int     len = strlen(str);
@@ -639,7 +639,7 @@ lnet_parse_hops (char *str, unsigned int *hops)
 
 #define LNET_PRIORITY_SEPARATOR (':')
 
-int
+static int
 lnet_parse_priority(char *str, unsigned int *priority, char **token)
 {
 	int   nob;
@@ -669,7 +669,7 @@ lnet_parse_priority(char *str, unsigned int *priority, char **token)
 	return 0;
 }
 
-int
+static int
 lnet_parse_route (char *str, int *im_a_router)
 {
 	/* static scratch buffer OK (single threaded) */
@@ -813,7 +813,7 @@ out:
 	return myrc;
 }
 
-int
+static int
 lnet_parse_route_tbs(struct list_head *tbs, int *im_a_router)
 {
 	struct lnet_text_buf   *ltb;
@@ -854,7 +854,7 @@ lnet_parse_routes (char *routes, int *im_a_router)
 	return rc;
 }
 
-int
+static int
 lnet_match_network_token(char *token, int len, __u32 *ipaddrs, int nip)
 {
 	struct list_head list = LIST_HEAD_INIT(list);
@@ -873,7 +873,7 @@ lnet_match_network_token(char *token, int len, __u32 *ipaddrs, int nip)
         return rc;
 }
 
-int
+static int
 lnet_match_network_tokens(char *net_entry, __u32 *ipaddrs, int nip)
 {
         static char tokens[LNET_SINGLE_TEXTBUF_NOB];
@@ -930,7 +930,7 @@ lnet_match_network_tokens(char *net_entry, __u32 *ipaddrs, int nip)
         return 1;
 }
 
-__u32
+static __u32
 lnet_netspec2net(char *netspec)
 {
         char   *bracket = strchr(netspec, '(');
@@ -947,7 +947,7 @@ lnet_netspec2net(char *netspec)
         return net;
 }
 
-int
+static int
 lnet_splitnets(char *source, struct list_head *nets)
 {
         int               offset = 0;
@@ -1029,7 +1029,7 @@ lnet_splitnets(char *source, struct list_head *nets)
 	}
 }
 
-int
+static int
 lnet_match_networks (char **networksp, char *ip2nets, __u32 *ipaddrs, int nip)
 {
 	static char	  networks[LNET_SINGLE_TEXTBUF_NOB];
@@ -1150,13 +1150,13 @@ lnet_match_networks (char **networksp, char *ip2nets, __u32 *ipaddrs, int nip)
 }
 
 #ifdef __KERNEL__
-void
+static void
 lnet_ipaddr_free_enumeration(__u32 *ipaddrs, int nip)
 {
         LIBCFS_FREE(ipaddrs, nip * sizeof(*ipaddrs));
 }
 
-int
+static int
 lnet_ipaddr_enumerate (__u32 **ipaddrsp)
 {
         int        up;
@@ -1225,7 +1225,7 @@ lnet_ipaddr_enumerate (__u32 **ipaddrsp)
 int
 lnet_parse_ip2nets (char **networksp, char *ip2nets)
 {
-        __u32     *ipaddrs;
+	__u32     *ipaddrs = NULL;
         int        nip = lnet_ipaddr_enumerate(&ipaddrs);
         int        rc;
 
