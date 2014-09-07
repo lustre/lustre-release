@@ -44,7 +44,7 @@
 #include <lnet/nidstr.h>
 #include "tracefile.h"
 
-void
+static void
 kportal_memhog_free (struct libcfs_device_userstate *ldu)
 {
 	struct page **level0p = &ldu->ldu_memhog_root_page;
@@ -87,7 +87,7 @@ kportal_memhog_free (struct libcfs_device_userstate *ldu)
 	LASSERT(ldu->ldu_memhog_pages == 0);
 }
 
-int
+static int
 kportal_memhog_alloc(struct libcfs_device_userstate *ldu, int npages,
 		     gfp_t flags)
 {
@@ -309,20 +309,9 @@ struct cfs_psdev_ops libcfs_psdev_ops = {
         libcfs_ioctl
 };
 
-extern int insert_proc(void);
-extern void remove_proc(void);
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Portals v3.1");
 MODULE_LICENSE("GPL");
-
-extern struct miscdevice libcfs_dev;
-extern struct rw_semaphore cfs_tracefile_sem;
-extern struct mutex cfs_trace_thread_mutex;
-extern struct cfs_wi_sched *cfs_sched_rehash;
-
-extern void libcfs_init_nidstrings(void);
-extern int libcfs_arch_init(void);
-extern void libcfs_arch_cleanup(void);
 
 static int init_libcfs_module(void)
 {

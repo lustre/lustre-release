@@ -31,6 +31,7 @@
 
 #include <linux/module.h>
 #include <linux/zutil.h>
+#include <libcfs/linux/linux-crypto.h>
 #include <crypto/internal/hash.h>
 
 

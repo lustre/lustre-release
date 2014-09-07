@@ -31,6 +31,7 @@
 
 #include <linux/module.h>
 #include <linux/crc32.h>
+#include <libcfs/linux/linux-crypto.h>
 #include <crypto/internal/hash.h>
 
 #define CHKSUM_BLOCK_SIZE	1

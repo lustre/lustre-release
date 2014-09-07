@@ -298,4 +298,7 @@ static inline void *__container_of(const void *ptr, unsigned long shift)
 
 #define _LIBCFS_H
 
+int libcfs_arch_init(void);
+void libcfs_arch_cleanup(void);
+
 #endif /* _LIBCFS_H */

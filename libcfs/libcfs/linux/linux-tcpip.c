@@ -51,7 +51,7 @@ static inline wait_queue_head_t *sk_sleep(struct sock *sk)
 }
 #endif
 
-int
+static int
 libcfs_sock_ioctl(int cmd, unsigned long arg)
 {
 	mm_segment_t    oldmm = get_fs();

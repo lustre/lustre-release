@@ -57,7 +57,7 @@ CFS_MODULE_PARM(libcfs_debug, "i", int, 0644,
                 "Lustre kernel debug mask");
 EXPORT_SYMBOL(libcfs_debug);
 
-unsigned int libcfs_debug_mb = 0;
+static unsigned int libcfs_debug_mb;
 CFS_MODULE_PARM(libcfs_debug_mb, "i", uint, 0644,
                 "Total debug buffer size.");
 EXPORT_SYMBOL(libcfs_debug_mb);
@@ -93,7 +93,7 @@ EXPORT_SYMBOL(libcfs_debug_binary);
 unsigned int libcfs_stack = 3 * THREAD_SIZE / 4;
 EXPORT_SYMBOL(libcfs_stack);
 
-unsigned int portal_enter_debugger;
+static unsigned int portal_enter_debugger;
 EXPORT_SYMBOL(portal_enter_debugger);
 
 unsigned int libcfs_catastrophe;
@@ -115,7 +115,7 @@ static wait_queue_head_t debug_ctlwq;
 char libcfs_debug_file_path_arr[PATH_MAX] = LIBCFS_DEBUG_FILE_PATH_DEFAULT;
 
 /* We need to pass a pointer here, but elsewhere this must be a const */
-char *libcfs_debug_file_path;
+static char *libcfs_debug_file_path;
 CFS_MODULE_PARM(libcfs_debug_file_path, "s", charp, 0644,
                 "Path for dumping debug logs, "
                 "set 'NONE' to prevent log dumping");
@@ -124,7 +124,7 @@ int libcfs_panic_in_progress;
 
 /* libcfs_debug_token2mask() expects the returned
  * string in lower-case */
-const char *libcfs_debug_subsys2str(int subsys)
+static const char *libcfs_debug_subsys2str(int subsys)
 {
 	static const char *libcfs_debug_subsystems[] = LIBCFS_DEBUG_SUBSYS_NAMES;
 
@@ -136,7 +136,7 @@ const char *libcfs_debug_subsys2str(int subsys)
 
 /* libcfs_debug_token2mask() expects the returned
  * string in lower-case */
-const char *libcfs_debug_dbg2str(int debug)
+static const char *libcfs_debug_dbg2str(int debug)
 {
 	static const char *libcfs_debug_masks[] = LIBCFS_DEBUG_MASKS_NAMES;
 
@@ -251,7 +251,7 @@ void libcfs_debug_dumplog_internal(void *arg)
 	POP_JOURNAL;
 }
 
-int libcfs_debug_dumplog_thread(void *arg)
+static int libcfs_debug_dumplog_thread(void *arg)
 {
 	libcfs_debug_dumplog_internal(arg);
 	wake_up(&debug_ctlwq);

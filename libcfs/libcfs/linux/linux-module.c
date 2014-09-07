@@ -100,8 +100,6 @@ failed:
 	RETURN(err);
 }
 
-extern struct cfs_psdev_ops          libcfs_psdev_ops;
-
 static int
 libcfs_psdev_open(struct inode * inode, struct file * file)
 {

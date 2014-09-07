@@ -52,6 +52,12 @@ typedef enum {
 extern char      cfs_tracefile[TRACEFILE_NAME_SIZE];
 extern long long cfs_tracefile_size;
 
+extern char lnet_upcall[1024];
+/**
+ * The path of debug log dump upcall script.
+ */
+extern char lnet_debug_log_upcall[1024];
+
 extern void libcfs_run_debug_log_upcall(char *file);
 
 int  cfs_tracefile_init_arch(void);
@@ -90,6 +96,9 @@ extern void libcfs_register_panic_notifier(void);
 extern void libcfs_unregister_panic_notifier(void);
 extern int  libcfs_panic_in_progress;
 extern int  cfs_trace_max_debug_mb(void);
+
+extern struct mutex cfs_trace_thread_mutex;
+extern struct rw_semaphore cfs_tracefile_sem;
 
 #define TCD_MAX_PAGES (5 << (20 - PAGE_CACHE_SHIFT))
 #define TCD_STOCK_PAGES (TCD_MAX_PAGES)

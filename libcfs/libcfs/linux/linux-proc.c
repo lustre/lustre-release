@@ -70,11 +70,6 @@
 #ifdef CONFIG_SYSCTL
 static struct ctl_table_header *lnet_table_header = NULL;
 #endif
-extern char lnet_upcall[1024];
-/**
- * The path of debug log dump upcall script.
- */
-extern char lnet_debug_log_upcall[1024];
 
 int lprocfs_call_handler(void *data, int write, loff_t *ppos,
 			 void __user *buffer, size_t *lenp,

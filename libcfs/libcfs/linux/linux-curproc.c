@@ -82,7 +82,7 @@ int cfs_cap_raised(cfs_cap_t cap)
         return cap_raised(current_cap(), cfs_cap_unpack(cap));
 }
 
-void cfs_kernel_cap_pack(kernel_cap_t kcap, cfs_cap_t *cap)
+static void cfs_kernel_cap_pack(kernel_cap_t kcap, cfs_cap_t *cap)
 {
 #if defined (_LINUX_CAPABILITY_VERSION) && _LINUX_CAPABILITY_VERSION == 0x19980330
         *cap = cfs_cap_pack(kcap);
@@ -96,7 +96,7 @@ void cfs_kernel_cap_pack(kernel_cap_t kcap, cfs_cap_t *cap)
 #endif
 }
 
-void cfs_kernel_cap_unpack(kernel_cap_t *kcap, cfs_cap_t cap)
+static void cfs_kernel_cap_unpack(kernel_cap_t *kcap, cfs_cap_t cap)
 {
 #if defined (_LINUX_CAPABILITY_VERSION) && _LINUX_CAPABILITY_VERSION == 0x19980330
         *kcap = cfs_cap_unpack(cap);
