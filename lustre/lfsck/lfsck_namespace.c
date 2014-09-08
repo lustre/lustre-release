@@ -115,9 +115,14 @@ static void lfsck_namespace_cpu_to_le(struct lfsck_namespace *des,
 }
 
 /**
- * \retval +ve: the lfsck_namespace is broken, the caller should reset it.
- * \retval 0: succeed.
- * \retval -ve: failed cases.
+ * Load namespace LFSCK statistics information from the trace file.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] com	pointer to the lfsck component
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure or absence the
+ *			namespace LFSCK trace file
  */
 static int lfsck_namespace_load(const struct lu_env *env,
 				struct lfsck_component *com)
@@ -138,21 +143,24 @@ static int lfsck_namespace_load(const struct lu_env *env,
 			      "0x%x != 0x%x\n",
 			      lfsck_lfsck2name(com->lc_lfsck),
 			      ns->ln_magic, LFSCK_NAMESPACE_MAGIC);
-			rc = 1;
+			rc = -ESTALE;
 		} else {
 			rc = 0;
 		}
-	} else if (rc != -ENODATA) {
-		CERROR("%.16s: fail to load lfsck_namespace, expected = %d, "
-		       "rc = %d\n", lfsck_lfsck2name(com->lc_lfsck), len, rc);
-		if (rc >= 0)
-			rc = 1;
+	} else {
+		if (rc != -ENODATA)
+			CERROR("%.16s: fail to load lfsck_namespace, "
+			       "expected = %d, rc = %d\n",
+			       lfsck_lfsck2name(com->lc_lfsck), len, rc);
+		else if (rc > 0)
+			rc = -ESTALE;
 	}
+
 	return rc;
 }
 
 static int lfsck_namespace_store(const struct lu_env *env,
-				 struct lfsck_component *com, bool init)
+				 struct lfsck_component *com)
 {
 	struct dt_object	*obj    = com->lc_obj;
 	struct lfsck_instance	*lfsck  = com->lc_lfsck;
@@ -189,8 +197,7 @@ static int lfsck_namespace_store(const struct lu_env *env,
 
 	rc = dt_xattr_set(env, obj,
 			  lfsck_buf_get(env, com->lc_file_disk, len),
-			  XATTR_NAME_LFSCK_NAMESPACE,
-			  init ? LU_XATTR_CREATE : LU_XATTR_REPLACE,
+			  XATTR_NAME_LFSCK_NAMESPACE, 0,
 			  handle, BYPASS_CAPA);
 	if (rc != 0)
 		CERROR("%.16s: fail to store lfsck_namespace, len = %d, "
@@ -213,7 +220,7 @@ static int lfsck_namespace_init(const struct lu_env *env,
 	ns->ln_magic = LFSCK_NAMESPACE_MAGIC;
 	ns->ln_status = LS_INIT;
 	down_write(&com->lc_sem);
-	rc = lfsck_namespace_store(env, com, true);
+	rc = lfsck_namespace_store(env, com);
 	up_write(&com->lc_sem);
 	return rc;
 }
@@ -696,7 +703,7 @@ static int lfsck_namespace_reset(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(out, rc);
 
-	rc = lfsck_namespace_store(env, com, true);
+	rc = lfsck_namespace_store(env, com);
 
 	GOTO(out, rc);
 
@@ -746,7 +753,7 @@ static int lfsck_namespace_checkpoint(const struct lu_env *env,
 		com->lc_new_checked = 0;
 	}
 
-	rc = lfsck_namespace_store(env, com, false);
+	rc = lfsck_namespace_store(env, com);
 
 	up_write(&com->lc_sem);
 	return rc;
@@ -1084,7 +1091,7 @@ static int lfsck_namespace_post(const struct lu_env *env,
 		com->lc_new_checked = 0;
 	}
 
-	rc = lfsck_namespace_store(env, com, false);
+	rc = lfsck_namespace_store(env, com);
 
 	up_write(&com->lc_sem);
 	return rc;
@@ -1458,7 +1465,7 @@ checkpoint:
 			ns->ln_time_last_checkpoint = cfs_time_current_sec();
 			ns->ln_objs_checked_phase2 += com->lc_new_checked;
 			com->lc_new_checked = 0;
-			rc = lfsck_namespace_store(env, com, false);
+			rc = lfsck_namespace_store(env, com);
 			up_write(&com->lc_sem);
 			if (rc != 0)
 				GOTO(put, rc);
@@ -1515,7 +1522,7 @@ fini:
 		spin_unlock(&lfsck->li_lock);
 	}
 
-	rc = lfsck_namespace_store(env, com, false);
+	rc = lfsck_namespace_store(env, com);
 
 	up_write(&com->lc_sem);
 	return rc;
@@ -1583,10 +1590,10 @@ int lfsck_namespace_setup(const struct lu_env *env,
 		GOTO(out, rc);
 
 	rc = lfsck_namespace_load(env, com);
-	if (rc > 0)
-		rc = lfsck_namespace_reset(env, com, true);
-	else if (rc == -ENODATA)
+	if (rc == -ENODATA)
 		rc = lfsck_namespace_init(env, com);
+	else if (rc < 0)
+		rc = lfsck_namespace_reset(env, com, true);
 	if (rc != 0)
 		GOTO(out, rc);
 
