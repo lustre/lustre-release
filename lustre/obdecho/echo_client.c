@@ -501,7 +501,7 @@ static int echo_alloc_memmd(struct echo_device *ed,
 	}
 
 	loi_init((*lsmp)->lsm_oinfo[0]);
-	(*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES;
+	(*lsmp)->lsm_maxbytes = LUSTRE_EXT3_STRIPE_MAXBYTES;
 	ostid_set_seq_echo(&(*lsmp)->lsm_oi);
 
 	RETURN(lsm_size);
