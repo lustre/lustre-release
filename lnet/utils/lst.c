@@ -50,19 +50,14 @@ lst_sid_t LST_INVALID_SID = {LNET_NID_ANY, -1};
 static lst_sid_t           session_id;
 static int                 session_key;
 
-#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 50, 0)
-/* assume all nodes can understand feature LST_FEAT_BULK_LEN */
-static unsigned		   session_features = LST_FEATS_MASK;
-#else
-static unsigned		   session_features = LST_FEATS_EMPTY;
-#endif
-
-static lstcon_trans_stat_t trans_stat;
+/* All nodes running 2.6.50 or later understand feature LST_FEAT_BULK_LEN */
+static unsigned		session_features = LST_FEATS_MASK;
+static lstcon_trans_stat_t	trans_stat;
 
 typedef struct list_string {
-        struct list_string *lstr_next;
-        int                 lstr_sz;
-        char                lstr_str[0];
+	struct list_string *lstr_next;
+	int                 lstr_sz;
+	char                lstr_str[0];
 } lstr_t;
 
 #ifndef offsetof
