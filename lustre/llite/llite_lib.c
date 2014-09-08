@@ -1477,8 +1477,8 @@ void ll_clear_inode(struct inode *inode)
 	EXIT;
 }
 
-int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data,
-                  struct md_open_data **mod)
+static int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data,
+			 struct md_open_data **mod)
 {
         struct lustre_md md;
         struct inode *inode = dentry->d_inode;

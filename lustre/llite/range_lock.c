@@ -90,7 +90,7 @@ static inline struct range_lock *next_lock(struct range_lock *lock)
  *				overlapping range node
  * \retval INTERVAL_ITER_STOP	indicate to stop the search
  */
-enum interval_iter range_unlock_cb(struct interval_node *node, void *arg)
+static enum interval_iter range_unlock_cb(struct interval_node *node, void *arg)
 {
 	struct range_lock *lock = arg;
 	struct range_lock *overlap = node2rangelock(node);
@@ -171,7 +171,7 @@ void range_unlock(struct range_lock_tree *tree, struct range_lock *lock)
  *				overlapping range node
  * \retval INTERVAL_ITER_STOP	indicate to stop the search
  */
-enum interval_iter range_lock_cb(struct interval_node *node, void *arg)
+static enum interval_iter range_lock_cb(struct interval_node *node, void *arg)
 {
 	struct range_lock *lock = (struct range_lock *)arg;
 	struct range_lock *overlap = node2rangelock(node);

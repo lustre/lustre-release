@@ -776,7 +776,7 @@ static int name##_single_open(struct inode *inode, struct file *file)	\
 	LPROCFS_ENTRY_CHECK(PDE(inode));				\
 	return single_open(file, name##_seq_show, PDE_DATA(inode));	\
 }									\
-struct file_operations name##_fops = {					\
+static const struct file_operations name##_fops = {			\
 	.owner	 = THIS_MODULE,						\
 	.open	 = name##_single_open,					\
 	.read	 = seq_read,						\

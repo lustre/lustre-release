@@ -47,9 +47,9 @@ struct proc_dir_entry *proc_lustre_fs_root;
 
 #ifdef LPROCFS
 /* /proc/lustre/llite mount point registration */
-struct file_operations ll_rw_extents_stats_fops;
-struct file_operations ll_rw_extents_stats_pp_fops;
-struct file_operations ll_rw_offset_stats_fops;
+static const struct file_operations ll_rw_extents_stats_fops;
+static const struct file_operations ll_rw_extents_stats_pp_fops;
+static const struct file_operations ll_rw_offset_stats_fops;
 
 static int ll_blksize_seq_show(struct seq_file *m, void *v)
 {

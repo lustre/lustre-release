@@ -1081,9 +1081,10 @@ struct vvp_thread_info {
         struct ll_cl_context vti_io_ctx;
 };
 
+extern struct lu_context_key vvp_key;
+
 static inline struct vvp_thread_info *vvp_env_info(const struct lu_env *env)
 {
-        extern struct lu_context_key vvp_key;
         struct vvp_thread_info      *info;
 
         info = lu_context_key_get(&env->le_ctx, &vvp_key);
@@ -1105,9 +1106,10 @@ struct vvp_session {
         struct vvp_io         vs_ios;
 };
 
+extern struct lu_context_key vvp_session_key;
+
 static inline struct vvp_session *vvp_env_session(const struct lu_env *env)
 {
-        extern struct lu_context_key vvp_session_key;
         struct vvp_session *ses;
 
         ses = lu_context_key_get(env->le_ses, &vvp_session_key);
