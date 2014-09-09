@@ -810,17 +810,29 @@ lfs help
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>The <literal>filefrag</literal> utility reports the extent of fragmentation in a given file. Initially, <literal>filefrag</literal> attempts to obtain extent information using <literal>FIEMAP ioctl</literal>, which is efficient and fast. If <literal>FIEMAP</literal> is not supported, then <literal>filefrag</literal> uses <literal>FIBMAP</literal>.</para>
-      <note>
-        <para>The Lustre software only supports <literal>FIEMAP ioctl</literal>. <literal>FIBMAP
-            ioctl</literal> is not supported.</para>
-      </note>
+      <para>The <literal>filefrag</literal> utility reports the extent of fragmentation in a given file.
+      The <literal>filefrag</literal> utility obtains the extent information
+      from Lustre files using the <literal>FIEMAP ioctl</literal>, which is
+      efficient and fast, even for very large files.</para>
       <para>In default mode <footnote>
-          <para>The default mode is faster than the verbose/extent mode.</para>
-        </footnote>, <literal>filefrag</literal> returns the number of physically discontiguous
-        extents in the file. In extent or verbose mode, each extent is printed with details. For a
-        Lustre file system, the extents are printed in device offset order, not logical offset
-        order.</para>
+          <para>The default mode is faster than the verbose/extent mode since
+          it only counts the number of extents.</para>
+        </footnote>, <literal>filefrag</literal> prints the number of physically
+        discontiguous extents in the file. In extent or verbose mode, each
+        extent is printed with details such as the blocks allocated on each OST.
+        For a Lustre file system, the extents are printed in device offset order
+        (i.e. all of the extents for one OST first, then the next OST, etc.),
+        not file logical offset order.  If the file logical offset order was
+	used, the Lustre striping would make the output very verbose and
+	difficult to see if there was file fragmentation or not.</para>
+      <note>
+        <para>Note that as long as a file has extent lengths of tens of
+        megabytes or more (i.e. <replaceable>read_bandwidth * seek_time >
+	extent_length</replaceable>), the read performance for the file will
+	not be significantly impacted by fragmentation, since file readahead
+	can fully utilize the disk disk bandwidth even with occasional seeks.
+        </para>
+      </note>
     </section>
     <section remap="h5">
       <title>Options</title>
@@ -854,7 +866,8 @@ lfs help
                 <para> <literal>-e</literal></para>
               </entry>
               <entry>
-                <para>Uses the extent mode when printing the output.</para>
+                <para>Uses the extent mode when printing the output.  This is
+                the default for Lustre files in verbose mode.</para>
               </entry>
             </row>
             <row>
@@ -862,7 +875,8 @@ lfs help
                 <para> <literal>-l</literal></para>
               </entry>
               <entry>
-                <para>Displays extents in LUN offset order.</para>
+                <para>Displays extents in LUN offset order.  This is the only
+                available mode for Lustre.</para>
               </entry>
             </row>
             <row>
@@ -870,7 +884,8 @@ lfs help
                 <para> <literal>-s</literal></para>
               </entry>
               <entry>
-                <para>Synchronizes the file before requesting the mapping.</para>
+                <para>Synchronizes any unwritten file data to disk before
+                requesting the mapping.</para>
               </entry>
             </row>
             <row>
@@ -878,7 +893,9 @@ lfs help
                 <para> <literal>-v</literal></para>
               </entry>
               <entry>
-                <para>Uses the verbose mode when checking file fragmentation.</para>
+                <para>Prints the file's layout in verbose mode when checking
+                file fragmentation, including the logical to physical mapping
+                for each extent in the file and the OST index.</para>
               </entry>
             </row>
           </tbody>
@@ -889,21 +906,26 @@ lfs help
       <title>Examples</title>
       <para>Lists default output.</para>
       <screen>$ filefrag /mnt/lustre/foo
-/mnt/lustre/foo: 6 extents found</screen>
+/mnt/lustre/foo: 13 extents found</screen>
       <para>Lists verbose output in extent format.</para>
-      <screen>$ filefrag  -ve /mnt/lustre/foo 
-Checking /mnt/lustre/foo
+      <screen>$ filefrag -v /mnt/lustre/foo
 Filesystem type is: bd00bd0
-Filesystem cylinder groups is approximately 5
-File size of /mnt/lustre/foo is 157286400 (153600 blocks)
-ext:       device_logical:         start..end              physical:               start..end:             length:         device:         flags:
-0: 0..                     49151:                  212992..                262144:                 49152:          0:              remote
-1: 49152..                 73727:                  270336..                294912:                 24576:          0:              remote
-2: 73728..                 76799:                  24576..                 27648:                  3072:           0:              remote
-3: 0..                     57343:                  196608..                253952:                 57344:          1:              remote
-4: 57344..                 65535:                  139264..                147456:                 8192:           1:              remote
-5: 65536..                 76799:                  163840..                175104:                 11264:          1:              remote
-/mnt/lustre/foo: 6 extents found</screen>
+File size of /mnt/lustre/foo is 1468297786 (1433888 blocks of 1024 bytes)
+ ext:     device_logical:        physical_offset: length:  dev: flags:
+   0:        0..  122879: 2804679680..2804802559: 122880: 0002: network
+   1:   122880..  245759: 2804817920..2804940799: 122880: 0002: network
+   2:   245760..  278527: 2804948992..2804981759:  32768: 0002: network
+   3:   278528..  360447: 2804982784..2805064703:  81920: 0002: network
+   4:   360448..  483327: 2805080064..2805202943: 122880: 0002: network
+   5:   483328..  606207: 2805211136..2805334015: 122880: 0002: network
+   6:   606208..  729087: 2805342208..2805465087: 122880: 0002: network
+   7:   729088..  851967: 2805473280..2805596159: 122880: 0002: network
+   8:   851968..  974847: 2805604352..2805727231: 122880: 0002: network
+   9:   974848.. 1097727: 2805735424..2805858303: 122880: 0002: network
+  10:  1097728.. 1220607: 2805866496..2805989375: 122880: 0002: network
+  11:  1220608.. 1343487: 2805997568..2806120447: 122880: 0002: network
+  12:  1343488.. 1433599: 2806128640..2806218751:  90112: 0002: network
+/mnt/lustre/foo: 13 extents found</screen>
     </section>
   </section>
   <section xml:id="dbdoclet.50438206_86244">
@@ -1029,9 +1051,9 @@ ext:       device_logical:         start..end              physical:            
     <para>When a client performs any remote operation, it gives the server a reasonable amount of time to respond. If a server does not reply either due to a down network, hung server, or any other reason, a timeout occurs which requires a recovery.</para>
     <para>If a timeout occurs, a message (similar to this one), appears on the console of the client, and in <literal>/var/log/messages</literal>:</para>
     <screen>LustreError: 26597:(client.c:810:ptlrpc_expire_one_request()) @@@ timeout
- 
+
 req@a2d45200 x5886/t0 o38-&gt;mds_svc_UUID@NID_mds_UUID:12 lens 168/64 ref 1 fl
- 
+
 RPC:/0/0 rc 0</screen>
   </section>
 </chapter>
