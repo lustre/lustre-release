@@ -1289,7 +1289,7 @@ out:
 }
 
 /**
- * Notify the LFSCK event to the instatnces on remote servers.
+ * Notify the LFSCK event to the instances on remote servers.
  *
  * The LFSCK assistant thread notifies the LFSCK instances on other
  * servers (MDT/OST) about some events, such as start new scanning,
@@ -1335,8 +1335,7 @@ static int lfsck_assistant_notify_others(const struct lu_env *env,
 		if (com->lc_type != LFSCK_TYPE_LAYOUT)
 			goto next;
 
-		lr->lr_valid = LSV_SPEED_LIMIT | LSV_ERROR_HANDLE | LSV_DRYRUN |
-			       LSV_ASYNC_WINDOWS | LSV_CREATE_OSTOBJ;
+		lr->lr_valid = LSV_SPEED_LIMIT | LSV_ERROR_HANDLE | LSV_DRYRUN;
 		lr->lr_speed = bk->lb_speed_limit;
 		lr->lr_version = bk->lb_version;
 		lr->lr_param |= bk->lb_param;

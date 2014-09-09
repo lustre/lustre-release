@@ -49,6 +49,7 @@ static struct option long_opt_start[] = {
 	{"device",		required_argument, 0, 'M'},
 	{"all",			no_argument,	   0, 'A'},
 	{"create_ostobj",	optional_argument, 0, 'c'},
+	{"create_mdtobj",	optional_argument, 0, 'C'},
 	{"error",		required_argument, 0, 'e'},
 	{"help",		no_argument,	   0, 'h'},
 	{"dryrun",		optional_argument, 0, 'n'},

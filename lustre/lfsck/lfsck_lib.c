@@ -98,6 +98,7 @@ const char *lfsck_param_names[] = {
 	"broadcast",
 	"orphan",
 	"create_ostobj",
+	"create_mdtobj",
 	NULL
 };
 
@@ -2540,7 +2541,8 @@ static int lfsck_start_all(const struct lu_env *env,
 	lr->lr_param = start->ls_flags;
 	lr->lr_async_windows = bk->lb_async_windows;
 	lr->lr_valid = LSV_SPEED_LIMIT | LSV_ERROR_HANDLE | LSV_DRYRUN |
-		       LSV_ASYNC_WINDOWS;
+		       LSV_ASYNC_WINDOWS | LSV_CREATE_OSTOBJ |
+		       LSV_CREATE_MDTOBJ;
 
 	laia->laia_com = NULL;
 	laia->laia_ltds = ltds;
