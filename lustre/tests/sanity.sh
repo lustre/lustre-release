@@ -6799,6 +6799,27 @@ test_102n() { # LU-4101 mdt: protect internal xattrs
 		setfattr --remove=$trusted.$name $file1 2> /dev/null
 	done
 
+	if [ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.6.50) ]
+	then
+		name="lfsck_ns"
+		# Try to copy xattr from $file0 to $file1.
+		value=$(getxattr $file0 trusted.$name 2> /dev/null)
+
+		setfattr --name=trusted.$name --value="$value" $file1 ||
+			error "setxattr 'trusted.$name' failed"
+
+		# Try to set a garbage xattr.
+		value=0sVGhlIHF1aWNrIGJyb3duIGZveCBqdW1wcyBvdmVyIGl0c2VsZi4=
+
+		setfattr --name=trusted.$name --value="$value" $file1 ||
+			error "setxattr 'trusted.$name' failed"
+
+		# Try to remove the xattr from $file1. We don't care if this
+		# appears to succeed or fail, we just don't want there to be
+		# any changes or crashes.
+		setfattr --remove=$trusted.$name $file1 2> /dev/null
+	fi
+
 	# Get 'after' xattrs of file1.
 	getfattr --absolute-names --dump --match=- $file1 > $xattr1
 

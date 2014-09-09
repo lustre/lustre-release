@@ -1702,8 +1702,13 @@ static inline void lmm_oi_cpu_to_le(struct ost_id *dst_oi,
 #define XATTR_NAME_VERSION      "trusted.version"
 #define XATTR_NAME_SOM		"trusted.som"
 #define XATTR_NAME_HSM		"trusted.hsm"
-#define XATTR_NAME_LFSCK_NAMESPACE "trusted.lfsck_namespace"
 #define XATTR_NAME_LFSCK_BITMAP "trusted.lfsck_bitmap"
+
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 8, 53, 0)
+# define XATTR_NAME_LFSCK_NAMESPACE_OLD "trusted.lfsck_namespace"
+#endif
+
+#define XATTR_NAME_LFSCK_NAMESPACE "trusted.lfsck_ns"
 #define XATTR_NAME_MAX_LEN	32 /* increase this, if there is longer name. */
 
 struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
