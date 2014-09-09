@@ -233,8 +233,7 @@ extern int  lwt_snapshot (cfs_cycles_t *now, int *ncpu, int *total_size,
 
 #define _LWORDSIZE BITS_PER_LONG
 
-#if (defined(__KERNEL__) && defined(HAVE_KERN__U64_LONG_LONG)) || \
-    (!defined(__KERNEL__) && defined(HAVE_USER__U64_LONG_LONG))
+#if defined(HAVE_KERN__U64_LONG_LONG)
 # define LPU64 "%llu"
 # define LPD64 "%lld"
 # define LPX64 "%#llx"

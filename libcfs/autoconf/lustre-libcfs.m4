@@ -436,46 +436,6 @@ AC_CHECK_TYPE([umode_t],
 	[],
 	[#include <asm/types.h>])
 
-AC_CHECK_TYPE([__s8],
-	[AC_DEFINE(HAVE___S8, 1, [__s8 is defined])],
-	[],
-	[#include <asm/types.h>])
-
-AC_CHECK_TYPE([__u8],
-	[AC_DEFINE(HAVE___U8, 1, [__u8 is defined])],
-	[],
-	[#include <asm/types.h>])
-
-AC_CHECK_TYPE([__s16],
-	[AC_DEFINE(HAVE___S16, 1, [__s16 is defined])],
-	[],
-	[#include <asm/types.h>])
-
-AC_CHECK_TYPE([__u16],
-	[AC_DEFINE(HAVE___U16, 1, [__u16 is defined])],
-	[],
-	[#include <asm/types.h>])
-
-AC_CHECK_TYPE([__s32],
-	[AC_DEFINE(HAVE___S32, 1, [__s32 is defined])],
-	[],
-	[#include <asm/types.h>])
-
-AC_CHECK_TYPE([__u32],
-	[AC_DEFINE(HAVE___U32, 1, [__u32 is defined])],
-	[],
-	[#include <asm/types.h>])
-
-AC_CHECK_TYPE([__u64],
-	[AC_DEFINE(HAVE___U64, 1, [__u64 is defined])],
-	[],
-	[#include <asm/types.h>])
-
-AC_CHECK_TYPE([__s64],
-	[AC_DEFINE(HAVE___S64, 1, [__s64 is defined])],
-	[],
-	[#include <asm/types.h>])
-
 # check userland __u64 type
 AC_MSG_CHECKING([userspace __u64 is long long type])
 tmp_flags="$CFLAGS"
