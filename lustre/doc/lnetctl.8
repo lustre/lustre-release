@@ -1,0 +1,626 @@
+.
+.TH lnetctl 1 "2014 Sep 12" Lustre "configuration utilities"
+.
+.SH "SYNOPSIS"
+\fBlnetctl\fR
+.
+.br
+\fBlnetctl\fR \fB<cmd> <subcmd> [optional parameters]\fR
+.
+.SH "DESCRIPTION"
+\fBlnetctl\fR is used to configure LNet parameters allowing various configuration
+and debugging features to be accessed\.
+.
+.P
+\fBlnetctl\fR can be invoked in interactive mode by issuing lnetctl command\.
+After that, commands are issued as below\.
+.
+.P
+To get a complete listing of available commands, type \fBhelp\fR at the
+lnetctl prompt\. To get basic help on the meaning and syntax of a command
+type \fB<command>\fR \-\-help\.
+.
+.P
+For non\-interactive use the \fBlnetctl\fR utility can be invoked from the
+command line as follows:
+.
+.P
+lnetctl \fIcommand\fR \fIsubcommand\fR [optional parameters]
+.
+.SS "LNet Initialization:"
+.
+.TP
+\fBlnetctl lnet\fR configure [\-\-all]
+Brings up the LNet Network Interface (NI) system\. If the \-\-all option is
+provided it will load network interfaces defined in the modprobe files\.
+Otherwise, it doesn\'t initialize any networks by default\.
+.
+.TP
+\fBlnetctl lnet\fR unconfigure
+Brings down the LNet Network Interface (NI) system including any configured
+networks\.
+.
+.SS "Network Configuration"
+.
+.TP
+\fBlnetctl net\fR add
+Configures a network interface either given the network name and physical
+interface device name, or given the ip2net parameter\. Other parameters
+are optional\.
+.
+.br
+\-\-net: net name (e.g. tcp0)
+.
+.br
+\-\-if: physical interface (e.g. eth0)
+.
+.br
+\-\-ip2net: specify networks based on IP address patterns
+.
+.br
+\-\-peer\-timeout: time to wait before declaring a peer dead (in seconds).
+Default value for o2iblnd and socklnd is 180 seconds.
+.
+.br
+\-\-peer\-credits: define the max number of in\-flight messages per peer.
+.
+.br
+\-\-peer\-buffer\-credits: the max number of routed in\-flight messages
+per peer.
+.
+.br
+\-\-credits: The total number of in\-flight messages over a network interface.
+.
+.br
+\-\-cpt: The CPU partitions on which the created network interface is bound to.
+Refer to the Lustre Manual Section "Binding Network Interface Against CPU
+Partitions" for more details. For example to bind a Network Interface to
+CPU partitions 0 and 1, you would specify this parameter as \-\-cpt [0,
+1]
+.
+.br
+
+.
+.TP
+\fBlnetctl net\fR del
+Delete a network interface given the network name\.
+.
+.br
+\-\-net: net name (e.g. tcp0)
+.
+.br
+
+.
+.TP
+\fBlnetctl net\fR show
+Show all currently configured network interfaces if no parameters given or filter
+on the network name\. More details can be shown by specifying the \-\-verbose
+parameter\.
+.
+.br
+\-\-net: net name (e.g. tcp0) to filter on
+.
+.br
+\-\-verbose: display detailed output per network
+.
+.SS "Route Configuration"
+.
+.TP
+\fBlnetctl route\fR add
+Add a route\.
+.
+.br
+\-\-net: net name (e.g. tcp0)
+.
+.br
+\-\-gateway: gateway nid (e.g. 10\.1\.1\.2@tcp)
+.
+.br
+\-\-hop: number to final destination (1 < hops < 255)
+.
+.br
+\-\-priority: priority of route (0 \- highest prio)
+.
+.br
+
+.
+.TP
+\fBlnetctl route\fR del
+Delete a route specified via the network and gateway\.
+.
+.br
+\-\-net: net name (e.g. tcp0)
+.
+.br
+\-\-gateway: gateway nid (e.g. 10\.1\.1\.2@tcp)
+.
+.br
+
+.
+.TP
+\fBlnetctl route\fR show
+Show all currently configured routes if no parameters given, or filter on
+given parameters\. More details can be shown by specifying the \-\-verbose
+parameter\.
+.
+.br
+\-\-net: net name (e.g. tcp0) to filter on
+.
+.br
+\-\-gateway: gateway nid (e.g. 10\.1\.1\.2@tcp) to filter on
+.
+.br
+\-\-hop: number to final destination (1 < hops < 255) to filter on
+.
+.br
+\-\-priority: priority of route (0 \- highest prio to filter on)
+.
+.br
+\-\-vebose: display detailed output per route
+.
+.br
+
+.
+.SS "Routing Information"
+.
+.TP
+\fBlnetctl routing\fR show
+Show router buffers values as well as show the status of routing (IE: whether
+the node is set to be a router)
+.
+.SS "Value Setting"
+Individual values can be set using the \fBlnetctl set\fR command\.
+.
+.TP
+\fBlnetctl set\fR tiny_buffers \fIvalue\fR
+Set the number of tiny buffers in the system\. This is the total number of tiny
+buffers for all CPU partitions\.
+.
+.TP
+\fBlnetctl set\fR small_buffers \fIvalue\fR
+Set the number of small buffers in the system\. This is the total number of
+small buffers for all CPU partitions\.
+.
+.TP
+\fBlnetctl set\fR large_buffers \fIvalue\fR
+Set the number of large buffers in the system\. This is the total number of
+large buffers for all CPU partitions\.
+.
+.TP
+\fBlnetctl set\fR routing \fI[0, 1]\fR
+0 value indicates to disable routing\. 1 value indicates to enable routing\.
+When routing is disabled the values of the buffers that might have been changed
+are not remembered, and the next time routing is enabled the default buffer
+count will be used\.
+.
+.SS "Import and Export YAML Configuration Files"
+LNet configuration can be represented in YAML format\. A YAML configuration
+file can be passed to the lnetctl utility via the \fBimport\fR command\. The
+lnetctl utility will attempt to configure all elements defined in the YAML
+file\.
+.
+.P
+Similarly the \fBexport\fR command can be used to dump all supported LNet
+configuration to stdout\. The output can be redirected to a file\.
+.
+.TP
+\fBlnetctl import\fR \fIFILE\fR:
+
+.
+.TP
+\fBlnetctl import\fR < \fIFILE\fR
+\fBimport\fR command uses the specified YAML configuration file to configure
+LNet parameters defined within\. The import command by default adds the LNet
+parameters defined in the YAML file, but this default behavior can be
+overwritten by specifying the desired behavior\.
+.
+.br
+\-\-add: add configuration
+.
+.br
+\-\-del: delete configuration
+.
+.br
+\-\-show: show configuration
+.
+.br
+\-\-help: display this help
+.
+.TP
+\fBlnetctl export\fR \fIFILE\fR:
+
+.
+.TP
+\fBlnetctl export\fR > \fIFILE\fR
+\fBexport\fR command dumps the supported LNet configuration in YAML format to
+stdout, which can be redirected to a normal file\. The output of the
+\fBimport\fR command can be used as input to the \fBexport\fR command\.
+.
+.br
+\-\-help: display this help
+.
+.SS "LNet Statistics"
+.
+.TP
+\fBlnetctl stats\fR
+Show LNET statistics
+.
+.br
+\-> Number of messages allocated
+.
+.br
+\-> Maximum number of messages allocated
+.
+.br
+\-> Number of errors encountered
+.
+.br
+\-> Number of messages sent
+.
+.br
+\-> Number of messages received
+.
+.br
+\-> Number of messages routed
+.
+.br
+\-> Total size in bytes of messages sent
+.
+.br
+\-> Total size in bytes of messages received
+.
+.br
+\-> Total size in bytes of messages routed
+.
+.br
+\-> Total size in bytes of messages dropped
+.
+.br
+
+.
+.SS "Showing Peer Credits"
+.
+.TP
+\fBlnetctl peer_credits\fR
+Show details on configured peer credits
+.
+.br
+\-> Peer nid
+.
+.br
+\-> State
+.
+.br
+\-> Reference count on the peer
+.
+.br
+\-> Maximum transmit credits
+.
+.br
+\-> Available transmit credits
+.
+.br
+\-> Available router credits
+.
+.br
+\-> Minimum router credits\.
+.
+.SH "EXAMPLES"
+.
+.SS "Initializing LNet after load"
+.
+.IP "\(bu" 4
+lnetctl lnet configure
+.
+.IP "\(bu" 4
+lnetctl lnet configure \-\-all
+.
+.IP "" 0
+.
+.SS "Shutting down LNet"
+.
+.IP "\(bu" 4
+lnetctl lnet unconfigure
+.
+.IP "" 0
+.
+.SS "Add network"
+.
+.IP "\(bu" 4
+lnetctl net add \-\-net tcp0 \-\-if eth0
+.
+.IP "\(bu" 4
+lnetctl net add \-\-ip2net "tcp0(eth0) 192\.168\.0\.[2,4]; tcp0 192\.168\.0\.*;
+o2ib0 132\.6\.[1\-3]\.[2\-8/2]"
+.
+.IP "" 0
+.
+.SS "Delete network"
+.
+.IP "\(bu" 4
+lnetctl net del \-\-net tcp0
+.
+.IP "" 0
+.
+.SS "Show network"
+.
+.TP
+lnetctl net show \-\-verbose:
+
+.
+.P
+net:
+.
+.br
+	\- nid: 0@lo
+.
+.br
+	  status: up
+.
+.br
+	  tunables:
+.
+.br
+		peer_timeout: 0
+.
+.br
+		peer_credits: 0
+.
+.br
+		peer_buffer_credits: 0
+.
+.br
+		credits: 0
+.
+.br
+	\- nid: 192\.168\.205\.130@tcp1
+.
+.br
+	  status: up
+.
+.br
+	  interfaces:
+.
+.br
+		0: eth3
+.
+.br
+		1: eth4
+.
+.br
+	  tunables:
+.
+.br
+		peer_timeout: 180
+.
+.br
+		peer_credits: 8
+.
+.br
+		peer_buffer_credits: 0
+.
+.br
+		credits: 256
+.
+.br
+.
+.SS "Add route"
+.
+.IP "\(bu" 4
+lnetctl route add \-\-net tcp0 \-\-gateway 10\.10\.10\.1@tcp1 \-\-hop 1
+\-\-priority 1
+.
+.IP "" 0
+.
+.SS "Delete route"
+.
+.IP "\(bu" 4
+lnetctl route del \-\-net tcp0 \-\-gateway 10\.10\.10\.1@tcp1
+.
+.IP "" 0
+.
+.SS "Show route"
+.
+.IP "\(bu" 4
+lnetctl route show \-\-verbose
+.
+.IP "" 0
+.
+.P
+route:
+.
+.br
+	\- net: tcp
+.
+.br
+	  gateway: 192\.168\.205\.131@tcp1
+.
+.br
+	  hop: 1
+.
+.br
+	  priority: 0 state: down
+.
+.br
+.
+.SS "Show routing"
+.
+.IP "\(bu" 4
+lnetctl routing show
+.
+.IP "" 0
+.
+.P
+routing:
+.
+.br
+	\- cpt[0]:
+.
+.br
+	  tiny:
+.
+.br
+		npages: 0
+.
+.br
+		nbuffers: 2048
+.
+.br
+		credits: 2048
+.
+.br
+		mincredits: 2048
+.
+.br
+	  small:
+.
+.br
+		npages: 1
+.
+.br
+		nbuffers: 16384
+.
+.br
+		credits: 16384
+.
+.br
+		mincredits: 16384
+.
+.br
+	  large:
+.
+.br
+		npages: 256
+.
+.br
+		nbuffers: 1024
+.
+.br
+		credits: 1024
+.
+.br
+		mincredits: 1024
+.
+.br
+	\- enable: 1
+.
+.SS "Setting variables"
+.
+.IP "\(bu" 4
+lnetctl set tiny_buffers 2048
+.
+.IP "\(bu" 4
+lnetctl set small_buffers 16384
+.
+.IP "\(bu" 4
+lnetctl set large_buffers 256
+.
+.IP "\(bu" 4
+lnetctl set routing 1
+.
+.IP "" 0
+.
+.SS "Importing YAML files for configuring"
+.
+.IP "\(bu" 4
+lnetctl import lnet\.conf
+.
+.IP "\(bu" 4
+lnetctl import < lnet\.conf
+.
+.IP "" 0
+.
+.SS "Exporting LNet Configuration"
+.
+.IP "\(bu" 4
+lnetctl export lnet\.conf
+.
+.IP "\(bu" 4
+lnetctl export > lnet\.conf
+.
+.IP "" 0
+.
+.SS "Showing LNet Stats"
+.
+.IP "\(bu" 4
+lnetctl stats show
+.
+.IP "" 0
+.
+.P
+statistics:
+.
+.br
+	msgs_alloc: 0
+.
+.br
+	msgs_max: 1
+.
+.br
+	errors: 0
+.
+.br
+	send_count: 89
+.
+.br
+	recv_count: 0
+.
+.br
+	route_count: 0
+.
+.br
+	drop_count: 19
+.
+.br
+	send_length: 0
+.
+.br
+	recv_length: 0
+.
+.br
+	route_length: 0
+.
+.br
+	drop_length: 0
+.
+.br
+.
+.SS "Showing peer credits information"
+.
+.IP "\(bu" 4
+lnetctl peer_credits show
+.
+.IP "" 0
+.
+.P
+peer:
+.
+.br
+	\- nid: 192\.168\.205\.131@tcp1
+.
+.br
+	  state: down
+.
+.br
+	  refcount: 4
+.
+.br
+	  max_ni_tx_credits: 8
+.
+.br
+	  available_tx_credits: 8
+.
+.br
+	  available_rtr_credits: 8
+.
+.br
+	  min_rtr_credits: 7
+.
+.br
+	  tx_q_num_of_buf: 0
+.
+.br
+
+.SH SEE ALSO
+.BR Lustre (7)
+
