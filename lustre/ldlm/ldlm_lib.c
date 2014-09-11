@@ -1068,8 +1068,10 @@ dont_check_exports:
 	 * OBD_CONNECT_MNE_SWAB flag around forever, just so long as we need
 	 * interop with unpatched 2.2 clients.  For newer clients, servers
 	 * will never do MNE swabbing, let the client handle that.  LU-1644 */
+	spin_lock(&export->exp_lock);
 	export->exp_need_mne_swab = !ptlrpc_req_need_swab(req) &&
 			!(data->ocd_connect_flags & OBD_CONNECT_MNE_SWAB);
+	spin_unlock(&export->exp_lock);
 #endif
 
         LASSERT(target->u.obt.obt_magic == OBT_MAGIC);
