@@ -1440,10 +1440,10 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-EINVAL);
         }
 
-	OBD_ALLOC(lmv->tgts, sizeof(*lmv->tgts) * 32);
+	lmv->tgts_size = 32U;
+	OBD_ALLOC(lmv->tgts, sizeof(*lmv->tgts) * lmv->tgts_size);
 	if (lmv->tgts == NULL)
 		RETURN(-ENOMEM);
-	lmv->tgts_size = 32;
 
 	obd_str2uuid(&lmv->desc.ld_uuid, desc->ld_uuid.uuid);
 	lmv->desc.ld_tgt_count = 0;
