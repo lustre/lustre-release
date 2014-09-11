@@ -1963,7 +1963,7 @@ lmv_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
 	if (IS_ERR(tgt))
 		RETURN(PTR_ERR(tgt));
 
-	CDEBUG(D_INODE, "ENQUEUE '%s' on "DFID" -> mds #%d\n",
+	CDEBUG(D_INODE, "ENQUEUE '%s' on "DFID" -> mds #%u\n",
 	       LL_IT2STR(it), PFID(&op_data->op_fid1), tgt->ltd_idx);
 
 	rc = md_enqueue(tgt->ltd_exp, einfo, policy, it, op_data, lockh,
@@ -1992,7 +1992,7 @@ lmv_getattr_name(struct obd_export *exp,struct md_op_data *op_data,
 	if (IS_ERR(tgt))
 		RETURN(PTR_ERR(tgt));
 
-	CDEBUG(D_INODE, "GETATTR_NAME for %*s on "DFID" -> mds #%d\n",
+	CDEBUG(D_INODE, "GETATTR_NAME for %*s on "DFID" -> mds #%u\n",
 	       op_data->op_namelen, op_data->op_name, PFID(&op_data->op_fid1),
 	       tgt->ltd_idx);
 
@@ -2036,7 +2036,7 @@ lmv_getattr_name(struct obd_export *exp,struct md_op_data *op_data,
 
 static int lmv_early_cancel(struct obd_export *exp, struct lmv_tgt_desc *tgt,
 			    struct md_op_data *op_data,
-			    int op_tgt, ldlm_mode_t mode, int bits, int flag)
+			    __u32 op_tgt, ldlm_mode_t mode, int bits, int flag)
 {
 	struct lu_fid          *fid = md_op_data_fid(op_data, flag);
 	struct obd_device      *obd = exp->exp_obd;
@@ -2731,7 +2731,7 @@ try_next_stripe:
 	if (rc != 0)
 		RETURN(rc);
 
-	CDEBUG(D_INODE, "unlink with fid="DFID"/"DFID" -> mds #%d\n",
+	CDEBUG(D_INODE, "unlink with fid="DFID"/"DFID" -> mds #%u\n",
 	       PFID(&op_data->op_fid1), PFID(&op_data->op_fid2), tgt->ltd_idx);
 
 	rc = md_unlink(tgt->ltd_exp, op_data, request);

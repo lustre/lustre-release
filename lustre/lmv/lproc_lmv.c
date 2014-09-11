@@ -175,7 +175,7 @@ static int lmv_tgt_seq_show(struct seq_file *p, void *v)
 
 	if (tgt == NULL)
 		return 0;
-	return seq_printf(p, "%d: %s %sACTIVE\n", tgt->ltd_idx,
+	return seq_printf(p, "%u: %s %sACTIVE\n", tgt->ltd_idx,
 			  tgt->ltd_uuid.uuid, tgt->ltd_active ? "" : "IN");
 }
 
