@@ -508,7 +508,7 @@ int client_connect_import(const struct lu_env *env,
 
         *exp = NULL;
 	down_write(&cli->cl_sem);
-        if (cli->cl_conn_count > 0 )
+	if (cli->cl_conn_count > 0)
                 GOTO(out_sem, rc = -EALREADY);
 
         rc = class_connect(&conn, obd, cluuid);
@@ -580,17 +580,17 @@ int client_disconnect_export(struct obd_export *exp)
         imp = cli->cl_import;
 
 	down_write(&cli->cl_sem);
-        CDEBUG(D_INFO, "disconnect %s - %d\n", obd->obd_name,
-               cli->cl_conn_count);
+	CDEBUG(D_INFO, "disconnect %s - %zu\n", obd->obd_name,
+		cli->cl_conn_count);
 
-        if (!cli->cl_conn_count) {
+	if (cli->cl_conn_count == 0) {
                 CERROR("disconnecting disconnected device (%s)\n",
                        obd->obd_name);
                 GOTO(out_disconnect, rc = -EINVAL);
         }
 
         cli->cl_conn_count--;
-        if (cli->cl_conn_count)
+	if (cli->cl_conn_count != 0)
                 GOTO(out_disconnect, rc = 0);
 
 	/* Mark import deactivated now, so we don't try to reconnect if any

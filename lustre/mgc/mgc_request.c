@@ -1001,8 +1001,8 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		}
 		/* Make sure not to re-enqueue when the mgc is stopping
 		   (we get called from client_disconnect_export) */
-		if (!lock->l_conn_export ||
-		    !lock->l_conn_export->exp_obd->u.cli.cl_conn_count) {
+		if (lock->l_conn_export == NULL ||
+		    lock->l_conn_export->exp_obd->u.cli.cl_conn_count == 0) {
 			CDEBUG(D_MGC, "log %.8s: disconnecting, won't requeue\n",
 				cld->cld_logname);
 			config_log_put(cld);
