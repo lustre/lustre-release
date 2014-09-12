@@ -1106,8 +1106,14 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 		credits = osd_calc_bkmap_credits(sb, inode, size, _pos, blocks);
 	}
 
-	osd_trans_declare_op(env, oh, OSD_OT_WRITE, credits);
+	/* if inode is created as part of the transaction,
+	 * then it's counted already by the creation method */
+	if (inode != NULL)
+		credits++;
+
 out:
+	osd_trans_declare_op(env, oh, OSD_OT_WRITE, credits);
+
 	/* dt_declare_write() is usually called for system objects, such
 	 * as llog or last_rcvd files. We needn't enforce quota on those
 	 * objects, so always set the lqi_space as 0. */
