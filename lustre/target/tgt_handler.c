@@ -1654,8 +1654,7 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 	struct ost_body		*body, *repbody;
 	struct l_wait_info	 lwi;
 	struct lustre_handle	 lockh = { 0 };
-	int			 niocount, npages, nob = 0, rc, i;
-	int			 no_reply = 0;
+	int			 npages, nob = 0, rc, i, no_reply = 0;
 	struct tgt_thread_big_cache *tbc = req->rq_svc_thread->t_data;
 
 	ENTRY;
@@ -1698,7 +1697,6 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 	ioo = req_capsule_client_get(tsi->tsi_pill, &RMF_OBD_IOOBJ);
 	LASSERT(ioo != NULL); /* must exists after tgt_ost_body_unpack */
 
-	niocount = ioo->ioo_bufcnt;
 	remote_nb = req_capsule_client_get(&req->rq_pill, &RMF_NIOBUF_REMOTE);
 	LASSERT(remote_nb != NULL); /* must exists after tgt_ost_body_unpack */
 
