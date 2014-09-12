@@ -532,10 +532,8 @@ static void osc_io_setattr_end(const struct lu_env *env,
         int result = 0;
 
 	if (cbargs->opc_rpc_sent) {
-		result = wait_for_completion_killable(&cbargs->opc_sync);
-		if (result == 0)
-			result = cbargs->opc_rc;
-		io->ci_result = result;
+		wait_for_completion(&cbargs->opc_sync);
+		result = io->ci_result = cbargs->opc_rc;
 	}
         if (result == 0) {
                 if (oio->oi_lockless) {
@@ -680,7 +678,7 @@ static void osc_io_fsync_end(const struct lu_env *env,
 		struct osc_io           *oio    = cl2osc_io(env, slice);
 		struct osc_async_cbargs *cbargs = &oio->oi_cbarg;
 
-		result = wait_for_completion_killable(&cbargs->opc_sync);
+		wait_for_completion(&cbargs->opc_sync);
 		if (result == 0)
 			result = cbargs->opc_rc;
 	}
