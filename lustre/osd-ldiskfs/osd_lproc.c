@@ -403,6 +403,79 @@ ldiskfs_osd_auto_scrub_seq_write(struct file *file, const char *buffer,
 }
 LPROC_SEQ_FOPS(ldiskfs_osd_auto_scrub);
 
+static int ldiskfs_osd_full_scrub_ratio_seq_show(struct seq_file *m, void *data)
+{
+	struct osd_device *dev = osd_dt_dev((struct dt_device *)m->private);
+
+	LASSERT(dev != NULL);
+	if (unlikely(dev->od_mnt == NULL))
+		return -EINPROGRESS;
+
+	return seq_printf(m, LPU64"\n", dev->od_full_scrub_ratio);
+}
+
+static ssize_t
+ldiskfs_osd_full_scrub_ratio_seq_write(struct file *file, const char *buffer,
+				       size_t count, loff_t *off)
+{
+	struct seq_file	  *m = file->private_data;
+	struct dt_device  *dt = m->private;
+	struct osd_device *dev = osd_dt_dev(dt);
+	int val, rc;
+
+	LASSERT(dev != NULL);
+	if (unlikely(dev->od_mnt == NULL))
+		return -EINPROGRESS;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc != 0)
+		return rc;
+
+	if (val < 0)
+		return -EINVAL;
+
+	dev->od_full_scrub_ratio = val;
+	return count;
+}
+LPROC_SEQ_FOPS(ldiskfs_osd_full_scrub_ratio);
+
+static int ldiskfs_osd_full_scrub_speed_seq_show(struct seq_file *m, void *data)
+{
+	struct osd_device *dev = osd_dt_dev((struct dt_device *)m->private);
+
+	LASSERT(dev != NULL);
+	if (unlikely(dev->od_mnt == NULL))
+		return -EINPROGRESS;
+
+	return seq_printf(m, LPU64" (bad OI mappings/minute)\n",
+			  dev->od_full_scrub_speed);
+}
+
+static ssize_t
+ldiskfs_osd_full_scrub_speed_seq_write(struct file *file, const char *buffer,
+				       size_t count, loff_t *off)
+{
+	struct seq_file	  *m = file->private_data;
+	struct dt_device  *dt = m->private;
+	struct osd_device *dev = osd_dt_dev(dt);
+	int val, rc;
+
+	LASSERT(dev != NULL);
+	if (unlikely(dev->od_mnt == NULL))
+		return -EINPROGRESS;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc != 0)
+		return rc;
+
+	if (val < 0)
+		return -EINVAL;
+
+	dev->od_full_scrub_speed = val;
+	return count;
+}
+LPROC_SEQ_FOPS(ldiskfs_osd_full_scrub_speed);
+
 static int
 ldiskfs_osd_track_declares_assert_seq_show(struct seq_file *m, void *data)
 {
@@ -538,6 +611,10 @@ struct lprocfs_seq_vars lprocfs_osd_obd_vars[] = {
 	  .fops	=	&ldiskfs_osd_pdo_fops		},
 	{ .name	=	"auto_scrub",
 	  .fops	=	&ldiskfs_osd_auto_scrub_fops	},
+	{ .name	=	"full_scrub_ratio",
+	  .fops	=	&ldiskfs_osd_full_scrub_ratio_fops	},
+	{ .name	=	"full_scrub_speed",
+	  .fops	=	&ldiskfs_osd_full_scrub_speed_fops	},
 	{ .name	=	"oi_scrub",
 	  .fops	=	&ldiskfs_osd_oi_scrub_fops	},
 	{ .name	=	"read_cache_enable",

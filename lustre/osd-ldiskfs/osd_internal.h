@@ -277,7 +277,30 @@ struct osd_device {
 
 	/* osd seq instance */
 	struct lu_client_seq	*od_cl_seq;
+	/* If the ratio of "the total OI mappings count" vs
+	 * "the bad OI mappings count" is lower than the
+	 * osd_device::od_full_scrub_ratio, then trigger
+	 * OI scrub to scan the whole the device. */
+	__u64			 od_full_scrub_ratio;
+	/* If the speed of found bad OI mappings (per minute)
+	 * exceeds the osd_device::od_full_scrub_speed, then
+	 * trigger OI scrub to scan the whole the device. */
+	__u64			 od_full_scrub_speed;
 };
+
+enum osd_full_scrub_ratio {
+	/* Trigger OI scrub to scan the whole device directly. */
+	OFSR_DIRECTLY	= 0,
+
+	/* Because the bad OI mappings count cannot be larger than
+	 * the total OI mappints count, then setting OFSR_NEVER means
+	 * that the whole device scanning cannot be triggered by auto
+	 * detected bad OI mappings during the RPC services. */
+	OFSR_NEVER	= 1,
+	OFSR_DEFAULT	= 10000,
+};
+
+#define FULL_SCRUB_SPEED_DEFULT	60
 
 /* There are at most 10 uid/gids are affected in a transaction, and
  * that's rename case:
@@ -670,7 +693,7 @@ int osd_obj_spec_update(struct osd_thread_info *info, struct osd_device *osd,
 void osd_scrub_file_reset(struct osd_scrub *scrub, __u8 *uuid, __u64 flags);
 int osd_scrub_file_store(struct osd_scrub *scrub);
 char *osd_lf_fid2name(const struct lu_fid *fid);
-int osd_scrub_start(struct osd_device *dev);
+int osd_scrub_start(struct osd_device *dev, __u32 flags);
 int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev);
 void osd_scrub_cleanup(const struct lu_env *env, struct osd_device *dev);
 int osd_oii_insert(struct osd_device *dev, struct osd_idmap_cache *oic,

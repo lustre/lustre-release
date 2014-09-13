@@ -285,7 +285,9 @@ void osd_scrub_file_reset(struct osd_scrub *scrub, __u8 *uuid, __u64 flags)
 	sf->sf_items_checked = 0;
 	sf->sf_items_updated = 0;
 	sf->sf_items_failed = 0;
-	sf->sf_items_updated_prior = 0;
+	if (!scrub->os_in_join)
+		sf->sf_items_updated_prior = 0;
+
 	sf->sf_items_noscrub = 0;
 	sf->sf_items_igif = 0;
 }
@@ -516,7 +518,9 @@ iget:
 			}
 		}
 
-		scrub->os_full_speed = 1;
+		if (!scrub->os_partial_scan)
+			scrub->os_full_speed = 1;
+
 		ops = DTO_INDEX_INSERT;
 		idx = osd_oi_fid2idx(dev, fid);
 		switch (val) {
@@ -547,7 +551,9 @@ iget:
 
 		GOTO(out, rc = 0);
 	} else {
-		scrub->os_full_speed = 1;
+		if (!scrub->os_partial_scan)
+			scrub->os_full_speed = 1;
+
 		sf->sf_flags |= SF_INCONSISTENT;
 
 		/* XXX: If the device is restored from file-level backup, then
@@ -630,14 +636,12 @@ static int osd_scrub_prep(struct osd_device *dev)
 	down_write(&scrub->os_rwsem);
 	if (flags & SS_SET_FAILOUT)
 		sf->sf_param |= SP_FAILOUT;
-
-	if (flags & SS_CLEAR_FAILOUT)
+	else if (flags & SS_CLEAR_FAILOUT)
 		sf->sf_param &= ~SP_FAILOUT;
 
-	if (flags & SS_SET_DRYRUN)
+	if (flags & SS_SET_DRYRUN) {
 		sf->sf_param |= SP_DRYRUN;
-
-	if (flags & SS_CLEAR_DRYRUN && sf->sf_param & SP_DRYRUN) {
+	} else if (flags & SS_CLEAR_DRYRUN && sf->sf_param & SP_DRYRUN) {
 		sf->sf_param &= ~SP_DRYRUN;
 		drop_dryrun = true;
 	}
@@ -646,22 +650,29 @@ static int osd_scrub_prep(struct osd_device *dev)
 		osd_scrub_file_reset(scrub,
 			LDISKFS_SB(osd_sb(dev))->s_es->s_uuid, 0);
 
-	if (flags & SS_AUTO) {
+	if (flags & SS_AUTO_FULL) {
 		scrub->os_full_speed = 1;
+		scrub->os_partial_scan = 0;
 		sf->sf_flags |= SF_AUTO;
-		/* For the case of OI scrub auto triggered, NOT dryrun. */
-		sf->sf_param &= ~SP_FAILOUT;
+	} else if (flags & SS_AUTO_PARTIAL) {
+		scrub->os_full_speed = 0;
+		scrub->os_partial_scan = 1;
+		sf->sf_flags |= SF_AUTO;
+	} else if (sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT |
+				   SF_UPGRADE)) {
+		scrub->os_full_speed = 1;
+		scrub->os_partial_scan = 0;
 	} else {
 		scrub->os_full_speed = 0;
+		scrub->os_partial_scan = 0;
 	}
 
-	if (sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT | SF_UPGRADE))
-		scrub->os_full_speed = 1;
-
-	scrub->os_in_prior = 0;
 	spin_lock(&scrub->os_lock);
+	scrub->os_in_prior = 0;
 	scrub->os_waiting = 0;
 	scrub->os_paused = 0;
+	scrub->os_in_join = 0;
+	scrub->os_full_scrub = 0;
 	spin_unlock(&scrub->os_lock);
 	scrub->os_new_checked = 0;
 	if (drop_dryrun && sf->sf_pos_first_inconsistent != 0)
@@ -769,13 +780,13 @@ typedef int (*osd_iit_next_policy)(struct osd_thread_info *info,
 				   struct osd_device *dev,
 				   struct osd_iit_param *param,
 				   struct osd_idmap_cache **oic,
-				   int noslot);
+				   const bool noslot);
 
 typedef int (*osd_iit_exec_policy)(struct osd_thread_info *info,
 				   struct osd_device *dev,
 				   struct osd_iit_param *param,
 				   struct osd_idmap_cache *oic,
-				   int *noslot, int rc);
+				   bool *noslot, int rc);
 
 static int osd_iit_next(struct osd_iit_param *param, __u32 *pos)
 {
@@ -942,7 +953,7 @@ put:
 
 static int osd_scrub_next(struct osd_thread_info *info, struct osd_device *dev,
 			  struct osd_iit_param *param,
-			  struct osd_idmap_cache **oic, int noslot)
+			  struct osd_idmap_cache **oic, const bool noslot)
 {
 	struct osd_scrub     *scrub  = &dev->od_scrub;
 	struct ptlrpc_thread *thread = &scrub->os_thread;
@@ -983,7 +994,7 @@ static int osd_scrub_next(struct osd_thread_info *info, struct osd_device *dev,
 		return 0;
 	}
 
-	if (noslot != 0)
+	if (noslot)
 		return SCRUB_NEXT_WAIT;
 
 	rc = osd_iit_next(param, &scrub->os_pos_current);
@@ -1000,7 +1011,7 @@ static int osd_scrub_next(struct osd_thread_info *info, struct osd_device *dev,
 
 static int osd_preload_next(struct osd_thread_info *info,
 			    struct osd_device *dev, struct osd_iit_param *param,
-			    struct osd_idmap_cache **oic, int noslot)
+			    struct osd_idmap_cache **oic, const bool noslot)
 {
 	struct osd_otable_cache *ooc    = &dev->od_otable_it->ooi_cache;
 	struct osd_scrub	*scrub;
@@ -1044,7 +1055,7 @@ osd_scrub_wakeup(struct osd_scrub *scrub, struct osd_otable_it *it)
 
 static int osd_scrub_exec(struct osd_thread_info *info, struct osd_device *dev,
 			  struct osd_iit_param *param,
-			  struct osd_idmap_cache *oic, int *noslot, int rc)
+			  struct osd_idmap_cache *oic, bool *noslot, int rc)
 {
 	struct l_wait_info	 lwi    = { 0 };
 	struct osd_scrub	*scrub  = &dev->od_scrub;
@@ -1099,7 +1110,7 @@ wait:
 		return 0;
 
 	if (ooc != NULL && osd_scrub_has_window(scrub, ooc)) {
-		*noslot = 0;
+		*noslot = false;
 		return 0;
 	}
 
@@ -1108,15 +1119,15 @@ wait:
 			     &lwi);
 
 	if (ooc != NULL && osd_scrub_has_window(scrub, ooc))
-		*noslot = 0;
+		*noslot = false;
 	else
-		*noslot = 1;
+		*noslot = true;
 	return 0;
 }
 
 static int osd_preload_exec(struct osd_thread_info *info,
 			    struct osd_device *dev, struct osd_iit_param *param,
-			    struct osd_idmap_cache *oic, int *noslot, int rc)
+			    struct osd_idmap_cache *oic, bool *noslot, int rc)
 {
 	struct osd_otable_cache *ooc = &dev->od_otable_it->ooi_cache;
 
@@ -1131,22 +1142,170 @@ static int osd_preload_exec(struct osd_thread_info *info,
 #define SCRUB_IT_ALL	1
 #define SCRUB_IT_CRASH	2
 
+static void osd_scrub_join(struct osd_device *dev, __u32 flags)
+{
+	struct osd_scrub     *scrub  = &dev->od_scrub;
+	struct ptlrpc_thread *thread = &scrub->os_thread;
+	struct scrub_file    *sf     = &scrub->os_file;
+	int		      rc;
+	ENTRY;
+
+	LASSERT(!(flags & SS_AUTO_PARTIAL));
+
+	down_write(&scrub->os_rwsem);
+	scrub->os_in_join = 1;
+	if (flags & SS_SET_FAILOUT)
+		sf->sf_param |= SP_FAILOUT;
+	else if (flags & SS_CLEAR_FAILOUT)
+		sf->sf_param &= ~SP_FAILOUT;
+
+	if (flags & SS_SET_DRYRUN)
+		sf->sf_param |= SP_DRYRUN;
+	else if (flags & SS_CLEAR_DRYRUN)
+		sf->sf_param &= ~SP_DRYRUN;
+
+	if (flags & SS_RESET)
+		osd_scrub_file_reset(scrub,
+			LDISKFS_SB(osd_sb(dev))->s_es->s_uuid, 0);
+
+	if (flags & SS_AUTO_FULL ||
+	    sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT | SF_UPGRADE))
+		scrub->os_full_speed = 1;
+	else
+		scrub->os_full_speed = 0;
+
+	scrub->os_new_checked = 0;
+	if (sf->sf_pos_last_checkpoint != 0)
+		sf->sf_pos_latest_start = sf->sf_pos_last_checkpoint + 1;
+	else
+		sf->sf_pos_latest_start = LDISKFS_FIRST_INO(osd_sb(dev)) + 1;
+
+	scrub->os_pos_current = sf->sf_pos_latest_start;
+	sf->sf_time_latest_start = cfs_time_current_sec();
+	sf->sf_time_last_checkpoint = sf->sf_time_latest_start;
+	rc = osd_scrub_file_store(scrub);
+	if (rc != 0)
+		CDEBUG(D_LFSCK, "%.16s: fail to store scrub file when join "
+		       "the OI scrub: rc = %d\n", osd_scrub2name(scrub), rc);
+
+	spin_lock(&scrub->os_lock);
+	scrub->os_waiting = 0;
+	scrub->os_paused = 0;
+	scrub->os_partial_scan = 0;
+	scrub->os_in_join = 0;
+	scrub->os_full_scrub = 0;
+	spin_unlock(&scrub->os_lock);
+	wake_up_all(&thread->t_ctl_waitq);
+	up_write(&scrub->os_rwsem);
+
+	EXIT;
+}
+
 static int osd_inode_iteration(struct osd_thread_info *info,
 			       struct osd_device *dev, __u32 max, bool preload)
 {
+	struct osd_scrub     *scrub  = &dev->od_scrub;
+	struct ptlrpc_thread *thread = &scrub->os_thread;
+	struct scrub_file    *sf     = &scrub->os_file;
 	osd_iit_next_policy   next;
 	osd_iit_exec_policy   exec;
 	__u32		     *pos;
 	__u32		     *count;
-	struct osd_iit_param  param;
+	struct osd_iit_param  param  = { 0 };
+	struct l_wait_info    lwi    = { 0 };
 	__u32		      limit;
-	int		      noslot = 0;
 	int		      rc;
+	bool		      noslot = true;
 	ENTRY;
 
-	if (!preload) {
-		struct osd_scrub *scrub = &dev->od_scrub;
+	param.sb = osd_sb(dev);
+	if (preload)
+		goto full;
 
+	while (scrub->os_partial_scan && !scrub->os_in_join) {
+		struct osd_idmap_cache *oic = NULL;
+
+		rc = osd_scrub_next(info, dev, &param, &oic, noslot);
+		switch (rc) {
+		case SCRUB_NEXT_EXIT:
+			RETURN(0);
+		case SCRUB_NEXT_CRASH:
+			RETURN(SCRUB_IT_CRASH);
+		case SCRUB_NEXT_FATAL:
+			RETURN(-EINVAL);
+		case SCRUB_NEXT_WAIT: {
+			struct kstatfs *ksfs = &info->oti_ksfs;
+			__u64 used;
+
+			if (dev->od_full_scrub_ratio == OFSR_NEVER ||
+			    unlikely(sf->sf_items_updated_prior == 0))
+				goto wait;
+
+			if (dev->od_full_scrub_ratio == OFSR_DIRECTLY ||
+			    scrub->os_full_scrub) {
+				osd_scrub_join(dev, SS_AUTO_FULL | SS_RESET);
+				goto full;
+			}
+
+			rc = param.sb->s_op->statfs(param.sb->s_root, ksfs);
+			if (rc != 0)
+				goto wait;
+
+			used = ksfs->f_files - ksfs->f_ffree;
+			do_div(used, sf->sf_items_updated_prior);
+			/* If we hit too much inconsistent OI mappings during
+			 * the partial scan, then scan the device completely. */
+			if (used < dev->od_full_scrub_ratio) {
+				osd_scrub_join(dev, SS_AUTO_FULL | SS_RESET);
+				goto full;
+			}
+
+wait:
+			if (OBD_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_DELAY) &&
+			    cfs_fail_val > 0)
+				continue;
+
+			sf->sf_status = SS_COMPLETED;
+			sf->sf_flags &= ~(SF_RECREATED | SF_INCONSISTENT |
+					  SF_UPGRADE | SF_AUTO);
+			l_wait_event(thread->t_ctl_waitq,
+				     !thread_is_running(thread) ||
+				     !scrub->os_partial_scan ||
+				     scrub->os_in_join ||
+				     !list_empty(&scrub->os_inconsistent_items),
+				     &lwi);
+
+			if (unlikely(!thread_is_running(thread)))
+				RETURN(0);
+
+			if (!scrub->os_partial_scan || scrub->os_in_join)
+				goto full;
+
+			continue;
+		}
+		default:
+			LASSERTF(rc == 0, "rc = %d\n", rc);
+
+			sf->sf_status = SS_SCANNING;
+			sf->sf_flags |= SF_AUTO;
+			osd_scrub_exec(info, dev, &param, oic, &noslot, rc);
+			break;
+		}
+	}
+
+full:
+	if (!preload) {
+		sf->sf_status = SS_SCANNING;
+		l_wait_event(thread->t_ctl_waitq,
+			     !thread_is_running(thread) || !scrub->os_in_join,
+			     &lwi);
+
+		if (unlikely(!thread_is_running(thread)))
+			RETURN(0);
+	}
+
+	noslot = false;
+	if (!preload) {
 		next = osd_scrub_next;
 		exec = osd_scrub_exec;
 		pos = &scrub->os_pos_current;
@@ -1159,7 +1318,6 @@ static int osd_inode_iteration(struct osd_thread_info *info,
 		pos = &ooc->ooc_pos_preload;
 		count = &ooc->ooc_cached_items;
 	}
-	param.sb = osd_sb(dev);
 	limit = le32_to_cpu(LDISKFS_SB(param.sb)->s_es->s_inodes_count);
 
 	while (*pos <= limit && *count < max) {
@@ -1186,8 +1344,7 @@ static int osd_inode_iteration(struct osd_thread_info *info,
 		if (param.bitmap == NULL) {
 			CDEBUG(D_LFSCK, "%.16s: fail to read bitmap for %u, "
 			       "scrub will stop, urgent mode\n",
-			       LDISKFS_SB(param.sb)->s_es->s_volume_name,
-			       (__u32)param.bg);
+			       osd_scrub2name(scrub), (__u32)param.bg);
 			RETURN(-EIO);
 		}
 
@@ -1276,7 +1433,7 @@ static int osd_scrub_main(void *args)
 		GOTO(out, rc);
 	}
 
-	if (!scrub->os_full_speed) {
+	if (!scrub->os_full_speed && !scrub->os_partial_scan) {
 		struct l_wait_info lwi = { 0 };
 		struct osd_otable_it *it = dev->od_otable_it;
 		struct osd_otable_cache *ooc = &it->ooi_cache;
@@ -2035,17 +2192,30 @@ static int do_osd_scrub_start(struct osd_device *dev, __u32 flags)
 	int		      rc;
 	ENTRY;
 
-again:
 	/* os_lock: sync status between stop and scrub thread */
 	spin_lock(&scrub->os_lock);
+
+again:
 	if (thread_is_running(thread)) {
 		spin_unlock(&scrub->os_lock);
-		RETURN(-EALREADY);
-	} else if (unlikely(thread_is_stopping(thread))) {
+		if (!scrub->os_partial_scan || flags & SS_AUTO_PARTIAL)
+			RETURN(-EALREADY);
+
+		osd_scrub_join(dev, flags);
+		spin_lock(&scrub->os_lock);
+		if (!thread_is_running(thread))
+			goto again;
+
+		spin_unlock(&scrub->os_lock);
+		RETURN(0);
+	}
+
+	if (unlikely(thread_is_stopping(thread))) {
 		spin_unlock(&scrub->os_lock);
 		l_wait_event(thread->t_ctl_waitq,
 			     thread_is_stopped(thread),
 			     &lwi);
+		spin_lock(&scrub->os_lock);
 		goto again;
 	}
 	spin_unlock(&scrub->os_lock);
@@ -2077,14 +2247,14 @@ again:
 	RETURN(0);
 }
 
-int osd_scrub_start(struct osd_device *dev)
+int osd_scrub_start(struct osd_device *dev, __u32 flags)
 {
 	int rc;
 	ENTRY;
 
 	/* od_otable_mutex: prevent curcurrent start/stop */
 	mutex_lock(&dev->od_otable_mutex);
-	rc = do_osd_scrub_start(dev, SS_AUTO);
+	rc = do_osd_scrub_start(dev, flags);
 	mutex_unlock(&dev->od_otable_mutex);
 
 	RETURN(rc == -EALREADY ? 0 : rc);
@@ -2252,7 +2422,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	     (sf->sf_status == SS_INIT &&
 	      sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT |
 			      SF_UPGRADE))))
-		rc = osd_scrub_start(dev);
+		rc = osd_scrub_start(dev, SS_AUTO_FULL);
 
 	if (rc != 0)
 		GOTO(cleanup_oi, rc);
@@ -2336,7 +2506,7 @@ static struct dt_it *osd_otable_it_init(const struct lu_env *env,
 			start |= SS_CLEAR_DRYRUN;
 	}
 
-	rc = do_osd_scrub_start(dev, start);
+	rc = do_osd_scrub_start(dev, start & ~SS_AUTO_PARTIAL);
 	if (rc < 0 && rc != -EALREADY) {
 		dev->od_otable_it = NULL;
 		OBD_FREE_PTR(it);
@@ -2546,6 +2716,8 @@ const struct dt_index_operations osd_otable_ops = {
 
 /* high priority inconsistent items list APIs */
 
+#define SCRUB_BAD_OIMAP_DECAY_INTERVAL	60
+
 int osd_oii_insert(struct osd_device *dev, struct osd_idmap_cache *oic,
 		   int insert)
 {
@@ -2562,6 +2734,25 @@ int osd_oii_insert(struct osd_device *dev, struct osd_idmap_cache *oic,
 	INIT_LIST_HEAD(&oii->oii_list);
 	oii->oii_cache = *oic;
 	oii->oii_insert = insert;
+
+	if (scrub->os_partial_scan) {
+		__u64 now = cfs_time_current_sec();
+
+		/* If there haven't been errors in a long time,
+		 * decay old count until either the errors are
+		 * gone or we reach the current interval. */
+		while (unlikely(scrub->os_bad_oimap_count > 0 &&
+				scrub->os_bad_oimap_time +
+				SCRUB_BAD_OIMAP_DECAY_INTERVAL < now)) {
+			scrub->os_bad_oimap_count >>= 1;
+			scrub->os_bad_oimap_time +=
+				SCRUB_BAD_OIMAP_DECAY_INTERVAL;
+		}
+
+		scrub->os_bad_oimap_time = now;
+		if (++scrub->os_bad_oimap_count > dev->od_full_scrub_speed)
+			scrub->os_full_scrub = 1;
+	}
 
 	spin_lock(&scrub->os_lock);
 	if (unlikely(!thread_is_running(thread))) {
