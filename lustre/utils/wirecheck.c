@@ -1789,6 +1789,45 @@ check_getinfo_fid2path(void)
 	CHECK_MEMBER(getinfo_fid2path, gf_path[0]);
 }
 
+/* We don't control the definitions of posix_acl_xattr_{entry,header}
+ * and so we shouldn't have used them in our wire protocol. But it's
+ * too late now and so we emit checks against the *fixed* definitions
+ * below. See LU-5607. */
+
+typedef struct {
+	__u16			e_tag;
+	__u16			e_perm;
+	__u32			e_id;
+} posix_acl_xattr_entry;
+
+typedef struct {
+	__u32			a_version;
+	posix_acl_xattr_entry	a_entries[0];
+} posix_acl_xattr_header;
+
+static void
+check_posix_acl_xattr_entry(void)
+{
+	BLANK_LINE();
+	printf("#ifdef CONFIG_FS_POSIX_ACL\n");
+	CHECK_STRUCT_TYPEDEF(posix_acl_xattr_entry);
+	CHECK_MEMBER_TYPEDEF(posix_acl_xattr_entry, e_tag);
+	CHECK_MEMBER_TYPEDEF(posix_acl_xattr_entry, e_perm);
+	CHECK_MEMBER_TYPEDEF(posix_acl_xattr_entry, e_id);
+	printf("#endif /* CONFIG_FS_POSIX_ACL */\n");
+}
+
+static void
+check_posix_acl_xattr_header(void)
+{
+	BLANK_LINE();
+	printf("#ifdef CONFIG_FS_POSIX_ACL\n");
+	CHECK_STRUCT_TYPEDEF(posix_acl_xattr_header);
+	CHECK_MEMBER_TYPEDEF(posix_acl_xattr_header, a_version);
+	CHECK_MEMBER_TYPEDEF(posix_acl_xattr_header, a_entries);
+	printf("#endif /* CONFIG_FS_POSIX_ACL */\n");
+}
+
 static void
 check_ll_user_fiemap(void)
 {
@@ -2498,6 +2537,8 @@ main(int argc, char **argv)
 	check_getinfo_fid2path();
 	check_ll_user_fiemap();
 	check_ll_fiemap_extent();
+	check_posix_acl_xattr_entry();
+	check_posix_acl_xattr_header();
 	check_link_ea_header();
 	check_link_ea_entry();
 	check_layout_intent();
