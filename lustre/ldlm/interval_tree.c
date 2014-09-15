@@ -43,7 +43,6 @@
 #else
 # include <libcfs/libcfs.h>
 #endif
-#include <obd_support.h>
 #include <interval_tree.h>
 
 enum {

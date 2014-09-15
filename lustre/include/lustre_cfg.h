@@ -37,6 +37,15 @@
 #ifndef _LUSTRE_CFG_H
 #define _LUSTRE_CFG_H
 
+#include <libcfs/libcfs.h>
+#include <lustre/lustre_user.h>
+
+#ifdef __KERNEL__
+# include <obd_support.h>
+#else /* !__KERNEL__ */
+# include <malloc.h>
+#endif /* __KERNEL__ */
+
 /** \defgroup cfg cfg
  *
  * @{
@@ -238,9 +247,6 @@ static inline __u32 lustre_cfg_len(__u32 bufcount, __u32 *buflens)
         RETURN(cfs_size_round(len));
 }
 
-
-#include <obd_support.h>
-
 static inline void lustre_cfg_init(struct lustre_cfg *lcfg, int cmd,
 				   struct lustre_cfg_bufs *bufs)
 {
@@ -263,24 +269,25 @@ static inline struct lustre_cfg *lustre_cfg_new(int cmd,
 {
 	struct lustre_cfg	*lcfg;
 
-	ENTRY;
+#ifdef __KERNEL__
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount, bufs->lcfg_buflen));
+#else /* !__KERNEL__ */
+	lcfg = malloc(lustre_cfg_len(bufs->lcfg_bufcount, bufs->lcfg_buflen));
+#endif /* __KERNEL__ */
 
-	OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount,
-				       bufs->lcfg_buflen));
 	if (lcfg != NULL)
 		lustre_cfg_init(lcfg, cmd, bufs);
-	RETURN(lcfg);
+
+	return lcfg;
 }
 
 static inline void lustre_cfg_free(struct lustre_cfg *lcfg)
 {
-        int len;
-
-        len = lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens);
-
-        OBD_FREE(lcfg, len);
-        EXIT;
-        return;
+#ifdef __KERNEL__
+	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
+#else /* ! __KERNEL__ */
+	free(lcfg);
+#endif /* __KERNEL__ */
 }
 
 static inline int lustre_cfg_sanity_check(void *buf, size_t len)
@@ -311,12 +318,6 @@ static inline int lustre_cfg_sanity_check(void *buf, size_t len)
         RETURN(0);
 }
 
-#include <lustre/lustre_user.h>
-
-#ifndef INVALID_UID
-#define INVALID_UID     (-1)
-#endif
-
 /** @} cfg */
 
-#endif // _LUSTRE_CFG_H
+#endif /* _LUSTRE_CFG_H */

@@ -37,10 +37,18 @@
 #ifndef _OBD_SUPPORT
 #define _OBD_SUPPORT
 
+#ifndef __KERNEL__
+# error Userspace should not include obd_support.h.
+#endif /* !__KERNEL__ */
+
+#include <linux/atomic.h>
+#include <linux/highmem.h>
+#include <linux/slab.h>
+#include <linux/types.h>
+
 #include <libcfs/libcfs.h>
 #include <lprocfs_status.h>
-
-#include <linux/obd_support.h>
+#include <lustre_handles.h>
 
 /* global variables */
 extern struct lprocfs_stats *obd_memory;
@@ -606,7 +614,7 @@ extern void obd_update_maxusage(void);
 extern __u64 obd_memory_max(void);
 extern __u64 obd_pages_max(void);
 
-#else
+#else /* LPROCFS */
 
 extern __u64 obd_alloc;
 extern __u64 obd_pages;
@@ -644,7 +652,7 @@ static inline void obd_pages_sub(int order)
 #define obd_memory_max() (obd_max_alloc)
 #define obd_pages_max() (obd_max_pages)
 
-#endif
+#endif /* !LPROCFS */
 
 #define OBD_DEBUG_MEMUSAGE (1)
 
@@ -678,22 +686,6 @@ static inline void obd_pages_sub(int order)
 #define OBD_ALLOC_FAIL_MASK ((1 << OBD_ALLOC_FAIL_BITS) - 1)
 #define OBD_ALLOC_FAIL_MULT (OBD_ALLOC_FAIL_MASK / 100)
 
-#if defined(LUSTRE_UTILS) /* this version is for utils only */
-#define __OBD_MALLOC_VERBOSE(ptr, cptab, cpt, size, flags)		      \
-do {									      \
-	(ptr) = (cptab) == NULL ?					      \
-		kmalloc(size, flags | __GFP_ZERO) :			      \
-		cfs_cpt_malloc(cptab, cpt, size, flags | __GFP_ZERO);	      \
-	if (unlikely((ptr) == NULL)) {                                        \
-		CERROR("kmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
-		       (int)(size), __FILE__, __LINE__);		      \
-	} else {							      \
-		CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p\n",	      \
-		       (int)(size), ptr);				      \
-	}								      \
-} while (0)
-
-#else /* this version is for the kernel and liblustre */
 #define OBD_FREE_RTN0(ptr)                                                    \
 ({                                                                            \
 	kfree(ptr);                                                        \
@@ -714,7 +706,6 @@ do {									      \
                 OBD_ALLOC_POST(ptr, size, "kmalloced");                       \
         }                                                                     \
 } while (0)
-#endif
 
 #define OBD_ALLOC_GFP(ptr, size, gfp_mask)				      \
 	__OBD_MALLOC_VERBOSE(ptr, NULL, 0, size, gfp_mask)
@@ -737,7 +728,7 @@ do {									      \
  * (and particularly to not set __GFP_FS, which is likely to cause some
  * deadlock situations in our code).
  */
-# define __OBD_VMALLOC_VERBOSE(ptr, cptab, cpt, size)			      \
+#define __OBD_VMALLOC_VERBOSE(ptr, cptab, cpt, size)			      \
 do {									      \
 	(ptr) = cptab == NULL ?						      \
 		__vmalloc(size, GFP_NOFS | __GFP_HIGHMEM | __GFP_ZERO,	      \
@@ -753,12 +744,10 @@ do {									      \
 	}                                                                     \
 } while(0)
 
-# define OBD_VMALLOC(ptr, size)						      \
+#define OBD_VMALLOC(ptr, size)						      \
 	 __OBD_VMALLOC_VERBOSE(ptr, NULL, 0, size)
-# define OBD_CPT_VMALLOC(ptr, cptab, cpt, size)				      \
+#define OBD_CPT_VMALLOC(ptr, cptab, cpt, size)				      \
 	 __OBD_VMALLOC_VERBOSE(ptr, cptab, cpt, size)
-
-#ifdef __KERNEL__
 
 /* Allocations above this size are considered too big and could not be done
  * atomically.
@@ -793,17 +782,6 @@ do {                                                                          \
                 OBD_FREE(ptr, size);                                          \
 } while (0)
 
-#else /* !__KERNEL__ */
-
-#define OBD_ALLOC_LARGE(ptr, size)					      \
-	OBD_ALLOC(ptr, size)
-#define OBD_CPT_ALLOC_LARGE(ptr, cptab, cpt, size)			      \
-	OBD_ALLOC(ptr, size)
-#define OBD_FREE_LARGE(ptr, size)					      \
-	OBD_FREE(ptr, size)
-
-#endif /* __KERNEL__ */
-
 #ifdef CONFIG_DEBUG_SLAB
 #define POISON(ptr, c, s) do {} while (0)
 #define POISON_PTR(ptr)  ((void)0)
@@ -819,7 +797,6 @@ do {                                                                          \
 #define POISON_PAGE(page, val) do { } while (0)
 #endif
 
-#ifdef __KERNEL__
 #define OBD_FREE(ptr, size)                                                   \
 do {                                                                          \
         OBD_FREE_PRE(ptr, size, "kfreed");                                    \
@@ -838,11 +815,6 @@ do {									      \
 	call_rcu(&__h->h_rcu, class_handle_free_cb);			      \
 	POISON_PTR(ptr);						      \
 } while(0)
-
-#else
-#define OBD_FREE(ptr, size) ((void)(size), free((ptr)))
-#define OBD_FREE_RCU(ptr, size, handle) (OBD_FREE(ptr, size))
-#endif /* ifdef __KERNEL__ */
 
 #define OBD_VFREE(ptr, size)				\
 	do {						\
