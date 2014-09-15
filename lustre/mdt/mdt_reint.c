@@ -46,6 +46,7 @@
 
 #define DEBUG_SUBSYSTEM S_MDS
 
+#include <lprocfs_status.h>
 #include "mdt_internal.h"
 #include <lustre_lmv.h>
 
@@ -2022,28 +2023,68 @@ static int mdt_reint_migrate(struct mdt_thread_info *info,
 	return mdt_reint_rename_or_migrate(info, lhc, MRL_MIGRATE);
 }
 
-typedef int (*mdt_reinter)(struct mdt_thread_info *info,
-                           struct mdt_lock_handle *lhc);
+struct mdt_reinter {
+	int (*mr_handler)(struct mdt_thread_info *, struct mdt_lock_handle *);
+	enum lprocfs_extra_opc mr_extra_opc;
+};
 
-static mdt_reinter reinters[REINT_MAX] = {
-	[REINT_SETATTR]  = mdt_reint_setattr,
-	[REINT_CREATE]   = mdt_reint_create,
-	[REINT_LINK]     = mdt_reint_link,
-	[REINT_UNLINK]   = mdt_reint_unlink,
-	[REINT_RENAME]   = mdt_reint_rename,
-	[REINT_OPEN]     = mdt_reint_open,
-	[REINT_SETXATTR] = mdt_reint_setxattr,
-	[REINT_RMENTRY]  = mdt_reint_unlink,
-	[REINT_MIGRATE]   = mdt_reint_migrate,
+static const struct mdt_reinter mdt_reinters[] = {
+	[REINT_SETATTR]	= {
+		.mr_handler = &mdt_reint_setattr,
+		.mr_extra_opc = MDS_REINT_SETATTR,
+	},
+	[REINT_CREATE] = {
+		.mr_handler = &mdt_reint_create,
+		.mr_extra_opc = MDS_REINT_CREATE,
+	},
+	[REINT_LINK] = {
+		.mr_handler = &mdt_reint_link,
+		.mr_extra_opc = MDS_REINT_LINK,
+	},
+	[REINT_UNLINK] = {
+		.mr_handler = &mdt_reint_unlink,
+		.mr_extra_opc = MDS_REINT_UNLINK,
+	},
+	[REINT_RENAME] = {
+		.mr_handler = &mdt_reint_rename,
+		.mr_extra_opc = MDS_REINT_RENAME,
+	},
+	[REINT_OPEN] = {
+		.mr_handler = &mdt_reint_open,
+		.mr_extra_opc = MDS_REINT_OPEN,
+	},
+	[REINT_SETXATTR] = {
+		.mr_handler = &mdt_reint_setxattr,
+		.mr_extra_opc = MDS_REINT_SETXATTR,
+	},
+	[REINT_RMENTRY] = {
+		.mr_handler = &mdt_reint_unlink,
+		.mr_extra_opc = MDS_REINT_UNLINK,
+	},
+	[REINT_MIGRATE] = {
+		.mr_handler = &mdt_reint_migrate,
+		.mr_extra_opc = MDS_REINT_RENAME,
+	},
 };
 
 int mdt_reint_rec(struct mdt_thread_info *info,
-                  struct mdt_lock_handle *lhc)
+		  struct mdt_lock_handle *lhc)
 {
-        int rc;
-        ENTRY;
+	const struct mdt_reinter *mr;
+	int rc;
+	ENTRY;
 
-        rc = reinters[info->mti_rr.rr_opcode](info, lhc);
+	if (!(info->mti_rr.rr_opcode < ARRAY_SIZE(mdt_reinters)))
+		RETURN(-EPROTO);
 
-        RETURN(rc);
+	mr = &mdt_reinters[info->mti_rr.rr_opcode];
+	if (mr->mr_handler == NULL)
+		RETURN(-EPROTO);
+
+	rc = (*mr->mr_handler)(info, lhc);
+
+	lprocfs_counter_incr(ptlrpc_req2svc(mdt_info_req(info))->srv_stats,
+			     PTLRPC_LAST_CNTR + mr->mr_extra_opc);
+
+	RETURN(rc);
 }

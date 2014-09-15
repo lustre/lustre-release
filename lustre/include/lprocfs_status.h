@@ -351,7 +351,7 @@ enum {
 
 #define PTLRPC_FIRST_CNTR PTLRPC_REQWAIT_CNTR
 
-enum {
+enum lprocfs_extra_opc {
         LDLM_GLIMPSE_ENQUEUE = 0,
         LDLM_PLAIN_ENQUEUE,
         LDLM_EXTENT_ENQUEUE,
