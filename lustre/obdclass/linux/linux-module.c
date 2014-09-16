@@ -412,17 +412,35 @@ struct file_operations obd_device_list_fops = {
 
 int class_procfs_init(void)
 {
+	struct proc_dir_entry *entry;
 	int rc;
 	ENTRY;
 
 	obd_sysctl_init();
-	proc_lustre_root = lprocfs_seq_register("fs/lustre", NULL,
-						lprocfs_base, NULL);
+
+	entry = lprocfs_seq_register("fs/lustre", NULL, lprocfs_base, NULL);
+	if (IS_ERR(entry)) {
+		rc = PTR_ERR(entry);
+		CERROR("cannot create '/proc/fs/lustre': rc = %d\n", rc);
+		RETURN(rc);
+	}
+
+	proc_lustre_root = entry;
+
 	rc = lprocfs_seq_create(proc_lustre_root, "devices", 0444,
 				&obd_device_list_fops, NULL);
-	if (rc)
-		CERROR("error adding /proc/fs/lustre/devices file\n");
-	RETURN(0);
+	if (rc < 0) {
+		CERROR("cannot create '/proc/fs/lustre/devices': rc = %d\n",
+		       rc);
+		GOTO(out_proc, rc);
+	}
+
+	RETURN(rc);
+
+out_proc:
+	lprocfs_remove(&proc_lustre_root);
+
+	RETURN(rc);
 }
 
 int class_procfs_clean(void)
