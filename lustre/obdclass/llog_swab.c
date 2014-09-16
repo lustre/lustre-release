@@ -135,32 +135,32 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec)
 {
 	struct llog_rec_tail *tail = NULL;
 
-        __swab32s(&rec->lrh_len);
-        __swab32s(&rec->lrh_index);
-        __swab32s(&rec->lrh_type);
+	__swab32s(&rec->lrh_len);
+	__swab32s(&rec->lrh_index);
+	__swab32s(&rec->lrh_type);
 	__swab32s(&rec->lrh_id);
 
-        switch (rec->lrh_type) {
+	switch (rec->lrh_type) {
 	case OST_SZ_REC:
 	{
-                struct llog_size_change_rec *lsc =
-                        (struct llog_size_change_rec *)rec;
+		struct llog_size_change_rec *lsc =
+			(struct llog_size_change_rec *)rec;
 
-                lustre_swab_ll_fid(&lsc->lsc_fid);
-                __swab32s(&lsc->lsc_ioepoch);
+		lustre_swab_ll_fid(&lsc->lsc_fid);
+		__swab32s(&lsc->lsc_ioepoch);
 		tail = &lsc->lsc_tail;
-                break;
-        }
+		break;
+	}
 	case MDS_UNLINK_REC:
 	{
-                struct llog_unlink_rec *lur = (struct llog_unlink_rec *)rec;
+		struct llog_unlink_rec *lur = (struct llog_unlink_rec *)rec;
 
-                __swab64s(&lur->lur_oid);
-                __swab32s(&lur->lur_oseq);
-                __swab32s(&lur->lur_count);
+		__swab64s(&lur->lur_oid);
+		__swab32s(&lur->lur_oseq);
+		__swab32s(&lur->lur_count);
 		tail = &lur->lur_tail;
-                break;
-        }
+		break;
+	}
 	case MDS_UNLINK64_REC:
 	{
 		struct llog_unlink64_rec *lur =
@@ -173,16 +173,17 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec)
 	}
 	case CHANGELOG_REC:
 	{
-                struct llog_changelog_rec *cr = (struct llog_changelog_rec*)rec;
+		struct llog_changelog_rec *cr =
+			(struct llog_changelog_rec *)rec;
 
-                __swab16s(&cr->cr.cr_namelen);
-                __swab16s(&cr->cr.cr_flags);
-                __swab32s(&cr->cr.cr_type);
-                __swab64s(&cr->cr.cr_index);
-                __swab64s(&cr->cr.cr_prev);
-                __swab64s(&cr->cr.cr_time);
-                lustre_swab_lu_fid(&cr->cr.cr_tfid);
-                lustre_swab_lu_fid(&cr->cr.cr_pfid);
+		__swab16s(&cr->cr.cr_namelen);
+		__swab16s(&cr->cr.cr_flags);
+		__swab32s(&cr->cr.cr_type);
+		__swab64s(&cr->cr.cr_index);
+		__swab64s(&cr->cr.cr_prev);
+		__swab64s(&cr->cr.cr_time);
+		lustre_swab_lu_fid(&cr->cr.cr_tfid);
+		lustre_swab_lu_fid(&cr->cr.cr_pfid);
 		if (CHANGELOG_REC_EXTENDED(&cr->cr)) {
 			struct llog_changelog_ext_rec *ext =
 				(struct llog_changelog_ext_rec *)rec;
@@ -193,18 +194,20 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec)
 		} else {
 			tail = &cr->cr_tail;
 		}
-                break;
-        }
+		tail = (struct llog_rec_tail *)((char *)tail +
+						cr->cr.cr_namelen);
+		break;
+	}
 	case CHANGELOG_USER_REC:
 	{
-                struct llog_changelog_user_rec *cur =
-                        (struct llog_changelog_user_rec*)rec;
+		struct llog_changelog_user_rec *cur =
+			(struct llog_changelog_user_rec *)rec;
 
-                __swab32s(&cur->cur_id);
-                __swab64s(&cur->cur_endrec);
+		__swab32s(&cur->cur_id);
+		__swab64s(&cur->cur_endrec);
 		tail = &cur->cur_tail;
-                break;
-        }
+		break;
+	}
 
 	case HSM_AGENT_REC: {
 		struct llog_agent_req_rec *arr =
@@ -236,23 +239,23 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec)
 		__swab64s(&lsr->lsr_valid);
 		tail = &lsr->lsr_tail;
 		break;
-        }
-        case OBD_CFG_REC:
-                /* these are swabbed as they are consumed */
-                break;
+	}
+	case OBD_CFG_REC:
+		/* these are swabbed as they are consumed */
+		break;
 	case LLOG_HDR_MAGIC:
 	{
-                struct llog_log_hdr *llh = (struct llog_log_hdr *)rec;
+		struct llog_log_hdr *llh = (struct llog_log_hdr *)rec;
 
-                __swab64s(&llh->llh_timestamp);
-                __swab32s(&llh->llh_count);
-                __swab32s(&llh->llh_bitmap_offset);
-                __swab32s(&llh->llh_flags);
-                __swab32s(&llh->llh_size);
-                __swab32s(&llh->llh_cat_idx);
+		__swab64s(&llh->llh_timestamp);
+		__swab32s(&llh->llh_count);
+		__swab32s(&llh->llh_bitmap_offset);
+		__swab32s(&llh->llh_flags);
+		__swab32s(&llh->llh_size);
+		__swab32s(&llh->llh_cat_idx);
 		tail = &llh->llh_tail;
-                break;
-        }
+		break;
+	}
 	case LLOG_LOGID_MAGIC:
 	{
 		struct llog_logid_rec *lid = (struct llog_logid_rec *)rec;
@@ -270,17 +273,17 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec)
 		tail = &lgr->lgr_tail;
 		break;
 	}
-        case LLOG_PAD_MAGIC:
-                break;
-        default:
-                CERROR("Unknown llog rec type %#x swabbing rec %p\n",
-                       rec->lrh_type, rec);
-        }
+	case LLOG_PAD_MAGIC:
+		break;
+	default:
+		CERROR("Unknown llog rec type %#x swabbing rec %p\n",
+		       rec->lrh_type, rec);
+	}
 
-        if (tail) {
-                __swab32s(&tail->lrt_len);
-                __swab32s(&tail->lrt_index);
-        }
+	if (tail) {
+		__swab32s(&tail->lrt_len);
+		__swab32s(&tail->lrt_index);
+	}
 }
 EXPORT_SYMBOL(lustre_swab_llog_rec);
 
