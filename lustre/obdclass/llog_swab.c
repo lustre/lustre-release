@@ -171,16 +171,17 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec)
 	}
 	case CHANGELOG_REC:
 	{
-                struct llog_changelog_rec *cr = (struct llog_changelog_rec*)rec;
+		struct llog_changelog_rec *cr =
+			(struct llog_changelog_rec *)rec;
 
-                __swab16s(&cr->cr.cr_namelen);
-                __swab16s(&cr->cr.cr_flags);
-                __swab32s(&cr->cr.cr_type);
-                __swab64s(&cr->cr.cr_index);
-                __swab64s(&cr->cr.cr_prev);
-                __swab64s(&cr->cr.cr_time);
-                lustre_swab_lu_fid(&cr->cr.cr_tfid);
-                lustre_swab_lu_fid(&cr->cr.cr_pfid);
+		__swab16s(&cr->cr.cr_namelen);
+		__swab16s(&cr->cr.cr_flags);
+		__swab32s(&cr->cr.cr_type);
+		__swab64s(&cr->cr.cr_index);
+		__swab64s(&cr->cr.cr_prev);
+		__swab64s(&cr->cr.cr_time);
+		lustre_swab_lu_fid(&cr->cr.cr_tfid);
+		lustre_swab_lu_fid(&cr->cr.cr_pfid);
 		if (CHANGELOG_REC_EXTENDED(&cr->cr)) {
 			struct llog_changelog_ext_rec *ext =
 				(struct llog_changelog_ext_rec *)rec;
@@ -191,8 +192,10 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec)
 		} else {
 			tail = &cr->cr_tail;
 		}
-                break;
-        }
+		tail = (struct llog_rec_tail *)((char *)tail +
+						cr->cr.cr_namelen);
+		break;
+	}
 	case CHANGELOG_USER_REC:
 	{
                 struct llog_changelog_user_rec *cur =
@@ -275,10 +278,10 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec)
                        rec->lrh_type, rec);
         }
 
-        if (tail) {
-                __swab32s(&tail->lrt_len);
-                __swab32s(&tail->lrt_index);
-        }
+	if (tail) {
+		__swab32s(&tail->lrt_len);
+		__swab32s(&tail->lrt_index);
+	}
 }
 EXPORT_SYMBOL(lustre_swab_llog_rec);
 
