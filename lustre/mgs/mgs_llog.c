@@ -1888,7 +1888,12 @@ static int mgs_write_log_failnids(const struct lu_env *env,
         #07 L add_conn 0:OSC_uml1_ost1_mdsA  1:uml2_UUID
         */
 
-        /* Pull failnid info out of params string */
+	/*
+	 * Pull failnid info out of params string, which may contain something
+	 * like "<nid1>,<nid2>:<nid3>,<nid4>".  class_parse_nid() does not
+	 * complain about abnormal inputs like ",:<nid1>", "<nid1>:,<nid2>",
+	 * etc.  However, convert_hostnames() should have caught those.
+	 */
         while (class_find_param(ptr, PARAM_FAILNODE, &ptr) == 0) {
                 while (class_parse_nid(ptr, &nid, &ptr) == 0) {
                         if (failnodeuuid == NULL) {
@@ -1903,15 +1908,25 @@ static int mgs_write_log_failnids(const struct lu_env *env,
                                "client %s\n", libcfs_nid2str(nid),
                                failnodeuuid, cliname);
 			rc = record_add_uuid(env, llh, nid, failnodeuuid);
-                }
+			/*
+			 * If *ptr is ':', we have added all NIDs for
+			 * failnodeuuid.
+			 */
+			if (*ptr == ':') {
+				rc = record_add_conn(env, llh, cliname,
+						     failnodeuuid);
+				name_destroy(&failnodeuuid);
+				failnodeuuid = NULL;
+			}
+		}
 		if (failnodeuuid) {
 			rc = record_add_conn(env, llh, cliname, failnodeuuid);
 			name_destroy(&failnodeuuid);
 			failnodeuuid = NULL;
 		}
-        }
+	}
 
-        return rc;
+	return rc;
 }
 
 static int mgs_write_log_mdc_to_lmv(const struct lu_env *env,
