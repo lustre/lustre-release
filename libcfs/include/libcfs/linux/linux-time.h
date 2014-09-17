@@ -101,8 +101,6 @@
 #include <linux/time.h>
 #include <asm/div64.h>
 
-#include <libcfs/linux/portals_compat25.h>
-
 /*
  * post 2.5 kernels.
  */

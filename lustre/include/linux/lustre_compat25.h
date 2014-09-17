@@ -39,7 +39,6 @@
 
 #include <linux/fs_struct.h>
 #include <linux/namei.h>
-#include <libcfs/linux/portals_compat25.h>
 
 #include <linux/lustre_patchless_compat.h>
 

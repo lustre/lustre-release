@@ -50,7 +50,6 @@
 #endif
 
 #include <net/sock.h>
-#include <libcfs/linux/portals_compat25.h>
 
 #ifndef HIPQUAD
 // XXX Should just kill all users

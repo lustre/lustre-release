@@ -111,6 +111,11 @@ do {                                                                    \
  */
 #define CFS_CURPROC_COMM_MAX (sizeof ((struct task_struct *)0)->comm)
 
+/* helper for sysctl handlers */
+int lprocfs_call_handler(void *data, int write, loff_t *ppos, void *buffer,
+			 size_t *lenp, int (*handler)(void *data, int write,
+			 loff_t pos, void *buffer, int len));
+
 #include <linux/capability.h>
 
 /*

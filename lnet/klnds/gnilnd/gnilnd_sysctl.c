@@ -40,7 +40,9 @@ static kgn_sysctl_data_t        kgnilnd_sysctl;
 
 static struct ctl_table_header *kgnilnd_table_header = NULL;
 
-static int LL_PROC_PROTO(proc_toggle_thread_pause)
+static int
+proc_toggle_thread_pause(struct ctl_table *table, int write,
+			 void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	int  old_val = kgnilnd_sysctl.ksd_pause_trigger;
 	int  rc = 0;
@@ -68,7 +70,9 @@ static int LL_PROC_PROTO(proc_toggle_thread_pause)
 	RETURN(rc);
 }
 
-static int LL_PROC_PROTO(proc_hw_quiesce)
+static int
+proc_hw_quiesce(struct ctl_table *table, int write, void __user *buffer,
+		size_t *lenp, loff_t *ppos)
 {
 	int              rc = 0;
 	kgn_device_t    *dev;
@@ -97,7 +101,9 @@ static int LL_PROC_PROTO(proc_hw_quiesce)
 	RETURN(rc);
 }
 
-int LL_PROC_PROTO(proc_trigger_stack_reset)
+static int
+proc_trigger_stack_reset(struct ctl_table *table, int write,
+			 void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	int              rc = 0;
 	int              i = 1;
@@ -129,7 +135,9 @@ int LL_PROC_PROTO(proc_trigger_stack_reset)
 	RETURN(rc);
 }
 
-static int LL_PROC_PROTO(proc_toggle_rdmaq_override)
+static int
+proc_toggle_rdmaq_override(struct ctl_table *table, int write,
+			   void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	int  old_val = kgnilnd_sysctl.ksd_rdmaq_override;
 	int  rc = 0;
@@ -161,7 +169,9 @@ static int LL_PROC_PROTO(proc_toggle_rdmaq_override)
 /* /proc/sys entry point for injecting up/down nid event
  * <up|down> <nid>
  */
-static int LL_PROC_PROTO(proc_peer_state)
+static int
+proc_peer_state(struct ctl_table *table, int write, void __user *buffer,
+		size_t *lenp, loff_t *ppos)
 {
 	int             rc;
 	int             nid;

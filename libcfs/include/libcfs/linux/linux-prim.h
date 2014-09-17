@@ -67,7 +67,6 @@
 #endif
 #include <linux/user_namespace.h>
 #include <linux/miscdevice.h>
-#include <libcfs/linux/portals_compat25.h>
 #include <asm/div64.h>
 
 #include <libcfs/linux/linux-time.h>
@@ -85,15 +84,6 @@
 #ifndef NR_CPUS
 #define NR_CPUS				1
 #endif
-
-#define DECLARE_PROC_HANDLER(name)                      \
-static int                                              \
-LL_PROC_PROTO(name)                                     \
-{                                                       \
-        return proc_call_handler(table->data, write,    \
-                                 ppos, buffer, lenp,    \
-                                 __##name);             \
-}
 
 /*
  * Wait Queue

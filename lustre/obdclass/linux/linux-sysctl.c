@@ -57,7 +57,9 @@
 struct ctl_table_header *obd_table_header = NULL;
 #endif
 
-int LL_PROC_PROTO(proc_set_timeout)
+static int
+proc_set_timeout(struct ctl_table *table, int write, void __user *buffer,
+		 size_t *lenp, loff_t *ppos)
 {
         int rc;
 
@@ -67,7 +69,9 @@ int LL_PROC_PROTO(proc_set_timeout)
         return rc;
 }
 
-int LL_PROC_PROTO(proc_memory_alloc)
+static int
+proc_memory_alloc(struct ctl_table *table, int write, void __user *buffer,
+		  size_t *lenp, loff_t *ppos)
 {
         char buf[22];
         int len;
@@ -90,7 +94,9 @@ int LL_PROC_PROTO(proc_memory_alloc)
         return 0;
 }
 
-int LL_PROC_PROTO(proc_pages_alloc)
+static int
+proc_pages_alloc(struct ctl_table *table, int write, void __user *buffer,
+		 size_t *lenp, loff_t *ppos)
 {
         char buf[22];
         int len;
@@ -113,7 +119,9 @@ int LL_PROC_PROTO(proc_pages_alloc)
         return 0;
 }
 
-int LL_PROC_PROTO(proc_mem_max)
+static int
+proc_mem_max(struct ctl_table *table, int write, void __user *buffer,
+	     size_t *lenp, loff_t *ppos)
 {
         char buf[22];
         int len;
@@ -136,7 +144,9 @@ int LL_PROC_PROTO(proc_mem_max)
         return 0;
 }
 
-int LL_PROC_PROTO(proc_pages_max)
+static int
+proc_pages_max(struct ctl_table *table, int write, void __user *buffer,
+	       size_t *lenp, loff_t *ppos)
 {
         char buf[22];
         int len;
@@ -159,7 +169,9 @@ int LL_PROC_PROTO(proc_pages_max)
         return 0;
 }
 
-int LL_PROC_PROTO(proc_max_dirty_pages_in_mb)
+static int
+proc_max_dirty_pages_in_mb(struct ctl_table *table, int write,
+			   void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	int rc = 0;
 
@@ -232,31 +244,6 @@ int proc_alloc_fail_rate(struct ctl_table *table, int write,
         return rc;
 }
 #endif
-
-int LL_PROC_PROTO(proc_bulk_timeout)
-{
-	return proc_dointvec(table, write, buffer, lenp, ppos);
-}
-int LL_PROC_PROTO(proc_at_min)
-{
-	return proc_dointvec(table, write, buffer, lenp, ppos);
-}
-int LL_PROC_PROTO(proc_at_max)
-{
-	return proc_dointvec(table, write, buffer, lenp, ppos);
-}
-int LL_PROC_PROTO(proc_at_extra)
-{
-	return proc_dointvec(table, write, buffer, lenp, ppos);
-}
-int LL_PROC_PROTO(proc_at_early_margin)
-{
-	return proc_dointvec(table, write, buffer, lenp, ppos);
-}
-int LL_PROC_PROTO(proc_at_history)
-{
-	return proc_dointvec(table, write, buffer, lenp, ppos);
-}
 
 #ifdef CONFIG_SYSCTL
 static struct ctl_table obd_table[] = {
@@ -356,7 +343,7 @@ static struct ctl_table obd_table[] = {
 		.data		= &bulk_timeout,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= &proc_bulk_timeout
+		.proc_handler	= &proc_dointvec
 	},
 	{
 		INIT_CTL_NAME
@@ -364,7 +351,7 @@ static struct ctl_table obd_table[] = {
 		.data		= &at_min,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= &proc_at_min
+		.proc_handler	= &proc_dointvec
 	},
 	{
 		INIT_CTL_NAME
@@ -372,7 +359,7 @@ static struct ctl_table obd_table[] = {
 		.data		= &at_max,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= &proc_at_max
+		.proc_handler	= &proc_dointvec
 	},
 	{
 		INIT_CTL_NAME
@@ -380,7 +367,7 @@ static struct ctl_table obd_table[] = {
 		.data		= &at_extra,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= &proc_at_extra
+		.proc_handler	= &proc_dointvec
 	},
 	{
 		INIT_CTL_NAME
@@ -388,7 +375,7 @@ static struct ctl_table obd_table[] = {
 		.data		= &at_early_margin,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= &proc_at_early_margin
+		.proc_handler	= &proc_dointvec
 	},
 	{
 		INIT_CTL_NAME
@@ -396,7 +383,7 @@ static struct ctl_table obd_table[] = {
 		.data		= &at_history,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= &proc_at_history
+		.proc_handler	= &proc_dointvec
 	},
 	{ 0 }
 };

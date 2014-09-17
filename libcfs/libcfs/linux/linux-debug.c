@@ -63,7 +63,6 @@
 # define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/libcfs.h>
-#include <libcfs/linux/portals_compat25.h>
 
 #include "tracefile.h"
 

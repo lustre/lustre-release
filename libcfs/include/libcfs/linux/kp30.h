@@ -71,8 +71,6 @@
 #include <linux/moduleparam.h>
 #include <linux/scatterlist.h>
 
-#include <libcfs/linux/portals_compat25.h>
-
 /******************************************************************************/
 /* Module parameter support */
 #define CFS_MODULE_PARM(name, t, type, perm, desc) \

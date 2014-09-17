@@ -67,7 +67,6 @@
 #include <linux/syscalls.h>
 
 #include <libcfs/libcfs.h>
-#include <libcfs/linux/portals_compat25.h>
 
 #include <linux/crc32.h>
 static inline __u32 ksocknal_csum(__u32 crc, unsigned char const *p, size_t len)
