@@ -244,6 +244,7 @@ unsigned int cfs_rand(void);
 void cfs_srand(unsigned int, unsigned int);
 void cfs_get_random_bytes(void *buf, int size);
 
+#include <libcfs/byteorder.h>
 #include <libcfs/err.h>
 #include <libcfs/libcfs_debug.h>
 #include <libcfs/libcfs_private.h>

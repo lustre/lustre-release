@@ -9,6 +9,7 @@ endif
 
 EXTRA_DIST = \
 	bitmap.h \
+	byteorder.h \
 	curproc.h \
 	err.h \
 	libcfs.h \
