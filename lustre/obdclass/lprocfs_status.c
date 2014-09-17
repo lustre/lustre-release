@@ -498,7 +498,10 @@ lprocfs_seq_register(const char *name, struct proc_dir_entry *parent,
 	struct proc_dir_entry *newchild;
 
 	newchild = proc_mkdir(name, parent);
-	if (newchild != NULL && list != NULL) {
+	if (newchild == NULL)
+		return ERR_PTR(-ENOMEM);
+
+	if (list != NULL) {
 		int rc = lprocfs_seq_add_vars(newchild, list, data);
 		if (rc) {
 			lprocfs_remove(&newchild);
