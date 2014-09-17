@@ -107,8 +107,6 @@ static inline int __is_po2(unsigned long long val)
 
 #define NULL ((void *)0)
 
-#define LUSTRE_SRV_LNET_PID      LUSTRE_LNET_PID
-
 #ifdef __KERNEL__
 
 #include <libcfs/list.h>

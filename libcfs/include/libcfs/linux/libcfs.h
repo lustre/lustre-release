@@ -96,9 +96,6 @@ do {                                                                    \
 #define CDEBUG_STACK() (0L)
 #endif /* __x86_64__ */
 
-/* initial pid  */
-#define LUSTRE_LNET_PID          12345
-
 /**
  * Platform specific declarations for cfs_curproc API (libcfs/curproc.h)
  *

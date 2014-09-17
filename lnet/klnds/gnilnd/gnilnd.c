@@ -1874,7 +1874,10 @@ kgnilnd_query(lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
 	kgn_tx_t                *tx;
 	kgn_peer_t              *peer = NULL;
 	kgn_conn_t              *conn = NULL;
-	lnet_process_id_t       id = {.nid = nid, .pid = LUSTRE_SRV_LNET_PID};
+	lnet_process_id_t       id = {
+		.nid = nid,
+		.pid = LNET_PID_LUSTRE,
+	};
 	ENTRY;
 
 	/* I expect to find him, so only take a read lock */

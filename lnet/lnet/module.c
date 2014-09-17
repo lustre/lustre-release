@@ -53,7 +53,7 @@ lnet_configure(void *arg)
 	LNET_MUTEX_LOCK(&lnet_config_mutex);
 
 	if (!the_lnet.ln_niinit_self) {
-		rc = LNetNIInit(LUSTRE_SRV_LNET_PID);
+		rc = LNetNIInit(LNET_PID_LUSTRE);
 		if (rc >= 0) {
 			the_lnet.ln_niinit_self = 1;
 			rc = 0;
@@ -93,7 +93,7 @@ lnet_dyn_configure(struct libcfs_ioctl_hdr *hdr)
 
 	LNET_MUTEX_LOCK(&lnet_config_mutex);
 	if (the_lnet.ln_niinit_self)
-		rc = lnet_dyn_add_ni(LUSTRE_SRV_LNET_PID,
+		rc = lnet_dyn_add_ni(LNET_PID_LUSTRE,
 				     conf->cfg_config_u.cfg_net.net_intf,
 				     conf->cfg_config_u.cfg_net.
 					net_peer_timeout,

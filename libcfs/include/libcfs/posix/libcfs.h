@@ -164,9 +164,6 @@ typedef unsigned long long cfs_cycles_t;
 #define CFS_CHECK_STACK(msgdata, mask, cdls) do {} while(0)
 #define CDEBUG_STACK() (0L)
 
-/* initial pid  */
-#define LUSTRE_LNET_PID          12345
-
 /**
  * Platform specific declarations for cfs_curproc API (libcfs/curproc.h)
  *

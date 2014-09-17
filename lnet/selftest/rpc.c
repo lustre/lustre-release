@@ -1667,10 +1667,10 @@ srpc_startup (void)
         srpc_data.rpc_state = SRPC_STATE_NONE;
 
 #ifdef __KERNEL__
-        rc = LNetNIInit(LUSTRE_SRV_LNET_PID);
+	rc = LNetNIInit(LNET_PID_LUSTRE);
 #else
         if (the_lnet.ln_server_mode_flag)
-                rc = LNetNIInit(LUSTRE_SRV_LNET_PID);
+		rc = LNetNIInit(LNET_PID_LUSTRE);
         else
                 rc = LNetNIInit(getpid() | LNET_PID_USERFLAG);
 #endif

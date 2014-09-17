@@ -283,7 +283,7 @@ out:
                                 rc = -1;
                         }
 
-                        (*idspp)[i].pid = LUSTRE_LNET_PID;
+			(*idspp)[i].pid = LNET_PID_LUSTRE;
                         i++;
                 }
 

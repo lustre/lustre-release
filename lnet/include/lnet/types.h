@@ -74,6 +74,7 @@ typedef __u32 lnet_pid_t;
 
 #define LNET_PID_RESERVED 0xf0000000 /* reserved bits in PID */
 #define LNET_PID_USERFLAG 0x80000000 /* set in userspace peers */
+#define LNET_PID_LUSTRE 12345
 
 #define LNET_TIME_FOREVER    (-1)
 

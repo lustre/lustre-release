@@ -1806,7 +1806,10 @@ ksocknal_query (lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
         cfs_time_t         now = cfs_time_current();
         ksock_peer_t      *peer = NULL;
 	rwlock_t		*glock = &ksocknal_data.ksnd_global_lock;
-        lnet_process_id_t  id = {.nid = nid, .pid = LUSTRE_SRV_LNET_PID};
+	lnet_process_id_t  id = {
+		.nid = nid,
+		.pid = LNET_PID_LUSTRE,
+	};
 
 	read_lock(glock);
 
@@ -2156,7 +2159,7 @@ ksocknal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 
         case IOC_LIBCFS_ADD_PEER:
                 id.nid = data->ioc_nid;
-                id.pid = LUSTRE_SRV_LNET_PID;
+		id.pid = LNET_PID_LUSTRE;
                 return ksocknal_add_peer (ni, id,
                                           data->ioc_u32[0], /* IP */
                                           data->ioc_u32[1]); /* port */

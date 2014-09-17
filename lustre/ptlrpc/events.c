@@ -509,7 +509,7 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid,
 
         portals_compatibility = LNetCtl(IOC_LIBCFS_PORTALS_COMPATIBILITY, NULL);
 
-        peer->pid = LUSTRE_SRV_LNET_PID;
+	peer->pid = LNET_PID_LUSTRE;
 
         /* Choose the matching UUID that's closest */
         while (lustre_uuid_to_peer(uuid->uuid, &dst_nid, count++) == 0) {
@@ -585,10 +585,7 @@ void ptlrpc_ni_fini(void)
 
 lnet_pid_t ptl_get_pid(void)
 {
-        lnet_pid_t        pid;
-
-        pid = LUSTRE_SRV_LNET_PID;
-        return pid;
+	return LNET_PID_LUSTRE;
 }
 
 int ptlrpc_ni_init(void)
