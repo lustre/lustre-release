@@ -167,11 +167,6 @@ typedef unsigned long long cfs_cycles_t;
 /* initial pid  */
 #define LUSTRE_LNET_PID          12345
 
-#define ENTRY_NESTING_SUPPORT (1)
-#define ENTRY_NESTING   do {;} while (0)
-#define EXIT_NESTING   do {;} while (0)
-#define __current_nesting_level() (0)
-
 /**
  * Platform specific declarations for cfs_curproc API (libcfs/curproc.h)
  *

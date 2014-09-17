@@ -270,7 +270,6 @@ int libcfs_debug_vmsg2(struct libcfs_debug_msg_data *msgdata,
         int                        needed = 85; /* average message length */
         int                        max_nob;
         va_list                    ap;
-        int                        depth;
         int                        i;
         int                        remain;
         int                        mask = msgdata->msg_mask;
@@ -299,8 +298,7 @@ int libcfs_debug_vmsg2(struct libcfs_debug_msg_data *msgdata,
                 goto console;
         }
 
-        depth = __current_nesting_level();
-        known_size = strlen(file) + 1 + depth;
+	known_size = strlen(file) + 1;
         if (msgdata->msg_fn)
                 known_size += strlen(msgdata->msg_fn) + 1;
 
@@ -369,12 +367,6 @@ int libcfs_debug_vmsg2(struct libcfs_debug_msg_data *msgdata,
                 memcpy(debug_buf, &header, sizeof(header));
                 tage->used += sizeof(header);
                 debug_buf += sizeof(header);
-        }
-
-        /* indent message according to the nesting level */
-        while (depth-- > 0) {
-                *(debug_buf++) = '.';
-                ++ tage->used;
         }
 
         strcpy(debug_buf, file);
