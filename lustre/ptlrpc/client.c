@@ -1268,7 +1268,9 @@ static int after_reply(struct ptlrpc_request *req)
 		time_t	now = cfs_time_current_sec();
 
 		DEBUG_REQ(D_RPCTRACE, req, "Resending request on EINPROGRESS");
+		spin_lock(&req->rq_lock);
 		req->rq_resend = 1;
+		spin_unlock(&req->rq_lock);
 		req->rq_nr_resend++;
 
 		/* allocate new xid to avoid reply reconstruction */
