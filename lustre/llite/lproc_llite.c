@@ -451,6 +451,8 @@ ll_max_cached_mb_seq_write(struct file *file, const char __user *buffer,
 		       totalram_pages >> (20 - PAGE_CACHE_SHIFT));
 		RETURN(-ERANGE);
 	}
+	/* Allow enough cache so clients can make well-formed RPCs */
+	pages_number = max_t(long, pages_number, PTLRPC_MAX_BRW_PAGES);
 
 	spin_lock(&sbi->ll_lock);
 	diff = pages_number - cache->ccc_lru_max;

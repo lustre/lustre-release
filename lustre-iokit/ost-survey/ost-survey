@@ -14,7 +14,9 @@
 $pname = $0;			 # to hold program name
 $OSTS = 0;                       # Number of OSTS we will loop over
 $BSIZE = 1024 * 1024;            # Size of i/o block
+$MBSIZE = 1024 * 1024;           # One MB
 $MNT = "/mnt/lustre";            # Location of Lustre file system
+$CACHESZ = 0;                    # max_cached_mb parameter
 $FSIZE = 30;			 # Number of i/o blocks
 
 # Usage
@@ -27,18 +29,18 @@ sub usage () {
 	exit 1;
 }
 
-# ost_count subroutine ets globle variable $OST with Number of OST's
+# ost_count subroutine sets global variable $OST with number of OSTs
 # Also fills 1 for active OST indexes in ACTIVEOST_INX array.
 sub ost_count () {
-	$OSTS = `lctl get_param -n lov.*-clilov-*.activeobd`;
+	$OSTS = `lctl get_param -n lov.$FSNAME-clilov-*.activeobd`;
 	if ( $? ) {
-		die "Read lov.*-clilov-*.activeobd error: $?\n";
+		die "Read lov.*-clilov-$FSNAME.activeobd error: $?\n";
 	}
 	print "Number of Active OST devices : $OSTS";
 
-	$numost = `lctl get_param -n lov.*-clilov-*.numobd`;
+	$numost = `lctl get_param -n lov.$FSNAME-clilov-*.numobd`;
 	if ( $? ) {
-		die "Read lov.*-clilov-*.numobd error: $?\n";
+		die "Read lov.$FSNAME-clilov-*.numobd error: $?\n";
 	}
 
 	if ( $numost != $OSTS ) {
@@ -46,9 +48,9 @@ sub ost_count () {
 		$OSTS = $numost;
 	}
 
-	$targets = `lctl get_param -n lov.*-clilov-*.target_obd`;
+	$targets = `lctl get_param -n lov.$FSNAME-clilov-*.target_obd`;
 	if ( $? ) {
-		die "Read lov.*-clilov-*.target_obd error: $?\n";
+		die "Read lov.$FSNAME-clilov-*.target_obd error: $?\n";
 	}
 
 	my $count = 0;
@@ -61,19 +63,28 @@ sub ost_count () {
 	}
 }
 
-sub cache_off () {
-	$CACHESZ = `lctl get_param -n llite.*.max_cached_mb`;
+# cache_mod subroutine sets global variable $CACHESZ and sets max_cached_mb
+# to 256 * system page size in MB.
+sub cache_mod () {
+	use POSIX qw(sysconf _SC_PAGESIZE);
+	$CACHESZ = `lctl get_param -n llite.$FSNAME-*.max_cached_mb`;
 	if ( $? ) {
-		die "Read llite.*.max_cached_mb error: $?\n";
+		die "Read llite.$FSNAME-*.max_cached_mb error: $?\n";
 	}
 
 	$CACHESZ = `echo "$CACHESZ" | grep max_cached_mb | awk '{print \$2}'`;
+	my $pagesize = sysconf(_SC_PAGESIZE);
+	$req_cache_mb = ($pagesize * 256)/ $MBSIZE;
 
-	system("lctl set_param -n llite.*.max_cached_mb=0");
+	system("lctl set_param -n llite.$FSNAME-*.max_cached_mb=$req_cache_mb");
+	if ( $? ) {
+		die "Set llite.$FSNAME-*.max_cached_mb error: $?\n";
+	}
 }
 
-sub cache_on () {
-	system("lctl set_param -n llite.*.max_cached_mb=$CACHESZ");
+# cache_return subroutine returns max_cached_mb to original value
+sub cache_return () {
+	system("lctl set_param -n llite.$FSNAME-*.max_cached_mb=$CACHESZ");
 }
 
 # make_dummy subroutine creates a dummy file that will be used for read operation.
@@ -84,9 +95,9 @@ sub make_dummy () {
 }
 
 # run_test subroutine actually writes and reads data to/from dummy file
-# and compute corresponding time taken for read and write operation and 
+# and computes corresponding time taken for read and write operation and
 # byte transfer for the both operations.
-# This subroutine also fill corresponding globle arrays with above information.
+# This subroutine also fill corresponding global arrays with above information.
 sub run_test () {
 	my $SIZE = $_[0];
 	my $INX=$_[1];
@@ -173,11 +184,11 @@ sub output_all_data () {
 	print "Ost#  Read(MB/s)  Write(MB/s)  Read-time  Write-time\n";
 	print "----------------------------------------------------\n";
 	while ( $count < $OSTS ) {
-		if ( $ACTIVEOST_INX[$count] ) { 
+		if ( $ACTIVEOST_INX[$count] ) {
 			printf "%d     %.3f       %.3f        %.3f      %.3f\n",$count, 
 			$rMBs[$count], $wMBs[$count], $rTime[$count], $wTime[$count];
 		} else {
-			printf "%d     Inactive ost\n",$count; 
+			printf "%d     Inactive ost\n",$count;
 		}
 		$count = $count + 1;
 	}
@@ -194,6 +205,10 @@ my $filename = "";
 my $dirpath = "";
 my $flag = 0;
 
+# Check number of arguments
+my $numargs = $#ARGV + 1;
+usage() if $numargs < 1;
+
 # Command line parameter parsing
 use Getopt::Std;
 getopts('s:h') or usage();
@@ -207,9 +222,9 @@ foreach (@ARGV) {
 	if ($i > 1) {
 		print "ERROR: extra argument $_\n";
 		usage();
-	}	
+	}
 }
-#Check for Time::HiRes module 
+#Check for Time::HiRes module
 my $CheckTimeHiRes = "require Time::HiRes";
 eval ($CheckTimeHiRes) or die "You need to install the perl-Time-HiRes package to use this script\n";
 my $LoadTimeHiRes = "use Time::HiRes qw(gettimeofday)";
@@ -222,10 +237,18 @@ chop($hostname);
 print "$pname: ", strftime("%D", localtime($time_v));
 print " OST speed survey on $MNT from $hostname\n";
 
+# Get the file system name.
+$FSNAME = `lfs getname $MNT`;
+if ( $? ) {
+	die "`lfs getname $MNT` error: $?\n";
+}
+$FSNAME =~ /(.*)-/;
+$FSNAME = $1;
+
 # get OST count
 ost_count ();
-# turn off local cache
-cache_off ();
+# Modify local cache
+cache_mod ();
 
 $dirpath = "$MNT/ost_survey_tmp";
 eval { mkpath($dirpath) };
@@ -240,7 +263,7 @@ while ($CNT < $OSTS) {
 	$filename = "$dirpath/file$CNT";
 	if ( $ACTIVEOST_INX[$CNT] ) {
 		# set stripe for OST number $CNT
-		system ("lfs setstripe $filename 0 $CNT 1");
+		system ("lfs setstripe -S 0 -i $CNT -c 1 $filename");
 		# Perform write for OST number $CNT
 		&run_test($FSIZE,$CNT,"write",$filename);
 		$flag++;
@@ -258,7 +281,7 @@ while ($CNT < $OSTS) {
 	$CNT = $CNT + 1;
 }
 
-# if read or write performed on any OST then display information. 
+# if read or write performed on any OST then display information.
 if ( $flag ) {
 	if ( $flag > 1 ) {
 		&calculate("Read",@rMBs);
@@ -269,7 +292,8 @@ if ( $flag ) {
 	print "There is no active OST's found\n";
 }
 
-cache_on ();
+# Return cache to original size
+cache_return ();
 
 eval { rmtree($dirpath) };
 if ($@) {
