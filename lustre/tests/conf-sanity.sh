@@ -364,7 +364,7 @@ test_5a() {	# was test_5
 	wait $UMOUNT_PID
 	if grep " $MOUNT " /proc/mounts; then
 		echo "test 5: /proc/mounts after failed umount"
-		umount $MOUNT &
+		umount -f $MOUNT &
 		UMOUNT_PID=$!
 		sleep 2
 		echo "killing umount"
@@ -966,6 +966,7 @@ test_24b() {
 		--reformat $fs2mdsdev $fs2mdsvdev || exit 10
 	setup
 	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && return 2
+	stop fs2mds -f
 	cleanup || return 6
 }
 run_test 24b "Multiple MGSs on a single node (should return err)"
