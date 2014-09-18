@@ -228,13 +228,13 @@
           obdfilter directly. The script may run on one or more OSS nodes, for example, when the
           OSSs are all attached to the same multi-ported disk subsystem.</para>
         <para>Run the script using the <literal>case=disk</literal> parameter to run the test against all the local OSTs. The script automatically detects all local OSTs and includes them in the survey.</para>
-        <para>To run the test against only specific OSTs, run the script using the <literal>target=parameter</literal> to list the OSTs to be tested explicitly. If some OSTs are on remote nodes, specify their hostnames in addition to the OST name (for example, <literal>oss2:lustre-OST0004</literal>).</para>
+        <para>To run the test against only specific OSTs, run the script using the <literal>targets=parameter</literal> to list the OSTs to be tested explicitly. If some OSTs are on remote nodes, specify their hostnames in addition to the OST name (for example, <literal>oss2:lustre-OST0004</literal>).</para>
         <para>All <literal>obdfilter</literal> instances are driven directly. The script automatically loads the <literal>obdecho</literal> module (if required) and creates one instance of <literal>echo_client</literal> for each <literal>obdfilter</literal> instance in order to generate I/O requests directly to the OST.</para>
         <para>For more details, see <xref linkend="dbdoclet.50438212_59319"/>.</para>
       </listitem>
       <listitem>
         <para><emphasis role="bold">Network</emphasis>  - In this mode, the Lustre client generates I/O requests over the network but these requests are not sent to the OST file system. The OSS node runs the obdecho server to receive the requests but discards them before they are sent to the disk.</para>
-        <para>Pass the parameters <literal>case=network</literal> and <literal>target=<replaceable>hostname|IP_of_server</replaceable></literal> to the script. For each network case, the script does the required setup.</para>
+        <para>Pass the parameters <literal>case=network</literal> and <literal>targets=<replaceable>hostname|IP_of_server</replaceable></literal> to the script. For each network case, the script does the required setup.</para>
         <para>For more details, see <xref linkend="dbdoclet.50438212_36037"/></para>
       </listitem>
       <listitem>
@@ -322,13 +322,13 @@
         </listitem>
         <listitem>
           <para>List all OSTs you want to test.</para>
-          <para>Use the <literal>target=parameter</literal> to list the OSTs separated by spaces. List the individual OSTs by name using the format
+          <para>Use the <literal>targets=parameter</literal> to list the OSTs separated by spaces. List the individual OSTs by name using the format
               <literal><replaceable>fsname</replaceable>-<replaceable>OSTnumber</replaceable></literal>
             (for example, <literal>lustre-OST0001</literal>). You do not have to specify an MDS or LOV.</para>
         </listitem>
         <listitem>
           <para>Run the <literal>obdfilter-survey</literal> script with the
-              <literal>target=parameter</literal>.</para>
+              <literal>targets=parameter</literal>.</para>
           <para>For example, to run a local test with up to two objects (<literal>nobjhi</literal>), up to two threads (<literal>thrhi</literal>), and 1024 Mb (size) transfer size:</para>
           <screen>$ nobjhi=2 thrhi=2 size=1024 targets=&quot;lustre-OST0001 \
 	   lustre-OST0002&quot; sh obdfilter-survey</screen>
@@ -361,7 +361,7 @@
                 <literal>targets=<replaceable>hostname|ip_of_server</replaceable></literal>. For
             example:</para>
           <screen>$ nobjhi=2 thrhi=2 size=1024 targets=&quot;oss0 oss1&quot; \
-	   case=network sh odbfilter-survey</screen>
+	   case=network sh obdfilter-survey</screen>
         </listitem>
         <listitem>
           <para>On the server side, view the statistics at:</para>
@@ -416,11 +416,11 @@
         </listitem>
         <listitem>
           <para>List all OSCs you want to test.</para>
-          <para>Use the <literal>target=parameter</literal> to list the OSCs separated by spaces. List the individual OSCs by name separated by spaces using the format <literal><replaceable>fsname</replaceable>-<replaceable>OST_name</replaceable>-osc-<replaceable>instance</replaceable></literal> (for example, <literal>lustre-OST0000-osc-ffff88007754bc00</literal>). You <emphasis>do not have to specify an MDS or LOV.</emphasis></para>
+          <para>Use the <literal>targets=parameter</literal> to list the OSCs separated by spaces. List the individual OSCs by name separated by spaces using the format <literal><replaceable>fsname</replaceable>-<replaceable>OST_name</replaceable>-osc-<replaceable>instance</replaceable></literal> (for example, <literal>lustre-OST0000-osc-ffff88007754bc00</literal>). You <emphasis>do not have to specify an MDS or LOV.</emphasis></para>
         </listitem>
         <listitem>
           <para>Run the <literal>obdfilter-survey</literal> script with the
-                <literal>target=<replaceable>osc</replaceable></literal> and
+                <literal>targets=<replaceable>osc</replaceable></literal> and
               <literal>case=netdisk</literal>.</para>
           <para>An example of a local test run with up to two objects (<literal>nobjhi</literal>), up to two threads (<literal>thrhi</literal>), and 1024 Mb (size) transfer size is shown below:</para>
           <screen>$ nobjhi=2 thrhi=2 size=1024 \
@@ -618,23 +618,23 @@
     </note>
     <para>To run the <literal>ost-survey</literal> script, supply a file size (in KB) and the Lustre
       file system mount point. For example, run:</para>
-    <screen>$ ./ost-survey.sh 10 /mnt/lustre
+    <screen>$ ./ost-survey.sh -s 10 /mnt/lustre
 </screen>
     <para>Typical output is:</para>
     <screen>
-Average read Speed:                  6.73
-Average write Speed:                 5.41
-read - Worst OST indx 0              5.84 MB/s
-write - Worst OST indx 0             3.77 MB/s
-read - Best OST indx 1               7.38 MB/s
-write - Best OST indx 1              6.31 MB/s
-3 OST devices found
-Ost index 0 Read speed               5.84         Write speed     3.77
-Ost index 0 Read time                0.17         Write time      0.27
-Ost index 1 Read speed               7.38         Write speed     6.31
-Ost index 1 Read time                0.14         Write time      0.16
-Ost index 2 Read speed               6.98         Write speed     6.16
-Ost index 2 Read time                0.14         Write time      0.16 
+Number of Active OST devices : 4
+Worst  Read OST indx: 2 speed: 2835.272725
+Best   Read OST indx: 3 speed: 2872.889668
+Read Average: 2852.508999 +/- 16.444792 MB/s
+Worst  Write OST indx: 3 speed: 17.705545
+Best   Write OST indx: 2 speed: 128.172576
+Write Average: 95.437735 +/- 45.518117 MB/s
+Ost#  Read(MB/s)  Write(MB/s)  Read-time  Write-time
+----------------------------------------------------
+0     2837.440       126.918        0.035      0.788
+1     2864.433       108.954        0.035      0.918
+2     2835.273       128.173        0.035      0.780
+3     2872.890       17.706        0.035      5.648
 </screen>
   </section>
   <section xml:id="mds_survey_ref">
