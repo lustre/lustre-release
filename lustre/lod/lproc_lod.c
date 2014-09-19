@@ -817,8 +817,8 @@ int lod_procfs_init(struct lod_device *lod)
 	lod->lod_symlink = lprocfs_add_symlink(obd->obd_name, lov_proc_dir,
 					       "../lod/%s", obd->obd_name);
 	if (lod->lod_symlink == NULL)
-		CERROR("could not register LOV symlink for "
-			"/proc/fs/lustre/lod/%s.", obd->obd_name);
+		CERROR("cannot create LOV symlink for /proc/fs/lustre/lod/%s\n",
+		       obd->obd_name);
 	RETURN(0);
 
 out:

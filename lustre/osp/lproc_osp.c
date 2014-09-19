@@ -844,8 +844,8 @@ void osp_lprocfs_init(struct osp_device *osp)
 	osp->opd_symlink = lprocfs_add_symlink(obd->obd_name, osc_proc_dir,
 					       "../osp/%s", obd->obd_name);
 	if (osp->opd_symlink == NULL)
-		CERROR("could not register OSC symlink for "
-		       "/proc/fs/lustre/osp/%s.", obd->obd_name);
+		CERROR("cannot create OSC symlink for /proc/fs/lustre/osp/%s\n",
+		       obd->obd_name);
 }
 
 #endif /* LPROCFS */

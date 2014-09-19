@@ -1148,7 +1148,7 @@ static int __osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
 
 	oxe = osp_oac_xattr_find_or_add(o, name, buf->lb_len);
 	if (oxe == NULL) {
-		CWARN("%s: Fail to add xattr (%s) to cache for "DFID,
+		CWARN("%s: cannot cache xattr '%s' of "DFID"\n",
 		      dt->do_lu.lo_dev->ld_obd->obd_name,
 		      name, PFID(lu_object_fid(&dt->do_lu)));
 
@@ -1163,7 +1163,7 @@ static int __osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
 		osp_oac_xattr_put(oxe);
 		oxe = tmp;
 		if (tmp == NULL) {
-			CWARN("%s: Fail to update xattr (%s) to cache for "DFID,
+			CWARN("%s: cannot update cached xattr '%s' of "DFID"\n",
 			      dt->do_lu.lo_dev->ld_obd->obd_name,
 			      name, PFID(lu_object_fid(&dt->do_lu)));
 			spin_lock(&o->opo_lock);
