@@ -306,23 +306,19 @@ extern int llapi_fswap_layouts(const int fd1, const int fd2,
 extern int llapi_swap_layouts(const char *path1, const char *path2,
 			      __u64 dv1, __u64 dv2, __u64 flags);
 
-/* Changelog interface.  priv is private state, managed internally
-   by these functions */
-#define CHANGELOG_FLAG_FOLLOW 0x01   /* Not yet implemented */
-#define CHANGELOG_FLAG_BLOCK  0x02   /* Blocking IO makes sense in case of
-   slow user parsing of the records, but it also prevents us from cleaning
-   up if the records are not consumed. */
+/* Changelog interface.  priv is private state, managed internally by these
+ * functions */
 
 /* Records received are in extentded format now, though most of them are still
  * written in disk in changelog_rec format (to save space and time), it's
  * converted to extented format in the lustre api to ease changelog analysis. */
 #define HAVE_CHANGELOG_EXTEND_REC 1
 
-extern int llapi_changelog_start(void **priv, int flags, const char *mdtname,
-                                 long long startrec);
+extern int llapi_changelog_start(void **priv, enum changelog_send_flag flags,
+				 const char *mdtname, long long startrec);
 extern int llapi_changelog_fini(void **priv);
-extern int llapi_changelog_recv(void *priv, struct changelog_ext_rec **rech);
-extern int llapi_changelog_free(struct changelog_ext_rec **rech);
+extern int llapi_changelog_recv(void *priv, struct changelog_rec **rech);
+extern int llapi_changelog_free(struct changelog_rec **rech);
 /* Allow records up to endrec to be destroyed; requires registered id. */
 extern int llapi_changelog_clear(const char *mdtname, const char *idstr,
                                  long long endrec);

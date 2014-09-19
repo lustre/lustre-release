@@ -11239,6 +11239,10 @@ test_205() { # Job stats
 		trap jobstats_set EXIT
 	fi
 
+	local user=$(do_facet $SINGLEMDS $LCTL --device $MDT0 \
+		     changelog_register -n)
+	echo "Registered as changelog user $user"
+
 	# mkdir
 	cmd="mkdir $DIR/$tfile"
 	verify_jobstats "$cmd" "mdt"
@@ -11269,6 +11273,15 @@ test_205() { # Job stats
 	# rename
 	cmd="mv -f $DIR/$tfile $DIR/jobstats_test_rename"
 	verify_jobstats "$cmd" "mdt"
+
+	# Ensure that jobid are present in changelog (if supported by MDS)
+	if [ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.52) ]
+	then
+		$LFS changelog $MDT0 | tail -9
+		jobids=$($LFS changelog $MDT0 | tail -9 | grep -c "j=")
+		[ $jobids -eq 9 ] ||
+			error "Wrong changelog jobid count $jobids != 9"
+	fi
 
 	# cleanup
 	rm -f $DIR/jobstats_test_rename

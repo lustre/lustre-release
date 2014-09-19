@@ -1111,22 +1111,27 @@ int lr_setxattr(struct lr_info *info)
 /* Parse a line of changelog entry */
 int lr_parse_line(void *priv, struct lr_info *info)
 {
-	struct changelog_ext_rec *rec;
+	struct changelog_rec		*rec;
+	struct changelog_ext_rename	*rnm;
 
         if (llapi_changelog_recv(priv, &rec) != 0)
                 return -1;
 
-	info->is_extended = CHANGELOG_REC_EXTENDED(rec);
+	info->is_extended = !!(rec->cr_flags & CLF_RENAME);
         info->recno = rec->cr_index;
         info->type = rec->cr_type;
         sprintf(info->tfid, DFID, PFID(&rec->cr_tfid));
         sprintf(info->pfid, DFID, PFID(&rec->cr_pfid));
-	strncpy(info->name, rec->cr_name, rec->cr_namelen);
+	strncpy(info->name, changelog_rec_name(rec), rec->cr_namelen);
 	info->name[rec->cr_namelen] = '\0';
 
-	if (fid_is_sane(&rec->cr_sfid)) {
-		sprintf(info->sfid, DFID, PFID(&rec->cr_sfid));
-		sprintf(info->spfid, DFID, PFID(&rec->cr_spfid));
+	/* Don't use rnm if CLF_RENAME isn't set */
+	rnm = changelog_rec_rename(rec);
+	if (rec->cr_flags & CLF_RENAME && !fid_is_zero(&rnm->cr_sfid)) {
+		snprintf(info->sfid, sizeof(info->sfid), DFID,
+			 PFID(&rnm->cr_sfid));
+		snprintf(info->spfid, sizeof(info->spfid), DFID,
+			 PFID(&rnm->cr_spfid));
 		strncpy(info->sname, changelog_rec_sname(rec),
 			changelog_rec_snamelen(rec));
 		info->sname[changelog_rec_snamelen(rec)] = '\0';
@@ -1495,9 +1500,10 @@ int lr_replicate()
 
         lr_print_status(info);
 
-        /* Open changelogs for consumption*/
-        rc = llapi_changelog_start(&changelog_priv, CHANGELOG_FLAG_BLOCK,
-                                   status->ls_source_fs, status->ls_last_recno);
+	/* Open changelogs for consumption*/
+	rc = llapi_changelog_start(&changelog_priv,
+				   CHANGELOG_FLAG_BLOCK | CHANGELOG_FLAG_JOBID,
+				   status->ls_source_fs, status->ls_last_recno);
         if (rc < 0) {
                 fprintf(stderr, "Error opening changelog file for fs %s.\n",
                         status->ls_source_fs);

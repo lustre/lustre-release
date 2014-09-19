@@ -1171,7 +1171,6 @@ struct lustre_msg_v2 {
 
 /* without gss, ptlrpc_body is put at the first buffer. */
 #define PTLRPC_NUM_VERSIONS     4
-#define JOBSTATS_JOBID_SIZE     32  /* 32 bytes string */
 struct ptlrpc_body_v3 {
 	struct lustre_handle pb_handle;
 	__u32 pb_type;
@@ -1193,7 +1192,7 @@ struct ptlrpc_body_v3 {
 	__u64 pb_pre_versions[PTLRPC_NUM_VERSIONS];
 	/* padding for future needs */
 	__u64 pb_padding[4];
-	char  pb_jobid[JOBSTATS_JOBID_SIZE];
+	char  pb_jobid[LUSTRE_JOBID_SIZE];
 };
 #define ptlrpc_body     ptlrpc_body_v3
 
@@ -3343,15 +3342,9 @@ struct changelog_setinfo {
 
 /** changelog record */
 struct llog_changelog_rec {
-        struct llog_rec_hdr  cr_hdr;
-        struct changelog_rec cr;
-        struct llog_rec_tail cr_tail; /**< for_sizezof_only */
-} __attribute__((packed));
-
-struct llog_changelog_ext_rec {
-	struct llog_rec_hdr      cr_hdr;
-	struct changelog_ext_rec cr;
-	struct llog_rec_tail     cr_tail; /**< for_sizezof_only */
+	struct llog_rec_hdr  cr_hdr;
+	struct changelog_rec cr; /**< Variable length field */
+	struct llog_rec_tail cr_do_not_use; /**< for_sizeof_only */
 } __attribute__((packed));
 
 #define CHANGELOG_USER_PREFIX "cl"
@@ -3437,6 +3430,9 @@ enum llog_flag {
 	LLOG_F_ZAP_WHEN_EMPTY	= 0x1,
 	LLOG_F_IS_CAT		= 0x2,
 	LLOG_F_IS_PLAIN		= 0x4,
+	LLOG_F_EXT_JOBID	= 0x8,
+
+	LLOG_F_EXT_MASK = LLOG_F_EXT_JOBID,
 };
 
 struct llog_log_hdr {

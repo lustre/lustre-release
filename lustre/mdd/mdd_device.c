@@ -170,7 +170,7 @@ static int changelog_init_cb(const struct lu_env *env, struct llog_handle *llh,
 	       "seeing record at index %d/%d/"LPU64" t=%x %.*s in log"
 	       DOSTID"\n", hdr->lrh_index, rec->cr_hdr.lrh_index,
 	       rec->cr.cr_index, rec->cr.cr_type, rec->cr.cr_namelen,
-	       rec->cr.cr_name, POSTID(&llh->lgh_id.lgl_oi));
+	       changelog_rec_name(&rec->cr), POSTID(&llh->lgh_id.lgl_oi));
 
 	mdd->mdd_cl.mc_index = rec->cr.cr_index;
 	return LLOG_PROC_BREAK;
@@ -517,10 +517,11 @@ int mdd_changelog_write_header(const struct lu_env *env,
         rec->cr.cr_flags = CLF_VERSION;
         rec->cr.cr_type = CL_MARK;
         rec->cr.cr_namelen = len;
-        memcpy(rec->cr.cr_name, obd->obd_name, rec->cr.cr_namelen);
+	memcpy(changelog_rec_name(&rec->cr), obd->obd_name, rec->cr.cr_namelen);
         /* Status and action flags */
 	rec->cr.cr_markerflags = mdd->mdd_cl.mc_flags | markerflags;
-	rec->cr_hdr.lrh_len = llog_data_len(sizeof(*rec) + rec->cr.cr_namelen);
+	rec->cr_hdr.lrh_len = llog_data_len(changelog_rec_size(&rec->cr) +
+					    rec->cr.cr_namelen);
 	rec->cr_hdr.lrh_type = CHANGELOG_REC;
 	rec->cr.cr_time = cl_time();
 	spin_lock(&mdd->mdd_cl.mc_lock);

@@ -4122,9 +4122,9 @@ static int changelog_ioctl(const char *mdtname, int opc, int id,
 
 #define CHANGELOG_PRIV_MAGIC 0xCA8E1080
 struct changelog_private {
-        int magic;
-        int flags;
-        lustre_kernelcomm kuc;
+	int				magic;
+	enum changelog_send_flag	flags;
+	lustre_kernelcomm		kuc;
 };
 
 /** Start reading from a changelog
@@ -4134,44 +4134,53 @@ struct changelog_private {
  * @param startrec Report changes beginning with this record number
  * (just call llapi_changelog_fini when done; don't need an endrec)
  */
-int llapi_changelog_start(void **priv, int flags, const char *device,
-                          long long startrec)
+int llapi_changelog_start(void **priv, enum changelog_send_flag flags,
+			  const char *device, long long startrec)
 {
-        struct changelog_private *cp;
-        int rc;
+	struct changelog_private	*cp;
+	static bool			 warned;
+	int				 rc;
 
-        /* Set up the receiver control struct */
-        cp = calloc(1, sizeof(*cp));
-        if (cp == NULL)
-                return -ENOMEM;
+	/* Set up the receiver control struct */
+	cp = calloc(1, sizeof(*cp));
+	if (cp == NULL)
+		return -ENOMEM;
 
-        cp->magic = CHANGELOG_PRIV_MAGIC;
-        cp->flags = flags;
+	cp->magic = CHANGELOG_PRIV_MAGIC;
+	cp->flags = flags;
 
-        /* Set up the receiver */
+	/* Set up the receiver */
 	rc = libcfs_ukuc_start(&cp->kuc, 0 /* no group registration */, 0);
-        if (rc < 0)
-                goto out_free;
+	if (rc < 0)
+		goto out_free;
 
-        *priv = cp;
+	*priv = cp;
 
-        /* Tell the kernel to start sending */
-        rc = changelog_ioctl(device, OBD_IOC_CHANGELOG_SEND, cp->kuc.lk_wfd,
-                             startrec, flags);
-        /* Only the kernel reference keeps the write side open */
-        close(cp->kuc.lk_wfd);
-        cp->kuc.lk_wfd = LK_NOFD;
-        if (rc < 0) {
-                /* frees and clears priv */
-                llapi_changelog_fini(priv);
-                return rc;
-        }
+	/* CHANGELOG_FLAG_JOBID will eventually become mandatory. Display a
+	 * warning if it's missing. */
+	if (!(flags & CHANGELOG_FLAG_JOBID) && !warned) {
+		llapi_err_noerrno(LLAPI_MSG_WARN, "warning: %s() called "
+				  "w/o CHANGELOG_FLAG_JOBID", __func__);
+		warned = true;
+	}
 
-        return 0;
+	/* Tell the kernel to start sending */
+	rc = changelog_ioctl(device, OBD_IOC_CHANGELOG_SEND, cp->kuc.lk_wfd,
+			     startrec, flags);
+	/* Only the kernel reference keeps the write side open */
+	close(cp->kuc.lk_wfd);
+	cp->kuc.lk_wfd = LK_NOFD;
+	if (rc < 0) {
+		/* frees and clears priv */
+		llapi_changelog_fini(priv);
+		return rc;
+	}
+
+	return 0;
 
 out_free:
-        free(cp);
-        return rc;
+	free(cp);
+	return rc;
 }
 
 /** Finish reading from a changelog */
@@ -4188,24 +4197,15 @@ int llapi_changelog_fini(void **priv)
         return 0;
 }
 
-/** Convert a changelog_rec to changelog_ext_rec, in this way client can treat
- *  all records in the format of changelog_ext_rec, this can make record
- *  analysis simpler.
+/**
+ * Convert all records to a same format according to the caller's wishes.
+ * Default is CLF_VERSION | CLF_RENAME.
+ * Add CLF_JOBID if explicitely requested.
+ *
+ * \param rec  The record to remap. It is expected to be big enough to
+ *             properly handle the final format.
+ * \return 1 if anything changed. 0 otherwise.
  */
-static inline int changelog_extend_rec(struct changelog_ext_rec *ext)
-{
-	if (!CHANGELOG_REC_EXTENDED(ext)) {
-		struct changelog_rec *rec = (struct changelog_rec *)ext;
-
-		memmove(ext->cr_name, rec->cr_name, rec->cr_namelen);
-		fid_zero(&ext->cr_sfid);
-		fid_zero(&ext->cr_spfid);
-		return 1;
-	}
-
-	return 0;
-}
-
 /** Read the next changelog entry
  * @param priv Opaque private control structure
  * @param rech Changelog record handle; record will be allocated here
@@ -4213,11 +4213,13 @@ static inline int changelog_extend_rec(struct changelog_ext_rec *ext)
  *         <0 error code
  *         1 EOF
  */
-int llapi_changelog_recv(void *priv, struct changelog_ext_rec **rech)
+#define DEFAULT_RECORD_FMT	(CLF_VERSION | CLF_RENAME)
+int llapi_changelog_recv(void *priv, struct changelog_rec **rech)
 {
-	struct changelog_private *cp = (struct changelog_private *)priv;
-	struct kuc_hdr *kuch;
-	int rc = 0;
+	struct changelog_private	*cp = (struct changelog_private *)priv;
+	struct kuc_hdr			*kuch;
+	enum changelog_rec_flags	 rec_fmt = DEFAULT_RECORD_FMT;
+	int				 rc = 0;
 
 	if (!cp || (cp->magic != CHANGELOG_PRIV_MAGIC))
 		return -EINVAL;
@@ -4226,6 +4228,9 @@ int llapi_changelog_recv(void *priv, struct changelog_ext_rec **rech)
 	kuch = malloc(KUC_CHANGELOG_MSG_MAXSIZE);
 	if (kuch == NULL)
 		return -ENOMEM;
+
+	if (cp->flags & CHANGELOG_FLAG_JOBID)
+		rec_fmt |= CLF_JOBID;
 
 repeat:
 	rc = libcfs_ukuc_msg_get(&cp->kuc, (char *)kuch,
@@ -4254,11 +4259,10 @@ repeat:
                 }
         }
 
-	/* Our message is a changelog_ext_rec.  Use pointer math to skip
-	 * kuch_hdr and point directly to the message payload.
-	 */
-	*rech = (struct changelog_ext_rec *)(kuch + 1);
-	changelog_extend_rec(*rech);
+	/* Our message is a changelog_rec.  Use pointer math to skip
+	 * kuch_hdr and point directly to the message payload. */
+	*rech = (struct changelog_rec *)(kuch + 1);
+	changelog_remap_rec(*rech, rec_fmt);
 
         return 0;
 
@@ -4269,7 +4273,7 @@ out_free:
 }
 
 /** Release the changelog record when done with it. */
-int llapi_changelog_free(struct changelog_ext_rec **rech)
+int llapi_changelog_free(struct changelog_rec **rech)
 {
         if (*rech) {
                 /* We allocated memory starting at the kuc_hdr, but passed

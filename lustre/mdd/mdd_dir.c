@@ -643,9 +643,30 @@ static int __mdd_index_delete(const struct lu_env *env, struct mdd_object *pobj,
         RETURN(rc);
 }
 
+static int mdd_llog_record_calc_size(const struct lu_env *env,
+				     const struct lu_name *tname,
+				     const struct lu_name *sname)
+{
+	const struct lu_ucred	*uc = lu_ucred(env);
+	enum changelog_rec_flags crf = 0;
+	size_t			 hdr_size = sizeof(struct llog_changelog_rec) -
+					    sizeof(struct changelog_rec);
+
+	if (sname != NULL)
+		crf |= CLF_RENAME;
+
+	if (uc != NULL && uc->uc_jobid[0] != '\0')
+		crf |= CLF_JOBID;
+
+	return llog_data_len(hdr_size + changelog_rec_offset(crf) +
+			     (tname != NULL ? tname->ln_namelen : 0) +
+			     (sname != NULL ? 1 + sname->ln_namelen : 0));
+}
+
 int mdd_declare_changelog_store(const struct lu_env *env,
 				struct mdd_device *mdd,
-				const struct lu_name *fname,
+				const struct lu_name *tname,
+				const struct lu_name *sname,
 				struct thandle *handle)
 {
 	struct obd_device		*obd = mdd2obd_dev(mdd);
@@ -659,46 +680,7 @@ int mdd_declare_changelog_store(const struct lu_env *env,
 	if (!(mdd->mdd_cl.mc_flags & CLM_ON))
 		return 0;
 
-	reclen = llog_data_len(sizeof(*rec) +
-			       (fname != NULL ? fname->ln_namelen : 0));
-	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_big_buf, reclen);
-	if (buf->lb_buf == NULL)
-		return -ENOMEM;
-
-	rec = buf->lb_buf;
-	rec->cr_hdr.lrh_len = reclen;
-	rec->cr_hdr.lrh_type = CHANGELOG_REC;
-
-	ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
-	if (ctxt == NULL)
-		return -ENXIO;
-
-	rc = llog_declare_add(env, ctxt->loc_handle, &rec->cr_hdr, handle);
-	llog_ctxt_put(ctxt);
-
-	return rc;
-}
-
-static int mdd_declare_changelog_ext_store(const struct lu_env *env,
-					   struct mdd_device *mdd,
-					   const struct lu_name *tname,
-					   const struct lu_name *sname,
-					   struct thandle *handle)
-{
-	struct obd_device		*obd = mdd2obd_dev(mdd);
-	struct llog_ctxt		*ctxt;
-	struct llog_changelog_ext_rec	*rec;
-	struct lu_buf			*buf;
-	int				 reclen;
-	int				 rc;
-
-	/* Not recording */
-	if (!(mdd->mdd_cl.mc_flags & CLM_ON))
-		return 0;
-
-	reclen = llog_data_len(sizeof(*rec) +
-			       (tname != NULL ? tname->ln_namelen : 0) +
-			       (sname != NULL ? 1 + sname->ln_namelen : 0));
+	reclen = mdd_llog_record_calc_size(env, tname, sname);
 	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_big_buf, reclen);
 	if (buf->lb_buf == NULL)
 		return -ENOMEM;
@@ -721,7 +703,7 @@ static int mdd_declare_changelog_ext_store(const struct lu_env *env,
  * \param mdd
  * \param rec
  * \param handle - currently ignored since llogs start their own transaction;
- *                 this will hopefully be fixed in llog rewrite
+ *		this will hopefully be fixed in llog rewrite
  * \retval 0 ok
  */
 int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
@@ -731,44 +713,9 @@ int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
 	struct llog_ctxt	*ctxt;
 	int			 rc;
 
-	rec->cr_hdr.lrh_len = llog_data_len(sizeof(*rec) + rec->cr.cr_namelen);
-	rec->cr_hdr.lrh_type = CHANGELOG_REC;
-	rec->cr.cr_time = cl_time();
+	rec->cr_hdr.lrh_len = llog_data_len(sizeof(*rec) +
+					    changelog_rec_varsize(&rec->cr));
 
-	spin_lock(&mdd->mdd_cl.mc_lock);
-	/* NB: I suppose it's possible llog_add adds out of order wrt cr_index,
-	 * but as long as the MDD transactions are ordered correctly for e.g.
-	 * rename conflicts, I don't think this should matter. */
-	rec->cr.cr_index = ++mdd->mdd_cl.mc_index;
-	spin_unlock(&mdd->mdd_cl.mc_lock);
-
-	ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
-	if (ctxt == NULL)
-		return -ENXIO;
-
-	rc = llog_add(env, ctxt->loc_handle, &rec->cr_hdr, NULL, th);
-	llog_ctxt_put(ctxt);
-	if (rc > 0)
-		rc = 0;
-	return rc;
-}
-
-/** Add a changelog_ext entry \a rec to the changelog llog
- * \param mdd
- * \param rec
- * \param handle - currently ignored since llogs start their own transaction;
- *		this will hopefully be fixed in llog rewrite
- * \retval 0 ok
- */
-static int
-mdd_changelog_ext_store(const struct lu_env *env, struct mdd_device *mdd,
-			struct llog_changelog_ext_rec *rec, struct thandle *th)
-{
-	struct obd_device	*obd = mdd2obd_dev(mdd);
-	struct llog_ctxt	*ctxt;
-	int			 rc;
-
-	rec->cr_hdr.lrh_len = llog_data_len(sizeof(*rec) + rec->cr.cr_namelen);
 	/* llog_lvfs_write_rec sets the llog tail len */
 	rec->cr_hdr.lrh_type = CHANGELOG_REC;
 	rec->cr.cr_time = cl_time();
@@ -793,62 +740,35 @@ mdd_changelog_ext_store(const struct lu_env *env, struct mdd_device *mdd,
 	return rc;
 }
 
-/** Store a namespace change changelog record
- * If this fails, we must fail the whole transaction; we don't
- * want the change to commit without the log entry.
- * \param target - mdd_object of change
- * \param parent - parent dir/object
- * \param tname - target name string
- * \param handle - transacion handle
- */
-int mdd_changelog_ns_store(const struct lu_env *env, struct mdd_device *mdd,
-			   enum changelog_rec_type type, unsigned flags,
-			   struct mdd_object *target, struct mdd_object *parent,
-			   const struct lu_name *tname, struct thandle *handle)
+static void mdd_changelog_rec_ext_rename(struct changelog_rec *rec,
+					 const struct lu_fid *sfid,
+					 const struct lu_fid *spfid,
+					 const struct lu_name *sname)
 {
-	struct llog_changelog_rec *rec;
-	struct lu_buf *buf;
-	int reclen;
-	int rc;
-	ENTRY;
+	struct changelog_ext_rename	*rnm = changelog_rec_rename(rec);
+	size_t				 extsize = sname->ln_namelen + 1;
 
-	/* Not recording */
-	if (!(mdd->mdd_cl.mc_flags & CLM_ON))
-		RETURN(0);
-	if ((mdd->mdd_cl.mc_mask & (1 << type)) == 0)
-		RETURN(0);
+	LASSERT(sfid != NULL);
+	LASSERT(spfid != NULL);
+	LASSERT(sname != NULL);
 
-	LASSERT(target != NULL);
-	LASSERT(parent != NULL);
-	LASSERT(tname != NULL);
-	LASSERT(handle != NULL);
+	rnm->cr_sfid = *sfid;
+	rnm->cr_spfid = *spfid;
 
-	reclen = llog_data_len(sizeof(*rec) + tname->ln_namelen);
-	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_big_buf, reclen);
-	if (buf->lb_buf == NULL)
-		RETURN(-ENOMEM);
-	rec = buf->lb_buf;
-
-	rec->cr.cr_flags = CLF_VERSION | (CLF_FLAGMASK & flags);
-	rec->cr.cr_type = (__u32)type;
-	rec->cr.cr_tfid = *mdo2fid(target);
-	rec->cr.cr_pfid = *mdo2fid(parent);
-	rec->cr.cr_namelen = tname->ln_namelen;
-	memcpy(rec->cr.cr_name, tname->ln_name, tname->ln_namelen);
-
-	target->mod_cltime = cfs_time_current_64();
-
-	rc = mdd_changelog_store(env, mdd, rec, handle);
-	if (rc < 0) {
-		CERROR("changelog failed: rc=%d, op%d %s c"DFID" p"DFID"\n",
-			rc, type, tname->ln_name, PFID(&rec->cr.cr_tfid),
-			PFID(&rec->cr.cr_pfid));
-		RETURN(-EFAULT);
-	}
-
-	RETURN(0);
+	changelog_rec_name(rec)[rec->cr_namelen] = '\0';
+	strlcpy(changelog_rec_sname(rec), sname->ln_name, extsize);
+	rec->cr_namelen += extsize;
 }
 
+void mdd_changelog_rec_ext_jobid(struct changelog_rec *rec, const char *jobid)
+{
+	struct changelog_ext_jobid	*jid = changelog_rec_jobid(rec);
+
+	if (jobid == NULL || jobid[0] == '\0')
+		return;
+
+	strlcpy(jid->cr_jobid, jobid, sizeof(jid->cr_jobid));
+}
 
 /** Store a namespace change changelog record
  * If this fails, we must fail the whole transaction; we don't
@@ -861,55 +781,63 @@ int mdd_changelog_ns_store(const struct lu_env *env, struct mdd_device *mdd,
  * \param sname - source name string
  * \param handle - transacion handle
  */
-static int mdd_changelog_ext_ns_store(const struct lu_env  *env,
-				      struct mdd_device    *mdd,
-				      enum changelog_rec_type type,
-				      unsigned flags,
-				      struct mdd_object    *target,
-				      const struct lu_fid  *tpfid,
-				      const struct lu_fid  *sfid,
-				      const struct lu_fid  *spfid,
-				      const struct lu_name *tname,
-				      const struct lu_name *sname,
-				      struct thandle *handle)
+int mdd_changelog_ns_store(const struct lu_env *env,
+			   struct mdd_device *mdd,
+			   enum changelog_rec_type type,
+			   enum changelog_rec_flags crf,
+			   struct mdd_object *target,
+			   const struct lu_fid *tpfid,
+			   const struct lu_fid *sfid,
+			   const struct lu_fid *spfid,
+			   const struct lu_name *tname,
+			   const struct lu_name *sname,
+			   struct thandle *handle)
 {
-	struct llog_changelog_ext_rec *rec;
-	struct lu_buf *buf;
-	int reclen;
-	int rc;
+	const struct lu_ucred		*uc = lu_ucred(env);
+	struct llog_changelog_rec	*rec;
+	struct lu_buf			*buf;
+	int				 reclen;
+	int				 rc;
 	ENTRY;
 
 	/* Not recording */
 	if (!(mdd->mdd_cl.mc_flags & CLM_ON))
 		RETURN(0);
+
 	if ((mdd->mdd_cl.mc_mask & (1 << type)) == 0)
 		RETURN(0);
 
-	LASSERT(sfid != NULL);
 	LASSERT(tpfid != NULL);
 	LASSERT(tname != NULL);
 	LASSERT(handle != NULL);
 
-	reclen = llog_data_len(sizeof(*rec) +
-			       sname != NULL ? 1 + sname->ln_namelen : 0);
+	reclen = mdd_llog_record_calc_size(env, tname, sname);
 	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_big_buf, reclen);
 	if (buf->lb_buf == NULL)
 		RETURN(-ENOMEM);
 	rec = buf->lb_buf;
 
-	rec->cr.cr_flags = CLF_EXT_VERSION | (CLF_FLAGMASK & flags);
+	crf = (crf & CLF_FLAGMASK);
+
+	if (uc->uc_jobid[0] != '\0')
+		crf |= CLF_JOBID;
+
+	if (sname != NULL)
+		crf |= CLF_RENAME;
+	else
+		crf |= CLF_VERSION;
+
+	rec->cr.cr_flags = crf;
 	rec->cr.cr_type = (__u32)type;
 	rec->cr.cr_pfid = *tpfid;
-	rec->cr.cr_sfid = *sfid;
-	rec->cr.cr_spfid = *spfid;
 	rec->cr.cr_namelen = tname->ln_namelen;
-	memcpy(rec->cr.cr_name, tname->ln_name, tname->ln_namelen);
-	if (sname) {
-		rec->cr.cr_name[tname->ln_namelen] = '\0';
-		memcpy(rec->cr.cr_name + tname->ln_namelen + 1, sname->ln_name,
-			sname->ln_namelen);
-		rec->cr.cr_namelen += 1 + sname->ln_namelen;
-	}
+	memcpy(changelog_rec_name(&rec->cr), tname->ln_name, tname->ln_namelen);
+
+	if (crf & CLF_RENAME)
+		mdd_changelog_rec_ext_rename(&rec->cr, sfid, spfid, sname);
+
+	if (crf & CLF_JOBID)
+		mdd_changelog_rec_ext_jobid(&rec->cr, uc->uc_jobid);
 
 	if (likely(target != NULL)) {
 		rec->cr.cr_tfid = *mdo2fid(target);
@@ -918,7 +846,7 @@ static int mdd_changelog_ext_ns_store(const struct lu_env  *env,
 		fid_zero(&rec->cr.cr_tfid);
 	}
 
-	rc = mdd_changelog_ext_store(env, mdd, rec, handle);
+	rc = mdd_changelog_store(env, mdd, rec, handle);
 	if (rc < 0) {
 		CERROR("changelog failed: rc=%d, op%d %s c"DFID" p"DFID"\n",
 			rc, type, tname->ln_name, PFID(sfid), PFID(tpfid));
@@ -1243,11 +1171,11 @@ static int mdd_declare_link(const struct lu_env *env,
 	rc = mdo_declare_index_insert(env, p, mdo2fid(c), mdd_object_type(c),
 				      name->ln_name, handle);
 	if (rc != 0)
-                return rc;
+		return rc;
 
-        rc = mdo_declare_ref_add(env, c, handle);
-        if (rc)
-                return rc;
+	rc = mdo_declare_ref_add(env, c, handle);
+	if (rc)
+		return rc;
 
 	la->la_valid = LA_CTIME | LA_MTIME;
 	rc = mdo_declare_attr_set(env, p, la, handle);
@@ -1256,16 +1184,16 @@ static int mdd_declare_link(const struct lu_env *env,
 
 	la->la_valid = LA_CTIME;
 	rc = mdo_declare_attr_set(env, c, la, handle);
-        if (rc)
-                return rc;
+	if (rc)
+		return rc;
 
 	rc = mdd_declare_links_add(env, c, handle, data);
-        if (rc)
-                return rc;
+	if (rc)
+		return rc;
 
-        rc = mdd_declare_changelog_store(env, mdd, name, handle);
+	rc = mdd_declare_changelog_store(env, mdd, name, NULL, handle);
 
-        return rc;
+	return rc;
 }
 
 static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
@@ -1364,7 +1292,8 @@ out_unlock:
         mdd_write_unlock(env, mdd_sobj);
         if (rc == 0)
 		rc = mdd_changelog_ns_store(env, mdd, CL_HARDLINK, 0, mdd_sobj,
-					    mdd_tobj, lname, handle);
+					    mdo2fid(mdd_tobj), NULL, NULL,
+					    lname, NULL, handle);
 stop:
 	mdd_trans_stop(env, mdd, rc, handle);
 
@@ -1531,7 +1460,7 @@ static int mdd_declare_unlink(const struct lu_env *env, struct mdd_device *mdd,
 			return rc;
 
 		/* FIXME: need changelog for remove entry */
-		rc = mdd_declare_changelog_store(env, mdd, name, handle);
+		rc = mdd_declare_changelog_store(env, mdd, name, NULL, handle);
 	}
 
 	return rc;
@@ -1718,7 +1647,8 @@ cleanup:
 
 		rc = mdd_changelog_ns_store(env, mdd,
 			is_dir ? CL_RMDIR : CL_UNLINK, cl_flags,
-			mdd_cobj, mdd_pobj, lname, handle);
+			mdd_cobj, mdo2fid(mdd_pobj), NULL, NULL, lname, NULL,
+			handle);
 	}
 
 stop:
@@ -1800,7 +1730,7 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
 	if (rc)
 		GOTO(stop, rc);
 
-	rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
+	rc = mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
 	if (rc)
 		GOTO(stop, rc);
 
@@ -2107,7 +2037,7 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
 		if (rc)
 			return rc;
 
-		rc = mdd_declare_changelog_store(env, mdd, name, handle);
+		rc = mdd_declare_changelog_store(env, mdd, name, NULL, handle);
 		if (rc)
 			return rc;
 	}
@@ -2464,7 +2394,8 @@ out_volatile:
 				S_ISDIR(attr->la_mode) ? CL_MKDIR :
 				S_ISREG(attr->la_mode) ? CL_CREATE :
 				S_ISLNK(attr->la_mode) ? CL_SOFTLINK : CL_MKNOD,
-				0, son, mdd_pobj, lname, handle);
+				0, son, mdo2fid(mdd_pobj), NULL, NULL, lname,
+				NULL, handle);
 out_stop:
 	rc2 = mdd_trans_stop(env, mdd, rc, handle);
 	if (rc == 0)
@@ -2680,7 +2611,7 @@ static int mdd_declare_rename(const struct lu_env *env,
 			return rc;
         }
 
-	rc = mdd_declare_changelog_ext_store(env, mdd, tname, sname, handle);
+	rc = mdd_declare_changelog_store(env, mdd, tname, sname, handle);
         if (rc)
                 return rc;
 
@@ -2981,10 +2912,9 @@ cleanup:
 
 cleanup_unlocked:
 	if (rc == 0)
-		rc = mdd_changelog_ext_ns_store(env, mdd, CL_RENAME, cl_flags,
-						mdd_tobj, tpobj_fid, lf,
-						spobj_fid, ltname, lsname,
-						handle);
+		rc = mdd_changelog_ns_store(env, mdd, CL_RENAME, cl_flags,
+					    mdd_tobj, tpobj_fid, lf, spobj_fid,
+					    ltname, lsname, handle);
 
 stop:
 	mdd_trans_stop(env, mdd, rc, handle);

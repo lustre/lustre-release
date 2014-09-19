@@ -123,6 +123,18 @@ static int mdt_root_squash(struct mdt_thread_info *info, lnet_nid_t peernid)
 	RETURN(0);
 }
 
+static void ucred_set_jobid(struct mdt_thread_info *info, struct lu_ucred *uc)
+{
+	struct ptlrpc_request	*req = mdt_info_req(info);
+	const char		*jobid = mdt_req_get_jobid(req);
+
+	/* set jobid if specified. */
+	if (jobid)
+		strlcpy(uc->uc_jobid, jobid, sizeof(uc->uc_jobid));
+	else
+		uc->uc_jobid[0] = '\0';
+}
+
 static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
                           void *buf)
 {
@@ -285,6 +297,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 		ucred->uc_cap &= ~(CFS_CAP_SYS_RESOURCE_MASK |
 				   CFS_CAP_CHOWN_MASK);
 	ucred->uc_valid = UCRED_NEW;
+	ucred_set_jobid(info, ucred);
 
 	EXIT;
 
@@ -450,6 +463,7 @@ static int old_init_ucred(struct mdt_thread_info *info,
 	else
 		uc->uc_cap = body->mbo_capability;
 	uc->uc_valid = UCRED_OLD;
+	ucred_set_jobid(info, uc);
 
 	RETURN(0);
 }
@@ -489,6 +503,7 @@ static int old_init_ucred_reint(struct mdt_thread_info *info)
 	if (uc->uc_fsuid)
 		uc->uc_cap &= ~CFS_CAP_FS_MASK;
 	uc->uc_valid = UCRED_OLD;
+	ucred_set_jobid(info, uc);
 
 	RETURN(0);
 }

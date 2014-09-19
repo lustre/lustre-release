@@ -1996,26 +1996,32 @@ static struct kuc_hdr *changelog_kuc_hdr(char *buf, int len, int flags)
 }
 
 struct changelog_show {
-	__u64		cs_startrec;
-	__u32		cs_flags;
-	struct file	*cs_fp;
-	char		*cs_buf;
-	struct obd_device *cs_obd;
+	__u64				 cs_startrec;
+	enum changelog_send_flag	 cs_flags;
+	struct file			*cs_fp;
+	char				*cs_buf;
+	struct obd_device		*cs_obd;
 };
+
+static inline char *cs_obd_name(struct changelog_show *cs)
+{
+	return cs->cs_obd->obd_name;
+}
 
 static int changelog_kkuc_cb(const struct lu_env *env, struct llog_handle *llh,
 			     struct llog_rec_hdr *hdr, void *data)
 {
-	struct changelog_show *cs = data;
-	struct llog_changelog_rec *rec = (struct llog_changelog_rec *)hdr;
-	struct kuc_hdr *lh;
-	int len, rc;
+	struct changelog_show		*cs = data;
+	struct llog_changelog_rec	*rec = (struct llog_changelog_rec *)hdr;
+	struct kuc_hdr			*lh;
+	int				 len;
+	int				 rc;
 	ENTRY;
 
 	if (rec->cr_hdr.lrh_type != CHANGELOG_REC) {
 		rc = -EINVAL;
 		CERROR("%s: not a changelog rec %x/%d: rc = %d\n",
-		       cs->cs_obd->obd_name, rec->cr_hdr.lrh_type,
+		       cs_obd_name(cs), rec->cr_hdr.lrh_type,
 		       rec->cr.cr_type, rc);
 		RETURN(rc);
 	}
@@ -2048,11 +2054,12 @@ static int changelog_kkuc_cb(const struct lu_env *env, struct llog_handle *llh,
 
 static int mdc_changelog_send_thread(void *csdata)
 {
-	struct changelog_show *cs = csdata;
-	struct llog_ctxt *ctxt = NULL;
-	struct llog_handle *llh = NULL;
-	struct kuc_hdr *kuch;
-	int rc;
+	struct changelog_show	*cs = csdata;
+	struct llog_ctxt	*ctxt = NULL;
+	struct llog_handle	*llh = NULL;
+	struct kuc_hdr		*kuch;
+	enum llog_flag		 flags = LLOG_F_IS_CAT;
+	int			 rc;
 
 	CDEBUG(D_HSM, "changelog to fp=%p start "LPU64"\n",
 	       cs->cs_fp, cs->cs_startrec);
@@ -2069,10 +2076,14 @@ static int mdc_changelog_send_thread(void *csdata)
 		       LLOG_OPEN_EXISTS);
 	if (rc) {
 		CERROR("%s: fail to open changelog catalog: rc = %d\n",
-		       cs->cs_obd->obd_name, rc);
+		       cs_obd_name(cs), rc);
 		GOTO(out, rc);
 	}
-	rc = llog_init_handle(NULL, llh, LLOG_F_IS_CAT, NULL);
+
+	if (cs->cs_flags & CHANGELOG_FLAG_JOBID)
+		flags |= LLOG_F_EXT_JOBID;
+
+	rc = llog_init_handle(NULL, llh, flags, NULL);
 	if (rc) {
 		CERROR("llog_init_handle failed %d\n", rc);
 		GOTO(out, rc);
@@ -2126,11 +2137,12 @@ static int mdc_ioc_changelog_send(struct obd_device *obd,
 	if (IS_ERR(task)) {
 		rc = PTR_ERR(task);
 		CERROR("%s: cannot start changelog thread: rc = %d\n",
-		       obd->obd_name, rc);
+		       cs_obd_name(cs), rc);
 		OBD_FREE_PTR(cs);
 	} else {
 		rc = 0;
-		CDEBUG(D_HSM, "%s: started changelog thread\n", obd->obd_name);
+		CDEBUG(D_HSM, "%s: started changelog thread\n",
+		       cs_obd_name(cs));
 	}
 
 	return rc;

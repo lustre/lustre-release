@@ -638,6 +638,7 @@ int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,
 			     enum changelog_rec_type type, int flags,
 			     struct mdd_object *mdd_obj, struct thandle *handle)
 {
+	const struct lu_ucred		*uc = lu_ucred(env);
 	const struct lu_fid		*tfid;
 	struct llog_changelog_rec	*rec;
 	struct lu_buf			*buf;
@@ -663,17 +664,24 @@ int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,
                 RETURN(0);
         }
 
-	reclen = llog_data_len(sizeof(*rec));
+	flags = (flags & CLF_FLAGMASK) | CLF_VERSION;
+	if (uc->uc_jobid[0] != '\0')
+		flags |= CLF_JOBID;
+
+	reclen = llog_data_len(changelog_rec_offset(flags & CLF_SUPPORTED));
 	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_big_buf, reclen);
 	if (buf->lb_buf == NULL)
 		RETURN(-ENOMEM);
 	rec = buf->lb_buf;
 
-        rec->cr.cr_flags = CLF_VERSION | (CLF_FLAGMASK & flags);
-        rec->cr.cr_type = (__u32)type;
-        rec->cr.cr_tfid = *tfid;
-        rec->cr.cr_namelen = 0;
-        mdd_obj->mod_cltime = cfs_time_current_64();
+	rec->cr.cr_flags = flags;
+	rec->cr.cr_type = (__u32)type;
+	rec->cr.cr_tfid = *tfid;
+	rec->cr.cr_namelen = 0;
+	mdd_obj->mod_cltime = cfs_time_current_64();
+
+	if (flags & CLF_JOBID)
+		mdd_changelog_rec_ext_jobid(&rec->cr, uc->uc_jobid);
 
 	rc = mdd_changelog_store(env, mdd, rec, handle);
 
@@ -693,9 +701,9 @@ static int mdd_changelog(const struct lu_env *env, enum changelog_rec_type type,
         if (IS_ERR(handle))
 		RETURN(PTR_ERR(handle));
 
-        rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
-        if (rc)
-                GOTO(stop, rc);
+	rc = mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
+	if (rc)
+		GOTO(stop, rc);
 
         rc = mdd_trans_start(env, mdd, handle);
         if (rc)
@@ -781,7 +789,7 @@ static int mdd_declare_attr_set(const struct lu_env *env,
         }
 #endif
 
-	rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
+	rc = mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
 	return rc;
 }
 
@@ -919,19 +927,19 @@ static int mdd_declare_xattr_set(const struct lu_env *env,
 	if (strncmp(XATTR_USER_PREFIX, name,
 		    sizeof(XATTR_USER_PREFIX) - 1) == 0 ||
 	    strcmp(XATTR_NAME_LOV, name) == 0) {
-		rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
+		rc = mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
 		if (rc)
 			return rc;
 	}
 
 	/* If HSM data is modified, this could add a changelog */
 	if (strcmp(XATTR_NAME_HSM, name) == 0) {
-		rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
+		rc = mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
 		if (rc)
 			return rc;
 	}
 
-	rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
+	rc = mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
 	return rc;
 }
 
@@ -1105,7 +1113,7 @@ static int mdd_declare_xattr_del(const struct lu_env *env,
 	/* Only record user xattr changes */
 	if ((strncmp(XATTR_USER_PREFIX, name,
 		     sizeof(XATTR_USER_PREFIX) - 1) == 0))
-		rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
+		rc = mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
 
 	return rc;
 }
@@ -1744,9 +1752,9 @@ again:
                 if (rc)
                         GOTO(stop, rc);
 
-                rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
-                if (rc)
-                        GOTO(stop, rc);
+		rc = mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
+		if (rc)
+			GOTO(stop, rc);
 
                 rc = mdd_trans_start(env, mdo2mdd(obj), handle);
                 if (rc)
@@ -1820,10 +1828,10 @@ out:
                         if (IS_ERR(handle))
 				GOTO(stop, rc = PTR_ERR(handle));
 
-                        rc = mdd_declare_changelog_store(env, mdd, NULL,
-                                                         handle);
-                        if (rc)
-                                GOTO(stop, rc);
+			rc = mdd_declare_changelog_store(env, mdd, NULL, NULL,
+							 handle);
+			if (rc)
+				GOTO(stop, rc);
 
                         rc = mdd_trans_start(env, mdo2mdd(obj), handle);
                         if (rc)

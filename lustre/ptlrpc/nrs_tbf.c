@@ -626,7 +626,7 @@ nrs_tbf_jobid_cli_init(struct nrs_tbf_client *cli,
 
 	if (jobid == NULL)
 		jobid = NRS_TBF_JOBID_NULL;
-	LASSERT(strlen(jobid) < JOBSTATS_JOBID_SIZE);
+	LASSERT(strlen(jobid) < LUSTRE_JOBID_SIZE);
 	INIT_LIST_HEAD(&cli->tc_lru);
 	memcpy(cli->tc_jobid, jobid, strlen(jobid));
 }

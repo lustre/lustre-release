@@ -277,9 +277,11 @@ struct mdd_object *mdd_object_find(const struct lu_env *env,
 int mdd_readpage(const struct lu_env *env, struct md_object *obj,
                  const struct lu_rdpg *rdpg);
 int mdd_declare_changelog_store(const struct lu_env *env,
-				struct mdd_device *mdd,
-				const struct lu_name *fname,
-				struct thandle *handle);
+				       struct mdd_device *mdd,
+				       const struct lu_name *tname,
+				       const struct lu_name *sname,
+				       struct thandle *handle);
+void mdd_changelog_rec_ext_jobid(struct changelog_rec *rec, const char *jobid);
 int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
 			struct llog_changelog_rec *rec, struct thandle *th);
 int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,
@@ -287,9 +289,15 @@ int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,
 			     struct mdd_object *mdd_obj,
 			     struct thandle *handle);
 int mdd_changelog_ns_store(const struct lu_env *env, struct mdd_device *mdd,
-			   enum changelog_rec_type type, unsigned flags,
-			   struct mdd_object *target, struct mdd_object *parent,
-			   const struct lu_name *tname, struct thandle *handle);
+			   enum changelog_rec_type type,
+			   enum changelog_rec_flags crf,
+			   struct mdd_object *target,
+			   const struct lu_fid *tpfid,
+			   const struct lu_fid *sfid,
+			   const struct lu_fid *spfid,
+			   const struct lu_name *tname,
+			   const struct lu_name *sname,
+			   struct thandle *handle);
 int mdd_declare_object_create_internal(const struct lu_env *env,
 				       struct mdd_object *p,
 				       struct mdd_object *c,

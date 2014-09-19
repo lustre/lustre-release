@@ -945,7 +945,7 @@ void ccc_req_attr_set(const struct lu_env *env,
 	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_INVALID_PFID))
 		oa->o_parent_oid++;
 	memcpy(attr->cra_jobid, cl_i2info(inode)->lli_jobid,
-	       JOBSTATS_JOBID_SIZE);
+	       LUSTRE_JOBID_SIZE);
 }
 
 static const struct cl_req_operations ccc_req_ops = {

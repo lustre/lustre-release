@@ -187,6 +187,7 @@ static int llog_osd_read_header(const struct lu_env *env,
 	struct llog_rec_hdr	*llh_hdr;
 	struct dt_object	*o;
 	struct llog_thread_info	*lgi;
+	enum llog_flag		 flags;
 	int			 rc;
 
 	ENTRY;
@@ -208,6 +209,8 @@ static int llog_osd_read_header(const struct lu_env *env,
 		CDEBUG(D_HA, "not reading header from 0-byte log\n");
 		RETURN(LLOG_EEMPTY);
 	}
+
+	flags = handle->lgh_hdr->llh_flags;
 
 	lgi->lgi_off = 0;
 	lgi->lgi_buf.lb_buf = handle->lgh_hdr;
@@ -243,6 +246,7 @@ static int llog_osd_read_header(const struct lu_env *env,
 		RETURN(-EIO);
 	}
 
+	handle->lgh_hdr->llh_flags |= (flags & LLOG_F_EXT_MASK);
 	handle->lgh_last_idx = handle->lgh_hdr->llh_tail.lrt_index;
 
 	RETURN(0);
@@ -587,6 +591,32 @@ static inline void llog_skip_over(__u64 *off, int curr, int goal)
 }
 
 /**
+ * Remove optional fields that the client doesn't expect.
+ * This is typically in order to ensure compatibility with older clients.
+ * It is assumed that since we exclusively remove fields, the block will be
+ * big enough to handle the remapped records. It is also assumed that records
+ * of a block have the same format (i.e.: the same features enabled).
+ *
+ * \param[in,out]    hdr	Header of the block of records to remap.
+ * \param[in,out]    last_hdr   Last header, don't read past this point.
+ * \param[in]        flags	Flags describing the fields to keep.
+ */
+static void changelog_block_trim_ext(struct llog_rec_hdr *hdr,
+				     struct llog_rec_hdr *last_hdr,
+				     enum changelog_rec_flags flags)
+{
+	if (hdr->lrh_type != CHANGELOG_REC)
+		return;
+
+	do {
+		struct changelog_rec *rec = (struct changelog_rec *)(hdr + 1);
+
+		changelog_remap_rec(rec, rec->cr_flags & flags);
+		hdr = llog_rec_hdr_next(hdr);
+	} while ((char *)hdr <= (char *)last_hdr);
+}
+
+/**
  * Implementation of the llog_operations::lop_next_block
  *
  * This function finds the the next llog block to return which contains
@@ -713,6 +743,12 @@ static int llog_osd_next_block(const struct lu_env *env,
 			       rec->lrh_index, next_idx);
 			GOTO(out, rc = -ENOENT);
 		}
+
+		/* Trim unsupported extensions for compat w/ older clients */
+		if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_JOBID))
+			changelog_block_trim_ext(rec, last_rec,
+						 CLF_VERSION | CLF_RENAME);
+
 		GOTO(out, rc = 0);
 	}
 	GOTO(out, rc = -EIO);
@@ -831,6 +867,12 @@ static int llog_osd_prev_block(const struct lu_env *env,
 			       rec->lrh_index, prev_idx);
 			GOTO(out, rc = -ENOENT);
 		}
+
+		/* Trim unsupported extensions for compat w/ older clients */
+		if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_JOBID))
+			changelog_block_trim_ext(rec, last_rec,
+						 CLF_VERSION | CLF_RENAME);
+
 		GOTO(out, rc = 0);
 	}
 	GOTO(out, rc = -EIO);

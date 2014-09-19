@@ -840,20 +840,21 @@ enum {
 };
 
 struct lu_ucred {
-	__u32               uc_valid;
-	__u32               uc_o_uid;
-	__u32               uc_o_gid;
-	__u32               uc_o_fsuid;
-	__u32               uc_o_fsgid;
-	__u32               uc_uid;
-	__u32               uc_gid;
-	__u32               uc_fsuid;
-	__u32               uc_fsgid;
-	__u32               uc_suppgids[2];
-	cfs_cap_t           uc_cap;
-	__u32               uc_umask;
-	struct group_info   *uc_ginfo;
-	struct md_identity *uc_identity;
+	__u32			 uc_valid;
+	__u32			 uc_o_uid;
+	__u32			 uc_o_gid;
+	__u32			 uc_o_fsuid;
+	__u32			 uc_o_fsgid;
+	__u32			 uc_uid;
+	__u32			 uc_gid;
+	__u32			 uc_fsuid;
+	__u32			 uc_fsgid;
+	__u32			 uc_suppgids[2];
+	cfs_cap_t		 uc_cap;
+	__u32			 uc_umask;
+	struct group_info	*uc_ginfo;
+	struct md_identity	*uc_identity;
+	char			 uc_jobid[LUSTRE_JOBID_SIZE];
 };
 
 struct lu_ucred *lu_ucred(const struct lu_env *env);

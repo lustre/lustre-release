@@ -124,18 +124,18 @@ EXPORT_SYMBOL(obd_memory);
  */
 int lustre_get_jobid(char *jobid)
 {
-	int jobid_len = JOBSTATS_JOBID_SIZE;
+	int jobid_len = LUSTRE_JOBID_SIZE;
 	int rc = 0;
 	ENTRY;
 
-	memset(jobid, 0, JOBSTATS_JOBID_SIZE);
+	memset(jobid, 0, LUSTRE_JOBID_SIZE);
 	/* Jobstats isn't enabled */
 	if (strcmp(obd_jobid_var, JOBSTATS_DISABLE) == 0)
 		RETURN(0);
 
 	/* Use process name + fsuid as jobid */
 	if (strcmp(obd_jobid_var, JOBSTATS_PROCNAME_UID) == 0) {
-		snprintf(jobid, JOBSTATS_JOBID_SIZE, "%s.%u",
+		snprintf(jobid, LUSTRE_JOBID_SIZE, "%s.%u",
 			 current_comm(),
 			 from_kuid(&init_user_ns, current_fsuid()));
 		RETURN(0);

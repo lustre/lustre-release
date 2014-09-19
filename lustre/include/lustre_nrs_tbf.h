@@ -56,7 +56,7 @@ struct nrs_tbf_client {
 	/** NID of the client. */
 	lnet_nid_t			 tc_nid;
 	/** Jobid of the client. */
-	char				 tc_jobid[JOBSTATS_JOBID_SIZE];
+	char				 tc_jobid[LUSTRE_JOBID_SIZE];
 	/** Reference number of the client. */
 	atomic_t			 tc_ref;
 	/** Likage to rule. */

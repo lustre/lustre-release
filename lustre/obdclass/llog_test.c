@@ -837,8 +837,9 @@ static int llog_test_7(const struct lu_env *env, struct obd_device *obd)
 	}
 
 	CWARN("7e: test llog_changelog_rec\n");
+	/* Direct access to cr_do_not_use: peculiar case for this test */
 	llog_records.lcr.cr_hdr.lrh_len = sizeof(llog_records.lcr);
-	llog_records.lcr.cr_tail.lrt_len = sizeof(llog_records.lcr);
+	llog_records.lcr.cr_do_not_use.lrt_len = sizeof(llog_records.lcr);
 	llog_records.lcr.cr_hdr.lrh_type = CHANGELOG_REC;
 
 	rc = llog_test_7_sub(env, ctxt);

@@ -367,7 +367,7 @@ check_ptlrpc_body(void)
 	CHECK_CVALUE(PTLRPC_NUM_VERSIONS);
 	CHECK_MEMBER(ptlrpc_body, pb_pre_versions);
 	CHECK_MEMBER(ptlrpc_body, pb_padding);
-	CHECK_CVALUE(JOBSTATS_JOBID_SIZE);
+	CHECK_CVALUE(LUSTRE_JOBID_SIZE);
 	CHECK_MEMBER(ptlrpc_body, pb_jobid);
 
 	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_handle);
@@ -1558,20 +1558,20 @@ check_changelog_rec(void)
 }
 
 static void
-check_changelog_rec_ext(void)
+check_changelog_ext_rename(void)
 {
 	BLANK_LINE();
-	CHECK_STRUCT(changelog_ext_rec);
-	CHECK_MEMBER(changelog_ext_rec, cr_namelen);
-	CHECK_MEMBER(changelog_ext_rec, cr_flags);
-	CHECK_MEMBER(changelog_ext_rec, cr_type);
-	CHECK_MEMBER(changelog_ext_rec, cr_index);
-	CHECK_MEMBER(changelog_ext_rec, cr_prev);
-	CHECK_MEMBER(changelog_ext_rec, cr_time);
-	CHECK_MEMBER(changelog_ext_rec, cr_tfid);
-	CHECK_MEMBER(changelog_ext_rec, cr_pfid);
-	CHECK_MEMBER(changelog_ext_rec, cr_sfid);
-	CHECK_MEMBER(changelog_ext_rec, cr_spfid);
+	CHECK_STRUCT(changelog_ext_rename);
+	CHECK_MEMBER(changelog_ext_rename, cr_sfid);
+	CHECK_MEMBER(changelog_ext_rename, cr_spfid);
+}
+
+static void
+check_changelog_ext_jobid(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(changelog_ext_jobid);
+	CHECK_MEMBER(changelog_ext_jobid, cr_jobid);
 }
 
 static void
@@ -1590,7 +1590,7 @@ check_llog_changelog_rec(void)
 	CHECK_STRUCT(llog_changelog_rec);
 	CHECK_MEMBER(llog_changelog_rec, cr_hdr);
 	CHECK_MEMBER(llog_changelog_rec, cr);
-	CHECK_MEMBER(llog_changelog_rec, cr_tail);
+	CHECK_MEMBER(llog_changelog_rec, cr_do_not_use);
 }
 
 static void
@@ -2519,7 +2519,8 @@ main(int argc, char **argv)
 	check_llog_setattr64_rec();
 	check_llog_size_change_rec();
 	check_changelog_rec();
-	check_changelog_rec_ext();
+	check_changelog_ext_rename();
+	check_changelog_ext_jobid();
 	check_changelog_setinfo();
 	check_llog_changelog_rec();
 	check_llog_changelog_user_rec();
