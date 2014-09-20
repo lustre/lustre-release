@@ -69,7 +69,8 @@ enum {
 #define	LU_CACHE_NR_UNLIMITED		-1
 #define	LU_CACHE_NR_DEFAULT		LU_CACHE_NR_UNLIMITED
 #define	LU_CACHE_NR_LDISKFS_LIMIT	LU_CACHE_NR_UNLIMITED
-#define	LU_CACHE_NR_ZFS_LIMIT		256
+/** This is set to roughly (20 * OSS_NTHRS_MAX) to prevent thrashing */
+#define	LU_CACHE_NR_ZFS_LIMIT		10240
 
 #define LU_SITE_BITS_MIN    12
 #define LU_SITE_BITS_MAX    24
