@@ -43,6 +43,7 @@ OSTSIZE=${OSTSIZE:-200000}
 OSTOPT=${OSTOPT:-}
 OST_FS_MKFS_OPTS=${OST_FS_MKFS_OPTS:-}
 OST_MOUNT_OPTS=${OST_MOUNT_OPTS:-}
+OST_INDEX_LIST=${OST_INDEX_LIST:-}
 # Can specify individual ost devs with
 # OSTDEV1="/dev/sda"
 # on specific hosts with
@@ -51,6 +52,17 @@ OST_MOUNT_OPTS=${OST_MOUNT_OPTS:-}
 # For ZFS, ost devices can be specified via either or both of the following:
 # OSTZFSDEV1="${FSNAME}-ost1/ost1"
 # OSTDEV1="/dev/sdb1"
+#
+# OST indices can be specified as follows:
+# OSTINDEX1="1"
+# OSTINDEX2="2"
+# OSTINDEX3="4"
+# ......
+# or
+# OST_INDEX_LIST="[1,2,4-6,8]"	# [n-m,l-k,...], where n < m and l < k, etc.
+#
+# The default index value of an individual OST is its facet number minus 1.
+# More specific ones override more general ones. See facet_index().
 
 NETTYPE=${NETTYPE:-tcp}
 MGSNID=${MGSNID:-$(h2$NETTYPE $mgs_HOST)}

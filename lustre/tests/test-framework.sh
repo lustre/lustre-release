@@ -816,6 +816,25 @@ node_fstypes() {
 	echo -n $fstypes
 }
 
+facet_index() {
+	local facet=$1
+	local num=$(facet_number $facet)
+	local index
+
+	if [[ $(facet_type $facet) = OST ]]; then
+		index=OSTINDEX${num}
+		if [[ -n "${!index}" ]]; then
+			echo -n ${!index}
+			return
+		fi
+
+		index=${OST_INDICES[num - 1]}
+	fi
+
+	[[ -n "$index" ]] || index=$((num - 1))
+	echo -n $index
+}
+
 devicelabel() {
 	local facet=$1
 	local dev=$2
@@ -3258,7 +3277,7 @@ mkfs_opts() {
 	local dev=$2
 	local fsname=${3:-"$FSNAME"}
 	local type=$(facet_type $facet)
-	local index=$(($(facet_number $facet) - 1))
+	local index=$(facet_index $facet)
 	local fstype=$(facet_fstype $facet)
 	local host=$(facet_host $facet)
 	local opts
@@ -3344,6 +3363,24 @@ mkfs_opts() {
 	echo -n "$opts"
 }
 
+check_ost_indices() {
+	local index_count=${#OST_INDICES[@]}
+	[[ $index_count -eq 0 || $OSTCOUNT -le $index_count ]] && return 0
+
+	# OST count is greater than the index count in $OST_INDEX_LIST.
+	# We need check whether there are duplicate indices.
+	local i
+	local j
+	local index
+	for i in $(seq $((index_count + 1)) $OSTCOUNT); do
+		index=$(facet_index ost$i)
+		for j in $(seq 0 $((index_count - 1))); do
+			[[ $index -ne ${OST_INDICES[j]} ]] ||
+			error "ost$i has the same index $index as ost$((j+1))"
+		done
+	done
+}
+
 formatall() {
 	local quiet
 
@@ -3370,6 +3407,8 @@ formatall() {
 			${quiet:+>/dev/null} || exit 10
 	done
 
+	export OST_INDICES=($(hostlist_expand "$OST_INDEX_LIST"))
+	check_ost_indices
 	for num in $(seq $OSTCOUNT); do
 		echo "Format ost$num: $(ostdevname $num)"
 		add ost$num $(mkfs_opts ost$num $(ostdevname ${num})) \
