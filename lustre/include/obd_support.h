@@ -317,6 +317,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_OST_ENOINO              0x229
 #define OBD_FAIL_OST_DQACQ_NET           0x230
 #define OBD_FAIL_OST_STATFS_EINPROGRESS  0x231
+#define OBD_FAIL_OST_NODESTROY		 0x233
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301

@@ -70,7 +70,7 @@ lfsck_create() {
 		test_mkdir ${tdir}
 	EOF"
 
-	for ((j=1; j<${threads}; j++)); do
+	for ((j = 1; j < ${threads}; j++)); do
 		${ECHOCMD} "${LCTL} <<-EOF
 			cfg_device ${echodev}
 			test_mkdir ${tdir}${j}
@@ -138,7 +138,7 @@ test_0() {
 		ldiskfs --reformat ${MDT_DEVNAME} $(mdsvdevname 1) > /dev/null ||
 		error "Fail to reformat the MDS!"
 
-	for ((i=$MINCOUNT; i<=$MAXCOUNT; i=$((i * FACTOR)))); do
+	for ((i = $MINCOUNT; i <= $MAXCOUNT; i = $((i * FACTOR)))); do
 		local nfiles=$((i - BCOUNT))
 
 		echo "+++ start to create for ${i} files set at: $(date) +++"
@@ -180,7 +180,8 @@ test_1() {
 		ldiskfs --reformat ${MDT_DEVNAME} $(mdsvdevname 1) > /dev/null ||
 		error "Fail to reformat the MDS!"
 
-	for ((i=$MINCOUNT_REPAIR; i<=$MAXCOUNT_REPAIR; i=$((i * FACTOR)))); do
+	for ((i = $MINCOUNT_REPAIR; i <= $MAXCOUNT_REPAIR;
+	      i = $((i * FACTOR)))); do
 		local nfiles=$((i - BCOUNT))
 
 		echo "+++ start to create for ${i} files set at: $(date) +++"
@@ -224,7 +225,8 @@ run_test 1 "lfsck performance test (backup/restore) without load"
 test_2() {
 	local i
 
-	for ((i=$MINCOUNT_REPAIR; i<=$MAXCOUNT_REPAIR; i=$((i * FACTOR)))); do
+	for ((i = $MINCOUNT_REPAIR; i <= $MAXCOUNT_REPAIR;
+	      i = $((i * FACTOR)))); do
 		stopall
 		do_rpc_nodes $(facet_active_host $SINGLEMDS) load_modules_local
 		reformat_external_journal
@@ -278,7 +280,7 @@ test_3() {
 		ldiskfs --reformat ${MDT_DEVNAME} $(mdsvdevname 1) > /dev/null ||
 		error "Fail to reformat the MDS!"
 
-	for ((i=$inc_count; i<=$BASE_COUNT; i=$((i + inc_count)))); do
+	for ((i = $inc_count; i <= $BASE_COUNT; i = $((i + inc_count)))); do
 		local nfiles=$((i - BCOUNT))
 
 		echo "+++ start to create for ${i} files set at: $(date) +++"
@@ -309,7 +311,7 @@ test_3() {
 	local inc_speed=$((FULL_SPEED * INCFACTOR / 100))
 	local j
 
-	for ((j=$inc_speed; j<$FULL_SPEED; j=$((j + inc_speed)))); do
+	for ((j = $inc_speed; j < $FULL_SPEED; j = $((j + inc_speed)))); do
 		start ${SINGLEMDS} $MDT_DEVNAME $MNTOPTS_NOSCRUB > /dev/null ||
 			error "Fail to start MDS!"
 
