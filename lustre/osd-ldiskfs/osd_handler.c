@@ -5307,7 +5307,10 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 	} else {
 		attr &= ~LU_DIRENT_ATTRS_MASK;
 		if (!fid_is_sane(fid)) {
-			if (OBD_FAIL_CHECK(OBD_FAIL_FID_LOOKUP))
+			if (OBD_FAIL_CHECK(OBD_FAIL_FID_LOOKUP) &&
+			    likely(it->oie_dirent->oied_namelen != 2 ||
+				   it->oie_dirent->oied_name[0] != '.' ||
+				   it->oie_dirent->oied_name[1] != '.'))
 				RETURN(-ENOENT);
 
 			rc = osd_ea_fid_get(env, obj, ino, fid, id);

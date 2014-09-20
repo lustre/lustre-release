@@ -388,6 +388,9 @@ test_4()
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1505
 	ls $DIR/$tdir/ > /dev/null || error "(11) no FID-in-dirent."
 
+	local count=$(ls -al $DIR/$tdir | wc -l)
+	[ $count -gt 9 ] || error "(12) namespace LFSCK failed"
+
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
 }
 run_test 4 "FID-in-dirent can be rebuilt after MDT file-level backup/restore"
