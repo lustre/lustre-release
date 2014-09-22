@@ -1057,25 +1057,11 @@ dont_check_exports:
                 rc = obd_reconnect(req->rq_svc_thread->t_env,
                                    export, target, &cluuid, data, client_nid);
         }
-        if (rc)
-                GOTO(out, rc);
+	if (rc)
+		GOTO(out, rc);
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 6, 53, 0)
-	/* 2.2.0 clients always swab nidtbl entries due to a bug, so server
-	 * will do the swabbing for if the client is using the same endianness.
-	 *
-	 * This fixup is version-limited, because we don't want to carry the
-	 * OBD_CONNECT_MNE_SWAB flag around forever, just so long as we need
-	 * interop with unpatched 2.2 clients.  For newer clients, servers
-	 * will never do MNE swabbing, let the client handle that.  LU-1644 */
-	spin_lock(&export->exp_lock);
-	export->exp_need_mne_swab = !ptlrpc_req_need_swab(req) &&
-			!(data->ocd_connect_flags & OBD_CONNECT_MNE_SWAB);
-	spin_unlock(&export->exp_lock);
-#endif
-
-        LASSERT(target->u.obt.obt_magic == OBT_MAGIC);
-        data->ocd_instance = target->u.obt.obt_instance;
+	LASSERT(target->u.obt.obt_magic == OBT_MAGIC);
+	data->ocd_instance = target->u.obt.obt_instance;
 
         /* Return only the parts of obd_connect_data that we understand, so the
          * client knows that we don't understand the rest. */
