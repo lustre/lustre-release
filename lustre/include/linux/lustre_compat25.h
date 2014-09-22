@@ -367,6 +367,10 @@ static inline int radix_tree_exceptional_entry(void *arg)
 }
 #endif
 
+#ifndef HAVE_TRUNCATE_INODE_PAGES_FINAL
+# define truncate_inode_pages_final(map) truncate_inode_pages(map, 0)
+#endif
+
 #ifndef SIZE_MAX
 #define SIZE_MAX	(~(size_t)0)
 #endif

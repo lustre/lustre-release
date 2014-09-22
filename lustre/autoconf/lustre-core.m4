@@ -1490,6 +1490,22 @@ have_bvec_iter, [
 ]) # LC_HAVE_BVEC_ITER
 
 #
+# LC_HAVE_TRUNCATE_IPAGE_FINAL
+#
+# 3.14 bring truncate_inode_pages_final for evict_inode
+#
+AC_DEFUN([LC_HAVE_TRUNCATE_IPAGES_FINAL], [
+LB_CHECK_COMPILE([if Linux kernel has truncate_inode_pages_final],
+truncate_ipages_final, [
+	#include <linux/mm.h>
+],[
+	truncate_inode_pages_final(NULL);
+], [
+	AC_DEFINE(HAVE_TRUNCATE_INODE_PAGES_FINAL, 1,
+		[kernel has truncate_inode_pages_final])
+])
+]) # LC_HAVE_TRUNCATE_IPAGES_FINAL
+#
 # LC_VFS_RENAME_6ARGS
 #
 # 3.15 has vfs_rename with 6 args
@@ -1627,6 +1643,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 3.14
 	LC_HAVE_BVEC_ITER
+	LC_HAVE_TRUNCATE_IPAGES_FINAL
 
 	# 3.15
 	LC_VFS_RENAME_6ARGS
