@@ -138,7 +138,6 @@ pkglib_LTLIBRARIES += mount_osd_ldiskfs.la
 
 mount_osd_ldiskfs_la_SOURCES = mount_utils_ldiskfs.c
 mount_osd_ldiskfs_la_LDFLAGS = -shared -export-dynamic -module -avoid-version
-mount_osd_ldiskfs_LDADD = libiam.a
 endif
 
 mount_lustre_SOURCES = mount_lustre.c mount_utils.c mount_utils.h
