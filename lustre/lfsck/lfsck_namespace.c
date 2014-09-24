@@ -997,10 +997,8 @@ static int lfsck_namespace_insert_orphan(const struct lu_env *env,
 		}
 	}
 
-	if (rc != 0)
-		GOTO(unlock, rc);
-
-	rc = dt_attr_set(env, orphan, la, th, BYPASS_CAPA);
+	if (rc == 0)
+		rc = dt_attr_set(env, orphan, la, th, BYPASS_CAPA);
 
 	GOTO(stop, rc = (rc == 0 ? 1 : rc));
 
@@ -1245,10 +1243,13 @@ static int lfsck_namespace_create_orphan_remote(const struct lu_env *env,
 	rc = ptlrpc_queue_wait(req);
 	ptlrpc_req_finished(req);
 
-	if (rc == 0)
+	if (rc == 0) {
+		orphan->do_lu.lo_header->loh_attr |= LOHA_EXISTS;
 		rc = 1;
-	else if (rc == -EEXIST)
+	} else if (rc == -EEXIST) {
+		orphan->do_lu.lo_header->loh_attr |= LOHA_EXISTS;
 		rc = 0;
+	}
 
 	GOTO(out, rc);
 

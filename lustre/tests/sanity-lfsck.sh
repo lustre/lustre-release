@@ -28,7 +28,7 @@ SAVED_OSTCOUNT=${OSTCOUNT}
 # do not use too small MDSSIZE/OSTSIZE, which affect the default journal size
 MDSSIZE=100000
 OSTSIZE=100000
-# no need too much OSTs, to reduce the format/start/stop overhead
+# no need too many OSTs, to reduce the format/start/stop overhead
 [ $OSTCOUNT -gt 4 ] && OSTCOUNT=4
 
 # build up a clean test environment.
@@ -3590,8 +3590,8 @@ run_test 29b "LFSCK can repair bad nlink count (2)"
 
 test_29c() {
 	echo "#####"
-	echo "There are too much hard links to the object, and exceeds the
-	echo object's linkEA limitation, as to NOT all the known name entries"
+	echo "There are too many hard links to the object, and exceeds the"
+	echo "object's linkEA limitation, as to NOT all the known name entries"
 	echo "will be recorded in the linkEA. Under such case, LFSCK should"
 	echo "skip the nlink verification for this object."
 	echo "#####"
