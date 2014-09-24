@@ -1021,7 +1021,7 @@ static int osp_init0(const struct lu_env *env, struct osp_device *osp,
 		 * used in orphan cleanup. */
 		rc = osp_last_used_init(env, osp);
 		if (rc)
-			GOTO(out_proc, rc);
+			GOTO(out_fid, rc);
 
 
 		/* Initialize precreation thread, it handles new
@@ -1065,6 +1065,8 @@ out_precreat:
 out_last_used:
 	if (!osp->opd_connect_mdt)
 		osp_last_used_fini(env, osp);
+out_fid:
+	obd_fid_fini(osp->opd_obd);
 out_proc:
 	ptlrpc_lprocfs_unregister_obd(obd);
 	lprocfs_obd_cleanup(obd);
