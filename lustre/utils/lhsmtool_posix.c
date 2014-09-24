@@ -41,7 +41,9 @@
 #include <stdlib.h>
 #include <dirent.h>
 #include <errno.h>
+#include <time.h>
 #include <utime.h>
+#include <sys/time.h>
 #include <sys/xattr.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
@@ -115,27 +117,34 @@ static char fs_name[MAX_OBD_NAME + 1];
 
 static struct hsm_copytool_private *ctdata;
 
+static inline double ct_now(void)
+{
+	struct timeval tv;
 
-#define CT_ERROR(_rc, _format, ...) \
+	gettimeofday(&tv, NULL);
+
+	return tv.tv_sec + 0.000001 * tv.tv_usec;
+}
+
+#define CT_ERROR(_rc, _format, ...)					\
 	llapi_error(LLAPI_MSG_ERROR, _rc,				\
-		    "%s[%ld]: "_format,					\
-		    cmd_name, syscall(SYS_gettid), ## __VA_ARGS__)
-#define CT_DEBUG(_format, ...) \
+		    "%f %s[%ld]: "_format,				\
+		    ct_now(), cmd_name, syscall(SYS_gettid), ## __VA_ARGS__)
+
+#define CT_DEBUG(_format, ...)						\
 	llapi_error(LLAPI_MSG_DEBUG | LLAPI_MSG_NO_ERRNO, 0,		\
-		    "%s[%ld]: "_format,					\
-		    cmd_name, syscall(SYS_gettid), ## __VA_ARGS__)
+		    "%f %s[%ld]: "_format,				\
+		    ct_now(), cmd_name, syscall(SYS_gettid), ## __VA_ARGS__)
+
 #define CT_WARN(_format, ...) \
 	llapi_error(LLAPI_MSG_WARN | LLAPI_MSG_NO_ERRNO, 0,		\
-		    "%s[%ld]: "_format,					\
-		    cmd_name, syscall(SYS_gettid), ## __VA_ARGS__)
-#define CT_TRACE(_format, ...) \
+		    "%f %s[%ld]: "_format,				\
+		    ct_now(), cmd_name, syscall(SYS_gettid), ## __VA_ARGS__)
+
+#define CT_TRACE(_format, ...)						\
 	llapi_error(LLAPI_MSG_INFO | LLAPI_MSG_NO_ERRNO, 0,		\
-		    "%s[%ld]: "_format,					\
-		    cmd_name, syscall(SYS_gettid), ## __VA_ARGS__)
-#define CT_PRINTF(_format, ...) \
-	llapi_printf(LLAPI_MSG_NORMAL,					\
-		     "%s[%ld]: "_format,				\
-		     cmd_name, syscall(SYS_gettid), ## __VA_ARGS__)
+		    "%f %s[%ld]: "_format,				\
+		    ct_now(), cmd_name, syscall(SYS_gettid), ## __VA_ARGS__)
 
 static void usage(const char *name, int rc)
 {
@@ -535,10 +544,9 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 	char			*buf = NULL;
 	__u64			 write_total = 0;
 	__u64			 length;
+	double			 start_time = ct_now();
 	time_t			 last_print_time = time(NULL);
 	int			 rc = 0;
-
-	CT_TRACE("going to copy data from '%s' to '%s'", src, dst);
 
 	if (fstat(src_fd, &src_st) < 0) {
 		rc = -errno;
@@ -595,7 +603,8 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 		goto out;
 	}
 
-	CT_DEBUG("Going to copy "LPU64" bytes %s -> %s\n", length, src, dst);
+	CT_TRACE("start copy of "LPU64" bytes from '%s' to '%s'",
+		 length, src, dst);
 
 	while (write_total < length) {
 		ssize_t	rsize;
@@ -667,6 +676,9 @@ out:
 
 	if (buf != NULL)
 		free(buf);
+
+	CT_TRACE("copied "LPU64" bytes in %f seconds",
+		 length, ct_now() - start_time);
 
 	return rc;
 }
