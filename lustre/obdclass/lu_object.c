@@ -796,13 +796,10 @@ struct lu_object *lu_object_find_at(const struct lu_env *env,
 	struct lu_object        *obj;
 	wait_queue_t           wait;
 
+	if (conf != NULL && conf->loc_flags & LOC_F_NOWAIT)
+		return lu_object_find_try(env, dev, f, conf, NULL);
+
 	while (1) {
-		if (conf != NULL && conf->loc_flags & LOC_F_NOWAIT) {
-			obj = lu_object_find_try(env, dev, f, conf, NULL);
-
-			return obj;
-		}
-
 		obj = lu_object_find_try(env, dev, f, conf, &wait);
 		if (obj != ERR_PTR(-EAGAIN))
 			return obj;

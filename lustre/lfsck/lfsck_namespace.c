@@ -4150,9 +4150,28 @@ static int lfsck_namespace_exec_dir(const struct lu_env *env,
 				    struct lfsck_component *com,
 				    struct lu_dirent *ent, __u16 type)
 {
-	struct lfsck_assistant_data	*lad	= com->lc_data;
+	struct lfsck_assistant_data	*lad	 = com->lc_data;
+	struct lfsck_instance		*lfsck	 = com->lc_lfsck;
 	struct lfsck_namespace_req	*lnr;
-	bool				 wakeup	= false;
+	struct lfsck_bookmark		*bk	 = &lfsck->li_bookmark_ram;
+	struct ptlrpc_thread		*mthread = &lfsck->li_thread;
+	struct ptlrpc_thread		*athread = &lad->lad_thread;
+	struct l_wait_info		 lwi	 = { 0 };
+	bool				 wakeup	 = false;
+
+	l_wait_event(mthread->t_ctl_waitq,
+		     bk->lb_async_windows == 0 ||
+		     lad->lad_prefetched < bk->lb_async_windows ||
+		     !thread_is_running(mthread) ||
+		     thread_is_stopped(athread),
+		     &lwi);
+
+	if (unlikely(!thread_is_running(mthread)) ||
+		     thread_is_stopped(athread))
+		return 0;
+
+	if (unlikely(lfsck_is_dead_obj(lfsck->li_obj_dir)))
+		return 0;
 
 	lnr = lfsck_namespace_assistant_req_init(com->lc_lfsck, ent, type);
 	if (IS_ERR(lnr)) {
@@ -4304,8 +4323,8 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 					  lfsck->li_time_last_checkpoint;
 		__u64 checked = ns->ln_items_checked + com->lc_new_checked;
 		__u64 speed = checked;
-		__u64 new_checked = msecs_to_jiffies(com->lc_new_checked *
-						     MSEC_PER_SEC);
+		__u64 new_checked = com->lc_new_checked *
+				    msecs_to_jiffies(MSEC_PER_SEC);
 		__u32 rtime = ns->ln_run_time_phase1 +
 			      cfs_duration_sec(duration + HALF_SEC);
 
@@ -4359,8 +4378,8 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 				com->lc_new_checked;
 		__u64 speed1 = ns->ln_items_checked;
 		__u64 speed2 = checked;
-		__u64 new_checked = msecs_to_jiffies(com->lc_new_checked *
-						     MSEC_PER_SEC);
+		__u64 new_checked = com->lc_new_checked *
+				    msecs_to_jiffies(MSEC_PER_SEC);
 		__u32 rtime = ns->ln_run_time_phase2 +
 			      cfs_duration_sec(duration + HALF_SEC);
 

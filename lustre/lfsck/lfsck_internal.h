@@ -1184,9 +1184,9 @@ static inline struct dt_object *lfsck_object_find(const struct lu_env *env,
 	return lfsck_object_find_by_dev(env, lfsck->li_next, fid);
 }
 
-static inline struct dt_object *
-lfsck_object_find_bottom(const struct lu_env *env, struct lfsck_instance *lfsck,
-			 const struct lu_fid *fid)
+static inline struct dt_device *
+lfsck_find_dev_by_fid(const struct lu_env *env, struct lfsck_instance *lfsck,
+		      const struct lu_fid *fid)
 {
 	struct dt_device *dev;
 	int		  idx;
@@ -1207,7 +1207,34 @@ lfsck_object_find_bottom(const struct lu_env *env, struct lfsck_instance *lfsck,
 		dev = ltd->ltd_tgt;
 	}
 
+	return dev;
+}
+
+static inline struct dt_object *
+lfsck_object_find_bottom(const struct lu_env *env, struct lfsck_instance *lfsck,
+			 const struct lu_fid *fid)
+{
+	struct dt_device *dev;
+
+	dev = lfsck_find_dev_by_fid(env, lfsck, fid);
+	if (IS_ERR(dev))
+		return (struct dt_object *)dev;
+
 	return lfsck_object_find_by_dev(env, dev, fid);
+}
+
+static inline struct dt_object *
+lfsck_object_find_bottom_nowait(const struct lu_env *env,
+				struct lfsck_instance *lfsck,
+				const struct lu_fid *fid)
+{
+	struct dt_device *dev;
+
+	dev = lfsck_find_dev_by_fid(env, lfsck, fid);
+	if (IS_ERR(dev))
+		return (struct dt_object *)dev;
+
+	return lfsck_object_find_by_dev_nowait(env, dev, fid);
 }
 
 static inline struct lfsck_tgt_desc *lfsck_tgt_get(struct lfsck_tgt_descs *ltds,
