@@ -3637,6 +3637,13 @@ static int lfs_hsm_prepare_file(char *file, struct lu_fid *fid,
 		fprintf(stderr, "Cannot stat %s: %s\n", file, strerror(errno));
 		return -errno;
 	}
+	/* Checking for regular file as archiving as posix copytool
+	 * rejects archiving files other than regular files
+	 */
+	if (!S_ISREG(st.st_mode)) {
+		fprintf(stderr, "error: \"%s\" is not a regular file\n", file);
+		return CMD_HELP;
+	}
 	/* A request should be ... */
 	if (*last_dev != st.st_dev && *last_dev != 0) {
 		fprintf(stderr, "All files should be "
