@@ -940,15 +940,21 @@ int osd_ldiskfs_read(struct inode *inode, void *buf, int size, loff_t *offs)
                 boffs = *offs & (blocksize - 1);
                 csize = min(blocksize - boffs, size);
                 bh = ldiskfs_bread(NULL, inode, block, 0, &err);
-                if (!bh) {
-                        CERROR("%s: can't read %u@%llu on ino %lu: rc = %d\n",
-                               LDISKFS_SB(inode->i_sb)->s_es->s_volume_name,
-                               csize, *offs, inode->i_ino, err);
-                        return err;
-                }
+		if (err != 0) {
+			CERROR("%s: can't read %u@%llu on ino %lu: rc = %d\n",
+			       LDISKFS_SB(inode->i_sb)->s_es->s_volume_name,
+			       csize, *offs, inode->i_ino, err);
+			if (bh != NULL)
+				brelse(bh);
+			return err;
+		}
 
-                memcpy(buf, bh->b_data + boffs, csize);
-                brelse(bh);
+		if (bh != NULL) {
+			memcpy(buf, bh->b_data + boffs, csize);
+			brelse(bh);
+		} else {
+			memset(buf, 0, csize);
+		}
 
                 *offs += csize;
                 buf += csize;

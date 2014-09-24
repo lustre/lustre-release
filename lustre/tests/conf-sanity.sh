@@ -3586,6 +3586,7 @@ run_test 55 "check lov_objid size"
 
 test_56() {
 	local mds_journal_size_orig=$MDSJOURNALSIZE
+	local n
 
 	MDSJOURNALSIZE=16
 
@@ -3593,22 +3594,28 @@ test_56() {
 		add mds${num} $(mkfs_opts mds${num} $(mdsdevname $num)) \
 			--reformat $(mdsdevname $num) $(mdsvdevname $num)
 	done
-	add ost1 $(mkfs_opts ost1 $(ostdevname 1)) --index=1000 --reformat \
+	add ost1 $(mkfs_opts ost1 $(ostdevname 1)) --index=10000 --reformat \
 		$(ostdevname 1) $(ostvdevname 1)
-	add ost2 $(mkfs_opts ost2 $(ostdevname 2)) --index=10000 --reformat \
+	add ost2 $(mkfs_opts ost2 $(ostdevname 2)) --index=1000 --reformat \
 		$(ostdevname 2) $(ostvdevname 2)
 
 	start_mgsmds
-	start_ost
-	start_ost2 || error "Unable to start second ost"
+	start_ost || error "Unable to start first ost (idx 10000)"
+	start_ost2 || error "Unable to start second ost (idx 1000)"
 	mount_client $MOUNT || error "Unable to mount client"
 	echo ok
 	$LFS osts
+	wait_osc_import_state mds ost1 FULL
+	wait_osc_import_state mds ost2 FULL
+	$LFS setstripe --stripe-count=-1 $DIR/$tfile || error "Unable to create"
+	n=$($LFS getstripe --stripe-count $DIR/$tfile)
+	[ "$n" -eq 2 ] || error "Stripe count not two: $n"
+	rm $DIR/$tfile
 	stopall
 	MDSJOURNALSIZE=$mds_journal_size_orig
 	reformat
 }
-run_test 56 "check big indexes"
+run_test 56 "check big OST indexes and out-of-index-order start"
 
 test_57a() { # bug 22656
 	local NID=$(do_facet ost1 "$LCTL get_param nis" | tail -1 | awk '{print $1}')
