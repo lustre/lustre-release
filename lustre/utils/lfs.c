@@ -345,6 +345,36 @@ command_t cmdlist[] = {
 	{ 0, 0, 0, NULL }
 };
 
+/* Generate a random id for the grouplock */
+static int random_group_id(int *gid)
+{
+	int	fd;
+	int	rc;
+	size_t	sz = sizeof(*gid);
+
+	fd = open("/dev/urandom", O_RDONLY);
+	if (fd < 0) {
+		rc = -errno;
+		fprintf(stderr, "cannot open /dev/urandom: %s\n",
+			strerror(-rc));
+		goto out;
+	}
+
+	rc = read(fd, gid, sz);
+	if (rc < sz) {
+		rc = -errno;
+		fprintf(stderr, "cannot read %zu bytes from /dev/urandom: %s\n",
+			sz, strerror(-rc));
+		goto out;
+	}
+
+out:
+	if (fd >= 0)
+		close(fd);
+
+	return rc;
+}
+
 #define MIGRATION_BLOCKS 1
 
 static int lfs_migrate(char *name, unsigned long long stripe_size,
@@ -365,7 +395,7 @@ static int lfs_migrate(char *name, unsigned long long stripe_size,
 	void			*buf = NULL;
 	int			 rsize, wsize;
 	__u64			 rpos, wpos, bufoff;
-	int			 gid = 0, sz;
+	int			 gid;
 	int			 have_gl = 0;
 	struct stat		 st, stv;
 
@@ -393,21 +423,10 @@ static int lfs_migrate(char *name, unsigned long long stripe_size,
 	}
 
 	if (migration_flags & MIGRATION_BLOCKS) {
-		/* generate a random id for the grouplock */
-		fd = open("/dev/urandom", O_RDONLY);
-		if (fd == -1) {
-			rc = -errno;
-			fprintf(stderr, "cannot open /dev/urandom (%s)\n",
-				strerror(-rc));
-			goto free;
-		}
-		sz = sizeof(gid);
-		rc = read(fd, &gid, sz);
-		close(fd);
-		if (rc < sz) {
-			rc = -errno;
-			fprintf(stderr, "cannot read %d bytes from"
-				" /dev/urandom (%s)\n", sz, strerror(-rc));
+		rc = random_group_id(&gid);
+		if (rc < 0) {
+			fprintf(stderr, "%s: cannot get random group ID: %s\n",
+				name, strerror(-rc));
 			goto free;
 		}
 	}
@@ -503,8 +522,8 @@ static int lfs_migrate(char *name, unsigned long long stripe_size,
 		 * be implemented (see LU-2919) */
 		/* group lock is taken after data version read because it
 		 * blocks data version call */
-		if (ioctl(fd, LL_IOC_GROUP_LOCK, gid) == -1) {
-			rc = -errno;
+		rc = llapi_group_lock(fd, gid);
+		if (rc < 0) {
 			fprintf(stderr, "cannot get group lock on %s (%s)\n",
 				name, strerror(-rc));
 			goto error;
@@ -551,11 +570,10 @@ static int lfs_migrate(char *name, unsigned long long stripe_size,
 
 	if (migration_flags & MIGRATION_BLOCKS) {
 		/* give back group lock */
-		if (ioctl(fd, LL_IOC_GROUP_UNLOCK, gid) == -1) {
-			rc = -errno;
+		rc = llapi_group_unlock(fd, gid);
+		if (rc < 0)
 			fprintf(stderr, "cannot put group lock on %s (%s)\n",
 				name, strerror(-rc));
-		}
 		have_gl = 0;
 	}
 
@@ -580,11 +598,14 @@ static int lfs_migrate(char *name, unsigned long long stripe_size,
 
 error:
 	/* give back group lock */
-	if ((migration_flags & MIGRATION_BLOCKS) && have_gl &&
-	    (ioctl(fd, LL_IOC_GROUP_UNLOCK, gid) == -1)) {
-		/* we keep in rc the original error */
-		fprintf(stderr, "cannot put group lock on %s (%s)\n",
-			name, strerror(-errno));
+	if ((migration_flags & MIGRATION_BLOCKS) && have_gl) {
+		int rc2;
+
+		/* we keep the original error in rc */
+		rc2 = llapi_group_unlock(fd, gid);
+		if (rc2 < 0)
+			fprintf(stderr, "cannot put group lock on %s (%s)\n",
+				name, strerror(-rc2));
 	}
 
 	close(fdv);

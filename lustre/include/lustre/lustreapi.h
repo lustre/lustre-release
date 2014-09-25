@@ -380,6 +380,10 @@ extern int llapi_lease_get(int fd, int mode);
 extern int llapi_lease_check(int fd);
 extern int llapi_lease_put(int fd);
 
+/* Group lock */
+int llapi_group_lock(int fd, int gid);
+int llapi_group_unlock(int fd, int gid);
+
 /** @} llapi */
 
 /* llapi_layout user interface */

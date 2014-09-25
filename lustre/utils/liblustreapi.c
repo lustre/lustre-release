@@ -4653,3 +4653,45 @@ int llapi_open_by_fid(const char *lustre_dir, const lustre_fid *fid, int flags)
 	snprintf(path, sizeof(path), "%s/.lustre/fid/"DFID, mntdir, PFID(fid));
 	return open(path, flags);
 }
+
+/**
+ * Take group lock.
+ *
+ * \param fd   File to lock.
+ * \param gid  Group Identifier.
+ *
+ * \retval 0 on success.
+ * \retval -errno on failure.
+ */
+int llapi_group_lock(int fd, int gid)
+{
+	int rc;
+
+	rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid);
+	if (rc < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "cannot get group lock");
+	}
+	return rc;
+}
+
+/**
+ * Put group lock.
+ *
+ * \param fd   File to unlock.
+ * \param gid  Group Identifier.
+ *
+ * \retval 0 on success.
+ * \retval -errno on failure.
+ */
+int llapi_group_unlock(int fd, int gid)
+{
+	int rc;
+
+	rc = ioctl(fd, LL_IOC_GROUP_UNLOCK, gid);
+	if (rc < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "cannot put group lock");
+	}
+	return rc;
+}

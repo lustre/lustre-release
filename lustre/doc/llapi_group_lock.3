@@ -1,0 +1,51 @@
+.TH llapi_group_lock 3 "2014 Oct 03" "Lustre User API"
+.SH NAME
+llapi_group_lock, llapi_group_unlock \- get and put a Lustre group lock.
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_group_lock(int "fd ", int "gid );
+
+.BI "int llapi_group_unlock(int "fd ", int "gid );
+.fi
+.SH DESCRIPTION
+.PP
+The function
+.BR llapi_group_lock()
+takes a group lock on the file descriptor
+.I fd
+with group identifier
+.IR gid .
+
+The function
+.BR llapi_group_unlock()
+releases a group lock identified by group identifier
+.I gid
+on the file descriptor
+.IR fd .
+
+The group lock is a whole file lock that blocks concurrent I/O originating from descriptors that have not been locked. Multiple processes can acquire a lock by specifying the same group identifier.
+
+.SH RETURN VALUES
+.LP
+.B llapi_group_lock(\|)
+and
+.B llapi_group_unlock(\|)
+return 0 on success or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.SM -EBADF
+.I fd
+is not a valid file descriptor.
+.TP
+.SM -ENOTTY
+.I fd
+does not describe an object suitable for this request.
+.TP
+.SM -EINVAL
+.I fd
+is already group locked with a different group identifier.
+.TP
+.SH "SEE ALSO"
+.BR liblustreapi (7)
