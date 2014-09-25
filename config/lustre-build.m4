@@ -626,6 +626,12 @@ LC_CONFIG_CLIENT
 LB_CONFIG_MPITESTS
 LB_CONFIG_SERVERS
 
+AC_CHECK_PROGS(RST2MAN, [rst2man rst2man.py], [])
+if test "x$RST2MAN" = "x"; then
+  AC_MSG_ERROR(
+    [rst2man is needed to build the man pages. Install python-docutils.])
+fi
+
 # Tests depends from utils (multiop from liblustreapi)
 AS_IF([test "x$enable_utils" = xno], [enable_tests="no"])
 

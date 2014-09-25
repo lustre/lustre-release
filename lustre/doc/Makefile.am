@@ -68,8 +68,11 @@ if UTILS
 man_MANS = $(MANFILES)
 endif
 
+.rst.3 .rst.7:
+	@RST2MAN@ $? $@
+
 CLEANFILES = *.aux *.tex *.log *.pdf
 
-EXTRA_DIST = $(MANFILES) $(DISTONLY_MANFILES)
+EXTRA_DIST = $(MANFILES) *.rst $(DISTONLY_MANFILES)
 
 all:
