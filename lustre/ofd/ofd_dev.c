@@ -1636,7 +1636,8 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 		CDEBUG(D_HA, "ofd_last_id() = "LPU64" -> diff = %d\n",
 			ofd_seq_last_oid(oseq), diff);
 		if (-diff > OST_MAX_PRECREATE) {
-			/* FIXME: should reset precreate_next_id on MDS */
+			/* Let MDS know that we are so far ahead. */
+			ostid_set_id(&rep_oa->o_oi, ofd_seq_last_oid(oseq) + 1);
 			rc = 0;
 		} else if (diff < 0) {
 			rc = ofd_orphans_destroy(tsi->tsi_env, exp,
