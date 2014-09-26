@@ -4308,14 +4308,21 @@ int llapi_get_data_version(int fd, __u64 *data_version, __u64 flags)
 }
 
 /*
- * Create a volatile file and open it for write:
- * - file is created as a standard file in the directory
- * - file does not appears in directory and directory mtime does not change
- * - file is removed at close
- * - file modes are rw-------, if user wants another one it must use fchmod()
- * \param	directory	Directory where the file is created
- * \param	idx		MDT index on which the file is created
- * \param	open_flags	Standard open flags
+ * Create a file without any name open it for read/write:
+ *
+ * - file is created as if it were a standard file in the given \a directory
+ * - file does not appear in \a directory and mtime does not change because
+ *   the filename is handled specially by the Lustre MDS.
+ * - file is removed at final close
+ * - file modes are rw-------, since it doesn't make sense to have a read-only
+ *   or write-only file that cannot be opened again.
+ * - if user wants another mode it must use fchmod() on the open file, no
+ *   security problems arise because it cannot be opened by another process.
+ *
+ * \param[in]	directory	directory from which to inherit layout/MDT idx
+ * \param[in]	idx		MDT index on which the file is created,
+ *				\a idx == -1 means no specific MDT is requested
+ * \param[in]	open_flags	standard open(2) flags
  *
  * \retval	0 on success.
  * \retval	-errno on error.
@@ -4357,11 +4364,16 @@ int llapi_create_volatile_idx(char *directory, int idx, int open_flags)
 	fd = open(file_path, O_RDWR | O_CREAT | open_flags, S_IRUSR | S_IWUSR);
 	if (fd < 0) {
 		llapi_error(LLAPI_MSG_ERROR, errno,
-			    "Cannot create volatile file %s in %s\n",
+			    "Cannot create volatile file '%s' in '%s'\n",
 			    filename + LUSTRE_VOLATILE_HDR_LEN,
 			    directory);
 		return -errno;
 	}
+	/* unlink file in case this wasn't a Lustre filesystem, and the
+	 * magic volatile filename wasn't handled as intended. The effect
+	 * is the same. */
+	unlink(file_path);
+
 	return fd;
 }
 
