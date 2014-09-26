@@ -926,7 +926,7 @@ int dt_index_read(const struct lu_env *env, struct dt_device *dev,
 	if (!(feat->dif_flags & DT_IND_VARREC))
 		ii->ii_recsize = feat->dif_recsize_max;
 
-	if (!(feat->dif_flags & DT_IND_NONUNQ))
+	if (feat->dif_flags & DT_IND_NONUNQ)
 		/* key isn't necessarily unique */
 		ii->ii_flags |= II_FL_NONUNQ;
 
