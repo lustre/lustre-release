@@ -233,7 +233,7 @@ static int vvp_mmap_locks(const struct lu_env *env,
         unsigned long           addr;
         unsigned long           seg;
         ssize_t                 count;
-        int                     result;
+	int                     result = 0;
         ENTRY;
 
         LASSERT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE);
@@ -264,13 +264,13 @@ static int vvp_mmap_locks(const struct lu_env *env,
                         struct inode *inode = vma->vm_file->f_dentry->d_inode;
                         int flags = CEF_MUST;
 
-                        if (ll_file_nolock(vma->vm_file)) {
-                                /*
-                                 * For no lock case, a lockless lock will be
-                                 * generated.
-                                 */
-                                flags = CEF_NEVER;
-                        }
+			if (ll_file_nolock(vma->vm_file)) {
+				/*
+				 * For no lock case is not allowed for mmap
+				 */
+				result = -EINVAL;
+				break;
+			}
 
                         /*
                          * XXX: Required lock mode can be weakened: CIT_WRITE
@@ -291,20 +291,20 @@ static int vvp_mmap_locks(const struct lu_env *env,
                                descr->cld_mode, descr->cld_start,
                                descr->cld_end);
 
-			if (result < 0) {
-				up_read(&mm->mmap_sem);
-				RETURN(result);
-			}
+			if (result < 0)
+				break;
 
-                        if (vma->vm_end - addr >= count)
-                                break;
+			if (vma->vm_end - addr >= count)
+				break;
 
-                        count -= vma->vm_end - addr;
-                        addr = vma->vm_end;
-                }
-                up_read(&mm->mmap_sem);
-        }
-        RETURN(0);
+			count -= vma->vm_end - addr;
+			addr = vma->vm_end;
+		}
+		up_read(&mm->mmap_sem);
+		if (result < 0)
+			break;
+	}
+	RETURN(result);
 }
 
 static int vvp_io_rw_lock(const struct lu_env *env, struct cl_io *io,
@@ -330,7 +330,7 @@ static int vvp_io_rw_lock(const struct lu_env *env, struct cl_io *io,
 static int vvp_io_read_lock(const struct lu_env *env,
                             const struct cl_io_slice *ios)
 {
-	struct cl_io		*io = ios->cis_io;
+	struct cl_io		*io  = ios->cis_io;
 	struct cl_io_rw_common	*rd = &io->u.ci_rd.rd;
 	int result;
 
@@ -792,6 +792,7 @@ static int vvp_io_write_start(const struct lu_env *env,
                  * PARALLEL IO This has to be changed for parallel IO doing
                  * out-of-order writes.
                  */
+		ll_merge_lvb(env, inode);
                 pos = io->u.ci_wr.wr.crw_pos = i_size_read(inode);
                 cio->cui_iocb->ki_pos = pos;
         } else {

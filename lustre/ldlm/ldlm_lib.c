@@ -2514,6 +2514,7 @@ int ldlm_error2errno(ldlm_error_t error)
 
         switch (error) {
         case ELDLM_OK:
+	case ELDLM_LOCK_MATCHED:
                 result = 0;
                 break;
         case ELDLM_LOCK_CHANGED:

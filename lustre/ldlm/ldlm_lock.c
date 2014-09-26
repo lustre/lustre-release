@@ -718,12 +718,12 @@ void ldlm_add_ast_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
  */
 void ldlm_lock_addref(struct lustre_handle *lockh, __u32 mode)
 {
-        struct ldlm_lock *lock;
+	struct ldlm_lock *lock;
 
-        lock = ldlm_handle2lock(lockh);
-        LASSERT(lock != NULL);
-        ldlm_lock_addref_internal(lock, mode);
-        LDLM_LOCK_PUT(lock);
+	lock = ldlm_handle2lock(lockh);
+	LASSERTF(lock != NULL, "Non-existing lock: "LPX64"\n", lockh->cookie);
+	ldlm_lock_addref_internal(lock, mode);
+	LDLM_LOCK_PUT(lock);
 }
 EXPORT_SYMBOL(ldlm_lock_addref);
 
@@ -1181,10 +1181,11 @@ static struct ldlm_lock *search_queue(struct list_head *queue,
                      lock->l_policy_data.l_extent.end < policy->l_extent.end))
                         continue;
 
-                if (unlikely(match == LCK_GROUP) &&
-                    lock->l_resource->lr_type == LDLM_EXTENT &&
-                    lock->l_policy_data.l_extent.gid != policy->l_extent.gid)
-                        continue;
+		if (unlikely(match == LCK_GROUP) &&
+		    lock->l_resource->lr_type == LDLM_EXTENT &&
+		    policy->l_extent.gid != LDLM_GID_ANY &&
+		    lock->l_policy_data.l_extent.gid != policy->l_extent.gid)
+			continue;
 
                 /* We match if we have existing lock with same or wider set
                    of bits. */

@@ -44,7 +44,6 @@
  *
  *  i_mutex
  *      PG_locked
- *          ->coh_lock_guard
  *          ->coh_attr_guard
  *          ->ls_guard
  */
@@ -63,8 +62,6 @@
 
 static struct kmem_cache *cl_env_kmem;
 
-/** Lock class of cl_object_header::coh_lock_guard */
-static struct lock_class_key cl_lock_guard_class;
 /** Lock class of cl_object_header::coh_attr_guard */
 static struct lock_class_key cl_attr_guard_class;
 
@@ -80,11 +77,8 @@ int cl_object_header_init(struct cl_object_header *h)
 	ENTRY;
 	result = lu_object_header_init(&h->coh_lu);
 	if (result == 0) {
-		spin_lock_init(&h->coh_lock_guard);
 		spin_lock_init(&h->coh_attr_guard);
-		lockdep_set_class(&h->coh_lock_guard, &cl_lock_guard_class);
 		lockdep_set_class(&h->coh_attr_guard, &cl_attr_guard_class);
-		INIT_LIST_HEAD(&h->coh_locks);
 		h->coh_page_bufsize = 0;
 	}
 	RETURN(result);
@@ -96,7 +90,6 @@ EXPORT_SYMBOL(cl_object_header_init);
  */
 void cl_object_header_fini(struct cl_object_header *h)
 {
-	LASSERT(list_empty(&h->coh_locks));
         lu_object_header_fini(&h->coh_lu);
 }
 EXPORT_SYMBOL(cl_object_header_fini);
@@ -326,7 +319,7 @@ EXPORT_SYMBOL(cl_conf_set);
 /**
  * Prunes caches of pages and locks for this object.
  */
-void cl_object_prune(const struct lu_env *env, struct cl_object *obj)
+int cl_object_prune(const struct lu_env *env, struct cl_object *obj)
 {
 	struct lu_object_header *top;
 	struct cl_object *o;
@@ -343,10 +336,7 @@ void cl_object_prune(const struct lu_env *env, struct cl_object *obj)
 		}
 	}
 
-	/* TODO: pruning locks will be moved into layers after cl_lock
-	 * simplification is done */
-	cl_locks_prune(env, obj, 1);
-	EXIT;
+	RETURN(result);
 }
 EXPORT_SYMBOL(cl_object_prune);
 
@@ -359,37 +349,11 @@ EXPORT_SYMBOL(cl_object_prune);
  */
 void cl_object_kill(const struct lu_env *env, struct cl_object *obj)
 {
-        struct cl_object_header *hdr;
-
-        hdr = cl_object_header(obj);
+	struct cl_object_header *hdr = cl_object_header(obj);
 
 	set_bit(LU_OBJECT_HEARD_BANSHEE, &hdr->coh_lu.loh_flags);
-        /*
-         * Destroy all locks. Object destruction (including cl_inode_fini())
-         * cannot cancel the locks, because in the case of a local client,
-         * where client and server share the same thread running
-         * prune_icache(), this can dead-lock with ldlm_cancel_handler()
-         * waiting on __wait_on_freeing_inode().
-         */
-        cl_locks_prune(env, obj, 0);
 }
 EXPORT_SYMBOL(cl_object_kill);
-
-/**
- * Check if the object has locks.
- */
-int cl_object_has_locks(struct cl_object *obj)
-{
-	struct cl_object_header *head = cl_object_header(obj);
-	int has;
-
-	spin_lock(&head->coh_lock_guard);
-	has = list_empty(&head->coh_locks);
-	spin_unlock(&head->coh_lock_guard);
-
-	return (has == 0);
-}
-EXPORT_SYMBOL(cl_object_has_locks);
 
 void cache_stats_init(struct cache_stats *cs, const char *name)
 {
@@ -439,11 +403,8 @@ int cl_site_init(struct cl_site *s, struct cl_device *d)
         result = lu_site_init(&s->cs_lu, &d->cd_lu_dev);
         if (result == 0) {
                 cache_stats_init(&s->cs_pages, "pages");
-                cache_stats_init(&s->cs_locks, "locks");
                 for (i = 0; i < ARRAY_SIZE(s->cs_pages_state); ++i)
 			atomic_set(&s->cs_pages_state[0], 0);
-                for (i = 0; i < ARRAY_SIZE(s->cs_locks_state); ++i)
-			atomic_set(&s->cs_locks_state[i], 0);
 		cl_env_percpu_refill();
 	}
 	return result;
@@ -477,15 +438,6 @@ int cl_site_stats_print(const struct cl_site *site, struct seq_file *m)
 		[CPS_PAGEIN]	= "r",
 		[CPS_FREEING]	= "f"
 	};
-	static const char *lstate[] = {
-		[CLS_NEW]	= "n",
-		[CLS_QUEUING]	= "q",
-		[CLS_ENQUEUED]	= "e",
-		[CLS_HELD]	= "h",
-		[CLS_INTRANSIT]	= "t",
-		[CLS_CACHED]	= "c",
-		[CLS_FREEING]	= "f"
-	};
 	int i;
 
 /*
@@ -500,12 +452,6 @@ locks: ...... ...... ...... ...... ...... [...... ...... ...... ...... ......]
 	for (i = 0; i < ARRAY_SIZE(site->cs_pages_state); ++i)
 		seq_printf(m, "%s: %u ", pstate[i],
 			   atomic_read(&site->cs_pages_state[i]));
-	seq_printf(m, "]\n");
-	cache_stats_print(&site->cs_locks, m, 0);
-	seq_printf(m, " [");
-	for (i = 0; i < ARRAY_SIZE(site->cs_locks_state); ++i)
-		seq_printf(m, "%s: %u ", lstate[i],
-			   atomic_read(&site->cs_locks_state[i]));
 	seq_printf(m, "]\n");
 	cache_stats_print(&cl_env_stats, m, 0);
 	seq_printf(m, "\n");
@@ -1255,12 +1201,6 @@ void cl_stack_fini(const struct lu_env *env, struct cl_device *cl)
 }
 EXPORT_SYMBOL(cl_stack_fini);
 
-int  cl_lock_init(void);
-void cl_lock_fini(void);
-
-int  cl_page_init(void);
-void cl_page_fini(void);
-
 static struct lu_context_key cl_key;
 
 struct cl_thread_info *cl_env_info(const struct lu_env *env)
@@ -1357,22 +1297,13 @@ int cl_global_init(void)
         if (result)
                 goto out_kmem;
 
-        result = cl_lock_init();
-        if (result)
-                goto out_context;
-
-        result = cl_page_init();
-        if (result)
-                goto out_lock;
-
 	result = cl_env_percpu_init();
 	if (result)
 		/* no cl_env_percpu_fini on error */
-		goto out_lock;
+		goto out_context;
 
         return 0;
-out_lock:
-        cl_lock_fini();
+
 out_context:
         lu_context_key_degister(&cl_key);
 out_kmem:
@@ -1388,8 +1319,6 @@ out_store:
 void cl_global_fini(void)
 {
 	cl_env_percpu_fini();
-        cl_lock_fini();
-        cl_page_fini();
         lu_context_key_degister(&cl_key);
         lu_kmem_fini(cl_object_caches);
         cl_env_store_fini();

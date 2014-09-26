@@ -170,8 +170,7 @@ static int ll_releasepage(struct page *vmpage, RELEASEPAGE_ARG_TYPE gfp_mask)
 	 * If this page holds the last refc of cl_object, the following
 	 * call path may cause reschedule:
 	 *   cl_page_put -> cl_page_free -> cl_object_put ->
-	 *     lu_object_put -> lu_object_free -> lov_delete_raid0 ->
-	 *     cl_locks_prune.
+	 *     lu_object_put -> lu_object_free -> lov_delete_raid0.
 	 *
 	 * However, the kernel can't get rid of this inode until all pages have
 	 * been cleaned up. Now that we hold page lock here, it's pretty safe
@@ -542,6 +541,7 @@ static int ll_write_begin(struct file *file, struct address_space *mapping,
 
 	/* To avoid deadlock, try to lock page first. */
 	vmpage = grab_cache_page_nowait(mapping, index);
+
 	if (unlikely(vmpage == NULL ||
 		     PageDirty(vmpage) || PageWriteback(vmpage))) {
 		struct ccc_io *cio = ccc_env_io(env);
