@@ -1680,6 +1680,16 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 				       ofd_name(ofd), POSTID(&oa->o_oi));
 				GOTO(out, rc = -EINVAL);
 			}
+
+			if (diff < 0) {
+				/* LU-5648 */
+				CERROR("%s: invalid precreate request for "
+				       DOSTID", last_id " LPU64 ". "
+				       "Likely MDS last_id corruption\n",
+				       ofd_name(ofd), POSTID(&oa->o_oi),
+				       ofd_seq_last_oid(oseq));
+				GOTO(out, rc = -EINVAL);
+			}
 		}
 	}
 	if (diff > 0) {
