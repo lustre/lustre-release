@@ -5166,6 +5166,58 @@ test_82b() { # LU-4665
 }
 run_test 82b "specify OSTs for file with --pool and --ost-list options"
 
+test_83() {
+	local dev
+	local ostmnt
+	local fstype
+	local mnt_opts
+
+	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+		skip "Only applicable to ldiskfs-based MDTs"
+		return
+	fi
+
+	dev=$(ostdevname 1)
+	ostmnt=$(facet_mntpt ost1)
+	fstype=$(facet_fstype ost1)
+
+	# Mount the OST as an ldiskfs filesystem.
+	log "mount the OST $dev as a $fstype filesystem"
+	add ost1 $(mkfs_opts ost1 $dev) $FSTYPE_OPT \
+		--reformat $dev $dev > /dev/null ||
+		error "format ost1 error"
+
+	if ! test -b $dev; then
+		mnt_opts=$(csa_add "$OST_MOUNT_OPTS" -o loop)
+	fi
+	echo "mnt_opts $mnt_opts"
+	do_facet ost1 mount -t $fstype $dev \
+		$ostmnt $mnt_opts
+	# Run llverfs on the mounted ldiskfs filesystem.
+	# It is needed to get ENOSPACE.
+	log "run llverfs in partial mode on the OST $fstype $ostmnt"
+	do_rpc_nodes $(facet_host ost1) run_llverfs $ostmnt -vpl \
+		"no" || error "run_llverfs error on $fstype"
+
+	# Unmount the OST.
+	log "unmount the OST $dev"
+	stop ost1
+
+	# Delete file IO_scrub. Later osd_scrub_setup will try to
+	# create "IO_scrub" but will get ENOSPACE.
+	writeconf_all
+	echo "start ost1 service on `facet_active_host ost1`"
+	start ost1 `ostdevname 1` $OST_MOUNT_OPTS
+
+	local err
+	err=$(do_facet ost1 dmesg | grep "VFS: Busy inodes after unmount of")
+	echo "string err $err"
+	[ -z "$err" ] || error $err
+	reformat
+}
+run_test 83 "ENOSPACE on OST doesn't cause message VFS: \
+Busy inodes after unmount ..."
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi

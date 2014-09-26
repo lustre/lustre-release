@@ -2173,7 +2173,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 			sf->sf_internal_flags = SIF_NO_HANDLE_OLD_FID;
 		dirty = 1;
 	} else if (rc != 0) {
-		RETURN(rc);
+		GOTO(cleanup_inode, rc);
 	} else {
 		if (memcmp(sf->sf_uuid, es->s_uuid, 16) != 0) {
 			osd_scrub_file_reset(scrub, es->s_uuid,SF_INCONSISTENT);
@@ -2192,47 +2192,51 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	if (dirty != 0) {
 		rc = osd_scrub_file_store(scrub);
 		if (rc != 0)
-			RETURN(rc);
+			GOTO(cleanup_inode, rc);
 	}
 
 	/* Initialize OI files. */
 	rc = osd_oi_init(info, dev);
 	if (rc < 0)
-		RETURN(rc);
+		GOTO(cleanup_inode, rc);
 
 	rc = osd_initial_OI_scrub(info, dev);
-	if (rc == 0) {
-		if (sf->sf_flags & SF_UPGRADE ||
-		    !(sf->sf_internal_flags & SIF_NO_HANDLE_OLD_FID ||
-		      sf->sf_success_count > 0)) {
-			dev->od_igif_inoi = 0;
-			dev->od_check_ff = dev->od_is_ost;
-		} else {
-			dev->od_igif_inoi = 1;
-			dev->od_check_ff = 0;
-		}
+	if (rc != 0)
+		GOTO(cleanup_oi, rc);
 
-		if (sf->sf_flags & SF_INCONSISTENT)
-			/* The 'od_igif_inoi' will be set under the
-			 * following cases:
-			 * 1) new created system, or
-			 * 2) restored from file-level backup, or
-			 * 3) the upgrading completed.
-			 *
-			 * The 'od_igif_inoi' may be cleared by OI scrub
-			 * later if found that the system is upgrading. */
-			dev->od_igif_inoi = 1;
-
-		if (!dev->od_noscrub &&
-		    ((sf->sf_status == SS_PAUSED) ||
-		     (sf->sf_status == SS_CRASHED &&
-		      sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT |
-				      SF_UPGRADE | SF_AUTO)) ||
-		     (sf->sf_status == SS_INIT &&
-		      sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT |
-				      SF_UPGRADE))))
-			rc = osd_scrub_start(dev);
+	if (sf->sf_flags & SF_UPGRADE ||
+	    !(sf->sf_internal_flags & SIF_NO_HANDLE_OLD_FID ||
+	      sf->sf_success_count > 0)) {
+		dev->od_igif_inoi = 0;
+		dev->od_check_ff = dev->od_is_ost;
+	} else {
+		dev->od_igif_inoi = 1;
+		dev->od_check_ff = 0;
 	}
+
+	if (sf->sf_flags & SF_INCONSISTENT)
+		/* The 'od_igif_inoi' will be set under the
+		 * following cases:
+		 * 1) new created system, or
+		 * 2) restored from file-level backup, or
+		 * 3) the upgrading completed.
+		 *
+		 * The 'od_igif_inoi' may be cleared by OI scrub
+		 * later if found that the system is upgrading. */
+		dev->od_igif_inoi = 1;
+
+	if (!dev->od_noscrub &&
+	    ((sf->sf_status == SS_PAUSED) ||
+	     (sf->sf_status == SS_CRASHED &&
+	      sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT |
+			      SF_UPGRADE | SF_AUTO)) ||
+	     (sf->sf_status == SS_INIT &&
+	      sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT |
+			      SF_UPGRADE))))
+		rc = osd_scrub_start(dev);
+
+	if (rc != 0)
+		GOTO(cleanup_oi, rc);
 
 	/* it is possible that dcache entries may keep objects after they are
 	 * deleted by OSD. While it looks safe this can cause object data to
@@ -2241,7 +2245,14 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	 * anymore let's just free them after use here */
 	shrink_dcache_sb(sb);
 
-	RETURN(rc);
+	RETURN(0);
+cleanup_oi:
+	osd_oi_fini(info, dev);
+cleanup_inode:
+	iput(scrub->os_inode);
+	scrub->os_inode = NULL;
+
+	return rc;
 }
 
 void osd_scrub_cleanup(const struct lu_env *env, struct osd_device *dev)
