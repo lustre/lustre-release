@@ -318,6 +318,43 @@ out:
 	return rc;
 }
 
+/**
+ * Check whether allow the client to set supplementary group IDs or not.
+ *
+ * \param[in] info	pointer to the thread context
+ * \param[in] uc	pointer to the RPC user descriptor
+ *
+ * \retval		true if allow to set supplementary group IDs
+ * \retval		false for other cases
+ */
+bool allow_client_chgrp(struct mdt_thread_info *info, struct lu_ucred *uc)
+{
+	__u32 remote = exp_connect_rmtclient(info->mti_exp);
+	__u32 perm;
+
+	/* 1. If identity_upcall is disabled, then forbid remote client to set
+	 *    supplementary group IDs, but permit local client to do that. */
+	if (is_identity_get_disabled(info->mti_mdt->mdt_identity_cache)) {
+		if (remote)
+			return false;
+
+		return true;
+	}
+
+	/* 2. If fail to get related identities, then forbid any client to
+	 *    set supplementary group IDs. */
+	if (uc->uc_identity == NULL)
+		return false;
+
+	/* 3. Check the permission in the identities. */
+	perm = mdt_identity_get_perm(uc->uc_identity, remote,
+				     mdt_info_req(info)->rq_peer.nid);
+	if (perm & CFS_SETGRP_PERM)
+		return true;
+
+	return false;
+}
+
 int mdt_check_ucred(struct mdt_thread_info *info)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
