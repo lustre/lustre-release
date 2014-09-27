@@ -59,6 +59,10 @@
 
 #define ONE_MB 0x100000
 
+#ifndef NSEC_PER_SEC
+# define NSEC_PER_SEC 1000000000UL
+#endif
+
 /* copytool uses a 32b bitmask field to register with kuc
  * archive num = 0 => all
  * archive num from 1 to 32
@@ -501,38 +505,6 @@ static int ct_restore_stripe(const char *src, const char *dst, int dst_fd,
 	return rc;
 }
 
-static void bandwidth_ctl_delay(int wsize)
-{
-	static unsigned long long	tot_bytes;
-	static time_t			start_time;
-	static time_t			last_time;
-	time_t				now = time(0);
-	double				tot_time;
-	double				excess;
-	unsigned int			sleep_time;
-
-	if (now > last_time + 5) {
-		tot_bytes = 0;
-		start_time = last_time = now;
-	}
-
-	tot_bytes += wsize;
-	tot_time = now - start_time;
-	if (tot_time < 1)
-		tot_time = 1;
-
-	excess = tot_bytes - tot_time * opt.o_bandwidth;
-	sleep_time = excess * 1000000 / opt.o_bandwidth;
-	if ((now - start_time) % 10 == 1)
-		CT_TRACE("bandwith control: excess=%E sleep for %dus", excess,
-			 sleep_time);
-
-	if (excess > 0)
-		usleep(sleep_time);
-
-	last_time = now;
-}
-
 static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 			const char *dst, int src_fd, int dst_fd,
 			const struct hsm_action_item *hai, long hal_flags)
@@ -544,9 +516,13 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 	char			*buf = NULL;
 	__u64			 write_total = 0;
 	__u64			 length;
-	double			 start_time = ct_now();
-	time_t			 last_print_time = time(NULL);
+	time_t			 last_report_time;
 	int			 rc = 0;
+	double			 start_ct_now = ct_now();
+	/* Bandwidth Control */
+	time_t			start_time;
+	time_t			now;
+	time_t			last_bw_print;
 
 	if (fstat(src_fd, &src_st) < 0) {
 		rc = -errno;
@@ -583,6 +559,8 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 
 	/* Don't read beyond a given extent */
 	length = min(hai->hai_extent.length, src_st.st_size);
+
+	start_time = last_bw_print = last_report_time = time(NULL);
 
 	he.offset = offset;
 	he.length = 0;
@@ -633,12 +611,50 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 		write_total += wsize;
 		offset += wsize;
 
-		if (opt.o_bandwidth != 0)
-			/* sleep if needed, to honor bandwidth limits */
-			bandwidth_ctl_delay(wsize);
+		now = time(NULL);
+		/* sleep if needed, to honor bandwidth limits */
+		if (opt.o_bandwidth != 0) {
+			unsigned long long write_theory;
 
-		if (time(0) >= last_print_time + opt.o_report_int) {
-			last_print_time = time(0);
+			write_theory = (now - start_time) * opt.o_bandwidth;
+
+			if (write_theory < write_total) {
+				unsigned long long	excess;
+				struct timespec		delay;
+
+				excess = write_total - write_theory;
+
+				delay.tv_sec = excess / opt.o_bandwidth;
+				delay.tv_nsec = (excess % opt.o_bandwidth) *
+					NSEC_PER_SEC / opt.o_bandwidth;
+
+				if (now >= last_bw_print + opt.o_report_int) {
+					CT_TRACE("bandwith control: %lluB/s "
+						 "excess=%llu sleep for "
+						 "%lld.%09lds",
+						 opt.o_bandwidth, excess,
+						 (long long)delay.tv_sec,
+						 delay.tv_nsec);
+					last_bw_print = now;
+				}
+
+				do {
+					rc = nanosleep(&delay, &delay);
+				} while (rc < 0 && errno == EINTR);
+				if (rc < 0) {
+					CT_ERROR(errno, "delay for bandwidth "
+						 "control failed to sleep: "
+						 "residual=%lld.%09lds",
+						 (long long)delay.tv_sec,
+						 delay.tv_nsec);
+					rc = 0;
+				}
+			}
+		}
+
+		now = time(NULL);
+		if (now >= last_report_time + opt.o_report_int) {
+			last_report_time = now;
 			CT_TRACE("%%"LPU64" ", 100 * write_total / length);
 			he.length = write_total;
 			rc = llapi_hsm_action_progress(hcp, &he, length, 0);
@@ -678,7 +694,7 @@ out:
 		free(buf);
 
 	CT_TRACE("copied "LPU64" bytes in %f seconds",
-		 length, ct_now() - start_time);
+		 length, ct_now() - start_ct_now);
 
 	return rc;
 }
