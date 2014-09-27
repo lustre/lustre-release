@@ -4132,6 +4132,9 @@ osd_consistency_check(struct osd_thread_info *oti, struct osd_device *dev,
 	if (!fid_is_norm(fid) && !fid_is_igif(fid))
 		RETURN_EXIT;
 
+	if (scrub->os_pos_current > id->oii_ino)
+		RETURN_EXIT;
+
 again:
 	rc = osd_oi_lookup(oti, dev, fid, id, OI_CHECK_FLD);
 	if (rc != 0 && rc != -ENOENT)
@@ -4191,16 +4194,14 @@ static int osd_fail_fid_lookup(struct osd_thread_info *oti,
 	return rc;
 }
 
-int osd_add_oi_cache(struct osd_thread_info *info, struct osd_device *osd,
-		     struct osd_inode_id *id, const struct lu_fid *fid)
+void osd_add_oi_cache(struct osd_thread_info *info, struct osd_device *osd,
+		      struct osd_inode_id *id, const struct lu_fid *fid)
 {
 	CDEBUG(D_INODE, "add "DFID" %u:%u to info %p\n", PFID(fid),
 	       id->oii_ino, id->oii_gen, info);
 	info->oti_cache.oic_lid = *id;
 	info->oti_cache.oic_fid = *fid;
 	info->oti_cache.oic_dev = osd;
-
-	return 0;
 }
 
 /**
@@ -4321,8 +4322,6 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 		struct osd_inode_id *id = &oti->oti_id;
 		struct osd_idmap_cache *oic = &oti->oti_cache;
 		struct osd_device *dev = osd_obj2dev(obj);
-		struct osd_scrub *scrub = &dev->od_scrub;
-		struct scrub_file *sf = &scrub->os_file;
 
 		ino = le32_to_cpu(de->inode);
 		if (OBD_FAIL_CHECK(OBD_FAIL_FID_LOOKUP)) {
@@ -4355,16 +4354,8 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 		if (osd_remote_fid(env, dev, fid))
 			GOTO(out, rc = 0);
 
-		rc = osd_add_oi_cache(osd_oti_get(env), osd_obj2dev(obj), id,
-				      fid);
-		if (rc != 0)
-			GOTO(out, rc);
-		if ((scrub->os_pos_current <= ino) &&
-		    ((sf->sf_flags & SF_INCONSISTENT) ||
-		     (sf->sf_flags & SF_UPGRADE && fid_is_igif(fid)) ||
-		     ldiskfs_test_bit(osd_oi_fid2idx(dev, fid),
-				      sf->sf_oi_bitmap)))
-			osd_consistency_check(oti, dev, oic);
+		osd_add_oi_cache(osd_oti_get(env), osd_obj2dev(obj), id, fid);
+		osd_consistency_check(oti, dev, oic);
 	} else {
 		rc = -ENOENT;
 	}
@@ -5586,11 +5577,8 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 	struct osd_it_ea       *it    = (struct osd_it_ea *)di;
 	struct osd_object      *obj   = it->oie_obj;
 	struct osd_device      *dev   = osd_obj2dev(obj);
-	struct osd_scrub       *scrub = &dev->od_scrub;
-	struct scrub_file      *sf    = &scrub->os_file;
 	struct osd_thread_info *oti   = osd_oti_get(env);
 	struct osd_inode_id    *id    = &oti->oti_id;
-	struct osd_idmap_cache *oic   = &oti->oti_cache;
 	struct lu_fid	       *fid   = &it->oie_dirent->oied_fid;
 	struct lu_dirent       *lde   = (struct lu_dirent *)dtrec;
 	__u32			ino   = it->oie_dirent->oied_ino;
@@ -5644,14 +5632,7 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 		RETURN(0);
 
 	if (likely(!(attr & LUDA_IGNORE) && rc == 0))
-		rc = osd_add_oi_cache(oti, dev, id, fid);
-
-	if (!(attr & LUDA_VERIFY) &&
-	    (scrub->os_pos_current <= ino) &&
-	    ((sf->sf_flags & SF_INCONSISTENT) ||
-	     (sf->sf_flags & SF_UPGRADE && fid_is_igif(fid)) ||
-	     ldiskfs_test_bit(osd_oi_fid2idx(dev, fid), sf->sf_oi_bitmap)))
-		osd_consistency_check(oti, dev, oic);
+		osd_add_oi_cache(oti, dev, id, fid);
 
 	RETURN(rc > 0 ? 0 : rc);
 }

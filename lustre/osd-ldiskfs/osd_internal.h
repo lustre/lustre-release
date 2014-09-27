@@ -662,8 +662,8 @@ int osd_ea_fid_set(struct osd_thread_info *info, struct inode *inode,
 		   const struct lu_fid *fid, __u32 compat, __u32 incompat);
 int osd_get_lma(struct osd_thread_info *info, struct inode *inode,
 		struct dentry *dentry, struct lustre_mdt_attrs *lma);
-int osd_add_oi_cache(struct osd_thread_info *info, struct osd_device *osd,
-		     struct osd_inode_id *id, const struct lu_fid *fid);
+void osd_add_oi_cache(struct osd_thread_info *info, struct osd_device *osd,
+		      struct osd_inode_id *id, const struct lu_fid *fid);
 int osd_get_idif(struct osd_thread_info *info, struct inode *inode,
 		 struct dentry *dentry, struct lu_fid *fid);
 

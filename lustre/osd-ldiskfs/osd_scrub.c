@@ -271,11 +271,14 @@ void osd_scrub_file_reset(struct osd_scrub *scrub, __u8 *uuid, __u64 flags)
 {
 	struct scrub_file *sf = &scrub->os_file;
 
-	CDEBUG(D_LFSCK, "%.16s: reset OI scrub file, flags = "LPX64"\n",
-	       osd_scrub2name(scrub), flags);
+	CDEBUG(D_LFSCK, "%.16s: reset OI scrub file, old flags = "
+	       LPX64", add flags = "LPX64"\n",
+	       osd_scrub2name(scrub), sf->sf_flags, flags);
+
 	memcpy(sf->sf_uuid, uuid, 16);
 	sf->sf_status = SS_INIT;
 	sf->sf_flags |= flags;
+	sf->sf_flags &= ~SF_AUTO;
 	sf->sf_run_time = 0;
 	sf->sf_time_latest_start = 0;
 	sf->sf_time_last_checkpoint = 0;
@@ -633,6 +636,9 @@ static int osd_scrub_prep(struct osd_device *dev)
 	bool		      drop_dryrun = false;
 	ENTRY;
 
+	CDEBUG(D_LFSCK, "%.16s: OI scrub prep, flags = 0x%x\n",
+	       osd_scrub2name(scrub), flags);
+
 	down_write(&scrub->os_rwsem);
 	if (flags & SS_SET_FAILOUT)
 		sf->sf_param |= SP_FAILOUT;
@@ -686,6 +692,7 @@ static int osd_scrub_prep(struct osd_device *dev)
 	sf->sf_status = SS_SCANNING;
 	sf->sf_time_latest_start = cfs_time_current_sec();
 	sf->sf_time_last_checkpoint = sf->sf_time_latest_start;
+	sf->sf_pos_last_checkpoint = sf->sf_pos_latest_start - 1;
 	rc = osd_scrub_file_store(scrub);
 	if (rc == 0) {
 		spin_lock(&scrub->os_lock);
@@ -725,6 +732,9 @@ static void osd_scrub_post(struct osd_scrub *scrub, int result)
 {
 	struct scrub_file *sf = &scrub->os_file;
 	ENTRY;
+
+	CDEBUG(D_LFSCK, "%.16s: OI scrub post, result = %d\n",
+	       osd_scrub2name(scrub), result);
 
 	down_write(&scrub->os_rwsem);
 	spin_lock(&scrub->os_lock);
@@ -1142,7 +1152,8 @@ static int osd_preload_exec(struct osd_thread_info *info,
 #define SCRUB_IT_ALL	1
 #define SCRUB_IT_CRASH	2
 
-static void osd_scrub_join(struct osd_device *dev, __u32 flags)
+static void osd_scrub_join(struct osd_device *dev, __u32 flags,
+			   bool inconsistent)
 {
 	struct osd_scrub     *scrub  = &dev->od_scrub;
 	struct ptlrpc_thread *thread = &scrub->os_thread;
@@ -1164,12 +1175,19 @@ static void osd_scrub_join(struct osd_device *dev, __u32 flags)
 	else if (flags & SS_CLEAR_DRYRUN)
 		sf->sf_param &= ~SP_DRYRUN;
 
-	if (flags & SS_RESET)
+	if (flags & SS_RESET) {
 		osd_scrub_file_reset(scrub,
-			LDISKFS_SB(osd_sb(dev))->s_es->s_uuid, 0);
+			LDISKFS_SB(osd_sb(dev))->s_es->s_uuid,
+			inconsistent ? SF_INCONSISTENT : 0);
+		sf->sf_status = SS_SCANNING;
+	}
 
-	if (flags & SS_AUTO_FULL ||
-	    sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT | SF_UPGRADE))
+	if (flags & SS_AUTO_FULL) {
+		sf->sf_flags |= SF_AUTO;
+		scrub->os_full_speed = 1;
+	}
+
+	if (sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT | SF_UPGRADE))
 		scrub->os_full_speed = 1;
 	else
 		scrub->os_full_speed = 0;
@@ -1183,6 +1201,7 @@ static void osd_scrub_join(struct osd_device *dev, __u32 flags)
 	scrub->os_pos_current = sf->sf_pos_latest_start;
 	sf->sf_time_latest_start = cfs_time_current_sec();
 	sf->sf_time_last_checkpoint = sf->sf_time_latest_start;
+	sf->sf_pos_last_checkpoint = sf->sf_pos_latest_start - 1;
 	rc = osd_scrub_file_store(scrub);
 	if (rc != 0)
 		CDEBUG(D_LFSCK, "%.16s: fail to store scrub file when join "
@@ -1235,7 +1254,7 @@ static int osd_inode_iteration(struct osd_thread_info *info,
 			RETURN(-EINVAL);
 		case SCRUB_NEXT_WAIT: {
 			struct kstatfs *ksfs = &info->oti_ksfs;
-			__u64 used;
+			__u64 saved_flags;
 
 			if (dev->od_full_scrub_ratio == OFSR_NEVER ||
 			    unlikely(sf->sf_items_updated_prior == 0))
@@ -1243,21 +1262,24 @@ static int osd_inode_iteration(struct osd_thread_info *info,
 
 			if (dev->od_full_scrub_ratio == OFSR_DIRECTLY ||
 			    scrub->os_full_scrub) {
-				osd_scrub_join(dev, SS_AUTO_FULL | SS_RESET);
+				osd_scrub_join(dev, SS_AUTO_FULL | SS_RESET,
+					       true);
 				goto full;
 			}
 
 			rc = param.sb->s_op->statfs(param.sb->s_root, ksfs);
-			if (rc != 0)
-				goto wait;
+			if (rc == 0) {
+				__u64 used = ksfs->f_files - ksfs->f_ffree;
 
-			used = ksfs->f_files - ksfs->f_ffree;
-			do_div(used, sf->sf_items_updated_prior);
-			/* If we hit too much inconsistent OI mappings during
-			 * the partial scan, then scan the device completely. */
-			if (used < dev->od_full_scrub_ratio) {
-				osd_scrub_join(dev, SS_AUTO_FULL | SS_RESET);
-				goto full;
+				do_div(used, sf->sf_items_updated_prior);
+				/* If we hit too much inconsistent OI
+				 * mappings during the partial scan,
+				 * then scan the device completely. */
+				if (used < dev->od_full_scrub_ratio) {
+					osd_scrub_join(dev,
+						SS_AUTO_FULL | SS_RESET, true);
+					goto full;
+				}
 			}
 
 wait:
@@ -1265,15 +1287,18 @@ wait:
 			    cfs_fail_val > 0)
 				continue;
 
-			sf->sf_status = SS_COMPLETED;
+			saved_flags = sf->sf_flags;
 			sf->sf_flags &= ~(SF_RECREATED | SF_INCONSISTENT |
 					  SF_UPGRADE | SF_AUTO);
+			sf->sf_status = SS_COMPLETED;
 			l_wait_event(thread->t_ctl_waitq,
 				     !thread_is_running(thread) ||
 				     !scrub->os_partial_scan ||
 				     scrub->os_in_join ||
 				     !list_empty(&scrub->os_inconsistent_items),
 				     &lwi);
+			sf->sf_flags = saved_flags;
+			sf->sf_status = SS_SCANNING;
 
 			if (unlikely(!thread_is_running(thread)))
 				RETURN(0);
@@ -1286,8 +1311,6 @@ wait:
 		default:
 			LASSERTF(rc == 0, "rc = %d\n", rc);
 
-			sf->sf_status = SS_SCANNING;
-			sf->sf_flags |= SF_AUTO;
 			osd_scrub_exec(info, dev, &param, oic, &noslot, rc);
 			break;
 		}
@@ -1295,7 +1318,6 @@ wait:
 
 full:
 	if (!preload) {
-		sf->sf_status = SS_SCANNING;
 		l_wait_event(thread->t_ctl_waitq,
 			     !thread_is_running(thread) || !scrub->os_in_join,
 			     &lwi);
@@ -2201,7 +2223,7 @@ again:
 		if (!scrub->os_partial_scan || flags & SS_AUTO_PARTIAL)
 			RETURN(-EALREADY);
 
-		osd_scrub_join(dev, flags);
+		osd_scrub_join(dev, flags, false);
 		spin_lock(&scrub->os_lock);
 		if (!thread_is_running(thread))
 			goto again;

@@ -129,6 +129,10 @@ scrub_prep() {
 		fi
 		cp $LUSTRE/tests/*.sh $DIR/$tdir/mds$n ||
 			error "Failed to copy files to mds$n"
+		mkdir -p $DIR/$tdir/mds$n/d_$tfile ||
+			error "mkdir failed on mds$n"
+		createmany -m $DIR/$tdir/mds$n/d_$tfile/f 2 > \
+			/dev/null || error "create failed on mds$n"
 		if [[ $nfiles -gt 0 ]]; then
 			createmany -m $DIR/$tdir/mds$n/$tfile $nfiles > \
 				/dev/null || error "createmany failed on mds$n"
@@ -495,7 +499,7 @@ test_4b() {
 	done
 
 	for n in $(seq $MDSCOUNT); do
-		ls -l $DIR/$tdir/mds$n/${tfile}1 || error "(17) fail to ls"
+		ls -l $DIR/$tdir/mds$n/d_${tfile}/ || error "(17) fail to ls"
 	done
 	sleep 3
 
@@ -624,6 +628,7 @@ test_5() {
 	scrub_check_status 15 failed
 	mount_client $MOUNT || error "(16) Fail to start client!"
 
+	full_scrub_ratio 0
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
 	do_nodes $(comma_list $(mdts_nodes)) \
 		$LCTL set_param fail_val=3 fail_loc=0x190
