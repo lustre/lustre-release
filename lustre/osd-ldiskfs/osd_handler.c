@@ -6064,7 +6064,7 @@ static int osd_device_init0(const struct lu_env *env,
 		o->od_is_ost = 1;
 
 	o->od_full_scrub_ratio = OFSR_DEFAULT;
-	o->od_full_scrub_speed = FULL_SCRUB_SPEED_DEFULT;
+	o->od_full_scrub_threshold_rate = FULL_SCRUB_THRESHOLD_RATE_DEFAULT;
 	rc = osd_mount(env, o, cfg);
 	if (rc != 0)
 		GOTO(out_capa, rc);

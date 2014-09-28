@@ -439,7 +439,8 @@ ldiskfs_osd_full_scrub_ratio_seq_write(struct file *file, const char *buffer,
 }
 LPROC_SEQ_FOPS(ldiskfs_osd_full_scrub_ratio);
 
-static int ldiskfs_osd_full_scrub_speed_seq_show(struct seq_file *m, void *data)
+static int ldiskfs_osd_full_scrub_threshold_rate_seq_show(struct seq_file *m,
+							  void *data)
 {
 	struct osd_device *dev = osd_dt_dev((struct dt_device *)m->private);
 
@@ -448,12 +449,13 @@ static int ldiskfs_osd_full_scrub_speed_seq_show(struct seq_file *m, void *data)
 		return -EINPROGRESS;
 
 	return seq_printf(m, LPU64" (bad OI mappings/minute)\n",
-			  dev->od_full_scrub_speed);
+			  dev->od_full_scrub_threshold_rate);
 }
 
 static ssize_t
-ldiskfs_osd_full_scrub_speed_seq_write(struct file *file, const char *buffer,
-				       size_t count, loff_t *off)
+ldiskfs_osd_full_scrub_threshold_rate_seq_write(struct file *file,
+						const char *buffer,
+						size_t count, loff_t *off)
 {
 	struct seq_file	  *m = file->private_data;
 	struct dt_device  *dt = m->private;
@@ -471,10 +473,10 @@ ldiskfs_osd_full_scrub_speed_seq_write(struct file *file, const char *buffer,
 	if (val < 0)
 		return -EINVAL;
 
-	dev->od_full_scrub_speed = val;
+	dev->od_full_scrub_threshold_rate = val;
 	return count;
 }
-LPROC_SEQ_FOPS(ldiskfs_osd_full_scrub_speed);
+LPROC_SEQ_FOPS(ldiskfs_osd_full_scrub_threshold_rate);
 
 static int
 ldiskfs_osd_track_declares_assert_seq_show(struct seq_file *m, void *data)
@@ -613,8 +615,8 @@ struct lprocfs_seq_vars lprocfs_osd_obd_vars[] = {
 	  .fops	=	&ldiskfs_osd_auto_scrub_fops	},
 	{ .name	=	"full_scrub_ratio",
 	  .fops	=	&ldiskfs_osd_full_scrub_ratio_fops	},
-	{ .name	=	"full_scrub_speed",
-	  .fops	=	&ldiskfs_osd_full_scrub_speed_fops	},
+	{ .name	=	"full_scrub_threshold_rate",
+	  .fops	=	&ldiskfs_osd_full_scrub_threshold_rate_fops	},
 	{ .name	=	"oi_scrub",
 	  .fops	=	&ldiskfs_osd_oi_scrub_fops	},
 	{ .name	=	"read_cache_enable",

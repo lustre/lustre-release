@@ -2772,7 +2772,8 @@ int osd_oii_insert(struct osd_device *dev, struct osd_idmap_cache *oic,
 		}
 
 		scrub->os_bad_oimap_time = now;
-		if (++scrub->os_bad_oimap_count > dev->od_full_scrub_speed)
+		if (++scrub->os_bad_oimap_count >
+		    dev->od_full_scrub_threshold_rate)
 			scrub->os_full_scrub = 1;
 	}
 
