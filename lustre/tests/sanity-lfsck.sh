@@ -176,6 +176,7 @@ test_1a() {
 	ls $DIR/$tdir/ > /dev/null || error "(7) no FID-in-dirent."
 
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	cancel_lru_locks mdc
 }
 run_test 1a "LFSCK can find out and repair crashed FID-in-dirent"
 
@@ -212,6 +213,7 @@ test_1b()
 	stat $DIR/$tdir/dummy > /dev/null || error "(7) no FID-in-LMA."
 
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	cancel_lru_locks mdc
 }
 run_test 1b "LFSCK can find out and repair missed FID-in-LMA"
 
@@ -366,10 +368,16 @@ test_4()
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1505
 	ls $DIR/$tdir/ > /dev/null || error "(11) no FID-in-dirent."
 
-	local count=$(ls -al $DIR/$tdir | wc -l)
-	[ $count -gt 9 ] || error "(12) namespace LFSCK failed"
+	local server_version=$(lustre_version_code $SINGLEMDS)
+	if [[ $server_version -ge $(version_code 2.5.58) ]] ||
+	   [[ $server_version -ge $(version_code 2.5.4) &&
+	      $server_version -lt $(version_code 2.5.11) ]]; then
+		local count=$(ls -al $DIR/$tdir | wc -l)
+		[ $count -gt 9 ] || error "(12) namespace LFSCK failed"
+	fi
 
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	cancel_lru_locks mdc
 }
 run_test 4 "FID-in-dirent can be rebuilt after MDT file-level backup/restore"
 
@@ -423,6 +431,7 @@ test_5()
 	ls $DIR/$tdir/ > /dev/null || error "(12) no FID-in-dirent."
 
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	cancel_lru_locks mdc
 	local dummyfid=$($LFS path2fid $DIR/$tdir/dummy)
 	local dummyname=$($LFS fid2path $DIR $dummyfid)
 	[ "$dummyname" == "$DIR/$tdir/dummy" ] ||
