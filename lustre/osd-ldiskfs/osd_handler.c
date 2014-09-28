@@ -3255,7 +3255,8 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 			 * recheck under lock.
 			 */
 			if (!osd_has_index(obj))
-				result = osd_iam_container_init(env, obj, dir);
+				result = osd_iam_container_init(env, obj,
+								obj->oo_dir);
 			else
 				result = 0;
 			up_write(&obj->oo_ext_idx_sem);
