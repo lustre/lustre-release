@@ -2163,24 +2163,15 @@ void ll_delete_inode(struct inode *inode)
 	ENTRY;
 
 	if (S_ISREG(inode->i_mode) && lli->lli_clob != NULL)
-		/* discard all dirty pages before truncating them, required by
-		 * osc_extent implementation at LU-1030. */
-		cl_sync_file_range(inode, 0, OBD_OBJECT_EOF,
-				   CL_FSYNC_DISCARD, 1);
+		/* It is last chance to write out dirty pages,
+		 * otherwise we may lose data while umount */
+		cl_sync_file_range(inode, 0, OBD_OBJECT_EOF, CL_FSYNC_LOCAL, 1);
 
 	truncate_inode_pages_final(&inode->i_data);
 
-        /* Workaround for LU-118 */
-        if (inode->i_data.nrpages) {
-		spin_lock_irq(&inode->i_data.tree_lock);
-		spin_unlock_irq(&inode->i_data.tree_lock);
-                LASSERTF(inode->i_data.nrpages == 0,
-			 "inode="DFID"(%p) nrpages=%lu, see "
-			 "https://jira.hpdd.intel.com/browse/LU-118\n",
-			 PFID(ll_inode2fid(inode)), inode,
-                         inode->i_data.nrpages);
-        }
-        /* Workaround end */
+	LASSERTF(inode->i_data.nrpages == 0, "inode="DFID"(%p) nrpages=%lu, "
+		 "see https://jira.hpdd.intel.com/browse/LU-118\n",
+		 PFID(ll_inode2fid(inode)), inode, inode->i_data.nrpages);
 
 #ifdef HAVE_SBOPS_EVICT_INODE
 	ll_clear_inode(inode);
