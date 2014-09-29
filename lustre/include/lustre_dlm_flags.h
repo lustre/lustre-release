@@ -37,6 +37,9 @@
 /** l_flags bits marked as "all_flags" bits */
 #define LDLM_FL_ALL_FLAGS_MASK          0x00FFFFFFC08F932FULL
 
+/** Flag whether a lock is found on server for re-sent RPC. */
+#define LDLM_FL_RESENT			 0x0100000000000000ULL /* bit 56 */
+
 /** l_flags bits marked as "ast" bits */
 #define LDLM_FL_AST_MASK                0x0000000080008000ULL
 

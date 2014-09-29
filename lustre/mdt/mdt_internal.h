@@ -717,6 +717,10 @@ int mdt_lock_setup(struct mdt_thread_info *info,
                    struct mdt_object *o,
                    struct mdt_lock_handle *lh);
 
+int mdt_check_resent_lock(struct mdt_thread_info *info,
+			  struct mdt_object *mo,
+			  struct mdt_lock_handle *lhc);
+
 int mdt_object_lock(struct mdt_thread_info *,
                     struct mdt_object *,
                     struct mdt_lock_handle *,

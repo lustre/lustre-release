@@ -692,11 +692,12 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
         int contended_locks = 0;
         ENTRY;
 
-        LASSERT(cfs_list_empty(&res->lr_converting));
-        LASSERT(!(*flags & LDLM_FL_DENY_ON_CONTENTION) ||
+	LASSERT(lock->l_granted_mode != lock->l_req_mode);
+	LASSERT(cfs_list_empty(&res->lr_converting));
+	LASSERT(!(*flags & LDLM_FL_DENY_ON_CONTENTION) ||
 		!(lock->l_flags & LDLM_FL_AST_DISCARD_DATA));
-        check_res_locked(res);
-        *err = ELDLM_OK;
+	check_res_locked(res);
+	*err = ELDLM_OK;
 
         if (!first_enq) {
                 /* Careful observers will note that we don't handle -EWOULDBLOCK

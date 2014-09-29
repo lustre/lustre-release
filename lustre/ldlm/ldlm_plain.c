@@ -149,8 +149,9 @@ int ldlm_process_plain_lock(struct ldlm_lock *lock, __u64 *flags,
         int rc;
         ENTRY;
 
-        check_res_locked(res);
-        LASSERT(cfs_list_empty(&res->lr_converting));
+	LASSERT(lock->l_granted_mode != lock->l_req_mode);
+	check_res_locked(res);
+	LASSERT(cfs_list_empty(&res->lr_converting));
 
         if (!first_enq) {
                 LASSERT(work_list != NULL);

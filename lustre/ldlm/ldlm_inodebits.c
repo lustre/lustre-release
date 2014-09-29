@@ -187,8 +187,9 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
         int rc;
         ENTRY;
 
-        LASSERT(cfs_list_empty(&res->lr_converting));
-        check_res_locked(res);
+	LASSERT(lock->l_granted_mode != lock->l_req_mode);
+	LASSERT(cfs_list_empty(&res->lr_converting));
+	check_res_locked(res);
 
 	/* (*flags & LDLM_FL_BLOCK_NOWAIT) is for layout lock right now. */
         if (!first_enq || (*flags & LDLM_FL_BLOCK_NOWAIT)) {
