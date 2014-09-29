@@ -143,8 +143,7 @@ static int mgs_completion_ast_generic(struct ldlm_lock *lock, __u64 flags,
 {
 	ENTRY;
 
-	if (!(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
-		       LDLM_FL_BLOCK_CONV))) {
+	if (!(flags & LDLM_FL_BLOCKED_MASK)) {
 		struct fs_db *fsdb;
 
 		/* l_ast_data is used as a marker to avoid cancel ldlm lock

@@ -1687,8 +1687,18 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
                 }
         }
 
-	if (*flags & LDLM_FL_RESENT)
+	if (*flags & LDLM_FL_RESENT) {
+		/* Reconstruct LDLM_FL_SRV_ENQ_MASK @flags for reply.
+		 * Set LOCK_CHANGED always.
+		 * Check if the lock is granted for BLOCK_GRANTED.
+		 * Take NO_TIMEOUT from the lock as it is inherited through
+		 * LDLM_FL_INHERIT_MASK */
+		*flags |= LDLM_FL_LOCK_CHANGED;
+		if (lock->l_req_mode != lock->l_granted_mode)
+			*flags |= LDLM_FL_BLOCK_GRANTED;
+		*flags |= lock->l_flags & LDLM_FL_NO_TIMEOUT;
 		RETURN(ELDLM_OK);
+	}
 
 	/* For a replaying lock, it might be already in granted list. So
 	 * unlinking the lock will cause the interval node to be freed, we
@@ -1702,8 +1712,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
                 /* The server returned a blocked lock, but it was granted
                  * before we got a chance to actually enqueue it.  We don't
                  * need to do anything else. */
-                *flags &= ~(LDLM_FL_BLOCK_GRANTED |
-                            LDLM_FL_BLOCK_CONV | LDLM_FL_BLOCK_WAIT);
+                *flags &= ~LDLM_FL_BLOCKED_MASK;
                 GOTO(out, ELDLM_OK);
         }
 
