@@ -74,10 +74,3 @@ lnetctl_LDADD = -L. -lm -lyaml -llnetconfig \
 		$(LIBCFSUTIL) $(LIBCFS) $(LIBREADLINE) $(LIBEFENCE)
 lnetctl_DEPENDENCIES = $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.so
 endif # UTILS
-
-LND_LIBS =
-if BUILD_USOCKLND
-LND_LIBS += $(top_builddir)/lnet/ulnds/socklnd/libsocklnd.a
-endif
-
-EXTRA_DIST = genlib.sh

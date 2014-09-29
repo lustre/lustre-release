@@ -114,31 +114,6 @@ AS_IF([test "x$enable_backoff" = xyes], [
 ]) # LN_CONFIG_BACKOFF
 
 #
-# LN_CONFIG_USOCKLND
-#
-# configure support for userspace TCP/IP LND
-#
-AC_DEFUN([LN_CONFIG_USOCKLND], [
-AC_MSG_CHECKING([whether to enable usocklnd])
-AC_ARG_ENABLE([usocklnd],
-	AC_HELP_STRING([--disable-usocklnd],
-		[disable usocklnd]),
-	[], [enable_usocklnd="yes"])
-AC_MSG_RESULT([$enable_usocklnd])
-USOCKLND=""
-AS_IF([test "x$enable_usocklnd" = xyes], [
-	AC_MSG_CHECKING([whether to build usocklnd])
-	AS_IF([test "$ENABLE_LIBPTHREAD" = yes], [
-		AC_MSG_RESULT([yes])
-		USOCKLND="usocklnd"
-	], [
-		AC_MSG_RESULT([no (libpthread not present or disabled)])
-	])
-])
-AC_SUBST(USOCKLND)
-]) # LN_CONFIG_USOCKLND
-
-#
 # LN_CONFIG_DLC
 #
 # Configure dlc if enabled
@@ -696,7 +671,6 @@ AS_IF([test "x$enable_libwrap" = xyes], [
 AC_SUBST(LIBWRAP)
 
 LN_CONFIG_MAX_PAYLOAD
-LN_CONFIG_USOCKLND
 LN_CONFIG_DLC
 ]) # LN_CONFIGURE
 
@@ -712,7 +686,6 @@ AM_CONDITIONAL(BUILD_O2IBLND,    test x$O2IBLND = "xo2iblnd")
 AM_CONDITIONAL(BUILD_RALND,      test x$RALND = "xralnd")
 AM_CONDITIONAL(BUILD_GNILND,     test x$GNILND = "xgnilnd")
 AM_CONDITIONAL(BUILD_GNILND_RCA, test x$GNILNDRCA = "xgnilndrca")
-AM_CONDITIONAL(BUILD_USOCKLND,   test x$USOCKLND = "xusocklnd")
 AM_CONDITIONAL(BUILD_DLC,        test x$USE_DLC = "xyes")
 ]) # LN_CONDITIONALS
 
@@ -749,9 +722,6 @@ lnet/lnet/Makefile
 lnet/lnet/autoMakefile
 lnet/selftest/Makefile
 lnet/selftest/autoMakefile
-lnet/ulnds/Makefile
-lnet/ulnds/autoMakefile
-lnet/ulnds/socklnd/Makefile
 lnet/utils/Makefile
 lnet/utils/lnetconfig/Makefile
 ])

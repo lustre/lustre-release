@@ -1,4 +1,0 @@
-@BUILD_USOCKLND_TRUE@subdir-m += socklnd
-
-@INCLUDE_RULES@
-

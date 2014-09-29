@@ -34,8 +34,8 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-SUBDIRS = lnet klnds ulnds selftest doc utils include	\
+SUBDIRS = lnet klnds selftest doc utils include	\
 	autoconf
 
-DIST_SUBDIRS = lnet klnds ulnds selftest doc utils include \
+DIST_SUBDIRS = lnet klnds selftest doc utils include \
 	autoconf
