@@ -881,6 +881,32 @@ run_test 24 "reconstruct on non-existing object"
 
 # end commit on sharing tests
 
+test_24() {
+	cancel_lru_locks osc
+
+	$SETSTRIPE -i 0 -c 1 $DIR/$tfile
+
+	# get lock for the 1st client
+	dd if=/dev/zero of=$DIR/$tfile count=1 >/dev/null ||
+		error "failed to write data"
+
+	# get waiting locks for the 2nd client
+	drop_ldlm_cancel "multiop $DIR2/$tfile Ow512" &
+	sleep 1
+
+#define OBD_FAIL_OST_LDLM_REPLY_NET      0x213
+	# failover, replay and resend replayed waiting locks
+	do_facet ost1 lctl set_param fail_loc=0x80000213
+	fail ost1
+
+	# multiop does not finish because CP AST is skipped;
+	# it is ok to kill it in the test, because CP AST is already re-sent
+	# and it does not hung forever in real life
+	killall multiop
+	wait
+}
+run_test 24 "replay|resend"
+
 complete $SECONDS
 SLEEP=$((`date +%s` - $NOW))
 [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP

@@ -1687,6 +1687,9 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
                 }
         }
 
+	if (*flags & LDLM_FL_RESENT)
+		RETURN(ELDLM_OK);
+
 	/* For a replaying lock, it might be already in granted list. So
 	 * unlinking the lock will cause the interval node to be freed, we
 	 * have to allocate the interval node early otherwise we can't regrant
