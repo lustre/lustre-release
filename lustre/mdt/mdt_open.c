@@ -1416,6 +1416,7 @@ int mdt_open_by_fid_lock(struct mdt_thread_info *info, struct ldlm_reply *rep,
         struct mdt_object       *parent= NULL;
         struct mdt_object       *o;
         int                      rc;
+	int			 object_locked = 0;
 	__u64			 ibits = 0;
         ENTRY;
 
@@ -1469,6 +1470,7 @@ int mdt_open_by_fid_lock(struct mdt_thread_info *info, struct ldlm_reply *rep,
 		GOTO(out, rc);
 	} else if (rc > 0) {
 		rc = mdt_object_open_lock(info, o, lhc, &ibits);
+		object_locked = 1;
 		if (rc)
 			GOTO(out_unlock, rc);
 	}
@@ -1495,7 +1497,8 @@ int mdt_open_by_fid_lock(struct mdt_thread_info *info, struct ldlm_reply *rep,
 	GOTO(out_unlock, rc);
 
 out_unlock:
-	mdt_object_open_unlock(info, o, lhc, ibits, rc);
+	if (object_locked)
+		mdt_object_open_unlock(info, o, lhc, ibits, rc);
 out:
 	mdt_object_put(env, o);
 	if (parent != NULL)
@@ -1586,6 +1589,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         struct lu_name          *lname;
         int                      result, rc;
         int                      created = 0;
+	int			 object_locked = 0;
         __u32                    msg_flags;
         ENTRY;
 
@@ -1844,6 +1848,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 		/* get openlock if this isn't replay and client requested it */
 		if (!req_is_replay(req)) {
 			rc = mdt_object_open_lock(info, child, lhc, &ibits);
+			object_locked = 1;
 			if (rc != 0)
 				GOTO(out_child_unlock, result = rc);
 			else if (create_flags & MDS_OPEN_LOCK)
@@ -1884,7 +1889,8 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	}
 	EXIT;
 out_child_unlock:
-	mdt_object_open_unlock(info, child, lhc, ibits, result);
+	if (object_locked)
+		mdt_object_open_unlock(info, child, lhc, ibits, result);
 out_child:
 	mdt_object_put(info->mti_env, child);
 out_parent:
