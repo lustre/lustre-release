@@ -67,12 +67,6 @@ struct md_device_operations;
 struct md_object;
 struct obd_export;
 
-struct md_quota {
-        struct obd_export       *mq_exp;
-};
-
-struct md_quota *md_quota(const struct lu_env *env);
-
 /** metadata attributes */
 enum ma_valid {
 	MA_INODE     = (1 << 0),
@@ -82,11 +76,10 @@ enum ma_valid {
 	MA_LMV       = (1 << 4),
 	MA_ACL_DEF   = (1 << 5),
 	MA_LOV_DEF   = (1 << 6),
-	MA_LAY_GEN   = (1 << 7),
-	MA_HSM       = (1 << 8),
-	MA_SOM       = (1 << 9),
-	MA_PFID      = (1 << 10),
-	MA_LMV_DEF   = (1 << 11)
+	MA_HSM       = (1 << 7),
+	MA_SOM       = (1 << 8),
+	MA_PFID      = (1 << 9),
+	MA_LMV_DEF   = (1 << 10)
 };
 
 typedef enum {
@@ -148,7 +141,6 @@ struct md_attr {
         int                     ma_lmm_size;
         int                     ma_lmv_size;
         int                     ma_acl_size;
-        __u16                   ma_layout_gen;
 };
 
 /** Additional parameters for create */
@@ -156,12 +148,8 @@ struct md_op_spec {
         union {
                 /** symlink target */
                 const char               *sp_symname;
-                /** parent FID for cross-ref mkdir */
-                const struct lu_fid      *sp_pfid;
                 /** eadata for regular files */
                 struct md_spec_reg {
-                        /** lov objs exist already */
-                        const struct lu_fid   *fid;
                         const void *eadata;
                         int  eadatalen;
                 } sp_ea;
@@ -224,19 +212,6 @@ struct md_object_operations {
         int (*moo_changelog)(const struct lu_env *env,
                              enum changelog_rec_type type, int flags,
                              struct md_object *obj);
-        /** part of cross-ref operation */
-        int (*moo_object_create)(const struct lu_env *env,
-                                 struct md_object *obj,
-                                 const struct md_op_spec *spec,
-                                 struct md_attr *ma);
-
-        int (*moo_ref_add)(const struct lu_env *env,
-                           struct md_object *obj,
-                           const struct md_attr *ma);
-
-        int (*moo_ref_del)(const struct lu_env *env,
-                           struct md_object *obj,
-                           struct md_attr *ma);
 
         int (*moo_open)(const struct lu_env *env,
                         struct md_object *obj, int flag);
@@ -249,12 +224,6 @@ struct md_object_operations {
 
         int (*moo_object_sync)(const struct lu_env *, struct md_object *);
 
-	int (*moo_file_lock)(const struct lu_env *env, struct md_object *obj,
-			     struct lov_mds_md *lmm, struct ldlm_extent *extent,
-			     struct lustre_handle *lockh);
-	int (*moo_file_unlock)(const struct lu_env *env, struct md_object *obj,
-			       struct lov_mds_md *lmm,
-			       struct lustre_handle *lockh);
 	int (*moo_object_lock)(const struct lu_env *env, struct md_object *obj,
 			       struct lustre_handle *lh,
 			       struct ldlm_enqueue_info *einfo,
@@ -307,28 +276,6 @@ struct md_dir_operations {
 	int (*mdo_migrate)(const struct lu_env *env, struct md_object *pobj,
 			   struct md_object *sobj, const struct lu_name *lname,
 			   struct md_object *tobj, struct md_attr *ma);
-        /** This method is used to compare a requested layout to an existing
-         * layout (struct lov_mds_md_v1/3 vs struct lov_mds_md_v1/3) */
-        int (*mdo_lum_lmm_cmp)(const struct lu_env *env,
-                               struct md_object *cobj,
-                               const struct md_op_spec *spec,
-                               struct md_attr *ma);
-
-        /** partial ops for cross-ref case */
-        int (*mdo_name_insert)(const struct lu_env *env,
-                               struct md_object *obj,
-                               const struct lu_name *lname,
-                               const struct lu_fid *fid,
-                               const struct md_attr *ma);
-
-        int (*mdo_name_remove)(const struct lu_env *env,
-                               struct md_object *obj,
-                               const struct lu_name *lname,
-                               const struct md_attr *ma);
-
-        int (*mdo_rename_tgt)(const struct lu_env *env, struct md_object *pobj,
-                              struct md_object *tobj, const struct lu_fid *fid,
-                              const struct lu_name *lname, struct md_attr *ma);
 };
 
 struct md_device_operations {
@@ -357,69 +304,10 @@ struct md_device_operations {
                              unsigned int cmd, int len, void *data);
 };
 
-enum md_upcall_event {
-        /** Sync the md layer*/
-        MD_LOV_SYNC = (1 << 0),
-        /** Just for split, no need trans, for replay */
-        MD_NO_TRANS = (1 << 1),
-        MD_LOV_CONFIG = (1 << 2),
-        /** Trigger quota recovery */
-        MD_LOV_QUOTA = (1 << 3)
-};
-
-struct md_upcall {
-        /** this lock protects upcall using against its removal
-         * read lock is for usage the upcall, write - for init/fini */
-	struct rw_semaphore	mu_upcall_sem;
-        /** device to call, upper layer normally */
-        struct md_device       *mu_upcall_dev;
-        /** upcall function */
-        int (*mu_upcall)(const struct lu_env *env, struct md_device *md,
-                         enum md_upcall_event ev, void *data);
-};
-
 struct md_device {
         struct lu_device                   md_lu_dev;
         const struct md_device_operations *md_ops;
-        struct md_upcall                   md_upcall;
 };
-
-static inline void md_upcall_init(struct md_device *m, void *upcl)
-{
-	init_rwsem(&m->md_upcall.mu_upcall_sem);
-	m->md_upcall.mu_upcall_dev = NULL;
-	m->md_upcall.mu_upcall = upcl;
-}
-
-static inline void md_upcall_dev_set(struct md_device *m, struct md_device *up)
-{
-	down_write(&m->md_upcall.mu_upcall_sem);
-	m->md_upcall.mu_upcall_dev = up;
-	up_write(&m->md_upcall.mu_upcall_sem);
-}
-
-static inline void md_upcall_fini(struct md_device *m)
-{
-	down_write(&m->md_upcall.mu_upcall_sem);
-	m->md_upcall.mu_upcall_dev = NULL;
-	m->md_upcall.mu_upcall = NULL;
-	up_write(&m->md_upcall.mu_upcall_sem);
-}
-
-static inline int md_do_upcall(const struct lu_env *env, struct md_device *m,
-				enum md_upcall_event ev, void *data)
-{
-	int rc = 0;
-	down_read(&m->md_upcall.mu_upcall_sem);
-	if (m->md_upcall.mu_upcall_dev != NULL &&
-	    m->md_upcall.mu_upcall_dev->md_upcall.mu_upcall != NULL) {
-		rc = m->md_upcall.mu_upcall_dev->md_upcall.mu_upcall(env,
-					      m->md_upcall.mu_upcall_dev,
-					      ev, data);
-	}
-	up_read(&m->md_upcall.mu_upcall_sem);
-	return rc;
-}
 
 struct md_object {
         struct lu_object                   mo_lu;
@@ -450,11 +338,6 @@ static inline struct md_object *lu2md(const struct lu_object *o)
 {
         LASSERT(o == NULL || IS_ERR(o) || lu_device_is_md(o->lo_dev));
         return container_of0(o, struct md_object, mo_lu);
-}
-
-static inline struct md_object *md_object_next(const struct md_object *obj)
-{
-        return (obj ? lu2md(lu_object_next(&obj->mo_lu)) : NULL);
 }
 
 static inline int md_device_init(struct md_device *md, struct lu_device_type *t)
@@ -589,31 +472,6 @@ static inline int mo_readpage(const struct lu_env *env,
         return m->mo_ops->moo_readpage(env, m, rdpg);
 }
 
-static inline int mo_object_create(const struct lu_env *env,
-                                   struct md_object *m,
-                                   const struct md_op_spec *spc,
-                                   struct md_attr *at)
-{
-        LASSERT(m->mo_ops->moo_object_create);
-        return m->mo_ops->moo_object_create(env, m, spc, at);
-}
-
-static inline int mo_ref_add(const struct lu_env *env,
-                             struct md_object *m,
-                             const struct md_attr *ma)
-{
-        LASSERT(m->mo_ops->moo_ref_add);
-        return m->mo_ops->moo_ref_add(env, m, ma);
-}
-
-static inline int mo_ref_del(const struct lu_env *env,
-                             struct md_object *m,
-                             struct md_attr *ma)
-{
-        LASSERT(m->mo_ops->moo_ref_del);
-        return m->mo_ops->moo_ref_del(env, m, ma);
-}
-
 static inline int mo_capa_get(const struct lu_env *env,
                               struct md_object *m,
                               struct lustre_capa *c,
@@ -627,23 +485,6 @@ static inline int mo_object_sync(const struct lu_env *env, struct md_object *m)
 {
         LASSERT(m->mo_ops->moo_object_sync);
         return m->mo_ops->moo_object_sync(env, m);
-}
-
-static inline int mo_file_lock(const struct lu_env *env, struct md_object *m,
-                               struct lov_mds_md *lmm,
-                               struct ldlm_extent *extent,
-                               struct lustre_handle *lockh)
-{
-        LASSERT(m->mo_ops->moo_file_lock);
-        return m->mo_ops->moo_file_lock(env, m, lmm, extent, lockh);
-}
-
-static inline int mo_file_unlock(const struct lu_env *env, struct md_object *m,
-                                 struct lov_mds_md *lmm,
-                                 struct lustre_handle *lockh)
-{
-        LASSERT(m->mo_ops->moo_file_unlock);
-        return m->mo_ops->moo_file_unlock(env, m, lmm, lockh);
 }
 
 static inline int mo_object_lock(const struct lu_env *env,
@@ -759,50 +600,6 @@ static inline int mdo_unlink(const struct lu_env *env,
 	return p->mo_dir_ops->mdo_unlink(env, p, c, lname, ma, no_name);
 }
 
-static inline int mdo_lum_lmm_cmp(const struct lu_env *env,
-                                  struct md_object *c,
-                                  const struct md_op_spec *spec,
-                                  struct md_attr *ma)
-{
-        LASSERT(c->mo_dir_ops->mdo_lum_lmm_cmp);
-        return c->mo_dir_ops->mdo_lum_lmm_cmp(env, c, spec, ma);
-}
-
-static inline int mdo_name_insert(const struct lu_env *env,
-                                  struct md_object *p,
-                                  const struct lu_name *lname,
-                                  const struct lu_fid *f,
-                                  const struct md_attr *ma)
-{
-        LASSERT(p->mo_dir_ops->mdo_name_insert);
-        return p->mo_dir_ops->mdo_name_insert(env, p, lname, f, ma);
-}
-
-static inline int mdo_name_remove(const struct lu_env *env,
-                                  struct md_object *p,
-                                  const struct lu_name *lname,
-                                  const struct md_attr *ma)
-{
-        LASSERT(p->mo_dir_ops->mdo_name_remove);
-        return p->mo_dir_ops->mdo_name_remove(env, p, lname, ma);
-}
-
-static inline int mdo_rename_tgt(const struct lu_env *env,
-                                 struct md_object *p,
-                                 struct md_object *t,
-                                 const struct lu_fid *lf,
-                                 const struct lu_name *lname,
-                                 struct md_attr *ma)
-{
-        if (t) {
-                LASSERT(t->mo_dir_ops->mdo_rename_tgt);
-                return t->mo_dir_ops->mdo_rename_tgt(env, p, t, lf, lname, ma);
-        } else {
-                LASSERT(p->mo_dir_ops->mdo_rename_tgt);
-                return p->mo_dir_ops->mdo_rename_tgt(env, p, t, lf, lname, ma);
-        }
-}
-
 /**
  * Used in MDD/OUT layer for object lock rule
  **/
@@ -815,18 +612,6 @@ enum mdd_object_role {
 };
 
 struct dt_device;
-/**
- * Structure to hold object information. This is used to create object
- * \pre llod_dir exist
- */
-struct lu_local_obj_desc {
-        const char                      *llod_dir;
-        const char                      *llod_name;
-        __u32                            llod_oid;
-        int                              llod_is_index;
-        const struct dt_index_features  *llod_feat;
-	struct list_head		 llod_linkage;
-};
 
 int lustre_buf2som(void *buf, int rc, struct md_som_data *msd);
 int lustre_buf2hsm(void *buf, int rc, struct md_hsm *mh);
