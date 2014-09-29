@@ -442,7 +442,7 @@ struct lmv_obd {
 	struct obd_export	*exp;
 	struct proc_dir_entry	*targets_proc_entry;
 
-	struct mutex		init_mutex;
+	struct mutex		lmv_init_mutex;
 	int			connected;
 	int			max_easize;
 	int			max_def_easize;
