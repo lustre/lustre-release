@@ -1349,7 +1349,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
 		rc = mdt_check_resent_lock(info, child, lhc);
 		if (rc < 0) {
-			RETURN(-EPROTO);
+			RETURN(rc);
 		} else if (rc > 0) {
                         mdt_lock_handle_init(lhc);
                         mdt_lock_reg_init(lhc, LCK_PR);
@@ -1432,13 +1432,13 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 	if (unlikely(IS_ERR(child)))
 		GOTO(out_parent, rc = PTR_ERR(child));
 
+	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RESEND, obd_timeout*2);
 	rc = mdt_check_resent_lock(info, child, lhc);
 	if (rc < 0) {
 		GOTO(out_child, rc);
 	} else if (rc > 0) {
 		bool try_layout = false;
 
-		OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RESEND, obd_timeout*2);
 		mdt_lock_handle_init(lhc);
 		mdt_lock_reg_init(lhc, LCK_PR);
 
@@ -2627,8 +2627,14 @@ int mdt_check_resent_lock(struct mdt_thread_info *info,
 
 		lock = ldlm_handle2lock(&lhc->mlh_reg_lh);
 		LASSERT(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT);
-		LASSERTF(lock != NULL, "Invalid lock handle "LPX64"\n",
-			 lhc->mlh_reg_lh.cookie);
+		if (lock == NULL) {
+			/* Lock is pinned by ldlm_handle_enqueue0() as it is
+			 * a resend case, however, it could be already destroyed
+			 * due to client eviction or a raced cancel RPC. */
+			LDLM_DEBUG_NOLOCK("Invalid lock handle "LPX64"\n",
+					  lhc->mlh_reg_lh.cookie);
+			RETURN(-ESTALE);
+		}
 
 		if (!fid_res_name_eq(mdt_object_fid(mo),
 				     &lock->l_resource->lr_name)) {

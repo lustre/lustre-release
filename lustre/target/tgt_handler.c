@@ -793,6 +793,7 @@ int tgt_enqueue(struct tgt_session_info *tsi)
 	if (rc)
 		RETURN(err_serious(rc));
 
+	tsi->tsi_reply_fail_id = OBD_FAIL_LDLM_REPLY;
 	RETURN(req->rq_status);
 }
 EXPORT_SYMBOL(tgt_enqueue);
