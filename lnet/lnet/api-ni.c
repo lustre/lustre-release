@@ -1107,7 +1107,7 @@ lnet_ping_info_setup(lnet_ping_info_t **ppinfo, lnet_handle_md_t *md_handle,
 {
 	lnet_handle_me_t  me_handle;
 	lnet_process_id_t id = {LNET_NID_ANY, LNET_PID_ANY};
-	lnet_md_t	  md = {0};
+	lnet_md_t	  md = {NULL};
 	int		  rc, rc2;
 
 	if (set_eq) {
@@ -2395,7 +2395,7 @@ lnet_ping(lnet_process_id_t id, int timeout_ms, lnet_process_id_t __user *ids,
 	lnet_handle_eq_t     eqh;
 	lnet_handle_md_t     mdh;
 	lnet_event_t         event;
-	lnet_md_t            md = {0};
+	lnet_md_t            md = { NULL };
 	int                  which;
 	int                  unlinked = 0;
 	int                  replied = 0;

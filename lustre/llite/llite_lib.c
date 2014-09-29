@@ -170,7 +170,7 @@ static void ll_free_sbi(struct super_block *sb)
 static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                                     struct vfsmount *mnt)
 {
-        struct inode *root = 0;
+	struct inode *root = NULL;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device *obd;
         struct obd_capa *oc = NULL;
@@ -2360,7 +2360,7 @@ int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
 		  struct super_block *sb, struct lookup_intent *it)
 {
 	struct ll_sb_info *sbi = NULL;
-	struct lustre_md md = { 0 };
+	struct lustre_md md = { NULL };
 	int rc;
 	ENTRY;
 

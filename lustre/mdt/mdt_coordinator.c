@@ -449,7 +449,7 @@ static int mdt_coordinator(void *data)
 	struct mdt_thread_info	*mti = data;
 	struct mdt_device	*mdt = mti->mti_mdt;
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
-	struct hsm_scan_data	 hsd = { 0 };
+	struct hsm_scan_data	 hsd = { NULL };
 	int			 rc = 0;
 	ENTRY;
 

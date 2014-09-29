@@ -216,7 +216,7 @@ struct lprocfs_seq_vars lprocfs_lmv_obd_vars[] = {
 	  .fops	=	&lmv_uuid_fops		},
 	{ .name	=	"desc_uuid",
 	  .fops	=	&lmv_desc_uuid_fops	},
-	{ 0 }
+	{ NULL }
 };
 
 struct file_operations lmv_proc_target_fops = {

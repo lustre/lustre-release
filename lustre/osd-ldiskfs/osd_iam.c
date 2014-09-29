@@ -1412,7 +1412,7 @@ static void iam_unlock_array(struct iam_container *ic,
 int iam_index_next(struct iam_container *c, struct iam_path *path)
 {
         iam_ptr_t cursor;
-        struct dynlock_handle *lh[DX_MAX_TREE_HEIGHT] = { 0, };
+	struct dynlock_handle *lh[DX_MAX_TREE_HEIGHT] = { NULL, };
         int result;
         struct inode *object;
 
@@ -1893,8 +1893,8 @@ int split_index_node(handle_t *handle, struct iam_path *path,
 
         struct iam_entry *entries;   /* old block contents */
         struct iam_entry *entries2;  /* new block contents */
-         struct iam_frame *frame, *safe;
-        struct buffer_head *bh_new[DX_MAX_TREE_HEIGHT] = {0};
+	struct iam_frame *frame, *safe;
+	struct buffer_head *bh_new[DX_MAX_TREE_HEIGHT] = {NULL};
         u32 newblock[DX_MAX_TREE_HEIGHT] = {0};
         struct dynlock_handle *lock[DX_MAX_TREE_HEIGHT] = {NULL,};
         struct dynlock_handle *new_lock[DX_MAX_TREE_HEIGHT] = {NULL,};

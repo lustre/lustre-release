@@ -1369,7 +1369,7 @@ static int mdt_lock_objects_in_linkea(struct mdt_thread_info *info,
 				      struct list_head *lock_list)
 {
 	struct lu_buf		*buf = &info->mti_big_buf;
-	struct linkea_data	ldata = { 0 };
+	struct linkea_data	ldata = { NULL };
 	int			count;
 	int			rc;
 	ENTRY;

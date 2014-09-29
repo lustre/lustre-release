@@ -773,7 +773,7 @@ static struct lprocfs_seq_vars lprocfs_osp_obd_vars[] = {
 	  .fops =	&osp_destroys_in_flight_fops		},
 	{ .name	=	"lfsck_max_rpcs_in_flight",
 	  .fops	=	&osp_lfsck_max_rpcs_in_flight_fops	},
-	{ 0 }
+	{ NULL }
 };
 
 LPROC_SEQ_FOPS_RO_TYPE(osp, dt_blksize);
@@ -796,7 +796,7 @@ static struct lprocfs_seq_vars lprocfs_osp_osd_vars[] = {
 	  .fops =	&osp_dt_filestotal_fops		},
 	{ .name =	"filesfree",
 	  .fops =	&osp_dt_filesfree_fops		},
-	{ 0 }
+	{ NULL }
 };
 
 /**

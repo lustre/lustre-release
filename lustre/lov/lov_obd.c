@@ -344,7 +344,7 @@ static int lov_disconnect(struct obd_export *exp)
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 if (lov->lov_tgts[i] && lov->lov_tgts[i]->ltd_exp) {
                         /* Disconnection is the last we know about an obd */
-                        lov_del_target(obd, i, 0, lov->lov_tgts[i]->ltd_gen);
+			lov_del_target(obd, i, NULL, lov->lov_tgts[i]->ltd_gen);
                 }
         }
         obd_putref(obd);
@@ -656,7 +656,7 @@ out:
         if (rc) {
                 CERROR("add failed (%d), deleting %s\n", rc,
                        obd_uuid2str(&tgt->ltd_uuid));
-                lov_del_target(obd, index, 0, 0);
+		lov_del_target(obd, index, NULL, 0);
         }
         obd_putref(obd);
         RETURN(rc);
@@ -944,7 +944,7 @@ static int lov_cleanup(struct obd_device *obd)
 				       "deathrow=%d, lovrc=%d\n",
 				       obd->obd_name, i, lov->lov_death_row,
 				       atomic_read(&lov->lov_refcount));
-			lov_del_target(obd, i, 0, 0);
+			lov_del_target(obd, i, NULL, 0);
 		}
                 obd_putref(obd);
                 OBD_FREE(lov->lov_tgts, sizeof(*lov->lov_tgts) *

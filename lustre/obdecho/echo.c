@@ -561,7 +561,7 @@ LPROC_SEQ_FOPS_RO_TYPE(echo, uuid);
 static struct lprocfs_seq_vars lprocfs_echo_obd_vars[] = {
 	{ .name	=	"uuid",
 	  .fops	=	&echo_uuid_fops		},
-	{ 0 }
+	{ NULL }
 };
 
 static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)

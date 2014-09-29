@@ -1024,7 +1024,7 @@ struct lprocfs_seq_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_root_squash_fops			},
 	{ .name	=	"nosquash_nids",
 	  .fops	=	&ll_nosquash_nids_fops			},
-	{ 0 }
+	{ NULL }
 };
 
 #define MAX_STRING_SIZE 128

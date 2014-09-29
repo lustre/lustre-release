@@ -76,6 +76,6 @@ struct lprocfs_seq_vars lprocfs_mgc_obd_vars[] = {
 	  .fops	=	&mgc_state_fops		},
 	{ .name	=	"ir_state",
 	  .fops	=	&mgc_ir_state_fops	},
-	{ 0 }
+	{ NULL }
 };
 #endif /* LPROCFS */

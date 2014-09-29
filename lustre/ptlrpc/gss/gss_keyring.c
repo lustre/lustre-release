@@ -1226,7 +1226,7 @@ int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
                 RETURN(-EINVAL);
         }
 
-        if (key->payload.data != 0) {
+	if (key->payload.data != NULL) {
                 CERROR("key already have payload\n");
                 RETURN(-EINVAL);
         }

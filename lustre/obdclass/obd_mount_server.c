@@ -241,8 +241,8 @@ static int server_start_mgs(struct super_block *sb)
 
 	if (!rc) {
 		rc = lustre_start_simple(LUSTRE_MGS_OBDNAME, LUSTRE_MGS_NAME,
-					 LUSTRE_MGS_OBDNAME, 0, 0,
-					 lsi->lsi_osd_obdname, 0);
+					 LUSTRE_MGS_OBDNAME, NULL, NULL,
+					 lsi->lsi_osd_obdname, NULL);
 		/* server_deregister_mount() is not called previously, for lsi
 		 * and other stuff can't be freed cleanly when mgs calls
 		 * server_put_mount() in error handling case (see b=17758),
@@ -609,7 +609,7 @@ static int lustre_lwp_setup(struct lustre_cfg *lcfg, struct lustre_sb_info *lsi,
 	sprintf(lwpuuid, "%s_UUID", lwpname);
 	rc = lustre_start_simple(lwpname, LUSTRE_LWP_NAME,
 				 lwpuuid, lustre_cfg_string(lcfg, 1),
-				 0, 0, 0);
+				 NULL, NULL, NULL);
 	if (rc) {
 		CERROR("%s: setup up failed: rc %d\n", lwpname, rc);
 		GOTO(out, rc);
@@ -1245,7 +1245,7 @@ static int server_start_targets(struct super_block *sb)
 			rc = lustre_start_simple(LUSTRE_MDS_OBDNAME,
 						 LUSTRE_MDS_NAME,
 						 LUSTRE_MDS_OBDNAME"_uuid",
-						 0, 0, 0, 0);
+						 NULL, NULL, NULL, NULL);
 			if (rc) {
 				mutex_unlock(&server_start_lock);
 				CERROR("failed to start MDS: %d\n", rc);
@@ -1264,7 +1264,7 @@ static int server_start_targets(struct super_block *sb)
 			rc = lustre_start_simple(LUSTRE_OSS_OBDNAME,
 						 LUSTRE_OSS_NAME,
 						 LUSTRE_OSS_OBDNAME"_uuid",
-						 0, 0, 0, 0);
+						 NULL, NULL, NULL, NULL);
 			if (rc) {
 				mutex_unlock(&server_start_lock);
 				CERROR("failed to start OSS: %d\n", rc);
@@ -1630,7 +1630,7 @@ static const struct inode_operations server_inode_operations = {
 
 static int server_fill_super_common(struct super_block *sb)
 {
-	struct inode *root = 0;
+	struct inode *root = NULL;
 	ENTRY;
 
 	CDEBUG(D_MOUNT, "Server sb, dev=%d\n", (int)sb->s_dev);

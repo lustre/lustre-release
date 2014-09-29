@@ -142,6 +142,6 @@ struct lprocfs_seq_vars lprocfs_mdc_obd_vars[] = {
 	  .fops	=	&mdc_state_fops			},
 	{ .name	=	"pinger_recov",
 	  .fops	=	&mdc_pinger_recov_fops		},
-	{ 0 }
+	{ NULL }
 };
 #endif /* LPROCFS */

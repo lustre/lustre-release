@@ -824,21 +824,24 @@ static inline int record_add_uuid(const struct lu_env *env,
 				  struct llog_handle *llh,
 				  uint64_t nid, char *uuid)
 {
-	return record_base(env, llh, NULL, nid, LCFG_ADD_UUID, uuid, 0, 0, 0);
+	return record_base(env, llh, NULL, nid, LCFG_ADD_UUID, uuid,
+			   NULL, NULL, NULL);
 }
 
 static inline int record_add_conn(const struct lu_env *env,
 				  struct llog_handle *llh,
 				  char *devname, char *uuid)
 {
-	return record_base(env, llh, devname, 0, LCFG_ADD_CONN, uuid, 0, 0, 0);
+	return record_base(env, llh, devname, 0, LCFG_ADD_CONN, uuid,
+			   NULL, NULL, NULL);
 }
 
 static inline int record_attach(const struct lu_env *env,
 				struct llog_handle *llh, char *devname,
 				char *type, char *uuid)
 {
-	return record_base(env, llh,devname, 0, LCFG_ATTACH, type, uuid, 0, 0);
+	return record_base(env, llh, devname, 0, LCFG_ATTACH, type, uuid,
+			   NULL, NULL);
 }
 
 static inline int record_setup(const struct lu_env *env,
@@ -1316,8 +1319,8 @@ static inline int record_lov_add(const struct lu_env *env,
                                  char *lov_name, char *ost_uuid,
                                  char *index, char *gen)
 {
-	return record_base(env,llh,lov_name,0,LCFG_LOV_ADD_OBD,
-			   ost_uuid, index, gen, 0);
+	return record_base(env, llh, lov_name, 0, LCFG_LOV_ADD_OBD,
+			   ost_uuid, index, gen, NULL);
 }
 
 static inline int record_mount_opt(const struct lu_env *env,
@@ -1325,8 +1328,8 @@ static inline int record_mount_opt(const struct lu_env *env,
                                    char *profile, char *lov_name,
                                    char *mdc_name)
 {
-	return record_base(env,llh,NULL,0,LCFG_MOUNTOPT,
-                           profile,lov_name,mdc_name,0);
+	return record_base(env, llh, NULL, 0, LCFG_MOUNTOPT,
+			   profile, lov_name, mdc_name, NULL);
 }
 
 static int record_marker(const struct lu_env *env,
@@ -1984,7 +1987,8 @@ static int mgs_write_log_mdc_to_lmv(const struct lu_env *env,
 	rc = record_attach(env, llh, mdcname, LUSTRE_MDC_NAME, lmvuuid);
 	if (rc)
 		GOTO(out_end, rc);
-	rc = record_setup(env, llh, mdcname, mti->mti_uuid, nodeuuid, 0, 0);
+	rc = record_setup(env, llh, mdcname, mti->mti_uuid, nodeuuid,
+			  NULL, NULL);
 	if (rc)
 		GOTO(out_end, rc);
 	rc = mgs_write_log_failnids(env, mti, llh, mdcname);
@@ -2418,7 +2422,8 @@ static int mgs_write_log_osc_to_lov(const struct lu_env *env,
 	rc = record_attach(env, llh, oscname, LUSTRE_OSC_NAME, lovuuid);
 	if (rc)
 		GOTO(out_end, rc);
-	rc = record_setup(env, llh, oscname, mti->mti_uuid, nodeuuid, 0, 0);
+	rc = record_setup(env, llh, oscname, mti->mti_uuid, nodeuuid,
+			  NULL, NULL);
 	if (rc)
 		GOTO(out_end, rc);
 	rc = mgs_write_log_failnids(env, mti, llh, oscname);
@@ -2492,7 +2497,7 @@ static int mgs_write_log_ost(const struct lu_env *env,
 		GOTO(out_end, rc);
 	rc = record_setup(env, llh, mti->mti_svname,
                           "dev"/*ignored*/, "type"/*ignored*/,
-                          failout ? "n" : "f", 0/*options*/);
+			  failout ? "n" : "f", NULL/*options*/);
 	if (rc)
 		GOTO(out_end, rc);
 	rc = record_marker(env, llh, fsdb, CM_END, mti->mti_svname, "add ost");
@@ -3965,7 +3970,7 @@ static int mgs_write_log_pool(const struct lu_env *env,
 	if (rc)
 		goto out;
 	rc = record_base(env, llh, tgtname, 0, cmd,
-			 fsname, poolname, ostname, 0);
+			 fsname, poolname, ostname, NULL);
 	if (rc)
 		goto out;
 	rc = record_marker(env, llh, fsdb, CM_END, tgtname, comment);

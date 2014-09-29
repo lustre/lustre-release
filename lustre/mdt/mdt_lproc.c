@@ -878,7 +878,7 @@ static struct lprocfs_seq_vars lprocfs_mdt_obd_vars[] = {
 	  .fops =	&mdt_enable_remote_dir_gid_fops		},
 	{ .name =	"hsm_control",
 	  .fops =	&mdt_hsm_cdt_control_fops		},
-	{ 0 }
+	{ NULL }
 };
 
 static int lprocfs_mdt_print_open_files(cfs_hash_t *hs, cfs_hash_bd_t *bd,

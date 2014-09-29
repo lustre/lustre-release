@@ -218,7 +218,7 @@ static struct lprocfs_seq_vars lprocfs_mgs_obd_vars[] = {
 	  .fops	=	&mgs_evict_client_fops	},
 	{ .name	=	"ir_timeout",
 	  .fops	=	&mgs_ir_timeout_fops	},
-	{ 0 }
+	{ NULL }
 };
 
 int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name)

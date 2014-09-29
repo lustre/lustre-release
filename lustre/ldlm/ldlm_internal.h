@@ -298,7 +298,7 @@ ldlm_add_var(struct lprocfs_seq_vars *vars, struct proc_dir_entry *proc_dir,
 	snprintf((char *)vars->name, MAX_STRING_SIZE, "%s", name);
 	vars->data = data;
 	vars->fops = ops;
-	lprocfs_seq_add_vars(proc_dir, vars, 0);
+	lprocfs_seq_add_vars(proc_dir, vars, NULL);
 }
 
 static inline int is_granted_or_cancelled(struct ldlm_lock *lock)

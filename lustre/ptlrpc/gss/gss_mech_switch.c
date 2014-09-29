@@ -331,7 +331,7 @@ __u32 lgss_delete_sec_context(struct gss_ctx **context_handle)
                 return(GSS_S_NO_CONTEXT);
 
         mech = (*context_handle)->mech_type;
-        if ((*context_handle)->internal_ctx_id != 0) {
+	if ((*context_handle)->internal_ctx_id != NULL) {
                 LASSERT(mech);
                 LASSERT(mech->gm_ops);
                 LASSERT(mech->gm_ops->gss_delete_sec_context);

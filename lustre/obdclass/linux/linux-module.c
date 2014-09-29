@@ -322,7 +322,7 @@ static struct lprocfs_seq_vars lprocfs_base[] = {
 	  .fops	=	&obd_proc_health_fops	},
 	{ .name =	"jobid_var",
 	  .fops	=	&obd_proc_jobid_var_fops},
-	{ 0 }
+	{ NULL }
 };
 #else
 #define lprocfs_base NULL

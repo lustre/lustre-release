@@ -2867,7 +2867,7 @@ err_fini_fs:
 err_fini_lut:
 	tgt_fini(env, &m->ofd_lut);
 err_free_ns:
-	ldlm_namespace_free(m->ofd_namespace, 0, obd->obd_force);
+	ldlm_namespace_free(m->ofd_namespace, NULL, obd->obd_force);
 	obd->obd_namespace = m->ofd_namespace = NULL;
 err_fini_stack:
 	ofd_stack_fini(env, m, &m->ofd_osd->dd_lu_dev);

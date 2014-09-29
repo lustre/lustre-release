@@ -625,13 +625,13 @@ struct lprocfs_seq_vars lprocfs_osd_obd_vars[] = {
 	  .fops	=	&ldiskfs_osd_readcache_fops	},
 	{ .name	=	"lma_self_repair",
 	  .fops	=	&ldiskfs_osd_lma_self_repair_fops	},
-	{ 0 }
+	{ NULL }
 };
 
 struct lprocfs_seq_vars lprocfs_osd_module_vars[] = {
 	{ .name	=	"track_declares_assert",
 	  .fops	=	&ldiskfs_osd_track_declares_assert_fops		},
-	{ 0 }
+	{ NULL }
 };
 
 

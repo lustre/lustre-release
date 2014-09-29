@@ -845,7 +845,7 @@ static int lfsck_namespace_insert_orphan(const struct lu_env *env,
 	struct thandle			*th	= NULL;
 	struct lustre_handle		 plh	= { 0 };
 	struct lustre_handle		 clh	= { 0 };
-	struct linkea_data		 ldata	= { 0 };
+	struct linkea_data		 ldata	= { NULL };
 	struct lu_buf			 linkea_buf;
 	int				 namelen;
 	int				 idx	= 0;
@@ -1311,7 +1311,7 @@ static int lfsck_namespace_create_orphan_local(const struct lu_env *env,
 	struct dt_object		*child	= NULL;
 	struct thandle			*th	= NULL;
 	struct lustre_handle		 lh	= { 0 };
-	struct linkea_data		 ldata	= { 0 };
+	struct linkea_data		 ldata	= { NULL };
 	struct lu_buf			 linkea_buf;
 	struct lu_buf			 lmv_buf;
 	char				 name[32];
@@ -1574,7 +1574,7 @@ static int lfsck_namespace_shrink_linkea(const struct lu_env *env,
 	struct lfsck_bookmark		*bk	   = &lfsck->li_bookmark_ram;
 	struct thandle			*th	   = NULL;
 	struct lustre_handle		 lh	   = { 0 };
-	struct linkea_data		 ldata_new = { 0 };
+	struct linkea_data		 ldata_new = { NULL };
 	struct lu_buf			 linkea_buf;
 	int				 rc	   = 0;
 	ENTRY;
@@ -1792,7 +1792,7 @@ static int lfsck_namespace_replace_cond(const struct lu_env *env,
 	struct dt_object		*obj	= NULL;
 	struct lustre_handle		 plh	= { 0 };
 	struct lustre_handle		 clh	= { 0 };
-	struct linkea_data		 ldata	= { 0 };
+	struct linkea_data		 ldata	= { NULL };
 	struct thandle			*th	= NULL;
 	bool				 exist	= true;
 	int				 rc	= 0;
@@ -2198,7 +2198,7 @@ static int lfsck_namespace_repair_unmatched_pairs(const struct lu_env *env,
 	struct lfsck_instance		*lfsck	= com->lc_lfsck;
 	struct dt_device		*dev	= lfsck->li_bottom;
 	struct thandle			*th	= NULL;
-	struct linkea_data		 ldata	= { 0 };
+	struct linkea_data		 ldata	= { NULL };
 	struct lu_buf			 linkea_buf;
 	int				 rc	= 0;
 	ENTRY;
@@ -2663,7 +2663,7 @@ lfsck_namespace_dsd_multiple(const struct lu_env *env,
 	struct lfsck_instance	 *lfsck		= com->lc_lfsck;
 	struct lfsck_bookmark	 *bk		= &lfsck->li_bookmark_ram;
 	struct dt_object	 *parent	= NULL;
-	struct linkea_data	  ldata_new	= { 0 };
+	struct linkea_data	  ldata_new	= { NULL };
 	int			  dirent_count	= 0;
 	int			  linkea_count	= 0;
 	int			  rc		= 0;
@@ -2908,7 +2908,7 @@ static int lfsck_namespace_repair_nlink(const struct lu_env *env,
 	const struct lu_fid		*cfid	= lfsck_dto2fid(obj);
 	struct dt_object		*child	= NULL;
 	struct thandle			*th	= NULL;
-	struct linkea_data		 ldata	= { 0 };
+	struct linkea_data		 ldata	= { NULL };
 	struct lustre_handle		 lh	= { 0 };
 	__u32				 old	= la->la_nlink;
 	int				 rc	= 0;
@@ -3049,7 +3049,7 @@ static int lfsck_namespace_double_scan_dir(const struct lu_env *env,
 	struct lfsck_namespace	 *ns		= com->lc_file_ram;
 	struct lfsck_instance	 *lfsck		= com->lc_lfsck;
 	struct lustre_handle	  lh		= { 0 };
-	struct linkea_data	  ldata		= { 0 };
+	struct linkea_data	  ldata		= { NULL };
 	bool			  unknown	= false;
 	bool			  lpf		= false;
 	bool			  retry		= false;
@@ -3281,7 +3281,7 @@ static int lfsck_namespace_double_scan_one(const struct lu_env *env,
 	struct lfsck_instance	 *lfsck	   = com->lc_lfsck;
 	struct lfsck_namespace	 *ns	   = com->lc_file_ram;
 	struct dt_object	 *parent   = NULL;
-	struct linkea_data	  ldata	   = { 0 };
+	struct linkea_data	  ldata	   = { NULL };
 	bool			  repaired = false;
 	int			  count	   = 0;
 	int			  rc;
@@ -4042,7 +4042,7 @@ static int lfsck_namespace_exec_oit(const struct lu_env *env,
 	struct dt_device	 *dev	= lfsck->li_bottom;
 	struct seq_server_site	 *ss	=
 				lu_site2seq(dev->dd_lu_dev.ld_site);
-	struct linkea_data	  ldata	= { 0 };
+	struct linkea_data	  ldata	= { NULL };
 	__u32			  idx	= lfsck_dev_idx(dev);
 	int			  rc;
 	ENTRY;
@@ -4808,7 +4808,7 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 	struct lmv_mds_md_v1		*lmv2	= &info->lti_lmv2;
 	struct dt_object		*parent	= lnr->lnr_obj;
 	const struct lu_name		*cname;
-	struct linkea_data		 ldata	= { 0 };
+	struct linkea_data		 ldata	= { NULL };
 	struct lustre_handle		 lh     = { 0 };
 	struct lu_buf			 linkea_buf;
 	struct lu_buf			 lmv_buf;
@@ -5015,7 +5015,7 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 	struct lfsck_instance	   *lfsck    = com->lc_lfsck;
 	struct lfsck_bookmark	   *bk	     = &lfsck->li_bookmark_ram;
 	struct lfsck_namespace	   *ns	     = com->lc_file_ram;
-	struct linkea_data	    ldata    = { 0 };
+	struct linkea_data	    ldata    = { NULL };
 	const struct lu_name	   *cname;
 	struct thandle		   *handle   = NULL;
 	struct lfsck_namespace_req *lnr      =
@@ -6243,7 +6243,7 @@ int lfsck_verify_linkea(const struct lu_env *env, struct dt_device *dev,
 			struct dt_object *obj, const struct lu_name *cname,
 			const struct lu_fid *pfid)
 {
-	struct linkea_data	 ldata	= { 0 };
+	struct linkea_data	 ldata	= { NULL };
 	struct lu_buf		 linkea_buf;
 	struct thandle		*th;
 	int			 rc;
@@ -6322,7 +6322,7 @@ int lfsck_links_get_first(const struct lu_env *env, struct dt_object *obj,
 			  char *name, struct lu_fid *pfid)
 {
 	struct lu_name		 *cname = &lfsck_env_info(env)->lti_name;
-	struct linkea_data	  ldata = { 0 };
+	struct linkea_data	  ldata = { NULL };
 	int			  rc;
 
 	rc = lfsck_links_read(env, obj, &ldata);

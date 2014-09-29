@@ -1751,11 +1751,11 @@ static int lfsck_layout_recreate_parent(const struct lu_env *env,
 	struct dt_object		*pobj	= NULL;
 	struct dt_object		*cobj	= NULL;
 	struct thandle			*th	= NULL;
-	struct lu_buf			 pbuf	= { 0 };
+	struct lu_buf			 pbuf	= { NULL };
 	struct lu_buf			*ea_buf = &info->lti_big_buf;
 	struct lu_buf			 lov_buf;
 	struct lustre_handle		 lh	= { 0 };
-	struct linkea_data		 ldata	= { 0 };
+	struct linkea_data		 ldata	= { NULL };
 	struct lu_buf			 linkea_buf;
 	const struct lu_name		*pname;
 	int				 size	= 0;
@@ -3201,7 +3201,7 @@ static int lfsck_layout_assistant_handler_p1(const struct lu_env *env,
 	struct lfsck_thread_info	     *info   = lfsck_env_info(env);
 	struct filter_fid_old		     *pea    = &info->lti_old_pfid;
 	struct lu_fid			     *pfid   = &info->lti_fid;
-	struct lu_buf			      buf    = { 0 };
+	struct lu_buf			      buf    = { NULL };
 	struct dt_object		     *parent = llr->llr_parent->llo_obj;
 	struct dt_object		     *child  = llr->llr_child;
 	struct lu_attr			     *pla    = &info->lti_la;
@@ -4333,7 +4333,7 @@ static int lfsck_layout_master_exec_oit(const struct lu_env *env,
 	struct lov_mds_md_v1		*lmm	= NULL;
 	struct dt_device		*dev	= lfsck->li_bottom;
 	struct lustre_handle		 lh	= { 0 };
-	struct lu_buf			 ea_buf = { 0 };
+	struct lu_buf			 ea_buf = { NULL };
 	int				 rc	= 0;
 	int				 size	= 0;
 	bool				 locked	= false;

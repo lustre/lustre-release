@@ -1056,7 +1056,7 @@ struct lprocfs_seq_vars lprocfs_ofd_obd_vars[] = {
 	  .fops =	&ofd_lfsck_layout_fops		},
 	{ .name	=	"lfsck_verify_pfid",
 	  .fops	=	&ofd_lfsck_verify_pfid_fops	},
-	{ 0 }
+	{ NULL }
 };
 
 /**

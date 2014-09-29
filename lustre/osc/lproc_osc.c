@@ -635,7 +635,7 @@ struct lprocfs_seq_vars lprocfs_osc_obd_vars[] = {
 	  .fops	=	&osc_pinger_recov_fops		},
 	{ .name	=	"unstable_stats",
 	  .fops	=	&osc_unstable_stats_fops	},
-	{ 0 }
+	{ NULL }
 };
 
 #define pct(a,b) (b ? a * 100 / b : 0)

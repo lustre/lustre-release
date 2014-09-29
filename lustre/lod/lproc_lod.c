@@ -733,7 +733,7 @@ static struct lprocfs_seq_vars lprocfs_lod_obd_vars[] = {
 	  .fops	=	&lod_qos_maxage_fops	},
 	{ .name	=	"lmv_failout",
 	  .fops	=	&lod_lmv_failout_fops	},
-	{ 0 }
+	{ NULL }
 };
 
 static struct lprocfs_seq_vars lprocfs_lod_osd_vars[] = {
@@ -743,7 +743,7 @@ static struct lprocfs_seq_vars lprocfs_lod_osd_vars[] = {
 	{ "kbytesavail",	&lod_dt_kbytesavail_fops	},
 	{ "filestotal",		&lod_dt_filestotal_fops		},
 	{ "filesfree",		&lod_dt_filesfree_fops		},
-	{ 0 }
+	{ NULL }
 };
 
 static const struct file_operations lod_proc_target_fops = {

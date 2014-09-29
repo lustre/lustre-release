@@ -468,7 +468,7 @@ LPROC_SEQ_FOPS_RO_TYPE(mds, uuid);
 
 static struct lprocfs_seq_vars lprocfs_mds_obd_vars[] = {
 	{ "uuid",	&mds_uuid_fops  },
-	{ 0 }
+	{ NULL }
 };
 
 static struct lu_device *mds_device_alloc(const struct lu_env *env,

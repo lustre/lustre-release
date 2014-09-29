@@ -298,7 +298,7 @@ struct lprocfs_seq_vars lprocfs_lov_obd_vars[] = {
 	  .fops	=	&lov_kbytesavail_fops	},
 	{ .name	=	"desc_uuid",
 	  .fops	=	&lov_desc_uuid_fops	},
-	{ 0 }
+	{ NULL }
 };
 
 struct file_operations lov_proc_target_fops = {

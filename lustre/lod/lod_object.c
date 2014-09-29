@@ -1811,7 +1811,7 @@ next:
 		struct dt_object	*dto		= stripe[i];
 		char			*stripe_name	= info->lti_key;
 		struct lu_name		*sname;
-		struct linkea_data	 ldata		= { 0 };
+		struct linkea_data	 ldata		= { NULL };
 		struct lu_buf		 linkea_buf;
 
 		rc = dt_declare_create(env, dto, attr, NULL, dof, th);
@@ -2438,7 +2438,7 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 		struct dt_object	*dto;
 		char			*stripe_name	= info->lti_key;
 		struct lu_name		*sname;
-		struct linkea_data	 ldata		= { 0 };
+		struct linkea_data	 ldata		= { NULL };
 		struct lu_buf		 linkea_buf;
 
 		dto = lo->ldo_stripe[i];

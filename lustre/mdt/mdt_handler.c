@@ -5367,7 +5367,7 @@ static int mdt_path_current(struct mdt_thread_info *info,
 	struct lu_buf		*buf = &info->mti_big_buf;
 	char			*ptr;
 	int			reclen;
-	struct linkea_data	ldata = { 0 };
+	struct linkea_data	ldata = { NULL };
 	int			rc = 0;
 	bool			first = true;
 	ENTRY;

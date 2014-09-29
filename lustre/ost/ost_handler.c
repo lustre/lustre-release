@@ -77,7 +77,7 @@ LPROC_SEQ_FOPS_RO_TYPE(ost, uuid);
 static struct lprocfs_seq_vars lprocfs_ost_obd_vars[] = {
 	{ .name	=	"uuid",
 	  .fops	=	&ost_uuid_fops	},
-	{ 0 }
+	{ NULL }
 };
 #endif /* LPROCFS */
 

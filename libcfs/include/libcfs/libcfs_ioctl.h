@@ -225,11 +225,11 @@ static inline bool libcfs_ioctl_is_invalid(struct libcfs_ioctl_data *data)
 		CERROR("LIBCFS ioctl: pbuf2 pointer but 0 length\n");
 		return 1;
 	}
-	if (data->ioc_plen1 && data->ioc_pbuf1 == 0) {
+	if (data->ioc_plen1 && data->ioc_pbuf1 == NULL) {
 		CERROR("LIBCFS ioctl: plen1 nonzero but no pbuf1 pointer\n");
 		return 1;
 	}
-	if (data->ioc_plen2 && data->ioc_pbuf2 == 0) {
+	if (data->ioc_plen2 && data->ioc_pbuf2 == NULL) {
 		CERROR("LIBCFS ioctl: plen2 nonzero but no pbuf2 pointer\n");
 		return 1;
 	}

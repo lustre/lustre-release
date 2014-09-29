@@ -1230,7 +1230,7 @@ static int osd_inode_iteration(struct osd_thread_info *info,
 	osd_iit_exec_policy   exec;
 	__u32		     *pos;
 	__u32		     *count;
-	struct osd_iit_param  param  = { 0 };
+	struct osd_iit_param  param  = { NULL };
 	struct l_wait_info    lwi    = { 0 };
 	__u32		      limit;
 	int		      rc;
@@ -2356,13 +2356,13 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	lu_igif_build(fid, inode->i_ino, inode->i_generation);
 	rc = osd_ea_fid_set(info, inode, fid, LMAC_NOT_IN_OI, 0);
 	if (rc != 0) {
-		filp_close(filp, 0);
+		filp_close(filp, NULL);
 		pop_ctxt(&saved, ctxt);
 		RETURN(rc);
 	}
 
 	scrub->os_inode = igrab(inode);
-	filp_close(filp, 0);
+	filp_close(filp, NULL);
 	pop_ctxt(&saved, ctxt);
 
 	rc = osd_scrub_file_load(scrub);

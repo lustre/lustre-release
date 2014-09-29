@@ -200,14 +200,14 @@ static __u32 hash_build0(const char *name, int namelen)
                 struct ldiskfs_dx_hash_info hinfo;
 
                 hinfo.hash_version = LDISKFS_DX_HASH_TEA;
-                hinfo.seed = 0;
+		hinfo.seed = NULL;
                 ldiskfsfs_dirhash(name, namelen, &hinfo);
                 result = hinfo.hash;
                 if (LVAR_HASH_SANDWICH) {
                         __u32 result2;
 
                         hinfo.hash_version = LDISKFS_DX_HASH_TEA;
-                        hinfo.seed = 0;
+			hinfo.seed = NULL;
                         ldiskfsfs_dirhash(name, namelen, &hinfo);
                         result2 = hinfo.hash;
                         result = (0xfc000000 & result2) | (0x03ffffff & result);

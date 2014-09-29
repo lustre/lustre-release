@@ -4234,7 +4234,7 @@ static int osd_get_pfid_from_linkea(const struct lu_env *env,
 	struct lu_buf		*buf	= &oti->oti_big_buf;
 	struct dentry		*dentry	= &oti->oti_obj_dentry;
 	struct inode		*inode	= obj->oo_inode;
-	struct linkea_data	 ldata	= { 0 };
+	struct linkea_data	 ldata	= { NULL };
 	int			 rc;
 	ENTRY;
 

@@ -183,7 +183,7 @@ EXPORT_SYMBOL(class_get_next_param);
 
 /* returns 0 if this is the first key in the buffer, else 1.
    valp points to first char after key. */
-int class_match_param(char *buf, char *key, char **valp)
+int class_match_param(char *buf, const char *key, char **valp)
 {
         if (!buf)
                 return 1;
@@ -1162,7 +1162,7 @@ int class_process_config(struct lustre_cfg *lcfg)
                 char *tmp;
                 /* llite has no obd */
                 if ((class_match_param(lustre_cfg_string(lcfg, 1),
-                                       PARAM_LLITE, 0) == 0) &&
+				       PARAM_LLITE, NULL) == 0) &&
                     client_process_config) {
                         err = (*client_process_config)(lcfg);
                         GOTO(out, err);
@@ -1304,7 +1304,7 @@ int class_process_proc_param(char *prefix, struct lprocfs_seq_vars *lvars,
 		/* Search proc entries */
 		while (lvars[j].name) {
 			var = &lvars[j];
-			if (class_match_param(key, (char *)var->name, 0) == 0 &&
+			if (class_match_param(key, var->name, NULL) == 0 &&
 			    keylen == strlen(var->name)) {
 				matched++;
 				rc = -EROFS;

@@ -806,7 +806,7 @@ lstcon_group_info(char *name, lstcon_ndlist_ent_t __user *gents_p,
                 return rc;
         }
 
-        if (dents_up != 0) {
+	if (dents_up != NULL) {
                 /* verbose query */
                 rc = lstcon_nodes_getent(&grp->grp_ndl_list,
                                          index_p, count_p, dents_up);

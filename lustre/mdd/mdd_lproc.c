@@ -293,7 +293,7 @@ static struct lprocfs_seq_vars lprocfs_mdd_obd_vars[] = {
 	  .fops =	&mdd_lfsck_namespace_fops	},
 	{ .name	=	"lfsck_layout",
 	  .fops	=	&mdd_lfsck_layout_fops		},
-	{ 0 }
+	{ NULL }
 };
 
 int mdd_procfs_init(struct mdd_device *mdd, const char *name)

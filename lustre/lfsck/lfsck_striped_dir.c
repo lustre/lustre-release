@@ -1917,7 +1917,7 @@ int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 		struct lfsck_slave_lmv_rec *lslr = llmv->ll_lslr + i;
 		const struct lu_fid *cfid = &lslr->lslr_fid;
 		const struct lu_name *cname;
-		struct linkea_data ldata = { 0 };
+		struct linkea_data ldata = { NULL };
 		int len;
 		int rc1 = 0;
 		bool repair_linkea = false;

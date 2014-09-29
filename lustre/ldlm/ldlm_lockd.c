@@ -2968,7 +2968,7 @@ static int ldlm_setup(void)
 
 	INIT_LIST_HEAD(&waiting_locks_list);
 	spin_lock_init(&waiting_locks_spinlock);
-	cfs_timer_init(&waiting_locks_timer, waiting_locks_callback, 0);
+	cfs_timer_init(&waiting_locks_timer, waiting_locks_callback, NULL);
 
 	task = kthread_run(expired_lock_main, NULL, "ldlm_elt");
 	if (IS_ERR(task)) {

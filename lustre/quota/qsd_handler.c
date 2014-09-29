@@ -385,7 +385,7 @@ static void qsd_req_completion(const struct lu_env *env,
 	}
 
 	/* extract information from lvb */
-	if (ret == 0 && lvb != 0) {
+	if (ret == 0 && lvb != NULL) {
 		if (lvb->lvb_id_qunit != 0)
 			qsd_set_qunit(lqe, lvb->lvb_id_qunit);
 		qsd_set_edquot(lqe, !!(lvb->lvb_flags & LQUOTA_FL_EDQUOT));
