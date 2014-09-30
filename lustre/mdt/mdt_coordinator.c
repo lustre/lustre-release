@@ -336,6 +336,15 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 				       hsm_copytool_action2name(
 						     larr->arr_hai.hai_action));
 
+			if (rc == -ENOENT) {
+				/* The request no longer exists, forget
+				 * about it, and do not send a cancel request
+				 * to the client, for which an error will be
+				 * sent back, leading to an endless cycle of
+				 * cancellation. */
+				RETURN(LLOG_DEL_RECORD);
+			}
+
 			/* add the cookie to the list of record to be
 			 * canceled by caller */
 			if (hsd->max_cookie == (hsd->cookie_cnt - 1)) {
