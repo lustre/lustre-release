@@ -770,4 +770,3 @@ static inline struct lov_layout_raid0 *lov_r0(struct lov_object *lov)
 /** @} lov */
 
 #endif
-

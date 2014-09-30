@@ -1544,9 +1544,10 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
  * \param fm_end logical end of mapping
  * \param start_stripe starting stripe will be returned in this
  */
-obd_size fiemap_calc_fm_end_offset(struct ll_user_fiemap *fiemap,
-                                   struct lov_stripe_md *lsm, obd_size fm_start,
-                                   obd_size fm_end, int *start_stripe)
+static obd_size fiemap_calc_fm_end_offset(struct ll_user_fiemap *fiemap,
+					  struct lov_stripe_md *lsm,
+					  obd_size fm_start,
+					  obd_size fm_end, int *start_stripe)
 {
         obd_size local_end = fiemap->fm_extents[0].fe_logical;
         obd_off lun_start, lun_end;
@@ -1606,9 +1607,9 @@ obd_size fiemap_calc_fm_end_offset(struct ll_user_fiemap *fiemap,
  *
  * \retval last_stripe return the last stripe of the mapping
  */
-int fiemap_calc_last_stripe(struct lov_stripe_md *lsm, obd_size fm_start,
-                            obd_size fm_end, int start_stripe,
-                            int *stripe_count)
+static int fiemap_calc_last_stripe(struct lov_stripe_md *lsm, obd_size fm_start,
+				   obd_size fm_end, int start_stripe,
+				   int *stripe_count)
 {
         int last_stripe;
         obd_off obd_start, obd_end;
@@ -1642,10 +1643,10 @@ int fiemap_calc_last_stripe(struct lov_stripe_md *lsm, obd_size fm_start,
  * \param ext_count number of extents to be copied
  * \param current_extent where to start copying in main extent array
  */
-void fiemap_prepare_and_copy_exts(struct ll_user_fiemap *fiemap,
-                                  struct ll_fiemap_extent *lcl_fm_ext,
-                                  int ost_index, unsigned int ext_count,
-                                  int current_extent)
+static void fiemap_prepare_and_copy_exts(struct ll_user_fiemap *fiemap,
+					 struct ll_fiemap_extent *lcl_fm_ext,
+					 int ost_index, unsigned int ext_count,
+					 int current_extent)
 {
         char *to;
         int ext;
@@ -2168,9 +2169,7 @@ static struct obd_ops lov_obd_ops = {
 
 struct kmem_cache *lov_oinfo_slab;
 
-extern struct lu_kmem_descr lov_caches[];
-
-int __init lov_init(void)
+static int __init lov_init(void)
 {
 	bool enable_proc = true;
 	struct obd_type *type;

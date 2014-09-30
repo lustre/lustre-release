@@ -55,8 +55,6 @@ static char *ldlm_cpts;
 CFS_MODULE_PARM(ldlm_cpts, "s", charp, 0444,
 		"CPU partitions ldlm threads should run on");
 
-extern struct kmem_cache *ldlm_resource_slab;
-extern struct kmem_cache *ldlm_lock_slab;
 static struct mutex	ldlm_ref_mutex;
 static int ldlm_refcount;
 
@@ -2478,8 +2476,8 @@ static int ldlm_hpreq_handler(struct ptlrpc_request *req)
         RETURN(0);
 }
 
-int ldlm_revoke_lock_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-			struct hlist_node *hnode, void *data)
+static int ldlm_revoke_lock_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+			       struct hlist_node *hnode, void *data)
 
 {
 	struct list_head         *rpc_list = data;

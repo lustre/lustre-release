@@ -114,6 +114,8 @@ struct lov_request_set {
 
 extern struct kmem_cache *lov_oinfo_slab;
 
+extern struct lu_kmem_descr lov_caches[];
+
 void lov_finish_set(struct lov_request_set *set);
 
 static inline void lov_put_reqset(struct lov_request_set *set)
@@ -233,7 +235,6 @@ int lov_pool_del(struct obd_device *obd, char *poolname);
 int lov_pool_add(struct obd_device *obd, char *poolname, char *ostname);
 int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname);
 void lov_dump_pool(int level, struct pool_desc *pool);
-void lov_pool_putref(struct pool_desc *pool);
 
 static inline struct lov_stripe_md *lsm_addref(struct lov_stripe_md *lsm)
 {

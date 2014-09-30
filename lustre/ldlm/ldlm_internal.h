@@ -43,6 +43,7 @@ extern struct list_head ldlm_srv_namespace_list;
 extern struct mutex ldlm_cli_namespace_lock;
 extern struct list_head ldlm_cli_active_namespace_list;
 extern struct list_head ldlm_cli_inactive_namespace_list;
+extern unsigned int ldlm_cancel_unused_locks_before_replay;
 
 static inline int ldlm_namespace_nr_read(ldlm_side_t client)
 {
@@ -112,12 +113,16 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns,
                           ldlm_cancel_flags_t cancel_flags, int flags);
 extern unsigned int ldlm_enqueue_min;
 /* ldlm_resource.c */
+extern struct kmem_cache *ldlm_resource_slab;
+extern struct kmem_cache *ldlm_lock_slab;
+
 int ldlm_resource_putref_locked(struct ldlm_resource *res);
 void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
                                      struct ldlm_lock *new);
 void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
                                struct obd_import *imp, int force);
 void ldlm_namespace_free_post(struct ldlm_namespace *ns);
+
 /* ldlm_lock.c */
 
 struct ldlm_cb_set_arg {
@@ -211,7 +216,6 @@ void l_check_ns_lock(struct ldlm_namespace *ns);
 void l_check_no_ns_lock(struct ldlm_namespace *ns);
 
 extern struct proc_dir_entry *ldlm_svc_proc_dir;
-extern struct proc_dir_entry *ldlm_type_proc_dir;
 
 struct ldlm_state {
         struct ptlrpc_service *ldlm_cb_service;
@@ -265,7 +269,7 @@ typedef enum ldlm_policy_res ldlm_policy_res_t;
 	struct __##var##__dummy_read {;} /* semicolon catcher */
 
 #define LDLM_POOL_PROC_WRITER(var, type)				\
-	int lprocfs_wr_##var(struct file *file,				\
+	static int lprocfs_wr_##var(struct file *file,			\
 			     const char __user *buffer,			\
 			     unsigned long count, void *data)		\
 	{								\

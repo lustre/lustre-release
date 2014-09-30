@@ -350,7 +350,7 @@ void ldlm_lock_touch_in_lru(struct ldlm_lock *lock)
  * ldlm_lock_destroy, you can never drop your final references on this lock.
  * Because it's not in the hash table anymore.  -phil
  */
-int ldlm_lock_destroy_internal(struct ldlm_lock *lock)
+static int ldlm_lock_destroy_internal(struct ldlm_lock *lock)
 {
         ENTRY;
 
@@ -445,7 +445,7 @@ static void lock_handle_free(void *lock, int size)
 	OBD_SLAB_FREE(lock, ldlm_lock_slab, size);
 }
 
-struct portals_handle_ops lock_handle_ops = {
+static struct portals_handle_ops lock_handle_ops = {
 	.hop_addref = lock_handle_addref,
 	.hop_free   = lock_handle_free,
 };
@@ -661,8 +661,8 @@ EXPORT_SYMBOL(ldlm_lock2desc);
  *
  * Only add if we have not sent a blocking AST to the lock yet.
  */
-void ldlm_add_bl_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
-			   struct list_head *work_list)
+static void ldlm_add_bl_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
+				  struct list_head *work_list)
 {
 	if (!ldlm_is_ast_sent(lock)) {
 		LDLM_DEBUG(lock, "lock incompatible; sending blocking AST.");
@@ -682,7 +682,8 @@ void ldlm_add_bl_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
 /**
  * Add a lock to list of just granted locks to send completion AST to.
  */
-void ldlm_add_cp_work_item(struct ldlm_lock *lock, struct list_head *work_list)
+static void ldlm_add_cp_work_item(struct ldlm_lock *lock,
+				  struct list_head *work_list)
 {
 	if (!ldlm_is_cp_reqd(lock)) {
 		ldlm_set_cp_reqd(lock);
@@ -2192,8 +2193,8 @@ struct export_cl_data {
  * Iterator function for ldlm_cancel_locks_for_export.
  * Cancels passed locks.
  */
-int ldlm_cancel_locks_for_export_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-				    struct hlist_node *hnode, void *data)
+static int ldlm_cancel_locks_for_export_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+					   struct hlist_node *hnode, void *data)
 
 {
 	struct export_cl_data	*ecl = (struct export_cl_data *)data;

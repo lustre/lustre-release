@@ -821,7 +821,7 @@ static const struct file_operations name##_fops = {			\
 	{								\
 		return single_open(file, NULL, PDE_DATA(inode));	\
 	}								\
-	struct file_operations name##_##type##_fops = {			\
+	static const struct file_operations name##_##type##_fops = {	\
 		.open	 = name##_##type##_open,			\
 		.write	 = name##_##type##_write,			\
 		.release = lprocfs_single_release,			\

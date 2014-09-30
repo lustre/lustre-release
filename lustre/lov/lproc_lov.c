@@ -236,7 +236,7 @@ static int lov_tgt_seq_show(struct seq_file *p, void *v)
 			  tgt->ltd_active ? "" : "IN");
 }
 
-struct seq_operations lov_tgt_sops = {
+static const struct seq_operations lov_tgt_sops = {
         .start = lov_tgt_seq_start,
         .stop = lov_tgt_seq_stop,
         .next = lov_tgt_seq_next,

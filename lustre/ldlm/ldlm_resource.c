@@ -61,15 +61,13 @@ struct list_head ldlm_cli_active_namespace_list;
 /* Client namespaces that don't have any locks in them */
 struct list_head ldlm_cli_inactive_namespace_list;
 
-struct proc_dir_entry *ldlm_type_proc_dir = NULL;
-struct proc_dir_entry *ldlm_ns_proc_dir = NULL;
-struct proc_dir_entry *ldlm_svc_proc_dir = NULL;
-
-extern unsigned int ldlm_cancel_unused_locks_before_replay;
+static struct proc_dir_entry *ldlm_type_proc_dir;
+static struct proc_dir_entry *ldlm_ns_proc_dir;
+struct proc_dir_entry *ldlm_svc_proc_dir;
 
 /* during debug dump certain amount of granted locks for one resource to avoid
  * DDOS. */
-unsigned int ldlm_dump_granted_max = 256;
+static unsigned int ldlm_dump_granted_max = 256;
 
 #ifdef LPROCFS
 static ssize_t
@@ -312,7 +310,7 @@ static ssize_t lprocfs_elc_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(lprocfs_elc);
 
-void ldlm_namespace_proc_unregister(struct ldlm_namespace *ns)
+static void ldlm_namespace_proc_unregister(struct ldlm_namespace *ns)
 {
 	if (ns->ns_proc_dir_entry == NULL)
                 CERROR("dlm namespace %s has no procfs dir?\n",
@@ -324,7 +322,7 @@ void ldlm_namespace_proc_unregister(struct ldlm_namespace *ns)
 		lprocfs_free_stats(&ns->ns_stats);
 }
 
-int ldlm_namespace_proc_register(struct ldlm_namespace *ns)
+static int ldlm_namespace_proc_register(struct ldlm_namespace *ns)
 {
 	struct lprocfs_seq_vars lock_vars[2];
         char lock_name[MAX_STRING_SIZE + 1];
@@ -481,7 +479,7 @@ static void ldlm_res_hop_put(cfs_hash_t *hs, struct hlist_node *hnode)
         ldlm_resource_putref(res);
 }
 
-cfs_hash_ops_t ldlm_ns_hash_ops = {
+static cfs_hash_ops_t ldlm_ns_hash_ops = {
         .hs_hash        = ldlm_res_hop_hash,
         .hs_key         = ldlm_res_hop_key,
         .hs_keycmp      = ldlm_res_hop_keycmp,
@@ -492,7 +490,7 @@ cfs_hash_ops_t ldlm_ns_hash_ops = {
         .hs_put         = ldlm_res_hop_put
 };
 
-cfs_hash_ops_t ldlm_ns_fid_hash_ops = {
+static cfs_hash_ops_t ldlm_ns_fid_hash_ops = {
         .hs_hash        = ldlm_res_hop_fid_hash,
         .hs_key         = ldlm_res_hop_key,
         .hs_keycmp      = ldlm_res_hop_keycmp,
@@ -513,7 +511,7 @@ typedef struct {
         cfs_hash_ops_t *nsd_hops;
 } ldlm_ns_hash_def_t;
 
-ldlm_ns_hash_def_t ldlm_ns_hash_defs[] =
+static ldlm_ns_hash_def_t ldlm_ns_hash_defs[] =
 {
         {
                 .nsd_type       = LDLM_NS_TYPE_MDC,
@@ -962,7 +960,7 @@ void ldlm_namespace_get(struct ldlm_namespace *ns)
 EXPORT_SYMBOL(ldlm_namespace_get);
 
 /* This is only for callers that care about refcount */
-int ldlm_namespace_get_return(struct ldlm_namespace *ns)
+static int ldlm_namespace_get_return(struct ldlm_namespace *ns)
 {
 	return atomic_inc_return(&ns->ns_bref);
 }
