@@ -465,7 +465,7 @@ static int ofd_object_print(const struct lu_env *env, void *cookie,
 	return (*p)(env, cookie, LUSTRE_OST_NAME"-object@%p", o);
 }
 
-struct lu_object_operations ofd_obj_ops = {
+static struct lu_object_operations ofd_obj_ops = {
 	.loo_object_init	= ofd_object_init,
 	.loo_object_free	= ofd_object_free,
 	.loo_object_print	= ofd_object_print
@@ -895,7 +895,7 @@ out_free:
  * \retval		0 if successful
  * \retval		negative value on error
  */
-int ofd_set_info_hdl(struct tgt_session_info *tsi)
+static int ofd_set_info_hdl(struct tgt_session_info *tsi)
 {
 	struct ptlrpc_request	*req = tgt_ses_req(tsi);
 	struct ost_body		*body = NULL, *repbody;
@@ -1137,7 +1137,7 @@ unlock_zero_regions(struct ldlm_namespace *ns, struct list_head *locked)
  * \retval		0 if successful
  * \retval		negative value on error
  */
-int ofd_get_info_hdl(struct tgt_session_info *tsi)
+static int ofd_get_info_hdl(struct tgt_session_info *tsi)
 {
 	struct obd_export		*exp = tsi->tsi_exp;
 	struct ofd_device		*ofd = ofd_exp(exp);
@@ -2503,13 +2503,13 @@ static void ofd_punch_hpreq_fini(struct ptlrpc_request *req)
 	ofd_punch_hpreq_check(req);
 }
 
-struct ptlrpc_hpreq_ops ofd_hpreq_rw = {
+static struct ptlrpc_hpreq_ops ofd_hpreq_rw = {
 	.hpreq_lock_match	= ofd_rw_hpreq_lock_match,
 	.hpreq_check		= ofd_rw_hpreq_check,
 	.hpreq_fini		= ofd_rw_hpreq_fini
 };
 
-struct ptlrpc_hpreq_ops ofd_hpreq_punch = {
+static struct ptlrpc_hpreq_ops ofd_hpreq_punch = {
 	.hpreq_lock_match	= ofd_punch_hpreq_lock_match,
 	.hpreq_check		= ofd_punch_hpreq_check,
 	.hpreq_fini		= ofd_punch_hpreq_fini
@@ -3016,7 +3016,7 @@ static struct lu_device_type ofd_device_type = {
  * \retval		0 if successful
  * \retval		negative value on error
  */
-int __init ofd_init(void)
+static int __init ofd_init(void)
 {
 	int				rc;
 
@@ -3041,7 +3041,7 @@ int __init ofd_init(void)
  * This function is called upon OFD module unloading.
  * It frees all related structures and unregisters OFD device type.
  */
-void __exit ofd_exit(void)
+static void __exit ofd_exit(void)
 {
 	ofd_fmd_exit();
 	lu_kmem_fini(ofd_caches);

@@ -976,8 +976,8 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 /*
  * Concurrency: shouldn't matter.
  */
-int osd_trans_start(const struct lu_env *env, struct dt_device *d,
-                    struct thandle *th)
+static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
+			   struct thandle *th)
 {
         struct osd_thread_info *oti = osd_oti_get(env);
         struct osd_device  *dev = osd_dt_dev(d);
@@ -2023,9 +2023,9 @@ static int osd_attr_set(const struct lu_env *env,
         return rc;
 }
 
-struct dentry *osd_child_dentry_get(const struct lu_env *env,
-                                    struct osd_object *obj,
-                                    const char *name, const int namelen)
+static struct dentry *osd_child_dentry_get(const struct lu_env *env,
+					   struct osd_object *obj,
+					   const char *name, const int namelen)
 {
         return osd_child_dentry_by_inode(env, obj->oo_inode, name, namelen);
 }
@@ -2587,8 +2587,8 @@ int osd_ea_fid_set(struct osd_thread_info *info, struct inode *inode,
  * \ldiskfs_dentry_param is used only to pass fid from osd to ldiskfs.
  * its inmemory API.
  */
-void osd_get_ldiskfs_dirent_param(struct ldiskfs_dentry_param *param,
-				  const struct lu_fid *fid)
+static void osd_get_ldiskfs_dirent_param(struct ldiskfs_dentry_param *param,
+					 const struct lu_fid *fid)
 {
 	if (!fid_is_namespace_visible(fid) ||
 	    OBD_FAIL_CHECK(OBD_FAIL_FID_IGIF)) {
@@ -4387,9 +4387,9 @@ out:
  * \retval osd_object on success
  * \retval        -ve on error
  */
-struct osd_object *osd_object_find(const struct lu_env *env,
-                                   struct dt_object *dt,
-                                   const struct lu_fid *fid)
+static struct osd_object *osd_object_find(const struct lu_env *env,
+					  struct dt_object *dt,
+					  const struct lu_fid *fid)
 {
         struct lu_device  *ludev = dt->do_lu.lo_dev;
         struct osd_object *child = NULL;
@@ -6312,8 +6312,8 @@ static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
 	RETURN(result);
 }
 
-int osd_fid_alloc(const struct lu_env *env, struct obd_export *exp,
-		  struct lu_fid *fid, struct md_op_data *op_data)
+static int osd_fid_alloc(const struct lu_env *env, struct obd_export *exp,
+			 struct lu_fid *fid, struct md_op_data *op_data)
 {
 	struct osd_device *osd = osd_dev(exp->exp_obd->obd_lu_dev);
 
@@ -6350,7 +6350,7 @@ static const struct lu_device_type_operations osd_device_type_ops = {
         .ldto_device_fini    = osd_device_fini
 };
 
-struct lu_device_type osd_device_type = {
+static struct lu_device_type osd_device_type = {
         .ldt_tags     = LU_DEVICE_DT,
 	.ldt_name     = LUSTRE_OSD_LDISKFS_NAME,
         .ldt_ops      = &osd_device_type_ops,

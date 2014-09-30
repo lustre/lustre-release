@@ -422,7 +422,7 @@ static void lvar_fini(struct iam_leaf *l)
         l->il_entries = l->il_at = NULL;
 }
 
-struct iam_rec *lvar_rec(const struct iam_leaf *l)
+static struct iam_rec *lvar_rec(const struct iam_leaf *l)
 {
         assert_corr(n_at_rec(l));
         return e_rec(n_cur(l));

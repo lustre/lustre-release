@@ -422,7 +422,8 @@ out:
  * \retval 0		on success
  * \retval negative	negated errno on error
  */
-int osp_precreate_rollover_new_seq(struct lu_env *env, struct osp_device *osp)
+static int osp_precreate_rollover_new_seq(struct lu_env *env,
+					  struct osp_device *osp)
 {
 	struct lu_fid	*fid = &osp_env_info(env)->osi_fid;
 	struct lu_fid	*last_fid = &osp->opd_last_used_fid;

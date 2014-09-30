@@ -206,7 +206,7 @@ static struct iam_lentry *iam_lfix_get_end(const struct iam_leaf *l)
         return ile;
 }
 
-struct iam_rec *iam_lfix_rec(const struct iam_leaf *l)
+static struct iam_rec *iam_lfix_rec(const struct iam_leaf *l)
 {
         void *e = l->il_at;
         assert_corr(iam_leaf_at_rec(l));

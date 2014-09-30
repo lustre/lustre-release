@@ -120,7 +120,7 @@ out_up:
 	return dchild;
 }
 
-int osd_last_rcvd_subdir_count(struct osd_device *osd)
+static int osd_last_rcvd_subdir_count(struct osd_device *osd)
 {
         struct lr_server_data lsd;
         struct dentry        *dlast;
@@ -480,7 +480,8 @@ int osd_obj_map_init(const struct lu_env *env, struct osd_device *dev)
         RETURN(rc);
 }
 
-struct osd_obj_seq *osd_seq_find_locked(struct osd_obj_map *map, obd_seq seq)
+static struct osd_obj_seq *osd_seq_find_locked(struct osd_obj_map *map,
+					       obd_seq seq)
 {
 	struct osd_obj_seq *osd_seq;
 
@@ -491,7 +492,7 @@ struct osd_obj_seq *osd_seq_find_locked(struct osd_obj_map *map, obd_seq seq)
 	return NULL;
 }
 
-struct osd_obj_seq *osd_seq_find(struct osd_obj_map *map, obd_seq seq)
+static struct osd_obj_seq *osd_seq_find(struct osd_obj_map *map, obd_seq seq)
 {
 	struct osd_obj_seq *osd_seq;
 
@@ -646,11 +647,11 @@ static int osd_obj_del_entry(struct osd_thread_info *info,
 	RETURN(rc);
 }
 
-int osd_obj_add_entry(struct osd_thread_info *info,
-		      struct osd_device *osd,
-		      struct dentry *dir, char *name,
-		      const struct osd_inode_id *id,
-		      handle_t *th)
+static int osd_obj_add_entry(struct osd_thread_info *info,
+			     struct osd_device *osd,
+			     struct dentry *dir, char *name,
+			     const struct osd_inode_id *id,
+			     handle_t *th)
 {
 	struct dentry *child;
 	struct inode *inode;

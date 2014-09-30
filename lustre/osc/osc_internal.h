@@ -135,6 +135,10 @@ long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 		   long target, bool force);
 long osc_lru_reclaim(struct client_obd *cli);
 
+extern spinlock_t osc_ast_guard;
+extern struct lu_kmem_descr osc_caches[];
+extern struct lock_class_key osc_ast_guard_class;
+
 unsigned long osc_ldlm_weigh_ast(struct ldlm_lock *dlmlock);
 
 int osc_cleanup(struct obd_device *obd);

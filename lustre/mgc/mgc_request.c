@@ -96,7 +96,8 @@ int mgc_fsname2resid(char *fsname, struct ldlm_res_id *res_id, int type)
 }
 EXPORT_SYMBOL(mgc_fsname2resid);
 
-int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id, int type)
+static int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id,
+			     int type)
 {
 	char *name_end;
 	int len;
@@ -1174,9 +1175,9 @@ static int mgc_target_register(struct obd_export *exp,
         RETURN(rc);
 }
 
-int mgc_set_info_async(const struct lu_env *env, struct obd_export *exp,
-                       obd_count keylen, void *key, obd_count vallen,
-                       void *val, struct ptlrpc_request_set *set)
+static int mgc_set_info_async(const struct lu_env *env, struct obd_export *exp,
+			      obd_count keylen, void *key, obd_count vallen,
+			      void *val, struct ptlrpc_request_set *set)
 {
         int rc = -EINVAL;
         ENTRY;
@@ -2034,7 +2035,7 @@ out:
         RETURN(rc);
 }
 
-struct obd_ops mgc_obd_ops = {
+static struct obd_ops mgc_obd_ops = {
         .o_owner        = THIS_MODULE,
         .o_setup        = mgc_setup,
         .o_precleanup   = mgc_precleanup,
@@ -2049,7 +2050,7 @@ struct obd_ops mgc_obd_ops = {
         .o_process_config = mgc_process_config,
 };
 
-int __init mgc_init(void)
+static int __init mgc_init(void)
 {
 	return class_register_type(&mgc_obd_ops, NULL, true, NULL,
 				   LUSTRE_MGC_NAME, NULL);

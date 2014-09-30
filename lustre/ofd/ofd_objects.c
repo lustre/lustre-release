@@ -60,8 +60,8 @@
  * \retval		0 if version matches
  * \retval		-EOVERFLOW on version mismatch
  */
-int ofd_version_get_check(struct ofd_thread_info *info,
-			  struct ofd_object *fo)
+static int ofd_version_get_check(struct ofd_thread_info *info,
+				 struct ofd_object *fo)
 {
 	dt_obj_version_t curr_version;
 

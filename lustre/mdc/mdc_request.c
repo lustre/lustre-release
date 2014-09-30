@@ -63,8 +63,9 @@ struct mdc_renew_capa_args {
 
 static int mdc_cleanup(struct obd_device *obd);
 
-int mdc_unpack_capa(struct obd_export *exp, struct ptlrpc_request *req,
-                    const struct req_msg_field *field, struct obd_capa **oc)
+static int mdc_unpack_capa(struct obd_export *exp, struct ptlrpc_request *req,
+			   const struct req_msg_field *field,
+			   struct obd_capa **oc)
 {
         struct lustre_capa *capa;
         struct obd_capa *c;
@@ -149,8 +150,8 @@ out:
 }
 
 /* This should be mdc_get_info("rootfid") */
-int mdc_getstatus(struct obd_export *exp, struct lu_fid *rootfid,
-                  struct obd_capa **pc)
+static int mdc_getstatus(struct obd_export *exp, struct lu_fid *rootfid,
+			 struct obd_capa **pc)
 {
         return send_getstatus(class_exp2cliimp(exp), rootfid, pc,
                               LUSTRE_IMP_FULL, 0);
@@ -215,8 +216,8 @@ static int mdc_getattr_common(struct obd_export *exp,
         RETURN(0);
 }
 
-int mdc_getattr(struct obd_export *exp, struct md_op_data *op_data,
-                struct ptlrpc_request **request)
+static int mdc_getattr(struct obd_export *exp, struct md_op_data *op_data,
+		       struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         int                    rc;
@@ -260,8 +261,8 @@ int mdc_getattr(struct obd_export *exp, struct md_op_data *op_data,
         RETURN(rc);
 }
 
-int mdc_getattr_name(struct obd_export *exp, struct md_op_data *op_data,
-                     struct ptlrpc_request **request)
+static int mdc_getattr_name(struct obd_export *exp, struct md_op_data *op_data,
+			    struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         int                    rc;
@@ -417,10 +418,12 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
         RETURN(rc);
 }
 
-int mdc_setxattr(struct obd_export *exp, const struct lu_fid *fid,
-                 struct obd_capa *oc, obd_valid valid, const char *xattr_name,
-                 const char *input, int input_size, int output_size,
-                 int flags, __u32 suppgid, struct ptlrpc_request **request)
+static int mdc_setxattr(struct obd_export *exp, const struct lu_fid *fid,
+			struct obd_capa *oc, obd_valid valid,
+			const char *xattr_name,
+			const char *input, int input_size, int output_size,
+			int flags, __u32 suppgid,
+			struct ptlrpc_request **request)
 {
         return mdc_xattr_common(exp, &RQF_MDS_REINT_SETXATTR,
                                 fid, oc, MDS_REINT, valid, xattr_name,
@@ -428,10 +431,11 @@ int mdc_setxattr(struct obd_export *exp, const struct lu_fid *fid,
                                 suppgid, request);
 }
 
-int mdc_getxattr(struct obd_export *exp, const struct lu_fid *fid,
-                 struct obd_capa *oc, obd_valid valid, const char *xattr_name,
-                 const char *input, int input_size, int output_size,
-                 int flags, struct ptlrpc_request **request)
+static int mdc_getxattr(struct obd_export *exp, const struct lu_fid *fid,
+			struct obd_capa *oc, obd_valid valid,
+			const char *xattr_name,
+			const char *input, int input_size, int output_size,
+			int flags, struct ptlrpc_request **request)
 {
         return mdc_xattr_common(exp, &RQF_MDS_GETXATTR,
                                 fid, oc, MDS_GETXATTR, valid, xattr_name,
@@ -832,8 +836,8 @@ static void mdc_close_handle_reply(struct ptlrpc_request *req,
         }
 }
 
-int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
-              struct md_open_data *mod, struct ptlrpc_request **request)
+static int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
+		     struct md_open_data *mod, struct ptlrpc_request **request)
 {
 	struct obd_device     *obd = class_exp2obd(exp);
 	struct ptlrpc_request *req;
@@ -950,8 +954,8 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
         RETURN(rc < 0 ? rc : saved_rc);
 }
 
-int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
-                     struct md_open_data *mod)
+static int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
+			    struct md_open_data *mod)
 {
         struct obd_device     *obd = class_exp2obd(exp);
         struct ptlrpc_request *req;
@@ -2427,9 +2431,9 @@ out:
 	return rc;
 }
 
-int mdc_get_info_rpc(struct obd_export *exp,
-                     obd_count keylen, void *key,
-                     int vallen, void *val)
+static int mdc_get_info_rpc(struct obd_export *exp,
+			    obd_count keylen, void *key,
+			    int vallen, void *val)
 {
         struct obd_import      *imp = class_exp2cliimp(exp);
         struct ptlrpc_request  *req;
@@ -2609,11 +2613,11 @@ static int mdc_kuc_reregister(struct obd_import *imp)
 					 (void *)imp);
 }
 
-int mdc_set_info_async(const struct lu_env *env,
-		       struct obd_export *exp,
-		       obd_count keylen, void *key,
-		       obd_count vallen, void *val,
-		       struct ptlrpc_request_set *set)
+static int mdc_set_info_async(const struct lu_env *env,
+			      struct obd_export *exp,
+			      obd_count keylen, void *key,
+			      obd_count vallen, void *val,
+			      struct ptlrpc_request_set *set)
 {
 	struct obd_import	*imp = class_exp2cliimp(exp);
 	int			 rc;
@@ -2661,9 +2665,9 @@ int mdc_set_info_async(const struct lu_env *env,
 	RETURN(-EINVAL);
 }
 
-int mdc_get_info(const struct lu_env *env, struct obd_export *exp,
-		 __u32 keylen, void *key, __u32 *vallen, void *val,
-		 struct lov_stripe_md *lsm)
+static int mdc_get_info(const struct lu_env *env, struct obd_export *exp,
+			__u32 keylen, void *key, __u32 *vallen, void *val,
+			struct lov_stripe_md *lsm)
 {
 	int rc = -EINVAL;
 
@@ -2725,8 +2729,8 @@ int mdc_get_info(const struct lu_env *env, struct obd_export *exp,
         RETURN(rc);
 }
 
-int mdc_fsync(struct obd_export *exp, const struct lu_fid *fid,
-	      struct obd_capa *oc, struct ptlrpc_request **request)
+static int mdc_fsync(struct obd_export *exp, const struct lu_fid *fid,
+		     struct obd_capa *oc, struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         int                    rc;
@@ -2819,7 +2823,8 @@ int mdc_fid_alloc(const struct lu_env *env, struct obd_export *exp,
 	RETURN(seq_client_alloc_fid(env, seq, fid));
 }
 
-struct obd_uuid *mdc_get_uuid(struct obd_export *exp) {
+static struct obd_uuid *mdc_get_uuid(struct obd_export *exp)
+{
         struct client_obd *cli = &exp->exp_obd->u.cli;
         return &cli->cl_target_uuid;
 }
@@ -2851,7 +2856,7 @@ static int mdc_resource_inode_free(struct ldlm_resource *res)
 	return 0;
 }
 
-struct ldlm_valblock_ops inode_lvbo = {
+static struct ldlm_valblock_ops inode_lvbo = {
 	.lvbo_free = mdc_resource_inode_free
 };
 
@@ -3015,9 +3020,9 @@ static int mdc_process_config(struct obd_device *obd, obd_count len, void *buf)
 
 
 /* get remote permission for current user on fid */
-int mdc_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
-                        struct obd_capa *oc, __u32 suppgid,
-                        struct ptlrpc_request **request)
+static int mdc_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
+			       struct obd_capa *oc, __u32 suppgid,
+			       struct ptlrpc_request **request)
 {
         struct ptlrpc_request  *req;
         int                    rc;
@@ -3108,7 +3113,7 @@ static int mdc_renew_capa(struct obd_export *exp, struct obd_capa *oc,
         RETURN(0);
 }
 
-struct obd_ops mdc_obd_ops = {
+static struct obd_ops mdc_obd_ops = {
         .o_owner            = THIS_MODULE,
         .o_setup            = mdc_setup,
         .o_precleanup       = mdc_precleanup,
@@ -3131,7 +3136,7 @@ struct obd_ops mdc_obd_ops = {
         .o_quotacheck       = mdc_quotacheck
 };
 
-struct md_ops mdc_md_ops = {
+static struct md_ops mdc_md_ops = {
         .m_getstatus        = mdc_getstatus,
         .m_null_inode	    = mdc_null_inode,
         .m_find_cbdata      = mdc_find_cbdata,
@@ -3165,7 +3170,7 @@ struct md_ops mdc_md_ops = {
         .m_revalidate_lock      = mdc_revalidate_lock
 };
 
-int __init mdc_init(void)
+static int __init mdc_init(void)
 {
 	return class_register_type(&mdc_obd_ops, &mdc_md_ops, true, NULL,
 				   LUSTRE_MDC_NAME, NULL);

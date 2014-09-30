@@ -566,7 +566,7 @@ int ofd_postrecov(const struct lu_env *env, struct ofd_device *ofd)
  * \retval		0 if successful
  * \retval		negative value on error
  */
-int ofd_obd_postrecov(struct obd_device *obd)
+static int ofd_obd_postrecov(struct obd_device *obd)
 {
 	struct lu_env		 env;
 	struct lu_device	*ldev = obd->obd_lu_dev;
@@ -897,8 +897,8 @@ out:
  * \retval		0 if successful
  * \retval		negative value on error
  */
-int ofd_echo_setattr(const struct lu_env *env, struct obd_export *exp,
-		     struct obd_info *oinfo, struct obd_trans_info *oti)
+static int ofd_echo_setattr(const struct lu_env *env, struct obd_export *exp,
+			    struct obd_info *oinfo, struct obd_trans_info *oti)
 {
 	struct ofd_thread_info	*info;
 	struct ofd_device	*ofd = ofd_exp(exp);
@@ -1048,8 +1048,8 @@ int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
  * \retval		0 if successful
  * \retval		negative value on error
  */
-int ofd_echo_destroy(const struct lu_env *env, struct obd_export *exp,
-		     struct obdo *oa, struct obd_trans_info *oti)
+static int ofd_echo_destroy(const struct lu_env *env, struct obd_export *exp,
+			    struct obdo *oa, struct obd_trans_info *oti)
 {
 	struct ofd_device	*ofd = ofd_exp(exp);
 	struct lu_fid		*fid = &oa->o_oi.oi_fid;
@@ -1096,8 +1096,8 @@ out:
  * \retval		0 if successful
  * \retval		negative value on error
  */
-int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
-		    struct obdo *oa, struct obd_trans_info *oti)
+static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
+			   struct obdo *oa, struct obd_trans_info *oti)
 {
 	struct ofd_device	*ofd = ofd_exp(exp);
 	struct ofd_thread_info	*info;
@@ -1177,8 +1177,8 @@ out_sem:
  * \retval		0 if successful
  * \retval		negative value on error
  */
-int ofd_echo_getattr(const struct lu_env *env, struct obd_export *exp,
-		     struct obd_info *oinfo)
+static int ofd_echo_getattr(const struct lu_env *env, struct obd_export *exp,
+			    struct obd_info *oinfo)
 {
 	struct ofd_device	*ofd = ofd_exp(exp);
 	struct ofd_thread_info	*info;
@@ -1302,8 +1302,8 @@ out:
  * \retval		0 if successful
  * \retval		negative value on error
  */
-int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
-		  void *karg, void *uarg)
+static int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
+			 void *karg, void *uarg)
 {
 	struct lu_env		 env;
 	struct ofd_device	*ofd = ofd_exp(exp);

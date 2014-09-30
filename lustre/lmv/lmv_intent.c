@@ -308,9 +308,11 @@ cleanup:
  * IT_OPEN is intended to open (and create, possible) an object. Parent (pid)
  * may be split dir.
  */
-int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
-		    struct lookup_intent *it, struct ptlrpc_request **reqp,
-		    ldlm_blocking_callback cb_blocking, __u64 extra_lock_flags)
+static int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
+			   struct lookup_intent *it,
+			   struct ptlrpc_request **reqp,
+			   ldlm_blocking_callback cb_blocking,
+			   __u64 extra_lock_flags)
 {
 	struct obd_device	*obd = exp->exp_obd;
 	struct lmv_obd		*lmv = &obd->u.lmv;

@@ -111,9 +111,9 @@ static struct lu_kmem_descr osp_caches[] = {
  * \retval object	object being created if the creation succeed.
  * \retval NULL		NULL if the creation failed.
  */
-struct lu_object *osp_object_alloc(const struct lu_env *env,
-				   const struct lu_object_header *hdr,
-				   struct lu_device *d)
+static struct lu_object *osp_object_alloc(const struct lu_env *env,
+					  const struct lu_object_header *hdr,
+					  struct lu_device *d)
 {
 	struct lu_object_header	*h = NULL;
 	struct osp_object	*o;
@@ -1651,8 +1651,8 @@ static int osp_obd_get_info(const struct lu_env *env, struct obd_export *exp,
  *                      requested from seq meta server
  * \retval negative	negative errno if FID allocation failed.
  */
-int osp_fid_alloc(const struct lu_env *env, struct obd_export *exp,
-		  struct lu_fid *fid, struct md_op_data *unused)
+static int osp_fid_alloc(const struct lu_env *env, struct obd_export *exp,
+			 struct lu_fid *fid, struct md_op_data *unused)
 {
 	struct client_obd	*cli = &exp->exp_obd->u.cli;
 	struct osp_device	*osp = lu2osp_dev(exp->exp_obd->obd_lu_dev);

@@ -543,7 +543,8 @@ int iam_leaf_at_end(const struct iam_leaf *leaf)
         return iam_leaf_ops(leaf)->at_end(leaf);
 }
 
-void iam_leaf_split(struct iam_leaf *l, struct buffer_head **bh, iam_ptr_t nr)
+static void iam_leaf_split(struct iam_leaf *l, struct buffer_head **bh,
+			   iam_ptr_t nr)
 {
         iam_leaf_ops(l)->split(l, bh, nr);
 }
@@ -749,7 +750,7 @@ static struct dynlock_handle *iam_lock_htree(struct iam_container *ic,
 	return dynlock_lock(&ic->ic_tree_lock, value, lt, GFP_NOFS);
 }
 
-int iam_index_lock(struct iam_path *path, struct dynlock_handle **lh)
+static int iam_index_lock(struct iam_path *path, struct dynlock_handle **lh)
 {
         struct iam_frame *f;
 
@@ -809,8 +810,8 @@ int dx_index_is_compat(struct iam_path *path)
  *
  */
 
-struct iam_entry *iam_find_position(struct iam_path *path,
-                                   struct iam_frame *frame)
+static struct iam_entry *iam_find_position(struct iam_path *path,
+					   struct iam_frame *frame)
 {
         int count;
         struct iam_entry *p;
@@ -1036,8 +1037,8 @@ static int iam_check_full_path(struct iam_path *path, int search)
  * Performs path lookup and returns with found leaf (if any) locked by htree
  * lock.
  */
-int iam_lookup_lock(struct iam_path *path,
-                   struct dynlock_handle **dl, enum dynlock_type lt)
+static int iam_lookup_lock(struct iam_path *path,
+			   struct dynlock_handle **dl, enum dynlock_type lt)
 {
         int result;
 
@@ -1652,7 +1653,7 @@ int iam_it_key_size(const struct iam_iterator *it)
 }
 EXPORT_SYMBOL(iam_it_key_size);
 
-struct buffer_head *
+static struct buffer_head *
 iam_new_node(handle_t *h, struct iam_container *c, iam_ptr_t *b, int *e)
 {
 	struct inode *inode = c->ic_object;
@@ -2525,7 +2526,7 @@ static inline int ptr_inside(void *base, size_t size, void *ptr)
         return (base <= ptr) && (ptr < base + size);
 }
 
-int iam_frame_invariant(struct iam_frame *f)
+static int iam_frame_invariant(struct iam_frame *f)
 {
         return
                 (f->bh != NULL &&
@@ -2534,7 +2535,8 @@ int iam_frame_invariant(struct iam_frame *f)
                 ptr_inside(f->bh->b_data, f->bh->b_size, f->at) &&
                 f->entries <= f->at);
 }
-int iam_leaf_invariant(struct iam_leaf *l)
+
+static int iam_leaf_invariant(struct iam_leaf *l)
 {
         return
                 l->il_bh != NULL &&
@@ -2544,7 +2546,7 @@ int iam_leaf_invariant(struct iam_leaf *l)
                 l->il_entries <= l->il_at;
 }
 
-int iam_path_invariant(struct iam_path *p)
+static int iam_path_invariant(struct iam_path *p)
 {
         int i;
 

@@ -42,7 +42,8 @@
 #include <obd_class.h>
 #include <lustre_param.h>
 #include <lustre_log.h>
-#include <libcfs/libcfs_string.h>
+
+#include "osp_internal.h"
 
 struct lwp_device {
 	struct lu_device	lpd_dev;
@@ -220,7 +221,7 @@ static int lwp_process_config(const struct lu_env *env,
 	RETURN(rc);
 }
 
-const struct lu_device_operations lwp_lu_ops = {
+static const struct lu_device_operations lwp_lu_ops = {
 	.ldo_process_config	= lwp_process_config,
 };
 
@@ -236,8 +237,8 @@ const struct lu_device_operations lwp_lu_ops = {
  * \retval		-ENODEV if the device name cannot be found
  * \retval		negative numbers on other errors
  */
-int lwp_init0(const struct lu_env *env, struct lwp_device *lwp,
-	      struct lu_device_type *ldt, struct lustre_cfg *cfg)
+static int lwp_init0(const struct lu_env *env, struct lwp_device *lwp,
+		     struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
 	int			   rc;
 	ENTRY;

@@ -512,7 +512,7 @@ static int ldiskfs_osd_oi_scrub_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(ldiskfs_osd_oi_scrub);
 
-int ldiskfs_osd_readcache_seq_show(struct seq_file *m, void *data)
+static int ldiskfs_osd_readcache_seq_show(struct seq_file *m, void *data)
 {
 	struct osd_device *osd = osd_dt_dev((struct dt_device *)m->private);
 
@@ -523,7 +523,7 @@ int ldiskfs_osd_readcache_seq_show(struct seq_file *m, void *data)
 	return seq_printf(m, LPU64"\n", osd->od_readcache_max_filesize);
 }
 
-ssize_t
+static ssize_t
 ldiskfs_osd_readcache_seq_write(struct file *file, const char *buffer,
 				size_t count, loff_t *off)
 {

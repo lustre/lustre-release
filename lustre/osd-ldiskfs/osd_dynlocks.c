@@ -35,8 +35,7 @@
 
 #include <obd_support.h>
 #include "osd_dynlocks.h"
-
-extern struct kmem_cache *dynlock_cachep;
+#include "osd_internal.h"
 
 #define DYNLOCK_HANDLE_MAGIC	0xd19a10c
 #define DYNLOCK_HANDLE_DEAD	0xd1956ee

@@ -42,6 +42,8 @@
 #include <lprocfs_status.h>
 #include <obd_class.h>
 
+#include "lmv_internal.h"
+
 #ifndef LPROCFS
 static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
@@ -180,7 +182,7 @@ static int lmv_tgt_seq_show(struct seq_file *p, void *v)
 			  tgt->ltd_uuid.uuid, tgt->ltd_active ? "" : "IN");
 }
 
-struct seq_operations lmv_tgt_sops = {
+static const struct seq_operations lmv_tgt_sops = {
         .start                 = lmv_tgt_seq_start,
         .stop                  = lmv_tgt_seq_stop,
         .next                  = lmv_tgt_seq_next,

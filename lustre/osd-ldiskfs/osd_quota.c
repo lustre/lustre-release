@@ -766,7 +766,7 @@ static int osd_it_admin_next(const struct lu_env *env, struct dt_it *di)
 	RETURN(rc);
 }
 
-const struct dt_index_operations osd_admin_index_ops = {
+static const struct dt_index_operations osd_admin_index_ops = {
 	.dio_lookup	= osd_acct_index_lookup,
 	.dio_it		= {
 		.init     = osd_it_acct_init,

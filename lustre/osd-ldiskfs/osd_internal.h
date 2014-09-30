@@ -70,6 +70,7 @@
 #include "osd_quota_fmt.h"
 
 struct inode;
+extern struct kmem_cache *dynlock_cachep;
 
 #define OSD_COUNTERS (0)
 

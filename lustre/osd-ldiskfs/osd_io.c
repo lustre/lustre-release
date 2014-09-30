@@ -414,7 +414,7 @@ static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
         RETURN(0);
 }
 
-struct page *osd_get_page(struct dt_object *dt, loff_t offset, int rw)
+static struct page *osd_get_page(struct dt_object *dt, loff_t offset, int rw)
 {
         struct inode      *inode = osd_dt_obj(dt)->oo_inode;
         struct osd_device *d = osd_obj2dev(osd_dt_obj(dt));
@@ -448,9 +448,9 @@ struct page *osd_get_page(struct dt_object *dt, loff_t offset, int rw)
     * i_data_sem
 
 */
-int osd_bufs_get(const struct lu_env *env, struct dt_object *d, loff_t pos,
-                 ssize_t len, struct niobuf_local *lnb, int rw,
-                 struct lustre_capa *capa)
+static int osd_bufs_get(const struct lu_env *env, struct dt_object *d,
+			loff_t pos, ssize_t len, struct niobuf_local *lnb,
+			int rw, struct lustre_capa *capa)
 {
         struct osd_object   *obj    = osd_dt_obj(d);
         int npages, i, rc = 0;
@@ -731,9 +731,9 @@ map:
 	return err;
 }
 
-int osd_ldiskfs_map_nblocks(struct inode *inode, unsigned long block,
-			    unsigned long num, unsigned long *blocks,
-			    int create)
+static int osd_ldiskfs_map_nblocks(struct inode *inode, unsigned long block,
+				   unsigned long num, unsigned long *blocks,
+				   int create)
 {
 	struct bpointers bp;
 	int err;
@@ -753,9 +753,9 @@ int osd_ldiskfs_map_nblocks(struct inode *inode, unsigned long block,
 	return err;
 }
 
-int osd_ldiskfs_map_bm_inode_pages(struct inode *inode, struct page **page,
-				   int pages, unsigned long *blocks,
-				   int create)
+static int osd_ldiskfs_map_bm_inode_pages(struct inode *inode,
+					  struct page **page, int pages,
+					  unsigned long *blocks, int create)
 {
 	int blocks_per_page = PAGE_CACHE_SIZE >> inode->i_blkbits;
 	unsigned long *b;
@@ -773,9 +773,10 @@ int osd_ldiskfs_map_bm_inode_pages(struct inode *inode, struct page **page,
 	return rc;
 }
 
-int osd_ldiskfs_map_ext_inode_pages(struct inode *inode, struct page **page,
-				    int pages, unsigned long *blocks,
-				    int create)
+static int osd_ldiskfs_map_ext_inode_pages(struct inode *inode,
+					   struct page **page,
+					   int pages, unsigned long *blocks,
+					   int create)
 {
 	int blocks_per_page = PAGE_CACHE_SIZE >> inode->i_blkbits;
 	int rc = 0, i = 0;

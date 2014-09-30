@@ -752,7 +752,7 @@ static int osp_md_index_delete(const struct lu_env *env,
  * \retval		1 if it reaches to the end of the index object.
  * \retval		negative errno if the pointer cannot be advanced.
  */
-int osp_md_index_it_next(const struct lu_env *env, struct dt_it *di)
+static int osp_md_index_it_next(const struct lu_env *env, struct dt_it *di)
 {
 	struct osp_it		*it = (struct osp_it *)di;
 	struct lu_idxpage	*idxpage;
