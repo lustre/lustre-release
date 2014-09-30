@@ -739,8 +739,14 @@ int ofd_object_destroy(const struct lu_env *env, struct ofd_object *fo,
 	if (IS_ERR(th))
 		GOTO(unlock, rc = PTR_ERR(th));
 
-	dt_declare_ref_del(env, ofd_object_child(fo), th);
-	dt_declare_destroy(env, ofd_object_child(fo), th);
+	rc = dt_declare_ref_del(env, ofd_object_child(fo), th);
+	if (rc < 0)
+		GOTO(stop, rc);
+
+	rc = dt_declare_destroy(env, ofd_object_child(fo), th);
+	if (rc < 0)
+		GOTO(stop, rc);
+
 	if (orphan)
 		rc = dt_trans_start_local(env, ofd->ofd_osd, th);
 	else

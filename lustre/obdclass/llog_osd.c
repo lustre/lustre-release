@@ -1262,7 +1262,9 @@ static int llog_osd_destroy(const struct lu_env *env,
 			GOTO(out_trans, rc);
 	}
 
-	dt_declare_ref_del(env, o, th);
+	rc = dt_declare_ref_del(env, o, th);
+	if (rc < 0)
+		GOTO(out_trans, rc);
 
 	rc = dt_declare_destroy(env, o, th);
 	if (rc)
