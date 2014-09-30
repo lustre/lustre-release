@@ -11,9 +11,11 @@ SRCDIR=$(dirname $0)
 export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/utils:$PATH:/sbin:/usr/sbin
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:    3815
+# bug number for skipped test:    LU-3815
 ALWAYS_EXCEPT="$SANITY_HSM_EXCEPT 34 35 36"
-# bug number for skipped test:4178         4176
+# bug number for skipped test:LU-5474
+ALWAYS_EXCEPT="$ALWAYS_EXCEPT 90"
+# bug number for skipped test:LU-4178      LU-4176
 ALWAYS_EXCEPT="$ALWAYS_EXCEPT 200 221 223b 31a"
 # bug number for skipped test:LU-3852
 ALWAYS_EXCEPT="$ALWAYS_EXCEPT 251"
