@@ -345,6 +345,25 @@ static struct dt_object *__local_file_create(const struct lu_env *env,
 	if (rc)
 		GOTO(trans_stop, rc);
 
+	if (dti->dti_dof.dof_type == DFT_DIR) {
+		if (!dt_try_as_dir(env, dto))
+			GOTO(trans_stop, rc = -ENOTDIR);
+
+		rc = dt_declare_insert(env, dto, (const struct dt_rec *)rec,
+				(const struct dt_key *)".", th);
+		if (rc != 0)
+			GOTO(trans_stop, rc);
+
+		rc = dt_declare_insert(env, dto, (const struct dt_rec *)rec,
+				(const struct dt_key *)"..", th);
+		if (rc != 0)
+			GOTO(trans_stop, rc);
+
+		rc = dt_declare_ref_add(env, dto, th);
+		if (rc != 0)
+			GOTO(trans_stop, rc);
+	}
+
 	rc = dt_trans_start_local(env, ls->ls_osd, th);
 	if (rc)
 		GOTO(trans_stop, rc);
@@ -361,8 +380,6 @@ static struct dt_object *__local_file_create(const struct lu_env *env,
 	LASSERT(dt_object_exists(dto));
 
 	if (dti->dti_dof.dof_type == DFT_DIR) {
-		if (!dt_try_as_dir(env, dto))
-			GOTO(destroy, rc = -ENOTDIR);
 
 		rec->rec_type = S_IFDIR;
 		rec->rec_fid = fid;

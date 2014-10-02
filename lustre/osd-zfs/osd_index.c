@@ -669,8 +669,9 @@ static int osd_declare_dir_delete(const struct lu_env *env,
 				  const struct dt_key *key,
 				  struct thandle *th)
 {
-	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_object  *obj = osd_dt_obj(dt);
 	struct osd_thandle *oh;
+	uint64_t	    dnode;
 	ENTRY;
 
 	LASSERT(dt_object_exists(dt));
@@ -679,10 +680,14 @@ static int osd_declare_dir_delete(const struct lu_env *env,
 	LASSERT(th != NULL);
 	oh = container_of0(th, struct osd_thandle, ot_super);
 
-	LASSERT(obj->oo_db);
-	LASSERT(osd_object_is_zap(obj->oo_db));
-
-	dmu_tx_hold_zap(oh->ot_tx, obj->oo_db->db_object, TRUE, (char *)key);
+	if (dt_object_exists(dt)) {
+		LASSERT(obj->oo_db);
+		LASSERT(osd_object_is_zap(obj->oo_db));
+		dnode = obj->oo_db->db_object;
+	} else {
+		dnode = DMU_NEW_OBJECT;
+	}
+	dmu_tx_hold_zap(oh->ot_tx, dnode, TRUE, (char *)key);
 
 	RETURN(0);
 }
@@ -1608,8 +1613,6 @@ int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 	struct osd_object *obj = osd_dt_obj(dt);
 	ENTRY;
 
-	LASSERT(dt_object_exists(dt));
-
 	/*
 	 * XXX: implement support for fixed-size keys sorted with natural
 	 *      numerical way (not using internal hash value)
@@ -1622,17 +1625,16 @@ int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 		RETURN(0);
 	}
 
-	LASSERT(obj->oo_db != NULL);
+	LASSERT(!dt_object_exists(dt) || obj->oo_db != NULL);
 	if (likely(feat == &dt_directory_features)) {
-		if (osd_object_is_zap(obj->oo_db))
+		if (!dt_object_exists(dt) || osd_object_is_zap(obj->oo_db))
 			dt->do_index_ops = &osd_dir_ops;
 		else
 			RETURN(-ENOTDIR);
 	} else if (unlikely(feat == &dt_acct_features)) {
 		LASSERT(fid_is_acct(lu_object_fid(&dt->do_lu)));
 		dt->do_index_ops = &osd_acct_index_ops;
-	} else if (osd_object_is_zap(obj->oo_db) &&
-		   dt->do_index_ops == NULL) {
+	} else if (dt->do_index_ops == NULL) {
 		/* For index file, we don't support variable key & record sizes
 		 * and the key has to be unique */
 		if ((feat->dif_flags & ~DT_IND_UPDATE) != 0)
