@@ -679,7 +679,7 @@ check_lov_mds_md_v3(void)
 	CHECK_MEMBER(lov_mds_md_v3, lmm_stripe_count);
 	CHECK_MEMBER(lov_mds_md_v3, lmm_layout_gen);
 	CHECK_CVALUE(LOV_MAXPOOLNAME);
-	CHECK_MEMBER(lov_mds_md_v3, lmm_pool_name[LOV_MAXPOOLNAME]);
+	CHECK_MEMBER(lov_mds_md_v3, lmm_pool_name[LOV_MAXPOOLNAME + 1]);
 	CHECK_MEMBER(lov_mds_md_v3, lmm_objects[0]);
 
 	CHECK_CDEFINE(LOV_MAGIC_V3);

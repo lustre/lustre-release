@@ -40,7 +40,7 @@ struct lov_user_md_v3 {
         __u32 lmm_stripe_size;
         __u16 lmm_stripe_count;
         __u16 lmm_stripe_offset;
-        char  lmm_pool_name[LOV_MAXPOOLNAME];
+        char  lmm_pool_name[LOV_MAXPOOLNAME + 1];
         struct lov_user_ost_data_v1 lmm_objects[0];
 } __attribute__((packed));
 .fi

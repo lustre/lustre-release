@@ -791,9 +791,11 @@ int lod_store_def_striping(const struct lu_env *env, struct dt_object *dt,
 	v3->lmm_stripe_count = cpu_to_le16(lo->ldo_def_stripenr);
 	v3->lmm_stripe_offset = cpu_to_le16(lo->ldo_def_stripe_offset);
 	v3->lmm_stripe_size = cpu_to_le32(lo->ldo_def_stripe_size);
-	if (lo->ldo_pool != NULL)
+	if (lo->ldo_pool != NULL) {
 		strlcpy(v3->lmm_pool_name, lo->ldo_pool,
 			sizeof(v3->lmm_pool_name));
+		v3->lmm_pool_name[sizeof(v3->lmm_pool_name) - 1] = '\0';
+	}
 	info->lti_buf.lb_buf = v3;
 	info->lti_buf.lb_len = sizeof(*v3);
 	rc = dt_xattr_set(env, next, &info->lti_buf, XATTR_NAME_LOV, 0, th,

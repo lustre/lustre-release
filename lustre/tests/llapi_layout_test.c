@@ -523,7 +523,7 @@ void test12(void)
 
 	/* Pool name too long*/
 	errno = 0;
-	rc = llapi_layout_pool_name_set(layout, "0123456789abcdef0");
+	rc = llapi_layout_pool_name_set(layout, "0123456789abcdef");
 	ASSERTF(rc == -1 && errno == EINVAL, "rc = %d, errno = %d", rc, errno);
 
 	llapi_layout_free(layout);
@@ -824,7 +824,7 @@ void test18(void)
 void test19(void)
 {
 	struct llapi_layout *layout;
-	char *name = "0123456789abcdef";
+	char *name = "0123456789abcde";
 	char mypool[LOV_MAXPOOLNAME + 1] = { '\0' };
 	int rc;
 
