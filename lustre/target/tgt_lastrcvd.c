@@ -148,7 +148,8 @@ EXPORT_SYMBOL(tgt_client_data_write);
 /**
  * Update client data in last_rcvd
  */
-int tgt_client_data_update(const struct lu_env *env, struct obd_export *exp)
+static int tgt_client_data_update(const struct lu_env *env,
+				  struct obd_export *exp)
 {
 	struct tg_export_data	*ted = &exp->exp_target_data;
 	struct lu_target	*tgt = class_exp2tgt(exp);
@@ -328,7 +329,8 @@ cleanup:
 }
 EXPORT_SYMBOL(tgt_truncate_last_rcvd);
 
-void tgt_client_epoch_update(const struct lu_env *env, struct obd_export *exp)
+static void tgt_client_epoch_update(const struct lu_env *env,
+				    struct obd_export *exp)
 {
 	struct lsd_client_data	*lcd = exp->exp_target_data.ted_lcd;
 	struct lu_target	*tgt = class_exp2tgt(exp);
@@ -406,8 +408,8 @@ struct tgt_last_committed_callback {
 	__u64			 llcc_transno;
 };
 
-void tgt_cb_last_committed(struct lu_env *env, struct thandle *th,
-			   struct dt_txn_commit_cb *cb, int err)
+static void tgt_cb_last_committed(struct lu_env *env, struct thandle *th,
+				  struct dt_txn_commit_cb *cb, int err)
 {
 	struct tgt_last_committed_callback *ccb;
 
@@ -474,8 +476,8 @@ struct tgt_new_client_callback {
 	struct obd_export	*lncc_exp;
 };
 
-void tgt_cb_new_client(struct lu_env *env, struct thandle *th,
-		       struct dt_txn_commit_cb *cb, int err)
+static void tgt_cb_new_client(struct lu_env *env, struct thandle *th,
+			      struct dt_txn_commit_cb *cb, int err)
 {
 	struct tgt_new_client_callback *ccb;
 
@@ -692,9 +694,9 @@ EXPORT_SYMBOL(tgt_client_del);
 /*
  * last_rcvd & last_committed update callbacks
  */
-int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
-			 struct dt_object *obj, __u64 opdata,
-			 struct thandle *th, struct ptlrpc_request *req)
+static int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
+				struct dt_object *obj, __u64 opdata,
+				struct thandle *th, struct ptlrpc_request *req)
 {
 	struct tgt_thread_info	*tti = tgt_th_info(env);
 	struct tg_export_data	*ted;
@@ -836,9 +838,11 @@ srv_update:
  * It updates last_rcvd client slot and version of object in
  * simple way but with all locks to simulate all drawbacks
  */
-int tgt_last_rcvd_update_echo(const struct lu_env *env, struct lu_target *tgt,
-			      struct dt_object *obj, struct thandle *th,
-			      struct obd_export *exp)
+static int tgt_last_rcvd_update_echo(const struct lu_env *env,
+				     struct lu_target *tgt,
+				     struct dt_object *obj,
+				     struct thandle *th,
+				     struct obd_export *exp)
 {
 	struct tgt_thread_info	*tti = tgt_th_info(env);
 	struct tg_export_data	*ted = &exp->exp_target_data;
@@ -874,8 +878,9 @@ int tgt_last_rcvd_update_echo(const struct lu_env *env, struct lu_target *tgt,
 	RETURN(rc);
 }
 
-int tgt_clients_data_init(const struct lu_env *env, struct lu_target *tgt,
-			  unsigned long last_size)
+static int tgt_clients_data_init(const struct lu_env *env,
+				 struct lu_target *tgt,
+				 unsigned long last_size)
 {
 	struct obd_device	*obd = tgt->lut_obd;
 	struct lr_server_data	*lsd = &tgt->lut_lsd;

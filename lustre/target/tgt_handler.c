@@ -499,7 +499,7 @@ static int tgt_filter_recovery_request(struct ptlrpc_request *req,
  *       -ve: abort immediately with the given error code;
  *         0: send reply with error code in req->rq_status;
  */
-int tgt_handle_recovery(struct ptlrpc_request *req, int reply_fail_id)
+static int tgt_handle_recovery(struct ptlrpc_request *req, int reply_fail_id)
 {
 	ENTRY;
 
@@ -1046,7 +1046,7 @@ EXPORT_SYMBOL(tgt_sendpage);
 /*
  * OBD_IDX_READ handler
  */
-int tgt_obd_idx_read(struct tgt_session_info *tsi)
+static int tgt_obd_idx_read(struct tgt_session_info *tsi)
 {
 	struct tgt_thread_info	*tti = tgt_th_info(tsi->tsi_env);
 	struct lu_rdpg		*rdpg = &tti->tti_u.rdpg.tti_rdpg;
@@ -1161,8 +1161,8 @@ EXPORT_SYMBOL(tgt_sync);
 
 /* Ensure that data and metadata are synced to the disk when lock is cancelled
  * (if requested) */
-int tgt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
-		     void *data, int flag)
+static int tgt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+			    void *data, int flag)
 {
 	struct lu_env		 env;
 	struct lu_target	*tgt;
@@ -1218,7 +1218,7 @@ err_env:
 	RETURN(rc);
 }
 
-struct ldlm_callback_suite tgt_dlm_cbs = {
+static struct ldlm_callback_suite tgt_dlm_cbs = {
 	.lcs_completion	= ldlm_server_completion_ast,
 	.lcs_blocking	= tgt_blocking_ast,
 	.lcs_glimpse	= ldlm_server_glimpse_ast
@@ -1371,7 +1371,7 @@ EXPORT_SYMBOL(tgt_llog_handlers);
  * sec context handlers
  */
 /* XXX: Implement based on mdt_sec_ctx_handle()? */
-int tgt_sec_ctx_handle(struct tgt_session_info *tsi)
+static int tgt_sec_ctx_handle(struct tgt_session_info *tsi)
 {
 	return 0;
 }

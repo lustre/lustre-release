@@ -167,8 +167,8 @@ static int out_obj_destroy(const struct lu_env *env, struct dt_object *dt_obj,
  * the following executing phase succeed in anyway, so these undo
  * should be useless for most of the time in Phase I
  */
-int out_tx_create_undo(const struct lu_env *env, struct thandle *th,
-		       struct tx_arg *arg)
+static int out_tx_create_undo(const struct lu_env *env, struct thandle *th,
+			      struct tx_arg *arg)
 {
 	int rc;
 
@@ -179,8 +179,8 @@ int out_tx_create_undo(const struct lu_env *env, struct thandle *th,
 	return rc;
 }
 
-int out_tx_create_exec(const struct lu_env *env, struct thandle *th,
-		       struct tx_arg *arg)
+static int out_tx_create_exec(const struct lu_env *env, struct thandle *th,
+			      struct tx_arg *arg)
 {
 	struct dt_object	*dt_obj = arg->object;
 	int			 rc;
@@ -1373,7 +1373,7 @@ static struct tgt_handler out_update_ops[] = {
 	DEF_OUT_HNDL(OUT_WRITE, "out_write", MUTABOR | HABEO_REFERO, out_write),
 };
 
-struct tgt_handler *out_handler_find(__u32 opc)
+static struct tgt_handler *out_handler_find(__u32 opc)
 {
 	struct tgt_handler *h;
 
@@ -1444,8 +1444,8 @@ static int out_trans_stop(const struct lu_env *env,
 	return rc;
 }
 
-int out_tx_end(const struct lu_env *env, struct thandle_exec_args *ta,
-	       int declare_ret)
+static int out_tx_end(const struct lu_env *env, struct thandle_exec_args *ta,
+		      int declare_ret)
 {
 	struct tgt_session_info	*tsi = tgt_ses_info(env);
 	int			i;

@@ -45,7 +45,7 @@
 #include "ptlrpc_internal.h"
 
 
-struct ll_rpc_opcode {
+static struct ll_rpc_opcode {
      __u32       opcode;
      const char *opname;
 } ll_rpc_opcode_table[LUSTRE_MAX_OPCODES] = {
@@ -139,7 +139,7 @@ struct ll_rpc_opcode {
 	{ LFSCK_QUERY,	    "lfsck_query" },
 };
 
-struct ll_eopcode {
+static struct ll_eopcode {
      __u32       opcode;
      const char *opname;
 } ll_eopcode_table[EXTRA_LAST_OPC] = {
@@ -178,13 +178,14 @@ const char *ll_opcode2str(__u32 opcode)
         return ll_rpc_opcode_table[offset].opname;
 }
 
-const char* ll_eopcode2str(__u32 opcode)
+static const char *ll_eopcode2str(__u32 opcode)
 {
         LASSERT(ll_eopcode_table[opcode].opcode == opcode);
         return ll_eopcode_table[opcode].opname;
 }
+
 #ifdef LPROCFS
-void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
+static void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
                              char *name, struct proc_dir_entry **procroot_ret,
                              struct lprocfs_stats **stats_ret)
 {
@@ -416,12 +417,6 @@ ptlrpc_lprocfs_threads_max_seq_write(struct file *file,
 	return count;
 }
 LPROC_SEQ_FOPS(ptlrpc_lprocfs_threads_max);
-
-/**
- * \addtogoup nrs
- * @{
- */
-extern struct nrs_core nrs_core;
 
 /**
  * Translates \e ptlrpc_nrs_pol_state values to human-readable strings.
@@ -732,7 +727,7 @@ struct ptlrpc_srh_iterator {
 	struct ptlrpc_request	*srhi_req;
 };
 
-int
+static int
 ptlrpc_lprocfs_svc_req_history_seek(struct ptlrpc_service_part *svcpt,
 				    struct ptlrpc_srh_iterator *srhi,
 				    __u64 seq)

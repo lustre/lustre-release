@@ -35,6 +35,7 @@
 
 #include <obd.h>
 #include "tgt_internal.h"
+#include "../ptlrpc/ptlrpc_internal.h"
 
 int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	     struct obd_device *obd, struct dt_device *dt,

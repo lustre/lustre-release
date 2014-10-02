@@ -399,7 +399,7 @@ __must_hold(&req->rq_lock)
 	RETURN(rc);
 }
 
-struct kmem_cache *request_cache;
+static struct kmem_cache *request_cache;
 
 int ptlrpc_request_cache_init(void)
 {
@@ -1656,7 +1656,7 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 
                 /* ptlrpc_set_wait->l_wait_event sets lwi_allow_intr
                  * so it sets rq_intr regardless of individual rpc
-                 * timeouts. The synchronous IO waiting path sets 
+		 * timeouts. The synchronous IO waiting path sets
                  * rq_intr irrespective of whether ptlrpcd
                  * has seen a timeout.  Our policy is to only interpret
                  * interrupted rpcs after they have timed out, so we
@@ -2167,14 +2167,14 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
                          * We still want to block for a limited time,
                          * so we allow interrupts during the timeout.
                          */
-                        lwi = LWI_TIMEOUT_INTR_ALL(cfs_time_seconds(1), 
+			lwi = LWI_TIMEOUT_INTR_ALL(cfs_time_seconds(1),
                                                    ptlrpc_expired_set,
                                                    ptlrpc_interrupted_set, set);
                 else
                         /*
                          * At least one request is in flight, so no
                          * interrupts are allowed. Wait until all
-                         * complete, or an in-flight req times out. 
+			 * complete, or an in-flight req times out.
                          */
                         lwi = LWI_TIMEOUT(cfs_time_seconds(timeout? timeout : 1),
                                           ptlrpc_expired_set, set);

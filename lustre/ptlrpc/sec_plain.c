@@ -47,6 +47,8 @@
 #include <lustre_net.h>
 #include <lustre_sec.h>
 
+#include "ptlrpc_internal.h"
+
 struct plain_sec {
         struct ptlrpc_sec       pls_base;
 	rwlock_t            pls_lock;

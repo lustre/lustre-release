@@ -26,6 +26,9 @@
 #include <linux/fs.h>
 #include <libcfs/libcfs.h>
 #include <lvfs.h>
+#include <obd_class.h>
+
+#include "ptlrpc_internal.h"
 
 /* refine later and change to seqlock or simlar from libcfs */
 /* Debugging check only needed during development */

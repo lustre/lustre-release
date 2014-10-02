@@ -122,7 +122,7 @@ static struct ptlrpc_enc_page_pool {
 /*
  * memory shrinker
  */
-const int pools_shrinker_seeks = DEFAULT_SEEKS;
+static const int pools_shrinker_seeks = DEFAULT_SEEKS;
 static struct shrinker *pools_shrinker;
 
 
@@ -922,5 +922,3 @@ int sptlrpc_get_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u8 alg,
 	return err;
 }
 EXPORT_SYMBOL(sptlrpc_get_bulk_checksum);
-
-

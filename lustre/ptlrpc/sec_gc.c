@@ -47,6 +47,8 @@
 #include <lustre_net.h>
 #include <lustre_sec.h>
 
+#include "ptlrpc_internal.h"
+
 #define SEC_GC_INTERVAL (30 * 60)
 
 
@@ -253,4 +255,3 @@ void sptlrpc_gc_fini(void)
 	l_wait_event(sec_gc_thread.t_ctl_waitq,
 		     thread_is_stopped(&sec_gc_thread), &lwi);
 }
-

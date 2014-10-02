@@ -1756,18 +1756,6 @@ out:
 	RETURN(rc);
 }
 
-
-/* ptlrpc/nrs_fifo.c */
-extern struct ptlrpc_nrs_pol_conf nrs_conf_fifo;
-#ifdef HAVE_SERVER_SUPPORT
-/* ptlrpc/nrs_crr.c */
-extern struct ptlrpc_nrs_pol_conf nrs_conf_crrn;
-/* ptlrpc/nrs_orr.c */
-extern struct ptlrpc_nrs_pol_conf nrs_conf_orr;
-extern struct ptlrpc_nrs_pol_conf nrs_conf_trr;
-extern struct ptlrpc_nrs_pol_conf nrs_conf_tbf;
-#endif /* HAVE_SERVER_SUPPORT */
-
 /**
  * Adds all policies that ship with the ptlrpc module, to NRS core's list of
  * policies \e nrs_core.nrs_policies.

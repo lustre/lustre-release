@@ -48,10 +48,8 @@ extern spinlock_t ptlrpc_last_xid_lock;
 #if RS_DEBUG
 extern spinlock_t ptlrpc_rs_debug_lock;
 #endif
-extern struct mutex pinger_mutex;
-extern struct mutex ptlrpcd_mutex;
 
-__init int ptlrpc_init(void)
+static __init int ptlrpc_init(void)
 {
 	int rc;
 

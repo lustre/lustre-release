@@ -48,6 +48,23 @@ struct ptlrpc_request_set;
 extern int test_req_buffer_pressure;
 extern struct list_head ptlrpc_all_services;
 extern struct mutex ptlrpc_all_services_mutex;
+extern struct ptlrpc_nrs_pol_conf nrs_conf_fifo;
+
+#ifdef HAVE_SERVER_SUPPORT
+extern struct ptlrpc_nrs_pol_conf nrs_conf_crrn;
+extern struct ptlrpc_nrs_pol_conf nrs_conf_orr;
+extern struct ptlrpc_nrs_pol_conf nrs_conf_trr;
+extern struct ptlrpc_nrs_pol_conf nrs_conf_tbf;
+#endif /* HAVE_SERVER_SUPPORT */
+
+/**
+ * \addtogoup nrs
+ * @{
+ */
+extern struct nrs_core nrs_core;
+
+extern struct mutex ptlrpcd_mutex;
+extern struct mutex pinger_mutex;
 
 int ptlrpc_start_thread(struct ptlrpc_service_part *svcpt, int wait);
 /* ptlrpcd.c */

@@ -52,6 +52,8 @@
 #include <obd_cksum.h>
 #include <lustre/ll_fiemap.h>
 
+#include "ptlrpc_internal.h"
+
 static inline int lustre_msg_hdr_size_v2(int count)
 {
         return cfs_size_round(offsetof(struct lustre_msg_v2,
@@ -447,8 +449,8 @@ void *lustre_msg_buf(struct lustre_msg *m, int n, int min_size)
 }
 EXPORT_SYMBOL(lustre_msg_buf);
 
-int lustre_shrink_msg_v2(struct lustre_msg_v2 *msg, int segment,
-                         unsigned int newlen, int move_data)
+static int lustre_shrink_msg_v2(struct lustre_msg_v2 *msg, int segment,
+				unsigned int newlen, int move_data)
 {
         char   *tail = NULL, *newpos;
         int     tail_len = 0, n;
@@ -2011,7 +2013,7 @@ void lustre_swab_fid2path(struct getinfo_fid2path *gf)
 }
 EXPORT_SYMBOL(lustre_swab_fid2path);
 
-void lustre_swab_fiemap_extent(struct ll_fiemap_extent *fm_extent)
+static void lustre_swab_fiemap_extent(struct ll_fiemap_extent *fm_extent)
 {
         __swab64s(&fm_extent->fe_logical);
         __swab64s(&fm_extent->fe_physical);
@@ -2526,7 +2528,7 @@ void lustre_swab_hsm_state_set(struct hsm_state_set *hss)
 }
 EXPORT_SYMBOL(lustre_swab_hsm_state_set);
 
-void lustre_swab_hsm_extent(struct hsm_extent *extent)
+static void lustre_swab_hsm_extent(struct hsm_extent *extent)
 {
 	__swab64s(&extent->offset);
 	__swab64s(&extent->length);

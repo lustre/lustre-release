@@ -741,8 +741,8 @@ static void nrs_orr_stop(struct ptlrpc_nrs_policy *policy)
  * \retval 0   operation carried successfully
  * \retval -ve error
  */
-int nrs_orr_ctl(struct ptlrpc_nrs_policy *policy, enum ptlrpc_nrs_ctl opc,
-		void *arg)
+static int nrs_orr_ctl(struct ptlrpc_nrs_policy *policy,
+		       enum ptlrpc_nrs_ctl opc, void *arg)
 {
 	assert_spin_locked(&policy->pol_nrs->nrs_lock);
 
@@ -819,10 +819,10 @@ int nrs_orr_ctl(struct ptlrpc_nrs_policy *policy, enum ptlrpc_nrs_ctl opc,
  *
  * \see nrs_resource_get_safe()
  */
-int nrs_orr_res_get(struct ptlrpc_nrs_policy *policy,
-		    struct ptlrpc_nrs_request *nrq,
-		    const struct ptlrpc_nrs_resource *parent,
-		    struct ptlrpc_nrs_resource **resp, bool moving_req)
+static int nrs_orr_res_get(struct ptlrpc_nrs_policy *policy,
+			   struct ptlrpc_nrs_request *nrq,
+			   const struct ptlrpc_nrs_resource *parent,
+			   struct ptlrpc_nrs_resource **resp, bool moving_req)
 {
 	struct nrs_orr_data	       *orrd;
 	struct nrs_orr_object	       *orro;
@@ -1168,7 +1168,7 @@ static void nrs_orr_req_stop(struct ptlrpc_nrs_policy *policy,
  * so that lprocfs read/write functions can be used by both the ORR and TRR
  * policies.
  */
-struct nrs_lprocfs_orr_data {
+static struct nrs_lprocfs_orr_data {
 	struct ptlrpc_service	*svc;
 	char			*name;
 } lprocfs_orr_data = {
@@ -1854,7 +1854,7 @@ ptlrpc_lprocfs_nrs_orr_supported_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(ptlrpc_lprocfs_nrs_orr_supported);
 
-int nrs_orr_lprocfs_init(struct ptlrpc_service *svc)
+static int nrs_orr_lprocfs_init(struct ptlrpc_service *svc)
 {
 	int	i;
 
@@ -1879,7 +1879,7 @@ int nrs_orr_lprocfs_init(struct ptlrpc_service *svc)
 	return lprocfs_seq_add_vars(svc->srv_procroot, nrs_orr_lprocfs_vars, NULL);
 }
 
-void nrs_orr_lprocfs_fini(struct ptlrpc_service *svc)
+static void nrs_orr_lprocfs_fini(struct ptlrpc_service *svc)
 {
 	if (svc->srv_procroot == NULL)
 		return;
@@ -1923,7 +1923,7 @@ struct ptlrpc_nrs_pol_conf nrs_conf_orr = {
 
 #ifdef LPROCFS
 
-int nrs_trr_lprocfs_init(struct ptlrpc_service *svc)
+static int nrs_trr_lprocfs_init(struct ptlrpc_service *svc)
 {
 	int	rc;
 	int	i;
@@ -1951,7 +1951,7 @@ int nrs_trr_lprocfs_init(struct ptlrpc_service *svc)
 	return rc;
 }
 
-void nrs_trr_lprocfs_fini(struct ptlrpc_service *svc)
+static void nrs_trr_lprocfs_fini(struct ptlrpc_service *svc)
 {
 	if (svc->srv_procroot == NULL)
 		return;

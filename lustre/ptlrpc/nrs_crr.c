@@ -270,8 +270,9 @@ static void nrs_crrn_stop(struct ptlrpc_nrs_policy *policy)
  * \retval 0   operation carried out successfully
  * \retval -ve error
  */
-int nrs_crrn_ctl(struct ptlrpc_nrs_policy *policy, enum ptlrpc_nrs_ctl opc,
-		 void *arg)
+static int nrs_crrn_ctl(struct ptlrpc_nrs_policy *policy,
+			enum ptlrpc_nrs_ctl opc,
+			void *arg)
 {
 	assert_spin_locked(&policy->pol_nrs->nrs_lock);
 
@@ -326,10 +327,10 @@ int nrs_crrn_ctl(struct ptlrpc_nrs_policy *policy, enum ptlrpc_nrs_ctl opc,
  *
  * \see nrs_resource_get_safe()
  */
-int nrs_crrn_res_get(struct ptlrpc_nrs_policy *policy,
-		     struct ptlrpc_nrs_request *nrq,
-		     const struct ptlrpc_nrs_resource *parent,
-		     struct ptlrpc_nrs_resource **resp, bool moving_req)
+static int nrs_crrn_res_get(struct ptlrpc_nrs_policy *policy,
+			    struct ptlrpc_nrs_request *nrq,
+			    const struct ptlrpc_nrs_resource *parent,
+			    struct ptlrpc_nrs_resource **resp, bool moving_req)
 {
 	struct nrs_crrn_net	*net;
 	struct nrs_crrn_client	*cli;
@@ -816,7 +817,7 @@ LPROC_SEQ_FOPS(ptlrpc_lprocfs_nrs_crrn_quantum);
  * \retval 0	success
  * \retval != 0	error
  */
-int nrs_crrn_lprocfs_init(struct ptlrpc_service *svc)
+static int nrs_crrn_lprocfs_init(struct ptlrpc_service *svc)
 {
 	struct lprocfs_seq_vars nrs_crrn_lprocfs_vars[] = {
 		{ .name		= "nrs_crrn_quantum",
@@ -837,7 +838,7 @@ int nrs_crrn_lprocfs_init(struct ptlrpc_service *svc)
  *
  * \param[in] svc the service
  */
-void nrs_crrn_lprocfs_fini(struct ptlrpc_service *svc)
+static void nrs_crrn_lprocfs_fini(struct ptlrpc_service *svc)
 {
 	if (svc->srv_procroot == NULL)
 		return;

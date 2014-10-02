@@ -53,15 +53,15 @@
 
 #define NRS_POL_NAME_TBF	"tbf"
 
-int tbf_jobid_cache_size = 8192;
+static int tbf_jobid_cache_size = 8192;
 CFS_MODULE_PARM(tbf_jobid_cache_size, "i", int, 0644,
 		"The size of jobid cache");
 
-int tbf_rate = 10000;
+static int tbf_rate = 10000;
 CFS_MODULE_PARM(tbf_rate, "i", int, 0644,
 		"Default rate limit in RPCs/s");
 
-int tbf_depth = 3;
+static int tbf_depth = 3;
 CFS_MODULE_PARM(tbf_depth, "i", int, 0644,
 		"How many tokens that a client can save up");
 
@@ -841,7 +841,7 @@ static void nrs_tbf_jobid_rule_fini(struct nrs_tbf_rule *rule)
 	OBD_FREE(rule->tr_jobids_str, strlen(rule->tr_jobids_str) + 1);
 }
 
-struct nrs_tbf_ops nrs_tbf_jobid_ops = {
+static struct nrs_tbf_ops nrs_tbf_jobid_ops = {
 	.o_name = NRS_TBF_TYPE_JOBID,
 	.o_startup = nrs_tbf_jobid_startup,
 	.o_cli_find = nrs_tbf_jobid_cli_find,
@@ -1073,7 +1073,7 @@ static int nrs_tbf_nid_parse(struct nrs_tbf_cmd *cmd, const char *id)
 	return 0;
 }
 
-struct nrs_tbf_ops nrs_tbf_nid_ops = {
+static struct nrs_tbf_ops nrs_tbf_nid_ops = {
 	.o_name = NRS_TBF_TYPE_NID,
 	.o_startup = nrs_tbf_nid_startup,
 	.o_cli_find = nrs_tbf_nid_cli_find,
@@ -1202,8 +1202,9 @@ static void nrs_tbf_stop(struct ptlrpc_nrs_policy *policy)
  * \retval 0   operation carried out successfully
  * \retval -ve error
  */
-int nrs_tbf_ctl(struct ptlrpc_nrs_policy *policy, enum ptlrpc_nrs_ctl opc,
-		void *arg)
+static int nrs_tbf_ctl(struct ptlrpc_nrs_policy *policy,
+		       enum ptlrpc_nrs_ctl opc,
+		       void *arg)
 {
 	int rc = 0;
 	ENTRY;
@@ -1823,7 +1824,7 @@ LPROC_SEQ_FOPS(ptlrpc_lprocfs_nrs_tbf_rule);
  * \retval 0	success
  * \retval != 0	error
  */
-int nrs_tbf_lprocfs_init(struct ptlrpc_service *svc)
+static int nrs_tbf_lprocfs_init(struct ptlrpc_service *svc)
 {
 	struct lprocfs_seq_vars nrs_tbf_lprocfs_vars[] = {
 		{ .name		= "nrs_tbf_rule",
@@ -1844,7 +1845,7 @@ int nrs_tbf_lprocfs_init(struct ptlrpc_service *svc)
  *
  * \param[in] svc the service
  */
-void nrs_tbf_lprocfs_fini(struct ptlrpc_service *svc)
+static void nrs_tbf_lprocfs_fini(struct ptlrpc_service *svc)
 {
 	if (svc->srv_procroot == NULL)
 		return;
