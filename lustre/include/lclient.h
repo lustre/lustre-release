@@ -207,12 +207,12 @@ struct ccc_object {
          */
 	struct list_head	cob_pending_list;
 
-        /**
-         * Access this counter is protected by inode->i_sem. Now that
-         * the lifetime of transient pages must be covered by inode sem,
-         * we don't need to hold any lock..
-         */
-        int                     cob_transient_pages;
+	/**
+	 * Number of transient pages.  This is no longer protected by i_sem,
+	 * and needs to be atomic.  This is not actually used for anything,
+	 * and can probably be removed.
+	 */
+	atomic_t		cob_transient_pages;
 	/**
 	 * Number of outstanding mmaps on this file.
 	 *

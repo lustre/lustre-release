@@ -377,7 +377,6 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         struct cl_io *io;
         struct file *file = iocb->ki_filp;
         struct inode *inode = file->f_mapping->host;
-        struct ccc_object *obj = cl_inode2ccc(inode);
         long count = iov_length(iov, nr_segs);
         long tot_bytes = 0, result = 0;
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -411,7 +410,6 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         io = ccc_env_io(env)->cui_cl.cis_io;
         LASSERT(io != NULL);
 
-        LASSERT(obj->cob_transient_pages == 0);
         for (seg = 0; seg < nr_segs; seg++) {
                 long iov_left = iov[seg].iov_len;
                 unsigned long user_addr = (unsigned long)iov[seg].iov_base;
@@ -471,8 +469,6 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                 }
         }
 out:
-	LASSERT(obj->cob_transient_pages == 0);
-
         if (tot_bytes > 0) {
 		struct ccc_io *cio = ccc_env_io(env);
 

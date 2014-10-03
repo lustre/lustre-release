@@ -495,7 +495,7 @@ static void vvp_transient_page_fini(const struct lu_env *env,
 	struct ccc_object *clobj = cl2ccc(clp->cp_obj);
 
 	vvp_page_fini_common(cp);
-	clobj->cob_transient_pages--;
+	atomic_dec(&clobj->cob_transient_pages);
 }
 
 static const struct cl_page_operations vvp_transient_page_ops = {
@@ -544,7 +544,7 @@ int vvp_page_init(const struct lu_env *env, struct cl_object *obj,
 
 		cl_page_slice_add(page, &cpg->cpg_cl, obj, index,
 				&vvp_transient_page_ops);
-		clobj->cob_transient_pages++;
+		atomic_inc(&clobj->cob_transient_pages);
 	}
 	return 0;
 }

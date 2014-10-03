@@ -347,13 +347,13 @@ struct lu_object *ccc_object_alloc(const struct lu_env *env,
 }
 
 int ccc_object_init0(const struct lu_env *env,
-                            struct ccc_object *vob,
-                            const struct cl_object_conf *conf)
+		     struct ccc_object *vob,
+		     const struct cl_object_conf *conf)
 {
-        vob->cob_inode = conf->coc_inode;
-        vob->cob_transient_pages = 0;
+	vob->cob_inode = conf->coc_inode;
+	atomic_set(&vob->cob_transient_pages, 0);
 	cl_object_page_init(&vob->cob_cl, sizeof(struct ccc_page));
-        return 0;
+	return 0;
 }
 
 int ccc_object_init(const struct lu_env *env, struct lu_object *obj,
