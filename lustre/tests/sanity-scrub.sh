@@ -262,12 +262,18 @@ scrub_backup_restore() {
 }
 
 scrub_enable_auto() {
-	local n
+	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param -n \
+		osd-ldiskfs.*.auto_scrub=1
+}
 
-	for n in $(seq $MDSCOUNT); do
-		do_facet mds$n $LCTL set_param -n \
-			osd-ldiskfs.$(facet_svc mds$n).auto_scrub 1
-	done
+full_scrub_ratio() {
+	[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.6.50) ]] &&
+		return
+
+	local ratio=$1
+
+	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param -n \
+		osd-ldiskfs.*.full_scrub_ratio=$ratio
 }
 
 test_0() {
@@ -375,7 +381,10 @@ test_4() {
 	scrub_check_flags 4 inconsistent
 	mount_client $MOUNT || error "(5) Fail to start client!"
 	scrub_enable_auto
+	full_scrub_ratio 0
 	scrub_check_data 6
+	sleep 3
+
 	scrub_check_status 7 completed
 	scrub_check_flags 8 ""
 }
@@ -398,6 +407,7 @@ test_5() {
 	do_nodes $(comma_list $(mdts_nodes)) \
 		$LCTL set_param fail_val=3 fail_loc=0x190
 
+	full_scrub_ratio 0
 	scrub_check_data 6
 	umount_client $MOUNT || error "(7) Fail to stop client!"
 	scrub_check_status 8 scanning
@@ -430,6 +440,7 @@ test_5() {
 	scrub_check_status 15 failed
 	mount_client $MOUNT || error "(16) Fail to start client!"
 
+	full_scrub_ratio 0
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
 	do_nodes $(comma_list $(mdts_nodes)) \
 		$LCTL set_param fail_val=3 fail_loc=0x190
@@ -461,8 +472,9 @@ test_6() {
 
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
 	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param fail_val=3 fail_loc=0x190
+		$LCTL set_param fail_val=2 fail_loc=0x190
 
+	full_scrub_ratio 0
 	scrub_check_data 6
 
 	# Sleep 5 sec to guarantee at least one object processed by OI scrub
@@ -540,6 +552,7 @@ test_7() {
 	do_nodes $(comma_list $(mdts_nodes)) \
 		$LCTL set_param fail_val=3 fail_loc=0x190
 
+	full_scrub_ratio 0
 	scrub_check_data 6
 
 	local n
@@ -678,6 +691,7 @@ test_10a() {
 	do_nodes $(comma_list $(mdts_nodes)) \
 		$LCTL set_param fail_val=1 fail_loc=0x190
 
+	full_scrub_ratio 0
 	scrub_check_data 6
 	scrub_check_status 7 scanning
 	umount_client $MOUNT || error "(8) Fail to stop client!"
@@ -889,6 +903,8 @@ run_test 14 "OI scrub can repair objects under lost+found"
 test_15() {
 	# skip test_15 for LU-4182
 	[ $MDSCOUNT -ge 2 ] && skip "skip now for >= 2 MDTs" && return
+	local server_version=$(lustre_version_code $SINGLEMDS)
+
 	scrub_prep 20
 	scrub_backup_restore 1
 	echo "starting MDTs with OI scrub disabled"
@@ -897,28 +913,48 @@ test_15() {
 	scrub_check_flags 4 inconsistent
 
 	# run under dryrun mode
-	scrub_start 5 -n on
+	if [ $server_version -lt $(version_code 2.5.58) ]; then
+		scrub_start 5 --dryrun on
+	else
+		scrub_start 5 --dryrun
+	fi
 	scrub_check_status 6 completed
 	scrub_check_flags 7 inconsistent
 	scrub_check_params 8 dryrun
 	scrub_check_repaired 9 20
 
 	# run under dryrun mode again
-	scrub_start 10 -n on
+	if [ $server_version -lt $(version_code 2.5.58) ]; then
+		scrub_start 5 --dryrun on
+	else
+		scrub_start 5 --dryrun
+	fi
 	scrub_check_status 11 completed
 	scrub_check_flags 12 inconsistent
 	scrub_check_params 13 dryrun
 	scrub_check_repaired 14 20
 
 	# run under normal mode
-	scrub_start 15 -n off
+	#
+	# Lustre-2.x (x <= 5) used "-n off" to disable dryrun which does not
+	# work under Lustre-2.y (y >= 6), the test script should be fixed as
+	# "-noff" or "--dryrun=off" or nothing by default.
+	if [ $server_version -lt $(version_code 2.5.58) ]; then
+		scrub_start 5 --dryrun off
+	else
+		scrub_start 5
+	fi
 	scrub_check_status 16 completed
 	scrub_check_flags 17 ""
 	scrub_check_params 18 ""
 	scrub_check_repaired 19 20
 
 	# run under normal mode again
-	scrub_start 20 -n off
+	if [ $server_version -lt $(version_code 2.5.58) ]; then
+		scrub_start 5 --dryrun off
+	else
+		scrub_start 5
+	fi
 	scrub_check_status 21 completed
 	scrub_check_flags 22 ""
 	scrub_check_params 23 ""
