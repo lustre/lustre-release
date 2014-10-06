@@ -1290,7 +1290,7 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
 		/* non-replayed lock, delayed lvb init may need to be done */
 		rc = ldlm_lvbo_init(res);
 		if (rc < 0) {
-			LDLM_ERROR(lock, "delayed lvb init failed (rc %d)", rc);
+			LDLM_DEBUG(lock, "delayed lvb init failed (rc %d)", rc);
 			GOTO(out, rc);
 		}
 	}
