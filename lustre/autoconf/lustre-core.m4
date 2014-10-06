@@ -1863,10 +1863,6 @@ AC_CHECK_HEADERS([sys/user.h sys/vfs.h stdint.h blkid/blkid.h])
 # libcfs/include/libcfs/linux/linux-prim.h, ...
 AC_CHECK_HEADERS([linux/types.h sys/types.h linux/unistd.h unistd.h])
 
-# libcfs/libcfs/user-tcpip.c
-AC_CHECK_HEADERS([netinet/in.h])
-AC_CHECK_FUNCS([inet_ntoa])
-
 # libcfs/include/libcfs/linux/linux-prim.h
 AC_CHECK_HEADERS([linux/random.h], [], [],
 		 [#ifdef HAVE_LINUX_TYPES_H
