@@ -39,11 +39,13 @@
 
 #include <libcfs/libcfs.h>
 
-#ifdef __KERNEL__
-# include "linux/linux-tracefile.h"
-#else /* __KERNEL__ */
-# include "posix/posix-tracefile.h"
-#endif /* !__KERNEL__ */
+typedef enum {
+	CFS_TCD_TYPE_PROC = 0,
+	CFS_TCD_TYPE_SOFTIRQ,
+	CFS_TCD_TYPE_IRQ,
+	CFS_TCD_TYPE_MAX
+} cfs_trace_buf_type_t;
+
 /* trace file lock routines */
 
 #define TRACEFILE_NAME_SIZE 1024
@@ -257,13 +259,6 @@ extern void cfs_print_to_console(struct ptldebug_header *hdr, int mask,
 
 extern int cfs_trace_lock_tcd(struct cfs_trace_cpu_data *tcd, int walking);
 extern void cfs_trace_unlock_tcd(struct cfs_trace_cpu_data *tcd, int walking);
-
-/**
- * trace_buf_type_t, trace_buf_idx_get() and trace_console_buffers[][]
- * are not public libcfs API; they should be defined in
- * platform-specific tracefile include files
- * (see, for example, linux-tracefile.h).
- */
 
 extern char *cfs_trace_console_buffers[NR_CPUS][CFS_TCD_TYPE_MAX];
 extern cfs_trace_buf_type_t cfs_trace_buf_idx_get(void);
