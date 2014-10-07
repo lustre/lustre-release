@@ -175,6 +175,8 @@ test_10b() {
 	local before=$(date +%s)
 	local evict
 
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.53) ]] &&
+		skip "Need MDS version at least 2.6.53" && return
 	do_facet client "stat $DIR > /dev/null"  ||
 		error "failed to stat $DIR: $?"
 	drop_bl_callback_once "chmod 0777 $DIR" ||
