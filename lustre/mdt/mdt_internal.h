@@ -592,10 +592,10 @@ int mdt_check_resent_lock(struct mdt_thread_info *info, struct mdt_object *mo,
 			  struct mdt_lock_handle *lhc);
 
 int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *mo,
-		    struct mdt_lock_handle *lh, __u64 ibits, int locality);
+		    struct mdt_lock_handle *lh, __u64 ibits);
 
 int mdt_object_lock_try(struct mdt_thread_info *info, struct mdt_object *mo,
-			struct mdt_lock_handle *lh, __u64 ibits, int locality);
+			struct mdt_lock_handle *lh, __u64 ibits);
 
 void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *mo,
 		       struct mdt_lock_handle *lh, int decref);

@@ -214,8 +214,7 @@ int mdt_hsm_state_get(struct tgt_session_info *tsi)
 
 	lh = &info->mti_lh[MDT_LH_CHILD];
 	mdt_lock_reg_init(lh, LCK_PR);
-	rc = mdt_object_lock(info, obj, lh, MDS_INODELOCK_LOOKUP,
-			     MDT_LOCAL_LOCK);
+	rc = mdt_object_lock(info, obj, lh, MDS_INODELOCK_LOOKUP);
 	if (rc < 0)
 		GOTO(out_ucred, rc);
 
@@ -276,7 +275,7 @@ int mdt_hsm_state_set(struct tgt_session_info *tsi)
 	lh = &info->mti_lh[MDT_LH_CHILD];
 	mdt_lock_reg_init(lh, LCK_PW);
 	rc = mdt_object_lock(info, obj, lh, MDS_INODELOCK_LOOKUP |
-			     MDS_INODELOCK_XATTR, MDT_LOCAL_LOCK);
+			     MDS_INODELOCK_XATTR);
 	if (rc < 0)
 		GOTO(out_ucred, rc);
 

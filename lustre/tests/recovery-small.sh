@@ -1912,6 +1912,77 @@ test_110g () {
 }
 run_test 110g "drop reply during migration"
 
+test_110h () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local src_dir=$DIR/$tdir/source_dir
+	local tgt_dir=$DIR/$tdir/target_dir
+	local MDTIDX=1
+
+	mkdir -p $src_dir
+	$LFS mkdir -i $MDTIDX $tgt_dir
+
+	dd if=/etc/hosts of=$src_dir/src_file
+	touch $tgt_dir/tgt_file
+	drop_update_reply $MDTIDX \
+		"mrename $src_dir/src_file $tgt_dir/tgt_file" ||
+		error "mrename failed"
+
+	$CHECKSTAT -t file $src_dir/src_file &&
+				error "src_file present after rename"
+
+	diff /etc/hosts $tgt_dir/tgt_file ||
+			error "file changed after rename"
+
+}
+run_test 110h "drop update reply during cross-MDT file rename"
+
+test_110i () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local src_dir=$DIR/$tdir/source_dir
+	local tgt_dir=$DIR/$tdir/target_dir
+	local MDTIDX=1
+
+	mkdir -p $src_dir
+	$LFS mkdir -i $MDTIDX $tgt_dir
+
+	mkdir $src_dir/src_dir
+	touch $src_dir/src_dir/a
+	mkdir $tgt_dir/tgt_dir
+	drop_update_reply $MDTIDX \
+		"mrename $src_dir/src_dir $tgt_dir/tgt_dir" ||
+		error "mrename failed"
+
+	$CHECKSTAT -t dir $src_dir/src_dir &&
+			error "src_dir present after rename"
+
+	$CHECKSTAT -t dir $tgt_dir/tgt_dir ||
+				error "tgt_dir not present after rename"
+
+	$CHECKSTAT -t file $tgt_dir/tgt_dir/a ||
+				error "a not present after rename"
+}
+run_test 110i "drop update reply during cross-MDT dir rename"
+
+test_110j () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local remote_dir=$DIR/$tdir/remote_dir
+	local local_dir=$DIR/$tdir/local_dir
+	local MDTIDX=1
+
+	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir/local_dir
+	$LFS mkdir -i $MDTIDX $remote_dir
+
+	touch $local_dir/local_file
+	drop_update_reply $MDTIDX \
+		"ln $local_dir/local_file $remote_dir/remote_file" ||
+		error "ln failed"
+
+	$CHECKSTAT -t file $remote_dir/remote_file ||
+				error "remote not present after ln"
+}
+run_test 110j "drop update reply during cross-MDT ln"
+
 # LU-2844 mdt prepare fail should not cause umount oops
 test_111 ()
 {

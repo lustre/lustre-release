@@ -276,7 +276,7 @@ run_test 7a "mkdir .../d7; mcreate .../d7/f; chmod .../d7/f ===="
 
 test_7b() {
 	if [ ! -d $DIR/$tdir ]; then
-		mkdir $DIR/$tdir
+		test_mkdir $DIR/$tdir
 	fi
 	$MCREATE $DIR/$tdir/$tfile
 	echo -n foo > $DIR/$tdir/$tfile
@@ -354,6 +354,7 @@ test_15() {
 	mv $DIR/$tdir/$tfile $DIR/$tdir/${tfile}_2
 	$CHECKSTAT -t file $DIR/$tdir/${tfile}_2 ||
 		error "$tdir/${tfile_2} not a file after rename"
+	rm $DIR/$tdir/${tfile}_2 || error "unlink failed after rename"
 }
 run_test 15 "touch .../d15/f; mv .../d15/f .../d15/f2 =========="
 
@@ -519,7 +520,7 @@ run_test 17k "symlinks: rsync with xattrs enabled ========================="
 test_17l() { # LU-279
 	[[ -z "$(which getfattr 2>/dev/null)" ]] &&
 		skip "no getfattr command" && return 0
-	mkdir -p $DIR/$tdir
+	test_mkdir -p $DIR/$tdir
 	touch $DIR/$tdir/$tfile
 	ln -s $DIR/$tdir/$tfile $DIR/$tdir/$tfile.lnk
 	for path in "$DIR/$tdir" "$DIR/$tdir/$tfile" "$DIR/$tdir/$tfile.lnk"; do
@@ -554,7 +555,7 @@ test_17m() {
 
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 
-	mkdir -p $WDIR
+	test_mkdir -p $WDIR
 	long_sym=$short_sym
 	# create a long symlink file
 	for ((i = 0; i < 4; ++i)); do
@@ -637,7 +638,7 @@ test_17n() {
 
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 
-	mkdir $DIR/$tdir
+	test_mkdir $DIR/$tdir
 	for ((i=0; i<10; i++)); do
 		$LFS mkdir -i1 -c2 $DIR/$tdir/remote_dir_${i} ||
 			error "create remote dir error $i"
@@ -686,7 +687,7 @@ test_17o() {
 	local mdt_index
 	local rc=0
 
-	mkdir -p $WDIR
+	test_mkdir -p $WDIR
 	mdt_index=$($LFS getstripe -M $WDIR)
 	mdt_index=$((mdt_index+1))
 
@@ -1040,7 +1041,7 @@ test_24v() {
 	# Performance issue on ZFS see LU-4072 (c.f. LU-2887)
 	[ $(facet_fstype $SINGLEMDS) = "zfs" ] && NRFILES=10000
 
-	mkdir -p $DIR/$tdir
+	test_mkdir -p $DIR/$tdir
 	createmany -m $DIR/$tdir/$tfile $NRFILES
 
 	cancel_lru_locks mdc
@@ -1083,30 +1084,28 @@ test_24x() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir -p $DIR/$tdir
+	test_mkdir -p $DIR/$tdir
 	$LFS mkdir -i $MDTIDX $remote_dir ||
 		error "create remote directory failed"
 
-	mkdir -p $DIR/$tdir/src_dir
+	test_mkdir -p $DIR/$tdir/src_dir
 	touch $DIR/$tdir/src_file
-	mkdir -p $remote_dir/tgt_dir
+	test_mkdir -p $remote_dir/tgt_dir
 	touch $remote_dir/tgt_file
 
-	mrename $remote_dir $DIR/ &&
-		error "rename dir cross MDT works!"
+	mrename $DIR/$tdir/src_dir $remote_dir/tgt_dir ||
+		error "rename dir cross MDT failed!"
 
-	mrename $DIR/$tdir/src_dir $remote_dir/tgt_dir &&
-		error "rename dir cross MDT works!"
+	mrename $DIR/$tdir/src_file $remote_dir/tgt_file ||
+		error "rename file cross MDT failed!"
 
-	mrename $DIR/$tdir/src_file $remote_dir/tgt_file &&
-		error "rename file cross MDT works!"
-
-	ln $DIR/$tdir/src_file $remote_dir/tgt_file1 &&
-		error "ln file cross MDT should not work!"
+	touch $DIR/$tdir/ln_file
+	ln $DIR/$tdir/ln_file $remote_dir/ln_name ||
+		error "ln file cross MDT failed"
 
 	rm -rf $DIR/$tdir || error "Can not delete directories"
 }
-run_test 24x "cross rename/link should be failed"
+run_test 24x "cross MDT rename/link"
 
 test_24y() {
 	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs" && return
@@ -1114,13 +1113,13 @@ test_24y() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir -p $DIR/$tdir
+	test_mkdir -p $DIR/$tdir
 	$LFS mkdir -i $MDTIDX $remote_dir ||
 	           error "create remote directory failed"
 
-	mkdir -p $remote_dir/src_dir
+	test_mkdir -p $remote_dir/src_dir
 	touch $remote_dir/src_file
-	mkdir -p $remote_dir/tgt_dir
+	test_mkdir -p $remote_dir/tgt_dir
 	touch $remote_dir/tgt_file
 
 	mrename $remote_dir/src_dir $remote_dir/tgt_dir ||
@@ -1136,37 +1135,11 @@ test_24y() {
 }
 run_test 24y "rename/link on the same dir should succeed"
 
-test_24z() {
-	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	local MDTIDX=1
-	local remote_src=$DIR/$tdir/remote_dir
-	local remote_tgt=$DIR/$tdir/remote_tgt
-
-	mkdir -p $DIR/$tdir
-	$LFS mkdir -i $MDTIDX $remote_src ||
-		   error "create remote directory failed"
-
-	$LFS mkdir -i $MDTIDX $remote_tgt ||
-		   error "create remote directory failed"
-
-	mrename $remote_src $remote_tgt &&
-		error "rename remote dirs should not work!"
-
-	# If target dir does not exists, it should succeed
-	rm -rf $remote_tgt
-	mrename $remote_src $remote_tgt ||
-		error "rename remote dirs(tgt dir does not exists) failed!"
-
-	rm -rf $DIR/$tdir || error "Can not delete directories"
-}
-run_test 24z "rename one remote dir to another remote dir should fail"
-
 test_24A() { # LU-3182
 	local NFILES=5000
 
 	rm -rf $DIR/$tdir
-	mkdir -p $DIR/$tdir
+	test_mkdir -p $DIR/$tdir
 	createmany -m $DIR/$tdir/$tfile $NFILES
 	local t=$(ls $DIR/$tdir | wc -l)
 	local u=$(ls $DIR/$tdir | sort -u | wc -l)
@@ -1183,7 +1156,7 @@ test_24B() { # LU-4805
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	local count
 
-	mkdir $DIR/$tdir
+	test_mkdir $DIR/$tdir
 	$LFS setdirstripe -i0 -c$MDSCOUNT $DIR/$tdir/striped_dir ||
 		error "create striped dir failed"
 
@@ -1249,6 +1222,38 @@ test_24D() { # LU-6101
 	rm -rf $DIR/$tdir || error "Can not delete directories"
 }
 run_test 24D "readdir() returns correct number of entries after cursor reload"
+
+test_24E() {
+	[[ $MDSCOUNT -lt 4 ]] && skip "needs >= 4 MDTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+
+	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir/src_dir
+	$LFS mkdir -i 1 $DIR/$tdir/src_dir/src_child ||
+		error "create remote source failed"
+
+	touch $DIR/$tdir/src_dir/src_child/a
+
+	$LFS mkdir -i 2 $DIR/$tdir/tgt_dir ||
+		error "create remote target dir failed"
+
+	$LFS mkdir -i 3 $DIR/$tdir/tgt_dir/tgt_child ||
+		error "create remote target child failed"
+
+	mrename $DIR/$tdir/src_dir/src_child $DIR/$tdir/tgt_dir/tgt_child ||
+		error "rename dir cross MDT failed!"
+
+	find $DIR/$tdir
+
+	$CHECKSTAT -t dir $DIR/$tdir/src_dir/src_child &&
+		error "src_child still exists after rename"
+
+	$CHECKSTAT -t file $DIR/$tdir/tgt_dir/tgt_child/a ||
+		error "missing file(a) after rename"
+
+	rm -rf $DIR/$tdir || error "Can not delete directories"
+}
+run_test 24E "cross MDT rename/link"
 
 test_25a() {
 	echo '== symlink sanity ============================================='
@@ -1756,7 +1761,7 @@ test_27y() {
 	done
 
 	OSTIDX=$(index_from_ostuuid $OST)
-	mkdir -p $DIR/$tdir
+	test_mkdir -p $DIR/$tdir
 	$SETSTRIPE -c 1 $DIR/$tdir      # 1 stripe / file
 
 	for OSC in $MDS_OSCS; do
@@ -2010,7 +2015,7 @@ test_27D() {
 	local ost_list=$(seq $first_ost $ost_step $last_ost)
 	local ost_range="$first_ost $last_ost $ost_step"
 
-	mkdir -p $DIR/$tdir
+	test_mkdir -p $DIR/$tdir
 	pool_add $POOL || error "pool_add failed"
 	pool_add_targets $POOL $ost_range || error "pool_add_targets failed"
 	llapi_layout_test -d$DIR/$tdir -p$POOL -o$OSTCOUNT ||
@@ -2304,7 +2309,7 @@ link_one() {
 }
 
 test_31o() { # LU-2901
-	mkdir -p $DIR/$tdir
+	test_mkdir -p $DIR/$tdir
 	for LOOP in $(seq 100); do
 		rm -f $DIR/$tdir/$tfile*
 		for THREAD in $(seq 8); do
@@ -2322,7 +2327,7 @@ run_test 31o "duplicate hard links with same filename"
 test_31p() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
-	mkdir $DIR/$tdir
+	test_mkdir $DIR/$tdir
 	$LFS setdirstripe -i0 -c2 $DIR/$tdir/striped_dir
 	$LFS setdirstripe -D -c2 -t all_char $DIR/$tdir/striped_dir
 
@@ -2675,7 +2680,7 @@ test_33d() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir -p $DIR/$tdir
+	test_mkdir -p $DIR/$tdir
 	$LFS mkdir -i $MDTIDX $remote_dir ||
 		error "create remote directory failed"
 
@@ -2994,7 +2999,7 @@ run_test 36h "utime on file racing with OST BRW write =========="
 test_36i() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
-	mkdir $DIR/$tdir
+	test_mkdir $DIR/$tdir
 	$LFS setdirstripe -i0 -c$MDSCOUNT $DIR/$tdir/striped_dir
 
 	local mtime=$(stat -c%Y $DIR/$tdir/striped_dir)
@@ -3411,7 +3416,7 @@ run_test 39n "check that O_NOATIME is honored"
 test_39o() {
 	TESTDIR=$DIR/$tdir/$tfile
 	[ -e $TESTDIR ] && rm -rf $TESTDIR
-	test_mkdir -p $TESTDIR
+	mkdir -p $TESTDIR
 	cd $TESTDIR
 	links1=2
 	ls
@@ -3433,7 +3438,7 @@ test_39p() {
 	local MDTIDX=1
 	TESTDIR=$DIR/$tdir/$tfile
 	[ -e $TESTDIR ] && rm -rf $TESTDIR
-	mkdir -p $TESTDIR
+	test_mkdir -p $TESTDIR
 	cd $TESTDIR
 	links1=2
 	ls
@@ -4925,7 +4930,7 @@ test_56x() {
 		skip_env "need 2 OST, skipping test" && return
 
 	local dir0=$DIR/$tdir/$testnum
-	mkdir -p $dir0 || error "creating dir $dir0"
+	test_mkdir -p $dir0 || error "creating dir $dir0"
 
 	local ref1=/etc/passwd
 	local file1=$dir0/file1
@@ -4949,7 +4954,7 @@ test_56y() {
 
 	local res=""
 	local dir0=$DIR/$tdir/$testnum
-	mkdir -p $dir0 || error "creating dir $dir0"
+	test_mkdir -p $dir0 || error "creating dir $dir0"
 	local f1=$dir0/file1
 	local f2=$dir0/file2
 
@@ -5567,8 +5572,9 @@ test_69() {
 run_test 69 "verify oa2dentry return -ENOENT doesn't LBUG ======"
 
 test_71() {
-    test_mkdir -p $DIR/$tdir
-    sh rundbench -C -D $DIR/$tdir 2 || error "dbench failed!"
+	test_mkdir -p $DIR/$tdir
+	$LFS setdirstripe -D -c$MDSCOUNT $DIR/$tdir
+	sh rundbench -C -D $DIR/$tdir 2 || error "dbench failed!"
 }
 run_test 71 "Running dbench on lustre (don't segment fault) ===="
 
@@ -13189,19 +13195,16 @@ test_300e() {
 	$LFS setdirstripe -i 0 -c 2 -t all_char $DIR/$tdir/striped_dir/stp_c ||
 		error "set striped dir under striped dir error"
 
-	mrename $DIR/$tdir/striped_dir/a $DIR/$tdir/striped_dir/b &&
-		error "rename file under striped dir should fail"
+	mrename $DIR/$tdir/striped_dir/dir_a $DIR/$tdir/striped_dir/dir_b ||
+		error "rename dir under striped dir fails"
 
-	mrename $DIR/$tdir/striped_dir/dir_a $DIR/$tdir/striped_dir/dir_b &&
-		error "rename dir under striped dir should fail"
-
-	mrename $DIR/$tdir/striped_dir/stp_a $DIR/$tdir/striped_dir/stp_b &&
-		error "rename dir under different stripes should fail"
+	mrename $DIR/$tdir/striped_dir/stp_a $DIR/$tdir/striped_dir/stp_b ||
+		error "rename dir under different stripes fails"
 
 	mrename $DIR/$tdir/striped_dir/a $DIR/$tdir/striped_dir/c ||
 		error "rename file under striped dir should succeed"
 
-	mrename $DIR/$tdir/striped_dir/dir_a $DIR/$tdir/striped_dir/dir_c ||
+	mrename $DIR/$tdir/striped_dir/dir_b $DIR/$tdir/striped_dir/dir_c ||
 		error "rename dir under striped dir should succeed"
 
 	rm -rf $DIR/$tdir
@@ -13233,20 +13236,14 @@ test_300f() {
 	$LFS setdirstripe -i 0 -c 2 $DIR/$tdir/striped_dir/stp_b ||
 		error "create striped dir under striped dir fails"
 
-	mrename $DIR/$tdir/striped_dir/a $DIR/$tdir/striped_dir1/b &&
-		error "rename file under different striped dir should fail"
-
-	mrename $DIR/$tdir/striped_dir/dir_a $DIR/$tdir/striped_dir1/dir_b &&
+	mrename $DIR/$tdir/striped_dir/dir_a $DIR/$tdir/striped_dir1/dir_b ||
 		error "rename dir under different striped dir should fail"
 
-	mrename $DIR/$tdir/striped_dir/stp_a $DIR/$tdir/striped_dir1/stp_b &&
+	mrename $DIR/$tdir/striped_dir/stp_a $DIR/$tdir/striped_dir1/stp_b ||
 		error "rename striped dir under diff striped dir should fail"
 
 	mrename $DIR/$tdir/striped_dir/a $DIR/$tdir/striped_dir1/a ||
 		error "rename file under diff striped dirs fails"
-
-	mrename $DIR/$tdir/striped_dir/dir_a $DIR/$tdir/striped_dir1/dir_a ||
-		error "rename dir under diff striped dirs fails"
 
 	rm -rf $DIR/$tdir
 }
@@ -13398,6 +13395,80 @@ test_300i() {
 	return 0
 }
 run_test 300i "client handle unknown hash type striped directory"
+
+prepare_remote_file() {
+	mkdir $DIR/$tdir/src_dir ||
+		error "create remote source failed"
+
+	cp /etc/hosts $DIR/$tdir/src_dir/a || error
+	touch $DIR/$tdir/src_dir/a
+
+	$LFS mkdir -i 1 $DIR/$tdir/tgt_dir ||
+		error "create remote target dir failed"
+
+	touch $DIR/$tdir/tgt_dir/b
+
+	mrename $DIR/$tdir/src_dir/a $DIR/$tdir/tgt_dir/b ||
+		error "rename dir cross MDT failed!"
+
+	$CHECKSTAT -t file $DIR/$tdir/src_dir/a &&
+		error "src_child still exists after rename"
+
+	$CHECKSTAT -t file $DIR/$tdir/tgt_dir/b ||
+		error "missing file(a) after rename"
+
+	diff /etc/hosts $DIR/$tdir/tgt_dir/b ||
+		error "diff after rename"
+}
+
+test_310a() {
+	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 4 MDTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	local remote_file=$DIR/$tdir/tgt_dir/b
+
+	mkdir -p $DIR/$tdir
+
+	prepare_remote_file || error "prepare remote file failed"
+
+	#open-unlink file
+	$OPENUNLINK $remote_file $remote_file || error
+	$CHECKSTAT -a $remote_file || error
+}
+run_test 310a "open unlink remote file"
+
+test_310b() {
+	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 4 MDTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	local remote_file=$DIR/$tdir/tgt_dir/b
+
+	mkdir -p $DIR/$tdir
+
+	prepare_remote_file || error "prepare remote file failed"
+
+	ln $remote_file $DIR/$tfile || error "link failed for remote file"
+	$MULTIOP $DIR/$tfile Ouc || error "mulitop failed"
+	$CHECKSTAT -t file $remote_file || error "check file failed"
+}
+run_test 310b "unlink remote file with multiple links while open"
+
+test_310c() {
+	[[ $MDSCOUNT -lt 4 ]] && skip "needs >= 4 MDTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	local remote_file=$DIR/$tdir/tgt_dir/b
+
+	mkdir -p $DIR/$tdir
+
+	prepare_remote_file || error "prepare remote file failed"
+
+	ln $remote_file $DIR/$tfile || error "link failed for remote file"
+	multiop_bg_pause $remote_file O_uc ||
+			error "mulitop failed for remote file"
+	MULTIPID=$!
+	$MULTIOP $DIR/$tfile Ouc
+	kill -USR1 $MULTIPID
+	wait $MULTIPID
+}
+run_test 310c "open-unlink remote file with multiple links"
 
 test_400a() { # LU-1606, was conf-sanity test_74
 	local extra_flags=''

@@ -268,21 +268,6 @@ static int mdt_remote_permission(struct mdt_thread_info *info,
 			return -EPERM;
 	}
 
-	if (mdt->mdt_enable_remote_dir == 0) {
-		struct seq_server_site	*ss = mdt_seq_site(mdt);
-		struct lu_seq_range	range = { 0 };
-		int			rc;
-
-		fld_range_set_type(&range, LU_SEQ_RANGE_MDT);
-		rc = fld_server_lookup(info->mti_env, ss->ss_server_fld,
-				       fid_seq(mdt_object_fid(parent)), &range);
-		if (rc != 0)
-			return rc;
-
-		if (range.lsr_index != 0)
-			return -EPERM;
-	}
-
 	if (!mdt_is_dne_client(exp))
 		return -ENOTSUPP;
 
@@ -336,8 +321,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
 
 	lh = &info->mti_lh[MDT_LH_PARENT];
 	mdt_lock_pdo_init(lh, LCK_PW, &rr->rr_name);
-	rc = mdt_object_lock(info, parent, lh, MDS_INODELOCK_UPDATE,
-			     MDT_CROSS_LOCK);
+	rc = mdt_object_lock(info, parent, lh, MDS_INODELOCK_UPDATE);
 	if (rc)
 		GOTO(put_parent, rc);
 
@@ -531,9 +515,9 @@ static int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 	if (ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID))
 		lockpart |= MDS_INODELOCK_LOOKUP | MDS_INODELOCK_PERM;
 
-        rc = mdt_object_lock(info, mo, lh, lockpart, MDT_LOCAL_LOCK);
-        if (rc != 0)
-                RETURN(rc);
+	rc = mdt_object_lock(info, mo, lh, lockpart);
+	if (rc != 0)
+		RETURN(rc);
 
 	s0_lh = &info->mti_lh[MDT_LH_LOCAL];
 	mdt_lock_reg_init(s0_lh, LCK_PW);
@@ -607,8 +591,7 @@ int mdt_add_dirty_flag(struct mdt_thread_info *info, struct mdt_object *mo,
 		ma->ma_hsm.mh_flags |= HS_DIRTY;
 
 		mdt_lock_reg_init(lh, LCK_PW);
-		rc = mdt_object_lock(info, mo, lh, MDS_INODELOCK_XATTR,
-				     MDT_LOCAL_LOCK);
+		rc = mdt_object_lock(info, mo, lh, MDS_INODELOCK_XATTR);
 		if (rc != 0)
 			RETURN(rc);
 
@@ -687,8 +670,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 		mdt_lock_reg_init(lh, LCK_PW);
 
 		rc = mdt_object_lock(info, mo, lh,
-				     MDS_INODELOCK_XATTR,
-				     MDT_LOCAL_LOCK);
+				     MDS_INODELOCK_XATTR);
 		if (rc != 0)
 			GOTO(out_put, rc);
 
@@ -786,10 +768,10 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         struct mdt_object       *mc;
         struct mdt_lock_handle  *parent_lh;
         struct mdt_lock_handle  *child_lh;
-	__u64			lock_ibits;
 	struct ldlm_enqueue_info *einfo = &info->mti_einfo;
 	struct mdt_lock_handle  *s0_lh = NULL;
 	struct mdt_object	*s0_obj = NULL;
+	__u64			lock_ibits;
 	int			rc;
 	int			no_name = 0;
 	ENTRY;
@@ -817,8 +799,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
 	parent_lh = &info->mti_lh[MDT_LH_PARENT];
 	mdt_lock_pdo_init(parent_lh, LCK_PW, &rr->rr_name);
-	rc = mdt_object_lock(info, mp, parent_lh, MDS_INODELOCK_UPDATE,
-			     MDT_CROSS_LOCK);
+	rc = mdt_object_lock(info, mp, parent_lh, MDS_INODELOCK_UPDATE);
 	if (rc != 0)
 		GOTO(put_parent, rc);
 
@@ -906,8 +887,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 		 * it will release the LOOKUP lock right away. Then What
 		 * would happen if another client try to grab the LOOKUP
 		 * lock at the same time with unlink XXX */
-		mdt_object_lock(info, mc, child_lh, MDS_INODELOCK_LOOKUP,
-				MDT_CROSS_LOCK);
+		mdt_object_lock(info, mc, child_lh, MDS_INODELOCK_LOOKUP);
 		repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
 		LASSERT(repbody != NULL);
 		repbody->mbo_fid1 = *mdt_object_fid(mc);
@@ -937,7 +917,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 		lock_ibits &= ~MDS_INODELOCK_LOOKUP;
 	}
 
-	rc = mdt_object_lock(info, mc, child_lh, lock_ibits, MDT_CROSS_LOCK);
+	rc = mdt_object_lock(info, mc, child_lh, lock_ibits);
 	if (rc != 0)
 		GOTO(put_child, rc);
 	/*
@@ -1069,16 +1049,8 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 		GOTO(out_unlock_parent, rc = -ENOENT);
 	}
 
-	if (mdt_object_remote(ms)) {
-		mdt_object_put(info->mti_env, ms);
-		CERROR("%s: source inode "DFID" on remote MDT from "DFID"\n",
-		       mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
-		       PFID(rr->rr_fid2));
-		GOTO(out_unlock_parent, rc = -EXDEV);
-	}
-
 	rc = mdt_object_lock(info, ms, lhs, MDS_INODELOCK_UPDATE |
-			     MDS_INODELOCK_XATTR, MDT_LOCAL_LOCK);
+			     MDS_INODELOCK_XATTR);
         if (rc != 0) {
                 mdt_object_put(info->mti_env, ms);
                 GOTO(out_unlock_parent, rc);
@@ -1154,29 +1126,16 @@ static int mdt_pdir_hash_lock(struct mdt_thread_info *info,
 	return rc;
 }
 
-enum mdt_rename_lock {
-	MRL_RENAME,
-	MRL_MIGRATE,
-};
-
 /**
- * Get BFL lock for rename or migrate process, right now, it does not support
- * cross-MDT rename, so we only need global rename lock during migration.
+ * Get BFL lock for rename or migrate process.
  **/
 static int mdt_rename_lock(struct mdt_thread_info *info,
-			   struct lustre_handle *lh,
-			   enum mdt_rename_lock rename_lock)
+			   struct lustre_handle *lh)
 {
-	struct ldlm_namespace	*ns = info->mti_mdt->mdt_namespace;
-	ldlm_policy_data_t	*policy = &info->mti_policy;
-	struct ldlm_res_id	*res_id = &info->mti_res_id;
-	__u64			flags = 0;
-	int			rc;
+	int	rc;
 	ENTRY;
 
-	/* XXX only do global rename lock for migration */
-	if (mdt_seq_site(info->mti_mdt)->ss_node_id != 0 &&
-	    rename_lock == MRL_MIGRATE) {
+	if (mdt_seq_site(info->mti_mdt)->ss_node_id != 0) {
 		struct lu_fid *fid = &info->mti_tmp_fid1;
 		struct mdt_object *obj;
 
@@ -1188,25 +1147,29 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
 		if (IS_ERR(obj))
 			RETURN(PTR_ERR(obj));
 
-		LASSERT(mdt_object_remote(obj));
 		rc = mdt_remote_object_lock(info, obj,
 					    &LUSTRE_BFL_FID, lh,
 					    LCK_EX,
 					    MDS_INODELOCK_UPDATE);
 		mdt_object_put(info->mti_env, obj);
 	} else {
+		struct ldlm_namespace	*ns = info->mti_mdt->mdt_namespace;
+		ldlm_policy_data_t	*policy = &info->mti_policy;
+		struct ldlm_res_id	*res_id = &info->mti_res_id;
+		__u64			flags = 0;
+
 		fid_build_reg_res_name(&LUSTRE_BFL_FID, res_id);
 		memset(policy, 0, sizeof *policy);
 		policy->l_inodebits.bits = MDS_INODELOCK_UPDATE;
 		flags = LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB;
 		rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS, policy,
-					    LCK_EX, &flags, ldlm_blocking_ast,
-					    ldlm_completion_ast, NULL, NULL, 0,
-					    LVB_T_NONE,
-					    &info->mti_exp->exp_handle.h_cookie,
-					    lh);
+					   LCK_EX, &flags, ldlm_blocking_ast,
+					   ldlm_completion_ast, NULL, NULL, 0,
+					   LVB_T_NONE,
+					   &info->mti_exp->exp_handle.h_cookie,
+					   lh);
+		RETURN(rc);
 	}
-
 	RETURN(rc);
 }
 
@@ -1346,8 +1309,7 @@ static int mdt_lock_objects_in_linkea(struct mdt_thread_info *info,
 
 		mdt_lock_pdo_init(&mll->mll_lh, LCK_PW, &name);
 		rc = mdt_object_lock(info, mdt_pobj, &mll->mll_lh,
-				     MDS_INODELOCK_UPDATE,
-				     MDT_CROSS_LOCK);
+				     MDS_INODELOCK_UPDATE);
 		if (rc != 0) {
 			CERROR("%s: cannot lock "DFID": rc =%d\n",
 			       mdt_obd_name(mdt), PFID(&fid), rc);
@@ -1399,8 +1361,7 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info,
 	lh_dirp = &info->mti_lh[MDT_LH_PARENT];
 	mdt_lock_pdo_init(lh_dirp, LCK_PW, &rr->rr_name);
 	rc = mdt_object_lock(info, msrcdir, lh_dirp,
-			     MDS_INODELOCK_UPDATE,
-			     MDT_CROSS_LOCK);
+			     MDS_INODELOCK_UPDATE);
 	if (rc)
 		GOTO(out_put_parent, rc);
 
@@ -1468,7 +1429,7 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info,
 		lock_ibits &= ~MDS_INODELOCK_LOOKUP;
 	}
 
-	rc = mdt_object_lock(info, mold, lh_childp, lock_ibits, MDT_CROSS_LOCK);
+	rc = mdt_object_lock(info, mold, lh_childp, lock_ibits);
 	if (rc != 0)
 		GOTO(out_unlock_child, rc);
 
@@ -1593,8 +1554,7 @@ static int mdt_object_lock_save(struct mdt_thread_info *info,
 	int rc;
 
 	/* we lock the target dir if it is local */
-	rc = mdt_object_lock(info, dir, lh, MDS_INODELOCK_UPDATE,
-			     MDT_LOCAL_LOCK);
+	rc = mdt_object_lock(info, dir, lh, MDS_INODELOCK_UPDATE);
 	if (rc != 0)
 		return rc;
 
@@ -1641,13 +1601,6 @@ static int mdt_rename_parents_lock(struct mdt_thread_info *info,
 		tgt = mdt_object_find_check(info, fid_tgt, 1);
 		if (IS_ERR(tgt))
 			GOTO(err_src_put, rc = PTR_ERR(tgt));
-
-		if (unlikely(mdt_object_remote(tgt))) {
-			CDEBUG(D_INFO, "Source dir "DFID" target dir "DFID
-			       "on different MDTs\n", PFID(fid_src),
-			       PFID(fid_tgt));
-			GOTO(err_tgt_put, rc = -EXDEV);
-		}
 	}
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME4, 5);
@@ -1729,6 +1682,7 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 	struct mdt_lock_handle  *lh_newp = NULL;
 	struct lu_fid           *old_fid = &info->mti_tmp_fid1;
 	struct lu_fid           *new_fid = &info->mti_tmp_fid2;
+	__u64			lock_ibits;
 	int                      rc;
 	ENTRY;
 
@@ -1792,22 +1746,21 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 		if (!fid_is_md_operative(new_fid))
 			GOTO(out_put_old, rc = -EPERM);
 
-		if (mdt_object_remote(mold)) {
-			CDEBUG(D_INFO, "Src child "DFID" is on another MDT\n",
-			       PFID(old_fid));
-			GOTO(out_put_old, rc = -EXDEV);
-		}
-
 		mnew = mdt_object_find(info->mti_env, info->mti_mdt, new_fid);
 		if (IS_ERR(mnew))
 			GOTO(out_put_old, rc = PTR_ERR(mnew));
 
 		if (mdt_object_remote(mnew)) {
-			CDEBUG(D_INFO, "src child "DFID" is on another MDT\n",
-			       PFID(new_fid));
-			GOTO(out_put_new, rc = -EXDEV);
-		}
+			struct mdt_body	 *repbody;
 
+			/* Always send rename req to the target child MDT */
+			repbody = req_capsule_server_get(info->mti_pill,
+							 &RMF_MDT_BODY);
+			LASSERT(repbody != NULL);
+			repbody->mbo_fid1 = *new_fid;
+			repbody->mbo_valid |= (OBD_MD_FLID | OBD_MD_MDS);
+			GOTO(out_put_old, rc = -EREMOTE);
+		}
 		/* Before locking the target dir, check we do not replace
 		 * a dir with a non-dir, otherwise it may deadlock with
 		 * link op which tries to create a link in this dir
@@ -1818,10 +1771,24 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 
 		lh_oldp = &info->mti_lh[MDT_LH_OLD];
 		mdt_lock_reg_init(lh_oldp, LCK_EX);
-		rc = mdt_object_lock(info, mold, lh_oldp, MDS_INODELOCK_LOOKUP |
-				     MDS_INODELOCK_XATTR, MDT_CROSS_LOCK);
+
+		lock_ibits = MDS_INODELOCK_LOOKUP | MDS_INODELOCK_XATTR;
+		if (mdt_object_remote(msrcdir)) {
+			/* Enqueue lookup lock from the parent MDT */
+			rc = mdt_remote_object_lock(info, msrcdir,
+						    mdt_object_fid(mold),
+						    &lh_oldp->mlh_rreg_lh,
+						    lh_oldp->mlh_rreg_mode,
+						    MDS_INODELOCK_LOOKUP);
+			if (rc != ELDLM_OK)
+				GOTO(out_put_new, rc);
+
+			lock_ibits &= ~MDS_INODELOCK_LOOKUP;
+		}
+
+		rc = mdt_object_lock(info, mold, lh_oldp, lock_ibits);
 		if (rc != 0)
-			GOTO(out_put_new, rc);
+			GOTO(out_unlock_old, rc);
 
 		/* Check if @msrcdir is subdir of @mnew, before locking child
 		 * to avoid reverse locking. */
@@ -1838,8 +1805,7 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 		mdt_lock_reg_init(lh_newp, LCK_EX);
 		rc = mdt_object_lock(info, mnew, lh_newp,
 				     MDS_INODELOCK_LOOKUP |
-				     MDS_INODELOCK_UPDATE,
-				     MDT_LOCAL_LOCK);
+				     MDS_INODELOCK_UPDATE);
 		if (rc != 0)
 			GOTO(out_unlock_old, rc);
 
@@ -1848,18 +1814,24 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 	} else if (rc != -EREMOTE && rc != -ENOENT) {
 		GOTO(out_put_old, rc);
 	} else {
-		/* If mnew does not exist and mold are remote directory,
-		 * it only allows rename if they are under same directory */
-		if (mtgtdir != msrcdir && mdt_object_remote(mold)) {
-			CDEBUG(D_INFO, "Src child "DFID" is on another MDT\n",
-			       PFID(old_fid));
-			GOTO(out_put_old, rc = -EXDEV);
-		}
-
 		lh_oldp = &info->mti_lh[MDT_LH_OLD];
 		mdt_lock_reg_init(lh_oldp, LCK_EX);
-		rc = mdt_object_lock(info, mold, lh_oldp, MDS_INODELOCK_LOOKUP |
-				     MDS_INODELOCK_XATTR, MDT_CROSS_LOCK);
+
+		lock_ibits = MDS_INODELOCK_LOOKUP | MDS_INODELOCK_XATTR;
+		if (mdt_object_remote(msrcdir)) {
+			/* Enqueue lookup lock from the parent MDT */
+			rc = mdt_remote_object_lock(info, msrcdir,
+						    mdt_object_fid(mold),
+						    &lh_oldp->mlh_rreg_lh,
+						    lh_oldp->mlh_rreg_mode,
+						    MDS_INODELOCK_LOOKUP);
+			if (rc != ELDLM_OK)
+				GOTO(out_put_new, rc);
+
+			lock_ibits &= ~MDS_INODELOCK_LOOKUP;
+		}
+
+		rc = mdt_object_lock(info, mold, lh_oldp, lock_ibits);
 		if (rc != 0)
 			GOTO(out_put_old, rc);
 
@@ -1910,8 +1882,7 @@ out_unlock_parents:
 }
 
 static int mdt_reint_rename_or_migrate(struct mdt_thread_info *info,
-				       struct mdt_lock_handle *lhc,
-				       enum mdt_rename_lock rename_lock)
+				       struct mdt_lock_handle *lhc, bool rename)
 {
 	struct mdt_reint_record *rr = &info->mti_rr;
 	struct ptlrpc_request   *req = mdt_info_req(info);
@@ -1926,14 +1897,20 @@ static int mdt_reint_rename_or_migrate(struct mdt_thread_info *info,
 	    !fid_is_md_operative(rr->rr_fid2))
 		RETURN(-EPERM);
 
-	rc = mdt_rename_lock(info, &rename_lh, rename_lock);
-	if (rc != 0) {
-		CERROR("%s: can't lock FS for rename: rc  = %d\n",
-		       mdt_obd_name(info->mti_mdt), rc);
-		RETURN(rc);
+	/* Note: do not enqueue rename lock for replay request, because
+	 * if other MDT holds rename lock, but being blocked to wait for
+	 * this MDT to finish its recovery, and the failover MDT can not
+	 * get rename lock, which will cause deadlock. */
+	if (!req_is_replay(req)) {
+		rc = mdt_rename_lock(info, &rename_lh);
+		if (rc != 0) {
+			CERROR("%s: can't lock FS for rename: rc  = %d\n",
+			       mdt_obd_name(info->mti_mdt), rc);
+			RETURN(rc);
+		}
 	}
 
-	if (rename_lock == MRL_RENAME)
+	if (rename)
 		rc = mdt_reint_rename_internal(info, lhc);
 	else
 		rc = mdt_reint_migrate_internal(info, lhc);
@@ -1947,13 +1924,13 @@ static int mdt_reint_rename_or_migrate(struct mdt_thread_info *info,
 static int mdt_reint_rename(struct mdt_thread_info *info,
 			    struct mdt_lock_handle *lhc)
 {
-	return mdt_reint_rename_or_migrate(info, lhc, MRL_RENAME);
+	return mdt_reint_rename_or_migrate(info, lhc, true);
 }
 
 static int mdt_reint_migrate(struct mdt_thread_info *info,
 			    struct mdt_lock_handle *lhc)
 {
-	return mdt_reint_rename_or_migrate(info, lhc, MRL_MIGRATE);
+	return mdt_reint_rename_or_migrate(info, lhc, false);
 }
 
 struct mdt_reinter {
