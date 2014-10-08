@@ -445,6 +445,8 @@ static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
 		       totalram_pages >> (20 - PAGE_CACHE_SHIFT));
 		RETURN(-ERANGE);
 	}
+	/* Allow enough cache so clients can make well-formed RPCs */
+	pages_number = max_t(long, pages_number, PTLRPC_MAX_BRW_PAGES);
 
 	if (sbi->ll_dt_exp == NULL) /* being initialized */
 		GOTO(out, rc = 0);
