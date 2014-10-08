@@ -161,7 +161,8 @@ struct md_op_spec {
 	/** don't create lov objects or llog cookie - this replay */
 	unsigned int no_create:1,
 		     sp_cr_lookup:1, /* do lookup sanity check or not. */
-		     sp_rm_entry:1;  /* only remove name entry */
+		     sp_rm_entry:1,  /* only remove name entry */
+		     sp_permitted:1; /* do not check permission */
 
 	/** Current lock mode for parent dir where create is performing. */
         mdl_mode_t sp_cr_mode;
