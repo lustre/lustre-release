@@ -73,9 +73,7 @@ static enum hrtimer_restart nrs_tbf_timer_cb(struct hrtimer *timer)
 	struct ptlrpc_nrs   *nrs = head->th_res.res_policy->pol_nrs;
 	struct ptlrpc_service_part *svcpt = nrs->nrs_svcpt;
 
-	spin_lock(&nrs->nrs_lock);
 	nrs->nrs_throttling = 0;
-	spin_unlock(&nrs->nrs_lock);
 	wake_up(&svcpt->scp_waitq);
 
 	return HRTIMER_NORESTART;
@@ -1427,9 +1425,7 @@ struct ptlrpc_nrs_request *nrs_tbf_req_get(struct ptlrpc_nrs_policy *policy,
 		} else {
 			ktime_t time;
 
-			spin_lock(&policy->pol_nrs->nrs_lock);
 			policy->pol_nrs->nrs_throttling = 1;
-			spin_unlock(&policy->pol_nrs->nrs_lock);
 			head->th_deadline = deadline;
 			time = ktime_set(0, 0);
 			time = ktime_add_ns(time, deadline);
