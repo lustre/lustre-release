@@ -12633,6 +12633,8 @@ test_238() {
 run_test 238 "Verify linkea consistency"
 
 test_239() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.60) ] &&
+		skip "Need MDS version at least 2.5.60" && return
 	local list=$(comma_list $(mdts_nodes))
 
 	mkdir -p $DIR/$tdir
