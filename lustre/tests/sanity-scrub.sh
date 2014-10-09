@@ -987,12 +987,11 @@ test_12() {
 	check_mount_and_prep
 	$SETSTRIPE -c 1 -i 0 $DIR/$tdir
 
-	local count=$(precreated_ost_obj_count 0 0)
-
 	#define OBD_FAIL_OSD_COMPAT_INVALID_ENTRY		0x195
 	do_facet ost1 $LCTL set_param fail_loc=0x195
-	createmany -o $DIR/$tdir/f $((count + 32))
+	local count=$(precreated_ost_obj_count 0 0)
 
+	createmany -o $DIR/$tdir/f $((count + 32))
 	umount_client $MOUNT || error "(1) Fail to stop client!"
 
 	stop ost1 || error "(2) Fail to stop ost1"
@@ -1026,10 +1025,10 @@ test_13() {
 	check_mount_and_prep
 	$SETSTRIPE -c 1 -i 0 $DIR/$tdir
 
-	local count=$(precreated_ost_obj_count 0 0)
-
 	#define OBD_FAIL_OSD_COMPAT_NO_ENTRY		0x196
 	do_facet ost1 $LCTL set_param fail_loc=0x196
+	local count=$(precreated_ost_obj_count 0 0)
+
 	createmany -o $DIR/$tdir/f $((count + 32))
 	do_facet ost1 $LCTL set_param fail_loc=0
 
@@ -1059,10 +1058,10 @@ test_14() {
 	check_mount_and_prep
 	$SETSTRIPE -c 1 -i 0 $DIR/$tdir
 
-	local count=$(precreated_ost_obj_count 0 0)
-
 	#define OBD_FAIL_OSD_COMPAT_NO_ENTRY		0x196
 	do_facet ost1 $LCTL set_param fail_loc=0x196
+	local count=$(precreated_ost_obj_count 0 0)
+
 	createmany -o $DIR/$tdir/f $((count + 32))
 	do_facet ost1 $LCTL set_param fail_loc=0
 

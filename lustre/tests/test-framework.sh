@@ -6997,11 +6997,10 @@ precreated_ost_obj_count()
 	local mdt_name="MDT$(printf '%04x' $mdt_idx)"
 	local ost_name="OST$(printf '%04x' $ost_idx)"
 	local proc_path="${FSNAME}-${ost_name}-osc-${mdt_name}"
-	local last_id=$(do_facet mds${mdt_idx} lctl get_param -n \
+	local last_id=$(do_facet mds$((mdt_idx + 1)) lctl get_param -n \
 			osp.$proc_path.prealloc_last_id)
-	local next_id=$(do_facet mds${mdt_idx} lctl get_param -n \
+	local next_id=$(do_facet mds$((mdt_idx + 1)) lctl get_param -n \
 			osp.$proc_path.prealloc_next_id)
-
 	echo $((last_id - next_id + 1))
 }
 

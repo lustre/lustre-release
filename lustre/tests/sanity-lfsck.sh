@@ -1419,11 +1419,11 @@ test_14() {
 	check_mount_and_prep
 	$LFS setstripe -c 1 -i 0 $DIR/$tdir
 
-	local count=$(precreated_ost_obj_count 0 0)
-
 	echo "Inject failure stub to simulate dangling referenced MDT-object"
 	#define OBD_FAIL_LFSCK_DANGLING	0x1610
 	do_facet ost1 $LCTL set_param fail_loc=0x1610
+	local count=$(precreated_ost_obj_count 0 0)
+
 	createmany -o $DIR/$tdir/f $((count + 31))
 	touch $DIR/$tdir/guard
 	do_facet ost1 $LCTL set_param fail_loc=0
