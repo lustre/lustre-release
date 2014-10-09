@@ -2349,6 +2349,36 @@ test_36() {
 }
 run_test 36 "Migrate old admin files into new global indexes"
 
+# chown/chgrp to the file created with MDS_OPEN_DELAY_CREATE
+# LU-5006
+test_37() {
+	setup_quota_test
+	trap cleanup_quota_test EXIT
+
+	# make sure the system is clean
+	local USED=$(getquota -u $TSTID global curspace)
+	[ $USED -ne 0 ] &&
+		error "Used space ($USED) for user $TSTID isn't 0."
+
+	# create file with MDS_OPEN_DELAY_CREATE flag
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir/$tfile ||
+		error "Create file failed"
+	# write to file
+	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=1 conv=notrunc \
+		oflag=sync || error "Write file failed"
+	# chown to the file
+	chown $TSTID $DIR/$tdir/$tfile || error "Chown to file failed"
+
+	# wait for setattr on objects finished..."
+	wait_delete_completed
+
+	USED=$(getquota -u $TSTID global curspace)
+	[ $USED -ne 0 ] || quota_error u $TSTUSR "Used space is 0"
+
+	cleanup_quota_test
+}
+run_test 37 "Quota accounted properly for file created by 'lfs setstripe'"
+
 quota_fini()
 {
         do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"

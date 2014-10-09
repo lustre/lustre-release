@@ -627,10 +627,6 @@ static int __osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 		RETURN(0);
 
 	if (!is_only_remote_trans(th)) {
-		if (o->opo_new)
-			/* no need in logging for new objects being created */
-			RETURN(0);
-
 		/*
 		 * track all UID/GID changes via llog
 		 */
@@ -745,24 +741,12 @@ static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 
 	if (is_only_remote_trans(th)) {
 		rc = __osp_attr_set(env, dt, attr, th);
-		if (rc == 0 && o->opo_new)
-			o->opo_new = 0;
-
 		RETURN(rc);
 	}
 
 	/* we're interested in uid/gid changes only */
 	if (!(attr->la_valid & (LA_UID | LA_GID)))
 		RETURN(0);
-
-	/* new object, the very first ->attr_set()
-	 * initializing attributes needs no logging
-	 * all subsequent one are subject to the
-	 * logging and synchronization with OST */
-	if (o->opo_new) {
-		o->opo_new = 0;
-		RETURN(0);
-	}
 
 	rc = osp_sync_add(env, o, MDS_SETATTR64_REC, th, attr);
 	/* XXX: send new uid/gid to OST ASAP? */
@@ -1568,10 +1552,6 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 			spin_unlock(&d->opd_pre_lock);
 		}
 	}
-
-	/* new object, the very first ->attr_set()
-	 * initializing attributes needs no logging */
-	o->opo_new = 1;
 
 	/* Only need update last_used oid file, seq file will only be update
 	 * during seq rollover */
