@@ -4261,6 +4261,19 @@ test_405() {
 }
 run_test 405 "archive and release under striped directory"
 
+test_500()
+{
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.92) ] &&
+		skip "HSM migrate is not supported" && return
+
+	# Stop the existing copytool
+	copytool_cleanup
+
+	test_mkdir -p $DIR/$tdir
+	llapi_hsm_test -d $DIR/$tdir || error "One llapi HSM test failed"
+}
+run_test 500 "various LLAPI HSM tests"
+
 copytool_cleanup
 
 complete $SECONDS
