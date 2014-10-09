@@ -2888,7 +2888,7 @@ next:
  * \param[in] env	pointer to the thread context
  * \param[in] com	pointer to the lfsck component
  * \param[in] obj	pointer to the dt_object to be handled
- * \param[in,out] nlink	pointer to buffer to object's hard lock count before
+ * \param[in,out] la	pointer to buffer to object's attribute before
  *			and after the repairing
  *
  * \retval		positive number for repaired cases
@@ -2897,10 +2897,10 @@ next:
  */
 static int lfsck_namespace_repair_nlink(const struct lu_env *env,
 					struct lfsck_component *com,
-					struct dt_object *obj, __u32 *nlink)
+					struct dt_object *obj,
+					struct lu_attr *la)
 {
 	struct lfsck_thread_info	*info	= lfsck_env_info(env);
-	struct lu_attr			*la	= &info->lti_la3;
 	struct lu_fid			*tfid	= &info->lti_fid3;
 	struct lfsck_namespace		*ns	= com->lc_file_ram;
 	struct lfsck_instance		*lfsck	= com->lc_lfsck;
@@ -2910,7 +2910,7 @@ static int lfsck_namespace_repair_nlink(const struct lu_env *env,
 	struct thandle			*th	= NULL;
 	struct linkea_data		 ldata	= { 0 };
 	struct lustre_handle		 lh	= { 0 };
-	__u32				 old	= *nlink;
+	__u32				 old	= la->la_nlink;
 	int				 rc	= 0;
 	__u8				 flags;
 	ENTRY;
@@ -2961,17 +2961,19 @@ static int lfsck_namespace_repair_nlink(const struct lu_env *env,
 	if (flags & LNTF_SKIP_NLINK)
 		GOTO(unlock, rc = 0);
 
-	rc = lfsck_links_read2(env, child, &ldata);
-	if (rc == -ENODATA)
-		GOTO(unlock, rc = 0);
-
+	rc = dt_attr_get(env, child, la, BYPASS_CAPA);
 	if (rc != 0)
-		GOTO(unlock, rc);
+		GOTO(unlock, rc = (rc == -ENOENT ? 0 : rc));
 
-	if (*nlink == ldata.ld_leh->leh_reccount)
+	rc = lfsck_links_read2(env, child, &ldata);
+	if (rc != 0)
+		GOTO(unlock, rc = (rc == -ENODATA ? 0 : rc));
+
+	if (la->la_nlink == ldata.ld_leh->leh_reccount ||
+	    unlikely(la->la_nlink == 0))
 		GOTO(unlock, rc = 0);
 
-	la->la_nlink = *nlink = ldata.ld_leh->leh_reccount;
+	la->la_nlink = ldata.ld_leh->leh_reccount;
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
 		GOTO(unlock, rc = 1);
 
@@ -2992,7 +2994,7 @@ log:
 
 	CDEBUG(D_LFSCK, "%s: namespace LFSCK repaired the object "DFID"'s "
 	       "nlink count from %u to %u: rc = %d\n",
-	       lfsck_lfsck2name(lfsck), PFID(cfid), old, *nlink, rc);
+	       lfsck_lfsck2name(lfsck), PFID(cfid), old, la->la_nlink, rc);
 
 	if (rc != 0)
 		ns->ln_flags |= LF_INCONSISTENT;
@@ -3570,37 +3572,38 @@ out:
 		count = ldata.ld_leh->leh_reccount;
 	}
 
-	/* If the LFSCK is marked as LF_INCOMPLETE, then means some
-	 * MDT has ever tried to verify some remote MDT-object that
-	 * resides on this MDT, but this MDT failed to respond such
-	 * request. So means there may be some remote name entry on
-	 * other MDT that references this object with another name,
-	 * so we cannot know whether this linkEA is valid or not.
-	 * So keep it there and maybe resolved when next LFSCK run. */
-	if (count == 0 && !(ns->ln_flags & LF_INCOMPLETE)) {
-		/* If the child becomes orphan, then insert it into
-		 * the global .lustre/lost+found/MDTxxxx directory. */
-		rc = lfsck_namespace_insert_orphan(env, com, child, "", "O",
-						   &count);
-		if (rc < 0)
+	if (count == 0) {
+		/* If the LFSCK is marked as LF_INCOMPLETE, then means some
+		 * MDT has ever tried to verify some remote MDT-object that
+		 * resides on this MDT, but this MDT failed to respond such
+		 * request. So means there may be some remote name entry on
+		 * other MDT that references this object with another name,
+		 * so we cannot know whether this linkEA is valid or not.
+		 * So keep it there and maybe resolved when next LFSCK run. */
+		if (!(ns->ln_flags & LF_INCOMPLETE)) {
+			/* If the child becomes orphan, then insert it into
+			 * the global .lustre/lost+found/MDTxxxx directory. */
+			rc = lfsck_namespace_insert_orphan(env, com, child,
+							   "", "O", &count);
+			if (rc < 0)
+				return rc;
+
+			if (rc > 0) {
+				ns->ln_mul_ref_repaired++;
+				repaired = true;
+			}
+		}
+	} else {
+		rc = dt_attr_get(env, child, la, BYPASS_CAPA);
+		if (rc != 0)
 			return rc;
 
-		if (rc > 0) {
-			ns->ln_mul_ref_repaired++;
-			repaired = true;
-		}
-	}
-
-	rc = dt_attr_get(env, child, la, BYPASS_CAPA);
-	if (rc != 0)
-		return rc;
-
-	if (la->la_nlink != count) {
-		rc = lfsck_namespace_repair_nlink(env, com, child,
-						  &la->la_nlink);
-		if (rc > 0) {
-			ns->ln_objs_nlink_repaired++;
-			rc = 0;
+		if (la->la_nlink != 0 && la->la_nlink != count) {
+			rc = lfsck_namespace_repair_nlink(env, com, child, la);
+			if (rc > 0) {
+				ns->ln_objs_nlink_repaired++;
+				rc = 0;
+			}
 		}
 	}
 
