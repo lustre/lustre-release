@@ -515,7 +515,7 @@ typedef struct kgn_device {
 	int                     gnd_id;           /* device id, also index in kgn_devices */
 	__u32                   gnd_nid;          /* ph host ID translated to NID */
 	struct list_head        gnd_fma_buffs;    /* list of FMA memory blocks */
-	struct semaphore        gnd_fmablk_sem;   /* semaphore for FMA block memory alloc/free */
+	struct mutex		gnd_fmablk_mutex; /* mutex for FMA block memory alloc/free */
 	spinlock_t              gnd_fmablk_lock;  /* lock for mbox alloc/release */
 	atomic_t                gnd_nfmablk;      /* # of fmablk live */
 	atomic_t                gnd_fmablk_vers;  /* gnd_fma_bufs stamp */
@@ -791,7 +791,7 @@ typedef struct kgn_data {
 	wait_queue_head_t       kgn_ruhroh_waitq;     /* ruhroh thread wakeup */
 	int                     kgn_quiesce_trigger;  /* should we quiesce ? */
 	atomic_t                kgn_nquiesce;         /* how many quiesced ? */
-	struct semaphore        kgn_quiesce_sem;      /* serialize ruhroh task, startup and shutdown */
+	struct mutex		kgn_quiesce_mutex;    /* serialize ruhroh task, startup and shutdown */
 	int                     kgn_needs_reset;      /* we need stack reset */
 
 	/* These next three members implement communication from gnilnd into

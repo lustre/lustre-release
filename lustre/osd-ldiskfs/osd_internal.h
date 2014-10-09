@@ -45,6 +45,8 @@
 
 #if defined(__KERNEL__)
 
+/* struct mutex */
+#include <linux/mutex.h>
 /* struct rw_semaphore */
 #include <linux/rwsem.h>
 /* struct dentry */
@@ -158,7 +160,7 @@ struct osd_obj_map {
 	rwlock_t	 om_seq_list_lock; /* lock for seq_list */
 	cfs_list_t	 om_seq_list;      /* list head for seq */
 	int		 om_subdir_count;
-	struct semaphore om_dir_init_sem;
+	struct mutex	 om_dir_init_mutex;
 };
 
 struct osd_mdobj {

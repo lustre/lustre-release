@@ -387,7 +387,7 @@ static int osd_ost_init(const struct lu_env *env, struct osd_device *dev)
 
 	CFS_INIT_LIST_HEAD(&dev->od_ost_map->om_seq_list);
 	rwlock_init(&dev->od_ost_map->om_seq_list_lock);
-	sema_init(&dev->od_ost_map->om_dir_init_sem, 1);
+	mutex_init(&dev->od_ost_map->om_dir_init_mutex);
 
         LASSERT(dev->od_fsops);
         osd_push_ctxt(dev, &new, &save);
@@ -833,7 +833,7 @@ static struct osd_obj_seq *osd_seq_load(struct osd_thread_info *info,
 		RETURN(osd_seq);
 
 	/* Serializing init process */
-	down(&map->om_dir_init_sem);
+	mutex_lock(&map->om_dir_init_mutex);
 
 	/* Check whether the seq has been added */
 	read_lock(&map->om_seq_list_lock);
@@ -862,7 +862,7 @@ static struct osd_obj_seq *osd_seq_load(struct osd_thread_info *info,
 	write_unlock(&map->om_seq_list_lock);
 
 cleanup:
-	up(&map->om_dir_init_sem);
+	mutex_unlock(&map->om_dir_init_mutex);
 	if (rc != 0) {
 		if (osd_seq != NULL)
 			OBD_FREE_PTR(osd_seq);

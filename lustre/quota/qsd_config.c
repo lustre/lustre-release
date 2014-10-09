@@ -88,7 +88,7 @@ struct qsd_fsinfo *qsd_get_fsinfo(char *name, bool create)
 		if (new == NULL)
 			RETURN(NULL);
 
-		sema_init(&new->qfs_sem, 1);
+		mutex_init(&new->qfs_mutex);
 		CFS_INIT_LIST_HEAD(&new->qfs_qsd_list);
 		strcpy(new->qfs_name, name);
 		new->qfs_ref = 1;
@@ -160,7 +160,7 @@ int qsd_process_config(struct lustre_cfg *lcfg)
 	if (strchr(valstr, 'g'))
 		enabled |= 1 << GRPQUOTA;
 
-	down(&qfs->qfs_sem);
+	mutex_lock(&qfs->qfs_mutex);
 	if (qfs->qfs_enabled[pool - LQUOTA_FIRST_RES] == enabled)
 		/* no change required */
 		GOTO(out, rc = 0);
@@ -205,7 +205,7 @@ int qsd_process_config(struct lustre_cfg *lcfg)
 		}
 	}
 out:
-	up(&qfs->qfs_sem);
+	mutex_unlock(&qfs->qfs_mutex);
 	qsd_put_fsinfo(qfs);
 	RETURN(0);
 }

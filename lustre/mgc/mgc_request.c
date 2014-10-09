@@ -704,8 +704,8 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb)
 	if (env == NULL)
 		RETURN(-ENOMEM);
 
-	/* The mgc fs exclusion sem. Only one fs can be setup at a time. */
-	down(&cli->cl_mgc_sem);
+	/* The mgc fs exclusion mutex. Only one fs can be setup at a time. */
+	mutex_lock(&cli->cl_mgc_mutex);
 
 	cfs_cleanup_group_info();
 
@@ -760,7 +760,7 @@ out_los:
 	if (rc < 0) {
 		local_oid_storage_fini(env, cli->cl_mgc_los);
 		cli->cl_mgc_los = NULL;
-		up(&cli->cl_mgc_sem);
+		mutex_unlock(&cli->cl_mgc_mutex);
 	}
 out_env:
 	lu_env_fini(env);
@@ -794,7 +794,7 @@ static int mgc_fs_cleanup(struct obd_device *obd)
 
 unlock:
 	class_decref(obd, "mgc_fs", obd);
-	up(&cli->cl_mgc_sem);
+	mutex_unlock(&cli->cl_mgc_mutex);
 
 	RETURN(0);
 }

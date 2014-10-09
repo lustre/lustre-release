@@ -76,11 +76,11 @@ static int LL_PROC_PROTO(proc_toggle_thread_pause)
 	}
 
 	if (old_val != kgnilnd_sysctl.ksd_pause_trigger) {
-		down(&kgnilnd_data.kgn_quiesce_sem);
+		mutex_lock(&kgnilnd_data.kgn_quiesce_mutex);
 		CDEBUG(D_NET, "setting quiesce_trigger %d\n", old_val);
 		kgnilnd_data.kgn_quiesce_trigger = kgnilnd_sysctl.ksd_pause_trigger;
 		kgnilnd_quiesce_wait("admin sysctl");
-		up(&kgnilnd_data.kgn_quiesce_sem);
+		mutex_unlock(&kgnilnd_data.kgn_quiesce_mutex);
 	}
 
 	RETURN(rc);

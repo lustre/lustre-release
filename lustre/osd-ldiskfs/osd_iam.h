@@ -488,7 +488,7 @@ struct iam_container {
 	/*
 	 * Protect ic_idle_bh
 	 */
-	struct semaphore	ic_idle_sem;
+	struct mutex		ic_idle_mutex;
 	/*
 	 * BH for idle blocks
 	 */

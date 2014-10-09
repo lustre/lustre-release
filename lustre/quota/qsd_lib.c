@@ -507,10 +507,10 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 
 	/* release per-filesystem information */
 	if (qsd->qsd_fsinfo != NULL) {
-		down(&qsd->qsd_fsinfo->qfs_sem);
+		mutex_lock(&qsd->qsd_fsinfo->qfs_mutex);
 		/* remove from the list of fsinfo */
 		cfs_list_del_init(&qsd->qsd_link);
-		up(&qsd->qsd_fsinfo->qfs_sem);
+		mutex_unlock(&qsd->qsd_fsinfo->qfs_mutex);
 		qsd_put_fsinfo(qsd->qsd_fsinfo);
 		qsd->qsd_fsinfo = NULL;
 	}
@@ -607,9 +607,9 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 	}
 
 	/* add in the list of lquota_fsinfo */
-	down(&qsd->qsd_fsinfo->qfs_sem);
+	mutex_lock(&qsd->qsd_fsinfo->qfs_mutex);
 	list_add_tail(&qsd->qsd_link, &qsd->qsd_fsinfo->qfs_qsd_list);
-	up(&qsd->qsd_fsinfo->qfs_sem);
+	mutex_unlock(&qsd->qsd_fsinfo->qfs_mutex);
 
 	/* register procfs directory */
 	qsd->qsd_proc = lprocfs_register(QSD_DIR, osd_proc,

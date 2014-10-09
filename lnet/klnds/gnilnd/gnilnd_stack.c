@@ -90,8 +90,8 @@ kgnilnd_bump_timeouts(__u32 nap_time, char *reason)
 	}
 }
 
-/* Quiesce or wake up the stack.  The caller must hold the kgn_quiesce_sem semaphore
- * on entry, which holds off any pending stack shutdown.   */
+/* Quiesce or wake up the stack.  The caller must hold the kgn_quiesce_mutex
+ * mutex on entry, which holds off any pending stack shutdown. */
 void
 kgnilnd_quiesce_wait(char *reason)
 {
@@ -386,7 +386,7 @@ kgnilnd_ruhroh_thread(void *arg)
 			break;
 
 		/* Serialize with driver startup and shutdown. */
-		down(&kgnilnd_data.kgn_quiesce_sem);
+		mutex_lock(&kgnilnd_data.kgn_quiesce_mutex);
 
 	       CDEBUG(D_NET, "trigger %d reset %d to_bump %d pause %d\n",
 			kgnilnd_data.kgn_quiesce_trigger,
@@ -451,7 +451,7 @@ kgnilnd_ruhroh_thread(void *arg)
 			set_mb(kgnilnd_data.kgn_needs_reset, 0);
 		}
 
-		up(&kgnilnd_data.kgn_quiesce_sem);
+		mutex_unlock(&kgnilnd_data.kgn_quiesce_mutex);
 	}
 
 	kgnilnd_data.kgn_ruhroh_running = 0;

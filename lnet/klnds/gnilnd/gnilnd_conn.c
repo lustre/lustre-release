@@ -79,9 +79,9 @@ kgnilnd_alloc_fmablk(kgn_device_t *device, int use_phys)
 	gni_smsg_attr_t         smsg_attr;
 	unsigned long           fmablk_vers;
 
-	/* we'll use fmablk_vers and the gnd_fmablk_sem to gate access
+	/* we'll use fmablk_vers and the gnd_fmablk_mutex to gate access
 	 * to this allocation code. Everyone will sample the version
-	 * before and after getting the semaphore. If it has changed,
+	 * before and after getting the mutex. If it has changed,
 	 * we'll bail out to check the lists again - this indicates that
 	 * some sort of change was made to the lists and it is possible
 	 * that there is a mailbox for us to find now. This should prevent
@@ -89,12 +89,12 @@ kgnilnd_alloc_fmablk(kgn_device_t *device, int use_phys)
 	 * that need a yet-to-be-allocated mailbox for a connection. */
 
 	fmablk_vers = atomic_read(&device->gnd_fmablk_vers);
-	down(&device->gnd_fmablk_sem);
+	mutex_lock(&device->gnd_fmablk_mutex);
 
 	if (fmablk_vers != atomic_read(&device->gnd_fmablk_vers)) {
-		/* version changed while we were waiting for semaphore,
+		/* version changed while we were waiting for mutex,
 		 * we'll recheck the lists assuming something nice happened */
-		up(&device->gnd_fmablk_sem);
+		mutex_unlock(&device->gnd_fmablk_mutex);
 		return 0;
 	}
 
@@ -203,7 +203,7 @@ kgnilnd_alloc_fmablk(kgn_device_t *device, int use_phys)
 
 	spin_unlock(&device->gnd_fmablk_lock);
 
-	up(&device->gnd_fmablk_sem);
+	mutex_unlock(&device->gnd_fmablk_mutex);
 
 	return 0;
 
@@ -220,7 +220,7 @@ free_blk:
 free_desc:
 	LIBCFS_FREE(fma_blk, sizeof(kgn_fma_memblock_t));
 out:
-	up(&device->gnd_fmablk_sem);
+	mutex_unlock(&device->gnd_fmablk_mutex);
 	return rc;
 }
 
@@ -584,8 +584,8 @@ kgnilnd_map_phys_fmablk(kgn_device_t *device)
 	int                     rc = 0;
 	kgn_fma_memblock_t     *fma_blk;
 
-	/* use sem to gate access to single thread, just in case */
-	down(&device->gnd_fmablk_sem);
+	/* use mutex to gate access to single thread, just in case */
+	mutex_lock(&device->gnd_fmablk_mutex);
 
 	spin_lock(&device->gnd_fmablk_lock);
 
@@ -597,7 +597,7 @@ kgnilnd_map_phys_fmablk(kgn_device_t *device)
 	}
 	spin_unlock(&device->gnd_fmablk_lock);
 
-	up(&device->gnd_fmablk_sem);
+	mutex_unlock(&device->gnd_fmablk_mutex);
 
 	RETURN(rc);
 }
@@ -608,8 +608,8 @@ kgnilnd_unmap_phys_fmablk(kgn_device_t *device)
 
 	kgn_fma_memblock_t      *fma_blk;
 
-	/* use sem to gate access to single thread, just in case */
-	down(&device->gnd_fmablk_sem);
+	/* use mutex to gate access to single thread, just in case */
+	mutex_lock(&device->gnd_fmablk_mutex);
 
 	spin_lock(&device->gnd_fmablk_lock);
 
@@ -619,7 +619,7 @@ kgnilnd_unmap_phys_fmablk(kgn_device_t *device)
 	}
 	spin_unlock(&device->gnd_fmablk_lock);
 
-	up(&device->gnd_fmablk_sem);
+	mutex_unlock(&device->gnd_fmablk_mutex);
 }
 
 void
@@ -628,8 +628,8 @@ kgnilnd_free_phys_fmablk(kgn_device_t *device)
 
 	kgn_fma_memblock_t      *fma_blk, *fma_blkN;
 
-	/* use sem to gate access to single thread, just in case */
-	down(&device->gnd_fmablk_sem);
+	/* use mutex to gate access to single thread, just in case */
+	mutex_lock(&device->gnd_fmablk_mutex);
 
 	spin_lock(&device->gnd_fmablk_lock);
 
@@ -639,7 +639,7 @@ kgnilnd_free_phys_fmablk(kgn_device_t *device)
 	}
 	spin_unlock(&device->gnd_fmablk_lock);
 
-	up(&device->gnd_fmablk_sem);
+	mutex_unlock(&device->gnd_fmablk_mutex);
 }
 
 /* kgnilnd dgram nid->struct managment */

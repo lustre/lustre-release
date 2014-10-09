@@ -2167,7 +2167,7 @@ int kgnilnd_base_startup(void)
 		INIT_LIST_HEAD(&dev->gnd_map_tx);
 		INIT_LIST_HEAD(&dev->gnd_fma_buffs);
 		mutex_init(&dev->gnd_cq_mutex);
-		sema_init(&dev->gnd_fmablk_sem, 1);
+		mutex_init(&dev->gnd_fmablk_mutex);
 		spin_lock_init(&dev->gnd_fmablk_lock);
 		init_waitqueue_head(&dev->gnd_waitq);
 		init_waitqueue_head(&dev->gnd_dgram_waitq);
@@ -2217,7 +2217,7 @@ int kgnilnd_base_startup(void)
 	init_waitqueue_head(&kgnilnd_data.kgn_ruhroh_waitq);
 	spin_lock_init(&kgnilnd_data.kgn_reaper_lock);
 
-	sema_init(&kgnilnd_data.kgn_quiesce_sem, 1);
+	mutex_init(&kgnilnd_data.kgn_quiesce_mutex);
 	atomic_set(&kgnilnd_data.kgn_nquiesce, 0);
 	atomic_set(&kgnilnd_data.kgn_npending_conns, 0);
 	atomic_set(&kgnilnd_data.kgn_npending_unlink, 0);
@@ -2608,7 +2608,7 @@ kgnilnd_startup(lnet_ni_t *ni)
 	}
 
 	/* Serialize with shutdown. */
-	down(&kgnilnd_data.kgn_quiesce_sem);
+	mutex_lock(&kgnilnd_data.kgn_quiesce_mutex);
 
 	LIBCFS_ALLOC(net, sizeof(*net));
 	if (net == NULL) {
@@ -2677,10 +2677,10 @@ kgnilnd_startup(lnet_ni_t *ni)
 
 	/* we need a separate thread to call probe_wait_by_id until
 	 * we get a function callback notifier from kgni */
-	up(&kgnilnd_data.kgn_quiesce_sem);
+	mutex_unlock(&kgnilnd_data.kgn_quiesce_mutex);
 	RETURN(0);
  failed:
-	up(&kgnilnd_data.kgn_quiesce_sem);
+	mutex_unlock(&kgnilnd_data.kgn_quiesce_mutex);
 	kgnilnd_shutdown(ni);
 	RETURN(rc);
 }
@@ -2699,7 +2699,7 @@ kgnilnd_shutdown(lnet_ni_t *ni)
 		"init %d\n", kgnilnd_data.kgn_init);
 
 	/* Serialize with startup. */
-	down(&kgnilnd_data.kgn_quiesce_sem);
+	mutex_lock(&kgnilnd_data.kgn_quiesce_mutex);
 	CDEBUG(D_MALLOC, "before NAL cleanup: kmem %d\n",
 	       atomic_read(&libcfs_kmemory));
 
@@ -2783,7 +2783,7 @@ out:
 	CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
 	       atomic_read(&libcfs_kmemory));
 
-	up(&kgnilnd_data.kgn_quiesce_sem);
+	mutex_unlock(&kgnilnd_data.kgn_quiesce_mutex);
 	EXIT;
 	return;
 }
