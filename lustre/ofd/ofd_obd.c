@@ -171,8 +171,6 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 	if (data->ocd_connect_flags & OBD_CONNECT_FLAGS2)
 		data->ocd_connect_flags2 &= OST_CONNECT_SUPPORTED2;
 
-	data->ocd_version = LUSTRE_VERSION_CODE;
-
 	/* Kindly make sure the SKIP_ORPHAN flag is from MDS. */
 	if (data->ocd_connect_flags & OBD_CONNECT_MDS)
 		CDEBUG(D_HA, "%s: Received MDS connection for group %u\n",
@@ -214,12 +212,12 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 		data->ocd_grant_max_blks = ddp->ddp_max_extent_blks;
 	}
 
-	if (OCD_HAS_FLAG(data, GRANT)) {
-		/* Save connect_data we have so far because tgt_grant_connect()
-		 * uses it to calculate grant. */
-		exp->exp_connect_data = *data;
+	/* Save connect_data we have so far because tgt_grant_connect()
+	 * uses it to calculate grant, and we want to save the client
+	 * version before it is overwritten by LUSTRE_VERSION_CODE. */
+	exp->exp_connect_data = *data;
+	if (OCD_HAS_FLAG(data, GRANT))
 		tgt_grant_connect(env, exp, data, new_connection);
-	}
 
 	if (data->ocd_connect_flags & OBD_CONNECT_INDEX) {
 		struct lr_server_data *lsd = &ofd->ofd_lut.lut_lsd;
@@ -271,6 +269,8 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 
 	if (data->ocd_connect_flags & OBD_CONNECT_MAXBYTES)
 		data->ocd_maxbytes = ofd->ofd_lut.lut_dt_conf.ddp_maxbytes;
+
+	data->ocd_version = LUSTRE_VERSION_CODE;
 
 	if (OCD_HAS_FLAG(data, PINGLESS)) {
 		if (ptlrpc_pinger_suppress_pings()) {

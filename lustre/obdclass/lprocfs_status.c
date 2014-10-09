@@ -758,16 +758,6 @@ void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
 	lprocfs_stats_unlock(stats, LPROCFS_GET_NUM_CPU, &flags);
 }
 
-/**
- * Append a space separated list of current set flags to str.
- */
-#define flag2str(flag)						\
-	do {								\
-		if (imp->imp_##flag) {					\
-			seq_printf(m, "%s" #flag, first ? "" : ", ");	\
-			first = false;					\
-		}							\
-	} while (0)
 static void obd_import_flags2str(struct obd_import *imp, struct seq_file *m)
 {
 	bool first = true;
@@ -777,18 +767,17 @@ static void obd_import_flags2str(struct obd_import *imp, struct seq_file *m)
 		first = false;
 	}
 
-	flag2str(invalid);
-	flag2str(deactive);
-	flag2str(replayable);
-	flag2str(delayed_recovery);
-	flag2str(vbr_failed);
-	flag2str(pingable);
-	flag2str(resend_replay);
-	flag2str(no_pinger_recover);
-	flag2str(need_mne_swab);
-	flag2str(connect_tried);
+	flag2str(imp, invalid);
+	flag2str(imp, deactive);
+	flag2str(imp, replayable);
+	flag2str(imp, delayed_recovery);
+	flag2str(imp, vbr_failed);
+	flag2str(imp, pingable);
+	flag2str(imp, resend_replay);
+	flag2str(imp, no_pinger_recover);
+	flag2str(imp, need_mne_swab);
+	flag2str(imp, connect_tried);
 }
-#undef flag2str
 
 static const char *obd_connect_names[] = {
 	/* flags names  */
@@ -862,8 +851,8 @@ static const char *obd_connect_names[] = {
 	NULL
 };
 
-static void obd_connect_seq_flags2str(struct seq_file *m, __u64 flags,
-				      __u64 flags2, const char *sep)
+void obd_connect_seq_flags2str(struct seq_file *m, __u64 flags, __u64 flags2,
+			       const char *sep)
 {
 	bool first = true;
 	__u64 mask;
@@ -900,6 +889,7 @@ static void obd_connect_seq_flags2str(struct seq_file *m, __u64 flags,
 		first = false;
 	}
 }
+EXPORT_SYMBOL(obd_connect_seq_flags2str);
 
 int obd_connect_flags2str(char *page, int count, __u64 flags, __u64 flags2,
 			  const char *sep)
@@ -936,8 +926,8 @@ int obd_connect_flags2str(char *page, int count, __u64 flags, __u64 flags2,
 }
 EXPORT_SYMBOL(obd_connect_flags2str);
 
-static void obd_connect_data_seqprint(struct seq_file *m,
-				      struct obd_connect_data *ocd)
+void
+obd_connect_data_seqprint(struct seq_file *m, struct obd_connect_data *ocd)
 {
 	__u64 flags;
 

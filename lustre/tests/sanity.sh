@@ -170,6 +170,45 @@ test_0c() {
 }
 run_test 0c "check import proc"
 
+test_0d() { # LU-3397
+	[ $(lustre_version_code mgs) -lt $(version_code 2.10.57) ] &&
+		skip "proc exports not supported before 2.10.57" && return
+
+	local mgs_exp="mgs.MGS.exports"
+	local client_uuid=$($LCTL get_param -n mgc.*.uuid)
+	local exp_client_nid
+	local exp_client_version
+	local exp_val
+	local imp_val
+	local temp_imp=$DIR/$tfile.import
+	local temp_exp=$DIR/$tfile.export
+
+	# save mgc import file to $temp_imp
+	$LCTL get_param mgc.*.import | tee $temp_imp
+	# Check if client uuid is found in MGS export
+	for exp_client_nid in $(do_facet mgs $LCTL get_param -N $mgs_exp.*); do
+		[ $(do_facet mgs $LCTL get_param $exp_client_nid.uuid) == \
+			$client_uuid ] &&
+			break;
+	done
+	# save mgs export file to $temp_exp
+	do_facet mgs $LCTL get_param $exp_client_nid.export | tee $temp_exp
+
+	# Compare the value of field "connect_flags"
+	imp_val=$(grep "connect_flags" $temp_imp)
+	exp_val=$(grep "connect_flags" $temp_exp)
+	[ "$exp_val" == "$imp_val" ] ||
+		error "export flags '$exp_val' != import flags '$imp_val'"
+
+	# Compare the value of client version
+	exp_client_version=$(awk '/target_version:/ { print $2 }' $temp_exp)
+	exp_val=$(version_code $exp_client_version)
+	imp_val=$(lustre_version_code client)
+	[ "$exp_val" == "$imp_val" ] ||
+		error "export client version '$exp_val' != '$imp_val'"
+}
+run_test 0d "check export proc ============================="
+
 test_1() {
 	test_mkdir $DIR/$tdir
 	test_mkdir $DIR/$tdir/d2

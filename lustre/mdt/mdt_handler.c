@@ -5599,12 +5599,12 @@ static int mdt_connect_internal(const struct lu_env *env,
 		data->ocd_grant_max_blks = ddp->ddp_max_extent_blks;
 	}
 
-	if (OCD_HAS_FLAG(data, GRANT)) {
-		/* Save connect_data we have so far because tgt_grant_connect()
-		 * uses it to calculate grant. */
-		exp->exp_connect_data = *data;
+	/* Save connect_data we have so far because tgt_grant_connect()
+	 * uses it to calculate grant, and we want to save the client
+	 * version before it is overwritten by LUSTRE_VERSION_CODE. */
+	exp->exp_connect_data = *data;
+	if (OCD_HAS_FLAG(data, GRANT))
 		tgt_grant_connect(env, exp, data, !reconnect);
-	}
 
 	if (OCD_HAS_FLAG(data, MAXBYTES))
 		data->ocd_maxbytes = mdt->mdt_lut.lut_dt_conf.ddp_maxbytes;

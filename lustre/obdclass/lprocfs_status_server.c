@@ -115,6 +115,86 @@ int lprocfs_num_exports_seq_show(struct seq_file *m, void *data)
 }
 EXPORT_SYMBOL(lprocfs_num_exports_seq_show);
 
+static int obd_export_flags2str(struct obd_export *exp, struct seq_file *m)
+{
+	bool first = true;
+
+	flag2str(exp, failed);
+	flag2str(exp, in_recovery);
+	flag2str(exp, disconnected);
+	flag2str(exp, connecting);
+
+	return 0;
+}
+
+static int
+lprocfs_exp_print_export_seq(struct cfs_hash *hs, struct cfs_hash_bd *bd,
+			     struct hlist_node *hnode, void *cb_data)
+{
+	struct seq_file		*m = cb_data;
+	struct obd_export	*exp = cfs_hash_object(hs, hnode);
+	struct obd_device	*obd;
+	struct obd_connect_data	*ocd;
+
+	LASSERT(exp != NULL);
+	if (exp->exp_nid_stats == NULL)
+		goto out;
+	obd = exp->exp_obd;
+	ocd = &exp->exp_connect_data;
+
+	seq_printf(m, "%s:\n"
+		   "    name: %s\n"
+		   "    client: %s\n"
+		   "    connect_flags: [ ",
+		   obd_uuid2str(&exp->exp_client_uuid),
+		   obd->obd_name,
+		   obd_export_nid2str(exp));
+	obd_connect_seq_flags2str(m, ocd->ocd_connect_flags,
+				  ocd->ocd_connect_flags2, ", ");
+	seq_printf(m, " ]\n");
+	obd_connect_data_seqprint(m, ocd);
+	seq_printf(m, "    export_flags: [ ");
+	obd_export_flags2str(exp, m);
+	seq_printf(m, " ]\n");
+
+out:
+	return 0;
+}
+
+/**
+ * RPC connections are composed of an import and an export. Using the
+ * lctl utility we can extract important information about the state.
+ * The lprocfs_exp_export_seq_show routine displays the state information
+ * for the export.
+ *
+ * \param[in] m		seq file
+ * \param[in] data	unused
+ *
+ * \retval		0 on success
+ *
+ * The format of the export state information is like:
+ * a793e354-49c0-aa11-8c4f-a4f2b1a1a92b:
+ *     name: MGS
+ *     client: 10.211.55.10@tcp
+ *     connect_flags: [ version, barrier, adaptive_timeouts, ... ]
+ *     connect_data:
+ *        flags: 0x2000011005002020
+ *        instance: 0
+ *        target_version: 2.10.51.0
+ *        export_flags: [ ... ]
+ *
+ */
+static int lprocfs_exp_export_seq_show(struct seq_file *m, void *data)
+{
+	struct nid_stat *stats = m->private;
+	struct obd_device *obd = stats->nid_obd;
+
+	cfs_hash_for_each_key(obd->obd_nid_hash, &stats->nid,
+			      lprocfs_exp_print_export_seq, m);
+	return 0;
+}
+LPROC_SEQ_FOPS_RO(lprocfs_exp_export);
+
 static void lprocfs_free_client_stats(struct nid_stat *client_stat)
 {
 	CDEBUG(D_CONFIG, "stat %p - data %p/%p\n", client_stat,
@@ -385,7 +465,8 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid)
 				   &lprocfs_exp_nodemap_fops);
 	if (IS_ERR(entry)) {
 		rc = PTR_ERR(entry);
-		CWARN("Error adding the nodemap file: rc = %d\n", rc);
+		CWARN("%s: error adding the nodemap file: rc = %d\n",
+		      obd->obd_name, rc);
 		GOTO(destroy_new_ns, rc);
 	}
 
@@ -393,7 +474,8 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid)
 				   &lprocfs_exp_uuid_fops);
 	if (IS_ERR(entry)) {
 		rc = PTR_ERR(entry);
-		CWARN("Error adding the NID stats file: rc = %d\n", rc);
+		CWARN("%s: error adding the NID stats file: rc = %d\n",
+		      obd->obd_name, rc);
 		GOTO(destroy_new_ns, rc);
 	}
 
@@ -401,7 +483,17 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid)
 				   &lprocfs_exp_hash_fops);
 	if (IS_ERR(entry)) {
 		rc = PTR_ERR(entry);
-		CWARN("Error adding the hash file: rc = %d\n", rc);
+		CWARN("%s: error adding the hash file: rc = %d\n",
+		      obd->obd_name, rc);
+		GOTO(destroy_new_ns, rc);
+	}
+
+	entry = lprocfs_add_simple(new_stat->nid_proc, "export",
+				   new_stat, &lprocfs_exp_export_fops);
+	if (IS_ERR(entry)) {
+		rc = PTR_ERR(entry);
+		CWARN("%s: error adding the export file: rc = %d\n",
+		      obd->obd_name, rc);
 		GOTO(destroy_new_ns, rc);
 	}
 
@@ -409,7 +501,7 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid)
 				   &lprocfs_exp_replydata_fops);
 	if (IS_ERR(entry)) {
 		rc = PTR_ERR(entry);
-		CWARN("%s: Error adding the reply_data file: rc = %d\n",
+		CWARN("%s: error adding the reply_data file: rc = %d\n",
 		      obd->obd_name, rc);
 		GOTO(destroy_new_ns, rc);
 	}

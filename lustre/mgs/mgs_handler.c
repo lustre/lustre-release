@@ -1615,6 +1615,30 @@ static struct lu_device_type mgs_device_type = {
 	.ldt_ctx_tags	= LCT_MG_THREAD
 };
 
+static int mgs_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
+			     struct obd_device *obd, struct obd_uuid *cluuid,
+			     struct obd_connect_data *data, void *localdata)
+{
+	ENTRY;
+
+	if (exp == NULL || obd == NULL || cluuid == NULL)
+		RETURN(-EINVAL);
+
+	tgt_counter_incr(exp, LPROC_MGS_CONNECT);
+
+	if (data != NULL) {
+		data->ocd_connect_flags &= MGS_CONNECT_SUPPORTED;
+
+		if (data->ocd_connect_flags & OBD_CONNECT_FLAGS2)
+			data->ocd_connect_flags2 &= MGS_CONNECT_SUPPORTED2;
+
+		exp->exp_connect_data = *data;
+		data->ocd_version = LUSTRE_VERSION_CODE;
+	}
+
+	RETURN(mgs_export_stats_init(obd, exp, localdata));
+}
+
 static int mgs_obd_connect(const struct lu_env *env, struct obd_export **exp,
 			   struct obd_device *obd, struct obd_uuid *cluuid,
 			   struct obd_connect_data *data, void *localdata)
@@ -1638,49 +1662,18 @@ static int mgs_obd_connect(const struct lu_env *env, struct obd_export **exp,
 	if (lexp == NULL)
 		RETURN(-EFAULT);
 
-	if (data != NULL) {
-		data->ocd_connect_flags &= MGS_CONNECT_SUPPORTED;
-
-		if (data->ocd_connect_flags & OBD_CONNECT_FLAGS2)
-			data->ocd_connect_flags2 &= MGS_CONNECT_SUPPORTED2;
-
-		data->ocd_version = LUSTRE_VERSION_CODE;
-		lexp->exp_connect_data = *data;
-	}
-
-	tgt_counter_incr(lexp, LPROC_MGS_CONNECT);
-
-	rc = mgs_export_stats_init(obd, lexp, localdata);
+	rc = mgs_obd_reconnect(env, lexp, obd, cluuid, data, localdata);
 	if (rc)
-		class_disconnect(lexp);
-	else
-		*exp = lexp;
+		GOTO(out_disconnect, rc);
+
+	*exp = lexp;
 
 	RETURN(rc);
-}
 
-static int mgs_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
-			     struct obd_device *obd, struct obd_uuid *cluuid,
-			     struct obd_connect_data *data, void *localdata)
-{
-	ENTRY;
+out_disconnect:
+	class_disconnect(lexp);
 
-	if (exp == NULL || obd == NULL || cluuid == NULL)
-		RETURN(-EINVAL);
-
-	tgt_counter_incr(exp, LPROC_MGS_CONNECT);
-
-	if (data != NULL) {
-		data->ocd_connect_flags &= MGS_CONNECT_SUPPORTED;
-
-		if (data->ocd_connect_flags & OBD_CONNECT_FLAGS2)
-			data->ocd_connect_flags2 &= MGS_CONNECT_SUPPORTED2;
-
-		data->ocd_version = LUSTRE_VERSION_CODE;
-		exp->exp_connect_data = *data;
-	}
-
-	RETURN(mgs_export_stats_init(obd, exp, localdata));
+	return rc;
 }
 
 static int mgs_obd_disconnect(struct obd_export *exp)

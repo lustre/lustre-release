@@ -59,6 +59,22 @@ struct lprocfs_vars {
 	mode_t				 proc_mode;
 };
 
+/**
+ * Append a space separated list of current set flags to str.
+ */
+#define flag2str(port, flag)						\
+	do {								\
+		if ((port)->port##_##flag) {				\
+			seq_printf(m, "%s" #flag, first ? "" : ", ");	\
+			first = false;					\
+		}							\
+	} while (0)
+
+void obd_connect_seq_flags2str(struct seq_file *m, __u64 flags, __u64 flags2,
+			       const char *sep);
+void obd_connect_data_seqprint(struct seq_file *m,
+			       struct obd_connect_data *ocd);
+
 /* if we find more consumers this could be generalized */
 #define OBD_HIST_MAX 32
 struct obd_histogram {
