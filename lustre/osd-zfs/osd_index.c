@@ -999,7 +999,8 @@ static int osd_dir_it_rec_size(const struct lu_env *env, const struct dt_it *di,
 {
 	struct osd_zap_it   *it = (struct osd_zap_it *)di;
 	zap_attribute_t     *za = &osd_oti_get(env)->oti_za;
-	int		     rc, namelen = 0;
+	size_t		     namelen = 0;
+	int		     rc;
 	ENTRY;
 
 	if (it->ozi_pos <= 1)

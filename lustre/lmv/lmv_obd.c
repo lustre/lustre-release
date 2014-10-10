@@ -2399,7 +2399,7 @@ static int lmv_read_striped_page(struct obd_export *exp,
 	int			ent_idx = 0;
 	struct lu_dirent	*min_ent = NULL;
 	struct lu_dirent	*last_ent;
-	int			left_bytes;
+	size_t			left_bytes;
 	int			rc;
 	ENTRY;
 

@@ -231,13 +231,15 @@ static int mdd_fix_children(const struct lu_env *env,
 		GOTO(out_put, rc);
 
 	do {
+		size_t lu_dirent_size;
+
 		rc = iops->key_size(env, it);
 		if (rc == 0)
 			goto next;
 
 		/* calculate max space required for lu_dirent */
-		rc = lu_dirent_calc_size(rc, 0);
-		LASSERT(rc <= sizeof(info->mti_xattr_buf));
+		lu_dirent_size = lu_dirent_calc_size(rc, 0);
+		LASSERT(lu_dirent_size <= sizeof(info->mti_xattr_buf));
 
 		rc = iops->rec(env, it, (struct dt_rec *)ent, LUDA_TYPE);
 		if (rc == 0) {
