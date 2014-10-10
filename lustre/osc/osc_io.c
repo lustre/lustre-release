@@ -204,7 +204,7 @@ static int osc_io_submit(const struct lu_env *env,
  * Expand stripe KMS if necessary.
  */
 static void osc_page_touch_at(const struct lu_env *env,
-                              struct cl_object *obj, pgoff_t idx, unsigned to)
+			      struct cl_object *obj, pgoff_t idx, size_t to)
 {
         struct lov_oinfo  *loi  = cl2osc(obj)->oo_oinfo;
         struct cl_attr    *attr = &osc_env_info(env)->oti_attr;
@@ -365,26 +365,25 @@ static void osc_io_rw_iter_fini(const struct lu_env *env,
 }
 
 static int osc_io_fault_start(const struct lu_env *env,
-                              const struct cl_io_slice *ios)
+			      const struct cl_io_slice *ios)
 {
-        struct cl_io       *io;
-        struct cl_fault_io *fio;
+	struct cl_io       *io;
+	struct cl_fault_io *fio;
+	ENTRY;
 
-        ENTRY;
-
-        io  = ios->cis_io;
-        fio = &io->u.ci_fault;
-        CDEBUG(D_INFO, "%lu %d %d\n",
-               fio->ft_index, fio->ft_writable, fio->ft_nob);
-        /*
-         * If mapping is writeable, adjust kms to cover this page,
-         * but do not extend kms beyond actual file size.
-         * See bug 10919.
-         */
-        if (fio->ft_writable)
-                osc_page_touch_at(env, ios->cis_obj,
-                                  fio->ft_index, fio->ft_nob);
-        RETURN(0);
+	io  = ios->cis_io;
+	fio = &io->u.ci_fault;
+	CDEBUG(D_INFO, "%lu %d %zu\n",
+		fio->ft_index, fio->ft_writable, fio->ft_nob);
+	/*
+	 * If mapping is writeable, adjust kms to cover this page,
+	 * but do not extend kms beyond actual file size.
+	 * See bug 10919.
+	 */
+	if (fio->ft_writable)
+		osc_page_touch_at(env, ios->cis_obj,
+				  fio->ft_index, fio->ft_nob);
+	RETURN(0);
 }
 
 static int osc_async_upcall(void *a, int rc)

@@ -1126,9 +1126,9 @@ pgoff_t cl_index(const struct cl_object *obj, loff_t offset)
 }
 EXPORT_SYMBOL(cl_index);
 
-int cl_page_size(const struct cl_object *obj)
+size_t cl_page_size(const struct cl_object *obj)
 {
-	return 1 << PAGE_CACHE_SHIFT;
+	return 1UL << PAGE_CACHE_SHIFT;
 }
 EXPORT_SYMBOL(cl_page_size);
 

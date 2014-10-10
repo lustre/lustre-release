@@ -237,19 +237,19 @@ ssize_t ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io,
                            int rw, struct inode *inode,
                            struct ll_dio_pages *pv)
 {
-        struct cl_page    *clp;
-        struct cl_2queue  *queue;
-        struct cl_object  *obj = io->ci_obj;
-        int i;
-        ssize_t rc = 0;
-        loff_t file_offset  = pv->ldp_start_offset;
-        long size           = pv->ldp_size;
-        int page_count      = pv->ldp_nr;
-        struct page **pages = pv->ldp_pages;
-        long page_size      = cl_page_size(obj);
-        bool do_io;
-        int  io_pages       = 0;
-        ENTRY;
+	struct cl_page    *clp;
+	struct cl_2queue  *queue;
+	struct cl_object  *obj = io->ci_obj;
+	int i;
+	ssize_t rc = 0;
+	loff_t file_offset  = pv->ldp_start_offset;
+	size_t size         = pv->ldp_size;
+	int page_count      = pv->ldp_nr;
+	struct page **pages = pv->ldp_pages;
+	size_t page_size    = cl_page_size(obj);
+	bool do_io;
+	int  io_pages       = 0;
+	ENTRY;
 
         queue = &io->ci_queue;
         cl_2queue_init(queue);

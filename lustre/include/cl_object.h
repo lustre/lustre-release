@@ -1855,7 +1855,7 @@ struct cl_io {
                         /** page index within file. */
                         pgoff_t         ft_index;
                         /** bytes valid byte on a faulted page. */
-                        int             ft_nob;
+			size_t		ft_nob;
                         /** writable page? for nopage() only */
                         int             ft_writable;
                         /** page of an executable? */
@@ -2374,25 +2374,24 @@ int  cl_page_flush      (const struct lu_env *env, struct cl_io *io,
  * Functions to discard, delete and export a cl_page.
  */
 /** @{ */
-void    cl_page_discard      (const struct lu_env *env, struct cl_io *io,
-                              struct cl_page *pg);
-void    cl_page_delete       (const struct lu_env *env, struct cl_page *pg);
-int     cl_page_is_vmlocked  (const struct lu_env *env,
-                              const struct cl_page *pg);
-void    cl_page_export       (const struct lu_env *env,
-                              struct cl_page *pg, int uptodate);
+void    cl_page_discard(const struct lu_env *env, struct cl_io *io,
+			struct cl_page *pg);
+void    cl_page_delete(const struct lu_env *env, struct cl_page *pg);
+int     cl_page_is_vmlocked(const struct lu_env *env,
+			    const struct cl_page *pg);
+void    cl_page_export(const struct lu_env *env,
+		       struct cl_page *pg, int uptodate);
 int     cl_page_is_under_lock(const struct lu_env *env, struct cl_io *io,
 			      struct cl_page *page, pgoff_t *max_index);
-loff_t  cl_offset            (const struct cl_object *obj, pgoff_t idx);
-pgoff_t cl_index             (const struct cl_object *obj, loff_t offset);
-int     cl_page_size         (const struct cl_object *obj);
-int     cl_pages_prune       (const struct lu_env *env, struct cl_object *obj);
+loff_t  cl_offset(const struct cl_object *obj, pgoff_t idx);
+pgoff_t cl_index(const struct cl_object *obj, loff_t offset);
+size_t  cl_page_size(const struct cl_object *obj);
 
-void cl_lock_print      (const struct lu_env *env, void *cookie,
-                         lu_printer_t printer, const struct cl_lock *lock);
+void cl_lock_print(const struct lu_env *env, void *cookie,
+		   lu_printer_t printer, const struct cl_lock *lock);
 void cl_lock_descr_print(const struct lu_env *env, void *cookie,
-                         lu_printer_t printer,
-                         const struct cl_lock_descr *descr);
+			 lu_printer_t printer,
+			 const struct cl_lock_descr *descr);
 /* @} helper */
 
 /** @} cl_page */
