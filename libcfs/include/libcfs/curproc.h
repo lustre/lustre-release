@@ -51,8 +51,8 @@
 typedef uid_t kuid_t;
 typedef gid_t kgid_t;
 
-#define INVALID_UID     -1
-#define INVALID_GID     -1
+#define INVALID_UID	-1
+#define INVALID_GID	-1
 
 #define GLOBAL_ROOT_UID	 0
 #define GLOBAL_ROOT_GID	 0
@@ -102,12 +102,12 @@ static inline bool uid_eq(kuid_t left, kuid_t right)
 
 static inline bool uid_valid(kuid_t uid)
 {
-	return (uid != INVALID_UID);
+	return uid != (typeof(uid))INVALID_UID;
 }
 
 static inline bool gid_valid(kgid_t gid)
 {
-	return (gid != INVALID_GID);
+	return gid != (typeof(gid))INVALID_GID;
 }
 #endif /* _LINUX_UIDGID_H */
 
