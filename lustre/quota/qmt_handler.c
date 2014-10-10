@@ -649,7 +649,7 @@ static int qmt_dqacq(const struct lu_env *env, struct lu_device *ld,
 
 			svc = req->rq_rqbd->rqbd_svcpt;
 			timeout = at_est2timeout(at_get(&svc->scp_at_estimate));
-			timeout = max(timeout, ldlm_timeout);
+			timeout += (ldlm_bl_timeout(lock) >> 1);
 
 			/* lock is being cancelled, prolong timeout */
 			ldlm_refresh_waiting_lock(lock, timeout);

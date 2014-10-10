@@ -1218,10 +1218,12 @@ int ldlm_handle_convert0(struct ptlrpc_request *req,
                          const struct ldlm_request *dlm_req);
 int ldlm_handle_cancel(struct ptlrpc_request *req);
 int ldlm_request_cancel(struct ptlrpc_request *req,
-                        const struct ldlm_request *dlm_req, int first);
+			const struct ldlm_request *dlm_req,
+			int first, enum lustre_at_flags flags);
 /** @} ldlm_handlers */
 
 void ldlm_revoke_export_locks(struct obd_export *exp);
+unsigned int ldlm_bl_timeout(struct ldlm_lock *lock);
 #endif
 int ldlm_del_waiting_lock(struct ldlm_lock *lock);
 int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, int timeout);

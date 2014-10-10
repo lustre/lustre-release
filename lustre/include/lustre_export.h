@@ -265,6 +265,7 @@ struct obd_export {
         } u;
 
 	struct nodemap		  *exp_nodemap;
+	struct adaptive_timeout    exp_bl_lock_at;
 };
 
 #define exp_target_data u.eu_target_data

@@ -913,6 +913,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
                 }
         }
 
+	at_init(&export->exp_bl_lock_at, obd_timeout, 0);
 	spin_lock(&obd->obd_dev_lock);
         if (obd->obd_stopping) {
                 cfs_hash_del(hash, cluuid, &export->exp_uuid_hash);

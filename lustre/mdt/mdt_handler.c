@@ -1195,7 +1195,7 @@ static int mdt_swap_layouts(struct tgt_session_info *tsi)
 	info = tsi2mdt_info(tsi);
 
 	if (info->mti_dlm_req != NULL)
-		ldlm_request_cancel(req, info->mti_dlm_req, 0);
+		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
 
 	if (req_capsule_get_size(info->mti_pill, &RMF_CAPA1, RCL_CLIENT))
 		mdt_set_capainfo(info, 0, &info->mti_body->mbo_fid1,

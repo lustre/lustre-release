@@ -377,7 +377,7 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
         CDEBUG(D_INODE, "setxattr for "DFID"\n", PFID(rr->rr_fid1));
 
 	if (info->mti_dlm_req)
-		ldlm_request_cancel(req, info->mti_dlm_req, 0);
+		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR))
                 RETURN(err_serious(-ENOMEM));
