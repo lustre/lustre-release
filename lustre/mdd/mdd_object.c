@@ -1850,7 +1850,7 @@ static int mdd_readpage_sanity_check(const struct lu_env *env,
 }
 
 static int mdd_dir_page_build(const struct lu_env *env, union lu_page *lp,
-			      int nob, const struct dt_it_ops *iops,
+			      size_t nob, const struct dt_it_ops *iops,
 			      struct dt_it *it, __u32 attr, void *arg)
 {
 	struct lu_dirpage	*dp = &lp->lp_dir;
@@ -1862,6 +1862,9 @@ static int mdd_dir_page_build(const struct lu_env *env, union lu_page *lp,
 	struct lu_fid		 fid;
 	int			 first = 1;
 
+	if (nob < sizeof(*dp))
+		return -EINVAL;
+
         memset(area, 0, sizeof (*dp));
         area += sizeof (*dp);
         nob  -= sizeof (*dp);
@@ -1869,7 +1872,7 @@ static int mdd_dir_page_build(const struct lu_env *env, union lu_page *lp,
         ent  = area;
         do {
                 int    len;
-                int    recsize;
+		size_t recsize;
 
                 len = iops->key_size(env, it);
 

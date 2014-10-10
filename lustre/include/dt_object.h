@@ -2069,7 +2069,7 @@ int dt_record_read(const struct lu_env *env, struct dt_object *dt,
 int dt_record_write(const struct lu_env *env, struct dt_object *dt,
                     const struct lu_buf *buf, loff_t *pos, struct thandle *th);
 typedef int (*dt_index_page_build_t)(const struct lu_env *env,
-				     union lu_page *lp, int nob,
+				     union lu_page *lp, size_t nob,
 				     const struct dt_it_ops *iops,
 				     struct dt_it *it, __u32 attr, void *arg);
 int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
