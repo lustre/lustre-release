@@ -207,9 +207,9 @@ do {                                                        \
                .msg_cdls   = (cdls)         };              \
         dataname.msg_mask   = (mask);
 
-#if defined(__KERNEL__) || (defined(__arch_lib__) && !defined(LUSTRE_UTILS))
+#ifdef __KERNEL__
 
-#ifdef CDEBUG_ENABLED
+# ifdef CDEBUG_ENABLED
 
 /**
  * Filters out logging messages based on mask and subsystem.
@@ -220,7 +220,7 @@ static inline int cfs_cdebug_show(unsigned int mask, unsigned int subsystem)
                 ((libcfs_debug & mask) && (libcfs_subsystem_debug & subsystem));
 }
 
-#define __CDEBUG(cdls, mask, format, ...)                               \
+#  define __CDEBUG(cdls, mask, format, ...)				\
 do {                                                                    \
         static struct libcfs_debug_msg_data msgdata;                    \
                                                                         \
@@ -232,41 +232,40 @@ do {                                                                    \
         }                                                               \
 } while (0)
 
-#define CDEBUG(mask, format, ...) __CDEBUG(NULL, mask, format, ## __VA_ARGS__)
+#  define CDEBUG(mask, format, ...) __CDEBUG(NULL, mask, format, ## __VA_ARGS__)
 
-#define CDEBUG_LIMIT(mask, format, ...)         \
+#  define CDEBUG_LIMIT(mask, format, ...)	\
 do {                                            \
         static cfs_debug_limit_state_t cdls;    \
                                                 \
         __CDEBUG(&cdls, mask, format, ## __VA_ARGS__);\
 } while (0)
 
-#else /* !CDEBUG_ENABLED */
+# else /* !CDEBUG_ENABLED */
 static inline int cfs_cdebug_show(unsigned int mask, unsigned int subsystem)
 {
         return 0;
 }
-#define CDEBUG(mask, format, ...) (void)(0)
-#define CDEBUG_LIMIT(mask, format, ...) (void)(0)
-#warning "CDEBUG IS DISABLED. THIS SHOULD NEVER BE DONE FOR PRODUCTION!"
-#endif
+#  define CDEBUG(mask, format, ...) (void)(0)
+#  define CDEBUG_LIMIT(mask, format, ...) (void)(0)
+#  warning "CDEBUG IS DISABLED. THIS SHOULD NEVER BE DONE FOR PRODUCTION!"
+# endif /* CDEBUG_ENABLED */
 
-#else /* !__KERNEL__ && (!__arch_lib__ || LUSTRE_UTILS) */
+#else /* !__KERNEL__ */
 static inline int cfs_cdebug_show(unsigned int mask, unsigned int subsystem)
 {
         return 0;
 }
-#define CDEBUG(mask, format, ...)                                       \
+# define CDEBUG(mask, format, ...)					\
 do {                                                                    \
         if (((mask) & D_CANTMASK) != 0)                                 \
                 fprintf(stderr, "(%s:%d:%s()) " format,                 \
                         __FILE__, __LINE__, __FUNCTION__, ## __VA_ARGS__);\
 } while (0)
 
-#define CDEBUG_LIMIT CDEBUG
+# define CDEBUG_LIMIT CDEBUG
 
-#endif /* !__KERNEL__ ... */
-
+#endif /* __KERNEL__ */
 
 #define CWARN(format, ...)          CDEBUG_LIMIT(D_WARNING, format, ## __VA_ARGS__)
 #define CERROR(format, ...)         CDEBUG_LIMIT(D_ERROR, format, ## __VA_ARGS__)
@@ -282,7 +281,7 @@ do {                                                                    \
 
 #define LCONSOLE_EMERG(format, ...) CDEBUG(D_CONSOLE | D_EMERG, format, ## __VA_ARGS__)
 
-#ifdef CDEBUG_ENTRY_EXIT
+#if defined(CDEBUG_ENTRY_EXIT) && defined(__KERNEL__)
 
 void libcfs_log_goto(struct libcfs_debug_msg_data *goto_data,
 		     const char *label, long_ptr_t rc);
@@ -301,8 +300,8 @@ do {									\
 
 
 long libcfs_log_return(struct libcfs_debug_msg_data *, long rc);
-#if BITS_PER_LONG > 32
-#define RETURN(rc)							\
+# if BITS_PER_LONG > 32
+#  define RETURN(rc)							\
 do {									\
 	if (cfs_cdebug_show(D_TRACE, DEBUG_SUBSYSTEM)) {		\
                 LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_TRACE, NULL);	\
@@ -312,13 +311,13 @@ do {									\
 									\
 	return (rc);							\
 } while (0)
-#else /* BITS_PER_LONG == 32 */
+# else /* BITS_PER_LONG == 32 */
 /* We need an on-stack variable, because we cannot case a 32-bit pointer
  * directly to (long long) without generating a complier warning/error, yet
  * casting directly to (long) will truncate 64-bit return values. The log
  * values will print as 32-bit values, but they always have been. LU-1436
  */
-#define RETURN(rc)							\
+#  define RETURN(rc)							\
 do {									\
 	if (cfs_cdebug_show(D_TRACE, DEBUG_SUBSYSTEM)) {		\
 		typeof(rc) __rc = (rc);					\
@@ -329,12 +328,13 @@ do {									\
 									\
 	return (rc);							\
 } while (0)
-#endif /* BITS_PER_LONG > 32 */
 
-#define ENTRY	CDEBUG(D_TRACE, "Process entered\n")
-#define EXIT	CDEBUG(D_TRACE, "Process leaving\n")
+# endif /* BITS_PER_LONG > 32 */
 
-#else /* !CDEBUG_ENTRY_EXIT */
+# define ENTRY	CDEBUG(D_TRACE, "Process entered\n")
+# define EXIT	CDEBUG(D_TRACE, "Process leaving\n")
+
+#else /* !CDEBUG_ENTRY_EXIT || !__KERNEL__ */
 
 # define GOTO(label, rc)						\
 	do {								\
@@ -342,11 +342,11 @@ do {									\
 		goto label;						\
 	} while (0)
 
-#define RETURN(rc) return (rc)
-#define ENTRY                           do { } while (0)
-#define EXIT                            do { } while (0)
+# define RETURN(rc) return (rc)
+# define ENTRY	do { } while (0)
+# define EXIT	do { } while (0)
 
-#endif /* !CDEBUG_ENTRY_EXIT */
+#endif /* CDEBUG_ENTRY_EXIT && __KERNEL__ */
 
 #define RETURN_EXIT							\
 do {									\
