@@ -156,7 +156,12 @@ static int hsm_update_work(struct cdt_req_progress *crp,
 	int			  rc, osz, nsz;
 	struct interval_node	**new_vv;
 	struct interval_node	 *v, *node;
+	__u64			  end;
 	ENTRY;
+
+	end = extent->offset + extent->length;
+	if (end <= extent->offset)
+		RETURN(-EINVAL);
 
 	mutex_lock(&crp->crp_lock);
 	/* new node index */
@@ -196,7 +201,7 @@ static int hsm_update_work(struct cdt_req_progress *crp,
 
 	v = crp->crp_node[crp->crp_cnt / NODE_VECTOR_SZ];
 	node = &v[crp->crp_cnt % NODE_VECTOR_SZ];
-	interval_set(node, extent->offset, extent->offset + extent->length);
+	interval_set(node, extent->offset, end);
 	/* try to insert, if entry already exist ignore the new one
 	 * it can happen if ct sends 2 times the same progress */
 	if (interval_insert(node, &crp->crp_root) == NULL)
@@ -205,7 +210,7 @@ static int hsm_update_work(struct cdt_req_progress *crp,
 	rc = 0;
 out:
 	mutex_unlock(&crp->crp_lock);
-	return rc;
+	RETURN(rc);
 }
 
 /**
