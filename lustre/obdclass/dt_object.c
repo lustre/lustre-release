@@ -472,35 +472,33 @@ EXPORT_SYMBOL(dt_read);
 int dt_record_read(const struct lu_env *env, struct dt_object *dt,
                    struct lu_buf *buf, loff_t *pos)
 {
-        int rc;
+	ssize_t size;
 
-        LASSERTF(dt != NULL, "dt is NULL when we want to read record\n");
+	LASSERTF(dt != NULL, "dt is NULL when we want to read record\n");
 
-        rc = dt->do_body_ops->dbo_read(env, dt, buf, pos, BYPASS_CAPA);
+	size = dt->do_body_ops->dbo_read(env, dt, buf, pos, BYPASS_CAPA);
 
-        if (rc == buf->lb_len)
-                rc = 0;
-        else if (rc >= 0)
-                rc = -EFAULT;
-        return rc;
+	if (size < 0)
+		return size;
+	return (size == (ssize_t)buf->lb_len) ? 0 : -EFAULT;
 }
 EXPORT_SYMBOL(dt_record_read);
 
 int dt_record_write(const struct lu_env *env, struct dt_object *dt,
                     const struct lu_buf *buf, loff_t *pos, struct thandle *th)
 {
-        int rc;
+	ssize_t size;
 
-        LASSERTF(dt != NULL, "dt is NULL when we want to write record\n");
-        LASSERT(th != NULL);
-        LASSERT(dt->do_body_ops);
-        LASSERT(dt->do_body_ops->dbo_write);
-        rc = dt->do_body_ops->dbo_write(env, dt, buf, pos, th, BYPASS_CAPA, 1);
-        if (rc == buf->lb_len)
-                rc = 0;
-        else if (rc >= 0)
-                rc = -EFAULT;
-        return rc;
+	LASSERTF(dt != NULL, "dt is NULL when we want to write record\n");
+	LASSERT(th != NULL);
+	LASSERT(dt->do_body_ops);
+	LASSERT(dt->do_body_ops->dbo_write);
+
+	size = dt->do_body_ops->dbo_write(env, dt, buf, pos, th, BYPASS_CAPA, 1);
+
+	if (size < 0)
+		return size;
+	return (size == (ssize_t)buf->lb_len) ? 0 : -EFAULT;
 }
 EXPORT_SYMBOL(dt_record_write);
 
