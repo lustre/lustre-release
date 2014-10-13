@@ -397,7 +397,7 @@ static void cl_env_percpu_refill(void);
  */
 int cl_site_init(struct cl_site *s, struct cl_device *d)
 {
-        int i;
+	size_t i;
         int result;
 
         result = lu_site_init(&s->cs_lu, &d->cd_lu_dev);
@@ -438,7 +438,7 @@ int cl_site_stats_print(const struct cl_site *site, struct seq_file *m)
 		[CPS_PAGEIN]	= "r",
 		[CPS_FREEING]	= "f"
 	};
-	int i;
+	size_t i;
 
 /*
        lookup    hit  total   busy create
@@ -1218,7 +1218,7 @@ static void *cl_key_init(const struct lu_context *ctx,
 
         info = cl0_key_init(ctx, key);
         if (!IS_ERR(info)) {
-                int i;
+		size_t i;
 
                 for (i = 0; i < ARRAY_SIZE(info->clt_counters); ++i)
                         lu_ref_init(&info->clt_counters[i].ctc_locks_locked);
@@ -1229,8 +1229,8 @@ static void *cl_key_init(const struct lu_context *ctx,
 static void cl_key_fini(const struct lu_context *ctx,
                         struct lu_context_key *key, void *data)
 {
-        struct cl_thread_info *info;
-        int i;
+	struct cl_thread_info *info;
+	size_t i;
 
         info = data;
         for (i = 0; i < ARRAY_SIZE(info->clt_counters); ++i)
@@ -1241,8 +1241,8 @@ static void cl_key_fini(const struct lu_context *ctx,
 static void cl_key_exit(const struct lu_context *ctx,
                         struct lu_context_key *key, void *data)
 {
-        struct cl_thread_info *info = data;
-        int i;
+	struct cl_thread_info *info = data;
+	size_t i;
 
         for (i = 0; i < ARRAY_SIZE(info->clt_counters); ++i) {
                 LASSERT(info->clt_counters[i].ctc_nr_held == 0);

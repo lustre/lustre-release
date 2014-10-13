@@ -1344,7 +1344,7 @@ void cl_req_page_add(const struct lu_env *env,
 {
 	struct cl_object  *obj;
 	struct cl_req_obj *rqo;
-	int i;
+	unsigned int i;
 
 	ENTRY;
 
@@ -1397,7 +1397,7 @@ EXPORT_SYMBOL(cl_req_page_done);
  */
 int cl_req_prep(const struct lu_env *env, struct cl_req *req)
 {
-        int i;
+	unsigned int i;
         int result;
         const struct cl_req_slice *slice;
 
@@ -1431,7 +1431,7 @@ void cl_req_attr_set(const struct lu_env *env, struct cl_req *req,
 {
         const struct cl_req_slice *slice;
         struct cl_page            *page;
-        int i;
+	unsigned int i;
 
 	LASSERT(!list_empty(&req->crq_pages));
         ENTRY;
