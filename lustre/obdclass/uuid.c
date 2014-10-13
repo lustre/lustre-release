@@ -42,11 +42,11 @@
 #include <obd_support.h>
 #include <obd_class.h>
 
-static inline __u32 consume(int nob, __u8 **ptr)
+static inline size_t consume(size_t nob, __u8 **ptr)
 {
-	__u32 value;
+	size_t value;
 
-	LASSERT(nob <= sizeof value);
+	LASSERT(nob <= sizeof(value));
 
 	for (value = 0; nob > 0; --nob)
 		value = (value << 8) | *((*ptr)++);
@@ -55,11 +55,11 @@ static inline __u32 consume(int nob, __u8 **ptr)
 
 #define CONSUME(val, ptr) (val) = consume(sizeof(val), (ptr))
 
-static void uuid_unpack(class_uuid_t in, __u16 *uu, int nr)
+static void uuid_unpack(class_uuid_t in, __u16 *uu, size_t nr)
 {
-        __u8 *ptr = in;
+	__u8 *ptr = in;
 
-	LASSERT(nr * sizeof *uu == sizeof(class_uuid_t));
+	LASSERT(nr * sizeof(*uu) == sizeof(class_uuid_t));
 
 	while (nr-- > 0)
 		CONSUME(uu[nr], &ptr);
