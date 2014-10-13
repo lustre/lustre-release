@@ -19,36 +19,36 @@ a DMU-based target is not safe as it could trigger a storage
 failure if the data is ever read from disk again and the
 checksum does not match that expected by the block pointer.
 
-Index: linux-3.6.0-0.3.fc.el6.x86_64/block/blk-core.c
+Index: linux-3.10.0-123.8.1.el7.x86_64/block/blk-core.c
 ===================================================================
---- linux-3.6.0-0.3.fc.el6.x86_64.orig/block/blk-core.c	2012-09-30 19:47:46.000000000 -0400
-+++ linux-3.6.0-0.3.fc.el6.x86_64/block/blk-core.c	2012-11-16 11:35:04.419174277 -0500
-@@ -1606,6 +1606,8 @@ static inline bool should_fail_request(s
-
+--- linux-3.10.0-123.8.1.el7.x86_64.orig/block/blk-core.c
++++ linux-3.10.0-123.8.1.el7.x86_64/block/blk-core.c
+@@ -1667,6 +1667,8 @@ static inline bool should_fail_request(s
+ 
  #endif /* CONFIG_FAIL_MAKE_REQUEST */
-
+ 
 +int dev_check_rdonly(struct block_device *bdev);
 +
  /*
   * Check whether this bio extends beyond the end of the device.
   */
-@@ -1668,6 +1670,12 @@ generic_make_request_checks(struct bio *
-		goto end_io;
-	}
-
+@@ -1729,6 +1731,12 @@ generic_make_request_checks(struct bio *
+ 		goto end_io;
+ 	}
+ 
 +	/* this is cfs's dev_rdonly check */
 +	if (bio_rw(bio) == WRITE && dev_check_rdonly(bio->bi_bdev)) {
 +		err = 0;
 +		goto end_io;
 +	}
 +
-	part = bio->bi_bdev->bd_part;
-	if (should_fail_request(part, bio->bi_size) ||
-	    should_fail_request(&part_to_disk(part)->part0,
-@@ -3034,6 +3042,99 @@ void blk_finish_plug(struct blk_plug *pl
- }
- EXPORT_SYMBOL(blk_finish_plug);
-
+ 	part = bio->bi_bdev->bd_part;
+ 	if (should_fail_request(part, bio->bi_size) ||
+ 	    should_fail_request(&part_to_disk(part)->part0,
+@@ -3240,6 +3248,99 @@ void blk_post_runtime_resume(struct requ
+ EXPORT_SYMBOL(blk_post_runtime_resume);
+ #endif
+ 
 +/*
 + * Debug code for turning block devices "read-only" (will discard writes
 + * silently).  This is for filesystem crash/recovery testing.
@@ -144,24 +144,24 @@ Index: linux-3.6.0-0.3.fc.el6.x86_64/block/blk-core.c
 +
  int __init blk_dev_init(void)
  {
-	BUILD_BUG_ON(__REQ_NR_BITS > 8 *
-Index: linux-3.6.0-0.3.fc.el6.x86_64/fs/block_dev.c
+ 	BUILD_BUG_ON(__REQ_NR_BITS > 8 *
+Index: linux-3.10.0-123.8.1.el7.x86_64/fs/block_dev.c
 ===================================================================
---- linux-3.6.0-0.3.fc.el6.x86_64.orig/fs/block_dev.c	2011-05-10 21:38:29.000000000 +0300
-+++ linux-3.6.0-0.3.fc.el6.x86_64/fs/block_dev.c	2011-05-19 21:01:04.000000000 +0300
-@@ -1389,6 +1389,7 @@ static int __blkdev_put(struct block_dev
-		if (bdev != bdev->bd_contains)
-			victim = bdev->bd_contains;
-		bdev->bd_contains = NULL;
+--- linux-3.10.0-123.8.1.el7.x86_64.orig/fs/block_dev.c
++++ linux-3.10.0-123.8.1.el7.x86_64/fs/block_dev.c
+@@ -1441,6 +1441,7 @@ static void __blkdev_put(struct block_de
+ 		if (bdev != bdev->bd_contains)
+ 			victim = bdev->bd_contains;
+ 		bdev->bd_contains = NULL;
 +		dev_clear_rdonly(bdev);
-
-		put_disk(disk);
-		module_put(owner);
-Index: linux-3.6.0-0.3.fc.el6.x86_64/include/linux/fs.h
+ 
+ 		put_disk(disk);
+ 		module_put(owner);
+Index: linux-3.10.0-123.8.1.el7.x86_64/include/linux/fs.h
 ===================================================================
---- linux-3.6.0-0.3.fc.el6.x86_64.orig/include/linux/fs.h	2011-05-10 21:38:29.000000000 +0300
-+++ linux-3.6.0-0.3.fc.el6.x86_64/include/linux/fs.h	2011-05-19 21:01:04.000000000 +0300
-@@ -2244,6 +2244,10 @@ struct bio;
+--- linux-3.10.0-123.8.1.el7.x86_64.orig/include/linux/fs.h
++++ linux-3.10.0-123.8.1.el7.x86_64/include/linux/fs.h
+@@ -2440,6 +2440,10 @@ extern void inode_sb_list_add(struct ino
  extern void submit_bio(int, struct bio *);
  extern int bdev_read_only(struct block_device *);
  #endif

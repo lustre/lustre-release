@@ -6,11 +6,83 @@ source ${LBUILD_DIR}/lbuild-rhel
 # to build built
 BUILD_GEN+=".0"
 
+SPEC_NAME="kernel.spec"
+DEVEL_PATH_ARCH_DELIMETER="."
+USE_KABI=true
+
+# force local definition of %dist into ~/.rpmmacros
+# to avoid verbose extended strings like ".el7.centos"
+# in kernel version and rpm names
+#
+RMAC=$HOME/.rpmmacros
+grep '%dist' $RMAC &> /dev/null || echo '%dist .el7' >> $RMAC
+
+patch_spec() {
+    local buildid="$1"
+
+    # the el7 .spec file requires patch names to begin with "patch-3."
+    # so rename the lustre patch from lbuild to one the .spec will like
+    mv $TOPDIR/SOURCES/linux-${lnxmaj}-lustre.patch \
+	$TOPDIR/SOURCES/patch-${lnxmaj}-lustre.patch
+
+    # edit the SPEC with our changes
+    patch_spec_common "$buildid"
+    sed -i -e '/^# empty final patch to facilitate testing of kernel patches/i\
+# adds Lustre patches\
+Patch99995: patch-%{version}-lustre.patch' \
+           -e '/^ApplyOptionalPatch linux-kernel-test.patch/i\
+\
+# lustre patch\
+ApplyOptionalPatch patch-%{version}-lustre.patch\
+' \
+           -e '/rm -f include\/generated\/kernel.cross/i\
+  # lustre kernel config.\
+  if [ -f %{_topdir}/lustre/lustre/kernel_patches/kernel_configs/kernel-%{version}-3.10-rhel7-%{_target_cpu}.config ]; then\
+    echo "# $Arch" > configs/kernel-%{version}-%{_target_cpu}.config\
+    cat %{_topdir}/lustre/lustre/kernel_patches/kernel_configs/kernel-%{version}-3.10-rhel7-%{_target_cpu}.config >> configs/kernel-%{version}-%{_target_cpu}.config\
+  fi'\
+           -e '/^# Dynamically generate kernel/a echo "CONFIG_BH_LRU_SIZE=16" >> config-generic'\
+           -e '/^%define listnewconfig_fail 1/s/1/0/'\
+          SPECS/$SPEC_NAME 2>&1 || \
+        fatal 1 "Error while editing SPECS/$SPEC_NAME"
+
+
+    return 0
+
+}
+
+unpack_linux_devel_rpm-rhel7() {
+    local callers_rpm="$1"
+
+    unpack_linux_devel_rpm-rhel "$callers_rpm"
+
+
+    return 0
+
+}
+
+get_rpmbuildopts() {
+
+    if $KERNEL_LUSTRE_NAMING; then
+        echo -e "--define \"variant -lustre\" \c"
+    fi
+    echo "--with firmware"
+
+    return 0
+
+}
+
 find_linux_rpm-rhel7() {
     local prefix="$1"
     local wanted_kernel="$2"
     local pathtorpms=${3:-"$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH"}
 
     find_linux_rpm-rhel "$prefix" "$wanted_kernel" "$pathtorpms"
+
+}
+
+kernel_srpm_location() {
+
+    echo "http://vault.centos.org/centos/7/updates/Source/SPackages/"
 
 }
