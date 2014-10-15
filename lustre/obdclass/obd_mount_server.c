@@ -264,7 +264,13 @@ static int server_stop_mgs(struct super_block *sb)
 {
 	struct obd_device *obd;
 	int rc;
+	struct lustre_mount_info *lmi;
 	ENTRY;
+
+	/* Do not stop MGS if this device is not the running MGT */
+	lmi = server_find_mount(LUSTRE_MGS_OBDNAME);
+	if (lmi != NULL && lmi->lmi_sb != sb)
+		RETURN(0);
 
 	CDEBUG(D_MOUNT, "Stop MGS service %s\n", LUSTRE_MGS_OBDNAME);
 
