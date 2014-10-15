@@ -276,6 +276,13 @@ extern int llapi_path2fid(const char *path, lustre_fid *fid);
 extern int llapi_get_mdt_index_by_fid(int fd, const lustre_fid *fid,
 				      int *mdt_index);
 extern int llapi_fd2fid(const int fd, lustre_fid *fid);
+/* get FID of parent dir + the related name of entry in this parent dir */
+extern int llapi_path2parent(const char *path, unsigned int linkno,
+			     lustre_fid *parent_fid, char *name,
+			     size_t name_size);
+extern int llapi_fd2parent(int fd, unsigned int linkno,
+			   lustre_fid *parent_fid, char *name,
+			   size_t name_size);
 extern int llapi_chomp_string(char *buf);
 extern int llapi_open_by_fid(const char *dir, const lustre_fid *fid,
 			     int open_flags);

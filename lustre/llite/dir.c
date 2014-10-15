@@ -1654,6 +1654,8 @@ out_rmdir:
                 RETURN(rc);
 	case OBD_IOC_FID2PATH:
 		RETURN(ll_fid2path(inode, (void __user *)arg));
+	case LL_IOC_GETPARENT:
+		RETURN(ll_getparent(file, (void __user *)arg));
 	case LL_IOC_FID2MDTIDX: {
 		struct obd_export *exp = ll_i2mdexp(inode);
 		struct lu_fid	  fid;

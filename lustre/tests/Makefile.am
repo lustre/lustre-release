@@ -93,7 +93,7 @@ it_test_LDADD=$(LIBCFS)
 rwv_LDADD=$(LIBCFS)
 
 ll_dirstripe_verify_SOURCES= ll_dirstripe_verify.c
-ll_dirstripe_verify_LDADD= -L$(top_builddir)/lustre/utils $(PTHREAD_LIBS) -llustreapi $(LIBCFS)
+ll_dirstripe_verify_LDADD= -L$(top_builddir)/lustre/utils $(PTHREAD_LIBS) $(LIBLUSTREAPI) $(LIBCFS)
 
 flocks_test_SOURCES=flocks_test.c
 flocks_test_LDADD=-lpthread

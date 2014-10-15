@@ -298,7 +298,7 @@ command_t cmdlist[] = {
 	 "usage: fid2path [--link <linkno>] <fsname|rootpath> <fid> ..."
 		/* [ --rec <recno> ] */ },
 	{"path2fid", lfs_path2fid, 0, "Display the fid(s) for a given path(s).\n"
-	 "usage: path2fid <path> ..."},
+	 "usage: path2fid [--parents] <path> ..."},
 	{"data_version", lfs_data_version, 0, "Display file data version for "
 	 "a given path.\n" "usage: data_version -[n|r|w] <path>"},
 	{"hsm_state", lfs_hsm_state, 0, "Display the HSM information (states, "
@@ -3362,33 +3362,75 @@ static int lfs_fid2path(int argc, char **argv)
 
 static int lfs_path2fid(int argc, char **argv)
 {
-	char **path;
-	const char *sep = "";
-	lustre_fid fid;
-	int rc = 0;
+	struct option	  long_opts[] = {
+		{"parents", no_argument, 0, 'p'},
+		{0, 0, 0, 0}
+	};
+	char		**path;
+	const char	  short_opts[] = "p";
+	const char	 *sep = "";
+	lustre_fid	  fid;
+	int		  rc = 0;
+	bool		  show_parents = false;
 
-	if (argc < 2)
+	optind = 0;
+	while ((rc = getopt_long(argc, argv, short_opts,
+				 long_opts, NULL)) != -1) {
+		switch (rc) {
+		case 'p':
+			show_parents = true;
+			break;
+		default:
+			fprintf(stderr, "error: %s: option '%s' unrecognized\n",
+				argv[0], argv[optind - 1]);
+			return CMD_HELP;
+		}
+	}
+
+	if (optind > argc - 1)
 		return CMD_HELP;
-	else if (argc > 2)
+	else if (optind < argc - 1)
 		sep = ": ";
 
-	path = argv + 1;
-	while (*path != NULL) {
-		int err = llapi_path2fid(*path, &fid);
+	rc = 0;
+	for (path = argv + optind; *path != NULL; path++) {
+		int err = 0;
+		if (!show_parents) {
+			err = llapi_path2fid(*path, &fid);
+			if (!err)
+				printf("%s%s"DFID"\n",
+				       *sep != '\0' ? *path : "", sep,
+				       PFID(&fid));
+		} else {
+			char		name[NAME_MAX + 1];
+			unsigned int	linkno = 0;
+
+			while ((err = llapi_path2parent(*path, linkno, &fid,
+						name, sizeof(name))) == 0) {
+				if (*sep != '\0' && linkno == 0)
+					printf("%s%s", *path, sep);
+
+				printf("%s"DFID"/%s", linkno != 0 ? "\t" : "",
+				       PFID(&fid), name);
+				linkno++;
+			}
+
+			/* err == -ENODATA is end-of-loop */
+			if (linkno > 0 && err == -ENODATA) {
+				printf("\n");
+				err = 0;
+			}
+		}
 
 		if (err) {
-			fprintf(stderr, "%s: can't get fid for %s: %s\n",
-				argv[0], *path, strerror(-err));
+			fprintf(stderr, "%s: can't get %sfid for %s: %s\n",
+				argv[0], show_parents ? "parent " : "", *path,
+				strerror(-err));
 			if (rc == 0) {
 				rc = err;
 				errno = -err;
 			}
-			goto out;
 		}
-		printf("%s%s"DFID"\n", *sep != '\0' ? *path : "", sep,
-		       PFID(&fid));
-out:
-		path++;
 	}
 
 	return rc;

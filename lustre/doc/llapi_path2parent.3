@@ -1,0 +1,63 @@
+.TH llapi_path2parent 3 "2014 Oct 13" "Lustre User API"
+.SH NAME
+llapi_path2parent, llapi_fd2parent \- Retrieve <parent FID>/name(s) for an entry
+in Lustre.
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_path2parent(const char *" path ", unsigned int " linkno ","
+.BI "                      lustre_fid *" parent_fid ", char *" name ","
+.BI "                      size_t " name_size );
+
+.BI "int llapi_fd2parent(int " fd ", unsigned int " linkno ","
+.BI "                    lustre_fid *" parent_fid ", char *" name ","
+.BI "                    size_t " name_size );
+.sp
+.fi
+.SH DESCRIPTION
+.PP
+.BR llapi_path2parent()
+for link number
+.I linkno
+stores the FID of the parent directory into
+.I parent_fid
+and the zero-terminated name of the entry into the buffer
+.I name
+which is expected to be of size
+.IR name_size .
+
+The function
+.B llapi_fd2parent()
+behaves similarly except that it operates on an open file descriptor
+instead of a path.
+.sp
+.SH RETURN VALUES
+.LP
+.B llapi_path2fid()
+and
+.B llapi_fd2fid()
+return 0 on success or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.SM -ENODATA
+linkno has reached the link count.
+.TP
+.SM -ENOTTY
+.I path
+does not reside on a Lustre filesystem.
+.TP
+.SM -ENOENT
+.I path
+does not exist.
+.TP
+.SM -EINVAL
+An invalid argument was specified.
+.TP
+.SM -EOVERFLOW
+The given buffer was too small.
+.TP
+.SM -EPERM
+The file cannot be open by user or CAP_DAC_READ_SEARCH is not granted.
+.SH "SEE ALSO"
+.BR liblustreapi (7)

@@ -44,7 +44,7 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .B lfs osts
 .RB [ path ]
 .br
-.B lfs path2fid <path> ...
+.B lfs path2fid [--parents] <path> ...
 .br
 .B lfs pool_list <filesystem>[.<pool>] | <pathname>
 .br
@@ -216,9 +216,12 @@ hard links, then all of the pathnames for that file are printed, unless
 at 0, in no particular order).  If multiple fids are specified, but only a
 single pathname is needed for each file, use \fB--link 0\fR.
 .TP
-.B path2fid <path> ...
+.B path2fid [--parents] <path> ...
 Print out the FIDs for the specified \fBpath(s)\fR.  If multiple pathnames
 are given, then they will be printed one per line with the path as prefix.
+The \fB--parents\fR switch makes it output the parent FID and name(s) of the
+given entries. If an entry has multiple links, these are displayed on a single
+line, tab-separated.
 .TP
 .B pool_list
 .RI { filesystem }[ .poolname "] | {" pathname }

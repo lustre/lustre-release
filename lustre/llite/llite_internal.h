@@ -40,6 +40,7 @@
 #include <lustre_ver.h>
 #include <lustre_disk.h>  /* for s2sbi */
 #include <lustre_eacl.h>
+#include <lustre_linkea.h>
 
 /* for struct cl_lock_descr and struct cl_io */
 #include <cl_object.h>
@@ -1676,5 +1677,7 @@ void ll_xattr_fini(void);
 
 int ll_page_sync_io(const struct lu_env *env, struct cl_io *io,
 		    struct cl_page *page, enum cl_req_type crt);
+
+int ll_getparent(struct file *file, struct getparent __user *arg);
 
 #endif /* LLITE_INTERNAL_H */

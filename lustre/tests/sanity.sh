@@ -9768,6 +9768,82 @@ test_154e()
 }
 run_test 154e ".lustre is not returned by readdir"
 
+test_154f() {
+	# create parent directory on a single MDT to avoid cross-MDT hardlinks
+	test_mkdir -p -c1 $DIR/$tdir/d
+	# test dirs inherit from its stripe
+	mkdir -p $DIR/$tdir/d/foo1 || error "mkdir error"
+	mkdir -p $DIR/$tdir/d/foo2 || error "mkdir error"
+	cp /etc/hosts $DIR/$tdir/d/foo1/$tfile
+	ln $DIR/$tdir/d/foo1/$tfile $DIR/$tdir/d/foo2/link
+	touch $DIR/f
+
+	# get fid of parents
+	local FID0=$($LFS path2fid $DIR/$tdir/d)
+	local FID1=$($LFS path2fid $DIR/$tdir/d/foo1)
+	local FID2=$($LFS path2fid $DIR/$tdir/d/foo2)
+	local FID3=$($LFS path2fid $DIR)
+
+	# check that path2fid --parents returns expected <parent_fid>/name
+	# 1) test for a directory (single parent)
+	local parent=$($LFS path2fid --parents $DIR/$tdir/d/foo1)
+	[ "$parent" == "$FID0/foo1" ] ||
+		error "expected parent: $FID0/foo1, got: $parent"
+
+	# 2) test for a file with nlink > 1 (multiple parents)
+	parent=$($LFS path2fid --parents $DIR/$tdir/d/foo1/$tfile)
+	echo "$parent" | grep -F "$FID1/$tfile" ||
+		error "$FID1/$tfile not returned in parent list"
+	echo "$parent" | grep -F "$FID2/link" ||
+		error "$FID2/link not returned in parent list"
+
+	# 3) get parent by fid
+	local file_fid=$($LFS path2fid $DIR/$tdir/d/foo1/$tfile)
+	parent=$($LFS path2fid --parents $MOUNT/.lustre/fid/$file_fid)
+	echo "$parent" | grep -F "$FID1/$tfile" ||
+		error "$FID1/$tfile not returned in parent list (by fid)"
+	echo "$parent" | grep -F "$FID2/link" ||
+		error "$FID2/link not returned in parent list (by fid)"
+
+	# 4) test for entry in root directory
+	parent=$($LFS path2fid --parents $DIR/f)
+	echo "$parent" | grep -F "$FID3/f" ||
+		error "$FID3/f not returned in parent list"
+
+	# 5) test it on root directory
+	[ -z "$($LFS path2fid --parents $MOUNT 2>/dev/null)" ] ||
+		error "$MOUNT should not have parents"
+
+	# enable xattr caching and check that linkea is correctly updated
+	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	save_lustre_params client "llite.*.xattr_cache" > $save
+	lctl set_param llite.*.xattr_cache 1
+
+	# 6.1) linkea update on rename
+	mv $DIR/$tdir/d/foo1/$tfile $DIR/$tdir/d/foo2/$tfile.moved
+
+	# get parents by fid
+	parent=$($LFS path2fid --parents $MOUNT/.lustre/fid/$file_fid)
+	# foo1 should no longer be returned in parent list
+	echo "$parent" | grep -F "$FID1" &&
+		error "$FID1 should no longer be in parent list"
+	# the new path should appear
+	echo "$parent" | grep -F "$FID2/$tfile.moved" ||
+		error "$FID2/$tfile.moved is not in parent list"
+
+	# 6.2) linkea update on unlink
+	rm -f $DIR/$tdir/d/foo2/link
+	parent=$($LFS path2fid --parents $MOUNT/.lustre/fid/$file_fid)
+	# foo2/link should no longer be returned in parent list
+	echo "$parent" | grep -F "$FID2/link" &&
+		error "$FID2/link should no longer be in parent list"
+	true
+
+	rm -f $DIR/f
+	restore_lustre_params < $save
+}
+run_test 154f "get parent fids by reading link ea"
+
 test_155_small_load() {
     local temp=$TMP/$tfile
     local file=$DIR/$tfile
