@@ -215,6 +215,11 @@ static inline int ldlm_pool_t2gsp(unsigned int t)
                  (t >> LDLM_POOL_GSP_STEP_SHIFT));
 }
 
+static inline int ldlm_pool_granted(struct ldlm_pool *pl)
+{
+	return atomic_read(&pl->pl_granted);
+}
+
 /**
  * Recalculates next grant limit on passed \a pl.
  *
@@ -225,7 +230,7 @@ static void ldlm_pool_recalc_grant_plan(struct ldlm_pool *pl)
 	int granted, grant_step, limit;
 
 	limit = ldlm_pool_get_limit(pl);
-	granted = atomic_read(&pl->pl_granted);
+	granted = ldlm_pool_granted(pl);
 
 	grant_step = ldlm_pool_t2gsp(pl->pl_recalc_period);
 	grant_step = ((limit - granted) * grant_step) / 100;
@@ -253,7 +258,7 @@ static void ldlm_pool_recalc_slv(struct ldlm_pool *pl)
 	slv = pl->pl_server_lock_volume;
 	grant_plan = pl->pl_grant_plan;
 	limit = ldlm_pool_get_limit(pl);
-	granted = atomic_read(&pl->pl_granted);
+	granted = ldlm_pool_granted(pl);
 	round_up = granted < limit;
 
         grant_usage = max_t(int, limit - (granted - grant_plan), 1);
@@ -289,7 +294,7 @@ static void ldlm_pool_recalc_stats(struct ldlm_pool *pl)
 {
 	int grant_plan = pl->pl_grant_plan;
 	__u64 slv = pl->pl_server_lock_volume;
-	int granted = atomic_read(&pl->pl_granted);
+	int granted = ldlm_pool_granted(pl);
 	int grant_rate = atomic_read(&pl->pl_grant_rate);
 	int cancel_rate = atomic_read(&pl->pl_cancel_rate);
 
@@ -386,13 +391,13 @@ static int ldlm_srv_pool_shrink(struct ldlm_pool *pl,
 	 * VM is asking how many entries may be potentially freed.
 	 */
 	if (nr == 0)
-		return atomic_read(&pl->pl_granted);
+		return ldlm_pool_granted(pl);
 
 	/*
 	 * Client already canceled locks but server is already in shrinker
 	 * and can't cancel anything. Let's catch this race.
 	 */
-	if (atomic_read(&pl->pl_granted) == 0)
+	if (ldlm_pool_granted(pl) == 0)
 		RETURN(0);
 
 	spin_lock(&pl->pl_lock);
@@ -668,7 +673,7 @@ static int lprocfs_pool_state_seq_show(struct seq_file *m, void *unused)
 	clv = pl->pl_client_lock_volume;
 	limit = ldlm_pool_get_limit(pl);
 	grant_plan = pl->pl_grant_plan;
-	granted = atomic_read(&pl->pl_granted);
+	granted = ldlm_pool_granted(pl);
 	grant_rate = atomic_read(&pl->pl_grant_rate);
 	cancel_rate = atomic_read(&pl->pl_cancel_rate);
 	grant_speed = grant_rate - cancel_rate;
@@ -1029,11 +1034,6 @@ __u32 ldlm_pool_get_lvf(struct ldlm_pool *pl)
 }
 EXPORT_SYMBOL(ldlm_pool_get_lvf);
 
-static unsigned int ldlm_pool_granted(struct ldlm_pool *pl)
-{
-	return atomic_read(&pl->pl_granted);
-}
-
 static struct ptlrpc_thread *ldlm_pools_thread;
 static struct shrinker *ldlm_pools_srv_shrinker;
 static struct shrinker *ldlm_pools_cli_shrinker;
@@ -1045,7 +1045,8 @@ static struct completion ldlm_pools_comp;
 */
 static unsigned long ldlm_pools_count(ldlm_side_t client, gfp_t gfp_mask)
 {
-	int total = 0, nr_ns;
+	unsigned long total = 0;
+	int nr_ns;
 	struct ldlm_namespace *ns;
 	struct ldlm_namespace *ns_old = NULL; /* loop detection */
 	void *cookie;
@@ -1181,7 +1182,7 @@ static unsigned long ldlm_pools_cli_scan(struct shrinker *s,
 static int ldlm_pools_shrink(ldlm_side_t client, int nr,
 			     gfp_t gfp_mask)
 {
-	unsigned int total = 0;
+	unsigned long total = 0;
 
 	if (client == LDLM_NAMESPACE_CLIENT && nr != 0 &&
 	    !(gfp_mask & __GFP_FS))
@@ -1216,7 +1217,7 @@ static int ldlm_pools_cli_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
 
 int ldlm_pools_recalc(ldlm_side_t client)
 {
-        __u32 nr_l = 0, nr_p = 0, l;
+	unsigned long nr_l = 0, nr_p = 0, l;
         struct ldlm_namespace *ns;
         struct ldlm_namespace *ns_old = NULL;
         int nr, equal = 0;
@@ -1256,7 +1257,7 @@ int ldlm_pools_recalc(ldlm_side_t client)
                  */
                 if (nr_l >= 2 * (LDLM_POOL_HOST_L / 3)) {
                         CWARN("\"Modest\" pools eat out 2/3 of server locks "
-                              "limit (%d of %lu). This means that you have too "
+                              "limit (%lu of %lu). This means that you have too "
                               "many clients for this amount of server RAM. "
                               "Upgrade server!\n", nr_l, LDLM_POOL_HOST_L);
                         equal = 1;
