@@ -654,11 +654,16 @@ out_free:
 }
 
 /** Register a copytool
- * \param[out] priv Opaque private control structure
- * \param mnt Lustre filesystem mount point
- * \param archive_count
- * \param archives Which archive numbers this copytool is responsible for
- * \param rfd_flags flags applied to read fd of pipe (e.g. O_NONBLOCK)
+ * \param[out] priv		Opaque private control structure
+ * \param mnt			Lustre filesystem mount point
+ * \param archive_count		Number of valid archive IDs in \a archives
+ * \param archives		Which archive numbers this copytool is
+ *				responsible for
+ * \param rfd_flags		flags applied to read fd of pipe
+ *				(e.g. O_NONBLOCK)
+ *
+ * \retval 0 on success.
+ * \retval -errno on error.
  */
 int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
 				const char *mnt, int archive_count,
@@ -714,6 +719,7 @@ int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
 			llapi_err_noerrno(LLAPI_MSG_ERROR,
 					  "maximum of %zu archives supported",
 					  8 * sizeof(ct->archives));
+			rc = -EINVAL;
 			goto out_err;
 		}
 		/* in the list we have a all archive wildcard
@@ -738,9 +744,7 @@ int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
 		rc = -errno;
 		llapi_error(LLAPI_MSG_ERROR, rc,
 			    "cannot start copytool on '%s'", mnt);
-		goto out_err;
-	} else {
-		rc = 0;
+		goto out_kuc;
 	}
 
 	llapi_hsm_log_ct_registration(&ct, CT_REGISTER);
@@ -748,10 +752,8 @@ int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
 	/* Only the kernel reference keeps the write side open */
 	close(ct->kuc.lk_wfd);
 	ct->kuc.lk_wfd = LK_NOFD;
-	if (rc < 0)
-		goto out_kuc;
-
 	*priv = ct;
+
 	return 0;
 
 out_kuc:
