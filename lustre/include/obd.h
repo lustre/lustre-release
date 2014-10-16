@@ -866,12 +866,12 @@ typedef int (* md_enqueue_cb_t)(struct ptlrpc_request *req,
                                 int rc);
 
 struct md_enqueue_info {
-        struct md_op_data       mi_data;
-        struct lookup_intent    mi_it;
-        struct lustre_handle    mi_lockh;
-        struct inode           *mi_dir;
-        md_enqueue_cb_t         mi_cb;
-        __u64                   mi_cbdata;
+	struct md_op_data	mi_data;
+	struct lookup_intent	mi_it;
+	struct lustre_handle	mi_lockh;
+	struct inode	       *mi_dir;
+	md_enqueue_cb_t		mi_cb;
+	void		       *mi_cbdata;
 };
 
 struct obd_ops {
