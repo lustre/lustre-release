@@ -71,12 +71,6 @@ const struct lu_buf *mdt_buf_const(const struct lu_env *env,
         return buf;
 }
 
-void mdt_trans_stop(const struct lu_env *env,
-			   struct mdt_device *mdt, struct thandle *th)
-{
-        dt_trans_stop(env, mdt->mdt_bottom, th);
-}
-
 /*
  * last_rcvd & last_committed update callbacks
  */
