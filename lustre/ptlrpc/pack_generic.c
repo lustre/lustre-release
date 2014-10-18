@@ -2149,18 +2149,38 @@ void lustre_swab_lmv_user_md(struct lmv_user_md *lum)
 }
 EXPORT_SYMBOL(lustre_swab_lmv_user_md);
 
-static void print_lum (struct lov_user_md *lum)
+void lustre_print_user_md(unsigned int lvl, struct lov_user_md *lum,
+			  const char *msg)
 {
-	CDEBUG(D_OTHER, "lov_user_md %p:\n", lum);
-	CDEBUG(D_OTHER, "\tlmm_magic: %#x\n", lum->lmm_magic);
-	CDEBUG(D_OTHER, "\tlmm_pattern: %#x\n", lum->lmm_pattern);
-	CDEBUG(D_OTHER, "\tlmm_object_id: "LPU64"\n", lmm_oi_id(&lum->lmm_oi));
-	CDEBUG(D_OTHER, "\tlmm_object_gr: "LPU64"\n", lmm_oi_seq(&lum->lmm_oi));
-	CDEBUG(D_OTHER, "\tlmm_stripe_size: %#x\n", lum->lmm_stripe_size);
-	CDEBUG(D_OTHER, "\tlmm_stripe_count: %#x\n", lum->lmm_stripe_count);
-	CDEBUG(D_OTHER, "\tlmm_stripe_offset/lmm_layout_gen: %#x\n",
-			lum->lmm_stripe_offset);
+	if (likely(!cfs_cdebug_show(lvl, DEBUG_SUBSYSTEM)))
+		return;
+
+	CDEBUG(lvl, "%s lov_user_md %p:\n", msg, lum);
+	CDEBUG(lvl, "\tlmm_magic: %#x\n", lum->lmm_magic);
+	CDEBUG(lvl, "\tlmm_pattern: %#x\n", lum->lmm_pattern);
+	CDEBUG(lvl, "\tlmm_object_id: "LPU64"\n", lmm_oi_id(&lum->lmm_oi));
+	CDEBUG(lvl, "\tlmm_object_gr: "LPU64"\n", lmm_oi_seq(&lum->lmm_oi));
+	CDEBUG(lvl, "\tlmm_stripe_size: %#x\n", lum->lmm_stripe_size);
+	CDEBUG(lvl, "\tlmm_stripe_count: %#x\n", lum->lmm_stripe_count);
+	CDEBUG(lvl, "\tlmm_stripe_offset/lmm_layout_gen: %#x\n",
+	       lum->lmm_stripe_offset);
+	if (lum->lmm_magic == LOV_USER_MAGIC_V3) {
+		struct lov_user_md_v3 *v3 = (void *)lum;
+		CDEBUG(lvl, "\tlmm_pool_name: %s\n", v3->lmm_pool_name);
+	}
+	if (lum->lmm_magic == LOV_USER_MAGIC_SPECIFIC) {
+		struct lov_user_md_v3 *v3 = (void *)lum;
+		int i;
+
+		if (v3->lmm_pool_name[0] != '\0')
+			CDEBUG(lvl, "\tlmm_pool_name: %s\n", v3->lmm_pool_name);
+
+		CDEBUG(lvl, "\ttarget list:\n");
+		for (i = 0; i < v3->lmm_stripe_count; i++)
+			CDEBUG(lvl, "\t\t%u\n", v3->lmm_objects[i].l_ost_idx);
+	}
 }
+EXPORT_SYMBOL(lustre_print_user_md);
 
 static void lustre_swab_lmm_oi(struct ost_id *oi)
 {
@@ -2177,7 +2197,6 @@ static void lustre_swab_lov_user_md_common(struct lov_user_md_v1 *lum)
 	__swab32s(&lum->lmm_stripe_size);
 	__swab16s(&lum->lmm_stripe_count);
 	__swab16s(&lum->lmm_stripe_offset);
-	print_lum(lum);
 	EXIT;
 }
 

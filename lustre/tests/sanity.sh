@@ -4765,28 +4765,6 @@ test_56v() {
 }
 run_test 56v "check 'lfs find -mdt match with lfs getstripe -M' ======="
 
-# Get and check the actual stripe count of one file.
-# Usage: check_stripe_count <file> <expected_stripe_count>
-check_stripe_count() {
-    local file=$1
-    local expected=$2
-    local actual
-
-    [[ -z "$file" || -z "$expected" ]] &&
-        error "check_stripe_count: invalid argument!"
-
-    local cmd="$GETSTRIPE -c $file"
-    actual=$($cmd) || error "$cmd failed"
-    actual=${actual%% *}
-
-    if [[ $actual -ne $expected ]]; then
-        [[ $expected -eq -1 ]] ||
-            error "$cmd wrong: found $actual, expected $expected"
-        [[ $actual -eq $OSTCOUNT ]] ||
-            error "$cmd wrong: found $actual, expected $OSTCOUNT"
-    fi
-}
-
 test_56w() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	TDIR=$DIR/${tdir}w

@@ -559,13 +559,14 @@ static int mgs_set_index(const struct lu_env *env,
                         fsdb->fsdb_mdt_count ++;
         }
 
-        if (mti->mti_stripe_index >= INDEX_MAP_SIZE * 8) {
-                LCONSOLE_ERROR_MSG(0x13f, "Server %s requested index %d, "
-                                   "but the max index is %d.\n",
-                                   mti->mti_svname, mti->mti_stripe_index,
-                                   INDEX_MAP_SIZE * 8);
+	/* the last index(0xffff) is reserved for default value. */
+	if (mti->mti_stripe_index >= INDEX_MAP_SIZE * 8 - 1) {
+		LCONSOLE_ERROR_MSG(0x13f, "Server %s requested index %u, "
+				   "but index must be less than %u.\n",
+				   mti->mti_svname, mti->mti_stripe_index,
+				   INDEX_MAP_SIZE * 8 - 1);
 		GOTO(out_up, rc = -ERANGE);
-        }
+	}
 
 	if (test_bit(mti->mti_stripe_index, imap)) {
                 if ((mti->mti_flags & LDD_F_VIRGIN) &&

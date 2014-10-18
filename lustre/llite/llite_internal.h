@@ -966,6 +966,27 @@ void ll_finish_md_op_data(struct md_op_data *op_data);
 int ll_get_obd_name(struct inode *inode, unsigned int cmd, unsigned long arg);
 char *ll_get_fsname(struct super_block *sb, char *buf, int buflen);
 void ll_compute_rootsquash_state(struct ll_sb_info *sbi);
+ssize_t ll_copy_user_md(const struct lov_user_md __user *md,
+			struct lov_user_md **kbuf);
+
+/* Compute expected user md size when passing in a md from user space */
+static inline ssize_t ll_lov_user_md_size(const struct lov_user_md *lum)
+{
+	switch (lum->lmm_magic) {
+	case LOV_USER_MAGIC_V1:
+		return sizeof(struct lov_user_md_v1);
+	case LOV_USER_MAGIC_V3:
+		return sizeof(struct lov_user_md_v3);
+	case LOV_USER_MAGIC_SPECIFIC:
+		if (lum->lmm_stripe_count > LOV_MAX_STRIPE_COUNT)
+			return -EINVAL;
+
+		return lov_user_md_size(lum->lmm_stripe_count,
+					LOV_USER_MAGIC_SPECIFIC);
+	}
+
+	return -EINVAL;
+}
 
 /* llite/llite_nfs.c */
 extern struct export_operations lustre_export_operations;

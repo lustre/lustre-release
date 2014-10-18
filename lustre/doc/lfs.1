@@ -32,12 +32,12 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .B lfs getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v] 
         \fB[--stripe-count|-c ] [--stripe-index|-i] [--mdt-index|-M]
         \fB[--stripe-size|-S] [--directory|-d]
-	\fB[--layout|-L]
+        \fB[--layout|-L]
         \fB[--pool|-p] [--recursive|-r] [--raw|-R] <dirname|filename> ...\fR
 .br
 .B lfs setstripe [--stripe-size|-S stripe_size] [--stripe-count|-c stripe_count]
-        \fB[--stripe-index|-i start_ost_index ] [--pool|-p <poolname>]
-        \fB<directory|filename>\fR
+        \fB[--stripe-index|-i start_ost_index] [--pool|-p <poolname>]
+        \fB[--ost-list|-o <ost_indices>] <directory|filename>\fR
 .br
 .B lfs setstripe -d <dir>
 .br
@@ -134,7 +134,7 @@ to that filesystem are displayed.
 .B getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v] 
         \fB[--count | -c ] [--index | -i | --offset | -o  ]
         \fB[--pool | -p ] [--size | -s ] [--directory | -d ]
-	\fB[--layout | -L]
+        \fB[--layout | -L]
         \fB[--recursive | -r ] [--raw | -R ] <dirname|filename>\fR
 .br
 List the striping information for a given filename or directory tree.
@@ -176,9 +176,10 @@ You can limit the returned files to those with objects on a specific OST with
 .TP
 .B setstripe [--stripe-count|-c stripe_count] [--stripe-size|-S stripe_size]
         \fB[--stripe-index|-i start_ost_index] [--pool <poolname>]
-        \fB<dirname|filename>\fR
+        \fB[--ost-index|-o <ost_indices>] <dirname|filename>\fR
 .br
-To create a new file, or set the directory default, with the specified striping parameters.  The
+To create a new file, or set the directory default, with the specified striping
+parameters.  The
 .I stripe_count
 is the number of OSTs to stripe a file over. A
 .I stripe_count
@@ -192,18 +193,48 @@ of 0 means to use the filesystem-wide default stripe_size (default 1MB).  The
 .I start_ost_index
 is the OST index (starting at 0) on which to start striping for this file.  A
 .I start_ost_index
-of -1 allows the MDS to choose the starting index and it is strongly recommended, as this allows space and load balancing to be done by the MDS as needed.  The
+of -1 allows the MDS to choose the starting index and it is strongly
+recommended, as this allows space and load balancing to be done by the MDS as
+needed. The
+.B -o
+option is used to specify the exact stripe layout on the file system.
+.I ost_indices
+is a list of OSTs referenced by their indices, which are specified in decimal
+or hex form and can be obtained using the
+.B lfs osts
+command. The list format consists of individual OST indices and index ranges
+separated by commas, e.g. 1,2-4,7. The
+.B -o
+option may be specified multiple times to stripe across the union of all listed
+OSTs. If the
+.B -c
+option is combined with
+.B -o
+the
+.I stripe_count
+must agree with the number of OSTs in
+.IR ost_indices .
+If the
+.B -i
+option is combined with
+.B -o
+the
+.I start_ost_index
+must be in the OST list, and it will be used as the index on which to start
+striping the file. Otherwise the striping will occur in the order specified in
+.IR ost_indices .
+The
 .I poolname
-is the name of a predefined pool of OSTs (see 
-.B lctl
-) that will be used for striping. The 
+is the name of a predefined pool of OSTs (see
+.BR lctl (8))
+that will be used for striping. The
 .IR stripe_count ,
 .IR stripe_size ,
 and
 .I start_ost_index
-will be used as well; the 
+will be used as well; the
 .I start_ost_index
-must be part of the pool or an error will be returned. 
+must be part of the pool or an error will be returned.
 .TP
 .B setstripe -d
 Delete the default striping on the specified directory.

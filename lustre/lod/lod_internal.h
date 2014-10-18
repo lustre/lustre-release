@@ -52,6 +52,8 @@
 #define LMVEA_DELETE_VALUES(count, offset)				\
 	((count) == 0 && (offset) == (typeof(offset))(-1))
 
+#define LOV_OFFSET_DEFAULT		((__u16)-1)
+
 struct lod_qos_rr {
 	__u32			 lqr_start_idx;	/* start index of new inode */
 	__u32			 lqr_offset_idx; /* aliasing for start_idx */

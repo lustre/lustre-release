@@ -715,7 +715,7 @@ static int llog_osd_next_block(const struct lu_env *env,
 						sizeof(struct llog_rec_tail));
 		/* get the last record in block */
 		last_rec = (struct llog_rec_hdr *)((char *)buf + rc -
-						   le32_to_cpu(tail->lrt_len));
+						   tail->lrt_len);
 
 		if (LLOG_REC_HDR_NEEDS_SWABBING(last_rec))
 			lustre_swab_llog_rec(last_rec);
@@ -1503,7 +1503,9 @@ out_trans:
 	lgi->lgi_buf.lb_buf = idarray;
 	lgi->lgi_buf.lb_len = size;
 	rc = dt_record_read(env, o, &lgi->lgi_buf, &lgi->lgi_off);
-	if (rc) {
+	/* -EFAULT means the llog is a sparse file. This is not an error
+	 * after arbitrary OST index is supported. */
+	if (rc < 0 && rc != -EFAULT) {
 		CERROR("%s: error reading CATALOGS: rc = %d\n",
 		       o->do_lu.lo_dev->ld_obd->obd_name,  rc);
 		GOTO(out, rc);

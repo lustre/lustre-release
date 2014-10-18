@@ -1579,6 +1579,8 @@ enum obdo_flags {
 #define LOV_MAGIC_JOIN_V1	(0x0BD20000 | LOV_MAGIC_MAGIC)
 #define LOV_MAGIC_V3		(0x0BD30000 | LOV_MAGIC_MAGIC)
 #define LOV_MAGIC_MIGRATE	(0x0BD40000 | LOV_MAGIC_MAGIC)
+/* reserved for specifying OSTs */
+#define LOV_MAGIC_SPECIFIC	(0x0BD50000 | LOV_MAGIC_MAGIC)
 #define LOV_MAGIC		LOV_MAGIC_V1
 
 /*
@@ -3680,6 +3682,8 @@ extern void lustre_swab_lov_user_md_v3(struct lov_user_md_v3 *lum);
 extern void lustre_swab_lov_user_md_objects(struct lov_user_ost_data *lod,
                                             int stripe_count);
 extern void lustre_swab_lov_mds_md(struct lov_mds_md *lmm);
+void lustre_print_user_md(unsigned int level, struct lov_user_md *lum,
+			  const char *msg);
 
 /* llog_swab.c */
 extern void lustre_swab_llogd_body (struct llogd_body *d);

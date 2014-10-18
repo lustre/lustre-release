@@ -1301,10 +1301,19 @@ static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 
 	rc = llog_osd_get_cat_list(env, d->opd_storage, d->opd_index, 1,
 				   &osi->osi_cid, fid);
-	if (rc) {
-		CERROR("%s: can't get id from catalogs: rc = %d\n",
-		       obd->obd_name, rc);
-		RETURN(rc);
+	if (rc < 0) {
+		if (rc != -EFAULT) {
+			CERROR("%s: can't get id from catalogs: rc = %d\n",
+			       obd->obd_name, rc);
+			RETURN(rc);
+		}
+
+		/* After sparse OST indices is supported, the CATALOG file
+		 * may become a sparse file that results in failure on
+		 * reading. Skip this error as the llog will be created
+		 * later */
+		memset(&osi->osi_cid, 0, sizeof(osi->osi_cid));
+		rc = 0;
 	}
 
 	CDEBUG(D_INFO, "%s: Init llog for %d - catid "DOSTID":%x\n",

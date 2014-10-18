@@ -7245,3 +7245,61 @@ pool_remove() {
 	error_noexit "Pool $FSNAME.$pool is not destroyed"
 	return 3
 }
+
+# Get and check the actual stripe count of one file.
+# Usage: check_stripe_count <file> <expected_stripe_count>
+check_stripe_count() {
+	local file=$1
+	local expected=$2
+	local actual
+
+	[[ -z "$file" || -z "$expected" ]] &&
+		error "check_stripe_count: invalid argument"
+
+	local cmd="$GETSTRIPE -c $file"
+	actual=$($cmd) || error "$cmd failed"
+	actual=${actual%% *}
+
+	if [[ $actual -ne $expected ]]; then
+		[[ $expected -eq -1 ]] ||
+			error "$cmd wrong: found $actual, expected $expected"
+		[[ $actual -eq $OSTCOUNT ]] ||
+			error "$cmd wrong: found $actual, expected $OSTCOUNT"
+	fi
+}
+
+# Get and check the actual list of OST indices on one file.
+# Usage: check_obdidx <file> <expected_comma_separated_list_of_ost_indices>
+check_obdidx() {
+	local file=$1
+	local expected=$2
+	local obdidx
+
+	[[ -z "$file" || -z "$expected" ]] &&
+		error "check_obdidx: invalid argument!"
+
+	obdidx=$(comma_list $($GETSTRIPE $file | grep -A $OSTCOUNT obdidx |
+			      grep -v obdidx | awk '{print $1}' | xargs))
+
+	[[ $obdidx = $expected ]] ||
+		error "list of OST indices on $file is $obdidx," \
+		      "should be $expected"
+}
+
+# Get and check the actual OST index of the first stripe on one file.
+# Usage: check_start_ost_idx <file> <expected_start_ost_idx>
+check_start_ost_idx() {
+	local file=$1
+	local expected=$2
+	local start_ost_idx
+
+	[[ -z "$file" || -z "$expected" ]] &&
+		error "check_start_ost_idx: invalid argument!"
+
+	start_ost_idx=$($GETSTRIPE $file | grep -A 1 obdidx | grep -v obdidx |
+			awk '{print $1}')
+
+	[[ $start_ost_idx = $expected ]] ||
+		error "OST index of the first stripe on $file is" \
+		      "$start_ost_idx, should be $expected"
+}

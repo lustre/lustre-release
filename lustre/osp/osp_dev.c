@@ -249,7 +249,7 @@ static int osp_init_last_objid(const struct lu_env *env, struct osp_device *osp)
 	struct osp_thread_info	*osi = osp_env_info(env);
 	struct lu_fid		*fid = &osp->opd_last_used_fid;
 	struct dt_object	*dto;
-	int			rc;
+	int			rc = -EFAULT;
 	ENTRY;
 
 	dto = osp_find_or_create_local_file(env, osp, &osi->osi_attr,
@@ -263,9 +263,11 @@ static int osp_init_last_objid(const struct lu_env *env, struct osp_device *osp)
 		osp_objid_buf_prep(&osi->osi_lb, &osi->osi_off, &fid->f_oid,
 				   osp->opd_index);
 		rc = dt_record_read(env, dto, &osi->osi_lb, &osi->osi_off);
-		if (rc != 0)
+		if (rc != 0 && rc != -EFAULT)
 			GOTO(out, rc);
-	} else {
+	}
+
+	if (rc == -EFAULT) { /* fresh LAST_ID */
 		fid->f_oid = 0;
 		osp_objid_buf_prep(&osi->osi_lb, &osi->osi_off, &fid->f_oid,
 				   osp->opd_index);
@@ -304,7 +306,7 @@ static int osp_init_last_seq(const struct lu_env *env, struct osp_device *osp)
 	struct osp_thread_info	*osi = osp_env_info(env);
 	struct lu_fid		*fid = &osp->opd_last_used_fid;
 	struct dt_object	*dto;
-	int			rc;
+	int			rc = -EFAULT;
 	ENTRY;
 
 	dto = osp_find_or_create_local_file(env, osp, &osi->osi_attr,
@@ -318,14 +320,18 @@ static int osp_init_last_seq(const struct lu_env *env, struct osp_device *osp)
 		osp_objseq_buf_prep(&osi->osi_lb, &osi->osi_off, &fid->f_seq,
 				   osp->opd_index);
 		rc = dt_record_read(env, dto, &osi->osi_lb, &osi->osi_off);
-		if (rc != 0)
+		if (rc != 0 && rc != -EFAULT)
 			GOTO(out, rc);
-	} else {
+	}
+
+	if (rc == -EFAULT) { /* fresh OSP */
 		fid->f_seq = 0;
 		osp_objseq_buf_prep(&osi->osi_lb, &osi->osi_off, &fid->f_seq,
 				    osp->opd_index);
 		rc = osp_write_local_file(env, osp, dto, &osi->osi_lb,
 					  osi->osi_off);
+		if (rc != 0)
+			GOTO(out, rc);
 	}
 	osp->opd_last_used_seq_file = dto;
 	RETURN(0);

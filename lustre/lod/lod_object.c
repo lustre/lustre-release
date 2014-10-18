@@ -3192,7 +3192,7 @@ static void lod_ah_init(const struct lu_env *env,
 	if (likely(parent)) {
 		lod_cache_parent_striping(env, lp, child_mode);
 
-		lc->ldo_def_stripe_offset = (__u16) -1;
+		lc->ldo_def_stripe_offset = LOV_OFFSET_DEFAULT;
 
 		if (lp->ldo_def_striping_set) {
 			if (lp->ldo_pool)

@@ -660,55 +660,114 @@ int llapi_search_ost(char *fsname, char *poolname, char *ostname)
         return 0;
 }
 
-int llapi_file_open_pool(const char *name, int flags, int mode,
-			 unsigned long long stripe_size, int stripe_offset,
-			 int stripe_count, int stripe_pattern, char *pool_name)
+/**
+ * Open a Lustre file.
+ *
+ * \param name the name of the file to be opened
+ * \param flags access mode, see flags in open(2)
+ * \param mode permisson of the file if it is created, see mode in open(2)
+ * \param param stripe pattern of the newly created file
+ *
+ * \return file descriptor of opened file
+ * \return -error failure
+ */
+int llapi_file_open_param(const char *name, int flags, mode_t mode,
+			  const struct llapi_stripe_param *param)
 {
-	struct lov_user_md_v3 lum = { 0 };
-	int fd = -1;
-	int rc = 0;
+	char fsname[MAX_OBD_NAME + 1] = { 0 };
+	char *pool_name = param->lsp_pool;
+	struct lov_user_md *lum = NULL;
+	size_t lum_size = sizeof(*lum);
+	int fd, rc;
 
-        /* Make sure we have a good pool */
-        if (pool_name != NULL) {
-                char fsname[MAX_OBD_NAME + 1], *ptr;
+	/* Make sure we are on a Lustre file system */
+	rc = llapi_search_fsname(name, fsname);
+	if (rc) {
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "'%s' is not on a Lustre filesystem",
+			    name);
+		return rc;
+	}
 
-                rc = llapi_search_fsname(name, fsname);
-                if (rc) {
-                        llapi_error(LLAPI_MSG_ERROR, rc,
-                                    "'%s' is not on a Lustre filesystem",
-                                    name);
-                        return rc;
-                }
-
-                /* in case user gives the full pool name <fsname>.<poolname>,
-                 * strip the fsname */
-                ptr = strchr(pool_name, '.');
-                if (ptr != NULL) {
-                        *ptr = '\0';
-                        if (strcmp(pool_name, fsname) != 0) {
-                                *ptr = '.';
-                                llapi_err_noerrno(LLAPI_MSG_ERROR,
-                                          "Pool '%s' is not on filesystem '%s'",
-                                          pool_name, fsname);
-                                return -EINVAL;
-                        }
-                        pool_name = ptr + 1;
-                }
-
-                /* Make sure the pool exists and is non-empty */
-                rc = llapi_search_ost(fsname, pool_name, NULL);
-                if (rc < 1) {
-                        llapi_err_noerrno(LLAPI_MSG_ERROR,
-                                          "pool '%s.%s' %s", fsname, pool_name,
-                                          rc == 0 ? "has no OSTs" : "does not exist");
-                        return -EINVAL;
-                }
-        }
-
-	rc = llapi_stripe_limit_check(stripe_size, stripe_offset, stripe_count,
-				      stripe_pattern);
+	/* Check if the stripe pattern is sane. */
+	rc = llapi_stripe_limit_check(param->lsp_stripe_size,
+				      param->lsp_stripe_offset,
+				      param->lsp_stripe_count,
+				      param->lsp_stripe_pattern);
 	if (rc != 0)
 		return rc;
+
+	/* Make sure we have a good pool */
+	if (pool_name != NULL) {
+		/* in case user gives the full pool name <fsname>.<poolname>,
+		 * strip the fsname */
+		char *ptr = strchr(pool_name, '.');
+		if (ptr != NULL) {
+			*ptr = '\0';
+			if (strcmp(pool_name, fsname) != 0) {
+				*ptr = '.';
+				llapi_err_noerrno(LLAPI_MSG_ERROR,
+					"Pool '%s' is not on filesystem '%s'",
+					pool_name, fsname);
+				return -EINVAL;
+			}
+			pool_name = ptr + 1;
+		}
+
+		/* Make sure the pool exists and is non-empty */
+		rc = llapi_search_ost(fsname, pool_name, NULL);
+		if (rc < 1) {
+			char *err = rc == 0 ? "has no OSTs" : "does not exist";
+
+			llapi_err_noerrno(LLAPI_MSG_ERROR, "pool '%s.%s' %s",
+					  fsname, pool_name, err);
+			return -EINVAL;
+		}
+
+		lum_size = sizeof(struct lov_user_md_v3);
+	}
+
+	/* sanity check of target list */
+	if (param->lsp_is_specific) {
+		char ostname[MAX_OBD_NAME + 1];
+		bool found = false;
+		int i;
+
+		for (i = 0; i < param->lsp_stripe_count; i++) {
+			snprintf(ostname, sizeof(ostname), "%s-OST%04x_UUID",
+				 fsname, param->lsp_osts[i]);
+			rc = llapi_search_ost(fsname, pool_name, ostname);
+			if (rc <= 0) {
+				if (rc == 0)
+					rc = -ENODEV;
+
+				llapi_error(LLAPI_MSG_ERROR, rc,
+					    "%s: cannot find OST %s in %s",
+					    __func__, ostname,
+					    pool_name != NULL ?
+					    "pool" : "system");
+				return rc;
+			}
+
+			/* Make sure stripe offset is in OST list. */
+			if (param->lsp_osts[i] == param->lsp_stripe_offset)
+				found = true;
+		}
+		if (!found) {
+			llapi_error(LLAPI_MSG_ERROR, -EINVAL,
+				    "%s: stripe offset '%d' is not in the "
+				    "target list",
+				    __func__, param->lsp_stripe_offset);
+			return -EINVAL;
+		}
+
+		lum_size = lov_user_md_size(param->lsp_stripe_count,
+					    LOV_USER_MAGIC_SPECIFIC);
+	}
+
+	lum = calloc(1, lum_size);
+	if (lum == NULL)
+		return -ENOMEM;
 
 retry_open:
 	fd = open(name, flags | O_LOV_DELAY_CREATE, mode);
@@ -719,43 +778,75 @@ retry_open:
 		}
 	}
 
-        if (fd < 0) {
-                rc = -errno;
-                llapi_error(LLAPI_MSG_ERROR, rc, "unable to open '%s'", name);
-                return rc;
-        }
+	if (fd < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "unable to open '%s'", name);
+		free(lum);
+		return rc;
+	}
 
-        /*  Initialize IOCTL striping pattern structure */
-        lum.lmm_magic = LOV_USER_MAGIC_V3;
-        lum.lmm_pattern = stripe_pattern;
-        lum.lmm_stripe_size = stripe_size;
-        lum.lmm_stripe_count = stripe_count;
-        lum.lmm_stripe_offset = stripe_offset;
-        if (pool_name != NULL) {
-		strlcpy(lum.lmm_pool_name, pool_name,
-			sizeof(lum.lmm_pool_name));
-        } else {
-                /* If no pool is specified at all, use V1 request */
-                lum.lmm_magic = LOV_USER_MAGIC_V1;
-        }
+	/*  Initialize IOCTL striping pattern structure */
+	lum->lmm_magic = LOV_USER_MAGIC_V1;
+	lum->lmm_pattern = param->lsp_stripe_pattern;
+	lum->lmm_stripe_size = param->lsp_stripe_size;
+	lum->lmm_stripe_count = param->lsp_stripe_count;
+	lum->lmm_stripe_offset = param->lsp_stripe_offset;
+	if (pool_name != NULL) {
+		struct lov_user_md_v3 *lumv3 = (void *)lum;
 
-        if (ioctl(fd, LL_IOC_LOV_SETSTRIPE, &lum)) {
-                char *errmsg = "stripe already set";
-                rc = -errno;
-                if (errno != EEXIST && errno != EALREADY)
-                        errmsg = strerror(errno);
+		lumv3->lmm_magic = LOV_USER_MAGIC_V3;
+		strncpy(lumv3->lmm_pool_name, pool_name, LOV_MAXPOOLNAME);
+	}
+	if (param->lsp_is_specific) {
+		struct lov_user_md_v3 *lumv3 = (void *)lum;
+		int i;
 
-                llapi_err_noerrno(LLAPI_MSG_ERROR,
-                                  "error on ioctl "LPX64" for '%s' (%d): %s",
-                                  (__u64)LL_IOC_LOV_SETSTRIPE, name, fd,errmsg);
-        }
+		lumv3->lmm_magic = LOV_USER_MAGIC_SPECIFIC;
+		if (pool_name == NULL) {
+			/* LOV_USER_MAGIC_SPECIFIC uses v3 format plus specified
+			 * OST list, therefore if pool is not specified we have
+			 * to pack a null pool name for placeholder. */
+			memset(lumv3->lmm_pool_name, 0, LOV_MAXPOOLNAME);
+		}
+
+		for (i = 0; i < param->lsp_stripe_count; i++)
+			lumv3->lmm_objects[i].l_ost_idx = param->lsp_osts[i];
+	}
+
+	if (ioctl(fd, LL_IOC_LOV_SETSTRIPE, lum) != 0) {
+		char *errmsg = "stripe already set";
+
+		rc = -errno;
+		if (errno != EEXIST && errno != EALREADY)
+			errmsg = strerror(errno);
+
+			llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "error on ioctl "LPX64" for '%s' (%d): %s",
+				  (__u64)LL_IOC_LOV_SETSTRIPE, name, fd,
+				  errmsg);
+	}
 
 	if (rc) {
 		close(fd);
 		fd = rc;
 	}
-
+	if (lum != NULL)
+		free(lum);
 	return fd;
+}
+
+int llapi_file_open_pool(const char *name, int flags, int mode,
+			 unsigned long long stripe_size, int stripe_offset,
+			 int stripe_count, int stripe_pattern, char *pool_name)
+{
+	const struct llapi_stripe_param param = {
+		.lsp_stripe_size = stripe_size,
+		.lsp_stripe_count = stripe_count,
+		.lsp_stripe_pattern = stripe_pattern,
+		.lsp_stripe_offset = stripe_offset,
+		.lsp_pool = pool_name
+	};
+	return llapi_file_open_param(name, flags, mode, &param);
 }
 
 int llapi_file_open(const char *name, int flags, int mode,

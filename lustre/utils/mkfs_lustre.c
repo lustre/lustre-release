@@ -408,6 +408,13 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         }
 			/* LU-2374: check whether it is OST/MDT later */
 			mop->mo_ldd.ldd_svindex = atol(optarg);
+			if (mop->mo_ldd.ldd_svindex >= INDEX_UNASSIGNED) {
+				fprintf(stderr, "%s: wrong index %u. "
+					"Target index must be less than %u.\n",
+					progname, mop->mo_ldd.ldd_svindex,
+					INDEX_UNASSIGNED);
+				return 1;
+			}
 			mop->mo_ldd.ldd_flags &= ~LDD_F_NEED_INDEX;
                         break;
                 case 'k':

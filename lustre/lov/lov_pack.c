@@ -172,17 +172,11 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
 		} else {
 			stripe_count = 0;
 		}
-        } else {
-                /* No need to allocate more than maximum supported stripes.
-                 * Anyway, this is pretty inaccurate since ld_tgt_count now
-                 * represents max index and we should rely on the actual number
-                 * of OSTs instead */
-		stripe_count = lov_mds_md_max_stripe_count(
-			lov->lov_ocd.ocd_max_easize, lmm_magic);
-
-                if (stripe_count > lov->desc.ld_tgt_count)
-                        stripe_count = lov->desc.ld_tgt_count;
-        }
+	} else {
+		/* To calculate maximum easize by active targets at present,
+		 * which is exactly the maximum easize to be seen by LOV */
+		stripe_count = lov->desc.ld_active_tgt_count;
+	}
 
         /* XXX LOV STACKING call into osc for sizes */
         lmm_size = lov_mds_md_size(stripe_count, lmm_magic);
@@ -434,9 +428,11 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
         lum_size = sizeof(struct lov_user_md_v1);
 	if (copy_from_user(&lum, lump, lum_size))
                 GOTO(out_set, rc = -EFAULT);
-        else if ((lum.lmm_magic != LOV_USER_MAGIC) &&
-                 (lum.lmm_magic != LOV_USER_MAGIC_V3))
-                GOTO(out_set, rc = -EINVAL);
+
+	if (lum.lmm_magic != LOV_USER_MAGIC_V1 &&
+	    lum.lmm_magic != LOV_USER_MAGIC_V3 &&
+	    lum.lmm_magic != LOV_USER_MAGIC_SPECIFIC)
+		GOTO(out_set, rc = -EINVAL);
 
         if (lum.lmm_stripe_count &&
             (lum.lmm_stripe_count < lsm->lsm_stripe_count)) {

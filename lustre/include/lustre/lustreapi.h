@@ -92,6 +92,19 @@ void llapi_error(enum llapi_message_level level, int err, const char *fmt, ...)
 void llapi_printf(enum llapi_message_level level, const char *fmt, ...)
 	__attribute__((__format__(__printf__, 2, 3)));
 
+struct llapi_stripe_param {
+	unsigned long long	lsp_stripe_size;
+	char			*lsp_pool;
+	int			lsp_stripe_offset;
+	int			lsp_stripe_pattern;
+	/* Number of stripes. Size of lsp_osts[] if lsp_specific is true.*/
+	int			lsp_stripe_count;
+	bool			lsp_is_specific;
+	__u32			lsp_osts[0];
+};
+
+extern int llapi_file_open_param(const char *name, int flags, mode_t mode,
+				 const struct llapi_stripe_param *param);
 extern int llapi_file_create(const char *name, unsigned long long stripe_size,
                              int stripe_offset, int stripe_count,
                              int stripe_pattern);

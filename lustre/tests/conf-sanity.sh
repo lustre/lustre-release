@@ -4857,6 +4857,309 @@ test_80() {
 }
 run_test 80 "mgc import reconnect race"
 
+# Save the original values of $OSTCOUNT and $OSTINDEX$i.
+save_ostindex() {
+	local new_ostcount=$1
+	saved_ostcount=$OSTCOUNT
+	OSTCOUNT=$new_ostcount
+
+	local i
+	local index
+	for i in $(seq $OSTCOUNT); do
+		index=OSTINDEX$i
+		eval saved_ostindex$i=${!index}
+		eval OSTINDEX$i=""
+	done
+}
+
+# Restore the original values of $OSTCOUNT and $OSTINDEX$i.
+restore_ostindex() {
+	trap 0
+
+	local i
+	local index
+	for i in $(seq $OSTCOUNT); do
+		index=saved_ostindex$i
+		eval OSTINDEX$i=${!index}
+	done
+	OSTCOUNT=$saved_ostcount
+
+	formatall
+}
+
+# The main purpose of this test is to ensure the OST_INDEX_LIST functions as
+# expected. This test uses OST_INDEX_LIST to format OSTs with a randomly
+# assigned index and ensures we can mount such a formatted file system
+test_81() { # LU-4665
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.54) ]] ||
+		{ skip "Need MDS version at least 2.6.54" && return; }
+	[[ $OSTCOUNT -ge 3 ]] || { skip_env "Need at least 3 OSTs" && return; }
+
+	stopall
+
+	# Each time RANDOM is referenced, a random integer between 0 and 32767
+	# is generated.
+	local i
+	local saved_ostindex1=$OSTINDEX1
+	for i in 65535 $((RANDOM + 65536)); do
+		echo -e "\nFormat ost1 with --index=$i, should fail"
+		OSTINDEX1=$i
+		if add ost1 $(mkfs_opts ost1 $(ostdevname 1)) --reformat \
+		   $(ostdevname 1) $(ostvdevname 1); then
+			OSTINDEX1=$saved_ostindex1
+			error "format ost1 with --index=$i should fail"
+		fi
+	done
+	OSTINDEX1=$saved_ostindex1
+
+	save_ostindex 3
+
+	# Format OSTs with random sparse indices.
+	trap "restore_ostindex" EXIT
+	echo -e "\nFormat $OSTCOUNT OSTs with sparse indices"
+	OST_INDEX_LIST=[0,$((RANDOM * 2 % 65533 + 1)),65534] formatall
+
+	# Setup and check Lustre filesystem.
+	start_mgsmds || error "start_mgsmds failed"
+	for i in $(seq $OSTCOUNT); do
+		start ost$i $(ostdevname $i) $OST_MOUNT_OPTS ||
+			error "start ost$i failed"
+	done
+
+	mount_client $MOUNT || error "mount client $MOUNT failed"
+	check_mount || error "check client $MOUNT failed"
+
+	# Check max_easize.
+	local max_easize=$($LCTL get_param -n llite.*.max_easize)
+	[[ $max_easize -eq 128 ]] ||
+		error "max_easize is $max_easize, should be 128 bytes"
+
+	restore_ostindex
+}
+run_test 81 "sparse OST indexing"
+
+# Wait OSTs to be active on both client and MDT side.
+wait_osts_up() {
+	local cmd="$LCTL get_param -n lov.$FSNAME-clilov-*.target_obd |
+		awk 'BEGIN {c = 0} /ACTIVE/{c += 1} END {printf \\\"%d\\\", c}'"
+	wait_update $HOSTNAME "eval $cmd" $OSTCOUNT ||
+		error "wait_update OSTs up on client failed"
+
+	cmd="$LCTL get_param -n lod.$FSNAME-MDT*-*.target_obd | sort -u |
+	     awk 'BEGIN {c = 0} /ACTIVE/{c += 1} END {printf \\\"%d\\\", c}'"
+	wait_update_facet $SINGLEMDS "eval $cmd" $OSTCOUNT ||
+		error "wait_update OSTs up on MDT failed"
+}
+
+# Here we exercise the stripe placement functionality on a file system that
+# has formatted the OST with a random index. With the file system the following
+# functionality is tested:
+#
+# 1. Creating a new file with a specific stripe layout.
+#
+# 2. Modifiy a existing empty file with a specific stripe layout.
+#
+# 3. Ensure we fail to set the stripe layout of a file that already has one.
+#
+# 4. If ost-index is defined we need to ensure it is the first entry in the
+#    ost index list returned by lfs getstripe.
+#
+# 5. Lastly ensure this functionality fails with directories.
+test_82a() { # LU-4665
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.54) ]] ||
+		{ skip "Need MDS version at least 2.6.54" && return; }
+	[[ $OSTCOUNT -ge 3 ]] || { skip_env "Need at least 3 OSTs" && return; }
+
+	stopall
+
+	save_ostindex 3
+
+	# Format OSTs with random sparse indices.
+	local i
+	local index
+	local ost_indices
+	for i in $(seq $OSTCOUNT); do
+		index=$((RANDOM * 2))
+		ost_indices+=" $index"
+	done
+	ost_indices=$(comma_list $ost_indices)
+
+	trap "restore_ostindex" EXIT
+	echo -e "\nFormat $OSTCOUNT OSTs with sparse indices $ost_indices"
+	OST_INDEX_LIST=[$ost_indices] formatall
+
+	# Setup Lustre filesystem.
+	start_mgsmds || error "start_mgsmds failed"
+	for i in $(seq $OSTCOUNT); do
+		start ost$i $(ostdevname $i) $OST_MOUNT_OPTS ||
+			error "start ost$i failed"
+	done
+
+	mount_client $MOUNT || error "mount client $MOUNT failed"
+	wait_osts_up
+
+	$LFS df $MOUNT || error "$LFS df $MOUNT failed"
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	# 1. If the file does not exist, new file will be created
+	#    with specified OSTs.
+	local file=$DIR/$tdir/$tfile-1
+	local cmd="$SETSTRIPE -o $ost_indices $file"
+	echo -e "\n$cmd"
+	eval $cmd || error "$cmd failed"
+	check_stripe_count $file $OSTCOUNT
+	check_obdidx $file $ost_indices
+	dd if=/dev/urandom of=$file count=1 bs=1M > /dev/null 2>&1 ||
+		error "write $file failed"
+
+	# 2. If the file already exists and is an empty file, the file
+	#    will be attached with specified layout.
+	file=$DIR/$tdir/$tfile-2
+	mcreate $file || error "mcreate $file failed"
+	cmd="$SETSTRIPE -o $ost_indices $file"
+	echo -e "\n$cmd"
+	eval $cmd || error "$cmd failed"
+	dd if=/dev/urandom of=$file count=1 bs=1M > /dev/null 2>&1 ||
+		error "write $file failed"
+	check_stripe_count $file $OSTCOUNT
+	check_obdidx $file $ost_indices
+
+	# 3. If the file already has a valid layout attached, the command
+	#    should fail with EBUSY.
+	echo -e "\n$cmd"
+	eval $cmd && error "stripe is already set on $file, $cmd should fail"
+
+	# 4. If [--stripe-index|-i <start_ost_idx>] is used, the index must
+	#    be in the OST indices list.
+	local start_ost_idx=${ost_indices##*,}
+	file=$DIR/$tdir/$tfile-3
+	cmd="$SETSTRIPE -o $ost_indices -i $start_ost_idx $file"
+	echo -e "\n$cmd"
+	eval $cmd || error "$cmd failed"
+	check_stripe_count $file $OSTCOUNT
+	check_obdidx $file $ost_indices
+	check_start_ost_idx $file $start_ost_idx
+
+	file=$DIR/$tdir/$tfile-4
+	cmd="$SETSTRIPE"
+	cmd+=" -o $(exclude_items_from_list $ost_indices $start_ost_idx)"
+	cmd+=" -i $start_ost_idx $file"
+	echo -e "\n$cmd"
+	eval $cmd && error "index $start_ost_idx should be in $ost_indices"
+
+	# 5. Specifying OST indices for directory should fail with ENOSUPP.
+	local dir=$DIR/$tdir/$tdir
+	mkdir $dir || error "mkdir $dir failed"
+	cmd="$SETSTRIPE -o $ost_indices $dir"
+	echo -e "\n$cmd"
+	eval $cmd && error "$cmd should fail, specifying OST indices" \
+			   "for directory is not supported"
+
+	restore_ostindex
+}
+run_test 82a "specify OSTs for file (succeed) or directory (fail)"
+
+cleanup_82b() {
+	trap 0
+
+	# Remove OSTs from a pool and destroy the pool.
+	destroy_pool $ost_pool || true
+
+	restore_ostindex
+}
+
+# Test 82b is run to ensure that if the user supplies a pool with a specific
+# stripe layout that it behaves proprerly. It should fail in the case that
+# the supplied OST index list points to OSTs not contained in the user
+# supplied pool.
+test_82b() { # LU-4665
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.54) ]] ||
+		{ skip "Need MDS version at least 2.6.54" && return; }
+	[[ $OSTCOUNT -ge 4 ]] || { skip_env "Need at least 4 OSTs" && return; }
+
+	stopall
+
+	save_ostindex 4
+
+	# Format OSTs with random sparse indices.
+	local i
+	local index
+	local ost_indices
+	for i in $(seq $OSTCOUNT); do
+		index=$((RANDOM * 2))
+		ost_indices+=" $index"
+	done
+	ost_indices=$(comma_list $ost_indices)
+
+	trap "restore_ostindex" EXIT
+	echo -e "\nFormat $OSTCOUNT OSTs with sparse indices $ost_indices"
+	OST_INDEX_LIST=[$ost_indices] formatall
+
+	# Setup Lustre filesystem.
+	start_mgsmds || error "start_mgsmds failed"
+	for i in $(seq $OSTCOUNT); do
+		start ost$i $(ostdevname $i) $OST_MOUNT_OPTS ||
+			error "start ost$i failed"
+	done
+
+	mount_client $MOUNT || error "mount client $MOUNT failed"
+	wait_osts_up
+	$LFS df $MOUNT || error "$LFS df $MOUNT failed"
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	# Create a new pool and add OSTs into it.
+	local ost_pool=$FSNAME.$TESTNAME
+	create_pool $ost_pool || error "create OST pool $ost_pool failed"
+
+	trap - EXIT
+	trap "cleanup_82b" EXIT
+
+	local ost_idx_in_list=${ost_indices##*,}
+	local ost_idx_in_pool=$(exclude_items_from_list $ost_indices \
+				$ost_idx_in_list)
+
+	local ost_targets="$FSNAME-OST["
+	for i in ${ost_idx_in_pool//,/ }; do
+		ost_targets=$ost_targets$(printf "%04x," $i)
+	done
+	ost_targets="${ost_targets%,}]"
+
+	local ost_targets_uuid=$(for i in ${ost_idx_in_pool//,/ }; \
+				 do printf "$FSNAME-OST%04x_UUID\n" $i; done |
+				 sort -u | tr '\n' ' ')
+
+	local cmd="$LCTL pool_add $ost_pool $ost_targets"
+	do_facet mgs $cmd || error "$cmd failed"
+	wait_update $HOSTNAME "$LCTL get_param -n lov.$FSNAME-*.pools.$TESTNAME|
+			       sort -u | tr '\n' ' ' " "$ost_targets_uuid" ||
+					error "wait_update $ost_pool failed"
+	pool_list $ost_pool || error "list OST pool $ost_pool failed"
+
+	# If [--pool|-p <pool_name>] is set with [--ost-list|-o <ost_indices>],
+	# then the OSTs must be the members of the pool.
+	local file=$DIR/$tdir/$tfile
+	cmd="$SETSTRIPE -p $ost_pool -o $ost_idx_in_list $file"
+	echo -e "\n$cmd"
+	eval $cmd && error "OST with index $ost_idx_in_list should be" \
+			   "in OST pool $ost_pool"
+
+	# Only select OST $ost_idx_in_list from $ost_pool for file.
+	ost_idx_in_list=${ost_idx_in_pool#*,}
+	cmd="$SETSTRIPE -p $ost_pool -o $ost_idx_in_list $file"
+	echo -e "\n$cmd"
+	eval $cmd || error "$cmd failed"
+	cmd="$GETSTRIPE $file"
+	echo -e "\n$cmd"
+	eval $cmd || error "$cmd failed"
+	check_stripe_count $file 2
+	check_obdidx $file $ost_idx_in_list
+	dd if=/dev/urandom of=$file count=1 bs=1M > /dev/null 2>&1 ||
+		error "write $file failed"
+
+	cleanup_82b
+}
+run_test 82b "specify OSTs for file with --pool and --ost-list options"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi
