@@ -1536,7 +1536,22 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry)
 	CDEBUG(D_READA, "start statahead thread: sai %p, parent %.*s\n",
 	       sai, parent->d_name.len, parent->d_name.name);
 
-        lli->lli_sai = sai;
+	/* if another process started statahead thread, or deauthorized current
+	 * lli_opendir_key, don't start statahead. */
+	spin_lock(&lli->lli_sa_lock);
+	if (unlikely(lli->lli_sai != NULL ||
+		     lli->lli_opendir_key == NULL ||
+		     lli->lli_opendir_pid != current->pid)) {
+		spin_unlock(&lli->lli_sa_lock);
+
+		dput(parent);
+		iput(sai->sai_inode);
+		GOTO(out, rc = -EAGAIN);
+	}
+	lli->lli_sai = sai;
+	spin_unlock(&lli->lli_sa_lock);
+
+	atomic_inc(&ll_i2sbi(parent->d_inode)->ll_sa_running);
 
 	task = kthread_run(ll_statahead_thread, parent, "ll_sa_%u",
 			   lli->lli_opendir_pid);
@@ -1545,9 +1560,12 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry)
 		rc = PTR_ERR(task);
 		CERROR("cannot start ll_sa thread: rc = %d\n", rc);
 		dput(parent);
-		lli->lli_opendir_key = NULL;
+
+		spin_lock(&lli->lli_sa_lock);
 		thread_set_flags(thread, SVC_STOPPED);
 		thread_set_flags(&sai->sai_agl_thread, SVC_STOPPED);
+		spin_unlock(&lli->lli_sa_lock);
+
 		ll_sai_put(sai);
 		LASSERT(lli->lli_sai == NULL);
 		RETURN(-EAGAIN);
@@ -1556,7 +1574,6 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry)
 	l_wait_event(thread->t_ctl_waitq,
 		     thread_is_running(thread) || thread_is_stopped(thread),
 		     &lwi);
-	atomic_inc(&ll_i2sbi(parent->d_inode)->ll_sa_running);
 	ll_sai_put(sai);
 
 	/*
@@ -1568,9 +1585,10 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry)
 out:
 	if (sai != NULL)
 		OBD_FREE_PTR(sai);
+
+	/* once we start statahead thread failed, disable statahead so
+	 * subsequent won't waste time to try it. */
 	spin_lock(&lli->lli_sa_lock);
-	lli->lli_opendir_key = NULL;
-	lli->lli_opendir_pid = 0;
 	lli->lli_sa_enabled = 0;
 	spin_unlock(&lli->lli_sa_lock);
 
