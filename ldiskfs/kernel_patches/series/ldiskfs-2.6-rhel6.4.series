@@ -48,3 +48,4 @@ rhel6.4/ext4-max-dir-size-options.patch
 rhel6.3/ext4-not-discard-preallocation-umount.patch
 rhel6.3/ext4-journal-path-opt.patch
 rhel6.3/ext4-recalc-percpu-counters-after-journal.patch
+rhel6.3/ext4-drop-inode-from-orphan-list-if-ext4_delete_inode-fails.patch

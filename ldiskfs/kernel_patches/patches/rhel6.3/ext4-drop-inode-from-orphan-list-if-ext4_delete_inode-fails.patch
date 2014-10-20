@@ -1,0 +1,22 @@
+commit 4538821993f4486c76090dfb377c60c0a0e71ba3
+Author: Theodore Ts'o <tytso@mit.edu>
+Date:   Thu Jul 29 15:06:10 2010 -0400
+
+    ext4: drop inode from orphan list if ext4_delete_inode() fails
+    
+    There were some error paths in ext4_delete_inode() which was not
+    dropping the inode from the orphan list.  This could lead to a BUG_ON
+    on umount when the orphan list is discovered to be non-empty.
+    
+Signed-off-by: "Theodore Ts'o" <tytso@mit.edu>
+Signed-off-by: Wang Shilong <wshilong@ddn.com>
+--- linux-stage.orig/fs/ext4/inode.c	2014-10-20 20:13:39.689001531 +0800
++++ linux-stage/fs/ext4/inode.c	2014-10-20 20:12:14.224997168 +0800
+@@ -279,6 +279,7 @@
+ 				     "couldn't extend journal (err %d)", err);
+ 		stop_handle:
+ 			ext4_journal_stop(handle);
++			ext4_orphan_del(NULL, inode);
+ 			sb_end_intwrite(inode->i_sb);
+ 			goto no_delete;
+ 		}
