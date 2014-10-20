@@ -1,9 +1,5 @@
 # Administration utilities Makefile
 
-if GSS
-SUBDIRS = gss
-endif
-
 AM_CFLAGS  := -fPIC -D_GNU_SOURCE \
 	      -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS=1
 AM_LDFLAGS := -L$(top_builddir)/lnet/utils
@@ -20,6 +16,11 @@ EXTRA_PROGRAMS = wirecheck
 endif
 
 if UTILS
+
+if GSS
+SUBDIRS = gss
+endif
+
 # mount only finds helpers in /sbin
 rootsbin_PROGRAMS = mount.lustre
 bin_SCRIPTS   = llstat llobdstat plot-llstat

@@ -1020,13 +1020,20 @@ build_lustre() {
 
 }
 
+# Only zfs Lustre DKMS Server is supported
 build_lustre_dkms() {
     [ -n "$MPSS_VERSION" ] && return 0
     local ver=$(eval echo  $(awk '/LUSTRE_VERSION_STRING/ {print $3}'  lustre/include/lustre_ver.h))
     echo "Building Lustre DKMS RPMs for: $BUILD_ARCHS..."
     ./configure --enable-dist || return 255
-    $RPMBUILD --define="_topdir $TOPDIR" -bs lustre-dkms.spec || return 255
-    $RPMBUILD --rebuild --define="_topdir $TOPDIR" $TOPDIR/SRPMS/lustre-dkms-$ver-*.src.rpm || return 255
+
+    if $PATCHLESS; then
+	$RPMBUILD --define="_topdir $TOPDIR" --without servers -bs lustre-dkms.spec || return 255
+        $RPMBUILD --rebuild --define="_topdir $TOPDIR" --without servers $TOPDIR/SRPMS/lustre-client-dkms-$ver-*.src.rpm || return 255
+    else
+	$RPMBUILD --define="_topdir $TOPDIR" -bs lustre-dkms.spec || return 255
+        $RPMBUILD --rebuild --define="_topdir $TOPDIR" $TOPDIR/SRPMS/lustre-dkms-$ver-*.src.rpm || return 255
+    fi
     return 0
 }
 

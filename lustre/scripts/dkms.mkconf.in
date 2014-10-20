@@ -1,0 +1,210 @@
+#!/bin/sh
+
+PROG=$0
+
+pkgcfg=/etc/sysconfig/lustre
+
+while getopts "n:v:c:f:" opt; do
+	case $opt in
+		n) pkgname=$OPTARG ;;
+		v) pkgver=$OPTARG  ;;
+		c) pkgcfg=$OPTARG ;;
+		f) filename=$OPTARG ;;
+	esac
+done
+
+if [ -z "${pkgname}" -o -z "${pkgver}" -o -z "${filename}" ]; then
+	echo "Usage: $PROG -n <pkgname> -v <pkgver> -c <pkgcfg> -f <filename>"
+	exit 1
+fi
+
+rpm -qa | grep krb5-devel >/dev/null
+if [ $? == 0 ] ; then
+	GSS="--enable-gss"
+else
+	GSS="--disable-gss"
+fi
+
+cat >${filename} <<EOF
+PACKAGE_NAME="${pkgname}"
+PACKAGE_VERSION="${pkgver}"
+PACKAGE_CONFIG="${pkgcfg}"
+EOF
+if [ $pkgname = "lustre" ] ; then
+	cat >>${filename} <<EOF
+SPL_VERSION=\$(dkms status -m spl -k \${kernelver}/\${arch} | awk -F', ' '{print \$2; exit 0}' | sed 's/: added\$//')
+ZFS_VERSION=\$(dkms status -m zfs -k \${kernelver}/\${arch} | awk -F', ' '{print \$2; exit 0}' | sed 's/: added\$//')
+EOF
+fi
+cat >>${filename} <<EOF
+# allow to re-evaluate krb5-devel presence during dkms re-adds and to re-create dkms.conf
+# accordingly!
+POST_ADD="lustre-dkms_post-add.sh \$module \$module_version \$kernelver \$kernel_source_dir \
+	 \$arch \$source_tree \$dkms_tree"
+PRE_BUILD="configure
+  --prefix=/usr
+  --with-linux=\${kernel_source_dir}
+  --with-linux-obj=\${kernel_source_dir}
+  --enable-modules
+EOF
+if [ $pkgname = "lustre-client" ] ; then
+	cat >>${filename} <<EOF
+  --disable-server
+EOF
+else
+	cat >>${filename} <<EOF
+  --enable-server
+  --with-spl=\${source_tree}/spl-\${SPL_VERSION}
+  --with-spl-obj=\${dkms_tree}/spl/\${SPL_VERSION}/\${kernelver}/\${arch}
+  --with-zfs=\${source_tree}/zfs-\${ZFS_VERSION}
+  --with-zfs-obj=\${dkms_tree}/zfs/\${ZFS_VERSION}/\${kernelver}/\${arch}
+  --disable-ldiskfs
+EOF
+fi
+cat >>${filename} <<EOF
+  --disable-iokit
+  --disable-snmp
+  --disable-doc
+  --disable-utils
+  $GSS
+  --disable-tests
+  --disable-maintainer-mode
+  --disable-manpages
+  --disable-dlc
+  \$(
+    [[ -r \${PACKAGE_CONFIG} ]] \\
+    && source \${PACKAGE_CONFIG} \\
+    && shopt -q -s extglob \\
+    && \\
+    {
+      if [[ \${LUSTRE_DKMS_DISABLE_CDEBUG,,} == @(y|yes) ]]
+      then
+        echo --disable-libcfs-cdebug
+      fi
+      if [[ \${LUSTRE_DKMS_DISABLE_TRACE,,} == @(y|yes) ]]
+      then
+        echo --disable-libcfs-trace
+      fi
+      if [[ \${LUSTRE_DKMS_DISABLE_ASSERT,,} == @(y|yes) ]]
+      then
+        echo --disable-libcfs-assert
+      fi
+    }
+  )
+"
+EOF
+if [ $pkgname = "lustre" ] ; then
+	cat >>${filename} <<EOF
+BUILD_DEPENDS[0]="zfs"
+EOF
+fi
+cat >>${filename} <<EOF
+AUTOINSTALL="yes"
+REMAKE_INITRD="no"
+MAKE[0]="make"
+# just have to set STRIP[0], it will become the new default.
+STRIP[0]="\$(
+  [[ -r \${PACKAGE_CONFIG} ]] \\
+  && source \${PACKAGE_CONFIG} \\
+  && shopt -q -s extglob \\
+  && [[ \${LUSTRE_DKMS_DISABLE_STRIP,,} == @(y|yes) ]] \\
+  && echo -n no
+)"
+
+# Common modules for both Client & Server
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lnet_selftest"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lnet/selftest/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lnet/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lnet"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lnet/lnet/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lnet/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="ksocklnd"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lnet/klnds/socklnd/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lnet/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="ko2iblnd"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lnet/klnds/o2iblnd/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lnet/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="libcfs"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="libcfs/libcfs/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="ptlrpc"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/ptlrpc/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lov"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/lov/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="fld"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/fld/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="obdecho"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/obdecho/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="osc"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/osc/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="mgc"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/mgc/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="llite_lloop"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/llite/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="fid"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/fid/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="mdc"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/mdc/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="obdclass"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/obdclass/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lmv"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/lmv/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lustre"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/llite/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+EOF
+if [ $GSS = "--enable-gss" ] ; then
+	cat >>${filename} <<EOF
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="ptlrpc_gss"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/ptlrpc/gss/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+EOF
+fi
+if [ $pkgname = "lustre" ] ; then
+	cat >>${filename} <<EOF
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="ofd"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/ofd/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="ost"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/ost/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lfsck"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/lfsck/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="osd_zfs"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/osd-zfs/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="mgs"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/mgs/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lquota"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/quota/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="mdt"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/mdt/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="osp"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/osp/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="mdd"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/mdd/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="llog_test"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/obdclass/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lod"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/lod/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
+EOF
+fi

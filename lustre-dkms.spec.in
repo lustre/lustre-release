@@ -1,6 +1,13 @@
-%define module  @PACKAGE@
+%bcond_without servers
+
+# Set the package name prefix
+%if %{with servers}
+    %define module  @PACKAGE@
+%else
+    %define module  @PACKAGE@-client
+%endif
+
 %define buildid 1
-%define mkconf  lustre/scripts/dkms.mkconf
 
 Name:           %{module}-dkms
 
@@ -11,7 +18,7 @@ Summary:        Kernel module(s) (dkms)
 Group:          System Environment/Kernel
 License:        GPLv2+
 URL:            http://lustre.opensfs.org/
-Source0:        %{module}-%{version}.tar.gz
+Source0:        @PACKAGE@-%{version}.tar.gz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildArch:      noarch
 
@@ -19,27 +26,84 @@ BuildArch:      noarch
 # (ie, "BUILD_DEPENDS[#]=<pkg>"), and have latest DKMS fixes integrated
 # for bugs that prevented our module to build/install.
 Requires:       dkms >= 2.2.0.3-28.git.7c3e7c5
+%if %{with servers}
+# Only zfs Lustre DKMS Server is supported
 Requires:       spl-dkms >= 0.6.1
 Requires:       zfs-dkms >= 0.6.1
+Requires:       %{module}-osd-zfs-mount
+%endif
 Requires:       gcc, make, perl
-Requires:       python-docutils
 Requires:       kernel-devel
-Requires:       @PACKAGE@-osd-zfs-mount
-Provides:       @PACKAGE@-kmod = %{version}
-Provides:       @PACKAGE@-modules = %{version}
-Provides:       @PACKAGE@-osd-zfs
-Conflicts:      @PACKAGE@-modules
-Conflicts:      @PACKAGE@-client-modules
-Conflicts:      @PACKAGE@-osd-zfs
+Provides:       %{module}-kmod = %{version}
+Provides:       %{module}-modules = %{version}
+%if %{with servers}
+# Only zfs Lustre DKMS Server is supported
+Provides:       %{module}-osd-zfs = %{version}
+Provides:       %{module}-osd
+%endif
 
 %description
 This package contains the dkms Lustre kernel modules.
 
 %prep
-%setup -q -n %{module}-%{version}
+%setup -q -n @PACKAGE@-%{version}
 
 %build
-%{mkconf} -n %{module} -v %{version} -f dkms.conf
+cat << EOF > dkms.conf
+# Embryonic lustre-dkms dkms.conf to allow for on-target accurate and full
+# version re-create during first dkms add stage.
+PACKAGE_NAME=%{module}
+PACKAGE_VERSION=%{version}
+POST_ADD="lustre-dkms_post-add.sh \$module \$module_version \$kernelver \
+	 \$kernel_source_dir \$arch \$source_tree \$dkms_tree"
+# at least one DEST_MODULE_LOCATION[] element, along with an install
+# path made of either "extra" or "updates" subdir, are required during
+# dkms.conf validity check of "dkms add" step.
+DEST_MODULE_LOCATION[${#DEST_MODULE_LOCATION[@]}]="/extra/lnet/"
+EOF
+
+cat << EOF > lustre-dkms_post-add.sh
+#!/bin/bash
+# \$1 : \$module
+# \$2 : \$module_version
+# \$3 : \$kernelver
+# \$4 : \$kernel_source_dir
+# \$5 : \$arch
+# \$6 : \$source_tree
+# \$7 : \$dkms_tree
+
+if [ \$1 = "lustre-client" ] ; then
+	SERVER="--disable-server"
+else
+	SPL_VERSION=\$(dkms status -m spl -k \$3/\$5 | awk -F', ' '{print \$2; exit 0}' | sed 's/: added\\\$//')
+	ZFS_VERSION=\$(dkms status -m zfs -k \$3/\$5 | awk -F', ' '{print \$2; exit 0}' | sed 's/: added\\\$//')
+
+	SERVER="--enable-server --disable-ldiskfs --with-linux=\$4 --with-linux-obj=\$4 \\
+	       --with-spl=\$6/spl-\${SPL_VERSION} \\
+	       --with-spl-obj=\$7/spl/\${SPL_VERSION}/\$3/\$5 \\
+	       --with-zfs=\$6/zfs-\${ZFS_VERSION} \\
+	       --with-zfs-obj=\$7/zfs/\${ZFS_VERSION}/\$3/\$5"
+fi
+
+rpm -qa | grep krb5-devel >/dev/null
+if [ \$? == 0 ] ; then
+        GSS="--enable-gss"
+else
+        GSS="--disable-gss"
+fi
+
+# run a configure pass to clean "--enable-dist" only effect and also to
+# ensure local/on-target environment to be taken into account
+./configure --enable-modules --disable-iokit --disable-snmp --disable-doc \\
+        --disable-utils --disable-tests --disable-maintainer-mode \\
+        \$GSS \$SERVER \\
+        --disable-manpages --disable-dlc
+# re-create dkms.conf based on this
+lustre/scripts/dkms.mkconf -n \$1 -v \$2 -f ./dkms.conf
+EOF
+
+chmod 755 lustre-dkms_post-add.sh
+
 sed -i 's/BUILDID[[:print:]]*/BUILDID = %{buildid}/' META
 sed -i 's/PRISTINE[[:print:]]*/PRISTINE = 1/' META
 cp META ldiskfs/META
@@ -49,7 +113,11 @@ if [ "$RPM_BUILD_ROOT" != "/" ]; then
     rm -rf $RPM_BUILD_ROOT
 fi
 mkdir -p $RPM_BUILD_ROOT/usr/src/
-cp -rfp ${RPM_BUILD_DIR}/%{module}-%{version} $RPM_BUILD_ROOT/usr/src/
+cp -rfp ${RPM_BUILD_DIR}/@PACKAGE@-%{version} $RPM_BUILD_ROOT/usr/src/
+%if %{without servers}
+# To have the directory reflect the DKMS RPM name!
+mv $RPM_BUILD_ROOT/usr/src/@PACKAGE@-%{version} $RPM_BUILD_ROOT/usr/src/%{module}-%{version}
+%endif
 
 %clean
 if [ "$RPM_BUILD_ROOT" != "/" ]; then
@@ -79,5 +147,8 @@ dkms remove -m %{module} -v %{version} --all --rpm_safe_upgrade
 exit 0
 
 %changelog
+* Wed Oct  7 2015 Bruno Faccini <bruno.faccini@intel.com>
+ - adapted for Lustre Client DKMS creation
+ - allow for on-target reconfig to prevent static deps requires
 * Fri Apr  8 2013 Brian Behlendorf <behlendorf1@llnl.gov> - 2.3.63-1
 - First DKMS packages.
