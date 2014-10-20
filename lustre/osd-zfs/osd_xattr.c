@@ -70,17 +70,7 @@
 
 #include <linux/posix_acl_xattr.h>
 
-/*
- * Copy an extended attribute into the buffer provided, or compute the
- * required buffer size.
- *
- * If buf is NULL, it computes the required buffer size.
- *
- * Returns 0 on success or a negative error number on failure.
- * On success, the number of bytes used / required is stored in 'size'.
- *
- * No locking is done here.
- */
+
 int __osd_xattr_load(struct osd_device *osd, uint64_t dnode, nvlist_t **sa)
 {
 	sa_handle_t *sa_hdl;
@@ -126,8 +116,9 @@ static inline int __osd_xattr_cache(const struct lu_env *env,
 				&obj->oo_sa_xattr);
 }
 
-int __osd_sa_xattr_get(const struct lu_env *env, struct osd_object *obj,
-		       const struct lu_buf *buf, const char *name, int *sizep)
+static int
+__osd_sa_xattr_get(const struct lu_env *env, struct osd_object *obj,
+		   const struct lu_buf *buf, const char *name, int *sizep)
 {
 	uchar_t *nv_value;
 	int      rc;
@@ -218,6 +209,23 @@ out_rele:
 	return rc;
 }
 
+/**
+ * Copy an extended attribute into the buffer provided, or compute
+ * the required buffer size if \a buf is NULL.
+ *
+ * On success, the number of bytes used or required is stored in \a sizep.
+ *
+ * Note that no locking is done here.
+ *
+ * \param[in] env      execution environment
+ * \param[in] obj      object for which to retrieve xattr
+ * \param[out] buf     buffer to store xattr value in
+ * \param[in] name     name of xattr to copy
+ * \param[out] sizep   bytes used or required to store xattr
+ *
+ * \retval 0           on success
+ * \retval negative    negated errno on failure
+ */
 int __osd_xattr_get(const struct lu_env *env, struct osd_object *obj,
 		    struct lu_buf *buf, const char *name, int *sizep)
 {
@@ -228,10 +236,8 @@ int __osd_xattr_get(const struct lu_env *env, struct osd_object *obj,
 	if (rc != -ENOENT)
 		return rc;
 
-	rc = __osd_xattr_get_large(env, osd_obj2dev(obj), obj->oo_xattr,
-				   buf, name, sizep);
-
-	return rc;
+	return __osd_xattr_get_large(env, osd_obj2dev(obj), obj->oo_xattr,
+				     buf, name, sizep);
 }
 
 int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
@@ -856,5 +862,3 @@ out:
 	RETURN(rc);
 
 }
-
-

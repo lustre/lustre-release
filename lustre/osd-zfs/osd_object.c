@@ -1797,4 +1797,3 @@ static struct dt_object_operations osd_obj_otable_it_ops = {
         .do_attr_get    = osd_otable_it_attr_get,
         .do_index_try   = osd_index_try,
 };
-

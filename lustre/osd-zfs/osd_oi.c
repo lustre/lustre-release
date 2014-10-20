@@ -860,5 +860,3 @@ int osd_options_init(void)
 
 	return 0;
 }
-
-
