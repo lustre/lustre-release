@@ -436,9 +436,12 @@ test_20b() { # bug 10480
 	mds_evict_client
 	client_up || client_up || true    # reconnect
 
+	do_facet $SINGLEMDS "lctl set_param -n osd*.*MDT*.force_sync 1"
+
 	fail $SINGLEMDS                            # start orphan recovery
 	wait_recovery_complete $SINGLEMDS || error "MDS recovery not done"
 	wait_delete_completed_mds $wait_timeout || return 3
+
 	AFTERUSED=$(df -P $DIR | tail -1 | awk '{ print $3 }')
 	log "before $BEFOREUSED, after $AFTERUSED"
 	(( $AFTERUSED > $BEFOREUSED + $(fs_log_size) )) &&
