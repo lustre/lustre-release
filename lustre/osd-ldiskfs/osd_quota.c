@@ -512,7 +512,7 @@ int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 	struct osd_device       *dev = info->oti_dev;
 	struct qsd_instance     *qsd = dev->od_quota_slave;
 	struct inode		*inode = NULL;
-	int                      i, rc = 0;
+	int                      i, rc = 0, crd;
 	bool                     found = false;
 	ENTRY;
 
@@ -537,11 +537,26 @@ int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 
 		if (obj != NULL)
 			inode = obj->oo_inode;
-		osd_trans_declare_op(env, oh, OSD_OT_QUOTA,
-				     (qi->lqi_id.qid_uid == 0 ||
-				      (inode != NULL &&
-				       inode->i_dquot[qi->lqi_type] != NULL)) ?
-				     1: LDISKFS_QUOTA_INIT_BLOCKS(osd_sb(dev)));
+
+		/* root ID entry should be always present in the quota file */
+		if (qi->lqi_id.qid_uid == 0) {
+			crd = 1;
+		} else {
+			/* used space for this ID could be dropped to zero,
+			 * reserve extra credits for removing ID entry from
+			 * the quota file */
+			if (qi->lqi_space < 0)
+				crd = LDISKFS_QUOTA_DEL_BLOCKS(osd_sb(dev));
+			/* reserve credits for adding ID entry to the quota
+			 * file if the i_dquot isn't initialized yet. */
+			else if (inode == NULL ||
+				 inode->i_dquot[qi->lqi_type] == NULL)
+				crd = LDISKFS_QUOTA_INIT_BLOCKS(osd_sb(dev));
+			else
+				crd = 1;
+		}
+
+		osd_trans_declare_op(env, oh, OSD_OT_QUOTA, crd);
 
 		oh->ot_id_array[i] = qi->lqi_id.qid_uid;
 		osd_qid_set_type(oh, i, qi->lqi_type);
