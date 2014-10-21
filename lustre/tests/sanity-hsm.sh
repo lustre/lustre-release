@@ -2758,6 +2758,13 @@ test_70() {
 
 	# Just start and stop the copytool to generate events.
 	cdt_clear_no_retry
+
+	# Wait for the copytool to register.
+	wait_update --verbose $(facet_active_host mds1) \
+		"$LCTL get_param -n ${MDT_PREFIX}0.hsm.agents | grep -o ^uuid" \
+		uuid 100 ||
+		error "copytool failed to register with MDT0000"
+
 	copytool_cleanup
 
 	local REGISTER_EVENT
