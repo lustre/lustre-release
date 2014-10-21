@@ -553,6 +553,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MIGRATE_NET_REP		0x1800
 #define OBD_FAIL_MIGRATE_ENTRIES		0x1801
 #define OBD_FAIL_MIGRATE_LINKEA			0x1802
+#define OBD_FAIL_MIGRATE_DELAY			0x1803
 
 /* LMV */
 #define OBD_FAIL_UNKNOWN_LMV_STRIPE		0x1901

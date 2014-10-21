@@ -1717,6 +1717,7 @@ static inline void lmm_oi_cpu_to_le(struct ost_id *dst_oi,
 #define XATTR_NAME_SOM		"trusted.som"
 #define XATTR_NAME_HSM		"trusted.hsm"
 #define XATTR_NAME_LFSCK_BITMAP "trusted.lfsck_bitmap"
+#define XATTR_NAME_DUMMY	"trusted.dummy"
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 8, 53, 0)
 # define XATTR_NAME_LFSCK_NAMESPACE_OLD "trusted.lfsck_namespace"

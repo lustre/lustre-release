@@ -1574,6 +1574,61 @@ test_15b() {
 }
 run_test 15b "LFSCK can repair unmatched MDT-object/OST-object pairs (2)"
 
+test_15c() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "We need at least 2 MDSes for this test" && return
+
+	echo "#####"
+	echo "According to current metadata migration implementation,"
+	echo "before the old MDT-object is removed, both the new MDT-object"
+	echo "and old MDT-object will reference the same LOV layout. Then if"
+	echo "the layout LFSCK finds the new MDT-object by race, it will"
+	echo "regard related OST-object(s) as multiple referenced case, and"
+	echo "will try to create new OST-object(s) for the new MDT-object."
+	echo "To avoid such trouble, the layout LFSCK needs to lock the old"
+	echo "MDT-object before confirm the multiple referenced case."
+	echo "#####"
+
+	check_mount_and_prep
+	$LFS mkdir -i 1 $DIR/$tdir/a1
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir/a1
+	dd if=/dev/zero of=$DIR/$tdir/a1/f1 bs=1M count=1
+	cancel_lru_locks osc
+
+	echo "Inject failure stub on MDT1 to delay the migration"
+
+	#define OBD_FAIL_MIGRATE_DELAY			0x1803
+	do_facet mds2 $LCTL set_param fail_val=5 fail_loc=0x1803
+	echo "Migrate $DIR/$tdir/a1 from MDT1 to MDT0 with delay"
+	$LFS mv -M 0 $DIR/$tdir/a1 &
+
+	sleep 1
+	echo "Trigger layout LFSCK to race with the migration"
+	$START_LAYOUT -A -r || error "(1) Fail to start layout LFSCK!"
+
+	for k in $(seq $MDSCOUNT); do
+		# The LFSCK status query internal is 30 seconds. For the case
+		# of some LFSCK_NOTIFY RPCs failure/lost, we will wait enough
+		# time to guarantee the status sync up.
+		wait_update_facet mds${k} "$LCTL get_param -n \
+			mdd.$(facet_svc mds${k}).lfsck_layout |
+			awk '/^status/ { print \\\$2 }'" "completed" $LTIME ||
+			error "(2) MDS${k} is not the expected 'completed'"
+	done
+
+	do_facet mds2 $LCTL set_param fail_loc=0 fail_val=0
+	local repaired=$($SHOW_LAYOUT |
+			 awk '/^repaired_unmatched_pair/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(3) Fail to repair unmatched pair: $repaired"
+
+	repaired=$($SHOW_LAYOUT |
+		   awk '/^repaired_multiple_referenced/ { print $2 }')
+	[ $repaired -eq 0 ] ||
+		error "(4) Unexpectedly repaird multiple references: $repaired"
+}
+run_test 15c "LFSCK can repair unmatched MDT-object/OST-object pairs (3)"
+
 test_16() {
 	echo "#####"
 	echo "If the OST-object's owner information does not match the owner"
