@@ -252,7 +252,6 @@ AC_ARG_ENABLE([utils],
 		[disable building of Lustre utility programs]),
 	[], [enable_utils="yes"])
 AC_MSG_RESULT([$enable_utils])
-AS_IF([test "x$enable_utils" = xyes], [LB_CONFIG_INIT_SCRIPTS])
 ]) # LB_CONFIG_UTILS
 
 #
@@ -308,26 +307,6 @@ AS_IF([test "x$enable_doc" = xyes],
 	[ENABLE_DOC=1], [ENABLE_DOC=0])
 AC_SUBST(ENABLE_DOC)
 ]) # LB_CONFIG_DOCS
-
-#
-# LB_CONFIG_INIT_SCRIPTS
-#
-# our init scripts only work on red hat linux
-#
-AC_DEFUN([LB_CONFIG_INIT_SCRIPTS], [
-ENABLE_INIT_SCRIPTS=0
-AS_IF([test x$enable_utils = xyes], [
-	AC_CACHE_CHECK([whether to install init scripts], [lb_cv_enable_init_scripts], [
-	# our scripts only work on red hat systems
-	AS_IF([test -f /etc/init.d/functions -a -f /etc/sysconfig/network],
-		[lb_cv_enable_init_scripts="yes"],
-		[lb_cv_enable_init_scripts="no"])
-	])
-	AS_IF([test "x$lb_cv_enable_init_scripts" = xyes],
-		[ENABLE_INIT_SCRIPTS=1])
-])
-AC_SUBST(ENABLE_INIT_SCRIPTS)
-])
 
 #
 # LB_CONFIG_HEADERS
@@ -422,10 +401,11 @@ AM_CONDITIONAL([MODULES], [test x$enable_modules = xyes])
 AM_CONDITIONAL([UTILS], [test x$enable_utils = xyes])
 AM_CONDITIONAL([TESTS], [test x$enable_tests = xyes])
 AM_CONDITIONAL([DOC], [test x$ENABLE_DOC = x1])
-AM_CONDITIONAL([INIT_SCRIPTS], [test x$ENABLE_INIT_SCRIPTS = x1])
 AM_CONDITIONAL([LINUX], [test x$lb_target_os = xlinux])
 AM_CONDITIONAL([USES_DPKG], [test x$uses_dpkg = xyes])
 AM_CONDITIONAL([USE_QUILT], [test x$use_quilt = xyes])
+AM_CONDITIONAL([RHEL], [test x$RHEL_KERNEL = xyes])
+AM_CONDITIONAL([SUSE], [test x$SUSE_KERNEL = xyes])
 
 # Sanity check for PCLMULQDQ instruction availability
 # PCLMULQDQ instruction is a new instruction available beginning with

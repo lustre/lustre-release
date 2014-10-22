@@ -48,7 +48,7 @@ endif
 udevrulesdir = $(sysconfdir)/udev/rules.d
 udevrules_DATA = 99-lustre.rules
 
-if INIT_SCRIPTS
+if RHEL
 if SERVER
 sysconfigdir = $(sysconfdir)/sysconfig
 sysconfig_DATA = lustre

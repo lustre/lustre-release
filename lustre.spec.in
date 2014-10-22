@@ -373,25 +373,23 @@ make install DESTDIR=$RPM_BUILD_ROOT
 
 :> lustre.files
 
-%if %{with servers}
+%if %{with servers} && %{with lustre_utils}
 # The .ha_v2 extension identifies the heartbeat resource agent as using
 # legacy syntax. Install a compatibility symlink to avoid conflicts when
 # newer-style agents are added.
-%if %{with lustre_utils}
 ln -s Lustre.ha_v2 $RPM_BUILD_ROOT%{_sysconfdir}/ha.d/resource.d/Lustre
 echo '%{_sysconfdir}/ha.d/resource.d/Lustre.ha_v2' >>lustre.files
 echo '%{_sysconfdir}/ha.d/resource.d/Lustre' >>lustre.files
 %endif
 
-if [ -f $RPM_BUILD_ROOT%{_sysconfdir}/init.d/lustre ]; then
-	echo '%{_sysconfdir}/sysconfig/lustre' >>lustre.files
-	echo '%{_sysconfdir}/init.d/lustre' >>lustre.files
-fi
+%if %{_vendor}=="redhat"
+# The following scripts are Red Hat specific
+%if %{with servers}
+echo '%{_sysconfdir}/sysconfig/lustre' >>lustre.files
+echo '%{_sysconfdir}/init.d/lustre' >>lustre.files
 %endif
-
-if [ -f $RPM_BUILD_ROOT%{_sysconfdir}/init.d/lnet ]; then
-	echo '%{_sysconfdir}/init.d/lnet' >>lustre.files
-fi
+echo '%{_sysconfdir}/init.d/lnet' >>lustre.files
+%endif
 
 # Create the pristine source directory.
 cd $RPM_BUILD_DIR/lustre-%{version}
