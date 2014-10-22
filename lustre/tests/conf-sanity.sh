@@ -2562,6 +2562,15 @@ test_41b() {
 run_test 41b "mount mds with --nosvc and --nomgs on first mount"
 
 test_41c() {
+	local server_version=$(lustre_version_code $SINGLEMDS)
+
+	[[ $server_version -ge $(version_code 2.6.52) ]] ||
+	[[ $server_version -ge $(version_code 2.5.26) &&
+	   $server_version -lt $(version_code 2.5.50) ]] ||
+	[[ $server_version -ge $(version_code 2.5.4) &&
+	   $server_version -lt $(version_code 2.5.11) ]] ||
+		{ skip "Need MDS version 2.5.4+ or 2.5.26+ or 2.6.52+"; return; }
+
 	cleanup
 	# MDT concurent start
 	#define OBD_FAIL_TGT_DELAY_CONNECT 0x703
