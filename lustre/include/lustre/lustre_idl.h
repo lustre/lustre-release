@@ -3560,19 +3560,12 @@ struct lfsck_request {
 	__u16		lr_active;
 	__u16		lr_param;
 	__u16		lr_async_windows;
-	union {
-		__u32	lr_flags2;
-		__u32	lr_layout_version;
-	};
+	__u32		lr_flags2;
 	struct lu_fid	lr_fid;
 	struct lu_fid	lr_fid2;
-	union {
-		struct lu_fid	lr_fid3;
-		char		lr_pool_name[LOV_MAXPOOLNAME + 1];
-	};
-	__u32		lr_stripe_count;
-	__u32		lr_hash_type;
-	__u64		lr_padding_3;
+	struct lu_fid	lr_fid3;
+	__u64		lr_padding_1;
+	__u64		lr_padding_2;
 };
 
 void lustre_swab_lfsck_request(struct lfsck_request *lr);
@@ -3597,7 +3590,6 @@ enum lfsck_events {
 	LE_PEER_EXIT		= 9,
 	LE_CONDITIONAL_DESTROY	= 10,
 	LE_PAIRS_VERIFY 	= 11,
-	LE_CREATE_ORPHAN	= 12,
 	LE_SKIP_NLINK_DECLARE	= 13,
 	LE_SKIP_NLINK		= 14,
 	LE_SET_LMV_MASTER	= 15,

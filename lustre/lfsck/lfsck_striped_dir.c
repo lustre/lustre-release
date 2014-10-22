@@ -1695,8 +1695,8 @@ int lfsck_namespace_verify_stripe_slave(const struct lu_env *env,
 	char				*name	= info->lti_key;
 	char				*name2;
 	struct lu_fid			*pfid	= &info->lti_fid3;
-	struct lu_fid			*tfid	= &info->lti_fid4;
 	const struct lu_fid		*cfid	= lfsck_dto2fid(obj);
+	struct lu_fid			 tfid;
 	struct lfsck_instance		*lfsck	= com->lc_lfsck;
 	struct lmv_mds_md_v1		*clmv	= &llmv->ll_lmv;
 	struct lmv_mds_md_v1		*plmv	= &info->lti_lmv;
@@ -1780,16 +1780,16 @@ int lfsck_namespace_verify_stripe_slave(const struct lu_env *env,
 		 PFID(cfid), clmv->lmv_master_mdt_index);
 	name2 = info->lti_tmpbuf2;
 
-	rc = lfsck_links_get_first(env, obj, name, tfid);
-	if (rc == 0 && strcmp(name, name2) == 0 && lu_fid_eq(pfid, tfid)) {
+	rc = lfsck_links_get_first(env, obj, name, &tfid);
+	if (rc == 0 && strcmp(name, name2) == 0 && lu_fid_eq(pfid, &tfid)) {
 		llmv->ll_lmv_verified = 1;
 
 		GOTO(out, rc);
 	}
 
-	rc = dt_lookup(env, parent, (struct dt_rec *)tfid,
+	rc = dt_lookup(env, parent, (struct dt_rec *)&tfid,
 		       (const struct dt_key *)name2, BYPASS_CAPA);
-	if (rc != 0 || !lu_fid_eq(cfid, tfid))
+	if (rc != 0 || !lu_fid_eq(cfid, &tfid))
 		rc = lfsck_namespace_trace_update(env, com, cfid,
 						  LNTF_UNCERTAIN_LMV, true);
 	else

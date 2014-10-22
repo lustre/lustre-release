@@ -4682,18 +4682,14 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lfsck_request, lr_fid3));
 	LASSERTF((int)sizeof(((struct lfsck_request *)0)->lr_fid3) == 16, "found %lld\n",
 		 (long long)(int)sizeof(((struct lfsck_request *)0)->lr_fid3));
-	LASSERTF((int)offsetof(struct lfsck_request, lr_stripe_count) == 80, "found %lld\n",
-		 (long long)(int)offsetof(struct lfsck_request, lr_stripe_count));
-	LASSERTF((int)sizeof(((struct lfsck_request *)0)->lr_stripe_count) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct lfsck_request *)0)->lr_stripe_count));
-	LASSERTF((int)offsetof(struct lfsck_request, lr_hash_type) == 84, "found %lld\n",
-		 (long long)(int)offsetof(struct lfsck_request, lr_hash_type));
-	LASSERTF((int)sizeof(((struct lfsck_request *)0)->lr_hash_type) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct lfsck_request *)0)->lr_hash_type));
-	LASSERTF((int)offsetof(struct lfsck_request, lr_padding_3) == 88, "found %lld\n",
-		 (long long)(int)offsetof(struct lfsck_request, lr_padding_3));
-	LASSERTF((int)sizeof(((struct lfsck_request *)0)->lr_padding_3) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct lfsck_request *)0)->lr_padding_3));
+	LASSERTF((int)offsetof(struct lfsck_request, lr_padding_1) == 80, "found %lld\n",
+		 (long long)(int)offsetof(struct lfsck_request, lr_padding_1));
+	LASSERTF((int)sizeof(((struct lfsck_request *)0)->lr_padding_1) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct lfsck_request *)0)->lr_padding_1));
+	LASSERTF((int)offsetof(struct lfsck_request, lr_padding_2) == 88, "found %lld\n",
+		 (long long)(int)offsetof(struct lfsck_request, lr_padding_2));
+	LASSERTF((int)sizeof(((struct lfsck_request *)0)->lr_padding_2) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct lfsck_request *)0)->lr_padding_2));
 	LASSERTF(LFSCK_TYPE_SCRUB == 0x00000000UL, "found 0x%.8xUL\n",
 		(unsigned)LFSCK_TYPE_SCRUB);
 	LASSERTF(LFSCK_TYPE_LAYOUT == 0x00000001UL, "found 0x%.8xUL\n",
@@ -4722,8 +4718,6 @@ void lustre_assert_wire_constants(void)
 		 (long long)LE_CONDITIONAL_DESTROY);
 	LASSERTF(LE_PAIRS_VERIFY == 11, "found %lld\n",
 		 (long long)LE_PAIRS_VERIFY);
-	LASSERTF(LE_CREATE_ORPHAN == 12, "found %lld\n",
-		 (long long)LE_CREATE_ORPHAN);
 	LASSERTF(LE_SKIP_NLINK_DECLARE == 13, "found %lld\n",
 		 (long long)LE_SKIP_NLINK_DECLARE);
 	LASSERTF(LE_SKIP_NLINK == 14, "found %lld\n",

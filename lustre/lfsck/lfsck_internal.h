@@ -630,6 +630,7 @@ struct lfsck_instance {
 	struct lu_fid		  li_global_root_fid; /* /ROOT */
 	struct dt_object	 *li_bookmark_obj;
 	struct dt_object	 *li_lpf_obj;
+	struct dt_object	 *li_lpf_root_obj;
 	struct lu_client_seq	 *li_seq;
 	struct lfsck_bookmark	  li_bookmark_ram;
 	struct lfsck_bookmark	  li_bookmark_disk;
@@ -800,8 +801,6 @@ struct lfsck_thread_info {
 	struct lu_fid		lti_fid;
 	struct lu_fid		lti_fid2;
 	struct lu_fid		lti_fid3;
-	struct lu_fid		lti_fid4;
-	struct lu_fid		lti_fid5;
 	struct lu_attr		lti_la;
 	struct lu_attr		lti_la2;
 	struct lu_attr		lti_la3;
@@ -850,7 +849,6 @@ void lfsck_ibits_unlock(struct lustre_handle *lh, ldlm_mode_t mode);
 int lfsck_find_mdt_idx_by_fid(const struct lu_env *env,
 			      struct lfsck_instance *lfsck,
 			      const struct lu_fid *fid);
-int lfsck_create_lpf(const struct lu_env *env, struct lfsck_instance *lfsck);
 int lfsck_verify_lpf(const struct lu_env *env, struct lfsck_instance *lfsck);
 struct lfsck_instance *lfsck_instance_find(struct dt_device *key, bool ref,
 					   bool unlink);
@@ -942,10 +940,6 @@ int lfsck_verify_linkea(const struct lu_env *env, struct dt_device *dev,
 			const struct lu_fid *pfid);
 int lfsck_links_get_first(const struct lu_env *env, struct dt_object *obj,
 			  char *name, struct lu_fid *pfid);
-int lfsck_remove_name_entry(const struct lu_env *env,
-			    struct lfsck_instance *lfsck,
-			    struct dt_object *parent,
-			    const char *name, __u32 type);
 int lfsck_update_name_entry(const struct lu_env *env,
 			    struct lfsck_instance *lfsck,
 			    struct dt_object *parent, const char *name,

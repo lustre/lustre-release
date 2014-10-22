@@ -1763,12 +1763,8 @@ static int lfsck_layout_recreate_parent(const struct lu_env *env,
 	int				 rc	= 0;
 	ENTRY;
 
-	/* Create .lustre/lost+found/MDTxxxx when needed. */
-	if (unlikely(lfsck->li_lpf_obj == NULL)) {
-		rc = lfsck_create_lpf(env, lfsck);
-		if (rc != 0)
-			GOTO(log, rc);
-	}
+	if (unlikely(lfsck->li_lpf_obj == NULL))
+		GOTO(log, rc = -ENXIO);
 
 	if (fid_is_zero(pfid)) {
 		struct filter_fid *ff = &info->lti_new_pfid;

@@ -2132,9 +2132,8 @@ static void check_lfsck_request(void)
 	CHECK_MEMBER(lfsck_request, lr_fid);
 	CHECK_MEMBER(lfsck_request, lr_fid2);
 	CHECK_MEMBER(lfsck_request, lr_fid3);
-	CHECK_MEMBER(lfsck_request, lr_stripe_count);
-	CHECK_MEMBER(lfsck_request, lr_hash_type);
-	CHECK_MEMBER(lfsck_request, lr_padding_3);
+	CHECK_MEMBER(lfsck_request, lr_padding_1);
+	CHECK_MEMBER(lfsck_request, lr_padding_2);
 
 	CHECK_VALUE_X(LFSCK_TYPE_SCRUB);
 	CHECK_VALUE_X(LFSCK_TYPE_LAYOUT);
@@ -2151,7 +2150,6 @@ static void check_lfsck_request(void)
 	CHECK_VALUE(LE_PEER_EXIT);
 	CHECK_VALUE(LE_CONDITIONAL_DESTROY);
 	CHECK_VALUE(LE_PAIRS_VERIFY);
-	CHECK_VALUE(LE_CREATE_ORPHAN);
 	CHECK_VALUE(LE_SKIP_NLINK_DECLARE);
 	CHECK_VALUE(LE_SKIP_NLINK);
 	CHECK_VALUE(LE_SET_LMV_MASTER);
