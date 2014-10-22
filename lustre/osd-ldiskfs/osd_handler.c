@@ -1712,17 +1712,18 @@ static void osd_inode_getattr(const struct lu_env *env,
 }
 
 static int osd_attr_get(const struct lu_env *env,
-                        struct dt_object *dt,
-                        struct lu_attr *attr,
-                        struct lustre_capa *capa)
+			struct dt_object *dt,
+			struct lu_attr *attr,
+			struct lustre_capa *capa)
 {
-        struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_object *obj = osd_dt_obj(dt);
 
-	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
-        LINVRNT(osd_invariant(obj));
+	LASSERT(dt_object_exists(dt));
+	LASSERT(!dt_object_remote(dt));
+	LINVRNT(osd_invariant(obj));
 
-        if (osd_object_auth(env, dt, capa, CAPA_OPC_META_READ))
-                return -EACCES;
+	if (osd_object_auth(env, dt, capa, CAPA_OPC_META_READ))
+		return -EACCES;
 
 	spin_lock(&obj->oo_guard);
 	osd_inode_getattr(env, obj->oo_inode, attr);
@@ -1951,21 +1952,22 @@ static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr)
 }
 
 static int osd_attr_set(const struct lu_env *env,
-                        struct dt_object *dt,
-                        const struct lu_attr *attr,
-                        struct thandle *handle,
-                        struct lustre_capa *capa)
+			struct dt_object *dt,
+			const struct lu_attr *attr,
+			struct thandle *handle,
+			struct lustre_capa *capa)
 {
-        struct osd_object *obj = osd_dt_obj(dt);
-        struct inode      *inode;
-        int rc;
+	struct osd_object *obj = osd_dt_obj(dt);
+	struct inode      *inode;
+	int rc;
 
-        LASSERT(handle != NULL);
-	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
-        LASSERT(osd_invariant(obj));
+	LASSERT(handle != NULL);
+	LASSERT(dt_object_exists(dt));
+	LASSERT(!dt_object_remote(dt));
+	LASSERT(osd_invariant(obj));
 
-        if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
-                return -EACCES;
+	if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
+		return -EACCES;
 
 	osd_trans_exec_op(env, handle, OSD_OT_ATTR_SET);
 
@@ -2392,22 +2394,21 @@ static int osd_declare_object_create(const struct lu_env *env,
 }
 
 static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
-                             struct lu_attr *attr,
-                             struct dt_allocation_hint *hint,
-                             struct dt_object_format *dof,
-                             struct thandle *th)
+			     struct lu_attr *attr,
+			     struct dt_allocation_hint *hint,
+			     struct dt_object_format *dof, struct thandle *th)
 {
-        const struct lu_fid    *fid    = lu_object_fid(&dt->do_lu);
-        struct osd_object      *obj    = osd_dt_obj(dt);
-        struct osd_thread_info *info   = osd_oti_get(env);
-        int result;
+	const struct lu_fid	*fid	= lu_object_fid(&dt->do_lu);
+	struct osd_object	*obj	= osd_dt_obj(dt);
+	struct osd_thread_info	*info	= osd_oti_get(env);
+	int result;
+	ENTRY;
 
-        ENTRY;
-
-        LINVRNT(osd_invariant(obj));
-	LASSERT(!dt_object_exists(dt) && !dt_object_remote(dt));
-        LASSERT(osd_write_locked(env, obj));
-        LASSERT(th != NULL);
+	LINVRNT(osd_invariant(obj));
+	LASSERT(!dt_object_exists(dt));
+	LASSERT(!dt_object_remote(dt));
+	LASSERT(osd_write_locked(env, obj));
+	LASSERT(th != NULL);
 
 	if (unlikely(fid_is_acct(fid)))
 		/* Quota files can't be created from the kernel any more,
@@ -2720,22 +2721,23 @@ static int osd_delete_local_agent_inode(const struct lu_env *env,
  * \retval -ve, on error
  */
 static int osd_object_ea_create(const struct lu_env *env, struct dt_object *dt,
-                                struct lu_attr *attr,
-                                struct dt_allocation_hint *hint,
-                                struct dt_object_format *dof,
-                                struct thandle *th)
+				struct lu_attr *attr,
+				struct dt_allocation_hint *hint,
+				struct dt_object_format *dof,
+				struct thandle *th)
 {
-        const struct lu_fid    *fid    = lu_object_fid(&dt->do_lu);
-        struct osd_object      *obj    = osd_dt_obj(dt);
-        struct osd_thread_info *info   = osd_oti_get(env);
-        int                     result;
+	const struct lu_fid	*fid	= lu_object_fid(&dt->do_lu);
+	struct osd_object	*obj	= osd_dt_obj(dt);
+	struct osd_thread_info	*info	= osd_oti_get(env);
+	int			 result;
 
-        ENTRY;
+	ENTRY;
 
-        LASSERT(osd_invariant(obj));
-	LASSERT(!dt_object_exists(dt) && !dt_object_remote(dt));
-        LASSERT(osd_write_locked(env, obj));
-        LASSERT(th != NULL);
+	LASSERT(osd_invariant(obj));
+	LASSERT(!dt_object_exists(dt));
+	LASSERT(!dt_object_remote(dt));
+	LASSERT(osd_write_locked(env, obj));
+	LASSERT(th != NULL);
 
 	if (unlikely(fid_is_acct(fid)))
 		/* Quota files can't be created from the kernel any more,
@@ -2745,7 +2747,7 @@ static int osd_object_ea_create(const struct lu_env *env, struct dt_object *dt,
 	osd_trans_exec_op(env, th, OSD_OT_CREATE);
 	osd_trans_declare_rb(env, th, OSD_OT_REF_ADD);
 
-        result = __osd_object_create(info, obj, attr, hint, dof, th);
+	result = __osd_object_create(info, obj, attr, hint, dof, th);
 	if (result == 0)
 		result = osd_ea_fid_set(info, obj->oo_inode, fid,
 				fid_is_on_ost(info, osd_obj2dev(obj),
@@ -2783,20 +2785,21 @@ static int osd_declare_object_ref_add(const struct lu_env *env,
  * Concurrency: @dt is write locked.
  */
 static int osd_object_ref_add(const struct lu_env *env,
-                              struct dt_object *dt, struct thandle *th)
+			      struct dt_object *dt, struct thandle *th)
 {
 	struct osd_object  *obj = osd_dt_obj(dt);
 	struct inode       *inode = obj->oo_inode;
 	struct osd_thandle *oh;
 	int		    rc = 0;
 
-        LINVRNT(osd_invariant(obj));
-	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
-        LASSERT(osd_write_locked(env, obj));
-        LASSERT(th != NULL);
+	LINVRNT(osd_invariant(obj));
+	LASSERT(dt_object_exists(dt));
+	LASSERT(!dt_object_remote(dt));
+	LASSERT(osd_write_locked(env, obj));
+	LASSERT(th != NULL);
 
-        oh = container_of0(th, struct osd_thandle, ot_super);
-        LASSERT(oh->ot_handle != NULL);
+	oh = container_of0(th, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle != NULL);
 
 	osd_trans_exec_op(env, th, OSD_OT_REF_ADD);
 
@@ -2831,16 +2834,17 @@ static int osd_object_ref_add(const struct lu_env *env,
 }
 
 static int osd_declare_object_ref_del(const struct lu_env *env,
-                                      struct dt_object *dt,
-                                      struct thandle *handle)
+				      struct dt_object *dt,
+				      struct thandle *handle)
 {
-        struct osd_thandle *oh;
+	struct osd_thandle *oh;
 
-	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
-        LASSERT(handle != NULL);
+	LASSERT(dt_object_exists(dt));
+	LASSERT(!dt_object_remote(dt));
+	LASSERT(handle != NULL);
 
-        oh = container_of0(handle, struct osd_thandle, ot_super);
-        LASSERT(oh->ot_handle == NULL);
+	oh = container_of0(handle, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle == NULL);
 
 	osd_trans_declare_op(env, oh, OSD_OT_REF_DEL,
 			     osd_dto_credits_noquota[DTO_ATTR_SET_BASE]);
@@ -2852,7 +2856,7 @@ static int osd_declare_object_ref_del(const struct lu_env *env,
  * Concurrency: @dt is write locked.
  */
 static int osd_object_ref_del(const struct lu_env *env, struct dt_object *dt,
-                              struct thandle *th)
+			      struct thandle *th)
 {
 	struct osd_object	*obj = osd_dt_obj(dt);
 	struct inode		*inode = obj->oo_inode;
@@ -2860,12 +2864,13 @@ static int osd_object_ref_del(const struct lu_env *env, struct dt_object *dt,
 	struct osd_thandle      *oh;
 
 	LINVRNT(osd_invariant(obj));
-	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
+	LASSERT(dt_object_exists(dt));
+	LASSERT(!dt_object_remote(dt));
 	LASSERT(osd_write_locked(env, obj));
 	LASSERT(th != NULL);
 
-        oh = container_of0(th, struct osd_thandle, ot_super);
-        LASSERT(oh->ot_handle != NULL);
+	oh = container_of0(th, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle != NULL);
 
 	osd_trans_exec_op(env, th, OSD_OT_REF_DEL);
 
@@ -2935,11 +2940,13 @@ static int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		return sizeof(dt_obj_version_t);
         }
 
-	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
-        LASSERT(inode->i_op != NULL && inode->i_op->getxattr != NULL);
+	LASSERT(dt_object_exists(dt));
+	LASSERT(!dt_object_remote(dt));
+	LASSERT(inode->i_op != NULL);
+	LASSERT(inode->i_op->getxattr != NULL);
 
-        if (osd_object_auth(env, dt, capa, CAPA_OPC_META_READ))
-                return -EACCES;
+	if (osd_object_auth(env, dt, capa, CAPA_OPC_META_READ))
+		return -EACCES;
 
 	return __osd_xattr_get(inode, dentry, name, buf->lb_buf, buf->lb_len);
 }
@@ -3068,36 +3075,39 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
  * Concurrency: @dt is read locked.
  */
 static int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
-                          struct lu_buf *buf, struct lustre_capa *capa)
+			  struct lu_buf *buf, struct lustre_capa *capa)
 {
-        struct osd_object      *obj    = osd_dt_obj(dt);
-        struct inode           *inode  = obj->oo_inode;
-        struct osd_thread_info *info   = osd_oti_get(env);
-        struct dentry          *dentry = &info->oti_obj_dentry;
+	struct osd_object      *obj    = osd_dt_obj(dt);
+	struct inode           *inode  = obj->oo_inode;
+	struct osd_thread_info *info   = osd_oti_get(env);
+	struct dentry          *dentry = &info->oti_obj_dentry;
 
-	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
-        LASSERT(inode->i_op != NULL && inode->i_op->listxattr != NULL);
+	LASSERT(dt_object_exists(dt));
+	LASSERT(!dt_object_remote(dt));
+	LASSERT(inode->i_op != NULL);
+	LASSERT(inode->i_op->listxattr != NULL);
 
-        if (osd_object_auth(env, dt, capa, CAPA_OPC_META_READ))
-                return -EACCES;
+	if (osd_object_auth(env, dt, capa, CAPA_OPC_META_READ))
+		return -EACCES;
 
-        dentry->d_inode = inode;
+	dentry->d_inode = inode;
 	dentry->d_sb = inode->i_sb;
-        return inode->i_op->listxattr(dentry, buf->lb_buf, buf->lb_len);
+	return inode->i_op->listxattr(dentry, buf->lb_buf, buf->lb_len);
 }
 
 static int osd_declare_xattr_del(const struct lu_env *env,
-                                 struct dt_object *dt, const char *name,
-                                 struct thandle *handle)
+				 struct dt_object *dt, const char *name,
+				 struct thandle *handle)
 {
-        struct osd_thandle *oh;
+	struct osd_thandle *oh;
 	struct super_block *sb = osd_sb(osd_dev(dt->do_lu.lo_dev));
 
-	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
-        LASSERT(handle != NULL);
+	LASSERT(dt_object_exists(dt));
+	LASSERT(!dt_object_remote(dt));
+	LASSERT(handle != NULL);
 
-        oh = container_of0(handle, struct osd_thandle, ot_super);
-        LASSERT(oh->ot_handle == NULL);
+	oh = container_of0(handle, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle == NULL);
 
 	osd_trans_declare_op(env, oh, OSD_OT_XATTR_SET,
 			     osd_dto_credits_noquota[DTO_XATTR_SET]);
@@ -3114,29 +3124,31 @@ static int osd_declare_xattr_del(const struct lu_env *env,
  * Concurrency: @dt is write locked.
  */
 static int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
-                         const char *name, struct thandle *handle,
-                         struct lustre_capa *capa)
+			 const char *name, struct thandle *handle,
+			 struct lustre_capa *capa)
 {
-        struct osd_object      *obj    = osd_dt_obj(dt);
-        struct inode           *inode  = obj->oo_inode;
-        struct osd_thread_info *info   = osd_oti_get(env);
-        struct dentry          *dentry = &info->oti_obj_dentry;
-        int                     rc;
+	struct osd_object      *obj    = osd_dt_obj(dt);
+	struct inode           *inode  = obj->oo_inode;
+	struct osd_thread_info *info   = osd_oti_get(env);
+	struct dentry          *dentry = &info->oti_obj_dentry;
+	int                     rc;
 
-	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
-        LASSERT(inode->i_op != NULL && inode->i_op->removexattr != NULL);
-        LASSERT(handle != NULL);
+	LASSERT(dt_object_exists(dt));
+	LASSERT(!dt_object_remote(dt));
+	LASSERT(inode->i_op != NULL);
+	LASSERT(inode->i_op->removexattr != NULL);
+	LASSERT(handle != NULL);
 
-        if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
-                return -EACCES;
+	if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
+		return -EACCES;
 
 	osd_trans_exec_op(env, handle, OSD_OT_XATTR_SET);
 
 	ll_vfs_dq_init(inode);
-        dentry->d_inode = inode;
+	dentry->d_inode = inode;
 	dentry->d_sb = inode->i_sb;
-        rc = inode->i_op->removexattr(dentry, name);
-        return rc;
+	rc = inode->i_op->removexattr(dentry, name);
+	return rc;
 }
 
 static struct obd_capa *osd_capa_get(const struct lu_env *env,
@@ -3157,7 +3169,8 @@ static struct obd_capa *osd_capa_get(const struct lu_env *env,
 	if (!osd->od_fl_capa)
 		RETURN(ERR_PTR(-ENOENT));
 
-	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
+	LASSERT(dt_object_exists(dt));
+	LASSERT(!dt_object_remote(dt));
 	LINVRNT(osd_invariant(obj));
 
 	/* renewal sanity check */
@@ -3507,28 +3520,27 @@ static int osd_index_declare_iam_delete(const struct lu_env *env,
  *      \retval  0  success
  *      \retval -ve   failure
  */
-
 static int osd_index_iam_delete(const struct lu_env *env, struct dt_object *dt,
-                                const struct dt_key *key,
-                                struct thandle *handle,
-                                struct lustre_capa *capa)
+				const struct dt_key *key,
+				struct thandle *handle,
+				struct lustre_capa *capa)
 {
-        struct osd_thread_info *oti = osd_oti_get(env);
-        struct osd_object      *obj = osd_dt_obj(dt);
-        struct osd_thandle     *oh;
-        struct iam_path_descr  *ipd;
-        struct iam_container   *bag = &obj->oo_dir->od_container;
-        int                     rc;
+	struct osd_thread_info *oti = osd_oti_get(env);
+	struct osd_object      *obj = osd_dt_obj(dt);
+	struct osd_thandle     *oh;
+	struct iam_path_descr  *ipd;
+	struct iam_container   *bag = &obj->oo_dir->od_container;
+	int                     rc;
+	ENTRY;
 
-        ENTRY;
+	LINVRNT(osd_invariant(obj));
+	LASSERT(dt_object_exists(dt));
+	LASSERT(!dt_object_remote(dt));
+	LASSERT(bag->ic_object == obj->oo_inode);
+	LASSERT(handle != NULL);
 
-        LINVRNT(osd_invariant(obj));
-	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
-        LASSERT(bag->ic_object == obj->oo_inode);
-        LASSERT(handle != NULL);
-
-        if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_DELETE))
-                RETURN(-EACCES);
+	if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_DELETE))
+		RETURN(-EACCES);
 
 	osd_trans_exec_op(env, handle, OSD_OT_DELETE);
 
@@ -3562,7 +3574,8 @@ static int osd_index_declare_ea_delete(const struct lu_env *env,
 	int		    rc;
 	ENTRY;
 
-	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
+	LASSERT(dt_object_exists(dt));
+	LASSERT(!dt_object_remote(dt));
 	LASSERT(handle != NULL);
 
 	oh = container_of0(handle, struct osd_thandle, ot_super);
@@ -3626,25 +3639,25 @@ static int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
  * \retval -ve, on error
  */
 static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
-                               const struct dt_key *key,
-                               struct thandle *handle,
-                               struct lustre_capa *capa)
+			       const struct dt_key *key, struct thandle *handle,
+			       struct lustre_capa *capa)
 {
-        struct osd_object          *obj    = osd_dt_obj(dt);
-        struct inode               *dir    = obj->oo_inode;
-        struct dentry              *dentry;
-        struct osd_thandle         *oh;
+	struct osd_object	   *obj = osd_dt_obj(dt);
+	struct inode		   *dir = obj->oo_inode;
+	struct dentry		   *dentry;
+	struct osd_thandle	   *oh;
 	struct ldiskfs_dir_entry_2 *de = NULL;
-        struct buffer_head         *bh;
-        struct htree_lock          *hlock = NULL;
+	struct buffer_head	   *bh;
+	struct htree_lock	   *hlock = NULL;
 	struct lu_fid		   *fid = &osd_oti_get(env)->oti_fid;
 	struct osd_device	   *osd = osd_dev(dt->do_lu.lo_dev);
 	int			   rc;
-        ENTRY;
+	ENTRY;
 
-        LINVRNT(osd_invariant(obj));
-	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
-        LASSERT(handle != NULL);
+	LINVRNT(osd_invariant(obj));
+	LASSERT(dt_object_exists(dt));
+	LASSERT(!dt_object_remote(dt));
+	LASSERT(handle != NULL);
 
 	osd_trans_exec_op(env, handle, OSD_OT_DELETE);
 
@@ -3783,22 +3796,22 @@ out:
  *      \retval -ve   failure
  */
 static int osd_index_iam_lookup(const struct lu_env *env, struct dt_object *dt,
-                                struct dt_rec *rec, const struct dt_key *key,
-                                struct lustre_capa *capa)
+				struct dt_rec *rec, const struct dt_key *key,
+				struct lustre_capa *capa)
 {
-        struct osd_object      *obj = osd_dt_obj(dt);
-        struct iam_path_descr  *ipd;
-        struct iam_container   *bag = &obj->oo_dir->od_container;
-        struct osd_thread_info *oti = osd_oti_get(env);
-        struct iam_iterator    *it = &oti->oti_idx_it;
-        struct iam_rec         *iam_rec;
-        int                     rc;
+	struct osd_object      *obj = osd_dt_obj(dt);
+	struct iam_path_descr  *ipd;
+	struct iam_container   *bag = &obj->oo_dir->od_container;
+	struct osd_thread_info *oti = osd_oti_get(env);
+	struct iam_iterator    *it = &oti->oti_idx_it;
+	struct iam_rec         *iam_rec;
+	int                     rc;
+	ENTRY;
 
-        ENTRY;
-
-        LASSERT(osd_invariant(obj));
-	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
-        LASSERT(bag->ic_object == obj->oo_inode);
+	LASSERT(osd_invariant(obj));
+	LASSERT(dt_object_exists(dt));
+	LASSERT(!dt_object_remote(dt));
+	LASSERT(bag->ic_object == obj->oo_inode);
 
         if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_LOOKUP))
                 RETURN(-EACCES);
@@ -3872,26 +3885,26 @@ static int osd_index_declare_iam_insert(const struct lu_env *env,
  *      \retval -ve failure
  */
 static int osd_index_iam_insert(const struct lu_env *env, struct dt_object *dt,
-                                const struct dt_rec *rec,
-                                const struct dt_key *key, struct thandle *th,
-                                struct lustre_capa *capa, int ignore_quota)
+				const struct dt_rec *rec,
+				const struct dt_key *key, struct thandle *th,
+				struct lustre_capa *capa, int ignore_quota)
 {
-        struct osd_object     *obj = osd_dt_obj(dt);
-        struct iam_path_descr *ipd;
-        struct osd_thandle    *oh;
-        struct iam_container  *bag = &obj->oo_dir->od_container;
-        struct osd_thread_info *oti = osd_oti_get(env);
-        struct iam_rec         *iam_rec;
-        int                     rc;
+	struct osd_object     *obj = osd_dt_obj(dt);
+	struct iam_path_descr *ipd;
+	struct osd_thandle    *oh;
+	struct iam_container  *bag = &obj->oo_dir->od_container;
+	struct osd_thread_info *oti = osd_oti_get(env);
+	struct iam_rec         *iam_rec;
+	int                     rc;
+	ENTRY;
 
-        ENTRY;
+	LINVRNT(osd_invariant(obj));
+	LASSERT(dt_object_exists(dt));
+	LASSERT(!dt_object_remote(dt));
+	LASSERT(bag->ic_object == obj->oo_inode);
+	LASSERT(th != NULL);
 
-        LINVRNT(osd_invariant(obj));
-	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
-        LASSERT(bag->ic_object == obj->oo_inode);
-        LASSERT(th != NULL);
-
-        if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_INSERT))
+	if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_INSERT))
 		RETURN(-EACCES);
 
 	osd_trans_exec_op(env, th, OSD_OT_INSERT);
@@ -4274,33 +4287,34 @@ again:
  * \retval -ve, on error
  */
 static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
-                             struct dt_rec *rec, const struct dt_key *key)
+			     struct dt_rec *rec, const struct dt_key *key)
 {
-        struct inode               *dir    = obj->oo_inode;
-        struct dentry              *dentry;
-        struct ldiskfs_dir_entry_2 *de;
-        struct buffer_head         *bh;
-        struct lu_fid              *fid = (struct lu_fid *) rec;
-        struct htree_lock          *hlock = NULL;
-        int                         ino;
-        int                         rc;
+	struct inode			*dir    = obj->oo_inode;
+	struct dentry			*dentry;
+	struct ldiskfs_dir_entry_2	*de;
+	struct buffer_head		*bh;
+	struct lu_fid			*fid = (struct lu_fid *) rec;
+	struct htree_lock		*hlock = NULL;
+	int				ino;
+	int				rc;
 	ENTRY;
 
-        LASSERT(dir->i_op != NULL && dir->i_op->lookup != NULL);
+	LASSERT(dir->i_op != NULL);
+	LASSERT(dir->i_op->lookup != NULL);
 
-        dentry = osd_child_dentry_get(env, obj,
-                                      (char *)key, strlen((char *)key));
+	dentry = osd_child_dentry_get(env, obj,
+				      (char *)key, strlen((char *)key));
 
-        if (obj->oo_hl_head != NULL) {
-                hlock = osd_oti_get(env)->oti_hlock;
-                ldiskfs_htree_lock(hlock, obj->oo_hl_head,
-                                   dir, LDISKFS_HLOCK_LOOKUP);
-        } else {
+	if (obj->oo_hl_head != NULL) {
+		hlock = osd_oti_get(env)->oti_hlock;
+		ldiskfs_htree_lock(hlock, obj->oo_hl_head,
+				   dir, LDISKFS_HLOCK_LOOKUP);
+	} else {
 		down_read(&obj->oo_ext_idx_sem);
-        }
+	}
 
-        bh = osd_ldiskfs_find_entry(dir, &dentry->d_name, &de, NULL, hlock);
-        if (bh) {
+	bh = osd_ldiskfs_find_entry(dir, &dentry->d_name, &de, NULL, hlock);
+	if (bh) {
 		struct osd_thread_info *oti = osd_oti_get(env);
 		struct osd_inode_id *id = &oti->oti_id;
 		struct osd_idmap_cache *oic = &oti->oti_cache;
@@ -4513,7 +4527,8 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
 	ENTRY;
 
 	LASSERT(osd_invariant(obj));
-	LASSERT(dt_object_exists(dt) && !dt_object_remote(dt));
+	LASSERT(dt_object_exists(dt));
+	LASSERT(!dt_object_remote(dt));
 	LASSERT(th != NULL);
 
 	osd_trans_exec_op(env, th, OSD_OT_INSERT);
@@ -6098,7 +6113,8 @@ static int osd_device_init0(const struct lu_env *env,
 		GOTO(out_scrub, rc);
 	}
 
-	LASSERT(l->ld_site->ls_linkage.next && l->ld_site->ls_linkage.prev);
+	LASSERT(l->ld_site->ls_linkage.next != NULL);
+	LASSERT(l->ld_site->ls_linkage.prev != NULL);
 
 	/* initialize quota slave instance */
 	o->od_quota_slave = qsd_init(env, o->od_svname, &o->od_dt_dev,
