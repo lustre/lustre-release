@@ -5379,7 +5379,7 @@ osd_dirent_check_repair(const struct lu_env *env, struct osd_object *obj,
 		  osd_dto_credits_noquota[DTO_INDEX_INSERT] + 1 + 1 + 2;
 
 again:
-	if (dev->od_dirent_journal) {
+	if (dev->od_dirent_journal != 0) {
 		jh = osd_journal_start_sb(sb, LDISKFS_HT_MISC, credits);
 		if (IS_ERR(jh)) {
 			rc = PTR_ERR(jh);
@@ -5455,7 +5455,7 @@ again:
 				GOTO(out_inode, rc = 0);
 			}
 
-			if (!dev->od_dirent_journal) {
+			if (dev->od_dirent_journal == 0) {
 				iput(inode);
 				brelse(bh);
 				if (hlock != NULL)
@@ -5487,7 +5487,7 @@ again:
 				GOTO(out_inode, rc = 0);
 			}
 
-			if (!dev->od_dirent_journal) {
+			if (dev->od_dirent_journal == 0) {
 				iput(inode);
 				brelse(bh);
 				if (hlock != NULL)
@@ -5526,7 +5526,7 @@ again:
 			GOTO(out_inode, rc = 0);
 		}
 
-		if (!dev->od_dirent_journal) {
+		if (dev->od_dirent_journal == 0) {
 			iput(inode);
 			brelse(bh);
 			if (hlock != NULL)
@@ -5579,7 +5579,7 @@ out_journal:
 	if (hlock != NULL) {
 		ldiskfs_htree_unlock(hlock);
 	} else {
-		if (dev->od_dirent_journal)
+		if (dev->od_dirent_journal != 0)
 			up_write(&obj->oo_ext_idx_sem);
 		else
 			up_read(&obj->oo_ext_idx_sem);
