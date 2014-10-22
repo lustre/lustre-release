@@ -18,7 +18,6 @@
 /mkfs_lustre
 /mount_lustre
 /tunefs_lustre
-/loadgen
 /lreplicate
 /ll_recover_lost_found_objs
 /ltrack_stats

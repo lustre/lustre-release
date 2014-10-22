@@ -406,7 +406,6 @@ echo '%{_bindir}/munlink' >>lustre-tests.files
 echo '%{_bindir}/req_layout' >>lustre-tests.files
 echo '%{_sbindir}/wirecheck' >>lustre-tests.files
 echo '%{_sbindir}/wiretest' >>lustre-tests.files
-echo '%{_sbindir}/loadgen' >>lustre-tests.files
 %if %{with lustre_modules}
 echo '%{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/llog_test.ko' >>lustre-tests.files
 %endif

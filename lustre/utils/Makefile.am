@@ -29,9 +29,6 @@ sbin_PROGRAMS = lctl l_getidentity llverfs lustre_rsync ltrack_stats
 if TESTS
 bin_PROGRAMS  += req_layout
 sbin_PROGRAMS += wiretest
-if LIBPTHREAD
-sbin_PROGRAMS += loadgen
-endif
 endif # TESTS
 
 if SERVER
@@ -57,10 +54,6 @@ lctl_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 lfs_SOURCES = lfs.c
 lfs_LDADD := liblustreapi.a $(LIBPTLCTL) $(LIBREADLINE)
 lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
-
-loadgen_SOURCES = loadgen.c lustre_cfg.c obd.c
-loadgen_LDADD := liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS) $(LIBREADLINE)
-loadgen_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 
 lustre_rsync_SOURCES = lustre_rsync.c obd.c lustre_cfg.c lustre_rsync.h
 lustre_rsync_LDADD :=  liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS) $(LIBREADLINE)
