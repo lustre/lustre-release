@@ -1019,8 +1019,6 @@ struct thandle *thandle_get_sub_by_dt(const struct lu_env *env,
 				top_th->tt_master_sub_thandle);
 		if (IS_ERR(st))
 			GOTO(stop_trans, rc = PTR_ERR(st));
-		top_th->tt_master_sub_thandle->th_sync = 1;
-		top_th->tt_super.th_sync = 1;
 	}
 
 	/* create and init sub th to the top trans list */

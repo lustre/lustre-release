@@ -1643,6 +1643,7 @@ t32_test() {
 
 	trap 'trap - RETURN; t32_test_cleanup' RETURN
 
+	load_modules
 	mkdir -p $tmp/mnt/lustre || error "mkdir $tmp/mnt/lustre failed"
 	$r mkdir -p $tmp/mnt/{mdt,ost}
 	$r tar xjvf $tarball -S -C $tmp || {
@@ -1893,10 +1894,12 @@ t32_test() {
 		}
 
 		if [ "$dne_upgrade" != "no" ]; then
-			$LFS mkdir -i 1 $tmp/mnt/lustre/remote_dir || {
+			$LFS mkdir -i 1 -c2 $tmp/mnt/lustre/remote_dir || {
 				error_noexit "set remote dir failed"
 				return 1
 			}
+
+			$LFS setdirstripe -D -c2 $tmp/mnt/lustre/remote_dir
 
 			pushd $tmp/mnt/lustre
 			tar -cf - . --exclude=./remote_dir |
@@ -2090,6 +2093,9 @@ test_32c() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	t32_check
 	for tarball in $tarballs; do
+		# Do not support 1_8 and 2_1 direct upgrade to DNE2 anymore */
+		echo $tarball | grep "1_8" && continue
+		echo $tarball | grep "2_1" && continue
 		dne_upgrade=yes t32_test $tarball writeconf || rc=$?
 	done
 	return $rc

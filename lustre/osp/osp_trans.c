@@ -545,11 +545,12 @@ int osp_trans_update_request_create(struct thandle *th)
 		return PTR_ERR(our);
 	}
 
-	if (dt2osp_dev(th->th_dev)->opd_connect_mdt)
-		our->our_flags = UPDATE_FL_SYNC;
-
 	oth->ot_our = our;
 	our->our_th = oth;
+
+	if (oth->ot_super.th_sync)
+		oth->ot_our->our_flags |= UPDATE_FL_SYNC;
+
 	return 0;
 }
 

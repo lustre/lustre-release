@@ -237,7 +237,6 @@ struct obd_export {
                                   exp_req_replay_needed:1,
                                   exp_lock_replay_needed:1,
                                   exp_need_sync:1,
-				  exp_keep_sync:1,
                                   exp_flvr_changed:1,
                                   exp_flvr_adapt:1,
                                   exp_libclient:1, /* liblustre client? */
