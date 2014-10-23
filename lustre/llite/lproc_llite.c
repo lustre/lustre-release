@@ -264,14 +264,16 @@ ll_max_readahead_mb_seq_write(struct file *file, const char __user *buffer,
 			      size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
-	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
 	__u64 val;
 	long pages_number;
-	int mult;
+	int pages_shift;
 	int rc;
 
-	mult = 1 << (20 - PAGE_CACHE_SHIFT);
-	rc = lprocfs_write_frac_u64_helper(buffer, count, &val, mult);
+	pages_shift = 20 - PAGE_CACHE_SHIFT;
+	rc = lprocfs_write_frac_u64_helper(buffer, count, &val,
+					   1 << pages_shift);
 	if (rc)
 		return rc;
 
@@ -281,8 +283,9 @@ ll_max_readahead_mb_seq_write(struct file *file, const char __user *buffer,
 
 	if (pages_number < 0 || pages_number > totalram_pages / 2) {
 		/* 1/2 of RAM */
-		CERROR("can't set file readahead more than %lu MB\n",
-		       totalram_pages >> (20 - PAGE_CACHE_SHIFT + 1));
+		CERROR("%s: can't set max_readahead_mb=%lu > %luMB\n",
+		       ll_get_fsname(sb, NULL, 0), pages_number >> pages_shift,
+		       totalram_pages >> (pages_shift + 1));
 		return -ERANGE;
 	}
 
@@ -314,19 +317,21 @@ ll_max_readahead_per_file_mb_seq_write(struct file *file,
 				       size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
-	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
-	int mult, rc, pages_number;
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	int pages_shift, rc, pages_number;
 
-	mult = 1 << (20 - PAGE_CACHE_SHIFT);
-	rc = lprocfs_write_frac_helper(buffer, count, &pages_number, mult);
+	pages_shift = 20 - PAGE_CACHE_SHIFT;
+	rc = lprocfs_write_frac_helper(buffer, count, &pages_number,
+				       1 << pages_shift);
 	if (rc)
 		return rc;
 
-	if (pages_number < 0 ||
-	    pages_number > sbi->ll_ra_info.ra_max_pages) {
-		CERROR("can't set file readahead more than"
-		       "max_read_ahead_mb %lu MB\n",
-		       sbi->ll_ra_info.ra_max_pages);
+	if (pages_number < 0 || pages_number > sbi->ll_ra_info.ra_max_pages) {
+		CERROR("%s: can't set max_readahead_per_file_mb=%u > "
+		       "max_read_ahead_mb=%lu\n", ll_get_fsname(sb, NULL, 0),
+		       pages_number >> pages_shift,
+		       sbi->ll_ra_info.ra_max_pages >> pages_shift);
 		return -ERANGE;
 	}
 
@@ -358,11 +363,13 @@ ll_max_read_ahead_whole_mb_seq_write(struct file *file,
 				     size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
-	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
-	int mult, rc, pages_number;
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	int pages_shift, rc, pages_number;
 
-	mult = 1 << (20 - PAGE_CACHE_SHIFT);
-	rc = lprocfs_write_frac_helper(buffer, count, &pages_number, mult);
+	pages_shift = 20 - PAGE_CACHE_SHIFT;
+	rc = lprocfs_write_frac_helper(buffer, count, &pages_number,
+				       1 << pages_shift);
 	if (rc)
 		return rc;
 
@@ -370,10 +377,11 @@ ll_max_read_ahead_whole_mb_seq_write(struct file *file,
 	 * algorithm does this anyway so it's pointless to set it larger. */
 	if (pages_number < 0 ||
 	    pages_number > sbi->ll_ra_info.ra_max_pages_per_file) {
-		CERROR("can't set max_read_ahead_whole_mb more than "
-		       "max_read_ahead_per_file_mb: %lu\n",
-			sbi->ll_ra_info.ra_max_pages_per_file >>
-			(20 - PAGE_CACHE_SHIFT));
+		CERROR("%s: can't set max_read_ahead_whole_mb=%u > "
+		       "max_read_ahead_per_file_mb=%lu\n",
+		       ll_get_fsname(sb, NULL, 0),
+		       pages_number >> pages_shift,
+		       sbi->ll_ra_info.ra_max_pages_per_file >> pages_shift);
 		return -ERANGE;
 	}
 
