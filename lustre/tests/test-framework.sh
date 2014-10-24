@@ -543,10 +543,10 @@ load_modules_local() {
 	local mount_lustre=$LUSTRE/utils/mount.lustre
 	if [ -f $mount_lustre ]; then
 		local sbin_mount=/sbin/mount.lustre
-		if grep -qe "$sbin_mount " /proc/mounts; then
-			cmp $mount_lustre $sbin_mount || umount $sbin_mount
+		if grep -qw "$sbin_mount" /proc/mounts; then
+			cmp -s $mount_lustre $sbin_mount || umount $sbin_mount
 		fi
-		if ! grep -qe "$sbin_mount " /proc/mounts; then
+		if ! grep -qw "$sbin_mount" /proc/mounts; then
 			[ ! -f "$sbin_mount" ] && touch "$sbin_mount"
 			if [ ! -s "$sbin_mount" -a -w "$sbin_mount" ]; then
 				cat <<- EOF > "$sbin_mount"
