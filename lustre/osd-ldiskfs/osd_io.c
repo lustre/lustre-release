@@ -1488,11 +1488,9 @@ static inline int osd_extents_enabled(struct super_block *sb,
 	return 0;
 }
 
-static inline int osd_calc_bkmap_credits(struct super_block *sb,
-					 struct inode *inode,
-					 const loff_t size,
-					 const loff_t pos,
-					 const int blocks)
+int osd_calc_bkmap_credits(struct super_block *sb, struct inode *inode,
+			   const loff_t size, const loff_t pos,
+			   const int blocks)
 {
 	int credits, bits, bs, i;
 

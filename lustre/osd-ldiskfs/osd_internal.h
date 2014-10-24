@@ -936,6 +936,10 @@ static inline void osd_ipd_put(const struct lu_env *env,
         bag->ic_descr->id_ops->id_ipd_free(ipd);
 }
 
+int osd_calc_bkmap_credits(struct super_block *sb, struct inode *inode,
+			   const loff_t size, const loff_t pos,
+			   const int blocks);
+
 int osd_ldiskfs_read(struct inode *inode, void *buf, int size, loff_t *offs);
 int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
 			     int write_NUL, loff_t *offs, handle_t *handle);

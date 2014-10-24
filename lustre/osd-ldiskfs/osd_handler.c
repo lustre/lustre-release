@@ -3086,9 +3086,29 @@ static int osd_declare_xattr_set(const struct lu_env *env,
 	} else {
 upgrade:
 		credits = osd_dto_credits_noquota[DTO_XATTR_SET];
-		if (buf && buf->lb_len > sb->s_blocksize) {
-			credits *= (buf->lb_len + sb->s_blocksize - 1) >>
-					sb->s_blocksize_bits;
+
+		if (buf != NULL) {
+			ssize_t buflen;
+
+			if (buf->lb_buf == NULL && dt_object_exists(dt)) {
+				/* learn xattr size from osd_xattr_get if
+				   attribute has not been read yet */
+				buflen = __osd_xattr_get(
+				    osd_dt_obj(dt)->oo_inode,
+				    &osd_oti_get(env)->oti_obj_dentry,
+				    name, NULL, 0);
+				if (buflen < 0)
+					buflen = 0;
+			} else {
+				buflen = buf->lb_len;
+			}
+
+			if (buflen > sb->s_blocksize) {
+				credits += osd_calc_bkmap_credits(
+				    sb, NULL, 0, -1,
+				    (buflen + sb->s_blocksize - 1) >>
+				    sb->s_blocksize_bits);
+			}
 		}
 		/*
 		 * xattr set may involve inode quota change, reserve credits for
