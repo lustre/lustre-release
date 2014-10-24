@@ -60,9 +60,11 @@ init_logging
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 64b 68 71 77f 78 115 124b 230d"
 
-[ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
-# bug number for skipped test:        LU-1593 LU-2833 LU-1957 LU-2805
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 34h     48a     180     184c"
+if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
+	# bug number for skipped test: LU-1593 LU-2833 LU-1957 LU-2805
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  34h     48a     180     184c"
+	[ "$SLOW" = "no" ] && EXCEPT_SLOW="$EXCEPT_SLOW 51b 51ba"
+fi
 
 FAIL_ON_ERROR=false
 
@@ -3976,22 +3978,30 @@ test_51b() {
 
 	test_mkdir -p -c1 $BASE
 
+	$LFS df
+	$LFS df -i
 	local mdtidx=$(printf "%04x" $($LFS getstripe -M $BASE))
 	local numfree=$(lctl get_param -n mdc.$FSNAME-MDT$mdtidx*.filesfree)
-	[[ $numfree -lt 21000 ]] && skip "not enough free inodes ($numfree)" &&
+	[[ $numfree -lt 21000 ]] &&
+		skip "not enough free inodes ($numfree) on MDT$mdtidx" &&
 		return
 
 	[[ $numfree -lt $NUMTEST ]] && NUMTEST=$(($numfree - 50)) &&
-		echo "reduced count to $NUMTEST due to inodes"
+		echo "reduced count to $NUMTEST due to inodes on MDT$mdtidx"
 
 	# need to check free space for the directories as well
 	local blkfree=$(lctl get_param -n mdc.$FSNAME-MDT$mdtidx*.kbytesavail)
 	numfree=$((blkfree / 4))
-	[[ $numfree -lt $NUMTEST ]] && NUMTEST=$(($numfree - 50)) &&
-		echo "reduced count to $NUMTEST due to blocks"
+	[[ $numfree -lt $NUMTEST ]] && NUMTEST=$((numfree - 50)) &&
+		echo "reduced count to $NUMTEST due to blocks on MDT$mdtidx"
 
 	createmany -d $BASE/d $NUMTEST && echo $NUMTEST > $BASE/fnum ||
+	{
+		$LFS df
+		$LFS df -i
 		echo "failed" > $BASE/fnum
+		error "failed to create $NUMTEST subdirs in MDT$mdtidx:$BASE"
+	}
 }
 run_test 51b "exceed 64k subdirectory nlink limit"
 
