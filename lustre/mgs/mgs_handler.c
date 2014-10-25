@@ -537,12 +537,14 @@ static int mgs_llog_open(struct tgt_session_info *tsi)
 	logname = req_capsule_client_get(tsi->tsi_pill, &RMF_NAME);
 	if (logname) {
 		char *ptr = strchr(logname, '-');
-		int   len = (int)(ptr - logname);
+		int   len = (ptr != NULL) ? (int)(ptr - logname) : 0;
 
-		if ((ptr == NULL && strcmp(logname, PARAMS_FILENAME) != 0) ||
-		     len >= sizeof(mgi->mgi_fsname)) {
-			LCONSOLE_WARN("%s: non-config logname received: %s\n",
-				      tgt_name(tsi->tsi_tgt), logname);
+		if (ptr == NULL || len >= sizeof(mgi->mgi_fsname)) {
+			if (strcmp(logname, PARAMS_FILENAME) != 0)
+				LCONSOLE_WARN("%s: non-config logname "
+					      "received: %s\n",
+					      tgt_name(tsi->tsi_tgt),
+					      logname);
 			/* not error, this can be llog test name */
 		} else {
 			strncpy(mgi->mgi_fsname, logname, len);
