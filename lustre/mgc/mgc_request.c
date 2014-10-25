@@ -1761,7 +1761,8 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 			rc = mgc_llog_local_copy(env, mgc, ctxt, lctxt,
 						 cld->cld_logname);
 		if (local_only || rc) {
-			if (llog_is_empty(env, lctxt, cld->cld_logname)) {
+			if (strcmp(cld->cld_logname, PARAMS_FILENAME) != 0 &&
+			    llog_is_empty(env, lctxt, cld->cld_logname)) {
 				LCONSOLE_ERROR_MSG(0x13a, "Failed to get MGS "
 						   "log %s and no local copy."
 						   "\n", cld->cld_logname);
@@ -1770,6 +1771,7 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 			CDEBUG(D_MGC, "Failed to get MGS log %s, using local "
 			       "copy for now, will try to update later.\n",
 			       cld->cld_logname);
+			rc = 0;
 		}
 		/* Now, whether we copied or not, start using the local llog.
 		 * If we failed to copy, we'll start using whatever the old

@@ -935,6 +935,17 @@ out:
 }
 EXPORT_SYMBOL(llog_close);
 
+/**
+ * Helper function to get the llog size in records. It is used by MGS
+ * mostly to check that config llog exists and contains data.
+ *
+ * \param[in] env	execution environment
+ * \param[in] ctxt	llog context
+ * \param[in] name	llog name
+ *
+ * \retval		true if there are records in llog besides a header
+ * \retval		false on error or llog without records
+ */
 int llog_is_empty(const struct lu_env *env, struct llog_ctxt *ctxt,
 		  char *name)
 {
@@ -956,7 +967,8 @@ int llog_is_empty(const struct lu_env *env, struct llog_ctxt *ctxt,
 out_close:
 	llog_close(env, llh);
 out:
-	/* header is record 1 */
+	/* The header is record 1, the llog is still considered as empty
+	 * if there is only header */
 	return (rc <= 1);
 }
 EXPORT_SYMBOL(llog_is_empty);

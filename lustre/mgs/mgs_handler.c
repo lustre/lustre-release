@@ -539,7 +539,8 @@ static int mgs_llog_open(struct tgt_session_info *tsi)
 		char *ptr = strchr(logname, '-');
 		int   len = (int)(ptr - logname);
 
-		if (ptr == NULL || len >= sizeof(mgi->mgi_fsname)) {
+		if ((ptr == NULL && strcmp(logname, PARAMS_FILENAME) != 0) ||
+		     len >= sizeof(mgi->mgi_fsname)) {
 			LCONSOLE_WARN("%s: non-config logname received: %s\n",
 				      tgt_name(tsi->tsi_tgt), logname);
 			/* not error, this can be llog test name */

@@ -77,8 +77,8 @@ if [[ "$LDISKFS_MKFS_OPTS" != *lazy_itable_init* ]]; then
 fi
 
 [ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
-# bug number for skipped test:        LU-2778 LU-2059 LU-4444
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 57b     50h     69"
+# bug number for skipped test:        LU-2778 LU-4444
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 57b     69"
 
 init_logging
 
@@ -452,9 +452,6 @@ test_5d() {
 	grep " $MOUNT " /etc/mtab && \
 		error false "unexpected entry in mtab before mount" && return 10
 
-	[ "$(facet_fstype ost1)" = "zfs" ] &&
-		skip "LU-2059: no local config for ZFS OSTs" && return
-
 	local rc=0
 	start_ost
 	start_mds
@@ -701,9 +698,6 @@ test_19a() {
 run_test 19a "start/stop MDS without OSTs"
 
 test_19b() {
-	[ "$(facet_fstype ost1)" = "zfs" ] &&
-		skip "LU-2059: no local config for ZFS OSTs" && return
-
 	start_ost || return 1
 	stop_ost -f || return 2
 }
@@ -740,9 +734,6 @@ test_21a() {
 run_test 21a "start mds before ost, stop ost first"
 
 test_21b() {
-	[ "$(facet_fstype ost1)" = "zfs" ] &&
-		skip "LU-2059: no local config for ZFS OSTs" && return
-
         start_ost
 	start_mds
         wait_osc_import_state mds ost FULL
@@ -1009,9 +1000,6 @@ test_26() {
 run_test 26 "MDT startup failure cleans LOV (should return errs)"
 
 test_27a() {
-	[ "$(facet_fstype ost1)" = "zfs" ] &&
-		skip "LU-2059: no local config for ZFS OSTs" && return
-
 	start_ost || return 1
 	start_mds || return 2
 	echo "Requeue thread should have started: "
@@ -3209,6 +3197,8 @@ run_test 50g "deactivated OST should not cause panic====================="
 test_50h() {
 	# prepare MDT/OST, make OSC inactive for OST1
 	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2, skipping" && return
+
+	[ $(facet_fstype ost1) == zfs ] && import_zpool ost1
 	do_facet ost1 "$TUNEFS --param osc.active=0 `ostdevname 1`" ||
 		error "tunefs OST1 failed"
 	start_mds  || error "Unable to start MDT"
