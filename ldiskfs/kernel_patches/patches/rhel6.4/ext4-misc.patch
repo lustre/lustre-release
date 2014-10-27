@@ -138,14 +138,12 @@ Index: linux-stage/fs/ext4/extents.c
   * How many index/leaf blocks need to change/allocate to modify nrblocks?
   *
   * if nrblocks are fit in a single extent (chunk flag is 1), then
-@@ -4488,3 +4537,14 @@ int ext4_fiemap(struct inode *inode, str
+@@ -4488,3 +4537,12 @@ int ext4_fiemap(struct inode *inode, str
  	return error;
  }
  
-+EXPORT_SYMBOL(ext4_ext_store_pblock);
 +EXPORT_SYMBOL(ext4_ext_search_right);
 +EXPORT_SYMBOL(ext4_ext_search_left);
-+EXPORT_SYMBOL(ext4_ext_pblock);
 +EXPORT_SYMBOL(ext4_ext_insert_extent);
 +EXPORT_SYMBOL(ext4_mb_new_blocks);
 +EXPORT_SYMBOL(ext4_ext_calc_credits_for_insert);
