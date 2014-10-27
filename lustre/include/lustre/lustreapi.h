@@ -157,76 +157,75 @@ struct find_param {
 	int			 fp_msign;
 	int			 fp_csign;
 	/* these need to be signed values */
-	int			 size_sign:2,
-				 stripesize_sign:2,
-				 stripecount_sign:2;
-	unsigned long long	 size;
-	unsigned long long	 size_units;
+	int			 fp_size_sign:2,
+				 fp_stripe_size_sign:2,
+				 fp_stripe_count_sign:2;
+	unsigned long long	 fp_size;
+	unsigned long long	 fp_size_units;
 
-	unsigned long		 zeroend:1,
-				 recursive:1,
-				 exclude_pattern:1,
+	unsigned long		 fp_zero_end:1,
+				 fp_recursive:1,
+				 fp_exclude_pattern:1,
 				 fp_exclude_type:1,
-				 exclude_obd:1,
-				 exclude_mdt:1,
+				 fp_exclude_obd:1,
+				 fp_exclude_mdt:1,
 				 fp_exclude_gid:1,
 				 fp_exclude_uid:1,
 				 fp_check_gid:1,
 				 fp_check_uid:1,
-				 check_pool:1,		/* LOV pool name */
-				 check_size:1,		/* file size */
-				 exclude_pool:1,
-				 exclude_size:1,
+				 fp_check_pool:1,	/* LOV pool name */
+				 fp_check_size:1,	/* file size */
+				 fp_exclude_pool:1,
+				 fp_exclude_size:1,
 				 fp_exclude_atime:1,
 				 fp_exclude_mtime:1,
 				 fp_exclude_ctime:1,
-				 get_lmv:1,	/* get MDT list from LMV */
-				 raw:1,		/* do not fill in defaults */
-				 check_stripesize:1,	/* LOV stripe size */
-				 exclude_stripesize:1,
-				 check_stripecount:1,	/* LOV stripe count */
-				 exclude_stripecount:1,
-				 check_layout:1,
-				 exclude_layout:1,
-				 get_default_lmv:1, /* Get default LMV */
-				 migrate:1;
+				 fp_get_lmv:1,	/* get MDT list from LMV */
+				 fp_raw:1,	/* do not fill in defaults */
+				 fp_check_stripe_size:1, /* LOV stripe size */
+				 fp_exclude_stripe_size:1,
+				 fp_check_stripe_count:1, /* LOV stripe count */
+				 fp_exclude_stripe_count:1,
+				 fp_check_layout:1,
+				 fp_exclude_layout:1,
+				 fp_get_default_lmv:1, /* Get default LMV */
+				 fp_migrate:1;
 
-	int			 verbose;
-	int			 quiet;
+	int			 fp_verbose;
+	int			 fp_quiet;
 
 	/* regular expression */
-	char			*pattern;
+	char			*fp_pattern;
 
-	struct  obd_uuid	*obduuid;
-	int			 num_obds;
-	int			 num_alloc_obds;
-	int			 obdindex;
-	int			*obdindexes;
+	struct  obd_uuid	*fp_obd_uuid;
+	int			 fp_num_obds;
+	int			 fp_num_alloc_obds;
+	int			 fp_obd_index;
+	int			*fp_obd_indexes;
 
-	struct  obd_uuid	*mdtuuid;
-	int			 num_mdts;
-	int			 num_alloc_mdts;
-	int			 mdtindex;
-	int			*mdtindexes;
-	int			 file_mdtindex;
+	struct  obd_uuid	*fp_mdt_uuid;
+	int			 fp_num_mdts;
+	int			 fp_num_alloc_mdts;
+	int			 fp_mdt_index;
+	int			*fp_mdt_indexes;
+	int			 fp_file_mdt_index;
 
-	int			 lumlen;
-	struct  lov_user_mds_data	*lmd;
+	size_t			 fp_lum_size;
+	struct  lov_user_mds_data *fp_lmd;
 
-	char			poolname[LOV_MAXPOOLNAME + 1];
+	char			 fp_poolname[LOV_MAXPOOLNAME + 1];
 
-	int			 fp_lmv_count;
+	__u32			 fp_lmv_stripe_count;
 	struct lmv_user_md	*fp_lmv_md;
 
-	unsigned long long	 stripesize;
-	unsigned long long	 stripesize_units;
-	unsigned long long	 stripecount;
-	__u32			 layout;
+	unsigned long long	 fp_stripe_size;
+	unsigned long long	 fp_stripe_size_units;
+	unsigned long long	 fp_stripe_count;
+	__u32			 fp_layout;
 
 	/* In-process parameters. */
-	unsigned long		 got_uuids:1,
-				 obds_printed:1,
-				 have_fileinfo:1; /* file attrs and LOV xattr */
+	unsigned long		 fp_got_uuids:1,
+				 fp_obds_printed:1;
 	unsigned int		 fp_depth;
 };
 
