@@ -139,7 +139,7 @@ ldlm_flock_destroy(struct ldlm_lock *lock, ldlm_mode_t mode, __u64 flags)
 {
         ENTRY;
 
-	LDLM_DEBUG(lock, "ldlm_flock_destroy(mode: %d, flags: 0x%llx)",
+	LDLM_DEBUG(lock, "ldlm_flock_destroy(mode: %d, flags: "LPX64")",
 		   mode, flags);
 
 	/* Safe to not lock here, since it should be empty anyway */
@@ -310,7 +310,7 @@ ldlm_process_flock_lock(struct ldlm_lock *req, __u64 *flags, int first_enq,
         const struct ldlm_callback_suite null_cbs = { NULL };
         ENTRY;
 
-	CDEBUG(D_DLMTRACE, "flags %#llx owner "LPU64" pid %u mode %u start "
+	CDEBUG(D_DLMTRACE, "flags "LPX64" owner "LPU64" pid %u mode %u start "
 	       LPU64" end "LPU64"\n", *flags,
 	       new->l_policy_data.l_flock.owner,
                new->l_policy_data.l_flock.pid, mode,
@@ -674,13 +674,13 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
         int                             rc = 0;
         ENTRY;
 
-	CDEBUG(D_DLMTRACE, "flags: 0x%llx data: %p getlk: %p\n",
-               flags, data, getlk);
+	CDEBUG(D_DLMTRACE, "flags: "LPX64" data: %p getlk: %p\n",
+	       flags, data, getlk);
 
-        /* Import invalidation. We need to actually release the lock
-         * references being held, so that it can go away. No point in
-         * holding the lock even if app still believes it has it, since
-         * server already dropped it anyway. Only for granted locks too. */
+	/* Import invalidation. We need to actually release the lock
+	 * references being held, so that it can go away. No point in
+	 * holding the lock even if app still believes it has it, since
+	 * server already dropped it anyway. Only for granted locks too. */
 	if ((lock->l_flags & (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) ==
 	    (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) {
 		if (lock->l_req_mode == lock->l_granted_mode &&

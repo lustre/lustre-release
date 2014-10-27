@@ -79,8 +79,8 @@ struct lookup_intent {
 	int     it_magic;
 	void    (*it_op_release)(struct lookup_intent *);
 	int     it_op;
-	int     it_flags;
 	int     it_create_mode;
+	__u64   it_flags;
 	union {
                 struct lustre_intent_data lustre;
 		void *fs_data;

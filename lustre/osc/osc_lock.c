@@ -1558,18 +1558,18 @@ static void osc_lock_state(const struct lu_env *env,
 }
 
 static int osc_lock_print(const struct lu_env *env, void *cookie,
-                          lu_printer_t p, const struct cl_lock_slice *slice)
+			  lu_printer_t p, const struct cl_lock_slice *slice)
 {
-        struct osc_lock *lock = cl2osc_lock(slice);
+	struct osc_lock *lock = cl2osc_lock(slice);
 
-        /*
-         * XXX print ldlm lock and einfo properly.
-         */
-	(*p)(env, cookie, "%p %#16llx "LPX64" %d %p ",
-             lock->ols_lock, lock->ols_flags, lock->ols_handle.cookie,
-             lock->ols_state, lock->ols_owner);
-        osc_lvb_print(env, cookie, p, &lock->ols_lvb);
-        return 0;
+	/*
+	 * XXX print ldlm lock and einfo properly.
+	 */
+	(*p)(env, cookie, "%p "LPX64" "LPX64" %d %p ",
+	     lock->ols_lock, lock->ols_flags, lock->ols_handle.cookie,
+	     lock->ols_state, lock->ols_owner);
+	osc_lvb_print(env, cookie, p, &lock->ols_lvb);
+	return 0;
 }
 
 static int osc_lock_fits_into(const struct lu_env *env,
@@ -1745,7 +1745,7 @@ int osc_lock_init(const struct lu_env *env,
 		if (clk->ols_locklessable && !(enqflags & CEF_DISCARD_DATA))
 			clk->ols_flags |= LDLM_FL_DENY_ON_CONTENTION;
 
-		LDLM_DEBUG_NOLOCK("lock %p, osc lock %p, flags %llx\n",
+		LDLM_DEBUG_NOLOCK("lock %p, osc lock %p, flags "LPX64"\n",
 				lock, clk, clk->ols_flags);
 
 		result = 0;

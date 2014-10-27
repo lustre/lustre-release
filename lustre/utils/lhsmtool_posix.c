@@ -1704,7 +1704,7 @@ static int ct_max_sequence(void)
 		sprintf(path + strlen(path), "/%04x", subseq);
 	}
 
-	printf("max_sequence: %016Lx\n", seq);
+	printf("max_sequence: "LPX64"\n", seq);
 
 	return 0;
 }

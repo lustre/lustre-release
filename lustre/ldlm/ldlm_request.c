@@ -609,20 +609,20 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 					      LDLM_FL_NO_TIMEOUT);
         unlock_res_and_lock(lock);
 
-	CDEBUG(D_INFO, "local: %p, remote cookie: "LPX64", flags: 0x%llx\n",
-               lock, reply->lock_handle.cookie, *flags);
+	CDEBUG(D_INFO, "local: %p, remote cookie: "LPX64", flags: "LPX64"\n",
+	       lock, reply->lock_handle.cookie, *flags);
 
-        /* If enqueue returned a blocked lock but the completion handler has
-         * already run, then it fixed up the resource and we don't need to do it
-         * again. */
-        if ((*flags) & LDLM_FL_LOCK_CHANGED) {
-                int newmode = reply->lock_desc.l_req_mode;
-                LASSERT(!is_replay);
-                if (newmode && newmode != lock->l_req_mode) {
-                        LDLM_DEBUG(lock, "server returned different mode %s",
-                                   ldlm_lockname[newmode]);
-                        lock->l_req_mode = newmode;
-                }
+	/* If enqueue returned a blocked lock but the completion handler has
+	 * already run, then it fixed up the resource and we don't need to do it
+	 * again. */
+	if ((*flags) & LDLM_FL_LOCK_CHANGED) {
+		int newmode = reply->lock_desc.l_req_mode;
+		LASSERT(!is_replay);
+		if (newmode && newmode != lock->l_req_mode) {
+			LDLM_DEBUG(lock, "server returned different mode %s",
+				   ldlm_lockname[newmode]);
+			lock->l_req_mode = newmode;
+		}
 
 		if (!ldlm_res_eq(&reply->lock_desc.l_resource.lr_name,
 				 &lock->l_resource->lr_name)) {
@@ -920,9 +920,9 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 
 			lock->l_req_extent = policy->l_extent;
 		}
-                LDLM_DEBUG(lock, "client-side enqueue START, flags %llx\n",
+		LDLM_DEBUG(lock, "client-side enqueue START, flags "LPX64"\n",
 			   *flags);
-        }
+	}
 
 	lock->l_conn_export = exp;
 	lock->l_export = NULL;
