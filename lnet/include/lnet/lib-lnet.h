@@ -945,6 +945,7 @@ int lnet_peer_buffer_credits(lnet_ni_t *ni);
 
 int lnet_router_checker_start(void);
 void lnet_router_checker_stop(void);
+void lnet_router_ni_update_locked(lnet_peer_t *gw, __u32 net);
 void lnet_swap_pinginfo(lnet_ping_info_t *info);
 
 int lnet_ping_target_init(void);
@@ -963,6 +964,14 @@ void lnet_peer_tables_cleanup(void);
 void lnet_peer_tables_destroy(void);
 int lnet_peer_tables_create(void);
 void lnet_debug_peer(lnet_nid_t nid);
+
+static inline void
+lnet_peer_set_alive(lnet_peer_t *lp)
+{
+	lp->lp_last_alive = lp->lp_last_query = cfs_time_current();
+	if (!lp->lp_alive)
+		lnet_notify_locked(lp, 0, 1, lp->lp_last_alive);
+}
 
 #ifndef __KERNEL__
 static inline int
