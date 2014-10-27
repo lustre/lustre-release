@@ -48,13 +48,8 @@
 
 #define D_QOS   D_OTHER
 
-#if 0
-#define QOS_DEBUG(fmt, ...)     CDEBUG(D_OTHER, fmt, ## __VA_ARGS__)
-#define QOS_CONSOLE(fmt, ...)   LCONSOLE(D_OTHER, fmt, ## __VA_ARGS__)
-#else
-#define QOS_DEBUG(fmt, ...)
-#define QOS_CONSOLE(fmt, ...)
-#endif
+#define QOS_DEBUG(fmt, ...)     CDEBUG(D_QOS, fmt, ## __VA_ARGS__)
+#define QOS_CONSOLE(fmt, ...)   LCONSOLE(D_QOS, fmt, ## __VA_ARGS__)
 
 #define TGT_BAVAIL(i) (OST_TGT(lod,i)->ltd_statfs.os_bavail * \
 		       OST_TGT(lod,i)->ltd_statfs.os_bsize)
