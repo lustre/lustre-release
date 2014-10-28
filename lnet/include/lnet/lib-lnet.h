@@ -702,6 +702,7 @@ lnet_net2rnethash(__u32 net)
 }
 
 extern lnd_t the_lolnd;
+extern int avoid_asym_router_failure;
 
 #ifndef __KERNEL__
 /* unconditional registration */
@@ -989,6 +990,7 @@ int lnet_peer_buffer_credits(lnet_ni_t *ni);
 
 int lnet_router_checker_start(void);
 void lnet_router_checker_stop(void);
+void lnet_router_ni_update_locked(lnet_peer_t *gw, __u32 net);
 void lnet_swap_pinginfo(lnet_ping_info_t *info);
 
 int lnet_parse_ip2nets(char **networksp, char *ip2nets);
@@ -1009,6 +1011,14 @@ int lnet_get_peer_info(__u32 peer_index, __u64 *nid,
 		       __u32 *ni_peer_tx_credits, __u32 *peer_tx_credits,
 		       __u32 *peer_rtr_credits, __u32 *peer_min_rtr_credtis,
 		       __u32 *peer_tx_qnob);
+
+static inline void
+lnet_peer_set_alive(lnet_peer_t *lp)
+{
+	lp->lp_last_alive = lp->lp_last_query = cfs_time_current();
+	if (!lp->lp_alive)
+		lnet_notify_locked(lp, 0, 1, lp->lp_last_alive);
+}
 
 #ifndef __KERNEL__
 static inline int
