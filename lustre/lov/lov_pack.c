@@ -49,6 +49,7 @@
 #include <lustre/lustre_user.h>
 
 #include "lov_internal.h"
+#include "lov_cl_internal.h"
 
 void lov_dump_lmm_common(int level, void *lmmp)
 {
@@ -128,11 +129,9 @@ void lov_dump_lmm(int level, void *lmm)
  *     LOVs properly.  For now lov_mds_md_size() just assumes one obd_id
  *     per stripe.
  */
-int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
-               struct lov_stripe_md *lsm)
+static int lov_obd_packmd(struct lov_obd *lov, struct lov_mds_md **lmmp,
+			  struct lov_stripe_md *lsm)
 {
-        struct obd_device *obd = class_exp2obd(exp);
-        struct lov_obd *lov = &obd->u.lov;
         struct lov_mds_md_v1 *lmmv1;
         struct lov_mds_md_v3 *lmmv3;
         __u16 stripe_count;
@@ -241,6 +240,15 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
 	}
 
 	RETURN(lmm_size);
+}
+
+int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
+	       struct lov_stripe_md *lsm)
+{
+	struct obd_device *obd = class_exp2obd(exp);
+	struct lov_obd *lov = &obd->u.lov;
+
+	return lov_obd_packmd(lov, lmmp, lsm);
 }
 
 /* Find the max stripecount we should use */
@@ -407,78 +415,79 @@ int lov_unpackmd(struct obd_export *exp,  struct lov_stripe_md **lsmp,
  * the maximum number of OST indices which will fit in the user buffer.
  * lmm_magic must be LOV_USER_MAGIC.
  */
-int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
+int lov_getstripe(struct lov_object *obj, struct lov_stripe_md *lsm,
 		  struct lov_user_md __user *lump)
 {
-        /*
-         * XXX huge struct allocated on stack.
-         */
-        /* we use lov_user_md_v3 because it is larger than lov_user_md_v1 */
-        struct lov_user_md_v3 lum;
-        struct lov_mds_md *lmmk = NULL;
-        int rc, lmm_size;
-        int lum_size;
-        ENTRY;
+	/*
+	 * XXX huge struct allocated on stack.
+	 */
+	/* we use lov_user_md_v3 because it is larger than lov_user_md_v1 */
+	struct lov_obd		*lov;
+	struct lov_mds_md	*lmmk = NULL;
+	struct lov_user_md_v3	lum;
+	int			rc;
+	int			lmmk_size;
+	int			lmm_size;
+	int			lum_size;
+	ENTRY;
 
-        if (!lsm)
-                RETURN(-ENODATA);
-
-        /* we only need the header part from user space to get lmm_magic and
-         * lmm_stripe_count, (the header part is common to v1 and v3) */
-        lum_size = sizeof(struct lov_user_md_v1);
+	/* we only need the header part from user space to get lmm_magic and
+	 * lmm_stripe_count, (the header part is common to v1 and v3) */
+	lum_size = sizeof(struct lov_user_md_v1);
 	if (copy_from_user(&lum, lump, lum_size))
-                GOTO(out_set, rc = -EFAULT);
+		GOTO(out, rc = -EFAULT);
 
 	if (lum.lmm_magic != LOV_USER_MAGIC_V1 &&
 	    lum.lmm_magic != LOV_USER_MAGIC_V3 &&
 	    lum.lmm_magic != LOV_USER_MAGIC_SPECIFIC)
-		GOTO(out_set, rc = -EINVAL);
+		GOTO(out, rc = -EINVAL);
 
-        if (lum.lmm_stripe_count &&
-            (lum.lmm_stripe_count < lsm->lsm_stripe_count)) {
-                /* Return right size of stripe to user */
-                lum.lmm_stripe_count = lsm->lsm_stripe_count;
+	if (lum.lmm_stripe_count &&
+	    (lum.lmm_stripe_count < lsm->lsm_stripe_count)) {
+		/* Return right size of stripe to user */
+		lum.lmm_stripe_count = lsm->lsm_stripe_count;
 		rc = copy_to_user(lump, &lum, lum_size);
-                GOTO(out_set, rc = -EOVERFLOW);
-        }
-        rc = lov_packmd(exp, &lmmk, lsm);
-        if (rc < 0)
-                GOTO(out_set, rc);
-        lmm_size = rc;
-        rc = 0;
+		GOTO(out, rc = -EOVERFLOW);
+	}
+	lov = lu2lov_dev(obj->lo_cl.co_lu.lo_dev)->ld_lov;
+	rc = lov_obd_packmd(lov, &lmmk, lsm);
+	if (rc < 0)
+		GOTO(out, rc);
+	lmmk_size = lmm_size = rc;
+	rc = 0;
 
-        /* FIXME: Bug 1185 - copy fields properly when structs change */
-        /* struct lov_user_md_v3 and struct lov_mds_md_v3 must be the same */
-        CLASSERT(sizeof(lum) == sizeof(struct lov_mds_md_v3));
-        CLASSERT(sizeof lum.lmm_objects[0] == sizeof lmmk->lmm_objects[0]);
+	/* FIXME: Bug 1185 - copy fields properly when structs change */
+	/* struct lov_user_md_v3 and struct lov_mds_md_v3 must be the same */
+	CLASSERT(sizeof(lum) == sizeof(struct lov_mds_md_v3));
+	CLASSERT(sizeof lum.lmm_objects[0] == sizeof lmmk->lmm_objects[0]);
 
-        if ((cpu_to_le32(LOV_MAGIC) != LOV_MAGIC) &&
-            ((lmmk->lmm_magic == cpu_to_le32(LOV_MAGIC_V1)) ||
-            (lmmk->lmm_magic == cpu_to_le32(LOV_MAGIC_V3)))) {
-                lustre_swab_lov_mds_md(lmmk);
-                lustre_swab_lov_user_md_objects(
-                                (struct lov_user_ost_data*)lmmk->lmm_objects,
-                                lmmk->lmm_stripe_count);
-        }
-        if (lum.lmm_magic == LOV_USER_MAGIC) {
-                /* User request for v1, we need skip lmm_pool_name */
-                if (lmmk->lmm_magic == LOV_MAGIC_V3) {
+	if ((cpu_to_le32(LOV_MAGIC) != LOV_MAGIC) &&
+	    ((lmmk->lmm_magic == cpu_to_le32(LOV_MAGIC_V1)) ||
+	    (lmmk->lmm_magic == cpu_to_le32(LOV_MAGIC_V3)))) {
+		lustre_swab_lov_mds_md(lmmk);
+		lustre_swab_lov_user_md_objects(
+				(struct lov_user_ost_data *)lmmk->lmm_objects,
+				lmmk->lmm_stripe_count);
+	}
+	if (lum.lmm_magic == LOV_USER_MAGIC) {
+		/* User request for v1, we need skip lmm_pool_name */
+		if (lmmk->lmm_magic == LOV_MAGIC_V3) {
 			memmove(((struct lov_mds_md_v1 *)lmmk)->lmm_objects,
 				((struct lov_mds_md_v3 *)lmmk)->lmm_objects,
-                                lmmk->lmm_stripe_count *
-                                sizeof(struct lov_ost_data_v1));
-                        lmm_size -= LOV_MAXPOOLNAME;
-                }
-        } else {
-                /* if v3 we just have to update the lum_size */
-                lum_size = sizeof(struct lov_user_md_v3);
-        }
+				lmmk->lmm_stripe_count *
+				sizeof(struct lov_ost_data_v1));
+			lmm_size -= LOV_MAXPOOLNAME;
+		}
+	} else {
+		/* if v3 we just have to update the lum_size */
+		lum_size = sizeof(struct lov_user_md_v3);
+	}
 
-        /* User wasn't expecting this many OST entries */
-        if (lum.lmm_stripe_count == 0)
-                lmm_size = lum_size;
-        else if (lum.lmm_stripe_count < lmmk->lmm_stripe_count)
-                GOTO(out_set, rc = -EOVERFLOW);
+	/* User wasn't expecting this many OST entries */
+	if (lum.lmm_stripe_count == 0)
+		lmm_size = lum_size;
+	else if (lum.lmm_stripe_count < lmmk->lmm_stripe_count)
+		GOTO(out_free, rc = -EOVERFLOW);
 	/*
 	 * Have a difference between lov_mds_md & lov_user_md.
 	 * So we have to re-order the data before copy to user.
@@ -490,7 +499,8 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
 	if (copy_to_user(lump, lmmk, lmm_size))
 		rc = -EFAULT;
 
-	obd_free_diskmd(exp, &lmmk);
-out_set:
+out_free:
+	OBD_FREE_LARGE(lmmk, lmmk_size);
+out:
 	RETURN(rc);
 }

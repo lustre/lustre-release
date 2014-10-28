@@ -767,6 +767,10 @@ static inline struct lov_layout_raid0 *lov_r0(struct lov_object *lov)
 	return &lov->u.raid0;
 }
 
+/* lov_pack.c */
+int lov_getstripe(struct lov_object *obj, struct lov_stripe_md *lsm,
+		  struct lov_user_md __user *lump);
+
 /** @} lov */
 
 #endif

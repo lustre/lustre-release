@@ -394,6 +394,11 @@ struct cl_object_operations {
 	 * mainly pages and locks.
 	 */
 	int (*coo_prune)(const struct lu_env *env, struct cl_object *obj);
+	/**
+	 * Object getstripe method.
+	 */
+	int (*coo_getstripe)(const struct lu_env *env, struct cl_object *obj,
+			     struct lov_user_md __user *lum);
 };
 
 /**
@@ -448,6 +453,7 @@ struct cl_object_header {
 	list_for_each_entry_reverse((slice),				\
 				    &(obj)->co_lu.lo_header->loh_layers,\
 				    co_lu.lo_linkage)
+
 /** @} cl_object */
 
 #define CL_PAGE_EOF ((pgoff_t)~0ull)
@@ -2258,6 +2264,8 @@ int  cl_conf_set          (const struct lu_env *env, struct cl_object *obj,
                            const struct cl_object_conf *conf);
 int  cl_object_prune      (const struct lu_env *env, struct cl_object *obj);
 void cl_object_kill       (const struct lu_env *env, struct cl_object *obj);
+int  cl_object_getstripe(const struct lu_env *env, struct cl_object *obj,
+			 struct lov_user_md __user *lum);
 
 /**
  * Returns true, iff \a o0 and \a o1 are slices of the same object.

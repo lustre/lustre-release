@@ -1430,9 +1430,6 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 obd_ioctl_freedata(buf, len);
                 break;
         }
-	case LL_IOC_LOV_GETSTRIPE:
-		rc = lov_getstripe(exp, karg, uarg);
-		break;
         case OBD_IOC_QUOTACTL: {
                 struct if_quotactl *qctl = karg;
                 struct lov_tgt_desc *tgt = NULL;

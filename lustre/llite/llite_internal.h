@@ -260,7 +260,7 @@ struct ll_inode_info {
          *      some of the following members can be moved into u.f.
          */
 	bool                            lli_has_smd;
-	struct cl_object	       *lli_clob;
+	struct cl_object		*lli_clob;
 
 	/* mutex to request for layout lock exclusively. */
 	struct mutex			lli_layout_mutex;

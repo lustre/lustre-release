@@ -341,6 +341,28 @@ int cl_object_prune(const struct lu_env *env, struct cl_object *obj)
 EXPORT_SYMBOL(cl_object_prune);
 
 /**
+ * Get stripe information of this object.
+ */
+int cl_object_getstripe(const struct lu_env *env, struct cl_object *obj,
+			struct lov_user_md __user *uarg)
+{
+	struct lu_object_header	*top;
+	int			result = 0;
+	ENTRY;
+
+	top = obj->co_lu.lo_header;
+	list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
+		if (obj->co_ops->coo_getstripe != NULL) {
+			result = obj->co_ops->coo_getstripe(env, obj, uarg);
+			if (result != 0)
+				break;
+		}
+	}
+	RETURN(result);
+}
+EXPORT_SYMBOL(cl_object_getstripe);
+
+/**
  * Helper function removing all object locks, and marking object for
  * deletion. All object pages must have been deleted at this point.
  *
