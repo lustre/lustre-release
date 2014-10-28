@@ -1504,9 +1504,6 @@ static ldlm_policy_res_t ldlm_cancel_lrur_policy(struct ldlm_namespace *ns,
 	if (slv == 0 || lv < slv)
 		return LDLM_POLICY_KEEP_LOCK;
 
-	if (ns->ns_cancel != NULL && ns->ns_cancel(lock) == 0)
-		return LDLM_POLICY_KEEP_LOCK;
-
 	return LDLM_POLICY_CANCEL_LOCK;
 }
 
@@ -1544,15 +1541,10 @@ static ldlm_policy_res_t ldlm_cancel_aged_policy(struct ldlm_namespace *ns,
 						 int unused, int added,
 						 int count)
 {
-        if (added >= count)
-		return LDLM_POLICY_KEEP_LOCK;
-
-	if (cfs_time_before(cfs_time_current(),
+	if ((added >= count) &&
+	    cfs_time_before(cfs_time_current(),
 			    cfs_time_add(lock->l_last_used, ns->ns_max_age)))
-                return LDLM_POLICY_KEEP_LOCK;
-
-        if (ns->ns_cancel != NULL && ns->ns_cancel(lock) == 0)
-                return LDLM_POLICY_KEEP_LOCK;
+		return LDLM_POLICY_KEEP_LOCK;
 
 	return LDLM_POLICY_CANCEL_LOCK;
 }
