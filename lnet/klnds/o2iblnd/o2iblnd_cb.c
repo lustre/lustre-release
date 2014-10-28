@@ -75,7 +75,7 @@ kiblnd_tx_done(kib_tx_t *tx)
 		tx->tx_conn = NULL;
 	}
 
-	tx->tx_nwrq = 0;
+	tx->tx_nwrq = tx->tx_nsge = 0;
 	tx->tx_status = 0;
 
 	kiblnd_pool_free_node(&tx->tx_pool->tpo_pool, &tx->tx_list);
@@ -422,7 +422,7 @@ kiblnd_handle_rx (kib_rx_t *rx)
                  * (a) I can overwrite tx_msg since my peer_ni has received it!
                  * (b) tx_waiting set tells tx_complete() it's not done. */
 
-                tx->tx_nwrq = 0;                /* overwrite PUT_REQ */
+		tx->tx_nwrq = tx->tx_nsge = 0;	/* overwrite PUT_REQ */
 
                 rc2 = kiblnd_init_rdma(conn, tx, IBLND_MSG_PUT_DONE,
                                        kiblnd_rd_size(&msg->ibm_u.putack.ibpam_rd),
@@ -765,7 +765,7 @@ __must_hold(&conn->ibc_lock)
 
 	LASSERT(tx->tx_queued);
 	/* We rely on this for QP sizing */
-	LASSERT(tx->tx_nwrq > 0);
+	LASSERT(tx->tx_nwrq > 0 && tx->tx_nsge >= 0);
 	LASSERT(tx->tx_nwrq <= 1 + conn->ibc_max_frags);
 
 	LASSERT(credit == 0 || credit == 1);
@@ -1024,7 +1024,7 @@ static void
 kiblnd_init_tx_msg(struct lnet_ni *ni, kib_tx_t *tx, int type, int body_nob)
 {
 	kib_hca_dev_t *hdev = tx->tx_pool->tpo_hdev;
-	struct ib_sge *sge = &tx->tx_sge[tx->tx_nwrq];
+	struct ib_sge *sge = &tx->tx_msgsge;
 	struct ib_rdma_wr *wrq;
 	int nob = offsetof(kib_msg_t, ibm_u) + body_nob;
 #ifdef HAVE_IB_GET_DMA_MR
@@ -1065,34 +1065,43 @@ static int
 kiblnd_init_rdma(kib_conn_t *conn, kib_tx_t *tx, int type,
 		 int resid, kib_rdma_desc_t *dstrd, __u64 dstcookie)
 {
-	kib_msg_t         *ibmsg = tx->tx_msg;
+	kib_msg_t	  *ibmsg = tx->tx_msg;
 	kib_rdma_desc_t   *srcrd = tx->tx_rd;
-	struct ib_sge     *sge = &tx->tx_sge[0];
-	struct ib_rdma_wr *wrq;
-	int                rc  = resid;
-	int                srcidx;
-	int                dstidx;
-	int                wrknob;
+	struct ib_rdma_wr *wrq = NULL;
+	struct ib_sge	  *sge;
+	int		   rc  = resid;
+	int		   srcidx;
+	int		   dstidx;
+	int		   sge_nob;
+	int		   wrq_sge;
 
-	LASSERT (!in_interrupt());
-	LASSERT (tx->tx_nwrq == 0);
-	LASSERT (type == IBLND_MSG_GET_DONE ||
-		 type == IBLND_MSG_PUT_DONE);
+	LASSERT(!in_interrupt());
+	LASSERT(tx->tx_nwrq == 0 && tx->tx_nsge == 0);
+	LASSERT(type == IBLND_MSG_GET_DONE || type == IBLND_MSG_PUT_DONE);
 
-	srcidx = dstidx = 0;
+	if (kiblnd_rd_size(srcrd) > conn->ibc_max_frags << PAGE_SHIFT) {
+		CERROR("RDMA is too large for peer %s (%d), src size: %d dst size: %d\n",
+		       libcfs_nid2str(conn->ibc_peer->ibp_nid),
+		       conn->ibc_max_frags << PAGE_SHIFT,
+		       kiblnd_rd_size(srcrd), kiblnd_rd_size(dstrd));
+		GOTO(too_big, rc = -EMSGSIZE);
+	}
 
-        while (resid > 0) {
-                if (srcidx >= srcrd->rd_nfrags) {
-                        CERROR("Src buffer exhausted: %d frags\n", srcidx);
-                        rc = -EPROTO;
-                        break;
-                }
+	for (srcidx = dstidx = wrq_sge = sge_nob = 0;
+	     resid > 0; resid -= sge_nob) {
+		int	prev = dstidx;
 
-                if (dstidx == dstrd->rd_nfrags) {
-                        CERROR("Dst buffer exhausted: %d frags\n", dstidx);
-                        rc = -EPROTO;
-                        break;
-                }
+		if (srcidx >= srcrd->rd_nfrags) {
+			CERROR("Src buffer exhausted: %d frags\n", srcidx);
+			rc = -EPROTO;
+			break;
+		}
+
+		if (dstidx >= dstrd->rd_nfrags) {
+			CERROR("Dst buffer exhausted: %d frags\n", dstidx);
+			rc = -EPROTO;
+			break;
+		}
 
 		if (tx->tx_nwrq >= conn->ibc_max_frags) {
 			CERROR("RDMA has too many fragments for peer_ni %s (%d), "
@@ -1105,43 +1114,51 @@ kiblnd_init_rdma(kib_conn_t *conn, kib_tx_t *tx, int type,
 			break;
 		}
 
-                wrknob = MIN(MIN(kiblnd_rd_frag_size(srcrd, srcidx),
-                                 kiblnd_rd_frag_size(dstrd, dstidx)), resid);
+		sge_nob = MIN(MIN(kiblnd_rd_frag_size(srcrd, srcidx),
+				  kiblnd_rd_frag_size(dstrd, dstidx)), resid);
 
-                sge = &tx->tx_sge[tx->tx_nwrq];
-                sge->addr   = kiblnd_rd_frag_addr(srcrd, srcidx);
-                sge->lkey   = kiblnd_rd_frag_key(srcrd, srcidx);
-                sge->length = wrknob;
+		sge = &tx->tx_sge[tx->tx_nsge];
+		sge->addr   = kiblnd_rd_frag_addr(srcrd, srcidx);
+		sge->lkey   = kiblnd_rd_frag_key(srcrd, srcidx);
+		sge->length = sge_nob;
 
-                wrq = &tx->tx_wrq[tx->tx_nwrq];
+		if (wrq_sge == 0) {
+			wrq = &tx->tx_wrq[tx->tx_nwrq];
 
-		wrq->wr.next		= &(wrq + 1)->wr;
-		wrq->wr.wr_id		= kiblnd_ptr2wreqid(tx, IBLND_WID_RDMA);
-		wrq->wr.sg_list		= sge;
-		wrq->wr.num_sge		= 1;
-		wrq->wr.opcode		= IB_WR_RDMA_WRITE;
-		wrq->wr.send_flags	= 0;
+			wrq->wr.next	= &(wrq + 1)->wr;
+			wrq->wr.wr_id	= kiblnd_ptr2wreqid(tx, IBLND_WID_RDMA);
+			wrq->wr.sg_list	= sge;
+			wrq->wr.opcode	= IB_WR_RDMA_WRITE;
+			wrq->wr.send_flags = 0;
 
 #ifdef HAVE_IB_RDMA_WR
-		wrq->remote_addr	= kiblnd_rd_frag_addr(dstrd, dstidx);
-		wrq->rkey		= kiblnd_rd_frag_key(dstrd, dstidx);
+			wrq->remote_addr	= kiblnd_rd_frag_addr(dstrd,
+								      dstidx);
+			wrq->rkey		= kiblnd_rd_frag_key(dstrd,
+								     dstidx);
 #else
-		wrq->wr.wr.rdma.remote_addr = kiblnd_rd_frag_addr(dstrd, dstidx);
-		wrq->wr.wr.rdma.rkey	= kiblnd_rd_frag_key(dstrd, dstidx);
+			wrq->wr.wr.rdma.remote_addr = kiblnd_rd_frag_addr(dstrd,
+									dstidx);
+			wrq->wr.wr.rdma.rkey	= kiblnd_rd_frag_key(dstrd,
+								     dstidx);
 #endif
+		}
 
-                srcidx = kiblnd_rd_consume_frag(srcrd, srcidx, wrknob);
-                dstidx = kiblnd_rd_consume_frag(dstrd, dstidx, wrknob);
+		srcidx = kiblnd_rd_consume_frag(srcrd, srcidx, sge_nob);
+		dstidx = kiblnd_rd_consume_frag(dstrd, dstidx, sge_nob);
 
-                resid -= wrknob;
+		wrq_sge++;
+		if (wrq_sge == *kiblnd_tunables.kib_wrq_sge || dstidx != prev) {
+			tx->tx_nwrq++;
+			wrq->wr.num_sge = wrq_sge;
+			wrq_sge = 0;
+		}
+		tx->tx_nsge++;
+	}
 
-                tx->tx_nwrq++;
-                wrq++;
-                sge++;
-        }
-
-        if (rc < 0)                             /* no RDMA if completing with failure */
-                tx->tx_nwrq = 0;
+too_big:
+	if (rc < 0)	/* no RDMA if completing with failure */
+		tx->tx_nwrq = tx->tx_nsge = 0;
 
         ibmsg->ibm_u.completion.ibcm_status = rc;
         ibmsg->ibm_u.completion.ibcm_cookie = dstcookie;
@@ -3677,11 +3694,11 @@ kiblnd_scheduler(void *arg)
 int
 kiblnd_failover_thread(void *arg)
 {
-	rwlock_t		*glock = &kiblnd_data.kib_global_lock;
-	kib_dev_t		*dev;
-	wait_queue_t		wait;
-	unsigned long		flags;
-	int			rc;
+	rwlock_t	*glock = &kiblnd_data.kib_global_lock;
+	kib_dev_t	*dev;
+	wait_queue_t	 wait;
+	unsigned long	 flags;
+	int		 rc;
 
 	LASSERT(*kiblnd_tunables.kib_dev_failover != 0);
 

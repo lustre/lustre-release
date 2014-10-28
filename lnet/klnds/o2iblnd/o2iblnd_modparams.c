@@ -146,6 +146,10 @@ static int use_privileged_port = 1;
 module_param(use_privileged_port, int, 0644);
 MODULE_PARM_DESC(use_privileged_port, "use privileged port when initiating connection");
 
+static unsigned int wrq_sge = 1;
+module_param(wrq_sge, uint, 0444);
+MODULE_PARM_DESC(wrq_sge, "# scatter/gather element per work request");
+
 kib_tunables_t kiblnd_tunables = {
         .kib_dev_failover           = &dev_failover,
         .kib_service                = &service,
@@ -159,7 +163,8 @@ kib_tunables_t kiblnd_tunables = {
         .kib_ib_mtu                 = &ib_mtu,
         .kib_require_priv_port      = &require_privileged_port,
 	.kib_use_priv_port	    = &use_privileged_port,
-	.kib_nscheds		    = &nscheds
+	.kib_nscheds		    = &nscheds,
+	.kib_wrq_sge		    = &wrq_sge,
 };
 
 static struct lnet_ioctl_config_o2iblnd_tunables default_tunables;

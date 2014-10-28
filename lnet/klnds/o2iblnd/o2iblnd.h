@@ -108,6 +108,7 @@ typedef struct
 	int              *kib_use_priv_port;    /* use privileged port for active connect */
 	/* # threads on each CPT */
 	int		 *kib_nscheds;
+	int		 *kib_wrq_sge;		/* # sg elements per wrq */
 } kib_tunables_t;
 
 extern kib_tunables_t  kiblnd_tunables;
@@ -617,8 +618,12 @@ typedef struct kib_tx                           /* transmit message */
 	__u64			tx_msgaddr;
 	/* for dma_unmap_single() */
 	DECLARE_PCI_UNMAP_ADDR(tx_msgunmap);
+	/** sge for tx_msgaddr */
+	struct ib_sge		tx_msgsge;
 	/* # send work items */
 	int			tx_nwrq;
+	/* # used scatter/gather elements */
+	int			tx_nsge;
 	/* send work items... */
 	struct ib_rdma_wr	*tx_wrq;
 	/* ...and their memory */
