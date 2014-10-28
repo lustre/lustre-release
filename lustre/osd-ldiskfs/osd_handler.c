@@ -1199,7 +1199,7 @@ int osd_statfs(const struct lu_env *env, struct dt_device *d,
 			osd->od_osfs_age = cfs_time_current_64();
 			statfs_pack(&osd->od_statfs, ksfs);
 			if (sb->s_flags & MS_RDONLY)
-				sfs->os_state = OS_STATE_READONLY;
+				osd->od_statfs.os_state = OS_STATE_READONLY;
 		}
 	}
 
