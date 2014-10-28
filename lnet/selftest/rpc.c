@@ -1460,6 +1460,14 @@ srpc_lnet_ev_handler(lnet_event_t *ev)
 	if (ev->status != 0) {
 		spin_lock(&srpc_data.rpc_glock);
 		srpc_data.rpc_counters.errors++;
+		CERROR("ev->status = %d, ev->type = %d, errors = %u, "
+		       "rpcs_sent = %u, rpcs_rcvd = %u, rpcs_dropped = %u, "
+		       "rpcs_expired = %u\n",
+		       ev->status, ev->type, srpc_data.rpc_counters.errors,
+		       srpc_data.rpc_counters.rpcs_sent,
+		       srpc_data.rpc_counters.rpcs_rcvd,
+		       srpc_data.rpc_counters.rpcs_dropped,
+		       srpc_data.rpc_counters.rpcs_expired);
 		spin_unlock(&srpc_data.rpc_glock);
 	}
 
