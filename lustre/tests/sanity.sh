@@ -4780,6 +4780,8 @@ test_56v() {
 run_test 56v "check 'lfs find -mdt match with lfs getstripe -M' ======="
 
 test_56w() {
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "$OSTCOUNT < 2 OSTs -- skipping" &&
+		return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	TDIR=$DIR/${tdir}w
 
