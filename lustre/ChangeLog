@@ -4,12 +4,13 @@ TBD Intel Corporation
          for currently supported client and server kernel versions.
        * Server known to build on patched kernels:
          2.6.32-431.29.2.el6 (RHEL6.5)
+         2.6.32-504.el6      (RHEL6.6)
          3.0.101-0.40        (SLES11 SP3)
        * Client known to build on unpatched kernels:
          2.6.32-431.29.2.el6 (RHEL6.5)
+         2.6.32-504.el6      (RHEL6.6)
+         3.10.0-123.9.2.el7  (RHEL7)
          3.0.101-0.40        (SLES11 SP3)
-         3.6.10-4.fc18       (FC18)
-         3.10                (kernel.org)
        * Recommended e2fsprogs version: 1.42.9.wc1 or newer
        * NFS export disabled when stack size < 8192 (32-bit Lustre clients),
          since the NFSv4 export of Lustre filesystem with 4K stack may cause a

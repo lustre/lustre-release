@@ -16,11 +16,7 @@ SPEC_NAME="kernel.spec"
 DEVEL_PATH_ARCH_DELIMETER="."
 USE_KABI=true
 
-patch_spec() {
-    local buildid="$1"
-
-    # edit the SPEC with our changes
-    patch_spec_common "$buildid"
+patch_spec_6_5() {
     sed -i -e '/^# empty final patch file to facilitate testing of kernel patches/i\
 # adds Lustre patches\
 Patch99995: linux-%{version}-lustre.patch' \
@@ -38,7 +34,39 @@ ApplyOptionalPatch linux-%{version}-lustre.patch\
            -e '/^# Dynamically generate kernel/a echo "CONFIG_BH_LRU_SIZE=16" >> config-generic'\
           SPECS/$SPEC_NAME 2>&1 || \
         fatal 1 "Error while editing SPECS/$SPEC_NAME"
+}
 
+patch_spec_6_6() {
+    sed -i -e '/^# empty final patch file to facilitate testing of kernel patches/i\
+# adds Lustre patches\
+Patch99995: linux-%{version}-lustre.patch' \
+           -e '/^ApplyOptionalPatch linux-kernel-test.patch/i\
+\
+# lustre patch\
+ApplyOptionalPatch linux-%{version}-lustre.patch\
+' \
+           -e '/rm -f include\/generated\/kernel.cross/i\
+  # lustre kernel config.\
+  if [ -f %{_topdir}/lustre/lustre/kernel_patches/kernel_configs/kernel-%{version}-2.6-rhel6.6-%{_target_cpu}.config ]; then\
+    echo "# $Arch" > configs/kernel-%{version}-%{_target_cpu}.config\
+    cat %{_topdir}/lustre/lustre/kernel_patches/kernel_configs/kernel-%{version}-2.6-rhel6.6-%{_target_cpu}.config >> configs/kernel-%{version}-%{_target_cpu}.config\
+  fi'\
+           -e '/^# Dynamically generate kernel/a echo "CONFIG_BH_LRU_SIZE=16" >> config-generic'\
+          SPECS/$SPEC_NAME 2>&1 || \
+        fatal 1 "Error while editing SPECS/$SPEC_NAME"
+}
+
+patch_spec() {
+    local buildid="$1"
+
+    # edit the SPEC with our changes
+    patch_spec_common "$buildid"
+    if [ "$TARGET" = "2.6-rhel6.6" ]
+    then
+	patch_spec_6_6
+    else
+	patch_spec_6_5
+    fi
 
     return 0
 

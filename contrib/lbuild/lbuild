@@ -284,7 +284,7 @@ check_options() {
         3.10-rhel7)
             CANONICAL_TARGET="rhel7"
             ;;
-        2.6-rhel6)
+        2.6-rhel6*)
             CANONICAL_TARGET="rhel6"
             ;;
         2.6-rhel5)
