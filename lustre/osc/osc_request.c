@@ -100,68 +100,6 @@ static void osc_release_ppga(struct brw_page **ppga, obd_count count);
 static int brw_interpret(const struct lu_env *env, struct ptlrpc_request *req,
 			 void *data, int rc);
 
-/* Unpack OSC object metadata from disk storage (LE byte order). */
-static int osc_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
-			struct lov_mds_md *lmm, int lmm_bytes)
-{
-	int lsm_size;
-	struct obd_import *imp = class_exp2cliimp(exp);
-	ENTRY;
-
-	if (lmm != NULL) {
-		if (lmm_bytes < sizeof(*lmm)) {
-			CERROR("%s: lov_mds_md too small: %d, need %d\n",
-			       exp->exp_obd->obd_name, lmm_bytes,
-			       (int)sizeof(*lmm));
-			RETURN(-EINVAL);
-		}
-		/* XXX LOV_MAGIC etc check? */
-
-		if (unlikely(ostid_id(&lmm->lmm_oi) == 0)) {
-			CERROR("%s: zero lmm_object_id: rc = %d\n",
-			       exp->exp_obd->obd_name, -EINVAL);
-			RETURN(-EINVAL);
-		}
-	}
-
-	lsm_size = lov_stripe_md_size(1);
-	if (lsmp == NULL)
-		RETURN(lsm_size);
-
-	if (*lsmp != NULL && lmm == NULL) {
-		OBD_FREE((*lsmp)->lsm_oinfo[0], sizeof(struct lov_oinfo));
-		OBD_FREE(*lsmp, lsm_size);
-		*lsmp = NULL;
-		RETURN(0);
-	}
-
-	if (*lsmp == NULL) {
-		OBD_ALLOC(*lsmp, lsm_size);
-		if (unlikely(*lsmp == NULL))
-			RETURN(-ENOMEM);
-		OBD_ALLOC((*lsmp)->lsm_oinfo[0], sizeof(struct lov_oinfo));
-		if (unlikely((*lsmp)->lsm_oinfo[0] == NULL)) {
-			OBD_FREE(*lsmp, lsm_size);
-			RETURN(-ENOMEM);
-		}
-		loi_init((*lsmp)->lsm_oinfo[0]);
-	} else if (unlikely(ostid_id(&(*lsmp)->lsm_oi) == 0)) {
-		RETURN(-EBADF);
-	}
-
-	if (lmm != NULL)
-		/* XXX zero *lsmp? */
-		ostid_le_to_cpu(&lmm->lmm_oi, &(*lsmp)->lsm_oi);
-
-	if (imp != NULL &&
-	    (imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_MAXBYTES))
-		(*lsmp)->lsm_maxbytes = imp->imp_connect_data.ocd_maxbytes;
-	else
-		(*lsmp)->lsm_maxbytes = LUSTRE_EXT3_STRIPE_MAXBYTES;
-
-	RETURN(lsm_size);
-}
-
 static inline void osc_pack_capa(struct ptlrpc_request *req,
                                  struct ost_body *body, void *capa)
 {
@@ -429,24 +367,17 @@ static int osc_setattr_async(struct obd_export *exp, struct obd_info *oinfo,
                                       oinfo->oi_cb_up, oinfo, rqset);
 }
 
-int osc_real_create(struct obd_export *exp, struct obdo *oa,
-                    struct lov_stripe_md **ea, struct obd_trans_info *oti)
+static int osc_create(const struct lu_env *env, struct obd_export *exp,
+		      struct obdo *oa, struct obd_trans_info *oti)
 {
         struct ptlrpc_request *req;
         struct ost_body       *body;
-        struct lov_stripe_md  *lsm;
         int                    rc;
         ENTRY;
 
-        LASSERT(oa);
-        LASSERT(ea);
-
-        lsm = *ea;
-        if (!lsm) {
-                rc = obd_alloc_memmd(exp, &lsm);
-                if (rc < 0)
-                        RETURN(rc);
-        }
+	LASSERT(oa != NULL);
+	LASSERT(oa->o_valid & OBD_MD_FLGROUP);
+	LASSERT(fid_seq_is_echo(ostid_seq(&oa->o_oi)));
 
         req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_OST_CREATE);
         if (req == NULL)
@@ -487,13 +418,6 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
 	oa->o_blksize = cli_brw_size(exp->exp_obd);
 	oa->o_valid |= OBD_MD_FLBLKSZ;
 
-	/* XXX LOV STACKING: the lsm that is passed to us from LOV does not
-	 * have valid lsm_oinfo data structs, so don't go touching that.
-	 * This needs to be fixed in a big way.
-	 */
-	lsm->lsm_oi = oa->o_oi;
-	*ea = lsm;
-
         if (oti != NULL) {
                 if (oa->o_valid & OBD_MD_FLCOOKIE) {
 			if (oti->oti_logcookies == NULL)
@@ -508,9 +432,7 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
 out_req:
         ptlrpc_req_finished(req);
 out:
-        if (rc && !*ea)
-                obd_free_memmd(exp, &lsm);
-        RETURN(rc);
+	RETURN(rc);
 }
 
 int osc_punch_base(struct obd_export *exp, struct obd_info *oinfo,
@@ -688,26 +610,6 @@ static int osc_can_send_destroy(struct client_obd *cli)
 		wake_up(&cli->cl_destroy_waitq);
 	}
 	return 0;
-}
-
-int osc_create(const struct lu_env *env, struct obd_export *exp,
-	       struct obdo *oa, struct lov_stripe_md **ea,
-	       struct obd_trans_info *oti)
-{
-	int rc = 0;
-	ENTRY;
-
-	LASSERT(oa);
-	LASSERT(ea);
-	LASSERT(oa->o_valid & OBD_MD_FLGROUP);
-
-	if (!fid_seq_is_mdt(ostid_seq(&oa->o_oi)))
-		RETURN(osc_real_create(exp, oa, ea, oti));
-
-	/* we should not get here anymore */
-	LBUG();
-
-	RETURN(rc);
 }
 
 /* Destroy requests can be async always on the client, and we don't even really
@@ -3198,7 +3100,6 @@ struct obd_ops osc_obd_ops = {
         .o_disconnect           = osc_disconnect,
         .o_statfs               = osc_statfs,
         .o_statfs_async         = osc_statfs_async,
-        .o_unpackmd             = osc_unpackmd,
         .o_create               = osc_create,
         .o_destroy              = osc_destroy,
         .o_getattr              = osc_getattr,

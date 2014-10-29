@@ -69,19 +69,18 @@ struct echo_device {
 };
 
 struct echo_object {
-        struct cl_object        eo_cl;
-        struct cl_object_header eo_hdr;
-
-        struct echo_device     *eo_dev;
+	struct cl_object	eo_cl;
+	struct cl_object_header	eo_hdr;
+	struct echo_device     *eo_dev;
 	struct list_head	eo_obj_chain;
-        struct lov_stripe_md   *eo_lsm;
+	struct lov_oinfo       *eo_oinfo;
 	atomic_t		eo_npages;
-        int                     eo_deleted;
+	int			eo_deleted;
 };
 
 struct echo_object_conf {
-        struct cl_object_conf  eoc_cl;
-        struct lov_stripe_md **eoc_md;
+	struct cl_object_conf	eoc_cl;
+	struct lov_oinfo      **eoc_oinfo;
 };
 
 struct echo_page {
@@ -163,8 +162,6 @@ struct echo_object_conf *cl2echo_conf(const struct cl_object_conf *c)
 
 /** @} echo_helpers */
 
-static struct echo_object *cl_echo_object_find(struct echo_device *d,
-                                               struct lov_stripe_md **lsm);
 static int cl_echo_object_put(struct echo_object *eco);
 static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
 			      struct page **pages, int npages, int async);
@@ -439,13 +436,15 @@ static int echo_object_init(const struct lu_env *env, struct lu_object *obj,
                 const struct cl_object_conf *cconf = lu2cl_conf(conf);
                 struct echo_object_conf *econf = cl2echo_conf(cconf);
 
-                LASSERT(econf->eoc_md);
-                eco->eo_lsm = *econf->eoc_md;
-                /* clear the lsm pointer so that it won't get freed. */
-                *econf->eoc_md = NULL;
-        } else {
-                eco->eo_lsm = NULL;
-        }
+		LASSERT(econf->eoc_oinfo != NULL);
+
+		/* Transfer the oinfo pointer to eco that it won't be
+		 * freed. */
+		eco->eo_oinfo = *econf->eoc_oinfo;
+		*econf->eoc_oinfo = NULL;
+	} else {
+		eco->eo_oinfo = NULL;
+	}
 
         eco->eo_dev = ed;
 	atomic_set(&eco->eo_npages, 0);
@@ -455,57 +454,6 @@ static int echo_object_init(const struct lu_env *env, struct lu_object *obj,
 	list_add_tail(&eco->eo_obj_chain, &ec->ec_objects);
 	spin_unlock(&ec->ec_lock);
 
-	RETURN(0);
-}
-
-/* taken from osc_unpackmd() */
-static int echo_alloc_memmd(struct echo_device *ed,
-			    struct lov_stripe_md **lsmp)
-{
-	int lsm_size;
-
-	ENTRY;
-
-	/* If export is lov/osc then use their obd method */
-	if (ed->ed_next != NULL)
-		return obd_alloc_memmd(ed->ed_ec->ec_exp, lsmp);
-	/* OFD has no unpackmd method, do everything here */
-	lsm_size = lov_stripe_md_size(1);
-
-	LASSERT(*lsmp == NULL);
-	OBD_ALLOC(*lsmp, lsm_size);
-	if (*lsmp == NULL)
-		RETURN(-ENOMEM);
-
-	OBD_ALLOC((*lsmp)->lsm_oinfo[0], sizeof(struct lov_oinfo));
-	if ((*lsmp)->lsm_oinfo[0] == NULL) {
-		OBD_FREE(*lsmp, lsm_size);
-		RETURN(-ENOMEM);
-	}
-
-	loi_init((*lsmp)->lsm_oinfo[0]);
-	(*lsmp)->lsm_maxbytes = LUSTRE_EXT3_STRIPE_MAXBYTES;
-	ostid_set_seq_echo(&(*lsmp)->lsm_oi);
-
-	RETURN(lsm_size);
-}
-
-static int echo_free_memmd(struct echo_device *ed, struct lov_stripe_md **lsmp)
-{
-	int lsm_size;
-
-	ENTRY;
-
-	/* If export is lov/osc then use their obd method */
-	if (ed->ed_next != NULL)
-		return obd_free_memmd(ed->ed_ec->ec_exp, lsmp);
-	/* OFD has no unpackmd method, do everything here */
-	lsm_size = lov_stripe_md_size(1);
-
-	LASSERT(*lsmp != NULL);
-	OBD_FREE((*lsmp)->lsm_oinfo[0], sizeof(struct lov_oinfo));
-	OBD_FREE(*lsmp, lsm_size);
-	*lsmp = NULL;
 	RETURN(0);
 }
 
@@ -524,8 +472,9 @@ static void echo_object_free(const struct lu_env *env, struct lu_object *obj)
         lu_object_fini(obj);
         lu_object_header_fini(obj->lo_header);
 
-	if (eco->eo_lsm)
-		echo_free_memmd(eco->eo_dev, &eco->eo_lsm);
+	if (eco->eo_oinfo != NULL)
+		OBD_FREE_PTR(eco->eo_oinfo);
+
 	OBD_SLAB_FREE_PTR(eco, echo_object_kmem);
 	EXIT;
 }
@@ -1018,26 +967,22 @@ static struct lu_device_type echo_device_type = {
  */
 
 /* Interfaces to echo client obd device */
-static struct echo_object *cl_echo_object_find(struct echo_device *d,
-                                               struct lov_stripe_md **lsmp)
+static struct echo_object *
+cl_echo_object_find(struct echo_device *d, const struct ost_id *oi)
 {
-        struct lu_env *env;
-        struct echo_thread_info *info;
-        struct echo_object_conf *conf;
-        struct lov_stripe_md    *lsm;
-        struct echo_object *eco;
-        struct cl_object   *obj;
-        struct lu_fid *fid;
-        int refcheck;
+	struct lu_env *env;
+	struct echo_thread_info *info;
+	struct echo_object_conf *conf;
+	struct echo_object *eco;
+	struct cl_object *obj;
+	struct lov_oinfo *oinfo = NULL;
+	struct lu_fid *fid;
+	int refcheck;
 	int rc;
 	ENTRY;
 
-	LASSERT(lsmp);
-	lsm = *lsmp;
-	LASSERT(lsm);
-	LASSERTF(ostid_id(&lsm->lsm_oi) != 0, DOSTID"\n", POSTID(&lsm->lsm_oi));
-	LASSERTF(ostid_seq(&lsm->lsm_oi) == FID_SEQ_ECHO, DOSTID"\n",
-		 POSTID(&lsm->lsm_oi));
+	LASSERTF(ostid_id(oi) != 0, DOSTID"\n", POSTID(oi));
+	LASSERTF(ostid_seq(oi) == FID_SEQ_ECHO, DOSTID"\n", POSTID(oi));
 
         /* Never return an object if the obd is to be freed. */
         if (echo_dev2cl(d)->cd_lu_dev.ld_obd->obd_stopping)
@@ -1050,16 +995,20 @@ static struct echo_object *cl_echo_object_find(struct echo_device *d,
         info = echo_env_info(env);
         conf = &info->eti_conf;
         if (d->ed_next) {
-		struct lov_oinfo *oinfo = lsm->lsm_oinfo[0];
+		OBD_ALLOC_PTR(oinfo);
+		if (oinfo == NULL)
+			GOTO(out, eco = ERR_PTR(-ENOMEM));
 
-		LASSERT(oinfo != NULL);
-		oinfo->loi_oi = lsm->lsm_oi;
+		oinfo->loi_oi = *oi;
 		conf->eoc_cl.u.coc_oinfo = oinfo;
-        }
-        conf->eoc_md = lsmp;
+	}
 
-	fid  = &info->eti_fid;
-	rc = ostid_to_fid(fid, &lsm->lsm_oi, 0);
+	/* If echo_object_init() is successful then ownership of oinfo
+	 * is transferred to the object. */
+	conf->eoc_oinfo = &oinfo;
+
+	fid = &info->eti_fid;
+	rc = ostid_to_fid(fid, oi, 0);
 	if (rc != 0)
 		GOTO(out, eco = ERR_PTR(rc));
 
@@ -1077,6 +1026,9 @@ static struct echo_object *cl_echo_object_find(struct echo_device *d,
         }
 
 out:
+	if (oinfo != NULL)
+		OBD_FREE_PTR(oinfo);
+
         cl_env_put(env, &refcheck);
         RETURN(eco);
 }
@@ -2090,38 +2042,23 @@ out_env:
 static int echo_create_object(const struct lu_env *env, struct echo_device *ed,
 			      struct obdo *oa, struct obd_trans_info *oti)
 {
-        struct echo_object     *eco;
-        struct echo_client_obd *ec = ed->ed_ec;
-        struct lov_stripe_md   *lsm = NULL;
-        int                     rc;
-        int                     created = 0;
-        ENTRY;
+	struct echo_object	*eco;
+	struct echo_client_obd	*ec = ed->ed_ec;
+	int created = 0;
+	int rc;
+	ENTRY;
 
-	if ((oa->o_valid & OBD_MD_FLID) == 0) { /* no obj id */
-                CERROR ("No valid oid\n");
-                RETURN(-EINVAL);
-        }
-
-	rc = echo_alloc_memmd(ed, &lsm);
-        if (rc < 0) {
-                CERROR("Cannot allocate md: rc = %d\n", rc);
-                GOTO(failed, rc);
-        }
-
-	/* setup object ID here */
-	if (oa->o_valid & OBD_MD_FLID) {
-		LASSERT(oa->o_valid & OBD_MD_FLGROUP);
-		lsm->lsm_oi = oa->o_oi;
+	if (!(oa->o_valid & OBD_MD_FLID) ||
+	    !(oa->o_valid & OBD_MD_FLGROUP) ||
+	    !fid_seq_is_echo(ostid_seq(&oa->o_oi))) {
+		CERROR("invalid oid "DOSTID"\n", POSTID(&oa->o_oi));
+		RETURN(-EINVAL);
 	}
 
-	if (ostid_id(&lsm->lsm_oi) == 0)
-		ostid_set_id(&lsm->lsm_oi, ++last_object_id);
+	if (ostid_id(&oa->o_oi) == 0)
+		ostid_set_id(&oa->o_oi, ++last_object_id);
 
-	/* Only echo objects are allowed to be created */
-	LASSERT((oa->o_valid & OBD_MD_FLGROUP) &&
-		(ostid_seq(&oa->o_oi) == FID_SEQ_ECHO));
-
-	rc = obd_create(env, ec->ec_exp, oa, &lsm, oti);
+	rc = obd_create(env, ec->ec_exp, oa, oti);
 	if (rc != 0) {
 		CERROR("Cannot create objects: rc = %d\n", rc);
 		GOTO(failed, rc);
@@ -2129,11 +2066,9 @@ static int echo_create_object(const struct lu_env *env, struct echo_device *ed,
 
 	created = 1;
 
-        /* See what object ID we were given */
-	oa->o_oi = lsm->lsm_oi;
-        oa->o_valid |= OBD_MD_FLID;
+	oa->o_valid |= OBD_MD_FLID;
 
-        eco = cl_echo_object_find(ed, &lsm);
+	eco = cl_echo_object_find(ed, &oa->o_oi);
         if (IS_ERR(eco))
                 GOTO(failed, rc = PTR_ERR(eco));
         cl_echo_object_put(eco);
@@ -2141,47 +2076,38 @@ static int echo_create_object(const struct lu_env *env, struct echo_device *ed,
         CDEBUG(D_INFO, "oa oid "DOSTID"\n", POSTID(&oa->o_oi));
         EXIT;
 
- failed:
-        if (created && rc)
-                obd_destroy(env, ec->ec_exp, oa, lsm, oti, NULL, NULL);
-        if (lsm)
-		echo_free_memmd(ed, &lsm);
-        if (rc)
-                CERROR("create object failed with: rc = %d\n", rc);
-        return (rc);
+failed:
+	if (created && rc != 0)
+		obd_destroy(env, ec->ec_exp, oa, NULL, oti, NULL, NULL);
+
+	if (rc != 0)
+		CERROR("create object failed with: rc = %d\n", rc);
+
+	return rc;
 }
 
 static int echo_get_object(struct echo_object **ecop, struct echo_device *ed,
-                           struct obdo *oa)
+			   struct obdo *oa)
 {
-        struct lov_stripe_md   *lsm = NULL;
-        struct echo_object     *eco;
-        int                     rc;
-        ENTRY;
+	struct echo_object *eco;
+	int rc;
+	ENTRY;
 
-        if ((oa->o_valid & OBD_MD_FLID) == 0 || ostid_id(&oa->o_oi) == 0) {
-		/* disallow use of object id 0 */
-                CERROR ("No valid oid\n");
-                RETURN(-EINVAL);
-        }
+	if (!(oa->o_valid & OBD_MD_FLID) ||
+	    !(oa->o_valid & OBD_MD_FLGROUP) ||
+	    ostid_id(&oa->o_oi) == 0) {
+		CERROR("invalid oid "DOSTID"\n", POSTID(&oa->o_oi));
+		RETURN(-EINVAL);
+	}
 
-	rc = echo_alloc_memmd(ed, &lsm);
-        if (rc < 0)
-                RETURN(rc);
+	rc = 0;
+	eco = cl_echo_object_find(ed, &oa->o_oi);
+	if (!IS_ERR(eco))
+		*ecop = eco;
+	else
+		rc = PTR_ERR(eco);
 
-	lsm->lsm_oi = oa->o_oi;
-	if (!(oa->o_valid & OBD_MD_FLGROUP))
-		ostid_set_seq_echo(&lsm->lsm_oi);
-
-        rc = 0;
-        eco = cl_echo_object_find(ed, &lsm);
-        if (!IS_ERR(eco))
-                *ecop = eco;
-        else
-                rc = PTR_ERR(eco);
-        if (lsm)
-		echo_free_memmd(ed, &lsm);
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static void echo_put_object(struct echo_object *eco)
