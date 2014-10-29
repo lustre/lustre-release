@@ -53,7 +53,7 @@ the default "local" configuration.
 
 Run all tests in the regression group 5 times using large config.
 
-  auster -f large -g test-groups/regression  -r 5
+  auster -f large -g test-groups/regression -i 5
 
 EOF
     exit
