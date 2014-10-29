@@ -3030,7 +3030,7 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
         if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
                 return -EACCES;
 
-	CDEBUG(D_INODE, DFID" set xattr '%s' with size %zd\n",
+	CDEBUG(D_INODE, DFID" set xattr '%s' with size %zu\n",
 	       PFID(lu_object_fid(&dt->do_lu)), name, buf->lb_len);
 
 	osd_trans_exec_op(env, handle, OSD_OT_XATTR_SET);

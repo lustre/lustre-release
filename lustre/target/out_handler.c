@@ -681,7 +681,7 @@ static int out_xattr_set(struct tgt_session_info *tsi)
 
 	tmp = object_update_param_get(update, 2, &size);
 	if (tmp == NULL || size != sizeof(*tmp)) {
-		CERROR("%s: emptry or wrong size %zd flag: rc = %d\n",
+		CERROR("%s: emptry or wrong size %zu flag: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), size, -EPROTO);
 		RETURN(err_serious(-EPROTO));
 	}
@@ -1318,7 +1318,7 @@ static int out_write(struct tgt_session_info *tsi)
 
 	tmp = object_update_param_get(update, 1, &size);
 	if (tmp == NULL || size != sizeof(*tmp)) {
-		CERROR("%s: empty or wrong size %zd pos: rc = %d\n",
+		CERROR("%s: empty or wrong size %zu pos: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), size, -EPROTO);
 		RETURN(err_serious(-EPROTO));
 	}

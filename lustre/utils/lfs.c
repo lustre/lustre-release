@@ -3364,7 +3364,7 @@ static int lfs_changelog(int argc, char **argv)
 				printf(" s="DFID" sp="DFID" %.*s",
 				       PFID(&rnm->cr_sfid),
 				       PFID(&rnm->cr_spfid),
-				       changelog_rec_snamelen(rec),
+				       (int)changelog_rec_snamelen(rec),
 				       changelog_rec_sname(rec));
 		}
 		printf("\n");

@@ -1127,7 +1127,7 @@ int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
 	LASSERT(sizeof(*lum) < sizeof(*lum3));
 
 	if (buf->lb_len < sizeof(*lum)) {
-		CDEBUG(D_IOCTL, "buf len %zd too small for lov_user_md\n",
+		CDEBUG(D_IOCTL, "buf len %zu too small for lov_user_md\n",
 		       buf->lb_len);
 		GOTO(out, rc = -EINVAL);
 	}
@@ -1188,7 +1188,7 @@ int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
 
 	stripe_count = le16_to_cpu(lum->lmm_stripe_count);
 	if (buf->lb_len != lum_size) {
-		CDEBUG(D_IOCTL, "invalid buf len %zd for lov_user_md with "
+		CDEBUG(D_IOCTL, "invalid buf len %zu for lov_user_md with "
 		       "magic %#x and stripe_count %u\n",
 		       buf->lb_len, magic, stripe_count);
 		GOTO(out, rc = -EINVAL);
@@ -1199,7 +1199,7 @@ int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
 
 	lum3 = buf->lb_buf;
 	if (buf->lb_len < sizeof(*lum3)) {
-		CDEBUG(D_IOCTL, "buf len %zd too small for lov_user_md_v3\n",
+		CDEBUG(D_IOCTL, "buf len %zu too small for lov_user_md_v3\n",
 		       buf->lb_len);
 		GOTO(out, rc = -EINVAL);
 	}

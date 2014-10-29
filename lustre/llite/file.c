@@ -1147,7 +1147,7 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 	struct range_lock     range;
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, "file: %s, type: %d ppos: "LPU64", count: %zd\n",
+	CDEBUG(D_VFSTRACE, "file: %s, type: %d ppos: "LPU64", count: %zu\n",
 		file->f_dentry->d_name.name, iot, *ppos, count);
 
 restart:
@@ -1220,7 +1220,7 @@ out:
 	/* If any bit been read/written (result != 0), we just return
 	 * short read/write instead of restart io. */
 	if ((result == 0 || result == -ENODATA) && io->ci_need_restart) {
-		CDEBUG(D_VFSTRACE, "Restart %s on %s from %lld, count:%zd\n",
+		CDEBUG(D_VFSTRACE, "Restart %s on %s from %lld, count:%zu\n",
 		       iot == CIT_READ ? "read" : "write",
 		       file->f_dentry->d_name.name, *ppos, count);
 		LASSERTF(io->ci_nob == 0, "%zd\n", io->ci_nob);
