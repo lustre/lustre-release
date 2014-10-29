@@ -228,10 +228,10 @@ struct client_obd {
         int                      cl_conn_count;
 	/* max_mds_easize is purely a performance thing so we don't have to
 	 * call obd_size_diskmd() all the time. */
-	int			 cl_default_mds_easize;
-	int			 cl_max_mds_easize;
-	int			 cl_default_mds_cookiesize;
-	int			 cl_max_mds_cookiesize;
+	__u32			 cl_default_mds_easize;
+	__u32			 cl_max_mds_easize;
+	__u32			 cl_default_mds_cookiesize;
+	__u32			 cl_max_mds_cookiesize;
 
         enum lustre_sec_part     cl_sp_me;
         enum lustre_sec_part     cl_sp_to;
@@ -811,7 +811,7 @@ struct md_op_data {
         struct lustre_handle    op_handle;
         obd_time                op_mod_time;
         const char             *op_name;
-        int                     op_namelen;
+	size_t			op_namelen;
         __u32                   op_mode;
         struct lmv_stripe_md   *op_mea1;
         struct lmv_stripe_md   *op_mea2;
@@ -1049,8 +1049,8 @@ struct md_ops {
 		       struct md_open_data *, struct ptlrpc_request **);
 
 	int (*m_create)(struct obd_export *, struct md_op_data *,
-			const void *, int, int, __u32, __u32, cfs_cap_t,
-			__u64, struct ptlrpc_request **);
+			const void *, size_t, umode_t, uid_t, gid_t,
+			cfs_cap_t, __u64, struct ptlrpc_request **);
 
 	int (*m_enqueue)(struct obd_export *, struct ldlm_enqueue_info *,
 			 const union ldlm_policy_data *,
@@ -1069,11 +1069,11 @@ struct md_ops {
 		      struct ptlrpc_request **);
 
 	int (*m_rename)(struct obd_export *, struct md_op_data *,
-			const char *, int, const char *, int,
+			const char *, size_t, const char *, size_t,
 			struct ptlrpc_request **);
 
 	int (*m_setattr)(struct obd_export *, struct md_op_data *, void *,
-			 int , void *, int, struct ptlrpc_request **,
+			size_t , void *, size_t, struct ptlrpc_request **,
 			 struct md_open_data **mod);
 
 	int (*m_fsync)(struct obd_export *, const struct lu_fid *,
@@ -1119,7 +1119,7 @@ struct md_ops {
 	int (*m_getattr_name)(struct obd_export *, struct md_op_data *,
 			      struct ptlrpc_request **);
 
-	int (*m_init_ea_size)(struct obd_export *, int, int, int, int);
+	int (*m_init_ea_size)(struct obd_export *, __u32, __u32, __u32, __u32);
 
 	int (*m_get_lustre_md)(struct obd_export *, struct ptlrpc_request *,
 			       struct obd_export *, struct obd_export *,
@@ -1239,7 +1239,8 @@ static inline const char *lu_dev_name(const struct lu_device *lu_dev)
         return lu_dev->ld_obd->obd_name;
 }
 
-static inline bool filename_is_volatile(const char *name, int namelen, int *idx)
+static inline bool filename_is_volatile(const char *name, size_t namelen,
+					int *idx)
 {
 	const char	*start;
 	char		*end;

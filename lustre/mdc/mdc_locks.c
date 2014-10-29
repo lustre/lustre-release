@@ -264,7 +264,7 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 	struct obd_device	*obddev = class_exp2obd(exp);
 	struct ldlm_intent	*lit;
 	const void		*lmm = op_data->op_data;
-	int			 lmmsize = op_data->op_data_size;
+	__u32			 lmmsize = op_data->op_data_size;
 	struct list_head	 cancels = LIST_HEAD_INIT(cancels);
 	int			 count = 0;
 	int			 mode;
@@ -359,7 +359,8 @@ mdc_intent_getxattr_pack(struct obd_export *exp,
 {
 	struct ptlrpc_request	*req;
 	struct ldlm_intent	*lit;
-	int			rc, count = 0, maxdata;
+	int			rc, count = 0;
+	__u32			maxdata;
 	struct list_head	cancels = LIST_HEAD_INIT(cancels);
 
 	ENTRY;
@@ -454,7 +455,7 @@ static struct ptlrpc_request *mdc_intent_getattr_pack(struct obd_export *exp,
 					       OBD_MD_FLRMTPERM : OBD_MD_FLACL);
 	struct ldlm_intent    *lit;
 	int                    rc;
-	int			easize;
+	__u32			easize;
 	ENTRY;
 
         req = ptlrpc_request_alloc(class_exp2cliimp(exp),
@@ -566,7 +567,7 @@ static int mdc_finish_enqueue(struct obd_export *exp,
 	struct lustre_intent_data *intent = &it->d.lustre;
 	struct ldlm_lock    *lock;
 	void                *lvb_data = NULL;
-	int                  lvb_len = 0;
+	__u32                lvb_len = 0;
         ENTRY;
 
         LASSERT(rc >= 0);
@@ -1028,10 +1029,11 @@ static int mdc_finish_intent_lock(struct obd_export *exp,
                         it->d.lustre.it_lock_handle = lockh->cookie;
                 }
         }
-        CDEBUG(D_DENTRY,"D_IT dentry %.*s intent: %s status %d disp %x rc %d\n",
-               op_data->op_namelen, op_data->op_name, ldlm_it2str(it->it_op),
-               it->d.lustre.it_status, it->d.lustre.it_disposition, rc);
-        RETURN(rc);
+	CDEBUG(D_DENTRY,"D_IT dentry %.*s intent: %s status %d disp %x rc %d\n",
+		(int)op_data->op_namelen, op_data->op_name,
+		ldlm_it2str(it->it_op), it->d.lustre.it_status,
+		it->d.lustre.it_disposition, rc);
+	RETURN(rc);
 }
 
 int mdc_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
@@ -1142,7 +1144,7 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 	LASSERT(it);
 
 	CDEBUG(D_DLMTRACE, "(name: %.*s,"DFID") in obj "DFID
-		", intent: %s flags %#"LPF64"o\n", op_data->op_namelen,
+		", intent: %s flags %#"LPF64"o\n", (int)op_data->op_namelen,
 		op_data->op_name, PFID(&op_data->op_fid2),
 		PFID(&op_data->op_fid1), ldlm_it2str(it->it_op),
 		it->it_flags);
@@ -1232,30 +1234,30 @@ out:
 }
 
 int mdc_intent_getattr_async(struct obd_export *exp,
-                             struct md_enqueue_info *minfo,
-                             struct ldlm_enqueue_info *einfo)
+			     struct md_enqueue_info *minfo,
+			     struct ldlm_enqueue_info *einfo)
 {
-        struct md_op_data       *op_data = &minfo->mi_data;
-        struct lookup_intent    *it = &minfo->mi_it;
-        struct ptlrpc_request   *req;
-        struct mdc_getattr_args *ga;
-        struct obd_device       *obddev = class_exp2obd(exp);
-        struct ldlm_res_id       res_id;
-        /*XXX: Both MDS_INODELOCK_LOOKUP and MDS_INODELOCK_UPDATE are needed
-         *     for statahead currently. Consider CMD in future, such two bits
-         *     maybe managed by different MDS, should be adjusted then. */
-        ldlm_policy_data_t       policy = {
-                                        .l_inodebits = { MDS_INODELOCK_LOOKUP | 
-                                                         MDS_INODELOCK_UPDATE }
-                                 };
-        int                      rc = 0;
-	__u64                    flags = LDLM_FL_HAS_INTENT;
+	struct md_op_data       *op_data = &minfo->mi_data;
+	struct lookup_intent    *it = &minfo->mi_it;
+	struct ptlrpc_request   *req;
+	struct mdc_getattr_args *ga;
+	struct obd_device       *obddev = class_exp2obd(exp);
+	struct ldlm_res_id       res_id;
+	/*XXX: Both MDS_INODELOCK_LOOKUP and MDS_INODELOCK_UPDATE are needed
+	 *     for statahead currently. Consider CMD in future, such two bits
+	 *     maybe managed by different MDS, should be adjusted then. */
+	ldlm_policy_data_t	 policy = {
+					.l_inodebits = { MDS_INODELOCK_LOOKUP |
+							 MDS_INODELOCK_UPDATE }
+				 };
+	int			 rc = 0;
+	__u64			 flags = LDLM_FL_HAS_INTENT;
 	ENTRY;
 
 	CDEBUG(D_DLMTRACE, "name: %.*s in inode "DFID", intent: %s flags %#"
 		LPF64"o\n",
-		op_data->op_namelen, op_data->op_name, PFID(&op_data->op_fid1),
-		ldlm_it2str(it->it_op), it->it_flags);
+		(int)op_data->op_namelen, op_data->op_name,
+		PFID(&op_data->op_fid1), ldlm_it2str(it->it_op), it->it_flags);
 
 	fid_build_reg_res_name(&op_data->op_fid1, &res_id);
 	req = mdc_intent_getattr_pack(exp, it, op_data);

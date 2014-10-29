@@ -44,30 +44,30 @@ extern struct lprocfs_seq_vars lprocfs_mdc_obd_vars[];
 #endif
 
 void mdc_pack_body(struct ptlrpc_request *req, const struct lu_fid *fid,
-                   struct obd_capa *oc, __u64 valid, int ea_size,
-                   __u32 suppgid, int flags);
+		   struct obd_capa *oc, __u64 valid, size_t ea_size,
+		   __u32 suppgid, __u32 flags);
 void mdc_pack_capa(struct ptlrpc_request *req,
 		   const struct req_msg_field *field, struct obd_capa *oc);
-int mdc_pack_req(struct ptlrpc_request *req, int version, int opc);
 void mdc_swap_layouts_pack(struct ptlrpc_request *req,
 			   struct md_op_data *op_data);
-void mdc_readdir_pack(struct ptlrpc_request *req, __u64 pgoff, __u32 size,
+void mdc_readdir_pack(struct ptlrpc_request *req, __u64 pgoff, size_t size,
                       const struct lu_fid *fid, struct obd_capa *oc);
-void mdc_getattr_pack(struct ptlrpc_request *req, __u64 valid, int flags,
-                      struct md_op_data *data, int ea_size);
+void mdc_getattr_pack(struct ptlrpc_request *req, __u64 valid, __u32 flags,
+		      struct md_op_data *data, size_t ea_size);
 void mdc_setattr_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
-                     void *ea, int ealen, void *ea2, int ea2len);
+		      void *ea, size_t ealen, void *ea2, size_t ea2len);
 void mdc_create_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
-                     const void *data, int datalen, __u32 mode, __u32 uid,
-                     __u32 gid, cfs_cap_t capability, __u64 rdev);
+		     const void *data, size_t datalen, umode_t mode,
+		     uid_t uid, gid_t gid, cfs_cap_t capability, __u64 rdev);
 void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
-		   __u32 mode, __u64 rdev, __u64 flags, const void *data,
-		   int datalen);
+		   umode_t mode, __u64 rdev, __u64 flags,
+		   const void *data, size_t datalen);
 void mdc_unlink_pack(struct ptlrpc_request *req, struct md_op_data *op_data);
 void mdc_getxattr_pack(struct ptlrpc_request *req, struct md_op_data *op_data);
 void mdc_link_pack(struct ptlrpc_request *req, struct md_op_data *op_data);
 void mdc_rename_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
-                     const char *old, int oldlen, const char *new, int newlen);
+		     const char *old, size_t oldlen,
+		     const char *new, size_t newlen);
 void mdc_close_pack(struct ptlrpc_request *req, struct md_op_data *op_data);
 
 /* mdc/mdc_locks.c */
@@ -98,10 +98,6 @@ int mdc_resource_get_unused(struct obd_export *exp, const struct lu_fid *fid,
 int mdc_fid_alloc(const struct lu_env *env, struct obd_export *exp,
 		  struct lu_fid *fid, struct md_op_data *op_data);
 
-int mdc_open(struct obd_export *exp, obd_id ino, int type, int flags,
-             struct lov_mds_md *lmm, int lmm_size, struct lustre_handle *fh,
-             struct ptlrpc_request **);
-
 struct obd_client_handle;
 
 int mdc_get_lustre_md(struct obd_export *md_exp, struct ptlrpc_request *req,
@@ -120,17 +116,18 @@ void mdc_commit_open(struct ptlrpc_request *req);
 void mdc_replay_open(struct ptlrpc_request *req);
 
 int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
-               const void *data, int datalen, int mode, __u32 uid, __u32 gid,
-               cfs_cap_t capability, __u64 rdev,
-               struct ptlrpc_request **request);
+		const void *data, size_t datalen,
+		umode_t mode, uid_t uid, gid_t gid,
+		cfs_cap_t capability, __u64 rdev,
+		struct ptlrpc_request **request);
 int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
              struct ptlrpc_request **request);
 int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
-               const char *old, int oldlen, const char *new, int newlen,
-               struct ptlrpc_request **request);
+		const char *old, size_t oldlen, const char *new, size_t newlen,
+		struct ptlrpc_request **request);
 int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
-                void *ea, int ealen, void *ea2, int ea2len,
-                struct ptlrpc_request **request, struct md_open_data **mod);
+		void *ea, size_t ealen, void *ea2, size_t ea2len,
+		struct ptlrpc_request **request, struct md_open_data **mod);
 int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
                struct ptlrpc_request **request);
 int mdc_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,
