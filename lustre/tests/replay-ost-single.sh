@@ -396,6 +396,34 @@ test_8e() {
 }
 run_test 8e "Verify that ptlrpc resends request on -EINPROGRESS"
 
+test_9() {
+	local server_version=$(lustre_version_code ost1)
+
+	[[ $server_version -ge $(version_code 2.6.55) ]] ||
+		[[ $server_version -ge $(version_code 2.5.27) &&
+		   $server_version -lt $(version_code 2.5.50) ]] ||
+		[[ $server_version -ge $(version_code 2.5.3) &&
+		   $server_version -lt $(version_code 2.5.11) ]] ||
+		{ skip "Need OST version 2.5.4+ or 2.5.27+ or 2.6.55+"; return; }
+
+	$SETSTRIPE -i 0 -c 1 $DIR/$tfile
+	replay_barrier ost1
+	# do IO
+	dd if=/dev/zero of=$DIR/$tfile count=1 bs=1M > /dev/null ||
+		error "failed to write"
+	# failover, replay and resend replayed waiting request
+	#define OBD_FAIL_TGT_REPLAY_DELAY2       0x714
+	do_facet ost1 $LCTL set_param fail_loc=0x00000714
+	do_facet ost1 $LCTL set_param fail_val=$TIMEOUT
+	fail ost1
+	do_facet ost1 $LCTL set_param fail_loc=0
+	do_facet ost1 "dmesg | tail -n 100" |\
+		sed -n '/no req deadline/,$ p' | grep -q 'Already past' &&
+		return 1
+	return 0
+}
+run_test 9 "Verify that no req deadline happened during recovery"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

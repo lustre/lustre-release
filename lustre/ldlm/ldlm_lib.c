@@ -1829,17 +1829,19 @@ repeat:
 
 static struct ptlrpc_request *target_next_replay_req(struct obd_device *obd)
 {
-        struct ptlrpc_request *req = NULL;
-        ENTRY;
+	struct ptlrpc_request *req = NULL;
+	ENTRY;
 
-        CDEBUG(D_HA, "Waiting for transno "LPD64"\n",
-               obd->obd_next_recovery_transno);
+	CDEBUG(D_HA, "Waiting for transno "LPD64"\n",
+		obd->obd_next_recovery_transno);
 
-        if (target_recovery_overseer(obd, check_for_next_transno,
-                                     exp_req_replay_healthy)) {
-                abort_req_replay_queue(obd);
-                abort_lock_replay_queue(obd);
-        }
+	CFS_FAIL_TIMEOUT(OBD_FAIL_TGT_REPLAY_DELAY2, cfs_fail_val);
+
+	if (target_recovery_overseer(obd, check_for_next_transno,
+				     exp_req_replay_healthy)) {
+		abort_req_replay_queue(obd);
+		abort_lock_replay_queue(obd);
+	}
 
 	spin_lock(&obd->obd_recovery_task_lock);
 	if (!cfs_list_empty(&obd->obd_req_replay_queue)) {

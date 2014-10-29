@@ -711,6 +711,12 @@ test_7_cycle() {
     do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
     do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
+	local at_max_saved=0
+	if at_is_enabled; then
+		at_max_saved=$(at_max_get $SINGLEMDS)
+		at_max_set $TIMEOUT mds client
+	fi
+
     do_node $CLIENT1 mkdir -p $DIR/$tdir
     replay_barrier $SINGLEMDS
     # first operation
@@ -727,11 +733,12 @@ test_7_cycle() {
     # should fail as conflict expected
     client_evicted $CLIENT1 || rc=1
 
-    wait_recovery_complete $SINGLEMDS
+	wait_recovery_complete $SINGLEMDS
 	wait_mds_ost_sync || error "wait_mds_ost_sync failed"
 
-    rm -rf $DIR/$tdir
-    return $rc
+	[[ $at_max_saved -eq 0 ]] || at_max_set $at_max_saved mds client
+	rm -rf $DIR/$tdir
+	return $rc
 }
 
 test_7a() {
