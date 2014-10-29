@@ -133,7 +133,7 @@ void print_layout(const struct req_format *rf)
                 [RCL_SERVER] = "S"
         };
 
-        printf("L %s (%i/%i)\n", rf->rf_name,
+	printf("L %s (%zu/%zu)\n", rf->rf_name,
                rf->rf_fields[RCL_CLIENT].nr, rf->rf_fields[RCL_SERVER].nr);
 
         for (j = 0; j < RCL_NR; ++j) {

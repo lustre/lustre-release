@@ -1211,12 +1211,12 @@ EXPORT_SYMBOL(RMF_LFSCK_REPLY);
  */
 
 struct req_format {
-        const char *rf_name;
-        int         rf_idx;
-        struct {
-                int                          nr;
-                const struct req_msg_field **d;
-        } rf_fields[RCL_NR];
+	const char *rf_name;
+	size_t	    rf_idx;
+	struct {
+		size_t			     nr;
+		const struct req_msg_field **d;
+	} rf_fields[RCL_NR];
 };
 
 #define DEFINE_REQ_FMT(name, client, client_nr, server, server_nr) {    \
@@ -1683,9 +1683,9 @@ EXPORT_SYMBOL(RQF_LFSCK_QUERY);
  */
 int req_layout_init(void)
 {
-        int i;
-        int j;
-        int k;
+	size_t i;
+	size_t j;
+	size_t k;
         struct req_format *rf = NULL;
 
         for (i = 0; i < ARRAY_SIZE(req_formats); ++i) {
@@ -1727,7 +1727,7 @@ EXPORT_SYMBOL(req_layout_fini);
  */
 void req_capsule_init_area(struct req_capsule *pill)
 {
-        int i;
+	size_t i;
 
         for (i = 0; i < ARRAY_SIZE(pill->rc_area[RCL_CLIENT]); i++) {
                 pill->rc_area[RCL_CLIENT][i] = -1;
@@ -1779,9 +1779,8 @@ EXPORT_SYMBOL(req_capsule_fini);
 
 static int __req_format_is_sane(const struct req_format *fmt)
 {
-        return
-                0 <= fmt->rf_idx && fmt->rf_idx < ARRAY_SIZE(req_formats) &&
-                req_formats[fmt->rf_idx] == fmt;
+	return fmt->rf_idx < ARRAY_SIZE(req_formats) &&
+		req_formats[fmt->rf_idx] == fmt;
 }
 
 static struct lustre_msg *__req_msg(const struct req_capsule *pill,
@@ -1814,11 +1813,11 @@ EXPORT_SYMBOL(req_capsule_set);
  * variable-sized fields.  The field sizes come from the declared \a rmf_size
  * field of a \a pill's \a rc_fmt's RMF's.
  */
-int req_capsule_filled_sizes(struct req_capsule *pill,
-                           enum req_location loc)
+size_t req_capsule_filled_sizes(struct req_capsule *pill,
+				enum req_location loc)
 {
-        const struct req_format *fmt = pill->rc_fmt;
-        int                      i;
+	const struct req_format *fmt = pill->rc_fmt;
+	size_t			 i;
 
         LASSERT(fmt != NULL);
 
@@ -1875,9 +1874,9 @@ EXPORT_SYMBOL(req_capsule_server_pack);
  * Returns the PTLRPC request or reply (\a loc) buffer offset of a \a pill
  * corresponding to the given RMF (\a field).
  */
-static int __req_capsule_offset(const struct req_capsule *pill,
-                                const struct req_msg_field *field,
-                                enum req_location loc)
+static __u32 __req_capsule_offset(const struct req_capsule *pill,
+				  const struct req_msg_field *field,
+				  enum req_location loc)
 {
         int offset;
 
@@ -1985,10 +1984,10 @@ static void *__req_capsule_get(struct req_capsule *pill,
         const struct req_format *fmt;
         struct lustre_msg       *msg;
         void                    *value;
-        int                      len;
-        int                      offset;
+	__u32                    len;
+	__u32                    offset;
 
-        void *(*getter)(struct lustre_msg *m, int n, int minlen);
+	void *(*getter)(struct lustre_msg *m, __u32 n, __u32 minlen);
 
         static const char *rcl_names[RCL_NR] = {
                 [RCL_CLIENT] = "client",
@@ -2018,24 +2017,24 @@ static void *__req_capsule_get(struct req_capsule *pill,
                 len = lustre_msg_buflen(msg, offset);
                 if ((len % field->rmf_size) != 0) {
                         CERROR("%s: array field size mismatch "
-                               "%d modulo %d != 0 (%d)\n",
-                               field->rmf_name, len, field->rmf_size, loc);
+				"%d modulo %u != 0 (%d)\n",
+				field->rmf_name, len, field->rmf_size, loc);
                         return NULL;
                 }
         } else if (pill->rc_area[loc][offset] != -1) {
                 len = pill->rc_area[loc][offset];
         } else {
-                len = max(field->rmf_size, 0);
+		len = max_t(typeof(field->rmf_size), field->rmf_size, 0);
         }
         value = getter(msg, offset, len);
 
         if (value == NULL) {
                 DEBUG_REQ(D_ERROR, pill->rc_req,
-                          "Wrong buffer for field `%s' (%d of %d) "
-                          "in format `%s': %d vs. %d (%s)\n",
-                          field->rmf_name, offset, lustre_msg_bufcount(msg),
-                          fmt->rf_name, lustre_msg_buflen(msg, offset), len,
-                          rcl_names[loc]);
+			  "Wrong buffer for field `%s' (%u of %u) "
+			  "in format `%s': %u vs. %u (%s)\n",
+			  field->rmf_name, offset, lustre_msg_bufcount(msg),
+			  fmt->rf_name, lustre_msg_buflen(msg, offset), len,
+			  rcl_names[loc]);
         } else {
                 swabber_dumper_helper(pill, field, loc, offset, value, len,
                                       dump, swabber);
@@ -2049,10 +2048,10 @@ static void *__req_capsule_get(struct req_capsule *pill,
  */
 void __req_capsule_dump(struct req_capsule *pill, enum req_location loc)
 {
-        const struct    req_format *fmt;
-        const struct    req_msg_field *field;
-        int             len;
-        int             i;
+	const struct    req_format *fmt;
+	const struct    req_msg_field *field;
+	__u32		len;
+	size_t		i;
 
         fmt = pill->rc_fmt;
 
@@ -2065,8 +2064,8 @@ void __req_capsule_dump(struct req_capsule *pill, enum req_location loc)
                          * have a specific dumper
                          */
                         len = req_capsule_get_size(pill, field, loc);
-                        CDEBUG(D_RPCTRACE, "Field %s has no dumper function;"
-                               "field size is %d\n", field->rmf_name, len);
+			CDEBUG(D_RPCTRACE, "Field %s has no dumper function;"
+				"field size is %u\n", field->rmf_name, len);
                 } else {
                         /* It's the dumping side-effect that we're interested in */
                         (void) __req_capsule_get(pill, field, loc, NULL, 1);
@@ -2126,8 +2125,8 @@ EXPORT_SYMBOL(req_capsule_client_swab_get);
  * returned.
  */
 void *req_capsule_client_sized_get(struct req_capsule *pill,
-                                   const struct req_msg_field *field,
-                                   int len)
+				   const struct req_msg_field *field,
+				   __u32 len)
 {
         req_capsule_set_size(pill, field, RCL_CLIENT, len);
         return __req_capsule_get(pill, field, RCL_CLIENT, NULL, 0);
@@ -2167,8 +2166,8 @@ EXPORT_SYMBOL(req_capsule_server_swab_get);
  * returned.
  */
 void *req_capsule_server_sized_get(struct req_capsule *pill,
-                                   const struct req_msg_field *field,
-                                   int len)
+				   const struct req_msg_field *field,
+				   __u32 len)
 {
         req_capsule_set_size(pill, field, RCL_SERVER, len);
         return __req_capsule_get(pill, field, RCL_SERVER, NULL, 0);
@@ -2177,7 +2176,7 @@ EXPORT_SYMBOL(req_capsule_server_sized_get);
 
 void *req_capsule_server_sized_swab_get(struct req_capsule *pill,
 					const struct req_msg_field *field,
-					int len, void *swabber)
+					__u32 len, void *swabber)
 {
 	req_capsule_set_size(pill, field, RCL_SERVER, len);
 	return __req_capsule_get(pill, field, RCL_SERVER, swabber, 0);
@@ -2207,30 +2206,31 @@ EXPORT_SYMBOL(req_capsule_other_get);
  * request or reply.
  */
 void req_capsule_set_size(struct req_capsule *pill,
-                          const struct req_msg_field *field,
-                          enum req_location loc, int size)
+			  const struct req_msg_field *field,
+			  enum req_location loc, __u32 size)
 {
-        LASSERT(loc == RCL_SERVER || loc == RCL_CLIENT);
+	LASSERT(loc == RCL_SERVER || loc == RCL_CLIENT);
 
-        if ((size != field->rmf_size) &&
-            (field->rmf_size != -1) &&
-            !(field->rmf_flags & RMF_F_NO_SIZE_CHECK) &&
-            (size > 0)) {
-                if ((field->rmf_flags & RMF_F_STRUCT_ARRAY) &&
-                    (size % field->rmf_size != 0)) {
-                        CERROR("%s: array field size mismatch "
-                               "%d %% %d != 0 (%d)\n",
-                               field->rmf_name, size, field->rmf_size, loc);
-                        LBUG();
-                } else if (!(field->rmf_flags & RMF_F_STRUCT_ARRAY) &&
-                    size < field->rmf_size) {
-                        CERROR("%s: field size mismatch %d != %d (%d)\n",
-                               field->rmf_name, size, field->rmf_size, loc);
-                        LBUG();
-                }
-        }
+	if ((size != (__u32)field->rmf_size) &&
+	    (field->rmf_size != -1) &&
+	    !(field->rmf_flags & RMF_F_NO_SIZE_CHECK) &&
+	    (size > 0)) {
+		__u32 rmf_size = (__u32)field->rmf_size;
+		if ((field->rmf_flags & RMF_F_STRUCT_ARRAY) &&
+		    (size % rmf_size != 0)) {
+			CERROR("%s: array field size mismatch "
+				"%u %% %u != 0 (%d)\n",
+				field->rmf_name, size, rmf_size, loc);
+			LBUG();
+		} else if (!(field->rmf_flags & RMF_F_STRUCT_ARRAY) &&
+			   size < rmf_size) {
+			CERROR("%s: field size mismatch %u != %u (%d)\n",
+				field->rmf_name, size, rmf_size, loc);
+			LBUG();
+		}
+	}
 
-        pill->rc_area[loc][__req_capsule_offset(pill, field, loc)] = size;
+	pill->rc_area[loc][__req_capsule_offset(pill, field, loc)] = size;
 }
 EXPORT_SYMBOL(req_capsule_set_size);
 
@@ -2242,7 +2242,7 @@ EXPORT_SYMBOL(req_capsule_set_size);
  * actually sets the size in pill.rc_area[loc][offset], but this function
  * returns the message buflen[offset], maybe we should use another name.
  */
-int req_capsule_get_size(const struct req_capsule *pill,
+__u32 req_capsule_get_size(const struct req_capsule *pill,
                          const struct req_msg_field *field,
                          enum req_location loc)
 {
@@ -2260,7 +2260,7 @@ EXPORT_SYMBOL(req_capsule_get_size);
  *
  * See also req_capsule_set_size().
  */
-int req_capsule_msg_size(struct req_capsule *pill, enum req_location loc)
+__u32 req_capsule_msg_size(struct req_capsule *pill, enum req_location loc)
 {
         return lustre_msg_size(pill->rc_req->rq_import->imp_msg_magic,
                                pill->rc_fmt->rf_fields[loc].nr,
@@ -2275,10 +2275,11 @@ int req_capsule_msg_size(struct req_capsule *pill, enum req_location loc)
  * This function should not be used for formats which contain variable size
  * fields.
  */
-int req_capsule_fmt_size(__u32 magic, const struct req_format *fmt,
+__u32 req_capsule_fmt_size(__u32 magic, const struct req_format *fmt,
                          enum req_location loc)
 {
-        int size, i = 0;
+	__u32 size;
+	size_t i = 0;
 
         /*
          * This function should probably LASSERT() that fmt has no fields with
@@ -2288,8 +2289,8 @@ int req_capsule_fmt_size(__u32 magic, const struct req_format *fmt,
          * we do.
          */
         size = lustre_msg_hdr_size(magic, fmt->rf_fields[loc].nr);
-        if (size < 0)
-                return size;
+	if (size == 0)
+		return size;
 
         for (; i < fmt->rf_fields[loc].nr; ++i)
                 if (fmt->rf_fields[loc].d[i]->rmf_size != -1)
@@ -2319,8 +2320,8 @@ int req_capsule_fmt_size(__u32 magic, const struct req_format *fmt,
  */
 void req_capsule_extend(struct req_capsule *pill, const struct req_format *fmt)
 {
-        int i;
-        int j;
+	int i;
+	size_t j;
 
         const struct req_format *old;
 
@@ -2378,7 +2379,7 @@ int req_capsule_field_present(const struct req_capsule *pill,
                               const struct req_msg_field *field,
                               enum req_location loc)
 {
-        int offset;
+	__u32 offset;
 
         LASSERT(loc == RCL_SERVER || loc == RCL_CLIENT);
         LASSERT(req_capsule_has_field(pill, field, loc));
@@ -2395,13 +2396,13 @@ EXPORT_SYMBOL(req_capsule_field_present);
  * This is not the opposite of req_capsule_extend().
  */
 void req_capsule_shrink(struct req_capsule *pill,
-                        const struct req_msg_field *field,
-                        unsigned int newlen,
-                        enum req_location loc)
+			const struct req_msg_field *field,
+			__u32 newlen,
+			enum req_location loc)
 {
         const struct req_format *fmt;
         struct lustre_msg       *msg;
-        int                      len;
+	__u32			 len;
         int                      offset;
 
         fmt = pill->rc_fmt;
@@ -2414,7 +2415,7 @@ void req_capsule_shrink(struct req_capsule *pill,
 
         msg = __req_msg(pill, loc);
         len = lustre_msg_buflen(msg, offset);
-        LASSERTF(newlen <= len, "%s:%s, oldlen=%d, newlen=%d\n",
+	LASSERTF(newlen <= len, "%s:%s, oldlen=%u, newlen=%u\n",
                                 fmt->rf_name, field->rmf_name, len, newlen);
 
         if (loc == RCL_CLIENT)
@@ -2427,12 +2428,13 @@ void req_capsule_shrink(struct req_capsule *pill,
 EXPORT_SYMBOL(req_capsule_shrink);
 
 int req_capsule_server_grow(struct req_capsule *pill,
-                            const struct req_msg_field *field,
-                            unsigned int newlen)
+			    const struct req_msg_field *field,
+			    __u32 newlen)
 {
         struct ptlrpc_reply_state *rs = pill->rc_req->rq_reply_state, *nrs;
         char *from, *to;
-        int offset, len, rc;
+	int rc;
+	__u32 offset, len;
 
         LASSERT(pill->rc_fmt != NULL);
         LASSERT(__req_format_is_sane(pill->rc_fmt));
@@ -2441,7 +2443,7 @@ int req_capsule_server_grow(struct req_capsule *pill,
 
         len = req_capsule_get_size(pill, field, RCL_SERVER);
         offset = __req_capsule_offset(pill, field, RCL_SERVER);
-        if (pill->rc_req->rq_repbuf_len >=
+	if ((__u32)pill->rc_req->rq_repbuf_len >=
             lustre_packed_msg_size(pill->rc_req->rq_repmsg) - len + newlen)
                 CERROR("Inplace repack might be done\n");
 
