@@ -1269,34 +1269,6 @@ static inline int obd_iocontrol(unsigned int cmd, struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int obd_change_cbdata(struct obd_export *exp,
-                                    struct lov_stripe_md *lsm,
-                                    ldlm_iterator_t it, void *data)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, change_cbdata);
-        EXP_COUNTER_INCREMENT(exp, change_cbdata);
-
-        rc = OBP(exp->exp_obd, change_cbdata)(exp, lsm, it, data);
-        RETURN(rc);
-}
-
-static inline int obd_find_cbdata(struct obd_export *exp,
-                                  struct lov_stripe_md *lsm,
-                                  ldlm_iterator_t it, void *data)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, find_cbdata);
-        EXP_COUNTER_INCREMENT(exp, find_cbdata);
-
-        rc = OBP(exp->exp_obd, find_cbdata)(exp, lsm, it, data);
-        RETURN(rc);
-}
-
 static inline void obd_import_event(struct obd_device *obd,
                                     struct obd_import *imp,
                                     enum obd_import_event event)

@@ -938,10 +938,6 @@ struct obd_ops {
                           struct niobuf_remote *remote, int pages,
                           struct niobuf_local *local,
                           struct obd_trans_info *oti, int rc);
-        int (*o_change_cbdata)(struct obd_export *, struct lov_stripe_md *,
-                               ldlm_iterator_t it, void *data);
-        int (*o_find_cbdata)(struct obd_export *, struct lov_stripe_md *,
-                             ldlm_iterator_t it, void *data);
         int (*o_init_export)(struct obd_export *exp);
         int (*o_destroy_export)(struct obd_export *exp);
 
