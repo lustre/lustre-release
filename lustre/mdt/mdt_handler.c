@@ -2917,23 +2917,26 @@ void mdt_object_unlock_put(struct mdt_thread_info * info,
 
 struct mdt_handler *mdt_handler_find(__u32 opc, struct mdt_opc_slice *supported)
 {
-        struct mdt_opc_slice *s;
-        struct mdt_handler   *h;
+	struct mdt_opc_slice *s;
+	struct mdt_handler   *h;
 
-        h = NULL;
-        for (s = supported; s->mos_hs != NULL; s++) {
-                if (s->mos_opc_start <= opc && opc < s->mos_opc_end) {
-                        h = s->mos_hs + (opc - s->mos_opc_start);
-                        if (likely(h->mh_opc != 0))
-                                LASSERTF(h->mh_opc == opc,
-                                         "opcode mismatch %d != %d\n",
-                                         h->mh_opc, opc);
-                        else
-                                h = NULL; /* unsupported opc */
-                        break;
-                }
-        }
-        return h;
+	h = NULL;
+	for (s = supported; s->mos_hs != NULL; s++) {
+		if (s->mos_opc_start <= opc && opc < s->mos_opc_end) {
+			h = s->mos_hs + (opc - s->mos_opc_start);
+			if (likely(h->mh_opc != 0)) {
+				LASSERTF(h->mh_opc == opc,
+					 "opcode mismatch %d != %d\n",
+					 h->mh_opc, opc);
+				if (h->mh_act == NULL) /* unsupported opc */
+					h = NULL;
+			} else {
+				h = NULL; /* unsupported opc */
+			}
+			break;
+		}
+	}
+	return h;
 }
 
 static int mdt_lock_resname_compat(struct mdt_device *m,
