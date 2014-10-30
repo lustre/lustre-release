@@ -384,7 +384,7 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 	LASSERT(!list_empty(nilist));
 
 	LIBCFS_FREE(tokens, tokensize);
-	return nnets;
+	return 0;
 
  failed_syntax:
 	lnet_syntax("networks", networks, (int)(tmp - tokens), strlen(tmp));
