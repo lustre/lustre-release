@@ -2790,20 +2790,18 @@ void ll_compute_rootsquash_state(struct ll_sb_info *sbi)
 /**
  * Parse linkea content to extract information about a given hardlink
  *
- * \param[in]  ldata  - Initialized linkea data
- * \param[in]  linkno - Link identifier
- * \param[out] gpout  - Destination structure to fill with linkno,
- *                      parent FID and entry name
- * \param[in]  size   - Size of the gp_name buffer in gpout
+ * \param[in]   ldata      - Initialized linkea data
+ * \param[in]   linkno     - Link identifier
+ * \param[out]  parent_fid - The entry's parent FID
+ * \param[out]  ln         - Entry name destination buffer
  *
  * \retval 0 on success
  * \retval Appropriate negative error code on failure
  */
 static int ll_linkea_decode(struct linkea_data *ldata, unsigned int linkno,
-			    struct getparent *gpout, size_t name_size)
+			    struct lu_fid *parent_fid, struct lu_name *ln)
 {
 	unsigned int	idx;
-	struct lu_name	ln;
 	int		rc;
 	ENTRY;
 
@@ -2816,25 +2814,18 @@ static int ll_linkea_decode(struct linkea_data *ldata, unsigned int linkno,
 		RETURN(-ENODATA);
 
 	linkea_first_entry(ldata);
-	idx = 0;
-	while (ldata->ld_lee != NULL) {
-		linkea_entry_unpack(ldata->ld_lee, &ldata->ld_reclen, &ln,
-				    &gpout->gp_fid);
+	for (idx = 0; ldata->ld_lee != NULL; idx++) {
+		linkea_entry_unpack(ldata->ld_lee, &ldata->ld_reclen, ln,
+				    parent_fid);
 		if (idx == linkno)
 			break;
 
 		linkea_next_entry(ldata);
-		idx++;
 	}
 
 	if (idx < linkno)
 		RETURN(-ENODATA);
 
-	if (ln.ln_namelen >= name_size)
-		RETURN(-EOVERFLOW);
-
-	gpout->gp_linkno = linkno;
-	strlcpy(gpout->gp_name, ln.ln_name, name_size);
 	RETURN(0);
 }
 
@@ -2857,10 +2848,10 @@ int ll_getparent(struct file *file, struct getparent __user *arg)
 	struct inode		*inode = file->f_dentry->d_inode;
 	struct linkea_data	*ldata;
 	struct lu_buf		 buf = LU_BUF_NULL;
-	struct getparent	*gpout;
+	struct lu_name		 ln;
+	struct lu_fid		 parent_fid;
 	__u32			 linkno;
 	__u32			 name_size;
-	size_t			 out_size;
 	int			 rc;
 
 	ENTRY;
@@ -2886,27 +2877,26 @@ int ll_getparent(struct file *file, struct getparent __user *arg)
 	if (rc < 0)
 		GOTO(ldata_free, rc);
 
-	out_size = sizeof(*gpout) + name_size;
-	OBD_ALLOC(gpout, out_size);
-	if (gpout == NULL)
-		GOTO(lb_free, rc = -ENOMEM);
-
-	if (copy_from_user(gpout, arg, sizeof(*gpout)))
-		GOTO(gp_free, rc = -EFAULT);
-
 	rc = ll_getxattr(dentry, XATTR_NAME_LINK, buf.lb_buf, buf.lb_len);
 	if (rc < 0)
-		GOTO(gp_free, rc);
+		GOTO(lb_free, rc);
 
-	rc = ll_linkea_decode(ldata, linkno, gpout, name_size);
+	rc = ll_linkea_decode(ldata, linkno, &parent_fid, &ln);
 	if (rc < 0)
-		GOTO(gp_free, rc);
+		GOTO(lb_free, rc);
 
-	if (copy_to_user(arg, gpout, out_size))
-		GOTO(gp_free, rc = -EFAULT);
+	if (ln.ln_namelen >= name_size)
+		GOTO(lb_free, rc = -EOVERFLOW);
 
-gp_free:
-	OBD_FREE(gpout, out_size);
+	if (copy_to_user(&arg->gp_fid, &parent_fid, sizeof(arg->gp_fid)))
+		GOTO(lb_free, rc = -EFAULT);
+
+	if (copy_to_user(&arg->gp_name, ln.ln_name, ln.ln_namelen))
+		GOTO(lb_free, rc = -EFAULT);
+
+	if (put_user('\0', arg->gp_name + ln.ln_namelen))
+		GOTO(lb_free, rc = -EFAULT);
+
 lb_free:
 	lu_buf_free(&buf);
 ldata_free:

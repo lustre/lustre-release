@@ -4521,7 +4521,6 @@ int llapi_fd2parent(int fd, unsigned int linkno, lustre_fid *parent_fid,
 	if (gp == NULL)
 		return -ENOMEM;
 
-	memset(gp, 0, sizeof(*gp) + name_size);
 	gp->gp_linkno = linkno;
 	gp->gp_name_size = name_size;
 
@@ -4531,12 +4530,8 @@ int llapi_fd2parent(int fd, unsigned int linkno, lustre_fid *parent_fid,
 		goto err_free;
 	}
 
-	if (gp->gp_name_size > name_size) {
-		rc = -EOVERFLOW;
-		goto err_free;
-	}
-
 	*parent_fid = gp->gp_fid;
+
 	strncpy(name, gp->gp_name, name_size);
 	name[name_size - 1] = '\0';
 
