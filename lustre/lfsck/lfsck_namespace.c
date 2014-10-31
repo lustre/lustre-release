@@ -4246,7 +4246,8 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 					  lfsck->li_time_last_checkpoint;
 		__u64 checked = ns->ln_items_checked + com->lc_new_checked;
 		__u64 speed = checked;
-		__u64 new_checked = com->lc_new_checked * HZ;
+		__u64 new_checked = msecs_to_jiffies(com->lc_new_checked *
+						     MSEC_PER_SEC);
 		__u32 rtime = ns->ln_run_time_phase1 +
 			      cfs_duration_sec(duration + HALF_SEC);
 
@@ -4300,7 +4301,8 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 				com->lc_new_checked;
 		__u64 speed1 = ns->ln_items_checked;
 		__u64 speed2 = checked;
-		__u64 new_checked = com->lc_new_checked * HZ;
+		__u64 new_checked = msecs_to_jiffies(com->lc_new_checked *
+						     MSEC_PER_SEC);
 		__u32 rtime = ns->ln_run_time_phase2 +
 			      cfs_duration_sec(duration + HALF_SEC);
 

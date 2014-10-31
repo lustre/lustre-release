@@ -4773,7 +4773,8 @@ static int lfsck_layout_dump(const struct lu_env *env,
 		__u64 checked = lo->ll_objs_checked_phase1 +
 				com->lc_new_checked;
 		__u64 speed = checked;
-		__u64 new_checked = com->lc_new_checked * HZ;
+		__u64 new_checked = msecs_to_jiffies(com->lc_new_checked *
+						     MSEC_PER_SEC);
 		__u32 rtime = lo->ll_run_time_phase1 +
 			      cfs_duration_sec(duration + HALF_SEC);
 
@@ -4816,7 +4817,8 @@ static int lfsck_layout_dump(const struct lu_env *env,
 				com->lc_new_checked;
 		__u64 speed1 = lo->ll_objs_checked_phase1;
 		__u64 speed2 = checked;
-		__u64 new_checked = com->lc_new_checked * HZ;
+		__u64 new_checked = msecs_to_jiffies(com->lc_new_checked *
+						     MSEC_PER_SEC);
 		__u32 rtime = lo->ll_run_time_phase2 +
 			      cfs_duration_sec(duration + HALF_SEC);
 

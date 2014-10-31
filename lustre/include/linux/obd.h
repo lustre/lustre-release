@@ -77,8 +77,9 @@ static inline void __client_obd_list_lock(client_obd_lock_t *lock,
 			break;
 		}
 
-		if ((jiffies - cur > 5 * HZ) &&
-		    (jiffies - lock->time > 5 * HZ)) {
+		if ((jiffies - cur > msecs_to_jiffies(5 * MSEC_PER_SEC)) &&
+		    (jiffies - lock->time >
+		     msecs_to_jiffies(5 * MSEC_PER_SEC))) {
 			struct task_struct *task = lock->task;
 
 			if (task == NULL)
@@ -89,14 +90,15 @@ static inline void __client_obd_list_lock(client_obd_lock_t *lock,
 				      current->comm, current->pid,
 				      lock, task->comm, task->pid,
 				      lock->func, lock->line,
-				      (jiffies - lock->time) / HZ);
+				      jiffies_to_msecs(jiffies - lock->time) /
+				      MSEC_PER_SEC);
 			LCONSOLE_WARN("====== for process holding the "
 				      "lock =====\n");
 			libcfs_debug_dumpstack(task);
 			LCONSOLE_WARN("====== for current process =====\n");
 			libcfs_debug_dumpstack(NULL);
 			LCONSOLE_WARN("====== end =======\n");
-			cfs_pause(1000 * HZ);
+			cfs_pause(msecs_to_jiffies(1000 * MSEC_PER_SEC));
 		}
 		cpu_relax();
 	}

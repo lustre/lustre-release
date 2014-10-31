@@ -2056,9 +2056,9 @@ static int target_recovery_thread(void *arg)
 		 * export is being evicted */
 		ptlrpc_update_export_timer(req->rq_export, 0);
 		target_request_copy_put(req);
-        }
+	}
 
-	delta = (jiffies - delta) / HZ;
+	delta = jiffies_to_msecs(jiffies - delta) / MSEC_PER_SEC;
 	CDEBUG(D_INFO,"4: recovery completed in %lus - %d/%d reqs/locks\n",
 	      delta, obd->obd_replayed_requests, obd->obd_replayed_locks);
 	if (delta > OBD_RECOVERY_TIME_SOFT) {

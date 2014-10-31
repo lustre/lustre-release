@@ -1644,12 +1644,14 @@ bool __lfsck_set_speed(struct lfsck_instance *lfsck, __u32 limit)
 	bool dirty = false;
 
 	if (limit != LFSCK_SPEED_NO_LIMIT) {
-		if (limit > HZ) {
-			lfsck->li_sleep_rate = limit / HZ;
+		if (limit > msecs_to_jiffies(MSEC_PER_SEC)) {
+			lfsck->li_sleep_rate = jiffies_to_msecs(limit) /
+					       MSEC_PER_SEC;
 			lfsck->li_sleep_jif = 1;
 		} else {
 			lfsck->li_sleep_rate = 1;
-			lfsck->li_sleep_jif = HZ / limit;
+			lfsck->li_sleep_jif = msecs_to_jiffies(MSEC_PER_SEC /
+							       limit);
 		}
 	} else {
 		lfsck->li_sleep_jif = 0;

@@ -154,7 +154,8 @@ static void brw_stats_show(struct seq_file *seq, struct brw_stats *brw_stats)
 
 	display_brw_stats(seq, "I/O time (1/1000s)", "ios",
 			  &brw_stats->hist[BRW_R_IO_TIME],
-			  &brw_stats->hist[BRW_W_IO_TIME], 1000 / HZ);
+			  &brw_stats->hist[BRW_W_IO_TIME],
+			  jiffies_to_msecs(1000) / MSEC_PER_SEC);
 
         display_brw_stats(seq, "disk I/O size", "ios",
                           &brw_stats->hist[BRW_R_DISK_IOSIZE],

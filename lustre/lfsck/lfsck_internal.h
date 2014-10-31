@@ -47,7 +47,7 @@
 #include <md_object.h>
 #include <lustre_linkea.h>
 
-#define HALF_SEC			(HZ >> 1)
+#define HALF_SEC			msecs_to_jiffies(MSEC_PER_SEC >> 1)
 #define LFSCK_CHECKPOINT_INTERVAL	60
 
 enum lfsck_flags {

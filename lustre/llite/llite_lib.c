@@ -791,7 +791,7 @@ void ll_kill_super(struct super_block *sb)
 		/* wait running statahead threads to quit */
 		while (atomic_read(&sbi->ll_sa_running) > 0)
 			schedule_timeout_and_set_state(TASK_UNINTERRUPTIBLE,
-							HZ >> 3);
+				msecs_to_jiffies(MSEC_PER_SEC >> 3));
 	}
 
 	EXIT;

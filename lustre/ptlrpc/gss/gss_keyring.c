@@ -160,7 +160,8 @@ static void ctx_start_timer_kr(struct ptlrpc_cli_ctx *ctx, long timeout)
 	LASSERT(timer);
 
 	CDEBUG(D_SEC, "ctx %p: start timer %lds\n", ctx, timeout);
-	timeout = timeout * HZ + cfs_time_current();
+	timeout = msecs_to_jiffies(timeout * MSEC_PER_SEC) +
+		  cfs_time_current();
 
 	init_timer(timer);
 	timer->expires = timeout;

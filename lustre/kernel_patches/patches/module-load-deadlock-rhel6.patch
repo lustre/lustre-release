@@ -127,7 +127,7 @@ diff -rNup linux-2.6.32-431.20.3.el6.orig/kernel/module.c linux-2.6.32-431.20.3.
 +			!IS_ERR(ksym = resolve_symbol(sechdrs, versindex, name,
 +						      mod, ownername)) ||
 +			PTR_ERR(ksym) != -EBUSY,
-+					     30 * HZ) <= 0) {
++				msecs_to_jiffies(30 * MSEC_PER_SEC)) <= 0) {
 +		printk(KERN_WARNING "%s: gave up waiting for init of module %s.\n",
 +		       mod->name, ownername);
 +	}

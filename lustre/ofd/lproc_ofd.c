@@ -373,7 +373,8 @@ static int ofd_fmd_max_age_seq_show(struct seq_file *m, void *data)
 	struct obd_device *obd = m->private;
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	return seq_printf(m, "%ld\n", ofd->ofd_fmd_max_age / HZ);
+	return seq_printf(m, "%ld\n", jiffies_to_msecs(ofd->ofd_fmd_max_age) /
+				      MSEC_PER_SEC);
 }
 
 /**
@@ -407,7 +408,7 @@ ofd_fmd_max_age_seq_write(struct file *file, const char __user *buffer,
 	if (val > 65536 || val < 1)
 		return -EINVAL;
 
-	ofd->ofd_fmd_max_age = val * HZ;
+	ofd->ofd_fmd_max_age = msecs_to_jiffies(val * MSEC_PER_SEC);
 	return count;
 }
 LPROC_SEQ_FOPS(ofd_fmd_max_age);

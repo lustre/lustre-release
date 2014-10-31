@@ -1030,7 +1030,8 @@ int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 		      oti->oti_declare_ops_cred[OSD_OT_REF_DEL]);
 
 		if (last_credits != oh->ot_credits &&
-		    time_after(jiffies, last_printed + 60 * HZ)) {
+		    time_after(jiffies, last_printed +
+			       msecs_to_jiffies(60 * MSEC_PER_SEC))) {
 			libcfs_debug_dumpstack(NULL);
 			last_credits = oh->ot_credits;
 			last_printed = jiffies;
