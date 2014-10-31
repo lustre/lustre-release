@@ -531,16 +531,17 @@ int sptlrpc_enc_pool_get_pages(struct ptlrpc_bulk_desc *desc)
 	int             p_idx, g_idx;
 	int             i;
 
+	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
 	LASSERT(desc->bd_iov_count > 0);
 	LASSERT(desc->bd_iov_count <= page_pools.epp_max_pages);
 
 	/* resent bulk, enc iov might have been allocated previously */
-	if (desc->bd_enc_iov != NULL)
+	if (GET_ENC_KIOV(desc) != NULL)
 		return 0;
 
-	OBD_ALLOC(desc->bd_enc_iov,
-		  desc->bd_iov_count * sizeof(*desc->bd_enc_iov));
-	if (desc->bd_enc_iov == NULL)
+	OBD_ALLOC(GET_ENC_KIOV(desc),
+		  desc->bd_iov_count * sizeof(*GET_ENC_KIOV(desc)));
+	if (GET_ENC_KIOV(desc) == NULL)
 		return -ENOMEM;
 
 	spin_lock(&page_pools.epp_lock);
@@ -604,17 +605,17 @@ again:
         p_idx = page_pools.epp_free_pages / PAGES_PER_POOL;
         g_idx = page_pools.epp_free_pages % PAGES_PER_POOL;
 
-        for (i = 0; i < desc->bd_iov_count; i++) {
-                LASSERT(page_pools.epp_pools[p_idx][g_idx] != NULL);
-                desc->bd_enc_iov[i].kiov_page =
-                                        page_pools.epp_pools[p_idx][g_idx];
-                page_pools.epp_pools[p_idx][g_idx] = NULL;
+	for (i = 0; i < desc->bd_iov_count; i++) {
+		LASSERT(page_pools.epp_pools[p_idx][g_idx] != NULL);
+		BD_GET_ENC_KIOV(desc, i).kiov_page =
+		       page_pools.epp_pools[p_idx][g_idx];
+		page_pools.epp_pools[p_idx][g_idx] = NULL;
 
-                if (++g_idx == PAGES_PER_POOL) {
-                        p_idx++;
-                        g_idx = 0;
-                }
-        }
+		if (++g_idx == PAGES_PER_POOL) {
+			p_idx++;
+			g_idx = 0;
+		}
+	}
 
         if (page_pools.epp_free_pages < page_pools.epp_st_lowfree)
                 page_pools.epp_st_lowfree = page_pools.epp_free_pages;
@@ -639,46 +640,48 @@ EXPORT_SYMBOL(sptlrpc_enc_pool_get_pages);
 
 void sptlrpc_enc_pool_put_pages(struct ptlrpc_bulk_desc *desc)
 {
-        int     p_idx, g_idx;
-        int     i;
+	int     p_idx, g_idx;
+	int     i;
 
-        if (desc->bd_enc_iov == NULL)
-                return;
+	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
 
-        LASSERT(desc->bd_iov_count > 0);
+	if (GET_ENC_KIOV(desc) == NULL)
+		return;
+
+	LASSERT(desc->bd_iov_count > 0);
 
 	spin_lock(&page_pools.epp_lock);
 
-        p_idx = page_pools.epp_free_pages / PAGES_PER_POOL;
-        g_idx = page_pools.epp_free_pages % PAGES_PER_POOL;
+	p_idx = page_pools.epp_free_pages / PAGES_PER_POOL;
+	g_idx = page_pools.epp_free_pages % PAGES_PER_POOL;
 
-        LASSERT(page_pools.epp_free_pages + desc->bd_iov_count <=
-                page_pools.epp_total_pages);
-        LASSERT(page_pools.epp_pools[p_idx]);
+	LASSERT(page_pools.epp_free_pages + desc->bd_iov_count <=
+		page_pools.epp_total_pages);
+	LASSERT(page_pools.epp_pools[p_idx]);
 
-        for (i = 0; i < desc->bd_iov_count; i++) {
-                LASSERT(desc->bd_enc_iov[i].kiov_page != NULL);
-                LASSERT(g_idx != 0 || page_pools.epp_pools[p_idx]);
-                LASSERT(page_pools.epp_pools[p_idx][g_idx] == NULL);
+	for (i = 0; i < desc->bd_iov_count; i++) {
+		LASSERT(BD_GET_ENC_KIOV(desc, i).kiov_page != NULL);
+		LASSERT(g_idx != 0 || page_pools.epp_pools[p_idx]);
+		LASSERT(page_pools.epp_pools[p_idx][g_idx] == NULL);
 
-                page_pools.epp_pools[p_idx][g_idx] =
-                                        desc->bd_enc_iov[i].kiov_page;
+		page_pools.epp_pools[p_idx][g_idx] =
+			BD_GET_ENC_KIOV(desc, i).kiov_page;
 
-                if (++g_idx == PAGES_PER_POOL) {
-                        p_idx++;
-                        g_idx = 0;
-                }
-        }
+		if (++g_idx == PAGES_PER_POOL) {
+			p_idx++;
+			g_idx = 0;
+		}
+	}
 
-        page_pools.epp_free_pages += desc->bd_iov_count;
+	page_pools.epp_free_pages += desc->bd_iov_count;
 
-        enc_pools_wakeup();
+	enc_pools_wakeup();
 
 	spin_unlock(&page_pools.epp_lock);
 
-	OBD_FREE(desc->bd_enc_iov,
-		 desc->bd_iov_count * sizeof(*desc->bd_enc_iov));
-	desc->bd_enc_iov = NULL;
+	OBD_FREE(GET_ENC_KIOV(desc),
+		 desc->bd_iov_count * sizeof(*GET_ENC_KIOV(desc)));
+	GET_ENC_KIOV(desc) = NULL;
 }
 
 /*
@@ -885,6 +888,7 @@ int sptlrpc_get_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u8 alg,
 	unsigned int			bufsize;
 	int				i, err;
 
+	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
 	LASSERT(alg > BULK_HASH_ALG_NULL && alg < BULK_HASH_ALG_MAX);
 	LASSERT(buflen >= 4);
 
@@ -898,9 +902,11 @@ int sptlrpc_get_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u8 alg,
 	hashsize = cfs_crypto_hash_digestsize(cfs_hash_alg_id[alg]);
 
 	for (i = 0; i < desc->bd_iov_count; i++) {
-		cfs_crypto_hash_update_page(hdesc, desc->bd_iov[i].kiov_page,
-				  desc->bd_iov[i].kiov_offset & ~PAGE_MASK,
-				  desc->bd_iov[i].kiov_len);
+		cfs_crypto_hash_update_page(hdesc,
+				  BD_GET_KIOV(desc, i).kiov_page,
+				  BD_GET_KIOV(desc, i).kiov_offset &
+					      ~PAGE_MASK,
+				  BD_GET_KIOV(desc, i).kiov_len);
 	}
 
 	if (hashsize > buflen) {

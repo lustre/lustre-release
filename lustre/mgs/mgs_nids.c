@@ -658,18 +658,22 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
 	page_count = (bytes + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
 	LASSERT(page_count <= nrpages);
 	desc = ptlrpc_prep_bulk_exp(req, page_count, 1,
-				    BULK_PUT_SOURCE, MGS_BULK_PORTAL);
+				    PTLRPC_BULK_PUT_SOURCE |
+					PTLRPC_BULK_BUF_KIOV,
+				    MGS_BULK_PORTAL,
+				    &ptlrpc_bulk_kiov_pin_ops);
 	if (desc == NULL)
 		GOTO(out, rc = -ENOMEM);
 
 	for (i = 0; i < page_count && bytes > 0; i++) {
-		ptlrpc_prep_bulk_page_pin(desc, pages[i], 0,
-					  min_t(int, bytes, PAGE_CACHE_SIZE));
+		desc->bd_frag_ops->add_kiov_frag(desc, pages[i], 0,
+						 min_t(int, bytes,
+						      PAGE_CACHE_SIZE));
 		bytes -= PAGE_CACHE_SIZE;
         }
 
         rc = target_bulk_io(req->rq_export, desc, &lwi);
-	ptlrpc_free_bulk_pin(desc);
+	ptlrpc_free_bulk(desc);
 
 out:
 	for (i = 0; i < nrpages; i++) {

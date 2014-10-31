@@ -63,104 +63,106 @@ int gss_cli_ctx_wrap_bulk(struct ptlrpc_cli_ctx *ctx,
                           struct ptlrpc_request *req,
                           struct ptlrpc_bulk_desc *desc)
 {
-        struct gss_cli_ctx              *gctx;
-        struct lustre_msg               *msg;
-        struct ptlrpc_bulk_sec_desc     *bsd;
-        rawobj_t                         token;
-        __u32                            maj;
-        int                              offset;
-        int                              rc;
-        ENTRY;
+	struct gss_cli_ctx              *gctx;
+	struct lustre_msg               *msg;
+	struct ptlrpc_bulk_sec_desc     *bsd;
+	rawobj_t                         token;
+	__u32                            maj;
+	int                              offset;
+	int                              rc;
+	ENTRY;
 
-        LASSERT(req->rq_pack_bulk);
-        LASSERT(req->rq_bulk_read || req->rq_bulk_write);
+	LASSERT(req->rq_pack_bulk);
+	LASSERT(req->rq_bulk_read || req->rq_bulk_write);
+	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
 
-        gctx = container_of(ctx, struct gss_cli_ctx, gc_base);
-        LASSERT(gctx->gc_mechctx);
+	gctx = container_of(ctx, struct gss_cli_ctx, gc_base);
+	LASSERT(gctx->gc_mechctx);
 
-        switch (SPTLRPC_FLVR_SVC(req->rq_flvr.sf_rpc)) {
-        case SPTLRPC_SVC_NULL:
-                LASSERT(req->rq_reqbuf->lm_bufcount >= 3);
-                msg = req->rq_reqbuf;
-                offset = msg->lm_bufcount - 1;
-                break;
-        case SPTLRPC_SVC_AUTH:
-        case SPTLRPC_SVC_INTG:
-                LASSERT(req->rq_reqbuf->lm_bufcount >= 4);
-                msg = req->rq_reqbuf;
-                offset = msg->lm_bufcount - 2;
-                break;
-        case SPTLRPC_SVC_PRIV:
-                LASSERT(req->rq_clrbuf->lm_bufcount >= 2);
-                msg = req->rq_clrbuf;
-                offset = msg->lm_bufcount - 1;
-                break;
-        default:
-                LBUG();
-        }
+	switch (SPTLRPC_FLVR_SVC(req->rq_flvr.sf_rpc)) {
+	case SPTLRPC_SVC_NULL:
+		LASSERT(req->rq_reqbuf->lm_bufcount >= 3);
+		msg = req->rq_reqbuf;
+		offset = msg->lm_bufcount - 1;
+		break;
+	case SPTLRPC_SVC_AUTH:
+	case SPTLRPC_SVC_INTG:
+		LASSERT(req->rq_reqbuf->lm_bufcount >= 4);
+		msg = req->rq_reqbuf;
+		offset = msg->lm_bufcount - 2;
+		break;
+	case SPTLRPC_SVC_PRIV:
+		LASSERT(req->rq_clrbuf->lm_bufcount >= 2);
+		msg = req->rq_clrbuf;
+		offset = msg->lm_bufcount - 1;
+		break;
+	default:
+		LBUG();
+	}
 
-        bsd = lustre_msg_buf(msg, offset, sizeof(*bsd));
-        bsd->bsd_version = 0;
-        bsd->bsd_flags = 0;
-        bsd->bsd_type = SPTLRPC_BULK_DEFAULT;
-        bsd->bsd_svc = SPTLRPC_FLVR_BULK_SVC(req->rq_flvr.sf_rpc);
+	bsd = lustre_msg_buf(msg, offset, sizeof(*bsd));
+	bsd->bsd_version = 0;
+	bsd->bsd_flags = 0;
+	bsd->bsd_type = SPTLRPC_BULK_DEFAULT;
+	bsd->bsd_svc = SPTLRPC_FLVR_BULK_SVC(req->rq_flvr.sf_rpc);
 
-        if (bsd->bsd_svc == SPTLRPC_BULK_SVC_NULL)
-                RETURN(0);
+	if (bsd->bsd_svc == SPTLRPC_BULK_SVC_NULL)
+		RETURN(0);
 
-        LASSERT(bsd->bsd_svc == SPTLRPC_BULK_SVC_INTG ||
-                bsd->bsd_svc == SPTLRPC_BULK_SVC_PRIV);
+	LASSERT(bsd->bsd_svc == SPTLRPC_BULK_SVC_INTG ||
+		bsd->bsd_svc == SPTLRPC_BULK_SVC_PRIV);
 
-        if (req->rq_bulk_read) {
-                /*
-                 * bulk read: prepare receiving pages only for privacy mode.
-                 */
-                if (bsd->bsd_svc == SPTLRPC_BULK_SVC_PRIV)
-                        return gss_cli_prep_bulk(req, desc);
-        } else {
-                /*
-                 * bulk write: sign or encrypt bulk pages.
-                 */
-                bsd->bsd_nob = desc->bd_nob;
+	if (req->rq_bulk_read) {
+		/*
+		 * bulk read: prepare receiving pages only for privacy mode.
+		 */
+		if (bsd->bsd_svc == SPTLRPC_BULK_SVC_PRIV)
+			return gss_cli_prep_bulk(req, desc);
+	} else {
+		/*
+		 * bulk write: sign or encrypt bulk pages.
+		 */
+		bsd->bsd_nob = desc->bd_nob;
 
-                if (bsd->bsd_svc == SPTLRPC_BULK_SVC_INTG) {
-                        /* integrity mode */
-                        token.data = bsd->bsd_data;
-                        token.len = lustre_msg_buflen(msg, offset) -
-                                    sizeof(*bsd);
+		if (bsd->bsd_svc == SPTLRPC_BULK_SVC_INTG) {
+			/* integrity mode */
+			token.data = bsd->bsd_data;
+			token.len = lustre_msg_buflen(msg, offset) -
+				    sizeof(*bsd);
 
-                        maj = lgss_get_mic(gctx->gc_mechctx, 0, NULL,
-                                           desc->bd_iov_count, desc->bd_iov,
-                                           &token);
-                        if (maj != GSS_S_COMPLETE) {
-                                CWARN("failed to sign bulk data: %x\n", maj);
-                                RETURN(-EACCES);
-                        }
-                } else {
-                        /* privacy mode */
-                        if (desc->bd_iov_count == 0)
-                                RETURN(0);
+			maj = lgss_get_mic(gctx->gc_mechctx, 0, NULL,
+					   desc->bd_iov_count,
+					   GET_KIOV(desc),
+					   &token);
+			if (maj != GSS_S_COMPLETE) {
+				CWARN("failed to sign bulk data: %x\n", maj);
+				RETURN(-EACCES);
+			}
+		} else {
+			/* privacy mode */
+			if (desc->bd_iov_count == 0)
+				RETURN(0);
 
-                        rc = sptlrpc_enc_pool_get_pages(desc);
-                        if (rc) {
-                                CERROR("bulk write: failed to allocate "
-                                       "encryption pages: %d\n", rc);
-                                RETURN(rc);
-                        }
+			rc = sptlrpc_enc_pool_get_pages(desc);
+			if (rc) {
+				CERROR("bulk write: failed to allocate "
+				       "encryption pages: %d\n", rc);
+				RETURN(rc);
+			}
 
-                        token.data = bsd->bsd_data;
-                        token.len = lustre_msg_buflen(msg, offset) -
-                                    sizeof(*bsd);
+			token.data = bsd->bsd_data;
+			token.len = lustre_msg_buflen(msg, offset) -
+				    sizeof(*bsd);
 
-                        maj = lgss_wrap_bulk(gctx->gc_mechctx, desc, &token, 0);
-                        if (maj != GSS_S_COMPLETE) {
-                                CWARN("fail to encrypt bulk data: %x\n", maj);
-                                RETURN(-EACCES);
-                        }
-                }
-        }
+			maj = lgss_wrap_bulk(gctx->gc_mechctx, desc, &token, 0);
+			if (maj != GSS_S_COMPLETE) {
+				CWARN("fail to encrypt bulk data: %x\n", maj);
+				RETURN(-EACCES);
+			}
+		}
+	}
 
-        RETURN(0);
+	RETURN(0);
 }
 
 int gss_cli_ctx_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
@@ -177,6 +179,7 @@ int gss_cli_ctx_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
 
         LASSERT(req->rq_pack_bulk);
         LASSERT(req->rq_bulk_read || req->rq_bulk_write);
+	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
 
         switch (SPTLRPC_FLVR_SVC(req->rq_flvr.sf_rpc)) {
         case SPTLRPC_SVC_NULL:
@@ -250,26 +253,27 @@ int gss_cli_ctx_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
                 gctx = container_of(ctx, struct gss_cli_ctx, gc_base);
                 LASSERT(gctx->gc_mechctx);
 
-                if (bsdv->bsd_svc == SPTLRPC_BULK_SVC_INTG) {
-                        int i, nob;
+		if (bsdv->bsd_svc == SPTLRPC_BULK_SVC_INTG) {
+			int i, nob;
 
-                        /* fix the actual data size */
-                        for (i = 0, nob = 0; i < desc->bd_iov_count; i++) {
-                                if (desc->bd_iov[i].kiov_len + nob >
-                                    desc->bd_nob_transferred) {
-                                        desc->bd_iov[i].kiov_len =
-                                                desc->bd_nob_transferred - nob;
-                                }
-                                nob += desc->bd_iov[i].kiov_len;
-                        }
+			/* fix the actual data size */
+			for (i = 0, nob = 0; i < desc->bd_iov_count; i++) {
+				if (BD_GET_KIOV(desc, i).kiov_len + nob >
+				    desc->bd_nob_transferred) {
+					BD_GET_KIOV(desc, i).kiov_len =
+						desc->bd_nob_transferred - nob;
+				}
+				nob += BD_GET_KIOV(desc, i).kiov_len;
+			}
 
-                        token.data = bsdv->bsd_data;
-                        token.len = lustre_msg_buflen(vmsg, voff) -
-                                    sizeof(*bsdv);
+			token.data = bsdv->bsd_data;
+			token.len = lustre_msg_buflen(vmsg, voff) -
+				    sizeof(*bsdv);
 
-                        maj = lgss_verify_mic(gctx->gc_mechctx, 0, NULL,
-                                              desc->bd_iov_count, desc->bd_iov,
-                                              &token);
+			maj = lgss_verify_mic(gctx->gc_mechctx, 0, NULL,
+					      desc->bd_iov_count,
+					      GET_KIOV(desc),
+					      &token);
                         if (maj != GSS_S_COMPLETE) {
                                 CERROR("failed to verify bulk read: %x\n", maj);
                                 RETURN(-EACCES);
@@ -379,6 +383,7 @@ int gss_svc_unwrap_bulk(struct ptlrpc_request *req,
         LASSERT(req->rq_svc_ctx);
         LASSERT(req->rq_pack_bulk);
         LASSERT(req->rq_bulk_write);
+	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
 
         grctx = gss_svc_ctx2reqctx(req->rq_svc_ctx);
 
@@ -401,8 +406,9 @@ int gss_svc_unwrap_bulk(struct ptlrpc_request *req,
                 token.data = bsdr->bsd_data;
                 token.len = grctx->src_reqbsd_size - sizeof(*bsdr);
 
-                maj = lgss_verify_mic(grctx->src_ctx->gsc_mechctx, 0, NULL,
-                                      desc->bd_iov_count, desc->bd_iov, &token);
+		maj = lgss_verify_mic(grctx->src_ctx->gsc_mechctx, 0, NULL,
+				      desc->bd_iov_count,
+				      GET_KIOV(desc), &token);
                 if (maj != GSS_S_COMPLETE) {
                         bsdv->bsd_flags |= BSD_FL_ERR;
                         CERROR("failed to verify bulk signature: %x\n", maj);
@@ -455,6 +461,7 @@ int gss_svc_wrap_bulk(struct ptlrpc_request *req,
         LASSERT(req->rq_svc_ctx);
         LASSERT(req->rq_pack_bulk);
         LASSERT(req->rq_bulk_read);
+	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
 
         grctx = gss_svc_ctx2reqctx(req->rq_svc_ctx);
 
@@ -477,9 +484,10 @@ int gss_svc_wrap_bulk(struct ptlrpc_request *req,
                 token.data = bsdv->bsd_data;
                 token.len = grctx->src_repbsd_size - sizeof(*bsdv);
 
-                maj = lgss_get_mic(grctx->src_ctx->gsc_mechctx, 0, NULL,
-                                   desc->bd_iov_count, desc->bd_iov, &token);
-                if (maj != GSS_S_COMPLETE) {
+		maj = lgss_get_mic(grctx->src_ctx->gsc_mechctx, 0, NULL,
+				   desc->bd_iov_count,
+				   GET_KIOV(desc), &token);
+		if (maj != GSS_S_COMPLETE) {
                         bsdv->bsd_flags |= BSD_FL_ERR;
                         CERROR("failed to sign bulk data: %x\n", maj);
                         RETURN(-EACCES);

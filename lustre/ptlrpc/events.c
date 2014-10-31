@@ -183,12 +183,12 @@ void client_bulk_callback (lnet_event_t *ev)
         struct ptlrpc_request   *req;
         ENTRY;
 
-        LASSERT ((desc->bd_type == BULK_PUT_SINK &&
-                  ev->type == LNET_EVENT_PUT) ||
-                 (desc->bd_type == BULK_GET_SOURCE &&
-                  ev->type == LNET_EVENT_GET) ||
-                 ev->type == LNET_EVENT_UNLINK);
-        LASSERT (ev->unlinked);
+	LASSERT((ptlrpc_is_bulk_put_sink(desc->bd_type) &&
+		 ev->type == LNET_EVENT_PUT) ||
+		(ptlrpc_is_bulk_get_source(desc->bd_type) &&
+		 ev->type == LNET_EVENT_GET) ||
+		ev->type == LNET_EVENT_UNLINK);
+	LASSERT(ev->unlinked);
 
         if (CFS_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_CLIENT_BULK_CB, CFS_FAIL_ONCE))
                 ev->status = -EIO;
@@ -437,9 +437,9 @@ void server_bulk_callback (lnet_event_t *ev)
 
 	LASSERT(ev->type == LNET_EVENT_SEND ||
 		ev->type == LNET_EVENT_UNLINK ||
-		(desc->bd_type == BULK_PUT_SOURCE &&
+		(ptlrpc_is_bulk_put_source(desc->bd_type) &&
 		 ev->type == LNET_EVENT_ACK) ||
-		(desc->bd_type == BULK_GET_SINK &&
+		(ptlrpc_is_bulk_get_sink(desc->bd_type) &&
 		 ev->type == LNET_EVENT_REPLY));
 
         CDEBUG((ev->status == 0) ? D_NET : D_ERROR,
