@@ -21,6 +21,7 @@ static int hf_lustre_ldlm_fl_no_timeout          = -1;
 static int hf_lustre_ldlm_fl_block_nowait        = -1;
 static int hf_lustre_ldlm_fl_test_lock           = -1;
 static int hf_lustre_ldlm_fl_cancel_on_block     = -1;
+static int hf_lustre_ldlm_fl_cos_incompat        = -1;
 static int hf_lustre_ldlm_fl_deny_on_contention  = -1;
 static int hf_lustre_ldlm_fl_ast_discard_data    = -1;
 
@@ -39,6 +40,7 @@ const value_string lustre_ldlm_flags_vals[] = {
   {LDLM_FL_BLOCK_NOWAIT,        "LDLM_FL_BLOCK_NOWAIT"},
   {LDLM_FL_TEST_LOCK,           "LDLM_FL_TEST_LOCK"},
   {LDLM_FL_CANCEL_ON_BLOCK,     "LDLM_FL_CANCEL_ON_BLOCK"},
+  {LDLM_FL_COS_INCOMPAT,        "LDLM_FL_COS_INCOMPAT"},
   {LDLM_FL_DENY_ON_CONTENTION,  "LDLM_FL_DENY_ON_CONTENTION"},
   {LDLM_FL_AST_DISCARD_DATA,    "LDLM_FL_AST_DISCARD_DATA"},
   { 0, NULL }
@@ -81,6 +83,7 @@ lustre_dissect_element_ldlm_lock_flags(
   dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_block_nowait);
   dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_test_lock);
   dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_cancel_on_block);
+  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_cos_incompat);
   dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_deny_on_contention);
   return
     dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_ast_discard_data);
@@ -275,6 +278,22 @@ lustre_dissect_element_ldlm_lock_flags(
        "cancel notification to original lock holder, but expect no reply. This is\n"
        "for clients (like liblustre) that cannot be expected to reliably response\n"
        "to blocking AST.",
+      /* id      */ HFILL
+    }
+  },
+  {
+    /* p_id    */ &hf_lustre_ldlm_fl_cos_incompat,
+    /* hfinfo  */ {
+      /* name    */ "LDLM_FL_COS_INCOMPAT",
+      /* abbrev  */ "lustre.ldlm_fl_cos_incompat",
+      /* type    */ FT_BOOLEAN,
+      /* display */ 32,
+      /* strings */ TFS(&lnet_flags_set_truth),
+      /* bitmask */ LDLM_FL_COS_INCOMPAT,
+      /* blurb   */ "Flag whether a lock is enqueued from a distributed transaction, and the\n"
+	"requesting lock mode is PW/EX, if so, it will check compatibility with COS\n"
+	"locks, and different from original COS semantic, transactions from the same\n"
+	"client is also treated as lock conflict.",
       /* id      */ HFILL
     }
   },

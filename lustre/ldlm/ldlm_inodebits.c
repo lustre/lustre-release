@@ -56,6 +56,7 @@
 #include <lustre_dlm.h>
 #include <obd_support.h>
 #include <lustre_lib.h>
+#include <obd_class.h>
 
 #include "ldlm_internal.h"
 
@@ -81,7 +82,6 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 {
 	struct list_head *tmp;
 	struct ldlm_lock *lock;
-	enum ldlm_mode req_mode = req->l_req_mode;
 	__u64 req_bits = req->l_policy_data.l_inodebits.bits;
 	int compat = 1;
 	ENTRY;
@@ -98,23 +98,33 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 		/* We stop walking the queue if we hit ourselves so we don't
 		 * take conflicting locks enqueued after us into account,
 		 * or we'd wait forever. */
-                if (req == lock)
-                        RETURN(compat);
+		if (req == lock)
+			RETURN(compat);
 
-                /* last lock in mode group */
-                LASSERT(lock->l_sl_mode.prev != NULL);
+		/* last lock in mode group */
+		LASSERT(lock->l_sl_mode.prev != NULL);
 		mode_tail = &list_entry(lock->l_sl_mode.prev,
-                                            struct ldlm_lock,
-                                            l_sl_mode)->l_res_link;
+					struct ldlm_lock,
+					l_sl_mode)->l_res_link;
 
-                /* locks are compatible, bits don't matter */
-                if (lockmode_compat(lock->l_req_mode, req_mode)) {
-                        /* jump to last lock in mode group */
-                        tmp = mode_tail;
-                        continue;
-                }
+		/* if reqest lock is not COS_INCOMPAT and COS is disabled,
+		 * they are compatible, IOW this request is from a local
+		 * transaction on a DNE system. */
+		if (lock->l_req_mode == LCK_COS && !ldlm_is_cos_incompat(req) &&
+		    !ldlm_is_cos_enabled(req)) {
+			/* jump to last lock in mode group */
+			tmp = mode_tail;
+			continue;
+		}
 
-                for (;;) {
+		/* locks' mode are compatible, bits don't matter */
+		if (lockmode_compat(lock->l_req_mode, req->l_req_mode)) {
+			/* jump to last lock in mode group */
+			tmp = mode_tail;
+			continue;
+		}
+
+		for (;;) {
 			struct list_head *head;
 
 			/* Advance loop cursor to last lock in policy group. */
@@ -128,6 +138,8 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 				 * requirement: it is only compatible with
 				 * locks from the same client. */
 				if (lock->l_req_mode == LCK_COS &&
+				    !ldlm_is_cos_incompat(req) &&
+				    ldlm_is_cos_enabled(req) &&
 				    lock->l_client_cookie == req->l_client_cookie)
 					goto not_conflicting;
 				/* Found a conflicting policy group. */
@@ -206,8 +218,8 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
                 ldlm_grant_lock(lock, work_list);
 
 		*err = ELDLM_OK;
-                RETURN(LDLM_ITER_CONTINUE);
-        }
+		RETURN(LDLM_ITER_CONTINUE);
+	}
 
  restart:
         rc = ldlm_inodebits_compat_queue(&res->lr_granted, lock, &rpc_list);

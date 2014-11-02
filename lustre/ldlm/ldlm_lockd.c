@@ -903,6 +903,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         LDLM_DEBUG(lock, "server preparing blocking AST");
 
         ptlrpc_request_set_replen(req);
+	ldlm_set_cbpending(lock);
 	if (instant_cancel) {
 		unlock_res_and_lock(lock);
 		ldlm_lock_cancel(lock);

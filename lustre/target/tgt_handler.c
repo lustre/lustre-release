@@ -1284,6 +1284,7 @@ int tgt_sync(const struct lu_env *env, struct lu_target *tgt,
 		   tgt->lut_obd->obd_last_committed) {
 		rc = dt_object_sync(env, obj, start, end);
 	}
+	atomic_inc(&tgt->lut_sync_count);
 
 	RETURN(rc);
 }
@@ -1292,14 +1293,27 @@ EXPORT_SYMBOL(tgt_sync);
  * Unified target DLM handlers.
  */
 
-/* Ensure that data and metadata are synced to the disk when lock is cancelled
- * (if requested) */
+/**
+ * Unified target BAST
+ *
+ * Ensure data and metadata are synced to disk when lock is canceled if Sync on
+ * Cancel (SOC) is enabled. If it's extent lock, normally sync obj is enough,
+ * but if it's cross-MDT lock, because remote object version is not set, a
+ * filesystem sync is needed.
+ *
+ * \param lock server side lock
+ * \param desc lock desc
+ * \param data ldlm_cb_set_arg
+ * \param flag	indicates whether this cancelling or blocking callback
+ * \retval	0 on success
+ * \retval	negative number on error
+ */
 static int tgt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 			    void *data, int flag)
 {
 	struct lu_env		 env;
 	struct lu_target	*tgt;
-	struct dt_object	*obj;
+	struct dt_object	*obj = NULL;
 	struct lu_fid		 fid;
 	int			 rc = 0;
 
@@ -1314,10 +1328,12 @@ static int tgt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 	}
 
 	if (flag == LDLM_CB_CANCELING &&
-	    (lock->l_granted_mode & (LCK_PW | LCK_GROUP)) &&
+	    (lock->l_granted_mode & (LCK_EX | LCK_PW | LCK_GROUP)) &&
 	    (tgt->lut_sync_lock_cancel == ALWAYS_SYNC_ON_CANCEL ||
 	     (tgt->lut_sync_lock_cancel == BLOCKING_SYNC_ON_CANCEL &&
-	      lock->l_flags & LDLM_FL_CBPENDING))) {
+	      ldlm_is_cbpending(lock))) &&
+	    ((exp_connect_flags(lock->l_export) & OBD_CONNECT_MDS_MDS) ||
+	     lock->l_resource->lr_type == LDLM_EXTENT)) {
 		__u64 start = 0;
 		__u64 end = OBD_OBJECT_EOF;
 
@@ -1327,14 +1343,15 @@ static int tgt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
 		ost_fid_from_resid(&fid, &lock->l_resource->lr_name,
 				   tgt->lut_lsd.lsd_osd_index);
-		obj = dt_locate(&env, tgt->lut_bottom, &fid);
-		if (IS_ERR(obj))
-			GOTO(err_env, rc = PTR_ERR(obj));
-
-		if (!dt_object_exists(obj))
-			GOTO(err_put, rc = -ENOENT);
 
 		if (lock->l_resource->lr_type == LDLM_EXTENT) {
+			obj = dt_locate(&env, tgt->lut_bottom, &fid);
+			if (IS_ERR(obj))
+				GOTO(err_env, rc = PTR_ERR(obj));
+
+			if (!dt_object_exists(obj))
+				GOTO(err_put, rc = -ENOENT);
+
 			start = lock->l_policy_data.l_extent.start;
 			end = lock->l_policy_data.l_extent.end;
 		}
@@ -1348,7 +1365,8 @@ static int tgt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 			       lock->l_policy_data.l_extent.end, rc);
 		}
 err_put:
-		lu_object_put(&env, &obj->do_lu);
+		if (obj != NULL)
+			lu_object_put(&env, &obj->do_lu);
 err_env:
 		lu_env_fini(&env);
 	}

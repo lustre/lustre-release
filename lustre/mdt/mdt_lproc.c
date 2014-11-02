@@ -677,6 +677,100 @@ mdt_enable_remote_dir_gid_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(mdt_enable_remote_dir_gid);
 
+/**
+ * Show MDT policy for handling dirty metadata under a lock being cancelled.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
+static int mdt_slc_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct lu_target *tgt = obd->u.obt.obt_lut;
+	char *slc_states[] = {"never", "blocking", "always" };
+
+	return seq_printf(m, "%s\n", slc_states[tgt->lut_sync_lock_cancel]);
+}
+LPROC_SEQ_FOPS_RO(mdt_slc);
+
+/**
+ * Show MDT async commit count.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
+static int mdt_async_commit_count_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return seq_printf(m, "%d\n", atomic_read(&mdt->mdt_async_commit_count));
+}
+
+static ssize_t
+mdt_async_commit_count_seq_write(struct file *file, const char __user *buffer,
+				 size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct obd_device *obd = m->private;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	int val;
+	int rc;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	atomic_set(&mdt->mdt_async_commit_count, val);
+
+	return count;
+}
+LPROC_SEQ_FOPS(mdt_async_commit_count);
+
+/**
+ * Show MDT sync count.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
+static int mdt_sync_count_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct lu_target *tgt = obd->u.obt.obt_lut;
+
+	return seq_printf(m, "%d\n", atomic_read(&tgt->lut_sync_count));
+}
+
+static ssize_t
+mdt_sync_count_seq_write(struct file *file, const char __user *buffer,
+			 size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct obd_device *obd = m->private;
+	struct lu_target *tgt = obd->u.obt.obt_lut;
+	int val;
+	int rc;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	atomic_set(&tgt->lut_sync_count, val);
+
+	return count;
+}
+LPROC_SEQ_FOPS(mdt_sync_count);
+
+
 LPROC_SEQ_FOPS_RO_TYPE(mdt, uuid);
 LPROC_SEQ_FOPS_RO_TYPE(mdt, recovery_status);
 LPROC_SEQ_FOPS_RO_TYPE(mdt, num_exports);
@@ -740,6 +834,12 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 	  .fops =	&mdt_recovery_time_hard_fops	},
 	{ .name =	"recovery_time_soft",
 	  .fops =	&mdt_recovery_time_soft_fops	},
+	{ .name =	"sync_lock_cancel",
+	  .fops =	&mdt_slc_fops				},
+	{ .name =	"async_commit_count",
+	  .fops =	&mdt_async_commit_count_fops		},
+	{ .name =	"sync_count",
+	  .fops =	&mdt_sync_count_fops			},
 	{ NULL }
 };
 

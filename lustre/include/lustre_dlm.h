@@ -900,6 +900,13 @@ struct ldlm_lock {
 	struct list_head	l_exp_list;
 };
 
+/** For uncommitted cross-MDT lock, store transno this lock belongs to */
+#define l_transno l_client_cookie
+
+/** For uncommitted cross-MDT lock, which is client lock, share with l_rk_ast
+ *  which is for server. */
+#define l_slc_link l_rk_ast
+
 /**
  * LDLM resource description.
  * Basically, resource is a representation for a single object.

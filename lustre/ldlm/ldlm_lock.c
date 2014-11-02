@@ -1799,6 +1799,10 @@ enum ldlm_error ldlm_lock_enqueue(struct ldlm_namespace *ns,
 		ldlm_set_ast_discard_data(lock);
 	if (*flags & LDLM_FL_TEST_LOCK)
 		ldlm_set_test_lock(lock);
+	if (*flags & LDLM_FL_COS_INCOMPAT)
+		ldlm_set_cos_incompat(lock);
+	if (*flags & LDLM_FL_COS_ENABLED)
+		ldlm_set_cos_enabled(lock);
 
 	/* This distinction between local lock trees is very important; a client
 	 * namespace only has information about locks taken by that client, and

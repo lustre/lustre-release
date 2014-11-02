@@ -4753,6 +4753,59 @@ test_70d() {
 }
 run_test 70d "stop MDT1, mkdir succeed, create remote dir fail"
 
+test_70e() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.62) ] ||
+		{ skip "Need MDS version at least 2.7.62"; return 0; }
+
+	cleanup || error "cleanup failed with $?"
+
+	local mdsdev=$(mdsdevname 1)
+	local ostdev=$(ostdevname 1)
+	local mdsvdev=$(mdsvdevname 1)
+	local ostvdev=$(ostvdevname 1)
+	local opts_mds="$(mkfs_opts mds1 $mdsdev) --reformat $mdsdev $mdsvdev"
+	local opts_ost="$(mkfs_opts ost1 $ostdev) --reformat $ostdev $ostvdev"
+
+	add mds1 $opts_mds || error "add mds1 failed"
+	start_mdt 1 || error "start mdt1 failed"
+	add ost1 $opts_ost || error "add ost1 failed"
+	start_ost || error "start ost failed"
+	mount_client $MOUNT > /dev/null || error "mount client $MOUNT failed"
+
+	local soc=$(do_facet mds1 "$LCTL get_param -n \
+		    mdt.*MDT0000.sync_lock_cancel")
+	[ $soc == "never" ] || error "SoC enabled on single MDS"
+
+	for i in $(seq 2 $MDSCOUNT); do
+		mdsdev=$(mdsdevname $i)
+		mdsvdev=$(mdsvdevname $i)
+		opts_mds="$(mkfs_opts mds$i $mdsdev) --reformat $mdsdev \
+			  $mdsvdev"
+		add mds$i $opts_mds || error "add mds$i failed"
+		start_mdt $i || error "start mdt$i fail"
+	done
+
+	wait_dne_interconnect
+
+	for i in $(seq $MDSCOUNT); do
+		soc=$(do_facet mds$i "$LCTL get_param -n \
+			mdt.*MDT000$((i - 1)).sync_lock_cancel")
+		[ $soc == "blocking" ] || error "SoC not enabled on DNE"
+	done
+
+	for i in $(seq 2 $MDSCOUNT); do
+		stop_mdt $i || error "stop mdt$i fail"
+	done
+	soc=$(do_facet mds1 "$LCTL get_param -n \
+		mdt.*MDT0000.sync_lock_cancel")
+	[ $soc == "never" ] || error "SoC enabled on single MDS"
+
+	cleanup || error "cleanup failed with $?"
+}
+run_test 70e "Sync-on-Cancel will be enabled by default on DNE"
+
 test_71a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	if combined_mgs_mds; then

@@ -1032,6 +1032,11 @@ static inline void lustre_handle_copy(struct lustre_handle *tgt,
 	tgt->cookie = src->cookie;
 }
 
+struct lustre_handle_array {
+	unsigned int		count;
+	struct lustre_handle	handles[0];
+};
+
 /* flags for lm_flags */
 #define MSGHDR_AT_SUPPORT               0x1
 #define MSGHDR_CKSUM_INCOMPAT18         0x2

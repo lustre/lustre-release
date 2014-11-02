@@ -925,7 +925,7 @@ test_33b() {
 		avgjbd=0
 		avgtime=0
 		for i in 1 2 3; do
-			do_node $CLIENT1 "$LFS mkdir -i $MDTIDX -p \
+			do_node $CLIENT1 "$LFS mkdir -i $MDTIDX \
 					  $DIR1/$tdir-\\\$(hostname)-$i"
 
 			jbdold=$(print_jbd_stat)
@@ -957,6 +957,118 @@ test_33b() {
 	return 0
 }
 run_test 33b "COS: cross create/delete, 2 clients, benchmark under remote dir"
+
+test_33c() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.63) ] &&
+		skip "DNE CoS not supported" && return
+
+	sync
+
+	mkdir $DIR/$tdir
+	# remote mkdir is done on MDT2, which enqueued lock of $tdir on MDT1
+	$LFS mkdir -i 1 $DIR/$tdir/d1
+	do_facet mds1 "lctl set_param -n mdt.*.sync_count=0"
+	mkdir $DIR/$tdir/d2
+	local sync_count=$(do_facet mds1 \
+		"lctl get_param -n mdt.*MDT0000.sync_count")
+	[ $sync_count -eq 1 ] || error "Sync-Lock-Cancel not triggered"
+
+	$LFS mkdir -i 1 $DIR/$tdir/d3
+	do_facet mds1 "lctl set_param -n mdt.*.sync_count=0"
+	# during sleep remote mkdir should have been committed and canceled
+	# remote lock spontaneously, which shouldn't trigger sync
+	sleep 6
+	mkdir $DIR/$tdir/d4
+	local sync_count=$(do_facet mds1 \
+		"lctl get_param -n mdt.*MDT0000.sync_count")
+	[ $sync_count -eq 0 ] || error "Sync-Lock-Cancel triggered"
+}
+run_test 33c "Cancel cross-MDT lock should trigger Sync-Lock-Cancel"
+
+ops_do_cos() {
+	local nodes=$(comma_list $(mdts_nodes))
+	do_nodes $nodes "lctl set_param -n mdt.*.async_commit_count=0"
+	sh -c "$@"
+	local async_commit_count=$(do_nodes $nodes \
+		"lctl get_param -n mdt.*.async_commit_count" | calc_sum)
+	[ $async_commit_count -gt 0 ] || error "CoS not triggerred"
+
+	rm -rf $DIR/$tdir
+	sync
+}
+
+test_33d() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.63) ] &&
+		skip "DNE CoS not supported" && return
+
+	sync
+	# remote directory create
+	mkdir $DIR/$tdir
+	ops_do_cos "$LFS mkdir -i 1 $DIR/$tdir/subdir"
+	# remote directory unlink
+	$LFS mkdir -i 1 $DIR/$tdir
+	ops_do_cos "rmdir $DIR/$tdir"
+	# striped directory create
+	mkdir $DIR/$tdir
+	ops_do_cos "$LFS mkdir -c 2 $DIR/$tdir/subdir"
+	# striped directory setattr
+	$LFS mkdir -c 2 $DIR/$tdir
+	touch $DIR/$tdir
+	ops_do_cos "chmod 713 $DIR/$tdir"
+	# striped directory unlink
+	$LFS mkdir -c 2 $DIR/$tdir
+	touch $DIR/$tdir
+	ops_do_cos "rmdir $DIR/$tdir"
+	# cross-MDT link
+	$LFS mkdir -c 2 $DIR/$tdir
+	$LFS mkdir -i 0 $DIR/$tdir/d1
+	$LFS mkdir -i 1 $DIR/$tdir/d2
+	touch $DIR/$tdir/d1/tgt
+	ops_do_cos "ln $DIR/$tdir/d1/tgt $DIR/$tdir/d2/src"
+	# cross-MDT rename
+	$LFS mkdir -c 2 $DIR/$tdir
+	$LFS mkdir -i 0 $DIR/$tdir/d1
+	$LFS mkdir -i 1 $DIR/$tdir/d2
+	touch $DIR/$tdir/d1/src
+	ops_do_cos "mv $DIR/$tdir/d1/src $DIR/$tdir/d2/tgt"
+	# migrate
+	$LFS mkdir -i 0 $DIR/$tdir
+	ops_do_cos "$LFS migrate -m 1 $DIR/$tdir"
+	return 0
+}
+run_test 33d "DNE distributed operation should trigger COS"
+
+test_33e() {
+	[ -n "$CLIENTS" ] || { skip "Need two or more clients" && return 0; }
+	[ $CLIENTCOUNT -ge 2 ] ||
+		{ skip "Need two or more clients, have $CLIENTCOUNT" &&
+								return 0; }
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.63) ] &&
+		skip "DNE CoS not supported" && return
+
+	local client2=${CLIENT2:-$(hostname)}
+
+	sync
+
+	local nodes=$(comma_list $(mdts_nodes))
+	do_nodes $nodes "lctl set_param -n mdt.*.async_commit_count=0"
+
+	$LFS mkdir -c 2 $DIR/$tdir
+	mkdir $DIR/$tdir/subdir
+	echo abc > $DIR/$tdir/$tfile
+	do_node $client2 echo dfg >> $DIR/$tdir/$tfile
+	do_node $client2 touch $DIR/$tdir/subdir
+
+	local async_commit_count=$(do_nodes $nodes \
+		"lctl get_param -n mdt.*.async_commit_count" | calc_sum)
+	[ $async_commit_count -gt 0 ] && error "CoS triggerred"
+
+	return 0
+}
+run_test 33e "DNE local operation shouldn't trigger COS"
 
 # End commit on sharing tests
 
@@ -3433,6 +3545,11 @@ test_91() {
 run_test 91 "chmod and unlink striped directory"
 
 log "cleanup: ======================================================"
+
+# kill and wait in each test only guarentee script finish, but command in script
+# like 'rm' 'chmod' may still be running, wait for all commands to finish
+# otherwise umount below will fail
+wait_update $HOSTNAME "fuser -m $MOUNT2" "" || true
 
 [ "$(mount | grep $MOUNT2)" ] && umount $MOUNT2
 

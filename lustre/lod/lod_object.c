@@ -3890,11 +3890,6 @@ static int lod_object_sync(const struct lu_env *env, struct dt_object *dt,
 	return dt_object_sync(env, dt_object_child(dt), start, end);
 }
 
-struct lod_slave_locks	{
-	int			lsl_lock_count;
-	struct lustre_handle	lsl_handle[0];
-};
-
 /**
  * Release LDLM locks on the stripes of a striped directory.
  *
@@ -3914,7 +3909,7 @@ static int lod_object_unlock_internal(const struct lu_env *env,
 				      struct ldlm_enqueue_info *einfo,
 				      union ldlm_policy_data *policy)
 {
-	struct lod_slave_locks  *slave_locks = einfo->ei_cbdata;
+	struct lustre_handle_array *slave_locks = einfo->ei_cbdata;
 	int			rc = 0;
 	int			i;
 	ENTRY;
@@ -3922,9 +3917,9 @@ static int lod_object_unlock_internal(const struct lu_env *env,
 	if (slave_locks == NULL)
 		RETURN(0);
 
-	for (i = 1; i < slave_locks->lsl_lock_count; i++) {
-		if (lustre_handle_is_used(&slave_locks->lsl_handle[i]))
-			ldlm_lock_decref(&slave_locks->lsl_handle[i],
+	for (i = 1; i < slave_locks->count; i++) {
+		if (lustre_handle_is_used(&slave_locks->handles[i]))
+			ldlm_lock_decref(&slave_locks->handles[i],
 					 einfo->ei_mode);
 	}
 
@@ -3943,32 +3938,31 @@ static int lod_object_unlock(const struct lu_env *env, struct dt_object *dt,
 			     struct ldlm_enqueue_info *einfo,
 			     union ldlm_policy_data *policy)
 {
-	struct lod_object	*lo = lod_dt_obj(dt);
-	struct lod_slave_locks  *slave_locks = einfo->ei_cbdata;
-	int			slave_locks_size;
-	int			rc;
+	struct lod_object *lo = lod_dt_obj(dt);
+	struct lustre_handle_array *slave_locks = einfo->ei_cbdata;
+	int slave_locks_size;
+	int i;
 	ENTRY;
 
 	if (slave_locks == NULL)
 		RETURN(0);
 
-	if (!S_ISDIR(dt->do_lu.lo_header->loh_attr))
-		RETURN(-ENOTDIR);
-
+	LASSERT(S_ISDIR(dt->do_lu.lo_header->loh_attr));
+	LASSERT(lo->ldo_stripenr > 1);
 	/* Note: for remote lock for single stripe dir, MDT will cancel
 	 * the lock by lockh directly */
-	if (lo->ldo_stripenr <= 1 && dt_object_remote(dt_object_child(dt)))
-		RETURN(0);
+	LASSERT(!dt_object_remote(dt_object_child(dt)));
 
-	/* Only cancel slave lock for striped dir */
-	rc = lod_object_unlock_internal(env, dt, einfo, policy);
+	/* locks were unlocked in MDT layer */
+	for (i = 1; i < slave_locks->count; i++)
+		LASSERT(!lustre_handle_is_used(&slave_locks->handles[i]));
 
-	slave_locks_size = sizeof(*slave_locks) + slave_locks->lsl_lock_count *
-			   sizeof(slave_locks->lsl_handle[0]);
+	slave_locks_size = sizeof(*slave_locks) + slave_locks->count *
+			   sizeof(slave_locks->handles[0]);
 	OBD_FREE(slave_locks, slave_locks_size);
 	einfo->ei_cbdata = NULL;
 
-	RETURN(rc);
+	RETURN(0);
 }
 
 /**
@@ -3989,7 +3983,7 @@ static int lod_object_lock(const struct lu_env *env,
 	int			rc = 0;
 	int			i;
 	int			slave_locks_size;
-	struct lod_slave_locks	*slave_locks = NULL;
+	struct lustre_handle_array *slave_locks = NULL;
 	ENTRY;
 
 	/* remote object lock */
@@ -4011,12 +4005,12 @@ static int lod_object_lock(const struct lu_env *env,
 		RETURN(0);
 
 	slave_locks_size = sizeof(*slave_locks) + lo->ldo_stripenr *
-			   sizeof(slave_locks->lsl_handle[0]);
+			   sizeof(slave_locks->handles[0]);
 	/* Freed in lod_object_unlock */
 	OBD_ALLOC(slave_locks, slave_locks_size);
 	if (slave_locks == NULL)
 		RETURN(-ENOMEM);
-	slave_locks->lsl_lock_count = lo->ldo_stripenr;
+	slave_locks->count = lo->ldo_stripenr;
 
 	/* striped directory lock */
 	for (i = 1; i < lo->ldo_stripenr; i++) {
@@ -4038,6 +4032,10 @@ static int lod_object_lock(const struct lu_env *env,
 			ldlm_completion_callback completion = einfo->ei_cb_cp;
 			__u64	dlmflags = LDLM_FL_ATOMIC_CB;
 
+			if (einfo->ei_mode == LCK_PW ||
+			    einfo->ei_mode == LCK_EX)
+				dlmflags |= LDLM_FL_COS_INCOMPAT;
+
 			/* This only happens if there are mulitple stripes
 			 * on the master MDT, i.e. except stripe0, there are
 			 * other stripes on the Master MDT as well, Only
@@ -4052,7 +4050,7 @@ static int lod_object_lock(const struct lu_env *env,
 		}
 		if (rc != 0)
 			GOTO(out, rc);
-		slave_locks->lsl_handle[i] = lockh;
+		slave_locks->handles[i] = lockh;
 	}
 
 	einfo->ei_cbdata = slave_locks;

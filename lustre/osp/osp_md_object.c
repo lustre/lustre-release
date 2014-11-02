@@ -904,6 +904,8 @@ static int osp_md_object_lock(const struct lu_env *env,
 
 	if (einfo->ei_nonblock)
 		flags |= LDLM_FL_BLOCK_NOWAIT;
+	if (einfo->ei_mode & (LCK_EX | LCK_PW))
+		flags |= LDLM_FL_COS_INCOMPAT;
 
 	req = ldlm_enqueue_pack(osp->opd_exp, 0);
 	if (IS_ERR(req))
@@ -923,13 +925,6 @@ static int osp_md_object_lock(const struct lu_env *env,
 			      &flags, NULL, 0, LVB_T_NONE, lh, 0);
 
 	ptlrpc_req_finished(req);
-	if (rc == ELDLM_OK) {
-		struct ldlm_lock *lock;
-
-		lock = __ldlm_handle2lock(lh, 0);
-		ldlm_set_cbpending(lock);
-		LDLM_LOCK_PUT(lock);
-	}
 
 	return rc == ELDLM_OK ? 0 : -EIO;
 }

@@ -216,6 +216,12 @@ struct mdt_device {
 	struct lu_device	  *mdt_qmt_dev;
 
 	struct coordinator	   mdt_coordinator;
+
+	/* inter-MDT connection count */
+	atomic_t		   mdt_mds_mds_conns;
+
+	/* MDT device async commit count, used for debug and sanity test */
+	atomic_t		   mdt_async_commit_count;
 };
 
 #define MDT_SERVICE_WATCHDOG_FACTOR	(2)
@@ -586,8 +592,16 @@ int mdt_check_resent_lock(struct mdt_thread_info *info, struct mdt_object *mo,
 int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *mo,
 		    struct mdt_lock_handle *lh, __u64 ibits);
 
+int mdt_reint_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
+			  struct mdt_lock_handle *lh, __u64 ibits,
+			  bool cos_incompat);
+
 int mdt_object_lock_try(struct mdt_thread_info *info, struct mdt_object *mo,
 			struct mdt_lock_handle *lh, __u64 ibits);
+
+int mdt_reint_object_lock_try(struct mdt_thread_info *info,
+			      struct mdt_object *o, struct mdt_lock_handle *lh,
+			      __u64 ibits, bool cos_incompat);
 
 void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *mo,
 		       struct mdt_lock_handle *lh, int decref);
@@ -963,6 +977,11 @@ static inline int mdt_fid_lock(struct ldlm_namespace *ns,
 static inline void mdt_fid_unlock(struct lustre_handle *lh, enum ldlm_mode mode)
 {
 	ldlm_lock_decref(lh, mode);
+}
+
+static inline bool mdt_slc_is_enabled(struct mdt_device *mdt)
+{
+	return mdt->mdt_lut.lut_sync_lock_cancel == BLOCKING_SYNC_ON_CANCEL;
 }
 
 extern mdl_mode_t mdt_mdl_lock_modes[];

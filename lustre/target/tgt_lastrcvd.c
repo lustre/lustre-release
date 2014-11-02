@@ -781,7 +781,9 @@ static void tgt_cb_last_committed(struct lu_env *env, struct thandle *th,
 	if (ccb->llcc_transno > ccb->llcc_exp->exp_last_committed) {
 		ccb->llcc_exp->exp_last_committed = ccb->llcc_transno;
 		spin_unlock(&ccb->llcc_tgt->lut_translock);
+
 		ptlrpc_commit_replies(ccb->llcc_exp);
+		tgt_cancel_slc_locks(ccb->llcc_transno);
 	} else {
 		spin_unlock(&ccb->llcc_tgt->lut_translock);
 	}

@@ -37,6 +37,113 @@
 #include "tgt_internal.h"
 #include "../ptlrpc/ptlrpc_internal.h"
 
+static spinlock_t uncommitted_slc_locks_guard;
+static struct list_head uncommitted_slc_locks;
+
+/*
+ * Save cross-MDT lock in uncommitted_slc_locks.
+ *
+ * Lock R/W count is not saved, but released in unlock (not canceled remotely),
+ * instead only a refcount is taken, so that the remote MDT where the object
+ * resides can detect conflict with this lock there.
+ *
+ * \param lock cross-MDT lock to save
+ * \param transno when the transaction with this transno is committed, this lock
+ *		  can be canceled.
+ */
+void tgt_save_slc_lock(struct ldlm_lock *lock, __u64 transno)
+{
+	spin_lock(&uncommitted_slc_locks_guard);
+	lock_res_and_lock(lock);
+	if (ldlm_is_cbpending(lock)) {
+		/* if it was canceld by server, don't save, because remote MDT
+		 * will do Sync-on-Cancel. */
+		LDLM_LOCK_PUT(lock);
+	} else {
+		lock->l_transno = transno;
+		/* if this lock is in the list already, there are two operations
+		 * both use this lock, and save it after use, so for the second
+		 * one, just put the refcount. */
+		if (list_empty(&lock->l_slc_link))
+			list_add_tail(&lock->l_slc_link,
+				      &uncommitted_slc_locks);
+		else
+			LDLM_LOCK_PUT(lock);
+	}
+	unlock_res_and_lock(lock);
+	spin_unlock(&uncommitted_slc_locks_guard);
+}
+EXPORT_SYMBOL(tgt_save_slc_lock);
+
+/*
+ * Discard cross-MDT lock from uncommitted_slc_locks.
+ *
+ * This is called upon BAST, just remove lock from uncommitted_slc_locks and put
+ * lock refcount. The BAST will cancel this lock.
+ *
+ * \param lock cross-MDT lock to discard
+ */
+void tgt_discard_slc_lock(struct ldlm_lock *lock)
+{
+	spin_lock(&uncommitted_slc_locks_guard);
+	lock_res_and_lock(lock);
+	/* may race with tgt_cancel_slc_locks() */
+	if (lock->l_transno != 0) {
+		LASSERT(!list_empty(&lock->l_slc_link));
+		LASSERT(ldlm_is_cbpending(lock));
+		list_del_init(&lock->l_slc_link);
+		lock->l_transno = 0;
+		LDLM_LOCK_PUT(lock);
+	}
+	unlock_res_and_lock(lock);
+	spin_unlock(&uncommitted_slc_locks_guard);
+}
+EXPORT_SYMBOL(tgt_discard_slc_lock);
+
+/*
+ * Cancel cross-MDT locks upon transaction commit.
+ *
+ * Remove cross-MDT locks from uncommitted_slc_locks, cancel them and put lock
+ * refcount.
+ *
+ * \param transno transaction with this number was committed.
+ */
+void tgt_cancel_slc_locks(__u64 transno)
+{
+	struct ldlm_lock *lock, *next;
+	LIST_HEAD(list);
+	struct lustre_handle lockh;
+
+	spin_lock(&uncommitted_slc_locks_guard);
+	list_for_each_entry_safe(lock, next, &uncommitted_slc_locks,
+				 l_slc_link) {
+		lock_res_and_lock(lock);
+		LASSERT(lock->l_transno != 0);
+		if (lock->l_transno > transno) {
+			unlock_res_and_lock(lock);
+			continue;
+		}
+		/* ouch, another operation is using it after it's saved */
+		if (lock->l_readers != 0 || lock->l_writers != 0) {
+			unlock_res_and_lock(lock);
+			continue;
+		}
+		/* set CBPENDING so that this lock won't be used again */
+		ldlm_set_cbpending(lock);
+		lock->l_transno = 0;
+		list_move(&lock->l_slc_link, &list);
+		unlock_res_and_lock(lock);
+	}
+	spin_unlock(&uncommitted_slc_locks_guard);
+
+	list_for_each_entry_safe(lock, next, &list, l_slc_link) {
+		list_del_init(&lock->l_slc_link);
+		ldlm_lock2handle(lock, &lockh);
+		ldlm_cli_cancel(&lockh, LCF_ASYNC);
+		LDLM_LOCK_PUT(lock);
+	}
+}
+
 int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	     struct obd_device *obd, struct dt_device *dt,
 	     struct tgt_opc_slice *slice, int request_fail_id,
@@ -145,6 +252,8 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	rc = tgt_reply_data_init(env, lut);
 	if (rc < 0)
 		GOTO(out, rc);
+
+	atomic_set(&lut->lut_sync_count, 0);
 
 	RETURN(0);
 
@@ -294,6 +403,9 @@ int tgt_mod_init(void)
 	lu_context_key_register_many(&tgt_session_key, NULL);
 
 	update_info_init();
+
+	spin_lock_init(&uncommitted_slc_locks_guard);
+	INIT_LIST_HEAD(&uncommitted_slc_locks);
 
 	RETURN(0);
 }

@@ -3017,6 +3017,7 @@ static int cb_migrate_mdt_init(char *path, DIR *parent, DIR **dirp,
 	int			fd;
 	int			ret;
 	char			*filename;
+	bool			retry = false;
 
 	LASSERT(parent != NULL || dirp != NULL);
 	if (dirp != NULL)
@@ -3047,8 +3048,19 @@ static int cb_migrate_mdt_init(char *path, DIR *parent, DIR **dirp,
 		goto out;
 	}
 
+migrate:
 	ret = ioctl(fd, LL_IOC_MIGRATE, rawbuf);
 	if (ret != 0) {
+		if (errno == EBUSY && !retry) {
+			/* because migrate may not be able to lock all involved
+			 * objects in order, for some of them it try lock, while
+			 * there may be conflicting COS locks and cause migrate
+			 * fail with EBUSY, hope a sync() could cause
+			 * transaction commit and release these COS locks. */
+			sync();
+			retry = true;
+			goto migrate;
+		}
 		ret = -errno;
 		fprintf(stderr, "%s migrate failed: %s (%d)\n",
 			path, strerror(-ret), ret);

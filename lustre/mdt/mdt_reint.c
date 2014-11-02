@@ -292,6 +292,139 @@ static int mdt_remote_permission(struct mdt_thread_info *info)
 	return 0;
 }
 
+static int mdt_unlock_slaves(struct mdt_thread_info *mti,
+			     struct mdt_object *obj, __u64 ibits,
+			     struct mdt_lock_handle *s0_lh,
+			     struct mdt_object *s0_obj,
+			     struct ldlm_enqueue_info *einfo,
+			     int decref)
+{
+	union ldlm_policy_data *policy = &mti->mti_policy;
+	struct lustre_handle_array *slave_locks = einfo->ei_cbdata;
+	int i;
+	int rc;
+	ENTRY;
+
+	if (!S_ISDIR(obj->mot_header.loh_attr))
+		RETURN(0);
+
+	/* Unlock stripe 0 */
+	if (s0_lh != NULL && lustre_handle_is_used(&s0_lh->mlh_reg_lh)) {
+		LASSERT(s0_obj != NULL);
+		mdt_object_unlock_put(mti, s0_obj, s0_lh, decref);
+	}
+
+	memset(policy, 0, sizeof(*policy));
+	policy->l_inodebits.bits = ibits;
+
+	if (slave_locks != NULL) {
+		LASSERT(s0_lh != NULL);
+		for (i = 1; i < slave_locks->count; i++) {
+			/* borrow s0_lh temporarily to do mdt unlock */
+			mdt_lock_reg_init(s0_lh, einfo->ei_mode);
+			s0_lh->mlh_rreg_lh = slave_locks->handles[i];
+			mdt_object_unlock(mti, obj, s0_lh, decref);
+			slave_locks->handles[i].cookie = 0ull;
+		}
+	}
+
+	rc = mo_object_unlock(mti->mti_env, mdt_object_child(obj), einfo,
+			      policy);
+	RETURN(rc);
+}
+
+static int mdt_init_slaves(struct mdt_thread_info *mti, struct mdt_object *obj,
+			   struct lu_fid *fid)
+{
+	struct lu_buf *buf = &mti->mti_buf;
+	struct lmv_mds_md_v1 *lmv;
+	int rc;
+	ENTRY;
+
+	if (!S_ISDIR(obj->mot_header.loh_attr))
+		RETURN(0);
+
+	buf->lb_buf = mti->mti_xattr_buf;
+	buf->lb_len = sizeof(mti->mti_xattr_buf);
+	rc = mo_xattr_get(mti->mti_env, mdt_object_child(obj), buf,
+			  XATTR_NAME_LMV);
+	if (rc == -ERANGE) {
+		rc = mdt_big_xattr_get(mti, obj, XATTR_NAME_LMV);
+		if (rc > 0) {
+			buf->lb_buf = mti->mti_big_lmm;
+			buf->lb_len = mti->mti_big_lmmsize;
+		}
+	}
+
+	if (rc == -ENODATA || rc == -ENOENT)
+		RETURN(0);
+
+	if (rc <= 0)
+		RETURN(rc);
+
+	lmv = buf->lb_buf;
+	if (le32_to_cpu(lmv->lmv_magic) != LMV_MAGIC_V1)
+		RETURN(-EINVAL);
+
+	fid_le_to_cpu(fid, &lmv->lmv_stripe_fids[0]);
+
+	RETURN(rc);
+}
+
+/**
+ * Lock slave stripes if necessary, the lock handles of slave stripes
+ * will be stored in einfo->ei_cbdata.
+ **/
+static int mdt_lock_slaves(struct mdt_thread_info *mti, struct mdt_object *obj,
+			   enum ldlm_mode mode, __u64 ibits,
+			   struct lu_fid *s0_fid,
+			   struct mdt_lock_handle *s0_lh,
+			   struct mdt_object **s0_objp,
+			   struct ldlm_enqueue_info *einfo)
+{
+	union ldlm_policy_data *policy = &mti->mti_policy;
+	int rc;
+	ENTRY;
+
+	rc = mdt_init_slaves(mti, obj, s0_fid);
+	if (rc <= 0)
+		RETURN(rc);
+
+	LASSERT(S_ISDIR(obj->mot_header.loh_attr));
+
+	if (!lu_fid_eq(s0_fid, mdt_object_fid(obj))) {
+		/* Except migrating object, whose 0_stripe and master
+		 * object are the same object, 0_stripe and master
+		 * object are different, though they are in the same
+		 * MDT, to avoid adding osd_object_lock here, so we
+		 * will enqueue the stripe0 lock in MDT0 for now */
+		*s0_objp = mdt_object_find(mti->mti_env, mti->mti_mdt, s0_fid);
+		if (IS_ERR(*s0_objp))
+			RETURN(PTR_ERR(*s0_objp));
+
+		rc = mdt_reint_object_lock(mti, *s0_objp, s0_lh, ibits, true);
+		if (rc < 0) {
+			mdt_object_put(mti->mti_env, *s0_objp);
+			RETURN(rc);
+		}
+	}
+
+	memset(einfo, 0, sizeof(*einfo));
+	einfo->ei_type = LDLM_IBITS;
+	einfo->ei_mode = mode;
+	einfo->ei_cb_bl = mdt_remote_blocking_ast;
+	einfo->ei_cb_local_bl = mdt_blocking_ast;
+	einfo->ei_cb_cp = ldlm_completion_ast;
+	einfo->ei_enq_slave = 1;
+	einfo->ei_namespace = mti->mti_mdt->mdt_namespace;
+	memset(policy, 0, sizeof(*policy));
+	policy->l_inodebits.bits = ibits;
+
+	rc = mo_object_lock(mti->mti_env, mdt_object_child(obj), NULL, einfo,
+			    policy);
+	RETURN(rc);
+}
+
 /*
  * VBR: we save three versions in reply:
  * 0 - parent. Check that parent version is the same during replay.
@@ -302,15 +435,15 @@ static int mdt_remote_permission(struct mdt_thread_info *info)
  */
 static int mdt_md_create(struct mdt_thread_info *info)
 {
-        struct mdt_device       *mdt = info->mti_mdt;
-        struct mdt_object       *parent;
-        struct mdt_object       *child;
-        struct mdt_lock_handle  *lh;
-        struct mdt_body         *repbody;
-        struct md_attr          *ma = &info->mti_attr;
-        struct mdt_reint_record *rr = &info->mti_rr;
-        int rc;
-        ENTRY;
+	struct mdt_device       *mdt = info->mti_mdt;
+	struct mdt_object       *parent;
+	struct mdt_object       *child;
+	struct mdt_lock_handle  *lh;
+	struct mdt_body         *repbody;
+	struct md_attr          *ma = &info->mti_attr;
+	struct mdt_reint_record *rr = &info->mti_rr;
+	int rc;
+	ENTRY;
 
 	DEBUG_REQ(D_INODE, mdt_info_req(info), "Create  ("DNAME"->"DFID") "
 		  "in "DFID,
@@ -357,153 +490,106 @@ static int mdt_md_create(struct mdt_thread_info *info)
 	mdt_enoent_version_save(info, 1);
 
 	child = mdt_object_new(info->mti_env, mdt, rr->rr_fid2);
-        if (likely(!IS_ERR(child))) {
-                struct md_object *next = mdt_object_child(parent);
+	if (unlikely(IS_ERR(child)))
+		GOTO(unlock_parent, rc = PTR_ERR(child));
 
-		rc = mdt_remote_permission(info);
-		if (rc != 0)
-			GOTO(out_put_child, rc);
+	rc = mdt_remote_permission(info);
+	if (rc != 0)
+		GOTO(put_child, rc);
 
-		ma->ma_need = MA_INODE;
-                ma->ma_valid = 0;
+	ma->ma_need = MA_INODE;
+	ma->ma_valid = 0;
 
-                mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
-                               OBD_FAIL_MDS_REINT_CREATE_WRITE);
+	mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
+			OBD_FAIL_MDS_REINT_CREATE_WRITE);
 
-                /* Version of child will be updated on disk. */
-		tgt_vbr_obj_set(info->mti_env, mdt_obj2dt(child));
-                rc = mdt_version_get_check_save(info, child, 2);
-                if (rc)
-                        GOTO(out_put_child, rc);
+	/* Version of child will be updated on disk. */
+	tgt_vbr_obj_set(info->mti_env, mdt_obj2dt(child));
+	rc = mdt_version_get_check_save(info, child, 2);
+	if (rc)
+		GOTO(put_child, rc);
 
-                /* Let lower layer know current lock mode. */
-                info->mti_spec.sp_cr_mode =
-                        mdt_dlm_mode2mdl_mode(lh->mlh_pdo_mode);
+	/* Let lower layer know current lock mode. */
+	info->mti_spec.sp_cr_mode = mdt_dlm_mode2mdl_mode(lh->mlh_pdo_mode);
 
-		/*
-		 * Do not perform lookup sanity check. We know that name does
-		 * not exist.
-		 */
-		info->mti_spec.sp_cr_lookup = 0;
-                info->mti_spec.sp_feat = &dt_directory_features;
+	/*
+	 * Do not perform lookup sanity check. We know that name does
+	 * not exist.
+	 */
+	info->mti_spec.sp_cr_lookup = 0;
+	info->mti_spec.sp_feat = &dt_directory_features;
 
-		rc = mdo_create(info->mti_env, next, &rr->rr_name,
-				mdt_object_child(child), &info->mti_spec, ma);
-		if (rc == 0)
-			rc = mdt_attr_get_complex(info, child, ma);
+	rc = mdo_create(info->mti_env, mdt_object_child(parent), &rr->rr_name,
+			mdt_object_child(child), &info->mti_spec, ma);
+	if (rc == 0)
+		rc = mdt_attr_get_complex(info, child, ma);
 
-		if (rc == 0) {
-			/* Return fid & attr to client. */
-			if (ma->ma_valid & MA_INODE)
-				mdt_pack_attr2body(info, repbody, &ma->ma_attr,
-						   mdt_object_fid(child));
+	if (rc < 0)
+		GOTO(put_child, rc);
+
+	/*
+	 * On DNE, we need to eliminate dependey between 'mkdir a' and
+	 * 'mkdir a/b' if b is a striped directory, to achieve this, two
+	 * things are done below:
+	 * 1. save child and slaves lock.
+	 * 2. if the child is a striped directory, relock parent so to
+	 *    compare against with COS locks to ensure parent was
+	 *    committed to disk.
+	 */
+	if (mdt_slc_is_enabled(mdt) && S_ISDIR(ma->ma_attr.la_mode)) {
+		struct mdt_lock_handle *lhc;
+		struct mdt_lock_handle *s0_lh;
+		struct mdt_object *s0_obj = NULL;
+		struct ldlm_enqueue_info *einfo;
+		struct lu_fid *s0_fid = &info->mti_tmp_fid1;
+		bool cos_incompat = false;
+
+		rc = mdt_init_slaves(info, child, s0_fid);
+		if (rc > 0) {
+			cos_incompat = true;
+			if (!mdt_object_remote(parent)) {
+				mdt_object_unlock(info, parent, lh, 1);
+				mdt_lock_pdo_init(lh, LCK_PW, &rr->rr_name);
+				rc = mdt_reint_object_lock(info, parent, lh,
+							   MDS_INODELOCK_UPDATE,
+							   true);
+				if (rc)
+					GOTO(put_child, rc);
+			}
 		}
-out_put_child:
-		mdt_object_put(info->mti_env, child);
-	} else {
-		rc = PTR_ERR(child);
+
+		einfo = &info->mti_einfo;
+		lhc = &info->mti_lh[MDT_LH_CHILD];
+		mdt_lock_handle_init(lhc);
+		mdt_lock_reg_init(lhc, LCK_PW);
+		rc = mdt_reint_object_lock(info, child, lhc,
+					   MDS_INODELOCK_UPDATE,
+					   cos_incompat);
+		if (rc)
+			GOTO(put_child, rc);
+		mdt_object_unlock(info, child, lhc, rc);
+
+		s0_lh = &info->mti_lh[MDT_LH_LOCAL];
+		mdt_lock_handle_init(s0_lh);
+		mdt_lock_reg_init(s0_lh, LCK_PW);
+		rc = mdt_lock_slaves(info, child, LCK_PW, MDS_INODELOCK_UPDATE,
+				     s0_fid, s0_lh, &s0_obj, einfo);
+		mdt_unlock_slaves(info, child, MDS_INODELOCK_UPDATE, s0_lh,
+				  s0_obj, einfo, rc);
+		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_SLAVE_NAME) && rc == -EIO)
+			rc = 0;
 	}
+
+	/* Return fid & attr to client. */
+	if (ma->ma_valid & MA_INODE)
+		mdt_pack_attr2body(info, repbody, &ma->ma_attr,
+				   mdt_object_fid(child));
+put_child:
+	mdt_object_put(info->mti_env, child);
 unlock_parent:
 	mdt_object_unlock(info, parent, lh, rc);
 put_parent:
 	mdt_object_put(info->mti_env, parent);
-	RETURN(rc);
-}
-
-static int mdt_unlock_slaves(struct mdt_thread_info *mti,
-			     struct mdt_object *obj, __u64 ibits,
-			     struct mdt_lock_handle *s0_lh,
-			     struct mdt_object *s0_obj,
-			     struct ldlm_enqueue_info *einfo)
-{
-	union ldlm_policy_data *policy = &mti->mti_policy;
-	int rc;
-	ENTRY;
-
-	if (!S_ISDIR(obj->mot_header.loh_attr))
-		RETURN(0);
-
-	/* Unlock stripe 0 */
-	if (s0_lh != NULL && lustre_handle_is_used(&s0_lh->mlh_reg_lh)) {
-		LASSERT(s0_obj != NULL);
-		mdt_object_unlock_put(mti, s0_obj, s0_lh, 1);
-	}
-
-	memset(policy, 0, sizeof(*policy));
-	policy->l_inodebits.bits = ibits;
-
-	rc = mo_object_unlock(mti->mti_env, mdt_object_child(obj), einfo,
-			      policy);
-	RETURN(rc);
-}
-
-/**
- * Lock slave stripes if necessary, the lock handles of slave stripes
- * will be stored in einfo->ei_cbdata.
- **/
-static int mdt_lock_slaves(struct mdt_thread_info *mti, struct mdt_object *obj,
-			   enum ldlm_mode mode, __u64 ibits,
-			   struct mdt_lock_handle *s0_lh,
-			   struct mdt_object **s0_objp,
-			   struct ldlm_enqueue_info *einfo)
-{
-	union ldlm_policy_data *policy = &mti->mti_policy;
-	struct lu_buf *buf = &mti->mti_buf;
-	struct lmv_mds_md_v1 *lmv;
-	struct lu_fid *fid = &mti->mti_tmp_fid1;
-	int rc;
-	ENTRY;
-
-	if (!S_ISDIR(obj->mot_header.loh_attr))
-		RETURN(0);
-
-	buf->lb_buf = mti->mti_xattr_buf;
-	buf->lb_len = sizeof(mti->mti_xattr_buf);
-	rc = mo_xattr_get(mti->mti_env, mdt_object_child(obj), buf,
-			  XATTR_NAME_LMV);
-	if (rc == -ERANGE) {
-		rc = mdt_big_xattr_get(mti, obj, XATTR_NAME_LMV);
-		if (rc > 0) {
-			buf->lb_buf = mti->mti_big_lmm;
-			buf->lb_len = mti->mti_big_lmmsize;
-		}
-	}
-
-	if (rc == -ENODATA || rc == -ENOENT)
-		RETURN(0);
-
-	if (rc <= 0)
-		RETURN(rc);
-
-	lmv = buf->lb_buf;
-	if (le32_to_cpu(lmv->lmv_magic) != LMV_MAGIC_V1)
-		RETURN(-EINVAL);
-
-	fid_le_to_cpu(fid, &lmv->lmv_stripe_fids[0]);
-	if (!lu_fid_eq(fid, mdt_object_fid(obj))) {
-		/* Except migrating object, whose 0_stripe and master
-		 * object are the same object, 0_stripe and master
-		 * object are different, though they are in the same
-		 * MDT, to avoid adding osd_object_lock here, so we
-		 * will enqueue the stripe0 lock in MDT0 for now */
-		*s0_objp = mdt_object_find_lock(mti, fid, s0_lh, ibits);
-		if (IS_ERR(*s0_objp))
-			RETURN(PTR_ERR(*s0_objp));
-	}
-
-	memset(einfo, 0, sizeof(*einfo));
-	einfo->ei_type = LDLM_IBITS;
-	einfo->ei_mode = mode;
-	einfo->ei_cb_bl = mdt_remote_blocking_ast;
-	einfo->ei_cb_local_bl = mdt_blocking_ast;
-	einfo->ei_cb_cp = ldlm_completion_ast;
-	einfo->ei_enq_slave = 1;
-	einfo->ei_namespace = mti->mti_mdt->mdt_namespace;
-	memset(policy, 0, sizeof(*policy));
-	policy->l_inodebits.bits = ibits;
-
-	rc = mo_object_lock(mti->mti_env, mdt_object_child(obj), NULL, einfo,
-			    policy);
 	RETURN(rc);
 }
 
@@ -514,10 +600,16 @@ static int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 	int do_vbr = ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID|LA_FLAGS);
 	__u64 lockpart = MDS_INODELOCK_UPDATE;
 	struct ldlm_enqueue_info *einfo = &info->mti_einfo;
-	struct mdt_lock_handle  *s0_lh;
-	struct mdt_object	*s0_obj = NULL;
+	struct lu_fid *s0_fid = &info->mti_tmp_fid1;
+	struct mdt_lock_handle *s0_lh = NULL;
+	struct mdt_object *s0_obj = NULL;
+	bool cos_incompat = false;
 	int rc;
 	ENTRY;
+
+	rc = mdt_init_slaves(info, mo, s0_fid);
+	if (rc > 0)
+		cos_incompat = true;
 
         lh = &info->mti_lh[MDT_LH_PARENT];
         mdt_lock_reg_init(lh, LCK_PW);
@@ -529,13 +621,14 @@ static int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 	if (ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID))
 		lockpart |= MDS_INODELOCK_LOOKUP | MDS_INODELOCK_PERM;
 
-	rc = mdt_object_lock(info, mo, lh, lockpart);
+	rc = mdt_reint_object_lock(info, mo, lh, lockpart, cos_incompat);
 	if (rc != 0)
 		RETURN(rc);
 
 	s0_lh = &info->mti_lh[MDT_LH_LOCAL];
 	mdt_lock_reg_init(s0_lh, LCK_PW);
-	rc = mdt_lock_slaves(info, mo, LCK_PW, lockpart, s0_lh, &s0_obj, einfo);
+	rc = mdt_lock_slaves(info, mo, LCK_PW, lockpart, s0_fid, s0_lh, &s0_obj,
+			     einfo);
 	if (rc != 0)
 		GOTO(out_unlock, rc);
 
@@ -571,7 +664,7 @@ static int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 
         EXIT;
 out_unlock:
-	mdt_unlock_slaves(info, mo, lockpart, s0_lh, s0_obj, einfo);
+	mdt_unlock_slaves(info, mo, lockpart, s0_lh, s0_obj, einfo, rc);
         mdt_object_unlock(info, mo, lh, rc);
         return rc;
 }
@@ -776,22 +869,24 @@ static int mdt_reint_create(struct mdt_thread_info *info,
  * Version of child is getting and checking during its lookup. If
  */
 static int mdt_reint_unlink(struct mdt_thread_info *info,
-                            struct mdt_lock_handle *lhc)
+			    struct mdt_lock_handle *lhc)
 {
-        struct mdt_reint_record *rr = &info->mti_rr;
-        struct ptlrpc_request   *req = mdt_info_req(info);
-        struct md_attr          *ma = &info->mti_attr;
-        struct lu_fid           *child_fid = &info->mti_tmp_fid1;
-        struct mdt_object       *mp;
-        struct mdt_object       *mc;
-        struct mdt_lock_handle  *parent_lh;
-        struct mdt_lock_handle  *child_lh;
+	struct mdt_reint_record *rr = &info->mti_rr;
+	struct ptlrpc_request *req = mdt_info_req(info);
+	struct md_attr *ma = &info->mti_attr;
+	struct lu_fid *child_fid = &info->mti_tmp_fid1;
+	struct mdt_object *mp;
+	struct mdt_object *mc;
+	struct mdt_lock_handle *parent_lh;
+	struct mdt_lock_handle *child_lh;
 	struct ldlm_enqueue_info *einfo = &info->mti_einfo;
-	struct mdt_lock_handle  *s0_lh = NULL;
-	struct mdt_object	*s0_obj = NULL;
-	__u64			lock_ibits;
-	int			rc;
-	int			no_name = 0;
+	struct lu_fid *s0_fid = &info->mti_tmp_fid2;
+	struct mdt_lock_handle *s0_lh = NULL;
+	struct mdt_object *s0_obj = NULL;
+	__u64 lock_ibits;
+	bool cos_incompat = false;
+	int no_name = 0;
+	int rc;
 	ENTRY;
 
 	DEBUG_REQ(D_INODE, req, "unlink "DFID"/"DNAME"", PFID(rr->rr_fid1),
@@ -800,34 +895,22 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 	if (info->mti_dlm_req)
 		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
-                RETURN(err_serious(-ENOENT));
+	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
+		RETURN(err_serious(-ENOENT));
 
 	if (!fid_is_md_operative(rr->rr_fid1))
 		RETURN(-EPERM);
 
-        /*
-	 * step 1: Found the parent.
-         */
 	mp = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
-	if (IS_ERR(mp)) {
-		rc = PTR_ERR(mp);
-		GOTO(out, rc);
-	}
-
-	parent_lh = &info->mti_lh[MDT_LH_PARENT];
-	mdt_lock_pdo_init(parent_lh, LCK_PW, &rr->rr_name);
-	rc = mdt_object_lock(info, mp, parent_lh, MDS_INODELOCK_UPDATE);
-	if (rc != 0)
-		GOTO(put_parent, rc);
+	if (IS_ERR(mp))
+		RETURN(PTR_ERR(mp));
 
 	if (!mdt_object_remote(mp)) {
 		rc = mdt_version_get_check_save(info, mp, 0);
 		if (rc)
-			GOTO(unlock_parent, rc);
+			GOTO(put_parent, rc);
 	}
 
-	/* step 2: find & lock the child */
 	/* lookup child object along with version checking */
 	fid_zero(child_fid);
 	rc = mdt_lookup_version_check(info, mp, &rr->rr_name, child_fid, 1);
@@ -852,35 +935,45 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 			no_name = 1;
 			*child_fid = *rr->rr_fid2;
 		 } else {
-			GOTO(unlock_parent, rc);
+			GOTO(put_parent, rc);
 		 }
 	}
 
 	if (!fid_is_md_operative(child_fid))
-		GOTO(unlock_parent, rc = -EPERM);
+		GOTO(put_parent, rc = -EPERM);
 
 	/* We will lock the child regardless it is local or remote. No harm. */
 	mc = mdt_object_find(info->mti_env, info->mti_mdt, child_fid);
 	if (IS_ERR(mc))
-		GOTO(unlock_parent, rc = PTR_ERR(mc));
+		GOTO(put_parent, rc = PTR_ERR(mc));
 
-        child_lh = &info->mti_lh[MDT_LH_CHILD];
-        mdt_lock_reg_init(child_lh, LCK_EX);
+	rc = mdt_init_slaves(info, mc, s0_fid);
+	cos_incompat = (mdt_object_remote(mp) || (rc > 0));
+
+	parent_lh = &info->mti_lh[MDT_LH_PARENT];
+	mdt_lock_pdo_init(parent_lh, LCK_PW, &rr->rr_name);
+	rc = mdt_reint_object_lock(info, mp, parent_lh, MDS_INODELOCK_UPDATE,
+				   cos_incompat);
+	if (rc != 0)
+		GOTO(put_child, rc);
+
+	child_lh = &info->mti_lh[MDT_LH_CHILD];
+	mdt_lock_reg_init(child_lh, LCK_EX);
 	if (info->mti_spec.sp_rm_entry) {
 		struct lu_ucred *uc  = mdt_ucred(info);
 
 		if (!mdt_is_dne_client(req->rq_export))
 			/* Return -ENOTSUPP for old client */
-			GOTO(put_child, rc = -ENOTSUPP);
+			GOTO(unlock_parent, rc = -ENOTSUPP);
 
 		if (!md_capable(uc, CFS_CAP_SYS_ADMIN))
-			GOTO(put_child, rc = -EPERM);
+			GOTO(unlock_parent, rc = -EPERM);
 
 		ma->ma_need = MA_INODE;
 		ma->ma_valid = 0;
 		rc = mdo_unlink(info->mti_env, mdt_object_child(mp),
 				NULL, &rr->rr_name, ma, no_name);
-		GOTO(put_child, rc);
+		GOTO(unlock_parent, rc);
 	}
 
 	if (mdt_object_remote(mc)) {
@@ -890,7 +983,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 			CDEBUG(D_INFO, "%s: name "DNAME" cannot find "DFID"\n",
 			       mdt_obd_name(info->mti_mdt),
 			       PNAME(&rr->rr_name), PFID(mdt_object_fid(mc)));
-			GOTO(put_child, rc = -ENOENT);
+			GOTO(unlock_parent, rc = -ENOENT);
 		}
 		CDEBUG(D_INFO, "%s: name "DNAME": "DFID" is on another MDT\n",
 		       mdt_obd_name(info->mti_mdt),
@@ -898,7 +991,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
 		if (!mdt_is_dne_client(req->rq_export))
 			/* Return -ENOTSUPP for old client */
-			GOTO(put_child, rc = -ENOTSUPP);
+			GOTO(unlock_parent, rc = -ENOTSUPP);
 
 		/* Revoke the LOOKUP lock of the remote object granted by
 		 * this MDT. Since the unlink will happen on another MDT,
@@ -923,14 +1016,16 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 					    child_lh->mlh_rreg_mode,
 					    MDS_INODELOCK_LOOKUP, false);
 		if (rc != ELDLM_OK)
-			GOTO(put_child, rc);
+			GOTO(unlock_parent, rc);
 
 		lock_ibits &= ~MDS_INODELOCK_LOOKUP;
 	}
 
-	rc = mdt_object_lock(info, mc, child_lh, lock_ibits);
+	rc = mdt_reint_object_lock(info, mc, child_lh, lock_ibits,
+				   cos_incompat);
 	if (rc != 0)
-		GOTO(put_child, rc);
+		GOTO(unlock_child, rc);
+
 	/*
 	 * Now we can only make sure we need MA_INODE, in mdd layer, will check
 	 * whether need MA_LOV and MA_COOKIE.
@@ -940,8 +1035,8 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
 	s0_lh = &info->mti_lh[MDT_LH_LOCAL];
 	mdt_lock_reg_init(s0_lh, LCK_EX);
-	rc = mdt_lock_slaves(info, mc, LCK_EX, MDS_INODELOCK_UPDATE, s0_lh,
-			     &s0_obj, einfo);
+	rc = mdt_lock_slaves(info, mc, LCK_EX, MDS_INODELOCK_UPDATE, s0_fid,
+			     s0_lh, &s0_obj, einfo);
 	if (rc != 0)
 		GOTO(unlock_child, rc);
 
@@ -984,15 +1079,15 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         EXIT;
 
 unlock_child:
-	mdt_unlock_slaves(info, mc, MDS_INODELOCK_UPDATE, s0_lh, s0_obj, einfo);
+	mdt_unlock_slaves(info, mc, MDS_INODELOCK_UPDATE, s0_lh, s0_obj, einfo,
+			  rc);
 	mdt_object_unlock(info, mc, child_lh, rc);
-put_child:
-	mdt_object_put(info->mti_env, mc);
 unlock_parent:
 	mdt_object_unlock(info, mp, parent_lh, rc);
+put_child:
+	mdt_object_put(info->mti_env, mc);
 put_parent:
 	mdt_object_put(info->mti_env, mp);
-out:
         return rc;
 }
 
@@ -1001,109 +1096,117 @@ out:
  * name.
  */
 static int mdt_reint_link(struct mdt_thread_info *info,
-                          struct mdt_lock_handle *lhc)
+			  struct mdt_lock_handle *lhc)
 {
-        struct mdt_reint_record *rr = &info->mti_rr;
-        struct ptlrpc_request   *req = mdt_info_req(info);
-        struct md_attr          *ma = &info->mti_attr;
-        struct mdt_object       *ms;
-        struct mdt_object       *mp;
-        struct mdt_lock_handle  *lhs;
-        struct mdt_lock_handle  *lhp;
-        int rc;
-        ENTRY;
+	struct mdt_reint_record *rr = &info->mti_rr;
+	struct ptlrpc_request   *req = mdt_info_req(info);
+	struct md_attr          *ma = &info->mti_attr;
+	struct mdt_object       *ms;
+	struct mdt_object       *mp;
+	struct mdt_lock_handle  *lhs;
+	struct mdt_lock_handle  *lhp;
+	bool cos_incompat;
+	int rc;
+	ENTRY;
 
 	DEBUG_REQ(D_INODE, req, "link "DFID" to "DFID"/"DNAME,
 		  PFID(rr->rr_fid1), PFID(rr->rr_fid2), PNAME(&rr->rr_name));
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
-                RETURN(err_serious(-ENOENT));
+	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
+		RETURN(err_serious(-ENOENT));
 
 	if (info->mti_dlm_req)
 		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
 
-        /* Invalid case so return error immediately instead of
-         * processing it */
-        if (lu_fid_eq(rr->rr_fid1, rr->rr_fid2))
-                RETURN(-EPERM);
+	/* Invalid case so return error immediately instead of
+	 * processing it */
+	if (lu_fid_eq(rr->rr_fid1, rr->rr_fid2))
+		RETURN(-EPERM);
 
 	if (!fid_is_md_operative(rr->rr_fid1) ||
 	    !fid_is_md_operative(rr->rr_fid2))
 		RETURN(-EPERM);
 
-        /* step 1: find & lock the target parent dir */
-        lhp = &info->mti_lh[MDT_LH_PARENT];
-	mdt_lock_pdo_init(lhp, LCK_PW, &rr->rr_name);
-        mp = mdt_object_find_lock(info, rr->rr_fid2, lhp,
-                                  MDS_INODELOCK_UPDATE);
-        if (IS_ERR(mp))
-                RETURN(PTR_ERR(mp));
+	/* step 1: find target parent dir */
+	mp = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid2);
+	if (IS_ERR(mp))
+		RETURN(PTR_ERR(mp));
 
-        rc = mdt_version_get_check_save(info, mp, 0);
-        if (rc)
-                GOTO(out_unlock_parent, rc);
+	rc = mdt_version_get_check_save(info, mp, 0);
+	if (rc)
+		GOTO(put_parent, rc);
+
+	/* step 2: find source */
+	ms = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
+	if (IS_ERR(ms))
+		GOTO(put_parent, rc = PTR_ERR(ms));
+
+	if (!mdt_object_exists(ms)) {
+		CDEBUG(D_INFO, "%s: "DFID" does not exist.\n",
+		       mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1));
+		GOTO(put_source, rc = -ENOENT);
+	}
+
+	cos_incompat = (mdt_object_remote(mp) || mdt_object_remote(ms));
+
+	lhp = &info->mti_lh[MDT_LH_PARENT];
+	mdt_lock_pdo_init(lhp, LCK_PW, &rr->rr_name);
+	rc = mdt_reint_object_lock(info, mp, lhp, MDS_INODELOCK_UPDATE,
+				   cos_incompat);
+	if (rc != 0)
+		GOTO(put_source, rc);
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME3, 5);
 
-        /* step 2: find & lock the source */
-        lhs = &info->mti_lh[MDT_LH_CHILD];
-        mdt_lock_reg_init(lhs, LCK_EX);
+	lhs = &info->mti_lh[MDT_LH_CHILD];
+	mdt_lock_reg_init(lhs, LCK_EX);
+	rc = mdt_reint_object_lock(info, ms, lhs,
+				   MDS_INODELOCK_UPDATE | MDS_INODELOCK_XATTR,
+				   cos_incompat);
+	if (rc != 0)
+		GOTO(unlock_parent, rc);
 
-        ms = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
-        if (IS_ERR(ms))
-                GOTO(out_unlock_parent, rc = PTR_ERR(ms));
-
-	if (!mdt_object_exists(ms)) {
-		mdt_object_put(info->mti_env, ms);
-		CDEBUG(D_INFO, "%s: "DFID" does not exist.\n",
-		       mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1));
-		GOTO(out_unlock_parent, rc = -ENOENT);
-	}
-
-	rc = mdt_object_lock(info, ms, lhs, MDS_INODELOCK_UPDATE |
-			     MDS_INODELOCK_XATTR);
-        if (rc != 0) {
-                mdt_object_put(info->mti_env, ms);
-                GOTO(out_unlock_parent, rc);
-        }
-
-        /* step 3: link it */
-        mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
-                       OBD_FAIL_MDS_REINT_LINK_WRITE);
+	/* step 3: link it */
+	mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
+			OBD_FAIL_MDS_REINT_LINK_WRITE);
 
 	tgt_vbr_obj_set(info->mti_env, mdt_obj2dt(ms));
-        rc = mdt_version_get_check_save(info, ms, 1);
-        if (rc)
-                GOTO(out_unlock_child, rc);
+	rc = mdt_version_get_check_save(info, ms, 1);
+	if (rc)
+		GOTO(unlock_source, rc);
 
-        /** check target version by name during replay */
+	/** check target version by name during replay */
 	rc = mdt_lookup_version_check(info, mp, &rr->rr_name,
 				      &info->mti_tmp_fid1, 2);
-        if (rc != 0 && rc != -ENOENT)
-                GOTO(out_unlock_child, rc);
-        /* save version of file name for replay, it must be ENOENT here */
-        if (!req_is_replay(mdt_info_req(info))) {
+	if (rc != 0 && rc != -ENOENT)
+		GOTO(unlock_source, rc);
+	/* save version of file name for replay, it must be ENOENT here */
+	if (!req_is_replay(mdt_info_req(info))) {
 		if (rc != -ENOENT) {
 			CDEBUG(D_INFO, "link target "DNAME" existed!\n",
 			       PNAME(&rr->rr_name));
-			GOTO(out_unlock_child, rc = -EEXIST);
+			GOTO(unlock_source, rc = -EEXIST);
 		}
-                info->mti_ver[2] = ENOENT_VERSION;
-                mdt_version_save(mdt_info_req(info), info->mti_ver[2], 2);
-        }
+		info->mti_ver[2] = ENOENT_VERSION;
+		mdt_version_save(mdt_info_req(info), info->mti_ver[2], 2);
+	}
 
 	rc = mdo_link(info->mti_env, mdt_object_child(mp),
-	      mdt_object_child(ms), &rr->rr_name, ma);
+		      mdt_object_child(ms), &rr->rr_name, ma);
 
-        if (rc == 0)
+	if (rc == 0)
 		mdt_counter_incr(req, LPROC_MDT_LINK);
 
-        EXIT;
-out_unlock_child:
-        mdt_object_unlock_put(info, ms, lhs, rc);
-out_unlock_parent:
-        mdt_object_unlock_put(info, mp, lhp, rc);
-        return rc;
+	EXIT;
+unlock_source:
+	mdt_object_unlock(info, ms, lhs, rc);
+unlock_parent:
+	mdt_object_unlock(info, mp, lhp, rc);
+put_source:
+	mdt_object_put(info->mti_env, ms);
+put_parent:
+	mdt_object_put(info->mti_env, mp);
+	return rc;
 }
 /**
  * lock the part of the directory according to the hash of the name
@@ -1111,11 +1214,13 @@ out_unlock_parent:
  */
 static int mdt_pdir_hash_lock(struct mdt_thread_info *info,
 			      struct mdt_lock_handle *lh,
-			      struct mdt_object *obj, __u64 ibits)
+			      struct mdt_object *obj, __u64 ibits,
+			      bool cos_incompat)
 {
 	struct ldlm_res_id *res = &info->mti_res_id;
 	struct ldlm_namespace *ns = info->mti_mdt->mdt_namespace;
 	union ldlm_policy_data *policy = &info->mti_policy;
+	__u64 dlmflags = LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB;
 	int rc;
 
 	/*
@@ -1126,14 +1231,16 @@ static int mdt_pdir_hash_lock(struct mdt_thread_info *info,
 	fid_build_pdo_res_name(mdt_object_fid(obj), lh->mlh_pdo_hash, res);
 	memset(policy, 0, sizeof(*policy));
 	policy->l_inodebits.bits = ibits;
+	if (cos_incompat &&
+	    (lh->mlh_reg_mode == LCK_PW || lh->mlh_reg_mode == LCK_EX))
+		dlmflags |= LDLM_FL_COS_INCOMPAT;
 	/*
 	 * Use LDLM_FL_LOCAL_ONLY for this lock. We do not know yet if it is
 	 * going to be sent to client. If it is - mdt_intent_policy() path will
 	 * fix it up and turn FL_LOCAL flag off.
 	 */
 	rc = mdt_fid_lock(ns, &lh->mlh_reg_lh, lh->mlh_reg_mode, policy,
-			  res, LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB,
-			  &info->mti_exp->exp_handle.h_cookie);
+			  res, dlmflags, &info->mti_exp->exp_handle.h_cookie);
 	return rc;
 }
 
@@ -1335,8 +1442,8 @@ again:
 		 * cannot be gotten because of conflicting locks, then drop all
 		 * current locks, send an AST to the client, and start again. */
 		mdt_lock_pdo_init(&mll->mll_lh, LCK_PW, &name);
-		rc = mdt_object_lock_try(info, mdt_pobj, &mll->mll_lh,
-					 MDS_INODELOCK_UPDATE);
+		rc = mdt_reint_object_lock_try(info, mdt_pobj, &mll->mll_lh,
+						MDS_INODELOCK_UPDATE, true);
 		if (rc == 0) {
 			mdt_unlock_list(info, lock_list, rc);
 
@@ -1426,8 +1533,8 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info,
 
 	lh_dirp = &info->mti_lh[MDT_LH_PARENT];
 	mdt_lock_pdo_init(lh_dirp, LCK_PW, &rr->rr_name);
-	rc = mdt_object_lock(info, msrcdir, lh_dirp,
-			     MDS_INODELOCK_UPDATE);
+	rc = mdt_reint_object_lock(info, msrcdir, lh_dirp, MDS_INODELOCK_UPDATE,
+				   true);
 	if (rc)
 		GOTO(out_put_parent, rc);
 
@@ -1547,7 +1654,7 @@ out_lease:
 		lock_ibits &= ~MDS_INODELOCK_LOOKUP;
 	}
 
-	rc = mdt_object_lock(info, mold, lh_childp, lock_ibits);
+	rc = mdt_reint_object_lock(info, mold, lh_childp, lock_ibits, true);
 	if (rc != 0)
 		GOTO(out_unlock_child, rc);
 
@@ -1645,7 +1752,10 @@ out_put_new:
 out_unlock_child:
 	mdt_object_unlock(info, mold, lh_childp, rc);
 out_unlock_list:
-	mdt_unlock_list(info, &lock_list, rc);
+	/* we don't really modify linkea objects, so we can safely decref these
+	 * locks, and this can avoid saving them as COS locks, which may prevent
+	 * subsequent migrate. */
+	mdt_unlock_list(info, &lock_list, 1);
 	if (lease != NULL) {
 		ldlm_reprocess_all(lease->l_resource);
 		LDLM_LOCK_PUT(lease);
@@ -1689,12 +1799,13 @@ out_put:
 static int mdt_object_lock_save(struct mdt_thread_info *info,
 				struct mdt_object *dir,
 				struct mdt_lock_handle *lh,
-				int idx)
+				int idx, bool cos_incompat)
 {
 	int rc;
 
 	/* we lock the target dir if it is local */
-	rc = mdt_object_lock(info, dir, lh, MDS_INODELOCK_UPDATE);
+	rc = mdt_reint_object_lock(info, dir, lh, MDS_INODELOCK_UPDATE,
+				   cos_incompat);
 	if (rc != 0)
 		return rc;
 
@@ -1703,97 +1814,10 @@ static int mdt_object_lock_save(struct mdt_thread_info *info,
 	return 0;
 }
 
-
-static int mdt_rename_parents_lock(struct mdt_thread_info *info,
-				   struct mdt_object **srcp,
-				   struct mdt_object **tgtp)
-{
-	struct mdt_reint_record *rr = &info->mti_rr;
-	const struct lu_fid     *fid_src = rr->rr_fid1;
-	const struct lu_fid     *fid_tgt = rr->rr_fid2;
-	struct mdt_lock_handle  *lh_src = &info->mti_lh[MDT_LH_PARENT];
-	struct mdt_lock_handle  *lh_tgt = &info->mti_lh[MDT_LH_CHILD];
-	struct mdt_object       *src;
-	struct mdt_object       *tgt;
-	int                      reverse = 0;
-	int                      rc;
-	ENTRY;
-
-	/* find both parents. */
-	src = mdt_object_find_check(info, fid_src, 0);
-	if (IS_ERR(src))
-		RETURN(PTR_ERR(src));
-
-	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME3, 5);
-
-	if (lu_fid_eq(fid_src, fid_tgt)) {
-		tgt = src;
-		mdt_object_get(info->mti_env, tgt);
-	} else {
-		/* Check if the @src is not a child of the @tgt, otherwise a
-		 * reverse locking must take place. */
-		rc = mdt_is_subdir(info, src, fid_tgt);
-		if (rc == -EINVAL)
-			reverse = 1;
-		else if (rc)
-			GOTO(err_src_put, rc);
-
-		tgt = mdt_object_find_check(info, fid_tgt, 1);
-		if (IS_ERR(tgt))
-			GOTO(err_src_put, rc = PTR_ERR(tgt));
-	}
-
-	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME4, 5);
-
-	/* lock parents in the proper order. */
-	if (reverse) {
-		rc = mdt_object_lock_save(info, tgt, lh_tgt, 1);
-		if (rc)
-			GOTO(err_tgt_put, rc);
-
-		OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME, 5);
-
-		rc = mdt_object_lock_save(info, src, lh_src, 0);
-	} else {
-		rc = mdt_object_lock_save(info, src, lh_src, 0);
-		if (rc)
-			GOTO(err_tgt_put, rc);
-
-		OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME, 5);
-
-		if (tgt != src)
-			rc = mdt_object_lock_save(info, tgt, lh_tgt, 1);
-		else if (lh_src->mlh_pdo_hash != lh_tgt->mlh_pdo_hash) {
-			rc = mdt_pdir_hash_lock(info, lh_tgt, tgt,
-						MDS_INODELOCK_UPDATE);
-			OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_PDO_LOCK2, 10);
-		}
-	}
-	if (rc)
-		GOTO(err_unlock, rc);
-
-	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME4, 5);
-
-	*srcp = src;
-	*tgtp = tgt;
-	RETURN(0);
-
-err_unlock:
-	/* The order does not matter as the handle is checked inside,
-	 * as well as not used handle. */
-	mdt_object_unlock(info, src, lh_src, rc);
-	mdt_object_unlock(info, tgt, lh_tgt, rc);
-err_tgt_put:
-	mdt_object_put(info->mti_env, tgt);
-err_src_put:
-	mdt_object_put(info->mti_env, src);
-	RETURN(rc);
-}
-
 /*
- * VBR: rename versions in reply: 0 - src parent; 1 - tgt parent;
- * 2 - src child; 3 - tgt child.
- * Update on disk version of src child.
+ * VBR: rename versions in reply: 0 - srcdir parent; 1 - tgtdir parent;
+ * 2 - srcdir child; 3 - tgtdir child.
+ * Update on disk version of srcdir child.
  */
 /**
  * For DNE phase I, only these renames are allowed
@@ -1810,39 +1834,105 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 				     struct mdt_lock_handle *lhc)
 {
 	struct mdt_reint_record *rr = &info->mti_rr;
-	struct md_attr          *ma = &info->mti_attr;
-	struct ptlrpc_request   *req = mdt_info_req(info);
-	struct mdt_object       *msrcdir = NULL;
-	struct mdt_object       *mtgtdir = NULL;
-	struct mdt_object       *mold;
-	struct mdt_object       *mnew = NULL;
-	struct mdt_lock_handle  *lh_srcdirp;
-	struct mdt_lock_handle  *lh_tgtdirp;
-	struct mdt_lock_handle  *lh_oldp = NULL;
-	struct mdt_lock_handle  *lh_newp = NULL;
-	struct lu_fid           *old_fid = &info->mti_tmp_fid1;
-	struct lu_fid           *new_fid = &info->mti_tmp_fid2;
-	__u64			lock_ibits;
-	int                      rc;
+	struct md_attr *ma = &info->mti_attr;
+	struct ptlrpc_request *req = mdt_info_req(info);
+	struct mdt_object *msrcdir = NULL;
+	struct mdt_object *mtgtdir = NULL;
+	struct mdt_object *mold;
+	struct mdt_object *mnew = NULL;
+	struct mdt_lock_handle *lh_srcdirp;
+	struct mdt_lock_handle *lh_tgtdirp;
+	struct mdt_lock_handle *lh_oldp = NULL;
+	struct mdt_lock_handle *lh_newp = NULL;
+	struct lu_fid *old_fid = &info->mti_tmp_fid1;
+	struct lu_fid *new_fid = &info->mti_tmp_fid2;
+	__u64 lock_ibits;
+	bool reverse = false;
+	bool cos_incompat;
+	int rc;
 	ENTRY;
 
 	DEBUG_REQ(D_INODE, req, "rename "DFID"/"DNAME" to "DFID"/"DNAME,
 		  PFID(rr->rr_fid1), PNAME(&rr->rr_name),
 		  PFID(rr->rr_fid2), PNAME(&rr->rr_tgt_name));
 
+	/* find both parents. */
+	msrcdir = mdt_object_find_check(info, rr->rr_fid1, 0);
+	if (IS_ERR(msrcdir))
+		RETURN(PTR_ERR(msrcdir));
+
+	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME3, 5);
+
+	if (lu_fid_eq(rr->rr_fid1, rr->rr_fid2)) {
+		mtgtdir = msrcdir;
+		mdt_object_get(info->mti_env, mtgtdir);
+	} else {
+		/* Check if the @msrcdir is not a child of the @mtgtdir,
+		 * otherwise a reverse locking must take place. */
+		rc = mdt_is_subdir(info, msrcdir, rr->rr_fid2);
+		if (rc == -EINVAL)
+			reverse = true;
+		else if (rc)
+			GOTO(out_put_srcdir, rc);
+
+		mtgtdir = mdt_object_find_check(info, rr->rr_fid2, 1);
+		if (IS_ERR(mtgtdir))
+			GOTO(out_put_srcdir, rc = PTR_ERR(mtgtdir));
+	}
+
+	/* source needs to be looked up after locking source parent, otherwise
+	 * this rename may race with unlink source, and cause rename hang, see
+	 * sanityn.sh 55b, so check parents first, if later we found source is
+	 * remote, relock parents. */
+	cos_incompat = (mdt_object_remote(msrcdir) ||
+			mdt_object_remote(mtgtdir));
+
+	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME4, 5);
+
+	/* lock parents in the proper order. */
 	lh_srcdirp = &info->mti_lh[MDT_LH_PARENT];
-	mdt_lock_pdo_init(lh_srcdirp, LCK_PW, &rr->rr_name);
 	lh_tgtdirp = &info->mti_lh[MDT_LH_CHILD];
+
+relock:
+	mdt_lock_pdo_init(lh_srcdirp, LCK_PW, &rr->rr_name);
 	mdt_lock_pdo_init(lh_tgtdirp, LCK_PW, &rr->rr_tgt_name);
 
-	/* step 1&2: lock the source and target dirs. */
-	rc = mdt_rename_parents_lock(info, &msrcdir, &mtgtdir);
-	if (rc)
-		RETURN(rc);
+	if (reverse) {
+		rc = mdt_object_lock_save(info, mtgtdir, lh_tgtdirp, 1,
+					  cos_incompat);
+		if (rc)
+			GOTO(out_put_tgtdir, rc);
 
+		OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME, 5);
+
+		rc = mdt_object_lock_save(info, msrcdir, lh_srcdirp, 0,
+					  cos_incompat);
+	} else {
+		rc = mdt_object_lock_save(info, msrcdir, lh_srcdirp, 0,
+					  cos_incompat);
+		if (rc)
+			GOTO(out_put_tgtdir, rc);
+
+		OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME, 5);
+
+		if (mtgtdir != msrcdir) {
+			rc = mdt_object_lock_save(info, mtgtdir, lh_tgtdirp, 1,
+						  cos_incompat);
+		} else if (lh_srcdirp->mlh_pdo_hash !=
+			   lh_tgtdirp->mlh_pdo_hash) {
+			rc = mdt_pdir_hash_lock(info, lh_tgtdirp, mtgtdir,
+						MDS_INODELOCK_UPDATE,
+						cos_incompat);
+			OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_PDO_LOCK2, 10);
+		}
+	}
+	if (rc)
+		GOTO(out_unlock_parents, rc);
+
+	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME4, 5);
 	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME2, 5);
 
-	/* step 3: find & lock the old object. */
+	/* find mold object. */
 	fid_zero(old_fid);
 	rc = mdt_lookup_version_check(info, msrcdir, &rr->rr_name, old_fid, 2);
 	if (rc != 0)
@@ -1868,9 +1958,17 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 	/* save version after locking */
 	mdt_version_get_save(info, mold, 2);
 
-	/* step 4: find & lock the new object. */
-	/* new target object may not exist now */
-	/* lookup with version checking */
+	if (!cos_incompat && mdt_object_remote(mold)) {
+		cos_incompat = true;
+		mdt_object_put(info->mti_env, mold);
+		mdt_object_unlock(info, mtgtdir, lh_tgtdirp, -EAGAIN);
+		mdt_object_unlock(info, msrcdir, lh_srcdirp, -EAGAIN);
+		goto relock;
+	}
+
+	/* find mnew object:
+	 * mnew target object may not exist now
+	 * lookup with version checking */
 	fid_zero(new_fid);
 	rc = mdt_lookup_version_check(info, mtgtdir, &rr->rr_tgt_name, new_fid,
 				      3);
@@ -1911,7 +2009,6 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 
 		lh_oldp = &info->mti_lh[MDT_LH_OLD];
 		mdt_lock_reg_init(lh_oldp, LCK_EX);
-
 		lock_ibits = MDS_INODELOCK_LOOKUP | MDS_INODELOCK_XATTR;
 		if (mdt_object_remote(msrcdir)) {
 			/* Enqueue lookup lock from the parent MDT */
@@ -1927,7 +2024,8 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 			lock_ibits &= ~MDS_INODELOCK_LOOKUP;
 		}
 
-		rc = mdt_object_lock(info, mold, lh_oldp, lock_ibits);
+		rc = mdt_reint_object_lock(info, mold, lh_oldp, lock_ibits,
+					   cos_incompat);
 		if (rc != 0)
 			GOTO(out_unlock_old, rc);
 
@@ -1944,9 +2042,10 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 
 		lh_newp = &info->mti_lh[MDT_LH_NEW];
 		mdt_lock_reg_init(lh_newp, LCK_EX);
-		rc = mdt_object_lock(info, mnew, lh_newp,
-				     MDS_INODELOCK_LOOKUP |
-				     MDS_INODELOCK_UPDATE);
+		rc = mdt_reint_object_lock(info, mnew, lh_newp,
+					   MDS_INODELOCK_LOOKUP |
+					   MDS_INODELOCK_UPDATE,
+					   cos_incompat);
 		if (rc != 0)
 			GOTO(out_unlock_old, rc);
 
@@ -1957,7 +2056,6 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 	} else {
 		lh_oldp = &info->mti_lh[MDT_LH_OLD];
 		mdt_lock_reg_init(lh_oldp, LCK_EX);
-
 		lock_ibits = MDS_INODELOCK_LOOKUP | MDS_INODELOCK_XATTR;
 		if (mdt_object_remote(msrcdir)) {
 			/* Enqueue lookup lock from the parent MDT */
@@ -1968,14 +2066,15 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 						    MDS_INODELOCK_LOOKUP,
 						    false);
 			if (rc != ELDLM_OK)
-				GOTO(out_put_new, rc);
+				GOTO(out_put_old, rc);
 
 			lock_ibits &= ~MDS_INODELOCK_LOOKUP;
 		}
 
-		rc = mdt_object_lock(info, mold, lh_oldp, lock_ibits);
+		rc = mdt_reint_object_lock(info, mold, lh_oldp, lock_ibits,
+					   cos_incompat);
 		if (rc != 0)
-			GOTO(out_put_old, rc);
+			GOTO(out_unlock_old, rc);
 
 		mdt_enoent_version_save(info, 3);
 	}
@@ -2018,8 +2117,12 @@ out_put_new:
 out_put_old:
 	mdt_object_put(info->mti_env, mold);
 out_unlock_parents:
-	mdt_object_unlock_put(info, mtgtdir, lh_tgtdirp, rc);
-	mdt_object_unlock_put(info, msrcdir, lh_srcdirp, rc);
+	mdt_object_unlock(info, mtgtdir, lh_tgtdirp, rc);
+	mdt_object_unlock(info, msrcdir, lh_srcdirp, rc);
+out_put_tgtdir:
+	mdt_object_put(info->mti_env, mtgtdir);
+out_put_srcdir:
+	mdt_object_put(info->mti_env, msrcdir);
 	return rc;
 }
 
