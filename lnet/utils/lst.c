@@ -38,6 +38,8 @@
  * Author: Liang Zhen <liangzhen@clusterfs.com>
  */
 
+#include <getopt.h>
+#include <pwd.h>
 #include <libcfs/libcfsutil.h>
 #include <lnet/lnetctl.h>
 #include <lnet/lnetst.h>

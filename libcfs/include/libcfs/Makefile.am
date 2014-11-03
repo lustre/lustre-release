@@ -1,5 +1,5 @@
-SUBDIRS = linux posix util
-DIST_SUBDIRS = linux posix util
+SUBDIRS = linux util
+DIST_SUBDIRS = linux util
 
 libcfsdir = $(includedir)/libcfs
 

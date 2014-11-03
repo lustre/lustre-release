@@ -38,12 +38,37 @@
 #define __LIBCFS_LIBCFS_H__
 
 #include <libcfs/types.h>
+#include <libcfs/list.h>
 
 #ifdef __KERNEL__
 # include <libcfs/linux/libcfs.h>
-#else /* __KERNEL__ */
-# include <libcfs/posix/libcfs.h>
-#endif /* !__KERNEL__ */
+#else /* !__KERNEL__ */
+# include <assert.h>
+# include <ctype.h>
+# include <errno.h>
+# include <fcntl.h>
+# include <limits.h>
+# include <signal.h>
+# include <stdarg.h>
+# include <stdbool.h>
+# include <stddef.h>
+# include <stdint.h>
+# include <stdio.h>
+# include <stdlib.h>
+# include <string.h>
+# include <time.h>
+# include <sys/ioctl.h>
+# include <sys/socket.h>
+# include <sys/stat.h>
+# include <sys/time.h>
+# include <sys/types.h>
+# include <libcfs/user-time.h>
+# include <libcfs/user-prim.h>
+# include <libcfs/user-mem.h>
+# include <libcfs/user-lock.h>
+# include <libcfs/user-tcpip.h>
+# include <libcfs/user-bitops.h>
+#endif /* __KERNEL__ */
 
 #include "curproc.h"
 
@@ -108,8 +133,6 @@ static inline int __is_po2(unsigned long long val)
 #define NULL ((void *)0)
 
 #ifdef __KERNEL__
-
-#include <libcfs/list.h>
 
 #ifndef cfs_for_each_possible_cpu
 #  error cfs_for_each_possible_cpu is not supported by kernel!

@@ -43,12 +43,15 @@
 #define _GNU_SOURCE
 #endif
 #include "mount_utils.h"
+#include <getopt.h>
+#include <mntent.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
+#include <sys/mount.h>
 #include "obdctl.h"
 #include <lustre_ver.h>
 #include <ctype.h>

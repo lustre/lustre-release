@@ -20,6 +20,8 @@
 
 #define __USE_FILE_OFFSET64
 
+#include <sys/ioctl.h>
+#include <sys/mman.h>
 #include <libcfs/libcfsutil.h>
 #include <lnet/lnetctl.h>
 

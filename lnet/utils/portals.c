@@ -23,6 +23,8 @@
 #include <lnet/lnetctl.h>
 #include <lnet/socklnd.h>
 #include <lnet/lib-dlc.h>
+#include <getopt.h>
+#include <netdb.h>
 
 unsigned int libcfs_debug;
 unsigned int libcfs_printk = D_CANTMASK;

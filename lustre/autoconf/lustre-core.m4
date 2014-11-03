@@ -1856,9 +1856,8 @@ AS_IF([test $target_cpu == "i686" -o $target_cpu == "x86_64"],
 # maximum MDS thread count
 LC_MDS_MAX_THREADS
 
-# libcfs/include/libcfs/posix/libcfs.h
 # lustre/utils/llverdev.c
-AC_CHECK_HEADERS([sys/user.h sys/vfs.h stdint.h blkid/blkid.h])
+AC_CHECK_HEADERS([blkid/blkid.h])
 
 # libcfs/include/libcfs/linux/linux-prim.h, ...
 AC_CHECK_HEADERS([linux/types.h sys/types.h linux/unistd.h unistd.h])

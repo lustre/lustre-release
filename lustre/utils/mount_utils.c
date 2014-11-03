@@ -38,12 +38,14 @@
 #endif /* HAVE_CONFIG_H */
 
 #include "mount_utils.h"
+#include <mntent.h>
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
 #include <config.h>
 #include <lustre_disk.h>
 #include <lustre_ver.h>
+#include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
 #include <linux/loop.h>

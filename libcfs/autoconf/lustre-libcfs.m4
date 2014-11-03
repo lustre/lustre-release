@@ -444,7 +444,6 @@ libcfs/autoconf/Makefile
 libcfs/include/Makefile
 libcfs/include/libcfs/Makefile
 libcfs/include/libcfs/linux/Makefile
-libcfs/include/libcfs/posix/Makefile
 libcfs/include/libcfs/util/Makefile
 libcfs/libcfs/Makefile
 libcfs/libcfs/autoMakefile
