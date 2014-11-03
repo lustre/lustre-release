@@ -1696,43 +1696,34 @@ out:
 /**
  * Get size for inode for which FIEMAP mapping is requested.
  * Make the FIEMAP get_info call and returns the result.
+ * \param fiemap	kernel buffer to hold extens
+ * \param num_bytes	kernel buffer size
  */
-static int ll_do_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
+static int ll_do_fiemap(struct inode *inode, struct fiemap *fiemap,
 			size_t num_bytes)
 {
-	struct obd_export *exp = ll_i2dtexp(inode);
-	struct lov_stripe_md *lsm = NULL;
-        struct ll_fiemap_info_key fm_key = { .name = KEY_FIEMAP, };
-	__u32 vallen = num_bytes;
-        int rc;
-        ENTRY;
+	struct lu_env			*env;
+	int				refcheck;
+	int				rc = 0;
+	struct ll_fiemap_info_key	fmkey = { .name = KEY_FIEMAP, };
+	ENTRY;
 
-        /* Checks for fiemap flags */
-        if (fiemap->fm_flags & ~LUSTRE_FIEMAP_FLAGS_COMPAT) {
-                fiemap->fm_flags &= ~LUSTRE_FIEMAP_FLAGS_COMPAT;
-                return -EBADR;
-        }
+	/* Checks for fiemap flags */
+	if (fiemap->fm_flags & ~LUSTRE_FIEMAP_FLAGS_COMPAT) {
+		fiemap->fm_flags &= ~LUSTRE_FIEMAP_FLAGS_COMPAT;
+		return -EBADR;
+	}
 
-        /* Check for FIEMAP_FLAG_SYNC */
-        if (fiemap->fm_flags & FIEMAP_FLAG_SYNC) {
-                rc = filemap_fdatawrite(inode->i_mapping);
-                if (rc)
-                        return rc;
-        }
+	/* Check for FIEMAP_FLAG_SYNC */
+	if (fiemap->fm_flags & FIEMAP_FLAG_SYNC) {
+		rc = filemap_fdatawrite(inode->i_mapping);
+		if (rc)
+			return rc;
+	}
 
-	lsm = ccc_inode_lsm_get(inode);
-	if (lsm == NULL)
-		return -ENOENT;
-
-	/* If the stripe_count > 1 and the application does not understand
-	 * DEVICE_ORDER flag, then it cannot interpret the extents correctly.
-	 */
-	if (lsm->lsm_stripe_count > 1 &&
-	    !(fiemap->fm_flags & FIEMAP_FLAG_DEVICE_ORDER))
-		GOTO(out, rc = -EOPNOTSUPP);
-
-	fm_key.oa.o_oi = lsm->lsm_oi;
-        fm_key.oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+	env = cl_env_get(&refcheck);
+	if (IS_ERR(env))
+		RETURN(PTR_ERR(env));
 
 	if (i_size_read(inode) == 0) {
 		rc = ll_glimpse_size(inode);
@@ -1740,23 +1731,22 @@ static int ll_do_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
 			GOTO(out, rc);
 	}
 
-        obdo_from_inode(&fm_key.oa, inode, OBD_MD_FLSIZE);
-        obdo_set_parent_fid(&fm_key.oa, &ll_i2info(inode)->lli_fid);
-        /* If filesize is 0, then there would be no objects for mapping */
-        if (fm_key.oa.o_size == 0) {
-                fiemap->fm_mapped_extents = 0;
+	fmkey.oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+	obdo_from_inode(&fmkey.oa, inode, OBD_MD_FLSIZE);
+	obdo_set_parent_fid(&fmkey.oa, &ll_i2info(inode)->lli_fid);
+
+	/* If filesize is 0, then there would be no objects for mapping */
+	if (fmkey.oa.o_size == 0) {
+		fiemap->fm_mapped_extents = 0;
 		GOTO(out, rc = 0);
-        }
+	}
 
-        memcpy(&fm_key.fiemap, fiemap, sizeof(*fiemap));
+	fmkey.fiemap = *fiemap;
 
-        rc = obd_get_info(NULL, exp, sizeof(fm_key), &fm_key, &vallen,
-                          fiemap, lsm);
-        if (rc)
-                CERROR("obd_get_info failed: rc = %d\n", rc);
-
+	rc = cl_object_fiemap(env, ll_i2info(inode)->lli_clob,
+			      &fmkey, fiemap, &num_bytes);
 out:
-	ccc_inode_lsm_put(inode, lsm);
+	cl_env_put(env, &refcheck);
 	RETURN(rc);
 }
 
@@ -1803,60 +1793,59 @@ gf_free:
 	RETURN(rc);
 }
 
-static int ll_ioctl_fiemap(struct inode *inode, unsigned long arg)
+static int ll_ioctl_fiemap(struct inode *inode, struct fiemap __user *arg)
 {
-        struct ll_user_fiemap *fiemap_s;
-        size_t num_bytes, ret_bytes;
-        unsigned int extent_count;
-        int rc = 0;
+	struct fiemap	*fiemap;
+	size_t		num_bytes;
+	size_t		ret_bytes;
+	__u32		extent_count;
+	int		rc = 0;
 
-        /* Get the extent count so we can calculate the size of
-         * required fiemap buffer */
-        if (get_user(extent_count,
-            &((struct ll_user_fiemap __user *)arg)->fm_extent_count))
-                RETURN(-EFAULT);
+	/* Get the extent count so we can calculate the size of
+	 * required fiemap buffer */
+	if (get_user(extent_count, &arg->fm_extent_count))
+		RETURN(-EFAULT);
 
 	if (extent_count >=
-	    (SIZE_MAX - sizeof(*fiemap_s)) / sizeof(struct ll_fiemap_extent))
+	    (SIZE_MAX - sizeof(*fiemap)) / sizeof(struct ll_fiemap_extent))
 		RETURN(-EINVAL);
-        num_bytes = sizeof(*fiemap_s) + (extent_count *
-                                         sizeof(struct ll_fiemap_extent));
+	num_bytes = sizeof(*fiemap) + (extent_count *
+				       sizeof(struct ll_fiemap_extent));
 
-        OBD_ALLOC_LARGE(fiemap_s, num_bytes);
-        if (fiemap_s == NULL)
-                RETURN(-ENOMEM);
+	OBD_ALLOC_LARGE(fiemap, num_bytes);
+	if (fiemap == NULL)
+		RETURN(-ENOMEM);
 
 	/* get the fiemap value */
-	if (copy_from_user(fiemap_s, (struct ll_user_fiemap __user *)arg,
-			   sizeof(*fiemap_s)))
+	if (copy_from_user(fiemap, arg, sizeof(*fiemap)))
 		GOTO(error, rc = -EFAULT);
 
-        /* If fm_extent_count is non-zero, read the first extent since
-         * it is used to calculate end_offset and device from previous
-         * fiemap call. */
-        if (extent_count) {
-                if (copy_from_user(&fiemap_s->fm_extents[0],
-                    (char __user *)arg + sizeof(*fiemap_s),
-                    sizeof(struct ll_fiemap_extent)))
-                        GOTO(error, rc = -EFAULT);
-        }
+	/* If fm_extent_count is non-zero, read the first extent since
+	 * it is used to calculate end_offset and device from previous
+	 * fiemap call. */
+	if (extent_count != 0) {
+		if (copy_from_user(&fiemap->fm_extents[0],
+				   (char __user *)arg + sizeof(*fiemap),
+				   sizeof(struct ll_fiemap_extent)))
+			GOTO(error, rc = -EFAULT);
+	}
 
-        rc = ll_do_fiemap(inode, fiemap_s, num_bytes);
-        if (rc)
-                GOTO(error, rc);
+	rc = ll_do_fiemap(inode, fiemap, num_bytes);
+	if (rc)
+		GOTO(error, rc);
 
-        ret_bytes = sizeof(struct ll_user_fiemap);
+	ret_bytes = sizeof(struct fiemap);
 
-        if (extent_count != 0)
-                ret_bytes += (fiemap_s->fm_mapped_extents *
-                                 sizeof(struct ll_fiemap_extent));
+	if (extent_count != 0)
+		ret_bytes += (fiemap->fm_mapped_extents *
+				 sizeof(struct ll_fiemap_extent));
 
-	if (copy_to_user((void __user *)arg, fiemap_s, ret_bytes))
+	if (copy_to_user((void __user *)arg, fiemap, ret_bytes))
 		rc = -EFAULT;
 
 error:
-        OBD_FREE_LARGE(fiemap_s, num_bytes);
-        RETURN(rc);
+	OBD_FREE_LARGE(fiemap, num_bytes);
+	RETURN(rc);
 }
 
 /*
@@ -2273,8 +2262,8 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case LL_IOC_LOV_GETSTRIPE:
 		RETURN(ll_file_getstripe(inode,
 					 (struct lov_user_md __user *)arg));
-        case FSFILT_IOC_FIEMAP:
-                RETURN(ll_ioctl_fiemap(inode, arg));
+	case FSFILT_IOC_FIEMAP:
+		RETURN(ll_ioctl_fiemap(inode, (struct fiemap __user *)arg));
         case FSFILT_IOC_GETFLAGS:
         case FSFILT_IOC_SETFLAGS:
                 RETURN(ll_iocontrol(inode, file, cmd, arg));

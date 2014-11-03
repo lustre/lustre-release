@@ -256,6 +256,91 @@ static int osc_object_find_cbdata(const struct lu_env *env,
 	return rc;
 }
 
+static int osc_object_fiemap(const struct lu_env *env, struct cl_object *obj,
+			     struct ll_fiemap_info_key *fmkey,
+			     struct fiemap *fiemap, size_t *buflen)
+{
+	struct obd_export		*exp = osc_export(cl2osc(obj));
+	struct ldlm_res_id		resid;
+	ldlm_policy_data_t		policy;
+	struct lustre_handle		lockh;
+	ldlm_mode_t			mode = 0;
+	struct ptlrpc_request		*req;
+	struct fiemap			*reply;
+	char				*tmp;
+	int				rc;
+	ENTRY;
+
+	fmkey->oa.o_oi = cl2osc(obj)->oo_oinfo->loi_oi;
+	if (!(fmkey->fiemap.fm_flags & FIEMAP_FLAG_SYNC))
+		goto skip_locking;
+
+	policy.l_extent.start = fmkey->fiemap.fm_start & PAGE_CACHE_MASK;
+
+	if (OBD_OBJECT_EOF - fmkey->fiemap.fm_length <=
+	    fmkey->fiemap.fm_start + PAGE_CACHE_SIZE - 1)
+		policy.l_extent.end = OBD_OBJECT_EOF;
+	else
+		policy.l_extent.end = (fmkey->fiemap.fm_start +
+				       fmkey->fiemap.fm_length +
+				       PAGE_CACHE_SIZE - 1) & PAGE_CACHE_MASK;
+
+	ostid_build_res_name(&fmkey->oa.o_oi, &resid);
+	mode = ldlm_lock_match(exp->exp_obd->obd_namespace,
+			       LDLM_FL_BLOCK_GRANTED | LDLM_FL_LVB_READY,
+			       &resid, LDLM_EXTENT, &policy,
+			       LCK_PR | LCK_PW, &lockh, 0);
+	if (mode) { /* lock is cached on client */
+		if (mode != LCK_PR) {
+			ldlm_lock_addref(&lockh, LCK_PR);
+			ldlm_lock_decref(&lockh, LCK_PW);
+		}
+	} else { /* no cached lock, needs acquire lock on server side */
+		fmkey->oa.o_valid |= OBD_MD_FLFLAGS;
+		fmkey->oa.o_flags |= OBD_FL_SRVLOCK;
+	}
+
+skip_locking:
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
+				   &RQF_OST_GET_INFO_FIEMAP);
+	if (req == NULL)
+		GOTO(drop_lock, rc = -ENOMEM);
+
+	req_capsule_set_size(&req->rq_pill, &RMF_FIEMAP_KEY, RCL_CLIENT,
+			     sizeof(*fmkey));
+	req_capsule_set_size(&req->rq_pill, &RMF_FIEMAP_VAL, RCL_CLIENT,
+			     *buflen);
+	req_capsule_set_size(&req->rq_pill, &RMF_FIEMAP_VAL, RCL_SERVER,
+			     *buflen);
+
+	rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_GET_INFO);
+	if (rc != 0) {
+		ptlrpc_request_free(req);
+		GOTO(drop_lock, rc);
+	}
+	tmp = req_capsule_client_get(&req->rq_pill, &RMF_FIEMAP_KEY);
+	memcpy(tmp, fmkey, sizeof(*fmkey));
+	tmp = req_capsule_client_get(&req->rq_pill, &RMF_FIEMAP_VAL);
+	memcpy(tmp, fiemap, *buflen);
+	ptlrpc_request_set_replen(req);
+
+	rc = ptlrpc_queue_wait(req);
+	if (rc != 0)
+		GOTO(fini_req, rc);
+
+	reply = req_capsule_server_get(&req->rq_pill, &RMF_FIEMAP_VAL);
+	if (reply == NULL)
+		GOTO(fini_req, rc = -EPROTO);
+
+	memcpy(fiemap, reply, *buflen);
+fini_req:
+	ptlrpc_req_finished(req);
+drop_lock:
+	if (mode)
+		ldlm_lock_decref(&lockh, LCK_PR);
+	RETURN(rc);
+}
+
 void osc_object_set_contended(struct osc_object *obj)
 {
         obj->oo_contention_time = cfs_time_current();
@@ -295,14 +380,15 @@ int osc_object_is_contended(struct osc_object *obj)
 }
 
 static const struct cl_object_operations osc_ops = {
-	.coo_page_init    = osc_page_init,
-	.coo_lock_init    = osc_lock_init,
-	.coo_io_init      = osc_io_init,
-	.coo_attr_get     = osc_attr_get,
-	.coo_attr_update  = osc_attr_update,
-	.coo_glimpse      = osc_object_glimpse,
-	.coo_prune        = osc_object_prune,
-	.coo_find_cbdata  = osc_object_find_cbdata
+	.coo_page_init   = osc_page_init,
+	.coo_lock_init   = osc_lock_init,
+	.coo_io_init     = osc_io_init,
+	.coo_attr_get    = osc_attr_get,
+	.coo_attr_update = osc_attr_update,
+	.coo_glimpse     = osc_object_glimpse,
+	.coo_prune       = osc_object_prune,
+	.coo_find_cbdata = osc_object_find_cbdata,
+	.coo_fiemap      = osc_object_fiemap,
 };
 
 static const struct lu_object_operations osc_lu_obj_ops = {

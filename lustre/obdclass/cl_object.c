@@ -386,6 +386,39 @@ int cl_object_find_cbdata(const struct lu_env *env, struct cl_object *obj,
 EXPORT_SYMBOL(cl_object_find_cbdata);
 
 /**
+ * Get fiemap extents from file object.
+ *
+ * \param env [in]	lustre environment
+ * \param obj [in]	file object
+ * \param key [in]	fiemap request argument
+ * \param fiemap [out]	fiemap extents mapping retrived
+ * \param buflen [in]	max buffer length of @fiemap
+ *
+ * \retval 0	success
+ * \retval < 0	error
+ */
+int cl_object_fiemap(const struct lu_env *env, struct cl_object *obj,
+		     struct ll_fiemap_info_key *key,
+		     struct fiemap *fiemap, size_t *buflen)
+{
+	struct lu_object_header	*top;
+	int			result = 0;
+	ENTRY;
+
+	top = obj->co_lu.lo_header;
+	list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
+		if (obj->co_ops->coo_fiemap != NULL) {
+			result = obj->co_ops->coo_fiemap(env, obj, key, fiemap,
+							 buflen);
+			if (result != 0)
+				break;
+		}
+	}
+	RETURN(result);
+}
+EXPORT_SYMBOL(cl_object_fiemap);
+
+/**
  * Helper function removing all object locks, and marking object for
  * deletion. All object pages must have been deleted at this point.
  *

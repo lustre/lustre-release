@@ -409,6 +409,12 @@ struct cl_object_operations {
 	 */
 	int (*coo_find_cbdata)(const struct lu_env *env, struct cl_object *obj,
 			       ldlm_iterator_t iter, void *data);
+	/**
+	 * Get FIEMAP mapping from the object.
+	 */
+	int (*coo_fiemap)(const struct lu_env *env, struct cl_object *obj,
+			  struct ll_fiemap_info_key *fmkey,
+			  struct fiemap *fiemap, size_t *buflen);
 };
 
 /**
@@ -2180,6 +2186,9 @@ int cl_object_getstripe(const struct lu_env *env, struct cl_object *obj,
 			struct lov_user_md __user *lum);
 int cl_object_find_cbdata(const struct lu_env *env, struct cl_object *obj,
 			  ldlm_iterator_t iter, void *data);
+int cl_object_fiemap(const struct lu_env *env, struct cl_object *obj,
+		     struct ll_fiemap_info_key *fmkey, struct fiemap *fiemap,
+		     size_t *buflen);
 
 /**
  * Returns true, iff \a o0 and \a o1 are slices of the same object.
