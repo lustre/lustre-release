@@ -36,7 +36,7 @@ HOSTNAME_CHECKSUM=$(hostname | sum | awk '{ print $1 }')
 SUBNET_CHECKSUM=$(expr $HOSTNAME_CHECKSUM % 250 + 1)
 NODEMAP_COUNT=16
 NODEMAP_RANGE_COUNT=3
-NODEMAP_IPADDR_COUNT=30
+NODEMAP_IPADDR_LIST="1 10 64 128 200 250"
 NODEMAP_MAX_ID=128
 
 require_dsh_mds || exit 0
@@ -1096,7 +1096,7 @@ test_13() {
 	rc=0
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
 		for ((j = 0; j < NODEMAP_RANGE_COUNT; j++)); do
-			for ((k = 1; k < 253; k++)); do
+			for k in $NODEMAP_IPADDR_LIST; do
 				if ! test_nid $SUBNET_CHECKSUM.$i.$j.$k	\
 				       ${HOSTNAME_CHECKSUM}_${i}; then
 					rc=$((rc + 1))
@@ -1131,7 +1131,7 @@ test_14() {
 	rc=0
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
 		for ((j = 0; j < NODEMAP_RANGE_COUNT; j++)); do
-			for ((k = 1; k < 253; k++)); do
+			for k in $NODEMAP_IPADDR_LIST; do
 				if ! test_nid $SUBNET_CHECKSUM.$i.$j.$k \
 					default; then
 					rc=$((rc + 1))
