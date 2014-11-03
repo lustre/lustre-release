@@ -266,7 +266,7 @@ LPROC_SEQ_FOPS_RO_TYPE(lov, kbytestotal);
 LPROC_SEQ_FOPS_RO_TYPE(lov, kbytesfree);
 LPROC_SEQ_FOPS_RO_TYPE(lov, kbytesavail);
 
-struct lprocfs_seq_vars lprocfs_lov_obd_vars[] = {
+struct lprocfs_vars lprocfs_lov_obd_vars[] = {
 	{ .name	=	"uuid",
 	  .fops	=	&lov_uuid_fops		},
 	{ .name	=	"stripesize",

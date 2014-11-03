@@ -40,7 +40,7 @@
 #include <lustre_mdc.h>
 
 #ifdef LPROCFS
-extern struct lprocfs_seq_vars lprocfs_mdc_obd_vars[];
+extern struct lprocfs_vars lprocfs_mdc_obd_vars[];
 #endif
 
 void mdc_pack_body(struct ptlrpc_request *req, const struct lu_fid *fid,

@@ -705,7 +705,7 @@ lod_lmv_failout_seq_write(struct file *file, const char *buffer,
 }
 LPROC_SEQ_FOPS(lod_lmv_failout);
 
-static struct lprocfs_seq_vars lprocfs_lod_obd_vars[] = {
+static struct lprocfs_vars lprocfs_lod_obd_vars[] = {
 	{ .name	=	"uuid",
 	  .fops	=	&lod_uuid_fops		},
 	{ .name	=	"stripesize",
@@ -733,7 +733,7 @@ static struct lprocfs_seq_vars lprocfs_lod_obd_vars[] = {
 	{ 0 }
 };
 
-static struct lprocfs_seq_vars lprocfs_lod_osd_vars[] = {
+static struct lprocfs_vars lprocfs_lod_osd_vars[] = {
 	{ "blocksize",		&lod_dt_blksize_fops		},
 	{ "kbytestotal",	&lod_dt_kbytestotal_fops	},
 	{ "kbytesfree",		&lod_dt_kbytesfree_fops		},
@@ -774,8 +774,8 @@ int lod_procfs_init(struct lod_device *lod)
 		RETURN(rc);
 	}
 
-	rc = lprocfs_seq_add_vars(obd->obd_proc_entry, lprocfs_lod_osd_vars,
-				  &lod->lod_dt_dev);
+	rc = lprocfs_add_vars(obd->obd_proc_entry, lprocfs_lod_osd_vars,
+			      &lod->lod_dt_dev);
 	if (rc) {
 		CERROR("%s: cannot setup procfs entry: %d\n",
 		       obd->obd_name, rc);
@@ -790,9 +790,9 @@ int lod_procfs_init(struct lod_device *lod)
 		GOTO(out, rc);
 	}
 
-	lod->lod_pool_proc_entry = lprocfs_seq_register("pools",
-							obd->obd_proc_entry,
-							NULL, NULL);
+	lod->lod_pool_proc_entry = lprocfs_register("pools",
+						    obd->obd_proc_entry,
+						    NULL, NULL);
 	if (IS_ERR(lod->lod_pool_proc_entry)) {
 		rc = PTR_ERR(lod->lod_pool_proc_entry);
 		lod->lod_pool_proc_entry = NULL;

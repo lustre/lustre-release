@@ -1858,7 +1858,7 @@ int nrs_orr_lprocfs_init(struct ptlrpc_service *svc)
 {
 	int	i;
 
-	struct lprocfs_seq_vars nrs_orr_lprocfs_vars[] = {
+	struct lprocfs_vars nrs_orr_lprocfs_vars[] = {
 		{ .name		= "nrs_orr_quantum",
 		  .fops		= &ptlrpc_lprocfs_nrs_orr_quantum_fops	},
 		{ .name		= "nrs_orr_offset_type",
@@ -1876,7 +1876,7 @@ int nrs_orr_lprocfs_init(struct ptlrpc_service *svc)
 	for (i = 0; i < ARRAY_SIZE(nrs_orr_lprocfs_vars); i++)
 		nrs_orr_lprocfs_vars[i].data = &lprocfs_orr_data;
 
-	return lprocfs_seq_add_vars(svc->srv_procroot, nrs_orr_lprocfs_vars, NULL);
+	return lprocfs_add_vars(svc->srv_procroot, nrs_orr_lprocfs_vars, NULL);
 }
 
 void nrs_orr_lprocfs_fini(struct ptlrpc_service *svc)
@@ -1925,10 +1925,9 @@ struct ptlrpc_nrs_pol_conf nrs_conf_orr = {
 
 int nrs_trr_lprocfs_init(struct ptlrpc_service *svc)
 {
-	int	rc;
 	int	i;
 
-	struct lprocfs_seq_vars nrs_trr_lprocfs_vars[] = {
+	struct lprocfs_vars nrs_trr_lprocfs_vars[] = {
 		{ .name		= "nrs_trr_quantum",
 		  .fops		= &ptlrpc_lprocfs_nrs_orr_quantum_fops },
 		{ .name		= "nrs_trr_offset_type",
@@ -1946,9 +1945,7 @@ int nrs_trr_lprocfs_init(struct ptlrpc_service *svc)
 	for (i = 0; i < ARRAY_SIZE(nrs_trr_lprocfs_vars); i++)
 		nrs_trr_lprocfs_vars[i].data = &lprocfs_trr_data;
 
-	rc = lprocfs_seq_add_vars(svc->srv_procroot, nrs_trr_lprocfs_vars, NULL);
-
-	return rc;
+	return lprocfs_add_vars(svc->srv_procroot, nrs_trr_lprocfs_vars, NULL);
 }
 
 void nrs_trr_lprocfs_fini(struct ptlrpc_service *svc)

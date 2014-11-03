@@ -1195,8 +1195,8 @@ static int __init lod_mod_init(void)
 		return rc;
 
 	type = class_search_type(LUSTRE_LOD_NAME);
-	type->typ_procsym = lprocfs_seq_register("lov", proc_lustre_root,
-						 NULL, NULL);
+	type->typ_procsym = lprocfs_register("lov", proc_lustre_root,
+					     NULL, NULL);
 	if (IS_ERR(type->typ_procsym)) {
 		CERROR("lod: can't create compat entry \"lov\": %d\n",
 		       (int)PTR_ERR(type->typ_procsym));
