@@ -201,8 +201,7 @@ static int nodemap_exports_show(struct seq_file *m, void *data)
  */
 static int nodemap_exports_open(struct inode *inode, struct file *file)
 {
-	struct proc_dir_entry	*dir = PDE(inode);
-	struct lu_nodemap	*nodemap = dir->data;
+	struct lu_nodemap	*nodemap = PDE_DATA(inode);
 
 	return single_open(file, nodemap_exports_show, nodemap);
 }
