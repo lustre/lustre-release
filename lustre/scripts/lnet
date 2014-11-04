@@ -134,7 +134,7 @@ case "$1" in
 	# utility for parsing.  This will configure the items defined
 	# in YAML format in the config file.
 	if [ -f $LUSTRE_LNET_CONFIG_UTILITY ] && [ -f "$LUSTRE_LNET_CONFIG_FILE" ]; then
-		$LUSTRE_LNET_CONFIG_UTILITY $LUSTRE_LNET_CONFIG_FILE
+		$LUSTRE_LNET_CONFIG_UTILITY import < $LUSTRE_LNET_CONFIG_FILE
 	fi
 	run_postexec_check "start"
 	;;
