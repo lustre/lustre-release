@@ -98,8 +98,11 @@
  */
 #include <libcfs/libcfs.h>
 #include <lu_object.h>
+#include <linux/atomic.h>
 #include <linux/mutex.h>
 #include <linux/radix-tree.h>
+#include <linux/spinlock.h>
+#include <linux/wait.h>
 
 struct inode;
 
@@ -2401,6 +2404,52 @@ void cl_lock_descr_print(const struct lu_env *env, void *cookie,
 			 lu_printer_t printer,
 			 const struct cl_lock_descr *descr);
 /* @} helper */
+
+/**
+ * Data structure managing a client's cached pages. A count of
+ * "unstable" pages is maintained, and an LRU of clean pages is
+ * maintained. "unstable" pages are pages pinned by the ptlrpc
+ * layer for recovery purposes.
+ */
+struct cl_client_cache {
+	/**
+	 * # of users (OSCs)
+	 */
+	atomic_t		ccc_users;
+	/**
+	 * # of threads are doing shrinking
+	 */
+	unsigned int		ccc_lru_shrinkers;
+	/**
+	 * # of LRU entries available
+	 */
+	atomic_long_t		ccc_lru_left;
+	/**
+	 * List of entities(OSCs) for this LRU cache
+	 */
+	struct list_head	ccc_lru;
+	/**
+	 * Max # of LRU entries
+	 */
+	unsigned long		ccc_lru_max;
+	/**
+	 * Lock to protect ccc_lru list
+	 */
+	spinlock_t		ccc_lru_lock;
+	/**
+	 * Set if unstable check is enabled
+	 */
+	unsigned int		ccc_unstable_check:1;
+	/**
+	 * # of unstable pages for this mount point
+	 */
+	atomic_long_t		ccc_unstable_nr;
+	/**
+	 * Waitq for awaiting unstable pages to reach zero.
+	 * Used at umounting time and signaled on BRW commit
+	 */
+	wait_queue_head_t	ccc_unstable_waitq;
+};
 
 /** @} cl_page */
 

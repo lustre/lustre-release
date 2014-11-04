@@ -337,10 +337,6 @@ liblustre code that is located in liblustre/llite_cl.c.
 Definitions of data-structures shared within a layer are in
 foo/foo_cl_internal.h
 
-VVP and SLP share most of the CLIO functionality and data-structures. Common
-functions are defined in the lustre/lclient directory, and common types are in
-the lustre/include/lclient.h header.
-
 =============
 = 2. Layers =
 =============

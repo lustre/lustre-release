@@ -58,8 +58,6 @@
 #include <lustre_mdc.h>
 #include <cl_object.h>
 
-#include <lclient.h>
-
 #include "llite_internal.h"
 
 static const struct cl_req_operations ccc_req_ops;

@@ -55,7 +55,6 @@
 #include <lprocfs_status.h>
 #include <lustre_param.h>
 #include <cl_object.h>
-#include <lclient.h>
 #include <lustre/ll_fiemap.h>
 #include <lustre_fid.h>
 

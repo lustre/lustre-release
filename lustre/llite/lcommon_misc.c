@@ -41,7 +41,6 @@
 #include <obd_support.h>
 #include <obd.h>
 #include <cl_object.h>
-#include <lclient.h>
 
 #include "llite_internal.h"
 

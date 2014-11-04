@@ -43,6 +43,7 @@
 
 
 #include <obd.h>
+#include "llite_internal.h"
 #include "vvp_internal.h"
 
 static struct vvp_io *cl2vvp_io(const struct lu_env *env,

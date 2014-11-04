@@ -43,6 +43,7 @@
 
 
 #include <obd.h>
+#include "llite_internal.h"
 #include "vvp_internal.h"
 
 /*****************************************************************************
