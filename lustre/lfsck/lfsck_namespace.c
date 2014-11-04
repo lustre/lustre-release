@@ -5519,19 +5519,9 @@ static void lfsck_namespace_scan_local_lpf(const struct lu_env *env,
 		rc = 0;
 
 	while (rc == 0) {
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DELAY3) &&
-		    cfs_fail_val > 0) {
-			struct l_wait_info lwi;
-
-			lwi = LWI_TIMEOUT(cfs_time_seconds(cfs_fail_val),
-					  NULL, NULL);
-			l_wait_event(thread->t_ctl_waitq,
-				     !thread_is_running(thread),
-				     &lwi);
-
-			if (unlikely(!thread_is_running(thread)))
-				break;
-		}
+		if (CFS_FAIL_TIMEOUT(OBD_FAIL_LFSCK_DELAY3, cfs_fail_val) &&
+		    unlikely(!thread_is_running(thread)))
+			break;
 
 		rc = iops->rec(env, di, (struct dt_rec *)ent,
 			       LUDA_64BITHASH | LUDA_TYPE);
@@ -5795,19 +5785,9 @@ static int lfsck_namespace_assistant_handler_p2(const struct lu_env *env,
 		GOTO(put, rc);
 
 	do {
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DELAY3) &&
-		    cfs_fail_val > 0) {
-			struct l_wait_info lwi;
-
-			lwi = LWI_TIMEOUT(cfs_time_seconds(cfs_fail_val),
-					  NULL, NULL);
-			l_wait_event(thread->t_ctl_waitq,
-				     !thread_is_running(thread),
-				     &lwi);
-
-			if (unlikely(!thread_is_running(thread)))
-				GOTO(put, rc = 0);
-		}
+		if (CFS_FAIL_TIMEOUT(OBD_FAIL_LFSCK_DELAY3, cfs_fail_val) &&
+		    unlikely(!thread_is_running(thread)))
+			GOTO(put, rc = 0);
 
 		key = iops->key(env, di);
 		fid_be_to_cpu(&fid, (const struct lu_fid *)key);

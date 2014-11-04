@@ -1603,19 +1603,9 @@ int lfsck_namespace_scan_shard(const struct lu_env *env,
 		rc = 0;
 
 	while (rc == 0) {
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DELAY3) &&
-		    cfs_fail_val > 0) {
-			struct l_wait_info lwi;
-
-			lwi = LWI_TIMEOUT(cfs_time_seconds(cfs_fail_val),
-					  NULL, NULL);
-			l_wait_event(thread->t_ctl_waitq,
-				     !thread_is_running(thread),
-				     &lwi);
-
-			if (unlikely(!thread_is_running(thread)))
-				GOTO(out, rc = 0);
-		}
+		if (CFS_FAIL_TIMEOUT(OBD_FAIL_LFSCK_DELAY3, cfs_fail_val) &&
+		    unlikely(!thread_is_running(thread)))
+			GOTO(out, rc = 0);
 
 		rc = iops->rec(env, di, (struct dt_rec *)ent, args);
 		if (rc == 0)

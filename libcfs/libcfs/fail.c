@@ -127,7 +127,7 @@ int __cfs_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
 	int ret = 0;
 
 	ret = __cfs_fail_check_set(id, value, set);
-	if (ret) {
+	if (ret && likely(ms > 0)) {
 		CERROR("cfs_fail_timeout id %x sleeping for %dms\n",
 		       id, ms);
 		schedule_timeout_and_set_state(TASK_UNINTERRUPTIBLE,

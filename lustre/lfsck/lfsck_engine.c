@@ -761,24 +761,14 @@ static int lfsck_master_dir_engine(const struct lu_env *env,
 	ENTRY;
 
 	do {
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DELAY2) &&
-		    cfs_fail_val > 0) {
-			struct l_wait_info lwi;
+		if (CFS_FAIL_TIMEOUT(OBD_FAIL_LFSCK_DELAY2, cfs_fail_val) &&
+		    unlikely(!thread_is_running(thread))) {
+			CDEBUG(D_LFSCK, "%s: scan dir exit for engine stop, "
+			       "parent "DFID", cookie "LPX64"\n",
+			       lfsck_lfsck2name(lfsck),
+			       PFID(lfsck_dto2fid(dir)), lfsck->li_cookie_dir);
 
-			lwi = LWI_TIMEOUT(cfs_time_seconds(cfs_fail_val),
-					  NULL, NULL);
-			l_wait_event(thread->t_ctl_waitq,
-				     !thread_is_running(thread),
-				     &lwi);
-
-			if (unlikely(!thread_is_running(thread))) {
-				CDEBUG(D_LFSCK, "%s: scan dir exit for engine "
-				       "stop, parent "DFID", cookie "LPX64"\n",
-				       lfsck_lfsck2name(lfsck),
-				       PFID(lfsck_dto2fid(dir)),
-				       lfsck->li_cookie_dir);
-				RETURN(0);
-			}
+			RETURN(0);
 		}
 
 		lfsck->li_new_scanned++;
@@ -897,23 +887,13 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 		if (unlikely(lfsck->li_oit_over))
 			RETURN(1);
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DELAY1) &&
-		    cfs_fail_val > 0) {
-			struct l_wait_info lwi;
+		if (CFS_FAIL_TIMEOUT(OBD_FAIL_LFSCK_DELAY1, cfs_fail_val) &&
+		    unlikely(!thread_is_running(thread))) {
+			CDEBUG(D_LFSCK, "%s: OIT scan exit for engine stop, "
+			       "cookie "LPU64"\n",
+			       lfsck_lfsck2name(lfsck), iops->store(env, di));
 
-			lwi = LWI_TIMEOUT(cfs_time_seconds(cfs_fail_val),
-					  NULL, NULL);
-			l_wait_event(thread->t_ctl_waitq,
-				     !thread_is_running(thread),
-				     &lwi);
-
-			if (unlikely(!thread_is_running(thread))) {
-				CDEBUG(D_LFSCK, "%s: OIT scan exit for engine "
-				       "stop, cookie "LPU64"\n",
-				       lfsck_lfsck2name(lfsck),
-				       iops->store(env, di));
-				RETURN(0);
-			}
+			RETURN(0);
 		}
 
 		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_CRASH))

@@ -1310,11 +1310,19 @@ lfsck_layout_lastid_load(const struct lu_env *env,
 						cfs_time_seconds(cfs_fail_val),
 						NULL, NULL);
 
-				up_write(&com->lc_sem);
-				l_wait_event(lfsck->li_thread.t_ctl_waitq,
-					     !thread_is_running(&lfsck->li_thread),
-					     &lwi);
-				down_write(&com->lc_sem);
+				/* Some others may changed the cfs_fail_val
+				 * as zero after above check, re-check it for
+				 * sure to avoid falling into wait for ever. */
+				if (likely(lwi.lwi_timeout > 0)) {
+					struct ptlrpc_thread *thread =
+						&lfsck->li_thread;
+
+					up_write(&com->lc_sem);
+					l_wait_event(thread->t_ctl_waitq,
+						     !thread_is_running(thread),
+						     &lwi);
+					down_write(&com->lc_sem);
+				}
 			}
 		}
 
@@ -2625,17 +2633,9 @@ static int lfsck_layout_scan_orphan(const struct lu_env *env,
 		struct dt_key		*key;
 		struct lu_orphan_rec	*rec = &info->lti_rec;
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DELAY3) &&
-		    cfs_fail_val > 0) {
-			struct ptlrpc_thread	*thread = &lfsck->li_thread;
-			struct l_wait_info	 lwi;
-
-			lwi = LWI_TIMEOUT(cfs_time_seconds(cfs_fail_val),
-					  NULL, NULL);
-			l_wait_event(thread->t_ctl_waitq,
-				     !thread_is_running(thread),
-				     &lwi);
-		}
+		if (CFS_FAIL_TIMEOUT(OBD_FAIL_LFSCK_DELAY3, cfs_fail_val) &&
+		    unlikely(!thread_is_running(&lfsck->li_thread)))
+			break;
 
 		key = iops->key(env, di);
 		com->lc_fid_latest_scanned_phase2 = *(struct lu_fid *)key;
