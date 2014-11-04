@@ -72,7 +72,7 @@ command_t route_cmds[] = {
 	 "\t--gateway: gateway nid (e.g. 10.1.1.2@tcp) to filter on\n"
 	 "\t--hop: number to final destination (1 < hops < 255) to filter on\n"
 	 "\t--priority: priority of route (0 - highest prio to filter on\n"
-	 "\t--vebose: display detailed output per route\n"},
+	 "\t--verbose: display detailed output per route\n"},
 	{ 0, 0, 0, NULL }
 };
 
