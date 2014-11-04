@@ -68,10 +68,6 @@ struct osc_brw_async_args {
 
 #define osc_grant_args osc_brw_async_args
 
-struct osc_async_args {
-	struct obd_info	*aa_oi;
-};
-
 struct osc_setattr_args {
 	struct obdo		*sa_oa;
 	obd_enqueue_update_f	 sa_upcall;
@@ -116,8 +112,7 @@ static inline void osc_pack_capa(struct ptlrpc_request *req,
         DEBUG_CAPA(D_SEC, c, "pack");
 }
 
-static inline void osc_pack_req_body(struct ptlrpc_request *req,
-                                     struct obd_info *oinfo)
+void osc_pack_req_body(struct ptlrpc_request *req, struct obd_info *oinfo)
 {
 	struct ost_body *body;
 
@@ -129,9 +124,9 @@ static inline void osc_pack_req_body(struct ptlrpc_request *req,
 	osc_pack_capa(req, body, oinfo->oi_capa);
 }
 
-static inline void osc_set_capa_size(struct ptlrpc_request *req,
-                                     const struct req_msg_field *field,
-                                     struct obd_capa *oc)
+void osc_set_capa_size(struct ptlrpc_request *req,
+		       const struct req_msg_field *field,
+		       struct obd_capa *oc)
 {
         if (oc == NULL)
                 req_capsule_set_size(&req->rq_pill, field, RCL_CLIENT, 0);
@@ -140,9 +135,9 @@ static inline void osc_set_capa_size(struct ptlrpc_request *req,
                 ;
 }
 
-static int osc_getattr_interpret(const struct lu_env *env,
-                                 struct ptlrpc_request *req,
-                                 struct osc_async_args *aa, int rc)
+int osc_getattr_interpret(const struct lu_env *env,
+			  struct ptlrpc_request *req,
+			  struct osc_async_args *aa, int rc)
 {
         struct ost_body *body;
         ENTRY;

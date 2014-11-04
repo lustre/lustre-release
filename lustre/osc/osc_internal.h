@@ -196,6 +196,11 @@ struct osc_quota_info {
 	struct hlist_node oqi_hash;
 	obd_uid		  oqi_id;
 };
+
+struct osc_async_args {
+	struct obd_info	*aa_oi;
+};
+
 int osc_quota_setup(struct obd_device *obd);
 int osc_quota_cleanup(struct obd_device *obd);
 int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
@@ -226,4 +231,10 @@ enum osc_dap_flags {
 struct ldlm_lock *osc_dlmlock_at_pgoff(const struct lu_env *env,
 				       struct osc_object *obj, pgoff_t index,
 				       enum osc_dap_flags flags);
+void osc_pack_req_body(struct ptlrpc_request *req, struct obd_info *oinfo);
+void osc_set_capa_size(struct ptlrpc_request *req,
+		       const struct req_msg_field *field, struct obd_capa *oc);
+int osc_getattr_interpret(const struct lu_env *env,
+			  struct ptlrpc_request *req,
+			  struct osc_async_args *aa, int rc);
 #endif /* OSC_INTERNAL_H */

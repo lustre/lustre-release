@@ -341,6 +341,41 @@ drop_lock:
 	RETURN(rc);
 }
 
+static int osc_object_obd_info_get(const struct lu_env *env,
+				   struct cl_object *obj,
+				   struct obd_info *oinfo,
+				   struct ptlrpc_request_set *set)
+{
+	struct ptlrpc_request	*req;
+	struct osc_async_args	*aa;
+	int			rc;
+	ENTRY;
+
+	req = ptlrpc_request_alloc(class_exp2cliimp(osc_export(cl2osc(obj))),
+				   &RQF_OST_GETATTR);
+	if (req == NULL)
+		RETURN(-ENOMEM);
+
+	osc_set_capa_size(req, &RMF_CAPA1, oinfo->oi_capa);
+	rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_GETATTR);
+	if (rc != 0) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+
+	osc_pack_req_body(req, oinfo);
+
+	ptlrpc_request_set_replen(req);
+	req->rq_interpret_reply = (ptlrpc_interpterer_t)osc_getattr_interpret;
+
+	CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
+	aa = ptlrpc_req_async_args(req);
+	aa->aa_oi = oinfo;
+
+	ptlrpc_set_add_req(set, req);
+	RETURN(0);
+}
+
 void osc_object_set_contended(struct osc_object *obj)
 {
         obj->oo_contention_time = cfs_time_current();
@@ -380,15 +415,16 @@ int osc_object_is_contended(struct osc_object *obj)
 }
 
 static const struct cl_object_operations osc_ops = {
-	.coo_page_init   = osc_page_init,
-	.coo_lock_init   = osc_lock_init,
-	.coo_io_init     = osc_io_init,
-	.coo_attr_get    = osc_attr_get,
-	.coo_attr_update = osc_attr_update,
-	.coo_glimpse     = osc_object_glimpse,
-	.coo_prune       = osc_object_prune,
-	.coo_find_cbdata = osc_object_find_cbdata,
-	.coo_fiemap      = osc_object_fiemap,
+	.coo_page_init    = osc_page_init,
+	.coo_lock_init    = osc_lock_init,
+	.coo_io_init      = osc_io_init,
+	.coo_attr_get     = osc_attr_get,
+	.coo_attr_update  = osc_attr_update,
+	.coo_glimpse      = osc_object_glimpse,
+	.coo_prune        = osc_object_prune,
+	.coo_find_cbdata  = osc_object_find_cbdata,
+	.coo_fiemap       = osc_object_fiemap,
+	.coo_obd_info_get = osc_object_obd_info_get,
 };
 
 static const struct lu_object_operations osc_lu_obj_ops = {

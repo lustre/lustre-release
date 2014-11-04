@@ -202,7 +202,7 @@ EXPORT_SYMBOL(cl_object_attr_unlock);
  * for.
  */
 int cl_object_attr_get(const struct lu_env *env, struct cl_object *obj,
-                       struct cl_attr *attr)
+			struct cl_attr *attr)
 {
 	struct lu_object_header *top;
 	int result;
@@ -210,19 +210,19 @@ int cl_object_attr_get(const struct lu_env *env, struct cl_object *obj,
 	assert_spin_locked(cl_object_attr_guard(obj));
 	ENTRY;
 
-        top = obj->co_lu.lo_header;
-        result = 0;
+	top = obj->co_lu.lo_header;
+	result = 0;
 	list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
-                if (obj->co_ops->coo_attr_get != NULL) {
-                        result = obj->co_ops->coo_attr_get(env, obj, attr);
-                        if (result != 0) {
-                                if (result > 0)
-                                        result = 0;
-                                break;
-                        }
-                }
-        }
-        RETURN(result);
+		if (obj->co_ops->coo_attr_get != NULL) {
+			result = obj->co_ops->coo_attr_get(env, obj, attr);
+			if (result != 0) {
+				if (result > 0)
+					result = 0;
+				break;
+			}
+		}
+	}
+	RETURN(result);
 }
 EXPORT_SYMBOL(cl_object_attr_get);
 
@@ -417,6 +417,47 @@ int cl_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 	RETURN(result);
 }
 EXPORT_SYMBOL(cl_object_fiemap);
+
+int cl_object_obd_info_get(const struct lu_env *env, struct cl_object *obj,
+			   struct obd_info *oinfo,
+			   struct ptlrpc_request_set *set)
+{
+	struct lu_object_header	*top;
+	int			result = 0;
+	ENTRY;
+
+	top = obj->co_lu.lo_header;
+	list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
+		if (obj->co_ops->coo_obd_info_get != NULL) {
+			result = obj->co_ops->coo_obd_info_get(env, obj, oinfo,
+							       set);
+			if (result != 0)
+				break;
+		}
+	}
+	RETURN(result);
+}
+EXPORT_SYMBOL(cl_object_obd_info_get);
+
+int cl_object_data_version(const struct lu_env *env, struct cl_object *obj,
+			   __u64 *data_version, int flags)
+{
+	struct lu_object_header	*top;
+	int			result = 0;
+	ENTRY;
+
+	top = obj->co_lu.lo_header;
+	list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
+		if (obj->co_ops->coo_data_version != NULL) {
+			result = obj->co_ops->coo_data_version(env, obj,
+							data_version, flags);
+			if (result != 0)
+				break;
+		}
+	}
+	RETURN(result);
+}
+EXPORT_SYMBOL(cl_object_data_version);
 
 /**
  * Helper function removing all object locks, and marking object for

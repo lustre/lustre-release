@@ -105,6 +105,7 @@
 #include <linux/wait.h>
 #include <lustre_dlm.h>
 
+struct obd_info;
 struct inode;
 
 struct cl_device;
@@ -348,19 +349,19 @@ struct cl_object_operations {
          */
         int  (*coo_io_init)(const struct lu_env *env,
                             struct cl_object *obj, struct cl_io *io);
-        /**
-         * Fill portion of \a attr that this layer controls. This method is
-         * called top-to-bottom through all object layers.
-         *
-         * \pre cl_object_header::coh_attr_guard of the top-object is locked.
-         *
-         * \return   0: to continue
-         * \return +ve: to stop iterating through layers (but 0 is returned
-         * from enclosing cl_object_attr_get())
-         * \return -ve: to signal error
-         */
-        int (*coo_attr_get)(const struct lu_env *env, struct cl_object *obj,
-                            struct cl_attr *attr);
+	/**
+	 * Fill portion of \a attr that this layer controls. This method is
+	 * called top-to-bottom through all object layers.
+	 *
+	 * \pre cl_object_header::coh_attr_guard of the top-object is locked.
+	 *
+	 * \return   0: to continue
+	 * \return +ve: to stop iterating through layers (but 0 is returned
+	 *              from enclosing cl_object_attr_get())
+	 * \return -ve: to signal error
+	 */
+	int (*coo_attr_get)(const struct lu_env *env, struct cl_object *obj,
+			    struct cl_attr *attr);
         /**
          * Update attributes.
          *
@@ -415,6 +416,17 @@ struct cl_object_operations {
 	int (*coo_fiemap)(const struct lu_env *env, struct cl_object *obj,
 			  struct ll_fiemap_info_key *fmkey,
 			  struct fiemap *fiemap, size_t *buflen);
+	/**
+	 * Get attributes of the object from server. (top->bottom)
+	 */
+	int (*coo_obd_info_get)(const struct lu_env *env, struct cl_object *obj,
+				struct obd_info *oinfo,
+				struct ptlrpc_request_set *set);
+	/**
+	 * Get data version of the object. (top->bottom)
+	 */
+	int (*coo_data_version)(const struct lu_env *env, struct cl_object *obj,
+				__u64 *version, int flags);
 };
 
 /**
@@ -2172,8 +2184,8 @@ void cl_object_put        (const struct lu_env *env, struct cl_object *o);
 void cl_object_get        (struct cl_object *o);
 void cl_object_attr_lock  (struct cl_object *o);
 void cl_object_attr_unlock(struct cl_object *o);
-int  cl_object_attr_get   (const struct lu_env *env, struct cl_object *obj,
-                           struct cl_attr *attr);
+int  cl_object_attr_get(const struct lu_env *env, struct cl_object *obj,
+			struct cl_attr *attr);
 int  cl_object_attr_update(const struct lu_env *env, struct cl_object *obj,
                            const struct cl_attr *attr, unsigned valid);
 int  cl_object_glimpse    (const struct lu_env *env, struct cl_object *obj,
@@ -2189,6 +2201,11 @@ int cl_object_find_cbdata(const struct lu_env *env, struct cl_object *obj,
 int cl_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 		     struct ll_fiemap_info_key *fmkey, struct fiemap *fiemap,
 		     size_t *buflen);
+int cl_object_obd_info_get(const struct lu_env *env, struct cl_object *obj,
+			   struct obd_info *oinfo,
+			   struct ptlrpc_request_set *set);
+int cl_object_data_version(const struct lu_env *env, struct cl_object *obj,
+			   __u64 *version, int flags);
 
 /**
  * Returns true, iff \a o0 and \a o1 are slices of the same object.

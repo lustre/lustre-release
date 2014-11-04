@@ -1854,43 +1854,31 @@ error:
  * This value is computed using stripe object version on OST.
  * Version is computed using server side locking.
  *
- * @param sync if do sync on the OST side;
+ * @param flags if do sync on the OST side;
  *		0: no sync
  *		LL_DV_RD_FLUSH: flush dirty pages, LCK_PR on OSTs
  *		LL_DV_WR_FLUSH: drop all caching pages, LCK_PW on OSTs
  */
 int ll_data_version(struct inode *inode, __u64 *data_version, int flags)
 {
-	struct lov_stripe_md	*lsm = NULL;
-	struct ll_sb_info	*sbi = ll_i2sbi(inode);
-	struct obdo		*obdo = NULL;
-	int			 rc;
+	struct lu_env	*env;
+	int		refcheck;
+	int		rc;
 	ENTRY;
 
-	/* If no stripe, we consider version is 0. */
-	lsm = ccc_inode_lsm_get(inode);
-	if (!lsm_has_objects(lsm)) {
+	/* If no file object initialized, we consider its version is 0. */
+	if (ll_i2info(inode)->lli_clob == NULL) {
 		*data_version = 0;
-		CDEBUG(D_INODE, "No object for inode\n");
-		GOTO(out, rc = 0);
+		RETURN(0);
 	}
 
-	OBD_ALLOC_PTR(obdo);
-	if (obdo == NULL)
-		GOTO(out, rc = -ENOMEM);
+	env = cl_env_get(&refcheck);
+	if (IS_ERR(env))
+		RETURN(PTR_ERR(env));
 
-	rc = ll_lsm_getattr(lsm, sbi->ll_dt_exp, NULL, obdo, flags);
-	if (rc == 0) {
-		if (!(obdo->o_valid & OBD_MD_FLDATAVERSION))
-			rc = -EOPNOTSUPP;
-		else
-			*data_version = obdo->o_data_version;
-	}
-
-	OBD_FREE_PTR(obdo);
-	EXIT;
-out:
-	ccc_inode_lsm_put(inode, lsm);
+	rc = cl_object_data_version(env, ll_i2info(inode)->lli_clob,
+				    data_version, flags);
+	cl_env_put(env, &refcheck);
 	RETURN(rc);
 }
 
