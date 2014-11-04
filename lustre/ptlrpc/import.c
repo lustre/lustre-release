@@ -1014,6 +1014,32 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 		GOTO(out, rc = -EPROTO);
 	}
 
+	if (!(imp->imp_connect_flags_orig & OBD_CONNECT_LIGHTWEIGHT) &&
+	    (imp->imp_connect_flags_orig & OBD_CONNECT_MDS_MDS) &&
+	    !(imp->imp_connect_flags_orig & OBD_CONNECT_IMP_RECOV) &&
+	    (ocd->ocd_connect_flags & OBD_CONNECT_VERSION)) {
+		__u32 major = OBD_OCD_VERSION_MAJOR(ocd->ocd_version);
+		__u32 minor = OBD_OCD_VERSION_MINOR(ocd->ocd_version);
+		__u32 patch = OBD_OCD_VERSION_PATCH(ocd->ocd_version);
+
+		/* We do not support the MDT-MDT interoperations with
+		 * different version MDT because of protocol changes. */
+		if (unlikely(major != LUSTRE_MAJOR ||
+			     minor != LUSTRE_MINOR ||
+			     abs(patch - LUSTRE_PATCH) > 3)) {
+			LCONSOLE_WARN("%s: import %p (%u.%u.%u.%u) tried the "
+				      "connection to different version MDT "
+				      "(%d.%d.%d.%d) %s\n",
+				      imp->imp_obd->obd_name, imp, LUSTRE_MAJOR,
+				      LUSTRE_MINOR, LUSTRE_PATCH, LUSTRE_FIX,
+				      major, minor, patch,
+				      OBD_OCD_VERSION_FIX(ocd->ocd_version),
+				      imp->imp_connection->c_remote_uuid.uuid);
+
+			GOTO(out, rc = -EPROTO);
+		}
+	}
+
 	if (!exp) {
 		/* This could happen if export is cleaned during the
 		   connect attempt */

@@ -900,6 +900,34 @@ int target_handle_connect(struct ptlrpc_request *req)
 		mds_conn = (data->ocd_connect_flags & OBD_CONNECT_MDS) != 0;
 		lw_client = (data->ocd_connect_flags &
 			     OBD_CONNECT_LIGHTWEIGHT) != 0;
+
+		/* OBD_CONNECT_MNE_SWAB is defined as OBD_CONNECT_MDS_MDS
+		 * for Imperative Recovery connection from MGC to MGS. */
+		if (!lw_client &&
+		    (data->ocd_connect_flags & OBD_CONNECT_MDS_MDS) &&
+		    !(data->ocd_connect_flags & OBD_CONNECT_IMP_RECOV) &&
+		    (data->ocd_connect_flags & OBD_CONNECT_VERSION)) {
+			__u32 major = OBD_OCD_VERSION_MAJOR(data->ocd_version);
+			__u32 minor = OBD_OCD_VERSION_MINOR(data->ocd_version);
+			__u32 patch = OBD_OCD_VERSION_PATCH(data->ocd_version);
+
+			/* We do not support the MDT-MDT interoperations with
+			 * different version MDT because of protocol changes. */
+			if (unlikely(major != LUSTRE_MAJOR ||
+				     minor != LUSTRE_MINOR ||
+				     abs(patch - LUSTRE_PATCH) > 3)) {
+				LCONSOLE_WARN("%s (%u.%u.%u.%u) refused the "
+					"connection from different version MDT "
+					"(%d.%d.%d.%d) %s %s\n",
+					target->obd_name, LUSTRE_MAJOR,
+					LUSTRE_MINOR, LUSTRE_PATCH, LUSTRE_FIX,
+					major, minor, patch,
+					OBD_OCD_VERSION_FIX(data->ocd_version),
+					libcfs_nid2str(req->rq_peer.nid), str);
+
+				GOTO(out, rc = -EPROTO);
+			}
+		}
 	}
 
         /* lctl gets a backstage, all-access pass. */
