@@ -558,7 +558,7 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 		*item = NULL, *first_seq = NULL;
 	int str_buf_len = LNET_MAX_SHOW_NUM_CPT * 2;
 	char str_buf[str_buf_len];
-	char *pos = str_buf;
+	char *pos;
 	char err_str[LNET_MAX_STR_LEN];
 
 	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
@@ -589,6 +589,10 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 		goto out;
 
 	for (i = 0;; i++) {
+		pos = str_buf;
+
+		memset(buf, 0, sizeof(*data) + sizeof(*net_config));
+
 		LIBCFS_IOC_INIT_V2(*data, cfg_hdr);
 		/*
 		 * set the ioc_len to the proper value since INIT assumes
@@ -621,7 +625,13 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 			first_seq = item;
 
 		if (cYAML_create_string(item,
-					"nid",
+					"net",
+					libcfs_net2str(
+						LNET_NIDNET(data->cfg_nid)))
+		    == NULL)
+			goto out;
+
+		if (cYAML_create_string(item, "nid",
 					libcfs_nid2str(data->cfg_nid)) == NULL)
 			goto out;
 
@@ -678,15 +688,29 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 						  net_max_tx_credits) == NULL)
 				goto out;
 
+			/* out put the CPTs in the format: "[x,x,x,...]" */
+			pos += snprintf(pos, str_buf + str_buf_len - pos, "[");
 			for (j = 0 ; data->cfg_ncpts > 1 &&
-			     j < data->cfg_ncpts; j++) {
-				pos += snprintf(str_buf,
+				j < data->cfg_ncpts; j++) {
+				pos += snprintf(pos,
 						str_buf + str_buf_len - pos,
-						" %d", net_config->ni_cpts[j]);
+						"%d", net_config->ni_cpts[j]);
+				if ((j + 1) < data->cfg_ncpts)
+					pos += snprintf(pos,
+							str_buf +
+							 str_buf_len - pos,
+							",");
 			}
+			if (str_buf + str_buf_len - pos <= 0)
+				pos += snprintf(str_buf + str_buf_len - 2,
+						2, "]");
+			else
+				pos += snprintf(pos,
+						str_buf + str_buf_len - pos,
+						"]");
 
 			if (data->cfg_ncpts > 1 &&
-			    cYAML_create_string(tunables, "CPTs",
+			    cYAML_create_string(tunables, "CPT",
 						str_buf) == NULL)
 				goto out;
 		}
@@ -1243,7 +1267,7 @@ static int handle_yaml_config_net(struct cYAML *tree, struct cYAML **show_rc,
 		peer_buf_cr = cYAML_get_object_item(tunables,
 						    "peer_buffer_credits");
 		credits = cYAML_get_object_item(tunables, "credits");
-		smp = cYAML_get_object_item(tunables, "SMP");
+		smp = cYAML_get_object_item(tunables, "CPT");
 	}
 	seq_no = cYAML_get_object_item(tree, "seq_no");
 
