@@ -929,6 +929,33 @@ inode_i_nlink_protected, [
 ]) # LC_HAVE_PROTECT_I_NLINK
 
 #
+# 2.6.39 security_inode_init_security takes a 'struct qstr' parameter
+#
+# 3.2 security_inode_init_security takes a callback to set xattrs
+#
+AC_DEFUN([LC_HAVE_SECURITY_IINITSEC], [
+LB_CHECK_COMPILE([if security_inode_init_security takes a callback],
+security_inode_init_security_callback, [
+	#include <linux/security.h>
+],[
+	security_inode_init_security(NULL, NULL, NULL, (const initxattrs)NULL, NULL);
+],[
+	AC_DEFINE(HAVE_SECURITY_IINITSEC_CALLBACK, 1,
+		  [security_inode_init_security takes a callback to set xattrs])
+],[
+	LB_CHECK_COMPILE([if security_inode_init_security takes a 'struct qstr' parameter],
+	security_inode_init_security_qstr, [
+		#include <linux/security.h>
+	],[
+		security_inode_init_security(NULL, NULL, (struct qstr *)NULL, NULL, NULL, NULL);
+	],[
+		AC_DEFINE(HAVE_SECURITY_IINITSEC_QSTR, 1,
+			  [security_inode_init_security takes a 'struct qstr' parameter])
+	])
+])
+]) # LC_HAVE_SECURITY_IINITSEC
+
+#
 # LC_HAVE_MIGRATE_HEADER
 #
 # 3.3 introduces migrate_mode.h and migratepage has 4 args
@@ -1766,6 +1793,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_FSTYPE_MOUNT
 	LC_IOP_TRUNCATE
 	LC_HAVE_INODE_OWNER_OR_CAPABLE
+	LC_HAVE_SECURITY_IINITSEC
 
 	# 3.0
 	LC_DIRTY_INODE_WITH_FLAG

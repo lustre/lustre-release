@@ -313,6 +313,10 @@ int ll_xattr_cache_get(struct inode *inode,
 			size_t size,
 			__u64 valid);
 
+int ll_init_security(struct dentry *dentry,
+			    struct inode *inode,
+			    struct inode *dir);
+
 /*
  * Locking to guarantee consistency of non-atomic updates to long long i_size,
  * consistency between file size and KMS.
