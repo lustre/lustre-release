@@ -1072,7 +1072,7 @@ void cYAML_build_error(int rc, int seq_no, char *cmd,
 		goto failed;
 
 	if (seq_no >= 0 &&
-	    cYAML_create_number(err, "seqno", seq_no) == NULL)
+	    cYAML_create_number(err, "seq_no", seq_no) == NULL)
 		goto failed;
 
 	if (cYAML_create_number(err, "errno", rc) == NULL)
