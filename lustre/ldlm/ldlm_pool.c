@@ -579,42 +579,50 @@ static struct ldlm_pool_ops ldlm_cli_pool_ops = {
  */
 int ldlm_pool_recalc(struct ldlm_pool *pl)
 {
-        time_t recalc_interval_sec;
-        int count;
+	time_t recalc_interval_sec;
+	int count;
 
-        recalc_interval_sec = cfs_time_current_sec() - pl->pl_recalc_time;
-        if (recalc_interval_sec <= 0)
-                goto recalc;
-
-	spin_lock(&pl->pl_lock);
+	recalc_interval_sec = cfs_time_current_sec() - pl->pl_recalc_time;
 	if (recalc_interval_sec > 0) {
-		/*
-		 * Update pool statistics every 1s.
-		 */
-		ldlm_pool_recalc_stats(pl);
+		spin_lock(&pl->pl_lock);
+		recalc_interval_sec = cfs_time_current_sec() -
+			pl->pl_recalc_time;
 
-		/*
-		 * Zero out all rates and speed for the last period.
-		 */
-		atomic_set(&pl->pl_grant_rate, 0);
-		atomic_set(&pl->pl_cancel_rate, 0);
+		if (recalc_interval_sec > 0) {
+			/*
+			 * Update pool statistics every 1s.
+			 */
+			ldlm_pool_recalc_stats(pl);
+
+			/*
+			 * Zero out all rates and speed for the last period.
+			 */
+			atomic_set(&pl->pl_grant_rate, 0);
+			atomic_set(&pl->pl_cancel_rate, 0);
+		}
+		spin_unlock(&pl->pl_lock);
 	}
-	spin_unlock(&pl->pl_lock);
 
- recalc:
-        if (pl->pl_ops->po_recalc != NULL) {
-                count = pl->pl_ops->po_recalc(pl);
-                lprocfs_counter_add(pl->pl_stats, LDLM_POOL_RECALC_STAT,
-                                    count);
-        }
+	if (pl->pl_ops->po_recalc != NULL) {
+		count = pl->pl_ops->po_recalc(pl);
+		lprocfs_counter_add(pl->pl_stats, LDLM_POOL_RECALC_STAT,
+				    count);
+	}
+
 	recalc_interval_sec = pl->pl_recalc_time - cfs_time_current_sec() +
 			      pl->pl_recalc_period;
 	if (recalc_interval_sec <= 0) {
+		/* DEBUG: should be re-removed after LU-4536 is fixed */
+		CDEBUG(D_DLMTRACE, "%s: Negative interval(%ld), "
+		       "too short period(%ld)\n",
+		       pl->pl_name, recalc_interval_sec,
+		       pl->pl_recalc_period);
+
 		/* Prevent too frequent recalculation. */
 		recalc_interval_sec = 1;
 	}
 
-        return recalc_interval_sec;
+	return recalc_interval_sec;
 }
 
 /**
