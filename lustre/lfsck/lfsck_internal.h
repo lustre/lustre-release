@@ -1165,27 +1165,16 @@ lfsck_object_find_by_dev_nowait(const struct lu_env *env, struct dt_device *dev,
 				const struct lu_fid *fid)
 {
 	struct lu_object_conf	*conf = &lfsck_env_info(env)->lti_conf;
-	struct dt_object	*obj;
 
 	conf->loc_flags = LOC_F_NOWAIT;
-	obj = lu2dt(lu_object_find_slice(env, dt2lu_dev(dev), fid, conf));
-	if (unlikely(obj == NULL))
-		return ERR_PTR(-ENOENT);
-
-	return obj;
+	return lu2dt(lu_object_find_slice(env, dt2lu_dev(dev), fid, conf));
 }
 
 static inline struct dt_object *
 lfsck_object_find_by_dev(const struct lu_env *env, struct dt_device *dev,
 			 const struct lu_fid *fid)
 {
-	struct dt_object *obj;
-
-	obj = lu2dt(lu_object_find_slice(env, dt2lu_dev(dev), fid, NULL));
-	if (unlikely(obj == NULL))
-		return ERR_PTR(-ENOENT);
-
-	return obj;
+	return lu2dt(lu_object_find_slice(env, dt2lu_dev(dev), fid, NULL));
 }
 
 static inline struct dt_object *lfsck_object_find(const struct lu_env *env,

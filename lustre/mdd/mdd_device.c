@@ -578,8 +578,6 @@ static int obf_lookup(const struct lu_env *env, struct md_object *p,
 
         /* Check if object with this fid exists */
         child = mdd_object_find(env, mdd, f);
-        if (child == NULL)
-                GOTO(out, rc = 0);
         if (IS_ERR(child))
                 GOTO(out, rc = PTR_ERR(child));
 
