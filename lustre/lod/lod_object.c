@@ -3984,8 +3984,16 @@ static int lod_object_init(const struct lu_env *env, struct lu_object *lo,
 	ENTRY;
 
 	rc = lod_fld_lookup(env, lod, lu_object_fid(lo), &idx, &type);
-	if (rc != 0)
+	if (rc != 0) {
+		/* Note: Sometimes, it will Return EAGAIN here, see
+		 * ptrlpc_import_delay_req(), which might confuse
+		 * lu_object_find_at() and make it wait there incorrectly.
+		 * so we convert it to EIO here.*/
+		if (rc == -EAGAIN)
+			rc = -EIO;
+
 		RETURN(rc);
+	}
 
 	if (type == LU_SEQ_RANGE_MDT &&
 	    idx == lu_site2seq(lo->lo_dev->ld_site)->ss_node_id) {
