@@ -1078,7 +1078,7 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
 	}
 
 	while (nob > 0 && pg_count > 0) {
-		int count = pga[i]->count > nob ? nob : pga[i]->count;
+		unsigned int count = pga[i]->count > nob ? nob : pga[i]->count;
 
 		/* corrupt the data before we compute the checksum, to
 		 * simulate an OST->client data error */
@@ -1087,7 +1087,7 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
 			unsigned char *ptr = kmap(pga[i]->pg);
 			int off = pga[i]->off & ~CFS_PAGE_MASK;
 
-			memcpy(ptr + off, "bad1", min(4, nob));
+			memcpy(ptr + off, "bad1", min_t(typeof(nob), 4, nob));
 			kunmap(pga[i]->pg);
 		}
 		cfs_crypto_hash_update_page(hdesc, pga[i]->pg,
@@ -1372,7 +1372,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
                         &req->rq_import->imp_connection->c_peer;
         struct client_obd *cli = aa->aa_cli;
         struct ost_body *body;
-        __u32 client_cksum = 0;
+	u32 client_cksum = 0;
         ENTRY;
 
         if (rc < 0 && rc != -EDQUOT) {
@@ -1452,7 +1452,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 
         if (body->oa.o_valid & OBD_MD_FLCKSUM) {
                 static int cksum_counter;
-                __u32      server_cksum = body->oa.o_cksum;
+		u32        server_cksum = body->oa.o_cksum;
                 char      *via;
                 char      *router;
                 cksum_type_t cksum_type;
