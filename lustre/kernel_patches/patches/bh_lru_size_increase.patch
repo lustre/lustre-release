@@ -1,0 +1,41 @@
+Increase the buffer-head per-CPU LRU size to allow efficient
+filesystem operations that access many blocks for each transaction.
+For example, creating a file in a large ext4 directory with quota
+enabled will access multiple buffer heads and will overflow the LRU
+at the default 8-block LRU size:
+
+* parent directory inode table block (ctime, nlinks for subdirs)
+* new inode bitmap
+* inode table block
+* 2 quota blocks
+* directory leaf block (not reused, but pollutes one cache entry)
+* 2 levels htree blocks (only one is reused, other pollutes cache)
+* 2 levels indirect/index blocks (only one is reused)
+
+The buffer-head per-CPU LRU size is raised to 16, as it shows in
+metadata performance benchmarks up to 10% gain for create,
+4% for lookup and 7% for destroy.
+
+Signed-off-by: Liang Zhen <liang.zhen@intel.com>
+Signed-off-by: Andreas Dilger <andreas.dilger@intel.com>
+Signed-off-by: Sebastien Buisson <sebastien.buisson@bull.net>
+---
+ fs/buffer.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/fs/buffer.c b/fs/buffer.c
+index 6024877..a6468f2 100644
+--- a/fs/buffer.c
++++ b/fs/buffer.c
+@@ -1256,7 +1256,7 @@ static struct buffer_head *__bread_slow(struct buffer_head *bh)
+  * a local interrupt disable for that.
+  */
+ 
+-#define BH_LRU_SIZE	8
++#define BH_LRU_SIZE	16
+ 
+ struct bh_lru {
+ 	struct buffer_head *bhs[BH_LRU_SIZE];
+-- 
+1.7.1
+

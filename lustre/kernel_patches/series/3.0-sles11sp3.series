@@ -2,5 +2,5 @@ raid5-mmp-unplug-dev-sles11sp2.patch
 quota-replace-dqptr-sem-sles11sp2.patch
 quota-avoid-dqget-calls-sles11sp2.patch
 blkdev_tunables-3.0-sles11sp3.patch
-bh_lru_size_config.patch
+bh_lru_size_increase.patch
 jbd2-log_wait_for_space-2.6-rhel6.patch

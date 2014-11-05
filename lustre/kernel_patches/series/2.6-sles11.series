@@ -1,5 +1,5 @@
 raid5-mmp-unplug-dev-sles11sp1.patch
 dev_read_only-2.6.32-sles11.patch
-bh_lru_size_config.patch
+bh_lru_size_increase.patch
 quota-replace-dqptr-sem-sles11.patch
 quota-avoid-dqget-calls.patch
