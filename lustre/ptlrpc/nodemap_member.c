@@ -220,7 +220,7 @@ int nm_member_add(struct lu_nodemap *nodemap, struct obd_export *exp)
 	rc = cfs_hash_add_unique(nodemap->nm_member_hash, exp,
 				 &exp->exp_target_data.ted_nodemap_member);
 
-	if (rc == 0 )
+	if (rc == 0)
 		class_export_get(exp);
 	/* else -EALREADY - exp already in nodemap hash */
 
@@ -247,24 +247,32 @@ static int nm_member_reclassify_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
 				   struct hlist_node *hnode, void *data)
 {
 	struct obd_export	*exp;
+	struct lu_nodemap	*nodemap;
 
 	exp = hlist_entry(hnode, struct obd_export,
 			  exp_target_data.ted_nodemap_member);
 	if (exp == NULL)
 		goto out;
 
-	/* Call member add before del so exp->nodemap is never NULL. Must use
-	 * bd_del_locked inside a cfs_hash callback. For those reasons, can't
-	 * use member_del.
+	/* Must use bd_del_locked inside a cfs_hash callback, and exp->nodemap
+	 * should never be NULL. For those reasons, can't use member_del.
 	 */
-	nodemap_add_member(exp->exp_connection->c_peer.nid, exp);
-	cfs_hash_bd_del_locked(hs, bd, hnode);
-	class_export_put(exp);
+	read_lock(&nm_range_tree_lock);
+	nodemap = nodemap_classify_nid(exp->exp_connection->c_peer.nid);
+	if (exp->exp_target_data.ted_nodemap != nodemap) {
+		cfs_hash_bd_del_locked(hs, bd, hnode);
+		exp->exp_target_data.ted_nodemap = nodemap;
+		cfs_hash_add_unique(nodemap->nm_member_hash, exp,
+				&exp->exp_target_data.ted_nodemap_member);
+	}
+	read_unlock(&nm_range_tree_lock);
 
 	nm_member_exp_revoke(exp);
 out:
 	return 0;
 }
+
+DEFINE_MUTEX(reclassify_nodemap_lock);
 
 /**
  * Reclassify the members of a nodemap after range changes or activation,
@@ -277,9 +285,12 @@ out:
  */
 void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap)
 {
+	/* reclassify only one nodemap at a time to avoid deadlock */
+	mutex_lock(&reclassify_nodemap_lock);
 	cfs_hash_for_each_safe(nodemap->nm_member_hash,
 			       nm_member_reclassify_cb,
 			       NULL);
+	mutex_unlock(&reclassify_nodemap_lock);
 }
 
 static int nm_member_revoke_locks_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
