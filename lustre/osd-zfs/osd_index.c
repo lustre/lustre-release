@@ -796,6 +796,8 @@ static int osd_dir_it_next(const struct lu_env *env, struct dt_it *di)
 	zap_attribute_t	  *za = &osd_oti_get(env)->oti_za;
 	int		   rc;
 
+	ENTRY;
+
 	/* temp. storage should be enough for any key supported by ZFS */
 	CLASSERT(sizeof(za->za_name) <= sizeof(it->ozi_name));
 
@@ -808,9 +810,10 @@ static int osd_dir_it_next(const struct lu_env *env, struct dt_it *di)
 		it->ozi_pos++;
 		if (it->ozi_pos <=2)
 			RETURN(0);
-	}
 
-	zap_cursor_advance(it->ozi_zc);
+	} else {
+		zap_cursor_advance(it->ozi_zc);
+	}
 
 	/*
 	 * According to current API we need to return error if its last entry.
@@ -925,14 +928,11 @@ static int osd_dir_it_rec(const struct lu_env *env, const struct dt_it *di,
 		osd_it_append_attrs(lde, attr, 2, IFTODT(S_IFDIR));
 		lde->lde_reclen = cpu_to_le16(lu_dirent_calc_size(2, attr));
 		rc = osd_find_parent_fid(env, &it->ozi_obj->oo_dt, &lde->lde_fid);
-		/*
-		 * early Orion code was not setting LinkEA, so it's possible
-		 * some setups still have objects with no LinkEA set.
-		 * but at that time .. was a real record in the directory
-		 * so we should try to lookup .. in ZAP
-		 */
-		if (rc != -ENOENT)
-			GOTO(out, rc);
+
+		/* ENOENT happens at the root of filesystem so ignore it */
+		if (rc == -ENOENT)
+			rc = 0;
+		GOTO(out, rc);
 	}
 
 	LASSERT(lde);
