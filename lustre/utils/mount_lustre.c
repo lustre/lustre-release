@@ -422,18 +422,19 @@ static int parse_ldd(char *source, struct mount_opts *mop, char *options)
 
 	/* svname of the form lustre:OST1234 means never registered */
 	rc = strlen(ldd->ldd_svname);
-	if (rc < 8) {
-		fprintf(stderr, "%s: invalid name '%s'\n",
-			progname, ldd->ldd_svname);
-		return EINVAL;
-	} else if (ldd->ldd_svname[rc - 8] == ':') {
-		ldd->ldd_svname[rc - 8] = '-';
-		ldd->ldd_flags |= LDD_F_VIRGIN;
-	} else if (ldd->ldd_svname[rc - 8] == '=') {
-		ldd->ldd_svname[rc - 8] = '-';
-		ldd->ldd_flags |= LDD_F_WRITECONF;
+	if (strcmp(ldd->ldd_svname, "MGS") != 0) {
+		if (rc < 8) {
+			fprintf(stderr, "%s: invalid name '%s'\n",
+				progname, ldd->ldd_svname);
+			return EINVAL;
+		} else if (ldd->ldd_svname[rc - 8] == ':') {
+			ldd->ldd_svname[rc - 8] = '-';
+			ldd->ldd_flags |= LDD_F_VIRGIN;
+		} else if (ldd->ldd_svname[rc - 8] == '=') {
+			ldd->ldd_svname[rc - 8] = '-';
+			ldd->ldd_flags |= LDD_F_WRITECONF;
+		}
 	}
-
 	/* backend osd type */
 	append_option(options, "osd=");
 	strcat(options, mt_type(ldd->ldd_mount_type));
