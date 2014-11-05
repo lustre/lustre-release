@@ -192,7 +192,7 @@ struct obd_type {
 struct brw_page {
 	obd_off  off;
 	struct page *pg;
-	int count;
+	unsigned int count;
 	obd_flag flag;
 };
 
