@@ -838,7 +838,7 @@ int lustre_lnet_show_routing(int seq_no, struct cYAML **show_rc,
 	struct cYAML *root = NULL, *pools_node = NULL,
 		     *type_node = NULL, *item = NULL, *cpt = NULL,
 		     *first_seq = NULL;
-	int i;
+	int i, j;
 	char err_str[LNET_MAX_STR_LEN];
 	char node_name[LNET_MAX_STR_LEN];
 
@@ -883,24 +883,24 @@ int lustre_lnet_show_routing(int seq_no, struct cYAML **show_rc,
 			goto out;
 
 		/* create the tree  and print */
-		for (i = 0; i < LNET_NRBPOOLS; i++) {
-			type_node = cYAML_create_object(cpt, pools[i]);
+		for (j = 0; j < LNET_NRBPOOLS; j++) {
+			type_node = cYAML_create_object(cpt, pools[j]);
 			if (type_node == NULL)
 				goto out;
 			if (cYAML_create_number(type_node, "npages",
-						pool_cfg->pl_pools[i].pl_npages)
+						pool_cfg->pl_pools[j].pl_npages)
 			    == NULL)
 				goto out;
 			if (cYAML_create_number(type_node, "nbuffers",
-						pool_cfg->pl_pools[i].
+						pool_cfg->pl_pools[j].
 						  pl_nbuffers) == NULL)
 				goto out;
 			if (cYAML_create_number(type_node, "credits",
-						pool_cfg->pl_pools[i].
+						pool_cfg->pl_pools[j].
 						   pl_credits) == NULL)
 				goto out;
 			if (cYAML_create_number(type_node, "mincredits",
-						pool_cfg->pl_pools[i].
+						pool_cfg->pl_pools[j].
 						   pl_mincredits) == NULL)
 				goto out;
 		}
