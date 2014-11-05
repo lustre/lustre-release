@@ -3950,6 +3950,60 @@ run_lfsck() {
 	return $rc
 }
 
+dump_file_contents() {
+	local nodes=$1
+	local dir=$2
+	local logname=$3
+	local node
+
+	if [ -z "$nodes" -o -z "$dir" -o -z "$logname" ]; then
+		error_noexit false \
+			"Invalid parameters for dump_file_contents()"
+		return 1
+	fi
+	for node in ${nodes}; do
+		do_node $node "for i in \\\$(find $dir -type f); do
+				echo ====\\\${i}=======================;
+				cat \\\${i};
+				done" >> ${logname}.${node}.log
+	done
+}
+
+dump_command_output() {
+	local nodes=$1
+	local cmd=$2
+	local logname=$3
+	local node
+
+	if [ -z "$nodes" -o -z "$cmd" -o -z "$logname" ]; then
+		error_noexit false \
+			"Invalid parameters for dump_command_output()"
+		return 1
+	fi
+
+	for node in ${nodes}; do
+		do_node $node "echo ====${cmd}=======================;
+				$cmd" >> ${logname}.${node}.log
+	done
+}
+
+log_zfs_info() {
+	local logname=$1
+
+	# dump file contents from /proc/spl in case of zfs test
+	if [ "$(facet_fstype ost1)" = "zfs" ]; then
+		dump_file_contents "$(osts_nodes)" "/proc/spl" "${logname}"
+		dump_command_output \
+			"$(osts_nodes)" "zpool events -v" "${logname}"
+	fi
+
+	if [ "$(facet_fstype $SINGLEMDS)" = "zfs" ]; then
+		dump_file_contents "$(mdts_nodes)" "/proc/spl" "${logname}"
+		dump_command_output \
+			"$(mdts_nodes)" "zpool events -v" "${logname}"
+	fi
+}
+
 check_and_cleanup_lustre() {
     if [ "$LFSCK_ALWAYS" = "yes" -a "$TESTSUITE" != "lfsck" ]; then
         get_svr_devs
@@ -4664,6 +4718,8 @@ run_one_logged() {
 	local TEST_ERROR
 	local name=${TESTSUITE}.test_${1}.test_log.$(hostname -s).log
 	local test_log=$LOGDIR/$name
+	local zfs_log_name=${TESTSUITE}.test_${1}.zfs_log
+	local zfs_debug_log=$LOGDIR/$zfs_log_name
 	rm -rf $LOGDIR/err
 	rm -rf $LOGDIR/ignore
 	rm -rf $LOGDIR/skip
@@ -4691,6 +4747,7 @@ run_one_logged() {
 	log_sub_test_end $TEST_STATUS $duration "$RC" "$TEST_ERROR"
 
 	if [ -f $LOGDIR/err ]; then
+		log_zfs_info "$zfs_debug_log"
 		$FAIL_ON_ERROR && exit $RC
 	fi
 
