@@ -18,33 +18,6 @@
 # Check for and source configuration file otherwise set defaults
 [ -f /etc/sysconfig/lnet ] && . /etc/sysconfig/lnet
 
-declare -r TOP_MODULES=(	\
-	obdecho			\
-	llite			\
-	lustre			\
-	osc			\
-	lov			\
-	mds			\
-	mdc			\
-	mgs			\
-	mgc			\
-	ost			\
-	obdfilter		\
-	lquota			\
-	ptlrpc			\
-)
-declare -r BOTTOM_MODULES=(	\
-	ksocklnd		\
-	kqswlnd			\
-	ko2iblnd		\
-	fsfilt_ldiskfs		\
-	obdclass		\
-	lnet			\
-	lvfs			\
-	libcfs			\
-	ldiskfs			\
-)
-
 declare -r awkprog='BEGIN { rc = -1 }
 		       { if ( $1 == module_name ) { rc = $3; exit; } }
 		    END { print rc }'
@@ -79,44 +52,9 @@ run_postexec_check ()
 	fi
 }
 
-remove_modules ()
-{
-	local modules="${@}"
-	local ref_cnt
-
-	for mod in $modules; do
-		ref_cnt=`/sbin/lsmod | awk "$awkprog" "module_name=$mod"`
-		if [ $ref_cnt -lt 0 ]; then
-			# module not loaded, skip it
-			continue
-		fi
-		if [ $ref_cnt -gt 0 ]; then
-			# module in use.  maybe it just needs a few seconds
-			# after removal of previous modules.
-			sleep 5
-			ref_cnt=`/sbin/lsmod | awk "$awkprog" module_name=$mod`
-		fi
-		if [ $ref_cnt -eq 0 ]; then
-			# unload the module
-			echo "Removing module $mod"
-			/sbin/rmmod $mod
-			if [ $? -ne 0 ]; then
-				echo "ERROR: Failed to remove module $mod."
-				return 1
-			fi
-		else
-			# boo!  module still in use.
-			echo "ERROR: Module $mod has non-zero reference count."
-			return 1
-		fi
-	done
-
-	return 0
-}
-
 stop_lnet ()
 {
-	local errmsg=`/usr/sbin/lctl network unconfigure 2>&1`
+	local errmsg=$(/usr/sbin/lctl network down 2>&1)
 	if [ $? -gt 0 ]; then
 		# The following error message means that lnet is already
 		# unconfigured, and the modules are not loaded.
@@ -188,9 +126,8 @@ case "$1" in
 	;;
   stop)
 	run_preexec_check "stop"
-	remove_modules ${TOP_MODULES[*]} || exit 1
 	stop_lnet || exit 1
-	remove_modules ${BOTTOM_MODULES[*]} || exit 1
+	lustre_rmmod || exit 1
 	rm -f /var/lock/subsys/lnet
 	run_postexec_check "stop"
 	;;
