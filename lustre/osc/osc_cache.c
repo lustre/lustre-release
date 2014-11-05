@@ -1355,7 +1355,7 @@ static int osc_completion(const struct lu_env *env, struct osc_async_page *oap,
 static void osc_consume_write_grant(struct client_obd *cli,
 				    struct brw_page *pga)
 {
-	assert_spin_locked(&cli->cl_loi_list_lock.lock);
+	assert_spin_locked(&cli->cl_loi_list_lock);
 	LASSERT(!(pga->flag & OBD_BRW_FROM_GRANT));
 	atomic_long_inc(&obd_dirty_pages);
 	cli->cl_dirty_pages++;
@@ -1372,7 +1372,7 @@ static void osc_release_write_grant(struct client_obd *cli,
 {
 	ENTRY;
 
-	assert_spin_locked(&cli->cl_loi_list_lock.lock);
+	assert_spin_locked(&cli->cl_loi_list_lock);
 	if (!(pga->flag & OBD_BRW_FROM_GRANT)) {
 		EXIT;
 		return;
@@ -1426,11 +1426,11 @@ static void __osc_unreserve_grant(struct client_obd *cli,
 void osc_unreserve_grant(struct client_obd *cli,
 			 unsigned int reserved, unsigned int unused)
 {
-	client_obd_list_lock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
 	__osc_unreserve_grant(cli, reserved, unused);
 	if (unused > 0)
 		osc_wake_cache_waiters(cli);
-	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_unlock(&cli->cl_loi_list_lock);
 }
 
 /**
@@ -1451,7 +1451,7 @@ static void osc_free_grant(struct client_obd *cli, unsigned int nr_pages,
 {
 	int grant = (1 << cli->cl_chunkbits) + cli->cl_extent_tax;
 
-	client_obd_list_lock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
 	atomic_long_sub(nr_pages, &obd_dirty_pages);
 	cli->cl_dirty_pages -= nr_pages;
 	cli->cl_lost_grant += lost_grant;
@@ -1462,7 +1462,7 @@ static void osc_free_grant(struct client_obd *cli, unsigned int nr_pages,
 		cli->cl_avail_grant += grant;
 	}
 	osc_wake_cache_waiters(cli);
-	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_unlock(&cli->cl_loi_list_lock);
 	CDEBUG(D_CACHE, "lost %u grant: %lu avail: %lu dirty: %lu\n",
 	       lost_grant, cli->cl_lost_grant,
 	       cli->cl_avail_grant, cli->cl_dirty_pages << PAGE_CACHE_SHIFT);
@@ -1474,9 +1474,9 @@ static void osc_free_grant(struct client_obd *cli, unsigned int nr_pages,
  */
 static void osc_exit_cache(struct client_obd *cli, struct osc_async_page *oap)
 {
-	client_obd_list_lock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
 	osc_release_write_grant(cli, &oap->oap_brw_page);
-	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_unlock(&cli->cl_loi_list_lock);
 }
 
 /**
@@ -1514,9 +1514,9 @@ static int osc_enter_cache_try(struct client_obd *cli,
 static int ocw_granted(struct client_obd *cli, struct osc_cache_waiter *ocw)
 {
 	int rc;
-	client_obd_list_lock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
 	rc = list_empty(&ocw->ocw_entry);
-	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_unlock(&cli->cl_loi_list_lock);
 	return rc;
 }
 
@@ -1540,7 +1540,7 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 
 	OSC_DUMP_GRANT(D_CACHE, cli, "need:%d.\n", bytes);
 
-	client_obd_list_lock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
 
 	/* force the caller to try sync io.  this can jump the list
 	 * of queued writes and create a discontiguous rpc stream */
@@ -1565,7 +1565,7 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 	while (cli->cl_dirty_pages > 0 || cli->cl_w_in_flight > 0) {
 		list_add_tail(&ocw.ocw_entry, &cli->cl_cache_waiters);
 		ocw.ocw_rc = 0;
-		client_obd_list_unlock(&cli->cl_loi_list_lock);
+		spin_unlock(&cli->cl_loi_list_lock);
 
 		osc_io_unplug_async(env, cli, NULL);
 
@@ -1574,7 +1574,7 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 
 		rc = l_wait_event(ocw.ocw_waitq, ocw_granted(cli, &ocw), &lwi);
 
-		client_obd_list_lock(&cli->cl_loi_list_lock);
+		spin_lock(&cli->cl_loi_list_lock);
 
 		/* l_wait_event is interrupted by signal, or timed out */
 		if (rc < 0) {
@@ -1610,7 +1610,7 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 	}
 	EXIT;
 out:
-	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_unlock(&cli->cl_loi_list_lock);
 	OSC_DUMP_GRANT(D_CACHE, cli, "returned %d.\n", rc);
 	RETURN(rc);
 }
@@ -1771,9 +1771,9 @@ static int osc_list_maint(struct client_obd *cli, struct osc_object *osc)
 {
 	int is_ready;
 
-	client_obd_list_lock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
 	is_ready = __osc_list_maint(cli, osc);
-	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_unlock(&cli->cl_loi_list_lock);
 
 	return is_ready;
 }
@@ -1823,10 +1823,10 @@ static void osc_ap_completion(const struct lu_env *env, struct client_obd *cli,
 	oap->oap_interrupted = 0;
 
 	if (oap->oap_cmd & OBD_BRW_WRITE && xid > 0) {
-		client_obd_list_lock(&cli->cl_loi_list_lock);
+		spin_lock(&cli->cl_loi_list_lock);
 		osc_process_ar(&cli->cl_ar, xid, rc);
 		osc_process_ar(&loi->loi_ar, xid, rc);
-		client_obd_list_unlock(&cli->cl_loi_list_lock);
+		spin_unlock(&cli->cl_loi_list_lock);
 	}
 
 	rc = osc_completion(env, oap, oap->oap_cmd, rc);
@@ -2141,7 +2141,7 @@ __must_hold(&cli->cl_loi_list_lock)
 		}
 
 		cl_object_get(obj);
-		client_obd_list_unlock(&cli->cl_loi_list_lock);
+		spin_unlock(&cli->cl_loi_list_lock);
 		lu_object_ref_add_at(&obj->co_lu, &link, "check", current);
 
 		/* attempt some read/write balancing by alternating between
@@ -2186,7 +2186,7 @@ __must_hold(&cli->cl_loi_list_lock)
 		lu_object_ref_del_at(&obj->co_lu, &link, "check", current);
 		cl_object_put(env, obj);
 
-		client_obd_list_lock(&cli->cl_loi_list_lock);
+		spin_lock(&cli->cl_loi_list_lock);
 	}
 }
 
@@ -2202,9 +2202,9 @@ static int osc_io_unplug0(const struct lu_env *env, struct client_obd *cli,
 		/* disable osc_lru_shrink() temporarily to avoid
 		 * potential stack overrun problem. LU-2859 */
 		atomic_inc(&cli->cl_lru_shrinkers);
-		client_obd_list_lock(&cli->cl_loi_list_lock);
+		spin_lock(&cli->cl_loi_list_lock);
 		osc_check_rpcs(env, cli, pol);
-		client_obd_list_unlock(&cli->cl_loi_list_lock);
+		spin_unlock(&cli->cl_loi_list_lock);
 		atomic_dec(&cli->cl_lru_shrinkers);
 	} else {
 		CDEBUG(D_CACHE, "Queue writeback work for client %p.\n", cli);
@@ -2340,9 +2340,9 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 			grants = 0;
 
 		/* it doesn't need any grant to dirty this page */
-		client_obd_list_lock(&cli->cl_loi_list_lock);
+		spin_lock(&cli->cl_loi_list_lock);
 		rc = osc_enter_cache_try(cli, oap, grants, 0);
-		client_obd_list_unlock(&cli->cl_loi_list_lock);
+		spin_unlock(&cli->cl_loi_list_lock);
 		if (rc == 0) { /* try failed */
 			grants = 0;
 			need_release = 1;

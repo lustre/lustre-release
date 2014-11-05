@@ -1893,9 +1893,9 @@ static bool obd_request_slot_avail(struct client_obd *cli,
 {
 	bool avail;
 
-	client_obd_list_lock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
 	avail = !!list_empty(&orsw->orsw_entry);
-	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_unlock(&cli->cl_loi_list_lock);
 
 	return avail;
 };
@@ -1913,17 +1913,17 @@ int obd_get_request_slot(struct client_obd *cli)
 	struct l_wait_info		 lwi;
 	int				 rc;
 
-	client_obd_list_lock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
 	if (cli->cl_r_in_flight < cli->cl_max_rpcs_in_flight) {
 		cli->cl_r_in_flight++;
-		client_obd_list_unlock(&cli->cl_loi_list_lock);
+		spin_unlock(&cli->cl_loi_list_lock);
 		return 0;
 	}
 
 	init_waitqueue_head(&orsw.orsw_waitq);
 	list_add_tail(&orsw.orsw_entry, &cli->cl_loi_read_list);
 	orsw.orsw_signaled = false;
-	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_unlock(&cli->cl_loi_list_lock);
 
 	lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
 	rc = l_wait_event(orsw.orsw_waitq,
@@ -1933,7 +1933,7 @@ int obd_get_request_slot(struct client_obd *cli)
 
 	/* Here, we must take the lock to avoid the on-stack 'orsw' to be
 	 * freed but other (such as obd_put_request_slot) is using it. */
-	client_obd_list_lock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
 	if (rc != 0) {
 		if (!orsw.orsw_signaled) {
 			if (list_empty(&orsw.orsw_entry))
@@ -1948,7 +1948,7 @@ int obd_get_request_slot(struct client_obd *cli)
 
 		rc = -EINTR;
 	}
-	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_unlock(&cli->cl_loi_list_lock);
 
 	return rc;
 }
@@ -1958,7 +1958,7 @@ void obd_put_request_slot(struct client_obd *cli)
 {
 	struct obd_request_slot_waiter *orsw;
 
-	client_obd_list_lock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
 	cli->cl_r_in_flight--;
 
 	/* If there is free slot, wakeup the first waiter. */
@@ -1970,7 +1970,7 @@ void obd_put_request_slot(struct client_obd *cli)
 		cli->cl_r_in_flight++;
 		wake_up(&orsw->orsw_waitq);
 	}
-	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_unlock(&cli->cl_loi_list_lock);
 }
 EXPORT_SYMBOL(obd_put_request_slot);
 
@@ -1990,7 +1990,7 @@ int obd_set_max_rpcs_in_flight(struct client_obd *cli, __u32 max)
 	if (max > OBD_MAX_RIF_MAX || max < 1)
 		return -ERANGE;
 
-	client_obd_list_lock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
 	old = cli->cl_max_rpcs_in_flight;
 	cli->cl_max_rpcs_in_flight = max;
 	diff = max - old;
@@ -2006,7 +2006,7 @@ int obd_set_max_rpcs_in_flight(struct client_obd *cli, __u32 max)
 		cli->cl_r_in_flight++;
 		wake_up(&orsw->orsw_waitq);
 	}
-	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_unlock(&cli->cl_loi_list_lock);
 
 	return 0;
 }

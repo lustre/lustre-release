@@ -37,6 +37,7 @@
 #ifndef __OBD_H
 #define __OBD_H
 
+#include <linux/spinlock.h>
 #include <linux/obd.h>
 
 #include <lustre/lustre_idl.h>
@@ -273,14 +274,10 @@ struct client_obd {
          * blocking everywhere, but we don't want to slow down fast-path of
          * our main platform.)
          *
-         * Exact type of ->cl_loi_list_lock is defined in arch/obd.h together
-         * with client_obd_list_{un,}lock() and
-         * client_obd_list_lock_{init,done}() functions.
-	 *
 	 * NB by Jinshan: though field names are still _loi_, but actually
 	 * osc_object{}s are in the list.
 	 */
-	client_obd_lock_t	cl_loi_list_lock;
+	spinlock_t		cl_loi_list_lock;
 	struct list_head	cl_loi_ready_list;
 	struct list_head	cl_loi_hp_ready_list;
 	struct list_head	cl_loi_write_list;
@@ -307,7 +304,7 @@ struct client_obd {
 	atomic_long_t		 cl_lru_in_list;
 	atomic_long_t		 cl_unstable_count;
 	struct list_head	 cl_lru_list; /* lru page list */
-	client_obd_lock_t	 cl_lru_list_lock; /* page list protector */
+	spinlock_t		 cl_lru_list_lock; /* page list protector */
 	atomic_t		 cl_lru_shrinkers;
 
 	/* number of in flight destroy rpcs is limited to max_rpcs_in_flight */

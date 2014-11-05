@@ -84,9 +84,9 @@ static int osc_max_rpcs_in_flight_seq_show(struct seq_file *m, void *v)
 	struct client_obd *cli = &dev->u.cli;
 	int rc;
 
-	client_obd_list_lock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
 	rc = seq_printf(m, "%u\n", cli->cl_max_rpcs_in_flight);
-	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_unlock(&cli->cl_loi_list_lock);
 	return rc;
 }
 
@@ -110,10 +110,10 @@ static ssize_t osc_max_rpcs_in_flight_seq_write(struct file *file,
         if (pool && val > cli->cl_max_rpcs_in_flight)
                 pool->prp_populate(pool, val-cli->cl_max_rpcs_in_flight);
 
-	client_obd_list_lock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
 	cli->cl_max_rpcs_in_flight = val;
 	client_adjust_max_dirty(cli);
-	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_unlock(&cli->cl_loi_list_lock);
 
 	LPROCFS_CLIMP_EXIT(dev);
 	return count;
@@ -127,9 +127,9 @@ static int osc_max_dirty_mb_seq_show(struct seq_file *m, void *v)
         long val;
         int mult;
 
-	client_obd_list_lock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
 	val = cli->cl_dirty_max_pages;
-	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_unlock(&cli->cl_loi_list_lock);
 
 	mult = 1 << (20 - PAGE_CACHE_SHIFT);
 	return lprocfs_seq_read_frac_helper(m, val, mult);
@@ -153,10 +153,10 @@ static ssize_t osc_max_dirty_mb_seq_write(struct file *file,
 	    pages_number > totalram_pages / 4) /* 1/4 of RAM */
 		return -ERANGE;
 
-	client_obd_list_lock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
 	cli->cl_dirty_max_pages = pages_number;
 	osc_wake_cache_waiters(cli);
-	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_unlock(&cli->cl_loi_list_lock);
 
 	return count;
 }
@@ -236,9 +236,9 @@ static int osc_cur_dirty_bytes_seq_show(struct seq_file *m, void *v)
 	struct client_obd *cli = &dev->u.cli;
 	int rc;
 
-	client_obd_list_lock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
 	rc = seq_printf(m, "%lu\n", cli->cl_dirty_pages << PAGE_CACHE_SHIFT);
-	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_unlock(&cli->cl_loi_list_lock);
 	return rc;
 }
 LPROC_SEQ_FOPS_RO(osc_cur_dirty_bytes);
@@ -249,9 +249,9 @@ static int osc_cur_grant_bytes_seq_show(struct seq_file *m, void *v)
 	struct client_obd *cli = &dev->u.cli;
 	int rc;
 
-	client_obd_list_lock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
 	rc = seq_printf(m, "%lu\n", cli->cl_avail_grant);
-	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_unlock(&cli->cl_loi_list_lock);
 	return rc;
 }
 
@@ -272,12 +272,13 @@ static ssize_t osc_cur_grant_bytes_seq_write(struct file *file,
                 return rc;
 
         /* this is only for shrinking grant */
-        client_obd_list_lock(&cli->cl_loi_list_lock);
-        if (val >= cli->cl_avail_grant) {
-                client_obd_list_unlock(&cli->cl_loi_list_lock);
-                return 0;
-        }
-        client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
+	if (val >= cli->cl_avail_grant) {
+		spin_unlock(&cli->cl_loi_list_lock);
+		return 0;
+	}
+
+	spin_unlock(&cli->cl_loi_list_lock);
 
         LPROCFS_CLIMP_CHECK(obd);
         if (cli->cl_import->imp_state == LUSTRE_IMP_FULL)
@@ -295,9 +296,9 @@ static int osc_cur_lost_grant_bytes_seq_show(struct seq_file *m, void *v)
 	struct client_obd *cli = &dev->u.cli;
 	int rc;
 
-	client_obd_list_lock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
 	rc = seq_printf(m, "%lu\n", cli->cl_lost_grant);
-	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_unlock(&cli->cl_loi_list_lock);
 	return rc;
 }
 LPROC_SEQ_FOPS_RO(osc_cur_lost_grant_bytes);
@@ -526,10 +527,10 @@ static ssize_t osc_obd_max_pages_per_rpc_seq_write(struct file *file,
 		LPROCFS_CLIMP_EXIT(dev);
 		return -ERANGE;
 	}
-	client_obd_list_lock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
 	cli->cl_max_pages_per_rpc = val;
 	client_adjust_max_dirty(cli);
-	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_unlock(&cli->cl_loi_list_lock);
 
 	LPROCFS_CLIMP_EXIT(dev);
 	return count;
@@ -649,7 +650,7 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 
 	do_gettimeofday(&now);
 
-	client_obd_list_lock(&cli->cl_loi_list_lock);
+	spin_lock(&cli->cl_loi_list_lock);
 
 	seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
 		   now.tv_sec, now.tv_usec);
@@ -731,7 +732,7 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
                         break;
         }
 
-        client_obd_list_unlock(&cli->cl_loi_list_lock);
+	spin_unlock(&cli->cl_loi_list_lock);
 
         return 0;
 }
