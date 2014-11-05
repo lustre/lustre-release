@@ -11369,6 +11369,15 @@ test_205() { # Job stats
 		jobids=$($LFS changelog $MDT0 | tail -9 | grep -c "j=")
 		[ $jobids -eq 9 ] ||
 			error "Wrong changelog jobid count $jobids != 9"
+
+		# LU-5862
+		JOBENV="disable"
+		jobstats_set $JOBENV
+		touch $DIR/$tfile
+		$LFS changelog $MDT0 | tail -1
+		jobids=$($LFS changelog $MDT0 | tail -1 | grep -c "j=")
+		[ $jobids -eq 0 ] ||
+			error "Unexpected jobids when jobid_var=$JOBENV"
 	fi
 
 	# cleanup
