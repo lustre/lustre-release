@@ -107,6 +107,7 @@ Requires: %{name}-modules = %{version}
 BuildRequires: libtool
 %if %{with servers}
 Requires: lustre-osd
+Requires: lustre-osd-mount
 %endif
 %if %{defined cross_requires}
 Requires: %{cross_requires}
@@ -152,6 +153,7 @@ Summary: osd-ldiskfs contains both ldiskfs and its osd interface in Lustre.
 Requires: lustre-modules = %{version}
 Requires: module-init-tools >= 3.9
 Requires: ldiskfsprogs >= 1.42.7.wc1
+Requires: lustre-osd-ldiskfs-mount
 Provides: lustre-osd
 Obsoletes: lustre-ldiskfs
 Group: Development/Kernel
@@ -162,12 +164,24 @@ modify data that is supposed to be stored persistently. This API is the interfac
 to code that bridges individual file systems. This specific package provides an
 implementation of the OSD API for using the Ldiskfs filesystem as the underlying
 backing store of a Lustre server.
+
+%if %{with lustre_utils}
+%package osd-ldiskfs-mount
+Summary: osd-ldiskfs-mount contains mount's ldiskfs specific dso.
+Provides: lustre-osd-mount
+Group: Development/Kernel
+
+%description osd-ldiskfs-mount
+LDISKFS hooks for mount/mkfs into a dynamic library.
+
+%endif
 %endif
 
 %if %{with zfs}
 %package osd-zfs
 Summary: osd-zfs is the mandatory glue for ZFS support in Lustre.
 Requires: lustre-modules = %{version}, zfs-kmod
+Requires: lustre-osd-zfs-mount
 Provides: lustre-osd
 Group: Development/Kernel
 
@@ -177,6 +191,17 @@ modify data that is supposed to be stored persistently. This API is the interfac
 to code that bridges individual file systems. This specific package provides an
 implementation of the OSD API for using the ZFS filesystem as the underlying
 backing store of a Lustre server.
+
+%if %{with lustre_utils}
+%package osd-zfs-mount
+Summary: osd-zfs-mount contains mount's ldiskfs specific dso.
+Provides: lustre-osd-mount
+Group: Development/Kernel
+
+%description osd-zfs-mount
+ZFS hooks for mount/mkfs into a dynamic library.
+
+%endif
 %endif
 %endif # with lustre_modules
 
@@ -420,9 +445,15 @@ if [ -f $POST_SCRIPT ]; then
 	cp -f $POST_SCRIPT $RPM_BUILD_ROOT/%{rpm_post_base}-modules.sh
 %if %{with ldiskfs}
 	cp -f $POST_SCRIPT $RPM_BUILD_ROOT/%{rpm_post_base}-osd-ldiskfs.sh
+%if %{with lustre_utils}
+	cp -f $POST_SCRIPT $RPM_BUILD_ROOT/%{rpm_post_base}-mount-osd-ldiskfs.sh
+%endif
 %endif
 %if %{with zfs}
 	cp -f $POST_SCRIPT $RPM_BUILD_ROOT/%{rpm_post_base}-osd-zfs.sh
+%if %{with lustre_utils}
+	cp -f $POST_SCRIPT $RPM_BUILD_ROOT/%{rpm_post_base}-mount-osd-zfs.sh
+%endif
 %endif
 %if %{with lustre_tests}
 	cp -f $POST_SCRIPT $RPM_BUILD_ROOT/%{rpm_post_base}-tests.sh
@@ -494,11 +525,16 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} \
 %defattr(-,root,root)
 %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/ldiskfs.ko
 %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_ldiskfs.ko
-%if %{with lustre_utils}
-%{_libdir}/@PACKAGE@/mount_osd_ldiskfs.so
-%endif
 %if %{defined rpm_post_base}
 %attr(0555, root, root) %{rpm_post_base}-osd-ldiskfs.sh
+%endif
+%if %{with lustre_utils}
+%files osd-ldiskfs-mount
+%defattr(-,root,root)
+%{_libdir}/@PACKAGE@/mount_osd_ldiskfs.so
+%if %{defined rpm_post_base}
+%attr(0555, root, root) %{rpm_post_base}-mount-osd-ldiskfs.sh
+%endif
 %endif
 %endif
 
@@ -506,11 +542,16 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} \
 %files osd-zfs
 %defattr(-,root,root)
 %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_zfs.ko
-%if %{with lustre_utils}
-%{_libdir}/@PACKAGE@/mount_osd_zfs.so
-%endif
 %if %{defined rpm_post_base}
 %attr(0555, root, root) %{rpm_post_base}-osd-zfs.sh
+%endif
+%if %{with lustre_utils}
+%files osd-zfs-mount
+%defattr(-,root,root)
+%{_libdir}/@PACKAGE@/mount_osd_zfs.so
+%if %{defined rpm_post_base}
+%attr(0555, root, root) %{rpm_post_base}-mount-osd-zfs.sh
+%endif
 %endif
 %endif
 %endif # with lustre_modules
@@ -647,6 +688,12 @@ if sysctl kernel.unsupported >/dev/null 2>&1 &&
      into /etc/modprobe.d/unsupported_modules"
 fi
 %endif
+%if %{with lustre_utils} && %{defined rpm_post_base}
+%post osd-ldiskfs-mount
+if [ -x %{rpm_post_base}-mount-osd-ldiskfs.sh ]; then
+	%{rpm_post_base}-mount-osd-ldiskfs.sh %{cross_path} create
+fi
+%endif
 %endif
 
 %if %{with zfs}
@@ -690,6 +737,12 @@ if sysctl kernel.unsupported >/dev/null 2>&1 &&
      into /etc/modprobe.d/unsupported_modules"
 fi
 %endif
+%if %{with lustre_utils} && %{defined rpm_post_base}
+%post osd-zfs-mount
+if [ -x %{rpm_post_base}-mount-osd-zfs.sh ]; then
+	%{rpm_post_base}-mount-osd-zfs.sh %{cross_path} create
+fi
+%endif
 %endif
 
 %preun modules
@@ -712,6 +765,12 @@ fi
 OSD_LDISKFS_RPM_NAME=$(rpm -q %{name}-osd-ldiskfs | grep "%{version}-%{release}")
 rpm -ql $OSD_LDISKFS_RPM_NAME | grep '\.ko$' > /var/run/%{name}-osd-ldiskfs || true
 %endif
+%if %{with lustre_utils} && %{defined rpm_post_base}
+%preun osd-ldiskfs-mount
+if [ -x %{rpm_post_base}-mount-osd-ldiskfs.sh ]; then
+	%{rpm_post_base}-mount-osd-ldiskfs.sh %{cross_path} remove
+fi
+%endif
 %endif
 
 %if %{with zfs}
@@ -723,6 +782,12 @@ fi
 %else
 OSD_ZFS_RPM_NAME=$(rpm -q %{name}-osd-zfs | grep "%{version}-%{release}")
 rpm -ql $OSD_ZFS_RPM_NAME | grep '\.ko$' > /var/run/%{name}-osd-zfs || true
+%endif
+%if %{with lustre_utils} && %{defined rpm_post_base}
+%preun osd-zfs-mount
+if [ -x %{rpm_post_base}-mount-osd-zfs.sh ]; then
+	%{rpm_post_base}-mount-osd-zfs.sh %{cross_path} remove
+fi
 %endif
 %endif
 
