@@ -1063,6 +1063,11 @@ static int mdt_open_by_fid_lock(struct mdt_thread_info *info,
 	if (rc)
 		GOTO(out, rc);
 
+	/* We should not change file's existing LOV EA */
+	if (S_ISREG(lu_object_attr(&o->mot_obj)) &&
+	    flags & MDS_OPEN_HAS_EA && ma->ma_valid & MA_LOV)
+		GOTO(out, rc = -EEXIST);
+
 	/* If a release request, check file flags are fine and ask for an
 	 * exclusive open access. */
 	if (flags & MDS_OPEN_RELEASE && !mdt_hsm_release_allow(ma))
