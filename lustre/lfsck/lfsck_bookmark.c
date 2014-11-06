@@ -39,8 +39,6 @@
 
 #define LFSCK_BOOKMARK_MAGIC	0x20130C1D
 
-static const char lfsck_bookmark_name[] = "lfsck_bookmark";
-
 static void lfsck_bookmark_le_to_cpu(struct lfsck_bookmark *des,
 				     struct lfsck_bookmark *src)
 {
@@ -175,7 +173,7 @@ int lfsck_bookmark_setup(const struct lu_env *env,
 	}
 
 	obj = local_file_find_or_create(env, lfsck->li_los, root,
-					lfsck_bookmark_name,
+					LFSCK_BOOKMARK,
 					S_IFREG | S_IRUGO | S_IWUSR);
 	lu_object_put(env, &root->do_lu);
 	if (IS_ERR(obj))

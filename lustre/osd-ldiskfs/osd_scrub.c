@@ -1534,6 +1534,7 @@ struct osd_lf_map {
 	char		*olm_name;
 	struct lu_fid	 olm_fid;
 	__u16		 olm_flags;
+	__u16		 olm_namelen;
 	scandir_t	 olm_scandir;
 	filldir_t	 olm_filldir;
 };
@@ -1542,107 +1543,125 @@ struct osd_lf_map {
 static const struct osd_lf_map osd_lf_maps[] = {
 	/* CATALOGS */
 	{ CATLIST, { FID_SEQ_LOCAL_FILE, LLOG_CATALOGS_OID, 0 }, OLF_SHOW_NAME,
-		NULL, NULL },
+		sizeof(CATLIST) - 1, NULL, NULL },
 
 	/* CONFIGS */
 	{ MOUNT_CONFIGS_DIR, { FID_SEQ_LOCAL_FILE, MGS_CONFIGS_OID, 0 },
-		OLF_SCAN_SUBITEMS, osd_ios_general_scan,
-		osd_ios_varfid_fill },
+		OLF_SCAN_SUBITEMS, sizeof(MOUNT_CONFIGS_DIR) - 1,
+		osd_ios_general_scan, osd_ios_varfid_fill },
 
 	/* NIDTBL_VERSIONS */
 	{ MGS_NIDTBL_DIR, { 0, 0, 0 }, OLF_SCAN_SUBITEMS,
-		osd_ios_general_scan, osd_ios_varfid_fill },
+		sizeof(MGS_NIDTBL_DIR) - 1, osd_ios_general_scan,
+		osd_ios_varfid_fill },
 
 	/* PENDING */
-	{ "PENDING", { 0, 0, 0 }, 0, NULL, NULL },
+	{ "PENDING", { 0, 0, 0 }, 0, sizeof("PENDING") - 1, NULL, NULL },
 
 	/* ROOT */
 	{ "ROOT", { FID_SEQ_ROOT, FID_OID_ROOT, 0 },
-		OLF_SCAN_SUBITEMS | OLF_HIDE_FID, osd_ios_ROOT_scan, NULL },
+		OLF_SCAN_SUBITEMS | OLF_HIDE_FID, sizeof("ROOT") - 1,
+		osd_ios_ROOT_scan, NULL },
 
 	/* changelog_catalog */
-	{ CHANGELOG_CATALOG, { 0, 0, 0 }, 0, NULL, NULL },
+	{ CHANGELOG_CATALOG, { 0, 0, 0 }, 0, sizeof(CHANGELOG_CATALOG) - 1,
+		NULL, NULL },
 
 	/* changelog_users */
-	{ CHANGELOG_USERS, { 0, 0, 0 }, 0, NULL, NULL },
+	{ CHANGELOG_USERS, { 0, 0, 0 }, 0, sizeof(CHANGELOG_USERS) - 1,
+		NULL, NULL },
 
 	/* fld */
 	{ "fld", { FID_SEQ_LOCAL_FILE, FLD_INDEX_OID, 0 }, OLF_SHOW_NAME,
-		NULL, NULL },
+		sizeof("fld") - 1, NULL, NULL },
 
 	/* last_rcvd */
 	{ LAST_RCVD, { FID_SEQ_LOCAL_FILE, LAST_RECV_OID, 0 }, OLF_SHOW_NAME,
-		NULL, NULL },
-
-	/* lfsck_bookmark */
-	{ "lfsck_bookmark", { 0, 0, 0 }, 0, NULL, NULL },
+		sizeof(LAST_RCVD) - 1, NULL, NULL },
 
 	/* lov_objid */
 	{ LOV_OBJID, { FID_SEQ_LOCAL_FILE, MDD_LOV_OBJ_OID, 0 }, OLF_SHOW_NAME,
-		NULL, NULL },
+		sizeof(LOV_OBJID) - 1, NULL, NULL },
 
 	/* lov_objseq */
 	{ LOV_OBJSEQ, { FID_SEQ_LOCAL_FILE, MDD_LOV_OBJ_OSEQ, 0 },
-		OLF_SHOW_NAME, NULL, NULL },
+		OLF_SHOW_NAME, sizeof(LOV_OBJSEQ) - 1, NULL, NULL },
 
 	/* quota_master */
-	{ QMT_DIR, { 0, 0, 0 }, OLF_SCAN_SUBITEMS,
+	{ QMT_DIR, { 0, 0, 0 }, OLF_SCAN_SUBITEMS, sizeof(QMT_DIR) - 1,
 		osd_ios_general_scan, osd_ios_varfid_fill },
 
 	/* quota_slave */
-	{ QSD_DIR, { 0, 0, 0 }, OLF_SCAN_SUBITEMS,
+	{ QSD_DIR, { 0, 0, 0 }, OLF_SCAN_SUBITEMS, sizeof(QSD_DIR) - 1,
 		osd_ios_general_scan, osd_ios_varfid_fill },
 
 	/* seq_ctl */
 	{ "seq_ctl", { FID_SEQ_LOCAL_FILE, FID_SEQ_CTL_OID, 0 },
-		OLF_SHOW_NAME, NULL, NULL },
+		OLF_SHOW_NAME, sizeof("seq_ctl") - 1, NULL, NULL },
 
 	/* seq_srv */
 	{ "seq_srv", { FID_SEQ_LOCAL_FILE, FID_SEQ_SRV_OID, 0 },
-		OLF_SHOW_NAME, NULL, NULL },
+		OLF_SHOW_NAME, sizeof("seq_srv") - 1, NULL, NULL },
 
 	/* health_check */
 	{ HEALTH_CHECK, { FID_SEQ_LOCAL_FILE, OFD_HEALTH_CHECK_OID, 0 },
-		OLF_SHOW_NAME, NULL, NULL },
+		OLF_SHOW_NAME, sizeof(HEALTH_CHECK) - 1, NULL, NULL },
+
+	/* LFSCK */
+	{ LFSCK_DIR, { 0, 0, 0 }, 0, sizeof(LFSCK_DIR) - 1,
+		osd_ios_general_scan, osd_ios_varfid_fill },
+
+	/* lfsck_bookmark */
+	{ LFSCK_BOOKMARK, { 0, 0, 0 }, 0, sizeof(LFSCK_BOOKMARK) - 1,
+		NULL, NULL },
+
+	/* lfsck_layout */
+	{ LFSCK_LAYOUT, { 0, 0, 0 }, 0, sizeof(LFSCK_LAYOUT) - 1,
+		NULL, NULL },
 
 	/* lfsck_namespace */
-	{ "lfsck_namespace", { 0, 0, 0 }, 0, NULL, NULL },
+	{ LFSCK_NAMESPACE, { 0, 0, 0 }, 0, sizeof(LFSCK_NAMESPACE) - 1,
+		NULL, NULL },
 
 	/* OBJECTS, upgrade from old device */
-	{ OBJECTS, { 0, 0, 0 }, OLF_SCAN_SUBITEMS, osd_ios_OBJECTS_scan, NULL },
+	{ OBJECTS, { 0, 0, 0 }, OLF_SCAN_SUBITEMS, sizeof(OBJECTS) - 1,
+		osd_ios_OBJECTS_scan, NULL },
 
 	/* lquota_v2.user, upgrade from old device */
-	{ "lquota_v2.user", { 0, 0, 0 }, 0, NULL, NULL },
+	{ "lquota_v2.user", { 0, 0, 0 }, 0, sizeof("lquota_v2.user") - 1,
+		NULL, NULL },
 
 	/* lquota_v2.group, upgrade from old device */
-	{ "lquota_v2.group", { 0, 0, 0 }, 0, NULL, NULL },
+	{ "lquota_v2.group", { 0, 0, 0 }, 0, sizeof("lquota_v2.group") - 1,
+		NULL, NULL },
 
 	/* LAST_GROUP, upgrade from old device */
 	{ "LAST_GROUP", { FID_SEQ_LOCAL_FILE, OFD_LAST_GROUP_OID, 0 },
-		OLF_SHOW_NAME, NULL, NULL },
+		OLF_SHOW_NAME, sizeof("LAST_GROUP") - 1, NULL, NULL },
 
 	/* SLAVE_LOG, llog for destroy slave stripes of striped dir */
 	{ "SLAVE_LOG", { FID_SEQ_LOCAL_FILE, SLAVE_LLOG_CATALOGS_OID, 0 },
-	       OLF_SHOW_NAME, NULL, NULL },
+	       OLF_SHOW_NAME, sizeof("SLAVE_LOG") - 1, NULL, NULL },
 
 	/* lost+found */
 	{ "lost+found", { FID_SEQ_LOCAL_FILE, OSD_LPF_OID, 0 },
-		OLF_SCAN_SUBITEMS, osd_ios_general_scan, osd_ios_lf_fill },
+		OLF_SCAN_SUBITEMS, sizeof("lost+found") - 1,
+		osd_ios_general_scan, osd_ios_lf_fill },
 
-	{ NULL, { 0, 0, 0 }, 0, NULL, NULL }
+	{ NULL, { 0, 0, 0 }, 0, 0, NULL, NULL }
 };
 
 /* Add the new introduced files under .lustre/ in the list in the future. */
 static const struct osd_lf_map osd_dl_maps[] = {
 	/* .lustre/fid */
 	{ "fid", { FID_SEQ_DOT_LUSTRE, FID_OID_DOT_LUSTRE_OBF, 0 }, 0,
-		NULL, NULL },
+		sizeof("fid") - 1, NULL, NULL },
 
 	/* .lustre/lost+found */
 	{ "lost+found", { FID_SEQ_DOT_LUSTRE, FID_OID_DOT_LUSTRE_LPF, 0 }, 0,
-		NULL, NULL },
+		sizeof("lost+found") - 1, NULL, NULL },
 
-	{ NULL, { 0, 0, 0 }, 0, NULL, NULL }
+	{ NULL, { 0, 0, 0 }, 0, 0, NULL, NULL }
 };
 
 struct osd_ios_item {
@@ -1891,7 +1910,7 @@ static int osd_ios_dl_fill(void *buf, const char *name, int namelen,
 		RETURN(0);
 
 	for (map = osd_dl_maps; map->olm_name != NULL; map++) {
-		if (strlen(map->olm_name) != namelen)
+		if (map->olm_namelen != namelen)
 			continue;
 
 		if (strncmp(map->olm_name, name, namelen) == 0)
@@ -1927,7 +1946,7 @@ static int osd_ios_root_fill(void *buf, const char *name, int namelen,
 		RETURN(0);
 
 	for (map = osd_lf_maps; map->olm_name != NULL; map++) {
-		if (strlen(map->olm_name) != namelen)
+		if (map->olm_namelen != namelen)
 			continue;
 
 		if (strncmp(map->olm_name, name, namelen) == 0)
@@ -2169,7 +2188,7 @@ static int osd_initial_OI_scrub(struct osd_thread_info *info,
 
 		child = osd_ios_lookup_one_len(map->olm_name,
 					       osd_sb(dev)->s_root,
-					       strlen(map->olm_name));
+					       map->olm_namelen);
 		if (!IS_ERR(child))
 			dput(child);
 		else if (PTR_ERR(child) == -ENOENT)

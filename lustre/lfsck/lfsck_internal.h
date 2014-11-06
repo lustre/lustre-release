@@ -480,6 +480,15 @@ struct lfsck_tgt_descs {
 #define OST_TGT(lfsck, index)   LTD_TGT(&lfsck->li_ost_descs, index)
 #define MDT_TGT(lfsck, index)   LTD_TGT(&lfsck->li_mdt_descs, index)
 
+#define LFSCK_STF_BITS	4
+/* If want to adjust the LFSCK_STF_COUNT, please change LFSCK_STF_BITS. */
+#define LFSCK_STF_COUNT	(1 << LFSCK_STF_BITS)
+
+struct lfsck_sub_trace_obj {
+	struct dt_object	*lsto_obj;
+	struct mutex		 lsto_mutex;
+};
+
 struct lfsck_component {
 	/* into lfsck_instance::li_list_(scan,double_scan,idle} */
 	struct list_head	 lc_link;
@@ -493,6 +502,7 @@ struct lfsck_component {
 	struct lfsck_position	 lc_pos_start;
 	struct lfsck_instance	*lc_lfsck;
 	struct dt_object	*lc_obj;
+	struct lfsck_sub_trace_obj lc_sub_trace_objs[LFSCK_STF_COUNT];
 	struct lfsck_operations *lc_ops;
 	void			*lc_file_ram;
 	void			*lc_file_disk;
@@ -628,6 +638,7 @@ struct lfsck_instance {
 	struct local_oid_storage *li_los;
 	struct lu_fid		  li_local_root_fid;  /* backend root "/" */
 	struct lu_fid		  li_global_root_fid; /* /ROOT */
+	struct dt_object	 *li_lfsck_dir;
 	struct dt_object	 *li_bookmark_obj;
 	struct dt_object	 *li_lpf_obj;
 	struct dt_object	 *li_lpf_root_obj;
@@ -1261,6 +1272,15 @@ static inline void lfsck_component_put(const struct lu_env *env,
 				       struct lfsck_component *com)
 {
 	if (atomic_dec_and_test(&com->lc_ref)) {
+		struct lfsck_sub_trace_obj *lsto;
+		int			    i;
+
+		for (i = 0, lsto = &com->lc_sub_trace_objs[0];
+		     i < LFSCK_STF_COUNT; i++, lsto++) {
+			if (lsto->lsto_obj != NULL)
+				lu_object_put(env, &lsto->lsto_obj->do_lu);
+		}
+
 		if (com->lc_obj != NULL)
 			lu_object_put_nocache(env, &com->lc_obj->do_lu);
 		if (com->lc_file_ram != NULL)
@@ -1347,6 +1367,11 @@ static inline struct lfsck_lmv *lfsck_lmv_get(struct lfsck_lmv *llmv)
 		atomic_inc(&llmv->ll_ref);
 
 	return llmv;
+}
+
+static inline int lfsck_sub_trace_file_fid2idx(const struct lu_fid *fid)
+{
+	return fid->f_oid & (LFSCK_STF_COUNT - 1);
 }
 
 static inline void lfsck_lmv_header_le_to_cpu(struct lmv_mds_md_v1 *dst,

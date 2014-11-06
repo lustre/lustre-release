@@ -68,6 +68,10 @@
 #define QMT_DIR			"quota_master"
 #define QSD_DIR			"quota_slave"
 #define HSM_ACTIONS		"hsm_actions"
+#define LFSCK_DIR		"LFSCK"
+#define LFSCK_BOOKMARK		"lfsck_bookmark"
+#define LFSCK_LAYOUT		"lfsck_layout"
+#define LFSCK_NAMESPACE		"lfsck_namespace"
 
 /****************** persistent mount data *********************/
 

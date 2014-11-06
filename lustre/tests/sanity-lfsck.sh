@@ -720,11 +720,11 @@ test_7a()
 	echo "stop $SINGLEMDS"
 	stop $SINGLEMDS > /dev/null || error "(4) Fail to stop MDS!"
 
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
 	echo "start $SINGLEMDS"
 	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
 		error "(5) Fail to start MDS!"
 
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
 		awk '/^status/ { print \\\$2 }'" "completed" 30 || {
@@ -754,14 +754,15 @@ test_7b()
 		error "(4) unexpected status"
 	}
 
+	umount_client $MOUNT
 	echo "stop $SINGLEMDS"
 	stop $SINGLEMDS > /dev/null || error "(5) Fail to stop MDS!"
 
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
 	echo "start $SINGLEMDS"
 	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
 		error "(6) Fail to start MDS!"
 
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
 		awk '/^status/ { print \\\$2 }'" "completed" 30 || {

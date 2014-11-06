@@ -1544,6 +1544,11 @@ void lfsck_instance_cleanup(const struct lu_env *env,
 	lfsck_tgt_descs_fini(&lfsck->li_ost_descs);
 	lfsck_tgt_descs_fini(&lfsck->li_mdt_descs);
 
+	if (lfsck->li_lfsck_dir != NULL) {
+		lu_object_put_nocache(env, &lfsck->li_lfsck_dir->do_lu);
+		lfsck->li_lfsck_dir = NULL;
+	}
+
 	if (lfsck->li_bookmark_obj != NULL) {
 		lu_object_put_nocache(env, &lfsck->li_bookmark_obj->do_lu);
 		lfsck->li_bookmark_obj = NULL;
@@ -3210,12 +3215,18 @@ int lfsck_register(const struct lu_env *env, struct dt_device *key,
 	if (IS_ERR(obj))
 		GOTO(out, rc = PTR_ERR(obj));
 
-	lu_object_get(&obj->do_lu);
-	lfsck->li_obj_oit = obj;
 	rc = obj->do_ops->do_index_try(env, obj, &dt_otable_features);
 	if (rc != 0)
 		GOTO(out, rc);
 
+	lfsck->li_obj_oit = obj;
+	obj = local_file_find_or_create(env, lfsck->li_los, root, LFSCK_DIR,
+					S_IFDIR | S_IRUGO | S_IWUSR);
+	if (IS_ERR(obj))
+		GOTO(out, rc = PTR_ERR(obj));
+
+	lu_object_get(&obj->do_lu);
+	lfsck->li_lfsck_dir = obj;
 	rc = lfsck_bookmark_setup(env, lfsck);
 	if (rc != 0)
 		GOTO(out, rc);

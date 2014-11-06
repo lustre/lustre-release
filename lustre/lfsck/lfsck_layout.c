@@ -53,8 +53,6 @@
 
 #define LFSCK_LAYOUT_MAGIC		LFSCK_LAYOUT_MAGIC_V2
 
-static const char lfsck_layout_name[] = "lfsck_layout";
-
 struct lfsck_layout_seq {
 	struct list_head	 lls_list;
 	__u64			 lls_seq;
@@ -5456,7 +5454,7 @@ int lfsck_layout_setup(const struct lu_env *env, struct lfsck_instance *lfsck)
 		com->lc_ops = &lfsck_layout_master_ops;
 		com->lc_data = lfsck_assistant_data_init(
 				&lfsck_layout_assistant_ops,
-				"lfsck_layout");
+				LFSCK_LAYOUT);
 		if (com->lc_data == NULL)
 			GOTO(out, rc = -ENOMEM);
 	} else {
@@ -5491,7 +5489,7 @@ int lfsck_layout_setup(const struct lu_env *env, struct lfsck_instance *lfsck)
 		GOTO(out, rc = -ENOTDIR);
 
 	obj = local_file_find_or_create(env, lfsck->li_los, root,
-					lfsck_layout_name,
+					LFSCK_LAYOUT,
 					S_IFREG | S_IRUGO | S_IWUSR);
 	if (IS_ERR(obj))
 		GOTO(out, rc = PTR_ERR(obj));
