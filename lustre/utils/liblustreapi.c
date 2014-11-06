@@ -664,13 +664,13 @@ int llapi_search_ost(char *fsname, char *poolname, char *ostname)
 /**
  * Open a Lustre file.
  *
- * \param name the name of the file to be opened
- * \param flags access mode, see flags in open(2)
- * \param mode permisson of the file if it is created, see mode in open(2)
- * \param param stripe pattern of the newly created file
+ * \param name     the name of the file to be opened
+ * \param flags    access mode, see flags in open(2)
+ * \param mode     permission of the file if it is created, see mode in open(2)
+ * \param param    stripe pattern of the newly created file
  *
- * \return file descriptor of opened file
- * \return -error failure
+ * \retval         file descriptor of opened file
+ * \retval         negative errno on failure
  */
 int llapi_file_open_param(const char *name, int flags, mode_t mode,
 			  const struct llapi_stripe_param *param)
@@ -821,18 +821,17 @@ retry_open:
 		if (errno != EEXIST && errno != EALREADY)
 			errmsg = strerror(errno);
 
-			llapi_err_noerrno(LLAPI_MSG_ERROR,
+		llapi_err_noerrno(LLAPI_MSG_ERROR,
 				  "error on ioctl "LPX64" for '%s' (%d): %s",
 				  (__u64)LL_IOC_LOV_SETSTRIPE, name, fd,
 				  errmsg);
-	}
 
-	if (rc) {
 		close(fd);
 		fd = rc;
 	}
-	if (lum != NULL)
-		free(lum);
+
+	free(lum);
+
 	return fd;
 }
 
