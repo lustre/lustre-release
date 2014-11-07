@@ -194,15 +194,6 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
 		spin_unlock(&lli->lli_lock);
 	}
 
-        if (rc == 0) {
-                rc = ll_objects_destroy(req, inode);
-                if (rc)
-			CERROR("%s: inode "DFID
-			       " ll_objects destroy: rc = %d\n",
-			       ll_i2mdexp(inode)->exp_obd->obd_name,
-			       PFID(ll_inode2fid(inode)), rc);
-        }
-
 	if (rc == 0 && op_data->op_bias & MDS_HSM_RELEASE) {
 		struct mdt_body *body;
 		body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);

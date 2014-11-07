@@ -1039,10 +1039,7 @@ int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
  * \param[in] env	execution environment
  * \param[in] exp	OBD export of OFD device
  * \param[in] oa	obdo structure with FID
- * \param[in] md	not used in OFD
  * \param[in] oti	not used in OFD
- * \param[in] md_exp	not used in OFD
- * \param[in] capa	not used in OFD
  *
  * Note: this is OBD API method which is common API for server OBDs and
  * client OBDs. Thus some parameters used in client OBDs may not be used
@@ -1052,9 +1049,7 @@ int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
  * \retval		negative value on error
  */
 int ofd_echo_destroy(const struct lu_env *env, struct obd_export *exp,
-		     struct obdo *oa, struct lov_stripe_md *md,
-		     struct obd_trans_info *oti, struct obd_export *md_exp,
-		     void *capa)
+		     struct obdo *oa, struct obd_trans_info *oti)
 {
 	struct ofd_device	*ofd = ofd_exp(exp);
 	struct lu_fid		*fid = &oa->o_oi.oi_fid;

@@ -1160,82 +1160,6 @@ int ll_rmdir_entry(struct inode *dir, char *name, int namelen)
 	RETURN(rc);
 }
 
-int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
-{
-        struct mdt_body *body;
-        struct lov_mds_md *eadata;
-        struct lov_stripe_md *lsm = NULL;
-        struct obd_trans_info oti = { 0 };
-        struct obdo *oa;
-        struct obd_capa *oc = NULL;
-        int rc;
-        ENTRY;
-
-        /* req is swabbed so this is safe */
-	body = req_capsule_server_get(&request->rq_pill, &RMF_MDT_BODY);
-	if (!(body->mbo_valid & OBD_MD_FLEASIZE))
-		RETURN(0);
-
-	if (body->mbo_eadatasize == 0) {
-                CERROR("OBD_MD_FLEASIZE set but eadatasize zero\n");
-                GOTO(out, rc = -EPROTO);
-        }
-
-        /* The MDS sent back the EA because we unlinked the last reference
-         * to this file. Use this EA to unlink the objects on the OST.
-         * It's opaque so we don't swab here; we leave it to obd_unpackmd() to
-         * check it is complete and sensible. */
-	eadata = req_capsule_server_sized_get(&request->rq_pill, &RMF_MDT_MD,
-					      body->mbo_eadatasize);
-	LASSERT(eadata != NULL);
-
-	rc = obd_unpackmd(ll_i2dtexp(dir), &lsm, eadata, body->mbo_eadatasize);
-        if (rc < 0) {
-                CERROR("obd_unpackmd: %d\n", rc);
-                GOTO(out, rc);
-        }
-        LASSERT(rc >= sizeof(*lsm));
-
-        OBDO_ALLOC(oa);
-        if (oa == NULL)
-                GOTO(out_free_memmd, rc = -ENOMEM);
-
-	oa->o_oi = lsm->lsm_oi;
-	oa->o_mode = body->mbo_mode & S_IFMT;
-	oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLGROUP;
-
-	if (body->mbo_valid & OBD_MD_FLCOOKIE) {
-                oa->o_valid |= OBD_MD_FLCOOKIE;
-                oti.oti_logcookies =
-                        req_capsule_server_sized_get(&request->rq_pill,
-                                                     &RMF_LOGCOOKIES,
-                                                   sizeof(struct llog_cookie) *
-                                                     lsm->lsm_stripe_count);
-                if (oti.oti_logcookies == NULL) {
-                        oa->o_valid &= ~OBD_MD_FLCOOKIE;
-			body->mbo_valid &= ~OBD_MD_FLCOOKIE;
-		}
-	}
-
-	if (body->mbo_valid & OBD_MD_FLOSSCAPA) {
-                rc = md_unpack_capa(ll_i2mdexp(dir), request, &RMF_CAPA2, &oc);
-                if (rc)
-                        GOTO(out_free_memmd, rc);
-        }
-
-	rc = obd_destroy(NULL, ll_i2dtexp(dir), oa, lsm, &oti,
-			 ll_i2mdexp(dir), oc);
-	capa_put(oc);
-	if (rc)
-		CERROR("obd destroy objid "DOSTID" error %d\n",
-		       POSTID(&lsm->lsm_oi), rc);
-out_free_memmd:
-	obd_free_memmd(ll_i2dtexp(dir), &lsm);
-	OBDO_FREE(oa);
-out:
-	return rc;
-}
-
 /* ll_unlink() doesn't update the inode with the new link count.
  * Instead, ll_ddelete() and ll_d_iput() will update it based upon if
  * there is any lock existing. They will recycle dentries and inodes
@@ -1274,7 +1198,6 @@ static int ll_unlink(struct inode *dir, struct dentry *dchild)
         ll_update_times(request, dir);
         ll_stats_ops_tally(ll_i2sbi(dir), LPROC_LL_UNLINK, 1);
 
-        rc = ll_objects_destroy(request, dir);
  out:
         ptlrpc_req_finished(request);
         RETURN(rc);
@@ -1318,7 +1241,6 @@ static int ll_rename(struct inode *src, struct dentry *src_dchild,
                 ll_update_times(request, src);
                 ll_update_times(request, tgt);
                 ll_stats_ops_tally(sbi, LPROC_LL_RENAME, 1);
-                err = ll_objects_destroy(request, src);
         }
 
         ptlrpc_req_finished(request);

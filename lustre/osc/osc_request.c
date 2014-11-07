@@ -623,9 +623,7 @@ static int osc_can_send_destroy(struct client_obd *cli)
  * it will retrieve the llog unlink logs and then sends the log cancellation
  * cookies to the MDS after committing destroy transactions. */
 static int osc_destroy(const struct lu_env *env, struct obd_export *exp,
-                       struct obdo *oa, struct lov_stripe_md *ea,
-                       struct obd_trans_info *oti, struct obd_export *md_export,
-                       void *capa)
+		       struct obdo *oa, struct obd_trans_info *oti)
 {
         struct client_obd     *cli = &exp->exp_obd->u.cli;
         struct ptlrpc_request *req;
@@ -648,7 +646,7 @@ static int osc_destroy(const struct lu_env *env, struct obd_export *exp,
                 RETURN(-ENOMEM);
         }
 
-        osc_set_capa_size(req, &RMF_CAPA1, (struct obd_capa *)capa);
+	osc_set_capa_size(req, &RMF_CAPA1, NULL);
         rc = ldlm_prep_elc_req(exp, req, LUSTRE_OST_VERSION, OST_DESTROY,
                                0, &cancels, count);
         if (rc) {
@@ -665,7 +663,6 @@ static int osc_destroy(const struct lu_env *env, struct obd_export *exp,
 	LASSERT(body);
 	lustre_set_wire_obdo(&req->rq_import->imp_connect_data, &body->oa, oa);
 
-        osc_pack_capa(req, body, (struct obd_capa *)capa);
         ptlrpc_request_set_replen(req);
 
 	/* If osc_destory is for destroying the unlink orphan,
