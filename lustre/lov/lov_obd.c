@@ -1042,65 +1042,6 @@ int lov_getattr_interpret(struct ptlrpc_request_set *rqset, void *data, int rc)
 	RETURN(rc ? rc : err);
 }
 
-static int lov_getattr_async(struct obd_export *exp, struct obd_info *oinfo,
-                              struct ptlrpc_request_set *rqset)
-{
-        struct lov_request_set *lovset;
-        struct lov_obd *lov;
-	struct list_head *pos;
-        struct lov_request *req;
-        int rc = 0, err;
-        ENTRY;
-
-        LASSERT(oinfo);
-        ASSERT_LSM_MAGIC(oinfo->oi_md);
-
-        if (!exp || !exp->exp_obd)
-                RETURN(-ENODEV);
-
-        lov = &exp->exp_obd->u.lov;
-
-        rc = lov_prep_getattr_set(exp, oinfo, &lovset);
-        if (rc)
-                RETURN(rc);
-
-	CDEBUG(D_INFO, "objid "DOSTID": %ux%u byte stripes\n",
-	       POSTID(&oinfo->oi_md->lsm_oi), oinfo->oi_md->lsm_stripe_count,
-	       oinfo->oi_md->lsm_stripe_size);
-
-	list_for_each(pos, &lovset->set_list) {
-		req = list_entry(pos, struct lov_request, rq_link);
-
-		CDEBUG(D_INFO, "objid "DOSTID"[%d] has subobj "DOSTID" at idx"
-		       "%u\n", POSTID(&oinfo->oi_oa->o_oi), req->rq_stripe,
-		       POSTID(&req->rq_oi.oi_oa->o_oi), req->rq_idx);
-		rc = obd_getattr_async(lov->lov_tgts[req->rq_idx]->ltd_exp,
-				       &req->rq_oi, rqset);
-		if (rc) {
-			CERROR("%s: getattr objid "DOSTID" subobj"
-			       DOSTID" on OST idx %d: rc = %d\n",
-			       exp->exp_obd->obd_name,
-			       POSTID(&oinfo->oi_oa->o_oi),
-			       POSTID(&req->rq_oi.oi_oa->o_oi),
-			       req->rq_idx, rc);
-			GOTO(out, rc);
-		}
-	}
-
-	if (!list_empty(&rqset->set_requests)) {
-                LASSERT(rc == 0);
-                LASSERT (rqset->set_interpret == NULL);
-                rqset->set_interpret = lov_getattr_interpret;
-                rqset->set_arg = (void *)lovset;
-                RETURN(rc);
-        }
-out:
-	if (rc)
-		atomic_set(&lovset->set_completes, 0);
-	err = lov_fini_getattr_set(lovset);
-	RETURN(rc ? rc : err);
-}
-
 static int lov_setattr_interpret(struct ptlrpc_request_set *rqset,
 				 void *data, int rc)
 {
@@ -1680,7 +1621,6 @@ static struct obd_ops lov_obd_ops = {
 	.o_statfs_async		= lov_statfs_async,
 	.o_packmd		= lov_packmd,
 	.o_unpackmd		= lov_unpackmd,
-	.o_getattr_async	= lov_getattr_async,
 	.o_setattr_async	= lov_setattr_async,
 	.o_iocontrol		= lov_iocontrol,
 	.o_get_info		= lov_get_info,

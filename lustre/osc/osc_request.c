@@ -164,38 +164,6 @@ out:
         RETURN(rc);
 }
 
-static int osc_getattr_async(struct obd_export *exp, struct obd_info *oinfo,
-                             struct ptlrpc_request_set *set)
-{
-        struct ptlrpc_request *req;
-        struct osc_async_args *aa;
-        int                    rc;
-        ENTRY;
-
-        req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_OST_GETATTR);
-        if (req == NULL)
-                RETURN(-ENOMEM);
-
-        osc_set_capa_size(req, &RMF_CAPA1, oinfo->oi_capa);
-        rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_GETATTR);
-        if (rc) {
-                ptlrpc_request_free(req);
-                RETURN(rc);
-        }
-
-        osc_pack_req_body(req, oinfo);
-
-        ptlrpc_request_set_replen(req);
-        req->rq_interpret_reply = (ptlrpc_interpterer_t)osc_getattr_interpret;
-
-        CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-        aa = ptlrpc_req_async_args(req);
-        aa->aa_oi = oinfo;
-
-        ptlrpc_set_add_req(set, req);
-        RETURN(0);
-}
-
 static int osc_getattr(const struct lu_env *env, struct obd_export *exp,
                        struct obd_info *oinfo)
 {
@@ -2969,7 +2937,6 @@ static struct obd_ops osc_obd_ops = {
         .o_create               = osc_create,
         .o_destroy              = osc_destroy,
         .o_getattr              = osc_getattr,
-        .o_getattr_async        = osc_getattr_async,
         .o_setattr              = osc_setattr,
         .o_setattr_async        = osc_setattr_async,
         .o_iocontrol            = osc_iocontrol,

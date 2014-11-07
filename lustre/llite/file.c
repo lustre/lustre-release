@@ -881,59 +881,6 @@ static int ll_lease_close(struct obd_client_handle *och, struct inode *inode,
 	RETURN(rc);
 }
 
-/* Fills the obdo with the attributes for the lsm */
-static int ll_lsm_getattr(struct lov_stripe_md *lsm, struct obd_export *exp,
-			  struct obd_capa *capa, struct obdo *obdo,
-			  int dv_flags)
-{
-        struct ptlrpc_request_set *set;
-        struct obd_info            oinfo = { { { 0 } } };
-        int                        rc;
-
-        ENTRY;
-
-        LASSERT(lsm != NULL);
-
-        oinfo.oi_md = lsm;
-        oinfo.oi_oa = obdo;
-	oinfo.oi_oa->o_oi = lsm->lsm_oi;
-        oinfo.oi_oa->o_mode = S_IFREG;
-        oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE |
-                               OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
-                               OBD_MD_FLBLKSZ | OBD_MD_FLATIME |
-                               OBD_MD_FLMTIME | OBD_MD_FLCTIME |
-			       OBD_MD_FLGROUP | OBD_MD_FLDATAVERSION;
-        oinfo.oi_capa = capa;
-	if (dv_flags & (LL_DV_WR_FLUSH | LL_DV_RD_FLUSH)) {
-		oinfo.oi_oa->o_valid |= OBD_MD_FLFLAGS;
-		oinfo.oi_oa->o_flags |= OBD_FL_SRVLOCK;
-		if (dv_flags & LL_DV_WR_FLUSH)
-			oinfo.oi_oa->o_flags |= OBD_FL_FLUSH;
-	}
-
-	set = ptlrpc_prep_set();
-	if (set == NULL) {
-		CERROR("cannot allocate ptlrpc set: rc = %d\n", -ENOMEM);
-		rc = -ENOMEM;
-	} else {
-                rc = obd_getattr_async(exp, &oinfo, set);
-                if (rc == 0)
-                        rc = ptlrpc_set_wait(set);
-                ptlrpc_set_destroy(set);
-        }
-	if (rc == 0) {
-		oinfo.oi_oa->o_valid &= (OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ |
-					 OBD_MD_FLATIME | OBD_MD_FLMTIME |
-					 OBD_MD_FLCTIME | OBD_MD_FLSIZE |
-					 OBD_MD_FLDATAVERSION | OBD_MD_FLFLAGS);
-		if (dv_flags & LL_DV_WR_FLUSH &&
-		    !(oinfo.oi_oa->o_valid & OBD_MD_FLFLAGS &&
-		      oinfo.oi_oa->o_flags & OBD_FL_FLUSH))
-			RETURN(-ENOTSUPP);
-	}
-	RETURN(rc);
-}
-
 int ll_merge_attr(const struct lu_env *env, struct inode *inode)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
@@ -988,23 +935,6 @@ out_size_unlock:
 	ll_inode_size_unlock(inode);
 
 	RETURN(rc);
-}
-
-int ll_glimpse_ioctl(struct ll_sb_info *sbi, struct lov_stripe_md *lsm,
-                     lstat_t *st)
-{
-        struct obdo obdo = { 0 };
-        int rc;
-
-	rc = ll_lsm_getattr(lsm, sbi->ll_dt_exp, NULL, &obdo, 0);
-        if (rc == 0) {
-                st->st_size   = obdo.o_size;
-                st->st_blocks = obdo.o_blocks;
-                st->st_mtime  = obdo.o_mtime;
-                st->st_atime  = obdo.o_atime;
-                st->st_ctime  = obdo.o_ctime;
-        }
-        return rc;
 }
 
 static bool file_is_noatime(const struct file *file)

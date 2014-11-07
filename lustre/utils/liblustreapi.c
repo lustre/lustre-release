@@ -3204,14 +3204,13 @@ obd_matches:
 		if (param->fp_mdt_index != OBD_NOT_FOUND)
                         print_failed_tgt(param, path, LL_STATFS_LMV);
 
-		if (S_ISDIR(st->st_mode))
+		if (dir != NULL)
 			ret = fstat_f(dirfd(dir), st);
-		else if (dir != NULL)
-			ret = ioctl(dirfd(dir), IOC_LOV_GETINFO,
-				    (void *)param->fp_lmd);
+		else if (de != NULL)
+			ret = fstatat_f(dirfd(parent), de->d_name, st,
+					AT_SYMLINK_NOFOLLOW);
 		else
-			ret = ioctl(dirfd(parent), IOC_LOV_GETINFO,
-				    (void *)param->fp_lmd);
+			ret = lstat_f(path, st);
 
                 if (ret) {
                         if (errno == ENOENT) {
