@@ -582,9 +582,6 @@ iget:
 			sf->sf_items_updated_prior++;
 		else
 			sf->sf_items_updated++;
-
-		/* The target has been changed, need to be re-loaded. */
-		lu_object_purge(info->oti_env, osd2lu_dev(dev), fid);
 	}
 
 	GOTO(out, rc);
@@ -2221,7 +2218,8 @@ static int do_osd_scrub_start(struct osd_device *dev, __u32 flags)
 again:
 	if (thread_is_running(thread)) {
 		spin_unlock(&scrub->os_lock);
-		if (!scrub->os_partial_scan || flags & SS_AUTO_PARTIAL)
+		if (!(scrub->os_file.sf_flags & SF_AUTO) ||
+		     (flags & (SS_AUTO_FULL | SS_AUTO_PARTIAL)))
 			RETURN(-EALREADY);
 
 		osd_scrub_join(dev, flags, false);

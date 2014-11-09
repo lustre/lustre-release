@@ -731,8 +731,6 @@ struct lu_object *lu_object_find_at(const struct lu_env *env,
                                     struct lu_device *dev,
                                     const struct lu_fid *f,
                                     const struct lu_object_conf *conf);
-void lu_object_purge(const struct lu_env *env, struct lu_device *dev,
-		     const struct lu_fid *f);
 struct lu_object *lu_object_find_slice(const struct lu_env *env,
                                        struct lu_device *dev,
                                        const struct lu_fid *f,
@@ -1378,6 +1376,16 @@ struct lu_buf *lu_buf_check_and_alloc(struct lu_buf *buf, size_t len);
 
 extern __u32 lu_context_tags_default;
 extern __u32 lu_session_tags_default;
+
+static inline bool lu_device_is_cl(const struct lu_device *d)
+{
+	return d->ld_type->ldt_tags & LU_DEVICE_CL;
+}
+
+static inline bool lu_object_is_cl(const struct lu_object *o)
+{
+	return lu_device_is_cl(o->lo_dev);
+}
 
 /** @} lu */
 #endif /* __LUSTRE_LU_OBJECT_H */

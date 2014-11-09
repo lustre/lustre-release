@@ -2089,11 +2089,6 @@ static inline struct cl_site *lu2cl_site(const struct lu_site *site)
         return container_of(site, struct cl_site, cs_lu);
 }
 
-static inline int lu_device_is_cl(const struct lu_device *d)
-{
-        return d->ld_type->ldt_tags & LU_DEVICE_CL;
-}
-
 static inline struct cl_device *lu2cl_dev(const struct lu_device *d)
 {
         LASSERT(d == NULL || IS_ERR(d) || lu_device_is_cl(d));

@@ -1329,8 +1329,10 @@ int lfsck_verify_lpf(const struct lu_env *env, struct lfsck_instance *lfsck)
 		} else {
 			child1 = lfsck_object_find_by_dev(env, dev,
 							  &bk->lb_lpf_fid);
-			if (IS_ERR(child1))
-				GOTO(put, rc = PTR_ERR(child1));
+			if (IS_ERR(child1)) {
+				child1 = NULL;
+				goto find_child2;
+			}
 
 			if (unlikely(!dt_object_exists(child1) ||
 				     dt_object_remote(child1)) ||
@@ -1356,6 +1358,7 @@ int lfsck_verify_lpf(const struct lu_env *env, struct lfsck_instance *lfsck)
 		}
 	}
 
+find_child2:
 	snprintf(name, 8, "MDT%04x", node);
 	rc = dt_lookup(env, parent, (struct dt_rec *)cfid,
 		       (const struct dt_key *)name, BYPASS_CAPA);
@@ -3155,6 +3158,9 @@ int lfsck_register(const struct lu_env *env, struct dt_device *key,
 			if (IS_ERR(obj))
 				GOTO(out, rc = PTR_ERR(obj));
 
+			if (unlikely(!dt_try_as_dir(env, obj)))
+				GOTO(out, rc = -ENOTDIR);
+
 			rc = dt_lookup(env, obj, (struct dt_rec *)fid,
 				(const struct dt_key *)dotlustre, BYPASS_CAPA);
 			if (rc != 0)
@@ -3171,6 +3177,9 @@ int lfsck_register(const struct lu_env *env, struct dt_device *key,
 						 &lfsck->li_global_root_fid);
 			if (rc != 0)
 				GOTO(out, rc);
+
+			if (unlikely(!dt_try_as_dir(env, obj)))
+				GOTO(out, rc = -ENOTDIR);
 
 			*pfid = *fid;
 			rc = dt_lookup(env, obj, (struct dt_rec *)fid,
