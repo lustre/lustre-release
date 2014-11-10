@@ -368,6 +368,7 @@ static int random_group_id(int *gid)
 		goto out;
 	}
 
+retry:
 	rc = read(fd, gid, sz);
 	if (rc < sz) {
 		rc = -errno;
@@ -375,6 +376,10 @@ static int random_group_id(int *gid)
 			sz, strerror(-rc));
 		goto out;
 	}
+
+	/* gids must be non-zero */
+	if (*gid == 0)
+		goto retry;
 
 out:
 	if (fd >= 0)
