@@ -6033,6 +6033,13 @@ lfsck_namespace_assistant_sync_failures_interpret(const struct lu_env *env,
 						  struct ptlrpc_request *req,
 						  void *args, int rc)
 {
+	if (rc == 0) {
+		struct lfsck_async_interpret_args *laia = args;
+		struct lfsck_tgt_desc		  *ltd	= laia->laia_ltd;
+
+		ltd->ltd_synced_failures = 1;
+	}
+
 	return 0;
 }
 
@@ -6069,8 +6076,12 @@ static void lfsck_namespace_assistant_sync_failures(const struct lu_env *env,
 	struct lfsck_tgt_descs		  *ltds  = &lfsck->li_mdt_descs;
 	struct lfsck_tgt_desc		  *ltd;
 	struct ptlrpc_request_set	  *set;
+	__u32				   idx;
 	int				   rc    = 0;
 	ENTRY;
+
+	if (!lad->lad_incomplete)
+		RETURN_EXIT;
 
 	set = ptlrpc_prep_set();
 	if (set == NULL)
@@ -6080,25 +6091,12 @@ static void lfsck_namespace_assistant_sync_failures(const struct lu_env *env,
 	memset(laia, 0, sizeof(*laia));
 	lad->lad_touch_gen++;
 
-	spin_lock(&ltds->ltd_lock);
-	while (!list_empty(&lad->lad_mdt_list)) {
-		ltd = list_entry(lad->lad_mdt_list.next,
-				 struct lfsck_tgt_desc,
-				 ltd_namespace_list);
-		if (ltd->ltd_namespace_gen == lad->lad_touch_gen)
-			break;
+	down_read(&ltds->ltd_rw_sem);
+	cfs_foreach_bit(lad->lad_bitmap, idx) {
+		ltd = LTD_TGT(ltds, idx);
+		LASSERT(ltd != NULL);
 
-		ltd->ltd_namespace_gen = lad->lad_touch_gen;
-		list_move_tail(&ltd->ltd_namespace_list,
-			       &lad->lad_mdt_list);
-		if (!lad->lad_incomplete ||
-		    !cfs_bitmap_check(lad->lad_bitmap, ltd->ltd_index)) {
-			ltd->ltd_namespace_failed = 0;
-			continue;
-		}
-
-		ltd->ltd_namespace_failed = 1;
-		spin_unlock(&ltds->ltd_lock);
+		laia->laia_ltd = ltd;
 		rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
 			lfsck_namespace_assistant_sync_failures_interpret,
 			laia, LFSCK_NOTIFY);
@@ -6106,10 +6104,8 @@ static void lfsck_namespace_assistant_sync_failures(const struct lu_env *env,
 			CDEBUG(D_LFSCK, "%s: namespace LFSCK assistant fail "
 			       "to sync failure with MDT %x: rc = %d\n",
 			       lfsck_lfsck2name(lfsck), ltd->ltd_index, rc);
-
-		spin_lock(&ltds->ltd_lock);
 	}
-	spin_unlock(&ltds->ltd_lock);
+	up_read(&ltds->ltd_rw_sem);
 
 	rc = ptlrpc_set_wait(set);
 	ptlrpc_set_destroy(set);

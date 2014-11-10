@@ -1104,6 +1104,7 @@ int lfsck_master_engine(void *args)
 	else
 		rc = 1;
 
+	lfsck_pos_fill(env, lfsck, &lfsck->li_pos_checkpoint, false);
 	CDEBUG(D_LFSCK, "LFSCK exit: oit_flags = %#x, dir_flags = %#x, "
 	       "oit_cookie = "LPU64", dir_cookie = "LPX64", parent = "DFID
 	       ", pid = %d, rc = %d\n", lfsck->li_args_oit, lfsck->li_args_dir,
@@ -1332,6 +1333,7 @@ static int lfsck_assistant_notify_others(const struct lu_env *env,
 
 			laia->laia_ltd = ltd;
 			ltd->ltd_layout_done = 0;
+			ltd->ltd_synced_failures = 0;
 			rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
 					lfsck_async_interpret_common,
 					laia, LFSCK_NOTIFY);
@@ -1526,7 +1528,7 @@ again:
 
 			*gen = lad->lad_touch_gen;
 			list_move_tail(list, &lad->lad_mdt_list);
-			if (ltd->ltd_namespace_failed)
+			if (ltd->ltd_synced_failures)
 				continue;
 
 			atomic_inc(&ltd->ltd_ref);

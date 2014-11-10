@@ -268,10 +268,13 @@ lfsck_layout_assistant_sync_failures_interpret(const struct lu_env *env,
 					       struct ptlrpc_request *req,
 					       void *args, int rc)
 {
-	struct lfsck_async_interpret_args *laia = args;
+	if (rc == 0) {
+		struct lfsck_async_interpret_args *laia = args;
+		struct lfsck_tgt_desc		  *ltd	= laia->laia_ltd;
 
-	if (rc == 0)
+		ltd->ltd_synced_failures = 1;
 		atomic_dec(laia->laia_count);
+	}
 
 	return 0;
 }
@@ -333,11 +336,7 @@ static void lfsck_layout_assistant_sync_failures(const struct lu_env *env,
 		ltd = LTD_TGT(ltds, idx);
 		LASSERT(ltd != NULL);
 
-		spin_lock(&ltds->ltd_lock);
-		list_del_init(&ltd->ltd_layout_phase_list);
-		list_del_init(&ltd->ltd_layout_list);
-		spin_unlock(&ltds->ltd_lock);
-
+		laia->laia_ltd = ltd;
 		rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
 				lfsck_layout_assistant_sync_failures_interpret,
 				laia, LFSCK_NOTIFY);
@@ -4967,10 +4966,10 @@ static int lfsck_layout_slave_double_scan(const struct lu_env *env,
 	CDEBUG(D_LFSCK, "%s: layout LFSCK slave phase2 scan start\n",
 	       lfsck_lfsck2name(lfsck));
 
+	atomic_inc(&lfsck->li_double_scan_count);
+
 	if (lo->ll_flags & LF_INCOMPLETE)
 		GOTO(done, rc = 1);
-
-	atomic_inc(&lfsck->li_double_scan_count);
 
 	com->lc_new_checked = 0;
 	com->lc_new_scanned = 0;
@@ -4997,10 +4996,14 @@ static int lfsck_layout_slave_double_scan(const struct lu_env *env,
 
 		rc = l_wait_event(thread->t_ctl_waitq,
 				  !thread_is_running(thread) ||
+				  lo->ll_flags & LF_INCOMPLETE ||
 				  list_empty(&llsd->llsd_master_list),
 				  &lwi);
 		if (unlikely(!thread_is_running(thread)))
 			GOTO(done, rc = 0);
+
+		if (lo->ll_flags & LF_INCOMPLETE)
+			GOTO(done, rc = 1);
 
 		if (rc == -ETIMEDOUT)
 			continue;
@@ -5184,7 +5187,7 @@ static int lfsck_layout_master_in_notify(const struct lu_env *env,
 	CDEBUG(D_LFSCK, "%s: layout LFSCK master handles notify %u "
 	       "from %s %x, status %d, flags %x, flags2 %x\n",
 	       lfsck_lfsck2name(lfsck), lr->lr_event,
-	       (lr->lr_flags & LEF_TO_OST) ? "OST" : "MDT",
+	       (lr->lr_flags & LEF_FROM_OST) ? "OST" : "MDT",
 	       lr->lr_index, lr->lr_status, lr->lr_flags, lr->lr_flags2);
 
 	if (lr->lr_event != LE_PHASE1_DONE &&
@@ -5237,7 +5240,14 @@ static int lfsck_layout_master_in_notify(const struct lu_env *env,
 		break;
 	case LE_PHASE2_DONE:
 		ltd->ltd_layout_done = 1;
-		list_del_init(&ltd->ltd_layout_list);
+		if (!list_empty(&ltd->ltd_layout_list)) {
+			list_del_init(&ltd->ltd_layout_list);
+			if (lr->lr_flags2 & LF_INCOMPLETE) {
+				lfsck_lad_set_bitmap(env, com, ltd->ltd_index);
+				fail = true;
+			}
+		}
+
 		break;
 	case LE_PEER_EXIT:
 		fail = true;
@@ -5327,9 +5337,7 @@ static int lfsck_layout_slave_in_notify(const struct lu_env *env,
 							      true);
 			if (llst != NULL) {
 				lfsck_layout_llst_put(llst);
-				if (list_empty(&llsd->llsd_master_list))
-					wake_up_all(
-						&lfsck->li_thread.t_ctl_waitq);
+				wake_up_all(&lfsck->li_thread.t_ctl_waitq);
 			}
 		}
 

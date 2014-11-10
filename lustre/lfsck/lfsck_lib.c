@@ -2629,6 +2629,7 @@ static int lfsck_start_all(const struct lu_env *env,
 		laia->laia_ltd = ltd;
 		ltd->ltd_layout_done = 0;
 		ltd->ltd_namespace_done = 0;
+		ltd->ltd_synced_failures = 0;
 		rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
 					 lfsck_async_interpret, laia,
 					 LFSCK_NOTIFY);
