@@ -933,6 +933,13 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 				goto checkpoint;
 		}
 
+		if (unlikely(!fid_is_sane(fid))) {
+			CDEBUG(D_LFSCK, "%s: OIT scan find invalid FID "DFID
+			       ", skip it\n",
+			       lfsck_lfsck2name(lfsck), PFID(fid));
+			goto checkpoint;
+		}
+
 		if (fid_is_idif(fid)) {
 			__u32 idx1 = fid_idif_ost_idx(fid);
 

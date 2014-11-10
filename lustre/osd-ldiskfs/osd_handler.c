@@ -4406,13 +4406,19 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 		/* done with de, release bh */
 		brelse(bh);
 		if (rc != 0) {
-			if (unlikely(ino == osd_remote_parent_ino(dev)))
+			if (unlikely(ino == osd_remote_parent_ino(dev))) {
+				const char *name = (const char *)key;
+
 				/* If the parent is on remote MDT, and there
 				 * is no FID-in-dirent, then we have to get
 				 * the parent FID from the linkEA.  */
-				rc = osd_get_pfid_from_linkea(env, obj, fid);
-			else
+				if (likely(strlen(name) == 2 &&
+					   name[0] == '.' && name[1] == '.'))
+					rc = osd_get_pfid_from_linkea(env, obj,
+								      fid);
+			} else {
 				rc = osd_ea_fid_get(env, obj, ino, fid, id);
+			}
 		} else {
 			osd_id_gen(id, ino, OSD_OII_NOGEN);
 		}
@@ -5656,7 +5662,11 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 			/* If the parent is on remote MDT, and there
 			 * is no FID-in-dirent, then we have to get
 			 * the parent FID from the linkEA.  */
-			osd_get_pfid_from_linkea(env, obj, fid);
+			if (!fid_is_sane(fid) &&
+			    it->oie_dirent->oied_namelen == 2 &&
+			    it->oie_dirent->oied_name[0] == '.' &&
+			    it->oie_dirent->oied_name[1] == '.')
+				osd_get_pfid_from_linkea(env, obj, fid);
 		} else {
 			rc = osd_dirent_check_repair(env, obj, it, fid, id,
 						     &attr);
@@ -5664,19 +5674,21 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 	} else {
 		attr &= ~LU_DIRENT_ATTRS_MASK;
 		if (!fid_is_sane(fid)) {
-			if (OBD_FAIL_CHECK(OBD_FAIL_FID_LOOKUP) &&
-			    likely(it->oie_dirent->oied_namelen != 2 ||
-				   it->oie_dirent->oied_name[0] != '.' ||
-				   it->oie_dirent->oied_name[1] != '.'))
-				RETURN(-ENOENT);
-
-			if (unlikely(ino == osd_remote_parent_ino(dev)))
+			if (it->oie_dirent->oied_namelen == 2 &&
+			    it->oie_dirent->oied_name[0] == '.' &&
+			    it->oie_dirent->oied_name[1] == '.') {
 				/* If the parent is on remote MDT, and there
 				 * is no FID-in-dirent, then we have to get
 				 * the parent FID from the linkEA.  */
-				rc = osd_get_pfid_from_linkea(env, obj, fid);
-			else
+				if (ino == osd_remote_parent_ino(dev))
+					rc = osd_get_pfid_from_linkea(env, obj,
+								      fid);
+			} else {
+				if (OBD_FAIL_CHECK(OBD_FAIL_FID_LOOKUP))
+					RETURN(-ENOENT);
+
 				rc = osd_ea_fid_get(env, obj, ino, fid, id);
+			}
 		} else {
 			osd_id_gen(id, ino, OSD_OII_NOGEN);
 		}
