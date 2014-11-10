@@ -18,6 +18,20 @@ TBD Intel Corporation
        * NFSv4 reexport to 32-bit NFS client nodes requires Lustre client on
          the re-exporting nodes to be mounted with "32bitapi" mount option
 
+Severity   : enhancement
+Jira       : LU-6050
+Description: control OST-index in IDIF via  ROCOMPAT flag.
+Details    : Introduce new flag OBD_ROCOMPAT_IDX_IN_IDIF that is stored in the
+	     last_rcvd file. For new formatted OST device, it will be auto set;
+	     for the case of upgrading from old OST device, you can enable it
+	     via the lproc interface osd-ldiskfs.index_in_idif. With such flag
+	     enabled, for new created OST-object, its IDIF-in-LMA will contain
+	     the OST-index; for the existing OST-object, the OSD will convert
+	     old format IDIF as new format IDIF with OST-index stored in the
+	     LMA EA when accessing such OST-object or via OI scrub. Once such
+	     flag is enabled, it cannot be reverted back, so the system cannot
+	     be downgraded to the orignal incompatible version.
+
 --------------------------------------------------------------------------------
 
 07-30-2014 Intel Corporation

@@ -981,10 +981,10 @@ static struct server_compat_data tgt_scd[] = {
 			   OBD_INCOMPAT_MULTI_OI,
 	},
 	[LDD_F_SV_TYPE_OST] = {
-		.rocompat = 0,
+		.rocompat = OBD_ROCOMPAT_IDX_IN_IDIF,
 		.incompat = OBD_INCOMPAT_OST | OBD_INCOMPAT_COMMON_LR |
 			    OBD_INCOMPAT_FID,
-		.rocinit = 0,
+		.rocinit = OBD_ROCOMPAT_IDX_IN_IDIF,
 		.incinit = OBD_INCOMPAT_OST | OBD_INCOMPAT_COMMON_LR,
 	}
 };

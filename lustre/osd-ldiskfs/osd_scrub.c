@@ -370,6 +370,7 @@ osd_scrub_convert_ff(struct osd_thread_info *info, struct osd_device *dev,
 {
 	struct filter_fid_old   *ff	 = &info->oti_ff;
 	struct dentry		*dentry  = &info->oti_obj_dentry;
+	struct lu_fid		*tfid	 = &info->oti_fid;
 	handle_t		*jh;
 	int			 size	 = 0;
 	int			 rc;
@@ -379,6 +380,15 @@ osd_scrub_convert_ff(struct osd_thread_info *info, struct osd_device *dev,
 
 	if (dev->od_scrub.os_file.sf_param & SP_DRYRUN)
 		RETURN(0);
+
+	if (fid_is_idif(fid) && dev->od_index_in_idif == 0) {
+		struct ost_id *oi = &info->oti_ostid;
+
+		fid_to_ostid(fid, oi);
+		ostid_to_fid(tfid, oi, 0);
+	} else {
+		*tfid = *fid;
+	}
 
 	/* We want the LMA to fit into the 256-byte OST inode, so operate
 	 * as following:
@@ -395,7 +405,7 @@ osd_scrub_convert_ff(struct osd_thread_info *info, struct osd_device *dev,
 	if (IS_ERR(jh)) {
 		rc = PTR_ERR(jh);
 		CDEBUG(D_LFSCK, "%s: fail to start trans for convert ff "
-		       DFID": rc = %d\n", osd_name(dev), PFID(fid), rc);
+		       DFID": rc = %d\n", osd_name(dev), PFID(tfid), rc);
 		RETURN(rc);
 	}
 
@@ -416,7 +426,7 @@ osd_scrub_convert_ff(struct osd_thread_info *info, struct osd_device *dev,
 	}
 
 	/* 3) make new LMA and add it */
-	rc = osd_ea_fid_set(info, inode, fid, LMAC_FID_ON_OST, 0);
+	rc = osd_ea_fid_set(info, inode, tfid, LMAC_FID_ON_OST, 0);
 	if (rc == 0 && reset)
 		size = sizeof(struct filter_fid);
 	else if (rc != 0 && removed)
@@ -439,7 +449,7 @@ stop:
 	ldiskfs_journal_stop(jh);
 	if (rc < 0)
 		CDEBUG(D_LFSCK, "%s: fail to convert ff "DFID": rc = %d\n",
-		       osd_name(dev), PFID(fid), rc);
+		       osd_name(dev), PFID(tfid), rc);
 	return rc;
 }
 

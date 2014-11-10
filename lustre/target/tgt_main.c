@@ -112,6 +112,7 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	INIT_LIST_HEAD(&lut->lut_txn_cb.dtc_linkage);
 
 	dt_txn_callback_add(lut->lut_bottom, &lut->lut_txn_cb);
+	lut->lut_bottom->dd_lu_dev.ld_site->ls_tgt = lut;
 
 	RETURN(0);
 out_obj:

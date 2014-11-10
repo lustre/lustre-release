@@ -495,15 +495,14 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 	if (rc == -ENODATA && !fid_is_igif(rfid) && osd->od_check_ff) {
 		fid = &lma->lma_self_fid;
 		rc = osd_get_idif(info, inode, dentry, fid);
-		if ((rc > 0) || (rc == -ENODATA && osd->od_lma_self_repair)) {
+		if ((rc > 0) || (rc == -ENODATA && osd->od_index_in_idif)) {
 			/* For the given OST-object, if it has neither LMA nor
 			 * FID in XATTR_NAME_FID, then the given FID (which is
 			 * contained in the @obj, from client RPC for locating
 			 * the OST-object) is trusted. We use it to generate
 			 * the LMA. */
 			osd_lma_self_repair(info, osd, inode, rfid,
-				fid_is_on_ost(info, osd, fid, OI_CHECK_FLD) ?
-				LMAC_FID_ON_OST : 0);
+					    LMAC_FID_ON_OST);
 			RETURN(0);
 		}
 	}
@@ -546,7 +545,7 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 				fid_to_ostid(fid, oi);
 				ostid_to_fid(fid1, oi, idx);
 				if (lu_fid_eq(fid1, rfid)) {
-					if (osd->od_lma_self_repair)
+					if (osd->od_index_in_idif)
 						osd_lma_self_repair(info, osd,
 							inode, rfid,
 							LMAC_FID_ON_OST);
@@ -2796,11 +2795,23 @@ static int osd_object_ea_create(const struct lu_env *env, struct dt_object *dt,
 	osd_trans_declare_rb(env, th, OSD_OT_REF_ADD);
 
 	result = __osd_object_create(info, obj, attr, hint, dof, th);
-	if (result == 0)
-		result = osd_ea_fid_set(info, obj->oo_inode, fid,
+	if (result == 0) {
+		if (fid_is_idif(fid) &&
+		    !osd_dev(dt->do_lu.lo_dev)->od_index_in_idif) {
+			struct lu_fid *tfid = &info->oti_fid;
+			struct ost_id *oi   = &info->oti_ostid;
+
+			fid_to_ostid(fid, oi);
+			ostid_to_fid(tfid, oi, 0);
+			result = osd_ea_fid_set(info, obj->oo_inode, tfid,
+						LMAC_FID_ON_OST, 0);
+		} else {
+			result = osd_ea_fid_set(info, obj->oo_inode, fid,
 				fid_is_on_ost(info, osd_obj2dev(obj),
 					      fid, OI_CHECK_FLD) ?
 				LMAC_FID_ON_OST : 0, 0);
+		}
+	}
 
 	if (result == 0)
 		result = __osd_oi_insert(env, obj, fid, th);
@@ -6129,9 +6140,6 @@ static int osd_device_init0(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(out_site, rc);
 
-	/* self-repair LMA by default */
-	o->od_lma_self_repair = 1;
-
 	INIT_LIST_HEAD(&o->od_ios_list);
 	/* setup scrub, including OI files initialization */
 	rc = osd_scrub_setup(env, o);
@@ -6322,10 +6330,12 @@ static int osd_obd_disconnect(struct obd_export *exp)
 }
 
 static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
-                       struct lu_device *dev)
+		       struct lu_device *dev)
 {
-	struct osd_device *osd = osd_dev(dev);
-	int		   result = 0;
+	struct osd_device	*osd	= osd_dev(dev);
+	struct lr_server_data	*lsd	=
+			&osd->od_dt_dev.dd_lu_dev.ld_site->ls_tgt->lut_lsd;
+	int			 result	= 0;
 	ENTRY;
 
 	if (osd->od_quota_slave != NULL) {
@@ -6333,6 +6343,21 @@ static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
 		result = qsd_prepare(env, osd->od_quota_slave);
 		if (result != 0)
 			RETURN(result);
+	}
+
+	if (lsd->lsd_feature_incompat & OBD_COMPAT_OST) {
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 52, 0)
+		if (lsd->lsd_feature_rocompat & OBD_ROCOMPAT_IDX_IN_IDIF) {
+			osd->od_index_in_idif = 1;
+		} else {
+			osd->od_index_in_idif = 0;
+			result = osd_register_proc_index_in_idif(osd);
+			if (result != 0)
+				RETURN(result);
+		}
+#else
+		osd->od_index_in_idif = 1;
+#endif
 	}
 
 	result = osd_fid_init(env, osd);

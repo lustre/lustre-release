@@ -549,7 +549,8 @@ ldiskfs_osd_readcache_seq_write(struct file *file, const char *buffer,
 }
 LPROC_SEQ_FOPS(ldiskfs_osd_readcache);
 
-static int ldiskfs_osd_lma_self_repair_seq_show(struct seq_file *m, void *data)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 52, 0)
+static int ldiskfs_osd_index_in_idif_seq_show(struct seq_file *m, void *data)
 {
 	struct osd_device *dev = osd_dt_dev((struct dt_device *)m->private);
 
@@ -557,31 +558,73 @@ static int ldiskfs_osd_lma_self_repair_seq_show(struct seq_file *m, void *data)
 	if (unlikely(dev->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	return seq_printf(m, "%d\n", !!dev->od_lma_self_repair);
+	return seq_printf(m, "%d\n", (int)(dev->od_index_in_idif));
 }
 
 static ssize_t
-ldiskfs_osd_lma_self_repair_seq_write(struct file *file, const char *buffer,
-					size_t count, loff_t *off)
+ldiskfs_osd_index_in_idif_seq_write(struct file *file, const char *buffer,
+				    size_t count, loff_t *off)
 {
-	struct seq_file	  *m = file->private_data;
-	struct dt_device  *dt = m->private;
-	struct osd_device *dev = osd_dt_dev(dt);
-	int		   val;
-	int		   rc;
+	struct lu_env		 env;
+	struct seq_file		*m	= file->private_data;
+	struct dt_device	*dt	= m->private;
+	struct osd_device	*dev	= osd_dt_dev(dt);
+	struct lu_target	*tgt;
+	int			 val;
+	int			 rc;
 
 	LASSERT(dev != NULL);
 	if (unlikely(dev->od_mnt == NULL))
 		return -EINPROGRESS;
 
 	rc = lprocfs_write_helper(buffer, count, &val);
-	if (rc)
+	if (rc != 0)
 		return rc;
 
-	dev->od_lma_self_repair = !!val;
+	if (dev->od_index_in_idif) {
+		if (val != 0)
+			return count;
+
+		LCONSOLE_WARN("%s: OST-index in IDIF has been enabled, "
+			      "it cannot be reverted back.\n", osd_name(dev));
+		return -EPERM;
+	}
+
+	if (val == 0)
+		return count;
+
+	rc = lu_env_init(&env, LCT_DT_THREAD);
+	if (rc != 0)
+		return rc;
+
+	tgt = dev->od_dt_dev.dd_lu_dev.ld_site->ls_tgt;
+	tgt->lut_lsd.lsd_feature_rocompat |= OBD_ROCOMPAT_IDX_IN_IDIF;
+	rc = tgt_server_data_update(&env, tgt, 1);
+	lu_env_fini(&env);
+	if (rc < 0)
+		return rc;
+
+	LCONSOLE_INFO("%s: enable OST-index in IDIF successfully, "
+		      "it cannot be reverted back.\n", osd_name(dev));
+
+	dev->od_index_in_idif = 1;
 	return count;
 }
-LPROC_SEQ_FOPS(ldiskfs_osd_lma_self_repair);
+LPROC_SEQ_FOPS(ldiskfs_osd_index_in_idif);
+
+int osd_register_proc_index_in_idif(struct osd_device *osd)
+{
+	struct proc_dir_entry *proc;
+
+	proc = proc_create_data("index_in_idif", 0, osd->od_proc_entry,
+				&ldiskfs_osd_index_in_idif_fops,
+				&osd->od_dt_dev);
+	if (proc == NULL)
+		return -ENOMEM;
+
+	return 0;
+}
+#endif
 
 LPROC_SEQ_FOPS_RO_TYPE(ldiskfs, dt_blksize);
 LPROC_SEQ_FOPS_RO_TYPE(ldiskfs, dt_kbytestotal);
@@ -625,8 +668,6 @@ struct lprocfs_vars lprocfs_osd_obd_vars[] = {
 	  .fops	=	&ldiskfs_osd_wcache_fops	},
 	{ .name	=	"readcache_max_filesize",
 	  .fops	=	&ldiskfs_osd_readcache_fops	},
-	{ .name	=	"lma_self_repair",
-	  .fops	=	&ldiskfs_osd_lma_self_repair_fops	},
 	{ NULL }
 };
 
