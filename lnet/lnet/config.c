@@ -204,6 +204,7 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 	struct lnet_ni	*ni;
 	__u32		net;
 	int		nnets = 0;
+	struct list_head *temp_node;
 
 	if (networks == NULL) {
 		CERROR("networks string is undefined\n");
@@ -227,11 +228,6 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 
 	memcpy(tokens, networks, tokensize);
 	str = tmp = tokens;
-
-	/* Add in the loopback network */
-	ni = lnet_ni_alloc(LNET_MKNET(LOLND, 0), NULL, nilist);
-	if (ni == NULL)
-		goto failed;
 
 	while (str != NULL && *str != 0) {
 		char	*comma = strchr(str, ',');
@@ -305,7 +301,6 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 			goto failed_syntax;
 		}
 
-		nnets++;
 		ni = lnet_ni_alloc(net, el, nilist);
 		if (ni == NULL)
 			goto failed;
@@ -381,10 +376,11 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 		}
 	}
 
-	LASSERT(!list_empty(nilist));
+	list_for_each(temp_node, nilist)
+		nnets++;
 
 	LIBCFS_FREE(tokens, tokensize);
-	return 0;
+	return nnets;
 
  failed_syntax:
 	lnet_syntax("networks", networks, (int)(tmp - tokens), strlen(tmp));
