@@ -12941,6 +12941,20 @@ test_243()
 }
 run_test 243 "various group lock tests"
 
+test_250() {
+	[ "$(facet_fstype ost$(($($GETSTRIPE -i $DIR/$tfile) + 1)))" = "zfs" ] \
+	 && skip "no 16TB file size limit on ZFS" && return
+
+	$SETSTRIPE -c 1 $DIR/$tfile
+	# ldiskfs extent file size limit is (16TB - 4KB - 1) bytes
+	local size=$((16 * 1024 * 1024 * 1024 * 1024 - 4096 - 1))
+	$TRUNCATE $DIR/$tfile $size || error "truncate $tfile to $size failed"
+	dd if=/dev/zero of=$DIR/$tfile bs=10 count=1 oflag=append \
+		conv=notrunc,fsync && error "append succeeded"
+	return 0
+}
+run_test 250 "Write above 16T limit"
+
 cleanup_test_300() {
 	trap 0
 	umask $SAVE_UMASK
