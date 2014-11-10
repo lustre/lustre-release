@@ -7,9 +7,9 @@
 # distributions, update the BUILD_GEN variable in build/lbuild)
 BUILD_GEN+=".0"
 
-# This distro does not support zfs, so define ZFSNOTSUPPORTED
+# This distro does not support zfs, so define WITH_ZFS
 # use words that make the bash log readable.
-ZFSNOTSUPPORTED="Zfs Not Supported"
+WITH_ZFS="Zfs Not Supported"
 
 source ${LBUILD_DIR}/lbuild-rhel
 

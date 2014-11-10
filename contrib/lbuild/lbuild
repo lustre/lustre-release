@@ -71,6 +71,7 @@ OSDLDISKFSRPM=true
 OSDZFSRPM=false
 SMPTYPES="smp bigsmp default ''"
 PATCHLESS=false
+WITH_ZFS=""
 XEN=false
 LINUXOBJ=
 DISTRO=
@@ -186,6 +187,9 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
   --release
     Specifies that the files generated do not include timestamps, and
     that this is an official release.
+
+  --disable-zfs
+    Build Lustre without ZFS.
 
   --src
     Build a .src.rpm, a full kernel patch, and a patched kernel tarball.
@@ -964,7 +968,7 @@ build_lustre() {
     # These are required prior to the building of lustre server. Client does
     # not require spl/zfs. Use !PATCHLESS to indicate server which follows the
     # line above so is at least consistant.
-    if [ $PATCHLESS == false ] && [ "x$ZFSNOTSUPPORTED" == "x" ]; then
+    if [ $PATCHLESS == false ] && [ "x$WITH_ZFS" == "x" ]; then
         if ! build_spl_zfs; then
             popd >/dev/null # pushd lustre
             return 255
@@ -1962,7 +1966,7 @@ set -E
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
-options=$(getopt -o D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ccache,norpm,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,noiokit,ofed-version:,mpss-version:,publish,release,set-value:,src,stage:,target:,target-archs:,with-linux:,xen -- "$@")
+options=$(getopt -o D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ccache,norpm,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,noiokit,ofed-version:,mpss-version:,publish,disable-zfs,release,set-value:,src,stage:,target:,target-archs:,with-linux:,xen -- "$@")
 
 if [ $? != 0 ]; then
     usage 1
@@ -2067,6 +2071,10 @@ while [ "$1" ]; do
         --publish)
             shift
             ;;
+	--disable-zfs)
+	    WITH_ZFS="no"
+	    shift
+	    ;;
         --release)
             RELEASE=true
             shift
@@ -2162,7 +2170,7 @@ if [ -n "$MPSS_VERSION" ]; then
     PATCHLESS=true
     IOKITRPM=false
     LDISKFSRPM=false
-    ZFSNOTSUPPORTED="yes"
+    WITH_ZFS="no"
 
     # define variables for cross compilation:
     CROSS_SUFFIX="-mic"
