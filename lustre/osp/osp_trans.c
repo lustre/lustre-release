@@ -295,8 +295,8 @@ osp_find_or_create_async_update_request(struct osp_device *osp)
  * \param[in] env		pointer to the thread context
  * \param[in] op		operation type, see 'enum update_type'
  * \param[in] obj		pointer to the operation target
- * \param[in] count		array size of the subsequent @lens and @bufs
- * \param[in] lens		buffer length array for the subsequent @bufs
+ * \param[in] count		array size of the subsequent \a lens and \a bufs
+ * \param[in] lens		buffer length array for the subsequent \a bufs
  * \param[in] bufs		the buffers to compose the request
  * \param[in] data		pointer to the data used by the interpreter
  * \param[in] interpreter	pointer to the interpreter function
