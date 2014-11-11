@@ -496,7 +496,7 @@ static inline int ofd_grant_rnb_size(struct obd_export *exp,
  * \param[in] oa	incoming obdo in which we should return the pack the
  *			additional grant
  * \param[in,out] rnb	the list of network buffers
- * \param[in] niocont	the number of network buffers in the list
+ * \param[in] niocount	the number of network buffers in the list
  * \param[in] left	the remaining free space with space already granted
  *			taken out
  */
@@ -850,7 +850,7 @@ void ofd_grant_discard(struct obd_export *exp)
  *
  * \param[in] env	is the lu environment provided by the caller
  * \param[in] exp	is the export of the client which sent the request
- * \paral[in,out] oa	is the incoming obdo sent by the client
+ * \param[in,out] oa	is the incoming obdo sent by the client
  */
 void ofd_grant_prepare_read(const struct lu_env *env,
 			    struct obd_export *exp, struct obdo *oa)
@@ -925,7 +925,7 @@ void ofd_grant_prepare_read(const struct lu_env *env,
  * \param[in] exp	export of the client which sent the request
  * \param[in] oa	incoming obdo sent by the client
  * \param[in] rnb	list of network buffers
- * \param[in] niocont	number of network buffers in the list
+ * \param[in] niocount	number of network buffers in the list
  */
 void ofd_grant_prepare_write(const struct lu_env *env,
 			     struct obd_export *exp, struct obdo *oa,
@@ -1113,6 +1113,7 @@ int ofd_grant_create(const struct lu_env *env, struct obd_export *exp, int *nr)
  *
  * \param[in] env	LU environment provided by the caller
  * \param[in] exp	export of the client which sent the request
+ * \param[in] rc	return code of pre-commit operations
  */
 void ofd_grant_commit(const struct lu_env *env, struct obd_export *exp,
 		      int rc)

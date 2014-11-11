@@ -54,7 +54,7 @@
  * value which shouldn't be exceeded.
  *
  * \param[in] ofd	OFD device
- * \param[in] int	number of updates in the batch
+ * \param[in] batch	number of updates in the batch
  *
  * \retval		\a batch limited by ofd_device::ofd_precreate_batch
  */
@@ -157,7 +157,7 @@ static struct ofd_seq *ofd_seq_add(const struct lu_env *env,
 /**
  * Get last object ID for the given sequence.
  *
- * \param[in] ofd_seq	OFD sequence structure
+ * \param[in] oseq	OFD sequence structure
  *
  * \retval		the last object ID for this sequence
  */
