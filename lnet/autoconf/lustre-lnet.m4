@@ -150,7 +150,14 @@ AC_ARG_WITH([o2ib],
 
 case $with_o2ib in
 	yes)    AS_IF([which ofed_info 2>/dev/null], [
-			O2IBPATHS=$(ofed_info | egrep -w 'compat-rdma-devel|kernel-ib-devel|ofa_kernel-devel' | xargs rpm -ql | grep '/openib$')
+			AS_IF([test x$uses_dpkg = xyes], [
+				OFED_INFO="ofed_info | awk '{print \[$]2}'"
+				LSPKG="dpkg --listfiles"
+			], [
+				OFED_INFO="ofed_info"
+				LSPKG="rpm -ql"
+			])
+			O2IBPATHS=$(eval $OFED_INFO | egrep -w 'mlnx-ofed-kernel-dkms|mlnx-ofa_kernel-devel|compat-rdma-devel|kernel-ib-devel|ofa_kernel-devel' | xargs $LSPKG | grep '\(/openib\|/ofa_kernel/default\)$' | head -n1)
 			AS_IF([test -z "$O2IBPATHS"], [
 				AC_MSG_ERROR([
 You seem to have an OFED installed but have not installed it's devel package.
