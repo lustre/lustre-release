@@ -150,6 +150,7 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 {
 	struct lod_tgt_desc *ost;
 	int		     rc;
+	ENTRY;
 
 	LASSERT(d);
 	ost = OST_TGT(d,index);
@@ -198,7 +199,7 @@ static void lod_qos_statfs_update(const struct lu_env *env,
 {
 	struct obd_device *obd = lod2obd(lod);
 	struct ost_pool   *osts = &(lod->lod_pool_info);
-	int		   i, idx, rc = 0;
+	int		   i, idx;
 	__u64		   max_age, avail;
 	ENTRY;
 
@@ -210,15 +211,14 @@ static void lod_qos_statfs_update(const struct lu_env *env,
 
 	down_write(&lod->lod_qos.lq_rw_sem);
 	if (cfs_time_beforeq_64(max_age, obd->obd_osfs_age))
-		GOTO(out, rc = 0);
+		goto out;
 
 	for (i = 0; i < osts->op_count; i++) {
 		idx = osts->op_array[i];
 		avail = OST_TGT(lod,idx)->ltd_statfs.os_bavail;
-		rc = lod_statfs_and_check(env, lod, idx,
-					  &OST_TGT(lod,idx)->ltd_statfs);
-		if (rc)
-			break;
+		if (lod_statfs_and_check(env, lod, idx,
+					 &OST_TGT(lod, idx)->ltd_statfs))
+			continue;
 		if (OST_TGT(lod,idx)->ltd_statfs.os_bavail != avail)
 			/* recalculate weigths */
 			lod->lod_qos.lq_dirty = 1;
