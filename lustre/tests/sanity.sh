@@ -12841,6 +12841,13 @@ test_242() {
 }
 run_test 242 "mdt_readpage failure should not cause directory unreadable"
 
+test_243()
+{
+	test_mkdir -p $DIR/$tdir
+	group_lock_test -d $DIR/$tdir || error "A group lock test failed"
+}
+run_test 243 "various group lock tests"
+
 cleanup_test_300() {
 	trap 0
 	umask $SAVE_UMASK
