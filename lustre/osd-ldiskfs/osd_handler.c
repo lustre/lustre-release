@@ -2092,14 +2092,13 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
                                               osd_sb(osd)->s_root->d_inode,
                                      mode);
         if (!IS_ERR(inode)) {
-                /* Do not update file c/mtime in ldiskfs.
-                 * NB: don't need any lock because no contention at this
-                 * early stage */
-                inode->i_flags |= S_NOCMTIME;
+		/* Do not update file c/mtime in ldiskfs. */
+		inode->i_flags |= S_NOCMTIME;
 
 		/* For new created object, it must be consistent,
 		 * and it is unnecessary to scrub against it. */
 		ldiskfs_set_inode_state(inode, LDISKFS_STATE_LUSTRE_NOSCRUB);
+
                 obj->oo_inode = inode;
                 result = 0;
         } else {
@@ -2326,13 +2325,16 @@ static int __osd_object_create(struct osd_thread_info *info,
 
 	result = osd_create_type_f(dof->dof_type)(info, obj, attr, hint, dof,
 						  th);
-        if (result == 0) {
+	if (result == 0) {
 		osd_attr_init(info, obj, attr, dof);
 		osd_object_init0(obj);
-		/* bz 24037 */
-		if (obj->oo_inode && (obj->oo_inode->i_state & I_NEW))
-			unlock_new_inode(obj->oo_inode);
-        }
+	}
+
+	if (obj->oo_inode != NULL) {
+		LASSERT(obj->oo_inode->i_state & I_NEW);
+
+		unlock_new_inode(obj->oo_inode);
+	}
 
 	/* restore previous umask value */
 	current->fs->umask = umask;
@@ -2703,6 +2705,9 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 		       (int)PTR_ERR(local));
 		RETURN(local);
 	}
+
+	ldiskfs_set_inode_state(local, LDISKFS_STATE_LUSTRE_NOSCRUB);
+	unlock_new_inode(local);
 
 	/* Set special LMA flag for local agent inode */
 	rc = osd_ea_fid_set(info, local, fid, 0, LMAI_AGENT);
