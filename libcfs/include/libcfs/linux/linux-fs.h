@@ -60,25 +60,19 @@
 #define filp_poff(f)					\
 	(&(f)->f_pos)
 
-#ifdef HAVE_FILE_FSYNC_4ARGS
-# define do_fsync(fp, flag)				\
-	((fp)->f_op->fsync(fp, 0, LLONG_MAX, flag))
-#elif defined(HAVE_FILE_FSYNC_2ARGS)
-# define do_fsync(fp, flag)				\
-	((fp)->f_op->fsync(fp, flag))
-#else
-# define do_fsync(fp, flag)				\
-	((fp)->f_op->fsync(fp, (fp)->f_dentry, flag))
-#endif
-
 #define filp_read(fp, buf, size, pos)			\
 	((fp)->f_op->read((fp), (buf), (size), pos))
 
 #define filp_write(fp, buf, size, pos)			\
 	((fp)->f_op->write((fp), (buf), (size), pos))
 
-#define filp_fsync(fp)					\
-	do_fsync(fp, 1)
+#ifdef HAVE_FILE_FSYNC_4ARGS
+#define ll_vfs_fsync(fp, datasync) \
+	vfs_fsync_range(fp, 0, LLONG_MAX, datasync)
+#else
+#define ll_vfs_fsync(fp, datasync) \
+	vfs_fsync_range(fp, (fp)->f_dentry, 0, LLONG_MAX, datasync)
+#endif
 
 #define flock_type(fl)			((fl)->fl_type)
 #define flock_set_type(fl, type)	do { (fl)->fl_type = (type); } while (0)

@@ -3124,13 +3124,9 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt)
 	file->f_dentry = dentry;
 	file->f_mapping = inode->i_mapping;
 	file->f_op = inode->i_fop;
-#ifndef HAVE_FILE_FSYNC_4ARGS
-	mutex_lock(&inode->i_mutex);
-#endif
-	rc = do_fsync(file, 0);
-#ifndef HAVE_FILE_FSYNC_4ARGS
-	mutex_unlock(&inode->i_mutex);
-#endif
+
+	rc = ll_vfs_fsync(file, 0);
+
 	RETURN(rc);
 }
 
