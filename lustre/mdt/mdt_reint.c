@@ -313,8 +313,13 @@ static int mdt_remote_permission(struct mdt_thread_info *info,
 		return -ENOTSUPP;
 
 	if (S_ISDIR(attr->la_mode) && spec->u.sp_ea.eadata != NULL &&
-	    spec->u.sp_ea.eadatalen != 0 && !mdt_is_striped_client(exp))
-		return -ENOTSUPP;
+	    spec->u.sp_ea.eadatalen != 0) {
+		const struct lmv_user_md *lum = spec->u.sp_ea.eadata;
+
+		if (le32_to_cpu(lum->lum_stripe_count) > 1 &&
+		    !mdt_is_striped_client(exp))
+			return -ENOTSUPP;
+	}
 
 	return 0;
 }
