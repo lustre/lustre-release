@@ -959,13 +959,18 @@ static int read_file(const char *path, char *buf, int size)
 	if (fd == NULL)
 		return errno;
 
-	/* should not ignore fgets(3)'s return value */
-	if (!fgets(buf, size, fd)) {
+	if (fgets(buf, size, fd) == NULL) {
 		fprintf(stderr, "reading from %s: %s", path, strerror(errno));
 		fclose(fd);
 		return 1;
 	}
 	fclose(fd);
+
+	/* strip trailing newline */
+	size = strlen(buf);
+	if (buf[size - 1] == '\n')
+		buf[size - 1] = '\0';
+
 	return 0;
 }
 
@@ -1170,12 +1175,37 @@ set_params:
 				real_path, strerror(errno));
 		/* No MAX_HW_SECTORS_KB_PATH isn't necessary an
 		 * error for some device. */
-		rc = 0;
+		goto subdevs;
 	}
 
 	if (strlen(buf) - 1 > 0) {
+		char oldbuf[32] = "", *end = NULL;
+		unsigned long long oldval, newval;
+
 		snprintf(real_path, sizeof(real_path), "%s/%s", path,
 			 MAX_SECTORS_KB_PATH);
+		rc = read_file(real_path, oldbuf, sizeof(oldbuf));
+		/* Only set new parameter if different from the old one. */
+		if (rc != 0 || strcmp(oldbuf, buf) == 0) {
+			/* No MAX_SECTORS_KB_PATH isn't necessary an
+			 * error for some device. */
+			goto subdevs;
+		}
+
+		newval = strtoull(buf, &end, 0);
+		if (newval == 0 || newval == ULLONG_MAX || end == buf)
+			goto subdevs;
+
+		/* Don't increase IO request size limit past 32MB.  It is about
+		 * 2x PTLRPC_MAX_BRW_SIZE, but that isn't defined publicly. */
+		if (newval > 32 * 1024)
+			newval = 32 * 1024;
+
+		oldval = strtoull(oldbuf, &end, 0);
+		/* Don't shrink the current limit. */
+		if (oldval != ULLONG_MAX && newval <= oldval)
+			goto subdevs;
+
 		rc = write_file(real_path, buf);
 		if (rc) {
 			if (verbose)
@@ -1183,13 +1213,13 @@ set_params:
 					real_path, strerror(errno));
 			/* No MAX_SECTORS_KB_PATH isn't necessary an
 			 * error for some device. */
-			rc = 0;
-		} else {
-			fprintf(stderr, "%s: set %s to %s\n", progname,
-				real_path, buf);
+			goto subdevs;
 		}
+		fprintf(stderr, "%s: increased %s from %s to %s\n",
+			progname, real_path, oldbuf, buf);
 	}
 
+subdevs:
 	/* Purposely ignore errors reported from set_blockdev_scheduler.
 	 * The worst that will happen is a block device with an "incorrect"
 	 * scheduler. */
