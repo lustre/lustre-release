@@ -119,7 +119,7 @@ int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
 {
 	struct lu_seq_range	range = { 0 };
 	struct lu_server_fld	*server_fld;
-	int rc = 0;
+	int rc;
 	ENTRY;
 
 	if (!fid_is_sane(fid)) {
@@ -131,7 +131,7 @@ int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
 	if (fid_is_idif(fid)) {
 		*tgt = fid_idif_ost_idx(fid);
 		*type = LU_SEQ_RANGE_OST;
-		RETURN(rc);
+		RETURN(0);
 	}
 
 	if (!lod->lod_initialized || (!fid_seq_in_fldb(fid_seq(fid)))) {
@@ -139,22 +139,22 @@ int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
 
 		*tgt = lu_site2seq(lod2lu_dev(lod)->ld_site)->ss_node_id;
 		*type = LU_SEQ_RANGE_MDT;
-		RETURN(rc);
+		RETURN(0);
 	}
 
 	server_fld = lu_site2seq(lod2lu_dev(lod)->ld_site)->ss_server_fld;
 	fld_range_set_type(&range, *type);
 	rc = fld_server_lookup(env, server_fld, fid_seq(fid), &range);
-	if (rc)
+	if (rc != 0)
 		RETURN(rc);
 
 	*tgt = range.lsr_index;
 	*type = range.lsr_flags;
 
-	CDEBUG(D_INFO, "LOD: got tgt %x for sequence: "
-	       LPX64"\n", *tgt, fid_seq(fid));
+	CDEBUG(D_INFO, "%s: got tgt %x for sequence: "LPX64"\n",
+	       lod2obd(lod)->obd_name, *tgt, fid_seq(fid));
 
-	RETURN(rc);
+	RETURN(0);
 }
 
 extern struct lu_object_operations lod_lu_obj_ops;
