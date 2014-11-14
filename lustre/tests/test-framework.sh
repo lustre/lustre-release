@@ -5828,22 +5828,25 @@ do_ls () {
     return $rc
 }
 
-# target_start_and_reset_recovery_timer()
-#        service_time = at_est2timeout(service_time);
-#        service_time += 2 * (CONNECTION_SWITCH_MAX + CONNECTION_SWITCH_INC +
-#                             INITIAL_CONNECT_TIMEOUT);
-# CONNECTION_SWITCH_MAX : min(25U, max(CONNECTION_SWITCH_MIN,obd_timeout))
-#define CONNECTION_SWITCH_INC 1
+# check_and_start_recovery_timer()
+#	service_time = at_est2timeout(service_time);
+#	service_time += 2 * INITIAL_CONNECT_TIMEOUT;
+#	service_time += 2 * (CONNECTION_SWITCH_MAX + CONNECTION_SWITCH_INC);
+
 #define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/20)
+#define CONNECTION_SWITCH_MAX min(50U, max(CONNECTION_SWITCH_MIN,obd_timeout))
 #define CONNECTION_SWITCH_MIN 5U
+#define CONNECTION_SWITCH_INC 5
+max_recovery_time() {
+	local init_connect_timeout=$(( TIMEOUT / 20 ))
+	[[ $init_connect_timeout -ge 5 ]] || init_connect_timeout=5
 
-max_recovery_time () {
-    local init_connect_timeout=$(( TIMEOUT / 20 ))
-    [[ $init_connect_timeout -ge 5 ]] || init_connect_timeout=5
+	local service_time=$(at_max_get client)
+	service_time=$(( service_time + (service_time >> 2) + 5 ))
+	service_time=$(( service_time + $(( 2 * init_connect_timeout )) ))
+	service_time=$(( service_time + $(( 2 * $(( 50 + 5 )) )) ))
 
-    local service_time=$(( $(at_max_get client) + $(( 2 * $(( 25 + 1  + init_connect_timeout)) )) ))
-
-    echo $service_time 
+	echo -n $service_time
 }
 
 get_clients_mount_count () {
