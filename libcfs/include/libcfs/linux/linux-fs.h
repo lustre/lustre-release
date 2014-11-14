@@ -67,11 +67,11 @@
 	((fp)->f_op->write((fp), (buf), (size), pos))
 
 #ifdef HAVE_FILE_FSYNC_4ARGS
-#define filp_fsync(fp, start, end) ((fp)->f_op->fsync((fp), start, end, 1))
-#elif defined(HAVE_FILE_FSYNC_2ARGS)
-#define filp_fsync(fp, start, end) ((fp)->f_op->fsync((fp), 1))
+#define ll_vfs_fsync_range(fp, start, end, datasync) \
+	vfs_fsync_range(fp, start, end, datasync)
 #else
-#define filp_fsync(fp, start, end) ((fp)->f_op->fsync((fp), (fp)->f_dentry, 1))
+#define ll_vfs_fsync_range(fp, start, end, datasync) \
+	vfs_fsync_range(fp, (fp)->f_dentry, start, end, datasync)
 #endif
 
 #define flock_type(fl)			((fl)->fl_type)

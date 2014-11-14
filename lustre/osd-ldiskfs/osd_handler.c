@@ -3269,17 +3269,7 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt,
 	file->f_op = inode->i_fop;
 	set_file_inode(file, inode);
 
-#ifdef HAVE_FILE_FSYNC_4ARGS
-	rc = file->f_op->fsync(file, start, end, 0);
-#elif defined(HAVE_FILE_FSYNC_2ARGS)
-	mutex_lock(&inode->i_mutex);
-	rc = file->f_op->fsync(file, 0);
-	mutex_unlock(&inode->i_mutex);
-#else
-	mutex_lock(&inode->i_mutex);
-	rc = file->f_op->fsync(file, dentry, 0);
-	mutex_unlock(&inode->i_mutex);
-#endif
+	rc = ll_vfs_fsync_range(file, start, end, 0);
 
 	RETURN(rc);
 }
