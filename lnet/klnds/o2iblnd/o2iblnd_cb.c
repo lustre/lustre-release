@@ -42,7 +42,6 @@
 
 static void kiblnd_peer_alive(kib_peer_t *peer);
 static void kiblnd_peer_connect_failed(kib_peer_t *peer, int active, int error);
-static void kiblnd_check_sends(kib_conn_t *conn);
 static void kiblnd_init_tx_msg(lnet_ni_t *ni, kib_tx_t *tx,
 			       int type, int body_nob);
 static int kiblnd_init_rdma(kib_conn_t *conn, kib_tx_t *tx, int type,
@@ -50,8 +49,9 @@ static int kiblnd_init_rdma(kib_conn_t *conn, kib_tx_t *tx, int type,
 static void kiblnd_queue_tx_locked(kib_tx_t *tx, kib_conn_t *conn);
 static void kiblnd_queue_tx(kib_tx_t *tx, kib_conn_t *conn);
 static void kiblnd_unmap_tx(lnet_ni_t *ni, kib_tx_t *tx);
+static void kiblnd_check_sends_locked(kib_conn_t *conn);
 
-static void
+void
 kiblnd_tx_done (lnet_ni_t *ni, kib_tx_t *tx)
 {
 	lnet_msg_t *lntmsg[2];
@@ -215,9 +215,9 @@ kiblnd_post_rx (kib_rx_t *rx, int credit)
 		conn->ibc_outstanding_credits++;
 	else
 		conn->ibc_reserved_credits++;
+	kiblnd_check_sends_locked(conn);
 	spin_unlock(&conn->ibc_lock);
 
-	kiblnd_check_sends(conn);
 out:
 	kiblnd_conn_decref(conn);
 	return rc;
@@ -350,8 +350,8 @@ kiblnd_handle_rx (kib_rx_t *rx)
                     !IBLND_OOB_CAPABLE(conn->ibc_version)) /* v1 only */
                         conn->ibc_outstanding_credits++;
 
+		kiblnd_check_sends_locked(conn);
 		spin_unlock(&conn->ibc_lock);
-                kiblnd_check_sends(conn);
         }
 
         switch (msg->ibm_type) {
@@ -803,9 +803,9 @@ __must_hold(&conn->ibc_lock)
             (!kiblnd_need_noop(conn) ||     /* redundant NOOP */
              (IBLND_OOB_CAPABLE(ver) && /* posted enough NOOP */
               conn->ibc_noops_posted == IBLND_OOB_MSGS(ver)))) {
-                /* OK to drop when posted enough NOOPs, since
-                 * kiblnd_check_sends will queue NOOP again when
-                 * posted NOOPs complete */
+		/* OK to drop when posted enough NOOPs, since
+		 * kiblnd_check_sends_locked will queue NOOP again when
+		 * posted NOOPs complete */
 		spin_unlock(&conn->ibc_lock);
 		kiblnd_tx_done(peer->ibp_ni, tx);
 		spin_lock(&conn->ibc_lock);
@@ -905,7 +905,7 @@ __must_hold(&conn->ibc_lock)
 }
 
 static void
-kiblnd_check_sends (kib_conn_t *conn)
+kiblnd_check_sends_locked(kib_conn_t *conn)
 {
         int        ver = conn->ibc_version;
         lnet_ni_t *ni = conn->ibc_peer->ibp_ni;
@@ -917,8 +917,6 @@ kiblnd_check_sends (kib_conn_t *conn)
                        libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 return;
         }
-
-	spin_lock(&conn->ibc_lock);
 
 	LASSERT(conn->ibc_nsends_posted <=
 		kiblnd_concurrent_sends(ver, ni));
@@ -969,8 +967,6 @@ kiblnd_check_sends (kib_conn_t *conn)
                 if (kiblnd_post_tx_locked(conn, tx, credit) != 0)
                         break;
         }
-
-	spin_unlock(&conn->ibc_lock);
 }
 
 static void
@@ -1016,16 +1012,11 @@ kiblnd_tx_complete (kib_tx_t *tx, int status)
         if (idle)
 		list_del(&tx->tx_list);
 
-        kiblnd_conn_addref(conn);               /* 1 ref for me.... */
-
+	kiblnd_check_sends_locked(conn);
 	spin_unlock(&conn->ibc_lock);
 
         if (idle)
                 kiblnd_tx_done(conn->ibc_peer->ibp_ni, tx);
-
-        kiblnd_check_sends(conn);
-
-        kiblnd_conn_decref(conn);               /* ...until here */
 }
 
 static void
@@ -1211,9 +1202,8 @@ kiblnd_queue_tx (kib_tx_t *tx, kib_conn_t *conn)
 {
 	spin_lock(&conn->ibc_lock);
 	kiblnd_queue_tx_locked(tx, conn);
+	kiblnd_check_sends_locked(conn);
 	spin_unlock(&conn->ibc_lock);
-
-	kiblnd_check_sends(conn);
 }
 
 static int kiblnd_resolve_addr(struct rdma_cm_id *cmid,
@@ -2184,13 +2174,10 @@ kiblnd_connreq_done(kib_conn_t *conn, int status)
 		return;
 	}
 
-	/* refcount taken by cmid is not reliable after I released the glock
-	 * because this connection is visible to other threads now, another
-	 * thread can find and close this connection right after I released
-	 * the glock, if kiblnd_cm_callback for RDMA_CM_EVENT_DISCONNECTED is
-	 * called, it can release the connection refcount taken by cmid.
-	 * It means the connection could be destroyed before I finish my
-	 * operations on it.
+	/* +1 ref for myself, this connection is visible to other threads
+	 * now, refcount of peer:ibp_conns can be released by connection
+	 * close from either a different thread, or the calling of
+	 * kiblnd_check_sends_locked() below. See bz21911 for details.
 	 */
 	kiblnd_conn_addref(conn);
 	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
@@ -2203,13 +2190,11 @@ kiblnd_connreq_done(kib_conn_t *conn, int status)
 
 		kiblnd_queue_tx_locked(tx, conn);
 	}
+	kiblnd_check_sends_locked(conn);
 	spin_unlock(&conn->ibc_lock);
-
-	kiblnd_check_sends(conn);
 
 	/* schedule blocked rxs */
 	kiblnd_handle_early_rxs(conn);
-
 	kiblnd_conn_decref(conn);
 }
 
@@ -3156,9 +3141,9 @@ kiblnd_check_conns (int idx)
 	struct list_head *ctmp;
 	unsigned long	  flags;
 
-        /* NB. We expect to have a look at all the peers and not find any
-         * RDMAs to time out, so we just use a shared lock while we
-         * take a look... */
+	/* NB. We expect to have a look at all the peers and not find any
+	 * RDMAs to time out, so we just use a shared lock while we
+	 * take a look... */
 	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
 	list_for_each(ptmp, peers) {
@@ -3221,7 +3206,11 @@ kiblnd_check_conns (int idx)
 		conn = list_entry(checksends.next,
 				  kib_conn_t, ibc_connd_list);
 		list_del(&conn->ibc_connd_list);
-		kiblnd_check_sends(conn);
+
+		spin_lock(&conn->ibc_lock);
+		kiblnd_check_sends_locked(conn);
+		spin_unlock(&conn->ibc_lock);
+
 		kiblnd_conn_decref(conn);
 	}
 }
