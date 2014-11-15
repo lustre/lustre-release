@@ -963,6 +963,69 @@ test_10()
 }
 run_test 10 "System is available during LFSCK scanning"
 
+test_20a() {
+	local server_version=$(lustre_version_code $SINGLEMDS)
+
+	[[ $server_version -ge $(version_code 2.5.60) ]] ||
+	[[ $server_version -ge $(version_code 2.5.3) &&
+	   $server_version -lt $(version_code 2.5.11) ]] ||
+		{ skip "Need MDS version 2.5.4+ or 2.5.60+"; return; }
+
+	[ $OSTCOUNT -lt 2 ] &&
+		skip "The test needs at least 2 OSTs" && return
+
+	echo "#####"
+	echo "For old client, even though it cannot access the file with"
+	echo "LOV EA hole, it should not cause the system crash."
+	echo "#####"
+
+	lfsck_prep 0 0
+	echo "start $SINGLEMDS"
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
+		error "(1) Fail to start MDS!"
+
+	mount_client $MOUNT || error "(2) Fail to start client!"
+	$LFS mkdir -i 0 $DIR/$tdir/a1
+	if [ $OSTCOUNT -gt 2 ]; then
+		$LFS setstripe -c 3 -i 0 -s 1M $DIR/$tdir/a1
+		bcount=513
+	else
+		$LFS setstripe -c 2 -i 0 -s 1M $DIR/$tdir/a1
+		bcount=257
+	fi
+
+	# 256 blocks on the stripe0.
+	# 1 block on the stripe1 for 2 OSTs case.
+	# 256 blocks on the stripe1 for other cases.
+	# 1 block on the stripe2 if OSTs > 2
+	dd if=/dev/zero of=$DIR/$tdir/a1/f0 bs=4096 count=$bcount
+
+	local fid0=$($LFS path2fid $DIR/$tdir/a1/f0)
+
+	echo ${fid0}
+	$LFS getstripe $DIR/$tdir/a1/f0
+
+	cancel_lru_locks osc
+
+	echo "Inject failure..."
+	echo "To make a LOV EA hole..."
+	#define OBD_FAIL_MAKE_LOVEA_HOLE	0x1406
+	do_facet mds1 $LCTL set_param fail_loc=0x1406
+	chown 1.1 $DIR/$tdir/a1/f0
+
+	umount_client $MOUNT
+	sync
+	sleep 2
+	do_facet mds1 $LCTL set_param fail_loc=0 fail_val=0
+
+	mount_client $MOUNT || error "Fail to start client!"
+
+	$LFS getstripe $DIR/$tdir/a1/f0
+	dd if=$DIR/$tdir/a1/f0 of=/dev/null
+	return 0 # not crash
+}
+run_test 20a "Don't crash client while access with LOV EA hole"
+
 $LCTL set_param debug=-lfsck > /dev/null || true
 
 # restore MDS/OST size

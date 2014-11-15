@@ -320,6 +320,19 @@ static int lod_declare_attr_set(const struct lu_env *env,
 		}
 	}
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_MAKE_LOVEA_HOLE) &&
+	    dt_object_exists(next) &&
+	    dt_object_remote(next) == 0 && S_ISREG(attr->la_mode)) {
+		struct lod_thread_info *info = lod_env_info(env);
+		struct lu_buf *buf = &info->lti_buf;
+
+		buf->lb_buf = info->lti_ea_store;
+		buf->lb_len = info->lti_ea_store_size;
+		dt_declare_xattr_set(env, next, buf, XATTR_NAME_LOV,
+				     LU_XATTR_REPLACE, handle);
+	}
+
+
 	RETURN(rc);
 }
 
@@ -354,6 +367,35 @@ static int lod_attr_set(const struct lu_env *env,
 		if (rc) {
 			CERROR("failed declaration: %d\n", rc);
 			break;
+		}
+	}
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_MAKE_LOVEA_HOLE) &&
+	    dt_object_exists(next) &&
+	    dt_object_remote(next) == 0 && S_ISREG(attr->la_mode)) {
+		struct lod_thread_info *info = lod_env_info(env);
+		struct lu_buf *buf = &info->lti_buf;
+		struct lov_mds_md_v1 *lmm;
+		struct lov_ost_data_v1 *objs;
+		__u32 magic;
+		int rc1;
+
+		rc1 = lod_get_lov_ea(env, lo);
+		if (rc1  <= 0)
+			RETURN(rc);
+
+		buf->lb_buf = info->lti_ea_store;
+		buf->lb_len = info->lti_ea_store_size;
+		lmm = info->lti_ea_store;
+		magic = le32_to_cpu(lmm->lmm_magic);
+		if (le16_to_cpu(lmm->lmm_stripe_count) >= 2) {
+			if (magic == LOV_MAGIC_V1)
+				objs = &(lmm->lmm_objects[1]);
+			else
+				objs = &((struct lov_mds_md_v3 *)lmm)->lmm_objects[1];
+			memset(objs, 0, sizeof(*objs));
+			dt_xattr_set(env, next, buf, XATTR_NAME_LOV,
+				     LU_XATTR_REPLACE, handle, BYPASS_CAPA);
 		}
 	}
 

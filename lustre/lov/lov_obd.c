@@ -1035,8 +1035,13 @@ static int lov_recreate(struct obd_export *exp, struct obdo *src_oa,
                 GOTO(out, rc = -EINVAL);
 
 	for (i = 0; i < lsm->lsm_stripe_count; i++) {
-		if (lsm->lsm_oinfo[i]->loi_ost_idx == ost_idx) {
-			if (ostid_id(&lsm->lsm_oinfo[i]->loi_oi) !=
+		struct lov_oinfo *loi = lsm->lsm_oinfo[i];
+
+		if (lov_oinfo_is_dummy(loi))
+			continue;
+
+		if (loi->loi_ost_idx == ost_idx) {
+			if (ostid_id(&loi->loi_oi) !=
 					ostid_id(&src_oa->o_oi))
 				GOTO(out, rc = -EINVAL);
 			break;
@@ -1696,10 +1701,13 @@ static int lov_change_cbdata(struct obd_export *exp,
                 struct lov_stripe_md submd;
                 struct lov_oinfo *loi = lsm->lsm_oinfo[i];
 
-                if (!lov->lov_tgts[loi->loi_ost_idx]) {
-                        CDEBUG(D_HA, "lov idx %d NULL \n", loi->loi_ost_idx);
-                        continue;
-                }
+		if (lov_oinfo_is_dummy(loi))
+			continue;
+
+		if (!lov->lov_tgts[loi->loi_ost_idx]) {
+			CDEBUG(D_HA, "lov idx %d NULL\n", loi->loi_ost_idx);
+			continue;
+		}
 
 		submd.lsm_oi = loi->loi_oi;
 		submd.lsm_stripe_count = 0;
@@ -1731,10 +1739,14 @@ static int lov_find_cbdata(struct obd_export *exp,
                 struct lov_stripe_md submd;
                 struct lov_oinfo *loi = lsm->lsm_oinfo[i];
 
-                if (!lov->lov_tgts[loi->loi_ost_idx]) {
-                        CDEBUG(D_HA, "lov idx %d NULL \n", loi->loi_ost_idx);
-                        continue;
-                }
+		if (lov_oinfo_is_dummy(loi))
+			continue;
+
+		if (!lov->lov_tgts[loi->loi_ost_idx]) {
+			CDEBUG(D_HA, "lov idx %d NULL\n", loi->loi_ost_idx);
+			continue;
+		}
+
 		submd.lsm_oi = loi->loi_oi;
 		submd.lsm_stripe_count = 0;
 		rc = obd_find_cbdata(lov->lov_tgts[loi->loi_ost_idx]->ltd_exp,
@@ -2154,14 +2166,19 @@ obd_size fiemap_calc_fm_end_offset(struct ll_user_fiemap *fiemap,
             fiemap->fm_extents[0].fe_logical == 0)
                 return 0;
 
-        /* Find out stripe_no from ost_index saved in the fe_device */
-        for (i = 0; i < lsm->lsm_stripe_count; i++) {
-                if (lsm->lsm_oinfo[i]->loi_ost_idx ==
-                                        fiemap->fm_extents[0].fe_device) {
-                        stripe_no = i;
-                        break;
-                }
-        }
+	/* Find out stripe_no from ost_index saved in the fe_device */
+	for (i = 0; i < lsm->lsm_stripe_count; i++) {
+		struct lov_oinfo *oinfo = lsm->lsm_oinfo[i];
+
+		if (lov_oinfo_is_dummy(oinfo))
+			continue;
+
+		if (oinfo->loi_ost_idx == fiemap->fm_extents[0].fe_device) {
+			stripe_no = i;
+			break;
+		}
+	}
+
 	if (stripe_no == -1)
 		return -EINVAL;
 
@@ -2350,6 +2367,9 @@ static int lov_fiemap(struct lov_obd *lov, __u32 keylen, void *key,
                                            &lun_start, &obd_object_end)) == 0)
                         continue;
 
+		if (lov_oinfo_is_dummy(lsm->lsm_oinfo[cur_stripe]))
+			GOTO(out, rc = -EIO);
+
                 /* If this is a continuation FIEMAP call and we are on
                  * starting stripe then lun_start needs to be set to
                  * fm_end_offset */
@@ -2537,6 +2557,9 @@ static int lov_get_info(const struct lu_env *env, struct obd_export *exp,
                  * be NULL and won't match the lock's export. */
                 for (i = 0; i < lsm->lsm_stripe_count; i++) {
                         loi = lsm->lsm_oinfo[i];
+			if (lov_oinfo_is_dummy(loi))
+				continue;
+
                         if (!lov->lov_tgts[loi->loi_ost_idx])
                                 continue;
 			if (lov->lov_tgts[loi->loi_ost_idx]->ltd_exp ==

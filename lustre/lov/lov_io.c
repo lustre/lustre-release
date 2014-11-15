@@ -151,6 +151,9 @@ static int lov_io_sub_init(const struct lu_env *env, struct lov_io *lio,
         LASSERT(sub->sub_stripe < lio->lis_stripe_count);
         ENTRY;
 
+	if (unlikely(lov_r0(lov)->lo_sub[stripe] == NULL))
+		RETURN(-EIO);
+
         result = 0;
         sub->sub_io_initialized = 0;
         sub->sub_borrowed = 0;
@@ -405,6 +408,15 @@ static int lov_io_iter_init(const struct lu_env *env,
                 if (!lov_stripe_intersects(lsm, stripe, lio->lis_pos,
                                            endpos, &start, &end))
                         continue;
+
+		if (unlikely(lov_r0(lio->lis_object)->lo_sub[stripe] == NULL)) {
+			if (ios->cis_io->ci_type == CIT_READ ||
+			    ios->cis_io->ci_type == CIT_WRITE ||
+			    ios->cis_io->ci_type == CIT_FAULT)
+				RETURN(-EIO);
+
+			continue;
+		}
 
                 end = lov_offset_mod(end, +1);
                 sub = lov_sub_get(env, lio, stripe);
@@ -921,7 +933,8 @@ int lov_io_init_raid0(const struct lu_env *env, struct cl_object *obj,
 
         ENTRY;
         CFS_INIT_LIST_HEAD(&lio->lis_active);
-        lov_io_slice_init(lio, lov, io);
+	lov_io_slice_init(lio, lov, io);
+
         if (io->ci_result == 0) {
                 io->ci_result = lov_io_subio_init(env, lio, io);
                 if (io->ci_result == 0) {
