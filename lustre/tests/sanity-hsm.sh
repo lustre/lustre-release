@@ -484,6 +484,13 @@ cdt_clear_mount_state() {
 
 cdt_set_mount_state() {
 	mdts_set_param "-P" hsm_control "$1"
+	# set_param -P is asynchronous operation and could race with set_param.
+	# In such case configs could be retrieved and applied at mgc after
+	# set_param -P completion. Sleep here to avoid race with set_param.
+	# We need at least 20 seconds. 10 for mgc_requeue_thread to wake up
+	# MGC_TIMEOUT_MIN_SECONDS + MGC_TIMEOUT_RAND_CENTISEC(5 + 5)
+	# and 10 seconds to retrieve config from server.
+	sleep 20
 }
 
 cdt_check_state() {
