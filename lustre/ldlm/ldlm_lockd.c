@@ -920,7 +920,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
         LASSERT(lock != NULL);
         LASSERT(data != NULL);
 
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_OST_LDLM_REPLY_NET)) {
+	if (OBD_FAIL_PRECHECK(OBD_FAIL_LDLM_SRV_CP_AST)) {
 		LDLM_DEBUG(lock, "dropping CP AST");
 		RETURN(0);
 	}

@@ -344,25 +344,23 @@ static int osp_sync_add_rec(const struct lu_env *env, struct osp_device *d,
 	ctxt = llog_get_context(d->opd_obd, LLOG_MDS_OST_ORIG_CTXT);
 	if (ctxt == NULL)
 		RETURN(-ENOMEM);
+
 	rc = llog_add(env, ctxt->loc_handle, &osi->osi_hdr, &osi->osi_cookie,
 		      th);
 	llog_ctxt_put(ctxt);
 
-	CDEBUG(D_OTHER, "%s: new record "DOSTID":%lu/%lu: %d\n",
-	       d->opd_obd->obd_name, POSTID(&osi->osi_cookie.lgc_lgl.lgl_oi),
-	       (unsigned long) osi->osi_cookie.lgc_lgl.lgl_ogen,
-	       (unsigned long) osi->osi_cookie.lgc_index, rc);
-
-	if (rc > 0)
-		rc = 0;
-
-	if (likely(rc == 0)) {
+	if (likely(rc >= 0)) {
+		CDEBUG(D_OTHER, "%s: new record "DOSTID":%lu/%lu: %d\n",
+		       d->opd_obd->obd_name,
+		       POSTID(&osi->osi_cookie.lgc_lgl.lgl_oi),
+		       (unsigned long)osi->osi_cookie.lgc_lgl.lgl_ogen,
+		       (unsigned long)osi->osi_cookie.lgc_index, rc);
 		spin_lock(&d->opd_syn_lock);
 		d->opd_syn_changes++;
 		spin_unlock(&d->opd_syn_lock);
 	}
-
-	RETURN(rc);
+	/* return 0 always here, error case just cause no llog record */
+	RETURN(0);
 }
 
 int osp_sync_add(const struct lu_env *env, struct osp_object *o,

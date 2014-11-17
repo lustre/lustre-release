@@ -246,6 +246,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MDS_RENAME2             0x154
 #define OBD_FAIL_MDS_RENAME3             0x155
 #define OBD_FAIL_MDS_RENAME4             0x156
+#define OBD_FAIL_MDS_LDLM_REPLY_NET	 0x157
 
 /* layout lock */
 #define OBD_FAIL_MDS_NO_LL_GETATTR	 0x170
@@ -354,6 +355,10 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_LDLM_CP_CB_WAIT4        0x322
 #define OBD_FAIL_LDLM_CP_CB_WAIT5        0x323
 
+#define OBD_FAIL_LDLM_SRV_BL_AST	 0x324
+#define OBD_FAIL_LDLM_SRV_CP_AST	 0x325
+#define OBD_FAIL_LDLM_SRV_GL_AST	 0x326
+
 /* LOCKLESS IO */
 #define OBD_FAIL_LDLM_SET_CONTENTION     0x385
 
@@ -421,7 +426,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_TGT_REPLAY_DROP         0x707
 #define OBD_FAIL_TGT_FAKE_EXP            0x708
 #define OBD_FAIL_TGT_REPLAY_DELAY        0x709
-#define OBD_FAIL_TGT_LAST_REPLAY         0x710
+/* #define OBD_FAIL_TGT_LAST_REPLAY         0x710 (obsoleted) */
 #define OBD_FAIL_TGT_CLIENT_ADD          0x711
 #define OBD_FAIL_TGT_RCVG_FLAG           0x712
 #define OBD_FAIL_TGT_DELAY_CONDITIONAL	 0x713
@@ -448,6 +453,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MGS_TARGET_REG_NET	 0x90a
 #define OBD_FAIL_MGS_TARGET_DEL_NET	 0x90b
 #define OBD_FAIL_MGS_CONFIG_READ_NET	 0x90c
+#define OBD_FAIL_MGS_LDLM_REPLY_NET	 0x90d
 
 #define OBD_FAIL_QUOTA_DQACQ_NET			0xA01
 #define OBD_FAIL_QUOTA_EDQUOT            0xA02
@@ -598,6 +604,11 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_RACE(id)                            CFS_RACE(id)
 #define OBD_FAIL_ONCE                           CFS_FAIL_ONCE
 #define OBD_FAILED                              CFS_FAILED
+
+#define LUT_FAIL_CLASS(fail_id)			(((fail_id) >> 8) << 16)
+#define LUT_FAIL_MGT				LUT_FAIL_CLASS(OBD_FAIL_MGS)
+#define LUT_FAIL_MDT				LUT_FAIL_CLASS(OBD_FAIL_MDS)
+#define LUT_FAIL_OST				LUT_FAIL_CLASS(OBD_FAIL_OST)
 
 extern atomic_t libcfs_kmemory;
 

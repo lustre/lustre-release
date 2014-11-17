@@ -1237,6 +1237,20 @@ int tgt_enqueue(struct tgt_session_info *tsi)
 	if (rc)
 		RETURN(err_serious(rc));
 
+	switch (LUT_FAIL_CLASS(tsi->tsi_reply_fail_id)) {
+	case LUT_FAIL_MDT:
+		tsi->tsi_reply_fail_id = OBD_FAIL_MDS_LDLM_REPLY_NET;
+		break;
+	case LUT_FAIL_OST:
+		tsi->tsi_reply_fail_id = OBD_FAIL_OST_LDLM_REPLY_NET;
+		break;
+	case LUT_FAIL_MGT:
+		tsi->tsi_reply_fail_id = OBD_FAIL_MGS_LDLM_REPLY_NET;
+		break;
+	default:
+		tsi->tsi_reply_fail_id = OBD_FAIL_LDLM_REPLY;
+		break;
+	}
 	RETURN(req->rq_status);
 }
 EXPORT_SYMBOL(tgt_enqueue);
