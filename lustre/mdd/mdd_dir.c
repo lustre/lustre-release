@@ -2168,9 +2168,11 @@ static int mdd_object_create(const struct lu_env *env, struct mdd_object *pobj,
 	/* During creation, there are only a few cases we need do xattr_set to
 	 * create stripes.
 	 * 1. regular file: see comments above.
-	 * 2. create striped directory with provided stripeEA.
-	 * 3. create striped directory because inherit default layout from the
-	 * parent. */
+	 * 2. dir: inherit default striping or pool settings from parent.
+	 * 3. create striped directory with provided stripeEA.
+	 * 4. create striped directory because inherit default layout from the
+	 * parent.
+	 */
 	if (spec->no_create ||
 	    (S_ISREG(attr->la_mode) && spec->sp_cr_flags & MDS_OPEN_HAS_EA) ||
 	    S_ISDIR(attr->la_mode)) {

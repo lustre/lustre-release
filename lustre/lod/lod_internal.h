@@ -46,8 +46,9 @@
 #define LOV_USES_DEFAULT_STRIPE         1
 
 /* Special values to remove LOV EA from disk */
-#define LOVEA_DELETE_VALUES(size, count, offset)			\
-	((size) == 0 && (count) == 0 && (offset) == (typeof(offset))(-1))
+#define LOVEA_DELETE_VALUES(size, count, offset, pool)			\
+	((size) == 0 && (count) == 0 &&					\
+	 (offset) == (typeof(offset))(-1) && (pool) == NULL)
 
 #define LMVEA_DELETE_VALUES(count, offset)				\
 	((count) == 0 && (offset) == (typeof(offset))(-1))
@@ -434,8 +435,6 @@ int lod_parse_dir_striping(const struct lu_env *env, struct lod_object *lo,
 			   const struct lu_buf *buf);
 int lod_initialize_objects(const struct lu_env *env, struct lod_object *mo,
 			   struct lov_ost_data_v1 *objs);
-int lod_store_def_striping(const struct lu_env *env, struct dt_object *dt,
-			   struct thandle *th);
 int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
 			bool is_from_disk);
 int lod_generate_and_set_lovea(const struct lu_env *env,

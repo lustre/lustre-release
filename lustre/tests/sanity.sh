@@ -11137,6 +11137,7 @@ test_200() {
 	local ost_range="$first_ost $last_ost $ost_step"
 	local test_path=$POOL_ROOT/$POOL_DIR_NAME
 	local file_dir=$POOL_ROOT/file_tst
+	local subdir=$test_path/subdir
 
 	local rc=0
 	while : ; do
@@ -11147,6 +11148,8 @@ test_200() {
 		mkdir -p $test_path
 		pool_set_dir      $POOL $test_path	|| { rc=$? ; break; }
 		pool_check_dir    $POOL $test_path	|| { rc=$? ; break; }
+		mkdir -p $subdir
+		pool_check_dir    $POOL $subdir		|| { rc=$? ; break; }
 		pool_dir_rel_path $POOL $POOL_DIR_NAME $POOL_ROOT \
 							|| { rc=$? ; break; }
 		# former test_200e test_200f

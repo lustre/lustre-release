@@ -1837,7 +1837,8 @@ next:
 		if (lo->ldo_striping_cached &&
 		    !LOVEA_DELETE_VALUES(lo->ldo_def_stripe_size,
 					 lo->ldo_def_stripenr,
-					 lo->ldo_def_stripe_offset)) {
+					 lo->ldo_def_stripe_offset,
+					 lo->ldo_pool)) {
 			struct lov_user_md_v3	*v3;
 
 			/* sigh, lti_ea_store has been used for lmv_buf,
@@ -2257,6 +2258,7 @@ static int lod_xattr_set_lov_on_dir(const struct lu_env *env,
 	struct lod_object	*l = lod_dt_obj(dt);
 	struct lov_user_md_v1	*lum;
 	struct lov_user_md_v3	*v3 = NULL;
+	const char		*pool_name = NULL;
 	int			 rc;
 	ENTRY;
 
@@ -2272,8 +2274,11 @@ static int lod_xattr_set_lov_on_dir(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
-	if (lum->lmm_magic == LOV_USER_MAGIC_V3)
+	if (lum->lmm_magic == LOV_USER_MAGIC_V3) {
 		v3 = buf->lb_buf;
+		if (v3->lmm_pool_name[0] != '\0')
+			pool_name = v3->lmm_pool_name;
+	}
 
 	/* if { size, offset, count } = { 0, -1, 0 } and no pool
 	 * (i.e. all default values specified) then delete default
@@ -2285,10 +2290,8 @@ static int lod_xattr_set_lov_on_dir(const struct lu_env *env,
 		(int)lum->lmm_stripe_offset,
 		v3 ? "from" : "", v3 ? v3->lmm_pool_name : "");
 
-	if (LOVEA_DELETE_VALUES((lum->lmm_stripe_size),
-				(lum->lmm_stripe_count),
-				(lum->lmm_stripe_offset)) &&
-			lum->lmm_magic == LOV_USER_MAGIC_V1) {
+	if (LOVEA_DELETE_VALUES(lum->lmm_stripe_size, lum->lmm_stripe_count,
+				lum->lmm_stripe_offset, pool_name)) {
 		rc = lod_xattr_del_internal(env, dt, name, th, capa);
 		if (rc == -ENODATA)
 			rc = 0;
@@ -2459,7 +2462,8 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 		if (lo->ldo_striping_cached &&
 		    !LOVEA_DELETE_VALUES(lo->ldo_def_stripe_size,
 					 lo->ldo_def_stripenr,
-					 lo->ldo_def_stripe_offset)) {
+					 lo->ldo_def_stripe_offset,
+					 lo->ldo_pool)) {
 			struct lov_user_md_v3	*v3;
 
 			/* sigh, lti_ea_store has been used for lmv_buf,
@@ -2659,7 +2663,8 @@ int lod_dir_striping_create_internal(const struct lu_env *env,
 	if (lo->ldo_striping_cached &&
 	    !LOVEA_DELETE_VALUES(lo->ldo_def_stripe_size,
 				 lo->ldo_def_stripenr,
-				 lo->ldo_def_stripe_offset)) {
+				 lo->ldo_def_stripe_offset,
+				 lo->ldo_pool)) {
 		struct lov_user_md_v3 *v3 = info->lti_ea_store;
 
 		if (info->lti_ea_store_size < sizeof(*v3)) {
