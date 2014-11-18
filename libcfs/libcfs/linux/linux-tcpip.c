@@ -288,15 +288,15 @@ EXPORT_SYMBOL(libcfs_ipif_free_enumeration);
 int
 libcfs_sock_write (struct socket *sock, void *buffer, int nob, int timeout)
 {
-        int            rc;
-        mm_segment_t   oldmm = get_fs();
-        long           ticks = timeout * HZ;
-        unsigned long  then;
-        struct timeval tv;
+	int		rc;
+	mm_segment_t	oldmm = get_fs();
+	long		jiffies_left = timeout * msecs_to_jiffies(MSEC_PER_SEC);
+	unsigned long	then;
+	struct timeval	tv;
 
-        LASSERT (nob > 0);
-        /* Caller may pass a zero timeout if she thinks the socket buffer is
-         * empty enough to take the whole message immediately */
+	LASSERT(nob > 0);
+	/* Caller may pass a zero timeout if she thinks the socket buffer is
+	 * empty enough to take the whole message immediately */
 
 	for (;;) {
 		struct kvec  iov = {
@@ -307,12 +307,16 @@ libcfs_sock_write (struct socket *sock, void *buffer, int nob, int timeout)
 			.msg_flags	= (timeout == 0) ? MSG_DONTWAIT : 0
 		};
 
-                if (timeout != 0) {
-                        /* Set send timeout to remaining time */
-                        tv = (struct timeval) {
-                                .tv_sec = ticks / HZ,
-                                .tv_usec = ((ticks % HZ) * 1000000) / HZ
-                        };
+		if (timeout != 0) {
+			/* Set send timeout to remaining time */
+			tv = (struct timeval) {
+				.tv_sec = jiffies_left /
+					  msecs_to_jiffies(MSEC_PER_SEC),
+				.tv_usec = ((jiffies_left %
+					    msecs_to_jiffies(MSEC_PER_SEC)) *
+					    USEC_PER_SEC) /
+					    msecs_to_jiffies(MSEC_PER_SEC)
+			};
                         set_fs(KERNEL_DS);
                         rc = sock_setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO,
                                              (char *)&tv, sizeof(tv));
@@ -327,7 +331,7 @@ libcfs_sock_write (struct socket *sock, void *buffer, int nob, int timeout)
 
 		then = jiffies;
 		rc = kernel_sendmsg(sock, &msg, &iov, 1, nob);
-		ticks -= jiffies - then;
+		jiffies_left -= jiffies - then;
 
                 if (rc == nob)
                         return 0;
@@ -340,7 +344,7 @@ libcfs_sock_write (struct socket *sock, void *buffer, int nob, int timeout)
                         return (-ECONNABORTED);
                 }
 
-                if (ticks <= 0)
+		if (jiffies_left <= 0)
                         return -EAGAIN;
 
                 buffer = ((char *)buffer) + rc;
@@ -354,16 +358,16 @@ EXPORT_SYMBOL(libcfs_sock_write);
 int
 libcfs_sock_read (struct socket *sock, void *buffer, int nob, int timeout)
 {
-        int            rc;
-        mm_segment_t   oldmm = get_fs();
-        long           ticks = timeout * HZ;
-        unsigned long  then;
-        struct timeval tv;
+	int		rc;
+	mm_segment_t	oldmm = get_fs();
+	long		jiffies_left = timeout * msecs_to_jiffies(MSEC_PER_SEC);
+	unsigned long	then;
+	struct timeval	tv;
 
-        LASSERT (nob > 0);
-        LASSERT (ticks > 0);
+	LASSERT(nob > 0);
+	LASSERT(jiffies_left > 0);
 
-        for (;;) {
+	for (;;) {
 		struct kvec  iov = {
 			.iov_base = buffer,
 			.iov_len  = nob
@@ -372,11 +376,14 @@ libcfs_sock_read (struct socket *sock, void *buffer, int nob, int timeout)
 			.msg_flags      = 0
 		};
 
-                /* Set receive timeout to remaining time */
-                tv = (struct timeval) {
-                        .tv_sec = ticks / HZ,
-                        .tv_usec = ((ticks % HZ) * 1000000) / HZ
-                };
+		/* Set receive timeout to remaining time */
+		tv = (struct timeval) {
+			.tv_sec = jiffies_left / msecs_to_jiffies(MSEC_PER_SEC),
+			.tv_usec = ((jiffies_left %
+				    msecs_to_jiffies(MSEC_PER_SEC)) *
+				    USEC_PER_SEC) /
+				    msecs_to_jiffies(MSEC_PER_SEC)
+		};
                 set_fs(KERNEL_DS);
                 rc = sock_setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO,
                                      (char *)&tv, sizeof(tv));
@@ -389,7 +396,7 @@ libcfs_sock_read (struct socket *sock, void *buffer, int nob, int timeout)
 
 		then = jiffies;
 		rc = kernel_recvmsg(sock, &msg, &iov, 1, nob, 0);
-		ticks -= jiffies - then;
+		jiffies_left -= jiffies - then;
 
                 if (rc < 0)
                         return rc;
@@ -403,7 +410,7 @@ libcfs_sock_read (struct socket *sock, void *buffer, int nob, int timeout)
                 if (nob == 0)
                         return 0;
 
-                if (ticks <= 0)
+		if (jiffies_left <= 0)
                         return -ETIMEDOUT;
         }
 }
