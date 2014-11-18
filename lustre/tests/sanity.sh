@@ -6866,7 +6866,8 @@ test_103a() {
 		skip_env "could not find setfacl" && return
 	$GSS && skip "could not run under gss" && return
 
-	gpasswd -a daemon bin	# LU-5641
+	gpasswd -a daemon bin				# LU-5641
+	do_facet $SINGLEMDS gpasswd -a daemon bin	# LU-5641
 
 	declare -a identity_old
 
