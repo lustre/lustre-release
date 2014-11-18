@@ -4539,7 +4539,8 @@ test_72() { #LU-2634
 		add mds${num} $(mkfs_opts mds$num $(mdsdevname $num)) \
 		--reformat $(mdsdevname $num) $(mdsvdevname $num) ||
 		error "add mds $num failed"
-		$TUNE2FS -O extents $(mdsdevname $num)
+		do_facet mds${num} "$TUNE2FS -O extents $(mdsdevname $num)" ||
+			error "$TUNE2FS failed on mds${num}"
 	done
 
 	add ost1 $(mkfs_opts ost1 $ostdev) --reformat $ostdev ||
