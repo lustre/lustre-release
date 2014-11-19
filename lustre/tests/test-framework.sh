@@ -416,22 +416,24 @@ load_module() {
 
     [ $# -gt 0 ] && echo "${module} options: '$*'"
 
-    # Note that insmod will ignore anything in modprobe.conf, which is why we're
-    # passing options on the command-line.
-    if [ "$BASE" == "lnet_selftest" ] && \
-            [ -f ${LUSTRE}/../lnet/selftest/${module}${EXT} ]; then
-        insmod ${LUSTRE}/../lnet/selftest/${module}${EXT}
-    elif [ -f ${LUSTRE}/${module}${EXT} ]; then
-        insmod ${LUSTRE}/${module}${EXT} "$@"
-    else
-        # must be testing a "make install" or "rpm" installation
-        # note failed to load ptlrpc_gss is considered not fatal
-        if [ "$BASE" == "ptlrpc_gss" ]; then
-            modprobe $BASE "$@" 2>/dev/null || echo "gss/krb5 is not supported"
-        else
-            modprobe $BASE "$@"
-        fi
-    fi
+	# Note that insmod will ignore anything in modprobe.conf, which is why
+	# we're passing options on the command-line.
+	if [[ "$BASE" == "lnet_selftest" ]] &&
+		[[ -f ${LUSTRE}/../lnet/selftest/${module}${EXT} ]]; then
+		insmod ${LUSTRE}/../lnet/selftest/${module}${EXT}
+	elif [[ -f ${LUSTRE}/${module}${EXT} ]]; then
+		[[ "$BASE" != "ptlrpc_gss" ]] || modprobe sunrpc
+		insmod ${LUSTRE}/${module}${EXT} "$@"
+	else
+		# must be testing a "make install" or "rpm" installation
+		# note failed to load ptlrpc_gss is considered not fatal
+		if [[ "$BASE" == "ptlrpc_gss" ]]; then
+			modprobe $BASE "$@" 2>/dev/null ||
+				echo "gss/krb5 is not supported"
+		else
+			modprobe $BASE "$@"
+		fi
+	fi
 }
 
 llite_lloop_enabled() {
