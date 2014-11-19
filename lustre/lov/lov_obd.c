@@ -1678,6 +1678,8 @@ static int lov_fiemap(struct lov_obd *lov, __u32 keylen, void *key,
 	obd_size fm_start, fm_end, fm_length, fm_end_offset;
         obd_size curr_loc;
         int current_extent = 0, rc = 0, i;
+	/* Whether have we collected enough extents */
+	bool enough = false;
         int ost_eof = 0; /* EOF for object */
         int ost_done = 0; /* done with required mapping for this OST? */
         int last_stripe;
@@ -1800,9 +1802,9 @@ static int lov_fiemap(struct lov_obd *lov, __u32 keylen, void *key,
                         lun_start += len_mapped_single_call;
                         fm_local->fm_length = req_fm_len - len_mapped_single_call;
                         req_fm_len = fm_local->fm_length;
-                        fm_local->fm_extent_count = count_local;
-                        fm_local->fm_mapped_extents = 0;
-                        fm_local->fm_flags = fiemap->fm_flags;
+			fm_local->fm_extent_count = enough ? 1 : count_local;
+			fm_local->fm_mapped_extents = 0;
+			fm_local->fm_flags = fiemap->fm_flags;
 
 			fm_key->oa.o_oi = lsm->lsm_oinfo[cur_stripe]->loi_oi;
                         ost_index = lsm->lsm_oinfo[cur_stripe]->loi_ost_idx;
@@ -1844,7 +1846,13 @@ inactive_tgt:
                                         goto finish;
                                 }
                                 break;
-                        }
+			} else if (enough) {
+				/*
+				 * We've collected enough extents and there are
+				 * more extents after it.
+				 */
+				goto finish;
+			}
 
                         /* If we just need num of extents then go to next device */
                         if (get_num_extents) {
@@ -1878,9 +1886,9 @@ inactive_tgt:
 
                         current_extent += ext_count;
 
-                        /* Ran out of available extents? */
-                        if (current_extent >= fiemap->fm_extent_count)
-                                goto finish;
+			/* Ran out of available extents? */
+			if (current_extent >= fiemap->fm_extent_count)
+				enough = true;
                 } while (ost_done == 0 && ost_eof == 0);
 
                 if (cur_stripe_wrap == last_stripe)
