@@ -12,9 +12,9 @@ Signed-off-by: Johann Lombardi <johann <at> whamcloud.com>
 ---
  fs/ext4/Makefile |    3 +-
  fs/ext4/ext4.h   |   76 ++++++++++++-
- fs/ext4/mmp.c    |  351 ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ fs/ext4/mmp.c    |  354 ++++++++++++++++++++++++++++++++++++++++++++++++++++++
  fs/ext4/super.c  |   18 +++-
- 4 files changed, 444 insertions(+), 4 deletions(-)
+ 4 files changed, 447 insertions(+), 4 deletions(-)
  create mode 100644 fs/ext4/mmp.c
 
 Index: linux-stage/fs/ext4/Makefile
@@ -156,7 +156,7 @@ Index: linux-stage/fs/ext4/mmp.c
 ===================================================================
 --- /dev/null
 +++ linux-stage/fs/ext4/mmp.c
-@@ -0,0 +1,351 @@
+@@ -0,0 +1,354 @@
 +#include <linux/fs.h>
 +#include <linux/random.h>
 +#include <linux/buffer_head.h>
@@ -305,10 +305,10 @@ Index: linux-stage/fs/ext4/mmp.c
 +                       goto failed;
 +               }
 +
-+               diff = jiffies - last_update_time;
-+               if (diff < mmp_update_interval * HZ)
-+                       schedule_timeout_interruptible(mmp_update_interval *
-+                                                      HZ - diff);
++		diff = jiffies - last_update_time;
++		if (diff < mmp_update_interval * msecs_to_jiffies(MSEC_PER_SEC))
++			schedule_timeout_interruptible(mmp_update_interval *
++				msecs_to_jiffies(MSEC_PER_SEC) - diff);
 +
 +               /*
 +                * We need to make sure that more than mmp_check_interval
@@ -316,7 +316,7 @@ Index: linux-stage/fs/ext4/mmp.c
 +                * we need to check if the MMP block is as we left it.
 +                */
 +               diff = jiffies - last_update_time;
-+               if (diff > mmp_check_interval * HZ) {
++               if (diff > mmp_check_interval * msecs_to_jiffies(MSEC_PER_SEC)) {
 +                       struct buffer_head *bh_check = NULL;
 +                       struct mmp_struct *mmp_check;
 +
@@ -343,14 +343,15 @@ Index: linux-stage/fs/ext4/mmp.c
 +                       put_bh(bh_check);
 +               }
 +
-+                /*
-+                * Adjust the mmp_check_interval depending on how much time
-+                * it took for the MMP block to be written.
-+                */
-+               mmp_check_interval = max(min(EXT4_MMP_CHECK_MULT * diff / HZ,
-+                                            EXT4_MMP_MAX_CHECK_INTERVAL),
-+                                        EXT4_MMP_MIN_CHECK_INTERVAL);
-+               mmp->mmp_check_interval = cpu_to_le16(mmp_check_interval);
++		/*
++		 * Adjust the mmp_check_interval depending on how much time
++		 * it took for the MMP block to be written.
++		 */
++		mmp_check_interval = max(min(EXT4_MMP_CHECK_MULT * diff /
++					     msecs_to_jiffies(MSEC_PER_SEC),
++					     EXT4_MMP_MAX_CHECK_INTERVAL),
++					 EXT4_MMP_MIN_CHECK_INTERVAL);
++		mmp->mmp_check_interval = cpu_to_le16(mmp_check_interval);
 +       }
 +
 +       /*
@@ -436,10 +437,11 @@ Index: linux-stage/fs/ext4/mmp.c
 +               ext4_warning(sb, "MMP interval %u higher than expected, please"
 +                            " wait.\n", wait_time * 2);
 +
-+       if (schedule_timeout_interruptible(HZ * wait_time) != 0) {
-+               ext4_warning(sb, "MMP startup interrupted, failing mount\n");
-+               goto failed;
-+       }
++	if (schedule_timeout_interruptible(msecs_to_jiffies(MSEC_PER_SEC) *
++					   wait_time) != 0) {
++		ext4_warning(sb, "MMP startup interrupted, failing mount\n");
++		goto failed;
++	}
 +
 +       retval = read_mmp_block(sb, &bh, mmp_block);
 +       if (retval)
@@ -461,13 +463,14 @@ Index: linux-stage/fs/ext4/mmp.c
 +       if (retval)
 +               goto failed;
 +
-+       /*
-+        * wait for MMP interval and check mmp_seq.
-+        */
-+       if (schedule_timeout_interruptible(HZ * wait_time) != 0) {
-+               ext4_warning(sb, "MMP startup interrupted, failing mount\n");
-+               goto failed;
-+       }
++	/*
++	 * wait for MMP interval and check mmp_seq.
++	 */
++	if (schedule_timeout_interruptible(msecs_to_jiffies(MSEC_PER_SEC) *
++					   wait_time) != 0) {
++		ext4_warning(sb, "MMP startup interrupted, failing mount\n");
++		goto failed;
++	}
 +
 +       retval = read_mmp_block(sb, &bh, mmp_block);
 +       if (retval)
