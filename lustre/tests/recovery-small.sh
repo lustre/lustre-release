@@ -20,8 +20,8 @@ require_dsh_mds || exit 0
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="17  26a  26b    50   51     57"
 
 [ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
-# bug number for skipped test:	      LU-2194 LU-2547
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 19b     24a 24b"
+# bug number for skipped test:	      LU-2547
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 24a 24b"
 
 build_test_filter
 
