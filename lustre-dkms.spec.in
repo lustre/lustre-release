@@ -15,7 +15,7 @@ Source0:        %{module}-%{version}.tar.gz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildArch:      noarch
 
-Requires:       dkms >= 2.2.0.2
+Requires:       dkms >= 2.2.0.3-28.git.7c3e7c5
 Requires:       spl-dkms >= 0.6.1
 Requires:       zfs-dkms >= 0.6.1
 Requires:       gcc, make, perl
