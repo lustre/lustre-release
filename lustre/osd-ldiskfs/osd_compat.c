@@ -905,8 +905,11 @@ int osd_obj_map_lookup(struct osd_thread_info *info, struct osd_device *dev,
 	brelse(bh);
 
 	inode = osd_iget(info, dev, id);
-	if (IS_ERR(inode))
-		RETURN(PTR_ERR(inode));
+	if (IS_ERR(inode)) {
+		int rc = PTR_ERR(inode);
+
+		RETURN(rc == -ENOENT ? -ESTALE : rc);
+	}
 
 	iput(inode);
 	RETURN(0);
