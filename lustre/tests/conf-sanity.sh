@@ -5217,6 +5217,91 @@ test_83() {
 run_test 83 "ENOSPACE on OST doesn't cause message VFS: \
 Busy inodes after unmount ..."
 
+recovery_time_min() {
+	local CONNECTION_SWITCH_MIN=5
+	local CONNECTION_SWITCH_INC=5
+	local CONNECTION_SWITCH_MAX
+	local RECONNECT_DELAY_MAX
+	local INITIAL_CONNECT_TIMEOUT
+	local max
+	local TO_20
+
+	#CONNECTION_SWITCH_MAX=min(50, max($CONNECTION_SWITCH_MIN,$TIMEOUT)
+	(($CONNECTION_SWITCH_MIN>$TIMEOUT)) && \
+		max=$CONNECTION_SWITCH_MIN || max=$TIMEOUT
+	(($max<50)) && CONNECTION_SWITCH_MAX=$max || CONNECTION_SWITCH_MAX=50
+
+	#INITIAL_CONNECT_TIMEOUT = max(CONNECTION_SWITCH_MIN, \
+	#obd_timeout/20)
+	TO_20=$(($TIMEOUT/20))
+	(($CONNECTION_SWITCH_MIN>$TO_20)) && \
+		INITIAL_CONNECT_TIMEOUT=$CONNECTION_SWITCH_MIN || \
+		INITIAL_CONNECT_TIMEOUT=$TO_20
+
+	RECONNECT_DELAY_MAX=$(($CONNECTION_SWITCH_MAX+$CONNECTION_SWITCH_INC+ \
+				$INITIAL_CONNECT_TIMEOUT))
+	echo $((2*$RECONNECT_DELAY_MAX))
+}
+
+test_83() {
+	local facet=$SINGLEMDS
+	local num=$(echo $facet | tr -d "mds")
+	local dev=$(mdsdevname $num)
+	local time_min=$(recovery_time_min)
+	local recovery_duration
+	local completed_clients
+
+	echo "start mds service on `facet_active_host $facet`"
+	start $facet ${dev} $MDS_MOUNT_OPTS \
+		"-o recovery_time_hard=$time_min,recovery_time_soft=$time_min"\
+		$@ || return 94
+
+	start_ost
+	start_ost2
+
+	echo "recovery_time_hard $time_min, recovery_time_soft $time_min, \
+		timeout $TIMEOUT"
+
+	mount_client $MOUNT1 || error "mount failed"
+	mount_client $MOUNT2 || error "mount failed"
+
+	replay_barrier $SINGLEMDS
+	createmany -o $DIR1/$tfile-%d 1000
+
+	# We need to catch the end of recovery window to extend it.
+	# Skip 5 requests and add delay to request handling.
+	#define OBD_FAIL_TGT_REPLAY_DELAY  0x709 | FAIL_SKIP
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x20000709"
+	do_facet $SINGLEMDS "lctl set_param fail_val=5"
+
+	facet_failover $SINGLEMDS || error "failover: $?"
+	client_up
+
+	echo "recovery status"
+	do_facet $SINGLEMDS "$LCTL get_param -n \
+				mdt.$FSNAME-MDT0000.recovery_status"
+
+	recovery_duration=$(do_facet $SINGLEMDS "$LCTL get_param -n \
+				mdt.$FSNAME-MDT0000.recovery_status" | \
+				grep recovery_duration |awk '{print $2}')
+	(($recovery_duration>$time_min)) && \
+		error "recovery_duration > recovery_time_hard"
+	completed_clients=$(do_facet $SINGLEMDS "$LCTL get_param -n \
+				mdt.$FSNAME-MDT0000.recovery_status" | \
+				grep completed_clients |awk '{print $2}')
+	[ "$completed_clients" = "1/2" ] || \
+		error "completed_clients != 1/2: "$completed_clients
+
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+	umount_client $MOUNT1
+	umount_client $MOUNT2
+
+	stop_ost
+	stop_ost2
+	stop_mds
+}
+run_test 83 "check recovery_hard_time"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi

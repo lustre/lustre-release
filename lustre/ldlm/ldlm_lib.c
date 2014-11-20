@@ -1563,22 +1563,20 @@ static void extend_recovery_timer(struct obd_device *obd, int drt, bool extend)
                 to += drt - left;
         } else if (!extend && (drt > to)) {
                 to = drt;
-                /* reduce drt by already passed time */
-                drt -= obd->obd_recovery_timeout - left;
         }
 
         if (to > obd->obd_recovery_time_hard)
                 to = obd->obd_recovery_time_hard;
-	if (obd->obd_recovery_timeout < to ||
-	    obd->obd_recovery_timeout == obd->obd_recovery_time_hard) {
+	if (obd->obd_recovery_timeout < to) {
                 obd->obd_recovery_timeout = to;
-                cfs_timer_arm(&obd->obd_recovery_timer,
-                              cfs_time_shift(drt));
+		end = obd->obd_recovery_start + to;
+		cfs_timer_arm(&obd->obd_recovery_timer,
+				cfs_time_shift(end - now));
         }
 	spin_unlock(&obd->obd_dev_lock);
 
 	CDEBUG(D_HA, "%s: recovery timer will expire in %u seconds\n",
-	       obd->obd_name, (unsigned)drt);
+		obd->obd_name, (unsigned)cfs_time_sub(end, now));
 }
 
 /* Reset the timer with each new client connection */
@@ -1764,6 +1762,12 @@ static int target_recovery_overseer(struct obd_device *obd,
 				    int (*health_check)(struct obd_export *))
 {
 repeat:
+	if ((obd->obd_recovery_start != 0) && (cfs_time_current_sec() >=
+	      (obd->obd_recovery_start + obd->obd_recovery_time_hard))) {
+		CWARN("recovery is aborted by hard timeout\n");
+		obd->obd_abort_recovery = 1;
+	}
+
 	wait_event(obd->obd_next_transno_waitq, check_routine(obd));
 	if (obd->obd_abort_recovery) {
 		CWARN("recovery is aborted, evict exports in recovery\n");
@@ -1801,6 +1805,11 @@ static struct ptlrpc_request *target_next_replay_req(struct obd_device *obd)
 		obd->obd_next_recovery_transno);
 
 	CFS_FAIL_TIMEOUT(OBD_FAIL_TGT_REPLAY_DELAY2, cfs_fail_val);
+	/** It is needed to extend recovery window above recovery_time_soft.
+	 *  Extending is possible only in the end of recovery window
+	 *  (see more details in handle_recovery_req).
+	 */
+	CFS_FAIL_TIMEOUT_MS(OBD_FAIL_TGT_REPLAY_DELAY, 300);
 
 	if (target_recovery_overseer(obd, check_for_next_transno,
 				     exp_req_replay_healthy)) {
