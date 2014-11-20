@@ -85,6 +85,39 @@
  * or osp_declare_xattr_get(). That is usually for LFSCK purpose,
  * but it also can be shared by others.
  *
+ *
+ * XXX: NOT prepare out RPC for remote transaction. ((please refer to the
+ *	comment of osp_trans_create() for remote transaction)
+ *
+ * According to our current transaction/dt_object_lock framework (to make
+ * the cross-MDTs modification for DNE1 to be workable), the transaction
+ * sponsor will start the transaction firstly, then try to acquire related
+ * dt_object_lock if needed. Under such rules, if we want to prepare the
+ * OUT RPC in the transaction declare phase, then related attr/xattr
+ * should be known without dt_object_lock. But such condition maybe not
+ * true for some remote transaction case. For example:
+ *
+ * For linkEA repairing (by LFSCK) case, before the LFSCK thread obtained
+ * the dt_object_lock on the target MDT-object, it cannot know whether
+ * the MDT-object has linkEA or not, neither invalid or not.
+ *
+ * Since the LFSCK thread cannot hold dt_object_lock before the remote
+ * transaction start (otherwise there will be some potential deadlock),
+ * it cannot prepare related OUT RPC for repairing during the declare
+ * phase as other normal transactions do.
+ *
+ * To resolve the trouble, we will make OSP to prepare related OUT RPC
+ * after remote transaction started, and trigger the remote updating
+ * (send RPC) when trans_stop. Then the up layer users, such as LFSCK,
+ * can follow the general rule to handle trans_start/dt_object_lock
+ * for repairing linkEA inconsistency without distinguishing remote
+ * MDT-object.
+ *
+ * In fact, above solution for remote transaction should be the normal
+ * model without considering DNE1. The trouble brought by DNE1 will be
+ * resolved in DNE2. At that time, this patch can be removed.
+ *
+ *
  * Author: Alex Zhuravlev <alexey.zhuravlev@intel.com>
  * Author: Mikhail Pershin <mike.tappro@intel.com>
  */
@@ -659,35 +692,9 @@ static int __osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 
 /**
  * Implement OSP layer dt_object_operations::do_declare_attr_set() interface.
- * XXX: NOT prepare set_{attr,xattr} RPC for remote transaction.
  *
- * According to our current transaction/dt_object_lock framework (to make
- * the cross-MDTs modification for DNE1 to be workable), the transaction
- * sponsor will start the transaction firstly, then try to acquire related
- * dt_object_lock if needed. Under such rules, if we want to prepare the
- * set_{attr,xattr} RPC in the RPC declare phase, then related attr/xattr
- * should be known without dt_object_lock. But such condition maybe not
- * true for some remote transaction case. For example:
- *
- * For linkEA repairing (by LFSCK) case, before the LFSCK thread obtained
- * the dt_object_lock on the target MDT-object, it cannot know whether
- * the MDT-object has linkEA or not, neither invalid or not.
- *
- * Since the LFSCK thread cannot hold dt_object_lock before the (remote)
- * transaction start (otherwise there will be some potential deadlock),
- * it cannot prepare related RPC for repairing during the declare phase
- * as other normal transactions do.
- *
- * To resolve the trouble, we will make OSP to prepare related RPC
- * (set_attr/set_xattr/del_xattr) after remote transaction started,
- * and trigger the remote updating (RPC sending) when trans_stop.
- * Then the up layer users, such as LFSCK, can follow the general
- * rule to handle trans_start/dt_object_lock for repairing linkEA
- * inconsistency without distinguishing remote MDT-object.
- *
- * In fact, above solution for remote transaction should be the normal
- * model without considering DNE1. The trouble brought by DNE1 will be
- * resolved in DNE2. At that time, this patch can be removed.
+ * If the transaction is not remote one, then declare the credits that will
+ * be used for the subsequent llog record for the object's attributes.
  *
  * \param[in] env	pointer to the thread context
  * \param[in] dt	pointer to the OSP layer dt_object
@@ -702,8 +709,12 @@ static int osp_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 {
 	int rc = 0;
 
-	if (!is_only_remote_trans(th))
+	if (!is_only_remote_trans(th)) {
 		rc = __osp_attr_set(env, dt, attr, th);
+
+		CDEBUG(D_INFO, "declare set attr "DFID": rc = %d\n",
+		       PFID(&dt->do_lu.lo_header->loh_fid), rc);
+	}
 
 	return rc;
 }
@@ -713,11 +724,10 @@ static int osp_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
  *
  * Set attribute to the specified OST object.
  *
- * If the transaction is a remote transaction, then related modification
- * sub-request has been added in the declare phase and related OUT RPC
- * has been triggered at transaction start. Otherwise it will generate
- * a MDS_SETATTR64_REC record in the llog. There is a dedicated thread
- * to handle the llog asynchronously.
+ * If the transaction is a remote one, then add OUT_ATTR_SET sub-request
+ * in the OUT RPC that will be flushed when the remote transaction stop.
+ * Otherwise, it will generate a MDS_SETATTR64_REC record in the llog that
+ * will be handled by a dedicated thread asynchronously.
  *
  * If the attribute entry exists in the OSP object attributes cache,
  * then update the cached attribute according to given attribute.
@@ -741,6 +751,10 @@ static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 
 	if (is_only_remote_trans(th)) {
 		rc = __osp_attr_set(env, dt, attr, th);
+
+		CDEBUG(D_INFO, "(1) set attr "DFID": rc = %d\n",
+		       PFID(&dt->do_lu.lo_header->loh_fid), rc);
+
 		RETURN(rc);
 	}
 
@@ -750,6 +764,9 @@ static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 
 	rc = osp_sync_add(env, o, MDS_SETATTR64_REC, th, attr);
 	/* XXX: send new uid/gid to OST ASAP? */
+
+	CDEBUG(D_INFO, "(2) set attr "DFID": rc = %d\n",
+	       PFID(&dt->do_lu.lo_header->loh_fid), rc);
 
 	RETURN(rc);
 }
@@ -1178,9 +1195,11 @@ static int __osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
  * Declare that the caller will set extended attribute to the specified
  * MDT/OST object.
  *
- * This function will add an OUT_XATTR_SET sub-request to the per
- * OSP-transaction based request queue which will be flushed when
- * the transaction starts.
+ * If it is non-remote transaction, it will add an OUT_XATTR_SET sub-request
+ * to the OUT RPC that will be flushed when the transaction start. And if the
+ * OSP attributes cache is initialized, then check whether the name extended
+ * attribute entry exists in the cache or not. If yes, replace it; otherwise,
+ * add the extended attribute to the cache.
  *
  * \param[in] env	pointer to the thread context
  * \param[in] dt	pointer to the OSP layer dt_object
@@ -1199,10 +1218,12 @@ int osp_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
 {
 	int rc = 0;
 
-	/* Please check the comment in osp_attr_set() for handling
-	 * remote transaction. */
-	if (!is_only_remote_trans(th))
+	if (!is_only_remote_trans(th)) {
 		rc = __osp_xattr_set(env, dt, buf, name, flag, th);
+
+		CDEBUG(D_INFO, "declare xattr %s set object "DFID": rc = %d\n",
+		       name, PFID(&dt->do_lu.lo_header->loh_fid), rc);
+	}
 
 	return rc;
 }
@@ -1212,12 +1233,11 @@ int osp_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
  *
  * Set extended attribute to the specified MDT/OST object.
  *
- * The real modification sub-request has been added in the declare phase
- * and related (OUT) RPC has been triggered when transaction start.
- *
- * If the OSP attributes cache is initialized, then check whether the name
- * extended attribute entry exists in the cache or not. If yes, replace it;
- * otherwise, add the extended attribute to the cache.
+ * If it is remote transaction, it will add an OUT_XATTR_SET sub-request into
+ * the OUT RPC that will be flushed when the transaction stop. And if the OSP
+ * attributes cache is initialized, then check whether the name extended
+ * attribute entry exists in the cache or not. If yes, replace it; otherwise,
+ * add the extended attribute to the cache.
  *
  * \param[in] env	pointer to the thread context
  * \param[in] dt	pointer to the OSP layer dt_object
@@ -1237,13 +1257,12 @@ int osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
 {
 	int rc = 0;
 
-	CDEBUG(D_INFO, "xattr %s set object "DFID"\n", name,
-	       PFID(&dt->do_lu.lo_header->loh_fid));
-
-	/* Please check the comment in osp_attr_set() for handling
-	 * remote transaction. */
-	if (is_only_remote_trans(th))
+	if (is_only_remote_trans(th)) {
 		rc = __osp_xattr_set(env, dt, buf, name, fl, th);
+
+		CDEBUG(D_INFO, "xattr %s set object "DFID": rc = %d\n",
+		       name, PFID(&dt->do_lu.lo_header->loh_fid), rc);
+	}
 
 	return rc;
 }
@@ -1283,9 +1302,10 @@ static int __osp_xattr_del(const struct lu_env *env, struct dt_object *dt,
  * Declare that the caller will delete extended attribute on the specified
  * MDT/OST object.
  *
- * This function will add an OUT_XATTR_DEL sub-request to the per
- * OSP-transaction based request queue which will be flushed when
- * transaction start.
+ * If it is non-remote transaction, it will add an OUT_XATTR_DEL sub-request
+ * to the OUT RPC that will be flushed when the transaction start. And if the
+ * name extended attribute entry exists in the OSP attributes cache, then remove
+ * it from the cache.
  *
  * \param[in] env	pointer to the thread context
  * \param[in] dt	pointer to the OSP layer dt_object
@@ -1300,10 +1320,12 @@ int osp_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
 {
 	int rc = 0;
 
-	/* Please check the comment in osp_attr_set() for handling
-	 * remote transaction. */
-	if (!is_only_remote_trans(th))
+	if (!is_only_remote_trans(th)) {
 		rc = __osp_xattr_del(env, dt, name, th);
+
+		CDEBUG(D_INFO, "declare xattr %s del object "DFID": rc = %d\n",
+		       name, PFID(&dt->do_lu.lo_header->loh_fid), rc);
+	}
 
 	return rc;
 }
@@ -1313,11 +1335,10 @@ int osp_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
  *
  * Delete extended attribute on the specified MDT/OST object.
  *
- * The real modification sub-request has been added in the declare phase
- * and related (OUT) RPC has been triggered when transaction start.
- *
- * If the name extended attribute entry exists in the OSP attributes
- * cache, then remove it from the cache.
+ * If it is remote transaction, it will add an OUT_XATTR_DEL sub-request into
+ * the OUT RPC that will be flushed when the transaction stop. And if the name
+ * extended attribute entry exists in the OSP attributes cache, then remove it
+ * from the cache.
  *
  * \param[in] env	pointer to the thread context
  * \param[in] dt	pointer to the OSP layer dt_object
@@ -1334,13 +1355,12 @@ int osp_xattr_del(const struct lu_env *env, struct dt_object *dt,
 {
 	int rc = 0;
 
-	CDEBUG(D_INFO, "xattr %s del object "DFID"\n", name,
-	       PFID(&dt->do_lu.lo_header->loh_fid));
-
-	/* Please check the comment in osp_attr_set() for handling
-	 * remote transaction. */
-	if (is_only_remote_trans(th))
+	if (is_only_remote_trans(th)) {
 		rc = __osp_xattr_del(env, dt, name, th);
+
+		CDEBUG(D_INFO, "xattr %s del object "DFID": rc = %d\n",
+		       name, PFID(&dt->do_lu.lo_header->loh_fid), rc);
+	}
 
 	return rc;
 }
@@ -1350,15 +1370,13 @@ int osp_xattr_del(const struct lu_env *env, struct dt_object *dt,
  *
  * Declare that the caller will create the OST object.
  *
- * If the transaction is a remote transaction (please refer to the
- * comment of osp_trans_create() for remote transaction), then the FID
- * for the OST object has been assigned already, and will be handled
- * as create (remote) MDT object via osp_md_declare_object_create().
- * This function is usually used for LFSCK to re-create the lost OST
- * object. Otherwise, if it is not replay case, the OSP will reserve
- * pre-created object for the subsequent create operation; if the MDT
- * side cached pre-created objects are less than some threshold, then
- * it will wakeup the pre-create thread.
+ * If the transaction is a remote transaction and the FID for the OST-object
+ * has been assigned already, then handle it as creating (remote) MDT object
+ * via osp_md_declare_object_create(). This function is usually used for LFSCK
+ * to re-create the lost OST object. Otherwise, if it is not replay case, the
+ * OSP will reserve pre-created object for the subsequent create operation;
+ * if the MDT side cached pre-created objects are less than some threshold,
+ * then it will wakeup the pre-create thread.
  *
  * \param[in] env	pointer to the thread context
  * \param[in] dt	pointer to the OSP layer dt_object
@@ -1386,7 +1404,7 @@ static int osp_declare_object_create(const struct lu_env *env,
 
 	ENTRY;
 
-	if (is_only_remote_trans(th)) {
+	if (is_only_remote_trans(th) && !fid_is_zero(fid)) {
 		LASSERT(fid_is_sane(fid));
 
 		rc = osp_md_declare_object_create(env, dt, attr, hint, dof, th);
@@ -1455,12 +1473,9 @@ static int osp_declare_object_create(const struct lu_env *env,
  *
  * Create the OST object.
  *
- * For remote transaction case, the real create sub-request has been
- * added in the declare phase and related (OUT) RPC has been triggered
- * at transaction start. Here, like creating (remote) MDT object, the
- * OSP will mark the object existence via osp_md_object_create().
- *
- * For non-remote transaction case, the OSP will assign FID to the
+ * If the transaction is a remote transaction and the FID for the OST-object
+ * has been assigned already, then handle it as handling MDT object via the
+ * osp_md_object_create(). For other cases, the OSP will assign FID to the
  * object to be created, and update last_used Object ID (OID) file.
  *
  * \param[in] env	pointer to the thread context
@@ -1486,7 +1501,8 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 	struct lu_fid		*fid = &osi->osi_fid;
 	ENTRY;
 
-	if (is_only_remote_trans(th)) {
+	if (is_only_remote_trans(th) &&
+	    !fid_is_zero(lu_object_fid(&dt->do_lu))) {
 		LASSERT(fid_is_sane(lu_object_fid(&dt->do_lu)));
 
 		rc = osp_md_object_create(env, dt, attr, hint, dof, th);

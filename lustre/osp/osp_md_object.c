@@ -60,29 +60,27 @@ static const char dot[] = ".";
 static const char dotdot[] = "..";
 
 /**
- * Implementation of dt_object_operations::do_declare_create
+ * Add OUT_CREATE sub-request into the OUT RPC.
  *
- * Insert object create update into the RPC, which will be sent during
- * transaction start. Note: if the object has already been created,
- * we must add object destroy updates ahead of create updates, so it will
- * destroy then recreate the object.
+ * Note: if the object has already been created, we must add object
+ * destroy sub-request ahead of the create, so it will destroy then
+ * re-create the object.
  *
  * \param[in] env	execution environment
- * \param[in] dt	remote object to be created
+ * \param[in] dt	object to be created
  * \param[in] attr	attribute of the created object
  * \param[in] hint	creation hint
  * \param[in] dof	creation format information
  * \param[in] th	the transaction handle
  *
- * \retval		0 if the insertion succeeds.
- * \retval		negative errno if the insertion fails.
+ * \retval		only return 0 for now
  */
-int osp_md_declare_object_create(const struct lu_env *env,
-				 struct dt_object *dt,
-				 struct lu_attr *attr,
-				 struct dt_allocation_hint *hint,
-				 struct dt_object_format *dof,
-				 struct thandle *th)
+static int __osp_md_declare_object_create(const struct lu_env *env,
+					  struct dt_object *dt,
+					  struct lu_attr *attr,
+					  struct dt_allocation_hint *hint,
+					  struct dt_object_format *dof,
+					  struct thandle *th)
 {
 	struct dt_update_request	*update;
 	int				rc;
@@ -154,7 +152,46 @@ out:
 }
 
 /**
+ * Implementation of dt_object_operations::do_declare_create
+ *
+ * For non-remote transaction, it will add an OUT_CREATE sub-request
+ * into the OUT RPC that will be flushed when the transaction start.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	remote object to be created
+ * \param[in] attr	attribute of the created object
+ * \param[in] hint	creation hint
+ * \param[in] dof	creation format information
+ * \param[in] th	the transaction handle
+ *
+ * \retval		0 if the insertion succeeds.
+ * \retval		negative errno if the insertion fails.
+ */
+int osp_md_declare_object_create(const struct lu_env *env,
+				 struct dt_object *dt,
+				 struct lu_attr *attr,
+				 struct dt_allocation_hint *hint,
+				 struct dt_object_format *dof,
+				 struct thandle *th)
+{
+	int rc = 0;
+
+	if (!is_only_remote_trans(th)) {
+		rc = __osp_md_declare_object_create(env, dt, attr, hint,
+						    dof, th);
+
+		CDEBUG(D_INFO, "declare create md_object "DFID": rc = %d\n",
+		       PFID(&dt->do_lu.lo_header->loh_fid), rc);
+	}
+
+	return rc;
+}
+
+/**
  * Implementation of dt_object_operations::do_create
+ *
+ * For remote transaction, it will add an OUT_CREATE sub-request into
+ * the OUT RPC that will be flushed when the transaction stop.
  *
  * It sets necessary flags for created object. In DNE phase I,
  * remote updates are actually executed during transaction start,
@@ -173,24 +210,27 @@ int osp_md_object_create(const struct lu_env *env, struct dt_object *dt,
 			 struct lu_attr *attr, struct dt_allocation_hint *hint,
 			 struct dt_object_format *dof, struct thandle *th)
 {
-	CDEBUG(D_INFO, "create object "DFID"\n",
-	       PFID(&dt->do_lu.lo_header->loh_fid));
+	int rc = 0;
 
-	/* Because the create update RPC will be sent during declare phase,
-	 * if creation reaches here, it means the object has been created
-	 * successfully */
-	dt->do_lu.lo_header->loh_attr |= LOHA_EXISTS | (attr->la_mode & S_IFMT);
-	dt2osp_obj(dt)->opo_non_exist = 0;
+	if (is_only_remote_trans(th)) {
+		rc = __osp_md_declare_object_create(env, dt, attr, hint,
+						    dof, th);
 
-	return 0;
+		CDEBUG(D_INFO, "create md_object "DFID": rc = %d\n",
+		       PFID(&dt->do_lu.lo_header->loh_fid), rc);
+	}
+
+	if (rc == 0) {
+		dt->do_lu.lo_header->loh_attr |= LOHA_EXISTS |
+						 (attr->la_mode & S_IFMT);
+		dt2osp_obj(dt)->opo_non_exist = 0;
+	}
+
+	return rc;
 }
 
 /**
- * Implementation of dt_object_operations::do_declare_ref_del
- *
- * Declare decreasing the reference count of the remote object, i.e. insert
- * decreasing object reference count update into the RPC, which will be sent
- * during transaction start.
+ * Add OUT_REF_DEL sub-request into the OUT RPC.
  *
  * \param[in] env	execution environment
  * \param[in] dt	object to decrease the reference count.
@@ -199,9 +239,8 @@ int osp_md_object_create(const struct lu_env *env, struct dt_object *dt,
  * \retval		0 if the insertion succeeds.
  * \retval		negative errno if the insertion fails.
  */
-static int osp_md_declare_object_ref_del(const struct lu_env *env,
-					 struct dt_object *dt,
-					 struct thandle *th)
+static int __osp_md_ref_del(const struct lu_env *env, struct dt_object *dt,
+			    struct thandle *th)
 {
 	struct dt_update_request	*update;
 	int				rc;
@@ -221,11 +260,38 @@ static int osp_md_declare_object_ref_del(const struct lu_env *env,
 }
 
 /**
+ * Implementation of dt_object_operations::do_declare_ref_del
+ *
+ * For non-remote transaction, it will add an OUT_REF_DEL sub-request
+ * into the OUT RPC that will be flushed when the transaction start.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object to decrease the reference count.
+ * \param[in] th	the transaction handle of refcount decrease.
+ *
+ * \retval		0 if the insertion succeeds.
+ * \retval		negative errno if the insertion fails.
+ */
+static int osp_md_declare_ref_del(const struct lu_env *env,
+				  struct dt_object *dt, struct thandle *th)
+{
+	int rc = 0;
+
+	if (!is_only_remote_trans(th)) {
+		rc = __osp_md_ref_del(env, dt, th);
+
+		CDEBUG(D_INFO, "declare ref del "DFID": rc = %d\n",
+		       PFID(&dt->do_lu.lo_header->loh_fid), rc);
+	}
+
+	return rc;
+}
+
+/**
  * Implementation of dt_object_operations::do_ref_del
  *
- * Do nothing in this method for now. In DNE phase I, remote updates are
- * actually executed during transaction start, i.e. the object reference
- * count has already been decreased when calling this method.
+ * For remote transaction, it will add an OUT_REF_DEL sub-request into
+ * the OUT RPC that will be flushed when the transaction stop.
  *
  * \param[in] env	execution environment
  * \param[in] dt	object to decrease the reference count
@@ -233,21 +299,23 @@ static int osp_md_declare_object_ref_del(const struct lu_env *env,
  *
  * \retval		only return 0 for now
  */
-static int osp_md_object_ref_del(const struct lu_env *env,
-				 struct dt_object *dt,
-				 struct thandle *th)
+static int osp_md_ref_del(const struct lu_env *env, struct dt_object *dt,
+			  struct thandle *th)
 {
-	CDEBUG(D_INFO, "ref del object "DFID"\n",
-	       PFID(&dt->do_lu.lo_header->loh_fid));
+	int rc = 0;
 
-	return 0;
+	if (is_only_remote_trans(th)) {
+		rc = __osp_md_ref_del(env, dt, th);
+
+		CDEBUG(D_INFO, "ref del "DFID": rc = %d\n",
+		       PFID(&dt->do_lu.lo_header->loh_fid), rc);
+	}
+
+	return rc;
 }
 
 /**
- * Implementation of dt_object_operations::do_declare_ref_del
- *
- * Declare increasing the reference count of the remote object,
- * i.e. insert increasing object reference count update into RPC.
+ * Add OUT_REF_ADD sub-request into the OUT RPC.
  *
  * \param[in] env	execution environment
  * \param[in] dt	object on which to increase the reference count.
@@ -256,8 +324,8 @@ static int osp_md_object_ref_del(const struct lu_env *env,
  * \retval		0 if the insertion succeeds.
  * \retval		negative errno if the insertion fails.
  */
-static int osp_md_declare_ref_add(const struct lu_env *env,
-				  struct dt_object *dt, struct thandle *th)
+static int __osp_md_ref_add(const struct lu_env *env, struct dt_object *dt,
+			    struct thandle *th)
 {
 	struct dt_update_request	*update;
 	int				rc;
@@ -278,11 +346,38 @@ static int osp_md_declare_ref_add(const struct lu_env *env,
 }
 
 /**
+ * Implementation of dt_object_operations::do_declare_ref_del
+ *
+ * For non-remote transaction, it will add an OUT_REF_ADD sub-request
+ * into the OUT RPC that will be flushed when the transaction start.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object on which to increase the reference count.
+ * \param[in] th	the transaction handle.
+ *
+ * \retval		0 if the insertion succeeds.
+ * \retval		negative errno if the insertion fails.
+ */
+static int osp_md_declare_ref_add(const struct lu_env *env,
+				  struct dt_object *dt, struct thandle *th)
+{
+	int rc = 0;
+
+	if (!is_only_remote_trans(th)) {
+		rc = __osp_md_ref_add(env, dt, th);
+
+		CDEBUG(D_INFO, "declare ref add "DFID": rc = %d\n",
+		       PFID(&dt->do_lu.lo_header->loh_fid), rc);
+	}
+
+	return rc;
+}
+
+/**
  * Implementation of dt_object_operations::do_ref_add
  *
- * Do nothing in this method for now. In DNE phase I, remote updates are
- * actually executed during transaction start, i.e. the object reference
- * count has already been increased when calling this method.
+ * For remote transaction, it will add an OUT_REF_ADD sub-request into
+ * the OUT RPC that will be flushed when the transaction stop.
  *
  * \param[in] env	execution environment
  * \param[in] dt	object on which to increase the reference count
@@ -290,13 +385,19 @@ static int osp_md_declare_ref_add(const struct lu_env *env,
  *
  * \retval		only return 0 for now
  */
-static int osp_md_object_ref_add(const struct lu_env *env, struct dt_object *dt,
-				 struct thandle *th)
+static int osp_md_ref_add(const struct lu_env *env, struct dt_object *dt,
+			  struct thandle *th)
 {
-	CDEBUG(D_INFO, "ref add object "DFID"\n",
-	       PFID(&dt->do_lu.lo_header->loh_fid));
+	int rc = 0;
 
-	return 0;
+	if (is_only_remote_trans(th)) {
+		rc = __osp_md_ref_add(env, dt, th);
+
+		CDEBUG(D_INFO, "ref add "DFID": rc = %d\n",
+		       PFID(&dt->do_lu.lo_header->loh_fid), rc);
+	}
+
+	return rc;
 }
 
 /**
@@ -326,7 +427,7 @@ static void osp_md_ah_init(const struct lu_env *env,
 }
 
 /**
- * Add attr_set sub-request into the OUT RPC.
+ * Add OUT_ATTR_SET sub-request into the OUT RPC.
  *
  * \param[in] env	execution environment
  * \param[in] dt	object on which to set attributes
@@ -362,9 +463,8 @@ int __osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,
  *
  * Declare setting attributes to the specified remote object.
  *
- * If the transaction is a remote transaction, then add the modification
- * sub-request into the OUT RPC here, and such OUT RPC will be triggered
- * when transaction start.
+ * If the transaction is a non-remote transaction, then add the OUT_ATTR_SET
+ * sub-request into the OUT RPC that will be flushed when the transaction start.
  *
  * \param[in] env	execution environment
  * \param[in] dt	object on which to set attributes
@@ -379,11 +479,12 @@ int osp_md_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 {
 	int rc = 0;
 
-	CDEBUG(D_INFO, "declare attr set object "DFID"\n",
-	       PFID(&dt->do_lu.lo_header->loh_fid));
-
-	if (!is_only_remote_trans(th))
+	if (!is_only_remote_trans(th)) {
 		rc = __osp_md_attr_set(env, dt, attr, th);
+
+		CDEBUG(D_INFO, "declare attr set md_object "DFID": rc = %d\n",
+		       PFID(&dt->do_lu.lo_header->loh_fid), rc);
+	}
 
 	return rc;
 }
@@ -393,11 +494,8 @@ int osp_md_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
  *
  * Set attributes to the specified remote object.
  *
- * If the transaction is a remote transaction, then related modification
- * sub-request has been added in the declare phase and related OUT RPC
- * has been triggered at transaction start. Otherwise, the modification
- * sub-request will be added here, and related OUT RPC will be triggered
- * when transaction stop.
+ * If the transaction is a remote transaction, then add the OUT_ATTR_SET
+ * sub-request into the OUT RPC that will be flushed when the transaction stop.
  *
  * \param[in] env	execution environment
  * \param[in] dt	object to set attributes
@@ -413,13 +511,14 @@ int osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,
 {
 	int rc = 0;
 
-	CDEBUG(D_INFO, "attr set object "DFID"\n",
-	       PFID(&dt->do_lu.lo_header->loh_fid));
-
-	if (is_only_remote_trans(th))
+	if (is_only_remote_trans(th)) {
 		rc = __osp_md_attr_set(env, dt, attr, th);
 
-	RETURN(rc);
+		CDEBUG(D_INFO, "attr set md_object "DFID": rc = %d\n",
+		       PFID(&dt->do_lu.lo_header->loh_fid), rc);
+	}
+
+	return rc;
 }
 
 /**
@@ -610,10 +709,7 @@ out:
 }
 
 /**
- * Implementation of dt_index_operations::dio_declare_insert
- *
- * Declare the index insert of the remote object, i.e. pack index insert update
- * into the RPC, which will be sent during transaction start.
+ * Add OUT_INDEX_INSERT sub-request into the OUT RPC.
  *
  * \param[in] env	execution environment
  * \param[in] dt	object for which to insert index
@@ -624,7 +720,7 @@ out:
  * \retval		0 if the insertion succeeds.
  * \retval		negative errno if the insertion fails.
  */
-static int osp_md_declare_insert(const struct lu_env *env,
+static int __osp_md_index_insert(const struct lu_env *env,
 				 struct dt_object *dt,
 				 const struct dt_rec *rec,
 				 const struct dt_key *key,
@@ -648,11 +744,45 @@ static int osp_md_declare_insert(const struct lu_env *env,
 }
 
 /**
+ * Implementation of dt_index_operations::dio_declare_insert
+ *
+ * For non-remote transaction, it will add an OUT_INDEX_INSERT sub-request
+ * into the OUT RPC that will be flushed when the transaction start.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object for which to insert index
+ * \param[in] rec	record of the index which will be inserted
+ * \param[in] key	key of the index which will be inserted
+ * \param[in] th	the transaction handle
+ *
+ * \retval		0 if the insertion succeeds.
+ * \retval		negative errno if the insertion fails.
+ */
+static int osp_md_declare_index_insert(const struct lu_env *env,
+				       struct dt_object *dt,
+				       const struct dt_rec *rec,
+				       const struct dt_key *key,
+				       struct thandle *th)
+{
+	int rc = 0;
+
+	if (!is_only_remote_trans(th)) {
+		rc = __osp_md_index_insert(env, dt, rec, key, th);
+
+		CDEBUG(D_INFO, "declare index insert "DFID" key %s, rec "DFID
+		       ": rc = %d\n", PFID(&dt->do_lu.lo_header->loh_fid),
+		       (char *)key,
+		       PFID(((struct dt_insert_rec *)rec)->rec_fid), rc);
+	}
+
+	return rc;
+}
+
+/**
  * Implementation of dt_index_operations::dio_insert
  *
- * Do nothing in this method for now. In DNE phase I, remote updates
- * are actually executed during transaction start, i.e. the index has
- * already been inserted when calling this method.
+ * For remote transaction, it will add an OUT_INDEX_INSERT sub-request
+ * into the OUT RPC that will be flushed when the transaction stop.
  *
  * \param[in] env	execution environment
  * \param[in] dt	object for which to insert index
@@ -672,14 +802,22 @@ static int osp_md_index_insert(const struct lu_env *env,
 			       struct lustre_capa *capa,
 			       int ignore_quota)
 {
-	return 0;
+	int rc = 0;
+
+	if (is_only_remote_trans(th)) {
+		rc = __osp_md_index_insert(env, dt, rec, key, th);
+
+		CDEBUG(D_INFO, "index insert "DFID" key %s, rec "DFID
+		       ": rc = %d\n", PFID(&dt->do_lu.lo_header->loh_fid),
+		       (char *)key,
+		       PFID(((struct dt_insert_rec *)rec)->rec_fid), rc);
+	}
+
+	return rc;
 }
 
 /**
- * Implementation of dt_index_operations::dio_declare_delete
- *
- * Declare the index delete of the remote object, i.e. insert index delete
- * update into the RPC, which will be sent during transaction start.
+ * Add OUT_INDEX_DELETE sub-request into the OUT RPC.
  *
  * \param[in] env	execution environment
  * \param[in] dt	object for which to delete index
@@ -689,7 +827,7 @@ static int osp_md_index_insert(const struct lu_env *env,
  * \retval		0 if the insertion succeeds.
  * \retval		negative errno if the insertion fails.
  */
-static int osp_md_declare_delete(const struct lu_env *env,
+static int __osp_md_index_delete(const struct lu_env *env,
 				 struct dt_object *dt,
 				 const struct dt_key *key,
 				 struct thandle *th)
@@ -712,11 +850,41 @@ static int osp_md_declare_delete(const struct lu_env *env,
 }
 
 /**
+ * Implementation of dt_index_operations::dio_declare_delete
+ *
+ * For non-remote transaction, it will add an OUT_INDEX_DELETE sub-request
+ * into the OUT RPC that will be flushed when the transaction start.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	object for which to delete index
+ * \param[in] key	key of the index
+ * \param[in] th	the transaction handle
+ *
+ * \retval		0 if the insertion succeeds.
+ * \retval		negative errno if the insertion fails.
+ */
+static int osp_md_declare_index_delete(const struct lu_env *env,
+				       struct dt_object *dt,
+				       const struct dt_key *key,
+				       struct thandle *th)
+{
+	int rc = 0;
+
+	if (!is_only_remote_trans(th)) {
+		rc = __osp_md_index_delete(env, dt, key, th);
+
+		CDEBUG(D_INFO, "declare index delete "DFID" %s: rc = %d\n",
+		       PFID(&dt->do_lu.lo_header->loh_fid), (char *)key, rc);
+	}
+
+	return rc;
+}
+
+/**
  * Implementation of dt_index_operations::dio_delete
  *
- * Do nothing in this method for now. Because in DNE phase I, remote updates
- * are actually executed during transaction start, i.e. the index has already
- * been deleted when calling this method.
+ * For remote transaction, it will add an OUT_INDEX_DELETE sub-request
+ * into the OUT RPC that will be flushed when the transaction stop.
  *
  * \param[in] env	execution environment
  * \param[in] dt	object for which to delete index
@@ -732,10 +900,16 @@ static int osp_md_index_delete(const struct lu_env *env,
 			       struct thandle *th,
 			       struct lustre_capa *capa)
 {
-	CDEBUG(D_INFO, "index delete "DFID" %s\n",
-	       PFID(&dt->do_lu.lo_header->loh_fid), (char *)key);
+	int rc = 0;
 
-	return 0;
+	if (is_only_remote_trans(th)) {
+		rc = __osp_md_index_delete(env, dt, key, th);
+
+		CDEBUG(D_INFO, "index delete "DFID" %s: rc = %d\n",
+		       PFID(&dt->do_lu.lo_header->loh_fid), (char *)key, rc);
+	}
+
+	return rc;
 }
 
 /**
@@ -891,9 +1065,9 @@ static int osp_it_load(const struct lu_env *env, const struct dt_it *di,
 
 const struct dt_index_operations osp_md_index_ops = {
 	.dio_lookup         = osp_md_index_lookup,
-	.dio_declare_insert = osp_md_declare_insert,
+	.dio_declare_insert = osp_md_declare_index_insert,
 	.dio_insert         = osp_md_index_insert,
-	.dio_declare_delete = osp_md_declare_delete,
+	.dio_declare_delete = osp_md_declare_index_delete,
 	.dio_delete         = osp_md_index_delete,
 	.dio_it     = {
 		.init     = osp_it_init,
@@ -1018,9 +1192,9 @@ struct dt_object_operations osp_md_obj_ops = {
 	.do_declare_create    = osp_md_declare_object_create,
 	.do_create            = osp_md_object_create,
 	.do_declare_ref_add   = osp_md_declare_ref_add,
-	.do_ref_add           = osp_md_object_ref_add,
-	.do_declare_ref_del   = osp_md_declare_object_ref_del,
-	.do_ref_del           = osp_md_object_ref_del,
+	.do_ref_add           = osp_md_ref_add,
+	.do_declare_ref_del   = osp_md_declare_ref_del,
+	.do_ref_del           = osp_md_ref_del,
 	.do_declare_destroy   = osp_declare_object_destroy,
 	.do_destroy           = osp_object_destroy,
 	.do_ah_init           = osp_md_ah_init,
