@@ -28,9 +28,9 @@ PRE_BUILD="configure
   --prefix=/usr
   --with-linux=\${kernel_source_dir}
   --with-linux-obj=\${kernel_source_dir}
-  --with-spl=\${dkms_tree}/spl/\${SPL_VERSION}/build
+  --with-spl=\${source_tree}/spl-\${SPL_VERSION}
   --with-spl-obj=\${dkms_tree}/spl/\${SPL_VERSION}/\${kernelver}/\${arch}
-  --with-zfs=\${dkms_tree}/zfs/\${ZFS_VERSION}/build
+  --with-zfs=\${source_tree}/zfs-\${ZFS_VERSION}
   --with-zfs-obj=\${dkms_tree}/zfs/\${ZFS_VERSION}/\${kernelver}/\${arch}
   --without-ldiskfs
   --without-lustre-iokit
