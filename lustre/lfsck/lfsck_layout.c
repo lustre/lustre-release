@@ -89,7 +89,6 @@ struct lfsck_layout_slave_data {
 };
 
 struct lfsck_layout_object {
-	struct dt_object	*llo_obj;
 	struct lu_attr		 llo_attr;
 	atomic_t		 llo_ref;
 	__u64			 llo_cookie;
@@ -128,8 +127,6 @@ lfsck_layout_object_init(const struct lu_env *env, struct dt_object *obj,
 		return ERR_PTR(rc);
 	}
 
-	lu_object_get(&obj->do_lu);
-	llo->llo_obj = obj;
 	llo->llo_cookie = cookie;
 	/* The gen can be used to check whether some others have changed the
 	 * file layout after LFSCK pre-fetching but before real verification. */
@@ -225,14 +222,13 @@ lfsck_layout_llst_find_and_del(struct lfsck_layout_slave_data *llsd,
 static inline void lfsck_layout_object_put(const struct lu_env *env,
 					   struct lfsck_layout_object *llo)
 {
-	if (atomic_dec_and_test(&llo->llo_ref)) {
-		lfsck_object_put(env, llo->llo_obj);
+	if (atomic_dec_and_test(&llo->llo_ref))
 		OBD_FREE_PTR(llo);
-	}
 }
 
 static struct lfsck_layout_req *
 lfsck_layout_assistant_req_init(struct lfsck_layout_object *parent,
+				const struct lu_fid *pfid,
 				struct dt_object *child, __u32 ost_idx,
 				__u32 lov_idx)
 {
@@ -243,6 +239,8 @@ lfsck_layout_assistant_req_init(struct lfsck_layout_object *parent,
 		return ERR_PTR(-ENOMEM);
 
 	INIT_LIST_HEAD(&llr->llr_lar.lar_list);
+	llr->llr_lar.lar_fid = *pfid;
+
 	atomic_inc(&parent->llo_ref);
 	llr->llr_parent = parent;
 	llr->llr_child = child;
@@ -2676,6 +2674,7 @@ log:
  * 2) Re-create the missing OST-object with the FID/owner information. */
 static int lfsck_layout_repair_dangling(const struct lu_env *env,
 					struct lfsck_component *com,
+					struct dt_object *parent,
 					struct lfsck_layout_req *llr,
 					const struct lu_attr *pla)
 {
@@ -2683,7 +2682,6 @@ static int lfsck_layout_repair_dangling(const struct lu_env *env,
 	struct filter_fid		*pfid	= &info->lti_new_pfid;
 	struct dt_allocation_hint	*hint	= &info->lti_hint;
 	struct lu_attr			*cla    = &info->lti_la2;
-	struct dt_object		*parent = llr->llr_parent->llo_obj;
 	struct dt_object		*child  = llr->llr_child;
 	struct dt_device		*dev	= lfsck_obj2dt_dev(child);
 	const struct lu_fid		*tfid	= lu_object_fid(&parent->do_lu);
@@ -2782,13 +2780,13 @@ log:
  * given MDT-object as its parent. So update the OST-object filter_fid. */
 static int lfsck_layout_repair_unmatched_pair(const struct lu_env *env,
 					      struct lfsck_component *com,
+					      struct dt_object *parent,
 					      struct lfsck_layout_req *llr,
 					      const struct lu_attr *pla)
 {
 	struct lfsck_thread_info	*info	= lfsck_env_info(env);
 	struct filter_fid		*pfid	= &info->lti_new_pfid;
 	struct lu_attr			*tla	= &info->lti_la3;
-	struct dt_object		*parent = llr->llr_parent->llo_obj;
 	struct dt_object		*child  = llr->llr_child;
 	struct dt_device		*dev	= lfsck_obj2dt_dev(child);
 	const struct lu_fid		*tfid	= lu_object_fid(&parent->do_lu);
@@ -2875,6 +2873,7 @@ log:
  * new OST-object(s) with new fid(s) for the non-recognized MDT-object(s). */
 static int lfsck_layout_repair_multiple_references(const struct lu_env *env,
 						   struct lfsck_component *com,
+						   struct dt_object *parent,
 						   struct lfsck_layout_req *llr,
 						   struct lu_attr *la,
 						   struct lu_buf *buf)
@@ -2884,7 +2883,6 @@ static int lfsck_layout_repair_multiple_references(const struct lu_env *env,
 	struct dt_object_format 	*dof	= &info->lti_dof;
 	struct dt_device		*pdev	= com->lc_lfsck->li_next;
 	struct ost_id			*oi	= &info->lti_oi;
-	struct dt_object		*parent = llr->llr_parent->llo_obj;
 	struct dt_device		*cdev	= lfsck_obj2dt_dev(llr->llr_child);
 	struct dt_object		*child	= NULL;
 	struct lu_device		*d	= &cdev->dd_lu_dev;
@@ -3005,12 +3003,12 @@ log:
  * is partly done. */
 static int lfsck_layout_repair_owner(const struct lu_env *env,
 				     struct lfsck_component *com,
+				     struct dt_object *parent,
 				     struct lfsck_layout_req *llr,
 				     struct lu_attr *pla)
 {
 	struct lfsck_thread_info	*info	= lfsck_env_info(env);
 	struct lu_attr			*tla	= &info->lti_la3;
-	struct dt_object		*parent = llr->llr_parent->llo_obj;
 	struct dt_object		*child  = llr->llr_child;
 	struct dt_device		*dev	= lfsck_obj2dt_dev(child);
 	struct thandle			*handle;
@@ -3239,7 +3237,7 @@ static int lfsck_layout_assistant_handler_p1(const struct lu_env *env,
 	struct filter_fid_old		     *pea    = &info->lti_old_pfid;
 	struct lu_fid			     *pfid   = &info->lti_fid;
 	struct lu_buf			      buf    = { NULL };
-	struct dt_object		     *parent = llr->llr_parent->llo_obj;
+	struct dt_object		     *parent;
 	struct dt_object		     *child  = llr->llr_child;
 	struct lu_attr			     *pla    = &info->lti_la;
 	struct lu_attr			     *cla    = &info->lti_la2;
@@ -3250,8 +3248,12 @@ static int lfsck_layout_assistant_handler_p1(const struct lu_env *env,
 	int				      rc;
 	ENTRY;
 
+	parent = lfsck_object_find(env, lfsck, &lar->lar_fid);
+	if (IS_ERR(parent))
+		RETURN(PTR_ERR(parent));
+
 	if (unlikely(lfsck_is_dead_obj(parent)))
-		RETURN(0);
+		GOTO(put_parent, rc = 0);
 
 	rc = dt_attr_get(env, parent, pla, BYPASS_CAPA);
 	if (rc != 0)
@@ -3260,7 +3262,7 @@ static int lfsck_layout_assistant_handler_p1(const struct lu_env *env,
 	rc = dt_attr_get(env, child, cla, BYPASS_CAPA);
 	if (rc == -ENOENT) {
 		if (unlikely(lfsck_is_dead_obj(parent)))
-			RETURN(0);
+			GOTO(put_parent, rc = 0);
 
 		type = LLIT_DANGLING;
 		goto repair;
@@ -3318,17 +3320,18 @@ repair:
 
 	switch (type) {
 	case LLIT_DANGLING:
-		rc = lfsck_layout_repair_dangling(env, com, llr, pla);
+		rc = lfsck_layout_repair_dangling(env, com, parent, llr, pla);
 		break;
 	case LLIT_UNMATCHED_PAIR:
-		rc = lfsck_layout_repair_unmatched_pair(env, com, llr, pla);
+		rc = lfsck_layout_repair_unmatched_pair(env, com, parent,
+							llr, pla);
 		break;
 	case LLIT_MULTIPLE_REFERENCED:
-		rc = lfsck_layout_repair_multiple_references(env, com, llr,
-							     pla, &buf);
+		rc = lfsck_layout_repair_multiple_references(env, com, parent,
+							     llr, pla, &buf);
 		break;
 	case LLIT_INCONSISTENT_OWNER:
-		rc = lfsck_layout_repair_owner(env, com, llr, pla);
+		rc = lfsck_layout_repair_owner(env, com, parent, llr, pla);
 		break;
 	default:
 		rc = 0;
@@ -3370,6 +3373,9 @@ out:
 							lfsck->li_di_oit);
 	}
 	up_write(&com->lc_sem);
+
+put_parent:
+	lu_object_put(env, &parent->do_lu);
 
 	return rc;
 }
@@ -4297,7 +4303,9 @@ static int lfsck_layout_scan_stripes(const struct lu_env *env,
 			}
 		}
 
-		llr = lfsck_layout_assistant_req_init(llo, cobj, index, i);
+		llr = lfsck_layout_assistant_req_init(llo,
+						      lfsck_dto2fid(parent),
+						      cobj, index, i);
 		if (IS_ERR(llr)) {
 			rc = PTR_ERR(llr);
 			goto next;

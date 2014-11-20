@@ -719,11 +719,11 @@ struct lfsck_thread_args {
 
 struct lfsck_assistant_req {
 	struct list_head	lar_list;
+	struct lu_fid		lar_fid;
 };
 
 struct lfsck_namespace_req {
 	struct lfsck_assistant_req	 lnr_lar;
-	struct dt_object		*lnr_obj;
 	struct lfsck_lmv		*lnr_lmv;
 	struct lu_fid			 lnr_fid;
 	__u64				 lnr_oit_cookie;
@@ -938,6 +938,7 @@ int lfsck_namespace_rebuild_linkea(const struct lu_env *env,
 				   struct linkea_data *ldata);
 int lfsck_namespace_repair_dangling(const struct lu_env *env,
 				    struct lfsck_component *com,
+				    struct dt_object *parent,
 				    struct dt_object *child,
 				    struct lfsck_namespace_req *lnr);
 int lfsck_namespace_repair_dirent(const struct lu_env *env,
@@ -993,9 +994,11 @@ int lfsck_namespace_repair_bad_name_hash(const struct lu_env *env,
 					 const char *name);
 int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 				       struct lfsck_component *com,
+				       struct dt_object *dir,
 				       struct lfsck_namespace_req *lnr);
 int lfsck_namespace_handle_striped_master(const struct lu_env *env,
 					  struct lfsck_component *com,
+					  struct dt_object *dir,
 					  struct lfsck_namespace_req *lnr);
 
 /* lfsck_layout.c */

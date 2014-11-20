@@ -70,7 +70,7 @@ lfsck_namespace_assistant_req_init(struct lfsck_instance *lfsck,
 		return ERR_PTR(-ENOMEM);
 
 	INIT_LIST_HEAD(&lnr->lnr_lar.lar_list);
-	lnr->lnr_obj = lfsck_object_get(lfsck->li_obj_dir);
+	lnr->lnr_lar.lar_fid = *lfsck_dto2fid(lfsck->li_obj_dir);
 	lnr->lnr_lmv = lfsck_lmv_get(lfsck->li_lmv);
 	lnr->lnr_fid = ent->lde_fid;
 	lnr->lnr_oit_cookie = lfsck->li_pos_current.lp_oit_cookie;
@@ -93,7 +93,6 @@ static void lfsck_namespace_assistant_req_fini(const struct lu_env *env,
 	if (lnr->lnr_lmv != NULL)
 		lfsck_lmv_put(env, lnr->lnr_lmv);
 
-	lu_object_put(env, &lnr->lnr_obj->do_lu);
 	OBD_FREE(lnr, lnr->lnr_size);
 }
 
@@ -3804,7 +3803,7 @@ static void lfsck_namespace_close_dir(const struct lu_env *env,
 	/* Generate a dummy request to indicate that all shards' name entry
 	 * in this striped directory has been scanned for the first time. */
 	INIT_LIST_HEAD(&lnr->lnr_lar.lar_list);
-	lnr->lnr_obj = lfsck_object_get(lfsck->li_obj_dir);
+	lnr->lnr_lar.lar_fid = *lfsck_dto2fid(lfsck->li_obj_dir);
 	lnr->lnr_lmv = lfsck_lmv_get(llmv);
 	lnr->lnr_fid = *lfsck_dto2fid(lfsck->li_obj_dir);
 	lnr->lnr_oit_cookie = lfsck->li_pos_current.lp_oit_cookie;
@@ -4703,6 +4702,8 @@ static struct lfsck_operations lfsck_namespace_ops = {
  *
  * \param[in] env	pointer to the thread context
  * \param[in] com	pointer to the lfsck component
+ * \param[in] parent	pointer to the dir object that contains the dangling
+ *			name entry
  * \param[in] child	pointer to the object corresponding to the dangling
  *			name entry
  * \param[in] lnr	pointer to the namespace request that contains the
@@ -4714,6 +4715,7 @@ static struct lfsck_operations lfsck_namespace_ops = {
  */
 int lfsck_namespace_repair_dangling(const struct lu_env *env,
 				    struct lfsck_component *com,
+				    struct dt_object *parent,
 				    struct dt_object *child,
 				    struct lfsck_namespace_req *lnr)
 {
@@ -4723,7 +4725,6 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 	struct dt_object_format		*dof	= &info->lti_dof;
 	struct dt_insert_rec		*rec	= &info->lti_dt_rec;
 	struct lmv_mds_md_v1		*lmv2	= &info->lti_lmv2;
-	struct dt_object		*parent	= lnr->lnr_obj;
 	const struct lu_name		*cname;
 	struct linkea_data		 ldata	= { NULL };
 	struct lustre_handle		 lh     = { 0 };
@@ -4937,9 +4938,9 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 	struct thandle		   *handle   = NULL;
 	struct lfsck_namespace_req *lnr      =
 			container_of0(lar, struct lfsck_namespace_req, lnr_lar);
-	struct dt_object	   *dir      = lnr->lnr_obj;
+	struct dt_object	   *dir      = NULL;
 	struct dt_object	   *obj      = NULL;
-	const struct lu_fid	   *pfid     = lfsck_dto2fid(dir);
+	const struct lu_fid	   *pfid;
 	struct dt_device	   *dev      = NULL;
 	struct lustre_handle	    lh       = { 0 };
 	bool			    repaired = false;
@@ -4954,6 +4955,14 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 	enum lfsck_namespace_inconsistency_type type = LNIT_NONE;
 	ENTRY;
 
+	dir = lfsck_object_find_bottom(env, lfsck, &lar->lar_fid);
+	if (IS_ERR(dir))
+		RETURN(PTR_ERR(dir));
+
+	if (unlikely(lfsck_is_dead_obj(dir)))
+		GOTO(put_dir, rc = 0);
+
+	pfid = lfsck_dto2fid(dir);
 	la->la_nlink = 0;
 	if (lnr->lnr_attr & LUDA_UPGRADE) {
 		ns->ln_flags |= LF_UPGRADE;
@@ -4994,9 +5003,9 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 	}
 
 	if (unlikely(lnr->lnr_dir_cookie == MDS_DIR_END_OFF)) {
-		rc = lfsck_namespace_striped_dir_rescan(env, com, lnr);
+		rc = lfsck_namespace_striped_dir_rescan(env, com, dir, lnr);
 
-		RETURN(rc);
+		GOTO(put_dir, rc);
 	}
 
 	if (lnr->lnr_name[0] == '.' &&
@@ -5004,9 +5013,9 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 		GOTO(out, rc = 0);
 
 	if (lnr->lnr_lmv != NULL && lnr->lnr_lmv->ll_lmv_master) {
-		rc = lfsck_namespace_handle_striped_master(env, com, lnr);
+		rc = lfsck_namespace_handle_striped_master(env, com, dir, lnr);
 
-		RETURN(rc);
+		GOTO(put_dir, rc);
 	}
 
 	idx = lfsck_find_mdt_idx_by_fid(env, lfsck, &lnr->lnr_fid);
@@ -5017,7 +5026,7 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 		if (unlikely(strcmp(lnr->lnr_name, dotdot) == 0))
 			GOTO(out, rc = 0);
 
-		dev = lfsck->li_next;
+		dev = lfsck->li_bottom;
 	} else {
 		struct lfsck_tgt_desc *ltd;
 
@@ -5062,7 +5071,7 @@ dangling:
 			}
 
 			type = LNIT_DANGLING;
-			rc = lfsck_namespace_repair_dangling(env, com,
+			rc = lfsck_namespace_repair_dangling(env, com, dir,
 							     obj, lnr);
 			if (rc == 0)
 				repaired = true;
@@ -5314,7 +5323,7 @@ out:
 		CDEBUG(D_LFSCK, "%s: namespace LFSCK assistant fail to handle "
 		       "the entry: "DFID", parent "DFID", name %.*s: rc = %d\n",
 		       lfsck_lfsck2name(lfsck), PFID(&lnr->lnr_fid),
-		       PFID(lfsck_dto2fid(lnr->lnr_obj)),
+		       PFID(lfsck_dto2fid(dir)),
 		       lnr->lnr_namelen, lnr->lnr_name, rc);
 
 		lfsck_namespace_record_failure(env, lfsck, ns);
@@ -5332,7 +5341,7 @@ out:
 			       "repaired the entry: "DFID", parent "DFID
 			       ", name %.*s\n", lfsck_lfsck2name(lfsck),
 			       PFID(&lnr->lnr_fid),
-			       PFID(lfsck_dto2fid(lnr->lnr_obj)),
+			       PFID(lfsck_dto2fid(dir)),
 			       lnr->lnr_namelen, lnr->lnr_name);
 
 		if (repaired) {
@@ -5383,6 +5392,9 @@ out:
 
 	if (obj != NULL && !IS_ERR(obj))
 		lfsck_object_put(env, obj);
+
+put_dir:
+	lu_object_put(env, &dir->do_lu);
 
 	return rc;
 }
@@ -6008,7 +6020,7 @@ static void lfsck_namespace_assistant_fill_pos(const struct lu_env *env,
 			 lnr_lar.lar_list);
 	pos->lp_oit_cookie = lnr->lnr_oit_cookie;
 	pos->lp_dir_cookie = lnr->lnr_dir_cookie - 1;
-	pos->lp_dir_parent = *lfsck_dto2fid(lnr->lnr_obj);
+	pos->lp_dir_parent = lnr->lnr_lar.lar_fid;
 }
 
 static int lfsck_namespace_double_scan_result(const struct lu_env *env,
