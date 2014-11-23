@@ -41,27 +41,6 @@ struct dt_key;
 struct dt_rec;
 struct object_update_param;
 
-struct update_buffer {
-	struct object_update_request	*ub_req;
-	size_t				ub_req_size;
-};
-
-/**
- * Tracking the updates being executed on this dt_device.
- */
-struct dt_update_request {
-	struct dt_device		*dur_dt;
-	/* attached itself to thandle */
-	int				dur_flags;
-	/* update request result */
-	int				dur_rc;
-	/* Current batch(transaction) id */
-	__u64				dur_batchid;
-	/* Holding object updates */
-	struct update_buffer		dur_buf;
-	struct list_head		dur_cb_items;
-};
-
 struct update_params {
 	struct object_update_param	up_params[0];
 };
@@ -116,7 +95,7 @@ update_params_get_param_buf(const struct update_params *params, __u16 index,
 	if (size != NULL)
 		*size = param->oup_len;
 
-	return &param->oup_buf[0];
+	return param->oup_buf;
 }
 
 struct update_op {
@@ -360,6 +339,7 @@ struct top_multiple_thandle {
 	/* All of update records will packed here */
 	struct thandle_update_records *tmt_update_records;
 
+	wait_queue_head_t	tmt_stop_waitq;
 	__u64			tmt_batchid;
 	int			tmt_result;
 	__u32			tmt_magic;
@@ -382,23 +362,24 @@ struct top_thandle {
 struct sub_thandle {
 	struct thandle		*st_sub_th;
 	struct dt_device	*st_dt;
-	struct list_head	st_list;
 	struct llog_cookie	st_cookie;
 	struct dt_txn_commit_cb	st_commit_dcb;
+	struct dt_txn_commit_cb	st_stop_dcb;
 	int			st_result;
 
 	/* linked to top_thandle */
 	struct list_head	st_sub_list;
 
 	/* If this sub thandle is committed */
-	bool			st_committed:1;
+	bool			st_committed:1,
+				st_stopped:1;
 };
 
 struct tx_arg;
 typedef int (*tx_exec_func_t)(const struct lu_env *env, struct thandle *th,
 			      struct tx_arg *ta);
 
-/* Structure for holding one update executation */
+/* Structure for holding one update execution */
 struct tx_arg {
 	tx_exec_func_t		 exec_fn;
 	tx_exec_func_t		 undo_fn;

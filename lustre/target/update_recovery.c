@@ -302,7 +302,7 @@ again:
 	}
 
 	if (rc == -EEXIST) {
-		dtrq_destory(dtrq);
+		dtrq_destroy(dtrq);
 		rc = 0;
 		goto again;
 	}
@@ -342,7 +342,7 @@ EXPORT_SYMBOL(dtrq_list_dump);
  *
  * \param[in] dtrq	distribute txn replqy req to be destroyed.
  */
-void dtrq_destory(struct distribute_txn_replay_req *dtrq)
+void dtrq_destroy(struct distribute_txn_replay_req *dtrq)
 {
 	struct distribute_txn_replay_req_sub	*dtrqs;
 	struct distribute_txn_replay_req_sub	*tmp;
@@ -360,7 +360,7 @@ void dtrq_destory(struct distribute_txn_replay_req *dtrq)
 
 	OBD_FREE_PTR(dtrq);
 }
-EXPORT_SYMBOL(dtrq_destory);
+EXPORT_SYMBOL(dtrq_destroy);
 
 /**
  * Destroy all of replay req.
@@ -378,7 +378,7 @@ void dtrq_list_destroy(struct target_distribute_txn_data *tdtd)
 	list_for_each_entry_safe(dtrq, tmp, &tdtd->tdtd_replay_list,
 				 dtrq_list) {
 		list_del_init(&dtrq->dtrq_list);
-		dtrq_destory(dtrq);
+		dtrq_destroy(dtrq);
 	}
 	spin_unlock(&tdtd->tdtd_replay_list_lock);
 }
@@ -1015,7 +1015,7 @@ int distribute_txn_replay_handle(struct lu_env *env,
 	struct top_thandle	*top_th;
 	struct top_multiple_thandle *tmt;
 	struct thandle_update_records *tur = NULL;
-	unsigned int		i;
+	int			i;
 	int			rc = 0;
 	ENTRY;
 
@@ -1098,7 +1098,7 @@ int distribute_txn_replay_handle(struct lu_env *env,
 			CDEBUG(D_HA, "error during execution of #%u from"
 			       " %s:%d: rc = %d\n", i, ta->ta_args[i]->file,
 			       ta->ta_args[i]->line, rc);
-			while (--i >= 0) {
+			while (--i > 0) {
 				if (ta->ta_args[i]->undo_fn != NULL) {
 					dt_obj = ta->ta_args[i]->object;
 					sub_dt =

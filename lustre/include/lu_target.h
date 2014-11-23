@@ -417,7 +417,7 @@ int distribute_txn_replay_handle(struct lu_env *env,
 __u64 distribute_txn_get_next_transno(struct target_distribute_txn_data *tdtd);
 struct distribute_txn_replay_req *
 distribute_txn_get_next_req(struct target_distribute_txn_data *tdtd);
-void dtrq_destory(struct distribute_txn_replay_req *dtrq);
+void dtrq_destroy(struct distribute_txn_replay_req *dtrq);
 struct distribute_txn_replay_req_sub *
 dtrq_sub_lookup(struct distribute_txn_replay_req *dtrq, __u32 mdt_index);
 

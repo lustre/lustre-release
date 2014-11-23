@@ -365,7 +365,7 @@ static int out_xattr_set(struct tgt_session_info *tsi)
 	lbuf->lb_len = buf_len;
 
 	tmp = object_update_param_get(update, 2, &size);
-	if (tmp == NULL || size != sizeof(*tmp)) {
+	if (tmp == NULL || IS_ERR(tmp) || size != sizeof(*tmp)) {
 		CERROR("%s: emptry or wrong size %zu flag: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), size, -EPROTO);
 		RETURN(err_serious(-EPROTO));
@@ -616,7 +616,7 @@ static int out_read(struct tgt_session_info *tsi)
 		GOTO(out, rc = -ENOENT);
 
 	tmp = object_update_param_get(update, 0, NULL);
-	if (tmp == NULL) {
+	if (tmp == NULL || IS_ERR(tmp)) {
 		CERROR("%s: empty size for read: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), -EPROTO);
 		GOTO(out, rc = err_serious(-EPROTO));
@@ -624,7 +624,7 @@ static int out_read(struct tgt_session_info *tsi)
 	size = le64_to_cpu(*(size_t *)(tmp));
 
 	tmp = object_update_param_get(update, 1, NULL);
-	if (tmp == NULL) {
+	if (tmp == NULL || IS_ERR(tmp)) {
 		CERROR("%s: empty pos for read: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), -EPROTO);
 		GOTO(out, rc = err_serious(-EPROTO));

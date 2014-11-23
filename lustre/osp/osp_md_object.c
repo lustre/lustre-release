@@ -104,7 +104,7 @@ static int osp_object_create_interpreter(const struct lu_env *env,
 /**
  * Implementation of dt_object_operations::do_declare_create
  *
- * Create the dt_update_request to track the update for this OSP
+ * Create the osp_update_request to track the update for this OSP
  * in the transaction.
  *
  * \param[in] env	execution environment
@@ -154,25 +154,25 @@ update_buffer_get_update(struct object_update_request *request,
 }
 
 int osp_extend_update_buffer(const struct lu_env *env,
-			     struct update_buffer *ubuf)
+			     struct osp_update_request *our)
 {
-	struct object_update_request *ureq;
-	size_t	new_size = ubuf->ub_req_size + OUT_UPDATE_BUFFER_SIZE_ADD;
+	struct object_update_request *obj_update_req;
+	size_t new_size = our->our_req_size + OUT_UPDATE_BUFFER_SIZE_ADD;
 
 	/* enlarge object update request size */
 	if (new_size > OUT_UPDATE_BUFFER_SIZE_MAX)
 		return -E2BIG;
 
-	OBD_ALLOC_LARGE(ureq, new_size);
-	if (ureq == NULL)
+	OBD_ALLOC_LARGE(obj_update_req, new_size);
+	if (obj_update_req == NULL)
 		return -ENOMEM;
 
-	memcpy(ureq, ubuf->ub_req, ubuf->ub_req_size);
+	memcpy(obj_update_req, our->our_req, our->our_req_size);
 
-	OBD_FREE_LARGE(ubuf->ub_req, ubuf->ub_req_size);
+	OBD_FREE_LARGE(our->our_req, our->our_req_size);
 
-	ubuf->ub_req = ureq;
-	ubuf->ub_req_size = new_size;
+	our->our_req = obj_update_req;
+	our->our_req_size = new_size;
 
 	return 0;
 }
@@ -197,11 +197,11 @@ int osp_md_object_create(const struct lu_env *env, struct dt_object *dt,
 			 struct lu_attr *attr, struct dt_allocation_hint *hint,
 			 struct dt_object_format *dof, struct thandle *th)
 {
-	struct dt_update_request	*update;
+	struct osp_update_request	*update;
 	struct osp_object		*obj = dt2osp_obj(dt);
 	int				rc;
 
-	update = thandle_to_dt_update_request(th);
+	update = thandle_to_osp_update_request(th);
 	LASSERT(update != NULL);
 
 	LASSERT(attr->la_valid & LA_TYPE);
@@ -228,7 +228,7 @@ out:
 /**
  * Implementation of dt_object_operations::do_declare_ref_del
  *
- * Create the dt_update_request to track the update for this OSP
+ * Create the osp_update_request to track the update for this OSP
  * in the transaction.
  *
  * \param[in] env	execution environment
@@ -260,10 +260,10 @@ static int osp_md_declare_ref_del(const struct lu_env *env,
 static int osp_md_ref_del(const struct lu_env *env, struct dt_object *dt,
 			  struct thandle *th)
 {
-	struct dt_update_request	*update;
+	struct osp_update_request	*update;
 	int				rc;
 
-	update = thandle_to_dt_update_request(th);
+	update = thandle_to_osp_update_request(th);
 	LASSERT(update != NULL);
 
 	rc = osp_update_rpc_pack(env, ref_del, update, OUT_REF_DEL,
@@ -274,7 +274,7 @@ static int osp_md_ref_del(const struct lu_env *env, struct dt_object *dt,
 /**
  * Implementation of dt_object_operations::do_declare_ref_del
  *
- * Create the dt_update_request to track the update for this OSP
+ * Create the osp_update_request to track the update for this OSP
  * in the transaction.
  *
  * \param[in] env	execution environment
@@ -306,10 +306,10 @@ static int osp_md_declare_ref_add(const struct lu_env *env,
 static int osp_md_ref_add(const struct lu_env *env, struct dt_object *dt,
 			  struct thandle *th)
 {
-	struct dt_update_request	*update;
+	struct osp_update_request	*update;
 	int				rc;
 
-	update = thandle_to_dt_update_request(th);
+	update = thandle_to_osp_update_request(th);
 	LASSERT(update != NULL);
 
 	rc = osp_update_rpc_pack(env, ref_add, update, OUT_REF_ADD,
@@ -346,7 +346,7 @@ static void osp_md_ah_init(const struct lu_env *env,
 /**
  * Implementation of dt_object_operations::do_declare_attr_get
  *
- * Create the dt_update_request to track the update for this OSP
+ * Create the osp_update_request to track the update for this OSP
  * in the transaction.
  *
  * \param[in] env	execution environment
@@ -382,10 +382,10 @@ int osp_md_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 int osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,
 		    const struct lu_attr *attr, struct thandle *th)
 {
-	struct dt_update_request	*update;
+	struct osp_update_request	*update;
 	int				rc;
 
-	update = thandle_to_dt_update_request(th);
+	update = thandle_to_osp_update_request(th);
 	LASSERT(update != NULL);
 
 	rc = osp_update_rpc_pack(env, attr_set, update, OUT_ATTR_SET,
@@ -506,7 +506,7 @@ static int osp_md_index_lookup(const struct lu_env *env, struct dt_object *dt,
 	struct lu_buf		*lbuf	= &osp_env_info(env)->osi_lb2;
 	struct osp_device	*osp	= lu2osp_dev(dt->do_lu.lo_dev);
 	struct dt_device	*dt_dev	= &osp->opd_dt_dev;
-	struct dt_update_request   *update;
+	struct osp_update_request   *update;
 	struct object_update_reply *reply;
 	struct ptlrpc_request	   *req = NULL;
 	struct lu_fid		   *fid;
@@ -517,7 +517,7 @@ static int osp_md_index_lookup(const struct lu_env *env, struct dt_object *dt,
 	 * just create an update buffer, instead of attaching the
 	 * update_remote list of the thandle.
 	 */
-	update = dt_update_request_create(dt_dev);
+	update = osp_update_request_create(dt_dev);
 	if (IS_ERR(update))
 		RETURN(PTR_ERR(update));
 
@@ -573,7 +573,7 @@ out:
 	if (req != NULL)
 		ptlrpc_req_finished(req);
 
-	dt_update_request_destroy(update);
+	osp_update_request_destroy(update);
 
 	return rc;
 }
@@ -581,7 +581,7 @@ out:
 /**
  * Implementation of dt_index_operations::dio_declare_insert
  *
- * Create the dt_update_request to track the update for this OSP
+ * Create the osp_update_request to track the update for this OSP
  * in the transaction.
  *
  * \param[in] env	execution environment
@@ -625,9 +625,11 @@ static int osp_md_index_insert(const struct lu_env *env,
 			       struct thandle *th,
 			       int ignore_quota)
 {
-	struct osp_thandle	 *oth = thandle_to_osp_thandle(th);
-	struct dt_update_request *update = oth->ot_dur;
+	struct osp_update_request *update;
 	int			 rc;
+
+	update = thandle_to_osp_update_request(th);
+	LASSERT(update != NULL);
 
 	rc = osp_update_rpc_pack(env, index_insert, update, OUT_INDEX_INSERT,
 				 lu_object_fid(&dt->do_lu), rec, key);
@@ -637,7 +639,7 @@ static int osp_md_index_insert(const struct lu_env *env,
 /**
  * Implementation of dt_index_operations::dio_declare_delete
  *
- * Create the dt_update_request to track the update for this OSP
+ * Create the osp_update_request to track the update for this OSP
  * in the transaction.
  *
  * \param[in] env	execution environment
@@ -675,10 +677,10 @@ static int osp_md_index_delete(const struct lu_env *env,
 			       const struct dt_key *key,
 			       struct thandle *th)
 {
-	struct dt_update_request *update;
+	struct osp_update_request *update;
 	int			 rc;
 
-	update = thandle_to_dt_update_request(th);
+	update = thandle_to_osp_update_request(th);
 	LASSERT(update != NULL);
 
 	rc = osp_update_rpc_pack(env, index_delete, update, OUT_INDEX_DELETE,
@@ -1026,14 +1028,14 @@ int osp_md_object_destroy(const struct lu_env *env, struct dt_object *dt,
 {
 	struct osp_object		*o = dt2osp_obj(dt);
 	struct osp_device		*osp = lu2osp_dev(dt->do_lu.lo_dev);
-	struct dt_update_request	*update;
+	struct osp_update_request	*update;
 	int				rc = 0;
 
 	ENTRY;
 	o->opo_non_exist = 1;
 
 	LASSERT(osp->opd_connect_mdt);
-	update = thandle_to_dt_update_request(th);
+	update = thandle_to_osp_update_request(th);
 	LASSERT(update != NULL);
 
 	rc = osp_update_rpc_pack(env, object_destroy, update, OUT_DESTROY,
@@ -1077,7 +1079,7 @@ struct dt_object_operations osp_md_obj_ops = {
 /**
  * Implementation of dt_body_operations::dbo_declare_write
  *
- * Create the dt_update_request to track the update for this OSP
+ * Create the osp_update_request to track the update for this OSP
  * in the transaction.
   *
  * \param[in] env	execution environment
@@ -1117,12 +1119,13 @@ static ssize_t osp_md_write(const struct lu_env *env, struct dt_object *dt,
 			    const struct lu_buf *buf, loff_t *pos,
 			    struct thandle *th, int ignore_quota)
 {
-	struct osp_object *obj = dt2osp_obj(dt);
-	struct dt_update_request  *update;
+	struct osp_object	  *obj = dt2osp_obj(dt);
+	struct osp_update_request  *update;
+	struct osp_thandle	  *oth = thandle_to_osp_thandle(th);
 	ssize_t			  rc;
 	ENTRY;
 
-	update = thandle_to_dt_update_request(th);
+	update = thandle_to_osp_update_request(th);
 	LASSERT(update != NULL);
 
 	rc = osp_update_rpc_pack(env, write, update, OUT_WRITE,
@@ -1141,6 +1144,10 @@ static ssize_t osp_md_write(const struct lu_env *env, struct dt_object *dt,
 	    obj->opo_ooa->ooa_attr.la_size < *pos)
 		obj->opo_ooa->ooa_attr.la_size = *pos;
 
+	rc = osp_check_and_set_rpc_version(oth);
+	if (rc < 0)
+		RETURN(rc);
+
 	RETURN(buf->lb_len);
 }
 
@@ -1150,7 +1157,7 @@ static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
 	struct osp_device	*osp	= lu2osp_dev(dt->do_lu.lo_dev);
 	struct dt_device	*dt_dev	= &osp->opd_dt_dev;
 	struct lu_buf		*lbuf	= &osp_env_info(env)->osi_lb2;
-	struct dt_update_request   *update;
+	struct osp_update_request   *update;
 	struct object_update_reply *reply;
 	struct out_read_reply	   *orr;
 	struct ptlrpc_request	   *req = NULL;
@@ -1159,8 +1166,8 @@ static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
 
 	/* Because it needs send the update buffer right away,
 	 * just create an update buffer, instead of attaching the
-	 * update_remote list of the thandle. */
-	update = dt_update_request_create(dt_dev);
+	 * update_remote list of the thandle.  */
+	update = osp_update_request_create(dt_dev);
 	if (IS_ERR(update))
 		RETURN(PTR_ERR(update));
 
@@ -1211,7 +1218,7 @@ out:
 	if (req != NULL)
 		ptlrpc_req_finished(req);
 
-	dt_update_request_destroy(update);
+	osp_update_request_destroy(update);
 
 	return rc;
 }

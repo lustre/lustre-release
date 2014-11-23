@@ -104,7 +104,7 @@ typedef void (*dt_cb_t)(struct lu_env *env, struct thandle *th,
 #define TRANS_COMMIT_CB_MAGIC	0xa0a00a0a
 #define MAX_COMMIT_CB_STR_LEN	32
 
-#define DCB_TRANS_NOT_COMMITTED	0x1
+#define DCB_TRANS_STOP		0x1
 struct dt_txn_commit_cb {
 	struct list_head	dcb_linkage;
 	dt_cb_t			dcb_func;

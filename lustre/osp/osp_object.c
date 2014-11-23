@@ -541,7 +541,7 @@ int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 	struct osp_device		*osp = lu2osp_dev(dt->do_lu.lo_dev);
 	struct osp_object		*obj = dt2osp_obj(dt);
 	struct dt_device		*dev = &osp->opd_dt_dev;
-	struct dt_update_request	*update;
+	struct osp_update_request	*update;
 	struct object_update_reply	*reply;
 	struct ptlrpc_request		*req = NULL;
 	int				rc = 0;
@@ -561,7 +561,7 @@ int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 		spin_unlock(&obj->opo_lock);
 	}
 
-	update = dt_update_request_create(dev);
+	update = osp_update_request_create(dev);
 	if (IS_ERR(update))
 		RETURN(PTR_ERR(update));
 
@@ -607,7 +607,7 @@ out:
 	if (req != NULL)
 		ptlrpc_req_finished(req);
 
-	dt_update_request_destroy(update);
+	osp_update_request_destroy(update);
 
 	return rc;
 }
@@ -857,7 +857,7 @@ static int osp_declare_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		mutex_unlock(&osp->opd_async_requests_mutex);
 		osp_oac_xattr_put(oxe);
 	} else {
-		struct dt_update_request *update;
+		struct osp_update_request *update;
 
 		/* XXX: Currently, we trigger the batched async OUT
 		 *	RPC via dt_declare_xattr_get(). It is not
@@ -865,8 +865,8 @@ static int osp_declare_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		 *
 		 *	We will improve it in the future. */
 		update = osp->opd_async_requests;
-		if (update != NULL && update->dur_buf.ub_req != NULL &&
-		    update->dur_buf.ub_req->ourq_count > 0) {
+		if (update != NULL && update->our_req != NULL &&
+		    update->our_req->ourq_count > 0) {
 			osp->opd_async_requests = NULL;
 			mutex_unlock(&osp->opd_async_requests_mutex);
 			rc = osp_unplug_async_request(env, osp, update);
@@ -908,7 +908,7 @@ int osp_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	struct osp_object	*obj	= dt2osp_obj(dt);
 	struct dt_device	*dev	= &osp->opd_dt_dev;
 	struct lu_buf		*rbuf	= &osp_env_info(env)->osi_lb2;
-	struct dt_update_request *update = NULL;
+	struct osp_update_request *update = NULL;
 	struct ptlrpc_request	*req	= NULL;
 	struct object_update_reply *reply;
 	struct osp_xattr_entry	*oxe	= NULL;
@@ -959,7 +959,7 @@ unlock:
 		spin_unlock(&obj->opo_lock);
 	}
 
-	update = dt_update_request_create(dev);
+	update = osp_update_request_create(dev);
 	if (IS_ERR(update))
 		GOTO(out, rc = PTR_ERR(update));
 
@@ -1077,7 +1077,7 @@ out:
 		ptlrpc_req_finished(req);
 
 	if (update != NULL && !IS_ERR(update))
-		dt_update_request_destroy(update);
+		osp_update_request_destroy(update);
 
 	if (oxe != NULL)
 		osp_oac_xattr_put(oxe);
@@ -1141,12 +1141,12 @@ int osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
 		  struct thandle *th)
 {
 	struct osp_object	*o = dt2osp_obj(dt);
-	struct dt_update_request *update;
+	struct osp_update_request *update;
 	struct osp_xattr_entry	*oxe;
 	int			rc;
 	ENTRY;
 
-	update = thandle_to_dt_update_request(th);
+	update = thandle_to_osp_update_request(th);
 	LASSERT(update != NULL);
 
 	CDEBUG(D_INODE, DFID" set xattr '%s' with size %zd\n",
@@ -1245,13 +1245,13 @@ int osp_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
 int osp_xattr_del(const struct lu_env *env, struct dt_object *dt,
 		  const char *name, struct thandle *th)
 {
-	struct dt_update_request *update;
+	struct osp_update_request *update;
 	const struct lu_fid	 *fid = lu_object_fid(&dt->do_lu);
-	struct osp_object	 *o = dt2osp_obj(dt);
+	struct osp_object	 *o	= dt2osp_obj(dt);
 	struct osp_xattr_entry	 *oxe;
 	int			  rc;
 
-	update = thandle_to_dt_update_request(th);
+	update = thandle_to_osp_update_request(th);
 	LASSERT(update != NULL);
 
 	rc = osp_update_rpc_pack(env, xattr_del, update, OUT_XATTR_DEL,

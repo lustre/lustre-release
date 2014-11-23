@@ -316,8 +316,8 @@ static int lod_process_recovery_updates(const struct lu_env *env,
 
 	if (rec->lrh_len !=
 		llog_update_record_size((struct llog_update_record *)rec)) {
-		CERROR("%s broken update record! index %u "DOSTID":%u : rc = %d\n",
-		       lod2obd(lrd->lrd_lod)->obd_name, index,
+		CERROR("%s broken update record! index %u "DOSTID":%u :"
+		       " rc = %d\n", lod2obd(lrd->lrd_lod)->obd_name, index,
 		       POSTID(&llh->lgh_id.lgl_oi), rec->lrh_index, -EIO);
 		return -EIO;
 	}

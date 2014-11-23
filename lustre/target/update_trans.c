@@ -320,7 +320,10 @@ struct sub_thandle *create_sub_thandle(struct top_multiple_thandle *tmt,
  * Mark the sub thandle to be committed and if all sub thandle are committed
  * notify the top thandle.
  *
- * \param[in] sub_th	sub thandle being committed.
+ * \param[in] env	execution environment
+ * \param[in] sub_th	sub thandle being committed
+ * \param[in] cb	commit callback
+ * \param[in] err	trans result
  */
 static void sub_trans_commit_cb(struct lu_env *env,
 				struct thandle *sub_th,
@@ -364,6 +367,48 @@ static void sub_thandle_register_commit_cb(struct sub_thandle *st,
 }
 
 /**
+ * Sub thandle stop call back
+ *
+ * After sub thandle is stopped, it will call this callback to notify
+ * the top thandle.
+ *
+ * \param[in] th	sub thandle to be stopped
+ * \param[in] rc	result of sub trans
+ */
+static void sub_trans_stop_cb(struct lu_env *env,
+			      struct thandle *sub_th,
+			      struct dt_txn_commit_cb *cb, int err)
+{
+	struct sub_thandle		*st;
+	struct top_multiple_thandle	*tmt = cb->dcb_data;
+	ENTRY;
+
+	list_for_each_entry(st, &tmt->tmt_sub_thandle_list, st_sub_list) {
+		if (st->st_stopped)
+			continue;
+
+		if (st->st_dt == sub_th->th_dev) {
+			st->st_stopped = 1;
+			st->st_result = err;
+			break;
+		}
+	}
+
+	wake_up(&tmt->tmt_stop_waitq);
+	RETURN_EXIT;
+}
+
+static void sub_thandle_register_stop_cb(struct sub_thandle *st,
+					 struct top_multiple_thandle *tmt)
+{
+	st->st_stop_dcb.dcb_func = sub_trans_stop_cb;
+	st->st_stop_dcb.dcb_data = tmt;
+	st->st_stop_dcb.dcb_flags = DCB_TRANS_STOP;
+	INIT_LIST_HEAD(&st->st_stop_dcb.dcb_linkage);
+	dt_trans_cb_add(st->st_sub_th, &st->st_stop_dcb);
+}
+
+/**
  * Create sub thandle
  *
  * Create transaction handle for sub_thandle
@@ -391,7 +436,6 @@ int sub_thandle_trans_create(const struct lu_env *env,
 	sub_th->th_wait_submit = 1;
 	return 0;
 }
-
 
 /**
  * Create the top transaction.
@@ -611,6 +655,7 @@ int top_trans_start(const struct lu_env *env, struct dt_device *master_dev,
 		if (rc != 0)
 			GOTO(out, rc);
 
+		sub_thandle_register_stop_cb(st, tmt);
 		sub_thandle_register_commit_cb(st, tmt);
 	}
 out:
@@ -656,6 +701,57 @@ static bool top_check_write_updates(struct top_thandle *top_th)
 		return false;
 
 	return true;
+}
+
+/**
+ * Check if top transaction is stopped
+ *
+ * Check if top transaction is stopped, only if all sub transaction
+ * is stopped, then the top transaction is stopped.
+ *
+ * \param [in] top_th	top thandle
+ *
+ * \retval		true if the top transaction is stopped.
+ * \retval		false if the top transaction is not stopped.
+ */
+static bool top_trans_is_stopped(struct top_thandle *top_th)
+{
+	struct top_multiple_thandle	*tmt;
+	struct sub_thandle		*st;
+	bool			all_stopped = true;
+
+	tmt = top_th->tt_multiple_thandle;
+	list_for_each_entry(st, &tmt->tmt_sub_thandle_list, st_sub_list) {
+		if (!st->st_stopped && st->st_sub_th != NULL) {
+			all_stopped = false;
+			break;
+		}
+
+		if (st->st_result != 0 &&
+		    top_th->tt_super.th_result == 0)
+			top_th->tt_super.th_result = st->st_result;
+	}
+
+	return all_stopped;
+}
+
+/**
+ * Wait result of top transaction
+ *
+ * Wait until all sub transaction get its result.
+ *
+ * \param [in] top_th	top thandle.
+ *
+ * \retval		the result of top thandle.
+ */
+static int top_trans_wait_result(struct top_thandle *top_th)
+{
+	struct l_wait_info	lwi = {0};
+
+	l_wait_event(top_th->tt_multiple_thandle->tmt_stop_waitq,
+		     top_trans_is_stopped(top_th), &lwi);
+
+	RETURN(top_th->tt_super.th_result);
 }
 
 /**
@@ -806,7 +902,10 @@ stop_other_trans:
 			th->th_result = rc;
 	}
 
+	rc = top_trans_wait_result(top_th);
+
 	tmt->tmt_result = rc;
+
 	/* Balance for the refcount in top_trans_create, Note: if it is NOT
 	 * multiple node transaction, the top transaction will be destroyed. */
 	top_multiple_thandle_put(tmt);
@@ -842,6 +941,7 @@ int top_trans_create_tmt(const struct lu_env *env,
 	INIT_LIST_HEAD(&tmt->tmt_commit_list);
 	atomic_set(&tmt->tmt_refcount, 1);
 
+	init_waitqueue_head(&tmt->tmt_stop_waitq);
 	top_th->tt_multiple_thandle = tmt;
 
 	return 0;
@@ -860,6 +960,7 @@ create_sub_thandle_with_thandle(struct top_thandle *top_th,
 		return st;
 
 	st->st_sub_th = sub_th;
+
 	sub_th->th_top = &top_th->tt_super;
 	return st;
 }
@@ -1135,7 +1236,7 @@ distribute_txn_commit_batchid_update(const struct lu_env *env,
 	if (rc < 0)
 		GOTO(stop, rc);
 
-	dt_trans_cb_add(th, &dtbd->dtbd_cb);
+	rc = dt_trans_cb_add(th, &dtbd->dtbd_cb);
 	if (rc < 0)
 		GOTO(stop, rc);
 
@@ -1188,8 +1289,11 @@ distribute_txn_commit_batchid_init(const struct lu_env *env,
 
 	dt_obj = dt_find_or_create(env, lut->lut_bottom, fid, dof,
 				   attr);
-	if (IS_ERR(dt_obj))
-		GOTO(out_put, rc = PTR_ERR(dt_obj));
+	if (IS_ERR(dt_obj)) {
+		rc = PTR_ERR(dt_obj);
+		dt_obj = NULL;
+		GOTO(out_put, rc);
+	}
 
 	tdtd->tdtd_batchid_obj = dt_obj;
 

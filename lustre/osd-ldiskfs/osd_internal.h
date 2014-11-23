@@ -330,7 +330,8 @@ struct osd_thandle {
         struct thandle          ot_super;
         handle_t               *ot_handle;
         struct ldiskfs_journal_cb_entry ot_jcb;
-	struct list_head              ot_dcb_list;
+	struct list_head       ot_commit_dcb_list;
+	struct list_head       ot_stop_dcb_list;
 	/* Link to the device, for debugging. */
 	struct lu_ref_link      ot_dev_link;
         unsigned short          ot_credits;

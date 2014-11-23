@@ -74,6 +74,7 @@
 
 #define DEBUG_SUBSYSTEM S_MDS
 
+#include <linux/kthread.h>
 #include <obd_class.h>
 #include <lustre_ioctl.h>
 #include <lustre_param.h>
@@ -483,6 +484,95 @@ static int osp_disconnect(struct osp_device *d)
 }
 
 /**
+ * Initialize the osp_update structure in OSP device
+ *
+ * Allocate osp update structure and start update thread.
+ *
+ * \param[in] osp	OSP device
+ *
+ * \retval		0 if initialization succeeds.
+ * \retval		negative errno if initialization fails.
+ */
+static int osp_update_init(struct osp_device *osp)
+{
+	struct l_wait_info	lwi = { 0 };
+	struct task_struct	*task;
+
+	ENTRY;
+
+	LASSERT(osp->opd_connect_mdt);
+
+	OBD_ALLOC_PTR(osp->opd_update);
+	if (osp->opd_update == NULL)
+		RETURN(-ENOMEM);
+
+	init_waitqueue_head(&osp->opd_update_thread.t_ctl_waitq);
+	init_waitqueue_head(&osp->opd_update->ou_waitq);
+	spin_lock_init(&osp->opd_update->ou_lock);
+	INIT_LIST_HEAD(&osp->opd_update->ou_list);
+	osp->opd_update->ou_rpc_version = 1;
+	osp->opd_update->ou_version = 1;
+
+	/* start thread handling sending updates to the remote MDT */
+	task = kthread_run(osp_send_update_thread, osp,
+			   "osp_up%u-%u", osp->opd_index, osp->opd_group);
+	if (IS_ERR(task)) {
+		int rc = PTR_ERR(task);
+
+		OBD_FREE_PTR(osp->opd_update);
+		osp->opd_update = NULL;
+		CERROR("%s: can't start precreate thread: rc = %d\n",
+		       osp->opd_obd->obd_name, rc);
+		RETURN(rc);
+	}
+
+	l_wait_event(osp->opd_update_thread.t_ctl_waitq,
+		     osp_send_update_thread_running(osp) ||
+		     osp_send_update_thread_stopped(osp), &lwi);
+
+	RETURN(0);
+}
+
+/**
+ * Finialize osp_update structure in OSP device
+ *
+ * Stop the OSP update sending thread, then delete the left
+ * osp thandle in the sending list.
+ *
+ * \param [in] osp	OSP device.
+ */
+static void osp_update_fini(const struct lu_env *env, struct osp_device *osp)
+{
+	struct osp_update_request *our;
+	struct osp_update_request *tmp;
+	struct osp_updates *ou = osp->opd_update;
+
+	if (ou == NULL)
+		return;
+
+	osp->opd_update_thread.t_flags = SVC_STOPPING;
+	wake_up(&ou->ou_waitq);
+
+	wait_event(osp->opd_update_thread.t_ctl_waitq,
+		   osp->opd_update_thread.t_flags & SVC_STOPPED);
+
+	/* Remove the left osp thandle from the list */
+	spin_lock(&ou->ou_lock);
+	list_for_each_entry_safe(our, tmp, &ou->ou_list,
+				 our_list) {
+		list_del_init(&our->our_list);
+		LASSERT(our->our_th != NULL);
+		osp_trans_callback(env, our->our_th, -EIO);
+		/* our will be destroyed in osp_thandle_put() */
+		osp_thandle_put(our->our_th);
+	}
+	spin_unlock(&ou->ou_lock);
+
+	OBD_FREE_PTR(ou);
+	osp->opd_update = NULL;
+}
+
+/**
  * Cleanup OSP, which includes disconnect import, cleanup unlink log, stop
  * precreate threads etc.
  *
@@ -543,6 +633,7 @@ static int osp_process_config(const struct lu_env *env,
 	switch (lcfg->lcfg_command) {
 	case LCFG_PRE_CLEANUP:
 		rc = osp_disconnect(d);
+		osp_update_fini(env, d);
 		break;
 	case LCFG_CLEANUP:
 		lu_dev_del_linkage(dev->ld_site, dev);
@@ -1082,6 +1173,10 @@ static int osp_init0(const struct lu_env *env, struct osp_device *osp,
 		rc = osp_sync_init(env, osp);
 		if (rc < 0)
 			GOTO(out_precreat, rc);
+	} else {
+		rc = osp_update_init(osp);
+		if (rc != 0)
+			GOTO(out_fid, rc);
 	}
 
 	ns_register_cancel(obd->obd_namespace, osp_cancel_weight);
@@ -1109,6 +1204,8 @@ out_precreat:
 	/* stop precreate thread */
 	if (!osp->opd_connect_mdt)
 		osp_precreate_fini(osp);
+	else
+		osp_update_fini(env, osp);
 out_last_used:
 	if (!osp->opd_connect_mdt)
 		osp_last_used_fini(env, osp);
@@ -1222,7 +1319,7 @@ static struct lu_device *osp_device_fini(const struct lu_env *env,
 	ENTRY;
 
 	if (osp->opd_async_requests != NULL) {
-		dt_update_request_destroy(osp->opd_async_requests);
+		osp_update_request_destroy(osp->opd_async_requests);
 		osp->opd_async_requests = NULL;
 	}
 
