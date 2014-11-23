@@ -2665,10 +2665,10 @@ run_test 58 "Truncate a released file will trigger restore"
 
 test_60() {
 	# This test validates the fix for LU-4512. Ensure that the -u
-	# option changes the progress reporting interval from the default
-	# (30 seconds) to the user-specified interval.
+	# option changes the progress reporting interval from the
+	# default (30 seconds) to the user-specified interval.
 	local interval=5
-	local progress_timeout=$((interval * 3))
+	local progress_timeout=$((interval * 4))
 
 	# test needs a new running copytool
 	copytool_cleanup
@@ -2678,13 +2678,18 @@ test_60() {
 	local f=$DIR/$tdir/$tfile
 	local fid=$(make_large_for_progress $f)
 
-	local start_at=$(date +%s)
-	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f ||
-		error "could not archive file"
-
 	local mdtidx=0
 	local mdt=${MDT_PREFIX}${mdtidx}
 	local mds=mds$((mdtidx + 1))
+
+	# Wait for copytool to register
+	wait_update_facet $mds \
+		"$LCTL get_param -n ${mdt}.hsm.agents | grep -o ^uuid" \
+		uuid 100 || error "coyptool failed to register with $mdt"
+
+	local start_at=$(date +%s)
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f ||
+		error "could not archive file"
 
 	local cmd="$LCTL get_param -n ${mdt}.hsm.active_requests"
 	cmd+=" | awk '/'$fid'.*action=ARCHIVE/ {print \\\$12}' | cut -f2 -d="
