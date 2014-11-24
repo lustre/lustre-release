@@ -129,7 +129,7 @@ int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
 				RETURN(result);
 
 			if (!agl) {
-				cl_merge_lvb(env, inode);
+				ll_merge_attr(env, inode);
 				if (cl_isize_read(inode) > 0 &&
 				    inode->i_blocks == 0) {
 					/*
@@ -144,7 +144,7 @@ int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
 			cl_lock_release(env, lock);
 		} else {
 			CDEBUG(D_DLMTRACE, "No objects for inode\n");
-			cl_merge_lvb(env, inode);
+			ll_merge_attr(env, inode);
 		}
 	}
 
@@ -247,7 +247,7 @@ int cl_local_size(struct inode *inode)
 		lock->cll_descr.cld_obj = clob;
 		result = cl_lock_request(env, io, lock);
 		if (result == 0) {
-			cl_merge_lvb(env, inode);
+			ll_merge_attr(env, inode);
 			cl_lock_release(env, lock);
 		}
 	}

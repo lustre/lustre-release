@@ -749,7 +749,7 @@ int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io)
 	}
 
 	/* update inode size */
-	ll_merge_lvb(env, inode);
+	ll_merge_attr(env, inode);
 
 	/* Now the pages in queue were failed to commit, discard them
 	 * unless they were dirtied before. */
@@ -792,7 +792,7 @@ static int vvp_io_write_start(const struct lu_env *env,
                  * PARALLEL IO This has to be changed for parallel IO doing
                  * out-of-order writes.
                  */
-		ll_merge_lvb(env, inode);
+		ll_merge_attr(env, inode);
                 pos = io->u.ci_wr.wr.crw_pos = i_size_read(inode);
                 cio->cui_iocb->ki_pos = pos;
         } else {

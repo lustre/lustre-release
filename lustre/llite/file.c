@@ -1009,51 +1009,57 @@ int ll_inode_getattr(struct inode *inode, struct obdo *obdo,
 	RETURN(rc);
 }
 
-int ll_merge_lvb(const struct lu_env *env, struct inode *inode)
+int ll_merge_attr(const struct lu_env *env, struct inode *inode)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct cl_object *obj = lli->lli_clob;
 	struct cl_attr *attr = ccc_env_thread_attr(env);
-	struct ost_lvb lvb;
+	obd_time atime;
+	obd_time mtime;
+	obd_time ctime;
 	int rc = 0;
 
 	ENTRY;
 
 	ll_inode_size_lock(inode);
+
 	/* merge timestamps the most recently obtained from mds with
 	   timestamps obtained from osts */
-	LTIME_S(inode->i_atime) = lli->lli_lvb.lvb_atime;
-	LTIME_S(inode->i_mtime) = lli->lli_lvb.lvb_mtime;
-	LTIME_S(inode->i_ctime) = lli->lli_lvb.lvb_ctime;
+	LTIME_S(inode->i_atime) = lli->lli_atime;
+	LTIME_S(inode->i_mtime) = lli->lli_mtime;
+	LTIME_S(inode->i_ctime) = lli->lli_ctime;
 
-	lvb.lvb_size = i_size_read(inode);
-	lvb.lvb_blocks = inode->i_blocks;
-	lvb.lvb_mtime = LTIME_S(inode->i_mtime);
-	lvb.lvb_atime = LTIME_S(inode->i_atime);
-	lvb.lvb_ctime = LTIME_S(inode->i_ctime);
+	atime = LTIME_S(inode->i_atime);
+	mtime = LTIME_S(inode->i_mtime);
+	ctime = LTIME_S(inode->i_ctime);
 
 	cl_object_attr_lock(obj);
 	rc = cl_object_attr_get(env, obj, attr);
 	cl_object_attr_unlock(obj);
 
-	if (rc == 0) {
-		if (lvb.lvb_atime < attr->cat_atime)
-			lvb.lvb_atime = attr->cat_atime;
-		if (lvb.lvb_ctime < attr->cat_ctime)
-			lvb.lvb_ctime = attr->cat_ctime;
-		if (lvb.lvb_mtime < attr->cat_mtime)
-			lvb.lvb_mtime = attr->cat_mtime;
+	if (rc != 0)
+		GOTO(out_size_unlock, rc);
 
-		CDEBUG(D_VFSTRACE, DFID" updating i_size "LPU64"\n",
-				PFID(&lli->lli_fid), attr->cat_size);
-		cl_isize_write_nolock(inode, attr->cat_size);
+	if (atime < attr->cat_atime)
+		atime = attr->cat_atime;
 
-		inode->i_blocks = attr->cat_blocks;
+	if (ctime < attr->cat_ctime)
+		ctime = attr->cat_ctime;
 
-		LTIME_S(inode->i_mtime) = lvb.lvb_mtime;
-		LTIME_S(inode->i_atime) = lvb.lvb_atime;
-		LTIME_S(inode->i_ctime) = lvb.lvb_ctime;
-	}
+	if (mtime < attr->cat_mtime)
+		mtime = attr->cat_mtime;
+
+	CDEBUG(D_VFSTRACE, DFID" updating i_size "LPU64"\n",
+	       PFID(&lli->lli_fid), attr->cat_size);
+
+	cl_isize_write_nolock(inode, attr->cat_size);
+	inode->i_blocks = attr->cat_blocks;
+
+	LTIME_S(inode->i_atime) = atime;
+	LTIME_S(inode->i_mtime) = mtime;
+	LTIME_S(inode->i_ctime) = ctime;
+
+out_size_unlock:
 	ll_inode_size_unlock(inode);
 
 	RETURN(rc);
@@ -1982,7 +1988,7 @@ int ll_hsm_release(struct inode *inode)
 	if (IS_ERR(env))
 		GOTO(out, rc = PTR_ERR(env));
 
-	ll_merge_lvb(env, inode);
+	ll_merge_attr(env, inode);
 	cl_env_nested_put(&nest, env);
 
 	/* Release the file.
@@ -3271,9 +3277,9 @@ static int ll_merge_md_attr(struct inode *inode)
 	ll_i2info(inode)->lli_stripe_dir_size = attr.cat_size;
 	ll_i2info(inode)->lli_stripe_dir_nlink = attr.cat_nlink;
 
-	ll_i2info(inode)->lli_lvb.lvb_atime = attr.cat_atime;
-	ll_i2info(inode)->lli_lvb.lvb_mtime = attr.cat_mtime;
-	ll_i2info(inode)->lli_lvb.lvb_ctime = attr.cat_ctime;
+	ll_i2info(inode)->lli_atime = attr.cat_atime;
+	ll_i2info(inode)->lli_mtime = attr.cat_mtime;
+	ll_i2info(inode)->lli_ctime = attr.cat_ctime;
 
 	RETURN(0);
 }
@@ -3298,9 +3304,9 @@ ll_inode_revalidate(struct dentry *dentry, __u64 ibits)
 				RETURN(rc);
 		}
 
-		LTIME_S(inode->i_atime) = ll_i2info(inode)->lli_lvb.lvb_atime;
-		LTIME_S(inode->i_mtime) = ll_i2info(inode)->lli_lvb.lvb_mtime;
-		LTIME_S(inode->i_ctime) = ll_i2info(inode)->lli_lvb.lvb_ctime;
+		LTIME_S(inode->i_atime) = ll_i2info(inode)->lli_atime;
+		LTIME_S(inode->i_mtime) = ll_i2info(inode)->lli_mtime;
+		LTIME_S(inode->i_ctime) = ll_i2info(inode)->lli_ctime;
 	} else {
 		/* In case of restore, the MDT has the right size and has
 		 * already send it back without granting the layout lock,
