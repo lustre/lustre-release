@@ -4962,6 +4962,9 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 	if (unlikely(lfsck_is_dead_obj(dir)))
 		GOTO(put_dir, rc = 0);
 
+	if (unlikely(!dt_try_as_dir(env, dir)))
+		GOTO(put_dir, rc = -ENOTDIR);
+
 	pfid = lfsck_dto2fid(dir);
 	la->la_nlink = 0;
 	if (lnr->lnr_attr & LUDA_UPGRADE) {
