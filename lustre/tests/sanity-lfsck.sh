@@ -2832,7 +2832,7 @@ test_22a() {
 	echo "#####"
 	echo "The parent_A references the child directory via some name entry,"
 	echo "but the child directory back references another parent_B via its"
-	echo "".." name entry. The parent_B does not exist. Then the namesapce"
+	echo "".." name entry. The parent_B does not exist. Then the namespace"
 	echo "LFSCK will repair the child directory's ".." name entry."
 	echo "#####"
 
@@ -2881,7 +2881,7 @@ test_22b() {
 	echo "The parent_A references the child directory via the name entry_B,"
 	echo "but the child directory back references another parent_C via its"
 	echo "".." name entry. The parent_C exists, but there is no the name"
-	echo "entry_B under the parent_C. Then the namesapce LFSCK will repair"
+	echo "entry_B under the parent_C. Then the namespace LFSCK will repair"
 	echo "the child directory's ".." name entry and its linkEA."
 	echo "#####"
 

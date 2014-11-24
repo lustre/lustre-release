@@ -947,15 +947,14 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 				  struct dt_object *child,
 				  const char *name, const char *name2,
 				  __u16 type, bool update, bool dec);
-int lfsck_verify_linkea(const struct lu_env *env, struct dt_device *dev,
-			struct dt_object *obj, const struct lu_name *cname,
-			const struct lu_fid *pfid);
+int lfsck_verify_linkea(const struct lu_env *env, struct dt_object *obj,
+			const struct lu_name *cname, const struct lu_fid *pfid);
 int lfsck_links_get_first(const struct lu_env *env, struct dt_object *obj,
 			  char *name, struct lu_fid *pfid);
 int lfsck_update_name_entry(const struct lu_env *env,
 			    struct lfsck_instance *lfsck,
-			    struct dt_object *parent, const char *name,
-			    const struct lu_fid *pfid, __u32 type);
+			    struct dt_object *dir, const char *name,
+			    const struct lu_fid *fid, __u32 type);
 int lfsck_namespace_setup(const struct lu_env *env,
 			  struct lfsck_instance *lfsck);
 
@@ -1016,7 +1015,7 @@ static inline bool name_is_dot_or_dotdot(const char *name, int namelen)
 	       (namelen == 1 || (namelen == 2 && name[1] == '.'));
 }
 
-static inline struct dt_device *lfsck_obj2dt_dev(struct dt_object *obj)
+static inline struct dt_device *lfsck_obj2dev(struct dt_object *obj)
 {
 	return container_of0(obj->do_lu.lo_dev, struct dt_device, dd_lu_dev);
 }
@@ -1163,9 +1162,15 @@ static inline void lfsck_object_put(const struct lu_env *env,
 	lu_object_put(env, &obj->do_lu);
 }
 
-static inline u32 lfsck_dev_idx(struct dt_device *dev)
+static inline struct seq_server_site
+*lfsck_dev_site(struct lfsck_instance *lfsck)
 {
-	return dev->dd_lu_dev.ld_site->ld_seq_site->ss_node_id;
+	return lu_site2seq(lfsck->li_bottom->dd_lu_dev.ld_site);
+}
+
+static inline u32 lfsck_dev_idx(struct lfsck_instance *lfsck)
+{
+	return lfsck_dev_site(lfsck)->ss_node_id;
 }
 
 static inline struct dt_object *
@@ -1185,13 +1190,6 @@ lfsck_object_find_by_dev(const struct lu_env *env, struct dt_device *dev,
 	return lu2dt(lu_object_find_slice(env, dt2lu_dev(dev), fid, NULL));
 }
 
-static inline struct dt_object *lfsck_object_find(const struct lu_env *env,
-						  struct lfsck_instance *lfsck,
-						  const struct lu_fid *fid)
-{
-	return lfsck_object_find_by_dev(env, lfsck->li_next, fid);
-}
-
 static inline struct dt_device *
 lfsck_find_dev_by_fid(const struct lu_env *env, struct lfsck_instance *lfsck,
 		      const struct lu_fid *fid)
@@ -1199,11 +1197,14 @@ lfsck_find_dev_by_fid(const struct lu_env *env, struct lfsck_instance *lfsck,
 	struct dt_device *dev;
 	int		  idx;
 
+	if (!lfsck->li_master)
+		return lfsck->li_bottom;
+
 	idx = lfsck_find_mdt_idx_by_fid(env, lfsck, fid);
 	if (idx < 0)
 		return ERR_PTR(idx);
 
-	if (idx == lfsck_dev_idx(lfsck->li_bottom)) {
+	if (idx == lfsck_dev_idx(lfsck)) {
 		dev = lfsck->li_bottom;
 	} else {
 		struct lfsck_tgt_desc *ltd;
@@ -1245,6 +1246,23 @@ lfsck_object_find_bottom_nowait(const struct lu_env *env,
 	return lfsck_object_find_by_dev_nowait(env, dev, fid);
 }
 
+static inline struct dt_object *
+lfsck_object_locate(struct dt_device *dev, struct dt_object *obj)
+{
+	if (lfsck_obj2dev(obj) == dev) {
+		return obj;
+	} else {
+		struct lu_object *lo;
+
+		lo = lu_object_locate(obj->do_lu.lo_header,
+				      dev->dd_lu_dev.ld_type);
+		if (unlikely(lo == NULL))
+			return ERR_PTR(-ENOENT);
+
+		return lu2dt(lo);
+	}
+}
+
 static inline struct lfsck_tgt_desc *lfsck_tgt_get(struct lfsck_tgt_descs *ltds,
 						   __u32 index)
 {
@@ -1281,11 +1299,11 @@ static inline void lfsck_component_put(const struct lu_env *env,
 		for (i = 0, lsto = &com->lc_sub_trace_objs[0];
 		     i < LFSCK_STF_COUNT; i++, lsto++) {
 			if (lsto->lsto_obj != NULL)
-				lu_object_put(env, &lsto->lsto_obj->do_lu);
+				lfsck_object_put(env, lsto->lsto_obj);
 		}
 
 		if (com->lc_obj != NULL)
-			lu_object_put_nocache(env, &com->lc_obj->do_lu);
+			lfsck_object_put(env, com->lc_obj);
 		if (com->lc_file_ram != NULL)
 			OBD_FREE(com->lc_file_ram, com->lc_file_size);
 		if (com->lc_file_disk != NULL)

@@ -119,7 +119,7 @@ static void ofd_inconsistency_verify_one(const struct lu_env *env,
 			       ", the old stored PFID "DFID"\n",
 			       ofd_name(ofd), PFID(&fo->ofo_header.loh_fid),
 			       PFID(&oii->oii_pfid), PFID(pfid));
-		} else {
+		} else if (rc < 0) {
 			CDEBUG(D_LFSCK, "%s: fail to fix the OST PFID xattr "
 			       "for "DFID", client given PFID "DFID", local "
 			       "stored PFID "DFID": rc = %d\n",

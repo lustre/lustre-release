@@ -98,7 +98,7 @@ static int lfsck_update_lma(const struct lu_env *env,
 {
 	struct lfsck_thread_info	*info	= lfsck_env_info(env);
 	struct lfsck_bookmark		*bk	= &lfsck->li_bookmark_ram;
-	struct dt_device		*dt	= lfsck->li_bottom;
+	struct dt_device		*dev	= lfsck_obj2dev(obj);
 	struct lustre_mdt_attrs 	*lma	= &info->lti_lma;
 	struct lu_buf			*buf;
 	struct thandle			*th;
@@ -129,7 +129,7 @@ static int lfsck_update_lma(const struct lu_env *env,
 	}
 	lustre_lma_swab(lma);
 
-	th = dt_trans_create(env, dt);
+	th = dt_trans_create(env, dev);
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
 
@@ -138,7 +138,7 @@ static int lfsck_update_lma(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	rc = dt_trans_start(env, dt, th);
+	rc = dt_trans_start_local(env, dev, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
@@ -147,7 +147,7 @@ static int lfsck_update_lma(const struct lu_env *env,
 	GOTO(stop, rc);
 
 stop:
-	dt_trans_stop(env, dt, th);
+	dt_trans_stop(env, dev, th);
 	return rc;
 }
 
@@ -194,9 +194,8 @@ static int lfsck_needs_scan_dir(const struct lu_env *env,
 	struct lfsck_thread_info *info    = lfsck_env_info(env);
 	struct lu_fid		 *fid     = &info->lti_fid;
 	struct lu_seq_range	 *range   = &info->lti_range;
-	struct dt_device	 *dev	  = lfsck->li_bottom;
-	struct seq_server_site	 *ss	  = lu_site2seq(dev->dd_lu_dev.ld_site);
-	__u32			  idx	  = lfsck_dev_idx(dev);
+	struct seq_server_site	 *ss	  = lfsck_dev_site(lfsck);
+	__u32			  idx	  = lfsck_dev_idx(lfsck);
 	int			  depth   = 0;
 	int			  rc      = 0;
 
@@ -237,7 +236,7 @@ static int lfsck_needs_scan_dir(const struct lu_env *env,
 			return 1;
 
 		if (obj == NULL) {
-			obj = lfsck_object_find(env, lfsck, fid);
+			obj = lfsck_object_find_bottom(env, lfsck, fid);
 			if (IS_ERR(obj))
 				return PTR_ERR(obj);
 
@@ -327,25 +326,14 @@ static int lfsck_load_stripe_lmv(const struct lu_env *env,
 			RETURN(-ENOMEM);
 		}
 
-		/* Find the object against the bottom device. */
-		obj = lfsck_object_find_by_dev(env, lfsck->li_bottom,
-					       lfsck_dto2fid(obj));
-		if (IS_ERR(obj)) {
-			OBD_FREE_LARGE(lslr, sizeof(*lslr) * stripes);
-			OBD_FREE_PTR(llmv);
-
-			RETURN(PTR_ERR(obj));
-		}
-
 		llmv->ll_stripes_allocated = stripes;
 		llmv->ll_hash_type = LMV_HASH_TYPE_UNKNOWN;
 		llmv->ll_lslr = lslr;
-		lfsck->li_obj_dir = obj;
 	} else {
 		llmv->ll_lmv_slave = 1;
-		lfsck->li_obj_dir = lfsck_object_get(obj);
 	}
 
+	lfsck->li_obj_dir = lfsck_object_get(obj);
 	llmv->ll_lmv = *lmv;
 	atomic_set(&llmv->ll_ref, 1);
 	lfsck->li_lmv = llmv;
@@ -530,7 +518,7 @@ static int lfsck_prep(const struct lu_env *env, struct lfsck_instance *lfsck,
 		GOTO(out, rc = 0);
 
 	/* Find the directory for namespace-based traverse. */
-	obj = lfsck_object_find(env, lfsck, &pos->lp_dir_parent);
+	obj = lfsck_object_find_bottom(env, lfsck, &pos->lp_dir_parent);
 	if (IS_ERR(obj))
 		RETURN(PTR_ERR(obj));
 
@@ -865,9 +853,8 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 	struct lu_fid		 *fid	= &info->lti_fid;
 	struct lfsck_bookmark	 *bk	= &lfsck->li_bookmark_ram;
 	struct ptlrpc_thread	 *thread = &lfsck->li_thread;
-	struct dt_device	 *dev	= lfsck->li_bottom;
-	struct seq_server_site	 *ss	= lu_site2seq(dev->dd_lu_dev.ld_site);
-	__u32			 idx	= lfsck_dev_idx(dev);
+	struct seq_server_site	 *ss	= lfsck_dev_site(lfsck);
+	__u32			 idx	= lfsck_dev_idx(lfsck);
 	int			 rc;
 	ENTRY;
 
@@ -980,7 +967,7 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 			}
 		}
 
-		target = lfsck_object_find(env, lfsck, fid);
+		target = lfsck_object_find_bottom(env, lfsck, fid);
 		if (IS_ERR(target)) {
 			CDEBUG(D_LFSCK, "%s: OIT scan failed at find target "
 			       DFID", cookie "LPU64": rc = %d\n",
@@ -1195,7 +1182,6 @@ static int lfsck_assistant_query_others(const struct lu_env *env,
 
 	lad->lad_touch_gen++;
 	memset(lr, 0, sizeof(*lr));
-	lr->lr_index = lfsck_dev_idx(lfsck->li_bottom);
 	lr->lr_event = LE_QUERY;
 	lr->lr_active = com->lc_type;
 	laia->laia_com = com;
@@ -1312,7 +1298,7 @@ static int lfsck_assistant_notify_others(const struct lu_env *env,
 	if (set == NULL)
 		RETURN(-ENOMEM);
 
-	lr->lr_index = lfsck_dev_idx(lfsck->li_bottom);
+	lr->lr_index = lfsck_dev_idx(lfsck);
 	lr->lr_active = com->lc_type;
 	laia->laia_com = com;
 	laia->laia_lr = lr;

@@ -100,6 +100,7 @@ int lfsck_bookmark_store(const struct lu_env *env, struct lfsck_instance *lfsck)
 {
 	struct thandle    *handle;
 	struct dt_object  *obj    = lfsck->li_bookmark_obj;
+	struct dt_device  *dev    = lfsck_obj2dev(obj);
 	loff_t		   pos    = 0;
 	int		   len    = sizeof(struct lfsck_bookmark);
 	int		   rc;
@@ -107,7 +108,7 @@ int lfsck_bookmark_store(const struct lu_env *env, struct lfsck_instance *lfsck)
 
 	lfsck_bookmark_cpu_to_le(&lfsck->li_bookmark_disk,
 				 &lfsck->li_bookmark_ram);
-	handle = dt_trans_create(env, lfsck->li_bottom);
+	handle = dt_trans_create(env, dev);
 	if (IS_ERR(handle))
 		GOTO(log, rc = PTR_ERR(handle));
 
@@ -118,7 +119,7 @@ int lfsck_bookmark_store(const struct lu_env *env, struct lfsck_instance *lfsck)
 	if (rc != 0)
 		GOTO(out, rc);
 
-	rc = dt_trans_start_local(env, lfsck->li_bottom, handle);
+	rc = dt_trans_start_local(env, dev, handle);
 	if (rc != 0)
 		GOTO(out, rc);
 
@@ -129,7 +130,7 @@ int lfsck_bookmark_store(const struct lu_env *env, struct lfsck_instance *lfsck)
 	GOTO(out, rc);
 
 out:
-	dt_trans_stop(env, lfsck->li_bottom, handle);
+	dt_trans_stop(env, dev, handle);
 
 log:
 	if (rc != 0)
@@ -167,7 +168,7 @@ int lfsck_bookmark_setup(const struct lu_env *env,
 		RETURN(PTR_ERR(root));
 
 	if (unlikely(!dt_try_as_dir(env, root))) {
-		lu_object_put(env, &root->do_lu);
+		lfsck_object_put(env, root);
 
 		RETURN(-ENOTDIR);
 	}
@@ -175,7 +176,7 @@ int lfsck_bookmark_setup(const struct lu_env *env,
 	obj = local_file_find_or_create(env, lfsck->li_los, root,
 					LFSCK_BOOKMARK,
 					S_IFREG | S_IRUGO | S_IWUSR);
-	lu_object_put(env, &root->do_lu);
+	lfsck_object_put(env, root);
 	if (IS_ERR(obj))
 		RETURN(PTR_ERR(obj));
 

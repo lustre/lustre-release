@@ -206,7 +206,7 @@ static int lfsck_disable_master_lmv(const struct lu_env *env,
 	struct lfsck_thread_info	*info	= lfsck_env_info(env);
 	struct lu_attr			*la	= &info->lti_la;
 	struct lfsck_instance		*lfsck	= com->lc_lfsck;
-	struct dt_device		*dev	= lfsck_obj2dt_dev(obj);
+	struct dt_device		*dev	= lfsck_obj2dev(obj);
 	struct thandle			*th	= NULL;
 	int				 rc	= 0;
 	ENTRY;
@@ -342,7 +342,7 @@ static int lfsck_remove_dirent(const struct lu_env *env,
 
 	snprintf(info->lti_tmpbuf2, sizeof(info->lti_tmpbuf2), DFID":%u",
 		 PFID(fid), index);
-	obj = lfsck_object_find_by_dev(env, com->lc_lfsck->li_bottom, fid);
+	obj = lfsck_object_find_bottom(env, com->lc_lfsck, fid);
 	if (IS_ERR(obj))
 		return PTR_ERR(obj);
 
@@ -841,22 +841,12 @@ out:
 int lfsck_read_stripe_lmv(const struct lu_env *env, struct dt_object *obj,
 			  struct lmv_mds_md_v1 *lmv)
 {
-	struct dt_object *bottom;
-	int		  rc;
+	int rc;
 
-	/* Currently, we only store the LMV header on disk. It is the LOD's
-	 * duty to iterate the master MDT-object's directory to compose the
-	 * integrated LMV EA. But here, we only want to load the LMV header,
-	 * so we need to bypass LOD to avoid unnecessary iteration in LOD. */
-	bottom = lu2dt(container_of0(obj->do_lu.lo_header->loh_layers.prev,
-				     struct lu_object, lo_linkage));
-	if (unlikely(bottom == NULL))
-		return -ENOENT;
-
-	dt_read_lock(env, bottom, 0);
-	rc = dt_xattr_get(env, bottom, lfsck_buf_get(env, lmv, sizeof(*lmv)),
+	dt_read_lock(env, obj, 0);
+	rc = dt_xattr_get(env, obj, lfsck_buf_get(env, lmv, sizeof(*lmv)),
 			  XATTR_NAME_LMV, BYPASS_CAPA);
-	dt_read_unlock(env, bottom);
+	dt_read_unlock(env, obj);
 	if (rc != sizeof(*lmv))
 		return rc > 0 ? -EINVAL : rc;
 
@@ -1009,7 +999,7 @@ int lfsck_namespace_update_lmv(const struct lu_env *env,
 	struct lmv_mds_md_v1		*lmv4	= &info->lti_lmv4;
 	struct lu_buf			*buf	= &info->lti_buf;
 	struct lfsck_instance		*lfsck	= com->lc_lfsck;
-	struct dt_device		*dev	= lfsck_obj2dt_dev(obj);
+	struct dt_device		*dev	= lfsck_obj2dev(obj);
 	struct thandle			*th	= NULL;
 	struct lustre_handle		 lh	= { 0 };
 	int				 rc	= 0;
@@ -1237,7 +1227,7 @@ static int lfsck_namespace_notify_lmv_remote(const struct lu_env *env,
 	lr = req_capsule_client_get(&req->rq_pill, &RMF_LFSCK_REQUEST);
 	memset(lr, 0, sizeof(*lr));
 	lr->lr_event = event;
-	lr->lr_index = lfsck_dev_idx(lfsck->li_bottom);
+	lr->lr_index = lfsck_dev_idx(lfsck);
 	lr->lr_active = LFSCK_TYPE_NAMESPACE;
 	lr->lr_fid = *fid;
 	lr->lr_flags = flags;
@@ -1356,7 +1346,7 @@ int lfsck_namespace_notify_lmv_master_local(const struct lu_env *env,
  *
  * \param[in] env	pointer to the thread context
  * \param[in] com	pointer to the lfsck component
- * \param[in] dir	pointer to the object on which the LMV EA will be set
+ * \param[in] obj	pointer to the object on which the LMV EA will be set
  * \param[in] lmv	pointer to the buffer holding the new LMV EA
  * \param[in] cfid	the shard's FID used for verification
  * \param[in] cidx	the shard's index used for verification
@@ -1368,7 +1358,7 @@ int lfsck_namespace_notify_lmv_master_local(const struct lu_env *env,
  */
 static int lfsck_namespace_set_lmv_master(const struct lu_env *env,
 					  struct lfsck_component *com,
-					  struct dt_object *dir,
+					  struct dt_object *obj,
 					  struct lmv_mds_md_v1 *lmv,
 					  const struct lu_fid *cfid,
 					  __u32 cidx, __u32 flags)
@@ -1377,19 +1367,11 @@ static int lfsck_namespace_set_lmv_master(const struct lu_env *env,
 	struct lmv_mds_md_v1		*lmv3	= &info->lti_lmv3;
 	struct lu_seq_range		*range	= &info->lti_range;
 	struct lfsck_instance		*lfsck	= com->lc_lfsck;
-	struct seq_server_site		*ss	=
-			lu_site2seq(lfsck->li_bottom->dd_lu_dev.ld_site);
-	struct dt_object		*obj;
+	struct seq_server_site		*ss	= lfsck_dev_site(lfsck);
 	struct lustre_handle		 lh	= { 0 };
 	int				 pidx	= -1;
 	int				 rc	= 0;
 	ENTRY;
-
-	/* Find the bottom object to bypass LOD when set LMV EA. */
-	obj = lu2dt(container_of0(dir->do_lu.lo_header->loh_layers.prev,
-				  struct lu_object, lo_linkage));
-	if (unlikely(obj == NULL))
-		RETURN(-ENOENT);
 
 	fld_range_set_mdt(range);
 	rc = fld_server_lookup(env, ss->ss_server_fld,
@@ -1524,7 +1506,7 @@ log:
 	CDEBUG(D_LFSCK, "%s: namespace LFSCK assistant found bad name hash "
 	       "on the MDT %x, parent "DFID", name %s, shard_%x "DFID
 	       ": rc = %d\n",
-	       lfsck_lfsck2name(lfsck), lfsck_dev_idx(lfsck->li_bottom),
+	       lfsck_lfsck2name(lfsck), lfsck_dev_idx(lfsck),
 	       PFID(pfid), name, llmv->ll_lmv.lmv_master_mdt_index,
 	       PFID(lfsck_dto2fid(shard)), rc);
 
@@ -1714,7 +1696,7 @@ int lfsck_namespace_verify_stripe_slave(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 
-	parent = lfsck_object_find(env, lfsck, pfid);
+	parent = lfsck_object_find_bottom(env, lfsck, pfid);
 	if (IS_ERR(parent)) {
 		rc = lfsck_namespace_trace_update(env, com, cfid,
 					LNTF_UNCERTAIN_LMV, true);
@@ -1837,8 +1819,7 @@ int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 	struct lmv_mds_md_v1		*lmv2	= &info->lti_lmv2;
 	const struct lu_fid		*pfid	= lfsck_dto2fid(dir);
 	struct lu_seq_range		*range	= &info->lti_range;
-	struct seq_server_site		*ss	=
-			lu_site2seq(lfsck->li_bottom->dd_lu_dev.ld_site);
+	struct seq_server_site		*ss	= lfsck_dev_site(lfsck);
 	__u32				 stripe_count;
 	__u32				 hash_type;
 	int				 rc	= 0;
@@ -2214,11 +2195,11 @@ int lfsck_namespace_handle_striped_master(const struct lu_env *env,
 	if (shard_idx < 0)
 		GOTO(fail_lmv, rc = shard_idx);
 
-	if (shard_idx == lfsck_dev_idx(lfsck->li_bottom)) {
+	if (shard_idx == lfsck_dev_idx(lfsck)) {
 		if (unlikely(strcmp(lnr->lnr_name, dotdot) == 0))
 			GOTO(out, rc = 0);
 
-		dev = lfsck->li_next;
+		dev = lfsck->li_bottom;
 	} else {
 		struct lfsck_tgt_desc *ltd;
 
@@ -2336,7 +2317,7 @@ out:
 		if ((rc == -ENOTCONN || rc == -ESHUTDOWN || rc == -EREMCHG ||
 		     rc == -ETIMEDOUT || rc == -EHOSTDOWN ||
 		     rc == -EHOSTUNREACH || rc == -EINPROGRESS) &&
-		    dev != NULL && dev != lfsck->li_next)
+		    dev != NULL && dev != lfsck->li_bottom)
 			lfsck_lad_set_bitmap(env, com, shard_idx);
 
 		if (!(lfsck->li_bookmark_ram.lb_param & LPF_FAILOUT))
