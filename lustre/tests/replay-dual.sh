@@ -254,23 +254,25 @@ test_10() {
 run_test 10 "resending a replayed unlink"
 
 test_11() {
-    replay_barrier $SINGLEMDS
-    mcreate $MOUNT1/$tfile-1
-    mcreate $MOUNT2/$tfile-2
-    mcreate $MOUNT1/$tfile-3
-    mcreate $MOUNT2/$tfile-4
-    mcreate $MOUNT1/$tfile-5
-    # drop all reint replies for a while
-    do_facet $SINGLEMDS lctl set_param fail_loc=0x0119
-    # note that with this fail_loc set, facet_failover df will fail
-    facet_failover $SINGLEMDS
-    #sleep for while, let both clients reconnect and timeout
-    sleep $((TIMEOUT * 2))
-    do_facet $SINGLEMDS lctl set_param fail_loc=0
+	replay_barrier $SINGLEMDS
+	mcreate $DIR1/$tfile-1
+	mcreate $DIR2/$tfile-2
+	mcreate $DIR1/$tfile-3
+	mcreate $DIR2/$tfile-4
+	mcreate $DIR1/$tfile-5
+	# drop all reint replies for a while
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x0119
+	# note that with this fail_loc set, facet_failover df will fail
+	facet_failover $SINGLEMDS
 
-    rm $MOUNT1/$tfile-[1-5] || return 1
+	local clients=${CLIENTS:-$HOSTNAME}
+	wait_clients_import_state "$clients" $SINGLEMDS FULL
 
-    return 0
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+
+	rm $DIR1/$tfile-[1-5] || return 1
+
+	return 0
 }
 run_test 11 "both clients timeout during replay"
 
@@ -471,27 +473,29 @@ test_19() { # Bug 10991 - resend of open request does not fail assertion.
 run_test 19 "resend of open request"
 
 test_20() { #16389
-    BEFORE=`date +%s`
-    replay_barrier $SINGLEMDS
-    touch $MOUNT1/a
-    touch $MOUNT2/b
-    umount $MOUNT2
-    fail $SINGLEMDS
-    rm $MOUNT1/a
-    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
-    TIER1=$((`date +%s` - BEFORE))
-    BEFORE=`date +%s`
-    replay_barrier $SINGLEMDS
-    touch $MOUNT1/a
-    touch $MOUNT2/b
-    umount $MOUNT2
-    fail $SINGLEMDS
-    rm $MOUNT1/a
-    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
-    TIER2=$((`date +%s` - BEFORE))
-    [ $TIER2 -ge $((TIER1 * 2)) ] && \
-        error "recovery time is growing $TIER2 > $TIER1"
-    return 0
+	local before=$SECONDS
+	replay_barrier $SINGLEMDS
+	touch $DIR1/$tfile.a
+	touch $DIR2/$tfile.b
+	umount $DIR2
+	fail $SINGLEMDS
+	rm $DIR1/$tfile.a
+	zconf_mount $HOSTNAME $DIR2 || error "mount $DIR2 fail"
+	local tier1=$((SECONDS - before))
+
+	before=$SECONDS
+	replay_barrier $SINGLEMDS
+	touch $DIR1/$tfile.a
+	touch $DIR2/$tfile.b
+	umount $DIR2
+	fail $SINGLEMDS
+	rm $DIR1/$tfile.a
+	zconf_mount $HOSTNAME $DIR2 || error "mount $DIR2 fail"
+	local tier2=$((SECONDS - before))
+
+	# timeout is more than 2.25x original timeout
+	((tier2 < tier1 * 9 / 4)) ||
+		error "recovery time $tier2 >= 2.25x original time $tier1"
 }
 run_test 20 "recovery time is not increasing"
 
