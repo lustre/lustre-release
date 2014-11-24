@@ -4118,7 +4118,6 @@ static int lfsck_namespace_exec_dir(const struct lu_env *env,
 	bool				 wakeup	 = false;
 
 	l_wait_event(mthread->t_ctl_waitq,
-		     bk->lb_async_windows == 0 ||
 		     lad->lad_prefetched < bk->lb_async_windows ||
 		     !thread_is_running(mthread) ||
 		     thread_is_stopped(athread),

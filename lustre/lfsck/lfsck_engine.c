@@ -1636,10 +1636,7 @@ int lfsck_assistant_engine(void *args)
 			/* Wake up the main engine thread only when the list
 			 * is empty or half of the prefetched items have been
 			 * handled to avoid too frequent thread schedule. */
-			if (lad->lad_prefetched == 0 ||
-			    (bk->lb_async_windows != 0 &&
-			     bk->lb_async_windows / 2 ==
-			     lad->lad_prefetched))
+			if (lad->lad_prefetched <= (bk->lb_async_windows / 2))
 				wakeup = true;
 			spin_unlock(&lad->lad_lock);
 			if (wakeup)

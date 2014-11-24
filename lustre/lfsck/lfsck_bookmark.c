@@ -182,8 +182,20 @@ int lfsck_bookmark_setup(const struct lu_env *env,
 
 	lfsck->li_bookmark_obj = obj;
 	rc = lfsck_bookmark_load(env, lfsck);
-	if (rc == -ENODATA)
+	if (rc == 0) {
+		struct lfsck_bookmark *mb = &lfsck->li_bookmark_ram;
+
+		/* It is upgraded from old release, set it as
+		 * LFSCK_ASYNC_WIN_DEFAULT to avoid memory pressure. */
+		if (unlikely(mb->lb_async_windows == 0)) {
+			mb->lb_async_windows = LFSCK_ASYNC_WIN_DEFAULT;
+			mutex_lock(&lfsck->li_mutex);
+			rc = lfsck_bookmark_store(env, lfsck);
+			mutex_unlock(&lfsck->li_mutex);
+		}
+	} else if (rc == -ENODATA) {
 		rc = lfsck_bookmark_init(env, lfsck);
+	}
 
 	RETURN(rc);
 }
@@ -314,6 +326,10 @@ int lfsck_set_param(const struct lu_env *env, struct lfsck_instance *lfsck,
 		}
 
 		if (start->ls_valid & LSV_ASYNC_WINDOWS) {
+			if (start->ls_async_windows < 1 ||
+			    start->ls_async_windows > LFSCK_ASYNC_WIN_MAX)
+				return -EINVAL;
+
 			if (bk->lb_async_windows != start->ls_async_windows) {
 				bk->lb_async_windows = start->ls_async_windows;
 				dirty = true;

@@ -272,14 +272,11 @@ bad_type:
 		}
 		case 'w':
 			val = atoi(optarg);
-			if (val < 0 || val > LFSCK_ASYNC_WIN_MAX) {
+			if (val < 1 || val > LFSCK_ASYNC_WIN_MAX) {
 				fprintf(stderr,
-					"Too large async window size, "
-					"which may cause memory issues. "
-					"The valid range is [0 - %u]. "
-					"If you do not want to restrict "
-					"the window size for async reqeusts "
-					"pipeline, just set it as 0.\n",
+					"Invalid async window size that "
+					"may cause memory issues. The valid "
+					"range is [1 - %u].\n",
 					LFSCK_ASYNC_WIN_MAX);
 				return -EINVAL;
 			}

@@ -4218,7 +4218,6 @@ static int lfsck_layout_scan_stripes(const struct lu_env *env,
 			continue;
 
 		l_wait_event(mthread->t_ctl_waitq,
-			     bk->lb_async_windows == 0 ||
 			     lad->lad_prefetched < bk->lb_async_windows ||
 			     !thread_is_running(mthread) ||
 			     thread_is_stopped(athread),
