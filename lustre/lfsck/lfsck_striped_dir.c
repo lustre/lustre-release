@@ -2078,12 +2078,12 @@ repair:
 			rc1 = lfsck_ibits_lock(env, lfsck, obj, &lh,
 					       MDS_INODELOCK_UPDATE |
 					       MDS_INODELOCK_XATTR, LCK_EX);
-			lfsck_ibits_unlock(&lh, LCK_EX);
 			if (rc1 != 0)
 				goto next;
 
 			rc1 = lfsck_namespace_rebuild_linkea(env, com, obj,
 							     &ldata);
+			lfsck_ibits_unlock(&lh, LCK_EX);
 			if (rc1 >= 0) {
 				linkea_repaired = true;
 				if (rc1 > 0)

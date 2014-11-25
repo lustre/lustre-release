@@ -801,6 +801,13 @@ struct lfsck_assistant_data {
 
 #define LFSCK_TMPBUF_LEN	64
 
+struct lfsck_lock_handle {
+	struct lustre_handle	llh_pdo_lh;
+	struct lustre_handle	llh_reg_lh;
+	ldlm_mode_t		llh_pdo_mode;
+	ldlm_mode_t		llh_reg_mode;
+};
+
 struct lfsck_thread_info {
 	struct lu_name		lti_name_const;
 	struct lu_name		lti_name;
@@ -848,6 +855,7 @@ struct lfsck_thread_info {
 	struct lmv_mds_md_v1	lti_lmv2;
 	struct lmv_mds_md_v1	lti_lmv3;
 	struct lmv_mds_md_v1	lti_lmv4;
+	struct lfsck_lock_handle lti_llh;
 };
 
 /* lfsck_lib.c */
@@ -857,6 +865,10 @@ int lfsck_ibits_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
 		     struct dt_object *obj, struct lustre_handle *lh,
 		     __u64 bits, ldlm_mode_t mode);
 void lfsck_ibits_unlock(struct lustre_handle *lh, ldlm_mode_t mode);
+int lfsck_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
+	       struct dt_object *obj, const char *name,
+	       struct lfsck_lock_handle *llh, __u64 bits, ldlm_mode_t mode);
+void lfsck_unlock(struct lfsck_lock_handle *llh);
 int lfsck_find_mdt_idx_by_fid(const struct lu_env *env,
 			      struct lfsck_instance *lfsck,
 			      const struct lu_fid *fid);

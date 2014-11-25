@@ -1766,7 +1766,7 @@ static int lfsck_layout_recreate_parent(const struct lu_env *env,
 	struct thandle			*th	= NULL;
 	struct lu_buf			*ea_buf = &info->lti_big_buf;
 	struct lu_buf			 lov_buf;
-	struct lustre_handle		 lh	= { 0 };
+	struct lfsck_lock_handle	*llh	= &info->lti_llh;
 	struct linkea_data		 ldata	= { NULL };
 	struct lu_buf			 linkea_buf;
 	const struct lu_name		*pname;
@@ -1806,25 +1806,6 @@ static int lfsck_layout_recreate_parent(const struct lu_env *env,
 	LASSERT(infix != NULL);
 	LASSERT(type != NULL);
 
-	do {
-		snprintf(name, NAME_MAX, DFID"%s-%s-%d", PFID(pfid), infix,
-			 type, idx++);
-		rc = dt_lookup(env, lfsck->li_lpf_obj, (struct dt_rec *)tfid,
-			       (const struct dt_key *)name, BYPASS_CAPA);
-		if (rc != 0 && rc != -ENOENT)
-			GOTO(log, rc);
-	} while (rc == 0);
-
-	rc = linkea_data_new(&ldata,
-			     &lfsck_env_info(env)->lti_linkea_buf);
-	if (rc != 0)
-		GOTO(log, rc);
-
-	pname = lfsck_name_get_const(env, name, strlen(name));
-	rc = linkea_add_buf(&ldata, pname, lfsck_dto2fid(lfsck->li_lpf_obj));
-	if (rc != 0)
-		GOTO(log, rc);
-
 	memset(la, 0, sizeof(*la));
 	la->la_uid = rec->lor_uid;
 	la->la_gid = rec->lor_gid;
@@ -1844,16 +1825,42 @@ static int lfsck_layout_recreate_parent(const struct lu_env *env,
 			GOTO(log, rc = -ENOMEM);
 	}
 
-	/* Hold update lock on the .lustre/lost+found/MDTxxxx/.
-	 *
-	 * XXX: Currently, we do not grab the PDO lock as normal create cases,
-	 *	because creating MDT-object for orphan OST-object is rare, we
-	 *	do not much care about the performance. It can be improved in
-	 *	the future when needed. */
-	rc = lfsck_ibits_lock(env, lfsck, lpf, &lh,
-			      MDS_INODELOCK_UPDATE, LCK_EX);
+again:
+	do {
+		snprintf(name, NAME_MAX, DFID"%s-%s-%d", PFID(pfid), infix,
+			 type, idx++);
+		rc = dt_lookup(env, lfsck->li_lpf_obj, (struct dt_rec *)tfid,
+			       (const struct dt_key *)name, BYPASS_CAPA);
+		if (rc != 0 && rc != -ENOENT)
+			GOTO(log, rc);
+	} while (rc == 0);
+
+	rc = lfsck_lock(env, lfsck, lfsck->li_lpf_obj, name, llh,
+			MDS_INODELOCK_UPDATE, LCK_PW);
 	if (rc != 0)
 		GOTO(log, rc);
+
+	/* Re-check whether the name conflict with othrs after taken
+	 * the ldlm lock. */
+	rc = dt_lookup(env, lfsck->li_lpf_obj, (struct dt_rec *)tfid,
+		       (const struct dt_key *)name, BYPASS_CAPA);
+	if (unlikely(rc == 0)) {
+		lfsck_unlock(llh);
+		goto again;
+	}
+
+	if (rc != -ENOENT)
+		GOTO(unlock, rc);
+
+	rc = linkea_data_new(&ldata,
+			     &lfsck_env_info(env)->lti_linkea_buf);
+	if (rc != 0)
+		GOTO(unlock, rc);
+
+	pname = lfsck_name_get_const(env, name, strlen(name));
+	rc = linkea_add_buf(&ldata, pname, lfsck_dto2fid(lfsck->li_lpf_obj));
+	if (rc != 0)
+		GOTO(unlock, rc);
 
 	/* The 1st transaction. */
 	th = dt_trans_create(env, dev);
@@ -1920,7 +1927,7 @@ stop:
 		dt_trans_stop(env, dev, th);
 
 unlock:
-	lfsck_ibits_unlock(&lh, LCK_EX);
+	lfsck_unlock(llh);
 
 log:
 	if (cobj != NULL && !IS_ERR(cobj))
@@ -2136,7 +2143,6 @@ static int lfsck_layout_conflict_create(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(out, rc);
 
-	/* Hold layout lock on the parent to prevent others to access. */
 	rc = lfsck_ibits_lock(env, com->lc_lfsck, parent, &lh,
 			      MDS_INODELOCK_LAYOUT | MDS_INODELOCK_XATTR,
 			      LCK_EX);
