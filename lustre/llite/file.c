@@ -1052,7 +1052,7 @@ int ll_merge_attr(const struct lu_env *env, struct inode *inode)
 	CDEBUG(D_VFSTRACE, DFID" updating i_size "LPU64"\n",
 	       PFID(&lli->lli_fid), attr->cat_size);
 
-	cl_isize_write_nolock(inode, attr->cat_size);
+	i_size_write(inode, attr->cat_size);
 	inode->i_blocks = attr->cat_blocks;
 
 	LTIME_S(inode->i_atime) = atime;
@@ -1653,7 +1653,7 @@ ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg)
 	LASSERT(fd->fd_grouplock.cg_lock == NULL);
 	spin_unlock(&lli->lli_lock);
 
-	rc = cl_get_grouplock(cl_i2info(inode)->lli_clob,
+	rc = cl_get_grouplock(ll_i2info(inode)->lli_clob,
 			      arg, (file->f_flags & O_NONBLOCK), &grouplock);
 	if (rc)
 		RETURN(rc);
@@ -2725,7 +2725,7 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 	capa = ll_osscapa_get(inode, CAPA_OPC_OSS_WRITE);
 
 	io = ccc_env_thread_io(env);
-	io->ci_obj = cl_i2info(inode)->lli_clob;
+	io->ci_obj = ll_i2info(inode)->lli_clob;
 	io->ci_ignore_layout = ignore_layout;
 
 	/* initialize parameters for sync */
@@ -4037,7 +4037,7 @@ int ll_layout_restore(struct inode *inode, loff_t offset, __u64 length)
 	hur->hur_user_item[0].hui_extent.offset = offset;
 	hur->hur_user_item[0].hui_extent.length = length;
 	hur->hur_request.hr_itemcount = 1;
-	rc = obd_iocontrol(LL_IOC_HSM_REQUEST, cl_i2sbi(inode)->ll_md_exp,
+	rc = obd_iocontrol(LL_IOC_HSM_REQUEST, ll_i2sbi(inode)->ll_md_exp,
 			   len, hur, NULL);
 	OBD_FREE(hur, len);
 	RETURN(rc);

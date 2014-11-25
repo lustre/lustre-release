@@ -412,14 +412,14 @@ int ccc_attr_set(const struct lu_env *env, struct cl_object *obj,
 }
 
 int ccc_object_glimpse(const struct lu_env *env,
-                       const struct cl_object *obj, struct ost_lvb *lvb)
+		       const struct cl_object *obj, struct ost_lvb *lvb)
 {
-        struct inode *inode = ccc_object_inode(obj);
+	struct inode *inode = ccc_object_inode(obj);
 
-        ENTRY;
-        lvb->lvb_mtime = cl_inode_mtime(inode);
-        lvb->lvb_atime = cl_inode_atime(inode);
-        lvb->lvb_ctime = cl_inode_ctime(inode);
+	ENTRY;
+	lvb->lvb_mtime = LTIME_S(inode->i_mtime);
+	lvb->lvb_atime = LTIME_S(inode->i_atime);
+	lvb->lvb_ctime = LTIME_S(inode->i_ctime);
         /*
          * LU-417: Add dirty pages block count lest i_blocks reports 0, some
          * "cp" or "tar" on remote node may think it's a completely sparse file
@@ -443,7 +443,7 @@ static void ccc_object_size_lock(struct cl_object *obj)
 {
 	struct inode *inode = ccc_object_inode(obj);
 
-	cl_isize_lock(inode);
+	ll_inode_size_lock(inode);
 	cl_object_attr_lock(obj);
 }
 
@@ -452,7 +452,7 @@ static void ccc_object_size_unlock(struct cl_object *obj)
 	struct inode *inode = ccc_object_inode(obj);
 
 	cl_object_attr_unlock(obj);
-	cl_isize_unlock(inode);
+	ll_inode_size_unlock(inode);
 }
 
 /*****************************************************************************
@@ -731,7 +731,7 @@ int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
                                  * kernel will check such case correctly.
                                  * linux-2.6.18-128.1.1 miss to do that.
                                  * --bug 17336 */
-				loff_t size = cl_isize_read(inode);
+				loff_t size = i_size_read(inode);
 				unsigned long cur_index = start >>
 							  PAGE_CACHE_SHIFT;
 
@@ -752,12 +752,12 @@ int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
                          * which will always be >= the kms value here.
                          * b=11081
                          */
-                        if (cl_isize_read(inode) < kms) {
-                                cl_isize_write_nolock(inode, kms);
+			if (i_size_read(inode) < kms) {
+				i_size_write(inode, kms);
                                 CDEBUG(D_VFSTRACE,
                                        DFID" updating i_size "LPU64"\n",
                                        PFID(lu_object_fid(&obj->co_lu)),
-                                       (__u64)cl_isize_read(inode));
+				       (__u64)i_size_read(inode));
 
                         }
                 }
@@ -826,16 +826,16 @@ void ccc_req_attr_set(const struct lu_env *env,
 	if (slice->crs_req->crq_type == CRT_WRITE) {
 		if (flags & OBD_MD_FLEPOCH) {
 			oa->o_valid |= OBD_MD_FLEPOCH;
-			oa->o_ioepoch = cl_i2info(inode)->lli_ioepoch;
+			oa->o_ioepoch = ll_i2info(inode)->lli_ioepoch;
 			valid_flags |= OBD_MD_FLMTIME | OBD_MD_FLCTIME |
 				       OBD_MD_FLUID | OBD_MD_FLGID;
 		}
 	}
 	obdo_from_inode(oa, inode, valid_flags & flags);
-	obdo_set_parent_fid(oa, &cl_i2info(inode)->lli_fid);
+	obdo_set_parent_fid(oa, &ll_i2info(inode)->lli_fid);
 	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_INVALID_PFID))
 		oa->o_parent_oid++;
-	memcpy(attr->cra_jobid, cl_i2info(inode)->lli_jobid,
+	memcpy(attr->cra_jobid, ll_i2info(inode)->lli_jobid,
 	       LUSTRE_JOBID_SIZE);
 }
 
@@ -859,7 +859,7 @@ int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
                 RETURN(PTR_ERR(env));
 
         io = ccc_env_thread_io(env);
-        io->ci_obj = cl_i2info(inode)->lli_clob;
+	io->ci_obj = ll_i2info(inode)->lli_clob;
 
         io->u.ci_setattr.sa_attr.lvb_atime = LTIME_S(attr->ia_atime);
         io->u.ci_setattr.sa_attr.lvb_mtime = LTIME_S(attr->ia_mtime);
@@ -875,7 +875,7 @@ again:
                 if (attr->ia_valid & ATTR_FILE)
                         /* populate the file descriptor for ftruncate to honor
                          * group lock - see LU-787 */
-                        cio->cui_fd = cl_iattr2fd(inode, attr);
+			cio->cui_fd = LUSTRE_FPRIVATE(attr->ia_file);
 
                 result = cl_io_loop(env, io);
         } else {
@@ -962,12 +962,11 @@ struct page *cl2vm_page(const struct cl_page_slice *slice)
  */
 int ccc_object_invariant(const struct cl_object *obj)
 {
-        struct inode         *inode = ccc_object_inode(obj);
-        struct cl_inode_info *lli   = cl_i2info(inode);
+	struct inode		*inode	= ccc_object_inode(obj);
+	struct ll_inode_info	*lli	= ll_i2info(inode);
 
-        return (S_ISREG(cl_inode_mode(inode)) ||
-                /* i_mode of unlinked inode is zeroed. */
-                cl_inode_mode(inode) == 0) && lli->lli_clob == obj;
+	return (S_ISREG(inode->i_mode) || inode->i_mode == 0) &&
+	       lli->lli_clob == obj;
 }
 
 struct inode *ccc_object_inode(const struct cl_object *obj)
@@ -997,8 +996,8 @@ struct cl_page *ccc_vmpage_page_transient(struct page *vmpage)
  */
 int cl_file_inode_init(struct inode *inode, struct lustre_md *md)
 {
-        struct lu_env        *env;
-        struct cl_inode_info *lli;
+	struct lu_env        *env;
+	struct ll_inode_info *lli;
         struct cl_object     *clob;
         struct lu_site       *site;
         struct lu_fid        *fid;
@@ -1012,14 +1011,14 @@ int cl_file_inode_init(struct inode *inode, struct lustre_md *md)
         int refcheck;
 
 	LASSERT(md->body->mbo_valid & OBD_MD_FLID);
-        LASSERT(S_ISREG(cl_inode_mode(inode)));
+	LASSERT(S_ISREG(inode->i_mode));
 
-        env = cl_env_get(&refcheck);
-        if (IS_ERR(env))
-                return PTR_ERR(env);
+	env = cl_env_get(&refcheck);
+	if (IS_ERR(env))
+		return PTR_ERR(env);
 
-        site = cl_i2sbi(inode)->ll_site;
-        lli  = cl_i2info(inode);
+	site = ll_i2sbi(inode)->ll_site;
+	lli  = ll_i2info(inode);
         fid  = &lli->lli_fid;
         LASSERT(fid_is_sane(fid));
 
@@ -1093,8 +1092,8 @@ static void cl_object_put_last(struct lu_env *env, struct cl_object *obj)
 
 void cl_inode_fini(struct inode *inode)
 {
-        struct lu_env           *env;
-        struct cl_inode_info    *lli  = cl_i2info(inode);
+	struct lu_env           *env;
+	struct ll_inode_info    *lli  = ll_i2info(inode);
         struct cl_object        *clob = lli->lli_clob;
         int refcheck;
         int emergency;
@@ -1188,10 +1187,10 @@ __u32 cl_fid_build_gen(const struct lu_fid *fid)
  * inside layout lock - MDS_INODELOCK_LAYOUT. */
 struct lov_stripe_md *ccc_inode_lsm_get(struct inode *inode)
 {
-	return lov_lsm_get(cl_i2info(inode)->lli_clob);
+	return lov_lsm_get(ll_i2info(inode)->lli_clob);
 }
 
 void inline ccc_inode_lsm_put(struct inode *inode, struct lov_stripe_md *lsm)
 {
-	lov_lsm_put(cl_i2info(inode)->lli_clob, lsm);
+	lov_lsm_put(ll_i2info(inode)->lli_clob, lsm);
 }
