@@ -11148,6 +11148,39 @@ test_184d() {
 }
 run_test 184d "allow stripeless layouts swap"
 
+test_184e() {
+	check_swap_layouts_support && return 0
+	[ -z "$(which getfattr 2>/dev/null)" ] &&
+		skip "no getfattr command" && return 0
+
+	local file1=$DIR/$tdir/$tfile-1
+	local file2=$DIR/$tdir/$tfile-2
+	local file3=$DIR/$tdir/$tfile-3
+	local lovea
+
+	mkdir -p $DIR/$tdir
+	touch $file1 || error "create $file1 failed"
+	$OPENFILE -f O_CREAT:O_LOV_DELAY_CREATE $file2 ||
+		error "create $file2 failed"
+	$OPENFILE -f O_CREAT:O_LOV_DELAY_CREATE $file3 ||
+		error "create $file3 failed"
+
+	$LFS swap_layouts $file1 $file2 ||
+		error "swap $file1 $file2 layouts failed"
+
+	lovea=$(getfattr -n trusted.lov $file1 | grep ^trusted)
+	[[ -z "$lovea" ]] || error "$file1 shouldn't have lovea"
+
+	echo 123 > $file1 || error "Should be able to write into $file1"
+
+	$LFS swap_layouts $file1 $file3 ||
+		error "swap $file1 $file3 layouts failed"
+
+	echo 123 > $file1 || error "Should be able to write into $file1"
+
+	rm -rf $file1 $file2 $file3
+}
+run_test 184e "Recreate layout after stripeless layout swaps"
 
 test_185() { # LU-2441
 	# LU-3553 - no volatile file support in old servers
