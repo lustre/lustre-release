@@ -6881,6 +6881,11 @@ test_102p() { # LU-4703 setxattr did not check ownership
 }
 run_test 102p "check setxattr(2) correctly fails without permission"
 
+test_102q() {
+	orphan_linkea_check $DIR/$tfile || error "orphan_linkea_check"
+}
+run_test 102q "flistxattr should not return trusted.link EAs for orphans"
+
 run_acl_subtest()
 {
     $LUSTRE/tests/acl/run $LUSTRE/tests/acl/$1.test

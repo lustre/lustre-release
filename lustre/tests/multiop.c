@@ -52,6 +52,7 @@
 #include <semaphore.h>
 #include <time.h>
 #include <err.h>
+#include <attr/xattr.h>
 
 #include <lustre/lustre_idl.h>
 #include <lustre/lustreapi.h>
@@ -63,10 +64,13 @@ char *buf, *buf_align;
 int bufsize = 0;
 sem_t sem;
 #define ALIGN_LEN 65535
+#define XATTR "user.multiop"
 
 char usage[] =
 "Usage: %s filename command-sequence [path...]\n"
 "    command-sequence items:\n"
+"	 A  fsetxattr(\"user.multiop\")\n"
+"	 a  fgetxattr(\"user.multiop\")\n"
 "	 c  close\n"
 "	 B[num] call setstripe ioctl to create stripes\n"
 "	 C[num] create with optional stripes\n"
@@ -247,6 +251,20 @@ int main(int argc, char **argv)
 			ts.tv_nsec = 0;
                         while (sem_timedwait(&sem, &ts) < 0 && errno == EINTR);
                         break;
+		case 'A':
+			if (fsetxattr(fd, XATTR, "multiop", 8, 0)) {
+				save_errno = errno;
+				perror("fsetxattr");
+				exit(save_errno);
+			}
+			break;
+		case 'a':
+			if (fgetxattr(fd, XATTR, NULL, 0) == -1) {
+				save_errno = errno;
+				perror("fgetxattr");
+				exit(save_errno);
+			}
+			break;
                 case 'c':
                         if (close(fd) == -1) {
                                 save_errno = errno;

@@ -289,7 +289,35 @@ static int mdd_xattr_list(const struct lu_env *env, struct md_object *obj,
         rc = mdo_xattr_list(env, mdd_obj, buf, mdd_object_capa(env, mdd_obj));
         mdd_read_unlock(env, mdd_obj);
 
-        RETURN(rc);
+	if (rc < 0)
+		RETURN(rc);
+
+	/*
+	 * Filter out XATTR_NAME_LINK if this is an orphan object.  See
+	 * mdd_xattr_get().
+	 */
+	if (unlikely(mdd_obj->mod_flags & (DEAD_OBJ | ORPHAN_OBJ))) {
+		char   *end = (char *)buf->lb_buf + rc;
+		char   *p = buf->lb_buf;
+
+		while (p < end) {
+			char   *next = p + strlen(p) + 1;
+
+			if (strcmp(p, XATTR_NAME_LINK) == 0) {
+				if (end - next > 0)
+					memmove(p, next, end - next);
+				rc -= next - p;
+				CDEBUG(D_INFO, "Filtered out "XATTR_NAME_LINK
+				       " of orphan "DFID"\n",
+				       PFID(mdd_object_fid(mdd_obj)));
+				break;
+			}
+
+			p = next;
+		}
+	}
+
+	RETURN(rc);
 }
 
 int mdd_declare_object_create_internal(const struct lu_env *env,
