@@ -3644,7 +3644,7 @@ test_42a() {
 		error "$BEFOREWRITES < $AFTERWRITES"
 	start_writeback
 }
-run_test 42a "ensure that we don't flush on close =============="
+run_test 42a "ensure that we don't flush on close"
 
 test_42b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
@@ -3805,56 +3805,53 @@ test_43A() { # was test_43
 	# give multiop a chance to open
 	sleep 1
 
-	$DIR/$tdir/$tfile && error || true
+	$DIR/$tdir/$tfile && error "execute $DIR/$tdir/$tfile succeeded" || true
 	kill -USR1 $pid
 }
 run_test 43A "execution of file opened for write should return -ETXTBSY"
 
 test_43a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	test_mkdir -p $DIR/$tdir
-	cp -p `which $MULTIOP` $DIR/$tdir/multiop ||
-			cp -p multiop $DIR/$tdir/multiop
+	test_mkdir $DIR/$tdir
+	cp -p $(which $MULTIOP) $DIR/$tdir/multiop ||
+		cp -p multiop $DIR/$tdir/multiop
 	MULTIOP_PROG=$DIR/$tdir/multiop multiop_bg_pause $TMP/$tfile.junk O_c ||
-			return 1
-        MULTIOP_PID=$!
-        $MULTIOP $DIR/$tdir/multiop Oc && error "expected error, got success"
-        kill -USR1 $MULTIOP_PID || return 2
-        wait $MULTIOP_PID || return 3
-	rm $TMP/$tfile.junk $DIR/$tdir/multiop
+		error "multiop open $TMP/$tfile.junk failed"
+	MULTIOP_PID=$!
+	$MULTIOP $DIR/$tdir/multiop Oc && error "expected error, got success"
+	kill -USR1 $MULTIOP_PID || error "kill -USR1 PID $MULTIOP_PID failed"
+	wait $MULTIOP_PID || error "wait PID $MULTIOP_PID failed"
 }
 run_test 43a "open(RDWR) of file being executed should return -ETXTBSY"
 
 test_43b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	test_mkdir -p $DIR/$tdir
-	cp -p `which $MULTIOP` $DIR/$tdir/multiop ||
-			cp -p multiop $DIR/$tdir/multiop
+	test_mkdir $DIR/$tdir
+	cp -p $(which $MULTIOP) $DIR/$tdir/multiop ||
+		cp -p multiop $DIR/$tdir/multiop
 	MULTIOP_PROG=$DIR/$tdir/multiop multiop_bg_pause $TMP/$tfile.junk O_c ||
-			return 1
-        MULTIOP_PID=$!
-        $TRUNCATE $DIR/$tdir/multiop 0 && error "expected error, got success"
-        kill -USR1 $MULTIOP_PID || return 2
-        wait $MULTIOP_PID || return 3
-	rm $TMP/$tfile.junk $DIR/$tdir/multiop
+		error "multiop open $TMP/$tfile.junk failed"
+	MULTIOP_PID=$!
+	$TRUNCATE $DIR/$tdir/multiop 0 && error "expected error, got success"
+	kill -USR1 $MULTIOP_PID || error "kill -USR1 PID $MULTIOP_PID failed"
+	wait $MULTIOP_PID || error "wait PID $MULTIOP_PID failed"
 }
 run_test 43b "truncate of file being executed should return -ETXTBSY"
 
 test_43c() {
 	local testdir="$DIR/$tdir"
-	test_mkdir -p $DIR/$tdir
+	test_mkdir $testdir
 	cp $SHELL $testdir/
-	( cd $(dirname $SHELL) && md5sum $(basename $SHELL) ) | \
-		( cd $testdir && md5sum -c)
+	( cd $(dirname $SHELL) && md5sum $(basename $SHELL) ) |
+		( cd $testdir && md5sum -c )
 }
-run_test 43c "md5sum of copy into lustre========================"
+run_test 43c "md5sum of copy into lustre"
 
 test_44A() { # was test_44
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "skipping 2-stripe test" && return
 	dd if=/dev/zero of=$DIR/f1 bs=4k count=1 seek=1023
 	dd if=$DIR/f1 bs=4k count=1 > /dev/null
 }
-run_test 44A "zero length read from a sparse stripe ============="
+run_test 44A "zero length read from a sparse stripe"
 
 test_44a() {
 	local nstripe=$($LCTL lov_getconfig $DIR | grep default_stripe_count: |
@@ -4235,6 +4232,35 @@ test_51e() {
 	return 0
 }
 run_test 51e "check file nlink limit"
+
+test_51f() {
+	test_mkdir $DIR/$tdir
+
+	local max=100000
+	local ulimit_old=$(ulimit -n)
+	local spare=20 # number of spare fd's for scripts/libraries, etc.
+	local mdt=$(lfs getstripe -M $DIR/$tdir)
+	local numfree=$(lfs df -i $DIR/$tdir | awk '/MDT:'$mdt'/ { print $4 }')
+
+	echo "MDT$mdt numfree=$numfree, max=$max"
+	[[ $numfree -gt $max ]] && numfree=$max || numfree=$((numfree * 7 / 8))
+	if [ $((numfree + spare)) -gt $ulimit_old ]; then
+		while ! ulimit -n $((numfree + spare)); do
+			numfree=$((numfree * 3 / 4))
+		done
+		echo "changed ulimit from $ulimit_old to $((numfree + spare))"
+	else
+		echo "left ulimit at $ulimit_old"
+	fi
+
+	createmany -o -k -t 120 $DIR/$tdir/f $numfree ||
+		error "create+open $numfree files in $DIR/$tdir failed"
+	ulimit -n $ulimit_old
+
+	# if createmany exits at 120s there will be fewer than $numfree files
+	unlinkmany $DIR/$tdir/f $numfree || true
+}
+run_test 51f "check many open files limit"
 
 test_52a() {
 	[ -f $DIR/$tdir/foo ] && chattr -a $DIR/$tdir/foo

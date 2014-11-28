@@ -876,7 +876,7 @@ test_33a() {
 
             [ $fstype = ldiskfs ] && jbdold=$(print_jbd_stat)
             echo "=== START createmany old: $jbdold transaction"
-            local elapsed=$(do_and_time "do_nodes $CLIENT1,$CLIENT2 createmany -o $DIR1/$tdir-\\\$(hostname)-$i/f- -r $DIR2/$tdir-\\\$(hostname)-$i/f- $nfiles > /dev/null 2>&1")
+            local elapsed=$(do_and_time "do_nodes $CLIENT1,$CLIENT2 createmany -o $DIR1/$tdir-\\\$(hostname)-$i/f- -r$DIR2/$tdir-\\\$(hostname)-$i/f- $nfiles > /dev/null 2>&1")
             [ $fstype = ldiskfs ] && jbdnew=$(print_jbd_stat)
             [ $fstype = ldiskfs ] && jbd=$(( jbdnew - jbdold ))
             echo "=== END   createmany new: $jbdnew transaction :  $jbd transactions  nfiles $nfiles time $elapsed COS=$COS"
@@ -932,7 +932,7 @@ test_33b() {
 			echo "=== START createmany old: $jbdold transaction"
 			local elapsed=$(do_and_time "do_nodes $CLIENT1,$CLIENT2\
 				createmany -o $DIR1/$tdir-\\\$(hostname)-$i/f- \
-				-r $DIR2/$tdir-\\\$(hostname)-$i/f- $nfiles > \
+				-r$DIR2/$tdir-\\\$(hostname)-$i/f- $nfiles > \
 								/dev/null 2>&1")
 			jbdnew=$(print_jbd_stat)
 			jbd=$(( jbdnew - jbdold ))
@@ -2955,7 +2955,7 @@ test_76() { #LU-946
 
 	rm -rf $DIR/$tdir
 }
-run_test 76 "Verify open file for 2048 files"
+run_test 76 "Verify MDS open_files tracking for 2048 files"
 
 nrs_write_read() {
 	local n=16
