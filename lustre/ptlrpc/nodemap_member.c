@@ -50,7 +50,7 @@ void nm_member_putref(struct obd_export *exp)
 static __u32 nm_member_hashfn(cfs_hash_t *hash_body,
 			   const void *key, unsigned mask)
 {
-	return cfs_hash_djb2_hash(key, strlen(key), mask);
+	return hash_long((unsigned long)key, hash_body->hs_bkt_bits) & mask;
 }
 
 static void *nm_member_hs_key(struct hlist_node *hnode)
@@ -106,13 +106,14 @@ static void nm_member_hs_put_locked(cfs_hash_t *hs,
  */
 void nm_member_del(struct lu_nodemap *nodemap, struct obd_export *exp)
 {
+	struct obd_export *exp1;
 
+	exp1 = cfs_hash_del_key(nodemap->nm_member_hash, exp);
+	if (exp1 != NULL)
+		class_export_put(exp1);
+
+	LASSERT(hlist_unhashed(&exp->exp_target_data.ted_nodemap_member));
 	exp->exp_target_data.ted_nodemap = NULL;
-	exp = cfs_hash_del_key(nodemap->nm_member_hash, exp);
-	if (exp == NULL)
-		return;
-
-	class_export_put(exp);
 }
 
 static cfs_hash_ops_t nm_member_hash_operations = {
