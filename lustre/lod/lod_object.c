@@ -2829,7 +2829,7 @@ static int lod_xattr_del(const struct lu_env *env, struct dt_object *dt,
  * for details.
  */
 static int lod_xattr_list(const struct lu_env *env,
-			  struct dt_object *dt, struct lu_buf *buf,
+			  struct dt_object *dt, const struct lu_buf *buf,
 			  struct lustre_capa *capa)
 {
 	return dt_xattr_list(env, dt_object_child(dt), buf, capa);

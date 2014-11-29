@@ -490,7 +490,7 @@ int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 		  const char *name, struct thandle *handle,
 		  struct lustre_capa *capa);
 int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
-		   struct lu_buf *lb, struct lustre_capa *capa);
+		   const struct lu_buf *lb, struct lustre_capa *capa);
 void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,
 			int vallen, const char *name, struct osd_thandle *oh);
 int __osd_sa_xattr_set(const struct lu_env *env, struct osd_object *obj,

@@ -743,7 +743,7 @@ struct dt_object_operations {
          */
 	int   (*do_xattr_list)(const struct lu_env *env,
 			       struct dt_object *dt,
-			       struct lu_buf *buf,
+			       const struct lu_buf *buf,
 			       struct lustre_capa *capa);
 
 	/**
@@ -2622,9 +2622,9 @@ static inline int dt_xattr_get(const struct lu_env *env,
         return dt->do_ops->do_xattr_get(env, dt, buf, name, capa);
 }
 
-static inline int dt_xattr_list(const struct lu_env *env,
-                               struct dt_object *dt, struct lu_buf *buf,
-                               struct lustre_capa *capa)
+static inline int dt_xattr_list(const struct lu_env *env, struct dt_object *dt,
+				const struct lu_buf *buf,
+				struct lustre_capa *capa)
 {
         LASSERT(dt);
         LASSERT(dt->do_ops);

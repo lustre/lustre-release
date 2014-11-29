@@ -3087,7 +3087,7 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
  * Concurrency: @dt is read locked.
  */
 static int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
-			  struct lu_buf *buf, struct lustre_capa *capa)
+			  const struct lu_buf *buf, struct lustre_capa *capa)
 {
 	struct osd_object      *obj    = osd_dt_obj(dt);
 	struct inode           *inode  = obj->oo_inode;
