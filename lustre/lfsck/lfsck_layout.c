@@ -2885,6 +2885,7 @@ static int lfsck_layout_repair_multiple_references(const struct lu_env *env,
 	struct thandle			*handle = NULL;
 	struct lov_mds_md_v1		*lmm;
 	struct lov_ost_data_v1		*objs;
+	const struct lu_fid		*pfid	= lfsck_dto2fid(parent);
 	struct lu_fid			 tfid;
 	struct lustre_handle		 lh	= { 0 };
 	struct lu_buf			 ea_buf;
@@ -2946,6 +2947,22 @@ static int lfsck_layout_repair_multiple_references(const struct lu_env *env,
 		GOTO(log, rc);
 
 	/* The 2nd transaction. */
+
+	/* XXX: Generally, we should use bottom device (OSD) to update parent
+	 *	LOV EA. But because the LOD-object still references the wrong
+	 *	OSP-object that should be detached after the parent's LOV EA
+	 *	refreshed. Unfortunately, there is no suitable API for that.
+	 *	So we have to make the LOD to re-load the OSP-object(s) via
+	 *	replacing the LOV EA against the LOD-object.
+	 *
+	 *	Once the DNE2 patches have been landed, we can replace the
+	 *	LOD device with the OSD device. LU-6230. */
+
+	dev = lfsck->li_next;
+	parent = lfsck_object_locate(dev, parent);
+	if (IS_ERR(parent))
+		GOTO(log, rc = PTR_ERR(parent));
+
 	handle = dt_trans_create(env, dev);
 	if (IS_ERR(handle))
 		GOTO(log, rc = PTR_ERR(handle));
@@ -2999,14 +3016,7 @@ static int lfsck_layout_repair_multiple_references(const struct lu_env *env,
 	rc = dt_xattr_set(env, parent, &ea_buf, XATTR_NAME_LOV,
 			  LU_XATTR_REPLACE, handle, BYPASS_CAPA);
 
-	if (rc == 0) {
-		/* The @parent LOV EA has been updated, need to be re-loaded. */
-		set_bit(LU_OBJECT_HEARD_BANSHEE,
-			&parent->do_lu.lo_header->loh_flags);
-		rc = 1;
-	}
-
-	GOTO(unlock, rc);
+	GOTO(unlock, rc = (rc == 0 ? 1 : rc));
 
 unlock:
 	dt_write_unlock(env, parent);
@@ -3022,8 +3032,7 @@ log:
 
 	CDEBUG(D_LFSCK, "%s: layout LFSCK assistant repaired multiple "
 	       "references for: parent "DFID", OST-index %u, stripe-index %u, "
-	       "owner %u/%u: rc = %d\n",
-	       lfsck_lfsck2name(lfsck), PFID(lfsck_dto2fid(parent)),
+	       "owner %u/%u: rc = %d\n", lfsck_lfsck2name(lfsck), PFID(pfid),
 	       llr->llr_ost_idx, llr->llr_lov_idx, la->la_uid, la->la_gid, rc);
 
 	return rc;
