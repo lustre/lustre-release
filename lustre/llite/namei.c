@@ -469,7 +469,8 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 
 		alias = ll_splice_alias(inode, *de);
 		if (IS_ERR(alias))
-			RETURN(PTR_ERR(alias));
+			GOTO(out, rc = PTR_ERR(alias));
+
 		*de = alias;
 	} else if (!it_disposition(it, DISP_LOOKUP_NEG)  &&
 		   !it_disposition(it, DISP_OPEN_CREATE)) {
@@ -501,7 +502,7 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 						 (*de)->d_name.name,
 						 (*de)->d_name.len, &fid);
 			if (rc != 0)
-				RETURN(rc);
+				GOTO(out, rc);
 		}
 
 		if (md_revalidate_lock(ll_i2mdexp(parent), &parent_it, &fid,
@@ -509,9 +510,15 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 			d_lustre_revalidate(*de);
 			ll_intent_release(&parent_it);
 		}
-        }
+	}
 
-        RETURN(0);
+	GOTO(out, rc = 0);
+
+out:
+	if (rc != 0 && it->it_op & IT_OPEN)
+		ll_open_cleanup((*de)->d_sb, request);
+
+	return rc;
 }
 
 static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
