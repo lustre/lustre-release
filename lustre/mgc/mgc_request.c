@@ -465,12 +465,17 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
 int lprocfs_mgc_rd_ir_state(char *page, char **start, off_t off,
                             int count, int *eof, void *data)
 {
-        struct obd_device       *obd = data;
-        struct obd_import       *imp = obd->u.cli.cl_import;
-        struct obd_connect_data *ocd = &imp->imp_connect_data;
-        struct config_llog_data *cld;
-        int rc = 0;
-        ENTRY;
+	struct obd_device	*obd = data;
+	struct obd_import	*imp;
+	struct obd_connect_data	*ocd;
+	struct config_llog_data	*cld;
+	int			 rc = 0;
+	ENTRY;
+
+	LASSERT(obd != NULL);
+	LPROCFS_CLIMP_CHECK(obd);
+	imp = obd->u.cli.cl_import;
+	ocd = &imp->imp_connect_data;
 
         rc = snprintf(page, count, "imperative_recovery: %s\n",
 		      OCD_HAS_FLAG(ocd, IMP_RECOV) ? "ENABLED" : "DISABLED");
@@ -487,6 +492,7 @@ int lprocfs_mgc_rd_ir_state(char *page, char **start, off_t off,
 	}
 	spin_unlock(&config_list_lock);
 
+	LPROCFS_CLIMP_EXIT(obd);
 	RETURN(rc);
 }
 
