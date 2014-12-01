@@ -1797,7 +1797,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	int				i;
 	int				rc;
 	struct list_head		rpc_list = LIST_HEAD_INIT(rpc_list);
-
+	struct ost_body			*body;
 	ENTRY;
 	LASSERT(!list_empty(ext_list));
 
@@ -1889,6 +1889,8 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	 * later setattr before earlier BRW (as determined by the request xid),
 	 * the OST will not use BRW timestamps.  Sadly, there is no obvious
 	 * way to do this in a single call.  bug 10150 */
+	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
+	crattr->cra_oa = &body->oa;
 	cl_req_attr_set(env, clerq, crattr,
 			OBD_MD_FLMTIME|OBD_MD_FLCTIME|OBD_MD_FLATIME);
 
