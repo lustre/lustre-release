@@ -1024,52 +1024,6 @@ static int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
         RETURN(rc);
 }
 
-#ifdef HAVE_SPLIT_SUPPORT
-int mdc_sendpage(struct obd_export *exp, const struct lu_fid *fid,
-                 const struct page *page, int offset)
-{
-        struct ptlrpc_request   *req;
-        struct ptlrpc_bulk_desc *desc;
-        int                      rc;
-        ENTRY;
-
-        req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MDS_WRITEPAGE);
-        if (req == NULL)
-                RETURN(-ENOMEM);
-
-        /* FIXME: capa doesn't support split yet */
-        mdc_set_capa_size(req, &RMF_CAPA1, NULL);
-
-        rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_WRITEPAGE);
-        if (rc) {
-                ptlrpc_request_free(req);
-                RETURN(rc);
-        }
-
-        req->rq_request_portal = MDS_READPAGE_PORTAL;
-        ptlrpc_at_set_req_timeout(req);
-
-	desc = ptlrpc_prep_bulk_imp(req, 1, 1,BULK_GET_SOURCE, MDS_BULK_PORTAL);
-	if (desc == NULL)
-		GOTO(out, rc = -ENOMEM);
-
-        /* NB req now owns desc and will free it when it gets freed. */
-        ptlrpc_prep_bulk_page(desc, (struct page *)page, 0, offset);
-        mdc_readdir_pack(req, 0, offset, fid, NULL);
-
-        ptlrpc_request_set_replen(req);
-        rc = ptlrpc_queue_wait(req);
-        if (rc)
-                GOTO(out, rc);
-
-        rc = sptlrpc_cli_unwrap_bulk_write(req, req->rq_bulk);
-out:
-        ptlrpc_req_finished(req);
-        return rc;
-}
-EXPORT_SYMBOL(mdc_sendpage);
-#endif
-
 static int mdc_getpage(struct obd_export *exp, const struct lu_fid *fid,
 		       __u64 offset, struct obd_capa *oc,
 		       struct page **pages, int npages,

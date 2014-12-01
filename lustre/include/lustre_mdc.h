@@ -193,10 +193,6 @@ static inline void mdc_update_max_ea_from_body(struct obd_export *exp,
 
 /* mdc/mdc_locks.c */
 int it_open_error(int phase, struct lookup_intent *it);
-#ifdef HAVE_SPLIT_SUPPORT
-int mdc_sendpage(struct obd_export *exp, const struct lu_fid *fid,
-                 const struct page *page, int offset);
-#endif
 
 static inline bool cl_is_lov_delay_create(unsigned int flags)
 {

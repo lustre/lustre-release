@@ -722,7 +722,6 @@ static struct req_format *req_formats[] = {
         &RQF_MDS_CLOSE,
 	&RQF_MDS_RELEASE_CLOSE,
         &RQF_MDS_READPAGE,
-        &RQF_MDS_WRITEPAGE,
         &RQF_MDS_DONE_WRITING,
         &RQF_MDS_REINT,
         &RQF_MDS_REINT_CREATE,
@@ -1549,12 +1548,6 @@ struct req_format RQF_MDS_SWAP_LAYOUTS =
 	DEFINE_REQ_FMT0("MDS_SWAP_LAYOUTS",
 			mdt_swap_layouts, empty);
 EXPORT_SYMBOL(RQF_MDS_SWAP_LAYOUTS);
-
-/* This is for split */
-struct req_format RQF_MDS_WRITEPAGE =
-        DEFINE_REQ_FMT0("MDS_WRITEPAGE",
-                        mdt_body_capa, mdt_body_only);
-EXPORT_SYMBOL(RQF_MDS_WRITEPAGE);
 
 struct req_format RQF_LLOG_ORIGIN_HANDLE_CREATE =
         DEFINE_REQ_FMT0("LLOG_ORIGIN_HANDLE_CREATE",

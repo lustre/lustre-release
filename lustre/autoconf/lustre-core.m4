@@ -1746,22 +1746,6 @@ AS_IF([test "x$enable_quota" != xno -a "x$enable_utils" != xno], [
 ]) # LC_QUOTA
 
 #
-# LC_CONFIG_SPLIT
-#
-# whether to enable split support
-#
-AC_DEFUN([LC_CONFIG_SPLIT], [
-AC_MSG_CHECKING([whether to enable split support])
-AC_ARG_ENABLE([split],
-	AC_HELP_STRING([--enable-split],
-		[enable split support]),
-	[], [enable_split='no'])
-AC_MSG_RESULT([$enable_split])
-AS_IF([test "x$enable_split" != xno],
-    [AC_DEFINE(HAVE_SPLIT_SUPPORT, 1, [enable split support])])
-]) # LC_CONFIG_SPLIT
-
-#
 # LC_CONFIG_NODEMAP_PROC_DEBUG
 #
 # enable nodemap proc file debugging

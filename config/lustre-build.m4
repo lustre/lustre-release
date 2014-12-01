@@ -647,8 +647,6 @@ LB_CONFIG_SERVERS
 # Tests depends from utils (multiop from liblustreapi)
 AS_IF([test "x$enable_utils" = xno], [enable_tests="no"])
 
-# two macros for cmd3
-m4_ifdef([LC_CONFIG_SPLIT], [LC_CONFIG_SPLIT])
 m4_ifdef([LC_NODEMAP_PROC_DEBUG], [LC_NODEMAP_PROC_DEBUG])
 LN_CONFIG_CDEBUG
 LC_QUOTA
