@@ -5322,25 +5322,6 @@ static int mdt_destroy_export(struct obd_export *exp)
 	RETURN(0);
 }
 
-/** The maximum depth that fid2path() will search.
- * This is limited only because we want to store the fids for
- * historical path lookup purposes.
- */
-#define MAX_PATH_DEPTH 100
-
-/** mdt_path() lookup structure. */
-struct path_lookup_info {
-	__u64			pli_recno;	/**< history point */
-	__u64			pli_currec;	/**< current record */
-	struct lu_fid		pli_fid;
-	struct lu_fid		pli_fids[MAX_PATH_DEPTH]; /**< path, in fids */
-	struct mdt_object	*pli_mdt_obj;
-	char			*pli_path;	/**< full path */
-	int			pli_pathlen;
-	int			pli_linkno;	/**< which hardlink to follow */
-	int			pli_fidcount;	/**< number of \a pli_fids */
-};
-
 int mdt_links_read(struct mdt_thread_info *info, struct mdt_object *mdt_obj,
 		   struct linkea_data *ldata)
 {
@@ -5372,8 +5353,21 @@ int mdt_links_read(struct mdt_thread_info *info, struct mdt_object *mdt_obj,
 	return linkea_init(ldata);
 }
 
+/**
+ * Given an MDT object, try to look up the full path to the object.
+ * Part of the MDT layer implementation of lfs fid2path.
+ *
+ * \param[in]     info  Per-thread common data shared by MDT level handlers.
+ * \param[in]     obj   Object to do path lookup of
+ * \param[in,out] fp    User-provided struct to store path information
+ *
+ * \retval 0 Lookup successful, path information stored in fp
+ * \retval -EAGAIN Lookup failed, usually because object is being moved
+ * \retval negative errno if there was a problem
+ */
 static int mdt_path_current(struct mdt_thread_info *info,
-			    struct path_lookup_info *pli)
+			    struct mdt_object *obj,
+			    struct getinfo_fid2path *fp)
 {
 	struct mdt_device	*mdt = info->mti_mdt;
 	struct mdt_object	*mdt_obj;
@@ -5386,6 +5380,7 @@ static int mdt_path_current(struct mdt_thread_info *info,
 	int			reclen;
 	struct linkea_data	ldata = { 0 };
 	int			rc = 0;
+	bool			first = true;
 	ENTRY;
 
 	/* temp buffer for path element, the buffer will be finally freed
@@ -5395,16 +5390,14 @@ static int mdt_path_current(struct mdt_thread_info *info,
 		RETURN(-ENOMEM);
 
 	ldata.ld_buf = buf;
-	ptr = pli->pli_path + pli->pli_pathlen - 1;
+	ptr = fp->gf_path + fp->gf_pathlen - 1;
 	*ptr = 0;
 	--ptr;
-	pli->pli_fidcount = 0;
-	pli->pli_fids[0] = *(struct lu_fid *)mdt_object_fid(pli->pli_mdt_obj);
-	*tmpfid = pli->pli_fids[0];
+	*tmpfid = fp->gf_fid = *mdt_object_fid(obj);
+
 	/* root FID only exists on MDT0, and fid2path should also ends at MDT0,
 	 * so checking root_fid can only happen on MDT0. */
-	while (!lu_fid_eq(&mdt->mdt_md_root_fid,
-			  &pli->pli_fids[pli->pli_fidcount])) {
+	while (!lu_fid_eq(&mdt->mdt_md_root_fid, &fp->gf_fid)) {
 		struct lu_buf		lmv_buf;
 
 		mdt_obj = mdt_object_find(info->mti_env, mdt, tmpfid);
@@ -5432,18 +5425,17 @@ static int mdt_path_current(struct mdt_thread_info *info,
 		linkea_entry_unpack(lee, &reclen, tmpname, tmpfid);
 		/* If set, use link #linkno for path lookup, otherwise use
 		   link #0.  Only do this for the final path element. */
-		if (pli->pli_fidcount == 0 &&
-		    pli->pli_linkno < leh->leh_reccount) {
+		if (first && fp->gf_linkno < leh->leh_reccount) {
 			int count;
-			for (count = 0; count < pli->pli_linkno; count++) {
+			for (count = 0; count < fp->gf_linkno; count++) {
 				lee = (struct link_ea_entry *)
 				     ((char *)lee + reclen);
 				linkea_entry_unpack(lee, &reclen, tmpname,
 						    tmpfid);
 			}
-			if (pli->pli_linkno < leh->leh_reccount - 1)
+			if (fp->gf_linkno < leh->leh_reccount - 1)
 				/* indicate to user there are more links */
-				pli->pli_linkno++;
+				fp->gf_linkno++;
 		}
 
 		lmv_buf.lb_buf = info->mti_xattr_buf;
@@ -5457,7 +5449,7 @@ static int mdt_path_current(struct mdt_thread_info *info,
 
 			/* For slave stripes, get its master */
 			if (le32_to_cpu(lmm->lmv_magic) == LMV_MAGIC_STRIPE) {
-				pli->pli_fids[pli->pli_fidcount] = *tmpfid;
+				fp->gf_fid = *tmpfid;
 				continue;
 			}
 		} else if (rc < 0 && rc != -ENODATA) {
@@ -5468,72 +5460,81 @@ static int mdt_path_current(struct mdt_thread_info *info,
 
 		/* Pack the name in the end of the buffer */
 		ptr -= tmpname->ln_namelen;
-		if (ptr - 1 <= pli->pli_path)
+		if (ptr - 1 <= fp->gf_path)
 			GOTO(out, rc = -EOVERFLOW);
 		strncpy(ptr, tmpname->ln_name, tmpname->ln_namelen);
 		*(--ptr) = '/';
 
-		/* Store the parent fid for historic lookup */
-		if (++pli->pli_fidcount >= MAX_PATH_DEPTH)
-			GOTO(out, rc = -EOVERFLOW);
-		pli->pli_fids[pli->pli_fidcount] = *tmpfid;
+		/* keep the last resolved fid to the client, so the
+		 * client will build the left path on another MDT for
+		 * remote object */
+		fp->gf_fid = *tmpfid;
+
+		first = false;
 	}
 
 remote_out:
 	ptr++; /* skip leading / */
-	memmove(pli->pli_path, ptr, pli->pli_path + pli->pli_pathlen - ptr);
+	memmove(fp->gf_path, ptr, fp->gf_path + fp->gf_pathlen - ptr);
 
-	EXIT;
 out:
-	return rc;
+	RETURN(rc);
 }
 
-/* Returns the full path to this fid, as of changelog record recno. */
+/**
+ * Given an MDT object, use mdt_path_current to get the path.
+ * Essentially a wrapper to retry mdt_path_current a set number of times
+ * if -EAGAIN is returned (usually because an object is being moved).
+ *
+ * Part of the MDT layer implementation of lfs fid2path.
+ *
+ * \param[in]     info  Per-thread common data shared by mdt level handlers.
+ * \param[in]     obj   Object to do path lookup of
+ * \param[in,out] fp    User-provided struct for arguments and to store path
+ * 			information
+ *
+ * \retval 0 Lookup successful, path information stored in fp
+ * \retval negative errno if there was a problem
+ */
 static int mdt_path(struct mdt_thread_info *info, struct mdt_object *obj,
-		    char *path, int pathlen, __u64 *recno, int *linkno,
-		    struct lu_fid *fid)
+		    struct getinfo_fid2path *fp)
 {
 	struct mdt_device	*mdt = info->mti_mdt;
-	struct path_lookup_info	*pli;
 	int			tries = 3;
 	int			rc = -EAGAIN;
 	ENTRY;
 
-	if (pathlen < 3)
+	if (fp->gf_pathlen < 3)
 		RETURN(-EOVERFLOW);
 
 	if (lu_fid_eq(&mdt->mdt_md_root_fid, mdt_object_fid(obj))) {
-		path[0] = '\0';
+		fp->gf_path[0] = '\0';
 		RETURN(0);
 	}
 
-	OBD_ALLOC_PTR(pli);
-	if (pli == NULL)
-		RETURN(-ENOMEM);
-
-	pli->pli_mdt_obj = obj;
-	pli->pli_recno = *recno;
-	pli->pli_path = path;
-	pli->pli_pathlen = pathlen;
-	pli->pli_linkno = *linkno;
-
 	/* Retry multiple times in case file is being moved */
 	while (tries-- && rc == -EAGAIN)
-		rc = mdt_path_current(info, pli);
-
-	/* return the last resolved fids to the client, so the client will
-	 * build the left path on another MDT for remote object */
-	*fid = pli->pli_fids[pli->pli_fidcount];
-
-	*recno = pli->pli_currec;
-	/* Return next link index to caller */
-	*linkno = pli->pli_linkno;
-
-	OBD_FREE_PTR(pli);
+		rc = mdt_path_current(info, obj, fp);
 
 	RETURN(rc);
 }
 
+/**
+ * Get the full path of the provided FID, as of changelog record recno.
+ *
+ * This checks sanity and looks up object for user provided FID
+ * before calling the actual path lookup code.
+ *
+ * Part of the MDT layer implementation of lfs fid2path.
+ *
+ * \param[in]     info  Per-thread common data shared by mdt level handlers.
+ * \param[in,out] fp    User-provided struct for arguments and to store path
+ * 			information
+ *
+ * \retval 0 Lookup successful, path information and recno stored in fp
+ * \retval -ENOENT, object does not exist
+ * \retval negative errno if there was a problem
+ */
 static int mdt_fid2path(struct mdt_thread_info *info,
 			struct getinfo_fid2path *fp)
 {
@@ -5576,8 +5577,7 @@ static int mdt_fid2path(struct mdt_thread_info *info,
 		RETURN(rc);
 	}
 
-	rc = mdt_path(info, obj, fp->gf_path, fp->gf_pathlen, &fp->gf_recno,
-		      &fp->gf_linkno, &fp->gf_fid);
+	rc = mdt_path(info, obj, fp);
 
 	CDEBUG(D_INFO, "fid "DFID", path %s recno "LPX64" linkno %u\n",
 	       PFID(&fp->gf_fid), fp->gf_path, fp->gf_recno, fp->gf_linkno);

@@ -10532,6 +10532,8 @@ check_path() {
     local fid=$2
 
     local path=$(${LFS} fid2path $*)
+    # Remove the '//' indicating a remote directory
+    path=$(echo $path | sed 's#//#/#g')
     RC=$?
 
     if [ $RC -ne 0 ]; then
@@ -10625,6 +10627,33 @@ test_162b() {
 	return 0
 }
 run_test 162b "striped directory path lookup sanity"
+
+# LU-4239: Verify fid2path works with paths 100 or more directories deep
+test_162c() {
+	test_mkdir $DIR/$tdir.local
+	test_mkdir $DIR/$tdir.remote
+	local lpath=$tdir.local
+	local rpath=$tdir.remote
+
+	for ((i = 0; i <= 101; i++)); do
+		lpath="$lpath/$i"
+		mkdir $DIR/$lpath
+		FID=$($LFS path2fid $DIR/$lpath | tr -d '[]') ||
+			error "get fid for local directory $DIR/$lpath failed"
+		check_path "$DIR/$lpath" $MOUNT $FID --link 0 ||
+			error "check path for local directory $DIR/$lpath failed"
+
+		rpath="$rpath/$i"
+		test_mkdir $DIR/$rpath
+		FID=$($LFS path2fid $DIR/$rpath | tr -d '[]') ||
+			error "get fid for remote directory $DIR/$rpath failed"
+		check_path "$DIR/$rpath" $MOUNT $FID --link 0 ||
+			error "check path for remote directory $DIR/$rpath failed"
+	done
+
+	return 0
+}
+run_test 162c "fid2path works with paths 100 or more directories deep"
 
 test_169() {
 	# do directio so as not to populate the page cache
