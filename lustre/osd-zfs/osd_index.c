@@ -865,8 +865,6 @@ static int osd_dir_it_next(const struct lu_env *env, struct dt_it *di)
 	zap_attribute_t	  *za = &osd_oti_get(env)->oti_za;
 	int		   rc;
 
-	ENTRY;
-
 	/* temp. storage should be enough for any key supported by ZFS */
 	CLASSERT(sizeof(za->za_name) <= sizeof(it->ozi_name));
 
@@ -879,10 +877,9 @@ static int osd_dir_it_next(const struct lu_env *env, struct dt_it *di)
 		it->ozi_pos++;
 		if (it->ozi_pos <=2)
 			RETURN(0);
-
-	} else {
-		zap_cursor_advance(it->ozi_zc);
 	}
+
+	zap_cursor_advance(it->ozi_zc);
 
 	/*
 	 * According to current API we need to return error if its last entry.
