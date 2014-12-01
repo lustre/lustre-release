@@ -922,13 +922,13 @@ static int lov_attr_get(const struct lu_env *env, struct cl_object *obj,
         return LOV_2DISPATCH_NOLOCK(cl2lov(obj), llo_getattr, env, obj, attr);
 }
 
-static int lov_attr_set(const struct lu_env *env, struct cl_object *obj,
-                        const struct cl_attr *attr, unsigned valid)
+static int lov_attr_update(const struct lu_env *env, struct cl_object *obj,
+			   const struct cl_attr *attr, unsigned valid)
 {
-        /*
-         * No dispatch is required here, as no layout implements this.
-         */
-        return 0;
+	/*
+	 * No dispatch is required here, as no layout implements this.
+	 */
+	return 0;
 }
 
 int lov_lock_init(const struct lu_env *env, struct cl_object *obj,
@@ -957,13 +957,13 @@ static int lov_object_getstripe(const struct lu_env *env, struct cl_object *obj,
 }
 
 static const struct cl_object_operations lov_ops = {
-        .coo_page_init = lov_page_init,
-        .coo_lock_init = lov_lock_init,
-        .coo_io_init   = lov_io_init,
-        .coo_attr_get  = lov_attr_get,
-        .coo_attr_set  = lov_attr_set,
-	.coo_conf_set  = lov_conf_set,
-	.coo_getstripe = lov_object_getstripe
+	.coo_page_init    = lov_page_init,
+	.coo_lock_init    = lov_lock_init,
+	.coo_io_init      = lov_io_init,
+	.coo_attr_get     = lov_attr_get,
+	.coo_attr_update  = lov_attr_update,
+	.coo_conf_set     = lov_conf_set,
+	.coo_getstripe    = lov_object_getstripe
 };
 
 static const struct lu_object_operations lov_lu_obj_ops = {

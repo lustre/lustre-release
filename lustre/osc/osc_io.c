@@ -228,16 +228,16 @@ static void osc_page_touch_at(const struct lu_env *env,
 
 	attr->cat_mtime = attr->cat_ctime = LTIME_S(CFS_CURRENT_TIME);
 	valid = CAT_MTIME | CAT_CTIME;
-        if (kms > loi->loi_kms) {
-                attr->cat_kms = kms;
-                valid |= CAT_KMS;
-        }
-        if (kms > loi->loi_lvb.lvb_size) {
-                attr->cat_size = kms;
-                valid |= CAT_SIZE;
-        }
-        cl_object_attr_set(env, obj, attr, valid);
-        cl_object_attr_unlock(obj);
+	if (kms > loi->loi_kms) {
+		attr->cat_kms = kms;
+		valid |= CAT_KMS;
+	}
+	if (kms > loi->loi_lvb.lvb_size) {
+		attr->cat_size = kms;
+		valid |= CAT_SIZE;
+	}
+	cl_object_attr_update(env, obj, attr, valid);
+	cl_object_attr_unlock(obj);
 }
 
 static int osc_io_commit_async(const struct lu_env *env,
@@ -477,14 +477,15 @@ static int osc_io_setattr_start(const struct lu_env *env,
 			}
 			if (ia_valid & ATTR_CTIME_SET) {
 				attr->cat_ctime = lvb->lvb_ctime;
-                                cl_valid |= CAT_CTIME;
-                        }
-                        result = cl_object_attr_set(env, obj, attr, cl_valid);
-                }
-                cl_object_attr_unlock(obj);
-        }
-        memset(oa, 0, sizeof(*oa));
-        if (result == 0) {
+				cl_valid |= CAT_CTIME;
+			}
+			result = cl_object_attr_update(env, obj, attr,
+						       cl_valid);
+		}
+		cl_object_attr_unlock(obj);
+	}
+	memset(oa, 0, sizeof(*oa));
+	if (result == 0) {
 		oa->o_oi = loi->loi_oi;
 		oa->o_mtime = attr->cat_mtime;
 		oa->o_atime = attr->cat_atime;
@@ -567,7 +568,7 @@ static int osc_io_read_start(const struct lu_env *env,
 	if (!slice->cis_io->ci_noatime) {
 		cl_object_attr_lock(obj);
 		attr->cat_atime = LTIME_S(CFS_CURRENT_TIME);
-		rc = cl_object_attr_set(env, obj, attr, CAT_ATIME);
+		rc = cl_object_attr_update(env, obj, attr, CAT_ATIME);
 		cl_object_attr_unlock(obj);
 	}
 
@@ -585,7 +586,7 @@ static int osc_io_write_start(const struct lu_env *env,
 	OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_DELAY_SETTIME, 1);
 	cl_object_attr_lock(obj);
 	attr->cat_mtime = attr->cat_ctime = LTIME_S(CFS_CURRENT_TIME);
-	rc = cl_object_attr_set(env, obj, attr, CAT_MTIME | CAT_CTIME);
+	rc = cl_object_attr_update(env, obj, attr, CAT_MTIME | CAT_CTIME);
 	cl_object_attr_unlock(obj);
 
 	RETURN(rc);

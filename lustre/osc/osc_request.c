@@ -1716,7 +1716,7 @@ static int brw_interpret(const struct lu_env *env,
 		}
 
 		if (valid != 0)
-			cl_object_attr_set(env, obj, attr, valid);
+			cl_object_attr_update(env, obj, attr, valid);
 		cl_object_attr_unlock(obj);
 	}
 	OBDO_FREE(aa->aa_oa);

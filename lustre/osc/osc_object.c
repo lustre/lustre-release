@@ -170,28 +170,28 @@ static int osc_attr_get(const struct lu_env *env, struct cl_object *obj,
         return 0;
 }
 
-static int osc_attr_set(const struct lu_env *env, struct cl_object *obj,
-			const struct cl_attr *attr, unsigned valid)
+static int osc_attr_update(const struct lu_env *env, struct cl_object *obj,
+			   const struct cl_attr *attr, unsigned valid)
 {
-        struct lov_oinfo *oinfo = cl2osc(obj)->oo_oinfo;
-        struct ost_lvb   *lvb   = &oinfo->loi_lvb;
+	struct lov_oinfo *oinfo = cl2osc(obj)->oo_oinfo;
+	struct ost_lvb   *lvb   = &oinfo->loi_lvb;
 
-        if (valid & CAT_SIZE)
-                lvb->lvb_size = attr->cat_size;
-        if (valid & CAT_MTIME)
-                lvb->lvb_mtime = attr->cat_mtime;
-        if (valid & CAT_ATIME)
-                lvb->lvb_atime = attr->cat_atime;
-        if (valid & CAT_CTIME)
-                lvb->lvb_ctime = attr->cat_ctime;
-        if (valid & CAT_BLOCKS)
-                lvb->lvb_blocks = attr->cat_blocks;
-        if (valid & CAT_KMS) {
-                CDEBUG(D_CACHE, "set kms from "LPU64"to "LPU64"\n",
-                       oinfo->loi_kms, (__u64)attr->cat_kms);
-                loi_kms_set(oinfo, attr->cat_kms);
-        }
-        return 0;
+	if (valid & CAT_SIZE)
+		lvb->lvb_size = attr->cat_size;
+	if (valid & CAT_MTIME)
+		lvb->lvb_mtime = attr->cat_mtime;
+	if (valid & CAT_ATIME)
+		lvb->lvb_atime = attr->cat_atime;
+	if (valid & CAT_CTIME)
+		lvb->lvb_ctime = attr->cat_ctime;
+	if (valid & CAT_BLOCKS)
+		lvb->lvb_blocks = attr->cat_blocks;
+	if (valid & CAT_KMS) {
+		CDEBUG(D_CACHE, "set kms from "LPU64"to "LPU64"\n",
+		       oinfo->loi_kms, (__u64)attr->cat_kms);
+		loi_kms_set(oinfo, attr->cat_kms);
+	}
+	return 0;
 }
 
 static int osc_object_glimpse(const struct lu_env *env,
@@ -270,13 +270,13 @@ int osc_object_is_contended(struct osc_object *obj)
 }
 
 static const struct cl_object_operations osc_ops = {
-	.coo_page_init = osc_page_init,
-	.coo_lock_init = osc_lock_init,
-	.coo_io_init   = osc_io_init,
-	.coo_attr_get  = osc_attr_get,
-	.coo_attr_set  = osc_attr_set,
-	.coo_glimpse   = osc_object_glimpse,
-	.coo_prune     = osc_object_prune
+	.coo_page_init    = osc_page_init,
+	.coo_lock_init    = osc_lock_init,
+	.coo_io_init      = osc_io_init,
+	.coo_attr_get     = osc_attr_get,
+	.coo_attr_update  = osc_attr_update,
+	.coo_glimpse      = osc_object_glimpse,
+	.coo_prune        = osc_object_prune
 };
 
 static const struct lu_object_operations osc_lu_obj_ops = {

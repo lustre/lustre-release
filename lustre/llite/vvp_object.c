@@ -106,8 +106,8 @@ static int vvp_attr_get(const struct lu_env *env, struct cl_object *obj,
 	return 0; /* layers below have to fill in the rest */
 }
 
-static int vvp_attr_set(const struct lu_env *env, struct cl_object *obj,
-                        const struct cl_attr *attr, unsigned valid)
+static int vvp_attr_update(const struct lu_env *env, struct cl_object *obj,
+			   const struct cl_attr *attr, unsigned valid)
 {
 	struct inode *inode = vvp_object_inode(obj);
 
@@ -193,14 +193,14 @@ static int vvp_object_glimpse(const struct lu_env *env,
 }
 
 static const struct cl_object_operations vvp_ops = {
-	.coo_page_init = vvp_page_init,
-	.coo_lock_init = vvp_lock_init,
-	.coo_io_init   = vvp_io_init,
-	.coo_attr_get  = vvp_attr_get,
-	.coo_attr_set  = vvp_attr_set,
-	.coo_conf_set  = vvp_conf_set,
-	.coo_prune     = vvp_prune,
-	.coo_glimpse   = vvp_object_glimpse
+	.coo_page_init    = vvp_page_init,
+	.coo_lock_init    = vvp_lock_init,
+	.coo_io_init      = vvp_io_init,
+	.coo_attr_get     = vvp_attr_get,
+	.coo_attr_update  = vvp_attr_update,
+	.coo_conf_set     = vvp_conf_set,
+	.coo_prune        = vvp_prune,
+	.coo_glimpse      = vvp_object_glimpse
 };
 
 static int vvp_object_init0(const struct lu_env *env,

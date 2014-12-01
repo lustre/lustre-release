@@ -105,14 +105,14 @@ static int lovsub_object_print(const struct lu_env *env, void *cookie,
         return (*p)(env, cookie, "[%d]", los->lso_index);
 }
 
-static int lovsub_attr_set(const struct lu_env *env, struct cl_object *obj,
-                           const struct cl_attr *attr, unsigned valid)
+static int lovsub_attr_update(const struct lu_env *env, struct cl_object *obj,
+			      const struct cl_attr *attr, unsigned valid)
 {
-        struct lov_object *lov = cl2lovsub(obj)->lso_super;
+	struct lov_object *lov = cl2lovsub(obj)->lso_super;
 
-        ENTRY;
-        lov_r0(lov)->lo_attr_valid = 0;
-        RETURN(0);
+	ENTRY;
+	lov_r0(lov)->lo_attr_valid = 0;
+	RETURN(0);
 }
 
 static int lovsub_object_glimpse(const struct lu_env *env,
@@ -128,10 +128,10 @@ static int lovsub_object_glimpse(const struct lu_env *env,
 
 
 static const struct cl_object_operations lovsub_ops = {
-        .coo_page_init = lovsub_page_init,
-        .coo_lock_init = lovsub_lock_init,
-        .coo_attr_set  = lovsub_attr_set,
-        .coo_glimpse   = lovsub_object_glimpse
+	.coo_page_init    = lovsub_page_init,
+	.coo_lock_init    = lovsub_lock_init,
+	.coo_attr_update  = lovsub_attr_update,
+	.coo_glimpse      = lovsub_object_glimpse
 };
 
 static const struct lu_object_operations lovsub_lu_obj_ops = {
