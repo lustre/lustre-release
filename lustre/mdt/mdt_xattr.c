@@ -378,16 +378,14 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 	__u32			 perm;
 	ENTRY;
 
-        CDEBUG(D_INODE, "setxattr for "DFID"\n", PFID(rr->rr_fid1));
+	CDEBUG(D_INODE, "setxattr for "DFID": %s %s\n", PFID(rr->rr_fid1),
+	       valid & OBD_MD_FLXATTR ? "set" : "remove", xattr_name);
 
 	if (info->mti_dlm_req)
 		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR))
                 RETURN(err_serious(-ENOMEM));
-
-        CDEBUG(D_INODE, "%s xattr %s\n",
-               valid & OBD_MD_FLXATTR ? "set" : "remove", xattr_name);
 
 	rc = mdt_init_ucred_reint(info);
         if (rc != 0)
@@ -486,43 +484,38 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 	attr->la_valid = LA_CTIME;
 	child = mdt_object_child(obj);
 	if (valid & OBD_MD_FLXATTR) {
-		char *xattr = rr->rr_eadata;
+		void   *xattr = rr->rr_eadata;
+		int	flags = 0;
 
-                if (xattr_len > 0) {
-                        int flags = 0;
+		if (valid & OBD_MD_FLRMTLSETFACL) {
+			if (unlikely(!remote))
+				GOTO(out_unlock, rc = -EINVAL);
 
-                        if (valid & OBD_MD_FLRMTLSETFACL) {
-                                if (unlikely(!remote))
-                                        GOTO(out_unlock, rc = -EINVAL);
+			xattr_len = mdt_rmtlsetfacl(info, child, xattr_name,
+						    xattr, &new_xattr);
+			if (xattr_len < 0)
+				GOTO(out_unlock, rc = xattr_len);
 
-                                xattr_len = mdt_rmtlsetfacl(info, child,
-                                                xattr_name,
-                                                (ext_acl_xattr_header *)xattr,
-                                                &new_xattr);
-                                if (xattr_len < 0)
-                                        GOTO(out_unlock, rc = xattr_len);
+			xattr = new_xattr;
+		}
 
-                                xattr = (char *)new_xattr;
-                        }
+		if (attr->la_flags & XATTR_REPLACE)
+			flags |= LU_XATTR_REPLACE;
 
-                        if (attr->la_flags & XATTR_REPLACE)
-                                flags |= LU_XATTR_REPLACE;
+		if (attr->la_flags & XATTR_CREATE)
+			flags |= LU_XATTR_CREATE;
 
-                        if (attr->la_flags & XATTR_CREATE)
-                                flags |= LU_XATTR_CREATE;
+		mdt_fail_write(env, info->mti_mdt->mdt_bottom,
+			       OBD_FAIL_MDS_SETXATTR_WRITE);
 
-                        mdt_fail_write(env, info->mti_mdt->mdt_bottom,
-                                       OBD_FAIL_MDS_SETXATTR_WRITE);
-
-                        buf->lb_buf = xattr;
-                        buf->lb_len = xattr_len;
-                        rc = mo_xattr_set(env, child, buf, xattr_name, flags);
-                        /* update ctime after xattr changed */
-                        if (rc == 0) {
-                                ma->ma_attr_flags |= MDS_PERM_BYPASS;
-                                mo_attr_set(env, child, ma);
-                        }
-                }
+		buf->lb_buf = xattr;
+		buf->lb_len = xattr_len;
+		rc = mo_xattr_set(env, child, buf, xattr_name, flags);
+		/* update ctime after xattr changed */
+		if (rc == 0) {
+			ma->ma_attr_flags |= MDS_PERM_BYPASS;
+			mo_attr_set(env, child, ma);
+		}
         } else if (valid & OBD_MD_FLXATTRRM) {
                 rc = mo_xattr_del(env, child, xattr_name);
                 /* update ctime after xattr changed */
