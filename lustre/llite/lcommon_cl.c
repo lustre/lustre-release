@@ -507,12 +507,13 @@ int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
         io = ccc_env_thread_io(env);
 	io->ci_obj = ll_i2info(inode)->lli_clob;
 
-        io->u.ci_setattr.sa_attr.lvb_atime = LTIME_S(attr->ia_atime);
-        io->u.ci_setattr.sa_attr.lvb_mtime = LTIME_S(attr->ia_mtime);
-        io->u.ci_setattr.sa_attr.lvb_ctime = LTIME_S(attr->ia_ctime);
-        io->u.ci_setattr.sa_attr.lvb_size = attr->ia_size;
-        io->u.ci_setattr.sa_valid = attr->ia_valid;
-        io->u.ci_setattr.sa_capa = capa;
+	io->u.ci_setattr.sa_attr.lvb_atime = LTIME_S(attr->ia_atime);
+	io->u.ci_setattr.sa_attr.lvb_mtime = LTIME_S(attr->ia_mtime);
+	io->u.ci_setattr.sa_attr.lvb_ctime = LTIME_S(attr->ia_ctime);
+	io->u.ci_setattr.sa_attr.lvb_size = attr->ia_size;
+	io->u.ci_setattr.sa_valid = attr->ia_valid;
+	io->u.ci_setattr.sa_parent_fid = ll_inode2fid(inode);
+	io->u.ci_setattr.sa_capa = capa;
 
 again:
         if (cl_io_init(env, io, CIT_SETATTR, io->ci_obj) == 0) {

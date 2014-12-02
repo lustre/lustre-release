@@ -1849,17 +1849,19 @@ struct cl_io {
                 struct cl_rd_io {
                         struct cl_io_rw_common rd;
                 } ci_rd;
-                struct cl_wr_io {
-                        struct cl_io_rw_common wr;
-                        int                    wr_append;
+		struct cl_wr_io {
+			struct cl_io_rw_common wr;
+			int                    wr_append;
 			int                    wr_sync;
-                } ci_wr;
-                struct cl_io_rw_common ci_rw;
-                struct cl_setattr_io {
-                        struct ost_lvb   sa_attr;
-                        unsigned int     sa_valid;
-                        struct obd_capa *sa_capa;
-                } ci_setattr;
+		} ci_wr;
+		struct cl_io_rw_common ci_rw;
+		struct cl_setattr_io {
+			struct ost_lvb   sa_attr;
+			unsigned int     sa_valid;
+			int		 sa_stripe_index;
+			struct lu_fid    *sa_parent_fid;
+			struct obd_capa  *sa_capa;
+		} ci_setattr;
                 struct cl_fault_io {
                         /** page index within file. */
                         pgoff_t         ft_index;
