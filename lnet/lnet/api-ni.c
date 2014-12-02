@@ -1992,6 +1992,7 @@ lnet_dyn_add_ni(lnet_pid_t requested_pid, char *nets,
 	struct lnet_ni		*ni;
 	struct list_head	net_head;
 	int			rc;
+	lnet_remotenet_t	*rnet;
 
 	INIT_LIST_HEAD(&net_head);
 
@@ -2007,12 +2008,25 @@ lnet_dyn_add_ni(lnet_pid_t requested_pid, char *nets,
 		goto failed0;
 	}
 
+	ni = list_entry(net_head.next, struct lnet_ni, ni_list);
+
+	lnet_net_lock(LNET_LOCK_EX);
+	rnet = lnet_find_net_locked(LNET_NIDNET(ni->ni_nid));
+	lnet_net_unlock(LNET_LOCK_EX);
+	/* make sure that the net added doesn't invalidate the current
+	 * configuration LNet is keeping */
+	if (rnet != NULL) {
+		CERROR("Adding net %s will invalidate routing configuration\n",
+		       nets);
+		rc = -EUSERS;
+		goto failed0;
+	}
+
 	rc = lnet_ping_info_setup(&pinfo, &md_handle, 1 + lnet_get_ni_count(),
 				  false);
 	if (rc != 0)
 		goto failed0;
 
-	ni = list_entry(net_head.next, struct lnet_ni, ni_list);
 	list_del_init(&ni->ni_list);
 
 	rc = lnet_startup_lndni(ni, peer_timeout, peer_cr,
