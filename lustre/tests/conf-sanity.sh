@@ -2670,6 +2670,13 @@ test_42() { #bug 14693
 run_test 42 "allow client/server mount/unmount with invalid config param"
 
 test_43() {
+	local server_version=$(lustre_version_code $SINGLEMDS)
+
+	[[ $server_version -ge $(version_code 2.5.59) ]] ||
+	[[ $server_version -ge $(version_code 2.5.3) &&
+	   $server_version -lt $(version_code 2.5.11) ]] ||
+		{ skip "Need MDS version 2.5.4+ or 2.5.59+"; return; }
+
 	[ $UID -ne 0 -o $RUNAS_ID -eq 0 ] && skip_env "run as root"
 
 	ID1=${ID1:-501}
