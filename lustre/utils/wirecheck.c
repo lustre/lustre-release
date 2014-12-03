@@ -578,7 +578,6 @@ check_obdo(void)
 	CHECK_DEFINE_64X(OBD_MD_FLHANDLE);
 	CHECK_DEFINE_64X(OBD_MD_FLCKSUM);
 	CHECK_DEFINE_64X(OBD_MD_FLQOS);
-	CHECK_DEFINE_64X(OBD_MD_FLCOOKIE);
 	CHECK_DEFINE_64X(OBD_MD_FLGROUP);
 	CHECK_DEFINE_64X(OBD_MD_FLFID);
 	CHECK_DEFINE_64X(OBD_MD_FLEPOCH);
@@ -914,7 +913,7 @@ check_mdt_body(void)
 	CHECK_MEMBER(mdt_body, mbo_eadatasize);
 	CHECK_MEMBER(mdt_body, mbo_aclsize);
 	CHECK_MEMBER(mdt_body, mbo_max_mdsize);
-	CHECK_MEMBER(mdt_body, mbo_max_cookiesize);
+	CHECK_MEMBER(mdt_body, mbo_unused3);
 	CHECK_MEMBER(mdt_body, mbo_uid_h);
 	CHECK_MEMBER(mdt_body, mbo_gid_h);
 	CHECK_MEMBER(mdt_body, mbo_padding_5);

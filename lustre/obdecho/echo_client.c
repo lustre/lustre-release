@@ -2175,7 +2175,7 @@ out_env:
 #endif /* HAVE_SERVER_SUPPORT */
 
 static int echo_create_object(const struct lu_env *env, struct echo_device *ed,
-			      struct obdo *oa, struct obd_trans_info *oti)
+			      struct obdo *oa)
 {
 	struct echo_object	*eco;
 	struct echo_client_obd	*ec = ed->ed_ec;
@@ -2193,7 +2193,7 @@ static int echo_create_object(const struct lu_env *env, struct echo_device *ed,
 	if (ostid_id(&oa->o_oi) == 0)
 		ostid_set_id(&oa->o_oi, ++last_object_id);
 
-	rc = obd_create(env, ec->ec_exp, oa, oti);
+	rc = obd_create(env, ec->ec_exp, oa);
 	if (rc != 0) {
 		CERROR("Cannot create objects: rc = %d\n", rc);
 		GOTO(failed, rc);
@@ -2213,7 +2213,7 @@ static int echo_create_object(const struct lu_env *env, struct echo_device *ed,
 
 failed:
 	if (created && rc != 0)
-		obd_destroy(env, ec->ec_exp, oa, oti);
+		obd_destroy(env, ec->ec_exp, oa);
 
 	if (rc != 0)
 		CERROR("create object failed with: rc = %d\n", rc);
@@ -2317,8 +2317,7 @@ echo_client_page_debug_check(struct page *page, u64 id, u64 offset, u64 count)
 
 static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
 			    struct echo_object *eco, u64 offset,
-			    u64 count, int async,
-			    struct obd_trans_info *oti)
+			    u64 count, int async)
 {
 	size_t			npages;
         struct brw_page        *pga;
@@ -2412,8 +2411,7 @@ static int echo_client_prep_commit(const struct lu_env *env,
 				   struct obd_export *exp, int rw,
 				   struct obdo *oa, struct echo_object *eco,
 				   u64 offset, u64 count,
-				   u64 batch, struct obd_trans_info *oti,
-				   int async)
+				   u64 batch, int async)
 {
 	struct obd_ioobj	 ioo;
 	struct niobuf_local	*lnb;
@@ -2458,8 +2456,7 @@ static int echo_client_prep_commit(const struct lu_env *env,
                 ioo.ioo_bufcnt = npages;
 
                 lpages = npages;
-		ret = obd_preprw(env, rw, exp, oa, 1, &ioo, rnb, &lpages,
-				 lnb, oti);
+		ret = obd_preprw(env, rw, exp, oa, 1, &ioo, rnb, &lpages, lnb);
                 if (ret != 0)
                         GOTO(out, ret);
                 LASSERT(lpages == npages);
@@ -2491,13 +2488,10 @@ static int echo_client_prep_commit(const struct lu_env *env,
 							     rnb[i].rnb_len);
 		}
 
-		ret = obd_commitrw(env, rw, exp, oa, 1, &ioo,
-				   rnb, npages, lnb, oti, ret);
+		ret = obd_commitrw(env, rw, exp, oa, 1, &ioo, rnb, npages, lnb,
+				   ret);
                 if (ret != 0)
                         GOTO(out, ret);
-
-                /* Reset oti otherwise it would confuse ldiskfs. */
-                memset(oti, 0, sizeof(*oti));
 
 		/* Reuse env context. */
 		lu_context_exit((struct lu_context *)&env->le_ctx);
@@ -2514,8 +2508,7 @@ out:
 
 static int echo_client_brw_ioctl(const struct lu_env *env, int rw,
 				 struct obd_export *exp,
-				 struct obd_ioctl_data *data,
-				 struct obd_trans_info *dummy_oti)
+				 struct obd_ioctl_data *data)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct echo_device *ed = obd2echo_dev(obd);
@@ -2553,21 +2546,21 @@ static int echo_client_brw_ioctl(const struct lu_env *env, int rw,
         case 1:
                 /* fall through */
         case 2:
-                rc = echo_client_kbrw(ed, rw, oa,
-                                      eco, data->ioc_offset,
-				      data->ioc_count, async, dummy_oti);
-                break;
-        case 3:
-		rc = echo_client_prep_commit(env, ec->ec_exp, rw, oa,
-					     eco, data->ioc_offset,
-					     data->ioc_count, data->ioc_plen1,
-					     dummy_oti, async);
-                break;
-        default:
-                rc = -EINVAL;
-        }
-        echo_put_object(eco);
-        RETURN(rc);
+		rc = echo_client_kbrw(ed, rw, oa, eco, data->ioc_offset,
+				      data->ioc_count, async);
+		break;
+	case 3:
+		rc = echo_client_prep_commit(env, ec->ec_exp, rw, oa, eco,
+					     data->ioc_offset, data->ioc_count,
+					     data->ioc_plen1, async);
+		break;
+	default:
+		rc = -EINVAL;
+	}
+
+	echo_put_object(eco);
+
+	RETURN(rc);
 }
 
 static int
@@ -2582,20 +2575,15 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         struct echo_client_obd *ec = ed->ed_ec;
         struct echo_object     *eco;
         struct obd_ioctl_data  *data = karg;
-        struct obd_trans_info   dummy_oti;
         struct lu_env          *env;
-        struct oti_req_ack_lock *ack_lock;
         struct obdo            *oa;
         struct lu_fid           fid;
         int                     rw = OBD_BRW_READ;
         int                     rc = 0;
-        int                     i;
 #ifdef HAVE_SERVER_SUPPORT
 	struct lu_context	 echo_session;
 #endif
         ENTRY;
-
-        memset(&dummy_oti, 0, sizeof(dummy_oti));
 
 	oa = &data->ioc_obdo1;
 	if (!(oa->o_valid & OBD_MD_FLGROUP)) {
@@ -2632,7 +2620,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
-		rc = echo_create_object(env, ed, oa, &dummy_oti);
+		rc = echo_create_object(env, ed, oa);
                 GOTO(out, rc);
 
 #ifdef HAVE_SERVER_SUPPORT
@@ -2708,7 +2696,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
                 rc = echo_get_object(&eco, ed, oa);
                 if (rc == 0) {
-			rc = obd_destroy(env, ec->ec_exp, oa, &dummy_oti);
+			rc = obd_destroy(env, ec->ec_exp, oa);
                         if (rc == 0)
                                 eco->eo_deleted = 1;
                         echo_put_object(eco);
@@ -2737,7 +2725,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 				.oi_oa = oa,
 			};
 
-                        rc = obd_setattr(env, ec->ec_exp, &oinfo, NULL);
+			rc = obd_setattr(env, ec->ec_exp, &oinfo);
                         echo_put_object(eco);
                 }
                 GOTO(out, rc);
@@ -2749,7 +2737,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 rw = OBD_BRW_WRITE;
                 /* fall through */
         case OBD_IOC_BRW_READ:
-		rc = echo_client_brw_ioctl(env, rw, exp, data, &dummy_oti);
+		rc = echo_client_brw_ioctl(env, rw, exp, data);
                 GOTO(out, rc);
 
         default:
@@ -2767,14 +2755,6 @@ out_env:
         lu_env_fini(env);
 out_alloc:
         OBD_FREE_PTR(env);
-
-        /* XXX this should be in a helper also called by target_send_reply */
-        for (ack_lock = dummy_oti.oti_ack_locks, i = 0; i < 4;
-             i++, ack_lock++) {
-                if (!ack_lock->mode)
-                        break;
-                ldlm_lock_decref(&ack_lock->lock, ack_lock->mode);
-        }
 
         return rc;
 }

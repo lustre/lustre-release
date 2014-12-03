@@ -764,7 +764,7 @@ static inline int obd_free_memmd(struct obd_export *exp,
 }
 
 static inline int obd_create(const struct lu_env *env, struct obd_export *exp,
-			     struct obdo *obdo, struct obd_trans_info *oti)
+			     struct obdo *obdo)
 {
 	int rc;
 	ENTRY;
@@ -772,12 +772,12 @@ static inline int obd_create(const struct lu_env *env, struct obd_export *exp,
 	EXP_CHECK_DT_OP(exp, create);
 	EXP_COUNTER_INCREMENT(exp, create);
 
-	rc = OBP(exp->exp_obd, create)(env, exp, obdo, oti);
+	rc = OBP(exp->exp_obd, create)(env, exp, obdo);
 	RETURN(rc);
 }
 
 static inline int obd_destroy(const struct lu_env *env, struct obd_export *exp,
-			      struct obdo *obdo, struct obd_trans_info *oti)
+			      struct obdo *obdo)
 {
 	int rc;
 	ENTRY;
@@ -785,7 +785,7 @@ static inline int obd_destroy(const struct lu_env *env, struct obd_export *exp,
 	EXP_CHECK_DT_OP(exp, destroy);
 	EXP_COUNTER_INCREMENT(exp, destroy);
 
-	rc = OBP(exp->exp_obd, destroy)(env, exp, obdo, oti);
+	rc = OBP(exp->exp_obd, destroy)(env, exp, obdo);
 	RETURN(rc);
 }
 
@@ -803,17 +803,16 @@ static inline int obd_getattr(const struct lu_env *env, struct obd_export *exp,
 }
 
 static inline int obd_setattr(const struct lu_env *env, struct obd_export *exp,
-                              struct obd_info *oinfo,
-                              struct obd_trans_info *oti)
+			      struct obd_info *oinfo)
 {
-        int rc;
-        ENTRY;
+	int rc;
 
-        EXP_CHECK_DT_OP(exp, setattr);
-        EXP_COUNTER_INCREMENT(exp, setattr);
+	ENTRY;
+	EXP_CHECK_DT_OP(exp, setattr);
+	EXP_COUNTER_INCREMENT(exp, setattr);
+	rc = OBP(exp->exp_obd, setattr)(env, exp, oinfo);
 
-        rc = OBP(exp->exp_obd, setattr)(env, exp, oinfo, oti);
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static inline int obd_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
@@ -1165,35 +1164,33 @@ static inline int obd_preprw(const struct lu_env *env, int cmd,
 			     struct obd_export *exp, struct obdo *oa,
 			     int objcount, struct obd_ioobj *obj,
 			     struct niobuf_remote *remote, int *pages,
-			     struct niobuf_local *local,
-			     struct obd_trans_info *oti)
+			     struct niobuf_local *local)
 {
-        int rc;
-        ENTRY;
+	int rc;
 
-        EXP_CHECK_DT_OP(exp, preprw);
-        EXP_COUNTER_INCREMENT(exp, preprw);
-
+	ENTRY;
+	EXP_CHECK_DT_OP(exp, preprw);
+	EXP_COUNTER_INCREMENT(exp, preprw);
 	rc = OBP(exp->exp_obd, preprw)(env, cmd, exp, oa, objcount, obj, remote,
-				       pages, local, oti);
-        RETURN(rc);
+				       pages, local);
+
+	RETURN(rc);
 }
 
 static inline int obd_commitrw(const struct lu_env *env, int cmd,
-                               struct obd_export *exp, struct obdo *oa,
-                               int objcount, struct obd_ioobj *obj,
-                               struct niobuf_remote *rnb, int pages,
-                               struct niobuf_local *local,
-                               struct obd_trans_info *oti, int rc)
+			       struct obd_export *exp, struct obdo *oa,
+			       int objcount, struct obd_ioobj *obj,
+			       struct niobuf_remote *rnb, int pages,
+			       struct niobuf_local *local, int rc)
 {
-        ENTRY;
+	ENTRY;
 
-        EXP_CHECK_DT_OP(exp, commitrw);
-        EXP_COUNTER_INCREMENT(exp, commitrw);
+	EXP_CHECK_DT_OP(exp, commitrw);
+	EXP_COUNTER_INCREMENT(exp, commitrw);
+	rc = OBP(exp->exp_obd, commitrw)(env, cmd, exp, oa, objcount, obj,
+					 rnb, pages, local, rc);
 
-        rc = OBP(exp->exp_obd, commitrw)(env, cmd, exp, oa, objcount, obj,
-                                         rnb, pages, local, oti, rc);
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static inline int obd_iocontrol(unsigned int cmd, struct obd_export *exp,
@@ -1645,15 +1642,13 @@ static inline ldlm_mode_t md_lock_match(struct obd_export *exp, __u64 flags,
                                              policy, mode, lockh));
 }
 
-static inline int md_init_ea_size(struct obd_export *exp, int easize,
-				  int def_asize, int cookiesize,
-				  int def_cookiesize)
+static inline int md_init_ea_size(struct obd_export *exp, __u32 ea_size,
+				  __u32 def_ea_size)
 {
 	ENTRY;
 	EXP_CHECK_MD_OP(exp, init_ea_size);
 	EXP_MD_COUNTER_INCREMENT(exp, init_ea_size);
-	RETURN(MDP(exp->exp_obd, init_ea_size)(exp, easize, def_asize,
-					       cookiesize, def_cookiesize));
+	RETURN(MDP(exp->exp_obd, init_ea_size)(exp, ea_size, def_ea_size));
 }
 
 static inline int md_get_remote_perm(struct obd_export *exp,

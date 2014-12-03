@@ -1853,7 +1853,7 @@ int mdt_close(struct tgt_session_info *tsi)
                 ma->ma_lmm_size = req_capsule_get_size(info->mti_pill,
                                                        &RMF_MDT_MD,
                                                        RCL_SERVER);
-                ma->ma_need = MA_INODE | MA_LOV | MA_COOKIE;
+		ma->ma_need = MA_INODE | MA_LOV;
 		repbody->mbo_eadatasize = 0;
 		repbody->mbo_aclsize = 0;
         } else {

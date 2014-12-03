@@ -116,7 +116,7 @@ static u64 echo_next_id(struct obd_device *obddev)
 }
 
 static int echo_create(const struct lu_env *env, struct obd_export *exp,
-		       struct obdo *oa, struct obd_trans_info *oti)
+		       struct obdo *oa)
 {
         struct obd_device *obd = class_exp2obd(exp);
 
@@ -144,7 +144,7 @@ static int echo_create(const struct lu_env *env, struct obd_export *exp,
 }
 
 static int echo_destroy(const struct lu_env *env, struct obd_export *exp,
-			struct obdo *oa, struct obd_trans_info *oti)
+			struct obdo *oa)
 {
         struct obd_device *obd = class_exp2obd(exp);
 
@@ -196,7 +196,7 @@ static int echo_getattr(const struct lu_env *env, struct obd_export *exp,
 }
 
 static int echo_setattr(const struct lu_env *env, struct obd_export *exp,
-                        struct obd_info *oinfo, struct obd_trans_info *oti)
+			struct obd_info *oinfo)
 {
         struct obd_device *obd = class_exp2obd(exp);
 
@@ -215,14 +215,7 @@ static int echo_setattr(const struct lu_env *env, struct obd_export *exp,
 
         memcpy(&obd->u.echo.eo_oa, oinfo->oi_oa, sizeof(*oinfo->oi_oa));
 
-        if (ostid_id(&oinfo->oi_oa->o_oi) & 4) {
-                /* Save lock to force ACKed reply */
-                ldlm_lock_addref (&obd->u.echo.eo_nl_lock, LCK_NL);
-                oti->oti_ack_locks[0].mode = LCK_NL;
-                oti->oti_ack_locks[0].lock = obd->u.echo.eo_nl_lock;
-        }
-
-        RETURN(0);
+	RETURN(0);
 }
 
 static void
@@ -280,9 +273,6 @@ echo_page_debug_check(struct page *page, u64 id,
 
 	return rc;
 }
-
-/* This allows us to verify that desc_private is passed unmolested */
-#define DESC_PRIV 0x10293847
 
 static int echo_map_nb_to_lb(struct obdo *oa, struct obd_ioobj *obj,
                              struct niobuf_remote *nb, int *pages,
@@ -402,7 +392,7 @@ static int echo_preprw(const struct lu_env *env, int cmd,
 		       struct obd_export *export, struct obdo *oa,
 		       int objcount, struct obd_ioobj *obj,
 		       struct niobuf_remote *nb, int *pages,
-		       struct niobuf_local *res, struct obd_trans_info *oti)
+		       struct niobuf_local *res)
 {
         struct obd_device *obd;
         int tot_bytes = 0;
@@ -421,9 +411,6 @@ static int echo_preprw(const struct lu_env *env, int cmd,
 
         CDEBUG(D_PAGE, "%s %d obdos with %d IOs\n",
                cmd == OBD_BRW_READ ? "reading" : "writing", objcount, *pages);
-
-        if (oti)
-                oti->oti_handle = (void *)DESC_PRIV;
 
         left = *pages;
         *pages = 0;
@@ -479,8 +466,7 @@ static int echo_commitrw(const struct lu_env *env, int cmd,
 			 struct obd_export *export, struct obdo *oa,
 			 int objcount, struct obd_ioobj *obj,
 			 struct niobuf_remote *rb, int niocount,
-			 struct niobuf_local *res, struct obd_trans_info *oti,
-			 int rc)
+			 struct niobuf_local *res, int rc)
 {
         struct obd_device *obd;
         int pgs = 0;
@@ -506,8 +492,6 @@ static int echo_commitrw(const struct lu_env *env, int cmd,
                 CERROR("NULL res niobuf with niocount %d\n", niocount);
                 RETURN(-EINVAL);
         }
-
-        LASSERT(oti == NULL || oti->oti_handle == (void *)DESC_PRIV);
 
 	for (i = 0; i < objcount; i++, obj++) {
 		int verify = (rc == 0 &&

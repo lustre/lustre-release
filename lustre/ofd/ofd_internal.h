@@ -368,12 +368,11 @@ int ofd_verify_ff(const struct lu_env *env, struct ofd_object *fo,
 int ofd_preprw(const struct lu_env *env,int cmd, struct obd_export *exp,
 	       struct obdo *oa, int objcount, struct obd_ioobj *obj,
 	       struct niobuf_remote *rnb, int *nr_local,
-	       struct niobuf_local *lnb, struct obd_trans_info *oti);
+	       struct niobuf_local *lnb);
 int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		 struct obdo *oa, int objcount, struct obd_ioobj *obj,
 		 struct niobuf_remote *rnb, int npages,
-		 struct niobuf_local *lnb, struct obd_trans_info *oti,
-		 int old_rc);
+		 struct niobuf_local *lnb, int old_rc);
 
 /* ofd_trans.c */
 struct thandle *ofd_trans_create(const struct lu_env *env,
@@ -561,20 +560,6 @@ static inline struct ofd_thread_info *tsi2ofd_info(struct tgt_session_info *tsi)
 		info->fti_pre_version = pre_version ? pre_version[0] : 0;
 	}
 	return info;
-}
-
-static inline void ofd_oti2info(struct ofd_thread_info *info,
-				struct obd_trans_info *oti)
-{
-	info->fti_xid = oti->oti_xid;
-	info->fti_pre_version = oti->oti_pre_version;
-}
-
-static inline void ofd_info2oti(struct ofd_thread_info *info,
-                                struct obd_trans_info *oti)
-{
-	oti->oti_xid = info->fti_xid;
-	oti->oti_pre_version = info->fti_pre_version;
 }
 
 /* sync on lock cancel is useless when we force a journal flush,

@@ -853,36 +853,6 @@ static ssize_t ll_default_easize_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(ll_default_easize);
 
-static int ll_max_cookiesize_seq_show(struct seq_file *m, void *v)
-{
-	struct super_block *sb = m->private;
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
-	unsigned int cookielen;
-	int rc;
-
-	rc = ll_get_max_cookiesize(sbi, &cookielen);
-	if (rc)
-		return rc;
-
-	return seq_printf(m, "%u\n", cookielen);
-}
-LPROC_SEQ_FOPS_RO(ll_max_cookiesize);
-
-static int ll_default_cookiesize_seq_show(struct seq_file *m, void *v)
-{
-	struct super_block *sb = m->private;
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
-	unsigned int cookielen;
-	int rc;
-
-	rc = ll_get_default_cookiesize(sbi, &cookielen);
-	if (rc)
-		return rc;
-
-	return seq_printf(m, "%u\n", cookielen);
-}
-LPROC_SEQ_FOPS_RO(ll_default_cookiesize);
-
 static int ll_sbi_flags_seq_show(struct seq_file *m, void *v)
 {
 	const char *str[] = LL_SBI_FLAGS;
@@ -1073,10 +1043,6 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_max_easize_fops			},
 	{ .name	=	"default_easize",
 	  .fops	=	&ll_default_easize_fops			},
-	{ .name	=	"max_cookiesize",
-	  .fops	=	&ll_max_cookiesize_fops			},
-	{ .name	=	"default_cookiesize",
-	  .fops	=	&ll_default_cookiesize_fops		},
 	{ .name	=	"sbi_flags",
 	  .fops	=	&ll_sbi_flags_fops			},
 	{ .name	=	"xattr_cache",

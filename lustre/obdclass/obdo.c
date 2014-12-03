@@ -153,8 +153,6 @@ void obdo_cpy_md(struct obdo *dst, const struct obdo *src, u64 valid)
                 dst->o_parent_oid = src->o_parent_oid;
         if (valid & OBD_MD_FLHANDLE)
                 dst->o_handle = src->o_handle;
-        if (valid & OBD_MD_FLCOOKIE)
-                dst->o_lcookie = src->o_lcookie;
 
         dst->o_valid |= valid;
 }

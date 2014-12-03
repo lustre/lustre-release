@@ -1000,12 +1000,10 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         }
 
 	if (reqbody->mbo_valid & OBD_MD_FLMODEASIZE) {
-		repbody->mbo_max_cookiesize = 0;
 		repbody->mbo_max_mdsize = info->mti_mdt->mdt_max_mdsize;
 		repbody->mbo_valid |= OBD_MD_FLMODEASIZE;
-		CDEBUG(D_INODE, "I am going to change the MAX_MD_SIZE & "
-		       "MAX_COOKIE to : %d:%d\n", repbody->mbo_max_mdsize,
-		       repbody->mbo_max_cookiesize);
+		CDEBUG(D_INODE, "changing the max MD size to %u\n",
+		       repbody->mbo_max_mdsize);
 	}
 
 	if (exp_connect_rmtclient(info->mti_exp) &&

@@ -69,16 +69,15 @@ struct obd_export;
 
 /** metadata attributes */
 enum ma_valid {
-	MA_INODE     = (1 << 0),
-	MA_LOV       = (1 << 1),
-	MA_COOKIE    = (1 << 2),
-	MA_FLAGS     = (1 << 3),
-	MA_LMV       = (1 << 4),
-	MA_ACL_DEF   = (1 << 5),
-	MA_LOV_DEF   = (1 << 6),
-	MA_HSM       = (1 << 7),
-	MA_PFID      = (1 << 8),
-	MA_LMV_DEF   = (1 << 9),
+	MA_INODE     = 1 << 0,
+	MA_LOV       = 1 << 1,
+	MA_FLAGS     = 1 << 2,
+	MA_LMV       = 1 << 3,
+	MA_ACL_DEF   = 1 << 4,
+	MA_LOV_DEF   = 1 << 5,
+	MA_HSM       = 1 << 6,
+	MA_PFID      = 1 << 7,
+	MA_LMV_DEF   = 1 << 8,
 };
 
 typedef enum {

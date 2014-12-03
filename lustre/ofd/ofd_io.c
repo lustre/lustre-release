@@ -676,7 +676,6 @@ out:
  * \param[in] rnb	remote buffers
  * \param[in] nr_local	number of local buffers
  * \param[in] lnb	local buffers
- * \param[in] oti	request data from OST
  *
  * \retval		0 on successful prepare
  * \retval		negative value on error
@@ -684,7 +683,7 @@ out:
 int ofd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	       struct obdo *oa, int objcount, struct obd_ioobj *obj,
 	       struct niobuf_remote *rnb, int *nr_local,
-	       struct niobuf_local *lnb, struct obd_trans_info *oti)
+	       struct niobuf_local *lnb)
 {
 	struct tgt_session_info	*tsi = tgt_ses_info(env);
 	struct ofd_device	*ofd = ofd_exp(exp);
@@ -701,9 +700,7 @@ int ofd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	}
 
 	if (tgt_ses_req(tsi) == NULL) { /* echo client case */
-		LASSERT(oti != NULL);
 		info = ofd_info_init(env, exp);
-		ofd_oti2info(info, oti);
 		jobid = NULL;
 	} else {
 		info = tsi2ofd_info(tsi);
@@ -1149,7 +1146,6 @@ out:
  * \param[in] rnb	remote buffers
  * \param[in] npages	number of local buffers
  * \param[in] lnb	local buffers
- * \param[in] oti	request data from OST
  * \param[in] old_rc	result of processing at this point
  *
  * \retval		0 on successful commit
@@ -1158,8 +1154,7 @@ out:
 int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		 struct obdo *oa, int objcount, struct obd_ioobj *obj,
 		 struct niobuf_remote *rnb, int npages,
-		 struct niobuf_local *lnb, struct obd_trans_info *oti,
-		 int old_rc)
+		 struct niobuf_local *lnb, int old_rc)
 {
 	struct ofd_thread_info	*info = ofd_info(env);
 	struct ofd_mod_data	*fmd;
@@ -1247,7 +1242,5 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		rc = -EPROTO;
 	}
 
-	if (oti != NULL)
-		ofd_info2oti(info, oti);
 	RETURN(rc);
 }

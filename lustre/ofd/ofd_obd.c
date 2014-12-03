@@ -878,13 +878,12 @@ out:
  * \param[in] env	execution environment
  * \param[in] exp	OBD export of OFD device
  * \param[in] oinfo	obd_info with setattr parameters
- * \param[in] oti	not used in OFD
  *
  * \retval		0 if successful
  * \retval		negative value on error
  */
 static int ofd_echo_setattr(const struct lu_env *env, struct obd_export *exp,
-			    struct obd_info *oinfo, struct obd_trans_info *oti)
+			    struct obd_info *oinfo)
 {
 	struct ofd_thread_info	*info;
 	struct ofd_device	*ofd = ofd_exp(exp);
@@ -1025,7 +1024,6 @@ int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
  * \param[in] env	execution environment
  * \param[in] exp	OBD export of OFD device
  * \param[in] oa	obdo structure with FID
- * \param[in] oti	not used in OFD
  *
  * Note: this is OBD API method which is common API for server OBDs and
  * client OBDs. Thus some parameters used in client OBDs may not be used
@@ -1035,7 +1033,7 @@ int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
  * \retval		negative value on error
  */
 static int ofd_echo_destroy(const struct lu_env *env, struct obd_export *exp,
-			    struct obdo *oa, struct obd_trans_info *oti)
+			    struct obdo *oa)
 {
 	struct ofd_device	*ofd = ofd_exp(exp);
 	struct lu_fid		*fid = &oa->o_oi.oi_fid;
@@ -1072,8 +1070,6 @@ out:
  * \param[in]  env	execution environment
  * \param[in]  exp	OBD export of OFD device
  * \param[in]  oa	obdo structure with FID sequence to use
- * \param[out] ea	contains object ID/SEQ to return
- * \param[in]  oti	not used in OFD
  *
  * Note: this is OBD API method which is common API for server OBDs and
  * client OBDs. Thus some parameters used in client OBDs may not be used
@@ -1083,7 +1079,7 @@ out:
  * \retval		negative value on error
  */
 static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
-			   struct obdo *oa, struct obd_trans_info *oti)
+			   struct obdo *oa)
 {
 	struct ofd_device	*ofd = ofd_exp(exp);
 	struct ofd_thread_info	*info;
