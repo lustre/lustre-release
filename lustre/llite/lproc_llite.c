@@ -448,9 +448,6 @@ static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
 	/* Allow enough cache so clients can make well-formed RPCs */
 	pages_number = max_t(long, pages_number, PTLRPC_MAX_BRW_PAGES);
 
-	if (sbi->ll_dt_exp == NULL) /* being initialized */
-		GOTO(out, rc = 0);
-
 	spin_lock(&sbi->ll_lock);
 	diff = pages_number - cache->ccc_lru_max;
 	spin_unlock(&sbi->ll_lock);
@@ -484,6 +481,11 @@ static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
 
 		if (diff <= 0)
 			break;
+
+		if (sbi->ll_dt_exp == NULL) { /* being initialized */
+			rc = -ENODEV;
+			break;
+		}
 
 		/* difficult - have to ask OSCs to drop LRU slots. */
 		tmp = diff << 1;
