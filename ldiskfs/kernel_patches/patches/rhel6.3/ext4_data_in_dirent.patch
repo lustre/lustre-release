@@ -319,12 +319,15 @@ Index: linux-stage/fs/ext4/ext4.h
  			if (de > to)
  				memmove(to, de, rec_len);
  			to->rec_len = ext4_rec_len_to_disk(rec_len, blocksize);
-@@ -1335,10 +1345,16 @@ static int add_dirent_to_buf(handle_t *h
+@@ -1334,11 +1344,28 @@ static int add_dirent_to_buf(handle_t *h
+ 	int		namelen = dentry->d_name.len;
  	unsigned int	offset = 0;
  	unsigned int	blocksize = dir->i_sb->s_blocksize;
- 	unsigned short	reclen;
+-	unsigned short	reclen;
 -	int		nlen, rlen, err;
++	unsigned short	reclen, dotdot_reclen = 0;
 +	int		nlen, rlen, err, dlen = 0;
++	bool		is_dotdot = false, write_short_dotdot = false;
 +	unsigned char	*data;
  	char		*top;
  
@@ -334,20 +337,49 @@ Index: linux-stage/fs/ext4/ext4.h
 +	if (data)
 +		dlen = (*data) + 1;
 +
++	is_dotdot = (namelen == 2 &&
++		     memcmp(dentry->d_name.name, "..", 2) == 0);
++
++	/* dotdot entries must be in the second place in a directory block,
++	 * so calculate an alternate length without the FID so they can
++	 * always be made to fit in the existing slot - LU-5626 */
++	if (is_dotdot)
++		dotdot_reclen = __EXT4_DIR_REC_LEN(namelen);
++
 +	reclen = __EXT4_DIR_REC_LEN(namelen + dlen);
++
  	if (!de) {
  		de = (struct ext4_dir_entry_2 *)bh->b_data;
  		top = bh->b_data + blocksize - reclen;
-@@ -1348,7 +1364,7 @@ static int add_dirent_to_buf(handle_t *h
+@@ -1348,10 +1375,25 @@ static int add_dirent_to_buf(handle_t *h
  				return -EIO;
  			if (ext4_match(namelen, name, de))
  				return -EEXIST;
 -			nlen = EXT4_DIR_REC_LEN(de->name_len);
 +			nlen = EXT4_DIR_REC_LEN(de);
  			rlen = ext4_rec_len_from_disk(de->rec_len, blocksize);
- 			if ((de->inode? rlen - nlen: rlen) >= reclen)
+-			if ((de->inode? rlen - nlen: rlen) >= reclen)
++			/* Check first for enough space for the full entry */
++			if ((de->inode ? rlen - nlen : rlen) >= reclen)
  				break;
-@@ -1366,7 +1382,7 @@ static int add_dirent_to_buf(handle_t *h
++			/* Then for dotdot entries, check for the smaller space
++			 * required for just the entry, no FID */
++			if (is_dotdot) {
++				if ((de->inode ? rlen - nlen : rlen) >=
++				    dotdot_reclen) {
++					write_short_dotdot = true;
++					break;
++				}
++				/* The new ".." entry mut be written over the
++				 * previous ".." entry, which is the first
++				 * entry traversed by this scan.  If it doesn't
++				 * fit, something is badly wrong, so -EIO. */
++				return -EIO;
++			}
+ 			de = (struct ext4_dir_entry_2 *)((char *)de + rlen);
+ 			offset += rlen;
+ 		}
+@@ -1366,7 +1408,7 @@ static int add_dirent_to_buf(handle_t *h
  	}
  
  	/* By now the buffer is marked for journaling */
@@ -356,11 +388,12 @@ Index: linux-stage/fs/ext4/ext4.h
  	rlen = ext4_rec_len_from_disk(de->rec_len, blocksize);
  	if (de->inode) {
  		struct ext4_dir_entry_2 *de1 = (struct ext4_dir_entry_2 *)((char *)de + nlen);
-@@ -1382,6 +1398,12 @@ static int add_dirent_to_buf(handle_t *h
+@@ -1382,6 +1424,13 @@ static int add_dirent_to_buf(handle_t *h
  		de->inode = 0;
  	de->name_len = namelen;
  	memcpy(de->name, name, namelen);
-+	if (data) {
++	/* If we're writing the short form of "dotdot", don't add the data section */
++	if (data && !write_short_dotdot) {
 +		de->name[namelen] = 0;
 +		memcpy(&de->name[namelen + 1], data, *(char *) data);
 +		de->file_type |= EXT4_DIRENT_LUFID;
@@ -369,7 +402,7 @@ Index: linux-stage/fs/ext4/ext4.h
  	/*
  	 * XXX shouldn't update any times until successful
  	 * completion of syscall, but too many callers depend
-@@ -1480,7 +1502,8 @@ static int make_indexed_dir(handle_t *ha
+@@ -1480,7 +1529,8 @@ static int make_indexed_dir(handle_t *ha
  
  	dx_set_block(entries, 1);
  	dx_set_count(entries, 1);
@@ -379,7 +412,7 @@ Index: linux-stage/fs/ext4/ext4.h
  
  	/* Initialize as for dx_probe */
  	hinfo.hash_version = dx_info->hash_version;
-@@ -1523,6 +1546,8 @@ static int ext4_update_dotdot(handle_t *
+@@ -1523,6 +1573,8 @@ static int ext4_update_dotdot(handle_t *
  	struct buffer_head * dir_block;
  	struct ext4_dir_entry_2 * de;
  	int len, journal = 0, err = 0;
@@ -388,7 +421,7 @@ Index: linux-stage/fs/ext4/ext4.h
  
  	if (IS_ERR(handle))
  		return PTR_ERR(handle);
-@@ -1538,19 +1563,24 @@ static int ext4_update_dotdot(handle_t *
+@@ -1538,19 +1590,24 @@ static int ext4_update_dotdot(handle_t *
  	/* the first item must be "." */
  	assert(de->name_len == 1 && de->name[0] == '.');
  	len = le16_to_cpu(de->rec_len);
@@ -418,7 +451,7 @@ Index: linux-stage/fs/ext4/ext4.h
  	de = (struct ext4_dir_entry_2 *)
  			((char *) de + le16_to_cpu(de->rec_len));
  	if (!journal) {
-@@ -1564,10 +1594,15 @@ static int ext4_update_dotdot(handle_t *
+@@ -1564,10 +1621,15 @@ static int ext4_update_dotdot(handle_t *
  	if (len > 0)
  		de->rec_len = cpu_to_le16(len);
  	else
@@ -436,7 +469,7 @@ Index: linux-stage/fs/ext4/ext4.h
  
  out_journal:
  	if (journal) {
-@@ -1989,12 +2024,13 @@ retry:
+@@ -1991,12 +2053,13 @@ retry:
  /* Initialize @inode as a subdirectory of @dir, and add the
   * "." and ".." entries into the first directory block. */
  int ext4_add_dot_dotdot(handle_t *handle, struct inode * dir,
@@ -452,7 +485,7 @@ Index: linux-stage/fs/ext4/ext4.h
  
  	if (IS_ERR(handle))
  		return PTR_ERR(handle);
-@@ -2015,17 +2051,32 @@ int ext4_add_dot_dotdot(handle_t *handle
+@@ -2017,17 +2080,32 @@ int ext4_add_dot_dotdot(handle_t *handle
  	de = (struct ext4_dir_entry_2 *) dir_block->b_data;
  	de->inode = cpu_to_le32(inode->i_ino);
  	de->name_len = 1;
@@ -488,7 +521,7 @@ Index: linux-stage/fs/ext4/ext4.h
  	inode->i_nlink = 2;
  	BUFFER_TRACE(dir_block, "call ext4_handle_dirty_metadata");
  	err = ext4_handle_dirty_metadata(handle, inode, dir_block);
-@@ -2064,7 +2115,7 @@ retry:
+@@ -2066,7 +2144,7 @@ retry:
  	if (IS_ERR(inode))
  		goto out_stop;
  
@@ -497,7 +530,7 @@ Index: linux-stage/fs/ext4/ext4.h
  	if (err)
  		goto out_clear_inode;
  
-@@ -2103,7 +2154,7 @@ static int empty_dir(struct inode *inode
+@@ -2105,7 +2183,7 @@ static int empty_dir(struct inode *inode
  	int err = 0;
  
  	sb = inode->i_sb;
