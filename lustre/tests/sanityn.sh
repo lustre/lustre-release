@@ -164,6 +164,18 @@ test_2f() {
 }
 run_test 2f "check attr/owner updates on DNE with 2 mtpt's"
 
+test_2g() {
+	dd if=/dev/zero of=$DIR1/$tfile oflag=sync bs=1M count=2
+
+	local block1=$(stat $DIR1/$tfile | awk '/Blocks/ {print $4} ')
+	cancel_lru_locks osc
+	local block2=$(stat $DIR2/$tfile | awk '/Blocks/ {print $4} ')
+	echo "$DIR1/$tfile has $block1 blocks"
+	echo "$DIR2/$tfile has $block2 blocks"
+	[ $block1 -eq $block2 ] || error
+}
+run_test 2g "check blocks update on sync write"
+
 test_3() {
 	local target="this/is/good"
 	ln -s $target $DIR1/$tfile || error "ln -s $target $DIR1/$tfile failed"
