@@ -5641,26 +5641,15 @@ restore_lustre_params() {
 }
 
 check_catastrophe() {
-	local rnodes=${1:-$(comma_list $(remote_nodes_list))}
-	VAR=$(lctl get_param -n catastrophe 2>&1)
-	if [ $? = 0 ] ; then
-		if [ $VAR != 0 ]; then
-			return 1
-		fi
-	fi
+	local nodes=${1:-$(comma_list $(nodes_list))}
 
-	[ -z "$rnodes" ] && return 0
-
-	local data
-	data=$(do_nodes "$rnodes" "rc=\\\$(lctl get_param -n catastrophe);
-		if [ \\\$rc -ne 0 ]; then echo \\\$(hostname): \\\$rc; fi
-		exit \\\$rc")
-	local rc=$?
-	if [ -n "$data" ]; then
-	    echo $data
-	    return $rc
-	fi
-	return 0
+	do_nodes $nodes "rc=0;
+val=\\\$($LCTL get_param -n catastrophe 2>&1);
+if [[ \\\$? -eq 0 && \\\$val -ne 0 ]]; then
+	echo \\\$(hostname -s): \\\$val;
+	rc=\\\$val;
+fi;
+exit \\\$rc"
 }
 
 # CMD: determine mds index where directory inode presents
