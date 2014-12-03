@@ -856,6 +856,13 @@ static int lfs_setstripe(int argc, char **argv)
 		return CMD_HELP;
 	}
 
+	if (pool_name_arg && strlen(pool_name_arg) > LOV_MAXPOOLNAME) {
+		fprintf(stderr,
+			"error: %s: pool name '%s' is too long (max is %d characters)\n",
+			argv[0], pool_name_arg, LOV_MAXPOOLNAME);
+		return CMD_HELP;
+	}
+
 	/* get the stripe size */
 	if (stripe_size_arg != NULL) {
 		result = llapi_parse_size(stripe_size_arg, &st_size,
