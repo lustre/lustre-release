@@ -1093,7 +1093,7 @@ int ofd_destroy(const struct lu_env *env, struct obd_export *exp,
 		} else if (lrc != 0) {
 			CERROR("%s: error destroying object "DFID": %d\n",
 			       ofd_obd(ofd)->obd_name, PFID(&info->fti_fid),
-			       rc);
+			       lrc);
 			rc = lrc;
 		}
 		count--;
