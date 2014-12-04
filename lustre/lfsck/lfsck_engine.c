@@ -783,6 +783,10 @@ static int lfsck_master_dir_engine(const struct lu_env *env,
 		    strcmp(ent->lde_name, dotdot) != 0)
 			goto checkpoint;
 
+		/* skip dot entry. */
+		if (ent->lde_namelen == 1 && ent->lde_name[0] == '.')
+			goto checkpoint;
+
 		/* The type in the @ent structure may has been overwritten,
 		 * so we need to pass the @type parameter independently. */
 		rc = lfsck_exec_dir(env, lfsck, ent, type);

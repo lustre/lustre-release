@@ -5066,8 +5066,7 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 		GOTO(put_dir, rc);
 	}
 
-	if (lnr->lnr_name[0] == '.' &&
-	    (lnr->lnr_namelen == 1 || fid_seq_is_dot(fid_seq(&lnr->lnr_fid))))
+	if (fid_seq_is_dot(fid_seq(&lnr->lnr_fid)))
 		GOTO(out, rc = 0);
 
 	if (lnr->lnr_lmv != NULL && lnr->lnr_lmv->ll_lmv_master) {
