@@ -1146,12 +1146,12 @@ static int lod_alloc_ost_list(const struct lu_env *env,
 /**
  * Allocate a striping on a predefined set of OSTs.
  *
- * Allocates new striping starting from OST provided lo->ldo_def_stripe_offset.
+ * Allocates new layout starting from OST index in lo->ldo_def_stripe_offset.
  * Full OSTs are not considered. The exact order of OSTs is not important and
  * varies depending on OST status. The allocation procedure prefers the targets
  * with precreated objects ready. The number of stripes needed and stripe
- * offset are taken from the object. If that number can not be met, then the
- * function returns a failure and then it's the caller's responsibility to
+ * offset are taken from the object. If that number cannot be met, then the
+ * function returns an error and then it's the caller's responsibility to
  * release the stripes allocated. All the internal structures are protected,
  * but no concurrent allocation is allowed on the same objects.
  *
@@ -1162,9 +1162,10 @@ static int lod_alloc_ost_list(const struct lu_env *env,
  * \param[in] th	transaction handle
  *
  * \retval 0		on success
- * \retval -E2BIG	if no enough OSTs are found
+ * \retval -ENOSPC	if no OST objects are available at all
+ * \retval -EFBIG	if not enough OST objects are found
  * \retval -EINVAL	requested offset is invalid
- * \retval negative	negated errno on error
+ * \retval negative	errno on failure
  */
 static int lod_alloc_specific(const struct lu_env *env, struct lod_object *lo,
 			      struct dt_object **stripe, int flags,
@@ -1278,13 +1279,11 @@ repeat_find:
 	/* If we were passed specific striping params, then a failure to
 	 * meet those requirements is an error, since we can't reallocate
 	 * that memory (it might be part of a larger array or something).
-	 *
-	 * We can only get here if lsm_stripe_count was originally > 1.
 	 */
 	CERROR("can't lstripe objid "DFID": have %d want %u\n",
 	       PFID(lu_object_fid(lod2lu_obj(lo))), stripe_num,
 	       lo->ldo_stripenr);
-	rc = -EFBIG;
+	rc = stripe_num == 0 ? -ENOSPC : -EFBIG;
 out:
 	if (pool != NULL) {
 		up_read(&pool_tgt_rw_sem(pool));
@@ -1331,19 +1330,21 @@ static inline int lod_qos_is_usable(struct lod_device *lod)
  * The function allocates OST objects to create a striping. The algorithm
  * used is based on weights (currently only using the free space), and it's
  * trying to ensure the space is used evenly by OSTs and OSSs. The striping
- * configuration (# of stripes, offset,
- * pool) is taken from the object and is prepared by the caller.
+ * configuration (# of stripes, offset, pool) is taken from the object and
+ * is prepared by the caller.
+ *
  * If LOV_USES_DEFAULT_STRIPE is not passed and prepared configuration can't
- * be met due to too few OSTs, then allocation fails. If the flag is
- * passed and less than 75% of the requested number of stripes can be
- * allocated, then allocation fails.
- * No concurrent allocation is allowed on the object and this must be
- * ensured by the caller. All the internal structures are protected by the
- * function.
- * The algorithm has two steps: find available OSTs and calucate their weights,
- * then select the OSTs the weights used as the probability. An OST with a
- * higher weight is proportionately more likely to be selected than one with
- * a lower weight.
+ * be met due to too few OSTs, then allocation fails. If the flag is passed
+ * fewer than 3/4 of the requested number of stripes can be allocated, then
+ * allocation fails.
+ *
+ * No concurrent allocation is allowed on the object and this must be ensured
+ * by the caller. All the internal structures are protected by the function.
+ *
+ * The algorithm has two steps: find available OSTs and calculate their
+ * weights, then select the OSTs with their weights used as the probability.
+ * An OST with a higher weight is proportionately more likely to be selected
+ * than one with a lower weight.
  *
  * \param[in] env	execution environment for this thread
  * \param[in] lo	LOD object
@@ -1352,9 +1353,9 @@ static inline int lod_qos_is_usable(struct lod_device *lod)
  * \param[in] th	transaction handle
  *
  * \retval 0		on success
- * \retval -E2BIG	if no enough OSTs are found
- * \retval -EINVAL	requested offset is invalid
- * \retval negative	negated errno on error
+ * \retval -EAGAIN	not enough OSTs are found for specified stripe count
+ * \retval -EINVAL	requested OST index is invalid
+ * \retval negative	errno on failure
  */
 static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			 struct dt_object **stripe, int flags,
@@ -1484,8 +1485,8 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			rand = 0;
 		}
 
-		/* On average, this will hit larger-weighted osts more often.
-		   0-weight osts will always get used last (only when rand=0) */
+		/* On average, this will hit larger-weighted OSTs more often.
+		 * 0-weight OSTs will always get used last (only when rand=0) */
 		for (i = 0; i < osts->op_count; i++) {
 			__u32 idx = osts->op_array[i];
 

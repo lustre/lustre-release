@@ -12061,9 +12061,10 @@ test_220() { #LU-325
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 	local OSTIDX=0
 
-	test_mkdir -p $DIR/$tdir
-	local OST=$($LFS osts | grep ${OSTIDX}": " | \
-		awk '{print $2}' | sed -e 's/_UUID$//')
+	# create on MDT0000 so the last_id and next_id are correct
+	mkdir $DIR/$tdir
+	local OST=$($LFS df $DIR | awk '/OST:'$OSTIDX'/ { print $1 }')
+	OST=${OST%_UUID}
 
 	# on the mdt's osc
 	local mdtosc_proc1=$(get_mdtosc_proc_path $SINGLEMDS $OST)
