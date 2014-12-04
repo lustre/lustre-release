@@ -1016,7 +1016,7 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 
 	if (!(imp->imp_connect_flags_orig & OBD_CONNECT_LIGHTWEIGHT) &&
 	    (imp->imp_connect_flags_orig & OBD_CONNECT_MDS_MDS) &&
-	    !(imp->imp_connect_flags_orig & OBD_CONNECT_IMP_RECOV) &&
+	    (imp->imp_connect_flags_orig & OBD_CONNECT_FID) &&
 	    (ocd->ocd_connect_flags & OBD_CONNECT_VERSION)) {
 		__u32 major = OBD_OCD_VERSION_MAJOR(ocd->ocd_version);
 		__u32 minor = OBD_OCD_VERSION_MINOR(ocd->ocd_version);
