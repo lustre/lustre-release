@@ -41,7 +41,7 @@
 #ifndef __LNET_LIB_LNET_H__
 #define __LNET_LIB_LNET_H__
 
-#include <lnet/linux/lib-lnet.h>
+#define LNET_ROUTER
 
 #include <libcfs/libcfs.h>
 #include <lnet/types.h>

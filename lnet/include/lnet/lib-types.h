@@ -42,7 +42,13 @@
 #ifndef __LNET_LIB_TYPES_H__
 #define __LNET_LIB_TYPES_H__
 
-#include <lnet/linux/lib-types.h>
+#ifdef __KERNEL__
+# include <linux/uio.h>
+# include <linux/types.h>
+#else /* !__KERNEL__ */
+# define LNET_USE_LIB_FREELIST
+# include <sys/types.h>
+#endif /* __KERNEL__ */
 
 #include <libcfs/libcfs.h>
 #include <libcfs/list.h>

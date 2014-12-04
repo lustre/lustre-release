@@ -705,7 +705,6 @@ lnet/autoconf/Makefile
 lnet/doc/Makefile
 lnet/include/Makefile
 lnet/include/lnet/Makefile
-lnet/include/lnet/linux/Makefile
 lnet/klnds/Makefile
 lnet/klnds/autoMakefile
 lnet/klnds/mxlnd/autoMakefile

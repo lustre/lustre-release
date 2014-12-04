@@ -38,6 +38,7 @@
  * Author: Eric Barton <eric@bartonsoftware.com>
  */
 
+#include <asm/page.h>
 #include "o2iblnd.h"
 
 static lnd_t the_o2iblnd;
@@ -1262,9 +1263,9 @@ kiblnd_map_rx_descs(kib_conn_t *conn)
                                                    rx->rx_msgaddr));
                 KIBLND_UNMAP_ADDR_SET(rx, rx_msgunmap, rx->rx_msgaddr);
 
-                CDEBUG(D_NET,"rx %d: %p "LPX64"("LPX64")\n",
-                       i, rx->rx_msg, rx->rx_msgaddr,
-                       lnet_page2phys(pg) + pg_off);
+		CDEBUG(D_NET, "rx %d: %p "LPX64"("LPX64")\n",
+		       i, rx->rx_msg, rx->rx_msgaddr,
+		       (__u64)(page_to_phys(pg) + pg_off));
 
                 pg_off += IBLND_MSG_SIZE;
                 LASSERT (pg_off <= PAGE_SIZE);

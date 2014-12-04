@@ -1,8 +1,5 @@
 lnetdir=$(includedir)/lnet
 
-SUBDIRS = linux
-DIST_SUBDIRS = linux
-
 EXTRA_DIST = \
 	api.h \
 	lib-dlc.h \

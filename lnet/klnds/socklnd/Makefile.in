@@ -1,5 +1,10 @@
 MODULES := ksocklnd
 
-ksocklnd-objs := socklnd.o socklnd_cb.o socklnd_proto.o socklnd_modparams.o socklnd_lib-linux.o
+ksocklnd-objs := \
+	socklnd.o \
+	socklnd_cb.o \
+	socklnd_lib.o \
+	socklnd_modparams.o \
+	socklnd_proto.o
 
 @INCLUDE_RULES@

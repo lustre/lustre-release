@@ -23,6 +23,7 @@
  *
  */
 
+#include <asm/page.h>
 #include <linux/nmi.h>
 #include "gnilnd.h"
 
@@ -709,7 +710,7 @@ kgnilnd_setup_phys_buffer(kgn_tx_t *tx, int nkiov, lnet_kiov_t *kiov,
 			       "nkiov %u offset %u\n",
 		      kiov->kiov_page, kiov->kiov_offset, kiov->kiov_len, nob, nkiov, offset);
 
-		phys->address = lnet_page2phys(kiov->kiov_page);
+		phys->address = page_to_phys(kiov->kiov_page);
 		phys++;
 		kiov++;
 		nkiov--;

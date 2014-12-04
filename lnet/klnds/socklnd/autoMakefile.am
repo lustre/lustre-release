@@ -1,11 +1,7 @@
 if MODULES
-if LINUX
-
-  modulenet_DATA := ksocklnd$(KMODEXT)
-
-endif # LINUX
+modulenet_DATA := ksocklnd$(KMODEXT)
 endif # MODULES
 
-EXTRA_DIST := $(ksocklnd-objs:%.o=%.c) socklnd_lib-linux.h socklnd.h
+EXTRA_DIST := $(ksocklnd-objs:%.o=%.c) socklnd.h
 
-MOSTLYCLEANFILES = @MOSTLYCLEANFILES@ socklnd_lib.c
+MOSTLYCLEANFILES = @MOSTLYCLEANFILES@

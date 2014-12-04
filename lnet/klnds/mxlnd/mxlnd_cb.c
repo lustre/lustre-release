@@ -41,6 +41,7 @@
  * Author: Scott Atchley <atchley at myri.com>
  */
 
+#include <asm/page.h>
 #include "mxlnd.h"
 
 mx_endpoint_addr_t MX_EPA_NULL; /* use to determine if an endpoint is NULL */
@@ -1885,7 +1886,8 @@ mxlnd_setup_kiov(kmx_ctx_t *ctx, u32 niov, lnet_kiov_t *kiov, u32 offset, u32 no
         ctx->mxc_nseg = niov;
         sum = 0;
         for (i = 0; i < niov; i++) {
-                seg[i].segment_ptr = lnet_page2phys(kiov[first_kiov + i].kiov_page);
+		seg[i].segment_ptr =
+			page_to_phys(kiov[first_kiov + i].kiov_page);
                 seg[i].segment_length = kiov[first_kiov + i].kiov_len;
                 if (i == 0) {
                         seg[i].segment_ptr += (u64) first_kiov_offset;
