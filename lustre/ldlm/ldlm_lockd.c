@@ -145,6 +145,10 @@ static enum elt_state expired_lock_thread_state = ELT_STOPPED;
 static int expired_lock_dump;
 static LIST_HEAD(expired_lock_list);
 
+static int ldlm_lock_busy(struct ldlm_lock *lock);
+static int ldlm_add_waiting_lock(struct ldlm_lock *lock, time64_t timeout);
+static int __ldlm_add_waiting_lock(struct ldlm_lock *lock, time64_t seconds);
+
 static inline int have_expired_locks(void)
 {
 	int need_to_run;
@@ -226,14 +230,31 @@ static int expired_lock_main(void *arg)
 			export = class_export_lock_get(lock->l_export, lock);
 			spin_unlock_bh(&waiting_locks_spinlock);
 
-			spin_lock_bh(&export->exp_bl_list_lock);
-			list_del_init(&lock->l_exp_list);
-			spin_unlock_bh(&export->exp_bl_list_lock);
+			/* Check if we need to prolong timeout */
+			if (!OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_TIMEOUT) &&
+			    lock->l_callback_timeout != 0 && /* not AST error */
+			    ldlm_lock_busy(lock)) {
+				LDLM_DEBUG(lock, "prolong the busy lock");
+				lock_res_and_lock(lock);
+				ldlm_add_waiting_lock(lock,
+						ldlm_bl_timeout(lock) >> 1);
+				unlock_res_and_lock(lock);
+			} else {
+				spin_lock_bh(&export->exp_bl_list_lock);
+				list_del_init(&lock->l_exp_list);
+				spin_unlock_bh(&export->exp_bl_list_lock);
 
-			do_dump++;
-			class_fail_export(export);
+				LDLM_ERROR(lock,
+					   "lock callback timer expired after "
+					   "%llds: evicting client at %s ",
+					   cfs_time_current_sec() -
+					   lock->l_last_activity,
+					   obd_export_nid2str(export));
+				ldlm_lock_to_ns(lock)->ns_timeouts++;
+				do_dump++;
+				class_fail_export(export);
+			}
 			class_export_lock_put(export, lock);
-
 			/* release extra ref grabbed by ldlm_add_waiting_lock()
 			 * or ldlm_failed_ast() */
 			LDLM_LOCK_RELEASE(lock);
@@ -256,9 +277,6 @@ static int expired_lock_main(void *arg)
 	RETURN(0);
 }
 
-static int ldlm_add_waiting_lock(struct ldlm_lock *lock);
-static int __ldlm_add_waiting_lock(struct ldlm_lock *lock, time64_t seconds);
-
 /**
  * Check if there is a request in the export request list
  * which prevents the lock canceling.
@@ -272,7 +290,7 @@ static int ldlm_lock_busy(struct ldlm_lock *lock)
 	if (lock->l_export == NULL)
 		return 0;
 
-	spin_lock_bh(&lock->l_export->exp_rpc_lock);
+	spin_lock(&lock->l_export->exp_rpc_lock);
 	list_for_each_entry(req, &lock->l_export->exp_hp_rpcs,
 				rq_exp_list) {
 		if (req->rq_ops->hpreq_lock_match) {
@@ -281,7 +299,7 @@ static int ldlm_lock_busy(struct ldlm_lock *lock)
 				break;
 		}
 	}
-	spin_unlock_bh(&lock->l_export->exp_rpc_lock);
+	spin_unlock(&lock->l_export->exp_rpc_lock);
 	RETURN(match);
 }
 
@@ -298,37 +316,6 @@ static void waiting_locks_callback(unsigned long unused)
 		if (lock->l_callback_timeout > ktime_get_seconds() ||
 		    lock->l_req_mode == LCK_GROUP)
 			break;
-
-                /* Check if we need to prolong timeout */
-                if (!OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_TIMEOUT) &&
-                    ldlm_lock_busy(lock)) {
-                        int cont = 1;
-
-                        if (lock->l_pending_chain.next == &waiting_locks_list)
-                                cont = 0;
-
-                        LDLM_LOCK_GET(lock);
-
-			spin_unlock_bh(&waiting_locks_spinlock);
-			LDLM_DEBUG(lock, "prolong the busy lock");
-			ldlm_refresh_waiting_lock(lock,
-						  ldlm_bl_timeout(lock) >> 1);
-			spin_lock_bh(&waiting_locks_spinlock);
-
-                        if (!cont) {
-                                LDLM_LOCK_RELEASE(lock);
-                                break;
-                        }
-
-                        LDLM_LOCK_RELEASE(lock);
-                        continue;
-                }
-                ldlm_lock_to_ns(lock)->ns_timeouts++;
-		LDLM_ERROR(lock, "lock callback timer expired after %llds: "
-                           "evicting client at %s ",
-			   ktime_get_real_seconds() - lock->l_last_activity,
-                           libcfs_nid2str(
-                                   lock->l_export->exp_connection->c_peer.nid));
 
                 /* no needs to take an extra ref on the lock since it was in
                  * the waiting_locks_list and ldlm_add_waiting_lock()
@@ -424,9 +411,8 @@ static void ldlm_add_blocked_lock(struct ldlm_lock *lock)
 		obd_stale_export_adjust(lock->l_export);
 }
 
-static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
+static int ldlm_add_waiting_lock(struct ldlm_lock *lock, time64_t timeout)
 {
-	time64_t timeout = ldlm_bl_timeout(lock);
 	int ret;
 
 	/* NB: must be called with hold of lock_res_and_lock() */
@@ -639,6 +625,7 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
 		/* the lock was not in any list, grab an extra ref before adding
 		 * the lock to the expired list */
 		LDLM_LOCK_GET(lock);
+	lock->l_callback_timeout = 0; /* differentiate it from expired locks */
 	list_add(&lock->l_pending_chain, &expired_lock_list);
 	wake_up(&expired_lock_wait_queue);
 	spin_unlock_bh(&waiting_locks_spinlock);
@@ -814,7 +801,7 @@ static void ldlm_lock_reorder_req(struct ldlm_lock *lock)
 		RETURN_EXIT;
 	}
 
-	spin_lock_bh(&lock->l_export->exp_rpc_lock);
+	spin_lock(&lock->l_export->exp_rpc_lock);
 	list_for_each_entry(req, &lock->l_export->exp_hp_rpcs,
 			    rq_exp_list) {
 		/* Do not process requests that were not yet added to there
@@ -828,7 +815,7 @@ static void ldlm_lock_reorder_req(struct ldlm_lock *lock)
 		    req->rq_ops->hpreq_lock_match(req, lock))
 			ptlrpc_nrs_req_hp_move(req);
 	}
-	spin_unlock_bh(&lock->l_export->exp_rpc_lock);
+	spin_unlock(&lock->l_export->exp_rpc_lock);
 	EXIT;
 }
 
@@ -919,7 +906,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 		req->rq_no_resend = 1;
 	} else {
 		LASSERT(lock->l_granted_mode == lock->l_req_mode);
-		ldlm_add_waiting_lock(lock);
+		ldlm_add_waiting_lock(lock, ldlm_bl_timeout(lock));
 		unlock_res_and_lock(lock);
 
 		/* Do not resend after lock callback timeout */
@@ -1057,7 +1044,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 			lock_res_and_lock(lock);
 		} else {
 			/* start the lock-timeout clock */
-			ldlm_add_waiting_lock(lock);
+			ldlm_add_waiting_lock(lock, ldlm_bl_timeout(lock));
 			/* Do not resend after lock callback timeout */
 			req->rq_delay_limit = ldlm_bl_timeout(lock);
 			req->rq_resend_cb = ldlm_update_resend;
@@ -1375,8 +1362,10 @@ existing_lock:
                                 unlock_res_and_lock(lock);
                                 ldlm_lock_cancel(lock);
                                 lock_res_and_lock(lock);
-                        } else
-                                ldlm_add_waiting_lock(lock);
+			} else {
+				ldlm_add_waiting_lock(lock,
+						      ldlm_bl_timeout(lock));
+			}
                 }
         }
 	unlock_res_and_lock(lock);
