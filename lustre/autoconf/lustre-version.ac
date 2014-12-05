@@ -1,6 +1,6 @@
 m4_define([LUSTRE_MAJOR],[2])
 m4_define([LUSTRE_MINOR],[6])
-m4_define([LUSTRE_PATCH],[90])
+m4_define([LUSTRE_PATCH],[91])
 m4_define([LUSTRE_FIX],[0])
 
 dnl # liblustre delta is 0.0.1.32 , next version with fixes is ok, but
