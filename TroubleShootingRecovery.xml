@@ -1,693 +1,1445 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="troubleshootingrecovery">
-    <title xml:id="troubleshootingrecovery.title">Troubleshooting Recovery</title>
-    <para>This chapter describes what to do if something goes wrong during recovery. It describes:</para>
-    <itemizedlist>
-        <listitem>
-            <para><xref linkend="dbdoclet.50438225_71141"/></para>
-        </listitem>
-        <listitem>
-            <para><xref linkend="dbdoclet.50438225_37365"/></para>
-        </listitem>
-        <listitem>
-            <para><xref linkend="dbdoclet.50438225_12316"/></para>
-        </listitem>
-        <listitem>
-            <para><xref linkend="dbdoclet.lfsckadmin"/></para>
-        </listitem>
-    </itemizedlist>
-    <section xml:id="dbdoclet.50438225_71141">
-        <title><indexterm><primary>recovery</primary><secondary>corruption of backing ldiskfs file system</secondary></indexterm>Recovering from Errors or Corruption on a Backing ldiskfs File System</title>
-        <para>When an OSS, MDS, or MGS server crash occurs, it is not necessary to run e2fsck on the
-            file system. <literal>ldiskfs</literal> journaling ensures that the file system remains
-            consistent over a system crash. The backing file systems are never accessed directly
-            from the client, so client crashes are not relevant for server file system
-            consistency.</para>
-        <para>The only time it is REQUIRED that <literal>e2fsck</literal> be run on a device is when an event causes problems that ldiskfs journaling is unable to handle, such as a hardware device failure or I/O error. If the ldiskfs kernel code detects corruption on the disk, it mounts the file system as read-only to prevent further corruption, but still allows read access to the device. This appears as error &quot;-30&quot; (<literal>EROFS</literal>) in the syslogs on the server, e.g.:</para>
-        <screen>Dec 29 14:11:32 mookie kernel: LDISKFS-fs error (device sdz):
+<?xml version='1.0' encoding='utf-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+xml:id="troubleshootingrecovery">
+  <title xml:id="troubleshootingrecovery.title">Troubleshooting
+  Recovery</title>
+  <para>This chapter describes what to do if something goes wrong during
+  recovery. It describes:</para>
+  <itemizedlist>
+    <listitem>
+      <para>
+        <xref linkend="dbdoclet.50438225_71141" />
+      </para>
+    </listitem>
+    <listitem>
+      <para>
+        <xref linkend="dbdoclet.50438225_37365" />
+      </para>
+    </listitem>
+    <listitem>
+      <para>
+        <xref linkend="dbdoclet.50438225_12316" />
+      </para>
+    </listitem>
+    <listitem>
+      <para>
+        <xref linkend="dbdoclet.lfsckadmin" />
+      </para>
+    </listitem>
+  </itemizedlist>
+  <section xml:id="dbdoclet.50438225_71141">
+    <title>
+    <indexterm>
+      <primary>recovery</primary>
+      <secondary>corruption of backing ldiskfs file system</secondary>
+    </indexterm>Recovering from Errors or Corruption on a Backing ldiskfs File
+    System</title>
+    <para>When an OSS, MDS, or MGS server crash occurs, it is not necessary to
+    run e2fsck on the file system.
+    <literal>ldiskfs</literal> journaling ensures that the file system remains
+    consistent over a system crash. The backing file systems are never accessed
+    directly from the client, so client crashes are not relevant for server
+    file system consistency.</para>
+    <para>The only time it is REQUIRED that
+    <literal>e2fsck</literal> be run on a device is when an event causes
+    problems that ldiskfs journaling is unable to handle, such as a hardware
+    device failure or I/O error. If the ldiskfs kernel code detects corruption
+    on the disk, it mounts the file system as read-only to prevent further
+    corruption, but still allows read access to the device. This appears as
+    error "-30" (
+    <literal>EROFS</literal>) in the syslogs on the server, e.g.:</para>
+    <screen>Dec 29 14:11:32 mookie kernel: LDISKFS-fs error (device sdz):
             ldiskfs_lookup: unlinked inode 5384166 in dir #145170469
-Dec 29 14:11:32 mookie kernel: Remounting filesystem read-only</screen>
-        <para>In such a situation, it is normally required that e2fsck only be run on the bad device before placing the device back into service.</para>
-        <para>In the vast majority of cases, the Lustre software can cope with any inconsistencies
-            found on the disk and between other devices in the file system.</para>
-        <note>
-            <para>The offline LFSCK tool included with e2fsprogs is rarely required for Lustre file
-                system operation.</para>
-        </note>
-        <para>For problem analysis, it is strongly recommended that <literal>e2fsck</literal> be run under a logger, like script, to record all of the output and changes that are made to the file system in case this information is needed later.</para>
-        <para>If time permits, it is also a good idea to first run <literal>e2fsck</literal> in non-fixing mode (-n option) to assess the type and extent of damage to the file system. The drawback is that in this mode, <literal>e2fsck</literal> does not recover the file system journal, so there may appear to be file system corruption when none really exists.</para>
-        <para>To address concern about whether corruption is real or only due to the journal not
-            being replayed, you can briefly mount and unmount the <literal>ldiskfs</literal> file
-            system directly on the node with the Lustre file system stopped, using a command similar
-            to:</para>
-        <screen>mount -t ldiskfs /dev/{ostdev} /mnt/ost; umount /mnt/ost</screen>
-        <para>This causes the journal to be recovered.</para>
-        <para>The <literal>e2fsck</literal> utility works well when fixing file system corruption
-            (better than similar file system recovery tools and a primary reason why
-                <literal>ldiskfs</literal> was chosen over other file systems). However, it is often
-            useful to identify the type of damage that has occurred so an <literal>ldiskfs</literal>
-            expert can make intelligent decisions about what needs fixing, in place of
-                <literal>e2fsck</literal>.</para>
-        <screen>root# {stop lustre services for this device, if running}
+Dec 29 14:11:32 mookie kernel: Remounting filesystem read-only </screen>
+    <para>In such a situation, it is normally required that e2fsck only be run
+    on the bad device before placing the device back into service.</para>
+    <para>In the vast majority of cases, the Lustre software can cope with any
+    inconsistencies found on the disk and between other devices in the file
+    system.</para>
+    <note>
+	  <para>The legacy offline-LFSCK tool included with e2fsprogs is rarely
+      required for Lustre file system operation. offline-LFSCK is not to be
+      confused with LFSCK tool, which is part of Lustre and provides online
+      consistency checking.</para>
+    </note>
+    <para>For problem analysis, it is strongly recommended that
+    <literal>e2fsck</literal> be run under a logger, like script, to record all
+    of the output and changes that are made to the file system in case this
+    information is needed later.</para>
+    <para>If time permits, it is also a good idea to first run
+    <literal>e2fsck</literal> in non-fixing mode (-n option) to assess the type
+    and extent of damage to the file system. The drawback is that in this mode,
+    <literal>e2fsck</literal> does not recover the file system journal, so there
+    may appear to be file system corruption when none really exists.</para>
+    <para>To address concern about whether corruption is real or only due to
+    the journal not being replayed, you can briefly mount and unmount the
+    <literal>ldiskfs</literal> file system directly on the node with the Lustre
+    file system stopped, using a command similar to:</para>
+    <screen>mount -t ldiskfs /dev/{ostdev} /mnt/ost; umount /mnt/ost</screen>
+    <para>This causes the journal to be recovered.</para>
+    <para>The
+    <literal>e2fsck</literal> utility works well when fixing file system
+    corruption (better than similar file system recovery tools and a primary
+    reason why
+    <literal>ldiskfs</literal> was chosen over other file systems). However, it
+    is often useful to identify the type of damage that has occurred so an
+    <literal>ldiskfs</literal> expert can make intelligent decisions about what
+    needs fixing, in place of
+    <literal>e2fsck</literal>.</para>
+    <screen>root# {stop lustre services for this device, if running}
 root# script /tmp/e2fsck.sda
 Script started, file is /tmp/e2fsck.sda
 root# mount -t ldiskfs /dev/sda /mnt/ost
 root# umount /mnt/ost
-root# e2fsck -fn /dev/sda   # don&apos;t fix file system, just check for corruption
+root# e2fsck -fn /dev/sda   # don't fix file system, just check for corruption
 :
 [e2fsck output]
 :
-root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>yes</literal>)
-        </screen>
+root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>yes</literal>)</screen>
+  </section>
+  <section xml:id="dbdoclet.50438225_37365">
+    <title>
+    <indexterm>
+      <primary>recovery</primary>
+      <secondary>corruption of Lustre file system</secondary>
+    </indexterm>Recovering from Corruption in the Lustre File System</title>
+    <para>In cases where an ldiskfs MDT or OST becomes corrupt, you need to run
+    e2fsck to correct the local filesystem consistency, then use
+    <literal>LFSCK</literal> to run a distributed check on the file system to
+    resolve any inconsistencies between the MDTs and OSTs, or among MDTs.</para>
+    <orderedlist>
+      <listitem>
+        <para>Stop the Lustre file system.</para>
+      </listitem>
+      <listitem>
+        <para>Run
+        <literal>e2fsck -f</literal> on the individual MDT/OST that had
+        problems to fix any local file system damage.</para>
+        <para>We recommend running
+        <literal>e2fsck</literal> under script, to create a log of changes made
+        to the file system in case it is needed later. After
+        <literal>e2fsck</literal> is run, bring up the file system, if
+        necessary, to reduce the outage window.</para>
+      </listitem>
+    </orderedlist>
+    <section xml:id="dbdoclet.50438225_13916">
+      <title>
+      <indexterm>
+        <primary>recovery</primary>
+        <secondary>orphaned objects</secondary>
+      </indexterm>Working with Orphaned Objects</title>
+      <para>The simplest problem to resolve is that of orphaned objects. When
+      the LFSCK layout check is run, these objects are linked to new files and
+      put into 
+      <literal>.lustre/lost+found/MDT<replaceable>xxxx</replaceable></literal> 
+      in the Lustre file system 
+      (where MDTxxxx is the index of the MDT on which the orphan was found),
+      where they can be examined and saved or deleted as necessary.</para>
+      <para condition='l27'>With Lustre version 2.7 and later, LFSCK will
+       identify and process orphan objects found on MDTs as well.</para>
     </section>
-    <section xml:id="dbdoclet.50438225_37365">
-        <title><indexterm><primary>recovery</primary><secondary>corruption of Lustre file system</secondary></indexterm>Recovering from Corruption in the Lustre File System</title>
-        <para>In cases where an ldiskfs MDT or OST becomes corrupt, you need to run e2fsck to correct the local filesystem consistency, then use <literal>LFSCK</literal> to run a distributed check on the file system to resolve any inconsistencies between the MDTs and OSTs.</para>
-        <orderedlist>
-            <listitem>
-                <para>Stop the Lustre file system.</para>
-            </listitem>
-            <listitem>
-                <para>Run <literal>e2fsck -f</literal> on the individual MDS / OST that had problems to fix any local file system damage.</para>
-                <para>We recommend running <literal>e2fsck</literal> under script, to create a log of changes made to the file system in case it is needed later. After <literal>e2fsck</literal> is run, bring up the file system, if necessary, to reduce the outage window.</para>
-            </listitem>
-        </orderedlist>
-        <section xml:id="dbdoclet.50438225_13916">
-            <title><indexterm><primary>recovery</primary><secondary>orphaned objects</secondary></indexterm>Working with Orphaned Objects</title>
-            <para>The easiest problem to resolve is that of orphaned objects. When the LFSCK layout check is run, these objects are linked to new files and put into <literal>.lustre/lost+found</literal> in the Lustre file system, where they can be examined and saved or deleted as necessary.</para>
-        </section>
-    </section>
-    <section xml:id="dbdoclet.50438225_12316">
-        <title><indexterm><primary>recovery</primary><secondary>unavailable OST</secondary></indexterm>Recovering from an Unavailable OST</title>
-        <para>One problem encountered in a Lustre file system environment is
-            when an OST becomes unavailable due to a network partition, OSS node crash, etc. When
-            this happens, the OST&apos;s clients pause and wait for the OST to become available
-            again, either on the primary OSS or a failover OSS. When the OST comes back online, the
-            Lustre file system starts a recovery process to enable clients to reconnect to the OST.
-            Lustre servers put a limit on the time they will wait in recovery for clients to
-            reconnect.</para>
-        <para>During recovery, clients reconnect and replay their requests serially, in the same order they were done originally. Until a client receives a confirmation that a given transaction has been written to stable storage, the client holds on to the transaction, in case it needs to be replayed. Periodically, a progress message prints to the log, stating how_many/expected clients have reconnected. If the recovery is aborted, this log shows how many clients managed to reconnect. When all clients have completed recovery, or if the recovery timeout is reached, the recovery period ends and the OST resumes normal request processing.</para>
-        <para>If some clients fail to replay their requests during the recovery period, this will not stop the recovery from completing. You may have a situation where the OST recovers, but some clients are not able to participate in recovery (e.g. network problems or client failure), so they are evicted and their requests are not replayed. This would result in any operations on the evicted clients failing, including in-progress writes, which would cause cached writes to be lost. This is a normal outcome; the recovery cannot wait indefinitely, or the file system would be hung any time a client failed. The lost transactions are an unfortunate result of the recovery process.</para>
-        <note>
-	    <para>The failure of client recovery does not indicate or lead to
-	    filesystem corruption.  This is a normal event that is handled by
-	    the MDT and OST, and should not result in any inconsistencies
-	    between servers.</para>
-        </note>
-        <note>
-            <para>The version-based recovery (VBR) feature enables a failed client to be &apos;&apos;skipped&apos;&apos;, so remaining clients can replay their requests, resulting in a more successful recovery from a downed OST. For more information about the VBR feature, see <xref linkend="lustrerecovery"/>(Version-based Recovery).</para>
-        </note>
-    </section>
-    <section xml:id="dbdoclet.lfsckadmin" condition='l23'>
-        <title><indexterm><primary>recovery</primary><secondary>oiscrub</secondary></indexterm><indexterm><primary>recovery</primary><secondary>lfsck</secondary></indexterm>Checking the file system with LFSCK</title>
-        <para>LFSCK is an administrative tool introduced in Lustre software release 2.3 for checking
-            and repair of the attributes specific to a mounted Lustre file system. It is similar in
-            concept to an offline fsck repair tool for a local filesystem,
-            but LFSCK is implemented to run as part of the Lustre file system while the file
-            system is mounted and in use. This allows consistency of checking and repair by the
-            Lustre software without unnecessary downtime, and can be run on the largest Lustre file
-            systems.</para>
-        <para>In Lustre software release 2.3, LFSCK can verify and repair the Object Index (OI)
-            table that is used internally to map Lustre File Identifiers (FIDs) to MDT internal
-            inode numbers, through a process called OI Scrub. An OI Scrub is required after
-            restoring from a file-level MDT backup (<xref linkend="dbdoclet.50438207_71633"/>), or
-            in case the OI table is otherwise corrupted. Later phases of LFSCK will add further
-            checks to the Lustre distributed file system state.</para>
-        <para condition='l24'>In Lustre software release 2.4, LFSCK namespace scanning can verify and repair the directory FID-in-Dirent and LinkEA consistency.
-</para>
-        <para condition='l26'>In Lustre software release 2.6, LFSCK layout scanning can verify and repair MDT-OST file layout inconsistency. File layout inconsistencies between MDT-objects and OST-objects that are checked and corrected include dangling reference, unreferenced OST-objects, mismatched references and multiple references.
-</para>
-	<para>Control and monitoring of LFSCK is through LFSCK and the <literal>/proc</literal> file system
-            interfaces. LFSCK supports three types of interface: switch interface, status
-            interface and adjustment interface. These interfaces are detailed below.</para>
+  </section>
+  <section xml:id="dbdoclet.50438225_12316">
+    <title>
+    <indexterm>
+      <primary>recovery</primary>
+      <secondary>unavailable OST</secondary>
+    </indexterm>Recovering from an Unavailable OST</title>
+    <para>One problem encountered in a Lustre file system environment is when
+    an OST becomes unavailable due to a network partition, OSS node crash, etc.
+    When this happens, the OST's clients pause and wait for the OST to become
+    available again, either on the primary OSS or a failover OSS. When the OST
+    comes back online, the Lustre file system starts a recovery process to
+    enable clients to reconnect to the OST. Lustre servers put a limit on the
+    time they will wait in recovery for clients to reconnect.</para>
+    <para>During recovery, clients reconnect and replay their requests
+    serially, in the same order they were done originally. Until a client
+    receives a confirmation that a given transaction has been written to stable
+    storage, the client holds on to the transaction, in case it needs to be
+    replayed. Periodically, a progress message prints to the log, stating
+    how_many/expected clients have reconnected. If the recovery is aborted,
+    this log shows how many clients managed to reconnect. When all clients have
+    completed recovery, or if the recovery timeout is reached, the recovery
+    period ends and the OST resumes normal request processing.</para>
+    <para>If some clients fail to replay their requests during the recovery
+    period, this will not stop the recovery from completing. You may have a
+    situation where the OST recovers, but some clients are not able to
+    participate in recovery (e.g. network problems or client failure), so they
+    are evicted and their requests are not replayed. This would result in any
+    operations on the evicted clients failing, including in-progress writes,
+    which would cause cached writes to be lost. This is a normal outcome; the
+    recovery cannot wait indefinitely, or the file system would be hung any
+    time a client failed. The lost transactions are an unfortunate result of
+    the recovery process.</para>
+    <note>
+      <para>The failure of client recovery does not indicate or lead to
+      filesystem corruption. This is a normal event that is handled by the MDT
+      and OST, and should not result in any inconsistencies between
+      servers.</para>
+    </note>
+    <note>
+      <para>The version-based recovery (VBR) feature enables a failed client to
+      be ''skipped'', so remaining clients can replay their requests, resulting
+      in a more successful recovery from a downed OST. For more information
+      about the VBR feature, see
+      <xref linkend="lustrerecovery" />(Version-based Recovery).</para>
+    </note>
+  </section>
+  <section xml:id="dbdoclet.lfsckadmin" condition='l23'>
+    <title>
+    <indexterm>
+      <primary>recovery</primary>
+      <secondary>oiscrub</secondary>
+    </indexterm>
+    <indexterm>
+      <primary>recovery</primary>
+      <secondary>LFSCK</secondary>
+    </indexterm>Checking the file system with LFSCK</title>
+	<para condition='l23'>LFSCK is an administrative tool introduced in Lustre
+    software release 2.3 for checking and repair of the attributes specific to a
+    mounted Lustre file system. It is similar in concept to an offline fsck repair
+    tool for a local filesystem, but LFSCK is implemented to run as part of the
+    Lustre file system while the file system is mounted and in use. This allows
+    consistency of checking and repair by the Lustre software without unnecessary
+    downtime, and can be run on the largest Lustre file systems with negligible
+    disruption to normal operations.</para>
+    <para condition='l23'>Since Lustre software release 2.3, LFSCK can verify
+    and repair the Object Index (OI) table that is used internally to map
+    Lustre File Identifiers (FIDs) to MDT internal ldiskfs inode numbers, in
+    an internal table called the OI Table. An OI Scrub traverses this the IO
+    Table and makes corrections where necessary. An OI Scrub is required after
+    restoring from a file-level MDT backup (
+    <xref linkend="dbdoclet.50438207_71633" />), or in case the OI Table is
+    otherwise corrupted. Later phases of LFSCK will add further checks to the
+    Lustre distributed file system state.</para>
+    <para condition='l24'>In Lustre software release 2.4, LFSCK namespace
+    scanning can verify and repair the directory FID-in-Dirent and LinkEA
+    consistency.</para>
+    <para condition='l26'>In Lustre software release 2.6, LFSCK layout scanning
+    can verify and repair MDT-OST file layout inconsistencies. File layout
+    inconsistencies between MDT-objects and OST-objects that are checked and
+    corrected include dangling reference, unreferenced OST-objects, mismatched
+    references and multiple references.</para>
+    <para condition='l27'>In Lustre software release 2.7, LFSCK layout scanning
+    is enhanced to support verify and repair inconsistencies between multiple
+    MDTs.</para>
+    <para>Control and monitoring of LFSCK is through LFSCK and the
+    <literal>/proc</literal> file system interfaces. LFSCK supports three types
+    of interface: switch interface, status interface, and adjustment interface.
+    These interfaces are detailed below.</para>
     <section>
-        <title>LFSCK switch interface</title>
+      <title>LFSCK switch interface</title>
+      <section>
+        <title>Manually Starting LFSCK</title>
         <section>
-            <title>Manually Starting LFSCK</title>
-            <section>
-                <title>Description</title>
-		<para>LFSCK can be started after the MDT is mounted using the <literal>lctl lfsck_start</literal> command.</para>
-            </section>
-            <section>
-                <title>Usage</title>
-                <screen>lctl lfsck_start -M | --device <replaceable>[MDT,OST]_device</replaceable> \
+          <title>Description</title>
+          <para>LFSCK can be started after the MDT is mounted using the
+          <literal>lctl lfsck_start</literal> command.</para>
+        </section>
+        <section>
+          <title>Usage</title>
+          <screen>lctl lfsck_start -M | --device
+<replaceable>[MDT,OST]_device</replaceable> \
                     [-A | --all] \
-                    [-c | --create_ostobj <replaceable>[on | off]</replaceable>] \
-                    [-C | --create_mdtobj <replaceable>[on | off]</replaceable>] \
-                    [-e | --error <replaceable>{continue | abort}</replaceable>] \
+                    [-c | --create_ostobj
+<replaceable>[on | off]</replaceable>] \
+                    [-C | --create_mdtobj
+<replaceable>[on | off]</replaceable>] \
+                    [-e | --error
+<replaceable>{continue | abort}</replaceable>] \
                     [-h | --help] \
-                    [-n | --dryrun <replaceable>[on | off]</replaceable>] \
+                    [-n | --dryrun
+<replaceable>[on | off]</replaceable>] \
                     [-o | --orphan] \
                     [-r | --reset] \
-                    [-s | --speed <replaceable>ops_per_sec_limit</replaceable>] \
-                    [-t | --type <replaceable>lfsck_type[,lfsck_type...]</replaceable>] \
-                    [-w | --window_size <replaceable>size</replaceable>]
-                </screen>
-            </section>
-            <section>
-                <title>Options</title>
-                <para>The various <literal>lfsck_start</literal> options are listed and described below. For a complete list of available options, type <literal>lctl lfsck_start -h</literal>.</para>
-                <informaltable frame="all">
-                    <tgroup cols="2">
-                        <colspec colname="c1" colwidth="3*"/>
-                        <colspec colname="c2" colwidth="7*"/>
-                        <thead>
-                            <row>
-                                <entry>
-                                    <para><emphasis role="bold">Option</emphasis></para>
-                                </entry>
-                                <entry>
-                                    <para><emphasis role="bold">Description</emphasis></para>
-                                </entry>
-                            </row>
-                        </thead>
-                        <tbody>
-                            <row>
-                                <entry>
-                                    <para><literal>-M | --device</literal> </para>
-                                </entry>
-                                <entry>
-                                    <para>The MDT or OST device to start LFSCK/scrub on.</para>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
-                                    <para><literal>-A | --all</literal> </para>
-                                </entry>
-                                <entry>
-                                    <para condition='l26'>Start LFSCK on all devices via a single lctl command. This applies to both layout and namespace consistency checking and repair.</para>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
-                                    <para><literal>-c | --create_ostobj</literal> </para>
-                                </entry>
-                                <entry>
-					<para condition='l26'>Create the lost OST-object for dangling LOV EA, <literal>off</literal> (default) or <literal>on</literal>. If not specified, then the default behaviour is to keep the dangling LOV EA there without creating the lost OST-object.</para>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
-                                    <para><literal>-C | --create_mdtobj</literal> </para>
-                                </entry>
-                                <entry>
-					<para condition='l27'>Create the lost MDT-object for dangling name entry, <literal>off</literal> (default) or <literal>on</literal>. If not specified, then the default behaviour is to keep the dangling name entry there without creating the lost MDT-object.</para>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
-                                    <para><literal>-e | --error</literal> </para>
-                                </entry>
-                                <entry>
-                                    <para>Error handle, <literal>continue</literal> (default) or <literal>abort</literal>. Specify whether the LFSCK will stop or not if fail to repair something. If it is not specified, the saved value (when resuming from checkpoint) will be used if present. This option cannot be changed if LFSCK is running.</para>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
-                                    <para><literal>-h | --help</literal> </para>
-                                </entry>
-                                <entry>
-                                    <para>Operating help information.</para>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
-                                    <para><literal>-n | --dryrun</literal> </para>
-                                </entry>
-                                <entry>
-                                    <para>Perform a trial without making any changes. <literal>off</literal> (default) or <literal>on</literal>.</para>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
-                                    <para><literal>-o | --orphan</literal> </para>
-                                </entry>
-                                <entry>
-                                    <para condition='l26'>Repair orphan OST-objects for layout LFSCK.</para>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
-                                    <para><literal>-r | --reset</literal> </para>
-                                </entry>
-                                <entry>
-                                    <para>Reset the start position for the object iteration to the beginning for the specified MDT. By default the iterator will resume scanning from the last checkpoint (saved periodically by LFSCK) provided it is available.</para>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
-                                    <para><literal>-s | --speed</literal> </para>
-                                </entry>
-                                <entry>
-                                    <para>Set the upper speed limit of LFSCK processing in objects per second. If it is not specified, the saved value (when resuming from checkpoint) or default value of 0 (0 = run as fast as possible) is used. Speed can be adjusted while LFSCK is running with the adjustment interface.</para>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
-                                    <para><literal>-t | --type</literal> </para>
-                                </entry>
-                                <entry>
-                                    <para>The type of checking/repairing that should be performed. The new LFSCK framework provides a single interface for a variety of system consistency checking/repairing operations including:</para>
-<para>Without a specified option, the LFSCK component(s) which ran last time and did not finish or the component(s) corresponding to some known system inconsistency, will be started. Anytime the LFSCK is triggered, the OI scrub will run automatically, so there is no need to specify OI_scrub.</para>
-<para condition='l24'><literal>namespace</literal>: check and repair FID-in-Dirent and LinkEA consistency. Lustre-2.7 enhances namespace consistency verification under DNE mode.</para>
-<para condition='l26'><literal>layout</literal>: check and repair MDT-OST inconsistency.</para>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
-                                    <para><literal>-w | --window_size</literal> </para>
-                                </entry>
-                                <entry>
-					<para condition='l26'>The window size for the async request pipeline. The LFSCK async request pipeline's input/output may have quite different processing speeds, and there may be too many requests in the pipeline as to cause abnormal memory/network pressure. If not specified, then the default window size for the async request pipeline is 1024.</para>
-                                </entry>
-                            </row>
-                        </tbody>
-                    </tgroup>
-                </informaltable>
-            </section>
+                    [-s | --speed
+<replaceable>ops_per_sec_limit</replaceable>] \
+                    [-t | --type
+<replaceable>lfsck_type[,lfsck_type...]</replaceable>] \
+                    [-w | --window_size
+<replaceable>size</replaceable>]</screen>
         </section>
         <section>
-            <title>Manually Stopping LFSCK</title>
-            <section>
-                <title>Description</title>
-		<para>To stop LFSCK when the MDT is mounted, use the <literal>lctl lfsck_stop</literal> command.</para>
-            </section>
-            <section>
-                <title>Usage</title>
-                <screen>lctl lfsck_stop -M | --device <replaceable>[MDT,OST]_device</replaceable> \
+          <title>Options</title>
+          <para>The various
+          <literal>lfsck_start</literal> options are listed and described below.
+          For a complete list of available options, type
+          <literal>lctl lfsck_start -h</literal>.</para>
+          <informaltable frame="all">
+            <tgroup cols="2">
+              <colspec colname="c1" colwidth="3*" />
+              <colspec colname="c2" colwidth="7*" />
+              <thead>
+                <row>
+                  <entry>
+                    <para>
+                      <emphasis role="bold">Option</emphasis>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para>
+                      <emphasis role="bold">Description</emphasis>
+                    </para>
+                  </entry>
+                </row>
+              </thead>
+              <tbody>
+                <row>
+                  <entry>
+                    <para>
+                      <literal>-M | --device</literal>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para>The MDT or OST device to start LFSCK on.</para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para>
+                      <literal>-A | --all</literal>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para condition='l26'>Start LFSCK on all devices.
+                    This applies to both layout and
+                    namespace consistency checking and repair.</para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para>
+                      <literal>-c | --create_ostobj</literal>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para condition='l26'>Create the lost OST-object for
+                    dangling LOV EA,
+                    <literal>off</literal>(default) or
+                    <literal>on</literal>. If not specified, then the default
+                    behaviour is to keep the dangling LOV EA there without
+                    creating the lost OST-object.</para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para>
+                      <literal>-C | --create_mdtobj</literal>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para condition='l27'>Create the lost MDT-object for
+                    dangling name entry,
+                    <literal>off</literal>(default) or
+                    <literal>on</literal>. If not specified, then the default
+                    behaviour is to keep the dangling name entry there without
+                    creating the lost MDT-object.</para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para>
+                      <literal>-e | --error</literal>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para>Error handle,
+                    <literal>continue</literal>(default) or
+                    <literal>abort</literal>. Specify whether the LFSCK will
+                    stop or not if fails to repair something. If it is not
+                    specified, the saved value (when resuming from checkpoint)
+                    will be used if present. This option cannot be changed
+                    while LFSCK is running.</para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para>
+                      <literal>-h | --help</literal>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para>Operating help information.</para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para>
+                      <literal>-n | --dryrun</literal>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para>Perform a trial without making any changes.
+                    <literal>off</literal>(default) or
+                    <literal>on</literal>.</para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para>
+                      <literal>-o | --orphan</literal>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para condition='l26'>Repair orphan OST-objects for layout
+                    LFSCK.</para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para>
+                      <literal>-r | --reset</literal>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para>Reset the start position for the object iteration to
+                    the beginning for the specified MDT. By default the
+                    iterator will resume scanning from the last checkpoint
+                    (saved periodically by LFSCK) provided it is
+                    available.</para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para>
+                      <literal>-s | --speed</literal>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para>Set the upper speed limit of LFSCK processing in
+                    objects per second. If it is not specified, the saved value
+                    (when resuming from checkpoint) or default value of 0 (0 =
+                    run as fast as possible) is used. Speed can be adjusted
+                    while LFSCK is running with the adjustment
+                    interface.</para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para>
+                      <literal>-t | --type</literal>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para>The type of checking/repairing that should be
+                    performed. The new LFSCK framework provides a single
+                    interface for a variety of system consistency
+                    checking/repairing operations including:</para>
+                    <para>Without a specified option, the LFSCK component(s)
+                    which ran last time and did not finish or the component(s)
+                    corresponding to some known system inconsistency, will be
+                    started. Anytime the LFSCK is triggered, the OI scrub will
+                    run automatically, so there is no need to specify
+                    OI_scrub in that case.</para>
+                    <para condition='l24'>
+                    <literal>namespace</literal>: check and repair
+                    FID-in-Dirent and LinkEA consistency.</para>
+                    <para condition='l27'> Lustre-2.7 enhances
+                    namespace consistency verification under DNE mode.</para>
+                    <para condition='l26'>
+                    <literal>layout</literal>: check and repair MDT-OST
+                    inconsistency.</para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para>
+                      <literal>-w | --window_size</literal>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para condition='l26'>The window size for the async request
+                    pipeline. The LFSCK async request pipeline's input/output
+                    may have quite different processing speeds, and there may
+                    be too many requests in the pipeline as to cause abnormal
+                    memory/network pressure. If not specified, then the default
+                    window size for the async request pipeline is 1024.</para>
+                  </entry>
+                </row>
+              </tbody>
+            </tgroup>
+          </informaltable>
+        </section>
+      </section>
+      <section>
+        <title>Manually Stopping LFSCK</title>
+        <section>
+          <title>Description</title>
+          <para>To stop LFSCK when the MDT is mounted, use the
+          <literal>lctl lfsck_stop</literal> command.</para>
+        </section>
+        <section>
+          <title>Usage</title>
+          <screen>lctl lfsck_stop -M | --device
+<replaceable>[MDT,OST]_device</replaceable> \
                     [-A | --all] \
-                    [-h | --help]
-                </screen>
-            </section>
-            <section>
-                <title>Options</title>
-                <para>The various <literal>lfsck_stop</literal> options are listed and described below. For a complete list of available options, type <literal>lctl lfsck_stop -h</literal>.</para>
-                <informaltable frame="all">
-                    <tgroup cols="2">
-                        <colspec colname="c1" colwidth="3*"/>
-                        <colspec colname="c2" colwidth="7*"/>
-                        <thead>
-                            <row>
-                                <entry>
-                                    <para><emphasis role="bold">Option</emphasis></para>
-                                </entry>
-                                <entry>
-                                    <para><emphasis role="bold">Description</emphasis></para>
-                                </entry>
-                            </row>
-                        </thead>
-                        <tbody>
-                            <row>
-                                <entry>
-                                    <para><literal>-M | --device</literal> </para>
-                                </entry>
-                                <entry>
-                                    <para>The MDT or OST device to stop LFSCK/scrub on.</para>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
-                                    <para><literal>-A | --all</literal> </para>
-                                </entry>
-                                <entry>
-                                    <para>Stop LFSCK on all devices.</para>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
-                                    <para><literal>-h | --help</literal> </para>
-                                </entry>
-                                <entry>
-                                    <para>Operating help information.</para>
-                                </entry>
-                            </row>
-                        </tbody>
-                    </tgroup>
-                </informaltable>
-            </section>
+                    [-h | --help]</screen>
         </section>
-    </section>
-    <section>
-        <title>LFSCK status interface</title>
         <section>
-            <title>LFSCK status of OI Scrub via <literal>procfs</literal></title>
-            <section>
-                <title>Description</title>
-                <para>For each LFSCK component there is a dedicated procfs interface to trace the corresponding LFSCK component status. For OI Scrub, the interface is the OSD layer procfs interface, named <literal>oi_scrub</literal>. To display OI Scrub status, the standard <literal>lctl get_param</literal> command is used as shown in the usage below.</para>
-            </section>
-            <section >
-                <title>Usage</title>
-                <screen>lctl get_param -n osd-ldiskfs.<replaceable>FSNAME</replaceable>-<replaceable>MDT_device</replaceable>.oi_scrub
-                </screen>
-            </section>
-            <section>
-                <title>Output</title>
-                <informaltable frame="all">
-                    <tgroup cols="2">
-                        <colspec colname="c1" colwidth="3*"/>
-                        <colspec colname="c2" colwidth="7*"/>
-                        <thead>
-                            <row>
-                                <entry>
-                                    <para><emphasis role="bold">Information</emphasis></para>
-                                </entry>
-                                <entry>
-                                    <para><emphasis role="bold">Detail</emphasis></para>
-                                </entry>
-                            </row>
-                        </thead>
-                        <tbody>
-                            <row>
-                                <entry>
-                                    <para>General Information</para>
-                                </entry>
-                                <entry>
-                                    <itemizedlist>
-                                        <listitem><para>Name: OI_scrub.</para></listitem>
-                                        <listitem><para>OI scrub magic id (an identifier unique to OI scrub).</para></listitem>
-                                        <listitem><para>OI files count.</para></listitem>
-                                        <listitem><para>Status: one of the status - <literal>init</literal>, <literal>scanning</literal>, <literal>completed</literal>, <literal>failed</literal>, <literal>stopped</literal>, <literal>paused</literal>, or <literal>crashed</literal>.</para></listitem>
-                                        <listitem><para>Flags: including - <literal>recreated</literal> (OI file(s) is/are removed/recreated),
-                                                  <literal>inconsistent</literal> (restored from
-                                                  file-level backup), <literal>auto</literal>
-                                                  (triggered by non-UI mechanism), and
-                                                  <literal>upgrade</literal> (from Lustre software
-                                                  release 1.8 IGIF format.)</para></listitem>
-                                        <listitem><para>Parameters: OI scrub parameters, like <literal>failout</literal>.</para></listitem>
-                                        <listitem><para>Time Since Last Completed.</para></listitem>
-                                        <listitem><para>Time Since Latest Start.</para></listitem>
-                                        <listitem><para>Time Since Last Checkpoint.</para></listitem>
-                                        <listitem><para>Latest Start Position: the position for the latest scrub started from.</para></listitem>
-                                        <listitem><para>Last Checkpoint Position.</para></listitem>
-                                        <listitem><para>First Failure Position: the position for the first object to be repaired.</para></listitem>
-                                        <listitem><para>Current Position.</para></listitem>
-                                    </itemizedlist>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
-                                    <para>Statistics</para>
-                                </entry>
-                                <entry>
-                                    <itemizedlist>
-                                        <listitem><para><literal>Checked</literal> total number of objects scanned.</para></listitem>
-                                        <listitem><para><literal>Updated</literal> total number of objects repaired.</para></listitem>
-                                        <listitem><para><literal>Failed</literal> total number of objects that failed to be repaired.</para></listitem>
-                                        <listitem><para><literal>No Scrub</literal> total number of objects marked <literal>LDISKFS_STATE_LUSTRE_NOSCRUB and skipped</literal>.</para></listitem>
-                                        <listitem><para><literal>IGIF</literal> total number of objects IGIF scanned.</para></listitem>
-                                        <listitem><para><literal>Prior Updated</literal> how many objects have been repaired which are triggered by parallel RPC.</para></listitem>
-                                        <listitem><para><literal>Success Count</literal> total number of completed OI_scrub runs on the device.</para></listitem>
-                                        <listitem><para><literal>Run Time</literal> how long the scrub has run, tally from the time of scanning from the beginning of the specified MDT device, not include the paused/failure time among checkpoints.</para></listitem>
-                                        <listitem><para><literal>Average Speed</literal> calculated by dividing <literal>Checked</literal> by <literal>run_time</literal>.</para></listitem>
-                                        <listitem><para><literal>Real-Time Speed</literal> the speed since last checkpoint if the OI_scrub is running.</para></listitem>
-                                        <listitem><para><literal>Scanned</literal> total number of objects under /lost+found that have been scanned.</para></listitem>
-                                        <listitem><para><literal>Repaired</literal> total number of objects under /lost+found that have been recovered.</para></listitem>
-                                        <listitem><para><literal>Failed</literal> total number of objects under /lost+found failed to be scanned or failed to be recovered.</para></listitem>
-                                    </itemizedlist>
-                                </entry>
-                            </row>
-                        </tbody>
-                    </tgroup>
-                </informaltable>
-            </section>
+          <title>Options</title>
+          <para>The various
+          <literal>lfsck_stop</literal> options are listed and described below.
+          For a complete list of available options, type
+          <literal>lctl lfsck_stop -h</literal>.</para>
+          <informaltable frame="all">
+            <tgroup cols="2">
+              <colspec colname="c1" colwidth="3*" />
+              <colspec colname="c2" colwidth="7*" />
+              <thead>
+                <row>
+                  <entry>
+                    <para>
+                      <emphasis role="bold">Option</emphasis>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para>
+                      <emphasis role="bold">Description</emphasis>
+                    </para>
+                  </entry>
+                </row>
+              </thead>
+              <tbody>
+                <row>
+                  <entry>
+                    <para>
+                      <literal>-M | --device</literal>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para>The MDT or OST device to stop LFSCK on.</para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para>
+                      <literal>-A | --all</literal>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para>Stop LFSCK on all devices.</para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para>
+                      <literal>-h | --help</literal>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para>Operating help information.</para>
+                  </entry>
+                </row>
+              </tbody>
+            </tgroup>
+          </informaltable>
         </section>
-        <section condition='l24'>
-            <title>LFSCK status of namespace via <literal>procfs</literal></title>
-            <section>
-                <title>Description</title>
-                <para>The <literal>namespace</literal> component is responsible for checking and repairing FID-in-Dirent and LinkEA consistency. The <literal>procfs</literal> interface for this component is in the MDD layer, named <literal>lfsck_namespace</literal>. To show the status of this component, <literal>lctl get_param</literal> should be used as described in the usage below.</para>
-            </section>
-            <section >
-                <title>Usage</title>
-                <screen>lctl get_param -n mdd.<replaceable>FSNAME</replaceable>-<replaceable>MDT_device</replaceable>.lfsck_namespace
-                </screen>
-            </section>
-            <section>
-                <title>Output</title>
-                <informaltable frame="all">
-                    <tgroup cols="2">
-                        <colspec colname="c1" colwidth="3*"/>
-                        <colspec colname="c2" colwidth="7*"/>
-                        <thead>
-                            <row>
-                                <entry>
-                                    <para><emphasis role="bold">Information</emphasis></para>
-                                </entry>
-                                <entry>
-                                    <para><emphasis role="bold">Detail</emphasis></para>
-                                </entry>
-                            </row>
-                        </thead>
-                        <tbody>
-                            <row>
-                                <entry>
-                                    <para>General Information</para>
-                                </entry>
-                                <entry>
-                                    <itemizedlist>
-                                        <listitem><para>Name: <literal>lfsck_namespace</literal></para></listitem>
-                                        <listitem><para>LFSCK namespace magic.</para></listitem>
-                                        <listitem><para>LFSCK namespace version..</para></listitem>
-                                        <listitem><para>Status: one of the status - <literal>init</literal>, <literal>scanning-phase1</literal>, <literal>scanning-phase2</literal>, <literal>completed</literal>, <literal>failed</literal>, <literal>stopped</literal>, <literal>paused</literal>, <literal>partial</literal>, <literal>co-failed</literal>, <literal>co-stopped</literal> or <literal>co-paused</literal>.</para></listitem>
-                                        <listitem><para>Flags: including - <literal>scanned-once</literal> (the first cycle scanning has been
-                                                  completed), <literal>inconsistent</literal> (one
-                                                  or more inconsistent FID-in-Dirent or LinkEA
-                                                  entries that have been discovered),
-                                                  <literal>upgrade</literal> (from Lustre software
-                                                  release 1.8 IGIF format.)</para></listitem>
-                                        <listitem><para>Parameters: including <literal>dryrun</literal>, <literal>all_targets</literal>, <literal>failout</literal>, <literal>broadcast</literal>, <literal>orphan</literal>, <literal>create_ostobj</literal>and<literal>create_mdtobj</literal>.</para></listitem>
-                                        <listitem><para>Time Since Last Completed.</para></listitem>
-                                        <listitem><para>Time Since Latest Start.</para></listitem>
-                                        <listitem><para>Time Since Last Checkpoint.</para></listitem>
-                                        <listitem><para>Latest Start Position: the position the checking began most recently.</para></listitem>
-                                        <listitem><para>Last Checkpoint Position.</para></listitem>
-                                        <listitem><para>First Failure Position: the position for the first object to be repaired.</para></listitem>
-                                        <listitem><para>Current Position.</para></listitem>
-                                    </itemizedlist>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
-                                    <para>Statistics</para>
-                                </entry>
-                                <entry>
-                                    <itemizedlist>
-                                        <listitem><para><literal>Checked Phase1</literal> total number of objects scanned during <literal>scanning-phase1</literal>.</para></listitem>
-                                        <listitem><para><literal>Checked Phase2</literal> total number of objects scanned during <literal>scanning-phase2</literal>.</para></listitem>
-                                        <listitem><para><literal>Updated Phase1</literal> total number of objects repaired during <literal>scanning-phase1</literal>.</para></listitem>
-                                        <listitem><para><literal>Updated Phase2</literal> total number of objects repaired during <literal>scanning-phase2</literal>.</para></listitem>
-                                        <listitem><para><literal>Failed Phase1</literal> total number of objets that failed to be repaired during <literal>scanning-phase1</literal>.</para></listitem>
-                                        <listitem><para><literal>Failed Phase2</literal> total number of objets that failed to be repaired during <literal>scanning-phase2</literal>.</para></listitem>
-                                        <listitem><para><literal>directories</literal> total number of directories scanned.</para></listitem>
-                                        <listitem><para><literal>multiple_linked_checked</literal> total number of multiple-linked objects that have been scanned.</para></listitem>
-                                        <listitem><para><literal>dirent_repaired</literal> total number of FID-in-dirent entries that have been repaired.</para></listitem>
-                                        <listitem><para><literal>linkea_repaired</literal> total number of linkEA entries that have been repaired.</para></listitem>
-                                        <listitem><para><literal>unknown_inconsistency</literal> total number of undefined inconsistencies found in scanning-phase2.</para></listitem>
-                                        <listitem><para><literal>unmatched_pairs_repaired</literal> total number of unmatched pairs that have been repaired.</para></listitem>
-                                        <listitem><para><literal>dangling_repaired</literal> total number of dangling name entries that have been found/repaired.</para></listitem>
-                                        <listitem><para><literal>multi_referenced_repaired</literal> total number of multiple referenced name entries that have been found/repaired.</para></listitem>
-                                        <listitem><para><literal>bad_file_type_repaired</literal> total number of name entries with bad file type that have been repaired.</para></listitem>
-                                        <listitem><para><literal>lost_dirent_repaired</literal> total number of lost name entries that have been re-inserted.</para></listitem>
-                                        <listitem><para><literal>striped_dirs_scanned</literal> total number of striped directories (master) that have been scanned.</para></listitem>
-                                        <listitem><para><literal>striped_dirs_repaired</literal> total number of striped directories (master) that have been repaired.</para></listitem>
-                                        <listitem><para><literal>striped_dirs_failed</literal> total number of striped directories (master) that have failed to be verified.</para></listitem>
-                                        <listitem><para><literal>striped_dirs_disabled</literal> total number of striped directories (master) that have been disabled.</para></listitem>
-                                        <listitem><para><literal>striped_dirs_skipped</literal> total number of striped directories (master) that have been skipped (for shards verification) because of lost master LMV EA.</para></listitem>
-                                        <listitem><para><literal>striped_shards_scanned</literal> total number of striped directory shards (slave) that have been scanned.</para></listitem>
-                                        <listitem><para><literal>striped_shards_repaired</literal> total number of striped directory shards (slave) that have been repaired.</para></listitem>
-                                        <listitem><para><literal>striped_shards_failed</literal> total number of striped directory shards (slave) that have failed to be verified.</para></listitem>
-                                        <listitem><para><literal>striped_shards_skipped</literal> total number of striped directory shards (slave) that have been skipped (for name hash verification) because LFSCK does not know whether the slave LMV EA is valid or not.</para></listitem>
-                                        <listitem><para><literal>name_hash_repaired</literal> total number of name entries under striped directory with bad name hash that have been repaired.</para></listitem>
-                                        <listitem><para><literal>nlinks_repaired</literal> total number of objects with nlink fixed.</para></listitem>
-                                        <listitem><para><literal>mul_linked_repaired</literal> total number of multiple-linked objects that have been repaired.</para></listitem>
-                                        <listitem><para><literal>local_lost_found_scanned</literal> total number of objects under /lost+found that have been scanned.</para></listitem>
-                                        <listitem><para><literal>local_lost_found_moved</literal> total number of objects under /lost+found that have been moved to namespace visible directory.</para></listitem>
-                                        <listitem><para><literal>local_lost_found_skipped</literal> total number of objects under /lost+found that have been skipped.</para></listitem>
-                                        <listitem><para><literal>local_lost_found_failed</literal> total number of objects under /lost+found that have failed to be processed.</para></listitem>
-                                        <listitem><para><literal>Success Count</literal> the total number of completed LFSCK runs on the device.</para></listitem>
-                                        <listitem><para><literal>Run Time Phase1</literal> the duration of the LFSCK run during <literal>scanning-phase1</literal>. Excluding the time spent paused between checkpoints.</para></listitem>
-                                        <listitem><para><literal>Run Time Phase2</literal> the duration of the LFSCK run during <literal>scanning-phase2</literal>. Excluding the time spent paused between checkpoints.</para></listitem>
-                                        <listitem><para><literal>Average Speed Phase1</literal> calculated by dividing <literal>checked_phase1</literal> by <literal>run_time_phase1</literal>.</para></listitem>
-                                        <listitem><para><literal>Average Speed Phase2</literal> calculated by dividing <literal>checked_phase2</literal> by <literal>run_time_phase1</literal>.</para></listitem>
-                                        <listitem><para><literal>Real-Time Speed Phase1</literal> the speed since the last checkpoint if the LFSCK is running <literal>scanning-phase1</literal>.</para></listitem>
-                                        <listitem><para><literal>Real-Time Speed Phase2</literal> the speed since the last checkpoint if the LFSCK is running <literal>scanning-phase2</literal>.</para></listitem>
-                                    </itemizedlist>
-                                </entry>
-                            </row>
-                        </tbody>
-                    </tgroup>
-                </informaltable>
-            </section>
-        </section>
-        <section condition='l26'>
-            <title>LFSCK status of layout via <literal>procfs</literal></title>
-            <section>
-                <title>Description</title>
-                <para>The <literal>layout</literal> component is responsible for checking and repairing MDT-OST inconsistency. The <literal>procfs</literal> interface for this component is in the MDD layer, named <literal>lfsck_layout</literal>, and in the OBD layer, named <literal>lfsck_layout</literal>. To show the status of this component <literal>lctl get_param</literal> should be used as described in the usage below.</para>
-            </section>
-            <section >
-                <title>Usage</title>
-                <screen>lctl get_param -n mdd.<replaceable>FSNAME</replaceable>-<replaceable>MDT_device</replaceable>.lfsck_layout
-lctl get_param -n obdfilter.<replaceable>FSNAME</replaceable>-<replaceable>OST_device</replaceable>.lfsck_layout
-                </screen>
-            </section>
-            <section>
-                <title>Output</title>
-                <informaltable frame="all">
-                    <tgroup cols="2">
-                        <colspec colname="c1" colwidth="3*"/>
-                        <colspec colname="c2" colwidth="7*"/>
-                        <thead>
-                            <row>
-                                <entry>
-                                    <para><emphasis role="bold">Information</emphasis></para>
-                                </entry>
-                                <entry>
-                                    <para><emphasis role="bold">Detail</emphasis></para>
-                                </entry>
-                            </row>
-                        </thead>
-                        <tbody>
-                            <row>
-                                <entry>
-                                    <para>General Information</para>
-                                </entry>
-                                <entry>
-                                    <itemizedlist>
-                                        <listitem><para>Name: <literal>lfsck_layout</literal></para></listitem>
-                                        <listitem><para>LFSCK namespace magic.</para></listitem>
-                                        <listitem><para>LFSCK namespace version..</para></listitem>
-                                        <listitem><para>Status: one of the status - <literal>init</literal>, <literal>scanning-phase1</literal>, <literal>scanning-phase2</literal>, <literal>completed</literal>, <literal>failed</literal>, <literal>stopped</literal>, <literal>paused</literal>, <literal>crashed</literal>, <literal>partial</literal>, <literal>co-failed</literal>, <literal>co-stopped</literal>, or <literal>co-paused</literal>.</para></listitem>
-                                        <listitem><para>Flags: including - <literal>scanned-once</literal> (the first cycle scanning has been
-                                                  completed), <literal>inconsistent</literal> (one
-                                                  or more MDT-OST inconsistencies
-                                                  have been discovered),
-                                                  <literal>incomplete</literal> (some MDT or OST did not participate in the LFSCK or failed to finish the LFSCK) or <literal>crashed_lastid</literal> (the lastid files on the OST crashed and needs to be rebuilt).</para></listitem>
-                                        <listitem><para>Parameters: including <literal>dryrun</literal>, <literal>all_targets</literal> and <literal>failout</literal>.</para></listitem>
-                                        <listitem><para>Time Since Last Completed.</para></listitem>
-                                        <listitem><para>Time Since Latest Start.</para></listitem>
-                                        <listitem><para>Time Since Last Checkpoint.</para></listitem>
-                                        <listitem><para>Latest Start Position: the position the checking began most recently.</para></listitem>
-                                        <listitem><para>Last Checkpoint Position.</para></listitem>
-                                        <listitem><para>First Failure Position: the position for the first object to be repaired.</para></listitem>
-                                        <listitem><para>Current Position.</para></listitem>
-                                    </itemizedlist>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
-                                    <para>Statistics</para>
-                                </entry>
-                                <entry>
-                                    <itemizedlist>
-                                        <listitem><para><literal>Success Count:</literal> the total number of completed LFSCK runs on the device.</para></listitem>
-                                        <listitem><para><literal>Repaired Dangling:</literal> total number of MDT-objects with dangling reference have been repaired in the scanning-phase1.</para></listitem>
-                                        <listitem><para><literal>Repaired Unmatched Pairs</literal> total number of unmatched MDT and OST-object paris have been repaired in the scanning-phase1</para></listitem>
-                                        <listitem><para><literal>Repaired Multiple Referenced</literal> total number of OST-objects with multiple reference have been repaired in the scanning-phase1.</para></listitem>
-                                        <listitem><para><literal>Repaired Orphan</literal> total number of orphan OST-objects have been repaired in the scanning-phase2.</para></listitem>
-                                        <listitem><para><literal>Repaired Inconsistent Owner</literal> total number.of OST-objects with incorrect owner information have been repaired in the scanning-phase1.</para></listitem>
-                                        <listitem><para><literal>Repaired Others</literal> total number of.other inconsistency repaired in the scanning phases. </para></listitem>
-                                        <listitem><para><literal>Skipped</literal> Number of skipped objects.</para></listitem>
-                                        <listitem><para><literal>Failed Phase1</literal> total number of objects that failed to be repaired during <literal>scanning-phase1</literal>.</para></listitem>
-                                        <listitem><para><literal>Failed Phase2</literal> total number of objects that failed to be repaired during <literal>scanning-phase2</literal>.</para></listitem>
-                                        <listitem><para><literal>Checked Phase1</literal> total number of objects scanned during <literal>scanning-phase1</literal>.</para></listitem>
-                                        <listitem><para><literal>Checked Phase2</literal> total number of objects scanned during <literal>scanning-phase2</literal>.</para></listitem>
-                                        <listitem><para><literal>Run Time Phase1</literal> the duration of the LFSCK run during <literal>scanning-phase1</literal>. Excluding the time spent paused between checkpoints.</para></listitem>
-                                        <listitem><para><literal>Run Time Phase2</literal> the duration of the LFSCK run during <literal>scanning-phase2</literal>. Excluding the time spent paused between checkpoints.</para></listitem>
-                                        <listitem><para><literal>Average Speed Phase1</literal> calculated by dividing <literal>checked_phase1</literal> by <literal>run_time_phase1</literal>.</para></listitem>
-                                        <listitem><para><literal>Average Speed Phase2</literal> calculated by dividing <literal>checked_phase2</literal> by <literal>run_time_phase1</literal>.</para></listitem>
-                                        <listitem><para><literal>Real-Time Speed Phase1</literal> the speed since the last checkpoint if the LFSCK is running <literal>scanning-phase1</literal>.</para></listitem>
-                                        <listitem><para><literal>Real-Time Speed Phase2</literal> the speed since the last checkpoint if the LFSCK is running <literal>scanning-phase2</literal>.</para></listitem>
-                                    </itemizedlist>
-                                </entry>
-                            </row>
-                        </tbody>
-                    </tgroup>
-                </informaltable>
-            </section>
-        </section>
+      </section>
     </section>
     <section>
-        <title>LFSCK adjustment interface</title>
-        <section condition='l26'>
-            <title>Rate control</title>
-            <section>
-                <title>Description</title>
-		<para>The LFSCK upper speed limit can be changed using <literal>lctl set_param</literal> as shown in the usage below.</para>
-            </section>
-            <section>
-                <title>Usage</title>
-                <screen>lctl set_param mdd.${FSNAME}-${MDT_device}.lfsck_speed_limit=<replaceable>N</replaceable>
-lctl set_param obdfilter.${FSNAME}-${OST_device}.lfsck_speed_limit=<replaceable>N</replaceable></screen>
-            </section>
-            <section>
-                <title>Values</title>
-                <informaltable frame="all">
-                    <tgroup cols="2">
-                        <colspec colname="c1" colwidth="3*"/>
-                        <colspec colname="c2" colwidth="7*"/>
-                        <tbody>
-                            <row>
-                                <entry>
-                                    <para>0</para>
-                                </entry>
-                                <entry>
-                                    <para>No speed limit (run at maximum speed.)</para>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
-                                    <para>positive integer</para>
-                                </entry>
-                                <entry>
-                                    <para>Maximum number of objects to scan per second.</para>
-                                </entry>
-                            </row>
-                        </tbody>
-                    </tgroup>
-                </informaltable>
-            </section>
+      <title>LFSCK status interface</title>
+      <section>
+        <title>LFSCK status of OI Scrub via
+        <literal>procfs</literal></title>
+        <section>
+          <title>Description</title>
+          <para>For each LFSCK component there is a dedicated procfs interface
+          to trace the corresponding LFSCK component status. For OI Scrub, the
+          interface is the OSD layer procfs interface, named
+          <literal>oi_scrub</literal>. To display OI Scrub status, the standard
+         
+          <literal>lctl get_param</literal> command is used as shown in the
+          usage below.</para>
         </section>
-        <section xml:id="dbdoclet.lfsck_auto_scrub">
-            <title>Auto scrub</title>
-            <section>
-                <title>Description</title>
-		<para>The <literal>auto_scrub</literal> parameter controls whether OI scrub will be triggered when an inconsistency is detected during OI lookup. It can be set as described in the usage and values sections below.</para>
-		<para>There is also a <literal>noscrub</literal> mount option (see <xref linkend="dbdoclet.50438219_12635"/>) which can be used to disable automatic OI scrub upon detection of a file-level backup at mount time. If the <literal>noscrub</literal> mount option is specified, <literal>auto_scrub</literal> will also be disabled, so OI scrub will not be triggered when an OI inconsistency is detected. Auto scrub can be renabled after the mount using the command shown in the usage. Manually starting LFSCK after mounting provides finer control over the starting conditions.</para>
-            </section>
-            <section>
-                <title>Usage</title>
-		<screen>lctl set_param osd_ldiskfs.${FSNAME}-${MDT_device}.auto_scrub=<replaceable>N</replaceable>
-                </screen>
-		<para>where <replaceable>N</replaceable> is an integer as described below.</para>
-            </section>
-            <section>
-                <title>Values</title>
-                <informaltable frame="all">
-                    <tgroup cols="2">
-                        <colspec colname="c1" colwidth="3*"/>
-                        <colspec colname="c2" colwidth="7*"/>
-                        <tbody>
-                            <row>
-                                <entry>
-                                    <para>0</para>
-                                </entry>
-                                <entry>
-                                    <para>Do not start OI Scrub automatically.</para>
-                                </entry>
-                            </row>
-                            <row>
-                                <entry>
-                                    <para>positive integer</para>
-                                </entry>
-                                <entry>
-                                    <para>Automatically start OI Scrub if inconsistency is detected during OI lookup.</para>
-                                </entry>
-                            </row>
-                        </tbody>
-                    </tgroup>
-                </informaltable>
-            </section>
+        <section>
+          <title>Usage</title>
+          <screen>lctl get_param -n osd-ldiskfs.<replaceable>FSNAME</replaceable>-[<replaceable>MDT_device|OST_device</replaceable>].oi_scrub</screen>
         </section>
+        <section>
+          <title>Output</title>
+          <informaltable frame="all">
+            <tgroup cols="2">
+              <colspec colname="c1" colwidth="3*" />
+              <colspec colname="c2" colwidth="7*" />
+              <thead>
+                <row>
+                  <entry>
+                    <para>
+                      <emphasis role="bold">Information</emphasis>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para>
+                      <emphasis role="bold">Detail</emphasis>
+                    </para>
+                  </entry>
+                </row>
+              </thead>
+              <tbody>
+                <row>
+                  <entry>
+                    <para>General Information</para>
+                  </entry>
+                  <entry>
+                    <itemizedlist>
+                      <listitem>
+                        <para>Name: OI_scrub.</para>
+                      </listitem>
+                      <listitem>
+                        <para>OI scrub magic id (an identifier unique to OI
+                        scrub).</para>
+                      </listitem>
+                      <listitem>
+                        <para>OI files count.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Status: one of the status -
+                        <literal>init</literal>,
+                        <literal>scanning</literal>,
+                        <literal>completed</literal>,
+                        <literal>failed</literal>,
+                        <literal>stopped</literal>,
+                        <literal>paused</literal>, or
+                        <literal>crashed</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Flags: including -
+                        <literal>recreated</literal>(OI file(s) is/are
+                        removed/recreated),
+                        <literal>inconsistent</literal>(restored from
+                        file-level backup),
+                        <literal>auto</literal>(triggered by non-UI mechanism),
+                        and
+                        <literal>upgrade</literal>(from Lustre software release
+                        1.8 IGIF format.)</para>
+                      </listitem>
+                      <listitem>
+                        <para>Parameters: OI scrub parameters, like
+                        <literal>failout</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Time Since Last Completed.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Time Since Latest Start.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Time Since Last Checkpoint.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Latest Start Position: the position for the
+                        latest scrub started from.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Last Checkpoint Position.</para>
+                      </listitem>
+                      <listitem>
+                        <para>First Failure Position: the position for the
+                        first object to be repaired.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Current Position.</para>
+                      </listitem>
+                    </itemizedlist>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para>Statistics</para>
+                  </entry>
+                  <entry>
+                    <itemizedlist>
+                      <listitem>
+                        <para>
+                        <literal>Checked</literal> total number of objects
+                        scanned.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Updated</literal> total number of objects
+                        repaired.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Failed</literal> total number of objects that
+                        failed to be repaired.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>No Scrub</literal> total number of objects
+                        marked
+                        <literal>LDISKFS_STATE_LUSTRE_NOSCRUB and
+                        skipped</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>IGIF</literal> total number of objects IGIF
+                        scanned.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Prior Updated</literal> how many objects have
+                        been repaired which are triggered by parallel
+                        RPC.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Success Count</literal> total number of
+                        completed OI_scrub runs on the device.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Run Time</literal> how long the scrub has run,
+                        tally from the time of scanning from the beginning of
+                        the specified MDT device, not include the
+                        paused/failure time among checkpoints.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Average Speed</literal> calculated by dividing
+                        <literal>Checked</literal> by
+                        <literal>run_time</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Real-Time Speed</literal> the speed since last
+                        checkpoint if the OI_scrub is running.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Scanned</literal> total number of objects under
+                        /lost+found that have been scanned.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Repaired</literal> total number of objects
+                        under /lost+found that have been recovered.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Failed</literal> total number of objects under
+                        /lost+found failed to be scanned or failed to be
+                        recovered.</para>
+                      </listitem>
+                    </itemizedlist>
+                  </entry>
+                </row>
+              </tbody>
+            </tgroup>
+          </informaltable>
+        </section>
+      </section>
+      <section condition='l24'>
+        <title>LFSCK status of namespace via
+        <literal>procfs</literal></title>
+        <section>
+          <title>Description</title>
+          <para>The
+          <literal>namespace</literal> component is responsible for checks
+          described in <xref linkend="dbdoclet.lfsckadmin" />. The
+          <literal>procfs</literal> interface for this component is in the
+          MDD layer, named
+          <literal>lfsck_namespace</literal>. To show the status of this
+          component,
+          <literal>lctl get_param</literal> should be used as described in the
+          usage below.</para>
+        </section>
+        <section>
+          <title>Usage</title>
+          <screen>lctl get_param -n mdd. <replaceable>FSNAME</replaceable>-<replaceable>MDT_device</replaceable>.lfsck_namespace</screen>
+        </section>
+        <section>
+          <title>Output</title>
+          <informaltable frame="all">
+            <tgroup cols="2">
+              <colspec colname="c1" colwidth="3*" />
+              <colspec colname="c2" colwidth="7*" />
+              <thead>
+                <row>
+                  <entry>
+                    <para>
+                      <emphasis role="bold">Information</emphasis>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para>
+                      <emphasis role="bold">Detail</emphasis>
+                    </para>
+                  </entry>
+                </row>
+              </thead>
+              <tbody>
+                <row>
+                  <entry>
+                    <para>General Information</para>
+                  </entry>
+                  <entry>
+                    <itemizedlist>
+                      <listitem>
+                        <para>Name:
+                        <literal>lfsck_namespace</literal></para>
+                      </listitem>
+                      <listitem>
+                        <para>LFSCK namespace magic.</para>
+                      </listitem>
+                      <listitem>
+                        <para>LFSCK namespace version..</para>
+                      </listitem>
+                      <listitem>
+                        <para>Status: one of the status -
+                        <literal>init</literal>,
+                        <literal>scanning-phase1</literal>,
+                        <literal>scanning-phase2</literal>,
+                        <literal>completed</literal>,
+                        <literal>failed</literal>,
+                        <literal>stopped</literal>,
+                        <literal>paused</literal>,
+                        <literal>partial</literal>,
+                        <literal>co-failed</literal>,
+                        <literal>co-stopped</literal> or
+                        <literal>co-paused</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Flags: including -
+                        <literal>scanned-once</literal>(the first cycle
+                        scanning has been completed),
+                        <literal>inconsistent</literal>(one or more
+                        inconsistent FID-in-Dirent or LinkEA entries that have
+                        been discovered),
+                        <literal>upgrade</literal>(from Lustre software release
+                        1.8 IGIF format.)</para>
+                      </listitem>
+                      <listitem>
+                        <para>Parameters: including
+                        <literal>dryrun</literal>,
+                        <literal>all_targets</literal>,
+                        <literal>failout</literal>,
+                        <literal>broadcast</literal>,
+                        <literal>orphan</literal>,
+                        <literal>create_ostobj</literal> and
+                        <literal>create_mdtobj</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Time Since Last Completed.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Time Since Latest Start.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Time Since Last Checkpoint.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Latest Start Position: the position the checking
+                        began most recently.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Last Checkpoint Position.</para>
+                      </listitem>
+                      <listitem>
+                        <para>First Failure Position: the position for the
+                        first object to be repaired.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Current Position.</para>
+                      </listitem>
+                    </itemizedlist>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para>Statistics</para>
+                  </entry>
+                  <entry>
+                    <itemizedlist>
+                      <listitem>
+                        <para>
+                        <literal>Checked Phase1</literal> total number of
+                        objects scanned during
+                        <literal>scanning-phase1</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Checked Phase2</literal> total number of
+                        objects scanned during
+                        <literal>scanning-phase2</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Updated Phase1</literal> total number of
+                        objects repaired during
+                        <literal>scanning-phase1</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Updated Phase2</literal> total number of
+                        objects repaired during
+                        <literal>scanning-phase2</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Failed Phase1</literal> total number of objets
+                        that failed to be repaired during
+                        <literal>scanning-phase1</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Failed Phase2</literal> total number of objets
+                        that failed to be repaired during
+                        <literal>scanning-phase2</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>directories</literal> total number of
+                        directories scanned.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>multiple_linked_checked</literal> total number
+                        of multiple-linked objects that have been
+                        scanned.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>dirent_repaired</literal> total number of
+                        FID-in-dirent entries that have been repaired.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>linkea_repaired</literal> total number of
+                        linkEA entries that have been repaired.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>unknown_inconsistency</literal> total number of
+                        undefined inconsistencies found in
+                        scanning-phase2.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>unmatched_pairs_repaired</literal> total number
+                        of unmatched pairs that have been repaired.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>dangling_repaired</literal> total number of
+                        dangling name entries that have been
+                        found/repaired.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>multi_referenced_repaired</literal> total
+                        number of multiple referenced name entries that have
+                        been found/repaired.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>bad_file_type_repaired</literal> total number
+                        of name entries with bad file type that have been
+                        repaired.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>lost_dirent_repaired</literal> total number of
+                        lost name entries that have been re-inserted.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>striped_dirs_scanned</literal> total number of
+                        striped directories (master) that have been
+                        scanned.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>striped_dirs_repaired</literal> total number of
+                        striped directories (master) that have been
+                        repaired.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>striped_dirs_failed</literal> total number of
+                        striped directories (master) that have failed to be
+                        verified.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>striped_dirs_disabled</literal> total number of
+                        striped directories (master) that have been
+                        disabled.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>striped_dirs_skipped</literal> total number of
+                        striped directories (master) that have been skipped
+                        (for shards verification) because of lost master LMV
+                        EA.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>striped_shards_scanned</literal> total number
+                        of striped directory shards (slave) that have been
+                        scanned.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>striped_shards_repaired</literal> total number
+                        of striped directory shards (slave) that have been
+                        repaired.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>striped_shards_failed</literal> total number of
+                        striped directory shards (slave) that have failed to be
+                        verified.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>striped_shards_skipped</literal> total number
+                        of striped directory shards (slave) that have been
+                        skipped (for name hash verification) because LFSCK does
+                        not know whether the slave LMV EA is valid or
+                        not.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>name_hash_repaired</literal> total number of
+                        name entries under striped directory with bad name hash
+                        that have been repaired.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>nlinks_repaired</literal> total number of
+                        objects with nlink fixed.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>mul_linked_repaired</literal> total number of
+                        multiple-linked objects that have been repaired.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>local_lost_found_scanned</literal> total number
+                        of objects under /lost+found that have been
+                        scanned.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>local_lost_found_moved</literal> total number
+                        of objects under /lost+found that have been moved to
+                        namespace visible directory.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>local_lost_found_skipped</literal> total number
+                        of objects under /lost+found that have been
+                        skipped.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>local_lost_found_failed</literal> total number
+                        of objects under /lost+found that have failed to be
+                        processed.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Success Count</literal> the total number of
+                        completed LFSCK runs on the device.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Run Time Phase1</literal> the duration of the
+                        LFSCK run during
+                        <literal>scanning-phase1</literal>. Excluding the time
+                        spent paused between checkpoints.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Run Time Phase2</literal> the duration of the
+                        LFSCK run during
+                        <literal>scanning-phase2</literal>. Excluding the time
+                        spent paused between checkpoints.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Average Speed Phase1</literal> calculated by
+                        dividing
+                        <literal>checked_phase1</literal> by
+                        <literal>run_time_phase1</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Average Speed Phase2</literal> calculated by
+                        dividing
+                        <literal>checked_phase2</literal> by
+                        <literal>run_time_phase1</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Real-Time Speed Phase1</literal> the speed
+                        since the last checkpoint if the LFSCK is running
+                        <literal>scanning-phase1</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Real-Time Speed Phase2</literal> the speed
+                        since the last checkpoint if the LFSCK is running
+                        <literal>scanning-phase2</literal>.</para>
+                      </listitem>
+                    </itemizedlist>
+                  </entry>
+                </row>
+              </tbody>
+            </tgroup>
+          </informaltable>
+        </section>
+      </section>
+      <section condition='l26'>
+        <title>LFSCK status of layout via
+        <literal>procfs</literal></title>
+        <section>
+          <title>Description</title>
+          <para>The
+          <literal>layout</literal> component is responsible for checking and
+          repairing MDT-OST inconsistency. The
+          <literal>procfs</literal> interface for this component is in the MDD
+          layer, named
+          <literal>lfsck_layout</literal>, and in the OBD layer, named
+          <literal>lfsck_layout</literal>. To show the status of this component
+          <literal>lctl get_param</literal> should be used as described in the
+          usage below.</para>
+        </section>
+        <section>
+          <title>Usage</title>
+          <screen>lctl get_param -n mdd.
+<replaceable>FSNAME</replaceable>-
+<replaceable>MDT_device</replaceable>.lfsck_layout
+lctl get_param -n obdfilter.
+<replaceable>FSNAME</replaceable>-
+<replaceable>OST_device</replaceable>.lfsck_layout</screen>
+        </section>
+        <section>
+          <title>Output</title>
+          <informaltable frame="all">
+            <tgroup cols="2">
+              <colspec colname="c1" colwidth="3*" />
+              <colspec colname="c2" colwidth="7*" />
+              <thead>
+                <row>
+                  <entry>
+                    <para>
+                      <emphasis role="bold">Information</emphasis>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para>
+                      <emphasis role="bold">Detail</emphasis>
+                    </para>
+                  </entry>
+                </row>
+              </thead>
+              <tbody>
+                <row>
+                  <entry>
+                    <para>General Information</para>
+                  </entry>
+                  <entry>
+                    <itemizedlist>
+                      <listitem>
+                        <para>Name:
+                        <literal>lfsck_layout</literal></para>
+                      </listitem>
+                      <listitem>
+                        <para>LFSCK namespace magic.</para>
+                      </listitem>
+                      <listitem>
+                        <para>LFSCK namespace version..</para>
+                      </listitem>
+                      <listitem>
+                        <para>Status: one of the status -
+                        <literal>init</literal>,
+                        <literal>scanning-phase1</literal>,
+                        <literal>scanning-phase2</literal>,
+                        <literal>completed</literal>,
+                        <literal>failed</literal>,
+                        <literal>stopped</literal>,
+                        <literal>paused</literal>,
+                        <literal>crashed</literal>,
+                        <literal>partial</literal>,
+                        <literal>co-failed</literal>,
+                        <literal>co-stopped</literal>, or
+                        <literal>co-paused</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Flags: including -
+                        <literal>scanned-once</literal>(the first cycle
+                        scanning has been completed),
+                        <literal>inconsistent</literal>(one or more MDT-OST
+                        inconsistencies have been discovered),
+                        <literal>incomplete</literal>(some MDT or OST did not
+                        participate in the LFSCK or failed to finish the LFSCK)
+                        or
+                        <literal>crashed_lastid</literal>(the lastid files on
+                        the OST crashed and needs to be rebuilt).</para>
+                      </listitem>
+                      <listitem>
+                        <para>Parameters: including
+                        <literal>dryrun</literal>,
+                        <literal>all_targets</literal> and
+                        <literal>failout</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Time Since Last Completed.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Time Since Latest Start.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Time Since Last Checkpoint.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Latest Start Position: the position the checking
+                        began most recently.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Last Checkpoint Position.</para>
+                      </listitem>
+                      <listitem>
+                        <para>First Failure Position: the position for the
+                        first object to be repaired.</para>
+                      </listitem>
+                      <listitem>
+                        <para>Current Position.</para>
+                      </listitem>
+                    </itemizedlist>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para>Statistics</para>
+                  </entry>
+                  <entry>
+                    <itemizedlist>
+                      <listitem>
+                        <para>
+                        <literal>Success Count:</literal> the total number of
+                        completed LFSCK runs on the device.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Repaired Dangling:</literal> total number of
+                        MDT-objects with dangling reference have been repaired
+                        in the scanning-phase1.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Repaired Unmatched Pairs</literal> total number
+                        of unmatched MDT and OST-object paris have been
+                        repaired in the scanning-phase1</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Repaired Multiple Referenced</literal> total
+                        number of OST-objects with multiple reference have been
+                        repaired in the scanning-phase1.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Repaired Orphan</literal> total number of
+                        orphan OST-objects have been repaired in the
+                        scanning-phase2.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Repaired Inconsistent Owner</literal> total
+                        number.of OST-objects with incorrect owner information
+                        have been repaired in the scanning-phase1.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Repaired Others</literal> total number of.other
+                        inconsistency repaired in the scanning phases.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Skipped</literal> Number of skipped
+                        objects.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Failed Phase1</literal> total number of objects
+                        that failed to be repaired during
+                        <literal>scanning-phase1</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Failed Phase2</literal> total number of objects
+                        that failed to be repaired during
+                        <literal>scanning-phase2</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Checked Phase1</literal> total number of
+                        objects scanned during
+                        <literal>scanning-phase1</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Checked Phase2</literal> total number of
+                        objects scanned during
+                        <literal>scanning-phase2</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Run Time Phase1</literal> the duration of the
+                        LFSCK run during
+                        <literal>scanning-phase1</literal>. Excluding the time
+                        spent paused between checkpoints.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Run Time Phase2</literal> the duration of the
+                        LFSCK run during
+                        <literal>scanning-phase2</literal>. Excluding the time
+                        spent paused between checkpoints.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Average Speed Phase1</literal> calculated by
+                        dividing
+                        <literal>checked_phase1</literal> by
+                        <literal>run_time_phase1</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Average Speed Phase2</literal> calculated by
+                        dividing
+                        <literal>checked_phase2</literal> by
+                        <literal>run_time_phase1</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Real-Time Speed Phase1</literal> the speed
+                        since the last checkpoint if the LFSCK is running
+                        <literal>scanning-phase1</literal>.</para>
+                      </listitem>
+                      <listitem>
+                        <para>
+                        <literal>Real-Time Speed Phase2</literal> the speed
+                        since the last checkpoint if the LFSCK is running
+                        <literal>scanning-phase2</literal>.</para>
+                      </listitem>
+                    </itemizedlist>
+                  </entry>
+                </row>
+              </tbody>
+            </tgroup>
+          </informaltable>
+        </section>
+      </section>
     </section>
+    <section>
+      <title>LFSCK adjustment interface</title>
+      <section condition='l26'>
+        <title>Rate control</title>
+        <section>
+          <title>Description</title>
+          <para>The LFSCK upper speed limit can be changed using
+          <literal>lctl set_param</literal> as shown in the usage below.</para>
+        </section>
+        <section>
+          <title>Usage</title>
+          <screen>lctl set_param mdd.${FSNAME}-${MDT_device}.lfsck_speed_limit=
+<replaceable>N</replaceable>
+lctl set_param obdfilter.${FSNAME}-${OST_device}.lfsck_speed_limit=
+<replaceable>N</replaceable></screen>
+        </section>
+        <section>
+          <title>Values</title>
+          <informaltable frame="all">
+            <tgroup cols="2">
+              <colspec colname="c1" colwidth="3*" />
+              <colspec colname="c2" colwidth="7*" />
+              <tbody>
+                <row>
+                  <entry>
+                    <para>0</para>
+                  </entry>
+                  <entry>
+                    <para>No speed limit (run at maximum speed.)</para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para>positive integer</para>
+                  </entry>
+                  <entry>
+                    <para>Maximum number of objects to scan per second.</para>
+                  </entry>
+                </row>
+              </tbody>
+            </tgroup>
+          </informaltable>
+        </section>
+      </section>
+      <section xml:id="dbdoclet.lfsck_auto_scrub">
+        <title>Auto scrub</title>
+        <section>
+          <title>Description</title>
+          <para>The
+          <literal>auto_scrub</literal> parameter controls whether OI scrub will
+          be triggered when an inconsistency is detected during OI lookup. It
+          can be set as described in the usage and values sections
+          below.</para>
+          <para>There is also a
+          <literal>noscrub</literal> mount option (see
+          <xref linkend="dbdoclet.50438219_12635" />) which can be used to
+          disable automatic OI scrub upon detection of a file-level backup at
+          mount time. If the
+          <literal>noscrub</literal> mount option is specified,
+          <literal>auto_scrub</literal> will also be disabled, so OI scrub will
+          not be triggered when an OI inconsistency is detected. Auto scrub can
+          be renabled after the mount using the command shown in the usage.
+          Manually starting LFSCK after mounting provides finer control over
+          the starting conditions.</para>
+        </section>
+        <section>
+          <title>Usage</title>
+          <screen>lctl set_param osd_ldiskfs.${FSNAME}-${MDT_device}.auto_scrub=<replaceable>N</replaceable></screen>
+          <para>where
+          <replaceable>N</replaceable>is an integer as described below.</para>
+          <note condition='l25'><para>Lustre software 2.5 and later supports
+          <literal>-P</literal> option that makes the
+          <literal>set_param</literal> permanent.</para></note>
+        </section>
+        <section>
+          <title>Values</title>
+          <informaltable frame="all">
+            <tgroup cols="2">
+              <colspec colname="c1" colwidth="3*" />
+              <colspec colname="c2" colwidth="7*" />
+              <tbody>
+                <row>
+                  <entry>
+                    <para>0</para>
+                  </entry>
+                  <entry>
+                    <para>Do not start OI Scrub automatically.</para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para>positive integer</para>
+                  </entry>
+                  <entry>
+                    <para>Automatically start OI Scrub if inconsistency is
+                    detected during OI lookup.</para>
+                  </entry>
+                </row>
+              </tbody>
+            </tgroup>
+          </informaltable>
+        </section>
+      </section>
     </section>
+  </section>
 </chapter>

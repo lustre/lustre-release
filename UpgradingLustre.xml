@@ -1,144 +1,198 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="upgradinglustre">
+<?xml version='1.0' encoding='utf-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+xml:id="upgradinglustre">
   <title xml:id="upgradinglustre.title">Upgrading a Lustre File System</title>
-  <para>This chapter describes interoperability between Lustre software releases. It also provides
-    procedures for upgrading from Lustre software release 1.8  to Lustre softeware release 2.x ,
-    from  a Lustre software release 2.x  to a more recent Lustre software release 2.x (major release
-    upgrade), and from a a Lustre software release 2.x.y  to a more recent Lustre software release
-    2.x.y (minor release upgrade). It includes the following sections:</para>
+  <para>This chapter describes interoperability between Lustre software
+  releases. It also provides procedures for upgrading from Lustre software
+  release 1.8 to Lustre softeware release 2.x , from a Lustre software release
+  2.x to a more recent Lustre software release 2.x (major release upgrade), and
+  from a a Lustre software release 2.x.y to a more recent Lustre software
+  release 2.x.y (minor release upgrade). It includes the following
+  sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438205_82079"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438205_82079" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="Upgrading_2.x"/></para>
+      <para>
+        <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+        linkend="Upgrading_2.x" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="Upgrading_2.x.x"/></para>
+      <para>
+        <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+        linkend="Upgrading_2.x.x" />
+      </para>
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438205_82079">
-      <title><indexterm>
-        <primary>Lustre</primary>
-        <secondary>upgrading</secondary>
-        <see>upgrading</see>
-      </indexterm><indexterm>
-        <primary>upgrading</primary>
-      </indexterm>Release Interoperability and Upgrade Requirements</title>
-    <para><emphasis role="italic"><emphasis role="bold">Lustre software release 2.x (major)
-          upgrade:</emphasis></emphasis><itemizedlist>
+    <title>
+    <indexterm>
+      <primary>Lustre</primary>
+      <secondary>upgrading</secondary>
+      <see>upgrading</see>
+    </indexterm>
+    <indexterm>
+      <primary>upgrading</primary>
+    </indexterm>Release Interoperability and Upgrade Requirements</title>
+    <para>
+      <emphasis role="italic">
+        <emphasis role="bold">Lustre software release 2.x (major)
+        upgrade:</emphasis>
+      </emphasis>
+      <itemizedlist>
         <listitem>
-          <para>All servers must be upgraded at the same time, while some or all clients may be
-            upgraded.</para>
+          <para>All servers must be upgraded at the same time, while some or
+          all clients may be upgraded.</para>
         </listitem>
         <listitem>
-          <para>All servers must be be upgraded to a Linux kernel supported by the Lustre software.
-            See the Linux Test Matrix at <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-              linkend="LustreTestMatrixTable"/> for a list of tested Lustre distributions.</para>
+          <para>All servers must be be upgraded to a Linux kernel supported by
+          the Lustre software. See the Linux Test Matrix at 
+          <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+          linkend="LustreTestMatrixTable" />for a list of tested Lustre
+          distributions.</para>
         </listitem>
         <listitem>
-          <para>Clients to be upgraded to the Lustre software release 2.4 or higher must be running
-            a compatible Linux distribution. See the Linux Test Matrix at <xref
-              xmlns:xlink="http://www.w3.org/1999/xlink" linkend="LustreTestMatrixTable"/> for a
-            list of tested Linux distributions.</para>
+          <para>Clients to be upgraded to the Lustre software release 2.4 or
+          higher must be running a compatible Linux distribution. See the Linux
+          Test Matrix at 
+          <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+          linkend="LustreTestMatrixTable" />for a list of tested Linux
+          distributions.</para>
         </listitem>
-      </itemizedlist></para>
-    <para><emphasis role="italic"><emphasis role="bold">Lustre software release 2.x.y release
-          (minor) upgrade:</emphasis></emphasis></para>
+      </itemizedlist>
+    </para>
+    <para>
+      <emphasis role="italic">
+        <emphasis role="bold">Lustre software release 2.x.y release (minor)
+        upgrade:</emphasis>
+      </emphasis>
+    </para>
     <itemizedlist>
       <listitem>
-        <para>All servers must be upgraded at the same time, while some or all clients may be
-          upgraded.</para>
+        <para>All servers must be upgraded at the same time, while some or all
+        clients may be upgraded.</para>
       </listitem>
       <listitem>
-        <para>Rolling upgrades are supported for minor releases allowing individual servers and
-          clients to be upgraded without stopping the Lustre file system.</para>
+        <para>Rolling upgrades are supported for minor releases allowing
+        individual servers and clients to be upgraded without stopping the
+        Lustre file system.</para>
       </listitem>
     </itemizedlist>
   </section>
   <section xml:id="Upgrading_2.x">
-    <title><indexterm>
-        <primary>upgrading</primary>
-        <secondary>major release (2.x to 2.x)</secondary>
-      </indexterm><indexterm>
-        <primary>wide striping</primary>
-      </indexterm><indexterm>
-        <primary>MDT</primary>
-        <secondary>multiple MDSs</secondary>
-      </indexterm><indexterm>
-        <primary>large_xattr</primary>
-        <secondary>ea_inode</secondary>
-      </indexterm><indexterm>
-        <primary>wide striping</primary>
-        <secondary>large_xattr</secondary>
-        <tertiary>ea_inode</tertiary>
-      </indexterm>Upgrading to Lustre Software Release 2.x (Major Release)</title>
-    <para> The procedure for upgrading from a Lustre software release 2.x to a more recent 2.x
-      release of the Lustre software is described in this section. </para>
+    <title>
+    <indexterm>
+      <primary>upgrading</primary>
+      <secondary>major release (2.x to 2.x)</secondary>
+    </indexterm>
+    <indexterm>
+      <primary>wide striping</primary>
+    </indexterm>
+    <indexterm>
+      <primary>MDT</primary>
+      <secondary>multiple MDSs</secondary>
+    </indexterm>
+    <indexterm>
+      <primary>large_xattr</primary>
+      <secondary>ea_inode</secondary>
+    </indexterm>
+    <indexterm>
+      <primary>wide striping</primary>
+      <secondary>large_xattr</secondary>
+      <tertiary>ea_inode</tertiary>
+    </indexterm>Upgrading to Lustre Software Release 2.x (Major
+    Release)</title>
+    <para>The procedure for upgrading from a Lustre software release 2.x to a
+    more recent 2.x release of the Lustre software is described in this
+    section.</para>
     <note>
-      <para>This procedure can also be used to upgrade Lustre software release 1.8.6-wc1 or later to
-        any Lustre software release 2.x. To upgrade other versions of Lustre software release 1.8.x,
-        contact your support provider.</para>
+      <para>This procedure can also be used to upgrade Lustre software release
+      1.8.6-wc1 or later to any Lustre software release 2.x. To upgrade other
+      versions of Lustre software release 1.8.x, contact your support
+      provider.</para>
     </note>
     <note>
-      <para condition="l22">In Lustre software release 2.2, a feature has been added that allows
-        striping across up to 2000 OSTs. By default, this "wide striping" feature is disabled. It is
-        activated by setting the <literal>large_xattr</literal> or <literal>ea_inode</literal>
-        option on the MDT using either
-          <literal>mkfs.lustre</literal> or <literal>tune2fs</literal>. For example after upgrading
-        an existing file system to Lustre software release 2.2 or later, wide striping can be
-        enabled by running the following command on the MDT device before mounting
-        it:<screen>tune2fs -O large_xattr</screen>Once the wide striping feature is enabled and in
-        use on the MDT, it is not possible to directly downgrade the MDT file system to an earlier
-        version of the Lustre software that does not support wide striping. To disable wide striping:<orderedlist>
-          <listitem>
-            <para>Delete all wide-striped files. </para>
-            <para>OR </para>
-            <para>Use <literal>lfs_migrate</literal> with the option <literal>-c</literal>
-              <replaceable>stripe_count</replaceable> (set <replaceable>stripe_count</replaceable>
-              to 160) to move the files to another location.</para>
-          </listitem>
-          <listitem>
-            <para>Unmount the MDT.</para>
-          </listitem>
-          <listitem>
-            <para>Run the following command to turn off the <literal>large_xattr</literal>
-              option:<screen>tune2fs -O ^large_xattr</screen></para>
-          </listitem>
-        </orderedlist>
-        Using either <literal>mkfs.lustre</literal> or <literal>tune2fs</literal> with 
-          <literal>large_xattr</literal> or <literal>ea_inode</literal> option reseults in 
-          <literal>ea_inode</literal> in the file system feature list.
-      </para></note>
+      <para condition="l22">In Lustre software release 2.2, a feature has been
+      added that allows striping across up to 2000 OSTs. By default, this "wide
+      striping" feature is disabled. It is activated by setting the 
+      <literal>large_xattr</literal> or 
+      <literal>ea_inode</literal> option on the MDT using either 
+      <literal>mkfs.lustre</literal> or 
+      <literal>tune2fs</literal>. For example after upgrading an existing file
+      system to Lustre software release 2.2 or later, wide striping can be
+      enabled by running the following command on the MDT device before
+      mounting it:
+      <screen>tune2fs -O large_xattr</screen>
+      Once the wide striping feature is enabled and in use on the MDT, it is
+      not possible to directly downgrade the MDT file system to an earlier 
+      version of the Lustre software that does not support wide striping. To 
+      disable wide striping:
+      <orderedlist>
+        <listitem>
+          <para>Delete all wide-striped files.</para>
+          <para>OR</para>
+          <para>Use 
+          <literal>lfs_migrate</literal> with the option 
+          <literal>-c</literal>
+          <replaceable>stripe_count</replaceable>(set 
+          <replaceable>stripe_count</replaceable>to 160) to move the files to
+          another location.</para>
+        </listitem>
+        <listitem>
+          <para>Unmount the MDT.</para>
+        </listitem>
+        <listitem>
+          <para>Run the following command to turn off the 
+          <literal>large_xattr</literal> option:
+          <screen>tune2fs -O ^large_xattr</screen></para>
+        </listitem>
+      </orderedlist>Using either 
+      <literal>mkfs.lustre</literal> or 
+      <literal>tune2fs</literal> with 
+      <literal>large_xattr</literal> or 
+      <literal>ea_inode</literal> option reseults in 
+      <literal>ea_inode</literal> in the file system feature list.</para>
+    </note>
     <note condition="l23">
-      <para>To generate a list of all files with more than 160 stripes use <literal>lfs
-          find</literal> with the <literal>--stripe-count</literal>
-        option:<screen>lfs find ${mountpoint} --stripe-count=+160</screen></para>
+      <para>To generate a list of all files with more than 160 stripes use 
+      <literal>lfs find</literal> with the 
+      <literal>--stripe-count</literal> option:
+      <screen>lfs find ${mountpoint} --stripe-count=+160</screen></para>
     </note>
     <note condition="l24">
-      <para>In Lustre software release 2.4, a new feature allows using multiple MDTs, which can each
-        serve one or more remote sub-directories in the file system. The <literal>root</literal>
-        directory is always located on MDT0. </para>
-      <para>Note that clients running a release prior to the Lustre software release 2.4 can only
-        see the namespace hosted by MDT0 and will return an IO error if an attempt is made to access
-        a directory on another MDT.</para>
+      <para>In Lustre software release 2.4, a new feature allows using multiple
+      MDTs, which can each serve one or more remote sub-directories in the file
+      system. The 
+      <literal>root</literal> directory is always located on MDT0.</para>
+      <para>Note that clients running a release prior to the Lustre software
+      release 2.4 can only see the namespace hosted by MDT0 and will return an
+      IO error if an attempt is made to access a directory on another
+      MDT.</para>
     </note>
-    <para>To upgrade a Lustre software release 2.x to a more recent major release, complete these
-      steps:</para>
+    <para>To upgrade a Lustre software release 2.x to a more recent major
+    release, complete these steps:</para>
     <orderedlist>
       <listitem>
-        <para>Create a complete, restorable file system backup. </para>
+        <para>Create a complete, restorable file system backup.</para>
         <caution>
-          <para>Before installing the Lustre software, back up ALL data. The Lustre software
-            contains kernel modifications that interact with storage devices and may introduce
-            security issues and data loss if not installed, configured, or administered properly. If
-            a full backup of the file system is not practical, a device-level backup of the MDT file
-            system is recommended. See  <xref linkend="backupandrestore"/> for a procedure.</para>
+          <para>Before installing the Lustre software, back up ALL data. The
+          Lustre software contains kernel modifications that interact with
+          storage devices and may introduce security issues and data loss if
+          not installed, configured, or administered properly. If a full backup
+          of the file system is not practical, a device-level backup of the MDT
+          file system is recommended. See 
+          <xref linkend="backupandrestore" />for a procedure.</para>
         </caution>
       </listitem>
       <listitem>
-        <para>Shut down the file system by unmounting all clients and servers in the order shown
-          below (unmounting a block device causes the Lustre software to be shut down on that
-          node):</para>
+        <para>Shut down the file system by unmounting all clients and servers
+        in the order shown below (unmounting a block device causes the Lustre
+        software to be shut down on that node):</para>
         <orderedlist numeration="loweralpha">
           <listitem>
             <para>Unmount the clients. On each client node, run:</para>
@@ -156,30 +210,37 @@
       </listitem>
       <listitem>
         <para>Upgrade the Linux operating system on all servers to a compatible
-          (tested) Linux distribution and reboot. See the Linux Test Matrix at <xref
-            xmlns:xlink="http://www.w3.org/1999/xlink" linkend="LustreTestMatrixTable"/>.</para>
+        (tested) Linux distribution and reboot. See the Linux Test Matrix at 
+        <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+        linkend="LustreTestMatrixTable" />.</para>
       </listitem>
       <listitem>
-        <para>Upgrade the Linux operating system on all clients to Red Hat Enterprise Linux 6 or
-          other compatible (tested) distribution and reboot. See the Linux Test Matrix at <xref
-            xmlns:xlink="http://www.w3.org/1999/xlink" linkend="LustreTestMatrixTable"/>.</para>
+        <para>Upgrade the Linux operating system on all clients to Red Hat
+        Enterprise Linux 6 or other compatible (tested) distribution and
+        reboot. See the Linux Test Matrix at 
+        <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+        linkend="LustreTestMatrixTable" />.</para>
       </listitem>
       <listitem>
-        <para>Download the Lustre server RPMs for your platform from the <link
-            xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">Lustre Releases</link>
-          repository. See <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-            linkend="table_cnh_5m3_gk"/> for a list of required packages.</para>
+        <para>Download the Lustre server RPMs for your platform from the 
+        <link xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">
+        Lustre Releases</link>repository. See 
+        <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+        linkend="table_cnh_5m3_gk" />for a list of required packages.</para>
       </listitem>
       <listitem>
-        <para>Install the Lustre server packages on all Lustre servers (MGS, MDSs, and OSSs).</para>
+        <para>Install the Lustre server packages on all Lustre servers (MGS,
+        MDSs, and OSSs).</para>
         <orderedlist numeration="loweralpha">
           <listitem>
-            <para>Log onto a Lustre server as the <literal>root</literal> user</para>
+            <para>Log onto a Lustre server as the 
+            <literal>root</literal> user</para>
           </listitem>
           <listitem>
-            <para>Use the <literal>yum</literal> command to install the packages:</para>
+            <para>Use the 
+            <literal>yum</literal> command to install the packages:</para>
             <para>
-              <screen># yum --nogpgcheck install pkg1.rpm pkg2.rpm ...</screen>
+              <screen># yum --nogpgcheck install pkg1.rpm pkg2.rpm ... </screen>
             </para>
           </listitem>
           <listitem>
@@ -194,28 +255,33 @@
         </orderedlist>
       </listitem>
       <listitem>
-        <para>Download the Lustre client RPMs for your platform from the <link
-            xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">Lustre Releases</link>
-          repository. See <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-            linkend="table_j3r_ym3_gk"/> for a list of required packages.</para>
+        <para>Download the Lustre client RPMs for your platform from the 
+        <link xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">
+        Lustre Releases</link>repository. See 
+        <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+        linkend="table_j3r_ym3_gk" />for a list of required packages.</para>
         <note>
-          <para>The version of the kernel running on a Lustre client must be the same as the version
-            of the <literal>lustre-client-modules-</literal><replaceable>ver</replaceable> package
-            being installed. If not, a compatible kernel must be installed on the client before the
-            Lustre client packages are installed.</para>
+          <para>The version of the kernel running on a Lustre client must be
+          the same as the version of the 
+          <literal>lustre-client-modules-</literal>
+          <replaceable>ver</replaceable>package being installed. If not, a
+          compatible kernel must be installed on the client before the Lustre
+          client packages are installed.</para>
         </note>
       </listitem>
       <listitem>
-        <para>Install the Lustre client packages on each of the Lustre clients to be
-          upgraded.</para>
+        <para>Install the Lustre client packages on each of the Lustre clients
+        to be upgraded.</para>
         <orderedlist numeration="loweralpha">
           <listitem>
-            <para>Log onto a Lustre client as the <literal>root</literal> user.</para>
+            <para>Log onto a Lustre client as the 
+            <literal>root</literal> user.</para>
           </listitem>
           <listitem>
-            <para>Use the <literal>yum</literal> command to install the packages:</para>
+            <para>Use the 
+            <literal>yum</literal> command to install the packages:</para>
             <para>
-              <screen># yum --nogpgcheck install pkg1.rpm pkg2.rpm ...</screen>
+              <screen># yum --nogpgcheck install pkg1.rpm pkg2.rpm ... </screen>
             </para>
           </listitem>
           <listitem>
@@ -230,144 +296,166 @@
         </orderedlist>
       </listitem>
       <listitem>
-        <para>(Optional) For upgrades to Lustre software release 2.2 or higher, to enable wide
-          striping on an existing MDT, run the following command on the MDT
-          :<screen>mdt# tune2fs -O large_xattr <replaceable>device</replaceable></screen></para>
-        <para>For more information about wide striping, see <xref
-            xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_syy_gcl_qk"/>.</para>
+        <para>(Optional) For upgrades to Lustre software release 2.2 or higher,
+        to enable wide striping on an existing MDT, run the following command
+        on the MDT :
+        <screen>mdt# tune2fs -O large_xattr <replaceable>device</replaceable></screen></para>
+        <para>For more information about wide striping, see 
+        <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+        linkend="section_syy_gcl_qk" />.</para>
       </listitem>
       <listitem>
-        <para>(Optional) For upgrades to Lustre software release 2.4 or higher, to format an
-          additional MDT, complete these steps:<orderedlist numeration="loweralpha">
-            <listitem>
-              <para>Determine the index used for the first MDT (each MDT must have unique index).
-                Enter:<screen>client$ lctl dl | grep mdc
-36 UP mdc lustre-MDT0000-mdc-ffff88004edf3c00 
-      4c8be054-144f-9359-b063-8477566eb84e 5</screen></para>
-              <para>In this example, the next available index is 1.</para>
-            </listitem>
-            <listitem>
-              <para>Add the new block device as a new MDT at the next available index by entering
-                (on one
-                line):<screen>mds# mkfs.lustre --reformat --fsname=<replaceable>filesystem_name</replaceable> --mdt \
-    --mgsnode=<replaceable>mgsnode</replaceable> --index <replaceable>1</replaceable> <replaceable>/dev/mdt1_device</replaceable>
-		</screen></para>
-            </listitem>
-          </orderedlist></para>
-      </listitem>
-      <listitem>
-        <para>(Optional) If you are upgrading to Lustre software release 2.3 or higher from Lustre
-          software release 2.2 or earlier and want to enable the quota feature, complete these
-          steps: <orderedlist numeration="loweralpha">
-            <listitem>
-              <para>Before setting up the file system, enter on both the MDS and
-                OSTs:<screen>tunefs.lustre --quota</screen></para>
-            </listitem>
-            <listitem>
-              <para>When setting up the file system,
-                enter:<screen>conf_param $FSNAME.quota.mdt=$QUOTA_TYPE
-conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
-            </listitem>
-          </orderedlist></para>
-      </listitem>
-      <listitem>
-        <para>(Optional) If you are upgrading from Lustre software release 1.8, you must manually
-          enable the FID-in-dirent feature. On the MDS,
-          enter:<screen>tune2fs –O dirdata /dev/<replaceable>mdtdev</replaceable></screen></para>
-        <warning>
-          <para>This step is not reversible. Do not complete this step until you are sure you will
-            not be downgrading the Lustre software.</para>
-        </warning>
-        <para>This step only enables FID-in-dirent for newly created files. If you are upgrading to
-          Lustre software release 2.4, you can use LFSCK 1.5 to enable FID-in-dirent for existing
-          files. For more information about FID-in-dirent and related functionalities in LFSCK 1.5,
-          see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-            linkend="understandinglustre.storageio"/>.</para>
-      </listitem>
-      <listitem>
-        <para>Start the Lustre file system by starting the components in the order shown in the
-          following steps:</para>
+        <para>(Optional) For upgrades to Lustre software release 2.4 or higher,
+        to format an additional MDT, complete these steps:
         <orderedlist numeration="loweralpha">
           <listitem>
-            <para>Mount the MGT. On the MGS, run<screen>mgs# mount -a -t lustre</screen></para>
+            <para>Determine the index used for the first MDT (each MDT must
+            have unique index). Enter:
+            <screen>client$ lctl dl | grep mdc
+36 UP mdc lustre-MDT0000-mdc-ffff88004edf3c00 
+      4c8be054-144f-9359-b063-8477566eb84e 5</screen></para>
+            <para>In this example, the next available index is 1.</para>
           </listitem>
           <listitem>
-            <para>Mount the MDT(s). On each MDT, run:<screen>mds# mount -a -t lustre</screen></para>
+            <para>Add the new block device as a new MDT at the next available
+            index by entering (on one line):
+            <screen>mds# mkfs.lustre --reformat --fsname=<replaceable>filesystem_name</replaceable> --mdt \
+    --mgsnode=<replaceable>mgsnode</replaceable> --index <replaceable>1</replaceable> 
+<replaceable>/dev/mdt1_device</replaceable></screen></para>
+          </listitem>
+        </orderedlist></para>
+      </listitem>
+      <listitem>
+        <para>(Optional) If you are upgrading to Lustre software release 2.3 or
+        higher from Lustre software release 2.2 or earlier and want to enable
+        the quota feature, complete these steps: 
+        <orderedlist numeration="loweralpha">
+          <listitem>
+            <para>Before setting up the file system, enter on both the MDS and
+            OSTs:
+            <screen>tunefs.lustre --quota</screen></para>
+          </listitem>
+          <listitem>
+            <para>When setting up the file system, enter:
+            <screen>conf_param $FSNAME.quota.mdt=$QUOTA_TYPE
+conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
+          </listitem>
+        </orderedlist></para>
+      </listitem>
+      <listitem>
+        <para>(Optional) If you are upgrading from Lustre software release 1.8,
+        you must manually enable the FID-in-dirent feature. On the MDS, enter:
+        <screen>tune2fs –O dirdata /dev/<replaceable>mdtdev</replaceable></screen></para>
+        <warning>
+          <para>This step is not reversible. Do not complete this step until
+          you are sure you will not be downgrading the Lustre software.</para>
+        </warning>
+        <para condition='l24'>This step only enables FID-in-dirent for newly 
+        created files. If you are upgrading to Lustre software release 2.4, 
+        you can use LFSCK to enable FID-in-dirent for existing files. For 
+        more information about FID-in-dirent and related functionalities in 
+        LFSCK, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+        linkend="understandinglustre.storageio" />.</para>
+      </listitem>
+      <listitem>
+        <para>Start the Lustre file system by starting the components in the
+        order shown in the following steps:</para>
+        <orderedlist numeration="loweralpha">
+          <listitem>
+            <para>Mount the MGT. On the MGS, run
+            <screen>mgs# mount -a -t lustre</screen></para>
+          </listitem>
+          <listitem>
+            <para>Mount the MDT(s). On each MDT, run:
+            <screen>mds# mount -a -t lustre</screen></para>
           </listitem>
           <listitem>
             <para>Mount all the OSTs. On each OSS node, run:</para>
             <screen>oss# mount -a -t lustre</screen>
             <note>
-              <para>This command assumes that all the OSTs are listed in the
-                  <literal>/etc/fstab</literal> file. OSTs that are not listed in the
-                  <literal>/etc/fstab</literal> file, must be mounted individually by running the
-                mount command:</para>
-              <screen> mount -t lustre <replaceable>/dev/block_device</replaceable> <replaceable>/mount_point</replaceable> </screen>
+              <para>This command assumes that all the OSTs are listed in the 
+              <literal>/etc/fstab</literal> file. OSTs that are not listed in
+              the 
+              <literal>/etc/fstab</literal> file, must be mounted individually
+              by running the mount command:</para>
+              <screen>mount -t lustre <replaceable>/dev/block_device</replaceable><replaceable>/mount_point</replaceable></screen>
             </note>
           </listitem>
           <listitem>
-            <para>Mount the file system on the clients. On each client node, run:</para>
+            <para>Mount the file system on the clients. On each client node,
+            run:</para>
             <screen>client# mount -a -t lustre</screen>
           </listitem>
         </orderedlist>
       </listitem>
     </orderedlist>
     <note>
-      <para>The mounting order described in the steps above must be followed for the intial mount
-        and registration of a Lustre file system after an upgrade.  For a normal start of a Lustre
-        file system, the  mounting order is MGT, OSTs, MDT(s), clients.</para>
+      <para>The mounting order described in the steps above must be followed
+      for the intial mount and registration of a Lustre file system after an
+      upgrade. For a normal start of a Lustre file system, the mounting order
+      is MGT, OSTs, MDT(s), clients.</para>
     </note>
-    <para>If you have a problem upgrading a Lustre file system, see <xref
-        xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438198_30989"/> for some ways
-      to get help.</para>
+    <para>If you have a problem upgrading a Lustre file system, see 
+    <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+    linkend="dbdoclet.50438198_30989" />for some ways to get help.</para>
   </section>
   <section xml:id="Upgrading_2.x.x">
-    <title><indexterm>
-        <primary>upgrading</primary>
-        <secondary>2.X.y to 2.X.y (minor release)</secondary>
-      </indexterm>Upgrading to Lustre Software Release 2.x.y (Minor Release)</title>
-    <para>Rolling upgrades are supported for upgrading from any Lustre software release 2.x.y to a
-      more recent Lustre software release 2.X.y. This allows the Lustre file system to continue to
-      run while individual servers (or their failover partners) and clients are upgraded one at a
-      time. The procedure for upgrading a Lustre software release 2.x.y to a more recent minor
-      release is described in this section.</para>
-    <para>To upgrade Lustre software release 2.x.y to a more recent minor release, complete these
-      steps:</para>
+    <title>
+    <indexterm>
+      <primary>upgrading</primary>
+      <secondary>2.X.y to 2.X.y (minor release)</secondary>
+    </indexterm>Upgrading to Lustre Software Release 2.x.y (Minor
+    Release)</title>
+    <para>Rolling upgrades are supported for upgrading from any Lustre software
+    release 2.x.y to a more recent Lustre software release 2.X.y. This allows
+    the Lustre file system to continue to run while individual servers (or
+    their failover partners) and clients are upgraded one at a time. The
+    procedure for upgrading a Lustre software release 2.x.y to a more recent
+    minor release is described in this section.</para>
+    <para>To upgrade Lustre software release 2.x.y to a more recent minor
+    release, complete these steps:</para>
     <orderedlist>
       <listitem>
-        <para>Create a complete, restorable file system backup. </para>
+        <para>Create a complete, restorable file system backup.</para>
         <caution>
-          <para>Before installing the Lustre software, back up ALL data. The Lustre software
-            contains kernel modifications that interact with storage devices and may introduce
-            security issues and data loss if not installed, configured, or administered properly. If
-            a full backup of the file system is not practical, a device-level backup of the MDT file
-            system is recommended. See  <xref linkend="backupandrestore"/> for a procedure.</para>
+          <para>Before installing the Lustre software, back up ALL data. The
+          Lustre software contains kernel modifications that interact with
+          storage devices and may introduce security issues and data loss if
+          not installed, configured, or administered properly. If a full backup
+          of the file system is not practical, a device-level backup of the MDT
+          file system is recommended. See 
+          <xref linkend="backupandrestore" />for a procedure.</para>
         </caution>
       </listitem>
       <listitem>
-        <para>Download the Lustre server RPMs for your platform from the <link
-            xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">Lustre Releases</link>
-          repository. See <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-            linkend="table_cnh_5m3_gk"/> for a list of required packages.</para>
+        <para>Download the Lustre server RPMs for your platform from the 
+        <link xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">
+        Lustre Releases</link>repository. See 
+        <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+        linkend="table_cnh_5m3_gk" />for a list of required packages.</para>
       </listitem>
       <listitem>
-        <para>For a rolling upgrade, complete any procedures required to keep the Lustre file system
-          running while the server to be upgraded is offline, such as failing over a primary server
-          to its secondary partner. </para>
+        <para>For a rolling upgrade, complete any procedures required to keep
+        the Lustre file system running while the server to be upgraded is
+        offline, such as failing over a primary server to its secondary
+        partner.</para>
       </listitem>
       <listitem>
-        <para>Unmount the Lustre server to be upgraded (MGS, MDS, or OSS)</para>
+        <para>Unmount the Lustre server to be upgraded (MGS, MDS, or
+        OSS)</para>
       </listitem>
       <listitem>
         <para>Install the Lustre server packages on the Lustre server.</para>
         <orderedlist numeration="loweralpha">
           <listitem>
-            <para>Log onto the Lustre server as the <literal>root</literal> user</para>
+            <para>Log onto the Lustre server as the 
+            <literal>root</literal> user</para>
           </listitem>
           <listitem>
-            <para>Use the <literal>yum</literal> command to install the packages:</para>
+            <para>Use the 
+            <literal>yum</literal> command to install the packages:</para>
             <para>
-              <screen># yum --nogpgcheck install pkg1.rpm pkg2.rpm ...</screen>
+              <screen># yum --nogpgcheck install pkg1.rpm pkg2.rpm ... </screen>
             </para>
           </listitem>
           <listitem>
@@ -378,7 +466,8 @@ conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
           </listitem>
           <listitem>
             <para>Mount the Lustre server to restart the Lustre software on the
-              server:<screen>server# mount -a -t lustre</screen></para>
+            server:
+            <screen>server# mount -a -t lustre</screen></para>
           </listitem>
           <listitem>
             <para>Repeat these steps on each Lustre server.</para>
@@ -386,22 +475,25 @@ conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
         </orderedlist>
       </listitem>
       <listitem>
-        <para>Download the Lustre client RPMs for your platform from the <link
-            xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">Lustre Releases</link>
-          repository. See <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-            linkend="table_j3r_ym3_gk"/> for a list of required packages.</para>
+        <para>Download the Lustre client RPMs for your platform from the 
+        <link xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">
+        Lustre Releases</link>repository. See 
+        <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+        linkend="table_j3r_ym3_gk" />for a list of required packages.</para>
       </listitem>
       <listitem>
-        <para>Install the Lustre client packages on each of the Lustre clients to be
-          upgraded.</para>
+        <para>Install the Lustre client packages on each of the Lustre clients
+        to be upgraded.</para>
         <orderedlist numeration="loweralpha">
           <listitem>
-            <para>Log onto a Lustre client as the <literal>root</literal> user.</para>
+            <para>Log onto a Lustre client as the 
+            <literal>root</literal> user.</para>
           </listitem>
           <listitem>
-            <para>Use the <literal>yum</literal> command to install the packages:</para>
+            <para>Use the 
+            <literal>yum</literal> command to install the packages:</para>
             <para>
-              <screen># yum --nogpgcheck install pkg1.rpm pkg2.rpm ...</screen>
+              <screen># yum --nogpgcheck install pkg1.rpm pkg2.rpm ... </screen>
             </para>
           </listitem>
           <listitem>
@@ -412,7 +504,8 @@ conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
           </listitem>
           <listitem>
             <para>Mount the Lustre client to restart the Lustre software on the
-              client:<screen>client# mount -a -t lustre</screen></para>
+            client:
+            <screen>client# mount -a -t lustre</screen></para>
           </listitem>
           <listitem>
             <para>Repeat these steps on each Lustre client.</para>
@@ -420,8 +513,9 @@ conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
         </orderedlist>
       </listitem>
     </orderedlist>
-    <para>If you have a problem upgrading a Lustre file system, see <xref
-        xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438198_30989"/> for some
-      suggestions for how to get help.</para>
+    <para>If you have a problem upgrading a Lustre file system, see 
+    <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+    linkend="dbdoclet.50438198_30989" />for some suggestions for how to get
+    help.</para>
   </section>
 </chapter>

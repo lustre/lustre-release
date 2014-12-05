@@ -1,146 +1,302 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="backupandrestore">
-  <title xml:id="backupandrestore.title">Backing Up and Restoring a File System</title>
-  <para>This chapter describes how to backup and restore at the file system-level, device-level and
-    file-level in a Lustre file system. Each backup approach is described in the the following
-    sections:</para>
+<?xml version='1.0' encoding='utf-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+xml:id="backupandrestore">
+  <title xml:id="backupandrestore.title">Backing Up and Restoring a File
+  System</title>
+  <para>This chapter describes how to backup and restore at the file
+  system-level, device-level and file-level in a Lustre file system. Each
+  backup approach is described in the the following sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438207_56395"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438207_56395" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438207_71633"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438207_71633" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438207_21638"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438207_21638" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438207_22325"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438207_22325" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438207_31553"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438207_31553" />
+      </para>
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438207_56395">
-      <title>
-          <indexterm><primary>backup</primary></indexterm>
-          <indexterm><primary>restoring</primary><see>backup</see></indexterm>
-          <indexterm><primary>LVM</primary><see>backup</see></indexterm>
-          <indexterm><primary>rsync</primary><see>backup</see></indexterm>
-          Backing up a File System</title>
-    <para>Backing up a complete file system gives you full control over the files to back up, and
-      allows restoration of individual files as needed. File system-level backups are also the
-      easiest to integrate into existing backup solutions.</para>
-    <para>File system backups are performed from a Lustre client (or many clients working parallel in different directories) rather than on individual server nodes; this is no different than backing up any other file system.</para>
-    <para>However, due to the large size of most Lustre file systems, it is not always possible to get a complete backup. We recommend that you back up subsets of a file system. This includes subdirectories of the entire file system, filesets for a single user, files incremented by date, and so on.</para>
+    <title>
+    <indexterm>
+      <primary>backup</primary>
+    </indexterm>
+    <indexterm>
+      <primary>restoring</primary>
+      <see>backup</see>
+    </indexterm>
+    <indexterm>
+      <primary>LVM</primary>
+      <see>backup</see>
+    </indexterm>
+    <indexterm>
+      <primary>rsync</primary>
+      <see>backup</see>
+    </indexterm>Backing up a File System</title>
+    <para>Backing up a complete file system gives you full control over the
+    files to back up, and allows restoration of individual files as needed.
+    File system-level backups are also the easiest to integrate into existing
+    backup solutions.</para>
+    <para>File system backups are performed from a Lustre client (or many
+    clients working parallel in different directories) rather than on
+    individual server nodes; this is no different than backing up any other
+    file system.</para>
+    <para>However, due to the large size of most Lustre file systems, it is not
+    always possible to get a complete backup. We recommend that you back up
+    subsets of a file system. This includes subdirectories of the entire file
+    system, filesets for a single user, files incremented by date, and so
+    on.</para>
     <note>
-      <para>In order to allow the file system namespace to scale for future applications, Lustre
-        software release 2.x internally uses a 128-bit file identifier for all files. To interface
-        with user applications, the Lustre software presents 64-bit inode numbers for the
-          <literal>stat()</literal>, <literal>fstat()</literal>, and <literal>readdir()</literal>
-        system calls on 64-bit applications, and 32-bit inode numbers to 32-bit applications.</para>
-      <para>Some 32-bit applications accessing Lustre file systems (on both 32-bit and 64-bit CPUs)
-        may experience problems with the <literal>stat()</literal>, <literal>fstat()</literal>
-          or<literal> readdir()</literal> system calls under certain circumstances, though the
-        Lustre client should return 32-bit inode numbers to these applications.</para>
-      <para>In particular, if the Lustre file system is exported from a 64-bit client via NFS to a
-        32-bit client, the Linux NFS server will export 64-bit inode numbers to applications running
-        on the NFS client. If the 32-bit applications are not compiled with Large File Support
-        (LFS), then they return <literal>EOVERFLOW</literal> errors when accessing the Lustre files.
-        To avoid this problem, Linux NFS clients can use the kernel command-line option
-          &quot;<literal>nfs.enable_ino64=0</literal>&quot; in order to force the NFS client to
-        export 32-bit inode numbers to the client.</para>
-      <para><emphasis role="bold">Workaround</emphasis>: We very strongly recommend that backups using <literal>tar(1)</literal> and other utilities that depend on the inode number to uniquely identify an inode to be run on 64-bit clients. The 128-bit Lustre file identifiers cannot be uniquely mapped to a 32-bit inode number, and as a result these utilities may operate incorrectly on 32-bit clients.</para>
+      <para>In order to allow the file system namespace to scale for future
+      applications, Lustre software release 2.x internally uses a 128-bit file
+      identifier for all files. To interface with user applications, the Lustre
+      software presents 64-bit inode numbers for the 
+      <literal>stat()</literal>, 
+      <literal>fstat()</literal>, and 
+      <literal>readdir()</literal> system calls on 64-bit applications, and
+      32-bit inode numbers to 32-bit applications.</para>
+      <para>Some 32-bit applications accessing Lustre file systems (on both
+      32-bit and 64-bit CPUs) may experience problems with the 
+      <literal>stat()</literal>, 
+      <literal>fstat()</literal> or
+      <literal>readdir()</literal> system calls under certain circumstances,
+      though the Lustre client should return 32-bit inode numbers to these
+      applications.</para>
+      <para>In particular, if the Lustre file system is exported from a 64-bit
+      client via NFS to a 32-bit client, the Linux NFS server will export
+      64-bit inode numbers to applications running on the NFS client. If the
+      32-bit applications are not compiled with Large File Support (LFS), then
+      they return 
+      <literal>EOVERFLOW</literal> errors when accessing the Lustre files. To
+      avoid this problem, Linux NFS clients can use the kernel command-line
+      option "
+      <literal>nfs.enable_ino64=0</literal>" in order to force the NFS client
+      to export 32-bit inode numbers to the client.</para>
+      <para>
+      <emphasis role="bold">Workaround</emphasis>: We very strongly recommend
+      that backups using 
+      <literal>tar(1)</literal> and other utilities that depend on the inode
+      number to uniquely identify an inode to be run on 64-bit clients. The
+      128-bit Lustre file identifiers cannot be uniquely mapped to a 32-bit
+      inode number, and as a result these utilities may operate incorrectly on
+      32-bit clients.</para>
     </note>
     <section remap="h3">
-      <title><indexterm><primary>backup</primary><secondary>rsync</secondary></indexterm>Lustre_rsync</title>
-      <para>The <literal>lustre_rsync </literal>feature keeps the entire file system in sync on a backup by replicating the file system&apos;s changes to a second file system (the second file system need not be a Lustre file system, but it must be sufficiently large). <literal>lustre_rsync </literal>uses Lustre changelogs to efficiently synchronize the file systems without having to scan (directory walk) the Lustre file system. This efficiency is critically important for large file systems, and distinguishes the Lustre <literal>lustre_rsync</literal> feature from other replication/backup solutions.</para>
+      <title>
+      <indexterm>
+        <primary>backup</primary>
+        <secondary>rsync</secondary>
+      </indexterm>Lustre_rsync</title>
+      <para>The 
+      <literal>lustre_rsync</literal> feature keeps the entire file system in
+      sync on a backup by replicating the file system's changes to a second
+      file system (the second file system need not be a Lustre file system, but
+      it must be sufficiently large). 
+      <literal>lustre_rsync</literal> uses Lustre changelogs to efficiently
+      synchronize the file systems without having to scan (directory walk) the
+      Lustre file system. This efficiency is critically important for large
+      file systems, and distinguishes the Lustre 
+      <literal>lustre_rsync</literal> feature from other replication/backup
+      solutions.</para>
       <section remap="h4">
-          <title><indexterm><primary>backup</primary><secondary>rsync</secondary><tertiary>using</tertiary></indexterm>Using Lustre_rsync</title>
-        <para>The <literal>lustre_rsync</literal> feature works by periodically running <literal>lustre_rsync</literal>, a userspace program used to synchronize changes in the Lustre file system onto the target file system. The <literal>lustre_rsync</literal> utility keeps a status file, which enables it to be safely interrupted and restarted without losing synchronization between the file systems.</para>
-        <para>The first time that <literal>lustre_rsync</literal> is run, the user must specify a set of parameters for the program to use. These parameters are described in the following table and in <xref linkend="dbdoclet.50438219_63667"/>. On subsequent runs, these parameters are stored in the the status file, and only the name of the status file needs to be passed to <literal>lustre_rsync</literal>.</para>
-        <para>Before using <literal>lustre_rsync</literal>:</para>
+        <title>
+        <indexterm>
+          <primary>backup</primary>
+          <secondary>rsync</secondary>
+          <tertiary>using</tertiary>
+        </indexterm>Using Lustre_rsync</title>
+        <para>The 
+        <literal>lustre_rsync</literal> feature works by periodically running 
+        <literal>lustre_rsync</literal>, a userspace program used to
+        synchronize changes in the Lustre file system onto the target file
+        system. The 
+        <literal>lustre_rsync</literal> utility keeps a status file, which
+        enables it to be safely interrupted and restarted without losing
+        synchronization between the file systems.</para>
+        <para>The first time that 
+        <literal>lustre_rsync</literal> is run, the user must specify a set of
+        parameters for the program to use. These parameters are described in
+        the following table and in 
+        <xref linkend="dbdoclet.50438219_63667" />. On subsequent runs, these
+        parameters are stored in the the status file, and only the name of the
+        status file needs to be passed to 
+        <literal>lustre_rsync</literal>.</para>
+        <para>Before using 
+        <literal>lustre_rsync</literal>:</para>
         <itemizedlist>
           <listitem>
-            <para>Register the changelog user. For details, see the <xref linkend="systemconfigurationutilities"/> (<literal>changelog_register</literal>) parameter in the <xref linkend="systemconfigurationutilities"/> (<literal>lctl</literal>).</para>
+            <para>Register the changelog user. For details, see the 
+            <xref linkend="systemconfigurationutilities" />(
+            <literal>changelog_register</literal>) parameter in the 
+            <xref linkend="systemconfigurationutilities" />(
+            <literal>lctl</literal>).</para>
           </listitem>
         </itemizedlist>
         <para>- AND -</para>
         <itemizedlist>
           <listitem>
-            <para>Verify that the Lustre file system (source) and the replica file system (target) are identical <emphasis>before</emphasis> registering the changelog user. If the file systems are discrepant, use a utility, e.g. regular <literal>rsync</literal> (not <literal>lustre_rsync</literal>), to make them identical.</para>
+            <para>Verify that the Lustre file system (source) and the replica
+            file system (target) are identical 
+            <emphasis>before</emphasis>registering the changelog user. If the
+            file systems are discrepant, use a utility, e.g. regular 
+            <literal>rsync</literal>(not 
+            <literal>lustre_rsync</literal>), to make them identical.</para>
           </listitem>
         </itemizedlist>
-        <para>The <literal>lustre_rsync</literal> utility uses the following parameters:</para>
+        <para>The 
+        <literal>lustre_rsync</literal> utility uses the following
+        parameters:</para>
         <informaltable frame="all">
           <tgroup cols="2">
-            <colspec colname="c1" colwidth="3*"/>
-            <colspec colname="c2" colwidth="10*"/>
+            <colspec colname="c1" colwidth="3*" />
+            <colspec colname="c2" colwidth="10*" />
             <thead>
               <row>
                 <entry>
-                  <para><emphasis role="bold">Parameter</emphasis></para>
+                  <para>
+                    <emphasis role="bold">Parameter</emphasis>
+                  </para>
                 </entry>
                 <entry>
-                  <para><emphasis role="bold">Description</emphasis></para>
+                  <para>
+                    <emphasis role="bold">Description</emphasis>
+                  </para>
                 </entry>
               </row>
             </thead>
             <tbody>
               <row>
                 <entry>
-                  <para> <literal>--source=<replaceable>src</replaceable></literal></para>
+                  <para>
+                    <literal>--source=
+                    <replaceable>src</replaceable></literal>
+                  </para>
                 </entry>
                 <entry>
-                  <para>The path to the root of the Lustre file system (source) which will be synchronized. This is a mandatory option if a valid status log created during a previous synchronization operation (<literal>--statuslog</literal>) is not specified.</para>
-                </entry>
-              </row>
-              <row>
-                <entry>
-                  <para> <literal>--target=<replaceable>tgt</replaceable></literal></para>
-                </entry>
-                <entry>
-                  <para>The path to the root where the source file system will be synchronized (target). This is a mandatory option if the status log created during a previous synchronization operation (<literal>--statuslog</literal>) is not specified. This option can be repeated if multiple synchronization targets are desired.</para>
-                </entry>
-              </row>
-              <row>
-                <entry>
-                  <para> <literal>--mdt=<replaceable>mdt</replaceable></literal></para>
-                </entry>
-                <entry>
-                  <para>The metadata device to be synchronized. A changelog user must be registered for this device. This is a mandatory option if a valid status log created during a previous synchronization operation (<literal>--statuslog</literal>) is not specified.</para>
+                  <para>The path to the root of the Lustre file system (source)
+                  which will be synchronized. This is a mandatory option if a
+                  valid status log created during a previous synchronization
+                  operation (
+                  <literal>--statuslog</literal>) is not specified.</para>
                 </entry>
               </row>
               <row>
                 <entry>
-                  <para> <literal>--user=<replaceable>userid</replaceable></literal></para>
+                  <para>
+                    <literal>--target=
+                    <replaceable>tgt</replaceable></literal>
+                  </para>
                 </entry>
                 <entry>
-                  <para>The changelog user ID for the specified MDT. To use <literal>lustre_rsync</literal>, the changelog user must be registered. For details, see the <literal>changelog_register</literal> parameter in <xref linkend="systemconfigurationutilities"/> (<literal>lctl</literal>). This is a mandatory option if a valid status log created during a previous synchronization operation (<literal>--statuslog</literal>) is not specified.</para>
-                </entry>
-              </row>
-              <row>
-                <entry>
-                  <para> <literal>--statuslog=<replaceable>log</replaceable></literal></para>
-                </entry>
-                <entry>
-                  <para>A log file to which synchronization status is saved. When the <literal>lustre_rsync</literal> utility starts, if the status log from a previous synchronization operation is specified, then the state is read from the log and otherwise mandatory <literal>--source</literal>, <literal>--target</literal> and <literal>--mdt</literal> options can be skipped. Specifying the <literal>--source</literal>, <literal>--target</literal> and/or <literal>--mdt</literal> options, in addition to the <literal>--statuslog</literal> option, causes the specified parameters in the status log to be overridden. Command line options take precedence over options in the status log.</para>
-                </entry>
-              </row>
-              <row>
-                <entry>
-                  <literal> --xattr <replaceable>yes|no</replaceable> </literal>
-                </entry>
-                <entry>
-                  <para>Specifies whether extended attributes (<literal>xattrs</literal>) are synchronized or not. The default is to synchronize extended attributes.</para>
-                  <para><note>
-                      <para>Disabling xattrs causes Lustre striping information not to be synchronized.</para>
-                    </note></para>
+                  <para>The path to the root where the source file system will
+                  be synchronized (target). This is a mandatory option if the
+                  status log created during a previous synchronization
+                  operation (
+                  <literal>--statuslog</literal>) is not specified. This option
+                  can be repeated if multiple synchronization targets are
+                  desired.</para>
                 </entry>
               </row>
               <row>
                 <entry>
-                  <para> <literal>--verbose</literal></para>
+                  <para>
+                    <literal>--mdt=
+                    <replaceable>mdt</replaceable></literal>
+                  </para>
+                </entry>
+                <entry>
+                  <para>The metadata device to be synchronized. A changelog
+                  user must be registered for this device. This is a mandatory
+                  option if a valid status log created during a previous
+                  synchronization operation (
+                  <literal>--statuslog</literal>) is not specified.</para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para>
+                    <literal>--user=
+                    <replaceable>userid</replaceable></literal>
+                  </para>
+                </entry>
+                <entry>
+                  <para>The changelog user ID for the specified MDT. To use 
+                  <literal>lustre_rsync</literal>, the changelog user must be
+                  registered. For details, see the 
+                  <literal>changelog_register</literal> parameter in 
+                  <xref linkend="systemconfigurationutilities" />(
+                  <literal>lctl</literal>). This is a mandatory option if a
+                  valid status log created during a previous synchronization
+                  operation (
+                  <literal>--statuslog</literal>) is not specified.</para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para>
+                    <literal>--statuslog=
+                    <replaceable>log</replaceable></literal>
+                  </para>
+                </entry>
+                <entry>
+                  <para>A log file to which synchronization status is saved.
+                  When the 
+                  <literal>lustre_rsync</literal> utility starts, if the status
+                  log from a previous synchronization operation is specified,
+                  then the state is read from the log and otherwise mandatory 
+                  <literal>--source</literal>, 
+                  <literal>--target</literal> and 
+                  <literal>--mdt</literal> options can be skipped. Specifying
+                  the 
+                  <literal>--source</literal>, 
+                  <literal>--target</literal> and/or 
+                  <literal>--mdt</literal> options, in addition to the 
+                  <literal>--statuslog</literal> option, causes the specified
+                  parameters in the status log to be overridden. Command line
+                  options take precedence over options in the status
+                  log.</para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <literal>--xattr 
+                  <replaceable>yes|no</replaceable></literal>
+                </entry>
+                <entry>
+                  <para>Specifies whether extended attributes (
+                  <literal>xattrs</literal>) are synchronized or not. The
+                  default is to synchronize extended attributes.</para>
+                  <para>
+                    <note>
+                      <para>Disabling xattrs causes Lustre striping information
+                      not to be synchronized.</para>
+                    </note>
+                  </para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para>
+                    <literal>--verbose</literal>
+                  </para>
                 </entry>
                 <entry>
                   <para>Produces verbose output.</para>
@@ -148,18 +304,28 @@
               </row>
               <row>
                 <entry>
-                  <para> <literal>--dry-run</literal></para>
+                  <para>
+                    <literal>--dry-run</literal>
+                  </para>
                 </entry>
                 <entry>
-                  <para>Shows the output of <literal>lustre_rsync</literal> commands (<literal>copy</literal>, <literal>mkdir</literal>, etc.) on the target file system without actually executing them.</para>
+                  <para>Shows the output of 
+                  <literal>lustre_rsync</literal> commands (
+                  <literal>copy</literal>, 
+                  <literal>mkdir</literal>, etc.) on the target file system
+                  without actually executing them.</para>
                 </entry>
               </row>
               <row>
                 <entry>
-                  <para> <literal>--abort-on-err</literal></para>
+                  <para>
+                    <literal>--abort-on-err</literal>
+                  </para>
                 </entry>
                 <entry>
-                  <para>Stops processing the <literal>lustre_rsync</literal> operation if an error occurs. The default is to continue the operation.</para>
+                  <para>Stops processing the 
+                  <literal>lustre_rsync</literal> operation if an error occurs.
+                  The default is to continue the operation.</para>
                 </entry>
               </row>
             </tbody>
@@ -167,12 +333,22 @@
         </informaltable>
       </section>
       <section remap="h4">
-          <title><indexterm><primary>backup</primary><secondary>rsync</secondary><tertiary>examples</tertiary></indexterm><literal>lustre_rsync</literal> Examples</title>
-        <para>Sample <literal>lustre_rsync</literal> commands are listed below.</para>
-        <para>Register a changelog user for an MDT (e.g. <literal>testfs-MDT0000</literal>).</para>
+        <title>
+        <indexterm>
+          <primary>backup</primary>
+          <secondary>rsync</secondary>
+          <tertiary>examples</tertiary>
+        </indexterm>
+        <literal>lustre_rsync</literal> Examples</title>
+        <para>Sample 
+        <literal>lustre_rsync</literal> commands are listed below.</para>
+        <para>Register a changelog user for an MDT (e.g. 
+        <literal>testfs-MDT0000</literal>).</para>
         <screen># lctl --device testfs-MDT0000 changelog_register testfs-MDT0000
-Registered changelog userid &apos;cl1&apos;</screen>
-        <para>Synchronize a Lustre file system (<literal>/mnt/lustre</literal>) to a target file system (<literal>/mnt/target</literal>).</para>
+Registered changelog userid 'cl1'</screen>
+        <para>Synchronize a Lustre file system (
+        <literal>/mnt/lustre</literal>) to a target file system (
+        <literal>/mnt/target</literal>).</para>
         <screen>$ lustre_rsync --source=/mnt/lustre --target=/mnt/target \
            --mdt=testfs-MDT0000 --user=cl1 --statuslog sync.log  --verbose 
 Lustre filesystem: testfs 
@@ -185,7 +361,10 @@ Starting changelog record: 0
 Errors: 0 
 lustre_rsync took 1 seconds 
 Changelog records consumed: 22</screen>
-        <para>After the file system undergoes changes, synchronize the changes onto the target file system. Only the <literal>statuslog</literal> name needs to be specified, as it has all the parameters passed earlier.</para>
+        <para>After the file system undergoes changes, synchronize the changes
+        onto the target file system. Only the 
+        <literal>statuslog</literal> name needs to be specified, as it has all
+        the parameters passed earlier.</para>
         <screen>$ lustre_rsync --statuslog sync.log --verbose 
 Replicating Lustre filesystem: testfs 
 MDT device: testfs-MDT0000 
@@ -197,7 +376,10 @@ Starting changelog record: 22
 Errors: 0 
 lustre_rsync took 2 seconds 
 Changelog records consumed: 42</screen>
-        <para>To synchronize a Lustre file system (<literal>/mnt/lustre</literal>) to two target file systems (<literal>/mnt/target1</literal> and <literal>/mnt/target2</literal>).</para>
+        <para>To synchronize a Lustre file system (
+        <literal>/mnt/lustre</literal>) to two target file systems (
+        <literal>/mnt/target1</literal> and 
+        <literal>/mnt/target2</literal>).</para>
         <screen>$ lustre_rsync --source=/mnt/lustre --target=/mnt/target1 \
            --target=/mnt/target2 --mdt=testfs-MDT0000 --user=cl1  \
            --statuslog sync.log</screen>
@@ -205,117 +387,210 @@ Changelog records consumed: 42</screen>
     </section>
   </section>
   <section xml:id="dbdoclet.50438207_71633">
-      <title><indexterm><primary>backup</primary><secondary>MDS/OST device level</secondary></indexterm>Backing Up and Restoring an MDS or OST (Device Level)</title>
-    <para>In some cases, it is useful to do a full device-level backup of an individual device (MDT or OST), before replacing hardware, performing maintenance, etc. Doing full device-level backups ensures that all of the data and configuration files is preserved in the original state and is the easiest method of doing a backup. For the MDT file system, it may also be the fastest way to perform the backup and restore, since it can do large streaming read and write operations at the maximum bandwidth of the underlying devices.</para>
+    <title>
+    <indexterm>
+      <primary>backup</primary>
+      <secondary>MDS/OST device level</secondary>
+    </indexterm>Backing Up and Restoring an MDS or OST (Device Level)</title>
+    <para>In some cases, it is useful to do a full device-level backup of an
+    individual device (MDT or OST), before replacing hardware, performing
+    maintenance, etc. Doing full device-level backups ensures that all of the
+    data and configuration files is preserved in the original state and is the
+    easiest method of doing a backup. For the MDT file system, it may also be
+    the fastest way to perform the backup and restore, since it can do large
+    streaming read and write operations at the maximum bandwidth of the
+    underlying devices.</para>
     <note>
-      <para>Keeping an updated full backup of the MDT is especially important because a permanent failure of the MDT file system renders the much larger amount of data in all the OSTs largely inaccessible and unusable.</para>
+      <para>Keeping an updated full backup of the MDT is especially important
+      because a permanent failure of the MDT file system renders the much
+      larger amount of data in all the OSTs largely inaccessible and
+      unusable.</para>
     </note>
     <warning condition='l23'>
-        <para>In Lustre software release 2.0 through 2.2, the only successful way to backup and
-        restore an MDT is to do a device-level backup as is described in this section. File-level
-        restore of an MDT is not possible before Lustre software release 2.3, as the Object Index
-        (OI) file cannot be rebuilt after restore without the OI Scrub functionality. <emphasis
-          role="bold">Since Lustre software release 2.3</emphasis>, Object Index files are
-        automatically rebuilt at first mount after a restore is detected (see <link
-          xl:href="http://jira.hpdd.intel.com/browse/LU-957">LU-957</link>), and file-level backup
-        is supported (see <xref linkend="dbdoclet.50438207_21638"/>).</para>
+      <para>In Lustre software release 2.0 through 2.2, the only successful way
+      to backup and restore an MDT is to do a device-level backup as is
+      described in this section. File-level restore of an MDT is not possible
+      before Lustre software release 2.3, as the Object Index (OI) file cannot
+      be rebuilt after restore without the OI Scrub functionality. 
+      <emphasis role="bold">Since Lustre software release 2.3</emphasis>,
+      Object Index files are automatically rebuilt at first mount after a
+      restore is detected (see 
+      <link xl:href="http://jira.hpdd.intel.com/browse/LU-957">LU-957</link>),
+      and file-level backup is supported (see 
+      <xref linkend="dbdoclet.50438207_21638" />).</para>
     </warning>
-    <para>If hardware replacement is the reason for the backup or if a spare storage device is available, it is possible to do a raw copy of the MDT or OST from one block device to the other, as long as the new device is at least as large as the original device. To do this, run:</para>
+    <para>If hardware replacement is the reason for the backup or if a spare
+    storage device is available, it is possible to do a raw copy of the MDT or
+    OST from one block device to the other, as long as the new device is at
+    least as large as the original device. To do this, run:</para>
     <screen>dd if=/dev/{original} of=/dev/{newdev} bs=1M</screen>
-    <para>If hardware errors cause read problems on the original device, use the command below to allow as much data as possible to be read from the original device while skipping sections of the disk with errors:</para>
+    <para>If hardware errors cause read problems on the original device, use
+    the command below to allow as much data as possible to be read from the
+    original device while skipping sections of the disk with errors:</para>
     <screen>dd if=/dev/{original} of=/dev/{newdev} bs=4k conv=sync,noerror /
       count={original size in 4kB blocks}</screen>
-    <para>Even in the face of hardware errors, the <literal>ldiskfs</literal>
-    file system is very robust and it may be possible to recover the file
-    system data after running <literal>e2fsck -fy /dev/{newdev}</literal> on
-    the new device, along with <literal>ll_recover_lost_found_objs</literal>
-    for OST devices.</para>
+    <para>Even in the face of hardware errors, the 
+    <literal>ldiskfs</literal> file system is very robust and it may be possible
+    to recover the file system data after running 
+    <literal>e2fsck -fy /dev/{newdev}</literal> on the new device, along with 
+    <literal>ll_recover_lost_found_objs</literal> for OST devices.</para>
     <para condition="l26">With Lustre software version 2.6 and later, there is
-    no longer a need to run <literal>ll_recover_lost_found_objs</literal> on
-    the OSTs, since the <literal>LFSCK</literal> scanning will automatically
-    move objects from <literal>lost+found</literal> back into its correct
-    location on the OST after directory corruption.</para>
+    no longer a need to run 
+    <literal>ll_recover_lost_found_objs</literal> on the OSTs, since the 
+    <literal>LFSCK</literal> scanning will automatically move objects from 
+    <literal>lost+found</literal> back into its correct location on the OST
+    after directory corruption.</para>
   </section>
   <section xml:id="dbdoclet.50438207_21638">
-      <title><indexterm><primary>backup</primary><secondary>OST file system</secondary></indexterm><indexterm><primary>backup</primary><secondary>MDT file system</secondary></indexterm>Making a File-Level Backup of an OST or MDT File System</title>
-    <para>This procedure provides an alternative to backup or migrate the data of an OST or MDT at the file level. At the file-level, unused space is omitted from the backed up and the process may be completed quicker with smaller total backup size. Backing up a single OST device is not necessarily the best way to perform backups of the Lustre file system, since the files stored in the backup are not usable without metadata stored on the MDT and additional file stripes that may be on other OSTs. However, it is the preferred method for migration of OST devices, especially when it is desirable to reformat the underlying file system with different configuration options or to reduce fragmentation.</para>
+    <title>
+    <indexterm>
+      <primary>backup</primary>
+      <secondary>OST file system</secondary>
+    </indexterm>
+    <indexterm>
+      <primary>backup</primary>
+      <secondary>MDT file system</secondary>
+    </indexterm>Making a File-Level Backup of an OST or MDT File System</title>
+    <para>This procedure provides an alternative to backup or migrate the data
+    of an OST or MDT at the file level. At the file-level, unused space is
+    omitted from the backed up and the process may be completed quicker with
+    smaller total backup size. Backing up a single OST device is not
+    necessarily the best way to perform backups of the Lustre file system,
+    since the files stored in the backup are not usable without metadata stored
+    on the MDT and additional file stripes that may be on other OSTs. However,
+    it is the preferred method for migration of OST devices, especially when it
+    is desirable to reformat the underlying file system with different
+    configuration options or to reduce fragmentation.</para>
     <note>
-        <para>Prior to Lustre software release 2.3, the only successful way to perform an MDT backup
-        and restore is to do a device-level backup as is described in <xref
-          linkend="dbdoclet.50438207_71633"/>. The ability to do MDT file-level backups is not
-        available for Lustre software release 2.0 through 2.2, because restoration of the Object
-        Index (OI) file does not return the MDT to a functioning state. <emphasis role="bold">Since
-          Lustre software release 2.3</emphasis>, Object Index files are automatically rebuilt at
-        first mount after a restore is detected (see <link
-          xl:href="http://jira.hpdd.intel.com/browse/LU-957">LU-957</link>), so file-level MDT
-        restore is supported.</para>
+      <para>Prior to Lustre software release 2.3, the only successful way to
+      perform an MDT backup and restore is to do a device-level backup as is
+      described in 
+      <xref linkend="dbdoclet.50438207_71633" />. The ability to do MDT
+      file-level backups is not available for Lustre software release 2.0
+      through 2.2, because restoration of the Object Index (OI) file does not
+      return the MDT to a functioning state. 
+      <emphasis role="bold">Since Lustre software release 2.3</emphasis>,
+      Object Index files are automatically rebuilt at first mount after a
+      restore is detected (see 
+      <link xl:href="http://jira.hpdd.intel.com/browse/LU-957">LU-957</link>),
+      so file-level MDT restore is supported.</para>
     </note>
-    <para>For Lustre software release 2.3 and newer with MDT file-level backup support, substitute
-        <literal>mdt</literal> for <literal>ost</literal> in the instructions below.</para>
+    <para>For Lustre software release 2.3 and newer with MDT file-level backup
+    support, substitute 
+    <literal>mdt</literal> for 
+    <literal>ost</literal> in the instructions below.</para>
     <orderedlist>
       <listitem>
-        <para><emphasis role="bold">Make a mountpoint for the file system.</emphasis></para>
+        <para>
+          <emphasis role="bold">Make a mountpoint for the file
+          system.</emphasis>
+        </para>
         <screen>[oss]# mkdir -p /mnt/ost</screen>
       </listitem>
       <listitem>
-        <para><emphasis role="bold">Mount the file system.</emphasis></para>
+        <para>
+          <emphasis role="bold">Mount the file system.</emphasis>
+        </para>
         <screen>[oss]# mount -t ldiskfs /dev/<emphasis>{ostdev}</emphasis> /mnt/ost</screen>
       </listitem>
       <listitem>
-        <para><emphasis role="bold">Change to the mountpoint being backed up.</emphasis></para>
+        <para>
+          <emphasis role="bold">Change to the mountpoint being backed
+          up.</emphasis>
+        </para>
         <screen>[oss]# cd /mnt/ost</screen>
       </listitem>
       <listitem>
-        <para><emphasis role="bold">Back up the extended attributes.</emphasis></para>
-        <screen>[oss]# getfattr -R -d -m &apos;.*&apos; -e hex -P . &gt; ea-$(date +%Y%m%d).bak</screen>
+        <para>
+          <emphasis role="bold">Back up the extended attributes.</emphasis>
+        </para>
+        <screen>[oss]# getfattr -R -d -m '.*' -e hex -P . &gt; ea-$(date +%Y%m%d).bak</screen>
         <note>
-          <para>If the <literal>tar(1)</literal> command supports the <literal>--xattr</literal> option, the <literal>getfattr</literal> step may be unnecessary as long as tar does a backup of the <literal>trusted.*</literal> attributes. However, completing this step is not harmful and can serve as an added safety measure.</para>
+          <para>If the 
+          <literal>tar(1)</literal> command supports the 
+          <literal>--xattr</literal> option, the 
+          <literal>getfattr</literal> step may be unnecessary as long as tar
+          does a backup of the 
+          <literal>trusted.*</literal> attributes. However, completing this step
+          is not harmful and can serve as an added safety measure.</para>
         </note>
         <note>
-          <para>In most distributions, the <literal>getfattr</literal> command is part of the <literal>attr</literal> package. If the <literal>getfattr</literal> command returns errors like <literal>Operation not supported</literal>, then the kernel does not correctly support EAs. Stop and use a different backup method.</para>
+          <para>In most distributions, the 
+          <literal>getfattr</literal> command is part of the 
+          <literal>attr</literal> package. If the 
+          <literal>getfattr</literal> command returns errors like 
+          <literal>Operation not supported</literal>, then the kernel does not
+          correctly support EAs. Stop and use a different backup method.</para>
         </note>
       </listitem>
       <listitem>
-        <para><emphasis role="bold">Verify that the <literal>ea-$date.bak</literal> file has properly backed up the EA data on the OST.</emphasis></para>
-        <para>Without this attribute data, the restore process may be missing extra data that can be very useful in case of later file system corruption. Look at this file with more or a text editor. Each object file should have a corresponding item similar to this:</para>
+        <para>
+          <emphasis role="bold">Verify that the 
+          <literal>ea-$date.bak</literal> file has properly backed up the EA
+          data on the OST.</emphasis>
+        </para>
+        <para>Without this attribute data, the restore process may be missing
+        extra data that can be very useful in case of later file system
+        corruption. Look at this file with more or a text editor. Each object
+        file should have a corresponding item similar to this:</para>
         <screen>[oss]# file: O/0/d0/100992
 trusted.fid= \
 0x0d822200000000004a8a73e500000000808a0100000000000000000000000000</screen>
       </listitem>
       <listitem>
-        <para><emphasis role="bold">Back up all file system data.</emphasis></para>
+        <para>
+          <emphasis role="bold">Back up all file system data.</emphasis>
+        </para>
         <screen>[oss]# tar czvf {backup file}.tgz [--xattrs] --sparse .</screen>
         <note>
-            <para>The tar <literal>--sparse</literal> option is vital for backing up an MDT. In
-            order to have <literal>--sparse</literal> behave correctly, and complete the backup of
-            and MDT in finite time, the version of tar must be specified. Correctly functioning
-            versions of tar include the Lustre software enhanced version of tar at <link
-              xmlns:xlink="http://www.w3.org/1999/xlink"
-              xlink:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Tools#LustreTools-lustre-tar"
-            />, the tar from a Red Hat Enterprise Linux distribution (version 6.3 or more recent)
-            and the GNU tar version 1.25 or more recent.</para>
+          <para>The tar 
+          <literal>--sparse</literal> option is vital for backing up an MDT. In
+          order to have 
+          <literal>--sparse</literal> behave correctly, and complete the backup
+          of and MDT in finite time, the version of tar must be specified.
+          Correctly functioning versions of tar include the Lustre software
+          enhanced version of tar at 
+          <link xmlns:xlink="http://www.w3.org/1999/xlink"
+          xlink:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Tools#LustreTools-lustre-tar" />,
+          the tar from a Red Hat Enterprise Linux distribution (version 6.3 or
+          more recent) and the GNU tar version 1.25 or more recent.</para>
         </note>
         <warning>
-            <para>The tar <literal>--xattrs</literal> option is only available
-	    in GNU tar distributions from Red Hat or Intel.</para>
+          <para>The tar 
+          <literal>--xattrs</literal> option is only available in GNU tar
+          distributions from Red Hat or Intel.</para>
         </warning>
       </listitem>
       <listitem>
-        <para><emphasis role="bold">Change directory out of the file system.</emphasis></para>
+        <para>
+          <emphasis role="bold">Change directory out of the file
+          system.</emphasis>
+        </para>
         <screen>[oss]# cd -</screen>
       </listitem>
       <listitem>
-        <para><emphasis role="bold">Unmount the file system.</emphasis></para>
+        <para>
+          <emphasis role="bold">Unmount the file system.</emphasis>
+        </para>
         <screen>[oss]# umount /mnt/ost</screen>
         <note>
-          <para>When restoring an OST backup on a different node as part of an OST migration, you also have to change server NIDs and use the <literal>--writeconf</literal> command to re-generate the configuration logs. See <xref linkend="lustremaintenance"/> (Changing a Server NID).</para>
+          <para>When restoring an OST backup on a different node as part of an
+          OST migration, you also have to change server NIDs and use the 
+          <literal>--writeconf</literal> command to re-generate the
+          configuration logs. See 
+          <xref linkend="lustremaintenance" />(Changing a Server NID).</para>
         </note>
       </listitem>
     </orderedlist>
   </section>
   <section xml:id="dbdoclet.50438207_22325">
-    <title><indexterm><primary>backup</primary><secondary>restoring file system backup</secondary></indexterm>Restoring a File-Level Backup</title>
-    <para>To restore data from a file-level backup, you need to format the device, restore the file data and then restore the EA data.</para>
+    <title>
+    <indexterm>
+      <primary>backup</primary>
+      <secondary>restoring file system backup</secondary>
+    </indexterm>Restoring a File-Level Backup</title>
+    <para>To restore data from a file-level backup, you need to format the
+    device, restore the file data and then restore the EA data.</para>
     <orderedlist>
       <listitem>
         <para>Format the new device.</para>
@@ -341,12 +616,14 @@ trusted.fid= \
         <para>Restore the file system extended attributes.</para>
         <screen>[oss]# setfattr --restore=ea-${date}.bak</screen>
         <note>
-            <para>If <literal>--xattrs</literal> option is supported by tar and specified in the step above, this step is redundant.</para>
+          <para>If 
+          <literal>--xattrs</literal> option is supported by tar and specified
+          in the step above, this step is redundant.</para>
         </note>
       </listitem>
       <listitem>
         <para>Verify that the extended attributes were restored.</para>
-        <screen>[oss]# getfattr -d -m &quot;.*&quot; -e hex O/0/d0/100992 trusted.fid= \
+        <screen>[oss]# getfattr -d -m ".*" -e hex O/0/d0/100992 trusted.fid= \
 0x0d822200000000004a8a73e500000000808a0100000000000000000000000000</screen>
       </listitem>
       <listitem>
@@ -358,41 +635,77 @@ trusted.fid= \
         <screen>[oss]# umount /mnt/ost</screen>
       </listitem>
     </orderedlist>
-    <para>If the file system was used between the time the backup was made and when it was restored, then the online <literal>LFSCK</literal> tool (part of Lustre code) will automatically be run to ensure the file system is coherent. If all of the device file systems were backed up at the same time after the entire Lustre file system was stopped, this is not necessary. In either case, the file system should be immediately usable even if <literal>LFSCK</literal> is not run, though there may be I/O errors reading from files that are present on the MDT but not the OSTs, and files that were created after the MDT backup will not be accessible/visible.  See <xref linkend="dbdoclet.lfsckadmin"/> for details on using LFSCK.</para>
+    <para condition='l23'>If the file system was used between the time the backup was made and
+    when it was restored, then the online 
+    <literal>LFSCK</literal> tool (part of Lustre code after version 2.3) 
+    will automatically be
+    run to ensure the file system is coherent. If all of the device file
+    systems were backed up at the same time after the entire Lustre file system
+    was stopped, this step is unnecessary. In either case, the file system will
+    be immediately although there may be I/O errors reading
+    from files that are present on the MDT but not the OSTs, and files that
+    were created after the MDT backup will not be accessible or visible. See 
+    <xref linkend="dbdoclet.lfsckadmin" />for details on using LFSCK.</para>
   </section>
   <section xml:id="dbdoclet.50438207_31553">
-    <title><indexterm>
-        <primary>backup</primary>
-        <secondary>using LVM</secondary>
-      </indexterm>Using LVM Snapshots with the Lustre File System</title>
-    <para>If you want to perform disk-based backups (because, for example, access to the backup system needs to be as fast as to the primary Lustre file system), you can use the Linux LVM snapshot tool to maintain multiple, incremental file system backups.</para>
-    <para>Because LVM snapshots cost CPU cycles as new files are written, taking snapshots of the main Lustre file system will probably result in unacceptable performance losses. You should create a new, backup Lustre file system and periodically (e.g., nightly) back up new/changed files to it. Periodic snapshots can be taken of this backup file system to create a series of &quot;full&quot; backups.</para>
+    <title>
+    <indexterm>
+      <primary>backup</primary>
+      <secondary>using LVM</secondary>
+    </indexterm>Using LVM Snapshots with the Lustre File System</title>
+    <para>If you want to perform disk-based backups (because, for example,
+    access to the backup system needs to be as fast as to the primary Lustre
+    file system), you can use the Linux LVM snapshot tool to maintain multiple,
+    incremental file system backups.</para>
+    <para>Because LVM snapshots cost CPU cycles as new files are written,
+    taking snapshots of the main Lustre file system will probably result in
+    unacceptable performance losses. You should create a new, backup Lustre
+    file system and periodically (e.g., nightly) back up new/changed files to
+    it. Periodic snapshots can be taken of this backup file system to create a
+    series of "full" backups.</para>
     <note>
-      <para>Creating an LVM snapshot is not as reliable as making a separate backup, because the LVM snapshot shares the same disks as the primary MDT device, and depends on the primary MDT device for much of its data. If the primary MDT device becomes corrupted, this may result in the snapshot being corrupted.</para>
+      <para>Creating an LVM snapshot is not as reliable as making a separate
+      backup, because the LVM snapshot shares the same disks as the primary MDT
+      device, and depends on the primary MDT device for much of its data. If
+      the primary MDT device becomes corrupted, this may result in the snapshot
+      being corrupted.</para>
     </note>
     <section remap="h3">
-        <title><indexterm><primary>backup</primary><secondary>using LVM</secondary><tertiary>creating</tertiary></indexterm>Creating an LVM-based Backup File System</title>
-      <para>Use this procedure to create a backup Lustre file system for use with the LVM snapshot mechanism.</para>
+      <title>
+      <indexterm>
+        <primary>backup</primary>
+        <secondary>using LVM</secondary>
+        <tertiary>creating</tertiary>
+      </indexterm>Creating an LVM-based Backup File System</title>
+      <para>Use this procedure to create a backup Lustre file system for use
+      with the LVM snapshot mechanism.</para>
       <orderedlist>
         <listitem>
           <para>Create LVM volumes for the MDT and OSTs.</para>
-          <para>Create LVM devices for your MDT and OST targets. Make sure not to use the entire disk for the targets; save some room for the snapshots. The snapshots start out as 0 size, but grow as you make changes to the current file system. If you expect to change 20% of the file system between backups, the most recent snapshot will be 20% of the target size, the next older one will be 40%, etc. Here is an example:</para>
+          <para>Create LVM devices for your MDT and OST targets. Make sure not
+          to use the entire disk for the targets; save some room for the
+          snapshots. The snapshots start out as 0 size, but grow as you make
+          changes to the current file system. If you expect to change 20% of
+          the file system between backups, the most recent snapshot will be 20%
+          of the target size, the next older one will be 40%, etc. Here is an
+          example:</para>
           <screen>cfs21:~# pvcreate /dev/sda1
-   Physical volume &quot;/dev/sda1&quot; successfully created
+   Physical volume "/dev/sda1" successfully created
 cfs21:~# vgcreate vgmain /dev/sda1
-   Volume group &quot;vgmain&quot; successfully created
+   Volume group "vgmain" successfully created
 cfs21:~# lvcreate -L200G -nMDT0 vgmain
-   Logical volume &quot;MDT0&quot; created
+   Logical volume "MDT0" created
 cfs21:~# lvcreate -L200G -nOST0 vgmain
-   Logical volume &quot;OST0&quot; created
+   Logical volume "OST0" created
 cfs21:~# lvscan
-   ACTIVE                  &apos;/dev/vgmain/MDT0&apos; [200.00 GB] inherit
-   ACTIVE                  &apos;/dev/vgmain/OST0&apos; [200.00 GB] inherit</screen>
+   ACTIVE                  '/dev/vgmain/MDT0' [200.00 GB] inherit
+   ACTIVE                  '/dev/vgmain/OST0' [200.00 GB] inherit</screen>
         </listitem>
         <listitem>
           <para>Format the LVM volumes as Lustre targets.</para>
-          <para>In this example, the backup file system is called <literal>main</literal> and
-            designates the current, most up-to-date backup.</para>
+          <para>In this example, the backup file system is called 
+          <literal>main</literal> and designates the current, most up-to-date
+          backup.</para>
           <screen>cfs21:~# mkfs.lustre --fsname=main --mdt --index=0 /dev/vgmain/MDT0
  No management node specified, adding MGS to this MDT.
     Permanent disk data:
@@ -413,7 +726,8 @@ checking for existing Lustre data
  mkfs_cmd = mkfs.ext2 -j -b 4096 -L main-MDT0000  -i 4096 -I 512 -q
   -O dir_index -F /dev/vgmain/MDT0
  Writing CONFIGS/mountdata
-cfs21:~# mkfs.lustre --mgsnode=cfs21 --fsname=main --ost --index=0 /dev/vgmain/OST0
+cfs21:~# mkfs.lustre --mgsnode=cfs21 --fsname=main --ost --index=0
+/dev/vgmain/OST0
     Permanent disk data:
  Target:     main-OST0000
  Index:      0
@@ -435,13 +749,20 @@ checking for existing Lustre data
  Writing CONFIGS/mountdata
 cfs21:~# mount -t lustre /dev/vgmain/MDT0 /mnt/mdt
 cfs21:~# mount -t lustre /dev/vgmain/OST0 /mnt/ost
-cfs21:~# mount -t lustre cfs21:/main /mnt/main</screen>
+cfs21:~# mount -t lustre cfs21:/main /mnt/main
+</screen>
         </listitem>
       </orderedlist>
     </section>
     <section remap="h3">
-        <title><indexterm><primary>backup</primary><secondary>new/changed files</secondary></indexterm>Backing up New/Changed Files to the Backup File System</title>
-      <para>At periodic intervals e.g., nightly, back up new and changed files to the LVM-based backup file system.</para>
+      <title>
+      <indexterm>
+        <primary>backup</primary>
+        <secondary>new/changed files</secondary>
+      </indexterm>Backing up New/Changed Files to the Backup File
+      System</title>
+      <para>At periodic intervals e.g., nightly, back up new and changed files
+      to the LVM-based backup file system.</para>
       <screen>cfs21:~# cp /etc/passwd /mnt/main 
  
 cfs21:~# cp /etc/fstab /mnt/main 
@@ -450,29 +771,60 @@ cfs21:~# ls /mnt/main
 fstab  passwd</screen>
     </section>
     <section remap="h3">
-        <title><indexterm><primary>backup</primary><secondary>using LVM</secondary><tertiary>creating snapshots</tertiary></indexterm>Creating Snapshot Volumes</title>
-      <para>Whenever you want to make a &quot;checkpoint&quot; of the main Lustre file system, create LVM snapshots of all target MDT and OSTs in the LVM-based backup file system. You must decide the maximum size of a snapshot ahead of time, although you can dynamically change this later. The size of a daily snapshot is dependent on the amount of data changed daily in the main Lustre file system. It is likely that a two-day old snapshot will be twice as big as a one-day old snapshot.</para>
-      <para>You can create as many snapshots as you have room for in the volume group. If necessary, you can dynamically add disks to the volume group.</para>
-      <para>The snapshots of the target MDT and OSTs should be taken at the same point in time. Make sure that the cronjob updating the backup file system is not running, since that is the only thing writing to the disks. Here is an example:</para>
+      <title>
+      <indexterm>
+        <primary>backup</primary>
+        <secondary>using LVM</secondary>
+        <tertiary>creating snapshots</tertiary>
+      </indexterm>Creating Snapshot Volumes</title>
+      <para>Whenever you want to make a "checkpoint" of the main Lustre file
+      system, create LVM snapshots of all target MDT and OSTs in the LVM-based
+      backup file system. You must decide the maximum size of a snapshot ahead
+      of time, although you can dynamically change this later. The size of a
+      daily snapshot is dependent on the amount of data changed daily in the
+      main Lustre file system. It is likely that a two-day old snapshot will be
+      twice as big as a one-day old snapshot.</para>
+      <para>You can create as many snapshots as you have room for in the volume
+      group. If necessary, you can dynamically add disks to the volume
+      group.</para>
+      <para>The snapshots of the target MDT and OSTs should be taken at the
+      same point in time. Make sure that the cronjob updating the backup file
+      system is not running, since that is the only thing writing to the disks.
+      Here is an example:</para>
       <screen>cfs21:~# modprobe dm-snapshot
 cfs21:~# lvcreate -L50M -s -n MDT0.b1 /dev/vgmain/MDT0
    Rounding up size to full physical extent 52.00 MB
-   Logical volume &quot;MDT0.b1&quot; created
+   Logical volume "MDT0.b1" created
 cfs21:~# lvcreate -L50M -s -n OST0.b1 /dev/vgmain/OST0
    Rounding up size to full physical extent 52.00 MB
-   Logical volume &quot;OST0.b1&quot; created</screen>
-      <para>After the snapshots are taken, you can continue to back up new/changed files to &quot;main&quot;. The snapshots will not contain the new files.</para>
+   Logical volume "OST0.b1" created
+</screen>
+      <para>After the snapshots are taken, you can continue to back up
+      new/changed files to "main". The snapshots will not contain the new
+      files.</para>
       <screen>cfs21:~# cp /etc/termcap /mnt/main
 cfs21:~# ls /mnt/main
-fstab  passwd  termcap</screen>
+fstab  passwd  termcap
+</screen>
     </section>
     <section remap="h3">
-        <title><indexterm><primary>backup</primary><secondary>using LVM</secondary><tertiary>restoring</tertiary></indexterm>Restoring the File System From a Snapshot</title>
-      <para>Use this procedure to restore the file system from an LVM snapshot.</para>
+      <title>
+      <indexterm>
+        <primary>backup</primary>
+        <secondary>using LVM</secondary>
+        <tertiary>restoring</tertiary>
+      </indexterm>Restoring the File System From a Snapshot</title>
+      <para>Use this procedure to restore the file system from an LVM
+      snapshot.</para>
       <orderedlist>
         <listitem>
           <para>Rename the LVM snapshot.</para>
-          <para>Rename the file system snapshot from &quot;main&quot; to &quot;back&quot; so you can mount it without unmounting &quot;main&quot;. This is recommended, but not required. Use the <literal>--reformat</literal> flag to <literal>tunefs.lustre</literal> to force the name change. For example:</para>
+          <para>Rename the file system snapshot from "main" to "back" so you
+          can mount it without unmounting "main". This is recommended, but not
+          required. Use the 
+          <literal>--reformat</literal> flag to 
+          <literal>tunefs.lustre</literal> to force the name change. For
+          example:</para>
           <screen>cfs21:~# tunefs.lustre --reformat --fsname=back --writeconf /dev/vgmain/MDT0.b1
  checking for existing Lustre data
  found Lustre data
@@ -518,9 +870,10 @@ Permanent disk data:
               (OST writeconf )
  Persistent mount opts: errors=remount-ro,extents,mballoc
  Parameters: mgsnode=192.168.0.21@tcp
-Writing CONFIGS/mountdata</screen>
-        <para>When renaming a file system, we must also erase the last_rcvd file from the
-            snapshots</para>
+Writing CONFIGS/mountdata
+</screen>
+          <para>When renaming a file system, we must also erase the last_rcvd
+          file from the snapshots</para>
           <screen>cfs21:~# mount -t ldiskfs /dev/vgmain/MDT0.b1 /mnt/mdtback
 cfs21:~# rm /mnt/mdtback/last_rcvd
 cfs21:~# umount /mnt/mdtback
@@ -529,29 +882,45 @@ cfs21:~# rm /mnt/ostback/last_rcvd
 cfs21:~# umount /mnt/ostback</screen>
         </listitem>
         <listitem>
-          <para>Mount the file system from the LVM snapshot.  For example:</para>
+          <para>Mount the file system from the LVM snapshot. For
+          example:</para>
           <screen>cfs21:~# mount -t lustre /dev/vgmain/MDT0.b1 /mnt/mdtback
 cfs21:~# mount -t lustre /dev/vgmain/OST0.b1 /mnt/ostback
 cfs21:~# mount -t lustre cfs21:/back /mnt/back</screen>
         </listitem>
         <listitem>
-          <para>Note the old directory contents, as of the snapshot time.  For example:</para>
+          <para>Note the old directory contents, as of the snapshot time. For
+          example:</para>
           <screen>cfs21:~/cfs/b1_5/lustre/utils# ls /mnt/back
-fstab  passwds</screen>
+fstab  passwds
+</screen>
         </listitem>
       </orderedlist>
     </section>
     <section remap="h3">
-        <title><indexterm><primary>backup</primary><secondary>using LVM</secondary><tertiary>deleting</tertiary></indexterm>Deleting Old Snapshots</title>
-      <para>To reclaim disk space, you can erase old snapshots as your backup policy dictates. Run:</para>
+      <title>
+      <indexterm>
+        <primary>backup</primary>
+        <secondary>using LVM</secondary>
+        <tertiary>deleting</tertiary>
+      </indexterm>Deleting Old Snapshots</title>
+      <para>To reclaim disk space, you can erase old snapshots as your backup
+      policy dictates. Run:</para>
       <screen>lvremove /dev/vgmain/MDT0.b1</screen>
     </section>
     <section remap="h3">
-      <title><indexterm><primary>backup</primary><secondary>using LVM</secondary><tertiary>resizing</tertiary></indexterm>Changing Snapshot Volume Size</title>
-      <para>You can also extend or shrink snapshot volumes if you find your daily deltas are smaller or larger than expected. Run:</para>
+      <title>
+      <indexterm>
+        <primary>backup</primary>
+        <secondary>using LVM</secondary>
+        <tertiary>resizing</tertiary>
+      </indexterm>Changing Snapshot Volume Size</title>
+      <para>You can also extend or shrink snapshot volumes if you find your
+      daily deltas are smaller or larger than expected. Run:</para>
       <screen>lvextend -L10G /dev/vgmain/MDT0.b1</screen>
       <note>
-        <para>Extending snapshots seems to be broken in older LVM. It is working in LVM v2.02.01.</para>
+        <para>Extending snapshots seems to be broken in older LVM. It is
+        working in LVM v2.02.01.</para>
       </note>
     </section>
   </section>

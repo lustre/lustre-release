@@ -253,7 +253,7 @@
       </glossdef>
     </glossentry>
     <glossentry xml:id="lfsck">
-      <glossterm>lfsck
+      <glossterm>LFSCK
         </glossterm>
       <glossdef>
         <para>Lustre file system check. A distributed version of a disk file system checker.
