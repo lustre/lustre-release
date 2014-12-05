@@ -2606,10 +2606,10 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
         va_start(args, fmt);
 
         if (exp && exp->exp_connection) {
-                nid = libcfs_nid2str(exp->exp_connection->c_peer.nid);
+		nid = obd_export_nid2str(exp);
         } else if (exp && exp->exp_obd != NULL) {
                 struct obd_import *imp = exp->exp_obd->u.cli.cl_import;
-                nid = libcfs_nid2str(imp->imp_connection->c_peer.nid);
+		nid = obd_import_nid2str(imp);
         }
 
         if (resource == NULL) {

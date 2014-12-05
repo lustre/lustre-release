@@ -1671,13 +1671,12 @@ void class_disconnect_stale_exports(struct obd_device *obd,
 		spin_unlock(&exp->exp_lock);
 
 		list_move(&exp->exp_obd_chain, &work_list);
-                evicted++;
-                CDEBUG(D_HA, "%s: disconnect stale client %s@%s\n",
-                       obd->obd_name, exp->exp_client_uuid.uuid,
-                       exp->exp_connection == NULL ? "<unknown>" :
-                       libcfs_nid2str(exp->exp_connection->c_peer.nid));
-                print_export_data(exp, "EVICTING", 0, D_HA);
-        }
+		evicted++;
+		CDEBUG(D_HA, "%s: disconnect stale client %s@%s\n",
+		       obd->obd_name, exp->exp_client_uuid.uuid,
+		       obd_export_nid2str(exp));
+		print_export_data(exp, "EVICTING", 0, D_HA);
+	}
 	spin_unlock(&obd->obd_dev_lock);
 
 	if (evicted)
@@ -1727,15 +1726,6 @@ void class_fail_export(struct obd_export *exp)
 	class_export_put(exp);
 }
 EXPORT_SYMBOL(class_fail_export);
-
-char *obd_export_nid2str(struct obd_export *exp)
-{
-        if (exp->exp_connection != NULL)
-                return libcfs_nid2str(exp->exp_connection->c_peer.nid);
-
-        return "(no nid)";
-}
-EXPORT_SYMBOL(obd_export_nid2str);
 
 int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
 {

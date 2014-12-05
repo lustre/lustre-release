@@ -91,7 +91,17 @@ int get_devices_count(void);
 
 int class_notify_sptlrpc_conf(const char *fsname, int namelen);
 
-char *obd_export_nid2str(struct obd_export *exp);
+static inline char *obd_export_nid2str(struct obd_export *exp)
+{
+	return exp->exp_connection == NULL ?
+	       "<unknown>" : libcfs_nid2str(exp->exp_connection->c_peer.nid);
+}
+
+static inline char *obd_import_nid2str(struct obd_import *imp)
+{
+	return imp->imp_connection == NULL ?
+	       "<unknown>" : libcfs_nid2str(imp->imp_connection->c_peer.nid);
+}
 
 int obd_export_evict_by_nid(struct obd_device *obd, const char *nid);
 int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid);

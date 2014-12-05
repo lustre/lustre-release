@@ -152,7 +152,7 @@ static void mdt_steal_ack_locks(struct ptlrpc_request *req)
 		       " o%d NID %s\n",
 		       rs->rs_nlocks, rs,
 		       rs->rs_xid, rs->rs_transno, rs->rs_opc,
-		       libcfs_nid2str(exp->exp_connection->c_peer.nid));
+		       obd_export_nid2str(exp));
 
 		spin_lock(&svcpt->scp_rep_lock);
 		list_del_init(&rs->rs_exp_list);

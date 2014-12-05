@@ -226,8 +226,7 @@ static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
 
 			CERROR("%s: replay trans %llu NID %s: rc = %d\n",
 			       mdt_obd_name(mdt), info->mti_transno,
-			       libcfs_nid2str(exp->exp_connection->c_peer.nid),
-			       rc);
+			       obd_export_nid2str(exp), rc);
 			spin_unlock(&mdt->mdt_lut.lut_translock);
 			RETURN_EXIT;
 		}
