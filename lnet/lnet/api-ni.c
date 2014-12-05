@@ -728,26 +728,25 @@ lnet_prepare(lnet_pid_t requested_pid)
 		return -ENETDOWN;
 	}
 
-        LASSERT (the_lnet.ln_refcount == 0);
+	LASSERT(the_lnet.ln_refcount == 0);
 
-        the_lnet.ln_routing = 0;
+	the_lnet.ln_routing = 0;
 
 #ifdef __KERNEL__
-        LASSERT ((requested_pid & LNET_PID_USERFLAG) == 0);
-        the_lnet.ln_pid = requested_pid;
+	LASSERT((requested_pid & LNET_PID_USERFLAG) == 0);
+	the_lnet.ln_pid = requested_pid;
 #else
-        if (the_lnet.ln_server_mode_flag) {/* server case (uOSS) */
+	if (the_lnet.ln_server_mode_flag) {/* server case (uOSS) */
 		LASSERT ((requested_pid & LNET_PID_USERFLAG) == 0);
-
-		if (current_uid() != 0)	/* Only root can run user-space server */
+		/* Only root can run user-space server */
+		if (current_uid() != 0)
 			return -EPERM;
 		the_lnet.ln_pid = requested_pid;
 
-        } else {/* client case (liblustre) */
-
-                /* My PID must be unique on this node and flag I'm userspace */
-                the_lnet.ln_pid = getpid() | LNET_PID_USERFLAG;
-        }
+	} else {/* client case (liblustre) */
+		/* My PID must be unique on this node and flag I'm userspace */
+		the_lnet.ln_pid = getpid() | LNET_PID_USERFLAG;
+	}
 #endif
 
 	INIT_LIST_HEAD(&the_lnet.ln_test_peers);
@@ -788,15 +787,19 @@ lnet_prepare(lnet_pid_t requested_pid)
 
 	recs = lnet_res_containers_create(LNET_COOKIE_TYPE_ME, LNET_FL_MAX_MES,
 					  sizeof(lnet_me_t));
-	if (recs == NULL)
+	if (recs == NULL) {
+		rc = -ENOMEM;
 		goto failed;
+	}
 
 	the_lnet.ln_me_containers = recs;
 
 	recs = lnet_res_containers_create(LNET_COOKIE_TYPE_MD, LNET_FL_MAX_MDS,
 					  sizeof(lnet_libmd_t));
-	if (recs == NULL)
+	if (recs == NULL) {
+		rc = -ENOMEM;
 		goto failed;
+	}
 
 	the_lnet.ln_md_containers = recs;
 
