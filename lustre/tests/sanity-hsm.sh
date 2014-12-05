@@ -263,11 +263,13 @@ get_copytool_event_log() {
 
 copytool_cleanup() {
 	trap - EXIT
-	local agents=${1:-$(facet_active_host $SINGLEAGT)}
+	local facet=$SINGLEAGT
+	local agents=${1:-$(facet_active_host $facet)}
 	local mdtno
 	local idx
 	local oldstate
 	local mdt_hsmctrl
+	local hsm_root=$(copytool_device $facet)
 
 	do_nodesv $agents "pkill -INT -x $HSMTOOL_BASE" || return 0
 	sleep 1
@@ -292,6 +294,7 @@ copytool_cleanup() {
 			"$oldstate" 20 ||
 			error "mds${mdtno} cdt state is not $oldstate"
 	done
+	do_facet $facet "rm -rf $hsm_root"
 }
 
 copytool_suspend() {
