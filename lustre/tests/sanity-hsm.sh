@@ -309,7 +309,9 @@ copytool_cleanup() {
 			"$oldstate" 20 ||
 			error "mds${mdtno} cdt state is not $oldstate"
 	done
-	do_facet $facet "rm -rf $hsm_root"
+	if do_facet $facet "df $hsm_root" >/dev/null 2>&1 ; then
+		do_facet $facet "rm -rf $hsm_root/*"
+	fi
 }
 
 copytool_suspend() {
@@ -2433,7 +2435,7 @@ test_40() {
 	done
 	# force copytool to use a local/temp archive dir to ensure best
 	# performance vs remote/NFS mounts used in auto-tests
-	if df --local $HSM_ARCHIVE >/dev/null 2>&1 ; then
+	if do_facet $SINGLEAGT "df --local $HSM_ARCHIVE" >/dev/null 2>&1 ; then
 		copytool_setup
 	else
 		copytool_setup $SINGLEAGT $MOUNT $HSM_ARCHIVE_NUMBER $TMP/$tdir
@@ -2975,7 +2977,14 @@ test_90() {
 		fid=$(copy_file /etc/hosts $f.$i)
 		echo $f.$i >> $FILELIST
 	done
-	copytool_setup
+	# force copytool to use a local/temp archive dir to ensure best
+	# performance vs remote/NFS mounts used in auto-tests
+	if do_facet $SINGLEAGT "df --local $HSM_ARCHIVE" >/dev/null 2>&1 ; then
+		copytool_setup
+	else
+		local dai=$(get_hsm_param default_archive_id)
+		copytool_setup $SINGLEAGT $MOUNT $dai $TMP/$tdir
+	fi
 	# to be sure wait_all_done will not be mislead by previous tests
 	cdt_purge
 	wait_for_grace_delay
