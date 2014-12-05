@@ -257,8 +257,8 @@ static int qmt_device_init0(const struct lu_env *env, struct qmt_device *qmt,
 	LASSERT(type != NULL);
 
 	/* register proc directory associated with this qmt */
-	qmt->qmt_proc = lprocfs_register(qmt->qmt_svname, type->typ_procroot,
-					 NULL, NULL);
+	qmt->qmt_proc = lprocfs_seq_register(qmt->qmt_svname, type->typ_procroot,
+						NULL, NULL);
 	if (IS_ERR(qmt->qmt_proc)) {
 		rc = PTR_ERR(qmt->qmt_proc);
 		CERROR("%s: failed to create qmt proc entry (%d)\n",

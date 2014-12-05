@@ -818,7 +818,7 @@ LPROC_SEQ_FOPS(ptlrpc_lprocfs_nrs_crrn_quantum);
  */
 int nrs_crrn_lprocfs_init(struct ptlrpc_service *svc)
 {
-	struct lprocfs_vars nrs_crrn_lprocfs_vars[] = {
+	struct lprocfs_seq_vars nrs_crrn_lprocfs_vars[] = {
 		{ .name		= "nrs_crrn_quantum",
 		  .fops		= &ptlrpc_lprocfs_nrs_crrn_quantum_fops,
 		  .data = svc },
@@ -828,7 +828,8 @@ int nrs_crrn_lprocfs_init(struct ptlrpc_service *svc)
 	if (svc->srv_procroot == NULL)
 		return 0;
 
-	return lprocfs_add_vars(svc->srv_procroot, nrs_crrn_lprocfs_vars, NULL);
+	return lprocfs_seq_add_vars(svc->srv_procroot, nrs_crrn_lprocfs_vars,
+				    NULL);
 }
 
 /**

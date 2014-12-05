@@ -588,7 +588,7 @@ LPROC_SEQ_FOPS_RO_TYPE(ldiskfs, dt_kbytesavail);
 LPROC_SEQ_FOPS_RO_TYPE(ldiskfs, dt_filestotal);
 LPROC_SEQ_FOPS_RO_TYPE(ldiskfs, dt_filesfree);
 
-struct lprocfs_vars lprocfs_osd_obd_vars[] = {
+struct lprocfs_seq_vars lprocfs_osd_obd_vars[] = {
 	{ .name	=	"blocksize",
 	  .fops	=	&ldiskfs_dt_blksize_fops	},
 	{ .name	=	"kbytestotal",
@@ -628,7 +628,7 @@ struct lprocfs_vars lprocfs_osd_obd_vars[] = {
 	{ 0 }
 };
 
-struct lprocfs_vars lprocfs_osd_module_vars[] = {
+struct lprocfs_seq_vars lprocfs_osd_module_vars[] = {
 	{ .name	=	"track_declares_assert",
 	  .fops	=	&ldiskfs_osd_track_declares_assert_fops		},
 	{ 0 }
@@ -652,9 +652,9 @@ int osd_procfs_init(struct osd_device *osd, const char *name)
 	LASSERT(type != NULL);
 
 	/* Find the type procroot and add the proc entry for this device */
-	osd->od_proc_entry = lprocfs_register(name, type->typ_procroot,
-					      lprocfs_osd_obd_vars,
-					      &osd->od_dt_dev);
+	osd->od_proc_entry = lprocfs_seq_register(name, type->typ_procroot,
+						  lprocfs_osd_obd_vars,
+						  &osd->od_dt_dev);
 	if (IS_ERR(osd->od_proc_entry)) {
 		rc = PTR_ERR(osd->od_proc_entry);
 		CERROR("Error %d setting up lprocfs for %s\n",

@@ -917,7 +917,7 @@ ssize_t mdt_hsm_cdt_control_seq_write(struct file *file, const char *buffer,
 int mdt_hsm_cdt_control_seq_show(struct seq_file *m, void *data);
 int hsm_cdt_procfs_init(struct mdt_device *mdt);
 void hsm_cdt_procfs_fini(struct mdt_device *mdt);
-struct lprocfs_vars *hsm_cdt_get_proc_vars(void);
+struct lprocfs_seq_vars *hsm_cdt_get_proc_vars(void);
 /* md_hsm helpers */
 struct mdt_object *mdt_hsm_get_md_hsm(struct mdt_thread_info *mti,
 				      const struct lu_fid *fid,

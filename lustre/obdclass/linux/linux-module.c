@@ -313,7 +313,7 @@ LPROC_SEQ_FOPS(obd_proc_jobid_var);
 struct proc_dir_entry *proc_lustre_root = NULL;
 EXPORT_SYMBOL(proc_lustre_root);
 
-struct lprocfs_vars lprocfs_base[] = {
+struct lprocfs_seq_vars lprocfs_base[] = {
 	{ .name =	"version",
 	  .fops	=	&obd_proc_version_fops	},
 	{ .name =	"pinger",
@@ -412,7 +412,7 @@ int class_procfs_init(void)
 
 	obd_sysctl_init();
 
-	entry = lprocfs_register("fs/lustre", NULL, lprocfs_base, NULL);
+	entry = lprocfs_seq_register("fs/lustre", NULL, lprocfs_base, NULL);
 	if (IS_ERR(entry)) {
 		rc = PTR_ERR(entry);
 		CERROR("cannot create '/proc/fs/lustre': rc = %d\n", rc);

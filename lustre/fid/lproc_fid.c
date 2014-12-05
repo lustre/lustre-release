@@ -213,7 +213,7 @@ LPROC_SEQ_FOPS(lprocfs_server_fid_space);
 LPROC_SEQ_FOPS(lprocfs_server_fid_width);
 LPROC_SEQ_FOPS_RO(lprocfs_server_fid_server);
 
-struct lprocfs_vars seq_server_proc_list[] = {
+struct lprocfs_seq_vars seq_server_proc_list[] = {
 	{ .name	=	"space",
 	  .fops	=	&lprocfs_server_fid_space_fops	},
 	{ .name	=	"width",
@@ -636,7 +636,7 @@ LPROC_SEQ_FOPS(lprocfs_client_fid_width);
 LPROC_SEQ_FOPS_RO(lprocfs_client_fid_server);
 LPROC_SEQ_FOPS_RO(lprocfs_client_fid_fid);
 
-struct lprocfs_vars seq_client_proc_list[] = {
+struct lprocfs_seq_vars seq_client_proc_list[] = {
 	{ .name	=	"space",
 	  .fops	=	&lprocfs_client_fid_space_fops	},
 	{ .name	=	"width",

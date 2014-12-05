@@ -1825,7 +1825,7 @@ LPROC_SEQ_FOPS(ptlrpc_lprocfs_nrs_tbf_rule);
  */
 int nrs_tbf_lprocfs_init(struct ptlrpc_service *svc)
 {
-	struct lprocfs_vars nrs_tbf_lprocfs_vars[] = {
+	struct lprocfs_seq_vars nrs_tbf_lprocfs_vars[] = {
 		{ .name		= "nrs_tbf_rule",
 		  .fops		= &ptlrpc_lprocfs_nrs_tbf_rule_fops,
 		  .data = svc },
@@ -1835,7 +1835,8 @@ int nrs_tbf_lprocfs_init(struct ptlrpc_service *svc)
 	if (svc->srv_procroot == NULL)
 		return 0;
 
-	return lprocfs_add_vars(svc->srv_procroot, nrs_tbf_lprocfs_vars, NULL);
+	return lprocfs_seq_add_vars(svc->srv_procroot, nrs_tbf_lprocfs_vars,
+				    NULL);
 }
 
 /**

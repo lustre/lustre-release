@@ -276,7 +276,7 @@ static int mdd_lfsck_layout_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(mdd_lfsck_layout);
 
-static struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
+static struct lprocfs_seq_vars lprocfs_mdd_obd_vars[] = {
 	{ .name =	"atime_diff",
 	  .fops =	&mdd_atime_diff_fops		},
 	{ .name =	"changelog_mask",
@@ -313,8 +313,8 @@ int mdd_procfs_init(struct mdd_device *mdd, const char *name)
 
 	/* Find the type procroot and add the proc entry for this device */
 	obd->obd_vars = lprocfs_mdd_obd_vars;
-	mdd->mdd_proc_entry = lprocfs_register(name, type->typ_procroot,
-					       obd->obd_vars, mdd);
+	mdd->mdd_proc_entry = lprocfs_seq_register(name, type->typ_procroot,
+						   obd->obd_vars, mdd);
 	if (IS_ERR(mdd->mdd_proc_entry)) {
 		rc = PTR_ERR(mdd->mdd_proc_entry);
 		CERROR("Error %d setting up lprocfs for %s\n",

@@ -203,7 +203,7 @@ static int lmv_target_seq_open(struct inode *inode, struct file *file)
 
 LPROC_SEQ_FOPS_RO_TYPE(lmv, uuid);
 
-struct lprocfs_vars lprocfs_lmv_obd_vars[] = {
+struct lprocfs_seq_vars lprocfs_lmv_obd_vars[] = {
 	{ .name	=	"numobd",
 	  .fops	=	&lmv_numobd_fops	},
 	{ .name	=	"placement",

@@ -825,7 +825,7 @@ LPROC_SEQ_FOPS_RW_TYPE(mdt, ir_factor);
 LPROC_SEQ_FOPS_RW_TYPE(mdt, nid_stats_clear);
 LPROC_SEQ_FOPS(mdt_hsm_cdt_control);
 
-static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
+static struct lprocfs_seq_vars lprocfs_mdt_obd_vars[] = {
 	{ .name =	"uuid",
 	  .fops =	&mdt_uuid_fops				},
 	{ .name =	"recovery_status",

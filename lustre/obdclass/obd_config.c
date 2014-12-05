@@ -1260,10 +1260,10 @@ out:
 }
 EXPORT_SYMBOL(class_process_config);
 
-int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
+int class_process_proc_param(char *prefix, struct lprocfs_seq_vars *lvars,
 			     struct lustre_cfg *lcfg, void *data)
 {
-	struct lprocfs_vars *var;
+	struct lprocfs_seq_vars *var;
 	struct file fakefile;
 	struct seq_file fake_seqfile;
 	char *key, *sval;

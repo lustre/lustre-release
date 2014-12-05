@@ -288,13 +288,13 @@ typedef enum ldlm_policy_res ldlm_policy_res_t;
 	struct __##var##__dummy_write {;} /* semicolon catcher */
 
 static inline void
-ldlm_add_var(struct lprocfs_vars *vars, struct proc_dir_entry *proc_dir,
+ldlm_add_var(struct lprocfs_seq_vars *vars, struct proc_dir_entry *proc_dir,
 	     const char *name, void *data, const struct file_operations *ops)
 {
 	snprintf((char *)vars->name, MAX_STRING_SIZE, "%s", name);
 	vars->data = data;
 	vars->fops = ops;
-	lprocfs_add_vars(proc_dir, vars, 0);
+	lprocfs_seq_add_vars(proc_dir, vars, 0);
 }
 
 static inline int is_granted_or_cancelled(struct ldlm_lock *lock)

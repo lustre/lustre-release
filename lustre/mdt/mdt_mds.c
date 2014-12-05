@@ -466,7 +466,7 @@ static struct lu_device *mds_device_free(const struct lu_env *env,
 
 LPROC_SEQ_FOPS_RO_TYPE(mds, uuid);
 
-static struct lprocfs_vars lprocfs_mds_obd_vars[] = {
+static struct lprocfs_seq_vars lprocfs_mds_obd_vars[] = {
 	{ "uuid",	&mds_uuid_fops  },
 	{ 0 }
 };

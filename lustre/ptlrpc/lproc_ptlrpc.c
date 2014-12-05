@@ -202,7 +202,7 @@ void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
                 return;
 
         if (dir) {
-		svc_procroot = lprocfs_register(dir, root, NULL, NULL);
+		svc_procroot = lprocfs_seq_register(dir, root, NULL, NULL);
                 if (IS_ERR(svc_procroot)) {
                         lprocfs_free_stats(&svc_stats);
                         return;
@@ -1022,7 +1022,7 @@ static int ptlrpc_lprocfs_timeouts_seq_show(struct seq_file *m, void *n)
 			   DHMS_FMT" ago) ", "service",
 			   cur, worst, worstt, DHMS_VARS(&ts));
 
-		lprocfs_at_hist_helper(m, &svcpt->scp_at_estimate);
+		lprocfs_seq_at_hist_helper(m, &svcpt->scp_at_estimate);
 	}
 
 	return 0;
@@ -1062,7 +1062,7 @@ LPROC_SEQ_FOPS(ptlrpc_lprocfs_hp_ratio);
 void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                                      struct ptlrpc_service *svc)
 {
-	struct lprocfs_vars lproc_vars[] = {
+	struct lprocfs_seq_vars lproc_vars[] = {
 		{ .name	= "high_priority_ratio",
 		  .fops	= &ptlrpc_lprocfs_hp_ratio_fops,
 		  .data = svc },
@@ -1105,7 +1105,7 @@ void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
 	if (svc->srv_procroot == NULL)
 		return;
 
-	lprocfs_add_vars(svc->srv_procroot, lproc_vars, NULL);
+	lprocfs_seq_add_vars(svc->srv_procroot, lproc_vars, NULL);
 
 	rc = lprocfs_seq_create(svc->srv_procroot, "req_history",
 				0400, &req_history_fops, svc);

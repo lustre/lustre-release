@@ -163,7 +163,7 @@ struct lmv_tgt_desc
 		struct lu_fid *fid);
 /* lproc_lmv.c */
 #ifdef LPROCFS
-extern struct lprocfs_vars lprocfs_lmv_obd_vars[];
+extern struct lprocfs_seq_vars lprocfs_lmv_obd_vars[];
 #endif
 extern struct file_operations lmv_proc_target_fops;
 

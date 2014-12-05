@@ -983,7 +983,7 @@ LPROC_SEQ_FOPS_RO_TYPE(ofd, target_instance);
 LPROC_SEQ_FOPS_RW_TYPE(ofd, ir_factor);
 LPROC_SEQ_FOPS_RW_TYPE(ofd, job_interval);
 
-struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
+struct lprocfs_seq_vars lprocfs_ofd_obd_vars[] = {
 	{ .name =	"uuid",
 	  .fops =	&ofd_uuid_fops			},
 	{ .name =	"blocksize",

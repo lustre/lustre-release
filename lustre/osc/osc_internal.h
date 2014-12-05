@@ -141,7 +141,7 @@ int osc_cleanup(struct obd_device *obd);
 int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
 
 #ifdef LPROCFS
-extern struct lprocfs_vars lprocfs_osc_obd_vars[];
+extern struct lprocfs_seq_vars lprocfs_osc_obd_vars[];
 int lproc_osc_attach_seqstat(struct obd_device *dev);
 #else
 static inline int lproc_osc_attach_seqstat(struct obd_device *dev) {return 0;}

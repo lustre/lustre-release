@@ -207,7 +207,7 @@ LPROC_SEQ_FOPS_RO_TYPE(mgs, hash);
 LPROC_SEQ_FOPS_WO_TYPE(mgs, evict_client);
 LPROC_SEQ_FOPS_RW_TYPE(mgs, ir_timeout);
 
-struct lprocfs_vars lprocfs_mgs_obd_vars[] = {
+struct lprocfs_seq_vars lprocfs_mgs_obd_vars[] = {
 	{ .name	=	"uuid",
 	  .fops	=	&mgs_uuid_fops		},
 	{ .name	=	"num_exports",
@@ -243,17 +243,17 @@ int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name)
 	if (rc != 0)
 		GOTO(out, rc);
 
-	mgs->mgs_proc_live = lprocfs_register("live", obd->obd_proc_entry,
-					      NULL, NULL);
+	mgs->mgs_proc_live = lprocfs_seq_register("live", obd->obd_proc_entry,
+						  NULL, NULL);
         if (IS_ERR(mgs->mgs_proc_live)) {
                 rc = PTR_ERR(mgs->mgs_proc_live);
                 mgs->mgs_proc_live = NULL;
 		GOTO(out, rc);
         }
 
-	obd->obd_proc_exports_entry = lprocfs_register("exports",
-						       obd->obd_proc_entry,
-						       NULL, NULL);
+	obd->obd_proc_exports_entry = lprocfs_seq_register("exports",
+							   obd->obd_proc_entry,
+							   NULL, NULL);
         if (IS_ERR(obd->obd_proc_exports_entry)) {
                 rc = PTR_ERR(obd->obd_proc_exports_entry);
                 obd->obd_proc_exports_entry = NULL;

@@ -141,7 +141,7 @@ static int __init init_lustre_lite(void)
 	if (ll_rmtperm_hash_cachep == NULL)
 		GOTO(out_cache, rc = -ENOMEM);
 
-	entry = lprocfs_register("llite", proc_lustre_root, NULL, NULL);
+	entry = lprocfs_seq_register("llite", proc_lustre_root, NULL, NULL);
 	if (IS_ERR(entry)) {
 		rc = PTR_ERR(entry);
 		CERROR("cannot register '/proc/fs/lustre/llite': rc = %d\n",

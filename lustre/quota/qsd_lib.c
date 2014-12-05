@@ -207,7 +207,7 @@ qsd_timeout_seq_write(struct file *file, const char *buffer,
 }
 LPROC_SEQ_FOPS(qsd_timeout);
 
-static struct lprocfs_vars lprocfs_quota_qsd_vars[] = {
+static struct lprocfs_seq_vars lprocfs_quota_qsd_vars[] = {
 	{ .name	=	"info",
 	  .fops	=	&qsd_state_fops		},
 	{ .name	=	"enabled",
@@ -617,8 +617,8 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 	mutex_unlock(&qsd->qsd_fsinfo->qfs_mutex);
 
 	/* register procfs directory */
-	qsd->qsd_proc = lprocfs_register(QSD_DIR, osd_proc,
-					lprocfs_quota_qsd_vars, qsd);
+	qsd->qsd_proc = lprocfs_seq_register(QSD_DIR, osd_proc,
+						lprocfs_quota_qsd_vars, qsd);
 	if (IS_ERR(qsd->qsd_proc)) {
 		rc = PTR_ERR(qsd->qsd_proc);
 		qsd->qsd_proc = NULL;

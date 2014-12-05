@@ -169,7 +169,7 @@ int sptlrpc_lprocfs_cliobd_attach(struct obd_device *dev)
 EXPORT_SYMBOL(sptlrpc_lprocfs_cliobd_attach);
 
 LPROC_SEQ_FOPS_RO(sptlrpc_proc_enc_pool);
-static struct lprocfs_vars sptlrpc_lprocfs_vars[] = {
+static struct lprocfs_seq_vars sptlrpc_lprocfs_vars[] = {
 	{ .name	=	"encrypt_page_pools",
 	  .fops	=	&sptlrpc_proc_enc_pool_fops	},
 	{ NULL }
@@ -181,8 +181,8 @@ int sptlrpc_lproc_init(void)
 
 	LASSERT(sptlrpc_proc_root == NULL);
 
-	sptlrpc_proc_root = lprocfs_register("sptlrpc", proc_lustre_root,
-					     sptlrpc_lprocfs_vars, NULL);
+	sptlrpc_proc_root = lprocfs_seq_register("sptlrpc", proc_lustre_root,
+						 sptlrpc_lprocfs_vars, NULL);
 	if (IS_ERR(sptlrpc_proc_root)) {
 		rc = PTR_ERR(sptlrpc_proc_root);
 		sptlrpc_proc_root = NULL;

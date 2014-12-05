@@ -959,7 +959,7 @@ static ssize_t ll_nosquash_nids_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(ll_nosquash_nids);
 
-struct lprocfs_vars lprocfs_llite_obd_vars[] = {
+struct lprocfs_seq_vars lprocfs_llite_obd_vars[] = {
 	{ .name	=	"uuid",
 	  .fops	=	&ll_sb_uuid_fops			},
 	{ .name	=	"fstype",
@@ -1122,7 +1122,7 @@ LPROC_SEQ_FOPS_RO_TYPE(llite, uuid);
 int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                                 struct super_block *sb, char *osc, char *mdc)
 {
-	struct lprocfs_vars lvars[2];
+	struct lprocfs_seq_vars lvars[2];
 	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 	struct obd_device *obd;
@@ -1150,7 +1150,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
 	snprintf(name, MAX_STRING_SIZE, "%.*s-%p", len,
 		 lsi->lsi_lmd->lmd_profile, sb);
 
-	sbi->ll_proc_root = lprocfs_register(name, parent, NULL, NULL);
+	sbi->ll_proc_root = lprocfs_seq_register(name, parent, NULL, NULL);
 	if (IS_ERR(sbi->ll_proc_root)) {
 		err = PTR_ERR(sbi->ll_proc_root);
 		sbi->ll_proc_root = NULL;
@@ -1215,7 +1215,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                 GOTO(out, err);
 
 
-	err = lprocfs_add_vars(sbi->ll_proc_root, lprocfs_llite_obd_vars, sb);
+	err = lprocfs_seq_add_vars(sbi->ll_proc_root, lprocfs_llite_obd_vars, sb);
 	if (err)
 		GOTO(out, err);
 
@@ -1232,13 +1232,13 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
 
 	snprintf(name, MAX_STRING_SIZE, "common_name");
 	lvars[0].fops = &llite_name_fops;
-	err = lprocfs_add_vars(dir, lvars, obd);
+	err = lprocfs_seq_add_vars(dir, lvars, obd);
 	if (err)
 		GOTO(out, err);
 
 	snprintf(name, MAX_STRING_SIZE, "uuid");
 	lvars[0].fops = &llite_uuid_fops;
-	err = lprocfs_add_vars(dir, lvars, obd);
+	err = lprocfs_seq_add_vars(dir, lvars, obd);
 	if (err)
 		GOTO(out, err);
 
@@ -1255,13 +1255,13 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
 
 	snprintf(name, MAX_STRING_SIZE, "common_name");
 	lvars[0].fops = &llite_name_fops;
-	err = lprocfs_add_vars(dir, lvars, obd);
+	err = lprocfs_seq_add_vars(dir, lvars, obd);
 	if (err)
 		GOTO(out, err);
 
 	snprintf(name, MAX_STRING_SIZE, "uuid");
 	lvars[0].fops = &llite_uuid_fops;
-	err = lprocfs_add_vars(dir, lvars, obd);
+	err = lprocfs_seq_add_vars(dir, lvars, obd);
 out:
 	if (err) {
 		lprocfs_remove(&sbi->ll_proc_root);

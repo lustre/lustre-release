@@ -234,9 +234,9 @@ static int lmv_connect(const struct lu_env *env,
                 lmv->conn_data = *data;
 
 	if (lmv->targets_proc_entry == NULL) {
-		lmv->targets_proc_entry = lprocfs_register("target_obds",
-							   obd->obd_proc_entry,
-							   NULL, NULL);
+		lmv->targets_proc_entry = lprocfs_seq_register("target_obds",
+							obd->obd_proc_entry,
+							NULL, NULL);
 		if (IS_ERR(lmv->targets_proc_entry)) {
 			CERROR("%s: cannot register "
 			       "/proc/fs/lustre/%s/%s/target_obds\n",
