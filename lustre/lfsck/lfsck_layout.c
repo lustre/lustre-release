@@ -5179,6 +5179,7 @@ static void lfsck_layout_slave_quit(const struct lu_env *env,
 		list_del_init(&llst->llst_list);
 		spin_unlock(&llsd->llsd_lock);
 		lfsck_layout_llst_put(llst);
+		spin_lock(&llsd->llsd_lock);
 	}
 	spin_unlock(&llsd->llsd_lock);
 
