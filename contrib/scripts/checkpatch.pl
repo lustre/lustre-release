@@ -1841,8 +1841,9 @@ sub process {
 			}
 		}
 
-# check we are in a valid source file C or perl if not then ignore this hunk
-		next if ($realfile !~ /\.(h|c|pl)$/);
+# check we are in a valid source file C, perl or bash script
+# if not then ignore this hunk
+		next if ($realfile !~ /\.(h|c|pl|sh)$/);
 
 # at the beginning of a line any tabs must come first and anything
 # more than 8 must use tabs.
