@@ -476,9 +476,7 @@ static struct dt_object *
 lfsck_namespace_load_one_trace_file(const struct lu_env *env,
 				    struct lfsck_component *com,
 				    struct dt_object *parent,
-				    const char *name,
-				    const struct dt_index_features *ft,
-				    bool reset)
+				    const char *name, bool reset)
 {
 	struct lfsck_instance	*lfsck = com->lc_lfsck;
 	struct dt_object	*obj;
@@ -490,12 +488,9 @@ lfsck_namespace_load_one_trace_file(const struct lu_env *env,
 			return ERR_PTR(rc);
 	}
 
-	if (ft != NULL)
-		obj = local_index_find_or_create(env, lfsck->li_los, parent,
-					name, S_IFREG | S_IRUGO | S_IWUSR, ft);
-	else
-		obj = local_file_find_or_create(env, lfsck->li_los, parent,
-					name, S_IFREG | S_IRUGO | S_IWUSR);
+	obj = local_index_find_or_create(env, lfsck->li_los, parent, name,
+					 S_IFREG | S_IRUGO | S_IWUSR,
+					 &dt_lfsck_features);
 
 	return obj;
 }
@@ -522,8 +517,7 @@ static int lfsck_namespace_load_sub_trace_files(const struct lu_env *env,
 		}
 
 		obj = lfsck_namespace_load_one_trace_file(env, com,
-					com->lc_lfsck->li_lfsck_dir,
-					name, &dt_lfsck_features, reset);
+				com->lc_lfsck->li_lfsck_dir, name, reset);
 		if (IS_ERR(obj))
 			return PTR_ERR(obj);
 
@@ -3752,7 +3746,7 @@ static int lfsck_namespace_reset(const struct lu_env *env,
 	lfsck_object_put(env, com->lc_obj);
 	com->lc_obj = NULL;
 	dto = lfsck_namespace_load_one_trace_file(env, com, root,
-				LFSCK_NAMESPACE, NULL, true);
+						  LFSCK_NAMESPACE, true);
 	if (IS_ERR(dto))
 		GOTO(out, rc = PTR_ERR(dto));
 
@@ -6440,9 +6434,10 @@ int lfsck_namespace_setup(const struct lu_env *env,
 	if (unlikely(!dt_try_as_dir(env, root)))
 		GOTO(out, rc = -ENOTDIR);
 
-	obj = local_file_find_or_create(env, lfsck->li_los, root,
-					LFSCK_NAMESPACE,
-					S_IFREG | S_IRUGO | S_IWUSR);
+	obj = local_index_find_or_create(env, lfsck->li_los, root,
+					 LFSCK_NAMESPACE,
+					 S_IFREG | S_IRUGO | S_IWUSR,
+					 &dt_lfsck_features);
 	if (IS_ERR(obj))
 		GOTO(out, rc = PTR_ERR(obj));
 
