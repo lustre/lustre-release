@@ -4126,7 +4126,6 @@ static int lfsck_namespace_exec_oit(const struct lu_env *env,
 
 out:
 	down_write(&com->lc_sem);
-	com->lc_new_checked++;
 	if (S_ISDIR(lfsck_object_type(obj)))
 		ns->ln_dirs_checked++;
 	if (rc != 0)

@@ -2372,9 +2372,6 @@ int lfsck_checkpoint_generic(const struct lu_env *env,
 	struct ptlrpc_thread		*athread = &lad->lad_thread;
 	struct l_wait_info		 lwi	 = { 0 };
 
-	if (com->lc_new_checked == 0)
-		return LFSCK_CHECKPOINT_SKIP;
-
 	l_wait_event(mthread->t_ctl_waitq,
 		     list_empty(&lad->lad_req_list) ||
 		     !thread_is_running(mthread) ||
