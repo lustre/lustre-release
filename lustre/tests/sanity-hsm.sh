@@ -45,6 +45,14 @@ check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
 
 build_test_filter
 
+# if there is no CLIENT1 defined, some tests can be ran on localhost
+CLIENT1=${CLIENT1:-$HOSTNAME}
+# if CLIENT2 doesn't exist then use CLIENT1 instead
+# All tests should use CLIENT2 with MOUNT2 only therefore it will work if
+# $CLIENT2 == CLIENT1
+# Exception is the test which need two separate nodes
+CLIENT2=${CLIENT2:-$CLIENT1}
+
 #
 # In order to test multiple remote HSM agents, a new facet type named "AGT" and
 # the following associated variables are added:
@@ -206,7 +214,8 @@ copytool_monitor_cleanup() {
 
 copytool_setup() {
 	local facet=${1:-$SINGLEAGT}
-	local lustre_mntpnt=${2:-$MOUNT}
+	# Use MOUNT2 by default if defined
+	local lustre_mntpnt=${2:-${MOUNT2:-$MOUNT}}
 	local arc_id=$3
 	local hsm_root=${4:-$(copytool_device $facet)}
 	local agent=$(facet_active_host $facet)
@@ -3399,11 +3408,24 @@ check_agent_unregistered() {
 	done
 }
 
-test_106() {
-	local uuid=$(do_rpc_nodes $(facet_active_host $SINGLEAGT) \
-		get_client_uuid $MOUNT | cut -d' ' -f2)
+get_agent_uuid() {
+	local agent=${1:-$(facet_active_host $SINGLEAGT)}
 
+	# Lustre mount-point is mandatory and last parameter on
+	# copytool cmd-line.
+	local mntpnt=$(do_rpc_nodes $agent pgrep -fl $HSMTOOL_BASE |
+		       grep -v pgrep | awk '{print $NF}')
+	[ -n "$mntpnt" ] || error "Found no Agent or with no mount-point "\
+				  "parameter"
+	do_rpc_nodes $agent get_client_uuid $mntpnt | cut -d' ' -f2
+}
+
+test_106() {
+	# test needs a running copytool
 	copytool_setup
+
+	local uuid=$(get_agent_uuid $(facet_active_host $SINGLEAGT))
+
 	check_agent_registered $uuid
 
 	search_copytools || error "No copytool found"
@@ -3412,6 +3434,7 @@ test_106() {
 	check_agent_unregistered $uuid
 
 	copytool_setup
+	uuid=$(get_agent_uuid $(facet_active_host $SINGLEAGT))
 	check_agent_registered $uuid
 
 	copytool_cleanup
@@ -4293,12 +4316,12 @@ test_403() {
 	copytool_cleanup
 
         local agent=$(facet_active_host $SINGLEAGT)
-	local uuid=$(do_rpc_nodes $agent get_client_uuid | cut -d' ' -f2)
 
 	# deactivate all mdc for MDT0001
 	mdc_change_state $SINGLEAGT "$FSNAME-MDT0001" "deactivate"
 
 	copytool_setup
+	local uuid=$(get_agent_uuid $agent)
 	# check the agent is registered on MDT0000, and not on MDT0001
 	check_agent_registered_by_mdt $uuid 0
 	check_agent_unregistered_by_mdt $uuid 1
