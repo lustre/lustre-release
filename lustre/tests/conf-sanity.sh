@@ -5243,7 +5243,7 @@ recovery_time_min() {
 	echo $((2*$RECONNECT_DELAY_MAX))
 }
 
-test_83() {
+test_84() {
 	local facet=$SINGLEMDS
 	local num=$(echo $facet | tr -d "mds")
 	local dev=$(mdsdevname $num)
@@ -5300,7 +5300,7 @@ test_83() {
 	stop_ost2
 	stop_mds
 }
-run_test 83 "check recovery_hard_time"
+run_test 84 "check recovery_hard_time"
 
 if ! combined_mgs_mds ; then
 	stop mgs
