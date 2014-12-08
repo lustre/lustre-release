@@ -2571,7 +2571,7 @@ test_33b() {
         rm -fr $DIR/d33
         test_mkdir -p $DIR/d33
         chown $RUNAS_ID $DIR/d33
-        $RUNAS $OPENFILE -f 1286739555 $DIR/d33/f33
+        $RUNAS $OPENFILE -f 1286739555 $DIR/d33/f33 || true
 }
 run_test 33b "test open file with malformed flags (No panic)"
 
