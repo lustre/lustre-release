@@ -511,6 +511,9 @@ CONFIGURE_ARGS=
 eval set -- $ac_configure_args
 for arg; do
 	case $arg in
+		--*dir=* ) ;;
+		-C | --cache-file=* ) ;;
+		--prefix=* | --*-prefix=* ) ;;
 		--enable-dist ) ;;
 		--with-release=* ) ;;
 		--with-kmp-moddir=* ) ;;
@@ -521,6 +524,7 @@ for arg; do
 		--enable-tests | --disable-tests ) ;;
 		--enable-utils | --disable-utils ) ;;
 		--enable-iokit | --disable-iokit ) ;;
+		--enable-dlc | --disable-dlc ) ;;
 		* ) CONFIGURE_ARGS="$CONFIGURE_ARGS '$arg'" ;;
 	esac
 done
@@ -577,11 +581,9 @@ if test x$enable_zfs = xyes ; then
 fi
 if test x$enable_iokit != xyes ; then
 	RPMBINARGS="$RPMBINARGS --without lustre_iokit"
-	RPMSRCARGS="$RPMSRCARGS --without lustre_iokit"
 fi
-if test x$BUILD_DLC != xyes ; then
-	RPMBINARGS="$RPMBINARGS --without lnet_dlc"
-	RPMSRCARGS="$RPMSRCARGS --without lnet_dlc"
+if test x$USE_DLC = xyes ; then
+	RPMBINARGS="$RPMBINARGS --with lnet_dlc"
 fi
 
 RPMBUILD_BINARY_ARGS=$RPMBINARGS

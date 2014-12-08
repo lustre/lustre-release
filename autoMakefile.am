@@ -193,7 +193,7 @@ checkstack:
 	{ for MOD in $$(find . -name "*.ko"); do			     \
 		objdump -d $$MOD | perl contrib/scripts/checkstack.pl;	     \
 	  done } | grep -v " bug " | sort -nr | uniq > ${CSTK}
-	[ -f ${CSTKO} ] && ! diff -u ${CSTKO} ${CSTK} || head -30 ${CSTK}
+	[ -f ${CSTKO} ] && ! diff -u ${CSTKO} ${CSTK} || head -n 30 ${CSTK}
 
 checkstack-update:
 	[ -f ${CSTK} ] && mv -f ${CSTK} ${CSTKO}
@@ -202,11 +202,14 @@ checkstack-clean:
 	rm -f ${CSTK} ${CSTKO}
 
 module-dist-hook:
-	if [ -d .git ]; then \
-		perl lustre/scripts/version_tag.pl --make_META > $(distdir)/META; \
+	@if [ -d .git ]; then \
+		perl lustre/scripts/version_tag.pl \
+			--make_META > $(distdir)/META; \
 	elif [ -f META ]; then \
 		cp META $(distdir)/META; \
 	else \
-		echo -e "I have no idea how to create a META file in $(distdir).\nPlease file a bug at http://bugzilla.lustre.org/"; \
+		echo -e "\n" \
+		"*** I have no idea how to create a META file in $(distdir).\n"\
+		"*** Please file a bug at https://jira.hpdd.intel.com/\n"; \
 		exit 1; \
 	fi

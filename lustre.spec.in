@@ -18,19 +18,21 @@
 %endif
 
 %{!?version: %global version @VERSION@}
-%{!?kver: %global kver ""}
-%{!?kdir: %global kdir %(dir=$(echo "%configure_args" | sed -ne 's/.*--with-linux=\\([^ ][^ ]*\\).*$/\\1/p'); if [ -n "$dir" ]; then echo "$dir"; else if [ -n "%kver" ]; then kversion="%kver"; else kversion="$(uname -r)"; fi; echo "/lib/modules/$kversion/source"; fi)}
-
-%{!?kobjdir: %global kobjdir %(dir=$(echo "%configure_args" | sed -ne 's/.*--with-linux-obj=\\([^ ][^ ]*\\).*$/\\1/p'); if [ -n "$dir" ]; then echo "$dir"; else if [ -n "%kver" ]; then kversion="%kver"; else kversion="$(uname -r)"; fi; if [ "%kdir" = "/lib/modules/$kversion/source" ]; then echo "/lib/modules/$kversion/build"; else echo "%kdir"; fi; fi)}
+%{!?kver:    %global kver    %(uname -r)}
+%{!?kdir:    %global kdir    /lib/modules/%{kver}/source}
+%{!?kobjdir: %global kobjdir %(if [ "%{kdir}" = "/lib/modules/%{kver}/source" ]; then echo "/lib/modules/%{kver}/build"; else echo "%{kdir}"; fi)}
 
 # as an alternative to this implementation we could simply "make -C $kdir kernelversion"
-%{!?kversion: %global kversion %(if test -s %kobjdir/include/generated/utsrelease.h ; then LINUXRELEASEHEADER=%kobjdir/include/generated/utsrelease.h ; elif test -s %kobjdir/include/linux/utsrelease.h ; then LINUXRELEASEHEADER=%kobjdir/include/linux/utsrelease.h ; else LINUXRELEASEHEADER=%kobjdir/include/linux/version.h; fi; sed -ne '/^#define UTS_RELEASE/s/.*"\\(.*\\)"$/\\1/p' $LINUXRELEASEHEADER)}
-
-%{!?downstream_release: %global downstream_release "@DOWNSTREAM_RELEASE@"}
+%{!?kversion: %global kversion %(files="include/generated/utsrelease.h include/linux/utsrelease.h include/linux/version.h"; for f in $files; do if test -r %{kobjdir}/$f && grep UTS_RELEASE %{kobjdir}/$f >/dev/null; then sed -ne '/^#define UTS_RELEASE/s/.*"\\(.*\\)"$/\\1/p' %{kobjdir}/$f; break; fi; done)}
 
 %define buildid %(if [ -n "@BUILDID@" ]; then echo "_@BUILDID@"; fi)
 
-%{!?myrelease: %global myrelease %(if [ -n "%downstream_release" ]; then echo -n "%{downstream_release}_"; fi; echo %kversion | tr '-' '_')}
+%if 0%{?build_src_rpm}
+    %{!?myrelease: %global myrelease 1}
+%else
+    %{!?downstream_release: %global downstream_release "@DOWNSTREAM_RELEASE@"}
+    %{!?myrelease: %global myrelease %(if [ -n "%downstream_release" ]; then echo -n "%{downstream_release}_"; fi; echo %kversion | tr '-' '_')}
+%endif
 
 # always append the buildid, even when the caller defines %release
 %define fullrelease %{myrelease}%{buildid}
@@ -57,7 +59,7 @@
 
 # for those uses that don't want the -smp/-bigsmp (or the .arch) on the end
 # of %kversion
-%define krequires %(bash -c "echo %{kversion} | sed -e 's/\.x86_64$//' -e 's/\.i[3456]86$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/-ppc64$//' -e 's/-default$//'")
+%define krequires %(echo %{kversion} | sed -e 's/\.x86_64$//' -e 's/\.i[3456]86$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/-ppc64$//' -e 's/-default$//')
 
 # Set the package name prefix
 %if %{undefined lustre_name}
@@ -81,7 +83,7 @@
 %endif
 
 %if %{defined cross_path} && %{defined post_script}
-%define rpm_post_base %(echo $(dirname %{cross_path})/%{lustre_name})
+%define rpm_post_base %(dirname %{cross_path})/%{lustre_name}
 %endif
 
 # SUSE don't support .debug_info section from cross compiler:
@@ -309,53 +311,16 @@ cd $RPM_BUILD_DIR/lustre-%{version}
 # override %optflags so that the vendor's overzealous flags don't create
 # build failures
 %define optflags -g -O2 -Werror
-CONFIGURE_ARGS="%{?configure_args} --with-release=%release"
 
-%if %{with lustre_tests}
-CONFIGURE_ARGS="$CONFIGURE_ARGS --enable-tests"
-%else
-CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-tests"
-%endif
-
-%if %{with lustre_utils}
-CONFIGURE_ARGS="$CONFIGURE_ARGS --enable-utils"
-%else
-CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-utils"
-%endif
-
-%if %{without lustre_iokit}
-CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-iokit"
-%endif
-
-%if %{with lustre_modules}
-CONFIGURE_ARGS="$CONFIGURE_ARGS --enable-modules"
-%else
-CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-modules"
-%endif
-
-%if %{without servers}
-CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-server"
-%endif
-
-%if %{without ldiskfs}
-CONFIGURE_ARGS="$CONFIGURE_ARGS --disable-ldiskfs"
-%endif
-
-%if %{without zfs}
-CONFIGURE_ARGS="$CONFIGURE_ARGS --without-zfs"
-%endif
-
-# if %%kdir was given, make sure it's not in the configure arguments
-if [ -n "%kdir" ]; then
+CONFIGURE_ARGS="%{?configure_args}"
+if [ -n "$CONFIGURE_ARGS" ]; then
+	# make sure %%kdir and %%kobjdir are not in the configure arguments
 	CONFIGURE_ARGS=$(echo $CONFIGURE_ARGS | sed -e 's/"\?--with-linux=[^ ][^ ]* \?//')
-fi
-# ditto for %%kobjdir
-if [ -n "%kobjdir" ]; then
 	CONFIGURE_ARGS=$(echo $CONFIGURE_ARGS | sed -e 's/"\?--with-linux-obj=[^ ][^ ]* \?//')
+	# remove --with-kmp-moddir from configure arguments,
+	# it will be set --with-kmp-moddir=%%kmoddir
+	CONFIGURE_ARGS=$(echo $CONFIGURE_ARGS | sed -e 's/"\?--with-kmp-moddir=[^ ][^ ]* \?//')
 fi
-# remove --with-kmp-moddir from configure arguments,
-# it will be set --with-kmp-moddir=%%kmoddir
-CONFIGURE_ARGS=$(echo $CONFIGURE_ARGS | sed -e 's/"\?--with-kmp-moddir=[^ ][^ ]* \?//')
 
 # we need to eval "configure" because $CONFIGURE_ARGS could have a quoted
 # string in it which we don't want word splitted by the shell
@@ -363,9 +328,20 @@ CONFIGURE_ARGS=$(echo $CONFIGURE_ARGS | sed -e 's/"\?--with-kmp-moddir=[^ ][^ ]*
 # inside $CONFIGURE_ARGS
 %define eval_configure %(echo '%configure' | sed -e 's#\./configure#eval ./configure#' -e 's/--\\(build\\|host\\|target\\)=[^ ][^ ]* //g')
 
-%eval_configure \
-	%{?kdir: --with-linux=%kdir} %{?kobjdir: --with-linux-obj=%kobjdir} \
-	$CONFIGURE_ARGS --with-kmp-moddir=%{kmoddir}
+%eval_configure $CONFIGURE_ARGS \
+	%{?with_lustre_tests:--enable-tests}%{!?with_lustre_tests:--disable-tests} \
+	%{?with_lustre_utils:--enable-utils}%{!?with_lustre_utils:--disable-utils} \
+	%{?with_lustre_modules:--enable-modules}%{!?with_lustre_modules:--disable-modules} \
+	%{!?with_lustre_iokit:--disable-iokit} \
+	%{!?with_ldiskfs:--disable-ldiskfs} \
+	%{!?with_servers:--disable-server} \
+	%{!?with_zfs:--without-zfs} \
+	%{!?with_lnet_dlc:--disable-dlc} \
+	--with-release=%{release} \
+	--with-linux=%{kdir} \
+	--with-linux-obj=%{kobjdir} \
+	--with-kmp-moddir=%{kmoddir}
+
 make %{?_smp_mflags} -s %{?make_args}
 
 %install
@@ -401,26 +377,22 @@ chmod -R go-w lustre-source/lustre-%{version}
 # fc18 needs 'x' permission for library files
 find $RPM_BUILD_ROOT -name \*.so -type f -exec chmod +x {} \;
 
-if [ -f $RPM_BUILD_ROOT%{_libdir}/liblnetconfig.a ] ; then
-  echo '%attr(-, root, root) %{_libdir}/liblnetconfig.a' >>lustre.files
-  echo '%attr(-, root, root) %{_libdir}/liblnetconfig.so' >>lustre.files
-fi
+%if %{with lnet_dlc}
+echo '%attr(-, root, root) %{_libdir}/liblnetconfig.a' >>lustre.files
+echo '%attr(-, root, root) %{_libdir}/liblnetconfig.so' >>lustre.files
+%endif
 
-if [ -f $RPM_BUILD_ROOT%{_libdir}/liblustre.so ] ; then
-  echo '%{_libdir}/liblustre.a' >>lustre.files
-  echo '%{_libdir}/liblustre.so' >>lustre.files
-fi
-
-if [ -f $RPM_BUILD_ROOT%{_libdir}/libiam.a ] ; then
-  echo '%{_libdir}/libiam.a' >>lustre.files
-fi
+%if %{with ldiskfs}
+echo '%{_libdir}/libiam.a' >>lustre.files
+%endif
 
 if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/snmp ] ; then
-  echo '%{_libdir}/lustre/snmp' >>lustre.files
-  echo '%{_datadir}/lustre/snmp/mibs' >>lustre.files
+	echo '%{_libdir}/lustre/snmp' >>lustre.files
+	echo '%{_datadir}/lustre/snmp/mibs' >>lustre.files
 fi
 
-find $RPM_BUILD_ROOT%{_libdir}/@PACKAGE@/ -name \*.la -type f -delete
+find $RPM_BUILD_ROOT%{_libdir}/@PACKAGE@ \
+    -name \*.la -type f -exec rm -f {} \;
 
 %if %{with lustre_tests}
 echo '%{_libdir}/lustre/tests/*' >>lustre-tests.files

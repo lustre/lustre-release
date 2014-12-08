@@ -40,9 +40,8 @@ AM_CFLAGS = $(LLCFLAGS)
 
 if BUILD_DLC
 SUBDIRS = lnetconfig
-endif
-
 AM_LDFLAGS := -L$(top_builddir)/lnet/utils/lnetconfig
+endif
 
 LIBCFS= $(top_builddir)/libcfs/libcfs/libcfs.a
 LIBCFSUTIL= $(top_builddir)/libcfs/libcfs/libcfsutil.a

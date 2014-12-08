@@ -952,12 +952,6 @@ build_lustre() {
         targets="--target $arch $targets"
     done
 
-    local confoptions=""
-
-    if $PATCHLESS; then
-        confoptions="$confoptions --disable-server"
-    fi
-
     local rpmbuildopt='-tb'
     if $NORPM; then
         rpmbuildopt='-tc'
@@ -1002,7 +996,7 @@ build_lustre() {
     fi
 
     RPMBUILD_DEFS="$RPMBUILD_DEFS ${FIND_REQUIRES:+--define \"__find_requires $FIND_REQUIRES\"}"
-    RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"configure_args $confoptions ${CONFIGURE_FLAGS}\""
+    RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"configure_args ${CONFIGURE_FLAGS}\""
     RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"kdir $linux\""
     RPMBUILD_DEFS="$RPMBUILD_DEFS ${linuxobj:+--define \"kobjdir $linuxobj\"}"
     RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"_tmppath $TMPDIR\""
