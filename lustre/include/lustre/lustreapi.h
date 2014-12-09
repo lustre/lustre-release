@@ -46,6 +46,9 @@
 #include <stdint.h>
 #include <lustre/lustre_user.h>
 
+extern bool liblustreapi_initialized;
+
+
 typedef void (*llapi_cb_t)(char *obd_type_name, char *obd_name, char *obd_uuid,
 			   void *args);
 
