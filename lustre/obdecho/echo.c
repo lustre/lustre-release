@@ -402,8 +402,7 @@ static int echo_preprw(const struct lu_env *env, int cmd,
 		       struct obd_export *export, struct obdo *oa,
 		       int objcount, struct obd_ioobj *obj,
 		       struct niobuf_remote *nb, int *pages,
-		       struct niobuf_local *res, struct obd_trans_info *oti,
-		       struct lustre_capa *unused)
+		       struct niobuf_local *res, struct obd_trans_info *oti)
 {
         struct obd_device *obd;
         int tot_bytes = 0;

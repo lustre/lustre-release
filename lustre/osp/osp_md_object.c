@@ -501,13 +501,11 @@ int osp_md_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
  * \param[in] dt	object to set attributes
  * \param[in] attr	attributes to be set
  * \param[in] th	the transaction handle
- * \param[in] capa	capability of setting attributes (not yet implemented).
  *
  * \retval		only return 0 for now
  */
 int osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,
-		    const struct lu_attr *attr, struct thandle *th,
-		    struct lustre_capa *capa)
+		    const struct lu_attr *attr, struct thandle *th)
 {
 	int rc = 0;
 
@@ -624,14 +622,12 @@ static int osp_md_object_write_locked(const struct lu_env *env,
  * \param[in] dt	index object to lookup
  * \param[out] rec	record in which to return lookup result
  * \param[in] key	key of index which will be looked up
- * \param[in] capa	capability of lookup (not yet implemented)
  *
  * \retval		1 if the lookup succeeds.
  * \retval              negative errno if the lookup fails.
  */
 static int osp_md_index_lookup(const struct lu_env *env, struct dt_object *dt,
-			       struct dt_rec *rec, const struct dt_key *key,
-			       struct lustre_capa *capa)
+			       struct dt_rec *rec, const struct dt_key *key)
 {
 	struct lu_buf		*lbuf	= &osp_env_info(env)->osi_lb2;
 	struct osp_device	*osp	= lu2osp_dev(dt->do_lu.lo_dev);
@@ -789,7 +785,6 @@ static int osp_md_declare_index_insert(const struct lu_env *env,
  * \param[in] rec	record of the index to be inserted
  * \param[in] key	key of the index to be inserted
  * \param[in] th	the transaction handle
- * \param[in] capa	capability of insert (not yet implemented)
  * \param[in] ignore_quota quota enforcement for insert
  *
  * \retval		only return 0 for now
@@ -799,7 +794,6 @@ static int osp_md_index_insert(const struct lu_env *env,
 			       const struct dt_rec *rec,
 			       const struct dt_key *key,
 			       struct thandle *th,
-			       struct lustre_capa *capa,
 			       int ignore_quota)
 {
 	int rc = 0;
@@ -890,15 +884,13 @@ static int osp_md_declare_index_delete(const struct lu_env *env,
  * \param[in] dt	object for which to delete index
  * \param[in] key	key of the index which will be deleted
  * \param[in] th	the transaction handle
- * \param[in] capa	capability of delete (not yet implemented)
  *
  * \retval		only return 0 for now
  */
 static int osp_md_index_delete(const struct lu_env *env,
 			       struct dt_object *dt,
 			       const struct dt_key *key,
-			       struct thandle *th,
-			       struct lustre_capa *capa)
+			       struct thandle *th)
 {
 	int rc = 0;
 
@@ -1261,15 +1253,13 @@ static ssize_t osp_md_declare_write(const struct lu_env *env,
  * \param[in] buf	buffer to write which includes an embedded size field
  * \param[in] pos	offet in the object to start writing at
  * \param[in] th	transaction handle
- * \param[in] capa	capability of the write (not yet implemented)
  * \param[in] ignore_quota quota enforcement for this write
  *
  * \retval		the buffer size in bytes.
  */
 static ssize_t osp_md_write(const struct lu_env *env, struct dt_object *dt,
 			    const struct lu_buf *buf, loff_t *pos,
-			    struct thandle *handle,
-			    struct lustre_capa *capa, int ignore_quota)
+			    struct thandle *handle, int ignore_quota)
 {
 	*pos += buf->lb_len;
 	return buf->lb_len;

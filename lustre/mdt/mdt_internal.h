@@ -200,15 +200,6 @@ struct mdt_device {
 
         struct upcall_cache        *mdt_identity_cache;
 
-	/* capability keys */
-	unsigned long              mdt_capa_timeout;
-	__u32                      mdt_capa_alg;
-	struct dt_object          *mdt_ck_obj;
-	unsigned long              mdt_ck_timeout;
-	unsigned long              mdt_ck_expiry;
-	struct timer_list          mdt_ck_timer;
-	struct ptlrpc_thread       mdt_ck_thread;
-	struct lustre_capa_key     mdt_capa_keys[2];
 	unsigned int               mdt_capa_conf:1,
 				   /* Enable remote dir on non-MDT0 */
 				   mdt_enable_remote_dir:1;
@@ -429,7 +420,6 @@ struct mdt_thread_info {
 	loff_t                     mti_off;
 	struct lu_buf              mti_buf;
 	struct lu_buf              mti_big_buf;
-	struct lustre_capa_key     mti_capa_key;
 
         /* Ops object filename */
         struct lu_name             mti_name;
@@ -1023,15 +1013,6 @@ void mdt_rename_counter_tally(struct mdt_thread_info *info,
 			      struct mdt_device *mdt,
 			      struct ptlrpc_request *req,
 			      struct mdt_object *src, struct mdt_object *tgt);
-
-/* Capability */
-int mdt_ck_thread_start(struct mdt_device *mdt);
-void mdt_ck_thread_stop(struct mdt_device *mdt);
-void mdt_ck_timer_callback(unsigned long castmeharder);
-int mdt_capa_keys_init(const struct lu_env *env, struct mdt_device *mdt);
-void mdt_set_capainfo(struct mdt_thread_info *info, int offset,
-		      const struct lu_fid *fid, struct lustre_capa *capa);
-void mdt_dump_capainfo(struct mdt_thread_info *info);
 
 static inline struct obd_device *mdt2obd_dev(const struct mdt_device *mdt)
 {

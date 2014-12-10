@@ -66,7 +66,7 @@ static void *lprocfs_quota_seq_start(struct seq_file *p, loff_t *pos)
 
 	/* initialize iterator */
 	iops = &lqp->lqp_obj->do_index_ops->dio_it;
-	it = iops->init(&lqp->lqp_env, lqp->lqp_obj, 0, BYPASS_CAPA);
+	it = iops->init(&lqp->lqp_env, lqp->lqp_obj, 0);
 	if (IS_ERR(it)) {
 		CERROR("%s: failed to initialize iterator: rc = %ld\n",
 		       lqp->lqp_obj->do_lu.lo_dev->ld_obd->obd_name,

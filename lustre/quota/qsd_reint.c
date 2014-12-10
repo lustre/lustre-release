@@ -305,7 +305,7 @@ static int qsd_reconciliation(const struct lu_env *env,
 	LASSERT(qqi->qqi_glb_obj != NULL);
 	iops = &qqi->qqi_glb_obj->do_index_ops->dio_it;
 
-	it = iops->init(env, qqi->qqi_glb_obj, 0, BYPASS_CAPA);
+	it = iops->init(env, qqi->qqi_glb_obj, 0);
 	if (IS_ERR(it)) {
 		CWARN("%s: Initialize it for "DFID" failed. %ld\n",
 		      qsd->qsd_svname, PFID(&qqi->qqi_fid), PTR_ERR(it));

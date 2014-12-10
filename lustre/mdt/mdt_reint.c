@@ -57,33 +57,6 @@ static inline void mdt_reint_init_ma(struct mdt_thread_info *info,
         ma->ma_valid = 0;
 }
 
-static int mdt_create_pack_capa(struct mdt_thread_info *info, int rc,
-                                struct mdt_object *object,
-                                struct mdt_body *repbody)
-{
-        ENTRY;
-
-        /* for cross-ref mkdir, mds capa has been fetched from remote obj, then
-         * we won't go to below*/
-	if (repbody->mbo_valid & OBD_MD_FLMDSCAPA)
-                RETURN(rc);
-
-	if (rc == 0 && info->mti_mdt->mdt_lut.lut_mds_capa &&
-	    exp_connect_flags(info->mti_exp) & OBD_CONNECT_MDS_CAPA) {
-                struct lustre_capa *capa;
-
-                capa = req_capsule_server_get(info->mti_pill, &RMF_CAPA1);
-                LASSERT(capa);
-                capa->lc_opc = CAPA_OPC_MDS_DEFAULT;
-                rc = mo_capa_get(info->mti_env, mdt_object_child(object), capa,
-                                 0);
-                if (rc == 0)
-			repbody->mbo_valid |= OBD_MD_FLMDSCAPA;
-        }
-
-        RETURN(rc);
-}
-
 /**
  * Get version of object by fid.
  *
@@ -400,10 +373,6 @@ static int mdt_md_create(struct mdt_thread_info *info)
 
 		ma->ma_need = MA_INODE;
                 ma->ma_valid = 0;
-                /* capa for cross-ref will be stored here */
-                ma->ma_capa = req_capsule_server_get(info->mti_pill,
-                                                     &RMF_CAPA1);
-                LASSERT(ma->ma_capa);
 
                 mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                                OBD_FAIL_MDS_REINT_CREATE_WRITE);
@@ -437,11 +406,9 @@ static int mdt_md_create(struct mdt_thread_info *info)
 						   mdt_object_fid(child));
 		}
 out_put_child:
-		mdt_create_pack_capa(info, rc, child, repbody);
 		mdt_object_put(info->mti_env, child);
 	} else {
 		rc = PTR_ERR(child);
-		mdt_create_pack_capa(info, rc, NULL, repbody);
 	}
 unlock_parent:
 	mdt_object_unlock(info, parent, lh, rc);
@@ -749,21 +716,6 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 
 	mdt_pack_attr2body(info, repbody, &ma->ma_attr, mdt_object_fid(mo));
 
-	if (info->mti_mdt->mdt_lut.lut_oss_capa &&
-	    exp_connect_flags(info->mti_exp) & OBD_CONNECT_OSS_CAPA &&
-	    S_ISREG(lu_object_attr(&mo->mot_obj)) &&
-	    (ma->ma_attr.la_valid & LA_SIZE)) {
-                struct lustre_capa *capa;
-
-                capa = req_capsule_server_get(info->mti_pill, &RMF_CAPA2);
-                LASSERT(capa);
-                capa->lc_opc = CAPA_OPC_OSS_DEFAULT | CAPA_OPC_OSS_TRUNC;
-                rc = mo_capa_get(info->mti_env, mdt_object_child(mo), capa, 0);
-                if (rc)
-                        GOTO(out_put, rc);
-		repbody->mbo_valid |= OBD_MD_FLOSSCAPA;
-        }
-
         EXIT;
 out_put:
         mdt_object_put(info->mti_env, mo);
@@ -944,7 +896,6 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
 			ma->ma_need = MA_INODE;
 			ma->ma_valid = 0;
-			mdt_set_capainfo(info, 1, child_fid, BYPASS_CAPA);
 			rc = mdo_unlink(info->mti_env, mdt_object_child(mp),
 					NULL, &rr->rr_name, ma, no_name);
 			GOTO(put_child, rc);
@@ -995,8 +946,6 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 		       OBD_FAIL_MDS_REINT_UNLINK_WRITE);
 	/* save version when object is locked */
 	mdt_version_get_save(info, mc, 1);
-
-	mdt_set_capainfo(info, 1, child_fid, BYPASS_CAPA);
 
 	mutex_lock(&mc->mot_lov_mutex);
 
@@ -1799,7 +1748,6 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 	tgt_vbr_obj_set(info->mti_env, mdt_obj2dt(mold));
 	/* save version after locking */
 	mdt_version_get_save(info, mold, 2);
-	mdt_set_capainfo(info, 2, old_fid, BYPASS_CAPA);
 
 	/* step 4: find & lock the new object. */
 	/* new target object may not exist now */
@@ -1872,7 +1820,6 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 
 		/* get and save version after locking */
 		mdt_version_get_save(info, mnew, 3);
-		mdt_set_capainfo(info, 3, new_fid, BYPASS_CAPA);
 	} else if (rc != -EREMOTE && rc != -ENOENT) {
 		GOTO(out_put_old, rc);
 	} else {

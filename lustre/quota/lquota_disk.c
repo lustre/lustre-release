@@ -486,7 +486,7 @@ int lquota_disk_for_each_slv(const struct lu_env *env, struct dt_object *parent,
 	sprintf(name, "0x%x-", glb_fid->f_oid);
 
 	iops = &parent->do_index_ops->dio_it;
-	it = iops->init(env, parent, 0, BYPASS_CAPA);
+	it = iops->init(env, parent, 0);
 	if (IS_ERR(it)) {
 		OBD_FREE(name, LQUOTA_NAME_MAX);
 		RETURN(PTR_ERR(it));
@@ -578,8 +578,7 @@ int lquota_disk_read(const struct lu_env *env, struct dt_object *obj,
 
 	/* lookup on-disk record from index file */
 	dt_read_lock(env, obj, 0);
-	rc = dt_lookup(env, obj, rec, (struct dt_key *)&id->qid_uid,
-		       BYPASS_CAPA);
+	rc = dt_lookup(env, obj, rec, (struct dt_key *)&id->qid_uid);
 	dt_read_unlock(env, obj);
 
 	RETURN(rc);
@@ -655,11 +654,10 @@ int lquota_disk_write(const struct lu_env *env, struct thandle *th,
 	dt_write_lock(env, obj, 0);
 
 	/* check whether there is already an existing record for this ID */
-	rc = dt_lookup(env, obj, (struct dt_rec *)&qti->qti_rec, key,
-		       BYPASS_CAPA);
+	rc = dt_lookup(env, obj, (struct dt_rec *)&qti->qti_rec, key);
 	if (rc == 0) {
 		/* delete existing record in order to replace it */
-		rc = dt_delete(env, obj, key, th, BYPASS_CAPA);
+		rc = dt_delete(env, obj, key, th);
 		if (rc)
 			GOTO(out, rc);
 	} else if (rc == -ENOENT) {
@@ -671,11 +669,11 @@ int lquota_disk_write(const struct lu_env *env, struct thandle *th,
 
 	if (rec != NULL) {
 		/* insert record with updated quota settings */
-		rc = dt_insert(env, obj, rec, key, th, BYPASS_CAPA, 1);
+		rc = dt_insert(env, obj, rec, key, th, 1);
 		if (rc) {
 			/* try to insert the old one */
 			rc = dt_insert(env, obj, (struct dt_rec *)&qti->qti_rec,
-				       key, th, BYPASS_CAPA, 1);
+				       key, th, 1);
 			LASSERTF(rc == 0, "failed to insert record in quota "
 				 "index "DFID"\n",
 				 PFID(lu_object_fid(&obj->do_lu)));
@@ -782,19 +780,18 @@ int lquota_disk_write_glb(const struct lu_env *env, struct dt_object *obj,
 		if (tmp == NULL)
 			GOTO(out_lock, rc = -ENOMEM);
 
-		rc = dt_lookup(env, obj, (struct dt_rec *)tmp, key,
-			       BYPASS_CAPA);
+		rc = dt_lookup(env, obj, (struct dt_rec *)tmp, key);
 
 		OBD_FREE_PTR(tmp);
 		if (rc == 0) {
-			rc = dt_delete(env, obj, key, th, BYPASS_CAPA);
+			rc = dt_delete(env, obj, key, th);
 			if (rc)
 				GOTO(out_lock, rc);
 		}
 		rc = 0;
 	}
 
-	rc = dt_insert(env, obj, (struct dt_rec *)rec, key, th, BYPASS_CAPA, 1);
+	rc = dt_insert(env, obj, (struct dt_rec *)rec, key, th, 1);
 out_lock:
 	dt_write_unlock(env, obj);
 out:

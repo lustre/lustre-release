@@ -180,9 +180,7 @@ int seq_store_read(struct lu_server_seq *seq,
         info = lu_context_key_get(&env->le_ctx, &seq_thread_key);
         LASSERT(info != NULL);
 
-	rc = seq->lss_obj->do_body_ops->dbo_read(env, seq->lss_obj,
-						 seq_store_buf(info),
-						 &pos, BYPASS_CAPA);
+	rc = dt_read(env, seq->lss_obj, seq_store_buf(info), &pos);
 
         if (rc == sizeof(info->sti_space)) {
                 range_le_to_cpu(&seq->lss_space, &info->sti_space);

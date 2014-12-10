@@ -409,68 +409,6 @@ out:
 }
 LPROC_SEQ_FOPS_WO_TYPE(mdt, identity_info);
 
-/* for debug only */
-static int mdt_capa_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_device *obd = m->private;
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return seq_printf(m, "capability on: %s %s\n",
-			  mdt->mdt_lut.lut_oss_capa ? "oss" : "",
-			  mdt->mdt_lut.lut_mds_capa ? "mds" : "");
-}
-
-static ssize_t
-mdt_capa_seq_write(struct file *file, const char __user *buffer,
-		   size_t count, loff_t *off)
-{
-	struct seq_file   *m = file->private_data;
-	struct obd_device *obd = m->private;
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	int val, rc;
-
-	rc = lprocfs_write_helper(buffer, count, &val);
-	if (rc)
-		return rc;
-
-	if (val < 0 || val > 3) {
-		CERROR("invalid capability mode, only 0/2/3 is accepted.\n"
-		       " 0:  disable fid capability\n"
-		       " 2:  enable MDS fid capability\n"
-		       " 3:  enable both MDS and OSS fid capability\n");
-		return -EINVAL;
-	}
-
-	/* OSS fid capability needs enable both MDS and OSS fid capability on
-	 * MDS */
-	if (val == 1) {
-		CERROR("can't enable OSS fid capability only, you should use "
-		       "'3' to enable both MDS and OSS fid capability.\n");
-		return -EINVAL;
-	}
-
-	spin_lock(&mdt->mdt_lut.lut_flags_lock);
-	mdt->mdt_lut.lut_oss_capa = !!(val & 0x1);
-	mdt->mdt_lut.lut_mds_capa = !!(val & 0x2);
-	spin_unlock(&mdt->mdt_lut.lut_flags_lock);
-	mdt->mdt_capa_conf = 1;
-	LCONSOLE_INFO("MDS %s %s MDS fid capability.\n",
-		      mdt_obd_name(mdt),
-		      mdt->mdt_lut.lut_mds_capa ? "enabled" : "disabled");
-	LCONSOLE_INFO("MDS %s %s OSS fid capability.\n",
-		      mdt_obd_name(mdt),
-		      mdt->mdt_lut.lut_oss_capa ? "enabled" : "disabled");
-	return count;
-}
-LPROC_SEQ_FOPS(mdt_capa);
-
-static int mdt_capa_count_seq_show(struct seq_file *m, void *data)
-{
-	return seq_printf(m, "%d %d\n", capa_count[CAPA_SITE_CLIENT],
-			  capa_count[CAPA_SITE_SERVER]);
-}
-LPROC_SEQ_FOPS_RO(mdt_capa_count);
-
 static int mdt_site_stats_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -479,60 +417,6 @@ static int mdt_site_stats_seq_show(struct seq_file *m, void *data)
 	return lu_site_stats_seq_print(mdt_lu_site(mdt), m);
 }
 LPROC_SEQ_FOPS_RO(mdt_site_stats);
-
-static int mdt_capa_timeout_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_device *obd = m->private;
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return seq_printf(m, "%lu\n", mdt->mdt_capa_timeout);
-}
-
-static ssize_t
-mdt_capa_timeout_seq_write(struct file *file, const char __user *buffer,
-			   size_t count, loff_t *off)
-{
-	struct seq_file   *m = file->private_data;
-	struct obd_device *obd = m->private;
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	int val, rc;
-
-	rc = lprocfs_write_helper(buffer, count, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_capa_timeout = (unsigned long)val;
-	mdt->mdt_capa_conf = 1;
-	return count;
-}
-LPROC_SEQ_FOPS(mdt_capa_timeout);
-
-static int mdt_ck_timeout_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_device *obd = m->private;
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return seq_printf(m, "%lu\n", mdt->mdt_ck_timeout);
-}
-
-static ssize_t
-mdt_ck_timeout_seq_write(struct file *file, const char __user *buffer,
-			 size_t count, loff_t *off)
-{
-	struct seq_file	  *m = file->private_data;
-	struct obd_device *obd = m->private;
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	int val, rc;
-
-	rc = lprocfs_write_helper(buffer, count, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_ck_timeout = (unsigned long)val;
-	mdt->mdt_capa_conf = 1;
-	return count;
-}
-LPROC_SEQ_FOPS(mdt_ck_timeout);
 
 #define BUFLEN (UUID_MAX + 4)
 
@@ -780,14 +664,6 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 	  .fops =	&mdt_identity_flush_fops		},
 	{ .name =	"identity_info",
 	  .fops =	&mdt_identity_info_fops			},
-	{ .name =	"capa",
-	  .fops =	&mdt_capa_fops				},
-	{ .name =	"capa_timeout",
-	  .fops =	&mdt_capa_timeout_fops			},
-	{ .name =	"capa_key_timeout",
-	  .fops =	&mdt_ck_timeout_fops			},
-	{ .name =	"capa_count",
-	  .fops =	&mdt_capa_count_fops			},
 	{ .name =	"site_stats",
 	  .fops =	&mdt_site_stats_fops			},
 	{ .name =	"evict_client",

@@ -683,17 +683,6 @@ static int lod_commit_async(const struct lu_env *env, struct dt_device *dev)
 	return dt_commit_async(env, dt2lod_dev(dev)->lod_child);
 }
 
-/**
- * Not used
- */
-static int lod_init_capa_ctxt(const struct lu_env *env, struct dt_device *dev,
-			      int mode, unsigned long timeout,
-			      __u32 alg, struct lustre_capa_key *keys)
-{
-	struct dt_device *next = dt2lod_dev(dev)->lod_child;
-	return dt_init_capa_ctxt(env, next, mode, timeout, alg, keys);
-}
-
 static const struct dt_device_operations lod_dt_ops = {
 	.dt_root_get         = lod_root_get,
 	.dt_statfs           = lod_statfs,
@@ -704,7 +693,6 @@ static const struct dt_device_operations lod_dt_ops = {
 	.dt_sync             = lod_sync,
 	.dt_ro               = lod_ro,
 	.dt_commit_async     = lod_commit_async,
-	.dt_init_capa_ctxt   = lod_init_capa_ctxt,
 };
 
 /**

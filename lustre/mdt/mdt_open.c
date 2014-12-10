@@ -542,32 +542,6 @@ static int mdt_finish_open(struct mdt_thread_info *info,
 				       exp->exp_target_data.ted_nodemap);
 #endif
 
-	if (info->mti_mdt->mdt_lut.lut_mds_capa &&
-	    exp_connect_flags(exp) & OBD_CONNECT_MDS_CAPA) {
-                struct lustre_capa *capa;
-
-                capa = req_capsule_server_get(info->mti_pill, &RMF_CAPA1);
-                LASSERT(capa);
-                capa->lc_opc = CAPA_OPC_MDS_DEFAULT;
-                rc = mo_capa_get(info->mti_env, mdt_object_child(o), capa, 0);
-                if (rc)
-                        RETURN(rc);
-		repbody->mbo_valid |= OBD_MD_FLMDSCAPA;
-        }
-	if (info->mti_mdt->mdt_lut.lut_oss_capa &&
-	    exp_connect_flags(exp) & OBD_CONNECT_OSS_CAPA &&
-	    S_ISREG(lu_object_attr(&o->mot_obj))) {
-                struct lustre_capa *capa;
-
-                capa = req_capsule_server_get(info->mti_pill, &RMF_CAPA2);
-                LASSERT(capa);
-                capa->lc_opc = CAPA_OPC_OSS_DEFAULT | capa_open_opc(flags);
-                rc = mo_capa_get(info->mti_env, mdt_object_child(o), capa, 0);
-                if (rc)
-                        RETURN(rc);
-		repbody->mbo_valid |= OBD_MD_FLOSSCAPA;
-        }
-
         /*
          * If we are following a symlink, don't open; and do not return open
          * handle for special nodes as client required.
@@ -714,8 +688,6 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
 			rc = 0;
 		} else {
 			if (mdt_object_exists(child)) {
-				mdt_set_capainfo(info, 1, rr->rr_fid2,
-						 BYPASS_CAPA);
 				mdt_prep_ma_buf_from_rep(info, child, ma);
 				rc = mdt_attr_get_complex(info, child, ma);
 				if (rc == 0)
@@ -1171,7 +1143,6 @@ static int mdt_cross_open(struct mdt_thread_info *info,
 				goto out;
 
 			mdt_prep_ma_buf_from_rep(info, o, ma);
-			mdt_set_capainfo(info, 0, fid, BYPASS_CAPA);
 			rc = mdt_attr_get_complex(info, o, ma);
 			if (rc != 0)
 				GOTO(out, rc);
@@ -1353,7 +1324,6 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         if (rc)
                 GOTO(out_child, result = rc);
 
-        mdt_set_capainfo(info, 1, child_fid, BYPASS_CAPA);
         if (result == -ENOENT) {
 		/* Create under OBF and .lustre is not permitted */
 		if (!fid_is_md_operative(rr->rr_fid1))

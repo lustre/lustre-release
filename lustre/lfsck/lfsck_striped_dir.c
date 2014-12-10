@@ -238,16 +238,16 @@ static int lfsck_disable_master_lmv(const struct lu_env *env,
 		GOTO(unlock, rc = 0);
 
 	if (del_lmv) {
-		rc = dt_xattr_del(env, obj, XATTR_NAME_LMV, th, BYPASS_CAPA);
+		rc = dt_xattr_del(env, obj, XATTR_NAME_LMV, th);
 		if (rc != 0)
 			GOTO(unlock, rc);
 	}
 
-	rc = dt_attr_get(env, obj, la, BYPASS_CAPA);
+	rc = dt_attr_get(env, obj, la);
 	if (rc == 0 && !(la->la_flags & LUSTRE_IMMUTABLE_FL)) {
 		la->la_valid = LA_FLAGS;
 		la->la_flags |= LUSTRE_IMMUTABLE_FL;
-		rc = dt_attr_set(env, obj, la, th, BYPASS_CAPA);
+		rc = dt_attr_set(env, obj, la, th);
 	}
 
 	GOTO(unlock, rc);
@@ -845,7 +845,7 @@ int lfsck_read_stripe_lmv(const struct lu_env *env, struct dt_object *obj,
 
 	dt_read_lock(env, obj, 0);
 	rc = dt_xattr_get(env, obj, lfsck_buf_get(env, lmv, sizeof(*lmv)),
-			  XATTR_NAME_LMV, BYPASS_CAPA);
+			  XATTR_NAME_LMV);
 	dt_read_unlock(env, obj);
 	if (rc != sizeof(*lmv))
 		return rc > 0 ? -EINVAL : rc;
@@ -1043,7 +1043,7 @@ int lfsck_namespace_update_lmv(const struct lu_env *env,
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
 		GOTO(unlock, rc = 0);
 
-	rc = dt_xattr_set(env, obj, buf, XATTR_NAME_LMV, 0, th, BYPASS_CAPA);
+	rc = dt_xattr_set(env, obj, buf, XATTR_NAME_LMV, 0, th);
 
 	GOTO(unlock, rc);
 
@@ -1112,7 +1112,7 @@ static int lfsck_allow_regenerate_master_lmv(const struct lu_env *env,
 	snprintf(info->lti_tmpbuf, sizeof(info->lti_tmpbuf), DFID":%u",
 		 PFID(cfid), cidx);
 	rc = dt_lookup(env, obj, (struct dt_rec *)tfid,
-		       (const struct dt_key *)info->lti_tmpbuf, BYPASS_CAPA);
+		       (const struct dt_key *)info->lti_tmpbuf);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -1121,7 +1121,7 @@ static int lfsck_allow_regenerate_master_lmv(const struct lu_env *env,
 
 	args = lfsck->li_args_dir & ~(LUDA_VERIFY | LUDA_VERIFY_DRYRUN);
 	iops = &obj->do_index_ops->dio_it;
-	di = iops->init(env, obj, args, BYPASS_CAPA);
+	di = iops->init(env, obj, args);
 	if (IS_ERR(di))
 		RETURN(PTR_ERR(di));
 
@@ -1485,7 +1485,7 @@ int lfsck_namespace_repair_bad_name_hash(const struct lu_env *env,
 	ENTRY;
 
 	rc = dt_lookup(env, shard, (struct dt_rec *)pfid,
-		       (const struct dt_key *)dotdot, BYPASS_CAPA);
+		       (const struct dt_key *)dotdot);
 	if (rc != 0 || !fid_is_sane(pfid))
 		GOTO(log, rc);
 
@@ -1578,7 +1578,7 @@ int lfsck_namespace_scan_shard(const struct lu_env *env,
 
 	args = lfsck->li_args_dir & ~(LUDA_VERIFY | LUDA_VERIFY_DRYRUN);
 	iops = &child->do_index_ops->dio_it;
-	di = iops->init(env, child, args, BYPASS_CAPA);
+	di = iops->init(env, child, args);
 	if (IS_ERR(di))
 		GOTO(out, rc = PTR_ERR(di));
 
@@ -1688,7 +1688,7 @@ int lfsck_namespace_verify_stripe_slave(const struct lu_env *env,
 	}
 
 	rc = dt_lookup(env, obj, (struct dt_rec *)pfid,
-		       (const struct dt_key *)dotdot, BYPASS_CAPA);
+		       (const struct dt_key *)dotdot);
 	if (rc != 0 || !fid_is_sane(pfid)) {
 		rc = lfsck_namespace_trace_update(env, com, cfid,
 					LNTF_UNCERTAIN_LMV, true);
@@ -1764,7 +1764,7 @@ int lfsck_namespace_verify_stripe_slave(const struct lu_env *env,
 	}
 
 	rc = dt_lookup(env, parent, (struct dt_rec *)&tfid,
-		       (const struct dt_key *)name2, BYPASS_CAPA);
+		       (const struct dt_key *)name2);
 	if (rc != 0 || !lu_fid_eq(cfid, &tfid))
 		rc = lfsck_namespace_trace_update(env, com, cfid,
 						  LNTF_UNCERTAIN_LMV, true);

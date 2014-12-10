@@ -598,8 +598,7 @@ static int lfsck_lpf_remove_name_entry(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	rc = dt_delete(env, parent, (const struct dt_key *)name, th,
-		       BYPASS_CAPA);
+	rc = dt_delete(env, parent, (const struct dt_key *)name, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
@@ -710,14 +709,14 @@ static int lfsck_create_lpf_local(const struct lu_env *env,
 	/* 1b.2. insert dot into child dir */
 	rec->rec_fid = cfid;
 	rc = dt_insert(env, child, (const struct dt_rec *)rec,
-		       (const struct dt_key *)dot, th, BYPASS_CAPA, 1);
+		       (const struct dt_key *)dot, th, 1);
 	if (rc != 0)
 		GOTO(unlock, rc);
 
 	/* 1b.3. insert dotdot into child dir */
 	rec->rec_fid = &LU_LPF_FID;
 	rc = dt_insert(env, child, (const struct dt_rec *)rec,
-		       (const struct dt_key *)dotdot, th, BYPASS_CAPA, 1);
+		       (const struct dt_key *)dotdot, th, 1);
 	if (rc != 0)
 		GOTO(unlock, rc);
 
@@ -728,7 +727,7 @@ static int lfsck_create_lpf_local(const struct lu_env *env,
 
 	/* 3b. insert linkEA for child. */
 	rc = dt_xattr_set(env, child, &linkea_buf,
-			  XATTR_NAME_LINK, 0, th, BYPASS_CAPA);
+			  XATTR_NAME_LINK, 0, th);
 	dt_write_unlock(env, child);
 	if (rc != 0)
 		GOTO(stop, rc);
@@ -736,7 +735,7 @@ static int lfsck_create_lpf_local(const struct lu_env *env,
 	/* 4b. insert name into parent dir */
 	rec->rec_fid = cfid;
 	rc = dt_insert(env, parent, (const struct dt_rec *)rec,
-		       (const struct dt_key *)name, th, BYPASS_CAPA, 1);
+		       (const struct dt_key *)name, th, 1);
 	if (rc != 0)
 		GOTO(stop, rc);
 
@@ -865,14 +864,14 @@ static int lfsck_create_lpf_remote(const struct lu_env *env,
 	rec->rec_type = S_IFDIR;
 	rec->rec_fid = cfid;
 	rc = dt_insert(env, child, (const struct dt_rec *)rec,
-		       (const struct dt_key *)dot, th, BYPASS_CAPA, 1);
+		       (const struct dt_key *)dot, th, 1);
 	if (rc != 0)
 		GOTO(unlock, rc);
 
 	/* 1b.3. insert dotdot into child dir */
 	rec->rec_fid = &LU_LPF_FID;
 	rc = dt_insert(env, child, (const struct dt_rec *)rec,
-		       (const struct dt_key *)dotdot, th, BYPASS_CAPA, 1);
+		       (const struct dt_key *)dotdot, th, 1);
 	if (rc != 0)
 		GOTO(unlock, rc);
 
@@ -883,7 +882,7 @@ static int lfsck_create_lpf_remote(const struct lu_env *env,
 
 	/* 3b. insert linkEA for child */
 	rc = dt_xattr_set(env, child, &linkea_buf,
-			  XATTR_NAME_LINK, 0, th, BYPASS_CAPA);
+			  XATTR_NAME_LINK, 0, th);
 	if (rc != 0)
 		GOTO(unlock, rc);
 
@@ -925,7 +924,7 @@ static int lfsck_create_lpf_remote(const struct lu_env *env,
 
 	/* 5b. insert name into parent dir */
 	rc = dt_insert(env, parent, (const struct dt_rec *)rec,
-		       (const struct dt_key *)name, th, BYPASS_CAPA, 1);
+		       (const struct dt_key *)name, th, 1);
 	if (rc != 0)
 		GOTO(stop, rc);
 
@@ -997,7 +996,7 @@ static int lfsck_create_lpf(const struct lu_env *env,
 		 * the lfsck_bookmark::lb_lpf_fid successfully. So need lookup
 		 * it from MDT0 firstly. */
 		rc = dt_lookup(env, parent, (struct dt_rec *)cfid,
-			       (const struct dt_key *)name, BYPASS_CAPA);
+			       (const struct dt_key *)name);
 		if (rc != 0 && rc != -ENOENT)
 			GOTO(unlock, rc);
 
@@ -1075,7 +1074,7 @@ static int lfsck_scan_lpf_bad_entries(const struct lu_env *env,
 	int			 rc;
 	ENTRY;
 
-	it = iops->init(env, parent, LUDA_64BITHASH, BYPASS_CAPA);
+	it = iops->init(env, parent, LUDA_64BITHASH);
 	if (IS_ERR(it))
 		RETURN(PTR_ERR(it));
 
@@ -1206,7 +1205,7 @@ static int lfsck_verify_lpf_pairs(const struct lu_env *env,
 
 	fid_zero(fid);
 	rc = dt_lookup(env, child, (struct dt_rec *)fid,
-		       (const struct dt_key *)dotdot, BYPASS_CAPA);
+		       (const struct dt_key *)dotdot);
 	if (rc != 0)
 		GOTO(linkea, rc);
 
@@ -1292,7 +1291,7 @@ linkea:
 	}
 
 	rc = dt_lookup(env, parent2, (struct dt_rec *)fid,
-		       (const struct dt_key *)name2, BYPASS_CAPA);
+		       (const struct dt_key *)name2);
 	dt_read_unlock(env, child);
 	lfsck_ibits_unlock(&lh, LCK_PR);
 	if (rc != 0 && rc != -ENOENT)
@@ -1453,7 +1452,7 @@ int lfsck_verify_lpf(const struct lu_env *env, struct lfsck_instance *lfsck)
 find_child2:
 	snprintf(name, 8, "MDT%04x", node);
 	rc = dt_lookup(env, parent, (struct dt_rec *)cfid,
-		       (const struct dt_key *)name, BYPASS_CAPA);
+		       (const struct dt_key *)name);
 	if (rc == -ENOENT) {
 		if (!fid_is_zero(&bk->lb_lpf_fid))
 			goto check_child1;
@@ -3255,7 +3254,7 @@ int lfsck_register(const struct lu_env *env, struct dt_device *key,
 
 			rc = dt_lookup(env, root,
 				(struct dt_rec *)(&lfsck->li_global_root_fid),
-				(const struct dt_key *)"ROOT", BYPASS_CAPA);
+				(const struct dt_key *)"ROOT");
 			if (rc != 0)
 				GOTO(out, rc);
 
@@ -3267,7 +3266,7 @@ int lfsck_register(const struct lu_env *env, struct dt_device *key,
 				GOTO(out, rc = -ENOTDIR);
 
 			rc = dt_lookup(env, obj, (struct dt_rec *)fid,
-				(const struct dt_key *)dotlustre, BYPASS_CAPA);
+				(const struct dt_key *)dotlustre);
 			if (rc != 0)
 				GOTO(out, rc);
 
@@ -3288,8 +3287,7 @@ int lfsck_register(const struct lu_env *env, struct dt_device *key,
 
 			*pfid = *fid;
 			rc = dt_lookup(env, obj, (struct dt_rec *)fid,
-				       (const struct dt_key *)lostfound,
-				       BYPASS_CAPA);
+				       (const struct dt_key *)lostfound);
 			if (rc != 0)
 				GOTO(out, rc);
 

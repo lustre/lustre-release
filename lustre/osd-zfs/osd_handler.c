@@ -582,24 +582,6 @@ static int osd_ro(const struct lu_env *env, struct dt_device *d)
 	RETURN(0);
 }
 
-/*
- * Concurrency: serialization provided by callers.
- */
-static int osd_init_capa_ctxt(const struct lu_env *env, struct dt_device *d,
-			      int mode, unsigned long timeout, __u32 alg,
-			      struct lustre_capa_key *keys)
-{
-	struct osd_device *dev = osd_dt_dev(d);
-	ENTRY;
-
-	dev->od_fl_capa = mode;
-	dev->od_capa_timeout = timeout;
-	dev->od_capa_alg = alg;
-	dev->od_capa_keys = keys;
-
-	RETURN(0);
-}
-
 static struct dt_device_operations osd_dt_ops = {
 	.dt_root_get		= osd_root_get,
 	.dt_statfs		= osd_statfs,
@@ -611,7 +593,6 @@ static struct dt_device_operations osd_dt_ops = {
 	.dt_sync		= osd_sync,
 	.dt_commit_async	= osd_commit_async,
 	.dt_ro			= osd_ro,
-	.dt_init_capa_ctxt	= osd_init_capa_ctxt,
 };
 
 /*
@@ -901,10 +882,6 @@ static int osd_device_init0(const struct lu_env *env,
 	l->ld_ops = &osd_lu_ops;
 	o->od_dt_dev.dd_ops = &osd_dt_ops;
 
-	o->od_capa_hash = init_capa_hash();
-	if (o->od_capa_hash == NULL)
-		GOTO(out, rc = -ENOMEM);
-
 out:
 	RETURN(rc);
 }
@@ -947,7 +924,6 @@ static struct lu_device *osd_device_free(const struct lu_env *env,
 	struct osd_device *o = osd_dev(d);
 	ENTRY;
 
-	cleanup_capa_hash(o->od_capa_hash);
 	/* XXX: make osd top device in order to release reference */
 	d->ld_site->ls_top_dev = d;
 	lu_site_purge(env, d->ld_site, -1);

@@ -63,7 +63,7 @@ static int mdd_xattr_get(const struct lu_env *env,
                          const char *name);
 
 int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
-               struct lu_attr *la, struct lustre_capa *capa)
+	       struct lu_attr *la)
 {
         if (mdd_object_exists(obj) == 0) {
                 CERROR("%s: object "DFID" not found: rc = -2\n",
@@ -71,7 +71,7 @@ int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
                 return -ENOENT;
         }
 
-        return mdo_attr_get(env, obj, la, capa);
+	return mdo_attr_get(env, obj, la);
 }
 
 struct mdd_thread_info *mdd_env_info(const struct lu_env *env)
@@ -155,7 +155,7 @@ static int mdd_object_start(const struct lu_env *env, struct lu_object *o)
 		struct mdd_object *mdd_obj = lu2mdd_obj(o);
 		struct lu_attr *attr = MDD_ENV_VAR(env, la_for_start);
 
-		rc = mdd_la_get(env, mdd_obj, attr, BYPASS_CAPA);
+		rc = mdd_la_get(env, mdd_obj, attr);
 	}
 
 	return rc;
@@ -204,8 +204,7 @@ int mdd_attr_get(const struct lu_env *env, struct md_object *obj,
 
 	ENTRY;
 
-	rc = mdd_la_get(env, mdd_obj, &ma->ma_attr,
-			mdd_object_capa(env, md2mdd_obj(obj)));
+	rc = mdd_la_get(env, mdd_obj, &ma->ma_attr);
 	if ((ma->ma_need & MA_INODE) != 0 && mdd_is_dead_obj(mdd_obj))
 		ma->ma_attr.la_nlink = 0;
 
@@ -237,8 +236,7 @@ static int mdd_xattr_get(const struct lu_env *env,
 		RETURN(-ENOENT);
 
         mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
-        rc = mdo_xattr_get(env, mdd_obj, buf, name,
-                           mdd_object_capa(env, mdd_obj));
+	rc = mdo_xattr_get(env, mdd_obj, buf, name);
         mdd_read_unlock(env, mdd_obj);
 
         RETURN(rc);
@@ -268,8 +266,7 @@ int mdd_readlink(const struct lu_env *env, struct md_object *obj,
 	LASSERT(next->do_body_ops != NULL);
 	LASSERT(next->do_body_ops->dbo_read != NULL);
 	mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
-        rc = next->do_body_ops->dbo_read(env, next, buf, &pos,
-                                         mdd_object_capa(env, mdd_obj));
+	rc = dt_read(env, next, buf, &pos);
         mdd_read_unlock(env, mdd_obj);
         RETURN(rc);
 }
@@ -286,7 +283,7 @@ static int mdd_xattr_list(const struct lu_env *env, struct md_object *obj,
         ENTRY;
 
         mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
-        rc = mdo_xattr_list(env, mdd_obj, buf, mdd_object_capa(env, mdd_obj));
+	rc = mdo_xattr_list(env, mdd_obj, buf);
         mdd_read_unlock(env, mdd_obj);
 
 	if (rc < 0)
@@ -381,7 +378,7 @@ int mdd_attr_set_internal(const struct lu_env *env, struct mdd_object *obj,
         int rc;
         ENTRY;
 
-        rc = mdo_attr_set(env, obj, attr, handle, mdd_object_capa(env, obj));
+	rc = mdo_attr_set(env, obj, attr, handle);
 #ifdef CONFIG_FS_POSIX_ACL
         if (!rc && (attr->la_valid & LA_MODE) && needacl)
                 rc = mdd_acl_chmod(env, obj, attr->la_mode, handle);
@@ -783,7 +780,7 @@ static int mdd_declare_attr_set(const struct lu_env *env,
 	if (attr->la_valid & LA_MODE) {
                 mdd_read_lock(env, obj, MOR_TGT_CHILD);
 		rc = mdo_xattr_get(env, obj, &LU_BUF_NULL,
-				   XATTR_NAME_ACL_ACCESS, BYPASS_CAPA);
+				   XATTR_NAME_ACL_ACCESS);
                 mdd_read_unlock(env, obj);
                 if (rc == -EOPNOTSUPP || rc == -ENODATA)
                         rc = 0;
@@ -854,7 +851,7 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 	LASSERT((ma->ma_valid & MA_HSM) == 0);
 	LASSERT((ma->ma_valid & MA_SOM) == 0);
 
-	rc = mdd_la_get(env, mdd_obj, attr, BYPASS_CAPA);
+	rc = mdd_la_get(env, mdd_obj, attr);
 	if (rc)
 		RETURN(rc);
 
@@ -983,8 +980,7 @@ static int mdd_hsm_update_locked(const struct lu_env *env,
 	CLASSERT(sizeof(struct hsm_attrs) <= sizeof(info->mti_xattr_buf));
 	current_buf = mdd_buf_get(env, info->mti_xattr_buf,
 				  sizeof(info->mti_xattr_buf));
-	rc = mdo_xattr_get(env, mdd_obj, current_buf, XATTR_NAME_HSM,
-			   mdd_object_capa(env, mdd_obj));
+	rc = mdo_xattr_get(env, mdd_obj, current_buf, XATTR_NAME_HSM);
 	rc = lustre_buf2hsm(current_buf->lb_buf, rc, current_mh);
 	if (rc < 0 && rc != -ENODATA)
 		GOTO(free, rc);
@@ -1033,7 +1029,7 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 	int			 rc;
 	ENTRY;
 
-	rc = mdd_la_get(env, mdd_obj, attr, BYPASS_CAPA);
+	rc = mdd_la_get(env, mdd_obj, attr);
 	if (rc)
 		RETURN(rc);
 
@@ -1083,8 +1079,7 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 		}
 	}
 
-	rc = mdo_xattr_set(env, mdd_obj, buf, name, fl, handle,
-			   mdd_object_capa(env, mdd_obj));
+	rc = mdo_xattr_set(env, mdd_obj, buf, name, fl, handle);
 	mdd_write_unlock(env, mdd_obj);
 	if (rc)
 		GOTO(stop, rc);
@@ -1141,7 +1136,7 @@ static int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
 	int  rc;
 	ENTRY;
 
-	rc = mdd_la_get(env, mdd_obj, attr, BYPASS_CAPA);
+	rc = mdd_la_get(env, mdd_obj, attr);
 	if (rc)
 		RETURN(rc);
 
@@ -1162,8 +1157,7 @@ static int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
                 GOTO(stop, rc);
 
         mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
-        rc = mdo_xattr_del(env, mdd_obj, name, handle,
-                           mdd_object_capa(env, mdd_obj));
+	rc = mdo_xattr_del(env, mdd_obj, name, handle);
         mdd_write_unlock(env, mdd_obj);
 	if (rc)
 		GOTO(stop, rc);
@@ -1196,8 +1190,7 @@ int mdd_get_lov_ea(const struct lu_env *env, struct mdd_object *obj,
 	ENTRY;
 
 repeat:
-	rc = mdo_xattr_get(env, obj, buf, XATTR_NAME_LOV,
-			   mdd_object_capa(env, obj));
+	rc = mdo_xattr_get(env, obj, buf, XATTR_NAME_LOV);
 
 	if (rc == -ERANGE) {
 		/* mti_big_buf is allocated but is too small
@@ -1251,7 +1244,7 @@ static int mdd_xattr_hsm_replace(const struct lu_env *env,
 	ENTRY;
 
 	rc = mdo_xattr_set(env, o, buf, XATTR_NAME_HSM, LU_XATTR_REPLACE,
-			   handle, mdd_object_capa(env, o));
+			   handle);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -1346,11 +1339,11 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	if (rc < 0)
 		swap(fst_o, snd_o);
 
-	rc = mdd_la_get(env, fst_o, fst_la, BYPASS_CAPA);
+	rc = mdd_la_get(env, fst_o, fst_la);
 	if (rc != 0)
 		RETURN(rc);
 
-	rc = mdd_la_get(env, snd_o, snd_la, BYPASS_CAPA);
+	rc = mdd_la_get(env, snd_o, snd_la);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -1432,13 +1425,11 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 			GOTO(stop, rc = -ENOMEM);
 
 		/* Read HSM attribute */
-		rc = mdo_xattr_get(env, fst_o, fst_hsm_buf, XATTR_NAME_HSM,
-				   BYPASS_CAPA);
+		rc = mdo_xattr_get(env, fst_o, fst_hsm_buf, XATTR_NAME_HSM);
 		if (rc < 0)
 			GOTO(stop, rc);
 
-		rc = mdo_xattr_get(env, snd_o, snd_hsm_buf, XATTR_NAME_HSM,
-				   BYPASS_CAPA);
+		rc = mdo_xattr_get(env, snd_o, snd_hsm_buf, XATTR_NAME_HSM);
 		if (rc < 0)
 			GOTO(stop, rc);
 
@@ -1492,8 +1483,7 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 		}
 	}
 
-	rc = mdo_xattr_set(env, fst_o, snd_buf, XATTR_NAME_LOV, fst_fl, handle,
-			   mdd_object_capa(env, fst_o));
+	rc = mdo_xattr_set(env, fst_o, snd_buf, XATTR_NAME_LOV, fst_fl, handle);
 	if (rc != 0)
 		GOTO(stop, rc);
 
@@ -1502,11 +1492,9 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	} else {
 		if (fst_buf->lb_buf != NULL)
 			rc = mdo_xattr_set(env, snd_o, fst_buf, XATTR_NAME_LOV,
-					   LU_XATTR_REPLACE, handle,
-					   mdd_object_capa(env, snd_o));
+					   LU_XATTR_REPLACE, handle);
 		else
-			rc = mdo_xattr_del(env, snd_o, XATTR_NAME_LOV, handle,
-					   mdd_object_capa(env, snd_o));
+			rc = mdo_xattr_del(env, snd_o, XATTR_NAME_LOV, handle);
 	}
 
 	if (rc != 0) {
@@ -1518,11 +1506,9 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 			fst_lmm->lmm_oi = *saved_oi;
 			fst_lmm->lmm_layout_gen = cpu_to_le16(fst_gen - 1);
 			rc2 = mdo_xattr_set(env, fst_o, fst_buf, XATTR_NAME_LOV,
-					    LU_XATTR_REPLACE, handle,
-					    mdd_object_capa(env, fst_o));
+					    LU_XATTR_REPLACE, handle);
 		} else {
-			rc2 = mdo_xattr_del(env, fst_o, XATTR_NAME_LOV, handle,
-					    mdd_object_capa(env, fst_o));
+			rc2 = mdo_xattr_del(env, fst_o, XATTR_NAME_LOV, handle);
 		}
 		if (rc2 < 0)
 			goto do_lbug;
@@ -1693,7 +1679,7 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
 
 	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
 
-	rc = mdd_la_get(env, mdd_obj, attr, BYPASS_CAPA);
+	rc = mdd_la_get(env, mdd_obj, attr);
 	if (rc != 0)
 		GOTO(out, rc);
 
@@ -1771,8 +1757,7 @@ again:
         }
 
         mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
-	rc = mdd_la_get(env, mdd_obj, &ma->ma_attr,
-			mdd_object_capa(env, mdd_obj));
+	rc = mdd_la_get(env, mdd_obj, &ma->ma_attr);
 	if (rc != 0) {
 		CERROR("Failed to get lu_attr of "DFID": %d\n",
 		       PFID(mdd_object_fid(mdd_obj)), rc);
@@ -2080,7 +2065,6 @@ const struct md_object_operations mdd_obj_ops = {
 	.moo_readpage		= mdd_readpage,
 	.moo_readlink		= mdd_readlink,
 	.moo_changelog		= mdd_changelog,
-	.moo_capa_get		= mdd_capa_get,
 	.moo_object_sync	= mdd_object_sync,
 	.moo_object_lock	= mdd_object_lock,
 	.moo_object_unlock	= mdd_object_unlock,

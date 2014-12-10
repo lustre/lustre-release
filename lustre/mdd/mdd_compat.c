@@ -80,12 +80,12 @@ static int mdd_convert_remove_dots(const struct lu_env *env,
 		GOTO(out, rc);
 	/* ignore non-existing "."/".." - we stored them on disk for
 	 * pre-production systems, but this is not how regular ZFS works */
-	rc = dt_delete(env, mdd_object_child(o), dot, th, BYPASS_CAPA);
+	rc = dt_delete(env, mdd_object_child(o), dot, th);
 	if (rc == -ENOENT)
 		rc = 0;
 	if (rc)
 		GOTO(out, rc);
-	rc = dt_delete(env, mdd_object_child(o), dotdot, th, BYPASS_CAPA);
+	rc = dt_delete(env, mdd_object_child(o), dotdot, th);
 	if (rc == -ENOENT)
 		rc = 0;
 	if (rc)
@@ -147,7 +147,7 @@ static int mdd_convert_object(const struct lu_env *env,
 		RETURN(PTR_ERR(o));
 	}
 
-	rc = mdo_attr_get(env, o, la, BYPASS_CAPA);
+	rc = mdo_attr_get(env, o, la);
 	if (rc)
 		GOTO(out, rc);
 
@@ -196,7 +196,7 @@ static int mdd_convert_lma(const struct lu_env *env, struct mdd_device *mdd,
 	rc = dt_trans_start_local(env, mdd->mdd_child, th);
 	if (rc)
 		GOTO(out, rc);
-	rc = mdo_xattr_set(env, o, &buf, XATTR_NAME_LMA, 0, th, BYPASS_CAPA);
+	rc = mdo_xattr_set(env, o, &buf, XATTR_NAME_LMA, 0, th);
 out:
 	dt_trans_stop(env, mdd->mdd_child, th);
 	RETURN(rc);
@@ -218,7 +218,7 @@ static int mdd_fix_children(const struct lu_env *env,
 	ent = (struct lu_dirent *)&info->mti_xattr_buf;
 	iops = &o->do_index_ops->dio_it;
 
-	it = iops->init(env, o, LUDA_64BITHASH, BYPASS_CAPA);
+	it = iops->init(env, o, LUDA_64BITHASH);
 	if (IS_ERR(it)) {
 		rc = PTR_ERR(it);
 		CERROR("%s: can't initialize the iterator: rc = %d\n",
@@ -341,7 +341,7 @@ int mdd_compat_fixes(const struct lu_env *env, struct mdd_device *mdd)
 	CLASSERT(sizeof(info->mti_xattr_buf) >= LMA_OLD_SIZE);
 	buf.lb_len = LMA_OLD_SIZE;
 	buf.lb_buf = lma;
-	rc = mdo_xattr_get(env, root, &buf, XATTR_NAME_LMA, BYPASS_CAPA);
+	rc = mdo_xattr_get(env, root, &buf, XATTR_NAME_LMA);
 	if (rc < 0 && rc != -ENODATA) {
 		CERROR("%s: can't fetch LMA: rc = %d\n",
 		       mdd2obd_dev(mdd)->obd_name, rc);

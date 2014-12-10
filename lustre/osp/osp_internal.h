@@ -542,21 +542,19 @@ int osp_remote_sync(const struct lu_env *env, struct osp_device *osp,
 		    struct ptlrpc_request **reqp, bool rpc_lock);
 /* osp_object.c */
 int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
-		 struct lu_attr *attr, struct lustre_capa *capa);
+		 struct lu_attr *attr);
 int osp_xattr_get(const struct lu_env *env, struct dt_object *dt,
-		  struct lu_buf *buf, const char *name,
-		  struct lustre_capa *capa);
+		  struct lu_buf *buf, const char *name);
 int osp_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
 			  const struct lu_buf *buf, const char *name,
 			  int flag, struct thandle *th);
 int osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
 		  const struct lu_buf *buf, const char *name, int fl,
-		  struct thandle *th, struct lustre_capa *capa);
+		  struct thandle *th);
 int osp_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
 			  const char *name, struct thandle *th);
 int osp_xattr_del(const struct lu_env *env, struct dt_object *dt,
-		  const char *name, struct thandle *th,
-		  struct lustre_capa *capa);
+		  const char *name, struct thandle *th);
 
 int osp_declare_object_destroy(const struct lu_env *env,
 			       struct dt_object *dt, struct thandle *th);
@@ -567,7 +565,7 @@ int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 		   struct thandle *th);
 
 struct dt_it *osp_it_init(const struct lu_env *env, struct dt_object *dt,
-			  __u32 attr, struct lustre_capa *capa);
+			  __u32 attr);
 void osp_it_fini(const struct lu_env *env, struct dt_it *di);
 int osp_it_get(const struct lu_env *env, struct dt_it *di,
 	       const struct dt_key *key);

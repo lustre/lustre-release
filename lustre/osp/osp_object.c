@@ -493,13 +493,11 @@ static int osp_attr_get_interpterer(const struct lu_env *env,
  *
  * \param[in] env	pointer to the thread context
  * \param[in] dt	pointer to the OSP layer dt_object
- * \param[in] capa	the capability for this operation
  *
  * \retval		0 for success
  * \retval		negative error number on failure
  */
-static int osp_declare_attr_get(const struct lu_env *env, struct dt_object *dt,
-				struct lustre_capa *capa)
+static int osp_declare_attr_get(const struct lu_env *env, struct dt_object *dt)
 {
 	struct osp_object	*obj	= dt2osp_obj(dt);
 	struct osp_device	*osp	= lu2osp_dev(dt->do_lu.lo_dev);
@@ -533,13 +531,12 @@ static int osp_declare_attr_get(const struct lu_env *env, struct dt_object *dt,
  * \param[in] env	pointer to the thread context
  * \param[in] dt	pointer to the OSP layer dt_object
  * \param[out] attr	pointer to the buffer to hold the output attribute
- * \param[in] capa	the capability for this operation
  *
  * \retval		0 for success
  * \retval		negative error number on failure
  */
 int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
-		 struct lu_attr *attr, struct lustre_capa *capa)
+		 struct lu_attr *attr)
 {
 	struct osp_device		*osp = lu2osp_dev(dt->do_lu.lo_dev);
 	struct osp_object		*obj = dt2osp_obj(dt);
@@ -736,14 +733,12 @@ static int osp_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
  * \param[in] dt	pointer to the OSP layer dt_object
  * \param[in] attr	pointer to the attribute to be set
  * \param[in] th	pointer to the transaction handler
- * \param[in] capa	the capability for this operation
  *
  * \retval		0 for success
  * \retval		negative error number on failure
  */
 static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
-			const struct lu_attr *attr, struct thandle *th,
-			struct lustre_capa *capa)
+			const struct lu_attr *attr, struct thandle *th)
 {
 	struct osp_object	*o = dt2osp_obj(dt);
 	int			 rc = 0;
@@ -849,14 +844,12 @@ static int osp_xattr_get_interpterer(const struct lu_env *env,
  * \param[in] dt	pointer to the OSP layer dt_object
  * \param[out] buf	pointer to the lu_buf to hold the extended attribute
  * \param[in] name	the name for the expected extended attribute
- * \param[in] capa	the capability for this operation
  *
  * \retval		0 for success
  * \retval		negative error number on failure
  */
 static int osp_declare_xattr_get(const struct lu_env *env, struct dt_object *dt,
-				 struct lu_buf *buf, const char *name,
-				 struct lustre_capa *capa)
+				 struct lu_buf *buf, const char *name)
 {
 	struct osp_object	*obj	 = dt2osp_obj(dt);
 	struct osp_device	*osp	 = lu2osp_dev(dt->do_lu.lo_dev);
@@ -929,14 +922,12 @@ static int osp_declare_xattr_get(const struct lu_env *env, struct dt_object *dt,
  * \param[in] dt	pointer to the OSP layer dt_object
  * \param[out] buf	pointer to the lu_buf to hold the extended attribute
  * \param[in] name	the name for the expected extended attribute
- * \param[in] capa	the capability for this operation
  *
  * \retval		0 for success
  * \retval		negative error number on failure
  */
 int osp_xattr_get(const struct lu_env *env, struct dt_object *dt,
-		  struct lu_buf *buf, const char *name,
-		  struct lustre_capa *capa)
+		  struct lu_buf *buf, const char *name)
 {
 	struct osp_device	*osp	= lu2osp_dev(dt->do_lu.lo_dev);
 	struct osp_object	*obj	= dt2osp_obj(dt);
@@ -1246,14 +1237,13 @@ int osp_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
  * \param[in] fl	to indicate the detailed set operation: LU_XATTR_CREATE
  *			or LU_XATTR_REPLACE or others
  * \param[in] th	pointer to the transaction handler
- * \param[in] capa	the capability for this operation
  *
  * \retval		0 for success
  * \retval		negative error number on failure
  */
 int osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
 		  const struct lu_buf *buf, const char *name, int fl,
-		  struct thandle *th, struct lustre_capa *capa)
+		  struct thandle *th)
 {
 	int rc = 0;
 
@@ -1344,14 +1334,12 @@ int osp_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
  * \param[in] dt	pointer to the OSP layer dt_object
  * \param[in] name	the name of the extended attribute to be set
  * \param[in] th	pointer to the transaction handler
- * \param[in] capa	the capability for this operation
  *
  * \retval		0 for success
  * \retval		negative error number on failure
  */
 int osp_xattr_del(const struct lu_env *env, struct dt_object *dt,
-		  const char *name, struct thandle *th,
-		  struct lustre_capa *capa)
+		  const char *name, struct thandle *th)
 {
 	int rc = 0;
 
@@ -1655,8 +1643,7 @@ int osp_object_destroy(const struct lu_env *env, struct dt_object *dt,
 static int osp_orphan_index_lookup(const struct lu_env *env,
 				   struct dt_object *dt,
 				   struct dt_rec *rec,
-				   const struct dt_key *key,
-				   struct lustre_capa *capa)
+				   const struct dt_key *key)
 {
 	return -EOPNOTSUPP;
 }
@@ -1675,7 +1662,6 @@ static int osp_orphan_index_insert(const struct lu_env *env,
 				   const struct dt_rec *rec,
 				   const struct dt_key *key,
 				   struct thandle *handle,
-				   struct lustre_capa *capa,
 				   int ignore_quota)
 {
 	return -EOPNOTSUPP;
@@ -1692,8 +1678,7 @@ static int osp_orphan_index_declare_delete(const struct lu_env *env,
 static int osp_orphan_index_delete(const struct lu_env *env,
 				   struct dt_object *dt,
 				   const struct dt_key *key,
-				   struct thandle *handle,
-				   struct lustre_capa *capa)
+				   struct thandle *handle)
 {
 	return -EOPNOTSUPP;
 }
@@ -1704,13 +1689,12 @@ static int osp_orphan_index_delete(const struct lu_env *env,
  * \param[in] env	pointer to the thread context
  * \param[in] dt	pointer to the index object to be iterated
  * \param[in] attr	unused
- * \param[in] capa	the capability for this operation
  *
  * \retval		pointer to the iteration structure
  * \retval		negative error number on failure
  */
 struct dt_it *osp_it_init(const struct lu_env *env, struct dt_object *dt,
-			  __u32 attr, struct lustre_capa *capa)
+			  __u32 attr)
 {
 	struct osp_it *it;
 
@@ -2203,8 +2187,7 @@ static int osp_object_init(const struct lu_env *env, struct lu_object *o,
 
 		po->opo_obj.do_ops = &osp_md_obj_ops;
 		po->opo_obj.do_body_ops = &osp_md_body_ops;
-		rc = po->opo_obj.do_ops->do_attr_get(env, lu2dt_obj(o),
-						     la, NULL);
+		rc = po->opo_obj.do_ops->do_attr_get(env, lu2dt_obj(o), la);
 		if (rc == 0)
 			o->lo_header->loh_attr |=
 				LOHA_EXISTS | (la->la_mode & S_IFMT);

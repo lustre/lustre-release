@@ -414,78 +414,6 @@ ofd_fmd_max_age_seq_write(struct file *file, const char __user *buffer,
 LPROC_SEQ_FOPS(ofd_fmd_max_age);
 
 /**
- * Show if OSS FID capability is enabled or disabled
- *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
- */
-static int ofd_capa_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_device	*obd = m->private;
-
-	return seq_printf(m, "capability on: %s\n",
-			  obd->u.filter.fo_fl_oss_capa ? "oss" : "");
-}
-
-/**
- * Enable or disable OSS FID capability mode.
- *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents mode
- *			1: enable mode
- *			0: disable mode
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- *
- * \retval		\a count on success
- * \retval		negative number on error
- */
-static ssize_t
-ofd_capa_seq_write(struct file *file, const char *__user buffer, size_t count,
-		   loff_t *off)
-{
-	struct seq_file		*m = file->private_data;
-	struct obd_device	*obd = m->private;
-	int			 val, rc;
-
-	rc = lprocfs_write_helper(buffer, count, &val);
-	if (rc)
-		return rc;
-
-	if (val & ~0x1) {
-		CERROR("invalid capability mode, only 0/1 are accepted.\n"
-		       " 1: enable oss fid capability\n"
-		       " 0: disable oss fid capability\n");
-		return -EINVAL;
-	}
-
-	obd->u.filter.fo_fl_oss_capa = val;
-	LCONSOLE_INFO("OSS %s %s fid capability.\n", obd->obd_name,
-		      val ? "enabled" : "disabled");
-	return count;
-}
-LPROC_SEQ_FOPS(ofd_capa);
-
-/**
- * Show capability count on client and server side.
- *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
- */
-static int ofd_capa_count_seq_show(struct seq_file *m, void *data)
-{
-	return seq_printf(m, "%d %d\n", capa_count[CAPA_SITE_CLIENT],
-			  capa_count[CAPA_SITE_SERVER]);
-}
-LPROC_SEQ_FOPS_RO(ofd_capa_count);
-
-/**
  * Show if the OFD is in degraded mode.
  *
  * Degraded means OFD has a failed drive or is undergoing RAID rebuild.
@@ -1042,10 +970,6 @@ struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	  .fops =	&ofd_fmd_max_num_fops		},
 	{ .name =	"client_cache_seconds",
 	  .fops =	&ofd_fmd_max_age_fops		},
-	{ .name =	"capa",
-	  .fops =	&ofd_capa_fops			},
-	{ .name =	"capa_count",
-	  .fops =	&ofd_capa_count_fops		},
 	{ .name =	"job_cleanup_interval",
 	  .fops =	&ofd_job_interval_fops		},
 	{ .name =	"soft_sync_limit",

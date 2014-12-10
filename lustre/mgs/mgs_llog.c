@@ -72,7 +72,7 @@ int class_dentry_readdir(const struct lu_env *env,
 	LASSERT(dir->do_index_ops);
 
 	iops = &dir->do_index_ops->dio_it;
-	it = iops->init(env, dir, LUDA_64BITHASH, BYPASS_CAPA);
+	it = iops->init(env, dir, LUDA_64BITHASH);
 	if (IS_ERR(it))
 		RETURN(PTR_ERR(it));
 

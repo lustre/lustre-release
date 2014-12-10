@@ -67,8 +67,6 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	/* sptlrcp variables init */
 	rwlock_init(&lut->lut_sptlrpc_lock);
 	sptlrpc_rule_set_init(&lut->lut_sptlrpc_rset);
-	lut->lut_mds_capa = 1;
-	lut->lut_oss_capa = 1;
 
 	spin_lock_init(&lut->lut_flags_lock);
 	lut->lut_sync_lock_cancel = NEVER_SYNC_ON_CANCEL;

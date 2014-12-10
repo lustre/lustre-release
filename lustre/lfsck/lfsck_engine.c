@@ -110,7 +110,7 @@ static int lfsck_update_lma(const struct lu_env *env,
 		RETURN(0);
 
 	buf = lfsck_buf_get(env, info->lti_lma_old, LMA_OLD_SIZE);
-	rc = dt_xattr_get(env, obj, buf, XATTR_NAME_LMA, BYPASS_CAPA);
+	rc = dt_xattr_get(env, obj, buf, XATTR_NAME_LMA);
 	if (rc < 0) {
 		if (rc != -ENODATA)
 			RETURN(rc);
@@ -142,7 +142,7 @@ static int lfsck_update_lma(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	rc = dt_xattr_set(env, obj, buf, XATTR_NAME_LMA, fl, th, BYPASS_CAPA);
+	rc = dt_xattr_set(env, obj, buf, XATTR_NAME_LMA, fl, th);
 
 	GOTO(stop, rc);
 
@@ -159,7 +159,7 @@ static int lfsck_parent_fid(const struct lu_env *env, struct dt_object *obj,
 		return -ENOTDIR;
 
 	return dt_lookup(env, obj, (struct dt_rec *)fid,
-			 (const struct dt_key *)"..", BYPASS_CAPA);
+			 (const struct dt_key *)"..");
 }
 
 /**
@@ -253,8 +253,7 @@ static int lfsck_needs_scan_dir(const struct lu_env *env,
 		}
 
 		rc = dt_xattr_get(env, obj,
-				  lfsck_buf_get(env, NULL, 0), XATTR_NAME_LINK,
-				  BYPASS_CAPA);
+				  lfsck_buf_get(env, NULL, 0), XATTR_NAME_LINK);
 		dt_read_unlock(env, obj);
 		if (rc >= 0)
 			GOTO(out, rc = 1);
@@ -416,7 +415,7 @@ int lfsck_open_dir(const struct lu_env *env,
 	}
 
 	iops = &obj->do_index_ops->dio_it;
-	di = iops->init(env, obj, lfsck->li_args_dir, BYPASS_CAPA);
+	di = iops->init(env, obj, lfsck->li_args_dir);
 	if (IS_ERR(di))
 		GOTO(out, rc = PTR_ERR(di));
 
@@ -1060,7 +1059,7 @@ int lfsck_master_engine(void *args)
 			       lfsck_lfsck2name(lfsck), rc);
 	}
 
-	oit_di = oit_iops->init(env, oit_obj, lfsck->li_args_oit, BYPASS_CAPA);
+	oit_di = oit_iops->init(env, oit_obj, lfsck->li_args_oit);
 	if (IS_ERR(oit_di)) {
 		rc = PTR_ERR(oit_di);
 		CDEBUG(D_LFSCK, "%s: master engine fail to init iteration: "

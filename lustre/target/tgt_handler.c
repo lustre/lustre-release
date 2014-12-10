@@ -97,12 +97,7 @@ static int tgt_mdt_body_unpack(struct tgt_session_info *tsi, __u32 flags)
 	if (!IS_ERR(obj)) {
 		if ((flags & HABEO_CORPUS) && !lu_object_exists(obj)) {
 			lu_object_put(tsi->tsi_env, obj);
-			/* for capability renew ENOENT will be handled in
-			 * mdt_renew_capa */
-			if (body->mbo_valid & OBD_MD_FLOSSCAPA)
-				rc = 0;
-			else
-				rc = -ENOENT;
+			rc = -ENOENT;
 		} else {
 			tsi->tsi_corpus = obj;
 			rc = 0;
@@ -242,7 +237,6 @@ static int tgt_ost_body_unpack(struct tgt_session_info *tsi, __u32 flags)
 {
 	struct ost_body		*body;
 	struct req_capsule	*pill = tsi->tsi_pill;
-	struct lustre_capa	*capa;
 	struct lu_nodemap	*nodemap;
 	int			 rc;
 
@@ -264,15 +258,6 @@ static int tgt_ost_body_unpack(struct tgt_session_info *tsi, __u32 flags)
 	body->oa.o_gid = nodemap_map_id(nodemap, NODEMAP_GID,
 					NODEMAP_CLIENT_TO_FS,
 					body->oa.o_gid);
-
-	if (body->oa.o_valid & OBD_MD_FLOSSCAPA) {
-		capa = req_capsule_client_get(pill, &RMF_CAPA1);
-		if (capa == NULL) {
-			CERROR("%s: OSSCAPA flag is set without capability\n",
-			       tgt_name(tsi->tsi_tgt));
-			RETURN(-EFAULT);
-		}
-	}
 
 	tsi->tsi_ost_body = body;
 	tsi->tsi_fid = body->oa.o_oi.oi_fid;
@@ -732,9 +717,7 @@ EXPORT_SYMBOL(tgt_counter_incr);
 static inline void tgt_init_sec_none(struct obd_connect_data *reply)
 {
 	reply->ocd_connect_flags &= ~(OBD_CONNECT_RMT_CLIENT |
-				      OBD_CONNECT_RMT_CLIENT_FORCE |
-				      OBD_CONNECT_MDS_CAPA |
-				      OBD_CONNECT_OSS_CAPA);
+				      OBD_CONNECT_RMT_CLIENT_FORCE);
 }
 
 static int tgt_init_sec_level(struct ptlrpc_request *req)
@@ -800,15 +783,7 @@ static int tgt_init_sec_level(struct ptlrpc_request *req)
 		       "as remote by default.\n", client, tgt_name(tgt));
 	}
 
-	if (remote) {
-		if (!tgt->lut_oss_capa) {
-			CDEBUG(D_SEC,
-			       "client %s -> target %s is set as remote,"
-			       " but OSS capabilities are not enabled: %d.\n",
-			       client, tgt_name(tgt), tgt->lut_oss_capa);
-			RETURN(-EACCES);
-		}
-	} else {
+	if (remote == 0) {
 		if (!uid_valid(make_kuid(&init_user_ns, req->rq_auth_uid))) {
 			CDEBUG(D_SEC, "client %s -> target %s: user is not "
 			       "authenticated!\n", client, tgt_name(tgt));
@@ -837,10 +812,8 @@ static int tgt_init_sec_level(struct ptlrpc_request *req)
 			break;
 		reply->ocd_connect_flags &= ~(OBD_CONNECT_RMT_CLIENT |
 					      OBD_CONNECT_RMT_CLIENT_FORCE);
-		if (!tgt->lut_oss_capa)
-			reply->ocd_connect_flags &= ~OBD_CONNECT_OSS_CAPA;
-		if (!tgt->lut_mds_capa)
-			reply->ocd_connect_flags &= ~OBD_CONNECT_MDS_CAPA;
+		reply->ocd_connect_flags &= ~OBD_CONNECT_OSS_CAPA;
+		reply->ocd_connect_flags &= ~OBD_CONNECT_MDS_CAPA;
 		break;
 	default:
 		RETURN(-EINVAL);
@@ -1746,7 +1719,7 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 
 	npages = PTLRPC_MAX_BRW_PAGES;
 	rc = obd_preprw(tsi->tsi_env, OBD_BRW_READ, exp, &repbody->oa, 1,
-			ioo, remote_nb, &npages, local_nb, NULL, BYPASS_CAPA);
+			ioo, remote_nb, &npages, local_nb, NULL);
 	if (rc != 0)
 		GOTO(out_lock, rc);
 
@@ -2012,8 +1985,7 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 
 	npages = PTLRPC_MAX_BRW_PAGES;
 	rc = obd_preprw(tsi->tsi_env, OBD_BRW_WRITE, exp, &repbody->oa,
-			objcount, ioo, remote_nb, &npages, local_nb, NULL,
-			BYPASS_CAPA);
+			objcount, ioo, remote_nb, &npages, local_nb, NULL);
 	if (rc < 0)
 		GOTO(out_lock, rc);
 

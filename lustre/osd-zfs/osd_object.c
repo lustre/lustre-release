@@ -352,7 +352,7 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 	buf.lb_buf = lma;
 	buf.lb_len = sizeof(info->oti_buf);
 
-	rc = osd_xattr_get(env, &obj->oo_dt, &buf, XATTR_NAME_LMA, BYPASS_CAPA);
+	rc = osd_xattr_get(env, &obj->oo_dt, &buf, XATTR_NAME_LMA);
 	if (rc > 0) {
 		rc = 0;
 		lustre_lma_swab(lma);
@@ -734,8 +734,7 @@ static int osd_object_write_locked(const struct lu_env *env,
 
 static int osd_attr_get(const struct lu_env *env,
 			struct dt_object *dt,
-			struct lu_attr *attr,
-			struct lustre_capa *capa)
+			struct lu_attr *attr)
 {
 	struct osd_object	*obj = osd_dt_obj(dt);
 	uint64_t		 blocks;
@@ -905,8 +904,7 @@ static int osd_declare_attr_set(const struct lu_env *env,
  * to a transaction group.
  */
 static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
-			const struct lu_attr *la, struct thandle *handle,
-			struct lustre_capa *capa)
+			const struct lu_attr *la, struct thandle *handle)
 {
 	struct osd_object	*obj = osd_dt_obj(dt);
 	struct osd_device	*osd = osd_obj2dev(obj);
@@ -1429,7 +1427,7 @@ static inline int osd_init_lma(const struct lu_env *env, struct osd_object *obj,
 	buf.lb_len = sizeof(*lma);
 
 	rc = osd_xattr_set_internal(env, obj, &buf, XATTR_NAME_LMA,
-				    LU_XATTR_CREATE, oh, BYPASS_CAPA);
+				    LU_XATTR_CREATE, oh);
 
 	return rc;
 }
@@ -1600,145 +1598,6 @@ static int osd_object_ref_del(const struct lu_env *env,
 	return rc;
 }
 
-static int capa_is_sane(const struct lu_env *env, struct osd_device *dev,
-			struct lustre_capa *capa, struct lustre_capa_key *keys)
-{
-	struct osd_thread_info	*oti = osd_oti_get(env);
-	struct obd_capa		*oc;
-	int			 i, rc = 0;
-	ENTRY;
-
-	oc = capa_lookup(dev->od_capa_hash, capa, 0);
-	if (oc) {
-		if (capa_is_expired(oc)) {
-			DEBUG_CAPA(D_ERROR, capa, "expired");
-			rc = -ESTALE;
-		}
-		capa_put(oc);
-		RETURN(rc);
-	}
-
-	spin_lock(&capa_lock);
-	for (i = 0; i < 2; i++) {
-		if (keys[i].lk_keyid == capa->lc_keyid) {
-			oti->oti_capa_key = keys[i];
-			break;
-		}
-	}
-	spin_unlock(&capa_lock);
-
-	if (i == 2) {
-		DEBUG_CAPA(D_ERROR, capa, "no matched capa key");
-		RETURN(-ESTALE);
-	}
-
-	rc = capa_hmac(oti->oti_capa.lc_hmac, capa, oti->oti_capa_key.lk_key);
-	if (rc)
-		RETURN(rc);
-	if (memcmp(oti->oti_capa.lc_hmac, capa->lc_hmac, sizeof(capa->lc_hmac)))
-	{
-		DEBUG_CAPA(D_ERROR, capa, "HMAC mismatch");
-		RETURN(-EACCES);
-	}
-
-	oc = capa_add(dev->od_capa_hash, capa);
-	capa_put(oc);
-
-	RETURN(0);
-}
-
-static int osd_object_auth(const struct lu_env *env, struct dt_object *dt,
-			   struct lustre_capa *capa, __u64 opc)
-{
-	const struct lu_fid	*fid = lu_object_fid(&dt->do_lu);
-	struct osd_device	*dev = osd_dev(dt->do_lu.lo_dev);
-	int			 rc;
-
-	if (!dev->od_fl_capa)
-		return 0;
-
-	if (capa == BYPASS_CAPA)
-		return 0;
-
-	if (!capa) {
-		CERROR("no capability is provided for fid "DFID"\n", PFID(fid));
-		return -EACCES;
-	}
-
-	if (!lu_fid_eq(fid, &capa->lc_fid)) {
-		DEBUG_CAPA(D_ERROR, capa, "fid "DFID" mismatch with",PFID(fid));
-		return -EACCES;
-	}
-
-	if (!capa_opc_supported(capa, opc)) {
-		DEBUG_CAPA(D_ERROR, capa, "opc "LPX64" not supported by", opc);
-		return -EACCES;
-	}
-
-	if ((rc = capa_is_sane(env, dev, capa, dev->od_capa_keys))) {
-		DEBUG_CAPA(D_ERROR, capa, "insane (rc %d)", rc);
-		return -EACCES;
-	}
-
-	return 0;
-}
-
-static struct obd_capa *osd_capa_get(const struct lu_env *env,
-				     struct dt_object *dt,
-				     struct lustre_capa *old,
-				     __u64 opc)
-{
-	struct osd_thread_info	*info = osd_oti_get(env);
-	const struct lu_fid	*fid = lu_object_fid(&dt->do_lu);
-	struct osd_object	*obj = osd_dt_obj(dt);
-	struct osd_device	*dev = osd_obj2dev(obj);
-	struct lustre_capa_key	*key = &info->oti_capa_key;
-	struct lustre_capa	*capa = &info->oti_capa;
-	struct obd_capa		*oc;
-	int			 rc;
-	ENTRY;
-
-	if (!dev->od_fl_capa)
-		RETURN(ERR_PTR(-ENOENT));
-
-	LASSERT(dt_object_exists(dt));
-	LASSERT(osd_invariant(obj));
-
-	/* renewal sanity check */
-	if (old && osd_object_auth(env, dt, old, opc))
-		RETURN(ERR_PTR(-EACCES));
-
-	capa->lc_fid = *fid;
-	capa->lc_opc = opc;
-	capa->lc_uid = 0;
-	capa->lc_flags = dev->od_capa_alg << 24;
-	capa->lc_timeout = dev->od_capa_timeout;
-	capa->lc_expiry = 0;
-
-	oc = capa_lookup(dev->od_capa_hash, capa, 1);
-	if (oc) {
-		LASSERT(!capa_is_expired(oc));
-		RETURN(oc);
-	}
-
-	spin_lock(&capa_lock);
-	*key = dev->od_capa_keys[1];
-	spin_unlock(&capa_lock);
-
-	capa->lc_keyid = key->lk_keyid;
-	capa->lc_expiry = cfs_time_current_sec() + dev->od_capa_timeout;
-
-	rc = capa_hmac(capa->lc_hmac, capa, key->lk_key);
-	if (rc) {
-		DEBUG_CAPA(D_ERROR, capa, "HMAC failed: %d for", rc);
-		LBUG();
-		RETURN(ERR_PTR(rc));
-	}
-
-	oc = capa_add(dev->od_capa_hash, capa);
-	RETURN(oc);
-}
-
 static int osd_object_sync(const struct lu_env *env, struct dt_object *dt,
 			   __u64 start, __u64 end)
 {
@@ -1779,7 +1638,6 @@ static struct dt_object_operations osd_obj_ops = {
 	.do_declare_xattr_del	= osd_declare_xattr_del,
 	.do_xattr_del		= osd_xattr_del,
 	.do_xattr_list		= osd_xattr_list,
-	.do_capa_get		= osd_capa_get,
 	.do_object_sync		= osd_object_sync,
 };
 
@@ -1794,8 +1652,7 @@ static struct lu_object_operations osd_lu_obj_ops = {
 
 static int osd_otable_it_attr_get(const struct lu_env *env,
 				struct dt_object *dt,
-				struct lu_attr *attr,
-				struct lustre_capa *capa)
+				struct lu_attr *attr)
 {
 	attr->la_valid = 0;
 	return 0;

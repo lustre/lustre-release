@@ -403,7 +403,7 @@ struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 
 	atomic_set(&oseq->os_refc, 1);
 
-	rc = dt_attr_get(env, dob, &info->fti_attr, BYPASS_CAPA);
+	rc = dt_attr_get(env, dob, &info->fti_attr);
 	if (rc)
 		GOTO(cleanup, rc);
 

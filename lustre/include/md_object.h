@@ -136,7 +136,6 @@ struct md_attr {
         struct lov_mds_md      *ma_lmm;
 	union lmv_mds_md       *ma_lmv;
         void                   *ma_acl;
-        struct lustre_capa     *ma_capa;
         struct md_som_data     *ma_som;
         int                     ma_lmm_size;
         int                     ma_lmv_size;
@@ -220,9 +219,6 @@ struct md_object_operations {
         int (*moo_close)(const struct lu_env *env, struct md_object *obj,
                          struct md_attr *ma, int mode);
 
-        int (*moo_capa_get)(const struct lu_env *, struct md_object *,
-                            struct lustre_capa *, int renewal);
-
         int (*moo_object_sync)(const struct lu_env *, struct md_object *);
 
 	int (*moo_object_lock)(const struct lu_env *env, struct md_object *obj,
@@ -289,14 +285,6 @@ struct md_device_operations {
 
         int (*mdo_statfs)(const struct lu_env *env, struct md_device *m,
                           struct obd_statfs *sfs);
-
-        int (*mdo_init_capa_ctxt)(const struct lu_env *env, struct md_device *m,
-                                  int mode, unsigned long timeout, __u32 alg,
-                                  struct lustre_capa_key *keys);
-
-        int (*mdo_update_capa_key)(const struct lu_env *env,
-                                   struct md_device *m,
-                                   struct lustre_capa_key *key);
 
         int (*mdo_llog_ctxt_get)(const struct lu_env *env,
                                  struct md_device *m, int idx, void **h);
@@ -471,15 +459,6 @@ static inline int mo_readpage(const struct lu_env *env,
 {
         LASSERT(m->mo_ops->moo_readpage);
         return m->mo_ops->moo_readpage(env, m, rdpg);
-}
-
-static inline int mo_capa_get(const struct lu_env *env,
-                              struct md_object *m,
-                              struct lustre_capa *c,
-                              int renewal)
-{
-        LASSERT(m->mo_ops->moo_capa_get);
-        return m->mo_ops->moo_capa_get(env, m, c, renewal);
 }
 
 static inline int mo_object_sync(const struct lu_env *env, struct md_object *m)

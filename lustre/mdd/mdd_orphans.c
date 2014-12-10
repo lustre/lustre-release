@@ -119,8 +119,7 @@ static inline int mdd_orphan_insert_obj(const struct lu_env *env,
 	rec->rec_fid = lf;
 	rec->rec_type = mdd_object_type(obj);
 
-	return dt_insert(env, dor, (const struct dt_rec *)rec, key, th,
-			 BYPASS_CAPA, 1);
+	return dt_insert(env, dor, (const struct dt_rec *)rec, key, th, 1);
 }
 
 static inline int mdd_orphan_delete_obj(const struct lu_env *env,
@@ -130,7 +129,7 @@ static inline int mdd_orphan_delete_obj(const struct lu_env *env,
 {
 	struct dt_object *dor = mdd->mdd_orphans;
 
-	return dt_delete(env, dor, key, th, BYPASS_CAPA);
+	return dt_delete(env, dor, key, th);
 }
 
 static inline int mdd_orphan_ref_add(const struct lu_env *env,
@@ -227,12 +226,12 @@ static int orph_index_insert(const struct lu_env *env,
         if (!dt_try_as_dir(env, next))
 		GOTO(out, rc = 0);
 
-	dt_delete(env, next, (const struct dt_key *)dotdot, th, BYPASS_CAPA);
+	dt_delete(env, next, (const struct dt_key *)dotdot, th);
 
 	rec->rec_fid = lf_dor;
 	rec->rec_type = S_IFDIR;
 	dt_insert(env, next, (const struct dt_rec *)rec,
-		  (const struct dt_key *)dotdot, th, BYPASS_CAPA, 1);
+		  (const struct dt_key *)dotdot, th, 1);
 
 out:
         if (rc == 0)
@@ -440,7 +439,7 @@ static int orph_index_iterate(const struct lu_env *env,
         ENTRY;
 
         iops = &dor->do_index_ops->dio_it;
-        it = iops->init(env, dor, LUDA_64BITHASH, BYPASS_CAPA);
+	it = iops->init(env, dor, LUDA_64BITHASH);
         if (IS_ERR(it)) {
                 rc = PTR_ERR(it);
                 CERROR("%s: cannot clean PENDING: rc = %d\n",

@@ -180,7 +180,7 @@ static struct dt_object
 		RETURN(dto);
 
 	/* Get attributes of the local object. */
-	rc = dt_attr_get(env, dto, attr, NULL);
+	rc = dt_attr_get(env, dto, attr);
 	if (rc) {
 		CERROR("%s: can't be initialized: rc = %d\n",
 		       osp->opd_obd->obd_name, rc);

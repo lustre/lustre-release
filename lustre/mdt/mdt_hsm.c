@@ -225,11 +225,6 @@ int mdt_hsm_state_get(struct tgt_session_info *tsi)
 	if (rc)
 		GOTO(out_unlock, rc);
 
-	if (req_capsule_get_size(info->mti_pill, &RMF_CAPA1, RCL_CLIENT))
-		mdt_set_capainfo(info, 0, &info->mti_body->mbo_fid1,
-				 req_capsule_client_get(info->mti_pill,
-				 &RMF_CAPA1));
-
 	hus = req_capsule_server_get(tsi->tsi_pill, &RMF_HSM_USER_STATE);
 	if (hus == NULL)
 		GOTO(out_unlock, rc = -EPROTO);
@@ -284,10 +279,6 @@ int mdt_hsm_state_set(struct tgt_session_info *tsi)
 			     MDS_INODELOCK_XATTR, MDT_LOCAL_LOCK);
 	if (rc < 0)
 		GOTO(out_ucred, rc);
-
-	if (req_capsule_get_size(info->mti_pill, &RMF_CAPA1, RCL_CLIENT))
-		mdt_set_capainfo(info, 0, &info->mti_body->mbo_fid1,
-			    req_capsule_client_get(info->mti_pill, &RMF_CAPA1));
 
 	/* Detect out-of range masks */
 	if ((hss->hss_setmask | hss->hss_clearmask) & ~HSM_FLAGS_MASK) {
@@ -401,11 +392,6 @@ int mdt_hsm_action(struct tgt_session_info *tsi)
 	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
 	if (rc)
 		GOTO(out, rc = err_serious(rc));
-
-	if (req_capsule_get_size(tsi->tsi_pill, &RMF_CAPA1, RCL_CLIENT))
-		mdt_set_capainfo(info, 0, &info->mti_body->mbo_fid1,
-				 req_capsule_client_get(info->mti_pill,
-							&RMF_CAPA1));
 
 	/* Coordinator information */
 	hal_size = sizeof(*hal) +

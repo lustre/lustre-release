@@ -2516,8 +2516,7 @@ void osd_scrub_cleanup(const struct lu_env *env, struct osd_device *dev)
 /* object table based iteration APIs */
 
 static struct dt_it *osd_otable_it_init(const struct lu_env *env,
-				       struct dt_object *dt, __u32 attr,
-				       struct lustre_capa *capa)
+				       struct dt_object *dt, __u32 attr)
 {
 	enum dt_otable_it_flags flags = attr >> DT_OTABLE_IT_FLAGS_SHIFT;
 	enum dt_otable_it_valid valid = attr & ~DT_OTABLE_IT_FLAGS_MASK;

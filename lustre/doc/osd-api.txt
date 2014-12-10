@@ -575,8 +575,6 @@ void  (*dt_conf_get)(const struct lu_env *, const struct dt_device *,
 int   (*dt_sync)(const struct lu_env *, struct dt_device *);
 int   (*dt_ro)(const struct lu_env *, struct dt_device *);
 int   (*dt_commit_async)(const struct lu_env *, struct dt_device *);
-int   (*dt_init_capa_ctxt)(const struct lu_env *, struct dt_device *, int,
-			   unsigned long, __u32, struct lustre_capa_key *);
 
 dt_trans_create
 dt_trans_start
@@ -600,8 +598,6 @@ dt_commit_async
 	called to notify OSD/backend that higher level need transaction to be
 	flushed as soon as possible. Used by Commit-on-Share feature.
 	Should return immediately and not block for long.
-dt_init_capa_ctxt
-	called to initialize context for capabilities. not in use currently.
 
 2. Data Objects
 ===============
@@ -633,26 +629,25 @@ void (*do_read_unlock)(const struct lu_env *, struct dt_object *);
 void (*do_write_unlock)(const struct lu_env *, struct dt_object *);
 int  (*do_write_locked)(const struct lu_env *, struct dt_object *);
 int  (*do_attr_get)(const struct lu_env *, struct dt_object *,
-		     struct lu_attr *, struct lustre_capa *);
+		     struct lu_attr *);
 int  (*do_declare_attr_set)(const struct lu_env *, struct dt_object *,
                             const struct lu_attr *, struct thandle *);
 int  (*do_attr_set)(const struct lu_env *, struct dt_object *,
-		    const struct lu_attr *, struct thandle *,
-		    struct lustre_capa *);
+		    const struct lu_attr *, struct thandle *);
 int  (*do_xattr_get)(const struct lu_env *, struct dt_object *,
-		      struct lu_buf *, const char *, struct lustre_capa *);
+		      struct lu_buf *, const char *);
 int  (*do_declare_xattr_set)(const struct lu_env *, struct dt_object *,
                              const struct lu_buf *, const char *, int,
 			     struct thandle *);
 int  (*do_xattr_set)(const struct lu_env *, struct dt_object *,
 		      const struct lu_buf *, const char *, int,
-		      struct thandle *, struct lustre_capa *);
+		      struct thandle *);
 int  (*do_declare_xattr_del)(const struct lu_env *, struct dt_object *,
 			      const char *, struct thandle *);
 int  (*do_xattr_del)(const struct lu_env *, struct dt_object *, const char *,
-		      struct thandle *, struct lustre_capa *);
+		      struct thandle *);
 int  (*do_xattr_list)(const struct lu_env *, struct dt_object *,
-                       struct lu_buf *, struct lustre_capa *);
+                       struct lu_buf *);
 void (*do_ah_init)(const struct lu_env *, struct dt_allocation_hint *,
                     struct dt_object *, struct dt_object *, cfs_umode_t);
 int  (*do_declare_create)(const struct lu_env *, struct dt_object *,
@@ -672,8 +667,6 @@ int  (*do_ref_add)(const struct lu_env *, struct dt_object *, struct thandle *);
 int  (*do_declare_ref_del)(const struct lu_env *, struct dt_object *,
 			   struct thandle *);
 int  (*do_ref_del)(const struct lu_env *, struct dt_object *, struct thandle *);
-struct obd_capa *(*do_capa_get)(const struct lu_env *, struct dt_object *,
-                                struct lustre_capa *, __u64);
 int  (*do_object_sync)(const struct lu_env *, struct dt_object *);
 
 do_read_lock
@@ -769,8 +762,6 @@ do_ref_del
 	called to decrement nlink attribute in a specified transaction.
 	This is typically done on an object when a record referring to it is
 	deleted from an index object. The object must exist.
-do_capa_get
-	called to get a capability for a specified object. not used currently.
 do_object_sync
 	called to flush a given object on-disk. It’s a fine grained version of
 	->do_sync() method which should make sure an object is stored on-disk.
@@ -787,14 +778,13 @@ Set of methods described in struct dt_body_operations which should be used with
 regular objects storing unstructured data:
 
 ssize_t (*dbo_read)(const struct lu_env *, struct dt_object *, struct lu_buf *,
-	            loff_t *pos, struct lustre_capa *);
+	            loff_t *pos);
 ssize_t (*dbo_declare_write)(const struct lu_env *, struct dt_object *,
 			     const loff_t, loff_t, struct thandle *);
 ssize_t (*dbo_write)(const struct lu_env , struct dt_object *,
-		     const struct lu_buf *, loff_t *, struct thandle *,
-		     struct lustre_capa *, int);
+		     const struct lu_buf *, loff_t *, struct thandle *, int);
 int (*dbo_bufs_get)(const struct lu_env *, struct dt_object *, loff_t,
-		    ssize_t, struct niobuf_local *, int, struct lustre_capa *);
+		    ssize_t, struct niobuf_local *, int);
 int (*dbo_bufs_put)(const struct lu_env *, struct dt_object *,
 		    struct niobuf_local *, int);
 int (*dbo_write_prep)(const struct lu_env *, struct dt_object *,
@@ -810,7 +800,7 @@ int (*dbo_fiemap_get)(const struct lu_env *, struct dt_object *,
 int (*dbo_declare_punch)(const struct lu_env*, struct dt_object *, __u64,
 			  __u64,struct thandle *);
 int (*dbo_punch)(const struct lu_env *, struct dt_object *, __u64, __u64,
-		struct thandle *, struct lustre_capa *);
+		struct thandle *);
 
 dbo_read
 	is called to read raw unstructured data from a specified range of an
@@ -891,18 +881,17 @@ to maintain user-visible namespace, FLD, index of unlinked files, etc.
 The method prototypes are defined in dt_index_operations as follows:
 
 int (*dio_lookup)(const struct lu_env *, struct dt_object *, struct dt_rec *,
-		  const struct dt_key *, struct lustre_capa *);
+		  const struct dt_key *);
 int (*dio_declare_insert)(const struct lu_env *, struct dt_object *,
 			  const struct dt_rec *, const struct dt_key *,
 			  struct thandle *);
 int (*dio_insert)(const struct lu_env *, struct dt_object *,
 		  const struct dt_rec *, const struct dt_key *,
-		  struct thandle *, struct lustre_capa *, int);
+		  struct thandle *, int);
 int (*dio_declare_delete)(const struct lu_env *, struct dt_object *,
                           const struct dt_key *, struct thandle *);
 int (*dio_delete)(const struct lu_env *, struct dt_object *,
-		  const struct dt_key *, struct thandle *,
-		  struct lustre_capa *);
+		  const struct dt_key *, struct thandle *);
 
 dio_lookup
 	is called to lookup exact key=value pair. A value is copied into a
@@ -927,8 +916,7 @@ dio_delete
 To iterate over all key=value pair stored in an index, OSD should provide the
 following set of methods:
 
-struct dt_it *(*init)(const struct lu_env *, struct dt_object *, __u32,
-                      struct lustre_capa *);
+struct dt_it *(*init)(const struct lu_env *, struct dt_object *, __u32);
 void  (*fini)(const struct lu_env *, struct dt_it *);
 int   (*get)(const struct lu_env *, struct dt_it *, const struct dt_key *);
 void  (*put)(const struct lu_env *, struct dt_it *);

@@ -314,9 +314,9 @@ int tgt_truncate_last_rcvd(const struct lu_env *env, struct lu_target *tgt,
 	if (rc)
 		GOTO(cleanup, rc);
 
-	rc = dt_punch(env, dt, size, OBD_OBJECT_EOF, th, BYPASS_CAPA);
+	rc = dt_punch(env, dt, size, OBD_OBJECT_EOF, th);
 	if (rc == 0)
-		rc = dt_attr_set(env, dt, &attr, th, BYPASS_CAPA);
+		rc = dt_attr_set(env, dt, &attr, th);
 
 cleanup:
 	dt_trans_stop(env, tgt->lut_bottom, th);
@@ -997,7 +997,7 @@ int tgt_server_data_init(const struct lu_env *env, struct lu_target *tgt)
 	__u32				 index;
 	int				 rc, type;
 
-	rc = dt_attr_get(env, tgt->lut_last_rcvd, &tti->tti_attr, BYPASS_CAPA);
+	rc = dt_attr_get(env, tgt->lut_last_rcvd, &tti->tti_attr);
 	if (rc)
 		RETURN(rc);
 

@@ -239,12 +239,7 @@ struct osd_device {
 				  od_is_ost:1,
 				  od_index_in_idif:1;
 
-	unsigned long		  od_capa_timeout;
-	__u32			  od_capa_alg;
 	__u32			  od_dirent_journal;
-	struct lustre_capa_key   *od_capa_keys;
-	struct hlist_head	 *od_capa_hash;
-
 	struct proc_dir_entry	 *od_proc_entry;
 	struct lprocfs_stats     *od_stats;
 
@@ -525,11 +520,6 @@ struct osd_thread_info {
          * XXX temporary: for ->i_op calls.
          */
         struct timespec        oti_time;
-        /*
-         * XXX temporary: for capa operations.
-         */
-        struct lustre_capa_key oti_capa_key;
-        struct lustre_capa     oti_capa;
 
         /** osd_device reference, initialized in osd_trans_start() and
             used in osd_trans_stop() */
@@ -647,8 +637,6 @@ int osd_register_proc_index_in_idif(struct osd_device *osd);
 #endif
 int osd_statfs(const struct lu_env *env, struct dt_device *dev,
                struct obd_statfs *sfs);
-int osd_object_auth(const struct lu_env *env, struct dt_object *dt,
-                    struct lustre_capa *capa, __u64 opc);
 struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 		       struct osd_inode_id *id);
 int osd_ea_fid_set(struct osd_thread_info *info, struct inode *inode,

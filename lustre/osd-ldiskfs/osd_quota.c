@@ -92,7 +92,6 @@ int osd_acct_obj_lookup(struct osd_thread_info *info, struct osd_device *osd,
  * \param dtrec - is the record to fill with space usage information
  * \param dtkey - is the id the of the user or group for which we would
  *                like to access disk usage.
- * \param capa - is the capability, not used.
  *
  * \retval +ve - success : exact match
  * \retval -ve - failure
@@ -100,8 +99,7 @@ int osd_acct_obj_lookup(struct osd_thread_info *info, struct osd_device *osd,
 static int osd_acct_index_lookup(const struct lu_env *env,
 				 struct dt_object *dtobj,
 				 struct dt_rec *dtrec,
-				 const struct dt_key *dtkey,
-				 struct lustre_capa *capa)
+				 const struct dt_key *dtkey)
 {
 	struct osd_thread_info	*info = osd_oti_get(env);
 #ifdef HAVE_DQUOT_FS_DISK_QUOTA
@@ -148,11 +146,10 @@ static int osd_acct_index_lookup(const struct lu_env *env,
  *
  * \param  dt    - osd index object
  * \param  attr  - not used
- * \param  capa  - BYPASS_CAPA
  */
 static struct dt_it *osd_it_acct_init(const struct lu_env *env,
 				      struct dt_object *dt,
-				      __u32 attr, struct lustre_capa *capa)
+				      __u32 attr)
 {
 	struct osd_it_quota	*it;
 	struct lu_object	*lo = &dt->do_lu;
@@ -380,8 +377,7 @@ static int osd_it_acct_rec(const struct lu_env *env,
 
 	ENTRY;
 
-	rc = osd_acct_index_lookup(env, &it->oiq_obj->oo_dt, dtrec, key,
-				   BYPASS_CAPA);
+	rc = osd_acct_index_lookup(env, &it->oiq_obj->oo_dt, dtrec, key);
 	RETURN(rc > 0 ? 0 : rc);
 }
 
@@ -824,7 +820,7 @@ static int convert_quota_file(const struct lu_env *env,
 
 	/* iterate the old admin file, insert each record into the
 	 * new index file. */
-	it = iops->init(env, old, 0, BYPASS_CAPA);
+	it = iops->init(env, old, 0);
 	if (IS_ERR(it))
 		GOTO(out, rc = PTR_ERR(it));
 
@@ -932,11 +928,11 @@ static int truncate_quota_index(const struct lu_env *env, struct dt_object *dt,
 		GOTO(out, rc);
 
 	dt_write_lock(env, dt, 0);
-	rc = dt_punch(env, dt, 0, OBD_OBJECT_EOF, th, BYPASS_CAPA);
+	rc = dt_punch(env, dt, 0, OBD_OBJECT_EOF, th);
 	if (rc)
 		GOTO(out_lock, rc);
 
-	rc = dt_attr_set(env, dt, attr, th, BYPASS_CAPA);
+	rc = dt_attr_set(env, dt, attr, th);
 	if (rc)
 		GOTO(out_lock, rc);
 

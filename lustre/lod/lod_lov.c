@@ -253,7 +253,6 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 					   OBD_CONNECT_LRU_RESIZE |
 #endif
 					   OBD_CONNECT_MDS |
-					   OBD_CONNECT_OSS_CAPA |
 					   OBD_CONNECT_REQPORTAL |
 					   OBD_CONNECT_SKIP_ORPHAN |
 					   OBD_CONNECT_FID |
@@ -270,8 +269,6 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 		for_ost = false;
 		data->ocd_ibits_known = MDS_INODELOCK_UPDATE;
 		data->ocd_connect_flags |= OBD_CONNECT_ACL |
-					   OBD_CONNECT_MDS_CAPA |
-					   OBD_CONNECT_OSS_CAPA |
 					   OBD_CONNECT_IBITS |
 					   OBD_CONNECT_MDS_MDS |
 					   OBD_CONNECT_FID |
@@ -671,7 +668,7 @@ int lod_generate_and_set_lovea(const struct lu_env *env,
 	info->lti_buf.lb_buf = lmm;
 	info->lti_buf.lb_len = lmm_size;
 	rc = dt_xattr_set(env, next, &info->lti_buf, XATTR_NAME_LOV, 0,
-			  th, BYPASS_CAPA);
+			  th);
 	if (rc < 0)
 		lod_object_free_striping(env, lo);
 
@@ -709,7 +706,7 @@ int lod_get_ea(const struct lu_env *env, struct lod_object *lo,
 repeat:
 		info->lti_buf.lb_buf = info->lti_ea_store;
 		info->lti_buf.lb_len = info->lti_ea_store_size;
-		rc = dt_xattr_get(env, next, &info->lti_buf, name, BYPASS_CAPA);
+		rc = dt_xattr_get(env, next, &info->lti_buf, name);
 	}
 
 	/* if object is not striped or inaccessible */
@@ -718,8 +715,7 @@ repeat:
 
 	if (rc == -ERANGE) {
 		/* EA doesn't fit, reallocate new buffer */
-		rc = dt_xattr_get(env, next, &LU_BUF_NULL, name,
-				  BYPASS_CAPA);
+		rc = dt_xattr_get(env, next, &LU_BUF_NULL, name);
 		if (rc == -ENODATA || rc == -ENOENT)
 			RETURN(0);
 		else if (rc < 0)

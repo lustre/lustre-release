@@ -190,7 +190,7 @@ int lquotactl_slv(const struct lu_env *env, struct dt_device *dev,
 
 	/* lookup record storing space accounting information for this ID */
 	rc = dt_lookup(env, obj, (struct dt_rec *)&qti->qti_acct_rec,
-		       (struct dt_key *)&key, BYPASS_CAPA);
+		       (struct dt_key *)&key);
 	if (rc < 0)
 		GOTO(out, rc);
 
@@ -212,7 +212,7 @@ int lquotactl_slv(const struct lu_env *env, struct dt_device *dev,
 	memset(&qti->qti_slv_rec, 0, sizeof(qti->qti_slv_rec));
 	/* lookup record storing enforcement information for this ID */
 	rc = dt_lookup(env, obj, (struct dt_rec *)&qti->qti_slv_rec,
-		       (struct dt_key *)&key, BYPASS_CAPA);
+		       (struct dt_key *)&key);
 	if (rc < 0 && rc != -ENOENT)
 		GOTO(out, rc = 0);
 

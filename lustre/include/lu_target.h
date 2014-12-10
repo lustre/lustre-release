@@ -57,9 +57,7 @@ struct lu_target {
 	struct sptlrpc_rule_set	 lut_sptlrpc_rset;
 	spinlock_t		 lut_flags_lock;
 	int			 lut_sec_level;
-	unsigned int		 lut_mds_capa:1,
-				 lut_oss_capa:1,
-				 lut_syncjournal:1,
+	unsigned int		 lut_syncjournal:1,
 				 lut_sync_lock_cancel:2,
 				 /* e.g. OST node */
 				 lut_no_reconstruct:1;

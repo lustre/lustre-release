@@ -298,8 +298,6 @@ enum lc_auth_id {
 	LC_ID_CONVERT	= 2
 };
 
-#define BYPASS_CAPA (struct lustre_capa *)ERR_PTR(-ENOENT)
-
 enum {
 	LU_CAPAINFO_MAX = 5
 };

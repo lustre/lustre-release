@@ -112,8 +112,7 @@ static void record_end_io(struct osd_device *osd, int rw,
 }
 
 static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
-			struct lu_buf *buf, loff_t *pos,
-			struct lustre_capa *capa)
+			struct lu_buf *buf, loff_t *pos)
 {
 	struct osd_object *obj  = osd_dt_obj(dt);
 	struct osd_device *osd = osd_obj2dev(obj);
@@ -200,8 +199,7 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 
 static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 			const struct lu_buf *buf, loff_t *pos,
-			struct thandle *th, struct lustre_capa *capa,
-			int ignore_quota)
+			struct thandle *th, int ignore_quota)
 {
 	struct osd_object  *obj  = osd_dt_obj(dt);
 	struct osd_device  *osd = osd_obj2dev(obj);
@@ -511,7 +509,7 @@ out_err:
 
 static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
 			loff_t offset, ssize_t len, struct niobuf_local *lnb,
-			int rw, struct lustre_capa *capa)
+			int rw)
 {
 	struct osd_object *obj  = osd_dt_obj(dt);
 	int                rc;
@@ -876,8 +874,7 @@ static int __osd_object_punch(objset_t *os, dmu_buf_t *db, dmu_tx_t *tx,
 }
 
 static int osd_punch(const struct lu_env *env, struct dt_object *dt,
-			__u64 start, __u64 end, struct thandle *th,
-			struct lustre_capa *capa)
+			__u64 start, __u64 end, struct thandle *th)
 {
 	struct osd_object  *obj = osd_dt_obj(dt);
 	struct osd_device  *osd = osd_obj2dev(obj);

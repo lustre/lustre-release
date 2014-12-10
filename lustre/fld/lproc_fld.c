@@ -304,7 +304,7 @@ static int fldb_seq_open(struct inode *inode, struct file *file)
 
 	env_init = 1;
 	iops = &obj->do_index_ops->dio_it;
-	param->fsp_it = iops->init(&param->fsp_env, obj, 0, NULL);
+	param->fsp_it = iops->init(&param->fsp_env, obj, 0);
 	if (IS_ERR(param->fsp_it))
 		GOTO(out, rc = PTR_ERR(param->fsp_it));
 

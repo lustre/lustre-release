@@ -123,9 +123,6 @@ void mdt_fs_cleanup(const struct lu_env *env, struct mdt_device *mdt)
 
         /* Remove transaction callback */
         dt_txn_callback_del(mdt->mdt_bottom, &mdt->mdt_txn_cb);
-        if (mdt->mdt_ck_obj)
-                lu_object_put(env, &mdt->mdt_ck_obj->do_lu);
-        mdt->mdt_ck_obj = NULL;
         EXIT;
 }
 

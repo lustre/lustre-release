@@ -304,16 +304,6 @@ struct dt_device_operations {
 	 */
          int   (*dt_commit_async)(const struct lu_env *env,
                                   struct dt_device *dev);
-
-	 /**
-	  * Not used, subject to removal.
-	  */
-	 int   (*dt_init_capa_ctxt)(const struct lu_env *env,
-				    struct dt_device *dev,
-				    int mode,
-				    unsigned long timeout,
-				    __u32 alg,
-				    struct lustre_capa_key *keys);
 };
 
 struct dt_index_features {
@@ -501,14 +491,12 @@ struct dt_object_operations {
 	 *
 	 * \param[in] env	execution environment for this thread
 	 * \param[in] dt	object
-	 * \param[in] capa	unused
 	 *
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
 	 */
 	int   (*do_declare_attr_get)(const struct lu_env *env,
-				     struct dt_object *dt,
-				     struct lustre_capa *capa);
+				     struct dt_object *dt);
 
 	/**
 	 * Return regular attributes.
@@ -522,15 +510,13 @@ struct dt_object_operations {
 	 * \param[in] env	execution environment for this thread
 	 * \param[in] dt	object
 	 * \param[out] attr	attributes to fill
-	 * \param[in] capa	unused
 	 *
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
 	 */
 	int   (*do_attr_get)(const struct lu_env *env,
 			     struct dt_object *dt,
-			     struct lu_attr *attr,
-			     struct lustre_capa *capa);
+			     struct lu_attr *attr);
 
 	/**
 	 * Declare intention to change regular object's attributes.
@@ -568,7 +554,6 @@ struct dt_object_operations {
 	 * \param[in] dt	object
 	 * \param[in] attr	new attributes to apply
 	 * \param[in] th	transaction handle
-	 * \param[in] capa	unused
 	 *
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
@@ -576,8 +561,7 @@ struct dt_object_operations {
         int   (*do_attr_set)(const struct lu_env *env,
                              struct dt_object *dt,
                              const struct lu_attr *attr,
-			     struct thandle *th,
-                             struct lustre_capa *capa);
+			     struct thandle *th);
 
 	/**
 	 * Declare intention to request extented attribute.
@@ -593,7 +577,6 @@ struct dt_object_operations {
 	 * \param[in] dt	object
 	 * \param[in] buf	unused, may be removed in the future
 	 * \param[in] name	name of the extended attribute
-	 * \param[in] capa	unused, may be removed in the future
 	 *
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
@@ -601,8 +584,7 @@ struct dt_object_operations {
 	int   (*do_declare_xattr_get)(const struct lu_env *env,
 				      struct dt_object *dt,
 				      struct lu_buf *buf,
-				      const char *name,
-				      struct lustre_capa *capa);
+				      const char *name);
 
 	/**
 	 * Return a value of an extended attribute.
@@ -614,7 +596,6 @@ struct dt_object_operations {
 	 * \param[in] dt	object
 	 * \param[out] buf	buffer in which to store the value
 	 * \param[in] name	name of the extended attribute
-	 * \param[in] capa	unused
 	 *
 	 * \retval 0		on success
 	 * \retval -ERANGE	if \a buf is too small
@@ -624,8 +605,7 @@ struct dt_object_operations {
 	int   (*do_xattr_get)(const struct lu_env *env,
 			      struct dt_object *dt,
 			      struct lu_buf *buf,
-			      const char *name,
-			      struct lustre_capa *capa);
+			      const char *name);
 
 	/**
 	 * Declare intention to change an extended attribute.
@@ -670,7 +650,6 @@ struct dt_object_operations {
 	 * \param[in] name	name of the attribute
 	 * \param[in] fl	flags indicating EA creation or replacement
 	 * \param[in] th	transaction handle
-	 * \param[in] capa	unused
 	 *
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
@@ -680,8 +659,7 @@ struct dt_object_operations {
 			      const struct lu_buf *buf,
 			      const char *name,
 			      int fl,
-			      struct thandle *th,
-			      struct lustre_capa *capa);
+			      struct thandle *th);
 
 	/**
 	 * Declare intention to delete an extended attribute.
@@ -715,7 +693,6 @@ struct dt_object_operations {
 	 * \param[in] dt	object
 	 * \param[in] name	name of the attribute
 	 * \param[in] th	transaction handle
-	 * \param[in] capa	unused
 	 *
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
@@ -723,8 +700,7 @@ struct dt_object_operations {
 	int   (*do_xattr_del)(const struct lu_env *env,
 			      struct dt_object *dt,
 			      const char *name,
-			      struct thandle *th,
-			      struct lustre_capa *capa);
+			      struct thandle *th);
 
 	/**
 	 * Return a list of the extended attributes.
@@ -736,15 +712,13 @@ struct dt_object_operations {
 	 * \param[in] env	execution environment for this thread
 	 * \param[in] dt	object
 	 * \param[out] buf	buffer to put the list in
-	 * \param[in] capa	unused
 	 *
 	 * \retval positive	bytes used/required in the buffer
 	 * \retval negative	negated errno on error
          */
 	int   (*do_xattr_list)(const struct lu_env *env,
 			       struct dt_object *dt,
-			       const struct lu_buf *buf,
-			       struct lustre_capa *capa);
+			       const struct lu_buf *buf);
 
 	/**
 	 * Prepare allocation hint for a new object.
@@ -969,14 +943,6 @@ struct dt_object_operations {
 			    struct thandle *th);
 
 	/**
-	 * Not used, subject to removal.
-	 */
-	struct obd_capa *(*do_capa_get)(const struct lu_env *env,
-					struct dt_object *dt,
-					struct lustre_capa *old,
-					__u64 opc);
-
-	/**
 	 * Sync obect.
 	 *
 	 * The method is called to sync specified range of the object to a
@@ -1001,13 +967,6 @@ struct dt_object_operations {
 			      struct dt_object *obj,
 			      __u64 start,
 			      __u64 end);
-
-	/**
-	 * Not used, subject to removal.
-	 */
-	int (*do_data_get)(const struct lu_env *env,
-			   struct dt_object *dt,
-			   void **data);
 
 	/**
 	 * Lock object.
@@ -1067,7 +1026,6 @@ struct dt_body_operations {
 	 * \param[out] buf	buffer (including size) to copy data in
 	 * \param[in] pos	position in the object to start
 	 * \param[out] pos	original value of \a pos + bytes returned
-	 * \param[in] capa	unused
 	 *
 	 * \retval positive	bytes read on success
 	 * \retval negative	negated errno on error
@@ -1075,8 +1033,7 @@ struct dt_body_operations {
 	ssize_t (*dbo_read)(const struct lu_env *env,
 			    struct dt_object *dt,
 			    struct lu_buf *buf,
-			    loff_t *pos,
-			    struct lustre_capa *capa);
+			    loff_t *pos);
 
 	/**
 	 * Declare intention to write data to object.
@@ -1122,7 +1079,6 @@ struct dt_body_operations {
 	 * \param[in] pos	position in the object to start
 	 * \param[out] pos	\a pos + bytes written
 	 * \param[in] th	transaction handle
-	 * \param[in] capa	unused
 	 * \param[in] ignore	unused (was used to request quota ignorance)
 	 *
 	 * \retval positive	bytes written on success
@@ -1133,7 +1089,6 @@ struct dt_body_operations {
 			     const struct lu_buf *buf,
 			     loff_t *pos,
 			     struct thandle *th,
-			     struct lustre_capa *capa,
 			     int ignore);
 
 	/**
@@ -1164,7 +1119,6 @@ struct dt_body_operations {
 	 * \param[in] len	size of region in bytes
 	 * \param[out] lb	array of descriptors to fill
 	 * \param[in] rw	0 if used to read, 1 if used for write
-	 * \param[in] capa	unused
 	 *
 	 * \retval positive	number of descriptors on success
 	 * \retval negative	negated errno on error
@@ -1174,8 +1128,7 @@ struct dt_body_operations {
 			    loff_t pos,
 			    ssize_t len,
 			    struct niobuf_local *lb,
-			    int rw,
-			    struct lustre_capa *capa);
+			    int rw);
 
 	/**
 	 * Release reference granted by ->dbo_bufs_get().
@@ -1350,7 +1303,6 @@ struct dt_body_operations {
 	 * \param[in] start	the start of the region to deallocate
 	 * \param[in] end	the end of the region to deallocate
 	 * \param[in] th	transaction handle
-	 * \param[in] capa	unused
 	 *
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
@@ -1359,8 +1311,7 @@ struct dt_body_operations {
 			   struct dt_object *dt,
 			   __u64 start,
 			   __u64 end,
-			   struct thandle *th,
-			   struct lustre_capa *capa);
+			   struct thandle *th);
 };
 
 /**
@@ -1401,7 +1352,6 @@ struct dt_index_operations {
 	 * \param[in] dt	object
 	 * \param[out] rec	buffer where value will be stored
 	 * \param[in] key	key
-	 * \param[in] capa	unused
 	 *
 	 * \retval 0		on success
 	 * \retval -ENOENT	if key isn't found
@@ -1410,8 +1360,7 @@ struct dt_index_operations {
 	int (*dio_lookup)(const struct lu_env *env,
 			  struct dt_object *dt,
 			  struct dt_rec *rec,
-			  const struct dt_key *key,
-			  struct lustre_capa *capa);
+			  const struct dt_key *key);
 
 	/**
 	 * Declare intention to insert a key/value into an index.
@@ -1452,7 +1401,6 @@ struct dt_index_operations {
 	 * \param[in] rec	buffer storing value
 	 * \param[in] key	key
 	 * \param[in] th	transaction handle
-	 * \param[in] capa	unused
 	 * \param[in] ignore	unused (was used to request quota ignorance)
 	 *
 	 * \retval 0		on success
@@ -1463,7 +1411,6 @@ struct dt_index_operations {
 			  const struct dt_rec *rec,
 			  const struct dt_key *key,
 			  struct thandle *th,
-			  struct lustre_capa *capa,
 			  int ignore);
 
 	/**
@@ -1501,7 +1448,6 @@ struct dt_index_operations {
 	 * \param[in] dt	object
 	 * \param[in] key	key
 	 * \param[in] th	transaction handle
-	 * \param[in] capa	unused
 	 *
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
@@ -1509,8 +1455,7 @@ struct dt_index_operations {
 	int (*dio_delete)(const struct lu_env *env,
 			  struct dt_object *dt,
 			  const struct dt_key *key,
-			  struct thandle *th,
-			  struct lustre_capa *capa);
+			  struct thandle *th);
 
         /**
 	 * Iterator interface.
@@ -1531,15 +1476,13 @@ struct dt_index_operations {
 		 * \param[in] dt	object
 		 * \param[in] attr	ask the iterator to return part of
 					the records, see LUDA_* for details
-		 * \param[in] capa	unused
 		 *
 		 * \retval pointer	iterator pointer on success
 		 * \retval ERR_PTR(errno)	on error
                  */
                 struct dt_it *(*init)(const struct lu_env *env,
-                                      struct dt_object *dt,
-                                      __u32 attr,
-                                      struct lustre_capa *capa);
+				      struct dt_object *dt,
+				      __u32 attr);
 
 		/**
 		 * Release iterator.
@@ -2244,8 +2187,7 @@ static inline int dt_write_locked(const struct lu_env *env,
 }
 
 static inline int dt_declare_attr_get(const struct lu_env *env,
-				      struct dt_object *dt,
-				      struct lustre_capa *capa)
+				      struct dt_object *dt)
 {
 	LASSERT(dt);
 	LASSERT(dt->do_ops);
@@ -2254,11 +2196,11 @@ static inline int dt_declare_attr_get(const struct lu_env *env,
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_ATTR_GET))
 		return cfs_fail_err;
 
-	return dt->do_ops->do_declare_attr_get(env, dt, capa);
+	return dt->do_ops->do_declare_attr_get(env, dt);
 }
 
 static inline int dt_attr_get(const struct lu_env *env, struct dt_object *dt,
-                              struct lu_attr *la, void *arg)
+			      struct lu_attr *la)
 {
         LASSERT(dt);
         LASSERT(dt->do_ops);
@@ -2267,7 +2209,7 @@ static inline int dt_attr_get(const struct lu_env *env, struct dt_object *dt,
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_ATTR_GET))
 		return cfs_fail_err;
 
-        return dt->do_ops->do_attr_get(env, dt, la, arg);
+	return dt->do_ops->do_attr_get(env, dt, la);
 }
 
 static inline int dt_declare_attr_set(const struct lu_env *env,
@@ -2286,8 +2228,7 @@ static inline int dt_declare_attr_set(const struct lu_env *env,
 }
 
 static inline int dt_attr_set(const struct lu_env *env, struct dt_object *dt,
-                              const struct lu_attr *la, struct thandle *th,
-                              struct lustre_capa *capa)
+			      const struct lu_attr *la, struct thandle *th)
 {
         LASSERT(dt);
         LASSERT(dt->do_ops);
@@ -2296,7 +2237,7 @@ static inline int dt_attr_set(const struct lu_env *env, struct dt_object *dt,
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_ATTR_SET))
 		return cfs_fail_err;
 
-        return dt->do_ops->do_attr_set(env, dt, la, th, capa);
+	return dt->do_ops->do_attr_set(env, dt, la, th);
 }
 
 static inline int dt_declare_ref_add(const struct lu_env *env,
@@ -2351,26 +2292,15 @@ static inline int dt_ref_del(const struct lu_env *env,
         return dt->do_ops->do_ref_del(env, dt, th);
 }
 
-static inline struct obd_capa *dt_capa_get(const struct lu_env *env,
-                                           struct dt_object *dt,
-                                           struct lustre_capa *old, __u64 opc)
-{
-        LASSERT(dt);
-        LASSERT(dt->do_ops);
-	LASSERT(dt->do_ops->do_capa_get);
-        return dt->do_ops->do_capa_get(env, dt, old, opc);
-}
-
 static inline int dt_bufs_get(const struct lu_env *env, struct dt_object *d,
 			      struct niobuf_remote *rnb,
-			      struct niobuf_local *lnb, int rw,
-			      struct lustre_capa *capa)
+			      struct niobuf_local *lnb, int rw)
 {
 	LASSERT(d);
 	LASSERT(d->do_body_ops);
 	LASSERT(d->do_body_ops->dbo_bufs_get);
 	return d->do_body_ops->dbo_bufs_get(env, d, rnb->rnb_offset,
-					    rnb->rnb_len, lnb, rw, capa);
+					    rnb->rnb_len, lnb, rw);
 }
 
 static inline int dt_bufs_put(const struct lu_env *env, struct dt_object *d,
@@ -2432,13 +2362,12 @@ static inline int dt_declare_punch(const struct lu_env *env,
 }
 
 static inline int dt_punch(const struct lu_env *env, struct dt_object *dt,
-                           __u64 start, __u64 end, struct thandle *th,
-                           struct lustre_capa *capa)
+			   __u64 start, __u64 end, struct thandle *th)
 {
         LASSERT(dt);
         LASSERT(dt->do_body_ops);
         LASSERT(dt->do_body_ops->dbo_punch);
-        return dt->do_body_ops->dbo_punch(env, dt, start, end, th, capa);
+	return dt->do_body_ops->dbo_punch(env, dt, start, end, th);
 }
 
 static inline int dt_fiemap_get(const struct lu_env *env, struct dt_object *d,
@@ -2509,7 +2438,7 @@ static inline int dt_declare_insert(const struct lu_env *env,
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_INSERT))
 		return cfs_fail_err;
 
-        return dt->do_index_ops->dio_declare_insert(env, dt, rec, key, th);
+	return dt->do_index_ops->dio_declare_insert(env, dt, rec, key, th);
 }
 
 static inline int dt_insert(const struct lu_env *env,
@@ -2517,7 +2446,6 @@ static inline int dt_insert(const struct lu_env *env,
                                     const struct dt_rec *rec,
                                     const struct dt_key *key,
                                     struct thandle *th,
-                                    struct lustre_capa *capa,
                                     int noquota)
 {
         LASSERT(dt);
@@ -2527,8 +2455,7 @@ static inline int dt_insert(const struct lu_env *env,
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_INSERT))
 		return cfs_fail_err;
 
-        return dt->do_index_ops->dio_insert(env, dt, rec, key, th,
-                                            capa, noquota);
+	return dt->do_index_ops->dio_insert(env, dt, rec, key, th, noquota);
 }
 
 static inline int dt_declare_xattr_del(const struct lu_env *env,
@@ -2547,9 +2474,8 @@ static inline int dt_declare_xattr_del(const struct lu_env *env,
 }
 
 static inline int dt_xattr_del(const struct lu_env *env,
-                               struct dt_object *dt, const char *name,
-                               struct thandle *th,
-                               struct lustre_capa *capa)
+			       struct dt_object *dt, const char *name,
+			       struct thandle *th)
 {
         LASSERT(dt);
         LASSERT(dt->do_ops);
@@ -2558,7 +2484,7 @@ static inline int dt_xattr_del(const struct lu_env *env,
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_XATTR_DEL))
 		return cfs_fail_err;
 
-        return dt->do_ops->do_xattr_del(env, dt, name, th, capa);
+	return dt->do_ops->do_xattr_del(env, dt, name, th);
 }
 
 static inline int dt_declare_xattr_set(const struct lu_env *env,
@@ -2578,9 +2504,8 @@ static inline int dt_declare_xattr_set(const struct lu_env *env,
 }
 
 static inline int dt_xattr_set(const struct lu_env *env,
-                              struct dt_object *dt, const struct lu_buf *buf,
-                              const char *name, int fl, struct thandle *th,
-                              struct lustre_capa *capa)
+			       struct dt_object *dt, const struct lu_buf *buf,
+			       const char *name, int fl, struct thandle *th)
 {
         LASSERT(dt);
         LASSERT(dt->do_ops);
@@ -2589,14 +2514,13 @@ static inline int dt_xattr_set(const struct lu_env *env,
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_XATTR_SET))
 		return cfs_fail_err;
 
-        return dt->do_ops->do_xattr_set(env, dt, buf, name, fl, th, capa);
+	return dt->do_ops->do_xattr_set(env, dt, buf, name, fl, th);
 }
 
 static inline int dt_declare_xattr_get(const struct lu_env *env,
 				       struct dt_object *dt,
 				       struct lu_buf *buf,
-				       const char *name,
-				       struct lustre_capa *capa)
+				       const char *name)
 {
 	LASSERT(dt);
 	LASSERT(dt->do_ops);
@@ -2605,12 +2529,12 @@ static inline int dt_declare_xattr_get(const struct lu_env *env,
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_XATTR_GET))
 		return cfs_fail_err;
 
-	return dt->do_ops->do_declare_xattr_get(env, dt, buf, name, capa);
+	return dt->do_ops->do_declare_xattr_get(env, dt, buf, name);
 }
 
 static inline int dt_xattr_get(const struct lu_env *env,
-                              struct dt_object *dt, struct lu_buf *buf,
-                              const char *name, struct lustre_capa *capa)
+			       struct dt_object *dt, struct lu_buf *buf,
+			       const char *name)
 {
         LASSERT(dt);
         LASSERT(dt->do_ops);
@@ -2619,12 +2543,11 @@ static inline int dt_xattr_get(const struct lu_env *env,
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_XATTR_GET))
 		return cfs_fail_err;
 
-        return dt->do_ops->do_xattr_get(env, dt, buf, name, capa);
+	return dt->do_ops->do_xattr_get(env, dt, buf, name);
 }
 
 static inline int dt_xattr_list(const struct lu_env *env, struct dt_object *dt,
-				const struct lu_buf *buf,
-				struct lustre_capa *capa)
+				const struct lu_buf *buf)
 {
         LASSERT(dt);
         LASSERT(dt->do_ops);
@@ -2633,7 +2556,7 @@ static inline int dt_xattr_list(const struct lu_env *env, struct dt_object *dt,
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_XATTR_LIST))
 		return cfs_fail_err;
 
-        return dt->do_ops->do_xattr_list(env, dt, buf, capa);
+	return dt->do_ops->do_xattr_list(env, dt, buf);
 }
 
 static inline int dt_declare_delete(const struct lu_env *env,
@@ -2652,10 +2575,9 @@ static inline int dt_declare_delete(const struct lu_env *env,
 }
 
 static inline int dt_delete(const struct lu_env *env,
-                            struct dt_object *dt,
-                            const struct dt_key *key,
-                            struct thandle *th,
-                            struct lustre_capa *capa)
+			    struct dt_object *dt,
+			    const struct dt_key *key,
+			    struct thandle *th)
 {
         LASSERT(dt);
         LASSERT(dt->do_index_ops);
@@ -2664,7 +2586,7 @@ static inline int dt_delete(const struct lu_env *env,
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DELETE))
 		return cfs_fail_err;
 
-        return dt->do_index_ops->dio_delete(env, dt, key, th, capa);
+	return dt->do_index_ops->dio_delete(env, dt, key, th);
 }
 
 static inline int dt_commit_async(const struct lu_env *env,
@@ -2676,23 +2598,10 @@ static inline int dt_commit_async(const struct lu_env *env,
         return dev->dd_ops->dt_commit_async(env, dev);
 }
 
-static inline int dt_init_capa_ctxt(const struct lu_env *env,
-				    struct dt_device *dev,
-				    int mode, unsigned long timeout,
-				    __u32 alg, struct lustre_capa_key *keys)
-{
-	LASSERT(dev);
-	LASSERT(dev->dd_ops);
-	LASSERT(dev->dd_ops->dt_init_capa_ctxt);
-	return dev->dd_ops->dt_init_capa_ctxt(env, dev, mode,
-					      timeout, alg, keys);
-}
-
 static inline int dt_lookup(const struct lu_env *env,
-                            struct dt_object *dt,
-                            struct dt_rec *rec,
-                            const struct dt_key *key,
-                            struct lustre_capa *capa)
+			    struct dt_object *dt,
+			    struct dt_rec *rec,
+			    const struct dt_key *key)
 {
         int ret;
 
@@ -2703,7 +2612,7 @@ static inline int dt_lookup(const struct lu_env *env,
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_LOOKUP))
 		return cfs_fail_err;
 
-        ret = dt->do_index_ops->dio_lookup(env, dt, rec, key, capa);
+	ret = dt->do_index_ops->dio_lookup(env, dt, rec, key);
         if (ret > 0)
                 ret = 0;
         else if (ret == 0)

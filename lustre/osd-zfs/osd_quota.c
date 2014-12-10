@@ -80,7 +80,6 @@ static uint64_t osd_objset_user_iused(struct osd_device *osd, uint64_t uidbytes)
  * \param dtrec - is the record to fill with space usage information
  * \param dtkey - is the id the of the user or group for which we would
  *                like to access disk usage.
- * \param capa - is the capability, not used.
  *
  * \retval +ve - success : exact match
  * \retval -ve - failure
@@ -88,8 +87,7 @@ static uint64_t osd_objset_user_iused(struct osd_device *osd, uint64_t uidbytes)
 static int osd_acct_index_lookup(const struct lu_env *env,
 				struct dt_object *dtobj,
 				struct dt_rec *dtrec,
-				const struct dt_key *dtkey,
-				struct lustre_capa *capa)
+				const struct dt_key *dtkey)
 {
 	struct osd_thread_info	*info = osd_oti_get(env);
 	char			*buf  = info->oti_buf;
@@ -148,12 +146,10 @@ static int osd_acct_index_lookup(const struct lu_env *env,
  *
  * \param  dt    - osd index object
  * \param  attr  - not used
- * \param  capa  - BYPASS_CAPA
  */
 static struct dt_it *osd_it_acct_init(const struct lu_env *env,
 				      struct dt_object *dt,
-				      __u32 attr,
-				      struct lustre_capa *capa)
+				      __u32 attr)
 {
 	struct osd_thread_info	*info = osd_oti_get(env);
 	struct osd_it_quota	*it;

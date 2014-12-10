@@ -185,8 +185,7 @@ int fld_index_create(const struct lu_env *env, struct lu_server_fld *fld,
 	    range_compare_loc(new_range, range) == 0) {
 		range_cpu_to_be(tmp, range);
 		rc = dt_delete(env, fld->lsf_obj,
-			       (struct dt_key *)&tmp->lsr_start, th,
-				BYPASS_CAPA);
+			       (struct dt_key *)&tmp->lsr_start, th);
 		if (rc != 0)
 			GOTO(out, rc);
 		*tmp = *new_range;
@@ -198,7 +197,7 @@ int fld_index_create(const struct lu_env *env, struct lu_server_fld *fld,
 
 	range_cpu_to_be(tmp, tmp);
 	rc = dt_insert(env, fld->lsf_obj, (struct dt_rec *)tmp,
-		       (struct dt_key *)&tmp->lsr_start, th, BYPASS_CAPA, 1);
+		       (struct dt_key *)&tmp->lsr_start, th, 1);
 	if (rc != 0) {
 		CERROR("%s: insert range "DRANGE" failed: rc = %d\n",
 		       fld->lsf_name, PRANGE(new_range), rc);
@@ -385,7 +384,7 @@ int fld_index_init(const struct lu_env *env, struct lu_server_fld *fld,
 	range = &info->fti_rec;
 	/* Load fld entry to cache */
 	iops = &dt_obj->do_index_ops->dio_it;
-	it = iops->init(env, dt_obj, 0, NULL);
+	it = iops->init(env, dt_obj, 0);
 	if (IS_ERR(it))
 		GOTO(out, rc = PTR_ERR(it));
 
@@ -470,7 +469,7 @@ int fld_server_read(const struct lu_env *env, struct lu_server_fld *fld,
 
 	lsra->lsra_count = 0;
 	iops = &dt_obj->do_index_ops->dio_it;
-	it = iops->init(env, dt_obj, 0, NULL);
+	it = iops->init(env, dt_obj, 0);
 	if (IS_ERR(it))
 		RETURN(PTR_ERR(it));
 

@@ -315,7 +315,7 @@ static int out_tx_attr_set_exec(const struct lu_env *env, struct thandle *th,
 	       PFID(lu_object_fid(&dt_obj->do_lu)));
 
 	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
-	rc = dt_attr_set(env, dt_obj, &arg->u.attr_set.attr, th, NULL);
+	rc = dt_attr_set(env, dt_obj, &arg->u.attr_set.attr, th);
 	dt_write_unlock(env, dt_obj);
 
 	CDEBUG(D_INFO, "%s: insert attr_set reply %p index %d: rc = %d\n",
@@ -412,7 +412,7 @@ static int out_attr_get(struct tgt_session_info *tsi)
 	}
 
 	dt_read_lock(env, obj, MOR_TGT_CHILD);
-	rc = dt_attr_get(env, obj, la, NULL);
+	rc = dt_attr_get(env, obj, la);
 	if (rc)
 		GOTO(out_unlock, rc);
 
@@ -473,7 +473,7 @@ static int out_xattr_get(struct tgt_session_info *tsi)
 		       cfs_size_round((unsigned long)update_result->our_data -
 				      (unsigned long)update_result);
 	dt_read_lock(env, obj, MOR_TGT_CHILD);
-	rc = dt_xattr_get(env, obj, lbuf, name, NULL);
+	rc = dt_xattr_get(env, obj, lbuf, name);
 	dt_read_unlock(env, obj);
 	if (rc < 0) {
 		lbuf->lb_len = 0;
@@ -522,7 +522,7 @@ static int out_index_lookup(struct tgt_session_info *tsi)
 		GOTO(out_unlock, rc = -ENOTDIR);
 
 	rc = dt_lookup(env, obj, (struct dt_rec *)&tti->tti_fid1,
-		(struct dt_key *)name, NULL);
+		       (struct dt_key *)name);
 
 	if (rc < 0)
 		GOTO(out_unlock, rc);
@@ -563,8 +563,7 @@ static int out_tx_xattr_set_exec(const struct lu_env *env,
 
 	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
 	rc = dt_xattr_set(env, dt_obj, &arg->u.xattr_set.buf,
-			  arg->u.xattr_set.name, arg->u.xattr_set.flags,
-			  th, NULL);
+			  arg->u.xattr_set.name, arg->u.xattr_set.flags, th);
 	/**
 	 * Ignore errors if this is LINK EA
 	 **/
@@ -711,8 +710,7 @@ static int out_tx_xattr_del_exec(const struct lu_env *env, struct thandle *th,
 		GOTO(out, rc = -ENOENT);
 
 	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
-	rc = dt_xattr_del(env, dt_obj, arg->u.xattr_set.name,
-			  th, NULL);
+	rc = dt_xattr_del(env, dt_obj, arg->u.xattr_set.name, th);
 	dt_write_unlock(env, dt_obj);
 out:
 	CDEBUG(D_INFO, "%s: insert xattr del reply %p index %d: rc = %d\n",
@@ -942,7 +940,7 @@ static int out_obj_index_insert(const struct lu_env *env,
 		return -ENOTDIR;
 
 	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
-	rc = dt_insert(env, dt_obj, rec, key, th, NULL, 0);
+	rc = dt_insert(env, dt_obj, rec, key, th, 0);
 	dt_write_unlock(env, dt_obj);
 
 	return rc;
@@ -963,7 +961,7 @@ static int out_obj_index_delete(const struct lu_env *env,
 		return -ENOTDIR;
 
 	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
-	rc = dt_delete(env, dt_obj, key, th, NULL);
+	rc = dt_delete(env, dt_obj, key, th);
 	dt_write_unlock(env, dt_obj);
 
 	return rc;

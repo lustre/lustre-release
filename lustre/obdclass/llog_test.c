@@ -886,7 +886,7 @@ static int llog_truncate(const struct lu_env *env, struct dt_object *o)
 	d = lu2dt_dev(o->do_lu.lo_dev);
 	LASSERT(d);
 
-	rc = dt_attr_get(env, o, &la, NULL);
+	rc = dt_attr_get(env, o, &la);
 	if (rc)
 		RETURN(rc);
 
@@ -915,11 +915,11 @@ static int llog_truncate(const struct lu_env *env, struct dt_object *o)
 	if (rc)
 		GOTO(stop, rc);
 
-	rc = dt_punch(env, o, la.la_size, OBD_OBJECT_EOF, th, BYPASS_CAPA);
+	rc = dt_punch(env, o, la.la_size, OBD_OBJECT_EOF, th);
 	if (rc)
 		GOTO(stop, rc);
 
-	rc = dt_attr_set(env, o, &la, th, BYPASS_CAPA);
+	rc = dt_attr_set(env, o, &la, th);
 	if (rc)
 		GOTO(stop, rc);
 
