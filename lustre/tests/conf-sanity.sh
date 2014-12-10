@@ -4842,20 +4842,20 @@ test_79() { # LU-4227
 	add ost1 $opts_ost1 $ostdev1 $ostvdev2 &&
 		error "Must specify --mgsnode when formatting an ost"
 
-	return 0
+	reformat
 }
 run_test 79 "format MDT/OST without mgs option (should return errors)"
 
 test_80() {
-	start_mds
-	start_ost
+	start_mds || error "Failed to start MDT"
+	start_ost || error "Failed to start OST1"
 	uuid=$(do_facet ost1 $LCTL get_param -n mgc.*.uuid)
 #define OBD_FAIL_MGS_PAUSE_TARGET_CON       0x906
 	do_facet ost1 "$LCTL set_param fail_val=10 fail_loc=0x906"
 	do_facet mgs "$LCTL set_param fail_val=10 fail_loc=0x906"
 	do_facet mgs "$LCTL set_param -n mgs/MGS/evict_client $uuid"
 	sleep 30
-	start_ost2
+	start_ost2 || error "Failed to start OST2"
 
 	do_facet ost1 "$LCTL set_param fail_loc=0"
 	stopall
