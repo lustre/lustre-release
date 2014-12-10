@@ -980,11 +980,7 @@ test_20a() {
 	echo "#####"
 
 	lfsck_prep 0 0
-	echo "start $SINGLEMDS"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
-		error "(1) Fail to start MDS!"
 
-	mount_client $MOUNT || error "(2) Fail to start client!"
 	$LFS mkdir -i 0 $DIR/$tdir/a1
 	if [ $OSTCOUNT -gt 2 ]; then
 		$LFS setstripe -c 3 -i 0 -s 1M $DIR/$tdir/a1
