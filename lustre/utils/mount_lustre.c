@@ -625,21 +625,17 @@ int main(int argc, char *const argv[])
 
 	set_defaults(&mop);
 
-	rc = osd_init();
-	if (rc)
-		return rc;
-
 	rc = parse_opts(argc, argv, &mop);
 	if (rc || version)
 		return rc;
 
-        if (verbose) {
-                for (i = 0; i < argc; i++)
-                        printf("arg[%d] = %s\n", i, argv[i]);
+	if (verbose) {
+		for (i = 0; i < argc; i++)
+			printf("arg[%d] = %s\n", i, argv[i]);
 		printf("source = %s (%s), target = %s\n", mop.mo_usource,
 		       mop.mo_source, mop.mo_target);
 		printf("options = %s\n", mop.mo_orig_options);
-        }
+	}
 
 	options = malloc(MAXOPT);
         if (options == NULL) {
@@ -674,29 +670,33 @@ int main(int argc, char *const argv[])
 		mop.mo_nomtab++;
 
 	rc = access(mop.mo_target, F_OK);
-        if (rc) {
-                rc = errno;
+	if (rc) {
+		rc = errno;
 		fprintf(stderr, "%s: %s inaccessible: %s\n", progname,
 			mop.mo_target, strerror(errno));
-                return rc;
-        }
+		return rc;
+	}
 
-	if (!strstr(mop.mo_usource, ":/")) {
+	if (strstr(mop.mo_usource, ":/") == NULL) {
+		rc = osd_init();
+		if (rc)
+			return rc;
+
 		rc = parse_ldd(mop.mo_source, &mop, options);
 		if (rc)
 			return rc;
 	}
 
-        /* In Linux 2.4, the target device doesn't get passed to any of our
-           functions.  So we'll stick it on the end of the options. */
+	/* In Linux 2.4, the target device doesn't get passed to any of our
+	   functions.  So we'll stick it on the end of the options. */
 	append_option(options, "device=");
 	strcat(options, mop.mo_source);
 
-        if (verbose)
-                printf("mounting device %s at %s, flags=%#x options=%s\n",
+	if (verbose)
+		printf("mounting device %s at %s, flags=%#x options=%s\n",
 		       mop.mo_source, mop.mo_target, flags, options);
 
-	if (!strstr(mop.mo_usource, ":/") &&
+	if (strstr(mop.mo_usource, ":/") == NULL &&
 	    osd_tune_lustre(mop.mo_source, &mop)) {
 		if (verbose)
 			fprintf(stderr, "%s: unable to set tunables for %s"
@@ -705,10 +705,10 @@ int main(int argc, char *const argv[])
 	}
 
 	if (!mop.mo_fake) {
-                /* flags and target get to lustre_get_sb, but not
-                   lustre_fill_super.  Lustre ignores the flags, but mount
-                   does not. */
-                for (i = 0, rc = -EAGAIN; i <= mop.mo_retry && rc != 0; i++) {
+		/* flags and target get to lustre_get_sb(), but not
+		 * lustre_fill_super().  Lustre ignores the flags, but mount
+		 * does not. */
+		for (i = 0, rc = -EAGAIN; i <= mop.mo_retry && rc != 0; i++) {
 			rc = mount(mop.mo_source, mop.mo_target, "lustre",
 				   flags, (void *)options);
 			if (rc == 0) {
@@ -815,7 +815,8 @@ int main(int argc, char *const argv[])
 	/* mo_usource should be freed, but we can rely on the kernel */
 	free(mop.mo_source);
 
-	osd_fini();
+	if (strstr(mop.mo_usource, ":/") == NULL)
+		osd_fini();
 
-        return rc;
+	return rc;
 }
