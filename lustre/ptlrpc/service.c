@@ -1287,6 +1287,11 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
         int rc;
         ENTRY;
 
+	if (CFS_FAIL_CHECK(OBD_FAIL_TGT_REPLAY_RECONNECT)) {
+		/* don't send early reply */
+		RETURN(1);
+	}
+
         /* deadline is when the client expects us to reply, margin is the
            difference between clients' and servers' expectations */
         DEBUG_REQ(D_ADAPTTO, req,

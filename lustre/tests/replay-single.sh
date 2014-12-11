@@ -2808,6 +2808,28 @@ test_90() { # bug 19494
 }
 run_test 90 "lfs find identifies the missing striped file segments"
 
+test_93() {
+    local server_version=$(lustre_version_code $SINGLEMDS)
+	[[ $server_version -ge $(version_code 2.6.90) ]] ||
+	[[ $server_version -ge $(version_code 2.5.4) &&
+	   $server_version -lt $(version_code 2.5.50) ]] ||
+		{ skip "Need MDS version 2.5.4+ or 2.6.90+"; return; }
+
+    cancel_lru_locks osc
+
+    $SETSTRIPE -i 0 -c 1 $DIR/$tfile
+    dd if=/dev/zero of=$DIR/$tfile bs=1024 count=1
+#define OBD_FAIL_TGT_REPLAY_RECONNECT     0x715
+    # We need to emulate a state that OST is waiting for other clients
+    # not completing the recovery. Final ping is queued, but reply will be sent
+    # on the recovery completion. It is done by sleep before processing final
+    # pings
+    do_facet ost1 "$LCTL set_param fail_val=40"
+    do_facet ost1 "$LCTL set_param fail_loc=0x715"
+    fail ost1
+}
+run_test 93 "replay + reconnect"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
