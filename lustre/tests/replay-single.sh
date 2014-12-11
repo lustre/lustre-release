@@ -2819,6 +2819,12 @@ test_90() { # bug 19494
 run_test 90 "lfs find identifies the missing striped file segments"
 
 test_93() {
+    local server_version=$(lustre_version_code $SINGLEMDS)
+	[[ $server_version -ge $(version_code 2.6.90) ]] ||
+	[[ $server_version -ge $(version_code 2.5.4) &&
+	   $server_version -lt $(version_code 2.5.50) ]] ||
+		{ skip "Need MDS version 2.5.4+ or 2.6.90+"; return; }
+
     cancel_lru_locks osc
 
     $SETSTRIPE -i 0 -c 1 $DIR/$tfile
