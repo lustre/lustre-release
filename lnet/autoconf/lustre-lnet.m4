@@ -131,14 +131,16 @@ AC_DEFUN([LN_CONFIG_DLC], [
 		AC_HELP_STRING([--disable-dlc],
 			[disable building dlc]),
 			[], [enable_dlc="yes"])
-	AC_MSG_RESULT([$enable_dlc])
 	USE_DLC=""
 	AS_IF([test "x$enable_dlc" = xyes],
-	      [AS_IF([test "x$LIBYAML" = xlibyaml], [
+		[AS_IF([test "x$LIBYAML" = xlibyaml], [
 			USE_DLC="yes"
+			AC_MSG_RESULT([yes])
 		], [
 			AC_MSG_RESULT([no (libyaml not present)])
 		])
+	], [
+		AC_MSG_RESULT([no])
 	])
 	AC_SUBST(USE_DLC)
 ])
