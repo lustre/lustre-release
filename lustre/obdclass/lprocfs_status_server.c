@@ -161,8 +161,8 @@ int lprocfs_exp_nid_seq_show(struct seq_file *m, void *data)
 	return seq_printf(m, "%s\n", obd_export_nid2str(exp));
 }
 
-int lprocfs_exp_print_uuid_seq(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-				struct hlist_node *hnode, void *cb_data)
+static int lprocfs_exp_print_uuid_seq(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+				      struct hlist_node *hnode, void *cb_data)
 
 {
 	struct obd_export *exp = cfs_hash_object(hs, hnode);
@@ -173,7 +173,7 @@ int lprocfs_exp_print_uuid_seq(cfs_hash_t *hs, cfs_hash_bd_t *bd,
 	return 0;
 }
 
-int lprocfs_exp_nodemap_seq_show(struct seq_file *m, void *data)
+static int lprocfs_exp_nodemap_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_export       *exp = m->private;
 	if (exp->exp_target_data.ted_nodemap)
@@ -183,7 +183,7 @@ int lprocfs_exp_nodemap_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(lprocfs_exp_nodemap);
 
-int lprocfs_exp_uuid_seq_show(struct seq_file *m, void *data)
+static int lprocfs_exp_uuid_seq_show(struct seq_file *m, void *data)
 {
 	struct nid_stat *stats = m->private;
 	struct obd_device *obd = stats->nid_obd;
@@ -194,8 +194,8 @@ int lprocfs_exp_uuid_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(lprocfs_exp_uuid);
 
-int lprocfs_exp_print_hash_seq(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-				struct hlist_node *hnode, void *cb_data)
+static int lprocfs_exp_print_hash_seq(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+				      struct hlist_node *hnode, void *cb_data)
 
 {
 	struct seq_file *m = cb_data;
@@ -208,7 +208,7 @@ int lprocfs_exp_print_hash_seq(cfs_hash_t *hs, cfs_hash_bd_t *bd,
 	return 0;
 }
 
-int lprocfs_exp_hash_seq_show(struct seq_file *m, void *data)
+static int lprocfs_exp_hash_seq_show(struct seq_file *m, void *data)
 {
 	struct nid_stat *stats = m->private;
 	struct obd_device *obd = stats->nid_obd;

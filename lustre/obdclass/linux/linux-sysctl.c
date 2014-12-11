@@ -52,9 +52,10 @@
 
 #include <obd_support.h>
 #include <lprocfs_status.h>
+#include <obd_class.h>
 
 #ifdef CONFIG_SYSCTL
-struct ctl_table_header *obd_table_header = NULL;
+static struct ctl_table_header *obd_table_header;
 #endif
 
 static int
@@ -216,8 +217,8 @@ proc_max_dirty_pages_in_mb(struct ctl_table *table, int write,
 }
 
 #ifdef RANDOM_FAIL_ALLOC
-int proc_alloc_fail_rate(struct ctl_table *table, int write,
-			 void __user *buffer, size_t *lenp, loff_t *ppos)
+static int proc_alloc_fail_rate(struct ctl_table *table, int write,
+				void __user *buffer, size_t *lenp, loff_t *ppos)
 {
         int rc          = 0;
 

@@ -461,7 +461,7 @@ LU_KEY_INIT_FINI(lu_global, struct lu_cdebug_data);
  * Key, holding temporary buffer. This key is registered very early by
  * lu_global_init().
  */
-struct lu_context_key lu_global_key = {
+static struct lu_context_key lu_global_key = {
 	.lct_tags = LCT_MD_THREAD | LCT_DT_THREAD |
 		    LCT_MG_THREAD | LCT_CL_THREAD | LCT_LOCAL,
 	.lct_init = lu_global_key_init,
@@ -1064,7 +1064,7 @@ static void lu_obj_hop_put_locked(cfs_hash_t *hs, struct hlist_node *hnode)
         LBUG(); /* we should never called it */
 }
 
-cfs_hash_ops_t lu_site_hash_ops = {
+static cfs_hash_ops_t lu_site_hash_ops = {
         .hs_hash        = lu_obj_hop_hash,
         .hs_key         = lu_obj_hop_key,
         .hs_keycmp      = lu_obj_hop_keycmp,
@@ -2058,13 +2058,13 @@ static int lu_cache_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
 /**
  * Environment to be used in debugger, contains all tags.
  */
-struct lu_env lu_debugging_env;
+static struct lu_env lu_debugging_env;
 
 /**
  * Debugging printer function using printk().
  */
 int lu_printk_printer(const struct lu_env *env,
-                      void *unused, const char *format, ...)
+		      void *unused, const char *format, ...)
 {
         va_list args;
 
@@ -2394,4 +2394,3 @@ int lu_buf_check_and_grow(struct lu_buf *buf, size_t len)
 	return 0;
 }
 EXPORT_SYMBOL(lu_buf_check_and_grow);
-

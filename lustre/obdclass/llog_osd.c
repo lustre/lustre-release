@@ -890,8 +890,8 @@ out:
  * \retval		dt_object of llog directory
  * \retval		ERR_PTR of negative value on error
  */
-struct dt_object *llog_osd_dir_get(const struct lu_env *env,
-				   struct llog_ctxt *ctxt)
+static struct dt_object *llog_osd_dir_get(const struct lu_env *env,
+					  struct llog_ctxt *ctxt)
 {
 	struct dt_device	*dt;
 	struct dt_thread_info	*dti = dt_info(env);

@@ -207,7 +207,7 @@ int lustre_start_simple(char *obdname, char *type, char *uuid,
 	return rc;
 }
 
-DEFINE_MUTEX(mgc_start_lock);
+static DEFINE_MUTEX(mgc_start_lock);
 
 /** Set up a mgc obd to process startup logs
  *
@@ -560,7 +560,7 @@ out:
 
 /***************** lustre superblock **************/
 
-struct lustre_sb_info *lustre_init_lsi(struct super_block *sb)
+static struct lustre_sb_info *lustre_init_lsi(struct super_block *sb)
 {
         struct lustre_sb_info *lsi;
         ENTRY;
@@ -1263,7 +1263,7 @@ struct lustre_mount_data2 {
  * and this is where we start setting things up.
  * @param data Mount options (e.g. -o flock,abort_recov)
  */
-int lustre_fill_super(struct super_block *sb, void *data, int silent)
+static int lustre_fill_super(struct super_block *sb, void *data, int silent)
 {
         struct lustre_mount_data *lmd;
         struct lustre_mount_data2 *lmd2 = data;
@@ -1364,16 +1364,16 @@ EXPORT_SYMBOL(lustre_register_kill_super_cb);
 
 /***************** FS registration ******************/
 #ifdef HAVE_FSTYPE_MOUNT
-struct dentry *lustre_mount(struct file_system_type *fs_type, int flags,
-				const char *devname, void *data)
+static struct dentry *lustre_mount(struct file_system_type *fs_type, int flags,
+				   const char *devname, void *data)
 {
 	struct lustre_mount_data2 lmd2 = { data, NULL };
 
 	return mount_nodev(fs_type, flags, &lmd2, lustre_fill_super);
 }
 #else
-int lustre_get_sb(struct file_system_type *fs_type, int flags,
-                  const char *devname, void * data, struct vfsmount *mnt)
+static int lustre_get_sb(struct file_system_type *fs_type, int flags,
+			 const char *devname, void *data, struct vfsmount *mnt)
 {
 	struct lustre_mount_data2 lmd2 = { data, mnt };
 
@@ -1381,7 +1381,7 @@ int lustre_get_sb(struct file_system_type *fs_type, int flags,
 }
 #endif
 
-void lustre_kill_super(struct super_block *sb)
+static void lustre_kill_super(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
 
@@ -1393,7 +1393,7 @@ void lustre_kill_super(struct super_block *sb)
 
 /** Register the "lustre" fs type
  */
-struct file_system_type lustre_fs_type = {
+static struct file_system_type lustre_fs_type = {
         .owner        = THIS_MODULE,
         .name         = "lustre",
 #ifdef HAVE_FSTYPE_MOUNT

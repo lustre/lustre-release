@@ -358,7 +358,7 @@ lprocfs_seq_add_vars(struct proc_dir_entry *root, struct lprocfs_seq_vars *list,
 EXPORT_SYMBOL(lprocfs_seq_add_vars);
 
 #ifndef HAVE_ONLY_PROCFS_SEQ
-void lprocfs_remove_nolock(struct proc_dir_entry **proot)
+static void lprocfs_remove_nolock(struct proc_dir_entry **proot)
 {
 	struct proc_dir_entry *root = *proot;
 	struct proc_dir_entry *temp = root;
@@ -1466,7 +1466,7 @@ out:
 	return (rc < 0) ? rc : 0;
 }
 
-struct seq_operations lprocfs_stats_seq_sops = {
+static const struct seq_operations lprocfs_stats_seq_sops = {
 	.start	= lprocfs_stats_seq_start,
 	.stop	= lprocfs_stats_seq_stop,
 	.next	= lprocfs_stats_seq_next,
@@ -1490,7 +1490,7 @@ static int lprocfs_stats_seq_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-struct file_operations lprocfs_stats_seq_fops = {
+static const struct file_operations lprocfs_stats_seq_fops = {
         .owner   = THIS_MODULE,
         .open    = lprocfs_stats_seq_open,
         .read    = seq_read,

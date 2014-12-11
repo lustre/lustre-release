@@ -64,7 +64,7 @@
 
 /*********** mount lookup *********/
 
-DEFINE_MUTEX(lustre_mount_info_lock);
+static DEFINE_MUTEX(lustre_mount_info_lock);
 static struct list_head server_mount_info_list =
 	LIST_HEAD_INIT(server_mount_info_list);
 
@@ -378,7 +378,7 @@ EXPORT_SYMBOL(tgt_name2lwp_name);
 
 static struct list_head lwp_register_list =
 	LIST_HEAD_INIT(lwp_register_list);
-DEFINE_MUTEX(lwp_register_list_lock);
+static DEFINE_MUTEX(lwp_register_list_lock);
 
 int lustre_register_lwp_item(const char *lwpname, struct obd_export **exp,
 			     register_lwp_cb cb_func, void *cb_data)
@@ -999,7 +999,7 @@ out:
 	return rc;
 }
 
-DEFINE_MUTEX(server_start_lock);
+static DEFINE_MUTEX(server_start_lock);
 
 /* Stop MDS/OSS if nobody is using them */
 static int server_stop_servers(int lsiflags)
@@ -1619,7 +1619,7 @@ static ssize_t lustre_listxattr(struct dentry *d_entry, char *name,
 	return -EOPNOTSUPP;
 }
 
-const struct inode_operations server_inode_operations = {
+static const struct inode_operations server_inode_operations = {
 	.setxattr       = lustre_setxattr,
 	.getxattr       = lustre_getxattr,
 	.listxattr      = lustre_listxattr,

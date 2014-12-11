@@ -786,7 +786,7 @@ EXPORT_SYMBOL(class_add_conn);
 
 /** Remove a failover nid location.
  */
-int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
+static int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         struct obd_import *imp;
         struct obd_uuid uuid;
@@ -816,7 +816,7 @@ int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
         RETURN(rc);
 }
 
-struct list_head lustre_profile_list =
+static struct list_head lustre_profile_list =
 	LIST_HEAD_INIT(lustre_profile_list);
 
 struct lustre_profile *class_get_profile(const char * prof)
@@ -837,8 +837,8 @@ EXPORT_SYMBOL(class_get_profile);
  * This defines the mdc and osc names to use for a client.
  * This also is used to define the lov to be used by a mdt.
  */
-int class_add_profile(int proflen, char *prof, int osclen, char *osc,
-                      int mdclen, char *mdc)
+static int class_add_profile(int proflen, char *prof, int osclen, char *osc,
+			     int mdclen, char *mdc)
 {
         struct lustre_profile *lprof;
         int err = 0;
@@ -1348,8 +1348,6 @@ int class_process_proc_param(char *prefix, struct lprocfs_seq_vars *lvars,
 }
 EXPORT_SYMBOL(class_process_proc_param);
 
-extern int lustre_check_exclusion(struct super_block *sb, char *svname);
-
 /*
  * Supplemental functions for config logs, it allocates lustre_cfg
  * buffers plus initialized llog record header at the beginning.
@@ -1655,7 +1653,7 @@ parse_out:
 }
 EXPORT_SYMBOL(class_config_parse_llog);
 
-struct lcfg_type_data {
+static struct lcfg_type_data {
 	__u32	 ltd_type;
 	char	*ltd_name;
 	char	*ltd_bufs[4];
@@ -1768,7 +1766,7 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size)
  * This is separated from class_config_dump_handler() to use
  * for ioctl needs as well
  */
-int class_config_parse_rec(struct llog_rec_hdr *rec, char *buf, int size)
+static int class_config_parse_rec(struct llog_rec_hdr *rec, char *buf, int size)
 {
 	struct lustre_cfg	*lcfg = (struct lustre_cfg *)(rec + 1);
 	char			*ptr = buf;

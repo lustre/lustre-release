@@ -1895,6 +1895,9 @@ void lustre_deregister_lwp_item(struct obd_export **exp);
 struct obd_export *lustre_find_lwp_by_index(const char *dev, __u32 idx);
 int tgt_name2lwp_name(const char *tgt_name, char *lwp_name, int len, __u32 idx);
 #endif /* HAVE_SERVER_SUPPORT */
+int lustre_register_fs(void);
+int lustre_unregister_fs(void);
+int lustre_check_exclusion(struct super_block *sb, char *svname);
 
 /* sysctl.c */
 extern void obd_sysctl_init (void);
@@ -1930,5 +1933,10 @@ struct root_squash_info {
 };
 
 int server_name2index(const char *svname, __u32 *idx, const char **endptr);
+
+/* linux-module.c */
+extern struct miscdevice obd_psdev;
+int class_procfs_init(void);
+int class_procfs_clean(void);
 
 #endif /* __LINUX_OBD_CLASS_H */

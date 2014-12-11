@@ -2794,7 +2794,7 @@ static struct obd_ops echo_client_obd_ops = {
         .o_disconnect  = echo_client_disconnect
 };
 
-int echo_client_init(void)
+static int echo_client_init(void)
 {
         int rc;
 
@@ -2809,7 +2809,7 @@ int echo_client_init(void)
 	return rc;
 }
 
-void echo_client_exit(void)
+static void echo_client_exit(void)
 {
         class_unregister_type(LUSTRE_ECHO_CLIENT_NAME);
         lu_kmem_fini(echo_caches);

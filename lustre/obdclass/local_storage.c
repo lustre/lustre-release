@@ -68,14 +68,14 @@ static void ls_object_free(const struct lu_env *env, struct lu_object *o)
 	OBD_FREE_PTR(obj);
 }
 
-struct lu_object_operations ls_lu_obj_ops = {
+static struct lu_object_operations ls_lu_obj_ops = {
 	.loo_object_init  = ls_object_init,
 	.loo_object_free  = ls_object_free,
 };
 
-struct lu_object *ls_object_alloc(const struct lu_env *env,
-				  const struct lu_object_header *_h,
-				  struct lu_device *d)
+static struct lu_object *ls_object_alloc(const struct lu_env *env,
+					 const struct lu_object_header *_h,
+					 struct lu_device *d)
 {
 	struct lu_object_header	*h;
 	struct ls_object	*o;
@@ -291,13 +291,14 @@ int local_object_create(const struct lu_env *env,
 /*
  * Create local named object (file, directory or index) in parent directory.
  */
-struct dt_object *__local_file_create(const struct lu_env *env,
-				      const struct lu_fid *fid,
-				      struct local_oid_storage *los,
-				      struct ls_device *ls,
-				      struct dt_object *parent,
-				      const char *name, struct lu_attr *attr,
-				      struct dt_object_format *dof)
+static struct dt_object *__local_file_create(const struct lu_env *env,
+					     const struct lu_fid *fid,
+					     struct local_oid_storage *los,
+					     struct ls_device *ls,
+					     struct dt_object *parent,
+					     const char *name,
+					     struct lu_attr *attr,
+					     struct dt_object_format *dof)
 {
 	struct dt_thread_info	*dti	= dt_info(env);
 	struct lu_object_conf	*conf	= &dti->dti_conf;
@@ -691,8 +692,9 @@ void dt_los_put(struct local_oid_storage *los)
 /* after Lustre 2.3 release there may be old file to store last generated FID
  * If such file exists then we have to read its content
  */
-int lastid_compat_check(const struct lu_env *env, struct dt_device *dev,
-			__u64 lastid_seq, __u32 *first_oid, struct ls_device *ls)
+static int lastid_compat_check(const struct lu_env *env, struct dt_device *dev,
+			       __u64 lastid_seq, __u32 *first_oid,
+			       struct ls_device *ls)
 {
 	struct dt_thread_info	*dti = dt_info(env);
 	struct dt_object	*root = NULL;

@@ -412,7 +412,7 @@ EXPORT_SYMBOL(_debug_capa);
  */
 LU_KEY_INIT_FINI(lu_capainfo, struct lu_capainfo);
 
-struct lu_context_key lu_capainfo_key = {
+static struct lu_context_key lu_capainfo_key = {
 	.lct_tags = LCT_SERVER_SESSION,
 	.lct_init = lu_capainfo_key_init,
 	.lct_fini = lu_capainfo_key_fini

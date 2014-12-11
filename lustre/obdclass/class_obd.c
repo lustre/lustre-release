@@ -58,8 +58,13 @@ EXPORT_SYMBOL(obd_devs);
 struct list_head obd_types;
 DEFINE_RWLOCK(obd_dev_lock);
 
-__u64 obd_max_pages = 0;
-__u64 obd_max_alloc = 0;
+#ifdef LPROCFS
+static __u64 obd_max_pages;
+static __u64 obd_max_alloc;
+#else
+__u64 obd_max_pages;
+__u64 obd_max_alloc;
+#endif
 
 static DEFINE_SPINLOCK(obd_updatemax_lock);
 
@@ -429,8 +434,6 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
         RETURN(err);
 } /* class_handle_ioctl */
 
-extern struct miscdevice obd_psdev;
-
 #define OBD_INIT_CHECK
 #ifdef OBD_INIT_CHECK
 static int obd_init_checks(void)
@@ -504,13 +507,9 @@ static int obd_init_checks(void)
 #define obd_init_checks() do {} while(0)
 #endif
 
-extern int class_procfs_init(void);
-extern int class_procfs_clean(void);
-
 static int __init init_obdclass(void)
 {
         int i, err;
-        int lustre_register_fs(void);
 
         for (i = CAPA_SITE_CLIENT; i < CAPA_SITE_MAX; i++)
 		INIT_LIST_HEAD(&capa_list[i]);
@@ -648,7 +647,6 @@ EXPORT_SYMBOL(obd_pages_max);
  * ifdef to the end of the file to cover module and versioning goo.*/
 static void cleanup_obdclass(void)
 {
-        int lustre_unregister_fs(void);
         __u64 memory_leaked, pages_leaked;
         __u64 memory_max, pages_max;
         ENTRY;
