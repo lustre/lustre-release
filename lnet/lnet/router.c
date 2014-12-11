@@ -416,6 +416,9 @@ lnet_add_route(__u32 net, unsigned int hops, lnet_nid_t gateway,
 	if (rnet != rnet2)
 		LIBCFS_FREE(rnet, sizeof(*rnet));
 
+	/* indicate to startup the router checker if configured */
+	wake_up(&the_lnet.ln_rc_waitq);
+
 	return rc;
 }
 
@@ -1136,11 +1139,6 @@ lnet_router_checker_start(void)
                 return -EINVAL;
         }
 
-        if (!the_lnet.ln_routing &&
-            live_router_check_interval <= 0 &&
-            dead_router_check_interval <= 0)
-                return 0;
-
 #ifdef __KERNEL__
 	sema_init(&the_lnet.ln_rc_signal, 0);
         /* EQ size doesn't matter; the callback is guaranteed to get every
@@ -1185,13 +1183,15 @@ lnet_router_checker_start(void)
 void
 lnet_router_checker_stop (void)
 {
-        int rc;
+	int rc;
 
-        if (the_lnet.ln_rc_state == LNET_RC_STATE_SHUTDOWN)
-                return;
+	if (the_lnet.ln_rc_state == LNET_RC_STATE_SHUTDOWN)
+		return;
 
-        LASSERT (the_lnet.ln_rc_state == LNET_RC_STATE_RUNNING);
+	LASSERT (the_lnet.ln_rc_state == LNET_RC_STATE_RUNNING);
 	the_lnet.ln_rc_state = LNET_RC_STATE_STOPPING;
+	/* wakeup the RC thread if it's sleeping */
+	wake_up(&the_lnet.ln_rc_waitq);
 
 #ifdef __KERNEL__
 	/* block until event callback signals exit */
@@ -1289,17 +1289,42 @@ lnet_prune_rc_data(int wait_unlink)
 
 #if defined(__KERNEL__) && defined(LNET_ROUTER)
 
+/*
+ * This function is called to check if the RC should block indefinitely.
+ * It's called from lnet_router_checker() as well as being passed to
+ * wait_event_interruptible() to avoid the lost wake_up problem.
+ *
+ * When it's called from wait_event_interruptible() it is necessary to
+ * also not sleep if the rc state is not running to avoid a deadlock
+ * when the system is shutting down
+ */
+static inline bool
+lnet_router_checker_active(void)
+{
+	if (the_lnet.ln_rc_state != LNET_RC_STATE_RUNNING)
+		return true;
+
+	/* Router Checker thread needs to run when routing is enabled in
+	 * order to call lnet_update_ni_status_locked() */
+	if (the_lnet.ln_routing)
+		return true;
+
+	return !list_empty(&the_lnet.ln_routers) &&
+		(live_router_check_interval > 0 ||
+		 dead_router_check_interval > 0);
+}
+
 static int
 lnet_router_checker(void *arg)
 {
-        lnet_peer_t       *rtr;
+	lnet_peer_t       *rtr;
 	struct list_head  *entry;
 
-        cfs_block_allsigs();
+	cfs_block_allsigs();
 
-        LASSERT (the_lnet.ln_rc_state == LNET_RC_STATE_RUNNING);
+	LASSERT (the_lnet.ln_rc_state == LNET_RC_STATE_RUNNING);
 
-        while (the_lnet.ln_rc_state == LNET_RC_STATE_RUNNING) {
+	while (the_lnet.ln_rc_state == LNET_RC_STATE_RUNNING) {
 		__u64	version;
 		int	cpt;
 		int	cpt2;
@@ -1321,14 +1346,14 @@ rescan:
 					goto rescan;
 			}
 
-                        lnet_ping_router_locked(rtr);
+			lnet_ping_router_locked(rtr);
 
-                        /* NB dropped lock */
-                        if (version != the_lnet.ln_routers_version) {
-                                /* the routers list has changed */
-                                goto rescan;
-                        }
-                }
+			/* NB dropped lock */
+			if (version != the_lnet.ln_routers_version) {
+				/* the routers list has changed */
+				goto rescan;
+			}
+		}
 
 		if (the_lnet.ln_routing)
 			lnet_update_ni_status_locked();
@@ -1340,8 +1365,16 @@ rescan:
 		/* Call cfs_pause() here always adds 1 to load average
 		 * because kernel counts # active tasks as nr_running
 		 * + nr_uninterruptible. */
-		schedule_timeout_and_set_state(TASK_INTERRUPTIBLE,
-						   cfs_time_seconds(1));
+		/* if there are any routes then wakeup every second.  If
+		 * there are no routes then sleep indefinitely until woken
+		 * up by a user adding a route */
+		if (!lnet_router_checker_active())
+			wait_event_interruptible(the_lnet.ln_rc_waitq,
+						 lnet_router_checker_active());
+		else
+			wait_event_interruptible_timeout(the_lnet.ln_rc_waitq,
+							 false,
+							 cfs_time_seconds(1));
 	}
 
 	LASSERT(the_lnet.ln_rc_state == LNET_RC_STATE_STOPPING);
