@@ -133,6 +133,7 @@ int jt_nodemap_del_range(int argc, char **argv);
 int jt_nodemap_add_idmap(int argc, char **argv);
 int jt_nodemap_del_idmap(int argc, char **argv);
 int jt_nodemap_test_id(int argc, char **argv);
+int jt_nodemap_info(int argc, char **argv);
 int jt_changelog_register(int argc, char **argv);
 int jt_changelog_deregister(int argc, char **argv);
 
