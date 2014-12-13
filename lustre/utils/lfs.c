@@ -774,7 +774,6 @@ static int lfs_setstripe(int argc, char **argv)
 	if (strcmp(argv[0], "migrate") == 0)
 		migrate_mode = true;
 
-	optind = 0;
 	while ((c = getopt_long(argc, argv, "c:di:o:p:s:S:",
 				long_opts, NULL)) >= 0) {
 		switch (c) {
@@ -1096,7 +1095,6 @@ static int lfs_find(int argc, char **argv)
 
         time(&t);
 
-	optind = 0;
 	/* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
 	while ((c = getopt_long_only(argc, argv,
 				     "-A:c:C:D:g:G:i:L:m:M:n:O:Ppqrs:S:t:u:U:v",
@@ -1478,7 +1476,6 @@ static int lfs_getstripe_internal(int argc, char **argv,
 	int c, rc;
 
 	param->fp_max_depth = 1;
-	optind = 0;
 	while ((c = getopt_long(argc, argv, "cdDghiLMoO:pqrRsSv",
 				long_opts, NULL)) != -1) {
 		switch (c) {
@@ -1677,8 +1674,6 @@ static int lfs_setdirstripe(int argc, char **argv)
 		{"default_stripe", no_argument, 0, 'D'},
 		{0, 0, 0, 0}
 	};
-
-	optind = 0;
 
 	while ((c = getopt_long(argc, argv, "c:Di:m:t:", long_opts,
 				NULL)) >= 0) {
@@ -2097,7 +2092,6 @@ static int lfs_df(int argc, char **argv)
                 {0, 0, 0, 0}
         };
 
-	optind = 0;
 	while ((c = getopt_long(argc, argv, "hilp:", long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'i':
@@ -2144,7 +2138,6 @@ static int lfs_getname(int argc, char **argv)
         int rc = 0, index = 0, c;
         char buf[sizeof(struct obd_uuid)];
 
-        optind = 0;
         while ((c = getopt(argc, argv, "h")) != -1)
                 return CMD_HELP;
 
@@ -2241,7 +2234,6 @@ static int lfs_quotacheck(int argc, char **argv)
 
         memset(&qchk, 0, sizeof(qchk));
 
-        optind = 0;
         while ((c = getopt(argc, argv, "gu")) != -1) {
                 switch (c) {
                 case 'u':
@@ -2316,7 +2308,6 @@ static int lfs_quotaon(int argc, char **argv)
         memset(&qctl, 0, sizeof(qctl));
         qctl.qc_cmd = LUSTRE_Q_QUOTAON;
 
-        optind = 0;
         while ((c = getopt(argc, argv, "fgu")) != -1) {
                 switch (c) {
                 case 'u':
@@ -2384,7 +2375,6 @@ static int lfs_quotaoff(int argc, char **argv)
         memset(&qctl, 0, sizeof(qctl));
         qctl.qc_cmd = LUSTRE_Q_QUOTAOFF;
 
-        optind = 0;
         while ((c = getopt(argc, argv, "gu")) != -1) {
                 switch (c) {
                 case 'u':
@@ -2546,7 +2536,6 @@ int lfs_setquota_times(int argc, char **argv)
         qctl.qc_cmd  = LUSTRE_Q_SETINFO;
         qctl.qc_type = UGQUOTA;
 
-        optind = 0;
         while ((c = getopt_long(argc, argv, "b:gi:tu", long_opts, NULL)) != -1) {
                 switch (c) {
                 case 'u':
@@ -2636,7 +2625,6 @@ int lfs_setquota(int argc, char **argv)
                                  * so it can be used as a marker that qc_type
                                  * isn't reinitialized from command line */
 
-        optind = 0;
         while ((c = getopt_long(argc, argv, "b:B:g:i:I:u:", long_opts, NULL)) != -1) {
                 switch (c) {
                 case 'u':
@@ -3023,7 +3011,6 @@ static int lfs_quota(int argc, char **argv)
 	__u64 total_ialloc = 0, total_balloc = 0;
 	bool human_readable = false;
 
-	optind = 0;
 	while ((c = getopt(argc, argv, "gi:I:o:qtuvh")) != -1) {
                 switch (c) {
                 case 'u':
@@ -3202,7 +3189,6 @@ static int lfs_flushctx(int argc, char **argv)
 	int     index = 0;
 	int     rc = 0;
 
-        optind = 0;
         while ((c = getopt(argc, argv, "k")) != -1) {
                 switch (c) {
                 case 'k':
@@ -3291,7 +3277,6 @@ static int lfs_changelog(int argc, char **argv)
         char short_opts[] = "f";
         int rc, follow = 0;
 
-        optind = 0;
         while ((rc = getopt_long(argc, argv, short_opts,
                                 long_opts, NULL)) != -1) {
                 switch (rc) {
@@ -3418,8 +3403,6 @@ static int lfs_fid2path(int argc, char **argv)
         int printcur = 0;
 	int rc = 0;
 
-        optind = 0;
-
         while ((rc = getopt_long(argc, argv, short_opts,
                                 long_opts, NULL)) != -1) {
                 switch (rc) {
@@ -3507,7 +3490,6 @@ static int lfs_path2fid(int argc, char **argv)
 	int		  rc = 0;
 	bool		  show_parents = false;
 
-	optind = 0;
 	while ((rc = getopt_long(argc, argv, short_opts,
 				 long_opts, NULL)) != -1) {
 		switch (rc) {
@@ -3582,7 +3564,6 @@ static int lfs_data_version(int argc, char **argv)
 	if (argc < 2)
 		return CMD_HELP;
 
-	optind = 0;
 	while ((c = getopt(argc, argv, "nrw")) != -1) {
 		switch (c) {
 		case 'n':
@@ -3692,7 +3673,6 @@ static int lfs_hsm_change_flags(int argc, char **argv, int mode)
 	if (argc < 3)
 		return CMD_HELP;
 
-	optind = 0;
 	while ((c = getopt_long(argc, argv, short_opts,
 				long_opts, NULL)) != -1) {
 		switch (c) {
@@ -3880,7 +3860,6 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 	if (argc < 2)
 		return CMD_HELP;
 
-	optind = 0;
 	while ((c = getopt_long(argc, argv, short_opts,
 				long_opts, NULL)) != -1) {
 		switch (c) {

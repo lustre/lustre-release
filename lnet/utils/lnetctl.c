@@ -299,7 +299,6 @@ static int jt_config_lnet(int argc, char **argv)
 	struct cYAML *err_rc = NULL;
 	bool load_mod_params = false;
 	int rc, opt;
-	optind = 0;
 
 	const char *const short_options = "ah";
 	const struct option long_options[] = {
@@ -337,7 +336,6 @@ static int jt_unconfig_lnet(int argc, char **argv)
 {
 	struct cYAML *err_rc = NULL;
 	int rc;
-	optind = 0;
 
 	if (handle_help(lnet_cmds, "lnet", "unconfigure", argc, argv) == 0)
 		return 0;
@@ -357,7 +355,6 @@ static int jt_add_route(int argc, char **argv)
 	long int hop = -1, prio = -1;
 	struct cYAML *err_rc = NULL;
 	int rc, opt;
-	optind = 0;
 
 	const char *const short_options = "n:g:c:p:h";
 	const struct option long_options[] = {
@@ -418,7 +415,6 @@ static int jt_add_net(int argc, char **argv)
 	long int pto = -1, pc = -1, pbc = -1, cre = -1;
 	struct cYAML *err_rc = NULL;
 	int rc, opt;
-	optind = 0;
 
 	const char *const short_options = "n:i:p:t:c:b:r:s:h";
 	const struct option long_options[] = {
@@ -505,7 +501,6 @@ static int jt_del_route(int argc, char **argv)
 	char *network = NULL, *gateway = NULL;
 	struct cYAML *err_rc = NULL;
 	int rc, opt;
-	optind = 0;
 
 	const char *const short_options = "n:g:h";
 	const struct option long_options[] = {
@@ -547,7 +542,6 @@ static int jt_del_net(int argc, char **argv)
 	char *network = NULL;
 	struct cYAML *err_rc = NULL;
 	int rc, opt;
-	optind = 0;
 
 	const char *const short_options = "n:h";
 	const struct option long_options[] = {
@@ -586,7 +580,6 @@ static int jt_show_route(int argc, char **argv)
 	long int hop = -1, prio = -1;
 	int detail = 0, rc, opt;
 	struct cYAML *err_rc = NULL, *show_rc = NULL;
-	optind = 0;
 
 	const char *const short_options = "n:g:h:p:vh";
 	const struct option long_options[] = {
@@ -654,7 +647,6 @@ static int jt_show_net(int argc, char **argv)
 	char *network = NULL;
 	int detail = 0, rc, opt;
 	struct cYAML *err_rc = NULL, *show_rc = NULL;
-	optind = 0;
 
 	const char *const short_options = "n:vh";
 	const struct option long_options[] = {
@@ -740,7 +732,6 @@ static int jt_show_peer_credits(int argc, char **argv)
 {
 	int rc;
 	struct cYAML *show_rc = NULL, *err_rc = NULL;
-	optind = 0;
 
 	if (handle_help(credits_cmds, "peer_credits", "show", argc, argv) == 0)
 		return 0;
@@ -848,7 +839,6 @@ static int jt_import(int argc, char **argv)
 	struct cYAML *err_rc = NULL;
 	struct cYAML *show_rc = NULL;
 	int rc = 0, opt, opt_found = 0;
-	optind = 0;
 	char cmd = 'a';
 
 	const char *const short_options = "adsh";
@@ -918,7 +908,6 @@ static int jt_export(int argc, char **argv)
 	struct cYAML *err_rc = NULL;
 	int rc, opt;
 	FILE *f = NULL;
-	optind = 0;
 
 	const char *const short_options = "h";
 	const struct option long_options[] = {

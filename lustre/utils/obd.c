@@ -1154,7 +1154,6 @@ int jt_obd_md_common(int argc, char **argv, int cmd)
                 {0, 0, 0, 0}
         };
 
-        optind = 0;
         while ((c = getopt_long(argc, argv, "b:c:d:D:m:n:t:v",
                                 long_opts, NULL)) >= 0) {
                 switch (c) {

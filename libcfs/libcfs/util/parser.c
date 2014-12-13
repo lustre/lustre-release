@@ -243,46 +243,45 @@ static char **command_completion(const char *text, int start, int end)
 /* take a string and execute the function or print help */
 int execute_line(char * line)
 {
-        command_t         *cmd, *ambig;
-        char *prev;
-        char *next, *tmp;
-        char *argv[MAXARGS];
-        int         i;
-        int rc = 0;
+	command_t	*cmd, *ambig;
+	char		*prev;
+	char		*next, *tmp;
+	char		*argv[MAXARGS];
+	int		i;
+	int		rc = 0;
 
-        switch (process(line, &next, top_level, &cmd, &prev)) {
-        case CMD_AMBIG:
-                fprintf(stderr, "Ambiguous command \'%s\'\nOptions: ", line);
-                while( (ambig = find_cmd(prev, cmd, &tmp)) ) {
-                        fprintf(stderr, "%s ", ambig->pc_name);
-                        cmd = ambig + 1;
-                }
-                fprintf(stderr, "\n");
-                break;
-        case CMD_NONE:
-                fprintf(stderr, "No such command, type help\n");
-                break;
-        case CMD_INCOMPLETE:
-                fprintf(stderr,
-                        "'%s' incomplete command.  Use '%s x' where x is one of:\n",
-                        line, line);
-                fprintf(stderr, "\t");
-                for (i = 0; cmd->pc_sub_cmd[i].pc_name; i++) {
-                        fprintf(stderr, "%s ", cmd->pc_sub_cmd[i].pc_name);
-                }
-                fprintf(stderr, "\n");
-                break;
-        case CMD_COMPLETE:
-                i = line2args(line, argv, MAXARGS);
-                rc = (cmd->pc_func)(i, argv);
+	switch (process(line, &next, top_level, &cmd, &prev)) {
+	case CMD_AMBIG:
+		fprintf(stderr, "Ambiguous command \'%s\'\nOptions: ", line);
+		while ((ambig = find_cmd(prev, cmd, &tmp))) {
+			fprintf(stderr, "%s ", ambig->pc_name);
+			cmd = ambig + 1;
+		}
+		fprintf(stderr, "\n");
+		break;
+	case CMD_NONE:
+		fprintf(stderr, "No such command, type help\n");
+		break;
+	case CMD_INCOMPLETE:
+		fprintf(stderr, "'%s' incomplete command.  Use '%s x' where "
+			"x is one of:\n", line, line);
+		fprintf(stderr, "\t");
+		for (i = 0; cmd->pc_sub_cmd[i].pc_name; i++)
+			fprintf(stderr, "%s ", cmd->pc_sub_cmd[i].pc_name);
+		fprintf(stderr, "\n");
+		break;
+	case CMD_COMPLETE:
+		optind = 0;
+		i = line2args(line, argv, MAXARGS);
+		rc = (cmd->pc_func)(i, argv);
 
-                if (rc == CMD_HELP)
-                        fprintf(stderr, "%s\n", cmd->pc_help);
+		if (rc == CMD_HELP)
+			fprintf(stderr, "%s\n", cmd->pc_help);
 
-                break;
-        }
+		break;
+	}
 
-        return rc;
+	return rc;
 }
 
 #ifdef HAVE_LIBREADLINE
