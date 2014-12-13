@@ -389,6 +389,62 @@ static void mdt_pack_size2body(struct mdt_thread_info *info,
 	b->mbo_blocks = ma->ma_som->msd_blocks;
 }
 
+#ifdef CONFIG_FS_POSIX_ACL
+/*
+ * Pack ACL data into the reply. UIDs/GIDs are mapped and filtered by nodemap.
+ *
+ * \param	info	thread info object
+ * \param	repbody	reply to pack ACLs into
+ * \param	o	mdt object of file to examine
+ * \param	nodemap	nodemap of client to reply to
+ * \retval	0	success
+ * \retval	-errno	error getting or parsing ACL from disk
+ */
+int mdt_pack_acl2body(struct mdt_thread_info *info, struct mdt_body *repbody,
+		      struct mdt_object *o, struct lu_nodemap *nodemap)
+{
+	const struct lu_env	*env = info->mti_env;
+	struct md_object	*next = mdt_object_child(o);
+	struct lu_buf		*buf = &info->mti_buf;
+	int rc;
+
+	buf->lb_buf = req_capsule_server_get(info->mti_pill, &RMF_ACL);
+	buf->lb_len = req_capsule_get_size(info->mti_pill, &RMF_ACL,
+					   RCL_SERVER);
+	if (buf->lb_len == 0)
+		return 0;
+
+	rc = mo_xattr_get(env, next, buf, XATTR_NAME_ACL_ACCESS);
+	if (rc < 0) {
+		if (rc == -ENODATA) {
+			repbody->mbo_aclsize = 0;
+			repbody->mbo_valid |= OBD_MD_FLACL;
+			rc = 0;
+		} else if (rc == -EOPNOTSUPP) {
+			rc = 0;
+		} else {
+			CERROR("%s: unable to read "DFID" ACL: rc = %d\n",
+			       mdt_obd_name(info->mti_mdt),
+			       PFID(mdt_object_fid(o)), rc);
+		}
+	} else {
+		rc = nodemap_map_acl(nodemap, buf->lb_buf,
+				     rc, NODEMAP_FS_TO_CLIENT);
+		/* if all ACLs mapped out, rc is still >= 0 */
+		if (rc < 0) {
+			CERROR("%s: nodemap_map_acl unable to parse "DFID
+			       " ACL: rc = %d\n", mdt_obd_name(info->mti_mdt),
+			       PFID(mdt_object_fid(o)), rc);
+		} else {
+			repbody->mbo_aclsize = rc;
+			repbody->mbo_valid |= OBD_MD_FLACL;
+			rc = 0;
+		}
+	}
+	return rc;
+}
+#endif
+
 void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
                         const struct lu_attr *attr, const struct lu_fid *fid)
 {
@@ -1006,43 +1062,8 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 	}
 #ifdef CONFIG_FS_POSIX_ACL
 	else if ((exp_connect_flags(req->rq_export) & OBD_CONNECT_ACL) &&
-		 (reqbody->mbo_valid & OBD_MD_FLACL)) {
-                buffer->lb_buf = req_capsule_server_get(pill, &RMF_ACL);
-                buffer->lb_len = req_capsule_get_size(pill,
-                                                      &RMF_ACL, RCL_SERVER);
-                if (buffer->lb_len > 0) {
-                        rc = mo_xattr_get(env, next, buffer,
-                                          XATTR_NAME_ACL_ACCESS);
-                        if (rc < 0) {
-                                if (rc == -ENODATA) {
-					repbody->mbo_aclsize = 0;
-					repbody->mbo_valid |= OBD_MD_FLACL;
-                                        rc = 0;
-                                } else if (rc == -EOPNOTSUPP) {
-                                        rc = 0;
-				} else {
-					CERROR("%s: unable to read "DFID
-					       " ACL: rc = %d\n",
-					       mdt_obd_name(info->mti_mdt),
-					       PFID(mdt_object_fid(o)), rc);
-				}
-                        } else {
-				rc = nodemap_map_acl(nodemap, buffer->lb_buf,
-						     rc, NODEMAP_FS_TO_CLIENT);
-				/* if all ACLs mapped out, rc is still >= 0 */
-				if (rc < 0) {
-					CERROR("%s: nodemap_map_acl unable to"
-					       " parse "DFID" ACL: rc = %d\n",
-					       mdt_obd_name(info->mti_mdt),
-					       PFID(mdt_object_fid(o)), rc);
-				} else {
-					repbody->mbo_aclsize = rc;
-					repbody->mbo_valid |= OBD_MD_FLACL;
-					rc = 0;
-				}
-			}
-		}
-	}
+		 (reqbody->mbo_valid & OBD_MD_FLACL))
+		rc = mdt_pack_acl2body(info, repbody, o, nodemap);
 #endif
 
 	if (reqbody->mbo_valid & OBD_MD_FLMDSCAPA &&

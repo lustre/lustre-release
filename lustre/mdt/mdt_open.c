@@ -45,6 +45,7 @@
 #include <lustre_acl.h>
 #include <lustre_mds.h>
 #include "mdt_internal.h"
+#include <lustre_nodemap.h>
 
 /* we do nothing because we do not have refcount now */
 static void mdt_mfd_get(void *mfdp)
@@ -904,34 +905,9 @@ int mdt_finish_open(struct mdt_thread_info *info,
                 }
         }
 #ifdef CONFIG_FS_POSIX_ACL
-	else if (exp_connect_flags(exp) & OBD_CONNECT_ACL) {
-                const struct lu_env *env = info->mti_env;
-                struct md_object *next = mdt_object_child(o);
-                struct lu_buf *buf = &info->mti_buf;
-
-                buf->lb_buf = req_capsule_server_get(info->mti_pill, &RMF_ACL);
-                buf->lb_len = req_capsule_get_size(info->mti_pill, &RMF_ACL,
-                                                   RCL_SERVER);
-                if (buf->lb_len > 0) {
-                        rc = mo_xattr_get(env, next, buf,
-                                          XATTR_NAME_ACL_ACCESS);
-                        if (rc < 0) {
-                                if (rc == -ENODATA) {
-					repbody->mbo_aclsize = 0;
-					repbody->mbo_valid |= OBD_MD_FLACL;
-                                        rc = 0;
-                                } else if (rc == -EOPNOTSUPP) {
-                                        rc = 0;
-                                } else {
-                                        CERROR("got acl size: %d\n", rc);
-                                }
-                        } else {
-				repbody->mbo_aclsize = rc;
-				repbody->mbo_valid |= OBD_MD_FLACL;
-                                rc = 0;
-                        }
-                }
-        }
+	else if (exp_connect_flags(exp) & OBD_CONNECT_ACL)
+		rc = mdt_pack_acl2body(info, repbody, o,
+				       exp->exp_target_data.ted_nodemap);
 #endif
 
 	if (info->mti_mdt->mdt_lut.lut_mds_capa &&

@@ -680,6 +680,10 @@ int mdt_name_unpack(struct req_capsule *pill,
 int mdt_close_unpack(struct mdt_thread_info *info);
 int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op);
 int mdt_reint_rec(struct mdt_thread_info *, struct mdt_lock_handle *);
+#ifdef CONFIG_FS_POSIX_ACL
+int mdt_pack_acl2body(struct mdt_thread_info *info, struct mdt_body *repbody,
+		      struct mdt_object *o, struct lu_nodemap *nodemap);
+#endif
 void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
                         const struct lu_attr *attr, const struct lu_fid *fid);
 
