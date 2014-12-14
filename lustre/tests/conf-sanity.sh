@@ -3652,6 +3652,7 @@ test_55() {
 run_test 55 "check lov_objid size"
 
 test_56() {
+	local server_version=$(lustre_version_code $SINGLEMDS)
 	local mds_journal_size_orig=$MDSJOURNALSIZE
 	local n
 
@@ -3672,12 +3673,19 @@ test_56() {
 	mount_client $MOUNT || error "Unable to mount client"
 	echo ok
 	$LFS osts
-	wait_osc_import_state mds ost1 FULL
-	wait_osc_import_state mds ost2 FULL
-	$LFS setstripe --stripe-count=-1 $DIR/$tfile || error "Unable to create"
-	n=$($LFS getstripe --stripe-count $DIR/$tfile)
-	[ "$n" -eq 2 ] || error "Stripe count not two: $n"
-	rm $DIR/$tfile
+
+	if [[ $server_version -ge $(version_code 2.6.54) ]] ||
+	   [[ $server_version -ge $(version_code 2.5.4) &&
+	      $server_version -lt $(version_code 2.5.11) ]]; then
+		wait_osc_import_state mds ost1 FULL
+		wait_osc_import_state mds ost2 FULL
+		$SETSTRIPE --stripe-count=-1 $DIR/$tfile ||
+			error "Unable to setstripe $DIR/$tfile"
+		n=$($GETSTRIPE --stripe-count $DIR/$tfile)
+		[[ $n -eq 2 ]] || error "Stripe count not two: $n"
+		rm $DIR/$tfile
+	fi
+
 	stopall
 	MDSJOURNALSIZE=$mds_journal_size_orig
 	reformat
