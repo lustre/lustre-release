@@ -206,7 +206,7 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
 	/* we grab lli_trunc_sem to exclude truncate case.
 	 * Otherwise, we could add dirty pages into osc cache
 	 * while truncate is on-going. */
-	inode = ccc_object_inode(io->ci_obj);
+	inode = vvp_object_inode(io->ci_obj);
 	lli = ll_i2info(inode);
 	down_read(&lli->lli_trunc_sem);
 
@@ -435,17 +435,17 @@ static int ll_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
 
 /**
  *  To avoid cancel the locks covering mmapped region for lock cache pressure,
- *  we track the mapped vma count in ccc_object::cob_mmap_cnt.
+ *  we track the mapped vma count in vvp_object::vob_mmap_cnt.
  */
 static void ll_vm_open(struct vm_area_struct * vma)
 {
 	struct inode *inode    = vma->vm_file->f_dentry->d_inode;
-	struct ccc_object *vob = cl_inode2ccc(inode);
+	struct vvp_object *vob = cl_inode2vvp(inode);
 
 	ENTRY;
 	LASSERT(vma->vm_file);
-	LASSERT(atomic_read(&vob->cob_mmap_cnt) >= 0);
-	atomic_inc(&vob->cob_mmap_cnt);
+	LASSERT(atomic_read(&vob->vob_mmap_cnt) >= 0);
+	atomic_inc(&vob->vob_mmap_cnt);
 	EXIT;
 }
 
@@ -455,12 +455,12 @@ static void ll_vm_open(struct vm_area_struct * vma)
 static void ll_vm_close(struct vm_area_struct *vma)
 {
 	struct inode      *inode = vma->vm_file->f_dentry->d_inode;
-	struct ccc_object *vob   = cl_inode2ccc(inode);
+	struct vvp_object *vob   = cl_inode2vvp(inode);
 
 	ENTRY;
 	LASSERT(vma->vm_file);
-	atomic_dec(&vob->cob_mmap_cnt);
-	LASSERT(atomic_read(&vob->cob_mmap_cnt) >= 0);
+	atomic_dec(&vob->vob_mmap_cnt);
+	LASSERT(atomic_read(&vob->vob_mmap_cnt) >= 0);
 	EXIT;
 }
 

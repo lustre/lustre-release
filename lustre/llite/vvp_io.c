@@ -125,7 +125,7 @@ static int vvp_io_fault_iter_init(const struct lu_env *env,
                                   const struct cl_io_slice *ios)
 {
         struct vvp_io *vio   = cl2vvp_io(env, ios);
-        struct inode  *inode = ccc_object_inode(ios->cis_obj);
+	struct inode  *inode = vvp_object_inode(ios->cis_obj);
 
         LASSERT(inode ==
                 cl2ccc_io(env, ios)->cui_fd->fd_file->f_dentry->d_inode);
@@ -138,9 +138,9 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 	struct cl_io     *io  = ios->cis_io;
 	struct cl_object *obj = io->ci_obj;
 	struct ccc_io    *cio = cl2ccc_io(env, ios);
-	struct inode     *inode = ccc_object_inode(obj);
+	struct inode     *inode = vvp_object_inode(obj);
 
-	CLOBINVRNT(env, obj, ccc_object_invariant(obj));
+	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
 
 	CDEBUG(D_VFSTRACE, DFID" ignore/verify layout %d/%d, layout version %d "
 			   "restore needed %d\n",
@@ -189,7 +189,7 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 			/* today successful restore is the only possible
 			 * case */
 			/* restore was done, clear restoring state */
-			ll_i2info(ccc_object_inode(obj))->lli_flags &=
+			ll_i2info(vvp_object_inode(obj))->lli_flags &=
 				~LLIF_FILE_RESTORING;
 		}
 	}
@@ -201,7 +201,7 @@ static void vvp_io_fault_fini(const struct lu_env *env,
         struct cl_io   *io   = ios->cis_io;
         struct cl_page *page = io->u.ci_fault.ft_page;
 
-        CLOBINVRNT(env, io->ci_obj, ccc_object_invariant(io->ci_obj));
+	CLOBINVRNT(env, io->ci_obj, vvp_object_invariant(io->ci_obj));
 
         if (page != NULL) {
                 lu_ref_del(&page->cp_reference, "fault", io);
@@ -464,7 +464,7 @@ static int vvp_io_setattr_start(const struct lu_env *env,
 				const struct cl_io_slice *ios)
 {
 	struct cl_io	*io    = ios->cis_io;
-	struct inode	*inode = ccc_object_inode(io->ci_obj);
+	struct inode	*inode = vvp_object_inode(io->ci_obj);
 	int result = 0;
 
 	mutex_lock(&inode->i_mutex);
@@ -480,7 +480,7 @@ static void vvp_io_setattr_end(const struct lu_env *env,
                                const struct cl_io_slice *ios)
 {
 	struct cl_io *io    = ios->cis_io;
-	struct inode *inode = ccc_object_inode(io->ci_obj);
+	struct inode *inode = vvp_object_inode(io->ci_obj);
 
 	if (cl_io_is_trunc(io)) {
 		/* Truncate in memory pages - they must be clean pages
@@ -504,7 +504,7 @@ static int vvp_io_read_start(const struct lu_env *env,
         struct ccc_io     *cio   = cl2ccc_io(env, ios);
         struct cl_io      *io    = ios->cis_io;
         struct cl_object  *obj   = io->ci_obj;
-        struct inode      *inode = ccc_object_inode(obj);
+	struct inode      *inode = vvp_object_inode(obj);
         struct ll_ra_read *bead  = &vio->cui_bead;
         struct file       *file  = cio->cui_fd->fd_file;
 
@@ -514,7 +514,7 @@ static int vvp_io_read_start(const struct lu_env *env,
         long    tot = cio->cui_tot_count;
         int     exceed = 0;
 
-        CLOBINVRNT(env, obj, ccc_object_invariant(obj));
+	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
 
         CDEBUG(D_VFSTRACE, "read: -> [%lli, %lli)\n", pos, pos + cnt);
 
@@ -658,7 +658,7 @@ static void write_commit_callback(const struct lu_env *env, struct cl_io *io,
 	set_page_dirty(vmpage);
 
 	cp = cl2ccc_page(cl_object_page_slice(clob, page));
-	vvp_write_pending(cl2ccc(clob), cp);
+	vvp_write_pending(cl2vvp(clob), cp);
 
 	cl_page_disown(env, io, page);
 
@@ -695,7 +695,7 @@ static bool page_list_sanity_check(struct cl_object *obj,
 int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io)
 {
 	struct cl_object *obj = io->ci_obj;
-	struct inode *inode = ccc_object_inode(obj);
+	struct inode *inode = vvp_object_inode(obj);
 	struct ccc_io *cio = ccc_env_io(env);
 	struct cl_page_list *queue = &cio->u.write.cui_queue;
 	struct cl_page *page;
@@ -778,7 +778,7 @@ static int vvp_io_write_start(const struct lu_env *env,
         struct ccc_io      *cio   = cl2ccc_io(env, ios);
         struct cl_io       *io    = ios->cis_io;
         struct cl_object   *obj   = io->ci_obj;
-        struct inode       *inode = ccc_object_inode(obj);
+	struct inode       *inode = vvp_object_inode(obj);
         ssize_t result = 0;
         loff_t pos = io->u.ci_wr.wr.crw_pos;
         size_t cnt = io->u.ci_wr.wr.crw_count;
@@ -899,7 +899,7 @@ static void mkwrite_commit_callback(const struct lu_env *env, struct cl_io *io,
 	set_page_dirty(page->cp_vmpage);
 
 	cp = cl2ccc_page(cl_object_page_slice(clob, page));
-	vvp_write_pending(cl2ccc(clob), cp);
+	vvp_write_pending(cl2vvp(clob), cp);
 }
 
 static int vvp_io_fault_start(const struct lu_env *env,
@@ -908,7 +908,7 @@ static int vvp_io_fault_start(const struct lu_env *env,
 	struct vvp_io       *vio     = cl2vvp_io(env, ios);
 	struct cl_io        *io      = ios->cis_io;
 	struct cl_object    *obj     = io->ci_obj;
-	struct inode        *inode   = ccc_object_inode(obj);
+	struct inode        *inode   = vvp_object_inode(obj);
 	struct cl_fault_io  *fio     = &io->u.ci_fault;
 	struct vvp_fault_io *cfio    = &vio->u.fault;
 	loff_t               offset;
@@ -1079,7 +1079,7 @@ static int vvp_io_read_page(const struct lu_env *env,
 	struct cl_io              *io     = ios->cis_io;
 	struct ccc_page           *cp     = cl2ccc_page(slice);
 	struct cl_page            *page   = slice->cpl_page;
-	struct inode              *inode  = ccc_object_inode(slice->cpl_obj);
+	struct inode              *inode  = vvp_object_inode(slice->cpl_obj);
 	struct ll_sb_info         *sbi    = ll_i2sbi(inode);
 	struct ll_file_data       *fd     = cl2ccc_io(env, ios)->cui_fd;
 	struct ll_readahead_state *ras    = &fd->fd_ras;
@@ -1156,10 +1156,10 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
 {
 	struct vvp_io      *vio   = vvp_env_io(env);
 	struct ccc_io      *cio   = ccc_env_io(env);
-	struct inode       *inode = ccc_object_inode(obj);
+	struct inode       *inode = vvp_object_inode(obj);
         int                 result;
 
-        CLOBINVRNT(env, obj, ccc_object_invariant(obj));
+	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
         ENTRY;
 
 	CDEBUG(D_VFSTRACE, DFID" ignore/verify layout %d/%d, layout version %d "

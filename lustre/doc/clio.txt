@@ -372,8 +372,8 @@ Let's look at VVP in more detail. First, VVP implements VFS entry points
 required by the Linux kernel interface: ll_file_{read,write,sendfile}(). Then,
 VVP implements VM entry points: ll_{write,invalidate,release}page().
 
-For file objects, VVP slice (ccc_object, shared with liblustre) contains a
-pointer to an inode.
+For file objects, VVP slice (vvp_object) contains a pointer to an
+inode.
 
 For pages, the VVP slice (ccc_page) contains a pointer to the VM page
 (cfs_page_t), a `defer up to date' flag to track read-ahead hits (similar to
@@ -485,7 +485,7 @@ object-subobject relationship:
                   cl_object_header-+--->radix tree of pages
                           |        |
                           V        +--->list of locks
-           inode<----ccc_object
+           inode<----vvp_object
                           |
                           V
                      lov_object
@@ -592,7 +592,7 @@ cl_page:
            cl_object_header<------------cl_page<-----------------+
                    |          ->cp_obj     |                     |
                    V                       V                     |
-    inode<----ccc_object<---------------ccc_page---->cfs_page_t  |
+    inode<----vvp_object<---------------ccc_page---->cfs_page_t  |
                    |        ->cpl_obj      |                     |
                    V                       V                     | ->cp_child
               lov_object<---------------lov_page                 |
@@ -739,7 +739,7 @@ sub-locks, protecting cached pages of sub-objects:
         cl_object_header<------------cl_lock
                 |          ->cld_obj    |
                 V                       V
-           ccc_object<---------------ccc_lock
+           vvp_object<---------------ccc_lock
                 |          ->cls_obj    |
                 V                       V
            lov_object<---------------lov_lock

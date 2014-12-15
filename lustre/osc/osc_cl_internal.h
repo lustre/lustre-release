@@ -139,10 +139,10 @@ struct osc_object {
          * List of pages in transfer.
          */
 	struct list_head	oo_inflight[CRT_NR];
-        /**
-         * Lock, protecting ccc_object::cob_inflight, because a seat-belt is
-         * locked during take-off and landing.
-         */
+	/**
+	 * Lock, protecting osc_page::ops_inflight, because a seat-belt is
+	 * locked during take-off and landing.
+	 */
 	spinlock_t		oo_seatbelt;
 
 	/**
