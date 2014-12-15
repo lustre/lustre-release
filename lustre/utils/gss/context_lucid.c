@@ -223,19 +223,30 @@ key_lucid_to_krb5(const gss_krb5_lucid_key_t *lin, krb5_keyblock *kout)
 #endif
 }
 
-static void
+static int
 key_krb5_to_lucid(const krb5_keyblock *kin, gss_krb5_lucid_key_t *lout)
 {
 	memset(lout, 0, sizeof(*lout));
+
 #ifdef HAVE_KRB5
+	lout->data = malloc(kin->length);
+	if (lout->data == NULL)
+		return KRB5_CC_NOMEM;
+
 	lout->type = kin->enctype;
 	lout->length = kin->length;
-	lout->data = kin->contents;
+	memcpy(lout->data, kin->contents, kin->length);
 #else
+	lout->data = malloc(kin->keyvalue.length);
+	if (lout->data == NULL)
+		return KRB5_CC_NOMEM;
+
 	lout->type = kin->keytype;
 	lout->length = kin->keyvalue.length;
 	memcpy(lout->data, kin->keyvalue.data, kin->keyvalue.length);
 #endif
+
+	return 0;
 }
 
 /* XXX Hack alert! XXX  Do NOT submit upstream! XXX */
@@ -253,16 +264,18 @@ derive_key_lucid(const gss_krb5_lucid_key_t *in, gss_krb5_lucid_key_t *out,
 	unsigned char constant_data[K5CLENGTH];
 	krb5_data datain;
 	int keylength;
+#ifdef HAVE_KRB5
 	void *enc;
-	krb5_keyblock kin, kout;  /* must send krb5_keyblock, not lucid! */
+#endif
+	krb5_keyblock kin;  /* must send krb5_keyblock, not lucid! */
 #if defined(HAVE_HEIMDAL) || HAVE_KRB5INT_DERIVE_KEY
 	krb5_context kcontext;
+	krb5_keyblock *outkey;
+#else
+	krb5_keyblock kout;
 #endif
 #if HAVE_KRB5INT_DERIVE_KEY
 	krb5_key key_in, key_out;
-#endif
-#ifdef HAVE_HEIMDAL
-	krb5_keyblock *outkey;
 #endif
 
 	/*
@@ -296,17 +309,8 @@ derive_key_lucid(const gss_krb5_lucid_key_t *in, gss_krb5_lucid_key_t *out,
 		goto out;
 	}
 
-	/* allocate memory for output key */
-	if ((out->data = malloc(keylength)) == NULL) {
-		code = ENOMEM;
-		goto out;
-	}
-	out->length = keylength;
-	out->type = in->type;
-
 	/* Convert to correct format for call to krb5_derive_key */
 	key_lucid_to_krb5(in, &kin);
-	key_lucid_to_krb5(out, &kout);
 
 	datain.data = (char *) constant_data;
 	datain.length = K5CLENGTH;
@@ -318,51 +322,56 @@ derive_key_lucid(const gss_krb5_lucid_key_t *in, gss_krb5_lucid_key_t *out,
 
 	((char *)(datain.data))[4] = (char) extra;
 
+	/* Step 1: Init context */
+	/* Heimdal and newer MIT Kerberos require kcontext */
+#if defined(HAVE_KRB5INT_DERIVE_KEY) || defined(HAVE_HEIMDAL)
+	code = krb5_init_context(&kcontext);
+	if (code)
+		goto out;
+#endif
+
+	/* Step 2: Get the derived key */
 #ifdef HAVE_KRB5
 #if HAVE_KRB5INT_DERIVE_KEY
-	code = krb5_init_context(&kcontext);
-	if (code) {
-		free(out->data);
-		out->data = NULL;
-		goto out;
-	}
 	code = krb5_k_create_key(kcontext, &kin, &key_in);
-	if (code) {
-		free(out->data);
-		out->data = NULL;
+	if (code)
 		goto out;
-	}
-	code = krb5_k_create_key(kcontext, &kout, &key_out);
-	if (code) {
-		free(out->data);
-		out->data = NULL;
-		goto out;
-	}
+
 	code = krb5int_derive_key(enc, key_in, &key_out, &datain,
 				  DERIVE_RFC3961);
+
+	krb5_k_free_key(kcontext, key_in);
+	if (code == 0) {
+		krb5_k_key_keyblock(kcontext, key_out, &outkey);
+		krb5_k_free_key(kcontext, key_out);
+	}
 #else  /* !HAVE_KRB5INT_DERIVE_KEY */
+	out->length = keylength;
+	out->type = in->type;
+
+	key_lucid_to_krb5(out, &kout);
+
 	code = krb5_derive_key(enc, &kin, &kout, &datain);
 #endif	/* HAVE_KRB5INT_DERIVE_KEY */
 #else	/* !defined(HAVE_KRB5) */
-	if ((code = krb5_init_context(&kcontext))) {
-	}
 	code = krb5_derive_key(kcontext, &kin, in->type, constant_data, K5CLENGTH, &outkey);
 #endif	/* defined(HAVE_KRB5) */
-	if (code) {
-		free(out->data);
-		out->data = NULL;
+
+	if (code)
 		goto out;
-	}
-#ifdef HAVE_KRB5
-	key_krb5_to_lucid(&kout, out);
-#if HAVE_KRB5INT_DERIVE_KEY
-	krb5_free_context(kcontext);
-#endif	/* HAVE_KRB5INT_DERIVE_KEY */
-#else	/* !defined(HAVE_KRB5) */
-	key_krb5_to_lucid(outkey, out);
+
+	/* Step 3: Copy the key to out */
+#if defined(HAVE_KRB5INT_DERIVE_KEY) || defined(HAVE_HEIMDAL)
+	code = key_krb5_to_lucid(outkey, out);
 	krb5_free_keyblock(kcontext, outkey);
-	krb5_free_context(kcontext);
+#else	/* !defined(HAVE_KRB5) */
+	code = key_krb5_to_lucid(&kout, out);
 #endif	/* defined(HAVE_KRB5) */
+
+	/* Step 4: Free the context */
+#if defined(HAVE_KRB5INT_DERIVE_KEY) || defined(HAVE_HEIMDAL)
+	krb5_free_context(kcontext);
+#endif
 
   out:
 	if (code)
