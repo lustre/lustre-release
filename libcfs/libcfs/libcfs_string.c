@@ -69,26 +69,6 @@ char *cfs_strrstr(const char *haystack, const char *needle)
 }
 EXPORT_SYMBOL(cfs_strrstr);
 
-/* non-0 = don't match */
-int cfs_strncasecmp(const char *s1, const char *s2, size_t n)
-{
-        if (s1 == NULL || s2 == NULL)
-                return 1;
-
-        if (n == 0)
-                return 0;
-
-        while (n-- != 0 && tolower(*s1) == tolower(*s2)) {
-                if (n == 0 || *s1 == '\0' || *s2 == '\0')
-                        break;
-                s1++;
-                s2++;
-        }
-
-        return tolower(*(unsigned char *)s1) - tolower(*(unsigned char *)s2);
-}
-EXPORT_SYMBOL(cfs_strncasecmp);
-
 /* Convert a text string to a bitmask */
 int cfs_str2mask(const char *str, const char *(*bit2str)(int bit),
                  int *oldmask, int minmask, int allmask)
@@ -129,7 +109,7 @@ int cfs_str2mask(const char *str, const char *(*bit2str)(int bit),
                         debugstr = bit2str(i);
                         if (debugstr != NULL &&
                             strlen(debugstr) == len &&
-                            cfs_strncasecmp(str, debugstr, len) == 0) {
+			    strncasecmp(str, debugstr, len) == 0) {
                                 if (op == '-')
                                         newmask &= ~(1 << i);
                                 else
@@ -139,7 +119,7 @@ int cfs_str2mask(const char *str, const char *(*bit2str)(int bit),
                         }
                 }
                 if (!found && len == 3 &&
-                    (cfs_strncasecmp(str, "ALL", len) == 0)) {
+		    (strncasecmp(str, "ALL", len) == 0)) {
                         if (op == '-')
                                 newmask = minmask;
                         else
