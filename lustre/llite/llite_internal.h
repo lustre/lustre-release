@@ -113,27 +113,17 @@ struct ll_remote_perm {
 };
 
 enum lli_flags {
-        /* MDS has an authority for the Size-on-MDS attributes. */
-        LLIF_MDS_SIZE_LOCK      = (1 << 0),
-        /* Epoch close is postponed. */
-        LLIF_EPOCH_PENDING      = (1 << 1),
-        /* DONE WRITING is allowed. */
-        LLIF_DONE_WRITING       = (1 << 2),
-        /* Sizeon-on-MDS attributes are changed. An attribute update needs to
-         * be sent to MDS. */
-        LLIF_SOM_DIRTY          = (1 << 3),
 	/* File data is modified. */
-	LLIF_DATA_MODIFIED      = (1 << 4),
+	LLIF_DATA_MODIFIED      = 1 << 0,
 	/* File is being restored */
-	LLIF_FILE_RESTORING	= (1 << 5),
+	LLIF_FILE_RESTORING	= 1 << 1,
 	/* Xattr cache is attached to the file */
-	LLIF_XATTR_CACHE	= (1 << 6),
+	LLIF_XATTR_CACHE	= 1 << 2,
 };
 
 struct ll_inode_info {
 	__u32				lli_inode_magic;
 	__u32				lli_flags;
-	__u64				lli_ioepoch;
 
 	spinlock_t			lli_lock;
 	struct posix_acl		*lli_posix_acl;
@@ -146,18 +136,12 @@ struct ll_inode_info {
 	/* master inode fid for stripe directory */
 	struct lu_fid			lli_pfid;
 
-	struct list_head		lli_close_list;
 	struct list_head		lli_oss_capas;
 	/* open count currently used by capability only, indicate whether
 	 * capability needs renewal */
 	atomic_t			lli_open_count;
 	struct obd_capa		       *lli_mds_capa;
 	cfs_time_t			lli_rmtperm_time;
-
-	/* handle is to be sent to MDS later on done_writing and setattr.
-	 * Open handle data are needed for the recovery to reconstruct
-	 * the inode state on the MDS. XXX: recovery is not ready yet. */
-	struct obd_client_handle       *lli_pending_och;
 
 	/* We need all three because every inode may be opened in different
 	 * modes */
@@ -416,7 +400,7 @@ enum stats_track_type {
 #define LL_SBI_LOCALFLOCK       0x200 /* Local flocks support by kernel */
 #define LL_SBI_LRU_RESIZE       0x400 /* lru resize support */
 #define LL_SBI_LAZYSTATFS       0x800 /* lazystatfs mount option */
-#define LL_SBI_SOM_PREVIEW     0x1000 /* SOM preview mount option */
+/*	LL_SBI_SOM_PREVIEW     0x1000    SOM preview mount option, obsolete */
 #define LL_SBI_32BIT_API       0x2000 /* generate 32 bit inodes. */
 #define LL_SBI_64BIT_HASH      0x4000 /* support 64-bits dir hash/offset */
 #define LL_SBI_AGL_ENABLED     0x8000 /* enable agl */
@@ -507,14 +491,15 @@ struct ll_sb_info {
 
         int                       ll_flags;
 	unsigned int		  ll_umounting:1,
-				  ll_xattr_cache_enabled:1;
+				  ll_xattr_cache_enabled:1,
+				  ll_client_common_fill_super_succeeded:1;
+
 	/* per-conn chain of SBs */
 	struct list_head		ll_conn_chain;
         struct lustre_client_ocd  ll_lco;
 
 	/*please don't ask -p*/
 	struct list_head	ll_orphan_dentry_list;
-        struct ll_close_queue    *ll_lcq;
 
         struct lprocfs_stats     *ll_stats; /* lprocfs stats counter */
 
@@ -822,15 +807,8 @@ int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_glimpse_ioctl(struct ll_sb_info *sbi,
                      struct lov_stripe_md *lsm, lstat_t *st);
-void ll_ioepoch_open(struct ll_inode_info *lli, __u64 ioepoch);
 int ll_release_openhandle(struct dentry *, struct lookup_intent *);
 int ll_md_real_close(struct inode *inode, fmode_t fmode);
-void ll_ioepoch_close(struct inode *inode, struct md_op_data *op_data,
-                      struct obd_client_handle **och, unsigned long flags);
-void ll_done_writing_attr(struct inode *inode, struct md_op_data *op_data);
-int ll_som_update(struct inode *inode, struct md_op_data *op_data);
-int ll_inode_getattr(struct inode *inode, struct obdo *obdo,
-                     __u64 ioepoch, int sync);
 void ll_pack_inode2opdata(struct inode *inode, struct md_op_data *op_data,
                           struct lustre_handle *fh);
 extern void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid,
@@ -965,18 +943,6 @@ int ll_dir_get_parent_fid(struct inode *dir, struct lu_fid *parent_fid);
 /* llite/symlink.c */
 extern struct inode_operations ll_fast_symlink_inode_operations;
 
-/* llite/llite_close.c */
-struct ll_close_queue {
-	spinlock_t		lcq_lock;
-	struct list_head		lcq_head;
-	wait_queue_head_t	lcq_waitq;
-	struct completion	lcq_comp;
-	atomic_t		lcq_stop;
-};
-
-void vvp_write_pending(struct vvp_object *club, struct vvp_page *page);
-void vvp_write_complete(struct vvp_object *club, struct vvp_page *page);
-
 /**
  * IO arguments for various VFS I/O interfaces.
  */
@@ -1036,10 +1002,6 @@ static inline struct vvp_io_args *vvp_env_args(const struct lu_env *env,
 
 int vvp_global_init(void);
 void vvp_global_fini(void);
-
-void ll_queue_done_writing(struct inode *inode, unsigned long flags);
-void ll_close_thread_shutdown(struct ll_close_queue *lcq);
-int ll_close_thread_start(struct ll_close_queue **lcq_ret);
 
 /* llite/llite_mmap.c */
 

@@ -217,9 +217,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 				  OBD_CONNECT_OPEN_BY_FID |
 				  OBD_CONNECT_DIR_STRIPE;
 
-        if (sbi->ll_flags & LL_SBI_SOM_PREVIEW)
-                data->ocd_connect_flags |= OBD_CONNECT_SOM;
-
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         if (sbi->ll_flags & LL_SBI_LRU_RESIZE)
                 data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
@@ -418,9 +415,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 				  OBD_CONNECT_LAYOUTLOCK |
 				  OBD_CONNECT_PINGLESS | OBD_CONNECT_LFSCK;
 
-        if (sbi->ll_flags & LL_SBI_SOM_PREVIEW)
-                data->ocd_connect_flags |= OBD_CONNECT_SOM;
-
         if (!OBD_FAIL_CHECK(OBD_FAIL_OSC_CONNECT_CKSUM)) {
                 /* OBD_CONNECT_CKSUM should always be set, even if checksums are
                  * disabled by default, because it can still be enabled on the
@@ -553,12 +547,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 err = IS_ERR(root) ? PTR_ERR(root) : -EBADF;
                 root = NULL;
                 CERROR("lustre_lite: bad iget4 for root\n");
-                GOTO(out_root, err);
-        }
-
-        err = ll_close_thread_start(&sbi->ll_lcq);
-        if (err) {
-                CERROR("cannot start close thread: rc %d\n", err);
                 GOTO(out_root, err);
         }
 
@@ -783,8 +771,6 @@ static void client_common_put_super(struct super_block *sb)
         }
 #endif
 
-        ll_close_thread_shutdown(sbi->ll_lcq);
-
         cl_sb_fini(sb);
 
 	list_del(&sbi->ll_conn_chain);
@@ -926,11 +912,6 @@ static int ll_options(char *options, int *flags)
                         *flags &= ~tmp;
                         goto next;
                 }
-                tmp = ll_set_opt("som_preview", s1, LL_SBI_SOM_PREVIEW);
-                if (tmp) {
-                        *flags |= tmp;
-                        goto next;
-                }
                 tmp = ll_set_opt("32bitapi", s1, LL_SBI_32BIT_API);
                 if (tmp) {
                         *flags |= tmp;
@@ -964,7 +945,6 @@ void ll_lli_init(struct ll_inode_info *lli)
 {
 	lli->lli_inode_magic = LLI_INODE_MAGIC;
 	lli->lli_flags = 0;
-	lli->lli_ioepoch = 0;
 	lli->lli_maxbytes = MAX_LFS_FILESIZE;
 	spin_lock_init(&lli->lli_lock);
 	lli->lli_posix_acl = NULL;
@@ -972,12 +952,10 @@ void ll_lli_init(struct ll_inode_info *lli)
 	mutex_init(&lli->lli_rmtperm_mutex);
 	/* Do not set lli_fid, it has been initialized already. */
 	fid_zero(&lli->lli_pfid);
-	INIT_LIST_HEAD(&lli->lli_close_list);
 	INIT_LIST_HEAD(&lli->lli_oss_capas);
 	atomic_set(&lli->lli_open_count, 0);
 	lli->lli_mds_capa = NULL;
 	lli->lli_rmtperm_time = 0;
-	lli->lli_pending_och = NULL;
 	lli->lli_mds_read_och = NULL;
         lli->lli_mds_write_och = NULL;
         lli->lli_mds_exec_och = NULL;
@@ -1108,6 +1086,10 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 
         /* connections, registrations, sb setup */
         err = client_common_fill_super(sb, md, dt, mnt);
+	if (err < 0)
+		GOTO(out_free, err);
+
+	sbi->ll_client_common_fill_super_succeeded = 1;
 
 out_free:
         if (md)
@@ -1173,10 +1155,10 @@ void ll_put_super(struct super_block *sb)
                 }
         }
 
-        if (sbi->ll_lcq) {
-                /* Only if client_common_fill_super succeeded */
-                client_common_put_super(sb);
-        }
+	if (sbi->ll_client_common_fill_super_succeeded) {
+		/* Only if client_common_fill_super succeeded */
+		client_common_put_super(sb);
+	}
 
         next = 0;
         while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) !=NULL) {
@@ -1446,9 +1428,6 @@ void ll_clear_inode(struct inode *inode)
                 LASSERT(lli->lli_opendir_pid == 0);
         }
 
-	spin_lock(&lli->lli_lock);
-        ll_i2info(inode)->lli_flags &= ~LLIF_MDS_SIZE_LOCK;
-	spin_unlock(&lli->lli_lock);
 	md_null_inode(sbi->ll_md_exp, ll_inode2fid(inode));
 
         LASSERT(!lli->lli_open_fd_write_count);
@@ -1553,47 +1532,10 @@ static int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data,
 	rc = simple_setattr(dentry, &op_data->op_attr);
 	op_data->op_attr.ia_valid = ia_valid;
 
-        /* Extract epoch data if obtained. */
-	op_data->op_handle = md.body->mbo_handle;
-	op_data->op_ioepoch = md.body->mbo_ioepoch;
-
 	rc = ll_update_inode(inode, &md);
 	ptlrpc_req_finished(request);
 
 	RETURN(rc);
-}
-
-/* Close IO epoch and send Size-on-MDS attribute update. */
-static int ll_setattr_done_writing(struct inode *inode,
-                                   struct md_op_data *op_data,
-                                   struct md_open_data *mod)
-{
-        struct ll_inode_info *lli = ll_i2info(inode);
-        int rc = 0;
-        ENTRY;
-
-        LASSERT(op_data != NULL);
-        if (!S_ISREG(inode->i_mode))
-                RETURN(0);
-
-        CDEBUG(D_INODE, "Epoch "LPU64" closed on "DFID" for truncate\n",
-               op_data->op_ioepoch, PFID(&lli->lli_fid));
-
-        op_data->op_flags = MF_EPOCH_CLOSE;
-        ll_done_writing_attr(inode, op_data);
-        ll_pack_inode2opdata(inode, op_data, NULL);
-
-        rc = md_done_writing(ll_i2sbi(inode)->ll_md_exp, op_data, mod);
-        if (rc == -EAGAIN) {
-                /* MDS has instructed us to obtain Size-on-MDS attribute
-                 * from OSTs and send setattr to back to MDS. */
-                rc = ll_som_update(inode, op_data);
-        } else if (rc) {
-		CERROR("%s: inode "DFID" mdc truncate failed: rc = %d\n",
-		       ll_i2sbi(inode)->ll_md_exp->exp_obd->obd_name,
-		       PFID(ll_inode2fid(inode)), rc);
-        }
-        RETURN(rc);
 }
 
 static int ll_setattr_ost(struct inode *inode, struct iattr *attr)
@@ -1638,7 +1580,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
         struct md_op_data *op_data = NULL;
         struct md_open_data *mod = NULL;
 	bool file_is_released = false;
-	int rc = 0, rc1 = 0;
+	int rc = 0;
 	ENTRY;
 
 	CDEBUG(D_VFSTRACE, "%s: setattr inode "DFID"(%p) from %llu to %llu, "
@@ -1743,11 +1685,6 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 
 	memcpy(&op_data->op_attr, attr, sizeof(*attr));
 
-	/* Open epoch for truncate. */
-	if (exp_connect_som(ll_i2mdexp(inode)) && !hsm_import &&
-	    (attr->ia_valid & (ATTR_SIZE | ATTR_MTIME | ATTR_MTIME_SET)))
-		op_data->op_flags = MF_EPOCH_OPEN;
-
 	rc = ll_md_setattr(dentry, op_data, &mod);
 	if (rc)
 		GOTO(out, rc);
@@ -1759,7 +1696,6 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 		spin_unlock(&lli->lli_lock);
 	}
 
-	ll_ioepoch_open(lli, op_data->op_ioepoch);
 	if (!S_ISREG(inode->i_mode) || file_is_released)
 		GOTO(out, rc = 0);
 
@@ -1780,14 +1716,9 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 	}
 	EXIT;
 out:
-	if (op_data) {
-		if (op_data->op_ioepoch) {
-			rc1 = ll_setattr_done_writing(inode, op_data, mod);
-			if (!rc)
-				rc = rc1;
-		}
+	if (op_data != NULL)
 		ll_finish_md_op_data(op_data);
-	}
+
 	if (!S_ISDIR(inode->i_mode)) {
 		mutex_lock(&inode->i_mutex);
 		if ((attr->ia_valid & ATTR_SIZE) && !hsm_import)
@@ -2045,49 +1976,11 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 	LASSERT(fid_seq(&lli->lli_fid) != 0);
 
 	if (body->mbo_valid & OBD_MD_FLSIZE) {
-                if (exp_connect_som(ll_i2mdexp(inode)) &&
-		    S_ISREG(inode->i_mode)) {
-                        struct lustre_handle lockh;
-                        ldlm_mode_t mode;
+		i_size_write(inode, body->mbo_size);
 
-                        /* As it is possible a blocking ast has been processed
-                         * by this time, we need to check there is an UPDATE
-                         * lock on the client and set LLIF_MDS_SIZE_LOCK holding
-                         * it. */
-                        mode = ll_take_md_lock(inode, MDS_INODELOCK_UPDATE,
-					       &lockh, LDLM_FL_CBPENDING,
-					       LCK_CR | LCK_CW |
-					       LCK_PR | LCK_PW);
-                        if (mode) {
-                                if (lli->lli_flags & (LLIF_DONE_WRITING |
-                                                      LLIF_EPOCH_PENDING |
-                                                      LLIF_SOM_DIRTY)) {
-					CERROR("%s: inode "DFID" flags %u still"
-					       " has size authority! do not "
-					       "trust the size from MDS\n",
-					       sbi->ll_md_exp->exp_obd->obd_name,
-					       PFID(ll_inode2fid(inode)),
-					       lli->lli_flags);
-                                } else {
-                                        /* Use old size assignment to avoid
-                                         * deadlock bz14138 & bz14326 */
-					i_size_write(inode, body->mbo_size);
-					spin_lock(&lli->lli_lock);
-                                        lli->lli_flags |= LLIF_MDS_SIZE_LOCK;
-					spin_unlock(&lli->lli_lock);
-                                }
-                                ldlm_lock_decref(&lockh, mode);
-                        }
-                } else {
-                        /* Use old size assignment to avoid
-                         * deadlock bz14138 & bz14326 */
-			i_size_write(inode, body->mbo_size);
-
-			CDEBUG(D_VFSTRACE,
-			       "inode="DFID", updating i_size %llu\n",
-			       PFID(ll_inode2fid(inode)),
-			       (unsigned long long)body->mbo_size);
-		}
+		CDEBUG(D_VFSTRACE, "inode="DFID", updating i_size %llu\n",
+		       PFID(ll_inode2fid(inode)),
+		       (unsigned long long)body->mbo_size);
 
 		if (body->mbo_valid & OBD_MD_FLBLOCKS)
 			inode->i_blocks = body->mbo_blocks;
@@ -2416,7 +2309,6 @@ void ll_open_cleanup(struct super_block *sb, struct ptlrpc_request *open_req)
 	}
 
 	op_data->op_fid1 = body->mbo_fid1;
-	op_data->op_ioepoch = body->mbo_ioepoch;
 	op_data->op_handle = body->mbo_handle;
 	op_data->op_mod_time = cfs_time_current_sec();
 	md_close(exp, op_data, NULL, &close_req);

@@ -167,8 +167,6 @@ static void vvp_page_delete(const struct lu_env *env,
 	LASSERT((struct cl_page *)vmpage->private == page);
 	LASSERT(inode == vvp_object_inode(obj));
 
-	vvp_write_complete(cl2vvp(obj), cl2vvp_page(slice));
-
 	/* Drop the reference count held in vvp_page_init */
 	refc = atomic_dec_return(&page->cp_ref);
 	LASSERTF(refc >= 1, "page = %p, refc = %d\n", page, refc);
@@ -221,7 +219,6 @@ static int vvp_page_prep_write(const struct lu_env *env,
 	LASSERT(!PageDirty(vmpage));
 
 	set_page_writeback(vmpage);
-	vvp_write_pending(cl2vvp(slice->cpl_obj), cl2vvp_page(slice));
 
 	return 0;
 }
@@ -298,19 +295,6 @@ static void vvp_page_completion_write(const struct lu_env *env,
 	CL_PAGE_HEADER(D_PAGE, env, pg, "completing WRITE with %d\n", ioret);
 
 	/*
-	 * TODO: Actually it makes sense to add the page into oap pending
-	 * list again and so that we don't need to take the page out from
-	 * SoM write pending list, if we just meet a recoverable error,
-	 * -ENOMEM, etc.
-	 * To implement this, we just need to return a non zero value in
-	 * ->cpo_completion method. The underlying transfer should be notified
-	 * and then re-add the page into pending transfer queue.  -jay
-	 */
-
-	vpg->vpg_write_queued = 0;
-	vvp_write_complete(cl2vvp(slice->cpl_obj), vpg);
-
-	/*
 	 * Only mark the page error only when it's an async write because
 	 * applications won't wait for IO to finish.
 	 */
@@ -348,8 +332,6 @@ static int vvp_page_make_ready(const struct lu_env *env,
 		/* This actually clears the dirty bit in the radix
 		 * tree. */
 		set_page_writeback(vmpage);
-		vvp_write_pending(cl2vvp(slice->cpl_obj),
-				cl2vvp_page(slice));
 		CL_PAGE_HEADER(D_PAGE, env, pg, "readied\n");
 	} else if (pg->cp_state == CPS_PAGEOUT) {
 		/* is it possible for osc_flush_async_page() to already
@@ -388,10 +370,9 @@ static int vvp_page_print(const struct lu_env *env,
 	struct vvp_page *vpg	= cl2vvp_page(slice);
 	struct page     *vmpage	= vpg->vpg_page;
 
-	(*printer)(env, cookie, LUSTRE_VVP_NAME"-page@%p(%d:%d:%d) "
+	(*printer)(env, cookie, LUSTRE_VVP_NAME"-page@%p(%d:%d) "
 		   "vm@%p ",
-		   vpg, vpg->vpg_defer_uptodate, vpg->vpg_ra_used,
-		   vpg->vpg_write_queued, vmpage);
+		   vpg, vpg->vpg_defer_uptodate, vpg->vpg_ra_used, vmpage);
 
 	if (vmpage != NULL) {
 		(*printer)(env, cookie, "%lx %d:%d %lx %lu %slru",
@@ -563,7 +544,6 @@ int vvp_page_init(const struct lu_env *env, struct cl_object *obj,
 	vpg->vpg_page = vmpage;
 	page_cache_get(vmpage);
 
-	INIT_LIST_HEAD(&vpg->vpg_pending_linkage);
 	if (page->cp_type == CPT_CACHEABLE) {
 		/* in cache, decref in vvp_page_delete */
 		atomic_inc(&page->cp_ref);
