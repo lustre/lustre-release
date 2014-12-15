@@ -1640,7 +1640,7 @@ int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
 			 "boffs %d size %d bh->b_size %lu\n",
 			 boffs, size, (unsigned long)bh->b_size);
                 memcpy(bh->b_data + boffs, buf, size);
-                err = ldiskfs_journal_dirty_metadata(handle, bh);
+		err = ldiskfs_handle_dirty_metadata(handle, NULL, bh);
                 if (err)
                         break;
 

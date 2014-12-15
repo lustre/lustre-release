@@ -600,7 +600,7 @@ update:
 		GOTO(out, rc);
 
 	de->inode = cpu_to_le32(id->oii_ino);
-	rc = ldiskfs_journal_dirty_metadata(th, bh);
+	rc = ldiskfs_handle_dirty_metadata(th, NULL, bh);
 
 	GOTO(out, rc);
 

@@ -65,19 +65,6 @@ Index: linux-stage/fs/ext4/ext4_jbd2.c
  	return err;
  }
 +EXPORT_SYMBOL(__ext4_handle_dirty_metadata);
-Index: linux-stage/fs/ext4/ext4_jbd2.h
-===================================================================
---- linux-stage.orig/fs/ext4/ext4_jbd2.h	2011-05-20 10:59:29.000000000 +0300
-+++ linux-stage/fs/ext4/ext4_jbd2.h	2011-05-20 11:00:01.000000000 +0300
-@@ -35,6 +35,8 @@
- 	(EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_EXTENTS)   \
- 	 ? 27U : 8U)
- 
-+#define ext4_journal_dirty_metadata(handle, bh)  \
-+		ext4_handle_dirty_metadata(handle, NULL, bh)
- /* Extended attribute operations touch at most two data buffers,
-  * two bitmap buffers, and two group summaries, in addition to the inode
-  * and the superblock, which are already accounted for. */
 Index: linux-stage/fs/ext4/extents.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/extents.c

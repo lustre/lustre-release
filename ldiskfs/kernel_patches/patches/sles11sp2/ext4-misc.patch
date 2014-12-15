@@ -63,15 +63,6 @@
  				      struct ext4_extent *ex2);
 --- a/fs/ext4/ext4_jbd2.h
 +++ b/fs/ext4/ext4_jbd2.h
-@@ -35,6 +35,8 @@
- 	(EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_EXTENTS)   \
- 	 ? 27U : 8U)
-
-+#define ext4_journal_dirty_metadata(handle, bh)  \
-+		ext4_handle_dirty_metadata(handle, NULL, bh)
- /* Extended attribute operations touch at most two data buffers,
-  * two bitmap buffers, and two group summaries, in addition to the inode
-  * and the superblock, which are already accounted for. */
 @@ -175,6 +177,7 @@ static inline void ext4_journal_callback
  	list_del_init(&jce->jce_list);
  	spin_unlock(&sbi->s_md_lock);

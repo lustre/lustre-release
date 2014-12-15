@@ -1023,9 +1023,10 @@ int iam_lvar_create(struct inode *obj,
                 lvar_root(root_node->b_data, bsize, keysize, ptrsize, recsize);
                 lvar_leaf(leaf_node->b_data, bsize, keysize, ptrsize, recsize);
                 ldiskfs_mark_inode_dirty(handle, obj);
-                result = ldiskfs_journal_dirty_metadata(handle, root_node);
-                if (result == 0)
-                        result = ldiskfs_journal_dirty_metadata(handle, leaf_node);
+		result = ldiskfs_handle_dirty_metadata(handle, NULL, root_node);
+		if (result == 0)
+			result = ldiskfs_handle_dirty_metadata(handle, NULL,
+							       leaf_node);
                 if (result != 0)
                         ldiskfs_std_error(sb, result);
         }

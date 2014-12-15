@@ -1,7 +1,8 @@
-diff -u -r linux-stage.orig/fs/ext4/ext4.h linux-stage/fs/ext4/ext4.h
---- linux-stage.orig/fs/ext4/ext4.h	2012-12-31 15:07:27.000000000 -0500
-+++ linux-stage/fs/ext4/ext4.h	2012-12-31 15:14:03.000000000 -0500
-@@ -912,6 +912,7 @@
+Index: linux-3.0.101-0.5/fs/ext4/ext4.h
+===================================================================
+--- linux-3.0.101-0.5.orig/fs/ext4/ext4.h
++++ linux-3.0.101-0.5/fs/ext4/ext4.h
+@@ -911,6 +911,7 @@ struct ext4_inode_info {
  #define EXT4_MOUNT_POSIX_ACL		0x08000	/* POSIX Access Control Lists */
  #define EXT4_MOUNT_NO_AUTO_DA_ALLOC	0x10000	/* No auto delalloc mapping */
  #define EXT4_MOUNT_BARRIER		0x20000 /* Use block barriers */
@@ -9,58 +10,62 @@ diff -u -r linux-stage.orig/fs/ext4/ext4.h linux-stage/fs/ext4/ext4.h
  #define EXT4_MOUNT_QUOTA		0x80000 /* Some quota option set */
  #define EXT4_MOUNT_USRQUOTA		0x100000 /* "old" user quota */
  #define EXT4_MOUNT_GRPQUOTA		0x200000 /* "old" group quota */
-diff -u -r linux-stage.orig/fs/ext4/ext4_jbd2.h linux-stage/fs/ext4/ext4_jbd2.h
---- linux-stage.orig/fs/ext4/ext4_jbd2.h	2012-12-31 15:07:27.000000000 -0500
-+++ linux-stage/fs/ext4/ext4_jbd2.h	2012-12-31 15:07:34.000000000 -0500
+Index: linux-3.0.101-0.5/fs/ext4/ext4_jbd2.h
+===================================================================
+--- linux-3.0.101-0.5.orig/fs/ext4/ext4_jbd2.h
++++ linux-3.0.101-0.5/fs/ext4/ext4_jbd2.h
 @@ -33,7 +33,7 @@
-
+ 
  #define EXT4_SINGLEDATA_TRANS_BLOCKS(sb)				\
  	(EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_EXTENTS)   \
 -	 ? 27U : 8U)
 +	 || test_opt(sb, EXTENTS) ? 27U : 8U)
-
- #define ext4_journal_dirty_metadata(handle, bh)  \
- 		ext4_handle_dirty_metadata(handle, NULL, bh)
-diff -u -r linux-stage.orig/fs/ext4/extents.c linux-stage/fs/ext4/extents.c
---- linux-stage.orig/fs/ext4/extents.c	2012-12-31 15:07:27.000000000 -0500
-+++ linux-stage/fs/ext4/extents.c	2012-12-31 15:07:34.000000000 -0500
-@@ -2733,7 +2733,7 @@
+ 
+ /* Extended attribute operations touch at most two data buffers,
+  * two bitmap buffers, and two group summaries, in addition to the inode
+Index: linux-3.0.101-0.5/fs/ext4/extents.c
+===================================================================
+--- linux-3.0.101-0.5.orig/fs/ext4/extents.c
++++ linux-3.0.101-0.5/fs/ext4/extents.c
+@@ -2751,7 +2751,7 @@ void ext4_ext_init(struct super_block *s
  	 * possible initialization would be here
  	 */
-
+ 
 -	if (EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_EXTENTS)) {
 +	if (test_opt(sb, EXTENTS)) {
  #if defined(AGGRESSIVE_TEST) || defined(CHECK_BINSEARCH) || defined(EXTENTS_STATS)
  		printk(KERN_INFO "EXT4-fs: file extents enabled");
  #ifdef AGGRESSIVE_TEST
-@@ -2760,7 +2760,7 @@
+@@ -2778,7 +2778,7 @@ void ext4_ext_init(struct super_block *s
   */
  void ext4_ext_release(struct super_block *sb)
  {
 -	if (!EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_EXTENTS))
 +	if (!test_opt(sb, EXTENTS))
  		return;
-
+ 
  #ifdef EXTENTS_STATS
-diff -u -r linux-stage.orig/fs/ext4/ialloc.c linux-stage/fs/ext4/ialloc.c
---- linux-stage.orig/fs/ext4/ialloc.c	2012-12-31 15:07:27.000000000 -0500
-+++ linux-stage/fs/ext4/ialloc.c	2012-12-31 15:07:34.000000000 -0500
-@@ -1057,7 +1057,7 @@
+Index: linux-3.0.101-0.5/fs/ext4/ialloc.c
+===================================================================
+--- linux-3.0.101-0.5.orig/fs/ext4/ialloc.c
++++ linux-3.0.101-0.5/fs/ext4/ialloc.c
+@@ -1054,7 +1054,7 @@ got:
  	if (err)
  		goto fail_free_drop;
-
+ 
 -	if (EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_EXTENTS)) {
 +	if (test_opt(sb, EXTENTS)) {
  		/* set extent flag only for directory, file and normal symlink*/
  		if (S_ISDIR(mode) || S_ISREG(mode) || S_ISLNK(mode)) {
  			ext4_set_inode_flag(inode, EXT4_INODE_EXTENTS);
-diff -u -r linux-stage.orig/fs/ext4/migrate.c linux-stage/fs/ext4/migrate.c
---- linux-stage.orig/fs/ext4/migrate.c	2012-12-31 15:07:27.000000000 -0500
-+++ linux-stage/fs/ext4/migrate.c	2012-12-31 15:07:34.000000000 -0500
-@@ -469,13 +469,10 @@
+Index: linux-3.0.101-0.5/fs/ext4/migrate.c
+===================================================================
+--- linux-3.0.101-0.5.orig/fs/ext4/migrate.c
++++ linux-3.0.101-0.5/fs/ext4/migrate.c
+@@ -469,13 +469,10 @@ int ext4_ext_migrate(struct inode *inode
  	unsigned long max_entries;
  	__u32 goal;
-
+ 
 -	/*
 -	 * If the filesystem does not support extents, or the inode
 -	 * already is extent-based, error out.
@@ -73,12 +78,13 @@ diff -u -r linux-stage.orig/fs/ext4/migrate.c linux-stage/fs/ext4/migrate.c
 +		 * if mounted with noextents we don't allow the migrate
 +		 */
  		return -EINVAL;
-
+ 
  	if (S_ISLNK(inode->i_mode) && inode->i_blocks == 0)
-diff -u -r linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
---- linux-stage.orig/fs/ext4/super.c	2012-12-31 15:07:27.000000000 -0500
-+++ linux-stage/fs/ext4/super.c	2012-12-31 15:15:49.000000000 -0500
-@@ -1078,6 +1078,8 @@
+Index: linux-3.0.101-0.5/fs/ext4/super.c
+===================================================================
+--- linux-3.0.101-0.5.orig/fs/ext4/super.c
++++ linux-3.0.101-0.5/fs/ext4/super.c
+@@ -1128,6 +1128,8 @@ static int ext4_show_options(struct seq_
  		seq_puts(seq, ",journal_async_commit");
  	else if (test_opt(sb, JOURNAL_CHECKSUM))
  		seq_puts(seq, ",journal_checksum");
@@ -87,15 +93,15 @@ diff -u -r linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  	if (test_opt(sb, I_VERSION))
  		seq_puts(seq, ",i_version");
  	if (!test_opt(sb, DELALLOC) &&
-@@ -1303,6 +1305,7 @@
+@@ -1369,6 +1371,7 @@ enum {
  	Opt_inode_readahead_blks, Opt_journal_ioprio,
  	Opt_dioread_nolock, Opt_dioread_lock,
  	Opt_mballoc, Opt_bigendian_extents, Opt_force_over_128tb,
 +	Opt_extents, Opt_noextents,
  	Opt_discard, Opt_nodiscard, Opt_init_itable, Opt_noinit_itable,
  };
-
-@@ -1380,6 +1383,8 @@
+ 
+@@ -1446,6 +1449,8 @@ static const match_table_t tokens = {
  	{Opt_bigendian_extents, "bigendian_extents"},
  	{Opt_force_over_128tb, "force_over_128tb"},
  	{Opt_mballoc, "mballoc"},
@@ -104,15 +110,15 @@ diff -u -r linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  	{Opt_discard, "discard"},
  	{Opt_nodiscard, "nodiscard"},
  	{Opt_init_itable, "init_itable=%u"},
-@@ -1472,6 +1477,7 @@
+@@ -1538,6 +1543,7 @@ static int clear_qf_name(struct super_bl
  	return 1;
  }
  #endif
 +	ext4_fsblk_t last_block;
-
+ 
  static int parse_options(char *options, struct super_block *sb,
  			 unsigned long *journal_devnum,
-@@ -1887,6 +1893,32 @@
+@@ -1953,6 +1959,32 @@ set_qf_format:
  		case Opt_force_over_128tb:
  			force_over_128tb = 1;
  			break;
@@ -145,9 +151,9 @@ diff -u -r linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  		default:
  			ext4_msg(sb, KERN_ERR,
  			       "Unrecognized mount option \"%s\" "
-@@ -3206,6 +3238,14 @@
+@@ -3276,6 +3308,14 @@ static int ext4_fill_super(struct super_
  		set_opt(sb, BARRIER);
-
+ 
  	/*
 +	 * turn on extents feature by default in ext4 filesystem
 +	 * only if feature flag already set by mkfs or tune2fs.

@@ -3989,8 +3989,8 @@ static int __osd_ea_add_rec(struct osd_thread_info *info,
 				else
 					de->file_type = LDISKFS_DIRENT_LUFID |
 							LDISKFS_FT_DIR;
-				ldiskfs_journal_dirty_metadata(oth->ot_handle,
-							       bh);
+				ldiskfs_handle_dirty_metadata(oth->ot_handle,
+							      NULL, bh);
 				brelse(bh);
 			}
 		}
@@ -5210,7 +5210,7 @@ osd_dirent_update(handle_t *jh, struct super_block *sb,
 
 	rec = (struct osd_fid_pack *)(de->name + de->name_len + 1);
 	fid_cpu_to_be((struct lu_fid *)rec->fp_area, fid);
-	rc = ldiskfs_journal_dirty_metadata(jh, bh);
+	rc = ldiskfs_handle_dirty_metadata(jh, NULL, bh);
 
 	RETURN(rc);
 }
@@ -5268,7 +5268,7 @@ osd_dirent_reinsert(const struct lu_env *env, handle_t *jh,
 		fid_cpu_to_be((struct lu_fid *)rec->fp_area, fid);
 		de->file_type |= LDISKFS_DIRENT_LUFID;
 
-		rc = ldiskfs_journal_dirty_metadata(jh, bh);
+		rc = ldiskfs_handle_dirty_metadata(jh, NULL, bh);
 
 		RETURN(rc);
 	}

@@ -292,7 +292,7 @@ Index: linux-stage/fs/ext4/xattr.c
 +
 +		memcpy(bh->b_data, buf, csize);
 +		set_buffer_uptodate(bh);
-+		ext4_journal_dirty_metadata(handle, bh);
++		ext4_handle_dirty_metadata(handle, ea_inode, bh);
 +
 +		buf += csize;
 +		wsize += csize;

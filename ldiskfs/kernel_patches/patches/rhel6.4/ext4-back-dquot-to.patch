@@ -70,13 +70,18 @@ Index: linux-stage/fs/ext4/inode.c
  
  	if (ext4_should_order_data(inode))
  		ext4_begin_ordered_truncate(inode, 0);
-@@ -230,7 +231,10 @@ void ext4_delete_inode(struct inode *ino
+@@ -230,12 +231,15 @@ void ext4_delete_inode(struct inode *ino
  	if (is_bad_inode(inode))
  		goto no_delete;
  
--	handle = ext4_journal_start(inode, blocks_for_truncate(inode)+3);
 +	if (!IS_NOQUOTA(inode))
 +		extra_credits += 2 * EXT4_QUOTA_DEL_BLOCKS(inode->i_sb);
+ 	/*
+ 	 * Protect us against freezing - iput() caller didn't have to have any
+ 	 * protection against it
+ 	 */
+ 	sb_start_intwrite(inode->i_sb);
+-	handle = ext4_journal_start(inode, blocks_for_truncate(inode)+3);
 +	handle = ext4_journal_start(inode,
 +			blocks_for_truncate(inode) + extra_credits);
  	if (IS_ERR(handle)) {
