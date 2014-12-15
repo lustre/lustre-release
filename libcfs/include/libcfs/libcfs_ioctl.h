@@ -157,7 +157,7 @@ struct libcfs_ioctl_handler {
 
 
 /*
- * DLC Speicif IOCTL numbers.
+ * DLC Specific IOCTL numbers.
  * In order to maintain backward compatibility with any possible external
  * tools which might be accessing the IOCTL numbers, a new group of IOCTL
  * number have been allocated.

@@ -988,8 +988,8 @@ int lustre_lnet_show_peer_credits(int seq_no, struct cYAML **show_rc,
 		goto out;
 
 	peer_root = cYAML_create_seq(root, "peer");
-		if (peer_root == NULL)
-			goto out;
+	if (peer_root == NULL)
+		goto out;
 
 	do {
 		for (i = 0;; i++) {

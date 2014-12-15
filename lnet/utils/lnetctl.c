@@ -976,7 +976,7 @@ command_t list[] = {
 				 "--help} FILE.yaml"},
 	{"export", jt_export, 0, "export {--help} FILE.yaml"},
 	{"stats", jt_stats, 0, "stats {show | help}"},
-	{"peer_credits", jt_peer_credits, 0, "stats {show | help}"},
+	{"peer_credits", jt_peer_credits, 0, "peer_credits {show | help}"},
 	{"help", Parser_help, 0, "help"},
 	{"exit", Parser_quit, 0, "quit"},
 	{"quit", Parser_quit, 0, "quit"},

@@ -2116,6 +2116,10 @@ LNetCtl(unsigned int cmd, void *arg)
 
 	case IOC_LIBCFS_ADD_ROUTE:
 		config = arg;
+
+		if (config->cfg_hdr.ioc_len < sizeof(*config))
+			return -EINVAL;
+
 		LNET_MUTEX_LOCK(&the_lnet.ln_api_mutex);
 		rc = lnet_add_route(config->cfg_net,
 				    config->cfg_config_u.cfg_route.rtr_hop,
@@ -2127,6 +2131,10 @@ LNetCtl(unsigned int cmd, void *arg)
 
 	case IOC_LIBCFS_DEL_ROUTE:
 		config = arg;
+
+		if (config->cfg_hdr.ioc_len < sizeof(*config))
+			return -EINVAL;
+
 		LNET_MUTEX_LOCK(&the_lnet.ln_api_mutex);
 		rc = lnet_del_route(config->cfg_net, config->cfg_nid);
 		LNET_MUTEX_UNLOCK(&the_lnet.ln_api_mutex);
@@ -2134,6 +2142,10 @@ LNetCtl(unsigned int cmd, void *arg)
 
 	case IOC_LIBCFS_GET_ROUTE:
 		config = arg;
+
+		if (config->cfg_hdr.ioc_len < sizeof(*config))
+			return -EINVAL;
+
 		return lnet_get_route(config->cfg_count,
 				      &config->cfg_net,
 				      &config->cfg_config_u.cfg_route.rtr_hop,
@@ -2144,7 +2156,13 @@ LNetCtl(unsigned int cmd, void *arg)
 
 	case IOC_LIBCFS_GET_NET: {
 		struct lnet_ioctl_net_config *net_config;
+		size_t total = sizeof(*config) + sizeof(*net_config);
+
 		config = arg;
+
+		if (config->cfg_hdr.ioc_len < total)
+			return -EINVAL;
+
 		net_config = (struct lnet_ioctl_net_config *)
 			config->cfg_bulk;
 		if (config == NULL || net_config == NULL)
@@ -2168,6 +2186,9 @@ LNetCtl(unsigned int cmd, void *arg)
 	{
 		struct lnet_ioctl_lnet_stats *lnet_stats = arg;
 
+		if (lnet_stats->st_hdr.ioc_len < sizeof(*lnet_stats))
+			return -EINVAL;
+
 		lnet_counters_get(&lnet_stats->st_cntrs);
 		return 0;
 	}
@@ -2175,6 +2196,10 @@ LNetCtl(unsigned int cmd, void *arg)
 #if defined(__KERNEL__) && defined(LNET_ROUTER)
 	case IOC_LIBCFS_CONFIG_RTR:
 		config = arg;
+
+		if (config->cfg_hdr.ioc_len < sizeof(*config))
+			return -EINVAL;
+
 		LNET_MUTEX_LOCK(&the_lnet.ln_api_mutex);
 		if (config->cfg_config_u.cfg_buffers.buf_enable) {
 			rc = lnet_rtrpools_enable();
@@ -2187,6 +2212,10 @@ LNetCtl(unsigned int cmd, void *arg)
 
 	case IOC_LIBCFS_ADD_BUF:
 		config = arg;
+
+		if (config->cfg_hdr.ioc_len < sizeof(*config))
+			return -EINVAL;
+
 		LNET_MUTEX_LOCK(&the_lnet.ln_api_mutex);
 		rc = lnet_rtrpools_adjust(config->cfg_config_u.cfg_buffers.
 						buf_tiny,
@@ -2200,13 +2229,23 @@ LNetCtl(unsigned int cmd, void *arg)
 
 	case IOC_LIBCFS_GET_BUF: {
 		struct lnet_ioctl_pool_cfg *pool_cfg;
+		size_t total = sizeof(*config) + sizeof(*pool_cfg);
+
 		config = arg;
+
+		if (config->cfg_hdr.ioc_len < total)
+			return -EINVAL;
+
 		pool_cfg = (struct lnet_ioctl_pool_cfg *)config->cfg_bulk;
 		return lnet_get_rtr_pool_cfg(config->cfg_count, pool_cfg);
 	}
 
 	case IOC_LIBCFS_GET_PEER_INFO: {
 		struct lnet_ioctl_peer *peer_info = arg;
+
+		if (peer_info->pr_hdr.ioc_len < sizeof(*peer_info))
+			return -EINVAL;
+
 		return lnet_get_peer_info(
 		   peer_info->pr_count,
 		   &peer_info->pr_nid,
