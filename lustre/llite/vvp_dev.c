@@ -135,11 +135,86 @@ static const struct cl_device_operations vvp_cl_ops = {
         .cdo_req_init = ccc_req_init
 };
 
-static struct lu_device *vvp_device_alloc(const struct lu_env *env,
-                                          struct lu_device_type *t,
-                                          struct lustre_cfg *cfg)
+static struct lu_device *vvp_device_free(const struct lu_env *env,
+					 struct lu_device *d)
 {
-        return ccc_device_alloc(env, t, cfg, &vvp_lu_ops, &vvp_cl_ops);
+	struct vvp_device *vdv  = lu2vvp_dev(d);
+	struct cl_site    *site = lu2cl_site(d->ld_site);
+	struct lu_device  *next = cl2lu_dev(vdv->vdv_next);
+
+	if (d->ld_site != NULL) {
+		cl_site_fini(site);
+		OBD_FREE_PTR(site);
+	}
+
+	cl_device_fini(lu2cl_dev(d));
+	OBD_FREE_PTR(vdv);
+	return next;
+}
+
+static struct lu_device *vvp_device_alloc(const struct lu_env *env,
+					  struct lu_device_type *t,
+					  struct lustre_cfg *cfg)
+{
+	struct vvp_device *vdv;
+	struct lu_device *lud;
+	struct cl_site *site;
+	int rc;
+	ENTRY;
+
+	OBD_ALLOC_PTR(vdv);
+	if (vdv == NULL)
+		RETURN(ERR_PTR(-ENOMEM));
+
+	lud = &vdv->vdv_cl.cd_lu_dev;
+	cl_device_init(&vdv->vdv_cl, t);
+	vvp2lu_dev(vdv)->ld_ops = &vvp_lu_ops;
+	vdv->vdv_cl.cd_ops = &vvp_cl_ops;
+
+	OBD_ALLOC_PTR(site);
+	if (site != NULL) {
+		rc = cl_site_init(site, &vdv->vdv_cl);
+		if (rc == 0)
+			rc = lu_site_init_finish(&site->cs_lu);
+		else {
+			LASSERT(lud->ld_site == NULL);
+			CERROR("Cannot init lu_site, rc %d.\n", rc);
+			OBD_FREE_PTR(site);
+		}
+	} else
+		rc = -ENOMEM;
+	if (rc != 0) {
+		vvp_device_free(env, lud);
+		lud = ERR_PTR(rc);
+	}
+	RETURN(lud);
+}
+
+static int vvp_device_init(const struct lu_env *env, struct lu_device *d,
+			   const char *name, struct lu_device *next)
+{
+	struct vvp_device  *vdv;
+	int rc;
+	ENTRY;
+
+	vdv = lu2vvp_dev(d);
+	vdv->vdv_next = lu2cl_dev(next);
+
+	LASSERT(d->ld_site != NULL && next->ld_type != NULL);
+	next->ld_site = d->ld_site;
+	rc = next->ld_type->ldt_ops->ldto_device_init(
+		env, next, next->ld_type->ldt_name, NULL);
+	if (rc == 0) {
+		lu_device_get(next);
+		lu_ref_add(&next->ld_reference, "lu-stack", &lu_site_init);
+	}
+	RETURN(rc);
+}
+
+static struct lu_device *vvp_device_fini(const struct lu_env *env,
+					 struct lu_device *d)
+{
+	return cl2lu_dev(lu2vvp_dev(d)->vdv_next);
 }
 
 static const struct lu_device_type_operations vvp_device_type_ops = {
@@ -149,10 +224,10 @@ static const struct lu_device_type_operations vvp_device_type_ops = {
         .ldto_start = vvp_type_start,
         .ldto_stop  = vvp_type_stop,
 
-        .ldto_device_alloc = vvp_device_alloc,
-        .ldto_device_free  = ccc_device_free,
-        .ldto_device_init  = ccc_device_init,
-        .ldto_device_fini  = ccc_device_fini
+	.ldto_device_alloc	= vvp_device_alloc,
+	.ldto_device_free	= vvp_device_free,
+	.ldto_device_init	= vvp_device_init,
+	.ldto_device_fini	= vvp_device_fini,
 };
 
 struct lu_device_type vvp_device_type = {
@@ -206,7 +281,7 @@ int cl_sb_init(struct super_block *sb)
                 cl = cl_type_setup(env, NULL, &vvp_device_type,
                                    sbi->ll_dt_exp->exp_obd->obd_lu_dev);
                 if (!IS_ERR(cl)) {
-                        cl2ccc_dev(cl)->cdv_sb = sb;
+			cl2vvp_dev(cl)->vdv_sb = sb;
                         sbi->ll_cl = cl;
                         sbi->ll_site = cl2lu_dev(cl)->ld_site;
                 }
