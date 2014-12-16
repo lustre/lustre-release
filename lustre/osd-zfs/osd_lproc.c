@@ -50,6 +50,110 @@
 
 #ifdef LPROCFS
 
+#define pct(a, b) (b ? a * 100 / b : 0)
+
+static void display_brw_stats(struct seq_file *seq, char *name, char *units,
+			      struct obd_histogram *read,
+			      struct obd_histogram *write, int scale)
+{
+	unsigned long read_tot, write_tot, r, w, read_cum = 0, write_cum = 0;
+	int i;
+
+	seq_printf(seq, "\n%26s read      |     write\n", " ");
+	seq_printf(seq, "%-22s %-5s %% cum %% |  %-11s %% cum %%\n",
+		   name, units, units);
+
+	read_tot = lprocfs_oh_sum(read);
+	write_tot = lprocfs_oh_sum(write);
+	for (i = 0; i < OBD_HIST_MAX; i++) {
+		r = read->oh_buckets[i];
+		w = write->oh_buckets[i];
+		read_cum += r;
+		write_cum += w;
+		if (read_cum == 0 && write_cum == 0)
+			continue;
+
+		if (!scale)
+			seq_printf(seq, "%u", i);
+		else if (i < 10)
+			seq_printf(seq, "%u", scale << i);
+		else if (i < 20)
+			seq_printf(seq, "%uK", scale << (i-10));
+		else
+			seq_printf(seq, "%uM", scale << (i-20));
+
+		seq_printf(seq, ":\t\t%10lu %3lu %3lu   | %4lu %3lu %3lu\n",
+			   r, pct(r, read_tot), pct(read_cum, read_tot),
+			   w, pct(w, write_tot), pct(write_cum, write_tot));
+
+		if (read_cum == read_tot && write_cum == write_tot)
+			break;
+	}
+}
+
+static void brw_stats_show(struct seq_file *seq, struct brw_stats *brw_stats)
+{
+	struct timeval now;
+
+	/* this sampling races with updates */
+	do_gettimeofday(&now);
+	seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
+		   now.tv_sec, now.tv_usec);
+
+	display_brw_stats(seq, "pages per bulk r/w", "rpcs",
+			  &brw_stats->hist[BRW_R_PAGES],
+			  &brw_stats->hist[BRW_W_PAGES], 1);
+	display_brw_stats(seq, "discontiguous pages", "rpcs",
+			  &brw_stats->hist[BRW_R_DISCONT_PAGES],
+			  &brw_stats->hist[BRW_W_DISCONT_PAGES], 0);
+#if 0
+	display_brw_stats(seq, "discontiguous blocks", "rpcs",
+			  &brw_stats->hist[BRW_R_DISCONT_BLOCKS],
+			  &brw_stats->hist[BRW_W_DISCONT_BLOCKS], 0);
+
+	display_brw_stats(seq, "disk fragmented I/Os", "ios",
+			  &brw_stats->hist[BRW_R_DIO_FRAGS],
+			  &brw_stats->hist[BRW_W_DIO_FRAGS], 0);
+#endif
+	display_brw_stats(seq, "disk I/Os in flight", "ios",
+			  &brw_stats->hist[BRW_R_RPC_HIST],
+			  &brw_stats->hist[BRW_W_RPC_HIST], 0);
+
+	display_brw_stats(seq, "I/O time (1/1000s)", "ios",
+			  &brw_stats->hist[BRW_R_IO_TIME],
+			  &brw_stats->hist[BRW_W_IO_TIME], 1000 / HZ);
+
+	display_brw_stats(seq, "disk I/O size", "ios",
+			  &brw_stats->hist[BRW_R_DISK_IOSIZE],
+			  &brw_stats->hist[BRW_W_DISK_IOSIZE], 1);
+}
+
+#undef pct
+
+static int osd_brw_stats_seq_show(struct seq_file *seq, void *v)
+{
+	struct osd_device *osd = seq->private;
+
+	brw_stats_show(seq, &osd->od_brw_stats);
+
+	return 0;
+}
+
+static ssize_t osd_brw_stats_seq_write(struct file *file, const char *buf,
+				       size_t len, loff_t *off)
+{
+	struct seq_file *seq = file->private_data;
+	struct osd_device *osd = seq->private;
+	int i;
+
+	for (i = 0; i < BRW_LAST; i++)
+		lprocfs_oh_clear(&osd->od_brw_stats.hist[i]);
+
+	return len;
+}
+
+LPROC_SEQ_FOPS(osd_brw_stats);
+
 static int osd_stats_init(struct osd_device *osd)
 {
 	int result;
@@ -97,6 +201,8 @@ static int osd_stats_init(struct osd_device *osd)
 				LPROCFS_CNTR_AVGMINMAX,
 				"thandle_closing", "usec");
 #endif
+		result = lprocfs_seq_create(osd->od_proc_entry, "brw_stats",
+					    0644, &osd_brw_stats_fops, osd);
 	} else {
 		result = -ENOMEM;
 	}

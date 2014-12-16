@@ -284,6 +284,10 @@ struct osd_device {
 	/* quota slave instance */
 	struct qsd_instance	*od_quota_slave;
 
+	struct brw_stats	od_brw_stats;
+	atomic_t		od_r_in_flight;
+	atomic_t		od_w_in_flight;
+
 	/* used to debug zerocopy logic: the fields track all
 	 * allocated, loaned and referenced buffers in use.
 	 * to be removed once the change is tested well. */

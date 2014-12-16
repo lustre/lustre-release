@@ -68,6 +68,50 @@
 
 static char *osd_zerocopy_tag = "zerocopy";
 
+
+static void record_start_io(struct osd_device *osd, int rw, int npages,
+			    int discont_pages)
+{
+	struct obd_histogram *h = osd->od_brw_stats.hist;
+
+	if (rw == READ) {
+		atomic_inc(&osd->od_r_in_flight);
+		lprocfs_oh_tally(&h[BRW_R_RPC_HIST],
+				 atomic_read(&osd->od_r_in_flight));
+		lprocfs_oh_tally_log2(&h[BRW_R_PAGES], npages);
+		lprocfs_oh_tally(&h[BRW_R_DISCONT_PAGES], discont_pages);
+
+	} else {
+		atomic_inc(&osd->od_w_in_flight);
+		lprocfs_oh_tally(&h[BRW_W_RPC_HIST],
+				 atomic_read(&osd->od_w_in_flight));
+		lprocfs_oh_tally_log2(&h[BRW_W_PAGES], npages);
+		lprocfs_oh_tally(&h[BRW_W_DISCONT_PAGES], discont_pages);
+
+	}
+}
+
+static void record_end_io(struct osd_device *osd, int rw,
+			  unsigned long elapsed, int disksize)
+{
+	struct obd_histogram *h = osd->od_brw_stats.hist;
+
+	if (rw == READ) {
+		atomic_dec(&osd->od_r_in_flight);
+		if (disksize > 0)
+			lprocfs_oh_tally_log2(&h[BRW_R_DISK_IOSIZE], disksize);
+		if (elapsed)
+			lprocfs_oh_tally_log2(&h[BRW_R_IO_TIME], elapsed);
+
+	} else {
+		atomic_dec(&osd->od_w_in_flight);
+		if (disksize > 0)
+			lprocfs_oh_tally_log2(&h[BRW_W_DISK_IOSIZE], disksize);
+		if (elapsed)
+			lprocfs_oh_tally_log2(&h[BRW_W_IO_TIME], elapsed);
+	}
+}
+
 static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
 			struct lu_buf *buf, loff_t *pos,
 			struct lustre_capa *capa)
@@ -77,9 +121,12 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
 	uint64_t	   old_size;
 	int		   size = buf->lb_len;
 	int		   rc;
+	unsigned long	   start;
 
 	LASSERT(dt_object_exists(dt));
 	LASSERT(obj->oo_db);
+
+	start = cfs_time_current();
 
 	read_lock(&obj->oo_attr_lock);
 	old_size = obj->oo_attr.la_size;
@@ -92,16 +139,15 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
 			size = old_size - *pos;
 	}
 
+	record_start_io(osd, READ, (size >> PAGE_CACHE_SHIFT), 0);
+
 	rc = -dmu_read(osd->od_os, obj->oo_db->db_object, *pos, size,
 			buf->lb_buf, DMU_READ_PREFETCH);
+
+	record_end_io(osd, READ, cfs_time_current() - start, size);
 	if (rc == 0) {
 		rc = size;
 		*pos += size;
-
-		/* XXX: workaround for bug in HEAD: fsfilt_ldiskfs_read() returns
-		 * requested number of bytes, not actually read ones */
-		if (S_ISLNK(obj->oo_dt.do_lu.lo_header->loh_attr))
-			rc = buf->lb_len;
 	}
 	return rc;
 }
@@ -162,6 +208,7 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 	struct osd_thandle *oh;
 	uint64_t            offset = *pos;
 	int                 rc;
+
 	ENTRY;
 
 	LASSERT(dt_object_exists(dt));
@@ -169,6 +216,8 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(th != NULL);
 	oh = container_of0(th, struct osd_thandle, ot_super);
+
+	record_start_io(osd, WRITE, (buf->lb_len >> PAGE_CACHE_SHIFT), 0);
 
 	dmu_write(osd->od_os, obj->oo_db->db_object, offset,
 		(uint64_t)buf->lb_len, buf->lb_buf, oh->ot_tx);
@@ -191,6 +240,8 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 	rc = buf->lb_len;
 
 out:
+	record_end_io(osd, WRITE, 0, buf->lb_len);
+
 	RETURN(rc);
 }
 
@@ -540,6 +591,8 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	int		    i, rc, flags = 0;
 	bool		    ignore_quota = false, synced = false;
 	long long	    space = 0;
+	struct page	   *last_page = NULL;
+	unsigned long	    discont_pages = 0;
 	ENTRY;
 
 	LASSERT(dt_object_exists(dt));
@@ -551,6 +604,9 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	oh = container_of0(th, struct osd_thandle, ot_super);
 
 	for (i = 0; i < npages; i++) {
+		if (last_page && lnb[i].lnb_page->index != (last_page->index + 1))
+			++discont_pages;
+		last_page = lnb[i].lnb_page;
 		if (lnb[i].lnb_rc)
 			/* ENOSPC, network RPC error, etc.
 			 * We don't want to book space for pages which will be
@@ -611,6 +667,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	CDEBUG(D_QUOTA, "writting %d pages, reserving "LPD64"K of quota "
 	       "space\n", npages, space);
 
+	record_start_io(osd, WRITE, npages, discont_pages);
 retry:
 	/* acquire quota space if needed */
 	rc = osd_declare_quota(env, osd, obj->oo_attr.la_uid,
@@ -645,6 +702,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 	struct osd_thandle *oh;
 	uint64_t            new_size = 0;
 	int                 i, rc = 0;
+	unsigned long	   iosize = 0;
 	ENTRY;
 
 	LASSERT(dt_object_exists(dt));
@@ -689,6 +747,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 
 		if (new_size < lnb[i].lnb_file_offset + lnb[i].lnb_len)
 			new_size = lnb[i].lnb_file_offset + lnb[i].lnb_len;
+		iosize += lnb[i].lnb_len;
 	}
 
 	if (unlikely(new_size == 0)) {
@@ -696,6 +755,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 		th->th_local = 1;
 		/* it is important to return 0 even when all lnb_rc == -ENOSPC
 		 * since ofd_commitrw_write() retries several times on ENOSPC */
+		record_end_io(osd, WRITE, 0, 0);
 		RETURN(0);
 	}
 
@@ -712,6 +772,8 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 		write_unlock(&obj->oo_attr_lock);
 	}
 
+	record_end_io(osd, WRITE, 0, iosize);
+
 	RETURN(rc);
 }
 
@@ -719,12 +781,19 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 			struct niobuf_local *lnb, int npages)
 {
 	struct osd_object *obj  = osd_dt_obj(dt);
+	struct osd_device  *osd = osd_obj2dev(obj);
 	struct lu_buf      buf;
 	loff_t             offset;
 	int                i;
+	unsigned long	   start;
+	unsigned long	   size = 0;
 
 	LASSERT(dt_object_exists(dt));
 	LASSERT(obj->oo_db);
+
+	start = cfs_time_current();
+
+	record_start_io(osd, READ, npages, 0);
 
 	for (i = 0; i < npages; i++) {
 		buf.lb_buf = kmap(lnb[i].lnb_page);
@@ -737,6 +806,8 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 		lnb[i].lnb_rc = osd_read(env, dt, &buf, &offset, NULL);
 		kunmap(lnb[i].lnb_page);
 
+		size += lnb[i].lnb_rc;
+
 		if (lnb[i].lnb_rc < buf.lb_len) {
 			/* all subsequent rc should be 0 */
 			while (++i < npages)
@@ -744,6 +815,8 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 			break;
 		}
 	}
+
+	record_end_io(osd, READ, cfs_time_current() - start, size);
 
 	return 0;
 }
