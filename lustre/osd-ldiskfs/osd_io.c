@@ -435,54 +435,32 @@ static struct page *osd_get_page(struct dt_object *dt, loff_t offset, int rw)
  * journal_start
  * i_mutex
  * page lock
-
- * osd write path
-    * lock page(s)
-    * journal_start
-    * truncate_sem
-
+ *
+ * osd write path:
+ *  - lock page(s)
+ *  - journal_start
+ *  - truncate_sem
+ *
  * ext4 vmtruncate:
-    * lock pages, unlock
-    * journal_start
-    * lock partial page
-    * i_data_sem
+ *  - lock pages, unlock
+ *  - journal_start
+ *  - lock partial page
+ *  - i_data_sem
+ *
+ */
 
-*/
-static int osd_bufs_get(const struct lu_env *env, struct dt_object *d,
-			loff_t pos, ssize_t len, struct niobuf_local *lnb,
-			int rw, struct lustre_capa *capa)
-{
-        struct osd_object   *obj    = osd_dt_obj(d);
-        int npages, i, rc = 0;
-
-        LASSERT(obj->oo_inode);
-
-        osd_map_remote_to_local(pos, len, &npages, lnb);
-
-        for (i = 0; i < npages; i++, lnb++) {
-		lnb->lnb_page = osd_get_page(d, lnb->lnb_file_offset, rw);
-		if (lnb->lnb_page == NULL)
-			GOTO(cleanup, rc = -ENOMEM);
-
-		/* DLM locking protects us from write and truncate competing
-		 * for same region, but truncate can leave dirty page in the
-		 * cache. it's possible the writeout on a such a page is in
-		 * progress when we access it. it's also possible that during
-		 * this writeout we put new (partial) data, but then won't
-		 * be able to proceed in filter_commitrw_write(). thus let's
-		 * just wait for writeout completion, should be rare enough.
-		 * -bzzz */
-		wait_on_page_writeback(lnb->lnb_page);
-		BUG_ON(PageWriteback(lnb->lnb_page));
-
-                lu_object_get(&d->do_lu);
-        }
-        rc = i;
-
-cleanup:
-        RETURN(rc);
-}
-
+/**
+ * Unlock and release pages loaded by osd_bufs_get()
+ *
+ * Unlock \a npages pages from \a lnb and drop the refcount on them.
+ *
+ * \param env		thread execution environment
+ * \param dt		dt object undergoing IO (OSD object + methods)
+ * \param lnb		array of pages undergoing IO
+ * \param npages	number of pages in \a lnb
+ *
+ * \retval 0		always
+ */
 static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 			struct niobuf_local *lnb, int npages)
 {
@@ -499,6 +477,60 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 	}
 
 	RETURN(0);
+}
+
+/**
+ * Load and lock pages undergoing IO
+ *
+ * Pages as described in the \a lnb array are fetched (from disk or cache)
+ * and locked for IO by the caller.
+ *
+ * DLM locking protects us from write and truncate competing for same region,
+ * but partial-page truncate can leave dirty pages in the cache for ldiskfs.
+ * It's possible the writeout on a such a page is in progress when we access
+ * it. It's also possible that during this writeout we put new (partial) data
+ * into the page, but won't be able to proceed in filter_commitrw_write().
+ * Therefore, just wait for writeout completion as it should be rare enough.
+ *
+ * \param env		thread execution environment
+ * \param dt		dt object undergoing IO (OSD object + methods)
+ * \param pos		byte offset of IO start
+ * \param len		number of bytes of IO
+ * \param lnb		array of extents undergoing IO
+ * \param rw		read or write operation?
+ * \param capa		capabilities
+ *
+ * \retval pages	(zero or more) loaded successfully
+ * \retval -ENOMEM	on memory/page allocation error
+ */
+static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
+			loff_t pos, ssize_t len, struct niobuf_local *lnb,
+			int rw, struct lustre_capa *capa)
+{
+	struct osd_object   *obj    = osd_dt_obj(dt);
+	int npages, i, rc = 0;
+
+	LASSERT(obj->oo_inode);
+
+	osd_map_remote_to_local(pos, len, &npages, lnb);
+
+	for (i = 0; i < npages; i++, lnb++) {
+		lnb->lnb_page = osd_get_page(dt, lnb->lnb_file_offset, rw);
+		if (lnb->lnb_page == NULL)
+			GOTO(cleanup, rc = -ENOMEM);
+
+		wait_on_page_writeback(lnb->lnb_page);
+		BUG_ON(PageWriteback(lnb->lnb_page));
+
+		lu_object_get(&dt->do_lu);
+	}
+
+	RETURN(i);
+
+cleanup:
+	if (i > 0)
+		osd_bufs_put(env, dt, lnb - i, i);
+	return rc;
 }
 
 #ifndef HAVE_LDISKFS_MAP_BLOCKS
