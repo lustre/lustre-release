@@ -254,78 +254,6 @@ static void vvp_object_size_unlock(struct cl_object *obj)
 
 /*****************************************************************************
  *
- * Page operations.
- *
- */
-
-int ccc_fail(const struct lu_env *env, const struct cl_page_slice *slice)
-{
-        /*
-         * Cached read?
-         */
-        LBUG();
-        return 0;
-}
-
-void ccc_transient_page_verify(const struct cl_page *page)
-{
-}
-
-int ccc_transient_page_own(const struct lu_env *env,
-                                   const struct cl_page_slice *slice,
-                                   struct cl_io *unused,
-                                   int nonblock)
-{
-        ccc_transient_page_verify(slice->cpl_page);
-        return 0;
-}
-
-void ccc_transient_page_assume(const struct lu_env *env,
-                                      const struct cl_page_slice *slice,
-                                      struct cl_io *unused)
-{
-        ccc_transient_page_verify(slice->cpl_page);
-}
-
-void ccc_transient_page_unassume(const struct lu_env *env,
-                                        const struct cl_page_slice *slice,
-                                        struct cl_io *unused)
-{
-        ccc_transient_page_verify(slice->cpl_page);
-}
-
-void ccc_transient_page_disown(const struct lu_env *env,
-                                      const struct cl_page_slice *slice,
-                                      struct cl_io *unused)
-{
-        ccc_transient_page_verify(slice->cpl_page);
-}
-
-void ccc_transient_page_discard(const struct lu_env *env,
-                                       const struct cl_page_slice *slice,
-                                       struct cl_io *unused)
-{
-        struct cl_page *page = slice->cpl_page;
-
-        ccc_transient_page_verify(slice->cpl_page);
-
-        /*
-         * For transient pages, remove it from the radix tree.
-         */
-        cl_page_delete(env, page);
-}
-
-int ccc_transient_page_prep(const struct lu_env *env,
-                                   const struct cl_page_slice *slice,
-                                   struct cl_io *unused)
-{
-        ENTRY;
-        /* transient page should always be sent. */
-        RETURN(0);
-}
-
-/*****************************************************************************
- *
  * Lock operations.
  *
  */
@@ -717,22 +645,6 @@ struct ccc_io *cl2ccc_io(const struct lu_env *env,
 struct ccc_req *cl2ccc_req(const struct cl_req_slice *slice)
 {
         return container_of0(slice, struct ccc_req, crq_cl);
-}
-
-struct page *cl2vm_page(const struct cl_page_slice *slice)
-{
-        return cl2ccc_page(slice)->cpg_page;
-}
-
-/**
- * Returns a pointer to cl_page associated with \a vmpage, without acquiring
- * additional reference to the resulting page. This is an unsafe version of
- * cl_vmpage_page() that can only be used under vmpage lock.
- */
-struct cl_page *ccc_vmpage_page_transient(struct page *vmpage)
-{
-        KLASSERT(PageLocked(vmpage));
-        return (struct cl_page *)vmpage->private;
 }
 
 /**

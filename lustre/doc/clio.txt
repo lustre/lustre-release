@@ -375,7 +375,7 @@ VVP implements VM entry points: ll_{write,invalidate,release}page().
 For file objects, VVP slice (vvp_object) contains a pointer to an
 inode.
 
-For pages, the VVP slice (ccc_page) contains a pointer to the VM page
+For pages, the VVP slice (vvp_page) contains a pointer to the VM page
 (cfs_page_t), a `defer up to date' flag to track read-ahead hits (similar to
 the pre-CLIO client), and fields necessary for synchronous transfer (see
 below).  VVP is responsible for implementation of the interaction between
@@ -592,7 +592,7 @@ cl_page:
            cl_object_header<------------cl_page<-----------------+
                    |          ->cp_obj     |                     |
                    V                       V                     |
-    inode<----vvp_object<---------------ccc_page---->cfs_page_t  |
+    inode<----vvp_object<---------------vvp_page---->cfs_page_t  |
                    |        ->cpl_obj      |                     |
                    V                       V                     | ->cp_child
               lov_object<---------------lov_page                 |
