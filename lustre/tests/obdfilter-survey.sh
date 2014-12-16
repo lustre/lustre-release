@@ -164,7 +164,7 @@ test_1b () {
 run_test 1b "Object Storage Targets survey, async journal"
 
 test_1c () {
-	nobjlo=1 nobjhi=1 thrlo=128 thrhi=128 rszlo=1024 rszhi=1024 size=8192\
+	nobjlo=1 nobjhi=1 thrlo=32 thrhi=32 rszlo=1024 rszhi=1024 size=8192\
 	obdflter_survey_run disk
 }
 run_test 1c "Object Storage Targets survey, big batch"
