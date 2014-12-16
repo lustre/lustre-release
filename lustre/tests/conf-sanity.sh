@@ -5250,17 +5250,17 @@ test_84() {
 	local time_min=$(recovery_time_min)
 	local recovery_duration
 	local completed_clients
+	local wrap_up=5
 
-	echo "start mds service on `facet_active_host $facet`"
+	echo "start mds service on $(facet_active_host $facet)"
 	start $facet ${dev} $MDS_MOUNT_OPTS \
-		"-o recovery_time_hard=$time_min,recovery_time_soft=$time_min"\
-		$@ || return 94
+	    "-o recovery_time_hard=$time_min,recovery_time_soft=$time_min" $@ ||
+		error "start MDS failed"
 
 	start_ost
 	start_ost2
 
-	echo "recovery_time_hard $time_min, recovery_time_soft $time_min, \
-		timeout $TIMEOUT"
+	echo "recovery_time=$time_min, timeout=$TIMEOUT, wrap_up=$wrap_up"
 
 	mount_client $MOUNT1 || error "mount failed"
 	mount_client $MOUNT2 || error "mount failed"
@@ -5271,26 +5271,25 @@ test_84() {
 	# We need to catch the end of recovery window to extend it.
 	# Skip 5 requests and add delay to request handling.
 	#define OBD_FAIL_TGT_REPLAY_DELAY  0x709 | FAIL_SKIP
-	do_facet $SINGLEMDS "lctl set_param fail_loc=0x20000709"
-	do_facet $SINGLEMDS "lctl set_param fail_val=5"
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x20000709 fail_val=5"
 
 	facet_failover $SINGLEMDS || error "failover: $?"
 	client_up
 
 	echo "recovery status"
-	do_facet $SINGLEMDS "$LCTL get_param -n \
-				mdt.$FSNAME-MDT0000.recovery_status"
+	do_facet $SINGLEMDS \
+		"$LCTL get_param -n mdt.$FSNAME-MDT0000.recovery_status"
 
-	recovery_duration=$(do_facet $SINGLEMDS "$LCTL get_param -n \
-				mdt.$FSNAME-MDT0000.recovery_status" | \
-				grep recovery_duration |awk '{print $2}')
-	(($recovery_duration>$time_min)) && \
-		error "recovery_duration > recovery_time_hard"
-	completed_clients=$(do_facet $SINGLEMDS "$LCTL get_param -n \
-				mdt.$FSNAME-MDT0000.recovery_status" | \
-				grep completed_clients |awk '{print $2}')
-	[ "$completed_clients" = "1/2" ] || \
-		error "completed_clients != 1/2: "$completed_clients
+	recovery_duration=$(do_facet $SINGLEMDS \
+		"$LCTL get_param -n mdt.$FSNAME-MDT0000.recovery_status" |
+		awk '/recovery_duration/ { print $2 }')
+	(( $recovery_duration > $time_min + $wrap_up )) &&
+		error "recovery_duration > recovery_time_hard + wrap up"
+	completed_clients=$(do_facet $SINGLEMDS \
+		"$LCTL get_param -n mdt.$FSNAME-MDT0000.recovery_status" |
+		awk '/completed_clients/ { print $2 }')
+	[ "$completed_clients" = "1/2" ] ||
+		error "completed_clients != 1/2: $completed_clients"
 
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
 	umount_client $MOUNT1
