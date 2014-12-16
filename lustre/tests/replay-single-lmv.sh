@@ -94,22 +94,22 @@ test_2a() {
 run_test 2a "unlink cross-node file (fail mds with name)"
 
 test_3a() {
-    replay_barrier mds2
-    mkdir $DIR/dir3a1
-    $LCTL mark "FAILOVER mds2"
-    fail mds2
-    stat $DIR
-    $CHECKSTAT -t dir $DIR/dir3a1 || return 1
+	replay_barrier mds2
+	mkdir $DIR/dir3a1
+	$LCTL mark "$HOSTNAME FAILOVER mds2"
+	fail mds2
+	stat $DIR
+	$CHECKSTAT -t dir $DIR/dir3a1 || return 1
 }
 run_test 3a "mkdir cross-node dir (fail mds with inode)"
 
 test_3b() {
-    replay_barrier mds1
-    mkdir $DIR/dir3b1
-    $LCTL mark "FAILOVER mds1"
-    fail mds1
-    stat $DIR
-    $CHECKSTAT -t dir $DIR/dir3b1 || return 1
+	replay_barrier mds1
+	mkdir $DIR/dir3b1
+	$LCTL mark "$HOSTNAME FAILOVER mds1"
+	fail mds1
+	stat $DIR
+	$CHECKSTAT -t dir $DIR/dir3b1 || return 1
 }
 run_test 3b "mkdir cross-node dir (fail mds with inode)"
 

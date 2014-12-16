@@ -873,7 +873,7 @@ test_40(){
 	lctl get_param mdc.*.connect_flags | grep -q layout_lock &&
 		skip "layout_lock needs MDS connection for IO" && return 0
 
-	$LCTL mark multiop $MOUNT/$tfile OS_c
+	$LCTL mark "$HOSTNAME multiop $MOUNT/$tfile OS_c"
 	multiop $MOUNT/$tfile OS_c  &
 	PID=$!
 	writeme -s $MOUNT/${tfile}-2 &

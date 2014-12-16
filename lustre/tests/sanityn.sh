@@ -1219,7 +1219,7 @@ test_36() { #bug 16417
 	sync; sleep 5; sync # wait for delete thread
 
 	while [ $i -le 10 ]; do
-		lctl mark "start test"
+		lctl mark "$HOSTNAME start test loop $i"
 		local before=$(lfs_df $MOUNT1 | awk '/^filesystem/{ print $4; exit }')
 		dd if=/dev/zero of=$DIR1/$tdir/$tfile bs=1M count=$SIZE ||
 			error "dd $DIR1/$tdir/$tfile ${SIZE}MB failed"

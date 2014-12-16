@@ -308,7 +308,7 @@ run_test 11 "wake up a thread waiting for completion after eviction (b=2460)"
 
 #b=2494
 test_12(){
-	$LCTL mark $MULTIOP $DIR/$tfile OS_c
+	$LCTL mark "$HOSTNAME: $MULTIOP $DIR/$tfile OS_c"
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x115"
 	clear_failloc $SINGLEMDS $((TIMEOUT * 2)) &
 	multiop_bg_pause $DIR/$tfile OS_c ||

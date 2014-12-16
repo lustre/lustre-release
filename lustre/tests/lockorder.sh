@@ -56,7 +56,7 @@ mv $MAXDIR $LOCKDIR
 mv $MINFILE $LOCKFILE
 rm -rf $DIR/d$$
 
-$LCTL mark "start dir: $LOCKDIR=$MAXRES file: $LOCKFILE=$MINRES"
+$LCTL mark "$HOSTNAME: start dir: $LOCKDIR=$MAXRES file: $LOCKFILE=$MINRES"
 # link will lock $LOCKFILE and $DIR as it creates ${LOCKFILE}{0,1,...}
 $CREATEMANY -l$LOCKFILE $LOCKFILE -$COUNT &
 CR_PID=$!
