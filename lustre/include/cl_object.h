@@ -1310,7 +1310,7 @@ struct cl_lock {
 /**
  * Per-layer part of cl_lock
  *
- * \see ccc_lock, lov_lock, lovsub_lock, osc_lock
+ * \see vvp_lock, lov_lock, lovsub_lock, osc_lock
  */
 struct cl_lock_slice {
         struct cl_lock                  *cls_lock;
@@ -1336,7 +1336,7 @@ struct cl_lock_operations {
 	 *		@anchor for resources
 	 * \retval -ve	failure
 	 *
-	 * \see ccc_lock_enqueue(), lov_lock_enqueue(), lovsub_lock_enqueue(),
+	 * \see vvp_lock_enqueue(), lov_lock_enqueue(), lovsub_lock_enqueue(),
 	 * \see osc_lock_enqueue()
 	 */
 	int  (*clo_enqueue)(const struct lu_env *env,
@@ -1349,12 +1349,12 @@ struct cl_lock_operations {
 	void (*clo_cancel)(const struct lu_env *env,
 			   const struct cl_lock_slice *slice);
 	/** @} */
-        /**
-         * Destructor. Frees resources and the slice.
-         *
-         * \see ccc_lock_fini(), lov_lock_fini(), lovsub_lock_fini(),
-         * \see osc_lock_fini()
-         */
+	/**
+	 * Destructor. Frees resources and the slice.
+	 *
+	 * \see vvp_lock_fini(), lov_lock_fini(), lovsub_lock_fini(),
+	 * \see osc_lock_fini()
+	 */
         void (*clo_fini)(const struct lu_env *env, struct cl_lock_slice *slice);
         /**
          * Optional debugging helper. Prints given lock slice.

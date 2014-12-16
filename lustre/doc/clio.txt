@@ -739,7 +739,7 @@ sub-locks, protecting cached pages of sub-objects:
         cl_object_header<------------cl_lock
                 |          ->cld_obj    |
                 V                       V
-           vvp_object<---------------ccc_lock
+           vvp_object<---------------vvp_lock
                 |          ->cls_obj    |
                 V                       V
            lov_object<---------------lov_lock
