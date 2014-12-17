@@ -89,7 +89,7 @@ int __osd_xattr_load(struct osd_device *osd, uint64_t dnode, nvlist_t **sa)
 		goto out_sa;
 	}
 
-	buf = sa_spill_alloc(KM_SLEEP);
+	buf = osd_zio_buf_alloc(size);
 	if (buf == NULL) {
 		rc = -ENOMEM;
 		goto out_sa;
@@ -97,7 +97,7 @@ int __osd_xattr_load(struct osd_device *osd, uint64_t dnode, nvlist_t **sa)
 	rc = -sa_lookup(sa_hdl, SA_ZPL_DXATTR(osd), buf, size);
 	if (rc == 0)
 		rc = -nvlist_unpack(buf, size, sa, KM_SLEEP);
-	sa_spill_free(buf);
+	osd_zio_buf_free(buf, size);
 out_sa:
 	sa_handle_destroy(sa_hdl);
 
@@ -375,7 +375,7 @@ __osd_sa_xattr_update(const struct lu_env *env, struct osd_object *obj,
 	if (rc)
 		return rc;
 
-	dxattr = sa_spill_alloc(KM_SLEEP);
+	dxattr = osd_zio_buf_alloc(sa_size);
 	if (dxattr == NULL)
 		RETURN(-ENOMEM);
 
@@ -386,7 +386,7 @@ __osd_sa_xattr_update(const struct lu_env *env, struct osd_object *obj,
 
 	rc = osd_object_sa_update(obj, SA_ZPL_DXATTR(osd), dxattr, sa_size, oh);
 out_free:
-	sa_spill_free(dxattr);
+	osd_zio_buf_free(dxattr, sa_size);
 	RETURN(rc);
 }
 

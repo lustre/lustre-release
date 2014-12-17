@@ -401,6 +401,19 @@ your distribution.
 			AC_DEFINE(HAVE_DSL_SYNC_TASK_DO_NOWAIT, 1,
 				[Have dsl_sync_task_do_nowait in ZFS])
 		])
+		LB_CHECK_COMPILE([if zfs defines sa_spill_alloc],
+		sa_spill_alloc, [
+			#include <sys/kmem.h>
+			#include <sys/sa.h>
+		],[
+			void *ptr;
+
+			ptr = sa_spill_alloc(KM_SLEEP);
+			sa_spill_free(ptr);
+		],[
+			AC_DEFINE(HAVE_SA_SPILL_ALLOC, 1,
+				[Have sa_spill_alloc in ZFS])
+		])
 	])
 
 	AM_CONDITIONAL(ZFS_ENABLED, [test "x$enable_zfs" = xyes])

@@ -555,4 +555,21 @@ static inline void dsl_pool_config_exit(dsl_pool_t *dp, char *name)
 
 #endif
 
+#ifdef HAVE_SA_SPILL_ALLOC
+static inline void *
+osd_zio_buf_alloc(size_t size)
+{
+	return sa_spill_alloc(KM_SLEEP);
+}
+
+static inline void
+osd_zio_buf_free(void *buf, size_t size)
+{
+	sa_spill_free(buf);
+}
+#else
+#define	osd_zio_buf_alloc(size)		zio_buf_alloc(size)
+#define	osd_zio_buf_free(buf, size)	zio_buf_free(buf, size)
+#endif
+
 #endif /* _OSD_INTERNAL_H */
