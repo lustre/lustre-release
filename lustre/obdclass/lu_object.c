@@ -1721,15 +1721,20 @@ void lu_context_exit(struct lu_context *ctx)
         ctx->lc_state = LCS_LEFT;
         if (ctx->lc_tags & LCT_HAS_EXIT && ctx->lc_value != NULL) {
                 for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
-                        if (ctx->lc_value[i] != NULL) {
-                                struct lu_context_key *key;
+			/* could race with key quiescency */
+			if (ctx->lc_tags & LCT_REMEMBER)
+				spin_lock(&lu_keys_guard);
+			if (ctx->lc_value[i] != NULL) {
+				struct lu_context_key *key;
 
-                                key = lu_keys[i];
-                                LASSERT(key != NULL);
-                                if (key->lct_exit != NULL)
-                                        key->lct_exit(ctx,
-                                                      key, ctx->lc_value[i]);
-                        }
+				key = lu_keys[i];
+				LASSERT(key != NULL);
+				if (key->lct_exit != NULL)
+					key->lct_exit(ctx,
+						      key, ctx->lc_value[i]);
+			}
+			if (ctx->lc_tags & LCT_REMEMBER)
+				spin_unlock(&lu_keys_guard);
                 }
         }
 }
