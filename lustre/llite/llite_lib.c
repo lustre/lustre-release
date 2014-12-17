@@ -692,7 +692,8 @@ int ll_set_default_mdsize(struct ll_sb_info *sbi, int lmmsize)
 {
 	int rc;
 
-	if (lmmsize < sizeof(struct lov_mds_md) || lmmsize > PAGE_CACHE_SIZE)
+	if (lmmsize < sizeof(struct lov_mds_md) ||
+	    lmmsize > OBD_MAX_DEFAULT_EA_SIZE)
 		return -EINVAL;
 
 	rc = obd_set_info_async(NULL, sbi->ll_md_exp,

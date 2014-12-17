@@ -2037,6 +2037,35 @@ test_27D() {
 }
 run_test 27D "validate llapi_layout API"
 
+# Verify that default_easize is increased from its initial value after
+# accessing a widely striped file.
+test_27E() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+
+	# 72 bytes is the minimum space required to store striping
+	# information for a file striped across one OST:
+	# (sizeof(struct lov_user_md_v3) +
+	#  sizeof(struct lov_user_ost_data_v1))
+	local min_easize=72
+	$LCTL set_param -n llite.*.default_easize $min_easize ||
+		error "lctl set_param failed"
+	local easize=$($LCTL get_param -n llite.*.default_easize)
+
+	[ $easize -eq $min_easize ] ||
+		error "failed to set default_easize"
+
+	$LFS setstripe -c $OSTCOUNT $DIR/$tfile ||
+		error "setstripe failed"
+	cat $DIR/$tfile
+	rm $DIR/$tfile
+
+	easize=$($LCTL get_param -n llite.*.default_easize)
+
+	[ $easize -gt $min_easize ] ||
+		error "default_easize not updated"
+}
+run_test 27E "check that default extended attribute size properly increases"
+
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091
