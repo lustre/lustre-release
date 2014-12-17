@@ -783,7 +783,18 @@ static int ll_max_easize_seq_show(struct seq_file *m, void *v)
 }
 LPROC_SEQ_FOPS_RO(ll_max_easize);
 
-static int ll_defult_easize_seq_show(struct seq_file *m, void *v)
+/**
+ * Get default_easize.
+ *
+ * \see client_obd::cl_default_mds_easize
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] v		unused for single entry
+ *
+ * \retval 0		on success
+ * \retval negative	negated errno on failure
+ */
+static int ll_default_easize_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block *sb = m->private;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
@@ -796,7 +807,47 @@ static int ll_defult_easize_seq_show(struct seq_file *m, void *v)
 
 	return seq_printf(m, "%u\n", ealen);
 }
-LPROC_SEQ_FOPS_RO(ll_defult_easize);
+
+/**
+ * Set default_easize.
+ *
+ * Range checking on the passed value is handled by
+ * ll_set_default_mdsize().
+ *
+ * \see client_obd::cl_default_mds_easize
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string passed from user space
+ * \param[in] count	\a buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval positive	\a count on success
+ * \retval negative	negated errno on failure
+ */
+static ssize_t ll_default_easize_seq_write(struct file *file,
+					   const char __user *buffer,
+					   size_t count, loff_t *unused)
+{
+	struct seq_file		*seq = file->private_data;
+	struct super_block	*sb = (struct super_block *)seq->private;
+	struct ll_sb_info	*sbi = ll_s2sbi(sb);
+	int			 val;
+	int			 rc;
+
+	if (count == 0)
+		return 0;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc < 0)
+		return rc;
+
+	rc = ll_set_default_mdsize(sbi, val);
+	if (rc)
+		return rc;
+
+	return count;
+}
+LPROC_SEQ_FOPS(ll_default_easize);
 
 static int ll_max_cookiesize_seq_show(struct seq_file *m, void *v)
 {
@@ -813,7 +864,7 @@ static int ll_max_cookiesize_seq_show(struct seq_file *m, void *v)
 }
 LPROC_SEQ_FOPS_RO(ll_max_cookiesize);
 
-static int ll_defult_cookiesize_seq_show(struct seq_file *m, void *v)
+static int ll_default_cookiesize_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block *sb = m->private;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
@@ -826,7 +877,7 @@ static int ll_defult_cookiesize_seq_show(struct seq_file *m, void *v)
 
 	return seq_printf(m, "%u\n", cookielen);
 }
-LPROC_SEQ_FOPS_RO(ll_defult_cookiesize);
+LPROC_SEQ_FOPS_RO(ll_default_cookiesize);
 
 static int ll_sbi_flags_seq_show(struct seq_file *m, void *v)
 {
@@ -977,7 +1028,7 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	{ .name	=	"blocksize",
 	  .fops	=	&ll_blksize_fops			},
 	{ .name	=	"kbytestotal",
-	  .fops =	&ll_kbytestotal_fops			},
+	  .fops	=	&ll_kbytestotal_fops			},
 	{ .name	=	"kbytesfree",
 	  .fops	=	&ll_kbytesfree_fops			},
 	{ .name	=	"kbytesavail",
@@ -1013,17 +1064,17 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	{ .name	=	"statahead_stats",
 	  .fops	=	&ll_statahead_stats_fops		},
 	{ .name	=	"lazystatfs",
-	  .fops =	&ll_lazystatfs_fops			},
+	  .fops	=	&ll_lazystatfs_fops			},
 	{ .name	=	"max_easize",
-	  .fops =	&ll_max_easize_fops			},
+	  .fops	=	&ll_max_easize_fops			},
 	{ .name	=	"default_easize",
-	  .fops =	&ll_defult_easize_fops			},
+	  .fops	=	&ll_default_easize_fops			},
 	{ .name	=	"max_cookiesize",
-	  .fops =	&ll_max_cookiesize_fops			},
+	  .fops	=	&ll_max_cookiesize_fops			},
 	{ .name	=	"default_cookiesize",
-	  .fops =	&ll_defult_cookiesize_fops		},
+	  .fops	=	&ll_default_cookiesize_fops		},
 	{ .name	=	"sbi_flags",
-	  .fops =	&ll_sbi_flags_fops			},
+	  .fops	=	&ll_sbi_flags_fops			},
 	{ .name	=	"xattr_cache",
 	  .fops	=	&ll_xattr_cache_fops			},
 	{ .name	=	"unstable_stats",

@@ -2745,6 +2745,22 @@ static int lmv_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         RETURN(rc);
 }
 
+/**
+ * Get by key a value associated with a LMV device.
+ *
+ * Dispatch request to lower-layer devices as needed.
+ *
+ * \param[in] env		execution environment for this thread
+ * \param[in] exp		export for the LMV device
+ * \param[in] keylen		length of key identifier
+ * \param[in] key		identifier of key to get value for
+ * \param[in] vallen		size of \a val
+ * \param[out] val		pointer to storage location for value
+ * \param[in] lsm		optional striping metadata of object
+ *
+ * \retval 0		on success
+ * \retval negative	negated errno on failure
+ */
 static int lmv_get_info(const struct lu_env *env, struct obd_export *exp,
                         __u32 keylen, void *key, __u32 *vallen, void *val,
                         struct lov_stripe_md *lsm)
@@ -2810,26 +2826,43 @@ static int lmv_get_info(const struct lu_env *env, struct obd_export *exp,
         RETURN(-EINVAL);
 }
 
+/**
+ * Asynchronously set by key a value associated with a LMV device.
+ *
+ * Dispatch request to lower-layer devices as needed.
+ *
+ * \param[in] env	execution environment for this thread
+ * \param[in] exp	export for the LMV device
+ * \param[in] keylen	length of key identifier
+ * \param[in] key	identifier of key to store value for
+ * \param[in] vallen	size of value to store
+ * \param[in] val	pointer to data to be stored
+ * \param[in] set	optional list of related ptlrpc requests
+ *
+ * \retval 0		on success
+ * \retval negative	negated errno on failure
+ */
 int lmv_set_info_async(const struct lu_env *env, struct obd_export *exp,
-                       obd_count keylen, void *key, obd_count vallen,
-                       void *val, struct ptlrpc_request_set *set)
+		       obd_count keylen, void *key, obd_count vallen,
+		       void *val, struct ptlrpc_request_set *set)
 {
-	struct lmv_tgt_desc    *tgt = NULL;
-        struct obd_device      *obd;
-        struct lmv_obd         *lmv;
-        int rc = 0;
-        ENTRY;
+	struct lmv_tgt_desc	*tgt = NULL;
+	struct obd_device	*obd;
+	struct lmv_obd		*lmv;
+	int rc = 0;
+	ENTRY;
 
-        obd = class_exp2obd(exp);
-        if (obd == NULL) {
-                CDEBUG(D_IOCTL, "Invalid client cookie "LPX64"\n",
-                       exp->exp_handle.h_cookie);
-                RETURN(-EINVAL);
-        }
-        lmv = &obd->u.lmv;
+	obd = class_exp2obd(exp);
+	if (obd == NULL) {
+		CDEBUG(D_IOCTL, "Invalid client cookie "LPX64"\n",
+		       exp->exp_handle.h_cookie);
+		RETURN(-EINVAL);
+	}
+	lmv = &obd->u.lmv;
 
-        if (KEY_IS(KEY_READ_ONLY) || KEY_IS(KEY_FLUSH_CTX)) {
-                int i, err = 0;
+	if (KEY_IS(KEY_READ_ONLY) || KEY_IS(KEY_FLUSH_CTX) ||
+	    KEY_IS(KEY_DEFAULT_EASIZE)) {
+		int i, err = 0;
 
 		for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
 			tgt = lmv->tgts[i];
@@ -2837,16 +2870,16 @@ int lmv_set_info_async(const struct lu_env *env, struct obd_export *exp,
 			if (tgt == NULL || tgt->ltd_exp == NULL)
 				continue;
 
-                        err = obd_set_info_async(env, tgt->ltd_exp,
-                                                 keylen, key, vallen, val, set);
-                        if (err && rc == 0)
-                                rc = err;
-                }
+			err = obd_set_info_async(env, tgt->ltd_exp,
+						 keylen, key, vallen, val, set);
+			if (err && rc == 0)
+				rc = err;
+		}
 
-                RETURN(rc);
-        }
+		RETURN(rc);
+	}
 
-        RETURN(-EINVAL);
+	RETURN(-EINVAL);
 }
 
 static int lmv_pack_md_v1(const struct lmv_stripe_md *lsm,

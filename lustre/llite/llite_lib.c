@@ -653,6 +653,17 @@ int ll_get_max_mdsize(struct ll_sb_info *sbi, int *lmmsize)
 	RETURN(rc);
 }
 
+/**
+ * Get the value of the default_easize parameter.
+ *
+ * \see client_obd::cl_default_mds_easize
+ *
+ * \param[in] sbi	superblock info for this filesystem
+ * \param[out] lmmsize	pointer to storage location for value
+ *
+ * \retval 0		on success
+ * \retval negative	negated errno on failure
+ */
 int ll_get_default_mdsize(struct ll_sb_info *sbi, int *lmmsize)
 {
 	int size, rc;
@@ -662,6 +673,31 @@ int ll_get_default_mdsize(struct ll_sb_info *sbi, int *lmmsize)
 			 KEY_DEFAULT_EASIZE, &size, lmmsize, NULL);
 	if (rc)
 		CERROR("Get default mdsize error rc %d\n", rc);
+
+	RETURN(rc);
+}
+
+/**
+ * Set the default_easize parameter to the given value.
+ *
+ * \see client_obd::cl_default_mds_easize
+ *
+ * \param[in] sbi	superblock info for this filesystem
+ * \param[in] lmmsize	the size to set
+ *
+ * \retval 0		on success
+ * \retval negative	negated errno on failure
+ */
+int ll_set_default_mdsize(struct ll_sb_info *sbi, int lmmsize)
+{
+	int rc;
+
+	if (lmmsize < sizeof(struct lov_mds_md) || lmmsize > PAGE_CACHE_SIZE)
+		return -EINVAL;
+
+	rc = obd_set_info_async(NULL, sbi->ll_md_exp,
+				sizeof(KEY_DEFAULT_EASIZE), KEY_DEFAULT_EASIZE,
+				sizeof(int), &lmmsize, NULL);
 
 	RETURN(rc);
 }

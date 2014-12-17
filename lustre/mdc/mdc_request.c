@@ -2626,6 +2626,13 @@ static int mdc_set_info_async(const struct lu_env *env,
                 RETURN(rc);
         }
 
+	if (KEY_IS(KEY_DEFAULT_EASIZE)) {
+		__u32 *default_easize = val;
+
+		exp->exp_obd->u.cli.cl_default_mds_easize = *default_easize;
+		RETURN(0);
+	}
+
 	CERROR("Unknown key %s\n", (char *)key);
 	RETURN(-EINVAL);
 }
