@@ -264,6 +264,7 @@ int lustre_lnet_show_route(char *nw, char *gw, int hops, int prio, int detail,
 	struct cYAML *root = NULL, *route = NULL, *item = NULL;
 	struct cYAML *first_seq = NULL;
 	char err_str[LNET_MAX_STR_LEN];
+	bool exist = false;
 
 	snprintf(err_str, sizeof(err_str),
 		 "\"out of memory\"");
@@ -352,6 +353,7 @@ int lustre_lnet_show_route(char *nw, char *gw, int hops, int prio, int detail,
 
 		/* default rc to -1 incase we hit the goto */
 		rc = -1;
+		exist = true;
 
 		item = cYAML_create_seq_item(route);
 		if (item == NULL)
@@ -404,7 +406,7 @@ int lustre_lnet_show_route(char *nw, char *gw, int hops, int prio, int detail,
 
 	snprintf(err_str, sizeof(err_str), "\"success\"");
 out:
-	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
+	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR || !exist) {
 		cYAML_free_tree(root);
 	} else if (show_rc != NULL && *show_rc != NULL) {
 		struct cYAML *show_node;
@@ -560,6 +562,7 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 	char str_buf[str_buf_len];
 	char *pos;
 	char err_str[LNET_MAX_STR_LEN];
+	bool exist = false;
 
 	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
 
@@ -613,6 +616,7 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 
 		/* default rc to -1 in case we hit the goto */
 		rc = -1;
+		exist = true;
 
 		net_config = (struct lnet_ioctl_net_config *)data->cfg_bulk;
 
@@ -732,7 +736,7 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 
 	snprintf(err_str, sizeof(err_str), "\"success\"");
 out:
-	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
+	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR || !exist) {
 		cYAML_free_tree(root);
 	} else if (show_rc != NULL && *show_rc != NULL) {
 		struct cYAML *show_node;
@@ -841,6 +845,7 @@ int lustre_lnet_show_routing(int seq_no, struct cYAML **show_rc,
 	int i, j;
 	char err_str[LNET_MAX_STR_LEN];
 	char node_name[LNET_MAX_STR_LEN];
+	bool exist = false;
 
 	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
 
@@ -867,6 +872,8 @@ int lustre_lnet_show_routing(int seq_no, struct cYAML **show_rc,
 		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_BUF, data);
 		if (rc != 0)
 			break;
+
+		exist = true;
 
 		pool_cfg = (struct lnet_ioctl_pool_cfg *)data->cfg_bulk;
 
@@ -934,7 +941,7 @@ int lustre_lnet_show_routing(int seq_no, struct cYAML **show_rc,
 
 out:
 	free(buf);
-	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
+	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR || !exist) {
 		cYAML_free_tree(root);
 	} else if (show_rc != NULL && *show_rc != NULL) {
 		struct cYAML *show_node;
@@ -1517,32 +1524,13 @@ static int lustre_yaml_cb_helper(char *f, struct lookup_cmd_hdlr_tbl *table,
 			while ((head = cYAML_get_next_seq_item(child, &item))
 			       != NULL) {
 				rc = cb(head, show_rc, err_rc);
-				/* if processing fails or no cb is found
-				 * then fail */
-				if (rc != LUSTRE_CFG_RC_NO_ERR) {
-					snprintf(err_str, sizeof(err_str),
-						"\"Failed to process request:  "
-						"'%s' [%d, %p]\"",
-						head->cy_string, rc, cb);
-					cYAML_build_error(
-						LUSTRE_CFG_RC_BAD_PARAM, -1,
-						"yaml", "helper", err_str,
-						err_rc);
+				if (rc != LUSTRE_CFG_RC_NO_ERR)
 					return_rc = rc;
-				}
 			}
 		} else {
 			rc = cb(child, show_rc, err_rc);
-			/* if processing fails or no cb is found then fail */
-			if (rc != LUSTRE_CFG_RC_NO_ERR) {
-				snprintf(err_str, sizeof(err_str),
-					"\"Failed to process request: '%s'"
-					" [%d, %p]\"",
-					child->cy_string, rc, cb);
-				cYAML_build_error(LUSTRE_CFG_RC_BAD_PARAM, -1,
-					"yaml", "helper", err_str, err_rc);
+			if (rc != LUSTRE_CFG_RC_NO_ERR)
 				return_rc = rc;
-			}
 		}
 		item = NULL;
 		child = child->cy_next;

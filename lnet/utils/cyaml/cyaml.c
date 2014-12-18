@@ -448,7 +448,8 @@ static enum cYAML_handler_error yaml_stream_start(yaml_token_t *token,
 static enum cYAML_handler_error yaml_stream_end(yaml_token_t *token,
 						struct cYAML_tree_node *tree)
 {
-	if (tree->state != TREE_STATE_TREE_STARTED)
+	if (tree->state != TREE_STATE_TREE_STARTED &&
+	    tree->state != TREE_STATE_COMPLETE)
 		return CYAML_ERROR_UNEXPECTED_STATE;
 
 	tree->state = TREE_STATE_INITED;
@@ -884,6 +885,9 @@ static void print_value(FILE *f, struct list_head *stack)
 {
 	struct cYAML_print_info *cpi = NULL;
 	struct cYAML *node = cYAML_ll_pop(stack, &cpi);
+
+	if (node == NULL)
+		return;
 
 	switch (node->cy_type) {
 	case CYAML_TYPE_FALSE:
