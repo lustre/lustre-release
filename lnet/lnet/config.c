@@ -792,7 +792,7 @@ lnet_parse_route (char *str, int *im_a_router)
 			}
 
 			rc = lnet_add_route(net, hops, nid, priority);
-			if (rc != 0) {
+			if (rc != 0 && rc != -EEXIST && rc != -EHOSTUNREACH) {
 				CERROR("Can't create route "
 				       "to %s via %s\n",
 				       libcfs_net2str(net),
