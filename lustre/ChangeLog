@@ -9,7 +9,7 @@ TBD Intel Corporation
        * Client known to build on unpatched kernels:
          2.6.32-431.29.2.el6 (RHEL6.5)
          2.6.32-504.3.3.el6  (RHEL6.6)
-         3.10.0-123.9.2.el7  (RHEL7)
+         3.10.0-123.13.2.el7 (RHEL7)
          3.0.101-0.46        (SLES11 SP3)
        * Recommended e2fsprogs version: 1.42.9.wc1 or newer
        * NFS export disabled when stack size < 8192 (32-bit Lustre clients),
