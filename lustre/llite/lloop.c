@@ -199,7 +199,7 @@ static int do_bio_lustrebacked(struct lloop_device *lo, struct bio *head)
 	struct bio_vec	     *bvec;
 #endif
         int                   rw;
-        obd_count             page_count = 0;
+	size_t		      page_count = 0;
         struct bio           *bio;
         ssize_t               bytes;
 

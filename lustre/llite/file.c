@@ -1014,9 +1014,9 @@ int ll_merge_attr(const struct lu_env *env, struct inode *inode)
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct cl_object *obj = lli->lli_clob;
 	struct cl_attr *attr = ccc_env_thread_attr(env);
-	obd_time atime;
-	obd_time mtime;
-	obd_time ctime;
+	s64 atime;
+	s64 mtime;
+	s64 ctime;
 	int rc = 0;
 
 	ENTRY;
@@ -3228,10 +3228,10 @@ static int __ll_inode_revalidate(struct dentry *dentry, __u64 ibits)
 
                 ll_lookup_finish_locks(&oit, dentry);
         } else if (!ll_have_md_lock(dentry->d_inode, &ibits, LCK_MINMODE)) {
-                struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
-                obd_valid valid = OBD_MD_FLGETATTR;
-                struct md_op_data *op_data;
-                int ealen = 0;
+		struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
+		u64 valid = OBD_MD_FLGETATTR;
+		struct md_op_data *op_data;
+		int ealen = 0;
 
 		if (S_ISREG(inode->i_mode)) {
 			rc = ll_get_default_mdsize(sbi, &ealen);

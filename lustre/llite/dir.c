@@ -576,7 +576,7 @@ end:
  * Each time, it can only retrieve 1 stripe EA
  **/
 int ll_dir_getstripe(struct inode *inode, void **plmm, int *plmm_size,
-		     struct ptlrpc_request **request, obd_valid valid)
+		     struct ptlrpc_request **request, u64 valid)
 {
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct mdt_body   *body;
@@ -1208,7 +1208,7 @@ lmv_out_free:
 		struct ptlrpc_request	*request = NULL;
 		union lmv_mds_md	*lmm = NULL;
 		int			lmmsize;
-		obd_valid		valid = 0;
+		u64			valid = 0;
 		struct lmv_user_md	*tmp = NULL;
 		int			mdt_index;
 		int			lum_size;
@@ -1617,7 +1617,7 @@ out_rmdir:
         }
 #endif
         case LL_IOC_GETOBDCOUNT: {
-                int count, vallen;
+		u32 count, vallen;
                 struct obd_export *exp;
 
 		if (copy_from_user(&count, (int __user *)arg, sizeof(int)))

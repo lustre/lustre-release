@@ -487,13 +487,13 @@ void ccc_req_completion(const struct lu_env *env,
  *  and capability.
  */
 void ccc_req_attr_set(const struct lu_env *env,
-                      const struct cl_req_slice *slice,
-                      const struct cl_object *obj,
-                      struct cl_req_attr *attr, obd_valid flags)
+		      const struct cl_req_slice *slice,
+		      const struct cl_object *obj,
+		      struct cl_req_attr *attr, u64 flags)
 {
-        struct inode *inode;
-        struct obdo  *oa;
-        obd_flag      valid_flags;
+	struct inode	*inode;
+	struct obdo	*oa;
+	u32		 valid_flags;
 
 	oa = attr->cra_oa;
 	inode = vvp_object_inode(obj);

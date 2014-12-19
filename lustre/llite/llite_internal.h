@@ -173,9 +173,9 @@ struct ll_inode_info {
 	struct inode			lli_vfs_inode;
 
 	/* the most recent timestamps obtained from mds */
-	obd_time			lli_atime;
-	obd_time			lli_mtime;
-	obd_time			lli_ctime;
+	s64				lli_atime;
+	s64				lli_mtime;
+	s64				lli_ctime;
 	spinlock_t			lli_agl_lock;
 
 	/* Try to make the d::member and f::member are aligned. Before using
@@ -876,7 +876,7 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
                      int set_default);
 int ll_dir_getstripe(struct inode *inode, void **lmmp,
 		     int *lmm_size, struct ptlrpc_request **request,
-		     obd_valid valid);
+		     u64 valid);
 #ifdef HAVE_FILE_FSYNC_4ARGS
 int ll_fsync(struct file *file, loff_t start, loff_t end, int data);
 #elif defined(HAVE_FILE_FSYNC_2ARGS)
@@ -1259,7 +1259,7 @@ void ll_ra_stats_inc(struct inode *inode, enum ra_stat which);
 
 /* llite/llite_rmtacl.c */
 #ifdef CONFIG_FS_POSIX_ACL
-obd_valid rce_ops2valid(int ops);
+u64 rce_ops2valid(int ops);
 struct rmtacl_ctl_entry *rct_search(struct rmtacl_ctl_table *rct, pid_t key);
 int rct_add(struct rmtacl_ctl_table *rct, pid_t key, int ops);
 int rct_del(struct rmtacl_ctl_table *rct, pid_t key);
