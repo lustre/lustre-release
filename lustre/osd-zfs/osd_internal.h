@@ -224,7 +224,7 @@ struct osd_oi {
 struct osd_seq {
 	uint64_t	 *os_compat_dirs;
 	int		 os_subdir_count; /* subdir count for each seq */
-	obd_seq		 os_seq;	  /* seq number */
+	u64		 os_seq;	  /* seq number */
 	struct list_head os_seq_list;     /* list to seq_list */
 };
 
@@ -461,7 +461,7 @@ int osd_ost_seq_exists(const struct lu_env *env, struct osd_device *osd,
 int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 		  const struct dt_index_features *feat);
 int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
-		   obd_seq seq, struct lu_seq_range *range);
+		   u64 seq, struct lu_seq_range *range);
 void osd_zap_cursor_init_serialized(zap_cursor_t *zc, struct objset *os,
 				    uint64_t id, uint64_t dirhash);
 int osd_zap_cursor_init(zap_cursor_t **zc, struct objset *os,

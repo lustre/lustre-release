@@ -1074,7 +1074,7 @@ out:
 }
 
 static int osd_seq_exists(const struct lu_env *env,
-			      struct osd_device *osd, obd_seq seq)
+			  struct osd_device *osd, u64 seq)
 {
 	struct lu_seq_range	*range = &osd_oti_get(env)->oti_seq_range;
 	struct seq_server_site	*ss = osd_seq_site(osd);
@@ -2332,7 +2332,7 @@ static int __osd_oi_insert(const struct lu_env *env, struct osd_object *obj,
 }
 
 int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
-		   obd_seq seq, struct lu_seq_range *range)
+		   u64 seq, struct lu_seq_range *range)
 {
 	struct seq_server_site	*ss = osd_seq_site(osd);
 

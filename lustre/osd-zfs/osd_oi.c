@@ -210,7 +210,7 @@ osd_oi_find_or_create(const struct lu_env *env, struct osd_device *o,
  * the object is located (tgt index) and it is MDT or OST object.
  */
 int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
-		   obd_seq seq, struct lu_seq_range *range)
+		   u64 seq, struct lu_seq_range *range)
 {
 	struct seq_server_site	*ss = osd_seq_site(osd);
 
@@ -264,7 +264,7 @@ int fid_is_on_ost(const struct lu_env *env, struct osd_device *osd,
 }
 
 static struct osd_seq *osd_seq_find_locked(struct osd_seq_list *seq_list,
-					   obd_seq seq)
+					   u64 seq)
 {
 	struct osd_seq *osd_seq;
 
@@ -275,8 +275,7 @@ static struct osd_seq *osd_seq_find_locked(struct osd_seq_list *seq_list,
 	return NULL;
 }
 
-static struct osd_seq *osd_seq_find(struct osd_seq_list *seq_list,
-				    obd_seq seq)
+static struct osd_seq *osd_seq_find(struct osd_seq_list *seq_list, u64 seq)
 {
 	struct osd_seq *osd_seq;
 
@@ -288,7 +287,7 @@ static struct osd_seq *osd_seq_find(struct osd_seq_list *seq_list,
 }
 
 static struct osd_seq *osd_find_or_add_seq(const struct lu_env *env,
-					   struct osd_device *osd, obd_seq seq)
+					   struct osd_device *osd, u64 seq)
 {
 	struct osd_seq_list	*seq_list = &osd->od_seq_list;
 	struct osd_seq		*osd_seq;
@@ -373,7 +372,7 @@ osd_get_idx_for_ost_obj(const struct lu_env *env, struct osd_device *osd,
 {
 	struct osd_seq	*osd_seq;
 	unsigned long	b;
-	obd_id		id;
+	u64		id;
 	int		rc;
 
 	osd_seq = osd_find_or_add_seq(env, osd, fid_seq(fid));

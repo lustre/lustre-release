@@ -145,7 +145,7 @@ struct osd_obj_seq {
 	int		 oos_subdir_count; /* subdir count for each seq */
 	struct dentry	 *oos_root;	   /* O/<seq> */
 	struct dentry	 **oos_dirs;	   /* O/<seq>/d0-dXX */
-	obd_seq		 oos_seq;	   /* seq number */
+	u64		 oos_seq;	   /* seq number */
 	struct list_head oos_seq_list;     /* list to seq_list */
 };
 
@@ -159,7 +159,7 @@ struct osd_obj_map {
 
 struct osd_mdobj {
 	struct dentry	*om_root;      /* AGENT/<index> */
-	obd_seq		 om_index;     /* mdt index */
+	u64		 om_index;     /* mdt index */
 	struct list_head om_list;      /* list to omm_list */
 };
 
@@ -704,7 +704,7 @@ int osd_oii_lookup(struct osd_device *dev, const struct lu_fid *fid,
 int osd_scrub_dump(struct seq_file *m, struct osd_device *dev);
 
 int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
-		   obd_seq seq, struct lu_seq_range *range);
+		   u64 seq, struct lu_seq_range *range);
 
 int osd_delete_from_remote_parent(const struct lu_env *env,
 				  struct osd_device *osd,

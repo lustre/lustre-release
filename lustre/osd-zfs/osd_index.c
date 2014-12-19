@@ -527,7 +527,7 @@ static inline void osd_object_put(const struct lu_env *env,
 }
 
 static int osd_seq_exists(const struct lu_env *env, struct osd_device *osd,
-			  obd_seq seq)
+			  u64 seq)
 {
 	struct lu_seq_range	*range = &osd_oti_get(env)->oti_seq_range;
 	struct seq_server_site	*ss = osd_seq_site(osd);

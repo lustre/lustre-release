@@ -1031,7 +1031,7 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 }
 
 /* Check if a block is allocated or not */
-static int osd_is_mapped(struct inode *inode, obd_size offset)
+static int osd_is_mapped(struct inode *inode, u64 offset)
 {
 	sector_t (*fs_bmap)(struct address_space *, sector_t);
 

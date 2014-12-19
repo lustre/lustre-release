@@ -480,8 +480,7 @@ int osd_obj_map_init(const struct lu_env *env, struct osd_device *dev)
         RETURN(rc);
 }
 
-static struct osd_obj_seq *osd_seq_find_locked(struct osd_obj_map *map,
-					       obd_seq seq)
+static struct osd_obj_seq *osd_seq_find_locked(struct osd_obj_map *map, u64 seq)
 {
 	struct osd_obj_seq *osd_seq;
 
@@ -492,7 +491,7 @@ static struct osd_obj_seq *osd_seq_find_locked(struct osd_obj_map *map,
 	return NULL;
 }
 
-static struct osd_obj_seq *osd_seq_find(struct osd_obj_map *map, obd_seq seq)
+static struct osd_obj_seq *osd_seq_find(struct osd_obj_map *map, u64 seq)
 {
 	struct osd_obj_seq *osd_seq;
 
@@ -695,7 +694,7 @@ static int osd_obj_add_entry(struct osd_thread_info *info,
  * debug messages to objects in the future, and the legacy space
  * of FID_SEQ_OST_MDT0 will be unused in the future.
  **/
-static inline void osd_seq_name(char *seq_name, size_t name_size, obd_seq seq)
+static inline void osd_seq_name(char *seq_name, size_t name_size, u64 seq)
 {
 	snprintf(seq_name, name_size,
 		 (fid_seq_is_rsvd(seq) ||
@@ -704,7 +703,7 @@ static inline void osd_seq_name(char *seq_name, size_t name_size, obd_seq seq)
 }
 
 static inline void osd_oid_name(char *name, size_t name_size,
-				const struct lu_fid *fid, obd_id id)
+				const struct lu_fid *fid, u64 id)
 {
 	snprintf(name, name_size,
 		 (fid_seq_is_rsvd(fid_seq(fid)) ||
@@ -799,7 +798,7 @@ out_err:
 }
 
 static struct osd_obj_seq *osd_seq_load(struct osd_thread_info *info,
-					struct osd_device *osd, obd_seq seq)
+					struct osd_device *osd, u64 seq)
 {
 	struct osd_obj_map	*map;
 	struct osd_obj_seq	*osd_seq;
@@ -923,7 +922,7 @@ int osd_obj_map_insert(struct osd_thread_info *info,
 	struct osd_obj_seq	*osd_seq;
 	struct dentry		*d;
 	struct ost_id		*ostid = &info->oti_ostid;
-	obd_id			 oid;
+	u64			 oid;
 	int			dirn, rc = 0;
 	char			name[32];
 	ENTRY;
