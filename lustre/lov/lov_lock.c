@@ -127,13 +127,13 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 					  const struct cl_object *obj,
 					  struct cl_lock *lock)
 {
-        int result = 0;
-        int i;
-        int nr;
-        obd_off start;
-        obd_off end;
-        obd_off file_start;
-        obd_off file_end;
+	int result = 0;
+	int i;
+	int nr;
+	loff_t start;
+	loff_t end;
+	loff_t file_start;
+	loff_t file_end;
 
 	struct lov_object	*loo    = cl2lov(obj);
 	struct lov_layout_raid0	*r0     = lov_r0(loo);

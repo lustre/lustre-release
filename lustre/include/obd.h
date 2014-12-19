@@ -1143,10 +1143,10 @@ struct md_ops {
 
 struct lsm_operations {
 	void (*lsm_free)(struct lov_stripe_md *);
-	void (*lsm_stripe_by_index)(struct lov_stripe_md *, int *, u64 *,
-				    u64 *);
-	void (*lsm_stripe_by_offset)(struct lov_stripe_md *, int *, u64 *,
-				     u64 *);
+	void (*lsm_stripe_by_index)(struct lov_stripe_md *, int *,
+				    loff_t *, loff_t *);
+	void (*lsm_stripe_by_offset)(struct lov_stripe_md *, int *,
+				     loff_t *, loff_t *);
         int (*lsm_lmm_verify) (struct lov_mds_md *lmm, int lmm_bytes,
                                __u16 *stripe_count);
         int (*lsm_unpackmd) (struct lov_obd *lov, struct lov_stripe_md *lsm,
@@ -1155,7 +1155,7 @@ struct lsm_operations {
 
 extern const struct lsm_operations lsm_v1_ops;
 extern const struct lsm_operations lsm_v3_ops;
-static inline const struct lsm_operations *lsm_op_find(int magic)
+static inline const struct lsm_operations *lsm_op_find(u32 magic)
 {
         switch(magic) {
         case LOV_MAGIC_V1:

@@ -1466,15 +1466,17 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
  * \param fm_end logical end of mapping
  * \param start_stripe starting stripe will be returned in this
  */
-static obd_size fiemap_calc_fm_end_offset(struct ll_user_fiemap *fiemap,
-					  struct lov_stripe_md *lsm,
-					  obd_size fm_start,
-					  obd_size fm_end, int *start_stripe)
+static loff_t fiemap_calc_fm_end_offset(struct ll_user_fiemap *fiemap,
+				     struct lov_stripe_md *lsm,
+				     loff_t fm_start,
+				     loff_t fm_end, int *start_stripe)
 {
-        obd_size local_end = fiemap->fm_extents[0].fe_logical;
-        obd_off lun_start, lun_end;
-        obd_size fm_end_offset;
-        int stripe_no = -1, i;
+	loff_t local_end = fiemap->fm_extents[0].fe_logical;
+	loff_t lun_start;
+	loff_t lun_end;
+	loff_t fm_end_offset;
+	int stripe_no = -1;
+	int i;
 
         if (fiemap->fm_extent_count == 0 ||
             fiemap->fm_extents[0].fe_logical == 0)
@@ -1529,12 +1531,13 @@ static obd_size fiemap_calc_fm_end_offset(struct ll_user_fiemap *fiemap,
  *
  * \retval last_stripe return the last stripe of the mapping
  */
-static int fiemap_calc_last_stripe(struct lov_stripe_md *lsm, obd_size fm_start,
-				   obd_size fm_end, int start_stripe,
-				   int *stripe_count)
+static int fiemap_calc_last_stripe(struct lov_stripe_md *lsm,
+				   loff_t fm_start, loff_t fm_end,
+				   int start_stripe, int *stripe_count)
 {
-        int last_stripe;
-        obd_off obd_start, obd_end;
+	int last_stripe;
+	loff_t obd_start;
+	loff_t obd_end;
         int i, j;
 
         if (fm_end - fm_start > lsm->lsm_stripe_size * lsm->lsm_stripe_count) {
@@ -1598,8 +1601,11 @@ static int lov_fiemap(struct lov_obd *lov, __u32 keylen, void *key,
         int count_local;
         unsigned int get_num_extents = 0;
         int ost_index = 0, actual_start_stripe, start_stripe;
-	obd_size fm_start, fm_end, fm_length, fm_end_offset;
-        obd_size curr_loc;
+	loff_t fm_start;
+	loff_t fm_end;
+	loff_t fm_length;
+	loff_t fm_end_offset;
+	u64 curr_loc;
         int current_extent = 0, rc = 0, i;
 	/* Whether have we collected enough extents */
 	bool enough = false;
@@ -1671,9 +1677,11 @@ static int lov_fiemap(struct lov_obd *lov, __u32 keylen, void *key,
         /* Check each stripe */
         for (cur_stripe = start_stripe, i = 0; i < stripe_count;
              i++, cur_stripe = (cur_stripe + 1) % lsm->lsm_stripe_count) {
-                obd_size req_fm_len; /* Stores length of required mapping */
-                obd_size len_mapped_single_call;
-                obd_off lun_start, lun_end, obd_object_end;
+		loff_t req_fm_len; /* Stores length of required mapping */
+		loff_t len_mapped_single_call;
+		loff_t lun_start;
+		loff_t lun_end;
+		loff_t obd_object_end;
                 unsigned int ext_count;
 
                 cur_stripe_wrap = cur_stripe;
@@ -1845,7 +1853,8 @@ out:
 }
 
 static int lov_get_info(const struct lu_env *env, struct obd_export *exp,
-			__u32 keylen, void *key, __u32 *vallen, void *val,
+			__u32 keylen, void *key,
+			__u32 *vallen, void *val,
 			struct lov_stripe_md *lsm)
 {
 	struct obd_device *obddev = class_exp2obd(exp);
@@ -1879,16 +1888,19 @@ out:
 }
 
 static int lov_set_info_async(const struct lu_env *env, struct obd_export *exp,
-                              obd_count keylen, void *key, obd_count vallen,
-                              void *val, struct ptlrpc_request_set *set)
+			      __u32 keylen, void *key,
+			      __u32 vallen, void *val,
+			      struct ptlrpc_request_set *set)
 {
-        struct obd_device *obddev = class_exp2obd(exp);
-        struct lov_obd *lov = &obddev->u.lov;
-        obd_count count;
-        int i, rc = 0, err;
-        struct lov_tgt_desc *tgt;
+	struct obd_device *obddev = class_exp2obd(exp);
+	struct lov_obd *lov = &obddev->u.lov;
+	struct lov_tgt_desc *tgt;
 	int do_inactive = 0;
 	int no_set = 0;
+	u32 count;
+	u32 i;
+	int rc = 0;
+	int err;
         ENTRY;
 
         if (set == NULL) {

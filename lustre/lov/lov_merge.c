@@ -49,12 +49,12 @@
 int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
                       struct ost_lvb *lvb, __u64 *kms_place)
 {
-	__u64 size = 0;
-	__u64 kms = 0;
-	__u64 blocks = 0;
-	obd_time current_mtime = lvb->lvb_mtime;
-	obd_time current_atime = lvb->lvb_atime;
-	obd_time current_ctime = lvb->lvb_ctime;
+	u64 size = 0;
+	u64 kms = 0;
+	u64 blocks = 0;
+	s64 current_mtime = lvb->lvb_mtime;
+	s64 current_atime = lvb->lvb_atime;
+	s64 current_ctime = lvb->lvb_ctime;
 	int i;
 	int rc = 0;
 
@@ -66,8 +66,9 @@ int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
 	       lvb->lvb_size, lvb->lvb_mtime, lvb->lvb_atime, lvb->lvb_ctime,
 	       lvb->lvb_blocks);
 	for (i = 0; i < lsm->lsm_stripe_count; i++) {
-                struct lov_oinfo *loi = lsm->lsm_oinfo[i];
-                obd_size lov_size, tmpsize;
+		struct lov_oinfo *loi = lsm->lsm_oinfo[i];
+		u64 lov_size;
+		u64 tmpsize;
 
                 if (OST_LVB_IS_ERR(loi->loi_lvb.lvb_blocks)) {
                         rc = OST_LVB_GET_ERR(loi->loi_lvb.lvb_blocks);
@@ -110,8 +111,8 @@ int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
         RETURN(rc);
 }
 
-void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_valid valid,
-                     struct lov_stripe_md *lsm, int stripeno, int *set)
+void lov_merge_attrs(struct obdo *tgt, struct obdo *src, u64 valid,
+		     struct lov_stripe_md *lsm, int stripeno, int *set)
 {
 	valid &= src->o_valid;
 
@@ -119,7 +120,7 @@ void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_valid valid,
 		tgt->o_valid &= valid;
 		if (valid & OBD_MD_FLSIZE) {
 			/* this handles sparse files properly */
-			obd_size lov_size;
+			u64 lov_size;
 
 			lov_size = lov_stripe_size(lsm, src->o_size, stripeno);
 			if (lov_size > tgt->o_size)

@@ -128,22 +128,21 @@ static inline void lov_put_reqset(struct lov_request_set *set)
         (char *)((lv)->lov_tgts[index]->ltd_uuid.uuid)
 
 /* lov_merge.c */
-void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_valid valid,
-                     struct lov_stripe_md *lsm, int stripeno, int *set);
+void lov_merge_attrs(struct obdo *tgt, struct obdo *src, u64 valid,
+		     struct lov_stripe_md *lsm, int stripeno, int *set);
 int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
                       struct ost_lvb *lvb, __u64 *kms_place);
 
 /* lov_offset.c */
-obd_size lov_stripe_size(struct lov_stripe_md *lsm, obd_size ost_size,
-                         int stripeno);
-int lov_stripe_offset(struct lov_stripe_md *lsm, obd_off lov_off,
-                      int stripeno, obd_off *obd_off);
-obd_off lov_size_to_stripe(struct lov_stripe_md *lsm, obd_off file_size,
-                           int stripeno);
+u64 lov_stripe_size(struct lov_stripe_md *lsm, u64 ost_size, int stripeno);
+int lov_stripe_offset(struct lov_stripe_md *lsm, loff_t lov_off, int stripeno,
+		      loff_t *obd_off);
+loff_t lov_size_to_stripe(struct lov_stripe_md *lsm, u64 file_size,
+			  int stripeno);
 int lov_stripe_intersects(struct lov_stripe_md *lsm, int stripeno,
-                          obd_off start, obd_off end,
-                          obd_off *obd_start, obd_off *obd_end);
-int lov_stripe_number(struct lov_stripe_md *lsm, obd_off lov_off);
+			  loff_t start, loff_t end,
+			  loff_t *obd_start, loff_t *obd_end);
+int lov_stripe_number(struct lov_stripe_md *lsm, loff_t lov_off);
 pgoff_t lov_stripe_pgoff(struct lov_stripe_md *lsm, pgoff_t stripe_index,
 			 int stripe);
 

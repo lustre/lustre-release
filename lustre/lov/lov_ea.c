@@ -138,18 +138,18 @@ static void lsm_unpackmd_common(struct lov_stripe_md *lsm,
 
 static void
 lsm_stripe_by_index_plain(struct lov_stripe_md *lsm, int *stripeno,
-                           obd_off *lov_off, obd_off *swidth)
+			  loff_t *lov_off, loff_t *swidth)
 {
-        if (swidth)
-                *swidth = (obd_off)lsm->lsm_stripe_size * lsm->lsm_stripe_count;
+	if (swidth != NULL)
+		*swidth = (loff_t)lsm->lsm_stripe_size * lsm->lsm_stripe_count;
 }
 
 static void
 lsm_stripe_by_offset_plain(struct lov_stripe_md *lsm, int *stripeno,
-                           obd_off *lov_off, obd_off *swidth)
+			   loff_t *lov_off, loff_t *swidth)
 {
-        if (swidth)
-                *swidth = (obd_off)lsm->lsm_stripe_size * lsm->lsm_stripe_count;
+	if (swidth != NULL)
+		*swidth = (loff_t)lsm->lsm_stripe_size * lsm->lsm_stripe_count;
 }
 
 /* Find minimum stripe maxbytes value.  For inactive or

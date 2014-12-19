@@ -1520,9 +1520,9 @@ static int lmv_getstatus(struct obd_export *exp,
 }
 
 static int lmv_getxattr(struct obd_export *exp, const struct lu_fid *fid,
-                        struct obd_capa *oc, obd_valid valid, const char *name,
-                        const char *input, int input_size, int output_size,
-                        int flags, struct ptlrpc_request **request)
+			struct obd_capa *oc, u64 valid, const char *name,
+			const char *input, int input_size, int output_size,
+			int flags, struct ptlrpc_request **request)
 {
         struct obd_device      *obd = exp->exp_obd;
         struct lmv_obd         *lmv = &obd->u.lmv;
@@ -1545,10 +1545,10 @@ static int lmv_getxattr(struct obd_export *exp, const struct lu_fid *fid,
 }
 
 static int lmv_setxattr(struct obd_export *exp, const struct lu_fid *fid,
-                        struct obd_capa *oc, obd_valid valid, const char *name,
-                        const char *input, int input_size, int output_size,
-                        int flags, __u32 suppgid,
-                        struct ptlrpc_request **request)
+			struct obd_capa *oc, u64 valid, const char *name,
+			const char *input, int input_size, int output_size,
+			int flags, __u32 suppgid,
+			struct ptlrpc_request **request)
 {
         struct obd_device      *obd = exp->exp_obd;
         struct lmv_obd         *lmv = &obd->u.lmv;
