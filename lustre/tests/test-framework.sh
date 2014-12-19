@@ -4638,7 +4638,7 @@ stop_full_debug_logging() {
 }
 
 # prints bash call stack
-log_trace_dump() {
+print_stack_trace() {
 	echo "  Trace dump:"
 	for (( i=1; i < ${#BASH_LINENO[*]} ; i++ )) ; do
 		local s=${BASH_SOURCE[$i]}
@@ -4664,7 +4664,7 @@ error_noexit() {
 
 
 	log " ${TESTSUITE} ${TESTNAME}: @@@@@@ ${TYPE}: $@ "
-	log_trace_dump
+	print_stack_trace >&2
 
 	mkdir -p $LOGDIR
 	# We need to dump the logs on all nodes
@@ -4850,7 +4850,7 @@ run_test() {
 }
 
 log() {
-    echo "$*"
+	echo "$*" >&2
     module_loaded lnet || load_modules
 
     local MSG="$*"
