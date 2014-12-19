@@ -175,10 +175,10 @@ struct obd_type {
 };
 
 struct brw_page {
-	obd_off  off;
-	struct page *pg;
-	unsigned int count;
-	obd_flag flag;
+	u64		 off;
+	struct page	*pg;
+	u32		 count;
+	u32		 flag;
 };
 
 struct timeout_item {
@@ -337,8 +337,8 @@ struct client_obd {
 #define obd2cli_tgt(obd) ((char *)(obd)->u.cli.cl_target_uuid.uuid)
 
 struct obd_id_info {
-        __u32   idx;
-        obd_id  *data;
+	u32	 idx;
+	u64	*data;
 };
 
 struct echo_client_obd {
@@ -793,8 +793,8 @@ struct md_op_data {
         struct lu_fid           op_fid3; /* 2 extra fids to find conflicting */
         struct lu_fid           op_fid4; /* to the operation locks. */
 	u32			op_mds;  /* what mds server open will go to */
-        struct lustre_handle    op_handle;
-        obd_time                op_mod_time;
+	struct lustre_handle    op_handle;
+	s64			op_mod_time;
         const char             *op_name;
 	size_t			op_namelen;
         __u32                   op_mode;
@@ -861,19 +861,19 @@ struct obd_ops {
 	struct module *o_owner;
 	int (*o_iocontrol)(unsigned int cmd, struct obd_export *exp, int len,
 			   void *karg, void __user *uarg);
-        int (*o_get_info)(const struct lu_env *env, struct obd_export *,
-                          __u32 keylen, void *key, __u32 *vallen, void *val,
-                          struct lov_stripe_md *lsm);
-        int (*o_set_info_async)(const struct lu_env *, struct obd_export *,
-                                __u32 keylen, void *key,
-                                __u32 vallen, void *val,
-                                struct ptlrpc_request_set *set);
+	int (*o_get_info)(const struct lu_env *env, struct obd_export *,
+			  __u32 keylen, void *key,
+			  __u32 *vallen, void *val,
+			  struct lov_stripe_md *lsm);
+	int (*o_set_info_async)(const struct lu_env *, struct obd_export *,
+				__u32 keylen, void *key,
+				__u32 vallen, void *val,
+				struct ptlrpc_request_set *set);
         int (*o_setup) (struct obd_device *dev, struct lustre_cfg *cfg);
         int (*o_precleanup)(struct obd_device *dev,
                             enum obd_cleanup_stage cleanup_stage);
         int (*o_cleanup)(struct obd_device *dev);
-        int (*o_process_config)(struct obd_device *dev, obd_count len,
-                                void *data);
+	int (*o_process_config)(struct obd_device *dev, size_t len, void *data);
         int (*o_postrecov)(struct obd_device *dev);
         int (*o_add_conn)(struct obd_import *imp, struct obd_uuid *uuid,
                           int priority);
@@ -1067,12 +1067,12 @@ struct md_ops {
 			struct ptlrpc_request **);
 
 	int (*m_setxattr)(struct obd_export *, const struct lu_fid *,
-			  struct obd_capa *, obd_valid, const char *,
+			  struct obd_capa *, u64, const char *,
 			  const char *, int, int, int, __u32,
 			  struct ptlrpc_request **);
 
 	int (*m_getxattr)(struct obd_export *, const struct lu_fid *,
-			  struct obd_capa *, obd_valid, const char *,
+			  struct obd_capa *, u64, const char *,
 			  const char *, int, int, int,
 			  struct ptlrpc_request **);
 
@@ -1149,11 +1149,11 @@ struct md_ops {
 };
 
 struct lsm_operations {
-        void (*lsm_free)(struct lov_stripe_md *);
-        void (*lsm_stripe_by_index)(struct lov_stripe_md *, int *, obd_off *,
-                                    obd_off *);
-        void (*lsm_stripe_by_offset)(struct lov_stripe_md *, int *, obd_off *,
-                                     obd_off *);
+	void (*lsm_free)(struct lov_stripe_md *);
+	void (*lsm_stripe_by_index)(struct lov_stripe_md *, int *, u64 *,
+				    u64 *);
+	void (*lsm_stripe_by_offset)(struct lov_stripe_md *, int *, u64 *,
+				     u64 *);
         int (*lsm_lmm_verify) (struct lov_mds_md *lmm, int lmm_bytes,
                                __u16 *stripe_count);
         int (*lsm_unpackmd) (struct lov_obd *lov, struct lov_stripe_md *lsm,
@@ -1195,7 +1195,7 @@ static inline struct md_open_data *obd_mod_alloc(void)
 	}                                                         \
 })
 
-void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid);
+void obdo_from_inode(struct obdo *dst, struct inode *src, u32 valid);
 void obdo_set_parent_fid(struct obdo *dst, const struct lu_fid *parent);
 
 /* return 1 if client should be resend request */

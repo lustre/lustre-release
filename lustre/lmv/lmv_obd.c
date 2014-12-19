@@ -1415,7 +1415,7 @@ static int lmv_cleanup(struct obd_device *obd)
 	RETURN(0);
 }
 
-static int lmv_process_config(struct obd_device *obd, obd_count len, void *buf)
+static int lmv_process_config(struct obd_device *obd, size_t len, void *buf)
 {
 	struct lustre_cfg	*lcfg = buf;
 	struct obd_uuid		obd_uuid;

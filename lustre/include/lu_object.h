@@ -407,12 +407,12 @@ static inline int lu_device_is_md(const struct lu_device *d)
 struct lu_attr {
         /** size in bytes */
         __u64          la_size;
-        /** modification time in seconds since Epoch */
-        obd_time       la_mtime;
-        /** access time in seconds since Epoch */
-        obd_time       la_atime;
-        /** change time in seconds since Epoch */
-        obd_time       la_ctime;
+	/** modification time in seconds since Epoch */
+	s64		la_mtime;
+	/** access time in seconds since Epoch */
+	s64		la_atime;
+	/** change time in seconds since Epoch */
+	s64		la_ctime;
         /** 512-byte blocks allocated to object */
         __u64          la_blocks;
         /** permission bits and file type */

@@ -2976,7 +2976,7 @@ static int mdc_cleanup(struct obd_device *obd)
         return client_obd_cleanup(obd);
 }
 
-static int mdc_process_config(struct obd_device *obd, obd_count len, void *buf)
+static int mdc_process_config(struct obd_device *obd, size_t len, void *buf)
 {
         struct lustre_cfg *lcfg = buf;
 	int rc = class_process_proc_param(PARAM_MDC, obd->obd_vars, lcfg, obd);

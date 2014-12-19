@@ -3082,7 +3082,7 @@ int osc_process_config_base(struct obd_device *obd, struct lustre_cfg *lcfg)
 	return rc > 0 ? 0: rc;
 }
 
-static int osc_process_config(struct obd_device *obd, obd_count len, void *buf)
+static int osc_process_config(struct obd_device *obd, size_t len, void *buf)
 {
         return osc_process_config_base(obd, buf);
 }

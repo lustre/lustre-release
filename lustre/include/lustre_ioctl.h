@@ -79,8 +79,8 @@ struct obd_ioctl_data {
 	struct obdo	ioc_obdo1;
 	struct obdo	ioc_obdo2;
 
-	obd_size	ioc_count;
-	obd_off		ioc_offset;
+	__u64		ioc_count;
+	__u64		ioc_offset;
 	__u32		ioc_dev;
 	__u32		ioc_command;
 

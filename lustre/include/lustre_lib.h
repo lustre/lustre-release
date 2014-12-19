@@ -79,10 +79,10 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
 
 int target_pack_pool_reply(struct ptlrpc_request *req);
 int do_set_info_async(struct obd_import *imp,
-                      int opcode, int version,
-                      obd_count keylen, void *key,
-                      obd_count vallen, void *val,
-                      struct ptlrpc_request_set *set);
+		      int opcode, int version,
+		      size_t keylen, void *key,
+		      size_t vallen, void *val,
+		      struct ptlrpc_request_set *set);
 
 void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id);
 

@@ -1927,7 +1927,7 @@ int mgc_process_log(struct obd_device *mgc, struct config_llog_data *cld)
  * LCFG_LOG_START gets the config log from the MGS, processes it to start
  * any services, and adds it to the list logs to watch (follow).
  */
-static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
+static int mgc_process_config(struct obd_device *obd, size_t len, void *buf)
 {
         struct lustre_cfg *lcfg = buf;
         struct config_llog_instance *cfg = NULL;
