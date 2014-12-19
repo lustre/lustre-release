@@ -229,7 +229,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
         __u32                   remote = exp_connect_rmtclient(info->mti_exp);
         __u32                   perm;
         int                     easize, rc;
-	obd_valid		valid;
+	u64			valid;
         ENTRY;
 
         LASSERT(info->mti_object != NULL);

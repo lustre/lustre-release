@@ -308,11 +308,11 @@ static int mdc_getattr_name(struct obd_export *exp, struct md_op_data *op_data,
 }
 
 static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
-                            const struct lu_fid *fid,
-                            struct obd_capa *oc, int opcode, obd_valid valid,
-                            const char *xattr_name, const char *input,
-                            int input_size, int output_size, int flags,
-                            __u32 suppgid, struct ptlrpc_request **request)
+			    const struct lu_fid *fid,
+			    struct obd_capa *oc, int opcode, u64 valid,
+			    const char *xattr_name, const char *input,
+			    int input_size, int output_size, int flags,
+			    __u32 suppgid, struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         int   xattr_namelen = 0;
@@ -419,7 +419,7 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
 }
 
 static int mdc_setxattr(struct obd_export *exp, const struct lu_fid *fid,
-			struct obd_capa *oc, obd_valid valid,
+			struct obd_capa *oc, u64 valid,
 			const char *xattr_name,
 			const char *input, int input_size, int output_size,
 			int flags, __u32 suppgid,
@@ -432,7 +432,7 @@ static int mdc_setxattr(struct obd_export *exp, const struct lu_fid *fid,
 }
 
 static int mdc_getxattr(struct obd_export *exp, const struct lu_fid *fid,
-			struct obd_capa *oc, obd_valid valid,
+			struct obd_capa *oc, u64 valid,
 			const char *xattr_name,
 			const char *input, int input_size, int output_size,
 			int flags, struct ptlrpc_request **request)
@@ -2397,8 +2397,8 @@ out:
 }
 
 static int mdc_get_info_rpc(struct obd_export *exp,
-			    obd_count keylen, void *key,
-			    int vallen, void *val)
+			    u32 keylen, void *key,
+			    u32 vallen, void *val)
 {
         struct obd_import      *imp = class_exp2cliimp(exp);
         struct ptlrpc_request  *req;
@@ -2413,7 +2413,7 @@ static int mdc_get_info_rpc(struct obd_export *exp,
         req_capsule_set_size(&req->rq_pill, &RMF_GETINFO_KEY,
                              RCL_CLIENT, keylen);
         req_capsule_set_size(&req->rq_pill, &RMF_GETINFO_VALLEN,
-                             RCL_CLIENT, sizeof(__u32));
+			     RCL_CLIENT, sizeof(vallen));
 
         rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_GET_INFO);
         if (rc) {
@@ -2424,7 +2424,7 @@ static int mdc_get_info_rpc(struct obd_export *exp,
         tmp = req_capsule_client_get(&req->rq_pill, &RMF_GETINFO_KEY);
         memcpy(tmp, key, keylen);
         tmp = req_capsule_client_get(&req->rq_pill, &RMF_GETINFO_VALLEN);
-        memcpy(tmp, &vallen, sizeof(__u32));
+	memcpy(tmp, &vallen, sizeof(vallen));
 
         req_capsule_set_size(&req->rq_pill, &RMF_GETINFO_VAL,
                              RCL_SERVER, vallen);
@@ -2580,8 +2580,8 @@ static int mdc_kuc_reregister(struct obd_import *imp)
 
 static int mdc_set_info_async(const struct lu_env *env,
 			      struct obd_export *exp,
-			      obd_count keylen, void *key,
-			      obd_count vallen, void *val,
+			      u32 keylen, void *key,
+			      u32 vallen, void *val,
 			      struct ptlrpc_request_set *set)
 {
 	struct obd_import	*imp = class_exp2cliimp(exp);
@@ -2631,7 +2631,8 @@ static int mdc_set_info_async(const struct lu_env *env,
 }
 
 static int mdc_get_info(const struct lu_env *env, struct obd_export *exp,
-			__u32 keylen, void *key, __u32 *vallen, void *val,
+			__u32 keylen, void *key,
+			__u32 *vallen, void *val,
 			struct lov_stripe_md *lsm)
 {
 	int rc = -EINVAL;

@@ -1176,8 +1176,9 @@ static int mgc_target_register(struct obd_export *exp,
 }
 
 static int mgc_set_info_async(const struct lu_env *env, struct obd_export *exp,
-			      obd_count keylen, void *key, obd_count vallen,
-			      void *val, struct ptlrpc_request_set *set)
+			      u32 keylen, void *key,
+			      u32 vallen, void *val,
+			      struct ptlrpc_request_set *set)
 {
         int rc = -EINVAL;
         ENTRY;
@@ -1281,8 +1282,9 @@ static int mgc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 }
 
 static int mgc_get_info(const struct lu_env *env, struct obd_export *exp,
-                        __u32 keylen, void *key, __u32 *vallen, void *val,
-                        struct lov_stripe_md *unused)
+			__u32 keylen, void *key,
+			__u32 *vallen, void *val,
+			struct lov_stripe_md *unused)
 {
         int rc = -EINVAL;
 
