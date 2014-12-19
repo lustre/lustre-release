@@ -134,8 +134,8 @@ static int tgt_mdt_body_unpack(struct tgt_session_info *tsi, __u32 flags)
 int tgt_validate_obdo(struct tgt_session_info *tsi, struct obdo *oa)
 {
 	struct ost_id	*oi	= &oa->o_oi;
-	obd_seq 	 seq	= ostid_seq(oi);
-	obd_id		 id	= ostid_id(oi);
+	u64		 seq	= ostid_seq(oi);
+	u64		 id	= ostid_id(oi);
 	int		 rc;
 	ENTRY;
 
@@ -1847,7 +1847,7 @@ EXPORT_SYMBOL(tgt_brw_read);
 static void tgt_warn_on_cksum(struct ptlrpc_request *req,
 			      struct ptlrpc_bulk_desc *desc,
 			      struct niobuf_local *local_nb, int npages,
-			      obd_count client_cksum, obd_count server_cksum,
+			      u32 client_cksum, u32 server_cksum,
 			      bool mmap)
 {
 	struct obd_export *exp = req->rq_export;

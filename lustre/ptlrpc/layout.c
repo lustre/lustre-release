@@ -1118,8 +1118,8 @@ struct req_msg_field RMF_EAVALS_LENS =
 EXPORT_SYMBOL(RMF_EAVALS_LENS);
 
 struct req_msg_field RMF_OBD_ID =
-        DEFINE_MSGF("obd_id", 0,
-                    sizeof(obd_id), lustre_swab_ost_last_id, NULL);
+	DEFINE_MSGF("obd_id", 0,
+		    sizeof(__u64), lustre_swab_ost_last_id, NULL);
 EXPORT_SYMBOL(RMF_OBD_ID);
 
 struct req_msg_field RMF_FID =

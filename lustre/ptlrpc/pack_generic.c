@@ -1804,7 +1804,7 @@ void lustre_swab_ost_body (struct ost_body *b)
 }
 EXPORT_SYMBOL(lustre_swab_ost_body);
 
-void lustre_swab_ost_last_id(obd_id *id)
+void lustre_swab_ost_last_id(u64 *id)
 {
         __swab64s(id);
 }

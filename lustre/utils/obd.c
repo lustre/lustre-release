@@ -1061,9 +1061,9 @@ int jt_obd_list(int argc, char **argv)
 }
 
 struct jt_fid_space {
-        obd_seq jt_seq;
-        obd_id  jt_id;
-        int     jt_width;
+	__u64	jt_seq;
+	__u64	jt_id;
+	int	jt_width;
 };
 
 int jt_obd_alloc_fids(struct jt_fid_space *space, struct lu_fid *fid,
@@ -1570,10 +1570,10 @@ int jt_obd_test_setattr(int argc, char **argv)
 {
         struct obd_ioctl_data data;
         struct timeval start, next_time;
-        __u64 i, count, next_count;
+	__u64 i, count, next_count;
         char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
         int verbose = 1;
-        obd_id objid = 3;
+	__u64 objid = 3;
         char *end;
         int rc = 0;
 
@@ -1780,9 +1780,9 @@ int jt_obd_test_getattr(int argc, char **argv)
         struct obd_ioctl_data data;
         struct timeval start, next_time;
         char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        __u64 i, count, next_count;
+	__u64 i, count, next_count;
         int verbose = 1;
-        obd_id objid = 3;
+	__u64 objid = 3;
         char *end;
         int rc = 0;
 
