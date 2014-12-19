@@ -1156,7 +1156,7 @@ static int ofd_get_info_hdl(struct tgt_session_info *tsi)
 				      RCL_CLIENT);
 
 	if (KEY_IS(KEY_LAST_ID)) {
-		obd_id		*last_id;
+		u64		*last_id;
 		struct ofd_seq	*oseq;
 
 		req_capsule_extend(tsi->tsi_pill, &RQF_OST_GET_INFO_LAST_ID);
@@ -1167,7 +1167,7 @@ static int ofd_get_info_hdl(struct tgt_session_info *tsi)
 		last_id = req_capsule_server_get(tsi->tsi_pill, &RMF_OBD_ID);
 
 		oseq = ofd_seq_load(tsi->tsi_env, ofd,
-				    (obd_seq)exp->exp_filter_data.fed_group);
+				    (u64)exp->exp_filter_data.fed_group);
 		if (IS_ERR(oseq))
 			rc = -EFAULT;
 		else
@@ -1467,10 +1467,10 @@ static int ofd_orphans_destroy(const struct lu_env *env,
 	struct lu_fid		*fid	= &info->fti_fid;
 	struct ost_id		*oi	= &oa->o_oi;
 	struct ofd_seq		*oseq;
-	obd_seq 		 seq	= ostid_seq(oi);
-	obd_id			 end_id = ostid_id(oi);
-	obd_id			 last;
-	obd_id			 oid;
+	u64			 seq	= ostid_seq(oi);
+	u64			 end_id = ostid_id(oi);
+	u64			 last;
+	u64			 oid;
 	int			 skip_orphan;
 	int			 rc	= 0;
 
@@ -1559,8 +1559,8 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 	struct obdo		*rep_oa;
 	struct obd_export	*exp = tsi->tsi_exp;
 	struct ofd_device	*ofd = ofd_exp(exp);
-	obd_seq			 seq = ostid_seq(&oa->o_oi);
-	obd_id			 oid = ostid_id(&oa->o_oi);
+	u64			 seq = ostid_seq(&oa->o_oi);
+	u64			 oid = ostid_id(&oa->o_oi);
 	struct ofd_seq		*oseq;
 	int			 rc = 0, diff;
 	int			 sync_trans = 0;
@@ -1684,7 +1684,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 	}
 	if (diff > 0) {
 		cfs_time_t	 enough_time = cfs_time_shift(DISK_TIMEOUT);
-		obd_id		 next_id;
+		u64		 next_id;
 		int		 created = 0;
 		int		 count;
 
@@ -1810,8 +1810,8 @@ static int ofd_destroy_hdl(struct tgt_session_info *tsi)
 	struct ofd_device	*ofd = ofd_exp(tsi->tsi_exp);
 	struct ofd_thread_info	*fti = tsi2ofd_info(tsi);
 	struct lu_fid		*fid = &fti->fti_fid;
-	obd_id			 oid;
-	obd_count		 count;
+	u64			 oid;
+	u32			 count;
 	int			 rc = 0;
 
 	ENTRY;

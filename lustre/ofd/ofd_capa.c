@@ -136,7 +136,7 @@ int ofd_update_capa_key(struct ofd_device *ofd, struct lustre_capa_key *new)
  * \retval		negative number on error
  */
 int ofd_auth_capa(struct obd_export *exp, const struct lu_fid *fid,
-		  obd_seq seq, struct lustre_capa *capa, __u64 opc)
+		  u64 seq, struct lustre_capa *capa, __u64 opc)
 {
 	struct filter_obd	*filter = &exp->exp_obd->u.filter;
 	struct filter_capa_key	*k;

@@ -81,7 +81,7 @@ int ofd_precreate_batch(struct ofd_device *ofd, int batch)
  * \retval		pointer to the requested ofd_seq structure
  * \retval		NULL if ofd_seq is not found
  */
-struct ofd_seq *ofd_seq_get(struct ofd_device *ofd, obd_seq seq)
+struct ofd_seq *ofd_seq_get(struct ofd_device *ofd, u64 seq)
 {
 	struct ofd_seq *oseq;
 
@@ -161,9 +161,9 @@ static struct ofd_seq *ofd_seq_add(const struct lu_env *env,
  *
  * \retval		the last object ID for this sequence
  */
-obd_id ofd_seq_last_oid(struct ofd_seq *oseq)
+u64 ofd_seq_last_oid(struct ofd_seq *oseq)
 {
-	obd_id id;
+	u64 id;
 
 	spin_lock(&oseq->os_last_oid_lock);
 	id = ostid_id(&oseq->os_oi);
@@ -178,7 +178,7 @@ obd_id ofd_seq_last_oid(struct ofd_seq *oseq)
  * \param[in] oseq	OFD sequence
  * \param[in] id	the new OID to set
  */
-void ofd_seq_last_oid_set(struct ofd_seq *oseq, obd_id id)
+void ofd_seq_last_oid_set(struct ofd_seq *oseq, u64 id)
 {
 	spin_lock(&oseq->os_last_oid_lock);
 	if (likely(ostid_id(&oseq->os_oi) < id))
@@ -205,7 +205,7 @@ int ofd_seq_last_oid_write(const struct lu_env *env, struct ofd_device *ofd,
 			   struct ofd_seq *oseq)
 {
 	struct ofd_thread_info	*info = ofd_info(env);
-	obd_id			 tmp;
+	u64			 tmp;
 	struct dt_object	*obj = oseq->os_lastid_obj;
 	struct thandle		*th;
 	int			 rc;
@@ -360,12 +360,12 @@ void ofd_seqs_fini(const struct lu_env *env, struct ofd_device *ofd)
  * \retval		ERR_PTR pointer on error
  */
 struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
-			     obd_seq seq)
+			     u64 seq)
 {
 	struct ofd_thread_info	*info = ofd_info(env);
 	struct ofd_seq		*oseq = NULL;
 	struct dt_object	*dob;
-	obd_id			 lastid;
+	u64			 lastid;
 	int			 rc;
 
 	ENTRY;

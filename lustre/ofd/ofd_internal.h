@@ -143,24 +143,24 @@ struct ofd_device {
 	__u64			 ofd_osfs_age;
 	int			 ofd_blockbits;
 	/* writes which might be be accounted twice in ofd_osfs.os_bavail */
-	obd_size		 ofd_osfs_unstable;
+	u64			 ofd_osfs_unstable;
 
 	/* counters used during statfs update, protected by ofd_osfs_lock.
 	 * record when some statfs refresh are in progress */
 	int			 ofd_statfs_inflight;
 	/* track writes completed while statfs refresh is underway.
 	 * tracking is only effective when ofd_statfs_inflight > 1 */
-	obd_size		 ofd_osfs_inflight;
+	u64			 ofd_osfs_inflight;
 
 	/* grants: all values in bytes */
 	/* grant lock to protect all grant counters */
 	spinlock_t		 ofd_grant_lock;
 	/* total amount of dirty data reported by clients in incoming obdo */
-	obd_size		 ofd_tot_dirty;
+	u64			 ofd_tot_dirty;
 	/* sum of filesystem space granted to clients for async writes */
-	obd_size		 ofd_tot_granted;
+	u64			 ofd_tot_granted;
 	/* grant used by I/Os in progress (between prepare and commit) */
-	obd_size		 ofd_tot_pending;
+	u64			 ofd_tot_pending;
 	/* free space threshold over which we stop granting space to clients
 	 * ofd_grant_ratio is stored as a fixed-point fraction using
 	 * OFD_GRANT_RATIO_SHIFT of the remaining free space, not in percentage
@@ -336,7 +336,7 @@ extern void target_recovery_init(struct lu_target *lut, svc_handler_t handler);
 /* ofd_capa.c */
 int ofd_update_capa_key(struct ofd_device *ofd, struct lustre_capa_key *key);
 int ofd_auth_capa(struct obd_export *exp, const struct lu_fid *fid,
-		  obd_seq seq, struct lustre_capa *capa, __u64 opc);
+		  u64 seq, struct lustre_capa *capa, __u64 opc);
 void ofd_free_capa_keys(struct ofd_device *ofd);
 
 /* ofd_dev.c */
@@ -357,12 +357,12 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 int ofd_obd_disconnect(struct obd_export *exp);
 
 /* ofd_fs.c */
-obd_id ofd_seq_last_oid(struct ofd_seq *oseq);
-void ofd_seq_last_oid_set(struct ofd_seq *oseq, obd_id id);
+u64 ofd_seq_last_oid(struct ofd_seq *oseq);
+void ofd_seq_last_oid_set(struct ofd_seq *oseq, u64 id);
 int ofd_seq_last_oid_write(const struct lu_env *env, struct ofd_device *ofd,
 			   struct ofd_seq *oseq);
 int ofd_seqs_init(const struct lu_env *env, struct ofd_device *ofd);
-struct ofd_seq *ofd_seq_get(struct ofd_device *ofd, obd_seq seq);
+struct ofd_seq *ofd_seq_get(struct ofd_device *ofd, u64 seq);
 void ofd_seq_put(const struct lu_env *env, struct ofd_seq *oseq);
 
 int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
@@ -370,7 +370,7 @@ int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
 void ofd_fs_cleanup(const struct lu_env *env, struct ofd_device *ofd);
 int ofd_precreate_batch(struct ofd_device *ofd, int batch);
 struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
-			     obd_seq seq);
+			     u64 seq);
 void ofd_seqs_fini(const struct lu_env *env, struct ofd_device *ofd);
 void ofd_seqs_free(const struct lu_env *env, struct ofd_device *ofd);
 
@@ -415,7 +415,7 @@ struct ofd_object *ofd_object_find(const struct lu_env *env,
 				   const struct lu_fid *fid);
 int ofd_object_ff_load(const struct lu_env *env, struct ofd_object *fo);
 int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
-			  obd_id id, struct ofd_seq *oseq, int nr, int sync);
+			  u64 id, struct ofd_seq *oseq, int nr, int sync);
 
 void ofd_object_put(const struct lu_env *env, struct ofd_object *fo);
 int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
@@ -446,7 +446,7 @@ struct ofd_object *ofd_object_find_exists(const struct lu_env *env,
 
 /* ofd_grants.c */
 #define OFD_GRANT_RATIO_SHIFT 8
-static inline __u64 ofd_grant_reserved(struct ofd_device *ofd, obd_size bavail)
+static inline u64 ofd_grant_reserved(struct ofd_device *ofd, u64 bavail)
 {
 	return (bavail * ofd->ofd_grant_ratio) >> OFD_GRANT_RATIO_SHIFT;
 }
@@ -488,7 +488,7 @@ static inline int ofd_grant_prohibit(struct obd_export *exp,
 
 void ofd_grant_sanity_check(struct obd_device *obd, const char *func);
 long ofd_grant_connect(const struct lu_env *env, struct obd_export *exp,
-		       obd_size want, bool new_conn);
+		       u64 want, bool new_conn);
 void ofd_grant_discard(struct obd_export *exp);
 void ofd_grant_prepare_read(const struct lu_env *env, struct obd_export *exp,
 			    struct obdo *oa);

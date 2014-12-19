@@ -60,8 +60,8 @@
 /* Clients typically hold 2x their max_rpcs_in_flight of grant space */
 #define OFD_GRANT_SHRINK_LIMIT(exp)	(2ULL * 8 * exp_max_brw_size(exp))
 
-static inline obd_size ofd_grant_from_cli(struct obd_export *exp,
-					  struct ofd_device *ofd, obd_size val)
+static inline u64 ofd_grant_from_cli(struct obd_export *exp,
+				     struct ofd_device *ofd, u64 val)
 {
 	if (ofd_grant_compat(exp, ofd))
 		/* clients not supporting OBD_CONNECT_GRANT_PARAM actually
@@ -71,16 +71,16 @@ static inline obd_size ofd_grant_from_cli(struct obd_export *exp,
 	return val;
 }
 
-static inline obd_size ofd_grant_to_cli(struct obd_export *exp,
-					struct ofd_device *ofd, obd_size val)
+static inline u64 ofd_grant_to_cli(struct obd_export *exp,
+				   struct ofd_device *ofd, u64 val)
 {
 	if (ofd_grant_compat(exp, ofd))
 		return val >> (ofd->ofd_blockbits - COMPAT_BSIZE_SHIFT);
 	return val;
 }
 
-static inline obd_size ofd_grant_chunk(struct obd_export *exp,
-				       struct ofd_device *ofd)
+static inline u64 ofd_grant_chunk(struct obd_export *exp,
+				  struct ofd_device *ofd)
 {
 	if (ofd_obd(ofd)->obd_self_export == exp)
 		/* Grant enough space to handle a big precreate request */
@@ -112,15 +112,15 @@ static inline obd_size ofd_grant_chunk(struct obd_export *exp,
  */
 void ofd_grant_sanity_check(struct obd_device *obd, const char *func)
 {
-	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
-	struct obd_export	*exp;
-	obd_size		 maxsize;
-	obd_size		 tot_dirty = 0;
-	obd_size		 tot_pending = 0;
-	obd_size		 tot_granted = 0;
-	obd_size		 fo_tot_granted;
-	obd_size		 fo_tot_pending;
-	obd_size		 fo_tot_dirty;
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	struct obd_export *exp;
+	u64		   maxsize;
+	u64		   tot_dirty = 0;
+	u64		   tot_pending = 0;
+	u64		   tot_granted = 0;
+	u64		   fo_tot_granted;
+	u64		   fo_tot_pending;
+	u64		   fo_tot_dirty;
 
 	if (list_empty(&obd->obd_exports))
 		return;
@@ -254,14 +254,14 @@ static void ofd_grant_statfs(const struct lu_env *env, struct obd_export *exp,
  *			of available space is requested
  * \retval		amount of non-allocated space, in bytes
  */
-static obd_size ofd_grant_space_left(struct obd_export *exp)
+static u64 ofd_grant_space_left(struct obd_export *exp)
 {
-	struct obd_device	*obd = exp->exp_obd;
-	struct ofd_device	*ofd = ofd_exp(exp);
-	obd_size		 tot_granted;
-	obd_size		 left;
-	obd_size		 avail;
-	obd_size		 unstable;
+	struct obd_device *obd = exp->exp_obd;
+	struct ofd_device *ofd = ofd_exp(exp);
+	u64		   tot_granted;
+	u64		   left;
+	u64		   avail;
+	u64		   unstable;
 
 	ENTRY;
 	assert_spin_locked(&ofd->ofd_grant_lock);
@@ -298,7 +298,7 @@ static obd_size ofd_grant_space_left(struct obd_export *exp)
 	 * overhead estimate made by the OSD layer. If we grant all the free
 	 * space, we have no way (grant space cannot be revoked yet) to
 	 * adjust if the write overhead has been underestimated. */
-	left -= min_t(obd_size, left, ofd_grant_reserved(ofd, avail));
+	left -= min_t(u64, left, ofd_grant_reserved(ofd, avail));
 
 	/* Align left on block size */
 	left &= ~((1ULL << ofd->ofd_blockbits) - 1);
@@ -356,7 +356,7 @@ static void ofd_grant_incoming(const struct lu_env *env, struct obd_export *exp,
 		oa->o_dirty = 0;
 
 	dirty       = ofd_grant_from_cli(exp, ofd, oa->o_dirty);
-	dropped     = ofd_grant_from_cli(exp, ofd, (obd_size)oa->o_dropped);
+	dropped     = ofd_grant_from_cli(exp, ofd, (u64)oa->o_dropped);
 	grant_chunk = ofd_grant_chunk(exp, ofd);
 
 	/* Update our accounting now so that statfs takes it into account.
@@ -408,7 +408,7 @@ static void ofd_grant_incoming(const struct lu_env *env, struct obd_export *exp,
  *				taken out
  */
 static void ofd_grant_shrink(struct obd_export *exp, struct obdo *oa,
-			     obd_size left_space)
+			     u64 left_space)
 {
 	struct filter_export_data	*fed;
 	struct ofd_device		*ofd = ofd_exp(exp);
@@ -451,13 +451,13 @@ static void ofd_grant_shrink(struct obd_export *exp, struct obdo *oa,
  * \retval		space (in bytes) that will be consumed to write the
  *			network buffer
  */
-static inline int ofd_grant_rnb_size(struct obd_export *exp,
+static inline u64 ofd_grant_rnb_size(struct obd_export *exp,
 				     struct ofd_device *ofd,
 				     struct niobuf_remote *rnb)
 {
-	obd_size blocksize;
-	obd_size bytes;
-	obd_size end;
+	u64 blocksize;
+	u64 bytes;
+	u64 end;
 
 	if (exp && ofd_grant_compat(exp, ofd))
 		blocksize = 1ULL << COMPAT_BSIZE_SHIFT;
@@ -473,7 +473,7 @@ static inline int ofd_grant_rnb_size(struct obd_export *exp,
 		bytes += blocksize - end;
 	if (exp)
 		/* Apply per-export pecularities if one is given */
-		bytes = ofd_grant_from_cli(exp, ofd, (obd_size)bytes);
+		bytes = ofd_grant_from_cli(exp, ofd, bytes);
 	return bytes;
 }
 
@@ -502,7 +502,7 @@ static inline int ofd_grant_rnb_size(struct obd_export *exp,
  */
 static void ofd_grant_check(const struct lu_env *env, struct obd_export *exp,
 			    struct obdo *oa, struct niobuf_remote *rnb,
-			    int niocount, obd_size *left)
+			    int niocount, u64 *left)
 {
 	struct filter_export_data	*fed = &exp->exp_filter_data;
 	struct obd_device		*obd = exp->exp_obd;
@@ -655,14 +655,14 @@ static void ofd_grant_check(const struct lu_env *env, struct obd_export *exp,
  *
  * \retval			amount of grant space allocated
  */
-static long ofd_grant_alloc(struct obd_export *exp, obd_size curgrant,
-			    obd_size want, obd_size left, bool conservative)
+static long ofd_grant_alloc(struct obd_export *exp, u64 curgrant,
+			    u64 want, u64 left, bool conservative)
 {
 	struct obd_device		*obd = exp->exp_obd;
 	struct ofd_device		*ofd = ofd_exp(exp);
 	struct filter_export_data	*fed = &exp->exp_filter_data;
 	long				 grant_chunk;
-	obd_size			 grant;
+	u64				 grant;
 
 	ENTRY;
 
@@ -753,11 +753,11 @@ static long ofd_grant_alloc(struct obd_export *exp, obd_size curgrant,
  * \retval		amount of grant space currently owned by the client
  */
 long ofd_grant_connect(const struct lu_env *env, struct obd_export *exp,
-		       obd_size want, bool new_conn)
+		       u64 want, bool new_conn)
 {
 	struct ofd_device		*ofd = ofd_exp(exp);
 	struct filter_export_data	*fed = &exp->exp_filter_data;
-	obd_size			 left = 0;
+	u64				 left = 0;
 	long				 grant;
 	int				 from_cache;
 	int				 force = 0; /* can use cached data */
@@ -785,11 +785,11 @@ refresh:
 	}
 
 	ofd_grant_alloc(exp,
-			ofd_grant_to_cli(exp, ofd, (obd_size)fed->fed_grant),
+			ofd_grant_to_cli(exp, ofd, (u64)fed->fed_grant),
 			want, left, new_conn);
 
 	/* return to client its current grant */
-	grant = ofd_grant_to_cli(exp, ofd, (obd_size)fed->fed_grant);
+	grant = ofd_grant_to_cli(exp, ofd, (u64)fed->fed_grant);
 	ofd->ofd_tot_granted_clients++;
 
 	spin_unlock(&ofd->ofd_grant_lock);
@@ -857,7 +857,7 @@ void ofd_grant_prepare_read(const struct lu_env *env,
 {
 	struct ofd_device	*ofd = ofd_exp(exp);
 	int			 do_shrink;
-	obd_size		 left = 0;
+	u64			 left = 0;
 
 	if (!oa)
 		return;
@@ -933,7 +933,7 @@ void ofd_grant_prepare_write(const struct lu_env *env,
 {
 	struct obd_device	*obd = exp->exp_obd;
 	struct ofd_device	*ofd = ofd_exp(exp);
-	obd_size		 left;
+	u64			 left;
 	int			 from_cache;
 	int			 force = 0; /* can use cached data intially */
 	int			 rc;
@@ -1030,7 +1030,7 @@ int ofd_grant_create(const struct lu_env *env, struct obd_export *exp, int *nr)
 	struct ofd_thread_info		*info = ofd_info(env);
 	struct ofd_device		*ofd = ofd_exp(exp);
 	struct filter_export_data	*fed = &exp->exp_filter_data;
-	obd_size			 left = 0;
+	u64				 left = 0;
 	unsigned long			 wanted;
 	ENTRY;
 
@@ -1140,7 +1140,7 @@ void ofd_grant_commit(const struct lu_env *env, struct obd_export *exp,
 	if (rc == 0) {
 		spin_lock(&ofd->ofd_osfs_lock);
 		/* Take pending out of cached statfs data */
-		ofd->ofd_osfs.os_bavail -= min_t(obd_size,
+		ofd->ofd_osfs.os_bavail -= min_t(u64,
 						 ofd->ofd_osfs.os_bavail,
 						 pending >> ofd->ofd_blockbits);
 		if (ofd->ofd_statfs_inflight)

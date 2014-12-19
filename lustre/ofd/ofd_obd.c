@@ -711,7 +711,7 @@ int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
 
 	spin_lock(&ofd->ofd_osfs_lock);
 	if (cfs_time_before_64(ofd->ofd_osfs_age, max_age) || max_age == 0) {
-		obd_size unstable;
+		u64 unstable;
 
 		/* statfs data are too old, get up-to-date one.
 		 * we must be cautious here since multiple threads might be
@@ -747,7 +747,7 @@ int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
 			 * w/o the ofd_osfs_lock. Those ones got added to
 			 * the cached statfs data that we are about to crunch.
 			 * Take them into account in the new statfs data */
-			osfs->os_bavail -= min_t(obd_size, osfs->os_bavail,
+			osfs->os_bavail -= min_t(u64, osfs->os_bavail,
 					       unstable >> ofd->ofd_blockbits);
 			/* However, we don't really know if those writes got
 			 * accounted in the statfs call, so tell
@@ -834,7 +834,7 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 	       osfs->os_bfree << ofd->ofd_blockbits,
 	       osfs->os_bavail << ofd->ofd_blockbits);
 
-	osfs->os_bavail -= min_t(obd_size, osfs->os_bavail,
+	osfs->os_bavail -= min_t(u64, osfs->os_bavail,
 				 ((ofd->ofd_tot_dirty + ofd->ofd_tot_pending +
 				   osfs->os_bsize - 1) >> ofd->ofd_blockbits));
 
@@ -844,7 +844,7 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 		struct filter_export_data *fed;
 
 		fed = &obd->obd_self_export->exp_filter_data;
-		osfs->os_bavail -= min_t(obd_size, osfs->os_bavail,
+		osfs->os_bavail -= min_t(u64, osfs->os_bavail,
 					 fed->fed_grant >> ofd->ofd_blockbits);
 	}
 
@@ -1101,10 +1101,10 @@ static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 {
 	struct ofd_device	*ofd = ofd_exp(exp);
 	struct ofd_thread_info	*info;
-	obd_seq			 seq = ostid_seq(&oa->o_oi);
+	u64			 seq = ostid_seq(&oa->o_oi);
 	struct ofd_seq		*oseq;
 	int			 rc = 0, diff = 1;
-	obd_id			 next_id;
+	u64			 next_id;
 	int			 count;
 
 	ENTRY;

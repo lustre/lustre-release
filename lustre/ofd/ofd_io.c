@@ -534,8 +534,8 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 	LASSERT(objcount == 1);
 
 	if (unlikely(exp->exp_obd->obd_recovering)) {
-		obd_seq seq = fid_seq(fid);
-		obd_id  oid = fid_oid(fid);
+		u64 seq = fid_seq(fid);
+		u64 oid = fid_oid(fid);
 		struct ofd_seq *oseq;
 
 		oseq = ofd_seq_load(env, ofd, seq);
@@ -569,7 +569,7 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 			}
 
 			while (diff > 0) {
-				obd_id next_id = ofd_seq_last_oid(oseq) + 1;
+				u64 next_id = ofd_seq_last_oid(oseq) + 1;
 				int count = ofd_precreate_batch(ofd, diff);
 
 				rc = ofd_precreate_objects(env, ofd, next_id,

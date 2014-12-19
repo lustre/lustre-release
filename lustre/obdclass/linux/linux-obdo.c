@@ -51,7 +51,7 @@
 /*FIXME: Just copy from obdo_from_inode*/
 void obdo_from_la(struct obdo *dst, const struct lu_attr *la, __u64 valid)
 {
-        obd_flag newvalid = 0;
+	u32 newvalid = 0;
 
         if (valid & LA_ATIME) {
                 dst->o_atime = la->la_atime;
@@ -100,7 +100,7 @@ void obdo_from_la(struct obdo *dst, const struct lu_attr *la, __u64 valid)
 EXPORT_SYMBOL(obdo_from_la);
 
 /*FIXME: Just copy from obdo_from_inode*/
-void la_from_obdo(struct lu_attr *dst, const struct obdo *obdo, obd_flag valid)
+void la_from_obdo(struct lu_attr *dst, const struct obdo *obdo, u32 valid)
 {
         __u64 newvalid = 0;
 
@@ -153,7 +153,7 @@ void la_from_obdo(struct lu_attr *dst, const struct obdo *obdo, obd_flag valid)
 EXPORT_SYMBOL(la_from_obdo);
 
 void obdo_refresh_inode(struct inode *dst, const struct obdo *src,
-			obd_flag valid)
+			u32 valid)
 {
         valid &= src->o_valid;
 

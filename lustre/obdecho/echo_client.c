@@ -163,7 +163,7 @@ struct echo_object_conf *cl2echo_conf(const struct cl_object_conf *c)
 /** @} echo_helpers */
 
 static int cl_echo_object_put(struct echo_object *eco);
-static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
+static int cl_echo_object_brw(struct echo_object *eco, int rw, u64 offset,
 			      struct page **pages, int npages, int async);
 
 struct echo_thread_info {
@@ -1057,8 +1057,8 @@ static int cl_echo_object_put(struct echo_object *eco)
 }
 
 static int cl_echo_enqueue0(struct lu_env *env, struct echo_object *eco,
-                            obd_off start, obd_off end, int mode,
-                            __u64 *cookie , __u32 enqflags)
+			    u64 start, u64 end, int mode,
+			    __u64 *cookie , __u32 enqflags)
 {
         struct cl_io *io;
         struct cl_lock *lck;
@@ -1145,7 +1145,7 @@ static void echo_commit_callback(const struct lu_env *env, struct cl_io *io,
 	cl_page_list_add(&queue->c2_qout, page);
 }
 
-static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
+static int cl_echo_object_brw(struct echo_object *eco, int rw, u64 offset,
 			      struct page **pages, int npages, int async)
 {
         struct lu_env           *env;
@@ -1243,7 +1243,7 @@ out:
 /** @} echo_exports */
 
 
-static obd_id last_object_id;
+static u64 last_object_id;
 
 #ifdef HAVE_SERVER_SUPPORT
 static inline void echo_md_build_name(struct lu_name *lname, char *name,
@@ -2120,14 +2120,13 @@ static void echo_put_object(struct echo_object *eco)
 		       eco->eo_dev->ed_ec->ec_exp->exp_obd->obd_name, rc);
 }
 
-static void
-echo_client_page_debug_setup(struct page *page, int rw, obd_id id,
-			     obd_off offset, obd_off count)
+static void echo_client_page_debug_setup(struct page *page, int rw, u64 id,
+					 u64 offset, u64 count)
 {
-        char    *addr;
-        obd_off  stripe_off;
-        obd_id   stripe_id;
-        int      delta;
+	char    *addr;
+	u64	 stripe_off;
+	u64	 stripe_id;
+	int	 delta;
 
         /* no partial pages on the client */
 	LASSERT(count == PAGE_CACHE_SIZE);
@@ -2150,11 +2149,10 @@ echo_client_page_debug_setup(struct page *page, int rw, obd_id id,
 }
 
 static int
-echo_client_page_debug_check(struct page *page, obd_id id, obd_off offset,
-			     obd_off count)
+echo_client_page_debug_check(struct page *page, u64 id, u64 offset, u64 count)
 {
-        obd_off stripe_off;
-        obd_id  stripe_id;
+	u64	 stripe_off;
+	u64	 stripe_id;
         char   *addr;
         int     delta;
         int     rc;
@@ -2183,20 +2181,20 @@ echo_client_page_debug_check(struct page *page, obd_id id, obd_off offset,
 }
 
 static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
-                            struct echo_object *eco, obd_off offset,
-                            obd_size count, int async,
-                            struct obd_trans_info *oti)
+			    struct echo_object *eco, u64 offset,
+			    u64 count, int async,
+			    struct obd_trans_info *oti)
 {
-        obd_count               npages;
+	size_t			npages;
         struct brw_page        *pga;
         struct brw_page        *pgp;
 	struct page            **pages;
-        obd_off                 off;
-        int                     i;
+	u64			 off;
+	size_t			i;
         int                     rc;
         int                     verify;
 	gfp_t			gfp_mask;
-        int                     brw_flags = 0;
+	u32			brw_flags = 0;
         ENTRY;
 
         verify = (ostid_id(&oa->o_oi) != ECHO_PERSISTENT_OBJID &&
@@ -2207,9 +2205,8 @@ static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
 
 	LASSERT(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ);
 
-        if (count <= 0 ||
-            (count & (~CFS_PAGE_MASK)) != 0)
-                RETURN(-EINVAL);
+	if ((count & (~CFS_PAGE_MASK)) != 0)
+		RETURN(-EINVAL);
 
         /* XXX think again with misaligned I/O */
 	npages = count >> PAGE_CACHE_SHIFT;
@@ -2279,15 +2276,15 @@ static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
 static int echo_client_prep_commit(const struct lu_env *env,
 				   struct obd_export *exp, int rw,
 				   struct obdo *oa, struct echo_object *eco,
-				   obd_off offset, obd_size count,
-				   obd_size batch, struct obd_trans_info *oti,
+				   u64 offset, u64 count,
+				   u64 batch, struct obd_trans_info *oti,
 				   int async)
 {
-        struct obd_ioobj ioo;
-        struct niobuf_local *lnb;
-        struct niobuf_remote *rnb;
-        obd_off off;
-        obd_size npages, tot_pages;
+	struct obd_ioobj	 ioo;
+	struct niobuf_local	*lnb;
+	struct niobuf_remote	*rnb;
+	u64			 off;
+	u64			 npages, tot_pages;
 	int i, ret = 0, brw_flags = 0;
 
         ENTRY;

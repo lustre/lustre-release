@@ -205,7 +205,7 @@ void ofd_object_put(const struct lu_env *env, struct ofd_object *fo)
  * \retval		negative value on error
  */
 int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
-			  obd_id id, struct ofd_seq *oseq, int nr, int sync)
+			  u64 id, struct ofd_seq *oseq, int nr, int sync)
 {
 	struct ofd_thread_info	*info = ofd_info(env);
 	struct ofd_object	*fo = NULL;
@@ -213,7 +213,7 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 	struct thandle		*th;
 	struct ofd_object	**batch;
 	struct lu_fid		*fid = &info->fti_fid;
-	obd_id			 tmp;
+	u64			 tmp;
 	int			 rc;
 	int			 i;
 	int			 objects = 0;
