@@ -1787,7 +1787,7 @@ static int lfs_mv(int argc, char **argv)
 	int     c;
 	int     rc = 0;
 	struct option long_opts[] = {
-		{"--mdt-index", required_argument, 0, 'M'},
+		{"mdt-index", required_argument, 0, 'M'},
 		{"verbose",	no_argument,	   0, 'v'},
 		{0, 0, 0, 0}
 	};
@@ -1815,20 +1815,21 @@ static int lfs_mv(int argc, char **argv)
 	}
 
 	if (param.fp_mdt_index == -1) {
-		fprintf(stderr, "%s MDT index must be indicated\n", argv[0]);
+		fprintf(stderr, "%s: MDT index must be specified\n", argv[0]);
 		return CMD_HELP;
 	}
 
 	if (optind >= argc) {
-		fprintf(stderr, "%s missing operand path\n", argv[0]);
+		fprintf(stderr, "%s: missing operand path\n", argv[0]);
 		return CMD_HELP;
 	}
 
 	param.fp_migrate = 1;
 	rc = llapi_mv(argv[optind], &param);
 	if (rc != 0)
-		fprintf(stderr, "cannot migrate '%s' to MDT%04x: %s\n",
-			argv[optind], param.fp_mdt_index, strerror(-rc));
+		fprintf(stderr, "%s: cannot migrate '%s' to MDT%04x: %s\n",
+			argv[0], argv[optind], param.fp_mdt_index,
+			strerror(-rc));
 	return rc;
 }
 

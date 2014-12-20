@@ -664,7 +664,7 @@ test_17n() {
 	check_fs_consistency_17n ||
 		error "e2fsck report error after create files under remote dir"
 
-	for ((i=0;i<10;i++)); do
+	for ((i = 0; i < 10; i++)); do
 		rm -rf $DIR/$tdir/remote_dir_${i} ||
 			error "destroy remote dir error $i"
 	done
@@ -675,16 +675,16 @@ test_17n() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.50) ] &&
 		skip "lustre < 2.4.50 does not support migrate mv " && return
 
-	for ((i=0; i<10; i++)); do
+	for ((i = 0; i < 10; i++)); do
 		mkdir -p $DIR/$tdir/remote_dir_${i}
 		createmany -o $DIR/$tdir/remote_dir_${i}/f 10 ||
 			error "create files under remote dir failed $i"
-		$LFS mv -M 1 $DIR/$tdir/remote_dir_${i} ||
+		$LFS mv --mdt-index 1 $DIR/$tdir/remote_dir_${i} ||
 			error "migrate remote dir error $i"
 	done
 	check_fs_consistency_17n || error "e2fsck report error after migration"
 
-	for ((i=0;i<10;i++)); do
+	for ((i = 0; i < 10; i++)); do
 		rm -rf $DIR/$tdir/remote_dir_${i} ||
 			error "destroy remote dir error $i"
 	done
@@ -12439,10 +12439,10 @@ test_230b() {
 	ln -s $other_dir/$tfile $migrate_dir/${tfile}_ln_other
 
 	$LFS mv -v -M $MDTIDX $migrate_dir ||
-			error "migrate remote dir error"
+		error "migrate remote dir error"
 
 	echo "migratate to MDT1, then checking.."
-	for ((i=0; i<10; i++)); do
+	for ((i = 0; i < 10; i++)); do
 		for file in $(find $migrate_dir/dir_${i}); do
 			mdt_index=$($LFS getstripe -M $file)
 			[ $mdt_index == $MDTIDX ] ||
@@ -12494,16 +12494,16 @@ test_230b() {
 
 	stripe_count=$($LFS getstripe -c $migrate_dir/dir_default_stripe2)
 	[ $stripe_count = 2 ] ||
-			error "dir strpe_count $d != 2 after migration."
+		error "dir strpe_count $d != 2 after migration."
 
 	stripe_count=$($LFS getstripe -c $migrate_dir/${tfile}_stripe2)
 	[ $stripe_count = 2 ] ||
-			error "file strpe_count $d != 2 after migration."
+		error "file strpe_count $d != 2 after migration."
 
 	#migrate back to MDT0
 	MDTIDX=0
 	$LFS mv -v -M $MDTIDX $migrate_dir ||
-			error "migrate remote dir error"
+		error "migrate remote dir error"
 
 	echo "migrate back to MDT0, checking.."
 	for file in $(find $migrate_dir); do
@@ -12576,10 +12576,10 @@ test_230c() {
 	#OBD_FAIL_MIGRATE_ENTRIES	0x1801
 	do_facet mds1 lctl set_param fail_loc=0x20001801
 	do_facet mds1 lctl  set_param fail_val=5
-	local t=`ls $DIR/$tdir | wc -l`
-	$LFS mv -M $MDTIDX $DIR/$tdir &&
-		error "migrate should failed after 5 entries"
-	local u=`ls $DIR/$tdir | wc -l`
+	local t=$(ls $DIR/$tdir | wc -l)
+	$LFS mv --mdt-index $MDTIDX $DIR/$tdir &&
+		error "migrate should fail after 5 entries"
+	local u=$(ls $DIR/$tdir | wc -l)
 	[ "$u" == "$t" ] || error "$u != $t during migration"
 
 	for file in $(find $DIR/$tdir); do
