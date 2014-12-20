@@ -3308,9 +3308,7 @@ static int nodemap_cmd(enum lcfg_command_type cmd, void *ret_data,
 		if (rc != 0)
 			goto out;
 
-		memcpy(ret_data, data.ioc_pbuf1, data.ioc_plen1);
-		if (ret_data == NULL || sizeof(ret_data) != ret_size)
-			rc = -errno;
+		memcpy(ret_data, data.ioc_pbuf1, min(data.ioc_plen1, ret_size));
 	}
 out:
 	lustre_cfg_free(lcfg);
