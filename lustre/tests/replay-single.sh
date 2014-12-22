@@ -47,21 +47,21 @@ if [ $LINUX_VERSION_CODE -lt $(version_code 2.6.33) ]; then
 fi
 
 test_0a() {	# was test_0
-    mkdir $DIR/$tfile
-    replay_barrier $SINGLEMDS
-    fail $SINGLEMDS
-    rmdir $DIR/$tfile
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	replay_barrier $SINGLEMDS
+	fail $SINGLEMDS
+	rmdir $DIR/$tdir
 }
 run_test 0a "empty replay"
 
 test_0b() {
-    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
-    # this test attempts to trigger a race in the precreation code,
-    # and must run before any other objects are created on the filesystem
-    fail ost1
-    createmany -o $DIR/$tfile 20 || return 1
-    unlinkmany $DIR/$tfile 20 || return 2
+	# this test attempts to trigger a race in the precreation code,
+	# and must run before any other objects are created on the filesystem
+	fail ost1
+	createmany -o $DIR/$tfile 20 || error "createmany -o $DIR/$tfile failed"
+	unlinkmany $DIR/$tfile 20 || error "unlinkmany $DIR/$tfile failed"
 }
 run_test 0b "ensure object created after recover exists. (3284)"
 
@@ -70,7 +70,7 @@ test_0c() {
 	mcreate $DIR/$tfile
 	umount $MOUNT
 	facet_failover $SINGLEMDS
-	zconf_mount `hostname` $MOUNT || error "mount fails"
+	zconf_mount $(hostname) $MOUNT || error "mount fails"
 	client_up || error "post-failover df failed"
 	# file shouldn't exist if replay-barrier works as expected
 	rm $DIR/$tfile && error "File exists and it shouldn't"
@@ -79,343 +79,369 @@ test_0c() {
 run_test 0c "check replay-barrier"
 
 test_0d() {
-    replay_barrier $SINGLEMDS
-    umount $MOUNT
-    facet_failover $SINGLEMDS
-    zconf_mount `hostname` $MOUNT || error "mount fails"
-    client_up || error "post-failover df failed"
+	replay_barrier $SINGLEMDS
+	umount $MOUNT
+	facet_failover $SINGLEMDS
+	zconf_mount $(hostname) $MOUNT || error "mount fails"
+	client_up || error "post-failover df failed"
 }
 run_test 0d "expired recovery with no clients"
 
 test_1() {
-    replay_barrier $SINGLEMDS
-    mcreate $DIR/$tfile
-    fail $SINGLEMDS
-    $CHECKSTAT -t file $DIR/$tfile || return 1
-    rm $DIR/$tfile
+	replay_barrier $SINGLEMDS
+	mcreate $DIR/$tfile
+	fail $SINGLEMDS
+	$CHECKSTAT -t file $DIR/$tfile ||
+		error "$CHECKSTAT $DIR/$tfile attribute check failed"
+	rm $DIR/$tfile
 }
 run_test 1 "simple create"
 
 test_2a() {
-    replay_barrier $SINGLEMDS
-    touch $DIR/$tfile
-    fail $SINGLEMDS
-    $CHECKSTAT -t file $DIR/$tfile || return 1
-    rm $DIR/$tfile
+	replay_barrier $SINGLEMDS
+	touch $DIR/$tfile
+	fail $SINGLEMDS
+	$CHECKSTAT -t file $DIR/$tfile ||
+		error "$CHECKSTAT $DIR/$tfile attribute check failed"
+	rm $DIR/$tfile
 }
 run_test 2a "touch"
 
 test_2b() {
-    mcreate $DIR/$tfile
-    replay_barrier $SINGLEMDS
-    touch $DIR/$tfile
-    fail $SINGLEMDS
-    $CHECKSTAT -t file $DIR/$tfile || return 1
-    rm $DIR/$tfile
+	mcreate $DIR/$tfile || error "mcreate $DIR/$tfile failed"
+	replay_barrier $SINGLEMDS
+	touch $DIR/$tfile
+	fail $SINGLEMDS
+	$CHECKSTAT -t file $DIR/$tfile ||
+		error "$CHECKSTAT $DIR/$tfile attribute check failed"
+	rm $DIR/$tfile
 }
 run_test 2b "touch"
 
 test_3a() {
-    local file=$DIR/$tfile
-    replay_barrier $SINGLEMDS
-    mcreate $file
-    openfile -f O_DIRECTORY $file
-    fail $SINGLEMDS
-    $CHECKSTAT -t file $file || return 2
-    rm $file
+	local file=$DIR/$tfile
+	replay_barrier $SINGLEMDS
+	mcreate $file
+	openfile -f O_DIRECTORY $file
+	fail $SINGLEMDS
+	$CHECKSTAT -t file $file ||
+		error "$CHECKSTAT $file attribute check failed"
+	rm $file
 }
 run_test 3a "replay failed open(O_DIRECTORY)"
 
 test_3b() {
-    replay_barrier $SINGLEMDS
-#define OBD_FAIL_MDS_OPEN_PACK | OBD_FAIL_ONCE
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000114"
-    touch $DIR/$tfile
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0"
-    fail $SINGLEMDS
-    $CHECKSTAT -t file $DIR/$tfile && return 2
-    return 0
+	replay_barrier $SINGLEMDS
+	#define OBD_FAIL_MDS_OPEN_PACK | OBD_FAIL_ONCE
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000114"
+	touch $DIR/$tfile
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+	fail $SINGLEMDS
+	$CHECKSTAT -t file $DIR/$tfile &&
+		error "$CHECKSTAT $DIR/$tfile attribute check should fail"
+	return 0
 }
 run_test 3b "replay failed open -ENOMEM"
 
 test_3c() {
-    replay_barrier $SINGLEMDS
-#define OBD_FAIL_MDS_ALLOC_OBDO | OBD_FAIL_ONCE
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000128"
-    touch $DIR/$tfile
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0"
-    fail $SINGLEMDS
+	replay_barrier $SINGLEMDS
+	#define OBD_FAIL_MDS_ALLOC_OBDO | OBD_FAIL_ONCE
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000128"
+	touch $DIR/$tfile
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+	fail $SINGLEMDS
 
-    $CHECKSTAT -t file $DIR/$tfile && return 2
-    return 0
+	$CHECKSTAT -t file $DIR/$tfile &&
+		error "$CHECKSTAT $DIR/$tfile attribute check should fail"
+	return 0
 }
 run_test 3c "replay failed open -ENOMEM"
 
 test_4a() {	# was test_4
-    replay_barrier $SINGLEMDS
-    for i in `seq 10`; do
-        echo "tag-$i" > $DIR/$tfile-$i
-    done
-    fail $SINGLEMDS
-    for i in `seq 10`; do
-      grep -q "tag-$i" $DIR/$tfile-$i || error "$tfile-$i"
-    done
+	replay_barrier $SINGLEMDS
+	for i in $(seq 10); do
+		echo "tag-$i" > $DIR/$tfile-$i
+	done
+	fail $SINGLEMDS
+	for i in $(seq 10); do
+		grep -q "tag-$i" $DIR/$tfile-$i || error "$tfile-$i"
+	done
 }
 run_test 4a "|x| 10 open(O_CREAT)s"
 
 test_4b() {
-    replay_barrier $SINGLEMDS
-    rm -rf $DIR/$tfile-*
-    fail $SINGLEMDS
-    $CHECKSTAT -t file $DIR/$tfile-* && return 1 || true
+	for i in $(seq 10); do
+		echo "tag-$i" > $DIR/$tfile-$i
+	done
+	replay_barrier $SINGLEMDS
+	rm -rf $DIR/$tfile-*
+	fail $SINGLEMDS
+	$CHECKSTAT -t file $DIR/$tfile-* &&
+		error "$CHECKSTAT $DIR/$tfile-* attribute check should fail" ||
+		true
 }
 run_test 4b "|x| rm 10 files"
 
 # The idea is to get past the first block of precreated files on both
 # osts, and then replay.
 test_5() {
-    replay_barrier $SINGLEMDS
-    for i in `seq 220`; do
-        echo "tag-$i" > $DIR/$tfile-$i
-    done
-    fail $SINGLEMDS
-    for i in `seq 220`; do
-      grep -q "tag-$i" $DIR/$tfile-$i || error "$tfile-$i"
-    done
-    rm -rf $DIR/$tfile-*
-    sleep 3
-    # waiting for commitment of removal
+	replay_barrier $SINGLEMDS
+	for i in $(seq 220); do
+		echo "tag-$i" > $DIR/$tfile-$i
+	done
+	fail $SINGLEMDS
+	for i in $(seq 220); do
+		grep -q "tag-$i" $DIR/$tfile-$i || error "$tfile-$i"
+	done
+	rm -rf $DIR/$tfile-*
+	sleep 3
+	# waiting for commitment of removal
 }
 run_test 5 "|x| 220 open(O_CREAT)"
 
-
 test_6a() {	# was test_6
-    mkdir -p $DIR/$tdir
-    replay_barrier $SINGLEMDS
-    mcreate $DIR/$tdir/$tfile
-    fail $SINGLEMDS
-    $CHECKSTAT -t dir $DIR/$tdir || return 1
-    $CHECKSTAT -t file $DIR/$tdir/$tfile || return 2
-    sleep 2
-    # waiting for log process thread
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	replay_barrier $SINGLEMDS
+	mcreate $DIR/$tdir/$tfile
+	fail $SINGLEMDS
+	$CHECKSTAT -t dir $DIR/$tdir ||
+		error "$CHECKSTAT $DIR/$tdir attribute check failed"
+	$CHECKSTAT -t file $DIR/$tdir/$tfile ||
+		error "$CHECKSTAT $DIR/$tdir/$tfile attribute check failed"
+	sleep 2
+	# waiting for log process thread
 }
 run_test 6a "mkdir + contained create"
 
 test_6b() {
-    mkdir -p $DIR/$tdir
-    replay_barrier $SINGLEMDS
-    rm -rf $DIR/$tdir
-    fail $SINGLEMDS
-    $CHECKSTAT -t dir $DIR/$tdir && return 1 || true
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	replay_barrier $SINGLEMDS
+	rm -rf $DIR/$tdir
+	fail $SINGLEMDS
+	$CHECKSTAT -t dir $DIR/$tdir &&
+		error "$CHECKSTAT $DIR/$tdir attribute check should fail" ||
+		true
 }
 run_test 6b "|X| rmdir"
 
 test_7() {
-    mkdir -p $DIR/$tdir
-    replay_barrier $SINGLEMDS
-    mcreate $DIR/$tdir/$tfile
-    fail $SINGLEMDS
-    $CHECKSTAT -t dir $DIR/$tdir || return 1
-    $CHECKSTAT -t file $DIR/$tdir/$tfile || return 2
-    rm -fr $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	replay_barrier $SINGLEMDS
+	mcreate $DIR/$tdir/$tfile
+	fail $SINGLEMDS
+	$CHECKSTAT -t dir $DIR/$tdir ||
+		error "$CHECKSTAT $DIR/$tdir attribute check failed"
+	$CHECKSTAT -t file $DIR/$tdir/$tfile ||
+		error "$CHECKSTAT $DIR/$tdir/$tfile attribute check failed"
+	rm -fr $DIR/$tdir
 }
 run_test 7 "mkdir |X| contained create"
 
 test_8() {
-    # make sure no side-effect from previous test.
-    rm -f $DIR/$tfile
-    replay_barrier $SINGLEMDS
-    multiop_bg_pause $DIR/$tfile mo_c || return 4
-    MULTIPID=$!
-    fail $SINGLEMDS
-    ls $DIR/$tfile
-    $CHECKSTAT -t file $DIR/$tfile || return 1
-    kill -USR1 $MULTIPID || return 2
-    wait $MULTIPID || return 3
-    rm $DIR/$tfile
+	replay_barrier $SINGLEMDS
+	multiop_bg_pause $DIR/$tfile mo_c ||
+		error "multiop mknod $DIR/$tfile failed"
+	MULTIPID=$!
+	fail $SINGLEMDS
+	ls $DIR/$tfile
+	$CHECKSTAT -t file $DIR/$tfile ||
+		error "$CHECKSTAT $DIR/$tfile attribute check failed"
+	kill -USR1 $MULTIPID || error "multiop mknod $MULTIPID not running"
+	wait $MULTIPID || error "multiop mknod $MULTIPID failed"
+	rm $DIR/$tfile
 }
 run_test 8 "creat open |X| close"
 
 test_9() {
-    replay_barrier $SINGLEMDS
-    mcreate $DIR/$tfile
-    local old_inum=`ls -i $DIR/$tfile | awk '{print $1}'`
-    fail $SINGLEMDS
-    local new_inum=`ls -i $DIR/$tfile | awk '{print $1}'`
+	replay_barrier $SINGLEMDS
+	mcreate $DIR/$tfile
+	local old_inum=$(ls -i $DIR/$tfile | awk '{print $1}')
+	fail $SINGLEMDS
+	local new_inum=$(ls -i $DIR/$tfile | awk '{print $1}')
 
-    echo " old_inum == $old_inum, new_inum == $new_inum"
-    if [ $old_inum -eq $new_inum  ] ;
-    then
-        echo " old_inum and new_inum match"
-    else
-        echo "!!!! old_inum and new_inum NOT match"
-        return 1
-    fi
-    rm $DIR/$tfile
+	echo " old_inum == $old_inum, new_inum == $new_inum"
+	if [ $old_inum -eq $new_inum  ] ;
+	then
+		echo "old_inum and new_inum match"
+	else
+		echo " old_inum and new_inum do not match"
+		error "old index($old_inum) does not match new index($new_inum)"
+	fi
+	rm $DIR/$tfile
 }
-run_test 9  "|X| create (same inum/gen)"
+run_test 9 "|X| create (same inum/gen)"
 
 test_10() {
-    mcreate $DIR/$tfile
-    replay_barrier $SINGLEMDS
-    mv $DIR/$tfile $DIR/$tfile-2
-    rm -f $DIR/$tfile
-    fail $SINGLEMDS
-    $CHECKSTAT $DIR/$tfile && return 1
-    $CHECKSTAT $DIR/$tfile-2 ||return 2
-    rm $DIR/$tfile-2
-    return 0
+	mcreate $DIR/$tfile || error "mcreate $DIR/$tfile failed"
+	replay_barrier $SINGLEMDS
+	mv $DIR/$tfile $DIR/$tfile-2
+	rm -f $DIR/$tfile
+	fail $SINGLEMDS
+	$CHECKSTAT $DIR/$tfile &&
+		error "$CHECKSTAT $DIR/$tfile attribute check should fail"
+	$CHECKSTAT $DIR/$tfile-2 ||
+		error "$CHECKSTAT $DIR/$tfile-2 attribute check failed"
+	rm $DIR/$tfile-2
+	return 0
 }
 run_test 10 "create |X| rename unlink"
 
 test_11() {
-    mcreate $DIR/$tfile
-    echo "old" > $DIR/$tfile
-    mv $DIR/$tfile $DIR/$tfile-2
-    replay_barrier $SINGLEMDS
-    echo "new" > $DIR/$tfile
-    grep new $DIR/$tfile
-    grep old $DIR/$tfile-2
-    fail $SINGLEMDS
-    grep new $DIR/$tfile || return 1
-    grep old $DIR/$tfile-2 || return 2
+	mcreate $DIR/$tfile || error "mcreate $DIR/$tfile failed"
+	echo "old" > $DIR/$tfile
+	mv $DIR/$tfile $DIR/$tfile-2
+	replay_barrier $SINGLEMDS
+	echo "new" > $DIR/$tfile
+	grep new $DIR/$tfile
+	grep old $DIR/$tfile-2
+	fail $SINGLEMDS
+	grep new $DIR/$tfile || error "grep $DIR/$tfile failed"
+	grep old $DIR/$tfile-2 || error "grep $DIR/$tfile-2 failed"
 }
 run_test 11 "create open write rename |X| create-old-name read"
 
 test_12() {
-    mcreate $DIR/$tfile
-    multiop_bg_pause $DIR/$tfile o_tSc || return 3
-    pid=$!
-    rm -f $DIR/$tfile
-    replay_barrier $SINGLEMDS
-    kill -USR1 $pid
-    wait $pid || return 1
+	mcreate $DIR/$tfile || error "mcreate $DIR/$tfile failed"
+	multiop_bg_pause $DIR/$tfile o_tSc ||
+		error "multiop_bg_pause $DIR/$tfile failed"
+	pid=$!
+	rm -f $DIR/$tfile
+	replay_barrier $SINGLEMDS
+	kill -USR1 $pid || error "multiop $pid not running"
+	wait $pid || error "multiop $pid failed"
 
-    fail $SINGLEMDS
-    [ -e $DIR/$tfile ] && return 2
-    return 0
+	fail $SINGLEMDS
+	[ -e $DIR/$tfile ] && error "file $DIR/$tfile should not exist"
+	return 0
 }
 run_test 12 "open, unlink |X| close"
-
 
 # 1777 - replay open after committed chmod that would make
 #        a regular open a failure
 test_13() {
-    mcreate $DIR/$tfile
-    multiop_bg_pause $DIR/$tfile O_wc || return 3
-    pid=$!
-    chmod 0 $DIR/$tfile
-    $CHECKSTAT -p 0 $DIR/$tfile
-    replay_barrier $SINGLEMDS
-    fail $SINGLEMDS
-    kill -USR1 $pid
-    wait $pid || return 1
+	mcreate $DIR/$tfile || error "mcreate $DIR/$tfile failed"
+	multiop_bg_pause $DIR/$tfile O_wc ||
+		error "multiop_bg_pause $DIR/$tfile failed"
+	pid=$!
+	chmod 0 $DIR/$tfile
+	$CHECKSTAT -p 0 $DIR/$tfile ||
+		error "$CHECKSTAT $DIR/$tfile attribute check failed"
+	replay_barrier $SINGLEMDS
+	fail $SINGLEMDS
+	kill -USR1 $pid || error "multiop $pid not running"
+	wait $pid || error "multiop $pid failed"
 
-    $CHECKSTAT -s 1 -p 0 $DIR/$tfile || return 2
-    rm $DIR/$tfile || return 4
-    return 0
+	$CHECKSTAT -s 1 -p 0 $DIR/$tfile ||
+		error "second $CHECKSTAT $DIR/$tfile attribute check failed"
+	rm $DIR/$tfile || error "rm $DIR/$tfile failed"
+	return 0
 }
 run_test 13 "open chmod 0 |x| write close"
 
 test_14() {
-    multiop_bg_pause $DIR/$tfile O_tSc || return 4
-    pid=$!
-    rm -f $DIR/$tfile
-    replay_barrier $SINGLEMDS
-    kill -USR1 $pid || return 1
-    wait $pid || return 2
+	multiop_bg_pause $DIR/$tfile O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile failed"
+	pid=$!
+	rm -f $DIR/$tfile
+	replay_barrier $SINGLEMDS
+	kill -USR1 $pid || error "multiop $pid not running"
+	wait $pid || error "multiop $pid failed"
 
-    fail $SINGLEMDS
-    [ -e $DIR/$tfile ] && return 3
-    return 0
+	fail $SINGLEMDS
+	[ -e $DIR/$tfile ] && error "file $DIR/$tfile should not exist"
+	return 0
 }
 run_test 14 "open(O_CREAT), unlink |X| close"
 
 test_15() {
-    multiop_bg_pause $DIR/$tfile O_tSc || return 5
-    pid=$!
-    rm -f $DIR/$tfile
-    replay_barrier $SINGLEMDS
-    touch $DIR/g11 || return 1
-    kill -USR1 $pid
-    wait $pid || return 2
+	multiop_bg_pause $DIR/$tfile O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile failed"
+	pid=$!
+	rm -f $DIR/$tfile
+	replay_barrier $SINGLEMDS
+	touch $DIR/$tfile-1 || error "touch $DIR/$tfile-1 failed"
+	kill -USR1 $pid || error "multiop $pid not running"
+	wait $pid || error "multiop $pid failed"
 
-    fail $SINGLEMDS
-    [ -e $DIR/$tfile ] && return 3
-    touch $DIR/h11 || return 4
-    return 0
+	fail $SINGLEMDS
+	[ -e $DIR/$tfile ] && error "file $DIR/$tfile should not exist"
+	touch $DIR/$tfile-2 || error "touch $DIR/$tfile-2 failed"
+	return 0
 }
 run_test 15 "open(O_CREAT), unlink |X|  touch new, close"
 
-
 test_16() {
-    replay_barrier $SINGLEMDS
-    mcreate $DIR/$tfile
-    munlink $DIR/$tfile
-    mcreate $DIR/$tfile-2
-    fail $SINGLEMDS
-    [ -e $DIR/$tfile ] && return 1
-    [ -e $DIR/$tfile-2 ] || return 2
-    munlink $DIR/$tfile-2 || return 3
+	replay_barrier $SINGLEMDS
+	mcreate $DIR/$tfile
+	munlink $DIR/$tfile
+	mcreate $DIR/$tfile-2
+	fail $SINGLEMDS
+	[ -e $DIR/$tfile ] && error "file $DIR/$tfile should not exist"
+	[ -e $DIR/$tfile-2 ] || error "file $DIR/$tfile-2 does not exist"
+	munlink $DIR/$tfile-2 || error "munlink $DIR/$tfile-2 failed"
 }
 run_test 16 "|X| open(O_CREAT), unlink, touch new,  unlink new"
 
 test_17() {
-    replay_barrier $SINGLEMDS
-    multiop_bg_pause $DIR/$tfile O_c || return 4
-    pid=$!
-    fail $SINGLEMDS
-    kill -USR1 $pid || return 1
-    wait $pid || return 2
-    $CHECKSTAT -t file $DIR/$tfile || return 3
-    rm $DIR/$tfile
+	replay_barrier $SINGLEMDS
+	multiop_bg_pause $DIR/$tfile O_c ||
+		error "multiop_bg_pause $DIR/$tfile failed"
+	pid=$!
+	fail $SINGLEMDS
+	kill -USR1 $pid || error "multiop $pid not running"
+	wait $pid || error "multiop $pid failed"
+	$CHECKSTAT -t file $DIR/$tfile ||
+		error "$CHECKSTAT $DIR/$tfile attribute check failed"
+	rm $DIR/$tfile
 }
 run_test 17 "|X| open(O_CREAT), |replay| close"
 
 test_18() {
-    replay_barrier $SINGLEMDS
-    multiop_bg_pause $DIR/$tfile O_tSc || return 8
-    pid=$!
-    rm -f $DIR/$tfile
-    touch $DIR/$tfile-2 || return 1
-    echo "pid: $pid will close"
-    kill -USR1 $pid
-    wait $pid || return 2
+	replay_barrier $SINGLEMDS
+	multiop_bg_pause $DIR/$tfile O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile failed"
+	pid=$!
+	rm -f $DIR/$tfile
+	touch $DIR/$tfile-2 || error "touch $DIR/$tfile-2 failed"
+	echo "pid: $pid will close"
+	kill -USR1 $pid || error "multiop $pid not running"
+	wait $pid || error "multiop $pid failed"
 
-    fail $SINGLEMDS
-    [ -e $DIR/$tfile ] && return 3
-    [ -e $DIR/$tfile-2 ] || return 4
-    # this touch frequently fails
-    touch $DIR/$tfile-3 || return 5
-    munlink $DIR/$tfile-2 || return 6
-    munlink $DIR/$tfile-3 || return 7
-    return 0
+	fail $SINGLEMDS
+	[ -e $DIR/$tfile ] && error "file $DIR/$tfile should not exist"
+	[ -e $DIR/$tfile-2 ] || error "file $DIR/$tfile-2 does not exist"
+	# this touch frequently fails
+	touch $DIR/$tfile-3 || error "touch $DIR/$tfile-3 failed"
+	munlink $DIR/$tfile-2 || error "munlink $DIR/$tfile-2 failed"
+	munlink $DIR/$tfile-3 || error "munlink $DIR/$tfile-3 failed"
+	return 0
 }
-run_test 18 "|X| open(O_CREAT), unlink, touch new, close, touch, unlink"
+run_test 18 "open(O_CREAT), unlink, touch new, close, touch, unlink"
 
 # bug 1855 (a simpler form of test_11 above)
 test_19() {
-    replay_barrier $SINGLEMDS
-    mcreate $DIR/$tfile
-    echo "old" > $DIR/$tfile
-    mv $DIR/$tfile $DIR/$tfile-2
-    grep old $DIR/$tfile-2
-    fail $SINGLEMDS
-    grep old $DIR/$tfile-2 || return 2
+	replay_barrier $SINGLEMDS
+	mcreate $DIR/$tfile
+	echo "old" > $DIR/$tfile
+	mv $DIR/$tfile $DIR/$tfile-2
+	grep old $DIR/$tfile-2
+	fail $SINGLEMDS
+	grep old $DIR/$tfile-2 || error "grep $DIR/$tfile-2 failed"
 }
-run_test 19 "|X| mcreate, open, write, rename "
+run_test 19 "mcreate, open, write, rename "
 
 test_20a() {	# was test_20
-    replay_barrier $SINGLEMDS
-    multiop_bg_pause $DIR/$tfile O_tSc || return 3
-    pid=$!
-    rm -f $DIR/$tfile
+	replay_barrier $SINGLEMDS
+	multiop_bg_pause $DIR/$tfile O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile failed"
+	pid=$!
+	rm -f $DIR/$tfile
 
-    fail $SINGLEMDS
-    kill -USR1 $pid
-    wait $pid || return 1
-    [ -e $DIR/$tfile ] && return 2
-    return 0
+	fail $SINGLEMDS
+	kill -USR1 $pid || error "multiop $pid not running"
+	wait $pid || error "multiop $pid failed"
+	[ -e $DIR/$tfile ] && error "file $DIR/$tfile should not exist"
+	return 0
 }
 run_test 20a "|X| open(O_CREAT), unlink, replay, close (test mds_cleanup_orphans)"
 
@@ -424,15 +450,15 @@ test_20b() { # bug 10480
 	local BEFOREUSED
 	local AFTERUSED
 
-	BEFOREUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
+	BEFOREUSED=$(df -P $DIR | tail -1 | awk '{ print $3 }')
 	dd if=/dev/zero of=$DIR/$tfile bs=4k count=10000 &
-	pid=$!
 	while [ ! -e $DIR/$tfile ] ; do
-	usleep 60                           # give dd a chance to start
+		usleep 60                      # give dd a chance to start
 	done
 
-	$GETSTRIPE $DIR/$tfile || return 1
-	rm -f $DIR/$tfile || return 2       # make it an orphan
+	$GETSTRIPE $DIR/$tfile || error "$GETSTRIPE $DIR/$tfile failed"
+	# make it an orphan
+	rm -f $DIR/$tfile || error "rm -f $DIR/$tfile failed"
 	mds_evict_client
 	client_up || client_up || true    # reconnect
 
@@ -440,7 +466,8 @@ test_20b() { # bug 10480
 
 	fail $SINGLEMDS                            # start orphan recovery
 	wait_recovery_complete $SINGLEMDS || error "MDS recovery not done"
-	wait_delete_completed_mds $wait_timeout || return 3
+	wait_delete_completed_mds $wait_timeout ||
+		error "delete did not complete"
 
 	AFTERUSED=$(df -P $DIR | tail -1 | awk '{ print $3 }')
 	log "before $BEFOREUSED, after $AFTERUSED"
@@ -451,348 +478,380 @@ test_20b() { # bug 10480
 run_test 20b "write, unlink, eviction, replay, (test mds_cleanup_orphans)"
 
 test_20c() { # bug 10480
-    multiop_bg_pause $DIR/$tfile Ow_c || return 1
-    pid=$!
+	multiop_bg_pause $DIR/$tfile Ow_c ||
+		error "multiop_bg_pause $DIR/$tfile failed"
+	pid=$!
 
-    ls -la $DIR/$tfile
+	ls -la $DIR/$tfile
 
-    mds_evict_client
-    client_up || client_up || true    # reconnect
+	mds_evict_client
+	client_up || client_up || true    # reconnect
 
-    kill -USR1 $pid
-    wait $pid || return 1
-    [ -s $DIR/$tfile ] || error "File was truncated"
+	kill -USR1 $pid || error "multiop $pid not running"
+	wait $pid || error "multiop $pid failed"
+	[ -s $DIR/$tfile ] || error "File was truncated"
 
-    return 0
+	return 0
 }
 run_test 20c "check that client eviction does not affect file content"
 
 test_21() {
-    replay_barrier $SINGLEMDS
-    multiop_bg_pause $DIR/$tfile O_tSc || return 5
-    pid=$!
-    rm -f $DIR/$tfile
-    touch $DIR/g11 || return 1
+	replay_barrier $SINGLEMDS
+	multiop_bg_pause $DIR/$tfile O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile failed"
+	pid=$!
+	rm -f $DIR/$tfile
+	touch $DIR/$tfile-1 || error "touch $DIR/$tfile-1 failed"
 
-    fail $SINGLEMDS
-    kill -USR1 $pid
-    wait $pid || return 2
-    [ -e $DIR/$tfile ] && return 3
-    touch $DIR/h11 || return 4
-    return 0
+	fail $SINGLEMDS
+	kill -USR1 $pid || error "multiop $pid not running"
+	wait $pid || error "multiop $pid failed"
+	[ -e $DIR/$tfile ] && error "file $DIR/$tfile should not exist"
+	touch $DIR/$tfile-2 || error "touch $DIR/$tfile-2 failed"
+	return 0
 }
 run_test 21 "|X| open(O_CREAT), unlink touch new, replay, close (test mds_cleanup_orphans)"
 
 test_22() {
-    multiop_bg_pause $DIR/$tfile O_tSc || return 3
-    pid=$!
+	multiop_bg_pause $DIR/$tfile O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile failed"
+	pid=$!
 
-    replay_barrier $SINGLEMDS
-    rm -f $DIR/$tfile
+	replay_barrier $SINGLEMDS
+	rm -f $DIR/$tfile
 
-    fail $SINGLEMDS
-    kill -USR1 $pid
-    wait $pid || return 1
-    [ -e $DIR/$tfile ] && return 2
-    return 0
+	fail $SINGLEMDS
+	kill -USR1 $pid || error "multiop $pid not running"
+	wait $pid || error "multiop $pid failed"
+	[ -e $DIR/$tfile ] && error "file $DIR/$tfile should not exist"
+	return 0
 }
 run_test 22 "open(O_CREAT), |X| unlink, replay, close (test mds_cleanup_orphans)"
 
 test_23() {
-    multiop_bg_pause $DIR/$tfile O_tSc || return 5
-    pid=$!
+	multiop_bg_pause $DIR/$tfile O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile failed"
+	pid=$!
 
-    replay_barrier $SINGLEMDS
-    rm -f $DIR/$tfile
-    touch $DIR/g11 || return 1
+	replay_barrier $SINGLEMDS
+	rm -f $DIR/$tfile
+	touch $DIR/$tfile-1 || error "touch $DIR/$tfile-1 failed"
 
-    fail $SINGLEMDS
-    kill -USR1 $pid
-    wait $pid || return 2
-    [ -e $DIR/$tfile ] && return 3
-    touch $DIR/h11 || return 4
-    return 0
+	fail $SINGLEMDS
+	kill -USR1 $pid || error "multiop $pid not running"
+	wait $pid || error "multiop $pid failed"
+	[ -e $DIR/$tfile ] && error "file $DIR/$tfile should not exist"
+	touch $DIR/$tfile-2 || error "touch $DIR/$tfile-2 failed"
+	return 0
 }
 run_test 23 "open(O_CREAT), |X| unlink touch new, replay, close (test mds_cleanup_orphans)"
 
 test_24() {
-    multiop_bg_pause $DIR/$tfile O_tSc || return 3
-    pid=$!
+	multiop_bg_pause $DIR/$tfile O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile failed"
+	pid=$!
 
-    replay_barrier $SINGLEMDS
-    fail $SINGLEMDS
-    rm -f $DIR/$tfile
-    kill -USR1 $pid
-    wait $pid || return 1
-    [ -e $DIR/$tfile ] && return 2
-    return 0
+	replay_barrier $SINGLEMDS
+	fail $SINGLEMDS
+	rm -f $DIR/$tfile
+	kill -USR1 $pid || error "multiop $pid not running"
+	wait $pid || error "multiop $pid failed"
+	[ -e $DIR/$tfile ] && error "file $DIR/$tfile should not exist"
+	return 0
 }
 run_test 24 "open(O_CREAT), replay, unlink, close (test mds_cleanup_orphans)"
 
 test_25() {
-    multiop_bg_pause $DIR/$tfile O_tSc || return 3
-    pid=$!
-    rm -f $DIR/$tfile
+	multiop_bg_pause $DIR/$tfile O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile failed"
+	pid=$!
+	rm -f $DIR/$tfile
 
-    replay_barrier $SINGLEMDS
-    fail $SINGLEMDS
-    kill -USR1 $pid
-    wait $pid || return 1
-    [ -e $DIR/$tfile ] && return 2
-    return 0
+	replay_barrier $SINGLEMDS
+	fail $SINGLEMDS
+	kill -USR1 $pid || error "multiop $pid not running"
+	wait $pid || error "multiop $pid failed"
+	[ -e $DIR/$tfile ] && error "file $DIR/$tfile should not exist"
+	return 0
 }
 run_test 25 "open(O_CREAT), unlink, replay, close (test mds_cleanup_orphans)"
 
 test_26() {
-    replay_barrier $SINGLEMDS
-    multiop_bg_pause $DIR/$tfile-1 O_tSc || return 5
-    pid1=$!
-    multiop_bg_pause $DIR/$tfile-2 O_tSc || return 6
-    pid2=$!
-    rm -f $DIR/$tfile-1
-    rm -f $DIR/$tfile-2
-    kill -USR1 $pid2
-    wait $pid2 || return 1
+	replay_barrier $SINGLEMDS
+	multiop_bg_pause $DIR/$tfile-1 O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile-1 failed"
+	pid1=$!
+	multiop_bg_pause $DIR/$tfile-2 O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile-2 failed"
+	pid2=$!
+	rm -f $DIR/$tfile-1
+	rm -f $DIR/$tfile-2
+	kill -USR1 $pid2 || error "second multiop $pid2 not running"
+	wait $pid2 || error "second multiop $pid2 failed"
 
-    fail $SINGLEMDS
-    kill -USR1 $pid1
-    wait $pid1 || return 2
-    [ -e $DIR/$tfile-1 ] && return 3
-    [ -e $DIR/$tfile-2 ] && return 4
-    return 0
+	fail $SINGLEMDS
+	kill -USR1 $pid1 || error "multiop $pid1 not running"
+	wait $pid1 || error "multiop $pid1 failed"
+	[ -e $DIR/$tfile-1 ] && error "file $DIR/$tfile-1 should not exist"
+	[ -e $DIR/$tfile-2 ] && error "file $DIR/$tfile-2 should not exist"
+	return 0
 }
 run_test 26 "|X| open(O_CREAT), unlink two, close one, replay, close one (test mds_cleanup_orphans)"
 
 test_27() {
-    replay_barrier $SINGLEMDS
-    multiop_bg_pause $DIR/$tfile-1 O_tSc || return 5
-    pid1=$!
-    multiop_bg_pause $DIR/$tfile-2 O_tSc || return 6
-    pid2=$!
-    rm -f $DIR/$tfile-1
-    rm -f $DIR/$tfile-2
+	replay_barrier $SINGLEMDS
+	multiop_bg_pause $DIR/$tfile-1 O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile-1 failed"
+	pid1=$!
+	multiop_bg_pause $DIR/$tfile-2 O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile-2 failed"
+	pid2=$!
+	rm -f $DIR/$tfile-1
+	rm -f $DIR/$tfile-2
 
-    fail $SINGLEMDS
-    kill -USR1 $pid1
-    wait $pid1 || return 1
-    kill -USR1 $pid2
-    wait $pid2 || return 2
-    [ -e $DIR/$tfile-1 ] && return 3
-    [ -e $DIR/$tfile-2 ] && return 4
-    return 0
+	fail $SINGLEMDS
+	kill -USR1 $pid1 || error "multiop $pid1 not running"
+	wait $pid1 || error "multiop $pid1 failed"
+	kill -USR1 $pid2 || error "second multiop $pid2 not running"
+	wait $pid2 || error "second multiop $pid2 failed"
+	[ -e $DIR/$tfile-1 ] && error "file $DIR/$tfile-1 should not exist"
+	[ -e $DIR/$tfile-2 ] && error "file $DIR/$tfile-2 should not exist"
+	return 0
 }
 run_test 27 "|X| open(O_CREAT), unlink two, replay, close two (test mds_cleanup_orphans)"
 
 test_28() {
-    multiop_bg_pause $DIR/$tfile-1 O_tSc || return 5
-    pid1=$!
-    multiop_bg_pause $DIR/$tfile-2 O_tSc || return 6
-    pid2=$!
-    replay_barrier $SINGLEMDS
-    rm -f $DIR/$tfile-1
-    rm -f $DIR/$tfile-2
-    kill -USR1 $pid2
-    wait $pid2 || return 1
+	multiop_bg_pause $DIR/$tfile-1 O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile-1 failed"
+	pid1=$!
+	multiop_bg_pause $DIR/$tfile-2 O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile-2 failed"
+	pid2=$!
+	replay_barrier $SINGLEMDS
+	rm -f $DIR/$tfile-1
+	rm -f $DIR/$tfile-2
+	kill -USR1 $pid2 || error "second multiop $pid2 not running"
+	wait $pid2 || error "second multiop $pid2 failed"
 
-    fail $SINGLEMDS
-    kill -USR1 $pid1
-    wait $pid1 || return 2
-    [ -e $DIR/$tfile-1 ] && return 3
-    [ -e $DIR/$tfile-2 ] && return 4
-    return 0
+	fail $SINGLEMDS
+	kill -USR1 $pid1 || error "multiop $pid1 not running"
+	wait $pid1 || error "multiop $pid1 failed"
+	[ -e $DIR/$tfile-1 ] && error "file $DIR/$tfile-1 should not exist"
+	[ -e $DIR/$tfile-2 ] && error "file $DIR/$tfile-2 should not exist"
+	return 0
 }
 run_test 28 "open(O_CREAT), |X| unlink two, close one, replay, close one (test mds_cleanup_orphans)"
 
 test_29() {
-    multiop_bg_pause $DIR/$tfile-1 O_tSc || return 5
-    pid1=$!
-    multiop_bg_pause $DIR/$tfile-2 O_tSc || return 6
-    pid2=$!
-    replay_barrier $SINGLEMDS
-    rm -f $DIR/$tfile-1
-    rm -f $DIR/$tfile-2
+	multiop_bg_pause $DIR/$tfile-1 O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile-1 failed"
+	pid1=$!
+	multiop_bg_pause $DIR/$tfile-2 O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile-2 failed"
+	pid2=$!
+	replay_barrier $SINGLEMDS
+	rm -f $DIR/$tfile-1
+	rm -f $DIR/$tfile-2
 
-    fail $SINGLEMDS
-    kill -USR1 $pid1
-    wait $pid1 || return 1
-    kill -USR1 $pid2
-    wait $pid2 || return 2
-    [ -e $DIR/$tfile-1 ] && return 3
-    [ -e $DIR/$tfile-2 ] && return 4
-    return 0
+	fail $SINGLEMDS
+	kill -USR1 $pid1 || error "multiop $pid1 not running"
+	wait $pid1 || error "multiop $pid1 failed"
+	kill -USR1 $pid2 || error "second multiop $pid2 not running"
+	wait $pid2 || error "second multiop $pid2 failed"
+	[ -e $DIR/$tfile-1 ] && error "file $DIR/$tfile-1 should not exist"
+	[ -e $DIR/$tfile-2 ] && error "file $DIR/$tfile-2 should not exist"
+	return 0
 }
 run_test 29 "open(O_CREAT), |X| unlink two, replay, close two (test mds_cleanup_orphans)"
 
 test_30() {
-    multiop_bg_pause $DIR/$tfile-1 O_tSc || return 5
-    pid1=$!
-    multiop_bg_pause $DIR/$tfile-2 O_tSc || return 6
-    pid2=$!
-    rm -f $DIR/$tfile-1
-    rm -f $DIR/$tfile-2
+	multiop_bg_pause $DIR/$tfile-1 O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile-1 failed"
+	pid1=$!
+	multiop_bg_pause $DIR/$tfile-2 O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile-2 failed"
+	pid2=$!
+	rm -f $DIR/$tfile-1
+	rm -f $DIR/$tfile-2
 
-    replay_barrier $SINGLEMDS
-    fail $SINGLEMDS
-    kill -USR1 $pid1
-    wait $pid1 || return 1
-    kill -USR1 $pid2
-    wait $pid2 || return 2
-    [ -e $DIR/$tfile-1 ] && return 3
-    [ -e $DIR/$tfile-2 ] && return 4
-    return 0
+	replay_barrier $SINGLEMDS
+	fail $SINGLEMDS
+	kill -USR1 $pid1 || error "multiop $pid1 not running"
+	wait $pid1 || error "multiop $pid1 failed"
+	kill -USR1 $pid2 || error "second multiop $pid2 not running"
+	wait $pid2 || error "second multiop $pid2 failed"
+	[ -e $DIR/$tfile-1 ] && error "file $DIR/$tfile-1 should not exist"
+	[ -e $DIR/$tfile-2 ] && error "file $DIR/$tfile-2 should not exist"
+	return 0
 }
 run_test 30 "open(O_CREAT) two, unlink two, replay, close two (test mds_cleanup_orphans)"
 
 test_31() {
-    multiop_bg_pause $DIR/$tfile-1 O_tSc || return 5
-    pid1=$!
-    multiop_bg_pause $DIR/$tfile-2 O_tSc || return 6
-    pid2=$!
-    rm -f $DIR/$tfile-1
+	multiop_bg_pause $DIR/$tfile-1 O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile-1 failed"
+	pid1=$!
+	multiop_bg_pause $DIR/$tfile-2 O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile-2 failed"
+	pid2=$!
+	rm -f $DIR/$tfile-1
 
-    replay_barrier $SINGLEMDS
-    rm -f $DIR/$tfile-2
-    fail $SINGLEMDS
-    kill -USR1 $pid1
-    wait $pid1 || return 1
-    kill -USR1 $pid2
-    wait $pid2 || return 2
-    [ -e $DIR/$tfile-1 ] && return 3
-    [ -e $DIR/$tfile-2 ] && return 4
-    return 0
+	replay_barrier $SINGLEMDS
+	rm -f $DIR/$tfile-2
+	fail $SINGLEMDS
+	kill -USR1 $pid1 || error "multiop $pid1 not running"
+	wait $pid1 || error "multiop $pid1 failed"
+	kill -USR1 $pid2 || error "second multiop $pid2 not running"
+	wait $pid2 || error "second multiop $pid2 failed"
+	[ -e $DIR/$tfile-1 ] && error "file $DIR/$tfile-1 should not exist"
+	[ -e $DIR/$tfile-2 ] && error "file $DIR/$tfile-2 should not exist"
+	return 0
 }
 run_test 31 "open(O_CREAT) two, unlink one, |X| unlink one, close two (test mds_cleanup_orphans)"
 
 # tests for bug 2104; completion without crashing is success.  The close is
 # stale, but we always return 0 for close, so the app never sees it.
 test_32() {
-    multiop_bg_pause $DIR/$tfile O_c || return 2
-    pid1=$!
-    multiop_bg_pause $DIR/$tfile O_c || return 3
-    pid2=$!
-    mds_evict_client
-    client_up || client_up || return 1
-    kill -USR1 $pid1
-    kill -USR1 $pid2
-    wait $pid1 || return 4
-    wait $pid2 || return 5
-    return 0
+	multiop_bg_pause $DIR/$tfile O_c ||
+		error "multiop_bg_pause $DIR/$tfile failed"
+	pid1=$!
+	multiop_bg_pause $DIR/$tfile O_c ||
+		error "second multiop_bg_pause $DIR/$tfile failed"
+	pid2=$!
+	mds_evict_client
+	client_up || client_up || error "client_up failed"
+	kill -USR1 $pid1 || error "multiop $pid1 not running"
+	kill -USR1 $pid2 || error "second multiop $pid2 not running"
+	wait $pid1 || error "multiop $pid1 failed"
+	wait $pid2 || error "second multiop $pid2 failed"
+	return 0
 }
 run_test 32 "close() notices client eviction; close() after client eviction"
 
 test_33a() {
-    createmany -o $DIR/$tfile-%d 10
-    replay_barrier_nosync $SINGLEMDS
-    fail_abort $SINGLEMDS
-    # recreate shouldn't fail
-    createmany -o $DIR/$tfile--%d 10 || return 1
-    rm $DIR/$tfile-* -f
-    return 0
+	createmany -o $DIR/$tfile-%d 10 ||
+		error "createmany create $DIR/$tfile failed"
+	replay_barrier_nosync $SINGLEMDS
+	fail_abort $SINGLEMDS
+	# recreate shouldn't fail
+	createmany -o $DIR/$tfile--%d 10 ||
+		error "createmany recreate $DIR/$tfile failed"
+	rm $DIR/$tfile-* -f
+	return 0
 }
 run_test 33a "fid seq shouldn't be reused after abort recovery"
 
 test_33b() {
-    #define OBD_FAIL_SEQ_ALLOC                          0x1311
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x1311"
+	#define OBD_FAIL_SEQ_ALLOC                          0x1311
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x1311"
 
-    createmany -o $DIR/$tfile-%d 10
-    replay_barrier_nosync $SINGLEMDS
-    fail_abort $SINGLEMDS
-    # recreate shouldn't fail
-    createmany -o $DIR/$tfile--%d 10 || return 1
-    rm $DIR/$tfile-* -f
-    return 0
+	createmany -o $DIR/$tfile-%d 10
+	replay_barrier_nosync $SINGLEMDS
+	fail_abort $SINGLEMDS
+	# recreate shouldn't fail
+	createmany -o $DIR/$tfile--%d 10 ||
+		error "createmany recreate $DIR/$tfile failed"
+	rm $DIR/$tfile-* -f
+	return 0
 }
 run_test 33b "test fid seq allocation"
 
 test_34() {
-    multiop_bg_pause $DIR/$tfile O_c || return 2
-    pid=$!
-    rm -f $DIR/$tfile
+	multiop_bg_pause $DIR/$tfile O_c ||
+		error "multiop_bg_pause $DIR/$tfile failed"
+	pid=$!
+	rm -f $DIR/$tfile
 
-    replay_barrier $SINGLEMDS
-    fail_abort $SINGLEMDS
-    kill -USR1 $pid
-    wait $pid || return 3
-    [ -e $DIR/$tfile ] && return 1
-    sync
-    return 0
+	replay_barrier $SINGLEMDS
+	fail_abort $SINGLEMDS
+	kill -USR1 $pid || error "multiop $pid not running"
+	wait $pid || error "multiop $pid failed"
+	[ -e $DIR/$tfile ] && error "file $DIR/$tfile should not exist"
+	sync
+	return 0
 }
 run_test 34 "abort recovery before client does replay (test mds_cleanup_orphans)"
 
 # bug 2278 - generate one orphan on OST, then destroy it during recovery from llog
 test_35() {
-    touch $DIR/$tfile
+	touch $DIR/$tfile || error "touch $DIR/$tfile failed"
 
-#define OBD_FAIL_MDS_REINT_NET_REP       0x119
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000119"
-    rm -f $DIR/$tfile &
-    sleep 1
-    sync
-    sleep 1
-    # give a chance to remove from MDS
-    fail_abort $SINGLEMDS
-    $CHECKSTAT -t file $DIR/$tfile && return 1 || true
+	#define OBD_FAIL_MDS_REINT_NET_REP       0x119
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000119"
+	rm -f $DIR/$tfile &
+	sleep 1
+	sync
+	sleep 1
+	# give a chance to remove from MDS
+	fail_abort $SINGLEMDS
+	$CHECKSTAT -t file $DIR/$tfile &&
+		error "$CHECKSTAT $DIR/$tfile attribute check should fail" ||
+		true
 }
 run_test 35 "test recovery from llog for unlink op"
 
 # b=2432 resent cancel after replay uses wrong cookie,
 # so don't resend cancels
 test_36() {
-    replay_barrier $SINGLEMDS
-    touch $DIR/$tfile
-    checkstat $DIR/$tfile
-    facet_failover $SINGLEMDS
-    cancel_lru_locks mdc
-    if dmesg | grep "unknown lock cookie"; then
-	echo "cancel after replay failed"
-	return 1
-    fi
+	replay_barrier $SINGLEMDS
+	touch $DIR/$tfile
+	checkstat $DIR/$tfile
+	facet_failover $SINGLEMDS
+	cancel_lru_locks mdc
+	if dmesg | grep "unknown lock cookie"; then
+		error "cancel after replay failed"
+	fi
 }
 run_test 36 "don't resend cancel"
 
 # b=2368
 # directory orphans can't be unlinked from PENDING directory
 test_37() {
-    rmdir $DIR/$tfile 2>/dev/null
-    multiop_bg_pause $DIR/$tfile dD_c || return 2
-    pid=$!
-    rmdir $DIR/$tfile
+	rmdir $DIR/$tfile 2>/dev/null
+	multiop_bg_pause $DIR/$tfile dD_c ||
+		error "multiop_bg_pause $DIR/$tfile failed"
+	pid=$!
+	rmdir $DIR/$tfile
 
-    replay_barrier $SINGLEMDS
-    # clear the dmesg buffer so we only see errors from this recovery
-    do_facet $SINGLEMDS dmesg -c >/dev/null
-    fail_abort $SINGLEMDS
-    kill -USR1 $pid
-    do_facet $SINGLEMDS dmesg | grep "error .* unlinking .* from PENDING" &&
-    	return 1
-    wait $pid || return 3
-    sync
-    return 0
+	replay_barrier $SINGLEMDS
+	# clear the dmesg buffer so we only see errors from this recovery
+	do_facet $SINGLEMDS dmesg -c >/dev/null
+	fail_abort $SINGLEMDS
+	kill -USR1 $pid || error "multiop $pid not running"
+	do_facet $SINGLEMDS dmesg | grep "error .* unlinking .* from PENDING" &&
+		error "error unlinking files"
+	wait $pid || error "multiop $pid failed"
+	sync
+	return 0
 }
-start_full_debug_logging
 run_test 37 "abort recovery before client does replay (test mds_cleanup_orphans for directories)"
-stop_full_debug_logging
 
 test_38() {
-    createmany -o $DIR/$tfile-%d 800
-    unlinkmany $DIR/$tfile-%d 0 400
-    replay_barrier $SINGLEMDS
-    fail $SINGLEMDS
-    unlinkmany $DIR/$tfile-%d 400 400
-    sleep 2
-    $CHECKSTAT -t file $DIR/$tfile-* && return 1 || true
+	createmany -o $DIR/$tfile-%d 800 ||
+		error "createmany -o $DIR/$tfile failed"
+	unlinkmany $DIR/$tfile-%d 0 400 || error "unlinkmany $DIR/$tfile failed"
+	replay_barrier $SINGLEMDS
+	fail $SINGLEMDS
+	unlinkmany $DIR/$tfile-%d 400 400 ||
+		error "unlinkmany $DIR/$tfile 400 failed"
+	sleep 2
+	$CHECKSTAT -t file $DIR/$tfile-* &&
+		error "$CHECKSTAT $DIR/$tfile-* attribute check should fail" ||
+		true
 }
 run_test 38 "test recovery from unlink llog (test llog_gen_rec) "
 
 test_39() { # bug 4176
-    createmany -o $DIR/$tfile-%d 800
-    replay_barrier $SINGLEMDS
-    unlinkmany $DIR/$tfile-%d 0 400
-    fail $SINGLEMDS
-    unlinkmany $DIR/$tfile-%d 400 400
-    sleep 2
-    $CHECKSTAT -t file $DIR/$tfile-* && return 1 || true
+	createmany -o $DIR/$tfile-%d 800 ||
+		error "createmany -o $DIR/$tfile failed"
+	replay_barrier $SINGLEMDS
+	unlinkmany $DIR/$tfile-%d 0 400
+	fail $SINGLEMDS
+	unlinkmany $DIR/$tfile-%d 400 400 ||
+		error "unlinkmany $DIR/$tfile 400 failed"
+	sleep 2
+	$CHECKSTAT -t file $DIR/$tfile-* &&
+		error "$CHECKSTAT $DIR/$tfile-* attribute check should fail" ||
+		true
 }
 run_test 39 "test recovery from unlink llog (test llog_gen_rec) "
 
@@ -813,12 +872,12 @@ test_40(){
 	WRITE_PID=$!
 	sleep 1
 	facet_failover $SINGLEMDS
-#define OBD_FAIL_MDS_CONNECT_NET         0x117
+	#define OBD_FAIL_MDS_CONNECT_NET         0x117
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000117"
 	kill -USR1 $PID
-	stat1=`count_ost_writes`
+	stat1=$(count_ost_writes)
 	sleep $TIMEOUT
-	stat2=`count_ost_writes`
+	stat2=$(count_ost_writes)
 	echo "$stat1, $stat2"
 	if [ $stat1 -lt $stat2 ]; then
 		echo "writes continuing during recovery"
@@ -832,13 +891,14 @@ test_40(){
 	wait $WRITE_PID
 
 	echo "waiting for multiop $PID"
-	wait $PID || return 2
-	do_facet client munlink $MOUNT/$tfile  || return 3
-	do_facet client munlink $MOUNT/${tfile}-2  || return 3
+	wait $PID || error "multiop $PID failed"
+	do_facet client munlink $MOUNT/$tfile  ||
+		error "munlink $MOUNT/$tfile failed"
+	do_facet client munlink $MOUNT/${tfile}-2  ||
+		error "munlink $MOUNT/$tfile-2 failed"
 	return $RC
 }
 run_test 40 "cause recovery in ptlrpc, ensure IO continues"
-
 
 #b=2814
 # make sure that a read to one osc doesn't try to double-unlock its page just
@@ -852,58 +912,66 @@ test_41() {
         skip_env "skipping test 41: we don't have a second OST to test with" &&
         return
 
-    local f=$MOUNT/$tfile
-    # make sure the start of the file is ost1
-    $SETSTRIPE -S $((128 * 1024)) -i 0 $f
-    do_facet client dd if=/dev/zero of=$f bs=4k count=1 || return 3
-    cancel_lru_locks osc
-    # fail ost2 and read from ost1
-    local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS $ost2_svc)
-    local osc2dev=$(do_facet $SINGLEMDS "lctl get_param -n devices" | \
-        grep $mdtosc | awk '{print $1}')
-    [ -z "$osc2dev" ] && echo "OST: $ost2_svc" && lctl get_param -n devices &&
-        return 4
-    do_facet $SINGLEMDS $LCTL --device $osc2dev deactivate || return 1
-    do_facet client dd if=$f of=/dev/null bs=4k count=1 || return 3
-    do_facet $SINGLEMDS $LCTL --device $osc2dev activate || return 2
-    return 0
+	local f=$MOUNT/$tfile
+	# make sure the start of the file is ost1
+	$SETSTRIPE -S $((128 * 1024)) -i 0 $f
+	do_facet client dd if=/dev/zero of=$f bs=4k count=1 ||
+		error "dd on client failed"
+	cancel_lru_locks osc
+	# fail ost2 and read from ost1
+	local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS $ost2_svc)
+	local osc2dev=$(do_facet $SINGLEMDS "lctl get_param -n devices" |
+		grep $mdtosc | awk '{print $1}')
+	[ -z "$osc2dev" ] && echo "OST: $ost2_svc" &&
+		lctl get_param -n devices &&
+		error "OST 2 $osc2dev does not exist"
+	do_facet $SINGLEMDS $LCTL --device $osc2dev deactivate ||
+		error "deactive device on $SINGLEMDS failed"
+	do_facet client dd if=$f of=/dev/null bs=4k count=1 ||
+		error "second dd on client failed"
+	do_facet $SINGLEMDS $LCTL --device $osc2dev activate ||
+		error "active device on $SINGLEMDS failed"
+	return 0
 }
 run_test 41 "read from a valid osc while other oscs are invalid"
 
 # test MDS recovery after ost failure
 test_42() {
-    blocks=`df -P $MOUNT | tail -n 1 | awk '{ print $2 }'`
-    createmany -o $DIR/$tfile-%d 800
-    replay_barrier ost1
-    unlinkmany $DIR/$tfile-%d 0 400
-    debugsave
-    lctl set_param debug=-1
-    facet_failover ost1
+	blocks=$(df -P $MOUNT | tail -n 1 | awk '{ print $2 }')
+	createmany -o $DIR/$tfile-%d 800 ||
+		error "createmany -o $DIR/$tfile failed"
+	replay_barrier ost1
+	unlinkmany $DIR/$tfile-%d 0 400
+	debugsave
+	lctl set_param debug=-1
+	facet_failover ost1
 
-    # osc is evicted, fs is smaller (but only with failout OSTs (bug 7287)
-    #blocks_after=`df -P $MOUNT | tail -n 1 | awk '{ print $2 }'`
-    #[ $blocks_after -lt $blocks ] || return 1
-    echo wait for MDS to timeout and recover
-    sleep $((TIMEOUT * 2))
-    debugrestore
-    unlinkmany $DIR/$tfile-%d 400 400
-    $CHECKSTAT -t file $DIR/$tfile-* && return 2 || true
+	# osc is evicted, fs is smaller (but only with failout OSTs (bug 7287)
+	#blocks_after=`df -P $MOUNT | tail -n 1 | awk '{ print $2 }'`
+	#[ $blocks_after -lt $blocks ] || return 1
+	echo "wait for MDS to timeout and recover"
+	sleep $((TIMEOUT * 2))
+	debugrestore
+	unlinkmany $DIR/$tfile-%d 400 400 ||
+		error "unlinkmany $DIR/$tfile 400 failed"
+	$CHECKSTAT -t file $DIR/$tfile-* &&
+		error "$CHECKSTAT $DIR/$tfile-* attribute check should fail" ||
+		true
 }
 run_test 42 "recovery after ost failure"
 
 # timeout in MDS/OST recovery RPC will LBUG MDS
 test_43() { # bug 2530
-    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
-    replay_barrier $SINGLEMDS
+	replay_barrier $SINGLEMDS
 
-    # OBD_FAIL_OST_CREATE_NET 0x204
-    do_facet ost1 "lctl set_param fail_loc=0x80000204"
-    fail $SINGLEMDS
-    sleep 10
-    do_facet ost1 "lctl set_param fail_loc=0"
+	# OBD_FAIL_OST_CREATE_NET 0x204
+	do_facet ost1 "lctl set_param fail_loc=0x80000204"
+	fail $SINGLEMDS
+	sleep 10
 
-    return 0
+	return 0
 }
 run_test 43 "mds osc import failure during recovery; don't LBUG"
 
@@ -912,23 +980,23 @@ test_44a() { # was test_44
 
 	local mdcdev=$($LCTL dl |
 		awk "/${FSNAME}-MDT0000-mdc-/ {if (\$2 == \"UP\") {print \$1}}")
-	[ "$mdcdev" ] || return 2
+	[ "$mdcdev" ] || error "${FSNAME}-MDT0000-mdc- not UP"
 	[ $(echo $mdcdev | wc -w) -eq 1 ] ||
-		{ echo mdcdev=$mdcdev; $LCTL dl; return 3; }
+		{ $LCTL dl; error "looking for mdcdev=$mdcdev"; }
 
-        # adaptive timeouts slow this way down
+	# adaptive timeouts slow this way down
 	if at_is_enabled; then
 		at_max_saved=$(at_max_get mds)
 		at_max_set 40 mds
 	fi
 
-	for i in `seq 1 10`; do
+	for i in $(seq 1 10); do
 		echo "$i of 10 ($(date +%s))"
 		do_facet $SINGLEMDS \
 			"lctl get_param -n md[ts].*.mdt.timeouts | grep service"
-#define OBD_FAIL_TGT_CONN_RACE     0x701
+		#define OBD_FAIL_TGT_CONN_RACE     0x701
 		do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000701"
-                # lctl below may fail, it is valid case
+		# lctl below may fail, it is valid case
 		$LCTL --device $mdcdev recover
 		df $MOUNT
 	done
@@ -941,21 +1009,21 @@ run_test 44a "race in target handle connect"
 test_44b() {
 	local mdcdev=$($LCTL dl |
 		awk "/${FSNAME}-MDT0000-mdc-/ {if (\$2 == \"UP\") {print \$1}}")
-	[ "$mdcdev" ] || return 2
+	[ "$mdcdev" ] || error "${FSNAME}-MDT0000-mdc not up"
 	[ $(echo $mdcdev | wc -w) -eq 1 ] ||
-		{ echo mdcdev=$mdcdev; $LCTL dl; return 3; }
+		{ echo mdcdev=$mdcdev; $LCTL dl;
+		  error "more than one ${FSNAME}-MDT0000-mdc"; }
 
-	for i in `seq 1 10`; do
+	for i in $(seq 1 10); do
 		echo "$i of 10 ($(date +%s))"
 		do_facet $SINGLEMDS \
 			"lctl get_param -n md[ts].*.mdt.timeouts | grep service"
-        #define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
+		#define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
 		do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000704"
-        # lctl below may fail, it is valid case
+		# lctl below may fail, it is valid case
 		$LCTL --device $mdcdev recover
 		df $MOUNT
 	done
-	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
 	return 0
 }
 run_test 44b "race in target handle connect"
@@ -963,7 +1031,7 @@ run_test 44b "race in target handle connect"
 test_44c() {
 	replay_barrier $SINGLEMDS
 	createmany -m $DIR/$tfile-%d 100 || error "failed to create directories"
-#define OBD_FAIL_TGT_RCVG_FLAG 0x712
+	#define OBD_FAIL_TGT_RCVG_FLAG 0x712
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000712"
 	fail_abort $SINGLEMDS
 	unlinkmany $DIR/$tfile-%d 100 && error "unliked after fail abort"
@@ -977,93 +1045,106 @@ run_test 44c "race in target handle connect"
 test_45() {
 	local mdcdev=$($LCTL get_param -n devices |
 		awk "/ ${FSNAME}-MDT0000-mdc-/ {print \$1}")
-	[ "$mdcdev" ] || return 2
+	[ "$mdcdev" ] || error "${FSNAME}-MDT0000-mdc not up"
 	[ $(echo $mdcdev | wc -w) -eq 1 ] ||
-		{ echo mdcdev=$mdcdev; $LCTL dl; return 3; }
+		{ echo mdcdev=$mdcdev; $LCTL dl;
+		  error "more than one ${FSNAME}-MDT0000-mdc"; }
 
-	$LCTL --device $mdcdev recover || return 6
+	$LCTL --device $mdcdev recover ||
+		error "$LCTL --device $mdcdev recover failed"
 
-	multiop_bg_pause $DIR/$tfile O_c || return 1
+	multiop_bg_pause $DIR/$tfile O_c ||
+		error "multiop_bg_pause $DIR/$tfile failed"
 	pid=$!
 
 	# This will cause the CLOSE to fail before even
 	# allocating a reply buffer
-	$LCTL --device $mdcdev deactivate || return 4
+	$LCTL --device $mdcdev deactivate ||
+		error "$LCTL --device $mdcdev deactivate failed"
 
 	# try the close
-	kill -USR1 $pid
-	wait $pid || return 1
+	kill -USR1 $pid || error "multiop $pid not running"
+	wait $pid || error "multiop $pid failed"
 
-	$LCTL --device $mdcdev activate || return 5
+	$LCTL --device $mdcdev activate ||
+		error "$LCTL --device $mdcdev activate failed"
 	sleep 1
 
-	$CHECKSTAT -t file $DIR/$tfile || return 2
+	$CHECKSTAT -t file $DIR/$tfile ||
+		error "$CHECKSTAT $DIR/$tfile attribute check failed"
 	return 0
 }
 run_test 45 "Handle failed close"
 
 test_46() {
-    dmesg -c >/dev/null
-    drop_reply "touch $DIR/$tfile"
-    fail $SINGLEMDS
-    # ironically, the previous test, 45, will cause a real forced close,
-    # so just look for one for this test
-    dmesg | grep -i "force closing client file handle for $tfile" && return 1
-    return 0
+	dmesg -c >/dev/null
+	drop_reply "touch $DIR/$tfile"
+	fail $SINGLEMDS
+	# ironically, the previous test, 45, will cause a real forced close,
+	# so just look for one for this test
+	dmesg | grep -i "force closing client file handle for $tfile" &&
+		error "found force closing in dmesg"
+	return 0
 }
 run_test 46 "Don't leak file handle after open resend (3325)"
 
 test_47() { # bug 2824
-    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
-    # create some files to make sure precreate has been done on all
-    # OSTs. (just in case this test is run independently)
-    createmany -o $DIR/$tfile 20  || return 1
+	# create some files to make sure precreate has been done on all
+	# OSTs. (just in case this test is run independently)
+	createmany -o $DIR/$tfile 20  ||
+		error "createmany create $DIR/$tfile failed"
 
-    # OBD_FAIL_OST_CREATE_NET 0x204
-    fail ost1
-    do_facet ost1 "lctl set_param fail_loc=0x80000204"
-    client_up || return 2
+	# OBD_FAIL_OST_CREATE_NET 0x204
+	fail ost1
+	do_facet ost1 "lctl set_param fail_loc=0x80000204"
+	client_up || error "client_up failed"
 
-    # let the MDS discover the OST failure, attempt to recover, fail
-    # and recover again.
-    sleep $((3 * TIMEOUT))
+	# let the MDS discover the OST failure, attempt to recover, fail
+	# and recover again.
+	sleep $((3 * TIMEOUT))
 
-    # Without 2824, this createmany would hang
-    createmany -o $DIR/$tfile 20 || return 3
-    unlinkmany $DIR/$tfile 20 || return 4
+	# Without 2824, this createmany would hang
+	createmany -o $DIR/$tfile 20 ||
+		error "createmany recraete $DIR/$tfile failed"
+	unlinkmany $DIR/$tfile 20 || error "unlinkmany $DIR/$tfile failed"
 
-    do_facet ost1 "lctl set_param fail_loc=0"
-    return 0
+	return 0
 }
 run_test 47 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_48() {
-    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
-    [ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs -- skipping" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+	[ "$OSTCOUNT" -lt "2" ] &&
+		skip_env "$OSTCOUNT < 2 OSTs -- skipping" && return
 
-    replay_barrier $SINGLEMDS
-    createmany -o $DIR/$tfile 20  || return 1
-    # OBD_FAIL_OST_EROFS 0x216
-    facet_failover $SINGLEMDS
-    do_facet ost1 "lctl set_param fail_loc=0x80000216"
-    client_up || return 2
+	replay_barrier $SINGLEMDS
+	createmany -o $DIR/$tfile 20  ||
+		error "createmany -o $DIR/$tfile failed"
+	# OBD_FAIL_OST_EROFS 0x216
+	facet_failover $SINGLEMDS
+	do_facet ost1 "lctl set_param fail_loc=0x80000216"
+	client_up || error "client_up failed"
 
-    createmany -o $DIR/$tfile 20 20 || return 2
-    unlinkmany $DIR/$tfile 40 || return 3
-    return 0
+	createmany -o $DIR/$tfile 20 20 ||
+		error "createmany recraete $DIR/$tfile failed"
+	unlinkmany $DIR/$tfile 40 || error "unlinkmany $DIR/$tfile failed"
+	return 0
 }
 run_test 48 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_50() {
-    local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS $ost1_svc) 
-    local oscdev=$(do_facet $SINGLEMDS "lctl get_param -n devices" | \
-        grep $mdtosc | awk '{print $1}')
-    [ "$oscdev" ] || return 1
-    do_facet $SINGLEMDS $LCTL --device $oscdev recover || return 2
-    do_facet $SINGLEMDS $LCTL --device $oscdev recover || return 3
-    # give the mds_lov_sync threads a chance to run
-    sleep 5
+	local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS $ost1_svc)
+	local oscdev=$(do_facet $SINGLEMDS "lctl get_param -n devices" |
+		grep $mdtosc | awk '{print $1}')
+	[ "$oscdev" ] || error "could not find OSC device on MDS"
+	do_facet $SINGLEMDS $LCTL --device $oscdev recover ||
+		error "OSC device $oscdev recovery failed"
+	do_facet $SINGLEMDS $LCTL --device $oscdev recover ||
+		error "second OSC device $oscdev recovery failed"
+	# give the mds_lov_sync threads a chance to run
+	sleep 5
 }
 run_test 50 "Double OSC recovery, don't LASSERT (3812)"
 
@@ -1073,19 +1154,19 @@ test_52() {
 		skip "MDS prior to 2.6.90 handle LDLM_REPLY_NET incorrectly" &&
 		return 0
 
-	touch $DIR/$tfile
+	touch $DIR/$tfile || error "touch $DIR/$tfile failed"
 	cancel_lru_locks mdc
 
-	multiop_bg_pause $DIR/$tfile s_s || return 1
+	multiop_bg_pause $DIR/$tfile s_s || error "multiop $DIR/$tfile failed"
 	mpid=$!
 
 	#define OBD_FAIL_MDS_LDLM_REPLY_NET	0x157
 	lctl set_param -n ldlm.cancel_unused_locks_before_replay "0"
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000157"
 
-	fail $SINGLEMDS || return 2
+	fail $SINGLEMDS || error "fail $SINGLEMDS failed"
 	kill -USR1 $mpid
-	wait $mpid || return 3
+	wait $mpid || error "multiop_bg_pause pid failed"
 
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x0"
 	lctl set_param fail_loc=0x0
@@ -1096,278 +1177,286 @@ run_test 52 "time out lock replay (3764)"
 
 # bug 3462 - simultaneous MDC requests
 test_53a() {
-        cancel_lru_locks mdc    # cleanup locks from former test cases
-        mkdir -p $DIR/${tdir}-1
-        mkdir -p $DIR/${tdir}-2
-        multiop $DIR/${tdir}-1/f O_c &
-        close_pid=$!
-        # give multiop a change to open
-        sleep 1
+	cancel_lru_locks mdc    # cleanup locks from former test cases
+	mkdir $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
+	mkdir $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
+	multiop $DIR/${tdir}-1/f O_c &
+	close_pid=$!
+	# give multiop a change to open
+	sleep 1
 
-        #define OBD_FAIL_MDS_CLOSE_NET 0x115
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000115"
-        kill -USR1 $close_pid
-        cancel_lru_locks mdc    # force the close
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+	#define OBD_FAIL_MDS_CLOSE_NET 0x115
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000115"
+	kill -USR1 $close_pid
+	cancel_lru_locks mdc    # force the close
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
 
-        mcreate $DIR/${tdir}-2/f || return 1
+	mcreate $DIR/${tdir}-2/f || error "mcreate $DIR/${tdir}-2/f failed"
 
-        # close should still be here
-        [ -d /proc/$close_pid ] || return 2
+	# close should still be here
+	[ -d /proc/$close_pid ] || error "close_pid doesn't exist"
 
-        replay_barrier_nodf $SINGLEMDS
-        fail $SINGLEMDS
-        wait $close_pid || return 3
+	replay_barrier_nodf $SINGLEMDS
+	fail $SINGLEMDS
+	wait $close_pid || error "close_pid $close_pid failed"
 
-        $CHECKSTAT -t file $DIR/${tdir}-1/f || return 4
-        $CHECKSTAT -t file $DIR/${tdir}-2/f || return 5
-        rm -rf $DIR/${tdir}-*
+	$CHECKSTAT -t file $DIR/${tdir}-1/f ||
+		error "$CHECKSTAT $DIR/${tdir}-1/f attribute check failed"
+	$CHECKSTAT -t file $DIR/${tdir}-2/f ||
+		error "$CHECKSTAT $DIR/${tdir}-2/f attribute check failed"
+	rm -rf $DIR/${tdir}-*
 }
 run_test 53a "|X| close request while two MDC requests in flight"
 
 test_53b() {
-        cancel_lru_locks mdc    # cleanup locks from former test cases
-        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+	cancel_lru_locks mdc    # cleanup locks from former test cases
 
-        mkdir -p $DIR/${tdir}-1
-        mkdir -p $DIR/${tdir}-2
-        multiop_bg_pause $DIR/${tdir}-1/f O_c || return 6
-        close_pid=$!
+	mkdir $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
+	mkdir $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
+	multiop_bg_pause $DIR/${tdir}-1/f O_c ||
+		error "multiop_bg_pause $DIR/${tdir}-1/f failed"
+	close_pid=$!
 
-        #define OBD_FAIL_MDS_REINT_NET 0x107
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000107"
-        mcreate $DIR/${tdir}-2/f &
-        open_pid=$!
-        sleep 1
+	#define OBD_FAIL_MDS_REINT_NET 0x107
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000107"
+	mcreate $DIR/${tdir}-2/f &
+	open_pid=$!
+	sleep 1
 
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0"
-        kill -USR1 $close_pid
-        cancel_lru_locks mdc    # force the close
-        wait $close_pid || return 1
-        # open should still be here
-        [ -d /proc/$open_pid ] || return 2
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+	kill -USR1 $close_pid
+	cancel_lru_locks mdc    # force the close
+	wait $close_pid || error "close_pid $close_pid failed"
+	# open should still be here
+	[ -d /proc/$open_pid ] || error "open_pid doesn't exist"
 
-        replay_barrier_nodf $SINGLEMDS
-        fail $SINGLEMDS
-        wait $open_pid || return 3
+	replay_barrier_nodf $SINGLEMDS
+	fail $SINGLEMDS
+	wait $open_pid || error "open_pid failed"
 
-        $CHECKSTAT -t file $DIR/${tdir}-1/f || return 4
-        $CHECKSTAT -t file $DIR/${tdir}-2/f || return 5
-        rm -rf $DIR/${tdir}-*
+	$CHECKSTAT -t file $DIR/${tdir}-1/f ||
+		error "$CHECKSTAT $DIR/${tdir}-1/f attribute check failed"
+	$CHECKSTAT -t file $DIR/${tdir}-2/f ||
+		error "$CHECKSTAT $DIR/${tdir}-2/f attribute check failed"
+	rm -rf $DIR/${tdir}-*
 }
 run_test 53b "|X| open request while two MDC requests in flight"
 
 test_53c() {
-        cancel_lru_locks mdc    # cleanup locks from former test cases
-        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+	cancel_lru_locks mdc    # cleanup locks from former test cases
 
-        mkdir -p $DIR/${tdir}-1
-        mkdir -p $DIR/${tdir}-2
-        multiop $DIR/${tdir}-1/f O_c &
-        close_pid=$!
+	mkdir $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
+	mkdir $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
+	multiop $DIR/${tdir}-1/f O_c &
+	close_pid=$!
 
-        #define OBD_FAIL_MDS_REINT_NET 0x107
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000107"
-        mcreate $DIR/${tdir}-2/f &
-        open_pid=$!
-        sleep 1
+	#define OBD_FAIL_MDS_REINT_NET 0x107
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000107"
+	mcreate $DIR/${tdir}-2/f &
+	open_pid=$!
+	sleep 1
 
-        #define OBD_FAIL_MDS_CLOSE_NET 0x115
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000115"
-        kill -USR1 $close_pid
-        cancel_lru_locks mdc    # force the close
+	#define OBD_FAIL_MDS_CLOSE_NET 0x115
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000115"
+	kill -USR1 $close_pid
+	cancel_lru_locks mdc    # force the close
 
-        #bz20647: make sure all pids are exists before failover
-        [ -d /proc/$close_pid ] || error "close_pid doesn't exist"
-        [ -d /proc/$open_pid ] || error "open_pid doesn't exists"
-        replay_barrier_nodf $SINGLEMDS
-        fail_nodf $SINGLEMDS
-        wait $open_pid || return 1
-        sleep 2
-        # close should be gone
-        [ -d /proc/$close_pid ] && return 2
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+	#bz20647: make sure all pids exist before failover
+	[ -d /proc/$close_pid ] || error "close_pid doesn't exist"
+	[ -d /proc/$open_pid ] || error "open_pid doesn't exists"
+	replay_barrier_nodf $SINGLEMDS
+	fail_nodf $SINGLEMDS
+	wait $open_pid || error "open_pid failed"
+	sleep 2
+	# close should be gone
+	[ -d /proc/$close_pid ] && error "close_pid should not exist"
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
 
-        $CHECKSTAT -t file $DIR/${tdir}-1/f || return 3
-        $CHECKSTAT -t file $DIR/${tdir}-2/f || return 4
-        rm -rf $DIR/${tdir}-*
+	$CHECKSTAT -t file $DIR/${tdir}-1/f ||
+		error "$CHECKSTAT $DIR/${tdir}-1/f attribute check failed"
+	$CHECKSTAT -t file $DIR/${tdir}-2/f ||
+		error "$CHECKSTAT $DIR/${tdir}-2/f attribute check failed"
+	rm -rf $DIR/${tdir}-*
 }
 run_test 53c "|X| open request and close request while two MDC requests in flight"
 
 test_53d() {
-        cancel_lru_locks mdc    # cleanup locks from former test cases
-        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+	cancel_lru_locks mdc    # cleanup locks from former test cases
 
-        mkdir -p $DIR/${tdir}-1
-        mkdir -p $DIR/${tdir}-2
-        multiop $DIR/${tdir}-1/f O_c &
-        close_pid=$!
-        # give multiop a chance to open
-        sleep 1
+	mkdir $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
+	mkdir $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
+	multiop $DIR/${tdir}-1/f O_c &
+	close_pid=$!
+	# give multiop a chance to open
+	sleep 1
 
-        #define OBD_FAIL_MDS_CLOSE_NET_REP 0x13b
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013b"
-        kill -USR1 $close_pid
-        cancel_lru_locks mdc    # force the close
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0"
-        mcreate $DIR/${tdir}-2/f || return 1
+	#define OBD_FAIL_MDS_CLOSE_NET_REP 0x13b
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013b"
+	kill -USR1 $close_pid
+	cancel_lru_locks mdc    # force the close
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+	mcreate $DIR/${tdir}-2/f || error "mcreate $DIR/${tdir}-2/f failed"
 
-        # close should still be here
-        [ -d /proc/$close_pid ] || return 2
-        fail $SINGLEMDS
-        wait $close_pid || return 3
+	# close should still be here
+	[ -d /proc/$close_pid ] || error "close_pid doesn't exist"
+	fail $SINGLEMDS
+	wait $close_pid || error "close_pid failed"
 
-        $CHECKSTAT -t file $DIR/${tdir}-1/f || return 4
-        $CHECKSTAT -t file $DIR/${tdir}-2/f || return 5
-        rm -rf $DIR/${tdir}-*
+	$CHECKSTAT -t file $DIR/${tdir}-1/f ||
+		error "$CHECKSTAT $DIR/${tdir}-1/f attribute check failed"
+	$CHECKSTAT -t file $DIR/${tdir}-2/f ||
+		error "$CHECKSTAT $DIR/${tdir}-2/f attribute check failed"
+	rm -rf $DIR/${tdir}-*
 }
-run_test 53d "|X| close reply while two MDC requests in flight"
+run_test 53d "close reply while two MDC requests in flight"
 
 test_53e() {
-        cancel_lru_locks mdc    # cleanup locks from former test cases
-        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+	cancel_lru_locks mdc    # cleanup locks from former test cases
 
-        mkdir -p $DIR/${tdir}-1
-        mkdir -p $DIR/${tdir}-2
-        multiop $DIR/${tdir}-1/f O_c &
-        close_pid=$!
+	mkdir $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
+	mkdir $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
+	multiop $DIR/${tdir}-1/f O_c &
+	close_pid=$!
 
-        #define OBD_FAIL_MDS_REINT_NET_REP 0x119
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0x119"
-        mcreate $DIR/${tdir}-2/f &
-        open_pid=$!
-        sleep 1
+	#define OBD_FAIL_MDS_REINT_NET_REP 0x119
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x119"
+	mcreate $DIR/${tdir}-2/f &
+	open_pid=$!
+	sleep 1
 
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0"
-        kill -USR1 $close_pid
-        cancel_lru_locks mdc    # force the close
-        wait $close_pid || return 1
-        # open should still be here
-        [ -d /proc/$open_pid ] || return 2
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+	kill -USR1 $close_pid
+	cancel_lru_locks mdc    # force the close
+	wait $close_pid || error "close_pid failed"
+	# open should still be here
+	[ -d /proc/$open_pid ] || error "open_pid doesn't exists"
 
-        replay_barrier_nodf $SINGLEMDS
-        fail $SINGLEMDS
-        wait $open_pid || return 3
+	replay_barrier_nodf $SINGLEMDS
+	fail $SINGLEMDS
+	wait $open_pid || error "open_pid failed"
 
-        $CHECKSTAT -t file $DIR/${tdir}-1/f || return 4
-        $CHECKSTAT -t file $DIR/${tdir}-2/f || return 5
-        rm -rf $DIR/${tdir}-*
+	$CHECKSTAT -t file $DIR/${tdir}-1/f ||
+		error "$CHECKSTAT $DIR/${tdir}-1/f attribute check failed"
+	$CHECKSTAT -t file $DIR/${tdir}-2/f ||
+		error "$CHECKSTAT $DIR/${tdir}-2/f attribute check failed"
+	rm -rf $DIR/${tdir}-*
 }
 run_test 53e "|X| open reply while two MDC requests in flight"
 
 test_53f() {
-        cancel_lru_locks mdc    # cleanup locks from former test cases
-        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+	cancel_lru_locks mdc    # cleanup locks from former test cases
 
-        mkdir -p $DIR/${tdir}-1
-        mkdir -p $DIR/${tdir}-2
-        multiop $DIR/${tdir}-1/f O_c &
-        close_pid=$!
+	mkdir $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
+	mkdir $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
+	multiop $DIR/${tdir}-1/f O_c &
+	close_pid=$!
 
-        #define OBD_FAIL_MDS_REINT_NET_REP 0x119
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0x119"
-        mcreate $DIR/${tdir}-2/f &
-        open_pid=$!
-        sleep 1
+	#define OBD_FAIL_MDS_REINT_NET_REP 0x119
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x119"
+	mcreate $DIR/${tdir}-2/f &
+	open_pid=$!
+	sleep 1
 
-        #define OBD_FAIL_MDS_CLOSE_NET_REP 0x13b
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013b"
-        kill -USR1 $close_pid
-        cancel_lru_locks mdc    # force the close
+	#define OBD_FAIL_MDS_CLOSE_NET_REP 0x13b
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013b"
+	kill -USR1 $close_pid
+	cancel_lru_locks mdc    # force the close
 
-        #bz20647: make sure all pids are exists before failover
-        [ -d /proc/$close_pid ] || error "close_pid doesn't exist"
-        [ -d /proc/$open_pid ] || error "open_pid doesn't exists"
-        replay_barrier_nodf $SINGLEMDS
-        fail_nodf $SINGLEMDS
-        wait $open_pid || return 1
-        sleep 2
-        # close should be gone
-        [ -d /proc/$close_pid ] && return 2
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+	#bz20647: make sure all pids are exists before failover
+	[ -d /proc/$close_pid ] || error "close_pid doesn't exist"
+	[ -d /proc/$open_pid ] || error "open_pid doesn't exists"
+	replay_barrier_nodf $SINGLEMDS
+	fail_nodf $SINGLEMDS
+	wait $open_pid || error "open_pid failed"
+	sleep 2
+	# close should be gone
+	[ -d /proc/$close_pid ] && error "close_pid should not exist"
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
 
-        $CHECKSTAT -t file $DIR/${tdir}-1/f || return 3
-        $CHECKSTAT -t file $DIR/${tdir}-2/f || return 4
-        rm -rf $DIR/${tdir}-*
+	$CHECKSTAT -t file $DIR/${tdir}-1/f ||
+		error "$CHECKSTAT $DIR/${tdir}-1/f attribute check failed"
+	$CHECKSTAT -t file $DIR/${tdir}-2/f ||
+		error "$CHECKSTAT $DIR/${tdir}-2/f attribute check failed"
+	rm -rf $DIR/${tdir}-*
 }
 run_test 53f "|X| open reply and close reply while two MDC requests in flight"
 
 test_53g() {
-        cancel_lru_locks mdc    # cleanup locks from former test cases
-        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+	cancel_lru_locks mdc    # cleanup locks from former test cases
 
-        mkdir -p $DIR/${tdir}-1
-        mkdir -p $DIR/${tdir}-2
-        multiop $DIR/${tdir}-1/f O_c &
-        close_pid=$!
+	mkdir $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
+	mkdir $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
+	multiop $DIR/${tdir}-1/f O_c &
+	close_pid=$!
 
-        #define OBD_FAIL_MDS_REINT_NET_REP 0x119
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0x119"
-        mcreate $DIR/${tdir}-2/f &
-        open_pid=$!
-        sleep 1
+	#define OBD_FAIL_MDS_REINT_NET_REP 0x119
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x119"
+	mcreate $DIR/${tdir}-2/f &
+	open_pid=$!
+	sleep 1
 
-        #define OBD_FAIL_MDS_CLOSE_NET 0x115
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000115"
-        kill -USR1 $close_pid
-        cancel_lru_locks mdc    # force the close
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+	#define OBD_FAIL_MDS_CLOSE_NET 0x115
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000115"
+	kill -USR1 $close_pid
+	cancel_lru_locks mdc    # force the close
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
 
-        #bz20647: make sure all pids are exists before failover
-        [ -d /proc/$close_pid ] || error "close_pid doesn't exist"
-        [ -d /proc/$open_pid ] || error "open_pid doesn't exists"
-        replay_barrier_nodf $SINGLEMDS
-        fail_nodf $SINGLEMDS
-        wait $open_pid || return 1
-        sleep 2
-        # close should be gone
-        [ -d /proc/$close_pid ] && return 2
+	#bz20647: make sure all pids are exists before failover
+	[ -d /proc/$close_pid ] || error "close_pid doesn't exist"
+	[ -d /proc/$open_pid ] || error "open_pid doesn't exists"
+	replay_barrier_nodf $SINGLEMDS
+	fail_nodf $SINGLEMDS
+	wait $open_pid || error "open_pid failed"
+	sleep 2
+	# close should be gone
+	[ -d /proc/$close_pid ] && error "close_pid should not exist"
 
-        $CHECKSTAT -t file $DIR/${tdir}-1/f || return 3
-        $CHECKSTAT -t file $DIR/${tdir}-2/f || return 4
-        rm -rf $DIR/${tdir}-*
+	$CHECKSTAT -t file $DIR/${tdir}-1/f ||
+		error "$CHECKSTAT $DIR/${tdir}-1/f attribute check failed"
+	$CHECKSTAT -t file $DIR/${tdir}-2/f ||
+		error "$CHECKSTAT $DIR/${tdir}-2/f attribute check failed"
+	rm -rf $DIR/${tdir}-*
 }
 run_test 53g "|X| drop open reply and close request while close and open are both in flight"
 
 test_53h() {
-        cancel_lru_locks mdc    # cleanup locks from former test cases
-        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+	cancel_lru_locks mdc    # cleanup locks from former test cases
 
-        mkdir -p $DIR/${tdir}-1
-        mkdir -p $DIR/${tdir}-2
-        multiop $DIR/${tdir}-1/f O_c &
-        close_pid=$!
+	mkdir $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
+	mkdir $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
+	multiop $DIR/${tdir}-1/f O_c &
+	close_pid=$!
 
-        #define OBD_FAIL_MDS_REINT_NET 0x107
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000107"
-        mcreate $DIR/${tdir}-2/f &
-        open_pid=$!
-        sleep 1
+	#define OBD_FAIL_MDS_REINT_NET 0x107
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000107"
+	mcreate $DIR/${tdir}-2/f &
+	open_pid=$!
+	sleep 1
 
-        #define OBD_FAIL_MDS_CLOSE_NET_REP 0x13b
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013b"
-        kill -USR1 $close_pid
-        cancel_lru_locks mdc    # force the close
-        sleep 1
+	#define OBD_FAIL_MDS_CLOSE_NET_REP 0x13b
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013b"
+	kill -USR1 $close_pid
+	cancel_lru_locks mdc    # force the close
+	sleep 1
 
-        #bz20647: make sure all pids are exists before failover
-        [ -d /proc/$close_pid ] || error "close_pid doesn't exist"
-        [ -d /proc/$open_pid ] || error "open_pid doesn't exists"
-        replay_barrier_nodf $SINGLEMDS
-        fail_nodf $SINGLEMDS
-        wait $open_pid || return 1
-        sleep 2
-        # close should be gone
-        [ -d /proc/$close_pid ] && return 2
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+	#bz20647: make sure all pids are exists before failover
+	[ -d /proc/$close_pid ] || error "close_pid doesn't exist"
+	[ -d /proc/$open_pid ] || error "open_pid doesn't exists"
+	replay_barrier_nodf $SINGLEMDS
+	fail_nodf $SINGLEMDS
+	wait $open_pid || error "open_pid failed"
+	sleep 2
+	# close should be gone
+	[ -d /proc/$close_pid ] && error "close_pid should not exist"
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
 
-        $CHECKSTAT -t file $DIR/${tdir}-1/f || return 3
-        $CHECKSTAT -t file $DIR/${tdir}-2/f || return 4
-        rm -rf $DIR/${tdir}-*
+	$CHECKSTAT -t file $DIR/${tdir}-1/f ||
+		error "$CHECKSTAT $DIR/${tdir}-1/f attribute check failed"
+	$CHECKSTAT -t file $DIR/${tdir}-2/f ||
+		error "$CHECKSTAT $DIR/${tdir}-2/f attribute check failed"
+	rm -rf $DIR/${tdir}-*
 }
-run_test 53h "|X| open request and close reply while two MDC requests in flight"
-
-#b_cray 54 "|X| open request and close reply while two MDC requests in flight"
+run_test 53h "open request and close reply while two MDC requests in flight"
 
 #b3761 ASSERTION(hash != 0) failed
 test_55() {
@@ -1394,59 +1483,63 @@ run_test 56 "don't replay a symlink open request (3440)"
 
 #recovery one mds-ost setattr from llog
 test_57() {
-#define OBD_FAIL_MDS_OST_SETATTR       0x12c
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000012c"
-    touch $DIR/$tfile
-    replay_barrier $SINGLEMDS
-    fail $SINGLEMDS
-    sleep 1
-    $CHECKSTAT -t file $DIR/$tfile || return 1
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x0"
-    rm $DIR/$tfile
+	#define OBD_FAIL_MDS_OST_SETATTR       0x12c
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000012c"
+	touch $DIR/$tfile || error "touch $DIR/$tfile failed"
+	replay_barrier $SINGLEMDS
+	fail $SINGLEMDS
+	sleep 1
+	$CHECKSTAT -t file $DIR/$tfile ||
+		error "$CHECKSTAT $DIR/$tfile attribute check failed"
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x0"
+	rm $DIR/$tfile
 }
 run_test 57 "test recovery from llog for setattr op"
 
 cleanup_58() {
-    zconf_umount `hostname` $MOUNT2
-    trap - EXIT
+	zconf_umount $(hostname) $MOUNT2
+	trap - EXIT
 }
 
 #recovery many mds-ost setattr from llog
 test_58a() {
-    mkdir -p $DIR/$tdir
-#define OBD_FAIL_MDS_OST_SETATTR       0x12c
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000012c"
-    createmany -o $DIR/$tdir/$tfile-%d 2500
-    replay_barrier $SINGLEMDS
-    fail $SINGLEMDS
-    sleep 2
-    $CHECKSTAT -t file $DIR/$tdir/$tfile-* >/dev/null || return 1
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x0"
-    unlinkmany $DIR/$tdir/$tfile-%d 2500
-    rmdir $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	#define OBD_FAIL_MDS_OST_SETATTR       0x12c
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000012c"
+	createmany -o $DIR/$tdir/$tfile-%d 2500
+	replay_barrier $SINGLEMDS
+	fail $SINGLEMDS
+	sleep 2
+	$CHECKSTAT -t file $DIR/$tdir/$tfile-* >/dev/null ||
+		error "$CHECKSTAT $DIR/$tfile-* attribute check failed"
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x0"
+	unlinkmany $DIR/$tdir/$tfile-%d 2500 ||
+		error "unlinkmany $DIR/$tfile failed"
+	rmdir $DIR/$tdir
 }
 run_test 58a "test recovery from llog for setattr op (test llog_gen_rec)"
 
 test_58b() {
-    local orig
-    local new
+	local orig
+	local new
 
-    trap cleanup_58 EXIT
+	trap cleanup_58 EXIT
 
-    large_xattr_enabled &&
-        orig="$(generate_string $(max_xattr_size))" || orig="bar"
+	large_xattr_enabled &&
+		orig="$(generate_string $(max_xattr_size))" || orig="bar"
 
-    mount_client $MOUNT2
-    mkdir -p $DIR/$tdir
-    touch $DIR/$tdir/$tfile
-    replay_barrier $SINGLEMDS
-    setfattr -n trusted.foo -v $orig $DIR/$tdir/$tfile
-    fail $SINGLEMDS
-    new=$(get_xattr_value trusted.foo $MOUNT2/$tdir/$tfile)
-    [[ "$new" = "$orig" ]] || return 1
-    rm -f $DIR/$tdir/$tfile
-    rmdir $DIR/$tdir
-    cleanup_58
+	mount_client $MOUNT2
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	touch $DIR/$tdir/$tfile || error "touch $DIR/$tdir/$tfile failed"
+	replay_barrier $SINGLEMDS
+	setfattr -n trusted.foo -v $orig $DIR/$tdir/$tfile
+	fail $SINGLEMDS
+	new=$(get_xattr_value trusted.foo $MOUNT2/$tdir/$tfile)
+	[[ "$new" = "$orig" ]] ||
+		error "xattr set ($orig) is not what was returned ($new)"
+	rm -f $DIR/$tdir/$tfile
+	rmdir $DIR/$tdir
+	cleanup_58
 }
 run_test 58b "test replay of setxattr op"
 
@@ -1466,99 +1559,108 @@ test_58c() { # bug 16570
         orig1="bar1"
     fi
 
-    mount_client $MOUNT2
-    mkdir -p $DIR/$tdir
-    touch $DIR/$tdir/$tfile
-    drop_request "setfattr -n trusted.foo -v $orig $DIR/$tdir/$tfile" ||
-        return 1
-    new=$(get_xattr_value trusted.foo $MOUNT2/$tdir/$tfile)
-    [[ "$new" = "$orig" ]] || return 2
-    drop_reint_reply "setfattr -n trusted.foo1 -v $orig1 $DIR/$tdir/$tfile" ||
-        return 3
-    new=$(get_xattr_value trusted.foo1 $MOUNT2/$tdir/$tfile)
-    [[ "$new" = "$orig1" ]] || return 4
-    rm -f $DIR/$tdir/$tfile
-    rmdir $DIR/$tdir
-    cleanup_58
+	mount_client $MOUNT2
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	touch $DIR/$tdir/$tfile || error "touch $DIR/$tdir/$tfile failed"
+	drop_request "setfattr -n trusted.foo -v $orig $DIR/$tdir/$tfile" ||
+		error "drop_request for setfattr failed"
+	new=$(get_xattr_value trusted.foo $MOUNT2/$tdir/$tfile)
+	[[ "$new" = "$orig" ]] ||
+		error "xattr set ($orig) is not what was returned ($new)"
+	drop_reint_reply "setfattr -n trusted.foo1 \
+			  -v $orig1 $DIR/$tdir/$tfile" ||
+		error "drop_request for setfattr failed"
+	new=$(get_xattr_value trusted.foo1 $MOUNT2/$tdir/$tfile)
+	[[ "$new" = "$orig1" ]] ||
+		error "second xattr set ($orig1) not what was returned ($new)"
+	rm -f $DIR/$tdir/$tfile
+	rmdir $DIR/$tdir
+	cleanup_58
 }
 run_test 58c "resend/reconstruct setxattr op"
 
 # log_commit_thread vs filter_destroy race used to lead to import use after free
 # bug 11658
 test_59() {
-    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
-    mkdir -p $DIR/$tdir
-    createmany -o $DIR/$tdir/$tfile-%d 200
-    sync
-    unlinkmany $DIR/$tdir/$tfile-%d 200
-#define OBD_FAIL_PTLRPC_DELAY_RECOV       0x507
-    do_facet ost1 "lctl set_param fail_loc=0x507"
-    fail ost1
-    fail $SINGLEMDS
-    do_facet ost1 "lctl set_param fail_loc=0x0"
-    sleep 20
-    rmdir $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	createmany -o $DIR/$tdir/$tfile-%d 200 ||
+		error "createmany create files failed"
+	sync
+	unlinkmany $DIR/$tdir/$tfile-%d 200 ||
+		error "unlinkmany $DIR/$tdir/$tfile failed"
+	#define OBD_FAIL_PTLRPC_DELAY_RECOV       0x507
+	do_facet ost1 "lctl set_param fail_loc=0x507"
+	fail ost1
+	fail $SINGLEMDS
+	do_facet ost1 "lctl set_param fail_loc=0x0"
+	sleep 20
+	rmdir $DIR/$tdir
 }
 run_test 59 "test log_commit_thread vs filter_destroy race"
 
 # race between add unlink llog vs cat log init in post_recovery (only for b1_6)
 # bug 12086: should no oops and No ctxt error for this test
 test_60() {
-    mkdir -p $DIR/$tdir
-    createmany -o $DIR/$tdir/$tfile-%d 200
-    replay_barrier $SINGLEMDS
-    unlinkmany $DIR/$tdir/$tfile-%d 0 100
-    fail $SINGLEMDS
-    unlinkmany $DIR/$tdir/$tfile-%d 100 100
-    local no_ctxt=`dmesg | grep "No ctxt"`
-    [ -z "$no_ctxt" ] || error "ctxt is not initialized in recovery"
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	createmany -o $DIR/$tdir/$tfile-%d 200 ||
+		error "createmany create files failed"
+	replay_barrier $SINGLEMDS
+	unlinkmany $DIR/$tdir/$tfile-%d 0 100
+	fail $SINGLEMDS
+	unlinkmany $DIR/$tdir/$tfile-%d 100 100
+	local no_ctxt=$(dmesg | grep "No ctxt")
+	[ -z "$no_ctxt" ] || error "ctxt is not initialized in recovery"
 }
 run_test 60 "test llog post recovery init vs llog unlink"
 
 #test race  llog recovery thread vs llog cleanup
 test_61a() {	# was test_61
-    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
-    mkdir -p $DIR/$tdir
-    createmany -o $DIR/$tdir/$tfile-%d 800
-    replay_barrier ost1
-#   OBD_FAIL_OST_LLOG_RECOVERY_TIMEOUT 0x221
-    unlinkmany $DIR/$tdir/$tfile-%d 800
-    set_nodes_failloc "$(osts_nodes)" 0x80000221
-    facet_failover ost1
-    sleep 10
-    fail ost1
-    sleep 30
-    set_nodes_failloc "$(osts_nodes)" 0x0
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	createmany -o $DIR/$tdir/$tfile-%d 800 ||
+		error "createmany create files failed"
+	replay_barrier ost1
+	unlinkmany $DIR/$tdir/$tfile-%d 800
+	#   OBD_FAIL_OST_LLOG_RECOVERY_TIMEOUT 0x221
+	set_nodes_failloc "$(osts_nodes)" 0x80000221
+	facet_failover ost1
+	sleep 10
+	fail ost1
+	sleep 30
+	set_nodes_failloc "$(osts_nodes)" 0x0
 
-    $CHECKSTAT -t file $DIR/$tdir/$tfile-* && return 1
-    rmdir $DIR/$tdir
+	$CHECKSTAT -t file $DIR/$tdir/$tfile-* &&
+		error "$CHECKSTAT $DIR/$tdir/$tfile attribute check should fail"
+	rmdir $DIR/$tdir
 }
 run_test 61a "test race llog recovery vs llog cleanup"
 
 #test race  mds llog sync vs llog cleanup
 test_61b() {
-#   OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT 0x13a
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013a"
-    facet_failover $SINGLEMDS
-    sleep 10
-    fail $SINGLEMDS
-    do_facet client dd if=/dev/zero of=$DIR/$tfile bs=4k count=1 || return 1
+	#   OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT 0x13a
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013a"
+	facet_failover $SINGLEMDS
+	sleep 10
+	fail $SINGLEMDS
+	do_facet client dd if=/dev/zero of=$DIR/$tfile bs=4k count=1 ||
+		error "dd failed"
 }
 run_test 61b "test race mds llog sync vs llog cleanup"
 
 #test race  cancel cookie cb vs llog cleanup
 test_61c() {
-    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
-#   OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT 0x222
-    touch $DIR/$tfile
-    set_nodes_failloc "$(osts_nodes)" 0x80000222
-    rm $DIR/$tfile
-    sleep 10
-    fail ost1
-    set_nodes_failloc "$(osts_nodes)" 0x0
+	#   OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT 0x222
+	touch $DIR/$tfile || error "touch $DIR/$tfile failed"
+	set_nodes_failloc "$(osts_nodes)" 0x80000222
+	rm $DIR/$tfile
+	sleep 10
+	fail ost1
+	set_nodes_failloc "$(osts_nodes)" 0x0
 }
 run_test 61c "test race mds llog sync vs llog cleanup"
 
@@ -1574,15 +1676,17 @@ test_61d() { # bug 16002 # bug 17466 # bug 22137
 run_test 61d "error in llog_setup should cleanup the llog context correctly"
 
 test_62() { # Bug 15756 - don't mis-drop resent replay
-    mkdir -p $DIR/$tdir
-    replay_barrier $SINGLEMDS
-    createmany -o $DIR/$tdir/$tfile- 25
-#define OBD_FAIL_TGT_REPLAY_DROP         0x707
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000707"
-    fail $SINGLEMDS
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0"
-    unlinkmany $DIR/$tdir/$tfile- 25 || return 2
-    return 0
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	replay_barrier $SINGLEMDS
+	createmany -o $DIR/$tdir/$tfile- 25 ||
+		error "createmany create files failed"
+	#define OBD_FAIL_TGT_REPLAY_DROP         0x707
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000707"
+	fail $SINGLEMDS
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+	unlinkmany $DIR/$tdir/$tfile- 25 ||
+		error "unlinkmany $DIR/$tdir/$tfile failed"
+	return 0
 }
 run_test 62 "don't mis-drop resent replay"
 
@@ -1601,17 +1705,17 @@ at_cleanup () {
         do_facet ost1 "lctl set_param at_history=$at_history" || true
     fi
 
-    if [ $AT_MAX_SET -ne 0 ]; then
-        for facet in mds client ost; do
-            var=AT_MAX_SAVE_${facet}
-            echo restore AT on $facet to saved value ${!var}
-            at_max_set ${!var} $facet
-            at_new=$(at_max_get $facet)
-            echo Restored AT value on $facet $at_new
-            [ $at_new -eq ${!var} ] || \
-            error "$facet : AT value was not restored SAVED ${!var} NEW $at_new"
-        done
-    fi
+	if [ $AT_MAX_SET -ne 0 ]; then
+		for facet in mds client ost; do
+			var=AT_MAX_SAVE_${facet}
+			echo restore AT on $facet to saved value ${!var}
+			at_max_set ${!var} $facet
+			at_new=$(at_max_get $facet)
+			echo Restored AT value on $facet $at_new
+			[ $at_new -eq ${!var} ] ||
+			error "AT value not restored SAVED ${!var} NEW $at_new"
+		done
+	fi
 }
 
 at_start()
@@ -1748,16 +1852,16 @@ test_66b() #bug 3055
 
 	at_start || return 0
 	ORIG=$(lctl get_param -n mdc.${FSNAME}-MDT0000*.timeouts |
-			awk '/network/ {print $4}')
+		awk '/network/ {print $4}')
 	$LCTL set_param fail_val=$(($ORIG + 5))
 	#define OBD_FAIL_PTLRPC_PAUSE_REP      0x50c
 	$LCTL set_param fail_loc=0x50c
 	ls $DIR/$tfile > /dev/null 2>&1
 	$LCTL set_param fail_loc=0
 	CUR=$(lctl get_param -n mdc.${FSNAME}-MDT0000*.timeouts |
-				awk '/network/ {print $4}')
+		awk '/network/ {print $4}')
 	WORST=$(lctl get_param -n mdc.${FSNAME}-MDT0000*.timeouts |
-				awk '/network/ {print $6}')
+		awk '/network/ {print $6}')
 	echo "network timeout orig $ORIG, cur $CUR, worst $WORST"
 	[ $WORST -gt $ORIG ] ||
 		error "Worst $WORST should be worse than orig $ORIG"
@@ -1801,9 +1905,9 @@ test_67b() #bug 3055
     local next_id=$(do_facet $SINGLEMDS lctl get_param -n \
         osc.$mdtosc.prealloc_next_id)
 
-    mkdir -p $DIR/$tdir/${OST}
-    $SETSTRIPE -i 0 -c 1 $DIR/$tdir/${OST} || error "$SETSTRIPE"
-    echo "Creating to objid $last_id on ost $OST..."
+	mkdir -p $DIR/$tdir/${OST} || error "mkdir $DIR/$tdir/${OST} failed"
+	$SETSTRIPE -i 0 -c 1 $DIR/$tdir/${OST} || error "$SETSTRIPE failed"
+	echo "Creating to objid $last_id on ost $OST..."
 #define OBD_FAIL_OST_PAUSE_CREATE        0x223
     do_facet ost1 "$LCTL set_param fail_val=20000"
     do_facet ost1 "$LCTL set_param fail_loc=0x80000223"
@@ -1840,12 +1944,11 @@ test_68 () #bug 13813
     [ -z "$ldlm_enqueue_min_r" ] && skip "missing /sys/.../ldlm_enqueue_min in the ost1" && return 0
     local ENQ_MIN=$(cat $ldlm_enqueue_min)
     local ENQ_MIN_R=$(do_facet ost1 "cat $ldlm_enqueue_min_r")
-    echo $TIMEOUT >> $ldlm_enqueue_min
-    do_facet ost1 "echo $TIMEOUT >> $ldlm_enqueue_min_r"
+	echo $TIMEOUT >> $ldlm_enqueue_min
+	do_facet ost1 "echo $TIMEOUT >> $ldlm_enqueue_min_r"
 
-    rm -rf $DIR/$tdir
-    mkdir -p $DIR/$tdir
-    $SETSTRIPE --stripe-index=0 --count=1 $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	$SETSTRIPE --stripe-index=0 --count=1 $DIR/$tdir
 #define OBD_FAIL_LDLM_PAUSE_CANCEL       0x312
     $LCTL set_param fail_val=$(($TIMEOUT - 1))
     $LCTL set_param fail_loc=0x80000312
@@ -1865,12 +1968,11 @@ run_test 68 "AT: verify slowing locks"
 at_cleanup
 # end of AT tests includes above lines
 
-
 # start multi-client tests
 test_70a () {
-	[ -z "$CLIENTS" ] && \
+	[ -z "$CLIENTS" ] &&
 		{ skip "Need two or more clients." && return; }
-	[ $CLIENTCOUNT -lt 2 ] && \
+	[ $CLIENTCOUNT -lt 2 ] &&
 		{ skip "Need two or more clients, have $CLIENTCOUNT" && return; }
 
 	echo "mount clients $CLIENTS ..."
@@ -1880,17 +1982,18 @@ test_70a () {
 	echo "Write/read files on $DIR ; clients $CLIENTS ... "
 	for CLIENT in $clients; do
 		do_node $CLIENT dd bs=1M count=10 if=/dev/zero \
-			of=$DIR/${tfile}_${CLIENT} 2>/dev/null || \
+			of=$DIR/${tfile}_${CLIENT} 2>/dev/null ||
 				error "dd failed on $CLIENT"
 	done
 
 	local prev_client=$(echo $clients | sed 's/^.* \(.\+\)$/\1/')
 	for C in ${CLIENTS//,/ }; do
-		do_node $prev_client dd if=$DIR/${tfile}_${C} of=/dev/null 2>/dev/null || \
+		do_node $prev_client dd if=$DIR/${tfile}_${C} \
+			of=/dev/null 2>/dev/null ||
 			error "dd if=$DIR/${tfile}_${C} failed on $prev_client"
 		prev_client=$C
 	done
-	
+
 	ls $DIR
 }
 run_test 70a "check multi client t-f"
@@ -1968,50 +2071,52 @@ run_test 70b "mds recovery; $CLIENTCOUNT clients"
 # end multi-client tests
 
 test_73a() {
-    multiop_bg_pause $DIR/$tfile O_tSc || return 3
-    pid=$!
-    rm -f $DIR/$tfile
+	multiop_bg_pause $DIR/$tfile O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile failed"
+	pid=$!
+	rm -f $DIR/$tfile
 
-    replay_barrier $SINGLEMDS
-#define OBD_FAIL_LDLM_ENQUEUE_NET			0x302
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000302"
-    fail $SINGLEMDS
-    kill -USR1 $pid
-    wait $pid || return 1
-    [ -e $DIR/$tfile ] && return 2
-    return 0
+	replay_barrier $SINGLEMDS
+	#define OBD_FAIL_LDLM_ENQUEUE_NET			0x302
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000302"
+	fail $SINGLEMDS
+	kill -USR1 $pid
+	wait $pid || error "multiop pid failed"
+	[ -e $DIR/$tfile ] && error "file $DIR/$tfile should not exist"
+	return 0
 }
-run_test 73a "open(O_CREAT), unlink, replay, reconnect before open replay , close"
+run_test 73a "open(O_CREAT), unlink, replay, reconnect before open replay, close"
 
 test_73b() {
-    multiop_bg_pause $DIR/$tfile O_tSc || return 3
-    pid=$!
-    rm -f $DIR/$tfile
+	multiop_bg_pause $DIR/$tfile O_tSc ||
+		error "multiop_bg_pause $DIR/$tfile failed"
+	pid=$!
+	rm -f $DIR/$tfile
 
-    replay_barrier $SINGLEMDS
-#define OBD_FAIL_LDLM_REPLY       0x30c
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000030c"
-    fail $SINGLEMDS
-    kill -USR1 $pid
-    wait $pid || return 1
-    [ -e $DIR/$tfile ] && return 2
-    return 0
+	replay_barrier $SINGLEMDS
+	#define OBD_FAIL_LDLM_REPLY       0x30c
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000030c"
+	fail $SINGLEMDS
+	kill -USR1 $pid
+	wait $pid || error "multiop pid failed"
+	[ -e $DIR/$tfile ] && error "file $DIR/$tfile should not exist"
+	return 0
 }
 run_test 73b "open(O_CREAT), unlink, replay, reconnect at open_replay reply, close"
 
 # bug 18554
 test_74() {
-    local clients=${CLIENTS:-$HOSTNAME}
+	local clients=${CLIENTS:-$HOSTNAME}
 
-    zconf_umount_clients $clients $MOUNT
-    stop ost1
-    facet_failover $SINGLEMDS
-    zconf_mount_clients $clients $MOUNT
-    mount_facet ost1
-    touch $DIR/$tfile || return 1
-    rm $DIR/$tfile || return 2
-    clients_up || error "client evicted: $?"
-    return 0
+	zconf_umount_clients $clients $MOUNT
+	stop ost1
+	facet_failover $SINGLEMDS
+	zconf_mount_clients $clients $MOUNT
+	mount_facet ost1
+	touch $DIR/$tfile || error "touch $DIR/$tfile failed"
+	rm $DIR/$tfile || error "rm $DIR/$tfile failed"
+	clients_up || error "client evicted: $?"
+	return 0
 }
 run_test 74 "Ensure applications don't fail waiting for OST recovery"
 
@@ -2037,7 +2142,7 @@ test_80a() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir -p $DIR/$tdir
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	#define OBD_FAIL_OUT_UPDATE_NET_REP	0x1701
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	$LFS mkdir -i $MDTIDX $remote_dir &
@@ -2064,7 +2169,7 @@ test_80b() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	#define OBD_FAIL_UPDATE_OBJ_NET_REP	0x1701
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	$LFS mkdir -i $MDTIDX $remote_dir &
@@ -2091,7 +2196,7 @@ test_80c() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	#define OBD_FAIL_UPDATE_OBJ_NET_REP	0x1701
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	$LFS mkdir -i $MDTIDX $remote_dir &
@@ -2114,7 +2219,7 @@ test_80d() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	#define OBD_FAIL_UPDATE_OBJ_NET_REP	0x1701
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	$LFS mkdir -i $MDTIDX $remote_dir &
@@ -2144,7 +2249,7 @@ test_80e() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
 	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x119
 	$LFS mkdir -i $MDTIDX $remote_dir &
@@ -2174,7 +2279,7 @@ test_80f() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
 	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x119
 	$LFS mkdir -i $MDTIDX $remote_dir &
@@ -2201,7 +2306,7 @@ test_80g() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
 	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x119
 	$LFS mkdir -i $MDTIDX $remote_dir &
@@ -2228,7 +2333,7 @@ test_80h() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
 	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x119
 	$LFS mkdir -i $MDTIDX $remote_dir &
@@ -2240,7 +2345,7 @@ test_80h() {
 
 	fail mds${MDTIDX},mds$((MDTIDX + 1))
 
-	wait $CLIENT_PID || return 1
+	wait $CLIENT_PID || error "remote dir creation failed"
 
 	remote_dir_check_80 || error "remote dir check failed"
 	rm -rf $DIR/$tdir || error "rmdir failed"
@@ -2259,10 +2364,10 @@ test_81a() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
 
-	touch $remote_dir
+	touch $remote_dir || error "touch $remote_dir failed"
 	# OBD_FAIL_OBJ_UPDATE_NET_REP       0x1701
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	rmdir $remote_dir &
@@ -2289,7 +2394,7 @@ test_81b() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
 
 	# OBD_FAIL_OBJ_UPDATE_NET_REP       0x1701
@@ -2319,7 +2424,7 @@ test_81c() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
 
 	# OBD_FAIL_OBJ_UPDATE_NET_REP       0x1701
@@ -2345,7 +2450,7 @@ test_81d() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
 
 	# OBD_FAIL_OBJ_UPDATE_NET_REP       0x1701
@@ -2375,7 +2480,7 @@ test_81e() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
 
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
@@ -2406,7 +2511,7 @@ test_81f() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
 
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
@@ -2436,7 +2541,7 @@ test_81g() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
 
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
@@ -2462,7 +2567,7 @@ test_81h() {
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
-	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
 
 	# OBD_FAIL_MDS_REINT_NET_REP       0x119
@@ -2494,64 +2599,74 @@ test_84a() {
 run_test 84a "stale open during export disconnect"
 
 test_85a() { #bug 16774
-    lctl set_param -n ldlm.cancel_unused_locks_before_replay "1"
+	lctl set_param -n ldlm.cancel_unused_locks_before_replay "1"
 
-    for i in `seq 100`; do
-        echo "tag-$i" > $DIR/$tfile-$i
-        grep -q "tag-$i" $DIR/$tfile-$i || error "f2-$i"
-    done
+	for i in $(seq 100); do
+		echo "tag-$i" > $DIR/$tfile-$i
+		grep -q "tag-$i" $DIR/$tfile-$i || error "f2-$i"
+	done
 
-    lov_id=`lctl dl | grep "clilov"`
-    addr=`echo $lov_id | awk '{print $4}' | awk -F '-' '{print $3}'`
-    count=`lctl get_param -n ldlm.namespaces.*MDT0000*$addr.lock_unused_count`
-    echo "before recovery: unused locks count = $count"
+	lov_id=$(lctl dl | grep "clilov")
+	addr=$(echo $lov_id | awk '{print $4}' | awk -F '-' '{print $3}')
+	count=$(lctl get_param -n \
+		ldlm.namespaces.*MDT0000*$addr.lock_unused_count)
+	echo "before recovery: unused locks count = $count"
 
-    fail $SINGLEMDS
+	fail $SINGLEMDS
 
-    count2=`lctl get_param -n ldlm.namespaces.*MDT0000*$addr.lock_unused_count`
-    echo "after recovery: unused locks count = $count2"
+	count2=$(lctl get_param -n \
+		 ldlm.namespaces.*MDT0000*$addr.lock_unused_count)
+	echo "after recovery: unused locks count = $count2"
 
-    if [ $count2 -ge $count ]; then
-        error "unused locks are not canceled"
-    fi
+	if [ $count2 -ge $count ]; then
+		error "unused locks are not canceled"
+	fi
 }
 run_test 85a "check the cancellation of unused locks during recovery(IBITS)"
 
 test_85b() { #bug 16774
-    lctl set_param -n ldlm.cancel_unused_locks_before_replay "1"
+	lctl set_param -n ldlm.cancel_unused_locks_before_replay "1"
 
-    do_facet mgs $LCTL pool_new $FSNAME.$TESTNAME || return 1
-    do_facet mgs $LCTL pool_add $FSNAME.$TESTNAME $FSNAME-OST0000 || return 2
+	do_facet mgs $LCTL pool_new $FSNAME.$TESTNAME ||
+		error "unable to create pool $TESTNAME"
+	do_facet mgs $LCTL pool_add $FSNAME.$TESTNAME $FSNAME-OST0000 ||
+		error "unable to add pool $TESTNAME"
 
-    $SETSTRIPE -c 1 -p $FSNAME.$TESTNAME $DIR
+	$SETSTRIPE -c 1 -p $FSNAME.$TESTNAME $DIR
 
-    for i in `seq 100`; do
-        dd if=/dev/urandom of=$DIR/$tfile-$i bs=4096 count=32 >/dev/null 2>&1
-    done
+	for i in $(seq 100); do
+		dd if=/dev/urandom of=$DIR/$tfile-$i bs=4096 \
+			count=32 >/dev/null 2>&1
+	done
 
-    cancel_lru_locks osc
+	cancel_lru_locks osc
 
-    for i in `seq 100`; do
-        dd if=$DIR/$tfile-$i of=/dev/null bs=4096 count=32 >/dev/null 2>&1
-    done
+	for i in $(seq 100); do
+		dd if=$DIR/$tfile-$i of=/dev/null bs=4096 \
+			count=32 >/dev/null 2>&1
+	done
 
-    lov_id=`lctl dl | grep "clilov"`
-    addr=`echo $lov_id | awk '{print $4}' | awk -F '-' '{print $3}'`
-    count=`lctl get_param -n ldlm.namespaces.*OST0000*$addr.lock_unused_count`
-    echo "before recovery: unused locks count = $count"
-    [ $count != 0 ] || return 3
+	lov_id=$(lctl dl | grep "clilov")
+	addr=$(echo $lov_id | awk '{print $4}' | awk -F '-' '{print $3}')
+	count=$(lctl get_param \
+		-n ldlm.namespaces.*OST0000*$addr.lock_unused_count)
+	echo "before recovery: unused locks count = $count"
+	[ $count != 0 ] || error "unused locks ($count) should be zero"
 
-    fail ost1
+	fail ost1
 
-    count2=`lctl get_param -n ldlm.namespaces.*OST0000*$addr.lock_unused_count`
-    echo "after recovery: unused locks count = $count2"
+	count2=$(lctl get_param \
+		 -n ldlm.namespaces.*OST0000*$addr.lock_unused_count)
+	echo "after recovery: unused locks count = $count2"
 
-    do_facet mgs $LCTL pool_remove $FSNAME.$TESTNAME $FSNAME-OST0000 || return 4
-    do_facet mgs $LCTL pool_destroy $FSNAME.$TESTNAME || return 5
+	do_facet mgs $LCTL pool_remove $FSNAME.$TESTNAME $FSNAME-OST0000 ||
+		error "unable to remove pool $TESTNAME"
+	do_facet mgs $LCTL pool_destroy $FSNAME.$TESTNAME ||
+		error "unable to destroy the pool $TESTNAME"
 
-    if [ $count2 -ge $count ]; then
-        error "unused locks are not canceled"
-    fi
+	if [ $count2 -ge $count ]; then
+		error "unused locks are not canceled"
+	fi
 }
 run_test 85b "check the cancellation of unused locks during recovery(EXTENT)"
 
@@ -2566,63 +2681,67 @@ test_86() {
 run_test 86 "umount server after clear nid_stats should not hit LBUG"
 
 test_87() {
-    do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 0"
+	do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 0"
 
-    replay_barrier ost1
-    $SETSTRIPE -i 0 -c 1 $DIR/$tfile
-    dd if=/dev/urandom of=$DIR/$tfile bs=1024k count=8 || error "Cannot write"
-    cksum=`md5sum $DIR/$tfile | awk '{print $1}'`
-    cancel_lru_locks osc
-    fail ost1
-    dd if=$DIR/$tfile of=/dev/null bs=1024k count=8 || error "Cannot read"
-    cksum2=`md5sum $DIR/$tfile | awk '{print $1}'`
-    if [ $cksum != $cksum2 ] ; then
-	error "New checksum $cksum2 does not match original $cksum"
-    fi
+	replay_barrier ost1
+	$SETSTRIPE -i 0 -c 1 $DIR/$tfile
+	dd if=/dev/urandom of=$DIR/$tfile bs=1024k count=8 ||
+		error "dd to $DIR/$tfile failed"
+	cksum=$(md5sum $DIR/$tfile | awk '{print $1}')
+	cancel_lru_locks osc
+	fail ost1
+	dd if=$DIR/$tfile of=/dev/null bs=1024k count=8 || error "Cannot read"
+	cksum2=$(md5sum $DIR/$tfile | awk '{print $1}')
+	if [ $cksum != $cksum2 ] ; then
+		error "New checksum $cksum2 does not match original $cksum"
+	fi
 }
 run_test 87 "write replay"
 
 test_87b() {
-    do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 0"
+	do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 0"
 
-    replay_barrier ost1
-    $SETSTRIPE -i 0 -c 1 $DIR/$tfile
-    dd if=/dev/urandom of=$DIR/$tfile bs=1024k count=8 || error "Cannot write"
-    sleep 1 # Give it a chance to flush dirty data
-    echo TESTTEST | dd of=$DIR/$tfile bs=1 count=8 seek=64
-    cksum=`md5sum $DIR/$tfile | awk '{print $1}'`
-    cancel_lru_locks osc
-    fail ost1
-    dd if=$DIR/$tfile of=/dev/null bs=1024k count=8 || error "Cannot read"
-    cksum2=`md5sum $DIR/$tfile | awk '{print $1}'`
-    if [ $cksum != $cksum2 ] ; then
-	error "New checksum $cksum2 does not match original $cksum"
-    fi
+	replay_barrier ost1
+	$SETSTRIPE -i 0 -c 1 $DIR/$tfile
+	dd if=/dev/urandom of=$DIR/$tfile bs=1024k count=8 ||
+		error "dd to $DIR/$tfile failed"
+	sleep 1 # Give it a chance to flush dirty data
+	echo TESTTEST | dd of=$DIR/$tfile bs=1 count=8 seek=64
+	cksum=$(md5sum $DIR/$tfile | awk '{print $1}')
+	cancel_lru_locks osc
+	fail ost1
+	dd if=$DIR/$tfile of=/dev/null bs=1024k count=8 || error "Cannot read"
+	cksum2=$(md5sum $DIR/$tfile | awk '{print $1}')
+	if [ $cksum != $cksum2 ] ; then
+		error "New checksum $cksum2 does not match original $cksum"
+	fi
 }
 run_test 87b "write replay with changed data (checksum resend)"
 
 test_88() { #bug 17485
-    mkdir -p $DIR/$tdir
-    mkdir -p $TMP/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	mkdir -p $TMP/$tdir || error "mkdir $TMP/$tdir failed"
 
-    $SETSTRIPE -i 0 -c 1 $DIR/$tdir || error "$SETSTRIPE"
+	$SETSTRIPE -i 0 -c 1 $DIR/$tdir || error "$SETSTRIPE"
 
-    replay_barrier ost1
-    replay_barrier $SINGLEMDS
+	replay_barrier ost1
+	replay_barrier $SINGLEMDS
 
     # exhaust precreations on ost1
     local OST=$(ostname_from_index 0)
     local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS $OST)
     local last_id=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_last_id)
     local next_id=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_next_id)
-    echo "before test: last_id = $last_id, next_id = $next_id"
+	echo "before test: last_id = $last_id, next_id = $next_id"
 
-    echo "Creating to objid $last_id on ost $OST..."
-    createmany -o $DIR/$tdir/f-%d $next_id $((last_id - next_id + 2))
+	echo "Creating to objid $last_id on ost $OST..."
+	createmany -o $DIR/$tdir/f-%d $next_id $((last_id - next_id + 2)) ||
+		error "createmany create files to last_id failed"
 
-    #create some files to use some uncommitted objids
-    last_id=$(($last_id + 1))
-    createmany -o $DIR/$tdir/f-%d $last_id 8
+	#create some files to use some uncommitted objids
+	last_id=$(($last_id + 1))
+	createmany -o $DIR/$tdir/f-%d $last_id 8 ||
+		error "createmany create files with uncommitted objids failed"
 
     last_id2=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_last_id)
     next_id2=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_next_id)
@@ -2650,58 +2769,58 @@ test_88() { #bug 17485
 
     last_id2=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_last_id)
     next_id2=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_next_id)
-    echo "after recovery: last_id = $last_id2, next_id = $next_id2" 
+	echo "after recovery: last_id = $last_id2, next_id = $next_id2"
 
-    # create new files, which should use new objids, and ensure the orphan 
-    # cleanup phase for ost1 is completed at the same time
-    for i in `seq 8`; do
-        file_id=$(($last_id + 10 + $i))
-        dd if=/dev/urandom of=$DIR/$tdir/f-$file_id bs=4096 count=128
-    done
+	# create new files, which should use new objids, and ensure the orphan
+	# cleanup phase for ost1 is completed at the same time
+	for i in $(seq 8); do
+		file_id=$(($last_id + 10 + $i))
+		dd if=/dev/urandom of=$DIR/$tdir/f-$file_id bs=4096 count=128
+	done
 
-    # if the objids were not recreated, then "ls" will fail with -ENOENT
-    ls -l $DIR/$tdir/* || error "can't get the status of precreated files"
+	# if the objids were not recreated, then "ls" will fail with -ENOENT
+	ls -l $DIR/$tdir/* || error "can't get the status of precreated files"
 
-    local file_id
-    # write into previously created files
-    for i in `seq 8`; do
-        file_id=$(($last_id + $i))
-        dd if=/dev/urandom of=$DIR/$tdir/f-$file_id bs=4096 count=128
-        cp -f $DIR/$tdir/f-$file_id $TMP/$tdir/
-    done
+	local file_id
+	# write into previously created files
+	for i in $(seq 8); do
+		file_id=$(($last_id + $i))
+		dd if=/dev/urandom of=$DIR/$tdir/f-$file_id bs=4096 count=128
+		cp -f $DIR/$tdir/f-$file_id $TMP/$tdir/
+	done
 
-    # compare the content
-    for i in `seq 8`; do
-        file_id=$(($last_id + $i))
-        cmp $TMP/$tdir/f-$file_id $DIR/$tdir/f-$file_id || error "the content" \
-        "of file is modified!"
-    done
+	# compare the content
+	for i in $(seq 8); do
+		file_id=$(($last_id + $i))
+		cmp $TMP/$tdir/f-$file_id $DIR/$tdir/f-$file_id ||
+			error "the content of file is modified!"
+	done
 
-    rm -fr $TMP/$tdir
+	rm -fr $TMP/$tdir
 }
 run_test 88 "MDS should not assign same objid to different files "
 
 test_89() {
-        cancel_lru_locks osc
-        mkdir -p $DIR/$tdir
-        rm -f $DIR/$tdir/$tfile
-        wait_mds_ost_sync
+	cancel_lru_locks osc
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	rm -f $DIR/$tdir/$tfile
+	wait_mds_ost_sync
 	wait_delete_completed
-        BLOCKS1=$(df -P $MOUNT | tail -n 1 | awk '{ print $3 }')
-        $SETSTRIPE -i 0 -c 1 $DIR/$tdir/$tfile
-        dd if=/dev/zero bs=1M count=10 of=$DIR/$tdir/$tfile
-        sync
-        stop ost1
-        facet_failover $SINGLEMDS
-        rm $DIR/$tdir/$tfile
-        umount $MOUNT
-        mount_facet ost1
-        zconf_mount $(hostname) $MOUNT
-        client_up || return 1
-        wait_mds_ost_sync
+	BLOCKS1=$(df -P $MOUNT | tail -n 1 | awk '{ print $3 }')
+	$SETSTRIPE -i 0 -c 1 $DIR/$tdir/$tfile
+	dd if=/dev/zero bs=1M count=10 of=$DIR/$tdir/$tfile
+	sync
+	stop ost1
+	facet_failover $SINGLEMDS
+	rm $DIR/$tdir/$tfile
+	umount $MOUNT
+	mount_facet ost1
+	zconf_mount $(hostname) $MOUNT || error "mount fails"
+	client_up || error "client_up failed"
+	wait_mds_ost_sync
 	wait_delete_completed
-        BLOCKS2=$(df -P $MOUNT | tail -n 1 | awk '{ print $3 }')
-	[ $((BLOCKS2 - BLOCKS1)) -le 4  ] || \
+	BLOCKS2=$(df -P $MOUNT | tail -n 1 | awk '{ print $3 }')
+	[ $((BLOCKS2 - BLOCKS1)) -le 4  ] ||
 		error $((BLOCKS2 - BLOCKS1)) blocks leaked
 }
 
@@ -2729,9 +2848,9 @@ test_90() { # bug 19494
         fi
     fi
 
-    mkdir -p $dir
+	mkdir $dir || error "mkdir $dir failed"
 
-    echo "Create the files"
+	echo "Create the files"
 
     # file "f${index}" striped over 1 OST
     # file "all" striped over all OSTs
@@ -2753,27 +2872,30 @@ test_90() { # bug 19494
         done
     done
 
-    # Before failing an OST, get its obd name and index
-    local varsvc=${ostfail}_svc
-    local obd=$(do_facet $ostfail lctl get_param -n obdfilter.${!varsvc}.uuid)
+	# Before failing an OST, get its obd name and index
+	local varsvc=${ostfail}_svc
+	local obd=$(do_facet $ostfail lctl get_param \
+		    -n obdfilter.${!varsvc}.uuid)
 	local index=$(($(facet_number $ostfail) - 1))
 
-    echo "Fail $ostfail $obd, display the list of affected files"
-    shutdown_facet $ostfail || return 2
+	echo "Fail $ostfail $obd, display the list of affected files"
+	shutdown_facet $ostfail || error "shutdown_facet $ostfail failed"
 
-    trap "cleanup_90 $ostfail" EXIT INT
-    echo "General Query: lfs find $dir"
-    local list=$($LFS find $dir)
-    echo "$list"
-    for (( i=0; i<$OSTCOUNT; i++ )); do
-        list_member "$list" $dir/f$i || error_noexit "lfs find $dir: no file f$i"
-    done
-    list_member "$list" $dir/all || error_noexit "lfs find $dir: no file all"
+	trap "cleanup_90 $ostfail" EXIT INT
+	echo "General Query: lfs find $dir"
+	local list=$($LFS find $dir)
+	echo "$list"
+	for (( i=0; i<$OSTCOUNT; i++ )); do
+		list_member "$list" $dir/f$i ||
+			error_noexit "lfs find $dir: no file f$i"
+	done
+	list_member "$list" $dir/all ||
+		error_noexit "lfs find $dir: no file all"
 
-    # focus on the missing OST,
-    # we expect to see only two files affected: "f$(index)" and "all"
+	# focus on the missing OST,
+	# we expect to see only two files affected: "f$(index)" and "all"
 
-    echo "Querying files on shutdown $ostfail: lfs find --obd $obd"
+	echo "Querying files on shutdown $ostfail: lfs find --obd $obd"
     list=$($LFS find --obd $obd $dir)
     echo "$list"
     for file in all f$index; do
@@ -2797,24 +2919,26 @@ test_90() { # bug 19494
 run_test 90 "lfs find identifies the missing striped file segments"
 
 test_93() {
-    local server_version=$(lustre_version_code $SINGLEMDS)
-	[[ $server_version -ge $(version_code 2.6.90) ]] ||
-	[[ $server_version -ge $(version_code 2.5.4) &&
-	   $server_version -lt $(version_code 2.5.50) ]] ||
+	local server_version=$(lustre_version_code $SINGLEMDS)
+		[[ $server_version -ge $(version_code 2.6.90) ]] ||
+		[[ $server_version -ge $(version_code 2.5.4) &&
+		   $server_version -lt $(version_code 2.5.50) ]] ||
 		{ skip "Need MDS version 2.5.4+ or 2.6.90+"; return; }
 
-    cancel_lru_locks osc
+	cancel_lru_locks osc
 
-    $SETSTRIPE -i 0 -c 1 $DIR/$tfile
-    dd if=/dev/zero of=$DIR/$tfile bs=1024 count=1
-#define OBD_FAIL_TGT_REPLAY_RECONNECT     0x715
-    # We need to emulate a state that OST is waiting for other clients
-    # not completing the recovery. Final ping is queued, but reply will be sent
-    # on the recovery completion. It is done by sleep before processing final
-    # pings
-    do_facet ost1 "$LCTL set_param fail_val=40"
-    do_facet ost1 "$LCTL set_param fail_loc=0x715"
-    fail ost1
+	$SETSTRIPE -i 0 -c 1 $DIR/$tfile ||
+		error "$SETSTRIPE  $DIR/$tfile failed"
+	dd if=/dev/zero of=$DIR/$tfile bs=1024 count=1 ||
+		error "dd to $DIR/$tfile failed"
+	#define OBD_FAIL_TGT_REPLAY_RECONNECT     0x715
+	# We need to emulate a state that OST is waiting for other clients
+	# not completing the recovery. Final ping is queued, but reply will be
+	# sent on the recovery completion. It is done by sleep before
+	# processing final pings
+	do_facet ost1 "$LCTL set_param fail_val=40"
+	do_facet ost1 "$LCTL set_param fail_loc=0x715"
+	fail ost1
 }
 run_test 93 "replay + reconnect"
 
@@ -2839,7 +2963,7 @@ test_100a() {
 	local striped_dir=$DIR/$tdir/striped_dir
 	local MDTIDX=1
 
-	mkdir $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 
 	#To make sure MDT1 and MDT0 are connected
 	#otherwise it may create single stripe dir here
@@ -2869,7 +2993,7 @@ test_100b() {
 	local striped_dir=$DIR/$tdir/striped_dir
 	local MDTIDX=1
 
-	mkdir $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 
 	#To make sure MDT1 and MDT0 are connected
 	#otherwise it may create single stripe dir here
