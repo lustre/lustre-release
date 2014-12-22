@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Brian J. Murrell <brian@interlinx.bc.ca>
 Uploaders: Brian J. Murrell <brian@interlinx.bc.ca>
 Standards-Version: 3.8.3
-Build-Depends: libreadline-dev, debhelper (>=5.0.0), dpatch, automake (>=1.7) | automake1.7 | automake1.8 | automake1.9, libsnmp-dev, bzip2, quilt, linux-headers-generic | linux-headers, rsync
+Build-Depends: module-assistant, libreadline-dev, debhelper (>=7.0.0), dpatch, automake (>=1.7) | automake1.7 | automake1.8 | automake1.9, libsnmp-dev, bzip2, quilt, linux-headers-generic | linux-headers, rsync
 Homepage: http://www.lustre.org/
 Vcs-Cvs: -d :pserver:anonymous@cvs.lustre.org:/lustre
 
@@ -32,7 +32,7 @@ Package: lustre-source
 Section: admin
 Architecture: all
 Priority: optional
-Depends: module-assistant, bzip2, debhelper (>= 5.0.0), libsnmp-dev, dpatch
+Depends: module-assistant, bzip2, debhelper (>= 7.0.0), libsnmp-dev, dpatch
 Description: source for Lustre filesystem client kernel modules
  Lustre is a scalable, secure, robust, highly-available cluster file system.
  This release is maintained by Intel Corporation and available from

@@ -29,7 +29,7 @@ endif
 #export CC
 
 # This is the debhelper compatability version to use.
-export DH_COMPAT=5
+export DH_COMPAT=7
 
 # Module-assistant stuff
 PACKAGE=lustre-client-modules
@@ -40,23 +40,20 @@ MA_DIR ?= /usr/share/modass
 ARCH=$(shell dpkg --print-architecture)
 TOP_DIR:=$(shell pwd)
 
-#  the lustre build process. This is $(KERNEL_VERSION)
+# This is the Lustre version
 VERSION=$(shell sed -n -e '1s/.*(\(.*\)) .*/\1/p' debian/changelog)
-#SUPPORTED_KERNELS=2.6.27
-SUPPORTED_KERNELS=2.6.18 2.6.20 2.6.22
 UPVERSION=$(shell echo $VERSION | sed -e 's/-[^-]*$$//')
-#KERNEL_VERSION=2.6.27
-# the kernel version to build all of this with
-#KVER=2.6.27-11-generic
-# if the above is not set, default to whatever kernel is booted
-KVER?=$$(uname -r)
-KERNEL_TREE=/lib/modules/$(KVER)/build
+
+# KVER is set to LINUXRELEASE being by autoconf which is either
+# $(uname -r) or the version of the source specified by the user
+KVER?=$(LINUXRELEASE)
+
 # KVERS, KSRC are the kernel version and source to use when building lustre
 # Will be the default when building lustre-utils, etc but whatever module-assistant
 # supplied when building modules
-KVERS?=$(KERNEL_VERSION)
-#KSRC?=$(KERNEL_TREE)
-KSRC=$(KERNEL_TREE)
+KVERS?=$(KVER)
+KSRC?=$(LINUX_OBJ)
+KSRC_TREE?=$(LINUX)
 
 # Packages
 PATCH_PKG=linux-patch-lustre
@@ -337,14 +334,15 @@ kdist_config: prep-deb-files patch-stamp
 	# touch files to same date, to avoid auto*
 	find . -type f -print0 | xargs -0 touch -r COPYING \;
 	# Doesn't seem possible to only build modules...
-	./configure --with-linux=$(KSRC) \
+	./configure --with-linux=$(KSRC_TREE) \
+		    --with-linux-obj=$(KSRC) \
 	            --disable-server \
 		    --disable-quilt  \
 		    --disable-dependency-tracking \
 		    --disable-doc  \
 		    --disable-utils \
+		    --disable-iokit \
 		    --disable-snmp \
-		    --disable-zerocopy \
 		    --disable-tests \
 		    --enable-quota
 
@@ -355,7 +353,7 @@ kdist_configure: kdist_config
 # during a normal build
 binary-modules: prep-deb-files
 	dh_testroot
-	dh_clean -k
+	dh_prep
 	$(MAKE) $(PMAKEARGS)
 	$(MAKE) install DESTDIR=$(CURDIR)/debian/$(PKGNAME)
 	# Remove stuff that doesn't belong (no module-only target)
@@ -369,7 +367,7 @@ binary-modules: prep-deb-files
 	dh_gencontrol -- -v$(VERSION)
 	dh_md5sums -p $(PKGNAME)
 	dh_builddeb --destdir=$(DEB_DESTDIR) -p $(PKGNAME)
-	dh_clean -k -p $(PKGNAME)
+	dh_prep -p $(PKGNAME)
 
 clean:
 	dh_testdir

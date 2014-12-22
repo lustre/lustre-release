@@ -140,12 +140,18 @@ debs:
 	ln -s /usr/share/modass/packages/ usr_share_modass/ && \
 	echo "lustre" > usr_share_modass/compliant.list && \
 	export MA_DIR=$$(pwd)/usr_share_modass && \
-	KVERS=$${KVERS:-$(LINUXRELEASE)}; \
-	m-a build $${KVERS:+-l $$KVERS} -i -u $$(pwd) lustre && \
+	KVERS=$${KVERS:-$(LINUXRELEASE)} && \
+	export KSRC_TREE=$(LINUX) && \
+	KSRC=$${KSRC:-$(LINUX_OBJ)} && \
+	m-a build $${KSRC:+-k $$KSRC} $${KVERS:+-l $$KVERS} -i -u $$(pwd) lustre && \
 	popd && \
-	VER=$$(sed -ne '1s/^lustre (\(.*-[0-9][0-9]*\)).*$$/\1/p' debian/changelog); \
+	VER=$$(sed -ne '1s/^lustre (\(.*-[0-9][0-9]*\)).*$$/\1/p' debian/changelog) && \
 	mkdir -p debs && \
-	mv ../linux-patch-lustre_$${VER}_all.deb ../lustre-dev_$${VER}_*.deb ../lustre-source_$${VER}_all.deb ../lustre-tests_$${VER}_*.deb ../lustre-utils_$${VER}_*.deb ../lustre_$${VER}.dsc ../lustre_$${VER}_*.changes ../lustre_$${VER%-[0-9]*}.orig.tar.gz ../lustre_$${VER}.diff.gz ../lustre-client-modules-$${KVERS}_$${VER}_*.deb debs/
+	mv ../linux-patch-lustre_$${VER}_all.deb ../lustre-dev_$${VER}_*.deb \
+	   ../lustre-source_$${VER}_all.deb ../lustre-tests_$${VER}_*.deb \
+	   ../lustre-utils_$${VER}_*.deb ../lustre_$${VER}.dsc \
+	   ../lustre_$${VER}_*.changes ../lustre_$${VER}.tar.gz \
+	   ../lustre-client-modules-$${KVERS}_$${VER}_*.deb debs/
 
 EXTRA_DIST += config.h.in
 
