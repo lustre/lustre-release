@@ -209,7 +209,6 @@ static int osc_object_ast_clear(struct ldlm_lock *lock, void *data)
 {
 	ENTRY;
 
-	LASSERT(lock->l_granted_mode == lock->l_req_mode);
 	if (lock->l_ast_data == data)
 		lock->l_ast_data = NULL;
 	RETURN(LDLM_ITER_CONTINUE);
