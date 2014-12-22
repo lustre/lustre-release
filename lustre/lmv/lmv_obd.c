@@ -1854,28 +1854,6 @@ int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
 	RETURN(rc);
 }
 
-static int lmv_done_writing(struct obd_export *exp,
-                            struct md_op_data *op_data,
-                            struct md_open_data *mod)
-{
-        struct obd_device     *obd = exp->exp_obd;
-        struct lmv_obd        *lmv = &obd->u.lmv;
-        struct lmv_tgt_desc   *tgt;
-        int                    rc;
-        ENTRY;
-
-        rc = lmv_check_connect(obd);
-        if (rc)
-                RETURN(rc);
-
-        tgt = lmv_find_target(lmv, &op_data->op_fid1);
-        if (IS_ERR(tgt))
-                RETURN(PTR_ERR(tgt));
-
-        rc = md_done_writing(tgt->ltd_exp, op_data, mod);
-        RETURN(rc);
-}
-
 static int
 lmv_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
 	    const union ldlm_policy_data *policy,
@@ -2200,9 +2178,7 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
 }
 
 static int lmv_setattr(struct obd_export *exp, struct md_op_data *op_data,
-			void *ea, size_t ealen, void *ea2, size_t ea2len,
-			struct ptlrpc_request **request,
-			struct md_open_data **mod)
+		       void *ea, size_t ealen, struct ptlrpc_request **request)
 {
 	struct obd_device       *obd = exp->exp_obd;
 	struct lmv_obd          *lmv = &obd->u.lmv;
@@ -2222,8 +2198,7 @@ static int lmv_setattr(struct obd_export *exp, struct md_op_data *op_data,
 	if (IS_ERR(tgt))
 		RETURN(PTR_ERR(tgt));
 
-	rc = md_setattr(tgt->ltd_exp, op_data, ea, ealen, ea2,
-			ea2len, request, mod);
+	rc = md_setattr(tgt->ltd_exp, op_data, ea, ealen, request);
 
 	RETURN(rc);
 }
@@ -3564,7 +3539,6 @@ struct md_ops lmv_md_ops = {
         .m_find_cbdata          = lmv_find_cbdata,
         .m_close                = lmv_close,
         .m_create               = lmv_create,
-        .m_done_writing         = lmv_done_writing,
         .m_enqueue              = lmv_enqueue,
         .m_getattr              = lmv_getattr,
         .m_getxattr             = lmv_getxattr,

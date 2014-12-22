@@ -321,13 +321,9 @@ struct inode;
 
 void obdo_from_la(struct obdo *dst, const struct lu_attr *la, __u64 valid);
 void la_from_obdo(struct lu_attr *la, const struct obdo *dst, u32 valid);
-void obdo_refresh_inode(struct inode *dst, const struct obdo *src,
-			u32 valid);
 
 void obdo_cpy_md(struct obdo *dst, const struct obdo *src, u32 valid);
 void obdo_to_ioobj(const struct obdo *oa, struct obd_ioobj *ioobj);
-void md_from_obdo(struct md_op_data *op_data, const struct obdo *oa,
-		  u32 valid);
 
 #define OBT(dev)        (dev)->obd_type
 #define OBP(dev, op)    (dev)->obd_type->typ_dt_ops->o_ ## op
@@ -1478,18 +1474,6 @@ static inline int md_create(struct obd_export *exp, struct md_op_data *op_data,
         RETURN(rc);
 }
 
-static inline int md_done_writing(struct obd_export *exp,
-                                  struct md_op_data *op_data,
-                                  struct md_open_data *mod)
-{
-        int rc;
-        ENTRY;
-        EXP_CHECK_MD_OP(exp, done_writing);
-        EXP_MD_COUNTER_INCREMENT(exp, done_writing);
-        rc = MDP(exp->exp_obd, done_writing)(exp, op_data, mod);
-        RETURN(rc);
-}
-
 static inline int md_enqueue(struct obd_export *exp,
 			     struct ldlm_enqueue_info *einfo,
 			     const union ldlm_policy_data *policy,
@@ -1560,17 +1544,15 @@ static inline int md_rename(struct obd_export *exp, struct md_op_data *op_data,
 }
 
 static inline int md_setattr(struct obd_export *exp, struct md_op_data *op_data,
-			     void *ea, size_t ealen, void *ea2, size_t ea2len,
-			     struct ptlrpc_request **request,
-			     struct md_open_data **mod)
+			     void *ea, size_t ealen,
+			     struct ptlrpc_request **request)
 {
-        int rc;
-        ENTRY;
-        EXP_CHECK_MD_OP(exp, setattr);
-        EXP_MD_COUNTER_INCREMENT(exp, setattr);
-        rc = MDP(exp->exp_obd, setattr)(exp, op_data, ea, ealen,
-                                        ea2, ea2len, request, mod);
-        RETURN(rc);
+	int rc;
+	ENTRY;
+	EXP_CHECK_MD_OP(exp, setattr);
+	EXP_MD_COUNTER_INCREMENT(exp, setattr);
+	rc = MDP(exp->exp_obd, setattr)(exp, op_data, ea, ealen, request);
+	RETURN(rc);
 }
 
 static inline int md_fsync(struct obd_export *exp, const struct lu_fid *fid,

@@ -1347,7 +1347,6 @@ void lprocfs_init_mps_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_MD_OP_INIT(num_private_stats, stats, find_cbdata);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, close);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, create);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, done_writing);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, enqueue);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, getattr);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, getattr_name);
