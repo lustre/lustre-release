@@ -168,22 +168,13 @@ static struct dt_it *osd_index_it_init(const struct lu_env *env,
 	LASSERT(osd_object_is_zap(obj->oo_db));
 	LASSERT(info);
 
-	if (info->oti_it_inline) {
-		OBD_ALLOC_PTR(it);
-		if (it == NULL)
-			RETURN(ERR_PTR(-ENOMEM));
-	} else {
-		it = &info->oti_it_zap;
-		info->oti_it_inline = 1;
-	}
+	OBD_SLAB_ALLOC_PTR_GFP(it, osd_zapit_cachep, GFP_NOFS);
+	if (it == NULL)
+		RETURN(ERR_PTR(-ENOMEM));
 
 	rc = osd_obj_cursor_init(&it->ozi_zc, obj, 0);
 	if (rc != 0) {
-		if (it != &info->oti_it_zap)
-			OBD_FREE_PTR(it);
-		else
-			info->oti_it_inline = 0;
-
+		OBD_SLAB_FREE_PTR(it, osd_zapit_cachep);
 		RETURN(ERR_PTR(rc));
 	}
 
@@ -197,7 +188,6 @@ static struct dt_it *osd_index_it_init(const struct lu_env *env,
 
 static void osd_index_it_fini(const struct lu_env *env, struct dt_it *di)
 {
-	struct osd_thread_info	*info	= osd_oti_get(env);
 	struct osd_zap_it	*it	= (struct osd_zap_it *)di;
 	struct osd_object	*obj;
 	ENTRY;
@@ -209,10 +199,7 @@ static void osd_index_it_fini(const struct lu_env *env, struct dt_it *di)
 
 	osd_zap_cursor_fini(it->ozi_zc);
 	lu_object_put(env, &obj->oo_dt.do_lu);
-	if (it != &info->oti_it_zap)
-		OBD_FREE_PTR(it);
-	else
-		info->oti_it_inline = 0;
+	OBD_SLAB_FREE_PTR(it, osd_zapit_cachep);
 
 	EXIT;
 }

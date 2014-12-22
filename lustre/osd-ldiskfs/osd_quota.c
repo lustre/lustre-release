@@ -154,7 +154,6 @@ static struct dt_it *osd_it_acct_init(const struct lu_env *env,
 				      struct dt_object *dt,
 				      __u32 attr, struct lustre_capa *capa)
 {
-	struct osd_thread_info	*info = osd_oti_get(env);
 	struct osd_it_quota	*it;
 	struct lu_object	*lo = &dt->do_lu;
 	struct osd_object	*obj = osd_dt_obj(dt);
@@ -163,19 +162,10 @@ static struct dt_it *osd_it_acct_init(const struct lu_env *env,
 
 	LASSERT(lu_object_exists(lo));
 
-	if (info == NULL)
+	OBD_ALLOC_PTR(it);
+	if (it == NULL)
 		RETURN(ERR_PTR(-ENOMEM));
 
-	if (info->oti_it_inline) {
-		OBD_ALLOC_PTR(it);
-		if (it == NULL)
-			RETURN(ERR_PTR(-ENOMEM));
-	} else {
-		it = &info->oti_it_quota;
-		info->oti_it_inline = 1;
-	}
-
-	memset(it, 0, sizeof(*it));
 	lu_object_get(lo);
 	it->oiq_obj = obj;
 	INIT_LIST_HEAD(&it->oiq_list);
@@ -196,7 +186,6 @@ static struct dt_it *osd_it_acct_init(const struct lu_env *env,
  */
 static void osd_it_acct_fini(const struct lu_env *env, struct dt_it *di)
 {
-	struct osd_thread_info *info = osd_oti_get(env);
 	struct osd_it_quota *it = (struct osd_it_quota *)di;
 	struct osd_quota_leaf *leaf, *tmp;
 	ENTRY;
@@ -208,10 +197,7 @@ static void osd_it_acct_fini(const struct lu_env *env, struct dt_it *di)
 		OBD_FREE_PTR(leaf);
 	}
 
-	if (it != &info->oti_it_quota)
-		OBD_FREE_PTR(it);
-	else
-		info->oti_it_inline = 0;
+	OBD_FREE_PTR(it);
 
 	EXIT;
 }

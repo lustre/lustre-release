@@ -74,11 +74,19 @@ struct lu_context_key	osd_key;
 /* Slab for OSD object allocation */
 struct kmem_cache *osd_object_kmem;
 
+/* Slab to allocate osd_zap_it */
+struct kmem_cache *osd_zapit_cachep;
+
 static struct lu_kmem_descr osd_caches[] = {
 	{
 		.ckd_cache = &osd_object_kmem,
 		.ckd_name  = "zfs_osd_obj",
 		.ckd_size  = sizeof(struct osd_object)
+	},
+	{
+		.ckd_cache = &osd_zapit_cachep,
+		.ckd_name  = "osd_zapit_cache",
+		.ckd_size  = sizeof(struct osd_zap_it)
 	},
 	{
 		.ckd_cache = NULL

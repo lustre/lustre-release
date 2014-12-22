@@ -86,11 +86,19 @@ CFS_MODULE_PARM(ldiskfs_track_declares_assert, "i", int, 0644,
 /* Slab to allocate dynlocks */
 struct kmem_cache *dynlock_cachep;
 
+/* Slab to allocate osd_it_ea */
+struct kmem_cache *osd_itea_cachep;
+
 static struct lu_kmem_descr ldiskfs_caches[] = {
 	{
 		.ckd_cache = &dynlock_cachep,
 		.ckd_name  = "dynlock_cache",
 		.ckd_size  = sizeof(struct dynlock_handle)
+	},
+	{
+		.ckd_cache = &osd_itea_cachep,
+		.ckd_name  = "osd_itea_cache",
+		.ckd_size  = sizeof(struct osd_it_ea)
 	},
 	{
 		.ckd_cache = NULL
@@ -4647,27 +4655,21 @@ static struct dt_it *osd_it_iam_init(const struct lu_env *env,
                                      __u32 unused,
                                      struct lustre_capa *capa)
 {
-        struct osd_it_iam      *it;
-        struct osd_thread_info *oti = osd_oti_get(env);
-        struct osd_object      *obj = osd_dt_obj(dt);
-        struct lu_object       *lo  = &dt->do_lu;
-        struct iam_path_descr  *ipd;
-        struct iam_container   *bag = &obj->oo_dir->od_container;
+	struct osd_it_iam      *it;
+	struct osd_object      *obj = osd_dt_obj(dt);
+	struct lu_object       *lo  = &dt->do_lu;
+	struct iam_path_descr  *ipd;
+	struct iam_container   *bag = &obj->oo_dir->od_container;
 
 	if (!dt_object_exists(dt))
 		return ERR_PTR(-ENOENT);
 
-        if (osd_object_auth(env, dt, capa, CAPA_OPC_BODY_READ))
-                return ERR_PTR(-EACCES);
+	if (osd_object_auth(env, dt, capa, CAPA_OPC_BODY_READ))
+		return ERR_PTR(-EACCES);
 
-	if (oti->oti_it_inline) {
-		OBD_ALLOC_PTR(it);
-		if (it == NULL)
-			return ERR_PTR(-ENOMEM);
-	} else {
-		it = &oti->oti_it;
-		oti->oti_it_inline = 1;
-	}
+	OBD_ALLOC_PTR(it);
+	if (it == NULL)
+		return ERR_PTR(-ENOMEM);
 
 	ipd = osd_it_ipd_get(env, bag);
 	if (likely(ipd != NULL)) {
@@ -4677,11 +4679,7 @@ static struct dt_it *osd_it_iam_init(const struct lu_env *env,
 		iam_it_init(&it->oi_it, bag, IAM_IT_MOVE, ipd);
 		return (struct dt_it *)it;
 	} else {
-		if (it != &oti->oti_it)
-			OBD_FREE_PTR(it);
-		else
-			oti->oti_it_inline = 0;
-
+		OBD_FREE_PTR(it);
 		return ERR_PTR(-ENOMEM);
 	}
 }
@@ -4692,17 +4690,13 @@ static struct dt_it *osd_it_iam_init(const struct lu_env *env,
 
 static void osd_it_iam_fini(const struct lu_env *env, struct dt_it *di)
 {
-	struct osd_thread_info	*oti = osd_oti_get(env);
 	struct osd_it_iam	*it  = (struct osd_it_iam *)di;
 	struct osd_object	*obj = it->oi_obj;
 
 	iam_it_fini(&it->oi_it);
 	osd_ipd_put(env, &obj->oo_dir->od_container, it->oi_ipd);
 	lu_object_put(env, &obj->oo_dt.do_lu);
-	if (it != &oti->oti_it)
-		OBD_FREE_PTR(it);
-	else
-		oti->oti_it_inline = 0;
+	OBD_FREE_PTR(it);
 }
 
 /**
@@ -4946,38 +4940,39 @@ static struct dt_it *osd_it_ea_init(const struct lu_env *env,
 {
 	struct osd_object       *obj  = osd_dt_obj(dt);
 	struct osd_thread_info  *info = osd_oti_get(env);
-	struct osd_it_ea	*it;
+	struct osd_it_ea	*oie;
 	struct file		*file;
 	struct lu_object	*lo   = &dt->do_lu;
-	struct dentry		*obj_dentry = &info->oti_it_dentry;
+	struct dentry		*obj_dentry;
 	ENTRY;
 
 	if (!dt_object_exists(dt))
 		RETURN(ERR_PTR(-ENOENT));
 
-	if (info->oti_it_inline) {
-		OBD_ALLOC_PTR(it);
-		if (it == NULL)
-			RETURN(ERR_PTR(-ENOMEM));
-	} else {
-		it = &info->oti_it_ea;
-		info->oti_it_inline = 1;
-	}
+	OBD_SLAB_ALLOC_PTR_GFP(oie, osd_itea_cachep, GFP_NOFS);
+	if (oie == NULL)
+		RETURN(ERR_PTR(-ENOMEM));
+	obj_dentry = &oie->oie_dentry;
 
 	obj_dentry->d_inode = obj->oo_inode;
 	obj_dentry->d_sb = osd_sb(osd_obj2dev(obj));
 	obj_dentry->d_name.hash = 0;
 
-	it->oie_rd_dirent       = 0;
-	it->oie_it_dirent       = 0;
-	it->oie_dirent          = NULL;
-	it->oie_buf             = info->oti_it_ea_buf;
-	it->oie_obj             = obj;
+	oie->oie_rd_dirent       = 0;
+	oie->oie_it_dirent       = 0;
+	oie->oie_dirent          = NULL;
+	if (unlikely(!info->oti_it_ea_buf_used)) {
+		oie->oie_buf = info->oti_it_ea_buf;
+		info->oti_it_ea_buf_used = 1;
+	} else {
+		OBD_ALLOC(oie->oie_buf, OSD_IT_EA_BUFSIZE);
+		if (oie->oie_buf == NULL)
+			RETURN(ERR_PTR(-ENOMEM));
+	}
+	oie->oie_obj             = obj;
 
-	file = &it->oie_file;
-	/* Reset the "file" totally to avoid to reuse any old value from
-	 * former readdir handling, the "file->f_pos" should be zero. */
-	memset(file, 0, sizeof(*file));
+	file = &oie->oie_file;
+
 	/* Only FMODE_64BITHASH or FMODE_32BITHASH should be set, NOT both. */
 	if (attr & LUDA_64BITHASH)
 		file->f_mode	= FMODE_64BITHASH;
@@ -4989,7 +4984,7 @@ static struct dt_it *osd_it_ea_init(const struct lu_env *env,
 	set_file_inode(file, obj->oo_inode);
 
 	lu_object_get(lo);
-	RETURN((struct dt_it *) it);
+	RETURN((struct dt_it *) oie);
 }
 
 /**
@@ -4999,18 +4994,19 @@ static struct dt_it *osd_it_ea_init(const struct lu_env *env,
  */
 static void osd_it_ea_fini(const struct lu_env *env, struct dt_it *di)
 {
-        struct osd_thread_info  *info	= osd_oti_get(env);
-        struct osd_it_ea	*it	= (struct osd_it_ea *)di;
-        struct osd_object	*obj	= it->oie_obj;
-        struct inode		*inode	= obj->oo_inode;
+	struct osd_thread_info  *info = osd_oti_get(env);
+	struct osd_it_ea	*oie	= (struct osd_it_ea *)di;
+	struct osd_object	*obj	= oie->oie_obj;
+	struct inode		*inode	= obj->oo_inode;
 
-        ENTRY;
-        it->oie_file.f_op->release(inode, &it->oie_file);
-        lu_object_put(env, &obj->oo_dt.do_lu);
-	if (it != &info->oti_it_ea)
-		OBD_FREE_PTR(it);
+	ENTRY;
+	oie->oie_file.f_op->release(inode, &oie->oie_file);
+	lu_object_put(env, &obj->oo_dt.do_lu);
+	if (unlikely(oie->oie_buf != info->oti_it_ea_buf))
+		OBD_FREE(oie->oie_buf, OSD_IT_EA_BUFSIZE);
 	else
-		info->oti_it_inline = 0;
+		info->oti_it_ea_buf_used = 0;
+	OBD_SLAB_FREE_PTR(oie, osd_itea_cachep);
 	EXIT;
 }
 

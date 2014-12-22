@@ -1966,7 +1966,7 @@ osd_ios_general_scan(struct osd_thread_info *info, struct osd_device *dev,
 						.oifb_info = info,
 						.oifb_dev = dev,
 						.oifb_dentry = dentry };
-	struct file		     *filp  = &info->oti_it_ea.oie_file;
+	struct file		     *filp  = &info->oti_file;
 	struct inode		     *inode = dentry->d_inode;
 	const struct file_operations *fops  = inode->i_fop;
 	int			      rc;

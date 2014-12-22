@@ -167,14 +167,9 @@ static struct dt_it *osd_it_acct_init(const struct lu_env *env,
 	if (info == NULL)
 		RETURN(ERR_PTR(-ENOMEM));
 
-	if (info->oti_it_inline) {
-		OBD_ALLOC_PTR(it);
-		if (it == NULL)
-			RETURN(ERR_PTR(-ENOMEM));
-	} else {
-		it = &info->oti_it_quota;
-		info->oti_it_inline = 1;
-	}
+	OBD_ALLOC_PTR(it);
+	if (it == NULL)
+		RETURN(ERR_PTR(-ENOMEM));
 
 	memset(it, 0, sizeof(*it));
 	it->oiq_oid = osd_quota_fid2dmu(lu_object_fid(lo));
@@ -182,11 +177,7 @@ static struct dt_it *osd_it_acct_init(const struct lu_env *env,
 	/* initialize zap cursor */
 	rc = osd_zap_cursor_init(&it->oiq_zc, osd->od_os, it->oiq_oid, 0);
 	if (rc != 0) {
-		if (it != &info->oti_it_quota)
-			OBD_FREE_PTR(it);
-		else
-			info->oti_it_inline = 0;
-
+		OBD_FREE_PTR(it);
 		RETURN(ERR_PTR(rc));
 	}
 
@@ -205,16 +196,12 @@ static struct dt_it *osd_it_acct_init(const struct lu_env *env,
  */
 static void osd_it_acct_fini(const struct lu_env *env, struct dt_it *di)
 {
-	struct osd_thread_info	*info	= osd_oti_get(env);
 	struct osd_it_quota	*it	= (struct osd_it_quota *)di;
 	ENTRY;
 
 	osd_zap_cursor_fini(it->oiq_zc);
 	lu_object_put(env, &it->oiq_obj->oo_dt.do_lu);
-	if (it != &info->oti_it_quota)
-		OBD_FREE_PTR(it);
-	else
-		info->oti_it_inline = 0;
+	OBD_FREE_PTR(it);
 
 	EXIT;
 }

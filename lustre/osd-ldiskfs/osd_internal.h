@@ -427,17 +427,18 @@ struct osd_it_ea_dirent {
  * mode (i.e. iterator over ldiskfs style directory)
  */
 struct osd_it_ea {
-        struct osd_object   *oie_obj;
-        /** used in ldiskfs iterator, to stored file pointer */
-        struct file          oie_file;
-        /** how many entries have been read-cached from storage */
-        int                  oie_rd_dirent;
-        /** current entry is being iterated by caller */
-        int                  oie_it_dirent;
-        /** current processing entry */
-        struct osd_it_ea_dirent *oie_dirent;
-        /** buffer to hold entries, size == OSD_IT_EA_BUFSIZE */
-        void                *oie_buf;
+	struct osd_object	*oie_obj;
+	/** used in ldiskfs iterator, to stored file pointer */
+	struct file		oie_file;
+	/** how many entries have been read-cached from storage */
+	int			oie_rd_dirent;
+	/** current entry is being iterated by caller */
+	int			oie_it_dirent;
+	/** current processing entry */
+	struct osd_it_ea_dirent *oie_dirent;
+	/** buffer to hold entries, size == OSD_IT_EA_BUFSIZE */
+	void			*oie_buf;
+	struct dentry		oie_dentry;
 };
 
 /**
@@ -517,10 +518,10 @@ struct osd_thread_info {
          * XXX temporary: for ->i_op calls.
          */
         struct timespec        oti_time;
-        /*
-         * XXX temporary: fake struct file for osd_object_sync
-         */
-        struct file            oti_file;
+	/*
+	 * XXX temporary: fake struct file for osd_object_sync
+	 */
+	struct file            oti_file;
         /*
          * XXX temporary: for capa operations.
          */
@@ -537,18 +538,9 @@ struct osd_thread_info {
          * in open iterator session.
          */
 
-        /** osd iterator context used for iterator session */
-
-	union {
-		struct osd_it_iam	oti_it;
-		/* ldiskfs iterator data structure,
-		 * see osd_it_ea_{init, fini} */
-		struct osd_it_ea	oti_it_ea;
-		struct osd_it_quota	oti_it_quota;
-	};
-
 	/** pre-allocated buffer used by oti_it_ea, size OSD_IT_EA_BUFSIZE */
 	void			*oti_it_ea_buf;
+	unsigned int		oti_it_ea_buf_used:1;
 
 	struct kstatfs		oti_ksfs;
 
@@ -568,7 +560,6 @@ struct osd_thread_info {
 
 	struct osd_idmap_cache oti_cache;
 
-	unsigned int	       oti_it_inline:1;
         int                    oti_r_locks;
         int                    oti_w_locks;
         int                    oti_txns;

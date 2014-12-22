@@ -170,12 +170,6 @@ struct osd_thread_info {
 
 	char			 oti_buf[64];
 
-	/** osd iterator context used for iterator session */
-	union {
-		struct osd_zap_it	oti_it_zap;
-		struct osd_it_quota	oti_it_quota;
-	};
-
 	char			 oti_str[64];
 	union {
 		char		 oti_key[MAXNAMELEN + 1];
@@ -191,7 +185,6 @@ struct osd_thread_info {
 
 	struct lquota_id_info	 oti_qi;
 	struct lu_seq_range	 oti_seq_range;
-	unsigned int		 oti_it_inline:1;
 };
 
 extern struct lu_context_key osd_key;
@@ -427,6 +420,7 @@ enum {
 	LPROC_OSD_LAST,
 };
 
+extern struct kmem_cache *osd_zapit_cachep;
 /* osd_lproc.c */
 extern struct lprocfs_vars lprocfs_osd_obd_vars[];
 
