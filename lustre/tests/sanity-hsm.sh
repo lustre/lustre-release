@@ -3777,6 +3777,8 @@ test_200() {
 	# test with cdt on is made in test_221
 	cdt_disable
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
+	# wait archive to register at CDT
+	wait_request_state $fid ARCHIVE WAITING
 	$LFS hsm_cancel $f
 	cdt_enable
 	wait_request_state $fid ARCHIVE CANCELED
@@ -3799,6 +3801,8 @@ test_201() {
 	# test with cdt on is made in test_222
 	cdt_disable
 	$LFS hsm_restore $f
+	# wait restore to register at CDT
+	wait_request_state $fid RESTORE WAITING
 	$LFS hsm_cancel $f
 	cdt_enable
 	wait_request_state $fid RESTORE CANCELED
@@ -3823,6 +3827,8 @@ test_202() {
 
 	cdt_disable
 	$LFS hsm_remove $f
+	# wait remove to register at CDT
+	wait_request_state $fid REMOVE WAITING
 	$LFS hsm_cancel $f
 	cdt_enable
 	wait_request_state $fid REMOVE CANCELED
