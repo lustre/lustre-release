@@ -386,6 +386,7 @@ lod_name_get(const struct lu_env *env, const void *area, int len)
 		cfs_foreach_bit((__dev)->lod_ost_bitmap, (index))
 
 /* lod_dev.c */
+extern struct kmem_cache *lod_object_kmem;
 int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
 		   const struct lu_fid *fid, __u32 *tgt, int *flags);
 /* lod_lov.c */
@@ -467,6 +468,8 @@ int lod_procfs_init(struct lod_device *lod);
 void lod_procfs_fini(struct lod_device *lod);
 
 /* lod_object.c */
+extern struct dt_object_operations lod_obj_ops;
+extern struct lu_object_operations lod_lu_obj_ops;
 int lod_load_lmv_shards(const struct lu_env *env, struct lod_object *lo,
 			struct lu_buf *buf, bool resize);
 int lod_object_set_pool(struct lod_object *o, char *pool);

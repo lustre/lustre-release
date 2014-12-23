@@ -220,9 +220,10 @@ int mdt_version_get_check_save(struct mdt_thread_info *info,
  * This checks version of 'name'. Many reint functions uses 'name' for child not
  * FID, therefore we need to get object by name and check its version.
  */
-int mdt_lookup_version_check(struct mdt_thread_info *info,
-			     struct mdt_object *p, const struct lu_name *lname,
-			     struct lu_fid *fid, int idx)
+static int mdt_lookup_version_check(struct mdt_thread_info *info,
+				    struct mdt_object *p,
+				    const struct lu_name *lname,
+				    struct lu_fid *fid, int idx)
 {
         int rc, vbrc;
 

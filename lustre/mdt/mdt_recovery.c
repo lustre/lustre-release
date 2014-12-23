@@ -72,7 +72,7 @@ const struct lu_buf *mdt_buf_const(const struct lu_env *env,
 }
 
 void mdt_trans_stop(const struct lu_env *env,
-                    struct mdt_device *mdt, struct thandle *th)
+			   struct mdt_device *mdt, struct thandle *th)
 {
         dt_trans_stop(env, mdt->mdt_bottom, th);
 }
@@ -189,8 +189,8 @@ static void mdt_steal_ack_locks(struct ptlrpc_request *req)
 /**
  * VBR: restore versions
  */
-void mdt_vbr_reconstruct(struct ptlrpc_request *req,
-                         struct lsd_client_data *lcd)
+static void mdt_vbr_reconstruct(struct ptlrpc_request *req,
+				struct lsd_client_data *lcd)
 {
         __u64 pre_versions[4] = {0};
         pre_versions[0] = lcd->lcd_pre_versions[0];
@@ -200,8 +200,7 @@ void mdt_vbr_reconstruct(struct ptlrpc_request *req,
         lustre_msg_set_versions(req->rq_repmsg, pre_versions);
 }
 
-void mdt_req_from_lcd(struct ptlrpc_request *req,
-                      struct lsd_client_data *lcd)
+void mdt_req_from_lcd(struct ptlrpc_request *req, struct lsd_client_data *lcd)
 {
         DEBUG_REQ(D_HA, req, "restoring transno "LPD64"/status %d",
                   lcd->lcd_last_transno, lcd->lcd_last_result);

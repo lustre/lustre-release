@@ -547,7 +547,8 @@ void mdt_client_compatibility(struct mdt_thread_info *info)
         EXIT;
 }
 
-int mdt_attr_get_eabuf_size(struct mdt_thread_info *info, struct mdt_object *o)
+static int mdt_attr_get_eabuf_size(struct mdt_thread_info *info,
+				   struct mdt_object *o)
 {
 	const struct lu_env *env = info->mti_env;
 	int rc, rc2;
@@ -4240,7 +4241,7 @@ static void mdt_quota_fini(const struct lu_env *env, struct mdt_device *mdt)
 /* mdt_getxattr() is used from mdt_intent_getxattr(), use this wrapper
  * for now. This will be removed along with converting rest of MDT code
  * to use tgt_session_info */
-int mdt_tgt_getxattr(struct tgt_session_info *tsi)
+static int mdt_tgt_getxattr(struct tgt_session_info *tsi)
 {
 	struct mdt_thread_info	*info = tsi2mdt_info(tsi);
 	int			 rc;

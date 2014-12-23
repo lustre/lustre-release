@@ -470,7 +470,7 @@ static int mdt_ioepoch_close(struct mdt_thread_info *info, struct mdt_object *o)
  * Apply obtained attributes for the 1st case, wipe out the on-disk SOM
  * cache otherwise.
  */
-int mdt_som_au_close(struct mdt_thread_info *info, struct mdt_object *o)
+static int mdt_som_au_close(struct mdt_thread_info *info, struct mdt_object *o)
 {
 	struct ptlrpc_request	*req = mdt_info_req(info);
 	__u64			 ioepoch = 0;
@@ -663,9 +663,9 @@ void mdt_mfd_set_mode(struct mdt_file_data *mfd, __u64 mode)
 /**
  * prep ma_lmm/ma_lmv for md_attr from reply
  */
-void mdt_prep_ma_buf_from_rep(struct mdt_thread_info *info,
-			      struct mdt_object *obj,
-			      struct md_attr *ma)
+static void mdt_prep_ma_buf_from_rep(struct mdt_thread_info *info,
+				     struct mdt_object *obj,
+				     struct md_attr *ma)
 {
 	LASSERT(ma->ma_lmv == NULL && ma->ma_lmm == NULL);
 	if (S_ISDIR(obj->mot_header.loh_attr)) {
@@ -852,9 +852,9 @@ err_out:
 	return rc;
 }
 
-int mdt_finish_open(struct mdt_thread_info *info,
-                    struct mdt_object *p, struct mdt_object *o,
-                    __u64 flags, int created, struct ldlm_reply *rep)
+static int mdt_finish_open(struct mdt_thread_info *info,
+			   struct mdt_object *p, struct mdt_object *o,
+			   __u64 flags, int created, struct ldlm_reply *rep)
 {
 	struct ptlrpc_request	*req = mdt_info_req(info);
 	struct obd_export	*exp = req->rq_export;
@@ -1001,9 +1001,6 @@ int mdt_finish_open(struct mdt_thread_info *info,
 	RETURN(rc);
 }
 
-extern void mdt_req_from_lcd(struct ptlrpc_request *req,
-                             struct lsd_client_data *lcd);
-
 void mdt_reconstruct_open(struct mdt_thread_info *info,
                           struct mdt_lock_handle *lhc)
 {
@@ -1117,7 +1114,7 @@ out:
         LASSERT(ergo(rc < 0, lustre_msg_get_transno(req->rq_repmsg) == 0));
 }
 
-int mdt_open_by_fid(struct mdt_thread_info *info, struct ldlm_reply *rep)
+static int mdt_open_by_fid(struct mdt_thread_info *info, struct ldlm_reply *rep)
 {
 	__u64			 flags = info->mti_spec.sp_cr_flags;
         struct mdt_reint_record *rr = &info->mti_rr;
@@ -1405,8 +1402,9 @@ static bool mdt_hsm_release_allow(const struct md_attr *ma)
 	return true;
 }
 
-int mdt_open_by_fid_lock(struct mdt_thread_info *info, struct ldlm_reply *rep,
-			 struct mdt_lock_handle *lhc)
+static int mdt_open_by_fid_lock(struct mdt_thread_info *info,
+				struct ldlm_reply *rep,
+				struct mdt_lock_handle *lhc)
 {
         const struct lu_env     *env   = info->mti_env;
         struct mdt_device       *mdt   = info->mti_mdt;

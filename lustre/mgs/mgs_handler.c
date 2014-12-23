@@ -841,8 +841,8 @@ out_pool:
 }
 
 /* from mdt_iocontrol */
-int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
-                  void *karg, void *uarg)
+static int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
+			 void *karg, void *uarg)
 {
 	struct mgs_device *mgs = exp2mgs_dev(exp);
         struct obd_ioctl_data *data = karg;
@@ -1302,15 +1302,15 @@ static int mgs_object_print(const struct lu_env *env, void *cookie,
 	return (*p)(env, cookie, LUSTRE_MGS_NAME"-object@%p", o);
 }
 
-struct lu_object_operations mgs_lu_obj_ops = {
+static struct lu_object_operations mgs_lu_obj_ops = {
 	.loo_object_init	= mgs_object_init,
 	.loo_object_free	= mgs_object_free,
 	.loo_object_print	= mgs_object_print,
 };
 
-struct lu_object *mgs_object_alloc(const struct lu_env *env,
-				   const struct lu_object_header *hdr,
-				   struct lu_device *d)
+static struct lu_object *mgs_object_alloc(const struct lu_env *env,
+					  const struct lu_object_header *hdr,
+					  struct lu_device *d)
 {
 	struct lu_object_header *h;
 	struct mgs_object       *o;

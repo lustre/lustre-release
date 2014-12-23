@@ -835,6 +835,9 @@ __u32 mdt_identity_get_perm(struct md_identity *, __u32, lnet_nid_t);
 
 int mdt_pack_remote_perm(struct mdt_thread_info *, struct mdt_object *, void *);
 
+/* mdt/mdt_recovery.c */
+void mdt_req_from_lcd(struct ptlrpc_request *req, struct lsd_client_data *lcd);
+
 /* mdt/mdt_hsm.c */
 int mdt_hsm_state_get(struct tgt_session_info *tsi);
 int mdt_hsm_state_set(struct tgt_session_info *tsi);

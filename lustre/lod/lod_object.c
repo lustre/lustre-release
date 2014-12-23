@@ -58,7 +58,6 @@
 static const char dot[] = ".";
 static const char dotdot[] = "..";
 
-extern struct kmem_cache *lod_object_kmem;
 static const struct dt_body_operations lod_body_lnk_ops;
 
 /**
@@ -188,7 +187,7 @@ do {								\
  *
  * \see dt_index_operations::dio_it.fini() in the API description for details.
  */
-void lod_it_fini(const struct lu_env *env, struct dt_it *di)
+static void lod_it_fini(const struct lu_env *env, struct dt_it *di)
 {
 	struct lod_it *it = (struct lod_it *)di;
 
@@ -207,8 +206,8 @@ void lod_it_fini(const struct lu_env *env, struct dt_it *di)
  *
  * \see dt_it_ops::get() in the API description for details.
  */
-int lod_it_get(const struct lu_env *env, struct dt_it *di,
-	       const struct dt_key *key)
+static int lod_it_get(const struct lu_env *env, struct dt_it *di,
+		      const struct dt_key *key)
 {
 	const struct lod_it *it = (const struct lod_it *)di;
 
@@ -223,7 +222,7 @@ int lod_it_get(const struct lu_env *env, struct dt_it *di,
  *
  * \see dt_it_ops::put() in the API description for details.
  */
-void lod_it_put(const struct lu_env *env, struct dt_it *di)
+static void lod_it_put(const struct lu_env *env, struct dt_it *di)
 {
 	struct lod_it *it = (struct lod_it *)di;
 
@@ -238,7 +237,7 @@ void lod_it_put(const struct lu_env *env, struct dt_it *di)
  *
  * \see dt_it_ops::next() in the API description for details.
  */
-int lod_it_next(const struct lu_env *env, struct dt_it *di)
+static int lod_it_next(const struct lu_env *env, struct dt_it *di)
 {
 	struct lod_it *it = (struct lod_it *)di;
 
@@ -253,7 +252,8 @@ int lod_it_next(const struct lu_env *env, struct dt_it *di)
  *
  * \see dt_it_ops::key() in the API description for details.
  */
-struct dt_key *lod_it_key(const struct lu_env *env, const struct dt_it *di)
+static struct dt_key *lod_it_key(const struct lu_env *env,
+				 const struct dt_it *di)
 {
 	const struct lod_it *it = (const struct lod_it *)di;
 
@@ -268,7 +268,7 @@ struct dt_key *lod_it_key(const struct lu_env *env, const struct dt_it *di)
  *
  * \see dt_it_ops::key_size() in the API description for details.
  */
-int lod_it_key_size(const struct lu_env *env, const struct dt_it *di)
+static int lod_it_key_size(const struct lu_env *env, const struct dt_it *di)
 {
 	struct lod_it *it = (struct lod_it *)di;
 
@@ -283,8 +283,8 @@ int lod_it_key_size(const struct lu_env *env, const struct dt_it *di)
  *
  * \see dt_it_ops::rec() in the API description for details.
  */
-int lod_it_rec(const struct lu_env *env, const struct dt_it *di,
-	       struct dt_rec *rec, __u32 attr)
+static int lod_it_rec(const struct lu_env *env, const struct dt_it *di,
+		      struct dt_rec *rec, __u32 attr)
 {
 	const struct lod_it *it = (const struct lod_it *)di;
 
@@ -300,8 +300,8 @@ int lod_it_rec(const struct lu_env *env, const struct dt_it *di,
  *
  * \see dt_it_ops::rec_size() in the API description for details.
  */
-int lod_it_rec_size(const struct lu_env *env, const struct dt_it *di,
-		    __u32 attr)
+static int lod_it_rec_size(const struct lu_env *env, const struct dt_it *di,
+			   __u32 attr)
 {
 	const struct lod_it *it = (const struct lod_it *)di;
 
@@ -317,7 +317,7 @@ int lod_it_rec_size(const struct lu_env *env, const struct dt_it *di,
  *
  * \see dt_it_ops::store() in the API description for details.
  */
-__u64 lod_it_store(const struct lu_env *env, const struct dt_it *di)
+static __u64 lod_it_store(const struct lu_env *env, const struct dt_it *di)
 {
 	const struct lod_it *it = (const struct lod_it *)di;
 
@@ -332,7 +332,8 @@ __u64 lod_it_store(const struct lu_env *env, const struct dt_it *di)
  *
  * \see dt_it_ops::load() in the API description for details.
  */
-int lod_it_load(const struct lu_env *env, const struct dt_it *di, __u64 hash)
+static int lod_it_load(const struct lu_env *env, const struct dt_it *di,
+		       __u64 hash)
 {
 	const struct lod_it *it = (const struct lod_it *)di;
 
@@ -347,8 +348,8 @@ int lod_it_load(const struct lu_env *env, const struct dt_it *di, __u64 hash)
  *
  * \see dt_it_ops::rec() in the API description for details.
  */
-int lod_it_key_rec(const struct lu_env *env, const struct dt_it *di,
-		   void *key_rec)
+static int lod_it_key_rec(const struct lu_env *env, const struct dt_it *di,
+			  void *key_rec)
 {
 	const struct lod_it *it = (const struct lod_it *)di;
 
@@ -1490,8 +1491,8 @@ static void lod_prep_slave_lmv_md(struct lmv_mds_md_v1 *slave_lmv,
  * \retval		0 on success
  * \retval		negative if failed
  */
-int lod_prep_lmv_md(const struct lu_env *env, struct dt_object *dt,
-		    struct lu_buf *lmv_buf)
+static int lod_prep_lmv_md(const struct lu_env *env, struct dt_object *dt,
+			   struct lu_buf *lmv_buf)
 {
 	struct lod_thread_info	*info = lod_env_info(env);
 	struct lod_device	*lod = lu2lod_dev(dt->do_lu.lo_dev);
@@ -2578,12 +2579,12 @@ out:
  * \retval		0 on success
  * \retval		negative if failed
  */
-int lod_dir_striping_create_internal(const struct lu_env *env,
-				     struct dt_object *dt,
-				     struct lu_attr *attr,
-				     struct dt_object_format *dof,
-				     struct thandle *th,
-				     bool declare)
+static int lod_dir_striping_create_internal(const struct lu_env *env,
+					    struct dt_object *dt,
+					    struct lu_attr *attr,
+					    struct dt_object_format *dof,
+					    struct thandle *th,
+					    bool declare)
 {
 	struct lod_thread_info	*info = lod_env_info(env);
 	struct lod_object	*lo = lod_dt_obj(dt);

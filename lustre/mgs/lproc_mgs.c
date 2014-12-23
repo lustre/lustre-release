@@ -207,7 +207,7 @@ LPROC_SEQ_FOPS_RO_TYPE(mgs, hash);
 LPROC_SEQ_FOPS_WO_TYPE(mgs, evict_client);
 LPROC_SEQ_FOPS_RW_TYPE(mgs, ir_timeout);
 
-struct lprocfs_seq_vars lprocfs_mgs_obd_vars[] = {
+static struct lprocfs_seq_vars lprocfs_mgs_obd_vars[] = {
 	{ .name	=	"uuid",
 	  .fops	=	&mgs_uuid_fops		},
 	{ .name	=	"num_exports",

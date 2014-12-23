@@ -881,8 +881,8 @@ static struct lprocfs_seq_vars lprocfs_mdt_obd_vars[] = {
 	{ 0 }
 };
 
-int lprocfs_mdt_print_open_files(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-				 struct hlist_node *hnode, void *v)
+static int lprocfs_mdt_print_open_files(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+					struct hlist_node *hnode, void *v)
 {
 	struct obd_export	*exp = cfs_hash_object(hs, hnode);
 	struct seq_file		*seq = v;
@@ -902,7 +902,7 @@ int lprocfs_mdt_print_open_files(cfs_hash_t *hs, cfs_hash_bd_t *bd,
 	return 0;
 }
 
-int lprocfs_mdt_open_files_seq_show(struct seq_file *seq, void *v)
+static int lprocfs_mdt_open_files_seq_show(struct seq_file *seq, void *v)
 {
 	struct nid_stat *stats = seq->private;
 	struct obd_device *obd = stats->nid_obd;

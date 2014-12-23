@@ -1442,10 +1442,12 @@ out_end:
 }
 
 /* write the lcfg in all logs for the given fs */
-int mgs_write_log_direct_all(const struct lu_env *env, struct mgs_device *mgs,
-			     struct fs_db *fsdb, struct mgs_target_info *mti,
-			     struct llog_cfg_rec *lcr, char *devname,
-			     char *comment, int server_only)
+static int mgs_write_log_direct_all(const struct lu_env *env,
+				    struct mgs_device *mgs,
+				    struct fs_db *fsdb,
+				    struct mgs_target_info *mti,
+				    struct llog_cfg_rec *lcr, char *devname,
+				    char *comment, int server_only)
 {
 	struct list_head	 log_list;
 	struct mgs_direntry	*dirent, *n;

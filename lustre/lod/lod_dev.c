@@ -156,9 +156,6 @@ int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
 	RETURN(0);
 }
 
-extern struct lu_object_operations lod_lu_obj_ops;
-extern struct dt_object_operations lod_obj_ops;
-
 /* Slab for OSD object allocation */
 struct kmem_cache *lod_object_kmem;
 
@@ -183,9 +180,9 @@ static struct lu_device *lod_device_fini(const struct lu_env *env,
  *
  * see include/lu_object.h for the details.
  */
-struct lu_object *lod_object_alloc(const struct lu_env *env,
-				   const struct lu_object_header *hdr,
-				   struct lu_device *dev)
+static struct lu_object *lod_object_alloc(const struct lu_env *env,
+					  const struct lu_object_header *hdr,
+					  struct lu_device *dev)
 {
 	struct lod_object	*lod_obj;
 	struct lu_object	*lu_obj;

@@ -102,7 +102,7 @@ out:
  * crash all connections are treated as new connections.
  */
 int mgs_client_add(struct obd_device *obd, struct obd_export *exp,
-                   void *localdata)
+			  void *localdata)
 {
         return 0;
 }
