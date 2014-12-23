@@ -1,6 +1,8 @@
 /*
  * Copyright (C) 2012 Cray, Inc.
  *
+ * Copyright (c) 2014, Intel Corporation.
+ *
  *   Author: Nic Henke <nic@cray.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.

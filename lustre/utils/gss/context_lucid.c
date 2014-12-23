@@ -1,7 +1,8 @@
 /*
- * COPYRIGHT (c) 2006
- * The Regents of the University of Michigan
+ * COPYRIGHT (c) 2006 The Regents of the University of Michigan
  * ALL RIGHTS RESERVED
+ *
+ * Copyright (c) 2014, Intel Corporation.
  *
  * Permission is granted to use, copy, create derivative works
  * and redistribute this software and such derivative works

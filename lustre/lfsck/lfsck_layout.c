@@ -20,7 +20,7 @@
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2013, Intel Corporation.
+ * Copyright (c) 2014, Intel Corporation.
  */
 /*
  * lustre/lfsck/lfsck_layout.c

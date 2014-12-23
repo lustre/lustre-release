@@ -22,6 +22,7 @@
 /*
  * Copyright (C) 2013 DataDirect Networks, Inc.
  *
+ * Copyright (c) 2014, Intel Corporation.
  */
 /*
  * lustre/ptlrpc/nrs_tbf.c

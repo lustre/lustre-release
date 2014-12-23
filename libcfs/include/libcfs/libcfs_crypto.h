@@ -23,6 +23,8 @@
 
 /*
  * Copyright 2012 Xyratex Technology Limited
+ *
+ * Copyright (c) 2014, Intel Corporation.
  */
 
 #ifndef _LIBCFS_CRYPTO_H

@@ -22,7 +22,7 @@
 /*
  * Copyright (C) 2011 FUJITSU LIMITED.  All rights reserved.
  *
- * Copyright (c) 2013, Intel Corporation.
+ * Copyright (c) 2013, 2014, Intel Corporation.
  */
 
 #include <libcfs/libcfs.h>

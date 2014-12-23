@@ -1,6 +1,8 @@
 /*
  * Copyright (c) 1998-2001 Apple Computer, Inc. All rights reserved.
  *
+ * Copyright (c) 2012, Intel Corporation.
+ *
  * @APPLE_LICENSE_HEADER_START@
  *
  * The contents of this file constitute Original Code as defined in and

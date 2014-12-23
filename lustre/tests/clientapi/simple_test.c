@@ -20,8 +20,10 @@
  * GPL HEADER END
  */
 
-/* Copyright (c) 2012 Intel Corporporation. All rights reserved.
- * Use is subject to license terms. */
+/*
+ * Copyright (c) 2013, Intel Corporporation.
+ * Use is subject to license terms.
+ */
 
 /* A simple program to test the headers and libraray are
  *  available.

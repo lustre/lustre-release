@@ -28,7 +28,7 @@
 # Copyright (c) 2001, 2010, Oracle and/or its affiliates. All rights reserved.
 # Use is subject to license terms.
 #
-# Copyright (c) 2012, 2013, Intel Corporation.
+# Copyright (c) 2012, 2014, Intel Corporation.
 #
 
 #

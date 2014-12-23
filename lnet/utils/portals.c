@@ -1,6 +1,8 @@
 /*
  * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  *
+ * Copyright (c) 2013, 2014, Intel Corporation.
+ *
  *   This file is part of Portals, http://www.sf.net/projects/lustre/
  *
  *   Portals is free software; you can redistribute it and/or

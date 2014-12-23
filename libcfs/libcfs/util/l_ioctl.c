@@ -1,6 +1,8 @@
 /*
  * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
  *
+ * Copyright (c) 2014, Intel Corporation.
+ *
  *   This file is part of Portals, http://www.sf.net/projects/lustre/
  *
  *   Portals is free software; you can redistribute it and/or

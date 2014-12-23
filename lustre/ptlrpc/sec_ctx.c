@@ -20,6 +20,9 @@
  *
  * GPL HEADER END
  */
+/*
+ * Copyright (c) 2014, Intel Corporation.
+ */
 
 #define DEBUG_SUBSYSTEM S_FILTER
 

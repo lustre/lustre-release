@@ -24,7 +24,7 @@
 /*
  * Copyright 2012 Xyratex Technology Limited
  *
- * Copyright (c) 2012, Intel Corporation.
+ * Copyright (c) 2012, 2014, Intel Corporation.
  */
 
 #include <linux/crypto.h>

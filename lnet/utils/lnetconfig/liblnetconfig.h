@@ -18,7 +18,7 @@
  *
  * LGPL HEADER END
  *
- * Copyright (c) 2013, Intel Corporation.
+ * Copyright (c) 2014, Intel Corporation.
  *
  * Author:
  *   Amir Shehata <amir.shehata@intel.com>

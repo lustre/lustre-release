@@ -20,10 +20,11 @@
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2012, 2013, Intel Corporation.
- * Use is subject to license terms.
  * Copyright (c) 2011, 2012 Commissariat a l'energie atomique et aux energies
  *                          alternatives
+ *
+ * Copyright (c) 2013, 2014, Intel Corporation.
+ * Use is subject to license terms.
  */
 /*
  * lustre/mdt/mdt_coordinator.c

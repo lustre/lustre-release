@@ -16,6 +16,9 @@
  *
  * header for lnet ioctl
  */
+/*
+ * Copyright (c) 2014, Intel Corporation.
+ */
 #ifndef _PTLCTL_H_
 #define _PTLCTL_H_
 

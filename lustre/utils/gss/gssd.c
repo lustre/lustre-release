@@ -9,6 +9,8 @@
   Copyright (c) 2002 Marius Aamodt Eriksen <marius@UMICH.EDU>.
   All rights reserved, all wrongs reversed.
 
+  Copyright (c) 2014, Intel Corporation.
+
   Redistribution and use in source and binary forms, with or without
   modification, are permitted provided that the following conditions
   are met:

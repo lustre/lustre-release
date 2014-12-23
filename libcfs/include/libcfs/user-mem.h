@@ -19,6 +19,9 @@
  *
  * GPL HEADER END
  */
+/*
+ * Copyright (c) 2012, 2013, Intel Corporation.
+ */
 
 #ifndef __LIBCFS_USER_MEM_H__
 #define __LIBCFS_USER_MEM_H__

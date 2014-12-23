@@ -21,6 +21,9 @@
 
 /*
  * Copyright (C) 2013, DataDirect Networks, Inc.
+ *
+ * Copyright (c) 2014, Intel Corporation.
+ *
  * Author: Swapnil Pimpale <spimpale@ddn.com>
  */
 
