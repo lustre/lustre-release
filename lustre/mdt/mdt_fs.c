@@ -50,49 +50,59 @@ static const struct file_operations mdt_open_files_seq_fops = {
 	.release = seq_release,
 };
 
-int mdt_export_stats_init(struct obd_device *obd,
-                          struct obd_export *exp,
-                          void              *localdata)
+/**
+ * Initialize MDT per-export statistics.
+ *
+ * This function sets up procfs entries for various MDT export counters. These
+ * counters are for per-client statistics tracked on the server.
+ *
+ * \param[in] obd	OBD device
+ * \param[in] exp	OBD export
+ * \param[in] localdata	NID of client
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
+int mdt_export_stats_init(struct obd_device *obd, struct obd_export *exp,
+			  void *localdata)
 {
-        lnet_nid_t *client_nid = localdata;
-        int        rc, newnid;
-        ENTRY;
+	lnet_nid_t *client_nid = localdata;
+	struct nid_stat *stats;
+	int rc;
+	ENTRY;
 
 	LASSERT(!obd->obd_uses_nid_stats);
 
-        rc = lprocfs_exp_setup(exp, client_nid, &newnid);
-        if (rc) {
-                /* Mask error for already created
-                 * /proc entries */
-                if (rc == -EALREADY)
-                        rc = 0;
-                RETURN(rc);
-        }
-        if (newnid) {
-                struct nid_stat *tmp = exp->exp_nid_stats;
+	rc = lprocfs_exp_setup(exp, client_nid);
+	if (rc != 0)
+		/* Mask error for already created /proc entries */
+		RETURN(rc == -EALREADY ? 0 : rc);
 
-		tmp->nid_stats = lprocfs_alloc_stats(LPROC_MDT_LAST,
+	stats = exp->exp_nid_stats;
+	stats->nid_stats = lprocfs_alloc_stats(LPROC_MDT_LAST,
 						LPROCFS_STATS_FLAG_NOPERCPU);
-		if (tmp->nid_stats == NULL)
-			RETURN(-ENOMEM);
-                mdt_stats_counter_init(tmp->nid_stats);
-                rc = lprocfs_register_stats(tmp->nid_proc, "stats",
-                                            tmp->nid_stats);
-                if (rc)
-                        GOTO(clean, rc);
-                rc = lprocfs_nid_ldlm_stats_init(tmp);
-                if (rc)
-                        GOTO(clean, rc);
+	if (stats->nid_stats == NULL)
+		RETURN(-ENOMEM);
 
-		rc = lprocfs_seq_create(tmp->nid_proc, "open_files",
-					0444, &mdt_open_files_seq_fops, tmp);
-		if (rc) {
-			CWARN("%s: error adding the open_files file: rc = %d\n",
-			      obd->obd_name, rc);
-			GOTO(clean, rc);
-		}
+	mdt_stats_counter_init(stats->nid_stats);
+
+	rc = lprocfs_register_stats(stats->nid_proc, "stats", stats->nid_stats);
+	if (rc != 0) {
+		lprocfs_free_stats(&stats->nid_stats);
+		GOTO(out, rc);
 	}
-        RETURN(0);
- clean:
-        return rc;
+
+	rc = lprocfs_nid_ldlm_stats_init(stats);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	rc = lprocfs_seq_create(stats->nid_proc, "open_files",
+				0444, &mdt_open_files_seq_fops, stats);
+	if (rc != 0) {
+		CWARN("%s: error adding the open_files file: rc = %d\n",
+			obd->obd_name, rc);
+		GOTO(out, rc);
+	}
+out:
+	RETURN(rc);
 }

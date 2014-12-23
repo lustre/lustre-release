@@ -70,9 +70,7 @@ static int ofd_export_stats_init(struct ofd_device *ofd,
 {
 	struct obd_device	*obd = ofd_obd(ofd);
 	struct nid_stat		*stats;
-	int			 num_stats;
-	int			 rc, newnid = 0;
-
+	int			 rc;
 	ENTRY;
 
 	LASSERT(obd->obd_uses_nid_stats);
@@ -81,44 +79,34 @@ static int ofd_export_stats_init(struct ofd_device *ofd,
 		/* Self-export gets no proc entry */
 		RETURN(0);
 
-	rc = lprocfs_exp_setup(exp, client_nid, &newnid);
-	if (rc) {
-		/* Mask error for already created
-		 * /proc entries */
-		if (rc == -EALREADY)
-			rc = 0;
-		RETURN(rc);
-	}
-
-	if (newnid == 0)
-		RETURN(0);
+	rc = lprocfs_exp_setup(exp, client_nid);
+	if (rc != 0)
+		/* Mask error for already created /proc entries */
+		RETURN(rc == -EALREADY ? 0 : rc);
 
 	stats = exp->exp_nid_stats;
-	LASSERT(stats != NULL);
-
-	num_stats = NUM_OBD_STATS + LPROC_OFD_STATS_LAST;
-
-	stats->nid_stats = lprocfs_alloc_stats(num_stats,
-					       LPROCFS_STATS_FLAG_NOPERCPU);
+	stats->nid_stats = lprocfs_alloc_stats(NUM_OBD_STATS +
+						LPROC_OFD_STATS_LAST,
+						LPROCFS_STATS_FLAG_NOPERCPU);
 	if (stats->nid_stats == NULL)
-		return -ENOMEM;
+		RETURN(-ENOMEM);
 
 	lprocfs_init_ops_stats(LPROC_OFD_STATS_LAST, stats->nid_stats);
-	ofd_stats_counter_init(stats->nid_stats);
-	rc = lprocfs_register_stats(stats->nid_proc, "stats",
-				    stats->nid_stats);
-	if (rc)
-		GOTO(clean, rc);
 
-	rc = lprocfs_nid_ldlm_stats_init(stats);
-	if (rc) {
+	ofd_stats_counter_init(stats->nid_stats);
+
+	rc = lprocfs_register_stats(stats->nid_proc, "stats", stats->nid_stats);
+	if (rc != 0) {
 		lprocfs_free_stats(&stats->nid_stats);
-		GOTO(clean, rc);
+		GOTO(out, rc);
 	}
 
-	RETURN(0);
-clean:
-	return rc;
+	rc = lprocfs_nid_ldlm_stats_init(stats);
+	if (rc != 0)
+		GOTO(out, rc);
+
+out:
+	RETURN(rc);
 }
 
 /**

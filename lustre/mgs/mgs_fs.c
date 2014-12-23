@@ -46,44 +46,54 @@
 #include <lustre_fid.h>
 #include "mgs_internal.h"
 
+/**
+ * Initialize MGS per-export statistics.
+ *
+ * This function sets up procfs entries for various MGS export counters. These
+ * counters are for per-client statistics tracked on the server.
+ *
+ * \param[in] obd	OBD device
+ * \param[in] exp	OBD export
+ * \param[in] localdata	NID of client
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
 int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp,
 			  void *localdata)
 {
 	lnet_nid_t *client_nid = localdata;
-	struct nid_stat *tmp;
-	int rc, is_new_nid;
+	struct nid_stat *stats;
+	int rc;
 	ENTRY;
 
-	rc = lprocfs_exp_setup(exp, client_nid, &is_new_nid);
-	if (rc != 0) {
+	rc = lprocfs_exp_setup(exp, client_nid);
+	if (rc != 0)
 		/* Mask error for already created /proc entries */
-		if (rc == -EALREADY)
-			rc = 0;
-		GOTO(out, rc = 0);
-        }
+		RETURN(rc == -EALREADY ? 0 : rc);
 
-	if (!is_new_nid)
-		GOTO(out, rc = 0);
+	stats = exp->exp_nid_stats;
+	stats->nid_stats = lprocfs_alloc_stats(NUM_OBD_STATS + LPROC_MGS_LAST,
+						LPROCFS_STATS_FLAG_NOPERCPU);
+	if (stats->nid_stats == NULL)
+		RETURN(-ENOMEM);
 
-	tmp = exp->exp_nid_stats;
-	tmp->nid_stats = lprocfs_alloc_stats(NUM_OBD_STATS + LPROC_MGS_LAST,
-					     LPROCFS_STATS_FLAG_NOPERCPU);
-	if (tmp->nid_stats == NULL)
-		GOTO(out, rc = -ENOMEM);
+	lprocfs_init_ops_stats(LPROC_MGS_LAST, stats->nid_stats);
 
-	lprocfs_init_ops_stats(LPROC_MGS_LAST, tmp->nid_stats);
-	mgs_stats_counter_init(tmp->nid_stats);
-	rc = lprocfs_register_stats(tmp->nid_proc, "stats", tmp->nid_stats);
+	mgs_stats_counter_init(stats->nid_stats);
+
+	rc = lprocfs_register_stats(stats->nid_proc, "stats", stats->nid_stats);
+	if (rc != 0) {
+		lprocfs_free_stats(&stats->nid_stats);
+		GOTO(out, rc);
+	}
+
+	rc = lprocfs_nid_ldlm_stats_init(stats);
 	if (rc != 0)
 		GOTO(out, rc);
 
-	rc = lprocfs_nid_ldlm_stats_init(tmp);
-	if (rc != 0)
-		GOTO(out, rc);
-
-	RETURN(0);
 out:
-	return rc;
+	RETURN(rc);
 }
 
 /**

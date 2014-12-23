@@ -590,8 +590,7 @@ struct nid_stat;
 extern int lprocfs_add_clear_entry(struct obd_device * obd,
 				   struct proc_dir_entry *entry);
 #ifdef HAVE_SERVER_SUPPORT
-extern int lprocfs_exp_setup(struct obd_export *exp,
-                             lnet_nid_t *peer_nid, int *newnid);
+extern int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *peer_nid);
 extern int lprocfs_exp_cleanup(struct obd_export *exp);
 #else
 static inline int lprocfs_exp_cleanup(struct obd_export *exp)
@@ -993,8 +992,7 @@ ssize_t lprocfs_nid_stats_seq_write(struct file *file, const char *buffer,
 static inline
 int lprocfs_nid_stats_clear_seq_show(struct seq_file *m, void *data)
 {return 0;}
-static inline int lprocfs_exp_setup(struct obd_export *exp,lnet_nid_t *peer_nid,
-                                    int *newnid)
+static inline int lprocfs_exp_setup(struct obd_export *exp,lnet_nid_t *peer_nid)
 { return 0; }
 #endif
 static inline int lprocfs_exp_cleanup(struct obd_export *exp)

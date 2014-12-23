@@ -165,21 +165,34 @@ static int lprocfs_exp_print_uuid_seq(cfs_hash_t *hs, cfs_hash_bd_t *bd,
 				      struct hlist_node *hnode, void *cb_data)
 
 {
-	struct obd_export *exp = cfs_hash_object(hs, hnode);
 	struct seq_file *m = cb_data;
+	struct obd_export *exp = cfs_hash_object(hs, hnode);
 
-	if (exp->exp_nid_stats)
+	if (exp->exp_nid_stats != NULL)
 		seq_printf(m, "%s\n", obd_uuid2str(&exp->exp_client_uuid));
+	return 0;
+}
+
+static int lprocfs_exp_print_nodemap_seq(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+					struct hlist_node *hnode, void *cb_data)
+{
+	struct seq_file *m = cb_data;
+	struct obd_export *exp = cfs_hash_object(hs, hnode);
+	struct lu_nodemap *nodemap = exp->exp_target_data.ted_nodemap;
+
+	if (nodemap != NULL)
+		seq_printf(m, "%s\n", nodemap->nm_name);
 	return 0;
 }
 
 static int lprocfs_exp_nodemap_seq_show(struct seq_file *m, void *data)
 {
-	struct obd_export       *exp = m->private;
-	if (exp->exp_target_data.ted_nodemap)
-		return seq_printf(m, "%s\n",
-				  exp->exp_target_data.ted_nodemap->nm_name);
-	return seq_printf(m, "null\n");
+	struct nid_stat *stats = m->private;
+	struct obd_device *obd = stats->nid_obd;
+
+	cfs_hash_for_each_key(obd->obd_nid_hash, &stats->nid,
+			      lprocfs_exp_print_nodemap_seq, m);
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(lprocfs_exp_nodemap);
 
@@ -269,7 +282,7 @@ lprocfs_nid_stats_clear_seq_write(struct file *file, const char *buffer,
 }
 EXPORT_SYMBOL(lprocfs_nid_stats_clear_seq_write);
 
-int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
+int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid)
 {
 	struct nid_stat *new_stat, *old_stat;
 	struct obd_device *obd = NULL;
@@ -278,8 +291,6 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
 	int rc = 0;
 	ENTRY;
 
-	*newnid = 0;
-
 	if (!exp || !exp->exp_obd || !exp->exp_obd->obd_proc_exports_entry ||
 	    !exp->exp_obd->obd_nid_stats_hash)
 		RETURN(-EINVAL);
@@ -287,8 +298,8 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
 	/* not test against zero because eric say:
 	 * You may only test nid against another nid, or LNET_NID_ANY.
 	 * Anything else is nonsense.*/
-	if (!nid || *nid == LNET_NID_ANY)
-		RETURN(0);
+	if (nid == NULL || *nid == LNET_NID_ANY)
+		RETURN(-EALREADY);
 
 	spin_lock(&exp->exp_lock);
 	if (exp->exp_nid_stats != NULL) {
@@ -305,8 +316,8 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
 	if (new_stat == NULL)
 		RETURN(-ENOMEM);
 
-	new_stat->nid		= *nid;
-	new_stat->nid_obd	= exp->exp_obd;
+	new_stat->nid     = *nid;
+	new_stat->nid_obd = exp->exp_obd;
 	/* we need set default refcount to 1 to balance obd_disconnect */
 	atomic_set(&new_stat->nid_exp_ref_count, 1);
 
@@ -353,8 +364,8 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
 		GOTO(destroy_new_ns, rc);
 	}
 
-	entry = lprocfs_add_simple(new_stat->nid_proc, "nodemap",
-				   exp, &lprocfs_exp_nodemap_fops);
+	entry = lprocfs_add_simple(new_stat->nid_proc, "nodemap", new_stat,
+				   &lprocfs_exp_nodemap_fops);
 	if (IS_ERR(entry)) {
 		rc = PTR_ERR(entry);
 		CWARN("Error adding the nodemap file: rc = %d\n", rc);
@@ -380,13 +391,13 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
 	spin_lock(&exp->exp_lock);
 	exp->exp_nid_stats = new_stat;
 	spin_unlock(&exp->exp_lock);
-	*newnid = 1;
+
 	/* protect competitive add to list, not need locking on destroy */
 	spin_lock(&obd->obd_nid_lock);
 	list_add(&new_stat->nid_list, &obd->obd_nid_stats);
 	spin_unlock(&obd->obd_nid_lock);
 
-	RETURN(rc);
+	RETURN(0);
 
 destroy_new_ns:
 	if (new_stat->nid_proc != NULL)
