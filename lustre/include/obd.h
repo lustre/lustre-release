@@ -38,7 +38,6 @@
 #define __OBD_H
 
 #include <linux/spinlock.h>
-#include <linux/obd.h>
 
 #include <lustre/lustre_idl.h>
 #include <lustre_lib.h>

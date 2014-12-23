@@ -43,5 +43,5 @@ linux_HEADERS = lustre_user.h
 endif
 
 EXTRA_DIST = \
-	obd.h lvfs.h lustre_compat25.h \
+	lvfs.h lustre_compat25.h \
 	lustre_user.h lustre_patchless_compat.h
