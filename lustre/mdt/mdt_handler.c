@@ -2367,7 +2367,7 @@ int mdt_check_resent_lock(struct mdt_thread_info *info,
 			  struct mdt_lock_handle *lhc)
 {
 	/* the lock might already be gotten in ldlm_handle_enqueue() */
-	if (lustre_handle_is_used(&lhc->mlh_reg_lh)) {
+	if (unlikely(lustre_handle_is_used(&lhc->mlh_reg_lh))) {
 		struct ptlrpc_request *req = mdt_info_req(info);
 		struct ldlm_lock      *lock;
 
@@ -3400,8 +3400,8 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
 
 	/* the open lock or the lock for cross-ref object should be
 	 * returned to the client */
-	if (rc == -MDT_EREMOTE_OPEN || mdt_get_disposition(rep, DISP_OPEN_LOCK)) {
-		LASSERT(lustre_handle_is_used(&lhc->mlh_reg_lh));
+	if (lustre_handle_is_used(&lhc->mlh_reg_lh) &&
+	    (rc == 0 || rc == -MDT_EREMOTE_OPEN)) {
 		rep->lock_policy_res2 = 0;
 		rc = mdt_intent_lock_replace(info, lockp, lhc, flags);
 		RETURN(rc);
@@ -3413,6 +3413,7 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
             mdt_get_disposition(rep, DISP_LOOKUP_NEG))
                 rep->lock_policy_res2 = 0;
 
+	lhc->mlh_reg_lh.cookie = 0ull;
         if (rc == -ENOTCONN || rc == -ENODEV ||
             rc == -EOVERFLOW) { /**< if VBR failure then return error */
                 /*
@@ -3421,28 +3422,13 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                  * will detect this, then disconnect, reconnect the import
                  * immediately, instead of impacting the following the rpc.
                  */
-                lhc->mlh_reg_lh.cookie = 0ull;
                 RETURN(rc);
-        } else {
-                /*
-                 * For other cases, the error will be returned by intent.
-                 * and client will retrieve the result from intent.
-                 */
-                 /*
-                  * FIXME: when open lock is finished, that should be
-                  * checked here.
-                  */
-                if (lustre_handle_is_used(&lhc->mlh_reg_lh)) {
-                        LASSERTF(rc == 0, "Error occurred but lock handle "
-                                 "is still in use, rc = %d\n", rc);
-                        rep->lock_policy_res2 = 0;
-			rc = mdt_intent_lock_replace(info, lockp, lhc, flags);
-                        RETURN(rc);
-                } else {
-                        lhc->mlh_reg_lh.cookie = 0ull;
-                        RETURN(ELDLM_LOCK_ABORTED);
-                }
         }
+	/*
+	 * For other cases, the error will be returned by intent, and client
+	 * will retrieve the result from intent.
+	 */
+	RETURN(ELDLM_LOCK_ABORTED);
 }
 
 static int mdt_intent_code(long itcode)
