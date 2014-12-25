@@ -113,6 +113,8 @@ static int nodemap_ranges_show(struct seq_file *m, void *data)
 	struct lu_nodemap		*nodemap = m->private;
 	struct lu_nid_range		*range;
 	struct interval_node_extent	ext;
+	char				start_nidstr[LNET_NIDSTR_SIZE];
+	char				end_nidstr[LNET_NIDSTR_SIZE];
 	bool				cont = false;
 
 	seq_printf(m, "[\n");
@@ -122,10 +124,10 @@ static int nodemap_ranges_show(struct seq_file *m, void *data)
 			seq_printf(m, ",\n");
 		cont = 1;
 		ext = range->rn_node.in_extent;
-		seq_printf(m, " { id: %u, start_nid: %s, "
-				"end_nid: %s }",
-			   range->rn_id, libcfs_nid2str(ext.start),
-			   libcfs_nid2str(ext.end));
+		libcfs_nid2str_r(ext.start, start_nidstr, sizeof(start_nidstr));
+		libcfs_nid2str_r(ext.end, end_nidstr, sizeof(end_nidstr));
+		seq_printf(m, " { id: %u, start_nid: %s, end_nid: %s }",
+			   range->rn_id, start_nidstr, end_nidstr);
 	}
 	read_unlock(&nm_range_tree_lock);
 	seq_printf(m, "\n");
@@ -162,13 +164,16 @@ static int nodemap_exports_show_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
 {
 	struct seq_file		*m = data;
 	struct obd_export	*exp;
-	char			*key;
+	char			nidstr[LNET_NIDSTR_SIZE] = "<unknown>";
 
 	exp = hlist_entry(hnode, struct obd_export,
 			  exp_target_data.ted_nodemap_member);
-	key = cfs_hash_key(hs, hnode);
+	if (exp->exp_connection != NULL)
+		libcfs_nid2str_r(exp->exp_connection->c_peer.nid,
+				 nidstr, sizeof(nidstr));
+
 	seq_printf(m, " { nid: %s, uuid: %s },",
-		   obd_export_nid2str(exp), exp->exp_client_uuid.uuid);
+		   nidstr, exp->exp_client_uuid.uuid);
 
 	return 0;
 }
@@ -183,7 +188,7 @@ static int nodemap_exports_show_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
  */
 static int nodemap_exports_show(struct seq_file *m, void *data)
 {
-	struct lu_nodemap		*nodemap = m->private;
+	struct lu_nodemap	*nodemap = m->private;
 
 	seq_printf(m, "[\n");
 

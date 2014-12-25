@@ -1733,10 +1733,13 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size)
 	if (lcfg->lcfg_num)
 		ptr += snprintf(ptr, end - ptr, ", num: %#08x",
 				lcfg->lcfg_num);
-	if (lcfg->lcfg_nid)
+	if (lcfg->lcfg_nid) {
+		char nidstr[LNET_NIDSTR_SIZE];
+
+		libcfs_nid2str_r(lcfg->lcfg_nid, nidstr, sizeof(nidstr));
 		ptr += snprintf(ptr, end - ptr, ", nid: %s("LPX64")",
-				libcfs_nid2str(lcfg->lcfg_nid),
-				lcfg->lcfg_nid);
+				nidstr, lcfg->lcfg_nid);
+	}
 
 	if (LUSTRE_CFG_BUFLEN(lcfg, 0) > 0)
 		ptr += snprintf(ptr, end - ptr, ", device: %s",
@@ -1782,10 +1785,13 @@ static int class_config_parse_rec(struct llog_rec_hdr *rec, char *buf, int size)
 	if (lcfg->lcfg_num)
 		ptr += snprintf(ptr, end-ptr, "num=%#08x ", lcfg->lcfg_num);
 
-	if (lcfg->lcfg_nid)
+	if (lcfg->lcfg_nid) {
+		char nidstr[LNET_NIDSTR_SIZE];
+
+		libcfs_nid2str_r(lcfg->lcfg_nid, nidstr, sizeof(nidstr));
 		ptr += snprintf(ptr, end-ptr, "nid=%s("LPX64")\n     ",
-				libcfs_nid2str(lcfg->lcfg_nid),
-				lcfg->lcfg_nid);
+				nidstr, lcfg->lcfg_nid);
+	}
 
 	if (lcfg->lcfg_command == LCFG_MARKER) {
 		struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);

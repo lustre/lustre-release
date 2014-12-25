@@ -101,12 +101,12 @@ libcfs_next_nidstring (void)
 }
 
 static int  libcfs_lo_str2addr(const char *str, int nob, __u32 *addr);
-static void libcfs_ip_addr2str(__u32 addr, char *str);
+static void libcfs_ip_addr2str(__u32 addr, char *str, size_t size);
 static int  libcfs_ip_str2addr(const char *str, int nob, __u32 *addr);
 static bool cfs_ip_is_contiguous(struct list_head *nidlist);
 static void cfs_ip_min_max(struct list_head *nidlist, __u32 *min, __u32 *max);
-static void libcfs_decnum_addr2str(__u32 addr, char *str);
-static void libcfs_hexnum_addr2str(__u32 addr, char *str);
+static void libcfs_decnum_addr2str(__u32 addr, char *str, size_t size);
+static void libcfs_hexnum_addr2str(__u32 addr, char *str, size_t size);
 static int  libcfs_num_str2addr(const char *str, int nob, __u32 *addr);
 static int  libcfs_num_parse(char *str, int len, struct list_head *list);
 static int  libcfs_num_match(__u32 addr, struct list_head *list);
@@ -118,10 +118,10 @@ static bool cfs_num_is_contiguous(struct list_head *nidlist);
 static void cfs_num_min_max(struct list_head *nidlist, __u32 *min, __u32 *max);
 
 struct netstrfns {
-	int	 nf_type;
+	__u32	 nf_type;
 	char	*nf_name;
 	char	*nf_modname;
-	void	(*nf_addr2str)(__u32 addr, char *str);
+	void	(*nf_addr2str)(__u32 addr, char *str, size_t size);
 	int	(*nf_str2addr)(const char *str, int nob, __u32 *addr);
 	int	(*nf_parse_addrlist)(char *str, int len,
 					struct list_head *list);
@@ -278,33 +278,21 @@ static struct netstrfns  libcfs_netstrfns[] = {
 	{/* .nf_type      */  -1},
 };
 
-static const int libcfs_nnetstrfns =
+static const size_t libcfs_nnetstrfns =
 	sizeof(libcfs_netstrfns)/sizeof(libcfs_netstrfns[0]);
 
-static int
-libcfs_lo_str2addr(const char *str, int nob, __u32 *addr)
+static int libcfs_lo_str2addr(const char *str, int nob, __u32 *addr)
 {
-        *addr = 0;
-        return 1;
+	*addr = 0;
+	return 1;
 }
 
 static void
-libcfs_ip_addr2str(__u32 addr, char *str)
+libcfs_ip_addr2str(__u32 addr, char *str, size_t size)
 {
-#if 0   /* never lookup */
-#if !defined(__KERNEL__) && defined HAVE_GETHOSTBYNAME
-        __u32           netip = htonl(addr);
-        struct hostent *he = gethostbyaddr(&netip, sizeof(netip), AF_INET);
-
-        if (he != NULL) {
-                snprintf(str, LNET_NIDSTR_SIZE, "%s", he->h_name);
-                return;
-        }
-#endif
-#endif
-        snprintf(str, LNET_NIDSTR_SIZE, "%u.%u.%u.%u",
-                 (addr >> 24) & 0xff, (addr >> 16) & 0xff,
-                 (addr >> 8) & 0xff, addr & 0xff);
+	snprintf(str, size, "%u.%u.%u.%u",
+		 (addr >> 24) & 0xff, (addr >> 16) & 0xff,
+		 (addr >> 8) & 0xff, addr & 0xff);
 }
 
 /* CAVEAT EMPTOR XscanfX
@@ -314,8 +302,7 @@ libcfs_ip_addr2str(__u32 addr, char *str)
  * fine, if it doesn't, then the scan ended at the end of the string, which is
  * fine too :) */
 
-static int
-libcfs_ip_str2addr(const char *str, int nob, __u32 *addr)
+static int libcfs_ip_str2addr(const char *str, int nob, __u32 *addr)
 {
 	unsigned int	a;
 	unsigned int	b;
@@ -362,15 +349,15 @@ libcfs_ip_str2addr(const char *str, int nob, __u32 *addr)
 }
 
 static void
-libcfs_decnum_addr2str(__u32 addr, char *str)
+libcfs_decnum_addr2str(__u32 addr, char *str, size_t size)
 {
-        snprintf(str, LNET_NIDSTR_SIZE, "%u", addr);
+	snprintf(str, size, "%u", addr);
 }
 
 static void
-libcfs_hexnum_addr2str(__u32 addr, char *str)
+libcfs_hexnum_addr2str(__u32 addr, char *str, size_t size)
 {
-        snprintf(str, LNET_NIDSTR_SIZE, "0x%x", addr);
+	snprintf(str, size, "0x%x", addr);
 }
 
 static int
@@ -394,16 +381,15 @@ libcfs_num_str2addr(const char *str, int nob, __u32 *addr)
 }
 
 static struct netstrfns *
-libcfs_lnd2netstrfns(int lnd)
+libcfs_lnd2netstrfns(__u32 lnd)
 {
-        int    i;
+	__u32 i;
 
-        if (lnd >= 0)
-                for (i = 0; i < libcfs_nnetstrfns; i++)
-                        if (lnd == libcfs_netstrfns[i].nf_type)
-                                return &libcfs_netstrfns[i];
+	for (i = 0; i < libcfs_nnetstrfns; i++)
+		if (lnd == libcfs_netstrfns[i].nf_type)
+			return &libcfs_netstrfns[i];
 
-        return NULL;
+	return NULL;
 }
 
 static struct netstrfns *
@@ -434,32 +420,16 @@ libcfs_name2netstrfns(const char *name)
         return NULL;
 }
 
-int
-libcfs_isknown_lnd(int type)
+int libcfs_isknown_lnd(__u32 lnd)
 {
-        return libcfs_lnd2netstrfns(type) != NULL;
+	return libcfs_lnd2netstrfns(lnd) != NULL;
 }
 
-char *
-libcfs_lnd2modname(int lnd)
+char *libcfs_lnd2modname(__u32 lnd)
 {
-        struct netstrfns *nf = libcfs_lnd2netstrfns(lnd);
+	struct netstrfns *nf = libcfs_lnd2netstrfns(lnd);
 
-        return (nf == NULL) ? NULL : nf->nf_modname;
-}
-
-char *
-libcfs_lnd2str(int lnd)
-{
-        char           *str;
-        struct netstrfns *nf = libcfs_lnd2netstrfns(lnd);
-
-        if (nf != NULL)
-                return nf->nf_name;
-
-        str = libcfs_next_nidstring();
-        snprintf(str, LNET_NIDSTR_SIZE, "?%u?", lnd);
-        return str;
+	return (nf == NULL) ? NULL : nf->nf_modname;
 }
 
 int
@@ -473,55 +443,85 @@ libcfs_str2lnd(const char *str)
         return -1;
 }
 
-char *
-libcfs_net2str(__u32 net)
+char *libcfs_lnd2str_r(__u32 lnd, char *buf, size_t buf_size)
 {
-        int               lnd = LNET_NETTYP(net);
-        int               num = LNET_NETNUM(net);
-        struct netstrfns *nf  = libcfs_lnd2netstrfns(lnd);
-        char             *str = libcfs_next_nidstring();
+	struct netstrfns *nf;
 
-        if (nf == NULL)
-                snprintf(str, LNET_NIDSTR_SIZE, "<%u:%u>", lnd, num);
-        else if (num == 0)
-                snprintf(str, LNET_NIDSTR_SIZE, "%s", nf->nf_name);
-        else
-                snprintf(str, LNET_NIDSTR_SIZE, "%s%u", nf->nf_name, num);
+	nf = libcfs_lnd2netstrfns(lnd);
+	if (nf == NULL)
+		snprintf(buf, buf_size, "?%u?", lnd);
+	else
+		snprintf(buf, buf_size, "%s", nf->nf_name);
 
-        return str;
+	return buf;
 }
 
-char *
-libcfs_nid2str(lnet_nid_t nid)
+char *libcfs_net2str_r(__u32 net, char *buf, size_t buf_size)
 {
-        __u32             addr = LNET_NIDADDR(nid);
-        __u32             net = LNET_NIDNET(nid);
-        int               lnd = LNET_NETTYP(net);
-        int               nnum = LNET_NETNUM(net);
-        struct netstrfns *nf;
-        char             *str;
-        int               nob;
+	__u32		  nnum = LNET_NETNUM(net);
+	__u32		  lnd  = LNET_NETTYP(net);
+	struct netstrfns *nf;
 
-        if (nid == LNET_NID_ANY)
-                return "<?>";
+	nf = libcfs_lnd2netstrfns(lnd);
+	if (nf == NULL)
+		snprintf(buf, buf_size, "<%u:%u>", lnd, nnum);
+	else if (nnum == 0)
+		snprintf(buf, buf_size, "%s", nf->nf_name);
+	else
+		snprintf(buf, buf_size, "%s%u", nf->nf_name, nnum);
 
-        nf = libcfs_lnd2netstrfns(lnd);
-        str = libcfs_next_nidstring();
+	return buf;
+}
 
-        if (nf == NULL)
-                snprintf(str, LNET_NIDSTR_SIZE, "%x@<%u:%u>", addr, lnd, nnum);
-        else {
-                nf->nf_addr2str(addr, str);
-                nob = strlen(str);
-                if (nnum == 0)
-                        snprintf(str + nob, LNET_NIDSTR_SIZE - nob, "@%s",
-                                 nf->nf_name);
-                else
-                        snprintf(str + nob, LNET_NIDSTR_SIZE - nob, "@%s%u",
-                                 nf->nf_name, nnum);
-        }
+char *libcfs_nid2str_r(lnet_nid_t nid, char *buf, size_t buf_size)
+{
+	__u32		  addr = LNET_NIDADDR(nid);
+	__u32		  net  = LNET_NIDNET(nid);
+	__u32		  nnum = LNET_NETNUM(net);
+	__u32		  lnd  = LNET_NETTYP(net);
+	struct netstrfns *nf;
 
-        return str;
+	if (nid == LNET_NID_ANY) {
+		strncpy(buf, "<?>", buf_size);
+		buf[buf_size - 1] = '\0';
+		return buf;
+	}
+
+	nf = libcfs_lnd2netstrfns(lnd);
+	if (nf == NULL) {
+		snprintf(buf, buf_size, "%x@<%u:%u>", addr, lnd, nnum);
+	} else {
+		size_t addr_len;
+
+		nf->nf_addr2str(addr, buf, buf_size);
+		addr_len = strlen(buf);
+		if (nnum == 0)
+			snprintf(buf + addr_len, buf_size - addr_len, "@%s",
+					nf->nf_name);
+		else
+			snprintf(buf + addr_len, buf_size - addr_len, "@%s%u",
+					nf->nf_name, nnum);
+	}
+
+	return buf;
+}
+
+char *libcfs_lnd2str(__u32 lnd)
+{
+	return libcfs_lnd2str_r(lnd, libcfs_next_nidstring(),
+				LNET_NIDSTR_SIZE);
+}
+
+char *libcfs_net2str(__u32 net)
+{
+	return libcfs_net2str_r(net, libcfs_next_nidstring(),
+				LNET_NIDSTR_SIZE);
+}
+
+char *libcfs_nid2str(lnet_nid_t nid)
+{
+	return libcfs_nid2str_r(nid, libcfs_next_nidstring(),
+				LNET_NIDSTR_SIZE);
 }
 
 static struct netstrfns *
@@ -1282,7 +1282,7 @@ static bool cfs_ip_is_contiguous(struct list_head *nidlist)
  * \param	*max_nid
  */
 void cfs_nidrange_find_min_max(struct list_head *nidlist, char *min_nid,
-			       char *max_nid, int nidstr_length)
+			       char *max_nid, size_t nidstr_length)
 {
 	struct nidrange		*nr;
 	struct netstrfns	*nf = NULL;
@@ -1301,8 +1301,8 @@ void cfs_nidrange_find_min_max(struct list_head *nidlist, char *min_nid,
 
 		nf->nf_min_max(nidlist, &min_addr, &max_addr);
 	}
-	nf->nf_addr2str(min_addr, min_addr_str);
-	nf->nf_addr2str(max_addr, max_addr_str);
+	nf->nf_addr2str(min_addr, min_addr_str, sizeof(min_addr_str));
+	nf->nf_addr2str(max_addr, max_addr_str, sizeof(max_addr_str));
 
 	snprintf(min_nid, nidstr_length, "%s@%s%d", min_addr_str, lndname,
 		 netnum);
@@ -1382,9 +1382,12 @@ static void cfs_ip_min_max(struct list_head *nidlist, __u32 *min_nid,
 EXPORT_SYMBOL(libcfs_isknown_lnd);
 EXPORT_SYMBOL(libcfs_lnd2modname);
 EXPORT_SYMBOL(libcfs_lnd2str);
+EXPORT_SYMBOL(libcfs_lnd2str_r);
 EXPORT_SYMBOL(libcfs_str2lnd);
 EXPORT_SYMBOL(libcfs_net2str);
+EXPORT_SYMBOL(libcfs_net2str_r);
 EXPORT_SYMBOL(libcfs_nid2str);
+EXPORT_SYMBOL(libcfs_nid2str_r);
 EXPORT_SYMBOL(libcfs_str2net);
 EXPORT_SYMBOL(libcfs_str2nid);
 EXPORT_SYMBOL(libcfs_id2str);

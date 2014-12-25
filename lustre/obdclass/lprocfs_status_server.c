@@ -154,16 +154,8 @@ void lprocfs_free_per_client_stats(struct obd_device *obd)
 }
 EXPORT_SYMBOL(lprocfs_free_per_client_stats);
 
-int lprocfs_exp_nid_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_export *exp = m->private;
-	LASSERT(exp != NULL);
-	return seq_printf(m, "%s\n", obd_export_nid2str(exp));
-}
-
 static int lprocfs_exp_print_uuid_seq(cfs_hash_t *hs, cfs_hash_bd_t *bd,
 				      struct hlist_node *hnode, void *cb_data)
-
 {
 	struct seq_file *m = cb_data;
 	struct obd_export *exp = cfs_hash_object(hs, hnode);
@@ -287,7 +279,7 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid)
 	struct nid_stat *new_stat, *old_stat;
 	struct obd_device *obd = NULL;
 	struct proc_dir_entry *entry;
-	char *buffer = NULL;
+	char nidstr[LNET_NIDSTR_SIZE];
 	int rc = 0;
 	ENTRY;
 
@@ -300,6 +292,8 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid)
 	 * Anything else is nonsense.*/
 	if (nid == NULL || *nid == LNET_NID_ANY)
 		RETURN(-EALREADY);
+
+	libcfs_nid2str_r(*nid, nidstr, sizeof(nidstr));
 
 	spin_lock(&exp->exp_lock);
 	if (exp->exp_nid_stats != NULL) {
@@ -324,8 +318,7 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid)
 	old_stat = cfs_hash_findadd_unique(obd->obd_nid_stats_hash,
 					   nid, &new_stat->nid_hash);
 	CDEBUG(D_INFO, "Found stats %p for nid %s - ref %d\n",
-	       old_stat, libcfs_nid2str(*nid),
-	       atomic_read(&new_stat->nid_exp_ref_count));
+	       old_stat, nidstr, atomic_read(&old_stat->nid_exp_ref_count));
 
 	/* Return -EALREADY here so that we know that the /proc
 	 * entry already has been created */
@@ -340,21 +333,15 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid)
 		GOTO(destroy_new, rc = -EALREADY);
 	}
 	/* not found - create */
-	OBD_ALLOC(buffer, LNET_NIDSTR_SIZE);
-	if (buffer == NULL)
-		GOTO(destroy_new, rc = -ENOMEM);
-
-	memcpy(buffer, libcfs_nid2str(*nid), LNET_NIDSTR_SIZE);
-	new_stat->nid_proc = lprocfs_register(buffer,
+	new_stat->nid_proc = lprocfs_register(nidstr,
 					      obd->obd_proc_exports_entry,
 					      NULL, NULL);
-	OBD_FREE(buffer, LNET_NIDSTR_SIZE);
 
 	if (IS_ERR(new_stat->nid_proc)) {
 		rc = PTR_ERR(new_stat->nid_proc);
 		new_stat->nid_proc = NULL;
 		CERROR("%s: cannot create proc entry for export %s: rc = %d\n",
-		       obd->obd_name, libcfs_nid2str(*nid), rc);
+		       obd->obd_name, nidstr, rc);
 		GOTO(destroy_new_ns, rc);
 	}
 

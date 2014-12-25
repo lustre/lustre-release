@@ -740,11 +740,10 @@ static inline void tgt_init_sec_none(struct obd_connect_data *reply)
 static int tgt_init_sec_level(struct ptlrpc_request *req)
 {
 	struct lu_target	*tgt = class_exp2tgt(req->rq_export);
-	char			*client = libcfs_nid2str(req->rq_peer.nid);
+	char			*client;
 	struct obd_connect_data	*data, *reply;
 	int			 rc = 0;
 	bool			 remote;
-
 	ENTRY;
 
 	data = req_capsule_client_get(&req->rq_pill, &RMF_CONNECT_DATA);
@@ -758,6 +757,7 @@ static int tgt_init_sec_level(struct ptlrpc_request *req)
 		RETURN(0);
 	}
 
+	client = libcfs_nid2str(req->rq_peer.nid);
 	/* no GSS support case */
 	if (!req->rq_auth_gss) {
 		if (tgt->lut_sec_level > LUSTRE_SEC_NONE) {
@@ -1857,15 +1857,13 @@ static void tgt_warn_on_cksum(struct ptlrpc_request *req,
 {
 	struct obd_export *exp = req->rq_export;
 	struct ost_body *body;
-	char *router;
-	char *via;
+	char *router = "";
+	char *via = "";
 
 	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
 	LASSERT(body != NULL);
 
-	if (req->rq_peer.nid == desc->bd_sender) {
-		via = router = "";
-	} else {
+	if (req->rq_peer.nid != desc->bd_sender) {
 		via = " via ";
 		router = libcfs_nid2str(desc->bd_sender);
 	}

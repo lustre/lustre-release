@@ -90,16 +90,14 @@ static void seq_show_srpc_rules(struct seq_file *seq, const char *tgtname,
         struct sptlrpc_rule    *r;
         char                    dirbuf[10];
         char                    flvrbuf[40];
-        char                   *net;
+	char			net[LNET_NIDSTR_SIZE] = "default";
         int                     i;
 
         for (i = 0; i < rset->srs_nrule; i++) {
                 r = &rset->srs_rules[i];
 
-                if (r->sr_netid == LNET_NIDNET(LNET_NID_ANY))
-                        net = "default";
-                else
-                        net = libcfs_net2str(r->sr_netid);
+		if (r->sr_netid != LNET_NIDNET(LNET_NID_ANY))
+			libcfs_net2str_r(r->sr_netid, net, sizeof(net));
 
                 if (r->sr_from == LUSTRE_SP_ANY && r->sr_to == LUSTRE_SP_ANY)
                         dirbuf[0] = '\0';

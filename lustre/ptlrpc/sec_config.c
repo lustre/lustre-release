@@ -931,14 +931,12 @@ EXPORT_SYMBOL(sptlrpc_conf_client_adapt);
 
 static void rule2string(struct sptlrpc_rule *r, char *buf, int buflen)
 {
-        char    dirbuf[8];
-        char   *net;
-        char   *ptr = buf;
+	char	 dirbuf[8];
+	char	 net[LNET_NIDSTR_SIZE] = "default";
+	char	*ptr = buf;
 
-        if (r->sr_netid == LNET_NIDNET(LNET_NID_ANY))
-                net = "default";
-        else
-                net = libcfs_net2str(r->sr_netid);
+	if (r->sr_netid != LNET_NIDNET(LNET_NID_ANY))
+		libcfs_net2str_r(r->sr_netid, net, sizeof(net));
 
         if (r->sr_from == LUSTRE_SP_ANY && r->sr_to == LUSTRE_SP_ANY)
                 dirbuf[0] = '\0';

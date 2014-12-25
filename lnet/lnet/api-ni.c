@@ -273,8 +273,7 @@ static void lnet_assert_wire_constants(void)
         CLASSERT ((int)sizeof(((lnet_hdr_t *)0)->msg.hello.type) == 4);
 }
 
-static lnd_t *
-lnet_find_lnd_by_type (int type)
+static lnd_t *lnet_find_lnd_by_type(__u32 type)
 {
 	lnd_t		 *lnd;
 	struct list_head *tmp;
@@ -283,7 +282,7 @@ lnet_find_lnd_by_type (int type)
 	list_for_each(tmp, &the_lnet.ln_lnds) {
 		lnd = list_entry(tmp, lnd_t, lnd_list);
 
-		if ((int)lnd->lnd_type == type)
+		if (lnd->lnd_type == type)
 			return lnd;
 	}
 	return NULL;
@@ -1222,7 +1221,7 @@ lnet_startup_lndni(struct lnet_ni *ni, __s32 peer_timeout,
 		   __s32 peer_cr, __s32 peer_buf_cr, __s32 credits)
 {
 	int			rc = -EINVAL;
-	int			lnd_type;
+	__u32			lnd_type;
 	lnd_t			*lnd;
 	struct lnet_tx_queue	*tq;
 	int			i;

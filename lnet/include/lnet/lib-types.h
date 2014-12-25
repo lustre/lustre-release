@@ -310,8 +310,8 @@ typedef struct lnet_lnd
 	struct list_head	lnd_list;	/* stash in the LND table */
 	int			lnd_refcount;	/* # active instances */
 
-        /* fields initialised by the LND */
-        unsigned int          lnd_type;
+	/* fields initialized by the LND */
+	__u32			lnd_type;
 
         int  (*lnd_startup) (struct lnet_ni *ni);
         void (*lnd_shutdown) (struct lnet_ni *ni);

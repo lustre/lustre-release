@@ -223,14 +223,16 @@ int lustre_start_mgc(struct super_block *sb)
         struct obd_uuid *uuid;
         class_uuid_t uuidc;
         lnet_nid_t nid;
+	char nidstr[LNET_NIDSTR_SIZE];
         char *mgcname = NULL, *niduuid = NULL, *mgssec = NULL;
         char *ptr;
-        int rc = 0, i = 0, j, len;
-        ENTRY;
+	int rc = 0, i = 0, j;
+	size_t len;
+	ENTRY;
 
-        LASSERT(lsi->lsi_lmd);
+	LASSERT(lsi->lsi_lmd);
 
-        /* Find the first non-lo MGS nid for our MGC name */
+	/* Find the first non-lo MGS nid for our MGC name */
 	if (IS_SERVER(lsi)) {
 		/* mount -o mgsnode=nid */
 		ptr = lsi->lsi_lmd->lmd_mgs;
@@ -260,12 +262,13 @@ int lustre_start_mgc(struct super_block *sb)
 
 	mutex_lock(&mgc_start_lock);
 
-        len = strlen(LUSTRE_MGC_OBDNAME) + strlen(libcfs_nid2str(nid)) + 1;
-        OBD_ALLOC(mgcname, len);
-        OBD_ALLOC(niduuid, len + 2);
-        if (!mgcname || !niduuid)
-                GOTO(out_free, rc = -ENOMEM);
-        sprintf(mgcname, "%s%s", LUSTRE_MGC_OBDNAME, libcfs_nid2str(nid));
+	libcfs_nid2str_r(nid, nidstr, sizeof(nidstr));
+	len = strlen(LUSTRE_MGC_OBDNAME) + strlen(nidstr) + 1;
+	OBD_ALLOC(mgcname, len);
+	OBD_ALLOC(niduuid, len + 2);
+	if (mgcname == NULL || niduuid == NULL)
+		GOTO(out_free, rc = -ENOMEM);
+	snprintf(mgcname, len, "%s%s", LUSTRE_MGC_OBDNAME, nidstr);
 
         mgssec = lsi->lsi_lmd->lmd_mgssec ? lsi->lsi_lmd->lmd_mgssec : "";
 
@@ -337,7 +340,7 @@ int lustre_start_mgc(struct super_block *sb)
 
         /* Add the primary nids for the MGS */
         i = 0;
-        sprintf(niduuid, "%s_%x", mgcname, i);
+	snprintf(niduuid, len + 2, "%s_%x", mgcname, i);
 	if (IS_SERVER(lsi)) {
 		ptr = lsi->lsi_lmd->lmd_mgs;
 		CDEBUG(D_MOUNT, "mgs nids %s.\n", ptr);
