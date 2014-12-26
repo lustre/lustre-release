@@ -1973,8 +1973,6 @@ int lfsck_namespace_rebuild_linkea(const struct lu_env *env,
 	int				 rc	= 0;
 	ENTRY;
 
-	LASSERT(!dt_object_remote(obj));
-
 	th = dt_trans_create(env, dev);
 	if (IS_ERR(th))
 		GOTO(log, rc = PTR_ERR(th));

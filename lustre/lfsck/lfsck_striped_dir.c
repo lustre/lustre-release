@@ -1728,6 +1728,9 @@ int lfsck_namespace_verify_stripe_slave(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 
+	if (unlikely(!dt_try_as_dir(env, parent)))
+		GOTO(out, rc = -ENOTDIR);
+
 	rc = lfsck_read_stripe_lmv(env, parent, plmv);
 	if (rc != 0) {
 		int rc1;
