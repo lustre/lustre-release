@@ -7,7 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <attr/xattr.h>
+#include <sys/xattr.h>
 
 int
 main(int argc, char *argv[])

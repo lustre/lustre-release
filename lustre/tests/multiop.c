@@ -46,13 +46,13 @@
 #include <sys/mman.h>
 #include <sys/vfs.h>
 #include <sys/ioctl.h>
+#include <sys/xattr.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <semaphore.h>
 #include <time.h>
 #include <err.h>
-#include <attr/xattr.h>
 
 #include <lustre/lustre_idl.h>
 #include <lustre/lustreapi.h>
