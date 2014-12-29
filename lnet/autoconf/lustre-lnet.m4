@@ -698,7 +698,6 @@ AM_CONDITIONAL(BUILD_DLC,        test x$USE_DLC = "xyes")
 #
 AC_DEFUN([LN_CONFIG_FILES], [
 AC_CONFIG_FILES([
-lnet/Kernelenv
 lnet/Makefile
 lnet/autoMakefile
 lnet/autoconf/Makefile

@@ -437,7 +437,6 @@ AM_CONDITIONAL(NEED_PCLMULQDQ_CRC32C, [test "x$enable_crc32c_crypto" = xyes])
 #
 AC_DEFUN([LIBCFS_CONFIG_FILES], [
 AC_CONFIG_FILES([
-libcfs/Kernelenv
 libcfs/Makefile
 libcfs/autoMakefile
 libcfs/autoconf/Makefile
