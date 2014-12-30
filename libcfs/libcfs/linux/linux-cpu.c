@@ -130,7 +130,12 @@ EXPORT_SYMBOL(cfs_cpu_ht_nsiblings);
 void
 cfs_node_to_cpumask(int node, cpumask_t *mask)
 {
-	cpumask_copy(mask, cpumask_of_node(node));
+	const cpumask_t *tmp = cpumask_of_node(node);
+
+	if (tmp != NULL)
+		cpumask_copy(mask, tmp);
+	else
+		cpumask_clear(mask);
 }
 EXPORT_SYMBOL(cfs_node_to_cpumask);
 
