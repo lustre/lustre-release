@@ -4255,12 +4255,15 @@ drop_update_reply() {
 
 pause_bulk() {
 #define OBD_FAIL_OST_BRW_PAUSE_BULK      0x214
-    RC=0
-    do_facet ost1 lctl set_param fail_loc=0x214
-    do_facet client "$1" || RC=$?
-    do_facet client "sync"
-    do_facet ost1 lctl set_param fail_loc=0
-    return $RC
+	RC=0
+
+	local timeout=${2:-0}
+	# default is (obd_timeout / 4) if unspecified
+	do_facet ost1 lctl set_param fail_val=$timeout fail_loc=0x80000214
+	do_facet client "$1" || RC=$?
+	do_facet client "sync"
+	do_facet ost1 lctl set_param fail_loc=0
+	return $RC
 }
 
 drop_ldlm_cancel() {
@@ -4317,7 +4320,7 @@ clear_failloc() {
 }
 
 set_nodes_failloc () {
-    do_nodes $(comma_list $1)  lctl set_param fail_loc=$2
+	do_nodes $(comma_list $1)  lctl set_param fail_val=0 fail_loc=$2
 }
 
 cancel_lru_locks() {
@@ -4654,9 +4657,10 @@ check_mds() {
 }
 
 reset_fail_loc () {
-    echo -n "Resetting fail_loc on all nodes..."
-    do_nodes $(comma_list $(nodes_list)) "lctl set_param -n fail_loc=0 2>/dev/null || true"
-    echo done.
+	echo -n "Resetting fail_loc on all nodes..."
+	do_nodes $(comma_list $(nodes_list)) "lctl set_param -n fail_loc=0 \
+		fail_val=0 2>/dev/null || true"
+	echo done.
 }
 
 
