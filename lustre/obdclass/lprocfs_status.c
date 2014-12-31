@@ -124,26 +124,29 @@ static const struct file_operations lprocfs_generic_fops = { };
 ssize_t
 lprocfs_fops_read(struct file *f, char __user *buf, size_t size, loff_t *ppos)
 {
-        struct proc_dir_entry *dp = PDE(f->f_dentry->d_inode);
-        char *page, *start = NULL;
-        int rc = 0, eof = 1, count;
+	struct inode *inode = f->f_dentry->d_inode;
+	struct proc_dir_entry *dp = PDE(inode);
+	char *page, *start = NULL;
+	int rc, eof = 1, count;
 
 	if (*ppos >= PAGE_CACHE_SIZE)
-                return 0;
+		return 0;
 
-        page = (char *)__get_free_page(GFP_KERNEL);
-        if (page == NULL)
-                return -ENOMEM;
+	page = (char *)__get_free_page(GFP_KERNEL);
+	if (page == NULL)
+		return -ENOMEM;
 
-	if (LPROCFS_ENTRY_CHECK(dp)) {
-                rc = -ENOENT;
-                goto out;
-        }
+	rc = LPROCFS_ENTRY_CHECK(inode);
+	if (rc < 0)
+		goto out;
 
-        OBD_FAIL_TIMEOUT(OBD_FAIL_LPROC_REMOVE, 10);
-        if (dp->read_proc)
+	OBD_FAIL_TIMEOUT(OBD_FAIL_LPROC_REMOVE, 10);
+	if (dp->read_proc != NULL)
 		rc = dp->read_proc(page, &start, *ppos, PAGE_CACHE_SIZE,
-                                   &eof, dp->data);
+				   &eof, dp->data);
+	else
+		rc = 0;
+
         if (rc <= 0)
                 goto out;
 
@@ -177,14 +180,20 @@ ssize_t
 lprocfs_fops_write(struct file *f, const char __user *buf, size_t size,
 		   loff_t *ppos)
 {
-        struct proc_dir_entry *dp = PDE(f->f_dentry->d_inode);
-        int rc = -EIO;
+	struct inode *inode = f->f_dentry->d_inode;
+	struct proc_dir_entry *dp = PDE(inode);
+	int rc;
 
-	if (LPROCFS_ENTRY_CHECK(dp))
-                return -ENOENT;
-        if (dp->write_proc)
-                rc = dp->write_proc(f, buf, size, dp->data);
-        return rc;
+	rc = LPROCFS_ENTRY_CHECK(inode);
+	if (rc < 0)
+		return rc;
+
+	if (dp->write_proc != NULL)
+		rc = dp->write_proc(f, buf, size, dp->data);
+	else
+		rc = -EIO;
+
+	return rc;
 }
 
 static struct file_operations lprocfs_generic_fops = {
@@ -1478,10 +1487,10 @@ static int lprocfs_stats_seq_open(struct inode *inode, struct file *file)
 	struct seq_file *seq;
 	int rc;
 
-#ifndef HAVE_ONLY_PROCFS_SEQ
-	if (LPROCFS_ENTRY_CHECK(PDE(inode)))
-		return -ENOENT;
-#endif
+	rc = LPROCFS_ENTRY_CHECK(inode);
+	if (rc < 0)
+		return rc;
+
 	rc = seq_open(file, &lprocfs_stats_seq_sops);
 	if (rc)
 		return rc;

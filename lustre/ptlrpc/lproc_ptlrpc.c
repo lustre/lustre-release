@@ -980,7 +980,10 @@ ptlrpc_lprocfs_svc_req_history_open(struct inode *inode, struct file *file)
 	struct seq_file	*seqf;
 	int		rc;
 
-	LPROCFS_ENTRY_CHECK(PDE(inode));
+	rc = LPROCFS_ENTRY_CHECK(inode);
+	if (rc < 0)
+		return rc;
+
 	rc = seq_open(file, &sops);
 	if (rc)
 		return rc;

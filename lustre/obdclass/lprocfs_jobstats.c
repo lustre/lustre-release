@@ -416,8 +416,9 @@ static int lprocfs_jobstats_seq_open(struct inode *inode, struct file *file)
 	struct seq_file *seq;
 	int rc;
 
-	if (LPROCFS_ENTRY_CHECK(PDE(inode)))
-		return -ENOENT;
+	rc = LPROCFS_ENTRY_CHECK(inode);
+	if (rc < 0)
+		return rc;
 
 	rc = seq_open(file, &lprocfs_jobstats_seq_sops);
 	if (rc)

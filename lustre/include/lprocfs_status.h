@@ -782,7 +782,12 @@ extern int lprocfs_seq_release(struct inode *, struct file *);
 #define __LPROC_SEQ_FOPS(name, custom_seq_write)			\
 static int name##_single_open(struct inode *inode, struct file *file)	\
 {									\
-	LPROCFS_ENTRY_CHECK(PDE(inode));				\
+	int rc;								\
+									\
+	rc = LPROCFS_ENTRY_CHECK(inode);				\
+	if (rc < 0)							\
+		return rc;						\
+									\
 	return single_open(file, name##_seq_show, PDE_DATA(inode));	\
 }									\
 static const struct file_operations name##_fops = {			\

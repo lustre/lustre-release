@@ -691,14 +691,13 @@ static struct seq_operations kgn_smsg_sops = {
 static int
 kgnilnd_smsg_seq_open(struct inode *inode, struct file *file)
 {
-	struct proc_dir_entry *dp = PDE(inode);
 	struct seq_file       *sf;
 	int                    rc;
 
 	rc = seq_open(file, &kgn_smsg_sops);
 	if (rc == 0) {
 		sf = file->private_data;
-		sf->private = dp->data;
+		sf->private = PDE_DATA(inode);
 	}
 
 	return rc;
@@ -1032,14 +1031,13 @@ kgnilnd_proc_peer_conns_read(char *page, char **start, off_t off,
 static int
 kgnilnd_conn_seq_open(struct inode *inode, struct file *file)
 {
-	struct proc_dir_entry *dp = PDE(inode);
 	struct seq_file       *sf;
 	int                    rc;
 
 	rc = seq_open(file, &kgn_conn_sops);
 	if (rc == 0) {
 		sf = file->private_data;
-		sf->private = dp->data;
+		sf->private = PDE_DATA(inode);
 	}
 
 	return rc;
@@ -1256,14 +1254,13 @@ static struct seq_operations kgn_peer_sops = {
 static int
 kgnilnd_peer_seq_open(struct inode *inode, struct file *file)
 {
-	struct proc_dir_entry *dp = PDE(inode);
 	struct seq_file       *sf;
 	int                    rc;
 
 	rc = seq_open(file, &kgn_peer_sops);
 	if (rc == 0) {
 		sf = file->private_data;
-		sf->private = dp->data;
+		sf->private = PDE_DATA(inode);
 	}
 
 	return rc;

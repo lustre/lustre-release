@@ -279,7 +279,10 @@ static int fldb_seq_open(struct inode *inode, struct file *file)
 	int			env_init = 0;
 	int			rc;
 
-	LPROCFS_ENTRY_CHECK(PDE(inode));
+	rc = LPROCFS_ENTRY_CHECK(inode);
+	if (rc < 0)
+		return rc;
+
 	rc = seq_open(file, &fldb_sops);
 	if (rc)
 		GOTO(out, rc);

@@ -40,21 +40,23 @@
 #ifndef __PARAMS_TREE_H__
 #define __PARAMS_TREE_H__
 
-#include <libcfs/libcfs.h>
+#include <linux/fs.h>
+#include <linux/proc_fs.h>
+#include <linux/rwsem.h>
+#include <linux/spinlock.h>
 
-#undef LPROCFS
-#if (defined(__KERNEL__) && defined(CONFIG_PROC_FS))
+#ifdef CONFIG_PROC_FS
 # define LPROCFS
-#endif
+#endif /* CONFIG_PROC_FS */
 
 #ifdef LPROCFS
-#ifndef HAVE_ONLY_PROCFS_SEQ
+# ifndef HAVE_ONLY_PROCFS_SEQ
 /* in lprocfs_stat.c, to protect the private data for proc entries */
 extern struct rw_semaphore		_lprocfs_lock;
 
-static inline
-int LPROCFS_ENTRY_CHECK(struct proc_dir_entry *dp)
+static inline int LPROCFS_ENTRY_CHECK(struct inode *inode)
 {
+	struct proc_dir_entry *dp = PDE(inode);
 	int deleted = 0;
 
 	spin_lock(&(dp)->pde_unload_lock);
@@ -65,37 +67,32 @@ int LPROCFS_ENTRY_CHECK(struct proc_dir_entry *dp)
 		return -ENODEV;
 	return 0;
 }
-#define LPROCFS_SRCH_ENTRY()            \
-do {                                    \
-        down_read(&_lprocfs_lock);      \
-} while(0)
 
-#define LPROCFS_SRCH_EXIT()             \
-do {                                    \
-        up_read(&_lprocfs_lock);        \
-} while(0)
+#  define LPROCFS_SRCH_ENTRY()			\
+	do {					\
+		down_read(&_lprocfs_lock);	\
+	} while (0)
 
-#define LPROCFS_WRITE_ENTRY()		\
-do {					\
-	down_write(&_lprocfs_lock);	\
-} while(0)
+#  define LPROCFS_SRCH_EXIT()			\
+	do {					\
+		up_read(&_lprocfs_lock);	\
+	} while (0)
 
-#define LPROCFS_WRITE_EXIT()		\
-do {					\
-	up_write(&_lprocfs_lock);	\
-} while(0)
+#  define LPROCFS_WRITE_ENTRY()			\
+	do {					\
+		down_write(&_lprocfs_lock);	\
+	} while (0)
 
-#define PDE_DATA(inode)		PDE(inode)->data
+#  define LPROCFS_WRITE_EXIT()			\
+	do {					\
+		up_write(&_lprocfs_lock);	\
+	} while (0)
 
-#else /* New proc api */
+#  define PDE_DATA(inode)	(PDE(inode)->data)
 
-static inline struct proc_dir_entry *PDE(struct inode *inode)
-{
-	return NULL;
-}
+# else /* HAVE_ONLY_PROCFS_SEQ */
 
-static inline
-int LPROCFS_ENTRY_CHECK(struct proc_dir_entry *dp)
+static inline int LPROCFS_ENTRY_CHECK(struct inode *inode)
 {
 	return 0;
 }
@@ -103,100 +100,6 @@ int LPROCFS_ENTRY_CHECK(struct proc_dir_entry *dp)
 #define LPROCFS_WRITE_ENTRY() do {} while(0)
 #define LPROCFS_WRITE_EXIT()  do {} while(0)
 
-#endif
-
-#else /* !LPROCFS */
-
-struct file {
-	void		*param_private;
-	loff_t		param_pos;
-	unsigned int	param_flags;
-};
-
-struct inode {
-	void		*param_private;
-};
-
-struct poll_table_struct {
-	void		*pad;
-};
-
-struct proc_dir_entry {
-	void		*param_data;
-};
-
-struct proc_inode {
-	struct proc_dir_entry	*param_pde;
-	struct inode		param_inode;
-};
-
-struct seq_operations;
-struct seq_file {
-	char				*buf;
-	size_t				size;
-	size_t				from;
-	size_t				count;
-	loff_t				index;
-	loff_t				version;
-	struct mutex			lock;
-	const struct seq_operations	*op;
-	void				*private;
-};
-
-struct seq_operations {
-	void *(*start) (struct seq_file *m, loff_t *pos);
-	void  (*stop) (struct seq_file *m, void *v);
-	void *(*next) (struct seq_file *m, void *v, loff_t *pos);
-	int   (*show) (struct seq_file *m, void *v);
-};
-
-#define seq_lseek	NULL
-
-static inline int seq_read(char *buf, size_t count, loff_t *ppos)
-{
-	return 0;
-}
-
-static inline int
-seq_open(struct file *file, const struct seq_operations *fops)
-{
-	struct seq_file *p = file->param_private;
-
-	if (p == NULL) {
-		LIBCFS_ALLOC(p, sizeof(*p));
-		if (p == NULL)
-			return -ENOMEM;
-		file->param_private = p;
-	} else {
-		memset(p, 0, sizeof(*p));
-	}
-	p->op = fops;
-	return 0;
-}
-
-static inline struct proc_inode *FAKE_PROC_I(const struct inode *inode)
-{
-	return container_of(inode, struct proc_inode, param_inode);
-}
-
-static inline struct proc_dir_entry *PDE(struct inode *inode)
-{
-	return FAKE_PROC_I(inode)->param_pde;
-}
-
-static inline
-int LPROCFS_ENTRY_CHECK(struct proc_dir_entry *dp)
-{
-	return 0;
-}
-#define LPROCFS_WRITE_ENTRY()       do {} while(0)
-#define LPROCFS_WRITE_EXIT()        do {} while(0)
-
-int seq_printf(struct seq_file *, const char *, ...)
-	__attribute__ ((format (printf,2,3)));
-
+# endif /* !HAVE_ONLY_PROCFS_SEQ */
 #endif /* LPROCFS */
-
-/* XXX: params_tree APIs */
-
 #endif  /* __PARAMS_TREE_H__ */
