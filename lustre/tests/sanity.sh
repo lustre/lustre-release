@@ -8202,6 +8202,10 @@ test_124a() {
         local MAX_HRS=10
 	local LIMIT=$($LCTL get_param -n $NSDIR.pool.limit)
 	log "LIMIT=$LIMIT"
+	if [ $LIMIT -lt $LRU_SIZE ]; then
+	    skip "Limit is too small $LIMIT"
+	    return 0
+	fi
 
         # Make LVF so higher that sleeping for $SLEEP is enough to _start_
         # killing locks. Some time was spent for creating locks. This means
