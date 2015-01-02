@@ -543,6 +543,14 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 		return rc;
 	}
 
+	if (hai->hai_extent.offset > (__u64)src_st.st_size) {
+		rc = -EINVAL;
+		CT_ERROR(rc, "Trying to start reading past end ("LPU64" > "
+			 "%jd) of '%s' source file", hai->hai_extent.offset,
+			 (intmax_t)src_st.st_size, src);
+		return rc;
+	}
+
 	if (fstat(dst_fd, &dst_st) < 0) {
 		rc = -errno;
 		CT_ERROR(rc, "cannot stat '%s'", dst);
@@ -555,17 +563,9 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 		return rc;
 	}
 
-	rc = lseek(src_fd, hai->hai_extent.offset, SEEK_SET);
-	if (rc < 0) {
-		rc = -errno;
-		CT_ERROR(rc,
-			 "cannot seek for read to "LPU64" (len %jd) in '%s'",
-			 hai->hai_extent.offset, (intmax_t)src_st.st_size, src);
-		return rc;
-	}
-
 	/* Don't read beyond a given extent */
-	length = min(hai->hai_extent.length, src_st.st_size);
+	length = min(hai->hai_extent.length,
+		     src_st.st_size - hai->hai_extent.offset);
 
 	start_time = last_bw_print = last_report_time = time(NULL);
 
