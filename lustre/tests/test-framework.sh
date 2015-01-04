@@ -2003,6 +2003,8 @@ sync_all_data() {
 
 wait_delete_completed_mds() {
 	local MAX_WAIT=${1:-20}
+	# for ZFS, waiting more time for DMUs to be committed
+	local ZFS_WAIT=${2:-5}
 	local mds2sync=""
 	local stime=$(date +%s)
 	local etime
@@ -2038,6 +2040,14 @@ wait_delete_completed_mds() {
 		if [[ $changes -eq 0 ]]; then
 			etime=$(date +%s)
 			#echo "delete took $((etime - stime)) seconds"
+
+			# the occupied disk space will be released
+			# only after DMUs are committed
+			if [[ $(facet_fstype $SINGLEMDS) == zfs ]]; then
+				echo "sleep $ZFS_WAIT for ZFS OSD"
+				sleep $ZFS_WAIT
+			fi
+
 			return
 		fi
 		sleep 1
