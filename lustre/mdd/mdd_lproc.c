@@ -298,7 +298,7 @@ static struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
 
 int mdd_procfs_init(struct mdd_device *mdd, const char *name)
 {
-	struct obd_device *obd = class_name2obd(name);
+	struct obd_device *obd = mdd2obd_dev(mdd);
 	struct obd_type   *type;
 	int		   rc;
 	ENTRY;

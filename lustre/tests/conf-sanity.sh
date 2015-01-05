@@ -1833,6 +1833,10 @@ t32_test() {
 		error_noexit "Setting \"lov.stripesize\""
 		return 1
 	}
+	$r $LCTL conf_param $fsname-MDT0000.mdd.atime_diff=70 || {
+		error_noexit "Setting \"mdd.atime_diff\""
+		return 1
+	}
 
 	if [ "$ff_convert" != "no" -a $(facet_fstype ost1) == "ldiskfs" ]; then
 		$r $LCTL lfsck_start -M $fsname-OST0000 || {

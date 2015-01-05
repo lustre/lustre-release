@@ -119,14 +119,22 @@ out:
 static int mdd_init0(const struct lu_env *env, struct mdd_device *mdd,
 		struct lu_device_type *t, struct lustre_cfg *lcfg)
 {
-	int rc;
+	int rc = -EINVAL;
+	const char *dev;
 	ENTRY;
 
+	dev = lustre_cfg_string(lcfg, 0);
+	if (dev == NULL)
+		RETURN(rc);
+
+	mdd->mdd_md_dev.md_lu_dev.ld_obd = class_name2obd(dev);
+	if (mdd->mdd_md_dev.md_lu_dev.ld_obd == NULL)
+		RETURN(rc);
 	mdd->mdd_md_dev.md_lu_dev.ld_ops = &mdd_lu_ops;
 	mdd->mdd_md_dev.md_ops = &mdd_ops;
 
 	rc = mdd_connect_to_next(env, mdd, lustre_cfg_string(lcfg, 3));
-	if (rc)
+	if (rc != 0)
 		RETURN(rc);
 
 	mdd->mdd_atime_diff = MAX_ATIME_DIFF;
