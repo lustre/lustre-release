@@ -1774,6 +1774,10 @@ static void handler(int signal)
 	 * does successfully unmount and the mount is actually gone, but the
 	 * mtab entry remains. So this just makes mtab happier. */
 	llapi_hsm_copytool_unregister(&ctdata);
+
+	/* Also remove fifo upon signal as during normal/error exit */
+	if (opt.o_event_fifo != NULL)
+		llapi_hsm_unregister_event_fifo(opt.o_event_fifo);
 	_exit(1);
 }
 
