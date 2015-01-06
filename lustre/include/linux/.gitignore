@@ -1,8 +1,0 @@
-/Makefile.in
-/extN_fs.h
-/extN_fs_i.h
-/extN_fs_sb.h
-/extN_jbd.h
-/extN_xattr.h
-/xattr.h
-/lustre_build_version.h

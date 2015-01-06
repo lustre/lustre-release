@@ -34,13 +34,13 @@
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
-#ifndef _LINUX_COMPAT25_H
-#define _LINUX_COMPAT25_H
+#ifndef _LUSTRE_COMPAT_H
+#define _LUSTRE_COMPAT_H
 
 #include <linux/fs_struct.h>
 #include <linux/namei.h>
 
-#include <linux/lustre_patchless_compat.h>
+#include <lustre_patchless_compat.h>
 
 #ifdef HAVE_FS_STRUCT_RWLOCK
 # define LOCK_FS_STRUCT(fs)	write_lock(&(fs)->lock)
@@ -383,4 +383,4 @@ static inline void truncate_inode_pages_final(struct address_space *map)
 #define SIZE_MAX	(~(size_t)0)
 #endif
 
-#endif /* _COMPAT25_H */
+#endif /* _LUSTRE_COMPAT_H */

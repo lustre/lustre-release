@@ -493,7 +493,6 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} \
 %{_mandir}/man?/*
 %{_includedir}/lustre
 %{_includedir}/libcfs
-%{_includedir}/linux/lustre_user.h
 %endif
 %{_datadir}/lustre
 %{_sysconfdir}/udev/rules.d/99-lustre.rules

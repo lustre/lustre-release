@@ -49,12 +49,28 @@
 #include <libcfs/types.h>
 
 #ifdef __KERNEL__
+# include <linux/quota.h>
 # include <linux/string.h> /* snprintf() */
-#else
+# include <linux/version.h>
+#else /* !__KERNEL__ */
+# define NEED_QUOTA_DEFS
 # include <stdio.h> /* snprintf() */
-#endif
+# include <string.h>
+# include <sys/quota.h>
+# include <sys/stat.h>
+#endif /* __KERNEL__ */
 #include <lustre/ll_fiemap.h>
-#include <linux/lustre_user.h>
+
+#if defined(__x86_64__) || defined(__ia64__) || defined(__ppc64__) || \
+    defined(__craynv) || defined(__mips64__) || defined(__powerpc64__)
+typedef struct stat	lstat_t;
+# define lstat_f	lstat
+# define HAVE_LOV_USER_MDS_DATA
+#elif defined(__USE_LARGEFILE64) || defined(__KERNEL__)
+typedef struct stat64	lstat_t;
+# define lstat_f	lstat64
+# define HAVE_LOV_USER_MDS_DATA
+#endif
 
 #define LUSTRE_EOF 0xffffffffffffffffULL
 

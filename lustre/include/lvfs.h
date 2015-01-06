@@ -41,12 +41,66 @@
 #ifndef __LVFS_H__
 #define __LVFS_H__
 
-#include <libcfs/libcfs.h>
+#include <linux/dcache.h>
+#include <linux/err.h>
+#include <linux/fs.h>
+#include <linux/mutex.h>
+#include <linux/namei.h>
+#include <lustre_compat.h>
 
-#include <linux/lvfs.h>
+#define OBD_RUN_CTXT_MAGIC	0xC0FFEEAA
+#define OBD_CTXT_DEBUG		/* development-only debugging */
+
+struct dt_device;
+
+struct lvfs_run_ctxt {
+	struct vfsmount		*pwdmnt;
+	struct dentry		*pwd;
+	mm_segment_t		 fs;
+	int			 umask;
+	struct dt_device	*dt;
+#ifdef OBD_CTXT_DEBUG
+	unsigned int		 magic;
+#endif
+};
+
+static inline void OBD_SET_CTXT_MAGIC(struct lvfs_run_ctxt *ctxt)
+{
+#ifdef OBD_CTXT_DEBUG
+	ctxt->magic = OBD_RUN_CTXT_MAGIC;
+#endif
+}
 
 /* ptlrpc_sec_ctx.c */
 void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx);
 void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx);
+
+/* We need to hold the inode semaphore over the dcache lookup itself, or we
+ * run the risk of entering the filesystem lookup path concurrently on SMP
+ * systems, and instantiating two inodes for the same entry.  We still
+ * protect against concurrent addition/removal races with the DLM locking.
+ */
+static inline struct dentry *
+ll_lookup_one_len(const char *fid_name, struct dentry *dparent,
+		  int fid_namelen)
+{
+	struct dentry *dchild;
+
+	mutex_lock(&dparent->d_inode->i_mutex);
+	dchild = lookup_one_len(fid_name, dparent, fid_namelen);
+	mutex_unlock(&dparent->d_inode->i_mutex);
+
+	if (IS_ERR(dchild) || dchild->d_inode == NULL)
+		return dchild;
+
+	if (is_bad_inode(dchild->d_inode)) {
+		CERROR("bad inode returned %lu/%u\n",
+		       dchild->d_inode->i_ino, dchild->d_inode->i_generation);
+		dput(dchild);
+		dchild = ERR_PTR(-ENOENT);
+	}
+
+	return dchild;
+}
 
 #endif
