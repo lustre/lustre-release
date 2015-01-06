@@ -331,30 +331,81 @@ $ ln /mnt/lustre/mydir/foo/file /mnt/lustre/mydir/myhardlink
 <indexterm><primary>monitoring</primary><secondary>jobstats</secondary></indexterm>
 
 Lustre Jobstats</title>
-    <para>The Lustre jobstats feature is available starting in Lustre software release 2.3. It
-      collects file system operation statistics for the jobs running on Lustre clients, and exposes
-      them via procfs on the server. Job schedulers known to be able to work with jobstats include:
+    <para>The Lustre jobstats feature is available starting in Lustre software
+    release 2.3. It collects file system operation statistics for user processes
+    running on Lustre clients, and exposes them via procfs on the server using
+    the unique Job Identifier (JobID) provided by the job scheduler for each
+    job. Job schedulers known to be able to work with jobstats include:
       SLURM, SGE, LSF, Loadleveler, PBS and Maui/MOAB.</para>
-    <para>Since jobstats is implemented in a scheduler-agnostic manner, it is likely that it will be
-      able to work with other schedulers also.</para>
+    <para>Since jobstats is implemented in a scheduler-agnostic manner, it is
+    likely that it will be able to work with other schedulers also.</para>
+    <section remap="h3">
+      <title><indexterm><primary>monitoring</primary><secondary>jobstats</secondary></indexterm>
+      How Jobstats Works</title>
+      <para>The Lustre jobstats code on the client extracts the unique JobID
+      from an environment variable within the user process, and sends this
+      JobID to the server with the I/O operation.  The server tracks
+      statistics for operations whose JobID is given, indexed by that
+      ID.</para>
+      
+      <para>A Lustre setting on the client, <literal>jobid_var</literal>,
+      specifies which variable to use.  Any environment variable can be
+      specified.  For example, SLURM sets the
+      <literal>SLURM_JOB_ID</literal> environment variable with the unique
+      job ID on each client when the job is first launched on a node, and
+      the <literal>SLURM_JOB_ID</literal> will be inherited by all child
+      processes started below that process.</para>
+      
+      <para>Lustre can also be configured to generate a synthetic JobID from
+      the user's process name and User ID, by setting
+      <literal>jobid_var</literal> to a special value,
+      <literal>procname_uid</literal>.</para>
+      
+      <para>The setting of <literal>jobid_var</literal> need not be the same
+      on all clients.  For example, one could use
+      <literal>SLURM_JOB_ID</literal> on all clients managed by SLURM, and
+      use <literal>procname_uid</literal> on clients not managed by SLURM,
+      such as interactive login nodes.</para>
+      
+      <para>It is not possible to have different
+      <literal>jobid_var</literal> settings on a single node, since it is
+      unlikely that multiple job schedulers are active on one client.
+      However, the actual JobID value is local to each process environment
+      and it is possible for multiple jobs with different JobIDs to be
+      active on a single client at one time.</para>
+    </section>
+
     <section remap="h3">
       <title><indexterm><primary>monitoring</primary><secondary>jobstats</secondary></indexterm>
 Enable/Disable Jobstats</title>
-      <para>Jobstats are disabled by default.  The current state of jobstats can be verified by checking <literal>lctl get_param jobid_var</literal> on a client:</para>
+      <para>Jobstats are disabled by default.  The current state of jobstats
+      can be verified by checking <literal>lctl get_param jobid_var</literal>
+      on a client:</para>
       <screen>
 $ lctl get_param jobid_var
 jobid_var=disable
       </screen>
-      <para>The Lustre jobstats code extracts the job identifier from an environment variable set by
-        the scheduler when the job is started. To enable jobstats, specify the
-          <literal>jobid_var</literal> to name the environment variable set by the scheduler. For
-        example, SLURM sets the <literal>SLURM_JOB_ID</literal> environment variable with the unique
-        job ID on each client. To permanently enable jobstats on the <literal>testfs</literal> file
-        system:</para>
-      <screen>$ lctl conf_param testfs.sys.jobid_var=SLURM_JOB_ID</screen>
-      <para>The following table shows the environment variables which are set by various job schedulers.
-	Set <literal>jobid_var</literal> to the value for your job scheduler to collect statistics on a
-	per job basis.</para>
+      <para>
+      To enable jobstats on the <literal>testfs</literal> file system with SLURM:</para>
+      <screen># lctl conf_param testfs.sys.jobid_var=SLURM_JOB_ID</screen>
+      <para>The <literal>lctl conf_param</literal> command to enable or disable
+      jobstats should be run on the MGS as root. The change is persistent, and
+      will be propogated to the MDS, OSS, and client nodes automatically when
+      it is set on the MGS and for each new client mount.</para>
+      <para>To temporarily enable jobstats on a client, or to use a different
+      jobid_var on a subset of nodes, such as nodes in a remote cluster that
+      use a different job scheduler, or interactive login nodes that do not
+      use a job scheduler at all, run the <literal>lctl set_param</literal>
+      command directly on the client node(s) after the filesystem is mounted.
+      For example, to enable the <literal>procname_uid</literal> synthetic
+      JobID on a login node run:
+      <screen># lctl set_param jobid_var=procname_uid</screen>
+      The <literal>lctl set_param</literal> setting is not persistent, and will
+      be reset if the global <literal>jobid_var</literal> is set on the MGS or
+      if the filesystem is unmounted.</para>
+      <para>The following table shows the environment variables which are set
+      by various job schedulers.  Set <literal>jobid_var</literal> to the value
+      for your job scheduler to collect statistics on a per job basis.</para>
     <informaltable frame="all">
       <tgroup cols="2">
         <colspec colname="c1" colwidth="50*"/>
@@ -421,13 +472,14 @@ jobid_var=disable
         </tbody>
       </tgroup>
     </informaltable>
-    <para>There are two special values for <literal>jobid_var</literal>: <literal>disable</literal>
-	and <literal>procname_uid</literal>.  To disable jobstats, specify <literal>jobid_var</literal>
-	as <literal>disable</literal>:</para>
-    <screen>$ lctl conf_param testfs.sys.jobid_var=disable</screen>
-    <para>To track job stats per process name and user ID (for debugging, or if no job scheduler is in use),
-	specify <literal>jobid_var</literal> as <literal>procname_uid</literal>:</para>
-    <screen>$ lctl conf_param testfs.sys.jobid_var=procname_uid</screen>
+    <para>There are two special values for <literal>jobid_var</literal>:
+    <literal>disable</literal> and <literal>procname_uid</literal>. To disable
+    jobstats, specify <literal>jobid_var</literal> as <literal>disable</literal>:</para>
+    <screen># lctl conf_param testfs.sys.jobid_var=disable</screen>
+    <para>To track job stats per process name and user ID (for debugging, or
+    if no job scheduler is in use on some nodes such as login nodes), specify
+    <literal>jobid_var</literal> as <literal>procname_uid</literal>:</para>
+    <screen># lctl conf_param testfs.sys.jobid_var=procname_uid</screen>
     </section>
     <section remap="h3">
       <title><indexterm><primary>monitoring</primary><secondary>jobstats</secondary></indexterm>
@@ -437,56 +489,86 @@ Check Job Stats</title>
           mdt.*.job_stats</literal>. For example, clients running with
           <literal>jobid_var=procname_uid</literal>:</para>
     <screen>
-$ lctl get_param mdt.*.job_stats
+# lctl get_param mdt.*.job_stats
 job_stats:
 - job_id:          bash.0
   snapshot_time:   1352084992
-  open:            { samples:           2, unit:  reqs }
-  close:           { samples:           2, unit:  reqs }
-  mknod:           { samples:           0, unit:  reqs }
-  link:            { samples:           0, unit:  reqs }
-  unlink:          { samples:           0, unit:  reqs }
-  mkdir:           { samples:           0, unit:  reqs }
-  rmdir:           { samples:           0, unit:  reqs }
-  rename:          { samples:           0, unit:  reqs }
-  getattr:         { samples:           3, unit:  reqs }
-  setattr:         { samples:           0, unit:  reqs }
-  getxattr:        { samples:           0, unit:  reqs }
-  setxattr:        { samples:           0, unit:  reqs }
-  statfs:          { samples:           0, unit:  reqs }
-  sync:            { samples:           0, unit:  reqs }
-  samedir_rename:  { samples:           0, unit:  reqs }
-  crossdir_rename: { samples:           0, unit:  reqs }
-- job_id:          dd.0
-  snapshot_time:   1352085037
-  open:            { samples:           1, unit:  reqs }
-  close:           { samples:           1, unit:  reqs }
-  mknod:           { samples:           0, unit:  reqs }
-  link:            { samples:           0, unit:  reqs }
-  unlink:          { samples:           0, unit:  reqs }
-  mkdir:           { samples:           0, unit:  reqs }
-  rmdir:           { samples:           0, unit:  reqs }
-  rename:          { samples:           0, unit:  reqs }
-  getattr:         { samples:           0, unit:  reqs }
-  setattr:         { samples:           0, unit:  reqs }
-  getxattr:        { samples:           0, unit:  reqs }
-  setxattr:        { samples:           0, unit:  reqs }
-  statfs:          { samples:           0, unit:  reqs }
-  sync:            { samples:           2, unit:  reqs }
-  samedir_rename:  { samples:           0, unit:  reqs }
-  crossdir_rename: { samples:           0, unit:  reqs }
+  open:            { samples:     2, unit:  reqs }
+  close:           { samples:     2, unit:  reqs }
+  mknod:           { samples:     0, unit:  reqs }
+  link:            { samples:     0, unit:  reqs }
+  unlink:          { samples:     0, unit:  reqs }
+  mkdir:           { samples:     0, unit:  reqs }
+  rmdir:           { samples:     0, unit:  reqs }
+  rename:          { samples:     0, unit:  reqs }
+  getattr:         { samples:     3, unit:  reqs }
+  setattr:         { samples:     0, unit:  reqs }
+  getxattr:        { samples:     0, unit:  reqs }
+  setxattr:        { samples:     0, unit:  reqs }
+  statfs:          { samples:     0, unit:  reqs }
+  sync:            { samples:     0, unit:  reqs }
+  samedir_rename:  { samples:     0, unit:  reqs }
+  crossdir_rename: { samples:     0, unit:  reqs }
+- job_id:          mythbackend.0
+  snapshot_time:   1352084996
+  open:            { samples:    72, unit:  reqs }
+  close:           { samples:    73, unit:  reqs }
+  mknod:           { samples:     0, unit:  reqs }
+  link:            { samples:     0, unit:  reqs }
+  unlink:          { samples:    22, unit:  reqs }
+  mkdir:           { samples:     0, unit:  reqs }
+  rmdir:           { samples:     0, unit:  reqs }
+  rename:          { samples:     0, unit:  reqs }
+  getattr:         { samples:   778, unit:  reqs }
+  setattr:         { samples:    22, unit:  reqs }
+  getxattr:        { samples:     0, unit:  reqs }
+  setxattr:        { samples:     0, unit:  reqs }
+  statfs:          { samples: 19840, unit:  reqs }
+  sync:            { samples: 33190, unit:  reqs }
+  samedir_rename:  { samples:     0, unit:  reqs }
+  crossdir_rename: { samples:     0, unit:  reqs }
     </screen>
-    <para>Data operation statistics are collected on OSTs. Data operations statistics can be accessed via <literal>lctl get_param obdfilter.*.job_stats</literal>, for example:</para>
+    <para>Data operation statistics are collected on OSTs. Data operations
+    statistics can be accessed via
+    <literal>lctl get_param obdfilter.*.job_stats</literal>, for example:</para>
     <screen>
 $ lctl get_param obdfilter.*.job_stats
+obdfilter.myth-OST0000.job_stats=
 job_stats:
-- job_id:          bash.0
-  snapshot_time:   1352085025
-  read:            { samples:           0, unit: bytes, min:       0, max:       0, sum:               0 }
-  write:           { samples:           1, unit: bytes, min:       4, max:       4, sum:               4 }
-  setattr:         { samples:           0, unit:  reqs }
-  punch:           { samples:           0, unit:  reqs }
-  sync:            { samples:           0, unit:  reqs }
+- job_id:          mythcommflag.0
+  snapshot_time:   1429714922
+  read:    { samples: 974, unit: bytes, min: 4096, max: 1048576, sum: 91530035 }
+  write:   { samples:   0, unit: bytes, min:    0, max:       0, sum:        0 }
+  setattr: { samples:   0, unit:  reqs }
+  punch:   { samples:   0, unit:  reqs }
+  sync:    { samples:   0, unit:  reqs }
+obdfilter.myth-OST0001.job_stats=
+job_stats:
+- job_id:          mythbackend.0
+  snapshot_time:   1429715270
+  read:    { samples:   0, unit: bytes, min:     0, max:      0, sum:        0 }
+  write:   { samples:   1, unit: bytes, min: 96899, max:  96899, sum:    96899 }
+  setattr: { samples:   0, unit:  reqs }
+  punch:   { samples:   1, unit:  reqs }
+  sync:    { samples:   0, unit:  reqs }
+obdfilter.myth-OST0002.job_stats=job_stats:
+obdfilter.myth-OST0003.job_stats=job_stats:
+obdfilter.myth-OST0004.job_stats=
+job_stats:
+- job_id:          mythfrontend.500
+  snapshot_time:   1429692083
+  read:    { samples:   9, unit: bytes, min: 16384, max: 1048576, sum: 4444160 }
+  write:   { samples:   0, unit: bytes, min:     0, max:       0, sum:       0 }
+  setattr: { samples:   0, unit:  reqs }
+  punch:   { samples:   0, unit:  reqs }
+  sync:    { samples:   0, unit:  reqs }
+- job_id:          mythbackend.500
+  snapshot_time:   1429692129
+  read:    { samples:   0, unit: bytes, min:     0, max:       0, sum:       0 }
+  write:   { samples:   1, unit: bytes, min: 56231, max:   56231, sum:   56231 }
+  setattr: { samples:   0, unit:  reqs }
+  punch:   { samples:   1, unit:  reqs }
+  sync:    { samples:   0, unit:  reqs }
     </screen>
     </section>
     <section remap="h3">
@@ -494,17 +576,17 @@ job_stats:
 Clear Job Stats</title>
     <para>Accumulated job statistics can be reset by writing proc file <literal>job_stats</literal>.</para>
     <para>Clear statistics for all jobs on the local node:</para>
-    <screen>$ lctl set_param obdfilter.*.job_stats=clear</screen>
-    <para>Clear statistics for job 'dd.0' on lustre-MDT0000:</para>
-    <screen>$ lctl set_param mdt.lustre-MDT0000.job_stats=clear</screen>
+    <screen># lctl set_param obdfilter.*.job_stats=clear</screen>
+    <para>Clear statistics only for job 'bash.0' on lustre-MDT0000:</para>
+    <screen># lctl set_param mdt.lustre-MDT0000.job_stats=bash.0</screen>
     </section>
     <section remap="h3">
       <title><indexterm><primary>monitoring</primary><secondary>jobstats</secondary></indexterm>
 Configure Auto-cleanup Interval</title>
     <para>By default, if a job is inactive for 600 seconds (10 minutes) statistics for this job will be dropped. This expiration value can be changed temporarily via:</para>
-    <screen>$ lctl set_param *.*.job_cleanup_interval={max_age}</screen>
+    <screen># lctl set_param *.*.job_cleanup_interval={max_age}</screen>
     <para>It can also be changed permanently, for example to 700 seconds via:</para>
-    <screen>$ lctl conf_param testfs.mdt.job_cleanup_interval=700</screen>
+    <screen># lctl conf_param testfs.mdt.job_cleanup_interval=700</screen>
     <para>The <literal>job_cleanup_interval</literal> can be set as 0 to disable the auto-cleanup. Note that if auto-cleanup of Jobstats is disabled, then all statistics will be kept in memory forever, which may eventually consume all memory on the servers. In this case, any monitoring tool should explicitly clear individual job statistics as they are processed, as shown above.</para>
     </section>
   </section>
