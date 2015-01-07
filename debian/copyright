@@ -6,9 +6,9 @@ based on work by Goswin von Brederlow and Patrick Winnertz.
 
 It is currently maintained by Brian J. Murrell, <brian.murrell@intel.com>
 
-Lustre is Copyright (C) 2002-2009 Sun Microsystems, Inc. and is licensed
-under the GNU Public License Version 2;
-it was downloaded from http://www.lustre.org/ .
+Lustre is Copyright (C) 2002-2009 Sun Microsystems, Inc. and is licensed 
+under the GNU Public License Version 2; it was downloaded from
+https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases
 
 The documentation (included in lustre-utils) is covered by
 the GNU Free Documentation License; there are no invariant-clauses included

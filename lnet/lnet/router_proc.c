@@ -3,8 +3,7 @@
  *
  * Copyright (c) 2011, 2013, Intel Corporation.
  *
- *   This file is part of Portals
- *   http://sourceforge.net/projects/sandiaportals/
+ *   This file is part of Lustre, https://wiki.hpdd.intel.com/
  *
  *   Portals is free software; you can redistribute it and/or
  *   modify it under the terms of version 2 of the GNU General Public

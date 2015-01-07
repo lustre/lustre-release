@@ -1293,6 +1293,6 @@ Appendix 2. Sample Code
 
 Lustre currently has 2 different OSD implementations:
 - ldiskfs OSD under lustre/osd-ldiskfs
-  http://git.whamcloud.com/?p=fs/lustre-release.git;a=tree;f=lustre/osd-ldiskfs;hb=HEAD
+  http://git.hpdd.intel.com/?p=fs/lustre-release.git;a=tree;f=lustre/osd-ldiskfs;hb=HEAD
 - ZFS OSD under lustre/zfs-osd
-  http://git.whamcloud.com/?p=fs/lustre-release.git;a=tree;f=lustre/osd-zfs;hb=HEAD
+  http://git.hpdd.intel.com/?p=fs/lustre-release.git;a=tree;f=lustre/osd-zfs;hb=HEAD

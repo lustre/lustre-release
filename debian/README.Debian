@@ -1,17 +1,21 @@
-Here is an short explanation what to install on your Servers to set up lustre quickly.
-Be aware that this doesn't replace the Documentation and Installation Howtos from Lustre.
+Here is an short explanation what to install on your Servers to set up
+Lustre quickly.  Be aware that this doesn't replace the Documentation
+and Installation Howtos from Lustre.
 
 
 #1. Building the kernel and the modules
-    You've to download the linux-source-2.6.18|21|22 package and the linux-patch-lustre package.
+    You've to download the linux-source package for your kernel and
+    the linux-patch-lustre package.
 
-    Then patch your kernel with the correct patch file. Build and install it. (Use make-kpkg)
-    To patch the kernel automatically use --added-patches=lustre as build option.
+    Then patch your kernel with the correct patch file. Build and install
+    it.  (Use make-kpkg) To patch the kernel automatically use
+    --added-patches=lustre as build option.
 
-    Here is the full line how I build my kernel (for those who are not familiar with make-kpkg)
-    make-kpkg --added-patches=lustre --initrd --append-to-version "-quota-enabled-lustre-1.6.4.1" --revision credativ.1 kernel_image
+    Here is the full line how I build my kernel (for those who are not
+    familiar with make-kpkg):
+    make-kpkg --added-patches=lustre --initrd --append-to-version "-my-version" --revision 1 kernel_image
 
-    Now reboot into this new kernel and install the lustre modules with:
+    Now reboot into this new kernel and install the Lustre modules with:
      - m-a auto-install lustre
 
     Then the kernel and the modules should be there.
@@ -19,11 +23,6 @@ Be aware that this doesn't replace the Documentation and Installation Howtos fro
 #2. Preparing the system
     In the next step install:
      - lustre-utils
-
-    Then load the kernel modules with:
-     - modprobe lnet
-     - modprobe lustre
-     - modprobe ldiskfs
 
     This have to be done on every server system.
 
@@ -47,31 +46,14 @@ Be aware that this doesn't replace the Documentation and Installation Howtos fro
 
 
 #4. Using the filesystem
-    In order to use the FS, you'll have to mount it on a client. Please note that this client also
-    needs the lustre-modules to be installed. (You can install lustre-source and build the module
-    as described in 1.)
+    In order to use the FS, you'll have to mount it on a client. Please note
+    that this client also needs the lustre-modules to be installed. (You can
+    install lustre-source and build the module as described in 1.)
      - mount -t lustre mgsnode@tcp0:/spfs /mnt
 
-#4.1 Using Quota:
-
-    The binaries and drivers for lustre in debian are compiled with enabled-quota.
-    So if you like to use quota this is quite simple:
-        - lfs quotacheck -ug $path/to/mounted/lustre/fs
-        - lfs setquota -u $user 1000 2000 10000 20000 $path/to/mounted/lustre/fs
-        - lfs quota -u $user $path/to/mounted/lustre/fs
-
-    If you want to reset this quota informations for a given user, you'll have first to
-    set every value to zero, and then give the new informations:
-        - lfs setquota -u $user 0 0 0 0  $path/to/mounted/lustre/fs
-        - lfs setquota -u $user 2000 3000 3000 4000 $path/to/mounted/lustre/fs
-
-    This behaviour is reported as lustre bug: https://bugzilla.lustre.org/show_bug.cgi?id=14513
-
-
-
 ###########
-Please have also a look into the official documentation for lustre available at:
+Please have also a look into the official documentation for Lustre available at:
 
-http://manual.lustre.org/index.php?title=Main_Page
+https://wiki.hpdd.intel.com/display/PUB/Documentation
 
  -- Patrick Winnertz <winnie@debian.org>  Thu, 28 Dec 2007 14:53:25 +0200

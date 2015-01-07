@@ -1,5 +1,5 @@
 /*
- *   This file is part of Portals, http://www.sf.net/projects/lustre/
+ *   This file is part of Lustre, https://wiki.hpdd.intel.com/
  *
  *   Portals is free software; you can redistribute it and/or
  *   modify it under the terms of version 2 of the GNU General Public

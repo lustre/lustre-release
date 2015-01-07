@@ -1164,7 +1164,7 @@ static void __exit lod_mod_exit(void)
 	lu_kmem_fini(lod_caches);
 }
 
-MODULE_AUTHOR("Whamcloud, Inc. <http://www.whamcloud.com/>");
+MODULE_AUTHOR("Intel Corporation. <https://wiki.hpdd.intel.com/>");
 MODULE_DESCRIPTION("Lustre Logical Object Device ("LUSTRE_LOD_NAME")");
 MODULE_LICENSE("GPL");
 
