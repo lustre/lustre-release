@@ -1464,34 +1464,33 @@ exhaust_precreations() {
 	local OSTIDX=$1
 	local FAILLOC=$2
 	local FAILIDX=${3:-$OSTIDX}
+	local ofacet=ost$((OSTIDX + 1))
 
-	test_mkdir -p $DIR/$tdir
-	local MDSIDX=$(get_mds_dir "$DIR/$tdir")
-	echo OSTIDX=$OSTIDX MDSIDX=$MDSIDX
+	test_mkdir -p -c1 $DIR/$tdir
+	local mdtidx=$($LFS getstripe -M $DIR/$tdir)
+	local mfacet=mds$((mdtidx + 1))
+	echo OSTIDX=$OSTIDX MDTIDX=$mdtidx
 
 	local OST=$(ostname_from_index $OSTIDX)
-	local MDT_INDEX=$(lfs df | grep "\[MDT:$((MDSIDX - 1))\]" | awk '{print $1}' | \
-			  sed -e 's/_UUID$//;s/^.*-//')
 
 	# on the mdt's osc
-	local mdtosc_proc1=$(get_mdtosc_proc_path mds${MDSIDX} $OST)
-	local last_id=$(do_facet mds${MDSIDX} lctl get_param -n \
+	local mdtosc_proc1=$(get_mdtosc_proc_path $mfacet $OST)
+	local last_id=$(do_facet $mfacet lctl get_param -n \
 			osc.$mdtosc_proc1.prealloc_last_id)
-	local next_id=$(do_facet mds${MDSIDX} lctl get_param -n \
+	local next_id=$(do_facet $mfacet lctl get_param -n \
 			osc.$mdtosc_proc1.prealloc_next_id)
 
-	local mdtosc_proc2=$(get_mdtosc_proc_path mds${MDSIDX})
-	do_facet mds${MDSIDX} lctl get_param osc.$mdtosc_proc2.prealloc*
+	local mdtosc_proc2=$(get_mdtosc_proc_path $mfacet)
+	do_facet $mfacet lctl get_param osc.$mdtosc_proc2.prealloc*
 
 	test_mkdir -p $DIR/$tdir/${OST}
 	$SETSTRIPE -i $OSTIDX -c 1 $DIR/$tdir/${OST}
 #define OBD_FAIL_OST_ENOSPC              0x215
-	do_facet ost$((OSTIDX + 1)) lctl set_param fail_val=$FAILIDX
-	do_facet ost$((OSTIDX + 1)) lctl set_param fail_loc=0x215
+	do_facet $ofacet lctl set_param fail_val=$FAILIDX fail_loc=0x215
 	echo "Creating to objid $last_id on ost $OST..."
 	createmany -o $DIR/$tdir/${OST}/f $next_id $((last_id - next_id + 2))
-	do_facet mds${MDSIDX} lctl get_param osc.$mdtosc_proc2.prealloc*
-	do_facet ost$((OSTIDX + 1)) lctl set_param fail_loc=$FAILLOC
+	do_facet $mfacet lctl get_param osc.$mdtosc_proc2.prealloc*
+	do_facet $ofacet lctl set_param fail_loc=$FAILLOC
 	sleep_maxage
 }
 
@@ -4989,16 +4988,17 @@ test_57b() {
 	fi
 
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	local dir=$DIR/d57b
+	local dir=$DIR/$tdir
 
 	local FILECOUNT=100
 	local FILE1=$dir/f1
 	local FILEN=$dir/f$FILECOUNT
 
 	rm -rf $dir || error "removing $dir"
-	test_mkdir -p $dir || error "creating $dir"
-	local num=$(get_mds_dir $dir)
-	local mymds=mds$num
+	test_mkdir -p -c1 $dir || error "creating $dir"
+	local mdtidx=$($LFS getstripe -M $dir)
+	local mdtname=MDT$(printf %04x $mdtidx)
+	local facet=mds$((mdtidx + 1))
 
 	echo "mcreating $FILECOUNT files"
 	createmany -m $dir/f 1 $FILECOUNT || \
@@ -5011,9 +5011,9 @@ test_57b() {
 	sync
 	sleep 1
 	df $dir  #make sure we get new statfs data
-	local MDSFREE=$(do_facet $mymds \
-		lctl get_param -n osd*.*MDT000$((num -1)).kbytesfree)
-	local MDCFREE=$(lctl get_param -n mdc.*MDT000$((num -1))-mdc-*.kbytesfree)
+	local MDSFREE=$(do_facet $facet \
+		lctl get_param -n osd*.*$mdtname.kbytesfree)
+	local MDCFREE=$(lctl get_param -n mdc.*$mdtname-mdc-*.kbytesfree)
 	echo "opening files to create objects/EAs"
 	local FILE
 	for FILE in `seq -f $dir/f%g 1 $FILECOUNT`; do
@@ -5026,9 +5026,9 @@ test_57b() {
 
 	sleep 1  #make sure we get new statfs data
 	df $dir
-	local MDSFREE2=$(do_facet $mymds \
-		lctl get_param -n osd*.*MDT000$((num -1)).kbytesfree)
-	local MDCFREE2=$(lctl get_param -n mdc.*MDT000$((num -1))-mdc-*.kbytesfree)
+	local MDSFREE2=$(do_facet $facet \
+		lctl get_param -n osd*.*$mdtname.kbytesfree)
+	local MDCFREE2=$(lctl get_param -n mdc.*$mdtname-mdc-*.kbytesfree)
 	if [[ $MDCFREE2 -lt $((MDCFREE - 16)) ]]; then
 		if [ "$MDSFREE" != "$MDSFREE2" ]; then
 			error "MDC before $MDCFREE != after $MDCFREE2"
@@ -8901,15 +8901,16 @@ som_mode_switch() {
 
 test_132() { #1028, SOM
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        remote_mds_nodsh && skip "remote MDS with nodsh" && return
-        local num=$(get_mds_dir $DIR)
-        local mymds=mds${num}
-        local MOUNT_OPTS_SAVE=$MOUNT_OPTS
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	local mdtidx=$($LFS getstripe -M $DIR)
+	local facet=mds$((mdtidx + 1))
 
-        dd if=/dev/zero of=$DIR/$tfile count=1 2>/dev/null
-        cancel_lru_locks osc
+	local MOUNTOPT_SAVE=$MOUNTOPT
 
-        som1=$(do_facet $mymds "$LCTL get_param -n mdt.*.som" | head -n 1)
+	dd if=/dev/zero of=$DIR/$tfile count=1 2>/dev/null
+	cancel_lru_locks osc
+	som1=$(do_facet $facet "$LCTL get_param mdt.*.som" |
+	       awk -F= ' {print $2}' | head -n 1)
 
         gl1=$(get_ost_param "ldlm_glimpse_enqueue")
         stat $DIR/$tfile >/dev/null
@@ -8921,7 +8922,8 @@ test_132() { #1028, SOM
         dd if=/dev/zero of=$DIR/$tfile count=1 2>/dev/null
         cancel_lru_locks osc
 
-        som2=$(do_facet $mymds "$LCTL get_param -n mdt.*.som" | head -n 1)
+	som2=$(do_facet $facet "$LCTL get_param mdt.*.som" |
+	       awk -F= ' {print $2}' | head -n 1)
         if [ $som1 == $som2 ]; then
             error "som is still "$som2
             if [ x$som2 = x"enabled" ]; then

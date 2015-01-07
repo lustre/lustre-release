@@ -1,6 +1,4 @@
 #!/bin/bash
-# -*- mode: Bash; tab-width: 4; indent-tabs-mode: t; -*-
-# vim:shiftwidth=4:softtabstop=4:tabstop=4:
 
 set -e
 
@@ -527,75 +525,76 @@ test_21a() {
 run_test 21a "commit on sharing"
 
 test_21b_sub () {
-    local mds=$1 
-    do_node $CLIENT1 rm -f $MOUNT1/$tfile-*
+	local mds=$1
+	do_node $CLIENT1 rm -f $MOUNT1/$tfile-*
 
-    do_facet $mds sync
-    do_node $CLIENT1 touch  $MOUNT1/$tfile-1
-    do_node $CLIENT2 mv  $MOUNT1/$tfile-1 $MOUNT1/$tfile-2
-    do_node $CLIENT1 mv  $MOUNT1/$tfile-2 $MOUNT1/$tfile-3
+	do_facet $mds sync
+	do_node $CLIENT1 touch $MOUNT1/$tfile-1
+	do_node $CLIENT2 mv $MOUNT1/$tfile-1 $MOUNT1/$tfile-2
+	do_node $CLIENT1 mv $MOUNT1/$tfile-2 $MOUNT1/$tfile-3
 
-    replay_barrier_nosync $mds
-    shutdown_client $CLIENT2 $MOUNT1
+	replay_barrier_nosync $mds
+	shutdown_client $CLIENT2 $MOUNT1
 
-    facet_failover $mds
+	facet_failover $mds
 
-    # were renames replayed?
-    local rc=0
-    echo UNLINK $MOUNT1/$tfile-3 
-    do_node $CLIENT1 unlink  $MOUNT1/$tfile-3 || \
-        { echo "unlink $tfile-3 fail!" && rc=1; }
+	# were renames replayed?
+	local rc=0
+	echo UNLINK $MOUNT1/$tfile-3
+	do_node $CLIENT1 unlink  $MOUNT1/$tfile-3 ||
+		{ echo "unlink $tfile-3 fail!" && rc=1; }
 
-    boot_node $CLIENT2
-    zconf_mount_clients $CLIENT2 $MOUNT1 || error "mount $CLIENT2 $MOUNT1 fail" 
+	boot_node $CLIENT2
+	zconf_mount_clients $CLIENT2 $MOUNT1 ||
+		error "mount $CLIENT2 $MOUNT1 fail"
 
-    return $rc
+	return $rc
 }
 
 test_21b() {
-    [ -z "$CLIENTS" ] && skip "Need two or more clients." && return
-    [ $CLIENTCOUNT -lt 2 ] && \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && return; }
+	[ -z "$CLIENTS" ] && skip "Need two or more clients" && return
+	[ $CLIENTCOUNT -lt 2 ] &&
+		{ skip "Need 2+ clients, have $CLIENTCOUNT" && return; }
 
-    if [ "$FAILURE_MODE" = "HARD" ] &&  mixed_mdt_devs; then
-        skip "Several mdt services on one mds node are used with FAILURE_MODE=$FAILURE_MODE. "
-        return 0
-    fi
+	if [ "$FAILURE_MODE" = "HARD" ] && mixed_mdt_devs; then
+		skip "Several MDTs on one MDS with FAILURE_MODE=$FAILURE_MODE"
+		return 0
+	fi
 
+	zconf_umount_clients $CLIENTS $MOUNT2
+	zconf_mount_clients $CLIENTS $MOUNT1
 
-    zconf_umount_clients $CLIENTS $MOUNT2
-    zconf_mount_clients $CLIENTS $MOUNT1
+	local param_file=$TMP/$tfile-params
 
-    local param_file=$TMP/$tfile-params
+	local mdtidx=$($LFS getstripe -M $MOUNT1)
+	local facet=mds$((mdtidx + 1))
 
-    local num=$(get_mds_dir $MOUNT1)
+	save_lustre_params $facet "mdt.*.commit_on_sharing" > $param_file
 
-	save_lustre_params mds$num "mdt.*.commit_on_sharing" > $param_file
+	# COS enabled
+	local COS=1
+	do_facet $facet lctl set_param mdt.*.commit_on_sharing=$COS
 
-    # COS enabled
-    local COS=1
-    do_facet mds$num lctl set_param mdt.*.commit_on_sharing=$COS
+	test_21b_sub $facet || error "Not all renames are replayed. COS=$COS"
 
-    test_21b_sub mds$num || error "Not all renames are replayed. COS=$COS"
+	# COS disabled (should fail)
+	COS=0
+	do_facet $facet lctl set_param mdt.*.commit_on_sharing=$COS
 
-    # COS disabled (should fail)
-    COS=0
-    do_facet mds$num lctl set_param mdt.*.commit_on_sharing=$COS
-
-    # there is still a window when transactions may be written to disk before
-    # the mds device is set R/O. To avoid such a rare test failure, the check
-    # is repeated several times.
-    local n_attempts=1
-    while true; do
-    test_21b_sub mds$num || break;
-    let n_attempts=n_attempts+1
-    [ $n_attempts -gt 3 ] &&
-        error "The test cannot check whether COS works or not: all renames are replied w/o COS"
-    done
-    zconf_mount_clients $CLIENTS $MOUNT2
-    restore_lustre_params < $param_file
-    rm -f $param_file
-    return 0
+	# there is still a window when transactions may be written to disk
+	# before the mds device is set R/O. To avoid such a rare test failure,
+	# the check is repeated several times.
+	local n_attempts=1
+	while true; do
+		test_21b_sub $facet || break
+		n_attempts=$((n_attempts + 1))
+		[ $n_attempts -gt 3 ] &&
+			error "can't check if COS works: rename replied w/o COS"
+	done
+	zconf_mount_clients $CLIENTS $MOUNT2
+	restore_lustre_params < $param_file
+	rm -f $param_file
+	return 0
 }
 run_test 21b "commit on sharing, two clients"
 
@@ -869,7 +868,7 @@ run_test 23d "c1 rmdir d1, M0 drop update reply and fail M0/M1, c2 mkdir d1"
 
 test_24 () {
 	[[ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.5.2) ]] ||
-                { skip "Need MDS version newer than 2.5.2"; return 0; }
+		{ skip "Need MDS version newer than 2.5.2"; return 0; }
 
 	touch $MOUNT/$tfile
 	stat $MOUNT/$tfile >&/dev/null

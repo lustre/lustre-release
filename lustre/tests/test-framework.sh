@@ -370,7 +370,7 @@ module_loaded () {
 
 # Load a module on the system where this is running.
 #
-# Synopsis: load_module module_name [module arguments for insmod/modprobe]
+# usage: load_module module_name [module arguments for insmod/modprobe]
 #
 # If module arguments are not given but MODOPTS_<MODULE> is set, then its value
 # will be used as the arguments.  Otherwise arguments will be obtained from
@@ -5664,27 +5664,6 @@ if [[ \\\$? -eq 0 && \\\$val -ne 0 ]]; then
 	rc=\\\$val;
 fi;
 exit \\\$rc"
-}
-
-# CMD: determine mds index where directory inode presents
-get_mds_dir() {
-    local dir=$1
-    local SEQ
-
-    SEQ=$(lfs path2fid $dir | tr '[:]' ' '|cut -f2 -d ' ')
-    if [ "$SEQ" == "" ]; then
-	error "can't get sequence for $dir"
-	return 1
-    fi
-    export SEQ
-
-    do_facet mds1 "cat /proc/fs/lustre/fld/srv-*-MDT0000/fldb" | \
-	tr '[)]:-' ' ' |				\
-	while read SS EE IDX TYP; do			\
-		if let "SEQ >= SS && SEQ < EE"; then	\
-			echo $IDX;			\
-		fi;					\
-	done
 }
 
 mdsrate_cleanup () {
