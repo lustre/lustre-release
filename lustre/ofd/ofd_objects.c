@@ -447,12 +447,12 @@ int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,
 	/* we support truncate, not punch yet */
 	LASSERT(end == OBD_OBJECT_EOF);
 
+	ofd_write_lock(env, fo);
 	fmd = ofd_fmd_get(info->fti_exp, &fo->ofo_header.loh_fid);
 	if (fmd && fmd->fmd_mactime_xid < info->fti_xid)
 		fmd->fmd_mactime_xid = info->fti_xid;
 	ofd_fmd_put(info->fti_exp, fmd);
 
-	ofd_write_lock(env, fo);
 	if (!ofd_object_exists(fo))
 		GOTO(unlock, rc = -ENOENT);
 
