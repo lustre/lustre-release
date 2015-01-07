@@ -1458,17 +1458,16 @@ srpc_lnet_ev_handler(lnet_event_t *ev)
 	LASSERT (!in_interrupt());
 
 	if (ev->status != 0) {
+		__u32 errors;
+
 		spin_lock(&srpc_data.rpc_glock);
-		srpc_data.rpc_counters.errors++;
-		CERROR("ev->status = %d, ev->type = %d, errors = %u, "
-		       "rpcs_sent = %u, rpcs_rcvd = %u, rpcs_dropped = %u, "
-		       "rpcs_expired = %u\n",
-		       ev->status, ev->type, srpc_data.rpc_counters.errors,
-		       srpc_data.rpc_counters.rpcs_sent,
-		       srpc_data.rpc_counters.rpcs_rcvd,
-		       srpc_data.rpc_counters.rpcs_dropped,
-		       srpc_data.rpc_counters.rpcs_expired);
+		if (ev->status != -ECANCELED) /* cancellation is not error */
+			srpc_data.rpc_counters.errors++;
+		errors = srpc_data.rpc_counters.errors;
 		spin_unlock(&srpc_data.rpc_glock);
+
+		CNETERR("LNet event status %d type %d, RPC errors %u\n",
+			ev->status, ev->type, errors);
 	}
 
         rpcev->ev_lnet = ev->type;
