@@ -7342,12 +7342,10 @@ run_test 116a "stripe QOS: free space balance ==================="
 
 test_116b() { # LU-2093
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ -z "$($LCTL get_param -n lo*.$FSNAME-MDT0000-mdtlov.qos_threshold_rr |
-		head -1 2>/dev/null)" ] && skip "no QOS" && return
 #define OBD_FAIL_MDS_OSC_CREATE_FAIL     0x147
-	local old_rr
-	old_rr=$(do_facet $SINGLEMDS lctl get_param -n \
-		lo*.$FSNAME-MDT0000-mdtlov.qos_threshold_rr | head -1)
+	local old_rr=$(do_facet $SINGLEMDS lctl get_param -n \
+		       lo*.$FSNAME-MDT0000-mdtlov.qos_threshold_rr | head -1)
+	[ -z "$old_rr" ] && skip "no QOS" && return 0
 	do_facet $SINGLEMDS lctl set_param \
 		lo*.$FSNAME-MDT0000-mdtlov.qos_threshold_rr=0
 	mkdir -p $DIR/$tdir
