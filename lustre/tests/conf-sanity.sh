@@ -1528,7 +1528,7 @@ t32_wait_til_devices_gone() {
 	done
 	echo "waiting for dev on $node: dev $devices loop $loops given up"
 	do_rpc_nodes $node "losetup -a"
-	do_rpc_nodes $node "$LCTL devices_list"
+	do_rpc_nodes $node "$LCTL device_list"
 	return 1
 }
 
