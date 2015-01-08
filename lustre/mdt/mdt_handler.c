@@ -128,33 +128,33 @@ static struct lu_kmem_descr mdt_caches[] = {
 	}
 };
 
-int mdt_get_disposition(struct ldlm_reply *rep, int flag)
+__u64 mdt_get_disposition(struct ldlm_reply *rep, __u64 op_flag)
 {
-        if (!rep)
-                return 0;
-        return (rep->lock_policy_res1 & flag);
+	if (!rep)
+		return 0;
+	return rep->lock_policy_res1 & op_flag;
 }
 
 void mdt_clear_disposition(struct mdt_thread_info *info,
-			   struct ldlm_reply *rep, int flag)
+			   struct ldlm_reply *rep, __u64 op_flag)
 {
 	if (info) {
-		info->mti_opdata &= ~flag;
-		tgt_opdata_clear(info->mti_env, flag);
+		info->mti_opdata &= ~op_flag;
+		tgt_opdata_clear(info->mti_env, op_flag);
 	}
 	if (rep)
-		rep->lock_policy_res1 &= ~flag;
+		rep->lock_policy_res1 &= ~op_flag;
 }
 
 void mdt_set_disposition(struct mdt_thread_info *info,
-			 struct ldlm_reply *rep, int flag)
+			 struct ldlm_reply *rep, __u64 op_flag)
 {
 	if (info) {
-		info->mti_opdata |= flag;
-		tgt_opdata_set(info->mti_env, flag);
+		info->mti_opdata |= op_flag;
+		tgt_opdata_set(info->mti_env, op_flag);
 	}
 	if (rep)
-		rep->lock_policy_res1 |= flag;
+		rep->lock_policy_res1 |= op_flag;
 }
 
 void mdt_lock_reg_init(struct mdt_lock_handle *lh, ldlm_mode_t lm)

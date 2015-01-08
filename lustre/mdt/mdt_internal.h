@@ -584,43 +584,33 @@ static inline bool mdt_is_striped_client(struct obd_export *exp)
 	return exp_connect_flags(exp) & OBD_CONNECT_DIR_STRIPE;
 }
 
-int mdt_get_disposition(struct ldlm_reply *rep, int flag);
+__u64 mdt_get_disposition(struct ldlm_reply *rep, __u64 op_flag);
 void mdt_set_disposition(struct mdt_thread_info *info,
-                        struct ldlm_reply *rep, int flag);
+			 struct ldlm_reply *rep, __u64 op_flag);
 void mdt_clear_disposition(struct mdt_thread_info *info,
-                        struct ldlm_reply *rep, int flag);
+			   struct ldlm_reply *rep, __u64 op_flag);
 
-void mdt_lock_pdo_init(struct mdt_lock_handle *lh,
-		       ldlm_mode_t lock_mode,
+void mdt_lock_pdo_init(struct mdt_lock_handle *lh, ldlm_mode_t lock_mode,
 		       const struct lu_name *lname);
 
-void mdt_lock_reg_init(struct mdt_lock_handle *lh,
-                       ldlm_mode_t lm);
+void mdt_lock_reg_init(struct mdt_lock_handle *lh, ldlm_mode_t lm);
 
-int mdt_lock_setup(struct mdt_thread_info *info,
-                   struct mdt_object *o,
-                   struct mdt_lock_handle *lh);
+int mdt_lock_setup(struct mdt_thread_info *info, struct mdt_object *mo,
+		   struct mdt_lock_handle *lh);
 
-int mdt_check_resent_lock(struct mdt_thread_info *info,
-			  struct mdt_object *mo,
+int mdt_check_resent_lock(struct mdt_thread_info *info, struct mdt_object *mo,
 			  struct mdt_lock_handle *lhc);
 
-int mdt_object_lock(struct mdt_thread_info *,
-                    struct mdt_object *,
-                    struct mdt_lock_handle *,
-                    __u64, int);
+int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *mo,
+		    struct mdt_lock_handle *lh, __u64 ibits, int locality);
 
-int mdt_object_lock_try(struct mdt_thread_info *,
-			struct mdt_object *,
-			struct mdt_lock_handle *,
-			__u64, int);
+int mdt_object_lock_try(struct mdt_thread_info *info, struct mdt_object *mo,
+			struct mdt_lock_handle *lh, __u64 ibits, int locality);
 
-void mdt_object_unlock(struct mdt_thread_info *,
-                       struct mdt_object *,
-                       struct mdt_lock_handle *,
-                       int decref);
+void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *mo,
+		       struct mdt_lock_handle *lh, int decref);
 
-struct mdt_object *mdt_object_new(const struct lu_env *,
+struct mdt_object *mdt_object_new(const struct lu_env *env,
 				  struct mdt_device *,
 				  const struct lu_fid *);
 struct mdt_object *mdt_object_find(const struct lu_env *,
