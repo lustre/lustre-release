@@ -870,7 +870,7 @@ static int lfs_setstripe(int argc, char **argv)
 		if (result) {
 			fprintf(stderr, "error: %s: bad stripe size '%s'\n",
 				argv[0], stripe_size_arg);
-			return result;
+			return CMD_HELP;
 		}
 	}
         /* get the stripe offset */
