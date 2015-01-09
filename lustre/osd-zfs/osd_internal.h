@@ -49,6 +49,9 @@
 #include <lustre_quota.h>
 
 #define _SPL_KMEM_H
+/* SPL redefines this but to the same value: ~0UL vs -1, but GCC complains.
+ * fixed in SPL master 52479ecf58fa89190e384edcf838fecccc786af5 */
+#undef SHRINK_STOP
 #include <sys/kstat.h>
 #define kmem_zalloc(a, b)	kzalloc(a, b)
 #define kmem_free(ptr, sz)	((void)(sz), kfree(ptr))
