@@ -115,27 +115,41 @@ static int lfs_hsm_cancel(int argc, char **argv);
 static int lfs_swap_layouts(int argc, char **argv);
 static int lfs_mv(int argc, char **argv);
 
-#define SETSTRIPE_USAGE(_cmd, _tgt) \
-	"usage: "_cmd" [--stripe-count|-c <stripe_count>]\n"\
-	"                 [--stripe-index|-i <start_ost_idx>]\n"\
-	"                 [--stripe-size|-S <stripe_size>]\n"\
-	"                 [--pool|-p <pool_name>]\n"\
-	"                 [--block|-b] "_tgt"\n"\
-	"                 [--ost-list|-o <ost_indices>]\n"\
-	"\tstripe_size:  Number of bytes on each OST (0 filesystem default)\n"\
-	"\t              Can be specified with k, m or g (in KB, MB and GB\n"\
-	"\t              respectively)\n"\
-	"\tstart_ost_idx: OST index of first stripe (-1 default)\n"\
-	"\tstripe_count: Number of OSTs to stripe over (0 default, -1 all)\n"\
-	"\tpool_name:    Name of OST pool to use (default none)\n"\
-	"\tblock:        Block file access during data migration\n"\
+/* Setstripe and migrate share mostly the same parameters */
+#define SSM_CMD_COMMON(cmd) \
+	"usage: "cmd" [--stripe-count|-c <stripe_count>]\n"		\
+	"                 [--stripe-index|-i <start_ost_idx>]\n"	\
+	"                 [--stripe-size|-S <stripe_size>]\n"		\
+	"                 [--pool|-p <pool_name>]\n"			\
+	"                 [--ost-list|-o <ost_indices>]\n"
+
+#define SSM_HELP_COMMON \
+	"\tstripe_size:  Number of bytes on each OST (0 filesystem default)\n" \
+	"\t              Can be specified with k, m or g (in KB, MB and GB\n" \
+	"\t              respectively)\n"				\
+	"\tstart_ost_idx: OST index of first stripe (-1 default)\n"	\
+	"\tstripe_count: Number of OSTs to stripe over (0 default, -1 all)\n" \
+	"\tpool_name:    Name of OST pool to use (default none)\n"	\
 	"\tost_indices:  List of OST indices, can be repeated multiple times\n"\
-	"\t              Indices be specified in a format of:\n"\
-	"\t                -o <ost_1>,<ost_i>-<ost_j>,<ost_n>\n"\
-	"\t              Or:\n"\
-	"\t                -o <ost_1> -o <ost_i>-<ost_j> -o <ost_n>\n"\
-	"\t              If --pool is set with --ost-list, then the OSTs\n"\
+	"\t              Indices be specified in a format of:\n"	\
+	"\t                -o <ost_1>,<ost_i>-<ost_j>,<ost_n>\n"	\
+	"\t              Or:\n"						\
+	"\t                -o <ost_1> -o <ost_i>-<ost_j> -o <ost_n>\n"	\
+	"\t              If --pool is set with --ost-list, then the OSTs\n" \
 	"\t              must be the members of the pool."
+
+#define SETSTRIPE_USAGE						\
+	SSM_CMD_COMMON("setstripe")				\
+	"                 <directory|filename>\n"		\
+	SSM_HELP_COMMON
+
+#define MIGRATE_USAGE							\
+	SSM_CMD_COMMON("migrate  ")					\
+	"                 [--block|-b]\n"				\
+	"                 <filename>\n"					\
+	SSM_HELP_COMMON							\
+	"\n"								\
+	"\tblock:        Block file access during data migration\n"	\
 
 /* all avaialable commands */
 command_t cmdlist[] = {
@@ -145,7 +159,7 @@ command_t cmdlist[] = {
 	 "delete the default striping pattern from an existing directory\n"
 	 "usage: setstripe -d <directory>   (to delete default striping)\n"\
 	 " or\n"
-	 SETSTRIPE_USAGE("setstripe", "<directory|filename>")},
+	 SETSTRIPE_USAGE},
 	{"getstripe", lfs_getstripe, 0,
 	 "To list the striping info for a given file or files in a\n"
 	 "directory or recursively for all files in a directory tree.\n"
@@ -340,7 +354,7 @@ command_t cmdlist[] = {
 	 "usage: swap_layouts <path1> <path2>"},
 	{"migrate", lfs_setstripe, 0, "migrate file from one OST layout to "
 	 "another (may be not safe with concurent writes).\n"
-	 SETSTRIPE_USAGE("migrate  ", "<filename>")},
+	 MIGRATE_USAGE},
 	{"mv", lfs_mv, 0,
 	 "To move directories between MDTs.\n"
 	 "usage: mv <directory|filename> [--mdt-index|-M] <mdt_index> "
