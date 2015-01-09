@@ -144,7 +144,6 @@ struct obd_type *class_get_type(const char *name)
 	}
 	return type;
 }
-EXPORT_SYMBOL(class_get_type);
 
 void class_put_type(struct obd_type *type)
 {
@@ -154,7 +153,6 @@ void class_put_type(struct obd_type *type)
 	module_put(type->typ_dt_ops->o_owner);
 	spin_unlock(&type->obd_type_lock);
 }
-EXPORT_SYMBOL(class_put_type);
 
 #define CLASS_MAX_NAME 1024
 
@@ -419,7 +417,6 @@ int class_name2dev(const char *name)
 
         return -1;
 }
-EXPORT_SYMBOL(class_name2dev);
 
 struct obd_device *class_name2obd(const char *name)
 {
@@ -449,7 +446,6 @@ int class_uuid2dev(struct obd_uuid *uuid)
 
         return -1;
 }
-EXPORT_SYMBOL(class_uuid2dev);
 
 struct obd_device *class_uuid2obd(struct obd_uuid *uuid)
 {
@@ -487,7 +483,6 @@ struct obd_device *class_num2obd(int num)
 
         return obd;
 }
-EXPORT_SYMBOL(class_num2obd);
 
 /**
  * Get obd devices count. Device in any
@@ -748,7 +743,6 @@ struct obd_device *class_conn2obd(struct lustre_handle *conn)
         }
         return NULL;
 }
-EXPORT_SYMBOL(class_conn2obd);
 
 struct obd_import *class_exp2cliimp(struct obd_export *exp)
 {
@@ -766,7 +760,6 @@ struct obd_import *class_conn2cliimp(struct lustre_handle *conn)
                 return NULL;
         return obd->u.cli.cl_import;
 }
-EXPORT_SYMBOL(class_conn2cliimp);
 
 /* Export management functions */
 static void class_export_destroy(struct obd_export *exp)
@@ -948,7 +941,6 @@ void class_unlink_export(struct obd_export *exp)
 	spin_unlock(&exp->exp_obd->obd_dev_lock);
 	class_export_put(exp);
 }
-EXPORT_SYMBOL(class_unlink_export);
 
 /* Import management functions */
 static void class_import_destroy(struct obd_import *imp)
@@ -1107,7 +1099,6 @@ void __class_export_add_lock_ref(struct obd_export *exp, struct ldlm_lock *lock)
                lock, exp, lock->l_exp_refs_nr);
 	spin_unlock(&exp->exp_locks_list_guard);
 }
-EXPORT_SYMBOL(__class_export_add_lock_ref);
 
 void __class_export_del_lock_ref(struct obd_export *exp, struct ldlm_lock *lock)
 {
@@ -1126,7 +1117,6 @@ void __class_export_del_lock_ref(struct obd_export *exp, struct ldlm_lock *lock)
                lock, exp, lock->l_exp_refs_nr);
 	spin_unlock(&exp->exp_locks_list_guard);
 }
-EXPORT_SYMBOL(__class_export_del_lock_ref);
 #endif
 
 /* A connection defines an export context in which preallocation can
@@ -1512,11 +1502,9 @@ int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid)
 
         return exports_evicted;
 }
-EXPORT_SYMBOL(obd_export_evict_by_uuid);
 
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
 void (*class_export_dump_hook)(struct obd_export*) = NULL;
-EXPORT_SYMBOL(class_export_dump_hook);
 #endif
 
 static void print_export_data(struct obd_export *exp, const char *status,
@@ -1567,7 +1555,6 @@ void dump_exports(struct obd_device *obd, int locks)
 		print_export_data(exp, "ZOMBIE", locks);
 	spin_unlock(&obd_zombie_impexp_lock);
 }
-EXPORT_SYMBOL(dump_exports);
 
 void obd_exports_barrier(struct obd_device *obd)
 {

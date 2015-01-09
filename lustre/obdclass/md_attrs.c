@@ -144,7 +144,6 @@ void lustre_hsm_swab(struct hsm_attrs *attrs)
 		__swab64s(&attrs->hsm_arch_ver);
 	}
 };
-EXPORT_SYMBOL(lustre_hsm_swab);
 
 /*
  * Swab and extract HSM attributes from on-disk xattr.

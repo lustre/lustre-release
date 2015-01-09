@@ -284,7 +284,6 @@ int class_parse_net(char *buf, __u32 *net, char **endh)
 {
 	return class_parse_value(buf, CLASS_PARSE_NET, (void *)net, endh, 0);
 }
-EXPORT_SYMBOL(class_parse_net);
 
 /* 1 param contains key and match
  * 0 param contains key and not match
@@ -306,7 +305,6 @@ int class_match_nid(char *buf, char *key, lnet_nid_t nid)
         }
         return rc;
 }
-EXPORT_SYMBOL(class_match_nid);
 
 int class_match_net(char *buf, char *key, __u32 net)
 {
@@ -324,7 +322,6 @@ int class_match_net(char *buf, char *key, __u32 net)
         }
         return rc;
 }
-EXPORT_SYMBOL(class_match_net);
 
 /********************** class fns **********************/
 
@@ -690,7 +687,6 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         RETURN(0);
 }
-EXPORT_SYMBOL(class_cleanup);
 
 struct obd_device *class_incref(struct obd_device *obd,
                                 const char *scope, const void *source)
@@ -782,7 +778,6 @@ int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         RETURN(rc);
 }
-EXPORT_SYMBOL(class_add_conn);
 
 /** Remove a failover nid location.
  */

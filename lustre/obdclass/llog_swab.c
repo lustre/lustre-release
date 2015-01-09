@@ -85,7 +85,6 @@ void lustre_swab_llog_id(struct llog_logid *log_id)
 	__swab64s(&log_id->lgl_oi.oi.oi_seq);
         __swab32s(&log_id->lgl_ogen);
 }
-EXPORT_SYMBOL(lustre_swab_llog_id);
 
 void lustre_swab_llogd_body (struct llogd_body *d)
 {
@@ -118,7 +117,6 @@ void lustre_swab_ll_fid(struct ll_fid *fid)
         __swab32s (&fid->generation);
         __swab32s (&fid->f_type);
 }
-EXPORT_SYMBOL(lustre_swab_ll_fid);
 
 void lustre_swab_lu_seq_range(struct lu_seq_range *range)
 {
@@ -284,7 +282,6 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec)
 		__swab32s(&tail->lrt_index);
 	}
 }
-EXPORT_SYMBOL(lustre_swab_llog_rec);
 
 static void print_llog_hdr(struct llog_log_hdr *h)
 {
@@ -363,7 +360,6 @@ void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg)
         EXIT;
         return;
 }
-EXPORT_SYMBOL(lustre_swab_lustre_cfg);
 
 /* used only for compatibility with old on-disk cfg_marker data */
 struct cfg_marker32 {
@@ -427,4 +423,3 @@ void lustre_swab_cfg_marker(struct cfg_marker *marker, int swab, int size)
         EXIT;
         return;
 }
-EXPORT_SYMBOL(lustre_swab_cfg_marker);

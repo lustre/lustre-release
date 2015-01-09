@@ -629,7 +629,6 @@ int llog_cat_process_or_fork(const struct lu_env *env,
 
         RETURN(rc);
 }
-EXPORT_SYMBOL(llog_cat_process_or_fork);
 
 int llog_cat_process(const struct lu_env *env, struct llog_handle *cat_llh,
 		     llog_cb_t cb, void *data, int startcat, int startidx)
@@ -801,55 +800,6 @@ int llog_cat_cleanup(const struct lu_env *env, struct llog_handle *cathandle,
 		       index, POSTID(&cathandle->lgh_id.lgl_oi));
 	return rc;
 }
-
-int cat_cancel_cb(const struct lu_env *env,
-		  struct llog_handle *cathandle,
-		  struct llog_rec_hdr *rec, void *data)
-{
-	struct llog_logid_rec	*lir = (struct llog_logid_rec *)rec;
-	struct llog_handle	*loghandle;
-	struct llog_log_hdr	*llh;
-	int			 rc;
-
-	ENTRY;
-
-	if (rec->lrh_type != LLOG_LOGID_MAGIC) {
-		CERROR("invalid record in catalog\n");
-		RETURN(-EINVAL);
-	}
-
-	CDEBUG(D_HA, "processing log "DOSTID":%x at index %u of catalog "
-	       DOSTID"\n", POSTID(&lir->lid_id.lgl_oi), lir->lid_id.lgl_ogen,
-	       rec->lrh_index, POSTID(&cathandle->lgh_id.lgl_oi));
-
-	rc = llog_cat_id2handle(env, cathandle, &loghandle, &lir->lid_id);
-	if (rc) {
-		CERROR("%s: cannot find handle for llog "DOSTID": %d\n",
-		       cathandle->lgh_ctxt->loc_obd->obd_name,
-		       POSTID(&lir->lid_id.lgl_oi), rc);
-		if (rc == -ENOENT || rc == -ESTALE) {
-			/* remove index from catalog */
-			llog_cat_cleanup(env, cathandle, NULL, rec->lrh_index);
-		}
-		RETURN(rc);
-	}
-
-	llh = loghandle->lgh_hdr;
-	if ((llh->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
-	    (llh->llh_count == 1)) {
-		rc = llog_destroy(env, loghandle);
-		if (rc)
-			CERROR("%s: fail to destroy empty log: rc = %d\n",
-			       loghandle->lgh_ctxt->loc_obd->obd_name, rc);
-
-		llog_cat_cleanup(env, cathandle, loghandle,
-				 loghandle->u.phd.phd_cookie.lgc_index);
-	}
-	llog_handle_put(loghandle);
-
-	RETURN(rc);
-}
-EXPORT_SYMBOL(cat_cancel_cb);
 
 /* helper to initialize catalog llog and process it to cancel */
 int llog_cat_init_and_process(const struct lu_env *env,

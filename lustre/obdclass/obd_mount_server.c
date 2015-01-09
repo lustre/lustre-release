@@ -1047,7 +1047,6 @@ int server_mti_print(const char *title, struct mgs_target_info *mti)
 		  mti->mti_config_ver, mti->mti_flags);
 	return 0;
 }
-EXPORT_SYMBOL(server_mti_print);
 
 /* Generate data for registration */
 static int server_lsi2mti(struct lustre_sb_info *lsi,
@@ -1868,4 +1867,3 @@ void server_calc_timeout(struct lustre_sb_info *lsi, struct obd_device *obd)
 	obd->obd_recovery_time_hard = hard;
 	obd->obd_recovery_ir_factor = factor;
 }
-EXPORT_SYMBOL(server_calc_timeout);

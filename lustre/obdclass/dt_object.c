@@ -60,7 +60,6 @@ struct lu_context_key dt_key = {
         .lct_init = dt_global_key_init,
         .lct_fini = dt_global_key_fini
 };
-EXPORT_SYMBOL(dt_key);
 
 /* no lock is necessary to protect the list, because call-backs
  * are added during system startup. Please refer to "struct dt_device".
@@ -320,7 +319,6 @@ dt_store_resolve(const struct lu_env *env, struct dt_device *dt,
         }
         return obj;
 }
-EXPORT_SYMBOL(dt_store_resolve);
 
 static struct dt_object *dt_reg_open(const struct lu_env *env,
                                      struct dt_device *dt,
@@ -365,7 +363,6 @@ struct dt_object *dt_store_open(const struct lu_env *env,
         }
         return file;
 }
-EXPORT_SYMBOL(dt_store_open);
 
 struct dt_object *dt_find_or_create(const struct lu_env *env,
                                     struct dt_device *dt,

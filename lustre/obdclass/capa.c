@@ -379,7 +379,6 @@ out:
 	crypto_free_blkcipher(tfm);
         return rc;
 }
-EXPORT_SYMBOL(capa_decrypt_id);
 
 void capa_cpy(void *capa, struct obd_capa *ocapa)
 {

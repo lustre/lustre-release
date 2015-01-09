@@ -164,7 +164,6 @@ out_err:
 	spin_unlock(&loghandle->lgh_hdr_lock);
 	return rc;
 }
-EXPORT_SYMBOL(llog_cancel_rec);
 
 static int llog_read_header(const struct lu_env *env,
 			    struct llog_handle *handle,
@@ -643,7 +642,6 @@ int llog_declare_create(const struct lu_env *env,
 		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
 	RETURN(rc);
 }
-EXPORT_SYMBOL(llog_declare_create);
 
 int llog_create(const struct lu_env *env, struct llog_handle *handle,
 		struct thandle *th)
@@ -667,7 +665,6 @@ int llog_create(const struct lu_env *env, struct llog_handle *handle,
 		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
 	RETURN(rc);
 }
-EXPORT_SYMBOL(llog_create);
 
 int llog_declare_write_rec(const struct lu_env *env,
 			   struct llog_handle *handle,
@@ -694,7 +691,6 @@ int llog_declare_write_rec(const struct lu_env *env,
 		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
 	RETURN(rc);
 }
-EXPORT_SYMBOL(llog_declare_write_rec);
 
 int llog_write_rec(const struct lu_env *env, struct llog_handle *handle,
 		   struct llog_rec_hdr *rec, struct llog_cookie *logcookies,
@@ -724,7 +720,6 @@ int llog_write_rec(const struct lu_env *env, struct llog_handle *handle,
 		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
 	RETURN(rc);
 }
-EXPORT_SYMBOL(llog_write_rec);
 
 int llog_add(const struct lu_env *env, struct llog_handle *lgh,
 	     struct llog_rec_hdr *rec, struct llog_cookie *logcookies,
@@ -983,7 +978,6 @@ int llog_copy_handler(const struct lu_env *env, struct llog_handle *llh,
 	/* Append all records */
 	return llog_write(env, copy_llh, rec, LLOG_NEXT_IDX);
 }
-EXPORT_SYMBOL(llog_copy_handler);
 
 /* backup plain llog */
 int llog_backup(const struct lu_env *env, struct obd_device *obd,

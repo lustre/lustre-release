@@ -518,7 +518,7 @@ static int llog_test_5(const struct lu_env *env, struct obd_device *obd)
 	cancel_count = 0;
 	rc = llog_cat_process(env, llh, llog_cancel_rec_cb, "foobar", 0, 0);
 	if (rc != -LLOG_EEMPTY) {
-		CERROR("5c: process with cat_cancel_cb failed: %d\n", rc);
+		CERROR("5c: process with llog_cancel_rec_cb failed: %d\n", rc);
 		GOTO(out, rc);
 	}
 
@@ -970,7 +970,7 @@ static int llog_test_8(const struct lu_env *env, struct obd_device *obd)
 	plain_counter = 0;
 	rc = llog_cat_process(env, llh, test_8_cb, "foobar", 0, 0);
 	if (rc != 0) {
-		CERROR("5a: process with cat_cancel_cb failed: %d\n", rc);
+		CERROR("5a: process with test_8_cb failed: %d\n", rc);
 		GOTO(out, rc);
 	}
 	orig_counter = plain_counter;
@@ -1047,7 +1047,7 @@ static int llog_test_8(const struct lu_env *env, struct obd_device *obd)
 	plain_counter = 0;
 	rc = llog_cat_process(env, llh, test_8_cb, "foobar", 0, 0);
 	if (rc != 0) {
-		CERROR("8d: process with cat_cancel_cb failed: %d\n", rc);
+		CERROR("8d: process with test_8_cb failed: %d\n", rc);
 		GOTO(out, rc);
 	}
 

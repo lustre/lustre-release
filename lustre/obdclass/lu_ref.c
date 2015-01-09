@@ -102,7 +102,6 @@ void lu_ref_print(const struct lu_ref *ref)
                 CERROR("     link: %s %p\n", link->ll_scope, link->ll_source);
         }
 }
-EXPORT_SYMBOL(lu_ref_print);
 
 static int lu_ref_is_marker(const struct lu_ref *ref)
 {
@@ -124,7 +123,6 @@ void lu_ref_print_all(void)
 	}
 	spin_unlock(&lu_ref_refs_guard);
 }
-EXPORT_SYMBOL(lu_ref_print_all);
 
 void lu_ref_init_loc(struct lu_ref *ref, const char *func, const int line)
 {
@@ -137,7 +135,6 @@ void lu_ref_init_loc(struct lu_ref *ref, const char *func, const int line)
 	list_add(&ref->lf_linkage, &lu_ref_refs);
 	spin_unlock(&lu_ref_refs_guard);
 }
-EXPORT_SYMBOL(lu_ref_init_loc);
 
 void lu_ref_fini(struct lu_ref *ref)
 {
@@ -147,7 +144,6 @@ void lu_ref_fini(struct lu_ref *ref)
 	list_del_init(&ref->lf_linkage);
 	spin_unlock(&lu_ref_refs_guard);
 }
-EXPORT_SYMBOL(lu_ref_fini);
 
 static struct lu_ref_link *lu_ref_add_context(struct lu_ref *ref,
                                               int flags,
@@ -185,7 +181,6 @@ void lu_ref_add(struct lu_ref *ref, const char *scope, const void *source)
 	might_sleep();
 	lu_ref_add_context(ref, GFP_IOFS, scope, source);
 }
-EXPORT_SYMBOL(lu_ref_add);
 
 void lu_ref_add_at(struct lu_ref *ref, struct lu_ref_link *link,
 		   const char *scope, const void *source)
@@ -198,7 +193,6 @@ void lu_ref_add_at(struct lu_ref *ref, struct lu_ref_link *link,
 	ref->lf_refs++;
 	spin_unlock(&ref->lf_guard);
 }
-EXPORT_SYMBOL(lu_ref_add_at);
 
 /**
  * Version of lu_ref_add() to be used in non-blockable contexts.
@@ -208,7 +202,6 @@ void lu_ref_add_atomic(struct lu_ref *ref, const char *scope,
 {
 	lu_ref_add_context(ref, GFP_ATOMIC, scope, source);
 }
-EXPORT_SYMBOL(lu_ref_add_atomic);
 
 static inline int lu_ref_link_eq(const struct lu_ref_link *link,
                                  const char *scope, const void *source)
@@ -262,7 +255,6 @@ void lu_ref_del(struct lu_ref *ref, const char *scope, const void *source)
 		spin_unlock(&ref->lf_guard);
 	}
 }
-EXPORT_SYMBOL(lu_ref_del);
 
 void lu_ref_set_at(struct lu_ref *ref, struct lu_ref_link *link,
 		   const char *scope,
@@ -276,7 +268,6 @@ void lu_ref_set_at(struct lu_ref *ref, struct lu_ref_link *link,
 	link->ll_source = source1;
 	spin_unlock(&ref->lf_guard);
 }
-EXPORT_SYMBOL(lu_ref_set_at);
 
 void lu_ref_del_at(struct lu_ref *ref, struct lu_ref_link *link,
 		   const char *scope, const void *source)
@@ -289,7 +280,6 @@ void lu_ref_del_at(struct lu_ref *ref, struct lu_ref_link *link,
 	ref->lf_refs--;
 	spin_unlock(&ref->lf_guard);
 }
-EXPORT_SYMBOL(lu_ref_del_at);
 
 #ifdef CONFIG_PROC_FS
 

@@ -566,7 +566,6 @@ int lu_object_invariant(const struct lu_object *o)
         }
         return 1;
 }
-EXPORT_SYMBOL(lu_object_invariant);
 
 static struct lu_object *htable_lookup(struct lu_site *s,
 				       cfs_hash_bd_t *bd,
@@ -1360,7 +1359,6 @@ void lu_stack_fini(const struct lu_env *env, struct lu_device *top)
                 }
         }
 }
-EXPORT_SYMBOL(lu_stack_fini);
 
 enum {
         /**
@@ -1586,14 +1584,12 @@ void lu_context_key_quiesce(struct lu_context_key *key)
 		++key_set_version;
 	}
 }
-EXPORT_SYMBOL(lu_context_key_quiesce);
 
 void lu_context_key_revive(struct lu_context_key *key)
 {
         key->lct_tags &= ~LCT_QUIESCENT;
         ++key_set_version;
 }
-EXPORT_SYMBOL(lu_context_key_revive);
 
 static void keys_fini(struct lu_context *ctx)
 {
@@ -1753,7 +1749,6 @@ int lu_context_refill(struct lu_context *ctx)
 {
         return likely(ctx->lc_version == key_set_version) ? 0 : keys_fill(ctx);
 }
-EXPORT_SYMBOL(lu_context_refill);
 
 /**
  * lu_ctx_tags/lu_ses_tags will be updated if there are new types of
@@ -2050,7 +2045,6 @@ void lu_context_keys_dump(void)
                 }
         }
 }
-EXPORT_SYMBOL(lu_context_keys_dump);
 
 /**
  * Initialization of global lu_* data.
@@ -2180,7 +2174,6 @@ int lu_site_stats_print(const struct lu_site *s, char *page, int count)
                         ls_stats_read(s->ls_stats, LU_SS_CACHE_DEATH_RACE),
                         ls_stats_read(s->ls_stats, LU_SS_LRU_PURGED));
 }
-EXPORT_SYMBOL(lu_site_stats_print);
 
 /**
  * Helper function to initialize a number of kmem slab caches at once.
@@ -2345,4 +2338,3 @@ int lu_buf_check_and_grow(struct lu_buf *buf, size_t len)
 	buf->lb_len = len;
 	return 0;
 }
-EXPORT_SYMBOL(lu_buf_check_and_grow);

@@ -218,7 +218,6 @@ struct cl_page *cl_page_alloc(const struct lu_env *env,
 	}
 	RETURN(page);
 }
-EXPORT_SYMBOL(cl_page_alloc);
 
 /**
  * Returns a cl_page with index \a idx at the object \a o, and associated with
@@ -1106,7 +1105,6 @@ int cl_page_cancel(const struct lu_env *env, struct cl_page *page)
                               (const struct lu_env *,
                                const struct cl_page_slice *));
 }
-EXPORT_SYMBOL(cl_page_cancel);
 
 /**
  * Converts a byte offset within object \a obj into a page index.

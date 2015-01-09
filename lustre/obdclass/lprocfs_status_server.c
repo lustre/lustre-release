@@ -417,7 +417,6 @@ int lprocfs_exp_cleanup(struct obd_export *exp)
 
 	return 0;
 }
-EXPORT_SYMBOL(lprocfs_exp_cleanup);
 
 #define LPROCFS_OBD_OP_INIT(base, stats, op)			\
 do {								\

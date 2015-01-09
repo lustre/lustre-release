@@ -77,7 +77,6 @@ int cl_io_is_going(const struct lu_env *env)
 {
         return cl_env_info(env)->clt_current_io != NULL;
 }
-EXPORT_SYMBOL(cl_io_is_going);
 
 /**
  * cl_io invariant that holds at all times when exported cl_io_*() functions
@@ -507,7 +506,6 @@ void cl_io_rw_advance(const struct lu_env *env, struct cl_io *io, size_t nob)
         }
         EXIT;
 }
-EXPORT_SYMBOL(cl_io_rw_advance);
 
 /**
  * Adds a lock to a lockset.
@@ -790,7 +788,6 @@ int cl_io_cancel(const struct lu_env *env, struct cl_io *io,
         }
         return result;
 }
-EXPORT_SYMBOL(cl_io_cancel);
 
 /**
  * Main io loop.
@@ -1066,7 +1063,6 @@ int cl_page_list_own(const struct lu_env *env,
 	}
 	RETURN(result);
 }
-EXPORT_SYMBOL(cl_page_list_own);
 
 /**
  * Assumes all pages in a queue.
@@ -1081,7 +1077,6 @@ void cl_page_list_assume(const struct lu_env *env,
 	cl_page_list_for_each(page, plist)
 		cl_page_assume(env, io, page);
 }
-EXPORT_SYMBOL(cl_page_list_assume);
 
 /**
  * Discards all pages in a queue.
@@ -1097,7 +1092,6 @@ void cl_page_list_discard(const struct lu_env *env, struct cl_io *io,
 		cl_page_discard(env, io, page);
 	EXIT;
 }
-EXPORT_SYMBOL(cl_page_list_discard);
 
 /**
  * Initialize dual page queue.
@@ -1157,7 +1151,6 @@ void cl_2queue_assume(const struct lu_env *env,
         cl_page_list_assume(env, io, &queue->c2_qin);
         cl_page_list_assume(env, io, &queue->c2_qout);
 }
-EXPORT_SYMBOL(cl_2queue_assume);
 
 /**
  * Finalize both page lists of a 2-queue.

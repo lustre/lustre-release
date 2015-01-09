@@ -183,7 +183,6 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
         lustre_cfg_free(lcfg);
         return(rc);
 }
-EXPORT_SYMBOL(do_lcfg);
 
 /** Call class_attach and class_setup.  These methods in turn call
  * obd type-specific methods.
