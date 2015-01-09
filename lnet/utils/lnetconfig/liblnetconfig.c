@@ -667,6 +667,8 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 		}
 
 		if (detail) {
+			char *limit;
+
 			tunables = cYAML_create_object(item, "tunables");
 			if (tunables == NULL)
 				goto out;
@@ -693,25 +695,17 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 				goto out;
 
 			/* out put the CPTs in the format: "[x,x,x,...]" */
-			pos += snprintf(pos, str_buf + str_buf_len - pos, "[");
+			limit = str_buf + str_buf_len - 3;
+			pos += snprintf(pos, limit - pos, "\"[");
 			for (j = 0 ; data->cfg_ncpts > 1 &&
-				j < data->cfg_ncpts; j++) {
-				pos += snprintf(pos,
-						str_buf + str_buf_len - pos,
+				j < data->cfg_ncpts &&
+				pos < limit; j++) {
+				pos += snprintf(pos, limit - pos,
 						"%d", net_config->ni_cpts[j]);
 				if ((j + 1) < data->cfg_ncpts)
-					pos += snprintf(pos,
-							str_buf +
-							 str_buf_len - pos,
-							",");
+					pos += snprintf(pos, limit - pos, ",");
 			}
-			if (str_buf + str_buf_len - pos <= 0)
-				pos += snprintf(str_buf + str_buf_len - 2,
-						2, "]");
-			else
-				pos += snprintf(pos,
-						str_buf + str_buf_len - pos,
-						"]");
+			pos += snprintf(pos, 3, "]\"");
 
 			if (data->cfg_ncpts > 1 &&
 			    cYAML_create_string(tunables, "CPT",
