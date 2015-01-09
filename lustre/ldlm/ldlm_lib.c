@@ -752,7 +752,6 @@ void target_client_add_cb(struct obd_device *obd, __u64 transno, void *cb_data,
 	spin_unlock(&exp->exp_lock);
 	class_export_cb_put(exp);
 }
-EXPORT_SYMBOL(target_client_add_cb);
 
 static void
 check_and_start_recovery_timer(struct obd_device *obd,
@@ -1281,7 +1280,6 @@ out:
 		req->rq_status = rc;
 	RETURN(rc);
 }
-EXPORT_SYMBOL(target_handle_connect);
 
 int target_handle_disconnect(struct ptlrpc_request *req)
 {
@@ -1297,7 +1295,6 @@ int target_handle_disconnect(struct ptlrpc_request *req)
 
         RETURN(0);
 }
-EXPORT_SYMBOL(target_handle_disconnect);
 
 void target_destroy_export(struct obd_export *exp)
 {
@@ -1531,7 +1528,6 @@ void target_cancel_recovery_timer(struct obd_device *obd)
         CDEBUG(D_HA, "%s: cancel recovery timer\n", obd->obd_name);
         cfs_timer_disarm(&obd->obd_recovery_timer);
 }
-EXPORT_SYMBOL(target_cancel_recovery_timer);
 
 static void target_start_recovery_timer(struct obd_device *obd)
 {
@@ -2357,14 +2353,12 @@ added:
 	wake_up(&obd->obd_next_transno_waitq);
 	RETURN(0);
 }
-EXPORT_SYMBOL(target_queue_recovery_request);
 
 int target_handle_ping(struct ptlrpc_request *req)
 {
         obd_ping(req->rq_svc_thread->t_env, req->rq_export);
         return req_capsule_server_pack(&req->rq_pill);
 }
-EXPORT_SYMBOL(target_handle_ping);
 
 void target_committed_to_req(struct ptlrpc_request *req)
 {
@@ -2381,7 +2375,6 @@ void target_committed_to_req(struct ptlrpc_request *req)
         CDEBUG(D_INFO, "last_committed "LPU64", transno "LPU64", xid "LPU64"\n",
                exp->exp_last_committed, req->rq_transno, req->rq_xid);
 }
-EXPORT_SYMBOL(target_committed_to_req);
 
 #endif /* HAVE_SERVER_SUPPORT */
 
@@ -2412,7 +2405,6 @@ int target_pack_pool_reply(struct ptlrpc_request *req)
 
         RETURN(0);
 }
-EXPORT_SYMBOL(target_pack_pool_reply);
 
 static int target_send_reply_msg(struct ptlrpc_request *req,
 				 int rc, int fail_id)
@@ -2524,7 +2516,6 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 	spin_unlock(&svcpt->scp_rep_lock);
 	EXIT;
 }
-EXPORT_SYMBOL(target_send_reply);
 
 ldlm_mode_t lck_compat_array[] = {
 	[LCK_EX]    = LCK_COMPAT_EX,
@@ -2614,7 +2605,6 @@ ldlm_error_t ldlm_errno2error(int err_no)
         }
         return error;
 }
-EXPORT_SYMBOL(ldlm_errno2error);
 
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
 void ldlm_dump_export_locks(struct obd_export *exp)

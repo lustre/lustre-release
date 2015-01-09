@@ -131,7 +131,6 @@ int ldlm_expired_completion_wait(void *data)
 
         RETURN(0);
 }
-EXPORT_SYMBOL(ldlm_expired_completion_wait);
 
 /**
  * Calculate the Completion timeout (covering enqueue, BL AST, data flush,
@@ -414,7 +413,6 @@ int ldlm_glimpse_ast(struct ldlm_lock *lock, void *reqp)
 {
         return -ELDLM_NO_LOCK_DATA;
 }
-EXPORT_SYMBOL(ldlm_glimpse_ast);
 
 /**
  * Enqueue a local lock (typically on a server).
@@ -1099,7 +1097,6 @@ int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, __u32 *flags)
         ptlrpc_req_finished(req);
         return rc;
 }
-EXPORT_SYMBOL(ldlm_cli_convert);
 
 /**
  * Cancel locks locally.
@@ -1270,7 +1267,6 @@ int ldlm_cli_cancel_req(struct obd_export *exp, struct list_head *cancels,
 out:
         return sent ? sent : rc;
 }
-EXPORT_SYMBOL(ldlm_cli_cancel_req);
 
 static inline struct ldlm_pool *ldlm_imp2pl(struct obd_import *imp)
 {
@@ -1326,7 +1322,6 @@ int ldlm_cli_update_pool(struct ptlrpc_request *req)
 
         RETURN(0);
 }
-EXPORT_SYMBOL(ldlm_cli_update_pool);
 
 /**
  * Client side lock cancel.
@@ -1428,7 +1423,6 @@ int ldlm_cli_cancel_list_local(struct list_head *cancels, int count,
 
         RETURN(count);
 }
-EXPORT_SYMBOL(ldlm_cli_cancel_list_local);
 
 /**
  * Cancel as many locks as possible w/o sending any RPCs (e.g. to write back
@@ -1995,7 +1989,6 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns,
                 RETURN(ELDLM_OK);
         }
 }
-EXPORT_SYMBOL(ldlm_cli_cancel_unused);
 
 /* Lock iterators. */
 
@@ -2036,7 +2029,6 @@ int ldlm_resource_foreach(struct ldlm_resource *res, ldlm_iterator_t iter,
         unlock_res(res);
         RETURN(rc);
 }
-EXPORT_SYMBOL(ldlm_resource_foreach);
 
 struct iter_helper_data {
         ldlm_iterator_t iter;
@@ -2069,7 +2061,6 @@ void ldlm_namespace_foreach(struct ldlm_namespace *ns,
                                  ldlm_res_iter_helper, &helper);
 
 }
-EXPORT_SYMBOL(ldlm_namespace_foreach);
 
 /* non-blocking function to manipulate a lock whose cb_data is being put away.
  * return  0:  find no resource
@@ -2320,4 +2311,3 @@ int ldlm_replay_locks(struct obd_import *imp)
 
 	RETURN(rc);
 }
-EXPORT_SYMBOL(ldlm_replay_locks);

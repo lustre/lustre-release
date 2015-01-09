@@ -65,7 +65,6 @@ char *ldlm_typename[] = {
 	[LDLM_FLOCK] = "FLK",
 	[LDLM_IBITS] = "IBT",
 };
-EXPORT_SYMBOL(ldlm_typename);
 
 static ldlm_policy_wire_to_local_t ldlm_policy_wire18_to_local[] = {
 	[LDLM_PLAIN - LDLM_MIN_TYPE]  = ldlm_plain_policy_wire_to_local,
@@ -570,7 +569,6 @@ int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
 
         RETURN(0);
 }
-EXPORT_SYMBOL(ldlm_lock_change_resource);
 
 /** \defgroup ldlm_handles LDLM HANDLES
  * Ways to get hold of locks without any addresses.
@@ -654,7 +652,6 @@ void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc)
 				    &lock->l_policy_data,
 				    &desc->l_policy_data);
 }
-EXPORT_SYMBOL(ldlm_lock2desc);
 
 /**
  * Add a lock to list of conflicting locks to send AST to.
@@ -1231,7 +1228,6 @@ void ldlm_lock_fail_match(struct ldlm_lock *lock)
         ldlm_lock_fail_match_locked(lock);
         unlock_res_and_lock(lock);
 }
-EXPORT_SYMBOL(ldlm_lock_fail_match);
 
 /**
  * Mark lock as "matchable" by OST.
@@ -2032,7 +2028,6 @@ void ldlm_reprocess_all_ns(struct ldlm_namespace *ns)
         }
         EXIT;
 }
-EXPORT_SYMBOL(ldlm_reprocess_all_ns);
 
 /**
  * Try to grant all waiting locks on a resource.
@@ -2401,7 +2396,6 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                 OBD_SLAB_FREE(node, ldlm_interval_slab, sizeof(*node));
         RETURN(res);
 }
-EXPORT_SYMBOL(ldlm_lock_convert);
 
 /**
  * Print lock with lock handle \a lockh description into debug log.

@@ -116,7 +116,6 @@ int node_equal(struct interval_node *n1, struct interval_node *n2)
 {
 	return extent_equal(&n1->in_extent, &n2->in_extent);
 }
-EXPORT_SYMBOL(node_equal);
 
 static inline __u64 max_u64(__u64 x, __u64 y)
 {
@@ -768,4 +767,3 @@ void interval_expand(struct interval_node *root,
                 ext->end = interval_expand_high(root, ext->end);
         LASSERT(interval_is_overlapped(root, ext) == 0);
 }
-EXPORT_SYMBOL(interval_expand);

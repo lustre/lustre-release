@@ -965,7 +965,6 @@ int ldlm_init_flock_export(struct obd_export *exp)
 
 	RETURN(0);
 }
-EXPORT_SYMBOL(ldlm_init_flock_export);
 
 void ldlm_destroy_flock_export(struct obd_export *exp)
 {
@@ -976,4 +975,3 @@ void ldlm_destroy_flock_export(struct obd_export *exp)
 	}
 	EXIT;
 }
-EXPORT_SYMBOL(ldlm_destroy_flock_export);
