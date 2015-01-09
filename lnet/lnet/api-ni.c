@@ -361,7 +361,6 @@ lnet_counters_reset(void)
 
 	lnet_net_unlock(LNET_LOCK_EX);
 }
-EXPORT_SYMBOL(lnet_counters_reset);
 
 static __u64 lnet_create_interface_cookie(void)
 {
