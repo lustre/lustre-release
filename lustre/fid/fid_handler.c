@@ -324,7 +324,6 @@ int seq_server_alloc_meta(struct lu_server_seq *seq,
 
         RETURN(rc);
 }
-EXPORT_SYMBOL(seq_server_alloc_meta);
 
 static int seq_server_handle(struct lu_site *site,
                              const struct lu_env *env,

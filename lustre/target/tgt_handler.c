@@ -998,13 +998,11 @@ int tgt_obd_log_cancel(struct tgt_session_info *tsi)
 {
 	return err_serious(-EOPNOTSUPP);
 }
-EXPORT_SYMBOL(tgt_obd_log_cancel);
 
 int tgt_obd_qc_callback(struct tgt_session_info *tsi)
 {
 	return err_serious(-EOPNOTSUPP);
 }
-EXPORT_SYMBOL(tgt_obd_qc_callback);
 
 int tgt_sendpage(struct tgt_session_info *tsi, struct lu_rdpg *rdpg, int nob)
 {
@@ -1127,7 +1125,6 @@ out:
 	}
 	return rc;
 }
-EXPORT_SYMBOL(tgt_obd_idx_read);
 
 struct tgt_handler tgt_obd_handlers[] = {
 TGT_OBD_HDL    (0,	OBD_PING,		tgt_obd_ping),
@@ -1257,19 +1254,16 @@ int tgt_convert(struct tgt_session_info *tsi)
 
 	RETURN(req->rq_status);
 }
-EXPORT_SYMBOL(tgt_convert);
 
 int tgt_bl_callback(struct tgt_session_info *tsi)
 {
 	return err_serious(-EOPNOTSUPP);
 }
-EXPORT_SYMBOL(tgt_bl_callback);
 
 int tgt_cp_callback(struct tgt_session_info *tsi)
 {
 	return err_serious(-EOPNOTSUPP);
 }
-EXPORT_SYMBOL(tgt_cp_callback);
 
 /* generic LDLM target handler */
 struct tgt_handler tgt_dlm_handlers[] = {
@@ -1318,7 +1312,6 @@ int tgt_llog_destroy(struct tgt_session_info *tsi)
 
 	RETURN(rc);
 }
-EXPORT_SYMBOL(tgt_llog_destroy);
 
 int tgt_llog_read_header(struct tgt_session_info *tsi)
 {
@@ -1566,7 +1559,6 @@ int tgt_brw_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 			       nb[nrbufs - 1].rnb_len - 1,
 			       lh, mode, &flags));
 }
-EXPORT_SYMBOL(tgt_brw_lock);
 
 void tgt_brw_unlock(struct obd_ioobj *obj, struct niobuf_remote *niob,
 		    struct lustre_handle *lh, int mode)
@@ -1582,7 +1574,6 @@ void tgt_brw_unlock(struct obd_ioobj *obj, struct niobuf_remote *niob,
 		tgt_extent_unlock(lh, mode);
 	EXIT;
 }
-EXPORT_SYMBOL(tgt_brw_unlock);
 
 static __u32 tgt_checksum_bulk(struct lu_target *tgt,
 			       struct ptlrpc_bulk_desc *desc, int opc,

@@ -223,7 +223,6 @@ static void iam_lfix_next(struct iam_leaf *l)
  * Bug chasing.
  */
 int lfix_dump = 0;
-EXPORT_SYMBOL(lfix_dump);
 
 static char hdigit(char ch)
 {
@@ -880,4 +879,3 @@ int iam_lfix_create(struct inode *obj,
         brelse(root_node);
         return result;
 }
-EXPORT_SYMBOL(iam_lfix_create);

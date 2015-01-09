@@ -180,7 +180,6 @@ struct lu_context_key tgt_thread_key = {
 	.lct_fini = tgt_key_fini,
 	.lct_exit = tgt_key_exit,
 };
-EXPORT_SYMBOL(tgt_thread_key);
 
 LU_KEY_INIT_GENERIC(tgt);
 

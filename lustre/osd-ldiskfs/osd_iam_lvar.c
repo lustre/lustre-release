@@ -1034,7 +1034,6 @@ int iam_lvar_create(struct inode *obj,
         brelse(root_node);
         return result;
 }
-EXPORT_SYMBOL(iam_lvar_create);
 
 static struct iam_operations lvar_ops = {
         .id_root_ptr    = lvar_root_ptr,

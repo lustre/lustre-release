@@ -163,7 +163,6 @@ void iam_format_register(struct iam_format *fmt)
 {
 	list_add(&fmt->if_linkage, &iam_formats);
 }
-EXPORT_SYMBOL(iam_format_register);
 
 static struct buffer_head *
 iam_load_idle_blocks(struct iam_container *c, iam_ptr_t blk)
@@ -263,7 +262,6 @@ int iam_container_init(struct iam_container *c,
 	mutex_init(&c->ic_idle_mutex);
 	return 0;
 }
-EXPORT_SYMBOL(iam_container_init);
 
 /*
  * Determine container format.
@@ -272,7 +270,6 @@ int iam_container_setup(struct iam_container *c)
 {
         return iam_format_guess(c);
 }
-EXPORT_SYMBOL(iam_container_setup);
 
 /*
  * Finalize container @c, release all resources.
@@ -284,7 +281,6 @@ void iam_container_fini(struct iam_container *c)
 	brelse(c->ic_root_bh);
 	c->ic_root_bh = NULL;
 }
-EXPORT_SYMBOL(iam_container_fini);
 
 void iam_path_init(struct iam_path *path, struct iam_container *c,
                    struct iam_path_descr *pd)
@@ -350,12 +346,10 @@ struct iam_path_descr *iam_ipd_alloc(void *area, int keysize)
                 ipd->ipd_key_scratch[i] = karea;
         return ipd;
 }
-EXPORT_SYMBOL(iam_ipd_alloc);
 
 void iam_ipd_free(struct iam_path_descr *ipd)
 {
 }
-EXPORT_SYMBOL(iam_ipd_free);
 
 int iam_node_read(struct iam_container *c, iam_ptr_t ptr,
                   handle_t *h, struct buffer_head **bh)
@@ -725,7 +719,6 @@ int  iam_it_init(struct iam_iterator *it, struct iam_container *c, __u32 flags,
         iam_path_init(&it->ii_path, c, pd);
         return 0;
 }
-EXPORT_SYMBOL(iam_it_init);
 
 /*
  * Finalize iterator and release all resources.
@@ -737,7 +730,6 @@ void iam_it_fini(struct iam_iterator *it)
         assert_corr(it_state(it) == IAM_IT_DETACHED);
         iam_path_fini(&it->ii_path);
 }
-EXPORT_SYMBOL(iam_it_fini);
 
 /*
  * this locking primitives are used to protect parts
@@ -1196,7 +1188,6 @@ int iam_it_get(struct iam_iterator *it, const struct iam_key *k)
                          it_keycmp(it, k) <= 0));
         return result;
 }
-EXPORT_SYMBOL(iam_it_get);
 
 /*
  * Attach iterator by index key.
@@ -1235,7 +1226,6 @@ int iam_it_get_at(struct iam_iterator *it, const struct iam_key *k)
         assert_corr(ergo(result >= 0, it_state(it) == IAM_IT_ATTACHED));
         return result;
 }
-EXPORT_SYMBOL(iam_it_get_at);
 
 /*
  * Duplicates iterator.
@@ -1276,7 +1266,6 @@ void iam_it_put(struct iam_iterator *it)
                 iam_leaf_fini(&it->ii_path.ip_leaf);
         }
 }
-EXPORT_SYMBOL(iam_it_put);
 
 static struct iam_ikey *iam_it_ikey_get(const struct iam_iterator *it,
                                         struct iam_ikey *ikey);
@@ -1554,7 +1543,6 @@ int iam_it_next(struct iam_iterator *it)
                          it_ikeycmp(it, ik_orig) >= 0));
         return result;
 }
-EXPORT_SYMBOL(iam_it_next);
 
 /*
  * Return pointer to the record under iterator.
@@ -1568,7 +1556,6 @@ struct iam_rec *iam_it_rec_get(const struct iam_iterator *it)
         assert_corr(it_at_rec(it));
         return iam_leaf_rec(&it->ii_path.ip_leaf);
 }
-EXPORT_SYMBOL(iam_it_rec_get);
 
 static void iam_it_reccpy(struct iam_iterator *it, const struct iam_rec *r)
 {
@@ -1606,7 +1593,6 @@ int iam_it_rec_set(handle_t *h,
         }
         return result;
 }
-EXPORT_SYMBOL(iam_it_rec_set);
 
 /*
  * Return pointer to the index key under iterator.
@@ -1636,7 +1622,6 @@ struct iam_key *iam_it_key_get(const struct iam_iterator *it)
         assert_corr(it_at_rec(it));
         return iam_leaf_key(&it->ii_path.ip_leaf);
 }
-EXPORT_SYMBOL(iam_it_key_get);
 
 /*
  * Return size of key under iterator (in bytes)
@@ -1651,7 +1636,6 @@ int iam_it_key_size(const struct iam_iterator *it)
         assert_corr(it_at_rec(it));
         return iam_leaf_key_size(&it->ii_path.ip_leaf);
 }
-EXPORT_SYMBOL(iam_it_key_size);
 
 static struct buffer_head *
 iam_new_node(handle_t *h, struct iam_container *c, iam_ptr_t *b, int *e)
@@ -2243,7 +2227,6 @@ int iam_it_rec_insert(handle_t *h, struct iam_iterator *it,
                          it_keycmp(it, k) == 0));
         return result;
 }
-EXPORT_SYMBOL(iam_it_rec_insert);
 
 static inline int iam_idle_blocks_limit(struct inode *inode)
 {
@@ -2478,7 +2461,6 @@ int iam_it_rec_delete(handle_t *h, struct iam_iterator *it)
                     it_state(it) == IAM_IT_DETACHED);
         return result;
 }
-EXPORT_SYMBOL(iam_it_rec_delete);
 
 /*
  * Convert iterator to cookie.
@@ -2499,7 +2481,6 @@ iam_pos_t iam_it_store(const struct iam_iterator *it)
         result = 0;
         return *(iam_pos_t *)iam_it_ikey_get(it, (void *)&result);
 }
-EXPORT_SYMBOL(iam_it_store);
 
 /*
  * Restore iterator from cookie.
@@ -2516,7 +2497,6 @@ int iam_it_load(struct iam_iterator *it, iam_pos_t pos)
         assert_corr(iam_it_container(it)->ic_descr->id_ikey_size <= sizeof pos);
         return iam_it_iget(it, (struct iam_ikey *)&pos);
 }
-EXPORT_SYMBOL(iam_it_load);
 
 /***********************************************************************/
 /* invariants                                                          */
@@ -2602,7 +2582,6 @@ int iam_lookup(struct iam_container *c, const struct iam_key *k,
         iam_it_fini(&it);
         return result;
 }
-EXPORT_SYMBOL(iam_lookup);
 
 /*
  * Insert new record @r with key @k into container @c (within context of
@@ -2631,7 +2610,6 @@ int iam_insert(handle_t *h, struct iam_container *c, const struct iam_key *k,
         iam_it_fini(&it);
         return result;
 }
-EXPORT_SYMBOL(iam_insert);
 
 /*
  * Update record with the key @k in container @c (within context of
@@ -2662,7 +2640,6 @@ int iam_update(handle_t *h, struct iam_container *c, const struct iam_key *k,
         iam_it_fini(&it);
         return result;
 }
-EXPORT_SYMBOL(iam_update);
 
 /*
  * Delete existing record with key @k.
@@ -2687,7 +2664,6 @@ int iam_delete(handle_t *h, struct iam_container *c, const struct iam_key *k,
         iam_it_fini(&it);
         return result;
 }
-EXPORT_SYMBOL(iam_delete);
 
 int iam_root_limit(int rootgap, int blocksize, int size)
 {
