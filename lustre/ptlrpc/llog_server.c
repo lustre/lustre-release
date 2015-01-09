@@ -114,7 +114,6 @@ out_ctxt:
 	llog_ctxt_put(ctxt);
 	return rc;
 }
-EXPORT_SYMBOL(llog_origin_handle_open);
 
 int llog_origin_handle_destroy(struct ptlrpc_request *req)
 {
@@ -154,7 +153,6 @@ int llog_origin_handle_destroy(struct ptlrpc_request *req)
 	llog_ctxt_put(ctxt);
 	RETURN(rc);
 }
-EXPORT_SYMBOL(llog_origin_handle_destroy);
 
 int llog_origin_handle_next_block(struct ptlrpc_request *req)
 {
@@ -215,7 +213,6 @@ out_ctxt:
 	llog_ctxt_put(ctxt);
 	return rc;
 }
-EXPORT_SYMBOL(llog_origin_handle_next_block);
 
 int llog_origin_handle_prev_block(struct ptlrpc_request *req)
 {
@@ -276,7 +273,6 @@ out_ctxt:
 	llog_ctxt_put(ctxt);
 	return rc;
 }
-EXPORT_SYMBOL(llog_origin_handle_prev_block);
 
 int llog_origin_handle_read_header(struct ptlrpc_request *req)
 {
@@ -331,7 +327,6 @@ out_ctxt:
 	llog_ctxt_put(ctxt);
 	return rc;
 }
-EXPORT_SYMBOL(llog_origin_handle_read_header);
 
 int llog_origin_handle_close(struct ptlrpc_request *req)
 {
@@ -344,4 +339,3 @@ int llog_origin_handle_close(struct ptlrpc_request *req)
 		RETURN(err_serious(-ENOMEM));
 	RETURN(0);
 }
-EXPORT_SYMBOL(llog_origin_handle_close);

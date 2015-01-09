@@ -749,7 +749,6 @@ void gss_secsvc_flush(struct obd_device *target)
 {
         rsc_flush_target(target);
 }
-EXPORT_SYMBOL(gss_secsvc_flush);
 
 static struct rsc *gss_svc_searchbyctx(rawobj_t *handle)
 {

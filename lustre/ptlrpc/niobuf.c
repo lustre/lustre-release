@@ -241,7 +241,6 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 
 	RETURN(0);
 }
-EXPORT_SYMBOL(ptlrpc_start_bulk_transfer);
 
 /**
  * Server side bulk abort. Idempotent. Not thread-safe (i.e. only
@@ -282,7 +281,6 @@ void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
 		CWARN("Unexpectedly long timeout: desc %p\n", desc);
 	}
 }
-EXPORT_SYMBOL(ptlrpc_abort_bulk);
 #endif /* HAVE_SERVER_SUPPORT */
 
 /**
@@ -411,7 +409,6 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 
 	RETURN(0);
 }
-EXPORT_SYMBOL(ptlrpc_register_bulk);
 
 /**
  * Disconnect a bulk desc from the network. Idempotent. Not
@@ -475,7 +472,6 @@ int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async)
         }
         RETURN(0);
 }
-EXPORT_SYMBOL(ptlrpc_unregister_bulk);
 
 static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
 {
@@ -614,7 +610,6 @@ out:
         ptlrpc_connection_put(conn);
         return rc;
 }
-EXPORT_SYMBOL(ptlrpc_send_reply);
 
 int ptlrpc_reply (struct ptlrpc_request *req)
 {
@@ -623,7 +618,6 @@ int ptlrpc_reply (struct ptlrpc_request *req)
         else
                 return (ptlrpc_send_reply(req, 0));
 }
-EXPORT_SYMBOL(ptlrpc_reply);
 
 /**
  * For request \a req send an error reply back. Create empty
@@ -651,13 +645,11 @@ int ptlrpc_send_error(struct ptlrpc_request *req, int may_be_difficult)
         rc = ptlrpc_send_reply(req, may_be_difficult);
         RETURN(rc);
 }
-EXPORT_SYMBOL(ptlrpc_send_error);
 
 int ptlrpc_error(struct ptlrpc_request *req)
 {
         return ptlrpc_send_error(req, 0);
 }
-EXPORT_SYMBOL(ptlrpc_error);
 
 /**
  * Send request \a request.

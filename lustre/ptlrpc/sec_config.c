@@ -88,7 +88,6 @@ enum lustre_sec_part sptlrpc_target_sec_part(struct obd_device *obd)
         CERROR("unknown target %p(%s)\n", obd, type);
         return LUSTRE_SP_ANY;
 }
-EXPORT_SYMBOL(sptlrpc_target_sec_part);
 
 /****************************************
  * user supplied flavor string parsing  *
@@ -286,7 +285,6 @@ int sptlrpc_rule_set_expand(struct sptlrpc_rule_set *rset)
         rset->srs_nslot = nslot;
         return 0;
 }
-EXPORT_SYMBOL(sptlrpc_rule_set_expand);
 
 static inline int rule_spec_dir(struct sptlrpc_rule *rule)
 {
@@ -434,7 +432,6 @@ int sptlrpc_rule_set_choose(struct sptlrpc_rule_set *rset,
 
         return 0;
 }
-EXPORT_SYMBOL(sptlrpc_rule_set_choose);
 
 void sptlrpc_rule_set_dump(struct sptlrpc_rule_set *rset)
 {
@@ -447,7 +444,6 @@ void sptlrpc_rule_set_dump(struct sptlrpc_rule_set *rset)
                        r->sr_from, r->sr_to, r->sr_netid, r->sr_flvr.sf_rpc);
         }
 }
-EXPORT_SYMBOL(sptlrpc_rule_set_dump);
 
 static int sptlrpc_rule_set_extract(struct sptlrpc_rule_set *gen,
                                     struct sptlrpc_rule_set *tgt,
@@ -899,7 +895,6 @@ void sptlrpc_target_choose_flavor(struct sptlrpc_rule_set *rset,
         if (sptlrpc_rule_set_choose(rset, from, LUSTRE_SP_ANY, nid, sf) == 0)
                 get_default_flavor(sf);
 }
-EXPORT_SYMBOL(sptlrpc_target_choose_flavor);
 
 #define SEC_ADAPT_DELAY         (10)
 
@@ -1211,7 +1206,6 @@ out:
 	mutex_unlock(&sptlrpc_conf_lock);
         RETURN(rc);
 }
-EXPORT_SYMBOL(sptlrpc_conf_target_get_rules);
 
 int  sptlrpc_conf_init(void)
 {

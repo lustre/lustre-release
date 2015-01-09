@@ -1283,7 +1283,6 @@ fail:
 
 	RETURN(rc);
 }
-EXPORT_SYMBOL(ptlrpc_nrs_policy_register);
 
 /**
  * Unregisters a previously registered policy with NRS core. All instances of
@@ -1350,7 +1349,6 @@ not_exist:
 
 	RETURN(rc);
 }
-EXPORT_SYMBOL(ptlrpc_nrs_policy_unregister);
 
 /**
  * Setup NRS heads on all service partitions of service \a svc, and register

@@ -431,7 +431,6 @@ void ptlrpc_commit_replies(struct obd_export *exp)
 	rs_batch_fini(&batch);
 	EXIT;
 }
-EXPORT_SYMBOL(ptlrpc_commit_replies);
 
 static int
 ptlrpc_server_post_idle_rqbds(struct ptlrpc_service_part *svcpt)
@@ -1110,7 +1109,6 @@ void ptlrpc_update_export_timer(struct obd_export *exp, long extra_delay)
 
         EXIT;
 }
-EXPORT_SYMBOL(ptlrpc_update_export_timer);
 
 /**
  * Sanity check request \a req.
@@ -2753,7 +2751,6 @@ void ptlrpc_stop_all_threads(struct ptlrpc_service *svc)
 
 	EXIT;
 }
-EXPORT_SYMBOL(ptlrpc_stop_all_threads);
 
 int ptlrpc_start_threads(struct ptlrpc_service *svc)
 {
@@ -2785,7 +2782,6 @@ int ptlrpc_start_threads(struct ptlrpc_service *svc)
 	ptlrpc_stop_all_threads(svc);
 	RETURN(rc);
 }
-EXPORT_SYMBOL(ptlrpc_start_threads);
 
 int ptlrpc_start_thread(struct ptlrpc_service_part *svcpt, int wait)
 {
