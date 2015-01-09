@@ -375,7 +375,7 @@ lnet_debug_peer(lnet_nid_t nid)
                 return;
         }
 
-	if (lnet_peer_aliveness_enabled(lp))
+        if (lnet_isrouter(lp) || lnet_peer_aliveness_enabled(lp))
                 aliveness = lp->lp_alive ? "up" : "down";
 
         CDEBUG(D_WARNING, "%-24s %4d %5s %5d %5d %5d %5d %5d %ld\n",
@@ -427,7 +427,8 @@ int lnet_get_peer_info(__u32 peer_index, __u64 *nid,
 				continue;
 
 			snprintf(aliveness, LNET_MAX_STR_LEN, "NA");
-			if (lnet_peer_aliveness_enabled(lp))
+			if (lnet_isrouter(lp) ||
+				lnet_peer_aliveness_enabled(lp))
 				snprintf(aliveness, LNET_MAX_STR_LEN,
 					 lp->lp_alive ? "up" : "down");
 

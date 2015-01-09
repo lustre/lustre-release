@@ -507,11 +507,14 @@ proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
                         int        minrtrcr  = peer->lp_minrtrcredits;
                         int        txqnob    = peer->lp_txqnob;
 
-                        if (lnet_peer_aliveness_enabled(peer)) {
-				cfs_time_t     now = cfs_time_current();
-				cfs_duration_t delta;
+                        if (lnet_isrouter(peer) ||
+                            lnet_peer_aliveness_enabled(peer))
+                                aliveness = peer->lp_alive ? "up" : "down";
 
-				aliveness = peer->lp_alive ? "up" : "down";
+                        if (lnet_peer_aliveness_enabled(peer)) {
+                                cfs_time_t     now = cfs_time_current();
+                                cfs_duration_t delta;
+
                                 delta = cfs_time_sub(now, peer->lp_last_alive);
                                 lastalive = cfs_duration_sec(delta);
 
