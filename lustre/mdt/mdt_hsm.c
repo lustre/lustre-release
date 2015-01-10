@@ -289,11 +289,23 @@ int mdt_hsm_state_set(struct tgt_session_info *tsi)
 		mdt_set_capainfo(info, 0, &info->mti_body->mbo_fid1,
 			    req_capsule_client_get(info->mti_pill, &RMF_CAPA1));
 
+	/* Detect out-of range masks */
+	if ((hss->hss_setmask | hss->hss_clearmask) & ~HSM_FLAGS_MASK) {
+		CDEBUG(D_HSM, "Incompatible masks provided (set "LPX64
+		       ", clear "LPX64") vs supported set (%#x).\n",
+		       hss->hss_setmask, hss->hss_clearmask, HSM_FLAGS_MASK);
+		GOTO(out_unlock, rc = -EINVAL);
+	}
+
 	/* Non-root users are forbidden to set or clear flags which are
 	 * NOT defined in HSM_USER_MASK. */
 	if (((hss->hss_setmask | hss->hss_clearmask) & ~HSM_USER_MASK) &&
-	    !md_capable(mdt_ucred(info), CFS_CAP_SYS_ADMIN))
+	    !md_capable(mdt_ucred(info), CFS_CAP_SYS_ADMIN)) {
+		CDEBUG(D_HSM, "Incompatible masks provided (set "LPX64
+		       ", clear "LPX64") vs unprivileged set (%#x).\n",
+		       hss->hss_setmask, hss->hss_clearmask, HSM_USER_MASK);
 		GOTO(out_unlock, rc = -EPERM);
+	}
 
 	/* Read current HSM info */
 	ma->ma_valid = 0;
@@ -316,6 +328,14 @@ int mdt_hsm_state_set(struct tgt_session_info *tsi)
 			       PFID(&info->mti_body->mbo_fid1));
 			GOTO(out_unlock, rc);
 		}
+
+		/* Detect out-of range archive id */
+		if (hss->hss_archive_id > LL_HSM_MAX_ARCHIVE) {
+			CDEBUG(D_HSM, "archive id %u exceeds maximum %zu.\n",
+			       hss->hss_archive_id, LL_HSM_MAX_ARCHIVE);
+			GOTO(out_unlock, rc = -EINVAL);
+		}
+
 		ma->ma_hsm.mh_arch_id = hss->hss_archive_id;
 	}
 

@@ -65,12 +65,6 @@
 # define NSEC_PER_SEC 1000000000UL
 #endif
 
-/* copytool uses a 32b bitmask field to register with kuc
- * archive num = 0 => all
- * archive num from 1 to 32
- */
-#define MAX_ARCHIVE_CNT (sizeof(__u32) * 8)
-
 enum ct_action {
 	CA_IMPORT = 1,
 	CA_REBIND,
@@ -86,7 +80,7 @@ struct options {
 	int			 o_verbose;
 	int			 o_copy_xattrs;
 	int			 o_archive_cnt;
-	int			 o_archive_id[MAX_ARCHIVE_CNT];
+	int			 o_archive_id[LL_HSM_MAX_ARCHIVE];
 	int			 o_report_int;
 	unsigned long long	 o_bandwidth;
 	size_t			 o_chunk_size;
@@ -246,11 +240,11 @@ static int ct_parseopts(int argc, char * const *argv)
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'A':
-			if ((opt.o_archive_cnt >= MAX_ARCHIVE_CNT) ||
-			    (atoi(optarg) >= MAX_ARCHIVE_CNT)) {
+			if ((opt.o_archive_cnt >= LL_HSM_MAX_ARCHIVE) ||
+			    (atoi(optarg) >= LL_HSM_MAX_ARCHIVE)) {
 				rc = -E2BIG;
 				CT_ERROR(rc, "archive number must be less"
-					 "than %zu", MAX_ARCHIVE_CNT);
+					 "than %zu", LL_HSM_MAX_ARCHIVE);
 				return rc;
 			}
 			opt.o_archive_id[opt.o_archive_cnt] = atoi(optarg);

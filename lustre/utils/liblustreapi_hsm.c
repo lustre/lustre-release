@@ -680,6 +680,13 @@ int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
 		return -EINVAL;
 	}
 
+	if (archive_count > LL_HSM_MAX_ARCHIVE) {
+		llapi_err_noerrno(LLAPI_MSG_ERROR, "%d requested when maximum "
+				  "of %zu archives supported", archive_count,
+				  LL_HSM_MAX_ARCHIVE);
+		return -EINVAL;
+	}
+
 	ct = calloc(1, sizeof(*ct));
 	if (ct == NULL)
 		return -ENOMEM;
@@ -717,10 +724,10 @@ int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
 	/* no archives specified means "match all". */
 	ct->archives = 0;
 	for (rc = 0; rc < archive_count; rc++) {
-		if (archives[rc] > 8 * sizeof(ct->archives)) {
-			llapi_err_noerrno(LLAPI_MSG_ERROR,
-					  "maximum of %zu archives supported",
-					  8 * sizeof(ct->archives));
+		if ((archives[rc] > LL_HSM_MAX_ARCHIVE) || (archives[rc] < 0)) {
+			llapi_err_noerrno(LLAPI_MSG_ERROR, "%d requested when "
+					  "archive id [0 - %zu] is supported",
+					  archives[rc], LL_HSM_MAX_ARCHIVE);
 			rc = -EINVAL;
 			goto out_err;
 		}

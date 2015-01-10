@@ -369,6 +369,13 @@ extern void lustre_som_swab(struct som_attrs *attrs);
 
 #define SOM_INCOMPAT_SUPP 0x0
 
+/* copytool uses a 32b bitmask field to encode archive-Ids during register
+ * with MDT thru kuc.
+ * archive num = 0 => all
+ * archive num from 1 to 32
+ */
+#define LL_HSM_MAX_ARCHIVE (sizeof(__u32) * 8)
+
 /**
  * HSM on-disk attributes stored in a separate xattr.
  */
