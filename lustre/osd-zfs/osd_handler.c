@@ -664,6 +664,16 @@ struct lu_context_key osd_key = {
 	.lct_exit = osd_key_exit
 };
 
+static void osd_fid_fini(const struct lu_env *env, struct osd_device *osd)
+{
+	if (osd->od_cl_seq == NULL)
+		return;
+
+	seq_client_fini(osd->od_cl_seq);
+	OBD_FREE_PTR(osd->od_cl_seq);
+	osd->od_cl_seq = NULL;
+}
+
 static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 {
 	ENTRY;
@@ -673,6 +683,8 @@ static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 		qsd_fini(env, o->od_quota_slave);
 		o->od_quota_slave = NULL;
 	}
+
+	osd_fid_fini(env, o);
 
 	RETURN(0);
 }
@@ -1096,6 +1108,33 @@ static int osd_obd_disconnect(struct obd_export *exp)
 	RETURN(rc);
 }
 
+static int osd_fid_init(const struct lu_env *env, struct osd_device *osd)
+{
+	struct seq_server_site	*ss = osd_seq_site(osd);
+	int			rc;
+	ENTRY;
+
+	if (osd->od_is_ost || osd->od_cl_seq != NULL)
+		RETURN(0);
+
+	if (unlikely(ss == NULL))
+		RETURN(-ENODEV);
+
+	OBD_ALLOC_PTR(osd->od_cl_seq);
+	if (osd->od_cl_seq == NULL)
+		RETURN(-ENOMEM);
+
+	rc = seq_client_init(osd->od_cl_seq, NULL, LUSTRE_SEQ_METADATA,
+			     osd->od_svname, ss->ss_server_seq);
+
+	if (rc != 0) {
+		OBD_FREE_PTR(osd->od_cl_seq);
+		osd->od_cl_seq = NULL;
+	}
+
+	RETURN(rc);
+}
+
 static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
 		       struct lu_device *dev)
 {
@@ -1103,9 +1142,14 @@ static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
 	int			 rc = 0;
 	ENTRY;
 
-	if (osd->od_quota_slave != NULL)
+	if (osd->od_quota_slave != NULL) {
 		/* set up quota slave objects */
 		rc = qsd_prepare(env, osd->od_quota_slave);
+		if (rc != 0)
+			RETURN(rc);
+	}
+
+	rc = osd_fid_init(env, osd);
 
 	RETURN(rc);
 }

@@ -525,8 +525,9 @@ static int osd_seq_exists(const struct lu_env *env, struct osd_device *osd,
 
 	rc = osd_fld_lookup(env, osd, seq, range);
 	if (rc != 0) {
-		CERROR("%s: Can not lookup fld for "LPX64"\n",
-		       osd_name(osd), seq);
+		if (rc != -ENOENT)
+			CERROR("%s: Can not lookup fld for "LPX64"\n",
+			       osd_name(osd), seq);
 		RETURN(0);
 	}
 

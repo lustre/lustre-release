@@ -3072,15 +3072,6 @@ static int mdd_update_linkea_internal(const struct lu_env *env,
 		RETURN(rc);
 	}
 
-	if (declare)
-		rc = mdd_declare_links_add(env, mdd_tobj, handle, ldata,
-					   MLAO_IGNORE);
-	else
-		rc = mdd_links_write(env, mdd_tobj, ldata, handle);
-
-	if (rc != 0)
-		RETURN(rc);
-
 	/* If it is mulitple links file, we need update the name entry for
 	 * all parent */
 	LASSERT(ldata->ld_leh != NULL);
@@ -3292,6 +3283,7 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 				      struct md_op_spec *spec,
 				      struct lu_attr *la,
 				      union lmv_mds_md *mgr_ea,
+				      struct linkea_data *ldata,
 				      struct thandle *handle)
 {
 	struct lu_attr		*la_flag = MDD_ENV_VAR(env, la_for_fix);
@@ -3317,6 +3309,11 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 		buf = mdd_buf_get_const(env, target_name, sym_len);
 		rc = dt_declare_record_write(env, mdd_object_child(mdd_tobj),
 					     buf, 0, handle);
+		if (rc != 0)
+			return rc;
+	} else if (S_ISDIR(la->la_mode)) {
+		rc = mdd_declare_links_add(env, mdd_tobj, handle, ldata,
+					   MLAO_IGNORE);
 		if (rc != 0)
 			return rc;
 	}
@@ -3348,6 +3345,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 			      struct mdd_object *mdd_pobj,
 			      struct mdd_object *mdd_sobj,
 			      struct mdd_object *mdd_tobj,
+			      const struct lu_name *lname,
 			      struct lu_attr *la)
 {
 	struct mdd_thread_info	*info = mdd_env_info(env);
@@ -3361,6 +3359,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 	struct lu_attr		*la_flag = MDD_ENV_VAR(env, la_for_fix);
 	struct dt_allocation_hint *hint = &mdd_env_info(env)->mti_hint;
 	int			mgr_easize;
+	struct linkea_data	*ldata = &mdd_env_info(env)->mti_link_data;
 	int			rc;
 	ENTRY;
 
@@ -3374,6 +3373,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 				la->la_size + 1);
 		link_buf = *buf;
 		link_buf.lb_len = la->la_size + 1;
+		memset(link_buf.lb_buf, 0, link_buf.lb_len);
 		rc = mdd_readlink(env, &mdd_sobj->mod_obj, &link_buf);
 		if (rc <= 0) {
 			rc = rc != 0 ? rc : -EFAULT;
@@ -3393,6 +3393,10 @@ static int mdd_migrate_create(const struct lu_env *env,
 			spec->u.sp_ea.eadatalen = lmm_buf.lb_len;
 			spec->sp_cr_flags |= MDS_OPEN_HAS_EA;
 		}
+	} else if (S_ISDIR(la->la_mode)) {
+		rc = mdd_links_read(env, mdd_sobj, ldata);
+		if (rc < 0 && rc != -ENODATA)
+			RETURN(rc);
 	}
 
 	mgr_ea = (struct lmv_mds_md_v1 *)info->mti_xattr_buf;
@@ -3417,7 +3421,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 	rc = mdd_declare_migrate_create(env, mdd_pobj, mdd_sobj, mdd_tobj,
 					spec, la,
 					(union lmv_mds_md *)info->mti_xattr_buf,
-					handle);
+					ldata, handle);
 	if (rc != 0)
 		GOTO(stop_trans, rc);
 
@@ -3430,6 +3434,12 @@ static int mdd_migrate_create(const struct lu_env *env,
 			       hint, handle);
 	if (rc != 0)
 		GOTO(stop_trans, rc);
+
+	if (S_ISDIR(la->la_mode)) {
+		rc = mdd_links_write(env, mdd_tobj, ldata, handle);
+		if (rc != 0)
+			GOTO(stop_trans, rc);
+	}
 
 	/* Set MIGRATE EA on the source inode, so once the migration needs
 	 * to be re-done during failover, the re-do process can locate the
@@ -4067,7 +4077,7 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *pobj,
 	mdd_tobj = md2mdd_obj(tobj);
 	if (!mdd_object_exists(mdd_tobj)) {
 		rc = mdd_migrate_create(env, mdd_pobj, mdd_sobj, mdd_tobj,
-					so_attr);
+					lname, so_attr);
 		if (rc != 0)
 			GOTO(put, rc);
 	}

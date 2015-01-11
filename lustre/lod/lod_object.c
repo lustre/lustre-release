@@ -1821,6 +1821,10 @@ next:
 		if (!dt_try_as_dir(env, dto))
 			GOTO(out_put, rc = -EINVAL);
 
+		rc = dt_declare_ref_add(env, dto, th);
+		if (rc != 0)
+			GOTO(out_put, rc);
+
 		rec->rec_fid = lu_object_fid(&dto->do_lu);
 		rc = dt_declare_insert(env, dto, (const struct dt_rec *)rec,
 				       (const struct dt_key *)dot, th);
@@ -2445,6 +2449,12 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 		dto = lo->ldo_stripe[i];
 		dt_write_lock(env, dto, MOR_TGT_CHILD);
 		rc = dt_create(env, dto, attr, NULL, dof, th);
+		if (rc != 0) {
+			dt_write_unlock(env, dto);
+			RETURN(rc);
+		}
+
+		rc = dt_ref_add(env, dto, th);
 		dt_write_unlock(env, dto);
 		if (rc != 0)
 			RETURN(rc);
@@ -3570,6 +3580,13 @@ static int lod_declare_object_destroy(const struct lu_env *env,
 	/* declare destroy all striped objects */
 	for (i = 0; i < lo->ldo_stripenr; i++) {
 		if (likely(lo->ldo_stripe[i] != NULL)) {
+			if (S_ISDIR(dt->do_lu.lo_header->loh_attr)) {
+				rc = dt_declare_ref_del(env, lo->ldo_stripe[i],
+							th);
+				if (rc != 0)
+					RETURN(rc);
+			}
+
 			rc = dt_declare_destroy(env, lo->ldo_stripe[i], th);
 			if (rc != 0)
 				break;
@@ -3638,6 +3655,15 @@ static int lod_object_destroy(const struct lu_env *env,
 		if (likely(lo->ldo_stripe[i] != NULL) &&
 		    (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_SPEOBJ) ||
 		     i == cfs_fail_val)) {
+			if (S_ISDIR(dt->do_lu.lo_header->loh_attr)) {
+				dt_write_lock(env, lo->ldo_stripe[i],
+					      MOR_TGT_CHILD);
+				rc = dt_ref_del(env, lo->ldo_stripe[i], th);
+				dt_write_unlock(env, lo->ldo_stripe[i]);
+				if (rc != 0)
+					break;
+			}
+
 			rc = dt_destroy(env, lo->ldo_stripe[i], th);
 			if (rc != 0)
 				break;
