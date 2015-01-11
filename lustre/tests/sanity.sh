@@ -58,7 +58,7 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/${NAME}.sh}
 init_logging
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 64b 68 71 77f 78 115 124b 230d"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 24D 27m 64b 68 71 77f 78 115 124b 230d"
 
 if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
 	# bug number for skipped test: LU-1593	LU-4536 LU-5242	LU-1957	LU-2805
@@ -1250,6 +1250,23 @@ test_24C() {
 		error ".. wrong after mv, expect $d1_ino, get $parent_ino"
 }
 run_test 24C "check .. in striped dir"
+
+test_24D() { # LU-6101
+	local NFILES=50000
+
+	rm -rf $DIR/$tdir
+	mkdir -p $DIR/$tdir
+	createmany -m $DIR/$tdir/$tfile $NFILES
+	local t=$(ls $DIR/$tdir | wc -l)
+	local u=$(ls $DIR/$tdir | sort -u | wc -l)
+	local v=$(ls -ai $DIR/$tdir | sort -u | wc -l)
+	if [ $t -ne $NFILES -o $u -ne $NFILES -o $v -ne $((NFILES + 2)) ] ; then
+		error "Expected $NFILES files, got $t ($u unique $v .&..)"
+	fi
+
+	rm -rf $DIR/$tdir || error "Can not delete directories"
+}
+run_test 24D "readdir() returns correct number of entries after cursor reload"
 
 test_25a() {
 	echo '== symlink sanity ============================================='

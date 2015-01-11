@@ -138,7 +138,8 @@ static inline void osd_obj_cursor_init_serialized(zap_cursor_t *zc,
 						 uint64_t dirhash)
 {
 	struct osd_device *d = osd_obj2dev(o);
-	zap_cursor_init_serialized(zc, d->od_os, o->oo_db->db_object, dirhash);
+	osd_zap_cursor_init_serialized(zc, d->od_os,
+				       o->oo_db->db_object, dirhash);
 }
 
 static inline int osd_obj_cursor_init(zap_cursor_t **zc, struct osd_object *o,
