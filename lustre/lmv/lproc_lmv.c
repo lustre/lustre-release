@@ -44,7 +44,7 @@
 
 #include "lmv_internal.h"
 
-#ifndef LPROCFS
+#ifndef CONFIG_PROC_FS
 static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
 #else
@@ -226,4 +226,4 @@ struct file_operations lmv_proc_target_fops = {
         .llseek               = seq_lseek,
         .release              = seq_release,
 };
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */

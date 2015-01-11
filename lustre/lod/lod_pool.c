@@ -667,7 +667,7 @@ int lod_pool_new(struct obd_device *obd, char *poolname)
 
 	INIT_HLIST_NODE(&new_pool->pool_hash);
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 	pool_getref(new_pool);
 	new_pool->pool_proc_entry = lprocfs_add_simple(lod->lod_pool_proc_entry,
 						       poolname, new_pool,

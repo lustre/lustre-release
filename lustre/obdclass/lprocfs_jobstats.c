@@ -35,7 +35,7 @@
 #include <lprocfs_status.h>
 #include <lustre/lustre_idl.h>
 
-#if defined(LPROCFS)
+#ifdef CONFIG_PROC_FS
 
 /*
  * JobID formats & JobID environment variable names for supported
@@ -561,4 +561,4 @@ lprocfs_job_interval_seq_write(struct file *file, const char *buffer,
 	return count;
 }
 EXPORT_SYMBOL(lprocfs_job_interval_seq_write);
-#endif /* LPROCFS*/
+#endif /* CONFIG_PROC_FS*/

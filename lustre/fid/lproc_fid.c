@@ -51,7 +51,7 @@
 #include <lprocfs_status.h>
 #include "fid_internal.h"
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 
 /* Format: [0x64BIT_INT - 0x64BIT_INT] + 32 bytes just in case */
 #define MAX_FID_RANGE_STRLEN (32 + 2 * 2 * sizeof(__u64))
@@ -650,4 +650,5 @@ struct lprocfs_seq_vars seq_client_proc_list[] = {
 	  .fops	=	&lprocfs_client_fid_fid_fops	},
 	{ NULL }
 };
-#endif
+
+#endif /* CONFIG_PROC_FS */

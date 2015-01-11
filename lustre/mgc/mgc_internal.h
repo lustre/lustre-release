@@ -44,10 +44,10 @@
 #include <lustre_log.h>
 #include <lustre_export.h>
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 extern struct lprocfs_seq_vars lprocfs_mgc_obd_vars[];
 int lprocfs_mgc_rd_ir_state(struct seq_file *m, void *data);
-#endif  /* LPROCFS */
+#endif /* CONFIG_PROC_FS */
 
 int mgc_process_log(struct obd_device *mgc, struct config_llog_data *cld);
 

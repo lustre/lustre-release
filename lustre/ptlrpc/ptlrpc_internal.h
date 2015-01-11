@@ -96,7 +96,7 @@ void ptlrpc_initiate_recovery(struct obd_import *imp);
 int lustre_unpack_req_ptlrpc_body(struct ptlrpc_request *req, int offset);
 int lustre_unpack_rep_ptlrpc_body(struct ptlrpc_request *req, int offset);
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 void ptlrpc_lprocfs_register_service(struct proc_dir_entry *proc_entry,
                                      struct ptlrpc_service *svc);
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc);
@@ -108,7 +108,7 @@ void ptlrpc_lprocfs_do_request_stat (struct ptlrpc_request *req,
 #define ptlrpc_lprocfs_unregister_service(params...) do{}while(0)
 #define ptlrpc_lprocfs_rpc_sent(params...) do{}while(0)
 #define ptlrpc_lprocfs_do_request_stat(params...) do{}while(0)
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */
 
 /* NRS */
 

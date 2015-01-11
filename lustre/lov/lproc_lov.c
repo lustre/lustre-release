@@ -42,7 +42,7 @@
 #include <lustre_param.h>
 #include "lov_internal.h"
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 static int lov_stripesize_seq_show(struct seq_file *m, void *v)
 {
 	struct obd_device *dev = (struct obd_device *)m->private;
@@ -308,4 +308,4 @@ struct file_operations lov_proc_target_fops = {
         .llseek  = seq_lseek,
         .release = lprocfs_seq_release,
 };
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */

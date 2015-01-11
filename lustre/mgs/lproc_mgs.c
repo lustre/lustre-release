@@ -43,7 +43,7 @@
 #include <lustre_param.h>
 #include "mgs_internal.h"
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 
 static int mgs_fs_seq_show(struct seq_file *seq, void *v)
 {

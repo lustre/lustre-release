@@ -40,7 +40,7 @@
 #include <lustre/lustre_idl.h>
 #include <lustre_nodemap.h>
 
-#if defined(LPROCFS)
+#ifdef CONFIG_PROC_FS
 
 int lprocfs_evict_client_open(struct inode *inode, struct file *f)
 {
@@ -705,4 +705,4 @@ int lprocfs_target_instance_seq_show(struct seq_file *m, void *data)
 }
 EXPORT_SYMBOL(lprocfs_target_instance_seq_show);
 
-#endif /* LPROCFS*/
+#endif /* CONFIG_PROC_FS*/

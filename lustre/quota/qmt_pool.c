@@ -565,7 +565,7 @@ int qmt_pool_prepare(const struct lu_env *env, struct qmt_device *qmt,
 			if (IS_ERR(lqe))
 				RETURN(PTR_ERR(lqe));
 			pool->qpi_grace_lqe[qtype] = lqe;
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 			/* add procfs file to dump the global index, mostly for
 			 * debugging purpose */
 			sprintf(qti->qti_buf, "glb-%s", QTYPE_NAME(qtype));

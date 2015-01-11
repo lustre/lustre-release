@@ -45,7 +45,7 @@
 #include <lprocfs_status.h>
 #include <lustre/lustre_idl.h>
 
-#if defined(LPROCFS)
+#ifdef CONFIG_PROC_FS
 
 static int lprocfs_no_percpu_stats = 0;
 CFS_MODULE_PARM(lprocfs_no_percpu_stats, "i", int, 0644,
@@ -2217,4 +2217,4 @@ failed:
 }
 EXPORT_SYMBOL(lprocfs_wr_nosquash_nids);
 
-#endif /* LPROCFS*/
+#endif /* CONFIG_PROC_FS*/

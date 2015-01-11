@@ -610,7 +610,7 @@ static void nrs_crrn_req_stop(struct ptlrpc_nrs_policy *policy,
 	       libcfs_id2str(req->rq_peer), nrq->nr_u.crr.cr_round);
 }
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 
 /**
  * lprocfs interface
@@ -846,7 +846,7 @@ static void nrs_crrn_lprocfs_fini(struct ptlrpc_service *svc)
 	lprocfs_remove_proc_entry("nrs_crrn_quantum", svc->srv_procroot);
 }
 
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */
 
 /**
  * CRR-N policy operations
@@ -861,7 +861,7 @@ static const struct ptlrpc_nrs_pol_ops nrs_crrn_ops = {
 	.op_req_enqueue		= nrs_crrn_req_add,
 	.op_req_dequeue		= nrs_crrn_req_del,
 	.op_req_stop		= nrs_crrn_req_stop,
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 	.op_lprocfs_init	= nrs_crrn_lprocfs_init,
 	.op_lprocfs_fini	= nrs_crrn_lprocfs_fini,
 #endif

@@ -51,7 +51,7 @@
 #include <lustre_fid.h>
 #include "fld_internal.h"
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 static int
 fld_proc_targets_seq_show(struct seq_file *m, void *unused)
 {
@@ -365,4 +365,4 @@ struct lprocfs_seq_vars fld_server_proc_list[] = {
 
 # endif /* HAVE_SERVER_SUPPORT */
 
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */

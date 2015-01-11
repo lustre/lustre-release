@@ -184,7 +184,7 @@ static const char *ll_eopcode2str(__u32 opcode)
         return ll_eopcode_table[opcode].opname;
 }
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 static void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
                              char *name, struct proc_dir_entry **procroot_ret,
                              struct lprocfs_stats **stats_ret)
@@ -1314,4 +1314,4 @@ lprocfs_pinger_recov_seq_write(struct file *file, const char *buffer,
 }
 EXPORT_SYMBOL(lprocfs_pinger_recov_seq_write);
 
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */

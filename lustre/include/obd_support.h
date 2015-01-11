@@ -600,7 +600,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 
 extern atomic_t libcfs_kmemory;
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 #define obd_memory_add(size)                                                  \
         lprocfs_counter_add(obd_memory, OBD_MEMORY_STAT, (long)(size))
 #define obd_memory_sub(size)                                                  \
@@ -622,7 +622,7 @@ extern void obd_update_maxusage(void);
 extern __u64 obd_memory_max(void);
 extern __u64 obd_pages_max(void);
 
-#else /* LPROCFS */
+#else /* CONFIG_PROC_FS */
 
 extern __u64 obd_alloc;
 extern __u64 obd_pages;
@@ -660,7 +660,7 @@ static inline void obd_pages_sub(int order)
 #define obd_memory_max() (obd_max_alloc)
 #define obd_pages_max() (obd_max_pages)
 
-#endif /* !LPROCFS */
+#endif /* !CONFIG_PROC_FS */
 
 #define OBD_DEBUG_MEMUSAGE (1)
 

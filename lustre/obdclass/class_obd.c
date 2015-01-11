@@ -58,7 +58,7 @@ EXPORT_SYMBOL(obd_devs);
 struct list_head obd_types;
 DEFINE_RWLOCK(obd_dev_lock);
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 static __u64 obd_max_pages;
 static __u64 obd_max_alloc;
 #else
@@ -110,7 +110,7 @@ EXPORT_SYMBOL(obd_dirty_transit_pages);
 char obd_jobid_var[JOBSTATS_JOBID_VAR_MAX_LEN + 1] = JOBSTATS_DISABLE;
 EXPORT_SYMBOL(obd_jobid_var);
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 struct lprocfs_stats *obd_memory = NULL;
 EXPORT_SYMBOL(obd_memory);
 #endif
@@ -518,7 +518,7 @@ static int __init init_obdclass(void)
 
 	spin_lock_init(&obd_types_lock);
         obd_zombie_impexp_init();
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
         obd_memory = lprocfs_alloc_stats(OBD_STATS_NUM,
 					 LPROCFS_STATS_FLAG_NONE |
 					 LPROCFS_STATS_FLAG_IRQ_SAFE);
@@ -617,7 +617,7 @@ void obd_update_maxusage(void)
 }
 EXPORT_SYMBOL(obd_update_maxusage);
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 __u64 obd_memory_max(void)
 {
 	__u64 ret;
@@ -641,7 +641,7 @@ __u64 obd_pages_max(void)
 	return ret;
 }
 EXPORT_SYMBOL(obd_pages_max);
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */
 
 /* liblustre doesn't call cleanup_obdclass, apparently.  we carry on in this
  * ifdef to the end of the file to cover module and versioning goo.*/

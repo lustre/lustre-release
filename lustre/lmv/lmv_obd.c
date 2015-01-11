@@ -1373,7 +1373,7 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	spin_lock_init(&lmv->lmv_lock);
 	mutex_init(&lmv->lmv_init_mutex);
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 	obd->obd_vars = lprocfs_lmv_obd_vars;
 	lprocfs_obd_setup(obd);
 	lprocfs_alloc_md_stats(obd, 0);

@@ -396,7 +396,7 @@ EXPORT_SYMBOL(fid_is_local);
 
 static void fld_server_proc_fini(struct lu_server_fld *fld);
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 static int fld_server_proc_init(struct lu_server_fld *fld)
 {
         int rc = 0;

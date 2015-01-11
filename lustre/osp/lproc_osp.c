@@ -40,7 +40,7 @@
 
 #include "osp_internal.h"
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 /**
  * Show OSP active status
  *
@@ -848,5 +848,5 @@ void osp_lprocfs_init(struct osp_device *osp)
 		       obd->obd_name);
 }
 
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */
 

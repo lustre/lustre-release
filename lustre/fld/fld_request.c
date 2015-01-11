@@ -229,7 +229,7 @@ int fld_client_del_target(struct lu_client_fld *fld, __u64 idx)
 }
 EXPORT_SYMBOL(fld_client_del_target);
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 static int fld_client_proc_init(struct lu_client_fld *fld)
 {
 	int rc;
@@ -270,7 +270,7 @@ void fld_client_proc_fini(struct lu_client_fld *fld)
         }
         EXIT;
 }
-#else /* LPROCFS */
+#else /* !CONFIG_PROC_FS */
 static int fld_client_proc_init(struct lu_client_fld *fld)
 {
         return 0;
@@ -280,7 +280,7 @@ void fld_client_proc_fini(struct lu_client_fld *fld)
 {
         return;
 }
-#endif /* !LPROCFS */
+#endif /* CONFIG_PROC_FS */
 
 EXPORT_SYMBOL(fld_client_proc_fini);
 

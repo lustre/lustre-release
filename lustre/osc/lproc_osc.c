@@ -43,7 +43,7 @@
 #include <linux/seq_file.h>
 #include "osc_internal.h"
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 static int osc_active_seq_show(struct seq_file *m, void *v)
 {
 	struct obd_device *dev = m->private;
@@ -802,4 +802,4 @@ int lproc_osc_attach_seqstat(struct obd_device *dev)
 
 	return rc;
 }
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */

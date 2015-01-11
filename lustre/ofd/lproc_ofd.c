@@ -48,7 +48,7 @@
 
 #include "ofd_internal.h"
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 
 /**
  * Show number of FID allocation sequences.
@@ -1094,4 +1094,4 @@ void ofd_stats_counter_init(struct lprocfs_stats *stats)
 			     0, "quotactl", "reqs");
 }
 
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */

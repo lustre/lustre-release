@@ -1161,7 +1161,7 @@ static void nrs_orr_req_stop(struct ptlrpc_nrs_policy *policy,
  * lprocfs interface
  */
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 
 /**
  * This allows to bundle the policy name into the lprocfs_vars::data pointer
@@ -1889,7 +1889,7 @@ static void nrs_orr_lprocfs_fini(struct ptlrpc_service *svc)
 	lprocfs_remove_proc_entry("nrs_orr_supported", svc->srv_procroot);
 }
 
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */
 
 static const struct ptlrpc_nrs_pol_ops nrs_orr_ops = {
 	.op_policy_init		= nrs_orr_init,
@@ -1902,7 +1902,7 @@ static const struct ptlrpc_nrs_pol_ops nrs_orr_ops = {
 	.op_req_enqueue		= nrs_orr_req_add,
 	.op_req_dequeue		= nrs_orr_req_del,
 	.op_req_stop		= nrs_orr_req_stop,
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 	.op_lprocfs_init	= nrs_orr_lprocfs_init,
 	.op_lprocfs_fini	= nrs_orr_lprocfs_fini,
 #endif
@@ -1921,7 +1921,7 @@ struct ptlrpc_nrs_pol_conf nrs_conf_orr = {
  * TRR reuses much of the functions and data structures of ORR
  */
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 
 static int nrs_trr_lprocfs_init(struct ptlrpc_service *svc)
 {
@@ -1961,7 +1961,7 @@ static void nrs_trr_lprocfs_fini(struct ptlrpc_service *svc)
 	lprocfs_remove_proc_entry("nrs_trr_supported", svc->srv_procroot);
 }
 
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */
 
 /**
  * Reuse much of the ORR functionality for TRR.
@@ -1977,7 +1977,7 @@ static const struct ptlrpc_nrs_pol_ops nrs_trr_ops = {
 	.op_req_enqueue		= nrs_orr_req_add,
 	.op_req_dequeue		= nrs_orr_req_del,
 	.op_req_stop		= nrs_orr_req_stop,
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 	.op_lprocfs_init	= nrs_trr_lprocfs_init,
 	.op_lprocfs_fini	= nrs_trr_lprocfs_fini,
 #endif

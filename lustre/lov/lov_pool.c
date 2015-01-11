@@ -153,7 +153,7 @@ cfs_hash_ops_t pool_hash_operations = {
 
 };
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 /* ifdef needed for liblustre support */
 /*
  * pool /proc seq_file methods
@@ -295,7 +295,7 @@ static struct file_operations pool_proc_operations = {
         .llseek         = seq_lseek,
         .release        = seq_release,
 };
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */
 
 void lov_dump_pool(int level, struct pool_desc *pool)
 {
@@ -457,7 +457,7 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
 
 	INIT_HLIST_NODE(&new_pool->pool_hash);
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
         /* we need this assert seq_file is not implementated for liblustre */
         /* get ref for /proc file */
         lov_pool_getref(new_pool);

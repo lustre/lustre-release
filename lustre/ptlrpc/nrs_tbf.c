@@ -1549,7 +1549,7 @@ static void nrs_tbf_req_stop(struct ptlrpc_nrs_policy *policy,
 	       nrq->nr_u.tbf.tr_sequence);
 }
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 
 /**
  * lprocfs interface
@@ -1854,7 +1854,7 @@ static void nrs_tbf_lprocfs_fini(struct ptlrpc_service *svc)
 	lprocfs_remove_proc_entry("nrs_tbf_rule", svc->srv_procroot);
 }
 
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */
 
 /**
  * TBF policy operations
@@ -1869,7 +1869,7 @@ static const struct ptlrpc_nrs_pol_ops nrs_tbf_ops = {
 	.op_req_enqueue		= nrs_tbf_req_add,
 	.op_req_dequeue		= nrs_tbf_req_del,
 	.op_req_stop		= nrs_tbf_req_stop,
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 	.op_lprocfs_init	= nrs_tbf_lprocfs_init,
 	.op_lprocfs_fini	= nrs_tbf_lprocfs_fini,
 #endif

@@ -2760,13 +2760,13 @@ static inline struct dt_thread_info *dt_info(const struct lu_env *env)
 int dt_global_init(void);
 void dt_global_fini(void);
 
-# ifdef LPROCFS
+# ifdef CONFIG_PROC_FS
 int lprocfs_dt_blksize_seq_show(struct seq_file *m, void *v);
 int lprocfs_dt_kbytestotal_seq_show(struct seq_file *m, void *v);
 int lprocfs_dt_kbytesfree_seq_show(struct seq_file *m, void *v);
 int lprocfs_dt_kbytesavail_seq_show(struct seq_file *m, void *v);
 int lprocfs_dt_filestotal_seq_show(struct seq_file *m, void *v);
 int lprocfs_dt_filesfree_seq_show(struct seq_file *m, void *v);
-# endif /* LPROCFS */
+# endif /* CONFIG_PROC_FS */
 
 #endif /* __LUSTRE_DT_OBJECT_H */

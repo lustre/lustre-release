@@ -782,7 +782,7 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
 	struct lov_desc *desc;
 	struct lov_obd *lov = &obd->u.lov;
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 	struct obd_type *type;
 #endif
 	int rc;
@@ -838,7 +838,7 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (rc)
 		GOTO(out, rc);
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 	obd->obd_vars = lprocfs_lov_obd_vars;
 	/* If this is true then both client (lov) and server
 	 * (lod) are on the same node. The lod layer if loaded

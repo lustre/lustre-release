@@ -252,7 +252,7 @@ int mgs_client_free(struct obd_export *exp);
 int mgs_fs_setup(const struct lu_env *env, struct mgs_device *m);
 int mgs_fs_cleanup(const struct lu_env *env, struct mgs_device *m);
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name);
 void lproc_mgs_cleanup(struct mgs_device *mgs);
 int lproc_mgs_add_live(struct mgs_device *mgs, struct fs_db *fsdb);

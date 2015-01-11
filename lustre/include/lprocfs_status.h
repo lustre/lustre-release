@@ -410,7 +410,7 @@ struct obd_job_stats {
 	time_t			ojs_last_cleanup;
 };
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 
 extern int lprocfs_stats_alloc_one(struct lprocfs_stats *stats,
 				   unsigned int cpuid);
@@ -937,8 +937,7 @@ extern int lprocfs_quota_rd_qs_factor(char *page, char **start, off_t off,
 extern int lprocfs_quota_wr_qs_factor(struct file *file,
                                       const char *buffer,
                                       unsigned long count, void *data);
-#else
-/* LPROCFS is not defined */
+#else /* !CONFIG_PROC_FS */
 
 #define proc_lustre_root NULL
 
@@ -1168,6 +1167,6 @@ int lprocfs_job_stats_init(struct obd_device *obd, int cntr_num,
 /* lproc_ptlrpc.c */
 #define target_print_req NULL
 
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */
 
 #endif /* LPROCFS_SNMP_H */

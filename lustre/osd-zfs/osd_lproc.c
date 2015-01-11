@@ -48,7 +48,7 @@
 
 #include "osd_internal.h"
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 
 #define pct(a, b) (b ? a * 100 / b : 0)
 

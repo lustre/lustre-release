@@ -144,7 +144,7 @@ unsigned long osc_ldlm_weigh_ast(struct ldlm_lock *dlmlock);
 int osc_cleanup(struct obd_device *obd);
 int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 extern struct lprocfs_seq_vars lprocfs_osc_obd_vars[];
 int lproc_osc_attach_seqstat(struct obd_device *dev);
 #else

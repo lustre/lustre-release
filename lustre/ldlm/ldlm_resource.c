@@ -69,7 +69,7 @@ struct proc_dir_entry *ldlm_svc_proc_dir;
  * DDOS. */
 static unsigned int ldlm_dump_granted_max = 256;
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 static ssize_t
 lprocfs_dump_ns_seq_write(struct file *file, const char __user *buffer,
 			  size_t count, loff_t *off)
@@ -383,12 +383,12 @@ static int ldlm_namespace_proc_register(struct ldlm_namespace *ns)
 	return 0;
 }
 #undef MAX_STRING_SIZE
-#else /* LPROCFS */
+#else /* CONFIG_PROC_FS */
 
 #define ldlm_namespace_proc_unregister(ns)      ({;})
 #define ldlm_namespace_proc_register(ns)        ({0;})
 
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */
 
 static unsigned ldlm_res_hop_hash(cfs_hash_t *hs,
                                   const void *key, unsigned mask)

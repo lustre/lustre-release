@@ -2172,7 +2172,7 @@ void lu_global_fini(void)
 
 static __u32 ls_stats_read(struct lprocfs_stats *stats, int idx)
 {
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
         struct lprocfs_counter ret;
 
         lprocfs_stats_collect(stats, idx, &ret);

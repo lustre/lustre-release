@@ -291,7 +291,7 @@ void lu_ref_del_at(struct lu_ref *ref, struct lu_ref_link *link,
 }
 EXPORT_SYMBOL(lu_ref_del_at);
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 
 static void *lu_ref_seq_start(struct seq_file *seq, loff_t *pos)
 {
@@ -415,7 +415,7 @@ static struct file_operations lu_ref_dump_fops = {
         .release = lu_ref_seq_release
 };
 
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */
 
 int lu_ref_global_init(void)
 {
@@ -428,23 +428,23 @@ int lu_ref_global_init(void)
 	spin_lock_init(&lu_ref_refs_guard);
         result = lu_kmem_init(lu_ref_caches);
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
         if (result == 0) {
                 result = lprocfs_seq_create(proc_lustre_root, "lu_refs",
                                             0444, &lu_ref_dump_fops, NULL);
                 if (result)
                         lu_kmem_fini(lu_ref_caches);
         }
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */
 
         return result;
 }
 
 void lu_ref_global_fini(void)
 {
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
         lprocfs_remove_proc_entry("lu_refs", proc_lustre_root);
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */
         lu_kmem_fini(lu_ref_caches);
 }
 

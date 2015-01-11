@@ -356,7 +356,7 @@ do {                                                            \
 } while (0)
 
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 #define OBD_COUNTER_OFFSET(op)						       \
 	((offsetof(struct obd_ops, o_ ## op) -				       \
 	  offsetof(struct obd_ops, o_iocontrol))			       \

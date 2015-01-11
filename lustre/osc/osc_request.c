@@ -2943,7 +2943,7 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
 	cli->cl_grant_shrink_interval = GRANT_SHRINK_INTERVAL;
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 	obd->obd_vars = lprocfs_osc_obd_vars;
 #endif
 	/* If this is true then both client (osc) and server (osp) are on the

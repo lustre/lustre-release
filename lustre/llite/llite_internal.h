@@ -696,7 +696,7 @@ static inline int ll_need_32bit_api(struct ll_sb_info *sbi)
 void ll_ras_enter(struct file *f);
 
 /* llite/lproc_llite.c */
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                                 struct super_block *sb, char *osc, char *mdc);
 void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi);

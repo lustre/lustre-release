@@ -40,7 +40,7 @@
 #include <lustre_lib.h>
 #include <lprocfs_status.h>
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 void lprocfs_counter_add(struct lprocfs_stats *stats, int idx, long amount)
 {
 	struct lprocfs_counter		*percpu_cntr;
@@ -134,4 +134,4 @@ void lprocfs_counter_sub(struct lprocfs_stats *stats, int idx, long amount)
 	lprocfs_stats_unlock(stats, LPROCFS_GET_SMP_ID, &flags);
 }
 EXPORT_SYMBOL(lprocfs_counter_sub);
-#endif  /* LPROCFS */
+#endif  /* CONFIG_PROC_FS */

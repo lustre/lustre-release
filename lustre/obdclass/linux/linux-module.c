@@ -213,7 +213,7 @@ struct miscdevice obd_psdev = {
 };
 
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 static int obd_proc_version_seq_show(struct seq_file *m, void *v)
 {
 	return seq_printf(m, "lustre: %s\nkernel: %s\nbuild:  %s\n",
@@ -326,7 +326,7 @@ static struct lprocfs_seq_vars lprocfs_base[] = {
 };
 #else
 #define lprocfs_base NULL
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */
 
 static void *obd_device_list_seq_start(struct seq_file *p, loff_t *pos)
 {

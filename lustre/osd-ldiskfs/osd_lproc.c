@@ -45,7 +45,7 @@
 
 #include "osd_internal.h"
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 
 void osd_brw_stats_update(struct osd_device *osd, struct osd_iobuf *iobuf)
 {

@@ -45,7 +45,7 @@
 
 struct proc_dir_entry *proc_lustre_fs_root;
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 /* /proc/lustre/llite mount point registration */
 static const struct file_operations ll_rw_extents_stats_fops;
 static const struct file_operations ll_rw_extents_stats_pp_fops;
@@ -1684,4 +1684,4 @@ static ssize_t ll_rw_offset_stats_seq_write(struct file *file,
 }
 
 LPROC_SEQ_FOPS(ll_rw_offset_stats);
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */

@@ -36,7 +36,7 @@
 #include <linux/seq_file.h>
 #include "lquota_internal.h"
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 /* structure allocated at seq_open time and release when seq_release is called.
  * It is passed to seq_start/stop/next/show which can thus use the same lu_env
  * to be used with the iterator API */
@@ -317,4 +317,4 @@ struct file_operations lprocfs_quota_seq_fops = {
 	.llseek		= seq_lseek,
 	.release	= lprocfs_quota_seq_release,
 };
-#endif  /* LPROCFS */
+#endif /* CONFIG_PROC_FS */

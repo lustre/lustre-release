@@ -956,7 +956,7 @@ out:
 }
 EXPORT_SYMBOL(dt_index_read);
 
-#ifdef LPROCFS
+#ifdef CONFIG_PROC_FS
 int lprocfs_dt_blksize_seq_show(struct seq_file *m, void *v)
 {
 	struct dt_device *dt = m->private;
@@ -1050,4 +1050,4 @@ int lprocfs_dt_filesfree_seq_show(struct seq_file *m, void *v)
 }
 EXPORT_SYMBOL(lprocfs_dt_filesfree_seq_show);
 
-#endif /* LPROCFS */
+#endif /* CONFIG_PROC_FS */
