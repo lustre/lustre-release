@@ -634,7 +634,7 @@ int lod_store_def_striping(const struct lu_env *env, struct dt_object *dt,
 		RETURN(0);
 
 	if (LOVEA_DELETE_VALUES(lo->ldo_def_stripe_size, lo->ldo_def_stripenr,
-				lo->ldo_def_stripe_offset))
+				lo->ldo_def_stripe_offset, lo->ldo_pool))
 		RETURN(0);
 
 	/* XXX: use thread info */
