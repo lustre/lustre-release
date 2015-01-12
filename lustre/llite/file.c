@@ -1152,18 +1152,18 @@ restart:
         ll_io_init(io, file, iot == CIT_WRITE);
 
         if (cl_io_rw_init(env, io, iot, *ppos, count) == 0) {
-		struct vvp_io *vio = vvp_env_io(env);
-		struct ccc_io *cio = ccc_env_io(env);
+		struct vvp_io *cio = vvp_env_io(env);
 		bool range_locked = false;
 
 		if (file->f_flags & O_APPEND)
 			range_lock_init(&range, 0, LUSTRE_EOF);
 		else
 			range_lock_init(&range, *ppos, *ppos + count - 1);
-		cio->cui_fd  = LUSTRE_FPRIVATE(file);
-		vio->cui_io_subtype = args->via_io_subtype;
 
-                switch (vio->cui_io_subtype) {
+		cio->cui_fd  = LUSTRE_FPRIVATE(file);
+		cio->cui_io_subtype = args->via_io_subtype;
+
+		switch (cio->cui_io_subtype) {
                 case IO_NORMAL:
                         cio->cui_iov = args->u.normal.via_iov;
                         cio->cui_nrsegs = args->u.normal.via_nrsegs;
@@ -1182,14 +1182,14 @@ restart:
 			}
 			down_read(&lli->lli_trunc_sem);
                         break;
-                case IO_SPLICE:
-                        vio->u.splice.cui_pipe = args->u.splice.via_pipe;
-                        vio->u.splice.cui_flags = args->u.splice.via_flags;
-                        break;
-                default:
-                        CERROR("Unknow IO type - %u\n", vio->cui_io_subtype);
-                        LBUG();
-                }
+		case IO_SPLICE:
+			cio->u.splice.cui_pipe = args->u.splice.via_pipe;
+			cio->u.splice.cui_flags = args->u.splice.via_flags;
+			break;
+		default:
+			CERROR("unknown IO subtype %u\n", cio->cui_io_subtype);
+			LBUG();
+		}
 
 		ll_cl_add(file, env, io);
                 result = cl_io_loop(env, io);

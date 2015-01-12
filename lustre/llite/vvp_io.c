@@ -46,9 +46,6 @@
 #include "llite_internal.h"
 #include "vvp_internal.h"
 
-static struct vvp_io *cl2vvp_io(const struct lu_env *env,
-                                const struct cl_io_slice *slice);
-
 /**
  * True, if \a io is a normal io, False for splice_{read,write}
  */
@@ -71,7 +68,7 @@ static bool can_populate_pages(const struct lu_env *env, struct cl_io *io,
 				struct inode *inode)
 {
 	struct ll_inode_info	*lli = ll_i2info(inode);
-	struct ccc_io		*cio = ccc_env_io(env);
+	struct vvp_io		*cio = vvp_env_io(env);
 	bool rc = true;
 
 	switch (io->ci_type) {
@@ -103,7 +100,7 @@ static bool can_populate_pages(const struct lu_env *env, struct cl_io *io,
 static int vvp_io_write_iter_init(const struct lu_env *env,
 				  const struct cl_io_slice *ios)
 {
-	struct ccc_io *cio = cl2ccc_io(env, ios);
+	struct vvp_io *cio = cl2vvp_io(env, ios);
 
 	cl_page_list_init(&cio->u.write.cui_queue);
 	cio->u.write.cui_written = 0;
@@ -116,7 +113,7 @@ static int vvp_io_write_iter_init(const struct lu_env *env,
 static void vvp_io_write_iter_fini(const struct lu_env *env,
 				   const struct cl_io_slice *ios)
 {
-	struct ccc_io *cio = cl2ccc_io(env, ios);
+	struct vvp_io *cio = cl2vvp_io(env, ios);
 
 	LASSERT(cio->u.write.cui_queue.pl_nr == 0);
 }
@@ -124,20 +121,20 @@ static void vvp_io_write_iter_fini(const struct lu_env *env,
 static int vvp_io_fault_iter_init(const struct lu_env *env,
                                   const struct cl_io_slice *ios)
 {
-        struct vvp_io *vio   = cl2vvp_io(env, ios);
+	struct vvp_io *vio   = cl2vvp_io(env, ios);
 	struct inode  *inode = vvp_object_inode(ios->cis_obj);
 
-        LASSERT(inode ==
-                cl2ccc_io(env, ios)->cui_fd->fd_file->f_dentry->d_inode);
-        vio->u.fault.ft_mtime = LTIME_S(inode->i_mtime);
-        return 0;
+	LASSERT(inode == vio->cui_fd->fd_file->f_dentry->d_inode);
+	vio->u.fault.ft_mtime = LTIME_S(inode->i_mtime);
+
+	return 0;
 }
 
 static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 {
 	struct cl_io     *io  = ios->cis_io;
 	struct cl_object *obj = io->ci_obj;
-	struct ccc_io    *cio = cl2ccc_io(env, ios);
+	struct vvp_io    *cio = cl2vvp_io(env, ios);
 	struct inode     *inode = vvp_object_inode(obj);
 
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
@@ -224,7 +221,7 @@ static enum cl_lock_mode vvp_mode_from_vma(struct vm_area_struct *vma)
 }
 
 static int vvp_mmap_locks(const struct lu_env *env,
-                          struct ccc_io *vio, struct cl_io *io)
+			  struct vvp_io *vio, struct cl_io *io)
 {
         struct ccc_thread_info *cti = ccc_env_info(env);
         struct mm_struct       *mm = current->mm;
@@ -311,20 +308,22 @@ static int vvp_mmap_locks(const struct lu_env *env,
 static int vvp_io_rw_lock(const struct lu_env *env, struct cl_io *io,
                           enum cl_lock_mode mode, loff_t start, loff_t end)
 {
-        struct ccc_io *cio = ccc_env_io(env);
-        int result;
-        int ast_flags = 0;
+	struct vvp_io *cio = vvp_env_io(env);
+	int result;
+	int ast_flags = 0;
 
-        LASSERT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE);
-        ENTRY;
+	LASSERT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE);
+	ENTRY;
 
-        ccc_io_update_iov(env, cio, io);
+	vvp_io_update_iov(env, cio, io);
 
-        if (io->u.ci_rw.crw_nonblock)
-                ast_flags |= CEF_NONBLOCK;
-        result = vvp_mmap_locks(env, cio, io);
-        if (result == 0)
-                result = ccc_io_one_lock(env, io, ast_flags, mode, start, end);
+	if (io->u.ci_rw.crw_nonblock)
+		ast_flags |= CEF_NONBLOCK;
+
+	result = vvp_mmap_locks(env, cio, io);
+	if (result == 0)
+		result = vvp_io_one_lock(env, io, ast_flags, mode, start, end);
+
         RETURN(result);
 }
 
@@ -349,9 +348,11 @@ static int vvp_io_fault_lock(const struct lu_env *env,
         /*
          * XXX LDLM_FL_CBPENDING
          */
-        return ccc_io_one_lock_index
-                (env, io, 0, vvp_mode_from_vma(vio->u.fault.ft_vma),
-                 io->u.ci_fault.ft_index, io->u.ci_fault.ft_index);
+	return vvp_io_one_lock_index(env,
+				     io, 0,
+				     vvp_mode_from_vma(vio->u.fault.ft_vma),
+				     io->u.ci_fault.ft_index,
+				     io->u.ci_fault.ft_index);
 }
 
 static int vvp_io_write_lock(const struct lu_env *env,
@@ -385,7 +386,7 @@ static int vvp_io_setattr_iter_init(const struct lu_env *env,
 static int vvp_io_setattr_lock(const struct lu_env *env,
                                const struct cl_io_slice *ios)
 {
-	struct ccc_io *cio = ccc_env_io(env);
+	struct vvp_io *cio = vvp_env_io(env);
 	struct cl_io  *io  = ios->cis_io;
 	__u64 new_size;
 	__u32 enqflags = 0;
@@ -403,8 +404,9 @@ static int vvp_io_setattr_lock(const struct lu_env *env,
                 new_size = 0;
         }
         cio->u.setattr.cui_local_lock = SETATTR_EXTENT_LOCK;
-        return ccc_io_one_lock(env, io, enqflags, CLM_WRITE,
-                               new_size, OBD_OBJECT_EOF);
+
+	return vvp_io_one_lock(env, io, enqflags, CLM_WRITE,
+			       new_size, OBD_OBJECT_EOF);
 }
 
 static int vvp_do_vmtruncate(struct inode *inode, size_t size)
@@ -498,19 +500,18 @@ static void vvp_io_setattr_fini(const struct lu_env *env,
 }
 
 static int vvp_io_read_start(const struct lu_env *env,
-                             const struct cl_io_slice *ios)
+			     const struct cl_io_slice *ios)
 {
-        struct vvp_io     *vio   = cl2vvp_io(env, ios);
-        struct ccc_io     *cio   = cl2ccc_io(env, ios);
-        struct cl_io      *io    = ios->cis_io;
-        struct cl_object  *obj   = io->ci_obj;
+	struct vvp_io     *vio   = cl2vvp_io(env, ios);
+	struct cl_io      *io    = ios->cis_io;
+	struct cl_object  *obj   = io->ci_obj;
 	struct inode      *inode = vvp_object_inode(obj);
-        struct file       *file  = cio->cui_fd->fd_file;
+	struct file       *file  = vio->cui_fd->fd_file;
 
-        int     result;
-        loff_t  pos = io->u.ci_rd.rd.crw_pos;
-        long    cnt = io->u.ci_rd.rd.crw_count;
-        long    tot = cio->cui_tot_count;
+	int     result;
+	loff_t  pos = io->u.ci_rd.rd.crw_pos;
+	long    cnt = io->u.ci_rd.rd.crw_count;
+	long    tot = vio->cui_tot_count;
         int     exceed = 0;
 
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
@@ -530,8 +531,8 @@ static int vvp_io_read_start(const struct lu_env *env,
                         "Read ino %lu, %lu bytes, offset %lld, size %llu\n",
                         inode->i_ino, cnt, pos, i_size_read(inode));
 
-        /* turn off the kernel's read-ahead */
-        cio->cui_fd->fd_file->f_ra.ra_pages = 0;
+	/* turn off the kernel's read-ahead */
+	vio->cui_fd->fd_file->f_ra.ra_pages = 0;
 
 	/* initialize read-ahead window once per syscall */
 	if (!vio->cui_ra_valid) {
@@ -545,31 +546,31 @@ static int vvp_io_read_start(const struct lu_env *env,
         file_accessed(file);
         switch (vio->cui_io_subtype) {
         case IO_NORMAL:
-		LASSERT(cio->cui_iocb->ki_pos == pos);
-		result = generic_file_aio_read(cio->cui_iocb,
-					       cio->cui_iov, cio->cui_nrsegs,
-					       cio->cui_iocb->ki_pos);
+		LASSERT(vio->cui_iocb->ki_pos == pos);
+		result = generic_file_aio_read(vio->cui_iocb,
+					       vio->cui_iov, vio->cui_nrsegs,
+					       vio->cui_iocb->ki_pos);
 		break;
-        case IO_SPLICE:
-                result = generic_file_splice_read(file, &pos,
-                                vio->u.splice.cui_pipe, cnt,
-                                vio->u.splice.cui_flags);
-                /* LU-1109: do splice read stripe by stripe otherwise if it
-                 * may make nfsd stuck if this read occupied all internal pipe
-                 * buffers. */
-                io->ci_continue = 0;
-                break;
-        default:
-                CERROR("Wrong IO type %u\n", vio->cui_io_subtype);
-                LBUG();
-        }
+	case IO_SPLICE:
+		result = generic_file_splice_read(file, &pos,
+						  vio->u.splice.cui_pipe, cnt,
+						  vio->u.splice.cui_flags);
+		/* LU-1109: do splice read stripe by stripe otherwise if it
+		 * may make nfsd stuck if this read occupied all internal pipe
+		 * buffers. */
+		io->ci_continue = 0;
+		break;
+	default:
+		CERROR("Wrong IO type %u\n", vio->cui_io_subtype);
+		LBUG();
+	}
 
 out:
 	if (result >= 0) {
 		if (result < cnt)
 			io->ci_continue = 0;
 		io->ci_nob += result;
-		ll_rw_stats_tally(ll_i2sbi(inode), current->pid, cio->cui_fd,
+		ll_rw_stats_tally(ll_i2sbi(inode), current->pid, vio->cui_fd,
 				  pos, result, READ);
 		result = 0;
 	}
@@ -684,7 +685,7 @@ int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io)
 {
 	struct cl_object *obj = io->ci_obj;
 	struct inode *inode = vvp_object_inode(obj);
-	struct ccc_io *cio = ccc_env_io(env);
+	struct vvp_io *cio = vvp_env_io(env);
 	struct cl_page_list *queue = &cio->u.write.cui_queue;
 	struct cl_page *page;
 	int rc = 0;
@@ -763,7 +764,7 @@ int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io)
 static int vvp_io_write_start(const struct lu_env *env,
                               const struct cl_io_slice *ios)
 {
-        struct ccc_io      *cio   = cl2ccc_io(env, ios);
+	struct vvp_io      *cio   = cl2vvp_io(env, ios);
         struct cl_io       *io    = ios->cis_io;
         struct cl_object   *obj   = io->ci_obj;
 	struct inode       *inode = vvp_object_inode(obj);
@@ -844,38 +845,40 @@ static int vvp_io_write_start(const struct lu_env *env,
 
 static int vvp_io_kernel_fault(struct vvp_fault_io *cfio)
 {
-        struct vm_fault *vmf = cfio->fault.ft_vmf;
+	struct vm_fault *vmf = cfio->ft_vmf;
 
-        cfio->fault.ft_flags = filemap_fault(cfio->ft_vma, vmf);
-	cfio->fault.ft_flags_valid = 1;
+	cfio->ft_flags = filemap_fault(cfio->ft_vma, vmf);
+	cfio->ft_flags_valid = 1;
 
-        if (vmf->page) {
-                LL_CDEBUG_PAGE(D_PAGE, vmf->page, "got addr %p type NOPAGE\n",
-                               vmf->virtual_address);
-                if (unlikely(!(cfio->fault.ft_flags & VM_FAULT_LOCKED))) {
-                        lock_page(vmf->page);
-			cfio->fault.ft_flags |= VM_FAULT_LOCKED;
-                }
+	if (vmf->page) {
+		LL_CDEBUG_PAGE(D_PAGE, vmf->page, "got addr %p type NOPAGE\n",
+			       vmf->virtual_address);
+		if (unlikely(!(cfio->ft_flags & VM_FAULT_LOCKED))) {
+			lock_page(vmf->page);
+			cfio->ft_flags |= VM_FAULT_LOCKED;
+		}
 
-                cfio->ft_vmpage = vmf->page;
-                return 0;
-        }
+		cfio->ft_vmpage = vmf->page;
 
-        if (cfio->fault.ft_flags & VM_FAULT_SIGBUS) {
-                CDEBUG(D_PAGE, "got addr %p - SIGBUS\n", vmf->virtual_address);
-                return -EFAULT;
-        }
+		return 0;
+	}
 
-        if (cfio->fault.ft_flags & VM_FAULT_OOM) {
-                CDEBUG(D_PAGE, "got addr %p - OOM\n", vmf->virtual_address);
-                return -ENOMEM;
-        }
+	if (cfio->ft_flags & VM_FAULT_SIGBUS) {
+		CDEBUG(D_PAGE, "got addr %p - SIGBUS\n", vmf->virtual_address);
+		return -EFAULT;
+	}
 
-        if (cfio->fault.ft_flags & VM_FAULT_RETRY)
-                return -EAGAIN;
+	if (cfio->ft_flags & VM_FAULT_OOM) {
+		CDEBUG(D_PAGE, "got addr %p - OOM\n", vmf->virtual_address);
+		return -ENOMEM;
+	}
 
-        CERROR("unknow error in page fault %d!\n", cfio->fault.ft_flags);
-        return -EINVAL;
+	if (cfio->ft_flags & VM_FAULT_RETRY)
+		return -EAGAIN;
+
+	CERROR("unknown error in page fault %d\n", cfio->ft_flags);
+
+	return -EINVAL;
 }
 
 static void mkwrite_commit_callback(const struct lu_env *env, struct cl_io *io,
@@ -1047,7 +1050,9 @@ out:
 	/* return unlocked vmpage to avoid deadlocking */
 	if (vmpage != NULL)
 		unlock_page(vmpage);
-	cfio->fault.ft_flags &= ~VM_FAULT_LOCKED;
+
+	cfio->ft_flags &= ~VM_FAULT_LOCKED;
+
 	return result;
 }
 
@@ -1069,7 +1074,7 @@ static int vvp_io_read_page(const struct lu_env *env,
 	struct cl_page            *page   = slice->cpl_page;
 	struct inode              *inode  = vvp_object_inode(slice->cpl_obj);
 	struct ll_sb_info         *sbi    = ll_i2sbi(inode);
-	struct ll_file_data       *fd     = cl2ccc_io(env, ios)->cui_fd;
+	struct ll_file_data       *fd     = cl2vvp_io(env, ios)->cui_fd;
 	struct ll_readahead_state *ras    = &fd->fd_ras;
 	struct cl_2queue          *queue  = &io->ci_queue;
 
@@ -1104,7 +1109,7 @@ static const struct cl_io_operations vvp_io_ops = {
 			.cio_fini	= vvp_io_fini,
 			.cio_lock	= vvp_io_read_lock,
 			.cio_start	= vvp_io_read_start,
-			.cio_advance	= ccc_io_advance,
+			.cio_advance	= vvp_io_advance,
 		},
                 [CIT_WRITE] = {
 			.cio_fini      = vvp_io_fini,
@@ -1112,7 +1117,7 @@ static const struct cl_io_operations vvp_io_ops = {
 			.cio_iter_fini = vvp_io_write_iter_fini,
 			.cio_lock      = vvp_io_write_lock,
 			.cio_start     = vvp_io_write_start,
-			.cio_advance   = ccc_io_advance
+			.cio_advance   = vvp_io_advance,
                 },
                 [CIT_SETATTR] = {
                         .cio_fini       = vvp_io_setattr_fini,
@@ -1126,7 +1131,7 @@ static const struct cl_io_operations vvp_io_ops = {
                         .cio_iter_init = vvp_io_fault_iter_init,
                         .cio_lock      = vvp_io_fault_lock,
                         .cio_start     = vvp_io_fault_start,
-                        .cio_end       = ccc_io_end
+			.cio_end       = vvp_io_end,
                 },
 		[CIT_FSYNC] = {
 			.cio_start  = vvp_io_fsync_start,
@@ -1143,21 +1148,20 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
                 struct cl_io *io)
 {
 	struct vvp_io      *vio   = vvp_env_io(env);
-	struct ccc_io      *cio   = ccc_env_io(env);
 	struct inode       *inode = vvp_object_inode(obj);
-        int                 result;
+	int                 result;
 
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
-        ENTRY;
+	ENTRY;
 
 	CDEBUG(D_VFSTRACE, DFID" ignore/verify layout %d/%d, layout version %d "
-			   "restore needed %d\n",
+	       "restore needed %d\n",
 	       PFID(lu_object_fid(&obj->co_lu)),
 	       io->ci_ignore_layout, io->ci_verify_layout,
-	       cio->cui_layout_gen, io->ci_restore_needed);
+	       vio->cui_layout_gen, io->ci_restore_needed);
 
-        CL_IO_SLICE_CLEAN(cio, cui_cl);
-        cl_io_slice_add(io, &cio->cui_cl, obj, &vvp_io_ops);
+	CL_IO_SLICE_CLEAN(vio, cui_cl);
+	cl_io_slice_add(io, &vio->cui_cl, obj, &vvp_io_ops);
 	vio->cui_ra_valid = false;
 	result = 0;
 	if (io->ci_type == CIT_READ || io->ci_type == CIT_WRITE) {
@@ -1169,10 +1173,10 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
                  *  results."  -- Single Unix Spec */
                 if (count == 0)
                         result = 1;
-                else {
-                        cio->cui_tot_count = count;
-                        cio->cui_tot_nrsegs = 0;
-                }
+		else {
+			vio->cui_tot_count = count;
+			vio->cui_tot_nrsegs = 0;
+		}
 
 		/* for read/write, we store the jobid in the inode, and
 		 * it'll be fetched by osc when building RPC.
@@ -1196,7 +1200,7 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
 	 * even for operations requiring to open file, such as read and write,
 	 * because it might not grant layout lock in IT_OPEN. */
 	if (result == 0 && !io->ci_ignore_layout) {
-		result = ll_layout_refresh(inode, &cio->cui_layout_gen);
+		result = ll_layout_refresh(inode, &vio->cui_layout_gen);
 		if (result == -ENOENT)
 			/* If the inode on MDS has been removed, but the objects
 			 * on OSTs haven't been destroyed (async unlink), layout
@@ -1210,12 +1214,4 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
 	}
 
 	RETURN(result);
-}
-
-static struct vvp_io *cl2vvp_io(const struct lu_env *env,
-                                const struct cl_io_slice *slice)
-{
-        /* Caling just for assertion */
-        cl2ccc_io(env, slice);
-        return vvp_env_io(env);
 }

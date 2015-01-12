@@ -1125,11 +1125,10 @@ layers.  Important properties so described include:
 Each layer keeps IO state in its `IO slice', described below, with all slices
 chained to the list hanging off of struct cl_io:
 
-- vvp_io, ccc_io: these two slices are used by the top-most layer of the Linux
-  kernel client. ccc_io is a state common between kernel client and liblustre,
-  and vvp_io is a state private to the kernel client.
+- vvp_io is used by the top-most layer of the Linux kernel
+  client.
 
-  The most important state in ccc_io is an array of struct iovec, describing
+  The most important state in vvp_io is an array of struct iovec, describing
   user space buffers from or to which IO is taking place. Note that other
   layers in the IO stack have no idea that data actually came from user space.
 

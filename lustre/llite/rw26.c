@@ -406,7 +406,7 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
 
         env = cl_env_get(&refcheck);
         LASSERT(!IS_ERR(env));
-        io = ccc_env_io(env)->cui_cl.cis_io;
+	io = vvp_env_io(env)->cui_cl.cis_io;
         LASSERT(io != NULL);
 
         for (seg = 0; seg < nr_segs; seg++) {
@@ -469,7 +469,7 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         }
 out:
         if (tot_bytes > 0) {
-		struct ccc_io *cio = ccc_env_io(env);
+		struct vvp_io *cio = vvp_env_io(env);
 
 		/* no commit async for direct IO */
 		cio->u.write.cui_written += tot_bytes;
@@ -544,7 +544,7 @@ static int ll_write_begin(struct file *file, struct address_space *mapping,
 
 	if (unlikely(vmpage == NULL ||
 		     PageDirty(vmpage) || PageWriteback(vmpage))) {
-		struct ccc_io *cio = ccc_env_io(env);
+		struct vvp_io *cio = vvp_env_io(env);
 		struct cl_page_list *plist = &cio->u.write.cui_queue;
 
                 /* if the page is already in dirty cache, we have to commit
@@ -619,7 +619,7 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 	struct ll_cl_context *lcc = fsdata;
 	const struct lu_env *env;
 	struct cl_io *io;
-	struct ccc_io *cio;
+	struct vvp_io *cio;
 	struct cl_page *page;
 	unsigned from = pos & (PAGE_CACHE_SIZE - 1);
 	bool unplug = false;
@@ -632,7 +632,7 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 	env  = lcc->lcc_env;
 	page = lcc->lcc_page;
 	io   = lcc->lcc_io;
-	cio  = ccc_env_io(env);
+	cio  = vvp_env_io(env);
 
 	LASSERT(cl_page_is_owned(page, io));
 	if (copied > 0) {
