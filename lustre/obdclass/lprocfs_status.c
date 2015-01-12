@@ -228,9 +228,9 @@ struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *head,
 {
 	struct proc_dir_entry *temp;
 
-	LPROCFS_SRCH_ENTRY();
+	down_read(&_lprocfs_lock);
 	temp = __lprocfs_srch(head, name);
-	LPROCFS_SRCH_EXIT();
+	up_read(&_lprocfs_lock);
 	return temp;
 }
 EXPORT_SYMBOL(lprocfs_srch);
@@ -316,9 +316,9 @@ int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
 {
 	int rc = 0;
 
-	LPROCFS_WRITE_ENTRY();
+	down_write(&_lprocfs_lock);
 	rc = __lprocfs_add_vars(root, list, data);
-	LPROCFS_WRITE_EXIT();
+	up_write(&_lprocfs_lock);
 
 	return rc;
 }
@@ -404,9 +404,9 @@ static void lprocfs_remove_nolock(struct proc_dir_entry **proot)
 void lprocfs_remove(struct proc_dir_entry **rooth)
 {
 #ifndef HAVE_ONLY_PROCFS_SEQ
-	LPROCFS_WRITE_ENTRY(); /* search vs remove race */
+	down_write(&_lprocfs_lock); /* search vs remove race */
 	lprocfs_remove_nolock(rooth);
-	LPROCFS_WRITE_EXIT();
+	up_write(&_lprocfs_lock);
 #else
 	proc_remove(*rooth);
 	*rooth = NULL;
@@ -432,8 +432,7 @@ void lprocfs_try_remove_proc_entry(const char *name,
 	LASSERT(parent != NULL);
 	len = strlen(name);
 
-	LPROCFS_WRITE_ENTRY();
-
+	down_write(&_lprocfs_lock);
 	/* lookup target name */
 	for (p = &parent->subdir; *p; p = &(*p)->next) {
 		if ((*p)->namelen != len)
@@ -462,8 +461,7 @@ void lprocfs_try_remove_proc_entry(const char *name,
 	if (busy == 0)
 		lprocfs_remove_nolock(&t);
 
-	LPROCFS_WRITE_EXIT();
-
+	up_write(&_lprocfs_lock);
 	return;
 }
 EXPORT_SYMBOL(lprocfs_try_remove_proc_entry);
@@ -475,7 +473,7 @@ struct proc_dir_entry *lprocfs_register(const char *name,
 	struct proc_dir_entry *entry;
 	int rc;
 
-	LPROCFS_WRITE_ENTRY();
+	down_write(&_lprocfs_lock);
 	entry = __lprocfs_srch(parent, name);
 	if (entry != NULL) {
 		CERROR("entry '%s' already registered\n", name);
@@ -494,7 +492,7 @@ struct proc_dir_entry *lprocfs_register(const char *name,
 		}
 	}
 out:
-	LPROCFS_WRITE_EXIT();
+	up_write(&_lprocfs_lock);
 	return entry;
 }
 EXPORT_SYMBOL(lprocfs_register);

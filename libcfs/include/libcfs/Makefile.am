@@ -29,7 +29,6 @@ EXTRA_DIST = \
 	libcfsutil.h \
 	list.h \
 	lucache.h \
-	params_tree.h \
 	types.h \
 	user-bitops.h \
 	user-crypto.h \

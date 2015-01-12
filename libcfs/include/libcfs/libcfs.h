@@ -42,7 +42,6 @@
 
 #ifdef __KERNEL__
 # include <libcfs/linux/libcfs.h>
-# include <libcfs/params_tree.h>
 #else /* !__KERNEL__ */
 # include <assert.h>
 # include <ctype.h>
