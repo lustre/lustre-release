@@ -2914,6 +2914,28 @@ test_100b() {
 }
 run_test 100b "DNE: create striped dir, fail MDT0"
 
+test_101() { #LU-5648
+	mkdir -p $DIR/$tdir/d1
+	mkdir -p $DIR/$tdir/d2
+	touch $DIR/$tdir/file0
+	num=1000
+
+	replay_barrier $SINGLEMDS
+	for i in $(seq $num) ; do
+		echo test$i > $DIR/$tdir/d1/file$i
+	done
+
+	fail_abort $SINGLEMDS
+	for i in $(seq $num) ; do
+		touch $DIR/$tdir/d2/file$i
+		test -s $DIR/$tdir/d2/file$i &&
+			ls -al $DIR/$tdir/d2/file$i && error "file$i's size > 0"
+	done
+
+	rm -rf $DIR/$tdir
+}
+run_test 101 "Shouldn't reassign precreated objs to other files after recovery"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
