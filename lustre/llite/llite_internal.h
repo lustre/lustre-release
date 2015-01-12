@@ -567,13 +567,6 @@ struct ll_sb_info {
 
 #define LL_DEFAULT_MAX_RW_CHUNK      (32 * 1024 * 1024)
 
-struct ll_ra_read {
-        pgoff_t             lrr_start;
-        pgoff_t             lrr_count;
-        struct task_struct *lrr_reader;
-	struct list_head          lrr_linkage;
-};
-
 /*
  * per file-descriptor read-ahead data.
  */
@@ -631,12 +624,6 @@ struct ll_readahead_state {
          * will not be accurate when dealing with reads issued via mmap.
          */
         unsigned long   ras_request_index;
-        /*
-         * list of struct ll_ra_read's one per read(2) call current in
-         * progress against this file descriptor. Used by read-ahead code,
-         * protected by ->ras_lock.
-         */
-	struct list_head      ras_read_beads;
         /*
          * The following 3 items are used for detecting the stride I/O
          * mode.
@@ -706,9 +693,7 @@ static inline int ll_need_32bit_api(struct ll_sb_info *sbi)
 #endif
 }
 
-void ll_ra_read_in(struct file *f, struct ll_ra_read *rar);
-void ll_ra_read_ex(struct file *f, struct ll_ra_read *rar);
-struct ll_ra_read *ll_ra_read_get(struct file *f);
+void ll_ras_enter(struct file *f);
 
 /* llite/lproc_llite.c */
 #ifdef LPROCFS
@@ -1034,14 +1019,12 @@ struct vvp_io {
                         } fault;
                 } fault;
         } u;
-        /**
-         * Read-ahead state used by read and page-fault IO contexts.
-         */
-        struct ll_ra_read    cui_bead;
-        /**
-         * Set when cui_bead has been initialized.
-         */
-        int                  cui_ra_window_set;
+
+	/* Readahead state. */
+	pgoff_t	cui_ra_start;
+	pgoff_t cui_ra_count;
+	/* Set when cui_ra_{start,count} have been initialized. */
+	bool	cui_ra_valid;
 };
 
 /**

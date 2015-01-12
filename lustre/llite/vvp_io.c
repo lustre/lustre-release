@@ -505,7 +505,6 @@ static int vvp_io_read_start(const struct lu_env *env,
         struct cl_io      *io    = ios->cis_io;
         struct cl_object  *obj   = io->ci_obj;
 	struct inode      *inode = vvp_object_inode(obj);
-        struct ll_ra_read *bead  = &vio->cui_bead;
         struct file       *file  = cio->cui_fd->fd_file;
 
         int     result;
@@ -534,13 +533,13 @@ static int vvp_io_read_start(const struct lu_env *env,
         /* turn off the kernel's read-ahead */
         cio->cui_fd->fd_file->f_ra.ra_pages = 0;
 
-        /* initialize read-ahead window once per syscall */
-        if (!vio->cui_ra_window_set) {
-                vio->cui_ra_window_set = 1;
-                bead->lrr_start = cl_index(obj, pos);
-		bead->lrr_count = cl_index(obj, tot + PAGE_CACHE_SIZE - 1);
-                ll_ra_read_in(file, bead);
-        }
+	/* initialize read-ahead window once per syscall */
+	if (!vio->cui_ra_valid) {
+		vio->cui_ra_valid = true;
+		vio->cui_ra_start = cl_index(obj, pos);
+		vio->cui_ra_count = cl_index(obj, tot + PAGE_CACHE_SIZE - 1);
+		ll_ras_enter(file);
+	}
 
         /* BUG: 5972 */
         file_accessed(file);
@@ -576,17 +575,6 @@ out:
 	}
 
 	return result;
-}
-
-static void vvp_io_read_fini(const struct lu_env *env, const struct cl_io_slice *ios)
-{
-	struct vvp_io *vio = cl2vvp_io(env, ios);
-	struct ccc_io *cio = cl2ccc_io(env, ios);
-
-	if (vio->cui_ra_window_set)
-		ll_ra_read_ex(cio->cui_fd->fd_file, &vio->cui_bead);
-
-	vvp_io_fini(env, ios);
 }
 
 static int vvp_io_commit_sync(const struct lu_env *env, struct cl_io *io,
@@ -1111,13 +1099,13 @@ static int vvp_io_read_page(const struct lu_env *env,
 }
 
 static const struct cl_io_operations vvp_io_ops = {
-        .op = {
-                [CIT_READ] = {
-                        .cio_fini      = vvp_io_read_fini,
-                        .cio_lock      = vvp_io_read_lock,
-                        .cio_start     = vvp_io_read_start,
-                        .cio_advance   = ccc_io_advance
-                },
+	.op = {
+		[CIT_READ] = {
+			.cio_fini	= vvp_io_fini,
+			.cio_lock	= vvp_io_read_lock,
+			.cio_start	= vvp_io_read_start,
+			.cio_advance	= ccc_io_advance,
+		},
                 [CIT_WRITE] = {
 			.cio_fini      = vvp_io_fini,
 			.cio_iter_init = vvp_io_write_iter_init,
@@ -1170,7 +1158,7 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
 
         CL_IO_SLICE_CLEAN(cio, cui_cl);
         cl_io_slice_add(io, &cio->cui_cl, obj, &vvp_io_ops);
-        vio->cui_ra_window_set = 0;
+	vio->cui_ra_valid = false;
 	result = 0;
 	if (io->ci_type == CIT_READ || io->ci_type == CIT_WRITE) {
 		size_t count;
