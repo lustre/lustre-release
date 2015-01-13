@@ -60,25 +60,17 @@
 
 #include "llite_internal.h"
 
-static const struct cl_req_operations ccc_req_ops;
-
 /*
  * ccc_ prefix stands for "Common Client Code".
  */
 
 static struct kmem_cache *ccc_thread_kmem;
-static struct kmem_cache *ccc_req_kmem;
 
 static struct lu_kmem_descr ccc_caches[] = {
         {
                 .ckd_cache = &ccc_thread_kmem,
                 .ckd_name  = "ccc_thread_kmem",
                 .ckd_size  = sizeof (struct ccc_thread_info),
-        },
-        {
-                .ckd_cache = &ccc_req_kmem,
-                .ckd_name  = "ccc_req_kmem",
-                .ckd_size  = sizeof (struct ccc_req)
         },
         {
                 .ckd_cache = NULL
@@ -113,21 +105,6 @@ struct lu_context_key ccc_key = {
         .lct_init = ccc_key_init,
         .lct_fini = ccc_key_fini
 };
-
-int ccc_req_init(const struct lu_env *env, struct cl_device *dev,
-		 struct cl_req *req)
-{
-	struct ccc_req *vrq;
-	int result;
-
-	OBD_SLAB_ALLOC_PTR_GFP(vrq, ccc_req_kmem, GFP_NOFS);
-	if (vrq != NULL) {
-		cl_req_slice_add(req, &vrq->crq_cl, dev, &ccc_req_ops);
-		result = 0;
-	} else
-		result = -ENOMEM;
-	return result;
-}
 
 /**
  * An `emergency' environment used by ccc_inode_fini() when cl_env_get()
@@ -181,84 +158,6 @@ void ccc_global_fini(struct lu_device_type *device_type)
         lu_kmem_fini(ccc_caches);
 }
 
-/*****************************************************************************
- *
- * Transfer operations.
- *
- */
-
-void ccc_req_completion(const struct lu_env *env,
-                        const struct cl_req_slice *slice, int ioret)
-{
-        struct ccc_req *vrq;
-
-        if (ioret > 0)
-                cl_stats_tally(slice->crs_dev, slice->crs_req->crq_type, ioret);
-
-        vrq = cl2ccc_req(slice);
-        OBD_SLAB_FREE_PTR(vrq, ccc_req_kmem);
-}
-
-/**
- * Implementation of struct cl_req_operations::cro_attr_set() for ccc
- * layer. ccc is responsible for
- *
- *    - o_[mac]time
- *
- *    - o_mode
- *
- *    - o_parent_seq
- *
- *    - o_[ug]id
- *
- *    - o_parent_oid
- *
- *    - o_parent_ver
- *
- *    - o_ioepoch,
- *
- *  and capability.
- */
-void ccc_req_attr_set(const struct lu_env *env,
-		      const struct cl_req_slice *slice,
-		      const struct cl_object *obj,
-		      struct cl_req_attr *attr, u64 flags)
-{
-	struct inode	*inode;
-	struct obdo	*oa;
-	u32		 valid_flags;
-
-	oa = attr->cra_oa;
-	inode = vvp_object_inode(obj);
-	valid_flags = OBD_MD_FLTYPE;
-
-	if ((flags & OBD_MD_FLOSSCAPA) != 0) {
-		LASSERT(attr->cra_capa == NULL);
-		attr->cra_capa = cl_capa_lookup(inode,
-						slice->crs_req->crq_type);
-	}
-
-	if (slice->crs_req->crq_type == CRT_WRITE) {
-		if (flags & OBD_MD_FLEPOCH) {
-			oa->o_valid |= OBD_MD_FLEPOCH;
-			oa->o_ioepoch = ll_i2info(inode)->lli_ioepoch;
-			valid_flags |= OBD_MD_FLMTIME | OBD_MD_FLCTIME |
-				       OBD_MD_FLUID | OBD_MD_FLGID;
-		}
-	}
-	obdo_from_inode(oa, inode, valid_flags & flags);
-	obdo_set_parent_fid(oa, &ll_i2info(inode)->lli_fid);
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_INVALID_PFID))
-		oa->o_parent_oid++;
-	memcpy(attr->cra_jobid, ll_i2info(inode)->lli_jobid,
-	       LUSTRE_JOBID_SIZE);
-}
-
-static const struct cl_req_operations ccc_req_ops = {
-        .cro_attr_set   = ccc_req_attr_set,
-        .cro_completion = ccc_req_completion
-};
-
 int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
                    struct obd_capa *capa)
 {
@@ -308,17 +207,6 @@ again:
 		result = 0;
 	cl_env_put(env, &refcheck);
 	RETURN(result);
-}
-
-/*****************************************************************************
- *
- * Type conversions.
- *
- */
-
-struct ccc_req *cl2ccc_req(const struct cl_req_slice *slice)
-{
-        return container_of0(slice, struct ccc_req, crq_cl);
 }
 
 /**

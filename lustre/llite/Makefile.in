@@ -7,7 +7,7 @@ lustre-objs += rw26.o super25.o statahead.o
 lustre-objs += glimpse.o
 lustre-objs += lcommon_cl.o
 lustre-objs += lcommon_misc.o
-lustre-objs += vvp_dev.o vvp_page.o vvp_lock.o vvp_io.o vvp_object.o
+lustre-objs += vvp_dev.o vvp_page.o vvp_lock.o vvp_io.o vvp_object.o vvp_req.o
 lustre-objs += range_lock.o
 
 llite_lloop-objs := lloop.o

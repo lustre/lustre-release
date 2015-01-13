@@ -134,17 +134,17 @@ struct cl_req_slice;
  * \see vvp_cl_ops, lov_cl_ops, lovsub_cl_ops, osc_cl_ops
  */
 struct cl_device_operations {
-        /**
-         * Initialize cl_req. This method is called top-to-bottom on all
-         * devices in the stack to get them a chance to allocate layer-private
-         * data, and to attach them to the cl_req by calling
-         * cl_req_slice_add().
-         *
-         * \see osc_req_init(), lov_req_init(), lovsub_req_init()
-         * \see ccc_req_init()
-         */
-        int (*cdo_req_init)(const struct lu_env *env, struct cl_device *dev,
-                            struct cl_req *req);
+	/**
+	 * Initialize cl_req. This method is called top-to-bottom on all
+	 * devices in the stack to get them a chance to allocate layer-private
+	 * data, and to attach them to the cl_req by calling
+	 * cl_req_slice_add().
+	 *
+	 * \see osc_req_init(), lov_req_init(), lovsub_req_init()
+	 * \see vvp_req_init()
+	 */
+	int (*cdo_req_init)(const struct lu_env *env, struct cl_device *dev,
+			    struct cl_req *req);
 };
 
 /**
