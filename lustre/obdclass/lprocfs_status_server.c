@@ -345,9 +345,9 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid)
 		GOTO(destroy_new, rc = -ENOMEM);
 
 	memcpy(buffer, libcfs_nid2str(*nid), LNET_NIDSTR_SIZE);
-	new_stat->nid_proc = lprocfs_seq_register(buffer,
-						  obd->obd_proc_exports_entry,
-						  NULL, NULL);
+	new_stat->nid_proc = lprocfs_register(buffer,
+					      obd->obd_proc_exports_entry,
+					      NULL, NULL);
 	OBD_FREE(buffer, LNET_NIDSTR_SIZE);
 
 	if (IS_ERR(new_stat->nid_proc)) {

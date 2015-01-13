@@ -74,7 +74,7 @@ static struct cfs_cpt_table	*ost_io_cptable;
 #ifdef CONFIG_PROC_FS
 LPROC_SEQ_FOPS_RO_TYPE(ost, uuid);
 
-static struct lprocfs_seq_vars lprocfs_ost_obd_vars[] = {
+static struct lprocfs_vars lprocfs_ost_obd_vars[] = {
 	{ .name	=	"uuid",
 	  .fops	=	&ost_uuid_fops	},
 	{ NULL }

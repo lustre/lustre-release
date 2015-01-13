@@ -100,7 +100,7 @@ LPROC_SEQ_FOPS_RO(mdc_obd_max_pages_per_rpc);
 LPROC_SEQ_FOPS_RW_TYPE(mdc, import);
 LPROC_SEQ_FOPS_RW_TYPE(mdc, pinger_recov);
 
-struct lprocfs_seq_vars lprocfs_mdc_obd_vars[] = {
+struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
 	{ .name	=	"uuid",
 	  .fops	=	&mdc_uuid_fops		},
 	{ .name	=	"ping",

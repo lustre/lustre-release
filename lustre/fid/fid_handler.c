@@ -414,16 +414,15 @@ static int seq_server_proc_init(struct lu_server_seq *seq)
 	int rc;
 	ENTRY;
 
-	seq->lss_proc_dir = lprocfs_seq_register(seq->lss_name,
-						 seq_type_proc_dir,
-						 NULL, NULL);
+	seq->lss_proc_dir = lprocfs_register(seq->lss_name,
+					     seq_type_proc_dir,
+					     NULL, NULL);
 	if (IS_ERR(seq->lss_proc_dir)) {
 		rc = PTR_ERR(seq->lss_proc_dir);
 		RETURN(rc);
 	}
 
-	rc = lprocfs_seq_add_vars(seq->lss_proc_dir,
-				  seq_server_proc_list, seq);
+	rc = lprocfs_add_vars(seq->lss_proc_dir, seq_server_proc_list, seq);
 	if (rc) {
 		CERROR("%s: Can't init sequence manager "
 		       "proc, rc %d\n", seq->lss_name, rc);

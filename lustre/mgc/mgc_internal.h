@@ -45,7 +45,7 @@
 #include <lustre_export.h>
 
 #ifdef CONFIG_PROC_FS
-extern struct lprocfs_seq_vars lprocfs_mgc_obd_vars[];
+extern struct lprocfs_vars lprocfs_mgc_obd_vars[];
 int lprocfs_mgc_rd_ir_state(struct seq_file *m, void *data);
 #endif /* CONFIG_PROC_FS */
 

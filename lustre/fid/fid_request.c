@@ -440,9 +440,8 @@ static int seq_client_proc_init(struct lu_client_seq *seq)
         int rc;
         ENTRY;
 
-	seq->lcs_proc_dir = lprocfs_seq_register(seq->lcs_name,
-						 seq_type_proc_dir,
-						 NULL, NULL);
+	seq->lcs_proc_dir = lprocfs_register(seq->lcs_name, seq_type_proc_dir,
+					     NULL, NULL);
         if (IS_ERR(seq->lcs_proc_dir)) {
                 CERROR("%s: LProcFS failed in seq-init\n",
                        seq->lcs_name);
@@ -450,8 +449,7 @@ static int seq_client_proc_init(struct lu_client_seq *seq)
                 RETURN(rc);
         }
 
-	rc = lprocfs_seq_add_vars(seq->lcs_proc_dir,
-				  seq_client_proc_list, seq);
+	rc = lprocfs_add_vars(seq->lcs_proc_dir, seq_client_proc_list, seq);
         if (rc) {
                 CERROR("%s: Can't init sequence manager "
                        "proc, rc %d\n", seq->lcs_name, rc);
@@ -574,9 +572,9 @@ struct proc_dir_entry *seq_type_proc_dir;
 
 static int __init fid_mod_init(void)
 {
-	seq_type_proc_dir = lprocfs_seq_register(LUSTRE_SEQ_NAME,
-						 proc_lustre_root,
-						 NULL, NULL);
+	seq_type_proc_dir = lprocfs_register(LUSTRE_SEQ_NAME,
+					     proc_lustre_root,
+					     NULL, NULL);
 	if (IS_ERR(seq_type_proc_dir))
 		return PTR_ERR(seq_type_proc_dir);
 

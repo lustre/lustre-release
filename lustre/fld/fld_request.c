@@ -235,9 +235,8 @@ static int fld_client_proc_init(struct lu_client_fld *fld)
 	int rc;
 	ENTRY;
 
-	fld->lcf_proc_dir = lprocfs_seq_register(fld->lcf_name,
-						 fld_type_proc_dir,
-						 NULL, NULL);
+	fld->lcf_proc_dir = lprocfs_register(fld->lcf_name, fld_type_proc_dir,
+					     NULL, NULL);
 	if (IS_ERR(fld->lcf_proc_dir)) {
 		CERROR("%s: LProcFS failed in fld-init\n",
 		       fld->lcf_name);
@@ -245,8 +244,7 @@ static int fld_client_proc_init(struct lu_client_fld *fld)
 		RETURN(rc);
 	}
 
-	rc = lprocfs_seq_add_vars(fld->lcf_proc_dir,
-				  fld_client_proc_list, fld);
+	rc = lprocfs_add_vars(fld->lcf_proc_dir, fld_client_proc_list, fld);
 	if (rc) {
 		CERROR("%s: Can't init FLD proc, rc %d\n",
 		       fld->lcf_name, rc);
@@ -525,9 +523,9 @@ struct proc_dir_entry *fld_type_proc_dir;
 
 static int __init fld_mod_init(void)
 {
-	fld_type_proc_dir = lprocfs_seq_register(LUSTRE_FLD_NAME,
-						 proc_lustre_root,
-						 NULL, NULL);
+	fld_type_proc_dir = lprocfs_register(LUSTRE_FLD_NAME,
+					     proc_lustre_root,
+					     NULL, NULL);
 	if (IS_ERR(fld_type_proc_dir))
 		return PTR_ERR(fld_type_proc_dir);
 

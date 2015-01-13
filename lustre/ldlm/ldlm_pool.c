@@ -742,7 +742,7 @@ static int ldlm_pool_proc_init(struct ldlm_pool *pl)
 {
 	struct ldlm_namespace *ns = ldlm_pl2ns(pl);
 	struct proc_dir_entry *parent_ns_proc;
-	struct lprocfs_seq_vars pool_vars[2];
+	struct lprocfs_vars pool_vars[2];
 	char *var_name = NULL;
 	int rc = 0;
 	ENTRY;
@@ -757,8 +757,8 @@ static int ldlm_pool_proc_init(struct ldlm_pool *pl)
 		       ldlm_ns_name(ns));
 		GOTO(out_free_name, rc = -EINVAL);
 	}
-	pl->pl_proc_dir = lprocfs_seq_register("pool", parent_ns_proc,
-						NULL, NULL);
+	pl->pl_proc_dir = lprocfs_register("pool", parent_ns_proc,
+					   NULL, NULL);
 	if (IS_ERR(pl->pl_proc_dir)) {
 		rc = PTR_ERR(pl->pl_proc_dir);
 		pl->pl_proc_dir = NULL;

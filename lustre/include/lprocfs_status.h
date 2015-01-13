@@ -49,7 +49,7 @@
 
 #include <lustre/lustre_idl.h>
 
-struct lprocfs_seq_vars {
+struct lprocfs_vars {
 	const char			*name;
 	const struct file_operations	*fops;
 	void				*data;
@@ -607,13 +607,11 @@ extern int lprocfs_register_stats(struct proc_dir_entry *root, const char *name,
                                   struct lprocfs_stats *stats);
 
 /* lprocfs_status.c */
-extern int lprocfs_seq_add_vars(struct proc_dir_entry *root,
-				struct lprocfs_seq_vars *var,
-				void *data);
-
+extern int lprocfs_add_vars(struct proc_dir_entry *root,
+			    struct lprocfs_vars *var, void *data);
 extern struct proc_dir_entry *
-lprocfs_seq_register(const char *name, struct proc_dir_entry *parent,
-		     struct lprocfs_seq_vars *list, void *data);
+lprocfs_register(const char *name, struct proc_dir_entry *parent,
+		 struct lprocfs_vars *list, void *data);
 extern void lprocfs_remove(struct proc_dir_entry **root);
 extern void lprocfs_remove_proc_entry(const char *name,
                                       struct proc_dir_entry *parent);
@@ -676,8 +674,8 @@ extern int lprocfs_connect_flags_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_num_exports_seq_show(struct seq_file *m, void *data);
 #endif
 struct adaptive_timeout;
-extern int lprocfs_seq_at_hist_helper(struct seq_file *m,
-				      struct adaptive_timeout *at);
+extern int lprocfs_at_hist_helper(struct seq_file *m,
+				  struct adaptive_timeout *at);
 extern int lprocfs_timeouts_seq_show(struct seq_file *m, void *data);
 extern ssize_t
 lprocfs_timeouts_seq_write(struct file *file, const char *buffer,
@@ -1002,13 +1000,12 @@ static inline struct proc_dir_entry *
 lprocfs_add_symlink(const char *name, struct proc_dir_entry *parent,
                     const char *format, ...)
 {return NULL; }
-static inline int lprocfs_seq_add_vars(struct proc_dir_entry *root,
-				       struct lprocfs_seq_vars *var,
-				       void *data)
+static inline int lprocfs_add_vars(struct proc_dir_entry *root,
+				   struct lprocfs_vars *var, void *data)
 { return 0; }
 static inline struct proc_dir_entry *
-lprocfs_seq_register(const char *name, struct proc_dir_entry *parent,
-		     struct lprocfs_seq_vars *list, void *data)
+lprocfs_register(const char *name, struct proc_dir_entry *parent,
+		 struct lprocfs_vars *list, void *data)
 { return NULL; }
 static inline void lprocfs_remove(struct proc_dir_entry **root)
 { return; }
@@ -1038,8 +1035,8 @@ static inline int lprocfs_num_exports_seq_show(struct seq_file *m, void *data)
 { return 0; }
 #endif
 struct adaptive_timeout;
-static inline int lprocfs_seq_at_hist_helper(struct seq_file *m,
-					     struct adaptive_timeout *at)
+static inline int lprocfs_at_hist_helper(struct seq_file *m,
+					 struct adaptive_timeout *at)
 { return 0; }
 static inline int lprocfs_timeouts_seq_show(struct seq_file *m, void *data)
 { return 0; }

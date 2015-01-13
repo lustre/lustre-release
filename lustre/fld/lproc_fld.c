@@ -136,7 +136,7 @@ LPROC_SEQ_FOPS_RO(fld_proc_targets);
 LPROC_SEQ_FOPS(fld_proc_hash);
 LPROC_SEQ_FOPS_WO_TYPE(fld, cache_flush);
 
-struct lprocfs_seq_vars fld_client_proc_list[] = {
+struct lprocfs_vars fld_client_proc_list[] = {
 	{ .name	=	"targets",
 	  .fops	=	&fld_proc_targets_fops	},
 	{ .name	=	"hash",
@@ -359,7 +359,7 @@ const struct file_operations fld_proc_seq_fops = {
 	.release = fldb_seq_release,
 };
 
-struct lprocfs_seq_vars fld_server_proc_list[] = {
+struct lprocfs_vars fld_server_proc_list[] = {
 	{ NULL }
 };
 

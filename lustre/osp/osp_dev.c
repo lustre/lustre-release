@@ -1780,8 +1780,8 @@ static int __init osp_mod_init(void)
 		return rc;
 
 	type = class_search_type(LUSTRE_OSP_NAME);
-	type->typ_procsym = lprocfs_seq_register("osc", proc_lustre_root,
-						 NULL, NULL);
+	type->typ_procsym = lprocfs_register("osc", proc_lustre_root,
+					     NULL, NULL);
 	if (IS_ERR(type->typ_procsym)) {
 		CERROR("osp: can't create compat entry \"osc\": %d\n",
 		       (int) PTR_ERR(type->typ_procsym));

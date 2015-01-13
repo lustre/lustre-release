@@ -571,7 +571,7 @@ LPROC_SEQ_FOPS_WO_TYPE(osc, ping);
 LPROC_SEQ_FOPS_RW_TYPE(osc, import);
 LPROC_SEQ_FOPS_RW_TYPE(osc, pinger_recov);
 
-struct lprocfs_seq_vars lprocfs_osc_obd_vars[] = {
+struct lprocfs_vars lprocfs_osc_obd_vars[] = {
 	{ .name	=	"uuid",
 	  .fops	=	&osc_uuid_fops			},
 	{ .name	=	"ping",

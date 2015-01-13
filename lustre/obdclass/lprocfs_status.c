@@ -130,8 +130,8 @@ static const struct file_operations lprocfs_generic_fops = { };
  *         < 0 on error
  */
 int
-lprocfs_seq_add_vars(struct proc_dir_entry *root, struct lprocfs_seq_vars *list,
-		     void *data)
+lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
+		 void *data)
 {
 	if (root == NULL || list == NULL)
 		return -EINVAL;
@@ -157,7 +157,7 @@ lprocfs_seq_add_vars(struct proc_dir_entry *root, struct lprocfs_seq_vars *list,
 	}
 	return 0;
 }
-EXPORT_SYMBOL(lprocfs_seq_add_vars);
+EXPORT_SYMBOL(lprocfs_add_vars);
 
 #ifndef HAVE_REMOVE_PROC_SUBTREE
 /* for b=10866, global variable */
@@ -270,8 +270,8 @@ void lprocfs_remove_proc_entry(const char *name, struct proc_dir_entry *parent)
 EXPORT_SYMBOL(lprocfs_remove_proc_entry);
 
 struct proc_dir_entry *
-lprocfs_seq_register(const char *name, struct proc_dir_entry *parent,
-		     struct lprocfs_seq_vars *list, void *data)
+lprocfs_register(const char *name, struct proc_dir_entry *parent,
+		 struct lprocfs_vars *list, void *data)
 {
 	struct proc_dir_entry *newchild;
 
@@ -280,7 +280,7 @@ lprocfs_seq_register(const char *name, struct proc_dir_entry *parent,
 		return ERR_PTR(-ENOMEM);
 
 	if (list != NULL) {
-		int rc = lprocfs_seq_add_vars(newchild, list, data);
+		int rc = lprocfs_add_vars(newchild, list, data);
 		if (rc) {
 			lprocfs_remove(&newchild);
 			return ERR_PTR(rc);
@@ -288,7 +288,7 @@ lprocfs_seq_register(const char *name, struct proc_dir_entry *parent,
 	}
 	return newchild;
 }
-EXPORT_SYMBOL(lprocfs_seq_register);
+EXPORT_SYMBOL(lprocfs_register);
 
 /* Generic callbacks */
 int lprocfs_uint_seq_show(struct seq_file *m, void *data)
@@ -909,7 +909,7 @@ int lprocfs_state_seq_show(struct seq_file *m, void *data)
 }
 EXPORT_SYMBOL(lprocfs_state_seq_show);
 
-int lprocfs_seq_at_hist_helper(struct seq_file *m, struct adaptive_timeout *at)
+int lprocfs_at_hist_helper(struct seq_file *m, struct adaptive_timeout *at)
 {
 	int i;
 	for (i = 0; i < AT_BINS; i++)
@@ -917,7 +917,7 @@ int lprocfs_seq_at_hist_helper(struct seq_file *m, struct adaptive_timeout *at)
 	seq_printf(m, "\n");
 	return 0;
 }
-EXPORT_SYMBOL(lprocfs_seq_at_hist_helper);
+EXPORT_SYMBOL(lprocfs_at_hist_helper);
 
 /* See also ptlrpc_lprocfs_timeouts_show_seq */
 int lprocfs_timeouts_seq_show(struct seq_file *m, void *data)
@@ -946,7 +946,7 @@ int lprocfs_timeouts_seq_show(struct seq_file *m, void *data)
 	s2dhms(&ts, now - worstt);
 	seq_printf(m, "%-10s : cur %3u  worst %3u (at %ld, "DHMS_FMT" ago) ",
 		   "network", cur, worst, worstt, DHMS_VARS(&ts));
-	lprocfs_seq_at_hist_helper(m, &imp->imp_at.iat_net_latency);
+	lprocfs_at_hist_helper(m, &imp->imp_at.iat_net_latency);
 
 	for(i = 0; i < IMP_AT_MAX_PORTALS; i++) {
 		if (imp->imp_at.iat_portal[i] == 0)
@@ -958,7 +958,7 @@ int lprocfs_timeouts_seq_show(struct seq_file *m, void *data)
 		seq_printf(m, "portal %-2d  : cur %3u  worst %3u (at %ld, "
 			   DHMS_FMT" ago) ", imp->imp_at.iat_portal[i],
 			   cur, worst, worstt, DHMS_VARS(&ts));
-		lprocfs_seq_at_hist_helper(m, &imp->imp_at.iat_service_estimate[i]);
+		lprocfs_at_hist_helper(m, &imp->imp_at.iat_service_estimate[i]);
 	}
 
 	LPROCFS_CLIMP_EXIT(obd);
@@ -990,9 +990,9 @@ lprocfs_obd_setup(struct obd_device *obd)
 	LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
 	LASSERT(obd->obd_type->typ_procroot != NULL);
 
-	obd->obd_proc_entry = lprocfs_seq_register(obd->obd_name,
-						   obd->obd_type->typ_procroot,
-						   obd->obd_vars, obd);
+	obd->obd_proc_entry = lprocfs_register(obd->obd_name,
+					       obd->obd_type->typ_procroot,
+					       obd->obd_vars, obd);
 	if (IS_ERR(obd->obd_proc_entry)) {
 		rc = PTR_ERR(obd->obd_proc_entry);
 		CERROR("error %d setting up lprocfs for %s\n",rc,obd->obd_name);

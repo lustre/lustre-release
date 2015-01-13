@@ -46,7 +46,7 @@
 #include <lustre_log.h>
 #include "mdt_internal.h"
 
-static struct lprocfs_seq_vars lprocfs_mdt_hsm_vars[];
+static struct lprocfs_vars lprocfs_mdt_hsm_vars[];
 
 /**
  * get obj and HSM attributes on a fid
@@ -401,7 +401,7 @@ int hsm_cdt_procfs_init(struct mdt_device *mdt)
 	ENTRY;
 
 	/* init /proc entries, failure is not critical */
-	cdt->cdt_proc_dir = lprocfs_seq_register("hsm",
+	cdt->cdt_proc_dir = lprocfs_register("hsm",
 					     mdt2obd_dev(mdt)->obd_proc_entry,
 					     lprocfs_mdt_hsm_vars, mdt);
 	if (IS_ERR(cdt->cdt_proc_dir)) {
@@ -433,7 +433,7 @@ void  hsm_cdt_procfs_fini(struct mdt_device *mdt)
  * \param none
  * \retval var vector
  */
-struct lprocfs_seq_vars *hsm_cdt_get_proc_vars(void)
+struct lprocfs_vars *hsm_cdt_get_proc_vars(void)
 {
 	return lprocfs_mdt_hsm_vars;
 }
@@ -2213,7 +2213,7 @@ LPROC_SEQ_FOPS(mdt_hsm_user_request_mask);
 LPROC_SEQ_FOPS(mdt_hsm_group_request_mask);
 LPROC_SEQ_FOPS(mdt_hsm_other_request_mask);
 
-static struct lprocfs_seq_vars lprocfs_mdt_hsm_vars[] = {
+static struct lprocfs_vars lprocfs_mdt_hsm_vars[] = {
 	{ .name	=	"agents",
 	  .fops	=	&mdt_hsm_agent_fops			},
 	{ .name	=	"actions",

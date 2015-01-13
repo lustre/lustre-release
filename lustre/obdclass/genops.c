@@ -159,7 +159,7 @@ EXPORT_SYMBOL(class_put_type);
 #define CLASS_MAX_NAME 1024
 
 int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
-			bool enable_proc, struct lprocfs_seq_vars *vars,
+			bool enable_proc, struct lprocfs_vars *vars,
 			const char *name, struct lu_device_type *ldt)
 {
         struct obd_type *type;
@@ -197,9 +197,9 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
 
 #ifdef CONFIG_PROC_FS
 	if (enable_proc) {
-		type->typ_procroot = lprocfs_seq_register(type->typ_name,
-							  proc_lustre_root,
-							  vars, type);
+		type->typ_procroot = lprocfs_register(type->typ_name,
+						      proc_lustre_root,
+						      vars, type);
 		if (IS_ERR(type->typ_procroot)) {
 			rc = PTR_ERR(type->typ_procroot);
 			type->typ_procroot = NULL;

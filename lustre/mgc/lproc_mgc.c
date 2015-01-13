@@ -58,7 +58,7 @@ static int mgc_ir_state_seq_show(struct seq_file *m, void *v)
 }
 LPROC_SEQ_FOPS_RO(mgc_ir_state);
 
-struct lprocfs_seq_vars lprocfs_mgc_obd_vars[] = {
+struct lprocfs_vars lprocfs_mgc_obd_vars[] = {
 	{ .name	=	"uuid",
 	  .fops	=	&mgc_uuid_fops		},
 	{ .name	=	"ping",

@@ -717,7 +717,7 @@ LPROC_SEQ_FOPS_RO_TYPE(osp, timeouts);
 LPROC_SEQ_FOPS_RW_TYPE(osp, import);
 LPROC_SEQ_FOPS_RO_TYPE(osp, state);
 
-static struct lprocfs_seq_vars lprocfs_osp_obd_vars[] = {
+static struct lprocfs_vars lprocfs_osp_obd_vars[] = {
 	{ .name =	"uuid",
 	  .fops =	&osp_uuid_fops			},
 	{ .name =	"ping",
@@ -783,7 +783,7 @@ LPROC_SEQ_FOPS_RO_TYPE(osp, dt_kbytesavail);
 LPROC_SEQ_FOPS_RO_TYPE(osp, dt_filestotal);
 LPROC_SEQ_FOPS_RO_TYPE(osp, dt_filesfree);
 
-static struct lprocfs_seq_vars lprocfs_osp_osd_vars[] = {
+static struct lprocfs_vars lprocfs_osp_osd_vars[] = {
 	{ .name =	"blocksize",
 	  .fops =	&osp_dt_blksize_fops		},
 	{ .name =	"kbytestotal",
@@ -815,8 +815,8 @@ void osp_lprocfs_init(struct osp_device *osp)
 	if (lprocfs_obd_setup(obd) != 0)
 		return;
 
-	rc = lprocfs_seq_add_vars(obd->obd_proc_entry, lprocfs_osp_osd_vars,
-				  &osp->opd_dt_dev);
+	rc = lprocfs_add_vars(obd->obd_proc_entry, lprocfs_osp_osd_vars,
+			      &osp->opd_dt_dev);
 	if (rc) {
 		CERROR("%s: can't register in lprocfs, rc %d\n",
 		       obd->obd_name, rc);

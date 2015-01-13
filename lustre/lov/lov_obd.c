@@ -237,9 +237,9 @@ static int lov_connect(const struct lu_env *env,
         if (data)
                 lov->lov_ocd = *data;
 
-	lov->targets_proc_entry = lprocfs_seq_register("target_obds",
-						       obd->obd_proc_entry,
-						       NULL, NULL);
+	lov->targets_proc_entry = lprocfs_register("target_obds",
+						   obd->obd_proc_entry,
+						   NULL, NULL);
 	if (IS_ERR(lov->targets_proc_entry)) {
 		CERROR("%s: cannot register "
 		       "/proc/fs/lustre/%s/%s/target_obds\n",
@@ -847,9 +847,9 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	 * Instead we use type->typ_procsym as the parent. */
 	type = class_search_type(LUSTRE_LOD_NAME);
 	if (type != NULL && type->typ_procsym != NULL) {
-		obd->obd_proc_entry = lprocfs_seq_register(obd->obd_name,
-							   type->typ_procsym,
-							   obd->obd_vars, obd);
+		obd->obd_proc_entry = lprocfs_register(obd->obd_name,
+						       type->typ_procsym,
+						       obd->obd_vars, obd);
 		if (IS_ERR(obd->obd_proc_entry)) {
 			rc = PTR_ERR(obd->obd_proc_entry);
 			CERROR("error %d setting up lprocfs for %s\n", rc,
@@ -866,9 +866,9 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		if (rc)
 			CWARN("Error adding the target_obd file\n");
 
-		lov->lov_pool_proc_entry = lprocfs_seq_register("pools",
-							obd->obd_proc_entry,
-							NULL, NULL);
+		lov->lov_pool_proc_entry = lprocfs_register("pools",
+							    obd->obd_proc_entry,
+							    NULL, NULL);
 		if (IS_ERR(lov->lov_pool_proc_entry)) {
 			rc = PTR_ERR(lov->lov_pool_proc_entry);
 			CERROR("error %d setting up lprocfs for pools\n", rc);
