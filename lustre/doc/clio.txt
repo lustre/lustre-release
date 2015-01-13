@@ -14,7 +14,7 @@ Topics
         1.2. Terminology
                 i.   I/O vs. Transfer
                 ii.  Top-{object,lock,page}, Sub-{object,lock,page}
-                iii. VVP, SLP, CCC
+                iii. VVP, llite
         1.3. Main Differences with the Pre-CLIO Client Code
         1.4. Layered objects, Slices, Headers
         1.5. Instantiation
@@ -23,7 +23,7 @@ Topics
         1.8. Finalization
         1.9. Code Structure
 2. Layers
-        2.1. VVP, SLP, Echo-client
+        2.1. VVP, Echo-client
         2.2. LOV, LOVSUB (layouts)
         2.3. OSC
 3. Objects
@@ -31,18 +31,17 @@ Topics
         3.2. Top-object, Sub-object
         3.3. Object Operations
         3.4. Object Attributes
+	3.5. Object Layout
 4. Pages
         4.1. Page Indexing
         4.2. Page Ownership
         4.3. Page Transfer Locking
         4.4. Page Operations
+	4.5. Page Initialization
 5. Locks
         5.1. Lock Life Cycle
-        5.2. Top-lock and Sub-locks
-        5.3. Lock State Machine
-        5.4. Lock Concurrency
-        5.5. Shared Sub-locks
-        5.6. Use Case: Lock Invalidation
+	5.2. cl_lock and LDLM Lock
+        5.3. Use Case: Lock Invalidation
 6. IO
         6.1. Fixed IO Types
         6.2. IO State Machine
@@ -62,8 +61,7 @@ Topics
         9.2. First IO to a File
                 i. Read, Read-ahead
                 ii. Write
-        9.3. Cached IO
-        9.4. Lock-less and No-cache IO
+        9.3. Lock-less and No-cache IO
 
 ================
 = 1. Overview =
@@ -125,9 +123,7 @@ constructed from sub-objects, sub-locks, sub-pages, sub-io's respectively.
 
 The topmost module in the Linux client, is traditionally known as `llite'.  The
 corresponding CLIO layer is called `VVP' (VFS, VM, POSIX) to reflect its
-functional responsibilities. The top-level layer for liblustre is called `SLP'.
-VVP and SLP share a lot of logic and data-types. Their common functions and
-types are prefixed with `ccc' which stands for "Common Client Code".
+functional responsibilities.
 
 1.3. Main Differences with the Pre-CLIO Client Code
 ===================================================
@@ -241,21 +237,26 @@ Locks and IO context instantiation is handled similarly.
 1.6. Life cycle
 ===============
 
-All layered objects except IO contexts and transfer requests (which leaves file
-objects, pages and locks) are reference counted and cached. They have a uniform
-caching mechanism:
+All layered objects except locks, IO contexts and transfer requests (which
+leaves file objects, pages) are reference counted and cached. They have a
+uniform caching mechanism:
 
 - Objects are kept in some sort of an index (global FID hash for file objects,
   per-file radix tree for pages, and per-file list for locks);
 
-- A reference for an object can be acquired by cl_{object,page,lock}_find()
-  functions that search the index, and if object is not there, create a new one
+- A reference for an object can be acquired by cl_{object,page}_find() functions
+  that search the index, and if object is not there, create a new one
   and insert it into the index;
 
-- A reference is released by cl_{object,page,lock}_put() functions. When the
-  last reference is released, the object is returned to the cache (still in the
+- A reference is released by cl_{object,page}_put() functions. When the last
+  reference is released, the object is returned to the cache (still in the
   index), except when the user explicitly set `do not cache' flag for this
   object. In the latter case the object is destroyed immediately.
+
+Locks(cl_lock) are owned by individual IO threads. cl_lock is a container of
+lock requirements for underlying DLM locks. cl_lock is allocated by
+cl_lock_request() and destroyed by cl_lock_cancel(). DLM locks are cacheable
+and can be reused by cl_locks.
 
 IO contexts are owned by a thread (or, potentially a group of threads) doing
 IO, and need neither reference counting nor indexing. Similarly, transfer
@@ -271,11 +272,11 @@ COMPLETED), and for the file objects it is very simple.  Page, lock, and IO
 state machines are described in more detail below.
 
 As a generic rule, state machine transitions are made under some kind of lock:
-VM lock for a page, a per-lock mutex for a cl_lock, and LU site spin-lock for
-an object. After some event that might cause a state transition, such lock is
-taken, and the object state is analysed to check whether transition is
-possible.  If it is, the state machine is advanced to the new state and the
-lock is released. IO state transitions do not require concurrency control.
+VM lock for a page, and LU site spin-lock for an object. After some event that
+might cause a state transition, such lock is taken, and the object state is
+analysed to check whether transition is possible. If it is, the state machine
+is advanced to the new state and the lock is released. IO state transitions do
+not require concurrency control.
 
 1.8. Finalization
 =================
@@ -287,22 +288,19 @@ counter), an entity is reachable through
 - Indexing structures described above
 
 - Pointers internal to some layer of this entity. For example, a page is
-  reachable through a pointer from VM page, lock might be reachable through a
-  ldlm_lock::l_ast_data pointer, and sub-{lock,object,page} might be reachable
-  through a pointer from its top-entity.
+  reachable through a pointer from VM page, and sub-{object, lock, page} might
+  be reachable through a pointer from its top-entity.
 
 Entity destruction happens in three phases:
 
-- First, a decision is made to destroy an entity, when, for example, a lock is
-  cancelled, or a page is truncated from a file. At this point the `do not
+- First, a decision is made to destroy an entity, when, for example, a page is
+  truncated from a file, or an inode is destroyed. At this point the `do not
   cache' bit is set in the entity header, and all ways to reach entity from
   internal pointers are severed.
 
-  cl_{page,lock,object}_get() functions never return an entity with the `do not
+  cl_{page,object}_get() functions never return an entity with the `do not
   cache' bit set, so from this moment no new internal pointers can be
   obtained.
-
-  See: cl_page_delete(), cl_lock_delete();
 
 - Pointers `drain' for some time as existing references are released. In
   this phase the entity is reachable through
@@ -313,7 +311,7 @@ Entity destruction happens in three phases:
 - When the last reference is released, the entity can be safely freed (after
   possibly removing it from the index).
 
-  See lu_object_put(), cl_page_put(), cl_lock_put().
+  See lu_object_put(), cl_page_put().
 
 1.9. Code Structure
 ===================
@@ -321,8 +319,6 @@ Entity destruction happens in three phases:
 The CLIO code resides in the following files:
 
   {llite,lov,osc}/*_{dev,object,lock,page,io}.c
-  liblustre/llite_cl.c
-  lclient/*.c
   obdclass/cl_*.c
   include/cl_object.h
 
@@ -331,11 +327,10 @@ contains detailed documentation. Generic clio code is in
 obdclass/cl_{object,page,lock,io}.c
 
 An implementation of CLIO interfaces for a layer foo is located in
-foo/foo_{dev,object,page,lock,io}.c files, with (temporary) exception of
-liblustre code that is located in liblustre/llite_cl.c.
+foo/foo_{dev,object,page,lock,io}.c files.
 
 Definitions of data-structures shared within a layer are in
-foo/foo_cl_internal.h
+foo/foo_cl_internal.h.
 
 =============
 = 2. Layers =
@@ -345,13 +340,12 @@ This section briefly outlines responsibility of every layer in the stack. More
 detailed description of functionality is in the following sections on objects,
 pages and locks.
 
-2.1. VVP, SLP, Echo-client
+2.1. VVP, Echo-client
 ==========================
 
-There are currently 3 options for the top-most Lustre layer:
+There are currently 2 options for the top-most Lustre layer:
 
 - VVP: linux kernel client,
-- SLP: liblustre client, and
 - echo-client: special client used by the Lustre testing sub-system.
 
 Other possibilities are:
@@ -372,11 +366,10 @@ Let's look at VVP in more detail. First, VVP implements VFS entry points
 required by the Linux kernel interface: ll_file_{read,write,sendfile}(). Then,
 VVP implements VM entry points: ll_{write,invalidate,release}page().
 
-For file objects, VVP slice (vvp_object) contains a pointer to an
-inode.
+For file objects, VVP slice (vvp_object) contains a pointer to an inode.
 
 For pages, the VVP slice (vvp_page) contains a pointer to the VM page
-(cfs_page_t), a `defer up to date' flag to track read-ahead hits (similar to
+(struct page), a `defer up to date' flag to track read-ahead hits (similar to
 the pre-CLIO client), and fields necessary for synchronous transfer (see
 below).  VVP is responsible for implementation of the interaction between
 client page (cl_page) and the VM.
@@ -446,16 +439,6 @@ that all server-side objects have is stored. Similarly, on a client, lu_object
 and lu_object_header are embedded into struct cl_object and struct
 cl_object_header where additional client state is stored.
 
-cl_object_header contains following additional state:
-
-- ->coh_tree: a radix tree of cached pages for this object. In this tree pages
-  are indexed by their logical offset from the beginning of this object. This
-  tree is protected by ->coh_page_guard spin-lock;
-
-- ->coh_locks: a double-linked list of all locks for this object. Locks in all
-  possible states (see Locks section below) reside in this list without any
-  particular ordering.
-
 3.2. Top-object, Sub-object
 ===========================
 
@@ -482,9 +465,9 @@ whereas its sub-objects are composed of layers:
 Here "LOVSUB" is a mostly dummy layer, whose purpose is to keep track of the
 object-subobject relationship:
 
-                  cl_object_header-+--->radix tree of pages
-                          |        |
-                          V        +--->list of locks
+                  cl_object_header-+--->object LRU list
+                          |
+                          V
            inode<----vvp_object
                           |
                           V
@@ -496,9 +479,9 @@ object-subobject relationship:
      cl_object_header |   .   .   .
            |          |   .   .   .
            |          V
-           .  cl_object_header-+--->radix tree of pages
-                      |        |
-                      V        +--->list of locks
+           .  cl_object_header-+--->object LRU list
+                      |
+                      V
                 lovsub_object
                       |
                       V
@@ -548,13 +531,36 @@ avoid collecting cumulative attributes over all sub-objects. To implement this
 optimization _all_ changes of sub-object attributes must go through
 cl_object_attr_set().
 
+3.5. Object Layout
+==================
+
+Layout of an object decides how data of the file are placed onto OSTs. Object
+layout can be changed and if that happens, clients will have to reconfigure
+the object layout by calling cl_conf_set() before it can do anything to this
+object.
+
+In order to be notified for the layout change, the client has to cache an
+inodebits lock: MDS_INODELOCK_LAYOUT in the memory. To change an object's
+layout, The MDT holds the EX mode of layout lock therefore all clients having
+this object cached will be notified.
+
+Reconfiguring layout of objects is expensive because it has to clean up page
+cache and rebuild the sub-objects. There is a field lsm_layout_gen in
+lov_stripe_md and it must be increased whenever the layout is changed for an
+object. Therefore, if the revocation of layout lock is due to flase sharing of
+ibits lock, the lsm_layout_gen won't be changed and the client can reuse the
+page cache and subobjects.
+
+CLIO uses ll_refresh_layout() to make sure that valid layout is fetched. This
+function must be called before any IO can be started to an object.
+
 ============
 = 4. Pages =
 ============
 
 A cl_page represents a portion of a file, cached in the memory. All pages of
-the given file are of the same size, and are kept in the radix tree hanging off
-the cl_object_header.
+the given file are of the same size, and are kept in the radix tree of kernel
+VM.
 
 A cl_page is associated with a VM page of the hosting environment (struct page
 in the Linux kernel, for example), cfs_page_t. It is assumed that this
@@ -573,46 +579,19 @@ pages get their backing VM buffers from different sources. For example, in the
 case if pNFS export, some pages might be backed by local DMU buffers, while
 others (representing data in remote stripes), by normal VM pages.
 
+Unlike any other entities in CLIO, there is no subpage for cl_page.
+
 4.1. Page Indexing
 ==================
 
 Pages within a given object are linearly ordered. The page index is stored in
-the ->cpo_index field. In a typical Lustre setup, a top-object has an array of
-sub-objects, and every page in a top-object corresponds to a page in one of its
-sub-objects. This second page (a sub-page of a first), is a first class
-cl_page, and, in particular, it is inserted into the sub-object's radix tree,
-where it is indexed by its offset within the sub-object. Sub-page and top-page
-are linked together through the ->cp_child and ->cp_parent fields in struct
-cl_page:
+the ->cpl_index field in cl_page_slice. In a typical Lustre setup, a top-object
+has an array of sub-objects, and every page in a top-object corresponds to a
+page slice in one of its sub-objects.
 
-                       +------>radix tree of pages
-                       |                  /|\
-                       |                 /.|.\
-                       |                 ..V..
-           cl_object_header<------------cl_page<-----------------+
-                   |          ->cp_obj     |                     |
-                   V                       V                     |
-    inode<----vvp_object<---------------vvp_page---->cfs_page_t  |
-                   |        ->cpl_obj      |                     |
-                   V                       V                     | ->cp_child
-              lov_object<---------------lov_page                 |
-                   |        ->cpl_obj                            | ->cp_parent
-           +---+---+---+---+                                     |
-           |   |   |   |   |                                     |
-           .   |   .   .   .                                     |
-               |                                                 |
-               |   +------>radix tree of pages                   |
-               |   |                       /|\                   |
-               |   |                      /.|.\                  |
-               V   |                      ..V..                  |
-       cl_object_header<-----------------cl_page<----------------+
-               |            ->cp_obj        |
-               V                            V
-         lovsub_object<-----------------lovsub_page
-               |            ->cpl_obj       |
-               V                            V
-          osc_object<--------------------osc_page
-                            ->cpl_obj
+There is a radix tree for pages on the OSC layer. When a LDLM lock is being
+cancelled, the OSC will look up the radix tree so that the pages belong to
+the corresponding lock extent can be destroyed.
 
 4.2. Page Ownership
 ===================
@@ -631,7 +610,7 @@ hosting MM/VM usually has its own page concurrency control mechanisms. For
 example, in Linux, page access is synchronized by the per-page PG_locked
 bit-lock, and generic kernel code (generic_file_*()) takes care to acquire and
 release such locks as necessary around the calls to the file system methods
-(->readpage(), ->prepare_write(), ->commit_write(), etc.). This leads to the
+(->readpage(), ->write_begin(), ->write_end(), etc.). This leads to the
 situation when there are two different ways to own a page in the client:
 
 - Client code explicitly and voluntary owns the page (cl_page_own());
@@ -658,14 +637,31 @@ locking.
 See documentation for cl_object.h:cl_page_operations. See cl_page state
 descriptions in documentation for cl_object.h:cl_page_state.
 
+4.5. Page Initialization
+========================
+
+cl_page is the most frequently allocated and freed entity in the CLIO stack. In
+order to improvement the performance of allocation and free, a cl_page, along
+with the corresponding cl_page_slice for each layer, is allocated as a single
+memory buffer.
+
+Now that the CLIO can support different type of object layout, and each layout
+may lead to different cl_page in size. When an object is initialized, the object
+initialization method ->loo_object_init() for each layer will decide the size of
+buffer for cl_page_slice by calling cl_object_page_init(). cl_object_page_init()
+will add the size to coh_page_bufsize of top cl_object_header and co_slice_off
+of the corresponding cl_object is used to remember the offset of page slice for
+this object.
+
 ============
 = 5. Locks =
 ============
 
 A struct cl_lock represents an extent lock on cached file or stripe data.
-cl_lock is used only to maintain distributed cache coherency and provides no
-intra-node synchronization. It should be noted that, as with other Lustre DLM
-locks, cl_lock is actually a lock _request_, rather than a lock itself.
+cl_lock is used only to collect the lock requirement to complete an IO. Due to
+the existence of MMAP, it may require more than one lock to complete an IO.
+Except the cases of direct IO and lockless IO, a cl_lock will be attached to a
+LDLM lock on the OSC layer.
 
 As locks protect cached data, and the unit of data caching is a page, locks are
 of page granularity.
@@ -673,269 +669,46 @@ of page granularity.
 5.1. Lock Life Cycle
 ====================
 
-Locks for a given file are cached in a per-file doubly linked list. The overall
-lock life cycle is as following:
+The lock requirements are collected in cl_io_lock(). In cl_io_lock(), the
+->cio_lock() method for each layers are invoked to decide the lock extent by
+IO region, layout, and buffers. For example, in the VVP layer, it has to search
+buffers of IO and if the buffers belong to a Lustre file mmap region, the locks
+for the corresponding file will be requred.
 
-- The lock is created in the CLS_NEW state. At this moment the lock doesn't
-  actually protect anything;
+Once the lock requirements are collected, cl_lock_request() is called to create
+and initialize individual locks. In cl_lock_request(), ->clo_enqueue() is called
+for each layers. Especially on the OSC layer, osc_lock_enqueue() is called to
+match or create LDLM lock to fulfill the lock requirement.
 
-- The Lock is enqueued, that is, sent to server, passing through the
-  CLS_QUEUING state. In this state multiple network communications with
-  multiple servers may occur;
+cl_lock is not cacheable. The locks will be destroyed after IO is complete. The
+lock destroying process starts from cl_io_unlock() where cl_lock_release() is
+called for each cl_lock. In cl_lock_release(), ->clo_cancel() methods are called
+for each layer to release the resource held by cl_lock. The most important
+resource held by cl_lock is the LDLM lock on the OSC layer. It will be released
+by osc_lock_cancel(). LDLM locks can still be cached in memory after being
+detached from cl_lock.
 
-- Once fully enqueued, the lock moves into the CLS_ENQUEUED state where it
-  waits for a final reply from the server or servers;
+5.2. cl_lock and LDLM Lock
+==========================
 
-- When a reply granting this lock is received, the lock moves into the CLS_HELD
-  state. In this state the lock protects file data, and pages in the lock
-  extent can be cached (and dirtied for a write lock);
+As the result of enqueue, an LDLM lock is attached to a cl_lock_slice on the OSC
+layer. The field ols_dlmlock in the osc_lock points to the LDLM lock.
 
-- When the lock is not actively used, it is `unused' and, moving through the
-  CLS_UNLOCKING state, lands in the CLS_CACHED state. In this state the lock
-  still protects cached data. The difference with CLS_HELD state is that a lock
-  in the CLS_CACHED state can be cancelled;
+When an LDLM lock is attached to a osc_lock, its use count(l_readers,l_writers)
+is increased therefore it can't be revoked during this time. A LDLM lock can be
+shared by multiple osc_lock, in that case, each osc_lock will hold the LDLM lock
+according to their use type, i.e., increase l_readers or l_writers respectively.
 
-- Ultimately, the lock is either cancelled, or destroyed without cancellation.
-  In any case, it is moved in CLS_FREEING state and eventually freed.
+When a cl_lock is cancelled, the corresponding LDLM lock will be released.
+Cancellation of cl_lock does not necessarily cause the underlying LDLM lock to
+be cancelled. The LDLM lock can be cached in the memory unless it's being
+cancelled by OST.
 
-  A lock can be cancelled by a client either voluntarily (in reaction to memory
-  pressure, by explicit user request, or as part of early cancellation), or
-  involuntarily, when a blocking AST arrives.
+To cache a page in the client memory, the page index must be covered by at
+least one LDLM lock's extent. Please refer to section 5.3 for the details of
+pages and lock.
 
-  A lock can be destroyed without cancellation when its object is destroyed
-  (there should be no cached data at this point), or during eviction (when
-  cached data are invalid);
-
-- If an unrecoverable error occurs at any point (e.g., due to network timeout,
-  or a server's refusal to grant a lock), the lock is moved into the
-  CLS_FREEING state.
-
-The description above matches the slow IO path. In the common fast path there
-is already a cached lock covering the extent which the IO is against. In this
-case, the cl_lock_find() function finds the cached lock. If the found lock is
-in the CLS_HELD state, it can be used for IO immediately. If the found lock is
-in CLS_CACHED state, it is removed from the cache and transitions to CLS_HELD.
-If the lock is in the CLS_QUEUING or CLS_ENQUEUED state, some other IO is
-currently in the process of enqueuing it, and the current thread helps that
-other thread by continuing the enqueue operation.
-
-The actual process of finding a lock in the cache is in fact more involved than
-the above description, because there are cases when a lock matching the IO
-extent and mode still cannot be used for this IO. For example, locks covering
-multiple stripes cannot be used for regular IO, due to the danger of cascading
-evictions. For such situations, every layer can optionally define
-cl_lock_operations::clo_fits_into() method that might declare a given lock
-unsuitable for a given IO. See lov_lock_fits_into() as an example.
-
-5.2. Top-lock and Sub-locks
-===========================
-
-A top-lock protects cached pages of a top-object, and is based on a set of
-sub-locks, protecting cached pages of sub-objects:
-
-                    +--------->list of locks
-                    |                   |
-                    |                   V
-        cl_object_header<------------cl_lock
-                |          ->cld_obj    |
-                V                       V
-           vvp_object<---------------vvp_lock
-                |          ->cls_obj    |
-                V                       V
-           lov_object<---------------lov_lock
-                |          ->cls_obj    |
-        +---+---+---+---+           +---+---+---+---+
-        |   |   |   |   |           |   |   |   |   |
-        .   |   .   .   .           .   .   .   |   .
-            |                                   |
-            |   +-------------->list of locks   |
-            |   |                           |   |
-            V   |                           V   V
-    cl_object_header<----------------------cl_lock
-            |              ->cp_obj           |
-            V                                 V
-      lovsub_object<---------------------lovsub_lock
-            |              ->cls_obj          |
-            V                                 V
-       osc_object<------------------------osc_lock
-                           ->cls_obj
-
-When a top-lock is created, it creates sub-locks based on the striping method
-(RAID0 currently). Sub-locks are `created' in the same manner as top-locks: by
-calling cl_lock_find() function to go through the lock cache. To enqueue a
-top-lock all of its sub-locks have to be enqueued also, with ordering
-constraints defined by enqueue options:
-
-- To enqueue a regular top-lock, each sub-lock has to be enqueued and granted
-  before the next one can be enqueued. This is necessary to avoid deadlock;
-
-- For `try-lock' style top-lock (e.g., a glimpse request, or O_NONBLOCK IO
-  locks), requests can be enqueued in parallel, because dead-lock is not
-  possible in this case.
-
-Sub-lock state depends on its top-lock state:
-
-- When top-lock is being enqueued, its sub-locks are in QUEUING, ENQUEUED,
-  or HELD state;
-
-- When a top-lock is in HELD state, its sub-locks are in HELD state too;
-
-- When a top-lock is in CACHED state, its sub-locks are in CACHED state too;
-
-- When a top-lock is in FREEING state, it detaches itself from all sub-locks,
-  and those are usually deleted too.
-
-A sub-lock can be cancelled while its top-lock is in CACHED state. To maintain
-an invariant that CACHED lock is immediately ready for re-use by IO, the
-top-lock is moved into NEW state. The next attempt to use this lock will
-enqueue it again, resulting in the creation and enqueue of any missing
-sub-locks.  As follows from the description above, the top-lock provides
-somewhat weaker guarantees than one might expect:
-
-- Some of its sub-locks can be missing, and
-
-- Top-lock does not necessarily protect the whole of its extent.
-
-In other words, a top-lock is potentially porous, and in effect, it is just a
-hint, describing what sub-locks are likely to exist. Nonetheless, in the most
-important cases of a file per client, and of clients working in the disjoint
-areas of a shared file this hint is precise.
-
-5.3. Lock State Machine
-=======================
-
-A cl_lock is a state machine. This requires some clarification. One of the
-goals of CLIO is to make IO path non-blocking, or at least to make it easier to
-make it non-blocking in the future. Here `non-blocking' means that when a
-system call (read, write, truncate) reaches a situation where it has to wait
-for a communication with the server, it should--instead of waiting--remember
-its current state and switch to some other work. That is, instead of waiting
-for a lock enqueue, the client should proceed doing IO on the next stripe, etc.
-Obviously this is rather radical redesign, and it is not planned to be fully
-implemented at this time. Instead we are putting some infrastructure in place
-that would make it easier to do asynchronous non-blocking IO in the future.
-Specifically, where the old locking code goes to sleep (waiting for enqueue,
-for example), the new code returns cl_lock_transition::CLO_WAIT. When the
-enqueue reply comes, its completion handler signals that the lock state-machine
-is ready to move to the next state. There is some generic code in cl_lock.c
-that sleeps, waiting for these signals. As a result, for users of this
-cl_lock.c code, it looks like locking is done in the normal blocking fashion,
-and at the same time it is possible to switch to the non-blocking locking
-(simply by returning cl_lock_transition::CLO_WAIT from cl_lock.c functions).
-
-For a description of state machine states and transitions see enum
-cl_lock_state.
-
-There are two ways to restrict a set of states which a lock might move to:
-
-- Placing a "hold" on a lock guarantees that the lock will not be moved into
-  cl_lock_state::CLS_FREEING state until the hold is released. A hold can only
-  be acquired on a lock that is not in cl_lock_state::CLS_FREEING. All holds on
-  a lock are counted in cl_lock::cll_holds. A hold protects the lock from
-  cancellation and destruction. Requests to cancel and destroy a lock on hold
-  will be recorded, but only honoured when the last hold on a lock is released;
-
-- Placing a "user" on a lock guarantees that lock will not leave the set of
-  states cl_lock_state::CLS_NEW, cl_lock_state::CLS_QUEUING,
-  cl_lock_state::CLS_ENQUEUED and cl_lock_state::CLS_HELD, once it enters this
-  set. That is, if a user is added onto a lock in a state not from this set, it
-  doesn't immediately force the lock to move to this set, but once the lock
-  enters this set it will remain there until all users are removed. Lock users
-  are counted in cl_lock::cll_users.
-
-  A user is used to assure that the lock is not cancelled or destroyed while it
-  is being enqueued or actively used by some IO.
-
-  Currently, a user always comes with a hold (cl_lock_invariant() checks that a
-  number of holds is not less than a number of users).
-
-Lock "users" are used by the top-level IO code to guarantee that a lock is not
-cancelled when IO it protects is going on. Lock "holds" are used by a top-lock
-(LOV code) to guarantee that its sub-locks are in an expected state.
-
-5.4. Lock Concurrency
-=====================
-
-The following describes how the lock state-machine operates. The fields of
-struct cl_lock are protected by the cl_lock::cll_guard mutex.
-
-- The mutex is taken, and cl_lock::cll_state is examined.
-
-- For every state there are possible target states which the lock can move
-  into. They are tried in order. Attempts to move into the next state are
-  done by _try() functions in cl_lock.c:cl_{enqueue,unlock,wait}_try().
-
-- If the transition can be performed immediately, the state is changed and the
-  mutex is released.
-
-- If the transition requires blocking, the _try() function returns
-  cl_lock_transition::CLO_WAIT. The caller unlocks the mutex and goes to sleep,
-  waiting for the possibility of a lock state change. It is woken up when some
-  event occurs that makes lock state change possible (e.g., the reception of
-  the reply from the server), and repeats the loop.
-
-Top-lock and sub-lock have separate mutices and the latter has to be taken
-first to avoid deadlock.
-
-To see an example of interaction of all these issues, take a look at the
-lov_cl.c:lov_lock_enqueue() function. It is called as part of cl_enqueue_try(),
-and tries to advance top-lock to the ENQUEUED state by advancing the
-state-machines of its sub-locks (lov_lock_enqueue_one()). Note also that it
-uses trylock to take the sub-lock mutex to avoid deadlock. It also has to
-handle CEF_ASYNC enqueue, when sub-locks enqueues have to be done in parallel
-(this is used for glimpse locks which cannot deadlock).
-
-              +------------------>NEW
-              |                    |
-              |                    | cl_enqueue_try()
-              |                    |
-              |    cl_unuse_try()  V
-              |  +--------------QUEUING (*)
-              |  |                 |
-              |  |                 | cl_enqueue_try()
-              |  |                 |
-              |  | cl_unuse_try()  V
-     sub-lock |  +-------------ENQUEUED (*)
-    cancelled |  |                 |
-              |  |                 | cl_wait_try()
-              |  |                 |
-              |  |                 V
-              |  |                HELD<---------+
-              |  |                 |            |
-              |  |                 |            |
-              |  | cl_unuse_try()  |            |
-              |  |                 |            |
-              |  |                 V            | cached
-              |  +------------>UNLOCKING (*)    | lock found
-              |                    |            |
-              |    cl_unuse_try()  |            |
-              |                    |            |
-              |                    |            | cl_use_try()
-              |                    V            |
-              +------------------CACHED---------+
-                                   |
-                              (Cancelled)
-                                   |
-                                   V
-                                FREEING
-
-5.5. Shared Sub-locks
-=====================
-
-For various reasons, the same sub-lock can be shared by multiple top-locks. For
-example, a large sub-lock can match multiple small top-locks. In general, a
-sub-lock keeps a list of all its parents, and propagates certain events to
-them, e.g., as described above, when a sub-lock is cancelled, it moves _all_ of
-its top-locks from CACHED to NEW state.
-
-This leads to a curious situation, when an operation on some top-lock (e.g.,
-enqueue), changes state of one of its sub-locks, and this change has to be
-propagated to the other top-locks of this sub-lock. The resulting locking
-pattern is top->bottom->top, which is obviously not deadlock safe. To avoid
-deadlocks, try-locking is used in such situations. See
-cl_object.h:cl_lock_closure documentation for details.
-
-5.6. Use Case: Lock Invalidation
+5.3. Use Case: Lock Invalidation
 ================================
 
 To demonstrate how objects, pages and lock data-structures interact, let's look
@@ -943,59 +716,26 @@ at the example of stripe lock invalidation.
 
 Imagine that on the client C0 there is a file object F, striped over stripes
 S0, S1 and S2 (files and stripes are represented by cl_object_header). Further,
-there is a write lock LF, for the extent [a, b] (recall that lock extents are
-measured in pages) of file F. This lock is based on write sub-locks LS0, LS1
-and LS2 for the corresponding extents of S0, S1 and S2 respectively.
-
-All locks are in CACHED state. Each LSi sub-lock has a osc_lock slice, where a
-pointer to the struct ldlm_lock is stored. The ->l_ast_data field of ldlm_lock
-points back to the sub-lock's osc_lock.
-
-The client caches clean and dirty pages for F, some in [a, b] and some outside
-of it (these latter are necessarily covered by some other locks). Each of these
-pages is in F's radix tree, and points through cl_page::cp_child to a sub-page
-which is in radix-tree of one of Si's.
+C0 just finished a write IO to file F's offset [a, b] and left some clean and
+dirty pages in C0 and corresponding LDLM lock LS0, LS1, and LS2 for the
+corresponding stripes of S0, S1, and S2 respectively. From section 4.1, the
+caching pages stay in the radix tree of S0, S1 and S2.
 
 Some other client requests a lock that conflicts with LS1. The OST where S1
 lives, sends a blocking AST to C0.
 
 C0's LDLM invokes lock->l_blocking_ast(), which is osc_ldlm_blocking_ast(),
-which eventually calls acquires a mutex on the sub-lock and calls
-cl_lock_cancel(sub-lock). cl_lock_cancel() ascends through sub-lock's slices
-(which are osc_lock and lovsub_lock), calling ->clo_cancel() method at every
-stripe, that is, calling osc_lock_cancel() (the LOVSUB layer doesn't define
-->clo_cancel()).
+which eventually calls osc_cache_writeback_range() with the corresponding LDLM
+lock's extent as parameters. To find the pages covered by a LDLM lock,
+LDLM lock stores a pointer to osc_object in its l_ast_data.
 
-osc_lock_cancel() calls cl_lock_page_out() to invalidate all pages cached under
-this lock after sending dirty ones back to stripe S1's server.
-
-To do this, cl_lock_page_out() obtains the sub-lock's object and sweeps through
-its radix tree from the starting to ending offset of the sub-lock (recall that
-a sub-lock extent is measured in page offsets within a sub-object). For every
-page thus found cl_page_unmap() function is called to invalidate it. This
-function goes through sub-page slices bottom-to-top, then follows ->cp_parent
-pointer to go to the top-page and repeats the same process. Eventually
-vvp_page_unmap() is called which unmaps a page (top-page by this time) from the
-page tables.
-
-After a page is invalidated, it is prepared for transfer if it is dirty. This
-step also includes a bottom-to-top scan of the page and top-page slices, and
-calls to ->cpo_prep() methods at each layer, allowing vvp_page_prep_write() to
-announce to the VM that the VM page is being written.
+In osc_cache_writeback_range(), it will check if there exist dirty pages for
+the extent of this lock. If that is the case, an OST_WRITE RPC will be issued
+to write the dirty pages back.
 
 Once all pages are written, they are removed from radix-trees and destroyed.
-This completes invalidation of a sub-lock, and osc_lock_cancel() exits.  Note
-that:
-
-- No special cancellation logic for the top-lock is necessary;
-
-- Specifically, VVP knows nothing about striping and there is no need to
-  handle the case where only part of the top-lock is cancelled;
-
-- There is no need to convert between file and stripe offsets during this
-  process;
-
-- There is no need to keep track of locks protecting the given page.
+osc_lock_discard_pages() is called for this purpose. It will look up radix tree
+and then discard every page the extent covers.
 
 =========
 = 6. IO =
@@ -1014,8 +754,9 @@ There are two classes of IO contexts, represented by cl_io:
         . CIT_READ: read system call including read(2), readv(2), pread(2),
           sendfile(2);
         . CIT_WRITE: write system call;
-        . CIT_TRUNC: truncate system call;
+        . CIT_SETATTR: truncate and utime system call;
         . CIT_FAULT: page fault handling;
+	. CIT_FSYNC: fsync(2) system call, ->writepages() writeback request;
 
 - A `catch-all' CIT_MISC IO type for all other IO activity:
 
@@ -1053,6 +794,11 @@ cl_io is a layered entity and each step above is performed by invoking the
 corresponding cl_io_operations method on every layer. As will be explained
 below, this is especially important in the `prepare' step, as it allows layers
 to cooperate in determining the scope of the current iteration.
+
+Before an IO can be started, the client has to make sure that the object's
+layout is valid. The client will check there exists a valid layout lock being
+cached in the client side memory, otherwise, ll_layout_refresh() has to be
+called to fetch uptodate layout from the MDT side.
 
 For CIT_READ or CIT_WRITE IO, a typical scenario is splitting the original user
 buffer into chunks that map completely inside of a single stripe in the target
@@ -1118,15 +864,14 @@ layers.  Important properties so described include:
 - A position in a file where the read or write is taking place, and a count of
   bytes remaining to be processed (for CIT_READ and CIT_WRITE);
 
-- A size to which file is being truncated or expanded (for CIT_TRUNC);
+- A size to which file is being truncated or expanded (for CIT_SETATTR);
 
 - A list of locks acquired for this IO;
 
 Each layer keeps IO state in its `IO slice', described below, with all slices
 chained to the list hanging off of struct cl_io:
 
-- vvp_io is used by the top-most layer of the Linux kernel
-  client.
+- vvp_io is used by the top-most layer of the Linux kernel client.
 
   The most important state in vvp_io is an array of struct iovec, describing
   user space buffers from or to which IO is taking place. Note that other
@@ -1143,9 +888,9 @@ chained to the list hanging off of struct cl_io:
 - osc_io: this slice stores IO state private to the OSC layer that exists within
   each sub-IO created by LOV.
 
-===============
-= 7. Transfer =
-===============
+=================
+= 7. RPC Engine =
+=================
 
 7.1. Immediate vs. Opportunistic Transfers
 ==========================================
@@ -1174,7 +919,8 @@ decision is made by "a req-formation engine", currently implemented as part of
 the OSC layer. Req-formation depends on many factors: the size of the resulting
 RPC, RPC alignment, whether or not multi-object RPCs are supported by the
 server, max-RPC-in-flight limitations, size of the staging area, etc. CLIO uses
-unmodified RPC formation logic from OSC, so it is not discussed here.
+osc_extent to group pages for req-formation. osc_extent are further managed in
+a per-object red-black tree for efficient RPC formatting.
 
 For an immediate transfer the IO submits a cl_page_list which the req-formation
 engine slices into cl_req's, possibly adding cached pages to some of the
@@ -1206,7 +952,7 @@ To summarize, there are two main entry points into transfer sub-system:
 
 - cl_io_submit_rw(): submits a list of pages for immediate transfer;
 
-- cl_page_cache_add(): places a page into staging area for future
+- cl_io_commit_async(): places a list of pages into staging area for future
   opportunistic transfer.
 
 7.2. Page Lists
@@ -1505,13 +1251,11 @@ user-level buffer used for this IO. In the future layers like SNS might request
 additional locks, e.g., to protect parity blocks.
 
 Locks requested by ->cio_lock() methods are added to the cl_lockset embedded
-into top cl_io. The lockset contains 3 lock queues: "todo", "current" and
-"done".  Locks are initially placed in the todo queue. Once locks from all
-layers have been collected, they are sorted to avoid deadlocks
-(cl_io_locks_sort()) and them enqueued by cl_lockset_lock(). The latter can
-enqueue multiple locks concurrently if the enqueuing mode guarantees this is
-safe (e.g., lock is a try-lock). Locks being enqueued are in the "current"
-queue, from where they are moved into "done" queue when the lock is granted.
+into top cl_io. The lockset contains 2 lock queues: "todo" and "done". Locks
+are initially placed in the todo queue. Once locks from all layers have been
+collected, they are sorted to avoid deadlocks (cl_io_locks_sort()) and then
+enqueued by cl_lockset_lock(). The locks will be moved from todo list into
+"done" list when they are granted.
 
 At this stage we have top- and sub-IO in the CIS_LOCKED state with all needed
 locks held. cl_io_start() moves cl_io into CIS_IO_GOING mode and calls
@@ -1532,32 +1276,20 @@ not-up-to-date page in the queue.
 is released by the transfer completion handler before copying page data to the
 user buffer.
 
-In the case of write, generic_file_write() calls the a_ops->prepare_write() and
-a_ops->commit_write() address space methods that end up calling
-cl_io_prepare_write() and cl_io_commit_write() respectively. These functions
-follow the normal Linux protocol for write, including a possible synchronous
-read of a non-overwritten part of a page (vvp_page_sync_io() call in
-vvp_io_prepare_partial()). In the normal case it ends up placing the dirtied
-page into the staging area (cl_page_cache_add() call in vvp_io_commit_write()).
-If the staging area is full already, cl_page_cache_add() fails with -EDQUOT and
-the page is transferred immediately by calling vvp_page_sync_io().
+In the case of write, generic_file_write() calls the a_ops->write_begin() and
+a_ops->write_end() address space methods that end up calling ll_write_begin()
+and ll_write_end() respectively. These functions follow the normal Linux
+protocol for write, including a possible synchronous read of a non-overwritten
+part of a page (ll_page_sync_io() call in ll_prepare_partial_page()). The pages
+are placed into a list of vui_queue of vvp_io. In the normal case the pages will
+be committed after all pages are handled by calling vvp_io_write_commit(). In
+vvp_io_commit_write(), it calls cl_io_commit_async() to submit the dirty pages
+into OSC writeback cache, where grant are allocated and the pages are added into
+a red-black tree of osc_extent. In case there is no enough grant on the client
+side, cl_io_commit_async will fail with -EDQUOT and the pages are transferred
+immediately by calling ll_page_sync_io().
 
-9.3. Cached IO
-==============
-
-Subsequent IO calls will, most likely, find suitable locks already cached on
-the client. This happens because the server tries to grant as large a lock as
-possible, to reduce future enqueue RPC traffic for a given file from a given
-client. Cached locks are kept (in no particular order) on a
-cl_object_header::coh_locks list. When, in the cl_io_lock() step, a layer
-requests a lock, this list is scanned for a matching lock. If a found lock is
-in the HELD or CACHED state it can be re-used immediately by simply calling
-cl_lock_use() method, which eventually calls ldlm_lock_addref_try() to protect
-the underlying DLM lock from a concurrent cancellation while IO is going on. If
-a lock in another (NEW, QUEUING or ENQUEUED) state is found, it is enqueued as
-usual.
-
-9.4. Lock-less and No-cache IO
+9.3. Lock-less and No-cache IO
 ==============================
 
 IO context has a "locking mode" selected from MAYBE, NEVER or MANDATORY set
