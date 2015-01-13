@@ -223,14 +223,8 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
 failed:
 	if (type->typ_name != NULL) {
 #ifdef CONFIG_PROC_FS
-		if (type->typ_procroot != NULL) {
-#ifndef HAVE_ONLY_PROCFS_SEQ
-			lprocfs_try_remove_proc_entry(type->typ_name,
-						      proc_lustre_root);
-#else
+		if (type->typ_procroot != NULL)
 			remove_proc_subtree(type->typ_name, proc_lustre_root);
-#endif
-		}
 #endif
                 OBD_FREE(type->typ_name, strlen(name) + 1);
 	}
@@ -267,14 +261,8 @@ int class_unregister_type(const char *name)
 	 * we can't reference pointer as it can get invalided when another
 	 * module removes the entry */
 #ifdef CONFIG_PROC_FS
-	if (type->typ_procroot != NULL) {
-#ifndef HAVE_ONLY_PROCFS_SEQ
-		lprocfs_try_remove_proc_entry(type->typ_name, proc_lustre_root);
-#else
+	if (type->typ_procroot != NULL)
 		remove_proc_subtree(type->typ_name, proc_lustre_root);
-#endif
-	}
-
 	if (type->typ_procsym != NULL)
 		lprocfs_remove(&type->typ_procsym);
 #endif

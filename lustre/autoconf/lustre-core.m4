@@ -1281,7 +1281,7 @@ hlist_for_each_entry_3args, [
 # f73a1c7d117d07a96d89475066188a2b79e53c48
 #
 AC_DEFUN([LC_HAVE_BIO_END_SECTOR], [
-LB_CHECK_COMPILE([if 'bio_end_sector is defined],
+LB_CHECK_COMPILE([if 'bio_end_sector' is defined],
 bio_end_sector, [
 	#include <linux/bio.h>
 ],[
@@ -1295,21 +1295,38 @@ bio_end_sector, [
 ]) # LC_HAVE_BIO_END_SECTOR
 
 #
-# LC_HAVE_ONLY_PROCFS_SEQ
+# LC_HAVE_REMOVE_PROC_SUBTREE
 #
-# 3.10+ only supports procfs seq_files handling
+# 3.10 introduced remove_proc_subtree
 #
-AC_DEFUN([LC_HAVE_ONLY_PROCFS_SEQ], [
-LB_CHECK_COMPILE([if procfs only supports using 'seq_files'],
-only_procfs_seq_files, [
+AC_DEFUN([LC_HAVE_REMOVE_PROC_SUBTREE], [
+LB_CHECK_COMPILE([if 'remove_proc_subtree' is defined],
+remove_proc_subtree, [
 	#include <linux/proc_fs.h>
 ],[
-	((struct proc_dir_entry *)0)->write_proc(NULL, NULL, 0, NULL);
-], [], [
-	AC_DEFINE(HAVE_ONLY_PROCFS_SEQ, 1,
-		[only seq_files supported])
+	remove_proc_subtree(NULL, NULL);
+], [
+	AC_DEFINE(HAVE_REMOVE_PROC_SUBTREE, 1,
+		  [remove_proc_subtree is defined])
 ])
-]) # LC_HAVE_ONLY_PROCFS_SEQ
+]) # LC_HAVE_REMOVE_PROC_SUBTREE
+
+#
+# LC_HAVE_PROC_REMOVE
+#
+# 3.10 introduced proc_remove
+#
+AC_DEFUN([LC_HAVE_PROC_REMOVE], [
+LB_CHECK_COMPILE([if 'proc_remove' is defined],
+proc_remove, [
+	#include <linux/proc_fs.h>
+],[
+	proc_remove(NULL);
+], [
+	AC_DEFINE(HAVE_PROC_REMOVE, 1,
+		  [proc_remove is defined])
+])
+]) # LC_HAVE_PROC_REMOVE
 
 #
 # LC_BLKDEV_RELEASE_RETURN_INT
@@ -1624,8 +1641,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_BIO_END_SECTOR
 
 	# 3.10
-	LC_HAVE_ONLY_PROCFS_SEQ
 	LC_BLKDEV_RELEASE_RETURN_INT
+	LC_HAVE_REMOVE_PROC_SUBTREE
+	LC_HAVE_PROC_REMOVE
 
 	# 3.11
 	LC_INVALIDATE_RANGE
