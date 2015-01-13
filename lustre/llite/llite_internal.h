@@ -791,7 +791,6 @@ void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras);
 int ll_readahead(const struct lu_env *env, struct cl_io *io,
 		 struct cl_page_list *queue, struct ll_readahead_state *ras,
 		 bool hit);
-int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io);
 struct ll_cl_context *ll_cl_find(struct file *file);
 void ll_cl_add(struct file *file, const struct lu_env *env, struct cl_io *io);
 void ll_cl_remove(struct file *file, const struct lu_env *env);

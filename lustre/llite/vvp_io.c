@@ -46,10 +46,21 @@
 #include "llite_internal.h"
 #include "vvp_internal.h"
 
+static struct vvp_io *cl2vvp_io(const struct lu_env *env,
+				const struct cl_io_slice *slice)
+{
+	struct vvp_io *vio;
+
+	vio = container_of(slice, struct vvp_io, vui_cl);
+	LASSERT(vio == vvp_env_io(env));
+
+	return vio;
+}
+
 /**
  * True, if \a io is a normal io, False for splice_{read,write}
  */
-int cl_is_normalio(const struct lu_env *env, const struct cl_io *io)
+static int cl_is_normalio(const struct lu_env *env, const struct cl_io *io)
 {
 	struct vvp_io *vio = vvp_env_io(env);
 
@@ -91,11 +102,164 @@ static bool can_populate_pages(const struct lu_env *env, struct cl_io *io,
 	return rc;
 }
 
+static void vvp_object_size_lock(struct cl_object *obj)
+{
+	struct inode *inode = vvp_object_inode(obj);
+
+	ll_inode_size_lock(inode);
+	cl_object_attr_lock(obj);
+}
+
+static void vvp_object_size_unlock(struct cl_object *obj)
+{
+	struct inode *inode = vvp_object_inode(obj);
+
+	cl_object_attr_unlock(obj);
+	ll_inode_size_unlock(inode);
+}
+
+/**
+ * Helper function that if necessary adjusts file size (inode->i_size), when
+ * position at the offset \a pos is accessed. File size can be arbitrary stale
+ * on a Lustre client, but client at least knows KMS. If accessed area is
+ * inside [0, KMS], set file size to KMS, otherwise glimpse file size.
+ *
+ * Locking: i_size_lock is used to serialize changes to inode size and to
+ * protect consistency between inode size and cl_object
+ * attributes. cl_object_size_lock() protects consistency between cl_attr's of
+ * top-object and sub-objects.
+ */
+static int vvp_prep_size(const struct lu_env *env, struct cl_object *obj,
+			 struct cl_io *io, loff_t start, size_t count,
+			 int *exceed)
+{
+	struct cl_attr *attr  = ccc_env_thread_attr(env);
+	struct inode   *inode = vvp_object_inode(obj);
+	loff_t          pos   = start + count - 1;
+	loff_t kms;
+	int result;
+
+	/*
+	 * Consistency guarantees: following possibilities exist for the
+	 * relation between region being accessed and real file size at this
+	 * moment:
+	 *
+	 *  (A): the region is completely inside of the file;
+	 *
+	 *  (B-x): x bytes of region are inside of the file, the rest is
+	 *  outside;
+	 *
+	 *  (C): the region is completely outside of the file.
+	 *
+	 * This classification is stable under DLM lock already acquired by
+	 * the caller, because to change the class, other client has to take
+	 * DLM lock conflicting with our lock. Also, any updates to ->i_size
+	 * by other threads on this client are serialized by
+	 * ll_inode_size_lock(). This guarantees that short reads are handled
+	 * correctly in the face of concurrent writes and truncates.
+	 */
+	vvp_object_size_lock(obj);
+	result = cl_object_attr_get(env, obj, attr);
+	if (result == 0) {
+		kms = attr->cat_kms;
+		if (pos > kms) {
+			/*
+			 * A glimpse is necessary to determine whether we
+			 * return a short read (B) or some zeroes at the end
+			 * of the buffer (C)
+			 */
+			vvp_object_size_unlock(obj);
+			result = cl_glimpse_lock(env, io, inode, obj, 0);
+			if (result == 0 && exceed != NULL) {
+				/* If objective page index exceed end-of-file
+				 * page index, return directly. Do not expect
+				 * kernel will check such case correctly.
+				 * linux-2.6.18-128.1.1 miss to do that.
+				 * --bug 17336 */
+				loff_t size = i_size_read(inode);
+				unsigned long cur_index = start >>
+					PAGE_CACHE_SHIFT;
+
+				if ((size == 0 && cur_index != 0) ||
+				    (((size - 1) >> PAGE_CACHE_SHIFT) <
+				     cur_index))
+					*exceed = 1;
+			}
+
+			return result;
+		} else {
+			/*
+			 * region is within kms and, hence, within real file
+			 * size (A). We need to increase i_size to cover the
+			 * read region so that generic_file_read() will do its
+			 * job, but that doesn't mean the kms size is
+			 * _correct_, it is only the _minimum_ size. If
+			 * someone does a stat they will get the correct size
+			 * which will always be >= the kms value here.
+			 * b=11081
+			 */
+			if (i_size_read(inode) < kms) {
+				i_size_write(inode, kms);
+				CDEBUG(D_VFSTRACE,
+				       DFID" updating i_size "LPU64"\n",
+				       PFID(lu_object_fid(&obj->co_lu)),
+				       (__u64)i_size_read(inode));
+			}
+		}
+	}
+
+	vvp_object_size_unlock(obj);
+
+	return result;
+}
+
 /*****************************************************************************
  *
  * io operations.
  *
  */
+
+static int vvp_io_one_lock_index(const struct lu_env *env, struct cl_io *io,
+				 __u32 enqflags, enum cl_lock_mode mode,
+				 pgoff_t start, pgoff_t end)
+{
+	struct vvp_io          *vio   = vvp_env_io(env);
+	struct cl_lock_descr   *descr = &vio->vui_link.cill_descr;
+	struct cl_object       *obj   = io->ci_obj;
+
+	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
+	ENTRY;
+
+	CDEBUG(D_VFSTRACE, "lock: %d [%lu, %lu]\n", mode, start, end);
+
+	memset(&vio->vui_link, 0, sizeof vio->vui_link);
+
+	if (vio->vui_fd && (vio->vui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
+		descr->cld_mode = CLM_GROUP;
+		descr->cld_gid  = vio->vui_fd->fd_grouplock.cg_gid;
+	} else {
+		descr->cld_mode  = mode;
+	}
+
+	descr->cld_obj   = obj;
+	descr->cld_start = start;
+	descr->cld_end   = end;
+	descr->cld_enq_flags = enqflags;
+
+	cl_io_lock_add(env, io, &vio->vui_link);
+
+	RETURN(0);
+}
+
+static int vvp_io_one_lock(const struct lu_env *env, struct cl_io *io,
+			   __u32 enqflags, enum cl_lock_mode mode,
+			   loff_t start, loff_t end)
+{
+	struct cl_object *obj = io->ci_obj;
+
+	return vvp_io_one_lock_index(env, io, enqflags, mode,
+				     cl_index(obj, start), cl_index(obj, end));
+}
 
 static int vvp_io_write_iter_init(const struct lu_env *env,
 				  const struct cl_io_slice *ios)
@@ -303,6 +467,75 @@ static int vvp_mmap_locks(const struct lu_env *env,
 			break;
 	}
 	RETURN(result);
+}
+
+static void vvp_io_advance(const struct lu_env *env,
+			   const struct cl_io_slice *ios,
+			   size_t nob)
+{
+	struct vvp_io    *vio = cl2vvp_io(env, ios);
+	struct cl_io     *io  = ios->cis_io;
+	struct cl_object *obj = ios->cis_io->ci_obj;
+
+	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
+
+	if (!cl_is_normalio(env, io))
+		return;
+
+	LASSERT(vio->vui_tot_nrsegs >= vio->vui_nrsegs);
+	LASSERT(vio->vui_tot_count  >= nob);
+
+	vio->vui_iov        += vio->vui_nrsegs;
+	vio->vui_tot_nrsegs -= vio->vui_nrsegs;
+	vio->vui_tot_count  -= nob;
+
+	/* update the iov */
+	if (vio->vui_iov_olen > 0) {
+		struct iovec *iv;
+
+		vio->vui_iov--;
+		vio->vui_tot_nrsegs++;
+		iv = &vio->vui_iov[0];
+		if (io->ci_continue) {
+			iv->iov_base += iv->iov_len;
+			LASSERT(vio->vui_iov_olen > iv->iov_len);
+			iv->iov_len = vio->vui_iov_olen - iv->iov_len;
+		} else {
+			/* restore the iov_len, in case of restart io. */
+			iv->iov_len = vio->vui_iov_olen;
+		}
+		vio->vui_iov_olen = 0;
+	}
+}
+
+static void vvp_io_update_iov(const struct lu_env *env,
+			      struct vvp_io *vio, struct cl_io *io)
+{
+	int i;
+	size_t size = io->u.ci_rw.crw_count;
+
+	vio->vui_iov_olen = 0;
+	if (!cl_is_normalio(env, io) || vio->vui_tot_nrsegs == 0)
+		return;
+
+	for (i = 0; i < vio->vui_tot_nrsegs; i++) {
+		struct iovec *iv = &vio->vui_iov[i];
+
+		if (iv->iov_len < size) {
+			size -= iv->iov_len;
+		} else {
+			if (iv->iov_len > size) {
+				vio->vui_iov_olen = iv->iov_len;
+				iv->iov_len = size;
+			}
+			break;
+		}
+	}
+
+	vio->vui_nrsegs = i + 1;
+	LASSERTF(vio->vui_tot_nrsegs >= vio->vui_nrsegs,
+		 "tot_nrsegs: %lu, nrsegs: %lu\n",
+		 vio->vui_tot_nrsegs, vio->vui_nrsegs);
 }
 
 static int vvp_io_rw_lock(const struct lu_env *env, struct cl_io *io,
@@ -522,7 +755,7 @@ static int vvp_io_read_start(const struct lu_env *env,
 	if (!can_populate_pages(env, io, inode))
 		return 0;
 
-        result = ccc_prep_size(env, obj, io, pos, tot, &exceed);
+	result = vvp_prep_size(env, obj, io, pos, tot, &exceed);
         if (result != 0)
                 return result;
         else if (exceed != 0)
@@ -920,7 +1153,7 @@ static int vvp_io_fault_start(const struct lu_env *env,
         /* offset of the last byte on the page */
         offset = cl_offset(obj, fio->ft_index + 1) - 1;
         LASSERT(cl_index(obj, offset) == fio->ft_index);
-        result = ccc_prep_size(env, obj, io, 0, offset + 1, NULL);
+	result = vvp_prep_size(env, obj, io, 0, offset + 1, NULL);
 	if (result != 0)
 		RETURN(result);
 
@@ -1102,6 +1335,12 @@ static int vvp_io_read_page(const struct lu_env *env,
 			     vpg->vpg_defer_uptodate);
 
 	RETURN(0);
+}
+
+static void vvp_io_end(const struct lu_env *env, const struct cl_io_slice *ios)
+{
+	CLOBINVRNT(env, ios->cis_io->ci_obj,
+		   vvp_object_invariant(ios->cis_io->ci_obj));
 }
 
 static const struct cl_io_operations vvp_io_ops = {
