@@ -207,60 +207,62 @@ int vvp_io_one_lock_index(const struct lu_env *env, struct cl_io *io,
 			  __u32 enqflags, enum cl_lock_mode mode,
 			  pgoff_t start, pgoff_t end)
 {
-	struct vvp_io          *cio   = vvp_env_io(env);
-        struct cl_lock_descr   *descr = &cio->cui_link.cill_descr;
-        struct cl_object       *obj   = io->ci_obj;
+	struct vvp_io          *vio   = vvp_env_io(env);
+	struct cl_lock_descr   *descr = &vio->vui_link.cill_descr;
+	struct cl_object       *obj   = io->ci_obj;
 
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
-        ENTRY;
+	ENTRY;
 
-        CDEBUG(D_VFSTRACE, "lock: %d [%lu, %lu]\n", mode, start, end);
+	CDEBUG(D_VFSTRACE, "lock: %d [%lu, %lu]\n", mode, start, end);
 
-        memset(&cio->cui_link, 0, sizeof cio->cui_link);
+	memset(&vio->vui_link, 0, sizeof vio->vui_link);
 
-        if (cio->cui_fd && (cio->cui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
-                descr->cld_mode = CLM_GROUP;
-                descr->cld_gid  = cio->cui_fd->fd_grouplock.cg_gid;
-        } else {
-                descr->cld_mode  = mode;
-        }
-        descr->cld_obj   = obj;
-        descr->cld_start = start;
-        descr->cld_end   = end;
-        descr->cld_enq_flags = enqflags;
+	if (vio->vui_fd && (vio->vui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
+		descr->cld_mode = CLM_GROUP;
+		descr->cld_gid  = vio->vui_fd->fd_grouplock.cg_gid;
+	} else {
+		descr->cld_mode  = mode;
+	}
 
-        cl_io_lock_add(env, io, &cio->cui_link);
-        RETURN(0);
+	descr->cld_obj   = obj;
+	descr->cld_start = start;
+	descr->cld_end   = end;
+	descr->cld_enq_flags = enqflags;
+
+	cl_io_lock_add(env, io, &vio->vui_link);
+
+	RETURN(0);
 }
 
 void vvp_io_update_iov(const struct lu_env *env,
-		       struct vvp_io *cio, struct cl_io *io)
+		       struct vvp_io *vio, struct cl_io *io)
 {
-        int i;
-        size_t size = io->u.ci_rw.crw_count;
+	int i;
+	size_t size = io->u.ci_rw.crw_count;
 
-        cio->cui_iov_olen = 0;
-        if (!cl_is_normalio(env, io) || cio->cui_tot_nrsegs == 0)
-                return;
+	vio->vui_iov_olen = 0;
+	if (!cl_is_normalio(env, io) || vio->vui_tot_nrsegs == 0)
+		return;
 
-        for (i = 0; i < cio->cui_tot_nrsegs; i++) {
-                struct iovec *iv = &cio->cui_iov[i];
+	for (i = 0; i < vio->vui_tot_nrsegs; i++) {
+		struct iovec *iv = &vio->vui_iov[i];
 
-                if (iv->iov_len < size)
-                        size -= iv->iov_len;
-                else {
-                        if (iv->iov_len > size) {
-                                cio->cui_iov_olen = iv->iov_len;
-                                iv->iov_len = size;
-                        }
-                        break;
-                }
-        }
+		if (iv->iov_len < size) {
+			size -= iv->iov_len;
+		} else {
+			if (iv->iov_len > size) {
+				vio->vui_iov_olen = iv->iov_len;
+				iv->iov_len = size;
+			}
+			break;
+		}
+	}
 
-        cio->cui_nrsegs = i + 1;
-	LASSERTF(cio->cui_tot_nrsegs >= cio->cui_nrsegs,
+	vio->vui_nrsegs = i + 1;
+	LASSERTF(vio->vui_tot_nrsegs >= vio->vui_nrsegs,
 		 "tot_nrsegs: %lu, nrsegs: %lu\n",
-		 cio->cui_tot_nrsegs, cio->cui_nrsegs);
+		 vio->vui_tot_nrsegs, vio->vui_nrsegs);
 }
 
 int vvp_io_one_lock(const struct lu_env *env, struct cl_io *io,
@@ -283,7 +285,7 @@ void vvp_io_advance(const struct lu_env *env,
 		    const struct cl_io_slice *ios,
 		    size_t nob)
 {
-	struct vvp_io    *cio = cl2vvp_io(env, ios);
+	struct vvp_io    *vio = cl2vvp_io(env, ios);
 	struct cl_io     *io  = ios->cis_io;
 	struct cl_object *obj = ios->cis_io->ci_obj;
 
@@ -292,29 +294,29 @@ void vvp_io_advance(const struct lu_env *env,
 	if (!cl_is_normalio(env, io))
 		return;
 
-	LASSERT(cio->cui_tot_nrsegs >= cio->cui_nrsegs);
-	LASSERT(cio->cui_tot_count  >= nob);
+	LASSERT(vio->vui_tot_nrsegs >= vio->vui_nrsegs);
+	LASSERT(vio->vui_tot_count  >= nob);
 
-	cio->cui_iov        += cio->cui_nrsegs;
-	cio->cui_tot_nrsegs -= cio->cui_nrsegs;
-	cio->cui_tot_count  -= nob;
+	vio->vui_iov        += vio->vui_nrsegs;
+	vio->vui_tot_nrsegs -= vio->vui_nrsegs;
+	vio->vui_tot_count  -= nob;
 
 	/* update the iov */
-	if (cio->cui_iov_olen > 0) {
+	if (vio->vui_iov_olen > 0) {
 		struct iovec *iv;
 
-		cio->cui_iov--;
-		cio->cui_tot_nrsegs++;
-		iv = &cio->cui_iov[0];
+		vio->vui_iov--;
+		vio->vui_tot_nrsegs++;
+		iv = &vio->vui_iov[0];
 		if (io->ci_continue) {
 			iv->iov_base += iv->iov_len;
-			LASSERT(cio->cui_iov_olen > iv->iov_len);
-			iv->iov_len = cio->cui_iov_olen - iv->iov_len;
+			LASSERT(vio->vui_iov_olen > iv->iov_len);
+			iv->iov_len = vio->vui_iov_olen - iv->iov_len;
 		} else {
 			/* restore the iov_len, in case of restart io. */
-			iv->iov_len = cio->cui_iov_olen;
+			iv->iov_len = vio->vui_iov_olen;
 		}
-		cio->cui_iov_olen = 0;
+		vio->vui_iov_olen = 0;
 	}
 }
 
@@ -517,12 +519,12 @@ int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
 
 again:
         if (cl_io_init(env, io, CIT_SETATTR, io->ci_obj) == 0) {
-		struct vvp_io *cio = vvp_env_io(env);
+		struct vvp_io *vio = vvp_env_io(env);
 
-                if (attr->ia_valid & ATTR_FILE)
-                        /* populate the file descriptor for ftruncate to honor
-                         * group lock - see LU-787 */
-			cio->cui_fd = LUSTRE_FPRIVATE(attr->ia_file);
+		if (attr->ia_valid & ATTR_FILE)
+			/* populate the file descriptor for ftruncate to honor
+			 * group lock - see LU-787 */
+			vio->vui_fd = LUSTRE_FPRIVATE(attr->ia_file);
 
                 result = cl_io_loop(env, io);
         } else {
@@ -550,12 +552,12 @@ again:
 struct vvp_io *cl2vvp_io(const struct lu_env *env,
 			 const struct cl_io_slice *slice)
 {
-	struct vvp_io *cio;
+	struct vvp_io *vio;
 
-	cio = container_of(slice, struct vvp_io, cui_cl);
-	LASSERT(cio == vvp_env_io(env));
+	vio = container_of(slice, struct vvp_io, vui_cl);
+	LASSERT(vio == vvp_env_io(env));
 
-	return cio;
+	return vio;
 }
 
 struct ccc_req *cl2ccc_req(const struct cl_req_slice *slice)

@@ -1152,7 +1152,7 @@ restart:
         ll_io_init(io, file, iot == CIT_WRITE);
 
         if (cl_io_rw_init(env, io, iot, *ppos, count) == 0) {
-		struct vvp_io *cio = vvp_env_io(env);
+		struct vvp_io *vio = vvp_env_io(env);
 		bool range_locked = false;
 
 		if (file->f_flags & O_APPEND)
@@ -1160,17 +1160,17 @@ restart:
 		else
 			range_lock_init(&range, *ppos, *ppos + count - 1);
 
-		cio->cui_fd  = LUSTRE_FPRIVATE(file);
-		cio->cui_io_subtype = args->via_io_subtype;
+		vio->vui_fd  = LUSTRE_FPRIVATE(file);
+		vio->vui_io_subtype = args->via_io_subtype;
 
-		switch (cio->cui_io_subtype) {
-                case IO_NORMAL:
-                        cio->cui_iov = args->u.normal.via_iov;
-                        cio->cui_nrsegs = args->u.normal.via_nrsegs;
-                        cio->cui_tot_nrsegs = cio->cui_nrsegs;
-                        cio->cui_iocb = args->u.normal.via_iocb;
-                        if ((iot == CIT_WRITE) &&
-                            !(cio->cui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
+		switch (vio->vui_io_subtype) {
+		case IO_NORMAL:
+			vio->vui_iov = args->u.normal.via_iov;
+			vio->vui_nrsegs = args->u.normal.via_nrsegs;
+			vio->vui_tot_nrsegs = vio->vui_nrsegs;
+			vio->vui_iocb = args->u.normal.via_iocb;
+			if ((iot == CIT_WRITE) &&
+			    !(vio->vui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
 				CDEBUG(D_VFSTRACE, "Range lock "RL_FMT"\n",
 				       RL_PARA(&range));
 				result = range_lock(&lli->lli_write_tree,
@@ -1181,13 +1181,13 @@ restart:
 				range_locked = true;
 			}
 			down_read(&lli->lli_trunc_sem);
-                        break;
+			break;
 		case IO_SPLICE:
-			cio->u.splice.cui_pipe = args->u.splice.via_pipe;
-			cio->u.splice.cui_flags = args->u.splice.via_flags;
+			vio->u.splice.vui_pipe = args->u.splice.via_pipe;
+			vio->u.splice.vui_flags = args->u.splice.via_flags;
 			break;
 		default:
-			CERROR("unknown IO subtype %u\n", cio->cui_io_subtype);
+			CERROR("unknown IO subtype %u\n", vio->vui_io_subtype);
 			LBUG();
 		}
 

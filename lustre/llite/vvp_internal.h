@@ -93,25 +93,25 @@ enum vvp_io_subtype {
  */
 struct vvp_io {
 	/** super class */
-	struct cl_io_slice     cui_cl;
-	struct cl_io_lock_link cui_link;
+	struct cl_io_slice     vui_cl;
+	struct cl_io_lock_link vui_link;
 	/**
 	 * I/O vector information to or from which read/write is going.
 	 */
-	struct iovec *cui_iov;
-	unsigned long cui_nrsegs;
+	struct iovec *vui_iov;
+	unsigned long vui_nrsegs;
 	/**
 	 * Total iov count for left IO.
 	 */
-	unsigned long cui_tot_nrsegs;
+	unsigned long vui_tot_nrsegs;
 	/**
 	 * Old length for iov that was truncated partially.
 	 */
-	size_t cui_iov_olen;
+	size_t vui_iov_olen;
 	/**
 	 * Total size for the left IO.
 	 */
-	size_t cui_tot_count;
+	size_t vui_tot_count;
 
 	union {
 		struct vvp_fault_io {
@@ -139,37 +139,37 @@ struct vvp_io {
 			bool			 ft_flags_valid;
 		} fault;
 		struct {
-			enum ccc_setattr_lock_type cui_local_lock;
+			enum ccc_setattr_lock_type vui_local_lock;
 		} setattr;
 		struct {
-			struct pipe_inode_info	*cui_pipe;
-			unsigned int		 cui_flags;
+			struct pipe_inode_info	*vui_pipe;
+			unsigned int		 vui_flags;
 		} splice;
 		struct {
-			struct cl_page_list cui_queue;
-			unsigned long cui_written;
-			int cui_from;
-			int cui_to;
+			struct cl_page_list vui_queue;
+			unsigned long vui_written;
+			int vui_from;
+			int vui_to;
 		} write;
 	} u;
 
-	enum vvp_io_subtype	cui_io_subtype;
+	enum vvp_io_subtype	vui_io_subtype;
 
 	/**
 	 * Layout version when this IO is initialized
 	 */
-	__u32                cui_layout_gen;
+	__u32			vui_layout_gen;
 	/**
 	* File descriptor against which IO is done.
 	*/
-	struct ll_file_data *cui_fd;
-	struct kiocb *cui_iocb;
+	struct ll_file_data	*vui_fd;
+	struct kiocb		*vui_iocb;
 
 	/* Readahead state. */
-	pgoff_t	cui_ra_start;
-	pgoff_t	cui_ra_count;
-	/* Set when cui_ra_{start,count} have been initialized. */
-	bool		cui_ra_valid;
+	pgoff_t	vui_ra_start;
+	pgoff_t	vui_ra_count;
+	/* Set when vui_ra_{start,count} have been initialized. */
+	bool		vui_ra_valid;
 };
 
 /**

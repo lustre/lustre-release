@@ -482,10 +482,10 @@ int ll_readahead(const struct lu_env *env, struct cl_io *io,
 	spin_lock(&ras->ras_lock);
 
 	/* Enlarge the RA window to encompass the full read */
-	if (vio->cui_ra_valid &&
+	if (vio->vui_ra_valid &&
 	    ras->ras_window_start + ras->ras_window_len <
-	    vio->cui_ra_start + vio->cui_ra_count) {
-		ras->ras_window_len = vio->cui_ra_start + vio->cui_ra_count -
+	    vio->vui_ra_start + vio->vui_ra_count) {
+		ras->ras_window_len = vio->vui_ra_start + vio->vui_ra_count -
 			ras->ras_window_start;
 	}
 
@@ -555,15 +555,15 @@ int ll_readahead(const struct lu_env *env, struct cl_io *io,
 	CDEBUG(D_READA, DFID": ria: %lu/%lu, bead: %lu/%lu, hit: %d\n",
 	       PFID(lu_object_fid(&clob->co_lu)),
 	       ria->ria_start, ria->ria_end,
-	       vio->cui_ra_valid ? vio->cui_ra_start : 0,
-	       vio->cui_ra_valid ? vio->cui_ra_count : 0,
+	       vio->vui_ra_valid ? vio->vui_ra_start : 0,
+	       vio->vui_ra_valid ? vio->vui_ra_count : 0,
 	       hit);
 
 	/* at least to extend the readahead window to cover current read */
-	if (!hit && vio->cui_ra_valid &&
-	    vio->cui_ra_start + vio->cui_ra_count > ria->ria_start) {
+	if (!hit && vio->vui_ra_valid &&
+	    vio->vui_ra_start + vio->vui_ra_count > ria->ria_start) {
 		/* to the end of current read window. */
-		mlen = vio->cui_ra_start + vio->cui_ra_count - ria->ria_start;
+		mlen = vio->vui_ra_start + vio->vui_ra_count - ria->ria_start;
 		/* trim to RPC boundary */
 		start = ria->ria_start & (PTLRPC_MAX_BRW_PAGES - 1);
 		mlen = min(mlen, PTLRPC_MAX_BRW_PAGES - start);
