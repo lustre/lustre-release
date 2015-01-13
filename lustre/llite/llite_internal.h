@@ -1138,6 +1138,10 @@ int lustre_check_remote_perm(struct inode *inode, int mask);
 int cl_sb_init(struct super_block *sb);
 int cl_sb_fini(struct super_block *sb);
 
+enum ras_update_flags {
+	LL_RAS_HIT  = 0x1,
+	LL_RAS_MMAP = 0x2
+};
 void ll_ra_count_put(struct ll_sb_info *sbi, unsigned long len);
 void ll_ra_stats_inc(struct inode *inode, enum ra_stat which);
 

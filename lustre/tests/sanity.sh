@@ -6553,41 +6553,29 @@ test_101e() {
 }
 run_test 101e "check read-ahead for small read(1k) for small files(500k)"
 
-cleanup_test101f() {
-    trap 0
-    $LCTL set_param -n llite.*.max_read_ahead_whole_mb $MAX_WHOLE_MB
-    rm -rf $DIR/$tfile 2>/dev/null
-}
-
 test_101f() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-    local file=$DIR/$tfile
-    local nreads=1000
+	which iozone || { skip "no iozone installed" && return; }
 
-    MAX_WHOLE_MB=$($LCTL get_param -n llite.*.max_read_ahead_whole_mb)
-    $LCTL set_param -n llite.*.max_read_ahead_whole_mb 2
-    dd if=/dev/zero of=${file} bs=2097152 count=1 2>/dev/null
-    trap cleanup_test101f EXIT
+	# create a test file
+	iozone -i 0 -+n -r 1m -s 128m -w -f $DIR/$tfile > /dev/null 2>&1
 
-    echo Cancel LRU locks on lustre client to flush the client cache
-    cancel_lru_locks osc
+	echo Cancel LRU locks on lustre client to flush the client cache
+	cancel_lru_locks osc
 
-    echo Reset readahead stats
-    $LCTL set_param -n llite.*.read_ahead_stats 0
-    # Random read in a 2M file, because max_read_ahead_whole_mb = 2M,
-    # readahead should read in 2M file on second read, so only miss
-    # 2 pages.
-    echo Random 4K reads on 2M file for 1000 times
-    $READS -f $file -s 2097152 -b 4096 -n $nreads
+	echo Reset readahead stats
+	$LCTL set_param -n llite.*.read_ahead_stats 0
 
-    echo checking missing pages
-    local miss=$($LCTL get_param -n llite.*.read_ahead_stats |
-          get_named_value 'misses' | cut -d" " -f1 | calc_total)
+	echo mmap read the file with small block size
+	iozone -i 1 -+n -r 32k -s 128m -B -f $DIR/$tfile > /dev/null 2>&1
 
-    [ $miss -lt 3 ] || error "misses too much pages!"
-    cleanup_test101f
+	echo checking missing pages
+	local miss=$($LCTL get_param -n llite.*.read_ahead_stats |
+			get_named_value 'misses' | cut -d" " -f1 | calc_total)
+
+	[ $miss -lt 3 ] || error "misses too much pages!"
+	rm -f $DIR/$tfile
 }
-run_test 101f "check read-ahead for max_read_ahead_whole_mb"
+run_test 101f "check mmap read performance"
 
 setup_test102() {
 	test_mkdir -p $DIR/$tdir
