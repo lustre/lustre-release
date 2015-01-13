@@ -1406,7 +1406,7 @@ write RPCs in flight: 0
             <para>To re-enable the writethrough cache on one OST, run:</para>
             <screen>root@oss1# lctl set_param obdfilter.{OST_name}.writethrough_cache_enable=1</screen>
             <para>To check if the writethrough cache is enabled, run:</para>
-            <screen>root@oss1# lctl set_param obdfilter.*.writethrough_cache_enable=1</screen>
+            <screen>root@oss1# lctl get_param obdfilter.*.writethrough_cache_enable</screen>
           </listitem>
           <listitem>
             <para><literal>readcache_max_filesize</literal> - Controls the maximum size of a file
