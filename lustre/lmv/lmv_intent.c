@@ -152,8 +152,8 @@ out:
 	return rc;
 }
 
-int lmv_revalidate_slaves(struct obd_export *exp, struct mdt_body *mbody,
-			  struct lmv_stripe_md *lsm,
+int lmv_revalidate_slaves(struct obd_export *exp,
+			  const struct lmv_stripe_md *lsm,
 			  ldlm_blocking_callback cb_blocking,
 			  int extra_lock_flags)
 {
@@ -162,11 +162,6 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct mdt_body *mbody,
 	struct ptlrpc_request	*req = NULL;
 	struct mdt_body		*body;
 	struct md_op_data      *op_data;
-	unsigned long           size = 0;
-	unsigned long           nlink = 0;
-	obd_time		atime = 0;
-	obd_time		ctime = 0;
-	obd_time		mtime = 0;
 	int                     i;
 	int                     rc = 0;
 
@@ -249,6 +244,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct mdt_body *mbody,
 
 
 			i_size_write(inode, body->mbo_size);
+			inode->i_blocks = body->mbo_blocks;
 			set_nlink(inode, body->mbo_nlink);
 			LTIME_S(inode->i_atime) = body->mbo_atime;
 			LTIME_S(inode->i_ctime) = body->mbo_ctime;
@@ -256,45 +252,12 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct mdt_body *mbody,
 		}
 
 		md_set_lock_data(tgt->ltd_exp, &lockh->cookie, inode, NULL);
-
-		size += i_size_read(inode);
-
-		if (i != 0)
-			nlink += inode->i_nlink - 2;
-		else
-			nlink += inode->i_nlink;
-
-		atime = LTIME_S(inode->i_atime) > atime ?
-				LTIME_S(inode->i_atime) : atime;
-		ctime = LTIME_S(inode->i_ctime) > ctime ?
-				LTIME_S(inode->i_ctime) : ctime;
-		mtime = LTIME_S(inode->i_mtime) > mtime ?
-				LTIME_S(inode->i_mtime) : mtime;
-
 		if (it.d.lustre.it_lock_mode != 0 && lockh != NULL) {
 			ldlm_lock_decref(lockh, it.d.lustre.it_lock_mode);
 			it.d.lustre.it_lock_mode = 0;
 		}
-
-		CDEBUG(D_INODE, "i %d "DFID" size %llu, nlink %u, atime "
-		       "%lu, mtime %lu, ctime %lu.\n", i, PFID(&fid),
-		       i_size_read(inode), inode->i_nlink,
-		       LTIME_S(inode->i_atime), LTIME_S(inode->i_mtime),
-		       LTIME_S(inode->i_ctime));
 	}
 
-	/*
-	 * update attr of master request.
-	 */
-	CDEBUG(D_INODE, "Return refreshed attrs: size = %lu nlink %lu atime "
-	       LPU64 "ctime "LPU64" mtime "LPU64" for " DFID"\n", size, nlink,
-	       atime, ctime, mtime, PFID(&lsm->lsm_md_oinfo[0].lmo_fid));
-
-	if (mbody != NULL) {
-		mbody->mbo_atime = atime;
-		mbody->mbo_ctime = ctime;
-		mbody->mbo_mtime = mtime;
-	}
 cleanup:
 	if (req != NULL)
 		ptlrpc_req_finished(req);
@@ -450,7 +413,7 @@ lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
 		/* If RPC happens, lsm information will be revalidated
 		 * during update_inode process (see ll_update_lsm_md) */
 		if (op_data->op_mea2 != NULL) {
-			rc = lmv_revalidate_slaves(exp, NULL, op_data->op_mea2,
+			rc = lmv_revalidate_slaves(exp, op_data->op_mea2,
 						   cb_blocking,
 						   extra_lock_flags);
 			if (rc != 0)

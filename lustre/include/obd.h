@@ -1109,10 +1109,7 @@ struct md_ops {
 
 	int (*m_merge_attr)(struct obd_export *,
 			    const struct lmv_stripe_md *lsm,
-			    struct cl_attr *attr);
-
-	int (*m_update_lsm_md)(struct obd_export *, struct lmv_stripe_md *lsm,
-			       struct mdt_body *, ldlm_blocking_callback);
+			    struct cl_attr *attr, ldlm_blocking_callback);
 
 	int (*m_set_open_replay_data)(struct obd_export *,
 				      struct obd_client_handle *,
