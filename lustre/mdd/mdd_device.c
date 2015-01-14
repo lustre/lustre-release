@@ -1025,10 +1025,6 @@ static int mdd_prepare(const struct lu_env *env,
 			       mdd2obd_dev(mdd)->obd_name, rc);
 			GOTO(out_los, rc);
 		}
-
-		rc = mdd_compat_fixes(env, mdd);
-		if (rc != 0)
-			GOTO(out_dot, rc);
 	} else {
 		/* Normal client usually send root access to MDT0 directly,
 		 * the root FID on non-MDT0 will only be used by echo client. */

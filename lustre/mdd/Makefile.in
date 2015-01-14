@@ -1,6 +1,5 @@
 MODULES := mdd
-mdd-objs := mdd_compat.o \
-	mdd_device.o \
+mdd-objs := mdd_device.o \
 	mdd_dir.o \
 	mdd_lock.o \
 	mdd_lproc.o \
