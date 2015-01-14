@@ -59,6 +59,14 @@ STORED_OSTSIZE=$OSTSIZE
 MDSSIZE=200000
 OSTSIZE=200000
 
+fs2mds_HOST=$mds_HOST
+fs2ost_HOST=$ost_HOST
+fs3ost_HOST=$ost_HOST
+
+MDSDEV1_2=$fs2mds_DEV
+OSTDEV1_2=$fs2ost_DEV
+OSTDEV2_2=$fs3ost_DEV
+
 if ! combined_mgs_mds; then
     # bug number for skipped test:    23954
     ALWAYS_EXCEPT="$ALWAYS_EXCEPT       24b"
@@ -247,6 +255,16 @@ cleanup_nocli() {
 cleanup() {
 	umount_client $MOUNT || return 200
 	cleanup_nocli || return $?
+}
+
+cleanup_fs2() {
+	trap 0
+	echo "umount $MOUNT2 ..."
+	umount $MOUNT2 || true
+	echo "stopping fs2mds ..."
+	stop fs2mds -f || true
+	echo "stopping fs2ost ..."
+	stop fs2ost -f || true
 }
 
 check_mount() {
@@ -759,6 +777,58 @@ test_21d() {
 }
 run_test 21d "start mgs then ost and then mds"
 
+cleanup_21e() {
+	MGSNID="$saved_mgsnid"
+	cleanup_fs2
+	echo "stopping fs2mgs ..."
+	stop $fs2mgs -f || true
+}
+
+test_21e() { # LU-5863
+	if [[ -z "$fs3ost_DEV" || -z "$fs2ost_DEV" || -z "$fs2mds_DEV" ]]; then
+		is_blkdev $SINGLEMDS $(mdsdevname ${SINGLEMDS//mds/}) &&
+		skip_env "mixed loopback and real device not working" && return
+	fi
+
+	local fs2mdsdev=$(mdsdevname 1_2)
+	local fs2ostdev=$(ostdevname 1_2)
+	local fs3ostdev=$(ostdevname 2_2)
+
+	local fs2mdsvdev=$(mdsvdevname 1_2)
+	local fs2ostvdev=$(ostvdevname 1_2)
+	local fs3ostvdev=$(ostvdevname 2_2)
+
+	# temporarily use fs3ost as fs2mgs
+	local fs2mgs=fs3ost
+	local fs2mgsdev=$fs3ostdev
+	local fs2mgsvdev=$fs3ostvdev
+
+	local fsname=test1234
+
+	add $fs2mgs $(mkfs_opts mgs $fs2mgsdev) --fsname=$fsname \
+		--reformat $fs2mgsdev $fs2mgsvdev || error "add fs2mgs failed"
+	start $fs2mgs $fs2mgsdev $MGS_MOUNT_OPTS && trap cleanup_21e EXIT INT ||
+		error "start fs2mgs failed"
+
+	local saved_mgsnid="$MGSNID"
+	MGSNID=$(do_facet $fs2mgs $LCTL list_nids | xargs | tr ' ' ,)
+
+	add fs2mds $(mkfs_opts mds1 $fs2mdsdev $fsname) \
+		--reformat $fs2mdsdev $fs2mdsvdev || error "add fs2mds failed"
+	add fs2ost $(mkfs_opts ost1 $fs2ostdev $fsname) \
+		--reformat $fs2ostdev $fs2ostvdev || error "add fs2ost failed"
+
+	start fs2ost $fs2ostdev $OST_MOUNT_OPTS || error "start fs2ost failed"
+	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS || error "start fs2mds failed"
+
+	mkdir -p $MOUNT2 || error "mkdir $MOUNT2 failed"
+	$MOUNT_CMD $MGSNID:/$fsname $MOUNT2 || error "mount $MOUNT2 failed"
+	DIR=$MOUNT2 MOUNT=$MOUNT2 check_mount || error "check $MOUNT2 failed"
+
+	cleanup_21e
+}
+run_test 21e "separate MGS and MDS"
+
 test_22() {
 	start_mds || error "MDS start failed"
 
@@ -861,23 +931,6 @@ test_23b() {    # was test_23
 	cleanup || error "cleanup failed with rc $?"
 }
 run_test 23b "Simulate -EINTR during mount"
-
-fs2mds_HOST=$mds_HOST
-fs2ost_HOST=$ost_HOST
-
-MDSDEV1_2=$fs2mds_DEV
-OSTDEV1_2=$fs2ost_DEV
-OSTDEV2_2=$fs3ost_DEV
-
-cleanup_fs2() {
-	trap 0
-	echo "umount $MOUNT2 ..."
-	umount $MOUNT2 || true
-	echo "stopping fs2mds ..."
-	stop fs2mds -f || true
-	echo "stopping fs2ost ..."
-	stop fs2ost -f || true
-}
 
 test_24a() {
 	local MDSDEV=$(mdsdevname ${SINGLEMDS//mds/})
@@ -2293,7 +2346,6 @@ test_36() { # 12743
 
 	local rc=0
 	local FSNAME2=test1234
-	local fs3ost_HOST=$ost_HOST
 	local MDSDEV=$(mdsdevname ${SINGLEMDS//mds/})
 
 	[ -n "$ost1_HOST" ] && fs2ost_HOST=$ost1_HOST && fs3ost_HOST=$ost1_HOST

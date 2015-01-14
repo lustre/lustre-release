@@ -3295,10 +3295,6 @@ mkfs_opts() {
 	local fs_mkfs_opts
 	local var
 
-	if [ $type == MGS ] && combined_mgs_mds; then
-		return 1
-	fi
-
 	if [ $type == MGS ] || ( [ $type == MDS ] &&
                                  [ "$dev" == $(mgsdevname) ] &&
 				 [ "$host" == "$(facet_host mgs)" ] ); then
