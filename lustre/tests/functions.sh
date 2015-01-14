@@ -335,6 +335,7 @@ run_metabench() {
     mbench_NFILES=${mbench_NFILES:-30400}
     # threads per client
     mbench_THREADS=${mbench_THREADS:-4}
+	mbench_OPTIONS=${mbench_OPTIONS:-}
 
     [ x$METABENCH = x ] &&
         { skip_env "metabench not found" && return; }
@@ -353,7 +354,7 @@ run_metabench() {
     # -S             Run the file stat tests.
     # -c nfile       Number of files to be used in each test.
     # -k             Cleanup.  Remove the test directories.
-    local cmd="$METABENCH -w $testdir -c $mbench_NFILES -C -S -k"
+	local cmd="$METABENCH -w $testdir -c $mbench_NFILES -C -S -k $mbench_OPTIONS"
     echo "+ $cmd"
 
 	# find out if we need to use srun by checking $SRUN_PARTITION
