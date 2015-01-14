@@ -11304,6 +11304,10 @@ test_185() { # LU-2441
 run_test 185 "Volatile file support"
 
 test_187a() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.0) ] &&
+		skip "Need MDS version at least 2.3.0" && return
+
 	local dir0=$DIR/$tdir/$testnum
 	mkdir -p $dir0 || error "creating dir $dir0"
 
@@ -11321,6 +11325,10 @@ test_187a() {
 run_test 187a "Test data version change"
 
 test_187b() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.0) ] &&
+		skip "Need MDS version at least 2.3.0" && return
+
 	local dir0=$DIR/$tdir/$testnum
 	mkdir -p $dir0 || error "creating dir $dir0"
 
