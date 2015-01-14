@@ -591,9 +591,12 @@ static int lod_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	int				rc;
 	ENTRY;
 
+	thandle_get(th);
 	rc = dt_trans_stop(env, th->th_dev, th);
-	if (likely(tu == NULL))
+	if (likely(tu == NULL)) {
+		thandle_put(th);
 		RETURN(rc);
+	}
 
 	list_for_each_entry_safe(update, tmp,
 				 &tu->tu_remote_update_list,
@@ -603,6 +606,7 @@ static int lod_trans_stop(const struct lu_env *env, struct dt_device *dt,
 		if (unlikely(rc2 != 0 && rc == 0))
 			rc = rc2;
 	}
+	thandle_put(th);
 
 	RETURN(rc);
 }
