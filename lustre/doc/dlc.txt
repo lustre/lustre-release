@@ -1,0 +1,235 @@
+		******************************************
+		* Overview of Dynamic LNet Configuration *
+		******************************************
+
+Original Authors:
+=================
+Amir Shehata <amir.shehata@intel.com>
+
+Contents
+1. Introduction
+	1.1 Objectives
+	1.3 Motivation
+	1.2 Overview
+2. YAML Interface
+3. DLC API
+4. LNet Backend Design
+	4.1 router.c
+		4.1.1 Enabling/Disabling Routing and Router Pools
+		4.1.2 Configuring Router Pools
+	4.2 api-ni.c
+		4.2.1 Dynamically Adding an NI
+		4.2.2 Dynamically Deleting an NI
+		4.2.3 Internal Functions
+
+===================
+= 1. Introduction =
+===================
+
+1.1 Objectives
+==============
+
+Dynamic LNet Configuration (DLC) strives to accomplish four objectives:
+
+. Allow changes to some LNet parameters to be dynamic so they can be altered
+  without having to stop/start LNet.
+. Remove the limits on how many NI's or route's which can be configured.
+. Work towards replacing the LNet module parameters with user space scripts
+  (i.e. /etc/rc.d and /etc/sysconfig/network-scripts) which operate much more
+  like conventional network config systems on Linux.
+. Allow sysadmins to use a command line utility for making dynamic changes to
+  the LNet configuration.
+
+1.2 Motivation
+==============
+
+DLC introduces a new shared library. The DLC C API Library is provided as part
+of the standard lustre installation. This library must be released under LGPL
+license to facilitate third-party development. This API will serve the
+following purposes:
+
+. Provide a funnel for all LNet configurations. This way there isn't multiple
+  ways to configure the same thing
+. Provide a C API which configures specific parameters. This C API will
+  translate into IOCTL calls to the kernel module.
+. Provide a YAML interface, which ensures that YAML parsing is done in one
+  location.
+. Provide more detailed return values from the kernel presented in YAML
+  format.
+. Provide a set of API calls to parse out the YAML error returns if need be.
+
+1.3 Overview
+============
+
+DLC introduces a userspace library which exposes a set of APIs to:
+
+. configure/unconfigure LNet
+. add/delete/show routes
+. add/delete/show networks
+. set router buffers sizes
+. enable/disable routing
+. import YAML configuration
+. export configuration in YAML format
+. show peer credit information
+
+DLC API uses IOCTLs to communicate with the kernel. This has the following
+advantage:
+
+. No need to do any string parsing in the kernel
+. Bypass the 4K limit, since each command will be sent to the kernel
+  separately. For example, if there are 100 routes to configure then this
+  translates to 100 ioctls to the kernel.
+. Provide a more intuitive user facing interface. The user need not know how
+  to talk to the kernel via ioctl. This will be achieved in two ways:
+	a. The configuration can be presented in YAML syntax, as shown below
+	b. A more traditional C API will be exported, Each translates to exactly
+	   one ioctl to the kernel module.
+
+=====================
+= 2. YAML Interface =
+=====================
+
+The DLC API provides functions to configure specific parameters together with
+higher level functions which accept a YAML formatted configuration and
+configure all parameters described therein.
+
+To aid in parsing and building YAML stings a third party library, libyaml, is
+used. lnet/utils/cyaml/cyaml.c is written to interface with the libyaml
+library. When parsing a yaml string or file, it builds an internal tree
+representation of the YAML string. lnet/utils/cyaml/cyaml.c then provides
+functions to extract data from the tree. It also provides functions to build
+a YAML tree, which can then be printed textually.
+
+The YAML API is used by the DLC API to parse and extract YAML configuration,
+and to build a YAML representation of the success or error status per DLC API.
+
+==============
+= 3. DLC API =
+==============
+
+Refer to: lnet/utils/lnetconfig/liblnetconfig.h
+
+==========================
+= 4. LNet Backend Design =
+==========================
+
+4.1 lnet/lnet/router.c
+=======================
+
+In router.c the following three functions are used to add, delete and get a
+route.
+
+. lnet_add_route() : adds a new route entry.
+. lnet_del_route() : removes an existing routing entry.
+. lnet_get_route() : retrieves information on an existing route.
+
+These functions will be called from the ioctl handler.
+
+The Router buffer pools will be controlled via the following APIs:
+
+. lnet_rtrpools_enable()  : enable routing and allocate router buffers
+. lnet_rtrpools_disable() : disable routing and free router buffers
+. lnet_rtrpools_adjust()  : configure the number of router buffer pools
+
+4.1.1 Enabling/Disabling Routing and Router Pools
+=================================================
+
+lnet_rtrpools_enable()
+lnet_rtrpools_disable()
+
+These functions will explicitly enable and disable rtrpools respectively. If the
+rtrpools are being enabled then the default values of the tiny, small and
+large buffers are used.
+
+    #define LNET_NRB_TINY        (LNET_NRB_TINY_MIN * 4)
+    #define LNET_NRB_SMALL        (LNET_NRB_SMALL_MIN * 4)
+    #define LNET_NRB_LARGE        (LNET_NRB_LARGE_MIN * 4)
+
+4.1.2 Configuring Router Pools
+==============================
+
+lnet_rtrpools_adjust()
+
+This API will set the tiny, small and large buffers. rtrpools must be enabled
+prior to calling this API. If not enabled, this API is a no-op.
+
+Below is the behavior when adjusting the router pools:
+
+. A value of 0 indicates that the default values (listed above) are used.
+. Each pool size will be run through the current sizing algorithm to ensure the
+  given values are not below the minimum standards. As such, a user could get
+  the defaults for all three pools by just passing in "0 0 0" for pool sizes.
+. If a pool size is being made bigger, add the new buffers to the pool checking
+  if there are any queued messages waiting for a buffer on that pool. If so,
+  schedule those messages to be sent with the new buffer.
+. If a pool size is being made smaller, change the maximum value for the number
+  of buffers on the pool only. When the system returns buffers to the pool, it
+  will see there are "excess" buffers on the pool and will discard the buffer
+  rather than return it to the pool.
+
+4.2 lnet/lnet/api-ni.c
+=======================
+
+The file api-ni.c contains the interface routines for working with network
+interfaces. Four new routines will be added to this file to support this
+feature.
+
+lnet_dyn_add_ni()     : adds an NI dynamically
+lnet_dyn_del_ni()     : deletes an NI dynamically
+lnet_startup_lndni()  : starts a single LND.
+lnet_shutdown_lndni() : shuts down a single LND.
+
+4.2.1 Dynamically Adding an NI
+==============================
+
+lnet_dyn_add_ni()
+
+This function is called to startup a network passed in through userspace as a
+string. This function verifies that only one network is passed in.  If more
+than one network is passed in, it fails with -EINVAL error number.
+
+Peer timeout, peer credits, and credits are passed in as well, since DLC makes
+these tunable parameters configurable per network interface.
+
+This function does the following:
+
+. Parses the network string passed in.
+. Initializes a new ping info structure in preparation of adding the Network
+  Interface.
+. Starts up the NI
+. Updates the global ping info.
+. If there is any failure in any of these steps, appropriate cleanup action is
+  taken.
+
+4.2.2 Dynamically Deleting an NI
+================================
+
+lnet_dyn_del_ni()
+
+This function does the following:
+
+. Allocates a new ping info for the number of networks without the one being
+  removed.
+. Shuts down the NI
+. Updates the global ping info appropriately.
+
+4.2.3 Internal Functions
+========================
+
+lnet_startup_lndni()
+
+The code was restructured to breakup the function lnet_startup_lndnis() into
+two functions: lnet_startup_lndni() and lnet_startup_lndnis(). This way the
+new lnet_dyn_add_ni() can call lnet_startup_lndni() to startup one NI, and on
+standard startup lnet_startup_lndnis() can start up all NIs configured in the
+module parameters, by calling lnet_startup_lndni() repeatedly.
+
+lnet_shutdown_lndni()
+
+This function was introduced to shutdown only one NI. It coexists with the
+original lnet_shutdown_lndnis() which shuts down all NIs, which is needed when
+LNet is being unconfigured.
+
+lnet_shutdown_lndni() is called from lnet_dyn_del_ni() and from
+lnet_startup_lndni() in case there is a failure starting the NI.
+
