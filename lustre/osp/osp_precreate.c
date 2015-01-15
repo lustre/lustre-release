@@ -217,7 +217,7 @@ static int osp_statfs_update(struct osp_device *d)
  *
  * If cached statfs data claim no free space, but OSP has got a request to
  * destroy an object (so release some space probably), then we may need to
- * refresh cached statfs data sooner then planned. The function checks there
+ * refresh cached statfs data sooner than planned. The function checks there
  * is no statfs update going and schedules immediate update if so.
  * XXX: there might be a case where removed object(s) do not add free space (empty
  * object). If the number of such deletions is high, then we can start to update

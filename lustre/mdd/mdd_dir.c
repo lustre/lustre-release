@@ -827,7 +827,7 @@ void mdd_changelog_rec_ext_jobid(struct changelog_rec *rec, const char *jobid)
  * \param spfid - source parent fid
  * \param tname - target name string
  * \param sname - source name string
- * \param handle - transacion handle
+ * \param handle - transaction handle
  */
 int mdd_changelog_ns_store(const struct lu_env *env,
 			   struct mdd_device *mdd,

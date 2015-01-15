@@ -697,7 +697,7 @@ static int osp_md_index_delete(const struct lu_env *env,
  * \param[in] env	execution environment
  * \param[in] di	iterator of this iteration
  *
- * \retval		0 if the pointer is advanced successfuly.
+ * \retval		0 if the pointer is advanced successfully.
  * \retval		1 if it reaches to the end of the index object.
  * \retval		negative errno if the pointer cannot be advanced.
  */

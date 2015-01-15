@@ -434,7 +434,7 @@ AS_IF([test x$target_cpu = "xx86_64" -a x$target_vendor != "xk1om"],
 LIBCFS_CONDITIONALS
 LN_CONDITIONALS
 LC_CONDITIONALS
-]) # LB_CONTITIONALS
+]) # LB_CONDITIONALS
 
 #
 # LB_CONFIG_FILES

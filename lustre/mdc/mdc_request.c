@@ -2083,9 +2083,9 @@ static int mdc_ioc_swap_layouts(struct obd_export *exp,
 
 	/* When the MDT will get the MDS_SWAP_LAYOUTS RPC the
 	 * first thing it will do is to cancel the 2 layout
-	 * locks hold by this client.
+	 * locks held by this client.
 	 * So the client must cancel its layout locks on the 2 fids
-	 * with the request RPC to avoid extra RPC round trips
+	 * with the request RPC to avoid extra RPC round trips.
 	 */
 	count = mdc_resource_get_unused(exp, &op_data->op_fid1, &cancels,
 					LCK_EX, MDS_INODELOCK_LAYOUT |

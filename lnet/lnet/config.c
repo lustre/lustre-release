@@ -327,7 +327,7 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 				goto failed;
 			}
 
-			/* Allocate a seperate piece of memory and copy
+			/* Allocate a separate piece of memory and copy
 			 * into it the string, so we don't have
 			 * a depencency on the tokens string.  This way we
 			 * can free the tokens at the end of the function.

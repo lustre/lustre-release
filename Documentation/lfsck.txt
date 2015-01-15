@@ -184,7 +184,7 @@ Glossary of terms
 ===============================================
 
 OSD - Object storage device. A generic term for a storage device with an
-  interface that extends beyond a block-orientated device interface.
+  interface that extends beyond a block-oriented device interface.
 
 OI - Object Index. A table that maps FIDs to inodes. This table must be
   regenerated if a file level restore is performed as inodes will change.

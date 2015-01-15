@@ -964,7 +964,7 @@ static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 	if (rc < 0)
 		GOTO(out, rc);
 
-	/* discard all pages with index greater then trunc_index */
+	/* discard all pages with index greater than trunc_index */
 	list_for_each_entry_safe(oap, tmp, &ext->oe_pages,
 				     oap_pending_item) {
 		pgoff_t index = osc_index(oap2osc(oap));

@@ -554,7 +554,7 @@ ptlrpc_server_nthreads_check(struct ptlrpc_service *svc,
 
 		/*
 		 * User wants to increase number of threads with for
-		 * each CPU core/HT, most likely the factor is larger then
+		 * each CPU core/HT, most likely the factor is larger than
 		 * one thread/core because service threads are supposed to
 		 * be blocked by lock or wait for IO.
 		 */

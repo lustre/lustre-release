@@ -826,7 +826,7 @@ static int lod_qos_is_ost_used(const struct lu_env *env, int ost, __u32 stripes)
 }
 
 /**
- * Allocate a striping using round-robin algorigthm.
+ * Allocate a striping using round-robin algorithm.
  *
  * Allocates a new striping using round-robin algorithm. The function refreshes
  * all the internal structures (statfs cache, array of available OSTs sorted
@@ -981,7 +981,7 @@ repeat_find:
 		}
 
 		/*
-		 * We've successfuly declared (reserved) an object
+		 * We've successfully declared (reserved) an object
 		 */
 		lod_qos_ost_in_use(env, stripe_idx, ost_idx);
 		stripe[stripe_idx] = o;
@@ -1107,7 +1107,7 @@ static int lod_alloc_ost_list(const struct lu_env *env,
 		}
 
 		/*
-		 * We've successfuly declared (reserved) an object
+		 * We've successfully declared (reserved) an object
 		 */
 		lod_qos_ost_in_use(env, stripe_count, ost_idx);
 		stripe[stripe_count] = o;
@@ -1233,7 +1233,7 @@ repeat_find:
 		}
 
 		/*
-		 * We've successfuly declared (reserved) an object
+		 * We've successfully declared (reserved) an object
 		 */
 		lod_qos_ost_in_use(env, stripe_num, ost_idx);
 		stripe[stripe_num] = o;

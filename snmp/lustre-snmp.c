@@ -187,13 +187,14 @@ struct variable7 clusterFileSystems_variables[] = {
  
 void init_lustresnmp(void) {
 
-  /* register ourselves with the agent to handle our mib tree */
-  REGISTER_MIB("clusterFileSystems", clusterFileSystems_variables, variable7,
-               clusterFileSystems_variables_oid);
-               
-   initilize_trap_handler();
+	/* register ourselves with the agent to handle our mib tree */
+	REGISTER_MIB("clusterFileSystems",
+		     clusterFileSystems_variables, variable7,
+		     clusterFileSystems_variables_oid);
 
-  DEBUGMSGTL(("lsnmpd", "%s %s \n", __FUNCTION__, "Initialization Done"));
+	initialize_trap_handler();
+
+	DEBUGMSGTL(("lsnmpd", "%s %s\n", __func__, "Initialization Done"));
 }
 
 /*****************************************************************************
@@ -209,13 +210,14 @@ void init_lustresnmp(void) {
 
 void deinit_lustresnmp(void) {
 
-  /* deregister ourselves with the agent */
-  unregister_mib(clusterFileSystems_variables_oid,
-    sizeof(clusterFileSystems_variables_oid)/sizeof(clusterFileSystems_variables_oid));
-  
-  terminate_trap_handler();
-  
-  DEBUGMSGTL(("lsnmpd", "%s %s \n", __FUNCTION__, "Termination Done"));
+	/* deregister ourselves with the agent */
+	unregister_mib(clusterFileSystems_variables_oid,
+		       sizeof(clusterFileSystems_variables_oid)/
+		       sizeof(clusterFileSystems_variables_oid));
+
+	terminate_trap_handler();
+
+	DEBUGMSGTL(("lsnmpd", "%s %s\n", __func__, "Termination Done"));
 }
 
 /*****************************************************************************

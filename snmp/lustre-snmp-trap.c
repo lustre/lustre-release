@@ -123,7 +123,7 @@ static unsigned int g_registration_handle;
 static char *g_health_check_test_file = 0;
 
 /*****************************************************************************
- * Function: initilize_trap_handler
+ * Function: initialize_trap_handler
  *
  * Description: Initlized the trap poll haalder.
  *
@@ -133,7 +133,7 @@ static char *g_health_check_test_file = 0;
  *
  ****************************************************************************/
  
-void initilize_trap_handler(void)
+void initialize_trap_handler(void)
 {
     g_poll_interval_seconds = get_poll_interval_seconds();
 

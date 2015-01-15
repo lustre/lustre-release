@@ -65,7 +65,7 @@
  * the valid values for perms are:
  * setuid/setgid/setgrp/rmtacl           -- enable corresponding perm
  * nosetuid/nosetgid/nosetgrp/normtacl   -- disable corresponding perm
- * they can be listed together, seperated by ',',
+ * they can be listed together, separated by ',',
  * when perm and noperm are in the same line (item), noperm is preferential,
  * when they are in different lines (items), the latter is preferential,
  * '*' nid is as default perm, and is not preferential.

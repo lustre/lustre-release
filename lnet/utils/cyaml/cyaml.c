@@ -1113,7 +1113,7 @@ struct cYAML *cYAML_build_tree(char *yaml_file,
 	/* Create the Parser object. */
 	yaml_parser_initialize(&parser);
 
-	/* file alwyas takes precedence */
+	/* file always takes precedence */
 	if (yaml_file != NULL) {
 		/* Set a file input. */
 		input = fopen(yaml_file, "rb");

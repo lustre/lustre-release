@@ -458,18 +458,18 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
 	INIT_HLIST_NODE(&new_pool->pool_hash);
 
 #ifdef CONFIG_PROC_FS
-        /* we need this assert seq_file is not implementated for liblustre */
-        /* get ref for /proc file */
+	/* get ref for /proc file */
         lov_pool_getref(new_pool);
-        new_pool->pool_proc_entry = lprocfs_add_simple(lov->lov_pool_proc_entry,
-							poolname, new_pool,
-							&pool_proc_operations);
-        if (IS_ERR(new_pool->pool_proc_entry)) {
-                CWARN("Cannot add proc pool entry "LOV_POOLNAMEF"\n", poolname);
-                new_pool->pool_proc_entry = NULL;
-                lov_pool_putref(new_pool);
-        }
-        CDEBUG(D_INFO, "pool %p - proc %p\n", new_pool, new_pool->pool_proc_entry);
+	new_pool->pool_proc_entry = lprocfs_add_simple(lov->lov_pool_proc_entry,
+						       poolname, new_pool,
+						       &pool_proc_operations);
+	if (IS_ERR(new_pool->pool_proc_entry)) {
+		CWARN("Cannot add proc pool entry "LOV_POOLNAMEF"\n", poolname);
+		new_pool->pool_proc_entry = NULL;
+		lov_pool_putref(new_pool);
+	}
+	CDEBUG(D_INFO, "pool %p - proc %p\n",
+	       new_pool, new_pool->pool_proc_entry);
 #endif
 
 	spin_lock(&obd->obd_dev_lock);

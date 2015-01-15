@@ -598,10 +598,10 @@ static int echo_site_init(const struct lu_env *env, struct echo_device *ed)
         struct cl_site *site = &ed->ed_site_myself;
         int rc;
 
-        /* initialize site */
+	/* initialize site */
         rc = cl_site_init(site, &ed->ed_cl);
         if (rc) {
-                CERROR("Cannot initilize site for echo client(%d)\n", rc);
+		CERROR("Cannot initialize site for echo client(%d)\n", rc);
                 return rc;
         }
 

@@ -300,7 +300,7 @@ void mdt_cdt_put_request(struct cdt_agent_req *car)
 
 /**
  * find request in the list by cookie or by fid
- * lock cdt_request_lock needs to be hold by caller
+ * lock cdt_request_lock needs to be held by caller
  * \param cdt [IN] coordinator
  * \param cookie [IN] request cookie
  * \param fid [IN] fid

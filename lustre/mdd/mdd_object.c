@@ -617,7 +617,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
  * If this fails, we must fail the whole transaction; we don't
  * want the change to commit without the log entry.
  * \param mdd_obj - mdd_object of change
- * \param handle - transacion handle
+ * \param handle - transaction handle
  */
 int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,
 			     enum changelog_rec_type type, int flags,

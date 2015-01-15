@@ -85,7 +85,7 @@ static void gss_sec_pipe_upcall_fini(struct gss_sec *gsec)
 }
 
 /****************************************
- * internel context helpers             *
+ * internal context helpers             *
  ****************************************/
 
 static

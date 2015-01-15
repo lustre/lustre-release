@@ -39,7 +39,7 @@
 #ifndef LUSTRE_SNMP_TRAP_H
 #define LUSTRE_SNMP_TRAP_H
 
-extern void initilize_trap_handler(void);
+extern void initialize_trap_handler(void);
 extern void terminate_trap_handler(void);
 
 #endif

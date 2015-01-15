@@ -1115,8 +1115,8 @@ ksocknal_process_receive (ksock_conn_t *conn)
 
 	LASSERT (atomic_read(&conn->ksnc_conn_refcount) > 0);
 
-        /* NB: sched lock NOT held */
-        /* SOCKNAL_RX_LNET_HEADER is here for backward compatability */
+	/* NB: sched lock NOT held */
+	/* SOCKNAL_RX_LNET_HEADER is here for backward compatibility */
         LASSERT (conn->ksnc_rx_state == SOCKNAL_RX_KSM_HEADER ||
                  conn->ksnc_rx_state == SOCKNAL_RX_LNET_PAYLOAD ||
                  conn->ksnc_rx_state == SOCKNAL_RX_LNET_HEADER ||

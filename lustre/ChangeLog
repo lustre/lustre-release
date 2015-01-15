@@ -460,7 +460,7 @@ Description: Remove set_info(KEY_UNLINKED) from MDS/OSC
 Severity   : enhancement
 Bugzilla   : 19526
 Description: correctly handle big reply message.
-Details    : send LNet event if reply is bigger then buffer and adjust this buffer
+Details    : send LNet event if reply is bigger than buffer and adjust this buffer
              correctly.
 
 Severity   : normal
@@ -2727,7 +2727,7 @@ Severity   : normal
 Bugzilla   : 19128
 Description: Out or order replies might be lost on replay
 Details    : In ptlrpc_retain_replayable_request if we cannot find retained
-             request with tid smaller then one currently being added, add it
+             request with tid smaller than one currently being added, add it
 	     to the start, not end of the list.
 
 --------------------------------------------------------------------------------

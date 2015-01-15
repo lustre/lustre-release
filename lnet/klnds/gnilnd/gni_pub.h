@@ -3326,8 +3326,8 @@ gni_return_t
  * Description:
  * This functions sets the maximum retransmit counts for SMSG transactions.
  * EPs associated with the NIC handle provided will give up retransmitting SMSG
- * transactions and return GNI_RC_TRANSACION_ERROR when the retransmit count has
- * been reached.
+ * transactions and return GNI_RC_TRANSACTION_ERROR when the retransmit count
+ * has been reached.
  **/
 gni_return_t
 	GNI_SmsgSetMaxRetrans(
@@ -5315,8 +5315,8 @@ gni_return_t
  * Description:
  * This functions sets the maximum retransmit counts for SMSG transactions.
  * EPs associated with the NIC handle provided will give up retransmitting SMSG
- * transactions and return GNI_RC_TRANSACION_ERROR when the retransmit count has
- * been reached.
+ * transactions and return GNI_RC_TRANSACTION_ERROR when the retransmit count
+ * has been reached.
  **/
 gni_return_t
 	gni_smsg_set_max_retrans(

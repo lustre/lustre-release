@@ -320,7 +320,7 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 		/* if restore registration failed, no restart,
 		 * we will return -ENODATA */
 		/* The layout will change after restore, so we need to
-		 * block on layout lock hold by the MDT
+		 * block on layout lock held by the MDT
 		 * as MDT will not send new layout in lvb (see LU-3124)
 		 * we have to explicitly fetch it, all this will be done
 		 * by ll_layout_refresh()

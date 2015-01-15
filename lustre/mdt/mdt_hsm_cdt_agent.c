@@ -49,7 +49,7 @@
 
 /*
  * find a hsm_agent by uuid
- * lock cdt_agent_lock needs to be hold by caller
+ * lock cdt_agent_lock needs to be held by caller
  * \param cdt [IN] coordinator
  * \param uuid [IN] agent UUID
  * \retval hsm_agent pointer or NULL if not found
