@@ -2155,8 +2155,14 @@ LNetCtl(unsigned int cmd, void *arg)
 				    config->cfg_nid,
 				    config->cfg_config_u.cfg_route.
 					rtr_priority);
+		if (rc == 0) {
+			rc = lnet_check_routes();
+			if (rc != 0)
+				lnet_del_route(config->cfg_net,
+					       config->cfg_nid);
+		}
 		LNET_MUTEX_UNLOCK(&the_lnet.ln_api_mutex);
-		return (rc != 0) ? rc : lnet_check_routes();
+		return rc;
 
 	case IOC_LIBCFS_DEL_ROUTE:
 		config = arg;
