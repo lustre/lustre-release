@@ -1264,10 +1264,16 @@ generic_file_{read,write}() function.
 
 In the case of read, generic_file_read() calls for every non-up-to-date page
 the a_ops->readpage() method that eventually (after obtaining cl_page
-corresponding to the VM page supplied to it) calls cl_io_read_page() which in
-turn calls cl_io_operations::cio_read_page().
+corresponding to the VM page supplied to it) calls ll_io_read_page() where it
+decides if it's necessary to read ahead more pages by calling ll_readahead().
+The number of pages to be read ahead is determined by the read pattern, also
+it will factor in the requirements from different layers in CLIO stack, for
+example, stripe alignment on the LOV layer and DLM lock coverage on the OSC
+layer. The callback ->cio_read_ahead() is used to gather the requirements from
+each layer. Please refer to lov_io_read_ahead() and osc_io_read_ahead() for
+details.
 
-vvp_io_read_page() populates a queue by a target page and pages from read-ahead
+ll_readahead() populates a queue by a target page and pages from read-ahead
 window. The resulting queue is then submitted for immediate transfer by calling
 cl_io_submit_rw() which ends up calling osc_io_submit_page() for every
 not-up-to-date page in the queue.
