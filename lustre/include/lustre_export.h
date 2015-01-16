@@ -340,12 +340,6 @@ static inline int exp_connect_vbr(struct obd_export *exp)
 	return !!(exp_connect_flags(exp) & OBD_CONNECT_VBR);
 }
 
-static inline int exp_connect_som(struct obd_export *exp)
-{
-	LASSERT(exp != NULL);
-	return !!(exp_connect_flags(exp) & OBD_CONNECT_SOM);
-}
-
 static inline int exp_connect_umask(struct obd_export *exp)
 {
 	return !!(exp_connect_flags(exp) & OBD_CONNECT_UMASK);

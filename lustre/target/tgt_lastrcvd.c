@@ -767,8 +767,7 @@ static int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 
 	mutex_lock(&ted->ted_lcd_lock);
 	LASSERT(ergo(tti->tti_transno == 0, th->th_result != 0));
-	if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE ||
-	    lustre_msg_get_opc(req->rq_reqmsg) == MDS_DONE_WRITING) {
+	if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {
 		transno_p = &ted->ted_lcd->lcd_last_close_transno;
 		ted->ted_lcd->lcd_last_close_xid = req->rq_xid;
 		ted->ted_lcd->lcd_last_close_result = th->th_result;

@@ -458,7 +458,6 @@ static int tgt_filter_recovery_request(struct ptlrpc_request *req,
 		*process = 1;
 		RETURN(0);
 	case MDS_CLOSE:
-	case MDS_DONE_WRITING:
 	case MDS_SYNC: /* used in unmounting */
 	case OBD_PING:
 	case MDS_REINT:

@@ -209,22 +209,8 @@ check_lustre_mdt_attrs(void)
 	CHECK_VALUE_X(LMAI_RELEASED);
 
 	CHECK_VALUE_X(LMAC_HSM);
-	CHECK_VALUE_X(LMAC_SOM);
 	CHECK_VALUE_X(LMAC_NOT_IN_OI);
 	CHECK_VALUE_X(LMAC_FID_ON_OST);
-}
-
-static void
-check_som_attrs(void)
-{
-	BLANK_LINE();
-	CHECK_STRUCT(som_attrs);
-	CHECK_MEMBER(som_attrs, som_compat);
-	CHECK_MEMBER(som_attrs, som_incompat);
-	CHECK_MEMBER(som_attrs, som_ioepoch);
-	CHECK_MEMBER(som_attrs, som_size);
-	CHECK_MEMBER(som_attrs, som_blocks);
-	CHECK_MEMBER(som_attrs, som_mountid);
 }
 
 static void
@@ -940,9 +926,6 @@ check_mdt_body(void)
 
 	CHECK_VALUE_O(MDS_FMODE_CLOSED);
 	CHECK_VALUE_O(MDS_FMODE_EXEC);
-	CHECK_VALUE_O(MDS_FMODE_EPOCH);
-	CHECK_VALUE_O(MDS_FMODE_TRUNC);
-	CHECK_VALUE_O(MDS_FMODE_SOM);
 
 	CHECK_VALUE_O(MDS_OPEN_CREATED);
 	CHECK_VALUE_O(MDS_OPEN_CROSS);
@@ -982,10 +965,10 @@ check_mdt_ioepoch(void)
 {
 	BLANK_LINE();
 	CHECK_STRUCT(mdt_ioepoch);
-	CHECK_MEMBER(mdt_ioepoch, handle);
-	CHECK_MEMBER(mdt_ioepoch, ioepoch);
-	CHECK_MEMBER(mdt_ioepoch, flags);
-	CHECK_MEMBER(mdt_ioepoch, padding);
+	CHECK_MEMBER(mdt_ioepoch, mio_handle);
+	CHECK_MEMBER(mdt_ioepoch, mio_unused1);
+	CHECK_MEMBER(mdt_ioepoch, mio_unused2);
+	CHECK_MEMBER(mdt_ioepoch, mio_padding);
 }
 
 static void
@@ -2344,16 +2327,6 @@ main(int argc, char **argv)
 
 	CHECK_VALUE(LUSTRE_BFLAG_UNCOMMITTED_WRITES);
 
-	CHECK_VALUE_X(MF_SOM_CHANGE);
-	CHECK_VALUE_X(MF_EPOCH_OPEN);
-	CHECK_VALUE_X(MF_EPOCH_CLOSE);
-	CHECK_VALUE_X(MF_MDC_CANCEL_FID1);
-	CHECK_VALUE_X(MF_MDC_CANCEL_FID2);
-	CHECK_VALUE_X(MF_MDC_CANCEL_FID3);
-	CHECK_VALUE_X(MF_MDC_CANCEL_FID4);
-	CHECK_VALUE_X(MF_SOM_AU);
-	CHECK_VALUE_X(MF_GETATTR_LOCK);
-
 	CHECK_VALUE_64X(MDS_ATTR_MODE);
 	CHECK_VALUE_64X(MDS_ATTR_UID);
 	CHECK_VALUE_64X(MDS_ATTR_GID);
@@ -2473,7 +2446,6 @@ main(int argc, char **argv)
 	CHECK_VALUE(OUT_INDEX_INSERT);
 	CHECK_VALUE(OUT_INDEX_DELETE);
 
-	check_som_attrs();
 	check_hsm_attrs();
 	check_ost_id();
 	check_lu_dirent();

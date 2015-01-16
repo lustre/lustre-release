@@ -77,9 +77,8 @@ enum ma_valid {
 	MA_ACL_DEF   = (1 << 5),
 	MA_LOV_DEF   = (1 << 6),
 	MA_HSM       = (1 << 7),
-	MA_SOM       = (1 << 8),
-	MA_PFID      = (1 << 9),
-	MA_LMV_DEF   = (1 << 10)
+	MA_PFID      = (1 << 8),
+	MA_LMV_DEF   = (1 << 9),
 };
 
 typedef enum {
@@ -111,21 +110,6 @@ struct md_hsm {
 	__u64	mh_arch_ver;
 };
 
-#define IOEPOCH_INVAL 0
-
-/* memory structure for som attributes
- * for fields description see the on disk structure som_attrs
- * which is defined in lustre_idl.h
- */
-struct md_som_data {
-	__u32	msd_compat;
-	__u32	msd_incompat;
-	__u64	msd_ioepoch;
-	__u64	msd_size;
-	__u64	msd_blocks;
-	__u64	msd_mountid;
-};
-
 struct md_attr {
         __u64                   ma_valid;
         __u64                   ma_need;
@@ -136,7 +120,6 @@ struct md_attr {
         struct lov_mds_md      *ma_lmm;
 	union lmv_mds_md       *ma_lmv;
         void                   *ma_acl;
-        struct md_som_data     *ma_som;
         int                     ma_lmm_size;
         int                     ma_lmv_size;
         int                     ma_acl_size;
@@ -593,7 +576,6 @@ enum mdd_object_role {
 
 struct dt_device;
 
-int lustre_buf2som(void *buf, int rc, struct md_som_data *msd);
 int lustre_buf2hsm(void *buf, int rc, struct md_hsm *mh);
 void lustre_hsm2buf(void *buf, const struct md_hsm *mh);
 

@@ -677,16 +677,17 @@ void mdc_replay_open(struct ptlrpc_request *req)
                 struct mdt_ioepoch *epoch;
 
 		LASSERT(opc == MDS_CLOSE);
-                epoch = req_capsule_client_get(&close_req->rq_pill,
-                                               &RMF_MDT_EPOCH);
-                LASSERT(epoch);
+		epoch = req_capsule_client_get(&close_req->rq_pill,
+					       &RMF_MDT_EPOCH);
+		LASSERT(epoch);
 
-                if (och != NULL)
-                        LASSERT(!memcmp(&old, &epoch->handle, sizeof(old)));
-                DEBUG_REQ(D_HA, close_req, "updating close body with new fh");
-		epoch->handle = body->mbo_handle;
-        }
-        EXIT;
+		if (och != NULL)
+			LASSERT(!memcmp(&old, &epoch->mio_handle, sizeof(old)));
+
+		DEBUG_REQ(D_HA, close_req, "updating close body with new fh");
+		epoch->mio_handle = body->mbo_handle;
+	}
+	EXIT;
 }
 
 void mdc_commit_open(struct ptlrpc_request *req)

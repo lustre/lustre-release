@@ -303,7 +303,7 @@ static inline int range_compare_loc(const struct lu_seq_range *r1,
  */
 enum lma_compat {
 	LMAC_HSM	= 0x00000001,
-	LMAC_SOM	= 0x00000002,
+/*	LMAC_SOM	= 0x00000002, obsolete since 2.8.0 */
 	LMAC_NOT_IN_OI	= 0x00000004, /* the object does NOT need OI mapping */
 	LMAC_FID_ON_OST = 0x00000008, /* For OST-object, its OI mapping is
 				       * under /O/<seq>/d<x>. */
@@ -327,29 +327,6 @@ extern void lustre_lma_swab(struct lustre_mdt_attrs *lma);
 extern void lustre_lma_init(struct lustre_mdt_attrs *lma,
 			    const struct lu_fid *fid,
 			    __u32 compat, __u32 incompat);
-/**
- * SOM on-disk attributes stored in a separate xattr.
- */
-struct som_attrs {
-	/** Bitfield for supported data in this structure. For future use. */
-	__u32	som_compat;
-
-	/** Incompat feature list. The supported feature mask is availabe in
-	 * SOM_INCOMPAT_SUPP */
-	__u32	som_incompat;
-
-	/** IO Epoch SOM attributes belongs to */
-	__u64	som_ioepoch;
-	/** total file size in objects */
-	__u64	som_size;
-	/** total fs blocks in objects */
-	__u64	som_blocks;
-	/** mds mount id the size is valid for */
-	__u64	som_mountid;
-};
-extern void lustre_som_swab(struct som_attrs *attrs);
-
-#define SOM_INCOMPAT_SUPP 0x0
 
 /* copytool uses a 32b bitmask field to encode archive-Ids during register
  * with MDT thru kuc.
@@ -1381,7 +1358,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_OSS_CAPA | OBD_CONNECT_MDS_MDS | \
                                 OBD_CONNECT_FID | LRU_RESIZE_CONNECT_FLAG | \
                                 OBD_CONNECT_VBR | OBD_CONNECT_LOV_V3 | \
-                                OBD_CONNECT_SOM | OBD_CONNECT_FULL20 | \
+				OBD_CONNECT_FULL20 | \
 				OBD_CONNECT_64BITHASH | OBD_CONNECT_JOBSTATS | \
 				OBD_CONNECT_EINPROGRESS | \
 				OBD_CONNECT_LIGHTWEIGHT | OBD_CONNECT_UMASK | \
@@ -2123,7 +2100,7 @@ typedef enum {
 	MDS_PIN			= 42, /* obsolete, never used in a release */
 	MDS_UNPIN		= 43, /* obsolete, never used in a release */
 	MDS_SYNC		= 44,
-	MDS_DONE_WRITING	= 45,
+	MDS_DONE_WRITING	= 45, /* obsolete since 2.8.0 */
 	MDS_SET_INFO		= 46,
 	MDS_QUOTACHECK		= 47,
 	MDS_QUOTACTL		= 48,
@@ -2229,24 +2206,6 @@ enum {
 #define MDS_STATUS_CONN 1
 #define MDS_STATUS_LOV 2
 
-/* mdt_thread_info.mti_flags. */
-enum md_op_flags {
-	/* The flag indicates Size-on-MDS attributes are changed. */
-	MF_SOM_CHANGE           = (1 << 0),
-	/* Flags indicates an epoch opens or closes. */
-	MF_EPOCH_OPEN           = (1 << 1),
-	MF_EPOCH_CLOSE          = (1 << 2),
-	MF_MDC_CANCEL_FID1      = (1 << 3),
-	MF_MDC_CANCEL_FID2      = (1 << 4),
-	MF_MDC_CANCEL_FID3      = (1 << 5),
-	MF_MDC_CANCEL_FID4      = (1 << 6),
-	/* There is a pending attribute update. */
-	MF_SOM_AU               = (1 << 7),
-	/* Cancel OST locks while getattr OST attributes. */
-	MF_GETATTR_LOCK         = (1 << 8),
-	MF_GET_MDT_IDX          = (1 << 9),
-};
-
 #define LUSTRE_BFLAG_UNCOMMITTED_WRITES   0x1
 
 /* these should be identical to their EXT4_*_FL counterparts, they are
@@ -2334,10 +2293,10 @@ struct mdt_body {
 extern void lustre_swab_mdt_body (struct mdt_body *b);
 
 struct mdt_ioepoch {
-        struct lustre_handle handle;
-        __u64  ioepoch;
-        __u32  flags;
-        __u32  padding;
+	struct lustre_handle mio_handle;
+	__u64 mio_unused1; /* was ioepoch */
+	__u32 mio_unused2; /* was flags */
+	__u32 mio_padding;
 };
 
 extern void lustre_swab_mdt_ioepoch (struct mdt_ioepoch *b);
@@ -2426,12 +2385,9 @@ extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 
 #define MDS_FMODE_CLOSED         00000000
 #define MDS_FMODE_EXEC           00000004
-/* IO Epoch is opened on a closed file. */
-#define MDS_FMODE_EPOCH          01000000
-/* IO Epoch is opened on a file truncate. */
-#define MDS_FMODE_TRUNC          02000000
-/* Size-on-MDS Attribute Update is pending. */
-#define MDS_FMODE_SOM            04000000
+/*	MDS_FMODE_EPOCH          01000000 obsolete since 2.8.0 */
+/*	MDS_FMODE_TRUNC          02000000 obsolete since 2.8.0 */
+/*	MDS_FMODE_SOM            04000000 obsolete since 2.8.0 */
 
 #define MDS_OPEN_CREATED         00000010
 #define MDS_OPEN_CROSS           00000020
@@ -2494,7 +2450,7 @@ enum mds_op_bias {
 	MDS_CROSS_REF		= 1 << 1,
 	MDS_VTX_BYPASS		= 1 << 2,
 	MDS_PERM_BYPASS		= 1 << 3,
-	MDS_SOM			= 1 << 4,
+/*	MDS_SOM			= 1 << 4, obsolete since 2.8.0 */
 	MDS_QUOTA_IGNORE	= 1 << 5,
 	/* Was MDS_CLOSE_CLEANUP (1 << 6), No more used */
 	MDS_KEEP_ORPHAN		= 1 << 7,

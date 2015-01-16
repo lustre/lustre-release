@@ -437,8 +437,6 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 
 	LASSERT(oattr != NULL);
 
-	/* export destroy does not have ->le_ses, but we may want
-	 * to drop LUSTRE_SOM_FL. */
 	uc = lu_ucred_check(env);
 	if (uc == NULL)
 		RETURN(0);
@@ -594,42 +592,22 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 		}
 	}
 
-	/* For both Size-on-MDS case and truncate case,
-	 * "la->la_valid & (LA_SIZE | LA_BLOCKS)" are ture.
-	 * We distinguish them by "flags & MDS_SOM".
-	 * For SOM case, it is true, the MAY_WRITE perm has been checked
-	 * when open, no need check again. For truncate case, it is false,
-	 * the MAY_WRITE perm should be checked here. */
-	if (flags & MDS_SOM) {
-		/* For the "Size-on-MDS" setattr update, merge coming
-		 * attributes with the set in the inode. BUG 10641 */
-		if ((la->la_valid & LA_ATIME) &&
-		    (la->la_atime <= oattr->la_atime))
-			la->la_valid &= ~LA_ATIME;
+	if (la->la_valid & (LA_SIZE | LA_BLOCKS)) {
+		if (!((flags & MDS_OWNEROVERRIDE) &&
+		      (uc->uc_fsuid == oattr->la_uid)) &&
+		    !(flags & MDS_PERM_BYPASS)) {
+			rc = mdd_permission_internal(env, obj, oattr,
+						     MAY_WRITE);
+			if (rc != 0)
+				RETURN(rc);
+		}
+	}
 
-		/* OST attributes do not have a priority over MDS attributes,
-		 * so drop times if ctime is equal. */
-		if ((la->la_valid & LA_CTIME) &&
-		    (la->la_ctime <= oattr->la_ctime))
-			la->la_valid &= ~(LA_MTIME | LA_CTIME);
-	} else {
-		if (la->la_valid & (LA_SIZE | LA_BLOCKS)) {
-			if (!((flags & MDS_OWNEROVERRIDE) &&
-			      (uc->uc_fsuid == oattr->la_uid)) &&
-			    !(flags & MDS_PERM_BYPASS)) {
-				rc = mdd_permission_internal(env, obj,
-							     oattr, MAY_WRITE);
-				if (rc != 0)
-					RETURN(rc);
-			}
-		}
-		if (la->la_valid & LA_CTIME) {
-			/* The pure setattr, it has the priority over what is
-			 * already set, do not drop it if ctime is equal. */
-			if (la->la_ctime < oattr->la_ctime)
-				la->la_valid &= ~(LA_ATIME | LA_MTIME |
-							LA_CTIME);
-		}
+	if (la->la_valid & LA_CTIME) {
+		/* The pure setattr, it has the priority over what is
+		 * already set, do not drop it if ctime is equal. */
+		if (la->la_ctime < oattr->la_ctime)
+			la->la_valid &= ~(LA_ATIME | LA_MTIME | LA_CTIME);
 	}
 
 	RETURN(0);
@@ -844,10 +822,9 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 	int rc;
 	ENTRY;
 
-	/* we do not use ->attr_set() for LOV/SOM/HSM EA any more */
+	/* we do not use ->attr_set() for LOV/HSM EA any more */
 	LASSERT((ma->ma_valid & MA_LOV) == 0);
 	LASSERT((ma->ma_valid & MA_HSM) == 0);
-	LASSERT((ma->ma_valid & MA_SOM) == 0);
 
 	rc = mdd_la_get(env, mdd_obj, attr);
 	if (rc)

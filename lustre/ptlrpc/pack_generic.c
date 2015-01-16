@@ -1841,12 +1841,12 @@ void lustre_swab_mdt_body (struct mdt_body *b)
 	CLASSERT(offsetof(typeof(*b), mbo_padding_5) != 0);
 }
 
-void lustre_swab_mdt_ioepoch (struct mdt_ioepoch *b)
+void lustre_swab_mdt_ioepoch(struct mdt_ioepoch *b)
 {
-        /* handle is opaque */
-         __swab64s (&b->ioepoch);
-         __swab32s (&b->flags);
-         CLASSERT(offsetof(typeof(*b), padding) != 0);
+	/* mio_handle is opaque */
+	CLASSERT(offsetof(typeof(*b), mio_unused1) != 0);
+	CLASSERT(offsetof(typeof(*b), mio_unused2) != 0);
+	CLASSERT(offsetof(typeof(*b), mio_padding) != 0);
 }
 
 void lustre_swab_mgs_target_info(struct mgs_target_info *mti)

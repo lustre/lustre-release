@@ -70,65 +70,6 @@ void lustre_lma_swab(struct lustre_mdt_attrs *lma)
 EXPORT_SYMBOL(lustre_lma_swab);
 
 /**
- * Swab, if needed, SOM structure which is stored on-disk in little-endian
- * order.
- *
- * \param attrs - is a pointer to the SOM structure to be swabbed.
- */
-void lustre_som_swab(struct som_attrs *attrs)
-{
-	/* Use LUSTRE_MSG_MAGIC to detect local endianess. */
-	if (LUSTRE_MSG_MAGIC != cpu_to_le32(LUSTRE_MSG_MAGIC)) {
-		__swab32s(&attrs->som_compat);
-		__swab32s(&attrs->som_incompat);
-		__swab64s(&attrs->som_ioepoch);
-		__swab64s(&attrs->som_size);
-		__swab64s(&attrs->som_blocks);
-		__swab64s(&attrs->som_mountid);
-	}
-};
-EXPORT_SYMBOL(lustre_som_swab);
-
-/*
- * Swab and extract SOM attributes from on-disk xattr.
- *
- * \param buf - is a buffer containing the on-disk SOM extended attribute.
- * \param rc  - is the SOM xattr stored in \a buf
- * \param msd - is the md_som_data structure where to extract SOM attributes.
- */
-int lustre_buf2som(void *buf, int rc, struct md_som_data *msd)
-{
-	struct som_attrs *attrs = (struct som_attrs *)buf;
-	ENTRY;
-
-	if (rc == 0 ||  rc == -ENODATA)
-		/* no SOM attributes */
-		RETURN(-ENODATA);
-
-	if (rc < 0)
-		/* error hit while fetching xattr */
-		RETURN(rc);
-
-	/* check SOM compatibility */
-	if (attrs->som_incompat & ~cpu_to_le32(SOM_INCOMPAT_SUPP))
-		RETURN(-ENODATA);
-
-	/* unpack SOM attributes */
-	lustre_som_swab(attrs);
-
-	/* fill in-memory msd structure */
-	msd->msd_compat   = attrs->som_compat;
-	msd->msd_incompat = attrs->som_incompat;
-	msd->msd_ioepoch  = attrs->som_ioepoch;
-	msd->msd_size     = attrs->som_size;
-	msd->msd_blocks   = attrs->som_blocks;
-	msd->msd_mountid  = attrs->som_mountid;
-
-	RETURN(0);
-}
-EXPORT_SYMBOL(lustre_buf2som);
-
-/**
  * Swab, if needed, HSM structure which is stored on-disk in little-endian
  * order.
  *
