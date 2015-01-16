@@ -188,9 +188,6 @@ struct mdt_device {
 	} mdt_opts;
         /* mdt state flags */
         unsigned long              mdt_state;
-        /* lock to protect IOepoch */
-	spinlock_t		   mdt_ioepoch_lock;
-        __u64                      mdt_ioepoch;
 
         /* transaction callbacks */
         struct dt_txn_callback     mdt_txn_cb;
@@ -213,7 +210,6 @@ struct mdt_device {
 	struct ptlrpc_thread       mdt_ck_thread;
 	struct lustre_capa_key     mdt_capa_keys[2];
 	unsigned int               mdt_capa_conf:1,
-				   mdt_som_conf:1,
 				   /* Enable remote dir on non-MDT0 */
 				   mdt_enable_remote_dir:1;
 
@@ -240,15 +236,17 @@ struct mdt_device {
 #define MDT_SERVICE_WATCHDOG_FACTOR	(2)
 #define MDT_COS_DEFAULT         (0)
 
+enum mdt_object_flags {
+	/** lov object has been created. */
+	MOF_LOV_CREATED		= 1 << 0,
+};
+
 struct mdt_object {
 	struct lu_object_header	mot_header;
 	struct lu_object	mot_obj;
-        __u64                   mot_ioepoch;
-        __u64                   mot_flags;
-        int                     mot_ioepoch_count;
-        int                     mot_writecount;
-        /* Lock to protect object's IO epoch. */
-	struct mutex		mot_ioepoch_mutex;
+	enum mdt_object_flags	mot_flags;
+	int			mot_write_count;
+	spinlock_t		mot_write_lock;
         /* Lock to protect create_data */
 	struct mutex		mot_lov_mutex;
 	/* Lock to protect lease open.
@@ -256,26 +254,6 @@ struct mdt_object {
 	struct rw_semaphore	mot_open_sem;
 	atomic_t		mot_lease_count;
 	atomic_t		mot_open_count;
-};
-
-enum mdt_object_flags {
-        /** SOM attributes are changed. */
-        MOF_SOM_CHANGE  = (1 << 0),
-        /**
-         * The SOM recovery state for mdt object.
-         * This state is an in-memory equivalent of an absent SOM EA, used
-         * instead of invalidating SOM EA while IOEpoch is still opened when
-         * a client eviction occurs or a client fails to obtain SOM attributes.
-         * It indicates that the last IOEpoch holder will need to obtain SOM
-         * attributes under [0;EOF] extent lock to flush all the client's
-         * cached of evicted from MDS clients (but not necessary evicted from
-         * OST) before taking ost attributes.
-         */
-        MOF_SOM_RECOV   = (1 << 1),
-        /** File has been just created. */
-        MOF_SOM_CREATED = (1 << 2),
-        /** lov object has been created. */
-        MOF_LOV_CREATED = (1 << 3),
 };
 
 struct mdt_lock_handle {
@@ -442,16 +420,12 @@ struct mdt_thread_info {
                         /* for mdt_sendpage()      */
                         struct l_wait_info mti_wait_info;
                 } rdpg;
-                struct {
-                        struct md_attr attr;
-                        struct md_som_data data;
-                } som;
+		struct {
+			struct md_attr attr;
+		} hsm;
         } mti_u;
 
-        /* IO epoch related stuff. */
-        struct mdt_ioepoch        *mti_ioepoch;
-        __u64                      mti_replayepoch;
-
+	struct lustre_handle	   mti_close_handle;
 	loff_t                     mti_off;
 	struct lu_buf              mti_buf;
 	struct lu_buf              mti_big_buf;
@@ -723,17 +697,6 @@ struct mdt_file_data *mdt_handle2mfd(struct mdt_export_data *med,
 				     const struct lustre_handle *handle,
 				     bool is_replay);
 
-enum {
-        MDT_IOEPOCH_CLOSED  = 0,
-        MDT_IOEPOCH_OPENED  = 1,
-        MDT_IOEPOCH_GETATTR = 2,
-};
-
-enum {
-        MDT_SOM_DISABLE = 0,
-        MDT_SOM_ENABLE  = 1,
-};
-
 int mdt_get_info(struct tgt_session_info *tsi);
 int mdt_attr_get_complex(struct mdt_thread_info *info,
 			 struct mdt_object *o, struct md_attr *ma);
@@ -741,9 +704,6 @@ int mdt_big_xattr_get(struct mdt_thread_info *info, struct mdt_object *o,
 		      const char *name);
 int mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,
 		   struct md_attr *ma, const char *name);
-int mdt_ioepoch_open(struct mdt_thread_info *info, struct mdt_object *o,
-                     int created);
-int mdt_object_is_som_enabled(struct mdt_object *mo);
 int mdt_write_get(struct mdt_object *o);
 void mdt_write_put(struct mdt_object *o);
 int mdt_write_read(struct mdt_object *o);
@@ -753,7 +713,6 @@ void mdt_mfd_free(struct mdt_file_data *mfd);
 int mdt_close(struct tgt_session_info *tsi);
 int mdt_add_dirty_flag(struct mdt_thread_info *info, struct mdt_object *mo,
 			struct md_attr *ma);
-int mdt_done_writing(struct tgt_session_info *tsi);
 int mdt_fix_reply(struct mdt_thread_info *info);
 int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *,
                            const struct md_attr *);

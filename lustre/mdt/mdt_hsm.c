@@ -70,7 +70,7 @@ int mdt_hsm_attr_set(struct mdt_thread_info *info, struct mdt_object *obj,
 	/* pack HSM attributes */
 	lustre_hsm2buf(info->mti_xattr_buf, mh);
 
-	/* update SOM attributes */
+	/* update HSM attributes */
 	buf->lb_buf = attrs;
 	buf->lb_len = sizeof(*attrs);
 	rc = mo_xattr_set(info->mti_env, next, buf, XATTR_NAME_HSM, 0);

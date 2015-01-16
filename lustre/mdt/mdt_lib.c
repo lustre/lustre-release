@@ -1023,17 +1023,23 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 	RETURN(0);
 }
 
-static int mdt_ioepoch_unpack(struct mdt_thread_info *info)
+static int mdt_close_handle_unpack(struct mdt_thread_info *info)
 {
-        struct req_capsule *pill = info->mti_pill;
-        ENTRY;
+	struct req_capsule *pill = info->mti_pill;
+	struct mdt_ioepoch *ioepoch;
+	ENTRY;
 
-        if (req_capsule_get_size(pill, &RMF_MDT_EPOCH, RCL_CLIENT))
-                info->mti_ioepoch =
-                        req_capsule_client_get(pill, &RMF_MDT_EPOCH);
-        else
-                info->mti_ioepoch = NULL;
-        RETURN(info->mti_ioepoch == NULL ? -EFAULT : 0);
+	if (req_capsule_get_size(pill, &RMF_MDT_EPOCH, RCL_CLIENT))
+		ioepoch = req_capsule_client_get(pill, &RMF_MDT_EPOCH);
+	else
+		ioepoch = NULL;
+
+	if (ioepoch == NULL)
+		RETURN(-EPROTO);
+
+	info->mti_close_handle = ioepoch->handle;
+
+	RETURN(0);
 }
 
 static inline int mdt_dlmreq_unpack(struct mdt_thread_info *info) {
@@ -1059,9 +1065,6 @@ static int mdt_setattr_unpack(struct mdt_thread_info *info)
         rc = mdt_setattr_unpack_rec(info);
         if (rc)
                 RETURN(rc);
-
-        /* Epoch may be absent */
-        mdt_ioepoch_unpack(info);
 
         if (req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
                 rr->rr_eadata = req_capsule_client_get(pill, &RMF_EADATA);
@@ -1109,10 +1112,10 @@ static int mdt_hsm_release_unpack(struct mdt_thread_info *info)
 
 int mdt_close_unpack(struct mdt_thread_info *info)
 {
-        int rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
-        rc = mdt_ioepoch_unpack(info);
+	rc = mdt_close_handle_unpack(info);
         if (rc)
                 RETURN(rc);
 
@@ -1430,7 +1433,6 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         /* Do not trigger ASSERTION if client miss to set such flags. */
         if (unlikely(info->mti_spec.sp_cr_flags == 0))
                 RETURN(-EPROTO);
-        info->mti_replayepoch = rec->cr_ioepoch;
 
         info->mti_cross_ref = !!(rec->cr_bias & MDS_CROSS_REF);
 

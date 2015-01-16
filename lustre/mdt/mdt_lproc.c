@@ -693,68 +693,6 @@ mdt_nosquash_nids_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(mdt_nosquash_nids);
 
-static int mdt_som_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_device *obd = m->private;
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return seq_printf(m, "%sabled\n",
-			  mdt->mdt_som_conf ? "en" : "dis");
-}
-
-static ssize_t
-mdt_som_seq_write(struct file *file, const char __user *buffer,
-		  size_t count, loff_t *off)
-{
-	struct seq_file	  *m = file->private_data;
-	struct obd_device *obd = m->private;
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	struct obd_export *exp;
-	char kernbuf[16];
-	unsigned long val = 0;
-
-        if (count > (sizeof(kernbuf) - 1))
-                return -EINVAL;
-
-	if (copy_from_user(kernbuf, buffer, count))
-                return -EFAULT;
-
-        kernbuf[count] = '\0';
-
-        if (!strcmp(kernbuf, "enabled"))
-                val = 1;
-        else if (strcmp(kernbuf, "disabled"))
-                return -EINVAL;
-
-        if (mdt->mdt_som_conf == val)
-                return count;
-
-        if (!obd->obd_process_conf) {
-                CERROR("Temporary SOM change is not supported, use lctl "
-                       "conf_param for permanent setting\n");
-                return count;
-        }
-
-	/* 1 stands for self export. */
-	list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
-		if (exp == obd->obd_self_export)
-			continue;
-		if (exp_connect_flags(exp) & OBD_CONNECT_MDS_MDS)
-			continue;
-                /* Some clients are already connected, skip the change */
-                LCONSOLE_INFO("%s is already connected, SOM will be %s on "
-                              "the next mount\n", exp->exp_client_uuid.uuid,
-                              val ? "enabled" : "disabled");
-                return count;
-        }
-
-        mdt->mdt_som_conf = val;
-        LCONSOLE_INFO("Enabling SOM\n");
-
-        return count;
-}
-LPROC_SEQ_FOPS(mdt_som);
-
 static int mdt_enable_remote_dir_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -864,8 +802,6 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 	  .fops =	&mdt_root_squash_fops			},
 	{ .name =	"nosquash_nids",
 	  .fops =	&mdt_nosquash_nids_fops			},
-	{ .name =	"som",
-	  .fops =	&mdt_som_fops				},
 	{ .name =	"instance",
 	  .fops =	&mdt_target_instance_fops		},
 	{ .name =	"ir_factor",

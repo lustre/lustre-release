@@ -199,8 +199,7 @@ void mdt_req_from_lcd(struct ptlrpc_request *req, struct lsd_client_data *lcd)
         DEBUG_REQ(D_HA, req, "restoring transno "LPD64"/status %d",
                   lcd->lcd_last_transno, lcd->lcd_last_result);
 
-        if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE ||
-            lustre_msg_get_opc(req->rq_repmsg) == MDS_DONE_WRITING) {
+	if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {
                 req->rq_transno = lcd->lcd_last_close_transno;
                 req->rq_status = lcd->lcd_last_close_result;
         } else {
@@ -331,21 +330,6 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
 		mdt_fake_ma(&mti->mti_attr);
         mdt_pack_attr2body(mti, body, &mti->mti_attr.ma_attr,
                            mdt_object_fid(obj));
-        if (mti->mti_ioepoch && (mti->mti_ioepoch->flags & MF_EPOCH_OPEN)) {
-                struct mdt_file_data *mfd;
-                struct mdt_body *repbody;
-
-                repbody = req_capsule_server_get(mti->mti_pill, &RMF_MDT_BODY);
-		repbody->mbo_ioepoch = obj->mot_ioepoch;
-		spin_lock(&med->med_open_lock);
-		list_for_each_entry(mfd, &med->med_open_head, mfd_list) {
-			if (mfd->mfd_xid == req->rq_xid)
-				break;
-		}
-		LASSERT(&mfd->mfd_list != &med->med_open_head);
-		spin_unlock(&med->med_open_lock);
-		repbody->mbo_handle.cookie = mfd->mfd_handle.h_cookie;
-	}
 
 	mdt_object_put(mti->mti_env, obj);
 }

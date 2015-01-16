@@ -362,33 +362,6 @@ out:
 	RETURN(rc);
 }
 
-/**
- * Pack SOM attributes into the reply.
- * Call under a DLM UPDATE lock.
- */
-static void mdt_pack_size2body(struct mdt_thread_info *info,
-                               struct mdt_object *mo)
-{
-        struct mdt_body *b;
-        struct md_attr *ma = &info->mti_attr;
-
-        LASSERT(ma->ma_attr.la_valid & LA_MODE);
-        b = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
-
-        /* Check if Size-on-MDS is supported, if this is a regular file,
-         * if SOM is enabled on the object and if SOM cache exists and valid.
-         * Otherwise do not pack Size-on-MDS attributes to the reply. */
-        if (!(mdt_conn_flags(info) & OBD_CONNECT_SOM) ||
-            !S_ISREG(ma->ma_attr.la_mode) ||
-            !mdt_object_is_som_enabled(mo) ||
-            !(ma->ma_valid & MA_SOM))
-                return;
-
-	b->mbo_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
-	b->mbo_size = ma->ma_som->msd_size;
-	b->mbo_blocks = ma->ma_som->msd_blocks;
-}
-
 #ifdef CONFIG_FS_POSIX_ACL
 /*
  * Pack ACL data into the reply. UIDs/GIDs are mapped and filtered by nodemap.
@@ -814,19 +787,6 @@ int mdt_attr_get_complex(struct mdt_thread_info *info,
 			GOTO(out, rc);
 	}
 
-	if (need & MA_SOM && S_ISREG(mode)) {
-		buf->lb_buf = info->mti_xattr_buf;
-		buf->lb_len = sizeof(info->mti_xattr_buf);
-		CLASSERT(sizeof(struct som_attrs) <=
-			 sizeof(info->mti_xattr_buf));
-		rc2 = mo_xattr_get(info->mti_env, next, buf, XATTR_NAME_SOM);
-		rc2 = lustre_buf2som(info->mti_xattr_buf, rc2, ma->ma_som);
-		if (rc2 == 0)
-			ma->ma_valid |= MA_SOM;
-		else if (rc2 < 0 && rc2 != -ENODATA)
-			GOTO(out, rc = rc2);
-	}
-
 	if (need & MA_HSM && S_ISREG(mode)) {
 		buf->lb_buf = info->mti_xattr_buf;
 		buf->lb_len = sizeof(info->mti_xattr_buf);
@@ -941,8 +901,6 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 ma->ma_need |= MA_LOV_DEF;
         }
         ma->ma_need |= ma_need;
-        if (ma->ma_need & MA_SOM)
-                ma->ma_som = &info->mti_u.som.data;
 
 	rc = mdt_attr_get_complex(info, o, ma);
 	if (unlikely(rc)) {
@@ -1641,11 +1599,6 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         }
 
         lock = ldlm_handle2lock(&lhc->mlh_reg_lh);
-        /* Get MA_SOM attributes if update lock is given. */
-        if (lock &&
-            lock->l_policy_data.l_inodebits.bits & MDS_INODELOCK_UPDATE &&
-            S_ISREG(lu_object_attr(&mdt_object_child(child)->mo_lu)))
-                ma_need |= MA_SOM;
 
         /* finally, we can get attr for child. */
         mdt_set_capainfo(info, 1, child_fid, BYPASS_CAPA);
@@ -1660,8 +1613,6 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			 "Lock res_id: "DLDLMRES", fid: "DFID"\n",
 			 PLDLMRES(lock->l_resource),
 			 PFID(mdt_object_fid(child)));
-		if (mdt_object_exists(child) && !mdt_object_remote(child))
-			mdt_pack_size2body(info, child);
         }
         if (lock)
                 LDLM_LOCK_PUT(lock);
@@ -4323,8 +4274,6 @@ TGT_MDT_HDL(HABEO_CORPUS,		MDS_GETXATTR,	mdt_tgt_getxattr),
 TGT_MDT_HDL(0		| HABEO_REFERO,	MDS_STATFS,	mdt_statfs),
 TGT_MDT_HDL(0		| MUTABOR,	MDS_REINT,	mdt_reint),
 TGT_MDT_HDL(HABEO_CORPUS,		MDS_CLOSE,	mdt_close),
-TGT_MDT_HDL(HABEO_CORPUS,		MDS_DONE_WRITING,
-							mdt_done_writing),
 TGT_MDT_HDL(HABEO_CORPUS| HABEO_REFERO,	MDS_READPAGE,	mdt_readpage),
 TGT_MDT_HDL(HABEO_CORPUS| HABEO_REFERO,	MDS_SYNC,	mdt_sync),
 TGT_MDT_HDL(0,				MDS_QUOTACTL,	mdt_quotactl),
@@ -4516,8 +4465,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 
         m->mdt_max_mdsize = MAX_MD_SIZE; /* 4 stripes */
 
-        m->mdt_som_conf = 0;
-
         m->mdt_opts.mo_cos = MDT_COS_DEFAULT;
 
 	/* default is coordinator off, it is started through conf_param
@@ -4536,7 +4483,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 		obd->u.obt.obt_magic = OBT_MAGIC;
 	}
 
-	spin_lock_init(&m->mdt_ioepoch_lock);
         m->mdt_capa_timeout = CAPA_TIMEOUT;
         m->mdt_capa_alg = CAPA_HMAC_ALG_SHA1;
         m->mdt_ck_timeout = CAPA_KEY_TIMEOUT;
@@ -4831,7 +4777,7 @@ static struct lu_object *mdt_object_alloc(const struct lu_env *env,
 		lu_object_init(o, h, d);
 		lu_object_add_top(h, o);
 		o->lo_ops = &mdt_obj_ops;
-		mutex_init(&mo->mot_ioepoch_mutex);
+		spin_lock_init(&mo->mot_write_lock);
 		mutex_init(&mo->mot_lov_mutex);
 		init_rwsem(&mo->mot_open_sem);
 		RETURN(o);
@@ -4882,13 +4828,13 @@ static void mdt_object_free(const struct lu_env *env, struct lu_object *o)
 }
 
 static int mdt_object_print(const struct lu_env *env, void *cookie,
-                            lu_printer_t p, const struct lu_object *o)
+			    lu_printer_t p, const struct lu_object *o)
 {
-        struct mdt_object *mdto = mdt_obj((struct lu_object *)o);
-        return (*p)(env, cookie, LUSTRE_MDT_NAME"-object@%p(ioepoch="LPU64" "
-                    "flags="LPX64", epochcount=%d, writecount=%d)",
-                    mdto, mdto->mot_ioepoch, mdto->mot_flags,
-                    mdto->mot_ioepoch_count, mdto->mot_writecount);
+	struct mdt_object *mdto = mdt_obj((struct lu_object *)o);
+
+	return (*p)(env, cookie,
+		    LUSTRE_MDT_NAME"-object@%p(flags=%d, writecount=%d)",
+		    mdto, mdto->mot_flags, mdto->mot_write_count);
 }
 
 static int mdt_prepare(const struct lu_env *env,
@@ -5017,9 +4963,6 @@ static int mdt_connect_internal(struct obd_export *exp,
 	if (!mdt->mdt_opts.mo_user_xattr)
 		data->ocd_connect_flags &= ~OBD_CONNECT_XATTR;
 
-	if (!mdt->mdt_som_conf)
-		data->ocd_connect_flags &= ~OBD_CONNECT_SOM;
-
 	if (data->ocd_connect_flags & OBD_CONNECT_BRW_SIZE) {
 		data->ocd_brw_size = min(data->ocd_brw_size,
 					 (__u32)MD_MAX_BRW_SIZE);
@@ -5054,15 +4997,6 @@ static int mdt_connect_internal(struct obd_export *exp,
 	if ((data->ocd_connect_flags & OBD_CONNECT_FID) == 0) {
 		CWARN("%s: MDS requires FID support, but client not\n",
 		      mdt_obd_name(mdt));
-		return -EBADE;
-	}
-
-	if (mdt->mdt_som_conf &&
-	    !(data->ocd_connect_flags & (OBD_CONNECT_LIGHTWEIGHT |
-					 OBD_CONNECT_MDS_MDS |
-					 OBD_CONNECT_SOM))) {
-		CWARN("%s: MDS has SOM enabled, but client does not support "
-		      "it\n", mdt_obd_name(mdt));
 		return -EBADE;
 	}
 
@@ -5167,7 +5101,7 @@ static int mdt_export_cleanup(struct obd_export *exp)
 			 * archive request into a noop if it's not actually
 			 * dirty.
 			 */
-			if (mfd->mfd_mode & (FMODE_WRITE|MDS_FMODE_TRUNC))
+			if (mfd->mfd_mode & FMODE_WRITE)
 				rc = mdt_ctxt_add_dirty_flag(&env, info, mfd);
 
 			/* Don't unlink orphan on failover umount, LU-184 */

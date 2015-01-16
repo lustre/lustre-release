@@ -661,11 +661,9 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
         struct md_attr          *ma = &info->mti_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
         struct ptlrpc_request   *req = mdt_info_req(info);
-        struct mdt_export_data  *med = &req->rq_export->exp_mdt_data;
-        struct mdt_file_data    *mfd;
         struct mdt_object       *mo;
         struct mdt_body         *repbody;
-        int                      som_au, rc, rc2;
+	int			 rc, rc2;
         ENTRY;
 
         DEBUG_REQ(D_INODE, req, "setattr "DFID" %x", PFID(rr->rr_fid1),
@@ -685,70 +683,14 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 	if (mdt_object_remote(mo))
 		GOTO(out_put, rc = -EREMOTE);
 
-        /* start a log jounal handle if needed */
-        if (!(mdt_conn_flags(info) & OBD_CONNECT_SOM)) {
-                if ((ma->ma_attr.la_valid & LA_SIZE) ||
-                    (rr->rr_flags & MRF_OPEN_TRUNC)) {
-                        /* Check write access for the O_TRUNC case */
-                        if (mdt_write_read(mo) < 0)
-                                GOTO(out_put, rc = -ETXTBSY);
-                }
-        } else if (info->mti_ioepoch &&
-                   (info->mti_ioepoch->flags & MF_EPOCH_OPEN)) {
-                /* Truncate case. IOEpoch is opened. */
-                rc = mdt_write_get(mo);
-                if (rc)
-                        GOTO(out_put, rc);
+	if ((ma->ma_attr.la_valid & LA_SIZE) ||
+	    (rr->rr_flags & MRF_OPEN_TRUNC)) {
+		/* Check write access for the O_TRUNC case */
+		if (mdt_write_read(mo) < 0)
+			GOTO(out_put, rc = -ETXTBSY);
+	}
 
-		mfd = mdt_mfd_new(med);
-                if (mfd == NULL) {
-                        mdt_write_put(mo);
-                        GOTO(out_put, rc = -ENOMEM);
-                }
-
-                mdt_ioepoch_open(info, mo, 0);
-		repbody->mbo_ioepoch = mo->mot_ioepoch;
-
-                mdt_object_get(info->mti_env, mo);
-                mdt_mfd_set_mode(mfd, MDS_FMODE_TRUNC);
-                mfd->mfd_object = mo;
-                mfd->mfd_xid = req->rq_xid;
-
-		spin_lock(&med->med_open_lock);
-		list_add(&mfd->mfd_list, &med->med_open_head);
-		spin_unlock(&med->med_open_lock);
-		repbody->mbo_handle.cookie = mfd->mfd_handle.h_cookie;
-        }
-
-        som_au = info->mti_ioepoch && info->mti_ioepoch->flags & MF_SOM_CHANGE;
-        if (som_au) {
-                /* SOM Attribute update case. Find the proper mfd and update
-                 * SOM attributes on the proper object. */
-		if (!(mdt_conn_flags(info) & OBD_CONNECT_SOM))
-			GOTO(out_put, rc = -EPROTO);
-
-		spin_lock(&med->med_open_lock);
-		mfd = mdt_handle2mfd(med, &info->mti_ioepoch->handle,
-				     req_is_replay(req));
-		if (mfd == NULL) {
-			spin_unlock(&med->med_open_lock);
-                        CDEBUG(D_INODE, "no handle for file close: "
-                               "fid = "DFID": cookie = "LPX64"\n",
-                               PFID(info->mti_rr.rr_fid1),
-                               info->mti_ioepoch->handle.cookie);
-                        GOTO(out_put, rc = -ESTALE);
-                }
-
-		if (mfd->mfd_mode != MDS_FMODE_SOM ||
-		    (info->mti_ioepoch->flags & MF_EPOCH_CLOSE))
-			GOTO(out_put, rc = -EPROTO);
-
-		class_handle_unhash(&mfd->mfd_handle);
-		list_del_init(&mfd->mfd_list);
-		spin_unlock(&med->med_open_lock);
-
-                mdt_mfd_close(info, mfd);
-	} else if ((ma->ma_valid & MA_INODE) && ma->ma_attr.la_valid) {
+	if ((ma->ma_valid & MA_INODE) && ma->ma_attr.la_valid) {
 		if (ma->ma_valid & MA_LOV)
 			GOTO(out_put, rc = -EPROTO);
 
@@ -810,7 +752,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 	if (info->mti_mdt->mdt_lut.lut_oss_capa &&
 	    exp_connect_flags(info->mti_exp) & OBD_CONNECT_OSS_CAPA &&
 	    S_ISREG(lu_object_attr(&mo->mot_obj)) &&
-	    (ma->ma_attr.la_valid & LA_SIZE) && !som_au) {
+	    (ma->ma_attr.la_valid & LA_SIZE)) {
                 struct lustre_capa *capa;
 
                 capa = req_capsule_server_get(info->mti_pill, &RMF_CAPA2);
