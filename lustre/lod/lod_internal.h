@@ -224,8 +224,8 @@ struct lod_dir_stripe_info {
 	__u32	ldsi_def_hash_type;
 	__u32	ldsi_hash_type;
 
-	unsigned int ldsi_striping_cached:1,
-		     ldsi_def_striping_set:1,
+	unsigned int ldsi_def_striping_set:1,
+		     ldsi_def_striping_cached:1,
 		     ldsi_striped:1;
 };
 
@@ -251,6 +251,7 @@ struct lod_object {
 	unsigned int	   ldo_stripes_allocated:16,
 			   ldo_striping_cached:1,
 			   ldo_def_striping_set:1,
+			   ldo_def_striping_cached:1,
 	/* ldo_dir_slave_stripe indicate this is a slave stripe of
 	 * a striped dir */
 			   ldo_dir_slave_stripe:1;
@@ -264,9 +265,9 @@ struct lod_object {
 #define ldo_dir_def_stripenr	ldo_dir_stripe->ldsi_def_stripenr
 #define ldo_dir_hash_type	ldo_dir_stripe->ldsi_hash_type
 #define ldo_dir_def_hash_type	ldo_dir_stripe->ldsi_def_hash_type
-#define ldo_dir_striping_cached	ldo_dir_stripe->ldsi_striping_cached
 #define ldo_dir_striped		ldo_dir_stripe->ldsi_striped
 #define ldo_dir_def_striping_set	ldo_dir_stripe->ldsi_def_striping_set
+#define ldo_dir_def_striping_cached	ldo_dir_stripe->ldsi_def_striping_cached
 #define ldo_dir_def_stripe_offset	ldo_dir_stripe->ldsi_def_stripe_offset
 
 struct lod_it {

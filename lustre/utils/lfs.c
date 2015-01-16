@@ -1628,12 +1628,14 @@ static int lfs_setdirstripe(int argc, char **argv)
 	char			*stripe_count_opt = NULL;
 	char			*stripe_hash_opt = NULL;
 	char			*mode_opt = NULL;
-	int			default_stripe = 0;
+	bool			default_stripe = false;
 	mode_t			mode = S_IRWXU | S_IRWXG | S_IRWXO;
 	mode_t			previous_mode = 0;
+	bool			delete = false;
 
 	struct option long_opts[] = {
 		{"count",	required_argument, 0, 'c'},
+		{"delete",	no_argument, 0, 'd'},
 		{"index",	required_argument, 0, 'i'},
 		{"mode",	required_argument, 0, 'm'},
 		{"hash-type",	required_argument, 0, 't'},
@@ -1641,7 +1643,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 		{0, 0, 0, 0}
 	};
 
-	while ((c = getopt_long(argc, argv, "c:Di:m:t:", long_opts,
+	while ((c = getopt_long(argc, argv, "c:dDi:m:t:", long_opts,
 				NULL)) >= 0) {
 		switch (c) {
 		case 0:
@@ -1650,8 +1652,12 @@ static int lfs_setdirstripe(int argc, char **argv)
 		case 'c':
 			stripe_count_opt = optarg;
 			break;
+		case 'd':
+			delete = true;
+			default_stripe = true;
+			break;
 		case 'D':
-			default_stripe = 1;
+			default_stripe = true;
 			break;
 		case 'i':
 			stripe_offset_opt = optarg;
@@ -1676,7 +1682,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 		return CMD_HELP;
 	}
 
-	if (stripe_offset_opt == NULL && stripe_count_opt == NULL) {
+	if (!delete && stripe_offset_opt == NULL && stripe_count_opt == NULL) {
 		fprintf(stderr, "error: %s: missing stripe offset and count.\n",
 			argv[0]);
 		return CMD_HELP;
@@ -1691,6 +1697,17 @@ static int lfs_setdirstripe(int argc, char **argv)
 			return CMD_HELP;
 		}
 	}
+
+	if (delete) {
+		if (stripe_offset_opt != NULL || stripe_count_opt != NULL) {
+			fprintf(stderr, "error: %s: cannot specify -d with -s,"
+				" or -i options.\n", argv[0]);
+			return CMD_HELP;
+		} else {
+			stripe_count = 0;
+		}
+	}
+
 
 	if (mode_opt != NULL) {
 		mode = strtoul(mode_opt, &end, 8);
@@ -1725,7 +1742,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 
 	dname = argv[optind];
 	do {
-		if (default_stripe == 1) {
+		if (default_stripe) {
 			result = llapi_dir_set_default_lmv_stripe(dname,
 						    stripe_offset, stripe_count,
 						    hash_type, NULL);

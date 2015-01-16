@@ -989,6 +989,9 @@ int lod_load_striping_locked(const struct lu_env *env, struct lod_object *lo)
 		 */
 		rc = lod_parse_dir_striping(env, lo, buf);
 	}
+
+	if (rc == 0)
+		lo->ldo_striping_cached = 1;
 out:
 	RETURN(rc);
 }

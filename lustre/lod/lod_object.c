@@ -1433,7 +1433,7 @@ static int lod_xattr_get(const struct lu_env *env, struct dt_object *dt,
 /**
  * Verify LVM EA.
  *
- * Checks that the magic and the number of the stripes are sane.
+ * Checks that the magic of the stripe is sane.
  *
  * \param[in] lod	lod device
  * \param[in] lum	a buffer storing LMV EA to verify
@@ -1444,22 +1444,16 @@ static int lod_xattr_get(const struct lu_env *env, struct dt_object *dt,
 static int lod_verify_md_striping(struct lod_device *lod,
 				  const struct lmv_user_md_v1 *lum)
 {
-	int	rc = 0;
-	ENTRY;
-
-	if (unlikely(le32_to_cpu(lum->lum_magic) != LMV_USER_MAGIC))
-		GOTO(out, rc = -EINVAL);
-
-	if (unlikely(le32_to_cpu(lum->lum_stripe_count) == 0))
-		GOTO(out, rc = -EINVAL);
-out:
-	if (rc != 0)
+	if (unlikely(le32_to_cpu(lum->lum_magic) != LMV_USER_MAGIC)) {
 		CERROR("%s: invalid lmv_user_md: magic = %x, "
 		       "stripe_offset = %d, stripe_count = %u: rc = %d\n",
 		       lod2obd(lod)->obd_name, le32_to_cpu(lum->lum_magic),
 		       (int)le32_to_cpu(lum->lum_stripe_offset),
-		       le32_to_cpu(lum->lum_stripe_count), rc);
-	return rc;
+		       le32_to_cpu(lum->lum_stripe_count), -EINVAL);
+		return -EINVAL;
+	}
+
+	return 0;
 }
 
 /**
@@ -1528,7 +1522,6 @@ static int lod_prep_lmv_md(const struct lu_env *env, struct dt_object *dt,
 	lmm1->lmv_master_mdt_index = cpu_to_le32(mdtidx);
 	lmv_buf->lb_buf = info->lti_ea_store;
 	lmv_buf->lb_len = sizeof(*lmm1);
-	lo->ldo_dir_striping_cached = 1;
 
 	RETURN(rc);
 }
@@ -1839,7 +1832,7 @@ next:
 			GOTO(out_put, rc);
 
 		/* probably nothing to inherite */
-		if (lo->ldo_striping_cached &&
+		if (lo->ldo_def_striping_set &&
 		    !LOVEA_DELETE_VALUES(lo->ldo_def_stripe_size,
 					 lo->ldo_def_stripenr,
 					 lo->ldo_def_stripe_offset,
@@ -2131,13 +2124,13 @@ static int lod_declare_xattr_set(const struct lu_env *env,
  */
 static void lod_lov_stripe_cache_clear(struct lod_object *lo)
 {
-	lo->ldo_striping_cached = 0;
 	lo->ldo_def_striping_set = 0;
+	lo->ldo_def_striping_cached = 0;
 	lod_object_set_pool(lo, NULL);
 	lo->ldo_def_stripe_size = 0;
 	lo->ldo_def_stripenr = 0;
 	if (lo->ldo_dir_stripe != NULL)
-		lo->ldo_dir_striping_cached = 0;
+		lo->ldo_dir_def_striping_cached = 0;
 }
 
 /**
@@ -2364,10 +2357,7 @@ static int lod_xattr_set_default_lmv_on_dir(const struct lu_env *env,
 			RETURN(-ENOMEM);
 	}
 
-	l->ldo_dir_striping_cached = 0;
-	l->ldo_dir_def_striping_set = 1;
-	l->ldo_dir_def_stripenr = le32_to_cpu(lum->lum_stripe_count);
-
+	l->ldo_dir_def_striping_cached = 0;
 	RETURN(rc);
 }
 
@@ -2471,7 +2461,7 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 		if (rc != 0)
 			RETURN(rc);
 
-		if (lo->ldo_striping_cached &&
+		if (lo->ldo_def_striping_set &&
 		    !LOVEA_DELETE_VALUES(lo->ldo_def_stripe_size,
 					 lo->ldo_def_stripenr,
 					 lo->ldo_def_stripe_offset,
@@ -2635,7 +2625,7 @@ static int lod_dir_striping_create_internal(const struct lu_env *env,
 	}
 
 	/* Transfer default LMV striping from the parent */
-	if (lo->ldo_dir_striping_cached &&
+	if (lo->ldo_dir_def_striping_set &&
 	    !LMVEA_DELETE_VALUES(lo->ldo_dir_def_stripenr,
 				 lo->ldo_dir_def_stripe_offset)) {
 		struct lmv_user_md_v1 *v1 = info->lti_ea_store;
@@ -2672,7 +2662,7 @@ static int lod_dir_striping_create_internal(const struct lu_env *env,
 	}
 
 	/* Transfer default LOV striping from the parent */
-	if (lo->ldo_striping_cached &&
+	if (lo->ldo_def_striping_set &&
 	    !LOVEA_DELETE_VALUES(lo->ldo_def_stripe_size,
 				 lo->ldo_def_stripenr,
 				 lo->ldo_def_stripe_offset,
@@ -2727,7 +2717,14 @@ static int lod_dir_striping_create(const struct lu_env *env,
 				   struct dt_object_format *dof,
 				   struct thandle *th)
 {
-	return lod_dir_striping_create_internal(env, dt, attr, dof, th, false);
+	struct lod_object *lo = lod_dt_obj(dt);
+	int rc;
+
+	rc = lod_dir_striping_create_internal(env, dt, attr, dof, th, false);
+	if (rc == 0)
+		lo->ldo_striping_cached = 1;
+
+	return rc;
 }
 
 /**
@@ -2916,7 +2913,7 @@ static int lod_cache_parent_lov_striping(const struct lu_env *env,
 	if (rc < (typeof(rc))sizeof(struct lov_user_md)) {
 		/* don't lookup for non-existing or invalid striping */
 		lp->ldo_def_striping_set = 0;
-		lp->ldo_striping_cached = 1;
+		lp->ldo_def_striping_cached = 1;
 		lp->ldo_def_stripe_size = 0;
 		lp->ldo_def_stripenr = 0;
 		lp->ldo_def_stripe_offset = (typeof(v1->lmm_stripe_offset))(-1);
@@ -2946,7 +2943,7 @@ static int lod_cache_parent_lov_striping(const struct lu_env *env,
 	lp->ldo_def_stripenr = v1->lmm_stripe_count;
 	lp->ldo_def_stripe_size = v1->lmm_stripe_size;
 	lp->ldo_def_stripe_offset = v1->lmm_stripe_offset;
-	lp->ldo_striping_cached = 1;
+	lp->ldo_def_striping_cached = 1;
 	lp->ldo_def_striping_set = 1;
 	if (v1->lmm_magic == LOV_USER_MAGIC_V3) {
 		/* XXX: sanity check here */
@@ -2991,7 +2988,7 @@ static int lod_cache_parent_lmv_striping(const struct lu_env *env,
 	if (rc < (typeof(rc))sizeof(struct lmv_user_md)) {
 		/* don't lookup for non-existing or invalid striping */
 		lp->ldo_dir_def_striping_set = 0;
-		lp->ldo_dir_striping_cached = 1;
+		lp->ldo_dir_def_striping_cached = 1;
 		lp->ldo_dir_def_stripenr = 0;
 		lp->ldo_dir_def_stripe_offset =
 					(typeof(v1->lum_stripe_offset))(-1);
@@ -3006,7 +3003,7 @@ static int lod_cache_parent_lmv_striping(const struct lu_env *env,
 	lp->ldo_dir_def_stripe_offset = le32_to_cpu(v1->lum_stripe_offset);
 	lp->ldo_dir_def_hash_type = le32_to_cpu(v1->lum_hash_type);
 	lp->ldo_dir_def_striping_set = 1;
-	lp->ldo_dir_striping_cached = 1;
+	lp->ldo_dir_def_striping_cached = 1;
 
 	EXIT;
 unlock:
@@ -3037,11 +3034,7 @@ static int lod_cache_parent_striping(const struct lu_env *env,
 	int rc = 0;
 	ENTRY;
 
-	rc = lod_load_striping(env, lp);
-	if (rc != 0)
-		RETURN(rc);
-
-	if (!lp->ldo_striping_cached) {
+	if (!lp->ldo_def_striping_cached) {
 		/* we haven't tried to get default striping for
 		 * the directory yet, let's cache it in the object */
 		rc = lod_cache_parent_lov_striping(env, lp);
@@ -3049,7 +3042,12 @@ static int lod_cache_parent_striping(const struct lu_env *env,
 			RETURN(rc);
 	}
 
-	if (S_ISDIR(child_mode) && !lp->ldo_dir_striping_cached)
+	/* If the parent is on the remote MDT, we should always
+	 * try to refresh the default stripeEA cache, because we
+	 * do not cache default striping information for remote
+	 * object. */
+	if (S_ISDIR(child_mode) && (!lp->ldo_dir_def_striping_cached ||
+				    dt_object_remote(&lp->ldo_obj)))
 		rc = lod_cache_parent_lmv_striping(env, lp);
 
 	RETURN(rc);
@@ -3116,6 +3114,7 @@ static void lod_ah_init(const struct lu_env *env,
 				return;
 		}
 
+		LASSERT(lp != NULL);
 		if (lp->ldo_dir_stripe == NULL) {
 			OBD_ALLOC_PTR(lp->ldo_dir_stripe);
 			if (lp->ldo_dir_stripe == NULL)
@@ -3127,14 +3126,14 @@ static void lod_ah_init(const struct lu_env *env,
 			return;
 
 		/* transfer defaults to new directory */
-		if (lp->ldo_striping_cached) {
+		if (lp->ldo_def_striping_set) {
 			if (lp->ldo_pool)
 				lod_object_set_pool(lc, lp->ldo_pool);
 			lc->ldo_def_stripenr = lp->ldo_def_stripenr;
 			lc->ldo_def_stripe_size = lp->ldo_def_stripe_size;
 			lc->ldo_def_stripe_offset = lp->ldo_def_stripe_offset;
-			lc->ldo_striping_cached = 1;
 			lc->ldo_def_striping_set = 1;
+			lc->ldo_def_striping_cached = 1;
 			CDEBUG(D_OTHER, "inherite EA sz:%d off:%d nr:%d\n",
 			       (int)lc->ldo_def_stripe_size,
 			       (int)lc->ldo_def_stripe_offset,
@@ -3142,14 +3141,14 @@ static void lod_ah_init(const struct lu_env *env,
 		}
 
 		/* transfer dir defaults to new directory */
-		if (lp->ldo_dir_striping_cached) {
+		if (lp->ldo_dir_def_striping_set) {
 			lc->ldo_dir_def_stripenr = lp->ldo_dir_def_stripenr;
 			lc->ldo_dir_def_stripe_offset =
 						  lp->ldo_dir_def_stripe_offset;
 			lc->ldo_dir_def_hash_type =
 						  lp->ldo_dir_def_hash_type;
-			lc->ldo_dir_striping_cached = 1;
 			lc->ldo_dir_def_striping_set = 1;
+			lc->ldo_dir_def_striping_cached = 1;
 			CDEBUG(D_INFO, "inherit default EA nr:%d off:%d t%u\n",
 			       (int)lc->ldo_dir_def_stripenr,
 			       (int)lc->ldo_dir_def_stripe_offset,
@@ -3432,6 +3431,24 @@ static int lod_declare_object_create(const struct lu_env *env,
 			rc = lod_declare_striped_object(env, dt, attr,
 							NULL, th);
 	} else if (dof->dof_type == DFT_DIR) {
+		struct seq_server_site *ss;
+
+		ss = lu_site2seq(dt->do_lu.lo_dev->ld_site);
+
+		/* If the parent has default stripeEA, and client
+		 * did not find it before sending create request,
+		 * then MDT will return -EREMOTE, and client will
+		 * retrieve the default stripeEA and re-create the
+		 * sub directory.
+		 *
+		 * Note: if dah_eadata != NULL, it means creating the
+		 * striped directory with specified stripeEA, then it
+		 * should ignore the default stripeEA */
+		if ((hint == NULL || hint->dah_eadata == NULL) &&
+		    lo->ldo_dir_stripe_offset != -1 &&
+		    lo->ldo_dir_stripe_offset != ss->ss_node_id)
+			GOTO(out, rc = -EREMOTE);
+
 		/* Orphan object (like migrating object) does not have
 		 * lod_dir_stripe, see lod_ah_init */
 		if (lo->ldo_dir_stripe != NULL)
@@ -3479,8 +3496,12 @@ int lod_striping_create(const struct lu_env *env, struct dt_object *dt,
 		if (rc)
 			break;
 	}
-	if (rc == 0)
+
+	if (rc == 0) {
 		rc = lod_generate_and_set_lovea(env, lo, th);
+		if (rc == 0)
+			lo->ldo_striping_cached = 1;
+	}
 
 	RETURN(rc);
 }
@@ -4098,6 +4119,7 @@ void lod_object_free_striping(const struct lu_env *env, struct lod_object *lo)
 		lo->ldo_stripe = NULL;
 		lo->ldo_stripes_allocated = 0;
 	}
+	lo->ldo_striping_cached = 0;
 	lo->ldo_stripenr = 0;
 	lo->ldo_pattern = 0;
 }

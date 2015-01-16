@@ -1250,6 +1250,11 @@ static int lmv_placement_policy(struct obd_device *obd,
 		RETURN(0);
 	}
 
+	if (op_data->op_default_stripe_offset != -1) {
+		*mds = op_data->op_default_stripe_offset;
+		RETURN(0);
+	}
+
 	/**
 	 * If stripe_offset is provided during setdirstripe
 	 * (setdirstripe -i xx), xx MDS will be choosen.

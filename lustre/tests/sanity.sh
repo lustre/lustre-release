@@ -13157,55 +13157,111 @@ test_300f() {
 }
 run_test 300f "check rename cross striped directory"
 
+test_300_check_default_striped_dir()
+{
+	local dirname=$1
+	local default_count=$2
+	local default_index=$3
+	local stripe_count
+	local stripe_index
+	local dir_stripe_index
+	local dir
+
+	echo "checking $dirname $default_count $default_index"
+	$LFS setdirstripe -D -c $default_count -i $default_index \
+				-t all_char $DIR/$tdir/$dirname ||
+		error "set default stripe on striped dir error"
+	stripe_count=$($LFS getdirstripe -D -c $DIR/$tdir/$dirname)
+	[ $stripe_count -eq $default_count ] ||
+		error "expect $default_count get $stripe_count for $dirname"
+
+	stripe_index=$($LFS getdirstripe -D -i $DIR/$tdir/$dirname)
+	[ $stripe_index -eq $default_index ] ||
+		error "expect $default_index get $stripe_index for $dirname"
+
+	mkdir $DIR/$tdir/$dirname/{test1,test2,test3,test4} ||
+						error "create dirs failed"
+	for dir in $(find $DIR/$tdir/$dirname/*); do
+		stripe_count=$($LFS getdirstripe -c $dir)
+		[ $stripe_count -eq $default_count ] ||
+		error "stripe count $default_count != $stripe_count for $dir"
+
+		stripe_index=$($LFS getdirstripe -i $dir)
+		[ $default_index -eq -1 -o $stripe_index -eq $default_index ] ||
+			error "$stripe_index != $default_index for $dir"
+
+		#check default stripe
+		stripe_count=$($LFS getdirstripe -D -c $dir)
+		[ $stripe_count -eq $default_count ] ||
+		error "default count $default_count != $stripe_count for $dir"
+
+		stripe_index=$($LFS getdirstripe -D -i $dir)
+		[ $stripe_index -eq $default_index ] ||
+		error "default index $default_index != $stripe_index for $dir"
+	done
+	rmdir $DIR/$tdir/$dirname/* || error "rmdir failed"
+}
+
 test_300g() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-	local stripe_count
 	local dir
+	local stripe_count
+	local stripe_index
+
+	mkdir $DIR/$tdir
+	mkdir $DIR/$tdir/normal_dir
+
+	test_300_check_default_striped_dir normal_dir $MDSCOUNT 1
+	test_300_check_default_striped_dir normal_dir 1 0
+	test_300_check_default_striped_dir normal_dir 2 1
+	test_300_check_default_striped_dir normal_dir 2 -1
+
+	#delete default stripe information
+	echo "delete default stripeEA"
+	$LFS setdirstripe -d $DIR/$tdir/normal_dir ||
+		error "set default stripe on striped dir error"
+
+	mkdir -p $DIR/$tdir/normal_dir/{test1,test2,test3,test4}
+	for dir in $(find $DIR/$tdir/normal_dir/*); do
+		stripe_count=$($LFS getdirstripe -c $dir)
+		[ $stripe_count -eq 0 ] ||
+			error "expect 1 get $stripe_count for $dir"
+		stripe_index=$($LFS getdirstripe -i $dir)
+		[ $stripe_index -eq 0 ] ||
+			error "expect 0 get $stripe_index for $dir"
+	done
+}
+run_test 300g "check default striped directory for normal directory"
+
+test_300h() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local dir
+	local stripe_count
 
 	mkdir $DIR/$tdir
 	$LFS setdirstripe -i 0 -c $MDSCOUNT -t all_char \
 					$DIR/$tdir/striped_dir ||
 		error "set striped dir error"
 
-	$LFS setdirstripe -D -c $MDSCOUNT -t all_char $DIR/$tdir/striped_dir ||
-		error "set default stripe on striped dir error"
+	test_300_check_default_striped_dir striped_dir $MDSCOUNT 1
+	test_300_check_default_striped_dir striped_dir 1 0
+	test_300_check_default_striped_dir striped_dir 2 1
+	test_300_check_default_striped_dir striped_dir 2 -1
 
-	stripe_count=$($LFS getdirstripe -D -c $DIR/$tdir/striped_dir)
-	[ $stripe_count -eq $MDSCOUNT ] ||
-		error "default stripe wrong expect $MDSCOUNT get $stripe_count"
-
-	mkdir -p $DIR/$tdir/striped_dir/{test1,test2,test3,test4}
-
-	for dir in $(find $DIR/$tdir/striped_dir/*); do
-		stripe_count=$($LFS getdirstripe -c $dir)
-		[ $stripe_count -eq $MDSCOUNT ] ||
-			error "expect $MDSCOUNT get $stripe_count for $dir"
-	done
-
-	rmdir $DIR/$tdir/striped_dir/* || error "rmdir1 failed"
-	#change default stripe count to 2
-	$LFS setdirstripe -D -c 2 -t all_char $DIR/$tdir/striped_dir ||
-		error "set default stripe on striped dir error"
-
-	mkdir -p $DIR/$tdir/striped_dir/{test1,test2,test3,test4}
-
-	rmdir $DIR/$tdir/striped_dir/* || error "rmdir2 failed"
-
-	#change default stripe count to 1
-	$LFS setdirstripe -D -c 1 -t all_char $DIR/$tdir/striped_dir ||
+	#delete default stripe information
+	$LFS setdirstripe -d $DIR/$tdir/striped_dir ||
 		error "set default stripe on striped dir error"
 
 	mkdir -p $DIR/$tdir/striped_dir/{test1,test2,test3,test4}
 	for dir in $(find $DIR/$tdir/striped_dir/*); do
 		stripe_count=$($LFS getdirstripe -c $dir)
-		[ $stripe_count -eq 1 ] ||
+		[ $stripe_count -eq 0 ] ||
 			error "expect 1 get $stripe_count for $dir"
 	done
-	rmdir $DIR/$tdir/striped_dir/* || error "rmdir3 failed"
 }
-run_test 300g "check default striped directory for striped directory"
+run_test 300h "check default striped directory for striped directory"
 
-test_300h() {
+test_300i() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	local stripe_count
@@ -13243,7 +13299,7 @@ test_300h() {
 
 	return 0
 }
-run_test 300h "client handle unknown hash type striped directory"
+run_test 300i "client handle unknown hash type striped directory"
 
 test_400a() { # LU-1606, was conf-sanity test_74
 	local extra_flags=''

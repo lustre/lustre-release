@@ -213,6 +213,8 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		}
 
 		if (bits & MDS_INODELOCK_XATTR) {
+			if (S_ISDIR(inode->i_mode))
+				ll_i2info(inode)->lli_def_stripe_offset = -1;
 			ll_xattr_cache_destroy(inode);
 			bits &= ~MDS_INODELOCK_XATTR;
 		}
@@ -918,6 +920,7 @@ static int ll_new_node(struct inode *dir, struct dentry *dchild,
         if (unlikely(tgt != NULL))
                 tgt_len = strlen(tgt) + 1;
 
+again:
         op_data = ll_prep_md_op_data(NULL, dir, NULL, name->name,
                                      name->len, 0, opc, NULL);
         if (IS_ERR(op_data))
@@ -928,8 +931,41 @@ static int ll_new_node(struct inode *dir, struct dentry *dchild,
 			from_kgid(&init_user_ns, current_fsgid()),
 			cfs_curproc_cap_pack(), rdev, &request);
 	ll_finish_md_op_data(op_data);
-        if (err)
-                GOTO(err_exit, err);
+	if (err) {
+		/* If the client doesn't know where to create a subdirectory (or
+		 * in case of a race that sends the RPC to the wrong MDS), the
+		 * MDS will return -EREMOTE and the client will fetch the layout
+		 * for the directory, either from the local xattr cache or the
+		 * MDS, then create the directory on the right MDT. */
+		if (err == -EREMOTE) {
+			struct lmv_user_md *lum;
+			int rc;
+
+			ptlrpc_req_finished(request);
+			request = NULL;
+
+			OBD_ALLOC_PTR(lum);
+			if (lum == NULL)
+				GOTO(err_exit, err = -ENOMEM);
+
+			rc = ll_getxattr_common(dir, XATTR_NAME_DEFAULT_LMV,
+						lum, sizeof(*lum),
+						OBD_MD_FLXATTR);
+			if (rc < 0) {
+				OBD_FREE_PTR(lum);
+				if (rc == -ENODATA)
+					GOTO(err_exit, err);
+				else
+					GOTO(err_exit, rc);
+			}
+
+			ll_i2info(dir)->lli_def_stripe_offset =
+				le32_to_cpu(lum->lum_stripe_offset);
+			OBD_FREE_PTR(lum);
+			goto again;
+		}
+		GOTO(err_exit, err);
+	}
 
         ll_update_times(request, dir);
 
@@ -941,7 +977,8 @@ static int ll_new_node(struct inode *dir, struct dentry *dchild,
 
         EXIT;
 err_exit:
-        ptlrpc_req_finished(request);
+	if (request != NULL)
+		ptlrpc_req_finished(request);
 
         return err;
 }

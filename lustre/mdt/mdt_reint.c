@@ -769,14 +769,26 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 			GOTO(out_put, rc);
 	} else if ((ma->ma_valid & MA_LMV) && (ma->ma_valid & MA_INODE)) {
 		struct lu_buf *buf  = &info->mti_buf;
+		struct mdt_lock_handle  *lh;
 
 		if (ma->ma_attr.la_valid != 0)
 			GOTO(out_put, rc = -EPROTO);
+
+		lh = &info->mti_lh[MDT_LH_PARENT];
+		mdt_lock_reg_init(lh, LCK_PW);
+
+		rc = mdt_object_lock(info, mo, lh,
+				     MDS_INODELOCK_XATTR,
+				     MDT_LOCAL_LOCK);
+		if (rc != 0)
+			GOTO(out_put, rc);
 
 		buf->lb_buf = ma->ma_lmv;
 		buf->lb_len = ma->ma_lmv_size;
 		rc = mo_xattr_set(info->mti_env, mdt_object_child(mo),
 				  buf, XATTR_NAME_DEFAULT_LMV, 0);
+
+		mdt_object_unlock(info, mo, lh, rc);
 		if (rc)
 			GOTO(out_put, rc);
 	} else {

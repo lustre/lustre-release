@@ -287,7 +287,6 @@ int ll_removexattr(struct dentry *dentry, const char *name)
                                   OBD_MD_FLXATTRRM);
 }
 
-static
 int ll_getxattr_common(struct inode *inode, const char *name,
                        void *buffer, size_t size, __u64 valid)
 {

@@ -208,6 +208,12 @@ struct ll_inode_info {
 			unsigned int			lli_sa_generation;
 			/* directory stripe information */
 			struct lmv_stripe_md		*lli_lsm_md;
+			/* default directory stripe offset.  This is extracted
+			 * from the "dmv" xattr in order to decide which MDT to
+			 * create a subdirectory on.  The MDS itself fetches
+			 * "dmv" and gets the rest of the default layout itself
+			 * (count, hash, etc). */
+			__u32				lli_def_stripe_offset;
 		};
 
 		/* for non-directory */
@@ -1506,6 +1512,8 @@ int ll_layout_restore(struct inode *inode, loff_t start, __u64 length);
 int ll_xattr_init(void);
 void ll_xattr_fini(void);
 
+int ll_getxattr_common(struct inode *inode, const char *name,
+		       void *buffer, size_t size, __u64 valid);
 int ll_page_sync_io(const struct lu_env *env, struct cl_io *io,
 		    struct cl_page *page, enum cl_req_type crt);
 
