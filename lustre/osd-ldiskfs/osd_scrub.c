@@ -1559,7 +1559,7 @@ static const struct osd_lf_map osd_lf_maps[] = {
 	{ "PENDING", { 0, 0, 0 }, 0, NULL, NULL },
 
 	/* ROOT */
-	{ "ROOT", { FID_SEQ_ROOT, 1, 0 },
+	{ "ROOT", { FID_SEQ_ROOT, FID_OID_ROOT, 0 },
 		OLF_SCAN_SUBITEMS | OLF_HIDE_FID, osd_ios_ROOT_scan, NULL },
 
 	/* changelog_catalog */

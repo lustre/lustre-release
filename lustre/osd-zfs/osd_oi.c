@@ -735,7 +735,7 @@ int osd_convert_root_to_new_seq(const struct lu_env *env,
 
 	/* declare that we'll add object to fid-dnode mapping */
 	newfid.f_seq = FID_SEQ_ROOT;
-	newfid.f_oid = 1;
+	newfid.f_oid = FID_OID_ROOT;
 	newfid.f_ver = 0;
 	zapid = osd_get_name_n_idx(env, o, &newfid, buf);
 	dmu_tx_hold_bonus(tx, zapid);
