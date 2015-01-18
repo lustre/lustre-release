@@ -65,10 +65,12 @@
     defined(__craynv) || defined(__mips64__) || defined(__powerpc64__)
 typedef struct stat	lstat_t;
 # define lstat_f	lstat
+# define fstat_f	fstat
 # define HAVE_LOV_USER_MDS_DATA
 #elif defined(__USE_LARGEFILE64) || defined(__KERNEL__)
 typedef struct stat64	lstat_t;
 # define lstat_f	lstat64
+# define fstat_f	fstat64
 # define HAVE_LOV_USER_MDS_DATA
 #endif
 

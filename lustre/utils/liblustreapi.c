@@ -1641,12 +1641,18 @@ static int get_lmd_info(char *path, DIR *parent, DIR *dir,
         if (dir) {
                 ret = ioctl(dirfd(dir), LL_IOC_MDC_GETINFO, (void *)lmd);
         } else if (parent) {
-                char *fname = strrchr(path, '/');
+		char *fname = strrchr(path, '/');
 
-                fname = (fname == NULL ? path : fname + 1);
-                /* retrieve needed file info */
+		/* To avoid opening, locking, and closing each file on the
+		 * client if that is not needed. The GETFILEINFO ioctl can
+		 * be done on the patent dir with a single open for all
+		 * files in that directory, and it also doesn't pollute the
+		 * client dcache with millions of dentries when traversing
+		 * a large filesystem.  */
+		fname = (fname == NULL ? path : fname + 1);
+		/* retrieve needed file info */
 		strlcpy((char *)lmd, fname, lumlen);
-                ret = ioctl(dirfd(parent), IOC_MDC_GETFILEINFO, (void *)lmd);
+		ret = ioctl(dirfd(parent), IOC_MDC_GETFILEINFO, (void *)lmd);
         }
 
         if (ret) {
@@ -3196,26 +3202,26 @@ obd_matches:
 	    param->fp_lmd->lmd_lmm.lmm_stripe_count)
                 decision = 0;
 
-        while (!decision) {
+	if (param->fp_check_size && S_ISDIR(st->st_mode))
+		decision = 0;
+
+	if (!decision) {
                 /* For regular files with the stripe the decision may have not
                  * been taken yet if *time or size is to be checked. */
-                LASSERT((S_ISREG(st->st_mode) &&
-			param->fp_lmd->lmd_lmm.lmm_stripe_count) ||
-			param->fp_mdt_index != OBD_NOT_FOUND);
-
 		if (param->fp_obd_index != OBD_NOT_FOUND)
                         print_failed_tgt(param, path, LL_STATFS_LOV);
 
 		if (param->fp_mdt_index != OBD_NOT_FOUND)
                         print_failed_tgt(param, path, LL_STATFS_LMV);
 
-		if (dir) {
+		if (S_ISDIR(st->st_mode))
+			ret = fstat_f(dirfd(dir), st);
+		else if (dir != NULL)
 			ret = ioctl(dirfd(dir), IOC_LOV_GETINFO,
 				    (void *)param->fp_lmd);
-		} else if (parent) {
+		else
 			ret = ioctl(dirfd(parent), IOC_LOV_GETINFO,
 				    (void *)param->fp_lmd);
-		}
 
                 if (ret) {
                         if (errno == ENOENT) {
@@ -3236,8 +3242,6 @@ obd_matches:
                 decision = find_time_check(st, param, 0);
                 if (decision == -1)
                         goto decided;
-
-                break;
         }
 
 	if (param->fp_check_size)
