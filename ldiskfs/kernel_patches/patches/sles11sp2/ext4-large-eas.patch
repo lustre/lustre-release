@@ -739,7 +739,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			new_offs = le16_to_cpu(last->e_value_offs) +
  							value_offs_shift;
  			BUG_ON(new_offs + le32_to_cpu(last->e_value_size)
-@@ -1359,20 +1673,89 @@ cleanup:
+@@ -1359,20 +1673,92 @@ cleanup:
  	return error;
  }
  
@@ -825,10 +825,13 @@ Index: linux-stage/fs/ext4/xattr.c
 +		if (entry->e_value_inum == 0)
 +			continue;
 +		if (ext4_expand_ino_array(lea_ino_array,
-+					  entry->e_value_inum) != 0)
++					  entry->e_value_inum) != 0) {
++			brelse(iloc.bh);
 +			goto cleanup;
++		}
 +		entry->e_value_inum = 0;
 +	}
++	brelse(iloc.bh);
  
 +delete_external_ea:
  	if (!EXT4_I(inode)->i_file_acl)
