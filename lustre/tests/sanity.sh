@@ -2729,6 +2729,35 @@ test_33e() {
 }
 run_test 33e "mkdir and striped directory should have same mode"
 
+cleanup_33f() {
+	trap 0
+	do_facet $SINGLEMDS $LCTL set_param mdt.*.enable_remote_dir_gid=0
+}
+
+test_33f() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	mkdir $DIR/$tdir
+	chmod go+rwx $DIR/$tdir
+	do_facet $SINGLEMDS $LCTL set_param mdt.*.enable_remote_dir_gid=-1
+	trap cleanup_33f EXIT
+
+	$RUNAS lfs mkdir -c$MDSCOUNT $DIR/$tdir/striped_dir ||
+		error "cannot create striped directory"
+
+	$RUNAS touch $DIR/$tdir/striped_dir/{0..16} ||
+		error "cannot create files in striped directory"
+
+	$RUNAS rm $DIR/$tdir/striped_dir/{0..16} ||
+		error "cannot remove files in striped directory"
+
+	$RUNAS rmdir $DIR/$tdir/striped_dir ||
+		error "cannot remove striped directory"
+
+	cleanup_33f
+}
+run_test 33f "nonroot user can create, access, and remove a striped directory"
+
 TEST_34_SIZE=${TEST_34_SIZE:-2000000000000}
 test_34a() {
 	rm -f $DIR/f34
