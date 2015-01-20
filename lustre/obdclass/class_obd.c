@@ -257,7 +257,10 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 GOTO(out, err);
         }
 
-	case OBD_GET_VERSION:
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
+	case OBD_GET_VERSION: {
+		static bool warned;
+
 		if (!data->ioc_inlbuf1) {
 			CERROR("No buffer passed in ioctl\n");
 			GOTO(out, err = -EINVAL);
@@ -268,13 +271,20 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 			GOTO(out, err = -EINVAL);
 		}
 
+		if (!warned) {
+			warned = true;
+			CWARN("%s: ioctl(OBD_GET_VERSION) is deprecated, "
+			      "use llapi_get_version_string() and/or relink\n",
+			      current->comm);
+		}
 		memcpy(data->ioc_bulk, LUSTRE_VERSION_STRING,
 		       strlen(LUSTRE_VERSION_STRING) + 1);
 
 		if (copy_to_user((void __user *)arg, data, len))
 			err = -EFAULT;
 		GOTO(out, err);
-
+	}
+#endif
         case OBD_IOC_NAME2DEV: {
                 /* Resolve a device name.  This does not change the
                  * currently selected device.
