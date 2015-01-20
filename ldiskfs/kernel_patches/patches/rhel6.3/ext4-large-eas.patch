@@ -623,7 +623,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			new_offs = le16_to_cpu(last->e_value_offs) +
  							value_offs_shift;
  			BUG_ON(new_offs + le32_to_cpu(last->e_value_size)
-@@ -1353,15 +1664,41 @@ cleanup:
+@@ -1353,15 +1664,42 @@ cleanup:
  /*
   * ext4_xattr_delete_inode()
   *
@@ -662,6 +662,7 @@ Index: linux-stage/fs/ext4/xattr.c
 +			entry->e_value_inum = 0;
 +		}
 +	}
++	brelse(iloc.bh);
  
 +delete_external_ea:
  	if (!EXT4_I(inode)->i_file_acl)
