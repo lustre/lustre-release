@@ -1,0 +1,38 @@
+.TH lctl-nodemap-add 8 "2015 Jan 20" Lustre "configuration utilities"
+.SH NAME
+lctl-nodemap-add \- Add a new nodemap, to which NID ranges, identities, and
+properties can be added.
+
+.SH SYNOPSIS
+.br
+.B lctl nodemap_add <name>
+.br
+.SH DESCRIPTION
+.B nodemap_add creates and names a new nodemap. The administrator can then add
+NID ranges and identity mappings to the nodemap, as well as modify its
+properties.
+
+.SH OPTIONS
+.I name
+is the name to give the new nodemap. It can be any string except "default".
+
+.SH EXAMPLES
+.nf
+# lctl nodemap_add remotesite
+# lctl nodemap_add otherremotesite
+.fi
+
+.SH AVAILABILITY
+.B lctl
+is part of the
+.BR Lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-nodemap-activate (8),
+.BR lctl-nodemap-del (8),
+.BR lctl-nodemap-add-range (8),
+.BR lctl-nodemap-del-range (8),
+.BR lctl-nodemap-add-idmap (8),
+.BR lctl-nodemap-del-idmap (8),
+.BR lctl-nodemap-modify (8)

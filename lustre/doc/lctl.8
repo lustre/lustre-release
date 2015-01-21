@@ -295,6 +295,70 @@ Unregister an existing changelog user.  If the user's "clear" record number
 is the minimum for the device, changelog records will be purged until the
 next minimum.
 .PP
+.SS Nodemap
+An identity mapping feature that facilitates mapping of client UIDs and GIDs to
+local file system UIDs and GIDs, while maintaining POSIX ownership, permissions,
+and quota.
+
+While the nodemap feature is enabled, all client file system access is subject
+to the nodemap identity mapping policy, which consists of the 'default' catchall
+nodemap, and any user-defined nodemaps. The 'default' nodemap maps all client
+identities to 99:99 (nobody:nobody). Administrators can define nodemaps for a
+range of client NIDs which map identities, and these nodemaps can be flagged as
+ 'trusted' so identities are accepted without translation, as well as flagged
+as 'admin' meaning that root is not squashed for these nodes.
+
+Note: In the current phase of implementation, to use the nodemap functionality
+you only need to enable and define nodemaps on the MDS. The MDSes must also be
+in a nodemap with the admin and trusted flags set. To use quotas with nodemaps,
+you must also use set_param to enable and define nodemaps on the OSS (matching
+what is defined on the MDS). Nodemaps do not currently persist, unless you
+define them with set_param and use the -P flag. Note that there is a hard limit
+to the number of changes you can persist over the lifetime of the file system.
+
+See also:
+
+.PP
+\fBlctl-nodemap-activate\fR(8)
+.RS 4
+Activate/deactivate the nodemap feature.
+.RE
+.PP
+\fBlctl-nodemap-add\fR(8)
+.RS 4
+Add a new nodemap, to which NID ranges, identities, and properties can be added.
+.RE
+.PP
+\fBlctl-nodemap-del\fR(8)
+.RS 4
+Delete an existing nodemap.
+.RE
+.PP
+\fBlctl-nodemap-add-range\fR(8)
+.RS 4
+Define a range of NIDs for a nodemap.
+.RE
+.PP
+\fBlctl-nodemap-del-range\fR(8)
+.RS 4
+Delete an existing NID range from a nodemap.
+.RE
+.PP
+\fBlctl-nodemap-add-idmap\fR(8)
+.RS 4
+Add a UID or GID mapping to a nodemap.
+.RE
+.PP
+\fBlctl-nodemap-del-idmap\fR(8)
+.RS 4
+Delete an existing UID or GID mapping from a nodemap.
+.RE
+.PP
+\fBlctl-nodemap-modify\fR(8)
+.RS 4
+Modify a nodemap property.
+.RE
+
 .SS LFSCK
 An on-line Lustre consistency check and repair tool.
 .TP
@@ -452,7 +516,7 @@ is part of the
 .BR Lustre (7) 
 filesystem package.
 .SH SEE ALSO
-.BR Lustre (7),
+.BR lustre (7),
 .BR mkfs.lustre (8),
 .BR mount.lustre (8),
 .BR lctl (8),

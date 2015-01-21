@@ -1,0 +1,64 @@
+.TH lctl-nodemap-add-range 8 "2015 Jan 20" Lustre "configuration utilities"
+.SH NAME
+lctl-nodemap-add-range \- Define a range of NIDs for a nodemap.
+
+.SH SYNOPSIS
+.br
+.B lctl nodemap_add_range <--name name> <--range range>
+.br
+.SH DESCRIPTION
+.B nodemap_add_range adds a range of NIDs to an existing nodemap. The NID range
+cannot overlap with an existing NID range. Clients with NIDs that fall into the
+new range will be moved into the given nodemap.
+
+.SH OPTIONS
+.I name
+is the name of the nodemap that this range should be added to.
+
+.I range
+is the NID range that should be added to the nodemap. The syntax for the range
+is the same as the rootsquash syntax, with the added constraint that the range
+must be contiguous.
+
+.SH Formal LNET Range Definition
+
+.nf
+<nidlist>	:== <nidrange> [ ' ' <nidrange> ]
+<nidrange>	:== <addrrange> '@' <net>
+<addrrange>	:== '*' |
+			<ipaddr_range> |
+			<numaddr_range>
+<ipaddr_range>	:==
+	<numaddr_range>.<numaddr_range>.<numaddr_range>.<numaddr_range>
+<numaddr_range>	:== <number> |
+			<expr_list>
+<expr_list>	:== '[' <range_expr> [ ',' <range_expr>] ']'
+<range_expr>	:== <number> |
+			<number> '-' <number> |
+			<number> '-' <number> '/' <number>
+<net>		:== <netname> | <netname><number>
+<netname>	:== "lo" | "tcp" | "o2ib" | "cib" | "openib" | "iib" |
+			"vib" | "ra" | "elan" | "gm" | "mx" | "ptl"
+<number>	:== <nonnegative decimal> | <hexadecimal>
+.fi
+
+.SH EXAMPLES
+.nf
+# lctl nodemap_add_range --name remotesite --range 192.168.1.[1-254]@tcp
+# lctl nodemap_add_range --name otherremotesite --range 192.168.2.[1-254]@tcp
+.fi
+
+.SH AVAILABILITY
+.B lctl
+is part of the
+.BR Lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-nodemap-activate (8),
+.BR lctl-nodemap-add (8),
+.BR lctl-nodemap-del (8),
+.BR lctl-nodemap-del-range (8),
+.BR lctl-nodemap-add-idmap (8),
+.BR lctl-nodemap-del-idmap (8),
+.BR lctl-nodemap-modify (8)

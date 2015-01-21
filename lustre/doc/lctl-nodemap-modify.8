@@ -1,0 +1,69 @@
+.TH lctl-nodemap-modify 8 "2015 Jan 20" Lustre "configuration utilities"
+.SH NAME
+lctl-nodemap-modify \- Modify a nodemap property.
+
+.SH SYNOPSIS
+.br
+.B lctl nodemap_modify <--name nodemap_name> <--property property_name>
+<--value value>
+.br
+.SH DESCRIPTION
+.B nodemap_modify
+modifies a property of the given nodemap.
+
+.SH OPTIONS
+.I nodemap_name
+is the name of the nodemap to modify
+
+
+.I property_name
+is one of the following properties:
+.PP
+admin
+.RS 4
+Defaults to off. If set to on, then root will NOT be squashed. By default,
+the root user is mapped to the value of squash_uid.
+.RE
+.PP
+trusted
+.RS 4
+Defaults to off. If set to on, then user mapping will be disabled for all
+non-root users. This means that the identities provided by the client will be
+trusted to match the identities of the file system. By default, the client user
+identities are mapped to the file system identities based on the nodemap rules.
+.RE
+.PP
+squash_uid
+.RS 4
+Defaults to 99. The user ID that unknown users (if not trusted) and root (if not admin) should be mapped to.
+.RE
+.PP
+squash_gid
+.RS 4
+Defaults to 99. The group ID that unknown groups (if not trusted) and root (if not admin) should be mapped to.
+.RE
+
+.I value
+is the value to set for the property. Should be 0 or 1 for admin and trusted.
+
+.SH EXAMPLES
+.nf
+# lctl nodemap_modify --name remotesite --property trusted --value 1
+# lctl nodemap_modify --name remotesite --property admin --value 1
+# lctl nodemap_modify --name otherremotesite --property squash_uid --value 101
+.fi
+
+.SH AVAILABILITY
+.B lctl
+is part of the
+.BR Lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-nodemap-activate (8),
+.BR lctl-nodemap-add (8),
+.BR lctl-nodemap-del (8),
+.BR lctl-nodemap-add-range (8),
+.BR lctl-nodemap-del-range (8),
+.BR lctl-nodemap-add-idmap (8),
+.BR lctl-nodemap-del-idmap (8),

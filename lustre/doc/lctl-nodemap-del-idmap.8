@@ -1,0 +1,46 @@
+.TH lctl-nodemap-del-idmap 8 "2015 Jan 20" Lustre "configuration utilities"
+.SH NAME
+lctl-nodemap-del-idmap \- Delete an existing idmap from a nodemap.
+
+.SH SYNOPSIS
+.br
+.B lctl nodemap_del_idmap <--name name> <--idtype [uid|gid]>
+<--idmap clientid:fsid>
+.br
+.SH DESCRIPTION
+.B nodemap_del_idmap
+deletes an idmap from a nodemap. Users or groups in the nodemap with that ID
+will be squashed, if the trusted flag is not enabled.
+
+.SH OPTIONS
+.I name
+is the name of the nodemap that this idmap should be deleted from.
+
+
+.I idtype
+is either "uid" or "gid" depending on if it is a user or group mapping that is
+to be removed.
+
+.I idmap
+is the identity map to delete.
+
+.SH EXAMPLES
+.nf
+# lctl nodemap_del_idmap --name remotesite --idtype uid --idmap 2001:1001
+# lctl nodemap_del_idmap --name remotesite --idtype gid --idmap 2002:1002
+.fi
+
+.SH AVAILABILITY
+.B lctl
+is part of the
+.BR Lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-nodemap-activate (8),
+.BR lctl-nodemap-add (8),
+.BR lctl-nodemap-del (8),
+.BR lctl-nodemap-add-range (8),
+.BR lctl-nodemap-del-range (8),
+.BR lctl-nodemap-add-idmap (8),
+.BR lctl-nodemap-modify (8)

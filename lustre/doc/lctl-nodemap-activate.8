@@ -1,0 +1,35 @@
+.TH lctl-nodemap-activate 8 "2015 Jan 20" Lustre "configuration utilities"
+.SH NAME
+lctl-nodemap-activate \- Activate or deactivate the nodemap feature.
+.SH SYNOPSIS
+.br
+.B lctl nodemap_activate "<0|1>"
+.br
+.SH DESCRIPTION
+.B nodemap_activate
+is used to activate or deactivate the nodemap feature. When nodemap is
+active, all client operations are mapped based on rules created by the
+administrator.
+
+.SH OPTIONS
+Passing 0 disables the nodemap feature, while 1 activates the feature.
+
+.SH EXAMPLES
+.nf
+# lctl nodemap_activate 1
+.fi
+
+.SH AVAILABILITY
+.B lctl
+is part of the
+.BR Lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-nodemap-add (8),
+.BR lctl-nodemap-del (8),
+.BR lctl-nodemap-add-range (8),
+.BR lctl-nodemap-del-range (8),
+.BR lctl-nodemap-add-idmap (8),
+.BR lctl-nodemap-del-idmap (8),
+.BR lctl-nodemap-modify (8)

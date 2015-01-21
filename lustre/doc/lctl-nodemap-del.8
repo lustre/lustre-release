@@ -1,0 +1,37 @@
+.TH lctl-nodemap-del 8 "2015 Jan 20" Lustre "configuration utilities"
+.SH NAME
+lctl-nodemap-del \- Delete an existing nodemap.
+
+.SH SYNOPSIS
+.br
+.B lctl nodemap_del "<name>"
+.br
+.SH DESCRIPTION
+.B nodemap_del deletes an existing nodemap. All of the associated mappings and
+NID ranges will be removed as well, and existing clients will be moved to the
+default nodemap.
+
+.SH OPTIONS
+.I name
+is the name of the nodemap to delete. The default nodemap cannot be deleted.
+
+.SH EXAMPLES
+.nf
+# lctl nodemap_del remotesite
+# lctl nodemap_del otherremotesite
+.fi
+
+.SH AVAILABILITY
+.B lctl
+is part of the
+.BR Lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-nodemap-activate (8),
+.BR lctl-nodemap-add (8),
+.BR lctl-nodemap-add-range (8),
+.BR lctl-nodemap-del-range (8),
+.BR lctl-nodemap-add-idmap (8),
+.BR lctl-nodemap-del-idmap (8),
+.BR lctl-nodemap-modify (8)

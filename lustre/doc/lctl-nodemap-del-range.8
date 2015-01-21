@@ -1,0 +1,40 @@
+.TH lctl-nodemap-del-range 8 "2015 Jan 20" Lustre "configuration utilities"
+.SH NAME
+lctl-nodemap-del-range \- Delete an existing NID range from a nodemap.
+
+.SH SYNOPSIS
+.br
+.B lctl nodemap_del_range "<--name name> <--range range>"
+.br
+.SH DESCRIPTION
+.B nodemap_del_range
+deletes a NID range from a nodemap. Clients will be moved to the default
+nodemap.
+
+.SH OPTIONS
+.I name
+is the name of the nodemap that this range should be deleted from.
+
+.I range
+is the NID range that should be deleted from the nodemap.
+
+.SH EXAMPLES
+.nf
+# lctl nodemap_del_range --name remotesite --range 192.168.1.[1-254]@tcp
+# lctl nodemap_del_range --name otherremotesite --range 192.168.2.[1-254]@tcp
+.fi
+
+.SH AVAILABILITY
+.B lctl
+is part of the
+.BR Lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-nodemap-activate (8),
+.BR lctl-nodemap-add (8),
+.BR lctl-nodemap-del (8),
+.BR lctl-nodemap-add-range (8),
+.BR lctl-nodemap-add-idmap (8),
+.BR lctl-nodemap-del-idmap (8),
+.BR lctl-nodemap-modify (8)
