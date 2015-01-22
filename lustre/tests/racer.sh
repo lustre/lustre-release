@@ -58,7 +58,7 @@ test_1() {
 	local rpids=""
 	for rdir in $RDIRS; do
 		do_nodes $clients "DURATION=$DURATION MDSCOUNT=$MDSCOUNT \
-				   $racer $rdir $NUM_RACER_THREADS" &
+				   LFS=$LFS $racer $rdir $NUM_RACER_THREADS" &
 		pid=$!
 		rpids="$rpids $pid"
 	done
