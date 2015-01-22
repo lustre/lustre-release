@@ -1,5 +1,4 @@
 lustre/contrib/README 	usr/share/doc/lustre-dev/contrib
 lustre/contrib/mpich-1.2.6-lustre.patch usr/share/doc/lustre-dev/contrib
-debian/tmp/usr/include/linux/*		usr/include/linux
 debian/tmp/usr/include/lustre/*		usr/include/lustre
 debian/tmp/usr/lib/*.a			usr/lib
