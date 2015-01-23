@@ -2879,6 +2879,9 @@ test_81() {
 run_test 81 "rename and stat under striped directory"
 
 test_82() {
+	[[ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.6.91) ]] ||
+		{ skip "Need MDS version at least 2.6.92"; return 0; }
+
 	# Client 1 creates a file.
 	multiop_bg_pause $DIR1/$tfile O_ac || error "multiop_bg_pause 1"
 	pid1=$!
