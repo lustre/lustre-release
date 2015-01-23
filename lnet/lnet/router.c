@@ -1361,6 +1361,7 @@ lnet_rtrpool_free_bufs(lnet_rtrbufpool_t *rbp, int cpt)
 	lnet_net_lock(cpt);
 	lnet_drop_routed_msgs_locked(&rbp->rbp_msgs, cpt);
 	list_splice_init(&rbp->rbp_bufs, &tmp);
+	rbp->rbp_req_nbuffers = 0;
 	rbp->rbp_nbuffers = rbp->rbp_credits = 0;
 	rbp->rbp_mincredits = 0;
 	lnet_net_unlock(cpt);
@@ -1380,37 +1381,50 @@ lnet_rtrpool_adjust_bufs(lnet_rtrbufpool_t *rbp, int nbufs, int cpt)
 	lnet_rtrbuf_t	*rb;
 	int		num_rb;
 	int		num_buffers = 0;
+	int		old_req_nbufs;
 	int		npages = rbp->rbp_npages;
 
+	lnet_net_lock(cpt);
 	/* If we are called for less buffers than already in the pool, we
-	 * just lower the nbuffers number and excess buffers will be
+	 * just lower the req_nbuffers number and excess buffers will be
 	 * thrown away as they are returned to the free list.  Credits
-	 * then get adjusted as well. */
-	if (nbufs <= rbp->rbp_nbuffers) {
-		lnet_net_lock(cpt);
-		rbp->rbp_nbuffers = nbufs;
+	 * then get adjusted as well.
+	 * If we already have enough buffers allocated to serve the
+	 * increase requested, then we can treat that the same way as we
+	 * do the decrease. */
+	num_rb = nbufs - rbp->rbp_nbuffers;
+	if (nbufs <= rbp->rbp_req_nbuffers || num_rb <= 0) {
+		rbp->rbp_req_nbuffers = nbufs;
 		lnet_net_unlock(cpt);
 		return 0;
 	}
+	/* store the older value of rbp_req_nbuffers and then set it to
+	 * the new request to prevent lnet_return_rx_credits_locked() from
+	 * freeing buffers that we need to keep around */
+	old_req_nbufs = rbp->rbp_req_nbuffers;
+	rbp->rbp_req_nbuffers = nbufs;
+	lnet_net_unlock(cpt);
 
 	INIT_LIST_HEAD(&rb_list);
 
 	/* allocate the buffers on a local list first.  If all buffers are
 	 * allocated successfully then join this list to the rbp buffer
 	 * list.  If not then free all allocated buffers. */
-	num_rb = rbp->rbp_nbuffers;
-
-	while (num_rb < nbufs) {
+	while (num_rb-- > 0) {
 		rb = lnet_new_rtrbuf(rbp, cpt);
 		if (rb == NULL) {
 			CERROR("Failed to allocate %d route bufs of %d pages\n",
 			       nbufs, npages);
+
+			lnet_net_lock(cpt);
+			rbp->rbp_req_nbuffers = old_req_nbufs;
+			lnet_net_unlock(cpt);
+
 			goto failed;
 		}
 
 		list_add(&rb->rb_list, &rb_list);
 		num_buffers++;
-		num_rb++;
 	}
 
 	lnet_net_lock(cpt);
@@ -1445,9 +1459,9 @@ lnet_rtrpool_init(lnet_rtrbufpool_t *rbp, int npages)
 	INIT_LIST_HEAD(&rbp->rbp_msgs);
 	INIT_LIST_HEAD(&rbp->rbp_bufs);
 
-        rbp->rbp_npages = npages;
-        rbp->rbp_credits = 0;
-        rbp->rbp_mincredits = 0;
+	rbp->rbp_npages = npages;
+	rbp->rbp_credits = 0;
+	rbp->rbp_mincredits = 0;
 }
 
 void

@@ -431,7 +431,9 @@ typedef struct {
 	struct list_head	rbp_msgs;
 	/* # pages in each buffer */
 	int			rbp_npages;
-	/* # buffers */
+	/* requested number of buffers */
+	int			rbp_req_nbuffers;
+	/* # buffers actually allocated */
 	int			rbp_nbuffers;
 	/* # free buffers / blocked messages */
 	int			rbp_credits;
