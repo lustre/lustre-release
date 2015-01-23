@@ -1473,8 +1473,8 @@ nodemap_test_setup() {
 	do_facet mgs $LCTL set_param $IDENTITY_UPCALL=NONE
 
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	[ $(lustre_version_code $SINGLEMGS) -lt $(version_code 2.5.53) ] &&
-		skip "No nodemap on $(get_lustre_version) MGS, need 2.5.53+" &&
+	[ $(lustre_version_code $SINGLEMGS) -lt $(version_code 2.6.90) ] &&
+		skip "Skip test on $(get_lustre_version) MGS, need 2.6.90+" &&
 		return
 
 	rc=0
