@@ -141,7 +141,8 @@ struct ofd_device {
 	struct obd_statfs	 ofd_osfs;
 	__u64			 ofd_osfs_age;
 	int			 ofd_blockbits;
-	/* writes which might be be accounted twice in ofd_osfs.os_bavail */
+	/* writes between prep & commit which might be accounted twice in
+	 * ofd_osfs.os_bavail */
 	u64			 ofd_osfs_unstable;
 
 	/* counters used during statfs update, protected by ofd_osfs_lock.
@@ -479,8 +480,11 @@ void ofd_grant_prepare_read(const struct lu_env *env, struct obd_export *exp,
 void ofd_grant_prepare_write(const struct lu_env *env, struct obd_export *exp,
 			     struct obdo *oa, struct niobuf_remote *rnb,
 			     int niocount);
-void ofd_grant_commit(const struct lu_env *env, struct obd_export *exp, int rc);
-int ofd_grant_create(const struct lu_env *env, struct obd_export *exp, int *nr);
+void ofd_grant_commit(struct obd_export *exp, unsigned long grant_used, int rc);
+int ofd_grant_commit_cb_add(struct thandle *th, struct obd_export *exp,
+			    unsigned long grant);
+long ofd_grant_create(const struct lu_env *env, struct obd_export *exp,
+		      int *nr);
 
 /* ofd_fmd.c */
 int ofd_fmd_init(void);

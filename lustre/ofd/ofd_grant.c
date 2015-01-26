@@ -173,6 +173,45 @@ void ofd_grant_sanity_check(struct obd_device *obd, const char *func)
 		tot_pending += fed->fed_pending;
 		tot_dirty += fed->fed_dirty;
 	}
+
+	/* exports about to be unlinked should also be taken into account since
+	 * they might still hold pending grant space to be released at
+	 * commit time */
+	list_for_each_entry(exp, &obd->obd_unlinked_exports, exp_obd_chain) {
+		struct filter_export_data	*fed;
+		int				 error = 0;
+
+		fed = &exp->exp_filter_data;
+
+		if (fed->fed_grant < 0 || fed->fed_pending < 0 ||
+		    fed->fed_dirty < 0)
+			error = 1;
+		if (fed->fed_grant + fed->fed_pending > maxsize) {
+			CERROR("%s: cli %s/%p fed_grant(%ld) + fed_pending(%ld)"
+			       " > maxsize("LPU64")\n", obd->obd_name,
+			       exp->exp_client_uuid.uuid, exp, fed->fed_grant,
+			       fed->fed_pending, maxsize);
+			spin_unlock(&obd->obd_dev_lock);
+			spin_unlock(&ofd->ofd_grant_lock);
+			LBUG();
+		}
+		if (fed->fed_dirty > maxsize) {
+			CERROR("%s: cli %s/%p fed_dirty(%ld) > maxsize("LPU64
+			       ")\n", obd->obd_name, exp->exp_client_uuid.uuid,
+			       exp, fed->fed_dirty, maxsize);
+			spin_unlock(&obd->obd_dev_lock);
+			spin_unlock(&ofd->ofd_grant_lock);
+			LBUG();
+		}
+		CDEBUG_LIMIT(error ? D_ERROR : D_CACHE, "%s: cli %s/%p dirty "
+			     "%ld pend %ld grant %ld\n", obd->obd_name,
+			     exp->exp_client_uuid.uuid, exp, fed->fed_dirty,
+			     fed->fed_pending, fed->fed_grant);
+		tot_granted += fed->fed_grant + fed->fed_pending;
+		tot_pending += fed->fed_pending;
+		tot_dirty += fed->fed_dirty;
+	}
+
 	spin_unlock(&obd->obd_dev_lock);
 	fo_tot_granted = ofd->ofd_tot_granted;
 	fo_tot_pending = ofd->ofd_tot_pending;
@@ -595,7 +634,10 @@ static void ofd_grant_check(const struct lu_env *env, struct obd_export *exp,
 				exp->exp_client_uuid.uuid, exp, i, bytes);
 	}
 
-	/* record space used for the I/O, will be used in ofd_grant_commmit() */
+	/* record in o_grant_used the actual space reserved for the I/O, will be
+	 * used later in ofd_grant_commmit() */
+	oa->o_grant_used = granted + ungranted;
+
 	/* Now substract what the clients has used already.  We don't subtract
 	 * this from the tot_granted yet, so that other client's can't grab
 	 * that space before we have actually allocated our blocks. That
@@ -603,9 +645,9 @@ static void ofd_grant_check(const struct lu_env *env, struct obd_export *exp,
 	info->fti_used = granted + ungranted;
 	*left -= ungranted;
 	fed->fed_grant -= granted;
-	fed->fed_pending += info->fti_used;
+	fed->fed_pending += oa->o_grant_used;
 	ofd->ofd_tot_granted += ungranted;
-	ofd->ofd_tot_pending += info->fti_used;
+	ofd->ofd_tot_pending += oa->o_grant_used;
 
 	CDEBUG(D_CACHE,
 	       "%s: cli %s/%p granted: %lu ungranted: %lu grant: %lu dirty: %lu"
@@ -829,7 +871,7 @@ void ofd_grant_discard(struct obd_export *exp)
 		 obd->obd_name, ofd->ofd_tot_pending,
 		 exp->exp_client_uuid.uuid, exp, fed->fed_pending);
 	/* ofd_tot_pending is handled in ofd_grant_commit as bulk
-	 * finishes */
+	 * commmits */
 	LASSERTF(ofd->ofd_tot_dirty >= fed->fed_dirty,
 		 "%s: tot_dirty "LPU64" cli %s/%p fed_dirty %ld\n",
 		 obd->obd_name, ofd->ofd_tot_dirty,
@@ -1022,19 +1064,17 @@ refresh:
  *			export currently)
  * \param[in] nr	number of objects to be created
  *
- * \retval 0		for success
+ * \retval >= 0		amount of grant space allocated to the precreate request
  * \retval -ENOSPC	on failure
  */
-int ofd_grant_create(const struct lu_env *env, struct obd_export *exp, int *nr)
+long ofd_grant_create(const struct lu_env *env, struct obd_export *exp, int *nr)
 {
-	struct ofd_thread_info		*info = ofd_info(env);
 	struct ofd_device		*ofd = ofd_exp(exp);
 	struct filter_export_data	*fed = &exp->exp_filter_data;
 	u64				 left = 0;
 	unsigned long			 wanted;
+	unsigned long			 granted;
 	ENTRY;
-
-	info->fti_used = 0;
 
 	if (exp->exp_obd->obd_recovering ||
 	    ofd->ofd_dt_conf.ddp_inodespace == 0)
@@ -1090,9 +1130,9 @@ int ofd_grant_create(const struct lu_env *env, struct obd_export *exp, int *nr)
 		left -= wanted - fed->fed_grant;
 		fed->fed_grant = 0;
 	}
-	info->fti_used = wanted;
-	fed->fed_pending += info->fti_used;
-	ofd->ofd_tot_pending += info->fti_used;
+	granted = wanted;
+	fed->fed_pending += granted;
+	ofd->ofd_tot_pending += granted;
 
 	/* grant more space for precreate purpose if possible. */
 	wanted = OST_MAX_PRECREATE * ofd->ofd_dt_conf.ddp_inodespace / 2;
@@ -1103,7 +1143,7 @@ int ofd_grant_create(const struct lu_env *env, struct obd_export *exp, int *nr)
 		ofd_grant_alloc(exp, fed->fed_grant, wanted, left, false);
 	}
 	spin_unlock(&ofd->ofd_grant_lock);
-	RETURN(0);
+	RETURN(granted);
 }
 
 /**
@@ -1111,22 +1151,18 @@ int ofd_grant_create(const struct lu_env *env, struct obd_export *exp, int *nr)
  *
  * Update pending grant counter once buffers have been written to the disk.
  *
- * \param[in] env	LU environment provided by the caller
  * \param[in] exp	export of the client which sent the request
+ * \param[in] pending	amount of reserved space to be released
  * \param[in] rc	return code of pre-commit operations
  */
-void ofd_grant_commit(const struct lu_env *env, struct obd_export *exp,
+void ofd_grant_commit(struct obd_export *exp, unsigned long pending,
 		      int rc)
 {
 	struct ofd_device	*ofd  = ofd_exp(exp);
-	struct ofd_thread_info	*info = ofd_info(env);
-	unsigned long		 pending;
-
 	ENTRY;
 
 	/* get space accounted in tot_pending for the I/O, set in
 	 * ofd_grant_check() */
-	pending = info->fti_used;
 	if (pending == 0)
 		RETURN_EXIT;
 
@@ -1179,4 +1215,76 @@ void ofd_grant_commit(const struct lu_env *env, struct obd_export *exp,
 	ofd->ofd_tot_pending -= pending;
 	spin_unlock(&ofd->ofd_grant_lock);
 	EXIT;
+}
+
+struct ofd_grant_cb {
+	/* commit callback structure */
+	struct dt_txn_commit_cb	 ogc_cb;
+	/* export associated with the bulk write */
+	struct obd_export	*ogc_exp;
+	/* pending grant to be released */
+	unsigned long		 ogc_granted;
+};
+
+/**
+ * Callback function for grant releasing
+ *
+ * Release grant space reserved by the client node.
+ *
+ * \param[in] env	execution environment
+ * \param[in] th	transaction handle
+ * \param[in] cb	callback data
+ * \param[in] err	error code
+ */
+static void ofd_grant_commit_cb(struct lu_env *env, struct thandle *th,
+				struct dt_txn_commit_cb *cb, int err)
+{
+	struct ofd_grant_cb	*ogc;
+
+	ogc = container_of(cb, struct ofd_grant_cb, ogc_cb);
+
+	ofd_grant_commit(ogc->ogc_exp, ogc->ogc_granted, err);
+	class_export_cb_put(ogc->ogc_exp);
+	OBD_FREE_PTR(ogc);
+}
+
+/**
+ * Add callback for grant releasing
+ *
+ * Register a commit callback to release grant space.
+ *
+ * \param[in] th	transaction handle
+ * \param[in] exp	OBD export of client
+ * \param[in] granted	amount of grant space to be released upon commit
+ *
+ * \retval		0 on successful callback adding
+ * \retval		negative value on error
+ */
+int ofd_grant_commit_cb_add(struct thandle *th, struct obd_export *exp,
+			    unsigned long granted)
+{
+	struct ofd_grant_cb	*ogc;
+	struct dt_txn_commit_cb	*dcb;
+	int			 rc;
+	ENTRY;
+
+	OBD_ALLOC_PTR(ogc);
+	if (ogc == NULL)
+		RETURN(-ENOMEM);
+
+	ogc->ogc_exp = class_export_cb_get(exp);
+	ogc->ogc_granted = granted;
+
+	dcb = &ogc->ogc_cb;
+	dcb->dcb_func = ofd_grant_commit_cb;
+	INIT_LIST_HEAD(&dcb->dcb_linkage);
+	strlcpy(dcb->dcb_name, "ofd_grant_commit_cb", sizeof(dcb->dcb_name));
+
+	rc = dt_trans_cb_add(th, dcb);
+	if (rc) {
+		class_export_cb_put(ogc->ogc_exp);
+		OBD_FREE_PTR(ogc);
+	}
+
+	RETURN(rc);
 }

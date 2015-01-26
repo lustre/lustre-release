@@ -722,7 +722,7 @@ int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
 		unstable = ofd->ofd_osfs_inflight - unstable;
 		ofd->ofd_osfs_unstable = 0;
 		if (unstable) {
-			/* some writes completed while we were running statfs
+			/* some writes committed while we were running statfs
 			 * w/o the ofd_osfs_lock. Those ones got added to
 			 * the cached statfs data that we are about to crunch.
 			 * Take them into account in the new statfs data */
@@ -1072,6 +1072,7 @@ static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 	u64			 seq = ostid_seq(&oa->o_oi);
 	struct ofd_seq		*oseq;
 	int			 rc = 0, diff = 1;
+	long			 granted;
 	u64			 next_id;
 	int			 count;
 
@@ -1099,8 +1100,10 @@ static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 	}
 
 	mutex_lock(&oseq->os_create_lock);
-	rc = ofd_grant_create(env, ofd_obd(ofd)->obd_self_export, &diff);
-	if (rc < 0) {
+	granted = ofd_grant_create(env, ofd_obd(ofd)->obd_self_export, &diff);
+	if (granted < 0) {
+		rc = granted;
+		granted = 0;
 		CDEBUG(D_HA, "%s: failed to acquire grant space for "
 		       "precreate (%d): rc = %d\n", ofd_name(ofd), diff, rc);
 		diff = 0;
@@ -1120,7 +1123,7 @@ static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 		rc = 0;
 	}
 
-	ofd_grant_commit(env, ofd_obd(ofd)->obd_self_export, rc);
+	ofd_grant_commit(ofd_obd(ofd)->obd_self_export, granted, rc);
 out:
 	mutex_unlock(&oseq->os_create_lock);
 	ofd_seq_put(env, oseq);
