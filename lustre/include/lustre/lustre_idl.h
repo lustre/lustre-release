@@ -3354,8 +3354,10 @@ struct llog_size_change_rec {
 #define CHANGELOG_MINMASK (1 << CL_MARK)
 /** bits covering all \a changelog_rec_type's */
 #define CHANGELOG_ALLMASK 0XFFFFFFFF
-/** default \a changelog_rec_type mask */
-#define CHANGELOG_DEFMASK CHANGELOG_ALLMASK & ~(1 << CL_ATIME | 1 << CL_CLOSE)
+/** default \a changelog_rec_type mask. Allow all of them, except
+ * CL_ATIME since it can really be time consuming, and not necessary
+ * under normal use. */
+#define CHANGELOG_DEFMASK (CHANGELOG_ALLMASK & ~(1 << CL_ATIME))
 
 /* changelog llog name, needed by client replicators */
 #define CHANGELOG_CATALOG "changelog_catalog"
