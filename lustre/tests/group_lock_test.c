@@ -21,7 +21,7 @@
  */
 
 /*
- * Copyright 2014 Cray Inc, all rights reserved.
+ * Copyright 2014, 2015 Cray Inc, all rights reserved.
  * Author: Frank Zago.
  *
  * A few portions are extracted from llapi_layout_test.c
@@ -63,11 +63,13 @@
 
 #define PERFORM(testfn) \
 	do {								\
+		cleanup();						\
 		fprintf(stderr, "Starting test " #testfn " at %lld\n",	\
 			(unsigned long long)time(NULL));		\
 		testfn();						\
 		fprintf(stderr, "Finishing test " #testfn " at %lld\n",	\
 			(unsigned long long)time(NULL));		\
+		cleanup();						\
 	} while (0)
 
 /* Name of file/directory. Will be set once and will not change. */
@@ -91,8 +93,6 @@ static void test10(void)
 	int fd;
 	int gid;
 	int i;
-
-	cleanup();
 
 	/* Create the test file, and open it. */
 	fd = creat(mainpath, 0);
@@ -166,8 +166,6 @@ static void test11(void)
 	int gid;
 	char buf[10000];
 
-	cleanup();
-
 	/* Create the test file. */
 	fd = creat(mainpath, 0);
 	ASSERTF(fd >= 0, "creat failed for '%s': %s",
@@ -226,8 +224,58 @@ static void test11(void)
 
 		close(fd);
 	}
+}
 
-	cleanup();
+/* Lock / unlock a volatile file, with different creation flags */
+static void test12(void)
+{
+	int rc;
+	int fd;
+	int gid;
+
+	rc = mkdir(mainpath, 0600);
+	ASSERTF(rc == 0, "mkdir failed for '%s': %s",
+		mainpath, strerror(errno));
+
+	fd = llapi_create_volatile_idx(mainpath, -1, O_CREAT | O_WRONLY);
+	ASSERTF(fd >= 0, "llapi_create_volatile_idx failed on '%s': %s",
+		mainpath, strerror(-fd));
+
+	gid = 34895;
+	rc = llapi_group_lock(fd, gid);
+	ASSERTF(rc == 0, "cannot lock '%s': %s", mainpath, strerror(-rc));
+
+	rc = llapi_group_unlock(fd, gid);
+	ASSERTF(rc == 0, "cannot unlock '%s': %s", mainpath, strerror(-rc));
+
+	close(fd);
+
+	fd = llapi_create_volatile_idx(mainpath, -1,
+				       O_CREAT | O_WRONLY | O_LOV_DELAY_CREATE);
+	ASSERTF(fd >= 0, "llapi_create_volatile_idx failed on '%s': %s",
+		mainpath, strerror(-fd));
+
+	gid = 3354895;
+	rc = llapi_group_lock(fd, gid);
+	ASSERTF(rc == 0, "cannot lock '%s': %s", mainpath, strerror(-rc));
+
+	rc = llapi_group_unlock(fd, gid);
+	ASSERTF(rc == 0, "cannot unlock '%s': %s", mainpath, strerror(-rc));
+
+	close(fd);
+
+	fd = llapi_create_volatile_idx(mainpath, -1, O_RDONLY);
+	ASSERTF(fd >= 0, "llapi_create_volatile_idx failed on '%s': %s",
+		mainpath, strerror(-fd));
+
+	gid = 3489655;
+	rc = llapi_group_lock(fd, gid);
+	ASSERTF(rc == 0, "cannot lock '%s': %s", mainpath, strerror(-rc));
+
+	rc = llapi_group_unlock(fd, gid);
+	ASSERTF(rc == 0, "cannot unlock '%s': %s", mainpath, strerror(-rc));
+
+	close(fd);
 }
 
 static void helper_test20(int fd)
@@ -263,8 +311,6 @@ static void test20(void)
 	int rc;
 	char dname[PATH_MAX];
 
-	cleanup();
-
 	/* Try the mountpoint. Should fail. */
 	fd = open(fsmountdir, O_RDONLY | O_DIRECTORY);
 	ASSERTF(fd >= 0, "open failed for '%s': %s", mainpath, strerror(errno));
@@ -282,7 +328,7 @@ static void test20(void)
 
 	/* A regular directory. */
 	rc = mkdir(mainpath, 0600);
-	ASSERTF(fd >= 0, "mkdir failed for '%s': %s",
+	ASSERTF(rc == 0, "mkdir failed for '%s': %s",
 		mainpath, strerror(errno));
 
 	fd = open(mainpath, O_RDONLY | O_DIRECTORY);
@@ -300,8 +346,6 @@ static void test30(void)
 	int gid;
 	int gid2;
 	int rc;
-
-	cleanup();
 
 	/* Create the test file, and open it. */
 	fd1 = creat(mainpath, 0);
@@ -401,7 +445,7 @@ static void process_args(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
-	char fsname[8];
+	char fsname[8 + 1];
 	int rc;
 
 	process_args(argc, argv);
@@ -428,6 +472,7 @@ int main(int argc, char *argv[])
 
 	PERFORM(test10);
 	PERFORM(test11);
+	PERFORM(test12);
 	PERFORM(test20);
 	PERFORM(test30);
 
