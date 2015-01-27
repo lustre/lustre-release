@@ -175,6 +175,7 @@ struct mgs_device {
 	struct obd_device		*mgs_obd;
 	struct local_oid_storage	*mgs_los;
 	struct mutex			 mgs_mutex;
+	struct mutex			 mgs_health_mutex;
 	struct lu_target		 mgs_lut;
 };
 

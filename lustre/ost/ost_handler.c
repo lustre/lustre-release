@@ -387,23 +387,17 @@ static int ost_cleanup(struct obd_device *obd)
 
 static int ost_health_check(const struct lu_env *env, struct obd_device *obd)
 {
-        struct ost_obd *ost = &obd->u.ost;
-        int rc = 0;
+	struct ost_obd *ost = &obd->u.ost;
+	int rc = 0;
 
 	mutex_lock(&ost->ost_health_mutex);
-        rc |= ptlrpc_service_health_check(ost->ost_service);
-        rc |= ptlrpc_service_health_check(ost->ost_create_service);
-        rc |= ptlrpc_service_health_check(ost->ost_io_service);
+	rc |= ptlrpc_service_health_check(ost->ost_service);
+	rc |= ptlrpc_service_health_check(ost->ost_create_service);
+	rc |= ptlrpc_service_health_check(ost->ost_io_service);
+	rc |= ptlrpc_service_health_check(ost->ost_seq_service);
 	mutex_unlock(&ost->ost_health_mutex);
 
-        /*
-         * health_check to return 0 on healthy
-         * and 1 on unhealthy.
-         */
-        if( rc != 0)
-                rc = 1;
-
-        return rc;
+	return rc != 0 ? 1 : 0;
 }
 
 /* use obd ops to offer management infrastructure */

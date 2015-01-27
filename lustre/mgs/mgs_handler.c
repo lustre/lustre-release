@@ -1152,6 +1152,7 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 	mutex_init(&mgs->mgs_mutex);
 	mgs->mgs_start_time = cfs_time_current_sec();
 	spin_lock_init(&mgs->mgs_lock);
+	mutex_init(&mgs->mgs_health_mutex);
 
 	rc = lproc_mgs_setup(mgs, lustre_cfg_string(lcfg, 3));
 	if (rc != 0) {
@@ -1379,7 +1380,9 @@ static struct lu_device *mgs_device_fini(const struct lu_env *env,
 
 	ping_evictor_stop();
 
+	mutex_lock(&mgs->mgs_health_mutex);
 	ptlrpc_unregister_service(mgs->mgs_service);
+	mutex_unlock(&mgs->mgs_health_mutex);
 
 	obd_exports_barrier(obd);
 	obd_zombie_barrier();
@@ -1517,6 +1520,18 @@ static int mgs_obd_disconnect(struct obd_export *exp)
 	RETURN(rc);
 }
 
+static int mgs_health_check(const struct lu_env *env, struct obd_device *obd)
+{
+	struct mgs_device *mgs = lu2mgs_dev(obd->obd_lu_dev);
+	int rc = 0;
+
+	mutex_lock(&mgs->mgs_health_mutex);
+	rc |= ptlrpc_service_health_check(mgs->mgs_service);
+	mutex_unlock(&mgs->mgs_health_mutex);
+
+	return rc != 0 ? 1 : 0;
+}
+
 /* use obd ops to offer management infrastructure */
 static struct obd_ops mgs_obd_device_ops = {
 	.o_owner		= THIS_MODULE,
@@ -1526,6 +1541,7 @@ static struct obd_ops mgs_obd_device_ops = {
 	.o_init_export		= mgs_init_export,
 	.o_destroy_export	= mgs_destroy_export,
 	.o_iocontrol		= mgs_iocontrol,
+	.o_health_check		= mgs_health_check,
 };
 
 static int __init mgs_init(void)

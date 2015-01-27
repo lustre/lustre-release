@@ -56,14 +56,15 @@
 
 struct mds_device {
 	/* super-class */
-	struct md_device	   mds_md_dev;
-	struct ptlrpc_service     *mds_regular_service;
-	struct ptlrpc_service     *mds_readpage_service;
-	struct ptlrpc_service     *mds_out_service;
-	struct ptlrpc_service     *mds_setattr_service;
-	struct ptlrpc_service     *mds_mdsc_service;
-	struct ptlrpc_service     *mds_mdss_service;
-	struct ptlrpc_service     *mds_fld_service;
+	struct md_device	 mds_md_dev;
+	struct ptlrpc_service	*mds_regular_service;
+	struct ptlrpc_service	*mds_readpage_service;
+	struct ptlrpc_service	*mds_out_service;
+	struct ptlrpc_service	*mds_setattr_service;
+	struct ptlrpc_service	*mds_mdsc_service;
+	struct ptlrpc_service	*mds_mdss_service;
+	struct ptlrpc_service	*mds_fld_service;
+	struct mutex		 mds_health_mutex;
 };
 
 /*
@@ -103,6 +104,8 @@ CFS_MODULE_PARM(mds_attr_num_cpts, "c", charp, 0444,
 static void mds_stop_ptlrpc_service(struct mds_device *m)
 {
 	ENTRY;
+
+	mutex_lock(&m->mds_health_mutex);
 	if (m->mds_regular_service != NULL) {
 		ptlrpc_unregister_service(m->mds_regular_service);
 		m->mds_regular_service = NULL;
@@ -131,6 +134,8 @@ static void mds_stop_ptlrpc_service(struct mds_device *m)
 		ptlrpc_unregister_service(m->mds_fld_service);
 		m->mds_fld_service = NULL;
 	}
+	mutex_unlock(&m->mds_health_mutex);
+
 	EXIT;
 }
 
@@ -502,6 +507,8 @@ static struct lu_device *mds_device_alloc(const struct lu_env *env,
 		return l;
 	}
 
+	mutex_init(&m->mds_health_mutex);
+
 	rc = mds_start_ptlrpc_service(m);
 
 	if (rc != 0) {
@@ -534,8 +541,28 @@ static struct lu_device_type mds_device_type = {
 	.ldt_ctx_tags = LCT_MD_THREAD
 };
 
+static int mds_health_check(const struct lu_env *env, struct obd_device *obd)
+{
+	struct mds_device *mds = mds_dev(obd->obd_lu_dev);
+	int rc = 0;
+
+
+	mutex_lock(&mds->mds_health_mutex);
+	rc |= ptlrpc_service_health_check(mds->mds_regular_service);
+	rc |= ptlrpc_service_health_check(mds->mds_readpage_service);
+	rc |= ptlrpc_service_health_check(mds->mds_out_service);
+	rc |= ptlrpc_service_health_check(mds->mds_setattr_service);
+	rc |= ptlrpc_service_health_check(mds->mds_mdsc_service);
+	rc |= ptlrpc_service_health_check(mds->mds_mdss_service);
+	rc |= ptlrpc_service_health_check(mds->mds_fld_service);
+	mutex_unlock(&mds->mds_health_mutex);
+
+	return rc != 0 ? 1 : 0;
+}
+
 static struct obd_ops mds_obd_device_ops = {
 	.o_owner	   = THIS_MODULE,
+	.o_health_check	   = mds_health_check,
 };
 
 int mds_mod_init(void)
