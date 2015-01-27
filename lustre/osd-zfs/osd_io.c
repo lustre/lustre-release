@@ -537,84 +537,44 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 	return 0;
 }
 
-/* Return number of blocks that aren't mapped in the [start, start + size]
- * region */
-static int osd_count_not_mapped(struct osd_object *obj, uint64_t start,
-				uint32_t size)
+static inline uint32_t osd_get_blocksz(struct osd_object *obj)
 {
-	dmu_buf_impl_t	*dbi = (dmu_buf_impl_t *)obj->oo_db;
-	dmu_buf_impl_t	*db;
-	dnode_t		*dn;
-	uint32_t	 blkshift;
-	uint64_t	 end, blkid;
-	int		 rc;
-	ENTRY;
+	uint32_t blksz;
+	u_longlong_t unused;
 
-	DB_DNODE_ENTER(dbi);
-	dn = DB_DNODE(dbi);
+	LASSERT(obj->oo_db);
 
-	if (dn->dn_maxblkid == 0) {
-		if (start + size <= dn->dn_datablksz)
-			GOTO(out, size = 0);
-		if (start < dn->dn_datablksz)
-			start = dn->dn_datablksz;
-		/* assume largest block size */
-		blkshift = osd_spa_maxblockshift(
-			dmu_objset_spa(osd_obj2dev(obj)->od_os));
-	} else {
-		/* blocksize can't change */
-		blkshift = dn->dn_datablkshift;
-	}
+	dmu_object_size_from_db(obj->oo_db, &blksz, &unused);
+	return blksz;
+}
 
-	/* compute address of last block */
-	end = (start + size - 1) >> blkshift;
-	/* align start on block boundaries */
-	start >>= blkshift;
+static inline uint64_t osd_roundup2blocksz(uint64_t size,
+					   uint64_t offset,
+					   uint32_t blksz)
+{
+	LASSERT(blksz > 0);
 
-	/* size is null, can't be mapped */
-	if (obj->oo_attr.la_size == 0 || dn->dn_maxblkid == 0)
-		GOTO(out, size = (end - start + 1) << blkshift);
+	size += offset % blksz;
 
-	/* beyond EOF, can't be mapped */
-	if (start > dn->dn_maxblkid)
-		GOTO(out, size = (end - start + 1) << blkshift);
+	if (likely(IS_PO2(blksz)))
+		return PO2_ROUNDUP_TYPED(size, blksz, uint64_t);
 
-	size = 0;
-	for (blkid = start; blkid <= end; blkid++) {
-		if (blkid == dn->dn_maxblkid)
-			/* this one is mapped for sure */
-			continue;
-		if (blkid > dn->dn_maxblkid) {
-			size += (end - blkid + 1) << blkshift;
-			GOTO(out, size);
-		}
-
-		rc = dbuf_hold_impl(dn, 0, blkid, TRUE, FTAG, &db);
-		if (rc) {
-			/* for ENOENT (block not mapped) and any other errors,
-			 * assume the block isn't mapped */
-			size += 1 << blkshift;
-			continue;
-		}
-		dbuf_rele(db, FTAG);
-	}
-
-	GOTO(out, size);
-out:
-	DB_DNODE_EXIT(dbi);
-	return size;
+	size += blksz - 1;
+	do_div(size, blksz);
+	return size * blksz;
 }
 
 static int osd_declare_write_commit(const struct lu_env *env,
-				struct dt_object *dt,
-				struct niobuf_local *lnb, int npages,
-				struct thandle *th)
+				    struct dt_object *dt,
+				    struct niobuf_local *lnb, int npages,
+				    struct thandle *th)
 {
 	struct osd_object  *obj = osd_dt_obj(dt);
 	struct osd_device  *osd = osd_obj2dev(obj);
 	struct osd_thandle *oh;
 	uint64_t            offset = 0;
 	uint32_t            size = 0;
+	uint32_t	    blksz = osd_get_blocksz(obj);
 	int		    i, rc, flags = 0;
 	bool		    ignore_quota = false, synced = false;
 	long long	    space = 0;
@@ -667,11 +627,13 @@ static int osd_declare_write_commit(const struct lu_env *env,
 
 		dmu_tx_hold_write(oh->ot_tx, obj->oo_db->db_object,
 				  offset, size);
-		/* estimating space that will be consumed by a write is rather
+		/* Estimating space to be consumed by a write is rather
 		 * complicated with ZFS. As a consequence, we don't account for
-		 * indirect blocks and quota overrun will be adjusted once the
-		 * operation is committed, if required. */
-		space += osd_count_not_mapped(obj, offset, size);
+		 * indirect blocks and just use as a rough estimate the worse
+		 * case where the old space is being held by a snapshot. Quota
+		 * overrun will be adjusted once the operation is committed, if
+		 * required. */
+		space += osd_roundup2blocksz(size, offset, blksz);
 
 		offset = lnb[i].lnb_file_offset;
 		size = lnb[i].lnb_len;
@@ -680,7 +642,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	if (size) {
 		dmu_tx_hold_write(oh->ot_tx, obj->oo_db->db_object,
 				  offset, size);
-		space += osd_count_not_mapped(obj, offset, size);
+		space += osd_roundup2blocksz(size, offset, blksz);
 	}
 
 	dmu_tx_hold_sa(oh->ot_tx, obj->oo_sa_hdl, 0);
@@ -691,8 +653,8 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	 * copies */
 	space  *= osd->od_os->os_copies;
 	space   = toqb(space);
-	CDEBUG(D_QUOTA, "writting %d pages, reserving "LPD64"K of quota "
-	       "space\n", npages, space);
+	CDEBUG(D_QUOTA, "writing %d pages, reserving "LPD64"K of quota space\n",
+	       npages, space);
 
 	record_start_io(osd, WRITE, discont_pages);
 retry:

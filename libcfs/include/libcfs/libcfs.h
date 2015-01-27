@@ -87,9 +87,9 @@ static inline int __is_po2(unsigned long long val)
         return !(val & (val - 1));
 }
 
-#define IS_PO2(val) __is_po2((unsigned long long)(val))
-
-#define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
+#define IS_PO2(val)	  __is_po2((unsigned long long)(val))
+#define PO2_ROUNDUP_TYPED(x, po2, type) (-(-(type)(x) & -(type)(po2)))
+#define LOWEST_BIT_SET(x) ((x) & ~((x) - 1))
 
 /* Sparse annotations */
 #ifdef __KERNEL__

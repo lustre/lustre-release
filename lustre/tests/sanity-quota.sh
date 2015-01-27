@@ -1952,6 +1952,10 @@ test_23_sub() {
 }
 
 test_23() {
+	[ $(facet_fstype ost1) == "zfs" ] &&
+		skip "Overwrite in place is not guaranteed to be " \
+		"space neutral on ZFS" && return
+
 	local OST0_MIN=$((6 * 1024)) # 6MB, extra space for meta blocks.
 	check_whether_skip && return 0
 	log "run for 4MB test file"
