@@ -49,15 +49,16 @@ uint64_t osd_quota_fid2dmu(const struct lu_fid *fid)
 static uint64_t osd_objset_user_iused(struct osd_device *osd, uint64_t uidbytes)
 {
 	uint64_t refdbytes, availbytes, usedobjs, availobjs;
-	uint64_t uidobjs;
+	uint64_t uidobjs, bshift;
 
 	/* get fresh statfs info */
 	dmu_objset_space(osd->od_os, &refdbytes, &availbytes,
 			 &usedobjs, &availobjs);
 
 	/* estimate the number of objects based on the disk usage */
+	bshift = fls64(osd->od_max_blksz) - 1;
 	uidobjs = osd_objs_count_estimate(refdbytes, usedobjs,
-					  uidbytes >> SPA_MAXBLOCKSHIFT);
+					  uidbytes >> bshift, bshift);
 	if (uidbytes > 0)
 		/* if we have at least 1 byte, we have at least one dnode ... */
 		uidobjs = max_t(uint64_t, uidobjs, 1);

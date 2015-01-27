@@ -83,13 +83,13 @@
 #define OSD_GFP_IO		(GFP_NOFS | __GFP_HIGHMEM)
 
 /* Statfs space reservation for grant, fragmentation, and unlink space. */
-#define OSD_STATFS_RESERVED_BLKS  (1ULL << (22 - SPA_MAXBLOCKSHIFT)) /* 4MB */
-#define OSD_STATFS_RESERVED_SHIFT (7)         /* reserve 0.78% of all space */
+#define OSD_STATFS_RESERVED_SIZE	(16ULL << 20) /* reserve 16MB minimum */
+#define OSD_STATFS_RESERVED_SHIFT	(7)     /* reserve 0.78% of all space */
 
 /* Statfs {minimum, safe estimate, and maximum} dnodes per block */
-#define OSD_DNODE_MIN_BLKSHIFT (SPA_MAXBLOCKSHIFT - DNODE_SHIFT) /* 17-9 =8 */
-#define OSD_DNODE_EST_BLKSHIFT (SPA_MAXBLOCKSHIFT - 12)          /* 17-12=5 */
-#define OSD_DNODE_EST_COUNT    1024
+#define OSD_DNODE_MIN_BLKSHIFT	(DNODES_PER_BLOCK_SHIFT)
+#define OSD_DNODE_EST_BLKSHIFT	(DNODES_PER_BLOCK_SHIFT >> 1)
+#define OSD_DNODE_EST_COUNT	1024
 
 #define OSD_GRANT_FOR_LOCAL_OIDS (2ULL << 20) /* 2MB for last_rcvd, ... */
 
@@ -252,6 +252,7 @@ struct osd_device {
 	struct proc_dir_entry	*od_proc_entry;
 	struct lprocfs_stats	*od_stats;
 
+	uint64_t		 od_max_blksz;
 	uint64_t		 od_root;
 	uint64_t		 od_O_id;
 	struct osd_oi		**od_oi_table;
@@ -334,7 +335,7 @@ int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
 		      struct osd_thandle *oh, bool is_blk, int *flags,
 		      bool force);
 uint64_t osd_objs_count_estimate(uint64_t refdbytes, uint64_t usedobjs,
-				 uint64_t nrblocks);
+				 uint64_t nrblocks, uint64_t est_maxblockshift);
 
 /*
  * Helpers.
@@ -535,7 +536,15 @@ static inline void dsl_pool_config_enter(dsl_pool_t *dp, char *name)
 static inline void dsl_pool_config_exit(dsl_pool_t *dp, char *name)
 {
 }
+#endif
 
+#ifdef HAVE_SPA_MAXBLOCKSIZE
+#define	osd_spa_maxblocksize(spa)	spa_maxblocksize(spa)
+#define	osd_spa_maxblockshift(spa)	fls64(spa_maxblocksize(spa) - 1)
+#else
+#define	osd_spa_maxblocksize(spa)	SPA_MAXBLOCKSIZE
+#define	osd_spa_maxblockshift(spa)	SPA_MAXBLOCKSHIFT
+#define	SPA_OLD_MAXBLOCKSIZE		SPA_MAXBLOCKSIZE
 #endif
 
 #ifdef HAVE_SA_SPILL_ALLOC

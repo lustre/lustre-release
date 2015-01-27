@@ -758,7 +758,8 @@ static int osd_attr_get(const struct lu_env *env,
 		attr->la_size = 512 * blocks;
 	/* Block size may be not set; suggest maximal I/O transfers. */
 	if (blksize == 0)
-		blksize = 1ULL << SPA_MAXBLOCKSHIFT;
+		blksize = osd_spa_maxblocksize(
+			dmu_objset_spa(osd_obj2dev(obj)->od_os));
 
 	attr->la_blksize = blksize;
 	attr->la_blocks = blocks;
@@ -1329,13 +1330,15 @@ static dmu_buf_t *osd_mkreg(const struct lu_env *env, struct osd_object *obj,
 		return ERR_PTR(rc);
 
 	/*
-	 * XXX: a hack, OST to use bigger blocksize. we need
-	 * a method in OSD API to control this from OFD/MDD
+	 * XXX: This heuristic is non-optimal.  It would be better to
+	 * increase the blocksize up to osd->od_max_blksz during the write.
+	 * This is exactly how the ZPL behaves and it ensures that the right
+	 * blocksize is selected based on the file size rather than the
+	 * making broad assumptions based on the osd type.
 	 */
 	if (!lu_device_is_md(osd2lu_dev(osd))) {
-		rc = -dmu_object_set_blocksize(osd->od_os,
-					       db->db_object,
-				128 << 10, 0, oh->ot_tx);
+		rc = -dmu_object_set_blocksize(osd->od_os, db->db_object,
+					       osd->od_max_blksz, 0, oh->ot_tx);
 		if (unlikely(rc)) {
 			CERROR("%s: can't change blocksize: %d\n",
 			       osd->od_svname, rc);

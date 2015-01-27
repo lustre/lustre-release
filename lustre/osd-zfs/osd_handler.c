@@ -313,7 +313,7 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 
 /* Estimate the number of objects from a number of blocks */
 uint64_t osd_objs_count_estimate(uint64_t refdbytes, uint64_t usedobjs,
-				 uint64_t nrblocks)
+				 uint64_t nrblocks, uint64_t est_maxblockshift)
 {
 	uint64_t est_objs, est_refdblocks, est_usedobjs;
 
@@ -332,7 +332,7 @@ uint64_t osd_objs_count_estimate(uint64_t refdbytes, uint64_t usedobjs,
 	CLASSERT(OSD_DNODE_MIN_BLKSHIFT > 0);
 	CLASSERT(OSD_DNODE_EST_BLKSHIFT > 0);
 
-	est_refdblocks = (refdbytes >> SPA_MAXBLOCKSHIFT) +
+	est_refdblocks = (refdbytes >> est_maxblockshift) +
 			 (OSD_DNODE_EST_COUNT >> OSD_DNODE_EST_BLKSHIFT);
 	est_usedobjs   = usedobjs + OSD_DNODE_EST_COUNT;
 
@@ -377,14 +377,15 @@ uint64_t osd_objs_count_estimate(uint64_t refdbytes, uint64_t usedobjs,
 	return est_objs;
 }
 
-static int osd_objset_statfs(struct objset *os, struct obd_statfs *osfs)
+static int osd_objset_statfs(struct osd_device *osd, struct obd_statfs *osfs)
 {
+	struct objset *os = osd->od_os;
 	uint64_t refdbytes, availbytes, usedobjs, availobjs;
 	uint64_t est_availobjs;
 	uint64_t reserved;
+	uint64_t bshift;
 
-	dmu_objset_space(os, &refdbytes, &availbytes, &usedobjs,
-			 &availobjs);
+	dmu_objset_space(os, &refdbytes, &availbytes, &usedobjs, &availobjs);
 
 	/*
 	 * ZFS allows multiple block sizes.  For statfs, Linux makes no
@@ -394,10 +395,11 @@ static int osd_objset_statfs(struct objset *os, struct obd_statfs *osfs)
 	 * largest possible block size as IO size for the optimum performance
 	 * and scale the free and used blocks count appropriately.
 	 */
-	osfs->os_bsize = 1ULL << SPA_MAXBLOCKSHIFT;
+	osfs->os_bsize = osd->od_max_blksz;
+	bshift = fls64(osfs->os_bsize) - 1;
 
-	osfs->os_blocks = (refdbytes + availbytes) >> SPA_MAXBLOCKSHIFT;
-	osfs->os_bfree = availbytes >> SPA_MAXBLOCKSHIFT;
+	osfs->os_blocks = (refdbytes + availbytes) >> bshift;
+	osfs->os_bfree = availbytes >> bshift;
 	osfs->os_bavail = osfs->os_bfree; /* no extra root reservation */
 
 	/* Take replication (i.e. number of copies) into account */
@@ -412,12 +414,11 @@ static int osd_objset_statfs(struct objset *os, struct obd_statfs *osfs)
 	 * Reserve 0.78% of total space, at least 4MB for small filesystems,
 	 * for internal files to be created/unlinked when space is tight.
 	 */
-	CLASSERT(OSD_STATFS_RESERVED_BLKS > 0);
-	if (likely(osfs->os_blocks >=
-			OSD_STATFS_RESERVED_BLKS << OSD_STATFS_RESERVED_SHIFT))
+	CLASSERT(OSD_STATFS_RESERVED_SIZE > 0);
+	if (likely(osfs->os_blocks >= OSD_STATFS_RESERVED_SIZE))
 		reserved = osfs->os_blocks >> OSD_STATFS_RESERVED_SHIFT;
 	else
-		reserved = OSD_STATFS_RESERVED_BLKS;
+		reserved = OSD_STATFS_RESERVED_SIZE >> bshift;
 
 	osfs->os_blocks -= reserved;
 	osfs->os_bfree  -= MIN(reserved, osfs->os_bfree);
@@ -431,7 +432,7 @@ static int osd_objset_statfs(struct objset *os, struct obd_statfs *osfs)
 	 * Compute a better estimate in udmu_objs_count_estimate().
 	 */
 	est_availobjs = osd_objs_count_estimate(refdbytes, usedobjs,
-						osfs->os_bfree);
+						osfs->os_bfree, bshift);
 
 	osfs->os_ffree = min(availobjs, est_availobjs);
 	osfs->os_files = osfs->os_ffree + usedobjs;
@@ -460,11 +461,10 @@ static int osd_objset_statfs(struct objset *os, struct obd_statfs *osfs)
 int osd_statfs(const struct lu_env *env, struct dt_device *d,
 	       struct obd_statfs *osfs)
 {
-	struct osd_device *osd = osd_dt_dev(d);
 	int		   rc;
 	ENTRY;
 
-	rc = osd_objset_statfs(osd->od_os, osfs);
+	rc = osd_objset_statfs(osd_dt_dev(d), osfs);
 	if (unlikely(rc != 0))
 		RETURN(rc);
 
@@ -474,13 +474,14 @@ int osd_statfs(const struct lu_env *env, struct dt_device *d,
 	RETURN(0);
 }
 
-static int osd_blk_insert_cost(void)
+static int osd_blk_insert_cost(struct osd_device *osd)
 {
-	int max_blockshift, nr_blkptrshift;
+	int max_blockshift, nr_blkptrshift, bshift;
 
 	/* max_blockshift is the log2 of the number of blocks needed to reach
 	 * the maximum filesize (that's to say 2^64) */
-	max_blockshift = DN_MAX_OFFSET_SHIFT - SPA_MAXBLOCKSHIFT;
+	bshift = osd_spa_maxblockshift(dmu_objset_spa(osd->od_os));
+	max_blockshift = DN_MAX_OFFSET_SHIFT - bshift;
 
 	/* nr_blkptrshift is the log2 of the number of block pointers that can
 	 * be stored in an indirect block */
@@ -532,7 +533,7 @@ static void osd_conf_get(const struct lu_env *env,
 	 * estimate the real size consumed by an object */
 	param->ddp_inodespace = OSD_DNODE_EST_COUNT;
 	/* per-fragment overhead to be used by the client code */
-	param->ddp_grant_frag = osd_blk_insert_cost();
+	param->ddp_grant_frag = osd_blk_insert_cost(osd);
 }
 
 /*
@@ -675,6 +676,70 @@ static void osd_xattr_changed_cb(void *arg, uint64_t newval)
 	osd->od_xattr_in_sa = (newval == ZFS_XATTR_SA);
 }
 
+static void osd_recordsize_changed_cb(void *arg, uint64_t newval)
+{
+	struct osd_device *osd = arg;
+
+	LASSERT(newval <= osd_spa_maxblocksize(dmu_objset_spa(osd->od_os)));
+	LASSERT(newval >= SPA_MINBLOCKSIZE);
+	LASSERT(ISP2(newval));
+
+	osd->od_max_blksz = newval;
+}
+
+/*
+ * This function unregisters all registered callbacks.  It's harmless to
+ * unregister callbacks that were never registered so it is used to safely
+ * unwind a partially completed call to osd_objset_register_callbacks().
+ */
+static void osd_objset_unregister_callbacks(struct osd_device *o)
+{
+	struct dsl_dataset	*ds = dmu_objset_ds(o->od_os);
+
+	(void) dsl_prop_unregister(ds, zfs_prop_to_name(ZFS_PROP_XATTR),
+				   osd_xattr_changed_cb, o);
+	(void) dsl_prop_unregister(ds, zfs_prop_to_name(ZFS_PROP_RECORDSIZE),
+				   osd_recordsize_changed_cb, o);
+
+	if (o->arc_prune_cb != NULL) {
+		arc_remove_prune_callback(o->arc_prune_cb);
+		o->arc_prune_cb = NULL;
+	}
+}
+
+/*
+ * Register the required callbacks to be notified when zfs properties
+ * are modified using the 'zfs(8)' command line utility.
+ */
+static int osd_objset_register_callbacks(struct osd_device *o)
+{
+	struct dsl_dataset	*ds = dmu_objset_ds(o->od_os);
+	dsl_pool_t		*dp = dmu_objset_pool(o->od_os);
+	int			rc;
+
+	LASSERT(ds);
+	LASSERT(dp);
+
+	dsl_pool_config_enter(dp, FTAG);
+	rc = -dsl_prop_register(ds, zfs_prop_to_name(ZFS_PROP_XATTR),
+				osd_xattr_changed_cb, o);
+	if (rc)
+		GOTO(err, rc);
+
+	rc = -dsl_prop_register(ds, zfs_prop_to_name(ZFS_PROP_RECORDSIZE),
+				osd_recordsize_changed_cb, o);
+	if (rc)
+		GOTO(err, rc);
+
+	o->arc_prune_cb = arc_add_prune_callback(arc_prune_func, o);
+err:
+	dsl_pool_config_exit(dp, FTAG);
+	if (rc)
+		osd_objset_unregister_callbacks(o);
+
+	RETURN(rc);
+}
+
 static int osd_objset_open(struct osd_device *o)
 {
 	uint64_t	version = ZPL_VERSION;
@@ -737,11 +802,9 @@ out:
 static int osd_mount(const struct lu_env *env,
 		     struct osd_device *o, struct lustre_cfg *cfg)
 {
-	struct dsl_dataset	*ds;
 	char			*mntdev = lustre_cfg_string(cfg, 1);
 	char			*svname = lustre_cfg_string(cfg, 4);
 	dmu_buf_t		*rootdb;
-	dsl_pool_t		*dp;
 	const char		*opts;
 	int			 rc;
 	ENTRY;
@@ -764,30 +827,19 @@ static int osd_mount(const struct lu_env *env,
 		o->od_is_ost = 1;
 
 	rc = osd_objset_open(o);
-	if (rc) {
-		CERROR("%s: can't open objset %s: rc = %d\n", o->od_svname,
-			o->od_mntdev, rc);
-		RETURN(rc);
-	}
-
-	ds = dmu_objset_ds(o->od_os);
-	dp = dmu_objset_pool(o->od_os);
-	LASSERT(ds);
-	LASSERT(dp);
-	dsl_pool_config_enter(dp, FTAG);
-	rc = dsl_prop_register(ds, "xattr", osd_xattr_changed_cb, o);
-	dsl_pool_config_exit(dp, FTAG);
 	if (rc)
-		CWARN("%s: can't register xattr callback, ignore: rc=%d\n",
-		      o->od_svname, rc);
+		GOTO(err, rc);
+
+	o->od_xattr_in_sa = B_TRUE;
+	o->od_max_blksz = SPA_OLD_MAXBLOCKSIZE;
+
+	rc = osd_objset_register_callbacks(o);
+	if (rc)
+		GOTO(err, rc);
 
 	rc = __osd_obj2dbuf(env, o->od_os, o->od_rootid, &rootdb);
-	if (rc) {
-		CERROR("%s: obj2dbuf() failed: rc = %d\n", o->od_svname, rc);
-		dmu_objset_disown(o->od_os, o);
-		o->od_os = NULL;
-		RETURN(rc);
-	}
+	if (rc)
+		GOTO(err, rc);
 
 	o->od_root = rootdb->db_object;
 	sa_buf_rele(rootdb, osd_obj_tag);
@@ -818,8 +870,6 @@ static int osd_mount(const struct lu_env *env,
 	if (rc)
 		GOTO(err, rc);
 
-	o->arc_prune_cb = arc_add_prune_callback(arc_prune_func, o);
-
 	/* initialize quota slave instance */
 	o->od_quota_slave = qsd_init(env, o->od_svname, &o->od_dt_dev,
 				     o->od_proc_entry);
@@ -835,6 +885,11 @@ static int osd_mount(const struct lu_env *env,
 		o->od_posix_acl = 1;
 
 err:
+	if (rc) {
+		dmu_objset_disown(o->od_os, o);
+		o->od_os = NULL;
+	}
+
 	RETURN(rc);
 }
 
@@ -940,7 +995,6 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 					 struct lu_device *d)
 {
 	struct osd_device *o = osd_dev(d);
-	struct dsl_dataset *ds;
 	int		   rc;
 	ENTRY;
 
@@ -949,15 +1003,7 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 	osd_oi_fini(env, o);
 
 	if (o->od_os) {
-		ds = dmu_objset_ds(o->od_os);
-		rc = dsl_prop_unregister(ds, "xattr", osd_xattr_changed_cb, o);
-		if (rc)
-			CERROR("%s: dsl_prop_unregister xattr error %d\n",
-				o->od_svname, rc);
-		if (o->arc_prune_cb != NULL) {
-			arc_remove_prune_callback(o->arc_prune_cb);
-			o->arc_prune_cb = NULL;
-		}
+		osd_objset_unregister_callbacks(o);
 		osd_sync(env, lu2dt_dev(d));
 		txg_wait_callbacks(spa_get_dsl(dmu_objset_spa(o->od_os)));
 	}
