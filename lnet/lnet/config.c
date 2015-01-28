@@ -108,11 +108,6 @@ lnet_ni_free(struct lnet_ni *ni)
 	if (ni->ni_cpts != NULL)
 		cfs_expr_list_values_free(ni->ni_cpts, ni->ni_ncpts);
 
-#ifndef __KERNEL__
-# ifdef HAVE_LIBPTHREAD
-	pthread_mutex_destroy(&ni->ni_lock);
-# endif
-#endif
 	for (i = 0; i < LNET_MAX_INTERFACES &&
 		    ni->ni_interfaces[i] != NULL; i++) {
 		LIBCFS_FREE(ni->ni_interfaces[i],
@@ -142,13 +137,7 @@ lnet_ni_alloc(__u32 net, struct cfs_expr_list *el, struct list_head *nilist)
                 return NULL;
         }
 
-#ifdef __KERNEL__
 	spin_lock_init(&ni->ni_lock);
-#else
-# ifdef HAVE_LIBPTHREAD
-	pthread_mutex_init(&ni->ni_lock, NULL);
-# endif
-#endif
 	INIT_LIST_HEAD(&ni->ni_cptlist);
 	ni->ni_refs = cfs_percpt_alloc(lnet_cpt_table(),
 				       sizeof(*ni->ni_refs[0]));
@@ -1149,7 +1138,6 @@ lnet_match_networks (char **networksp, char *ip2nets, __u32 *ipaddrs, int nip)
         return count;
 }
 
-#ifdef __KERNEL__
 static void
 lnet_ipaddr_free_enumeration(__u32 *ipaddrs, int nip)
 {
@@ -1337,4 +1325,3 @@ lnet_set_ip_niaddr (lnet_ni_t *ni)
 }
 EXPORT_SYMBOL(lnet_set_ip_niaddr);
 
-#endif

@@ -136,11 +136,7 @@ static int brw_inject_one_error(void)
 
 	if (brw_inject_errors <= 0) return 0;
 
-#ifndef __KERNEL__
-	gettimeofday(&tv, NULL);
-#else
 	do_gettimeofday(&tv);
-#endif
 
 	if ((tv.tv_usec & 1) == 0) return 0;
 
@@ -224,12 +220,7 @@ brw_fill_bulk(srpc_bulk_t *bk, int pattern, __u64 magic)
 	struct page *pg;
 
         for (i = 0; i < bk->bk_niov; i++) {
-#ifdef __KERNEL__
                 pg = bk->bk_iovs[i].kiov_page;
-#else
-                LASSERT (bk->bk_pages != NULL);
-                pg = bk->bk_pages[i];
-#endif
                 brw_fill_page(pg, pattern, magic);
         }
 }
@@ -241,12 +232,7 @@ brw_check_bulk(srpc_bulk_t *bk, int pattern, __u64 magic)
 	struct page *pg;
 
         for (i = 0; i < bk->bk_niov; i++) {
-#ifdef __KERNEL__
                 pg = bk->bk_iovs[i].kiov_page;
-#else
-                LASSERT (bk->bk_pages != NULL);
-                pg = bk->bk_pages[i];
-#endif
                 if (brw_check_page(pg, pattern, magic) != 0) {
                         CERROR ("Bulk page %p (%d/%d) is corrupted!\n",
                                 pg, i, bk->bk_niov);
@@ -360,9 +346,6 @@ brw_client_done_rpc (sfw_test_unit_t *tsu, srpc_client_rpc_t *rpc)
         }
 
 out:
-#ifndef __KERNEL__
-        rpc->crpc_bulk.bk_pages = NULL;
-#endif
         return;
 }
 
@@ -507,12 +490,6 @@ void brw_init_test_client(void)
 srpc_service_t brw_test_service;
 void brw_init_test_service(void)
 {
-#ifndef __KERNEL__
-	char *s;
-
-	s = getenv("BRW_INJECT_ERRORS");
-	brw_inject_errors = s != NULL ? atoi(s) : brw_inject_errors;
-#endif
 
         brw_test_service.sv_id         = SRPC_SERVICE_BRW;
         brw_test_service.sv_name       = "brw_test";

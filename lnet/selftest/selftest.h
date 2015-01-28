@@ -43,14 +43,6 @@
 
 #define LNET_ONLY
 
-#ifndef __KERNEL__
-
-/* XXX workaround XXX */
-#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
-
-#endif
 #include <libcfs/libcfs.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-lnet.h>
@@ -167,12 +159,7 @@ typedef struct {
         lnet_handle_md_t bk_mdh;
         int              bk_sink; /* sink/source */
         int              bk_niov; /* # iov in bk_iovs */
-#ifdef __KERNEL__
         lnet_kiov_t      bk_iovs[0];
-#else
-	struct page     **bk_pages;
-        lnet_md_iovec_t  bk_iovs[0];
-#endif
 } srpc_bulk_t; /* bulk descriptor */
 
 /* message buffer descriptor */
@@ -508,14 +495,6 @@ swi_deschedule_workitem(swi_workitem_t *swi)
 	return cfs_wi_deschedule(swi->swi_sched, &swi->swi_workitem);
 }
 
-#ifndef __KERNEL__
-static inline int
-swi_check_events(void)
-{
-        return cfs_wi_check_events();
-}
-#endif
-
 int sfw_startup(void);
 int srpc_startup(void);
 void sfw_shutdown(void);
@@ -527,9 +506,6 @@ srpc_destroy_client_rpc (srpc_client_rpc_t *rpc)
 	LASSERT (rpc != NULL);
 	LASSERT (!srpc_event_pending(rpc));
 	LASSERT (atomic_read(&rpc->crpc_refcount) == 0);
-#ifndef __KERNEL__
-	LASSERT (rpc->crpc_bulk.bk_pages == NULL);
-#endif
 
 	if (rpc->crpc_fini == NULL) {
 		LIBCFS_FREE(rpc, srpc_client_rpc_size(rpc));
@@ -598,23 +574,7 @@ swi_state2str (int state)
 #undef STATE2STR
 }
 
-#ifndef __KERNEL__
-
-int stt_poll_interval(void);
-int sfw_session_removed(void);
-
-int stt_check_events(void);
-int srpc_check_event(int timeout);
-
-int lnet_selftest_init(void);
-void lnet_selftest_fini(void);
-int selftest_wait_events(void);
-
-#else
-
 #define selftest_wait_events()	cfs_pause(cfs_time_seconds(1) / 10)
-
-#endif
 
 #define lst_wait_until(cond, lock, fmt, ...)				\
 do {									\

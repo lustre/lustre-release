@@ -95,17 +95,9 @@ srpc_add_bulk_page(srpc_bulk_t *bk, struct page *pg, int i, int nob)
 	LASSERT(nob > 0);
 	LASSERT(i >= 0 && i < bk->bk_niov);
 
-#ifdef __KERNEL__
 	bk->bk_iovs[i].kiov_offset = 0;
 	bk->bk_iovs[i].kiov_page   = pg;
 	bk->bk_iovs[i].kiov_len    = nob;
-#else
-	LASSERT(bk->bk_pages != NULL);
-
-	bk->bk_pages[i] = pg;
-	bk->bk_iovs[i].iov_len  = nob;
-	bk->bk_iovs[i].iov_base = page_address(pg);
-#endif
 	return nob;
 }
 
@@ -116,24 +108,14 @@ srpc_free_bulk (srpc_bulk_t *bk)
 	struct page *pg;
 
         LASSERT (bk != NULL);
-#ifndef __KERNEL__
-        LASSERT (bk->bk_pages != NULL);
-#endif
 
         for (i = 0; i < bk->bk_niov; i++) {
-#ifdef __KERNEL__
                 pg = bk->bk_iovs[i].kiov_page;
-#else
-                pg = bk->bk_pages[i];
-#endif
                 if (pg == NULL) break;
 
 		__free_page(pg);
         }
 
-#ifndef __KERNEL__
-	LIBCFS_FREE(bk->bk_pages, sizeof(struct page *) * bk->bk_niov);
-#endif
         LIBCFS_FREE(bk, offsetof(srpc_bulk_t, bk_iovs[bk->bk_niov]));
         return;
 }
@@ -157,24 +139,6 @@ srpc_alloc_bulk(int cpt, unsigned bulk_npg, unsigned bulk_len, int sink)
 	bk->bk_sink   = sink;
 	bk->bk_len    = bulk_len;
 	bk->bk_niov   = bulk_npg;
-#ifndef __KERNEL__
-	{
-		struct page  **pages;
-
-		LIBCFS_CPT_ALLOC(pages, lnet_cpt_table(), cpt,
-				 sizeof(struct page *) * bulk_npg);
-		if (pages == NULL) {
-			LIBCFS_FREE(bk, offsetof(srpc_bulk_t,
-				    bk_iovs[bulk_npg]));
-			CERROR("Can't allocate page array for %d pages\n",
-				bulk_npg);
-			return NULL;
-		}
-
-		memset(pages, 0, sizeof(struct page *) * bulk_npg);
-		bk->bk_pages = pages;
-	}
-#endif
 
 	for (i = 0; i < bulk_npg; i++) {
 		struct page *pg;
@@ -882,11 +846,7 @@ srpc_prepare_bulk (srpc_client_rpc_t *rpc)
         if (bk->bk_niov == 0) return 0; /* nothing to do */
 
         opt = bk->bk_sink ? LNET_MD_OP_PUT : LNET_MD_OP_GET;
-#ifdef __KERNEL__
         opt |= LNET_MD_KIOV;
-#else
-        opt |= LNET_MD_IOVEC;
-#endif
 
         ev->ev_fired = 0;
         ev->ev_data  = rpc;
@@ -916,11 +876,7 @@ srpc_do_bulk (srpc_server_rpc_t *rpc)
         LASSERT (bk != NULL);
 
         opt = bk->bk_sink ? LNET_MD_OP_GET : LNET_MD_OP_PUT;
-#ifdef __KERNEL__
         opt |= LNET_MD_KIOV;
-#else
-        opt |= LNET_MD_IOVEC;
-#endif
 
         ev->ev_fired = 0;
         ev->ev_data  = rpc;
@@ -1165,7 +1121,6 @@ srpc_del_client_rpc_timer (srpc_client_rpc_t *rpc)
 	if (stt_del_timer(&rpc->crpc_timer))
 		return;
 
-#ifdef __KERNEL__
 	/* timer detonated, wait for it to explode */
 	while (rpc->crpc_timeout != 0) {
 		spin_unlock(&rpc->crpc_lock);
@@ -1174,9 +1129,6 @@ srpc_del_client_rpc_timer (srpc_client_rpc_t *rpc)
 
 		spin_lock(&rpc->crpc_lock);
 	}
-#else
-	LBUG(); /* impossible in single-threaded runtime */
-#endif
 }
 
 static void
@@ -1632,32 +1584,6 @@ srpc_lnet_ev_handler(lnet_event_t *ev)
 	}
 }
 
-#ifndef __KERNEL__
-
-int
-srpc_check_event (int timeout)
-{
-        lnet_event_t ev;
-        int          rc;
-        int          i;
-
-        rc = LNetEQPoll(&srpc_data.rpc_lnet_eq, 1,
-                        timeout * 1000, &ev, &i);
-        if (rc == 0) return 0;
-
-        LASSERT (rc == -EOVERFLOW || rc == 1);
-
-        /* We can't affort to miss any events... */
-        if (rc == -EOVERFLOW) {
-                CERROR ("Dropped an event!!!\n");
-                abort();
-        }
-
-        srpc_lnet_ev_handler(&ev);
-        return 1;
-}
-
-#endif
 
 int
 srpc_startup (void)
@@ -1673,14 +1599,7 @@ srpc_startup (void)
 
         srpc_data.rpc_state = SRPC_STATE_NONE;
 
-#ifdef __KERNEL__
 	rc = LNetNIInit(LNET_PID_LUSTRE);
-#else
-        if (the_lnet.ln_server_mode_flag)
-		rc = LNetNIInit(LNET_PID_LUSTRE);
-        else
-                rc = LNetNIInit(getpid() | LNET_PID_USERFLAG);
-#endif
         if (rc < 0) {
                 CERROR ("LNetNIInit() has failed: %d\n", rc);
 		return rc;
@@ -1689,11 +1608,7 @@ srpc_startup (void)
         srpc_data.rpc_state = SRPC_STATE_NI_INIT;
 
         LNetInvalidateHandle(&srpc_data.rpc_lnet_eq);
-#ifdef __KERNEL__
 	rc = LNetEQAlloc(0, srpc_lnet_ev_handler, &srpc_data.rpc_lnet_eq);
-#else
-        rc = LNetEQAlloc(10240, LNET_EQ_HANDLER_NONE, &srpc_data.rpc_lnet_eq);
-#endif
         if (rc != 0) {
                 CERROR("LNetEQAlloc() has failed: %d\n", rc);
                 goto bail;

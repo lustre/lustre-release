@@ -42,8 +42,6 @@
  * LNet is an asynchronous message-passing API, which provides an unreliable
  * connectionless service that can't guarantee any order. It supports OFA IB,
  * TCP/IP, and Cray Portals, and routes between heterogeneous networks.
- *
- * LNet can run both in OS kernel space and in userspace as a library.
  * @{
  */
 
@@ -52,9 +50,6 @@
 /** \defgroup lnet_init_fini Initialization and cleanup
  * The LNet must be properly initialized before any LNet calls can be made.
  * @{ */
-int LNetInit(void);
-void LNetFini(void);
-
 int LNetNIInit(lnet_pid_t requested_pid);
 int LNetNIFini(void);
 /** @} lnet_init_fini */
@@ -212,15 +207,7 @@ int LNetGet(lnet_nid_t        self,
 int LNetSetLazyPortal(int portal);
 int LNetClearLazyPortal(int portal);
 int LNetCtl(unsigned int cmd, void *arg);
-int LNetSetAsync(lnet_process_id_t id, int nasync);
 
-#ifndef __KERNEL__
-/* Temporary workaround to allow uOSS and test programs force server
- * mode in userspace. See comments near ln_server_mode_flag in
- * lnet/lib-types.h */
-
-void lnet_server_mode();
-#endif
 /** @} lnet_misc */
 
 /** @} lnet */

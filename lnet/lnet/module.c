@@ -164,21 +164,21 @@ lnet_ioctl(unsigned int cmd, struct libcfs_ioctl_hdr *hdr)
 DECLARE_IOCTL_HANDLER(lnet_ioctl_handler, lnet_ioctl);
 
 static int
-init_lnet(void)
+lnet_module_init(void)
 {
-        int                  rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
 	mutex_init(&lnet_config_mutex);
 
-        rc = LNetInit();
-        if (rc != 0) {
-                CERROR("LNetInit: error %d\n", rc);
-                RETURN(rc);
-        }
+	rc = lnet_init();
+	if (rc != 0) {
+		CERROR("lnet_init: error %d\n", rc);
+		RETURN(rc);
+	}
 
-        rc = libcfs_register_ioctl(&lnet_ioctl_handler);
-        LASSERT (rc == 0);
+	rc = libcfs_register_ioctl(&lnet_ioctl_handler);
+	LASSERT(rc == 0);
 
 	if (config_on_load) {
 		/* Have to schedule a separate thread to avoid deadlocking
@@ -186,22 +186,22 @@ init_lnet(void)
 		(void) kthread_run(lnet_configure, NULL, "lnet_initd");
 	}
 
-        RETURN(0);
+	RETURN(0);
 }
 
 static void
-fini_lnet(void)
+lnet_module_exit(void)
 {
-        int rc;
+	int rc;
 
-        rc = libcfs_deregister_ioctl(&lnet_ioctl_handler);
-        LASSERT (rc == 0);
+	rc = libcfs_deregister_ioctl(&lnet_ioctl_handler);
+	LASSERT(rc == 0);
 
-        LNetFini();
+	lnet_fini();
 }
 
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Portals v3.1");
 MODULE_LICENSE("GPL");
 
-cfs_module(lnet, "1.0.0", init_lnet, fini_lnet);
+cfs_module(lnet, "1.0.0", lnet_module_init, lnet_module_exit);

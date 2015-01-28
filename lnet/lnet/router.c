@@ -24,8 +24,6 @@
 #define DEBUG_SUBSYSTEM S_LNET
 #include <lnet/lib-lnet.h>
 
-#if defined(__KERNEL__) && defined(LNET_ROUTER)
-
 #define LNET_NRB_TINY_MIN	512	/* min value for each CPT */
 #define LNET_NRB_TINY		(LNET_NRB_TINY_MIN * 4)
 #define LNET_NRB_SMALL_MIN	4096	/* min value for each CPT */
@@ -73,15 +71,6 @@ lnet_peer_buffer_credits(lnet_ni_t *ni)
 
 /* forward ref's */
 static int lnet_router_checker(void *);
-#else
-
-int
-lnet_peer_buffer_credits(lnet_ni_t *ni)
-{
-        return 0;
-}
-
-#endif
 
 static int check_routers_before_use = 0;
 CFS_MODULE_PARM(check_routers_before_use, "i", int, 0444,
@@ -827,9 +816,6 @@ lnet_wait_known_routerstate(void)
 		if (all_known)
                         return;
 
-#ifndef __KERNEL__
-                lnet_router_checker();
-#endif
                 cfs_pause(cfs_time_seconds(1));
         }
 }
@@ -1069,67 +1055,10 @@ int
 lnet_router_checker_start(void)
 {
 	int			rc;
-	int			eqsz;
-#ifdef __KERNEL__
+	int			eqsz = 0;
 	struct task_struct     *task;
-#else /* __KERNEL__ */
-	lnet_peer_t	       *rtr;
-	__u64			version;
-	int			nrtr = 0;
-	int			router_checker_max_eqsize = 10240;
 
-        LASSERT (check_routers_before_use);
-        LASSERT (dead_router_check_interval > 0);
-
-	lnet_net_lock(0);
-
-        /* As an approximation, allow each router the same number of
-         * outstanding events as it is allowed outstanding sends */
-        eqsz = 0;
-        version = the_lnet.ln_routers_version;
-	list_for_each_entry(rtr, &the_lnet.ln_routers, lp_rtr_list) {
-                lnet_ni_t         *ni = rtr->lp_ni;
-                lnet_process_id_t  id;
-
-                nrtr++;
-                eqsz += ni->ni_peertxcredits;
-
-                /* one async ping reply per router */
-                id.nid = rtr->lp_nid;
-		id.pid = LNET_PID_LUSTRE;
-
-		lnet_net_unlock(0);
-
-                rc = LNetSetAsync(id, 1);
-                if (rc != 0) {
-                        CWARN("LNetSetAsync %s failed: %d\n",
-                              libcfs_id2str(id), rc);
-                        return rc;
-                }
-
-		lnet_net_lock(0);
-		/* NB router list doesn't change in userspace */
-		LASSERT(version == the_lnet.ln_routers_version);
-	}
-
-	lnet_net_unlock(0);
-
-        if (nrtr == 0) {
-                CDEBUG(D_NET,
-                       "No router found, not starting router checker\n");
-                return 0;
-        }
-
-        /* at least allow a SENT and a REPLY per router */
-        if (router_checker_max_eqsize < 2 * nrtr)
-                router_checker_max_eqsize = 2 * nrtr;
-
-        LASSERT (eqsz > 0);
-        if (eqsz > router_checker_max_eqsize)
-                eqsz = router_checker_max_eqsize;
-#endif
-
-        LASSERT (the_lnet.ln_rc_state == LNET_RC_STATE_SHUTDOWN);
+	LASSERT(the_lnet.ln_rc_state == LNET_RC_STATE_SHUTDOWN);
 
         if (check_routers_before_use &&
             dead_router_check_interval <= 0) {
@@ -1139,24 +1068,15 @@ lnet_router_checker_start(void)
                 return -EINVAL;
         }
 
-#ifdef __KERNEL__
 	sema_init(&the_lnet.ln_rc_signal, 0);
-        /* EQ size doesn't matter; the callback is guaranteed to get every
-         * event */
-	eqsz = 0;
-        rc = LNetEQAlloc(eqsz, lnet_router_checker_event,
-                         &the_lnet.ln_rc_eqh);
-#else
-        rc = LNetEQAlloc(eqsz, LNET_EQ_HANDLER_NONE,
-                         &the_lnet.ln_rc_eqh);
-#endif
-        if (rc != 0) {
-                CERROR("Can't allocate EQ(%d): %d\n", eqsz, rc);
-                return -ENOMEM;
-        }
 
-        the_lnet.ln_rc_state = LNET_RC_STATE_RUNNING;
-#ifdef __KERNEL__
+	rc = LNetEQAlloc(0, lnet_router_checker_event, &the_lnet.ln_rc_eqh);
+	if (rc != 0) {
+		CERROR("Can't allocate EQ(%d): %d\n", eqsz, rc);
+		return -ENOMEM;
+	}
+
+	the_lnet.ln_rc_state = LNET_RC_STATE_RUNNING;
 	task = kthread_run(lnet_router_checker, NULL, "router_checker");
 	if (IS_ERR(task)) {
 		rc = PTR_ERR(task);
@@ -1168,7 +1088,6 @@ lnet_router_checker_start(void)
 		the_lnet.ln_rc_state = LNET_RC_STATE_SHUTDOWN;
 		return -ENOMEM;
 	}
-#endif
 
         if (check_routers_before_use) {
                 /* Note that a helpful side-effect of pinging all known routers
@@ -1193,12 +1112,8 @@ lnet_router_checker_stop (void)
 	/* wakeup the RC thread if it's sleeping */
 	wake_up(&the_lnet.ln_rc_waitq);
 
-#ifdef __KERNEL__
 	/* block until event callback signals exit */
 	down(&the_lnet.ln_rc_signal);
-#else
-	lnet_router_checker();
-#endif
 	LASSERT(the_lnet.ln_rc_state == LNET_RC_STATE_SHUTDOWN);
 
         rc = LNetEQFree(the_lnet.ln_rc_eqh);
@@ -1285,9 +1200,6 @@ lnet_prune_rc_data(int wait_unlink)
 
 	lnet_net_unlock(LNET_LOCK_EX);
 }
-
-
-#if defined(__KERNEL__) && defined(LNET_ROUTER)
 
 /*
  * This function is called to check if the RC should block indefinitely.
@@ -1866,133 +1778,3 @@ lnet_notify(lnet_ni_t *ni, lnet_nid_t nid, int alive, cfs_time_t when)
 	return 0;
 }
 EXPORT_SYMBOL(lnet_notify);
-
-void
-lnet_get_tunables (void)
-{
-        return;
-}
-
-#else
-
-int
-lnet_notify (lnet_ni_t *ni, lnet_nid_t nid, int alive, cfs_time_t when)
-{
-        return -EOPNOTSUPP;
-}
-
-void
-lnet_router_checker (void)
-{
-        static time_t last = 0;
-        static int    running = 0;
-
-        time_t            now = cfs_time_current_sec();
-        int               interval = now - last;
-        int               rc;
-        __u64             version;
-        lnet_peer_t      *rtr;
-
-        /* It's no use to call me again within a sec - all intervals and
-         * timeouts are measured in seconds */
-        if (last != 0 && interval < 2)
-                return;
-
-        if (last != 0 &&
-            interval > MAX(live_router_check_interval,
-                           dead_router_check_interval))
-                CNETERR("Checker(%d/%d) not called for %d seconds\n",
-                        live_router_check_interval, dead_router_check_interval,
-                        interval);
-
-	LASSERT(LNET_CPT_NUMBER == 1);
-
-	lnet_net_lock(0);
-	LASSERT(!running); /* recursion check */
-	running = 1;
-	lnet_net_unlock(0);
-
-	last = now;
-
-	if (the_lnet.ln_rc_state == LNET_RC_STATE_STOPPING)
-		lnet_prune_rc_data(0); /* unlink all rcd and nowait */
-
-        /* consume all pending events */
-        while (1) {
-                int          i;
-                lnet_event_t ev;
-
-                /* NB ln_rc_eqh must be the 1st in 'eventqs' otherwise the
-                 * recursion breaker in LNetEQPoll would fail */
-                rc = LNetEQPoll(&the_lnet.ln_rc_eqh, 1, 0, &ev, &i);
-                if (rc == 0)   /* no event pending */
-                        break;
-
-                /* NB a lost SENT prevents me from pinging a router again */
-                if (rc == -EOVERFLOW) {
-                        CERROR("Dropped an event!!!\n");
-                        abort();
-                }
-
-                LASSERT (rc == 1);
-
-                lnet_router_checker_event(&ev);
-        }
-
-	if (the_lnet.ln_rc_state == LNET_RC_STATE_STOPPING) {
-		lnet_prune_rc_data(1); /* release rcd */
-		the_lnet.ln_rc_state = LNET_RC_STATE_SHUTDOWN;
-                running = 0;
-                return;
-        }
-
-        LASSERT (the_lnet.ln_rc_state == LNET_RC_STATE_RUNNING);
-
-	lnet_net_lock(0);
-
-	version = the_lnet.ln_routers_version;
-	list_for_each_entry(rtr, &the_lnet.ln_routers, lp_rtr_list) {
-		lnet_ping_router_locked(rtr);
-		LASSERT(version == the_lnet.ln_routers_version);
-	}
-
-	lnet_net_unlock(0);
-
-	running = 0; /* lock only needed for the recursion check */
-	return;
-}
-
-/* NB lnet_peers_start_down depends on me,
- * so must be called before any peer creation */
-void
-lnet_get_tunables (void)
-{
-        char *s;
-
-        s = getenv("LNET_ROUTER_PING_TIMEOUT");
-        if (s != NULL) router_ping_timeout = atoi(s);
-
-        s = getenv("LNET_LIVE_ROUTER_CHECK_INTERVAL");
-        if (s != NULL) live_router_check_interval = atoi(s);
-
-        s = getenv("LNET_DEAD_ROUTER_CHECK_INTERVAL");
-        if (s != NULL) dead_router_check_interval = atoi(s);
-
-        /* This replaces old lnd_notify mechanism */
-        check_routers_before_use = 1;
-        if (dead_router_check_interval <= 0)
-                dead_router_check_interval = 30;
-}
-
-void
-lnet_rtrpools_free(int keep_pools)
-{
-}
-
-int
-lnet_rtrpools_alloc(int im_a_arouter)
-{
-        return 0;
-}
-
-#endif

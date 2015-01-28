@@ -83,7 +83,6 @@ LNetMEAttach(unsigned int portal,
 	struct lnet_me		*me;
 	struct list_head	*head;
 
-	LASSERT(the_lnet.ln_init);
 	LASSERT(the_lnet.ln_refcount > 0);
 
 	if ((int)portal >= the_lnet.ln_nportals)
@@ -156,7 +155,6 @@ LNetMEInsert(lnet_handle_me_t current_meh,
 	struct lnet_portal	*ptl;
 	int			cpt;
 
-	LASSERT(the_lnet.ln_init);
 	LASSERT(the_lnet.ln_refcount > 0);
 
 	if (pos == LNET_INS_LOCAL)
@@ -172,7 +170,7 @@ LNetMEInsert(lnet_handle_me_t current_meh,
 
 	current_me = lnet_handle2me(&current_meh);
 	if (current_me == NULL) {
-		lnet_me_free_locked(new_me);
+		lnet_me_free(new_me);
 
 		lnet_res_unlock(cpt);
 		return -ENOENT;
@@ -183,7 +181,7 @@ LNetMEInsert(lnet_handle_me_t current_meh,
 	ptl = the_lnet.ln_portals[current_me->me_portal];
 	if (lnet_ptl_is_unique(ptl)) {
 		/* nosense to insertion on unique portal */
-		lnet_me_free_locked(new_me);
+		lnet_me_free(new_me);
 		lnet_res_unlock(cpt);
 		return -EPERM;
         }
@@ -233,7 +231,6 @@ LNetMEUnlink(lnet_handle_me_t meh)
 	lnet_event_t	ev;
 	int		cpt;
 
-	LASSERT(the_lnet.ln_init);
 	LASSERT(the_lnet.ln_refcount > 0);
 
 	cpt = lnet_cpt_of_cookie(meh.cookie);
@@ -276,7 +273,7 @@ lnet_me_unlink(lnet_me_t *me)
 	}
 
 	lnet_res_lh_invalidate(&me->me_lh);
-	lnet_me_free_locked(me);
+	lnet_me_free(me);
 }
 
 #if 0

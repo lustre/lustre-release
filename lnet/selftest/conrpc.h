@@ -43,7 +43,6 @@
 #ifndef __LST_CONRPC_H__
 #define __LST_CONRPC_H__
 
-#ifdef __KERNEL__
 #include <libcfs/libcfs.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-types.h>
@@ -147,6 +146,5 @@ void lstcon_rpc_cleanup_wait(void);
 int  lstcon_rpc_module_init(void);
 void lstcon_rpc_module_fini(void);
 
-#endif
 
 #endif

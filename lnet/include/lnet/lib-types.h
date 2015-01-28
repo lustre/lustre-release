@@ -46,7 +46,6 @@
 # include <linux/uio.h>
 # include <linux/types.h>
 #else /* !__KERNEL__ */
-# define LNET_USE_LIB_FREELIST
 # include <sys/types.h>
 #endif /* __KERNEL__ */
 
@@ -290,26 +289,6 @@ typedef struct lnet_libmd {
 #define LNET_MD_FLAG_AUTO_UNLINK (1 << 1)
 #define LNET_MD_FLAG_ABORTED	 (1 << 2)
 
-#ifdef LNET_USE_LIB_FREELIST
-typedef struct
-{
-	/* single contiguous array of objects */
-	void		       *fl_objs;
-	/* the number of them */
-	int			fl_nobjs;
-	/* the size (including overhead) of each of them */
-	int			fl_objsize;
-	/* where they are enqueued */
-	struct list_head	fl_list;
-} lnet_freelist_t;
-
-typedef struct
-{
-	struct list_head	fo_list;	/* enqueue on fl_list */
-	void		       *fo_contents;	/* aligned contents */
-} lnet_freeobj_t;
-#endif
-
 typedef struct {
 	/* info about peers we are trying to fail */
 	struct list_head	tp_list;	/* ln_test_peers */
@@ -381,18 +360,8 @@ typedef struct lnet_lnd
         /* query of peer aliveness */
         void (*lnd_query)(struct lnet_ni *ni, lnet_nid_t peer, cfs_time_t *when);
 
-#if defined(__KERNEL__) || defined(HAVE_LIBPTHREAD)
         /* accept a new connection */
         int (*lnd_accept)(struct lnet_ni *ni, cfs_socket_t *sock);
-#endif
-
-#ifndef __KERNEL__
-        /* wait for something to happen */
-        void (*lnd_wait)(struct lnet_ni *ni, int milliseconds);
-
-        /* ensure non-RDMA messages can be received outside liblustre */
-        int (*lnd_setasync)(struct lnet_ni *ni, lnet_process_id_t id, int nasync);
-#endif
 } lnd_t;
 
 #define LNET_NI_STATUS_UP      0x15aac0de
@@ -414,15 +383,7 @@ struct lnet_tx_queue {
 #define LNET_MAX_INTERFACES	16
 
 typedef struct lnet_ni {
-#ifdef __KERNEL__
 	spinlock_t		ni_lock;
-#else
-# ifndef HAVE_LIBPTHREAD
-	int			ni_lock;
-# else
-	pthread_mutex_t		ni_lock;
-# endif
-#endif
 	struct list_head	ni_list;	/* chain on ln_nis */
 	struct list_head	ni_cptlist;	/* chain on ln_nis_cpt */
 	int			ni_maxtxcredits; /* # tx credits  */
@@ -688,15 +649,7 @@ struct lnet_match_table {
 #define	LNET_PTL_ROTOR_HASH_RT	3
 
 typedef struct lnet_portal {
-#ifdef __KERNEL__
 	spinlock_t		ptl_lock;
-#else
-# ifndef HAVE_LIBPTHREAD
-	int			ptl_lock;
-# else
-	pthread_mutex_t		ptl_lock;
-# endif
-#endif
 	unsigned int		ptl_index;	/* portal ID, reserved */
 	/* flags on this portal: lazy, unique... */
 	unsigned int		ptl_options;
@@ -724,9 +677,6 @@ struct lnet_res_container {
 	__u64			rec_lh_cookie;	/* cookie generator */
 	struct list_head	rec_active;	/* active resource list */
 	struct list_head	*rec_lh_hash;	/* handle hash */
-#ifdef LNET_USE_LIB_FREELIST
-	lnet_freelist_t		rec_freelist;	/* freelist for resources */
-#endif
 };
 
 /* message container */
@@ -739,9 +689,6 @@ struct lnet_msg_container {
 	struct list_head	msc_active;	/* active message list */
 	/* threads doing finalization */
 	void			**msc_finalizers;
-#ifdef LNET_USE_LIB_FREELIST
-	lnet_freelist_t		msc_freelist;	/* freelist for messages */
-#endif
 };
 
 /* Router Checker states */
@@ -770,17 +717,9 @@ typedef struct
 
 	/* Event Queue container */
 	struct lnet_res_container	ln_eq_container;
-#ifdef __KERNEL__
 	wait_queue_head_t		ln_eq_waitq;
 	spinlock_t			ln_eq_wait_lock;
-#else
-# ifndef HAVE_LIBPTHREAD
-	int				ln_eq_wait_lock;
-# else
-	pthread_cond_t			ln_eq_cond;
-	pthread_mutex_t			ln_eq_wait_lock;
-# endif
-#endif
+
 	unsigned int			ln_remote_nets_hbits;
 
 	/* protect NI, peer table, credits, routers, rtrbuf... */
@@ -800,8 +739,6 @@ typedef struct
 	/* dying LND instances */
 	struct list_head		ln_nis_zombie;
 	lnet_ni_t			*ln_loni;	/* the loopback NI */
-	/* NI to wait for events in */
-	lnet_ni_t			*ln_eq_waitni;
 
 	/* remote networks with routes to them */
 	struct list_head		*ln_remote_nets_hash;
@@ -826,23 +763,11 @@ typedef struct
 	struct list_head		ln_rcd_deathrow;
 	/* rcd ready for free */
 	struct list_head		ln_rcd_zombie;
-#ifdef __KERNEL__
 	/* serialise startup/shutdown */
 	struct semaphore		ln_rc_signal;
 
 	struct mutex			ln_api_mutex;
 	struct mutex			ln_lnd_mutex;
-	struct mutex			ln_delay_mutex;
-#else
-# ifndef HAVE_LIBPTHREAD
-	int				ln_api_mutex;
-	int				ln_lnd_mutex;
-# else
-	pthread_mutex_t			ln_api_mutex;
-	pthread_mutex_t			ln_lnd_mutex;
-# endif
-#endif
-	int				ln_init;	/* LNetInit() called? */
 	/* Have I called LNetNIInit myself? */
 	int				ln_niinit_self;
 	/* LNetNIInit/LNetNIFini counter */
@@ -871,14 +796,6 @@ typedef struct
 	 * the list, the router checker will sleep on this queue.  when
 	 * routes are added the thread will wake up */
 	wait_queue_head_t		ln_rc_waitq;
-
-#ifndef __KERNEL__
-	/* Temporary workaround to allow uOSS and test programs force
-	 * server mode in userspace. The only place where we use it is
-	 * lnet_prepare(). The only way to turn this flag on is to
-	 * call lnet_server_mode() */
-	int				ln_server_mode_flag;
-#endif
 } lnet_t;
 
 #endif

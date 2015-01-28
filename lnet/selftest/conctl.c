@@ -39,7 +39,6 @@
  *
  * Author: Liang Zhen <liangzhen@clusterfs.com>
  */
-#ifdef __KERNEL__
 
 #include <libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
@@ -930,4 +929,3 @@ out:
 
 EXPORT_SYMBOL(lstcon_ioctl_entry);
 
-#endif

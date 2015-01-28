@@ -200,10 +200,6 @@ sfw_del_session_timer (void)
                 return 0;
         }
 
-#ifndef __KERNEL__
-        /* Racing is impossible in single-threaded userland selftest */
-        LBUG();
-#endif
         return EBUSY; /* racing with sfw_session_expired() */
 }
 
@@ -251,15 +247,6 @@ __must_hold(&sfw_data.fw_lock)
 	spin_lock(&sfw_data.fw_lock);
 }
 
-#ifndef __KERNEL__
-
-int
-sfw_session_removed (void)
-{
-        return (sfw_data.fw_session == NULL) ? 1 : 0;
-}
-
-#endif
 
 static void
 sfw_session_expired (void *data)
@@ -331,9 +318,6 @@ sfw_client_rpc_fini (srpc_client_rpc_t *rpc)
 	LASSERT(rpc->crpc_bulk.bk_niov == 0);
 	LASSERT(list_empty(&rpc->crpc_list));
 	LASSERT(atomic_read(&rpc->crpc_refcount) == 0);
-#ifndef __KERNEL__
-	LASSERT(rpc->crpc_bulk.bk_pages == NULL);
-#endif
 
 	CDEBUG(D_NET, "Outgoing framework RPC done: "
 	       "service %d, peer %s, status %s:%d:%d\n",
@@ -809,9 +793,6 @@ sfw_add_test_instance (sfw_batch_t *tsb, srpc_server_rpc_t *rpc)
 	}
 
         LASSERT (bk != NULL);
-#ifndef __KERNEL__
-        LASSERT (bk->bk_pages != NULL);
-#endif
         LASSERT (bk->bk_niov * SFW_ID_PER_PAGE >= (unsigned int)ndest);
 	LASSERT((unsigned int)bk->bk_len >=
 		sizeof(lnet_process_id_packed_t) * ndest);
@@ -824,12 +805,8 @@ sfw_add_test_instance (sfw_batch_t *tsb, srpc_server_rpc_t *rpc)
                 lnet_process_id_packed_t  id;
                 int                       j;
 
-#ifdef __KERNEL__
 		dests = page_address(bk->bk_iovs[i / SFW_ID_PER_PAGE].kiov_page);
 		LASSERT (dests != NULL);  /* my pages are within KVM always */
-#else
-		dests = page_address(bk->bk_pages[i / SFW_ID_PER_PAGE]);
-#endif
                 id = dests[i % SFW_ID_PER_PAGE];
                 if (msg->msg_magic != SRPC_MSG_MAGIC)
                         sfw_unpack_id(id);
@@ -1366,13 +1343,8 @@ sfw_handle_server_rpc(struct srpc_server_rpc *rpc)
 	rpc->srpc_done = sfw_server_rpc_done;
 	spin_lock(&sfw_data.fw_lock);
 
-#ifdef __KERNEL__
 	if (!sfw_data.fw_shuttingdown)
 		sfw_add_session_timer();
-#else
-	LASSERT(!sfw_data.fw_shuttingdown);
-	sfw_add_session_timer();
-#endif
 
 	sfw_data.fw_active_srpc = NULL;
 	spin_unlock(&sfw_data.fw_lock);
@@ -1419,13 +1391,8 @@ sfw_bulk_ready(struct srpc_server_rpc *rpc, int status)
 
 	spin_lock(&sfw_data.fw_lock);
 
-#ifdef __KERNEL__
 	if (!sfw_data.fw_shuttingdown)
 		sfw_add_session_timer();
-#else
-	LASSERT(!sfw_data.fw_shuttingdown);
-	sfw_add_session_timer();
-#endif
 
 	sfw_data.fw_active_srpc = NULL;
 	spin_unlock(&sfw_data.fw_lock);
@@ -1690,15 +1657,6 @@ sfw_startup (void)
         srpc_service_t  *sv;
         sfw_test_case_t *tsc;
 
-#ifndef __KERNEL__
-        char *s;
-
-        s = getenv("SESSION_TIMEOUT");
-        session_timeout = s != NULL ? atoi(s) : session_timeout;
-
-        s = getenv("RPC_TIMEOUT");
-        rpc_timeout = s != NULL ? atoi(s) : rpc_timeout;
-#endif
 
         if (session_timeout < 0) {
                 CERROR ("Session timeout must be non-negative: %d\n",
@@ -1798,12 +1756,8 @@ sfw_shutdown (void)
 	spin_lock(&sfw_data.fw_lock);
 
         sfw_data.fw_shuttingdown = 1;
-#ifdef __KERNEL__
         lst_wait_until(sfw_data.fw_active_srpc == NULL, sfw_data.fw_lock,
                        "waiting for active RPC to finish.\n");
-#else
-        LASSERT (sfw_data.fw_active_srpc == NULL);
-#endif
 
         if (sfw_del_session_timer() != 0)
                 lst_wait_until(sfw_data.fw_session == NULL, sfw_data.fw_lock,

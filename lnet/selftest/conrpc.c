@@ -40,7 +40,6 @@
  * Author: Liang Zhen <liang@whamcloud.com>
  */
 
-#ifdef __KERNEL__
 
 #include <libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
@@ -1403,4 +1402,3 @@ lstcon_rpc_module_fini(void)
 	LASSERT(atomic_read(&console_session.ses_rpc_counter) == 0);
 }
 
-#endif

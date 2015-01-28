@@ -116,9 +116,5 @@ lnd_t the_lolnd = {
         /* .lnd_recv       = */ lolnd_recv,
         /* .lnd_eager_recv = */ NULL,
         /* .lnd_notify     = */ NULL,
-#ifdef __KERNEL__
         /* .lnd_accept     = */ NULL
-#else
-        /* .lnd_wait       = */ NULL
-#endif
 };

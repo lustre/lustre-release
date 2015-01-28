@@ -37,8 +37,6 @@
 #define DEBUG_SUBSYSTEM S_LNET
 #include <lnet/lib-lnet.h>
 
-#if defined(__KERNEL__) || defined(HAVE_LIBPTHREAD)
-
 static int   accept_port    = 988;
 static int   accept_backlog = 127;
 static int   accept_timeout = 5;
@@ -63,8 +61,6 @@ lnet_accept_magic(__u32 magic, __u32 constant)
         return (magic == constant ||
                 magic == __swab32(constant));
 }
-
-#ifdef __KERNEL__
 
 EXPORT_SYMBOL(lnet_acceptor_port);
 
@@ -221,45 +217,6 @@ lnet_connect(cfs_socket_t **sockp, lnet_nid_t peer_nid,
         return rc;
 }
 EXPORT_SYMBOL(lnet_connect);
-
-#else /* below is multi-threaded user-space code */
-
-static char *accept_type = "secure";
-
-int
-lnet_acceptor_get_tunables()
-{
-        int   rc;
-        char *env = getenv("LNET_ACCEPT");
-
-        if (env != NULL)
-                accept_type = env;
-
-        rc = lnet_parse_int_tunable(&accept_port, "LNET_ACCEPT_PORT");
-
-        if (rc != 0)
-                return rc;
-
-        rc = lnet_parse_int_tunable(&accept_backlog, "LNET_ACCEPT_BACKLOG");
-
-        if (rc != 0)
-                return rc;
-
-        rc = lnet_parse_int_tunable(&accept_timeout, "LNET_ACCEPT_TIMEOUT");
-
-        if (rc != 0)
-                return rc;
-
-        CDEBUG(D_NET, "accept_type     = %s\n", accept_type);
-        CDEBUG(D_NET, "accept_port     = %d\n", accept_port);
-        CDEBUG(D_NET, "accept_backlog  = %d\n", accept_backlog);
-        CDEBUG(D_NET, "accept_timeout  = %d\n", accept_timeout);
-        return 0;
-}
-
-#endif /* __KERNEL__ */
-
-/* Below is the code common for both kernel and MT user-space */
 
 static int
 lnet_accept(cfs_socket_t *sock, __u32 magic)
@@ -520,12 +477,6 @@ lnet_acceptor_start(void)
         if (rc != 0)
                 return rc;
 
-#ifndef __KERNEL__
-        /* Do nothing if we're liblustre clients */
-        if ((the_lnet.ln_pid & LNET_PID_USERFLAG) != 0)
-                return 0;
-#endif
-
 	init_completion(&lnet_acceptor_state.pta_signal);
 	rc = accept2secure(accept_type, &secure);
 	if (rc <= 0) {
@@ -575,16 +526,3 @@ lnet_acceptor_stop(void)
 
 	fini_completion(&lnet_acceptor_state.pta_signal);
 }
-
-#else /* single-threaded user-space */
-int
-lnet_acceptor_start(void)
-{
-	return 0;
-}
-
-void
-lnet_acceptor_stop(void)
-{
-}
-#endif /* defined(__KERNEL__) || defined(HAVE_LIBPTHREAD) */

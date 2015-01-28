@@ -63,10 +63,8 @@ static struct st_timer_data {
 	cfs_time_t		stt_prev_slot;
 	struct list_head	stt_hash[STTIMER_NSLOTS];
 	int			stt_shuttingdown;
-#ifdef __KERNEL__
 	wait_queue_head_t	stt_waitq;
 	int			stt_nthreads;
-#endif
 } stt_data;
 
 void
@@ -76,9 +74,7 @@ stt_add_timer(stt_timer_t *timer)
 
 	spin_lock(&stt_data.stt_lock);
 
-#ifdef __KERNEL__
 	LASSERT(stt_data.stt_nthreads > 0);
-#endif
 	LASSERT(!stt_data.stt_shuttingdown);
 	LASSERT(timer->stt_func != NULL);
 	LASSERT(list_empty(&timer->stt_list));
@@ -112,9 +108,7 @@ stt_del_timer(stt_timer_t *timer)
 
 	spin_lock(&stt_data.stt_lock);
 
-#ifdef __KERNEL__
 	LASSERT(stt_data.stt_nthreads > 0);
-#endif
 	LASSERT(!stt_data.stt_shuttingdown);
 
 	if (!list_empty(&timer->stt_list)) {
@@ -173,7 +167,6 @@ stt_check_timers (cfs_time_t *last)
 	return expired;
 }
 
-#ifdef __KERNEL__
 
 static int
 stt_timer_main (void *arg)
@@ -213,21 +206,6 @@ stt_start_timer_thread (void)
 	return 0;
 }
 
-#else /* !__KERNEL__ */
-
-int
-stt_check_events (void)
-{
-        return stt_check_timers(&stt_data.stt_prev_slot);
-}
-
-int
-stt_poll_interval (void)
-{
-        return STTIMER_SLOTTIME;
-}
-
-#endif
 
 int
 stt_startup (void)
@@ -242,13 +220,11 @@ stt_startup (void)
         for (i = 0; i < STTIMER_NSLOTS; i++)
 		INIT_LIST_HEAD(&stt_data.stt_hash[i]);
 
-#ifdef __KERNEL__
 	stt_data.stt_nthreads = 0;
 	init_waitqueue_head(&stt_data.stt_waitq);
 	rc = stt_start_timer_thread();
 	if (rc != 0)
 		CERROR ("Can't spawn timer thread: %d\n", rc);
-#endif
 
         return rc;
 }
@@ -265,12 +241,10 @@ stt_shutdown(void)
 
 	stt_data.stt_shuttingdown = 1;
 
-#ifdef __KERNEL__
 	wake_up(&stt_data.stt_waitq);
 	lst_wait_until(stt_data.stt_nthreads == 0, stt_data.stt_lock,
 		       "waiting for %d threads to terminate\n",
 		       stt_data.stt_nthreads);
-#endif
 
 	spin_unlock(&stt_data.stt_lock);
 }

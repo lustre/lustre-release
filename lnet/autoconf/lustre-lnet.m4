@@ -528,15 +528,6 @@ AC_SUBST(GNILND)
 ]) # LN_CONFIG_GNILND
 
 #
-# LN_CONFIG_USERSPACE
-#
-# This is defined but empty because it is called from
-# build/autconf/lustre-build.m4 which is shared by all branches.
-#
-AC_DEFUN([LN_CONFIG_USERSPACE], [
-]) # LN_CONFIG_USERSPACE
-
-#
 # LN_CONFIG_TCP_SENDPAGE
 #
 # 2.6.36 tcp_sendpage() first parameter is 'struct sock' instead of 'struct socket'.

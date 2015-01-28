@@ -81,7 +81,7 @@ lnet_md_unlink(lnet_libmd_t *md)
 
 	LASSERT(!list_empty(&md->md_list));
 	list_del_init(&md->md_list);
-	lnet_md_free_locked(md);
+	lnet_md_free(md);
 }
 
 static int
@@ -127,9 +127,6 @@ lnet_md_build(lnet_libmd_t *lmd, lnet_md_t *umd, int unlink)
                         return -EINVAL;
 
         } else if ((umd->options & LNET_MD_KIOV) != 0) {
-#ifndef __KERNEL__
-                return -EINVAL;
-#else
                 lmd->md_niov = niov = umd->length;
                 memcpy(lmd->md_iov.kiov, umd->start,
                        niov * sizeof (lmd->md_iov.kiov[0]));
@@ -149,7 +146,6 @@ lnet_md_build(lnet_libmd_t *lmd, lnet_md_t *umd, int unlink)
                     (umd->max_size < 0 ||
                      umd->max_size > total_length)) // illegal max_size
                         return -EINVAL;
-#endif
         } else {   /* contiguous */
                 lmd->md_length = umd->length;
                 lmd->md_niov = niov = 1;
@@ -274,7 +270,6 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
 	int			cpt;
 	int			rc;
 
-        LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
 
         if (lnet_md_validate(&umd) != 0)
@@ -321,7 +316,7 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
 	return 0;
 
  failed:
-	lnet_md_free_locked(md);
+	lnet_md_free(md);
 
 	lnet_res_unlock(cpt);
 	return rc;
@@ -351,7 +346,6 @@ LNetMDBind(lnet_md_t umd, lnet_unlink_t unlink, lnet_handle_md_t *handle)
 	int		cpt;
 	int		rc;
 
-        LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
 
         if (lnet_md_validate(&umd) != 0)
@@ -382,7 +376,7 @@ LNetMDBind(lnet_md_t umd, lnet_unlink_t unlink, lnet_handle_md_t *handle)
 	return 0;
 
  failed:
-	lnet_md_free_locked(md);
+	lnet_md_free(md);
 
 	lnet_res_unlock(cpt);
 	return rc;
@@ -426,7 +420,6 @@ LNetMDUnlink (lnet_handle_md_t mdh)
 	lnet_libmd_t	*md;
 	int		cpt;
 
-	LASSERT(the_lnet.ln_init);
 	LASSERT(the_lnet.ln_refcount > 0);
 
 	cpt = lnet_cpt_of_cookie(mdh.cookie);

@@ -725,11 +725,6 @@ lnet_ptl_cleanup(struct lnet_portal *ptl)
 
 	LASSERT(list_empty(&ptl->ptl_msg_delayed));
 	LASSERT(list_empty(&ptl->ptl_msg_stealing));
-#ifndef __KERNEL__
-# ifdef HAVE_LIBPTHREAD
-	pthread_mutex_destroy(&ptl->ptl_lock);
-# endif
-#endif
 	cfs_percpt_for_each(mtable, i, ptl->ptl_mtables) {
 		struct list_head *mhash;
 		lnet_me_t	 *me;
@@ -775,13 +770,7 @@ lnet_ptl_setup(struct lnet_portal *ptl, int index)
 	ptl->ptl_index = index;
 	INIT_LIST_HEAD(&ptl->ptl_msg_delayed);
 	INIT_LIST_HEAD(&ptl->ptl_msg_stealing);
-#ifdef __KERNEL__
 	spin_lock_init(&ptl->ptl_lock);
-#else
-# ifdef HAVE_LIBPTHREAD
-	pthread_mutex_init(&ptl->ptl_lock, NULL);
-# endif
-#endif
 	cfs_percpt_for_each(mtable, i, ptl->ptl_mtables) {
 		/* the extra entry is for MEs with ignore bits */
 		LIBCFS_CPT_ALLOC(mhash, lnet_cpt_table(), i,

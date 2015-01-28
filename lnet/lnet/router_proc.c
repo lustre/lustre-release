@@ -25,8 +25,6 @@
 #include <libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
 
-#if defined(__KERNEL__) && defined(LNET_ROUTER)
-
 /* This is really lnet_proc.c. You might need to update sanity test 215
  * if any file format is changed. */
 
@@ -941,17 +939,3 @@ lnet_proc_fini(void)
 	lnet_table_header = NULL;
 #endif
 }
-
-#else
-
-void
-lnet_proc_init(void)
-{
-}
-
-void
-lnet_proc_fini(void)
-{
-}
-
-#endif

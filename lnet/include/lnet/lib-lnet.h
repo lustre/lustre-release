@@ -41,8 +41,6 @@
 #ifndef __LNET_LIB_LNET_H__
 #define __LNET_LIB_LNET_H__
 
-#define LNET_ROUTER
-
 #include <libcfs/libcfs.h>
 #include <lnet/types.h>
 #include <lnet/lnet.h>
@@ -51,24 +49,17 @@
 
 extern lnet_t  the_lnet;                        /* THE network */
 
-#if !defined(__KERNEL__) || defined(LNET_USE_LIB_FREELIST)
-/* 1 CPT, simplify implementation... */
-# define LNET_CPT_MAX_BITS      0
-
-#else /* KERNEL and no freelist */
-
-# if (BITS_PER_LONG == 32)
+#if (BITS_PER_LONG == 32)
 /* 2 CPTs, allowing more CPTs might make us under memory pressure */
-#  define LNET_CPT_MAX_BITS     1
+# define LNET_CPT_MAX_BITS     1
 
-# else /* 64-bit system */
+#else /* 64-bit system */
 /*
  * 256 CPTs for thousands of CPUs, allowing more CPTs might make us
  * under risk of consuming all lh_cookie.
  */
-#  define LNET_CPT_MAX_BITS     8
-# endif /* BITS_PER_LONG == 32 */
-#endif
+# define LNET_CPT_MAX_BITS     8
+#endif /* BITS_PER_LONG == 32 */
 
 /* max allowed CPT number */
 #define LNET_CPT_MAX            (1 << LNET_CPT_MAX_BITS)
@@ -179,8 +170,6 @@ lnet_net_lock_current(void)
 #define LNET_LOCK()		lnet_net_lock(LNET_LOCK_EX)
 #define LNET_UNLOCK()		lnet_net_unlock(LNET_LOCK_EX)
 
-#ifdef __KERNEL__
-
 #define lnet_ptl_lock(ptl)	spin_lock(&(ptl)->ptl_lock)
 #define lnet_ptl_unlock(ptl)	spin_unlock(&(ptl)->ptl_lock)
 #define lnet_eq_wait_lock()	spin_lock(&the_lnet.ln_eq_wait_lock)
@@ -190,244 +179,11 @@ lnet_net_lock_current(void)
 #define LNET_MUTEX_LOCK(m)	mutex_lock(m)
 #define LNET_MUTEX_UNLOCK(m)	mutex_unlock(m)
 
-#else /* !__KERNEL__ */
-
-# ifndef HAVE_LIBPTHREAD
-#define LNET_SINGLE_THREADED_LOCK(l)            \
-do {                                            \
-        LASSERT ((l) == 0);                     \
-        (l) = 1;                                \
-} while (0)
-
-#define LNET_SINGLE_THREADED_UNLOCK(l)          \
-do {                                            \
-        LASSERT ((l) == 1);                     \
-        (l) = 0;                                \
-} while (0)
-
-#define LNET_MUTEX_LOCK(m)	LNET_SINGLE_THREADED_LOCK(*(m))
-#define LNET_MUTEX_UNLOCK(m)	LNET_SINGLE_THREADED_UNLOCK(*(m))
-
-#define lnet_ptl_lock(ptl)			\
-	LNET_SINGLE_THREADED_LOCK((ptl)->ptl_lock)
-#define lnet_ptl_unlock(ptl)			\
-	LNET_SINGLE_THREADED_UNLOCK((ptl)->ptl_lock)
-
-#define lnet_eq_wait_lock()			\
-	LNET_SINGLE_THREADED_LOCK(the_lnet.ln_eq_wait_lock)
-#define lnet_eq_wait_unlock()			\
-	LNET_SINGLE_THREADED_UNLOCK(the_lnet.ln_eq_wait_lock)
-
-#define lnet_ni_lock(ni)			\
-	LNET_SINGLE_THREADED_LOCK((ni)->ni_lock)
-#define lnet_ni_unlock(ni)			\
-	LNET_SINGLE_THREADED_UNLOCK((ni)->ni_lock)
-
-# else /* HAVE_LIBPTHREAD */
-
-#define LNET_MUTEX_LOCK(m)	pthread_mutex_lock(m)
-#define LNET_MUTEX_UNLOCK(m)	pthread_mutex_unlock(m)
-
-#define lnet_ptl_lock(ptl)	pthread_mutex_lock(&(ptl)->ptl_lock)
-#define lnet_ptl_unlock(ptl)	pthread_mutex_unlock(&(ptl)->ptl_lock)
-
-#define lnet_eq_wait_lock()	pthread_mutex_lock(&the_lnet.ln_eq_wait_lock)
-#define lnet_eq_wait_unlock()	pthread_mutex_unlock(&the_lnet.ln_eq_wait_lock)
-
-#define lnet_ni_lock(ni)	pthread_mutex_lock(&(ni)->ni_lock)
-#define lnet_ni_unlock(ni)	pthread_mutex_unlock(&(ni)->ni_lock)
-
-# endif /* HAVE_LIBPTHREAD */
-#endif /* __KERNEL__ */
-
 #define MAX_PORTALS     64
 
-/* these are only used by code with LNET_USE_LIB_FREELIST, but we still
- * exported them to !LNET_USE_LIB_FREELIST for easy implemetation */
-#define LNET_FL_MAX_MES		2048
-#define LNET_FL_MAX_MDS		2048
-#define LNET_FL_MAX_EQS		512
-#define LNET_FL_MAX_MSGS	2048    /* Outstanding messages */
-
-#ifdef LNET_USE_LIB_FREELIST
-
-int lnet_freelist_init(lnet_freelist_t *fl, int n, int size);
-void lnet_freelist_fini(lnet_freelist_t *fl);
-
-static inline void *
-lnet_freelist_alloc (lnet_freelist_t *fl)
-{
-	/* ALWAYS called with liblock held */
-	lnet_freeobj_t *o;
-
-	if (list_empty(&fl->fl_list))
-		return NULL;
-
-	o = list_entry(fl->fl_list.next, lnet_freeobj_t, fo_list);
-	list_del(&o->fo_list);
-	return (void *)&o->fo_contents;
-}
-
-static inline void
-lnet_freelist_free (lnet_freelist_t *fl, void *obj)
-{
-	/* ALWAYS called with liblock held */
-	lnet_freeobj_t *o = list_entry(obj, lnet_freeobj_t, fo_contents);
-
-	list_add(&o->fo_list, &fl->fl_list);
-}
-
-
 static inline lnet_eq_t *
 lnet_eq_alloc (void)
 {
-	/* NEVER called with resource lock held */
-	struct lnet_res_container *rec = &the_lnet.ln_eq_container;
-	lnet_eq_t		  *eq;
-
-	LASSERT(LNET_CPT_NUMBER == 1);
-
-	lnet_res_lock(0);
-	eq = (lnet_eq_t *)lnet_freelist_alloc(&rec->rec_freelist);
-	lnet_res_unlock(0);
-
-	return eq;
-}
-
-static inline void
-lnet_eq_free_locked(lnet_eq_t *eq)
-{
-	/* ALWAYS called with resource lock held */
-	struct lnet_res_container *rec = &the_lnet.ln_eq_container;
-
-	LASSERT(LNET_CPT_NUMBER == 1);
-	lnet_freelist_free(&rec->rec_freelist, eq);
-}
-
-static inline void
-lnet_eq_free(lnet_eq_t *eq)
-{
-	lnet_res_lock(0);
-	lnet_eq_free_locked(eq);
-	lnet_res_unlock(0);
-}
-
-static inline lnet_libmd_t *
-lnet_md_alloc (lnet_md_t *umd)
-{
-	/* NEVER called with resource lock held */
-	struct lnet_res_container *rec = the_lnet.ln_md_containers[0];
-	lnet_libmd_t		  *md;
-
-	LASSERT(LNET_CPT_NUMBER == 1);
-
-	lnet_res_lock(0);
-	md = (lnet_libmd_t *)lnet_freelist_alloc(&rec->rec_freelist);
-	lnet_res_unlock(0);
-
-	if (md != NULL)
-		INIT_LIST_HEAD(&md->md_list);
-
-	return md;
-}
-
-static inline void
-lnet_md_free_locked(lnet_libmd_t *md)
-{
-	/* ALWAYS called with resource lock held */
-	struct lnet_res_container *rec = the_lnet.ln_md_containers[0];
-
-	LASSERT(LNET_CPT_NUMBER == 1);
-	lnet_freelist_free(&rec->rec_freelist, md);
-}
-
-static inline void
-lnet_md_free(lnet_libmd_t *md)
-{
-	lnet_res_lock(0);
-	lnet_md_free_locked(md);
-	lnet_res_unlock(0);
-}
-
-static inline lnet_me_t *
-lnet_me_alloc(void)
-{
-	/* NEVER called with resource lock held */
-	struct lnet_res_container *rec = the_lnet.ln_me_containers[0];
-	lnet_me_t		  *me;
-
-	LASSERT(LNET_CPT_NUMBER == 1);
-
-	lnet_res_lock(0);
-	me = (lnet_me_t *)lnet_freelist_alloc(&rec->rec_freelist);
-	lnet_res_unlock(0);
-
-	return me;
-}
-
-static inline void
-lnet_me_free_locked(lnet_me_t *me)
-{
-	/* ALWAYS called with resource lock held */
-	struct lnet_res_container *rec = the_lnet.ln_me_containers[0];
-
-	LASSERT(LNET_CPT_NUMBER == 1);
-	lnet_freelist_free(&rec->rec_freelist, me);
-}
-
-static inline void
-lnet_me_free(lnet_me_t *me)
-{
-	lnet_res_lock(0);
-	lnet_me_free_locked(me);
-	lnet_res_unlock(0);
-}
-
-static inline lnet_msg_t *
-lnet_msg_alloc (void)
-{
-	/* NEVER called with network lock held */
-	struct lnet_msg_container *msc = the_lnet.ln_msg_containers[0];
-	lnet_msg_t		  *msg;
-
-	LASSERT(LNET_CPT_NUMBER == 1);
-
-	lnet_net_lock(0);
-	msg = (lnet_msg_t *)lnet_freelist_alloc(&msc->msc_freelist);
-	lnet_net_unlock(0);
-
-	if (msg != NULL) {
-		/* NULL pointers, clear flags etc */
-		memset(msg, 0, sizeof(*msg));
-	}
-	return msg;
-}
-
-static inline void
-lnet_msg_free_locked(lnet_msg_t *msg)
-{
-	/* ALWAYS called with network lock held */
-	struct lnet_msg_container *msc = the_lnet.ln_msg_containers[0];
-
-	LASSERT(LNET_CPT_NUMBER == 1);
-	LASSERT(!msg->msg_onactivelist);
-	lnet_freelist_free(&msc->msc_freelist, msg);
-}
-
-static inline void
-lnet_msg_free (lnet_msg_t *msg)
-{
-	lnet_net_lock(0);
-	lnet_msg_free_locked(msg);
-	lnet_net_unlock(0);
-}
-
-#else /* !LNET_USE_LIB_FREELIST */
-
-static inline lnet_eq_t *
-lnet_eq_alloc (void)
-{
-        /* NEVER called with liblock held */
         lnet_eq_t *eq;
 
         LIBCFS_ALLOC(eq, sizeof(*eq));
@@ -437,14 +193,12 @@ lnet_eq_alloc (void)
 static inline void
 lnet_eq_free(lnet_eq_t *eq)
 {
-	/* ALWAYS called with resource lock held */
 	LIBCFS_FREE(eq, sizeof(*eq));
 }
 
 static inline lnet_libmd_t *
 lnet_md_alloc (lnet_md_t *umd)
 {
-        /* NEVER called with liblock held */
         lnet_libmd_t *md;
         unsigned int  size;
         unsigned int  niov;
@@ -473,7 +227,6 @@ lnet_md_alloc (lnet_md_t *umd)
 static inline void
 lnet_md_free(lnet_libmd_t *md)
 {
-	/* ALWAYS called with resource lock held */
 	unsigned int  size;
 
 	if ((md->md_options & LNET_MD_KIOV) != 0)
@@ -487,7 +240,6 @@ lnet_md_free(lnet_libmd_t *md)
 static inline lnet_me_t *
 lnet_me_alloc (void)
 {
-        /* NEVER called with liblock held */
         lnet_me_t *me;
 
         LIBCFS_ALLOC(me, sizeof(*me));
@@ -497,14 +249,12 @@ lnet_me_alloc (void)
 static inline void
 lnet_me_free(lnet_me_t *me)
 {
-	/* ALWAYS called with resource lock held */
 	LIBCFS_FREE(me, sizeof(*me));
 }
 
 static inline lnet_msg_t *
 lnet_msg_alloc(void)
 {
-        /* NEVER called with liblock held */
         lnet_msg_t *msg;
 
         LIBCFS_ALLOC(msg, sizeof(*msg));
@@ -516,17 +266,9 @@ lnet_msg_alloc(void)
 static inline void
 lnet_msg_free(lnet_msg_t *msg)
 {
-	/* ALWAYS called with network lock held */
 	LASSERT(!msg->msg_onactivelist);
 	LIBCFS_FREE(msg, sizeof(*msg));
 }
-
-#define lnet_eq_free_locked(eq)		lnet_eq_free(eq)
-#define lnet_md_free_locked(md)		lnet_md_free(md)
-#define lnet_me_free_locked(me)		lnet_me_free(me)
-#define lnet_msg_free_locked(msg)	lnet_msg_free(msg)
-
-#endif /* LNET_USE_LIB_FREELIST */
 
 lnet_libhandle_t *lnet_res_lh_lookup(struct lnet_res_container *rec,
 				     __u64 cookie);
@@ -706,30 +448,14 @@ lnet_net2rnethash(__u32 net)
 extern lnd_t the_lolnd;
 extern int avoid_asym_router_failure;
 
-#ifndef __KERNEL__
-/* unconditional registration */
-#define LNET_REGISTER_ULND(lnd)                 \
-do {                                            \
-        extern lnd_t lnd;                       \
-                                                \
-        lnet_register_lnd(&(lnd));              \
-} while (0)
-
-/* conditional registration */
-#define LNET_REGISTER_ULND_IF_PRESENT(lnd)                              \
-do {                                                                    \
-        extern lnd_t lnd __attribute__ ((weak, alias("the_lolnd")));    \
-                                                                        \
-        if (&(lnd) != &the_lolnd)                                       \
-                lnet_register_lnd(&(lnd));                              \
-} while (0)
-#endif
-
 extern int lnet_cpt_of_nid_locked(lnet_nid_t nid);
 extern int lnet_cpt_of_nid(lnet_nid_t nid);
 extern lnet_ni_t *lnet_nid2ni_locked(lnet_nid_t nid, int cpt);
 extern lnet_ni_t *lnet_net2ni_locked(__u32 net, int cpt);
 extern lnet_ni_t *lnet_net2ni(__u32 net);
+
+int lnet_init(void);
+void lnet_fini(void);
 
 extern int portal_rotor;
 
@@ -968,7 +694,6 @@ void lnet_register_lnd(lnd_t *lnd);
 void lnet_unregister_lnd(lnd_t *lnd);
 int lnet_set_ip_niaddr (lnet_ni_t *ni);
 
-#ifdef __KERNEL__
 int lnet_connect(cfs_socket_t **sockp, lnet_nid_t peer_nid,
                  __u32 local_ip, __u32 peer_ip, int peer_port);
 void lnet_connect_console_error(int rc, lnet_nid_t peer_nid,
@@ -976,19 +701,9 @@ void lnet_connect_console_error(int rc, lnet_nid_t peer_nid,
 int lnet_count_acceptor_nis(void);
 int lnet_acceptor_timeout(void);
 int lnet_acceptor_port(void);
-#else
-void lnet_router_checker(void);
-#endif
-
-#ifdef HAVE_LIBPTHREAD
-int lnet_count_acceptor_nis(void);
-int lnet_acceptor_port(void);
-#endif
-
 int lnet_acceptor_start(void);
 void lnet_acceptor_stop(void);
 
-void lnet_get_tunables(void);
 int lnet_peers_start_down(void);
 int lnet_peer_buffer_credits(lnet_ni_t *ni);
 
@@ -1023,24 +738,5 @@ lnet_peer_set_alive(lnet_peer_t *lp)
 	if (!lp->lp_alive)
 		lnet_notify_locked(lp, 0, 1, lp->lp_last_alive);
 }
-
-#ifndef __KERNEL__
-static inline int
-lnet_parse_int_tunable(int *value, char *name)
-{
-        char    *env = getenv(name);
-        char    *end;
-
-        if (env == NULL)
-                return 0;
-
-        *value = strtoull(env, &end, 0);
-        if (*end == 0)
-                return 0;
-
-        CERROR("Can't parse tunable %s=%s\n", name, env);
-        return -EINVAL;
-}
-#endif
 
 #endif

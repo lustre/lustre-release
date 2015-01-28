@@ -72,7 +72,6 @@ LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback,
 {
         lnet_eq_t     *eq;
 
-        LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
 
         /* We need count to be a power of 2 so that when eq_{enq,deq}_seq
@@ -163,7 +162,6 @@ LNetEQFree(lnet_handle_eq_t eqh)
 	int		size = 0;
 	int		i;
 
-	LASSERT(the_lnet.ln_init);
 	LASSERT(the_lnet.ln_refcount > 0);
 
 	lnet_res_lock(LNET_LOCK_EX);
@@ -195,7 +193,7 @@ LNetEQFree(lnet_handle_eq_t eqh)
 
 	lnet_res_lh_invalidate(&eq->eq_lh);
 	list_del(&eq->eq_list);
-	lnet_eq_free_locked(eq);
+	lnet_eq_free(eq);
  out:
 	lnet_eq_wait_unlock();
 	lnet_res_unlock(LNET_LOCK_EX);
@@ -232,18 +230,9 @@ lnet_eq_enqueue_event(lnet_eq_t *eq, lnet_event_t *ev)
 	if (eq->eq_callback != LNET_EQ_HANDLER_NONE)
 		eq->eq_callback(ev);
 
-#ifdef __KERNEL__
 	/* Wake anyone waiting in LNetEQPoll() */
 	if (waitqueue_active(&the_lnet.ln_eq_waitq))
 		wake_up_all(&the_lnet.ln_eq_waitq);
-#else
-# ifndef HAVE_LIBPTHREAD
-	/* LNetEQPoll() calls into _the_ LND to wait for action */
-# else
-	/* Wake anyone waiting in LNetEQPoll() */
-	pthread_cond_broadcast(&the_lnet.ln_eq_cond);
-# endif
-#endif
 	lnet_eq_wait_unlock();
 }
 
@@ -332,8 +321,6 @@ LNetEQWait (lnet_handle_eq_t eventq, lnet_event_t *event)
 }
 EXPORT_SYMBOL(LNetEQWait);
 
-#ifdef __KERNEL__
-
 static int
 lnet_eq_wait_locked(int *timeout_ms)
 __must_hold(&the_lnet.ln_eq_wait_lock)
@@ -376,111 +363,6 @@ __must_hold(&the_lnet.ln_eq_wait_lock)
 	return wait;
 }
 
-#else /* !__KERNEL__ */
-
-# ifdef HAVE_LIBPTHREAD
-static void
-lnet_eq_cond_wait(struct timespec *ts)
-{
-	if (ts == NULL) {
-		pthread_cond_wait(&the_lnet.ln_eq_cond,
-				  &the_lnet.ln_eq_wait_lock);
-	} else {
-		pthread_cond_timedwait(&the_lnet.ln_eq_cond,
-				       &the_lnet.ln_eq_wait_lock, ts);
-	}
-}
-# endif
-
-static int
-lnet_eq_wait_locked(int *timeout_ms)
-{
-	lnet_ni_t	*eq_waitni = NULL;
-	int		tms = *timeout_ms;
-	int		wait;
-	struct timeval	then;
-	struct timeval	now;
-
-	if (the_lnet.ln_eq_waitni != NULL) {
-		/* I have a single NI that I have to call into, to get
-		 * events queued, or to block. */
-		lnet_eq_wait_unlock();
-
-		lnet_net_lock(0);
-		eq_waitni = the_lnet.ln_eq_waitni;
-		if (unlikely(eq_waitni == NULL)) {
-			lnet_net_unlock(0);
-
-			lnet_eq_wait_lock();
-			return -1;
-		}
-
-		lnet_ni_addref_locked(eq_waitni, 0);
-		lnet_net_unlock(0);
-
-		if (tms <= 0) { /* even for tms == 0 */
-			(eq_waitni->ni_lnd->lnd_wait)(eq_waitni, tms);
-
-		} else {
-			gettimeofday(&then, NULL);
-
-			(eq_waitni->ni_lnd->lnd_wait)(eq_waitni, tms);
-
-			gettimeofday(&now, NULL);
-			tms -= (now.tv_sec - then.tv_sec) * 1000 +
-			       (now.tv_usec - then.tv_usec) / 1000;
-			if (tms < 0)
-				tms = 0;
-		}
-
-		lnet_ni_decref(eq_waitni);
-		lnet_eq_wait_lock();
-	} else { /* w/o eq_waitni */
-# ifndef HAVE_LIBPTHREAD
-		/* If I'm single-threaded, LNET fails at startup if it can't
-		 * set the_lnet.ln_eqwaitni correctly.  */
-		LBUG();
-# else /* HAVE_LIBPTHREAD */
-		struct timespec  ts;
-
-		if (tms == 0) /* don't want to wait and new event */
-			return -1;
-
-		if (tms < 0) {
-			lnet_eq_cond_wait(NULL);
-
-		} else {
-
-			gettimeofday(&then, NULL);
-
-			ts.tv_sec = then.tv_sec + tms / 1000;
-			ts.tv_nsec = then.tv_usec * 1000 +
-				     (tms % 1000) * 1000000;
-			if (ts.tv_nsec >= 1000000000) {
-				ts.tv_sec++;
-				ts.tv_nsec -= 1000000000;
-			}
-
-			lnet_eq_cond_wait(&ts);
-
-			gettimeofday(&now, NULL);
-			tms -= (now.tv_sec - then.tv_sec) * 1000 +
-			       (now.tv_usec - then.tv_usec) / 1000;
-			if (tms < 0)
-				tms = 0;
-		}
-# endif /* HAVE_LIBPTHREAD */
-	}
-
-	wait = tms != 0;
-	*timeout_ms = tms;
-
-	return wait;
-}
-
-#endif /* __KERNEL__ */
-
-
 /**
  * Block the calling process until there's an event from a set of EQs or
  * timeout happens.
@@ -516,7 +398,6 @@ LNetEQPoll(lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
 	int	i;
         ENTRY;
 
-        LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
 
         if (neq < 1)
@@ -525,16 +406,6 @@ LNetEQPoll(lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
 	lnet_eq_wait_lock();
 
 	for (;;) {
-#ifndef __KERNEL__
-		lnet_eq_wait_unlock();
-
-		/* Recursion breaker */
-		if (the_lnet.ln_rc_state == LNET_RC_STATE_RUNNING &&
-		    !LNetHandleIsEqual(eventqs[0], the_lnet.ln_rc_eqh))
-			lnet_router_checker();
-
-		lnet_eq_wait_lock();
-#endif
 		for (i = 0; i < neq; i++) {
 			lnet_eq_t *eq = lnet_handle2eq(&eventqs[i]);
 
