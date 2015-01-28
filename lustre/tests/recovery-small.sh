@@ -199,6 +199,10 @@ run_test 10b "re-send BL AST"
 test_10d() {
 	local before=$(date +%s)
 	local evict
+
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.90) ]] &&
+		skip "Need MDS version at least 2.6.90" && return
+
 	# sleep 1 is to make sure that BEFORE is not equal to EVICTED below
 	sleep 1
 	rm -f $TMP/$tfile
