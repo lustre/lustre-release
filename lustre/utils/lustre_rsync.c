@@ -1005,7 +1005,7 @@ int lr_link(struct lr_info *info)
                                 break;
 
                         len = strlen(info->path) - strlen(info->name);
-                        if (len > 0 && strcmp(info->path + len,
+			if (len >= 0 && strcmp(info->path + len,
                                               info->name) == 0)
                                 snprintf(info->dest, PATH_MAX, "%s/%s",
                                         status->ls_targets[info->target_no],
