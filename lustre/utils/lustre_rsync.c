@@ -674,11 +674,11 @@ void lr_cascade_move(const char *fid, const char *dest, struct lr_info *info)
                                         info->src, d, errno);
                                 errors++;
                         }
-                        lr_cascade_move(curr->pc_log.pcl_tfid, d, info);
                         if (curr == parents)
                                 parents = curr->pc_next;
                         else
                                 prev->pc_next = curr->pc_next;
+			lr_cascade_move(curr->pc_log.pcl_tfid, d, info);
                         free(curr);
                         prev = curr = parents;
 
