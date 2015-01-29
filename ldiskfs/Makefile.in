@@ -12,15 +12,8 @@ trace_headers := $(wildcard @LINUX@/include/trace/events/ext4*.h)
 
 backfs_sources := $(filter-out %.mod.c,$(wildcard @EXT4_SRC_DIR@/*.c))
 
-ext3_new_sources := extents.c mballoc.c group.h fiemap.h
-ext3_new_headers := ext3_extents.h
-
-ext4_new_sources := fiemap.h mmp.c
-ext4_new_sources += htree_lock.c
-ext4_new_headers :=
-
-new_sources := $(ext4_new_sources)
-new_headers := $(ext4_new_headers)
+new_sources := mmp.c htree_lock.c
+new_headers :=
 
 ldiskfs_patched_sources := $(notdir $(backfs_sources) $(backfs_headers)) $(new_sources) $(new_headers)
 ldiskfs_sources := $(ldiskfs_patched_sources)

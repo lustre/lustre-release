@@ -1824,34 +1824,68 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
         RETURN(rc == 0 ? rc2 : rc);
 }
 
+static int fiemap_check_ranges(struct inode *inode,
+			       u64 start, u64 len, u64 *new_len)
+{
+	loff_t maxbytes;
+
+	*new_len = len;
+
+	if (len == 0)
+		return -EINVAL;
+
+	if (ldiskfs_test_inode_flag(inode, LDISKFS_INODE_EXTENTS))
+		maxbytes = inode->i_sb->s_maxbytes;
+	else
+		maxbytes = LDISKFS_SB(inode->i_sb)->s_bitmap_maxbytes;
+
+	if (start > maxbytes)
+		return -EFBIG;
+
+	/*
+	 * Shrink request scope to what the fs can actually handle.
+	 */
+	if (len > maxbytes || (maxbytes - len) < start)
+		*new_len = maxbytes - start;
+
+	return 0;
+}
+
+/* So that the fiemap access checks can't overflow on 32 bit machines. */
+#define FIEMAP_MAX_EXTENTS     (UINT_MAX / sizeof(struct fiemap_extent))
+
 static int osd_fiemap_get(const struct lu_env *env, struct dt_object *dt,
                           struct ll_user_fiemap *fm)
 {
-        struct inode *inode = osd_dt_obj(dt)->oo_inode;
-        struct osd_thread_info *info   = osd_oti_get(env);
-        struct dentry          *dentry = &info->oti_obj_dentry;
-        struct file            *file   = &info->oti_file;
-        mm_segment_t            saved_fs;
-        int rc;
+	struct fiemap_extent_info fieinfo = {0, };
+	struct inode *inode = osd_dt_obj(dt)->oo_inode;
+	u64 len;
+	int rc;
 
-        LASSERT(inode);
-        dentry->d_inode = inode;
-	dentry->d_sb = inode->i_sb;
-        file->f_dentry = dentry;
-        file->f_mapping = inode->i_mapping;
-        file->f_op = inode->i_fop;
-	set_file_inode(file, inode);
 
-        saved_fs = get_fs();
-        set_fs(get_ds());
-        /* ldiskfs_ioctl does not have a inode argument */
-        if (inode->i_fop->unlocked_ioctl)
-                rc = inode->i_fop->unlocked_ioctl(file, FSFILT_IOC_FIEMAP,
-                                                  (long)fm);
-        else
-                rc = -ENOTTY;
-        set_fs(saved_fs);
-        return rc;
+	LASSERT(inode);
+	if (inode->i_op->fiemap == NULL)
+		return -EOPNOTSUPP;
+
+	if (fm->fm_extent_count > FIEMAP_MAX_EXTENTS)
+		return -EINVAL;
+
+	rc = fiemap_check_ranges(inode, fm->fm_start, fm->fm_length, &len);
+	if (rc)
+		return rc;
+
+	fieinfo.fi_flags = fm->fm_flags;
+	fieinfo.fi_extents_max = fm->fm_extent_count;
+	fieinfo.fi_extents_start = fm->fm_extents;
+
+	if (fieinfo.fi_flags & FIEMAP_FLAG_SYNC)
+		filemap_write_and_wait(inode->i_mapping);
+
+	rc = inode->i_op->fiemap(inode, &fieinfo, fm->fm_start, len);
+	fm->fm_flags = fieinfo.fi_flags;
+	fm->fm_mapped_extents = fieinfo.fi_extents_mapped;
+
+	return rc;
 }
 
 /*

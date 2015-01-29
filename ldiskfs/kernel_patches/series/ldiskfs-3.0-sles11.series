@@ -29,7 +29,6 @@ rhel6.3/ext4-osd-iam-exports.patch
 rhel6.3/ext4-hash-indexed-dir-dotdot-update.patch
 sles11sp2/ext4-kill-dx_root.patch
 sles11sp2/ext4-extents-mount-option.patch
-rhel6.3/ext4-fiemap-2.6.patch
 sles11sp2/ext4-mballoc-pa_free-mismatch.patch
 sles11sp2/ext4-data-in-dirent.patch
 sles11sp2/ext4-large-eas.patch

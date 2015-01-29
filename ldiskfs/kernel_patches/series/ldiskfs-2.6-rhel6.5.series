@@ -25,7 +25,6 @@ rhel6.3/ext4-osd-iam-exports.patch
 rhel6.3/ext4-hash-indexed-dir-dotdot-update.patch
 rhel6.3/ext4-kill-dx_root.patch
 rhel6.3/ext4-extents-mount-option.patch
-rhel6.3/ext4-fiemap-2.6.patch
 rhel6.4/ext4-mballoc-pa_free-mismatch.patch
 rhel6.3/ext4-data-in-dirent.patch
 rhel6.4/ext4-back-dquot-to.patch
