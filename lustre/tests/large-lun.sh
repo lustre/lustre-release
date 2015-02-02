@@ -11,6 +11,12 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
+if ! [ "$REFORMAT" ]; then
+	skip_env "$0 reformats all devices,\
+		please set REFORMAT to run this test"
+	exit 0
+fi
+
 # Variable to run mdsrate
 THREADS_PER_CLIENT=${THREADS_PER_CLIENT:-5}    # thread(s) per client node
 MACHINEFILE=${MACHINEFILE:-$TMP/$TESTSUITE.machines}
@@ -152,6 +158,8 @@ test_1 () {
 		do_rpc_nodes $(facet_host ost${num}) run_llverdev $dev -vpf ||
 			error "llverdev on $dev failed!"
 	done
+	# restore format overwritten by llverdev
+	formatall
 }
 run_test 1 "run llverdev on raw LUN"
 
@@ -225,6 +233,9 @@ test_2 () {
 			$RUN_FSCK && check_fsfacet ost${num}
 		fi
 	done
+	# there is no reason to continue using ost devices
+	# filled by llverfs as ldiskfs
+	formatall
 }
 run_test 2 "run llverfs on OST ldiskfs/zfs filesystem"
 
