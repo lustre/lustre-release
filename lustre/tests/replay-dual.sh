@@ -491,9 +491,9 @@ test_20() { #16389
 	zconf_mount $HOSTNAME $DIR2 || error "mount $DIR2 fail"
 	local tier2=$((SECONDS - before))
 
-	# timeout is more than 2.25x original timeout
-	((tier2 < tier1 * 9 / 4)) ||
-		error "recovery time $tier2 >= 2.25x original time $tier1"
+	# timeout is more than 1.5x original timeout
+	((tier2 < tier1 * 6 / 4)) ||
+		error "recovery time $tier2 >= 1.5x original time $tier1"
 }
 run_test 20 "recovery time is not increasing"
 

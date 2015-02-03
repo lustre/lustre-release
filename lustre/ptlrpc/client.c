@@ -359,27 +359,29 @@ __must_hold(&req->rq_lock)
 	rc = sptlrpc_cli_unwrap_early_reply(req, &early_req);
 	if (rc) {
 		spin_lock(&req->rq_lock);
-                RETURN(rc);
-        }
+		RETURN(rc);
+	}
 
-        rc = unpack_reply(early_req);
-        if (rc == 0) {
-                /* Expecting to increase the service time estimate here */
-                ptlrpc_at_adj_service(req,
-                        lustre_msg_get_timeout(early_req->rq_repmsg));
-                ptlrpc_at_adj_net_latency(req,
-                        lustre_msg_get_service_time(early_req->rq_repmsg));
-        }
-
-        sptlrpc_cli_finish_early_reply(early_req);
-
+	rc = unpack_reply(early_req);
 	if (rc != 0) {
+		sptlrpc_cli_finish_early_reply(early_req);
 		spin_lock(&req->rq_lock);
 		RETURN(rc);
 	}
 
-	/* Adjust the local timeout for this req */
-	ptlrpc_at_set_req_timeout(req);
+	/* Use new timeout value just to adjust the local value for this
+	 * request, don't include it into at_history. It is unclear yet why
+	 * service time increased and should it be counted or skipped, e.g.
+	 * that can be recovery case or some error or server, the real reply
+	 * will add all new data if it is worth to add. */
+	req->rq_timeout = lustre_msg_get_timeout(early_req->rq_repmsg);
+	lustre_msg_set_timeout(req->rq_reqmsg, req->rq_timeout);
+
+	/* Network latency can be adjusted, it is pure network delays */
+	ptlrpc_at_adj_net_latency(req,
+			lustre_msg_get_service_time(early_req->rq_repmsg));
+
+	sptlrpc_cli_finish_early_reply(early_req);
 
 	spin_lock(&req->rq_lock);
 	olddl = req->rq_deadline;

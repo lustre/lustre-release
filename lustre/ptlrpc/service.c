@@ -1259,11 +1259,13 @@ ptlrpc_at_remove_timed(struct ptlrpc_request *req)
 static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 {
 	struct ptlrpc_service_part *svcpt = req->rq_rqbd->rqbd_svcpt;
-        struct ptlrpc_request *reqcopy;
-        struct lustre_msg *reqmsg;
-        cfs_duration_t olddl = req->rq_deadline - cfs_time_current_sec();
-        int rc;
-        ENTRY;
+	struct ptlrpc_request *reqcopy;
+	struct lustre_msg *reqmsg;
+	cfs_duration_t olddl = req->rq_deadline - cfs_time_current_sec();
+	time_t	newdl;
+	int rc;
+
+	ENTRY;
 
 	if (CFS_FAIL_CHECK(OBD_FAIL_TGT_REPLAY_RECONNECT)) {
 		/* don't send early reply */
@@ -1305,10 +1307,11 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 		 * during the recovery period send at least 4 early replies,
 		 * spacing them every at_extra if we can. at_estimate should
 		 * always equal this fixed value during recovery. */
-		at_measured(&svcpt->scp_at_estimate,
-			    cfs_time_current_sec() -
-			    req->rq_arrival_time.tv_sec + min(at_extra,
-			    req->rq_export->exp_obd->obd_recovery_timeout / 4));
+		/* Don't account request processing time into AT history
+		 * during recovery, it is not service time we need but
+		 * includes also waiting time for recovering clients */
+		newdl = cfs_time_current_sec() + min(at_extra,
+			req->rq_export->exp_obd->obd_recovery_timeout / 4);
 	} else {
 		/* We want to extend the request deadline by at_extra seconds,
 		 * so we set our service estimate to reflect how much time has
@@ -1320,17 +1323,16 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 		at_measured(&svcpt->scp_at_estimate, at_extra +
 			    cfs_time_current_sec() -
 			    req->rq_arrival_time.tv_sec);
-
+		newdl = req->rq_arrival_time.tv_sec +
+			at_get(&svcpt->scp_at_estimate);
 	}
+
 	/* Check to see if we've actually increased the deadline -
 	 * we may be past adaptive_max */
-	if (req->rq_deadline >= req->rq_arrival_time.tv_sec +
-	    at_get(&svcpt->scp_at_estimate)) {
+	if (req->rq_deadline >= newdl) {
 		DEBUG_REQ(D_WARNING, req, "Couldn't add any time "
 			  "(%ld/%ld), not sending early reply\n",
-			  olddl, req->rq_arrival_time.tv_sec +
-			  at_get(&svcpt->scp_at_estimate) -
-			  cfs_time_current_sec());
+			  olddl, newdl - cfs_time_current_sec());
 		RETURN(-ETIMEDOUT);
 	}
 
@@ -1388,8 +1390,7 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 
 	if (!rc) {
 		/* Adjust our own deadline to what we told the client */
-		req->rq_deadline = req->rq_arrival_time.tv_sec +
-				   at_get(&svcpt->scp_at_estimate);
+		req->rq_deadline = newdl;
 		req->rq_early_count++; /* number sent, server side */
 	} else {
 		DEBUG_REQ(D_ERROR, req, "Early reply send failed %d", rc);
@@ -1951,6 +1952,7 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt,
                     MSGHDR_AT_SUPPORT) ?
                    /* The max time the client expects us to take */
                    lustre_msg_get_timeout(req->rq_reqmsg) : obd_timeout;
+
         req->rq_deadline = req->rq_arrival_time.tv_sec + deadline;
         if (unlikely(deadline == 0)) {
                 DEBUG_REQ(D_ERROR, req, "Dropping request with 0 timeout");
