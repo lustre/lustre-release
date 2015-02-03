@@ -5028,7 +5028,7 @@ test_56z() { # LU-4824
 		error "$LFS find did not return an error"
 	# Make a directory unsearchable. This should NOT be the last entry in
 	# directory order.  Arbitrarily pick the 6th entry
-	chmod 700 $(lfs find $DIR/$tdir -type d | sed '6!d')
+	chmod 700 $($LFS find $DIR/$tdir -type d | sed '6!d')
 	local count=$($RUNAS $LFS find $DIR/non_existent $DIR/$tdir | wc -l)
 	# The user should be able to see 10 directories and 9 files
 	[ $count == 19 ] || error "$LFS find did not continue after error"
@@ -5975,7 +5975,7 @@ test_78() { # bug 10901
 	[[ $F78SIZE -gt $MEMTOTAL ]] && F78SIZE=$MEMTOTAL
 	[[ $F78SIZE -gt 512 ]] && F78SIZE=512
 	[[ $F78SIZE -gt $((MAXFREE / 1024)) ]] && F78SIZE=$((MAXFREE / 1024))
-	SMALLESTOST=$(lfs df $DIR | grep OST | awk '{ print $4 }' | sort -n |
+	SMALLESTOST=$($LFS df $DIR | grep OST | awk '{ print $4 }' | sort -n |
 		head -n1)
 	echo "Smallest OST: $SMALLESTOST"
 	[[ $SMALLESTOST -lt 10240 ]] &&
@@ -6670,14 +6670,14 @@ compare_stripe_info1() {
 			for offset in $(seq 0 $[$STRIPE_COUNT - 1]); do
 				local size=$((STRIPE_SIZE * num))
 				local file=file"$num-$offset-$count"
-				stripe_size=$(lfs getstripe -S $PWD/$file)
+				stripe_size=$($LFS getstripe -S $PWD/$file)
 				[[ $stripe_size -ne $size ]] &&
 				    error "$file: size $stripe_size != $size"
-				stripe_count=$(lfs getstripe -c $PWD/$file)
+				stripe_count=$($LFS getstripe -c $PWD/$file)
 				# allow fewer stripes to be created, ORI-601
 				[[ $stripe_count -lt $(((3 * count + 3) / 4)) ]] &&
 				    error "$file: count $stripe_count != $count"
-				stripe_index=$(lfs getstripe -i $PWD/$file)
+				stripe_index=$($LFS getstripe -i $PWD/$file)
 				[[ $stripe_index -ne 0 ]] &&
 					stripe_index_all_zero=false
 			done
@@ -9703,7 +9703,7 @@ test_154A() {
 	[ -z "$FID" ] && error "path2fid unable to get $DIR/$tfile FID"
 
 	# check that we get the same pathname back
-	local FOUND=$($LFS fid2path $MOUNT $FID)
+	local FOUND=$($LFS fid2path $MOUNT "$FID")
 	[ -z "$FOUND" ] && error "fid2path unable to get $FID path"
 	[ "$FOUND" != "$DIR/$tfile" ] &&
 		error "fid2path(path2fid($DIR/$tfile)) = $FOUND != $DIR/$tfile"
@@ -9785,7 +9785,8 @@ test_154c() {
 		N=$((N + 1))
 	done
 
-	$LFS fid2path $MOUNT $FID1 $FID2 $FID3 | while read PATHNAME; do
+	$LFS fid2path $MOUNT "$FID1" "$FID2" "$FID3" | while read PATHNAME;
+	do
 		[ "$PATHNAME" = "$DIR/$tfile.$N" ] ||
 			error "fid2path pathname $PATHNAME != $DIR/$tfile.$N:"
 		N=$((N + 1))
@@ -9809,13 +9810,13 @@ test_154d() {
 	rm -f $DIR/$tfile
 	touch $DIR/$tfile
 
-	fid=$($LFS path2fid $DIR/$tfile)
+	local fid=$($LFS path2fid $DIR/$tfile)
 	# Open the file
 	fd=$(free_fd)
 	cmd="exec $fd<$DIR/$tfile"
 	eval $cmd
-	fid_list=$(do_facet $SINGLEMDS $LCTL get_param $proc_ofile)
-	echo $fid_list | grep $fid
+	local fid_list=$(do_facet $SINGLEMDS $LCTL get_param $proc_ofile)
+	echo "$fid_list" | grep "$fid"
 	rc=$?
 
 	cmd="exec $fd>/dev/null"
@@ -11907,7 +11908,7 @@ test_220() { #LU-325
 	local OSTIDX=0
 
 	test_mkdir -p $DIR/$tdir
-	local OST=$(lfs osts | grep ${OSTIDX}": " | \
+	local OST=$($LFS osts | grep ${OSTIDX}": " | \
 		awk '{print $2}' | sed -e 's/_UUID$//')
 
 	# on the mdt's osc
@@ -12804,11 +12805,11 @@ test_238() {
 	ln $DIR/$tfile $DIR/$tfile.lnk
 	touch $DIR/$tfile.new
 	mv $DIR/$tfile.new $DIR/$tfile
-	local fid1=$(lfs path2fid $DIR/$tfile)
-	local fid2=$(lfs path2fid $DIR/$tfile.lnk)
-	local path1=$(lfs fid2path $FSNAME $fid1)
+	local fid1=$($LFS path2fid $DIR/$tfile)
+	local fid2=$($LFS path2fid $DIR/$tfile.lnk)
+	local path1=$($LFS fid2path $FSNAME "$fid1")
 	[ $tfile == $path1 ] || error "linkea inconsistent: $tfile $fid1 $path1"
-	local path2=$(lfs fid2path $FSNAME $fid2)
+	local path2=$($LFS fid2path $FSNAME "$fid2")
 	[ $tfile.lnk == $path2 ] ||
 		error "linkea inconsistent: $tfile.lnk $fid2 $path2!"
 	rm -f $DIR/$tfile*
