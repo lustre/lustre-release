@@ -813,9 +813,9 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 		RETURN(-ENOMEM);
 	rec = buf->lb_buf;
 
-	crf = (crf & CLF_FLAGMASK);
+	crf &= CLF_FLAGMASK;
 
-	if (uc->uc_jobid[0] != '\0')
+	if (uc != NULL && uc->uc_jobid[0] != '\0')
 		crf |= CLF_JOBID;
 
 	if (sname != NULL)

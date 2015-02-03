@@ -677,7 +677,7 @@ int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,
         }
 
 	flags = (flags & CLF_FLAGMASK) | CLF_VERSION;
-	if (uc->uc_jobid[0] != '\0')
+	if (uc != NULL && uc->uc_jobid[0] != '\0')
 		flags |= CLF_JOBID;
 
 	reclen = llog_data_len(changelog_rec_offset(flags & CLF_SUPPORTED));
