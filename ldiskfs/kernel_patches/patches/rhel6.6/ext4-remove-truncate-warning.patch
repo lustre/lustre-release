@@ -1,0 +1,17 @@
+Invoking ext4_truncate with i_mutex locked will cause a deadlock
+in lustre. Since lustre has own lock to provide protection we don't
+need this check at all.
+
+Index: linux-2.6.32-504.el6.x86_64/fs/ext4/inode.c
+===================================================================
+--- linux-2.6.32-504.el6.x86_64.orig/fs/ext4/inode.c
++++ linux-3.10.0-504.el6.x86_64/fs/ext4/inode.c
+@@ -3934,8 +3934,6 @@ void ext4_end_io_work(struct work_struct
+ int ext4_flush_unwritten_io(struct inode *inode)
+ {
+ 	int ret;
+-	WARN_ON_ONCE(!mutex_is_locked(&inode->i_mutex) &&
+-		     !(inode->i_state & I_FREEING));
+ 	ret = ext4_do_flush_completed_IO(inode, NULL);
+ 	ext4_unwritten_wait(inode);
+ 	return ret;
