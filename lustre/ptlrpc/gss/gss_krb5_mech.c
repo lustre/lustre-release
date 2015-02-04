@@ -602,6 +602,7 @@ int krb5_digest_hmac(struct crypto_hash *tfm,
                 if (iovs[i].kiov_len == 0)
                         continue;
 
+		sg_init_table(sg, 1);
 		sg_set_page(&sg[0], iovs[i].kiov_page, iovs[i].kiov_len,
 			    iovs[i].kiov_offset);
 		crypto_hash_update(&desc, sg, iovs[i].kiov_len);
@@ -644,6 +645,7 @@ int krb5_digest_norm(struct crypto_hash *tfm,
                 if (iovs[i].kiov_len == 0)
                         continue;
 
+		sg_init_table(sg, 1);
 		sg_set_page(&sg[0], iovs[i].kiov_page, iovs[i].kiov_len,
 			    iovs[i].kiov_offset);
 		crypto_hash_update(&desc, sg, iovs[i].kiov_len);
@@ -970,12 +972,14 @@ int krb5_encrypt_bulk(struct crypto_blkcipher *tfm,
 
         /* encrypt clear pages */
         for (i = 0; i < desc->bd_iov_count; i++) {
+		sg_init_table(&src, 1);
 		sg_set_page(&src, desc->bd_iov[i].kiov_page,
 			    (desc->bd_iov[i].kiov_len + blocksize - 1) &
 			    (~(blocksize - 1)),
 			    desc->bd_iov[i].kiov_offset);
 		if (adj_nob)
 			nob += src.length;
+		sg_init_table(&dst, 1);
 		sg_set_page(&dst, desc->bd_enc_iov[i].kiov_page, src.length,
 			    src.offset);
 
@@ -1094,6 +1098,7 @@ int krb5_decrypt_bulk(struct crypto_blkcipher *tfm,
                 if (desc->bd_enc_iov[i].kiov_len == 0)
                         continue;
 
+		sg_init_table(&src, 1);
 		sg_set_page(&src, desc->bd_enc_iov[i].kiov_page,
 			    desc->bd_enc_iov[i].kiov_len,
 			    desc->bd_enc_iov[i].kiov_offset);
