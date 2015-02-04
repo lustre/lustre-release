@@ -3979,6 +3979,10 @@ test_251() {
 	set_hsm_param loop_period 2
 	cdt_enable
 
+	# clear locks to avoid extra delay caused by flush/cancel
+	# and thus prevent early copytool death to timeout.
+	cancel_lru_locks osc
+
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE STARTED
 	sleep 5
