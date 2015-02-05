@@ -1163,14 +1163,17 @@ int llapi_hsm_action_end(struct hsm_copyaction_private **phcp,
 	hai = &hcp->copy.hc_hai;
 
 	if (hai->hai_action == HSMA_RESTORE && errval == 0) {
-		struct timeval tv[2];
+		struct ll_futimes_3 lfu = {
+			.lfu_atime_sec = hcp->stat.st_atim.tv_sec,
+			.lfu_atime_nsec = hcp->stat.st_atim.tv_nsec,
+			.lfu_mtime_sec = hcp->stat.st_mtim.tv_sec,
+			.lfu_mtime_nsec = hcp->stat.st_mtim.tv_nsec,
+			.lfu_ctime_sec = hcp->stat.st_ctim.tv_sec,
+			.lfu_ctime_nsec = hcp->stat.st_ctim.tv_nsec,
+		};
 
-		/* Set {a,m}time of volatile file to that of original. */
-		tv[0].tv_sec = hcp->stat.st_atime;
-		tv[0].tv_usec = 0;
-		tv[1].tv_sec = hcp->stat.st_mtime;
-		tv[1].tv_usec = 0;
-		if (futimes(hcp->data_fd, tv) < 0) {
+		/* Set {a,m,c}time of volatile file to that of original. */
+		if (ioctl(hcp->data_fd, LL_IOC_FUTIMES_3, &lfu) < 0) {
 			errval = -errno;
 			goto end;
 		}

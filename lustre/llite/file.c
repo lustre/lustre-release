@@ -2175,6 +2175,42 @@ static inline long ll_lease_type_from_fmode(fmode_t fmode)
 	       ((fmode & FMODE_WRITE) ? LL_LEASE_WRLCK : 0);
 }
 
+static int ll_file_futimes_3(struct file *file, const struct ll_futimes_3 *lfu)
+{
+	struct inode *inode = file->f_dentry->d_inode;
+	struct iattr ia = {
+		.ia_valid = ATTR_ATIME | ATTR_ATIME_SET |
+			    ATTR_MTIME | ATTR_MTIME_SET |
+			    ATTR_CTIME | ATTR_CTIME_SET,
+		.ia_atime = {
+			.tv_sec = lfu->lfu_atime_sec,
+			.tv_nsec = lfu->lfu_atime_nsec,
+		},
+		.ia_mtime = {
+			.tv_sec = lfu->lfu_mtime_sec,
+			.tv_nsec = lfu->lfu_mtime_nsec,
+		},
+		.ia_ctime = {
+			.tv_sec = lfu->lfu_ctime_sec,
+			.tv_nsec = lfu->lfu_ctime_nsec,
+		},
+	};
+	int rc;
+	ENTRY;
+
+	if (!capable(CAP_SYS_ADMIN))
+		RETURN(-EPERM);
+
+	if (!S_ISREG(inode->i_mode))
+		RETURN(-EINVAL);
+
+	mutex_lock(&inode->i_mutex);
+	rc = ll_setattr_raw(file->f_dentry, &ia, false);
+	mutex_unlock(&inode->i_mutex);
+
+	RETURN(rc);
+}
+
 static long
 ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
@@ -2506,7 +2542,16 @@ out:
 		OBD_FREE_PTR(hui);
 		RETURN(rc);
 	}
+	case LL_IOC_FUTIMES_3: {
+		struct ll_futimes_3 lfu;
 
+		if (copy_from_user(&lfu,
+				   (const struct ll_futimes_3 __user *)arg,
+				   sizeof(lfu)))
+			RETURN(-EFAULT);
+
+		RETURN(ll_file_futimes_3(file, &lfu));
+	}
 	default: {
 		int err;
 

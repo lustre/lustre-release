@@ -1881,7 +1881,7 @@ test_24a() {
 	[ $mtime0 -eq $mtime1 ] ||
 		error "restore changed mtime from $mtime0 to $mtime1"
 
-	[ $ctime0 -le $ctime1 ] ||
+	[ $ctime0 -eq $ctime1 ] ||
 		error "restore changed ctime from $ctime0 to $ctime1"
 
 	copytool_cleanup
@@ -1900,7 +1900,7 @@ test_24a() {
 	[ $mtime0 -eq $mtime1 ] ||
 		error "remount changed mtime from $mtime0 to $mtime1"
 
-	[ $ctime0 -le $ctime1 ] ||
+	[ $ctime0 -eq $ctime1 ] ||
 		error "remount changed ctime from $ctime0 to $ctime1"
 }
 run_test 24a "Archive, release, and restore does not change a/mtime (i/o)"
@@ -2081,6 +2081,26 @@ test_24d() {
 	cleanup_test_24d
 }
 run_test 24d "check that read-only mounts are respected"
+
+test_24e() {
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+
+	local f=$DIR/$tdir/$tfile
+	local fid
+
+	fid=$(make_small $f) || error "cannot create $f"
+	$LFS hsm_archive $f || error "cannot archive $f"
+	wait_request_state $fid ARCHIVE SUCCEED
+	$LFS hsm_release $f || error "cannot release $f"
+	sleep 5
+
+	tar -cf $TMP/$tfile.tar $DIR/$tdir || error "cannot tar $DIR/$tdir"
+
+	copytool_cleanup
+}
+run_test 24e "tar succeeds on HSM released files" # LU-6213
 
 test_25a() {
 	# test needs a running copytool

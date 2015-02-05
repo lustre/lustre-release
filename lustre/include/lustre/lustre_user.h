@@ -220,6 +220,15 @@ struct ost_id {
 #define DOSTID LPX64":"LPU64
 #define POSTID(oi) ostid_seq(oi), ostid_id(oi)
 
+struct ll_futimes_3 {
+	__u64 lfu_atime_sec;
+	__u64 lfu_atime_nsec;
+	__u64 lfu_mtime_sec;
+	__u64 lfu_mtime_nsec;
+	__u64 lfu_ctime_sec;
+	__u64 lfu_ctime_nsec;
+};
+
 /*
  * The ioctl naming rules:
  * LL_*     - works on the currently opened filehandle instead of parent dir
@@ -256,6 +265,7 @@ struct ost_id {
 #define LL_IOC_PATH2FID                 _IOR ('f', 173, long)
 #define LL_IOC_GET_CONNECT_FLAGS        _IOWR('f', 174, __u64 *)
 #define LL_IOC_GET_MDTIDX               _IOR ('f', 175, int)
+#define LL_IOC_FUTIMES_3		_IOWR('f', 176, struct ll_futimes_3)
 /*	lustre_ioctl.h			177-210 */
 #define LL_IOC_HSM_STATE_GET		_IOR('f', 211, struct hsm_user_state)
 #define LL_IOC_HSM_STATE_SET		_IOW('f', 212, struct hsm_state_set)

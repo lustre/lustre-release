@@ -1586,7 +1586,8 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 	}
 
         /* We mark all of the fields "set" so MDS/OST does not re-set them */
-        if (attr->ia_valid & ATTR_CTIME) {
+	if (!(attr->ia_valid & ATTR_CTIME_SET) &&
+	    (attr->ia_valid & ATTR_CTIME)) {
                 attr->ia_ctime = CFS_CURRENT_TIME;
                 attr->ia_valid |= ATTR_CTIME_SET;
         }
@@ -1638,7 +1639,8 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 
 	if (attr->ia_valid & (ATTR_SIZE |
 			      ATTR_ATIME | ATTR_ATIME_SET |
-			      ATTR_MTIME | ATTR_MTIME_SET)) {
+			      ATTR_MTIME | ATTR_MTIME_SET |
+			      ATTR_CTIME | ATTR_CTIME_SET)) {
 		/* For truncate and utimes sending attributes to OSTs, setting
 		 * mtime/atime to the past will be performed under PW [0:EOF]
 		 * extent lock (new_size:EOF for truncate).  It may seem
