@@ -334,12 +334,12 @@ static struct fs_db *mgs_new_fsdb(const struct lu_env *env,
 
         if (strlen(fsname) >= sizeof(fsdb->fsdb_name)) {
                 CERROR("fsname %s is too long\n", fsname);
-                RETURN(NULL);
+		RETURN(ERR_PTR(-EINVAL));
         }
 
         OBD_ALLOC_PTR(fsdb);
         if (!fsdb)
-                RETURN(NULL);
+		RETURN(ERR_PTR(-ENOMEM));
 
         strcpy(fsdb->fsdb_name, fsname);
 	mutex_init(&fsdb->fsdb_mutex);
@@ -380,7 +380,7 @@ err:
         name_destroy(&fsdb->fsdb_clilov);
         name_destroy(&fsdb->fsdb_clilmv);
         OBD_FREE_PTR(fsdb);
-        RETURN(NULL);
+	RETURN(ERR_PTR(rc));
 }
 
 static void mgs_free_fsdb(struct mgs_device *mgs, struct fs_db *fsdb)
@@ -443,11 +443,11 @@ int mgs_find_or_make_fsdb(const struct lu_env *env,
         CDEBUG(D_MGS, "Creating new db\n");
 	fsdb = mgs_new_fsdb(env, mgs, name);
 	/* lock fsdb_mutex until the db is loaded from llogs */
-	if (fsdb)
+	if (!IS_ERR(fsdb))
 		mutex_lock(&fsdb->fsdb_mutex);
 	mutex_unlock(&mgs->mgs_mutex);
-        if (!fsdb)
-		RETURN(-ENOMEM);
+	if (IS_ERR(fsdb))
+		RETURN(PTR_ERR(fsdb));
 
 	if (!test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags)) {
                 /* populate the db from the client llog */
