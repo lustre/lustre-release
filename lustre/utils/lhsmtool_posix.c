@@ -917,7 +917,7 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 		goto fini_major;
 	}
 
-	open_flags = O_WRONLY | O_NOFOLLOW | O_NONBLOCK;
+	open_flags = O_WRONLY | O_NOFOLLOW;
 	/* If extent is specified, don't truncate an old archived copy */
 	open_flags |= ((hai->hai_extent.length == -1) ? O_TRUNC : 0) | O_CREAT;
 
@@ -1170,7 +1170,7 @@ static int ct_restore(const struct hsm_action_item *hai, const long hal_flags)
 		goto fini;
 	}
 
-	src_fd = open(src, O_RDONLY | O_NOATIME | O_NONBLOCK | O_NOFOLLOW);
+	src_fd = open(src, O_RDONLY | O_NOATIME | O_NOFOLLOW);
 	if (src_fd < 0) {
 		rc = -errno;
 		CT_ERROR(rc, "cannot open '%s' for read", src);
