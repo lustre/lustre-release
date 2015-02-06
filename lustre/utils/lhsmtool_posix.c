@@ -347,7 +347,7 @@ static int ct_parseopts(int argc, char * const *argv)
 	CT_TRACE("action=%d src=%s dst=%s mount_point=%s",
 		 opt.o_action, opt.o_src, opt.o_dst, opt.o_mnt);
 
-	if (!opt.o_dry_run && opt.o_hsm_root == NULL) {
+	if (opt.o_hsm_root == NULL) {
 		rc = -EINVAL;
 		CT_ERROR(rc, "must specify a root directory for the backend");
 		return rc;
