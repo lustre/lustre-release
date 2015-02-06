@@ -51,6 +51,15 @@ while /bin/true; do
 		extra) opt="setstripe $RACER_EXTRA_LAYOUT" ;;
 		esac
 
+		if $RACER_ENABLE_FILE_MIGRATE && (( RANDOM % 20 == 0 )); then
+			if [ "$pattern" = "flr" ]; then
+				# LU-13730 crashes server when adding mirror
+				: # opt=${opt/create/extend}
+			else
+				opt=${opt/setstripe/migrate}
+				(( file % 8 == 0 )) && opt+=" --block"
+			fi
+		fi
 		$LFS $opt $DIR/$file 2> /dev/null || true
 	}
 
