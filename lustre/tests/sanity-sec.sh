@@ -1417,7 +1417,10 @@ test_fops() {
 	local mds_i
 	local rc=0
 	local perm_bit_list="0 3 $((0300)) $((0303))"
-	[ "$SLOW" == "yes" ] && perm_bit_list=$(seq 0 511)
+	# SLOW tests 000-007, 010-070, 100-700 (octal modes)
+	[ "$SLOW" == "yes" ] &&
+		perm_bit_list="0 $(seq 1 7) $(seq 8 8 63) $(seq 64 64 511) \
+			       $((0303))"
 
 	# step through mds users. -1 means root
 	for mds_i in -1 0 1 2; do
