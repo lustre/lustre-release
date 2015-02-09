@@ -1616,7 +1616,10 @@ static int mdc_ioc_hsm_progress(struct obd_export *exp,
 
 	ptlrpc_request_set_replen(req);
 
-	rc = mdc_queue_wait(req);
+	mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
+	rc = ptlrpc_queue_wait(req);
+	mdc_put_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
+
 	GOTO(out, rc);
 out:
 	ptlrpc_req_finished(req);
@@ -1798,10 +1801,11 @@ static int mdc_ioc_hsm_state_set(struct obd_export *exp,
 
 	ptlrpc_request_set_replen(req);
 
-	rc = mdc_queue_wait(req);
-	GOTO(out, rc);
+	mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
+	rc = ptlrpc_queue_wait(req);
+	mdc_put_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
 
-	EXIT;
+	GOTO(out, rc);
 out:
 	ptlrpc_req_finished(req);
 	return rc;
@@ -1857,7 +1861,10 @@ static int mdc_ioc_hsm_request(struct obd_export *exp,
 
 	ptlrpc_request_set_replen(req);
 
-	rc = mdc_queue_wait(req);
+	mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
+	rc = ptlrpc_queue_wait(req);
+	mdc_put_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
+
 	GOTO(out, rc);
 
 out:

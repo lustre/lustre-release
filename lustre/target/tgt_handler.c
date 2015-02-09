@@ -472,6 +472,9 @@ static int tgt_filter_recovery_request(struct ptlrpc_request *req,
 	case OST_SETATTR:
 	case OST_SYNC:
 	case OST_WRITE:
+	case MDS_HSM_PROGRESS:
+	case MDS_HSM_STATE_SET:
+	case MDS_HSM_REQUEST:
 		*process = target_queue_recovery_request(req, obd);
 		RETURN(0);
 
