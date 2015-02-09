@@ -4687,6 +4687,9 @@ error_noexit() {
 			echo "$@" > $LOGDIR/err
 		fi
 	fi
+
+	# cleanup the env for failed tests
+	reset_fail_loc
 }
 
 exit_status () {
