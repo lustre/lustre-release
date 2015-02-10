@@ -1,23 +1,14 @@
---- linux-2.6.18-194.3.1/fs/ext4/xattr.c	2010-11-23 21:13:35.000000000 -0800
-+++ linux-2.6.18-194.3.1-liang/fs/ext4/xattr.c	2010-11-25 20:15:27.000000000 -0800
-@@ -1050,7 +1050,7 @@ ext4_xattr_set_handle(handle_t *handle, 
-	}
- 	if (!error) {
- 		ext4_xattr_update_super_block(handle, inode->i_sb);
--		if (!(flags & XATTR_NO_CTIME))
-+		if (!IS_NOCMTIME(inode) && !(flags & XATTR_NO_CTIME))
- 			inode->i_ctime = ext4_current_time(inode);
- 		if (!value)
- 			EXT4_I(inode)->i_state &= ~EXT4_STATE_NO_EXPAND;
---- linux-2.6.18-194.3.1/fs/ext4/namei.c	2010-11-23 21:13:35.000000000 -0800
-+++ linux-2.6.18-194.3.1-liang/fs/ext4/namei.c	2010-11-25 20:17:25.000000000 -0800
-@@ -1465,7 +1465,8 @@ static int add_dirent_to_buf(handle_t *h
- 	 * happen is that the times are slightly out of date
- 	 * and/or different from the directory change time.
- 	 */
--	dir->i_mtime = dir->i_ctime = ext4_current_time(dir);
-+	if (!IS_NOCMTIME(dir))
-+		dir->i_mtime = dir->i_ctime = ext4_current_time(dir);
- 	ext4_update_dx_flag(dir);
- 	dir->i_version++;
- 	ext4_mark_inode_dirty(handle, dir);
+Index: linux-stage/fs/ext4/ext4.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -1213,6 +1213,9 @@ static inline struct ext4_inode_info *EX
+ 
+ static inline struct timespec ext4_current_time(struct inode *inode)
+ {
++	if (IS_NOCMTIME(inode))
++		return inode->i_ctime;
++
+ 	return (inode->i_sb->s_time_gran < NSEC_PER_SEC) ?
+ 		current_fs_time(inode->i_sb) : CURRENT_TIME_SEC;
+ }
