@@ -570,7 +570,6 @@ static inline struct seq_server_site *mdt_seq_site(struct mdt_device *mdt)
 static inline void mdt_export_evict(struct obd_export *exp)
 {
         class_fail_export(exp);
-        class_export_put(exp);
 }
 
 /* Here we use LVB_TYPE to check dne client, because it is
