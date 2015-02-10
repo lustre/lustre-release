@@ -312,11 +312,10 @@ __sa_make_ready(struct ll_statahead_info *sai, struct sa_entry *entry, int ret)
 {
 	struct sa_entry *se;
 	struct list_head *pos = &sai->sai_entries;
+	__u64 index = entry->se_index;
 
 	LASSERT(!sa_ready(entry));
 	LASSERT(list_empty(&entry->se_list));
-
-	entry->se_state = ret < 0 ? SA_ENTRY_INVA : SA_ENTRY_SUCC;
 
 	list_for_each_entry_reverse(se, &sai->sai_entries, se_list) {
 		if (se->se_index < entry->se_index) {
@@ -325,8 +324,9 @@ __sa_make_ready(struct ll_statahead_info *sai, struct sa_entry *entry, int ret)
 		}
 	}
 	list_add(&entry->se_list, pos);
+	entry->se_state = ret < 0 ? SA_ENTRY_INVA : SA_ENTRY_SUCC;
 
-	return (entry->se_index == sai->sai_index_wait);
+	return (index == sai->sai_index_wait);
 }
 
 /*
@@ -1481,10 +1481,7 @@ static int revalidate_statahead_dentry(struct inode *dir,
 		sai->sai_index_wait = entry->se_index;
 		lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(30), NULL,
 					LWI_ON_SIGNAL_NOOP, NULL);
-		rc = l_wait_event(sai->sai_waitq,
-				sa_ready(entry) ||
-				thread_is_stopped(&sai->sai_thread),
-				&lwi);
+		rc = l_wait_event(sai->sai_waitq, sa_ready(entry), &lwi);
 		if (rc < 0) {
 			/*
 			 * entry may not be ready, so it may be used by inflight
