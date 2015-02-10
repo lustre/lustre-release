@@ -1285,7 +1285,8 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
         struct osd_device *osd = osd_obj2dev(osd_dt_obj(dt));
         struct timeval start, end;
         unsigned long timediff;
-	int rc = 0, i, m = 0, cache = 0, cache_hits = 0, cache_misses = 0;
+	int rc = 0, i, cache = 0, cache_hits = 0, cache_misses = 0;
+	loff_t isize;
 
         LASSERT(inode);
 
@@ -1293,26 +1294,25 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 	if (unlikely(rc != 0))
 		RETURN(rc);
 
+	isize = i_size_read(inode);
+
 	if (osd->od_read_cache)
 		cache = 1;
-	if (i_size_read(inode) > osd->od_readcache_max_filesize)
+	if (isize > osd->od_readcache_max_filesize)
 		cache = 0;
 
 	do_gettimeofday(&start);
 	for (i = 0; i < npages; i++) {
 
-		if (i_size_read(inode) <= lnb[i].lnb_file_offset)
+		if (isize <= lnb[i].lnb_file_offset)
 			/* If there's no more data, abort early.
 			 * lnb->lnb_rc == 0, so it's easy to detect later. */
 			break;
 
-		if (i_size_read(inode) <
-		    lnb[i].lnb_file_offset + lnb[i].lnb_len - 1)
-			lnb[i].lnb_rc = i_size_read(inode) -
-				lnb[i].lnb_file_offset;
+		if (isize < lnb[i].lnb_file_offset + lnb[i].lnb_len - 1)
+			lnb[i].lnb_rc = isize - lnb[i].lnb_file_offset;
 		else
 			lnb[i].lnb_rc = lnb[i].lnb_len;
-		m += lnb[i].lnb_len;
 
 		if (PageUptodate(lnb[i].lnb_page)) {
 			cache_hits++;
