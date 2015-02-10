@@ -774,13 +774,9 @@ static struct mod_paths {
 } mod_paths[] = {
 	{ "libcfs", "libcfs/libcfs" },
 	{ "lnet", "lnet/lnet" },
-	{ "kmxlnd", "lnet/klnds/mxlnd" },
 	{ "ko2iblnd", "lnet/klnds/o2iblnd" },
 	{ "kgnilnd", "lnet/klnds/gnilnd"},
-	{ "kqswlnd", "lnet/klnds/qswlnd" },
-	{ "kralnd", "lnet/klnds/ralnd" },
 	{ "ksocklnd", "lnet/klnds/socklnd" },
-	{ "ktdilnd", "lnet/klnds/tdilnd" },
 	{ "obdclass", "lustre/obdclass" },
 	{ "llog_test", "lustre/obdclass" },
 	{ "ptlrpc_gss", "lustre/ptlrpc/gss" },

@@ -1,6 +1,0 @@
-MODULES := kqswlnd
-kqswlnd-objs := qswlnd.o qswlnd_cb.o qswlnd_modparams.o
-
-EXTRA_POST_CFLAGS := @QSWCPPFLAGS@ -I/usr/include
-
-@INCLUDE_RULES@

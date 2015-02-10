@@ -102,8 +102,6 @@ command_t cmdlist[] = {
         {"conn_list", jt_ptl_print_connections, 0,
          "print all the connected remote nid\n"
          "usage: conn_list"},
-        {"active_tx", jt_ptl_print_active_txs, 0, "print active transmits\n"
-         "usage: active_tx"},
         {"route_list", jt_ptl_print_routes, 0,
          "print the portals routing table, same as show_route\n"
          "usage: route_list"},

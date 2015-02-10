@@ -1,6 +1,0 @@
-MODULES := kmxlnd
-kmxlnd-objs := mxlnd.o mxlnd_cb.o mxlnd_modparams.o
-
-EXTRA_POST_CFLAGS := @MXCPPFLAGS@
-
-@INCLUDE_RULES@

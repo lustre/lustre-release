@@ -1,8 +1,5 @@
-@BUILD_MXLND_TRUE@subdir-m += mxlnd
-@BUILD_RALND_TRUE@subdir-m += ralnd
 @BUILD_GNILND_TRUE@subdir-m += gnilnd
 @BUILD_O2IBLND_TRUE@subdir-m += o2iblnd
-@BUILD_QSWLND_TRUE@subdir-m += qswlnd
 subdir-m += socklnd
 
 @INCLUDE_RULES@

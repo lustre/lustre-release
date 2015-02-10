@@ -146,125 +146,6 @@ AC_DEFUN([LN_CONFIG_DLC], [
 ])
 
 #
-# LN_CONFIG_QUADRICS
-#
-# check if quadrics support is in this kernel
-#
-AC_DEFUN([LN_CONFIG_QUADRICS], [
-AC_MSG_CHECKING([for QsNet sources])
-AC_ARG_WITH([qsnet],
-	AC_HELP_STRING([--with-qsnet=path],
-		[set path to qsnet source (default=$LINUX)]),
-	[QSNET=$with_qsnet], [QSNET=$LINUX])
-AC_MSG_RESULT([$QSNET])
-
-QSWLND=""
-QSWCPPFLAGS=""
-AC_MSG_CHECKING([if quadrics kernel headers are present])
-AS_IF([test -d $QSNET/drivers/net/qsnet], [
-	AC_MSG_RESULT([yes])
-	QSWLND="qswlnd"
-	AC_MSG_CHECKING([for multirail EKC])
-	AS_IF([test -f $QSNET/include/elan/epcomms.h], [
-		AC_MSG_RESULT([supported])
-		QSNET=$(readlink --canonicalize $QSNET)
-		QSWCPPFLAGS="-I$QSNET/include -DMULTIRAIL_EKC=1"
-	], [
-		AC_MSG_RESULT([not supported])
-		AC_MSG_ERROR([Need multirail EKC])
-	])
-
-	AS_IF([test x$QSNET = x$LINUX], [
-		LB_CHECK_CONFIG([QSNET], [], [
-			LB_CHECK_CONFIG([QSNET_MODULE], [], [
-				AC_MSG_WARN([QSNET is not enabled in this kernel; not building qswlnd.])
-				QSWLND=""
-				QSWCPPFLAGS=""
-			])
-		])
-	])
-], [
-	AC_MSG_RESULT([no])
-])
-AC_SUBST(QSWLND)
-AC_SUBST(QSWCPPFLAGS)
-]) # LN_CONFIG_QUADRICS
-
-#
-# LN_CONFIG_MX
-#
-AC_DEFUN([LN_CONFIG_MX], [
-# set default
-MXPATH="/opt/mx"
-AC_MSG_CHECKING([whether to enable Myrinet MX support])
-AC_ARG_WITH([mx],
-	AC_HELP_STRING([--with-mx=path],
-		[build mxlnd against path]),
-	[
-		case $with_mx in
-		yes) ENABLEMX=2 ;;
-		no)  ENABLEMX=0 ;;
-		*)   ENABLEMX=3; MXPATH=$with_mx ;;
-		esac
-	],[
-		ENABLEMX=1
-	])
-AS_IF([test $ENABLEMX -eq 0], [
-	AC_MSG_RESULT([disabled])
-], [test ! \( -f ${MXPATH}/include/myriexpress.h -a \
-	      -f ${MXPATH}/include/mx_kernel_api.h -a \
-	      -f ${MXPATH}/include/mx_pin.h \)], [
-	AC_MSG_RESULT([no])
-	case $ENABLEMX in
-	1) ;;
-	2) AC_MSG_ERROR([Myrinet MX kernel headers not present]) ;;
-	3) AC_MSG_ERROR([bad --with-mx path]) ;;
-	*) AC_MSG_ERROR([internal error]) ;;
-	esac
-], [
-	AC_MSG_RESULT([check])
-	MXPATH=$(readlink --canonicalize $MXPATH)
-	MXCPPFLAGS="-I$MXPATH/include"
-	MXLIBS="-L$MXPATH/lib"
-	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
-	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $MXCPPFLAGS"
-	LB_CHECK_COMPILE([if have Myrinet MX support],
-	myrinet_mx_support, [
-		#define MX_KERNEL 1
-		#include <mx_extensions.h>
-		#include <myriexpress.h>
-	],[
-		mx_endpoint_t   end;
-		mx_status_t     status;
-		mx_request_t    request;
-		int             result;
-		mx_init();
-		mx_open_endpoint(MX_ANY_NIC, MX_ANY_ENDPOINT, 0, NULL, 0, &end);
-		mx_register_unexp_handler(end, (mx_unexp_handler_t) NULL, NULL);
-		mx_wait_any(end, MX_INFINITE, 0LL, 0LL, &status, &result);
-		mx_iconnect(end, 0LL, 0, 0, 0, NULL, &request);
-		return 0;
-	],[
-		MXLND="mxlnd"
-	],[
-		case $ENABLEMX in
-		1) ;;
-		2) AC_MSG_ERROR([can't compile with Myrinet MX kernel headers]) ;;
-		3) AC_MSG_ERROR([can't compile with Myrinet MX headers under $MXPATH]) ;;
-		*) AC_MSG_ERROR([internal error]) ;;
-		esac
-		MXCPPFLAGS=""
-		MXLIBS=""
-		MXLND=""
-	])
-	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
-])
-AC_SUBST(MXCPPFLAGS)
-AC_SUBST(MXLIBS)
-AC_SUBST(MXLND)
-]) # LN_CONFIG_MX
-
-#
 # LN_CONFIG_O2IB
 #
 AC_DEFUN([LN_CONFIG_O2IB], [
@@ -437,35 +318,6 @@ AS_IF([test $ENABLEO2IB -ne 0], [
 ]) # LN_CONFIG_O2IB
 
 #
-# LN_CONFIG_RALND
-#
-# check whether to use the RapidArray lnd
-#
-AC_DEFUN([LN_CONFIG_RALND], [
-RALND=""
-RACPPFLAGS="-I${LINUX}/drivers/xd1/include"
-EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="$EXTRA_KCFLAGS $RACPPFLAGS"
-LB_CHECK_COMPILE([if 'RapidArray' kernel headers are present],
-RapkGetDeviceByIndex, [
-	#include <linux/types.h>
-	#include <rapl.h>
-],[
-	RAP_RETURN rc;
-	RAP_PVOID  dev_handle;
-	rc = RapkGetDeviceByIndex(0, NULL, &dev_handle);
-	return rc == RAP_SUCCESS ? 0 : 1;
-],[
-	RALND="ralnd"
-],[
-	RACPPFLAGS=""
-])
-EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
-AC_SUBST(RACPPFLAGS)
-AC_SUBST(RALND)
-]) # LN_CONFIG_RALND
-
-#
 # LN_CONFIG_GNILND
 #
 # check whether to use the Gemini Network Interface lnd
@@ -581,11 +433,8 @@ AC_MSG_NOTICE([LNet kernel checks
 LN_FUNC_DEV_GET_BY_NAME_2ARG
 LN_CONFIG_AFFINITY
 LN_CONFIG_BACKOFF
-LN_CONFIG_QUADRICS
 LN_CONFIG_O2IB
-LN_CONFIG_RALND
 LN_CONFIG_GNILND
-LN_CONFIG_MX
 # 2.6.36
 LN_CONFIG_TCP_SENDPAGE
 # 3.15
@@ -673,10 +522,7 @@ LN_CONFIG_DLC
 # AM_CONDITOINAL defines for lnet
 #
 AC_DEFUN([LN_CONDITIONALS], [
-AM_CONDITIONAL(BUILD_QSWLND,     test x$QSWLND = "xqswlnd")
-AM_CONDITIONAL(BUILD_MXLND,      test x$MXLND = "xmxlnd")
 AM_CONDITIONAL(BUILD_O2IBLND,    test x$O2IBLND = "xo2iblnd")
-AM_CONDITIONAL(BUILD_RALND,      test x$RALND = "xralnd")
 AM_CONDITIONAL(BUILD_GNILND,     test x$GNILND = "xgnilnd")
 AM_CONDITIONAL(BUILD_GNILND_RCA, test x$GNILNDRCA = "xgnilndrca")
 AM_CONDITIONAL(BUILD_DLC,        test x$USE_DLC = "xyes")
@@ -697,14 +543,8 @@ lnet/include/Makefile
 lnet/include/lnet/Makefile
 lnet/klnds/Makefile
 lnet/klnds/autoMakefile
-lnet/klnds/mxlnd/autoMakefile
-lnet/klnds/mxlnd/Makefile
 lnet/klnds/o2iblnd/Makefile
 lnet/klnds/o2iblnd/autoMakefile
-lnet/klnds/qswlnd/Makefile
-lnet/klnds/qswlnd/autoMakefile
-lnet/klnds/ralnd/Makefile
-lnet/klnds/ralnd/autoMakefile
 lnet/klnds/gnilnd/Makefile
 lnet/klnds/gnilnd/autoMakefile
 lnet/klnds/socklnd/Makefile
