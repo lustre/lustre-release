@@ -736,7 +736,7 @@ test_file_soft() {
 test_4a() {
 	local LIMIT=10 # inodes
 	local TESTFILE=$DIR/$tdir/$tfile-0
-	local GRACE=5
+	local GRACE=12
 
 	set_mdt_qtype "ug" || error "enable mdt quota failed"
 
