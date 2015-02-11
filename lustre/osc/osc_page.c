@@ -256,7 +256,7 @@ static int osc_page_print(const struct lu_env *env,
 
 	return (*printer)(env, cookie, LUSTRE_OSC_NAME"-page@%p %lu: "
 			  "1< %#x %d %u %s %s > "
-			  "2< "LPU64" %u %u %#x %#x | %p %p %p > "
+			  "2< "LPD64" %u %u %#x %#x | %p %p %p > "
 			  "3< %s %p %d %lu %d > "
 			  "4< %d %d %d %lu %s | %s %s %s %s > "
 			  "5< %s %s %s %s | %d %s | %d %s %s>\n",
@@ -905,7 +905,7 @@ out:
 static inline void unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
 					    int factor)
 {
-	obd_count page_count = desc->bd_iov_count;
+	int page_count = desc->bd_iov_count;
 	void *zone = NULL;
 	int count = 0;
 	int i;

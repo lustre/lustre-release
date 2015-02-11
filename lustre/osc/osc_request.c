@@ -56,7 +56,7 @@ struct osc_brw_async_args {
 	struct obdo		 *aa_oa;
 	int			  aa_requested_nob;
 	int			  aa_nio_count;
-	obd_count		  aa_page_count;
+	u32			  aa_page_count;
 	int			  aa_resends;
 	struct brw_page	**aa_ppga;
 	struct client_obd	 *aa_cli;
@@ -92,7 +92,7 @@ struct osc_enqueue_args {
 	unsigned int		oa_agl:1;
 };
 
-static void osc_release_ppga(struct brw_page **ppga, obd_count count);
+static void osc_release_ppga(struct brw_page **ppga, size_t count);
 static int brw_interpret(const struct lu_env *env, struct ptlrpc_request *req,
 			 void *data, int rc);
 
@@ -655,9 +655,9 @@ static int osc_destroy(const struct lu_env *env, struct obd_export *exp,
 static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
                                 long writing_bytes)
 {
-        obd_flag bits = OBD_MD_FLBLOCKS|OBD_MD_FLGRANT;
+	u64 bits = OBD_MD_FLBLOCKS | OBD_MD_FLGRANT;
 
-        LASSERT(!(oa->o_valid & bits));
+	LASSERT(!(oa->o_valid & bits));
 
 	oa->o_valid |= bits;
 	spin_lock(&cli->cl_loi_list_lock);
@@ -709,7 +709,7 @@ void osc_update_next_shrink(struct client_obd *cli)
                cli->cl_next_shrink_grant);
 }
 
-static void __osc_update_grant(struct client_obd *cli, obd_size grant)
+static void __osc_update_grant(struct client_obd *cli, u64 grant)
 {
 	spin_lock(&cli->cl_loi_list_lock);
 	cli->cl_avail_grant += grant;
@@ -725,8 +725,9 @@ static void osc_update_grant(struct client_obd *cli, struct ost_body *body)
 }
 
 static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
-                              obd_count keylen, void *key, obd_count vallen,
-                              void *val, struct ptlrpc_request_set *set);
+			      u32 keylen, void *key,
+			      u32 vallen, void *val,
+			      struct ptlrpc_request_set *set);
 
 static int osc_shrink_grant_interpret(const struct lu_env *env,
                                       struct ptlrpc_request *req,
@@ -929,7 +930,7 @@ static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
  * beyond the end of a stripe file; i.e. lustre is reading a sparse file
  * via the LOV, and it _knows_ it's reading inside the file, it's just that
  * this stripe never got written at or beyond this stripe offset yet. */
-static void handle_short_read(int nob_read, obd_count page_count,
+static void handle_short_read(int nob_read, size_t page_count,
                               struct brw_page **pga)
 {
         char *ptr;
@@ -965,8 +966,8 @@ static void handle_short_read(int nob_read, obd_count page_count,
 }
 
 static int check_write_rcs(struct ptlrpc_request *req,
-                           int requested_nob, int niocount,
-                           obd_count page_count, struct brw_page **pga)
+			   int requested_nob, int niocount,
+			   size_t page_count, struct brw_page **pga)
 {
         int     i;
         __u32   *remote_rcs;
@@ -1020,11 +1021,11 @@ static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
         return (p1->off + p1->count == p2->off);
 }
 
-static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
-				   struct brw_page **pga, int opc,
-				   cksum_type_t cksum_type)
+static u32 osc_checksum_bulk(int nob, size_t pg_count,
+			     struct brw_page **pga, int opc,
+			     cksum_type_t cksum_type)
 {
-	__u32				cksum;
+	u32				cksum;
 	int				i = 0;
 	struct cfs_crypto_hash_desc	*hdesc;
 	unsigned int			bufsize;
@@ -1076,11 +1077,11 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
 }
 
 static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
-                                struct lov_stripe_md *lsm, obd_count page_count,
-                                struct brw_page **pga,
-                                struct ptlrpc_request **reqp,
-                                struct obd_capa *ocapa, int reserve,
-                                int resend)
+				struct lov_stripe_md *lsm, u32 page_count,
+				struct brw_page **pga,
+				struct ptlrpc_request **reqp,
+				struct obd_capa *ocapa, int reserve,
+				int resend)
 {
         struct ptlrpc_request   *req;
         struct ptlrpc_bulk_desc *desc;
@@ -1283,9 +1284,9 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
 }
 
 static int check_write_checksum(struct obdo *oa, const lnet_process_id_t *peer,
-                                __u32 client_cksum, __u32 server_cksum, int nob,
-                                obd_count page_count, struct brw_page **pga,
-                                cksum_type_t client_cksum_type)
+				__u32 client_cksum, __u32 server_cksum, int nob,
+				size_t page_count, struct brw_page **pga,
+				cksum_type_t client_cksum_type)
 {
         __u32 new_cksum;
         char *msg;
@@ -1582,7 +1583,7 @@ static void sort_brw_pages(struct brw_page **array, int num)
         } while (stride > 1);
 }
 
-static void osc_release_ppga(struct brw_page **ppga, obd_count count)
+static void osc_release_ppga(struct brw_page **ppga, size_t count)
 {
         LASSERT(ppga != NULL);
         OBD_FREE(ppga, sizeof(*ppga) * count);
@@ -1749,8 +1750,8 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	enum cl_req_type		crt = (cmd & OBD_BRW_WRITE) ? CRT_WRITE :
 								      CRT_READ;
 	struct cl_req_attr		*crattr = NULL;
-	obd_off				starting_offset = OBD_OBJECT_EOF;
-	obd_off				ending_offset = 0;
+	loff_t				starting_offset = OBD_OBJECT_EOF;
+	loff_t				ending_offset = 0;
 	int				mpflag = 0;
 	int				mem_tight = 0;
 	int				page_count = 0;
@@ -1769,7 +1770,8 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 		list_for_each_entry(oap, &ext->oe_pages, oap_pending_item) {
 			++page_count;
 			list_add_tail(&oap->oap_rpc_item, &rpc_list);
-			if (starting_offset > oap->oap_obj_off)
+			if (starting_offset == OBD_OBJECT_EOF ||
+			    starting_offset > oap->oap_obj_off)
 				starting_offset = oap->oap_obj_off;
 			else
 				LASSERT(oap->oap_page_off == 0);
@@ -2470,8 +2472,9 @@ out:
 }
 
 static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
-                              obd_count keylen, void *key, obd_count vallen,
-                              void *val, struct ptlrpc_request_set *set)
+			      u32 keylen, void *key,
+			      u32 vallen, void *val,
+			      struct ptlrpc_request_set *set)
 {
         struct ptlrpc_request *req;
         struct obd_device     *obd = exp->exp_obd;

@@ -65,11 +65,10 @@ static void vvp_req_attr_set(const struct lu_env *env,
 {
 	struct inode	*inode;
 	struct obdo	*oa;
-	u32		 valid_flags;
+	u64		 valid_flags = OBD_MD_FLTYPE;
 
 	oa = attr->cra_oa;
 	inode = vvp_object_inode(obj);
-	valid_flags = OBD_MD_FLTYPE;
 
 	if ((flags & OBD_MD_FLOSSCAPA) != 0) {
 		LASSERT(attr->cra_capa == NULL);

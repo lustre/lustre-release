@@ -823,7 +823,7 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 	int nr_pages = ext->oe_nr_pages;
 	int lost_grant = 0;
 	int blocksize = cli->cl_import->imp_obd->obd_osfs.os_bsize ? : 4096;
-	__u64 last_off = 0;
+	loff_t last_off = 0;
 	int last_count = -1;
 	ENTRY;
 
@@ -2284,7 +2284,7 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 	pgoff_t index;
 	unsigned int tmp;
 	unsigned int grants = 0;
-	int    brw_flags = OBD_BRW_ASYNC;
+	u32    brw_flags = OBD_BRW_ASYNC;
 	int    cmd = OBD_BRW_WRITE;
 	int    need_release = 0;
 	int    rc = 0;
