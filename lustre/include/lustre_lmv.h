@@ -78,9 +78,6 @@ lsm_md_eq(const struct lmv_stripe_md *lsm1, const struct lmv_stripe_md *lsm2)
 }
 union lmv_mds_md;
 
-int lmv_alloc_md(union lmv_mds_md **lmmp, int stripe_count);
-void lmv_free_md(union lmv_mds_md *lmm);
-int lmv_alloc_memmd(struct lmv_stripe_md **lsmp, int stripe_count);
 void lmv_free_memmd(struct lmv_stripe_md *lsm);
 
 int lmvea_load_shards(const struct lu_env *env, struct dt_object *obj,

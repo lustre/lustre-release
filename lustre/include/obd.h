@@ -854,8 +854,6 @@ struct obd_ops {
                         struct obd_statfs *osfs, __u64 max_age, __u32 flags);
         int (*o_statfs_async)(struct obd_export *exp, struct obd_info *oinfo,
                               __u64 max_age, struct ptlrpc_request_set *set);
-        int (*o_unpackmd)(struct obd_export *exp,struct lov_stripe_md **mem_tgt,
-                          struct lov_mds_md *disk_src, int disk_len);
 	int (*o_create)(const struct lu_env *env, struct obd_export *exp,
 			struct obdo *oa);
 	int (*o_destroy)(const struct lu_env *env, struct obd_export *exp,
@@ -1055,6 +1053,8 @@ struct md_ops {
 				  const struct lmv_stripe_md *,
 				  const char *name, int namelen,
 				  struct lu_fid *fid);
+	int (*m_unpackmd)(struct obd_export *exp, struct lmv_stripe_md **plsm,
+			  const union lmv_mds_md *lmv, size_t lmv_size);
 };
 
 static inline struct md_open_data *obd_mod_alloc(void)

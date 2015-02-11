@@ -2947,8 +2947,8 @@ static int lmv_unpack_md_v1(struct obd_export *exp, struct lmv_stripe_md *lsm,
 	RETURN(rc);
 }
 
-int lmv_unpack_md(struct obd_export *exp, struct lmv_stripe_md **lsmp,
-		  const union lmv_mds_md *lmm, int stripe_count)
+static int lmv_unpackmd(struct obd_export *exp, struct lmv_stripe_md **lsmp,
+			const union lmv_mds_md *lmm, size_t lmm_size)
 {
 	struct lmv_stripe_md	 *lsm;
 	int			 lsm_size;
@@ -2973,17 +2973,6 @@ int lmv_unpack_md(struct obd_export *exp, struct lmv_stripe_md **lsmp,
 		lsm_size = lmv_stripe_md_size(lsm->lsm_md_stripe_count);
 		OBD_FREE(lsm, lsm_size);
 		*lsmp = NULL;
-		RETURN(0);
-	}
-
-	/* Alloc memmd */
-	if (lsm == NULL && lmm == NULL) {
-		lsm_size = lmv_stripe_md_size(stripe_count);
-		OBD_ALLOC(lsm, lsm_size);
-		if (lsm == NULL)
-			RETURN(-ENOMEM);
-		lsm->lsm_md_stripe_count = stripe_count;
-		*lsmp = lsm;
 		RETURN(0);
 	}
 
@@ -3036,23 +3025,11 @@ int lmv_unpack_md(struct obd_export *exp, struct lmv_stripe_md **lsmp,
 	RETURN(lsm_size);
 }
 
-int lmv_alloc_memmd(struct lmv_stripe_md **lsmp, int stripes)
-{
-	return lmv_unpack_md(NULL, lsmp, NULL, stripes);
-}
-
 void lmv_free_memmd(struct lmv_stripe_md *lsm)
 {
-	lmv_unpack_md(NULL, &lsm, NULL, 0);
+	lmv_unpackmd(NULL, &lsm, NULL, 0);
 }
 EXPORT_SYMBOL(lmv_free_memmd);
-
-int lmv_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
-                 struct lov_mds_md *lmm, int disk_len)
-{
-	return lmv_unpack_md(exp, (struct lmv_stripe_md **)lsmp,
-			     (union lmv_mds_md *)lmm, disk_len);
-}
 
 static int lmv_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,
                              ldlm_policy_data_t *policy, ldlm_mode_t mode,
@@ -3386,7 +3363,6 @@ struct obd_ops lmv_obd_ops = {
         .o_statfs               = lmv_statfs,
         .o_get_info             = lmv_get_info,
         .o_set_info_async       = lmv_set_info_async,
-        .o_unpackmd             = lmv_unpackmd,
         .o_notify               = lmv_notify,
         .o_get_uuid             = lmv_get_uuid,
         .o_iocontrol            = lmv_iocontrol,
@@ -3424,6 +3400,7 @@ struct md_ops lmv_md_ops = {
         .m_intent_getattr_async = lmv_intent_getattr_async,
 	.m_revalidate_lock      = lmv_revalidate_lock,
 	.m_get_fid_from_lsm	= lmv_get_fid_from_lsm,
+	.m_unpackmd		= lmv_unpackmd,
 };
 
 int __init lmv_init(void)
