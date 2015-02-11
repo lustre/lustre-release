@@ -66,7 +66,7 @@
 #define filp_write(fp, buf, size, pos)			\
 	((fp)->f_op->write((fp), (buf), (size), pos))
 
-#ifdef HAVE_FILE_FSYNC_4ARGS
+#if defined(HAVE_FILE_FSYNC_4ARGS) || defined(HAVE_FILE_FSYNC_2ARGS)
 #define ll_vfs_fsync_range(fp, start, end, datasync) \
 	vfs_fsync_range(fp, start, end, datasync)
 #else
