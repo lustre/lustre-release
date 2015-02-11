@@ -2803,6 +2803,16 @@ test_60() {
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f ||
 		error "could not archive file"
 
+	local agent=$(facet_active_host $SINGLEAGT)
+	local prefix=$TESTLOG_PREFIX
+	[[ -z "$TESTNAME" ]] || prefix=$prefix.$TESTNAME
+	local copytool_log=$prefix.copytool_log.$agent.log
+
+
+	wait_update $agent \
+	    "grep -o start.copy $copytool_log" "start copy" 100 ||
+		error "copytool failed to start"
+
 	local cmd="$LCTL get_param -n ${mdt}.hsm.active_requests"
 	cmd+=" | awk '/'$fid'.*action=ARCHIVE/ {print \\\$12}' | cut -f2 -d="
 
