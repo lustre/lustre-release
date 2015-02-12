@@ -2,16 +2,6 @@ Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
 --- linux-stage.orig/fs/ext4/ext4.h	2011-05-20 10:59:32.000000000 +0300
 +++ linux-stage/fs/ext4/ext4.h	2011-05-20 11:01:06.000000000 +0300
-@@ -1191,6 +1191,9 @@ EXT4_INODE_BIT_FNS(state, state_flags)
- 
- #define NEXT_ORPHAN(inode) EXT4_I(inode)->i_dtime
- 
-+/* Has been moved to linux/magic.h but we need it for Lustre */
-+#define EXT4_SUPER_MAGIC	0xEF53
-+
- /*
-  * Codes for operating systems
-  */
 @@ -1630,6 +1633,9 @@ extern void ext4_mb_put_buddy_cache_lock
  						ext4_group_t, int);
  extern int ext4_trim_fs(struct super_block *, struct fstrim_range *);
@@ -184,54 +174,3 @@ Index: linux-stage/fs/ext4/super.c
  
  void ext4_block_bitmap_set(struct super_block *sb,
  			   struct ext4_group_desc *bg, ext4_fsblk_t blk)
-@@ -1500,10 +1501,12 @@ enum {
-        Opt_usrjquota, Opt_grpjquota, Opt_offusrjquota, Opt_offgrpjquota,
-	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0, Opt_jqfmt_vfsv1, Opt_quota,
-	Opt_noquota, Opt_ignore, Opt_barrier, Opt_nobarrier, Opt_err,
-+	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
-	Opt_resize, Opt_usrquota, Opt_grpquota, Opt_i_version,
- 	Opt_stripe, Opt_delalloc, Opt_nodelalloc,
- 	Opt_block_validity, Opt_noblock_validity,
- 	Opt_inode_readahead_blks, Opt_journal_ioprio,
-+	Opt_mballoc,
- 	Opt_discard, Opt_nodiscard,
-	Opt_init_inode_table, Opt_noinit_inode_table,
- };
-@@ -1556,6 +1559,9 @@ static const match_table_t tokens = {             
-	{Opt_noquota, "noquota"},
-	{Opt_quota, "quota"},
-	{Opt_usrquota, "usrquota"},
-+	{Opt_iopen, "iopen"},
-+	{Opt_noiopen, "noiopen"},
-+	{Opt_iopen_nopriv, "iopen_nopriv"},
-	{Opt_barrier, "barrier=%u"},
-	{Opt_barrier, "barrier"},
-	{Opt_nobarrier, "nobarrier"},
-@@ -1571,6 +1577,7 @@ static const match_table_t tokens = {
- 	{Opt_auto_da_alloc, "auto_da_alloc=%u"},
- 	{Opt_auto_da_alloc, "auto_da_alloc"},
- 	{Opt_noauto_da_alloc, "noauto_da_alloc"},
-+	{Opt_mballoc, "mballoc"},
- 	{Opt_discard, "discard"},
- 	{Opt_nodiscard, "nodiscard"},
- 	{Opt_err, NULL},
-@@ -1928,6 +1935,10 @@ set_qf_format:           
- 			else
- 				clear_opt(sbi->s_mount_opt, BARRIER);
- 			break;
-+		case Opt_iopen:
-+		case Opt_noiopen:
-+		case Opt_iopen_nopriv:
-+			break;
- 		case Opt_ignore:
- 			break;
- 		case Opt_resize:
-@@ -2011,6 +2022,8 @@ set_qf_format:
- 		case Opt_nodiscard:
- 			clear_opt(sbi->s_mount_opt, DISCARD);
- 			break;
-+		case Opt_mballoc:
-+			break;
- 		default:
- 			ext4_msg(sb, KERN_ERR,
- 			       "Unrecognized mount option \"%s\" "

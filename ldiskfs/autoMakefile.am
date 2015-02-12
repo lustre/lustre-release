@@ -14,10 +14,13 @@ ldiskfs_linux_headers := $(addprefix linux/,$(subst ext4,ldiskfs,$(notdir $(linu
 
 $(filter %.c,$(ldiskfs_patched_sources)): sources $(ldiskfs_linux_headers) $(filter %.h,$(ldiskfs_patched_sources))
 
+# Convert LDISKFS_SUPER_MAGIC back to EXT4_SUPER_MAGIC so that the ldiskfs
+# code can use the existing kernel headers instead of defining this itself.
 ldiskfs_sed_flags = \
 	-e "s/dx_hash_info/ext4_dx_hash_info/g" \
 	-e "s/DX_HASH/EXT4_DX_HASH/g" \
-	-e "s/EXT4/LDISKFS/g" -e "s/ext4/ldiskfs/g"
+	-e "s/EXT4/LDISKFS/g" -e "s/ext4/ldiskfs/g" \
+	-e "s/LDISKFS_SUPER_MAGIC/EXT4_SUPER_MAGIC/g"
 
 %.c: linux-stage/fs/ext4/%.c
 	sed $(strip $(ldiskfs_sed_flags)) $< > $@

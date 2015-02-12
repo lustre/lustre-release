@@ -5988,7 +5988,7 @@ static int osd_mount(const struct lu_env *env,
 	struct osd_thread_info	*info = osd_oti_get(env);
 	struct lu_fid		*fid = &info->oti_fid;
 	struct inode		*inode;
-	int			 rc = 0;
+	int			 rc = 0, force_over_128tb = 0;
         ENTRY;
 
 	if (o->od_mnt != NULL)
@@ -5998,23 +5998,64 @@ static int osd_mount(const struct lu_env *env,
 		RETURN(-E2BIG);
 	strcpy(o->od_mntdev, dev);
 
-	OBD_PAGE_ALLOC(__page, GFP_IOFS);
-	if (__page == NULL)
-		GOTO(out, rc = -ENOMEM);
-
 	str = lustre_cfg_string(cfg, 2);
 	s_flags = simple_strtoul(str, NULL, 0);
 	str = strstr(str, ":");
 	if (str)
 		lmd_flags = simple_strtoul(str + 1, NULL, 0);
 	opts = lustre_cfg_string(cfg, 3);
+#ifdef __BIG_ENDIAN
+	if (opts == NULL || strstr(opts, "bigendian_extents") == NULL) {
+		CERROR("%s: device %s extents feature is not guaranteed to "
+		       "work on big-endian systems. Use \"bigendian_extents\" "
+		       "mount option to override.\n", name, dev);
+		RETURN(-EINVAL);
+	}
+#endif
+	if (opts != NULL && strstr(opts, "force_over_128tb") != NULL)
+		force_over_128tb = 1;
+
+	OBD_PAGE_ALLOC(__page, GFP_IOFS);
+	if (__page == NULL)
+		GOTO(out, rc = -ENOMEM);
 	page = (unsigned long)page_address(__page);
 	options = (char *)page;
 	*options = '\0';
-	if (opts == NULL)
-		strcat(options, "user_xattr,acl");
-	else
+	if (opts != NULL) {
+		/* strip out the options for back compatiblity */
+		static char *sout[] = {
+			"mballoc",
+			"iopen",
+			"noiopen",
+			"iopen_nopriv",
+			"extents",
+			"noextents",
+			/* strip out option we processed in osd */
+			"bigendian_extents",
+			"force_over_128tb",
+			NULL
+		};
 		strcat(options, opts);
+		for (rc = 0, str = options; sout[rc]; ) {
+			char *op = strstr(str, sout[rc]);
+			if (op == NULL) {
+				rc++;
+				str = options;
+				continue;
+			}
+			if (op == options || *(op - 1) == ',') {
+				str = op + strlen(sout[rc]);
+				if (*str == ',' || *str == '\0') {
+					*str == ',' ? str++ : str;
+					memmove(op, str, strlen(str) + 1);
+				}
+			}
+			for (str = op; *str != ',' && *str != '\0'; str++)
+				;
+		}
+	} else {
+		strncat(options, "user_xattr,acl", 14);
+	}
 
 	/* Glom up mount options */
 	if (*options != '\0')
@@ -6035,6 +6076,15 @@ static int osd_mount(const struct lu_env *env,
 		o->od_mnt = NULL;
 		CERROR("%s: can't mount %s: %d\n", name, dev, rc);
 		GOTO(out, rc);
+	}
+
+	if (ldiskfs_blocks_count(LDISKFS_SB(osd_sb(o))->s_es) > (8ULL << 32) &&
+	    force_over_128tb == 0) {
+		CERROR("%s: device %s LDISKFS does not support filesystems "
+		       "greater than 128TB and can cause data corruption. "
+		       "Use \"force_over_128tb\" mount option to override.\n",
+		       name, dev);
+		GOTO(out, rc = -EINVAL);
 	}
 
 #ifdef HAVE_DEV_SET_RDONLY

@@ -1,13 +1,10 @@
 diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
 --- linux-stage.orig/fs/ext4/super.c	2013-05-13 09:35:17.628478645 -0400
 +++ linux-stage/fs/ext4/super.c	2013-05-13 09:46:08.062358974 -0400
-@@ -1268,8 +1268,8 @@ enum {
- 	Opt_mballoc, Opt_bigendian_extents, Opt_force_over_128tb,
+@@ -1268,6 +1268,7 @@ enum {
  	Opt_extents, Opt_noextents,
  	Opt_no_mbcache,
--	Opt_discard, Opt_nodiscard,
--	Opt_init_itable, Opt_noinit_itable,
-+	Opt_discard, Opt_nodiscard, Opt_init_itable, Opt_noinit_itable,
+	Opt_discard, Opt_nodiscard, Opt_init_itable, Opt_noinit_itable,
 +	Opt_max_dir_size_kb,
  };
  

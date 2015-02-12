@@ -8,16 +8,6 @@
 
 --- a/fs/ext4/ext4.h
 +++ b/fs/ext4/ext4.h
-@@ -1308,6 +1308,9 @@ static inline void ext4_clear_state_flag
-
- #define NEXT_ORPHAN(inode) EXT4_I(inode)->i_dtime
-
-+/* Has been moved to linux/magic.h but we need it for Lustre */
-+#define EXT4_SUPER_MAGIC	0xEF53
-+
- /*
-  * Codes for operating systems
-  */
 @@ -1826,6 +1829,9 @@ extern void ext4_add_groupblocks(handle_
  				ext4_fsblk_t block, unsigned long count);
  extern int ext4_trim_fs(struct super_block *, struct fstrim_range *);
@@ -130,58 +120,3 @@
   * How many index/leaf blocks need to change/allocate to modify nrblocks?
   *
   * if nrblocks are fit in a single extent (chunk flag is 1), then
---- a/fs/ext4/super.c
-+++ b/fs/ext4/super.c
-@@ -1332,12 +1332,14 @@ enum {
- 	Opt_data_err_abort, Opt_data_err_ignore,
- 	Opt_usrjquota, Opt_grpjquota, Opt_offusrjquota, Opt_offgrpjquota,
- 	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0, Opt_jqfmt_vfsv1, Opt_quota,
-+	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
- 	Opt_noquota, Opt_ignore, Opt_barrier, Opt_nobarrier, Opt_err,
- 	Opt_resize, Opt_usrquota, Opt_grpquota, Opt_i_version,
- 	Opt_stripe, Opt_delalloc, Opt_nodelalloc, Opt_mblk_io_submit,
- 	Opt_nomblk_io_submit, Opt_block_validity, Opt_noblock_validity,
- 	Opt_inode_readahead_blks, Opt_journal_ioprio,
- 	Opt_dioread_nolock, Opt_dioread_lock,
-+	Opt_mballoc,
- 	Opt_discard, Opt_nodiscard, Opt_init_itable, Opt_noinit_itable,
- };
-
-@@ -1390,6 +1392,9 @@ static const match_table_t tokens = {
- 	{Opt_noquota, "noquota"},
- 	{Opt_quota, "quota"},
- 	{Opt_usrquota, "usrquota"},
-+	{Opt_iopen, "iopen"},
-+	{Opt_noiopen, "noiopen"},
-+	{Opt_iopen_nopriv, "iopen_nopriv"},
- 	{Opt_barrier, "barrier=%u"},
- 	{Opt_barrier, "barrier"},
- 	{Opt_nobarrier, "nobarrier"},
-@@ -1409,6 +1414,7 @@ static const match_table_t tokens = {
- 	{Opt_noauto_da_alloc, "noauto_da_alloc"},
- 	{Opt_dioread_nolock, "dioread_nolock"},
- 	{Opt_dioread_lock, "dioread_lock"},
-+	{Opt_mballoc, "mballoc"},
- 	{Opt_discard, "discard"},
- 	{Opt_nodiscard, "nodiscard"},
- 	{Opt_init_itable, "init_itable=%u"},
-@@ -1793,6 +1799,10 @@ set_qf_format:
- 			else
- 				clear_opt(sb, BARRIER);
- 			break;
-+		case Opt_iopen:
-+		case Opt_noiopen:
-+		case Opt_iopen_nopriv:
-+			break;
- 		case Opt_ignore:
- 			break;
- 		case Opt_resize:
-@@ -1904,6 +1914,8 @@ set_qf_format:
- 		case Opt_noinit_itable:
- 			clear_opt(sb, INIT_INODE_TABLE);
- 			break;
-+		case Opt_mballoc:
-+			break;
- 		default:
- 			ext4_msg(sb, KERN_ERR,
- 			       "Unrecognized mount option \"%s\" "

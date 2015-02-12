@@ -4,10 +4,10 @@
  fs/ext4/namei.c |  117 ++++++++++++++++++++++++++++++++++++++++----------------
  3 files changed, 170 insertions(+), 43 deletions(-)
 
-Index: linux-stage/fs/ext4/dir.c
+Index: linux-3.0.101-0.5/fs/ext4/dir.c
 ===================================================================
---- linux-stage.orig/fs/ext4/dir.c
-+++ linux-stage/fs/ext4/dir.c
+--- linux-3.0.101-0.5.orig/fs/ext4/dir.c
++++ linux-3.0.101-0.5/fs/ext4/dir.c
 @@ -53,11 +53,18 @@ const struct file_operations ext4_dir_op
  
  static unsigned char get_dtype(struct super_block *sb, int filetype)
@@ -80,10 +80,10 @@ Index: linux-stage/fs/ext4/dir.c
  	new_fn->name[dirent->name_len] = 0;
  
  	while (*p) {
-Index: linux-stage/fs/ext4/ext4.h
+Index: linux-3.0.101-0.5/fs/ext4/ext4.h
 ===================================================================
---- linux-stage.orig/fs/ext4/ext4.h
-+++ linux-stage/fs/ext4/ext4.h
+--- linux-3.0.101-0.5.orig/fs/ext4/ext4.h
++++ linux-3.0.101-0.5/fs/ext4/ext4.h
 @@ -901,6 +901,7 @@ struct ext4_inode_info {
  #define EXT4_MOUNT_ERRORS_PANIC		0x00040	/* Panic on errors */
  #define EXT4_MOUNT_MINIX_DF		0x00080	/* Mimics the Minix statfs */
@@ -92,7 +92,7 @@ Index: linux-stage/fs/ext4/ext4.h
  #define EXT4_MOUNT_DATA_FLAGS		0x00C00	/* Mode for data writes: */
  #define EXT4_MOUNT_JOURNAL_DATA		0x00400	/* Write data to journal */
  #define EXT4_MOUNT_ORDERED_DATA		0x00800	/* Flush data before commit */
-@@ -1411,7 +1412,9 @@ static inline void ext4_clear_state_flag
+@@ -1407,7 +1408,9 @@ static inline void ext4_clear_state_flag
  					 EXT4_FEATURE_INCOMPAT_EXTENTS| \
  					 EXT4_FEATURE_INCOMPAT_64BIT| \
  					 EXT4_FEATURE_INCOMPAT_FLEX_BG| \
@@ -103,7 +103,7 @@ Index: linux-stage/fs/ext4/ext4.h
  #define EXT4_FEATURE_RO_COMPAT_SUPP	(EXT4_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT4_FEATURE_RO_COMPAT_LARGE_FILE| \
  					 EXT4_FEATURE_RO_COMPAT_GDT_CSUM| \
-@@ -1498,6 +1501,43 @@ struct ext4_dir_entry_2 {
+@@ -1494,6 +1497,43 @@ struct ext4_dir_entry_2 {
  #define EXT4_FT_SYMLINK		7
  
  #define EXT4_FT_MAX		8
@@ -147,7 +147,7 @@ Index: linux-stage/fs/ext4/ext4.h
  
  /*
   * EXT4_DIR_PAD defines the directory entries boundaries
-@@ -1506,8 +1546,11 @@ struct ext4_dir_entry_2 {
+@@ -1502,8 +1542,11 @@ struct ext4_dir_entry_2 {
   */
  #define EXT4_DIR_PAD			4
  #define EXT4_DIR_ROUND			(EXT4_DIR_PAD - 1)
@@ -160,7 +160,7 @@ Index: linux-stage/fs/ext4/ext4.h
  #define EXT4_MAX_REC_LEN		((1<<16)-1)
  
  /*
-@@ -1899,7 +1942,7 @@ extern struct buffer_head * ext4_find_en
+@@ -1895,7 +1938,7 @@ extern struct buffer_head * ext4_find_en
  					    struct ext4_dir_entry_2 ** res_dir);
  #define ll_ext4_find_entry(inode, dentry, res_dir) ext4_find_entry(inode, &(dentry)->d_name, res_dir)
  extern int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
@@ -169,7 +169,7 @@ Index: linux-stage/fs/ext4/ext4.h
  extern struct buffer_head *ext4_append(handle_t *handle,
  				       struct inode *inode,
  				       ext4_lblk_t *block, int *err);
-@@ -2299,6 +2342,28 @@ static inline void set_bitmap_uptodate(s
+@@ -2295,6 +2338,28 @@ static inline void set_bitmap_uptodate(s
  extern wait_queue_head_t ext4__ioend_wq[EXT4_WQ_HASH_SZ];
  extern struct mutex ext4__aio_mutex[EXT4_WQ_HASH_SZ];
  
@@ -198,10 +198,10 @@ Index: linux-stage/fs/ext4/ext4.h
  #endif	/* __KERNEL__ */
  
  #endif	/* _EXT4_H */
-Index: linux-stage/fs/ext4/namei.c
+Index: linux-3.0.101-0.5/fs/ext4/namei.c
 ===================================================================
---- linux-stage.orig/fs/ext4/namei.c
-+++ linux-stage/fs/ext4/namei.c
+--- linux-3.0.101-0.5.orig/fs/ext4/namei.c
++++ linux-3.0.101-0.5/fs/ext4/namei.c
 @@ -170,7 +170,8 @@ static unsigned dx_get_count(struct dx_e
  static unsigned dx_get_limit(struct dx_entry *entries);
  static void dx_set_count(struct dx_entry *entries, unsigned value);
@@ -453,7 +453,7 @@ Index: linux-stage/fs/ext4/namei.c
  
  out_journal:
  	if (journal) {
-@@ -2003,12 +2065,13 @@ retry:
+@@ -2004,12 +2066,13 @@ retry:
  /* Initialize @inode as a subdirectory of @dir, and add the
   * "." and ".." entries into the first directory block. */
  int ext4_add_dot_dotdot(handle_t *handle, struct inode * dir,
@@ -469,7 +469,7 @@ Index: linux-stage/fs/ext4/namei.c
  
  	if (IS_ERR(handle))
  		return PTR_ERR(handle);
-@@ -2029,17 +2092,32 @@ int ext4_add_dot_dotdot(handle_t *handle
+@@ -2030,17 +2093,32 @@ int ext4_add_dot_dotdot(handle_t *handle
  	de = (struct ext4_dir_entry_2 *) dir_block->b_data;
  	de->inode = cpu_to_le32(inode->i_ino);
  	de->name_len = 1;
@@ -505,7 +505,7 @@ Index: linux-stage/fs/ext4/namei.c
  	inode->i_nlink = 2;
  	BUFFER_TRACE(dir_block, "call ext4_handle_dirty_metadata");
  	err = ext4_handle_dirty_metadata(handle, inode, dir_block);
-@@ -2079,7 +2157,7 @@ retry:
+@@ -2080,7 +2158,7 @@ retry:
  	if (IS_ERR(inode))
  		goto out_stop;
  
@@ -514,7 +514,7 @@ Index: linux-stage/fs/ext4/namei.c
  	if (err)
  		goto out_clear_inode;
  	err = ext4_add_entry(handle, dentry, inode);
-@@ -2117,7 +2195,7 @@ static int empty_dir(struct inode *inode
+@@ -2118,7 +2196,7 @@ static int empty_dir(struct inode *inode
  	int err = 0;
  
  	sb = inode->i_sb;
@@ -523,30 +523,29 @@ Index: linux-stage/fs/ext4/namei.c
  	    !(bh = ext4_bread(NULL, inode, 0, 0, &err))) {
  		if (err)
  			EXT4_ERROR_INODE(inode,
-Index: linux-stage/fs/ext4/super.c
+Index: linux-3.0.101-0.5/fs/ext4/super.c
 ===================================================================
---- linux-stage.orig/fs/ext4/super.c
-+++ linux-stage/fs/ext4/super.c
-@@ -1363,7 +1363,7 @@ enum {
+--- linux-3.0.101-0.5.orig/fs/ext4/super.c
++++ linux-3.0.101-0.5/fs/ext4/super.c
+@@ -1357,6 +1357,7 @@ enum {
  	Opt_data_err_abort, Opt_data_err_ignore,
  	Opt_usrjquota, Opt_grpjquota, Opt_offusrjquota, Opt_offgrpjquota,
  	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0, Opt_jqfmt_vfsv1, Opt_quota,
--	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
-+	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv, Opt_dirdata,
++	Opt_dirdata,
  	Opt_noquota, Opt_ignore, Opt_barrier, Opt_nobarrier, Opt_err,
  	Opt_resize, Opt_usrquota, Opt_grpquota, Opt_i_version,
  	Opt_stripe, Opt_delalloc, Opt_nodelalloc, Opt_mblk_io_submit,
-@@ -1427,6 +1427,7 @@ static const match_table_t tokens = {
- 	{Opt_iopen, "iopen"},
- 	{Opt_noiopen, "noiopen"},
- 	{Opt_iopen_nopriv, "iopen_nopriv"},
+@@ -1415,6 +1416,7 @@ static const match_table_t tokens = {
+ 	{Opt_noquota, "noquota"},
+ 	{Opt_quota, "quota"},
+ 	{Opt_usrquota, "usrquota"},
 +	{Opt_dirdata, "dirdata"},
  	{Opt_barrier, "barrier=%u"},
  	{Opt_barrier, "barrier"},
  	{Opt_nobarrier, "nobarrier"},
-@@ -1840,6 +1841,9 @@ set_qf_format:
- 		case Opt_noiopen:
- 		case Opt_iopen_nopriv:
+@@ -1818,6 +1820,9 @@ set_qf_format:
+ 			else
+ 				clear_opt(sb, BARRIER);
  			break;
 +		case Opt_dirdata:
 +			set_opt(sb, DIRDATA);
