@@ -528,7 +528,7 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 			goto out_sa;
 
 		rc = -dmu_free_range(osd->od_os, xa_data_db->db_object,
-					0, DMU_OBJECT_END, tx);
+				     0, DMU_OBJECT_END, tx);
 		if (rc)
 			goto out_sa;
 	} else if (rc == -ENOENT) {
@@ -546,7 +546,7 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 
 		la->la_valid = LA_MODE;
 		la->la_mode = S_IFREG | S_IRUGO | S_IWUSR;
-		rc = __osd_object_create(env, osd, &xa_data_db, tx, la,
+		rc = __osd_object_create(env, obj, &xa_data_db, tx, la,
 					 obj->oo_xattr);
 		if (rc)
 			goto out;

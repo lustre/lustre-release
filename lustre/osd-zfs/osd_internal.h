@@ -452,7 +452,7 @@ int osd_object_sa_update(struct osd_object *obj, sa_attr_type_t type,
 int __osd_zap_create(const struct lu_env *env, struct osd_device *osd,
 		     dmu_buf_t **zap_dbp, dmu_tx_t *tx, struct lu_attr *la,
 		     uint64_t parent, zap_flags_t flags);
-int __osd_object_create(const struct lu_env *env, struct osd_device *osd,
+int __osd_object_create(const struct lu_env *env, struct osd_object *obj,
 			dmu_buf_t **dbp, dmu_tx_t *tx, struct lu_attr *la,
 			uint64_t parent);
 
