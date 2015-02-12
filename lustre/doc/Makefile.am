@@ -36,7 +36,7 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-MANFILES = lustre.7 lfs.1 mount.lustre.8 lctl.8 \
+MANFILES = lustre.7 lfs.1 mount.lustre.8 lctl.8 lnetctl.8 \
 	llverdev.8 llbackup.8 llapi_quotactl.3 llobdstat.8 llstat.8 \
 	plot-llstat.8 l_getgroups.8 lst.8 routerstat.8 \
 	ll_recover_lost_found_objs.8 llog_reader.8 llapi_file_open.3 \
