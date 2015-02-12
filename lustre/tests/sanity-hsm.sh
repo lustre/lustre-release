@@ -1385,6 +1385,26 @@ test_12o() {
 }
 run_test 12o "Layout-swap failure during Restore leaves file released"
 
+test_12p() {
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir $DIR/$tdir
+	local f=$DIR/$tdir/$tfile
+	local fid=$(copy_file /etc/hosts $f)
+
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
+	wait_request_state $fid ARCHIVE SUCCEED
+	do_facet $SINGLEAGT cat $f > /dev/null || error "cannot cat $f"
+	$LFS hsm_release $f || error "cannot release $f"
+	do_facet $SINGLEAGT cat $f > /dev/null || error "cannot cat $f"
+	$LFS hsm_release $f || error "cannot release $f"
+	do_facet $SINGLEAGT cat $f > /dev/null || error "cannot cat $f"
+
+	copytool_cleanup
+}
+run_test 12p "implicit restore of a file on copytool mount point"
+
 test_13() {
 	# test needs a running copytool
 	copytool_setup
