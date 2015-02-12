@@ -7055,7 +7055,7 @@ pool_add() {
 
 	create_pool $FSNAME.$pool ||
 		{ error_noexit "No pool created, result code $?"; return 1; }
-	[ $($LFS pool_list $FSNAME | grep -c $pool) -eq 1 ] ||
+	[ $($LFS pool_list $FSNAME | grep -c "$FSNAME.${pool}\$") -eq 1 ] ||
 		{ error_noexit "$pool not in lfs pool_list"; return 2; }
 }
 

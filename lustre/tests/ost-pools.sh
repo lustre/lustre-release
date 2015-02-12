@@ -649,6 +649,95 @@ test_6() {
 }
 run_test 6 "getstripe/setstripe"
 
+helper_test_7a()
+{
+	# Create a pool, stripe a directory and file with it
+	local pool=$1
+
+	pool_add $pool || error "pool_add failed"
+	pool_add_targets $pool 0 1 || error "pool_add_targets failed"
+
+	$SETSTRIPE -c 1 $DIR/$tdir/testfile1 --pool "$pool" || \
+		error "setstripe failed"
+	$SETSTRIPE -c 1 $DIR/$tdir/testfile2 --pool "$FSNAME.$pool" || \
+		error "setstripe failed"
+
+	mkdir $DIR/$tdir/testdir
+	$SETSTRIPE -c 1 $DIR/$tdir/testdir  -p "$pool" || \
+		error "setstripe failed"
+	$SETSTRIPE -c 1 $DIR/$tdir/testdir  -p "$FSNAME.$pool" || \
+		error "setstripe failed"
+
+	rm -f $DIR/$tdir/testfile1
+	rm -f $DIR/$tdir/testfile2
+	rmdir $DIR/$tdir/testdir
+
+	destroy_pool_int $FSNAME.$pool
+}
+
+test_7a()
+{
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+
+	mkdir -p $DIR/$tdir
+
+	# Generate pool with random name from 1 to 15 characters
+	for i in 1 9 15 ; do
+		POOLNAME=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w $i |
+			   head -n 1)
+		echo set poolname to $POOLNAME
+		helper_test_7a $POOLNAME
+	done
+}
+run_test 7a "create various pool name"
+
+test_7b()
+{
+	# No fsname
+	do_facet mgs lctl pool_new qwerty
+	[ $? -ne 22 ] && error "can create a pool with no fsname"
+
+	# No pool name
+	do_facet mgs lctl pool_new $FSNAME.
+	[ $? -ne 22 ] && error "can create a pool with no name"
+
+	# Invalid character
+	do_facet mgs lctl pool_new $FSNAME.0123456789^bdef
+	[ $? -ne 22 ] && error "can create a pool with an invalid name"
+
+	# Too long
+	do_facet mgs lctl pool_new $FSNAME.0123456789abdefg
+	[ $? -ne 36 ] && error "can create a pool with a name too long"
+
+	return 0
+}
+run_test 7b "try to create pool name with invalid lengths or names"
+
+test_7c()
+{
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+
+	mkdir -p $DIR/$tdir
+
+	# Create a pool with 15 letters
+	local pool=0123456789abcde
+	pool_add $pool || error "pool_add failed"
+	pool_add_targets $pool 0 1 || error "pool_add_targets failed"
+
+	# setstripe with the same pool name plus 1 letter
+	$SETSTRIPE -c 1 $DIR/$tdir/testfile1 --pool "${pool}X" && \
+		error "setstripe succedeed"
+
+	# setstripe with the same pool name minus 1 letter
+	$SETSTRIPE -c 1 $DIR/$tdir/testfile1 --pool "${pool%?}" && \
+		error "setstripe succedeed"
+
+	rm -f $DIR/$tdir/testfile1
+
+	destroy_pool_int $FSNAME.$pool
+}
+run_test 7c "create a valid pool name and setstripe with a bad one"
+
 test_11() {
     set_cleanup_trap
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}

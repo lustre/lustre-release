@@ -73,6 +73,7 @@
 #include <libcfs/util/parser.h>
 #include <lustre/lustreapi.h>
 #include <lustre_ver.h>
+#include <lustre_param.h>
 
 /* all functions */
 static int lfs_setstripe(int argc, char **argv);
@@ -1024,11 +1025,41 @@ static int lfs_setstripe(int argc, char **argv)
 		return CMD_HELP;
 	}
 
-	if (pool_name_arg && strlen(pool_name_arg) > LOV_MAXPOOLNAME) {
-		fprintf(stderr,
-			"error: %s: pool name '%s' is too long (max is %d characters)\n",
-			argv[0], pool_name_arg, LOV_MAXPOOLNAME);
-		return CMD_HELP;
+	if (pool_name_arg != NULL) {
+		char	*ptr;
+		int	rc;
+
+		ptr = strchr(pool_name_arg, '.');
+		if (ptr == NULL) {
+			ptr = pool_name_arg;
+		} else {
+			if ((ptr - pool_name_arg) == 0) {
+				fprintf(stderr, "error: %s: fsname is empty "
+					"in pool name '%s'\n",
+					argv[0], pool_name_arg);
+				return CMD_HELP;
+			}
+
+			++ptr;
+		}
+
+		rc = lustre_is_poolname_valid(ptr, 1, LOV_MAXPOOLNAME);
+		if (rc == -1) {
+			fprintf(stderr, "error: %s: poolname '%s' is "
+				"empty\n",
+				argv[0], pool_name_arg);
+			return CMD_HELP;
+		} else if (rc == -2) {
+			fprintf(stderr, "error: %s: pool name '%s' is too long "
+				"(max is %d characters)\n",
+				argv[0], pool_name_arg, LOV_MAXPOOLNAME);
+			return CMD_HELP;
+		} else if (rc > 0) {
+			fprintf(stderr, "error: %s: char '%c' not allowed in "
+				"pool name '%s'\n",
+				argv[0], rc, pool_name_arg);
+			return CMD_HELP;
+		}
 	}
 
 	/* get the stripe size */
