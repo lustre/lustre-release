@@ -267,6 +267,7 @@ extern int llapi_getname(const char *path, char *buf, size_t size);
 
 extern int llapi_search_rootpath(char *pathname, const char *fsname);
 extern int llapi_nodemap_exists(const char *name);
+extern int llapi_migrate_mdt(char *path, struct find_param *param);
 extern int llapi_mv(char *path, struct find_param *param);
 
 struct mntent;

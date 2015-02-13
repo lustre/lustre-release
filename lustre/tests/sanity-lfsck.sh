@@ -1612,7 +1612,7 @@ test_15c() {
 	#define OBD_FAIL_MIGRATE_DELAY			0x1803
 	do_facet mds2 $LCTL set_param fail_val=5 fail_loc=0x1803
 	echo "Migrate $DIR/$tdir/a1 from MDT1 to MDT0 with delay"
-	$LFS mv -M 0 $DIR/$tdir/a1 &
+	$LFS migrate -m 0 $DIR/$tdir/a1 &
 
 	sleep 1
 	echo "Trigger layout LFSCK to race with the migration"

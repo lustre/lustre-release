@@ -664,7 +664,7 @@ test_17n() {
 		mkdir -p $DIR/$tdir/remote_dir_${i}
 		createmany -o $DIR/$tdir/remote_dir_${i}/f 10 ||
 			error "create files under remote dir failed $i"
-		$LFS mv --mdt-index 1 $DIR/$tdir/remote_dir_${i} ||
+		$LFS migrate --mdt-index 1 $DIR/$tdir/remote_dir_${i} ||
 			error "migrate remote dir error $i"
 	done
 	check_fs_consistency_17n || error "e2fsck report error after migration"
@@ -12588,7 +12588,7 @@ test_230b() {
 	ln -s $migrate_dir/$tfile $migrate_dir/${tfile}_ln
 	ln -s $other_dir/$tfile $migrate_dir/${tfile}_ln_other
 
-	$LFS mv -v -M $MDTIDX $migrate_dir ||
+	$LFS migrate -m $MDTIDX $migrate_dir ||
 		error "migrate remote dir error"
 
 	echo "migratate to MDT1, then checking.."
@@ -12652,7 +12652,7 @@ test_230b() {
 
 	#migrate back to MDT0
 	MDTIDX=0
-	$LFS mv -v -M $MDTIDX $migrate_dir ||
+	$LFS migrate -m $MDTIDX $migrate_dir ||
 		error "migrate remote dir error"
 
 	echo "migrate back to MDT0, checking.."
@@ -12729,7 +12729,7 @@ test_230c() {
 	do_facet mds1 lctl set_param fail_loc=0x20001801
 	do_facet mds1 lctl  set_param fail_val=5
 	local t=$(ls $migrate_dir | wc -l)
-	$LFS mv --mdt-index $MDTIDX $migrate_dir &&
+	$LFS migrate --mdt-index $MDTIDX $migrate_dir &&
 		error "migrate should fail after 5 entries"
 	local u=$(ls $migrate_dir | wc -l)
 	[ "$u" == "$t" ] || error "$u != $t during migration"
@@ -12741,7 +12741,7 @@ test_230c() {
 	do_facet mds1 lctl set_param fail_loc=0
 	do_facet mds1 lctl set_param fail_val=0
 
-	$LFS mv -M $MDTIDX $migrate_dir ||
+	$LFS migrate -m $MDTIDX $migrate_dir ||
 		error "migrate open files should failed with open files"
 
 	echo "Finish migration, then checking.."
@@ -12773,7 +12773,8 @@ test_230d() {
 			error "create files under remote dir failed $i"
 	done
 
-	$LFS mv -M $MDTIDX -v $migrate_dir || error "migrate remote dir error"
+	$LFS migrate -m $MDTIDX $migrate_dir ||
+		error "migrate remote dir error"
 
 	echo "Finish migration, then checking.."
 	for file in $(find $migrate_dir); do

@@ -1899,7 +1899,7 @@ test_110g () {
 
 	#define OBD_FAIL_MIGRATE_NET_REP	0x1702
 	do_facet mds$MDTIDX lctl set_param fail_loc=0x1702
-	$LFS mv -M $MDTIDX $remote_dir || error "migrate failed"
+	$LFS migrate -m $MDTIDX $remote_dir || error "migrate failed"
 	do_facet mds$MDTIDX lctl set_param fail_loc=0x0
 
 	for file in $(find $remote_dir); do

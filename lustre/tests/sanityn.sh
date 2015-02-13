@@ -3095,12 +3095,12 @@ test_80() {
 	# give multiop a chance to open
 	sleep 1
 
-	$LFS mv -M $MDTIDX $DIR1/$tdir &&
+	$LFS migrate -m $MDTIDX $DIR1/$tdir &&
 		error "migrate open files should failed with open files"
 
 	kill -USR1 $pid
 
-	$LFS mv -M $MDTIDX $DIR1/$tdir ||
+	$LFS migrate -m $MDTIDX $DIR1/$tdir ||
 			error "migrate remote dir error"
 
 	echo "Finish migration, then checking.."

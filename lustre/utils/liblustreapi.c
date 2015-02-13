@@ -3302,7 +3302,7 @@ decided:
 	return 0;
 }
 
-static int cb_mv_init(char *path, DIR *parent, DIR **dirp,
+static int cb_migrate_mdt_init(char *path, DIR *parent, DIR **dirp,
 		      void *param_data, struct dirent64 *de)
 {
 	struct find_param	*param = (struct find_param *)param_data;
@@ -3346,7 +3346,8 @@ static int cb_mv_init(char *path, DIR *parent, DIR **dirp,
 	ret = ioctl(fd, LL_IOC_MIGRATE, rawbuf);
 	if (ret != 0) {
 		ret = -errno;
-		fprintf(stderr, "%s migrate failed %d\n", path, ret);
+		fprintf(stderr, "%s migrate failed: %s (%d)\n",
+			path, strerror(-ret), ret);
 		goto out;
 	} else if (param->fp_verbose & VERBOSE_DETAIL) {
 		fprintf(stdout, "migrate %s to MDT%d\n",
@@ -3375,9 +3376,23 @@ out:
 	return ret;
 }
 
+int llapi_migrate_mdt(char *path, struct find_param *param)
+{
+	return param_callback(path, cb_migrate_mdt_init, cb_common_fini, param);
+}
+
 int llapi_mv(char *path, struct find_param *param)
 {
-	return param_callback(path, cb_mv_init, cb_common_fini, param);
+#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(2, 9, 53, 0)
+	static bool printed;
+
+	if (!printed) {
+		llapi_error(LLAPI_MSG_ERROR, -ESTALE,
+			    "llapi_mv() is deprecated, use llapi_migrate_mdt()\n");
+		printed = true;
+	}
+#endif
+	return llapi_migrate_mdt(path, param);
 }
 
 int llapi_find(char *path, struct find_param *param)
