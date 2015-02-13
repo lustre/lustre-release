@@ -396,7 +396,7 @@ static int ll_max_cached_mb_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block     *sb    = m->private;
 	struct ll_sb_info      *sbi   = ll_s2sbi(sb);
-	struct cl_client_cache *cache = &sbi->ll_cache;
+	struct cl_client_cache *cache = sbi->ll_cache;
 	int shift = 20 - PAGE_CACHE_SHIFT;
 	long max_cached_mb;
 	long unused_mb;
@@ -423,7 +423,7 @@ ll_max_cached_mb_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct super_block *sb = m->private;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
-	struct cl_client_cache *cache = &sbi->ll_cache;
+	struct cl_client_cache *cache = sbi->ll_cache;
 	struct lu_env *env;
 	__u64 val;
 	long diff = 0;
@@ -907,7 +907,7 @@ static int ll_unstable_stats_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block	*sb    = m->private;
 	struct ll_sb_info	*sbi   = ll_s2sbi(sb);
-	struct cl_client_cache	*cache = &sbi->ll_cache;
+	struct cl_client_cache	*cache = sbi->ll_cache;
 	long pages;
 	int mb;
 
@@ -945,9 +945,9 @@ static ssize_t ll_unstable_stats_seq_write(struct file *file,
 		return rc;
 
 	/* borrow lru lock to set the value */
-	spin_lock(&sbi->ll_cache.ccc_lru_lock);
-	sbi->ll_cache.ccc_unstable_check = !!val;
-	spin_unlock(&sbi->ll_cache.ccc_lru_lock);
+	spin_lock(&sbi->ll_cache->ccc_lru_lock);
+	sbi->ll_cache->ccc_unstable_check = !!val;
+	spin_unlock(&sbi->ll_cache->ccc_lru_lock);
 
 	return count;
 }

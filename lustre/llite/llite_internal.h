@@ -522,7 +522,7 @@ struct ll_sb_info {
 	 * LRU list of clean pages. An "unstable" page is defined as
 	 * any page which is sent to a server as part of a bulk request,
 	 * but is uncommitted to stable storage. */
-	struct cl_client_cache    ll_cache;
+	struct cl_client_cache	 *ll_cache;
 
         struct lprocfs_stats     *ll_ra_stats;
 

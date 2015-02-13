@@ -1152,3 +1152,52 @@ void cl_page_slice_add(struct cl_page *page, struct cl_page_slice *slice,
 	EXIT;
 }
 EXPORT_SYMBOL(cl_page_slice_add);
+
+/**
+ * Allocate and initialize cl_cache, called by ll_init_sbi().
+ */
+struct cl_client_cache *cl_cache_init(unsigned long lru_page_max)
+{
+	struct cl_client_cache	*cache = NULL;
+
+	ENTRY;
+	OBD_ALLOC(cache, sizeof(*cache));
+	if (cache == NULL)
+		RETURN(NULL);
+
+	/* Initialize cache data */
+	atomic_set(&cache->ccc_users, 1);
+	cache->ccc_lru_max = lru_page_max;
+	atomic_long_set(&cache->ccc_lru_left, lru_page_max);
+	spin_lock_init(&cache->ccc_lru_lock);
+	INIT_LIST_HEAD(&cache->ccc_lru);
+
+	/* turn unstable check off by default as it impacts performance */
+	cache->ccc_unstable_check = 0;
+	atomic_long_set(&cache->ccc_unstable_nr, 0);
+	init_waitqueue_head(&cache->ccc_unstable_waitq);
+
+	RETURN(cache);
+}
+EXPORT_SYMBOL(cl_cache_init);
+
+/**
+ * Increase cl_cache refcount
+ */
+void cl_cache_incref(struct cl_client_cache *cache)
+{
+	atomic_inc(&cache->ccc_users);
+}
+EXPORT_SYMBOL(cl_cache_incref);
+
+/**
+ * Decrease cl_cache refcount and free the cache if refcount=0.
+ * Since llite, lov and osc all hold cl_cache refcount,
+ * the free will not cause race. (LU-6173)
+ */
+void cl_cache_decref(struct cl_client_cache *cache)
+{
+	if (atomic_dec_and_test(&cache->ccc_users))
+		OBD_FREE(cache, sizeof(*cache));
+}
+EXPORT_SYMBOL(cl_cache_decref);

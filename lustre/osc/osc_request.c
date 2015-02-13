@@ -2636,7 +2636,7 @@ static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 
 		LASSERT(cli->cl_cache == NULL); /* only once */
 		cli->cl_cache = (struct cl_client_cache *)val;
-		atomic_inc(&cli->cl_cache->ccc_users);
+		cl_cache_incref(cli->cl_cache);
 		cli->cl_lru_left = &cli->cl_cache->ccc_lru_left;
 
 		/* add this osc into entity list */
@@ -3030,7 +3030,7 @@ int osc_cleanup(struct obd_device *obd)
 		list_del_init(&cli->cl_lru_osc);
 		spin_unlock(&cli->cl_cache->ccc_lru_lock);
 		cli->cl_lru_left = NULL;
-		atomic_dec(&cli->cl_cache->ccc_users);
+		cl_cache_decref(cli->cl_cache);
 		cli->cl_cache = NULL;
 	}
 

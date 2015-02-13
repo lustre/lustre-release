@@ -2327,7 +2327,8 @@ void cl_lock_descr_print(const struct lu_env *env, void *cookie,
  */
 struct cl_client_cache {
 	/**
-	 * # of users (OSCs)
+	 * # of client cache refcount
+	 * # of users (OSCs) + 2 (held by llite and lov)
 	 */
 	atomic_t		ccc_users;
 	/**
@@ -2364,6 +2365,12 @@ struct cl_client_cache {
 	 */
 	wait_queue_head_t	ccc_unstable_waitq;
 };
+/**
+ * cl_cache functions
+ */
+struct cl_client_cache *cl_cache_init(unsigned long lru_page_max);
+void cl_cache_incref(struct cl_client_cache *cache);
+void cl_cache_decref(struct cl_client_cache *cache);
 
 /** @} cl_page */
 
