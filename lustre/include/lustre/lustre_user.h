@@ -897,18 +897,18 @@ static inline size_t changelog_rec_offset(enum changelog_rec_flags crf)
 	return size;
 }
 
-static inline size_t changelog_rec_size(struct changelog_rec *rec)
+static inline size_t changelog_rec_size(const struct changelog_rec *rec)
 {
 	return changelog_rec_offset(rec->cr_flags);
 }
 
-static inline size_t changelog_rec_varsize(struct changelog_rec *rec)
+static inline size_t changelog_rec_varsize(const struct changelog_rec *rec)
 {
 	return changelog_rec_size(rec) - sizeof(*rec) + rec->cr_namelen;
 }
 
 static inline
-struct changelog_ext_rename *changelog_rec_rename(struct changelog_rec *rec)
+struct changelog_ext_rename *changelog_rec_rename(const struct changelog_rec *rec)
 {
 	enum changelog_rec_flags crf = rec->cr_flags & CLF_VERSION;
 
@@ -918,7 +918,7 @@ struct changelog_ext_rename *changelog_rec_rename(struct changelog_rec *rec)
 
 /* The jobid follows the rename extension, if present */
 static inline
-struct changelog_ext_jobid *changelog_rec_jobid(struct changelog_rec *rec)
+struct changelog_ext_jobid *changelog_rec_jobid(const struct changelog_rec *rec)
 {
 	enum changelog_rec_flags crf = rec->cr_flags &
 					(CLF_VERSION | CLF_RENAME);
@@ -928,18 +928,18 @@ struct changelog_ext_jobid *changelog_rec_jobid(struct changelog_rec *rec)
 }
 
 /* The name follows the rename and jobid extensions, if present */
-static inline char *changelog_rec_name(struct changelog_rec *rec)
+static inline char *changelog_rec_name(const struct changelog_rec *rec)
 {
 	return (char *)rec + changelog_rec_offset(rec->cr_flags &
 						  CLF_SUPPORTED);
 }
 
-static inline size_t changelog_rec_snamelen(struct changelog_rec *rec)
+static inline size_t changelog_rec_snamelen(const struct changelog_rec *rec)
 {
 	return rec->cr_namelen - strlen(changelog_rec_name(rec)) - 1;
 }
 
-static inline char *changelog_rec_sname(struct changelog_rec *rec)
+static inline char *changelog_rec_sname(const struct changelog_rec *rec)
 {
 	char *cr_name = changelog_rec_name(rec);
 
