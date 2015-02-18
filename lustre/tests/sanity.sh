@@ -12408,7 +12408,8 @@ test_230a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	local MDTIDX=1
 
-	mkdir -p $DIR/$tdir/test_230_local
+	test_mkdir $DIR/$tdir
+	test_mkdir -i0 -c1 $DIR/$tdir/test_230_local
 	local mdt_idx=$($GETSTRIPE -M $DIR/$tdir/test_230_local)
 	[ $mdt_idx -ne 0 ] &&
 		error "create local directory on wrong MDT $mdt_idx"
@@ -12439,8 +12440,9 @@ test_230b() {
 	local migrate_dir=$DIR/$tdir/migrate_dir
 	local other_dir=$DIR/$tdir/other_dir
 
-	mkdir -p $migrate_dir
-	mkdir -p $other_dir
+	test_mkdir $DIR/$tdir
+	test_mkdir -i0 -c1 $migrate_dir
+	test_mkdir -i0 -c1 $other_dir
 	for ((i=0; i<10; i++)); do
 		mkdir -p $migrate_dir/dir_${i}
 		createmany -o $migrate_dir/dir_${i}/f 10 ||
@@ -12595,36 +12597,38 @@ test_230c() {
 	local MDTIDX=1
 	local mdt_index
 	local file
+	local migrate_dir=$DIR/$tdir/migrate_dir
 
 	#If migrating directory fails in the middle, all entries of
 	#the directory is still accessiable.
-	mkdir -p $DIR/$tdir
-	stat $DIR/$tdir
-	createmany -o $DIR/$tdir/f 10 ||
-		error "create files under ${tdir} failed"
+	test_mkdir $DIR/$tdir
+	test_mkdir -i0 -c1 $migrate_dir
+	stat $migrate_dir
+	createmany -o $migrate_dir/f 10 ||
+		error "create files under ${migrate_dir} failed"
 
 	#failed after migrating 5 entries
 	#OBD_FAIL_MIGRATE_ENTRIES	0x1801
 	do_facet mds1 lctl set_param fail_loc=0x20001801
 	do_facet mds1 lctl  set_param fail_val=5
-	local t=$(ls $DIR/$tdir | wc -l)
-	$LFS mv --mdt-index $MDTIDX $DIR/$tdir &&
+	local t=$(ls $migrate_dir | wc -l)
+	$LFS mv --mdt-index $MDTIDX $migrate_dir &&
 		error "migrate should fail after 5 entries"
-	local u=$(ls $DIR/$tdir | wc -l)
+	local u=$(ls $migrate_dir | wc -l)
 	[ "$u" == "$t" ] || error "$u != $t during migration"
 
-	for file in $(find $DIR/$tdir); do
+	for file in $(find $migrate_dir); do
 		stat $file || error "stat $file failed"
 	done
 
 	do_facet mds1 lctl set_param fail_loc=0
 	do_facet mds1 lctl set_param fail_val=0
 
-	$LFS mv -M $MDTIDX $DIR/$tdir ||
+	$LFS mv -M $MDTIDX $migrate_dir ||
 		error "migrate open files should failed with open files"
 
 	echo "Finish migration, then checking.."
-	for file in $(find $DIR/$tdir); do
+	for file in $(find $migrate_dir); do
 		mdt_index=$($LFS getstripe -M $file)
 		[ $mdt_index == $MDTIDX ] ||
 			error "$file is not on MDT${MDTIDX}"
@@ -12639,21 +12643,23 @@ test_230d() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	local MDTIDX=1
 	local mdt_index
+	local migrate_dir=$DIR/$tdir/migrate_dir
 	local i
 	local j
 
-	mkdir -p $DIR/$tdir
+	test_mkdir $DIR/$tdir
+	test_mkdir -i0 -c1 $migrate_dir
 
 	for ((i=0; i<100; i++)); do
-		mkdir -p $DIR/$tdir/dir_${i}
-		createmany -o $DIR/$tdir/dir_${i}/f 100 ||
+		test_mkdir -i0 -c1 $migrate_dir/dir_${i}
+		createmany -o $migrate_dir/dir_${i}/f 100 ||
 			error "create files under remote dir failed $i"
 	done
 
-	$LFS mv -M $MDTIDX -v $DIR/$tdir || error "migrate remote dir error"
+	$LFS mv -M $MDTIDX -v $migrate_dir || error "migrate remote dir error"
 
 	echo "Finish migration, then checking.."
-	for file in $(find $DIR/$tdir); do
+	for file in $(find $migrate_dir); do
 		mdt_index=$($LFS getstripe -M $file)
 		[ $mdt_index == $MDTIDX ] ||
 			error "$file is not on MDT${MDTIDX}"
