@@ -1200,8 +1200,9 @@ static inline gni_return_t kgnilnd_post_rdma(
 			ep_hndl, post_descr);
 		break;
 	case GNI_RC_ERROR_RESOURCE:
-		GNILND_API_RESOURCE(
-			ep_hndl, post_descr);
+		CDEBUG(D_NET, "no resources for kgnilnd_post_rdma (0x%p, 0x%p)"
+			" rc %s\n", ep_hndl, post_descr,
+			kgnilnd_api_rc2str(rrc));
 		break;
 	default:
 		GNILND_API_RC_LBUG(

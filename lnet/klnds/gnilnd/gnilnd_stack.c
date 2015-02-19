@@ -36,7 +36,7 @@ kgnilnd_bump_timeouts(__u32 nap_time, char *reason)
 	kgn_device_t           *dev;
 	kgn_dgram_t            *dgram;
 
-	LCONSOLE_INFO("%s: bumping all timeouts by %ds\n", reason, nap_time);
+	CDEBUG(D_INFO, "%s: bumping all timeouts by %ds\n", reason, nap_time);
 
 	LASSERTF(GNILND_IS_QUIESCED, "gnilnd not quiesced %d != %d\n",
 		 atomic_read(&kgnilnd_data.kgn_nquiesce),
@@ -58,6 +58,7 @@ kgnilnd_bump_timeouts(__u32 nap_time, char *reason)
 			peer->gnp_reconnect_interval = 0;
 			/* tell LNet dude is still alive */
 			kgnilnd_peer_alive(peer);
+			kgnilnd_peer_notify(peer, 0, 1);
 
 			list_for_each_entry(tx, &peer->gnp_tx_queue, tx_list) {
 				tx->tx_qtime = jiffies;
@@ -123,11 +124,10 @@ kgnilnd_quiesce_wait(char *reason)
 		quiesce_to = cfs_time_seconds(*kgnilnd_tunables.kgn_timeout * 10);
 		quiesce_deadline = (long) jiffies + quiesce_to;
 
+		LCONSOLE_INFO("Quiesce start: %s\n", reason);
 		/* wait for everyone to check-in as quiesced */
-		i = 1;
 		while (!GNILND_IS_QUIESCED) {
-			i++;
-			LCONSOLE((((i) & (-i)) == i) ? D_WARNING : D_NET,
+			CDEBUG(D_INFO,
 				 "%s: Waiting for %d threads to pause\n",
 				 reason,
 				 atomic_read(&kgnilnd_data.kgn_nthreads) -
@@ -140,11 +140,11 @@ kgnilnd_quiesce_wait(char *reason)
 				 cfs_duration_sec(quiesce_to));
 		}
 
-		LCONSOLE_WARN("%s: All threads paused!\n", reason);
+		CDEBUG(D_INFO, "%s: All threads paused!\n", reason);
 		/* XXX Nic: Is there a set of counters we can grab here to
 		 * ensure that there is no traffic until quiesce is over ?*/
 	} else {
-		/* GO! GO! GO! */
+		LCONSOLE_INFO("Quiesce complete: %s\n", reason);
 
 		for (i = 0; i < kgnilnd_data.kgn_ndevs; i++) {
 			kgn_device_t *dev = &kgnilnd_data.kgn_devices[i];
@@ -153,17 +153,15 @@ kgnilnd_quiesce_wait(char *reason)
 
 		/* wait for everyone to check-in as running - they will be spinning
 		 * and looking, so no need to poke any waitq */
-		i = 1;
 		while (atomic_read(&kgnilnd_data.kgn_nquiesce) > 0) {
-			i++;
-			LCONSOLE((((i) & (-i)) == i) ? D_WARNING : D_NET,
+			CDEBUG(D_INFO,
 				 "%s: Waiting for %d threads to wake up\n",
 				  reason,
 				  atomic_read(&kgnilnd_data.kgn_nquiesce));
 			cfs_pause(cfs_time_seconds(1 * i));
 		}
 
-		LCONSOLE_WARN("%s: All threads awake!\n", reason);
+		CDEBUG(D_INFO, "%s: All threads awake!\n", reason);
 	}
 }
 
@@ -402,7 +400,7 @@ kgnilnd_ruhroh_thread(void *arg)
 
 			/* Pause all other kgnilnd threads. */
 			set_mb(kgnilnd_data.kgn_quiesce_trigger, GNILND_QUIESCE_HW_QUIESCE);
-			kgnilnd_quiesce_wait("hardware quiesce flag");
+			kgnilnd_quiesce_wait("hardware quiesce");
 
 			/* If the hardware quiesce flag is set, wait for it to clear.
 			 * This should happen relatively quickly, so we wait for it.
@@ -417,8 +415,8 @@ kgnilnd_ruhroh_thread(void *arg)
 			while (kgnilnd_hw_in_quiesce() || kgnilnd_data.kgn_bump_info_rdy) {
 
 				i++;
-				LCONSOLE((((i) & (-i)) == i) ? D_WARNING : D_NET,
-						"Waiting for hardware quiesce flag to clear\n");
+				CDEBUG(D_INFO, "Waiting for hardware quiesce "
+					       "flag to clear\n");
 				cfs_pause(cfs_time_seconds(1 * i));
 
 				/* If we got a quiesce event with bump info, DO THE BUMP!. */
@@ -664,9 +662,11 @@ subscribe_retry:
 			}
 
 			/* Only care about compute and service nodes not GPUs */
-			if (RSN_GET_FLD(event.ev_gen.svid_node.rs_node_flat,
-					TYPE) != rt_node) {
-				continue;
+			if (!(RSN_GET_FLD(event.ev_gen.svid_node.rs_node_flat,
+					TYPE) == rt_node ||
+			     RSN_GET_FLD(event.ev_gen.svid_node.rs_node_flat,
+					TYPE) == rt_accel)) {
+						continue;
 			}
 
 			switch (event.ev_id) {

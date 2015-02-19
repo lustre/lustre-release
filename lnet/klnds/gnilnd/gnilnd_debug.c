@@ -83,10 +83,12 @@ _kgnilnd_debug_tx(kgn_tx_t *tx, struct libcfs_debug_msg_data *msgdata,
 
 	va_start(args, fmt);
 	libcfs_debug_vmsg2(msgdata, fmt, args,
-		" tx@0x%p->%s id "LPX64"/%u/%d:%d msg %x/%s/%d q %s@%lds->0x%p f %x re %d\n",
+		" tx@0x%p->%s id "LPX64
+		"/%u/%d:%d msg %x/%s/%d x%d q %s@%lds->0x%p f %x re %d\n",
 		tx, nid, id->txe_cookie, id->txe_smsg_id, id->txe_cqid,
 		id->txe_idx, tx->tx_msg.gnm_type,
 		kgnilnd_msgtype2str(tx->tx_msg.gnm_type), tx->tx_buftype,
+		tx->tx_msg.gnm_seq,
 		kgnilnd_tx_state2str(tx->tx_list_state),
 		cfs_duration_sec((long)jiffies - tx->tx_qtime), tx->tx_list_p,
 		tx->tx_state, tx->tx_retrans);

@@ -179,6 +179,14 @@ CFS_MODULE_PARM(efault_lbug, "i", int, 0644,
 		"If a compute receives an EFAULT in"
 		" a message should it LBUG. 0 off 1 on");
 
+static int fast_reconn = GNILND_FAST_RECONNECT;
+CFS_MODULE_PARM(fast_reconn, "i", int, 0644,
+		"fast reconnect on connection timeout");
+
+static int max_conn_purg = GNILND_PURGATORY_MAX;
+CFS_MODULE_PARM(max_conn_purg, "i", int, 0644,
+		"Max number of connections per peer in purgatory");
+
 kgn_tunables_t kgnilnd_tunables = {
 	.kgn_min_reconnect_interval = &min_reconnect_interval,
 	.kgn_max_reconnect_interval = &max_reconnect_interval,
@@ -214,7 +222,9 @@ kgn_tunables_t kgnilnd_tunables = {
 	.kgn_reverse_rdma           = &reverse_rdma,
 	.kgn_dgram_timeout          = &dgram_timeout,
 	.kgn_eager_credits          = &eager_credits,
-	.kgn_efault_lbug            = &efault_lbug
+	.kgn_fast_reconn            = &fast_reconn,
+	.kgn_efault_lbug            = &efault_lbug,
+	.kgn_max_purgatory	    = &max_conn_purg
 };
 
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
@@ -496,6 +506,14 @@ static struct ctl_table kgnilnd_ctl_table[] = {
 		.data     = &efault_lbug,
 		.maxlen   = sizeof(int),
 		.mode     = 0644,
+		.proc_handler = &proc_dointvec
+	},
+	{
+		INIT_CTL_NAME
+		.procname = "max_conn_purg"
+		.data	  = &max_conn_purg,
+		.maxlen   = sizeof(int),
+		.mode	  = 0644,
 		.proc_handler = &proc_dointvec
 	},
 	{ 0 }

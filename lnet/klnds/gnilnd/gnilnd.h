@@ -42,7 +42,6 @@
 #include <linux/time.h>
 #include <asm/timex.h>
 
-#include <asm/system.h>
 #include <asm/uaccess.h>
 #include <asm/io.h>
 
@@ -116,11 +115,13 @@
 #define GNILND_FMABLK             64            /* default number of mboxes per fmablk */
 #define GNILND_SCHED_NICE         0		/* default nice value for scheduler threads */
 #define GNILND_COMPUTE            1             /* compute image */
+#define GNILND_FAST_RECONNECT     1             /* Fast Reconnect option */
 #else
 #define GNILND_SCHED_THREADS      3             /* default # of kgnilnd_scheduler threads */
 #define GNILND_FMABLK             1024          /* default number of mboxes per fmablk */
 #define GNILND_SCHED_NICE         -20		/* default nice value for scheduler threads */
 #define GNILND_COMPUTE            0             /* service image */
+#define GNILND_FAST_RECONNECT     0             /* Fast Reconnect option */
 #endif
 
 /* EXTRA_BITS are there to allow us to hide NOOP/CLOSE and anything else out of band */
@@ -134,6 +135,9 @@
 
 /* need sane upper bound to limit copy overhead */
 #define GNILND_MAX_IMMEDIATE      (64<<10)
+
+/* Max number of connections to keep in purgatory per peer */
+#define GNILND_PURGATORY_MAX	  5
 
 /* payload size to add to the base mailbox size
  * This is subtracting 2 from the concurrent_sends as 4 messages are included in the size
@@ -474,7 +478,9 @@ typedef struct kgn_tunables {
 	int		 *kgn_sched_nice;	/* nice value for kgnilnd scheduler threads */
 	int		 *kgn_reverse_rdma;	/* Reverse RDMA setting */
 	int		 *kgn_eager_credits;	/* allocated eager buffers */
-	int              *kgn_efault_lbug;      /* Should we LBUG on receiving an EFAULT */
+	int     *kgn_fast_reconn;      /* fast reconnection on conn timeout */
+	int     *kgn_efault_lbug;      /* LBUG on receiving an EFAULT */
+	int     *kgn_max_purgatory;    /* # conns/peer to keep in purgatory */
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
 	cfs_sysctl_table_header_t *kgn_sysctl;  /* sysctl interface */
 #endif
@@ -539,7 +545,7 @@ typedef struct kgn_device {
 	int                     gnd_dgram_ready;  /* dgrams need movin' */
 	struct list_head       *gnd_dgrams;       /* nid hash to dgrams */
 	atomic_t                gnd_ndgrams;      /* # dgrams extant */
-	atomic_t		gnd_nwcdgrams;    /* # wildcard dgrams to post on device */
+	atomic_t                gnd_nwcdgrams;    /* # wildcard dgrams to post*/
 	spinlock_t              gnd_dgram_lock;   /* serialize gnd_dgrams */
 	struct list_head        gnd_map_list;     /* list of all mapped regions */
 	int                     gnd_map_version;  /* version flag for map list */
@@ -829,14 +835,14 @@ typedef struct kgn_data {
 	wait_queue_head_t       kgn_reaper_waitq;     /* reaper sleeps here */
 	spinlock_t              kgn_reaper_lock;      /* serialise */
 
-	struct kmem_cache        *kgn_rx_cache;         /* rx descriptor space */
-	struct kmem_cache        *kgn_tx_cache;         /* tx descriptor memory */
-	struct kmem_cache        *kgn_tx_phys_cache;    /* tx phys descriptor memory */
+	struct kmem_cache      *kgn_rx_cache;         /* rx descriptor space */
+	struct kmem_cache      *kgn_tx_cache;         /* tx descriptor memory */
+	struct kmem_cache      *kgn_tx_phys_cache;    /* tx phys descriptor memory */
 	atomic_t                kgn_ntx;              /* # tx in use */
-	struct kmem_cache        *kgn_dgram_cache;      /* outgoing datagrams */
+	struct kmem_cache      *kgn_dgram_cache;      /* outgoing datagrams */
 
 	struct page          ***kgn_cksum_map_pages;  /* page arrays for mapping pages on checksum */
-	__u64			kgn_cksum_npages;     /* Number of pages allocated for checksumming */
+	__u64                   kgn_cksum_npages;     /* # pages alloc'd for checksumming */
 	atomic_t                kgn_nvmap_cksum;      /* # times we vmapped for checksums */
 	atomic_t                kgn_nvmap_short;      /* # times we vmapped for short kiov */
 
@@ -848,12 +854,13 @@ typedef struct kgn_data {
 	atomic_t                kgn_npending_unlink;  /* # of peers pending unlink */
 	atomic_t                kgn_npending_conns;   /* # of conns with pending closes */
 	atomic_t                kgn_npending_detach;  /* # of conns with a pending detach */
-	unsigned long		kgn_last_scheduled;   /* last time schedule was called in a sched thread */
-	unsigned long		kgn_last_condresched; /* last time cond_resched was called in a sched thread */
-	atomic_t		kgn_rev_offset;	      /* number of time REV rdma have been misaligned offsets */
-	atomic_t		kgn_rev_length;	      /* Number of times REV rdma have been misaligned lengths */
-	atomic_t		kgn_rev_copy_buff;    /* Number of times REV rdma have had to make a copy buffer */
+	unsigned long           kgn_last_scheduled;   /* last time schedule was called */
+	unsigned long           kgn_last_condresched; /* last time cond_resched was called */
+	atomic_t                kgn_rev_offset;       /* # of REV rdma w/misaligned offsets */
+	atomic_t                kgn_rev_length;       /* # of REV rdma have misaligned len */
+	atomic_t                kgn_rev_copy_buff;    /* # of REV rdma buffer copies */
 	struct socket          *kgn_sock;             /* for Apollo */
+	unsigned long           free_pages_limit;     /* # of free pages reserve from fma block allocations */
 } kgn_data_t;
 
 extern kgn_data_t         kgnilnd_data;
@@ -1737,7 +1744,7 @@ void kgnilnd_peer_cancel_tx_queue(kgn_peer_t *peer);
 void kgnilnd_cancel_peer_connect_locked(kgn_peer_t *peer, struct list_head *zombies);
 int kgnilnd_close_stale_conns_locked(kgn_peer_t *peer, kgn_conn_t *newconn);
 void kgnilnd_peer_alive(kgn_peer_t *peer);
-void kgnilnd_peer_notify(kgn_peer_t *peer, int error);
+void kgnilnd_peer_notify(kgn_peer_t *peer, int error, int alive);
 void kgnilnd_close_conn_locked(kgn_conn_t *conn, int error);
 void kgnilnd_close_conn(kgn_conn_t *conn, int error);
 void kgnilnd_complete_closed_conn(kgn_conn_t *conn);

@@ -43,6 +43,8 @@ kgnilnd_map_fmablk(kgn_device_t *device, kgn_fma_memblock_t *fma_blk)
 		flags |= GNI_MEM_PHYS_CONT;
 	}
 
+	fma_blk->gnm_hold_timeout = 0;
+
 	/* make sure we are mapping a clean block */
 	LASSERTF(fma_blk->gnm_hndl.qword1 == 0UL, "fma_blk %p dirty\n", fma_blk);
 
@@ -81,6 +83,19 @@ kgnilnd_alloc_fmablk(kgn_device_t *device, int use_phys)
 	gni_smsg_attr_t         smsg_attr;
 	unsigned long           fmablk_vers;
 
+#if defined(CONFIG_CRAY_XT) && !defined(CONFIG_CRAY_COMPUTE)
+	/* We allocate large blocks of memory here potentially leading
+	 * to memory exhaustion during massive reconnects during a network
+	 * outage. Limit the amount of fma blocks to use by always keeping
+	 * a percent of pages free initially set to 25% of total memory. */
+	if (global_page_state(NR_FREE_PAGES) < kgnilnd_data.free_pages_limit) {
+		LCONSOLE_INFO("Exceeding free page limit of %ld. "
+			      "Free pages available %ld\n",
+			      kgnilnd_data.free_pages_limit,
+			      global_page_state(NR_FREE_PAGES));
+		return -ENOMEM;
+	}
+#endif
 	/* we'll use fmablk_vers and the gnd_fmablk_mutex to gate access
 	 * to this allocation code. Everyone will sample the version
 	 * before and after getting the mutex. If it has changed,
@@ -232,8 +247,11 @@ kgnilnd_unmap_fmablk(kgn_device_t *dev, kgn_fma_memblock_t *fma_blk)
 	gni_return_t            rrc;
 
 	/* if some held, set hold_timeout from conn timeouts used in this block
-	 * but not during shutdown, then just nuke and pave */
-	if (fma_blk->gnm_held_mboxs && (!kgnilnd_data.kgn_shutdown)) {
+	 * but not during shutdown, then just nuke and pave
+	 * During a stack reset, we need to deregister with a hold timeout
+	 * set so we don't use the same mdd after reset is complete */
+	if ((fma_blk->gnm_held_mboxs && !kgnilnd_data.kgn_shutdown) ||
+	    kgnilnd_data.kgn_in_reset) {
 		fma_blk->gnm_hold_timeout = GNILND_TIMEOUT2DEADMAN;
 	}
 
@@ -255,7 +273,9 @@ kgnilnd_unmap_fmablk(kgn_device_t *dev, kgn_fma_memblock_t *fma_blk)
 		"tried to double unmap or something bad, fma_blk %p (rrc %d)\n",
 		fma_blk, rrc);
 
-	if (fma_blk->gnm_hold_timeout) {
+	if (fma_blk->gnm_hold_timeout &&
+	    !(kgnilnd_data.kgn_in_reset &&
+	      fma_blk->gnm_state == GNILND_FMABLK_PHYS)) {
 		atomic_inc(&dev->gnd_n_mdd_held);
 	} else {
 		atomic_dec(&dev->gnd_n_mdd);
@@ -1817,8 +1837,8 @@ kgnilnd_finish_connect(kgn_dgram_t *dgram)
 	}
 
 	if (peer->gnp_down == GNILND_RCA_NODE_DOWN) {
-		CNETERR("Received connection request from %s that RCA thinks is"
-			" down.\n", libcfs_nid2str(her_nid));
+		CNETERR("Received connection request from down nid %s\n",
+			libcfs_nid2str(her_nid));
 		peer->gnp_down = GNILND_RCA_NODE_UP;
 	}
 
@@ -2170,7 +2190,7 @@ inform_peer:
 
 		/* now that we are outside the lock, tell Mommy */
 		if (peer != NULL) {
-			kgnilnd_peer_notify(peer, rc);
+			kgnilnd_peer_notify(peer, rc, 0);
 			kgnilnd_peer_decref(peer);
 		}
 	}

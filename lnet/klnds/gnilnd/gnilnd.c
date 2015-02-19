@@ -460,7 +460,7 @@ kgnilnd_peer_alive(kgn_peer_t *peer)
 }
 
 void
-kgnilnd_peer_notify(kgn_peer_t *peer, int error)
+kgnilnd_peer_notify(kgn_peer_t *peer, int error, int alive)
 {
 	int                     tell_lnet = 0;
 	int                     nnets = 0;
@@ -489,10 +489,10 @@ kgnilnd_peer_notify(kgn_peer_t *peer, int error)
 	       peer, libcfs_nid2str(peer->gnp_nid), peer->gnp_connecting, conn,
 	       kgnilnd_data.kgn_in_reset, error);
 
-	if ((peer->gnp_connecting == GNILND_PEER_IDLE) &&
+	if (((peer->gnp_connecting == GNILND_PEER_IDLE) &&
 	    (conn == NULL) &&
 	    (!kgnilnd_data.kgn_in_reset) &&
-	    (!kgnilnd_conn_clean_errno(error))) {
+	    (!kgnilnd_conn_clean_errno(error))) || alive) {
 		tell_lnet = 1;
 	}
 
@@ -556,8 +556,8 @@ kgnilnd_peer_notify(kgn_peer_t *peer, int error)
 				peer, libcfs_nid2str(peer_nid), peer->gnp_last_alive,
 				cfs_duration_sec(jiffies - peer->gnp_last_alive));
 
-			lnet_notify(net->gnn_ni, peer_nid, 0, peer->gnp_last_alive);
-
+			lnet_notify(net->gnn_ni, peer_nid, alive,
+				    peer->gnp_last_alive);
 
 			kgnilnd_net_decref(net);
 		}
@@ -806,8 +806,8 @@ kgnilnd_complete_closed_conn(kgn_conn_t *conn)
 
 	/* I'm telling Mommy! - use peer_error if they initiated close */
 	kgnilnd_peer_notify(conn->gnc_peer,
-			    conn->gnc_error == -ECONNRESET ? conn->gnc_peer_error
-							   : conn->gnc_error);
+			    conn->gnc_error == -ECONNRESET ?
+			    conn->gnc_peer_error : conn->gnc_error, 0);
 
 	EXIT;
 }
@@ -1166,7 +1166,7 @@ kgnilnd_release_purgatory_list(struct list_head *conn_list)
 		 * make sure we tell LNet - if this is from other context,
 		 * the checks in the function will prevent an errant
 		 * notification */
-		kgnilnd_peer_notify(conn->gnc_peer, conn->gnc_error);
+		kgnilnd_peer_notify(conn->gnc_peer, conn->gnc_error, 0);
 
 		list_for_each_entry_safe(gmp, gmpN, &conn->gnc_mdd_list,
 					 gmp_list) {
@@ -1739,13 +1739,10 @@ kgnilnd_report_node_state(lnet_nid_t nid, int down)
 		 * kgnilnd_tx_done
 		 */
 		kgnilnd_txlist_done(&zombies, -ENETRESET);
-
-		if (*kgnilnd_tunables.kgn_peer_health) {
-			kgnilnd_peer_notify(peer, -ECONNRESET);
-		}
+		kgnilnd_peer_notify(peer, -ECONNRESET, 0);
+		LCONSOLE_INFO("Recieved down event for nid %lld\n", nid);
 	}
 
-	CDEBUG(D_INFO, "marking nid %lld %s\n", nid, down ? "down" : "up");
 	return 0;
 }
 
@@ -2017,7 +2014,7 @@ kgnilnd_dev_init(kgn_device_t *dev)
 	}
 	CDEBUG(D_NET, "NIC %x -> NID %d\n", dev->gnd_host_id, dev->gnd_nid);
 
-	rrc = kgnilnd_cq_create(dev->gnd_handle, cq_size,
+	rrc = kgnilnd_cq_create(dev->gnd_handle, *kgnilnd_tunables.kgn_credits,
 				0, kgnilnd_device_callback,
 				dev->gnd_id, &dev->gnd_snd_rdma_cqh);
 	if (rrc != GNI_RC_SUCCESS) {
@@ -2132,7 +2129,8 @@ kgnilnd_dev_fini(kgn_device_t *dev)
 		dev->gnd_domain = NULL;
 	}
 
-	sock_release(kgnilnd_data.kgn_sock);
+	if (kgnilnd_data.kgn_sock)
+		sock_release(kgnilnd_data.kgn_sock);
 
 	EXIT;
 }
@@ -2146,6 +2144,15 @@ int kgnilnd_base_startup(void)
 	int                  i;
 	kgn_device_t        *dev;
 	struct task_struct  *thrd;
+
+#if defined(CONFIG_CRAY_XT) && !defined(CONFIG_CRAY_COMPUTE)
+	/* limit how much memory can be allocated for fma blocks in
+	 * instances where many nodes need to reconnects at the same time */
+	struct sysinfo si;
+	si_meminfo(&si);
+	kgnilnd_data.free_pages_limit = si.totalram/4;
+#endif
+
 	ENTRY;
 
 	LASSERTF(kgnilnd_data.kgn_init == GNILND_INIT_NOTHING,
@@ -2501,7 +2508,8 @@ kgnilnd_base_shutdown(void)
 	wake_up_all(&kgnilnd_data.kgn_reaper_waitq);
 	spin_unlock(&kgnilnd_data.kgn_reaper_lock);
 
-	kgnilnd_wakeup_rca_thread();
+	if (atomic_read(&kgnilnd_data.kgn_nthreads))
+		kgnilnd_wakeup_rca_thread();
 
 	/* Wait for threads to exit */
 	i = 2;

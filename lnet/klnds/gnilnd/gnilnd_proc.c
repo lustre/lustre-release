@@ -58,7 +58,8 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 	for (i = 0; i < LNET_MAX_IOV; i++) {
 		src[i].kiov_offset = 0;
 		src[i].kiov_len = PAGE_SIZE;
-		src[i].kiov_page = alloc_page(GFP_KERNEL | __GFP_ZERO);
+		src[i].kiov_page = alloc_page(__GFP_WAIT | __GFP_IO |
+					      __GFP_FS | __GFP_ZERO);
 
 		if (src[i].kiov_page == NULL) {
 			CERROR("couldn't allocate page %d\n", i);
@@ -67,7 +68,8 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 
 		dest[i].kiov_offset = 0;
 		dest[i].kiov_len = PAGE_SIZE;
-		dest[i].kiov_page = alloc_page(GFP_KERNEL | __GFP_ZERO);
+		dest[i].kiov_page = alloc_page(__GFP_WAIT | __GFP_IO |
+					      __GFP_FS | __GFP_ZERO);
 
 		if (dest[i].kiov_page == NULL) {
 			CERROR("couldn't allocate page %d\n", i);
@@ -155,9 +157,9 @@ unwind:
 	return rc;
 }
 
-static int
-kgnilnd_proc_cksum_test_write(struct file *file, const char *ubuffer,
-			      unsigned long count, void *data)
+static ssize_t
+kgnilnd_proc_cksum_test_write(struct file *file, const char __user *ubuffer,
+			      size_t count, loff_t *ppos)
 {
 	char                    dummy[256 + 1] = { '\0' };
 	int                     testno, nloops, nbytes;
@@ -188,16 +190,29 @@ kgnilnd_proc_cksum_test_write(struct file *file, const char *ubuffer,
 }
 
 static int
-kgnilnd_proc_stats_read(char *page, char **start, off_t off,
-			     int count, int *eof, void *data)
+kgnilnd_cksum_test_seq_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, NULL, PDE_DATA(inode));
+}
+
+static const struct file_operations kgn_cksum_test_fops = {
+	.owner   = THIS_MODULE,
+	.open    = kgnilnd_cksum_test_seq_open,
+	.read    = seq_read,
+	.write   = kgnilnd_proc_cksum_test_write,
+	.llseek  = seq_lseek,
+	.release = seq_release,
+};
+
+static int
+kgnilnd_stats_seq_show(struct seq_file *sf, void *v)
 {
 	kgn_device_t           *dev;
 	struct timeval          now;
 	int                     rc;
 
 	if (kgnilnd_data.kgn_init < GNILND_INIT_ALL) {
-		rc = sprintf(page,
-			"kgnilnd is not initialized yet\n");
+		rc = seq_printf(sf, "kgnilnd is not initialized yet\n");
 		return rc;
 	}
 
@@ -208,7 +223,7 @@ kgnilnd_proc_stats_read(char *page, char **start, off_t off,
 	smp_rmb();
 	do_gettimeofday(&now);
 
-	rc = sprintf(page, "time: %lu.%lu\n"
+	rc = seq_printf(sf, "time: %lu.%lu\n"
 			   "ntx: %d\n"
 			   "npeers: %d\n"
 			   "nconns: %d\n"
@@ -233,14 +248,14 @@ kgnilnd_proc_stats_read(char *page, char **start, off_t off,
 			   "SMSG fast_try: %d\n"
 			   "SMSG fast_ok: %d\n"
 			   "SMSG fast_block: %d\n"
-			   "SMSG ntx: %d\n"
-			   "SMSG tx_bytes: %ld\n"
-			   "SMSG nrx: %d\n"
-			   "SMSG rx_bytes: %ld\n"
-			   "RDMA ntx: %d\n"
-			   "RDMA tx_bytes: %ld\n"
-			   "RDMA nrx: %d\n"
-			   "RDMA rx_bytes: %ld\n"
+			   "SMSG ntx: %u\n"
+			   "SMSG tx_bytes: %lu\n"
+			   "SMSG nrx: %u\n"
+			   "SMSG rx_bytes: %lu\n"
+			   "RDMA ntx: %u\n"
+			   "RDMA tx_bytes: %lu\n"
+			   "RDMA nrx: %u\n"
+			   "RDMA rx_bytes: %lu\n"
 			   "VMAP short: %d\n"
 			   "VMAP cksum: %d\n"
 			   "KMAP short: %d\n"
@@ -281,9 +296,9 @@ kgnilnd_proc_stats_read(char *page, char **start, off_t off,
 	return rc;
 }
 
-static int
-kgnilnd_proc_stats_write(struct file *file, const char *ubuffer,
-		     unsigned long count, void *data)
+static ssize_t
+kgnilnd_proc_stats_write(struct file *file, const char __user *ubuffer,
+			 size_t count, loff_t *ppos)
 {
 	kgn_device_t           *dev;
 
@@ -317,6 +332,21 @@ kgnilnd_proc_stats_write(struct file *file, const char *ubuffer,
 	smp_wmb();
 	return count;
 }
+
+static int
+kgnilnd_stats_seq_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, kgnilnd_stats_seq_show, PDE_DATA(inode));
+}
+
+static const struct file_operations kgn_stats_fops = {
+	.owner   = THIS_MODULE,
+	.open    = kgnilnd_stats_seq_open,
+	.read    = seq_read,
+	.write   = kgnilnd_proc_stats_write,
+	.llseek  = seq_lseek,
+	.release = seq_release,
+};
 
 typedef struct {
 	kgn_device_t           *gmdd_dev;
@@ -915,9 +945,9 @@ static struct seq_operations kgn_conn_sops = {
 #define KGN_DEBUG_PEER_NID_DEFAULT -1
 static int kgnilnd_debug_peer_nid = KGN_DEBUG_PEER_NID_DEFAULT;
 
-static int
-kgnilnd_proc_peer_conns_write(struct file *file, const char *ubuffer,
-			      unsigned long count, void *data)
+static ssize_t
+kgnilnd_proc_peer_conns_write(struct file *file, const char __user *ubuffer,
+			      size_t count, loff_t *ppos)
 {
 	char dummy[8];
 	int  rc;
@@ -959,19 +989,17 @@ kgnilnd_proc_peer_conns_write(struct file *file, const char *ubuffer,
 */
 
 static int
-kgnilnd_proc_peer_conns_read(char *page, char **start, off_t off,
-			     int count, int *eof, void *data)
+kgnilnd_proc_peer_conns_seq_show(struct seq_file *sf, void *v)
 {
 	kgn_peer_t      *peer;
 	kgn_conn_t      *conn;
 	struct tm       ctm;
 	struct timespec now;
 	unsigned long   jifs;
-	int             len = 0;
-	int             rc;
+	int             rc = 0;
 
 	if (kgnilnd_debug_peer_nid == KGN_DEBUG_PEER_NID_DEFAULT) {
-		rc = sprintf(page, "peer_conns not initialized\n");
+		rc = seq_printf(sf, "peer_conns not initialized\n");
 		return rc;
 	}
 
@@ -986,14 +1014,14 @@ kgnilnd_proc_peer_conns_read(char *page, char **start, off_t off,
 	peer = kgnilnd_find_peer_locked(kgnilnd_debug_peer_nid);
 
 	if (peer == NULL) {
-		rc = sprintf(page, "peer not found for this nid %d\n",
+		rc = seq_printf(sf, "peer not found for this nid %d\n",
 			     kgnilnd_debug_peer_nid);
 		write_unlock(&kgnilnd_data.kgn_peer_conn_lock);
 		return rc;
 	}
 
 	list_for_each_entry(conn, &peer->gnp_conns, gnc_list) {
-		len += scnprintf(page, count - len,
+		rc = seq_printf(sf,
 			"%04ld-%02d-%02dT%02d:%02d:%02d.%06ld %s "
 			"mbox adr %p "
 			"dg type %s "
@@ -1026,8 +1054,24 @@ kgnilnd_proc_peer_conns_read(char *page, char **start, off_t off,
 	}
 
 	write_unlock(&kgnilnd_data.kgn_peer_conn_lock);
-	return len;
+	return rc;
 }
+
+static int
+kgnilnd_peer_conns_seq_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, kgnilnd_proc_peer_conns_seq_show,
+			   PDE_DATA(inode));
+}
+
+static const struct file_operations kgn_peer_conns_fops = {
+	.owner   = THIS_MODULE,
+	.open    = kgnilnd_peer_conns_seq_open,
+	.read    = seq_read,
+	.write   = kgnilnd_proc_peer_conns_write,
+	.llseek  = seq_lseek,
+	.release = seq_release,
+};
 
 static int
 kgnilnd_conn_seq_open(struct inode *inode, struct file *file)
@@ -1293,76 +1337,59 @@ kgnilnd_proc_init(void)
 	}
 
 	/* Initialize CKSUM_TEST */
-	pde = create_proc_entry(GNILND_PROC_CKSUM_TEST, 0200, kgn_proc_root);
+	pde = proc_create(GNILND_PROC_CKSUM_TEST, 0200, kgn_proc_root,
+			  &kgn_cksum_test_fops);
 	if (pde == NULL) {
 		CERROR("couldn't create proc entry %s\n", GNILND_PROC_CKSUM_TEST);
 		GOTO(remove_dir, rc = -ENOENT);
 	}
 
-	pde->data = NULL;
-	pde->write_proc = kgnilnd_proc_cksum_test_write;
-
 	/* Initialize STATS */
-	pde = create_proc_entry(GNILND_PROC_STATS, 0644, kgn_proc_root);
+	pde = proc_create(GNILND_PROC_STATS, 0644, kgn_proc_root,
+			  &kgn_stats_fops);
 	if (pde == NULL) {
 		CERROR("couldn't create proc entry %s\n", GNILND_PROC_STATS);
 		GOTO(remove_test, rc = -ENOENT);
 	}
 
-	pde->data = NULL;
-	pde->read_proc = kgnilnd_proc_stats_read;
-	pde->write_proc = kgnilnd_proc_stats_write;
-
 	/* Initialize MDD */
-	pde = create_proc_entry(GNILND_PROC_MDD, 0444, kgn_proc_root);
+	pde = proc_create(GNILND_PROC_MDD, 0444, kgn_proc_root, &kgn_mdd_fops);
 	if (pde == NULL) {
 		CERROR("couldn't create proc entry %s\n", GNILND_PROC_MDD);
 		GOTO(remove_stats, rc = -ENOENT);
 	}
 
-	pde->data = NULL;
-	pde->proc_fops = &kgn_mdd_fops;
-
 	/* Initialize SMSG */
-	pde = create_proc_entry(GNILND_PROC_SMSG, 0444, kgn_proc_root);
+	pde = proc_create(GNILND_PROC_SMSG, 0444, kgn_proc_root,
+			  &kgn_smsg_fops);
 	if (pde == NULL) {
 		CERROR("couldn't create proc entry %s\n", GNILND_PROC_SMSG);
 		GOTO(remove_mdd, rc = -ENOENT);
 	}
 
-	pde->data = NULL;
-	pde->proc_fops = &kgn_smsg_fops;
-
 	/* Initialize CONN */
-	pde = create_proc_entry(GNILND_PROC_CONN, 0444, kgn_proc_root);
+	pde = proc_create(GNILND_PROC_CONN, 0444, kgn_proc_root,
+			  &kgn_conn_fops);
 	if (pde == NULL) {
 		CERROR("couldn't create proc entry %s\n", GNILND_PROC_CONN);
 		GOTO(remove_smsg, rc = -ENOENT);
 	}
 
-	pde->data = NULL;
-	pde->proc_fops = &kgn_conn_fops;
-
 	/* Initialize peer conns debug */
-	pde = create_proc_entry(GNILND_PROC_PEER_CONNS, 0644, kgn_proc_root);
+	pde = proc_create(GNILND_PROC_PEER_CONNS, 0644, kgn_proc_root,
+			  &kgn_peer_conns_fops);
 	if (pde == NULL) {
 		CERROR("couldn't create proc entry %s\n", GNILND_PROC_PEER_CONNS);
 		GOTO(remove_conn, rc = -ENOENT);
 	}
 
-	pde->data = NULL;
-	pde->read_proc = kgnilnd_proc_peer_conns_read;
-	pde->write_proc = kgnilnd_proc_peer_conns_write;
-
 	/* Initialize PEER */
-	pde = create_proc_entry(GNILND_PROC_PEER, 0444, kgn_proc_root);
+	pde = proc_create(GNILND_PROC_PEER, 0444, kgn_proc_root,
+			  &kgn_peer_fops);
 	if (pde == NULL) {
 		CERROR("couldn't create proc entry %s\n", GNILND_PROC_PEER);
 		GOTO(remove_pc, rc = -ENOENT);
 	}
-
-	pde->data = NULL;
-	pde->proc_fops = &kgn_peer_fops;
 	RETURN_EXIT;
 
 remove_pc:
@@ -1378,7 +1405,7 @@ remove_stats:
 remove_test:
 	remove_proc_entry(GNILND_PROC_CKSUM_TEST, kgn_proc_root);
 remove_dir:
-	remove_proc_entry(kgn_proc_root->name, NULL);
+	remove_proc_entry(libcfs_lnd2modname(GNILND), NULL);
 
 	RETURN_EXIT;
 }
@@ -1393,5 +1420,5 @@ kgnilnd_proc_fini(void)
 	remove_proc_entry(GNILND_PROC_SMSG, kgn_proc_root);
 	remove_proc_entry(GNILND_PROC_STATS, kgn_proc_root);
 	remove_proc_entry(GNILND_PROC_CKSUM_TEST, kgn_proc_root);
-	remove_proc_entry(kgn_proc_root->name, NULL);
+	remove_proc_entry(libcfs_lnd2modname(GNILND), NULL);
 }

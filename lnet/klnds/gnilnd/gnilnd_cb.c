@@ -4,6 +4,7 @@
  * Copyright (C) 2009-2012 Cray, Inc.
  *
  *   Derived from work by Eric Barton <eric@bartonsoftware.com>
+ *   Author: James Shimek <jshimek@cray.com>
  *   Author: Nic Henke <nic@cray.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
@@ -1446,7 +1447,8 @@ kgnilnd_sendmsg_nolock(kgn_tx_t *tx, void *immediate, unsigned int immediatenob,
 	}
 
 	if (time_after_eq(now, newest_last_rx + GNILND_TIMEOUTRX(timeout))) {
-		GNIDBG_CONN(D_NETERROR|D_CONSOLE, conn, "Cant send to %s after timeout lapse of %lu; TO %lu",
+		GNIDBG_CONN(D_NETERROR|D_CONSOLE, conn,
+			    "Cant send to %s after timeout lapse of %lu; TO %lu\n",
 		libcfs_nid2str(conn->gnc_peer->gnp_nid),
 		cfs_duration_sec(now - newest_last_rx),
 		cfs_duration_sec(GNILND_TIMEOUTRX(timeout)));
@@ -1485,9 +1487,10 @@ kgnilnd_sendmsg_nolock(kgn_tx_t *tx, void *immediate, unsigned int immediatenob,
 	if (unlikely(tx->tx_state & GNILND_TX_FAIL_SMSG)) {
 		rrc = cfs_fail_val ? cfs_fail_val : GNI_RC_NOT_DONE;
 	} else {
-	rrc = kgnilnd_smsg_send(conn->gnc_ephandle,
-				    msg, sizeof(*msg), immediate, immediatenob,
-			    tx->tx_id.txe_smsg_id);
+		rrc = kgnilnd_smsg_send(conn->gnc_ephandle,
+					msg, sizeof(*msg), immediate,
+					immediatenob,
+					tx->tx_id.txe_smsg_id);
 	}
 
 	switch (rrc) {
@@ -1855,7 +1858,7 @@ no_peer:
 	RETURN_EXIT;
 }
 
-void
+int
 kgnilnd_rdma(kgn_tx_t *tx, int type,
 	    kgn_rdma_desc_t *sink, unsigned int nob, __u64 cookie)
 {
@@ -1925,7 +1928,7 @@ kgnilnd_rdma(kgn_tx_t *tx, int type,
 					/* allocation of buffer failed nak the rdma */
 					kgnilnd_nak_rdma(tx->tx_conn, tx->tx_msg.gnm_type, -EFAULT, cookie, tx->tx_msg.gnm_srcnid);
 					kgnilnd_tx_done(tx, -EFAULT);
-					return;
+					return 0;
 				}
 				kgnilnd_admin_addref(kgnilnd_data.kgn_rev_copy_buff);
 				rc = kgnilnd_mem_register(conn->gnc_device->gnd_handle, (__u64)tx->tx_buffer_copy, desc_nob, NULL, GNI_MEM_READWRITE, &tx->tx_buffer_copy_map_key);
@@ -1935,7 +1938,7 @@ kgnilnd_rdma(kgn_tx_t *tx, int type,
 					tx->tx_buffer_copy = NULL;
 					kgnilnd_nak_rdma(tx->tx_conn, tx->tx_msg.gnm_type, -EFAULT, cookie, tx->tx_msg.gnm_srcnid);
 					kgnilnd_tx_done(tx, -EFAULT);
-					return;
+					return 0;
 				}
 			}
 			desc_map_key = tx->tx_buffer_copy_map_key;
@@ -1965,15 +1968,16 @@ kgnilnd_rdma(kgn_tx_t *tx, int type,
 
 	if (nob == 0) {
 		kgnilnd_queue_tx(conn, tx);
-		return;
+		return 0;
 	}
 
 	/* Don't lie (CLOSE == RDMA idle) */
 	LASSERTF(!conn->gnc_close_sent, "tx %p on conn %p after close sent %d\n",
 		 tx, conn, conn->gnc_close_sent);
 
-	GNIDBG_TX(D_NET, tx, "Post RDMA type 0x%02x dlvr_mode 0x%x cookie:"LPX64,
-		type, tx->tx_rdma_desc.dlvr_mode, cookie);
+	GNIDBG_TX(D_NET, tx, "Post RDMA type 0x%02x conn %p dlvr_mode "
+		"0x%x cookie:"LPX64,
+		type, conn, tx->tx_rdma_desc.dlvr_mode, cookie);
 
 	/* set CQ dedicated for RDMA */
 	tx->tx_rdma_desc.src_cq_hndl = conn->gnc_device->gnd_snd_rdma_cqh;
@@ -1987,6 +1991,23 @@ kgnilnd_rdma(kgn_tx_t *tx, int type,
 
 	rrc = kgnilnd_post_rdma(conn->gnc_ephandle, &tx->tx_rdma_desc);
 
+	if (rrc == GNI_RC_ERROR_RESOURCE) {
+		mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
+		kgnilnd_unmap_buffer(tx, 0);
+
+		if (tx->tx_buffer_copy != NULL) {
+			vfree(tx->tx_buffer_copy);
+			tx->tx_buffer_copy = NULL;
+		}
+
+		spin_lock(&tx->tx_conn->gnc_device->gnd_lock);
+		kgnilnd_tx_add_state_locked(tx, NULL, tx->tx_conn,
+					    GNILND_TX_MAPQ, 0);
+		spin_unlock(&tx->tx_conn->gnc_device->gnd_lock);
+		kgnilnd_schedule_device(tx->tx_conn->gnc_device);
+		return -EAGAIN;
+	}
+
 	spin_lock(&conn->gnc_list_lock);
 	kgnilnd_tx_add_state_locked(tx, conn->gnc_peer, conn, GNILND_TX_LIVE_RDMAQ, 1);
 	tx->tx_qtime = jiffies;
@@ -1997,7 +2018,7 @@ kgnilnd_rdma(kgn_tx_t *tx, int type,
 	/* XXX Nic: is this a place we should handle more errors for
 	 * robustness sake */
 	LASSERT(rrc == GNI_RC_SUCCESS);
-
+	return 0;
 }
 
 kgn_rx_t *
@@ -2762,8 +2783,10 @@ kgnilnd_check_peer_timeouts_locked(kgn_peer_t *peer, struct list_head *todie,
 	int                     rc = 0;
 	int                     count = 0;
 	int                     reconnect;
+	int                     to_reconn;
 	short                   releaseconn = 0;
 	unsigned long           first_rx = 0;
+	int                     purgatory_conn_cnt = 0;
 
 	CDEBUG(D_NET, "checking peer 0x%p->%s for timeouts; interval %lus\n",
 		peer, libcfs_nid2str(peer->gnp_nid),
@@ -2829,13 +2852,19 @@ kgnilnd_check_peer_timeouts_locked(kgn_peer_t *peer, struct list_head *todie,
 	reconnect = (peer->gnp_down == GNILND_RCA_NODE_UP) &&
 		    (atomic_read(&peer->gnp_dirty_eps) == 0);
 
+	/* fast reconnect after a timeout */
+	to_reconn = !conn &&
+		    (peer->gnp_last_errno == -ETIMEDOUT) &&
+		    *kgnilnd_tunables.kgn_fast_reconn;
+
 	/* if we are not connected and there are tx on the gnp_tx_queue waiting
 	 * to be sent, we'll check the reconnect interval and fire up a new
 	 * connection request */
 
-	if ((peer->gnp_connecting == GNILND_PEER_IDLE) &&
+	if (reconnect &&
+	    (peer->gnp_connecting == GNILND_PEER_IDLE) &&
 	    (time_after_eq(jiffies, peer->gnp_reconnect_time)) &&
-	     !list_empty(&peer->gnp_tx_queue) && reconnect) {
+	    (!list_empty(&peer->gnp_tx_queue) || to_reconn)) {
 
 		CDEBUG(D_NET, "starting connect to %s\n",
 			libcfs_nid2str(peer->gnp_nid));
@@ -2903,6 +2932,30 @@ kgnilnd_check_peer_timeouts_locked(kgn_peer_t *peer, struct list_head *todie,
 					cfs_duration_sec(waiting));
 
 				kgnilnd_detach_purgatory_locked(conn, souls);
+			} else {
+				purgatory_conn_cnt++;
+			}
+		}
+	}
+
+	/* If we have too many connections in purgatory we could run out of
+	 * resources. Limit the number of connections to a tunable number,
+	 * clean up to the minimum all in one fell swoop... there are
+	 * situations where dvs will retry tx's and we can eat up several
+	 * hundread connection requests at once.
+	 */
+	if (purgatory_conn_cnt > *kgnilnd_tunables.kgn_max_purgatory) {
+		list_for_each_entry_safe(conn, connN, &peer->gnp_conns,
+					 gnc_list) {
+			if (conn->gnc_in_purgatory &&
+			    conn->gnc_state == GNILND_CONN_DONE) {
+				CDEBUG(D_NET, "Dropping Held resource due to"
+					      " resource limits being hit\n");
+				kgnilnd_detach_purgatory_locked(conn, souls);
+
+				if (purgatory_conn_cnt-- <
+				    *kgnilnd_tunables.kgn_max_purgatory)
+					break;
 			}
 		}
 	}
@@ -3187,6 +3240,7 @@ kgnilnd_check_rdma_cq(kgn_device_t *dev)
 			/* drop ref from kgnilnd_validate_tx_ev_id */
 			kgnilnd_admin_decref(conn->gnc_tx_in_use);
 			kgnilnd_conn_decref(conn);
+
 			continue;
 		}
 
@@ -3554,7 +3608,12 @@ kgnilnd_send_mapped_tx(kgn_tx_t *tx, int try_map_if_full)
 	 * remote node where the RDMA will be started
 	 * Special case -EAGAIN logic - this should just queued as if the mapping couldn't
 	 * be satisified. The rest of the errors are "hard" errors that require
-	 * upper layers to handle themselves */
+	 * upper layers to handle themselves.
+	 * If kgnilnd_post_rdma returns a resource error, kgnilnd_rdma will put
+	 * the tx back on the TX_MAPQ. When this tx is pulled back off the MAPQ,
+	 * it's gnm_type will now be GNILND_MSG_PUT_DONE or
+	 * GNILND_MSG_GET_DONE_REV.
+	 */
 	case GNILND_MSG_GET_REQ:
 		tx->tx_msg.gnm_u.get.gngm_desc.gnrd_key = tx->tx_map_key;
 		tx->tx_msg.gnm_u.get.gngm_cookie = tx->tx_id.txe_cookie;
@@ -3578,18 +3637,20 @@ kgnilnd_send_mapped_tx(kgn_tx_t *tx, int try_map_if_full)
 		break;
 
 	/* PUT_REQ and GET_DONE are where we do the actual RDMA */
+	case GNILND_MSG_PUT_DONE:
 	case GNILND_MSG_PUT_REQ:
-		kgnilnd_rdma(tx, GNILND_MSG_PUT_DONE,
+		rc = kgnilnd_rdma(tx, GNILND_MSG_PUT_DONE,
 			     &tx->tx_putinfo.gnpam_desc,
 			     tx->tx_putinfo.gnpam_desc.gnrd_nob,
 			     tx->tx_putinfo.gnpam_dst_cookie);
+		RETURN(try_map_if_full ? rc : 0);
 		break;
 	case GNILND_MSG_GET_DONE:
-		kgnilnd_rdma(tx, GNILND_MSG_GET_DONE,
+		rc = kgnilnd_rdma(tx, GNILND_MSG_GET_DONE,
 			     &tx->tx_getinfo.gngm_desc,
 			     tx->tx_lntmsg[0]->msg_len,
 			     tx->tx_getinfo.gngm_cookie);
-
+		RETURN(try_map_if_full ? rc : 0);
 		break;
 	case GNILND_MSG_PUT_REQ_REV:
 		tx->tx_msg.gnm_u.get.gngm_desc.gnrd_key = tx->tx_map_key;
@@ -3603,10 +3664,11 @@ kgnilnd_send_mapped_tx(kgn_tx_t *tx, int try_map_if_full)
 		rc = kgnilnd_sendmsg(tx, NULL, 0, &tx->tx_conn->gnc_list_lock, GNILND_TX_FMAQ);
 		break;
 	case GNILND_MSG_PUT_DONE_REV:
-		kgnilnd_rdma(tx, GNILND_MSG_PUT_DONE_REV,
+		rc = kgnilnd_rdma(tx, GNILND_MSG_PUT_DONE_REV,
 			     &tx->tx_getinfo.gngm_desc,
 			     tx->tx_nob,
 			     tx->tx_getinfo.gngm_cookie);
+		RETURN(try_map_if_full ? rc : 0);
 		break;
 	case GNILND_MSG_GET_ACK_REV:
 		tx->tx_msg.gnm_u.putack.gnpam_desc.gnrd_key = tx->tx_map_key;
@@ -3621,12 +3683,13 @@ kgnilnd_send_mapped_tx(kgn_tx_t *tx, int try_map_if_full)
 		/* redirect to FMAQ on failure, no need to infinite loop here in MAPQ */
 		rc = kgnilnd_sendmsg(tx, NULL, 0, &tx->tx_conn->gnc_list_lock, GNILND_TX_FMAQ);
 		break;
+	case GNILND_MSG_GET_DONE_REV:
 	case GNILND_MSG_GET_REQ_REV:
-		kgnilnd_rdma(tx, GNILND_MSG_GET_DONE_REV,
+		rc = kgnilnd_rdma(tx, GNILND_MSG_GET_DONE_REV,
 				&tx->tx_putinfo.gnpam_desc,
 				tx->tx_putinfo.gnpam_desc.gnrd_nob,
 				tx->tx_putinfo.gnpam_dst_cookie);
-
+		RETURN(try_map_if_full ? rc : 0);
 		break;
 	}
 
@@ -4060,7 +4123,7 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 
 	if (rrc == GNI_RC_NOT_DONE) {
 		mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
-		CDEBUG(D_INFO, "SMSG RX empty\n");
+		CDEBUG(D_INFO, "SMSG RX empty conn 0x%p\n", conn);
 		RETURN_EXIT;
 	}
 
@@ -4097,8 +4160,7 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 		RETURN_EXIT;
 	}
 
-	GNIDBG_MSG(D_INFO, msg, "SMSG RX on %p from %s",
-		conn, libcfs_nid2str(peer->gnp_nid));
+	GNIDBG_MSG(D_INFO, msg, "SMSG RX on %p", conn);
 
 	timestamp = conn->gnc_last_rx;
 	last_seq = conn->gnc_rx_seq;
@@ -4698,6 +4760,11 @@ kgnilnd_process_mapped_tx(kgn_device_t *dev)
 			 * mapped so we can reset our timers */
 			dev->gnd_map_attempt = 0;
 			continue;
+		} else if (rc == -EAGAIN) {
+			spin_lock(&dev->gnd_lock);
+			mod_timer(&dev->gnd_map_timer, dev->gnd_next_map);
+			spin_unlock(&dev->gnd_lock);
+			GOTO(get_out_mapped, rc);
 		} else if (rc != -ENOMEM) {
 			/* carp, failure we can't handle */
 			kgnilnd_tx_done(tx, rc);
@@ -4842,9 +4909,9 @@ kgnilnd_process_conns(kgn_device_t *dev, unsigned long deadline)
 				 * yet. Cycle this conn back through
 				 * the scheduler. */
 				kgnilnd_schedule_conn(conn);
-			} else
-			kgnilnd_complete_closed_conn(conn);
-
+			} else {
+				kgnilnd_complete_closed_conn(conn);
+			}
 			up_write(&dev->gnd_conn_sem);
 		} else if (unlikely(conn->gnc_state == GNILND_CONN_DESTROY_EP)) {
 			/* DESTROY_EP set in kgnilnd_conn_decref on gnc_refcount = 1 */
