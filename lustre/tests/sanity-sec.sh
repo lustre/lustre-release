@@ -1236,14 +1236,17 @@ test_fops() {
 	return $rc
 }
 
+nodemap_version_check () {
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return 1
+	[ $(lustre_version_code $SINGLEMGS) -lt $(version_code 2.6.90) ] &&
+		skip "Skip test on $(get_lustre_version) MGS, need 2.6.90+" &&
+		return 1
+	return 0
+}
+
 nodemap_test_setup() {
 	local rc
 	local active_nodemap=$1
-
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	[ $(lustre_version_code $SINGLEMGS) -lt $(version_code 2.6.90) ] &&
-		skip "Skip test on $(get_lustre_version) MGS, need 2.6.90+" &&
-		return
 
 	do_nodes $(comma_list $(all_mdts_nodes)) $LCTL set_param \
 		mdt.*.identity_upcall=NONE
@@ -1295,6 +1298,7 @@ nodemap_clients_admin_trusted() {
 }
 
 test_16() {
+	nodemap_version_check || return 0
 	nodemap_test_setup 0
 
 	test_fops all_off
@@ -1303,6 +1307,7 @@ test_16() {
 run_test 16 "test nodemap all_off fileops"
 
 test_17() {
+	nodemap_version_check || return 0
 	nodemap_test_setup
 
 	nodemap_clients_admin_trusted 0 1
@@ -1312,6 +1317,7 @@ test_17() {
 run_test 17 "test nodemap trusted_noadmin fileops"
 
 test_18() {
+	nodemap_version_check || return 0
 	nodemap_test_setup
 	nodemap_clients_admin_trusted 0 0
 	test_fops mapped_noadmin 1
@@ -1320,6 +1326,7 @@ test_18() {
 run_test 18 "test nodemap mapped_noadmin fileops"
 
 test_19() {
+	nodemap_version_check || return 0
 	nodemap_test_setup
 	nodemap_clients_admin_trusted 1 1
 	test_fops trusted_admin 1
@@ -1328,6 +1335,7 @@ test_19() {
 run_test 19 "test nodemap trusted_admin fileops"
 
 test_20() {
+	nodemap_version_check || return 0
 	nodemap_test_setup
 	nodemap_clients_admin_trusted 1 0
 	test_fops mapped_admin 1
@@ -1336,6 +1344,7 @@ test_20() {
 run_test 20 "test nodemap mapped_admin fileops"
 
 test_21() {
+	nodemap_version_check || return 0
 	nodemap_test_setup
 	local x=1
 	local i=0
@@ -1357,6 +1366,7 @@ test_21() {
 run_test 21 "test nodemap mapped_trusted_noadmin fileops"
 
 test_22() {
+	nodemap_version_check || return 0
 	nodemap_test_setup
 	local x=1
 	local i=0
@@ -1440,6 +1450,7 @@ nodemap_acl_test() {
 }
 
 test_23() {
+	nodemap_version_check || return 0
 	nodemap_test_setup
 
 	# 1 trusted cluster, 1 mapped cluster
