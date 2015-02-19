@@ -20,7 +20,7 @@
  * GPL HEADER END
  */
 
-/* Copyright 2014 Cray Inc, all rights reserved. */
+/* Copyright 2014, 2015 Cray Inc, all rights reserved. */
 /* Some portions are extracted from llapi_layout_test.c */
 
 /* The purpose of this test is to check some HSM functions. HSM must
@@ -447,8 +447,9 @@ void test52(void)
 
 /* Helper to simulate archiving a file. No actual data movement
  * happens. */
-void (*helper_progress)(struct hsm_copyaction_private *hcp);
-void helper_archiving(const size_t length)
+void helper_archiving(void (*progress)
+		      (struct hsm_copyaction_private *hcp, size_t length),
+		      const size_t length)
 {
 	int rc;
 	int fd;
@@ -504,8 +505,8 @@ void helper_archiving(const size_t length)
 	ASSERTF(rc == 0, "llapi_hsm_action_begin failed: %s", strerror(-rc));
 	ASSERTF(hcp != NULL, "hcp is NULL");
 
-	if (helper_progress)
-		helper_progress(hcp);
+	if (progress)
+		progress(hcp, length);
 
 	/* Done archiving */
 	rc = llapi_hsm_action_end(&hcp, &hai->hai_extent, 0, 0);
@@ -528,299 +529,320 @@ void helper_archiving(const size_t length)
 void test100(void)
 {
 	const size_t length = 100;
-	helper_progress = NULL;
-	helper_archiving(length);
+
+	helper_archiving(NULL, length);
 }
 
 /* Archive, with a report every byte. */
+static void test101_progress(struct hsm_copyaction_private *hcp, size_t length)
+{
+	int i;
+	int rc;
+	struct hsm_extent he;
+	struct hsm_current_action hca;
+
+	/* Report progress. 1 byte at a time :) */
+	for (i = 0; i < length; i++) {
+		he.offset = i;
+		he.length = 1;
+		rc = llapi_hsm_action_progress(hcp, &he, length, 0);
+		ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
+			strerror(-rc));
+	}
+
+	rc = llapi_hsm_current_action(testfile, &hca);
+	ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
+		strerror(-rc));
+	ASSERTF(hca.hca_state == HPS_RUNNING,
+		"hca_state=%u", hca.hca_state);
+	ASSERTF(hca.hca_action == HUA_ARCHIVE,
+		"hca_state=%u", hca.hca_action);
+	ASSERTF(hca.hca_location.length == length,
+		"length=%llu", (unsigned long long)hca.hca_location.length);
+}
+
 void test101(void)
 {
 	const size_t length = 1000;
 
-	void test101_progress(struct hsm_copyaction_private *hcp)
-	{
-		int i;
-		int rc;
-		struct hsm_extent he;
-		struct hsm_current_action hca;
-
-		/* Report progress. 1 byte at a time :) */
-		for (i = 0; i < length; i++) {
-			he.offset = i;
-			he.length = 1;
-			rc = llapi_hsm_action_progress(hcp, &he, length, 0);
-			ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
-				strerror(-rc));
-		}
-
-		rc = llapi_hsm_current_action(testfile, &hca);
-		ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
-			strerror(-rc));
-		ASSERTF(hca.hca_state == HPS_RUNNING,
-			"hca_state=%u", hca.hca_state);
-		ASSERTF(hca.hca_action == HUA_ARCHIVE,
-			"hca_state=%u", hca.hca_action);
-		ASSERTF(hca.hca_location.length == length,
-			"length=%llu", hca.hca_location.length);
-	}
-
-	helper_progress = test101_progress;
-	helper_archiving(length);
+	helper_archiving(test101_progress, length);
 }
 
 /* Archive, with a report every byte, backwards. */
+static void test102_progress(struct hsm_copyaction_private *hcp, size_t length)
+{
+	int i;
+	int rc;
+	struct hsm_extent he;
+	struct hsm_current_action hca;
+
+	/* Report progress. 1 byte at a time :) */
+	for (i = length-1; i >= 0; i--) {
+		he.offset = i;
+		he.length = 1;
+		rc = llapi_hsm_action_progress(hcp, &he, length, 0);
+		ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
+			strerror(-rc));
+	}
+
+	rc = llapi_hsm_current_action(testfile, &hca);
+	ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
+		strerror(-rc));
+	ASSERTF(hca.hca_state == HPS_RUNNING,
+		"hca_state=%u", hca.hca_state);
+	ASSERTF(hca.hca_action == HUA_ARCHIVE,
+		"hca_state=%u", hca.hca_action);
+	ASSERTF(hca.hca_location.length == length,
+		"length=%llu", (unsigned long long)hca.hca_location.length);
+}
+
 void test102(void)
 {
 	const size_t length = 1000;
 
-	void test102_progress(struct hsm_copyaction_private *hcp)
-	{
-		int i;
-		int rc;
-		struct hsm_extent he;
-		struct hsm_current_action hca;
-
-		/* Report progress. 1 byte at a time :) */
-		for (i = length-1; i >= 0; i--) {
-			he.offset = i;
-			he.length = 1;
-			rc = llapi_hsm_action_progress(hcp, &he, length, 0);
-			ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
-				strerror(-rc));
-		}
-
-		rc = llapi_hsm_current_action(testfile, &hca);
-		ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
-			strerror(-rc));
-		ASSERTF(hca.hca_state == HPS_RUNNING,
-			"hca_state=%u", hca.hca_state);
-		ASSERTF(hca.hca_action == HUA_ARCHIVE,
-			"hca_state=%u", hca.hca_action);
-		ASSERTF(hca.hca_location.length == length,
-			"length=%llu", hca.hca_location.length);
-	}
-
-	helper_progress = test102_progress;
-	helper_archiving(length);
+	helper_archiving(test102_progress, length);
 }
 
 /* Archive, with a single report. */
+static void test103_progress(struct hsm_copyaction_private *hcp, size_t length)
+{
+	int rc;
+	struct hsm_extent he;
+	struct hsm_current_action hca;
+
+	he.offset = 0;
+	he.length = length;
+	rc = llapi_hsm_action_progress(hcp, &he, length, 0);
+	ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
+		strerror(-rc));
+
+	rc = llapi_hsm_current_action(testfile, &hca);
+	ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
+		strerror(-rc));
+	ASSERTF(hca.hca_state == HPS_RUNNING,
+		"hca_state=%u", hca.hca_state);
+	ASSERTF(hca.hca_action == HUA_ARCHIVE,
+		"hca_state=%u", hca.hca_action);
+	ASSERTF(hca.hca_location.length == length,
+		"length=%llu", (unsigned long long)hca.hca_location.length);
+}
+
 void test103(void)
 {
 	const size_t length = 1000;
 
-	void test103_progress(struct hsm_copyaction_private *hcp)
-	{
-		int rc;
-		struct hsm_extent he;
-		struct hsm_current_action hca;
+	helper_archiving(test103_progress, length);
+}
 
+/* Archive, with 2 reports. */
+static void test104_progress(struct hsm_copyaction_private *hcp, size_t length)
+{
+	int rc;
+	struct hsm_extent he;
+	struct hsm_current_action hca;
+
+	he.offset = 0;
+	he.length = length/2;
+	rc = llapi_hsm_action_progress(hcp, &he, length, 0);
+	ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
+		strerror(-rc));
+
+	he.offset = length/2;
+	he.length = length/2;
+	rc = llapi_hsm_action_progress(hcp, &he, length, 0);
+	ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
+		strerror(-rc));
+
+	rc = llapi_hsm_current_action(testfile, &hca);
+	ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
+		strerror(-rc));
+	ASSERTF(hca.hca_state == HPS_RUNNING,
+		"hca_state=%u", hca.hca_state);
+	ASSERTF(hca.hca_action == HUA_ARCHIVE,
+		"hca_state=%u", hca.hca_action);
+	ASSERTF(hca.hca_location.length == length,
+		"length=%llu", (unsigned long long)hca.hca_location.length);
+}
+
+void test104(void)
+{
+	const size_t length = 1000;
+
+	helper_archiving(test104_progress, length);
+}
+
+/* Archive, with 1 bogus report. */
+static void test105_progress(struct hsm_copyaction_private *hcp, size_t length)
+{
+	int rc;
+	struct hsm_extent he;
+	struct hsm_current_action hca;
+
+	he.offset = 2*length;
+	he.length = 10*length;
+	rc = llapi_hsm_action_progress(hcp, &he, length, 0);
+	ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
+		strerror(-rc));
+
+	rc = llapi_hsm_current_action(testfile, &hca);
+	ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
+		strerror(-rc));
+	ASSERTF(hca.hca_state == HPS_RUNNING,
+		"hca_state=%u", hca.hca_state);
+	ASSERTF(hca.hca_action == HUA_ARCHIVE,
+		"hca_state=%u", hca.hca_action);
+
+	/* BUG - offset should be 2*length, or length should
+	 * be 8*length */
+	ASSERTF(hca.hca_location.length == 10*length,
+		"length=%llu", (unsigned long long)hca.hca_location.length);
+}
+
+void test105(void)
+{
+	const size_t length = 1000;
+
+	helper_archiving(test105_progress, length);
+}
+
+/* Archive, with 1 empty report. */
+static void test106_progress(struct hsm_copyaction_private *hcp, size_t length)
+{
+	int rc;
+	struct hsm_extent he;
+	struct hsm_current_action hca;
+
+	he.offset = 0;
+	he.length = 0;
+	rc = llapi_hsm_action_progress(hcp, &he, length, 0);
+	ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
+		strerror(-rc));
+
+	rc = llapi_hsm_current_action(testfile, &hca);
+	ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
+		strerror(-rc));
+	ASSERTF(hca.hca_state == HPS_RUNNING,
+		"hca_state=%u", hca.hca_state);
+	ASSERTF(hca.hca_action == HUA_ARCHIVE,
+		"hca_state=%u", hca.hca_action);
+	ASSERTF(hca.hca_location.length == 0,
+		"length=%llu", (unsigned long long)hca.hca_location.length);
+}
+
+void test106(void)
+{
+	const size_t length = 1000;
+
+	helper_archiving(test106_progress, length);
+}
+
+/* Archive, with 1 bogus report. */
+static void test107_progress(struct hsm_copyaction_private *hcp, size_t length)
+{
+	int rc;
+	struct hsm_extent he;
+	struct hsm_current_action hca;
+
+	he.offset = -1;
+	he.length = 10;
+	rc = llapi_hsm_action_progress(hcp, &he, length, 0);
+	ASSERTF(rc == -EINVAL, "llapi_hsm_action_progress error: %s",
+		strerror(-rc));
+
+	rc = llapi_hsm_current_action(testfile, &hca);
+	ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
+		strerror(-rc));
+	ASSERTF(hca.hca_state == HPS_RUNNING,
+		"hca_state=%u", hca.hca_state);
+	ASSERTF(hca.hca_action == HUA_ARCHIVE,
+		"hca_state=%u", hca.hca_action);
+	ASSERTF(hca.hca_location.length == 0,
+		"length=%llu", (unsigned long long)hca.hca_location.length);
+}
+
+void test107(void)
+{
+	const size_t length = 1000;
+
+	helper_archiving(test107_progress, length);
+}
+
+/* Archive, with same report, many times. */
+static void test108_progress(struct hsm_copyaction_private *hcp, size_t length)
+{
+	int rc;
+	struct hsm_extent he;
+	int i;
+	struct hsm_current_action hca;
+
+	for (i = 0; i < 1000; i++) {
 		he.offset = 0;
 		he.length = length;
 		rc = llapi_hsm_action_progress(hcp, &he, length, 0);
 		ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
 			strerror(-rc));
-
-		rc = llapi_hsm_current_action(testfile, &hca);
-		ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
-			strerror(-rc));
-		ASSERTF(hca.hca_state == HPS_RUNNING,
-			"hca_state=%u", hca.hca_state);
-		ASSERTF(hca.hca_action == HUA_ARCHIVE,
-			"hca_state=%u", hca.hca_action);
-		ASSERTF(hca.hca_location.length == length,
-			"length=%llu", hca.hca_location.length);
 	}
 
-	helper_progress = test103_progress;
-	helper_archiving(length);
+	rc = llapi_hsm_current_action(testfile, &hca);
+	ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
+		strerror(-rc));
+	ASSERTF(hca.hca_state == HPS_RUNNING,
+		"hca_state=%u", hca.hca_state);
+	ASSERTF(hca.hca_action == HUA_ARCHIVE,
+		"hca_state=%u", hca.hca_action);
+	ASSERTF(hca.hca_location.length == length,
+		"length=%llu", (unsigned long long)hca.hca_location.length);
 }
 
-/* Archive, with 2 reports. */
-void test104(void)
-{
-	const size_t length = 1000;
-
-	void test104_progress(struct hsm_copyaction_private *hcp)
-	{
-		int rc;
-		struct hsm_extent he;
-		struct hsm_current_action hca;
-
-		he.offset = 0;
-		he.length = length/2;
-		rc = llapi_hsm_action_progress(hcp, &he, length, 0);
-		ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
-			strerror(-rc));
-
-		he.offset = length/2;
-		he.length = length/2;
-		rc = llapi_hsm_action_progress(hcp, &he, length, 0);
-		ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
-			strerror(-rc));
-
-		rc = llapi_hsm_current_action(testfile, &hca);
-		ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
-			strerror(-rc));
-		ASSERTF(hca.hca_state == HPS_RUNNING,
-			"hca_state=%u", hca.hca_state);
-		ASSERTF(hca.hca_action == HUA_ARCHIVE,
-			"hca_state=%u", hca.hca_action);
-		ASSERTF(hca.hca_location.length == length,
-			"length=%llu", hca.hca_location.length);
-	}
-
-	helper_progress = test104_progress;
-	helper_archiving(length);
-}
-
-/* Archive, with 1 bogus report. */
-void test105(void)
-{
-	const size_t length = 1000;
-
-	void test105_progress(struct hsm_copyaction_private *hcp)
-	{
-		int rc;
-		struct hsm_extent he;
-		struct hsm_current_action hca;
-
-		he.offset = 2*length;
-		he.length = 10*length;
-		rc = llapi_hsm_action_progress(hcp, &he, length, 0);
-		ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
-			strerror(-rc));
-
-		rc = llapi_hsm_current_action(testfile, &hca);
-		ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
-			strerror(-rc));
-		ASSERTF(hca.hca_state == HPS_RUNNING,
-			"hca_state=%u", hca.hca_state);
-		ASSERTF(hca.hca_action == HUA_ARCHIVE,
-			"hca_state=%u", hca.hca_action);
-
-		/* BUG - offset should be 2*length, or length should
-		 * be 8*length */
-		ASSERTF(hca.hca_location.length == 10*length,
-			"length=%llu", hca.hca_location.length);
-	}
-
-	helper_progress = test105_progress;
-	helper_archiving(length);
-}
-
-/* Archive, with 1 empty report. */
-void test106(void)
-{
-	const size_t length = 1000;
-
-	void test106_progress(struct hsm_copyaction_private *hcp)
-	{
-		int rc;
-		struct hsm_extent he;
-		struct hsm_current_action hca;
-
-		he.offset = 0;
-		he.length = 0;
-		rc = llapi_hsm_action_progress(hcp, &he, length, 0);
-		ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
-			strerror(-rc));
-
-		rc = llapi_hsm_current_action(testfile, &hca);
-		ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
-			strerror(-rc));
-		ASSERTF(hca.hca_state == HPS_RUNNING,
-			"hca_state=%u", hca.hca_state);
-		ASSERTF(hca.hca_action == HUA_ARCHIVE,
-			"hca_state=%u", hca.hca_action);
-		ASSERTF(hca.hca_location.length == 0,
-			"length=%llu", hca.hca_location.length);
-	}
-
-	helper_progress = test106_progress;
-	helper_archiving(length);
-}
-
-/* Archive, with 1 bogus report. */
-void test107(void)
-{
-	const size_t length = 1000;
-
-	void test107_progress(struct hsm_copyaction_private *hcp)
-	{
-		int rc;
-		struct hsm_extent he;
-		struct hsm_current_action hca;
-
-		he.offset = -1;
-		he.length = 10;
-		rc = llapi_hsm_action_progress(hcp, &he, length, 0);
-		ASSERTF(rc == -EINVAL, "llapi_hsm_action_progress error: %s",
-			strerror(-rc));
-
-		rc = llapi_hsm_current_action(testfile, &hca);
-		ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
-			strerror(-rc));
-		ASSERTF(hca.hca_state == HPS_RUNNING,
-			"hca_state=%u", hca.hca_state);
-		ASSERTF(hca.hca_action == HUA_ARCHIVE,
-			"hca_state=%u", hca.hca_action);
-		ASSERTF(hca.hca_location.length == 0,
-			"length=%llu", hca.hca_location.length);
-	}
-
-	helper_progress = test107_progress;
-	helper_archiving(length);
-}
-
-/* Archive, with same report, many times. */
 void test108(void)
 {
 	const size_t length = 1000;
 
-	void test108_progress(struct hsm_copyaction_private *hcp)
-	{
-		int rc;
-		struct hsm_extent he;
-		int i;
-		struct hsm_current_action hca;
-
-		for (i = 0; i < 1000; i++) {
-			he.offset = 0;
-			he.length = length;
-			rc = llapi_hsm_action_progress(hcp, &he, length, 0);
-			ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
-				strerror(-rc));
-		}
-
-		rc = llapi_hsm_current_action(testfile, &hca);
-		ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
-			strerror(-rc));
-		ASSERTF(hca.hca_state == HPS_RUNNING,
-			"hca_state=%u", hca.hca_state);
-		ASSERTF(hca.hca_action == HUA_ARCHIVE,
-			"hca_state=%u", hca.hca_action);
-		ASSERTF(hca.hca_location.length == length,
-			"length=%llu", hca.hca_location.length);
-	}
-
-	helper_progress = test108_progress;
-	helper_archiving(length);
+	helper_archiving(test108_progress, length);
 }
 
 /* Archive, 1 report, with large number. */
+static void test109_progress(struct hsm_copyaction_private *hcp, size_t length)
+{
+	int rc;
+	struct hsm_extent he;
+	struct hsm_current_action hca;
+
+	he.offset = 0;
+	he.length = 0xffffffffffffffffULL;
+	rc = llapi_hsm_action_progress(hcp, &he, length, 0);
+	ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
+		strerror(-rc));
+
+	rc = llapi_hsm_current_action(testfile, &hca);
+	ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
+		strerror(-rc));
+	ASSERTF(hca.hca_state == HPS_RUNNING,
+		"hca_state=%u", hca.hca_state);
+	ASSERTF(hca.hca_action == HUA_ARCHIVE,
+		"hca_state=%u", hca.hca_action);
+	ASSERTF(hca.hca_location.length == 0xffffffffffffffffULL,
+		"length=%llu", (unsigned long long)hca.hca_location.length);
+}
+
 void test109(void)
 {
 	const size_t length = 1000;
 
-	void test109_progress(struct hsm_copyaction_private *hcp)
-	{
-		int rc;
-		struct hsm_extent he;
-		struct hsm_current_action hca;
+	helper_archiving(test109_progress, length);
+}
 
-		he.offset = 0;
-		he.length = 0xffffffffffffffffULL;
+/* Archive, with 10 reports, checking progress. */
+static void test110_progress(struct hsm_copyaction_private *hcp, size_t length)
+{
+	int rc;
+	int i;
+	struct hsm_extent he;
+	struct hsm_current_action hca;
+
+	for (i = 0; i < 10; i++) {
+		he.offset = i*length/10;
+		he.length = length/10;
 		rc = llapi_hsm_action_progress(hcp, &he, length, 0);
 		ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
 			strerror(-rc));
@@ -832,141 +854,107 @@ void test109(void)
 			"hca_state=%u", hca.hca_state);
 		ASSERTF(hca.hca_action == HUA_ARCHIVE,
 			"hca_state=%u", hca.hca_action);
-		ASSERTF(hca.hca_location.length == 0xffffffffffffffffULL,
-			"length=%llu", hca.hca_location.length);
+		ASSERTF(hca.hca_location.length == (i+1)*length/10,
+			"i=%d, length=%llu",
+			i, (unsigned long long)hca.hca_location.length);
 	}
-
-	helper_progress = test109_progress;
-	helper_archiving(length);
 }
 
-/* Archive, with 10 reports, checking progress. */
 void test110(void)
 {
 	const size_t length = 1000;
 
-	void test110_progress(struct hsm_copyaction_private *hcp)
-	{
-		int rc;
-		int i;
-		struct hsm_extent he;
-		struct hsm_current_action hca;
-
-		for (i = 0; i < 10; i++) {
-			he.offset = i*length/10;
-			he.length = length/10;
-			rc = llapi_hsm_action_progress(hcp, &he, length, 0);
-			ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
-				strerror(-rc));
-
-			rc = llapi_hsm_current_action(testfile, &hca);
-			ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
-				strerror(-rc));
-			ASSERTF(hca.hca_state == HPS_RUNNING,
-				"hca_state=%u", hca.hca_state);
-			ASSERTF(hca.hca_action == HUA_ARCHIVE,
-				"hca_state=%u", hca.hca_action);
-			ASSERTF(hca.hca_location.length == (i+1)*length/10,
-				"i=%d, length=%llu",
-				i, hca.hca_location.length);
-		}
-	}
-
-	helper_progress = test110_progress;
-	helper_archiving(length);
+	helper_archiving(test110_progress, length);
 }
 
 /* Archive, with 10 reports in reverse order, checking progress. */
+static void test111_progress(struct hsm_copyaction_private *hcp, size_t length)
+{
+	int rc;
+	int i;
+	struct hsm_extent he;
+	struct hsm_current_action hca;
+
+	for (i = 0; i < 10; i++) {
+		he.offset = (9-i)*length/10;
+		he.length = length/10;
+		rc = llapi_hsm_action_progress(hcp, &he, length, 0);
+		ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
+			strerror(-rc));
+
+		rc = llapi_hsm_current_action(testfile, &hca);
+		ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
+			strerror(-rc));
+		ASSERTF(hca.hca_state == HPS_RUNNING,
+			"hca_state=%u", hca.hca_state);
+		ASSERTF(hca.hca_action == HUA_ARCHIVE,
+			"hca_state=%u", hca.hca_action);
+		ASSERTF(hca.hca_location.length == (i+1)*length/10,
+			"i=%d, length=%llu",
+			i, (unsigned long long)hca.hca_location.length);
+	}
+}
+
 void test111(void)
 {
 	const size_t length = 1000;
 
-	void test111_progress(struct hsm_copyaction_private *hcp)
-	{
-		int rc;
-		int i;
-		struct hsm_extent he;
-		struct hsm_current_action hca;
-
-		for (i = 0; i < 10; i++) {
-			he.offset = (9-i)*length/10;
-			he.length = length/10;
-			rc = llapi_hsm_action_progress(hcp, &he, length, 0);
-			ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
-				strerror(-rc));
-
-			rc = llapi_hsm_current_action(testfile, &hca);
-			ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
-				strerror(-rc));
-			ASSERTF(hca.hca_state == HPS_RUNNING,
-				"hca_state=%u", hca.hca_state);
-			ASSERTF(hca.hca_action == HUA_ARCHIVE,
-				"hca_state=%u", hca.hca_action);
-			ASSERTF(hca.hca_location.length == (i+1)*length/10,
-				"i=%d, length=%llu",
-				i, hca.hca_location.length);
-		}
-	}
-
-	helper_progress = test111_progress;
-	helper_archiving(length);
+	helper_archiving(test111_progress, length);
 }
 
 /* Archive, with 10 reports, and duplicating them, checking
  * progress. */
+static void test112_progress(struct hsm_copyaction_private *hcp, size_t length)
+{
+	int rc;
+	int i;
+	struct hsm_extent he;
+	struct hsm_current_action hca;
+
+	for (i = 0; i < 10; i++) {
+		he.offset = i*length/10;
+		he.length = length/10;
+		rc = llapi_hsm_action_progress(hcp, &he, length, 0);
+		ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
+			strerror(-rc));
+
+		rc = llapi_hsm_current_action(testfile, &hca);
+		ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
+			strerror(-rc));
+		ASSERTF(hca.hca_state == HPS_RUNNING,
+			"hca_state=%u", hca.hca_state);
+		ASSERTF(hca.hca_action == HUA_ARCHIVE,
+			"hca_state=%u", hca.hca_action);
+		ASSERTF(hca.hca_location.length == (i+1)*length/10,
+			"i=%d, length=%llu",
+			i, (unsigned long long)hca.hca_location.length);
+	}
+
+	for (i = 0; i < 10; i++) {
+		he.offset = i*length/10;
+		he.length = length/10;
+		rc = llapi_hsm_action_progress(hcp, &he, length, 0);
+		ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
+			strerror(-rc));
+
+		rc = llapi_hsm_current_action(testfile, &hca);
+		ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
+			strerror(-rc));
+		ASSERTF(hca.hca_state == HPS_RUNNING,
+			"hca_state=%u", hca.hca_state);
+		ASSERTF(hca.hca_action == HUA_ARCHIVE,
+			"hca_state=%u", hca.hca_action);
+		ASSERTF(hca.hca_location.length == length,
+			"i=%d, length=%llu",
+			i, (unsigned long long)hca.hca_location.length);
+	}
+}
+
 void test112(void)
 {
 	const size_t length = 1000;
 
-	void test112_progress(struct hsm_copyaction_private *hcp)
-	{
-		int rc;
-		int i;
-		struct hsm_extent he;
-		struct hsm_current_action hca;
-
-		for (i = 0; i < 10; i++) {
-			he.offset = i*length/10;
-			he.length = length/10;
-			rc = llapi_hsm_action_progress(hcp, &he, length, 0);
-			ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
-				strerror(-rc));
-
-			rc = llapi_hsm_current_action(testfile, &hca);
-			ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
-				strerror(-rc));
-			ASSERTF(hca.hca_state == HPS_RUNNING,
-				"hca_state=%u", hca.hca_state);
-			ASSERTF(hca.hca_action == HUA_ARCHIVE,
-				"hca_state=%u", hca.hca_action);
-			ASSERTF(hca.hca_location.length == (i+1)*length/10,
-				"i=%d, length=%llu",
-				i, hca.hca_location.length);
-		}
-
-		for (i = 0; i < 10; i++) {
-			he.offset = i*length/10;
-			he.length = length/10;
-			rc = llapi_hsm_action_progress(hcp, &he, length, 0);
-			ASSERTF(rc == 0, "llapi_hsm_action_progress failed: %s",
-				strerror(-rc));
-
-			rc = llapi_hsm_current_action(testfile, &hca);
-			ASSERTF(rc == 0, "llapi_hsm_current_action failed: %s",
-				strerror(-rc));
-			ASSERTF(hca.hca_state == HPS_RUNNING,
-				"hca_state=%u", hca.hca_state);
-			ASSERTF(hca.hca_action == HUA_ARCHIVE,
-				"hca_state=%u", hca.hca_action);
-			ASSERTF(hca.hca_location.length == length,
-				"i=%d, length=%llu",
-				i, hca.hca_location.length);
-		}
-
-	}
-
-	helper_progress = test112_progress;
-	helper_archiving(length);
+	helper_archiving(test112_progress, length);
 }
 
 static void usage(char *prog)
