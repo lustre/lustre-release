@@ -1,7 +1,7 @@
 m4_define([LUSTRE_MAJOR],[2])
 m4_define([LUSTRE_MINOR],[5])
 m4_define([LUSTRE_PATCH],[3])
-m4_define([LUSTRE_FIX],[0])
+m4_define([LUSTRE_FIX],[90])
 
 dnl # liblustre delta is 0.0.1.32 , next version with fixes is ok, but
 dnl # after following release candidate/beta would spill this warning already.
