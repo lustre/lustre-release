@@ -1314,28 +1314,29 @@ nodemap_check_quota() {
 
 do_fops_quota_test() {
 	local run_u=$1
-	# define fuzz as 2x ost block size in K
-	local quota_fuzz=$(($(lctl get_param -n \
-		osc.$FSNAME-OST0000-*.blocksize | head -1) / 512))
+	# fuzz quota used to account for possible indirect blocks, etc
+	local quota_fuzz=$(fs_log_size)
 	local qused_orig=$(nodemap_check_quota "$run_u")
-	local qused_low=$((qused_orig - quota_fuzz))
 	local qused_high=$((qused_orig + quota_fuzz))
+	local qused_low=$((qused_orig - quota_fuzz))
 	local testfile=$DIR/$tdir/$tfile
 	chmod 777 $DIR/$tdir
 	$run_u dd if=/dev/zero of=$testfile bs=1M count=1 >& /dev/null
 	sync; sync_all_data || true
 
 	local qused_new=$(nodemap_check_quota "$run_u")
-	[ $((qused_low + 1024)) -le $((qused_new)) \
-		-a $((qused_high + 1024)) -ge $((qused_new)) ] ||
-		error "$qused_new != $qused_orig + 1M after write"
+	[ $((qused_new)) -lt $((qused_low + 1024)) \
+		-o $((qused_new)) -gt $((qused_high + 1024)) ] &&
+		error "$qused_new != $qused_orig + 1M after write, \
+		      fuzz is $quota_fuzz"
 	$run_u rm $testfile && d=1
 	$NODEMAP_TEST_QUOTA && wait_delete_completed_mds
 
 	qused_new=$(nodemap_check_quota "$run_u")
-	[ $((qused_low)) -le $((qused_new)) \
-		-a $((qused_high)) -ge $((qused_new)) ] ||
-		error "quota not reclaimed, expect $qused_orig got $qused_new"
+	[ $((qused_new)) -lt $((qused_low)) \
+		-o $((qused_new)) -gt $((qused_high)) ] &&
+		error "quota not reclaimed, expect $qused_orig got $qused_new, \
+		      fuzz $quota_fuzz"
 }
 
 get_fops_mapped_user() {
