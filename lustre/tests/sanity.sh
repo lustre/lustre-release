@@ -11180,6 +11180,8 @@ test_184d() {
 run_test 184d "allow stripeless layouts swap"
 
 test_184e() {
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.94) ]] ||
+		{ skip "Need MDS version at least 2.6.94"; return 0; }
 	check_swap_layouts_support && return 0
 	[ -z "$(which getfattr 2>/dev/null)" ] &&
 		skip "no getfattr command" && return 0
