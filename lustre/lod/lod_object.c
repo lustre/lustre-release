@@ -2811,7 +2811,34 @@ static int lod_declare_xattr_del(const struct lu_env *env,
 				 struct dt_object *dt, const char *name,
 				 struct thandle *th)
 {
-	return dt_declare_xattr_del(env, dt_object_child(dt), name, th);
+	struct lod_object	*lo = lod_dt_obj(dt);
+	int			rc;
+	int			i;
+	ENTRY;
+
+	rc = dt_declare_xattr_del(env, dt_object_child(dt), name, th);
+	if (rc != 0)
+		RETURN(rc);
+
+	if (!S_ISDIR(dt->do_lu.lo_header->loh_attr))
+		RETURN(0);
+
+	/* set xattr to each stripes, if needed */
+	rc = lod_load_striping(env, lo);
+	if (rc != 0)
+		RETURN(rc);
+
+	if (lo->ldo_stripenr == 0)
+		RETURN(0);
+
+	for (i = 0; i < lo->ldo_stripenr; i++) {
+		LASSERT(lo->ldo_stripe[i]);
+		rc = dt_declare_xattr_del(env, lo->ldo_stripe[i], name, th);
+		if (rc != 0)
+			break;
+	}
+
+	RETURN(rc);
 }
 
 /**
@@ -2826,9 +2853,30 @@ static int lod_xattr_del(const struct lu_env *env, struct dt_object *dt,
 			 const char *name, struct thandle *th,
 			 struct lustre_capa *capa)
 {
+	struct dt_object	*next = dt_object_child(dt);
+	struct lod_object	*lo = lod_dt_obj(dt);
+	int			rc;
+	int			i;
+	ENTRY;
+
 	if (!strcmp(name, XATTR_NAME_LOV))
 		lod_object_free_striping(env, lod_dt_obj(dt));
-	return dt_xattr_del(env, dt_object_child(dt), name, th, capa);
+
+	rc = dt_xattr_del(env, next, name, th, capa);
+	if (rc != 0 || !S_ISDIR(dt->do_lu.lo_header->loh_attr))
+		RETURN(rc);
+
+	if (lo->ldo_stripenr == 0)
+		RETURN(0);
+
+	for (i = 0; i < lo->ldo_stripenr; i++) {
+		LASSERT(lo->ldo_stripe[i]);
+		rc = dt_xattr_del(env, lo->ldo_stripe[i], name, th, capa);
+		if (rc != 0)
+			break;
+	}
+
+	RETURN(rc);
 }
 
 /**
