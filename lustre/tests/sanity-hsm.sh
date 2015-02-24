@@ -181,7 +181,7 @@ copytool_monitor_setup() {
 		# Slightly racy, but just making a best-effort to catch obvious
 		# problems.
 		sleep 1
-		ps -p $HSMTOOL_MONITOR_PDSH >&- ||
+		ps -p $HSMTOOL_MONITOR_PDSH > /dev/null ||
 			error "Failed to start copytool monitor on $agent"
 	else
 		do_node $agent "$cmd"
