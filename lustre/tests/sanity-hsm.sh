@@ -272,54 +272,76 @@ get_copytool_event_log() {
 
 copytool_cleanup() {
 	trap - EXIT
-	local facet=$SINGLEAGT
-	local agents=${1:-$(facet_active_host $facet)}
-	local mdtno
-	local idx
-	local oldstate
-	local mdt_hsmctrl
-	local hsm_root=$(copytool_device $facet)
+	local agt_facet=$SINGLEAGT
+	local agt_hosts=${1:-$(facet_active_host $agt_facet)}
 	local end_wait=$(( SECONDS + TIMEOUT ))
+	local hsm_root=$(copytool_device $agt_facet)
+	local i
+	local facet
+	local param
+	local -a state
 
-	do_nodesv $agents "pkill -INT -x $HSMTOOL_BASE" || return 0
+	do_nodesv $agt_hosts "pkill -INT -x $HSMTOOL_BASE" || return 0
 
 	while (( SECONDS < end_wait )); do
 		sleep 2
-		do_nodesv $agents "pgrep -x $HSMTOOL_BASE"
+		do_nodesv $agt_hosts "pgrep -x $HSMTOOL_BASE"
 		if [ $? -ne 0 ]; then
-			echo "Copytool is stopped on $agents"
+			echo "copytool is stopped on $agt_hosts"
 			break
 		fi
-		echo "Copytool still running on $agents"
+		echo "copytool still running on $agt_hosts"
 	done
-	if do_nodesv $agents "pgrep -x $HSMTOOL_BASE"; then
-		error "Copytool failed to stop in ${TIMEOUT}s ..."
+
+	if do_nodesv $agt_hosts "pgrep -x $HSMTOOL_BASE"; then
+		error "copytool failed to stop in ${TIMEOUT}s"
 	else
-		echo "Copytool has stopped in " \
-		     "$((TIMEOUT - (end_wait - SECONDS)))s."
+		echo "copytool has stopped in " \
+		     "$((TIMEOUT - (end_wait - SECONDS)))s"
 	fi
 
-	# clean all CDTs orphans requests from previous tests
-	# that would otherwise need to timeout to clear.
-	for mdtno in $(seq 1 $MDSCOUNT); do
-		idx=$(($mdtno - 1))
-		mdt_hsmctrl="mdt.$FSNAME-MDT000${idx}.hsm_control"
-		oldstate=$(do_facet mds${mdtno} "$LCTL get_param -n " \
-				   "$mdt_hsmctrl")
-		# skip already stop[ed,ing] CDTs
-		echo $oldstate | grep stop && continue
+	# Clean all CDTs orphans requests from previous tests that
+	# would otherwise need to timeout to clear.
+	for ((i = 0; i < MDSCOUNT; i++)); do
+		facet=mds$((i + 1))
+		param=$(printf 'mdt.%s-MDT%04x.hsm_control' $FSNAME $i)
+		state[$i]=$(do_facet $facet "$LCTL get_param -n $param")
 
-		do_facet mds${mdtno} "$LCTL set_param $mdt_hsmctrl=shutdown"
-		wait_result mds${mdtno} "$LCTL get_param -n $mdt_hsmctrl" \
-			"stopped" 20 ||
-			error "mds${mdtno} cdt state is not stopped"
-		do_facet mds${mdtno} "$LCTL set_param $mdt_hsmctrl=$oldstate"
-		wait_result mds${mdtno} "$LCTL get_param -n $mdt_hsmctrl" \
-			"$oldstate" 20 ||
-			error "mds${mdtno} cdt state is not $oldstate"
+		# Skip already stopping or stopped CDTs.
+		[[ "${state[$i]}" =~ ^stop ]] && continue
+
+		do_facet $facet "$LCTL set_param $param=shutdown"
 	done
-	if do_facet $facet "df $hsm_root" >/dev/null 2>&1 ; then
-		do_facet $facet "rm -rf $hsm_root/*"
+
+	for ((i = 0; i < MDSCOUNT; i++)); do
+		# Only check and restore CDTs that we stopped in the first loop.
+		[[ "${state[$i]}" =~ ^stop ]] && continue
+
+		facet=mds$((i + 1))
+		param=$(printf 'mdt.%s-MDT%04x.hsm_control' $FSNAME $i)
+
+		wait_result $facet "$LCTL get_param -n $param" stopped 20 ||
+			error "$facet CDT state is not stopped"
+
+		# Restore old CDT state.
+		do_facet $facet "$LCTL set_param $param=${state[$i]}"
+	done
+
+
+	for ((i = 0; i < MDSCOUNT; i++)); do
+		# Only check CDTs that we stopped in the first loop.
+		[[ "${state[$i]}" =~ ^stop ]] && continue
+
+		facet=mds$((i + 1))
+		param=$(printf 'mdt.%s-MDT%04x.hsm_control' $FSNAME $i)
+
+		# Check that the old CDT state was restored.
+		wait_result $facet "$LCTL get_param -n $param" "${state[$i]}" \
+			20 || error "$facet CDT state is not '${state[$i]}'"
+	done
+
+	if do_facet $agt_facet "df $hsm_root" >/dev/null 2>&1 ; then
+		do_facet $agt_facet "rm -rf $hsm_root/*"
 	fi
 }
 
