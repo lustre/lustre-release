@@ -118,12 +118,7 @@ cfs_cpu_ht_nsiblings(int cpu)
 {
 	int	num;
 
-	mutex_lock(&cpt_data.cpt_mutex);
-
-	cfs_cpu_ht_siblings(cpu, cpt_data.cpt_cpumask);
-	num = cpus_weight(*cpt_data.cpt_cpumask);
-
-	mutex_unlock(&cpt_data.cpt_mutex);
+	num = cpus_weight(*topology_thread_cpumask(cpu));
 
 	return num;
 }
