@@ -1197,7 +1197,7 @@ static inline ssize_t hur_len(struct hsm_user_request *hur)
 		(__u64)hur->hur_request.hr_itemcount *
 		sizeof(hur->hur_user_item[0]) + hur->hur_request.hr_data_len;
 
-	if (size > ~((size_t)0)>>1)
+	if (size != (ssize_t)size)
 		return -1;
 
 	return size;
