@@ -1,4 +1,26 @@
 TBD Intel Corporation
+       * version 2.8.0
+       * See https://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix
+         for currently supported client and server kernel versions.
+       * Server known to build on patched kernels:
+         2.6.32-431.29.2.el6 (RHEL6.5)
+         2.6.32-504.8.1.el6  (RHEL6.6)
+         3.0.101-0.46        (SLES11 SP3)
+       * Client known to build on unpatched kernels:
+         2.6.32-431.29.2.el6 (RHEL6.5)
+         2.6.32-504.8.1.el6  (RHEL6.6)
+         3.10.0-123.20.1.el7 (RHEL7)
+         3.0.101-0.46        (SLES11 SP3)
+       * Recommended e2fsprogs version: 1.42.9.wc1 or newer
+       * NFS export disabled when stack size < 8192 (32-bit Lustre clients),
+         since the NFSv4 export of Lustre filesystem with 4K stack may cause a
+         stack overflow. For more information, please refer to bugzilla 17630.
+       * NFSv4 reexport to 32-bit NFS client nodes requires Lustre client on
+         the re-exporting nodes to be mounted with "32bitapi" mount option
+
+--------------------------------------------------------------------------------
+
+03-10-2015 Intel Corporation
        * version 2.7.0
        * See https://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix
          for currently supported client and server kernel versions.
