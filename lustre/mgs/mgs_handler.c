@@ -1365,22 +1365,6 @@ static struct lu_device *mgs_device_alloc(const struct lu_env *env,
 	return ludev;
 }
 
-/* LU-4772 debug function.
- * It checks there are no FSC keep export reference before
- * obd_exports_barrier() call.
- */
-int mgs_fsc_debug(struct mgs_device *mgs)
-{
-	struct fs_db *fsdb;
-
-	mutex_lock(&mgs->mgs_mutex);
-	list_for_each_entry(fsdb, &mgs->mgs_fs_db_list, fsdb_list)
-		LASSERTF(list_empty(&fsdb->fsdb_clients),
-			 "Find FSC after cleanup, FSDB %s\n", fsdb->fsdb_name);
-	mutex_unlock(&mgs->mgs_mutex);
-	return 0;
-}
-
 static struct lu_device *mgs_device_fini(const struct lu_env *env,
 					 struct lu_device *d)
 {
@@ -1400,14 +1384,13 @@ static struct lu_device *mgs_device_fini(const struct lu_env *env,
 	ptlrpc_unregister_service(mgs->mgs_service);
 	mutex_unlock(&mgs->mgs_health_mutex);
 
-	mgs_fsc_debug(mgs);
+	mgs_params_fsdb_cleanup(env, mgs);
+	mgs_cleanup_fsdb_list(mgs);
 
 	obd_exports_barrier(obd);
 	obd_zombie_barrier();
 
 	tgt_fini(env, &mgs->mgs_lut);
-	mgs_params_fsdb_cleanup(env, mgs);
-	mgs_cleanup_fsdb_list(mgs);
 	lproc_mgs_cleanup(mgs);
 
 	ctxt = llog_get_context(mgs->mgs_obd, LLOG_CONFIG_ORIG_CTXT);
