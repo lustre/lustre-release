@@ -54,6 +54,7 @@ KVER?=$(LINUXRELEASE)
 KVERS?=$(KVER)
 KSRC?=$(LINUX_OBJ)
 KSRC_TREE?=$(LINUX)
+IB_OPTIONS?=""
 
 # Packages
 PATCH_PKG=linux-patch-lustre
@@ -344,7 +345,8 @@ kdist_config: prep-deb-files patch-stamp
 		    --disable-iokit \
 		    --disable-snmp \
 		    --disable-tests \
-		    --enable-quota
+		    --enable-quota \
+		    $(IB_OPTIONS)
 
 kdist_configure: kdist_config
 

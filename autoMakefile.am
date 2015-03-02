@@ -141,6 +141,8 @@ debs:
 	echo "lustre" > usr_share_modass/compliant.list && \
 	export MA_DIR=$$(pwd)/usr_share_modass && \
 	KVERS=$${KVERS:-$(LINUXRELEASE)} && \
+	[ "x@ENABLEO2IB@" != "x" ] && \
+	export IB_OPTIONS="--with-o2ib=@O2IBPATHS@" && \
 	export KSRC_TREE=$(LINUX) && \
 	KSRC=$${KSRC:-$(LINUX_OBJ)} && \
 	m-a build $${KSRC:+-k $$KSRC} $${KVERS:+-l $$KVERS} -i -u $$(pwd) lustre && \
