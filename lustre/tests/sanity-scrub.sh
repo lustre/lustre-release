@@ -947,14 +947,13 @@ test_11() {
 
 	# OI scrub should skip the new created objects for the first accessing
 	# notice we're creating a new llog for every OST on every startup
-	# new features can make this even less stable, so we only check
-	# that the number of skipped files is less than 2x the number of files
-	local MAXIMUM=$((CREATED * 2))
+	# new features can make this even less stable, so we only check that
+	# the number of skipped files is more than the number or known created
 	local MINIMUM=$((CREATED + 1)) # files + directory
 	for n in $(seq $MDSCOUNT); do
 		local SKIPPED=$(scrub_status $n | awk '/^noscrub/ { print $2 }')
-		[ $SKIPPED -ge $MAXIMUM -o $SKIPPED -lt $MINIMUM ] &&
-			error "(5) Expect [ $MINIMUM , $MAXIMUM ) objects" \
+		[ $SKIPPED -lt $MINIMUM ] &&
+			error "(5) Expect at least $MINIMUM objects" \
 				"skipped on mds$n, but got $SKIPPED"
 
 		checked0[$n]=$(scrub_status $n | awk '/^checked/ { print $2 }')
