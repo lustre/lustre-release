@@ -2644,7 +2644,9 @@ int osc_queue_sync_pages(const struct lu_env *env, struct osc_object *obj,
 
 	ext = osc_extent_alloc(obj);
 	if (ext == NULL) {
-		list_for_each_entry(oap, list, oap_pending_item) {
+		struct osc_async_page *tmp;
+
+		list_for_each_entry_safe(oap, tmp, list, oap_pending_item) {
 			list_del_init(&oap->oap_pending_item);
 			osc_ap_completion(env, cli, oap, 0, -ENOMEM);
 		}
