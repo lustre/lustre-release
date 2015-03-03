@@ -2204,6 +2204,8 @@ test_18e() {
 	#define OBD_FAIL_LFSCK_DELAY3		0x1602
 	do_facet $SINGLEMDS $LCTL set_param fail_val=10 fail_loc=0x1602
 
+	start_full_debug_logging
+
 	echo "Trigger layout LFSCK on all devices to find out orphan OST-object"
 	$START_LAYOUT -r -o -c || error "(2) Fail to start LFSCK for layout!"
 
@@ -2238,6 +2240,8 @@ test_18e() {
 		[ "$cur_status" == "completed" ] ||
 		error "(5) OST${k} Expect 'completed', but got '$cur_status'"
 	done
+
+	stop_full_debug_logging
 
 	local repaired=$(do_facet $SINGLEMDS $LCTL get_param -n \
 			 mdd.$(facet_svc $SINGLEMDS).lfsck_layout |

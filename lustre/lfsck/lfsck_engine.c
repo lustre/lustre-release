@@ -1674,11 +1674,11 @@ int lfsck_assistant_engine(void *args)
 			lr->lr_event = LE_PHASE1_DONE;
 			lr->lr_status = lad->lad_post_result;
 			rc = lfsck_assistant_notify_others(env, com, lr);
-			if (rc != 0)
-				CDEBUG(D_LFSCK, "%s: LFSCK assistant failed to "
-				       "notify others for %s post: rc = %d\n",
-				       lfsck_lfsck2name(lfsck),
-				       lad->lad_name, rc);
+
+			CDEBUG(D_LFSCK, "%s: LFSCK assistant notified "
+			       "others for %s post: rc = %d\n",
+			       lfsck_lfsck2name(lfsck),
+			       lad->lad_name, rc);
 
 			/* Wakeup the master engine to go ahead. */
 			wake_up_all(&mthread->t_ctl_waitq);
