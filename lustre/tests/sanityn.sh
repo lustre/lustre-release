@@ -3,18 +3,11 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 3192 LU-1205 15528/3811 16929 9977 15528/11549 18080
-ALWAYS_EXCEPT="                14b  18c     19         22    28   29          35    $SANITYN_EXCEPT"
+# bug number for skipped test: 3192 LU-1205 15528/3811 9977 15528/11549 18080
+ALWAYS_EXCEPT="                14b  18c     19         28   29          35    $SANITYN_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-# bug number for skipped test:        12652 12652
-grep -q 'Enterprise Server 10' /etc/SuSE-release 2> /dev/null &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11    14" || true
-
-# It will be ported soon.
-EXCEPT="$EXCEPT 22"
-
-SRCDIR=`dirname $0`
+SRCDIR=$(dirname $0)
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
 SIZE=${SIZE:-40960}
