@@ -96,7 +96,7 @@ void usage(FILE *out)
 		progname);
 	fprintf(out,
 		"\t<device>: the disk device, or for a client:\n"
-		"\t\t<mgmtnid>[:<altmgtnid>...]:/<filesystem>-client\n"
+		"\t\t<mgsnid>[:<altmgsnid>...]:/<filesystem>[/<subdir>]\n"
 		"\t<filesystem>: name of the Lustre filesystem (e.g. lustre1)\n"
 		"\t<mountpt>: filesystem mountpoint (e.g. /mnt/lustre)\n"
 		"\t-f|--fake: fake mount (updates /etc/mtab)\n"

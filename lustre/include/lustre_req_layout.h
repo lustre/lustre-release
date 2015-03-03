@@ -155,7 +155,7 @@ extern struct req_format RQF_FLD_READ;
 extern struct req_format RQF_MDS_CONNECT;
 extern struct req_format RQF_MDS_DISCONNECT;
 extern struct req_format RQF_MDS_STATFS;
-extern struct req_format RQF_MDS_GETSTATUS;
+extern struct req_format RQF_MDS_GET_ROOT;
 extern struct req_format RQF_MDS_SYNC;
 extern struct req_format RQF_MDS_GETXATTR;
 extern struct req_format RQF_MDS_GETATTR;

@@ -593,32 +593,35 @@ static struct lustre_sb_info *lustre_init_lsi(struct super_block *sb)
 
 static int lustre_free_lsi(struct super_block *sb)
 {
-        struct lustre_sb_info *lsi = s2lsi(sb);
-        ENTRY;
+	struct lustre_sb_info *lsi = s2lsi(sb);
+	ENTRY;
 
-        LASSERT(lsi != NULL);
-        CDEBUG(D_MOUNT, "Freeing lsi %p\n", lsi);
+	LASSERT(lsi != NULL);
+	CDEBUG(D_MOUNT, "Freeing lsi %p\n", lsi);
 
-        /* someone didn't call server_put_mount. */
+	/* someone didn't call server_put_mount. */
 	LASSERT(atomic_read(&lsi->lsi_mounts) == 0);
 
-        if (lsi->lsi_lmd != NULL) {
-                if (lsi->lsi_lmd->lmd_dev != NULL)
-                        OBD_FREE(lsi->lsi_lmd->lmd_dev,
-                                 strlen(lsi->lsi_lmd->lmd_dev) + 1);
-                if (lsi->lsi_lmd->lmd_profile != NULL)
-                        OBD_FREE(lsi->lsi_lmd->lmd_profile,
-                                 strlen(lsi->lsi_lmd->lmd_profile) + 1);
-                if (lsi->lsi_lmd->lmd_mgssec != NULL)
-                        OBD_FREE(lsi->lsi_lmd->lmd_mgssec,
-                                 strlen(lsi->lsi_lmd->lmd_mgssec) + 1);
-                if (lsi->lsi_lmd->lmd_opts != NULL)
-                        OBD_FREE(lsi->lsi_lmd->lmd_opts,
-                                 strlen(lsi->lsi_lmd->lmd_opts) + 1);
-                if (lsi->lsi_lmd->lmd_exclude_count)
-                        OBD_FREE(lsi->lsi_lmd->lmd_exclude,
-                                 sizeof(lsi->lsi_lmd->lmd_exclude[0]) *
-                                 lsi->lsi_lmd->lmd_exclude_count);
+	if (lsi->lsi_lmd != NULL) {
+		if (lsi->lsi_lmd->lmd_dev != NULL)
+			OBD_FREE(lsi->lsi_lmd->lmd_dev,
+				strlen(lsi->lsi_lmd->lmd_dev) + 1);
+		if (lsi->lsi_lmd->lmd_profile != NULL)
+			OBD_FREE(lsi->lsi_lmd->lmd_profile,
+				strlen(lsi->lsi_lmd->lmd_profile) + 1);
+		if (lsi->lsi_lmd->lmd_fileset != NULL)
+			OBD_FREE(lsi->lsi_lmd->lmd_fileset,
+				strlen(lsi->lsi_lmd->lmd_fileset) + 1);
+		if (lsi->lsi_lmd->lmd_mgssec != NULL)
+			OBD_FREE(lsi->lsi_lmd->lmd_mgssec,
+				strlen(lsi->lsi_lmd->lmd_mgssec) + 1);
+		if (lsi->lsi_lmd->lmd_opts != NULL)
+			OBD_FREE(lsi->lsi_lmd->lmd_opts,
+				strlen(lsi->lsi_lmd->lmd_opts) + 1);
+		if (lsi->lsi_lmd->lmd_exclude_count)
+			OBD_FREE(lsi->lsi_lmd->lmd_exclude,
+				sizeof(lsi->lsi_lmd->lmd_exclude[0]) *
+				lsi->lsi_lmd->lmd_exclude_count);
 		if (lsi->lsi_lmd->lmd_mgs != NULL)
 			OBD_FREE(lsi->lsi_lmd->lmd_mgs,
 				 strlen(lsi->lsi_lmd->lmd_mgs) + 1);
@@ -628,14 +631,14 @@ static int lustre_free_lsi(struct super_block *sb)
 		if (lsi->lsi_lmd->lmd_params != NULL)
 			OBD_FREE(lsi->lsi_lmd->lmd_params, 4096);
 
-                OBD_FREE(lsi->lsi_lmd, sizeof(*lsi->lsi_lmd));
-        }
+		OBD_FREE_PTR(lsi->lsi_lmd);
+	}
 
-        LASSERT(lsi->lsi_llsbi == NULL);
-        OBD_FREE(lsi, sizeof(*lsi));
-        s2lsi_nocast(sb) = NULL;
+	LASSERT(lsi->lsi_llsbi == NULL);
+	OBD_FREE_PTR(lsi);
+	s2lsi_nocast(sb) = NULL;
 
-        RETURN(0);
+	RETURN(0);
 }
 
 /* The lsi has one reference for every server that is using the disk -
@@ -1298,18 +1301,39 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                 goto invalid;
         }
 
-        s1 = strstr(devname, ":/");
-        if (s1) {
-                ++s1;
-                lmd->lmd_flags |= LMD_FLG_CLIENT;
-                /* Remove leading /s from fsname */
-                while (*++s1 == '/') ;
-                /* Freed in lustre_free_lsi */
-                OBD_ALLOC(lmd->lmd_profile, strlen(s1) + 8);
-                if (!lmd->lmd_profile)
-                        RETURN(-ENOMEM);
-                sprintf(lmd->lmd_profile, "%s-client", s1);
-        }
+	s1 = strstr(devname, ":/");
+	if (s1) {
+		++s1;
+		lmd->lmd_flags |= LMD_FLG_CLIENT;
+		/* Remove leading /s from fsname */
+		while (*++s1 == '/')
+			;
+		s2 = s1;
+		while (*s2 != '/' && *s2 != '\0')
+			s2++;
+		/* Freed in lustre_free_lsi */
+		OBD_ALLOC(lmd->lmd_profile, s2 - s1 + 8);
+		if (!lmd->lmd_profile)
+			RETURN(-ENOMEM);
+
+		strncat(lmd->lmd_profile, s1, s2 - s1);
+		strncat(lmd->lmd_profile, "-client", 7);
+
+		s1 = s2;
+		s2 = s1 + strlen(s1) - 1;
+		/* Remove padding /s from fileset */
+		while (*s2 == '/')
+			s2--;
+		if (s2 > s1) {
+			OBD_ALLOC(lmd->lmd_fileset, s2 - s1 + 2);
+			if (lmd->lmd_fileset == NULL) {
+				OBD_FREE(lmd->lmd_profile,
+					strlen(lmd->lmd_profile) + 1);
+				RETURN(-ENOMEM);
+			}
+			strncat(lmd->lmd_fileset, s1, s2 - s1 + 1);
+		}
+	}
 
         /* Freed in lustre_free_lsi */
         OBD_ALLOC(lmd->lmd_dev, strlen(devname) + 1);
@@ -1381,28 +1405,28 @@ static int lustre_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out, rc = -EINVAL);
         }
 
-        if (lmd_is_client(lmd)) {
-                CDEBUG(D_MOUNT, "Mounting client %s\n", lmd->lmd_profile);
+	if (lmd_is_client(lmd)) {
+		CDEBUG(D_MOUNT, "Mounting client %s\n", lmd->lmd_profile);
 		if (client_fill_super == NULL)
 			request_module("lustre");
 		if (client_fill_super == NULL) {
-                        LCONSOLE_ERROR_MSG(0x165, "Nothing registered for "
-                                           "client mount! Is the 'lustre' "
-                                           "module loaded?\n");
-                        lustre_put_lsi(sb);
-                        rc = -ENODEV;
-                } else {
-                        rc = lustre_start_mgc(sb);
-                        if (rc) {
-                                lustre_put_lsi(sb);
-                                GOTO(out, rc);
-                        }
-                        /* Connect and start */
-                        /* (should always be ll_fill_super) */
-                        rc = (*client_fill_super)(sb, lmd2->lmd2_mnt);
-                        /* c_f_s will call lustre_common_put_super on failure */
-                }
-        } else {
+			LCONSOLE_ERROR_MSG(0x165, "Nothing registered for "
+					   "client mount! Is the 'lustre' "
+					   "module loaded?\n");
+			lustre_put_lsi(sb);
+			rc = -ENODEV;
+		} else {
+			rc = lustre_start_mgc(sb);
+			if (rc) {
+				lustre_put_lsi(sb);
+				GOTO(out, rc);
+			}
+			/* Connect and start */
+			/* (should always be ll_fill_super) */
+			rc = (*client_fill_super)(sb, lmd2->lmd2_mnt);
+			/* c_f_s will call lustre_common_put_super on failure */
+		}
+	} else {
 #ifdef HAVE_SERVER_SUPPORT
 		CDEBUG(D_MOUNT, "Mounting server from %s\n", lmd->lmd_dev);
 		rc = server_fill_super(sb);
@@ -1415,7 +1439,7 @@ static int lustre_fill_super(struct super_block *sb, void *data, int silent)
 		       "cannot handle server mount.\n");
 		rc = -EINVAL;
 #endif
-        }
+	}
 
         /* If error happens in fill_super() call, @lsi will be killed there.
          * This is why we do not put it here. */

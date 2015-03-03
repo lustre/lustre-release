@@ -847,21 +847,21 @@ out:
  */
 int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
 {
-        struct mntent mnt;
-        char buf[PATH_MAX], mntdir[PATH_MAX];
-        char *ptr;
-        FILE *fp;
-        int idx = 0, len = 0, mntlen, fd;
-        int rc = -ENODEV;
+	struct mntent mnt;
+	char buf[PATH_MAX], mntdir[PATH_MAX];
+	char *ptr, *ptr_end;
+	FILE *fp;
+	int idx = 0, len = 0, mntlen, fd;
+	int rc = -ENODEV;
 
         /* get the mount point */
-        fp = setmntent(PROC_MOUNTS, "r");
-        if (fp == NULL) {
-                rc = -EIO;
-                llapi_error(LLAPI_MSG_ERROR, rc,
+	fp = setmntent(PROC_MOUNTS, "r");
+	if (fp == NULL) {
+		rc = -EIO;
+		llapi_error(LLAPI_MSG_ERROR, rc,
                             "setmntent(%s) failed", PROC_MOUNTS);
-                return rc;
-        }
+		return rc;
+	}
         while (1) {
                 if (getmntent_r(fp, &mnt, buf, sizeof(buf)) == NULL)
                         break;
@@ -873,58 +873,71 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
                         continue;
 
                 mntlen = strlen(mnt.mnt_dir);
-                ptr = strrchr(mnt.mnt_fsname, '/');
+		ptr = strchr(mnt.mnt_fsname, '/');
+		while (ptr && *ptr == '/')
+			ptr++;
 		/* thanks to the call to llapi_is_lustre_mnt() above,
 		 * we are sure that mnt.mnt_fsname contains ":/",
 		 * so ptr should never be NULL */
 		if (ptr == NULL)
 			continue;
-                ptr++;
+		ptr_end = ptr;
+		while (*ptr_end != '/' && *ptr_end != '\0')
+			ptr_end++;
 
-                /* Check the fsname for a match, if given */
+		/* Check the fsname for a match, if given */
                 if (!(want & WANT_FSNAME) && fsname != NULL &&
-                    (strlen(fsname) > 0) && (strcmp(ptr, fsname) != 0))
+		    (strlen(fsname) > 0) &&
+		    (strncmp(ptr, fsname, ptr_end - ptr) != 0))
                         continue;
 
                 /* If the path isn't set return the first one we find */
-                if (path == NULL || strlen(path) == 0) {
-                        strcpy(mntdir, mnt.mnt_dir);
-                        if ((want & WANT_FSNAME) && fsname != NULL)
-                                strcpy(fsname, ptr);
-                        rc = 0;
-                        break;
-                /* Otherwise find the longest matching path */
-                } else if ((strlen(path) >= mntlen) && (mntlen >= len) &&
-                           (strncmp(mnt.mnt_dir, path, mntlen) == 0)) {
-                        strcpy(mntdir, mnt.mnt_dir);
-                        len = mntlen;
-                        if ((want & WANT_FSNAME) && fsname != NULL)
-                                strcpy(fsname, ptr);
-                        rc = 0;
-                }
-        }
-        endmntent(fp);
+		if (path == NULL || strlen(path) == 0) {
+			strncpy(mntdir, mnt.mnt_dir, strlen(mnt.mnt_dir));
+			mntdir[strlen(mnt.mnt_dir)] = '\0';
+			if ((want & WANT_FSNAME) && fsname != NULL) {
+				strncpy(fsname, ptr, ptr_end - ptr);
+				fsname[ptr_end - ptr] = '\0';
+			}
+			rc = 0;
+			break;
+		/* Otherwise find the longest matching path */
+		} else if ((strlen(path) >= mntlen) && (mntlen >= len) &&
+			   (strncmp(mnt.mnt_dir, path, mntlen) == 0)) {
+			strncpy(mntdir, mnt.mnt_dir, strlen(mnt.mnt_dir));
+			mntdir[strlen(mnt.mnt_dir)] = '\0';
+			len = mntlen;
+			if ((want & WANT_FSNAME) && fsname != NULL) {
+				strncpy(fsname, ptr, ptr_end - ptr);
+				fsname[ptr_end - ptr] = '\0';
+			}
+			rc = 0;
+		}
+	}
+	endmntent(fp);
 
-        /* Found it */
-        if (rc == 0) {
-                if ((want & WANT_PATH) && path != NULL)
-                        strcpy(path, mntdir);
-                if (want & WANT_FD) {
-                        fd = open(mntdir, O_RDONLY | O_DIRECTORY | O_NONBLOCK);
-                        if (fd < 0) {
-                                rc = -errno;
-                                llapi_error(LLAPI_MSG_ERROR, rc,
-                                            "error opening '%s'", mntdir);
+	/* Found it */
+	if (rc == 0) {
+		if ((want & WANT_PATH) && path != NULL) {
+			strncpy(path, mntdir, strlen(mntdir));
+			path[strlen(mntdir)] = '\0';
+		}
+		if (want & WANT_FD) {
+			fd = open(mntdir, O_RDONLY | O_DIRECTORY | O_NONBLOCK);
+			if (fd < 0) {
+				rc = -errno;
+				llapi_error(LLAPI_MSG_ERROR, rc,
+					    "error opening '%s'", mntdir);
 
-                        } else {
-                                *outfd = fd;
-                        }
-                }
-        } else if (want & WANT_ERROR)
-                llapi_err_noerrno(LLAPI_MSG_ERROR,
-                                  "can't find fs root for '%s': %d",
-                                  (want & WANT_PATH) ? fsname : path, rc);
-        return rc;
+			} else {
+				*outfd = fd;
+			}
+		}
+	} else if (want & WANT_ERROR)
+		llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "can't find fs root for '%s': %d",
+				  (want & WANT_PATH) ? fsname : path, rc);
+	return rc;
 }
 
 /*
@@ -3889,9 +3902,6 @@ int root_ioctl(const char *mdtname, int opc, void *data, int *mdtidxp,
                 rc = -errno;
         else
                 rc = 0;
-        if (rc && want_error)
-                llapi_error(LLAPI_MSG_ERROR, rc, "ioctl %d err %d", opc, rc);
-
         close(fd);
         return rc;
 }
@@ -4136,7 +4146,7 @@ int llapi_fid2path(const char *device, const char *fidstr, char *buf,
 		if (rc != -ENOENT)
 			llapi_error(LLAPI_MSG_ERROR, rc, "ioctl err %d", rc);
 	} else {
-		memcpy(buf, gf->gf_path, gf->gf_pathlen);
+		memcpy(buf, gf->gf_u.gf_path, gf->gf_pathlen);
 		if (buf[0] == '\0') { /* ROOT path */
 			buf[0] = '/';
 			buf[1] = '\0';

@@ -691,13 +691,17 @@ static int lmv_fid2path(struct obd_export *exp, int len, void *karg,
 	struct getinfo_fid2path *gf;
 	struct lmv_tgt_desc     *tgt;
 	struct getinfo_fid2path *remote_gf = NULL;
+	struct lu_fid		root_fid;
 	int			remote_gf_size = 0;
 	int			rc;
 
-	gf = (struct getinfo_fid2path *)karg;
+	gf = karg;
 	tgt = lmv_find_target(lmv, &gf->gf_fid);
 	if (IS_ERR(tgt))
 		RETURN(PTR_ERR(tgt));
+
+	root_fid = *gf->gf_u.gf_root_fid;
+	LASSERT(fid_is_sane(&root_fid));
 
 repeat_fid2path:
 	rc = obd_iocontrol(OBD_IOC_FID2PATH, tgt->ltd_exp, len, gf, uarg);
@@ -711,23 +715,24 @@ repeat_fid2path:
 		char *ptr;
 
 		ori_gf = (struct getinfo_fid2path *)karg;
-		if (strlen(ori_gf->gf_path) +
-		    strlen(gf->gf_path) > ori_gf->gf_pathlen)
+		if (strlen(ori_gf->gf_u.gf_path) +
+		    strlen(gf->gf_u.gf_path) > ori_gf->gf_pathlen)
 			GOTO(out_fid2path, rc = -EOVERFLOW);
 
-		ptr = ori_gf->gf_path;
+		ptr = ori_gf->gf_u.gf_path;
 
-		memmove(ptr + strlen(gf->gf_path) + 1, ptr,
-			strlen(ori_gf->gf_path));
+		memmove(ptr + strlen(gf->gf_u.gf_path) + 1, ptr,
+			strlen(ori_gf->gf_u.gf_path));
 
-		strncpy(ptr, gf->gf_path, strlen(gf->gf_path));
-		ptr += strlen(gf->gf_path);
+		strncpy(ptr, gf->gf_u.gf_path,
+			strlen(gf->gf_u.gf_path));
+		ptr += strlen(gf->gf_u.gf_path);
 		*ptr = '/';
 	}
 
 	CDEBUG(D_INFO, "%s: get path %s "DFID" rec: "LPU64" ln: %u\n",
 	       tgt->ltd_exp->exp_obd->obd_name,
-	       gf->gf_path, PFID(&gf->gf_fid), gf->gf_recno,
+	       gf->gf_u.gf_path, PFID(&gf->gf_fid), gf->gf_recno,
 	       gf->gf_linkno);
 
 	if (rc == 0)
@@ -756,7 +761,8 @@ repeat_fid2path:
 	remote_gf->gf_fid = gf->gf_fid;
 	remote_gf->gf_recno = -1;
 	remote_gf->gf_linkno = -1;
-	memset(remote_gf->gf_path, 0, remote_gf->gf_pathlen);
+	memset(remote_gf->gf_u.gf_path, 0, remote_gf->gf_pathlen);
+	*remote_gf->gf_u.gf_root_fid = root_fid;
 	gf = remote_gf;
 	goto repeat_fid2path;
 
@@ -1492,18 +1498,20 @@ out_free_temp:
         return rc;
 }
 
-static int lmv_getstatus(struct obd_export *exp, struct lu_fid *fid)
+static int lmv_getstatus(struct obd_export *exp,
+			 const char *fileset,
+			 struct lu_fid *fid)
 {
         struct obd_device    *obd = exp->exp_obd;
         struct lmv_obd       *lmv = &obd->u.lmv;
         int                   rc;
         ENTRY;
 
-        rc = lmv_check_connect(obd);
-        if (rc)
-                RETURN(rc);
+	rc = lmv_check_connect(obd);
+	if (rc)
+		RETURN(rc);
 
-	rc = md_getstatus(lmv->tgts[0]->ltd_exp, fid);
+	rc = md_get_root(lmv->tgts[0]->ltd_exp, fileset, fid);
 	RETURN(rc);
 }
 

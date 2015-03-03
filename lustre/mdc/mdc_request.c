@@ -84,7 +84,22 @@ static inline int mdc_queue_wait(struct ptlrpc_request *req)
 	return rc;
 }
 
-static int mdc_getstatus(struct obd_export *exp, struct lu_fid *rootfid)
+/*
+ * Send MDS_GET_ROOT RPC to fetch root FID.
+ *
+ * If \a fileset is not NULL it should contain a subdirectory off
+ * the ROOT/ directory to be mounted on the client. Return the FID
+ * of the subdirectory to the client to mount onto its mountpoint.
+ *
+ * \param[in]	imp	MDC import
+ * \param[in]	fileset	fileset name, which could be NULL
+ * \param[out]	rootfid	root FID of this mountpoint
+ * \param[out]	pc	root capa will be unpacked and saved in this pointer
+ *
+ * \retval	0 on success, negative errno on failure
+ */
+static int mdc_get_root(struct obd_export *exp, const char *fileset,
+			 struct lu_fid *rootfid)
 {
 	struct ptlrpc_request	*req;
 	struct mdt_body		*body;
@@ -92,13 +107,29 @@ static int mdc_getstatus(struct obd_export *exp, struct lu_fid *rootfid)
 
 	ENTRY;
 
-	req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
-					&RQF_MDS_GETSTATUS,
-					LUSTRE_MDS_VERSION, MDS_GETSTATUS);
+	if (fileset && !(exp_connect_flags(exp) & OBD_CONNECT_SUBTREE))
+		RETURN(-ENOTSUPP);
+
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
+				&RQF_MDS_GET_ROOT);
 	if (req == NULL)
 		RETURN(-ENOMEM);
 
+	if (fileset != NULL)
+		req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
+				     strlen(fileset) + 1);
+	rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_GET_ROOT);
+	if (rc) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
 	mdc_pack_body(req, NULL, 0, 0, -1, 0);
+	if (fileset != NULL) {
+		char *name = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
+
+		memcpy(name, fileset, strlen(fileset));
+	}
+	lustre_msg_add_flags(req->rq_reqmsg, LUSTRE_IMP_FULL);
 	req->rq_send_state = LUSTRE_IMP_FULL;
 
 	ptlrpc_request_set_replen(req);
@@ -1445,28 +1476,30 @@ output:
 
 static int mdc_ioc_fid2path(struct obd_export *exp, struct getinfo_fid2path *gf)
 {
-        __u32 keylen, vallen;
-        void *key;
-        int rc;
+	__u32 keylen, vallen;
+	void *key;
+	int rc;
 
-        if (gf->gf_pathlen > PATH_MAX)
-                RETURN(-ENAMETOOLONG);
-        if (gf->gf_pathlen < 2)
-                RETURN(-EOVERFLOW);
+	if (gf->gf_pathlen > PATH_MAX)
+		RETURN(-ENAMETOOLONG);
+	if (gf->gf_pathlen < 2)
+		RETURN(-EOVERFLOW);
 
-        /* Key is KEY_FID2PATH + getinfo_fid2path description */
-        keylen = cfs_size_round(sizeof(KEY_FID2PATH)) + sizeof(*gf);
-        OBD_ALLOC(key, keylen);
-        if (key == NULL)
-                RETURN(-ENOMEM);
-        memcpy(key, KEY_FID2PATH, sizeof(KEY_FID2PATH));
-        memcpy(key + cfs_size_round(sizeof(KEY_FID2PATH)), gf, sizeof(*gf));
+	/* Key is KEY_FID2PATH + getinfo_fid2path description */
+	keylen = cfs_size_round(sizeof(KEY_FID2PATH) + sizeof(*gf) +
+				sizeof(struct lu_fid));
+	OBD_ALLOC(key, keylen);
+	if (key == NULL)
+		RETURN(-ENOMEM);
+	memcpy(key, KEY_FID2PATH, sizeof(KEY_FID2PATH));
+	memcpy(key + cfs_size_round(sizeof(KEY_FID2PATH)), gf, sizeof(*gf));
+	memcpy(key + cfs_size_round(sizeof(KEY_FID2PATH)) + sizeof(*gf),
+	       gf->gf_u.gf_root_fid, sizeof(struct lu_fid));
+	CDEBUG(D_IOCTL, "path get "DFID" from "LPU64" #%d\n",
+	       PFID(&gf->gf_fid), gf->gf_recno, gf->gf_linkno);
 
-        CDEBUG(D_IOCTL, "path get "DFID" from "LPU64" #%d\n",
-               PFID(&gf->gf_fid), gf->gf_recno, gf->gf_linkno);
-
-        if (!fid_is_sane(&gf->gf_fid))
-                GOTO(out, rc = -EINVAL);
+	if (!fid_is_sane(&gf->gf_fid))
+		GOTO(out, rc = -EINVAL);
 
         /* Val is struct getinfo_fid2path result plus path */
         vallen = sizeof(*gf) + gf->gf_pathlen;
@@ -1482,9 +1515,9 @@ static int mdc_ioc_fid2path(struct obd_export *exp, struct getinfo_fid2path *gf)
 
 	CDEBUG(D_IOCTL, "path got "DFID" from "LPU64" #%d: %s\n",
 	       PFID(&gf->gf_fid), gf->gf_recno, gf->gf_linkno,
-	       gf->gf_pathlen < 512 ? gf->gf_path :
+	       gf->gf_pathlen < 512 ? gf->gf_u.gf_path :
 	       /* only log the last 512 characters of the path */
-	       gf->gf_path + gf->gf_pathlen - 512);
+	       gf->gf_u.gf_path + gf->gf_pathlen - 512);
 
 out:
 	OBD_FREE(key, keylen);
@@ -2758,7 +2791,7 @@ static struct obd_ops mdc_obd_ops = {
 };
 
 static struct md_ops mdc_md_ops = {
-        .m_getstatus        = mdc_getstatus,
+	.m_getstatus        = mdc_get_root,
         .m_null_inode	    = mdc_null_inode,
         .m_close            = mdc_close,
         .m_create           = mdc_create,

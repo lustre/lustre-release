@@ -501,6 +501,12 @@ static const struct req_msg_field *ldlm_intent_getxattr_server[] = {
 	&RMF_EAVALS_LENS
 };
 
+static const struct req_msg_field *mds_get_root_client[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_MDT_BODY,
+	&RMF_NAME
+};
+
 static const struct req_msg_field *mds_getxattr_client[] = {
         &RMF_PTLRPC_BODY,
         &RMF_MDT_BODY,
@@ -731,7 +737,7 @@ static struct req_format *req_formats[] = {
         &RQF_MDS_CONNECT,
         &RQF_MDS_DISCONNECT,
         &RQF_MDS_GET_INFO,
-        &RQF_MDS_GETSTATUS,
+	&RQF_MDS_GET_ROOT,
         &RQF_MDS_STATFS,
         &RQF_MDS_GETATTR,
         &RQF_MDS_GETATTR_NAME,
@@ -1328,9 +1334,9 @@ struct req_format RQF_LDLM_INTENT_QUOTA =
 			ldlm_intent_quota_server);
 EXPORT_SYMBOL(RQF_LDLM_INTENT_QUOTA);
 
-struct req_format RQF_MDS_GETSTATUS =
-        DEFINE_REQ_FMT0("MDS_GETSTATUS", mdt_body_only, mdt_body_capa);
-EXPORT_SYMBOL(RQF_MDS_GETSTATUS);
+struct req_format RQF_MDS_GET_ROOT =
+	DEFINE_REQ_FMT0("MDS_GET_ROOT", mds_get_root_client, mdt_body_capa);
+EXPORT_SYMBOL(RQF_MDS_GET_ROOT);
 
 struct req_format RQF_MDS_STATFS =
         DEFINE_REQ_FMT0("MDS_STATFS", empty, obd_statfs_server);

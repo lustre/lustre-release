@@ -1069,7 +1069,8 @@ struct md_ops {
 
 #define MD_STATS_LAST_OP m_revalidate_lock
 
-	int (*m_getstatus)(struct obd_export *, struct lu_fid *);
+	int (*m_getstatus)(struct obd_export *, const char *fileset,
+			   struct lu_fid *);
 	int (*m_null_inode)(struct obd_export *, const struct lu_fid *);
 
 	int (*m_getattr_name)(struct obd_export *, struct md_op_data *,

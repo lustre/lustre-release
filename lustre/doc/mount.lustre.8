@@ -25,10 +25,12 @@ There are two forms for the
 .I device
 option, depending on whether a client or a target service is started:
 .TP
-.IR <mgsspec> :/ <fsname>
+.IR <mgsspec> :/ <fsname>[/<subdir>]
 mounts the Lustre filesystem named
 .I fsname
-on the client by contacting the Management Service at 
+(under subdirectory
+.I subdir
+if specified) on the client by contacting the Management Service at
 .IR mgsspec 
 on the pathname given by
 .IR directory .
@@ -149,6 +151,9 @@ maximum of 'timeout' seconds.  The default hard recovery timeout is set to
 Start a client for the Lustre filesystem 'testfs' at the mount point
 /mnt/myfilesystem. The Management Service is running on a node reachable
 from this client via the nid cfs21@tcp0.
+.TP
+.B mount -t lustre cfs21@tcp0:/testfs/dir /mnt/myfilesystem
+Like above example, but mount subdirectory 'dir' as fileset.
 .TP
 .B mount -t lustre /dev/sda1 /mnt/test/mdt
 Start the Lustre metadata target service from /dev/sda1 on mountpoint /mnt/test/mdt.

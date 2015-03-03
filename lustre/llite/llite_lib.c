@@ -209,7 +209,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 				  OBD_CONNECT_DISP_STRIPE | OBD_CONNECT_LFSCK |
 				  OBD_CONNECT_OPEN_BY_FID |
 				  OBD_CONNECT_DIR_STRIPE |
-				  OBD_CONNECT_BULK_MBITS;
+				  OBD_CONNECT_BULK_MBITS |
+				  OBD_CONNECT_SUBTREE;
 
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         if (sbi->ll_flags & LL_SBI_LRU_RESIZE)
@@ -473,7 +474,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	mutex_unlock(&sbi->ll_lco.lco_lock);
 
 	fid_zero(&sbi->ll_root_fid);
-	err = md_getstatus(sbi->ll_md_exp, &sbi->ll_root_fid);
+	err = md_get_root(sbi->ll_md_exp, get_mount_fileset(sb),
+			   &sbi->ll_root_fid);
 	if (err) {
 		CERROR("cannot mds_connect: rc = %d\n", err);
 		GOTO(out_lock_cn_cb, err);

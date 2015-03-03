@@ -657,7 +657,7 @@ static const char *obd_connect_names[] = {
 	"unlink_close",
 	"multi_mod_rpcs",
 	"dir_stripe",
-	"fileset_mount",
+	"subtree",
 	"lock_ahead",
 	"bulk_mbits",
 	"compact_obdo",

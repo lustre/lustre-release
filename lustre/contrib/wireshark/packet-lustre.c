@@ -205,7 +205,7 @@ typedef enum {
 	MDS_READPAGE		= 37,
 	MDS_CONNECT		= 38,
 	MDS_DISCONNECT		= 39,
-	MDS_GETSTATUS		= 40,
+	MDS_GET_ROOT		= 40,
 	MDS_STATFS		= 41,
 	MDS_PIN			= 42,
 	MDS_UNPIN		= 43,
@@ -1162,7 +1162,7 @@ const value_string lustre_op_codes[] = {
   {37 , "MDS_READPAGE"},
   {38 , "MDS_CONNECT"},
   {39 , "MDS_DISCONNECT"},
-  {40 , "MDS_GETSTATUS"},
+  {40 , "MDS_GET_ROOT"},
   {41 , "MDS_STATFS"},
   {42 , "MDS_PIN"},
   {43 , "MDS_UNPIN"},
@@ -8590,7 +8590,7 @@ lustre_mds_opcode_process(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo 
     case MDS_DISCONNECT:
       /*[nothing]*/
       break;
-    case MDS_GETSTATUS:
+    case MDS_GET_ROOT:
       /*request: [mds body]*/
       /*reply:   [mds body][capa] */
       offset=lustre_dissect_struct_mdt_body(tvb, offset, pinfo, tree, hf_lustre_mdt_body) ;

@@ -78,7 +78,7 @@ static struct ll_rpc_opcode {
         { MDS_READPAGE,     "mds_readpage" },
         { MDS_CONNECT,      "mds_connect" },
         { MDS_DISCONNECT,   "mds_disconnect" },
-        { MDS_GETSTATUS,    "mds_getstatus" },
+	{ MDS_GET_ROOT,     "mds_get_root" },
         { MDS_STATFS,       "mds_statfs" },
         { MDS_PIN,          "mds_pin" },
         { MDS_UNPIN,        "mds_unpin" },

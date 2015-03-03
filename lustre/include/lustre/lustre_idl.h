@@ -1296,7 +1296,8 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT_OPEN_BY_FID | \
 				OBD_CONNECT_DIR_STRIPE | \
 				OBD_CONNECT_BULK_MBITS | \
-				OBD_CONNECT_MULTIMODRPCS)
+				OBD_CONNECT_MULTIMODRPCS | \
+				OBD_CONNECT_SUBTREE)
 
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
@@ -2005,7 +2006,7 @@ typedef enum {
 	MDS_READPAGE		= 37,
 	MDS_CONNECT		= 38,
 	MDS_DISCONNECT		= 39,
-	MDS_GETSTATUS		= 40,
+	MDS_GET_ROOT		= 40,
 	MDS_STATFS		= 41,
 	MDS_PIN			= 42, /* obsolete, never used in a release */
 	MDS_UNPIN		= 43, /* obsolete, never used in a release */
@@ -3691,11 +3692,14 @@ struct link_ea_entry {
 
 /** fid2path request/reply structure */
 struct getinfo_fid2path {
-        struct lu_fid   gf_fid;
-        __u64           gf_recno;
-        __u32           gf_linkno;
-        __u32           gf_pathlen;
-        char            gf_path[0];
+	struct lu_fid	gf_fid;
+	__u64		gf_recno;
+	__u32		gf_linkno;
+	__u32		gf_pathlen;
+	union {
+		char		gf_path[0];
+		struct lu_fid	gf_root_fid[0];
+	} gf_u;
 } __attribute__((packed));
 
 /** path2parent request/reply structures */

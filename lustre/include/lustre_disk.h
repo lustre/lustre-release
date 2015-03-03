@@ -219,21 +219,22 @@ static inline int server_make_name(__u32 flags, __u16 index, char *fs,
 
 /* gleaned from the mount command - no persistent info here */
 struct lustre_mount_data {
-        __u32      lmd_magic;
-        __u32      lmd_flags;         /* lustre mount flags */
-        int        lmd_mgs_failnodes; /* mgs failover node count */
-        int        lmd_exclude_count;
-        int        lmd_recovery_time_soft;
-        int        lmd_recovery_time_hard;
-        char      *lmd_dev;           /* device name */
-        char      *lmd_profile;       /* client only */
-        char      *lmd_mgssec;        /* sptlrpc flavor to mgs */
-        char      *lmd_opts;          /* lustre mount options (as opposed to
-                                         _device_ mount options) */
-	char      *lmd_params;        /* lustre params */
-        __u32     *lmd_exclude;       /* array of OSTs to ignore */
-	char	*lmd_mgs;           /* MGS nid */
-	char	*lmd_osd_type;      /* OSD type */
+	__u32	lmd_magic;
+	__u32	lmd_flags;	/* lustre mount flags */
+	int	lmd_mgs_failnodes; /* mgs failover node count */
+	int	lmd_exclude_count;
+	int	lmd_recovery_time_soft;
+	int	lmd_recovery_time_hard;
+	char   *lmd_dev;	/* device name */
+	char   *lmd_profile;	/* client only */
+	char   *lmd_fileset;	/* mount fileset */
+	char   *lmd_mgssec;	/* sptlrpc flavor to mgs */
+	char   *lmd_opts;	/* lustre mount options (as opposed to
+				 * device_ mount options) */
+	char   *lmd_params;	/* lustre params */
+	__u32  *lmd_exclude;	/* array of OSTs to ignore */
+	char   *lmd_mgs;	/* MGS nid */
+	char   *lmd_osd_type;	/* OSD type */
 };
 
 #define LMD_FLG_SERVER		0x0001	/* Mounting a server */
@@ -550,6 +551,7 @@ struct lustre_sb_info {
 #define     get_profile_name(sb)   (s2lsi(sb)->lsi_lmd->lmd_profile)
 #define	    get_mount_flags(sb)	   (s2lsi(sb)->lsi_lmd->lmd_flags)
 #define	    get_mntdev_name(sb)	   (s2lsi(sb)->lsi_lmd->lmd_dev)
+#define     get_mount_fileset(sb)  (s2lsi(sb)->lsi_lmd->lmd_fileset)
 
 #endif /* __KERNEL__ */
 
