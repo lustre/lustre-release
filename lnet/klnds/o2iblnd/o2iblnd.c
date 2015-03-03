@@ -693,8 +693,8 @@ kiblnd_get_completion_vector(kib_conn_t *conn, int cpt)
 	mask = cfs_cpt_cpumask(lnet_cpt_table(), cpt);
 
 	/* hash NID to CPU id in this partition... */
-	off = conn->ibc_peer->ibp_nid % cpus_weight(*mask);
-	for_each_cpu_mask(i, *mask) {
+	off = conn->ibc_peer->ibp_nid % cpumask_weight(mask);
+	for_each_cpu(i, mask) {
 		if (off-- == 0)
 			return i % vectors;
 	}
