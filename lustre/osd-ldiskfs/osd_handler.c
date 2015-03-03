@@ -6502,8 +6502,10 @@ static int __init osd_mod_init(void)
 {
 	int rc;
 
+#if !defined(CONFIG_DEBUG_MUTEXES) && !defined(CONFIG_DEBUG_SPINLOCK)
 	/* please, try to keep osd_thread_info smaller than a page */
 	CLASSERT(sizeof(struct osd_thread_info) <= PAGE_SIZE);
+#endif
 
 	osd_oi_mod_init();
 
