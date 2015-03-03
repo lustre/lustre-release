@@ -884,7 +884,7 @@ void lfsck_instance_cleanup(const struct lu_env *env,
 			    struct lfsck_instance *lfsck);
 int lfsck_bits_dump(struct seq_file *m, int bits, const char *names[],
 		    const char *prefix);
-int lfsck_time_dump(struct seq_file *m, __u64 time, const char *prefix);
+int lfsck_time_dump(struct seq_file *m, __u64 time, const char *name);
 int lfsck_pos_dump(struct seq_file *m, struct lfsck_position *pos,
 		   const char *prefix);
 void lfsck_pos_fill(const struct lu_env *env, struct lfsck_instance *lfsck,
