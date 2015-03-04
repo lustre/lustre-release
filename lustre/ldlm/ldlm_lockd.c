@@ -1095,7 +1095,7 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
 
 	if (arg->gl_desc != NULL)
 		/* There is a glimpse descriptor to pack */
-		req_fmt = &RQF_LDLM_GL_DESC_CALLBACK;
+		req_fmt = &RQF_LDLM_GL_CALLBACK_DESC;
 	else
 		req_fmt = &RQF_LDLM_GL_CALLBACK;
 

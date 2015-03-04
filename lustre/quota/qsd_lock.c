@@ -142,7 +142,7 @@ static int qsd_common_glimpse_ast(struct ptlrpc_request *req,
 	LASSERT(lustre_msg_get_opc(req->rq_reqmsg) == LDLM_GL_CALLBACK);
 
 	/* glimpse on quota locks always packs a glimpse descriptor */
-	req_capsule_extend(&req->rq_pill, &RQF_LDLM_GL_DESC_CALLBACK);
+	req_capsule_extend(&req->rq_pill, &RQF_LDLM_GL_CALLBACK_DESC);
 
 	/* extract glimpse descriptor */
 	*desc = req_capsule_client_get(&req->rq_pill, &RMF_DLM_GL_DESC);

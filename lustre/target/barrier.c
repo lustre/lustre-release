@@ -290,7 +290,7 @@ int barrier_handler(struct dt_device *key, struct ptlrpc_request *req)
 	ENTRY;
 
 	/* glimpse on barrier locks always packs a glimpse descriptor */
-	req_capsule_extend(&req->rq_pill, &RQF_LDLM_GL_DESC_CALLBACK);
+	req_capsule_extend(&req->rq_pill, &RQF_LDLM_GL_CALLBACK_DESC);
 	desc = req_capsule_client_get(&req->rq_pill, &RMF_DLM_GL_DESC);
 	if (!desc)
 		GOTO(out, rc = -EPROTO);

@@ -134,7 +134,7 @@ static const struct req_msg_field *mdt_close_client[] = {
         &RMF_CAPA1
 };
 
-static const struct req_msg_field *mdt_intent_close_client[] = {
+static const struct req_msg_field *mdt_close_intent_client[] = {
 	&RMF_PTLRPC_BODY,
 	&RMF_MDT_EPOCH,
 	&RMF_REC_REINT,
@@ -751,23 +751,23 @@ static struct req_format *req_formats[] = {
         &RQF_MDS_DISCONNECT,
         &RQF_MDS_GET_INFO,
 	&RQF_MDS_GET_ROOT,
-        &RQF_MDS_STATFS,
-        &RQF_MDS_GETATTR,
-        &RQF_MDS_GETATTR_NAME,
-        &RQF_MDS_GETXATTR,
-        &RQF_MDS_SYNC,
-        &RQF_MDS_CLOSE,
-	&RQF_MDS_INTENT_CLOSE,
+	&RQF_MDS_STATFS,
+	&RQF_MDS_GETATTR,
+	&RQF_MDS_GETATTR_NAME,
+	&RQF_MDS_GETXATTR,
+	&RQF_MDS_SYNC,
+	&RQF_MDS_CLOSE,
+	&RQF_MDS_CLOSE_INTENT,
 	&RQF_MDS_READPAGE,
 	&RQF_MDS_REINT,
 	&RQF_MDS_REINT_CREATE,
 	&RQF_MDS_REINT_CREATE_ACL,
-        &RQF_MDS_REINT_CREATE_SLAVE,
-        &RQF_MDS_REINT_CREATE_SYM,
-        &RQF_MDS_REINT_OPEN,
-        &RQF_MDS_REINT_UNLINK,
-        &RQF_MDS_REINT_LINK,
-        &RQF_MDS_REINT_RENAME,
+	&RQF_MDS_REINT_CREATE_SLAVE,
+	&RQF_MDS_REINT_CREATE_SYM,
+	&RQF_MDS_REINT_OPEN,
+	&RQF_MDS_REINT_UNLINK,
+	&RQF_MDS_REINT_LINK,
+	&RQF_MDS_REINT_RENAME,
 	&RQF_MDS_REINT_MIGRATE,
 	&RQF_MDS_REINT_SETATTR,
 	&RQF_MDS_REINT_SETXATTR,
@@ -806,17 +806,17 @@ static struct req_format *req_formats[] = {
 	&RQF_LDLM_CONVERT,
 	&RQF_LDLM_CANCEL,
 	&RQF_LDLM_CALLBACK,
-        &RQF_LDLM_CP_CALLBACK,
-        &RQF_LDLM_BL_CALLBACK,
-        &RQF_LDLM_GL_CALLBACK,
-	&RQF_LDLM_GL_DESC_CALLBACK,
-        &RQF_LDLM_INTENT,
+	&RQF_LDLM_CP_CALLBACK,
+	&RQF_LDLM_BL_CALLBACK,
+	&RQF_LDLM_GL_CALLBACK,
+	&RQF_LDLM_GL_CALLBACK_DESC,
+	&RQF_LDLM_INTENT,
 	&RQF_LDLM_INTENT_BASIC,
-        &RQF_LDLM_INTENT_LAYOUT,
-        &RQF_LDLM_INTENT_GETATTR,
-        &RQF_LDLM_INTENT_OPEN,
-        &RQF_LDLM_INTENT_CREATE,
-        &RQF_LDLM_INTENT_UNLINK,
+	&RQF_LDLM_INTENT_LAYOUT,
+	&RQF_LDLM_INTENT_GETATTR,
+	&RQF_LDLM_INTENT_OPEN,
+	&RQF_LDLM_INTENT_CREATE,
+	&RQF_LDLM_INTENT_UNLINK,
 	&RQF_LDLM_INTENT_GETXATTR,
 	&RQF_LDLM_INTENT_QUOTA,
 	&RQF_QUOTA_DQACQ,
@@ -1520,10 +1520,10 @@ struct req_format RQF_LDLM_GL_CALLBACK =
                         ldlm_gl_callback_server);
 EXPORT_SYMBOL(RQF_LDLM_GL_CALLBACK);
 
-struct req_format RQF_LDLM_GL_DESC_CALLBACK =
+struct req_format RQF_LDLM_GL_CALLBACK_DESC =
 	DEFINE_REQ_FMT0("LDLM_GL_CALLBACK", ldlm_gl_callback_desc_client,
 			ldlm_gl_callback_server);
-EXPORT_SYMBOL(RQF_LDLM_GL_DESC_CALLBACK);
+EXPORT_SYMBOL(RQF_LDLM_GL_CALLBACK_DESC);
 
 struct req_format RQF_LDLM_INTENT_BASIC =
 	DEFINE_REQ_FMT0("LDLM_INTENT_BASIC",
@@ -1536,7 +1536,7 @@ struct req_format RQF_LDLM_INTENT =
 EXPORT_SYMBOL(RQF_LDLM_INTENT);
 
 struct req_format RQF_LDLM_INTENT_LAYOUT =
-	DEFINE_REQ_FMT0("LDLM_INTENT_LAYOUT ",
+	DEFINE_REQ_FMT0("LDLM_INTENT_LAYOUT",
 			ldlm_intent_layout_client, ldlm_enqueue_lvb_server);
 EXPORT_SYMBOL(RQF_LDLM_INTENT_LAYOUT);
 
@@ -1571,10 +1571,10 @@ struct req_format RQF_MDS_CLOSE =
                         mdt_close_client, mds_last_unlink_server);
 EXPORT_SYMBOL(RQF_MDS_CLOSE);
 
-struct req_format RQF_MDS_INTENT_CLOSE =
-	DEFINE_REQ_FMT0("MDS_CLOSE",
-			mdt_intent_close_client, mds_last_unlink_server);
-EXPORT_SYMBOL(RQF_MDS_INTENT_CLOSE);
+struct req_format RQF_MDS_CLOSE_INTENT =
+	DEFINE_REQ_FMT0("MDS_CLOSE_INTENT",
+			mdt_close_intent_client, mds_last_unlink_server);
+EXPORT_SYMBOL(RQF_MDS_CLOSE_INTENT);
 
 struct req_format RQF_MDS_READPAGE =
         DEFINE_REQ_FMT0("MDS_READPAGE",

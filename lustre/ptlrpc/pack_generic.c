@@ -878,7 +878,8 @@ void lustre_msg_clear_flags(struct lustre_msg *msg, __u32 flags)
 	case LUSTRE_MSG_MAGIC_V2: {
 		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
 		LASSERTF(pb != NULL, "invalid msg %p: no ptlrpc body!\n", msg);
-		pb->pb_flags &= ~(MSG_GEN_FLAG_MASK & flags);
+		pb->pb_flags &= ~flags;
+
 		return;
 	}
 	default:
@@ -1616,39 +1617,40 @@ EXPORT_SYMBOL(do_set_info_async);
 /* byte flipping routines for all wire types declared in
  * lustre_idl.h implemented here.
  */
-void lustre_swab_ptlrpc_body(struct ptlrpc_body *b)
+void lustre_swab_ptlrpc_body(struct ptlrpc_body *body)
 {
-        __swab32s (&b->pb_type);
-        __swab32s (&b->pb_version);
-        __swab32s (&b->pb_opc);
-        __swab32s (&b->pb_status);
-        __swab64s (&b->pb_last_xid);
-	__swab16s (&b->pb_tag);
-        __swab64s (&b->pb_last_committed);
-        __swab64s (&b->pb_transno);
-        __swab32s (&b->pb_flags);
-        __swab32s (&b->pb_op_flags);
-        __swab32s (&b->pb_conn_cnt);
-        __swab32s (&b->pb_timeout);
-        __swab32s (&b->pb_service_time);
-        __swab32s (&b->pb_limit);
-        __swab64s (&b->pb_slv);
-        __swab64s (&b->pb_pre_versions[0]);
-        __swab64s (&b->pb_pre_versions[1]);
-        __swab64s (&b->pb_pre_versions[2]);
-        __swab64s (&b->pb_pre_versions[3]);
-	__swab64s(&b->pb_mbits);
-	CLASSERT(offsetof(typeof(*b), pb_padding0) != 0);
-	CLASSERT(offsetof(typeof(*b), pb_padding1) != 0);
-	CLASSERT(offsetof(typeof(*b), pb_padding64_0) != 0);
-	CLASSERT(offsetof(typeof(*b), pb_padding64_1) != 0);
-	CLASSERT(offsetof(typeof(*b), pb_padding64_2) != 0);
+	__swab32s(&body->pb_type);
+	__swab32s(&body->pb_version);
+	__swab32s(&body->pb_opc);
+	__swab32s(&body->pb_status);
+	__swab64s(&body->pb_last_xid);
+	__swab16s(&body->pb_tag);
+	CLASSERT(offsetof(typeof(*body), pb_padding0) != 0);
+	CLASSERT(offsetof(typeof(*body), pb_padding1) != 0);
+	__swab64s(&body->pb_last_committed);
+	__swab64s(&body->pb_transno);
+	__swab32s(&body->pb_flags);
+	__swab32s(&body->pb_op_flags);
+	__swab32s(&body->pb_conn_cnt);
+	__swab32s(&body->pb_timeout);
+	__swab32s(&body->pb_service_time);
+	__swab32s(&body->pb_limit);
+	__swab64s(&body->pb_slv);
+	__swab64s(&body->pb_pre_versions[0]);
+	__swab64s(&body->pb_pre_versions[1]);
+	__swab64s(&body->pb_pre_versions[2]);
+	__swab64s(&body->pb_pre_versions[3]);
+	__swab64s(&body->pb_mbits);
+	CLASSERT(offsetof(typeof(*body), pb_padding64_0) != 0);
+	CLASSERT(offsetof(typeof(*body), pb_padding64_1) != 0);
+	CLASSERT(offsetof(typeof(*body), pb_padding64_2) != 0);
 	/* While we need to maintain compatibility between
 	 * clients and servers without ptlrpc_body_v2 (< 2.3)
 	 * do not swab any fields beyond pb_jobid, as we are
 	 * using this swab function for both ptlrpc_body
 	 * and ptlrpc_body_v2. */
-	CLASSERT(offsetof(typeof(*b), pb_jobid) != 0);
+	/* pb_jobid is an ASCII string and should not be swabbed */
+	CLASSERT(offsetof(typeof(*body), pb_jobid) != 0);
 }
 
 void lustre_swab_connect(struct obd_connect_data *ocd)
@@ -1742,26 +1744,26 @@ EXPORT_SYMBOL(lustre_swab_obdo);
 
 void lustre_swab_obd_statfs (struct obd_statfs *os)
 {
-        __swab64s (&os->os_type);
-        __swab64s (&os->os_blocks);
-        __swab64s (&os->os_bfree);
-        __swab64s (&os->os_bavail);
-        __swab64s (&os->os_files);
-        __swab64s (&os->os_ffree);
-        /* no need to swab os_fsid */
-        __swab32s (&os->os_bsize);
-        __swab32s (&os->os_namelen);
-        __swab64s (&os->os_maxbytes);
-        __swab32s (&os->os_state);
-	CLASSERT(offsetof(typeof(*os), os_fprecreated) != 0);
-        CLASSERT(offsetof(typeof(*os), os_spare2) != 0);
-        CLASSERT(offsetof(typeof(*os), os_spare3) != 0);
-        CLASSERT(offsetof(typeof(*os), os_spare4) != 0);
-        CLASSERT(offsetof(typeof(*os), os_spare5) != 0);
-        CLASSERT(offsetof(typeof(*os), os_spare6) != 0);
-        CLASSERT(offsetof(typeof(*os), os_spare7) != 0);
-        CLASSERT(offsetof(typeof(*os), os_spare8) != 0);
-        CLASSERT(offsetof(typeof(*os), os_spare9) != 0);
+	__swab64s(&os->os_type);
+	__swab64s(&os->os_blocks);
+	__swab64s(&os->os_bfree);
+	__swab64s(&os->os_bavail);
+	__swab64s(&os->os_files);
+	__swab64s(&os->os_ffree);
+	/* no need to swab os_fsid */
+	__swab32s(&os->os_bsize);
+	__swab32s(&os->os_namelen);
+	__swab64s(&os->os_maxbytes);
+	__swab32s(&os->os_state);
+	__swab32s(&os->os_fprecreated);
+	CLASSERT(offsetof(typeof(*os), os_spare2) != 0);
+	CLASSERT(offsetof(typeof(*os), os_spare3) != 0);
+	CLASSERT(offsetof(typeof(*os), os_spare4) != 0);
+	CLASSERT(offsetof(typeof(*os), os_spare5) != 0);
+	CLASSERT(offsetof(typeof(*os), os_spare6) != 0);
+	CLASSERT(offsetof(typeof(*os), os_spare7) != 0);
+	CLASSERT(offsetof(typeof(*os), os_spare8) != 0);
+	CLASSERT(offsetof(typeof(*os), os_spare9) != 0);
 }
 
 void lustre_swab_obd_ioobj(struct obd_ioobj *ioo)

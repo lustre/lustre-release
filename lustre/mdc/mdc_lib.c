@@ -437,7 +437,7 @@ void mdc_link_pack(struct ptlrpc_request *req, struct md_op_data *op_data)
 	mdc_pack_name(req, &RMF_NAME, op_data->op_name, op_data->op_namelen);
 }
 
-static void mdc_intent_close_pack(struct ptlrpc_request *req,
+static void mdc_close_intent_pack(struct ptlrpc_request *req,
 				  struct md_op_data *op_data)
 {
 	struct close_data	*data;
@@ -509,7 +509,7 @@ void mdc_rename_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 	    op_data->op_bias & MDS_RENAME_MIGRATE) {
 		struct mdt_ioepoch *epoch;
 
-		mdc_intent_close_pack(req, op_data);
+		mdc_close_intent_pack(req, op_data);
 		epoch = req_capsule_client_get(&req->rq_pill, &RMF_MDT_EPOCH);
 		mdc_ioepoch_pack(epoch, op_data);
 	}
@@ -561,5 +561,5 @@ void mdc_close_pack(struct ptlrpc_request *req, struct md_op_data *op_data)
 		rec->sa_valid &= ~MDS_ATTR_ATIME;
 
 	mdc_ioepoch_pack(epoch, op_data);
-	mdc_intent_close_pack(req, op_data);
+	mdc_close_intent_pack(req, op_data);
 }

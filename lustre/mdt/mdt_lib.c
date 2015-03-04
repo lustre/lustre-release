@@ -1123,7 +1123,7 @@ static int mdt_setattr_unpack(struct mdt_thread_info *info)
 	RETURN(rc);
 }
 
-static int mdt_intent_close_unpack(struct mdt_thread_info *info)
+static int mdt_close_intent_unpack(struct mdt_thread_info *info)
 {
 	struct md_attr          *ma = &info->mti_attr;
 	struct req_capsule	*pill = info->mti_pill;
@@ -1132,7 +1132,7 @@ static int mdt_intent_close_unpack(struct mdt_thread_info *info)
 	if (!(ma->ma_attr_flags & MDS_CLOSE_INTENT))
 		RETURN(0);
 
-	req_capsule_extend(pill, &RQF_MDS_INTENT_CLOSE);
+	req_capsule_extend(pill, &RQF_MDS_CLOSE_INTENT);
 
 	if (!(req_capsule_has_field(pill, &RMF_CLOSE_DATA, RCL_CLIENT) &&
 	    req_capsule_field_present(pill, &RMF_CLOSE_DATA, RCL_CLIENT)))
@@ -1154,7 +1154,7 @@ int mdt_close_unpack(struct mdt_thread_info *info)
 	if (rc)
 		RETURN(rc);
 
-	rc = mdt_intent_close_unpack(info);
+	rc = mdt_close_intent_unpack(info);
 	if (rc)
 		RETURN(rc);
 

@@ -771,7 +771,7 @@ static int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
 	       op_data->op_bias);
 
 	if (op_data->op_bias & MDS_CLOSE_INTENT) {
-		req_fmt = &RQF_MDS_INTENT_CLOSE;
+		req_fmt = &RQF_MDS_CLOSE_INTENT;
 		if (op_data->op_bias & MDS_HSM_RELEASE) {
 			/* allocate a FID for volatile file */
 			rc = mdc_fid_alloc(NULL, exp, &op_data->op_fid2,
