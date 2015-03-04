@@ -75,6 +75,10 @@ EXTRA_DIST = \
 	lustre_mds.h \
 	lustre_net.h \
 	lustre_nodemap.h \
+	lustre_nrs.h \
+	lustre_nrs_crr.h \
+	lustre_nrs_fifo.h \
+	lustre_nrs_orr.h \
 	lustre_nrs_tbf.h \
 	lustre_param.h \
 	lustre_patchless_compat.h \
