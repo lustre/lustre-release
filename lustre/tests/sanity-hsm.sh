@@ -2207,6 +2207,7 @@ test_30c() {
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/SLEEP
+	local slp_sum1=$(md5sum /bin/sleep)
 	local fid=$(copy_file /bin/sleep $f)
 	chmod 755 $f
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
@@ -2223,7 +2224,12 @@ test_30c() {
 	wait $pid
 	[[ $? == 0 ]] || error "Execution failed during run"
 	cmp /bin/sleep $f
-	[[ $? == 0 ]] || error "Binary overwritten during exec"
+	if [[ $? != 0 ]]; then
+		local slp_sum2=$(md5sum /bin/sleep)
+		# in case sleep file is modified during the test
+		[[ $slp_sum1 == $slp_sum2 ]] &&
+			error "Binary overwritten during exec"
+	fi
 
 	# cleanup
 	# remove no try action mode
