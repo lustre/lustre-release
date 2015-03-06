@@ -122,19 +122,27 @@ case "$1" in
 	run_preexec_check "start"
 	touch /var/lock/subsys/lnet
 	modprobe lnet || exit 1
-	lctl network up || exit 1
+	# if lnet.conf file exists then use lnetctl lnet configure, since
+	# that doesn't load the networks and routes defined in the mod
+	# params.  The appropriate configuration will be picked up from
+	# the lnet.conf YAML file.
+	if [ -x $LUSTRE_LNET_CONFIG_UTILITY -a -f "$LUSTRE_LNET_CONFIG_FILE" ]; then
+		$LUSTRE_LNET_CONFIG_UTILITY lnet configure || exit 1
+	else
+		lctl network up || exit 1
+	fi
+	# if an lnet.conf file exists then pass that to the lnetctl
+	# utility for parsing.  This will configure the items defined
+	# in YAML format in the config file.
+	if [ -x $LUSTRE_LNET_CONFIG_UTILITY -a -f "$LUSTRE_LNET_CONFIG_FILE" ]; then
+		$LUSTRE_LNET_CONFIG_UTILITY import < $LUSTRE_LNET_CONFIG_FILE
+	fi
 	# if a routes config file is given then use it to configure the
 	# routes if not then default to LUSTRE_ROUTES_CONFIG_FILE
 	if [ -f "$2" ]; then
 		lustre_routes_config $2
 	elif [ -f "$LUSTRE_ROUTES_CONFIG_FILE" ]; then
 		lustre_routes_config $LUSTRE_ROUTES_CONFIG_FILE
-	fi
-	# if an lnet.conf file exists then pass that to the lnetctl
-	# utility for parsing.  This will configure the items defined
-	# in YAML format in the config file.
-	if [ -f $LUSTRE_LNET_CONFIG_UTILITY ] && [ -f "$LUSTRE_LNET_CONFIG_FILE" ]; then
-		$LUSTRE_LNET_CONFIG_UTILITY import < $LUSTRE_LNET_CONFIG_FILE
 	fi
 	run_postexec_check "start"
 	;;
