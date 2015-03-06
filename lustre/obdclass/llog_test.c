@@ -1289,6 +1289,101 @@ out_put:
 	RETURN(rc);
 }
 
+static int llog_test_9_sub(const struct lu_env *env, struct llog_ctxt *ctxt)
+{
+	struct llog_handle	*llh;
+	struct lu_fid		 fid;
+	int			 rc = 0;
+
+	ENTRY;
+
+	rc = llog_open_create(env, ctxt, &llh, NULL, NULL);
+	if (rc != 0) {
+		CERROR("9_sub: create log failed\n");
+		RETURN(rc);
+	}
+
+	rc = llog_init_handle(env, llh,
+			      LLOG_F_IS_PLAIN | LLOG_F_ZAP_WHEN_EMPTY,
+			      &uuid);
+	if (rc != 0) {
+		CERROR("9_sub: can't init llog handle: %d\n", rc);
+		GOTO(out_close, rc);
+	}
+
+	logid_to_fid(&llh->lgh_id, &fid);
+	fid_to_logid(&fid, &llog_records.llr.lid_id);
+	rc = llog_write(env, llh, &llog_records.lrh, LLOG_NEXT_IDX);
+	if (rc < 0) {
+		CERROR("9_sub: write recs failed at #1: %d\n", rc);
+		GOTO(out_close, rc);
+	}
+	CWARN("9_sub: record type %x in log "DFID_NOBRACE"\n",
+	      llog_records.lrh.lrh_type, PFID(&fid));
+out_close:
+	llog_close(env, llh);
+	RETURN(rc);
+}
+
+/* Prepare different types of llog records for llog_reader test*/
+static int llog_test_9(const struct lu_env *env, struct obd_device *obd)
+{
+	struct llog_ctxt	*ctxt;
+	int			 rc;
+
+	ENTRY;
+
+	ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
+
+	CWARN("9a: test llog_logid_rec\n");
+	llog_records.llr.lid_hdr.lrh_len = sizeof(llog_records.llr);
+	llog_records.llr.lid_tail.lrt_len = sizeof(llog_records.llr);
+	llog_records.llr.lid_hdr.lrh_type = LLOG_LOGID_MAGIC;
+
+	rc = llog_test_9_sub(env, ctxt);
+	if (rc != 0) {
+		CERROR("9a: llog_logid_rec test failed\n");
+		GOTO(out, rc);
+	}
+
+	CWARN("9b: test llog_obd_cfg_rec\n");
+	llog_records.lscr.lsc_hdr.lrh_len = sizeof(llog_records.lscr);
+	llog_records.lscr.lsc_tail.lrt_len = sizeof(llog_records.lscr);
+	llog_records.lscr.lsc_hdr.lrh_type = OBD_CFG_REC;
+
+	rc = llog_test_9_sub(env, ctxt);
+	if (rc != 0) {
+		CERROR("9b: llog_obd_cfg_rec test failed\n");
+		GOTO(out, rc);
+	}
+
+	CWARN("9c: test llog_changelog_rec\n");
+	/* Direct access to cr_do_not_use: peculiar case for this test */
+	llog_records.lcr.cr_hdr.lrh_len = sizeof(llog_records.lcr);
+	llog_records.lcr.cr_do_not_use.lrt_len = sizeof(llog_records.lcr);
+	llog_records.lcr.cr_hdr.lrh_type = CHANGELOG_REC;
+
+	rc = llog_test_9_sub(env, ctxt);
+	if (rc != 0) {
+		CERROR("9c: llog_changelog_rec test failed\n");
+		GOTO(out, rc);
+	}
+
+	CWARN("9d: test llog_changelog_user_rec\n");
+	llog_records.lcur.cur_hdr.lrh_len = sizeof(llog_records.lcur);
+	llog_records.lcur.cur_tail.lrt_len = sizeof(llog_records.lcur);
+	llog_records.lcur.cur_hdr.lrh_type = CHANGELOG_USER_REC;
+
+	rc = llog_test_9_sub(env, ctxt);
+	if (rc != 0) {
+		CERROR("9d: llog_changelog_user_rec test failed\n");
+		GOTO(out, rc);
+	}
+
+out:
+	llog_ctxt_put(ctxt);
+	RETURN(rc);
+}
 /* -------------------------------------------------------------------------
  * Tests above, boring obd functions below
  * ------------------------------------------------------------------------- */
@@ -1337,6 +1432,9 @@ static int llog_run_tests(const struct lu_env *env, struct obd_device *obd)
 	if (rc)
 		GOTO(cleanup, rc);
 
+	rc = llog_test_9(env, obd);
+	if (rc != 0)
+		GOTO(cleanup, rc);
 cleanup:
 	err = llog_destroy(env, llh);
 	if (err)

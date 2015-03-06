@@ -69,6 +69,7 @@ EXTRA_DIST = \
 	lustre_linkea.h \
 	lustre_lmv.h \
 	lustre_log.h \
+	lustre_log_user.h \
 	lustre_mdc.h \
 	lustre_mds.h \
 	lustre_net.h \
