@@ -100,16 +100,18 @@ static inline int lustre_msg_check_version_v2(struct lustre_msg_v2 *msg,
 
 int lustre_msg_check_version(struct lustre_msg *msg, __u32 version)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V1:
-                CERROR("msg v1 not supported - please upgrade you system\n");
-                return -EINVAL;
-        case LUSTRE_MSG_MAGIC_V2:
-                return lustre_msg_check_version_v2(msg, version);
-        default:
-                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
-                return 0;
-        }
+#define LUSTRE_MSG_MAGIC_V1 0x0BD00BD0
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V1:
+		CERROR("msg v1 not supported - please upgrade you system\n");
+		return -EINVAL;
+	case LUSTRE_MSG_MAGIC_V2:
+		return lustre_msg_check_version_v2(msg, version);
+	default:
+		CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+		return -EPROTO;
+	}
+#undef LUSTRE_MSG_MAGIC_V1
 }
 
 /* early reply size */
@@ -430,13 +432,14 @@ void *lustre_msg_buf_v2(struct lustre_msg_v2 *m, __u32 n, __u32 min_size)
 
 void *lustre_msg_buf(struct lustre_msg *m, __u32 n, __u32 min_size)
 {
-        switch (m->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2:
-                return lustre_msg_buf_v2(m, n, min_size);
-        default:
-                LASSERTF(0, "incorrect message magic: %08x(msg:%p)\n", m->lm_magic, m);
-                return NULL;
-        }
+	switch (m->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2:
+		return lustre_msg_buf_v2(m, n, min_size);
+	default:
+		LASSERTF(0, "incorrect message magic: %08x (msg:%p)\n",
+			 m->lm_magic, m);
+		return NULL;
+	}
 }
 EXPORT_SYMBOL(lustre_msg_buf);
 
@@ -773,266 +776,247 @@ char *lustre_msg_string(struct lustre_msg *m, __u32 index, __u32 max_len)
 static inline void *__lustre_swab_buf(struct lustre_msg *msg, __u32 index,
 				      __u32 min_size, void *swabber)
 {
-        void *ptr = NULL;
+	void *ptr = NULL;
 
-        LASSERT(msg != NULL);
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2:
-                ptr = lustre_msg_buf_v2(msg, index, min_size);
-                break;
-        default:
-                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
-        }
+	LASSERT(msg != NULL);
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2:
+		ptr = lustre_msg_buf_v2(msg, index, min_size);
+		break;
+	default:
+		CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+	}
 
-        if (ptr && swabber)
-                ((void (*)(void *))swabber)(ptr);
+	if (ptr != NULL && swabber != NULL)
+		((void (*)(void *))swabber)(ptr);
 
-        return ptr;
+	return ptr;
 }
 
 static inline struct ptlrpc_body *lustre_msg_ptlrpc_body(struct lustre_msg *msg)
 {
-        return lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF,
+	return lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF,
 				 sizeof(struct ptlrpc_body_v2));
 }
 
 __u32 lustre_msghdr_get_flags(struct lustre_msg *msg)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V1:
-        case LUSTRE_MSG_MAGIC_V1_SWABBED:
-                return 0;
-        case LUSTRE_MSG_MAGIC_V2:
-                /* already in host endian */
-                return msg->lm_flags;
-        default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-                return 0;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2:
+		/* already in host endian */
+		return msg->lm_flags;
+	default:
+		CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+		return 0;
+	}
 }
 EXPORT_SYMBOL(lustre_msghdr_get_flags);
 
 void lustre_msghdr_set_flags(struct lustre_msg *msg, __u32 flags)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V1:
-                return;
-        case LUSTRE_MSG_MAGIC_V2:
-                msg->lm_flags = flags;
-                return;
-        default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2:
+		msg->lm_flags = flags;
+		return;
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
 }
 
 __u32 lustre_msg_get_flags(struct lustre_msg *msg)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                if (!pb) {
-                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
-                        return 0;
-                }
-                return pb->pb_flags;
-        }
-        default:
-                /* flags might be printed in debug code while message
-                 * uninitialized */
-                return 0;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		if (pb != NULL)
+			return pb->pb_flags;
+
+		CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+	}
+	/* no break */
+	default:
+		/* flags might be printed in debug code while message
+		 * uninitialized */
+		return 0;
+	}
 }
 EXPORT_SYMBOL(lustre_msg_get_flags);
 
 void lustre_msg_add_flags(struct lustre_msg *msg, __u32 flags)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                pb->pb_flags |= flags;
-                return;
-        }
-        default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		LASSERTF(pb != NULL, "invalid msg %p: no ptlrpc body!\n", msg);
+		pb->pb_flags |= flags;
+		return;
+	}
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
 }
 EXPORT_SYMBOL(lustre_msg_add_flags);
 
 void lustre_msg_set_flags(struct lustre_msg *msg, __u32 flags)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                pb->pb_flags = flags;
-                return;
-        }
-        default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		LASSERTF(pb != NULL, "invalid msg %p: no ptlrpc body!\n", msg);
+		pb->pb_flags = flags;
+		return;
+	}
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
 }
 
 void lustre_msg_clear_flags(struct lustre_msg *msg, __u32 flags)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                pb->pb_flags &= ~(MSG_GEN_FLAG_MASK & flags);
-                return;
-        }
-        default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		LASSERTF(pb != NULL, "invalid msg %p: no ptlrpc body!\n", msg);
+		pb->pb_flags &= ~(MSG_GEN_FLAG_MASK & flags);
+		return;
+	}
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
 }
 EXPORT_SYMBOL(lustre_msg_clear_flags);
 
 __u32 lustre_msg_get_op_flags(struct lustre_msg *msg)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                if (!pb) {
-                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
-                        return 0;
-                }
-                return pb->pb_op_flags;
-        }
-        default:
-                return 0;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		if (pb != NULL)
+			return pb->pb_op_flags;
+
+		CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+	}
+	/* no break */
+	default:
+		return 0;
+	}
 }
 
 void lustre_msg_add_op_flags(struct lustre_msg *msg, __u32 flags)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                pb->pb_op_flags |= flags;
-                return;
-        }
-        default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		LASSERTF(pb != NULL, "invalid msg %p: no ptlrpc body!\n", msg);
+		pb->pb_op_flags |= flags;
+		return;
+	}
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
 }
 EXPORT_SYMBOL(lustre_msg_add_op_flags);
 
-void lustre_msg_set_op_flags(struct lustre_msg *msg, __u32 flags)
-{
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                pb->pb_op_flags |= flags;
-                return;
-        }
-        default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-        }
-}
-
 struct lustre_handle *lustre_msg_get_handle(struct lustre_msg *msg)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                if (!pb) {
-                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
-                        return NULL;
-                }
-                return &pb->pb_handle;
-        }
-        default:
-                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
-                return NULL;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		if (pb == NULL) {
+			CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+			return NULL;
+		}
+		return &pb->pb_handle;
+	}
+	default:
+		CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+		return NULL;
+	}
 }
 
 __u32 lustre_msg_get_type(struct lustre_msg *msg)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                if (!pb) {
-                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
-                        return PTL_RPC_MSG_ERR;
-                }
-                return pb->pb_type;
-        }
-        default:
-                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
-                return PTL_RPC_MSG_ERR;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		if (pb == NULL) {
+			CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+			return PTL_RPC_MSG_ERR;
+		}
+		return pb->pb_type;
+	}
+	default:
+		CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+		return PTL_RPC_MSG_ERR;
+	}
 }
 EXPORT_SYMBOL(lustre_msg_get_type);
 
 __u32 lustre_msg_get_version(struct lustre_msg *msg)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                if (!pb) {
-                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
-                        return 0;
-                }
-                return pb->pb_version;
-        }
-        default:
-                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
-                return 0;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		if (pb == NULL) {
+			CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+			return 0;
+		}
+		return pb->pb_version;
+	}
+	default:
+		CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+		return 0;
+	}
 }
 
 void lustre_msg_add_version(struct lustre_msg *msg, __u32 version)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                pb->pb_version |= version;
-                return;
-        }
-        default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		LASSERTF(pb != NULL, "invalid msg %p: no ptlrpc body!\n", msg);
+		pb->pb_version |= version;
+		return;
+	}
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
 }
 
 __u32 lustre_msg_get_opc(struct lustre_msg *msg)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                if (!pb) {
-                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
-                        return 0;
-                }
-                return pb->pb_opc;
-        }
-        default:
-                CERROR("incorrect message magic: %08x(msg:%p)\n", msg->lm_magic, msg);
-                LBUG();
-                return 0;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		if (pb == NULL) {
+			CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+			return 0;
+		}
+		return pb->pb_opc;
+	}
+	default:
+		CERROR("incorrect message magic: %08x (msg:%p)\n",
+		       msg->lm_magic, msg);
+		return 0;
+	}
 }
 EXPORT_SYMBOL(lustre_msg_get_opc);
 
 __u64 lustre_msg_get_last_xid(struct lustre_msg *msg)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                if (!pb) {
-                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
-                        return 0;
-                }
-                return pb->pb_last_xid;
-        }
-        default:
-                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
-                return 0;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		if (pb == NULL) {
+			CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+			return 0;
+		}
+		return pb->pb_last_xid;
+	}
+	default:
+		CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+		return 0;
+	}
 }
 EXPORT_SYMBOL(lustre_msg_get_last_xid);
 
@@ -1056,239 +1040,214 @@ EXPORT_SYMBOL(lustre_msg_get_tag);
 
 __u64 lustre_msg_get_last_committed(struct lustre_msg *msg)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                if (!pb) {
-                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
-                        return 0;
-                }
-                return pb->pb_last_committed;
-        }
-        default:
-                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
-                return 0;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		if (pb == NULL) {
+			CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+			return 0;
+		}
+		return pb->pb_last_committed;
+	}
+	default:
+		CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+		return 0;
+	}
 }
 EXPORT_SYMBOL(lustre_msg_get_last_committed);
 
 __u64 *lustre_msg_get_versions(struct lustre_msg *msg)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V1:
-                return NULL;
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                if (!pb) {
-                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
-                        return NULL;
-                }
-                return pb->pb_pre_versions;
-        }
-        default:
-                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
-                return NULL;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		if (pb == NULL) {
+			CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+			return NULL;
+		}
+		return pb->pb_pre_versions;
+	}
+	default:
+		CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+		return NULL;
+	}
 }
 EXPORT_SYMBOL(lustre_msg_get_versions);
 
 __u64 lustre_msg_get_transno(struct lustre_msg *msg)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                if (!pb) {
-                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
-                        return 0;
-                }
-                return pb->pb_transno;
-        }
-        default:
-                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
-                return 0;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		if (pb == NULL) {
+			CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+			return 0;
+		}
+		return pb->pb_transno;
+	}
+	default:
+		CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+		return 0;
+	}
 }
 EXPORT_SYMBOL(lustre_msg_get_transno);
 
 int lustre_msg_get_status(struct lustre_msg *msg)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                if (!pb) {
-                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
-                        return -EINVAL;
-                }
-                return pb->pb_status;
-        }
-        default:
-                /* status might be printed in debug code while message
-                 * uninitialized */
-                return -EINVAL;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		if (pb != NULL)
+			return pb->pb_status;
+		CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+	}
+	/* no break */
+	default:
+		/* status might be printed in debug code while message
+		* uninitialized */
+		return -EINVAL;
+	}
 }
 EXPORT_SYMBOL(lustre_msg_get_status);
 
 __u64 lustre_msg_get_slv(struct lustre_msg *msg)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                if (!pb) {
-                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
-                        return -EINVAL;
-                }
-                return pb->pb_slv;
-        }
-        default:
-                CERROR("invalid msg magic %08x\n", msg->lm_magic);
-                return -EINVAL;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		if (pb == NULL) {
+			CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+			return -EINVAL;
+		}
+		return pb->pb_slv;
+	}
+	default:
+		CERROR("invalid msg magic %08x\n", msg->lm_magic);
+		return -EINVAL;
+	}
 }
 
 
 void lustre_msg_set_slv(struct lustre_msg *msg, __u64 slv)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                if (!pb) {
-                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
-                        return;
-                }
-                pb->pb_slv = slv;
-                return;
-        }
-        default:
-                CERROR("invalid msg magic %x\n", msg->lm_magic);
-                return;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		if (pb == NULL) {
+			CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+			return;
+		}
+		pb->pb_slv = slv;
+		return;
+	}
+	default:
+		CERROR("invalid msg magic %x\n", msg->lm_magic);
+		return;
+	}
 }
 
 __u32 lustre_msg_get_limit(struct lustre_msg *msg)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                if (!pb) {
-                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
-                        return -EINVAL;
-                }
-                return pb->pb_limit;
-        }
-        default:
-                CERROR("invalid msg magic %x\n", msg->lm_magic);
-                return -EINVAL;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		if (pb == NULL) {
+			CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+			return -EINVAL;
+		}
+		return pb->pb_limit;
+	}
+	default:
+		CERROR("invalid msg magic %x\n", msg->lm_magic);
+		return -EINVAL;
+	}
 }
 
 
 void lustre_msg_set_limit(struct lustre_msg *msg, __u64 limit)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                if (!pb) {
-                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
-                        return;
-                }
-                pb->pb_limit = limit;
-                return;
-        }
-        default:
-                CERROR("invalid msg magic %08x\n", msg->lm_magic);
-                return;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		if (pb == NULL) {
+			CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+			return;
+		}
+		pb->pb_limit = limit;
+		return;
+	}
+	default:
+		CERROR("invalid msg magic %08x\n", msg->lm_magic);
+		return;
+	}
 }
 
 __u32 lustre_msg_get_conn_cnt(struct lustre_msg *msg)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                if (!pb) {
-                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
-                        return 0;
-                }
-                return pb->pb_conn_cnt;
-        }
-        default:
-                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
-                return 0;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		if (pb == NULL) {
+			CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+			return 0;
+		}
+		return pb->pb_conn_cnt;
+	}
+	default:
+		CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+		return 0;
+	}
 }
 EXPORT_SYMBOL(lustre_msg_get_conn_cnt);
 
-int lustre_msg_is_v1(struct lustre_msg *msg)
-{
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V1:
-        case LUSTRE_MSG_MAGIC_V1_SWABBED:
-                return 1;
-        default:
-                return 0;
-        }
-}
-
 __u32 lustre_msg_get_magic(struct lustre_msg *msg)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2:
-                return msg->lm_magic;
-        default:
-                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
-                return 0;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2:
+		return msg->lm_magic;
+	default:
+		CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+		return 0;
+	}
 }
 
 __u32 lustre_msg_get_timeout(struct lustre_msg *msg)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V1:
-        case LUSTRE_MSG_MAGIC_V1_SWABBED:
-                return 0;
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                if (!pb) {
-                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
-                        return 0;
-
-                }
-                return pb->pb_timeout;
-        }
-        default:
-                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
-                return 0;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		if (pb == NULL) {
+			CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+			return 0;
+		}
+		return pb->pb_timeout;
+	}
+	default:
+		CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+		return 0;
+	}
 }
 
 __u32 lustre_msg_get_service_time(struct lustre_msg *msg)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V1:
-        case LUSTRE_MSG_MAGIC_V1_SWABBED:
-                return 0;
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                if (!pb) {
-                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
-                        return 0;
-
-                }
-                return pb->pb_service_time;
-        }
-        default:
-                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
-                return 0;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		if (pb == NULL) {
+			CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+			return 0;
+		}
+		return pb->pb_service_time;
+	}
+	default:
+		CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+		return 0;
+	}
 }
 
 char *lustre_msg_get_jobid(struct lustre_msg *msg)
 {
 	switch (msg->lm_magic) {
-	case LUSTRE_MSG_MAGIC_V1:
-	case LUSTRE_MSG_MAGIC_V1_SWABBED:
-		return NULL;
 	case LUSTRE_MSG_MAGIC_V2: {
 		struct ptlrpc_body *pb =
 			lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF,
@@ -1307,13 +1266,13 @@ EXPORT_SYMBOL(lustre_msg_get_jobid);
 
 __u32 lustre_msg_get_cksum(struct lustre_msg *msg)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2:
-                return msg->lm_cksum;
-        default:
-                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
-                return 0;
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2:
+		return msg->lm_cksum;
+	default:
+		CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+		return 0;
+	}
 }
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 53, 0)
@@ -1356,58 +1315,58 @@ __u32 lustre_msg_calc_cksum(struct lustre_msg *msg)
 
 void lustre_msg_set_handle(struct lustre_msg *msg, struct lustre_handle *handle)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                pb->pb_handle = *handle;
-                return;
-        }
-        default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
+		pb->pb_handle = *handle;
+		return;
+	}
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
 }
 
 void lustre_msg_set_type(struct lustre_msg *msg, __u32 type)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                pb->pb_type = type;
-                return;
-        }
-        default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
+		pb->pb_type = type;
+		return;
+		}
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
 }
 
 void lustre_msg_set_opc(struct lustre_msg *msg, __u32 opc)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                pb->pb_opc = opc;
-                return;
-        }
-        default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
+		pb->pb_opc = opc;
+		return;
+	}
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
 }
 
 void lustre_msg_set_last_xid(struct lustre_msg *msg, __u64 last_xid)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                pb->pb_last_xid = last_xid;
-                return;
-        }
-        default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		LASSERTF(pb != NULL, "invalid msg %p: no ptlrpc body!\n", msg);
+		pb->pb_last_xid = last_xid;
+		return;
+	}
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
 }
 EXPORT_SYMBOL(lustre_msg_set_last_xid);
 
@@ -1428,119 +1387,111 @@ EXPORT_SYMBOL(lustre_msg_set_tag);
 
 void lustre_msg_set_last_committed(struct lustre_msg *msg, __u64 last_committed)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                pb->pb_last_committed = last_committed;
-                return;
-        }
-        default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		LASSERTF(pb != NULL, "invalid msg %p: no ptlrpc body!\n", msg);
+		pb->pb_last_committed = last_committed;
+		return;
+	}
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
 }
 
 void lustre_msg_set_versions(struct lustre_msg *msg, __u64 *versions)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V1:
-                return;
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                pb->pb_pre_versions[0] = versions[0];
-                pb->pb_pre_versions[1] = versions[1];
-                pb->pb_pre_versions[2] = versions[2];
-                pb->pb_pre_versions[3] = versions[3];
-                return;
-        }
-        default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		LASSERTF(pb != NULL, "invalid msg %p: no ptlrpc body!\n", msg);
+		pb->pb_pre_versions[0] = versions[0];
+		pb->pb_pre_versions[1] = versions[1];
+		pb->pb_pre_versions[2] = versions[2];
+		pb->pb_pre_versions[3] = versions[3];
+		return;
+	}
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
 }
 EXPORT_SYMBOL(lustre_msg_set_versions);
 
 void lustre_msg_set_transno(struct lustre_msg *msg, __u64 transno)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                pb->pb_transno = transno;
-                return;
-        }
-        default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		LASSERTF(pb != NULL, "invalid msg %p: no ptlrpc body!\n", msg);
+		pb->pb_transno = transno;
+		return;
+	}
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
 }
 EXPORT_SYMBOL(lustre_msg_set_transno);
 
 void lustre_msg_set_status(struct lustre_msg *msg, __u32 status)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                pb->pb_status = status;
-                return;
-        }
-        default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		LASSERTF(pb != NULL, "invalid msg %p: no ptlrpc body!\n", msg);
+		pb->pb_status = status;
+		return;
+	}
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
 }
 EXPORT_SYMBOL(lustre_msg_set_status);
 
 void lustre_msg_set_conn_cnt(struct lustre_msg *msg, __u32 conn_cnt)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                pb->pb_conn_cnt = conn_cnt;
-                return;
-        }
-        default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		LASSERTF(pb != NULL, "invalid msg %p: no ptlrpc body!\n", msg);
+		pb->pb_conn_cnt = conn_cnt;
+		return;
+	}
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
 }
 
 void lustre_msg_set_timeout(struct lustre_msg *msg, __u32 timeout)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V1:
-                return;
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                pb->pb_timeout = timeout;
-                return;
-        }
-        default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		LASSERTF(pb != NULL, "invalid msg %p: no ptlrpc body!\n", msg);
+		pb->pb_timeout = timeout;
+		return;
+	}
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
 }
 
 void lustre_msg_set_service_time(struct lustre_msg *msg, __u32 service_time)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V1:
-                return;
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                pb->pb_service_time = service_time;
-                return;
-        }
-        default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
+		pb->pb_service_time = service_time;
+		return;
+	}
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
 }
 
 void lustre_msg_set_jobid(struct lustre_msg *msg, char *jobid)
 {
 	switch (msg->lm_magic) {
-	case LUSTRE_MSG_MAGIC_V1:
-		return;
 	case LUSTRE_MSG_MAGIC_V2: {
 		__u32 opc = lustre_msg_get_opc(msg);
 		struct ptlrpc_body *pb;
@@ -1569,15 +1520,13 @@ EXPORT_SYMBOL(lustre_msg_set_jobid);
 
 void lustre_msg_set_cksum(struct lustre_msg *msg, __u32 cksum)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V1:
-                return;
-        case LUSTRE_MSG_MAGIC_V2:
-                msg->lm_cksum = cksum;
-                return;
-        default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-        }
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2:
+		msg->lm_cksum = cksum;
+		return;
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
 }
 
 

@@ -1079,30 +1079,30 @@ no_export:
 			t = cfs_timer_deadline(&target->obd_recovery_timer);
 			t = cfs_time_sub(t, cfs_time_current());
 			t = cfs_duration_sec(t);
-			LCONSOLE_WARN("%s: Denying connection for new client "
-				      "%s (at %s), waiting for all %d known "
-				      "clients (%d recovered, %d in progress, "
-				      "and %d evicted) to recover in %d:%.02d\n",
+			LCONSOLE_WARN("%s: Denying connection for new client %s"
+				      "(at %s), waiting for %d known clients "
+				      "(%d recovered, %d in progress, and %d "
+				      "evicted) to recover in %d:%.02d\n",
 				      target->obd_name, cluuid.uuid,
 				      libcfs_nid2str(req->rq_peer.nid), k,
 				      c - i, i, s, (int)t / 60,
 				      (int)t % 60);
-                        rc = -EBUSY;
-                } else {
+			rc = -EBUSY;
+		} else {
 dont_check_exports:
-                        rc = obd_connect(req->rq_svc_thread->t_env,
-                                         &export, target, &cluuid, data,
-                                         client_nid);
+			rc = obd_connect(req->rq_svc_thread->t_env,
+					 &export, target, &cluuid, data,
+					 client_nid);
 			if (mds_conn && OBD_FAIL_CHECK(OBD_FAIL_TGT_RCVG_FLAG))
 				lustre_msg_add_op_flags(req->rq_repmsg,
-						MSG_CONNECT_RECOVERING);
-                        if (rc == 0)
-                                conn.cookie = export->exp_handle.h_cookie;
-                }
-        } else {
-                rc = obd_reconnect(req->rq_svc_thread->t_env,
-                                   export, target, &cluuid, data, client_nid);
-        }
+							MSG_CONNECT_RECOVERING);
+			if (rc == 0)
+				conn.cookie = export->exp_handle.h_cookie;
+		}
+	} else {
+		rc = obd_reconnect(req->rq_svc_thread->t_env,
+				   export, target, &cluuid, data, client_nid);
+	}
 	if (rc)
 		GOTO(out, rc);
 
