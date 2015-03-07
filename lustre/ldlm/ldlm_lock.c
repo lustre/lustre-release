@@ -66,17 +66,10 @@ char *ldlm_typename[] = {
 	[LDLM_IBITS] = "IBT",
 };
 
-static ldlm_policy_wire_to_local_t ldlm_policy_wire18_to_local[] = {
+static ldlm_policy_wire_to_local_t ldlm_policy_wire_to_local[] = {
 	[LDLM_PLAIN - LDLM_MIN_TYPE]  = ldlm_plain_policy_wire_to_local,
 	[LDLM_EXTENT - LDLM_MIN_TYPE] = ldlm_extent_policy_wire_to_local,
-	[LDLM_FLOCK - LDLM_MIN_TYPE]  = ldlm_flock_policy_wire18_to_local,
-	[LDLM_IBITS - LDLM_MIN_TYPE]  = ldlm_ibits_policy_wire_to_local,
-};
-
-static ldlm_policy_wire_to_local_t ldlm_policy_wire21_to_local[] = {
-	[LDLM_PLAIN - LDLM_MIN_TYPE]  = ldlm_plain_policy_wire_to_local,
-	[LDLM_EXTENT - LDLM_MIN_TYPE] = ldlm_extent_policy_wire_to_local,
-	[LDLM_FLOCK - LDLM_MIN_TYPE]  = ldlm_flock_policy_wire21_to_local,
+	[LDLM_FLOCK - LDLM_MIN_TYPE]  = ldlm_flock_policy_wire_to_local,
 	[LDLM_IBITS - LDLM_MIN_TYPE]  = ldlm_ibits_policy_wire_to_local,
 };
 
@@ -109,14 +102,8 @@ void ldlm_convert_policy_to_local(struct obd_export *exp, ldlm_type_t type,
 				  ldlm_policy_data_t *lpolicy)
 {
 	ldlm_policy_wire_to_local_t convert;
-	int new_client;
 
-	/** some badness for 2.0.0 clients, but 2.0.0 isn't supported */
-	new_client = (exp_connect_flags(exp) & OBD_CONNECT_FULL20) != 0;
-	if (new_client)
-		convert = ldlm_policy_wire21_to_local[type - LDLM_MIN_TYPE];
-	else
-		convert = ldlm_policy_wire18_to_local[type - LDLM_MIN_TYPE];
+	convert = ldlm_policy_wire_to_local[type - LDLM_MIN_TYPE];
 
 	convert(wpolicy, lpolicy);
 }

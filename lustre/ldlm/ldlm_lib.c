@@ -871,6 +871,20 @@ int target_handle_connect(struct ptlrpc_request *req)
         if (rc)
                 GOTO(out, rc);
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
+	/* Don't allow clients to connect that are using old 1.8 format
+	 * protocol conventions (LUSTRE_MSG_MAGIC_v1, !MSGHDR_CKSUM_INCOMPAT18,
+	 * ldlm_flock_policy_wire format, MDT_ATTR_xTIME_SET, etc).  The
+	 * FULL20 flag should be set on all connections since 2.0, but no
+	 * longer affects behaviour.
+	 *
+	 * Later this check will be disabled and the flag can be retired
+	 * completely once interop with 3.0 is no longer needed.
+	 */
+	if (!(data->ocd_connect_flags & OBD_CONNECT_FULL20))
+		GOTO(out, rc = -EPROTO);
+#endif
+
 	if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {
 		if (data->ocd_version < LUSTRE_VERSION_CODE -
 		                               LUSTRE_VERSION_ALLOWED_OFFSET ||
@@ -1237,17 +1251,12 @@ dont_check_exports:
 	 * ptlrpc_handle_server_req_in->lustre_unpack_msg(). */
         revimp->imp_msg_magic = req->rq_reqmsg->lm_magic;
 
-	if ((data->ocd_connect_flags & OBD_CONNECT_AT) &&
-	    (revimp->imp_msg_magic != LUSTRE_MSG_MAGIC_V1))
+	if (data->ocd_connect_flags & OBD_CONNECT_AT)
 		revimp->imp_msghdr_flags |= MSGHDR_AT_SUPPORT;
 	else
 		revimp->imp_msghdr_flags &= ~MSGHDR_AT_SUPPORT;
 
-	if ((data->ocd_connect_flags & OBD_CONNECT_FULL20) &&
-            (revimp->imp_msg_magic != LUSTRE_MSG_MAGIC_V1))
-                revimp->imp_msghdr_flags |= MSGHDR_CKSUM_INCOMPAT18;
-        else
-                revimp->imp_msghdr_flags &= ~MSGHDR_CKSUM_INCOMPAT18;
+	revimp->imp_msghdr_flags |= MSGHDR_CKSUM_INCOMPAT18;
 
 	rc = sptlrpc_import_sec_adapt(revimp, req->rq_svc_ctx, &req->rq_flvr);
 	if (rc) {

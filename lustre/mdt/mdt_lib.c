@@ -923,20 +923,6 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 
         rr->rr_fid1 = &rec->sa_fid;
 	la->la_valid = mdt_attr_valid_xlate(rec->sa_valid, rr, ma);
-	/*  If MDS_ATTR_xTIME is set without MDS_ATTR_xTIME_SET and
-	 *  the client does not have OBD_CONNECT_FULL20, convert it
-	 *  to LA_xTIME. LU-3036 */
-	if (!(exp_connect_flags(info->mti_exp) & OBD_CONNECT_FULL20)) {
-		if (!(rec->sa_valid & MDS_ATTR_ATIME_SET) &&
-		     (rec->sa_valid & MDS_ATTR_ATIME))
-			la->la_valid |= LA_ATIME;
-		if (!(rec->sa_valid & MDS_ATTR_MTIME_SET) &&
-		     (rec->sa_valid & MDS_ATTR_MTIME))
-			la->la_valid |= LA_MTIME;
-		if (!(rec->sa_valid & MDS_ATTR_CTIME_SET) &&
-		     (rec->sa_valid & MDS_ATTR_CTIME))
-			la->la_valid |= LA_CTIME;
-	}
 	la->la_mode  = rec->sa_mode;
 	la->la_flags = rec->sa_attr_flags;
 	la->la_uid   = nodemap_map_id(nodemap, NODEMAP_UID,
