@@ -42,7 +42,6 @@
 #include <lnet/lib-dlc.h>
 #include <lnet/lnet.h>
 #include <lnet/nidstr.h>
-#include "tracefile.h"
 
 static void
 kportal_memhog_free (struct libcfs_device_userstate *ldu)
@@ -187,8 +186,8 @@ static int libcfs_psdev_release(unsigned long flags, void *args)
 	RETURN(0);
 }
 
-static struct rw_semaphore ioctl_list_sem;
-static struct list_head ioctl_list;
+static DECLARE_RWSEM(ioctl_list_sem);
+static LIST_HEAD(ioctl_list);
 
 int libcfs_register_ioctl(struct libcfs_ioctl_handler *hand)
 {
@@ -319,11 +318,6 @@ static int init_libcfs_module(void)
 
 	libcfs_arch_init();
 	libcfs_init_nidstrings();
-	init_rwsem(&cfs_tracefile_sem);
-	mutex_init(&cfs_trace_thread_mutex);
-	init_rwsem(&ioctl_list_sem);
-	INIT_LIST_HEAD(&ioctl_list);
-	init_waitqueue_head(&cfs_race_waitq);
 
 	rc = libcfs_debug_init(5 * 1024 * 1024);
 	if (rc < 0) {
@@ -415,9 +409,6 @@ static void exit_libcfs_module(void)
 	if (rc)
 		printk(KERN_ERR "LustreError: libcfs_debug_cleanup: %d\n",
 		       rc);
-
-	fini_rwsem(&ioctl_list_sem);
-	fini_rwsem(&cfs_tracefile_sem);
 
 	libcfs_arch_cleanup();
 }

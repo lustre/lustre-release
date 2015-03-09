@@ -34,8 +34,6 @@
 
 #include <libcfs/libcfs.h>
 
-#ifdef __KERNEL__
-
 /** destroy cpu-partition lock, see libcfs_private.h for more detail */
 void
 cfs_percpt_lock_free(struct cfs_percpt_lock *pcl)
@@ -148,69 +146,6 @@ __releases(pcl->pcl_locks)
 	}
 }
 EXPORT_SYMBOL(cfs_percpt_unlock);
-
-#else /* !__KERNEL__ */
-# ifdef HAVE_LIBPTHREAD
-
-struct cfs_percpt_lock *
-cfs_percpt_lock_alloc(struct cfs_cpt_table *cptab)
-{
-	struct cfs_percpt_lock *pcl;
-
-	CFS_ALLOC_PTR(pcl);
-	if (pcl != NULL)
-		pthread_mutex_init(&pcl->pcl_mutex, NULL);
-
-	return pcl;
-}
-
-void
-cfs_percpt_lock_free(struct cfs_percpt_lock *pcl)
-{
-	pthread_mutex_destroy(&pcl->pcl_mutex);
-	CFS_FREE_PTR(pcl);
-}
-
-void
-cfs_percpt_lock(struct cfs_percpt_lock *pcl, int lock)
-{
-	pthread_mutex_lock(&(pcl)->pcl_mutex);
-}
-
-void
-cfs_percpt_unlock(struct cfs_percpt_lock *pcl, int lock)
-{
-	pthread_mutex_unlock(&(pcl)->pcl_mutex);
-}
-
-# else /* !HAVE_LIBPTHREAD */
-
-struct cfs_percpt_lock *
-cfs_percpt_lock_alloc(struct cfs_cpt_table *cptab)
-{
-	return ((struct cfs_percpt_lock *) &CFS_PERCPT_LOCK_MAGIC);
-}
-
-void
-cfs_percpt_lock_free(struct cfs_percpt_lock *pcl)
-{
-	LASSERT(pcl == (struct cfs_percpt_lock *) &CFS_PERCPT_LOCK_MAGIC);
-}
-
-void
-cfs_percpt_lock(struct cfs_percpt_lock *pcl, int index)
-{
-	LASSERT(pcl == (struct cfs_percpt_lock *) &CFS_PERCPT_LOCK_MAGIC);
-}
-
-void
-cfs_percpt_unlock(struct cfs_percpt_lock *pcl, int index)
-{
-	LASSERT(pcl == (struct cfs_percpt_lock *) &CFS_PERCPT_LOCK_MAGIC);
-}
-
-# endif /* HAVE_LIBPTHREAD */
-#endif /* __KERNEL__ */
 
 /** free cpu-partition refcount */
 void

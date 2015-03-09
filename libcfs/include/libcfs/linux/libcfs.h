@@ -51,7 +51,6 @@
 #include <libcfs/linux/linux-time.h>
 #include <libcfs/linux/linux-mem.h>
 #include <libcfs/linux/linux-prim.h>
-#include <libcfs/linux/linux-lock.h>
 #include <libcfs/linux/linux-fs.h>
 #include <libcfs/linux/kp30.h>
 

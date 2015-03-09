@@ -471,26 +471,6 @@ struct cfs_percpt_lock {
 /* return number of private locks */
 #define cfs_percpt_lock_num(pcl)	cfs_cpt_number(pcl->pcl_cptab)
 
-#else /* !__KERNEL__ */
-
-# ifdef HAVE_LIBPTHREAD
-
-struct cfs_percpt_lock {
-	pthread_mutex_t		pcl_mutex;
-};
-
-# else /* !HAVE_LIBPTHREAD */
-
-struct cfs_percpt_lock {
-	int			pcl_lock;
-};
-
-static const struct cfs_percpt_lock CFS_PERCPT_LOCK_MAGIC;
-
-# endif /* HAVE_LIBPTHREAD */
-# define cfs_percpt_lock_num(pcl)        1
-#endif /* __KERNEL__ */
-
 /*
  * create a cpu-partition lock based on CPU partition table \a cptab,
  * each private lock has extra \a psize bytes padding data
@@ -509,7 +489,7 @@ atomic_t **cfs_percpt_atomic_alloc(struct cfs_cpt_table *cptab, int val);
 void cfs_percpt_atomic_free(atomic_t **refs);
 /* return sum of all percpu refs */
 int cfs_percpt_atomic_summary(atomic_t **refs);
-
+#endif /* __KERNEL__ */
 
 /** Compile-time assertion.
 

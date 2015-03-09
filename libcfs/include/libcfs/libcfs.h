@@ -65,7 +65,6 @@
 # include <libcfs/user-time.h>
 # include <libcfs/user-prim.h>
 # include <libcfs/user-mem.h>
-# include <libcfs/user-lock.h>
 # include <libcfs/user-bitops.h>
 #endif /* __KERNEL__ */
 
@@ -256,7 +255,9 @@ void cfs_get_random_bytes(void *buf, int size);
 #include <libcfs/libcfs_string.h>
 #include <libcfs/libcfs_kernelcomm.h>
 #include <libcfs/libcfs_workitem.h>
-#include <libcfs/libcfs_hash.h>
+#ifdef __KERNEL__
+# include <libcfs/libcfs_hash.h>
+#endif /* __KERNEL__ */
 #include <libcfs/libcfs_heap.h>
 #include <libcfs/libcfs_fail.h>
 

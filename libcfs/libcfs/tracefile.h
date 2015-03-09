@@ -97,9 +97,6 @@ extern void libcfs_unregister_panic_notifier(void);
 extern int  libcfs_panic_in_progress;
 extern int  cfs_trace_max_debug_mb(void);
 
-extern struct mutex cfs_trace_thread_mutex;
-extern struct rw_semaphore cfs_tracefile_sem;
-
 #define TCD_MAX_PAGES (5 << (20 - PAGE_CACHE_SHIFT))
 #define TCD_STOCK_PAGES (TCD_MAX_PAGES)
 #define CFS_TRACEFILE_SIZE (500 << 20)

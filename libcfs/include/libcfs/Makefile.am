@@ -31,7 +31,6 @@ EXTRA_DIST = \
 	types.h \
 	user-bitops.h \
 	user-crypto.h \
-	user-lock.h \
 	user-mem.h \
 	user-prim.h \
 	user-time.h

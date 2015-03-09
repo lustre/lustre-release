@@ -35,6 +35,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LNET
+#include <linux/completion.h>
 #include <lnet/lib-lnet.h>
 
 static int   accept_port    = 988;
@@ -473,10 +474,8 @@ lnet_acceptor_start(void)
 
 	init_completion(&lnet_acceptor_state.pta_signal);
 	rc = accept2secure(accept_type, &secure);
-	if (rc <= 0) {
-		fini_completion(&lnet_acceptor_state.pta_signal);
+	if (rc <= 0)
 		return rc;
-	}
 
 	if (lnet_count_acceptor_nis() == 0)  /* not required */
 		return 0;
@@ -486,7 +485,6 @@ lnet_acceptor_start(void)
 	if (IS_ERR(task)) {
 		rc2 = PTR_ERR(task);
 		CERROR("Can't start acceptor thread: %ld\n", rc2);
-		fini_completion(&lnet_acceptor_state.pta_signal);
 
 		return -ESRCH;
 	}
@@ -501,7 +499,6 @@ lnet_acceptor_start(void)
 	}
 
 	LASSERT(lnet_acceptor_state.pta_sock == NULL);
-	fini_completion(&lnet_acceptor_state.pta_signal);
 
 	return -ENETDOWN;
 }
@@ -517,6 +514,4 @@ lnet_acceptor_stop(void)
 
 	/* block until acceptor signals exit */
 	wait_for_completion(&lnet_acceptor_state.pta_signal);
-
-	fini_completion(&lnet_acceptor_state.pta_signal);
 }
