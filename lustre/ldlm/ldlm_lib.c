@@ -2633,9 +2633,13 @@ static int target_bulk_timeout(void *data)
         RETURN(1);
 }
 
-static inline char *bulk2type(struct ptlrpc_bulk_desc *desc)
+static inline const char *bulk2type(struct ptlrpc_request *req)
 {
-        return desc->bd_type == BULK_GET_SINK ? "GET" : "PUT";
+	if (req->rq_bulk_read)
+		return "READ";
+	if (req->rq_bulk_write)
+		return "WRITE";
+	return "UNKNOWN";
 }
 
 int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
@@ -2662,7 +2666,7 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
 	    exp->exp_conn_cnt > lustre_msg_get_conn_cnt(req->rq_reqmsg)) {
 		rc = -ENOTCONN;
 	} else {
-		if (desc->bd_type == BULK_PUT_SINK)
+		if (req->rq_bulk_read)
 			rc = sptlrpc_svc_wrap_bulk(req, desc);
 		if (rc == 0)
 			rc = ptlrpc_start_bulk_transfer(desc);
@@ -2670,7 +2674,7 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
 
 	if (rc < 0) {
 		DEBUG_REQ(D_ERROR, req, "bulk %s failed: rc %d",
-			  bulk2type(desc), rc);
+			  bulk2type(req), rc);
 		RETURN(rc);
 	}
 
@@ -2709,31 +2713,36 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
 
 	if (rc == -ETIMEDOUT) {
 		DEBUG_REQ(D_ERROR, req, "timeout on bulk %s after %ld%+lds",
-			  bulk2type(desc), deadline - start,
+			  bulk2type(req), deadline - start,
 			  cfs_time_current_sec() - deadline);
 		ptlrpc_abort_bulk(desc);
 	} else if (exp->exp_failed) {
 		DEBUG_REQ(D_ERROR, req, "Eviction on bulk %s",
-			  bulk2type(desc));
+			  bulk2type(req));
 		rc = -ENOTCONN;
 		ptlrpc_abort_bulk(desc);
 	} else if (exp->exp_conn_cnt >
 		   lustre_msg_get_conn_cnt(req->rq_reqmsg)) {
 		DEBUG_REQ(D_ERROR, req, "Reconnect on bulk %s",
-			  bulk2type(desc));
+			  bulk2type(req));
 		/* We don't reply anyway. */
 		rc = -ETIMEDOUT;
 		ptlrpc_abort_bulk(desc);
-	} else if (desc->bd_failure ||
-		   desc->bd_nob_transferred != desc->bd_nob) {
-		DEBUG_REQ(D_ERROR, req, "%s bulk %s %d(%d)",
-			  desc->bd_failure ? "network error on" : "truncated",
-			  bulk2type(desc), desc->bd_nob_transferred,
-			  desc->bd_nob);
-		/* XXX Should this be a different errno? */
+	} else if (desc->bd_failure) {
+		DEBUG_REQ(D_ERROR, req, "network error on bulk %s",
+			  bulk2type(req));
+		/* XXX should this be a different errno? */
 		rc = -ETIMEDOUT;
-	} else if (desc->bd_type == BULK_GET_SINK) {
-		rc = sptlrpc_svc_unwrap_bulk(req, desc);
+	} else {
+		if (req->rq_bulk_write)
+			rc = sptlrpc_svc_unwrap_bulk(req, desc);
+		if (rc == 0 && desc->bd_nob_transferred != desc->bd_nob) {
+			DEBUG_REQ(D_ERROR, req, "truncated bulk %s %d(%d)",
+				  bulk2type(req), desc->bd_nob_transferred,
+				  desc->bd_nob);
+			/* XXX should this be a different errno? */
+			rc = -ETIMEDOUT;
+		}
 	}
 
 	RETURN(rc);
