@@ -432,6 +432,10 @@ int gss_svc_unwrap_bulk(struct ptlrpc_request *req,
                         CERROR("failed decrypt bulk data: %x\n", maj);
                         RETURN(-EACCES);
                 }
+
+		/* mimic gss_cli_ctx_unwrap_bulk */
+		desc->bd_nob_transferred = desc->bd_nob;
+
                 break;
         }
 
