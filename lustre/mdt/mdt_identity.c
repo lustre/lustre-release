@@ -57,7 +57,6 @@
 #include <linux/slab.h>
 
 #include <libcfs/libcfs.h>
-#include <libcfs/lucache.h>
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_support.h>

@@ -49,7 +49,7 @@
 #define _MDT_INTERNAL_H
 
 
-#include <libcfs/lucache.h>
+#include <upcall_cache.h>
 #include <lustre_net.h>
 #include <lustre/lustre_idl.h>
 #include <obd_class.h>

@@ -34,8 +34,8 @@
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
-#ifndef _LUCACHE_H
-#define _LUCACHE_H
+#ifndef _UPCALL_CACHE_H
+#define _UPCALL_CACHE_H
 
 #include <libcfs/libcfs.h>
 #include <lnet/types.h>
@@ -56,22 +56,22 @@
 #define UC_CACHE_IS_EXPIRED(i)      ((i)->ue_flags & UC_CACHE_EXPIRED)
 #define UC_CACHE_IS_VALID(i)        ((i)->ue_flags == 0)
 
-#define UC_CACHE_SET_NEW(i)         (i)->ue_flags |= UC_CACHE_NEW
-#define UC_CACHE_SET_INVALID(i)     (i)->ue_flags |= UC_CACHE_INVALID
-#define UC_CACHE_SET_ACQUIRING(i)   (i)->ue_flags |= UC_CACHE_ACQUIRING
-#define UC_CACHE_SET_EXPIRED(i)     (i)->ue_flags |= UC_CACHE_EXPIRED
-#define UC_CACHE_SET_VALID(i)       (i)->ue_flags = 0
+#define UC_CACHE_SET_NEW(i)         ((i)->ue_flags |= UC_CACHE_NEW)
+#define UC_CACHE_SET_INVALID(i)     ((i)->ue_flags |= UC_CACHE_INVALID)
+#define UC_CACHE_SET_ACQUIRING(i)   ((i)->ue_flags |= UC_CACHE_ACQUIRING)
+#define UC_CACHE_SET_EXPIRED(i)     ((i)->ue_flags |= UC_CACHE_EXPIRED)
+#define UC_CACHE_SET_VALID(i)       ((i)->ue_flags = 0)
 
-#define UC_CACHE_CLEAR_NEW(i)       (i)->ue_flags &= ~UC_CACHE_NEW
-#define UC_CACHE_CLEAR_ACQUIRING(i) (i)->ue_flags &= ~UC_CACHE_ACQUIRING
-#define UC_CACHE_CLEAR_INVALID(i)   (i)->ue_flags &= ~UC_CACHE_INVALID
-#define UC_CACHE_CLEAR_EXPIRED(i)   (i)->ue_flags &= ~UC_CACHE_EXPIRED
+#define UC_CACHE_CLEAR_NEW(i)       ((i)->ue_flags &= ~UC_CACHE_NEW)
+#define UC_CACHE_CLEAR_ACQUIRING(i) ((i)->ue_flags &= ~UC_CACHE_ACQUIRING)
+#define UC_CACHE_CLEAR_INVALID(i)   ((i)->ue_flags &= ~UC_CACHE_INVALID)
+#define UC_CACHE_CLEAR_EXPIRED(i)   ((i)->ue_flags &= ~UC_CACHE_EXPIRED)
 
 struct upcall_cache_entry;
 
 struct md_perm {
-        lnet_nid_t      mp_nid;
-        __u32           mp_perm;
+	lnet_nid_t      mp_nid;
+	uint32_t	mp_perm;
 };
 
 struct md_identity {
@@ -85,7 +85,7 @@ struct md_identity {
 
 struct upcall_cache_entry {
 	struct list_head	ue_hash;
-	__u64			ue_key;
+	uint64_t		ue_key;
 	atomic_t		ue_refcount;
 	int			ue_flags;
 	wait_queue_head_t	ue_waitq;
@@ -103,19 +103,19 @@ struct upcall_cache_entry {
 struct upcall_cache;
 
 struct upcall_cache_ops {
-        void            (*init_entry)(struct upcall_cache_entry *, void *args);
-        void            (*free_entry)(struct upcall_cache *,
-                                      struct upcall_cache_entry *);
-        int             (*upcall_compare)(struct upcall_cache *,
-                                          struct upcall_cache_entry *,
-                                          __u64 key, void *args);
-        int             (*downcall_compare)(struct upcall_cache *,
-                                            struct upcall_cache_entry *,
-                                            __u64 key, void *args);
-        int             (*do_upcall)(struct upcall_cache *,
-                                     struct upcall_cache_entry *);
-        int             (*parse_downcall)(struct upcall_cache *,
-                                          struct upcall_cache_entry *, void *);
+	void            (*init_entry)(struct upcall_cache_entry *, void *args);
+	void            (*free_entry)(struct upcall_cache *,
+				      struct upcall_cache_entry *);
+	int             (*upcall_compare)(struct upcall_cache *,
+					  struct upcall_cache_entry *,
+					  __u64 key, void *args);
+	int             (*downcall_compare)(struct upcall_cache *,
+					    struct upcall_cache_entry *,
+					    __u64 key, void *args);
+	int             (*do_upcall)(struct upcall_cache *,
+				     struct upcall_cache_entry *);
+	int             (*parse_downcall)(struct upcall_cache *,
+					  struct upcall_cache_entry *, void *);
 };
 
 struct upcall_cache {
@@ -131,33 +131,28 @@ struct upcall_cache {
 };
 
 struct upcall_cache_entry *upcall_cache_get_entry(struct upcall_cache *cache,
-                                                  __u64 key, void *args);
+						  __u64 key, void *args);
 void upcall_cache_put_entry(struct upcall_cache *cache,
-                            struct upcall_cache_entry *entry);
+			    struct upcall_cache_entry *entry);
 int upcall_cache_downcall(struct upcall_cache *cache, __u32 err, __u64 key,
-                          void *args);
-void upcall_cache_flush_idle(struct upcall_cache *cache);
-void upcall_cache_flush_all(struct upcall_cache *cache);
+			  void *args);
+void upcall_cache_flush(struct upcall_cache *cache, int force);
+
+static inline void upcall_cache_flush_idle(struct upcall_cache *cache)
+{
+	upcall_cache_flush(cache, 0);
+}
+
+static inline void upcall_cache_flush_all(struct upcall_cache *cache)
+{
+	upcall_cache_flush(cache, 1);
+}
+
 void upcall_cache_flush_one(struct upcall_cache *cache, __u64 key, void *args);
 struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
-                                       struct upcall_cache_ops *ops);
+				       struct upcall_cache_ops *ops);
 void upcall_cache_cleanup(struct upcall_cache *cache);
-
-#if 0
-struct upcall_cache_entry *upcall_cache_get_entry(struct upcall_cache *hash,
-                                                  __u64 key, __u32 primary,
-                                                  __u32 ngroups, __u32 *groups);
-void upcall_cache_put_entry(struct upcall_cache *hash,
-                            struct upcall_cache_entry *entry);
-int upcall_cache_downcall(struct upcall_cache *hash, __u32 err, __u64 key,
-                          __u32 primary, __u32 ngroups, __u32 *groups);
-void upcall_cache_flush_idle(struct upcall_cache *cache);
-void upcall_cache_flush_all(struct upcall_cache *cache);
-struct upcall_cache *upcall_cache_init(const char *name);
-void upcall_cache_cleanup(struct upcall_cache *hash);
-
-#endif
 
 /** @} ucache */
 
-#endif /* _LUCACHE_H */
+#endif /* _UPCALL_CACHE_H */

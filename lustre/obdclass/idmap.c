@@ -42,9 +42,8 @@
 
 #define DEBUG_SUBSYSTEM S_SEC
 
-#include <libcfs/lucache.h>
-
 #include <lustre_idmap.h>
+#include <upcall_cache.h>
 #include <md_object.h>
 #include <obd_support.h>
 
