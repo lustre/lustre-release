@@ -54,6 +54,9 @@
 /* XATTR_{REPLACE,CREATE} */
 #include <linux/xattr.h>
 
+#include <ldiskfs/ldiskfs.h>
+#include <ldiskfs/xattr.h>
+#undef ENTRY
 /*
  * struct OBD_{ALLOC,FREE}*()
  * OBD_FAIL_CHECK
@@ -72,7 +75,6 @@
 #include <md_object.h>
 #include <lustre_quota.h>
 
-#include <ldiskfs/xattr.h>
 #include <lustre_linkea.h>
 
 int ldiskfs_pdo = 1;

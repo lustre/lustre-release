@@ -147,10 +147,14 @@
 #include <linux/string.h>
 #include <linux/quotaops.h>
 #include <linux/buffer_head.h>
+
+#include <ldiskfs/ldiskfs.h>
+#include <ldiskfs/xattr.h>
+#undef ENTRY
+
 #include "osd_internal.h"
 
-#include "xattr.h"
-#include "acl.h"
+#include <ldiskfs/acl.h>
 
 /*
  * List of all registered formats.

@@ -1,0 +1,135 @@
+Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/ext4.h
+===================================================================
+--- linux-3.10.0-123.13.2.el7.x86_64.orig/fs/ext4/ext4.h
++++ linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/ext4.h
+@@ -2145,6 +2145,19 @@ extern int ext4_orphan_add(handle_t *, s
+ extern int ext4_orphan_del(handle_t *, struct inode *);
+ extern int ext4_htree_fill_tree(struct file *dir_file, __u32 start_hash,
+ 				__u32 start_minor_hash, __u32 *next_hash);
++extern struct inode *ext4_create_inode(handle_t *handle,
++				       struct inode * dir, int mode);
++extern int ext4_add_entry(handle_t *handle, struct dentry *dentry,
++			  struct inode *inode);
++extern int ext4_delete_entry(handle_t *handle, struct inode * dir,
++			     struct ext4_dir_entry_2 * de_del,
++			     struct buffer_head * bh);
++extern struct buffer_head * ext4_find_entry(struct inode *dir,
++					    const struct qstr *d_name,
++					    struct ext4_dir_entry_2 ** res_dir,
++					    int *inlined);
++extern int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
++			       struct inode *inode);
+ extern int search_dir(struct buffer_head *bh,
+ 		      char *search_buf,
+ 		      int buf_size,
+Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/namei.c
+===================================================================
+--- linux-3.10.0-123.13.2.el7.x86_64.orig/fs/ext4/namei.c
++++ linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/namei.c
+@@ -1211,7 +1211,7 @@ static int is_dx_internal_node(struct in
+  * The returned buffer_head has ->b_count elevated.  The caller is expected
+  * to brelse() it when appropriate.
+  */
+-static struct buffer_head * ext4_find_entry (struct inode *dir,
++struct buffer_head * ext4_find_entry(struct inode *dir,
+ 					const struct qstr *d_name,
+ 					struct ext4_dir_entry_2 **res_dir,
+ 					int *inlined)
+@@ -1355,6 +1355,7 @@ cleanup_and_exit:
+ 		brelse(bh_use[ra_ptr]);
+ 	return ret;
+ }
++EXPORT_SYMBOL(ext4_find_entry);
+ 
+ static struct buffer_head * ext4_dx_find_entry(struct inode *dir, const struct qstr *d_name,
+ 		       struct ext4_dir_entry_2 **res_dir, int *err)
+@@ -1903,8 +1904,8 @@ static int make_indexed_dir(handle_t *ha
+  * may not sleep between calling this and putting something into
+  * the entry, as someone else might have used it while you slept.
+  */
+-static int ext4_add_entry(handle_t *handle, struct dentry *dentry,
+-			  struct inode *inode)
++int ext4_add_entry(handle_t *handle, struct dentry *dentry,
++		   struct inode *inode)
+ {
+ 	struct inode *dir = dentry->d_parent->d_inode;
+ 	struct buffer_head *bh;
+@@ -1979,6 +1980,7 @@ static int ext4_add_entry(handle_t *hand
+ 		ext4_set_inode_state(inode, EXT4_STATE_NEWENTRY);
+ 	return retval;
+ }
++EXPORT_SYMBOL(ext4_add_entry);
+ 
+ /*
+  * Returns 0 for success, or a negative error value
+@@ -2165,7 +2167,7 @@ int ext4_generic_delete_entry(handle_t *
+ 	return -ENOENT;
+ }
+ 
+-static int ext4_delete_entry(handle_t *handle,
++int ext4_delete_entry(handle_t *handle,
+ 			     struct inode *dir,
+ 			     struct ext4_dir_entry_2 *de_del,
+ 			     struct buffer_head *bh)
+@@ -2206,7 +2208,7 @@ out:
+ 		ext4_std_error(dir->i_sb, err);
+ 	return err;
+ }
+-
++EXPORT_SYMBOL(ext4_delete_entry);
+ /*
+  * DIR_NLINK feature is set if 1) nlinks > EXT4_LINK_MAX or 2) nlinks == 2,
+  * since this indicates that nlinks count was previously 1.
+@@ -2253,6 +2255,28 @@ static int ext4_add_nondir(handle_t *han
+ 	return err;
+ }
+ 
++ /* Return locked inode, then the caller can modify the inode's states/flags
++  * before others finding it. The caller should unlock the inode by itself. */
++struct inode * ext4_create_inode(handle_t *handle, struct inode * dir, int mode)
++{
++	struct inode *inode;
++
++	inode = ext4_new_inode(handle, dir, mode, NULL, 0, NULL);
++	if (!IS_ERR(inode)) {
++		if (S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode)) {
++#ifdef CONFIG_LDISKFS_FS_XATTR
++			inode->i_op = &ext4_special_inode_operations;
++#endif
++		} else {
++			inode->i_op = &ext4_file_inode_operations;
++			inode->i_fop = &ext4_file_operations;
++			ext4_set_aops(inode);
++		}
++	}
++	return inode;
++}
++EXPORT_SYMBOL(ext4_create_inode);
++
+ /*
+  * By the time this is called, we already have created
+  * the directory cache entry for the new file, but it
+@@ -2402,6 +2426,23 @@ out:
+ 	return err;
+ }
+ 
++/* Initialize @inode as a subdirectory of @dir, and add the
++ * "." and ".." entries into the first directory block. */
++int ext4_add_dot_dotdot(handle_t *handle, struct inode * dir,
++			struct inode *inode)
++{
++	if (IS_ERR(handle))
++		return PTR_ERR(handle);
++
++	if (IS_DIRSYNC(dir))
++		ext4_handle_sync(handle);
++
++	inode->i_op = &ext4_dir_inode_operations.ops;
++	inode->i_fop = &ext4_dir_operations;
++	return ext4_init_new_dir(handle, dir, inode);
++}
++EXPORT_SYMBOL(ext4_add_dot_dotdot);
++
+ static int ext4_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
+ {
+ 	handle_t *handle;
