@@ -851,8 +851,10 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 
 	rc = mdd_changelog_store(env, mdd, rec, handle);
 	if (rc < 0) {
-		CERROR("changelog failed: rc=%d, op%d %s c"DFID" p"DFID"\n",
-			rc, type, tname->ln_name, PFID(sfid), PFID(tpfid));
+		CERROR("%s: cannot store changelog record: type = %d, "
+		       "name = '%s', t = "DFID", p = "DFID": rc = %d\n",
+		       mdd2obd_dev(mdd)->obd_name, type, tname->ln_name,
+		       PFID(&rec->cr.cr_tfid), PFID(&rec->cr.cr_pfid), rc);
 		return -EFAULT;
 	}
 
