@@ -205,7 +205,7 @@ although it pass in FC2. commented out by CFS (agreed with HP)
 Replaced "echo" with "touch" can resolve such problem.
 #	$ echo i > e/i
 #	> e/i: Permission denied
-        $ touch e/i 2>&1 | sed -e "s/\\`/\\'/"
+        $ touch e/i 2>&1 | sed -e "s/touch .*e\\/i.*:/touch \\'e\\/i\\':/"
         > touch: cannot touch 'e/i': Permission denied
 
 	$ su
