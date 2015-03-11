@@ -174,12 +174,6 @@ void dt_update_request_destroy(struct dt_update_request *update);
 struct dt_update_request *dt_update_request_create(struct dt_device *dt);
 struct dt_update_request *dt_update_request_find_or_create(struct thandle *th,
 							  struct dt_object *dt);
-int out_prep_update_req(const struct lu_env *env, struct obd_import *imp,
-			const struct object_update_request *ureq,
-			struct ptlrpc_request **reqp);
-int out_remote_sync(const struct lu_env *env, struct obd_import *imp,
-		    struct dt_update_request *update,
-		    struct ptlrpc_request **reqp);
 int out_update_pack(const struct lu_env *env, struct update_buffer *ubuf,
 		    enum update_type op, const struct lu_fid *fid,
 		    int params_count, __u16 *param_sizes, const void **bufs,

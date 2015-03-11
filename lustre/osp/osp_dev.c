@@ -78,7 +78,6 @@
 #include <lustre_ioctl.h>
 #include <lustre_param.h>
 #include <lustre_log.h>
-#include <lustre_mdc.h>
 
 #include "osp_internal.h"
 

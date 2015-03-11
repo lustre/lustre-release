@@ -48,6 +48,7 @@
 #include <lustre_fid.h>
 #include <lustre_update.h>
 #include <lu_target.h>
+#include <lustre_mdc.h>
 
 /*
  * Infrastructure to support tracking of last committed llog record
@@ -411,8 +412,20 @@ static inline struct seq_server_site *osp_seq_site(struct osp_device *osp)
 }
 
 #define osp_init_rpc_lock(lck) mdc_init_rpc_lock(lck)
-#define osp_get_rpc_lock(lck, it)  mdc_get_rpc_lock(lck, it)
-#define osp_put_rpc_lock(lck, it) mdc_put_rpc_lock(lck, it)
+
+static inline void osp_get_rpc_lock(struct osp_device *osp)
+{
+	struct mdc_rpc_lock *rpc_lock = osp->opd_obd->u.cli.cl_rpc_lock;
+
+	mdc_get_rpc_lock(rpc_lock, NULL);
+}
+
+static inline void osp_put_rpc_lock(struct osp_device *osp)
+{
+	struct mdc_rpc_lock *rpc_lock = osp->opd_obd->u.cli.cl_rpc_lock;
+
+	mdc_put_rpc_lock(rpc_lock, NULL);
+}
 
 static inline int osp_fid_diff(const struct lu_fid *fid1,
 			       const struct lu_fid *fid2)
@@ -519,7 +532,12 @@ struct thandle *osp_trans_create(const struct lu_env *env,
 				 struct dt_device *d);
 int osp_trans_start(const struct lu_env *env, struct dt_device *dt,
 		    struct thandle *th);
-
+int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
+			const struct object_update_request *ureq,
+			struct ptlrpc_request **reqp);
+int osp_remote_sync(const struct lu_env *env, struct osp_device *osp,
+		    struct dt_update_request *update,
+		    struct ptlrpc_request **reqp, bool rpc_lock);
 /* osp_object.c */
 int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 		 struct lu_attr *attr, struct lustre_capa *capa);

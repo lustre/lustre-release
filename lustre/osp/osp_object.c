@@ -578,7 +578,7 @@ int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 		GOTO(out, rc);
 	}
 
-	rc = out_remote_sync(env, osp->opd_obd->u.cli.cl_import, update, &req);
+	rc = osp_remote_sync(env, osp, update, &req, false);
 	if (rc != 0) {
 		if (rc == -ENOENT) {
 			osp2lu_obj(obj)->lo_header->loh_attr &= ~LOHA_EXISTS;
@@ -1005,7 +1005,7 @@ unlock:
 		GOTO(out, rc);
 	}
 
-	rc = out_remote_sync(env, osp->opd_obd->u.cli.cl_import, update, &req);
+	rc = osp_remote_sync(env, osp, update, &req, false);
 	if (rc != 0) {
 		if (rc == -ENOENT) {
 			dt->do_lu.lo_header->loh_attr &= ~LOHA_EXISTS;

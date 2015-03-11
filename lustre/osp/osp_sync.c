@@ -768,7 +768,7 @@ static int osp_prep_unlink_update_req(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(out, rc);
 
-	rc = out_prep_update_req(env, osp->opd_obd->u.cli.cl_import,
+	rc = osp_prep_update_req(env, osp->opd_obd->u.cli.cl_import,
 				 update->dur_buf.ub_req, &req);
 	if (rc != 0)
 		GOTO(out, rc);

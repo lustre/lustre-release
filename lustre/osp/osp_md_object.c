@@ -659,7 +659,7 @@ static int osp_md_index_lookup(const struct lu_env *env, struct dt_object *dt,
 		GOTO(out, rc);
 	}
 
-	rc = out_remote_sync(env, osp->opd_obd->u.cli.cl_import, update, &req);
+	rc = osp_remote_sync(env, osp, update, &req, false);
 	if (rc < 0)
 		GOTO(out, rc);
 
