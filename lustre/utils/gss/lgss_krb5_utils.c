@@ -126,6 +126,7 @@
 #endif
 #include <krb5.h>
 
+#include "lsupport.h"
 #include "lgss_utils.h"
 #include "lgss_krb5_utils.h"
 
@@ -234,46 +235,62 @@ int princ_is_local_realm(krb5_context ctx, krb5_principal princ)
 
 static
 int svc_princ_verify_host(krb5_context ctx,
-                          krb5_principal princ,
-                          loglevel_t loglevel)
+			  krb5_principal princ,
+			  uint64_t self_nid,
+			  loglevel_t loglevel)
 {
-        struct utsname utsbuf;
-        struct hostent *host;
+	struct utsname utsbuf;
+	struct hostent *host;
+	const int max_namelen = 512;
+	char namebuf[max_namelen];
+	char *h_name;
 
-        if (krb5_princ_component(ctx, princ, 1) == NULL) {
-                logmsg(loglevel, "service principal has no host part\n");
-                return -1;
-        }
+	if (krb5_princ_component(ctx, princ, 1) == NULL) {
+		logmsg(loglevel, "service principal has no host part\n");
+		return -1;
+	}
 
-        if (uname(&utsbuf)) {
-                logmsg(loglevel, "get UTS name: %s\n", strerror(errno));
-                return -1;
-        }
+	if (self_nid != 0) {
+		if (lnet_nid2hostname(self_nid, namebuf, max_namelen)) {
+			logmsg(loglevel,
+			       "can't resolve hostname from nid %llx\n",
+			       self_nid);
+			return -1;
+		}
+		h_name = namebuf;
+	} else {
+		if (uname(&utsbuf)) {
+			logmsg(loglevel, "get UTS name: %s\n", strerror(errno));
+			return -1;
+		}
 
-        host = gethostbyname(utsbuf.nodename);
-        if (host == NULL) {
-                logmsg(loglevel, "failed to get local hostname\n");
-                return -1;
-        }
+		host = gethostbyname(utsbuf.nodename);
+		if (host == NULL) {
+			logmsg(loglevel, "failed to get local hostname\n");
+			return -1;
+		}
+		h_name = host->h_name;
+	}
 
-        if (lgss_krb5_strcasecmp(krb5_princ_component(ctx, princ, 1),
-                                 host->h_name)) {
-                logmsg(loglevel, "service principal: hostname %.*s "
-                       "doesn't match localhost %s\n",
-                       krb5_princ_component(ctx, princ, 1)->length,
-                       krb5_princ_component(ctx, princ, 1)->data,
-                       host->h_name);
-                return -1;
-        }
+	if (lgss_krb5_strcasecmp(krb5_princ_component(ctx, princ, 1),
+				 h_name)) {
+		logmsg(loglevel, "service principal: hostname %.*s "
+		       "doesn't match localhost %s\n",
+		       krb5_princ_component(ctx, princ, 1)->length,
+		       krb5_princ_component(ctx, princ, 1)->data,
+		       h_name);
+		return -1;
+	}
 
-        return 0;
+	return 0;
 }
 
 static
 int lkrb5_cc_check_tgt_princ(krb5_context ctx,
-                             krb5_ccache ccache,
-                             krb5_principal princ,
-                             unsigned int flag)
+			     krb5_ccache ccache,
+			     krb5_principal princ,
+			     unsigned int flag,
+			     uint64_t self_nid)
 {
         const char     *princ_name;
 
@@ -335,14 +352,14 @@ int lkrb5_cc_check_tgt_princ(krb5_context ctx,
                                krb5_princ_name(ctx, princ)->data);
                         return -1;
                 }
-        } else {
-                if (svc_princ_verify_host(ctx, princ, LL_WARN)) {
-                        logmsg(LL_DEBUG, "%.*s: doesn't belong to this node\n",
-                               krb5_princ_name(ctx, princ)->length,
-                               krb5_princ_name(ctx, princ)->data);
-                        return -1;
-                }
-        }
+	} else {
+		if (svc_princ_verify_host(ctx, princ, self_nid, LL_WARN)) {
+			logmsg(LL_DEBUG, "%.*s: doesn't belong to this node\n",
+			       krb5_princ_name(ctx, princ)->length,
+			       krb5_princ_name(ctx, princ)->data);
+			return -1;
+		}
+	}
 
         logmsg(LL_TRACE, "principal is OK\n");
         return 0;
@@ -377,9 +394,10 @@ void get_root_tgt_ccname(char *ccname, int size, unsigned int flag)
 
 static
 int lkrb5_check_root_tgt_cc_base(krb5_context ctx,
-                                 krb5_ccache ccache,
-                                 char *ccname,
-                                 unsigned int flag)
+				 krb5_ccache ccache,
+				 char *ccname,
+				 unsigned int flag,
+				 uint64_t self_nid)
 {
         krb5_ccache             tgt_ccache;
         krb5_creds              cred;
@@ -404,8 +422,8 @@ int lkrb5_check_root_tgt_cc_base(krb5_context ctx,
                 goto out_cc;
         }
 
-        if (lkrb5_cc_check_tgt_princ(ctx, tgt_ccache, princ, flag))
-                goto out_princ;
+	if (lkrb5_cc_check_tgt_princ(ctx, tgt_ccache, princ, flag, self_nid))
+		goto out_princ;
 
         /*
          * find a valid entry
@@ -498,8 +516,9 @@ out_cc:
  */
 static
 int lkrb5_check_root_tgt_cc(krb5_context ctx,
-                            krb5_ccache ccache,
-                            unsigned int root_flags)
+			    krb5_ccache ccache,
+			    unsigned int root_flags,
+			    uint64_t self_nid)
 {
         struct stat             statbuf;
         unsigned int            flag;
@@ -525,7 +544,8 @@ int lkrb5_check_root_tgt_cc(krb5_context ctx,
                         continue;
                 }
 
-                rc = lkrb5_check_root_tgt_cc_base(ctx, ccache, ccname, flag);
+		rc = lkrb5_check_root_tgt_cc_base(ctx, ccache, ccname, flag,
+						  self_nid);
                 if (rc == 0)
                         return 0;
         }
@@ -627,8 +647,9 @@ out_cred:
  */
 static
 int lkrb5_refresh_root_tgt_cc(krb5_context ctx,
-                              krb5_ccache ccache,
-                              unsigned int root_flags)
+			      krb5_ccache ccache,
+			      unsigned int root_flags,
+			      uint64_t self_nid)
 {
         krb5_keytab             kt;
         krb5_keytab_entry       kte;
@@ -694,14 +715,14 @@ int lkrb5_refresh_root_tgt_cc(krb5_context ctx,
                                 logmsg(LL_TRACE, "no hostname, skip\n");
                                 continue;
                         }
-                } else {
-                        if (svc_princ_verify_host(ctx, kte.principal,
-                                                  LL_TRACE)) {
-                                logmsg(LL_TRACE, "doesn't belong to this "
-                                       "node, skip\n");
-                                continue;
-                        }
-                }
+		} else {
+			if (svc_princ_verify_host(ctx, kte.principal, self_nid,
+						  LL_TRACE)) {
+				logmsg(LL_TRACE, "doesn't belong to this "
+				       "node, skip\n");
+				continue;
+			}
+		}
 
                 code = krb5_copy_principal(ctx, kte.principal, &princ);
                 if (code) {
@@ -769,10 +790,12 @@ int lkrb5_prepare_root_cred(struct lgss_cred *cred)
          */
         lgss_krb5_mutex_lock();
 
-        rc = lkrb5_check_root_tgt_cc(ctx, ccache, cred->lc_root_flags);
-        if (rc != 0)
-                rc = lkrb5_refresh_root_tgt_cc(ctx, ccache,
-                                               cred->lc_root_flags);
+	rc = lkrb5_check_root_tgt_cc(ctx, ccache, cred->lc_root_flags,
+				     cred->lc_self_nid);
+	if (rc != 0)
+		rc = lkrb5_refresh_root_tgt_cc(ctx, ccache,
+					       cred->lc_root_flags,
+					       cred->lc_self_nid);
 
         if (rc == 0)
                 rc = lgss_krb5_set_ccache_name(kcred->kc_ccname);

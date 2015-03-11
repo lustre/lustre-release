@@ -550,13 +550,13 @@ static int rsc_parse(struct cache_detail *cd, char *mesg, int mlen)
         }
         rsci.ctx.gsc_remote = (tmp_int != 0);
 
-        /* root user flag */
-        rv = get_int(&mesg, &tmp_int);
-        if (rv) {
-                CERROR("fail to get oss user flag\n");
-                goto out;
-        }
-        rsci.ctx.gsc_usr_root = (tmp_int != 0);
+	/* root user flag */
+	rv = get_int(&mesg, &tmp_int);
+	if (rv) {
+		CERROR("fail to get root user flag\n");
+		goto out;
+	}
+	rsci.ctx.gsc_usr_root = (tmp_int != 0);
 
         /* mds user flag */
         rv = get_int(&mesg, &tmp_int);

@@ -96,19 +96,20 @@ struct lgss_init_res {
 };
 
 struct keyring_upcall_param {
-        uint32_t        kup_ver;
-        uint32_t        kup_secid;
-        uint32_t        kup_uid;
-        uint32_t        kup_fsuid;
-        uint32_t        kup_gid;
-        uint32_t        kup_fsgid;
-        uint32_t        kup_svc;
-        uint64_t        kup_nid;
-        char            kup_tgt[64];
-        char            kup_mech[16];
-        unsigned int    kup_is_root:1,
-                        kup_is_mdt:1,
-                        kup_is_ost:1;
+	uint32_t        kup_ver;
+	uint32_t        kup_secid;
+	uint32_t        kup_uid;
+	uint32_t        kup_fsuid;
+	uint32_t        kup_gid;
+	uint32_t        kup_fsgid;
+	uint32_t        kup_svc;
+	uint64_t        kup_nid;
+	uint64_t        kup_selfnid;
+	char            kup_tgt[64];
+	char            kup_mech[16];
+	unsigned int    kup_is_root:1,
+		        kup_is_mdt:1,
+		        kup_is_ost:1;
 };
 
 /****************************************
@@ -541,16 +542,17 @@ out_cred:
  *  [5]: lustre_svc     (uint)
  *  [6]: target_nid     (uint64)
  *  [7]: target_uuid    (string)
+ *  [8]: self_nid        (uint64)
  */
 static int parse_callout_info(const char *coinfo,
                               struct keyring_upcall_param *uparam)
 {
-        const int       nargs = 8;
-        char            buf[1024];
-        char           *string = buf;
-        int             length, i;
-        char           *data[nargs];
-        char           *pos;
+	const int       nargs = 9;
+	char            buf[1024];
+	char           *string = buf;
+	int             length, i;
+	char           *data[nargs];
+	char           *pos;
 
         length = strlen(coinfo) + 1;
         if (length > 1024) {
@@ -572,31 +574,34 @@ static int parse_callout_info(const char *coinfo,
         }
         data[i] = string;
 
-        logmsg(LL_TRACE, "components: %s,%s,%s,%s,%s,%s,%s,%s\n",
-               data[0], data[1], data[2], data[3], data[4], data[5],
-               data[6], data[7]);
+	logmsg(LL_TRACE, "components: %s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+	       data[0], data[1], data[2], data[3], data[4], data[5],
+	       data[6], data[7], data[8]);
 
-        uparam->kup_secid = strtol(data[0], NULL, 0);
+	uparam->kup_secid = strtol(data[0], NULL, 0);
 	strlcpy(uparam->kup_mech, data[1], sizeof(uparam->kup_mech));
-        uparam->kup_uid = strtol(data[2], NULL, 0);
-        uparam->kup_gid = strtol(data[3], NULL, 0);
-        if (strchr(data[4], 'r'))
-                uparam->kup_is_root = 1;
-        if (strchr(data[4], 'm'))
-                uparam->kup_is_mdt = 1;
-        if (strchr(data[4], 'o'))
-                uparam->kup_is_ost = 1;
-        uparam->kup_svc = strtol(data[5], NULL, 0);
-        uparam->kup_nid = strtoll(data[6], NULL, 0);
+	uparam->kup_uid = strtol(data[2], NULL, 0);
+	uparam->kup_gid = strtol(data[3], NULL, 0);
+	if (strchr(data[4], 'r'))
+		uparam->kup_is_root = 1;
+	if (strchr(data[4], 'm'))
+		uparam->kup_is_mdt = 1;
+	if (strchr(data[4], 'o'))
+		uparam->kup_is_ost = 1;
+	uparam->kup_svc = strtol(data[5], NULL, 0);
+	uparam->kup_nid = strtoll(data[6], NULL, 0);
 	strlcpy(uparam->kup_tgt, data[7], sizeof(uparam->kup_tgt));
+	uparam->kup_selfnid = strtoll(data[8], NULL, 0);
 
-        logmsg(LL_DEBUG, "parse call out info: secid %d, mech %s, ugid %u:%u "
-               "is_root %d, is_mdt %d, is_ost %d, svc %d, nid 0x%llx, tgt %s\n",
-               uparam->kup_secid, uparam->kup_mech,
-               uparam->kup_uid, uparam->kup_gid,
-               uparam->kup_is_root, uparam->kup_is_mdt, uparam->kup_is_ost,
-               uparam->kup_svc, uparam->kup_nid, uparam->kup_tgt);
-        return 0;
+	logmsg(LL_DEBUG, "parse call out info: secid %d, mech %s, ugid %u:%u, "
+	       "is_root %d, is_mdt %d, is_ost %d, svc %d, nid 0x%llx, tgt %s, "
+	       "self nid 0x%llx\n",
+	       uparam->kup_secid, uparam->kup_mech,
+	       uparam->kup_uid, uparam->kup_gid,
+	       uparam->kup_is_root, uparam->kup_is_mdt, uparam->kup_is_ost,
+	       uparam->kup_svc, uparam->kup_nid, uparam->kup_tgt,
+	       uparam->kup_selfnid);
+	return 0;
 }
 
 #define LOG_LEVEL_PATH  "/proc/fs/lustre/sptlrpc/gss/lgss_keyring/debug_level"
@@ -717,12 +722,13 @@ int main(int argc, char *argv[])
                 return 1;
         }
 
-        cred->lc_uid = uparam.kup_uid;
-        cred->lc_root_flags |= uparam.kup_is_root ? LGSS_ROOT_CRED_ROOT : 0;
-        cred->lc_root_flags |= uparam.kup_is_mdt ? LGSS_ROOT_CRED_MDT : 0;
-        cred->lc_root_flags |= uparam.kup_is_ost ? LGSS_ROOT_CRED_OST : 0;
-        cred->lc_tgt_nid = uparam.kup_nid;
-        cred->lc_tgt_svc = uparam.kup_svc;
+	cred->lc_uid = uparam.kup_uid;
+	cred->lc_root_flags |= uparam.kup_is_root ? LGSS_ROOT_CRED_ROOT : 0;
+	cred->lc_root_flags |= uparam.kup_is_mdt ? LGSS_ROOT_CRED_MDT : 0;
+	cred->lc_root_flags |= uparam.kup_is_ost ? LGSS_ROOT_CRED_OST : 0;
+	cred->lc_tgt_nid = uparam.kup_nid;
+	cred->lc_tgt_svc = uparam.kup_svc;
+	cred->lc_self_nid = uparam.kup_selfnid;
 
         if (lgss_prepare_cred(cred)) {
                 logmsg(LL_ERR, "key %08x: failed to prepare credentials "

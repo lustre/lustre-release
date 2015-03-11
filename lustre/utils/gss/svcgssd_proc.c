@@ -401,9 +401,8 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 				cred->cr_uid = 0;
 				cred->cr_usr_mds = 1;
 			} else if (!strcmp(sname, GSSD_SERVICE_OSS)) {
-				printerr(0, "ERROR: MDS doesn't accept "
-					 "user "GSSD_SERVICE_OSS"\n");
-				break;
+				cred->cr_uid = 0;
+				cred->cr_usr_oss = 1;
 			} else {
 				pw = getpwnam(sname);
 				if (pw != NULL) {
@@ -438,8 +437,9 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 		} else if (!strcmp(sname, GSSD_SERVICE_MDS)) {
 			cred->cr_uid = 0;
 			cred->cr_usr_mds = 1;
-		} else {
-			printerr(0, "ERROR: svc %d doesn't accept user %s"
+		}
+		if (cred->cr_uid == -1) {
+			printerr(0, "ERROR: svc %d doesn't accept user %s "
 				 "from %016llx\n", lustre_svc, sname, nid);
 			break;
 		}

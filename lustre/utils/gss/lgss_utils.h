@@ -167,13 +167,14 @@ enum {
 };
 
 struct lgss_cred {
-        int                     lc_uid;
-        unsigned int            lc_root_flags;
-        uint64_t                lc_tgt_nid;
-        uint32_t                lc_tgt_svc;
+	int                     lc_uid;
+	unsigned int            lc_root_flags;
+	uint64_t                lc_self_nid;
+	uint64_t                lc_tgt_nid;
+	uint32_t                lc_tgt_svc;
 
-        struct lgss_mech_type  *lc_mech;
-        void                   *lc_mech_cred;
+	struct lgss_mech_type  *lc_mech;
+	void                   *lc_mech_cred;
 };
 
 struct lgss_mech_type *lgss_name2mech(const char *mech_name);

@@ -757,11 +757,12 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
         if (coinfo == NULL)
                 goto out;
 
-        snprintf(coinfo, coinfo_size, "%d:%s:%u:%u:%s:%d:"LPX64":%s",
-                 sec->ps_id, sec2gsec(sec)->gs_mech->gm_name,
-                 vcred->vc_uid, vcred->vc_gid,
-                 co_flags, import_to_gss_svc(imp),
-                 imp->imp_connection->c_peer.nid, imp->imp_obd->obd_name);
+	snprintf(coinfo, coinfo_size, "%d:%s:%u:%u:%s:%d:"LPX64":%s:"LPX64,
+		 sec->ps_id, sec2gsec(sec)->gs_mech->gm_name,
+		 vcred->vc_uid, vcred->vc_gid,
+		 co_flags, import_to_gss_svc(imp),
+		 imp->imp_connection->c_peer.nid, imp->imp_obd->obd_name,
+		 imp->imp_connection->c_self);
 
         CDEBUG(D_SEC, "requesting key for %s\n", desc);
 
