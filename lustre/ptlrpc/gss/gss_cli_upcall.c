@@ -282,7 +282,9 @@ int gss_do_ctx_init_rpc(__user char *buffer, unsigned long count)
 
 	if (strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) &&
 	    strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME) &&
-	    strcmp(obd->obd_type->typ_name, LUSTRE_MGC_NAME)) {
+	    strcmp(obd->obd_type->typ_name, LUSTRE_MGC_NAME) &&
+	    strcmp(obd->obd_type->typ_name, LUSTRE_LWP_NAME) &&
+	    strcmp(obd->obd_type->typ_name, LUSTRE_OSP_NAME)) {
 		CERROR("obd %s is not a client device\n", obdname);
 		spin_unlock(&obd->obd_dev_lock);
 		RETURN(-EINVAL);

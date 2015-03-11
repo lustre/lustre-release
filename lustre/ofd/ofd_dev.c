@@ -2846,6 +2846,8 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	if (rc != 0)
 		GOTO(err_fini_fs, rc);
 
+	tgt_adapt_sptlrpc_conf(&m->ofd_lut, 1);
+
 	RETURN(0);
 
 err_fini_fs:

@@ -445,6 +445,58 @@ struct niobuf_local {
 #define LUSTRE_MGS_OBDNAME "MGS"
 #define LUSTRE_MGC_OBDNAME "MGC"
 
+static inline int is_lwp_on_mdt(char *name)
+{
+	char   *ptr;
+
+	ptr = strrchr(name, '-');
+	if (ptr == NULL) {
+		CERROR("%s is not a obdname\n", name);
+		return 0;
+	}
+
+	/* LWP name on MDT is fsname-MDTxxxx-lwp-MDTxxxx */
+
+	if (strncmp(ptr + 1, "MDT", 3) != 0)
+		return 0;
+
+	while (*(--ptr) != '-' && ptr != name);
+
+	if (ptr == name)
+		return 0;
+
+	if (strncmp(ptr + 1, LUSTRE_LWP_NAME, strlen(LUSTRE_LWP_NAME)) != 0)
+		return 0;
+
+	return 1;
+}
+
+static inline int is_lwp_on_ost(char *name)
+{
+	char   *ptr;
+
+	ptr = strrchr(name, '-');
+	if (ptr == NULL) {
+		CERROR("%s is not a obdname\n", name);
+		return 0;
+	}
+
+	/* LWP name on OST is fsname-MDTxxxx-lwp-OSTxxxx */
+
+	if (strncmp(ptr + 1, "OST", 3) != 0)
+		return 0;
+
+	while (*(--ptr) != '-' && ptr != name);
+
+	if (ptr == name)
+		return 0;
+
+	if (strncmp(ptr + 1, LUSTRE_LWP_NAME, strlen(LUSTRE_LWP_NAME)) != 0)
+		return 0;
+
+	return 1;
+}
+
 /*
  * Events signalled through obd_notify() upcall-chain.
  */

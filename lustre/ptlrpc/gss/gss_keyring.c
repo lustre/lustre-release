@@ -747,6 +747,17 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
          * encode real uid/gid into callout info.
          */
 
+	/* But first we need to make sure the obd type is supported */
+	if (strcmp(imp->imp_obd->obd_type->typ_name, LUSTRE_MDC_NAME) &&
+	    strcmp(imp->imp_obd->obd_type->typ_name, LUSTRE_OSC_NAME) &&
+	    strcmp(imp->imp_obd->obd_type->typ_name, LUSTRE_MGC_NAME) &&
+	    strcmp(imp->imp_obd->obd_type->typ_name, LUSTRE_LWP_NAME) &&
+	    strcmp(imp->imp_obd->obd_type->typ_name, LUSTRE_OSP_NAME)) {
+		CERROR("obd %s is not a supported device\n",
+			imp->imp_obd->obd_name);
+		RETURN(NULL);
+	}
+
         construct_key_desc(desc, sizeof(desc), sec, vcred->vc_uid);
 
         /* callout info format:

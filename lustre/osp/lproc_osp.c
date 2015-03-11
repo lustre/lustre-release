@@ -823,6 +823,7 @@ void osp_lprocfs_init(struct osp_device *osp)
 		return;
 	}
 
+	sptlrpc_lprocfs_cliobd_attach(obd);
 	ptlrpc_lprocfs_register_obd(obd);
 
 	if (osp->opd_connect_mdt || !strstr(obd->obd_name, "osc"))

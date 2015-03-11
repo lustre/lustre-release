@@ -82,9 +82,11 @@ static int sptlrpc_info_lprocfs_seq_show(struct seq_file *seq, void *v)
         struct ptlrpc_sec *sec = NULL;
         char               str[32];
 
-        LASSERT(strcmp(dev->obd_type->typ_name, LUSTRE_OSC_NAME) == 0 ||
-                strcmp(dev->obd_type->typ_name, LUSTRE_MDC_NAME) == 0 ||
-                strcmp(dev->obd_type->typ_name, LUSTRE_MGC_NAME) == 0);
+	LASSERT(strcmp(dev->obd_type->typ_name, LUSTRE_OSC_NAME) == 0 ||
+		strcmp(dev->obd_type->typ_name, LUSTRE_MDC_NAME) == 0 ||
+		strcmp(dev->obd_type->typ_name, LUSTRE_MGC_NAME) == 0 ||
+		strcmp(dev->obd_type->typ_name, LUSTRE_LWP_NAME) == 0 ||
+		strcmp(dev->obd_type->typ_name, LUSTRE_OSP_NAME) == 0);
 
         if (cli->cl_import)
                 sec = sptlrpc_import_sec_ref(cli->cl_import);
@@ -120,9 +122,11 @@ static int sptlrpc_ctxs_lprocfs_seq_show(struct seq_file *seq, void *v)
         struct client_obd *cli = &dev->u.cli;
         struct ptlrpc_sec *sec = NULL;
 
-        LASSERT(strcmp(dev->obd_type->typ_name, LUSTRE_OSC_NAME) == 0 ||
-                strcmp(dev->obd_type->typ_name, LUSTRE_MDC_NAME) == 0 ||
-                strcmp(dev->obd_type->typ_name, LUSTRE_MGC_NAME) == 0);
+	LASSERT(strcmp(dev->obd_type->typ_name, LUSTRE_OSC_NAME) == 0 ||
+		strcmp(dev->obd_type->typ_name, LUSTRE_MDC_NAME) == 0 ||
+		strcmp(dev->obd_type->typ_name, LUSTRE_MGC_NAME) == 0 ||
+		strcmp(dev->obd_type->typ_name, LUSTRE_LWP_NAME) == 0 ||
+		strcmp(dev->obd_type->typ_name, LUSTRE_OSP_NAME) == 0);
 
         if (cli->cl_import)
                 sec = sptlrpc_import_sec_ref(cli->cl_import);
@@ -142,13 +146,15 @@ int sptlrpc_lprocfs_cliobd_attach(struct obd_device *dev)
 {
         int     rc;
 
-        if (strcmp(dev->obd_type->typ_name, LUSTRE_OSC_NAME) != 0 &&
-            strcmp(dev->obd_type->typ_name, LUSTRE_MDC_NAME) != 0 &&
-            strcmp(dev->obd_type->typ_name, LUSTRE_MGC_NAME) != 0) {
-                CERROR("can't register lproc for obd type %s\n",
-                       dev->obd_type->typ_name);
-                return -EINVAL;
-        }
+	if (strcmp(dev->obd_type->typ_name, LUSTRE_OSC_NAME) != 0 &&
+	    strcmp(dev->obd_type->typ_name, LUSTRE_MDC_NAME) != 0 &&
+	    strcmp(dev->obd_type->typ_name, LUSTRE_MGC_NAME) != 0 &&
+	    strcmp(dev->obd_type->typ_name, LUSTRE_LWP_NAME) != 0 &&
+	    strcmp(dev->obd_type->typ_name, LUSTRE_OSP_NAME) != 0) {
+		CERROR("can't register lproc for obd type %s\n",
+		       dev->obd_type->typ_name);
+		return -EINVAL;
+	}
 
         rc = lprocfs_obd_seq_create(dev, "srpc_info", 0444,
                                     &sptlrpc_info_lprocfs_fops, dev);
