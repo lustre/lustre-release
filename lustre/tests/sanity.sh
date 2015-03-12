@@ -13179,6 +13179,9 @@ test_300_check_default_striped_dir()
 
 	mkdir $DIR/$tdir/$dirname/{test1,test2,test3,test4} ||
 						error "create dirs failed"
+
+	createmany -o $DIR/$tdir/$dirname/f- 10 || error "create files failed"
+	unlinkmany $DIR/$tdir/$dirname/f- 10	|| error "unlink files failed"
 	for dir in $(find $DIR/$tdir/$dirname/*); do
 		stripe_count=$($LFS getdirstripe -c $dir)
 		[ $stripe_count -eq $default_count ] ||
