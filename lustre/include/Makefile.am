@@ -74,6 +74,7 @@ EXTRA_DIST = \
 	lustre_nodemap.h \
 	lustre_nrs.h \
 	lustre_nrs_crr.h \
+	lustre_nrs_delay.h \
 	lustre_nrs_fifo.h \
 	lustre_nrs_orr.h \
 	lustre_nrs_tbf.h \

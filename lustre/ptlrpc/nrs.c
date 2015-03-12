@@ -1811,6 +1811,10 @@ int ptlrpc_nrs_init(void)
 	rc = ptlrpc_nrs_policy_register(&nrs_conf_tbf);
 	if (rc != 0)
 		GOTO(fail, rc);
+
+	rc = ptlrpc_nrs_policy_register(&nrs_conf_delay);
+	if (rc != 0)
+		GOTO(fail, rc);
 #endif /* HAVE_SERVER_SUPPORT */
 
 	RETURN(rc);

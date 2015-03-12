@@ -3484,6 +3484,58 @@ test_77k() {
 }
 run_test 77k "check the extended TBF policy with NID/JobID/OPCode expression"
 
+test_77l() {
+	if [ $(lustre_version_code ost1) -lt $(version_code 2.9.54) ]; then
+		skip "Need OST version at least 2.9.54"
+		return 0
+	fi
+
+	local dir=$DIR/$tdir
+
+	mkdir $dir || error "mkdir $dir failed"
+	$LFS setstripe -c $OSTCOUNT $dir || error "setstripe to $dir failed"
+	chmod 777 $dir
+
+	local nodes=$(comma_list $(osts_nodes))
+	do_nodes $nodes lctl set_param ost.OSS.ost_io.nrs_policies=delay \
+				       ost.OSS.ost_io.nrs_delay_min=4 \
+				       ost.OSS.ost_io.nrs_delay_max=4 \
+				       ost.OSS.ost_io.nrs_delay_pct=100
+	[ $? -ne 0 ] && error "Failed to set delay policy"
+
+	local start=$SECONDS
+	do_nodes "${SINGLECLIENT:-$HOSTNAME}" "$RUNAS" \
+		 dd if=/dev/zero of="$dir/nrs_delay_$HOSTNAME" bs=1M count=1 \
+		   oflag=direct conv=fdatasync ||
+		{ do_nodes $nodes lctl set_param ost.OSS.ost_io.nrs_policies="fifo";
+		  error "dd on client failed (1)"; }
+	local elapsed=$((SECONDS - start))
+
+	# NRS delay doesn't do sub-second timing, so a request enqueued at
+	# 0.9 seconds can be dequeued at 4.0
+	[ $elapsed -lt 3 ] &&
+		{ do_nodes $nodes lctl set_param ost.OSS.ost_io.nrs_policies="fifo";
+		  error "Single 1M write should take at least 3 seconds"; }
+
+	start=$SECONDS
+	do_nodes "${SINGLECLIENT:-$HOSTNAME}" "$RUNAS" \
+		 dd if=/dev/zero of="$dir/nrs_delay_$HOSTNAME" bs=1M count=10 \
+		   oflag=direct conv=fdatasync ||
+		{ do_nodes $nodes lctl set_param ost.OSS.ost_io.nrs_policies="fifo";
+		  error "dd on client failed (2)"; }
+	elapsed=$((SECONDS - start))
+
+	[ $elapsed -lt 30 ] &&
+		{ do_nodes $nodes lctl set_param ost.OSS.ost_io.nrs_policies="fifo";
+		  error "Ten 1M writes should take at least 30 seconds"; }
+
+	do_nodes $nodes lctl set_param ost.OSS.ost_io.nrs_policies="fifo"
+	[ $? -ne 0 ] && error "failed to set policy back to fifo"
+
+	return 0
+}
+run_test 77l "check NRS Delay slows write RPC processing"
+
 test_78() { #LU-6673
 	local server_version=$(lustre_version_code ost1)
 	[[ $server_version -ge $(version_code 2.7.58) ]] ||
