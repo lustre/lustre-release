@@ -46,6 +46,7 @@
 #include <linux/proc_fs.h>
 #include <linux/rwsem.h>
 #include <linux/spinlock.h>
+#include <linux/seq_file.h>
 
 #include <lustre/lustre_idl.h>
 

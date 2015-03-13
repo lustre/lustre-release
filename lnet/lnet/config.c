@@ -1153,7 +1153,7 @@ lnet_ipaddr_enumerate (__u32 **ipaddrsp)
         __u32     *ipaddrs2;
         int        nip;
         char     **ifnames;
-        int        nif = libcfs_ipif_enumerate(&ifnames);
+	int        nif = lnet_ipif_enumerate(&ifnames);
         int        i;
         int        rc;
 
@@ -1163,7 +1163,7 @@ lnet_ipaddr_enumerate (__u32 **ipaddrsp)
         LIBCFS_ALLOC(ipaddrs, nif * sizeof(*ipaddrs));
         if (ipaddrs == NULL) {
                 CERROR("Can't allocate ipaddrs[%d]\n", nif);
-                libcfs_ipif_free_enumeration(ifnames, nif);
+		lnet_ipif_free_enumeration(ifnames, nif);
                 return -ENOMEM;
         }
 
@@ -1171,7 +1171,7 @@ lnet_ipaddr_enumerate (__u32 **ipaddrsp)
                 if (!strcmp(ifnames[i], "lo"))
                         continue;
 
-                rc = libcfs_ipif_query(ifnames[i], &up,
+		rc = lnet_ipif_query(ifnames[i], &up,
                                        &ipaddrs[nip], &netmask);
                 if (rc != 0) {
                         CWARN("Can't query interface %s: %d\n",
@@ -1188,7 +1188,7 @@ lnet_ipaddr_enumerate (__u32 **ipaddrsp)
                 nip++;
         }
 
-        libcfs_ipif_free_enumeration(ifnames, nif);
+	lnet_ipif_free_enumeration(ifnames, nif);
 
         if (nip == nif) {
                 *ipaddrsp = ipaddrs;

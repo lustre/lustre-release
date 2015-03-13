@@ -1,16 +1,8 @@
 my_sources =    api-ni.c config.c \
-		lib-me.c lib-msg.c lib-eq.c \
+		lib-me.c lib-msg.c lib-eq.c lib-socket.c \
 		lib-md.c lib-ptl.c lib-move.c lo.c \
 	        router.c router_proc.c \
 		acceptor.c peer.c net_fault.c
-
-
-if LIBLUSTRE
-noinst_LIBRARIES= liblnet.a
-liblnet_a_SOURCES= $(my_sources)
-liblnet_a_CPPFLAGS = $(LLCPPFLAGS)
-liblnet_a_CFLAGS = $(LLCFLAGS)
-endif
 
 if MODULES
 

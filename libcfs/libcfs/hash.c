@@ -106,6 +106,7 @@
  *   Now we support both locked iteration & lockless iteration of hash
  *   table. Also, user can break the iteration by return 1 in callback.
  */
+#include <linux/seq_file.h>
 
 #include <libcfs/libcfs.h>
 

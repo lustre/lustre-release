@@ -345,7 +345,7 @@ ksocknal_lib_tunables_fini ()
 int
 ksocknal_lib_get_conn_addrs (ksock_conn_t *conn)
 {
-        int rc = libcfs_sock_getaddr(conn->ksnc_sock, 1,
+	int rc = lnet_sock_getaddr(conn->ksnc_sock, true,
                                      &conn->ksnc_ipaddr,
                                      &conn->ksnc_port);
 
@@ -357,7 +357,7 @@ ksocknal_lib_get_conn_addrs (ksock_conn_t *conn)
                 return rc;
         }
 
-        rc = libcfs_sock_getaddr(conn->ksnc_sock, 0,
+	rc = lnet_sock_getaddr(conn->ksnc_sock, false,
                                  &conn->ksnc_myipaddr, NULL);
         if (rc != 0) {
                 CERROR ("Error %d getting sock local IP\n", rc);
@@ -747,7 +747,7 @@ ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, int *rxmem, int 
                 return (-ESHUTDOWN);
         }
 
-        rc = libcfs_sock_getbuf(sock, txmem, rxmem);
+	rc = lnet_sock_getbuf(sock, txmem, rxmem);
         if (rc == 0) {
                 len = sizeof(*nagle);
                 set_fs(KERNEL_DS);
@@ -818,9 +818,9 @@ ksocknal_lib_setup_sock (struct socket *sock)
                 }
         }
 
-        rc = libcfs_sock_setbuf(sock,
-                                *ksocknal_tunables.ksnd_tx_buffer_size,
-                                *ksocknal_tunables.ksnd_rx_buffer_size);
+	rc = lnet_sock_setbuf(sock,
+			      *ksocknal_tunables.ksnd_tx_buffer_size,
+			      *ksocknal_tunables.ksnd_rx_buffer_size);
         if (rc != 0) {
                 CERROR ("Can't set buffer tx %d, rx %d buffers: %d\n",
                         *ksocknal_tunables.ksnd_tx_buffer_size,
@@ -1075,7 +1075,7 @@ ksocknal_lib_memory_pressure(ksock_conn_t *conn)
 	sched = conn->ksnc_scheduler;
 	spin_lock_bh(&sched->kss_lock);
 
-        if (!SOCK_TEST_NOSPACE(conn->ksnc_sock) &&
+	if (!test_bit(SOCK_NOSPACE, &conn->ksnc_sock->flags) &&
             !conn->ksnc_tx_ready) {
                 /* SOCK_NOSPACE is set when the socket fills
                  * and cleared in the write_space callback

@@ -694,7 +694,7 @@ void lnet_md_deconstruct(lnet_libmd_t *lmd, lnet_md_t *umd);
 void lnet_register_lnd(lnd_t *lnd);
 void lnet_unregister_lnd(lnd_t *lnd);
 
-int lnet_connect(cfs_socket_t **sockp, lnet_nid_t peer_nid,
+int lnet_connect(struct socket **sockp, lnet_nid_t peer_nid,
                  __u32 local_ip, __u32 peer_ip, int peer_port);
 void lnet_connect_console_error(int rc, lnet_nid_t peer_nid,
                                 __u32 peer_ip, int port);
@@ -703,6 +703,28 @@ int lnet_acceptor_timeout(void);
 int lnet_acceptor_port(void);
 int lnet_acceptor_start(void);
 void lnet_acceptor_stop(void);
+
+#ifndef HAVE_SK_SLEEP
+static inline wait_queue_head_t *sk_sleep(struct sock *sk)
+{
+	return sk->sk_sleep;
+}
+#endif
+
+int lnet_ipif_query(char *name, int *up, __u32 *ip, __u32 *mask);
+int lnet_ipif_enumerate(char ***names);
+void lnet_ipif_free_enumeration(char **names, int n);
+int lnet_sock_setbuf(struct socket *socket, int txbufsize, int rxbufsize);
+int lnet_sock_getbuf(struct socket *socket, int *txbufsize, int *rxbufsize);
+int lnet_sock_getaddr(struct socket *socket, bool remote, __u32 *ip, int *port);
+int lnet_sock_write(struct socket *sock, void *buffer, int nob, int timeout);
+int lnet_sock_read(struct socket *sock, void *buffer, int nob, int timeout);
+
+int lnet_sock_listen(struct socket **sockp, __u32 ip, int port, int backlog);
+int lnet_sock_accept(struct socket **newsockp, struct socket *sock);
+int lnet_sock_connect(struct socket **sockp, int *fatal,
+			__u32 local_ip, int local_port,
+			__u32 peer_ip, int peer_port);
 
 int lnet_peers_start_down(void);
 int lnet_peer_buffer_credits(lnet_ni_t *ni);

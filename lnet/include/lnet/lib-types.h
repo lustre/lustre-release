@@ -45,6 +45,7 @@
 #ifdef __KERNEL__
 # include <linux/uio.h>
 # include <linux/types.h>
+# include <net/sock.h>
 #else /* !__KERNEL__ */
 # include <sys/types.h>
 #endif /* __KERNEL__ */
@@ -303,6 +304,7 @@ typedef struct {
 #define LNET_COOKIE_MASK	((1ULL << LNET_COOKIE_TYPE_BITS) - 1ULL)
 
 struct lnet_ni;                                  /* forward ref */
+struct socket;
 
 typedef struct lnet_lnd
 {
@@ -361,7 +363,7 @@ typedef struct lnet_lnd
         void (*lnd_query)(struct lnet_ni *ni, lnet_nid_t peer, cfs_time_t *when);
 
         /* accept a new connection */
-        int (*lnd_accept)(struct lnet_ni *ni, cfs_socket_t *sock);
+	int (*lnd_accept)(struct lnet_ni *ni, struct socket *sock);
 } lnd_t;
 
 #define LNET_NI_STATUS_UP      0x15aac0de

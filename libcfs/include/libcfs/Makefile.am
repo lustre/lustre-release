@@ -35,5 +35,4 @@ EXTRA_DIST = \
 	user-lock.h \
 	user-mem.h \
 	user-prim.h \
-	user-tcpip.h \
 	user-time.h

@@ -48,6 +48,7 @@
 #include <lustre_mdc.h>
 #include <lustre_intent.h>
 #include <linux/compat.h>
+#include <linux/aio.h>
 
 #include "vvp_internal.h"
 #include "range_lock.h"

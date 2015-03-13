@@ -24,8 +24,8 @@
 #ifndef _GNILND_ARIES_H
 #define _GNILND_ARIES_H
 
-/* for libcfs_ipif_query */
-#include <libcfs/libcfs.h>
+/* for lnet_ipif_query */
+#include <lnet/lib-lnet.h>
 
 #ifndef _GNILND_HSS_OPS_H
 # error "must include gnilnd_hss_ops.h first"
@@ -105,7 +105,7 @@ kgnilnd_setup_nic_translation(__u32 device_id)
 
 	LCONSOLE_INFO("using Aries SIM IP info for RCA translation\n");
 
-	rc = libcfs_ipif_query(if_name, &up, &ipaddr, &netmask);
+	rc = lnet_ipif_query(if_name, &up, &ipaddr, &netmask);
 	if (rc != 0) {
 		CERROR ("can't get IP interface for %s: %d\n", if_name, rc);
 		return rc;

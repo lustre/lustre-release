@@ -53,7 +53,6 @@
 #include <libcfs/linux/linux-prim.h>
 #include <libcfs/linux/linux-lock.h>
 #include <libcfs/linux/linux-fs.h>
-#include <libcfs/linux/linux-tcpip.h>
 #include <libcfs/linux/kp30.h>
 
 #ifdef HAVE_ASM_TYPES_H

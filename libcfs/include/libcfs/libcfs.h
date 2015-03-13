@@ -66,7 +66,6 @@
 # include <libcfs/user-prim.h>
 # include <libcfs/user-mem.h>
 # include <libcfs/user-lock.h>
-# include <libcfs/user-tcpip.h>
 # include <libcfs/user-bitops.h>
 #endif /* __KERNEL__ */
 
@@ -137,23 +136,6 @@ static inline int __is_po2(unsigned long long val)
 #ifndef cfs_for_each_possible_cpu
 #  error cfs_for_each_possible_cpu is not supported by kernel!
 #endif
-
-/* libcfs tcpip */
-int libcfs_ipif_query(char *name, int *up, __u32 *ip, __u32 *mask);
-int libcfs_ipif_enumerate(char ***names);
-void libcfs_ipif_free_enumeration(char **names, int n);
-int libcfs_sock_listen(cfs_socket_t **sockp, __u32 ip, int port, int backlog);
-int libcfs_sock_accept(cfs_socket_t **newsockp, cfs_socket_t *sock);
-void libcfs_sock_abort_accept(cfs_socket_t *sock);
-int libcfs_sock_connect(cfs_socket_t **sockp, int *fatal,
-                        __u32 local_ip, int local_port,
-                        __u32 peer_ip, int peer_port);
-int libcfs_sock_setbuf(cfs_socket_t *socket, int txbufsize, int rxbufsize);
-int libcfs_sock_getbuf(cfs_socket_t *socket, int *txbufsize, int *rxbufsize);
-int libcfs_sock_getaddr(cfs_socket_t *socket, int remote, __u32 *ip, int *port);
-int libcfs_sock_write(cfs_socket_t *sock, void *buffer, int nob, int timeout);
-int libcfs_sock_read(cfs_socket_t *sock, void *buffer, int nob, int timeout);
-void libcfs_sock_release(cfs_socket_t *sock);
 
 /* libcfs watchdogs */
 struct lc_watchdog;

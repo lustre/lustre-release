@@ -323,27 +323,26 @@ out:
 static void
 ksocknal_associate_route_conn_locked(ksock_route_t *route, ksock_conn_t *conn)
 {
-        ksock_peer_t      *peer = route->ksnr_peer;
-        int                type = conn->ksnc_type;
-        ksock_interface_t *iface;
+	ksock_peer_t	  *peer = route->ksnr_peer;
+	int		   type = conn->ksnc_type;
+	ksock_interface_t *iface;
 
-        conn->ksnc_route = route;
-        ksocknal_route_addref(route);
+	conn->ksnc_route = route;
+	ksocknal_route_addref(route);
 
-        if (route->ksnr_myipaddr != conn->ksnc_myipaddr) {
-                if (route->ksnr_myipaddr == 0) {
-                        /* route wasn't bound locally yet (the initial route) */
-                        CDEBUG(D_NET, "Binding %s %u.%u.%u.%u to %u.%u.%u.%u\n",
-                               libcfs_id2str(peer->ksnp_id),
-                               HIPQUAD(route->ksnr_ipaddr),
-                               HIPQUAD(conn->ksnc_myipaddr));
-                } else {
-                        CDEBUG(D_NET, "Rebinding %s %u.%u.%u.%u from "
-                               "%u.%u.%u.%u to %u.%u.%u.%u\n",
-                               libcfs_id2str(peer->ksnp_id),
-                               HIPQUAD(route->ksnr_ipaddr),
-                               HIPQUAD(route->ksnr_myipaddr),
-                               HIPQUAD(conn->ksnc_myipaddr));
+	if (route->ksnr_myipaddr != conn->ksnc_myipaddr) {
+		if (route->ksnr_myipaddr == 0) {
+			/* route wasn't bound locally yet (the initial route) */
+			CDEBUG(D_NET, "Binding %s %pI4h to %pI4h\n",
+			       libcfs_id2str(peer->ksnp_id),
+			       &route->ksnr_ipaddr,
+			       &conn->ksnc_myipaddr);
+		} else {
+			CDEBUG(D_NET, "Rebinding %s %pI4h from %pI4h "
+			       "to %pI4h\n", libcfs_id2str(peer->ksnp_id),
+			       &route->ksnr_ipaddr,
+			       &route->ksnr_myipaddr,
+			       &conn->ksnc_myipaddr);
 
                         iface = ksocknal_ip2iface(route->ksnr_peer->ksnp_ni,
                                                   route->ksnr_myipaddr);
@@ -383,9 +382,9 @@ ksocknal_add_route_locked (ksock_peer_t *peer, ksock_route_t *route)
 		route2 = list_entry(tmp, ksock_route_t, ksnr_list);
 
 		if (route2->ksnr_ipaddr == route->ksnr_ipaddr) {
-			CERROR("Duplicate route %s %u.%u.%u.%u\n",
+			CERROR("Duplicate route %s %pI4h\n",
 			       libcfs_id2str(peer->ksnp_id),
-			       HIPQUAD(route->ksnr_ipaddr));
+			       &route->ksnr_ipaddr);
 			LBUG();
 		}
 	}
@@ -972,23 +971,22 @@ ksocknal_create_routes(ksock_peer_t *peer, int port,
 }
 
 int
-ksocknal_accept (lnet_ni_t *ni, cfs_socket_t *sock)
+ksocknal_accept(lnet_ni_t *ni, struct socket *sock)
 {
-        ksock_connreq_t    *cr;
-        int                 rc;
-        __u32               peer_ip;
-        int                 peer_port;
+	ksock_connreq_t	*cr;
+	int		 rc;
+	__u32		 peer_ip;
+	int		 peer_port;
 
-        rc = libcfs_sock_getaddr(sock, 1, &peer_ip, &peer_port);
-        LASSERT (rc == 0);                      /* we succeeded before */
+	rc = lnet_sock_getaddr(sock, true, &peer_ip, &peer_port);
+	LASSERT(rc == 0);		/* we succeeded before */
 
-        LIBCFS_ALLOC(cr, sizeof(*cr));
-        if (cr == NULL) {
-                LCONSOLE_ERROR_MSG(0x12f, "Dropping connection request from "
-                                   "%u.%u.%u.%u: memory exhausted\n",
-                                   HIPQUAD(peer_ip));
-                return -ENOMEM;
-        }
+	LIBCFS_ALLOC(cr, sizeof(*cr));
+	if (cr == NULL) {
+		LCONSOLE_ERROR_MSG(0x12f, "Dropping connection request from "
+				   "%pI4h: memory exhausted\n", &peer_ip);
+		return -ENOMEM;
+	}
 
 	lnet_ni_addref(ni);
 	cr->ksncr_ni   = ni;
@@ -1016,8 +1014,8 @@ ksocknal_connecting (ksock_peer_t *peer, __u32 ipaddr)
 }
 
 int
-ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
-                      cfs_socket_t *sock, int type)
+ksocknal_create_conn(lnet_ni_t *ni, ksock_route_t *route,
+		     struct socket *sock, int type)
 {
 	rwlock_t		*global_lock = &ksocknal_data.ksnd_global_lock;
 	struct list_head	zombies = LIST_HEAD_INIT(zombies);
@@ -1238,10 +1236,10 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
          * code below probably isn't going to work. */
         if (active &&
             route->ksnr_ipaddr != conn->ksnc_ipaddr) {
-                CERROR("Route %s %u.%u.%u.%u connected to %u.%u.%u.%u\n",
+		CERROR("Route %s %pI4h connected to %pI4h\n",
                        libcfs_id2str(peer->ksnp_id),
-                       HIPQUAD(route->ksnr_ipaddr),
-                       HIPQUAD(conn->ksnc_ipaddr));
+		       &route->ksnr_ipaddr,
+		       &conn->ksnc_ipaddr);
         }
 
 	/* Search for a route corresponding to the new connection and
@@ -1269,7 +1267,7 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
 
 	conn->ksnc_tx_last_post = cfs_time_current();
 	/* Set the deadline for the outgoing HELLO to drain */
-	conn->ksnc_tx_bufnob = libcfs_sock_wmem_queued(sock);
+	conn->ksnc_tx_bufnob = sock->sk->sk_wmem_queued;
 	conn->ksnc_tx_deadline = cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
 	smp_mb();   /* order with adding to peer's conn list */
 
@@ -1300,10 +1298,10 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
          *        socket callbacks.
          */
 
-	CDEBUG(D_NET, "New conn %s p %d.x %u.%u.%u.%u -> %u.%u.%u.%u/%d"
-	       " incarnation:"LPD64" sched[%d:%d]\n",
+	CDEBUG(D_NET, "New conn %s p %d.x %pI4h -> %pI4h/%d"
+	       " incarnation:%lld sched[%d:%d]\n",
 	       libcfs_id2str(peerid), conn->ksnc_proto->pro_version,
-	       HIPQUAD(conn->ksnc_myipaddr), HIPQUAD(conn->ksnc_ipaddr),
+	       &conn->ksnc_myipaddr, &conn->ksnc_ipaddr,
 	       conn->ksnc_port, incarnation, cpt,
 	       (int)(sched - &sched->kss_info->ksi_scheds[0]));
 
@@ -1398,11 +1396,11 @@ failed_2:
                 LIBCFS_FREE(hello, offsetof(ksock_hello_msg_t,
                                             kshm_ips[LNET_MAX_INTERFACES]));
 
-        LIBCFS_FREE (conn, sizeof(*conn));
+	LIBCFS_FREE(conn, sizeof(*conn));
 
- failed_0:
-        libcfs_sock_release(sock);
-        return rc;
+failed_0:
+	sock_release(sock);
+	return rc;
 }
 
 void
@@ -1652,11 +1650,11 @@ ksocknal_destroy_conn (ksock_conn_t *conn)
         case SOCKNAL_RX_LNET_PAYLOAD:
                 last_rcv = conn->ksnc_rx_deadline -
                            cfs_time_seconds(*ksocknal_tunables.ksnd_timeout);
-                CERROR("Completing partial receive from %s[%d]"
-                       ", ip %d.%d.%d.%d:%d, with error, wanted: %d, left: %d, "
+		CERROR("Completing partial receive from %s[%d], "
+		       "ip %pI4h:%d, with error, wanted: %d, left: %d, "
                        "last alive is %ld secs ago\n",
                        libcfs_id2str(conn->ksnc_peer->ksnp_id), conn->ksnc_type,
-                       HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port,
+		       &conn->ksnc_ipaddr, conn->ksnc_port,
                        conn->ksnc_rx_nob_wanted, conn->ksnc_rx_nob_left,
                        cfs_duration_sec(cfs_time_sub(cfs_time_current(),
                                         last_rcv)));
@@ -1665,26 +1663,26 @@ ksocknal_destroy_conn (ksock_conn_t *conn)
                 break;
         case SOCKNAL_RX_LNET_HEADER:
                 if (conn->ksnc_rx_started)
-                        CERROR("Incomplete receive of lnet header from %s"
-                               ", ip %d.%d.%d.%d:%d, with error, protocol: %d.x.\n",
+			CERROR("Incomplete receive of lnet header from %s, "
+			       "ip %pI4h:%d, with error, protocol: %d.x.\n",
                                libcfs_id2str(conn->ksnc_peer->ksnp_id),
-                               HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port,
+			       &conn->ksnc_ipaddr, conn->ksnc_port,
                                conn->ksnc_proto->pro_version);
                 break;
         case SOCKNAL_RX_KSM_HEADER:
                 if (conn->ksnc_rx_started)
-                        CERROR("Incomplete receive of ksock message from %s"
-                               ", ip %d.%d.%d.%d:%d, with error, protocol: %d.x.\n",
+			CERROR("Incomplete receive of ksock message from %s, "
+			       "ip %pI4h:%d, with error, protocol: %d.x.\n",
                                libcfs_id2str(conn->ksnc_peer->ksnp_id),
-                               HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port,
+			       &conn->ksnc_ipaddr, conn->ksnc_port,
                                conn->ksnc_proto->pro_version);
                 break;
         case SOCKNAL_RX_SLOP:
                 if (conn->ksnc_rx_started)
-                        CERROR("Incomplete receive of slops from %s"
-                               ", ip %d.%d.%d.%d:%d, with error\n",
+			CERROR("Incomplete receive of slops from %s, "
+			       "ip %pI4h:%d, with error\n",
                                libcfs_id2str(conn->ksnc_peer->ksnp_id),
-                               HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port);
+			       &conn->ksnc_ipaddr, conn->ksnc_port);
                break;
         default:
                 LBUG ();
@@ -1821,7 +1819,7 @@ ksocknal_query (lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
 
 		list_for_each(tmp, &peer->ksnp_conns) {
 			conn = list_entry(tmp, ksock_conn_t, ksnc_list);
-                        bufnob = libcfs_sock_wmem_queued(conn->ksnc_sock);
+			bufnob = conn->ksnc_sock->sk->sk_wmem_queued;
 
                         if (bufnob < conn->ksnc_tx_bufnob) {
                                 /* something got ACKed */
@@ -2617,7 +2615,7 @@ ksocknal_enumerate_interfaces(ksock_net_t *net)
         int         rc;
         int         n;
 
-        n = libcfs_ipif_enumerate(&names);
+	n = lnet_ipif_enumerate(&names);
         if (n <= 0) {
                 CERROR("Can't enumerate interfaces: %d\n", n);
                 return n;
@@ -2631,7 +2629,7 @@ ksocknal_enumerate_interfaces(ksock_net_t *net)
                 if (!strcmp(names[i], "lo")) /* skip the loopback IF */
                         continue;
 
-                rc = libcfs_ipif_query(names[i], &up, &ip, &mask);
+		rc = lnet_ipif_query(names[i], &up, &ip, &mask);
                 if (rc != 0) {
                         CWARN("Can't get interface %s info: %d\n",
                               names[i], rc);
@@ -2657,7 +2655,7 @@ ksocknal_enumerate_interfaces(ksock_net_t *net)
                 j++;
         }
 
-        libcfs_ipif_free_enumeration(names, n);
+	lnet_ipif_free_enumeration(names, n);
 
         if (j == 0)
                 CERROR("Can't find any usable interfaces\n");
@@ -2819,8 +2817,7 @@ ksocknal_startup (lnet_ni_t *ni)
                         if (ni->ni_interfaces[i] == NULL)
                                 break;
 
-                        rc = libcfs_ipif_query(
-                                ni->ni_interfaces[i], &up,
+			rc = lnet_ipif_query(ni->ni_interfaces[i], &up,
                                 &net->ksnn_interfaces[i].ksni_ipaddr,
                                 &net->ksnn_interfaces[i].ksni_netmask);
 

@@ -55,6 +55,7 @@
 #include <linux/hash.h>
 #include <linux/mutex.h>
 #include <linux/sunrpc/cache.h>
+#include <net/sock.h>
 
 #include <obd.h>
 #include <obd_class.h>

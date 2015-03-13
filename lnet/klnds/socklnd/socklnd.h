@@ -322,7 +322,7 @@ typedef struct ksock_conn
 	struct ksock_peer  *ksnc_peer;		/* owning peer */
 	struct ksock_route *ksnc_route;		/* owning route */
 	struct list_head    ksnc_list;		/* stash on peer's conn list */
-	cfs_socket_t       *ksnc_sock;		/* actual socket */
+	struct socket       *ksnc_sock;		/* actual socket */
 	void                *ksnc_saved_data_ready; /* socket's original data_ready() callback */
 	void                *ksnc_saved_write_space; /* socket's original write_space() callback */
 	atomic_t            ksnc_conn_refcount; /* conn refcount */
@@ -437,7 +437,7 @@ typedef struct ksock_connreq
 	/* chosen NI */
 	lnet_ni_t		*ksncr_ni;
 	/* accepted socket */
-	cfs_socket_t		*ksncr_sock;
+	struct socket		*ksncr_sock;
 } ksock_connreq_t;
 
 extern ksock_nal_data_t ksocknal_data;
@@ -548,7 +548,7 @@ ksocknal_connsock_decref (ksock_conn_t *conn)
 	LASSERT (atomic_read(&conn->ksnc_sock_refcount) > 0);
 	if (atomic_dec_and_test(&conn->ksnc_sock_refcount)) {
 		LASSERT (conn->ksnc_closing);
-		libcfs_sock_release(conn->ksnc_sock);
+		sock_release(conn->ksnc_sock);
 		conn->ksnc_sock = NULL;
 		ksocknal_finalize_zcreq(conn);
 	}
@@ -614,14 +614,14 @@ int ksocknal_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
                   int delayed, unsigned int niov, 
                   struct iovec *iov, lnet_kiov_t *kiov,
                   unsigned int offset, unsigned int mlen, unsigned int rlen);
-int ksocknal_accept(lnet_ni_t *ni, cfs_socket_t *sock);
+int ksocknal_accept(lnet_ni_t *ni, struct socket *sock);
 
 extern int ksocknal_add_peer(lnet_ni_t *ni, lnet_process_id_t id, __u32 ip, int port);
 extern ksock_peer_t *ksocknal_find_peer_locked (lnet_ni_t *ni, lnet_process_id_t id);
 extern ksock_peer_t *ksocknal_find_peer (lnet_ni_t *ni, lnet_process_id_t id);
 extern void ksocknal_peer_failed (ksock_peer_t *peer);
 extern int ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
-                                 cfs_socket_t *sock, int type);
+				 struct socket *sock, int type);
 extern void ksocknal_close_conn_locked (ksock_conn_t *conn, int why);
 extern void ksocknal_terminate_conn (ksock_conn_t *conn);
 extern void ksocknal_destroy_conn (ksock_conn_t *conn);
@@ -661,19 +661,20 @@ extern void ksocknal_read_callback(ksock_conn_t *conn);
 extern void ksocknal_write_callback(ksock_conn_t *conn);
 
 extern int ksocknal_lib_zc_capable(ksock_conn_t *conn);
-extern void ksocknal_lib_save_callback(cfs_socket_t *sock, ksock_conn_t *conn);
-extern void ksocknal_lib_set_callback(cfs_socket_t *sock,  ksock_conn_t *conn);
-extern void ksocknal_lib_reset_callback(cfs_socket_t *sock, ksock_conn_t *conn);
-extern void ksocknal_lib_push_conn (ksock_conn_t *conn);
-extern int ksocknal_lib_get_conn_addrs (ksock_conn_t *conn);
-extern int ksocknal_lib_setup_sock (cfs_socket_t *so);
-extern int ksocknal_lib_send_iov (ksock_conn_t *conn, ksock_tx_t *tx);
-extern int ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx);
-extern void ksocknal_lib_eager_ack (ksock_conn_t *conn);
-extern int ksocknal_lib_recv_iov (ksock_conn_t *conn);
-extern int ksocknal_lib_recv_kiov (ksock_conn_t *conn);
-extern int ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, 
-                                           int *rxmem, int *nagle);
+extern void ksocknal_lib_save_callback(struct socket *sock, ksock_conn_t *conn);
+extern void ksocknal_lib_set_callback(struct socket *sock,  ksock_conn_t *conn);
+extern void ksocknal_lib_reset_callback(struct socket *sock,
+					ksock_conn_t *conn);
+extern void ksocknal_lib_push_conn(ksock_conn_t *conn);
+extern int ksocknal_lib_get_conn_addrs(ksock_conn_t *conn);
+extern int ksocknal_lib_setup_sock(struct socket *so);
+extern int ksocknal_lib_send_iov(ksock_conn_t *conn, ksock_tx_t *tx);
+extern int ksocknal_lib_send_kiov(ksock_conn_t *conn, ksock_tx_t *tx);
+extern void ksocknal_lib_eager_ack(ksock_conn_t *conn);
+extern int ksocknal_lib_recv_iov(ksock_conn_t *conn);
+extern int ksocknal_lib_recv_kiov(ksock_conn_t *conn);
+extern int ksocknal_lib_get_conn_tunables(ksock_conn_t *conn, int *txmem,
+					  int *rxmem, int *nagle);
 
 extern int ksocknal_tunables_init(void);
 extern void ksocknal_tunables_fini(void);
