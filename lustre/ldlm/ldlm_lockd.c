@@ -419,13 +419,17 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
 
 	/* NB: must be called with hold of lock_res_and_lock() */
 	LASSERT(ldlm_is_res_locked(lock));
-	ldlm_set_waited(lock);
-
 	LASSERT(!ldlm_is_cancel_on_block(lock));
 
 	spin_lock_bh(&waiting_locks_spinlock);
+	if (ldlm_is_cancel(lock)) {
+		spin_unlock_bh(&waiting_locks_spinlock);
+		return 0;
+	}
+
 	if (ldlm_is_destroyed(lock)) {
 		static cfs_time_t next;
+
 		spin_unlock_bh(&waiting_locks_spinlock);
 		LDLM_ERROR(lock, "not waiting on destroyed lock (bug 5653)");
 		if (cfs_time_after(cfs_time_current(), next)) {
@@ -435,6 +439,7 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
 		return 0;
 	}
 
+	ldlm_set_waited(lock);
 	lock->l_last_activity = cfs_time_current_sec();
 	ret = __ldlm_add_waiting_lock(lock, timeout);
 	if (ret) {
@@ -505,6 +510,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
 
 	spin_lock_bh(&waiting_locks_spinlock);
 	ret = __ldlm_del_waiting_lock(lock);
+	ldlm_clear_waited(lock);
 	spin_unlock_bh(&waiting_locks_spinlock);
 
 	/* remove the lock out of export blocking list */
