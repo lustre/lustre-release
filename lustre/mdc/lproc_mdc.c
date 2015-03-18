@@ -76,6 +76,44 @@ static ssize_t mdc_max_rpcs_in_flight_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(mdc_max_rpcs_in_flight);
 
+
+static int mdc_max_mod_rpcs_in_flight_seq_show(struct seq_file *m, void *v)
+{
+	struct obd_device *dev = m->private;
+	__u16 max;
+	int rc;
+
+	max = obd_get_max_mod_rpcs_in_flight(&dev->u.cli);
+	rc = seq_printf(m, "%hu\n", max);
+
+	return rc;
+}
+
+static ssize_t mdc_max_mod_rpcs_in_flight_seq_write(struct file *file,
+						    const char *buffer,
+						    size_t count,
+						    loff_t *off)
+{
+	struct obd_device *dev =
+			((struct seq_file *)file->private_data)->private;
+	int val;
+	int rc;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc != 0)
+		return rc;
+
+	if (val < 0 || val > USHRT_MAX)
+		return -ERANGE;
+
+	rc = obd_set_max_mod_rpcs_in_flight(&dev->u.cli, val);
+	if (rc != 0)
+		count = rc;
+
+	return count;
+}
+LPROC_SEQ_FOPS(mdc_max_mod_rpcs_in_flight);
+
 LPROC_SEQ_FOPS_WO_TYPE(mdc, ping);
 
 LPROC_SEQ_FOPS_RO_TYPE(mdc, uuid);
@@ -134,6 +172,8 @@ struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
 	  .fops	=	&mdc_obd_max_pages_per_rpc_fops	},
 	{ .name	=	"max_rpcs_in_flight",
 	  .fops	=	&mdc_max_rpcs_in_flight_fops	},
+	{ .name	=	"max_mod_rpcs_in_flight",
+	  .fops	=	&mdc_max_mod_rpcs_in_flight_fops	},
 	{ .name	=	"timeouts",
 	  .fops	=	&mdc_timeouts_fops		},
 	{ .name	=	"import",

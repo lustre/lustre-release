@@ -320,6 +320,11 @@ struct client_obd {
         struct mdc_rpc_lock     *cl_rpc_lock;
         struct mdc_rpc_lock     *cl_close_lock;
 
+	/* modify rpcs in flight
+	 * currently used for metadata only */
+	spinlock_t		 cl_mod_rpcs_lock;
+	__u16			 cl_max_mod_rpcs_in_flight;
+
         /* mgc datastruct */
 	struct mutex		  cl_mgc_mutex;
 	struct local_oid_storage *cl_mgc_los;

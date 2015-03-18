@@ -2756,7 +2756,11 @@ static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
         if (rc) {
                 mdc_cleanup(obd);
                 CERROR("failed to setup llogging subsystems\n");
+		RETURN(rc);
         }
+
+	spin_lock_init(&cli->cl_mod_rpcs_lock);
+	cli->cl_max_mod_rpcs_in_flight = OBD_MAX_RIF_DEFAULT - 1;
 
         RETURN(rc);
 

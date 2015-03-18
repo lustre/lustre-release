@@ -897,6 +897,14 @@ static int ptlrpc_connect_set_flags(struct obd_import *imp,
 
 	client_adjust_max_dirty(cli);
 
+	/* Update client max modify RPCs in flight with value returned
+	 * by the server */
+	if (ocd->ocd_connect_flags & OBD_CONNECT_MULTIMODRPCS)
+		cli->cl_max_mod_rpcs_in_flight = min(
+					cli->cl_max_mod_rpcs_in_flight,
+					ocd->ocd_maxmodrpcs);
+	else
+		cli->cl_max_mod_rpcs_in_flight = 1;
 
 	/* Reset ns_connect_flags only for initial connect. It might be
 	 * changed in while using FS and if we reset it in reconnect
