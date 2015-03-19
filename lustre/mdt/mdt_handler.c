@@ -5598,10 +5598,11 @@ static int mdt_fid2path(struct mdt_thread_info *info,
 	}
 
 	obj = mdt_object_find(info->mti_env, mdt, &fp->gf_fid);
-	if (obj == NULL || IS_ERR(obj)) {
-		CDEBUG(D_IOCTL, "no object "DFID": %ld\n", PFID(&fp->gf_fid),
-		       PTR_ERR(obj));
-		RETURN(-EINVAL);
+	if (IS_ERR(obj)) {
+		rc = PTR_ERR(obj);
+		CDEBUG(D_IOCTL, "cannot find "DFID": rc = %d\n",
+		       PFID(&fp->gf_fid), rc);
+		RETURN(rc);
 	}
 
 	if (mdt_object_remote(obj))
