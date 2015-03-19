@@ -92,7 +92,8 @@ static int libcfs_param_debug_mb_set(const char *val,
 	return rc;
 }
 
-/* While debug_mb setting look like unsigned int, in fact
+/*
+ * While debug_mb setting look like unsigned int, in fact
  * it needs quite a bunch of extra processing, so we define special
  * debug_mb parameter type with corresponding methods to handle this case
  */
@@ -270,8 +271,10 @@ MODULE_PARM_DESC(libcfs_debug_file_path,
 
 int libcfs_panic_in_progress;
 
-/* libcfs_debug_token2mask() expects the returned
- * string in lower-case */
+/*
+ * libcfs_debug_token2mask() expects the returned
+ * string in lower-case
+ */
 static const char *libcfs_debug_subsys2str(int subsys)
 {
 	static const char *libcfs_debug_subsystems[] = LIBCFS_DEBUG_SUBSYS_NAMES;
@@ -282,8 +285,10 @@ static const char *libcfs_debug_subsys2str(int subsys)
 	return libcfs_debug_subsystems[subsys];
 }
 
-/* libcfs_debug_token2mask() expects the returned
- * string in lower-case */
+/*
+ * libcfs_debug_token2mask() expects the returned
+ * string in lower-case
+ */
 static const char *libcfs_debug_dbg2str(int debug)
 {
 	static const char *libcfs_debug_masks[] = LIBCFS_DEBUG_MASKS_NAMES;
@@ -297,79 +302,78 @@ static const char *libcfs_debug_dbg2str(int debug)
 int
 libcfs_debug_mask2str(char *str, int size, int mask, int is_subsys)
 {
-        const char *(*fn)(int bit) = is_subsys ? libcfs_debug_subsys2str :
-                                                 libcfs_debug_dbg2str;
-        int           len = 0;
-        const char   *token;
-        int           i;
+	const char *(*fn)(int bit) = is_subsys ? libcfs_debug_subsys2str :
+						 libcfs_debug_dbg2str;
+	int len = 0;
+	const char *token;
+	int i;
 
-        if (mask == 0) {                        /* "0" */
-                if (size > 0)
-                        str[0] = '0';
-                len = 1;
-        } else {                                /* space-separated tokens */
-                for (i = 0; i < 32; i++) {
-                        if ((mask & (1 << i)) == 0)
-                                continue;
+	if (mask == 0) {			/* "0" */
+		if (size > 0)
+			str[0] = '0';
+		len = 1;
+	} else {				/* space-separated tokens */
+		for (i = 0; i < 32; i++) {
+			if ((mask & (1 << i)) == 0)
+				continue;
 
-                        token = fn(i);
-                        if (token == NULL)              /* unused bit */
-                                continue;
+			token = fn(i);
+			if (token == NULL)	/* unused bit */
+				continue;
 
-                        if (len > 0) {                  /* separator? */
-                                if (len < size)
-                                        str[len] = ' ';
-                                len++;
-                        }
+			if (len > 0) {		/* separator? */
+				if (len < size)
+					str[len] = ' ';
+				len++;
+			}
 
-                        while (*token != 0) {
-                                if (len < size)
-                                        str[len] = *token;
-                                token++;
-                                len++;
-                        }
-                }
-        }
+			while (*token != 0) {
+				if (len < size)
+					str[len] = *token;
+				token++;
+				len++;
+			}
+		}
+	}
 
-        /* terminate 'str' */
-        if (len < size)
-                str[len] = 0;
-        else
-                str[size - 1] = 0;
+	/* terminate 'str' */
+	if (len < size)
+		str[len] = 0;
+	else
+		str[size - 1] = 0;
 
-        return len;
+	return len;
 }
 
 int
 libcfs_debug_str2mask(int *mask, const char *str, int is_subsys)
 {
-        const char *(*fn)(int bit) = is_subsys ? libcfs_debug_subsys2str :
-                                                 libcfs_debug_dbg2str;
-        int         m = 0;
-        int         matched;
-        int         n;
-        int         t;
+	const char *(*fn)(int bit) = is_subsys ? libcfs_debug_subsys2str :
+						 libcfs_debug_dbg2str;
+	int m = 0;
+	int matched;
+	int n;
+	int t;
 
-        /* Allow a number for backwards compatibility */
+	/* Allow a number for backwards compatibility */
+	for (n = strlen(str); n > 0; n--)
+		if (!isspace(str[n-1]))
+			break;
+	matched = n;
 
-        for (n = strlen(str); n > 0; n--)
-                if (!isspace(str[n-1]))
-                        break;
-        matched = n;
+	t = sscanf(str, "%i%n", &m, &matched);
+	if (t >= 1 && matched == n) {
+		/* don't print warning for lctl set_param debug=0 or -1 */
+		if (m != 0 && m != -1)
+			CWARN("You are trying to use a numerical value for the "
+			      "mask - this will be deprecated in a future "
+			      "release.\n");
+		*mask = m;
+		return 0;
+	}
 
-        if ((t = sscanf(str, "%i%n", &m, &matched)) >= 1 &&
-            matched == n) {
-                /* don't print warning for lctl set_param debug=0 or -1 */
-                if (m != 0 && m != -1)
-                        CWARN("You are trying to use a numerical value for the "
-                              "mask - this will be deprecated in a future "
-                              "release.\n");
-                *mask = m;
-                return 0;
-        }
-
-        return cfs_str2mask(str, fn, mask, is_subsys ? 0 : D_CANTMASK,
-                            0xffffffff);
+	return cfs_str2mask(str, fn, mask, is_subsys ? 0 : D_CANTMASK,
+			    0xffffffff);
 }
 
 /**
@@ -410,11 +414,14 @@ void libcfs_debug_dumplog(void)
 {
 	wait_queue_entry_t wait;
 	struct task_struct *dumper;
+
 	ENTRY;
 
-	/* we're being careful to ensure that the kernel thread is
+	/*
+	 * we're being careful to ensure that the kernel thread is
 	 * able to set our state to running as it exits before we
-	 * get to schedule() */
+	 * get to schedule()
+	 */
 	init_waitqueue_entry(&wait, current);
 	set_current_state(TASK_INTERRUPTIBLE);
 	add_wait_queue(&debug_ctlwq, &wait);
@@ -436,7 +443,7 @@ EXPORT_SYMBOL(libcfs_debug_dumplog);
 
 int libcfs_debug_init(unsigned long bufsize)
 {
-	int    rc = 0;
+	int rc = 0;
 	unsigned int max = libcfs_debug_mb;
 
 	init_waitqueue_head(&debug_ctlwq);
@@ -454,8 +461,10 @@ int libcfs_debug_init(unsigned long bufsize)
 			sizeof(libcfs_debug_file_path_arr));
 	}
 
-	/* If libcfs_debug_mb is set to an invalid value or uninitialized
-	 * then just make the total buffers smp_num_cpus * TCD_MAX_PAGES */
+	/*
+	 * If libcfs_debug_mb is set to an invalid value or uninitialized
+	 * then just make the total buffers smp_num_cpus * TCD_MAX_PAGES
+	 */
 	if (max > cfs_trace_max_debug_mb() || max < num_possible_cpus()) {
 		max = TCD_MAX_PAGES;
 	} else {
@@ -485,30 +494,32 @@ int libcfs_debug_cleanup(void)
 
 int libcfs_debug_clear_buffer(void)
 {
-        cfs_trace_flush_pages();
-        return 0;
+	cfs_trace_flush_pages();
+	return 0;
 }
 
-/* Debug markers, although printed by S_LNET
- * should not be be marked as such. */
+/*
+ * Debug markers, although printed by S_LNET
+ * should not be be marked as such.
+ */
 #undef DEBUG_SUBSYSTEM
 #define DEBUG_SUBSYSTEM S_UNDEFINED
 int libcfs_debug_mark_buffer(const char *text)
 {
-        CDEBUG(D_TRACE,"***************************************************\n");
-        LCONSOLE(D_WARNING, "DEBUG MARKER: %s\n", text);
-        CDEBUG(D_TRACE,"***************************************************\n");
+	CDEBUG(D_TRACE, "**************************************************\n");
+	LCONSOLE(D_WARNING, "DEBUG MARKER: %s\n", text);
+	CDEBUG(D_TRACE, "**************************************************\n");
 
-        return 0;
+	return 0;
 }
 #undef DEBUG_SUBSYSTEM
 #define DEBUG_SUBSYSTEM S_LNET
 
 long libcfs_log_return(struct libcfs_debug_msg_data *msgdata, long rc)
 {
-        libcfs_debug_msg(msgdata, "Process leaving (rc=%lu : %ld : %lx)\n",
-                         rc, rc, rc);
-        return rc;
+	libcfs_debug_msg(msgdata, "Process leaving (rc=%lu : %ld : %lx)\n",
+			 rc, rc, rc);
+	return rc;
 }
 EXPORT_SYMBOL(libcfs_log_return);
 
