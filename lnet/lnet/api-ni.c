@@ -35,9 +35,8 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LNET
-#include <lnet/lib-lnet.h>
-#include <lnet/lib-dlc.h>
 #include <linux/log2.h>
+#include <lnet/lib-lnet.h>
 
 #define D_LNI D_CONSOLE
 

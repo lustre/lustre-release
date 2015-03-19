@@ -41,9 +41,6 @@
 #ifndef __LNET_ST_H__
 #define __LNET_ST_H__
 
-#include <libcfs/libcfs.h>
-#include <lnet/lib-types.h>
-
 #define LST_FEAT_NONE		(0)
 #define LST_FEAT_BULK_LEN	(1 << 0)	/* enable variable page size */
 

@@ -44,7 +44,7 @@
 #define LNET_ONLY
 
 #include <libcfs/libcfs.h>
-#include <lnet/lnet.h>
+#include <lnet/api.h>
 #include <lnet/lib-lnet.h>
 #include <lnet/lib-types.h>
 #include <lnet/lnetst.h>

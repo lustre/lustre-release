@@ -71,10 +71,6 @@
 
 #include "curproc.h"
 
-#ifndef offsetof
-# define offsetof(typ,memb) ((long)(long_ptr_t)((char *)&(((typ *)0)->memb)))
-#endif
-
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(a) ((sizeof (a)) / (sizeof ((a)[0])))
 #endif

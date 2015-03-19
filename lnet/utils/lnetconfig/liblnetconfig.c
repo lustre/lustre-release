@@ -38,8 +38,7 @@
 #include <libcfs/libcfsutil.h>
 #include <lnet/lnetctl.h>
 #include <lnet/socklnd.h>
-#include <lnet/lib-dlc.h>
-#include <lnet/nidstr.h>
+#include <lnet/lnet.h>
 #include "liblnetconfig.h"
 #include "cyaml.h"
 

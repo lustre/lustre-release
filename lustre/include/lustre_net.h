@@ -56,7 +56,8 @@
  */
 
 #include <libcfs/libcfs.h>
-#include <lnet/lnet.h>
+#include <lnet/nidstr.h>
+#include <lnet/api.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_ha.h>
 #include <lustre_sec.h>

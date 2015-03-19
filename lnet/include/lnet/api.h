@@ -45,6 +45,10 @@
  * @{
  */
 
+#ifndef __KERNEL__
+# error This include is only for kernel use.
+#endif
+
 #include <lnet/types.h>
 
 /** \defgroup lnet_init_fini Initialization and cleanup

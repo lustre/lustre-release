@@ -19,10 +19,9 @@
 /*
  * Copyright (c) 2014, Intel Corporation.
  */
-#ifndef _PTLCTL_H_
-#define _PTLCTL_H_
+#ifndef _LNETCTL_H_
+#define _LNETCTL_H_
 
-#include <libcfs/libcfs.h>
 #include <lnet/types.h>
 
 /** \addtogroup lnet_fault_simulation

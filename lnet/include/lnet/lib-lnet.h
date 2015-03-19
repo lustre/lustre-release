@@ -41,11 +41,14 @@
 #ifndef __LNET_LIB_LNET_H__
 #define __LNET_LIB_LNET_H__
 
+#ifndef __KERNEL__
+# error This include is only for kernel use.
+#endif
+
 #include <libcfs/libcfs.h>
-#include <lnet/types.h>
+#include <lnet/api.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-types.h>
-#include <lnet/lib-dlc.h>
 
 extern lnet_t  the_lnet;                        /* THE network */
 

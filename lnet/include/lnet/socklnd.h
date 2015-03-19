@@ -39,7 +39,6 @@
 #define __LNET_LNET_SOCKLND_H__
 
 #include <lnet/types.h>
-#include <lnet/lib-types.h>
 
 #define SOCKLND_CONN_NONE     (-1)
 #define SOCKLND_CONN_ANY        0
@@ -71,7 +70,7 @@ typedef struct {
          * ksnm_payload is removed because of winnt compiler's limitation:
          * zero-sized array can only be placed at the tail of [nested]
          * structure definitions. lnet payload will be stored just after
-         * the body of structure ksock_lnet_msg_t 
+	 * the body of structure ksock_lnet_msg_t
          */
 } WIRE_ATTR ksock_lnet_msg_t;
 

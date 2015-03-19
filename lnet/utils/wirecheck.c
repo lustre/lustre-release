@@ -38,15 +38,14 @@
 #define _GNU_SOURCE
 #endif
 
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <lnet/lib-types.h>
-
-#include <string.h>
+#include <lnet/types.h>
 
 #ifndef HAVE_STRNLEN
 #define strnlen(s, i) strlen(s)
