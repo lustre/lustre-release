@@ -263,7 +263,7 @@ derive_key_lucid(const gss_krb5_lucid_key_t *in, gss_krb5_lucid_key_t *out,
 	krb5_error_code code;
 	unsigned char constant_data[K5CLENGTH];
 	krb5_data datain;
-	int keylength;
+	int keylength __attribute__ ((unused));
 #ifdef HAVE_KRB5
 	void *enc;
 #endif

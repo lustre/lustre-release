@@ -154,28 +154,36 @@ void qword_addeol(char **bpp, int *lp)
 
 static char qword_buf[8192];
 static char tmp_buf[8192];
-void qword_print(FILE *f, char *str)
+int qword_print(FILE *f, char *str)
 {
 	char *bp = qword_buf;
 	int len = sizeof(qword_buf);
+	size_t sret;
+
 	qword_add(&bp, &len, str);
-	fwrite(qword_buf, bp-qword_buf, 1, f);
+	sret = fwrite(qword_buf, bp-qword_buf, 1, f);
 	/* XXX: */
 	memcpy(tmp_buf, qword_buf, bp-qword_buf);
 	tmp_buf[bp-qword_buf] = '\0';
 	printerr(2, "%s", tmp_buf);
+
+	return sret != 1;
 }
 
-void qword_printhex(FILE *f, char *str, int slen)
+int qword_printhex(FILE *f, char *str, int slen)
 {
 	char *bp = qword_buf;
 	int len = sizeof(qword_buf);
+	size_t sret;
+
 	qword_addhex(&bp, &len, str, slen);
-	fwrite(qword_buf, bp-qword_buf, 1, f);
+	sret = fwrite(qword_buf, bp-qword_buf, 1, f);
 	/* XXX: */
 	memcpy(tmp_buf, qword_buf, bp-qword_buf);
 	tmp_buf[bp-qword_buf] = '\0';
 	printerr(2, "%s", tmp_buf);
+
+	return sret != 1;
 }
 
 void qword_printint(FILE *f, int num)

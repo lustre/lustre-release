@@ -149,9 +149,10 @@ static void
 release_parent()
 {
 	int status;
+	ssize_t sret __attribute__ ((unused));
 
 	if (pipefds[1] > 0) {
-		write(pipefds[1], &status, 1);
+		sret = write(pipefds[1], &status, 1);
 		close(pipefds[1]);
 		pipefds[1] = -1;
 	}
