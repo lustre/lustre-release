@@ -12920,6 +12920,23 @@ test_250() {
 }
 run_test 250 "Write above 16T limit"
 
+test_251() {
+	$SETSTRIPE -c -1 -S 1048576 $DIR/$tfile
+
+	#define OBD_FAIL_LLITE_LOST_LAYOUT 0x1407
+	#Skip once - writing the first stripe will succeed
+	$LCTL set_param fail_loc=0xa0001407 fail_val=1
+	$MULTIOP $DIR/$tfile o:O_RDWR:w2097152c 2>&1 | grep -q "short write" &&
+		error "short write happened"
+
+	$LCTL set_param fail_loc=0xa0001407 fail_val=1
+	$MULTIOP $DIR/$tfile or2097152c 2>&1 | grep -q "short read" &&
+		error "short read happened"
+
+	rm -f $DIR/$tfile
+}
+run_test 251 "Handling short read and write correctly"
+
 cleanup_test_300() {
 	trap 0
 	umask $SAVE_UMASK

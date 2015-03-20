@@ -87,9 +87,10 @@ static bool can_populate_pages(const struct lu_env *env, struct cl_io *io,
 	case CIT_WRITE:
 		/* don't need lock here to check lli_layout_gen as we have held
 		 * extent lock and GROUP lock has to hold to swap layout */
-		if (ll_layout_version_get(lli) != vio->vui_layout_gen) {
+		if (ll_layout_version_get(lli) != vio->vui_layout_gen ||
+		    OBD_FAIL_CHECK_RESET(OBD_FAIL_LLITE_LOST_LAYOUT, 0)) {
 			io->ci_need_restart = 1;
-			/* this will return application a short read/write */
+			/* this will cause a short read/write */
 			io->ci_continue = 0;
 			rc = false;
 		}
@@ -476,6 +477,7 @@ static void vvp_io_advance(const struct lu_env *env,
 	struct vvp_io    *vio = cl2vvp_io(env, ios);
 	struct cl_io     *io  = ios->cis_io;
 	struct cl_object *obj = ios->cis_io->ci_obj;
+	struct iovec     *iov;
 
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
 
@@ -485,27 +487,28 @@ static void vvp_io_advance(const struct lu_env *env,
 	LASSERT(vio->vui_tot_nrsegs >= vio->vui_nrsegs);
 	LASSERT(vio->vui_tot_count  >= nob);
 
-	vio->vui_iov        += vio->vui_nrsegs;
-	vio->vui_tot_nrsegs -= vio->vui_nrsegs;
-	vio->vui_tot_count  -= nob;
-
-	/* update the iov */
+	/* Restore the iov changed in vvp_io_update_iov() */
 	if (vio->vui_iov_olen > 0) {
-		struct iovec *iv;
-
-		vio->vui_iov--;
-		vio->vui_tot_nrsegs++;
-		iv = &vio->vui_iov[0];
-		if (io->ci_continue) {
-			iv->iov_base += iv->iov_len;
-			LASSERT(vio->vui_iov_olen > iv->iov_len);
-			iv->iov_len = vio->vui_iov_olen - iv->iov_len;
-		} else {
-			/* restore the iov_len, in case of restart io. */
-			iv->iov_len = vio->vui_iov_olen;
-		}
+		vio->vui_iov[vio->vui_nrsegs - 1].iov_len = vio->vui_iov_olen;
 		vio->vui_iov_olen = 0;
 	}
+
+	/* advance iov */
+	iov = vio->vui_iov;
+	while (nob > 0) {
+		if (iov->iov_len > nob) {
+			iov->iov_len -= nob;
+			iov->iov_base += nob;
+			break;
+		}
+
+		nob -= iov->iov_len;
+		iov++;
+		vio->vui_tot_nrsegs--;
+	}
+
+	vio->vui_iov = iov;
+	vio->vui_tot_count -= nob;
 }
 
 static void vvp_io_update_iov(const struct lu_env *env,
@@ -1024,6 +1027,18 @@ static int vvp_io_write_start(const struct lu_env *env,
 	}
 
 	CDEBUG(D_VFSTRACE, "write: [%lli, %lli)\n", pos, pos + (long long)cnt);
+
+	/* The maximum Lustre file size is variable, based on the OST maximum
+	 * object size and number of stripes.  This needs another check in
+	 * addition to the VFS checks earlier. */
+	if (pos + cnt > ll_file_maxbytes(inode)) {
+		CDEBUG(D_INODE,
+		       "%s: file "DFID" offset %llu > maxbytes "LPU64"\n",
+		       ll_get_fsname(inode->i_sb, NULL, 0),
+		       PFID(ll_inode2fid(inode)), pos + cnt,
+		       ll_file_maxbytes(inode));
+		RETURN(-EFBIG);
+	}
 
 	if (vio->vui_iov == NULL) {
 		/* from a temp io in ll_cl_init(). */
