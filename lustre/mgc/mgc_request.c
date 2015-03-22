@@ -1717,7 +1717,7 @@ static int mgc_llog_local_copy(const struct lu_env *env,
 	 * - if failed then move bakup to logname again
 	 */
 
-	OBD_ALLOC(temp_log, strlen(logname) + 1);
+	OBD_ALLOC(temp_log, strlen(logname) + 2);
 	if (!temp_log)
 		RETURN(-ENOMEM);
 	sprintf(temp_log, "%sT", logname);
@@ -1739,7 +1739,7 @@ out:
 		       obd->obd_name, logname, rc);
 	}
 	llog_erase(env, lctxt, NULL, temp_log);
-	OBD_FREE(temp_log, strlen(logname) + 1);
+	OBD_FREE(temp_log, strlen(logname) + 2);
 	return rc;
 }
 
