@@ -139,36 +139,6 @@ int cfs_str2mask(const char *str, const char *(*bit2str)(int bit),
 }
 EXPORT_SYMBOL(cfs_str2mask);
 
-/**
- * cfs_{v}snprintf() return the actual size that is printed rather than
- * the size that would be printed in standard functions.
- */
-/* safe vsnprintf */
-int cfs_vsnprintf(char *buf, size_t size, const char *fmt, va_list args)
-{
-        int i;
-
-        LASSERT(size > 0);
-        i = vsnprintf(buf, size, fmt, args);
-
-        return  (i >= size ? size - 1 : i);
-}
-EXPORT_SYMBOL(cfs_vsnprintf);
-
-/* safe snprintf */
-int cfs_snprintf(char *buf, size_t size, const char *fmt, ...)
-{
-        va_list args;
-        int i;
-
-        va_start(args, fmt);
-        i = cfs_vsnprintf(buf, size, fmt, args);
-        va_end(args);
-
-        return  i;
-}
-EXPORT_SYMBOL(cfs_snprintf);
-
 /* get the first string out of @str */
 char *cfs_firststr(char *str, size_t size)
 {
@@ -398,12 +368,12 @@ cfs_range_expr_print(char *buffer, int count, struct cfs_range_expr *expr,
 		s[0] = e[0] = '\0';
 
 	if (expr->re_lo == expr->re_hi)
-		i = cfs_snprintf(buffer, count, "%u", expr->re_lo);
+		i = scnprintf(buffer, count, "%u", expr->re_lo);
 	else if (expr->re_stride == 1)
-		i = cfs_snprintf(buffer, count, "%s%u-%u%s",
+		i = scnprintf(buffer, count, "%s%u-%u%s",
 				  s, expr->re_lo, expr->re_hi, e);
 	else
-		i = cfs_snprintf(buffer, count, "%s%u-%u/%u%s",
+		i = scnprintf(buffer, count, "%s%u-%u/%u%s",
 				  s, expr->re_lo, expr->re_hi,
 				  expr->re_stride, e);
 	return i;
@@ -430,17 +400,17 @@ cfs_expr_list_print(char *buffer, int count, struct cfs_expr_list *expr_list)
 		numexprs++;
 
 	if (numexprs > 1)
-		i += cfs_snprintf(buffer + i, count - i, "[");
+		i += scnprintf(buffer + i, count - i, "[");
 
 	list_for_each_entry(expr, &expr_list->el_exprs, re_link) {
 		if (j++ != 0)
-			i += cfs_snprintf(buffer + i, count - i, ",");
+			i += scnprintf(buffer + i, count - i, ",");
 		i += cfs_range_expr_print(buffer + i, count - i, expr,
 					  numexprs > 1);
 	}
 
 	if (numexprs > 1)
-		i += cfs_snprintf(buffer + i, count - i, "]");
+		i += scnprintf(buffer + i, count - i, "]");
 
 	return i;
 }
