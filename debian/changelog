@@ -1,3 +1,9 @@
+lustre (2.7.50-1) unstable; urgency=low
+
+  * Automated changelog entry update
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Tue, 17 Mar 2015 23:39:07 -0400
+
 lustre (1.8.1.50-1) unstable; urgency=low
 
   * Update for an on-the-road-to-1.8.2 release

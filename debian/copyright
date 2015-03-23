@@ -1,18 +1,18 @@
-This package was debianized by Brian J. Murrell <brian@interlinx.bc.ca>,
+This package was debianized by Brian J. Murrell <brian.murrell@intel.com>,
 Aug. 2009.  It is heavily based on the work of Alastair McKinstry
 <mckinstry@debian.org>, October 2006. and more recently the Debian Lustre
 Packaging team, <pkg-lustre-maintainers@lists.alioth.debian.org>, which is
 based on work by Goswin von Brederlow and Patrick Winnertz.
 
-It is currently maintained by Brian J. Murrell, <brian@interlinx.bc.ca>
+It is currently maintained by Brian J. Murrell, <brian.murrell@intel.com>
 
-Lustre is Copyright (C) 2002-2009 Sun Microsystems, Inc. and is licensed 
-under the GNU Public License Version 2; 
+Lustre is Copyright (C) 2002-2009 Sun Microsystems, Inc. and is licensed
+under the GNU Public License Version 2;
 it was downloaded from http://www.lustre.org/ .
 
-The documentation (included in lustre-utils) is covered by 
-the GNU Free Documentation License; there are no invariant-clauses included 
-in this documentation, and hence it is considered to be free under 
+The documentation (included in lustre-utils) is covered by
+the GNU Free Documentation License; there are no invariant-clauses included
+in this documentation, and hence it is considered to be free under
 the Debian Free Software Guidelines (DFSG).
 
 A copy of the GPL may be found at /usr/share/common-licenses/GPL-2.

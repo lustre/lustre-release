@@ -1,8 +1,8 @@
 Source: lustre
 Section: admin
 Priority: optional
-Maintainer: Brian J. Murrell <brian@interlinx.bc.ca>
-Uploaders: Brian J. Murrell <brian@interlinx.bc.ca>
+Maintainer: Brian J. Murrell <brian.murrell@intel.com>
+Uploaders: Brian J. Murrell <brian.murrell@intel.com>
 Standards-Version: 3.7.2
 Build-Depends: debhelper (>= 5.0.0), bzip2
 

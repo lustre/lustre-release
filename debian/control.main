@@ -1,8 +1,8 @@
 Source: lustre
 Section: admin
 Priority: optional
-Maintainer: Brian J. Murrell <brian@interlinx.bc.ca>
-Uploaders: Brian J. Murrell <brian@interlinx.bc.ca>
+Maintainer: Brian J. Murrell <brian.murrell@intel.com>
+Uploaders: Brian J. Murrell <brian.murrell@intel.com>
 Standards-Version: 3.8.3
 Build-Depends: module-assistant, libreadline-dev, debhelper (>=7.0.0), dpatch, automake (>=1.7) | automake1.7 | automake1.8 | automake1.9, libsnmp-dev, bzip2, quilt, linux-headers-generic | linux-headers, rsync
 Homepage: http://www.lustre.org/
@@ -39,12 +39,12 @@ Description: source for Lustre filesystem client kernel modules
  https://wiki.hpdd.intel.com/
  .
  This package contains the module source. The client kernel modules
- can be built for kernels from 2.6.18 - 2.6.26 from it using
- module-assistant or make-kpkg.
+ can be built for kernels 2.6.32+ with the use of module-assistant
+ or make-kpkg.
 
 Package: lustre-utils
 Section: utils
-Architecture: i386 powerpc amd64 ia64
+Architecture: i386 powerpc ppc64el amd64 ia64
 Priority: optional
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Userspace utilities for the Lustre filesystem
@@ -57,12 +57,12 @@ Description: Userspace utilities for the Lustre filesystem
 
 Package: lustre-tests
 Section: utils
-Architecture: i386 powerpc amd64 ia64
+Architecture: i386 powerpc ppc64el amd64 ia64
 Priority: optional
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Test suite for the Lustre filesystem
  Lustre is a scalable, secure, robust, highly-available cluster file system.
- This release is maintained by Intel Corporation and available from 
+ This release is maintained by Intel Corporation and available from
  https://wiki.hpdd.intel.com/
  .
  This package provides a number of test utilities for the Lustre filesystem.
@@ -70,7 +70,7 @@ Description: Test suite for the Lustre filesystem
 Package: lustre-dev
 Section: libdevel
 Priority: optional
-Architecture: i386 powerpc amd64 ia64
+Architecture: i386 powerpc ppc64el amd64 ia64
 Depends: lustre-utils (= ${binary:Version})
 Description: Development files for the Lustre filesystem
  Lustre is a scalable, secure, robust, highly-available cluster file system.
