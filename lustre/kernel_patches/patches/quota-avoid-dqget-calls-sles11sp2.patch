@@ -1,79 +1,52 @@
-In dquot_initialize(), we'd call dqget() only when i_dquot not
-initialized, which can avoid 2 pair of dqget()/dqput() in most
-case. It could relieve the global locks contenion caused by
-dqget()/dqput().
---- linux-3.0/fs/quota/dquot.c.orig	2013-07-18 09:46:28.000000000 -0400
-+++ linux-3.0/fs/quota/dquot.c	2013-07-18 09:49:20.000000000 -0400
-@@ -1342,8 +1342,8 @@
+commit 1ea06bec78a128adc995ca32bd906a6c9bb9cf91
+Author: Niu Yawei <yawei.niu@gmail.com>
+Date:   Wed Jun 4 12:20:30 2014 +0800
+
+    quota: avoid unnecessary dqget()/dqput() calls
+
+    Avoid unnecessary dqget()/dqput() calls in __dquot_initialize(),
+    that will introduce global lock contention otherwise.
+
+    Signed-off-by: Lai Siyao <lai.siyao@intel.com>
+    Signed-off-by: Niu Yawei <yawei.niu@intel.com>
+    Signed-off-by: Jan Kara <jack@suse.cz>
+Index: linux-3.0.101-0.46_lustre.gbe21584/fs/quota/dquot.c
+===================================================================
+--- linux-3.0.101-0.46_lustre.gbe21584.orig/fs/quota/dquot.c
++++ linux-3.0.101-0.46_lustre.gbe21584/fs/quota/dquot.c
+@@ -1342,7 +1342,7 @@ static int dquot_active(const struct ino
  static void __dquot_initialize(struct inode *inode, int type)
  {
  	unsigned int id = 0;
 -	int cnt;
--	struct dquot *got[MAXQUOTAS];
-+	int cnt, ret = 0, dq_get = 0;
-+	struct dquot *got[MAXQUOTAS] = { NULL, NULL };
++	int cnt, init_needed = 0;
+ 	struct dquot *got[MAXQUOTAS];
  	struct super_block *sb = inode->i_sb;
  	qsize_t rsv;
- 
-@@ -1352,7 +1352,14 @@
- 	if (!dquot_active(inode))
- 		return;
- 
--	/* First get references to structures we might need. */
-+	/* In most case, the i_dquot should have been initialized, except
-+	 * the newly allocated one. We'd always try to skip the dqget() and
-+	 * dqput() calls to avoid unnecessary global lock contention. */
-+	if (!(inode->i_state & I_NEW))
-+		goto init_idquot;
-+
-+get_dquots:
-+	dq_get = 1;
- 	for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
+@@ -1357,6 +1357,15 @@ static void __dquot_initialize(struct in
  		got[cnt] = NULL;
  		if (type != -1 && cnt != type)
-@@ -1367,7 +1374,7 @@
- 		}
+ 			continue;
++		/*
++		 * The i_dquot should have been initialized in most cases,
++		 * we check it without locking here to avoid unnecessary
++		 * dqget()/dqput() calls.
++		 */
++		if (inode->i_dquot[cnt])
++			continue;
++		init_needed = 1;
++
+ 		switch (cnt) {
+ 		case USRQUOTA:
+ 			id = inode->i_uid;
+@@ -1368,6 +1377,10 @@ static void __dquot_initialize(struct in
  		got[cnt] = dqget(sb, id, cnt);
  	}
--
-+init_idquot:
+ 
++	/* All required i_dquot has been initialized */
++	if (!init_needed)
++		return;
++
  	spin_lock(&inode->i_lock);
  	if (IS_NOQUOTA(inode))
  		goto out_err;
-@@ -1381,10 +1388,14 @@
- 		/* Avoid races with quotaoff() */
- 		if (!sb_has_quota_active(sb, cnt))
- 			continue;
--		/* We could race with quotaon or dqget() could have failed */
--		if (!got[cnt])
--			continue;
- 		if (!inode->i_dquot[cnt]) {
-+			if (dq_get == 0) {
-+				spin_unlock(&inode->i_lock);
-+				goto get_dquots;
-+			}
-+			/* We could race with quotaon or dqget() could have failed */
-+			if (!got[cnt])
-+				continue;
- 			inode->i_dquot[cnt] = got[cnt];
- 			got[cnt] = NULL;
- 			/*
-@@ -1388,7 +1399,7 @@
- 			 * did a write before quota was turned on
- 			 */
- 			rsv = inode_get_rsv_space(inode);
--			if (unlikely(rsv)) {
-+			if (unlikely(rsv) && likely(inode->i_dquot[cnt])) {
- 				spin_lock(&dq_data_lock);
- 				dquot_resv_space(inode->i_dquot[cnt], rsv);
- 				spin_unlock(&dq_data_lock);
-@@ -1488,7 +1399,8 @@
- 	spin_unlock(&inode->i_lock);
- 
- 	/* Drop unused references */
--	dqput_all(got);
-+	if (dq_get)
-+		dqput_all(got);
- }
- 
- void dquot_initialize(struct inode *inode)
