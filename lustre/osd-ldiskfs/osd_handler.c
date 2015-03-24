@@ -2201,15 +2201,17 @@ static int __osd_object_create(struct osd_thread_info *info,
 
 	result = osd_create_type_f(dof->dof_type)(info, obj, attr, hint, dof,
 						  th);
-	if (result == 0) {
-		osd_attr_init(info, obj, attr, dof);
-		osd_object_init0(obj);
-	}
-
-	if (obj->oo_inode != NULL) {
+	if (likely(obj->oo_inode != NULL)) {
 		LASSERT(obj->oo_inode->i_state & I_NEW);
 
+		/* Unlock the inode before attr initialization to avoid
+		 * unnecessary dqget operations. LU-6378 */
 		unlock_new_inode(obj->oo_inode);
+	}
+
+	if (likely(result == 0)) {
+		osd_attr_init(info, obj, attr, dof);
+		osd_object_init0(obj);
 	}
 
 	/* restore previous umask value */
