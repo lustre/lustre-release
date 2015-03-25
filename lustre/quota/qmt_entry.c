@@ -641,8 +641,14 @@ void qmt_adjust_qunit(const struct lu_env *env, struct lquota_entry *lqe)
 		/* current qunit value still fits, let's see if we can afford to
 		 * increase qunit now ...
 		 * To increase qunit again, we have to be under 25% */
-		while (limit >= lqe->lqe_granted + 6 * qunit * slv_cnt)
+		while (qunit && limit >= lqe->lqe_granted + 6 * qunit * slv_cnt)
 			qunit <<= 2;
+
+		if (!qunit) {
+			qunit = limit;
+			do_div(qunit, 2 * slv_cnt);
+		}
+
 	} else {
 		/* shrink qunit until we find a suitable value */
 		while (qunit > pool->qpi_least_qunit &&
