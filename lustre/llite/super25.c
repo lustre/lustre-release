@@ -45,6 +45,7 @@
 #include <linux/fs.h>
 #include <lprocfs_status.h>
 #include "llite_internal.h"
+#include "vvp_internal.h"
 
 static struct kmem_cache *ll_inode_cachep;
 
@@ -176,9 +177,16 @@ static int __init init_lustre_lite(void)
 	if (rc != 0)
 		GOTO(out_capa, rc);
 
+	cl_inode_fini_env = cl_env_alloc(&cl_inode_fini_refcheck,
+					 LCT_REMEMBER | LCT_NOREF);
+	if (IS_ERR(cl_inode_fini_env))
+		GOTO(out_vvp, rc = PTR_ERR(cl_inode_fini_env));
+
+	cl_inode_fini_env->le_ctx.lc_cookie = 0x4;
+
 	rc = ll_xattr_init();
 	if (rc != 0)
-		GOTO(out_vvp, rc);
+		GOTO(out_inode_fini_env, rc);
 
 	lustre_register_client_fill_super(ll_fill_super);
 	lustre_register_kill_super_cb(ll_kill_super);
@@ -186,6 +194,8 @@ static int __init init_lustre_lite(void)
 
 	RETURN(0);
 
+out_inode_fini_env:
+	cl_env_put(cl_inode_fini_env, &cl_inode_fini_refcheck);
 out_vvp:
 	vvp_global_fini();
 out_capa:
@@ -218,6 +228,7 @@ static void __exit exit_lustre_lite(void)
 	lprocfs_remove(&proc_lustre_fs_root);
 
 	ll_xattr_fini();
+	cl_env_put(cl_inode_fini_env, &cl_inode_fini_refcheck);
 	vvp_global_fini();
 	del_timer(&ll_capa_timer);
 	ll_capa_thread_stop();

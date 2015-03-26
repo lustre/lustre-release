@@ -44,12 +44,11 @@
 
 #include "llite_internal.h"
 
-
 /* Initialize the default and maximum LOV EA and cookie sizes.  This allows
  * us to make MDS RPCs with large enough reply buffers to hold the
  * maximum-sized (= maximum striped) EA and cookie without having to
  * calculate this (via a call into the LOV + OSCs) each time we make an RPC. */
-int cl_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp)
+static int cl_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp)
 {
 	struct lov_stripe_md lsm = { .lsm_magic = LOV_MAGIC_V3 };
 	__u32 valsize = sizeof(struct lov_desc);
@@ -126,7 +125,7 @@ int cl_ocd_update(struct obd_device *host,
 #define GROUPLOCK_SCOPE "grouplock"
 
 int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
-                     struct ccc_grouplock *cg)
+		     struct ll_grouplock *lg)
 {
         struct lu_env          *env;
         struct cl_io           *io;
@@ -140,7 +139,7 @@ int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
         if (IS_ERR(env))
                 return PTR_ERR(env);
 
-        io = ccc_env_thread_io(env);
+	io = vvp_env_thread_io(env);
         io->ci_obj = obj;
 	io->ci_ignore_layout = 1;
 
@@ -154,7 +153,7 @@ int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
 		return rc;
 	}
 
-	lock = ccc_env_lock(env);
+	lock = vvp_env_lock(env);
 	descr = &lock->cll_descr;
         descr->cld_obj = obj;
         descr->cld_start = 0;
@@ -172,25 +171,25 @@ int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
 		return rc;
 	}
 
-        cg->cg_env  = cl_env_get(&refcheck);
-        cg->cg_io   = io;
-        cg->cg_lock = lock;
-        cg->cg_gid  = gid;
-        LASSERT(cg->cg_env == env);
+	lg->lg_env = cl_env_get(&refcheck);
+	lg->lg_io = io;
+	lg->lg_lock = lock;
+	lg->lg_gid = gid;
+	LASSERT(lg->lg_env == env);
 
-        cl_env_unplant(env, &refcheck);
-        return 0;
+	cl_env_unplant(env, &refcheck);
+	return 0;
 }
 
-void cl_put_grouplock(struct ccc_grouplock *cg)
+void cl_put_grouplock(struct ll_grouplock *lg)
 {
-	struct lu_env  *env  = cg->cg_env;
-	struct cl_io   *io   = cg->cg_io;
-	struct cl_lock *lock = cg->cg_lock;
+	struct lu_env  *env  = lg->lg_env;
+	struct cl_io   *io   = lg->lg_io;
+	struct cl_lock *lock = lg->lg_lock;
 	int             refcheck;
 
-	LASSERT(cg->cg_env);
-	LASSERT(cg->cg_gid);
+	LASSERT(lg->lg_env != NULL);
+	LASSERT(lg->lg_gid != 0);
 
 	cl_env_implant(env, &refcheck);
 	cl_env_put(env, &refcheck);
@@ -199,4 +198,3 @@ void cl_put_grouplock(struct ccc_grouplock *cg)
 	cl_io_fini(env, io);
 	cl_env_put(env, NULL);
 }
-

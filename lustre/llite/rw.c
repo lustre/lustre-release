@@ -435,12 +435,12 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 			struct ll_readahead_state *ras, bool hit)
 {
 	struct vvp_io *vio = vvp_env_io(env);
-	struct vvp_thread_info *vti = vvp_env_info(env);
-	struct cl_attr *attr = ccc_env_thread_attr(env);
+	struct ll_thread_info *lti = ll_env_info(env);
+	struct cl_attr *attr = vvp_env_thread_attr(env);
 	unsigned long len, mlen = 0, reserved;
 	pgoff_t ra_end, start = 0, end = 0;
 	struct inode *inode;
-	struct ra_io_arg *ria = &vti->vti_ria;
+	struct ra_io_arg *ria = &lti->lti_ria;
 	struct cl_object *clob;
 	int ret = 0;
 	__u64 kms;
@@ -921,7 +921,7 @@ int ll_writepage(struct page *vmpage, struct writeback_control *wbc)
         clob  = ll_i2info(inode)->lli_clob;
         LASSERT(clob != NULL);
 
-        io = ccc_env_thread_io(env);
+	io = vvp_env_thread_io(env);
         io->ci_obj = clob;
 	io->ci_ignore_layout = 1;
         result = cl_io_init(env, io, CIT_MISC, clob);
@@ -1062,7 +1062,7 @@ struct ll_cl_context *ll_cl_find(struct file *file)
 void ll_cl_add(struct file *file, const struct lu_env *env, struct cl_io *io)
 {
 	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
-	struct ll_cl_context *lcc = &vvp_env_info(env)->vti_io_ctx;
+	struct ll_cl_context *lcc = &ll_env_info(env)->lti_io_ctx;
 
 	memset(lcc, 0, sizeof(*lcc));
 	INIT_LIST_HEAD(&lcc->lcc_list);
@@ -1078,7 +1078,7 @@ void ll_cl_add(struct file *file, const struct lu_env *env, struct cl_io *io)
 void ll_cl_remove(struct file *file, const struct lu_env *env)
 {
 	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
-	struct ll_cl_context *lcc = &vvp_env_info(env)->vti_io_ctx;
+	struct ll_cl_context *lcc = &ll_env_info(env)->lti_io_ctx;
 
 	write_lock(&fd->fd_lock);
 	list_del_init(&lcc->lcc_list);

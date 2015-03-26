@@ -53,34 +53,6 @@ struct obd_device;
 struct obd_export;
 struct page;
 
-blkcnt_t dirty_cnt(struct inode *inode);
-
-int cl_glimpse_size0(struct inode *inode, int agl);
-int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
-		    struct inode *inode, struct cl_object *clob, int agl);
-
-static inline int cl_glimpse_size(struct inode *inode)
-{
-	return cl_glimpse_size0(inode, 0);
-}
-
-static inline int cl_agl(struct inode *inode)
-{
-	return cl_glimpse_size0(inode, 1);
-}
-
-/**
- * Locking policy for setattr.
- */
-enum ccc_setattr_lock_type {
-	/** Locking is done by server */
-	SETATTR_NOLOCK,
-	/** Extent lock is enqueued */
-	SETATTR_EXTENT_LOCK,
-	/** Existing local extent lock is used */
-	SETATTR_MATCH_LOCK
-};
-
 enum vvp_io_subtype {
 	/** normal IO */
 	IO_NORMAL,
@@ -139,9 +111,6 @@ struct vvp_io {
 			bool			 ft_flags_valid;
 		} fault;
 		struct {
-			enum ccc_setattr_lock_type vui_local_lock;
-		} setattr;
-		struct {
 			struct pipe_inode_info	*vui_pipe;
 			unsigned int		 vui_flags;
 		} splice;
@@ -172,51 +141,53 @@ struct vvp_io {
 	bool		vui_ra_valid;
 };
 
-extern struct lu_context_key ccc_key;
+extern struct lu_device_type vvp_device_type;
+
 extern struct lu_context_key vvp_session_key;
+extern struct lu_context_key vvp_thread_key;
 
 extern struct kmem_cache *vvp_lock_kmem;
 extern struct kmem_cache *vvp_object_kmem;
 extern struct kmem_cache *vvp_req_kmem;
 
-struct ccc_thread_info {
-	struct cl_lock		cti_lock;
-	struct cl_lock_descr	cti_descr;
-	struct cl_io		cti_io;
-	struct cl_attr		cti_attr;
+struct vvp_thread_info {
+	struct cl_lock		vti_lock;
+	struct cl_lock_descr	vti_descr;
+	struct cl_io		vti_io;
+	struct cl_attr		vti_attr;
 };
 
-static inline struct ccc_thread_info *ccc_env_info(const struct lu_env *env)
+static inline struct vvp_thread_info *vvp_env_info(const struct lu_env *env)
 {
-	struct ccc_thread_info      *info;
+	struct vvp_thread_info *vti;
 
-	info = lu_context_key_get(&env->le_ctx, &ccc_key);
-	LASSERT(info != NULL);
+	vti = lu_context_key_get(&env->le_ctx, &vvp_thread_key);
+	LASSERT(vti != NULL);
 
-	return info;
+	return vti;
 }
 
-static inline struct cl_lock *ccc_env_lock(const struct lu_env *env)
+static inline struct cl_lock *vvp_env_lock(const struct lu_env *env)
 {
-	struct cl_lock *lock = &ccc_env_info(env)->cti_lock;
+	struct cl_lock *lock = &vvp_env_info(env)->vti_lock;
 
 	memset(lock, 0, sizeof(*lock));
 
 	return lock;
 }
 
-static inline struct cl_attr *ccc_env_thread_attr(const struct lu_env *env)
+static inline struct cl_attr *vvp_env_thread_attr(const struct lu_env *env)
 {
-	struct cl_attr *attr = &ccc_env_info(env)->cti_attr;
+	struct cl_attr *attr = &vvp_env_info(env)->vti_attr;
 
 	memset(attr, 0, sizeof(*attr));
 
 	return attr;
 }
 
-static inline struct cl_io *ccc_env_thread_io(const struct lu_env *env)
+static inline struct cl_io *vvp_env_thread_io(const struct lu_env *env)
 {
-	struct cl_io *io = &ccc_env_info(env)->cti_io;
+	struct cl_io *io = &vvp_env_info(env)->vti_io;
 
 	memset(io, 0, sizeof(*io));
 
@@ -224,7 +195,7 @@ static inline struct cl_io *ccc_env_thread_io(const struct lu_env *env)
 }
 
 struct vvp_session {
-	struct vvp_io cs_ios;
+	struct vvp_io vs_ios;
 };
 
 static inline struct vvp_session *vvp_env_session(const struct lu_env *env)
@@ -239,11 +210,11 @@ static inline struct vvp_session *vvp_env_session(const struct lu_env *env)
 
 static inline struct vvp_io *vvp_env_io(const struct lu_env *env)
 {
-	return &vvp_env_session(env)->cs_ios;
+	return &vvp_env_session(env)->vs_ios;
 }
 
 /**
- * ccc-private object state.
+ * VPP-private object state.
  */
 struct vvp_object {
 	struct cl_object_header vob_header;
@@ -311,14 +282,6 @@ struct vvp_req {
 	struct cl_req_slice vrq_cl;
 };
 
-void *ccc_key_init(const struct lu_context *ctx, struct lu_context_key *key);
-void ccc_key_fini(const struct lu_context *ctx, struct lu_context_key *key,
-		  void *data);
-
-void ccc_umount(const struct lu_env *env, struct cl_device *dev);
-int ccc_global_init(struct lu_device_type *device_type);
-void ccc_global_fini(struct lu_device_type *device_type);
-
 static inline struct lu_device *vvp2lu_dev(struct vvp_device *vdv)
 {
 	return &vdv->vdv_cl.cd_lu_dev;
@@ -362,17 +325,6 @@ static inline struct vvp_lock *cl2vvp_lock(const struct cl_lock_slice *slice)
 	return container_of(slice, struct vvp_lock, vlk_cl);
 }
 
-int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
-		   struct obd_capa *capa);
-
-int cl_file_inode_init(struct inode *inode, struct lustre_md *md);
-void cl_inode_fini(struct inode *inode);
-int cl_local_size(struct inode *inode);
-
-__u16 ll_dirent_type_get(struct lu_dirent *ent);
-__u64 cl_fid_build_ino(const struct lu_fid *fid, int api32);
-__u32 cl_fid_build_gen(const struct lu_fid *fid);
-
 #ifdef CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK
 # define CLOBINVRNT(env, clob, expr)					\
 	do {								\
@@ -386,22 +338,6 @@ __u32 cl_fid_build_gen(const struct lu_fid *fid);
 # define CLOBINVRNT(env, clob, expr)					\
 	((void)sizeof(env), (void)sizeof(clob), (void)sizeof !!(expr))
 #endif /* CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK */
-
-int cl_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp);
-int cl_ocd_update(struct obd_device *host,
-		  struct obd_device *watched,
-		  enum obd_notify_event ev, void *owner, void *data);
-
-struct ccc_grouplock {
-	struct lu_env	*cg_env;
-	struct cl_io	*cg_io;
-	struct cl_lock	*cg_lock;
-	unsigned long	 cg_gid;
-};
-
-int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
-		     struct ccc_grouplock *cg);
-void cl_put_grouplock(struct ccc_grouplock *cg);
 
 /**
  * New interfaces to get and put lov_stripe_md from lov layer. This violates
@@ -417,14 +353,6 @@ int lov_read_and_clear_async_rc(struct cl_object *clob);
 struct lov_stripe_md *ccc_inode_lsm_get(struct inode *inode);
 void ccc_inode_lsm_put(struct inode *inode, struct lov_stripe_md *lsm);
 
-enum {
-	LUSTRE_OPC_MKDIR	= 0,
-	LUSTRE_OPC_SYMLINK	= 1,
-	LUSTRE_OPC_MKNOD	= 2,
-	LUSTRE_OPC_CREATE	= 3,
-	LUSTRE_OPC_ANY		= 5,
-};
-
 int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
 		struct cl_io *io);
 int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io);
@@ -437,6 +365,9 @@ int vvp_req_init(const struct lu_env *env, struct cl_device *dev,
 struct lu_object *vvp_object_alloc(const struct lu_env *env,
 				   const struct lu_object_header *hdr,
 				   struct lu_device *dev);
+
+int vvp_global_init(void);
+void vvp_global_fini(void);
 
 extern const struct file_operations vvp_dump_pgcache_file_ops;
 

@@ -33,9 +33,6 @@
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
- * cl code shared between vvp and liblustre (and other Lustre clients in the
- * future).
- *
  *   Author: Nikita Danilov <nikita.danilov@sun.com>
  */
 
@@ -59,104 +56,21 @@
 #include <cl_object.h>
 
 #include "llite_internal.h"
-
-/*
- * ccc_ prefix stands for "Common Client Code".
- */
-
-static struct kmem_cache *ccc_thread_kmem;
-
-static struct lu_kmem_descr ccc_caches[] = {
-        {
-                .ckd_cache = &ccc_thread_kmem,
-                .ckd_name  = "ccc_thread_kmem",
-                .ckd_size  = sizeof (struct ccc_thread_info),
-        },
-        {
-                .ckd_cache = NULL
-        }
-};
-
-/*****************************************************************************
- *
- * Vvp device and device type functions.
- *
- */
-
-void *ccc_key_init(const struct lu_context *ctx, struct lu_context_key *key)
-{
-	struct ccc_thread_info *info;
-
-	OBD_SLAB_ALLOC_PTR_GFP(info, ccc_thread_kmem, GFP_NOFS);
-	if (info == NULL)
-		info = ERR_PTR(-ENOMEM);
-	return info;
-}
-
-void ccc_key_fini(const struct lu_context *ctx,
-                         struct lu_context_key *key, void *data)
-{
-        struct ccc_thread_info *info = data;
-        OBD_SLAB_FREE_PTR(info, ccc_thread_kmem);
-}
-
-struct lu_context_key ccc_key = {
-        .lct_tags = LCT_CL_THREAD,
-        .lct_init = ccc_key_init,
-        .lct_fini = ccc_key_fini
-};
+#include "vvp_internal.h"
 
 /**
- * An `emergency' environment used by ccc_inode_fini() when cl_env_get()
- * fails. Access to this environment is serialized by ccc_inode_fini_guard
+ * An `emergency' environment used by cl_inode_fini() when cl_env_get()
+ * fails. Access to this environment is serialized by cl_inode_fini_guard
  * mutex.
  */
-static struct lu_env *ccc_inode_fini_env = NULL;
+struct lu_env *cl_inode_fini_env;
+int cl_inode_fini_refcheck;
 
 /**
  * A mutex serializing calls to slp_inode_fini() under extreme memory
  * pressure, when environments cannot be allocated.
  */
-static DEFINE_MUTEX(ccc_inode_fini_guard);
-static int dummy_refcheck;
-
-int ccc_global_init(struct lu_device_type *device_type)
-{
-        int result;
-
-        result = lu_kmem_init(ccc_caches);
-        if (result)
-                return result;
-
-        result = lu_device_type_init(device_type);
-        if (result)
-                goto out_kmem;
-
-        ccc_inode_fini_env = cl_env_alloc(&dummy_refcheck,
-                                          LCT_REMEMBER|LCT_NOREF);
-        if (IS_ERR(ccc_inode_fini_env)) {
-                result = PTR_ERR(ccc_inode_fini_env);
-                goto out_device;
-        }
-
-        ccc_inode_fini_env->le_ctx.lc_cookie = 0x4;
-        return 0;
-out_device:
-        lu_device_type_fini(device_type);
-out_kmem:
-        lu_kmem_fini(ccc_caches);
-        return result;
-}
-
-void ccc_global_fini(struct lu_device_type *device_type)
-{
-        if (ccc_inode_fini_env != NULL) {
-                cl_env_put(ccc_inode_fini_env, &dummy_refcheck);
-                ccc_inode_fini_env = NULL;
-        }
-        lu_device_type_fini(device_type);
-        lu_kmem_fini(ccc_caches);
-}
+static DEFINE_MUTEX(cl_inode_fini_guard);
 
 int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
                    struct obd_capa *capa)
@@ -172,7 +86,7 @@ int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
         if (IS_ERR(env))
                 RETURN(PTR_ERR(env));
 
-        io = ccc_env_thread_io(env);
+	io = vvp_env_thread_io(env);
 	io->ci_obj = ll_i2info(inode)->lli_clob;
 
 	io->u.ci_setattr.sa_attr.lvb_atime = LTIME_S(attr->ia_atime);
@@ -328,12 +242,13 @@ void cl_inode_fini(struct inode *inode)
                 cookie = cl_env_reenter();
                 env = cl_env_get(&refcheck);
                 emergency = IS_ERR(env);
-                if (emergency) {
-			mutex_lock(&ccc_inode_fini_guard);
-                        LASSERT(ccc_inode_fini_env != NULL);
-                        cl_env_implant(ccc_inode_fini_env, &refcheck);
-                        env = ccc_inode_fini_env;
-                }
+		if (emergency) {
+			mutex_lock(&cl_inode_fini_guard);
+			LASSERT(cl_inode_fini_env != NULL);
+			cl_env_implant(cl_inode_fini_env, &refcheck);
+			env = cl_inode_fini_env;
+		}
+
                 /*
                  * cl_object cache is a slave to inode cache (which, in turn
                  * is a slave to dentry cache), don't keep cl_object in memory
@@ -343,35 +258,15 @@ void cl_inode_fini(struct inode *inode)
                 lu_object_ref_del(&clob->co_lu, "inode", inode);
                 cl_object_put_last(env, clob);
                 lli->lli_clob = NULL;
-                if (emergency) {
-                        cl_env_unplant(ccc_inode_fini_env, &refcheck);
-			mutex_unlock(&ccc_inode_fini_guard);
-                } else
-                        cl_env_put(env, &refcheck);
+		if (emergency) {
+			cl_env_unplant(cl_inode_fini_env, &refcheck);
+			mutex_unlock(&cl_inode_fini_guard);
+		} else {
+			cl_env_put(env, &refcheck);
+		}
+
                 cl_env_reexit(cookie);
         }
-}
-
-/**
- * return IF_* type for given lu_dirent entry.
- * IF_* flag shld be converted to particular OS file type in
- * platform llite module.
- */
-__u16 ll_dirent_type_get(struct lu_dirent *ent)
-{
-        __u16 type = 0;
-        struct luda_type *lt;
-        int len = 0;
-
-        if (le32_to_cpu(ent->lde_attrs) & LUDA_TYPE) {
-                const unsigned align = sizeof(struct luda_type) - 1;
-
-                len = le16_to_cpu(ent->lde_namelen);
-                len = (len + align) & ~align;
-		lt = (void *)ent->lde_name + len;
-		type = IFTODT(le16_to_cpu(lt->lt_type));
-	}
-	return type;
 }
 
 /**

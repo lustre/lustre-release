@@ -41,7 +41,6 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-
 #include <obd.h>
 #include "llite_internal.h"
 #include "vvp_internal.h"
@@ -57,12 +56,19 @@
  * "llite_" (var. "ll_") prefix.
  */
 
+static struct kmem_cache *ll_thread_kmem;
 struct kmem_cache *vvp_lock_kmem;
 struct kmem_cache *vvp_object_kmem;
 struct kmem_cache *vvp_req_kmem;
-static struct kmem_cache *vvp_thread_kmem;
 static struct kmem_cache *vvp_session_kmem;
+static struct kmem_cache *vvp_thread_kmem;
+
 static struct lu_kmem_descr vvp_caches[] = {
+	{
+		.ckd_cache = &ll_thread_kmem,
+		.ckd_name  = "ll_thread_kmem",
+		.ckd_size  = sizeof(struct ll_thread_info),
+	},
 	{
 		.ckd_cache = &vvp_lock_kmem,
 		.ckd_name  = "vvp_lock_kmem",
@@ -79,37 +85,45 @@ static struct lu_kmem_descr vvp_caches[] = {
 		.ckd_size  = sizeof(struct vvp_req),
 	},
         {
-                .ckd_cache = &vvp_thread_kmem,
-                .ckd_name  = "vvp_thread_kmem",
-                .ckd_size  = sizeof (struct vvp_thread_info),
-        },
-        {
                 .ckd_cache = &vvp_session_kmem,
                 .ckd_name  = "vvp_session_kmem",
                 .ckd_size  = sizeof (struct vvp_session)
         },
+	{
+		.ckd_cache = &vvp_thread_kmem,
+		.ckd_name  = "vvp_thread_kmem",
+		.ckd_size  = sizeof(struct vvp_thread_info),
+	},
         {
                 .ckd_cache = NULL
         }
 };
 
-static void *vvp_key_init(const struct lu_context *ctx,
-			  struct lu_context_key *key)
+static void *ll_thread_key_init(const struct lu_context *ctx,
+				struct lu_context_key *key)
 {
-	struct vvp_thread_info *info;
+	struct ll_thread_info *lti;
 
-	OBD_SLAB_ALLOC_PTR_GFP(info, vvp_thread_kmem, GFP_NOFS);
-	if (info == NULL)
-		info = ERR_PTR(-ENOMEM);
-	return info;
+	OBD_SLAB_ALLOC_PTR_GFP(lti, ll_thread_kmem, GFP_NOFS);
+	if (lti == NULL)
+		lti = ERR_PTR(-ENOMEM);
+
+	return lti;
 }
 
-static void vvp_key_fini(const struct lu_context *ctx,
-                         struct lu_context_key *key, void *data)
+static void ll_thread_key_fini(const struct lu_context *ctx,
+			       struct lu_context_key *key, void *data)
 {
-        struct vvp_thread_info *info = data;
-        OBD_SLAB_FREE_PTR(info, vvp_thread_kmem);
+	struct ll_thread_info *lti = data;
+
+	OBD_SLAB_FREE_PTR(lti, ll_thread_kmem);
 }
+
+struct lu_context_key ll_thread_key = {
+	.lct_tags = LCT_CL_THREAD,
+	.lct_init = ll_thread_key_init,
+	.lct_fini = ll_thread_key_fini,
+};
 
 static void *vvp_session_key_init(const struct lu_context *ctx,
 				  struct lu_context_key *key)
@@ -129,21 +143,38 @@ static void vvp_session_key_fini(const struct lu_context *ctx,
         OBD_SLAB_FREE_PTR(session, vvp_session_kmem);
 }
 
-
-struct lu_context_key vvp_key = {
-        .lct_tags = LCT_CL_THREAD,
-        .lct_init = vvp_key_init,
-        .lct_fini = vvp_key_fini
-};
-
 struct lu_context_key vvp_session_key = {
         .lct_tags = LCT_SESSION,
         .lct_init = vvp_session_key_init,
         .lct_fini = vvp_session_key_fini
 };
 
+static void *vvp_thread_key_init(const struct lu_context *ctx,
+				 struct lu_context_key *key)
+{
+	struct vvp_thread_info *vti;
+
+	OBD_SLAB_ALLOC_PTR_GFP(vti, vvp_thread_kmem, GFP_NOFS);
+	if (vti == NULL)
+		vti = ERR_PTR(-ENOMEM);
+	return vti;
+}
+
+static void vvp_thread_key_fini(const struct lu_context *ctx,
+				struct lu_context_key *key, void *data)
+{
+	struct vvp_thread_info *vti = data;
+	OBD_SLAB_FREE_PTR(vti, vvp_thread_kmem);
+}
+
+struct lu_context_key vvp_thread_key = {
+	.lct_tags = LCT_CL_THREAD,
+	.lct_init = vvp_thread_key_init,
+	.lct_fini = vvp_thread_key_fini,
+};
+
 /* type constructor/destructor: vvp_type_{init,fini,start,stop}(). */
-LU_TYPE_INIT_FINI(vvp, &ccc_key, &vvp_key, &vvp_session_key);
+LU_TYPE_INIT_FINI(vvp, &ll_thread_key, &vvp_session_key, &vvp_thread_key);
 
 static const struct lu_device_operations vvp_lu_ops = {
         .ldo_object_alloc      = vvp_object_alloc
@@ -261,23 +292,29 @@ struct lu_device_type vvp_device_type = {
  */
 int vvp_global_init(void)
 {
-        int result;
+	int rc;
 
-        result = lu_kmem_init(vvp_caches);
-        if (result == 0) {
-                result = ccc_global_init(&vvp_device_type);
-                if (result != 0)
-                        lu_kmem_fini(vvp_caches);
-        }
-        return result;
+	rc = lu_kmem_init(vvp_caches);
+	if (rc != 0)
+		return rc;
+
+	rc = lu_device_type_init(&vvp_device_type);
+	if (rc != 0)
+		goto out_kmem;
+
+	return 0;
+
+out_kmem:
+	lu_kmem_fini(vvp_caches);
+
+	return rc;
 }
 
 void vvp_global_fini(void)
 {
-        ccc_global_fini(&vvp_device_type);
-        lu_kmem_fini(vvp_caches);
+	lu_device_type_fini(&vvp_device_type);
+	lu_kmem_fini(vvp_caches);
 }
-
 
 /*****************************************************************************
  *

@@ -45,11 +45,13 @@
 #include <linux/pagemap.h>
 #include <linux/file.h>
 #include <linux/sched.h>
-#include "llite_internal.h"
 #include <lustre/ll_fiemap.h>
 #include <lustre_ioctl.h>
 
 #include "cl_object.h"
+
+#include "llite_internal.h"
+#include "vvp_internal.h"
 
 static int
 ll_put_grouplock(struct inode *inode, struct file *file, unsigned long arg);
@@ -246,9 +248,9 @@ static int ll_md_close(struct obd_export *md_exp, struct inode *inode,
         int rc = 0;
         ENTRY;
 
-        /* clear group lock, if present */
-        if (unlikely(fd->fd_flags & LL_FILE_GROUP_LOCKED))
-                ll_put_grouplock(inode, file, fd->fd_grouplock.cg_gid);
+	/* clear group lock, if present */
+	if (unlikely(fd->fd_flags & LL_FILE_GROUP_LOCKED))
+		ll_put_grouplock(inode, file, fd->fd_grouplock.lg_gid);
 
 	if (fd->fd_lease_och != NULL) {
 		bool lease_broken;
@@ -885,7 +887,7 @@ int ll_merge_attr(const struct lu_env *env, struct inode *inode)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct cl_object *obj = lli->lli_clob;
-	struct cl_attr *attr = ccc_env_thread_attr(env);
+	struct cl_attr *attr = vvp_env_thread_attr(env);
 	s64 atime;
 	s64 mtime;
 	s64 ctime;
@@ -1005,7 +1007,7 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 		file->f_dentry->d_name.name, iot, *ppos, count);
 
 restart:
-        io = ccc_env_thread_io(env);
+	io = vvp_env_thread_io(env);
         ll_io_init(io, file, iot == CIT_WRITE);
 
 	/* The maximum Lustre file size is variable, based on the
@@ -1162,7 +1164,7 @@ static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
         if (IS_ERR(env))
                 RETURN(PTR_ERR(env));
 
-        args = vvp_env_args(env, IO_NORMAL);
+	args = ll_env_args(env, IO_NORMAL);
         args->u.normal.via_iov = (struct iovec *)iov;
         args->u.normal.via_nrsegs = nr_segs;
         args->u.normal.via_iocb = iocb;
@@ -1187,8 +1189,8 @@ static ssize_t ll_file_read(struct file *file, char __user *buf, size_t count,
         if (IS_ERR(env))
                 RETURN(PTR_ERR(env));
 
-        local_iov = &vvp_env_info(env)->vti_local_iov;
-        kiocb = &vvp_env_info(env)->vti_kiocb;
+	local_iov = &ll_env_info(env)->lti_local_iov;
+	kiocb = &ll_env_info(env)->lti_kiocb;
         local_iov->iov_base = (void __user *)buf;
         local_iov->iov_len = count;
         init_sync_kiocb(kiocb, file);
@@ -1228,7 +1230,7 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
         if (IS_ERR(env))
                 RETURN(PTR_ERR(env));
 
-        args = vvp_env_args(env, IO_NORMAL);
+	args = ll_env_args(env, IO_NORMAL);
         args->u.normal.via_iov = (struct iovec *)iov;
         args->u.normal.via_nrsegs = nr_segs;
         args->u.normal.via_iocb = iocb;
@@ -1253,8 +1255,8 @@ static ssize_t ll_file_write(struct file *file, const char __user *buf,
         if (IS_ERR(env))
                 RETURN(PTR_ERR(env));
 
-        local_iov = &vvp_env_info(env)->vti_local_iov;
-        kiocb = &vvp_env_info(env)->vti_kiocb;
+	local_iov = &ll_env_info(env)->lti_local_iov;
+	kiocb = &ll_env_info(env)->lti_kiocb;
         local_iov->iov_base = (void __user *)buf;
         local_iov->iov_len = count;
         init_sync_kiocb(kiocb, file);
@@ -1289,7 +1291,7 @@ static ssize_t ll_file_splice_read(struct file *in_file, loff_t *ppos,
         if (IS_ERR(env))
                 RETURN(PTR_ERR(env));
 
-        args = vvp_env_args(env, IO_SPLICE);
+	args = ll_env_args(env, IO_SPLICE);
         args->u.splice.via_pipe = pipe;
         args->u.splice.via_flags = flags;
 
@@ -1502,7 +1504,7 @@ ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg)
 {
         struct ll_inode_info   *lli = ll_i2info(inode);
         struct ll_file_data    *fd = LUSTRE_FPRIVATE(file);
-        struct ccc_grouplock    grouplock;
+	struct ll_grouplock	grouplock;
         int                     rc;
         ENTRY;
 
@@ -1517,11 +1519,11 @@ ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg)
 	spin_lock(&lli->lli_lock);
 	if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
 		CWARN("group lock already existed with gid %lu\n",
-		      fd->fd_grouplock.cg_gid);
+		      fd->fd_grouplock.lg_gid);
 		spin_unlock(&lli->lli_lock);
 		RETURN(-EINVAL);
 	}
-	LASSERT(fd->fd_grouplock.cg_lock == NULL);
+	LASSERT(fd->fd_grouplock.lg_lock == NULL);
 	spin_unlock(&lli->lli_lock);
 
 	rc = cl_get_grouplock(ll_i2info(inode)->lli_clob,
@@ -1550,7 +1552,7 @@ static int ll_put_grouplock(struct inode *inode, struct file *file,
 {
 	struct ll_inode_info   *lli = ll_i2info(inode);
 	struct ll_file_data    *fd = LUSTRE_FPRIVATE(file);
-	struct ccc_grouplock    grouplock;
+	struct ll_grouplock	grouplock;
 	ENTRY;
 
 	spin_lock(&lli->lli_lock);
@@ -1559,11 +1561,12 @@ static int ll_put_grouplock(struct inode *inode, struct file *file,
                 CWARN("no group lock held\n");
                 RETURN(-EINVAL);
         }
-        LASSERT(fd->fd_grouplock.cg_lock != NULL);
 
-        if (fd->fd_grouplock.cg_gid != arg) {
-                CWARN("group lock %lu doesn't match current id %lu\n",
-                       arg, fd->fd_grouplock.cg_gid);
+	LASSERT(fd->fd_grouplock.lg_lock != NULL);
+
+	if (fd->fd_grouplock.lg_gid != arg) {
+		CWARN("group lock %lu doesn't match current id %lu\n",
+		      arg, fd->fd_grouplock.lg_gid);
 		spin_unlock(&lli->lli_lock);
 		RETURN(-EINVAL);
 	}
@@ -2588,7 +2591,7 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 
 	capa = ll_osscapa_get(inode, CAPA_OPC_OSS_WRITE);
 
-	io = ccc_env_thread_io(env);
+	io = vvp_env_thread_io(env);
 	io->ci_obj = ll_i2info(inode)->lli_clob;
 	io->ci_ignore_layout = ignore_layout;
 

@@ -133,7 +133,7 @@ static int vvp_prep_size(const struct lu_env *env, struct cl_object *obj,
 			 struct cl_io *io, loff_t start, size_t count,
 			 int *exceed)
 {
-	struct cl_attr *attr  = ccc_env_thread_attr(env);
+	struct cl_attr *attr  = vvp_env_thread_attr(env);
 	struct inode   *inode = vvp_object_inode(obj);
 	loff_t          pos   = start + count - 1;
 	loff_t kms;
@@ -236,7 +236,7 @@ static int vvp_io_one_lock_index(const struct lu_env *env, struct cl_io *io,
 
 	if (vio->vui_fd && (vio->vui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
 		descr->cld_mode = CLM_GROUP;
-		descr->cld_gid  = vio->vui_fd->fd_grouplock.cg_gid;
+		descr->cld_gid  = vio->vui_fd->fd_grouplock.lg_gid;
 	} else {
 		descr->cld_mode  = mode;
 	}
@@ -387,10 +387,10 @@ static enum cl_lock_mode vvp_mode_from_vma(struct vm_area_struct *vma)
 static int vvp_mmap_locks(const struct lu_env *env,
 			  struct vvp_io *vio, struct cl_io *io)
 {
-        struct ccc_thread_info *cti = ccc_env_info(env);
+	struct vvp_thread_info *vti = vvp_env_info(env);
         struct mm_struct       *mm = current->mm;
         struct vm_area_struct  *vma;
-        struct cl_lock_descr   *descr = &cti->cti_descr;
+	struct cl_lock_descr   *descr = &vti->vti_descr;
         ldlm_policy_data_t      policy;
         unsigned long           addr;
         unsigned long           seg;
@@ -619,7 +619,6 @@ static int vvp_io_setattr_iter_init(const struct lu_env *env,
 static int vvp_io_setattr_lock(const struct lu_env *env,
                                const struct cl_io_slice *ios)
 {
-	struct vvp_io *vio = vvp_env_io(env);
 	struct cl_io  *io  = ios->cis_io;
 	__u64 new_size;
 	__u32 enqflags = 0;
@@ -636,8 +635,6 @@ static int vvp_io_setattr_lock(const struct lu_env *env,
                         return 0;
                 new_size = 0;
         }
-
-	vio->u.setattr.vui_local_lock = SETATTR_EXTENT_LOCK;
 
 	return vvp_io_one_lock(env, io, enqflags, CLM_WRITE,
 			       new_size, OBD_OBJECT_EOF);
@@ -676,7 +673,7 @@ static int vvp_io_setattr_time(const struct lu_env *env,
 {
         struct cl_io       *io    = ios->cis_io;
         struct cl_object   *obj   = io->ci_obj;
-        struct cl_attr     *attr  = ccc_env_thread_attr(env);
+	struct cl_attr     *attr  = vvp_env_thread_attr(env);
         int result;
         unsigned valid = CAT_CTIME;
 

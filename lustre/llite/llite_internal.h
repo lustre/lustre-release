@@ -113,6 +113,13 @@ struct ll_remote_perm {
                                                     lrp_fsuid/lrp_fsgid. */
 };
 
+struct ll_grouplock {
+	struct lu_env	*lg_env;
+	struct cl_io	*lg_io;
+	struct cl_lock	*lg_lock;
+	unsigned long	 lg_gid;
+};
+
 enum lli_flags {
 	/* File data is modified. */
 	LLIF_DATA_MODIFIED      = 1 << 0,
@@ -639,7 +646,7 @@ extern struct kmem_cache *ll_file_data_slab;
 struct lustre_handle;
 struct ll_file_data {
 	struct ll_readahead_state fd_ras;
-	struct ccc_grouplock fd_grouplock;
+	struct ll_grouplock fd_grouplock;
 	__u64 lfd_pos;
 	__u32 fd_flags;
 	fmode_t fd_omode;
@@ -682,6 +689,13 @@ static inline int ll_need_32bit_api(struct ll_sb_info *sbi)
 }
 
 void ll_ras_enter(struct file *f);
+
+/* llite/lcommon_misc.c */
+int cl_ocd_update(struct obd_device *host, struct obd_device *watched,
+		  enum obd_notify_event ev, void *owner, void *data);
+int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
+		     struct ll_grouplock *lg);
+void cl_put_grouplock(struct ll_grouplock *lg);
 
 /* llite/lproc_llite.c */
 #ifdef CONFIG_PROC_FS
@@ -899,6 +913,15 @@ int ll_set_default_mdsize(struct ll_sb_info *sbi, int default_mdsize);
 int ll_get_max_cookiesize(struct ll_sb_info *sbi, int *max_cookiesize);
 int ll_get_default_cookiesize(struct ll_sb_info *sbi, int *default_cookiesize);
 int ll_process_config(struct lustre_cfg *lcfg);
+
+enum {
+	LUSTRE_OPC_MKDIR	= 0,
+	LUSTRE_OPC_SYMLINK	= 1,
+	LUSTRE_OPC_MKNOD	= 2,
+	LUSTRE_OPC_CREATE	= 3,
+	LUSTRE_OPC_ANY		= 5,
+};
+
 struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 				      struct inode *i1, struct inode *i2,
 				      const char *name, size_t namelen,
@@ -968,37 +991,35 @@ struct ll_cl_context {
 	struct cl_page		*lcc_page;
 };
 
-struct vvp_thread_info {
-        struct iovec         vti_local_iov;
-        struct vvp_io_args   vti_args;
-        struct ra_io_arg     vti_ria;
-        struct kiocb         vti_kiocb;
-        struct ll_cl_context vti_io_ctx;
+struct ll_thread_info {
+	struct iovec		lti_local_iov;
+	struct vvp_io_args	lti_args;
+	struct ra_io_arg	lti_ria;
+	struct kiocb		lti_kiocb;
+	struct ll_cl_context	lti_io_ctx;
 };
 
-extern struct lu_context_key vvp_key;
+extern struct lu_context_key ll_thread_key;
 
-static inline struct vvp_thread_info *vvp_env_info(const struct lu_env *env)
+static inline struct ll_thread_info *ll_env_info(const struct lu_env *env)
 {
-        struct vvp_thread_info      *info;
+	struct ll_thread_info *lti;
 
-        info = lu_context_key_get(&env->le_ctx, &vvp_key);
-        LASSERT(info != NULL);
-        return info;
+	lti = lu_context_key_get(&env->le_ctx, &ll_thread_key);
+	LASSERT(lti != NULL);
+
+	return lti;
 }
 
-static inline struct vvp_io_args *vvp_env_args(const struct lu_env *env,
-                                               enum vvp_io_subtype type)
+static inline struct vvp_io_args *ll_env_args(const struct lu_env *env,
+					      enum vvp_io_subtype type)
 {
-        struct vvp_io_args *ret = &vvp_env_info(env)->vti_args;
+	struct vvp_io_args *via = &ll_env_info(env)->lti_args;
 
-        ret->via_io_subtype = type;
+	via->via_io_subtype = type;
 
-        return ret;
+	return via;
 }
-
-int vvp_global_init(void);
-void vvp_global_fini(void);
 
 /* llite/llite_mmap.c */
 
@@ -1114,9 +1135,6 @@ void ll_truncate_free_capa(struct obd_capa *ocapa);
 void ll_clear_inode_capas(struct inode *inode);
 void ll_print_capa_stat(struct ll_sb_info *sbi);
 
-/* llite/llite_cl.c */
-extern struct lu_device_type vvp_device_type;
-
 /**
  * Common IO arguments for various VFS I/O interfaces.
  */
@@ -1201,6 +1219,23 @@ struct ll_statahead_info {
 int ll_statahead(struct inode *dir, struct dentry **dentry, bool unplug);
 void ll_authorize_statahead(struct inode *dir, void *key);
 void ll_deauthorize_statahead(struct inode *dir, void *key);
+
+/* glimpse.c */
+blkcnt_t dirty_cnt(struct inode *inode);
+
+int cl_glimpse_size0(struct inode *inode, int agl);
+int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
+		    struct inode *inode, struct cl_object *clob, int agl);
+
+static inline int cl_glimpse_size(struct inode *inode)
+{
+	return cl_glimpse_size0(inode, 0);
+}
+
+static inline int cl_agl(struct inode *inode)
+{
+	return cl_glimpse_size0(inode, 1);
+}
 
 static inline int ll_glimpse_size(struct inode *inode)
 {
@@ -1476,5 +1511,19 @@ int ll_page_sync_io(const struct lu_env *env, struct cl_io *io,
 		    struct cl_page *page, enum cl_req_type crt);
 
 int ll_getparent(struct file *file, struct getparent __user *arg);
+
+/* lcommon_cl.c */
+int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
+		   struct obd_capa *capa);
+
+extern struct lu_env *cl_inode_fini_env;
+extern int cl_inode_fini_refcheck;
+
+int cl_file_inode_init(struct inode *inode, struct lustre_md *md);
+void cl_inode_fini(struct inode *inode);
+int cl_local_size(struct inode *inode);
+
+u64 cl_fid_build_ino(const struct lu_fid *fid, int api32);
+u32 cl_fid_build_gen(const struct lu_fid *fid);
 
 #endif /* LLITE_INTERNAL_H */
