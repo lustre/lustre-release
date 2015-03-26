@@ -2867,89 +2867,6 @@ int lmv_set_info_async(const struct lu_env *env, struct obd_export *exp,
 	RETURN(-EINVAL);
 }
 
-static int lmv_pack_md_v1(const struct lmv_stripe_md *lsm,
-			  struct lmv_mds_md_v1 *lmm1)
-{
-	int	cplen;
-	int	i;
-
-	lmm1->lmv_magic = cpu_to_le32(lsm->lsm_md_magic);
-	lmm1->lmv_stripe_count = cpu_to_le32(lsm->lsm_md_stripe_count);
-	lmm1->lmv_master_mdt_index = cpu_to_le32(lsm->lsm_md_master_mdt_index);
-	lmm1->lmv_hash_type = cpu_to_le32(lsm->lsm_md_hash_type);
-	cplen = strlcpy(lmm1->lmv_pool_name, lsm->lsm_md_pool_name,
-			sizeof(lmm1->lmv_pool_name));
-	if (cplen >= sizeof(lmm1->lmv_pool_name))
-		return -E2BIG;
-
-	for (i = 0; i < lsm->lsm_md_stripe_count; i++)
-		fid_cpu_to_le(&lmm1->lmv_stripe_fids[i],
-			      &lsm->lsm_md_oinfo[i].lmo_fid);
-	return 0;
-}
-
-int lmv_pack_md(union lmv_mds_md **lmmp, const struct lmv_stripe_md *lsm,
-		int stripe_count)
-{
-	int	lmm_size = 0;
-	bool	allocated = false;
-	int	rc = 0;
-	ENTRY;
-
-	LASSERT(lmmp != NULL);
-	/* Free lmm */
-	if (*lmmp != NULL && lsm == NULL) {
-		int stripe_count;
-
-		stripe_count = lmv_mds_md_stripe_count_get(*lmmp);
-		lmm_size = lmv_mds_md_size(stripe_count,
-					   le32_to_cpu((*lmmp)->lmv_magic));
-		if (lmm_size == 0)
-			RETURN(-EINVAL);
-		OBD_FREE(*lmmp, lmm_size);
-		*lmmp = NULL;
-		RETURN(0);
-	}
-
-	/* Alloc lmm */
-	if (*lmmp == NULL && lsm == NULL) {
-		lmm_size = lmv_mds_md_size(stripe_count, LMV_MAGIC);
-		LASSERT(lmm_size > 0);
-		OBD_ALLOC(*lmmp, lmm_size);
-		if (*lmmp == NULL)
-			RETURN(-ENOMEM);
-		lmv_mds_md_stripe_count_set(*lmmp, stripe_count);
-		(*lmmp)->lmv_magic = cpu_to_le32(LMV_MAGIC);
-		RETURN(lmm_size);
-	}
-
-	/* pack lmm */
-	LASSERT(lsm != NULL);
-	lmm_size = lmv_mds_md_size(lsm->lsm_md_stripe_count, lsm->lsm_md_magic);
-	if (*lmmp == NULL) {
-		OBD_ALLOC(*lmmp, lmm_size);
-		if (*lmmp == NULL)
-			RETURN(-ENOMEM);
-		allocated = true;
-	}
-
-	switch (lsm->lsm_md_magic) {
-	case LMV_MAGIC_V1:
-		rc = lmv_pack_md_v1(lsm, &(*lmmp)->lmv_md_v1);
-		break;
-	default:
-		rc = -EINVAL;
-		break;
-	}
-
-	if (rc != 0 && allocated) {
-		OBD_FREE(*lmmp, lmm_size);
-		*lmmp = NULL;
-	}
-
-	RETURN(lmm_size);
-}
-
 static int lmv_unpack_md_v1(struct obd_export *exp, struct lmv_stripe_md *lsm,
 			    const struct lmv_mds_md_v1 *lmm1)
 {
@@ -3099,26 +3016,6 @@ int lmv_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
 {
 	return lmv_unpack_md(exp, (struct lmv_stripe_md **)lsmp,
 			     (union lmv_mds_md *)lmm, disk_len);
-}
-
-int lmv_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
-               struct lov_stripe_md *lsm)
-{
-	struct obd_device		*obd = exp->exp_obd;
-	struct lmv_obd			*lmv_obd = &obd->u.lmv;
-	const struct lmv_stripe_md	*lmv = (struct lmv_stripe_md *)lsm;
-	int				stripe_count;
-
-	if (lmmp == NULL) {
-		if (lsm != NULL)
-			stripe_count = lmv->lsm_md_stripe_count;
-		else
-			stripe_count = lmv_obd->desc.ld_tgt_count;
-
-		return lmv_mds_md_size(stripe_count, LMV_MAGIC_V1);
-	}
-
-	return lmv_pack_md((union lmv_mds_md **)lmmp, lmv, 0);
 }
 
 static int lmv_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,
@@ -3487,7 +3384,6 @@ struct obd_ops lmv_obd_ops = {
         .o_statfs               = lmv_statfs,
         .o_get_info             = lmv_get_info,
         .o_set_info_async       = lmv_set_info_async,
-        .o_packmd               = lmv_packmd,
         .o_unpackmd             = lmv_unpackmd,
         .o_notify               = lmv_notify,
         .o_get_uuid             = lmv_get_uuid,

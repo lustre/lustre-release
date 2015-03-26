@@ -432,7 +432,6 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
 	LPROCFS_OBD_OP_INIT(num_private_stats, stats, fid_alloc);
 	LPROCFS_OBD_OP_INIT(num_private_stats, stats, statfs);
 	LPROCFS_OBD_OP_INIT(num_private_stats, stats, statfs_async);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, packmd);
 	LPROCFS_OBD_OP_INIT(num_private_stats, stats, unpackmd);
 	LPROCFS_OBD_OP_INIT(num_private_stats, stats, create);
 	LPROCFS_OBD_OP_INIT(num_private_stats, stats, destroy);

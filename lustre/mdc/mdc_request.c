@@ -528,14 +528,6 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
                 rc = obd_unpackmd(dt_exp, &md->lsm, lmm, lmmsize);
                 if (rc < 0)
                         GOTO(out, rc);
-
-		if (rc < (typeof(rc))sizeof(*md->lsm)) {
-                        CDEBUG(D_INFO, "lsm size too small: "
-                               "rc < sizeof (*md->lsm) (%d < %d)\n",
-                               rc, (int)sizeof(*md->lsm));
-                        GOTO(out, rc = -EPROTO);
-                }
-
 	} else if (md->body->mbo_valid & OBD_MD_FLDIREA) {
 		int lmvsize;
 		struct lov_mds_md *lmv;

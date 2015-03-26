@@ -656,8 +656,6 @@ struct ll_file_data {
 	struct list_head fd_lccs; /* list of ll_cl_context */
 };
 
-struct lov_stripe_md;
-
 extern spinlock_t inode_lock;
 
 extern struct proc_dir_entry *proc_lustre_fs_root;

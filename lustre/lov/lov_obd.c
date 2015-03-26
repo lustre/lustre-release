@@ -1021,14 +1021,6 @@ out:
         RETURN(rc);
 }
 
-#define ASSERT_LSM_MAGIC(lsmp)                                                  \
-do {                                                                            \
-        LASSERT((lsmp) != NULL);                                                \
-        LASSERTF(((lsmp)->lsm_magic == LOV_MAGIC_V1 ||                          \
-                 (lsmp)->lsm_magic == LOV_MAGIC_V3),                            \
-                 "%p->lsm_magic=%x\n", (lsmp), (lsmp)->lsm_magic);              \
-} while (0)
-
 int lov_statfs_interpret(struct ptlrpc_request_set *rqset, void *data, int rc)
 {
 	struct lov_request_set *lovset = (struct lov_request_set *)data;
@@ -1477,7 +1469,6 @@ static struct obd_ops lov_obd_ops = {
 	.o_disconnect		= lov_disconnect,
 	.o_statfs		= lov_statfs,
 	.o_statfs_async		= lov_statfs_async,
-	.o_packmd		= lov_packmd,
 	.o_unpackmd		= lov_unpackmd,
 	.o_iocontrol		= lov_iocontrol,
 	.o_get_info		= lov_get_info,
