@@ -1546,7 +1546,7 @@ static int ll_setattr_ost(struct inode *inode, struct iattr *attr)
         else
                 capa = ll_mdscapa_get(inode);
 
-        rc = cl_setattr_ost(inode, attr, capa);
+	rc = cl_setattr_ost(ll_i2info(inode)->lli_clob, attr, 0, capa);
 
         if (attr->ia_valid & ATTR_SIZE)
                 ll_truncate_free_capa(capa);
@@ -2118,9 +2118,10 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 		RETURN(put_user(flags, (int __user *)arg));
         }
         case FSFILT_IOC_SETFLAGS: {
-		struct lov_stripe_md *lsm;
-                struct obd_info oinfo = { { { 0 } } };
-                struct md_op_data *op_data;
+		struct iattr *attr;
+		struct md_op_data *op_data;
+		struct cl_object *obj;
+		struct obd_capa *capa;
 
 		if (get_user(flags, (int __user *)arg))
 			RETURN(-EFAULT);
@@ -2140,32 +2141,21 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 
 		inode->i_flags = ll_ext_to_inode_flags(flags);
 
-		lsm = ccc_inode_lsm_get(inode);
-		if (!lsm_has_objects(lsm)) {
-			ccc_inode_lsm_put(inode, lsm);
+		obj = ll_i2info(inode)->lli_clob;
+		if (obj == NULL)
 			RETURN(0);
-		}
 
-		OBDO_ALLOC(oinfo.oi_oa);
-		if (!oinfo.oi_oa) {
-			ccc_inode_lsm_put(inode, lsm);
+		OBD_ALLOC_PTR(attr);
+		if (attr == NULL)
 			RETURN(-ENOMEM);
-		}
-		oinfo.oi_md = lsm;
-		oinfo.oi_oa->o_oi = lsm->lsm_oi;
-                oinfo.oi_oa->o_flags = flags;
-                oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS |
-                                       OBD_MD_FLGROUP;
-                oinfo.oi_capa = ll_mdscapa_get(inode);
-                obdo_set_parent_fid(oinfo.oi_oa, &ll_i2info(inode)->lli_fid);
-                rc = obd_setattr_rqset(sbi->ll_dt_exp, &oinfo, NULL);
-                capa_put(oinfo.oi_capa);
-                OBDO_FREE(oinfo.oi_oa);
-		ccc_inode_lsm_put(inode, lsm);
 
-		if (rc && rc != -EPERM && rc != -EACCES)
-			CERROR("osc_setattr_async fails: rc = %d\n", rc);
+		attr->ia_valid = ATTR_ATTR_FLAG;
 
+		capa = ll_mdscapa_get(inode);
+		rc = cl_setattr_ost(obj, attr, flags, capa);
+		capa_put(capa);
+
+		OBD_FREE_PTR(attr);
 		RETURN(rc);
         }
         default:

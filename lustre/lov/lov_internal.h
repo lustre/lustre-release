@@ -157,12 +157,6 @@ int lov_check_and_wait_active(struct lov_obd *lov, int ost_idx);
 int lov_prep_getattr_set(struct obd_export *exp, struct obd_info *oinfo,
                          struct lov_request_set **reqset);
 int lov_fini_getattr_set(struct lov_request_set *set);
-int lov_prep_setattr_set(struct obd_export *exp, struct obd_info *oinfo,
-                         struct obd_trans_info *oti,
-                         struct lov_request_set **reqset);
-int lov_update_setattr_set(struct lov_request_set *set,
-                           struct lov_request *req, int rc);
-int lov_fini_setattr_set(struct lov_request_set *set);
 int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
                         struct lov_request_set **reqset);
 void lov_update_statfs(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,

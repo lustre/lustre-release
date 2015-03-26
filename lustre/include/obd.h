@@ -957,9 +957,6 @@ struct obd_ops {
 			 struct obdo *oa, struct obd_trans_info *oti);
         int (*o_setattr)(const struct lu_env *, struct obd_export *exp,
                          struct obd_info *oinfo, struct obd_trans_info *oti);
-        int (*o_setattr_async)(struct obd_export *exp, struct obd_info *oinfo,
-                               struct obd_trans_info *oti,
-                               struct ptlrpc_request_set *rqset);
         int (*o_getattr)(const struct lu_env *env, struct obd_export *exp,
                          struct obd_info *oinfo);
         int (*o_preprw)(const struct lu_env *env, int cmd,

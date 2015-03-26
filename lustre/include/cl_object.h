@@ -1786,11 +1786,12 @@ struct cl_io {
 		} ci_wr;
 		struct cl_io_rw_common ci_rw;
 		struct cl_setattr_io {
-			struct ost_lvb   sa_attr;
-			unsigned int     sa_valid;
-			int		 sa_stripe_index;
-			struct lu_fid    *sa_parent_fid;
-			struct obd_capa  *sa_capa;
+			struct ost_lvb		 sa_attr;
+			unsigned int		 sa_attr_flags;
+			unsigned int		 sa_valid;
+			int			 sa_stripe_index;
+			const struct lu_fid	*sa_parent_fid;
+			struct obd_capa		*sa_capa;
 		} ci_setattr;
                 struct cl_fault_io {
                         /** page index within file. */
