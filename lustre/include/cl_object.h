@@ -450,6 +450,10 @@ struct cl_object_operations {
 	 */
 	int (*coo_layout_get)(const struct lu_env *env, struct cl_object *obj,
 			      struct cl_layout *layout);
+	/**
+	 * Get maximum size of the object.
+	 */
+	loff_t (*coo_maxbytes)(struct cl_object *obj);
 };
 
 /**
@@ -2232,6 +2236,7 @@ int cl_object_data_version(const struct lu_env *env, struct cl_object *obj,
 			   __u64 *version, int flags);
 int cl_object_layout_get(const struct lu_env *env, struct cl_object *obj,
 			 struct cl_layout *cl);
+loff_t cl_object_maxbytes(struct cl_object *obj);
 
 /**
  * Returns true, iff \a o0 and \a o1 are slices of the same object.

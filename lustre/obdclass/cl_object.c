@@ -474,6 +474,22 @@ int cl_object_layout_get(const struct lu_env *env, struct cl_object *obj,
 }
 EXPORT_SYMBOL(cl_object_layout_get);
 
+loff_t cl_object_maxbytes(struct cl_object *obj)
+{
+	struct lu_object_header	*top = obj->co_lu.lo_header;
+	loff_t maxbytes = LLONG_MAX;
+	ENTRY;
+
+	list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
+		if (obj->co_ops->coo_maxbytes != NULL)
+			maxbytes = min_t(loff_t, obj->co_ops->coo_maxbytes(obj),
+					 maxbytes);
+	}
+
+	RETURN(maxbytes);
+}
+EXPORT_SYMBOL(cl_object_maxbytes);
+
 /**
  * Helper function removing all object locks, and marking object for
  * deletion. All object pages must have been deleted at this point.
