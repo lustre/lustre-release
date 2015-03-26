@@ -1298,29 +1298,34 @@ static int lov_get_info(const struct lu_env *env, struct obd_export *exp,
 {
 	struct obd_device *obddev = class_exp2obd(exp);
 	struct lov_obd *lov = &obddev->u.lov;
-	int rc;
-        ENTRY;
+	struct lov_desc *ld = &lov->desc;
+	int rc = 0;
+	ENTRY;
 
-        if (!vallen || !val)
-                RETURN(-EFAULT);
+	if (vallen == NULL || val == NULL)
+		RETURN(-EFAULT);
 
-        obd_getref(obddev);
+	obd_getref(obddev);
 
-	if (KEY_IS(KEY_LOVDESC)) {
-                struct lov_desc *desc_ret = val;
-                *desc_ret = lov->desc;
+	if (KEY_IS(KEY_MAX_EASIZE)) {
+		u32 max_stripe_count = min_t(u32, ld->ld_active_tgt_count,
+					     LOV_MAX_STRIPE_COUNT);
 
-                GOTO(out, rc = 0);
-        } else if (KEY_IS(KEY_TGT_COUNT)) {
-                *((int *)val) = lov->desc.ld_tgt_count;
-                GOTO(out, rc = 0);
-        }
+		*((u32 *)val) = lov_mds_md_size(max_stripe_count, LOV_MAGIC_V3);
+	} else if (KEY_IS(KEY_DEFAULT_EASIZE)) {
+		u32 def_stripe_count = min_t(u32, ld->ld_default_stripe_count,
+					     LOV_MAX_STRIPE_COUNT);
 
-        rc = -EINVAL;
+		*((u32 *)val) = lov_mds_md_size(def_stripe_count, LOV_MAGIC_V3);
+	} else if (KEY_IS(KEY_TGT_COUNT)) {
+		*((int *)val) = lov->desc.ld_tgt_count;
+	} else {
+		rc = -EINVAL;
+	}
 
-out:
-        obd_putref(obddev);
-        RETURN(rc);
+	obd_putref(obddev);
+
+	RETURN(rc);
 }
 
 static int lov_set_info_async(const struct lu_env *env, struct obd_export *exp,
