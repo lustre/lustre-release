@@ -105,7 +105,7 @@ static void helper_fid2path(const char *filename, int fd)
 	lustre_fid fid;
 	lustre_fid fid2;
 	lustre_fid fid3;
-	char fidstr[FID_LEN];
+	char fidstr[FID_LEN + 1];
 	char path1[PATH_MAX];
 	char path2[PATH_MAX];
 	char path3[PATH_MAX];
@@ -241,7 +241,7 @@ static void test11(void)
 	int rc;
 	int fd;
 	lustre_fid fid;
-	char fidstr[FID_LEN];
+	char fidstr[FID_LEN + 1];
 	char path[PATH_MAX];
 	long long recno;
 	int linkno;
@@ -371,7 +371,7 @@ static void test30(void)
 	char buf[PATH_MAX];
 	char buf2[PATH_MAX];
 	lustre_fid fid;
-	char fidstr[FID_LEN];
+	char fidstr[FID_LEN + 1];
 	int rc;
 	int i;
 	int j;
@@ -698,7 +698,7 @@ static void process_args(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
-	char fsname[8];
+	char fsname[8 + 1];
 	int rc;
 
 	process_args(argc, argv);

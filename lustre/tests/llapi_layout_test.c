@@ -1313,7 +1313,7 @@ int main(int argc, char *argv[])
 	int rc = 0;
 	int i;
 	struct stat s;
-	char fsname[8];
+	char fsname[8 + 1];
 
 	llapi_msg_set_level(LLAPI_MSG_OFF);
 

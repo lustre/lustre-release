@@ -1024,7 +1024,7 @@ static void process_args(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
-	char fsname[8];
+	char fsname[8 + 1];
 	int rc;
 
 	process_args(argc, argv);
