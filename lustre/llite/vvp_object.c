@@ -137,7 +137,7 @@ static int vvp_conf_set(const struct lu_env *env, struct cl_object *obj,
 		CDEBUG(D_VFSTRACE, DFID ": losing layout lock\n",
 		       PFID(&lli->lli_fid));
 
-		ll_layout_version_set(lli, LL_LAYOUT_GEN_NONE);
+		ll_layout_version_set(lli, CL_LAYOUT_GEN_NONE);
 
 		/* Clean up page mmap for this inode.
 		 * The reason for us to do this is that if the page has

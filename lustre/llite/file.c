@@ -3548,48 +3548,54 @@ ll_iocontrol_call(struct inode *inode, struct file *file,
 int ll_layout_conf(struct inode *inode, const struct cl_object_conf *conf)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
+	struct cl_object *obj = lli->lli_clob;
 	struct cl_env_nest nest;
 	struct lu_env *env;
-	int result;
+	int rc;
 	ENTRY;
 
-	if (lli->lli_clob == NULL)
+	if (obj == NULL)
 		RETURN(0);
 
 	env = cl_env_nested_get(&nest);
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
-	result = cl_conf_set(env, lli->lli_clob, conf);
-	cl_env_nested_put(&nest, env);
+	rc = cl_conf_set(env, lli->lli_clob, conf);
+	if (rc < 0)
+		GOTO(out, rc);
 
 	if (conf->coc_opc == OBJECT_CONF_SET) {
 		struct ldlm_lock *lock = conf->coc_lock;
+		struct cl_layout cl = {
+			.cl_layout_gen = 0,
+		};
 
 		LASSERT(lock != NULL);
 		LASSERT(ldlm_has_layout(lock));
-		if (result == 0) {
-			struct lustre_md *md = conf->u.coc_md;
-			__u32 gen = LL_LAYOUT_GEN_EMPTY;
 
-			/* it can only be allowed to match after layout is
-			 * applied to inode otherwise false layout would be
-			 * seen. Applying layout shoud happen before dropping
-			 * the intent lock. */
-			ldlm_lock_allow_match(lock);
+		/* it can only be allowed to match after layout is
+		 * applied to inode otherwise false layout would be
+		 * seen. Applying layout shoud happen before dropping
+		 * the intent lock. */
+		ldlm_lock_allow_match(lock);
 
-			lli->lli_has_smd = lsm_has_objects(md->lsm);
-			if (md->lsm != NULL)
-				gen = md->lsm->lsm_layout_gen;
+		rc = cl_object_layout_get(env, obj, &cl);
+		if (rc < 0)
+			GOTO(out, rc);
 
-			CDEBUG(D_VFSTRACE,
-			       DFID ": layout version change: %u -> %u\n",
-			       PFID(&lli->lli_fid), ll_layout_version_get(lli),
-			       gen);
-			ll_layout_version_set(lli, gen);
-		}
+		CDEBUG(D_VFSTRACE,
+		       DFID": layout version change: %u -> %u\n",
+		       PFID(&lli->lli_fid), ll_layout_version_get(lli),
+		       cl.cl_layout_gen);
+		ll_layout_version_set(lli, cl.cl_layout_gen);
+		lli->lli_has_smd = lsm_has_objects(conf->u.coc_md->lsm);
 	}
-	RETURN(result);
+
+out:
+	cl_env_nested_put(&nest, env);
+
+	RETURN(rc);
 }
 
 /* Fetch layout from MDT with getxattr request, if it's not ready yet */
@@ -3665,7 +3671,7 @@ out:
  * in this function.
  */
 static int ll_layout_lock_set(struct lustre_handle *lockh, ldlm_mode_t mode,
-				struct inode *inode, __u32 *gen, bool reconf)
+			      struct inode *inode)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct ll_sb_info    *sbi = ll_i2sbi(inode);
@@ -3683,8 +3689,8 @@ static int ll_layout_lock_set(struct lustre_handle *lockh, ldlm_mode_t mode,
 	LASSERT(lock != NULL);
 	LASSERT(ldlm_has_layout(lock));
 
-	LDLM_DEBUG(lock, "file "DFID"(%p) being reconfigured: %d",
-		   PFID(&lli->lli_fid), inode, reconf);
+	LDLM_DEBUG(lock, "file "DFID"(%p) being reconfigured",
+		   PFID(&lli->lli_fid), inode);
 
 	/* in case this is a caching lock and reinstate with new inode */
 	md_set_lock_data(sbi->ll_md_exp, &lockh->cookie, inode, NULL);
@@ -3695,16 +3701,8 @@ static int ll_layout_lock_set(struct lustre_handle *lockh, ldlm_mode_t mode,
 	/* checking lvb_ready is racy but this is okay. The worst case is
 	 * that multi processes may configure the file on the same time. */
 
-	if (lvb_ready || !reconf) {
-		rc = -ENODATA;
-		if (lvb_ready) {
-			/* layout_gen must be valid if layout lock is not
-			 * cancelled and stripe has already set */
-			*gen = ll_layout_version_get(lli);
-			rc = 0;
-		}
-		GOTO(out, rc);
-	}
+	if (lvb_ready)
+		GOTO(out, rc = 0);
 
 	rc = ll_layout_fetch(inode, lock);
 	if (rc < 0)
@@ -3717,19 +3715,18 @@ static int ll_layout_lock_set(struct lustre_handle *lockh, ldlm_mode_t mode,
 	if (lock->l_lvb_data != NULL) {
 		rc = obd_unpackmd(sbi->ll_dt_exp, &md.lsm,
 				  lock->l_lvb_data, lock->l_lvb_len);
-		if (rc >= 0) {
-			*gen = LL_LAYOUT_GEN_EMPTY;
-			if (md.lsm != NULL)
-				*gen = md.lsm->lsm_layout_gen;
-			rc = 0;
-		} else {
+		if (rc < 0) {
 			CERROR("%s: file "DFID" unpackmd error: %d\n",
 				ll_get_fsname(inode->i_sb, NULL, 0),
 				PFID(&lli->lli_fid), rc);
+			GOTO(out, rc);
 		}
+
+		LASSERTF(md.lsm != NULL, "lvb_data = %p, lvb_len = %u\n",
+			 lock->l_lvb_data, lock->l_lvb_len);
+
+		rc = 0;
 	}
-	if (rc < 0)
-		GOTO(out, rc);
 
 	/* set layout to file. Unlikely this will fail as old layout was
 	 * surely eliminated */
@@ -3771,20 +3768,7 @@ out:
 	RETURN(rc);
 }
 
-/**
- * This function checks if there exists a LAYOUT lock on the client side,
- * or enqueues it if it doesn't have one in cache.
- *
- * This function will not hold layout lock so it may be revoked any time after
- * this function returns. Any operations depend on layout should be redone
- * in that case.
- *
- * This function should be called before lov_io_init() to get an uptodate
- * layout version, the caller should save the version number and after IO
- * is finished, this function should be called again to verify that layout
- * is not changed during IO time.
- */
-int ll_layout_refresh(struct inode *inode, __u32 *gen)
+static int ll_layout_refresh_locked(struct inode *inode)
 {
 	struct ll_inode_info  *lli = ll_i2info(inode);
 	struct ll_sb_info     *sbi = ll_i2sbi(inode);
@@ -3801,37 +3785,23 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 	int rc;
 	ENTRY;
 
-	*gen = ll_layout_version_get(lli);
-	if (!(sbi->ll_flags & LL_SBI_LAYOUT_LOCK) || *gen != LL_LAYOUT_GEN_NONE)
-		RETURN(0);
-
-	/* sanity checks */
-	LASSERT(fid_is_sane(ll_inode2fid(inode)));
-	LASSERT(S_ISREG(inode->i_mode));
-
-	/* take layout lock mutex to enqueue layout lock exclusively. */
-	mutex_lock(&lli->lli_layout_mutex);
-
 again:
 	/* mostly layout lock is caching on the local side, so try to match
 	 * it before grabbing layout lock mutex. */
 	mode = ll_take_md_lock(inode, MDS_INODELOCK_LAYOUT, &lockh, 0,
 			       LCK_CR | LCK_CW | LCK_PR | LCK_PW);
 	if (mode != 0) { /* hit cached lock */
-		rc = ll_layout_lock_set(&lockh, mode, inode, gen, true);
+		rc = ll_layout_lock_set(&lockh, mode, inode);
 		if (rc == -EAGAIN)
 			goto again;
 
-		mutex_unlock(&lli->lli_layout_mutex);
 		RETURN(rc);
 	}
 
 	op_data = ll_prep_md_op_data(NULL, inode, inode, NULL,
 				     0, 0, LUSTRE_OPC_ANY, NULL);
-	if (IS_ERR(op_data)) {
-		mutex_unlock(&lli->lli_layout_mutex);
+	if (IS_ERR(op_data))
 		RETURN(PTR_ERR(op_data));
-	}
 
 	/* have to enqueue one */
 	memset(&it, 0, sizeof(it));
@@ -3856,10 +3826,51 @@ again:
 	if (rc == 0) {
 		/* set lock data in case this is a new lock */
 		ll_set_lock_data(sbi->ll_md_exp, inode, &it, NULL);
-		rc = ll_layout_lock_set(&lockh, mode, inode, gen, true);
+		rc = ll_layout_lock_set(&lockh, mode, inode);
 		if (rc == -EAGAIN)
 			goto again;
 	}
+
+	RETURN(rc);
+}
+
+/**
+ * This function checks if there exists a LAYOUT lock on the client side,
+ * or enqueues it if it doesn't have one in cache.
+ *
+ * This function will not hold layout lock so it may be revoked any time after
+ * this function returns. Any operations depend on layout should be redone
+ * in that case.
+ *
+ * This function should be called before lov_io_init() to get an uptodate
+ * layout version, the caller should save the version number and after IO
+ * is finished, this function should be called again to verify that layout
+ * is not changed during IO time.
+ */
+int ll_layout_refresh(struct inode *inode, __u32 *gen)
+{
+	struct ll_inode_info	*lli = ll_i2info(inode);
+	struct ll_sb_info	*sbi = ll_i2sbi(inode);
+	int rc;
+	ENTRY;
+
+	*gen = ll_layout_version_get(lli);
+	if (!(sbi->ll_flags & LL_SBI_LAYOUT_LOCK) || *gen != CL_LAYOUT_GEN_NONE)
+		RETURN(0);
+
+	/* sanity checks */
+	LASSERT(fid_is_sane(ll_inode2fid(inode)));
+	LASSERT(S_ISREG(inode->i_mode));
+
+	/* take layout lock mutex to enqueue layout lock exclusively. */
+	mutex_lock(&lli->lli_layout_mutex);
+
+	rc = ll_layout_refresh_locked(inode);
+	if (rc < 0)
+		GOTO(out, rc);
+
+	*gen = ll_layout_version_get(lli);
+out:
 	mutex_unlock(&lli->lli_layout_mutex);
 
 	RETURN(rc);

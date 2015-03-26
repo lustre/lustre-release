@@ -81,28 +81,11 @@ struct lov_layout_operations {
 
 static int lov_layout_wait(const struct lu_env *env, struct lov_object *lov);
 
-struct lov_stripe_md *lov_lsm_get(struct cl_object *clobj)
-{
-	struct lu_object *luobj;
-	struct lov_stripe_md *lsm = NULL;
-
-	if (clobj == NULL)
-		return NULL;
-
-	luobj = lu_object_locate(&cl_object_header(clobj)->coh_lu,
-				 &lov_device_type);
-	if (luobj != NULL)
-		lsm = lov_lsm_addref(lu2lov(luobj));
-	return lsm;
-}
-EXPORT_SYMBOL(lov_lsm_get);
-
-void lov_lsm_put(struct cl_object *unused, struct lov_stripe_md *lsm)
+static void lov_lsm_put(struct lov_stripe_md *lsm)
 {
 	if (lsm != NULL)
 		lov_free_memmd(&lsm);
 }
-EXPORT_SYMBOL(lov_lsm_put);
 
 /*****************************************************************************
  *
@@ -1441,8 +1424,10 @@ obj_put:
 out:
 	if (fm_local != NULL)
 		OBD_FREE_LARGE(fm_local, buffer_size);
-	lov_lsm_put(obj, lsm);
-	RETURN(rc);
+
+	lov_lsm_put(lsm);
+
+	return rc;
 }
 
 static int lov_dispatch_obd_info_get(const struct lu_env *env,
@@ -1565,7 +1550,7 @@ static int lov_object_data_version(const struct lu_env *env,
 out_obdo:
 	OBD_FREE_PTR(obdo);
 out:
-	lov_lsm_put(obj, lsm);
+	lov_lsm_put(lsm);
 	RETURN(rc);
 }
 
@@ -1582,8 +1567,36 @@ static int lov_object_getstripe(const struct lu_env *env, struct cl_object *obj,
 		RETURN(-ENODATA);
 
 	rc = lov_getstripe(cl2lov(obj), lsm, lum);
-	lov_lsm_put(obj, lsm);
+	lov_lsm_put(lsm);
 	RETURN(rc);
+}
+
+static int lov_object_layout_get(const struct lu_env *env,
+				 struct cl_object *obj,
+				 struct cl_layout *cl)
+{
+	struct lov_object *lov = cl2lov(obj);
+	struct lov_stripe_md *lsm = lov_lsm_addref(lov);
+	struct lu_buf *buf = &cl->cl_buf;
+	ssize_t rc;
+	ENTRY;
+
+	if (lsm == NULL) {
+		cl->cl_size = 0;
+		cl->cl_layout_gen = CL_LAYOUT_GEN_EMPTY;
+		cl->cl_is_released = false;
+
+		RETURN(0);
+	}
+
+	cl->cl_size = lov_mds_md_size(lsm->lsm_stripe_count, lsm->lsm_magic);
+	cl->cl_layout_gen = lsm->lsm_layout_gen;
+	cl->cl_is_released = lsm_is_released(lsm);
+
+	rc = lov_lsm_pack(lsm, buf->lb_buf, buf->lb_len);
+	lov_lsm_put(lsm);
+
+	RETURN(rc < 0 ? rc : 0);
 }
 
 static int lov_object_find_cbdata(const struct lu_env *env,
@@ -1607,6 +1620,7 @@ static const struct cl_object_operations lov_ops = {
 	.coo_attr_update  = lov_attr_update,
 	.coo_conf_set     = lov_conf_set,
 	.coo_getstripe    = lov_object_getstripe,
+	.coo_layout_get   = lov_object_layout_get,
 	.coo_find_cbdata  = lov_object_find_cbdata,
 	.coo_fiemap       = lov_object_fiemap,
 	.coo_data_version = lov_object_data_version,

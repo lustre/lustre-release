@@ -451,160 +451,150 @@ out:
         return rc;
 }
 
-ssize_t ll_getxattr(struct dentry *dentry, const char *name,
-                    void *buffer, size_t size)
+static ssize_t ll_getxattr_lov(struct inode *inode, void *buf, size_t buf_size)
 {
-        struct inode *inode = dentry->d_inode;
+	ssize_t rc;
 
-        LASSERT(inode);
-        LASSERT(name);
+	if (S_ISREG(inode->i_mode)) {
+		struct cl_object *obj = ll_i2info(inode)->lli_clob;
+		struct lu_env *env;
+		struct cl_layout cl = {
+			.cl_buf.lb_buf = buf,
+			.cl_buf.lb_len = buf_size,
+		};
+		int refcheck;
+
+		if (obj == NULL)
+			RETURN(-ENODATA);
+
+		env = cl_env_get(&refcheck);
+		if (IS_ERR(env))
+			RETURN(PTR_ERR(env));
+
+		rc = cl_object_layout_get(env, obj, &cl);
+		if (rc < 0)
+			GOTO(out_env, rc);
+
+		if (cl.cl_size == 0)
+			GOTO(out_env, rc = -ENODATA);
+
+		rc = cl.cl_size;
+
+		if (buf_size == 0)
+			GOTO(out_env, rc);
+
+		LASSERT(buf != NULL && rc <= buf_size);
+
+		/* Do not return layout gen for getxattr() since
+		 * otherwise it would confuse tar --xattr by
+		 * recognizing layout gen as stripe offset when the
+		 * file is restored. See LU-2809. */
+		((struct lov_mds_md *)buf)->lmm_layout_gen = 0;
+out_env:
+		cl_env_put(env, &refcheck);
+
+		RETURN(rc);
+	} else if (S_ISDIR(inode->i_mode)) {
+		struct lov_mds_md *lmm = NULL;
+		int lmm_size = 0;
+		struct ptlrpc_request *req = NULL;
+
+		rc = ll_dir_getstripe(inode, (void **)&lmm, &lmm_size,
+				      &req, 0);
+		if (rc < 0)
+			GOTO(out_req, rc);
+
+		if (buf_size == 0)
+			GOTO(out_req, rc = lmm_size);
+
+		if (buf_size < lmm_size)
+			GOTO(out_req, rc = -ERANGE);
+
+		memcpy(buf, lmm, lmm_size);
+		GOTO(out_req, rc = lmm_size);
+out_req:
+		if (req != NULL)
+			ptlrpc_req_finished(req);
+
+		return rc;
+	} else {
+		RETURN(-ENODATA);
+	}
+}
+
+ssize_t ll_getxattr(struct dentry *dentry, const char *name, void *buf,
+		    size_t buf_size)
+{
+	struct inode *inode = dentry->d_inode;
+
+	LASSERT(inode);
+	LASSERT(name);
 
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p), xattr %s\n",
 	       PFID(ll_inode2fid(inode)), inode, name);
 
-        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_GETXATTR, 1);
+	ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_GETXATTR, 1);
 
-        if ((strncmp(name, XATTR_TRUSTED_PREFIX,
-                     sizeof(XATTR_TRUSTED_PREFIX) - 1) == 0 &&
-             strcmp(name + sizeof(XATTR_TRUSTED_PREFIX) - 1, "lov") == 0) ||
-            (strncmp(name, XATTR_LUSTRE_PREFIX,
-                     sizeof(XATTR_LUSTRE_PREFIX) - 1) == 0 &&
-             strcmp(name + sizeof(XATTR_LUSTRE_PREFIX) - 1, "lov") == 0)) {
-		struct lov_stripe_md *lsm;
-                struct lov_user_md *lump;
-                struct lov_mds_md *lmm = NULL;
-                struct ptlrpc_request *request = NULL;
-                int rc = 0, lmmsize = 0;
-
-                if (!S_ISREG(inode->i_mode) && !S_ISDIR(inode->i_mode))
-                        return -ENODATA;
-
-		lsm = ccc_inode_lsm_get(inode);
-		if (lsm == NULL) {
-			if (S_ISDIR(inode->i_mode)) {
-				rc = ll_dir_getstripe(inode, (void **)&lmm,
-						      &lmmsize, &request, 0);
-			} else {
-				rc = -ENODATA;
-			}
-		} else {
-			/* LSM is present already after lookup/getattr call.
-			 * we need to grab layout lock once it is implemented */
-			rc = obd_packmd(ll_i2dtexp(inode), &lmm, lsm);
-			lmmsize = rc;
-		}
-		ccc_inode_lsm_put(inode, lsm);
-
-                if (rc < 0)
-                       GOTO(out, rc);
-
-                if (size == 0) {
-                        /* used to call ll_get_max_mdsize() forward to get
-                         * the maximum buffer size, while some apps (such as
-                         * rsync 3.0.x) care much about the exact xattr value
-                         * size */
-                        rc = lmmsize;
-                        GOTO(out, rc);
-                }
-
-                if (size < lmmsize) {
-                        CERROR("server bug: replied size %d > %d for %s (%s)\n",
-                               lmmsize, (int)size, dentry->d_name.name, name);
-                        GOTO(out, rc = -ERANGE);
-                }
-
-                lump = (struct lov_user_md *)buffer;
-                memcpy(lump, lmm, lmmsize);
-		/* do not return layout gen for getxattr otherwise it would
-		 * confuse tar --xattr by recognizing layout gen as stripe
-		 * offset when the file is restored. See LU-2809. */
-		lump->lmm_layout_gen = 0;
-
-                rc = lmmsize;
-out:
-                if (request)
-                        ptlrpc_req_finished(request);
-                else if (lmm)
-                        obd_free_diskmd(ll_i2dtexp(inode), &lmm);
-                return(rc);
-        }
-
-        return ll_getxattr_common(inode, name, buffer, size, OBD_MD_FLXATTR);
+	if (strcmp(name, XATTR_LUSTRE_LOV) == 0 ||
+	    strcmp(name, XATTR_NAME_LOV) == 0)
+		return ll_getxattr_lov(inode, buf, buf_size);
+	else
+		return ll_getxattr_common(inode, name, buf, buf_size,
+					  OBD_MD_FLXATTR);
 }
 
-ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
+ssize_t ll_listxattr(struct dentry *dentry, char *buf, size_t buf_size)
 {
-        struct inode *inode = dentry->d_inode;
-        int rc = 0, rc2 = 0;
-        struct lov_mds_md *lmm = NULL;
-        struct ptlrpc_request *request = NULL;
-        int lmmsize;
-
-        LASSERT(inode);
+	struct inode *inode = dentry->d_inode;
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
+	char *xattr_name;
+	ssize_t rc, rc2;
+	size_t len, rem;
 
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p)\n",
 	       PFID(ll_inode2fid(inode)), inode);
 
-        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_LISTXATTR, 1);
+	ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_LISTXATTR, 1);
 
-        rc = ll_getxattr_common(inode, NULL, buffer, size, OBD_MD_FLXATTRLS);
-        if (rc < 0)
-                GOTO(out, rc);
+	rc = ll_getxattr_common(inode, NULL, buf, buf_size, OBD_MD_FLXATTRLS);
+	if (rc < 0)
+		RETURN(rc);
 
-	if (buffer != NULL) {
-		struct ll_sb_info *sbi = ll_i2sbi(inode);
-		char *xattr_name = buffer;
-		int xlen, rem = rc;
+	/* If we're being called to get the size of the xattr list
+	 * (buf_size == 0) then just assume that a lustre.lov xattr
+	 * exists. */
+	if (buf_size == 0)
+		RETURN(rc + sizeof(XATTR_LUSTRE_LOV));
 
-		while (rem > 0) {
-			xlen = strnlen(xattr_name, rem - 1) + 1;
-			rem -= xlen;
-			if (xattr_type_filter(sbi,
-					get_xattr_type(xattr_name)) == 0) {
-				/* skip OK xattr type
-				 * leave it in buffer
-				 */
-				xattr_name += xlen;
-				continue;
-			}
-			/* move up remaining xattrs in buffer
-			 * removing the xattr that is not OK
-			 */
-			memmove(xattr_name, xattr_name + xlen, rem);
-			rc -= xlen;
-		}
-	}
-	if (S_ISREG(inode->i_mode)) {
-		if (!ll_i2info(inode)->lli_has_smd)
-			rc2 = -1;
-	} else if (S_ISDIR(inode->i_mode)) {
-		rc2 = ll_dir_getstripe(inode, (void **)&lmm, &lmmsize, &request,
-				       0);
-	}
+	xattr_name = buf;
+	rem = rc;
 
-        if (rc2 < 0) {
-                GOTO(out, rc2 = 0);
-        } else if (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) {
-                const int prefix_len = sizeof(XATTR_LUSTRE_PREFIX) - 1;
-                const size_t name_len   = sizeof("lov") - 1;
-                const size_t total_len  = prefix_len + name_len + 1;
-
-		if (((rc + total_len) > size) && (buffer != NULL)) {
-			ptlrpc_req_finished(request);
-			return -ERANGE;
+	while (rem > 0) {
+		len = strnlen(xattr_name, rem - 1) + 1;
+		rem -= len;
+		if (xattr_type_filter(sbi, get_xattr_type(xattr_name)) == 0) {
+			/* Skip OK xattr type, leave it in buffer. */
+			xattr_name += len;
+			continue;
 		}
 
-		if (buffer != NULL) {
-			buffer += rc;
-			memcpy(buffer, XATTR_LUSTRE_PREFIX, prefix_len);
-			memcpy(buffer + prefix_len, "lov", name_len);
-			buffer[prefix_len + name_len] = '\0';
-		}
-		rc2 = total_len;
+		/* Move up remaining xattrs in buffer removing the
+		 * xattr that is not OK. */
+		memmove(xattr_name, xattr_name + len, rem);
+		rc -= len;
 	}
-out:
-        ptlrpc_req_finished(request);
-        rc = rc + rc2;
 
-        return rc;
+	rc2 = ll_getxattr_lov(inode, NULL, 0);
+	if (rc2 == -ENODATA)
+		RETURN(rc);
+
+	if (rc2 < 0)
+		RETURN(rc2);
+
+	if (buf_size < rc + sizeof(XATTR_LUSTRE_LOV))
+		RETURN(-ERANGE);
+
+	memcpy(buf + rc, XATTR_LUSTRE_LOV, sizeof(XATTR_LUSTRE_LOV));
+
+	RETURN(rc + sizeof(XATTR_LUSTRE_LOV));
 }

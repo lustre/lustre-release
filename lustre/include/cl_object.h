@@ -305,6 +305,24 @@ enum {
 	OBJECT_CONF_WAIT = 2
 };
 
+enum {
+	CL_LAYOUT_GEN_NONE	= (u32)-2,	/* layout lock was cancelled */
+	CL_LAYOUT_GEN_EMPTY	= (u32)-1,	/* for empty layout */
+};
+
+struct cl_layout {
+	/** the buffer to return the layout in lov_mds_md format. */
+	struct lu_buf	cl_buf;
+	/** size of layout in lov_mds_md format. */
+	size_t		cl_size;
+	/** Layout generation. */
+	u32		cl_layout_gen;
+	/** True if this is a released file.
+	 * Temporarily added for released file truncate in ll_setattr_raw().
+	 * It will be removed later. -Jinshan */
+	bool		cl_is_released;
+};
+
 /**
  * Operations implemented for each cl object layer.
  *
@@ -427,6 +445,11 @@ struct cl_object_operations {
 	 */
 	int (*coo_data_version)(const struct lu_env *env, struct cl_object *obj,
 				__u64 *version, int flags);
+	/**
+	 * Get layout and generation of the object.
+	 */
+	int (*coo_layout_get)(const struct lu_env *env, struct cl_object *obj,
+			      struct cl_layout *layout);
 };
 
 /**
@@ -2207,6 +2230,8 @@ int cl_object_obd_info_get(const struct lu_env *env, struct cl_object *obj,
 			   struct ptlrpc_request_set *set);
 int cl_object_data_version(const struct lu_env *env, struct cl_object *obj,
 			   __u64 *version, int flags);
+int cl_object_layout_get(const struct lu_env *env, struct cl_object *obj,
+			 struct cl_layout *cl);
 
 /**
  * Returns true, iff \a o0 and \a o1 are slices of the same object.
