@@ -628,14 +628,12 @@ static int ofd_set_info_async(const struct lu_env *env, struct obd_export *exp,
  * \param[in]  key	key name
  * \param[out] vallen	length of key value
  * \param[out] val	the key value to return
- * \param[in]  lsm	not used in OFD
  *
  * \retval		0 if successful
  * \retval		negative value on error
  */
 static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
-			__u32 keylen, void *key, __u32 *vallen, void *val,
-			struct lov_stripe_md *lsm)
+			__u32 keylen, void *key, __u32 *vallen, void *val)
 {
 	struct ofd_thread_info		*info;
 	struct ofd_device		*ofd;

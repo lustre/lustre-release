@@ -57,8 +57,8 @@ static int cl_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp)
 	__u16 stripes, def_stripes;
 	ENTRY;
 
-        rc = obd_get_info(NULL, dt_exp, sizeof(KEY_LOVDESC), KEY_LOVDESC,
-                          &valsize, &desc, NULL);
+	rc = obd_get_info(NULL, dt_exp, sizeof(KEY_LOVDESC), KEY_LOVDESC,
+			  &valsize, &desc);
         if (rc)
                 RETURN(rc);
 

@@ -1217,8 +1217,7 @@ static int mdd_obd_disconnect(struct obd_export *exp)
 }
 
 static int mdd_obd_get_info(const struct lu_env *env, struct obd_export *exp,
-			    __u32 keylen, void *key, __u32 *vallen, void *val,
-			    struct lov_stripe_md *lsm)
+			    __u32 keylen, void *key, __u32 *vallen, void *val)
 {
 	int rc = -EINVAL;
 
@@ -1232,7 +1231,7 @@ static int mdd_obd_get_info(const struct lu_env *env, struct obd_export *exp,
 		mdd = lu2mdd_dev(obd->obd_lu_dev);
 		LASSERT(mdd);
 		rc = obd_get_info(env, mdd->mdd_child_exp, keylen, key, vallen,
-				  val, lsm);
+				  val);
 		RETURN(rc);
 	}
 

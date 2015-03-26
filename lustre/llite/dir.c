@@ -1592,8 +1592,8 @@ out_rmdir:
                 /* get ost count when count is zero, get mdt count otherwise */
                 exp = count ? sbi->ll_md_exp : sbi->ll_dt_exp;
                 vallen = sizeof(count);
-                rc = obd_get_info(NULL, exp, sizeof(KEY_TGT_COUNT),
-                                  KEY_TGT_COUNT, &vallen, &count, NULL);
+		rc = obd_get_info(NULL, exp, sizeof(KEY_TGT_COUNT),
+				  KEY_TGT_COUNT, &vallen, &count);
                 if (rc) {
                         CERROR("get target count failed: %d\n", rc);
                         RETURN(rc);

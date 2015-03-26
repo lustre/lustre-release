@@ -1064,12 +1064,11 @@ static u32 osc_checksum_bulk(int nob, size_t pg_count,
 	return cksum;
 }
 
-static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
-				struct lov_stripe_md *lsm, u32 page_count,
-				struct brw_page **pga,
-				struct ptlrpc_request **reqp,
-				struct obd_capa *ocapa, int reserve,
-				int resend)
+static int
+osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
+		     u32 page_count, struct brw_page **pga,
+		     struct ptlrpc_request **reqp, struct obd_capa *ocapa,
+		     int reserve, int resend)
 {
         struct ptlrpc_request   *req;
         struct ptlrpc_bulk_desc *desc;
@@ -1480,7 +1479,6 @@ static int osc_brw_redo_request(struct ptlrpc_request *request,
         rc = osc_brw_prep_request(lustre_msg_get_opc(request->rq_reqmsg) ==
                                         OST_WRITE ? OBD_BRW_WRITE :OBD_BRW_READ,
                                   aa->aa_cli, aa->aa_oa,
-                                  NULL /* lsm unused by osc currently */,
                                   aa->aa_page_count, aa->aa_ppga,
                                   &new_req, aa->aa_ocapa, 0, 1);
         if (rc)
@@ -1822,8 +1820,8 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	}
 
 	sort_brw_pages(pga, page_count);
-	rc = osc_brw_prep_request(cmd, cli, oa, NULL, page_count,
-			pga, &req, crattr->cra_capa, 1, 0);
+	rc = osc_brw_prep_request(cmd, cli, oa, page_count, pga, &req,
+				  crattr->cra_capa, 1, 0);
 	if (rc != 0) {
 		CERROR("prep_req failed: %d\n", rc);
 		GOTO(out, rc);

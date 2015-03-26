@@ -1602,14 +1602,12 @@ static int osp_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
  * \param[in] key	the key
  * \param[out] vallen	length of \a val
  * \param[out] val	holds the value returned by the key
- * \param[in] unused	necessary for the interface but unused
  *
  * \retval 0		0 if getting information succeeded.
  * \retval negative	negative errno if getting information failed.
  */
 static int osp_obd_get_info(const struct lu_env *env, struct obd_export *exp,
-			    __u32 keylen, void *key, __u32 *vallen, void *val,
-			    struct lov_stripe_md *unused)
+			    __u32 keylen, void *key, __u32 *vallen, void *val)
 {
 	int rc = -EINVAL;
 

@@ -1075,7 +1075,6 @@ static struct lu_device_type lod_device_type = {
  * \param[in] key		the key
  * \param[in] vallen		not used
  * \param[in] val		not used
- * \param[in] lsm		not used
  *
  * \retval			0 if a connection was seen
  * \retval			-EAGAIN if LOD isn't running yet or no
@@ -1083,8 +1082,7 @@ static struct lu_device_type lod_device_type = {
  * \retval			-EINVAL if not supported key is requested
  **/
 static int lod_obd_get_info(const struct lu_env *env, struct obd_export *exp,
-			    __u32 keylen, void *key, __u32 *vallen, void *val,
-			    struct lov_stripe_md *lsm)
+			    __u32 keylen, void *key, __u32 *vallen, void *val)
 {
 	int rc = -EINVAL;
 
@@ -1105,7 +1103,7 @@ static int lod_obd_get_info(const struct lu_env *env, struct obd_export *exp,
 			LASSERT(ost && ost->ltd_ost);
 
 			rc = obd_get_info(env, ost->ltd_exp, keylen, key,
-					  vallen, val, lsm);
+					  vallen, val);
 			/* one healthy device is enough */
 			if (rc == 0)
 				break;

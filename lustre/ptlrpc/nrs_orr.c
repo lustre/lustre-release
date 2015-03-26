@@ -247,7 +247,7 @@ static int nrs_orr_range_fill_physical(struct ptlrpc_nrs_request *nrq,
 	};
 
 	rc = obd_get_info(req->rq_svc_thread->t_env, req->rq_export,
-			  sizeof(key), &key, NULL, fiemap, NULL);
+			  sizeof(key), &key, NULL, fiemap);
 	if (rc < 0)
 		GOTO(out, rc);
 

@@ -482,21 +482,18 @@ static inline int class_devno_max(void)
         return MAX_OBD_DEVICES;
 }
 
-static inline int obd_get_info(const struct lu_env *env,
-			       struct obd_export *exp,
+static inline int obd_get_info(const struct lu_env *env, struct obd_export *exp,
 			       __u32 keylen, void *key,
-			       __u32 *vallen, void *val,
-			       struct lov_stripe_md *lsm)
+			       __u32 *vallen, void *val)
 {
-        int rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
-        EXP_CHECK_DT_OP(exp, get_info);
-        EXP_COUNTER_INCREMENT(exp, get_info);
+	EXP_CHECK_DT_OP(exp, get_info);
+	EXP_COUNTER_INCREMENT(exp, get_info);
 
-        rc = OBP(exp->exp_obd, get_info)(env, exp, keylen, key, vallen, val,
-                                         lsm);
-        RETURN(rc);
+	rc = OBP(exp->exp_obd, get_info)(env, exp, keylen, key, vallen, val);
+	RETURN(rc);
 }
 
 static inline int obd_set_info_async(const struct lu_env *env,

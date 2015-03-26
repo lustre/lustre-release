@@ -1067,8 +1067,8 @@ static int mgc_set_mgs_param(struct obd_export *exp,
 }
 
 /* Take a config lock so we can get cancel notifications */
-static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
-                       __u32 type, ldlm_policy_data_t *policy, __u32 mode,
+static int mgc_enqueue(struct obd_export *exp, __u32 type,
+		       ldlm_policy_data_t *policy, __u32 mode,
 		       __u64 *flags, void *bl_cb, void *cp_cb, void *gl_cb,
 		       void *data, __u32 lvb_len, void *lvb_swabber,
 		       struct lustre_handle *lockh)
@@ -1283,9 +1283,7 @@ static int mgc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 }
 
 static int mgc_get_info(const struct lu_env *env, struct obd_export *exp,
-			__u32 keylen, void *key,
-			__u32 *vallen, void *val,
-			struct lov_stripe_md *unused)
+			__u32 keylen, void *key, __u32 *vallen, void *val)
 {
         int rc = -EINVAL;
 
@@ -1882,10 +1880,10 @@ int mgc_process_log(struct obd_device *mgc, struct config_llog_data *cld)
         CDEBUG(D_MGC, "Process log %s:%p from %d\n", cld->cld_logname,
                cld->cld_cfg.cfg_instance, cld->cld_cfg.cfg_last_idx + 1);
 
-        /* Get the cfg lock on the llog */
-        rcl = mgc_enqueue(mgc->u.cli.cl_mgc_mgsexp, NULL, LDLM_PLAIN, NULL,
-                          LCK_CR, &flags, NULL, NULL, NULL,
-                          cld, 0, NULL, &lockh);
+	/* Get the cfg lock on the llog */
+	rcl = mgc_enqueue(mgc->u.cli.cl_mgc_mgsexp, LDLM_PLAIN, NULL,
+			  LCK_CR, &flags, NULL, NULL, NULL,
+			  cld, 0, NULL, &lockh);
         if (rcl == 0) {
                 /* Get the cld, it will be released in mgc_blocking_ast. */
                 config_log_get(cld);

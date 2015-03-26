@@ -5021,7 +5021,7 @@ static int mdt_obd_connect(const struct lu_env *env,
 	    !(data->ocd_connect_flags & OBD_CONNECT_LIGHTWEIGHT)) {
 		rc = obd_get_info(env, mdt->mdt_child_exp,
 				  sizeof(KEY_OSP_CONNECTED),
-				  KEY_OSP_CONNECTED, NULL, NULL, NULL);
+				  KEY_OSP_CONNECTED, NULL, NULL);
 		if (rc)
 			RETURN(-EAGAIN);
 		set_bit(MDT_FL_SYNCED, &mdt->mdt_state);
