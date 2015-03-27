@@ -378,14 +378,10 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         struct inode *inode = file->f_mapping->host;
         long count = iov_length(iov, nr_segs);
         long tot_bytes = 0, result = 0;
-        struct ll_inode_info *lli = ll_i2info(inode);
         unsigned long seg = 0;
         long size = MAX_DIO_SIZE;
         int refcheck;
         ENTRY;
-
-	if (!lli->lli_has_smd)
-                RETURN(-EBADF);
 
         /* FIXME: io smaller than PAGE_SIZE is broken on ia64 ??? */
         if ((file_offset & ~CFS_PAGE_MASK) || (count & ~CFS_PAGE_MASK))
