@@ -930,7 +930,7 @@ test_9() {
 
 	copytool_cleanup
 }
-run_test 9 "Use of explict archive number, with dedicated copytool"
+run_test 9 "Use of explicit archive number, with dedicated copytool"
 
 test_9a() {
 	needclients 3 || return 0
@@ -1834,7 +1834,7 @@ test_24b() {
 	copytool_setup
 	mkdir -p $DIR/$tdir
 
-	# Check that root can do HSM actions on a ordinary user's file.
+	# Check that root can do HSM actions on a regular user's file.
 	rm -f $file
 	fid=$(make_small $file)
 	sum0=$(md5sum $file)

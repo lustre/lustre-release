@@ -248,7 +248,7 @@ out:
  *
  * Archive number is changed iif the value is not 0.
  * The new flagset that will be computed should result in a coherent state.
- * This function checks that are flags are compatible.
+ * This function checks that flags are compatible.
  *
  * This is MDS_HSM_STATE_SET RPC handler.
  */

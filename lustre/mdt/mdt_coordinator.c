@@ -185,8 +185,8 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 		    cdt->cdt_max_requests)
 			break;
 
-		/* first search if the request if known in the list we have
-		 * build and if there is room in the request vector */
+		/* first search whether the request is found in the list we
+		 * have built and if there is room in the request vector */
 		empty_slot = -1;
 		found = -1;
 		for (i = 0; i < hsd->max_requests &&
@@ -1400,7 +1400,7 @@ unlock:
 		struct cdt_restore_handle	*crh;
 
 		/* restore in data FID done, we swap the layouts
-		 * only if restore is successfull */
+		 * only if restore is successful */
 		if (pgs->hpk_errval == 0) {
 			rc = hsm_swap_layouts(mti, &car->car_hai->hai_fid,
 					      &car->car_hai->hai_dfid, &mh);
@@ -1711,7 +1711,7 @@ out:
 }
 
 /**
- * check if a request is comptaible with file status
+ * check if a request is compatible with file status
  * \param hai [IN] request description
  * \param hal_an [IN] request archive number (not used)
  * \param rq_flags [IN] request flags

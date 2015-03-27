@@ -508,7 +508,7 @@ err_free:
  * might use to perform mount operations.
  *
  * Returns:
- *	0 => Sucess
+ *	0 => Success
  *	nonzero => Error
  */
 static int

@@ -710,7 +710,7 @@ load_target() {
     #       go away and the target just specify the $RPMSMPTYPE
     [ -z "$RPMSMPTYPE" ] && set_rpm_smp_type
 
-    # CC might have been overwriten in TARGET_FILE
+    # CC might have been overwritten in TARGET_FILE
     if [[ $CC != ccache\ * ]] && which "$CCACHE" &>/dev/null; then
         export CCACHE && export CC="ccache $CC"
     fi

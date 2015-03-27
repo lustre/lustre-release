@@ -653,7 +653,7 @@ int lkrb5_refresh_root_tgt_cc(krb5_context ctx,
                 goto out_kt;
         }
 
-        /* iterate keytab to find proper a entry */
+	/* iterate keytab to find proper an entry */
         do {
                 krb5_data      *princname;
 

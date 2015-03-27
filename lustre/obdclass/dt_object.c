@@ -237,7 +237,7 @@ struct dt_object *dt_locate_at(const struct lu_env *env,
 EXPORT_SYMBOL(dt_locate_at);
 
 /**
- * find a object named \a entry in given \a dfh->dfh_o directory.
+ * find an object named \a entry in given \a dfh->dfh_o directory.
  */
 static int dt_find_entry(const struct lu_env *env, const char *entry, void *data)
 {

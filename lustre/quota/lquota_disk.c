@@ -41,7 +41,7 @@
  *				  required and create the index file on disk if
  *				  it does not exist.
  * - lquota_disk_for_each_slv:	  iterate over all existing slave index files
- * - lquota_disk_read:		  read quota settings from a index file
+ * - lquota_disk_read:		  read quota settings from an index file
  * - lquota_disk_declare_write:	  reserve credits to update a record in an index
  *				  file
  * - lquota_disk_write:		  update a record in an index file

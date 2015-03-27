@@ -2312,7 +2312,7 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
 static int __ptlrpc_req_finished(struct ptlrpc_request *request, int locked);
 /**
  * Drop one request reference. Must be called with import imp_lock held.
- * When reference count drops to zero, reuqest is freed.
+ * When reference count drops to zero, request is freed.
  */
 void ptlrpc_req_finished_with_imp_lock(struct ptlrpc_request *request)
 {
@@ -2725,7 +2725,7 @@ EXPORT_SYMBOL(ptlrpc_queue_wait);
 
 /**
  * Callback used for replayed requests reply processing.
- * In case of succesful reply calls registeresd request replay callback.
+ * In case of successful reply calls registered request replay callback.
  * In case of error restart replay process.
  */
 static int ptlrpc_replay_interpret(const struct lu_env *env,

@@ -353,7 +353,7 @@ command_t cmdlist[] = {
 	{"swap_layouts", lfs_swap_layouts, 0, "Swap layouts between 2 files.\n"
 	 "usage: swap_layouts <path1> <path2>"},
 	{"migrate", lfs_setstripe, 0, "migrate file from one OST layout to "
-	 "another (may be not safe with concurent writes).\n"
+	 "another (may be not safe with concurrent writes).\n"
 	 MIGRATE_USAGE},
 	{"mv", lfs_mv, 0,
 	 "To move directories between MDTs.\n"
@@ -500,7 +500,7 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 		gid = random();
 	while (gid == 0);
 	if (migration_flags & MIGRATION_BLOCKS) {
-		/* take group lock to limit concurent access
+		/* take group lock to limit concurrent access
 		 * this will be no more needed when exclusive access will
 		 * be implemented (see LU-2919) */
 		/* group lock is taken after data version read because it

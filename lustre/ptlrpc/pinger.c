@@ -151,14 +151,14 @@ static cfs_duration_t pinger_check_timeout(cfs_time_t time)
         struct timeout_item *item;
         cfs_time_t timeout = PING_INTERVAL;
 
-        /* The timeout list is a increase order sorted list */
+	/* This list is sorted in increasing timeout order */
 	mutex_lock(&pinger_mutex);
 	list_for_each_entry(item, &timeout_list, ti_chain) {
-                int ti_timeout = item->ti_timeout;
-                if (timeout > ti_timeout)
-                        timeout = ti_timeout;
-                break;
-        }
+		int ti_timeout = item->ti_timeout;
+		if (timeout > ti_timeout)
+			timeout = ti_timeout;
+		break;
+	}
 	mutex_unlock(&pinger_mutex);
 
         return cfs_time_sub(cfs_time_add(time, cfs_time_seconds(timeout)),

@@ -96,7 +96,7 @@ struct lu_server_fld {
         char                     lsf_name[80];
 
 	/**
-	 * Just reformated or upgraded, and this flag is being
+	 * Just reformatted or upgraded, and this flag is being
 	 * used to check whether the local FLDB is needs to be
 	 * synced with global FLDB(in MDT0), and it is only needed
 	 * if the MDT is upgraded from < 2.6 to 2.6, i.e. when the

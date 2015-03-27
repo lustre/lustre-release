@@ -645,7 +645,7 @@ int main(int argc, char *const argv[])
                 goto out;
         }
 
-	/* Stand alone MGS doesn't need a index */
+	/* Stand alone MGS doesn't need an index */
 	if (!IS_MDT(ldd) && IS_MGS(ldd)) {
 #ifndef TUNEFS /* mkfs.lustre */
 		/* But if --index was specified flag an error */

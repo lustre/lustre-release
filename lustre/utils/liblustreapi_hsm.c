@@ -731,7 +731,7 @@ int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
 			rc = -EINVAL;
 			goto out_err;
 		}
-		/* in the list we have a all archive wildcard
+		/* in the list we have an all archive wildcard
 		 * so move to all archives mode
 		 */
 		if (archives[rc] == 0) {

@@ -260,7 +260,7 @@ and can be reused by cl_locks.
 
 IO contexts are owned by a thread (or, potentially a group of threads) doing
 IO, and need neither reference counting nor indexing. Similarly, transfer
-requests are owned by a OSC device, and their lifetime is from RPC creation
+requests are owned by an OSC device, and their lifetime is from RPC creation
 until completion notification.
 
 1.7. State Machines

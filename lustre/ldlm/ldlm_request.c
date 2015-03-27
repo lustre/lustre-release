@@ -812,7 +812,7 @@ int ldlm_prep_elc_req(struct obd_export *exp, struct ptlrpc_request *req,
                         dlm = req_capsule_client_get(pill, &RMF_DLM_REQ);
                         LASSERT(dlm);
                         /* Skip first lock handler in ldlm_request_pack(),
-                         * this method will incrment @lock_count according
+			 * this method will increment @lock_count according
                          * to the lock handle amount actually written to
                          * the buffer. */
                         dlm->lock_count = canceloff;

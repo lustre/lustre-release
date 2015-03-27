@@ -600,7 +600,7 @@ static void osc_lru_del(struct client_obd *cli, struct osc_page *opg)
  */
 static void osc_lru_use(struct client_obd *cli, struct osc_page *opg)
 {
-	/* If page is being transfered for the first time,
+	/* If page is being transferred for the first time,
 	 * ops_lru should be empty */
 	if (opg->ops_in_lru && !list_empty(&opg->ops_lru)) {
 		spin_lock(&cli->cl_lru_list_lock);

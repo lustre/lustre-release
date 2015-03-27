@@ -1861,6 +1861,7 @@ test_25_sub() {
 	resetquota $1 $TSTUSR2
 }
 
+# b=18081
 test_25() {
 	log "run for chown case"
 	test_25_sub -u
@@ -1868,7 +1869,7 @@ test_25() {
 	log "run for chgrp case"
 	test_25_sub -g
 }
-run_test_with_stat 25 "test whether quota usage is transfered when chown/chgrp (18081) ==========="
+run_test_with_stat 25 "test if quota usage is transferred on chown/chgrp"
 
 test_26() {
 	mkdir -p $DIR/$tdir

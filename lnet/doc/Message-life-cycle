@@ -6,7 +6,7 @@ slightly different life cycles, so they are addressed independently.
 Put request
 -----------
 
-1.  NAL notices that there is a incoming message header on the network
+1.  NAL notices that there is an incoming message header on the network
 and reads an ptl_hdr_t in from the wire.
 
 2.  It may store additional NAL specific data that provides context

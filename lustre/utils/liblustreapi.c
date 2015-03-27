@@ -1147,7 +1147,7 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
  * the value of the index will be ignored. The pathname will return data if
  * the pathname is located on a lustre mount. Index is used to pick which
  * mount point you want in the case of multiple mounted lustre file systems.
- * See function lfs_osts in lfs.c for a example of the index use.
+ * See function lfs_osts in lfs.c for an example of the index use.
  */
 int llapi_search_mounts(const char *pathname, int index, char *mntdir,
                         char *fsname)
@@ -3109,7 +3109,7 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 	    (param->fp_mdt_uuid && param->fp_mdt_index == OBD_NOT_FOUND))
 		goto decided;
 
-	/* If a OST or MDT UUID is given, and some OST matches,
+	/* If an OST or MDT UUID is given, and some OST matches,
 	 * check it here. */
 	if (param->fp_obd_index != OBD_NOT_FOUND ||
 	    param->fp_mdt_index != OBD_NOT_FOUND) {

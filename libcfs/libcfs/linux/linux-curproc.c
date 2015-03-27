@@ -148,7 +148,7 @@ static int cfs_access_process_vm(struct task_struct *tsk,
 	if (down_read_trylock(&mm->mmap_sem) == 0)
 		return -EDEADLK;
 
-	/* ignore errors, just check how much was sucessfully transfered */
+	/* ignore errors, just check how much was successfully transferred */
 	while (len) {
 		int bytes, rc, offset;
 		void *maddr;

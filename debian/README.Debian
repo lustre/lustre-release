@@ -36,8 +36,8 @@ Be aware that this doesn't replace the Documentation and Installation Howtos fro
         - OST: mkfs.lustre --fsname spfs --ost --mgsnode=$mgsnode@tcp0 $device
 
         Additional options are:
-            --reformat                       - this partition was previously formated with lustre, reformat it
-            --param="failover.mode=failout"  - don't hang the complete fs if a ost isn't available.
+	    --reformat                       - this partition was previously formatted with lustre, reformat it
+	    --param="failover.mode=failout"  - don't hang the entire fs if an ost isn't available.
 
      - Now mount the partitons on the servers:
         - first the MDT/MGS Server:

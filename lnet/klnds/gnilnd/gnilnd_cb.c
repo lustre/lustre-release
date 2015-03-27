@@ -120,7 +120,7 @@ kgnilnd_device_callback(__u32 devid, __u64 arg)
  * == 0: reschedule if someone marked him WANTS_SCHED
  * > 0 : force a reschedule */
 /* Return code 0 means it did not schedule the conn, 1
- *  means it succesfully scheduled the conn.
+ * means it successfully scheduled the conn.
  */
 
 int
@@ -3584,7 +3584,8 @@ kgnilnd_send_mapped_tx(kgn_tx_t *tx, int try_map_if_full)
 		rc = kgnilnd_map_buffer(tx);
 	}
 
-	/* rc should be 0 if we mapped succesfully here, if non-zero we are queueing */
+	/* rc should be 0 if we mapped successfully here, if non-zero
+	 * we are queueing */
 	if (rc != 0) {
 		/* if try_map_if_full set, they handle requeuing */
 		if (unlikely(try_map_if_full)) {

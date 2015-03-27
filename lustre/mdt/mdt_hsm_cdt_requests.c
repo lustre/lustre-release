@@ -225,7 +225,7 @@ static void mdt_cdt_init_request_tree(struct cdt_req_progress *crp)
 	crp->crp_max = 0;
 }
 
-/** Allocate/init a agent request and its sub-structures.
+/** Allocate/init an agent request and its sub-structures.
  *
  * \param compound_id [IN]
  * \param archive_id [IN]
@@ -266,7 +266,7 @@ struct cdt_agent_req *mdt_cdt_alloc_request(__u64 compound_id, __u32 archive_id,
 }
 
 /**
- * Free a agent request and its sub-structures.
+ * Free an agent request and its sub-structures.
  *
  * \param car [IN]  Request to be freed.
  */

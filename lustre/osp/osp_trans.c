@@ -41,7 +41,7 @@
  * OUT RPC.
  *
  * For the asynchronous idempotent operations, such as get_(x)attr, related
- * RPCs will be inserted into a osp_device based shared asynchronous request
+ * RPCs will be inserted into an osp_device based shared asynchronous request
  * queue - osp_device::opd_async_requests. When the queue is full, all the
  * requests in the queue will be packaged into a single OUT RPC and given to
  * the ptlrpcd daemon (for sending), then the queue is purged and other new

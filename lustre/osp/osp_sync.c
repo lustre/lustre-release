@@ -447,7 +447,7 @@ static void osp_sync_request_commit_cb(struct ptlrpc_request *req)
  * The callback is called by ptlrpc when RPC is replied. Now we have to decide
  * whether we should:
  *  - put request on a special list to wait until it's committed by the target,
- *    if the request is succesful
+ *    if the request is successful
  *  - schedule llog record cancel if no target object is found
  *  - try later (essentially after reboot) in case of unexpected error
  *

@@ -234,7 +234,7 @@ command_t cmdlist[] = {
          "detach a lustre regular file from a virtual block device\n"
          "usage: blockdev_detach <device_name>"},
         {"blockdev_info", jt_blockdev_info, 0,
-         "get the device info of a attached file\n"
+	 "get the device info of an attached file\n"
          "usage: blockdev_info <device_name>"},
 
         /* Pool commands */

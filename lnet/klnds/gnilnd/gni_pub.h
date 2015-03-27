@@ -1062,7 +1062,7 @@ gni_return_t
  * cdm_hndl   Communication Domain Handle
  *
  * Returns:
- * GNI_RC_SUCCESS - The operation completioned succesffully
+ * GNI_RC_SUCCESS - The operation completed successfully
  * GNI_RC_INVALID_PARAM - Caller specified an invalid Communication Domain Handle
  *
  * Description:
@@ -1152,7 +1152,7 @@ gni_return_t
  * cdm_handle   Communication Domain Handle
  *
  * Returns:
- * GNI_RC_SUCCESS - The operation completioned succesffully
+ * GNI_RC_SUCCESS - The operation completed successfully
  * GNI_RC_INVALID_PARAM - Caller specified an invalid Communication Domain Handle
  *
  * Description:
@@ -1174,7 +1174,7 @@ gni_return_t
  * cdm_handle   Communication Domain Handle
  *
  * Returns:
- * GNI_RC_SUCCESS - The operation completioned succesffully
+ * GNI_RC_SUCCESS - The operation completed successfully
  * GNI_RC_INVALID_PARAM - Caller specified an invalid Communication Domain Handle
  *
  * Description:
@@ -2763,8 +2763,8 @@ gni_return_t
 
 /**
  * GNI_SmsgBufferSizeNeeded - Return amount of memory required for short message
- *                            resources given parameters in a inut short message
- *                            attributes structure
+ *                            resources given parameters in an input short
+ *                            message attributes structure
  * IN
  * smsg_attr            pointer to short message attributes structure
  *
@@ -3138,7 +3138,7 @@ gni_return_t
  * Description:
  *
  * The remote PE address provided is assigned to an SMSG control structure and
- * mailbox for use in a inter-node connection.  An attribute structure
+ * mailbox for use in an inter-node connection.  An attribute structure
  * describing the assigned resources is then returned.  The attributes must be
  * traded with the remote end-point to establish the connection.
  **/
@@ -5136,9 +5136,9 @@ gni_return_t
 		);
 
 /**
- * gni_smsg_buff_size_needed - Return amount of memory required for short message
- *                            resources given parameters in a inut short message
- *                            attributes structure
+ * gni_smsg_buff_size_needed - Return amount of memory required for short
+ *                             message resources given parameters in an input
+ *                             short message attributes structure
  * IN
  * local_smsg_attr      parameters for short messaging
  *

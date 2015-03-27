@@ -319,7 +319,7 @@ device_is_active ()
 }
 
 # Usage: mount_one_device <label> <successflag> [devtype]
-# Remove <succesflag> on error (trick to detect errors after parallel runs).
+# Remove <successflag> on error (trick to detect errors after parallel runs).
 mount_one_device ()
 {
 	local label=$1

@@ -566,7 +566,7 @@ static inline void lu_echo_root_fid(struct lu_fid *fid)
 /**
  * Check if a fid is igif or not.
  * \param fid the fid to be tested.
- * \return true if the fid is a igif; otherwise false.
+ * \return true if the fid is an igif; otherwise false.
  */
 static inline bool fid_seq_is_igif(__u64 seq)
 {
@@ -581,7 +581,7 @@ static inline bool fid_is_igif(const struct lu_fid *fid)
 /**
  * Check if a fid is idif or not.
  * \param fid the fid to be tested.
- * \return true if the fid is a idif; otherwise false.
+ * \return true if the fid is an idif; otherwise false.
  */
 static inline bool fid_seq_is_idif(__u64 seq)
 {
@@ -837,8 +837,8 @@ static inline bool fid_is_last_id(const struct lu_fid *fid)
 }
 
 /**
- * Get inode number from a igif.
- * \param fid a igif to get inode number from.
+ * Get inode number from an igif.
+ * \param fid an igif to get inode number from.
  * \return inode number for the igif.
  */
 static inline ino_t lu_igif_ino(const struct lu_fid *fid)
@@ -849,8 +849,8 @@ static inline ino_t lu_igif_ino(const struct lu_fid *fid)
 extern void lustre_swab_ost_id(struct ost_id *oid);
 
 /**
- * Get inode generation from a igif.
- * \param fid a igif to get inode generation from.
+ * Get inode generation from an igif.
+ * \param fid an igif to get inode generation from.
  * \return inode generation for the igif.
  */
 static inline __u32 lu_igif_gen(const struct lu_fid *fid)

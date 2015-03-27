@@ -205,7 +205,7 @@ out:
  * No permission check is needed.
  *
  * returns 1: if fid is ancestor of @mo;
- * returns 0: if fid is not a ancestor of @mo;
+ * returns 0: if fid is not an ancestor of @mo;
  *
  * returns EREMOTE if remote object is found, fid of remote object is saved to
  * @fid;

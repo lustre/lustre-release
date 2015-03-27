@@ -2677,7 +2677,7 @@ hostlist_expand() {
     done
     myList="${myList%* }";
 
-    # We can select an object at a offset in the list
+    # We can select an object at an offset in the list
     [ $# -eq 2 ] && {
         cnt=0
         for item in $myList; do
@@ -3025,7 +3025,7 @@ ostvdevname() {
 			eval VDEVPTR="";;
 		zfs )
 			#if $OSTDEVn isn't defined, default is $OSTDEVBASE{n}
-			# Device formated by zfs
+			# Device formatted by zfs
 			DEVNAME=OSTDEV$num
 			eval VDEVPTR=${!DEVNAME:=${OSTDEVBASE}${num}};;
 		* )
@@ -3035,7 +3035,7 @@ ostvdevname() {
 	echo -n $VDEVPTR
 }
 
-# Logical device formated for lustre
+# Logical device formatted for lustre
 mdsdevname() {
 	local num=$1
 	local DEVNAME=MDSDEV$num
@@ -3069,7 +3069,7 @@ mdsvdevname() {
 			eval VDEVPTR="";;
 		zfs )
 			# if $MDSDEVn isn't defined, default is $MDSDEVBASE{n}
-			# Device formated by ZFS
+			# Device formatted by ZFS
 			local DEVNAME=MDSDEV$num
 			eval VDEVPTR=${!DEVNAME:=${MDSDEVBASE}${num}};;
 		* )

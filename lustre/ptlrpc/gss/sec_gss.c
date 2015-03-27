@@ -428,43 +428,42 @@ static void gss_cli_ctx_finalize(struct gss_cli_ctx *gctx)
         rawobj_free(&gctx->gc_handle);
 }
 
-/*
+/**
  * Based on sequence number algorithm as specified in RFC 2203.
  *
- * modified for our own problem: arriving request has valid sequence number,
+ * Modified for our own problem: arriving request has valid sequence number,
  * but unwrapping request might cost a long time, after that its sequence
  * are not valid anymore (fall behind the window). It rarely happen, mostly
  * under extreme load.
  *
- * note we should not check sequence before verify the integrity of incoming
+ * Note we should not check sequence before verifying the integrity of incoming
  * request, because just one attacking request with high sequence number might
- * cause all following request be dropped.
+ * cause all following requests be dropped.
  *
- * so here we use a multi-phase approach: prepare 2 sequence windows,
+ * So here we use a multi-phase approach: prepare 2 sequence windows,
  * "main window" for normal sequence and "back window" for fall behind sequence.
  * and 3-phase checking mechanism:
- *  0 - before integrity verification, perform a initial sequence checking in
- *      main window, which only try and don't actually set any bits. if the
- *      sequence is high above the window or fit in the window and the bit
+ *  0 - before integrity verification, perform an initial sequence checking in
+ *      main window, which only tries and doesn't actually set any bits. if the
+ *      sequence is high above the window or fits in the window and the bit
  *      is 0, then accept and proceed to integrity verification. otherwise
  *      reject this sequence.
  *  1 - after integrity verification, check in main window again. if this
- *      sequence is high above the window or fit in the window and the bit
- *      is 0, then set the bit and accept; if it fit in the window but bit
- *      already set, then reject; if it fall behind the window, then proceed
+ *      sequence is high above the window or fits in the window and the bit
+ *      is 0, then set the bit and accept; if it fits in the window but bit
+ *      already set, then reject; if it falls behind the window, then proceed
  *      to phase 2.
- *  2 - check in back window. if it is high above the window or fit in the
+ *  2 - check in back window. if it is high above the window or fits in the
  *      window and the bit is 0, then set the bit and accept. otherwise reject.
  *
- * return value:
- *   1: looks like a replay
- *   0: is ok
- *  -1: is a replay
+ * \return	 1:	looks like a replay
+ * \return	 0:	is ok
+ * \return	-1:	is a replay
  *
- * note phase 0 is necessary, because otherwise replay attacking request of
+ * Note phase 0 is necessary, because otherwise replay attacking request of
  * sequence which between the 2 windows can't be detected.
  *
- * this mechanism can't totally solve the problem, but could help much less
+ * This mechanism can't totally solve the problem, but could help reduce the
  * number of valid requests be dropped.
  */
 static

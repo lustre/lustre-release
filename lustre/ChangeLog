@@ -3073,11 +3073,11 @@ Details    : decrease the amount of synchronous RPC between clients and servers
 Severity   : enhancement
 Bugzilla   : 4900
 Description: Async OSC create to avoid the blocking unnecessarily.
-Details    : If a OST has no remain object, system will block on the creating
-	     when need to create a new object on this OST. Now, ways use
-	     pre-created objects when available, instead of blocking on an
-	     empty osc while others are not empty.  If we must block, we block
-	     for the shortest possible period of time.
+Details    : If an OST has no remaining object, system will block on the
+	     creation when it needs to create a new object on this OST. Now,
+	     ways use pre-created objects when available, instead of blocking on
+	     an empty osc while others are not empty.  If we must block, we
+	     block for the shortest possible period of time.
 
 Severity   : major
 Bugzilla   : 11710
@@ -3843,7 +3843,7 @@ Details    : If one node attempts to overwrite an executable in use by
 Severity   : enhancement
 Bugzilla   : 4900
 Description: Async OSC create to avoid the blocking unnecessarily.
-Details    : If a OST has no remain object, system will block on the creating
+Details    : If an OST has no remaining object, system will block on the creating
 	     when need to create a new object on this OST. Now, ways use
 	     pre-created objects when available, instead of blocking on an
 	     empty osc while others are not empty.  If we must block, we block
@@ -4751,7 +4751,7 @@ Frequency  : common
 Bugzilla   : 9489, 3273
 Description: First write from each client to each OST was only 4kB in size,
 	     to initialize client writeback cache, which caused sub-optimal
-	     RPCs and poor layout on disk for the first writen file.
+	     RPCs and poor layout on disk for the first written file.
 Details    : Clients now request an initial cache grant at (re)connect time
 	     and so that they can start streaming writes to the cache right
 	     away and always do full-sized RPCs if there is enough data.

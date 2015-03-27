@@ -2012,7 +2012,7 @@ struct cl_req_obj {
  */
 struct cl_req {
 	enum cl_req_type	crq_type;
-	/** A list of pages being transfered */
+	/** A list of pages being transferred */
 	struct list_head	crq_pages;
 	/** Number of pages in cl_req::crq_pages */
 	unsigned		crq_nrpages;

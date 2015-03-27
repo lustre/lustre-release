@@ -2021,7 +2021,7 @@ static unsigned long lu_cache_shrink_scan(struct shrinker *sk,
  * is safe to take the lu_sites_guard lock.
  *
  * Ideally we should accurately return the remaining number of cached
- * objects without taking the  lu_sites_guard lock, but this is not
+ * objects without taking the lu_sites_guard lock, but this is not
  * possible in the current implementation.
  */
 static int lu_cache_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))

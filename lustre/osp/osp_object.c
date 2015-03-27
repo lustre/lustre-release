@@ -319,7 +319,7 @@ osp_oac_xattr_find_or_add(struct osp_object *obj, const char *name, size_t len)
  *
  * \param[in] obj	pointer to the OSP object
  * \param[in,out] poxe	double pointer to the OSP object extended attribute
- *			entry: the new extended attribute entry is transfered
+ *			entry: the new extended attribute entry is transferred
  *			via such pointer target, and if old the extended
  *			attribute entry exists, then it will be returned back
  *			via such pointer target.
@@ -1670,7 +1670,7 @@ void osp_it_fini(const struct lu_env *env, struct dt_it *di)
  * Get more records for the iteration from peer.
  *
  * The new records will be filled in an array of pages. The OSP side
- * allows 1MB bulk data to be transfered.
+ * allows 1MB bulk data to be transferred.
  *
  * \param[in] env	pointer to the thread context
  * \param[in] it	pointer to the iteration structure

@@ -4593,7 +4593,7 @@ output
 
 \layout Standard
 \noindent 
-On succesfful return, this location will hold the Portal index where the
+On successful return, this location will hold the Portal index where the
  match list  has been attached.
 \end_inset 
 </cell>

@@ -412,7 +412,7 @@ static int import_sec_validate_get(struct obd_import *imp,
 }
 
 /**
- * Given a \a req, find or allocate a appropriate context for it.
+ * Given a \a req, find or allocate an appropriate context for it.
  * \pre req->rq_cli_ctx == NULL.
  *
  * \retval 0 succeed, and req->rq_cli_ctx is set.
@@ -732,10 +732,10 @@ again:
          * it for reply reconstruction.
          *
          * Commonly the original context should be uptodate because we
-         * have a expiry nice time; server will keep its context because
+	 * have an expiry nice time; server will keep its context because
          * we at least hold a ref of old context which prevent context
-         * destroying RPC being sent. So server still can accept the request
-         * and finish the RPC. But if that's not the case:
+	 * from destroying RPC being sent. So server still can accept the
+	 * request and finish the RPC. But if that's not the case:
          *  1. If server side context has been trimmed, a NO_CONTEXT will
          *     be returned, gss_cli_ctx_verify/unseal will switch to new
          *     context by force.
@@ -2046,7 +2046,7 @@ static int sptlrpc_svc_check_from(struct ptlrpc_request *req, int svc_rc)
 
 /**
  * Used by ptlrpc server, to perform transformation upon request message of
- * incoming \a req. This must be the first thing to do with a incoming
+ * incoming \a req. This must be the first thing to do with an incoming
  * request in ptlrpc layer.
  *
  * \retval SECSVC_OK success, and req->rq_reqmsg point to request message in

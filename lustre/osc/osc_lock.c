@@ -512,7 +512,7 @@ static int osc_dlm_blocking_ast0(const struct lu_env *env,
  *
  *     - ldlm calls dlmlock->l_blocking_ast(..., LDLM_CB_BLOCKING) to notify
  *       us that dlmlock conflicts with another lock that some client is
- *       enqueing. Lock is canceled.
+ *       enqueuing. Lock is canceled.
  *
  *           - cl_lock_cancel() is called. osc_lock_cancel() calls
  *             ldlm_cli_cancel() that calls

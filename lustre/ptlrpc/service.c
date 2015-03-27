@@ -1007,7 +1007,7 @@ static void ptlrpc_server_finish_request(struct ptlrpc_service_part *svcpt,
 }
 
 /**
- * to finish a active request: stop sending more early replies, and release
+ * to finish an active request: stop sending more early replies, and release
  * the request. should be called after we finished handling the request.
  */
 static void ptlrpc_server_finish_active_request(

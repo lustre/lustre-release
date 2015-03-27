@@ -1152,7 +1152,7 @@ static inline const char *hsm_user_action2name(enum hsm_user_action  a)
  * List of hr_flags (bit field)
  */
 #define HSM_FORCE_ACTION 0x0001
-/* used by CT, connot be set by user */
+/* used by CT, cannot be set by user */
 #define HSM_GHOST_COPY   0x0002
 
 /**
@@ -1238,7 +1238,7 @@ static inline const char *hsm_copytool_action2name(enum hsm_copytool_action  a)
 struct hsm_action_item {
 	__u32      hai_len;     /* valid size of this struct */
 	__u32      hai_action;  /* hsm_copytool_action, but use known size */
-	lustre_fid hai_fid;     /* Lustre FID to operated on */
+	lustre_fid hai_fid;     /* Lustre FID to operate on */
 	lustre_fid hai_dfid;    /* fid used for data access */
 	struct hsm_extent hai_extent;  /* byte range to operate on */
 	__u64      hai_cookie;  /* action cookie from coordinator */

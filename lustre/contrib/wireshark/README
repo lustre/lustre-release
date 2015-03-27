@@ -32,7 +32,7 @@ Build with packaging support
 Simply type ./wsbuild on a node that match one of the disribution specified
 above to create the RPMs for wirkshark and the associated Lustre/LNet plugins.
 
-Upon successs the build results can be found in directory
+Upon success the build results can be found in directory
 'wireshark-<version>/packaging/rpm/RPMS/x86_64' relative to this directory.
 The RPMs are:
 

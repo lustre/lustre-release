@@ -55,8 +55,8 @@ Running
 The script must be customised according to the components under test and
 where it should keep its working files. Customization variables are
 described clearly at Customization variables Section in the script.
-Please see maximum suported value ranges for customization variables
-in the srcipt.
+Please see maximum supported value ranges for customization variables
+in the script.
 
 To run against a local disk:
 ---------------------------

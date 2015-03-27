@@ -103,7 +103,7 @@ static void osp_statfs_timer_cb(unsigned long _d)
  *
  * An interpretation callback called by ptlrpc for OST_STATFS RPC when it is
  * replied by the target. It's used to maintain statfs cache for the target.
- * The function fills data from the reply if succesfull and schedules another
+ * The function fills data from the reply if successful and schedules another
  * update.
  *
  * \param[in] env	LU environment provided by the caller
@@ -1432,7 +1432,7 @@ int osp_precreate_get_fid(const struct lu_env *env, struct osp_device *d,
 }
 
 /*
- * Set size regular attribute on a object
+ * Set size regular attribute on an object
  *
  * When a striping is created late, it's possible that size is already
  * initialized on the file. Then the new striping should inherit size

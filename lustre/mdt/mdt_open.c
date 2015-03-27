@@ -511,8 +511,8 @@ static int mdt_finish_open(struct mdt_thread_info *info,
 
 	/* LU-2275, simulate broken behaviour (esp. prevalent in
 	 * pre-2.4 servers where a very strange reply is sent on error
-	 * that looks like it was actually almost succesful and a failure at the
-	 * same time */
+	 * that looks like it was actually almost successful and a
+	 * failure at the same time.) */
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_NEGATIVE_POSITIVE)) {
 		mdt_set_disposition(info, rep, DISP_OPEN_OPEN |
 					       DISP_LOOKUP_NEG |

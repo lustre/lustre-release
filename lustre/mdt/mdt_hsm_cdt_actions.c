@@ -365,7 +365,7 @@ static void *mdt_hsm_actions_proc_start(struct seq_file *s, loff_t *pos)
 		RETURN(ERR_PTR(-ENOENT));
 	}
 
-	CDEBUG(D_HSM, "llog succesfully initialized, start from "LPD64"\n",
+	CDEBUG(D_HSM, "llog successfully initialized, start from "LPD64"\n",
 	       *pos);
 	/* first call = rewind */
 	if (*pos == 0) {

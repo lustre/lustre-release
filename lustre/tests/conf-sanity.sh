@@ -2624,7 +2624,7 @@ test_41c() {
 		{ skip "Need MDS version 2.5.4+ or 2.5.26+ or 2.6.52+"; return; }
 
 	cleanup
-	# MDT concurent start
+	# MDT concurrent start
 	#define OBD_FAIL_TGT_DELAY_CONNECT 0x703
 	do_facet $SINGLEMDS "$LCTL set_param fail_loc=0x703"
 	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS &
@@ -2645,10 +2645,10 @@ test_41c() {
 		echo "2nd MDT start succeed"
 	else
 		stop mds1 -f
-		error "unexpected concurent MDT mounts result, rc=$rc rc2=$rc2"
+		error "unexpected concurrent MDT mounts result, rc=$rc rc2=$rc2"
 	fi
 
-	# OST concurent start
+	# OST concurrent start
 	#define OBD_FAIL_TGT_DELAY_CONNECT 0x703
 	do_facet ost1 "$LCTL set_param fail_loc=0x703"
 	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS &
@@ -2670,7 +2670,7 @@ test_41c() {
 	else
 		stop mds1 -f
 		stop ost1 -f
-		error "unexpected concurent OST mounts result, rc=$rc rc2=$rc2"
+		error "unexpected concurrent OST mounts result, rc=$rc rc2=$rc2"
 	fi
 	# cleanup
 	stop mds1 -f
@@ -2708,7 +2708,7 @@ test_41c() {
 	fi
 	cleanup
 }
-run_test 41c "concurent mounts of MDT/OST should all fail but one"
+run_test 41c "concurrent mounts of MDT/OST should all fail but one"
 
 test_42() { #bug 14693
 	setup

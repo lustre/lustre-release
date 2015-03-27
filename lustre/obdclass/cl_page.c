@@ -744,7 +744,7 @@ EXPORT_SYMBOL(cl_page_discard);
 
 /**
  * Version of cl_page_delete() that can be called for not fully constructed
- * pages, e.g,. in a error handling cl_page_find()->cl_page_delete0()
+ * pages, e.g. in an error handling cl_page_find()->cl_page_delete0()
  * path. Doesn't check page invariant.
  */
 static void cl_page_delete0(const struct lu_env *env, struct cl_page *pg)

@@ -77,7 +77,7 @@ typedef bool (*cYAML_walk_cb)(struct cYAML *, void *, void**);
 
 /*
  * cYAML_build_tree
- *   Build a tree representation of the YAML formated text passed in.
+ *   Build a tree representation of the YAML formatted text passed in.
  *
  *   yaml_file - YAML file to parse and build tree representation
  *   yaml_blk - blk of YAML.  yaml_file takes precedence if both

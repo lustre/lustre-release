@@ -355,11 +355,12 @@ void send_portals_catastrophe_trap(char *reason_string)
      */
     var_trap[1].next_variable = NULL;
 
-    /*The "name" is the OID of the portals trap reason strong*/
+    /* The "name" is the OID of the portals trap reason string */
     var_trap[1].name = lustre_portals_trap_string;
     var_trap[1].name_length = sizeof(lustre_portals_trap_string) / sizeof(oid);
 
-    /*And the data is a octet string, that contains the actually reason string*/
+    /* And the data is an octet string, that contains the actually reason
+     * string */
     var_trap[1].type = ASN_OCTET_STR;
     var_trap[1].val.string = (unsigned char *)reason_string;
     var_trap[1].val_len = strlen(reason_string);
@@ -410,26 +411,28 @@ void send_obd_unhealthy_trap(char *obd_name,char *reason_string)
      */
     var_trap[1].next_variable = &var_trap[2];;
 
-    /*The "name" is the OID of the portals trap reason strong*/
+    /* The "name" is the OID of the portals trap reason string */
     var_trap[1].name = lustre_unhealthy_trap_device_name_string;
     var_trap[1].name_length = sizeof(lustre_unhealthy_trap_device_name_string) / sizeof(oid);
 
-    /*And the data is a octet string, that contains the actually reason strong*/
+    /* And the data is an octet string, that contains the actual reason
+     * string */
     var_trap[1].type = ASN_OCTET_STR;
     var_trap[1].val.string = (unsigned char *)obd_name;
     var_trap[1].val_len = strlen(obd_name);
 
-    /* 
-     * Setup the third variable in the trap data. 
+    /*
+     * Setup the third variable in the trap data.
      * It is the last in the chain so set next to NULL
      */
     var_trap[2].next_variable = NULL;
 
-    /*The "name" is the OID of the portals trap reason strong*/
+    /* The "name" is the OID of the portals trap reason string */
     var_trap[2].name = lustre_unhealthy_trap_reason_string;
     var_trap[2].name_length = sizeof(lustre_unhealthy_trap_reason_string) / sizeof(oid);
 
-    /*And the data is a octet string, that contains the actually reason strong*/
+    /* And the data is an octet string, that contains the actual reason
+     * string */
     var_trap[2].type = ASN_OCTET_STR;
     var_trap[2].val.string = (unsigned char *)reason_string;
     var_trap[2].val_len = strlen(reason_string);

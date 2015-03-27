@@ -132,7 +132,7 @@ osdNumber OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The number of Object Storage Devices on a OST system."
+	"The number of Object Storage Devices on an OST system."
     ::= { objectStorageTargets 1 }
 
 osdTable OBJECT-TYPE
@@ -140,7 +140,7 @@ osdTable OBJECT-TYPE
     MAX-ACCESS not-accessible
     STATUS current
     DESCRIPTION
-        "A table listing the Object Storage Devices available on a OST system.
+	"A table listing the Object Storage Devices available on an OST system.
          The number of entries in this table is available in osdNumber."
     ::= { objectStorageTargets 2 }
 
@@ -149,7 +149,7 @@ osdEntry OBJECT-TYPE
     MAX-ACCESS not-accessible
     STATUS current
     DESCRIPTION
-        "Table entry with information an Object Storage Device on a OST
+	"Table entry with information an Object Storage Device on an OST
          system."
     INDEX { osdIndex }
     ::= { osdTable 1 }
@@ -170,7 +170,7 @@ osdIndex OBJECT-TYPE
     MAX-ACCESS not-accessible
     STATUS current
     DESCRIPTION
-        "Index into the table of Object Storage Devices on a OST system."
+	"Index into the table of Object Storage Devices on an OST system."
     ::= { osdEntry 1 }
 
 osdUUID OBJECT-TYPE

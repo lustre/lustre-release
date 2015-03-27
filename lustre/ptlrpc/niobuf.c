@@ -500,7 +500,7 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
         /* Report actual service time for client latency calc */
         lustre_msg_set_service_time(req->rq_repmsg, service_time);
         /* Report service time estimate for future client reqs, but report 0
-         * (to be ignored by client) if it's a error reply during recovery.
+	 * (to be ignored by client) if it's an error reply during recovery.
          * (bz15815) */
         if (req->rq_type == PTL_RPC_MSG_ERR &&
             (req->rq_export == NULL || req->rq_export->exp_obd->obd_recovering))
@@ -523,7 +523,7 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
 /**
  * Send request reply from request \a req reply buffer.
  * \a flags defines reply types
- * Returns 0 on sucess or error code
+ * Returns 0 on success or error code
  */
 int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
 {

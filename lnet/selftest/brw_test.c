@@ -352,20 +352,21 @@ brw_client_done_rpc(sfw_test_unit_t *tsu, srpc_client_rpc_t *rpc)
 static void
 brw_server_rpc_done(srpc_server_rpc_t *rpc)
 {
-        srpc_bulk_t *blk = rpc->srpc_bulk;
+	srpc_bulk_t *blk = rpc->srpc_bulk;
 
-        if (blk == NULL) return;
+	if (blk == NULL)
+		return;
 
-        if (rpc->srpc_status != 0)
-                CERROR ("Bulk transfer %s %s has failed: %d\n",
-                        blk->bk_sink ? "from" : "to",
-                        libcfs_id2str(rpc->srpc_peer), rpc->srpc_status);
-        else
-                CDEBUG (D_NET, "Transfered %d pages bulk data %s %s\n",
-                        blk->bk_niov, blk->bk_sink ? "from" : "to",
-                        libcfs_id2str(rpc->srpc_peer));
+	if (rpc->srpc_status != 0)
+		CERROR("Bulk transfer %s %s has failed: %d\n",
+		       blk->bk_sink ? "from" : "to",
+		       libcfs_id2str(rpc->srpc_peer), rpc->srpc_status);
+	else
+		CDEBUG(D_NET, "Transferred %d pages bulk data %s %s\n",
+		       blk->bk_niov, blk->bk_sink ? "from" : "to",
+		       libcfs_id2str(rpc->srpc_peer));
 
-        sfw_free_pages(rpc);
+	sfw_free_pages(rpc);
 }
 
 static int

@@ -1650,7 +1650,7 @@ static int ct_rebind_list(const char *list)
 	if (line)
 		free(line);
 
-	/* return 0 if all rebinds were sucessful */
+	/* return 0 if all rebinds were successful */
 	CT_TRACE("%u lines read from '%s', %u rebind successful", nl, list, ok);
 
 	return ok == nl ? 0 : -1;

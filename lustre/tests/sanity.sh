@@ -11057,7 +11057,7 @@ test_184c() {
 	local ref2=$dir0/ref2
 	local file1=$dir0/file1
 	local file2=$dir0/file2
-	# create a file large enough for the concurent test
+	# create a file large enough for the concurrent test
 	dd if=/dev/urandom of=$ref1 bs=1M count=$((RANDOM % 50 + 20))
 	dd if=/dev/urandom of=$ref2 bs=1M count=$((RANDOM % 50 + 20))
 	echo "ref file size: ref1($(stat -c %s $ref1))," \

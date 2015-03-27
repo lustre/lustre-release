@@ -2346,7 +2346,7 @@ static int lod_xattr_set_default_lmv_on_dir(const struct lu_env *env,
  * failure, then the layer above LOD sends this defined striping
  * using ->do_xattr_set(), so LOD uses this method to replay creation
  * of the stripes. Notice the original information for the striping
- * (#stripes, FIDs, etc) was transfered in declare path.
+ * (#stripes, FIDs, etc) was transferred in declare path.
  *
  * \param[in] env	execution environment
  * \param[in] dt	the striped object

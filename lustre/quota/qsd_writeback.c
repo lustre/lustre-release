@@ -338,7 +338,7 @@ void qsd_adjust_schedule(struct lquota_entry *lqe, bool defer, bool cancel)
 			lqe->lqe_adjust_time = defer ?
 				cfs_time_shift_64(QSD_WB_INTERVAL) :
 				cfs_time_current_64();
-		/* lqe reference transfered to list */
+		/* lqe reference transferred to list */
 		if (defer)
 			list_add_tail(&lqe->lqe_link,
 					  &qsd->qsd_adjust_list);

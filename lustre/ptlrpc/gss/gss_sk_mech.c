@@ -59,7 +59,7 @@ __u32 gss_import_sec_context_sk(rawobj_t *inbuf, struct gss_ctx *gss_context)
 		return GSS_S_FAILURE;
 
 	gss_context->internal_ctx_id = sk_context;
-	CDEBUG(D_SEC, "succesfully imported sk context\n");
+	CDEBUG(D_SEC, "successfully imported sk context\n");
 
 	return GSS_S_COMPLETE;
 }
@@ -78,7 +78,7 @@ __u32 gss_copy_reverse_context_sk(struct gss_ctx *gss_context_old,
 	sk_context_old = gss_context_old->internal_ctx_id;
 	memcpy(sk_context_new, sk_context_old, sizeof(*sk_context_new));
 	gss_context_new->internal_ctx_id = sk_context_new;
-	CDEBUG(D_SEC, "succesfully copied reverse sk context\n");
+	CDEBUG(D_SEC, "successfully copied reverse sk context\n");
 
 	return GSS_S_COMPLETE;
 }
