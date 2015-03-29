@@ -131,7 +131,7 @@ get_dump_file()
 
 /*
  * The dump file should start with a description of which devices are
- * used, but for now it will assumed whatever app reads the file will
+ * used, but for now it will assume whatever app reads the file will
  * know what to do. */
 int 
 dump(int dev_id, unsigned int opc, void *buf)

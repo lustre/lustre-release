@@ -312,7 +312,7 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 			struct hsm_progress_kernel pgs;
 
 			dump_llog_agent_req_rec("mdt_coordinator_cb(): "
-						"request timeouted, start "
+						"request timed out, start "
 						"cleaning", larr);
 			/* a too old cancel request just needs to be removed
 			 * this can happen, if copy tool does not support cancel
@@ -330,7 +330,7 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 			 */
 			rc = mdt_hsm_update_request_state(hsd->mti, &pgs, 0);
 			if (rc)
-				CERROR("%s: Cannot cleanup timeouted request: "
+				CERROR("%s: Cannot cleanup timed out request: "
 				       DFID" for cookie "LPX64" action=%s\n",
 				       mdt_obd_name(mdt),
 				       PFID(&pgs.hpk_fid), pgs.hpk_cookie,
@@ -543,7 +543,7 @@ static int mdt_coordinator(void *data)
 		CDEBUG(D_HSM, "Found %d requests to send and %d"
 			      " requests to cancel\n",
 		       hsd.request_cnt, hsd.cookie_cnt);
-		/* first we cancel llog records of the timeouted requests */
+		/* first we cancel llog records of the timed out requests */
 		if (hsd.cookie_cnt > 0) {
 			rc = mdt_agent_record_update(mti->mti_env, mdt,
 						     hsd.cookies,
@@ -1270,7 +1270,7 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 			 * ENOSYS only if does not support cancel
 			 */
 			/* this can also happen when cdt calls it to
-			 * for a timeouted request */
+			 * for a timed out request */
 			*status = ARS_FAILED;
 			/* to have a cancel event in changelog */
 			pgs->hpk_errval = ECANCELED;

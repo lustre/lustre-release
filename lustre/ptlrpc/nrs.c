@@ -1804,7 +1804,7 @@ fail:
 }
 
 /**
- * Removes all policy desciptors from nrs_core::nrs_policies, and frees the
+ * Removes all policy descriptors from nrs_core::nrs_policies, and frees the
  * policy descriptors.
  *
  * Since all PTLRPC services are stopped at this point, there are no more

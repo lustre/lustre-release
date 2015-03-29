@@ -3440,7 +3440,7 @@ static int lod_declare_object_create(const struct lu_env *env,
 		dt->do_body_ops = &lod_body_lnk_ops;
 
 	/*
-	 * it's lod_ah_init() who has decided the object will striped
+	 * it's lod_ah_init() that has decided the object will be striped
 	 */
 	if (dof->dof_type == DFT_REGULAR) {
 		/* callers don't want stripes */

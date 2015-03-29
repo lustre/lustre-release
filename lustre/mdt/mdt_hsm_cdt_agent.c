@@ -505,7 +505,7 @@ int mdt_hsm_coordinator_update(struct mdt_thread_info *mti,
 	int      rc;
 
 	ENTRY;
-	/* ask to coodinator to update request state and
+	/* ask to coordinator to update request state and
 	 * to record on disk the result */
 	rc = mdt_hsm_update_request_state(mti, pgs, 1);
 	RETURN(rc);

@@ -1225,14 +1225,14 @@ posix_acl_to_xattr_user_namespace, [
 # 3.8 struct file has new member f_inode
 #
 AC_DEFUN([LC_HAVE_FILE_F_INODE], [
-LB_CHECK_COMPILE([if 'struct file' has memeber 'f_inode'],
+LB_CHECK_COMPILE([if 'struct file' has member 'f_inode'],
 file_f_inode, [
 	#include <linux/fs.h>
 ],[
 	((struct file *)0)->f_inode = NULL;
 ],[
 	AC_DEFINE(HAVE_FILE_F_INODE, 1,
-		[struct file has memeber f_inode])
+		[struct file has member f_inode])
 ])
 ]) # LC_HAVE_FILE_F_INODE
 

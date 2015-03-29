@@ -3022,7 +3022,7 @@ run_test 47 "server restart does not make client loss lru_resize settings"
 cleanup_48() {
 	trap 0
 
-	# reformat after this test is needed - if test will failed
+	# reformat after this test is needed - if the test fails,
 	# we will have unkillable file at FS
 	reformat_and_config
 }

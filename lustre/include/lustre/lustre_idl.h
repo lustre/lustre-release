@@ -985,7 +985,7 @@ enum lu_dirent_attrs {
 	LUDA_TYPE		= 0x0002,
 	LUDA_64BITHASH		= 0x0004,
 
-	/* The following attrs are used for MDT interanl only,
+	/* The following attrs are used for MDT internal only,
 	 * not visible to client */
 
 	/* Verify the dirent consistency */

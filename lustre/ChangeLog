@@ -2938,13 +2938,13 @@ Details	   : When osc reconnect to OST, OST(filter)should clear grant info of
 Severity   : normal
 Frequency  : rare
 Bugzilla   : 11662
-Description: Grant space more than avaiable left space sometimes.
+Description: Grant space more than available left space sometimes.
 Details	   : When then OST is about to be full, if two bulk writing from
 	     different clients came to OST. Accord the avaliable space of the
 	     OST, the first req should be permitted, and the second one
 	     should be denied by ENOSPC. But if the seconde arrived before
 	     the first one is commited. The OST might wrongly permit second
-	     writing, which will cause grant space > avaiable space.
+	     writing, which will cause grant space > available space.
 
 Severity   : normal
 Frequency  : when client is evicted

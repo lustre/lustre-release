@@ -2659,7 +2659,7 @@ test_88() { #bug 17485
         dd if=/dev/urandom of=$DIR/$tdir/f-$file_id bs=4096 count=128
     done
 
-    # if the objids were not recreated, then "ls" will failed for -ENOENT
+    # if the objids were not recreated, then "ls" will fail with -ENOENT
     ls -l $DIR/$tdir/* || error "can't get the status of precreated files"
 
     local file_id

@@ -151,7 +151,7 @@ static int lfs_mv(int argc, char **argv);
 	"\n"								\
 	"\tblock:        Block file access during data migration\n"	\
 
-/* all avaialable commands */
+/* all available commands */
 command_t cmdlist[] = {
 	{"setstripe", lfs_setstripe, 0,
 	 "Create a new file with a specific striping pattern or\n"
@@ -398,9 +398,9 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 	}
 
 	rc = llapi_file_get_stripe(name, lum);
-	/* failure can come from may case and some may be not real error
+	/* failure can happen for many reasons and some may be not real errors
 	 * (eg: no stripe)
-	 * in case of a real error, a later call will failed with a better
+	 * in case of a real error, a later call will fail with better
 	 * error management */
 	if (rc < 0)
 		bufsz = 1024*1024;
@@ -3945,8 +3945,8 @@ static int lfs_hsm_request(int argc, char **argv, int action)
 		while ((rc = getline(&line, &len, fp)) != -1) {
 			struct hsm_user_item *hui;
 
-			/* If allocated buffer was too small, gets something
-			 * bigger */
+			/* If allocated buffer was too small, get something
+			 * larger */
 			if (nbfile_alloc <= hur->hur_request.hr_itemcount) {
 				ssize_t size;
 				nbfile_alloc = nbfile_alloc * 2 + 1;

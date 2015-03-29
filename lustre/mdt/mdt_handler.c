@@ -1261,7 +1261,7 @@ static int mdt_raw_lookup(struct mdt_thread_info *info,
 }
 
 /*
- * UPDATE lock should be taken against parent, and be release before exit;
+ * UPDATE lock should be taken against parent, and be released before exit;
  * child_bits lock should be taken against child, and be returned back:
  *            (1)normal request should release the child lock;
  *            (2)intent request will grant the lock to client.
@@ -2574,7 +2574,7 @@ void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
  * Unlock mdt object.
  *
  * Immeditely release the regular lock and the PDO lock or save the
- * lock in reqeuest and keep them referenced until client ACK or
+ * lock in request and keep them referenced until client ACK or
  * transaction commit.
  *
  * \param info thread info object
@@ -3648,7 +3648,7 @@ static int mdt_seq_init(const struct lu_env *env, struct mdt_device *mdt)
 		GOTO(out_seq_fini, rc);
 
 	if (ss->ss_node_id != 0)
-		/* register controler export through lwp */
+		/* register controller export through lwp */
 		rc = mdt_register_seq_exp(mdt);
 
 	EXIT;

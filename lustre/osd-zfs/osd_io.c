@@ -372,7 +372,7 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 				lnb->lnb_page = kmem_to_page(dbp[i]->db_data +
 							     bufoff);
 				/* mark just a single slot: we need this
-				 * reference to dbuf to be release once */
+				 * reference to dbuf to be released once */
 				lnb->lnb_data = dbf;
 				dbf = NULL;
 
@@ -385,7 +385,8 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 				lnb++;
 			}
 
-			/* steal dbuf so dmu_buf_rele_array() cant release it */
+			/* steal dbuf so dmu_buf_rele_array() can't release
+			 * it */
 			dbp[i] = NULL;
 		}
 

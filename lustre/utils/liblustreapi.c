@@ -1880,7 +1880,7 @@ enum tgt_type {
 /*
  * If uuidp is NULL, return the number of available obd uuids.
  * If uuidp is non-NULL, then it will return the uuids of the obds. If
- * there are more OSTs then allocated to uuidp, then an error is returned with
+ * there are more OSTs than allocated to uuidp, then an error is returned with
  * the ost_count set to number of available obd uuids.
  */
 static int llapi_get_target_uuids(int fd, struct obd_uuid *uuidp,

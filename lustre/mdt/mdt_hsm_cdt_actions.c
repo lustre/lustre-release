@@ -549,7 +549,7 @@ out:
 
 /**
  * lprocfs_release_hsm_actions() is called at end of /proc access.
- * It frees allocated ressources and calls cleanup lprocfs methods.
+ * It frees allocated resources and calls cleanup lprocfs methods.
  */
 static int lprocfs_release_hsm_actions(struct inode *inode, struct file *file)
 {

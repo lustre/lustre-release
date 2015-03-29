@@ -1107,7 +1107,7 @@ struct dt_body_operations {
 	 * at object's offset lnb_file_offset.
 	 *
 	 * The memory referenced by the descriptors can't change its purpose
-	 * until the complimentary ->dbo_bufs_put() is called. The caller should
+	 * until the complementary ->dbo_bufs_put() is called. The caller should
 	 * specify if the buffers are used to read or modify data so that OSD
 	 * can decide how to initialize the buffers: bring all the data for
 	 * reads or just bring partial buffers for write. Note: the method does
@@ -1681,7 +1681,7 @@ enum dt_otable_it_flags {
 	DOIF_DRYRUN	= 0x0008,
 };
 
-/* otable based iteration needs to use the common DT interation APIs.
+/* otable based iteration needs to use the common DT iteration APIs.
  * To initialize the iteration, it needs call dio_it::init() firstly.
  * Here is how the otable based iteration should prepare arguments to
  * call dt_it_ops::init().

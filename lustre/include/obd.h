@@ -152,7 +152,7 @@ struct obd_info {
         /* statfs data specific for every OSC, if needed at all. */
         struct obd_statfs      *oi_osfs;
         /* An update callback which is called to update some data on upper
-         * level. E.g. it is used for update lsm->lsm_oinfo at every recieved
+	 * level. E.g. it is used for update lsm->lsm_oinfo at every received
          * request in osc level for enqueue requests. It is also possible to
          * update some caller data from LOV layer if needed. */
         obd_enqueue_update_f    oi_cb_up;

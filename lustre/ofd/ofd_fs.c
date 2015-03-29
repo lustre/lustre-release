@@ -249,7 +249,7 @@ out:
  *
  * LWP is lightweight proxy - simplified connection between
  * servers. It is used for FID Location Database (FLDB) and
- * sequence (SEQ) client-server interations.
+ * sequence (SEQ) client-server interactions.
  *
  * This function is used during server cleanup process to free
  * LWP items that were previously set up upon OFD start.

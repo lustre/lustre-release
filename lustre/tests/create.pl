@@ -85,7 +85,7 @@ sub usage () {
     print "\t--mountpt\tlocation of lustre mount\n";
     print "\t--num_mounts=n\tnumber of lustre mounts to test across, default=-1 (single mount point without numeric suffix)\n\n";
     print "example: $0 --mountpt=/mnt/lustre --num_mounts=2 --iterations=50\n";
-    print "         will perform 50 interations in /mnt/lustre1 and /mnt/lustre2\n";
+	print "         will perform 50 iterations in /mnt/lustre1 and /mnt/lustre2\n";
     print "         $0 --mountpt=/mnt/lustre --num_mounts=-1 --iterations=50\n";
     print "         will perform 50 iterations in /mnt/lustre only\n\n";
     exit;

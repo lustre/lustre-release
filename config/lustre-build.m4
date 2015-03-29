@@ -105,7 +105,7 @@ AC_SUBST(BUILDID)
 #
 # LB_CHECK_FILE
 #
-# Check for file existance even when cross compiling
+# Check for file existence even when cross compiling
 # $1 - file to check
 # $2 - do 'yes'
 # $3 - do 'no'
@@ -499,7 +499,7 @@ AS_IF([test x$enable_server = xyes],
 #
 # The purpose of this function is to assemble command line options
 # for the rpmbuild command based on the options passed to the configure
-# script, and also upon the descisions that configure makes based on
+# script, and also upon the decisions that configure makes based on
 # the tests that it runs.
 # These strings can be passed to rpmbuild on the command line
 # in the Make targets named "rpms" and "srpm".

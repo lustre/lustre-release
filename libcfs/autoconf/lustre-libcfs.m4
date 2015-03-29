@@ -296,7 +296,7 @@ shrinker_count_objects, [
 	((struct shrinker*)0)->count_objects(NULL, NULL);
 ],[
 	AC_DEFINE(HAVE_SHRINKER_COUNT, 1,
-		[shrinker has count_objects memeber])
+		[shrinker has count_objects member])
 ])
 ])
 

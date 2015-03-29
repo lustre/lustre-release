@@ -200,7 +200,7 @@ AM_CONDITIONAL([LDISKFS_ENABLED], [test x$enable_ldiskfs = xyes])
 #
 # LB_VALIDATE_EXT4_SRC_DIR
 #
-# Spot check the existance of several source files common to ext4.
+# Spot check the existence of several source files common to ext4.
 # Detecting this at configure time allows us to avoid a potential build
 # failure and provide a useful error message to explain what is wrong.
 #

@@ -11,7 +11,7 @@ sub usage()
 {
     print STDERR "Usage: $pname <ost_name> [<interval> [<count>}]\n";
     print STDERR "where  ost_name  : ost name under /{proc,sys}/fs/lustre/obdfilter\n";
-    print STDERR "       interval  : sample interaval in seconds\n";
+    print STDERR "       interval  : sample interval in seconds\n";
     print STDERR "example: $pname lustre-OST0000 2\n";
     print STDERR "Use CTRL + C to stop statistics printing\n";
     exit 1;

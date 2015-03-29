@@ -833,11 +833,11 @@ kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
 
         conn->ibc_cq = cq;
 
-        rc = ib_req_notify_cq(cq, IB_CQ_NEXT_COMP);
-        if (rc != 0) {
-                CERROR("Can't request completion notificiation: %d\n", rc);
-                goto failed_2;
-        }
+	rc = ib_req_notify_cq(cq, IB_CQ_NEXT_COMP);
+	if (rc != 0) {
+		CERROR("Can't request completion notification: %d\n", rc);
+		goto failed_2;
+	}
 
         init_qp_attr->event_handler = kiblnd_qp_event;
         init_qp_attr->qp_context = conn;

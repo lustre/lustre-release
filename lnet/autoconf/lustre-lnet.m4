@@ -545,7 +545,7 @@ LN_CONFIG_DLC
 #
 # LN_CONDITIONALS
 #
-# AM_CONDITOINAL defines for lnet
+# AM_CONDITIONAL defines for lnet
 #
 AC_DEFUN([LN_CONDITIONALS], [
 AM_CONDITIONAL(BUILD_O2IBLND,    test x$O2IBLND = "xo2iblnd")

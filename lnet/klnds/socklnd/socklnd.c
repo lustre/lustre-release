@@ -1497,9 +1497,9 @@ ksocknal_peer_failed (ksock_peer_t *peer)
         int        notify = 0;
         cfs_time_t last_alive = 0;
 
-        /* There has been a connection failure or comms error; but I'll only
-         * tell LNET I think the peer is dead if it's to another kernel and
-         * there are no connections or connection attempts in existance. */
+	/* There has been a connection failure or comms error; but I'll only
+	 * tell LNET I think the peer is dead if it's to another kernel and
+	 * there are no connections or connection attempts in existence. */
 
 	read_lock(&ksocknal_data.ksnd_global_lock);
 
