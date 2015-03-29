@@ -302,51 +302,51 @@ brw_client_prep_rpc (sfw_test_unit_t *tsu,
 }
 
 static void
-brw_client_done_rpc (sfw_test_unit_t *tsu, srpc_client_rpc_t *rpc)
+brw_client_done_rpc(sfw_test_unit_t *tsu, srpc_client_rpc_t *rpc)
 {
-        __u64                magic = BRW_MAGIC;
-        sfw_test_instance_t *tsi = tsu->tsu_instance;
-        sfw_session_t       *sn = tsi->tsi_batch->bat_session;
-        srpc_msg_t          *msg = &rpc->crpc_replymsg;
-        srpc_brw_reply_t    *reply = &msg->msg_body.brw_reply;
-        srpc_brw_reqst_t    *reqst = &rpc->crpc_reqstmsg.msg_body.brw_reqst;
+	__u64                magic = BRW_MAGIC;
+	sfw_test_instance_t *tsi = tsu->tsu_instance;
+	sfw_session_t       *sn = tsi->tsi_batch->bat_session;
+	srpc_msg_t          *msg = &rpc->crpc_replymsg;
+	srpc_brw_reply_t    *reply = &msg->msg_body.brw_reply;
+	srpc_brw_reqst_t    *reqst = &rpc->crpc_reqstmsg.msg_body.brw_reqst;
 
-        LASSERT (sn != NULL);
+	LASSERT(sn != NULL);
 
-        if (rpc->crpc_status != 0) {
-                CERROR ("BRW RPC to %s failed with %d\n",
-                        libcfs_id2str(rpc->crpc_dest), rpc->crpc_status);
-                if (!tsi->tsi_stopping) /* rpc could have been aborted */
+	if (rpc->crpc_status != 0) {
+		CERROR("BRW RPC to %s failed with %d\n",
+		       libcfs_id2str(rpc->crpc_dest), rpc->crpc_status);
+		if (!tsi->tsi_stopping) /* rpc could have been aborted */
 			atomic_inc(&sn->sn_brw_errors);
-                goto out;
-        }
+		return;
+	}
 
-        if (msg->msg_magic != SRPC_MSG_MAGIC) {
-                __swab64s(&magic);
-                __swab32s(&reply->brw_status);
-        }
+	if (msg->msg_magic != SRPC_MSG_MAGIC) {
+		__swab64s(&magic);
+		__swab32s(&reply->brw_status);
+	}
 
-        CDEBUG (reply->brw_status ? D_WARNING : D_NET,
-                "BRW RPC to %s finished with brw_status: %d\n",
-                libcfs_id2str(rpc->crpc_dest), reply->brw_status);
+	CDEBUG(reply->brw_status ? D_WARNING : D_NET,
+	       "BRW RPC to %s finished with brw_status: %d\n",
+	       libcfs_id2str(rpc->crpc_dest), reply->brw_status);
 
-        if (reply->brw_status != 0) {
+	if (reply->brw_status != 0) {
 		atomic_inc(&sn->sn_brw_errors);
-                rpc->crpc_status = -(int)reply->brw_status;
-                goto out;
-        }
+		rpc->crpc_status = -(int)reply->brw_status;
+		return;
+	}
 
-        if (reqst->brw_rw == LST_BRW_WRITE) goto out;
+	if (reqst->brw_rw == LST_BRW_WRITE)
+		return;
 
-        if (brw_check_bulk(&rpc->crpc_bulk, reqst->brw_flags, magic) != 0) {
-                CERROR ("Bulk data from %s is corrupted!\n",
-                        libcfs_id2str(rpc->crpc_dest));
+	if (brw_check_bulk(&rpc->crpc_bulk, reqst->brw_flags, magic) != 0) {
+		CERROR("Bulk data from %s is corrupted!\n",
+		       libcfs_id2str(rpc->crpc_dest));
 		atomic_inc(&sn->sn_brw_errors);
-                rpc->crpc_status = -EBADMSG;
-        }
+		rpc->crpc_status = -EBADMSG;
+	}
 
-out:
-        return;
+	return;
 }
 
 static void
