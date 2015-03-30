@@ -1176,7 +1176,8 @@ static int lod_declare_attr_set(const struct lu_env *env,
 			RETURN(0);
 	} else {
 		if (!(attr->la_valid & (LA_UID | LA_GID | LA_MODE |
-					LA_ATIME | LA_MTIME | LA_CTIME)))
+					LA_ATIME | LA_MTIME | LA_CTIME |
+					LA_FLAGS)))
 			RETURN(rc);
 	}
 	/*
@@ -1267,7 +1268,8 @@ static int lod_attr_set(const struct lu_env *env,
 			RETURN(0);
 	} else {
 		if (!(attr->la_valid & (LA_UID | LA_GID | LA_MODE |
-					LA_ATIME | LA_MTIME | LA_CTIME)))
+					LA_ATIME | LA_MTIME | LA_CTIME |
+					LA_FLAGS)))
 			RETURN(rc);
 	}
 

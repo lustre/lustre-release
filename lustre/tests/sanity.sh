@@ -12963,6 +12963,11 @@ test_striped_dir() {
 	[ $(stat -c%h $DIR/$tdir/striped_dir) == '2' ] ||
 		error "nlink error after rmdir"
 
+	chattr +i $DIR/$tdir/striped_dir
+	createmany -o $DIR/$tdir/striped_dir/f 10 &&
+		error "immutable flags not working under striped dir!"
+	chattr -i $DIR/$tdir/striped_dir
+
 	rmdir $DIR/$tdir/striped_dir ||
 		error "rmdir striped dir error"
 
