@@ -196,7 +196,7 @@ backing store of a Lustre server.
 
 %if %{with lustre_utils}
 %package osd-zfs-mount
-Summary: osd-zfs-mount contains mount's ldiskfs specific dso.
+Summary: osd-zfs-mount contains mount's zfs specific dso.
 Provides: lustre-osd-mount
 Group: Development/Kernel
 
