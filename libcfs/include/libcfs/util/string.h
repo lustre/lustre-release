@@ -40,23 +40,21 @@
  * Author: Nathan Rutman <nathan.rutman@sun.com>
  */
 
-#ifndef __LIBCFS_STRING_H__
-#define __LIBCFS_STRING_H__
+#ifndef __LIBCFS_UTIL_STRING_H__
+#define __LIBCFS_UTIL_STRING_H__
 
-/* libcfs_string.c */
-char *cfs_strrstr(const char *haystack, const char *needle);
-/* Convert a text string to a bitmask */
-int cfs_str2mask(const char *str, const char *(*bit2str)(int bit),
-                 int *oldmask, int minmask, int allmask);
+#include <stddef.h>
 
-/* safe vsnprintf */
-int cfs_vsnprintf(char *buf, size_t size, const char *fmt, va_list args);
+#include <linux/types.h>
+#include <libcfs/list.h>
 
-/* safe snprintf */
-int cfs_snprintf(char *buf, size_t size, const char *fmt, ...);
+#ifndef HAVE_STRLCPY /* not in glibc for RHEL 5.x, remove when obsolete */
+size_t strlcpy(char *tgt, const char *src, size_t tgt_len);
+#endif
 
-/* trim leading and trailing space characters */
-char *cfs_firststr(char *str, size_t size);
+#ifndef HAVE_STRLCAT /* not in glibc for RHEL 5.x, remove when obsolete */
+size_t strlcat(char *tgt, const char *src, size_t tgt_len);
+#endif
 
 /**
  * Structure to represent NULL-less strings.
@@ -84,27 +82,12 @@ struct cfs_expr_list {
 	struct list_head	el_exprs;
 };
 
-char *cfs_trimwhite(char *str);
 int cfs_gettok(struct cfs_lstr *next, char delim, struct cfs_lstr *res);
 int cfs_str2num_check(char *str, int nob, unsigned *num,
 		      unsigned min, unsigned max);
-int cfs_range_expr_parse(struct cfs_lstr *src, unsigned min, unsigned max,
-			 int single_tok, struct cfs_range_expr **expr);
 int cfs_expr_list_match(__u32 value, struct cfs_expr_list *expr_list);
 int cfs_expr_list_print(char *buffer, int count,
 			struct cfs_expr_list *expr_list);
-int cfs_expr_list_values(struct cfs_expr_list *expr_list,
-			 int max, __u32 **values);
-static inline void
-cfs_expr_list_values_free(__u32 *values, int num)
-{
-	/* This array is allocated by LIBCFS_ALLOC(), so it shouldn't be freed
-	 * by OBD_FREE() if it's called by module other than libcfs & LNet,
-	 * otherwise we will see fake memory leak */
-	LIBCFS_FREE(values, num * sizeof(values[0]));
-}
-
-void cfs_expr_list_free(struct cfs_expr_list *expr_list);
 int cfs_expr_list_parse(char *str, int len, unsigned min, unsigned max,
 			struct cfs_expr_list **elpp);
 void cfs_expr_list_free_list(struct list_head *list);

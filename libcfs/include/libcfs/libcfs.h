@@ -252,7 +252,9 @@ void cfs_get_random_bytes(void *buf, int size);
 #include <libcfs/libcfs_ioctl.h>
 #include <libcfs/libcfs_prim.h>
 #include <libcfs/libcfs_time.h>
-#include <libcfs/libcfs_string.h>
+#ifdef __KERNEL__
+# include <libcfs/libcfs_string.h>
+#endif /* __KERNEL__ */
 #include <libcfs/libcfs_kernelcomm.h>
 #include <libcfs/libcfs_workitem.h>
 #ifdef __KERNEL__

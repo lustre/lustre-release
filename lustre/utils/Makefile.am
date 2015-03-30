@@ -81,14 +81,13 @@ llverfs_LDADD := $(EXT2FSLIB) $(E2PLIB)
 
 llverdev_LDADD := $(EXT2FSLIB) $(BLKIDLIB)
 
-L_STRING := $(top_builddir)/libcfs/libcfs/user-string.c
-L_IOCTL := $(top_builddir)/libcfs/libcfs/util/l_ioctl.c
+L_STRING := $(top_builddir)/libcfs/libcfs/util/string.c
 L_KERNELCOMM := $(top_builddir)/libcfs/libcfs/kernel_user_comm.c
 liblustreapitmp_a_SOURCES = liblustreapi.c liblustreapi_hsm.c \
 			    liblustreapi_nodemap.c lustreapi_internal.h \
 			    liblustreapi_json.c liblustreapi_layout.c \
 			    liblustreapi_lease.c liblustreapi_util.c \
-			    $(L_IOCTL) $(L_KERNELCOMM) $(L_STRING)
+			    $(L_KERNELCOMM) $(L_STRING)
 
 if UTILS
 # build static and shared lib lustreapi

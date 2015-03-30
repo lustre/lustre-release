@@ -1,4 +1,4 @@
-my_sources =    api-ni.c config.c \
+my_sources =    api-ni.c config.c nidstring.c \
 		lib-me.c lib-msg.c lib-eq.c lib-socket.c \
 		lib-md.c lib-ptl.c lib-move.c lo.c \
 	        router.c router_proc.c \

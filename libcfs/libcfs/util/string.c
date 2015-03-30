@@ -35,187 +35,55 @@
  *
  * String manipulation functions.
  *
- * libcfs/libcfs/libcfs_string.c
+ * libcfs/libcfs/util/string.c
  *
  * Author: Nathan Rutman <nathan.rutman@sun.com>
  */
+#include <ctype.h>
+#include <errno.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <libcfs/util/string.h>
 
-#include <libcfs/libcfs.h>
-
-char *cfs_strrstr(const char *haystack, const char *needle)
-{
-	char *ptr;
-
-	if (unlikely(haystack == NULL || needle == NULL))
-		return NULL;
-
-	if (strlen(needle) == 1)
-		return strrchr(haystack, needle[0]);
-
-	ptr = strstr(haystack, needle);
-	if (ptr != NULL) {
-		while (1) {
-			char *tmp;
-
-			tmp = strstr(&ptr[1], needle);
-			if (tmp == NULL)
-				return ptr;
-
-			ptr = tmp;
-		}
-	}
-
-	return NULL;
-}
-EXPORT_SYMBOL(cfs_strrstr);
-
-/* Convert a text string to a bitmask */
-int cfs_str2mask(const char *str, const char *(*bit2str)(int bit),
-                 int *oldmask, int minmask, int allmask)
-{
-        const char *debugstr;
-        char op = 0;
-        int newmask = minmask, i, len, found = 0;
-        ENTRY;
-
-        /* <str> must be a list of tokens separated by whitespace
-         * and optionally an operator ('+' or '-').  If an operator
-         * appears first in <str>, '*oldmask' is used as the starting point
-         * (relative), otherwise minmask is used (absolute).  An operator
-         * applies to all following tokens up to the next operator. */
-        while (*str != 0) {
-                while (isspace(*str))
-                        str++;
-                if (*str == 0)
-                        break;
-                if (*str == '+' || *str == '-') {
-                        op = *str++;
-                        if (!found)
-                                /* only if first token is relative */
-                                newmask = *oldmask;
-                        while (isspace(*str))
-                                str++;
-                        if (*str == 0)          /* trailing op */
-                                return -EINVAL;
-                }
-
-                /* find token length */
-                for (len = 0; str[len] != 0 && !isspace(str[len]) &&
-                      str[len] != '+' && str[len] != '-'; len++);
-
-                /* match token */
-                found = 0;
-                for (i = 0; i < 32; i++) {
-                        debugstr = bit2str(i);
-                        if (debugstr != NULL &&
-                            strlen(debugstr) == len &&
-			    strncasecmp(str, debugstr, len) == 0) {
-                                if (op == '-')
-                                        newmask &= ~(1 << i);
-                                else
-                                        newmask |= (1 << i);
-                                found = 1;
-                                break;
-                        }
-                }
-                if (!found && len == 3 &&
-		    (strncasecmp(str, "ALL", len) == 0)) {
-                        if (op == '-')
-                                newmask = minmask;
-                        else
-                                newmask = allmask;
-                        found = 1;
-                }
-                if (!found) {
-                        CWARN("unknown mask '%.*s'.\n"
-                              "mask usage: [+|-]<all|type> ...\n", len, str);
-                        return -EINVAL;
-                }
-                str += len;
-        }
-
-        *oldmask = newmask;
-        return 0;
-}
-EXPORT_SYMBOL(cfs_str2mask);
-
-/**
- * cfs_{v}snprintf() return the actual size that is printed rather than
- * the size that would be printed in standard functions.
+/*
+ * According manual of strlcpy() and strlcat() the functions should return
+ * the total length of the string they tried to create. For strlcpy() that
+ * means the length of src. For strlcat() that means the initial length of
+ * dst plus the length of src. So, the function strnlen() cannot be used
+ * otherwise the return value will be wrong.
  */
-/* safe vsnprintf */
-int cfs_vsnprintf(char *buf, size_t size, const char *fmt, va_list args)
+#ifndef HAVE_STRLCPY /* not in glibc for RHEL 5.x, remove when obsolete */
+size_t strlcpy(char *dst, const char *src, size_t size)
 {
-        int i;
+	size_t ret = strlen(src);
 
-        LASSERT(size > 0);
-        i = vsnprintf(buf, size, fmt, args);
-
-        return  (i >= size ? size - 1 : i);
-}
-EXPORT_SYMBOL(cfs_vsnprintf);
-
-/* safe snprintf */
-int cfs_snprintf(char *buf, size_t size, const char *fmt, ...)
-{
-        va_list args;
-        int i;
-
-        va_start(args, fmt);
-        i = cfs_vsnprintf(buf, size, fmt, args);
-        va_end(args);
-
-        return  i;
-}
-EXPORT_SYMBOL(cfs_snprintf);
-
-/* get the first string out of @str */
-char *cfs_firststr(char *str, size_t size)
-{
-        size_t i = 0;
-        char  *end;
-
-        /* trim leading spaces */
-        while (i < size && *str && isspace(*str)) {
-                ++i;
-                ++str;
-        }
-
-        /* string with all spaces */
-        if (*str == '\0')
-                goto out;
-
-        end = str;
-        while (i < size && *end != '\0' && !isspace(*end)) {
-                ++i;
-                ++end;
-        }
-
-        *end= '\0';
-out:
-        return str;
-}
-EXPORT_SYMBOL(cfs_firststr);
-
-char *
-cfs_trimwhite(char *str)
-{
-	char *end;
-
-	while (isspace(*str))
-		str++;
-
-	end = str + strlen(str);
-	while (end > str) {
-		if (!isspace(end[-1]))
-			break;
-		end--;
+	if (size) {
+		size_t len = (ret >= size) ? size - 1 : ret;
+		memcpy(dst, src, len);
+		dst[len] = '\0';
 	}
-
-	*end = 0;
-	return str;
+	return ret;
 }
-EXPORT_SYMBOL(cfs_trimwhite);
+#endif
+
+#ifndef HAVE_STRLCAT /* not in glibc for RHEL 5.x, remove when obsolete */
+size_t strlcat(char *dst, const char *src, size_t size)
+{
+	size_t dsize = strlen(dst);
+	size_t len = strlen(src);
+	size_t ret = dsize + len;
+
+	dst  += dsize;
+	size -= dsize;
+	if (len >= size)
+		len = size-1;
+	memcpy(dst, src, len);
+	dst[len] = '\0';
+	return ret;
+}
+#endif
 
 /**
  * Extracts tokens from strings.
@@ -271,7 +139,6 @@ cfs_gettok(struct cfs_lstr *next, char delim, struct cfs_lstr *res)
 	res->ls_len = end - res->ls_str + 1;
 	return 1;
 }
-EXPORT_SYMBOL(cfs_gettok);
 
 /**
  * Converts string to integer.
@@ -288,7 +155,7 @@ cfs_str2num_check(char *str, int nob, unsigned *num,
 {
 	char	*endp;
 
-	*num = simple_strtoul(str, &endp, 0);
+	*num = strtoul(str, &endp, 0);
 	if (endp == str)
 		return 0;
 
@@ -299,7 +166,6 @@ cfs_str2num_check(char *str, int nob, unsigned *num,
 
 	return (*num >= min && *num <= max);
 }
-EXPORT_SYMBOL(cfs_str2num_check);
 
 /**
  * Parses \<range_expr\> token of the syntax. If \a bracketed is false,
@@ -307,21 +173,21 @@ EXPORT_SYMBOL(cfs_str2num_check);
  *
  * \retval pointer to allocated range_expr and initialized
  * range_expr::re_lo, range_expr::re_hi and range_expr:re_stride if \a
- `* src parses to
+ * src parses to
  * \<number\> |
  * \<number\> '-' \<number\> |
  * \<number\> '-' \<number\> '/' \<number\>
  * \retval 0 will be returned if it can be parsed, otherwise -EINVAL or
  * -ENOMEM will be returned.
  */
-int
+static int
 cfs_range_expr_parse(struct cfs_lstr *src, unsigned min, unsigned max,
 		     int bracketed, struct cfs_range_expr **expr)
 {
 	struct cfs_range_expr	*re;
 	struct cfs_lstr		tok;
 
-	LIBCFS_ALLOC(re, sizeof(*re));
+	re = calloc(1, sizeof(*re));
 	if (re == NULL)
 		return -ENOMEM;
 
@@ -374,10 +240,9 @@ cfs_range_expr_parse(struct cfs_lstr *src, unsigned min, unsigned max,
 	return 0;
 
  failed:
-	LIBCFS_FREE(re, sizeof(*re));
+	free(re);
 	return -EINVAL;
 }
-EXPORT_SYMBOL(cfs_range_expr_parse);
 
 /**
  * Print the range expression \a re into specified \a buffer.
@@ -398,12 +263,12 @@ cfs_range_expr_print(char *buffer, int count, struct cfs_range_expr *expr,
 		s[0] = e[0] = '\0';
 
 	if (expr->re_lo == expr->re_hi)
-		i = cfs_snprintf(buffer, count, "%u", expr->re_lo);
+		i = snprintf(buffer, count, "%u", expr->re_lo);
 	else if (expr->re_stride == 1)
-		i = cfs_snprintf(buffer, count, "%s%u-%u%s",
+		i = snprintf(buffer, count, "%s%u-%u%s",
 				  s, expr->re_lo, expr->re_hi, e);
 	else
-		i = cfs_snprintf(buffer, count, "%s%u-%u/%u%s",
+		i = snprintf(buffer, count, "%s%u-%u/%u%s",
 				  s, expr->re_lo, expr->re_hi,
 				  expr->re_stride, e);
 	return i;
@@ -430,21 +295,20 @@ cfs_expr_list_print(char *buffer, int count, struct cfs_expr_list *expr_list)
 		numexprs++;
 
 	if (numexprs > 1)
-		i += cfs_snprintf(buffer + i, count - i, "[");
+		i += snprintf(buffer + i, count - i, "[");
 
 	list_for_each_entry(expr, &expr_list->el_exprs, re_link) {
 		if (j++ != 0)
-			i += cfs_snprintf(buffer + i, count - i, ",");
+			i += snprintf(buffer + i, count - i, ",");
 		i += cfs_range_expr_print(buffer + i, count - i, expr,
 					  numexprs > 1);
 	}
 
 	if (numexprs > 1)
-		i += cfs_snprintf(buffer + i, count - i, "]");
+		i += snprintf(buffer + i, count - i, "]");
 
 	return i;
 }
-EXPORT_SYMBOL(cfs_expr_list_print);
 
 /**
  * Matches value (\a value) against ranges expression list \a expr_list.
@@ -465,76 +329,26 @@ cfs_expr_list_match(__u32 value, struct cfs_expr_list *expr_list)
 
 	return 0;
 }
-EXPORT_SYMBOL(cfs_expr_list_match);
-
-/**
- * Convert express list (\a expr_list) to an array of all matched values
- *
- * \retval N N is total number of all matched values
- * \retval 0 if expression list is empty
- * \retval < 0 for failure
- */
-int
-cfs_expr_list_values(struct cfs_expr_list *expr_list, int max, __u32 **valpp)
-{
-	struct cfs_range_expr	*expr;
-	__u32			*val;
-	int			count = 0;
-	int			i;
-
-	list_for_each_entry(expr, &expr_list->el_exprs, re_link) {
-		for (i = expr->re_lo; i <= expr->re_hi; i++) {
-			if (((i - expr->re_lo) % expr->re_stride) == 0)
-				count++;
-		}
-	}
-
-	if (count == 0) /* empty expression list */
-		return 0;
-
-	if (count > max) {
-		CERROR("Number of values %d exceeds max allowed %d\n",
-		       max, count);
-		return -EINVAL;
-	}
-
-	LIBCFS_ALLOC(val, sizeof(val[0]) * count);
-	if (val == NULL)
-		return -ENOMEM;
-
-	count = 0;
-	list_for_each_entry(expr, &expr_list->el_exprs, re_link) {
-		for (i = expr->re_lo; i <= expr->re_hi; i++) {
-			if (((i - expr->re_lo) % expr->re_stride) == 0)
-				val[count++] = i;
-		}
-	}
-
-	*valpp = val;
-	return count;
-}
-EXPORT_SYMBOL(cfs_expr_list_values);
 
 /**
  * Frees cfs_range_expr structures of \a expr_list.
  *
  * \retval none
  */
-void
+static void
 cfs_expr_list_free(struct cfs_expr_list *expr_list)
 {
 	while (!list_empty(&expr_list->el_exprs)) {
 		struct cfs_range_expr *expr;
 
 		expr = list_entry(expr_list->el_exprs.next,
-				      struct cfs_range_expr, re_link);
+				  struct cfs_range_expr, re_link);
 		list_del(&expr->re_link);
-		LIBCFS_FREE(expr, sizeof(*expr));
+		free(expr);
 	}
 
-	LIBCFS_FREE(expr_list, sizeof(*expr_list));
+	free(expr_list);
 }
-EXPORT_SYMBOL(cfs_expr_list_free);
 
 /**
  * Parses \<cfs_expr_list\> token of the syntax.
@@ -551,7 +365,7 @@ cfs_expr_list_parse(char *str, int len, unsigned min, unsigned max,
 	struct cfs_lstr		src;
 	int			rc;
 
-	LIBCFS_ALLOC(expr_list, sizeof(*expr_list));
+	expr_list = calloc(1, sizeof(*expr_list));
 	if (expr_list == NULL)
 		return -ENOMEM;
 
@@ -596,7 +410,6 @@ cfs_expr_list_parse(char *str, int len, unsigned min, unsigned max,
 
 	return rc;
 }
-EXPORT_SYMBOL(cfs_expr_list_parse);
 
 /**
  * Frees cfs_expr_list structures of \a list.
@@ -618,7 +431,6 @@ cfs_expr_list_free_list(struct list_head *list)
 		cfs_expr_list_free(el);
 	}
 }
-EXPORT_SYMBOL(cfs_expr_list_free_list);
 
 int
 cfs_ip_addr_parse(char *str, int len, struct list_head *list)
@@ -657,7 +469,6 @@ cfs_ip_addr_parse(char *str, int len, struct list_head *list)
 
 	return rc;
 }
-EXPORT_SYMBOL(cfs_ip_addr_parse);
 
 /**
  * Matches address (\a addr) against address set encoded in \a list.
@@ -680,4 +491,3 @@ cfs_ip_addr_match(__u32 addr, struct list_head *list)
 
 	return i == 4;
 }
-EXPORT_SYMBOL(cfs_ip_addr_match);

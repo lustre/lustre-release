@@ -40,15 +40,14 @@ SUBDIRS = linux util
 DIST_SUBDIRS = linux util
 
 noinst_LIBRARIES= libcfs.a
-libcfs_a_SOURCES = user-string.c
+libcfs_a_SOURCES = util/string.c util/nidstrings.c
 
 libcfs_a_CPPFLAGS = $(LLCPPFLAGS)
 libcfs_a_CFLAGS = $(LLCFLAGS)
 
 if UTILS
 lib_LIBRARIES = libcfsutil.a
-libcfsutil_a_SOURCES = nidstrings.c libcfs_string.c util/parser.c	\
-		util/l_ioctl.c util/util.c
+libcfsutil_a_SOURCES = util/parser.c util/l_ioctl.c util/util.c
 libcfsutil_a_CPPFLAGS = $(LLCPPFLAGS)
 libcfsutil_a_CFLAGS = $(LLCFLAGS) -DLUSTRE_UTILS=1
 endif
@@ -63,6 +62,5 @@ endif # MODULES
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ linux-*.c linux/*.o libcfs
 EXTRA_DIST := $(libcfs-all-objs:%.o=%.c) tracefile.h prng.c \
-	      workitem.c \
-	      kernel_user_comm.c fail.c libcfs_cpu.c heap.c \
-	      libcfs_mem.c libcfs_lock.c user-string.c
+	      workitem.c kernel_user_comm.c fail.c libcfs_cpu.c \
+	      heap.c libcfs_mem.c libcfs_lock.c

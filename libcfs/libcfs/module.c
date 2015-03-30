@@ -317,7 +317,6 @@ static int init_libcfs_module(void)
 	int rc;
 
 	libcfs_arch_init();
-	libcfs_init_nidstrings();
 
 	rc = libcfs_debug_init(5 * 1024 * 1024);
 	if (rc < 0) {
