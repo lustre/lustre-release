@@ -164,21 +164,6 @@
 #define LUSTRE_LOG_VERSION  0x00050000
 #define LUSTRE_MGS_VERSION  0x00060000
 
-/* TODO: All obd_* typedefs will be removed in last patch in series */
-typedef __u64 obd_id;
-typedef __u64 obd_seq;
-typedef __s64 obd_time;
-typedef __u64 obd_size;
-typedef __u64 obd_off;
-typedef __u64 obd_blocks;
-typedef __u64 obd_valid;
-typedef __u32 obd_blksize;
-typedef __u32 obd_mode;
-typedef __u32 obd_uid;
-typedef __u32 obd_gid;
-typedef __u32 obd_flag;
-typedef __u32 obd_count;
-
 /**
  * Describes a range of sequence, lsr_start is included but lsr_end is
  * not in the range.

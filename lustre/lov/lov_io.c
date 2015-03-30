@@ -589,7 +589,7 @@ static int lov_io_read_ahead(const struct lu_env *env,
 	struct cl_object	*obj = lov2cl(loo);
 	struct lov_layout_raid0 *r0 = lov_r0(loo);
 	struct lov_io_sub	*sub;
-	obd_off			 suboff;
+	loff_t			 suboff;
 	pgoff_t			 ra_end;
 	unsigned int		 pps; /* pages per stripe */
 	int			 stripe;

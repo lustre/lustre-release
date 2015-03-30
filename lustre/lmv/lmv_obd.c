@@ -2839,8 +2839,8 @@ static int lmv_get_info(const struct lu_env *env, struct obd_export *exp,
  * \retval negative	negated errno on failure
  */
 int lmv_set_info_async(const struct lu_env *env, struct obd_export *exp,
-		       obd_count keylen, void *key, obd_count vallen,
-		       void *val, struct ptlrpc_request_set *set)
+			__u32 keylen, void *key, __u32 vallen, void *val,
+			struct ptlrpc_request_set *set)
 {
 	struct lmv_tgt_desc	*tgt = NULL;
 	struct obd_device	*obd;
