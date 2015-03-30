@@ -21,8 +21,10 @@ GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 require_dsh_mds || exit 0
 
 # Skip these tests
-# bug number for skipped tests: b=17466/LU-472
-ALWAYS_EXCEPT="                 61d	$REPLAY_SINGLE_EXCEPT"
+# bug number for skipped tests:
+# b=17466/LU-472 : 61d
+# LU-5319 : 53a 53d
+ALWAYS_EXCEPT="61d 53a 53d $REPLAY_SINGLE_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 case "$(lsb_release -sr)" in	# only disable tests for el7

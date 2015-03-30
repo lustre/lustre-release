@@ -260,12 +260,16 @@ struct client_obd {
 	wait_queue_head_t	 cl_destroy_waitq;
 
         struct mdc_rpc_lock     *cl_rpc_lock;
-        struct mdc_rpc_lock     *cl_close_lock;
 
 	/* modify rpcs in flight
 	 * currently used for metadata only */
 	spinlock_t		 cl_mod_rpcs_lock;
 	__u16			 cl_max_mod_rpcs_in_flight;
+	__u16			 cl_mod_rpcs_in_flight;
+	__u16			 cl_close_rpcs_in_flight;
+	wait_queue_head_t	 cl_mod_rpcs_waitq;
+	unsigned long		*cl_mod_tag_bitmap;
+	struct obd_histogram	 cl_mod_rpcs_hist;
 
         /* mgc datastruct */
 	struct mutex		  cl_mgc_mutex;

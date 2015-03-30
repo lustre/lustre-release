@@ -114,6 +114,30 @@ static ssize_t mdc_max_mod_rpcs_in_flight_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(mdc_max_mod_rpcs_in_flight);
 
+
+static int mdc_rpc_stats_seq_show(struct seq_file *seq, void *v)
+{
+	struct obd_device *dev = seq->private;
+
+	return obd_mod_rpc_stats_seq_show(&dev->u.cli, seq);
+}
+
+
+static ssize_t mdc_rpc_stats_seq_write(struct file *file,
+				       const char __user *buf,
+				       size_t len, loff_t *off)
+{
+	struct seq_file *seq = file->private_data;
+	struct obd_device *dev = seq->private;
+	struct client_obd *cli = &dev->u.cli;
+
+	lprocfs_oh_clear(&cli->cl_mod_rpcs_hist);
+
+	return len;
+}
+LPROC_SEQ_FOPS(mdc_rpc_stats);
+
+
 LPROC_SEQ_FOPS_WO_TYPE(mdc, ping);
 
 LPROC_SEQ_FOPS_RO_TYPE(mdc, uuid);
@@ -182,6 +206,8 @@ struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
 	  .fops	=	&mdc_state_fops			},
 	{ .name	=	"pinger_recov",
 	  .fops	=	&mdc_pinger_recov_fops		},
+	{ .name	=	"rpc_stats",
+	  .fops	=	&mdc_rpc_stats_fops		},
 	{ NULL }
 };
 #endif /* CONFIG_PROC_FS */
