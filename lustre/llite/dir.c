@@ -55,6 +55,7 @@
 #include <lustre_lib.h>
 #include <lustre_dlm.h>
 #include <lustre_fid.h>
+#include <lustre_kernelcomm.h>
 #include "llite_internal.h"
 
 /*

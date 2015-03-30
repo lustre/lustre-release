@@ -35,6 +35,8 @@
 #ifndef _LUSTREAPI_INTERNAL_H_
 #define _LUSTREAPI_INTERNAL_H_
 
+#include <uapi_kernelcomm.h>
+
 #define WANT_PATH   0x1
 #define WANT_FSNAME 0x2
 #define WANT_FD     0x4
@@ -73,5 +75,14 @@ static inline bool llapi_stripe_index_is_valid(int64_t index)
 /* Compatibility macro for legacy llapi functions that use "offset"
  * terminology instead of the preferred "index". */
 #define llapi_stripe_offset_is_valid(os) llapi_stripe_index_is_valid(os)
+
+/*
+ * Kernel communication for Changelogs and HSM requests.
+ */
+int libcfs_ukuc_start(struct lustre_kernelcomm *l, int groups, int rfd_flags);
+int libcfs_ukuc_stop(struct lustre_kernelcomm *l);
+int libcfs_ukuc_get_rfd(struct lustre_kernelcomm *link);
+int libcfs_ukuc_msg_get(struct lustre_kernelcomm *l, char *buf, int maxsize,
+			int transport);
 
 #endif /* _LUSTREAPI_INTERNAL_H_ */

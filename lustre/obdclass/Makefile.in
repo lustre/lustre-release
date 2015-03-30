@@ -14,6 +14,7 @@ obdclass-all-objs += lu_object.o dt_object.o capa.o
 obdclass-all-objs += cl_object.o cl_page.o cl_lock.o cl_io.o lu_ref.o
 obdclass-all-objs += acl.o
 obdclass-all-objs += linkea.o
+obdclass-all-objs += kernelcomm.o
 
 @SERVER_TRUE@obdclass-all-objs += idmap.o
 @SERVER_TRUE@obdclass-all-objs += upcall_cache.o

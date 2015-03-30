@@ -4223,7 +4223,7 @@ static int changelog_ioctl(const char *mdtname, int opc, int id,
 struct changelog_private {
 	int				magic;
 	enum changelog_send_flag	flags;
-	lustre_kernelcomm		kuc;
+	struct lustre_kernelcomm	kuc;
 };
 
 /** Start reading from a changelog

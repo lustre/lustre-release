@@ -71,7 +71,7 @@ struct hsm_copytool_private {
 	struct kuc_hdr		*kuch;
 	int			 mnt_fd;
 	int			 open_by_fid_fd;
-	lustre_kernelcomm	 kuc;
+	struct lustre_kernelcomm kuc;
 	__u32			 archives;
 };
 

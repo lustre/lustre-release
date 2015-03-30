@@ -44,6 +44,7 @@
 #include <obd.h>
 #include <lprocfs_status.h>
 #include <lustre_log.h>
+#include <lustre_kernelcomm.h>
 #include "mdt_internal.h"
 
 static struct lprocfs_vars lprocfs_mdt_hsm_vars[];

@@ -55,6 +55,7 @@
 #include <cl_object.h>
 #include <lustre_fid.h>
 #include <lustre_ioctl.h>
+#include <lustre_kernelcomm.h>
 #include "lmv_internal.h"
 
 static void lmv_activate_target(struct lmv_obd *lmv,

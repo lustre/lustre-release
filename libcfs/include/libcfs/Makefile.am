@@ -20,7 +20,6 @@ EXTRA_DIST = \
 	libcfs_hash.h \
 	libcfs_heap.h \
 	libcfs_ioctl.h \
-	libcfs_kernelcomm.h \
 	libcfs_prim.h \
 	libcfs_private.h \
 	libcfs_string.h \
