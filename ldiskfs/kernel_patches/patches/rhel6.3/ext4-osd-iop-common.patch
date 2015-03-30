@@ -1,20 +1,14 @@
 --- a/fs/ext4/ext4.h
 +++ b/fs/ext4/ext4.h
-@@ -1778,6 +1778,19 @@ extern int ext4_orphan_add(handle_t *, s
+@@ -1778,6 +1778,13 @@ extern int ext4_orphan_add(handle_t *, s
  extern int ext4_orphan_del(handle_t *, struct inode *);
  extern int ext4_htree_fill_tree(struct file *dir_file, __u32 start_hash,
  				__u32 start_minor_hash, __u32 *next_hash);
 +extern struct inode *ext4_create_inode(handle_t *handle,
 +				       struct inode * dir, int mode);
-+extern int ext4_add_entry(handle_t *handle, struct dentry *dentry,
-+			  struct inode *inode);
 +extern int ext4_delete_entry(handle_t *handle, struct inode * dir,
 +			     struct ext4_dir_entry_2 * de_del,
 +			     struct buffer_head * bh);
-+extern struct buffer_head * ext4_find_entry(struct inode *dir,
-+					    const struct qstr *d_name,
-+					    struct ext4_dir_entry_2 ** res_dir);
-+#define ll_ext4_find_entry(inode, dentry, res_dir) ext4_find_entry(inode, &(dentry)->d_name, res_dir)
 +extern int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
 +			       struct inode *inode);
  
@@ -30,46 +24,6 @@
  #include <linux/fs.h>
  #include <linux/pagemap.h>
  #include <linux/jbd2.h>
-@@ -873,9 +874,9 @@ static inline int search_dirblock(struct
-  * The returned buffer_head has ->b_count elevated.  The caller is expected
-  * to brelse() it when appropriate.
-  */
--static struct buffer_head * ext4_find_entry (struct inode *dir,
--					const struct qstr *d_name,
--					struct ext4_dir_entry_2 ** res_dir)
-+struct buffer_head * ext4_find_entry(struct inode *dir,
-+				      const struct qstr *d_name,
-+				      struct ext4_dir_entry_2 ** res_dir)
- {
- 	struct super_block *sb;
- 	struct buffer_head *bh_use[NAMEI_RA_SIZE];
-@@ -981,6 +982,7 @@ cleanup_and_exit:
- 		brelse(bh_use[ra_ptr]);
- 	return ret;
- }
-+EXPORT_SYMBOL(ext4_find_entry);
- 
- static struct buffer_head * ext4_dx_find_entry(struct inode *dir, const struct qstr *d_name,
- 		       struct ext4_dir_entry_2 **res_dir, int *err)
-@@ -1515,8 +1517,8 @@ static int make_indexed_dir(handle_t *ha
-  * may not sleep between calling this and putting something into
-  * the entry, as someone else might have used it while you slept.
-  */
--static int ext4_add_entry(handle_t *handle, struct dentry *dentry,
--			  struct inode *inode)
-+int ext4_add_entry(handle_t *handle, struct dentry *dentry,
-+		   struct inode *inode)
- {
- 	struct inode *dir = dentry->d_parent->d_inode;
- 	struct buffer_head *bh;
-@@ -1565,6 +1567,7 @@ static int ext4_add_entry(handle_t *hand
- 	brelse(bh);
- 	return retval;
- }
-+EXPORT_SYMBOL(ext4_add_entry);
- 
- /*
-  * Returns 0 for success, or a negative error value
 @@ -1704,10 +1707,10 @@ cleanup:
   * ext4_delete_entry deletes a directory entry by merging it with the
   * previous entry

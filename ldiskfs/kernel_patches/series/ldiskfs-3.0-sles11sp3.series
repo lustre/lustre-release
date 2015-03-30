@@ -30,7 +30,8 @@ sles11sp2/ext4-large-eas.patch
 sles11sp2/ext4-disable-mb-cache.patch
 rhel6.3/ext4-nocmtime-2.6.patch
 sles11sp2/ext4-store-tree-generation-at-find.patch
-sles11sp2/ext4-pdirop.patch
+sles11sp2/ext4-large-dir.patch
+rhel6.3/ext4-pdirop.patch
 rhel6.3/ext4-max-dir-size.patch
 sles11sp2/ext4-max-dir-size-options.patch
 rhel6.3/ext4-not-discard-preallocation-umount.patch
