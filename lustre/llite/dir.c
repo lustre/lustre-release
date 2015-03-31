@@ -1523,6 +1523,9 @@ out_rmdir:
         }
         case OBD_IOC_CHANGELOG_SEND:
         case OBD_IOC_CHANGELOG_CLEAR:
+		if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+			RETURN(-EPERM);
+
 		rc = copy_and_ioctl(cmd, sbi->ll_md_exp, (void __user *)arg,
                                     sizeof(struct ioc_changelog));
                 RETURN(rc);
