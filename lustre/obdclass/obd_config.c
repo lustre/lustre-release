@@ -52,6 +52,7 @@
 static struct cfs_hash_ops uuid_hash_ops;
 static struct cfs_hash_ops nid_hash_ops;
 static struct cfs_hash_ops nid_stat_hash_ops;
+static struct cfs_hash_ops gen_hash_ops;
 
 /*********** string parsing utils *********/
 
@@ -478,6 +479,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         obd->obd_uuid_hash = NULL;
         obd->obd_nid_hash = NULL;
         obd->obd_nid_stats_hash = NULL;
+	obd->obd_gen_hash = NULL;
 	spin_unlock(&obd->obd_dev_lock);
 
         /* create an uuid-export lustre hash */
@@ -512,6 +514,17 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                                                   &nid_stat_hash_ops, CFS_HASH_DEFAULT);
         if (!obd->obd_nid_stats_hash)
                 GOTO(err_hash, err = -ENOMEM);
+
+	/* create a client_generation-export lustre hash */
+	obd->obd_gen_hash = cfs_hash_create("UUID_HASH",
+					    HASH_GEN_CUR_BITS,
+					    HASH_GEN_MAX_BITS,
+					    HASH_GEN_BKT_BITS, 0,
+					    CFS_HASH_MIN_THETA,
+					    CFS_HASH_MAX_THETA,
+					    &gen_hash_ops, CFS_HASH_DEFAULT);
+	if (!obd->obd_gen_hash)
+		GOTO(err_hash, err = -ENOMEM);
 
         exp = class_new_export(obd, &obd->obd_uuid);
         if (IS_ERR(exp))
@@ -554,6 +567,10 @@ err_hash:
                 cfs_hash_putref(obd->obd_nid_stats_hash);
                 obd->obd_nid_stats_hash = NULL;
         }
+	if (obd->obd_gen_hash) {
+		cfs_hash_putref(obd->obd_gen_hash);
+		obd->obd_gen_hash = NULL;
+	}
         obd->obd_starting = 0;
         CERROR("setup %s failed (%d)\n", obd->obd_name, err);
         return err;
@@ -681,6 +698,12 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 cfs_hash_putref(obd->obd_nid_stats_hash);
                 obd->obd_nid_stats_hash = NULL;
         }
+
+	/* destroy a client_generation-export hash body */
+	if (obd->obd_gen_hash) {
+		cfs_hash_putref(obd->obd_gen_hash);
+		obd->obd_gen_hash = NULL;
+	}
 
         class_decref(obd, "setup", obd);
         obd->obd_set_up = 0;
@@ -2104,4 +2127,74 @@ static struct cfs_hash_ops nid_stat_hash_ops = {
         .hs_object      = nidstats_object,
         .hs_get         = nidstats_get,
         .hs_put_locked  = nidstats_put_locked,
+};
+
+
+/*
+ * client_generation<->export hash operations
+ */
+
+static unsigned
+gen_hash(struct cfs_hash *hs, const void *key, unsigned mask)
+{
+	return cfs_hash_djb2_hash(key, sizeof(__u32), mask);
+}
+
+static void *
+gen_key(struct hlist_node *hnode)
+{
+	struct obd_export *exp;
+
+	exp = hlist_entry(hnode, struct obd_export, exp_gen_hash);
+
+	RETURN(&exp->exp_target_data.ted_lcd->lcd_generation);
+}
+
+/*
+ * NOTE: It is impossible to find an export that is in failed
+ *       state with this function
+ */
+static int
+gen_kepcmp(const void *key, struct hlist_node *hnode)
+{
+	struct obd_export *exp;
+
+	LASSERT(key);
+	exp = hlist_entry(hnode, struct obd_export, exp_gen_hash);
+
+	RETURN(exp->exp_target_data.ted_lcd->lcd_generation == *(__u32 *)key &&
+	       !exp->exp_failed);
+}
+
+static void *
+gen_export_object(struct hlist_node *hnode)
+{
+	return hlist_entry(hnode, struct obd_export, exp_gen_hash);
+}
+
+static void
+gen_export_get(struct cfs_hash *hs, struct hlist_node *hnode)
+{
+	struct obd_export *exp;
+
+	exp = hlist_entry(hnode, struct obd_export, exp_gen_hash);
+	class_export_get(exp);
+}
+
+static void
+gen_export_put_locked(struct cfs_hash *hs, struct hlist_node *hnode)
+{
+	struct obd_export *exp;
+
+	exp = hlist_entry(hnode, struct obd_export, exp_gen_hash);
+	class_export_put(exp);
+}
+
+static struct cfs_hash_ops gen_hash_ops = {
+	.hs_hash        = gen_hash,
+	.hs_key         = gen_key,
+	.hs_keycmp      = gen_kepcmp,
+	.hs_object      = gen_export_object,
+	.hs_get         = gen_export_get,
+	.hs_put_locked  = gen_export_put_locked,
 };

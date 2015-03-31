@@ -206,6 +206,19 @@ static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
         if (lustre_msg_get_transno(req->rq_repmsg) != 0)
                 RETURN_EXIT;
 
+	if (tgt_is_multimodrpcs_client(req->rq_export)) {
+		struct thandle	       *th;
+
+		/* generate an empty transaction to get a transno
+		 * and reply data */
+		th = dt_trans_create(info->mti_env, mdt->mdt_bottom);
+		if (!IS_ERR(th)) {
+			rc = dt_trans_start(info->mti_env, mdt->mdt_bottom, th);
+			dt_trans_stop(info->mti_env, mdt->mdt_bottom, th);
+		}
+		RETURN_EXIT;
+	}
+
 	spin_lock(&mdt->mdt_lut.lut_translock);
 	if (rc != 0) {
 		if (info->mti_transno != 0) {
@@ -614,8 +627,6 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
         struct mdt_device       *mdt  = info->mti_mdt;
         struct req_capsule      *pill = info->mti_pill;
         struct ptlrpc_request   *req  = mdt_info_req(info);
-        struct tg_export_data   *ted  = &req->rq_export->exp_target_data;
-        struct lsd_client_data  *lcd  = ted->ted_lcd;
         struct md_attr          *ma   = &info->mti_attr;
         struct mdt_reint_record *rr   = &info->mti_rr;
 	__u64                   flags = info->mti_spec.sp_cr_flags;
@@ -624,17 +635,18 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
         struct mdt_object       *child;
         struct mdt_body         *repbody;
         int                      rc;
-        ENTRY;
+	__u64			 opdata;
+	ENTRY;
 
         LASSERT(pill->rc_fmt == &RQF_LDLM_INTENT_OPEN);
         ldlm_rep = req_capsule_server_get(pill, &RMF_DLM_REP);
         repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
 
 	ma->ma_need = MA_INODE | MA_HSM;
-        ma->ma_valid = 0;
+	ma->ma_valid = 0;
 
-        mdt_req_from_lcd(req, lcd);
-        mdt_set_disposition(info, ldlm_rep, lcd->lcd_last_data);
+	opdata = mdt_req_from_lrd(req, info->mti_reply_data);
+	mdt_set_disposition(info, ldlm_rep, opdata);
 
         CDEBUG(D_INODE, "This is reconstruct open: disp="LPX64", result=%d\n",
                ldlm_rep->lock_policy_res1, req->rq_status);

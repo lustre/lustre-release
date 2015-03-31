@@ -55,6 +55,7 @@ struct tgt_thread_info {
 	/* server and client data buffers */
 	struct lr_server_data	 tti_lsd;
 	struct lsd_client_data	 tti_lcd;
+	struct lsd_reply_data	 tti_lrd;
 	struct lu_buf		 tti_buf;
 	loff_t			 tti_off;
 
@@ -245,6 +246,8 @@ int tgt_txn_start_cb(const struct lu_env *env, struct thandle *th,
 		     void *cookie);
 int tgt_txn_stop_cb(const struct lu_env *env, struct thandle *th,
 		    void *cookie);
+int tgt_handle_received_xid(struct obd_export *exp, __u64 rcvd_xid);
+int tgt_handle_tag(struct obd_export *exp, __u16 tag);
 
 void update_records_dump(const struct update_records *records,
 			 unsigned int mask, bool dump_updates);

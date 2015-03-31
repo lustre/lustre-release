@@ -96,6 +96,9 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define HASH_NID_STATS_BKT_BITS 5
 #define HASH_NID_STATS_CUR_BITS 7
 #define HASH_NID_STATS_MAX_BITS 12
+#define HASH_GEN_BKT_BITS 5
+#define HASH_GEN_CUR_BITS 7
+#define HASH_GEN_MAX_BITS 12
 #define HASH_LQE_BKT_BITS 5
 #define HASH_LQE_CUR_BITS 7
 #define HASH_LQE_MAX_BITS 12

@@ -526,11 +526,11 @@ static int tgt_handle_recovery(struct ptlrpc_request *req, int reply_fail_id)
 
 	/* sanity check: if the xid matches, the request must be marked as a
 	 * resent or replayed */
-	if (req_xid_is_last(req)) {
+	if (req_can_reconstruct(req, NULL)) {
 		if (!(lustre_msg_get_flags(req->rq_reqmsg) &
 		      (MSG_RESENT | MSG_REPLAY))) {
 			DEBUG_REQ(D_WARNING, req, "rq_xid "LPU64" matches "
-				  "last_xid, expected REPLAY or RESENT flag "
+				  "saved xid, expected REPLAY or RESENT flag "
 				  "(%x)", req->rq_xid,
 				  lustre_msg_get_flags(req->rq_reqmsg));
 			req->rq_status = -ENOTCONN;
@@ -688,6 +688,16 @@ int tgt_request_handle(struct ptlrpc_request *req)
 
 	request_fail_id = tgt->lut_request_fail_id;
 	tsi->tsi_reply_fail_id = tgt->lut_reply_fail_id;
+
+	/* try to release in-memory reply data */
+	if (tgt_is_multimodrpcs_client(req->rq_export)) {
+		tgt_handle_received_xid(req->rq_export,
+				lustre_msg_get_last_xid(req->rq_reqmsg));
+		if (!(lustre_msg_get_flags(req->rq_reqmsg) &
+		      (MSG_RESENT | MSG_REPLAY)))
+			tgt_handle_tag(req->rq_export,
+				       lustre_msg_get_tag(req->rq_reqmsg));
+	}
 
 	h = tgt_handler_find_check(req);
 	if (IS_ERR(h)) {
@@ -2172,3 +2182,44 @@ out:
 	RETURN(rc);
 }
 EXPORT_SYMBOL(tgt_brw_write);
+
+/* Check if request can be reconstructed from saved reply data
+ * A copy of the reply data is returned in @trd if the pointer is not NULL
+ */
+bool req_can_reconstruct(struct ptlrpc_request *req,
+			 struct tg_reply_data *trd)
+{
+	struct tg_export_data *ted = &req->rq_export->exp_target_data;
+	struct lsd_client_data *lcd = ted->ted_lcd;
+	bool found;
+
+	if (tgt_is_multimodrpcs_client(req->rq_export))
+		return tgt_lookup_reply(req, trd);
+
+	mutex_lock(&ted->ted_lcd_lock);
+	found = req->rq_xid == lcd->lcd_last_xid ||
+		req->rq_xid == lcd->lcd_last_close_xid;
+
+	if (found && trd != NULL) {
+		if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {
+			trd->trd_reply.lrd_xid = lcd->lcd_last_close_xid;
+			trd->trd_reply.lrd_transno =
+						lcd->lcd_last_close_transno;
+			trd->trd_reply.lrd_result = lcd->lcd_last_close_result;
+		} else {
+			trd->trd_reply.lrd_xid = lcd->lcd_last_xid;
+			trd->trd_reply.lrd_transno = lcd->lcd_last_transno;
+			trd->trd_reply.lrd_result = lcd->lcd_last_result;
+			trd->trd_reply.lrd_data = lcd->lcd_last_data;
+			trd->trd_pre_versions[0] = lcd->lcd_pre_versions[0];
+			trd->trd_pre_versions[1] = lcd->lcd_pre_versions[1];
+			trd->trd_pre_versions[2] = lcd->lcd_pre_versions[2];
+			trd->trd_pre_versions[3] = lcd->lcd_pre_versions[3];
+		}
+	}
+	mutex_unlock(&ted->ted_lcd_lock);
+
+	return found;
+}
+EXPORT_SYMBOL(req_can_reconstruct);
+

@@ -548,6 +548,8 @@ struct obd_device {
 	struct cfs_hash             *obd_nid_hash;
 	/* nid stats body */
 	struct cfs_hash             *obd_nid_stats_hash;
+	/* client_generation-export hash body */
+	struct cfs_hash		    *obd_gen_hash;
 	struct list_head	obd_nid_stats;
 	atomic_t		obd_refcount;
 	struct list_head	obd_exports;

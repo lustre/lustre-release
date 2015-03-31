@@ -1594,6 +1594,10 @@ static const struct osd_lf_map osd_lf_maps[] = {
 	{ LAST_RCVD, { FID_SEQ_LOCAL_FILE, LAST_RECV_OID, 0 }, OLF_SHOW_NAME,
 		sizeof(LAST_RCVD) - 1, NULL, NULL },
 
+	/* reply_data */
+	{ REPLY_DATA, { FID_SEQ_LOCAL_FILE, REPLY_DATA_OID, 0 }, OLF_SHOW_NAME,
+		sizeof(REPLY_DATA) - 1, NULL, NULL },
+
 	/* lov_objid */
 	{ LOV_OBJID, { FID_SEQ_LOCAL_FILE, MDD_LOV_OBJ_OID, 0 }, OLF_SHOW_NAME,
 		sizeof(LOV_OBJID) - 1, NULL, NULL },

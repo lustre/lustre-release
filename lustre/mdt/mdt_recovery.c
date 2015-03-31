@@ -177,50 +177,43 @@ static void mdt_steal_ack_locks(struct ptlrpc_request *req)
 	spin_unlock(&exp->exp_lock);
 }
 
-/**
- * VBR: restore versions
- */
-static void mdt_vbr_reconstruct(struct ptlrpc_request *req,
-				struct lsd_client_data *lcd)
+__u64 mdt_req_from_lrd(struct ptlrpc_request *req,
+		       struct tg_reply_data *trd)
 {
-        __u64 pre_versions[4] = {0};
-        pre_versions[0] = lcd->lcd_pre_versions[0];
-        pre_versions[1] = lcd->lcd_pre_versions[1];
-        pre_versions[2] = lcd->lcd_pre_versions[2];
-        pre_versions[3] = lcd->lcd_pre_versions[3];
-        lustre_msg_set_versions(req->rq_repmsg, pre_versions);
+	struct lsd_reply_data *lrd;
+
+	LASSERT(trd != NULL);
+	lrd = &trd->trd_reply;
+
+	DEBUG_REQ(D_HA, req, "restoring transno "LPD64"/status %d",
+		  lrd->lrd_transno, lrd->lrd_result);
+
+	req->rq_transno = lrd->lrd_transno;
+	req->rq_status = lrd->lrd_result;
+
+	lustre_msg_set_versions(req->rq_repmsg, trd->trd_pre_versions);
+
+	if (req->rq_status != 0)
+		req->rq_transno = 0;
+	lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
+	lustre_msg_set_status(req->rq_repmsg, req->rq_status);
+
+	DEBUG_REQ(D_RPCTRACE, req, "restoring transno "LPD64"/status %d",
+		  req->rq_transno, req->rq_status);
+
+	mdt_steal_ack_locks(req);
+
+	return lrd->lrd_data;
 }
 
-void mdt_req_from_lcd(struct ptlrpc_request *req, struct lsd_client_data *lcd)
-{
-        DEBUG_REQ(D_HA, req, "restoring transno "LPD64"/status %d",
-                  lcd->lcd_last_transno, lcd->lcd_last_result);
-
-	if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {
-                req->rq_transno = lcd->lcd_last_close_transno;
-                req->rq_status = lcd->lcd_last_close_result;
-        } else {
-                req->rq_transno = lcd->lcd_last_transno;
-                req->rq_status = lcd->lcd_last_result;
-                mdt_vbr_reconstruct(req, lcd);
-        }
-        if (req->rq_status != 0)
-                req->rq_transno = 0;
-        lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
-        lustre_msg_set_status(req->rq_repmsg, req->rq_status);
-        DEBUG_REQ(D_RPCTRACE, req, "restoring transno "LPD64"/status %d",
-                  req->rq_transno, req->rq_status);
-
-        mdt_steal_ack_locks(req);
-}
 
 void mdt_reconstruct_generic(struct mdt_thread_info *mti,
-                             struct mdt_lock_handle *lhc)
+			     struct mdt_lock_handle *lhc)
 {
-        struct ptlrpc_request *req = mdt_info_req(mti);
-        struct tg_export_data *ted = &req->rq_export->exp_target_data;
+	struct ptlrpc_request *req = mdt_info_req(mti);
 
-        return mdt_req_from_lcd(req, ted->ted_lcd);
+	mdt_req_from_lrd(req, mti->mti_reply_data);
+	return;
 }
 
 /**
@@ -246,17 +239,16 @@ static void mdt_fake_ma(struct md_attr *ma)
 static void mdt_reconstruct_create(struct mdt_thread_info *mti,
                                    struct mdt_lock_handle *lhc)
 {
-        struct ptlrpc_request  *req = mdt_info_req(mti);
-        struct obd_export *exp = req->rq_export;
-        struct tg_export_data *ted = &exp->exp_target_data;
-        struct mdt_device *mdt = mti->mti_mdt;
-        struct mdt_object *child;
-        struct mdt_body *body;
-        int rc;
+	struct ptlrpc_request  *req = mdt_info_req(mti);
+	struct obd_export *exp = req->rq_export;
+	struct mdt_device *mdt = mti->mti_mdt;
+	struct mdt_object *child;
+	struct mdt_body *body;
+	int rc;
 
-        mdt_req_from_lcd(req, ted->ted_lcd);
-        if (req->rq_status)
-                return;
+	mdt_req_from_lrd(req, mti->mti_reply_data);
+	if (req->rq_status)
+		return;
 
 	/* if no error, so child was created with requested fid */
 	child = mdt_object_find(mti->mti_env, mdt, mti->mti_rr.rr_fid2);
@@ -296,15 +288,14 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
 {
         struct ptlrpc_request  *req = mdt_info_req(mti);
         struct obd_export *exp = req->rq_export;
-        struct mdt_export_data *med = &exp->exp_mdt_data;
         struct mdt_device *mdt = mti->mti_mdt;
         struct mdt_object *obj;
         struct mdt_body *body;
 	int rc;
 
-        mdt_req_from_lcd(req, med->med_ted.ted_lcd);
-        if (req->rq_status)
-                return;
+	mdt_req_from_lrd(req, mti->mti_reply_data);
+	if (req->rq_status)
+		return;
 
         body = req_capsule_server_get(mti->mti_pill, &RMF_MDT_BODY);
         obj = mdt_object_find(mti->mti_env, mdt, mti->mti_rr.rr_fid1);

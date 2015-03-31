@@ -65,14 +65,6 @@
 #include <lustre_quota.h>
 #include <lustre_linkea.h>
 
-/* check if request's xid is equal to last one or not*/
-static inline int req_xid_is_last(struct ptlrpc_request *req)
-{
-        struct lsd_client_data *lcd = req->rq_export->exp_target_data.ted_lcd;
-        return (req->rq_xid == lcd->lcd_last_xid ||
-                req->rq_xid == lcd->lcd_last_close_xid);
-}
-
 struct mdt_object;
 
 /* file data for open files on MDS */
@@ -431,6 +423,7 @@ struct mdt_thread_info {
 	/* should be enough to fit lustre_mdt_attrs */
 	char			   mti_xattr_buf[128];
 	struct ldlm_enqueue_info   mti_einfo;
+	struct tg_reply_data	  *mti_reply_data;
 };
 
 extern struct lu_context_key mdt_thread_key;
@@ -776,7 +769,7 @@ __u32 mdt_identity_get_perm(struct md_identity *, __u32, lnet_nid_t);
 int mdt_pack_remote_perm(struct mdt_thread_info *, struct mdt_object *, void *);
 
 /* mdt/mdt_recovery.c */
-void mdt_req_from_lcd(struct ptlrpc_request *req, struct lsd_client_data *lcd);
+__u64 mdt_req_from_lrd(struct ptlrpc_request *req, struct tg_reply_data *trd);
 
 /* mdt/mdt_hsm.c */
 int mdt_hsm_state_get(struct tgt_session_info *tsi);
@@ -911,18 +904,27 @@ static inline int mdt_check_resent(struct mdt_thread_info *info,
                                    mdt_reconstruct_t reconstruct,
                                    struct mdt_lock_handle *lhc)
 {
-        struct ptlrpc_request *req = mdt_info_req(info);
-        ENTRY;
+	struct ptlrpc_request *req = mdt_info_req(info);
+	int rc = 0;
+	ENTRY;
 
-        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {
-                if (req_xid_is_last(req)) {
-                        reconstruct(info, lhc);
-                        RETURN(1);
-                }
-                DEBUG_REQ(D_HA, req, "no reply for RESENT req (have "LPD64")",
-                          req->rq_export->exp_target_data.ted_lcd->lcd_last_xid);
-        }
-        RETURN(0);
+	if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {
+		OBD_ALLOC_PTR(info->mti_reply_data);
+		if (info->mti_reply_data == NULL)
+			RETURN(-ENOMEM);
+
+		if (req_can_reconstruct(req, info->mti_reply_data)) {
+			reconstruct(info, lhc);
+			rc = 1;
+		} else {
+			DEBUG_REQ(D_HA, req,
+				  "no reply data found for RESENT req");
+			rc = 0;
+		}
+		OBD_FREE_PTR(info->mti_reply_data);
+		info->mti_reply_data = NULL;
+	}
+	RETURN(rc);
 }
 
 struct lu_ucred *mdt_ucred(const struct mdt_thread_info *info);

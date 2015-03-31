@@ -94,6 +94,7 @@ static const struct named_oid oids[] = {
 	{ OFD_HEALTH_CHECK_OID,		HEALTH_CHECK },
 	{ ACCT_USER_OID,		"acct_usr_inode" },
 	{ ACCT_GROUP_OID,		"acct_grp_inode" },
+	{ REPLY_DATA_OID,		REPLY_DATA },
 	{ 0,				NULL }
 };
 

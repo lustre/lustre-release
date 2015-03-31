@@ -56,6 +56,10 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	lut->lut_bottom = dt;
 	lut->lut_last_rcvd = NULL;
 	lut->lut_client_bitmap = NULL;
+	atomic_set(&lut->lut_num_clients, 0);
+	atomic_set(&lut->lut_client_generation, 0);
+	lut->lut_reply_data = NULL;
+	lut->lut_reply_bitmap = NULL;
 	obd->u.obt.obt_lut = lut;
 	obd->u.obt.obt_magic = OBT_MAGIC;
 
@@ -93,13 +97,13 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 		rc = PTR_ERR(o);
 		CERROR("%s: cannot open LAST_RCVD: rc = %d\n", tgt_name(lut),
 		       rc);
-		GOTO(out_bitmap, rc);
+		GOTO(out, rc);
 	}
 
 	lut->lut_last_rcvd = o;
 	rc = tgt_server_data_init(env, lut);
 	if (rc < 0)
-		GOTO(out_obj, rc);
+		GOTO(out, rc);
 
 	/* prepare transactions callbacks */
 	lut->lut_txn_cb.dtc_txn_start = tgt_txn_start_cb;
@@ -112,23 +116,89 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	dt_txn_callback_add(lut->lut_bottom, &lut->lut_txn_cb);
 	lut->lut_bottom->dd_lu_dev.ld_site->ls_tgt = lut;
 
+	/* reply_data is supported by MDT targets only for now */
+	if (strncmp(obd->obd_type->typ_name, LUSTRE_MDT_NAME, 3) != 0)
+		RETURN(0);
+
+	OBD_ALLOC(lut->lut_reply_bitmap,
+		  LUT_REPLY_SLOTS_MAX_CHUNKS * sizeof(unsigned long *));
+	if (lut->lut_reply_bitmap == NULL)
+		GOTO(out, rc);
+
+	memset(&attr, 0, sizeof(attr));
+	attr.la_valid = LA_MODE;
+	attr.la_mode = S_IFREG | S_IRUGO | S_IWUSR;
+	dof.dof_type = dt_mode_to_dft(S_IFREG);
+
+	lu_local_obj_fid(&fid, REPLY_DATA_OID);
+
+	o = dt_find_or_create(env, lut->lut_bottom, &fid, &dof, &attr);
+	if (IS_ERR(o)) {
+		rc = PTR_ERR(o);
+		CERROR("%s: cannot open REPLY_DATA: rc = %d\n", tgt_name(lut),
+		       rc);
+		GOTO(out, rc);
+	}
+	lut->lut_reply_data = o;
+
+	rc = tgt_reply_data_init(env, lut);
+	if (rc < 0)
+		GOTO(out, rc);
+
 	RETURN(0);
-out_obj:
-	lu_object_put(env, &lut->lut_last_rcvd->do_lu);
+out:
+	if (lut->lut_last_rcvd != NULL)
+		lu_object_put(env, &lut->lut_last_rcvd->do_lu);
 	lut->lut_last_rcvd = NULL;
-out_bitmap:
-	OBD_FREE(lut->lut_client_bitmap, LR_MAX_CLIENTS >> 3);
+	if (lut->lut_client_bitmap != NULL)
+		OBD_FREE(lut->lut_client_bitmap, LR_MAX_CLIENTS >> 3);
 	lut->lut_client_bitmap = NULL;
+	if (lut->lut_reply_data != NULL)
+		lu_object_put(env, &lut->lut_reply_data->do_lu);
+	lut->lut_reply_data = NULL;
+	if (lut->lut_reply_bitmap != NULL)
+		OBD_FREE(lut->lut_reply_bitmap,
+			 LUT_REPLY_SLOTS_MAX_CHUNKS * sizeof(unsigned long *));
+	lut->lut_reply_bitmap = NULL;
 	return rc;
 }
 EXPORT_SYMBOL(tgt_init);
 
 void tgt_fini(const struct lu_env *env, struct lu_target *lut)
 {
+	int i;
+	int rc;
 	ENTRY;
+
+	if (lut->lut_lsd.lsd_feature_incompat & OBD_INCOMPAT_MULTI_RPCS &&
+	    atomic_read(&lut->lut_num_clients) == 0) {
+		/* Clear MULTI RPCS incompatibility flag that prevents previous
+		 * Lustre versions to mount a target with reply_data file */
+		lut->lut_lsd.lsd_feature_incompat &= ~OBD_INCOMPAT_MULTI_RPCS;
+		rc = tgt_server_data_update(env, lut, 1);
+		if (rc < 0)
+			CERROR("%s: unable to clear MULTI RPCS "
+			       "incompatibility flag\n",
+			       lut->lut_obd->obd_name);
+	}
 
 	sptlrpc_rule_set_free(&lut->lut_sptlrpc_rset);
 
+	if (lut->lut_reply_data != NULL)
+		lu_object_put(env, &lut->lut_reply_data->do_lu);
+	lut->lut_reply_data = NULL;
+	if (lut->lut_reply_bitmap != NULL) {
+		for (i = 0; i < LUT_REPLY_SLOTS_MAX_CHUNKS; i++) {
+			if (lut->lut_reply_bitmap[i] != NULL)
+				OBD_FREE(lut->lut_reply_bitmap[i],
+				    BITS_TO_LONGS(LUT_REPLY_SLOTS_PER_CHUNK) *
+				    sizeof(long));
+			lut->lut_reply_bitmap[i] = NULL;
+		}
+		OBD_FREE(lut->lut_reply_bitmap,
+			 LUT_REPLY_SLOTS_MAX_CHUNKS * sizeof(unsigned long *));
+	}
+	lut->lut_reply_bitmap = NULL;
 	if (lut->lut_client_bitmap) {
 		OBD_FREE(lut->lut_client_bitmap, LR_MAX_CLIENTS >> 3);
 		lut->lut_client_bitmap = NULL;

@@ -228,6 +228,36 @@ static int lprocfs_exp_hash_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(lprocfs_exp_hash);
 
+int lprocfs_exp_print_replydata_seq(struct cfs_hash *hs, struct cfs_hash_bd *bd,
+				    struct hlist_node *hnode, void *cb_data)
+
+{
+	struct obd_export *exp = cfs_hash_object(hs, hnode);
+	struct seq_file *m = cb_data;
+	struct tg_export_data *ted = &exp->exp_target_data;
+
+	seq_printf(m, "reply_cnt: %d\n"
+		      "reply_max: %d\n"
+		      "reply_released_by_xid: %d\n"
+		      "reply_released_by_tag: %d\n\n",
+		   ted->ted_reply_cnt,
+		   ted->ted_reply_max,
+		   ted->ted_release_xid,
+		   ted->ted_release_tag);
+	return 0;
+}
+
+int lprocfs_exp_replydata_seq_show(struct seq_file *m, void *data)
+{
+	struct nid_stat *stats = m->private;
+	struct obd_device *obd = stats->nid_obd;
+
+	cfs_hash_for_each_key(obd->obd_nid_hash, &stats->nid,
+				lprocfs_exp_print_replydata_seq, m);
+	return 0;
+}
+LPROC_SEQ_FOPS_RO(lprocfs_exp_replydata);
+
 int lprocfs_nid_stats_clear_seq_show(struct seq_file *m, void *data)
 {
 	return seq_printf(m, "%s\n", "Write into this file to clear all nid "
@@ -370,6 +400,15 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid)
 	if (IS_ERR(entry)) {
 		rc = PTR_ERR(entry);
 		CWARN("Error adding the hash file: rc = %d\n", rc);
+		GOTO(destroy_new_ns, rc);
+	}
+
+	entry = lprocfs_add_simple(new_stat->nid_proc, "reply_data", new_stat,
+				   &lprocfs_exp_replydata_fops);
+	if (IS_ERR(entry)) {
+		rc = PTR_ERR(entry);
+		CWARN("%s: Error adding the reply_data file: rc = %d\n",
+		      obd->obd_name, rc);
 		GOTO(destroy_new_ns, rc);
 	}
 

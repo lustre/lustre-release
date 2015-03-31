@@ -862,6 +862,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
 	spin_lock_init(&export->exp_rpc_lock);
 	INIT_HLIST_NODE(&export->exp_uuid_hash);
 	INIT_HLIST_NODE(&export->exp_nid_hash);
+	INIT_HLIST_NODE(&export->exp_gen_hash);
 	spin_lock_init(&export->exp_bl_list_lock);
 	INIT_LIST_HEAD(&export->exp_bl_list);
 

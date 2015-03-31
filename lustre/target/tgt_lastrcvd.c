@@ -44,6 +44,317 @@
 
 #include "tgt_internal.h"
 
+
+/* Allocate a bitmap for a chunk of reply data slots */
+static int tgt_bitmap_chunk_alloc(struct lu_target *lut, int chunk)
+{
+	unsigned long *bm;
+
+	OBD_ALLOC(bm, BITS_TO_LONGS(LUT_REPLY_SLOTS_PER_CHUNK) * sizeof(long));
+	if (bm == NULL)
+		return -ENOMEM;
+
+	spin_lock(&lut->lut_client_bitmap_lock);
+
+	if (lut->lut_reply_bitmap[chunk] != NULL) {
+		/* someone else already allocated the bitmap for this chunk */
+		spin_unlock(&lut->lut_client_bitmap_lock);
+		OBD_FREE(bm, BITS_TO_LONGS(LUT_REPLY_SLOTS_PER_CHUNK) *
+			 sizeof(long));
+		return 0;
+	}
+
+	lut->lut_reply_bitmap[chunk] = bm;
+
+	spin_unlock(&lut->lut_client_bitmap_lock);
+
+	return 0;
+}
+
+/* Look for an available reply data slot in the bitmap
+ * of the target @lut
+ * Allocate bitmap chunk when first used
+ * XXX algo could be improved if this routine limits performance
+ */
+static int tgt_find_free_reply_slot(struct lu_target *lut)
+{
+	unsigned long *bmp;
+	int chunk = 0;
+	int rc;
+	int b;
+
+	for (chunk = 0; chunk < LUT_REPLY_SLOTS_MAX_CHUNKS; chunk++) {
+		/* allocate the bitmap chunk if necessary */
+		if (unlikely(lut->lut_reply_bitmap[chunk] == NULL)) {
+			rc = tgt_bitmap_chunk_alloc(lut, chunk);
+			if (rc != 0)
+				return rc;
+		}
+		bmp = lut->lut_reply_bitmap[chunk];
+
+		/* look for an available slot in this chunk */
+		do {
+			b = find_first_zero_bit(bmp, LUT_REPLY_SLOTS_PER_CHUNK);
+			if (b >= LUT_REPLY_SLOTS_PER_CHUNK)
+				break;
+
+			/* found one */
+			if (test_and_set_bit(b, bmp) == 0)
+				return chunk * LUT_REPLY_SLOTS_PER_CHUNK + b;
+		} while (true);
+	}
+
+	return -ENOSPC;
+}
+
+/* Mark the reply data slot @idx 'used' in the corresponding bitmap chunk
+ * of the target @lut
+ * Allocate the bitmap chunk if necessary
+ */
+static int tgt_set_reply_slot(struct lu_target *lut, int idx)
+{
+	int chunk;
+	int b;
+	int rc;
+
+	chunk = idx / LUT_REPLY_SLOTS_PER_CHUNK;
+	b = idx % LUT_REPLY_SLOTS_PER_CHUNK;
+
+	LASSERT(chunk < LUT_REPLY_SLOTS_MAX_CHUNKS);
+	LASSERT(b < LUT_REPLY_SLOTS_PER_CHUNK);
+
+	/* allocate the bitmap chunk if necessary */
+	if (unlikely(lut->lut_reply_bitmap[chunk] == NULL)) {
+		rc = tgt_bitmap_chunk_alloc(lut, chunk);
+		if (rc != 0)
+			return rc;
+	}
+
+	/* mark the slot 'used' in this chunk */
+	if (test_and_set_bit(b, lut->lut_reply_bitmap[chunk]) != 0) {
+		CERROR("%s: slot %d already set in bitmap\n",
+		       tgt_name(lut), idx);
+		return -EALREADY;
+	}
+
+	return 0;
+}
+
+
+/* Mark the reply data slot @idx 'unused' in the corresponding bitmap chunk
+ * of the target @lut
+ */
+static int tgt_clear_reply_slot(struct lu_target *lut, int idx)
+{
+	int chunk;
+	int b;
+
+	chunk = idx / LUT_REPLY_SLOTS_PER_CHUNK;
+	b = idx % LUT_REPLY_SLOTS_PER_CHUNK;
+
+	LASSERT(chunk < LUT_REPLY_SLOTS_MAX_CHUNKS);
+	LASSERT(b < LUT_REPLY_SLOTS_PER_CHUNK);
+
+	if (test_and_clear_bit(b, lut->lut_reply_bitmap[chunk]) == 0) {
+		CERROR("%s: slot %d already clear in bitmap\n",
+		       tgt_name(lut), idx);
+		return -EALREADY;
+	}
+
+	return 0;
+}
+
+
+/* Read header of reply_data file of target @tgt into structure @lrh */
+static int tgt_reply_header_read(const struct lu_env *env,
+				 struct lu_target *tgt,
+				 struct lsd_reply_header *lrh)
+{
+	int			 rc;
+	struct lsd_reply_header	 buf;
+	struct tgt_thread_info	*tti = tgt_th_info(env);
+
+	tti->tti_off = 0;
+	tti->tti_buf.lb_buf = &buf;
+	tti->tti_buf.lb_len = sizeof(buf);
+
+	rc = dt_record_read(env, tgt->lut_reply_data, &tti->tti_buf,
+			    &tti->tti_off);
+	if (rc != 0)
+		return rc;
+
+	lrh->lrh_magic = le32_to_cpu(buf.lrh_magic);
+	lrh->lrh_header_size = le32_to_cpu(buf.lrh_header_size);
+	lrh->lrh_reply_size = le32_to_cpu(buf.lrh_reply_size);
+
+	CDEBUG(D_HA, "%s: read %s header. magic=0x%08x "
+	       "header_size=%d reply_size=%d\n",
+		tgt->lut_obd->obd_name, REPLY_DATA,
+		lrh->lrh_magic, lrh->lrh_header_size, lrh->lrh_reply_size);
+
+	return 0;
+}
+
+/* Write header into replay_data file of target @tgt from structure @lrh */
+static int tgt_reply_header_write(const struct lu_env *env,
+				  struct lu_target *tgt,
+				  struct lsd_reply_header *lrh)
+{
+	int			 rc;
+	struct lsd_reply_header	 buf;
+	struct tgt_thread_info	*tti = tgt_th_info(env);
+	struct thandle		*th;
+	struct dt_object	*dto;
+
+	CDEBUG(D_HA, "%s: write %s header. magic=0x%08x "
+	       "header_size=%d reply_size=%d\n",
+		tgt->lut_obd->obd_name, REPLY_DATA,
+		lrh->lrh_magic, lrh->lrh_header_size, lrh->lrh_reply_size);
+
+	buf.lrh_magic = cpu_to_le32(lrh->lrh_magic);
+	buf.lrh_header_size = cpu_to_le32(lrh->lrh_header_size);
+	buf.lrh_reply_size = cpu_to_le32(lrh->lrh_reply_size);
+
+	th = dt_trans_create(env, tgt->lut_bottom);
+	if (IS_ERR(th))
+		return PTR_ERR(th);
+	th->th_sync = 1;
+
+	tti->tti_off = 0;
+	tti->tti_buf.lb_buf = &buf;
+	tti->tti_buf.lb_len = sizeof(buf);
+
+	rc = dt_declare_record_write(env, tgt->lut_reply_data,
+				     &tti->tti_buf, tti->tti_off, th);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = dt_trans_start(env, tgt->lut_bottom, th);
+	if (rc)
+		GOTO(out, rc);
+
+	dto = dt_object_locate(tgt->lut_reply_data, th->th_dev);
+	rc = dt_record_write(env, dto, &tti->tti_buf, &tti->tti_off, th);
+out:
+	dt_trans_stop(env, tgt->lut_bottom, th);
+	return rc;
+}
+
+/* Write the reply data @lrd into reply_data file of target @tgt
+ * at offset @off
+ */
+static int tgt_reply_data_write(const struct lu_env *env, struct lu_target *tgt,
+				struct lsd_reply_data *lrd, loff_t off,
+				struct thandle *th)
+{
+	struct tgt_thread_info	*tti = tgt_th_info(env);
+	struct dt_object	*dto;
+	struct lsd_reply_data	*buf = &tti->tti_lrd;
+
+	lrd->lrd_result = ptlrpc_status_hton(lrd->lrd_result);
+
+	buf->lrd_transno	 = cpu_to_le64(lrd->lrd_transno);
+	buf->lrd_xid		 = cpu_to_le64(lrd->lrd_xid);
+	buf->lrd_data		 = cpu_to_le64(lrd->lrd_data);
+	buf->lrd_result		 = cpu_to_le32(lrd->lrd_result);
+	buf->lrd_client_gen	 = cpu_to_le32(lrd->lrd_client_gen);
+
+	lrd->lrd_result = ptlrpc_status_ntoh(lrd->lrd_result);
+
+	tti->tti_off = off;
+	tti->tti_buf.lb_buf = buf;
+	tti->tti_buf.lb_len = sizeof(*buf);
+
+	dto = dt_object_locate(tgt->lut_reply_data, th->th_dev);
+	return dt_record_write(env, dto, &tti->tti_buf, &tti->tti_off, th);
+}
+
+/* Read the reply data from reply_data file of target @tgt at offset @off
+ * into structure @lrd
+ */
+static int tgt_reply_data_read(const struct lu_env *env, struct lu_target *tgt,
+			       struct lsd_reply_data *lrd, loff_t off)
+{
+	int			 rc;
+	struct tgt_thread_info	*tti = tgt_th_info(env);
+	struct lsd_reply_data	*buf = &tti->tti_lrd;
+
+	tti->tti_off = off;
+	tti->tti_buf.lb_buf = buf;
+	tti->tti_buf.lb_len = sizeof(*buf);
+
+	rc = dt_record_read(env, tgt->lut_reply_data, &tti->tti_buf,
+			    &tti->tti_off);
+	if (rc != 0)
+		return rc;
+
+	lrd->lrd_transno	 = le64_to_cpu(buf->lrd_transno);
+	lrd->lrd_xid		 = le64_to_cpu(buf->lrd_xid);
+	lrd->lrd_data		 = le64_to_cpu(buf->lrd_data);
+	lrd->lrd_result		 = le32_to_cpu(buf->lrd_result);
+	lrd->lrd_client_gen	 = le32_to_cpu(buf->lrd_client_gen);
+
+	return 0;
+}
+
+
+/* Free the in-memory reply data structure @trd and release
+ * the corresponding slot in the reply_data file of target @lut
+ * Called with ted_lcd_lock held
+ */
+static void tgt_free_reply_data(struct lu_target *lut,
+				struct tg_export_data *ted,
+				struct tg_reply_data *trd)
+{
+	CDEBUG(D_TRACE, "%s: free reply data %p: xid %llu, transno %llu, "
+	       "client gen %u, slot idx %d\n",
+	       tgt_name(lut), trd, trd->trd_reply.lrd_xid,
+	       trd->trd_reply.lrd_transno, trd->trd_reply.lrd_client_gen,
+	       trd->trd_index);
+
+	LASSERT(mutex_is_locked(&ted->ted_lcd_lock));
+
+	list_del(&trd->trd_list);
+	ted->ted_reply_cnt--;
+	tgt_clear_reply_slot(lut, trd->trd_index);
+	OBD_FREE_PTR(trd);
+}
+
+/* Release the reply data @trd from target @lut
+ * The reply data with the highest transno for this export
+ * is retained to ensure correctness of target recovery
+ * Called with ted_lcd_lock held
+ */
+static void tgt_release_reply_data(struct lu_target *lut,
+				   struct tg_export_data *ted,
+				   struct tg_reply_data *trd)
+{
+	CDEBUG(D_TRACE, "%s: release reply data %p: xid %llu, transno %llu, "
+	       "client gen %u, slot idx %d\n",
+	       tgt_name(lut), trd, trd->trd_reply.lrd_xid,
+	       trd->trd_reply.lrd_transno, trd->trd_reply.lrd_client_gen,
+	       trd->trd_index);
+
+	LASSERT(mutex_is_locked(&ted->ted_lcd_lock));
+
+	/* Do not free the reply data corresponding to the
+	 * highest transno of this export.
+	 * This ensures on-disk reply data is kept and
+	 * last committed transno can be restored from disk in case
+	 * of target recovery
+	 */
+	if (trd->trd_reply.lrd_transno == ted->ted_lcd->lcd_last_transno) {
+		/* free previous retained reply */
+		if (ted->ted_reply_last != NULL)
+			tgt_free_reply_data(lut, ted, ted->ted_reply_last);
+		/* retain the reply */
+		list_del_init(&trd->trd_list);
+		ted->ted_reply_last = trd;
+	} else {
+		tgt_free_reply_data(lut, ted, trd);
+	}
+}
+
 static inline struct lu_buf *tti_buf_lsd(struct tgt_thread_info *tti)
 {
 	tti->tti_buf.lb_buf = &tti->tti_lsd;
@@ -71,6 +382,7 @@ int tgt_client_alloc(struct obd_export *exp)
 		RETURN(-ENOMEM);
 	/* Mark that slot is not yet valid, 0 doesn't work here */
 	exp->exp_target_data.ted_lr_idx = -1;
+	INIT_LIST_HEAD(&exp->exp_target_data.ted_reply_list);
 	RETURN(0);
 }
 EXPORT_SYMBOL(tgt_client_alloc);
@@ -82,8 +394,25 @@ void tgt_client_free(struct obd_export *exp)
 {
 	struct tg_export_data	*ted = &exp->exp_target_data;
 	struct lu_target	*lut = class_exp2tgt(exp);
+	struct tg_reply_data	*trd, *tmp;
 
 	LASSERT(exp != exp->exp_obd->obd_self_export);
+
+	/* free reply data */
+	mutex_lock(&ted->ted_lcd_lock);
+	list_for_each_entry_safe(trd, tmp, &ted->ted_reply_list, trd_list) {
+		tgt_release_reply_data(lut, ted, trd);
+	}
+	if (ted->ted_reply_last != NULL) {
+		tgt_free_reply_data(lut, ted, ted->ted_reply_last);
+		ted->ted_reply_last = NULL;
+	}
+	mutex_unlock(&ted->ted_lcd_lock);
+
+	if (!hlist_unhashed(&exp->exp_gen_hash))
+		cfs_hash_del(exp->exp_obd->obd_gen_hash,
+			     &ted->ted_lcd->lcd_generation,
+			     &exp->exp_gen_hash);
 
 	OBD_FREE_PTR(ted->ted_lcd);
 	ted->ted_lcd = NULL;
@@ -98,6 +427,9 @@ void tgt_client_free(struct obd_export *exp)
 		       exp->exp_obd->obd_name, ted->ted_lr_idx);
 		LBUG();
 	}
+
+	if (tgt_is_multimodrpcs_client(exp) && !exp->exp_obd->obd_stopping)
+		atomic_dec(&lut->lut_num_clients);
 }
 EXPORT_SYMBOL(tgt_client_free);
 
@@ -396,6 +728,16 @@ void tgt_boot_epoch_update(struct lu_target *tgt)
 	spin_lock(&tgt->lut_obd->obd_recovery_task_lock);
 	list_splice_init(&client_list, &tgt->lut_obd->obd_final_req_queue);
 	spin_unlock(&tgt->lut_obd->obd_recovery_task_lock);
+
+	/** Clear MULTI RPCS incompatibility flag if
+	 * - target is MDT and
+	 * - there is no client to recover or the recovery was aborted
+	 */
+	if (!strncmp(tgt->lut_obd->obd_type->typ_name, LUSTRE_MDT_NAME, 3) &&
+	    (tgt->lut_obd->obd_max_recoverable_clients == 0 ||
+	    tgt->lut_obd->obd_abort_recovery))
+		tgt->lut_lsd.lsd_feature_incompat &= ~OBD_INCOMPAT_MULTI_RPCS;
+
 	/** update server epoch */
 	tgt_server_data_update(&env, tgt, 1);
 	lu_env_fini(&env);
@@ -566,18 +908,40 @@ repeat:
 		goto repeat;
 	}
 
-	CDEBUG(D_INFO, "%s: client at idx %d with UUID '%s' added\n",
-	       tgt->lut_obd->obd_name, idx, ted->ted_lcd->lcd_uuid);
-
 	ted->ted_lr_idx = idx;
 	ted->ted_lr_off = tgt->lut_lsd.lsd_client_start +
 			  idx * tgt->lut_lsd.lsd_client_size;
 
 	LASSERTF(ted->ted_lr_off > 0, "ted_lr_off = %llu\n", ted->ted_lr_off);
 
-	CDEBUG(D_INFO, "%s: new client at index %d (%llu) with UUID '%s'\n",
+	if (tgt_is_multimodrpcs_client(exp)) {
+		/* Set MULTI RPCS incompatibility flag to prevent previous
+		 * Lustre versions to mount a target with reply_data file */
+		atomic_inc(&tgt->lut_num_clients);
+		if (!(tgt->lut_lsd.lsd_feature_incompat &
+		      OBD_INCOMPAT_MULTI_RPCS)) {
+			tgt->lut_lsd.lsd_feature_incompat |=
+							OBD_INCOMPAT_MULTI_RPCS;
+			rc = tgt_server_data_update(env, tgt, 1);
+			if (rc < 0) {
+				CERROR("%s: unable to set MULTI RPCS "
+				       "incompatibility flag\n",
+				       exp->exp_obd->obd_name);
+				RETURN(rc);
+			}
+		}
+
+		/* assign client slot generation */
+		ted->ted_lcd->lcd_generation =
+				atomic_inc_return(&tgt->lut_client_generation);
+	} else {
+		ted->ted_lcd->lcd_generation = 0;
+	}
+
+	CDEBUG(D_INFO, "%s: new client at index %d (%llu) with UUID '%s' "
+	       "generation %d\n",
 	       tgt->lut_obd->obd_name, ted->ted_lr_idx, ted->ted_lr_off,
-	       ted->ted_lcd->lcd_uuid);
+	       ted->ted_lcd->lcd_uuid, ted->ted_lcd->lcd_generation);
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_TGT_CLIENT_ADD))
 		RETURN(-ENOSPC);
@@ -591,10 +955,9 @@ repeat:
 }
 EXPORT_SYMBOL(tgt_client_new);
 
-/* Add client data to the MDS.  We use a bitmap to locate a free space
- * in the last_rcvd file if cl_off is -1 (i.e. a new client).
- * Otherwise, we just have to read the data from the last_rcvd file and
- * we know its offset.
+/* Add an existing client to the MDS in-memory state based on
+ * a client that was previously found in the last_rcvd file and
+ * already has an assigned slot (idx >= 0).
  *
  * It should not be possible to fail adding an existing client - otherwise
  * mdt_init_server_data() callsite needs to be fixed.
@@ -618,9 +981,12 @@ int tgt_client_add(const struct lu_env *env,  struct obd_export *exp, int idx)
 		       tgt->lut_obd->obd_name,  idx);
 		LBUG();
 	}
+	atomic_inc(&tgt->lut_num_clients);
 
-	CDEBUG(D_INFO, "%s: client at idx %d with UUID '%s' added\n",
-	       tgt->lut_obd->obd_name, idx, ted->ted_lcd->lcd_uuid);
+	CDEBUG(D_INFO, "%s: client at idx %d with UUID '%s' added, "
+	       "generation %d\n",
+	       tgt->lut_obd->obd_name, idx, ted->ted_lcd->lcd_uuid,
+	       ted->ted_lcd->lcd_generation);
 
 	ted->ted_lr_idx = idx;
 	ted->ted_lr_off = tgt->lut_lsd.lsd_client_start +
@@ -779,6 +1145,74 @@ static int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 		GOTO(srv_update, rc = 0);
 	}
 
+	/* Target that supports multiple reply data */
+	if (tgt_is_multimodrpcs_client(req->rq_export)) {
+		struct tg_reply_data	*trd;
+		struct lsd_reply_data	*lrd;
+		__u64			*pre_versions;
+		int			 i;
+		loff_t			 off;
+
+		OBD_ALLOC_PTR(trd);
+		if (unlikely(trd == NULL))
+			GOTO(srv_update, rc = -ENOMEM);
+
+		/* update export last transno */
+		mutex_lock(&ted->ted_lcd_lock);
+		if (tti->tti_transno > ted->ted_lcd->lcd_last_transno)
+			ted->ted_lcd->lcd_last_transno = tti->tti_transno;
+		mutex_unlock(&ted->ted_lcd_lock);
+
+		/* fill reply data information */
+		lrd = &trd->trd_reply;
+		lrd->lrd_transno = tti->tti_transno;
+		lrd->lrd_xid = req->rq_xid;
+		lrd->lrd_result = th->th_result;
+		lrd->lrd_data = opdata;
+		lrd->lrd_client_gen = ted->ted_lcd->lcd_generation;
+		trd->trd_tag = lustre_msg_get_tag(req->rq_reqmsg);
+		pre_versions = lustre_msg_get_versions(req->rq_repmsg);
+		if (pre_versions) {
+			trd->trd_pre_versions[0] = pre_versions[0];
+			trd->trd_pre_versions[1] = pre_versions[1];
+			trd->trd_pre_versions[2] = pre_versions[2];
+			trd->trd_pre_versions[3] = pre_versions[3];
+		}
+
+		/* find a empty slot */
+		i = tgt_find_free_reply_slot(tgt);
+		if (unlikely(i < 0)) {
+			CERROR("%s: couldn't find a slot for reply data: "
+			       "rc = %d\n", tgt_name(tgt), i);
+			GOTO(srv_update, rc = i);
+		}
+		trd->trd_index = i;
+
+		/* write reply data to disk */
+		off = sizeof(struct lsd_reply_header) + sizeof(*lrd) * i;
+		rc = tgt_reply_data_write(env, tgt, lrd, off, th);
+		if (unlikely(rc != 0)) {
+			CERROR("%s: can't update %s file: rc = %d\n",
+			       tgt_name(tgt), REPLY_DATA, rc);
+			RETURN(rc);
+		}
+
+		/* add reply data to target export's reply list */
+		mutex_lock(&ted->ted_lcd_lock);
+		list_add(&trd->trd_list, &ted->ted_reply_list);
+		ted->ted_reply_cnt++;
+		if (ted->ted_reply_cnt > ted->ted_reply_max)
+			ted->ted_reply_max = ted->ted_reply_cnt;
+		mutex_unlock(&ted->ted_lcd_lock);
+
+		CDEBUG(D_TRACE, "add reply %p: xid %llu, transno %llu, "
+		       "tag %hu, client gen %u, slot idx %d\n",
+		       trd, lrd->lrd_xid, lrd->lrd_transno,
+		       trd->trd_tag, lrd->lrd_client_gen, i);
+
+		GOTO(srv_update, rc = 0);
+	}
+
 	mutex_lock(&ted->ted_lcd_lock);
 	LASSERT(ergo(tti->tti_transno == 0, th->th_result != 0));
 	if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {
@@ -894,6 +1328,8 @@ static int tgt_clients_data_init(const struct lu_env *env,
 	int			 cl_idx;
 	int			 rc = 0;
 	loff_t			 off = lsd->lsd_client_start;
+	__u32			 generation = 0;
+	struct cfs_hash		*hash = NULL;
 
 	ENTRY;
 
@@ -903,6 +1339,10 @@ static int tgt_clients_data_init(const struct lu_env *env,
 	OBD_ALLOC_PTR(lcd);
 	if (lcd == NULL)
 		RETURN(-ENOMEM);
+
+	hash = cfs_hash_getref(tgt->lut_obd->obd_gen_hash);
+	if (hash == NULL)
+		GOTO(err_out, rc = -ENODEV);
 
 	for (cl_idx = 0; off < last_size; cl_idx++) {
 		struct obd_export	*exp;
@@ -933,8 +1373,9 @@ static int tgt_clients_data_init(const struct lu_env *env,
 		 * need to be set up like real exports as connect does.
 		 */
 		CDEBUG(D_HA, "RCVRNG CLIENT uuid: %s idx: %d lr: "LPU64
-		       " srv lr: "LPU64" lx: "LPU64"\n", lcd->lcd_uuid, cl_idx,
-		       last_transno, lsd->lsd_last_transno, lcd_last_xid(lcd));
+		       " srv lr: "LPU64" lx: "LPU64" gen %u\n", lcd->lcd_uuid,
+		       cl_idx, last_transno, lsd->lsd_last_transno,
+		       lcd_last_xid(lcd), lcd->lcd_generation);
 
 		exp = class_new_export(obd, (struct obd_uuid *)lcd->lcd_uuid);
 		if (IS_ERR(exp)) {
@@ -959,6 +1400,25 @@ static int tgt_clients_data_init(const struct lu_env *env,
 		exp->exp_in_recovery = 0;
 		spin_unlock(&exp->exp_lock);
 		obd->obd_max_recoverable_clients++;
+
+		if (tgt->lut_lsd.lsd_feature_incompat &
+		    OBD_INCOMPAT_MULTI_RPCS &&
+		    lcd->lcd_generation != 0) {
+			/* compute the highest valid client generation */
+			generation = max(generation, lcd->lcd_generation);
+
+			/* fill client_generation <-> export hash table */
+			rc = cfs_hash_add_unique(hash, &lcd->lcd_generation,
+						 &exp->exp_gen_hash);
+			if (rc != 0) {
+				CERROR("%s: duplicate export for client "
+				       "generation %u\n",
+				       tgt_name(tgt), lcd->lcd_generation);
+				class_export_put(exp);
+				GOTO(err_out, rc);
+			}
+		}
+
 		class_export_put(exp);
 
 		/* Need to check last_rcvd even for duplicated exports. */
@@ -971,7 +1431,12 @@ static int tgt_clients_data_init(const struct lu_env *env,
 		spin_unlock(&tgt->lut_translock);
 	}
 
+	/* record highest valid client generation */
+	atomic_set(&tgt->lut_client_generation, generation);
+
 err_out:
+	if (hash != NULL)
+		cfs_hash_putref(hash);
 	OBD_FREE_PTR(lcd);
 	RETURN(rc);
 }
@@ -988,7 +1453,8 @@ static struct server_compat_data tgt_scd[] = {
 		.rocompat = OBD_ROCOMPAT_LOVOBJID,
 		.incompat = OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR |
 			    OBD_INCOMPAT_FID | OBD_INCOMPAT_IAM_DIR |
-			    OBD_INCOMPAT_LMM_VER | OBD_INCOMPAT_MULTI_OI,
+			    OBD_INCOMPAT_LMM_VER | OBD_INCOMPAT_MULTI_OI |
+			    OBD_INCOMPAT_MULTI_RPCS,
 		.rocinit = OBD_ROCOMPAT_LOVOBJID,
 		.incinit = OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR |
 			   OBD_INCOMPAT_MULTI_OI,
@@ -1263,3 +1729,228 @@ int tgt_txn_stop_cb(const struct lu_env *env, struct thandle *th,
 					  tgt_ses_req(tsi));
 	return rc;
 }
+
+int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
+{
+	struct tgt_thread_info	*tti = tgt_th_info(env);
+	struct lsd_reply_data	*lrd = &tti->tti_lrd;
+	unsigned long		 reply_data_size;
+	int			 rc;
+	struct lsd_reply_header	*lrh = NULL;
+	struct lsd_client_data  *lcd = NULL;
+	struct tg_reply_data	*trd = NULL;
+	int                      idx;
+	loff_t			 off;
+	struct cfs_hash		*hash = NULL;
+	struct obd_export	*exp;
+	struct obd_export	*tmp;
+	struct tg_export_data   *ted;
+	int			 reply_data_recovered = 0;
+
+	rc = dt_attr_get(env, tgt->lut_reply_data, &tti->tti_attr);
+	if (rc)
+		GOTO(out, rc);
+	reply_data_size = (unsigned long)tti->tti_attr.la_size;
+
+	OBD_ALLOC_PTR(lrh);
+	if (lrh == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	if (reply_data_size == 0) {
+		CDEBUG(D_INFO, "%s: new reply_data file, initializing\n",
+		       tgt_name(tgt));
+		lrh->lrh_magic = LRH_MAGIC;
+		lrh->lrh_header_size = sizeof(struct lsd_reply_header);
+		lrh->lrh_reply_size = sizeof(struct lsd_reply_data);
+		rc = tgt_reply_header_write(env, tgt, lrh);
+		if (rc) {
+			CERROR("%s: error writing %s: rc = %d\n",
+			       tgt_name(tgt), REPLY_DATA, rc);
+			GOTO(out, rc);
+		}
+	} else {
+		rc = tgt_reply_header_read(env, tgt, lrh);
+		if (rc) {
+			CERROR("%s: error reading %s: rc = %d\n",
+			       tgt_name(tgt), REPLY_DATA, rc);
+			GOTO(out, rc);
+		}
+		if (lrh->lrh_magic != LRH_MAGIC ||
+		    lrh->lrh_header_size != sizeof(struct lsd_reply_header) ||
+		    lrh->lrh_reply_size != sizeof(struct lsd_reply_data)) {
+			CERROR("%s: invalid header in %s\n",
+			       tgt_name(tgt), REPLY_DATA);
+			GOTO(out, rc = -EINVAL);
+		}
+
+		hash = cfs_hash_getref(tgt->lut_obd->obd_gen_hash);
+		if (hash == NULL)
+			GOTO(out, rc = -ENODEV);
+
+		OBD_ALLOC_PTR(lcd);
+		if (lcd == NULL)
+			GOTO(out, rc = -ENOMEM);
+
+		OBD_ALLOC_PTR(trd);
+		if (trd == NULL)
+			GOTO(out, rc = -ENOMEM);
+
+		/* Load reply_data from disk */
+		for (idx = 0, off = sizeof(struct lsd_reply_header);
+		     off < reply_data_size;
+		     idx++, off += sizeof(struct lsd_reply_data)) {
+			rc = tgt_reply_data_read(env, tgt, lrd, off);
+			if (rc) {
+				CERROR("%s: error reading %s: rc = %d\n",
+				       tgt_name(tgt), REPLY_DATA, rc);
+				GOTO(out, rc);
+			}
+
+			exp = cfs_hash_lookup(hash, &lrd->lrd_client_gen);
+			if (exp == NULL) {
+				/* old reply data from a disconnected client */
+				continue;
+			}
+			ted = &exp->exp_target_data;
+			mutex_lock(&ted->ted_lcd_lock);
+
+			/* create in-memory reply_data and link it to
+			 * target export's reply list */
+			tgt_set_reply_slot(tgt, idx);
+			trd->trd_reply = *lrd;
+			trd->trd_pre_versions[0] = 0;
+			trd->trd_pre_versions[1] = 0;
+			trd->trd_pre_versions[2] = 0;
+			trd->trd_pre_versions[3] = 0;
+			trd->trd_index = idx;
+			trd->trd_tag = 0;
+			list_add(&trd->trd_list, &ted->ted_reply_list);
+			ted->ted_reply_cnt++;
+			if (ted->ted_reply_cnt > ted->ted_reply_max)
+				ted->ted_reply_max = ted->ted_reply_cnt;
+
+			CDEBUG(D_HA, "%s: restore reply %p: xid %llu, "
+			       "transno %llu, client gen %u, slot idx %d\n",
+			       tgt_name(tgt), trd, lrd->lrd_xid,
+			       lrd->lrd_transno, lrd->lrd_client_gen,
+			       trd->trd_index);
+
+			/* update export last committed transation */
+			exp->exp_last_committed = max(exp->exp_last_committed,
+						      lrd->lrd_transno);
+
+			mutex_unlock(&ted->ted_lcd_lock);
+			class_export_put(exp);
+
+			/* update target last committed transaction */
+			spin_lock(&tgt->lut_translock);
+			tgt->lut_last_transno = max(tgt->lut_last_transno,
+						    lrd->lrd_transno);
+			spin_unlock(&tgt->lut_translock);
+
+			reply_data_recovered++;
+
+			OBD_ALLOC_PTR(trd);
+			if (trd == NULL)
+				GOTO(out, rc = -ENOMEM);
+		}
+		CDEBUG(D_INFO, "%s: %d reply data have been recovered\n",
+		       tgt_name(tgt), reply_data_recovered);
+
+		/* delete entries from client_generation<->export hash */
+		spin_lock(&tgt->lut_obd->obd_dev_lock);
+		list_for_each_entry_safe(exp, tmp,
+					 &tgt->lut_obd->obd_exports,
+					 exp_obd_chain) {
+			struct tg_export_data *ted = &exp->exp_target_data;
+
+			if (!hlist_unhashed(&exp->exp_gen_hash))
+				cfs_hash_del(hash,
+					     &ted->ted_lcd->lcd_generation,
+					     &exp->exp_gen_hash);
+		}
+		spin_unlock(&tgt->lut_obd->obd_dev_lock);
+	}
+
+	rc = 0;
+
+out:
+	if (hash != NULL)
+		cfs_hash_putref(hash);
+	if (lcd != NULL)
+		OBD_FREE_PTR(lcd);
+	if (trd != NULL)
+		OBD_FREE_PTR(trd);
+	if (lrh != NULL)
+		OBD_FREE_PTR(lrh);
+	return rc;
+}
+
+/* Look for a reply data matching specified request @req
+ * A copy is returned in @trd if the pointer is not NULL
+ */
+bool tgt_lookup_reply(struct ptlrpc_request *req, struct tg_reply_data *trd)
+{
+	struct tg_export_data	*ted = &req->rq_export->exp_target_data;
+	struct tg_reply_data	*reply, *tmp;
+	bool			 found = false;
+
+	mutex_lock(&ted->ted_lcd_lock);
+	list_for_each_entry_safe(reply, tmp, &ted->ted_reply_list, trd_list) {
+		if (reply->trd_reply.lrd_xid == req->rq_xid) {
+			found = true;
+			break;
+		}
+	}
+	if (found && trd != NULL)
+		*trd = *reply;
+	mutex_unlock(&ted->ted_lcd_lock);
+
+	CDEBUG(D_TRACE, "%s: lookup reply xid %llu, found %d\n",
+	       tgt_name(class_exp2tgt(req->rq_export)), req->rq_xid,
+	       found ? 1 : 0);
+
+	return found;
+}
+EXPORT_SYMBOL(tgt_lookup_reply);
+
+int tgt_handle_received_xid(struct obd_export *exp, __u64 rcvd_xid)
+{
+	struct tg_export_data	*ted = &exp->exp_target_data;
+	struct lu_target	*lut = class_exp2tgt(exp);
+	struct tg_reply_data	*trd, *tmp;
+
+	mutex_lock(&ted->ted_lcd_lock);
+	list_for_each_entry_safe(trd, tmp, &ted->ted_reply_list, trd_list) {
+		if (trd->trd_reply.lrd_xid > rcvd_xid)
+			continue;
+		ted->ted_release_xid++;
+		tgt_release_reply_data(lut, ted, trd);
+	}
+	mutex_unlock(&ted->ted_lcd_lock);
+
+	return 0;
+}
+
+int tgt_handle_tag(struct obd_export *exp, __u16 tag)
+{
+	struct tg_export_data	*ted = &exp->exp_target_data;
+	struct lu_target	*lut = class_exp2tgt(exp);
+	struct tg_reply_data	*trd, *tmp;
+
+	if (tag == 0)
+		return 0;
+
+	mutex_lock(&ted->ted_lcd_lock);
+	list_for_each_entry_safe(trd, tmp, &ted->ted_reply_list, trd_list) {
+		if (trd->trd_tag != tag)
+			continue;
+		ted->ted_release_tag++;
+		tgt_release_reply_data(lut, ted, trd);
+		break;
+	}
+	mutex_unlock(&ted->ted_lcd_lock);
+
+	return 0;
+}
+

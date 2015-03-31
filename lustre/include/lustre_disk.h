@@ -59,6 +59,7 @@
 /** Persistent mount data are stored on the disk in this file. */
 #define MOUNT_DATA_FILE		MOUNT_CONFIGS_DIR"/"CONFIGS_FILE
 #define LAST_RCVD		"last_rcvd"
+#define REPLY_DATA		"reply_data"
 #define LOV_OBJID		"lov_objid"
 #define LOV_OBJSEQ		"lov_objseq"
 #define HEALTH_CHECK		"health_check"
@@ -317,6 +318,8 @@ struct lustre_mount_data {
 #define OBD_INCOMPAT_LMM_VER    0x00000100
 /** multiple OI files for MDT */
 #define OBD_INCOMPAT_MULTI_OI   0x00000200
+/** multiple RPCs in flight */
+#define OBD_INCOMPAT_MULTI_RPCS	0x00000400
 
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.
    This should be common to filter_internal.h, lustre_mds.h */
@@ -361,10 +364,34 @@ struct lsd_client_data {
         /* VBR: last versions */
         __u64 lcd_pre_versions[4];
         __u32 lcd_last_epoch;
-        /** orphans handling for delayed export rely on that */
-        __u32 lcd_first_epoch;
-        __u8  lcd_padding[LR_CLIENT_SIZE - 128];
+	/* generation counter of client slot in last_rcvd */
+	__u32 lcd_generation;
+	__u8  lcd_padding[LR_CLIENT_SIZE - 128];
 };
+
+
+/* Data stored in each slot of the reply_data file.
+ *
+ * The lrd_client_gen field is assigned with lcd_generation value
+ * to allow identify which client the reply data belongs to.
+ */
+struct lsd_reply_data {
+	__u64	lrd_transno;	/* transaction number */
+	__u64	lrd_xid;	/* transmission id */
+	__u64	lrd_data;	/* per-operation data */
+	__u32	lrd_result;	/* request result */
+	__u32	lrd_client_gen; /* client generation */
+};
+
+/* Header of the reply_data file */
+#define LRH_MAGIC 0xbdabda01
+struct lsd_reply_header {
+	__u32	lrh_magic;
+	__u32	lrh_header_size;
+	__u32	lrh_reply_size;
+	__u8	lrh_pad[sizeof(struct lsd_reply_data) - 12];
+};
+
 
 /* bug20354: the lcd_uuid for export of clients may be wrong */
 static inline void check_lcd(char *obd_name, int index,
@@ -452,7 +479,7 @@ static inline void lcd_le_to_cpu(struct lsd_client_data *buf,
         lcd->lcd_pre_versions[2]    = le64_to_cpu(buf->lcd_pre_versions[2]);
         lcd->lcd_pre_versions[3]    = le64_to_cpu(buf->lcd_pre_versions[3]);
         lcd->lcd_last_epoch         = le32_to_cpu(buf->lcd_last_epoch);
-        lcd->lcd_first_epoch        = le32_to_cpu(buf->lcd_first_epoch);
+	lcd->lcd_generation	    = le32_to_cpu(buf->lcd_generation);
 }
 
 static inline void lcd_cpu_to_le(struct lsd_client_data *lcd,
@@ -472,7 +499,7 @@ static inline void lcd_cpu_to_le(struct lsd_client_data *lcd,
         buf->lcd_pre_versions[2]    = cpu_to_le64(lcd->lcd_pre_versions[2]);
         buf->lcd_pre_versions[3]    = cpu_to_le64(lcd->lcd_pre_versions[3]);
         buf->lcd_last_epoch         = cpu_to_le32(lcd->lcd_last_epoch);
-        buf->lcd_first_epoch        = cpu_to_le32(lcd->lcd_first_epoch);
+	buf->lcd_generation	    = cpu_to_le32(lcd->lcd_generation);
 }
 
 static inline __u64 lcd_last_transno(struct lsd_client_data *lcd)

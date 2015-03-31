@@ -138,6 +138,35 @@ struct lu_target {
 	spinlock_t		 lut_client_bitmap_lock;
 	/** Bitmap of known clients */
 	unsigned long		*lut_client_bitmap;
+	/* Number of clients supporting multiple modify RPCs
+	 * recorded in the bitmap */
+	atomic_t		 lut_num_clients;
+	/* Client generation to identify client slot reuse */
+	atomic_t		 lut_client_generation;
+	/** reply_data file */
+	struct dt_object	*lut_reply_data;
+	/** Bitmap of used slots in the reply data file */
+	unsigned long		**lut_reply_bitmap;
+};
+
+/* number of slots in reply bitmap */
+#define LUT_REPLY_SLOTS_PER_CHUNK (1<<20)
+#define LUT_REPLY_SLOTS_MAX_CHUNKS 16
+
+/**
+ * Target reply data
+ */
+struct tg_reply_data {
+	/** chain of reply data anchored in tg_export_data */
+	struct list_head	trd_list;
+	/** copy of on-disk reply data */
+	struct lsd_reply_data	trd_reply;
+	/** versions for Version Based Recovery */
+	__u64			trd_pre_versions[4];
+	/** slot index in reply_data file */
+	int			trd_index;
+	/** tag the client used */
+	__u16			trd_tag;
 };
 
 extern struct lu_context_key tgt_session_key;
@@ -300,6 +329,12 @@ static inline int req_is_replay(struct ptlrpc_request *req)
 	return !!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY);
 }
 
+static inline bool tgt_is_multimodrpcs_client(struct obd_export *exp)
+{
+	return exp_connect_flags(exp) & OBD_CONNECT_MULTIMODRPCS;
+}
+
+
 /* target/tgt_handler.c */
 int tgt_request_handle(struct ptlrpc_request *req);
 char *tgt_name(struct lu_target *tgt);
@@ -350,6 +385,7 @@ void tgt_register_lfsck_in_notify(int (*notify)(const struct lu_env *,
 void tgt_register_lfsck_query(int (*query)(const struct lu_env *,
 					   struct dt_device *,
 					   struct lfsck_request *));
+bool req_can_reconstruct(struct ptlrpc_request *req, struct tg_reply_data *trd);
 
 extern struct tgt_handler tgt_lfsck_handlers[];
 extern struct tgt_handler tgt_obd_handlers[];
@@ -394,6 +430,8 @@ int tgt_server_data_update(const struct lu_env *env, struct lu_target *tg,
 			   int sync);
 int tgt_truncate_last_rcvd(const struct lu_env *env, struct lu_target *tg,
 			   loff_t off);
+int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt);
+bool tgt_lookup_reply(struct ptlrpc_request *req, struct tg_reply_data *trd);
 
 /* target/update_trans.c */
 int distribute_txn_init(const struct lu_env *env,
