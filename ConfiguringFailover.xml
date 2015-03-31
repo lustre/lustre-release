@@ -132,7 +132,7 @@
               --index=0 --servicenode=192.168.10.7@o2ib \
               --servicenode=192.168.10.8@o2ib \  
               /dev/sdb</screen></para>
-    <para>More than two potential service nodes caan be designated for a target. The target can then
+    <para>More than two potential service nodes can be designated for a target. The target can then
       be mounted on any of the designated service nodes.</para>
     <para>When HA is configured on a storage target, the Lustre software enables multi-mount
       protection (MMP) on that storage target. MMP prevents multiple nodes from simultaneously
