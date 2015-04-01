@@ -974,15 +974,16 @@ static int read_file(const char *path, char *buf, int size)
 
 static int write_file(const char *path, const char *buf)
 {
-	FILE *fd;
+	int fd, rc;
 
-	fd = fopen(path, "w");
-	if (fd == NULL)
+	fd = open(path, O_WRONLY);
+	if (fd < 0)
 		return errno;
 
-	fputs(buf, fd);
-	fclose(fd);
-	return 0;
+	rc = write(fd, buf, strlen(buf));
+	close(fd);
+
+	return rc < 0 ? errno : 0;
 }
 
 static int set_blockdev_scheduler(const char *path, const char *scheduler)
@@ -1156,7 +1157,7 @@ set_params:
 			snprintf(buf, sizeof(buf), "%d",
 				 mop->mo_md_stripe_cache_size);
 			rc = write_file(real_path, buf);
-			if (rc && verbose)
+			if (rc != 0 && verbose)
 				fprintf(stderr, "warning: opening %s: %s\n",
 					real_path, strerror(errno));
 		}
@@ -1195,9 +1196,11 @@ set_params:
 			goto subdevs;
 
 		/* Don't increase IO request size limit past 32MB.  It is about
-		 * 2x PTLRPC_MAX_BRW_SIZE, but that isn't defined publicly. */
-		if (newval > 32 * 1024)
+		 * 2x PTLRPC_MAX_BRW_SIZE, but that isn't in a public header. */
+		if (newval > 32 * 1024) {
 			newval = 32 * 1024;
+			snprintf(buf, sizeof(buf), "%llu", newval);
+		}
 
 		oldval = strtoull(oldbuf, &end, 0);
 		/* Don't shrink the current limit. */
@@ -1205,7 +1208,7 @@ set_params:
 			goto subdevs;
 
 		rc = write_file(real_path, buf);
-		if (rc) {
+		if (rc != 0) {
 			if (verbose)
 				fprintf(stderr, "warning: writing to %s: %s\n",
 					real_path, strerror(errno));
