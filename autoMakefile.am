@@ -99,11 +99,45 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec	\
 	build/Rules.in			\
 	build/gen_filelist.sh
 
-rpms: @PACKAGE_TARNAME@.spec dist Makefile
-	rpmbuild @RPMBUILD_BINARY_ARGS@ -ta $(distdir).tar.gz
+rpm-local:
+	@(if test -z "$(RPMBUILD)"; then \
+		echo -e "\n" \
+	"*** Required util 'rpmbuild' missing. Please install the\n" \
+	"*** package for your distribution which provides 'rpmbuild',\n" \
+	"*** re-run configure, and try again.\n"; \
+		exit 1; \
+	fi; \
+	$(MKDIR_P) $(rpmbuilddir)/TMP   && \
+	$(MKDIR_P) $(rpmbuilddir)/BUILD && \
+	$(MKDIR_P) $(rpmbuilddir)/RPMS  && \
+	$(MKDIR_P) $(rpmbuilddir)/SRPMS && \
+	$(MKDIR_P) $(rpmbuilddir)/SPECS && \
+	$(MKDIR_P) $(rpmbuilddir)/SOURCES)
+
+rpms: srpm
+	rpmbuilddir=`mktemp -t -d rpmbuild-@PACKAGE@-$$USER-XXXXXXXX`; \
+	$(MAKE) $(AM_MAKEFLAGS) \
+		rpmbuilddir="$$rpmbuilddir" rpm-local || exit 1; \
+	$(RPMBUILD) \
+		--define "_tmppath $$rpmbuilddir/TMP" \
+		--define "_topdir $$rpmbuilddir" \
+		@RPMBUILD_BINARY_ARGS@ \
+		--rebuild $(distdir)-*.src.rpm || exit 1; \
+	cp $$rpmbuilddir/RPMS/*/*.rpm $(top_srcdir) || exit 1; \
+	rm -rf $$rpmbuilddir
 
 srpm: @PACKAGE_TARNAME@.spec dist Makefile
-	rpmbuild @RPMBUILD_SOURCE_ARGS@ -ts $(distdir).tar.gz
+	rpmbuilddir=`mktemp -t -d rpmbuild-@PACKAGE@-$$USER-XXXXXXXX`; \
+	$(MAKE) $(AM_MAKEFLAGS) \
+		rpmbuilddir="$$rpmbuilddir" rpm-local || exit 1; \
+	$(RPMBUILD) \
+		--define "_tmppath $$rpmbuilddir/TMP" \
+		--define "_topdir $$rpmbuilddir" \
+		--define "build_src_rpm 1" \
+		--define "dist %{nil}" \
+		-ts $(distdir).tar.gz || exit 1; \
+	cp $$rpmbuilddir/SRPMS/$(distdir)-*.src.rpm $(top_srcdir) || exit 1; \
+	rm -rf $$rpmbuilddir
 
 # In the debs target, first make sure what's in the changelog reflects
 # the software version.  Here's how we could dig the version out of the

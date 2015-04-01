@@ -521,7 +521,6 @@ AS_IF([test x$enable_server = xyes],
 #
 AC_DEFUN([LB_CONFIG_RPMBUILD_OPTIONS], [
 RPMBINARGS=
-RPMSRCARGS=
 CONFIGURE_ARGS=
 eval set -- $ac_configure_args
 for arg; do
@@ -606,10 +605,8 @@ if test x$enable_manpages != xyes ; then
 fi
 
 RPMBUILD_BINARY_ARGS=$RPMBINARGS
-RPMBUILD_SOURCE_ARGS=$RPMSRCARGS
 
 AC_SUBST(RPMBUILD_BINARY_ARGS)
-AC_SUBST(RPMBUILD_SOURCE_ARGS)
 ]) # LB_CONFIG_RPMBUILD_OPTIONS
 
 #
