@@ -160,6 +160,9 @@ static struct dt_it *osd_index_it_init(const struct lu_env *env,
 	int			 rc;
 	ENTRY;
 
+	if (obj->oo_destroyed)
+		RETURN(ERR_PTR(-ENOENT));
+
 	LASSERT(lu_object_exists(lo));
 	LASSERT(obj->oo_db);
 	LASSERT(osd_object_is_zap(obj->oo_db));

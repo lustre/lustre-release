@@ -2371,6 +2371,7 @@ static int osd_object_destroy(const struct lu_env *env,
 
 	/* not needed in the cache anymore */
 	set_bit(LU_OBJECT_HEARD_BANSHEE, &dt->do_lu.lo_header->loh_flags);
+	obj->oo_destroyed = 1;
 
 	RETURN(0);
 }
@@ -4666,7 +4667,7 @@ static struct dt_it *osd_it_ea_init(const struct lu_env *env,
 	struct dentry		*obj_dentry;
 	ENTRY;
 
-	if (!dt_object_exists(dt))
+	if (!dt_object_exists(dt) || obj->oo_destroyed)
 		RETURN(ERR_PTR(-ENOENT));
 
 	OBD_SLAB_ALLOC_PTR_GFP(oie, osd_itea_cachep, GFP_NOFS);

@@ -3169,6 +3169,39 @@ test_82() {
 }
 run_test 82 "fsetxattr and fgetxattr on orphan files"
 
+test_83() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local pid1
+	local pid2
+
+	(
+		cd $DIR1
+		while true; do
+			$LFS mkdir -i1 -c2 $tdir
+			rmdir $tdir
+		done
+	) &
+	pid1=$!
+	echo "start pid $pid1 to create/unlink striped directory"
+
+	# Access the directory at the same time
+	(
+		cd $DIR2
+		while true; do
+			stat $tdir > /dev/null 2>&1
+		done
+	) &
+	pid2=$!
+	echo "start pid $pid2 to stat striped directory"
+
+	sleep 120
+	kill $pid1 $pid2
+	wait $pid1 $pid2
+
+	return 0
+}
+run_test 83 "access striped directory while it is being created/unlinked"
+
 log "cleanup: ======================================================"
 
 [ "$(mount | grep $MOUNT2)" ] && umount $MOUNT2

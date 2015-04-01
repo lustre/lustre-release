@@ -229,6 +229,15 @@ static int mdd_xattr_get(const struct lu_env *env,
                 return -ENOENT;
         }
 
+	/* If the object has been destroyed, then do not get LMVEA, because
+	 * it needs to load stripes from the iteration of the master object,
+	 * and it will cause problem if master object has been destroyed, see
+	 * LU-6427 */
+	if (unlikely((mdd_obj->mod_flags & DEAD_OBJ) &&
+		     !(mdd_obj->mod_flags & ORPHAN_OBJ) &&
+		      strcmp(name, XATTR_NAME_LMV) == 0))
+		RETURN(-ENOENT);
+
 	/* If the object has been delete from the namespace, then
 	 * get linkEA should return -ENOENT as well */
 	if (unlikely((mdd_obj->mod_flags & (DEAD_OBJ | ORPHAN_OBJ)) &&

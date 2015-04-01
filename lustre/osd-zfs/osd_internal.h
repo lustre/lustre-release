@@ -330,6 +330,7 @@ struct osd_object {
 	uint64_t		 oo_xattr;
 	enum osd_destroy_type	 oo_destroy;
 
+	__u32			 oo_destroyed:1;
 	/* record size for index file */
 	unsigned char		 oo_keysize;
 	unsigned char		 oo_recsize;

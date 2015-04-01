@@ -603,7 +603,8 @@ static int osd_object_destroy(const struct lu_env *env,
 out:
 	/* not needed in the cache anymore */
 	set_bit(LU_OBJECT_HEARD_BANSHEE, &dt->do_lu.lo_header->loh_flags);
-
+	if (rc == 0)
+		obj->oo_destroyed = 1;
 	RETURN (0);
 }
 
