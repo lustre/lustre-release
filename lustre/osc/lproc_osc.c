@@ -523,7 +523,8 @@ static ssize_t osc_obd_max_pages_per_rpc_seq_write(struct file *file,
 	chunk_mask = ~((1 << (cli->cl_chunkbits - PAGE_CACHE_SHIFT)) - 1);
 	/* max_pages_per_rpc must be chunk aligned */
 	val = (val + ~chunk_mask) & chunk_mask;
-	if (val == 0 || val > ocd->ocd_brw_size >> PAGE_CACHE_SHIFT) {
+	if (val == 0 || (ocd->ocd_brw_size != 0 &&
+			 val > ocd->ocd_brw_size >> PAGE_CACHE_SHIFT)) {
 		LPROCFS_CLIMP_EXIT(dev);
 		return -ERANGE;
 	}
