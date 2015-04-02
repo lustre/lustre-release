@@ -2043,8 +2043,8 @@ no_match:
 		if (req == NULL)
 			RETURN(-ENOMEM);
 
-		rc = ptlrpc_request_pack(req, LUSTRE_DLM_VERSION, LDLM_ENQUEUE);
-		if (rc < 0) {
+		rc = ldlm_prep_enqueue_req(exp, req, NULL, 0);
+		if (rc) {
                         ptlrpc_request_free(req);
                         RETURN(rc);
                 }
