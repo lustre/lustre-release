@@ -33,7 +33,7 @@
  * local OSD object interface to the MDD layer, and abstracts the
  * addressing of local (OSD) and remote (OSP) objects. The API is
  * described in the file lustre/include/dt_object.h and in
- * lustre/doc/osd-api.txt.
+ * Documentation/osd-api.txt.
  *
  * Author: Alex Zhuravlev <alexey.zhuravlev@intel.com>
  */

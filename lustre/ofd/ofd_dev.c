@@ -42,7 +42,7 @@
  * The OBD Filter Device (OFD) module belongs to the Object Storage
  * Server stack and connects the RPC oriented Unified Target (TGT)
  * layer (see lustre/include/lu_target.h) to the storage oriented OSD
- * layer (see lustre/doc/osd-api.txt).
+ * layer (see Documentation/osd-api.txt).
  *
  *     TGT
  *      |      DT and OBD APIs

@@ -163,9 +163,12 @@ osd-ldiskfs.<fsname>-<targetname>.full_scrub_threshold_rate). On starting, the
 master engine sends RPCs to other MDTs (when necessary) to start other master
 engines and to related OSTs to start the slave engines.
 
-2. The master engine on the MDT scans the MDT local device. Each object is
-checked for the consistency criteria enumerated in the 'features' section of
-this document.
+2. The master engine on the MDS scans the MDT device using namespace iteration
+(described below). For each striped file, it calls the registered LFSCK process
+handlers to perform the relevant system consistency checks/repairs, which are
+enumerated in the 'features' section. All objects on OSTs that are never
+referenced during this scan (because, for example, they are orphans) are
+recorded in an OST orphan object index on each OST.
 
 3. After the MDT completes first-stage system scanning, the master engine sends
 RPCs to related LFSCK engines on other targets to notify that the first-stage
@@ -194,10 +197,10 @@ Orphan objects will either be relinked to an existing file if found - or moved
 into a new file in .lustre/lost+found.
 
 If multiple MDTs are present, MDTs will check/repair MDT-OST consistency in
-parallel. To avoid scans of the OST device the slave engine will not begin
-second-stage system scans until all the master engines complete the first-stage
-system scan. For each OST there is a single OST orphan object index, regardless
-of how many MDTs are in the MDT-OST consistency check/repair.
+parallel. To avoid redundant scans of the OST device the slave engine will not
+begin second-stage system scans until all the master engines complete the
+first-stage system scan. For each OST there is a single OST orphan object
+index, regardless of how many MDTs are in the MDT-OST consistency check/repair.
 
 
 Object traversal design reference
@@ -263,21 +266,21 @@ useful links:      http://insidehpc.com/2013/05/02/video-lfsck-online-lustre-fil
 Glossary of terms
 ===============================================
 
-OSD - Object storage device. A generic term for a storage device with an
-  interface that extends beyond a block-oriented device interface.
-
 FID - File IDentifier. A Lustre file system identifies every file and object
   with a unique 128-bit ID.
-
-OI - Object Index. A table that maps the FID to the object's backend identifier.
-  For ldiskfs-based backend, this table must be regenerated if restored from
-  file-level backup.
 
 FID-in-dirent - FID in Directory Entry. To enhance the performance of readdir,
   the FID of a file is recorded in its directory name entry.
 
+linkEA - Link Extended Attributes. When a file is created or hard-linked the
+  parent directory name and FID are recorded as extended attributes to the file.
+
 LMA - Lustre Metadata Attributes. A record of Lustre specific attributes, for
   example HSM state, self-FID, and so on.
 
-linkEA - Link Extended Attributes. When a file is created or hard-linked the
-  parent directory name and FID are recorded as extended attributes to the file.
+OI - Object Index. A table that maps FIDs to inodes. On ldiskfs-based targets,
+  this table must be regenerated if a file level restore is performed as inodes
+  will change.
+
+OSD - Object storage device. A generic term for a storage device with an
+  interface that extends beyond a block-oriented device interface.
