@@ -510,8 +510,11 @@ static int osc_cache_too_much(struct client_obd *cli)
 			return lru_shrink_max;
 		else if (pages >= budget / 2)
 			return lru_shrink_min;
+#if 0
 	} else if (pages >= budget * 2)
 		return lru_shrink_min;
+#endif
+	}
 	return 0;
 }
 
