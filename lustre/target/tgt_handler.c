@@ -931,6 +931,16 @@ int tgt_connect_check_sptlrpc(struct ptlrpc_request *req, struct obd_export *exp
 		spin_lock(&exp->exp_lock);
 		exp->exp_sp_peer = req->rq_sp_from;
 		exp->exp_flvr = flvr;
+
+		/* when on mgs, if no restriction is set, or if client
+		 * is loopback, allow any flavor */
+		if ((strcmp(exp->exp_obd->obd_type->typ_name,
+			   LUSTRE_MGS_NAME) == 0) &&
+		     (exp->exp_flvr.sf_rpc == SPTLRPC_FLVR_NULL ||
+		      LNET_NETTYP(LNET_NIDNET(exp->exp_connection->c_peer.nid))
+		      == LOLND))
+			exp->exp_flvr.sf_rpc = SPTLRPC_FLVR_ANY;
+
 		if (exp->exp_flvr.sf_rpc != SPTLRPC_FLVR_ANY &&
 		    exp->exp_flvr.sf_rpc != req->rq_flvr.sf_rpc) {
 			CERROR("%s: unauthorized rpc flavor %x from %s, "

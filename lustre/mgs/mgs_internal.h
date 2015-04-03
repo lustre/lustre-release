@@ -189,6 +189,8 @@ struct mgs_object {
 
 int mgs_init_fsdb_list(struct mgs_device *mgs);
 int mgs_cleanup_fsdb_list(struct mgs_device *mgs);
+int mgs__mgs_fsdb_setup(const struct lu_env *env, struct mgs_device *mgs,
+			struct fs_db *fsdb);
 int mgs_params_fsdb_setup(const struct lu_env *env, struct mgs_device *mgs,
 			  struct fs_db *fsdb);
 int mgs_params_fsdb_cleanup(const struct lu_env *env, struct mgs_device *mgs);

@@ -1084,6 +1084,7 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 	struct lustre_mount_info	*lmi;
 	struct llog_ctxt		*ctxt;
 	struct fs_db			*fsdb = NULL;
+	struct fs_db			*fsdb_srpc = NULL;
 	int				 rc;
 
 	ENTRY;
@@ -1163,6 +1164,9 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 		/* params fsdb and log can be setup later */
 		CERROR("%s: %s fsdb and log setup failed: rc = %d\n",
 		       obd->obd_name, PARAMS_FILENAME, rc);
+
+	/* Setup _mgs fsdb, useful for srpc */
+	mgs__mgs_fsdb_setup(env, mgs, fsdb_srpc);
 
 	ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
 			   "mgs_ldlm_client", &obd->obd_ldlm_client);

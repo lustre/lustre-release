@@ -348,6 +348,7 @@ static struct fs_db *mgs_new_fsdb(const struct lu_env *env,
 
         if (strcmp(fsname, MGSSELF_NAME) == 0) {
 		set_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags);
+		fsdb->fsdb_mgs = mgs;
         } else {
                 OBD_ALLOC(fsdb->fsdb_ost_index_map, INDEX_MAP_SIZE);
                 OBD_ALLOC(fsdb->fsdb_mdt_index_map, INDEX_MAP_SIZE);
@@ -3072,6 +3073,9 @@ static int mgs_srpc_set_param_mem(struct fs_db *fsdb,
                 }
 
                 rset = &tgtconf->mtsc_rset;
+	} else if (strcmp(svname, MGSSELF_NAME) == 0) {
+		/* put _mgs related srpc rule directly in mgs ruleset */
+		rset = &fsdb->fsdb_mgs->mgs_lut.lut_sptlrpc_rset;
         } else {
                 rset = &fsdb->fsdb_srpc_gen;
         }
@@ -3829,6 +3833,19 @@ static void print_lustre_cfg(struct lustre_cfg *lcfg)
                                lustre_cfg_string(lcfg, i));
                 }
         EXIT;
+}
+
+/* Setup _mgs fsdb and log
+ */
+int mgs__mgs_fsdb_setup(const struct lu_env *env, struct mgs_device *mgs,
+			  struct fs_db *fsdb)
+{
+	int			rc;
+	ENTRY;
+
+	rc = mgs_find_or_make_fsdb(env, mgs, MGSSELF_NAME, &fsdb);
+
+	RETURN(rc);
 }
 
 /* Setup params fsdb and log
