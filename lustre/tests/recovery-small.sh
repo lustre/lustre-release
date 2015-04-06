@@ -1362,6 +1362,39 @@ run_test 61 "Verify to not reuse orphan objects - bug 17025"
 #}
 #run_test 62 "Verify connection flags race - bug LU-1716"
 
+test_66()
+{
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.51) ]] ||
+		{ skip "Need MDS version at least 2.7.51"; return 0; }
+
+	local list=$(comma_list $(osts_nodes))
+
+	# modify dir so that next revalidate would not obtain UPDATE lock
+	touch $DIR
+
+	# drop 1 reply with UPDATE lock
+	mcreate $DIR/$tfile || error "mcreate failed: $?"
+	drop_ldlm_reply_once "stat $DIR/$tfile" &
+	sleep 2
+
+	# make the re-sent lock to sleep
+#define OBD_FAIL_MDS_RESEND              0x136
+	do_nodes $list $LCTL set_param fail_loc=0x80000136
+
+	#initiate the re-connect & re-send
+	local mdccli=$($LCTL dl | awk '/-mdc-/ {print $4;}')
+	local conn_uuid=$($LCTL get_param -n mdc.${mdccli}.mds_conn_uuid)
+	$LCTL set_param "mdc.${mdccli}.import=connection=${conn_uuid}"
+	sleep 2
+
+	#initiate the client eviction while enqueue re-send is in progress
+	mds_evict_client
+
+	client_reconnect
+	wait
+}
+run_test 66 "lock enqueue re-send vs client eviction"
+
 check_cli_ir_state()
 {
         local NODE=${1:-$HOSTNAME}
