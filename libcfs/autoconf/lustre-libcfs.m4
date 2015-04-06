@@ -138,6 +138,24 @@ sk_sleep, [
 ]) # LC_SK_SLEEP
 
 #
+# LIBCFS_KSTRTOUL
+#
+# 2.6.38 kstrtoul is added
+#
+AC_DEFUN([LIBCFS_KSTRTOUL], [
+LB_CHECK_COMPILE([if Linux kernel has 'kstrtoul'],
+kstrtoul, [
+	#include <linux/kernel.h>
+],[
+	unsigned long result;
+	return kstrtoul("12345", 0, &result);
+],[
+	AC_DEFINE(HAVE_KSTRTOUL, 1,
+		[kernel has kstrtoul])
+])
+]) # LIBCFS_KSTRTOUL
+
+#
 # LIBCFS_DUMP_TRACE_ADDRESS
 #
 # 2.6.39 adds a base pointer address argument to dump_trace
@@ -298,6 +316,8 @@ LC_SHRINKER_WANT_SHRINK_PTR
 LIBCFS_SYSCTL_CTLNAME
 # 2.6.35
 LC_SK_SLEEP
+# 2.6.38
+LIBCFS_KSTRTOUL
 # 2.6.39
 LIBCFS_DUMP_TRACE_ADDRESS
 # 2.6.40 fc15
