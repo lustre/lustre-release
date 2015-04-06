@@ -40,7 +40,7 @@ MANFILES = lustre.7 lfs.1 mount.lustre.8 lctl.8 lnetctl.8 \
 	llverdev.8 llbackup.8 llapi_quotactl.3 llobdstat.8 llstat.8 \
 	plot-llstat.8 l_getgroups.8 lst.8 routerstat.8 \
 	ll_recover_lost_found_objs.8 llog_reader.8 llapi_file_open.3 \
-	llapi_file_create.3 llapi_file_get_stripe.3 lustreapi.7 \
+	llapi_file_create.3 llapi_file_get_stripe.3 \
 	lustre_rsync.8 lfs_migrate.1 lhbadm.8 ldev.8 ldev.conf.5 nids.5 \
 	lfs-hsm.1 llapi_hsm_state_get.3 llapi_hsm_state_set.3 \
 	lustre_routes_config.8 lustre_routes_conversion.8 \
@@ -64,15 +64,23 @@ else
 DISTONLY_MANFILES = $(SERVER_MANFILES)
 endif
 
+# Generated manpages with their sources in ReST. Generated files are
+# not part of the dist target; they may or may not have been
+# generated (see --disable-manpages option).
+RST_MANFILES = lustreapi.rst
+GEN_MANFILES = lustreapi.7
+
 if UTILS
-man_MANS = $(MANFILES)
+if MANPAGES
+man_MANS = $(MANFILES) $(GEN_MANFILES)
+endif
 endif
 
 .rst.3 .rst.7:
 	@RST2MAN@ $? $@
 
-CLEANFILES = *.aux *.tex *.log *.pdf
+CLEANFILES = *.aux *.tex *.log *.pdf $(GEN_MANFILES)
 
-EXTRA_DIST = $(MANFILES) *.rst $(DISTONLY_MANFILES)
+EXTRA_DIST = $(MANFILES) $(RST_MANFILES) $(DISTONLY_MANFILES)
 
 all:

@@ -309,6 +309,27 @@ AC_SUBST(ENABLE_DOC)
 ]) # LB_CONFIG_DOCS
 
 #
+# LB_CONFIG_MANPAGES
+#
+# Build manpages?
+#
+AC_DEFUN([LB_CONFIG_MANPAGES], [
+AC_MSG_CHECKING([whether to build Lustre manpages])
+AC_ARG_ENABLE([manpages],
+	AC_HELP_STRING([--disable-manpages],
+			[skip creation and inclusion of man pages (default is enable)]),
+	[], [enable_manpages="yes"])
+AC_MSG_RESULT([$enable_manpages])
+AS_IF([test "x$enable_manpages" = xyes], [
+AC_CHECK_PROGS(RST2MAN, [rst2man rst2man.py], [])
+  if test "x$RST2MAN" = "x"; then
+    AC_MSG_ERROR(
+      [rst2man is needed to build the man pages. Install python-docutils.])
+fi
+])
+]) # LB_CONFIG_MANPAGES
+
+#
 # LB_CONFIG_HEADERS
 #
 # add -include config.h
@@ -401,6 +422,7 @@ AM_CONDITIONAL([MODULES], [test x$enable_modules = xyes])
 AM_CONDITIONAL([UTILS], [test x$enable_utils = xyes])
 AM_CONDITIONAL([TESTS], [test x$enable_tests = xyes])
 AM_CONDITIONAL([DOC], [test x$ENABLE_DOC = x1])
+AM_CONDITIONAL([MANPAGES], [test x$enable_manpages = xyes])
 AM_CONDITIONAL([LINUX], [test x$lb_target_os = xlinux])
 AM_CONDITIONAL([USES_DPKG], [test x$uses_dpkg = xyes])
 AM_CONDITIONAL([USE_QUILT], [test x$use_quilt = xyes])
@@ -525,6 +547,7 @@ for arg; do
 		--enable-utils | --disable-utils ) ;;
 		--enable-iokit | --disable-iokit ) ;;
 		--enable-dlc | --disable-dlc ) ;;
+		--enable-manpages | --disable-manpages ) ;;
 		* ) CONFIGURE_ARGS="$CONFIGURE_ARGS '$arg'" ;;
 	esac
 done
@@ -585,6 +608,9 @@ fi
 if test x$USE_DLC = xyes ; then
 	RPMBINARGS="$RPMBINARGS --with lnet_dlc"
 fi
+if test x$enable_manpages != xyes ; then
+	RPMBINARGS="$RPMBINARGS --without manpages"
+fi
 
 RPMBUILD_BINARY_ARGS=$RPMBINARGS
 RPMBUILD_SOURCE_ARGS=$RPMSRCARGS
@@ -620,17 +646,12 @@ LB_PROG_CC
 LC_OSD_ADDON
 
 LB_CONFIG_DOCS
+LB_CONFIG_MANPAGES
 LB_CONFIG_UTILS
 LB_CONFIG_TESTS
 LC_CONFIG_CLIENT
 LB_CONFIG_MPITESTS
 LB_CONFIG_SERVERS
-
-AC_CHECK_PROGS(RST2MAN, [rst2man rst2man.py], [])
-if test "x$RST2MAN" = "x"; then
-  AC_MSG_ERROR(
-    [rst2man is needed to build the man pages. Install python-docutils.])
-fi
 
 # Tests depends from utils (multiop from liblustreapi)
 AS_IF([test "x$enable_utils" = xno], [enable_tests="no"])
