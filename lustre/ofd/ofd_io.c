@@ -649,6 +649,7 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 err:
 	dt_bufs_put(env, ofd_object_child(fo), lnb, *nr_local);
 	ofd_read_unlock(env, fo);
+	ofd_object_put(env, fo);
 	/* ofd_grant_prepare_write() was called, so we must commit */
 	ofd_grant_commit(env, exp, rc);
 out:
