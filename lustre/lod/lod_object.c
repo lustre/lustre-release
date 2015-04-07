@@ -1813,7 +1813,7 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 		if (i == 0) {
 			/* Right now, master stripe and master object are
 			 * on the same MDT */
-			idx = le32_to_cpu(lum->lum_stripe_offset);
+			idx = lu_site2seq(lod2lu_dev(lod)->ld_site)->ss_node_id;
 			rc = obd_fid_alloc(env, lod->lod_child_exp, &fid,
 					   NULL);
 			if (rc < 0)
