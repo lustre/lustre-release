@@ -12876,6 +12876,16 @@ test_241() {
 }
 run_test 241 "bio vs dio"
 
+test_241b() {
+	dd if=/dev/zero of=$DIR/$tfile count=1 bs=40960
+	ls -la $DIR/$tfile
+	test_241_dio 1000 &
+	PID=$!
+	test_241_dio 1000
+	wait $PID
+}
+run_test 241b "dio vs dio"
+
 test_242() {
 	mkdir -p $DIR/$tdir
 	touch $DIR/$tdir/$tfile

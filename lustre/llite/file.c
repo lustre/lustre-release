@@ -1035,7 +1035,11 @@ restart:
 			vio->vui_nrsegs = args->u.normal.via_nrsegs;
 			vio->vui_tot_nrsegs = vio->vui_nrsegs;
 			vio->vui_iocb = args->u.normal.via_iocb;
-			if ((iot == CIT_WRITE) &&
+			/* Direct IO reads must also take range lock,
+			 * or multiple reads will try to work on the same pages
+			 * See LU-6227 for details. */
+			if (((iot == CIT_WRITE) ||
+			    (iot == CIT_READ && (file->f_flags & O_DIRECT))) &&
 			    !(vio->vui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
 				CDEBUG(D_VFSTRACE, "Range lock "RL_FMT"\n",
 				       RL_PARA(&range));
