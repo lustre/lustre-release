@@ -889,10 +889,11 @@ static int ll_ioc_copy_end(struct super_block *sb, struct hsm_copy *copy)
 			 * The policy engine will ask for a new archive later
 			 * when the file will not be modified for some tunable
 			 * time */
-			/* we do not notify caller */
 			hpk.hpk_flags &= ~HP_FLAG_RETRY;
+			rc = -EBUSY;
 			/* hpk_errval must be >= 0 */
-			hpk.hpk_errval = EBUSY;
+			hpk.hpk_errval = -rc;
+			GOTO(progress, rc);
 		}
 
 	}
