@@ -1798,8 +1798,6 @@ out:
  *
  * \param[in] env	pointer to the thread context
  * \param[in] com	pointer to the lfsck component
- * \paran[in] dir	pointer to the striped directory or its shard to be
- *			rescanned
  * \param[in] lnr	pointer to the namespace request that contains the
  *			striped directory or the shard
  *
@@ -1808,7 +1806,6 @@ out:
  */
 int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 				       struct lfsck_component *com,
-				       struct dt_object *dir,
 				       struct lfsck_namespace_req *lnr)
 {
 	struct lfsck_thread_info	*info	= lfsck_env_info(env);
@@ -1817,7 +1814,10 @@ int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 	struct lfsck_lmv		*llmv	= lnr->lnr_lmv;
 	struct lmv_mds_md_v1		*lmv	= &llmv->ll_lmv;
 	struct lmv_mds_md_v1		*lmv2	= &info->lti_lmv2;
-	const struct lu_fid		*pfid	= lfsck_dto2fid(dir);
+	struct lfsck_assistant_object	*lso	= lnr->lnr_lar.lar_parent;
+	const struct lu_fid		*pfid	= &lso->lso_fid;
+	struct dt_object		*dir	= NULL;
+	struct dt_object		*obj	= NULL;
 	struct lu_seq_range		*range	= &info->lti_range;
 	struct seq_server_site		*ss	= lfsck_dev_site(lfsck);
 	__u32				 stripe_count;
@@ -1829,8 +1829,7 @@ int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 	if (llmv->ll_lmv_slave) {
 		if (llmv->ll_lmv_verified) {
 			ns->ln_striped_shards_scanned++;
-			lfsck_namespace_trace_update(env, com,
-					lfsck_dto2fid(dir),
+			lfsck_namespace_trace_update(env, com, pfid,
 					LNTF_UNCERTAIN_LMV |
 					LNTF_RECHECK_NAME_HASH, false);
 		}
@@ -1879,6 +1878,15 @@ int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 	}
 
 	if (llmv->ll_lmv_updated) {
+		if (dir == NULL) {
+			dir = lfsck_assistant_object_load(env, lfsck, lso);
+			if (IS_ERR(dir)) {
+				rc = PTR_ERR(dir);
+
+				RETURN(rc == -ENOENT ? 0 : rc);
+			}
+		}
+
 		lmv->lmv_layout_version++;
 		rc = lfsck_namespace_update_lmv(env, com, dir, lmv, false);
 		if (rc != 0)
@@ -1890,7 +1898,6 @@ int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 
 	fld_range_set_mdt(range);
 	for (i = 0; i <= llmv->ll_max_filled_off; i++) {
-		struct dt_object *obj = NULL;
 		struct lfsck_slave_lmv_rec *lslr = llmv->ll_lslr + i;
 		const struct lu_fid *cfid = &lslr->lslr_fid;
 		const struct lu_name *cname;
@@ -1917,8 +1924,18 @@ int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 
 		obj = lfsck_object_find_bottom_nowait(env, lfsck, cfid);
 		if (IS_ERR(obj)) {
-			if (lfsck_is_dead_obj(dir))
-				RETURN(0);
+			if (dir == NULL) {
+				dir = lfsck_assistant_object_load(env, lfsck,
+								  lso);
+				if (IS_ERR(dir)) {
+					if (PTR_ERR(dir) == -ENOENT)
+						RETURN(0);
+
+					dir = NULL;
+				}
+			} else if (lfsck_is_dead_obj(dir)) {
+				GOTO(out, rc = 0);
+			}
 
 			rc1 = PTR_ERR(obj);
 			goto next;
@@ -1982,6 +1999,20 @@ int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 
 repair:
 		if (create) {
+			if (dir == NULL) {
+				dir = lfsck_assistant_object_load(env, lfsck,
+								  lso);
+				if (IS_ERR(dir)) {
+					rc1 = PTR_ERR(dir);
+
+					if (rc1 == -ENOENT)
+						GOTO(out, rc = 0);
+
+					dir = NULL;
+					goto next;
+				}
+			}
+
 			rc1 = lfsck_namespace_repair_dangling(env, com, dir,
 							      obj, lnr);
 			if (rc1 >= 0) {
@@ -2047,6 +2078,20 @@ repair:
 		}
 
 		if (rename) {
+			if (dir == NULL) {
+				dir = lfsck_assistant_object_load(env, lfsck,
+								  lso);
+				if (IS_ERR(dir)) {
+					rc1 = PTR_ERR(dir);
+
+					if (rc1 == -ENOENT)
+						GOTO(out, rc = 0);
+
+					dir = NULL;
+					goto next;
+				}
+			}
+
 			rc1 = lfsck_namespace_repair_dirent(env, com, dir, obj,
 					info->lti_tmpbuf2, lnr->lnr_name,
 					lnr->lnr_type, true, false);
@@ -2070,6 +2115,20 @@ repair:
 			rc1 = linkea_data_new(&ldata, &info->lti_big_buf);
 			if (rc1 != 0)
 				goto next;
+
+			if (dir == NULL) {
+				dir = lfsck_assistant_object_load(env, lfsck,
+								  lso);
+				if (IS_ERR(dir)) {
+					rc1 = PTR_ERR(dir);
+
+					if (rc1 == -ENOENT)
+						GOTO(out, rc = 0);
+
+					dir = NULL;
+					goto next;
+				}
+			}
 
 			rc1 = linkea_add_buf(&ldata, cname, lfsck_dto2fid(dir));
 			if (rc1 != 0)
@@ -2104,8 +2163,10 @@ next:
 		      repair_lmvea ? "yes" : "no",
 		      lmvea_repaired ? "yes" : "no", rc1);
 
-		if (obj != NULL && !IS_ERR(obj))
+		if (obj != NULL && !IS_ERR(obj)) {
 			lfsck_object_put(env, obj);
+			obj = NULL;
+		}
 
 		if (rc1 < 0) {
 			rc = rc1;
@@ -2113,7 +2174,16 @@ next:
 		}
 	}
 
-	RETURN(rc);
+	GOTO(out, rc);
+
+out:
+	if (obj != NULL && !IS_ERR(obj))
+		lfsck_object_put(env, obj);
+
+	if (dir != NULL && !IS_ERR(dir))
+		lfsck_object_put(env, dir);
+
+	return rc;
 }
 
 /**
@@ -2159,8 +2229,6 @@ next:
  *
  * \param[in] env	pointer to the thread context
  * \param[in] com	pointer to the lfsck component
- * \param[in] dir	pointer to the master MDT-object of the
- *			striped directory
  * \param[in] lnr	pointer to the namespace request that contains the
  *			shard's name, parent object, parent's LMV, and ect.
  *
@@ -2169,7 +2237,6 @@ next:
  */
 int lfsck_namespace_handle_striped_master(const struct lu_env *env,
 					  struct lfsck_component *com,
-					  struct dt_object *dir,
 					  struct lfsck_namespace_req *lnr)
 {
 	struct lfsck_thread_info   *info	= lfsck_env_info(env);
@@ -2177,7 +2244,9 @@ int lfsck_namespace_handle_striped_master(const struct lu_env *env,
 	struct lfsck_instance	   *lfsck	= com->lc_lfsck;
 	struct lfsck_namespace	   *ns		= com->lc_file_ram;
 	struct lfsck_lmv	   *llmv	= lnr->lnr_lmv;
-	const struct lu_fid	   *pfid	= lfsck_dto2fid(dir);
+	struct lfsck_assistant_object *lso	= lnr->lnr_lar.lar_parent;
+	const struct lu_fid	   *pfid	= &lso->lso_fid;
+	struct dt_object	   *dir;
 	struct dt_object	   *obj		= NULL;
 	struct dt_device	   *dev		= NULL;
 	int			    shard_idx	= 0;
@@ -2190,6 +2259,13 @@ int lfsck_namespace_handle_striped_master(const struct lu_env *env,
 
 	if (unlikely(llmv->ll_ignore))
 		RETURN(0);
+
+	dir = lfsck_assistant_object_load(env, lfsck, lso);
+	if (IS_ERR(dir)) {
+		rc = PTR_ERR(dir);
+
+		RETURN(rc == -ENOENT ? 0 : rc);
+	}
 
 	shard_idx = lfsck_find_mdt_idx_by_fid(env, lfsck, &lnr->lnr_fid);
 	if (shard_idx < 0)
@@ -2311,8 +2387,7 @@ out:
 		CDEBUG(D_LFSCK, "%s: namespace LFSCK assistant fail to handle "
 		       "the shard: "DFID", parent "DFID", name %.*s: rc = %d\n",
 		       lfsck_lfsck2name(lfsck), PFID(&lnr->lnr_fid),
-		       PFID(lfsck_dto2fid(dir)),
-		       lnr->lnr_namelen, lnr->lnr_name, rc);
+		       PFID(pfid), lnr->lnr_namelen, lnr->lnr_name, rc);
 
 		if ((rc == -ENOTCONN || rc == -ESHUTDOWN || rc == -EREMCHG ||
 		     rc == -ETIMEDOUT || rc == -EHOSTDOWN ||
@@ -2343,6 +2418,8 @@ out:
 
 	if (obj != NULL && !IS_ERR(obj))
 		lfsck_object_put(env, obj);
+
+	lfsck_object_put(env, dir);
 
 	return rc;
 }

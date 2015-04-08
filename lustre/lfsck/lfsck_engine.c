@@ -608,13 +608,14 @@ out:
 
 static int lfsck_exec_dir(const struct lu_env *env,
 			  struct lfsck_instance *lfsck,
+			  struct lfsck_assistant_object *lso,
 			  struct lu_dirent *ent, __u16 type)
 {
 	struct lfsck_component *com;
 	int			rc;
 
 	list_for_each_entry(com, &lfsck->li_list_scan, lc_link) {
-		rc = com->lc_ops->lfsck_exec_dir(env, com, ent, type);
+		rc = com->lc_ops->lfsck_exec_dir(env, com, lso, ent, type);
 		if (rc != 0)
 			return rc;
 	}
@@ -743,6 +744,7 @@ static int lfsck_master_dir_engine(const struct lu_env *env,
 			(struct lu_dirent *)info->lti_key;
 	struct lfsck_bookmark		*bk	= &lfsck->li_bookmark_ram;
 	struct ptlrpc_thread		*thread = &lfsck->li_thread;
+	struct lfsck_assistant_object	*lso	= NULL;
 	int				 rc;
 	__u16				 type;
 	ENTRY;
@@ -755,7 +757,7 @@ static int lfsck_master_dir_engine(const struct lu_env *env,
 			       lfsck_lfsck2name(lfsck),
 			       PFID(lfsck_dto2fid(dir)), lfsck->li_cookie_dir);
 
-			RETURN(0);
+			GOTO(out, rc = 0);
 		}
 
 		lfsck->li_new_scanned++;
@@ -773,7 +775,7 @@ static int lfsck_master_dir_engine(const struct lu_env *env,
 			       lfsck->li_cookie_dir, rc);
 			lfsck_fail(env, lfsck, true);
 			if (bk->lb_param & LPF_FAILOUT)
-				RETURN(rc);
+				GOTO(out, rc);
 			else
 				goto checkpoint;
 		}
@@ -786,16 +788,29 @@ static int lfsck_master_dir_engine(const struct lu_env *env,
 		if (ent->lde_namelen == 1 && ent->lde_name[0] == '.')
 			goto checkpoint;
 
+		if (lso == NULL) {
+			lso = lfsck_assistant_object_init(env,
+				lfsck_dto2fid(dir), NULL,
+				lfsck->li_pos_current.lp_oit_cookie, true);
+			if (IS_ERR(lso)) {
+				if (bk->lb_param & LPF_FAILOUT)
+					RETURN(PTR_ERR(lso));
+
+				lso = NULL;
+				goto checkpoint;
+			}
+		}
+
 		/* The type in the @ent structure may has been overwritten,
 		 * so we need to pass the @type parameter independently. */
-		rc = lfsck_exec_dir(env, lfsck, ent, type);
+		rc = lfsck_exec_dir(env, lfsck, lso, ent, type);
 		if (rc != 0 && bk->lb_param & LPF_FAILOUT)
-			RETURN(rc);
+			GOTO(out, rc);
 
 checkpoint:
 		rc = lfsck_checkpoint(env, lfsck);
 		if (rc != 0 && bk->lb_param & LPF_FAILOUT)
-			RETURN(rc);
+			GOTO(out, rc);
 
 		/* Rate control. */
 		lfsck_control_speed(lfsck);
@@ -805,14 +820,14 @@ checkpoint:
 			       lfsck_lfsck2name(lfsck),
 			       PFID(lfsck_dto2fid(dir)),
 			       lfsck->li_cookie_dir);
-			RETURN(0);
+			GOTO(out, rc = 0);
 		}
 
 		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_FATAL2)) {
 			spin_lock(&lfsck->li_lock);
 			thread_set_flags(thread, SVC_STOPPING);
 			spin_unlock(&lfsck->li_lock);
-			RETURN(-EINVAL);
+			GOTO(out, rc = -EINVAL);
 		}
 
 		rc = iops->next(env, di);
@@ -821,7 +836,13 @@ checkpoint:
 	if (rc > 0 && !lfsck->li_oit_over)
 		lfsck_close_dir(env, lfsck, rc);
 
-	RETURN(rc);
+	GOTO(out, rc);
+
+out:
+	if (lso != NULL)
+		lfsck_assistant_object_put(env, lso);
+
+	return rc;
 }
 
 /**

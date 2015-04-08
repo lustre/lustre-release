@@ -360,6 +360,15 @@ struct lfsck_layout {
 	__u8	ll_ost_bitmap[0];
 };
 
+struct lfsck_assistant_object {
+	struct lu_fid		lso_fid;
+	__u64			lso_oit_cookie;
+	struct lu_attr		lso_attr;
+	atomic_t		lso_ref;
+	unsigned int		lso_dead:1,
+				lso_is_dir:1;
+};
+
 struct lfsck_component;
 struct lfsck_tgt_descs;
 struct lfsck_tgt_desc;
@@ -393,6 +402,7 @@ struct lfsck_operations {
 
 	int (*lfsck_exec_dir)(const struct lu_env *env,
 			      struct lfsck_component *com,
+			      struct lfsck_assistant_object *lso,
 			      struct lu_dirent *ent,
 			      __u16 type);
 
@@ -718,21 +728,27 @@ struct lfsck_thread_args {
 };
 
 struct lfsck_assistant_req {
-	struct list_head	lar_list;
-	struct lu_fid		lar_fid;
+	struct list_head		 lar_list;
+	struct lfsck_assistant_object	*lar_parent;
 };
 
 struct lfsck_namespace_req {
 	struct lfsck_assistant_req	 lnr_lar;
 	struct lfsck_lmv		*lnr_lmv;
 	struct lu_fid			 lnr_fid;
-	__u64				 lnr_oit_cookie;
 	__u64				 lnr_dir_cookie;
 	__u32				 lnr_attr;
 	__u32				 lnr_size;
 	__u16				 lnr_type;
 	__u16				 lnr_namelen;
 	char				 lnr_name[0];
+};
+
+struct lfsck_layout_req {
+	struct lfsck_assistant_req	 llr_lar;
+	struct dt_object		*llr_child;
+	__u32				 llr_ost_idx;
+	__u32				 llr_lov_idx; /* offset in LOV EA */
 };
 
 struct lfsck_assistant_operations {
@@ -821,7 +837,6 @@ struct lfsck_thread_info {
 	struct lu_fid		lti_fid3;
 	struct lu_attr		lti_la;
 	struct lu_attr		lti_la2;
-	struct lu_attr		lti_la3;
 	struct ost_id		lti_oi;
 	union {
 		struct lustre_mdt_attrs lti_lma;
@@ -896,6 +911,14 @@ void lfsck_thread_args_fini(struct lfsck_thread_args *lta);
 struct lfsck_assistant_data *
 lfsck_assistant_data_init(struct lfsck_assistant_operations *lao,
 			  const char *name);
+struct lfsck_assistant_object *
+lfsck_assistant_object_init(const struct lu_env *env, const struct lu_fid *fid,
+			    const struct lu_attr *attr, __u64 cookie,
+			    bool is_dir);
+struct dt_object *
+lfsck_assistant_object_load(const struct lu_env *env,
+			    struct lfsck_instance *lfsck,
+			    struct lfsck_assistant_object *lso);
 int lfsck_async_interpret_common(const struct lu_env *env,
 				 struct ptlrpc_request *req,
 				 void *args, int rc);
@@ -1005,11 +1028,9 @@ int lfsck_namespace_repair_bad_name_hash(const struct lu_env *env,
 					 const char *name);
 int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 				       struct lfsck_component *com,
-				       struct dt_object *dir,
 				       struct lfsck_namespace_req *lnr);
 int lfsck_namespace_handle_striped_master(const struct lu_env *env,
 					  struct lfsck_component *com,
-					  struct dt_object *dir,
 					  struct lfsck_namespace_req *lnr);
 
 /* lfsck_layout.c */
@@ -1425,5 +1446,21 @@ static inline void lfsck_lmv_header_cpu_to_le(struct lmv_mds_md_v1 *dst,
 	dst->lmv_master_mdt_index = cpu_to_le32(src->lmv_master_mdt_index);
 	dst->lmv_hash_type = cpu_to_le32(src->lmv_hash_type);
 	dst->lmv_layout_version = cpu_to_le32(src->lmv_layout_version);
+}
+
+static inline struct lfsck_assistant_object *
+lfsck_assistant_object_get(struct lfsck_assistant_object *lso)
+{
+	atomic_inc(&lso->lso_ref);
+
+	return lso;
+}
+
+static inline void
+lfsck_assistant_object_put(const struct lu_env *env,
+			   struct lfsck_assistant_object *lso)
+{
+	if (atomic_dec_and_test(&lso->lso_ref))
+		OBD_FREE_PTR(lso);
 }
 #endif /* _LFSCK_INTERNAL_H */

@@ -1943,6 +1943,56 @@ lfsck_assistant_data_init(struct lfsck_assistant_operations *lao,
 	return lad;
 }
 
+struct lfsck_assistant_object *
+lfsck_assistant_object_init(const struct lu_env *env, const struct lu_fid *fid,
+			    const struct lu_attr *attr, __u64 cookie,
+			    bool is_dir)
+{
+	struct lfsck_assistant_object	*lso;
+
+	OBD_ALLOC_PTR(lso);
+	if (lso == NULL)
+		return ERR_PTR(-ENOMEM);
+
+	lso->lso_fid = *fid;
+	if (attr != NULL)
+		lso->lso_attr = *attr;
+
+	atomic_set(&lso->lso_ref, 1);
+	lso->lso_oit_cookie = cookie;
+	if (is_dir)
+		lso->lso_is_dir = 1;
+
+	return lso;
+}
+
+struct dt_object *
+lfsck_assistant_object_load(const struct lu_env *env,
+			    struct lfsck_instance *lfsck,
+			    struct lfsck_assistant_object *lso)
+{
+	struct dt_object *obj;
+
+	obj = lfsck_object_find_bottom(env, lfsck, &lso->lso_fid);
+	if (IS_ERR(obj))
+		return obj;
+
+	if (unlikely(!dt_object_exists(obj) || lfsck_is_dead_obj(obj))) {
+		lso->lso_dead = 1;
+		lfsck_object_put(env, obj);
+
+		return ERR_PTR(-ENOENT);
+	}
+
+	if (lso->lso_is_dir && unlikely(!dt_try_as_dir(env, obj))) {
+		lfsck_object_put(env, obj);
+
+		return ERR_PTR(-ENOTDIR);
+	}
+
+	return obj;
+}
+
 /**
  * Generic LFSCK asynchronous communication interpretor function.
  * The LFSCK RPC reply for both the event notification and status
