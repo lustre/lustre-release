@@ -2299,7 +2299,7 @@ int lfsck_namespace_handle_striped_master(const struct lu_env *env,
 			GOTO(out, rc);
 		}
 
-		ltd = LTD_TGT(&lfsck->li_mdt_descs, shard_idx);
+		ltd = lfsck_ltd2tgt(&lfsck->li_mdt_descs, shard_idx);
 		if (unlikely(ltd == NULL)) {
 			CDEBUG(D_LFSCK, "%s: cannot talk with MDT %x which "
 			       "did not join the namespace LFSCK\n",

@@ -4660,7 +4660,7 @@ log:
 	       lr->lr_index, lr->lr_status, lr->lr_flags2);
 
 	spin_lock(&ltds->ltd_lock);
-	ltd = LTD_TGT(ltds, lr->lr_index);
+	ltd = lfsck_ltd2tgt(ltds, lr->lr_index);
 	if (ltd == NULL) {
 		spin_unlock(&ltds->ltd_lock);
 
@@ -5113,7 +5113,7 @@ static int lfsck_namespace_assistant_handler_p1(const struct lu_env *env,
 			GOTO(out, rc);
 		}
 
-		ltd = LTD_TGT(&lfsck->li_mdt_descs, idx);
+		ltd = lfsck_ltd2tgt(&lfsck->li_mdt_descs, idx);
 		if (unlikely(ltd == NULL)) {
 			CDEBUG(D_LFSCK, "%s: cannot talk with MDT %x which "
 			       "did not join the namespace LFSCK\n",
@@ -6262,7 +6262,7 @@ static void lfsck_namespace_assistant_sync_failures(const struct lu_env *env,
 
 	down_read(&ltds->ltd_rw_sem);
 	cfs_foreach_bit(lad->lad_bitmap, idx) {
-		ltd = LTD_TGT(ltds, idx);
+		ltd = lfsck_ltd2tgt(ltds, idx);
 		LASSERT(ltd != NULL);
 
 		laia->laia_ltd = ltd;

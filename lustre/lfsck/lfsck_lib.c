@@ -149,7 +149,7 @@ static void lfsck_tgt_descs_fini(struct lfsck_tgt_descs *ltds)
 	}
 
 	cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
-		ltd = LTD_TGT(ltds, idx);
+		ltd = lfsck_ltd2tgt(ltds, idx);
 		if (likely(ltd != NULL)) {
 			LASSERT(list_empty(&ltd->ltd_layout_list));
 			LASSERT(list_empty(&ltd->ltd_layout_phase_list));
@@ -158,7 +158,7 @@ static void lfsck_tgt_descs_fini(struct lfsck_tgt_descs *ltds)
 
 			ltds->ltd_tgtnr--;
 			cfs_bitmap_clear(ltds->ltd_tgts_bitmap, idx);
-			LTD_TGT(ltds, idx) = NULL;
+			lfsck_assign_tgt(ltds, NULL, idx);
 			lfsck_tgt_put(ltd);
 		}
 	}
@@ -230,7 +230,7 @@ static int __lfsck_add_target(const struct lu_env *env,
 			GOTO(unlock, rc = -ENOMEM);
 	}
 
-	LTD_TGT(ltds, index) = ltd;
+	lfsck_assign_tgt(ltds, ltd, index);
 	cfs_bitmap_set(ltds->ltd_tgts_bitmap, index);
 	ltds->ltd_tgtnr++;
 
@@ -3512,7 +3512,7 @@ void lfsck_del_target(const struct lu_env *env, struct dt_device *key,
 	if (unlikely(index >= ltds->ltd_tgts_bitmap->size))
 		goto unlock;
 
-	ltd = LTD_TGT(ltds, index);
+	ltd = lfsck_ltd2tgt(ltds, index);
 	if (unlikely(ltd == NULL))
 		goto unlock;
 
@@ -3520,7 +3520,7 @@ void lfsck_del_target(const struct lu_env *env, struct dt_device *key,
 
 	ltds->ltd_tgtnr--;
 	cfs_bitmap_clear(ltds->ltd_tgts_bitmap, index);
-	LTD_TGT(ltds, index) = NULL;
+	lfsck_assign_tgt(ltds, NULL, index);
 
 unlock:
 	if (ltd == NULL) {

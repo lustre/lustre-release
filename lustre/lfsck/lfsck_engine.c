@@ -1381,7 +1381,7 @@ next:
 		spin_lock(&ltds->ltd_lock);
 		if (com->lc_type == LFSCK_TYPE_LAYOUT) {
 			cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
-				ltd = LTD_TGT(ltds, idx);
+				ltd = lfsck_ltd2tgt(ltds, idx);
 				LASSERT(ltd != NULL);
 
 				if (!list_empty(&ltd->ltd_layout_list))
@@ -1394,7 +1394,7 @@ next:
 			}
 		} else {
 			cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
-				ltd = LTD_TGT(ltds, idx);
+				ltd = lfsck_ltd2tgt(ltds, idx);
 				LASSERT(ltd != NULL);
 
 				if (!list_empty(&ltd->ltd_namespace_list))

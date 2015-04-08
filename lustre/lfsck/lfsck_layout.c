@@ -278,7 +278,7 @@ static void lfsck_layout_assistant_sync_failures(const struct lu_env *env,
 
 	down_read(&ltds->ltd_rw_sem);
 	cfs_foreach_bit(lad->lad_bitmap, idx) {
-		ltd = LTD_TGT(ltds, idx);
+		ltd = lfsck_ltd2tgt(ltds, idx);
 		LASSERT(ltd != NULL);
 
 		laia->laia_ltd = ltd;
@@ -5203,7 +5203,7 @@ static int lfsck_layout_master_in_notify(const struct lu_env *env,
 	else
 		ltds = &lfsck->li_mdt_descs;
 	spin_lock(&ltds->ltd_lock);
-	ltd = LTD_TGT(ltds, lr->lr_index);
+	ltd = lfsck_ltd2tgt(ltds, lr->lr_index);
 	if (ltd == NULL) {
 		spin_unlock(&ltds->ltd_lock);
 

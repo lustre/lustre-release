@@ -483,12 +483,30 @@ struct lfsck_tgt_descs {
 	__u32				 ltd_tgtnr;
 };
 
-#define LTD_TGT(ltd, index)	\
-	((ltd)->ltd_tgts_idx[(index) / TGT_PTRS_PER_BLOCK]->\
-	 ldi_tgts[(index) % TGT_PTRS_PER_BLOCK])
+static inline struct lfsck_tgt_desc *
+lfsck_ltd2tgt(struct lfsck_tgt_descs *ltd, __u32 index)
+{
+	__u32 idx1 = index / TGT_PTRS_PER_BLOCK;
+	__u32 idx2 = index % TGT_PTRS_PER_BLOCK;
+	struct lfsck_tgt_desc *__tgt = NULL;
 
-#define OST_TGT(lfsck, index)   LTD_TGT(&lfsck->li_ost_descs, index)
-#define MDT_TGT(lfsck, index)   LTD_TGT(&lfsck->li_mdt_descs, index)
+	if (unlikely(idx1 >= TGT_PTRS))
+		CDEBUG(D_LFSCK, "The target idx %u is invalid.\n", index);
+	else if (likely(ltd->ltd_tgts_idx[idx1] != NULL))
+		__tgt = ltd->ltd_tgts_idx[idx1]->ldi_tgts[idx2];
+
+	return __tgt;
+}
+
+static inline void lfsck_assign_tgt(struct lfsck_tgt_descs *ltd,
+				    struct lfsck_tgt_desc *tgt, __u32 index)
+{
+	__u32 idx1 = index / TGT_PTRS_PER_BLOCK;
+	__u32 idx2 = index % TGT_PTRS_PER_BLOCK;
+
+	if (likely(idx1 < TGT_PTRS && ltd->ltd_tgts_idx[idx1] != NULL))
+		ltd->ltd_tgts_idx[idx1]->ldi_tgts[idx2] = tgt;
+}
 
 #define LFSCK_STF_BITS	4
 /* If want to adjust the LFSCK_STF_COUNT, please change LFSCK_STF_BITS. */
@@ -1243,7 +1261,7 @@ lfsck_find_dev_by_fid(const struct lu_env *env, struct lfsck_instance *lfsck,
 	} else {
 		struct lfsck_tgt_desc *ltd;
 
-		ltd = LTD_TGT(&lfsck->li_mdt_descs, idx);
+		ltd = lfsck_ltd2tgt(&lfsck->li_mdt_descs, idx);
 		if (unlikely(ltd == NULL))
 			return ERR_PTR(-ENODEV);
 
@@ -1302,7 +1320,7 @@ static inline struct lfsck_tgt_desc *lfsck_tgt_get(struct lfsck_tgt_descs *ltds,
 {
 	struct lfsck_tgt_desc *ltd;
 
-	ltd = LTD_TGT(ltds, index);
+	ltd = lfsck_ltd2tgt(ltds, index);
 	if (ltd != NULL)
 		atomic_inc(&ltd->ltd_ref);
 
