@@ -202,6 +202,15 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 			}
 			break;
 		}
+
+		/* LU-6441: last md is not sent and desc->bd_md_count == 1 */
+		if (OBD_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_CLIENT_BULK_CB3,
+					 CFS_FAIL_ONCE) &&
+		    posted_md == desc->bd_md_max_brw - 1) {
+			posted_md++;
+			continue;
+		}
+
 		/* Network is about to get at the memory */
 		if (desc->bd_type == BULK_PUT_SOURCE)
 			rc = LNetPut(conn->c_self, desc->bd_mds[posted_md],
@@ -265,7 +274,7 @@ void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
 	 * one.  If it fails, it must be because completion just happened,
 	 * but we must still l_wait_event() in this case, to give liblustre
 	 * a chance to run server_bulk_callback()*/
-	mdunlink_iterate_helper(desc->bd_mds, desc->bd_md_count);
+	mdunlink_iterate_helper(desc->bd_mds, desc->bd_md_max_brw);
 
 	for (;;) {
 		/* Network access will complete in finite time but the HUGE

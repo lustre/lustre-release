@@ -12002,6 +12002,31 @@ test_224b() { # LU-1039, MRP-303
 }
 run_test 224b "Don't panic on bulk IO failure"
 
+test_224c() { # LU-6441
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	local pages_per_rpc=$($LCTL get_param \
+				osc.*.max_pages_per_rpc)
+	local at_max=$(do_facet mgs "$LCTL get_param -n at_max")
+	local timeout=$(do_facet mgs "$LCTL get_param -n timeout")
+
+	$LCTL set_param -n osc.*.max_pages_per_rpc=1024
+	do_facet mgs "$LCTL conf_param $FSNAME.sys.at_max=0"
+	do_facet mgs "$LCTL conf_param $FSNAME.sys.timeout=5"
+
+	#define OBD_FAIL_PTLRPC_CLIENT_BULK_CB3   0x520
+	$LCTL set_param fail_loc=0x520
+	dd if=/dev/zero of=$DIR/$tfile bs=8MB count=1
+	sync
+	$LCTL set_param fail_loc=0
+
+	do_facet mgs "$LCTL conf_param $FSNAME.sys.at_max=" \
+				"$at_max"
+	do_facet mgs "$LCTL conf_param $FSNAME.sys.timeout=" \
+				"$timeout"
+	$LCTL set_param -n $pages_per_rpc
+}
+run_test 224c "Don't hang if one of md lost during large bulk RPC"
+
 MDSSURVEY=${MDSSURVEY:-$(which mds-survey 2>/dev/null || true)}
 test_225a () {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
