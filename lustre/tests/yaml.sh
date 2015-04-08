@@ -73,13 +73,23 @@ yml_code_review() {
 }
 
 release() {
-	if [ -r /etc/lsb-release ]; then
-		dist=$(sed -ne '/^DISTRIB_ID/s/DISTRIB_ID=//p' /etc/lsb-release)
-	elif [ -r /etc/redhat-release ]; then
-		dist=$(awk '/release/ { printf("%s %s %s", $1, $2, $3) }' \
-			/etc/redhat-release)
+	if [ -r /etc/SuSE-release ]; then
+		name=$(awk '/SUSE/ { printf("%s %s %s %s", $1, $2, $3, $4) }' \
+			/etc/SuSE-release)
+		version=$(sed -n -e 's/^VERSION = //p' /etc/SuSE-release)
+		level=$(sed -n -e 's/^PATCHLEVEL = //p' /etc/SuSE-release)
+		dist="${name} ${version}.${level}"
+	elif [ -r /etc/os-release ]; then
+		name=$(sed -n -e 's/"//g' -e 's/^NAME=//p' /etc/os-release)
+		version=$(sed -n -e 's/"//g' -e 's/^VERSION_ID=//p' \
+			/etc/os-release)
+		dist="${name} ${version}"
+	elif [ -r /etc/system-release ]; then
+		dist=$(awk '/release/ \
+			{ printf("%s %s %s", $1, $2, $3) }' \
+			/etc/system-release)
 	elif [ -r /etc/*-release ]; then
-		dist=$(find /etc/ -maxdepth 1 -name '*release' 2> /dev/null |
+		dist=$(find /etc/ -maxdepth 1 -name '*release' 2> /dev/null | \
 			sed -e 's/\/etc\///' -e 's/-release//' | head -n1)
 	else
 		dist="UNKNOWN"
