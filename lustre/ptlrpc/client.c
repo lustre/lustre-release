@@ -1247,6 +1247,9 @@ static int after_reply(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
+	do_gettimeofday(&work_start);
+	timediff = cfs_timeval_sub(&work_start, &req->rq_sent_tv, NULL);
+
         /*
          * NB Until this point, the whole of the incoming message,
          * including buflens, status etc is in the sender's byte order.
@@ -1301,8 +1304,6 @@ static int after_reply(struct ptlrpc_request *req)
 		RETURN(0);
 	}
 
-	do_gettimeofday(&work_start);
-	timediff = cfs_timeval_sub(&work_start, &req->rq_sent_tv, NULL);
 	if (obd->obd_svc_stats != NULL) {
 		lprocfs_counter_add(obd->obd_svc_stats, PTLRPC_REQWAIT_CNTR,
 				    timediff);
