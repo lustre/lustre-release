@@ -301,133 +301,6 @@ osd_iget_fid(struct osd_thread_info *info, struct osd_device *dev,
 	return inode;
 }
 
-static struct inode *osd_iget_check(struct osd_thread_info *info,
-				    struct osd_device *dev,
-				    const struct lu_fid *fid,
-				    struct osd_inode_id *id,
-				    bool in_oi)
-{
-	struct inode	*inode;
-	int		 rc	= 0;
-	ENTRY;
-
-	inode = ldiskfs_iget(osd_sb(dev), id->oii_ino);
-	if (IS_ERR(inode)) {
-		rc = PTR_ERR(inode);
-		if (!in_oi || (rc != -ENOENT && rc != -ESTALE)) {
-			CDEBUG(D_INODE, "no inode: ino = %u, rc = %d\n",
-			       id->oii_ino, rc);
-
-			GOTO(put, rc);
-		}
-
-		goto check_oi;
-	}
-
-	if (is_bad_inode(inode)) {
-		rc = -ENOENT;
-		if (!in_oi) {
-			CDEBUG(D_INODE, "bad inode: ino = %u\n", id->oii_ino);
-
-			GOTO(put, rc);
-		}
-
-		goto check_oi;
-	}
-
-	if (id->oii_gen != OSD_OII_NOGEN &&
-	    inode->i_generation != id->oii_gen) {
-		rc = -ESTALE;
-		if (!in_oi) {
-			CDEBUG(D_INODE, "unmatched inode: ino = %u, "
-			       "oii_gen = %u, i_generation = %u\n",
-			       id->oii_ino, id->oii_gen, inode->i_generation);
-
-			GOTO(put, rc);
-		}
-
-		goto check_oi;
-	}
-
-	if (inode->i_nlink == 0) {
-		rc = -ENOENT;
-		if (!in_oi) {
-			CDEBUG(D_INODE, "stale inode: ino = %u\n", id->oii_ino);
-
-			GOTO(put, rc);
-		}
-
-		goto check_oi;
-	}
-
-check_oi:
-	if (rc != 0) {
-		struct osd_inode_id saved_id = *id;
-
-		LASSERTF(rc == -ESTALE || rc == -ENOENT, "rc = %d\n", rc);
-
-		rc = osd_oi_lookup(info, dev, fid, id, OI_CHECK_FLD);
-		/* XXX: There are some possible cases:
-		 *	1. rc = 0.
-		 *	   Backup/restore caused the OI invalid.
-		 *	2. rc = 0.
-		 *	   Someone unlinked the object but NOT removed
-		 *	   the OI mapping, such as mount target device
-		 *	   as ldiskfs, and modify something directly.
-		 *	3. rc = -ENOENT.
-		 *	   Someone just removed the object between the
-		 *	   former oi_lookup and the iget. It is normal.
-		 *	4. Other failure cases.
-		 *
-		 *	Generally, when the device is mounted, it will
-		 *	auto check whether the system is restored from
-		 *	file-level backup or not. We trust such detect
-		 *	to distinguish the 1st case from the 2nd case. */
-		if (rc == 0) {
-			if (!IS_ERR(inode) && inode->i_generation != 0 &&
-			    inode->i_generation == id->oii_gen) {
-				rc = -ENOENT;
-			} else {
-				__u32 level = D_LFSCK;
-
-				rc = -EREMCHG;
-				if (!thread_is_running(&dev->od_scrub.os_thread))
-					level |= D_CONSOLE;
-
-				CDEBUG(level, "%s: the OI mapping for the FID "
-				       DFID" become inconsistent, the given ID "
-				       "%u/%u, the ID in OI mapping %u/%u\n",
-				       osd_name(dev), PFID(fid),
-				       saved_id.oii_ino, saved_id.oii_gen,
-				       id->oii_ino, id->oii_ino);
-			}
-		}
-	} else {
-		if (id->oii_gen == OSD_OII_NOGEN)
-			osd_id_gen(id, inode->i_ino, inode->i_generation);
-
-		/* Do not update file c/mtime in ldiskfs.
-		 * NB: we don't have any lock to protect this because we don't
-		 * have reference on osd_object now, but contention with
-		 * another lookup + attr_set can't happen in the tiny window
-		 * between if (...) and set S_NOCMTIME. */
-		if (!(inode->i_flags & S_NOCMTIME))
-			inode->i_flags |= S_NOCMTIME;
-	}
-
-	GOTO(put, rc);
-
-put:
-	if (rc != 0) {
-		if (!IS_ERR(inode))
-			iput(inode);
-
-		inode = ERR_PTR(rc);
-	}
-
-	return inode;
-}
-
 /**
  * \retval +v: new filter_fid, does not contain self-fid
  * \retval 0:  filter_fid_old, contains self-fid
@@ -534,8 +407,6 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 	}
 
 	if (fid != NULL && unlikely(!lu_fid_eq(rfid, fid))) {
-		__u32 level = D_LFSCK;
-
 		if (fid_is_idif(rfid) && fid_is_idif(fid)) {
 			struct ost_id	*oi   = &info->oti_ostid;
 			struct lu_fid	*fid1 = &info->oti_fid3;
@@ -559,13 +430,7 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 			}
 		}
 
-
 		rc = -EREMCHG;
-		if (!thread_is_running(&osd->od_scrub.os_thread))
-			level |= D_CONSOLE;
-
-		CDEBUG(level, "%s: FID "DFID" != self_fid "DFID"\n",
-		       osd_name(osd), PFID(rfid), PFID(fid));
 	}
 
 	RETURN(rc);
@@ -586,6 +451,7 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	int			result;
 	int			saved  = 0;
 	bool			in_oi  = false;
+	bool			in_cache = false;
 	bool			triggered = false;
 	ENTRY;
 
@@ -615,6 +481,7 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	if (lu_fid_eq(fid, &oic->oic_fid) &&
 	    likely(oic->oic_dev == dev)) {
 		id = &oic->oic_lid;
+		in_cache = true;
 		goto iget;
 	}
 
@@ -629,8 +496,7 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	/* Search order: 3. OI files. */
 	result = osd_oi_lookup(info, dev, fid, id, OI_CHECK_FLD);
 	if (result == -ENOENT) {
-		if (!fid_is_norm(fid) ||
-		    fid_is_on_ost(info, dev, fid, OI_CHECK_FLD) ||
+		if (!(fid_is_norm(fid) || fid_is_igif(fid)) ||
 		    !ldiskfs_test_bit(osd_oi_fid2idx(dev,fid),
 				      sf->sf_oi_bitmap))
 			GOTO(out, result = 0);
@@ -644,91 +510,107 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	in_oi = true;
 
 iget:
-	inode = osd_iget_check(info, dev, fid, id, in_oi);
+	inode = osd_iget(info, dev, id);
 	if (IS_ERR(inode)) {
 		result = PTR_ERR(inode);
-		if (result == -ENOENT || result == -ESTALE) {
-			if (!in_oi)
-				fid_zero(&oic->oic_fid);
+		if (result != -ENOENT && result != -ESTALE)
+			GOTO(out, result);
 
-			GOTO(out, result = -ENOENT);
-		} else if (result == -EREMCHG) {
+		if (in_cache)
+			fid_zero(&oic->oic_fid);
+
+		result = osd_oi_lookup(info, dev, fid, id, OI_CHECK_FLD);
+		if (result != 0)
+			GOTO(out, result = (result == -ENOENT ? 0 : result));
+
+		/* The OI mapping is there, but the inode is NOT there.
+		 * Two possible cases for that:
+		 *
+		 * 1) Backup/restore caused the OI invalid.
+		 * 2) Someone unlinked the object but NOT removed
+		 *    the OI mapping, such as mount target device
+		 *    as ldiskfs, and modify something directly.
+		 *
+		 * Generally, when the device is mounted, it will
+		 * auto check whether the system is restored from
+		 * file-level backup or not. We trust such detect
+		 * to distinguish the 1st case from the 2nd case. */
+		if (!(scrub->os_file.sf_flags & SF_INCONSISTENT))
+			GOTO(out, result = 0);
 
 trigger:
-			if (!in_oi)
-				fid_zero(&oic->oic_fid);
+		if (unlikely(triggered))
+			GOTO(out, result = saved);
 
-			if (unlikely(triggered))
-				GOTO(out, result = saved);
-
-			triggered = true;
-			if (thread_is_running(&scrub->os_thread)) {
+		triggered = true;
+		if (thread_is_running(&scrub->os_thread)) {
+			result = -EINPROGRESS;
+		} else if (!dev->od_noscrub) {
+			/* Since we do not know the right OI mapping, we have
+			 * to trigger OI scrub to scan the whole device. */
+			result = osd_scrub_start(dev, SS_AUTO_FULL |
+				SS_CLEAR_DRYRUN | SS_CLEAR_FAILOUT);
+			CDEBUG(D_LFSCK | D_CONSOLE, "%.16s: trigger OI "
+			       "scrub by RPC for "DFID", rc = %d [1]\n",
+			       osd_name(dev), PFID(fid), result);
+			if (result == 0 || result == -EALREADY)
 				result = -EINPROGRESS;
-			} else if (!dev->od_noscrub) {
-				/* Since we do not know the right OI mapping,
-				 * we have to trigger OI scrub to scan the
-				 * whole device. */
-				result = osd_scrub_start(dev, SS_AUTO_FULL |
-					SS_CLEAR_DRYRUN | SS_CLEAR_FAILOUT);
-				CDEBUG(D_LFSCK | D_CONSOLE, "%.16s: trigger OI "
-				       "scrub by RPC for "DFID", rc = %d [1]\n",
-				       osd_name(dev), PFID(fid),result);
-				if (result == 0 || result == -EALREADY)
-					result = -EINPROGRESS;
-				else
-					result = -EREMCHG;
-			}
-
-			/* We still have chance to get the valid inode: for the
-			 * object which is referenced by remote name entry, the
-			 * object on the local MDT will be linked under the dir
-			 * of "/REMOTE_PARENT_DIR" with its FID string as name.
-			 *
-			 * We do not know whether the object for the given FID
-			 * is referenced by some remote name entry or not, and
-			 * especially for DNE II, a multiple-linked object may
-			 * have many name entries reside on many MDTs.
-			 *
-			 * To simplify the operation, OSD will not distinguish
-			 * more, just lookup "/REMOTE_PARENT_DIR". Usually, it
-			 * only happened for the RPC from other MDT during the
-			 * OI scrub, or for the client side RPC with FID only,
-			 * such as FID to path, or from old connected client. */
-			saved = result;
-			result = osd_lookup_in_remote_parent(info, dev,
-							     fid, id);
-			if (result == 0) {
-				in_oi = false;
-				goto iget;
-			}
-
-			result = saved;
+			else
+				result = -EREMCHG;
 		}
 
-                GOTO(out, result);
-        }
+		/* We still have chance to get the valid inode: for the
+		 * object which is referenced by remote name entry, the
+		 * object on the local MDT will be linked under the dir
+		 * of "/REMOTE_PARENT_DIR" with its FID string as name.
+		 *
+		 * We do not know whether the object for the given FID
+		 * is referenced by some remote name entry or not, and
+		 * especially for DNE II, a multiple-linked object may
+		 * have many name entries reside on many MDTs.
+		 *
+		 * To simplify the operation, OSD will not distinguish
+		 * more, just lookup "/REMOTE_PARENT_DIR". Usually, it
+		 * only happened for the RPC from other MDT during the
+		 * OI scrub, or for the client side RPC with FID only,
+		 * such as FID to path, or from old connected client. */
+		saved = result;
+		result = osd_lookup_in_remote_parent(info, dev, fid, id);
+		if (result == 0) {
+			in_oi = false;
+			goto iget;
+		}
 
-        obj->oo_inode = inode;
-        LASSERT(obj->oo_inode->i_sb == osd_sb(dev));
+		GOTO(out, result = saved);
+	}
+
+	obj->oo_inode = inode;
+	LASSERT(obj->oo_inode->i_sb == osd_sb(dev));
 
 	result = osd_check_lma(env, obj);
 	if (result != 0) {
 		iput(inode);
 		obj->oo_inode = NULL;
-		if (result == -EREMCHG) {
-			if (!in_oi) {
-				result = osd_oi_lookup(info, dev, fid, id,
-						       OI_CHECK_FLD);
-				if (result != 0) {
-					fid_zero(&oic->oic_fid);
-					GOTO(out, result);
-				}
-			}
 
+		if (result != -EREMCHG)
+			GOTO(out, result);
+
+		if (in_cache)
+			fid_zero(&oic->oic_fid);
+
+		result = osd_oi_lookup(info, dev, fid, id, OI_CHECK_FLD);
+		if (result == 0)
 			goto trigger;
-		}
 
-		GOTO(out, result);
+		if (result != -ENOENT)
+			GOTO(out, result);
+
+		if (!in_oi && (fid_is_norm(fid) || fid_is_igif(fid)) &&
+		    ldiskfs_test_bit(osd_oi_fid2idx(dev, fid),
+				     sf->sf_oi_bitmap))
+			goto trigger;
+
+		GOTO(out, result = 0);
 	}
 
 	obj->oo_compat_dot_created = 1;
