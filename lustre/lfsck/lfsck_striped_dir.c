@@ -196,7 +196,7 @@ void lfsck_lmv_put(const struct lu_env *env, struct lfsck_lmv *llmv)
  * \param[in] del_lmv	true if need to drop the LMV EA
  *
  * \retval		positive number if nothing to be done
- * \retval		zero for succeed
+ * \retval		zero for success
  * \retval		negative error number on failure
  */
 static int lfsck_disable_master_lmv(const struct lu_env *env,
@@ -295,7 +295,7 @@ static inline bool lfsck_is_valid_slave_lmv(struct lmv_mds_md_v1 *lmv)
  *			striped directory to be handled and other information
  *
  * \retval		positive number if nothing to be done
- * \retval		zero for succeed
+ * \retval		zero for success
  * \retval		negative error number on failure
  */
 static int lfsck_remove_lmv(const struct lu_env *env,
@@ -379,7 +379,7 @@ static int lfsck_remove_dirent(const struct lu_env *env,
  * \param[in] index	the old shard's index in the striped directory
  * \param[in] flags	the new shard's flags in the @lslr slot
  *
- * \retval		zero for succeed
+ * \retval		zero for success
  * \retval		negative error number on failure
  */
 static int lfsck_replace_lmv(const struct lu_env *env,
@@ -476,7 +476,7 @@ static int lfsck_replace_lmv(const struct lu_env *env,
  *			we define the max depth can be called recursively
  *			(LFSCK_REC_LMV_MAX_DEPTH)
  *
- * \retval		zero for succeed
+ * \retval		zero for success
  * \retval		"-ERANGE" for invalid @shard_idx
  * \retval		"-EEXIST" for the required lslr slot has been
  *			occupied by other shard
@@ -1191,7 +1191,7 @@ out:
  * \param[in] index	the MDT index on which the LFSCK instance to be notified
  *
  * \retval		positive number if nothing to be done
- * \retval		zero for succeed
+ * \retval		zero for success
  * \retval		negative error number on failure
  */
 static int lfsck_namespace_notify_lmv_remote(const struct lu_env *env,
@@ -1258,7 +1258,7 @@ out:
  * \param[in] obj	pointer to the striped directory to be rescanned
  *
  * \retval		positive number if nothing to be done
- * \retval		zero for succeed
+ * \retval		zero for success
  * \retval		negative error number on failure
  */
 int lfsck_namespace_notify_lmv_master_local(const struct lu_env *env,
@@ -1353,7 +1353,7 @@ int lfsck_namespace_notify_lmv_master_local(const struct lu_env *env,
  * \param[in] flags	to indicate which element(s) in the LMV EA will be set
  *
  * \retval		positive number if nothing to be done
- * \retval		zero for succeed
+ * \retval		zero for success
  * \retval		negative error number on failure
  */
 static int lfsck_namespace_set_lmv_master(const struct lu_env *env,
@@ -1467,7 +1467,7 @@ log:
  * \param[in] name	the name of the bad name hash
  *
  * \retval		positive number if nothing to be done
- * \retval		zero for succeed
+ * \retval		zero for success
  * \retval		negative error number on failure
  */
 int lfsck_namespace_repair_bad_name_hash(const struct lu_env *env,
@@ -1492,6 +1492,12 @@ int lfsck_namespace_repair_bad_name_hash(const struct lu_env *env,
 	parent = lfsck_object_find_bottom(env, lfsck, pfid);
 	if (IS_ERR(parent))
 		GOTO(log, rc = PTR_ERR(parent));
+
+	if (unlikely(!dt_object_exists(parent)))
+		/* The parent object was previously accessed when verifying
+		 * the slave LMV EA.  If this condition is true it is because
+		 * the striped directory is being removed. */
+		GOTO(log, rc = 1);
 
 	*lmv2 = llmv->ll_lmv;
 	lmv2->lmv_hash_type = LMV_HASH_TYPE_UNKNOWN | LMV_HASH_FLAG_BAD_TYPE;
@@ -1613,7 +1619,7 @@ int lfsck_namespace_scan_shard(const struct lu_env *env,
 			ns->ln_flags |= LF_INCONSISTENT;
 			rc = lfsck_namespace_repair_bad_name_hash(env, com,
 						child, llmv, ent->lde_name);
-			if (rc >= 0)
+			if (rc == 0)
 				ns->ln_name_hash_repaired++;
 		}
 
@@ -1659,7 +1665,8 @@ out:
  * \param[in] obj	pointer to the object which LMV EA will be checked
  * \param[in] llmv	pointer to buffer holding the slave LMV EA
  *
- * \retval		zero for succeed
+ * \retval		positive number if nothing to be done
+ * \retval		zero for success
  * \retval		negative error number on failure
  */
 int lfsck_namespace_verify_stripe_slave(const struct lu_env *env,
@@ -1703,6 +1710,9 @@ int lfsck_namespace_verify_stripe_slave(const struct lu_env *env,
 
 		GOTO(out, rc);
 	}
+
+	if (unlikely(!dt_object_exists(parent)))
+		GOTO(out, rc = 1);
 
 	if (unlikely(!dt_try_as_dir(env, parent)))
 		GOTO(out, rc = -ENOTDIR);
@@ -1801,7 +1811,7 @@ out:
  * \param[in] lnr	pointer to the namespace request that contains the
  *			striped directory or the shard
  *
- * \retval		zero for succeed
+ * \retval		zero for success
  * \retval		negative error number on failure
  */
 int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
@@ -2232,7 +2242,7 @@ out:
  * \param[in] lnr	pointer to the namespace request that contains the
  *			shard's name, parent object, parent's LMV, and ect.
  *
- * \retval		zero for succeed
+ * \retval		zero for success
  * \retval		negative error number on failure
  */
 int lfsck_namespace_handle_striped_master(const struct lu_env *env,

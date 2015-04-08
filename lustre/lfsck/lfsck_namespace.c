@@ -557,7 +557,7 @@ static int lfsck_namespace_init(const struct lu_env *env,
  *			trace file
  * \param[in] add	true if add new flags, otherwise remove flags
  *
- * \retval		0 for succeed or nothing to be done
+ * \retval		0 for success or nothing to be done
  * \retval		negative error number on failure
  */
 int lfsck_namespace_trace_update(const struct lu_env *env,
@@ -2150,7 +2150,7 @@ log:
 	       "entry for: parent "DFID", child "DFID", name %s, type "
 	       "in name entry %o, type claimed by child %o. repair it "
 	       "by %s with new name2 %s: rc = %d\n", lfsck_lfsck2name(lfsck),
-	       PFID(lfsck_dto2fid(parent)), PFID(lfsck_dto2fid(child)),
+	       PFID(lfsck_dto2fid(parent)), PFID(cfid),
 	       name, type, update ? lfsck_object_type(child) : 0,
 	       update ? "updating" : "removing", name2, rc);
 
@@ -4539,7 +4539,7 @@ static int lfsck_namespace_in_notify(const struct lu_env *env,
 	struct lfsck_assistant_data	*lad   = com->lc_data;
 	struct lfsck_tgt_descs		*ltds  = &lfsck->li_mdt_descs;
 	struct lfsck_tgt_desc		*ltd;
-	int				 rc;
+	int				 rc    = 0;
 	bool				 fail  = false;
 	ENTRY;
 
@@ -4630,7 +4630,10 @@ log:
 		if (IS_ERR(obj))
 			RETURN(PTR_ERR(obj));
 
-		rc = lfsck_namespace_notify_lmv_master_local(env, com, obj);
+		if (likely(dt_object_exists(obj)))
+			rc = lfsck_namespace_notify_lmv_master_local(env, com,
+								     obj);
+
 		lfsck_object_put(env, obj);
 
 		RETURN(rc > 0 ? 0 : rc);
@@ -5390,7 +5393,7 @@ out:
 
 		rc = lfsck_namespace_repair_bad_name_hash(env, com, dir,
 						lnr->lnr_lmv, lnr->lnr_name);
-		if (rc >= 0)
+		if (rc == 0)
 			bad_hash = true;
 	}
 
