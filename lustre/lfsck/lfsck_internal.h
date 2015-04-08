@@ -813,6 +813,7 @@ struct lfsck_assistant_data {
 						 lad_in_double_scan:1,
 						 lad_exit:1,
 						 lad_incomplete:1;
+	bool					 lad_advance_lock;
 };
 
 #define LFSCK_TMPBUF_LEN	64

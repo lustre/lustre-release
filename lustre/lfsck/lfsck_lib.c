@@ -2400,6 +2400,7 @@ int lfsck_start_assistant(const struct lu_env *env, struct lfsck_component *com,
 	lad->lad_to_double_scan = 0;
 	lad->lad_in_double_scan = 0;
 	lad->lad_exit = 0;
+	lad->lad_advance_lock = false;
 	thread_set_flags(athread, 0);
 
 	lta = lfsck_thread_args_init(lfsck, com, lsp);
