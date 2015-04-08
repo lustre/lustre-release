@@ -73,7 +73,7 @@ Index: linux-2.6.32-504.3.3.el6.x86_64/fs/ext4/ext4_jbd2.h
 +	/* Add the jce to transaction's private list */
 +	jce->jce_func = func;
 +	spin_lock(&sbi->s_md_lock);
-+	list_add_tail(&jce->jce_list, &handle->h_transaction->t_private_list);
++	list_add(&jce->jce_list, &handle->h_transaction->t_private_list);
 +	spin_unlock(&sbi->s_md_lock);
 +}
 +

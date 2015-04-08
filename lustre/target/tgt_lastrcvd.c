@@ -761,14 +761,19 @@ static void tgt_cb_last_committed(struct lu_env *env, struct thandle *th,
 
 	ccb = container_of0(cb, struct tgt_last_committed_callback, llcc_cb);
 
+	LASSERT(ccb->llcc_exp);
 	LASSERT(ccb->llcc_tgt != NULL);
 	LASSERT(ccb->llcc_exp->exp_obd == ccb->llcc_tgt->lut_obd);
 
+	/* Fast path w/o spinlock, if exp_last_committed was updated
+	 * with higher transno, no need to take spinlock and check,
+	 * also no need to update obd_last_committed. */
+	if (ccb->llcc_transno <= ccb->llcc_exp->exp_last_committed)
+		goto out;
 	spin_lock(&ccb->llcc_tgt->lut_translock);
 	if (ccb->llcc_transno > ccb->llcc_tgt->lut_obd->obd_last_committed)
 		ccb->llcc_tgt->lut_obd->obd_last_committed = ccb->llcc_transno;
 
-	LASSERT(ccb->llcc_exp);
 	if (ccb->llcc_transno > ccb->llcc_exp->exp_last_committed) {
 		ccb->llcc_exp->exp_last_committed = ccb->llcc_transno;
 		spin_unlock(&ccb->llcc_tgt->lut_translock);
@@ -776,6 +781,7 @@ static void tgt_cb_last_committed(struct lu_env *env, struct thandle *th,
 	} else {
 		spin_unlock(&ccb->llcc_tgt->lut_translock);
 	}
+out:
 	class_export_cb_put(ccb->llcc_exp);
 	if (ccb->llcc_transno)
 		CDEBUG(D_HA, "%s: transno "LPD64" is committed\n",
