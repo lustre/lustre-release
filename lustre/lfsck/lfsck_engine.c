@@ -1694,6 +1694,9 @@ int lfsck_assistant_engine(void *args)
 			lad->lad_to_post = 0;
 			LASSERT(lad->lad_post_result > 0);
 
+			/* Wakeup the master engine to go ahead. */
+			wake_up_all(&mthread->t_ctl_waitq);
+
 			memset(lr, 0, sizeof(*lr));
 			lr->lr_event = LE_PHASE1_DONE;
 			lr->lr_status = lad->lad_post_result;
@@ -1703,9 +1706,6 @@ int lfsck_assistant_engine(void *args)
 			       "others for %s post: rc = %d\n",
 			       lfsck_lfsck2name(lfsck),
 			       lad->lad_name, rc);
-
-			/* Wakeup the master engine to go ahead. */
-			wake_up_all(&mthread->t_ctl_waitq);
 		}
 
 		if (lad->lad_to_double_scan) {

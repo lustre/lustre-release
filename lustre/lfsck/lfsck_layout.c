@@ -1336,7 +1336,7 @@ static int lfsck_layout_double_scan_result(const struct lu_env *env,
 
 	down_write(&com->lc_sem);
 	lo->ll_run_time_phase2 += cfs_duration_sec(cfs_time_current() +
-				HALF_SEC - lfsck->li_time_last_checkpoint);
+				  HALF_SEC - com->lc_time_last_checkpoint);
 	lo->ll_time_last_checkpoint = cfs_time_current_sec();
 	lo->ll_objs_checked_phase2 += com->lc_new_checked;
 
@@ -4851,7 +4851,7 @@ static int lfsck_layout_dump(const struct lu_env *env,
 
 	} else if (lo->ll_status == LS_SCANNING_PHASE2) {
 		cfs_duration_t duration = cfs_time_current() -
-					  lfsck->li_time_last_checkpoint;
+					  com->lc_time_last_checkpoint;
 		__u64 checked = lo->ll_objs_checked_phase2 +
 				com->lc_new_checked;
 		__u64 speed1 = lo->ll_objs_checked_phase1;
