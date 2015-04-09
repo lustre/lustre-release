@@ -42,7 +42,7 @@ fi
 
 stopall
 do_rpc_nodes $(facet_active_host $SINGLEMDS) load_modules_local
-reformat_external_journal
+reformat_external_journal ${SINGLEMDS}
 add ${SINGLEMDS} $(mkfs_opts ${SINGLEMDS} ${MDT_DEVNAME}) --backfstype ldiskfs \
 	--reformat ${MDT_DEVNAME} $(mdsvdevname 1) > /dev/null || exit 2
 
