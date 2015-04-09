@@ -854,7 +854,7 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 		/* For short writes we shouldn't count parts of pages that
 		 * span a whole chunk on the OST side, or our accounting goes
 		 * wrong.  Should match the code in filter_grant_check. */
-		int offset = last_off & ~CFS_PAGE_MASK;
+		int offset = last_off & ~PAGE_MASK;
 		int count = last_count + (offset & (blocksize - 1));
 		int end = (offset + last_count) & (blocksize - 1);
 		if (end)
@@ -2259,7 +2259,7 @@ int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
 
 	oap->oap_page = page;
 	oap->oap_obj_off = offset;
-	LASSERT(!(offset & ~CFS_PAGE_MASK));
+	LASSERT(!(offset & ~PAGE_MASK));
 
 	if (!client_is_remote(exp) && cfs_capable(CFS_CAP_SYS_RESOURCE))
 		oap->oap_brw_flags = OBD_BRW_NOQUOTA;

@@ -1025,7 +1025,7 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 			if (off)
 				memset(p, 0, off);
 			off = (lnb[i].lnb_page_offset + lnb[i].lnb_len) &
-			      ~CFS_PAGE_MASK;
+			      ~PAGE_MASK;
 			if (off)
 				memset(p + off, 0, PAGE_CACHE_SIZE - off);
 			kunmap(lnb[i].lnb_page);
@@ -1794,7 +1794,7 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 	 * For a partial-page truncate, flush the page to disk immediately to
 	 * avoid data corruption during direct disk write.  b=17397
 	 */
-	if ((start & ~CFS_PAGE_MASK) != 0)
+	if ((start & ~PAGE_MASK) != 0)
                 rc = filemap_fdatawrite_range(inode->i_mapping, start, start+1);
 
         h = journal_current_handle();

@@ -209,6 +209,60 @@ int cfs_cpt_spread_node(struct cfs_cpt_table *cptab, int cpt);
 int cfs_cpu_ht_nsiblings(int cpu);
 
 /**
+ * allocate \a nr_bytes of physical memory from a contiguous region with the
+ * properties of \a flags which are bound to the partition id \a cpt. This
+ * function should only be used for the case when only a few pages of memory
+ * are need.
+ */
+static inline void *
+cfs_cpt_malloc(struct cfs_cpt_table *cptab, int cpt, size_t nr_bytes,
+	       gfp_t flags)
+{
+	return kmalloc_node(nr_bytes, flags,
+			    cfs_cpt_spread_node(cptab, cpt));
+}
+
+/**
+ * allocate \a nr_bytes of virtually contiguous memory that is bound to the
+ * partition id \a cpt.
+ */
+static inline void *
+cfs_cpt_vzalloc(struct cfs_cpt_table *cptab, int cpt, size_t nr_bytes)
+{
+	/* vzalloc_node() sets __GFP_FS by default but no current Kernel
+	 * exported entry-point allows for both a NUMA node specification
+	 * and a custom allocation flags mask. This may be an issue since
+	 * __GFP_FS usage can cause some deadlock situations in our code,
+	 * like when memory reclaim started, within the same context of a
+	 * thread doing FS operations, that can also attempt conflicting FS
+	 * operations, ...
+	 */
+	return vzalloc_node(nr_bytes, cfs_cpt_spread_node(cptab, cpt));
+}
+
+/**
+ * allocate a single page of memory with the properties of \a flags were
+ * that page is bound to the partition id \a cpt.
+ */
+static inline struct page *
+cfs_page_cpt_alloc(struct cfs_cpt_table *cptab, int cpt, gfp_t flags)
+{
+	return alloc_pages_node(cfs_cpt_spread_node(cptab, cpt), flags, 0);
+}
+
+/**
+ * allocate a chunck of memory from a memory pool that is bound to the
+ * partition id \a cpt with the properites of \a flags.
+ */
+static inline void *
+cfs_mem_cache_cpt_alloc(struct kmem_cache *cachep, struct cfs_cpt_table *cptab,
+			int cpt, gfp_t flags)
+{
+	return kmem_cache_alloc_node(cachep, flags,
+				     cfs_cpt_spread_node(cptab, cpt));
+}
+
+/**
  * iterate over all CPU partitions in \a cptab
  */
 #define cfs_cpt_for_each(i, cptab)	\

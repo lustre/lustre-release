@@ -55,17 +55,6 @@
 #include <linux/backing-dev.h>
 #include <linux/posix_acl_xattr.h>
 
-#define filp_size(f)					\
-	(i_size_read((f)->f_dentry->d_inode))
-#define filp_poff(f)					\
-	(&(f)->f_pos)
-
-#define filp_read(fp, buf, size, pos)			\
-	((fp)->f_op->read((fp), (buf), (size), pos))
-
-#define filp_write(fp, buf, size, pos)			\
-	((fp)->f_op->write((fp), (buf), (size), pos))
-
 #if defined(HAVE_FILE_FSYNC_4ARGS) || defined(HAVE_FILE_FSYNC_2ARGS)
 #define ll_vfs_fsync_range(fp, start, end, datasync) \
 	vfs_fsync_range(fp, start, end, datasync)

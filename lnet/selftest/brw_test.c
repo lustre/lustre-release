@@ -448,7 +448,7 @@ brw_server_handle(struct srpc_server_rpc *rpc)
 
 	if ((reqstmsg->msg_ses_feats & LST_FEAT_BULK_LEN) == 0) {
 		/* compat with old version */
-		if ((reqst->brw_len & ~CFS_PAGE_MASK) != 0) {
+		if ((reqst->brw_len & ~PAGE_MASK) != 0) {
 			reply->brw_status = EINVAL;
 			return 0;
 		}

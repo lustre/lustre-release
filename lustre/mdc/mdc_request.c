@@ -1118,7 +1118,7 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
  *  |        |
  * .|--------v-------   -----.
  * |s|e|f|p|ent|ent| ... |ent|
- * '--|--------------   -----'   Each CFS_PAGE contains a single
+ * '--|--------------   -----'   Each PAGE contains a single
  *    '------.                   lu_dirpage.
  * .---------v-------   -----.
  * |s|e|f|p|ent| 0 | ... | 0 |
@@ -1128,26 +1128,26 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
  * larger than LU_PAGE_SIZE, a single host page may contain multiple
  * lu_dirpages. After reading the lu_dirpages from the MDS, the
  * ldp_hash_end of the first lu_dirpage refers to the one immediately
- * after it in the same CFS_PAGE (arrows simplified for brevity, but
+ * after it in the same PAGE (arrows simplified for brevity, but
  * in general e0==s1, e1==s2, etc.):
  *
  * .--------------------   -----.
  * |s0|e0|f0|p|ent|ent| ... |ent|
  * |---v----------------   -----|
  * |s1|e1|f1|p|ent|ent| ... |ent|
- * |---v----------------   -----|  Here, each CFS_PAGE contains
+ * |---v----------------   -----|  Here, each PAGE contains
  *             ...                 multiple lu_dirpages.
  * |---v----------------   -----|
  * |s'|e'|f'|p|ent|ent| ... |ent|
  * '---|----------------   -----'
  *     v
  * .----------------------------.
- * |        next CFS_PAGE       |
+ * |        next PAGE           |
  *
  * This structure is transformed into a single logical lu_dirpage as follows:
  *
  * - Replace e0 with e' so the request for the next lu_dirpage gets the page
- *   labeled 'next CFS_PAGE'.
+ *   labeled 'next PAGE'.
  *
  * - Copy the LDF_COLLIDE flag from f' to f0 to correctly reflect whether
  *   a hash collision with the next page exists.
@@ -1176,8 +1176,8 @@ static void mdc_adjust_dirpages(struct page **pages, int cfs_pgs, int lu_pgs)
 			/* Advance dp to next lu_dirpage. */
 			dp = (struct lu_dirpage *)((char *)dp + LU_PAGE_SIZE);
 
-			/* Check if we've reached the end of the CFS_PAGE. */
-			if (!((unsigned long)dp & ~CFS_PAGE_MASK))
+			/* Check if we've reached the end of the PAGE. */
+			if (!((unsigned long)dp & ~PAGE_MASK))
 				break;
 
 			/* Save the hash and flags of this lu_dirpage. */
@@ -1232,7 +1232,7 @@ static inline void delete_from_page_cache(struct page *page)
  * a header lu_dirpage which describes the start/end hash, and whether this
  * page is empty (contains no dir entry) or hash collide with next page.
  * After client receives reply, several pages will be integrated into dir page
- * in CFS_PAGE_SIZE (if CFS_PAGE_SIZE greater than LU_PAGE_SIZE), and the
+ * in PAGE_SIZE (if PAGE_SIZE greater than LU_PAGE_SIZE), and the
  * lu_dirpage for this integrated page will be adjusted.
  **/
 static int mdc_read_page_remote(void *data, struct page *page0)

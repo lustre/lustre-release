@@ -367,7 +367,7 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 
 				lnb->lnb_rc = 0;
 				lnb->lnb_file_offset = off;
-				lnb->lnb_page_offset = bufoff & ~CFS_PAGE_MASK;
+				lnb->lnb_page_offset = bufoff & ~PAGE_MASK;
 				lnb->lnb_len = thispage;
 				lnb->lnb_page = kmem_to_page(dbp[i]->db_data +
 							     bufoff);

@@ -418,8 +418,8 @@ static int vvp_mmap_locks(const struct lu_env *env,
                 if (count == 0)
                         continue;
 
-                count += addr & (~CFS_PAGE_MASK);
-                addr &= CFS_PAGE_MASK;
+		count += addr & ~PAGE_MASK;
+		addr &= PAGE_MASK;
 
                 down_read(&mm->mmap_sem);
                 while((vma = our_vma(mm, addr, count)) != NULL) {
@@ -1229,7 +1229,7 @@ static int vvp_io_fault_start(const struct lu_env *env,
 
 			/* size fixup */
 			if (last_index == vvp_index(vpg))
-				to = size & ~CFS_PAGE_MASK;
+				to = size & ~PAGE_MASK;
 
 			/* Do not set Dirty bit here so that in case IO is
 			 * started before the page is really made dirty, we

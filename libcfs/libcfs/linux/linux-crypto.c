@@ -213,7 +213,7 @@ int cfs_crypto_hash_update_page(struct cfs_crypto_hash_desc *hdesc,
 	struct scatterlist sl;
 
 	sg_init_table(&sl, 1);
-	sg_set_page(&sl, page, len, offset & ~CFS_PAGE_MASK);
+	sg_set_page(&sl, page, len, offset & ~PAGE_MASK);
 
 	return crypto_hash_update((struct hash_desc *)hdesc, &sl, sl.length);
 }

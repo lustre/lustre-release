@@ -229,7 +229,7 @@ static void
 echo_page_debug_setup(struct page *page, int rw, u64 id,
 		      __u64 offset, int len)
 {
-	int   page_offset = offset & ~CFS_PAGE_MASK;
+	int   page_offset = offset & ~PAGE_MASK;
 	char *addr        = ((char *)kmap(page)) + page_offset;
 
         if (len % OBD_ECHO_BLOCK_SIZE != 0)
@@ -256,7 +256,7 @@ static int
 echo_page_debug_check(struct page *page, u64 id,
 		      __u64 offset, int len)
 {
-	int   page_offset = offset & ~CFS_PAGE_MASK;
+	int   page_offset = offset & ~PAGE_MASK;
 	char *addr        = ((char *)kmap(page)) + page_offset;
 	int   rc          = 0;
 	int   rc2;
@@ -309,7 +309,7 @@ static int echo_map_nb_to_lb(struct obdo *oa, struct obd_ioobj *obj,
 
 		res->lnb_file_offset = offset;
 		res->lnb_len = plen;
-		LASSERT((res->lnb_file_offset & ~CFS_PAGE_MASK) +
+		LASSERT((res->lnb_file_offset & ~PAGE_MASK) +
 			res->lnb_len <= PAGE_CACHE_SIZE);
 
 		if (ispersistent &&

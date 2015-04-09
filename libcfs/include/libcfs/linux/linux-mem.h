@@ -57,53 +57,10 @@
 # include <linux/mm_inline.h>
 #endif
 
-#ifndef HAVE_LIBCFS_CPT
-/* Need this for cfs_cpt_table */
-#include <libcfs/libcfs_cpu.h>
-#endif
-
-#define CFS_PAGE_MASK                   (~((__u64)PAGE_CACHE_SIZE-1))
-
-#define page_index(p)       ((p)->index)
-
-
-#define memory_pressure_get() (current->flags & PF_MEMALLOC)
-#define memory_pressure_set() do { current->flags |= PF_MEMALLOC; } while (0)
-#define memory_pressure_clr() do { current->flags &= ~PF_MEMALLOC; } while (0)
-
-#if BITS_PER_LONG == 32
-/* limit to lowmem on 32-bit systems */
-#define NUM_CACHEPAGES \
-	min(totalram_pages, 1UL << (30 - PAGE_CACHE_SHIFT) * 3 / 4)
-#else
-#define NUM_CACHEPAGES totalram_pages
-#endif
-
-/*
- * In Linux there is no way to determine whether current execution context is
- * blockable.
- */
-#define ALLOC_ATOMIC_TRY   GFP_ATOMIC
 /* GFP_IOFS was added in 2.6.33 kernel */
 #ifndef GFP_IOFS
 #define GFP_IOFS       (__GFP_IO | __GFP_FS)
 #endif
-
-#define DECL_MMSPACE                mm_segment_t __oldfs
-#define MMSPACE_OPEN \
-        do { __oldfs = get_fs(); set_fs(get_ds());} while(0)
-#define MMSPACE_CLOSE               set_fs(__oldfs)
-
-
-extern void *cfs_cpt_malloc(struct cfs_cpt_table *cptab, int cpt,
-			    size_t nr_bytes, gfp_t flags);
-extern void *cfs_cpt_vzalloc(struct cfs_cpt_table *cptab, int cpt,
-			     size_t nr_bytes);
-extern struct page *cfs_page_cpt_alloc(struct cfs_cpt_table *cptab,
-				      int cpt, gfp_t flags);
-extern void *cfs_mem_cache_cpt_alloc(struct kmem_cache *cachep,
-				     struct cfs_cpt_table *cptab,
-				     int cpt, gfp_t flags);
 
 /*
  * Shrinker

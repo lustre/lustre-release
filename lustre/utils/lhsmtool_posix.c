@@ -45,6 +45,7 @@
 #include <getopt.h>
 #include <pthread.h>
 #include <time.h>
+#include <unistd.h>
 #include <utime.h>
 #include <sys/time.h>
 #include <sys/xattr.h>

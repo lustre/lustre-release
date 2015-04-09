@@ -1298,7 +1298,7 @@ static int cl_echo_object_brw(struct echo_object *eco, int rw, u64 offset,
         int i;
         ENTRY;
 
-        LASSERT((offset & ~CFS_PAGE_MASK) == 0);
+	LASSERT((offset & ~PAGE_MASK) == 0);
         LASSERT(ed->ed_next != NULL);
         env = cl_env_get(&refcheck);
         if (IS_ERR(env))
@@ -2335,7 +2335,7 @@ static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
 
 	LASSERT(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ);
 
-	if ((count & (~CFS_PAGE_MASK)) != 0)
+	if ((count & (~PAGE_MASK)) != 0)
 		RETURN(-EINVAL);
 
         /* XXX think again with misaligned I/O */

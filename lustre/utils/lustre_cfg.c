@@ -44,6 +44,7 @@
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <ctype.h>
@@ -905,8 +906,9 @@ static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
 
 static int getparam_display(struct param_opts *popt, char *pattern)
 {
-	glob_t glob_info;
+	long page_size = sysconf(_SC_PAGESIZE);
 	char filename[PATH_MAX + 1];    /* extra 1 byte for file type */
+	glob_t glob_info;
 	char *buf;
 	int rc;
 	int fd;
@@ -923,14 +925,14 @@ static int getparam_display(struct param_opts *popt, char *pattern)
 		return -ESRCH;
 	}
 
-	buf = malloc(PAGE_CACHE_SIZE);
+	buf = malloc(page_size);
 	if (buf == NULL)
 		return -ENOMEM;
 
 	for (i = 0; i  < glob_info.gl_pathc; i++) {
 		char *valuename = NULL;
 
-		memset(buf, 0, PAGE_CACHE_SIZE);
+		memset(buf, 0, page_size);
 		/* As listparam_display is used to show param name (with type),
 		 * here "if (only_path)" is ignored.*/
 		if (popt->po_show_path) {
@@ -955,7 +957,7 @@ static int getparam_display(struct param_opts *popt, char *pattern)
                 }
 
 		do {
-			rc = read(fd, buf, PAGE_CACHE_SIZE);
+			rc = read(fd, buf, page_size);
 			if (rc == 0)
 				break;
 			if (rc < 0) {

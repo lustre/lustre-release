@@ -40,6 +40,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <endian.h>
+#include <unistd.h>
 #include <fcntl.h>
 
 #include <time.h>

@@ -196,9 +196,9 @@ static void nrs_orr_range_fill_logical(struct niobuf_remote *nb, int niocount,
 				       struct nrs_orr_req_range *range)
 {
 	/* Should we do this at page boundaries ? */
-	range->or_start = nb[0].rnb_offset & CFS_PAGE_MASK;
+	range->or_start = nb[0].rnb_offset & PAGE_MASK;
 	range->or_end = (nb[niocount - 1].rnb_offset +
-			 nb[niocount - 1].rnb_len - 1) | ~CFS_PAGE_MASK;
+			 nb[niocount - 1].rnb_len - 1) | ~PAGE_MASK;
 }
 
 /**

@@ -368,7 +368,7 @@ static int osc_io_rw_iter_init(const struct lu_env *env,
 		RETURN(0);
 
 	npages = io->u.ci_rw.crw_count >> PAGE_CACHE_SHIFT;
-	if (io->u.ci_rw.crw_pos & ~CFS_PAGE_MASK)
+	if (io->u.ci_rw.crw_pos & ~PAGE_MASK)
 		++npages;
 
 	max_pages = cli->cl_max_pages_per_rpc * cli->cl_max_rpcs_in_flight;

@@ -64,7 +64,6 @@
 # include <sys/types.h>
 # include <libcfs/user-time.h>
 # include <libcfs/user-prim.h>
-# include <libcfs/user-mem.h>
 # include <libcfs/user-bitops.h>
 #endif /* __KERNEL__ */
 
@@ -156,12 +155,7 @@ void lc_watchdog_delete(struct lc_watchdog *lcw);
 /* Dump a debug log */
 void lc_watchdog_dumplog(pid_t pid, void *data);
 
-#else /* !__KERNEL__ */
-#include <unistd.h>
-#ifndef PAGE_SIZE
-#define PAGE_SIZE sysconf(_SC_PAGESIZE)
-#endif
-#endif /* !__KERNEL__ */
+#endif /* __KERNEL__ */
 
 /* need both kernel and user-land acceptor */
 #define LNET_ACCEPTOR_MIN_RESERVED_PORT    512
@@ -248,11 +242,11 @@ void cfs_get_random_bytes(void *buf, int size);
 #include <libcfs/libcfs_debug.h>
 #include <libcfs/libcfs_private.h>
 #include <libcfs/bitmap.h>
-#include <libcfs/libcfs_cpu.h>
 #ifdef __KERNEL__
+# include <libcfs/libcfs_cpu.h>
 # include <libcfs/libcfs_ioctl.h>
+# include <libcfs/libcfs_prim.h>
 #endif /* __KERNEL__ */
-#include <libcfs/libcfs_prim.h>
 #include <libcfs/libcfs_time.h>
 #ifdef __KERNEL__
 # include <libcfs/libcfs_string.h>

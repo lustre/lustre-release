@@ -1495,7 +1495,7 @@ int tgt_extent_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 	LASSERT(!lustre_handle_is_used(lh));
 
 	policy.l_extent.gid = 0;
-	policy.l_extent.start = start & CFS_PAGE_MASK;
+	policy.l_extent.start = start & PAGE_MASK;
 
 	/*
 	 * If ->o_blocks is EOF it means "lock till the end of the file".
@@ -1504,7 +1504,7 @@ int tgt_extent_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 	if (end == OBD_OBJECT_EOF || end < start)
 		policy.l_extent.end = OBD_OBJECT_EOF;
 	else
-		policy.l_extent.end = end | ~CFS_PAGE_MASK;
+		policy.l_extent.end = end | ~PAGE_MASK;
 
 	rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_EXTENT, &policy, mode,
 				    flags, ldlm_blocking_ast,
@@ -1585,7 +1585,7 @@ static __u32 tgt_checksum_bulk(struct lu_target *tgt,
 		 * simulate a client->OST data error */
 		if (i == 0 && opc == OST_WRITE &&
 		    OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_RECEIVE)) {
-			int off = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
+			int off = desc->bd_iov[i].kiov_offset & ~PAGE_MASK;
 			int len = desc->bd_iov[i].kiov_len;
 			struct page *np = tgt_page_to_corrupt;
 			char *ptr = kmap(desc->bd_iov[i].kiov_page) + off;
@@ -1603,14 +1603,14 @@ static __u32 tgt_checksum_bulk(struct lu_target *tgt,
 			}
 		}
 		cfs_crypto_hash_update_page(hdesc, desc->bd_iov[i].kiov_page,
-				  desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK,
+				  desc->bd_iov[i].kiov_offset & ~PAGE_MASK,
 				  desc->bd_iov[i].kiov_len);
 
 		 /* corrupt the data after we compute the checksum, to
 		 * simulate an OST->client data error */
 		if (i == 0 && opc == OST_READ &&
 		    OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_SEND)) {
-			int off = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
+			int off = desc->bd_iov[i].kiov_offset & ~PAGE_MASK;
 			int len = desc->bd_iov[i].kiov_len;
 			struct page *np = tgt_page_to_corrupt;
 			char *ptr = kmap(desc->bd_iov[i].kiov_page) + off;

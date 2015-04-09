@@ -43,6 +43,7 @@
 #define _GNU_SOURCE
 #endif
 
+#include <unistd.h>
 #include <libcfs/libcfs.h>
 #include <libcfs/util/ioctl.h>
 #include <lnet/lnetctl.h>

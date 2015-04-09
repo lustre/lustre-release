@@ -57,6 +57,8 @@ static int thread_running = 0;
 
 static atomic_t cfs_tage_allocated = ATOMIC_INIT(0);
 
+#define filp_size(f)	(i_size_read((f)->f_dentry->d_inode))
+
 static void put_pages_on_tcd_daemon_list(struct page_collection *pc,
 					struct cfs_trace_cpu_data *tcd);
 
@@ -663,9 +665,8 @@ int cfs_tracefile_dump_all_pages(char *filename)
 	struct file		*filp;
 	struct cfs_trace_page	*tage;
 	struct cfs_trace_page	*tmp;
+	mm_segment_t		__oldfs;
 	int rc;
-
-	DECL_MMSPACE;
 
 	cfs_tracefile_write_lock();
 
@@ -684,16 +685,17 @@ int cfs_tracefile_dump_all_pages(char *filename)
                 rc = 0;
                 goto close;
         }
+	__oldfs = get_fs();
+	set_fs(get_ds());
 
-        /* ok, for now, just write the pages.  in the future we'll be building
-         * iobufs with the pages and calling generic_direct_IO */
-	MMSPACE_OPEN;
+	/* ok, for now, just write the pages.  in the future we'll be building
+	 * iobufs with the pages and calling generic_direct_IO */
 	list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
 
-                __LASSERT_TAGE_INVARIANT(tage);
+		__LASSERT_TAGE_INVARIANT(tage);
 
-		rc = filp_write(filp, page_address(tage->page),
-				tage->used, filp_poff(filp));
+		rc = vfs_write(filp, page_address(tage->page), tage->used,
+			       &filp->f_pos);
 		if (rc != (int)tage->used) {
 			printk(KERN_WARNING "wanted to write %u but wrote "
 			       "%d\n", tage->used, rc);
@@ -704,7 +706,7 @@ int cfs_tracefile_dump_all_pages(char *filename)
 		list_del(&tage->linkage);
                 cfs_tage_free(tage);
         }
-	MMSPACE_CLOSE;
+	set_fs(__oldfs);
 	rc = ll_vfs_fsync_range(filp, 0, LLONG_MAX, 1);
 	if (rc)
 		printk(KERN_ERR "sync returns %d\n", rc);
@@ -951,11 +953,10 @@ static int tracefiled(void *arg)
 	struct tracefiled_ctl *tctl = arg;
 	struct cfs_trace_page *tage;
 	struct cfs_trace_page *tmp;
+	mm_segment_t __oldfs;
 	struct file *filp;
 	int last_loop = 0;
 	int rc;
-
-	DECL_MMSPACE;
 
 	/* we're started late enough that we pick up init's fs context */
 	/* this is so broken in uml?  what on earth is going on? */
@@ -989,8 +990,8 @@ static int tracefiled(void *arg)
 			__LASSERT(list_empty(&pc.pc_pages));
                         goto end_loop;
                 }
-
-		MMSPACE_OPEN;
+		__oldfs = get_fs();
+		set_fs(get_ds());
 
 		list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
                         static loff_t f_pos;
@@ -1002,8 +1003,8 @@ static int tracefiled(void *arg)
 			else if (f_pos > (off_t)filp_size(filp))
 				f_pos = filp_size(filp);
 
-			rc = filp_write(filp, page_address(tage->page),
-					tage->used, &f_pos);
+			rc = vfs_write(filp, page_address(tage->page),
+				       tage->used, &f_pos);
 			if (rc != (int)tage->used) {
 				printk(KERN_WARNING "wanted to write %u "
 				       "but wrote %d\n", tage->used, rc);
@@ -1012,7 +1013,7 @@ static int tracefiled(void *arg)
 				break;
 			}
                 }
-		MMSPACE_CLOSE;
+		set_fs(__oldfs);
 
 		filp_close(filp, NULL);
                 put_pages_on_daemon_list(&pc);
