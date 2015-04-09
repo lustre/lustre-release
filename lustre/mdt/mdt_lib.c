@@ -809,23 +809,108 @@ int mdt_fix_reply(struct mdt_thread_info *info)
 /* if object is dying, pack the lov/llog data,
  * parameter info->mti_attr should be valid at this point! */
 int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
-                           const struct md_attr *ma)
+			   struct md_attr *ma)
 {
-        struct mdt_body       *repbody;
+	struct mdt_body	     *repbody = NULL;
         const struct lu_attr *la = &ma->ma_attr;
+	struct coordinator   *cdt = &info->mti_mdt->mdt_coordinator;
+	int		     rc;
+	__u64		     need = 0;
+	struct hsm_action_item hai = {
+		.hai_len = sizeof(hai),
+		.hai_action = HSMA_REMOVE,
+		.hai_extent.length = -1,
+		.hai_cookie = 0,
+		.hai_gid = 0,
+	};
+	__u64 compound_id;
+	int archive_id;
+
         ENTRY;
 
-        repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
-        LASSERT(repbody != NULL);
+	if (mdt_info_req(info) != NULL) {
+		repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
+		LASSERT(repbody != NULL);
+	} else {
+		CDEBUG(D_INFO, "not running in a request/reply context\n");
+	}
 
-        if (ma->ma_valid & MA_INODE)
+	if ((ma->ma_valid & MA_INODE) && repbody != NULL)
                 mdt_pack_attr2body(info, repbody, la, mdt_object_fid(mo));
 
-        if (ma->ma_valid & MA_LOV) {
+	if (ma->ma_valid & MA_LOV) {
 		CERROR("No need in LOV EA upon unlink\n");
 		dump_stack();
-        }
-	repbody->mbo_eadatasize = 0;
+	}
+	if (repbody != NULL)
+		repbody->mbo_eadatasize = 0;
+
+	/* Only check unlinked and archived if RAoLU and upon last close */
+	if (!cdt->cdt_remove_archive_on_last_unlink ||
+	    atomic_read(&mo->mot_open_count) != 0)
+		RETURN(0);
+
+	if (ma->ma_valid & MA_INODE) {
+		if (ma->ma_attr.la_nlink != 0)
+			RETURN(0);
+	} else {
+		need |= MA_INODE;
+	}
+
+	if (ma->ma_valid & MA_HSM) {
+		if (!(ma->ma_hsm.mh_flags & HS_EXISTS))
+			RETURN(0);
+	} else {
+		need |= MA_HSM;
+	}
+
+	if (need != 0) {
+		ma->ma_need |= need;
+		rc = mdt_attr_get_complex(info, mo, ma);
+		if (rc) {
+			CERROR("%s: unable to fetch missing attributes of"
+			       DFID": rc=%d\n", mdt_obd_name(info->mti_mdt),
+			       PFID(mdt_object_fid(mo)), rc);
+			RETURN(0);
+		}
+
+		if (need & MA_INODE) {
+			if (ma->ma_valid & MA_INODE) {
+				if (ma->ma_attr.la_nlink != 0)
+					RETURN(0);
+			} else {
+				RETURN(0);
+			}
+		}
+
+		if (need & MA_HSM) {
+			if (ma->ma_valid & MA_HSM) {
+				if (!(ma->ma_hsm.mh_flags & HS_EXISTS))
+					RETURN(0);
+			} else {
+				RETURN(0);
+			}
+		}
+	}
+
+	/* RAoLU policy is active, last close on file has occured,
+	 * file is unlinked, file is archived, so create remove request
+	 * for copytool!
+	 * If CDT is not running, requests will be logged for later. */
+	compound_id = atomic_inc_return(&cdt->cdt_compound_id);
+	if (ma->ma_hsm.mh_arch_id != 0)
+		archive_id = ma->ma_hsm.mh_arch_id;
+	else
+		archive_id = cdt->cdt_default_archive_id;
+
+	hai.hai_fid = *mdt_object_fid(mo);
+
+	rc = mdt_agent_record_add(info->mti_env, info->mti_mdt,
+				  compound_id, archive_id, 0, &hai);
+	if (rc)
+		CERROR("%s: unable to add HSM remove request for "DFID
+		       ": rc=%d\n", mdt_obd_name(info->mti_mdt),
+		       PFID(mdt_object_fid(mo)), rc);
 
         RETURN(0);
 }

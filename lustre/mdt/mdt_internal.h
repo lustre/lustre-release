@@ -148,6 +148,9 @@ struct coordinator {
 	__u64			 cdt_user_request_mask;
 	__u64			 cdt_group_request_mask;
 	__u64			 cdt_other_request_mask;
+
+	/* Remove archive on last unlink policy */
+	bool			cdt_remove_archive_on_last_unlink;
 };
 
 /* mdt state flag bits */
@@ -700,7 +703,7 @@ int mdt_add_dirty_flag(struct mdt_thread_info *info, struct mdt_object *mo,
 			struct md_attr *ma);
 int mdt_fix_reply(struct mdt_thread_info *info);
 int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *,
-                           const struct md_attr *);
+			   struct md_attr *);
 void mdt_reconstruct_open(struct mdt_thread_info *, struct mdt_lock_handle *);
 
 struct lu_buf *mdt_buf(const struct lu_env *env, void *area, ssize_t len);

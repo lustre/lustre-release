@@ -434,8 +434,9 @@ struct cdt_agent_req *mdt_cdt_update_request(struct coordinator *cdt,
 
 	car->car_req_update = cfs_time_current_sec();
 
-	/* update progress done by copy tool */
-	if (pgs->hpk_errval == 0 && pgs->hpk_extent.length != 0) {
+	/* update data move progress done by copy tool */
+	if (car->car_hai->hai_action != HSMA_REMOVE && pgs->hpk_errval == 0 &&
+	    pgs->hpk_extent.length != 0) {
 		rc = hsm_update_work(&car->car_progress, &pgs->hpk_extent);
 		if (rc) {
 			mdt_cdt_put_request(car);

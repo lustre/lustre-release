@@ -5060,6 +5060,7 @@ static int mdt_export_cleanup(struct obd_export *exp)
 
 	if (!list_empty(&closing_list)) {
 		struct md_attr *ma = &info->mti_attr;
+		struct mdt_object *o;
 
 		/* Close any open files (which may also cause orphan
 		 * unlinking). */
@@ -5089,7 +5090,13 @@ static int mdt_export_cleanup(struct obd_export *exp)
 				ma->ma_valid = MA_FLAGS;
 				ma->ma_attr_flags |= MDS_KEEP_ORPHAN;
 			}
+
+			/* Do not lose object before last unlink. */
+			o = mfd->mfd_object;
+			mdt_object_get(info->mti_env, o);
                         mdt_mfd_close(info, mfd);
+			mdt_handle_last_unlink(info, o, ma);
+			mdt_object_put(info->mti_env, o);
                 }
         }
         info->mti_mdt = NULL;
