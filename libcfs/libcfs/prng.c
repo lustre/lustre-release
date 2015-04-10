@@ -39,6 +39,7 @@
  * algorithm recommended by Marsaglia
 */
 
+#include <linux/random.h>
 #include <libcfs/libcfs.h>
 
 /*

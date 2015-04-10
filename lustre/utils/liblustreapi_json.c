@@ -41,6 +41,7 @@
 #include <unistd.h>
 #endif
 
+#include <libcfs/util/string.h>
 #include <libcfs/libcfs.h>
 #include <lustre/lustreapi.h>
 

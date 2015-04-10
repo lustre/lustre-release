@@ -615,7 +615,7 @@ static struct lu_object *htable_lookup(struct lu_site *s,
          */
 
 	if (likely(waiter != NULL)) {
-		init_waitqueue_entry_current(waiter);
+		init_waitqueue_entry(waiter, current);
 		add_wait_queue(&bkt->lsb_marche_funebre, waiter);
 		set_current_state(TASK_UNINTERRUPTIBLE);
 		lprocfs_counter_incr(s->ls_stats, LU_SS_CACHE_DEATH_RACE);
@@ -784,7 +784,7 @@ struct lu_object *lu_object_find_at(const struct lu_env *env,
 		 * lu_object_find_try() already added waiter into the
 		 * wait queue.
 		 */
-		waitq_wait(&wait, TASK_UNINTERRUPTIBLE);
+		schedule();
 		bkt = lu_site_bkt_from_fid(dev->ld_site, (void *)f);
 		remove_wait_queue(&bkt->lsb_marche_funebre, &wait);
 	}

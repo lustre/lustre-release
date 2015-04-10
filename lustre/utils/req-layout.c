@@ -44,10 +44,14 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <libcfs/libcfs.h>
-#include <lustre/lustre_idl.h>
+#include <linux/types.h>
 
 #define __REQ_LAYOUT_USER__ (1)
+#define EXPORT_SYMBOL(s)
+
+#include <libcfs/libcfs.h>
+#include <lustre/lustre_idl.h>
+#include <lustre_req_layout.h>
 
 #define lustre_swab_generic_32s NULL
 #define lustre_swab_lu_seq_range NULL

@@ -42,6 +42,10 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#include <linux/user_namespace.h>
+#ifdef HAVE_UIDGID_HEADER
+# include <linux/uidgid.h>
+#endif
 #include <obd_class.h>
 #include <lustre/lustre_idl.h>
 

@@ -732,15 +732,16 @@ int main(int argc, char *const argv[])
 						mop.mo_retry - i);
                                 }
 
-                                if (mop.mo_retry) {
-                                        sleep(1 << max((i/2), 5));
-                                }
-                                else {
-                                        rc = errno;
-                                }
-                        }
-                }
-        }
+				if (mop.mo_retry) {
+					int limit = i/2 > 5 ? i/2 : 5;
+
+					sleep(1 << limit);
+				} else {
+					rc = errno;
+				}
+			}
+		}
+	}
 
         if (rc) {
                 char *cli;

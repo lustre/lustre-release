@@ -43,6 +43,7 @@
 
 #define DEBUG_SUBSYSTEM S_MDS
 
+#include <linux/kthread.h>
 #include <lustre_log.h>
 #include <lustre_update.h>
 #include "osp_internal.h"

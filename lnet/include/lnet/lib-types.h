@@ -46,6 +46,7 @@
 # error This include is only for kernel use.
 #endif
 
+#include <linux/kthread.h>
 #include <linux/uio.h>
 #include <linux/types.h>
 #include <net/sock.h>

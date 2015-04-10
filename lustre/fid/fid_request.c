@@ -247,7 +247,7 @@ static int seq_fid_alloc_prep(struct lu_client_seq *seq,
 		set_current_state(TASK_UNINTERRUPTIBLE);
 		mutex_unlock(&seq->lcs_mutex);
 
-		waitq_wait(link, TASK_UNINTERRUPTIBLE);
+		schedule();
 
 		mutex_lock(&seq->lcs_mutex);
 		remove_wait_queue(&seq->lcs_waitq, link);
@@ -278,7 +278,7 @@ int seq_client_get_seq(const struct lu_env *env,
 
 	LASSERT(seqnr != NULL);
 	mutex_lock(&seq->lcs_mutex);
-	init_waitqueue_entry_current(&link);
+	init_waitqueue_entry(&link, current);
 
         while (1) {
                 rc = seq_fid_alloc_prep(seq, &link);
@@ -329,7 +329,7 @@ int seq_client_alloc_fid(const struct lu_env *env,
 	LASSERT(seq != NULL);
 	LASSERT(fid != NULL);
 
-	init_waitqueue_entry_current(&link);
+	init_waitqueue_entry(&link, current);
 	mutex_lock(&seq->lcs_mutex);
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_SEQ_EXHAUST))
@@ -393,7 +393,7 @@ void seq_client_flush(struct lu_client_seq *seq)
 	wait_queue_t link;
 
 	LASSERT(seq != NULL);
-	init_waitqueue_entry_current(&link);
+	init_waitqueue_entry(&link, current);
 	mutex_lock(&seq->lcs_mutex);
 
 	while (seq->lcs_update) {
@@ -401,7 +401,7 @@ void seq_client_flush(struct lu_client_seq *seq)
 		set_current_state(TASK_UNINTERRUPTIBLE);
 		mutex_unlock(&seq->lcs_mutex);
 
-		waitq_wait(&link, TASK_UNINTERRUPTIBLE);
+		schedule();
 
 		mutex_lock(&seq->lcs_mutex);
 		remove_wait_queue(&seq->lcs_waitq, &link);
@@ -599,6 +599,8 @@ static void __exit fid_mod_exit(void)
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre FID Module");
+MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-cfs_module(fid, "0.1.0", fid_mod_init, fid_mod_exit);
+module_init(fid_mod_init);
+module_exit(fid_mod_exit);

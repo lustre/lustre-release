@@ -1810,6 +1810,8 @@ static void __exit osp_mod_exit(void)
 
 MODULE_AUTHOR("Intel, Inc. <http://www.intel.com/>");
 MODULE_DESCRIPTION("Lustre OST Proxy Device ("LUSTRE_OSP_NAME")");
+MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-cfs_module(osp, LUSTRE_VERSION_STRING, osp_mod_init, osp_mod_exit);
+module_init(osp_mod_init);
+module_exit(osp_mod_exit);

@@ -45,6 +45,10 @@
 #include <linux/pagemap.h>
 #include <linux/file.h>
 #include <linux/sched.h>
+#include <linux/user_namespace.h>
+#ifdef HAVE_UIDGID_HEADER
+# include <linux/uidgid.h>
+#endif
 #include <lustre/ll_fiemap.h>
 #include <lustre_ioctl.h>
 

@@ -44,6 +44,7 @@
 # include <obd_support.h>
 #else /* !__KERNEL__ */
 # include <malloc.h>
+# include <stdlib.h>
 #endif /* __KERNEL__ */
 
 /** \defgroup cfg cfg
@@ -222,9 +223,14 @@ static inline char *lustre_cfg_string(struct lustre_cfg *lcfg, __u32 index)
 	 * of data.  Try to use the padding first though.
 	 */
 	if (s[lcfg->lcfg_buflens[index] - 1] != '\0') {
-		size_t last = min((size_t)lcfg->lcfg_buflens[index],
-			       cfs_size_round(lcfg->lcfg_buflens[index]) - 1);
-		char lost = s[last];
+		size_t last = cfs_size_round(lcfg->lcfg_buflens[index]) - 1;
+		char lost;
+
+		/* Use the smaller value */
+		if (last > lcfg->lcfg_buflens[index])
+			last = lcfg->lcfg_buflens[index];
+
+		lost = s[last];
 		s[last] = '\0';
 		if (lost != '\0') {
 			CWARN("Truncated buf %d to '%s' (lost '%c'...)\n",

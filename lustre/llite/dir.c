@@ -42,6 +42,10 @@
 #include <linux/pagemap.h>
 #include <linux/mm.h>
 #include <linux/version.h>
+#include <linux/user_namespace.h>
+#ifdef HAVE_UIDGID_HEADER
+# include <linux/uidgid.h>
+#endif
 #include <asm/uaccess.h>
 #include <linux/buffer_head.h>   // for wait_on_buffer
 #include <linux/pagevec.h>

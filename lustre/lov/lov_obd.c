@@ -1601,6 +1601,8 @@ static void /*__exit*/ lov_exit(void)
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Logical Object Volume OBD driver");
+MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-cfs_module(lov, LUSTRE_VERSION_STRING, lov_init, lov_exit);
+module_init(lov_init);
+module_exit(lov_exit);

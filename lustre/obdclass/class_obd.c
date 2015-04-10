@@ -35,7 +35,12 @@
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
-#include <asm/atomic.h>
+
+#include <linux/user_namespace.h>
+#ifdef HAVE_UIDGID_HEADER
+# include <linux/uidgid.h>
+#endif
+#include <linux/atomic.h>
 
 #include <obd_support.h>
 #include <obd_class.h>
@@ -51,7 +56,6 @@
 #endif /* HAVE_SERVER_SUPPORT */
 #include <lustre_ioctl.h>
 #include "llog_internal.h"
-
 
 struct obd_device *obd_devs[MAX_OBD_DEVICES];
 struct list_head obd_types;
@@ -687,6 +691,8 @@ static void cleanup_obdclass(void)
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Class Driver Build Version: " BUILD_VERSION);
+MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-cfs_module(obdclass, LUSTRE_VERSION_STRING, init_obdclass, cleanup_obdclass);
+module_init(init_obdclass);
+module_exit(cleanup_obdclass);

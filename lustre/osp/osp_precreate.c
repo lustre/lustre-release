@@ -44,6 +44,7 @@
 
 #define DEBUG_SUBSYSTEM S_MDS
 
+#include <linux/kthread.h>
 #include "osp_internal.h"
 
 /*

@@ -2808,9 +2808,10 @@ static int mdt_tgt_connect(struct tgt_session_info *tsi)
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_TGT_DELAY_CONDITIONAL) &&
 	    cfs_fail_val ==
-	    tsi2mdt_info(tsi)->mti_mdt->mdt_seq_site.ss_node_id)
-		schedule_timeout_and_set_state(TASK_UNINTERRUPTIBLE,
-			msecs_to_jiffies(3 * MSEC_PER_SEC));
+	    tsi2mdt_info(tsi)->mti_mdt->mdt_seq_site.ss_node_id) {
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		schedule_timeout(msecs_to_jiffies(3 * MSEC_PER_SEC));
+	}
 
 	rc = tgt_connect(tsi);
 	if (rc != 0)
@@ -5854,6 +5855,8 @@ static void __exit mdt_mod_exit(void)
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Metadata Target ("LUSTRE_MDT_NAME")");
+MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-cfs_module(mdt, LUSTRE_VERSION_STRING, mdt_mod_init, mdt_mod_exit);
+module_init(mdt_mod_init);
+module_exit(mdt_mod_exit);

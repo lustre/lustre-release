@@ -46,6 +46,10 @@
 #include <linux/module.h>
 #include <linux/types.h>
 #include <linux/version.h>
+#include <linux/user_namespace.h>
+#ifdef HAVE_UIDGID_HEADER
+# include <linux/uidgid.h>
+#endif
 
 #include <lustre_ha.h>
 #include <lustre_dlm.h>

@@ -183,16 +183,17 @@ ksocknal_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
 }
 
 static int
-ksocknal_transmit (ksock_conn_t *conn, ksock_tx_t *tx)
+ksocknal_transmit(ksock_conn_t *conn, ksock_tx_t *tx)
 {
-        int      rc;
-        int      bufnob;
+	int	rc;
+	int	bufnob;
 
-        if (ksocknal_data.ksnd_stall_tx != 0) {
-                cfs_pause(cfs_time_seconds(ksocknal_data.ksnd_stall_tx));
-        }
+	if (ksocknal_data.ksnd_stall_tx != 0) {
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		schedule_timeout(cfs_time_seconds(ksocknal_data.ksnd_stall_tx));
+	}
 
-        LASSERT (tx->tx_resid != 0);
+	LASSERT(tx->tx_resid != 0);
 
         rc = ksocknal_connsock_addref(conn);
         if (rc != 0) {
@@ -345,9 +346,10 @@ ksocknal_receive (ksock_conn_t *conn)
         int     rc;
         ENTRY;
 
-        if (ksocknal_data.ksnd_stall_rx != 0) {
-                cfs_pause(cfs_time_seconds (ksocknal_data.ksnd_stall_rx));
-        }
+	if (ksocknal_data.ksnd_stall_rx != 0) {
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		schedule_timeout(cfs_time_seconds(ksocknal_data.ksnd_stall_rx));
+	}
 
         rc = ksocknal_connsock_addref(conn);
         if (rc != 0) {
@@ -2137,9 +2139,9 @@ ksocknal_connd (void *arg)
 	int                nloops = 0;
 	int                cons_retry = 0;
 
-	cfs_block_allsigs ();
+	cfs_block_allsigs();
 
-	init_waitqueue_entry_current(&wait);
+	init_waitqueue_entry(&wait, current);
 
 	spin_lock_bh(connd_lock);
 
@@ -2228,7 +2230,7 @@ ksocknal_connd (void *arg)
 		spin_unlock_bh(connd_lock);
 
 		nloops = 0;
-		waitq_timedwait(&wait, TASK_INTERRUPTIBLE, timeout);
+		schedule_timeout(timeout);
 
 		set_current_state(TASK_RUNNING);
 		remove_wait_queue(&ksocknal_data.ksnd_connd_waitq, &wait);
@@ -2529,7 +2531,7 @@ int ksocknal_reaper(void *arg)
         cfs_block_allsigs ();
 
 	INIT_LIST_HEAD(&enomem_conns);
-	init_waitqueue_entry_current(&wait);
+	init_waitqueue_entry(&wait, current);
 
 	spin_lock_bh(&ksocknal_data.ksnd_reaper_lock);
 
@@ -2636,7 +2638,7 @@ int ksocknal_reaper(void *arg)
 		if (!ksocknal_data.ksnd_shuttingdown &&
 		    list_empty(&ksocknal_data.ksnd_deathrow_conns) &&
 		    list_empty(&ksocknal_data.ksnd_zombie_conns))
-			waitq_timedwait(&wait, TASK_INTERRUPTIBLE, timeout);
+			schedule_timeout(timeout);
 
 		set_current_state(TASK_RUNNING);
 		remove_wait_queue(&ksocknal_data.ksnd_reaper_waitq, &wait);

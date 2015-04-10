@@ -211,7 +211,9 @@ lnet_module_exit(void)
 }
 
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
-MODULE_DESCRIPTION("Portals v3.1");
+MODULE_DESCRIPTION("LNet v3.1");
+MODULE_VERSION("1.0.0");
 MODULE_LICENSE("GPL");
 
-cfs_module(lnet, "1.0.0", lnet_module_init, lnet_module_exit);
+module_init(lnet_module_init);
+module_exit(lnet_module_exit);

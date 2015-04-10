@@ -43,6 +43,7 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/module.h>
+#include <linux/kthread.h>
 #include <obd_class.h>
 #include <lustre_ioctl.h>
 #include <lustre_mds.h>
@@ -1599,6 +1600,8 @@ static void __exit mdd_mod_exit(void)
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Meta-data Device Prototype ("LUSTRE_MDD_NAME")");
+MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-cfs_module(mdd, "0.1.0", mdd_mod_init, mdd_mod_exit);
+module_init(mdd_mod_init);
+module_exit(mdd_mod_exit);

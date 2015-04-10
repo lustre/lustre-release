@@ -2836,12 +2836,14 @@ kiblnd_base_shutdown(void)
 
 		i = 2;
 		while (atomic_read(&kiblnd_data.kib_nthreads) != 0) {
-                        i++;
-                        CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
-                               "Waiting for %d threads to terminate\n",
+			i++;
+			/* power of 2? */
+			CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET,
+			       "Waiting for %d threads to terminate\n",
 			       atomic_read(&kiblnd_data.kib_nthreads));
-                        cfs_pause(cfs_time_seconds(1));
-                }
+			set_current_state(TASK_UNINTERRUPTIBLE);
+			schedule_timeout(cfs_time_seconds(1));
+		}
 
                 /* fall through */
 
@@ -2893,16 +2895,18 @@ kiblnd_shutdown (lnet_ni_t *ni)
                 /* nuke all existing peers within this net */
                 kiblnd_del_peer(ni, LNET_NID_ANY);
 
-                /* Wait for all peer state to clean up */
-                i = 2;
+		/* Wait for all peer state to clean up */
+		i = 2;
 		while (atomic_read(&net->ibn_npeers) != 0) {
-                        i++;
-                        CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* 2**n? */
-                               "%s: waiting for %d peers to disconnect\n",
-                               libcfs_nid2str(ni->ni_nid),
+			i++;
+			/* power of 2? */
+			CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET,
+			       "%s: waiting for %d peers to disconnect\n",
+			       libcfs_nid2str(ni->ni_nid),
 			       atomic_read(&net->ibn_npeers));
-                        cfs_pause(cfs_time_seconds(1));
-                }
+			set_current_state(TASK_UNINTERRUPTIBLE);
+			schedule_timeout(cfs_time_seconds(1));
+		}
 
 		kiblnd_net_fini_pools(net);
 

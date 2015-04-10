@@ -35,6 +35,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
+#include <linux/kthread.h>
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_net.h>

@@ -34,6 +34,11 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#include <linux/user_namespace.h>
+#ifdef HAVE_UIDGID_HEADER
+# include <linux/uidgid.h>
+#endif
+
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_cksum.h>

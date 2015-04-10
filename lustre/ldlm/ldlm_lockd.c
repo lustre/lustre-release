@@ -41,6 +41,7 @@
 
 #define DEBUG_SUBSYSTEM S_LDLM
 
+#include <linux/kthread.h>
 #include <libcfs/libcfs.h>
 #include <lustre_dlm.h>
 #include <obd_class.h>
@@ -1761,8 +1762,8 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
 	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_BL_CB_RACE)) {
 		int to = cfs_time_seconds(1);
 		while (to > 0) {
-			schedule_timeout_and_set_state(
-				TASK_INTERRUPTIBLE, to);
+			set_current_state(TASK_INTERRUPTIBLE);
+			schedule_timeout(to);
 			if (lock->l_granted_mode == lock->l_req_mode ||
 			    ldlm_is_destroyed(lock))
 				break;

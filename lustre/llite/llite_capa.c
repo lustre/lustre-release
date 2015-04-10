@@ -42,6 +42,7 @@
 
 #include <linux/fs.h>
 #include <linux/version.h>
+#include <linux/kthread.h>
 #include <asm/uaccess.h>
 #include <linux/file.h>
 #include <linux/kmod.h>

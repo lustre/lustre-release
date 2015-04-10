@@ -1212,6 +1212,8 @@ CFS_MODULE_PARM(osd_oi_count, "i", int, 0444,
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Object Storage Device ("LUSTRE_OSD_ZFS_NAME")");
+MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-cfs_module(osd, LUSTRE_VERSION_STRING, osd_init, osd_exit);
+module_init(osd_init);
+module_exit(osd_exit);

@@ -30,6 +30,7 @@
 
 #define DEBUG_SUBSYSTEM S_LQUOTA
 
+#include <linux/kthread.h>
 #include "qsd_internal.h"
 
 extern struct kmem_cache *upd_kmem;

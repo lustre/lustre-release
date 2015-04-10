@@ -487,6 +487,25 @@ EXTRA_KCFLAGS=$tmp_flags
 ]) # LC_QUOTA64
 
 #
+# LC_HAVE_ADD_WAIT_QUEUE_EXCLUSIVE
+#
+# 2.6.34 adds __add_wait_queue_exclusive
+#
+AC_DEFUN([LC_HAVE_ADD_WAIT_QUEUE_EXCLUSIVE], [
+LB_CHECK_COMPILE([if '__add_wait_queue_exclusive' exists],
+__add_wait_queue_exclusive, [
+	#include <linux/wait.h>
+],[
+	wait_queue_head_t queue;
+	wait_queue_t	  wait;
+	__add_wait_queue_exclusive(&queue, &wait);
+],[
+	AC_DEFINE(HAVE___ADD_WAIT_QUEUE_EXCLUSIVE, 1,
+		  [__add_wait_queue_exclusive exists])
+])
+]) # LC_HAVE_ADD_WAIT_QUEUE_EXCLUSIVE
+
+#
 # LC_FS_STRUCT_RWLOCK
 #
 # 2.6.36 fs_struct.lock use spinlock instead of rwlock.
@@ -1565,6 +1584,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 2.6.34
 	LC_HAVE_DQUOT_FS_DISK_QUOTA
 	LC_HAVE_DQUOT_SUSPEND
+	LC_HAVE_ADD_WAIT_QUEUE_EXCLUSIVE
 
 	# 2.6.35, 3.0.0
 	LC_FILE_FSYNC

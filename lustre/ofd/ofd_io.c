@@ -40,6 +40,7 @@
 
 #define DEBUG_SUBSYSTEM S_FILTER
 
+#include <linux/kthread.h>
 #include "ofd_internal.h"
 
 struct ofd_inconsistency_item {

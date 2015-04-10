@@ -51,6 +51,7 @@
 #include <sys/xattr.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
+#include <libcfs/util/string.h>
 #include <lustre/lustre_idl.h>
 #include <lustre/lustreapi.h>
 
@@ -518,7 +519,7 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 	struct stat		 dst_st;
 	char			*buf = NULL;
 	__u64			 write_total = 0;
-	__u64			 length;
+	__u64			 length = hai->hai_extent.length;
 	time_t			 last_report_time;
 	int			 rc = 0;
 	double			 start_ct_now = ct_now();
@@ -560,8 +561,8 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 	}
 
 	/* Don't read beyond a given extent */
-	length = min(hai->hai_extent.length,
-		     src_st.st_size - hai->hai_extent.offset);
+	if (length > src_st.st_size - hai->hai_extent.offset)
+		length = src_st.st_size - hai->hai_extent.offset;
 
 	start_time = last_bw_print = last_report_time = time(NULL);
 

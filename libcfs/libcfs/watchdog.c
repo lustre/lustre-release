@@ -40,6 +40,7 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 
+#include <linux/kthread.h>
 #include <libcfs/libcfs.h>
 #include "tracefile.h"
 

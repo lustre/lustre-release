@@ -42,6 +42,7 @@
 #define D_MGC D_CONFIG /*|D_WARNING*/
 
 #include <linux/module.h>
+#include <linux/kthread.h>
 #include <obd_class.h>
 #include <lustre_dlm.h>
 #include <lprocfs_status.h>

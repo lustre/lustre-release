@@ -121,6 +121,7 @@
 #include <utime.h>
 #include <sys/xattr.h>
 
+#include <libcfs/util/string.h>
 #include <libcfs/util/parser.h>
 #include <lustre/lustreapi.h>
 #include <lustre/lustre_idl.h>
@@ -1114,7 +1115,7 @@ int lr_parse_line(void *priv, struct lr_info *info)
 	struct changelog_rec		*rec;
 	struct changelog_ext_rename	*rnm;
 	size_t				 namelen;
-	size_t				 copylen;
+	size_t				 copylen = sizeof(info->name);
 
 	if (llapi_changelog_recv(priv, &rec) != 0)
 		return -1;
@@ -1126,18 +1127,22 @@ int lr_parse_line(void *priv, struct lr_info *info)
 	snprintf(info->pfid, sizeof(info->pfid), DFID, PFID(&rec->cr_pfid));
 
 	namelen = strnlen(changelog_rec_name(rec), rec->cr_namelen);
-	copylen = min(sizeof(info->name), namelen + 1);
+	if (copylen > namelen + 1)
+		copylen = namelen + 1;
 	strlcpy(info->name, changelog_rec_name(rec), copylen);
 
 	/* Don't use rnm if CLF_RENAME isn't set */
 	rnm = changelog_rec_rename(rec);
 	if (rec->cr_flags & CLF_RENAME && !fid_is_zero(&rnm->cr_sfid)) {
+		copylen = sizeof(info->sname);
+
 		snprintf(info->sfid, sizeof(info->sfid), DFID,
 			 PFID(&rnm->cr_sfid));
 		snprintf(info->spfid, sizeof(info->spfid), DFID,
 			 PFID(&rnm->cr_spfid));
 		namelen = changelog_rec_snamelen(rec);
-		copylen = min(sizeof(info->sname), namelen + 1);
+		if (copylen > namelen + 1)
+			copylen = namelen + 1;
 		strlcpy(info->sname, changelog_rec_sname(rec), copylen);
 
 		if (verbose > 1)

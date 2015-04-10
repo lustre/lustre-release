@@ -97,6 +97,7 @@
 
 #define DEBUG_SUBSYSTEM S_LDLM
 
+#include <linux/kthread.h>
 #include <lustre_dlm.h>
 #include <cl_object.h>
 #include <obd_class.h>

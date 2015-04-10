@@ -376,6 +376,8 @@ static void exit_lquota(void)
 
 MODULE_AUTHOR("Intel Corporation <http://www.intel.com/>");
 MODULE_DESCRIPTION("Lustre Quota");
+MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-cfs_module(lquota, "2.4.0", init_lquota, exit_lquota);
+module_init(init_lquota);
+module_exit(exit_lquota);

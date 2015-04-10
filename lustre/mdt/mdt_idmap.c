@@ -45,6 +45,10 @@
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/kmod.h>
+#include <linux/user_namespace.h>
+#ifdef HAVE_UIDGID_HEADER
+# include <linux/uidgid.h>
+#endif
 #include <linux/string.h>
 #include <linux/stat.h>
 #include <linux/errno.h>

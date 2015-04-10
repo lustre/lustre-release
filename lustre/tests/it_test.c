@@ -43,6 +43,8 @@
 #include <time.h>
 #include <sys/time.h>
 
+#define EXPORT_SYMBOL(s)
+
 #include <libcfs/libcfs.h>
 #include <../ldlm/interval_tree.c>
 

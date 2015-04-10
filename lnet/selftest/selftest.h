@@ -574,8 +574,6 @@ swi_state2str (int state)
 #undef STATE2STR
 }
 
-#define selftest_wait_events()	cfs_pause(cfs_time_seconds(1) / 10)
-
 #define lst_wait_until(cond, lock, fmt, ...)				\
 do {									\
 	int __I = 2;							\
@@ -584,7 +582,8 @@ do {									\
 		       fmt, ## __VA_ARGS__);				\
 		spin_unlock(&(lock));					\
 									\
-		selftest_wait_events();					\
+		set_current_state(TASK_UNINTERRUPTIBLE);		\
+		schedule_timeout(cfs_time_seconds(1) / 10);		\
 									\
 		spin_lock(&(lock));					\
 	}								\
@@ -597,13 +596,14 @@ srpc_wait_service_shutdown(srpc_service_t *sv)
 
 	LASSERT(sv->sv_shuttingdown);
 
-        while (srpc_finish_service(sv) == 0) {
-                i++;
-                CDEBUG (((i & -i) == i) ? D_WARNING : D_NET,
-                        "Waiting for %s service to shutdown...\n",
-                        sv->sv_name);
-                selftest_wait_events();
-        }
+	while (srpc_finish_service(sv) == 0) {
+		i++;
+		CDEBUG(((i & -i) == i) ? D_WARNING : D_NET,
+		       "Waiting for %s service to shutdown...\n",
+		       sv->sv_name);
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		schedule_timeout(cfs_time_seconds(1) / 10);
+	}
 }
 
 extern sfw_test_client_ops_t ping_test_client;

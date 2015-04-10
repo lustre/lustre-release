@@ -43,6 +43,7 @@
 #define DEBUG_SUBSYSTEM S_MGS
 #define D_MGS D_CONFIG
 
+#include <linux/kthread.h>
 #include <linux/pagemap.h>
 
 #include <obd.h>

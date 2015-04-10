@@ -1353,7 +1353,8 @@ lstcon_rpc_cleanup_wait(void)
 
 		CWARN("Session is shutting down, "
 		      "waiting for termination of transactions\n");
-		cfs_pause(cfs_time_seconds(1));
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		schedule_timeout(cfs_time_seconds(1));
 
 		mutex_lock(&console_session.ses_mutex);
 	}

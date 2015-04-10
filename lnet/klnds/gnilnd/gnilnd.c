@@ -1544,7 +1544,8 @@ kgnilnd_del_conn_or_peer(kgn_net_t *net, lnet_nid_t nid, int command,
 	       atomic_read(&kgnilnd_data.kgn_npending_detach)  ||
 	       atomic_read(&kgnilnd_data.kgn_npending_unlink)) {
 
-		cfs_pause(cfs_time_seconds(1));
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		schedule_timeout(cfs_time_seconds(1));
 		i++;
 
 		CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, "Waiting on %d peers %d closes %d detaches\n",
@@ -2467,7 +2468,8 @@ kgnilnd_base_shutdown(void)
 
 		CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET,
 			"Waiting for conns to be cleaned up %d\n",atomic_read(&kgnilnd_data.kgn_nconns));
-		cfs_pause(cfs_time_seconds(1));
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		schedule_timeout(cfs_time_seconds(1));
 	}
 	/* Peer state all cleaned up BEFORE setting shutdown, so threads don't
 	 * have to worry about shutdown races.  NB connections may be created
@@ -2486,7 +2488,8 @@ kgnilnd_base_shutdown(void)
 		i++;
 		CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET,
 		       "Waiting for ruhroh thread to terminate\n");
-		cfs_pause(cfs_time_seconds(1));
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		schedule_timeout(cfs_time_seconds(1));
 	}
 
        /* Flag threads to terminate */
@@ -2518,7 +2521,8 @@ kgnilnd_base_shutdown(void)
 		CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
 		       "Waiting for %d threads to terminate\n",
 		       atomic_read(&kgnilnd_data.kgn_nthreads));
-		cfs_pause(cfs_time_seconds(1));
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		schedule_timeout(cfs_time_seconds(1));
 	}
 
 	LASSERTF(atomic_read(&kgnilnd_data.kgn_npeers) == 0,
@@ -2764,7 +2768,8 @@ kgnilnd_shutdown(lnet_ni_t *ni)
 				"Waiting for %d references to clear on net %d\n",
 				atomic_read(&net->gnn_refcount),
 				net->gnn_netnum);
-			cfs_pause(cfs_time_seconds(1));
+			set_current_state(TASK_UNINTERRUPTIBLE);
+			schedule_timeout(cfs_time_seconds(1));
 		}
 
 		/* release ref from kgnilnd_startup */

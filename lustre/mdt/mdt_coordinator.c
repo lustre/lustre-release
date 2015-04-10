@@ -38,6 +38,7 @@
 
 #define DEBUG_SUBSYSTEM S_MDS
 
+#include <linux/kthread.h>
 #include <obd_support.h>
 #include <lustre_net.h>
 #include <lustre_export.h>

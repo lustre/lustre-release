@@ -2330,17 +2330,19 @@ ksocknal_base_shutdown(void)
 			}
 		}
 
-                i = 4;
+		i = 4;
 		read_lock(&ksocknal_data.ksnd_global_lock);
-                while (ksocknal_data.ksnd_nthreads != 0) {
-                        i++;
-                        CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
-                               "waiting for %d threads to terminate\n",
-                                ksocknal_data.ksnd_nthreads);
+		while (ksocknal_data.ksnd_nthreads != 0) {
+			i++;
+			/* power of 2? */
+			CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET,
+				"waiting for %d threads to terminate\n",
+				ksocknal_data.ksnd_nthreads);
 			read_unlock(&ksocknal_data.ksnd_global_lock);
-                        cfs_pause(cfs_time_seconds(1));
+			set_current_state(TASK_UNINTERRUPTIBLE);
+			schedule_timeout(cfs_time_seconds(1));
 			read_lock(&ksocknal_data.ksnd_global_lock);
-                }
+		}
 		read_unlock(&ksocknal_data.ksnd_global_lock);
 
                 ksocknal_free_buffers();
@@ -2585,7 +2587,8 @@ ksocknal_shutdown (lnet_ni_t *ni)
 		CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
 		       "waiting for %d peers to disconnect\n",
 		       net->ksnn_npeers);
-		cfs_pause(cfs_time_seconds(1));
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		schedule_timeout(cfs_time_seconds(1));
 
 		ksocknal_debug_peerhash(ni);
 
@@ -2901,6 +2904,8 @@ ksocknal_module_init (void)
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Kernel TCP Socket LND v3.0.0");
+MODULE_VERSION("3.0.0");
 MODULE_LICENSE("GPL");
 
-cfs_module(ksocknal, "3.0.0", ksocknal_module_init, ksocknal_module_fini);
+module_init(ksocknal_module_init);
+module_exit(ksocknal_module_fini);

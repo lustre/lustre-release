@@ -35,6 +35,11 @@
  */
 
 #define DEBUG_SUBSYSTEM S_ECHO
+
+#include <linux/user_namespace.h>
+#ifdef HAVE_UIDGID_HEADER
+# include <linux/uidgid.h>
+#endif
 #include <libcfs/libcfs.h>
 
 #include <obd.h>
@@ -1047,8 +1052,8 @@ static struct lu_device *echo_device_free(const struct lu_env *env,
 		spin_unlock(&ec->ec_lock);
 		CERROR("echo_client still has objects at cleanup time, "
 		       "wait for 1 second\n");
-		schedule_timeout_and_set_state(TASK_UNINTERRUPTIBLE,
-						   cfs_time_seconds(1));
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		schedule_timeout(cfs_time_seconds(1));
 		lu_site_purge(env, &ed->ed_site->cs_lu, -1);
 		spin_lock(&ec->ec_lock);
 	}
@@ -2988,8 +2993,10 @@ static void /*__exit*/ obdecho_exit(void)
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Testing Echo OBD driver");
+MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-cfs_module(obdecho, LUSTRE_VERSION_STRING, obdecho_init, obdecho_exit);
+module_init(obdecho_init);
+module_exit(obdecho_exit);
 
 /** @} echo_client */

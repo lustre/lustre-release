@@ -63,7 +63,6 @@
 # include <sys/time.h>
 # include <sys/types.h>
 # include <libcfs/user-time.h>
-# include <libcfs/user-prim.h>
 # include <libcfs/user-bitops.h>
 #endif /* __KERNEL__ */
 
@@ -126,10 +125,6 @@ static inline int __is_po2(unsigned long long val)
 #define NULL ((void *)0)
 
 #ifdef __KERNEL__
-
-#ifndef cfs_for_each_possible_cpu
-#  error cfs_for_each_possible_cpu is not supported by kernel!
-#endif
 
 /* libcfs watchdogs */
 struct lc_watchdog;
@@ -201,7 +196,6 @@ sigset_t cfs_block_allsigs(void);
 sigset_t cfs_block_sigs(unsigned long sigs);
 sigset_t cfs_block_sigsinv(unsigned long sigs);
 void cfs_restore_sigs(sigset_t);
-int cfs_signal_pending(void);
 void cfs_clear_sigpending(void);
 
 int convert_server_error(__u64 ecode);
@@ -254,9 +248,9 @@ void cfs_get_random_bytes(void *buf, int size);
 #include <libcfs/libcfs_workitem.h>
 #ifdef __KERNEL__
 # include <libcfs/libcfs_hash.h>
+# include <libcfs/libcfs_heap.h>
+# include <libcfs/libcfs_fail.h>
 #endif /* __KERNEL__ */
-#include <libcfs/libcfs_heap.h>
-#include <libcfs/libcfs_fail.h>
 
 /* container_of depends on "likely" which is defined in libcfs_private.h */
 static inline void *__container_of(const void *ptr, unsigned long shift)
@@ -270,6 +264,4 @@ static inline void *__container_of(const void *ptr, unsigned long shift)
 #define container_of0(ptr, type, member)				\
 	((type *)__container_of((ptr), offsetof(type, member)))
 
-#define _LIBCFS_H
-
-#endif /* _LIBCFS_H */
+#endif /* _LIBCFS_LIBCFS_H_ */

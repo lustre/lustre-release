@@ -43,6 +43,7 @@
 
 #define DEBUG_SUBSYSTEM S_LDLM
 
+#include <linux/kthread.h>
 #include <libcfs/libcfs.h>
 #include <obd.h>
 #include <obd_class.h>

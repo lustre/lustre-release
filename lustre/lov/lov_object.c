@@ -380,7 +380,7 @@ static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
          * ->lo_sub[] slot in lovsub_object_fini() */
 	if (r0->lo_sub[idx] == los) {
 		waiter = &lov_env_info(env)->lti_waiter;
-		init_waitqueue_entry_current(waiter);
+		init_waitqueue_entry(waiter, current);
 		add_wait_queue(&bkt->lsb_marche_funebre, waiter);
 		set_current_state(TASK_UNINTERRUPTIBLE);
 		while (1) {
@@ -390,7 +390,7 @@ static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
 			spin_lock(&r0->lo_sub_lock);
 			if (r0->lo_sub[idx] == los) {
 				spin_unlock(&r0->lo_sub_lock);
-				waitq_wait(waiter, TASK_UNINTERRUPTIBLE);
+				schedule();
 			} else {
 				spin_unlock(&r0->lo_sub_lock);
 				set_current_state(TASK_RUNNING);

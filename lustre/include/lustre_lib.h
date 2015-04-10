@@ -212,6 +212,40 @@ struct l_wait_info {
 	 sigmask(SIGQUIT) | sigmask(SIGALRM))
 
 /*
+ * Wait Queue
+ */
+#ifndef HAVE___ADD_WAIT_QUEUE_EXCLUSIVE
+static inline void __add_wait_queue_exclusive(wait_queue_head_t *q,
+					      wait_queue_t *wait)
+{
+	wait->flags |= WQ_FLAG_EXCLUSIVE;
+	__add_wait_queue(q, wait);
+}
+#endif /* HAVE___ADD_WAIT_QUEUE_EXCLUSIVE */
+
+/**
+ * wait_queue_t of Linux (version < 2.6.34) is a FIFO list for exclusively
+ * waiting threads, which is not always desirable because all threads will
+ * be waken up again and again, even user only needs a few of them to be
+ * active most time. This is not good for performance because cache can
+ * be polluted by different threads.
+ *
+ * LIFO list can resolve this problem because we always wakeup the most
+ * recent active thread by default.
+ *
+ * NB: please don't call non-exclusive & exclusive wait on the same
+ * waitq if add_wait_queue_exclusive_head is used.
+ */
+#define add_wait_queue_exclusive_head(waitq, link)		\
+{								\
+	unsigned long flags;					\
+								\
+	spin_lock_irqsave(&((waitq)->lock), flags);		\
+	__add_wait_queue_exclusive(waitq, link);		\
+	spin_unlock_irqrestore(&((waitq)->lock), flags);	\
+}
+
+/*
  * wait for @condition to become true, but no longer than timeout, specified
  * by @info.
  */
@@ -226,7 +260,7 @@ do {                                                                           \
 	if (condition)                                                         \
 		break;                                                         \
 									       \
-	init_waitqueue_entry_current(&__wait);				       \
+	init_waitqueue_entry(&__wait, current);				       \
 	l_add_wait(&wq, &__wait);                                              \
 									       \
 	/* Block all signals (just the non-fatal ones if no timeout). */       \
@@ -236,27 +270,19 @@ do {                                                                           \
 		__blocked = cfs_block_sigsinv(0);                              \
 									       \
 	for (;;) {                                                             \
-		unsigned       __wstate;                                       \
-									       \
-		__wstate = info->lwi_on_signal != NULL &&                      \
-			   (__timeout == 0 || __allow_intr) ?                  \
-			TASK_INTERRUPTIBLE : TASK_UNINTERRUPTIBLE;             \
-									       \
 		set_current_state(TASK_INTERRUPTIBLE);			       \
 									       \
 		if (condition)                                                 \
 			break;                                                 \
 									       \
 		if (__timeout == 0) {                                          \
-			waitq_wait(&__wait, __wstate);                         \
+			schedule();					       \
 		} else {                                                       \
 			cfs_duration_t interval = info->lwi_interval?          \
 					     min_t(cfs_duration_t,             \
 						 info->lwi_interval,__timeout):\
 					     __timeout;                        \
-			cfs_duration_t remaining = waitq_timedwait(&__wait,    \
-						   __wstate,                   \
-						   interval);                  \
+			cfs_duration_t remaining = schedule_timeout(interval); \
 			__timeout = cfs_time_sub(__timeout,                    \
 					    cfs_time_sub(interval, remaining));\
 			if (__timeout == 0) {                                  \
@@ -273,7 +299,7 @@ do {                                                                           \
                                                                                \
                 if (condition)                                                 \
                         break;                                                 \
-                if (cfs_signal_pending()) {                                    \
+		if (signal_pending(current)) {				       \
                         if (info->lwi_on_signal != NULL &&                     \
                             (__timeout == 0 || __allow_intr)) {                \
                                 if (info->lwi_on_signal != LWI_ON_SIGNAL_NOOP) \
@@ -294,10 +320,9 @@ do {                                                                           \
                                                                                \
 	cfs_restore_sigs(__blocked);                                           \
                                                                                \
-	set_current_state(TASK_RUNNING);                               	       \
+	set_current_state(TASK_RUNNING);				       \
 	remove_wait_queue(&wq, &__wait);                                       \
 } while (0)
-
 
 
 #define l_wait_event(wq, condition, info)                       \

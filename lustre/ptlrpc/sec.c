@@ -40,10 +40,14 @@
 
 #define DEBUG_SUBSYSTEM S_SEC
 
-#include <libcfs/libcfs.h>
+#include <linux/user_namespace.h>
+#ifdef HAVE_UIDGID_HEADER
+# include <linux/uidgid.h>
+#endif
 #include <linux/crypto.h>
 #include <linux/key.h>
 
+#include <libcfs/libcfs.h>
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_support.h>
@@ -566,7 +570,7 @@ int sptlrpc_req_replace_dead_ctx(struct ptlrpc_request *req)
         newctx = req->rq_cli_ctx;
         LASSERT(newctx);
 
-        if (unlikely(newctx == oldctx && 
+	if (unlikely(newctx == oldctx &&
 		     test_bit(PTLRPC_CTX_DEAD_BIT, &oldctx->cc_flags))) {
                 /*
                  * still get the old dead ctx, usually means system too busy
@@ -575,8 +579,8 @@ int sptlrpc_req_replace_dead_ctx(struct ptlrpc_request *req)
                        "ctx (%p, fl %lx) doesn't switch, relax a little bit\n",
                        newctx, newctx->cc_flags);
 
-		schedule_timeout_and_set_state(TASK_INTERRUPTIBLE,
-			msecs_to_jiffies(MSEC_PER_SEC));
+		set_current_state(TASK_INTERRUPTIBLE);
+		schedule_timeout(msecs_to_jiffies(MSEC_PER_SEC));
 	} else {
                 /*
                  * it's possible newctx == oldctx if we're switching

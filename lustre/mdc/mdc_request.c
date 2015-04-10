@@ -41,6 +41,11 @@
 #include <linux/miscdevice.h>
 #include <linux/init.h>
 #include <linux/utsname.h>
+#include <linux/kthread.h>
+#include <linux/user_namespace.h>
+#ifdef HAVE_UIDGID_HEADER
+# include <linux/uidgid.h>
+#endif
 
 #include <lustre_acl.h>
 #include <lustre_ioctl.h>

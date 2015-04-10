@@ -45,6 +45,10 @@
 #include <linux/types.h>
 #include <linux/version.h>
 #include <linux/mm.h>
+#include <linux/user_namespace.h>
+#ifdef HAVE_UIDGID_HEADER
+# include <linux/uidgid.h>
+#endif
 
 #include <lustre_ioctl.h>
 #include <lustre_ha.h>
@@ -806,9 +810,10 @@ void ll_kill_super(struct super_block *sb)
 		sbi->ll_umounting = 1;
 
 		/* wait running statahead threads to quit */
-		while (atomic_read(&sbi->ll_sa_running) > 0)
-			schedule_timeout_and_set_state(TASK_UNINTERRUPTIBLE,
-				msecs_to_jiffies(MSEC_PER_SEC >> 3));
+		while (atomic_read(&sbi->ll_sa_running) > 0) {
+			set_current_state(TASK_UNINTERRUPTIBLE);
+			schedule_timeout(msecs_to_jiffies(MSEC_PER_SEC >> 3));
+		}
 	}
 
 	EXIT;

@@ -41,6 +41,7 @@
 
 # define DEBUG_SUBSYSTEM S_LNET
 
+#include <linux/kthread.h>
 #include <libcfs/libcfs.h>
 #include "tracefile.h"
 
@@ -231,9 +232,10 @@ void libcfs_debug_dumplog_internal(void *arg)
 {
 	static time_t last_dump_time;
 	time_t current_time;
-	DECL_JOURNAL_DATA;
+	void *journal_info;
 
-	PUSH_JOURNAL;
+	journal_info = current->journal_info;
+	current->journal_info = NULL;
 
 	current_time = cfs_time_current_sec();
 
@@ -248,7 +250,7 @@ void libcfs_debug_dumplog_internal(void *arg)
 		cfs_tracefile_dump_all_pages(debug_file_name);
 		libcfs_run_debug_log_upcall(debug_file_name);
 	}
-	POP_JOURNAL;
+	current->journal_info = journal_info;
 }
 
 static int libcfs_debug_dumplog_thread(void *arg)
@@ -267,7 +269,7 @@ void libcfs_debug_dumplog(void)
 	/* we're being careful to ensure that the kernel thread is
 	 * able to set our state to running as it exits before we
 	 * get to schedule() */
-	init_waitqueue_entry_current(&wait);
+	init_waitqueue_entry(&wait, current);
 	set_current_state(TASK_INTERRUPTIBLE);
 	add_wait_queue(&debug_ctlwq, &wait);
 
@@ -278,7 +280,7 @@ void libcfs_debug_dumplog(void)
 		printk(KERN_ERR "LustreError: cannot start log dump thread:"
 		       " %ld\n", PTR_ERR(dumper));
 	else
-		waitq_wait(&wait, TASK_INTERRUPTIBLE);
+		schedule();
 
 	/* be sure to teardown if cfs_create_thread() failed */
 	remove_wait_queue(&debug_ctlwq, &wait);

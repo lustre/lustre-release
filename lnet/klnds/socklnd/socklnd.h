@@ -36,6 +36,7 @@
 #include <linux/if.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
+#include <linux/kthread.h>
 #include <linux/kmod.h>
 #include <linux/list.h>
 #include <linux/mm.h>

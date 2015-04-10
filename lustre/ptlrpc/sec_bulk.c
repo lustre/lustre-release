@@ -573,11 +573,11 @@ again:
 						page_pools.epp_waitqlen;
 
 			set_current_state(TASK_UNINTERRUPTIBLE);
-			init_waitqueue_entry_current(&waitlink);
+			init_waitqueue_entry(&waitlink, current);
 			add_wait_queue(&page_pools.epp_waitq, &waitlink);
 
 			spin_unlock(&page_pools.epp_lock);
-			waitq_wait(&waitlink, TASK_UNINTERRUPTIBLE);
+			schedule();
 			remove_wait_queue(&page_pools.epp_waitq, &waitlink);
 			LASSERT(page_pools.epp_waitqlen > 0);
 			spin_lock(&page_pools.epp_lock);

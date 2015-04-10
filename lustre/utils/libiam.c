@@ -56,6 +56,7 @@
 #include <endian.h>
 #endif
 
+#include <libcfs/util/string.h>
 #include <libcfs/libcfs.h>
 #include <lustre/libiam.h>
 

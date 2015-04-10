@@ -44,6 +44,10 @@
 #define DEBUG_SUBSYSTEM S_OSD
 
 #include <linux/module.h>
+#include <linux/user_namespace.h>
+#ifdef HAVE_UIDGID_HEADER
+# include <linux/uidgid.h>
+#endif
 
 /* LUSTRE_VERSION_CODE */
 #include <lustre_ver.h>
@@ -6249,6 +6253,8 @@ static void __exit osd_mod_exit(void)
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Object Storage Device ("LUSTRE_OSD_LDISKFS_NAME")");
+MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-cfs_module(osd, "0.1.0", osd_mod_init, osd_mod_exit);
+module_init(osd_mod_init);
+module_exit(osd_mod_exit);

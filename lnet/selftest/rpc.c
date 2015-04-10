@@ -1593,9 +1593,10 @@ srpc_startup (void)
 	memset(&srpc_data, 0, sizeof(struct smoketest_rpc));
 	spin_lock_init(&srpc_data.rpc_glock);
 
-        /* 1 second pause to avoid timestamp reuse */
-        cfs_pause(cfs_time_seconds(1));
-        srpc_data.rpc_matchbits = ((__u64) cfs_time_current_sec()) << 48;
+	/* 1 second pause to avoid timestamp reuse */
+	set_current_state(TASK_UNINTERRUPTIBLE);
+	schedule_timeout(cfs_time_seconds(1));
+	srpc_data.rpc_matchbits = ((__u64) cfs_time_current_sec()) << 48;
 
         srpc_data.rpc_state = SRPC_STATE_NONE;
 

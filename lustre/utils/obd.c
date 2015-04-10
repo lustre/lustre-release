@@ -1110,7 +1110,9 @@ int jt_obd_alloc_fids(struct jt_fid_space *space, struct lu_fid *fid,
         fid->f_oid = space->jt_id;
         fid->f_ver = 0;
 
-        space->jt_id = min(space->jt_id + *count, space->jt_width);
+	space->jt_id = space->jt_id + *count;
+	if (space->jt_id > space->jt_width)
+		space->jt_id = space->jt_width;
 
         *count = space->jt_id - fid->f_oid;
         return 0;
@@ -3310,7 +3312,10 @@ static int nodemap_cmd(enum lcfg_command_type cmd, void *ret_data,
 		if (rc != 0)
 			goto out;
 
-		memcpy(ret_data, data.ioc_pbuf1, min(data.ioc_plen1, ret_size));
+		if (ret_size > data.ioc_plen1)
+			ret_size = data.ioc_plen1;
+
+		memcpy(ret_data, data.ioc_pbuf1, ret_size);
 	}
 out:
 	lustre_cfg_free(lcfg);

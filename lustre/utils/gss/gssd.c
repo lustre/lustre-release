@@ -54,6 +54,8 @@
 #include <string.h>
 #include <signal.h>
 #include <errno.h>
+#include <libcfs/util/string.h>
+
 #include "gssd.h"
 #include "err_util.h"
 #include "gss_util.h"

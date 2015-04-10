@@ -121,25 +121,6 @@ ctl_table_ctl_name, [
 ]) # LIBCFS_SYSCTL_CTLNAME
 
 #
-# LIBCFS_ADD_WAIT_QUEUE_EXCLUSIVE
-#
-# 2.6.34 adds __add_wait_queue_exclusive
-#
-AC_DEFUN([LIBCFS_ADD_WAIT_QUEUE_EXCLUSIVE], [
-LB_CHECK_COMPILE([if '__add_wait_queue_exclusive' exists],
-__add_wait_queue_exclusive, [
-	#include <linux/wait.h>
-],[
-	wait_queue_head_t queue;
-	wait_queue_t      wait;
-	__add_wait_queue_exclusive(&queue, &wait);
-],[
-	AC_DEFINE(HAVE___ADD_WAIT_QUEUE_EXCLUSIVE, 1,
-		[__add_wait_queue_exclusive exists])
-])
-]) # LIBCFS_ADD_WAIT_QUEUE_EXCLUSIVE
-
-#
 # LC_SK_SLEEP
 #
 # 2.6.35 kernel has sk_sleep function
@@ -315,8 +296,6 @@ LIBCFS_STACKTRACE_OPS_HAVE_WALK_STACK
 LC_SHRINKER_WANT_SHRINK_PTR
 # 2.6.33
 LIBCFS_SYSCTL_CTLNAME
-# 2.6.34
-LIBCFS_ADD_WAIT_QUEUE_EXCLUSIVE
 # 2.6.35
 LC_SK_SLEEP
 # 2.6.39

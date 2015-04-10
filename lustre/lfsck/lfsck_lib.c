@@ -30,6 +30,7 @@
 
 #define DEBUG_SUBSYSTEM S_LFSCK
 
+#include <linux/kthread.h>
 #include <libcfs/list.h>
 #include <lu_object.h>
 #include <dt_object.h>
@@ -3590,6 +3591,8 @@ static void __exit lfsck_exit(void)
 
 MODULE_AUTHOR("Intel Corporation <http://www.intel.com/>");
 MODULE_DESCRIPTION("LFSCK");
+MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-cfs_module(lfsck, LUSTRE_VERSION_STRING, lfsck_init, lfsck_exit);
+module_init(lfsck_init);
+module_exit(lfsck_exit);

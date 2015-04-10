@@ -42,18 +42,22 @@
 
 #define DEBUG_SUBSYSTEM S_SEC
 
+#include <linux/user_namespace.h>
+#ifdef HAVE_UIDGID_HEADER
+# include <linux/uidgid.h>
+#endif
 #include <lustre_idmap.h>
 #include <upcall_cache.h>
 #include <md_object.h>
 #include <obd_support.h>
 
-#define lustre_get_group_info(group_info) do {             \
-	atomic_inc(&(group_info)->usage);              \
+#define lustre_get_group_info(group_info) do {		\
+	atomic_inc(&(group_info)->usage);		\
 } while (0)
 
-#define lustre_put_group_info(group_info) do {             \
-	if (atomic_dec_and_test(&(group_info)->usage)) \
-		groups_free(group_info);               	   \
+#define lustre_put_group_info(group_info) do {		\
+	if (atomic_dec_and_test(&(group_info)->usage))	\
+		groups_free(group_info);		\
 } while (0)
 
 /*

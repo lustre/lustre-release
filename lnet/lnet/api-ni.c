@@ -987,7 +987,8 @@ lnet_ping_md_unlink(lnet_ping_info_t *pinfo, lnet_handle_md_t *md_handle)
 	/* NB md could be busy; this just starts the unlink */
 	while (pinfo->pi_features != LNET_PING_FEAT_INVAL) {
 		CDEBUG(D_NET, "Still waiting for ping MD to unlink\n");
-		cfs_pause(cfs_time_seconds(1));
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		schedule_timeout(cfs_time_seconds(1));
 	}
 
 	cfs_restore_sigs(blocked);
@@ -1125,7 +1126,8 @@ lnet_clear_zombies_nis_locked(void)
 				       "Waiting for zombie LNI %s\n",
 				       libcfs_nid2str(ni->ni_nid));
 			}
-			cfs_pause(cfs_time_seconds(1));
+			set_current_state(TASK_UNINTERRUPTIBLE);
+			schedule_timeout(cfs_time_seconds(1));
 			lnet_net_lock(LNET_LOCK_EX);
 			continue;
 		}

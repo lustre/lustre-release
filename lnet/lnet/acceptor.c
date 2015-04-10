@@ -382,13 +382,14 @@ lnet_acceptor(void *arg)
         while (!lnet_acceptor_state.pta_shutdown) {
 
 		rc = lnet_sock_accept(&newsock, lnet_acceptor_state.pta_sock);
-                if (rc != 0) {
-                        if (rc != -EAGAIN) {
-                                CWARN("Accept error %d: pausing...\n", rc);
-                                cfs_pause(cfs_time_seconds(1));
-                        }
-                        continue;
-                }
+		if (rc != 0) {
+			if (rc != -EAGAIN) {
+				CWARN("Accept error %d: pausing...\n", rc);
+				set_current_state(TASK_UNINTERRUPTIBLE);
+				schedule_timeout(cfs_time_seconds(1));
+			}
+			continue;
+		}
 
 		/* maybe we're waken up with lnet_sock_abort_accept() */
 		if (lnet_acceptor_state.pta_shutdown) {
