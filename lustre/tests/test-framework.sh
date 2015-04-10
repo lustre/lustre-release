@@ -492,6 +492,13 @@ load_modules_local() {
     [ "$PTLDEBUG" ] && lctl set_param debug="$PTLDEBUG"
     [ "$SUBSYSTEM" ] && lctl set_param subsystem_debug="${SUBSYSTEM# }"
     load_module ../lnet/lnet/lnet
+	case $NETTYPE in
+	o2ib)
+		LNETLND="o2iblnd/ko2iblnd"
+		;;
+	*)
+		;;
+	esac
     LNETLND=${LNETLND:-"socklnd/ksocklnd"}
     load_module ../lnet/klnds/$LNETLND
     load_module obdclass/obdclass
@@ -2891,6 +2898,12 @@ get_env_vars() {
 	if [ -n "$FSTYPE" ]; then
 		echo -n " FSTYPE=$FSTYPE"
 	fi
+
+	for var in LNETLND NETTYPE; do
+		if [ -n "${!var}" ]; then
+			echo -n " $var=${!var}"
+		fi
+	done
 }
 
 do_nodes() {
