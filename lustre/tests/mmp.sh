@@ -141,9 +141,12 @@ get_mmp_update_interval() {
 	local interval
 
 	interval=$(do_facet $facet \
-		   "$DEBUGFS -c -R dump_mmp $device 2>/dev/null" |
+		   "$DEBUGFS -c -R dump_mmp $device 2>$TMP/mmp.debugfs.msg" |
 		   awk 'tolower($0) ~ /update.interval/ { print $NF }')
-	[ -z "$interval" ] && interval=5
+	[ -z "$interval" ] && interval=5 &&
+		do_facet $facet cat $TMP/mmp.debugfs.msg &&
+		echo "$facet:$device: assume update interval=$interval" 1>&2 ||
+		echo "$facet:$device: got actual update interval=$interval" 1>&2
 
 	echo $interval
 }
@@ -155,9 +158,12 @@ get_mmp_check_interval() {
 	local interval
 
 	interval=$(do_facet $facet \
-		   "$DEBUGFS -c -R dump_mmp $device 2>/dev/null" |
+		   "$DEBUGFS -c -R dump_mmp $device 2>$TMP/mmp.debugfs.msg" |
 		   awk 'tolower($0) ~ /check.interval/ { print $NF }')
-	[ -z "$interval" ] && interval=5
+	[ -z "$interval" ] && interval=5 &&
+		do_facet $facet cat $TMP/mmp.debugfs.msg &&
+		echo "$facet:$device: assume check interval=$interval" 1>&2 ||
+		echo "$facet:$device: got actual check interval=$interval" 1>&2
 
 	echo $interval
 }
