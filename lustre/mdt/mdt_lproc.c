@@ -281,9 +281,9 @@ static int mdt_identity_upcall_seq_show(struct seq_file *m, void *data)
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	struct upcall_cache *hash = mdt->mdt_identity_cache;
 
-	read_lock(&hash->uc_upcall_rwlock);
+	down_read(&hash->uc_upcall_rwsem);
 	seq_printf(m, "%s\n", hash->uc_upcall);
-	read_unlock(&hash->uc_upcall_rwlock);
+	up_read(&hash->uc_upcall_rwsem);
 	return 0;
 }
 
@@ -309,9 +309,9 @@ mdt_identity_upcall_seq_write(struct file *file, const char __user *buffer,
 		GOTO(failed, rc = -EFAULT);
 
 	/* Remove any extraneous bits from the upcall (e.g. linefeeds) */
-	write_lock(&hash->uc_upcall_rwlock);
+	down_write(&hash->uc_upcall_rwsem);
 	sscanf(kernbuf, "%s", hash->uc_upcall);
-	write_unlock(&hash->uc_upcall_rwlock);
+	up_write(&hash->uc_upcall_rwsem);
 
 	if (strcmp(hash->uc_name, mdt_obd_name(mdt)) != 0)
 		CWARN("%s: write to upcall name %s\n",

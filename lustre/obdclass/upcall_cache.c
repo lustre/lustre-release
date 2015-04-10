@@ -428,7 +428,7 @@ struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
 		RETURN(ERR_PTR(-ENOMEM));
 
 	spin_lock_init(&cache->uc_lock);
-	rwlock_init(&cache->uc_upcall_rwlock);
+	init_rwsem(&cache->uc_upcall_rwsem);
 	for (i = 0; i < UC_CACHE_HASH_SIZE; i++)
 		INIT_LIST_HEAD(&cache->uc_hashtable[i]);
 	strlcpy(cache->uc_name, name, sizeof(cache->uc_name));
