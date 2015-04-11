@@ -63,7 +63,6 @@
 # include <sys/time.h>
 # include <sys/types.h>
 # include <libcfs/user-time.h>
-# include <libcfs/user-bitops.h>
 #endif /* __KERNEL__ */
 
 #include "curproc.h"
@@ -235,8 +234,8 @@ void cfs_get_random_bytes(void *buf, int size);
 #include <libcfs/err.h>
 #include <libcfs/libcfs_debug.h>
 #include <libcfs/libcfs_private.h>
-#include <libcfs/bitmap.h>
 #ifdef __KERNEL__
+# include <libcfs/bitmap.h>
 # include <libcfs/libcfs_cpu.h>
 # include <libcfs/libcfs_ioctl.h>
 # include <libcfs/libcfs_prim.h>

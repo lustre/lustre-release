@@ -27,6 +27,4 @@ EXTRA_DIST = \
 	libcfs_workitem.h \
 	list.h \
 	types.h \
-	user-bitops.h \
-	user-crypto.h \
 	user-time.h

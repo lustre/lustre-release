@@ -36,14 +36,6 @@
 #ifndef _LIBCFS_BITMAP_H_
 #define _LIBCFS_BITMAP_H_
 
-#ifndef __KERNEL__
-#define DIV_ROUND_UP(n, d)	(((n) + (d) - 1) / (d))
-#define BITS_TO_LONGS(nr)	DIV_ROUND_UP(nr, 8 * sizeof(long))
-
-#define DECLARE_BITMAP(name, bits) \
-	unsigned long name[BITS_TO_LONGS(bits)]
-#endif /* !__KERNEL__ */
-
 typedef struct {
 	unsigned int  size;
 	unsigned long data[0];

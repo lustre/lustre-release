@@ -56,7 +56,9 @@ static inline int ext2_test_bit(int nr, const void *addr)
 	const unsigned char *tmp = addr;
 	return (tmp[nr >> 3] >> (nr & 7)) & 1;
 #else
-	return test_bit(nr, addr);
+	const unsigned long *tmp = addr;
+	return ((1UL << (nr & (BITS_PER_LONG - 1))) &
+		((tmp)[nr / BITS_PER_LONG])) != 0;
 #endif
 }
 
