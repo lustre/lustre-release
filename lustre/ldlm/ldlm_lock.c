@@ -841,10 +841,16 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
 		ldlm_set_cbpending(lock);
         }
 
-        if (!lock->l_readers && !lock->l_writers &&
-	    ldlm_is_cbpending(lock)) {
-                /* If we received a blocked AST and this was the last reference,
-                 * run the callback. */
+	if (!lock->l_readers && !lock->l_writers &&
+	    (ldlm_is_cbpending(lock) || lock->l_req_mode == LCK_GROUP)) {
+		/* If we received a blocked AST and this was the last reference,
+		 * run the callback.
+		 * Group locks are special:
+		 * They must not go in LRU, but they are not called back
+		 * like non-group locks, instead they are manually released.
+		 * They have an l_writers reference which they keep until
+		 * they are manually released, so we remove them when they have
+		 * no more reader or writer references. - LU-6368 */
 		if (ldlm_is_ns_srv(lock) && lock->l_export)
                         CERROR("FL_CBPENDING set on non-local lock--just a "
                                "warning\n");
@@ -907,7 +913,6 @@ EXPORT_SYMBOL(ldlm_lock_decref);
  * \a lockh and mark it for subsequent cancellation once r/w refcount
  * drops to zero instead of putting into LRU.
  *
- * Typical usage is for GROUP locks which we cannot allow to be cached.
  */
 void ldlm_lock_decref_and_cancel(struct lustre_handle *lockh, __u32 mode)
 {

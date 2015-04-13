@@ -1017,13 +1017,15 @@ static void osc_lock_detach(const struct lu_env *env, struct osc_lock *olck)
 {
 	struct ldlm_lock *dlmlock;
 
+	ENTRY;
+
 	dlmlock = olck->ols_dlmlock;
 	if (dlmlock == NULL)
-		return;
+		RETURN_EXIT;
 
 	if (olck->ols_hold) {
 		olck->ols_hold = 0;
-		osc_cancel_base(&olck->ols_handle, olck->ols_einfo.ei_mode);
+		ldlm_lock_decref(&olck->ols_handle, olck->ols_einfo.ei_mode);
 		olck->ols_handle.cookie = 0ULL;
 	}
 
@@ -1034,6 +1036,8 @@ static void osc_lock_detach(const struct lu_env *env, struct osc_lock *olck)
 	lu_ref_del(&dlmlock->l_reference, "osc_lock", olck);
 	LDLM_LOCK_RELEASE(dlmlock);
 	olck->ols_has_ref = 0;
+
+	EXIT;
 }
 
 /**

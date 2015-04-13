@@ -2266,18 +2266,6 @@ int osc_match_base(struct obd_export *exp, struct ldlm_res_id *res_id,
         RETURN(rc);
 }
 
-int osc_cancel_base(struct lustre_handle *lockh, __u32 mode)
-{
-        ENTRY;
-
-        if (unlikely(mode == LCK_GROUP))
-                ldlm_lock_decref_and_cancel(lockh, mode);
-        else
-                ldlm_lock_decref(lockh, mode);
-
-        RETURN(0);
-}
-
 static int osc_statfs_interpret(const struct lu_env *env,
                                 struct ptlrpc_request *req,
                                 struct osc_async_args *aa, int rc)

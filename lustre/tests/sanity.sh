@@ -12896,6 +12896,16 @@ test_243()
 }
 run_test 243 "various group lock tests"
 
+test_244()
+{
+	test_mkdir -p $DIR/$tdir
+	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=35
+	sendfile_grouplock $DIR/$tdir/$tfile || \
+		error "sendfile+grouplock failed"
+	rm -rf $DIR/$tdir
+}
+run_test 244 "sendfile with group lock tests"
+
 test_250() {
 	[ "$(facet_fstype ost$(($($GETSTRIPE -i $DIR/$tfile) + 1)))" = "zfs" ] \
 	 && skip "no 16TB file size limit on ZFS" && return
