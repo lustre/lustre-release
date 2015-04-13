@@ -123,12 +123,57 @@ int mdd_lookup(const struct lu_env *env,
         RETURN(rc);
 }
 
+/**
+ * Get parent FID of the directory
+ *
+ * Read parent FID from linkEA, if that fails, then do lookup
+ * dotdot to get the parent FID.
+ *
+ * \param[in] env	execution environment
+ * \param[in] obj	object from which to find the parent FID
+ * \param[in] attr	attribute of the object
+ * \param[out] fid	fid to get the parent FID
+ *
+ * \retval		0 if getting the parent FID succeeds.
+ * \retval		negative errno if getting the parent FID fails.
+ **/
 static inline int mdd_parent_fid(const struct lu_env *env,
 				 struct mdd_object *obj,
 				 const struct lu_attr *attr,
 				 struct lu_fid *fid)
 {
-	return __mdd_lookup(env, &obj->mod_obj, attr, &lname_dotdot, fid, 0);
+	struct mdd_thread_info  *info = mdd_env_info(env);
+	struct linkea_data	ldata = { NULL };
+	struct lu_buf		*buf = &info->mti_link_buf;
+	struct lu_name		lname;
+	int			rc = 0;
+
+	ENTRY;
+
+	LASSERT(S_ISDIR(mdd_object_type(obj)));
+
+	buf = lu_buf_check_and_alloc(buf, PATH_MAX);
+	if (buf->lb_buf == NULL)
+		GOTO(lookup, rc = 0);
+
+	ldata.ld_buf = buf;
+	rc = mdd_links_read(env, obj, &ldata);
+	if (rc != 0)
+		GOTO(lookup, rc);
+
+	LASSERT(ldata.ld_leh != NULL);
+	/* Directory should only have 1 parent */
+	if (ldata.ld_leh->leh_reccount > 1)
+		GOTO(lookup, rc);
+
+	ldata.ld_lee = (struct link_ea_entry *)(ldata.ld_leh + 1);
+
+	linkea_entry_unpack(ldata.ld_lee, &ldata.ld_reclen, &lname, fid);
+	if (likely(fid_is_sane(fid)))
+		RETURN(0);
+lookup:
+	rc =  __mdd_lookup(env, &obj->mod_obj, attr, &lname_dotdot, fid, 0);
+	RETURN(rc);
 }
 
 /*
