@@ -479,10 +479,6 @@ static int out_xattr_get(struct tgt_session_info *tsi)
 		lbuf->lb_len = 0;
 		GOTO(out, rc);
 	}
-	if (rc == 0) {
-		lbuf->lb_len = 0;
-		GOTO(out, rc = -ENOENT);
-	}
 	lbuf->lb_len = rc;
 	rc = 0;
 	CDEBUG(D_INFO, "%s: "DFID" get xattr %s len %d\n",
