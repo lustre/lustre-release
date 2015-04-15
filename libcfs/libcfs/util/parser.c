@@ -20,8 +20,23 @@
  *
  */
 
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <assert.h>
+#include <ctype.h>
+#include <errno.h>
+#include <getopt.h>
+#include <malloc.h>
+#ifdef HAVE_LIBREADLINE
+# include <readline/history.h>
+# include <readline/readline.h>
+#endif /* HAVE_LIBREADLINE */
+#include <string.h>
+#include <unistd.h>
+
+#include <libcfs/util/parser.h>
 #include <lustre_ver.h>
-#include <libcfs/libcfsutil.h>
 
 static command_t * top_level;           /* Top level of commands, initialized by
                                     * InitParser                              */
@@ -236,7 +251,7 @@ static char **command_completion(const char *text, int start, int end)
                 if (*(pos - 1) == ' ') match_tbl = table->pc_sub_cmd;
         }
 
-        return completion_matches(text, command_generator);
+	return rl_completion_matches(text, command_generator);
 }
 #endif
 

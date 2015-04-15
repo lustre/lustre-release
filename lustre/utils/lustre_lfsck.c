@@ -41,9 +41,10 @@
 #include "obdctl.h"
 
 #include <lustre/lustre_lfsck_user.h>
-#include <libcfs/libcfsutil.h>
 #include <lnet/lnetctl.h>
 #include <lustre_ioctl.h>
+/* Needs to be last to avoid clashes */
+#include <libcfs/util/ioctl.h>
 
 static struct option long_opt_start[] = {
 	{"device",		required_argument, 0, 'M'},

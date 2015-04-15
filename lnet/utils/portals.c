@@ -19,13 +19,24 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  */
-
-#include <libcfs/libcfsutil.h>
+#include <errno.h>
+#include <getopt.h>
+#include <limits.h>
+#include <netdb.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <sys/time.h>
+#include <time.h>
+#include <linux/types.h>
+#include <libcfs/libcfs.h>
+#include <libcfs/util/string.h>
+#include <libcfs/util/ioctl.h>
 #include <lnet/lnetctl.h>
 #include <lnet/socklnd.h>
 #include <lnet/lnet.h>
-#include <getopt.h>
-#include <netdb.h>
 
 unsigned int libcfs_debug;
 unsigned int libcfs_printk = D_CANTMASK;

@@ -167,20 +167,6 @@ cfs_clear_sigpending(void)
 	spin_unlock_irqrestore(&current->sighand->siglock, flags);
 }
 
-int
-libcfs_arch_init(void)
-{
-        return 0;
-}
-
-void
-libcfs_arch_cleanup(void)
-{
-        return;
-}
-
-EXPORT_SYMBOL(libcfs_arch_init);
-EXPORT_SYMBOL(libcfs_arch_cleanup);
 EXPORT_SYMBOL(cfs_enter_debugger);
 EXPORT_SYMBOL(cfs_block_allsigs);
 EXPORT_SYMBOL(cfs_block_sigs);

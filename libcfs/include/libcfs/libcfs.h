@@ -249,7 +249,9 @@ void cfs_get_random_bytes(void *buf, int size);
 #include <libcfs/libcfs_private.h>
 #include <libcfs/bitmap.h>
 #include <libcfs/libcfs_cpu.h>
-#include <libcfs/libcfs_ioctl.h>
+#ifdef __KERNEL__
+# include <libcfs/libcfs_ioctl.h>
+#endif /* __KERNEL__ */
 #include <libcfs/libcfs_prim.h>
 #include <libcfs/libcfs_time.h>
 #ifdef __KERNEL__
@@ -275,8 +277,5 @@ static inline void *__container_of(const void *ptr, unsigned long shift)
 	((type *)__container_of((ptr), offsetof(type, member)))
 
 #define _LIBCFS_H
-
-int libcfs_arch_init(void);
-void libcfs_arch_cleanup(void);
 
 #endif /* _LIBCFS_H */

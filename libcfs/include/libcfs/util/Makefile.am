@@ -1,1 +1,1 @@
-EXTRA_DIST = parser.h platform.h string.h libcfsutil_ioctl.h
+EXTRA_DIST = ioctl.h parser.h string.h

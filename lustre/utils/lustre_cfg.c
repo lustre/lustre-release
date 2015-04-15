@@ -50,6 +50,7 @@
 #include <glob.h>
 
 #include <libcfs/libcfs.h>
+#include <libcfs/util/parser.h>
 #include <lnet/nidstr.h>
 #include <lustre_cfg.h>
 #include <lustre/lustre_idl.h>
@@ -65,7 +66,6 @@
 
 #include "obdctl.h"
 #include <lnet/lnetctl.h>
-#include <libcfs/libcfsutil.h>
 #include <stdio.h>
 
 static char * lcfg_devname;

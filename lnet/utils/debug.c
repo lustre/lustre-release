@@ -43,7 +43,8 @@
 #define _GNU_SOURCE
 #endif
 
-#include <libcfs/libcfsutil.h>
+#include <libcfs/libcfs.h>
+#include <libcfs/util/ioctl.h>
 #include <lnet/lnetctl.h>
 
 static char rawbuf[8192];
@@ -191,19 +192,8 @@ static int applymask(char* procpath, int value)
 
 static void applymask_all(unsigned int subs_mask, unsigned int debug_mask)
 {
-	if (!dump_filename) {
-		applymask(SUBSYS_DEBUG_CTL_NAME, subs_mask);
-		applymask(DEBUG_CTL_NAME, debug_mask);
-	} else {
-		struct libcfs_debug_ioctl_data data;
-
-		data.hdr.ioc_len = sizeof(data);
-		data.hdr.ioc_version = 0;
-		data.subs = subs_mask;
-		data.debug = debug_mask;
-
-		dump(OBD_DEV_ID, LIBCFS_IOC_DEBUG_MASK, &data);
-	}
+	applymask(SUBSYS_DEBUG_CTL_NAME, subs_mask);
+	applymask(DEBUG_CTL_NAME, debug_mask);
 	printf("Applied subsystem_debug=%d, debug=%d to /proc/sys/lnet\n",
 	       subs_mask, debug_mask);
 }
@@ -368,7 +358,6 @@ readhdr:
 			goto readhdr;
 
 		if (hdr->ph_len > 4094 ||       /* is this header bogus? */
-		    hdr->ph_type >= libcfs_tcd_type_max() ||
 		    hdr->ph_stack > 65536 ||
 		    hdr->ph_sec < (1 << 30) ||
 		    hdr->ph_usec > 1000000000 ||

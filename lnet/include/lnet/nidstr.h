@@ -29,6 +29,28 @@
 #define _LNET_NIDSTRINGS_H
 #include <lnet/types.h>
 
+/**
+ *  Lustre Network Driver types.
+ */
+enum {
+	/* Only add to these values (i.e. don't ever change or redefine them):
+	 * network addresses depend on them... */
+	QSWLND		= 1,
+	SOCKLND		= 2,
+	GMLND		= 3,
+	PTLLND		= 4,
+	O2IBLND		= 5,
+	CIBLND		= 6,
+	OPENIBLND	= 7,
+	IIBLND		= 8,
+	LOLND		= 9,
+	RALND		= 10,
+	VIBLND		= 11,
+	MXLND		= 12,
+	GNILND		= 13,
+	GNIIPLND	= 14,
+};
+
 struct list_head;
 
 #define LNET_NIDSTR_COUNT  1024    /* # of nidstrings */

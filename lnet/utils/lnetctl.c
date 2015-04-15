@@ -23,12 +23,12 @@
  * Author:
  *   Amir Shehata <amir.shehata@intel.com>
  */
-
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <getopt.h>
+#include <string.h>
+#include <libcfs/util/parser.h>
 #include <lnet/lnetctl.h>
-#include <libcfs/libcfsutil.h>
 #include "cyaml/cyaml.h"
 #include "lnetconfig/liblnetconfig.h"
 
@@ -996,14 +996,6 @@ int main(int argc, char **argv)
 		return rc;
 	}
 
-	rc = libcfs_arch_init();
-	if (rc < 0) {
-		cYAML_build_error(-1, -1, "lnetctl", "startup",
-				  "cannot initialize libcfs", &err_rc);
-		cYAML_print_tree2file(stderr, err_rc);
-		return rc;
-	}
-
 	Parser_init("lnetctl > ", list);
 	if (argc > 1) {
 		rc = Parser_execarg(argc - 1, &argv[1], list);
@@ -1013,6 +1005,5 @@ int main(int argc, char **argv)
 	Parser_commands();
 
 errorout:
-	libcfs_arch_cleanup();
 	return rc;
 }

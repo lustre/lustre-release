@@ -37,12 +37,20 @@
  *
  * Author: Liang Zhen <liangzhen@clusterfs.com>
  */
-
+#include <errno.h>
 #include <getopt.h>
 #include <pwd.h>
 #include <unistd.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <time.h>
 
-#include <libcfs/libcfsutil.h>
+#include <libcfs/list.h>
+#include <libcfs/util/ioctl.h>
+#include <libcfs/util/parser.h>
 #include <lnet/lnetctl.h>
 #include <lnet/lnetst.h>
 #include <lnet/lnet.h>
@@ -3299,10 +3307,6 @@ main(int argc, char **argv)
 
         setlinebuf(stdout);
 
-        rc = libcfs_arch_init();
-        if (rc < 0)
-                return rc;
-
         rc = lst_initialize();
         if (rc < 0)
                 goto errorout;
@@ -3310,7 +3314,7 @@ main(int argc, char **argv)
         rc = ptl_initialize(argc, argv);
         if (rc < 0)
                 goto errorout;
-        
+
         Parser_init("lst > ", lst_cmdlist);
 
         if (argc != 1)  {
@@ -3321,6 +3325,5 @@ main(int argc, char **argv)
         Parser_commands();
 
 errorout:
-        libcfs_arch_cleanup();
         return rc;
 }

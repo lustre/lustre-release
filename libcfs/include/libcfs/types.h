@@ -33,6 +33,7 @@
 #ifndef __KERNEL__
 # include <limits.h> /* LONG_MAX */
 # include <stdbool.h> /* bool */
+# include <stddef.h> /* size_t */
 #endif /* !__KERNEL__ */
 
 #if defined(_ASM_GENERIC_INT_L64_H)

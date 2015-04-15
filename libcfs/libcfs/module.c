@@ -288,15 +288,17 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile,
 			if (err == -EINVAL)
 				continue;
 
-			if (err == 0)
-				err = libcfs_ioctl_popdata(hdr, uparam);
+			if (err == 0) {
+				if (copy_to_user(uparam, hdr, hdr->ioc_len))
+					err = -EFAULT;
+			}
 			break;
 		}
 		up_read(&ioctl_list_sem);
 		break; }
 	}
 out:
-	libcfs_ioctl_freedata(hdr);
+	LIBCFS_FREE(hdr, hdr->ioc_len);
 	RETURN(err);
 }
 
@@ -315,8 +317,6 @@ MODULE_LICENSE("GPL");
 static int init_libcfs_module(void)
 {
 	int rc;
-
-	libcfs_arch_init();
 
 	rc = libcfs_debug_init(5 * 1024 * 1024);
 	if (rc < 0) {
@@ -408,8 +408,6 @@ static void exit_libcfs_module(void)
 	if (rc)
 		printk(KERN_ERR "LustreError: libcfs_debug_cleanup: %d\n",
 		       rc);
-
-	libcfs_arch_cleanup();
 }
 
 cfs_module(libcfs, "1.0.0", init_libcfs_module, exit_libcfs_module);

@@ -36,7 +36,7 @@
  * libcfs/include/libcfs/libcfs_ioctl.h
  *
  * Low-level ioctl data structures. Kernel ioctl functions declared here,
- * and user space functions are in libcfsutil_ioctl.h.
+ * and user space functions are in libcfs/util/ioctl.h.
  *
  */
 
@@ -100,22 +100,6 @@ do {							\
 	(data).hdr.ioc_version = LIBCFS_IOCTL_VERSION2;	\
 	(data).hdr.ioc_len = sizeof(data);		\
 } while (0)
-
-
-#ifdef __KERNEL__
-
-struct libcfs_ioctl_handler {
-	struct list_head item;
-	int (*handle_ioctl)(unsigned int cmd, struct libcfs_ioctl_hdr *hdr);
-};
-
-#define DECLARE_IOCTL_HANDLER(ident, func)			\
-	static struct libcfs_ioctl_handler ident = {		\
-		/* .item = */ LIST_HEAD_INIT(ident.item),	\
-		/* .handle_ioctl = */ func			\
-	}
-
-#endif
 
 /* 'f' ioctls are defined in lustre_ioctl.h and lustre_user.h except for: */
 #define LIBCFS_IOC_DEBUG_MASK             _IOWR('f', 250, long)
@@ -190,88 +174,54 @@ struct libcfs_ioctl_handler {
 static inline int libcfs_ioctl_packlen(struct libcfs_ioctl_data *data)
 {
 	int len = sizeof(*data);
-	len += cfs_size_round(data->ioc_inllen1);
-	len += cfs_size_round(data->ioc_inllen2);
+	len += (data->ioc_inllen1 + 7) & ~7;
+	len += (data->ioc_inllen2 + 7) & ~7;
 	return len;
 }
 
 static inline bool libcfs_ioctl_is_invalid(struct libcfs_ioctl_data *data)
 {
-	if (data->ioc_hdr.ioc_len > (1<<30)) {
-		CERROR("LIBCFS ioctl: ioc_len larger than 1<<30\n");
+	if (data->ioc_hdr.ioc_len > (1<<30))
 		return 1;
-	}
-	if (data->ioc_inllen1 > (1<<30)) {
-		CERROR("LIBCFS ioctl: ioc_inllen1 larger than 1<<30\n");
+
+	if (data->ioc_inllen1 > (1<<30))
 		return 1;
-	}
-	if (data->ioc_inllen2 > (1<<30)) {
-		CERROR("LIBCFS ioctl: ioc_inllen2 larger than 1<<30\n");
+
+	if (data->ioc_inllen2 > (1<<30))
 		return 1;
-	}
-	if (data->ioc_inlbuf1 && data->ioc_inllen1 == 0) {
-		CERROR("LIBCFS ioctl: inlbuf1 pointer but 0 length\n");
+
+	if (data->ioc_inlbuf1 && data->ioc_inllen1 == 0)
 		return 1;
-	}
-	if (data->ioc_inlbuf2 && data->ioc_inllen2 == 0) {
-		CERROR("LIBCFS ioctl: inlbuf2 pointer but 0 length\n");
+
+	if (data->ioc_inlbuf2 && data->ioc_inllen2 == 0)
 		return 1;
-	}
-	if (data->ioc_pbuf1 && data->ioc_plen1 == 0) {
-		CERROR("LIBCFS ioctl: pbuf1 pointer but 0 length\n");
+
+	if (data->ioc_pbuf1 && data->ioc_plen1 == 0)
 		return 1;
-	}
-	if (data->ioc_pbuf2 && data->ioc_plen2 == 0) {
-		CERROR("LIBCFS ioctl: pbuf2 pointer but 0 length\n");
+
+	if (data->ioc_pbuf2 && data->ioc_plen2 == 0)
 		return 1;
-	}
-	if (data->ioc_plen1 && data->ioc_pbuf1 == NULL) {
-		CERROR("LIBCFS ioctl: plen1 nonzero but no pbuf1 pointer\n");
+
+	if (data->ioc_plen1 && data->ioc_pbuf1 == NULL)
 		return 1;
-	}
-	if (data->ioc_plen2 && data->ioc_pbuf2 == NULL) {
-		CERROR("LIBCFS ioctl: plen2 nonzero but no pbuf2 pointer\n");
+
+	if (data->ioc_plen2 && data->ioc_pbuf2 == NULL)
 		return 1;
-	}
-	if ((__u32)libcfs_ioctl_packlen(data) != data->ioc_hdr.ioc_len) {
-		CERROR("LIBCFS ioctl: packlen != ioc_len\n");
+
+	if ((__u32)libcfs_ioctl_packlen(data) != data->ioc_hdr.ioc_len)
 		return 1;
-	}
+
 	if (data->ioc_inllen1 &&
-	    data->ioc_bulk[data->ioc_inllen1 - 1] != '\0') {
-		CERROR("LIBCFS ioctl: inlbuf1 not 0 terminated\n");
+	    data->ioc_bulk[data->ioc_inllen1 - 1] != '\0')
 		return 1;
-	}
+
 	if (data->ioc_inllen2 &&
-	    data->ioc_bulk[cfs_size_round(data->ioc_inllen1) +
-			   data->ioc_inllen2 - 1] != '\0') {
-		CERROR("LIBCFS ioctl: inlbuf2 not 0 terminated\n");
+	    data->ioc_bulk[((data->ioc_inllen1 + 7) & ~7) +
+			   data->ioc_inllen2 - 1] != '\0')
 		return 1;
-	}
+
 	return 0;
 }
-
-#ifdef __KERNEL__
-
-extern int libcfs_register_ioctl(struct libcfs_ioctl_handler *hand);
-extern int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand);
-extern int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr **hdr_pp,
-				struct libcfs_ioctl_hdr __user *uparam);
-
-static inline int libcfs_ioctl_popdata(struct libcfs_ioctl_hdr *hdr,
-				       struct libcfs_ioctl_hdr __user *uparam)
-{
-	 if (copy_to_user(uparam, hdr, hdr->ioc_len))
-		return -EFAULT;
-	 return 0;
-}
-
-static inline void libcfs_ioctl_freedata(struct libcfs_ioctl_hdr *hdr)
-{
-	LIBCFS_FREE(hdr, hdr->ioc_len);
-}
-
-#endif
 
 extern int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data);
 

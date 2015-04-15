@@ -594,28 +594,6 @@ do {                                                            \
         ptr += cfs_size_round(len);                             \
 } while (0)
 
-/**
- *  Lustre Network Driver types.
- */
-enum {
-        /* Only add to these values (i.e. don't ever change or redefine them):
-         * network addresses depend on them... */
-        QSWLND    = 1,
-        SOCKLND   = 2,
-        GMLND     = 3, /* obsolete, keep it so that libcfs_nid2str works */
-        PTLLND    = 4,
-        O2IBLND   = 5,
-        CIBLND    = 6,
-        OPENIBLND = 7,
-        IIBLND    = 8,
-        LOLND     = 9,
-        RALND     = 10,
-        VIBLND    = 11,
-        MXLND     = 12,
-        GNILND    = 13,
-	GNIIPLND  = 14,
-};
-
 extern struct cfs_psdev_ops libcfs_psdev_ops;
 extern struct miscdevice libcfs_dev;
 extern struct cfs_wi_sched *cfs_sched_rehash;

@@ -235,11 +235,4 @@ struct group_info{ };
 
 #define get_random_bytes(val, size)     (*val) = 0
 
-/* utility libcfs init/fini entries */
-static inline int libcfs_arch_init(void) {
-        return 0;
-}
-static inline void libcfs_arch_cleanup(void) {
-}
-
 #endif /* __LIBCFS_USER_PRIM_H__ */

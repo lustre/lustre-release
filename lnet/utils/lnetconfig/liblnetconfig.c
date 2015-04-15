@@ -33,9 +33,14 @@
  *  calls the APIs mentioned in 1
  */
 
+#include <errno.h>
+#include <limits.h>
+#include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <libcfs/libcfsutil.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <libcfs/util/ioctl.h>
 #include <lnet/lnetctl.h>
 #include <lnet/socklnd.h>
 #include <lnet/lnet.h>

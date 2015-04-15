@@ -65,6 +65,9 @@
 
 #include "obdctl.h"
 #include <libcfs/libcfs.h>
+#include <libcfs/util/ioctl.h>
+#include <libcfs/util/parser.h>
+
 #include <lnet/nidstr.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_cfg.h>
@@ -72,7 +75,6 @@
 #include <lustre/lustre_build_version.h>
 
 #include <lnet/lnetctl.h>
-#include <libcfs/libcfsutil.h>
 #include <lustre/lustreapi.h>
 
 #define MAX_STRING_SIZE 128
@@ -87,8 +89,8 @@
 #define MAX_BASE_ID 0xffffffff
 #define NIDSTRING_LENGTH 64
 struct shared_data {
-        l_mutex_t mutex;
-        l_cond_t  cond;
+	pthread_mutex_t	mutex;
+	pthread_cond_t	cond;
         int       stopping;
         struct {
                 __u64 counters[MAX_THREADS];
@@ -423,22 +425,22 @@ out:
 
 static inline void shmem_lock(void)
 {
-        l_mutex_lock(&shared_data->mutex);
+	pthread_mutex_lock(&shared_data->mutex);
 }
 
 static inline void shmem_unlock(void)
 {
-        l_mutex_unlock(&shared_data->mutex);
+	pthread_mutex_unlock(&shared_data->mutex);
 }
 
 static inline void shmem_wait(void)
 {
-        l_cond_wait(&shared_data->cond, &shared_data->mutex);
+	pthread_cond_wait(&shared_data->cond, &shared_data->mutex);
 }
 
 static inline void shmem_wakeup_all(void)
 {
-        l_cond_broadcast(&shared_data->cond);
+	pthread_cond_broadcast(&shared_data->cond);
 }
 
 static inline void shmem_reset(int total_threads)

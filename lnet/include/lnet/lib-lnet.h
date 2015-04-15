@@ -481,6 +481,22 @@ int lnet_get_net_config(int idx,
 			struct lnet_ioctl_net_config *net_config);
 int lnet_get_rtr_pool_cfg(int idx, struct lnet_ioctl_pool_cfg *pool_cfg);
 
+struct libcfs_ioctl_handler {
+	struct list_head item;
+	int (*handle_ioctl)(unsigned int cmd, struct libcfs_ioctl_hdr *hdr);
+};
+
+#define DECLARE_IOCTL_HANDLER(ident, func)                      \
+	static struct libcfs_ioctl_handler ident = {            \
+		/* .item = */ LIST_HEAD_INIT(ident.item),       \
+		/* .handle_ioctl = */ func                      \
+	}
+
+extern int libcfs_register_ioctl(struct libcfs_ioctl_handler *hand);
+extern int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand);
+extern int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr **hdr_pp,
+				struct libcfs_ioctl_hdr __user *uparam);
+
 void lnet_proc_init(void);
 void lnet_proc_fini(void);
 int  lnet_rtrpools_alloc(int im_a_router);

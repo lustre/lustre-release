@@ -121,7 +121,7 @@
 #include <utime.h>
 #include <sys/xattr.h>
 
-#include <libcfs/libcfsutil.h>
+#include <libcfs/util/parser.h>
 #include <lustre/lustreapi.h>
 #include <lustre/lustre_idl.h>
 #include "lustre_rsync.h"

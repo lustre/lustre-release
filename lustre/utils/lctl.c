@@ -42,9 +42,9 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <libcfs/util/parser.h>
 #include <lnet/lnetctl.h>
 #include "obdctl.h"
-#include <libcfs/libcfsutil.h>
 #include <lustre/lustre_idl.h>
 
 static int jt_noop(int argc, char **argv) {

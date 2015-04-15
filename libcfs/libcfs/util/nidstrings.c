@@ -40,8 +40,15 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 
+#include <assert.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include <libcfs/util/string.h>
-#include <libcfs/libcfs.h>
+#include <lnet/types.h>
 #include <lnet/nidstr.h>
 #ifdef HAVE_GETHOSTBYNAME
 # include <netdb.h>
@@ -556,7 +563,7 @@ libcfs_str2nid(const char *str)
 		sep = str + strlen(str);
 		net = LNET_MKNET(SOCKLND, 0);
 		nf = libcfs_lnd2netstrfns(SOCKLND);
-		LASSERT(nf != NULL);
+		assert(nf != NULL);
 	}
 
 	if (!nf->nf_str2addr(str, (int)(sep - str), &addr))
@@ -799,7 +806,8 @@ parse_nidrange(struct cfs_lstr *src, struct list_head *nidlist)
 
 	return 1;
  failed:
-	CWARN("can't parse nidrange: \"%.*s\"\n", tmp.ls_len, tmp.ls_str);
+	fprintf(stderr, "can't parse nidrange: \"%.*s\"\n",
+		tmp.ls_len, tmp.ls_str);
 	return 0;
 }
 
@@ -896,7 +904,7 @@ libcfs_num_match(__u32 addr, struct list_head *numaddr)
 {
 	struct cfs_expr_list *el;
 
-	LASSERT(!list_empty(numaddr));
+	assert(!list_empty(numaddr));
 	el = list_entry(numaddr->next, struct cfs_expr_list, el_link);
 
 	return cfs_expr_list_match(addr, el);
@@ -933,11 +941,11 @@ int cfs_match_nid(lnet_nid_t nid, struct list_head *nidlist)
 static int
 libcfs_num_addr_range_print(char *buffer, int count, struct list_head *list)
 {
-	int i = 0, j = 0;
 	struct cfs_expr_list *el;
+	int i = 0, j = 0;
 
 	list_for_each_entry(el, list, el_link) {
-		LASSERT(j++ < 1);
+		assert(j++ < 1);
 		i += cfs_expr_list_print(buffer + i, count - i, el);
 	}
 	return i;
@@ -950,7 +958,7 @@ libcfs_ip_addr_range_print(char *buffer, int count, struct list_head *list)
 	struct cfs_expr_list *el;
 
 	list_for_each_entry(el, list, el_link) {
-		LASSERT(j++ < 4);
+		assert(j++ < 4);
 		if (i != 0)
 			i += snprintf(buffer + i, count - i, ".");
 		i += cfs_expr_list_print(buffer + i, count - i, el);
@@ -1021,7 +1029,7 @@ int cfs_print_nidlist(char *buffer, int count, struct list_head *nidlist)
 			i += snprintf(buffer + i, count - i, " ");
 
 		if (nr->nr_all != 0) {
-			LASSERT(list_empty(&nr->nr_addrranges));
+			assert(list_empty(&nr->nr_addrranges));
 			i += snprintf(buffer + i, count - i, "*");
 			i += cfs_print_network(buffer + i, count - i, nr);
 		} else {

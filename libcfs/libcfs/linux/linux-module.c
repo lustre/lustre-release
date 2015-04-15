@@ -96,7 +96,7 @@ int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr **hdr_pp,
 
 	RETURN(0);
 failed:
-	libcfs_ioctl_freedata(*hdr_pp);
+	LIBCFS_FREE(*hdr_pp, hdr.ioc_len);
 	RETURN(err);
 }
 

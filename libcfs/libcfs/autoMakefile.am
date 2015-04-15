@@ -47,7 +47,7 @@ libcfs_a_CFLAGS = $(LLCFLAGS)
 
 if UTILS
 lib_LIBRARIES = libcfsutil.a
-libcfsutil_a_SOURCES = util/parser.c util/l_ioctl.c util/util.c
+libcfsutil_a_SOURCES = util/parser.c util/l_ioctl.c
 libcfsutil_a_CPPFLAGS = $(LLCPPFLAGS)
 libcfsutil_a_CFLAGS = $(LLCFLAGS) -DLUSTRE_UTILS=1
 endif
