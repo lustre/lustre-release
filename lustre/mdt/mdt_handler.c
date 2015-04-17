@@ -2314,8 +2314,6 @@ int mdt_remote_object_lock(struct mdt_thread_info *mti,
 
 	LASSERT(mdt_object_remote(o));
 
-	LASSERT(ibits == MDS_INODELOCK_UPDATE);
-
 	fid_build_reg_res_name(fid, res_id);
 
 	memset(einfo, 0, sizeof(*einfo));

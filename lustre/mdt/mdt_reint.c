@@ -786,6 +786,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         struct mdt_object       *mc;
         struct mdt_lock_handle  *parent_lh;
         struct mdt_lock_handle  *child_lh;
+	__u64			lock_ibits;
 	struct ldlm_enqueue_info *einfo = &info->mti_einfo;
 	struct mdt_lock_handle  *s0_lh = NULL;
 	struct mdt_object	*s0_obj = NULL;
@@ -923,9 +924,20 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 	/* We used to acquire MDS_INODELOCK_FULL here but we can't do
 	 * this now because a running HSM restore on the child (unlink
 	 * victim) will hold the layout lock. See LU-4002. */
-	rc = mdt_object_lock(info, mc, child_lh,
-			     MDS_INODELOCK_LOOKUP | MDS_INODELOCK_UPDATE,
-			     MDT_CROSS_LOCK);
+	lock_ibits = MDS_INODELOCK_LOOKUP | MDS_INODELOCK_UPDATE;
+	if (mdt_object_remote(mp)) {
+		/* Enqueue lookup lock from parent MDT */
+		rc = mdt_remote_object_lock(info, mp, mdt_object_fid(mc),
+					    &child_lh->mlh_rreg_lh,
+					    child_lh->mlh_rreg_mode,
+					    MDS_INODELOCK_LOOKUP);
+		if (rc != ELDLM_OK)
+			GOTO(put_child, rc);
+
+		lock_ibits &= ~MDS_INODELOCK_LOOKUP;
+	}
+
+	rc = mdt_object_lock(info, mc, child_lh, lock_ibits, MDT_CROSS_LOCK);
 	if (rc != 0)
 		GOTO(put_child, rc);
 	/*
@@ -1368,6 +1380,7 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info,
 	struct mdt_lock_handle  *lh_tgtp = NULL;
 	struct lu_fid           *old_fid = &info->mti_tmp_fid1;
 	struct list_head	lock_list;
+	__u64			lock_ibits;
 	int			rc;
 	ENTRY;
 
@@ -1441,11 +1454,23 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info,
 	/* 4: lock of the object migrated object */
 	lh_childp = &info->mti_lh[MDT_LH_OLD];
 	mdt_lock_reg_init(lh_childp, LCK_EX);
-	rc = mdt_object_lock(info, mold, lh_childp,
-			     MDS_INODELOCK_LOOKUP | MDS_INODELOCK_UPDATE |
-			     MDS_INODELOCK_LAYOUT, MDT_CROSS_LOCK);
+	lock_ibits = MDS_INODELOCK_LOOKUP | MDS_INODELOCK_UPDATE |
+		     MDS_INODELOCK_LAYOUT;
+	if (mdt_object_remote(msrcdir)) {
+		/* Enqueue lookup lock from the parent MDT */
+		rc = mdt_remote_object_lock(info, msrcdir, mdt_object_fid(mold),
+					    &lh_childp->mlh_rreg_lh,
+					    lh_childp->mlh_rreg_mode,
+					    MDS_INODELOCK_LOOKUP);
+		if (rc != ELDLM_OK)
+			GOTO(out_unlock_list, rc);
+
+		lock_ibits &= ~MDS_INODELOCK_LOOKUP;
+	}
+
+	rc = mdt_object_lock(info, mold, lh_childp, lock_ibits, MDT_CROSS_LOCK);
 	if (rc != 0)
-		GOTO(out_unlock_list, rc);
+		GOTO(out_unlock_child, rc);
 
 	ma->ma_need = MA_LMV;
 	ma->ma_valid = 0;
@@ -1453,7 +1478,7 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info,
 	ma->ma_lmv_size = sizeof(info->mti_xattr_buf);
 	rc = mdt_stripe_get(info, mold, ma, XATTR_NAME_LMV);
 	if (rc != 0)
-		GOTO(out_unlock_list, rc);
+		GOTO(out_unlock_child, rc);
 
 	if ((ma->ma_valid & MA_LMV)) {
 		struct lmv_mds_md_v1 *lmm1;
