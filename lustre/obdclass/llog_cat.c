@@ -791,6 +791,11 @@ int llog_cat_cleanup(const struct lu_env *env, struct llog_handle *cathandle,
 		/* llog was opened and keep in a list, close it now */
 		llog_close(env, loghandle);
 	}
+
+	/* do not attempt to cleanup on-disk llog if on client side */
+	if (cathandle->lgh_obj == NULL)
+		return 0;
+
 	/* remove plain llog entry from catalog by index */
 	llog_cat_set_first_idx(cathandle, index);
 	rc = llog_cancel_rec(env, cathandle, index);
