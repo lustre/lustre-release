@@ -5938,6 +5938,10 @@ get_clientmdc_proc_path() {
     echo "${1}-mdc-*"
 }
 
+get_clientmgc_proc_path() {
+    echo "*"
+}
+
 do_rpc_nodes () {
 	local list=$1
 	shift
@@ -5952,28 +5956,34 @@ do_rpc_nodes () {
 }
 
 wait_clients_import_state () {
-    local list=$1
-    local facet=$2
-    local expected=$3
+	local list=$1
+	local facet=$2
+	local expected=$3
 
-    local facets=$facet
+	local facets=$facet
 
-    if [ "$FAILURE_MODE" = HARD ]; then
-        facets=$(facets_on_host $(facet_active_host $facet))
-    fi
+	if [ "$FAILURE_MODE" = HARD ]; then
+		facets=$(facets_on_host $(facet_active_host $facet))
+	fi
 
-    for facet in ${facets//,/ }; do
-    local label=$(convert_facet2label $facet)
-    local proc_path
-    case $facet in
-        ost* ) proc_path="osc.$(get_clientosc_proc_path $label).ost_server_uuid" ;;
-        mds* ) proc_path="mdc.$(get_clientmdc_proc_path $label).mds_server_uuid" ;;
-        *) error "unknown facet!" ;;
-    esac
-    local params=$(expand_list $params $proc_path)
-    done
+	for facet in ${facets//,/ }; do
+		local label=$(convert_facet2label $facet)
+		local proc_path
+		case $facet in
+		ost* ) proc_path="osc.$(get_clientosc_proc_path \
+				  $label).ost_server_uuid" ;;
+		mds* ) proc_path="mdc.$(get_clientmdc_proc_path \
+				  $label).mds_server_uuid" ;;
+		mgs* ) proc_path="mgc.$(get_clientmgc_proc_path \
+				  $label).mgs_server_uuid" ;;
+		*) error "unknown facet!" ;;
+		esac
 
-	if ! do_rpc_nodes "$list" wait_import_state_mount $expected $params; then
+		local params=$(expand_list $params $proc_path)
+	done
+
+	if ! do_rpc_nodes "$list" wait_import_state_mount $expected $params;
+	then
 		error "import is not in ${expected} state"
 		return 1
 	fi

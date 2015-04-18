@@ -29,8 +29,8 @@ ALWAYS_EXCEPT="                 61d	$REPLAY_SINGLE_EXCEPT"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="1 2 3 4 6 12 16 44a      44b    65 66 67 68"
 
 [ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
-# bug number for skipped test:        LU-1867	LU-3127 LU-5407
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 89	73b	58c"
+# bug number for skipped test:        LU-1867	LU-3127
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 89	73b"
 
 build_test_filter
 
@@ -1541,24 +1541,28 @@ test_58b() {
 	rm -f $DIR/$tdir/$tfile
 	rmdir $DIR/$tdir
 	cleanup_58
+	wait_clients_import_state ${CLIENTS:-$HOSTNAME} "mgs" FULL
 }
 run_test 58b "test replay of setxattr op"
 
 test_58c() { # bug 16570
-    local orig
-    local orig1
-    local new
+	local orig
+	local orig1
+	local new
 
-    trap cleanup_58 EXIT
+	trap cleanup_58 EXIT
 
-    if large_xattr_enabled; then
-        local xattr_size=$(max_xattr_size)
-        orig="$(generate_string $((xattr_size / 2)))"
-        orig1="$(generate_string $xattr_size)"
-    else
-        orig="bar"
-        orig1="bar1"
-    fi
+	if large_xattr_enabled; then
+		local xattr_size=$(max_xattr_size)
+		orig="$(generate_string $((xattr_size / 2)))"
+		orig1="$(generate_string $xattr_size)"
+	else
+		orig="bar"
+		orig1="bar1"
+	fi
+
+	# PING_INTERVAL max(obd_timeout / 4, 1U)
+	sleep $((TIMEOUT / 4))
 
 	mount_client $MOUNT2
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
