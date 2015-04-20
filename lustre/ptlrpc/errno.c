@@ -185,8 +185,7 @@ static int lustre_errno_hton_mapping[] = {
 	[ESERVERFAULT]		= LUSTRE_ESERVERFAULT,
 	[EBADTYPE]		= LUSTRE_EBADTYPE,
 	[EJUKEBOX]		= LUSTRE_EJUKEBOX,
-	[EIOCBQUEUED]		= LUSTRE_EIOCBQUEUED,
-	[EIOCBRETRY]		= LUSTRE_EIOCBRETRY
+	[EIOCBQUEUED]		= LUSTRE_EIOCBQUEUED
 };
 
 static int lustre_errno_ntoh_mapping[] = {
@@ -332,8 +331,7 @@ static int lustre_errno_ntoh_mapping[] = {
 	[LUSTRE_ESERVERFAULT]		= ESERVERFAULT,
 	[LUSTRE_EBADTYPE]		= EBADTYPE,
 	[LUSTRE_EJUKEBOX]		= EJUKEBOX,
-	[LUSTRE_EIOCBQUEUED]		= EIOCBQUEUED,
-	[LUSTRE_EIOCBRETRY]		= EIOCBRETRY
+	[LUSTRE_EIOCBQUEUED]		= EIOCBQUEUED
 };
 
 unsigned int lustre_errno_hton(unsigned int h)

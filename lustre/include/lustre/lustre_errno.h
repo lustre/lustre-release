@@ -198,7 +198,6 @@
 					   complete before timeout */
 #define LUSTRE_EIOCBQUEUED	529	/* iocb queued, will get completion
 					   event */
-#define LUSTRE_EIOCBRETRY	530	/* iocb queued, will trigger a retry */
 
 /*
  * Translations are optimized away on x86.  Host errnos that shouldn't be put
