@@ -689,8 +689,7 @@ static char *root2convert = "ROOT";
  * This is only needed for pre-production 2.4 ZFS filesystems, and
  * can be removed in the future.
  */
-int osd_convert_root_to_new_seq(const struct lu_env *env,
-					struct osd_device *o)
+int osd_convert_root_to_new_seq(const struct lu_env *env, struct osd_device *o)
 {
 	struct luz_direntry *lze = &osd_oti_get(env)->oti_zde;
 	char		    *buf = osd_oti_get(env)->oti_str;

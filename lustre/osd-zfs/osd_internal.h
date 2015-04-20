@@ -203,6 +203,7 @@ static inline struct osd_thread_info *osd_oti_get(const struct lu_env *env)
 struct osd_thandle {
 	struct thandle		 ot_super;
 	struct list_head	 ot_dcb_list;
+	struct list_head	 ot_unlinked_list;
 	struct list_head	 ot_sa_list;
 	struct semaphore	 ot_sa_lock;
 	dmu_tx_t		*ot_tx;
@@ -245,6 +246,7 @@ struct osd_device {
 	/* information about underlying file system */
 	struct objset		*od_os;
 	uint64_t		 od_rootid;  /* id of root znode */
+	uint64_t		 od_unlinkedid; /* id of unlinked zapobj */
 	/* SA attr mapping->id,
 	 * name is the same as in ZFS to use defines SA_ZPL_...*/
 	sa_attr_type_t		 *z_attr_table;
@@ -295,6 +297,12 @@ struct osd_device {
 	struct lu_client_seq	*od_cl_seq;
 };
 
+enum osd_destroy_type {
+	OSD_DESTROY_NONE = 0,
+	OSD_DESTROY_SYNC = 1,
+	OSD_DESTROY_ASYNC = 2,
+};
+
 struct osd_object {
 	struct dt_object	 oo_dt;
 	/*
@@ -308,6 +316,7 @@ struct osd_object {
 	sa_handle_t		*oo_sa_hdl;
 	nvlist_t		*oo_sa_xattr;
 	struct list_head	 oo_sa_linkage;
+	struct list_head	 oo_unlinked_linkage;
 
 	struct rw_semaphore	 oo_sem;
 
@@ -315,9 +324,10 @@ struct osd_object {
 	rwlock_t		 oo_attr_lock;
 	struct lu_attr		 oo_attr;
 
-	/* protects extended attributes */
+	/* protects extended attributes and oo_unlinked_linkage */
 	struct semaphore	 oo_guard;
 	uint64_t		 oo_xattr;
+	enum osd_destroy_type	 oo_destroy;
 
 	/* record size for index file */
 	unsigned char		 oo_keysize;
@@ -484,6 +494,11 @@ int osd_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
 			  const char *name, struct thandle *handle);
 int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 		  const char *name, struct thandle *handle);
+void osd_declare_xattrs_destroy(const struct lu_env *env,
+				struct osd_object *obj,
+				struct osd_thandle *oh);
+int osd_xattrs_destroy(const struct lu_env *env,
+		       struct osd_object *obj, struct osd_thandle *oh);
 int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
 		   const struct lu_buf *lb);
 void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,

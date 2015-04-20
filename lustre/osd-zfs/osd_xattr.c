@@ -752,6 +752,96 @@ int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 	RETURN(rc);
 }
 
+void osd_declare_xattrs_destroy(const struct lu_env *env,
+				struct osd_object *obj, struct osd_thandle *oh)
+{
+	struct osd_device *osd = osd_obj2dev(obj);
+	zap_attribute_t	  *za = &osd_oti_get(env)->oti_za;
+	uint64_t	   oid = obj->oo_xattr, xid;
+	dmu_tx_t	  *tx = oh->ot_tx;
+	zap_cursor_t	  *zc;
+	int		   rc;
+
+	if (oid == ZFS_NO_OBJECT)
+		return; /* Nothing to do for SA xattrs */
+
+	/* Declare to free the ZAP holding xattrs */
+	dmu_tx_hold_free(tx, oid, 0, DMU_OBJECT_END);
+
+	rc = osd_zap_cursor_init(&zc, osd->od_os, oid, 0);
+	if (rc)
+		goto out;
+
+	while (zap_cursor_retrieve(zc, za) == 0) {
+		LASSERT(za->za_num_integers == 1);
+		LASSERT(za->za_integer_length == sizeof(uint64_t));
+
+		rc = -zap_lookup(osd->od_os, oid, za->za_name,
+				 sizeof(uint64_t), 1, &xid);
+		if (rc) {
+			CERROR("%s: xattr %s lookup failed: rc = %d\n",
+			       osd->od_svname, za->za_name, rc);
+			break;
+		}
+		dmu_tx_hold_free(tx, xid, 0, DMU_OBJECT_END);
+
+		zap_cursor_advance(zc);
+	}
+
+	osd_zap_cursor_fini(zc);
+out:
+	if (rc && tx->tx_err == 0)
+		tx->tx_err = -rc;
+}
+
+int osd_xattrs_destroy(const struct lu_env *env,
+		       struct osd_object *obj, struct osd_thandle *oh)
+{
+	struct osd_device *osd = osd_obj2dev(obj);
+	dmu_tx_t	  *tx = oh->ot_tx;
+	zap_attribute_t	  *za = &osd_oti_get(env)->oti_za;
+	zap_cursor_t	  *zc;
+	uint64_t	   xid;
+	int		   rc;
+
+	/* The transaction must have been assigned to a transaction group. */
+	LASSERT(tx->tx_txg != 0);
+
+	if (obj->oo_xattr == ZFS_NO_OBJECT)
+		return 0; /* Nothing to do for SA xattrs */
+
+	/* Free the ZAP holding the xattrs */
+	rc = osd_zap_cursor_init(&zc, osd->od_os, obj->oo_xattr, 0);
+	if (rc)
+		return rc;
+
+	while (zap_cursor_retrieve(zc, za) == 0) {
+		LASSERT(za->za_num_integers == 1);
+		LASSERT(za->za_integer_length == sizeof(uint64_t));
+
+		rc = -zap_lookup(osd->od_os, obj->oo_xattr, za->za_name,
+				 sizeof(uint64_t), 1, &xid);
+		if (rc) {
+			CERROR("%s: lookup xattr %s failed: rc = %d\n",
+			       osd->od_svname, za->za_name, rc);
+		} else {
+			rc = -dmu_object_free(osd->od_os, xid, tx);
+			if (rc)
+				CERROR("%s: free xattr %s failed: rc = %d\n",
+				       osd->od_svname, za->za_name, rc);
+		}
+		zap_cursor_advance(zc);
+	}
+	osd_zap_cursor_fini(zc);
+
+	rc = -dmu_object_free(osd->od_os, obj->oo_xattr, tx);
+	if (rc)
+		CERROR("%s: free xattr "LPU64" failed: rc = %d\n",
+		       osd->od_svname, obj->oo_xattr, rc);
+
+	return rc;
+}
+
 static int
 osd_sa_xattr_list(const struct lu_env *env, struct osd_object *obj,
 		  const struct lu_buf *lb)

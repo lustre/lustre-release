@@ -698,8 +698,8 @@ static int osd_dir_delete(const struct lu_env *env, struct dt_object *dt,
 	int rc;
 	ENTRY;
 
-	LASSERT(obj->oo_db);
-	LASSERT(osd_object_is_zap(obj->oo_db));
+	LASSERT(zap_db);
+	LASSERT(osd_object_is_zap(zap_db));
 
 	LASSERT(th != NULL);
 	oh = container_of0(th, struct osd_thandle, ot_super);
