@@ -1655,8 +1655,9 @@ mkfs.lustre</title>
                     the default mount options with those specified on the command line, and issues a
                     warning on stderr if any default mount options are omitted.</para></warning>
                 <para>The defaults for ldiskfs are:</para>
-                <para>OST: <literal>errors=remount-ro</literal>;</para>
                 <para>MGS/MDT: <literal>errors=remount-ro,iopen_nopriv,user_xattr</literal></para>
+                <para>OST: <literal>errors=remount-ro,extents,mballoc</literal></para>
+                <para condition='l25'>OST: <literal>errors=remount-ro</literal></para>
                 <para>Use care when altering the default mount options.</para>
               </entry>
             </row>
@@ -2444,8 +2445,9 @@ tunefs.lustre</title>
                 <para> Sets the mount options used when the backing file system is mounted.</para>
                 <warning><para> Unlike earlier versions of tunefs.lustre, this version completely replaces the existing mount options with those specified on the command line, and issues a warning on stderr if any default mount options are omitted.</para></warning>
                 <para>The defaults for ldiskfs are:</para>
-                <para>OST: <literal>errors=remount-ro,mballoc,extents</literal>;</para>
                 <para>MGS/MDT: <literal>errors=remount-ro,iopen_nopriv,user_xattr</literal></para>
+                <para>OST: <literal>errors=remount-ro,extents,mballoc</literal></para>
+                <para condition='l25'>OST: <literal>errors=remount-ro</literal></para>
                 <para>Do not alter the default mount options unless you know what you are doing.</para>
               </entry>
             </row>
