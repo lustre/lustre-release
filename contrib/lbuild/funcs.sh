@@ -140,9 +140,11 @@ autodetect_distro() {
                 ;;
             "SUSE LINUX")
                 name="sles"
-                PATCHLEVEL=$(sed -n -e 's/^PATCHLEVEL = //p' /etc/SuSE-release)
-                version="${version}.$PATCHLEVEL"
-                ;;
+		PATCHLEVEL=$(sed -n -e 's/^PATCHLEVEL = //p' /etc/SuSE-release)
+		if [ "$PATCHLEVEL" -ne "0" ]; then
+			version="${version}.$PATCHLEVEL"
+		fi
+		;;
             "Fedora")
                 name="fc"
                 ;;
@@ -156,8 +158,10 @@ autodetect_distro() {
         if [ -f /etc/SuSE-release ]; then
             name=sles
             version=$(sed -n -e 's/^VERSION = //p' /etc/SuSE-release)
-            PATCHLEVEL=$(sed -n -e 's/^PATCHLEVEL = //p' /etc/SuSE-release)
-            version="${version}.$PATCHLEVEL"
+	    PATCHLEVEL=$(sed -n -e 's/^PATCHLEVEL = //p' /etc/SuSE-release)
+	    if [ "$PATCHLEVEL" -ne "0" ]; then
+		    version="${version}.$PATCHLEVEL"
+	    fi
         elif [ -f /etc/redhat-release ]; then
             #name=$(head -1 /etc/redhat-release)
             name=rhel
@@ -188,6 +192,7 @@ autodetect_target() {
         sles10*)  target="2.6-sles10";;
         sles11.3) target="$(uname -r | cut -d . -f 1,2)-sles11sp3";;
         sles11*)  target="$(uname -r | cut -d . -f 1,2)-sles11";;
+	sles12*)  target="$(uname -r | cut -d . -f 1,2)-sles12";;
           fc15)   target="2.6-fc15";;
           fc18)   target="3.x-fc18";;
              *)   fatal 1 "I don't know what distro $distro is.\nEither update autodetect_target() or use the --target argument.";;

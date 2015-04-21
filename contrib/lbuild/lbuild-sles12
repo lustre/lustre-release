@@ -1,0 +1,118 @@
+# vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
+
+# increment this if you have made a change that should force a new kernel
+# to build built for this distribution (only -- if you want to force a kernel
+# build on all distributions, update the BUILD_GEN variable in build/lbuild)
+BUILD_GEN+=".0"
+
+# This distro does not support zfs, so define WITH_ZFS
+# use words that make the bash log readable.
+WITH_ZFS="Zfs Not Supported"
+
+source ${LBUILD_DIR}/lbuild-sles
+# LU-6490 work around
+CONFIGURE_FLAGS="$CONFIGURE_FLAGS --disable-gss"
+
+edit_specs() {
+
+    # edit the SPECs with our changes
+    local spec
+    (cd $TOPDIR/SOURCES; ./mkspec --release ${lnxrel})
+    for spec in $RPMSMPTYPE source; do
+        #cp $TOPDIR/SOURCES/kernel-$spec.spec{,.orig}
+        sed -i -e "s/^\(Release: *\).*$/\1${lnxrel}_${buildid}/" \
+               -e '/^%setup /a\
+cp  %_sourcedir/linux-3.0-lustre.patch %_builddir/%{name}-%{version}/lustre.patch\
+! grep -q lustre.patch %_sourcedir/series.conf && echo -e "\\n\\tlustre.patch" >> %_sourcedir/series.conf' \
+          SOURCES/kernel-${spec}.spec || \
+            fatal 1 "Error while editing SOURCES/kernel-${spec}.spec"
+
+        if $KERNEL_LUSTRE_NAMING; then
+            # these are all of the changes needed because we change the package names
+            # to kernel-lustre-*.  these should all go away when we stop this insanity
+            sed -i -e 's/^\(Name:.*kernel-\)\(.*\)/\1lustre-\2/' \
+                   -e "/^Provides:  *kernel = /a\
+Provides:       kernel-$spec = %{version}-%{release}
+" \
+                   -e 's/^\([ 	][ 	]*-i %_builddir\/kernel-\)\(source-2.6.27.21\/\$patch; then\)/\1lustre-\2/' \
+                   -e '/^%build/,/^%changelog/s/\(kernel-\)\(source\.files\)/\1lustre-\2/g' \
+                   -e '/--no-backup-if-mismatch/,/fi/s/kernel-source-/kernel-lustre-source-/g' \
+                   -e "s/^\(%package -n kernel-\)\(.*\)/\1lustre-\2/" \
+                   -e "s/^\(%description -n kernel-\)\(.*\)/\1lustre-\2/" \
+                   -e "s/^\(%files -n kernel-\)\(.*\)/\1lustre-\2/" \
+                   -e "s/^\(Provides:.*kernel-\)\(.*\)/\1lustre-\2/" \
+                   -e "s/^\(Requires:.*kernel-\)\(.*\)/\1lustre-\2/" \
+                   -e "s/^\(Supplements:.*kernel-\)\(.*\)/\1lustre-\2/" \
+                SOURCES/kernel-${spec}.spec || \
+                fatal 1 "Error while editing SOURCES/kernel-${spec}.spec"
+        fi
+
+        # XXX - a building-on-Ubuntu hack
+        if grep -q "Ubuntu" /etc/issue; then
+            sed -i -e '/^%_sourcedir\/install-configs %_sourcedir .*/i\
+curl ftp://ftp.kernel.org/pub/linux/kernel/people/akpm/patches/2.6/2.6.17/2.6.17-mm1/broken-out/i386-use-c-code-for-current_thread_info.patch | patch -p1' \
+                   -e 's/^\(BuildRequires: .*\)$/#NOU \1/g' \
+                   -e 's/%(\(chmod .*\))$/%(bash -c "\1")/' \
+                   -e 's/ -a 109//' \
+              SOURCES/kernel-${spec}.spec || \
+            fatal 1 "Error while editing SOURCES/kernel-${spec}.spec"
+        fi
+    done
+}
+
+unpack_linux_devel_rpm-sles12() {
+    local callers_rpm="$1"
+
+    local rpmdir="${callers_rpm%/*}"
+
+    local kernelrpm
+    local wanted_kernel="${lnxmaj}${lnxmin}-${lnxrel}"
+
+    # this is a hack that should go away when the modified lustre kernel
+    # Provides kernel-default-devel                       vvvvvvvvv
+    if ! kernelrpm=$(find_rpm "$rpmdir" provides "^kernel-(lustre-)?default-devel = $wanted_kernel"); then
+        fatal 1 "Could not find the kernel-default-devel in $rpmdir/"
+    fi
+
+    if ! rpm2cpio < "$rpmdir/$kernelrpm" | cpio -id > /dev/null 2>&1; then
+        fatal 1 "Unpack error for $kernelrpm"
+    fi
+
+    if ! kernelrpm=$(find_rpm "$rpmdir" provides "^kernel-(lustre-)?devel = $wanted_kernel"); then
+        fatal 1 "Could not find the kernel-devel in $rpmdir/"
+    fi
+
+    if ! rpm2cpio < "$rpmdir/$kernelrpm" | cpio -id > /dev/null 2>&1; then
+        fatal 1 "Unpack error for $kernelrpm"
+    fi
+
+    # SLES also needs the kernel-source together with the kernel-default-devel
+    if ! kernelrpm=$(find_rpm "$rpmdir" provides "^kernel-source = $wanted_kernel"); then
+        fatal 1 "Could not find the kernel-source in $rpmdir/"
+    fi
+
+    if ! rpm2cpio < "$rpmdir/$kernelrpm" | cpio -id > /dev/null 2>&1; then
+        fatal 1 "Unpack error for $kernelrpm"
+    fi
+
+}
+
+find_linux_rpm-sles12() {
+    local prefix="$1"
+    local wanted_kernel="$2"
+    local pathtorpms=${3:-"$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH"}
+
+    local PLEV=$(sed -n -e 's/^PATCHLEVEL = //p' /etc/SuSE-release)
+    local site="https://nu.novell.com/repo/\$RCE/SLES12-SP${PLEV}-Updates/sle-12-$(resolve_arch $TARGET_ARCH)/rpm/$(resolve_arch $TARGET_ARCH)"
+    if [ ! -f $pathtorpms/kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm ]; then
+        fetch_url "$site/kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm" $pathtorpms
+    fi
+    # SLES also needs the kernel-source along with kernel-devel
+    if [ ! -f $pathtorpms/kernel-source-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm ]; then
+        fetch_url "$site/kernel-source-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm" $pathtorpms
+    fi
+    echo "kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm"
+
+    return 0
+
+}
