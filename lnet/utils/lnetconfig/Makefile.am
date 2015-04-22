@@ -26,12 +26,10 @@
 #   Amir Shehata <amir.shehata@intel.com>
 #
 
-SUBDIRS =
-
-AM_CFLAGS=$(LLCFLAGS)
-AM_CPPFLAGS=$(LLCPPFLAGS) -I$(top_builddir)/lnet/utils \
-			  -I$(top_builddir)/lnet/utils/cyaml \
-			  -DLUSTRE_UTILS=1
+AM_CFLAGS  := -fPIC \
+	      -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS=1 \
+	      -I$(top_builddir)/lnet/utils \
+	      -I$(top_builddir)/lnet/utils/cyaml
 AM_LDFLAGS := -L$(top_builddir)/libcfs/libcfs
 
 lib_LIBRARIES = liblnetconfig.a
@@ -40,7 +38,6 @@ noinst_LIBRARIES = liblnetconfigtmp.a
 CYAML := $(top_builddir)/lnet/utils/cyaml/cyaml.c \
 	 $(top_builddir)/lnet/utils/cyaml/cyaml.h
 liblnetconfigtmp_a_SOURCES := liblnetconfig.c liblnetconfig.h $(CYAML)
-liblnetconfigtmp_a_CPPFLAGS := $(AM_CPPFLAGS)
 
 # build static and share lib lnet config library
 liblnetconfig.a : liblnetconfigtmp.a

@@ -7,8 +7,12 @@ ldlm_objs += $(LDLM)ldlm_resource.o $(LDLM)ldlm_lib.o
 ldlm_objs += $(LDLM)ldlm_plain.o $(LDLM)ldlm_extent.o
 ldlm_objs += $(LDLM)ldlm_request.o $(LDLM)ldlm_lockd.o
 ldlm_objs += $(LDLM)ldlm_flock.o $(LDLM)ldlm_inodebits.o
-ldlm_objs += $(LDLM)ldlm_pool.o
-ldlm_objs += $(LDLM)interval_tree.o
+ldlm_objs += $(LDLM)ldlm_pool.o $(LDLM)interval_tree.o
+
+target_objs := $(TARGET)tgt_main.o $(TARGET)tgt_lastrcvd.o
+target_objs += $(TARGET)tgt_handler.o $(TARGET)out_handler.o
+target_objs += $(TARGET)out_lib.o $(TARGET)update_trans.o
+
 ptlrpc_objs := client.o recover.o connection.o niobuf.o pack_generic.o
 ptlrpc_objs += events.o ptlrpc_module.o service.o pinger.o
 ptlrpc_objs += llog_net.o llog_client.o llog_server.o import.o ptlrpcd.o
@@ -17,12 +21,7 @@ ptlrpc_objs += sec.o sec_ctx.o sec_bulk.o sec_gc.o sec_config.o sec_lproc.o
 ptlrpc_objs += sec_null.o sec_plain.o nrs.o nrs_fifo.o nrs_crr.o nrs_orr.o
 ptlrpc_objs += nrs_tbf.o errno.o
 
-target_objs := $(TARGET)tgt_main.o $(TARGET)tgt_lastrcvd.o
-target_objs += $(TARGET)tgt_handler.o $(TARGET)out_handler.o
-target_objs += $(TARGET)out_lib.o
-target_objs += $(TARGET)update_trans.o
-
-nodemap_objs = nodemap_handler.o nodemap_lproc.o nodemap_range.o
+nodemap_objs := nodemap_handler.o nodemap_lproc.o nodemap_range.o
 nodemap_objs += nodemap_idmap.o nodemap_rbtree.o nodemap_member.o
 
 ptlrpc-objs := $(ldlm_objs) $(ptlrpc_objs)
@@ -48,8 +47,7 @@ out_%.c: @LUSTRE@/target/out_%.c
 	ln -sf $< $@
 
 EXTRA_DIST := $(ptlrpc_objs:.o=.c) ptlrpc_internal.h
-EXTRA_DIST += $(TARGET)tgt_internal.h nodemap_internal.h
-@SERVER_FALSE@EXTRA_DIST += $(target_objs:.o=.c)
+EXTRA_DIST += $(nodemap_objs:.o=.c) nodemap_internal.h
 
 EXTRA_PRE_CFLAGS := -I@LUSTRE@/ldlm -I@LUSTRE@/target
 

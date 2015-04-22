@@ -1,9 +1,3 @@
-my_sources =    api-ni.c config.c nidstring.c \
-		lib-me.c lib-msg.c lib-eq.c lib-socket.c \
-		lib-md.c lib-ptl.c lib-move.c lo.c \
-	        router.c router_proc.c \
-		acceptor.c peer.c net_fault.c
-
 if MODULES
 
 if LINUX
@@ -12,5 +6,6 @@ endif # LINUX
 
 endif # MODULES
 
+EXTRA_DIST := $(lnet-objs:%.o=%.c)
+
 MOSTLYCLEANFILES = @MOSTLYCLEANFILES@ lnet
-EXTRA_DIST = $(lnet-objs:%.o=%.c)

@@ -1,12 +1,10 @@
 # GSS daemons & tools Makefile
 
-SUBDIRS =
+AM_CFLAGS := -fPIC \
+	     -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS=1
 
-AM_CFLAGS=$(LLCFLAGS)
-AM_CPPFLAGS=$(LLCPPFLAGS) -DLUSTRE_UTILS=1
-AM_LDFLAGS := -L$(top_builddir)/libcfs/libcfs
-
-LIBCFS := $(top_builddir)/libcfs/libcfs/libcfs.a $(top_builddir)/libcfs/libcfs/libcfsutil.a
+LIBCFS := $(top_builddir)/libcfs/libcfs/libcfsutil.a \
+	  $(top_builddir)/libcfs/libcfs/libcfs.a
 
 sbin_PROGRAMS = lsvcgssd l_idmap
 

@@ -506,9 +506,7 @@ int lctl_main(int argc, char **argv)
         return rc < 0 ? -rc : rc;
 }
 
-#ifndef LIBLUSTRE_TEST
-int main (int argc, char **argv)
+int main(int argc, char **argv)
 {
-        return (lctl_main (argc, argv));
+	return lctl_main(argc, argv);
 }
-#endif

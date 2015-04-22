@@ -1,14 +1,3 @@
-my_sources = console.c conrpc.c conctl.c console.h conrpc.h \
-	     framework.c timer.c rpc.c module.c \
-	     ping_test.c brw_test.c
-
-if LIBLUSTRE
-noinst_LIBRARIES= libselftest.a
-libselftest_a_SOURCES= $(my_sources)
-libselftest_a_CPPFLAGS = $(LLCPPFLAGS)
-libselftest_a_CFLAGS = $(LLCFLAGS)
-endif
-
 if MODULES
 
 if LINUX
@@ -17,5 +6,7 @@ endif # LINUX
 
 endif # MODULES
 
+EXTRA_DIST := $(lnet_selftest-objs:%.o=%.c)
+EXTRA_DIST += console.h conrpc.h rpc.h selftest.h timer.h
+
 MOSTLYCLEANFILES = @MOSTLYCLEANFILES@ selftest
-EXTRA_DIST = $(lnet_selftest-objs:%.o=%.c) console.h conrpc.h rpc.h selftest.h timer.h

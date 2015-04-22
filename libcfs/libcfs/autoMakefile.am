@@ -40,23 +40,25 @@ SUBDIRS = linux util
 DIST_SUBDIRS = linux util
 
 noinst_LIBRARIES= libcfs.a
-libcfs_a_SOURCES = util/string.c util/nidstrings.c
-
-libcfs_a_CPPFLAGS = $(LLCPPFLAGS)
-libcfs_a_CFLAGS = $(LLCFLAGS)
+libcfs_a_SOURCES  := util/string.c util/nidstrings.c
+libcfs_a_CPPFLAGS := -D_GNU_SOURCE
+libcfs_a_CPPFLAGS += -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64
+libcfs_a_CFLAGS   := -fPIC
 
 if UTILS
 lib_LIBRARIES = libcfsutil.a
-libcfsutil_a_SOURCES = util/parser.c util/l_ioctl.c
-libcfsutil_a_CPPFLAGS = $(LLCPPFLAGS)
-libcfsutil_a_CFLAGS = $(LLCFLAGS) -DLUSTRE_UTILS=1
-endif
+libcfsutil_a_SOURCES  := util/parser.c util/l_ioctl.c
+libcfsutil_a_CPPFLAGS := -D_GNU_SOURCE
+libcfsutil_a_CPPFLAGS += -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64
+libcfsutil_a_CPPFLAGS += -DLUSTRE_UTILS=1
+libcfsutil_a_CFLAGS   := -fPIC
+endif # UTILS
 
 if MODULES
 
 if LINUX
 modulenet_DATA := libcfs$(KMODEXT)
-endif
+endif # LINUX
 
 endif # MODULES
 

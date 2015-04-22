@@ -34,15 +34,8 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-if LIBLUSTRE
-noinst_LIBRARIES = libfld.a
-libfld_a_SOURCES = fld_request.c fld_cache.c lproc_fld.c fld_internal.h
-libfld_a_CPPFLAGS = $(LLCPPFLAGS)
-libfld_a_CFLAGS = $(LLCFLAGS)
-endif
-
 if MODULES
 modulefs_DATA = fld$(KMODEXT)
-endif
+endif # MODULES
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@

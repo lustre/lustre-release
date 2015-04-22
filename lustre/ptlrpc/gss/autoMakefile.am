@@ -34,12 +34,9 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-if LIBLUSTRE
-endif
-
 if MODULES
 modulefs_DATA = ptlrpc_gss$(KMODEXT)
 endif # MODULES
 
 EXTRA_DIST = *.c *.h
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@

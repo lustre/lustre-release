@@ -1,10 +1,10 @@
 LIBCFS = $(top_builddir)/libcfs/libcfs/libcfs.a
+LIBLUSTREAPI = $(top_builddir)/lustre/utils/liblustreapi.a
 
 # Lustre test Makefile
-AM_CPPFLAGS = $(LLCPPFLAGS) -I/opt/lam/include -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS
-AM_CFLAGS = $(LLCFLAGS)
-# LDADD = -lldap
-# LDADD = -lreadline -ltermcap # -lefence
+AM_CFLAGS := -fPIC -D_GNU_SOURCE \
+	     -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS=1 \
+	     -I/opt/lam/include
 
 DIST_SUBDIRS = mpi
 
@@ -89,8 +89,7 @@ endif # TESTS
 
 mmap_sanity_SOURCES= mmap_sanity.c
 
-LIBLUSTREAPI = $(top_builddir)/lustre/utils/liblustreapi.a
-multiop_LDADD=$(LIBLUSTREAPI) $(PTHREAD_LIBS) $(LIBCFS)
+multiop_LDADD=$(LIBLUSTREAPI) $(LIBCFS) $(PTHREAD_LIBS)
 llapi_layout_test_LDADD=$(LIBLUSTREAPI)
 llapi_hsm_test_LDADD=$(LIBLUSTREAPI)
 group_lock_test_LDADD=$(LIBLUSTREAPI)
@@ -99,8 +98,8 @@ sendfile_grouplock_LDADD=$(LIBLUSTREAPI)
 it_test_LDADD=$(LIBCFS)
 rwv_LDADD=$(LIBCFS)
 
-ll_dirstripe_verify_SOURCES= ll_dirstripe_verify.c
-ll_dirstripe_verify_LDADD= -L$(top_builddir)/lustre/utils $(PTHREAD_LIBS) $(LIBLUSTREAPI) $(LIBCFS)
+ll_dirstripe_verify_SOURCES = ll_dirstripe_verify.c
+ll_dirstripe_verify_LDADD = $(LIBLUSTREAPI) $(LIBCFS) $(PTHREAD_LIBS)
 
 flocks_test_SOURCES=flocks_test.c
-flocks_test_LDADD=-lpthread
+flocks_test_LDADD=$(PTHREAD_LIBS)

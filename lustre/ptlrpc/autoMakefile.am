@@ -36,44 +36,11 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-LDLM_COMM_SOURCES= $(top_srcdir)/lustre/ldlm/l_lock.c	\
-	$(top_srcdir)/lustre/ldlm/ldlm_lock.c		\
-	$(top_srcdir)/lustre/ldlm/interval_tree.c       \
-	$(top_srcdir)/lustre/ldlm/ldlm_resource.c	\
-	$(top_srcdir)/lustre/ldlm/ldlm_lib.c		\
-	$(top_srcdir)/lustre/ldlm/ldlm_plain.c		\
-	$(top_srcdir)/lustre/ldlm/ldlm_extent.c		\
-	$(top_srcdir)/lustre/ldlm/ldlm_request.c	\
-	$(top_srcdir)/lustre/ldlm/ldlm_lockd.c		\
-	$(top_srcdir)/lustre/ldlm/ldlm_internal.h	\
-	$(top_srcdir)/lustre/ldlm/ldlm_inodebits.c	\
-	$(top_srcdir)/lustre/ldlm/ldlm_flock.c		\
-	$(top_srcdir)/lustre/ldlm/ldlm_pool.c
-
-NODEMAP_SOURCES = nodemap_handler.c nodemap_idmap.c nodemap_lproc.c \
-	nodemap_member.c nodemap_range.c nodemap_rbtree.c
-
-COMMON_SOURCES = client.c recover.c connection.c niobuf.c pack_generic.c       \
-	events.c ptlrpc_module.c service.c pinger.c llog_net.c sec_ctx.c       \
-	llog_client.c llog_server.c import.c ptlrpcd.c pers.c wiretest.c       \
-	ptlrpc_internal.h layout.c sec.c sec_bulk.c sec_gc.c sec_config.c      \
-	sec_lproc.c sec_null.c sec_plain.c lproc_ptlrpc.c nrs.c nrs_fifo.c     \
-	errno.c $(LDLM_COMM_SOURCES) $(NODEMAP_SOURCES)
-
-if LIBLUSTRE
-
-noinst_LIBRARIES = libptlrpc.a
-libptlrpc_a_SOURCES = $(COMMON_SOURCES)
-libptlrpc_a_CPPFLAGS = $(LLCPPFLAGS)
-libptlrpc_a_CFLAGS = $(LLCFLAGS)
-
-endif
-
 if MODULES
 
 if LINUX
 modulefs_DATA = ptlrpc$(KMODEXT)
-endif #LINUX
+endif # LINUX
 
 endif # MODULES
 
@@ -81,4 +48,4 @@ if GSS
 SUBDIRS = gss
 endif
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  ldlm_*.c l_lock.c interval_tree.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ ldlm_*.c l_lock.c interval_tree.c

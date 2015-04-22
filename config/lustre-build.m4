@@ -396,13 +396,6 @@ AS_IF([test $target_cpu = powerpc64], [
 
 CPPFLAGS="-I$PWD/$LIBCFS_INCLUDE_DIR -I$PWD/lnet/include -I$PWD/lustre/include $CPPFLAGS"
 
-LLCPPFLAGS="-D_LARGEFILE64_SOURCE=1"
-AC_SUBST(LLCPPFLAGS)
-
-# Add _GNU_SOURCE for strnlen on linux
-LLCFLAGS="-g -Wall -fPIC -D_GNU_SOURCE"
-AC_SUBST(LLCFLAGS)
-
 CCASFLAGS="-Wall -fPIC -D_GNU_SOURCE"
 AC_SUBST(CCASFLAGS)
 
@@ -693,10 +686,8 @@ cat <<_ACEOF
 CC:            $CC
 LD:            $LD
 CPPFLAGS:      $CPPFLAGS
-LLCPPFLAGS:    $LLCPPFLAGS
 CFLAGS:        $CFLAGS
 EXTRA_KCFLAGS: $EXTRA_KCFLAGS
-LLCFLAGS:      $LLCFLAGS
 
 Type 'make' to build Lustre.
 _ACEOF

@@ -4,8 +4,8 @@ if GSS
 SUBDIRS = gss
 endif
 
-AM_CFLAGS=$(LLCFLAGS)
-AM_CPPFLAGS=$(LLCPPFLAGS) -DLUSTRE_UTILS=1 -D_FILE_OFFSET_BITS=64
+AM_CFLAGS  := -fPIC -D_GNU_SOURCE \
+	      -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS=1
 AM_LDFLAGS := -L$(top_builddir)/lnet/utils
 
 MNTMODLDFLAGS := -rdynamic -ldl
@@ -48,7 +48,7 @@ noinst_LIBRARIES = liblustreapitmp.a
 endif # UTILS
 
 lctl_SOURCES = lustre_lfsck.c obd.c lustre_cfg.c lctl.c obdctl.h
-lctl_LDADD :=  liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS) $(LIBREADLINE)
+lctl_LDADD :=  liblustreapi.a $(LIBPTLCTL) $(LIBREADLINE) $(PTHREAD_LIBS)
 lctl_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 
 lfs_SOURCES = lfs.c
@@ -56,7 +56,7 @@ lfs_LDADD := liblustreapi.a $(LIBPTLCTL) $(LIBREADLINE)
 lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 
 lustre_rsync_SOURCES = lustre_rsync.c obd.c lustre_cfg.c lustre_rsync.h
-lustre_rsync_LDADD :=  liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS) $(LIBREADLINE)
+lustre_rsync_LDADD :=  liblustreapi.a $(LIBPTLCTL) $(LIBREADLINE) $(PTHREAD_LIBS)
 lustre_rsync_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 
 ll_recover_lost_found_objs_SOURCES = ll_recover_lost_found_objs.c
@@ -105,7 +105,7 @@ install-exec-hook: liblustreapi.so
 	    $(INSTALL_DATA) $$p $(DESTDIR)$(libdir)/$$f; \
 	  else :; fi; \
 	done
-endif
+endif # UTILS
 
 if LDISKFS_ENABLED
 libiam_a_SOURCES = libiam.c
@@ -125,37 +125,36 @@ if ZFS_ENABLED
 pkglib_LTLIBRARIES += mount_osd_zfs.la
 
 mount_osd_zfs_la_SOURCES = mount_utils_zfs.c
-mount_osd_zfs_la_CPPFLAGS = -DHAVE_IOCTL_IN_UNISTD_H
-mount_osd_zfs_la_CPPFLAGS += $(ZFS_LIBZFS_INCLUDE)
-mount_osd_zfs_la_LDFLAGS =  -pthread $(ZFS_LIBZFS_LDFLAGS)
-mount_osd_zfs_la_LDFLAGS += -shared -export-dynamic -module -avoid-version
-endif
+mount_osd_zfs_la_CPPFLAGS := -DHAVE_IOCTL_IN_UNISTD_H $(ZFS_LIBZFS_INCLUDE)
+mount_osd_zfs_la_LDFLAGS  := -pthread $(ZFS_LIBZFS_LDFLAGS)
+mount_osd_zfs_la_LDFLAGS  += -shared -export-dynamic -module -avoid-version
+endif # ZFS_ENABLED
 
 if LDISKFS_ENABLED
 pkglib_LTLIBRARIES += mount_osd_ldiskfs.la
 
 mount_osd_ldiskfs_la_SOURCES = mount_utils_ldiskfs.c
-mount_osd_ldiskfs_la_LDFLAGS = -shared -export-dynamic -module -avoid-version
-mount_osd_ldiskfs_la_LIBADD := $(SELINUX)
-endif
+mount_osd_ldiskfs_la_LDFLAGS  := -shared -export-dynamic -module -avoid-version
+mount_osd_ldiskfs_la_LIBADD   := $(SELINUX)
+endif # LDISKFS_ENABLED
 
 mount_lustre_SOURCES = mount_lustre.c mount_utils.c mount_utils.h
-mount_lustre_CPPFLAGS = $(AM_CPPFLAGS) ${MNTMODCFLAGS}
-mount_lustre_LDADD := $(LIBPTLCTL) $(SELINUX)
+mount_lustre_CPPFLAGS := ${MNTMODCFLAGS}
+mount_lustre_LDFLAGS  := ${MNTMODLDFLAGS}
+mount_lustre_LDADD    := $(LIBPTLCTL) $(SELINUX)
 mount_lustre_DEPENDENCIES := $(LIBPTLCTL)
-mount_lustre_LDFLAGS = ${MNTMODLDFLAGS}
 
 mkfs_lustre_SOURCES = mkfs_lustre.c mount_utils.c mount_utils.h
-mkfs_lustre_CPPFLAGS = -UTUNEFS $(AM_CPPFLAGS) ${MNTMODCFLAGS}
-mkfs_lustre_LDADD := $(LIBPTLCTL)
+mkfs_lustre_CPPFLAGS := -UTUNEFS ${MNTMODCFLAGS}
+mkfs_lustre_LDFLAGS  := ${MNTMODLDFLAGS}
+mkfs_lustre_LDADD    := $(LIBPTLCTL)
 mkfs_lustre_DEPENDENCIES := $(LIBPTLCTL)
-mkfs_lustre_LDFLAGS = ${MNTMODLDFLAGS}
 
 tunefs_lustre_SOURCES = mkfs_lustre.c mount_utils.c mount_utils.h
-tunefs_lustre_CPPFLAGS = -DTUNEFS $(AM_CPPFLAGS) ${MNTMODCFLAGS}
-tunefs_lustre_LDADD := $(mkfs_lustre_LDADD)
+tunefs_lustre_CPPFLAGS := -DTUNEFS ${MNTMODCFLAGS}
+tunefs_lustre_LDFLAGS  := ${MNTMODLDFLAGS}
+tunefs_lustre_LDADD    := $(mkfs_lustre_LDADD)
 tunefs_lustre_DEPENDENCIES := $(mkfs_lustre_DEPENDENCIES)
-tunefs_lustre_LDFLAGS = ${MNTMODLDFLAGS}
 
 l_getidentity_SOURCES = l_getidentity.c
 l_getidentity_LDADD := $(LIBPTLCTL)
@@ -168,7 +167,7 @@ lhsmtool_posix_LDADD := liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS)
 lhsmtool_posix_DEPENDENCIES := liblustreapi.a $(LIBPTLCTL)
 
 wirecheck_SOURCES = wirecheck.c
-wirecheck_CPPFLAGS = -DCC="\"$(CC)\""
+wirecheck_CPPFLAGS := -DCC="\"$(CC)\""
 
 wiretest_SOURCES = wiretest.c
 

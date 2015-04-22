@@ -2033,7 +2033,6 @@ AS_IF([test "x$enable_pgstat_track" = xyes],
 # AM_CONDITIONALS for lustre
 #
 AC_DEFUN([LC_CONDITIONALS], [
-AM_CONDITIONAL(LIBLUSTRE, false)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)

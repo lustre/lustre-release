@@ -36,12 +36,13 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-AM_CFLAGS = $(LLCFLAGS)
+AM_CFLAGS  := -fPIC -D_GNU_SOURCE
+AM_LDFLAGS := -L.
 
 if BUILD_DLC
 SUBDIRS = lnetconfig
-AM_LDFLAGS := -L$(top_builddir)/lnet/utils/lnetconfig
-endif
+AM_LDFLAGS += -L$(top_builddir)/lnet/utils/lnetconfig
+endif # BUILD_DLC
 
 LIBCFS= $(top_builddir)/libcfs/libcfs/libcfs.a
 LIBCFSUTIL= $(top_builddir)/libcfs/libcfs/libcfsutil.a
@@ -51,19 +52,19 @@ sbin_PROGRAMS = routerstat lst
 
 if BUILD_DLC
 sbin_PROGRAMS += lnetctl
-endif
+endif # BUILD_DLC
 
 routerstat_SOURCES = routerstat.c
 
 lst_SOURCES = lst.c
-lst_LDADD = -L. -lptlctl $(LIBCFSUTIL) $(LIBCFS) $(LIBREADLINE) $(LIBEFENCE)
+lst_LDADD = -lptlctl $(LIBCFSUTIL) $(LIBCFS) $(LIBREADLINE) $(LIBEFENCE)
 lst_DEPENDENCIES = libptlctl.a
 
 if TESTS
 sbin_PROGRAMS += wirecheck
 
 wirecheck_SOURCES = wirecheck.c
-endif
+endif # TESTS
 
 lib_LIBRARIES = libptlctl.a
 
@@ -71,7 +72,7 @@ libptlctl_a_SOURCES = portals.c debug.c
 
 CYAML := $(top_builddir)/lnet/utils/cyaml/cyaml.c
 lnetctl_SOURCES = lnetctl.c $(CYAML)
-lnetctl_LDADD = -L. -lm -lyaml -llnetconfig \
-		$(LIBCFSUTIL) $(LIBCFS) $(LIBREADLINE) $(LIBEFENCE)
+lnetctl_LDADD = -llnetconfig $(LIBCFSUTIL) $(LIBCFS) \
+		$(LIBREADLINE) $(LIBEFENCE) -lyaml -lm
 lnetctl_DEPENDENCIES = $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.so
 endif # UTILS

@@ -36,20 +36,12 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-if LIBLUSTRE
-noinst_LIBRARIES = libosc.a
-libosc_a_SOURCES = osc_request.c osc_internal.h osc_cl_internal.h osc_dev.c osc_object.c osc_page.c osc_lock.c osc_io.c osc_quota.c osc_cache.c
-
-libosc_a_CPPFLAGS = $(LLCPPFLAGS)
-libosc_a_CFLAGS = $(LLCFLAGS)
-endif
-
 if MODULES
 
 if LINUX
 modulefs_DATA = osc$(KMODEXT)
-endif
+endif # LINUX
 
-endif
+endif # MODULES
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
