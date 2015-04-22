@@ -30,7 +30,9 @@
 # include <asm/byteorder.h>
 #else /* __KERNEL__ */
 
-# include <endian.h>
+# ifdef HAVE_ENDIAN_H
+#  include <endian.h>
+# endif
 # include <byteswap.h>
 
 # define __swab16(x) bswap_16(x)

@@ -34,20 +34,18 @@
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <sys/time.h>
+#include <sys/mman.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <sys/mman.h>
-#include <errno.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <netdb.h>
+#include <getopt.h>
 #include <string.h>
-#include <sys/wait.h>
-#include <sys/time.h>
+#include <errno.h>
 
 char *dir = NULL, *dir2 = NULL;
 long page_size;

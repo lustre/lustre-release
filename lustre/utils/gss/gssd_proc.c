@@ -60,7 +60,9 @@
 #include <unistd.h>
 #include <errno.h>
 #include <gssapi/gssapi.h>
-#include <netdb.h>
+#ifdef HAVE_NETDB_H
+# include <netdb.h>
+#endif
 
 #include "gssd.h"
 #include "err_util.h"

@@ -61,17 +61,8 @@
 #include <errno.h>
 #include <stdio.h>
 #include <ctype.h>
-#include <sys/file.h>
-#include <signal.h>
 #include <string.h>
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/stat.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <sys/param.h>
-#include <netdb.h>
-#include <fcntl.h>
 #include <gssapi/gssapi.h>
 #if defined(HAVE_KRB5) && !defined(GSS_C_NT_HOSTBASED_SERVICE)
 #include <gssapi/gssapi_generic.h>
@@ -81,11 +72,11 @@
 #include "err_util.h"
 #include "gssd.h"
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <stdlib.h>
 #ifdef HAVE_COM_ERR_H
-#include <com_err.h>
+# include <com_err.h>
 #endif
 #include "lsupport.h"
 

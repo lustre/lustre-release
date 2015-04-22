@@ -39,9 +39,6 @@
 #include <libcfs/libcfs.h>
 #include <libcfs/libcfs_crypto.h>
 #include <lnet/lib-lnet.h>
-#include <lnet/lib-dlc.h>
-#include <lnet/lnet.h>
-#include <lnet/nidstr.h>
 
 static void
 kportal_memhog_free (struct libcfs_device_userstate *ldu)

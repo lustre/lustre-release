@@ -59,7 +59,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <assert.h>
-#ifdef HAVE_GETHOSTBYNAME
+#ifdef HAVE_NETDB_H
 # include <netdb.h>
 #endif
 #include <lnet/nidstr.h>

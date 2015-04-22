@@ -22,7 +22,9 @@
 #include <errno.h>
 #include <getopt.h>
 #include <limits.h>
-#include <netdb.h>
+#ifdef HAVE_NETDB_H
+# include <netdb.h>
+#endif
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>

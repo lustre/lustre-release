@@ -398,12 +398,10 @@ AS_IF([test "x$enable_gni" = xyes], [
 		return rrc;
 	],[
 		GNICPPFLAGS="$GNICPPFLAGS -DGNILND_USE_RCA=1"
-		GNILNDRCA="gnilndrca"
 	])
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 ])
 AC_SUBST(GNICPPFLAGS)
-AC_SUBST(GNILNDRCA)
 AC_SUBST(GNILND)
 ]) # LN_CONFIG_GNILND
 
@@ -487,58 +485,28 @@ AC_MSG_NOTICE([LNet core checks
 ==============================================================================])
 
 # lnet/utils/portals.c
-AC_CHECK_HEADERS([netdb.h netinet/tcp.h asm/types.h endian.h sys/ioctl.h])
-AC_CHECK_FUNCS([gethostbyname socket connect])
-
-# lnet/utils/debug.c
-AC_CHECK_HEADERS([linux/version.h])
+AC_CHECK_HEADERS([netdb.h])
+AC_CHECK_FUNCS([gethostbyname])
 
 # lnet/utils/wirecheck.c
 AC_CHECK_FUNCS([strnlen])
 
 # --------  Check for required packages  --------------
 
-#
-# LC_CONFIG_READLINE
-#
-# Build with readline
-#
-AC_MSG_CHECKING([whether to enable readline support])
-AC_ARG_ENABLE(readline,
-	AC_HELP_STRING([--disable-readline],
-		[disable readline support]),
-	[], [enable_readline="yes"])
-AC_MSG_RESULT([$enable_readline])
+AC_MSG_CHECKING([whether to enable 'efence' debugging support])
+AC_ARG_ENABLE(efence,
+	AC_HELP_STRING([--enable-efence],
+		[use efence library]),
+	[], [enable_efence="no"])
+AC_MSG_RESULT([$enable_efence])
 
-# -------- check for readline if enabled ----
-
-LIBREADLINE=""
-AS_IF([test "x$enable_readline" = xyes], [
-	AC_CHECK_LIB([readline], [readline], [
-		LIBREADLINE="-lreadline"
-		AC_DEFINE(HAVE_LIBREADLINE, 1,
-			[readline library is available])])
+LIBEFENCE=""
+AS_IF([test "$enable_efence" = yes], [
+	LIBEFENCE="-lefence"
+	AC_DEFINE(HAVE_LIBEFENCE, 1,
+		[libefence support is requested])
 ])
-AC_SUBST(LIBREADLINE)
-
-# -------- enable acceptor libwrap (TCP wrappers) support? -------
-
-AC_MSG_CHECKING([if libwrap support is requested])
-AC_ARG_ENABLE([libwrap],
-	AC_HELP_STRING([--enable-libwrap], [use TCP wrappers]),
-	[case "${enableval}" in
-		yes) enable_libwrap="yes" ;;
-		no)  enable_libwrap="no" ;;
-		*) AC_MSG_ERROR(bad value ${enableval} for --enable-libwrap) ;;
-	esac], [enable_libwrap="no"])
-AC_MSG_RESULT([$enable_libwrap])
-LIBWRAP=""
-AS_IF([test "x$enable_libwrap" = xyes], [
-	LIBWRAP="-lwrap"
-	AC_DEFINE(HAVE_LIBWRAP, 1,
-		[libwrap support is requested])
-])
-AC_SUBST(LIBWRAP)
+AC_SUBST(LIBEFENCE)
 
 LN_CONFIG_MAX_PAYLOAD
 LN_CONFIG_DLC
@@ -551,8 +519,7 @@ LN_CONFIG_DLC
 #
 AC_DEFUN([LN_CONDITIONALS], [
 AM_CONDITIONAL(BUILD_O2IBLND,    test x$O2IBLND = "xo2iblnd")
-AM_CONDITIONAL(BUILD_GNILND,     test x$GNILND = "xgnilnd")
-AM_CONDITIONAL(BUILD_GNILND_RCA, test x$GNILNDRCA = "xgnilndrca")
+AM_CONDITIONAL(BUILD_GNILND,     test x$GNILND  = "xgnilnd")
 AM_CONDITIONAL(BUILD_DLC,        test x$USE_DLC = "xyes")
 ]) # LN_CONDITIONALS
 

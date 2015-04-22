@@ -115,7 +115,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <netdb.h>
+#ifdef HAVE_NETDB_H
+# include <netdb.h>
+#endif
 #include <dirent.h>
 #include <fcntl.h>
 #include <errno.h>

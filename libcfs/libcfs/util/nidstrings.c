@@ -50,7 +50,7 @@
 #include <libcfs/util/string.h>
 #include <lnet/types.h>
 #include <lnet/nidstr.h>
-#ifdef HAVE_GETHOSTBYNAME
+#ifdef HAVE_NETDB_H
 # include <netdb.h>
 #endif
 

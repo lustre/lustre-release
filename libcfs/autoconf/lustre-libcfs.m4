@@ -1,9 +1,9 @@
 #
-# LN_CONFIG_CDEBUG
+# LIBCFS_CONFIG_CDEBUG
 #
 # whether to enable various libcfs debugs (CDEBUG, ENTRY/EXIT, LASSERT, etc.)
 #
-AC_DEFUN([LN_CONFIG_CDEBUG], [
+AC_DEFUN([LIBCFS_CONFIG_CDEBUG], [
 AC_MSG_CHECKING([whether to enable CDEBUG, CWARN])
 AC_ARG_ENABLE([libcfs_cdebug],
 	AC_HELP_STRING([--disable-libcfs-cdebug],
@@ -30,7 +30,7 @@ AC_ARG_ENABLE([libcfs_assert],
 AC_MSG_RESULT([$enable_libcfs_assert])
 AS_IF([test x$enable_libcfs_assert = xyes],
 	[AC_DEFINE(LIBCFS_DEBUG, 1, [enable libcfs LASSERT, LASSERTF])])
-]) # LN_CONFIG_CDEBUG
+]) # LIBCFS_CONFIG_CDEBUG
 
 #
 # LIBCFS_CONFIG_PANIC_DUMPLOG
@@ -376,26 +376,43 @@ AC_CHECK_FUNCS([strlcpy])
 # libcfs/libcfs/user-prim.c, missing for RHEL5 and earlier userspace
 AC_CHECK_FUNCS([strlcat])
 
+# libcfs/include/libcfs/linux/linux-prim.h, ...
+AC_CHECK_HEADERS([linux/types.h sys/types.h linux/unistd.h unistd.h])
+
+# libcfs/include/libcfs/linux/linux-prim.h
+AC_CHECK_HEADERS([linux/random.h], [], [],
+		 [#ifdef HAVE_LINUX_TYPES_H
+		  #include <linux/types.h>
+		  #endif
+		 ])
+
+# libcfs/include/libcfs/linux/libcfs.h
+# libcfs/include/libcfs/byteorder.h
+# libcfs/libcfs/util/nidstrings.c
+AC_CHECK_HEADERS([netdb.h asm/types.h endian.h])
+AC_CHECK_FUNCS([gethostbyname])
+
 # --------  Check for required packages  --------------
 
 AC_MSG_NOTICE([LibCFS required packages checks
 ==============================================================================])
 
-AC_MSG_CHECKING([whether to enable 'efence' debugging support])
-AC_ARG_ENABLE(efence,
-	AC_HELP_STRING([--enable-efence],
-		[use efence library]),
-	[], [enable_efence="no"])
-AC_MSG_RESULT([$enable_efence])
-AS_IF([test "$enable_efence" = yes], [
-	LIBEFENCE="-lefence"
-	AC_DEFINE(HAVE_LIBEFENCE, 1, [libefence support is requested])
-], [
-	LIBEFENCE=""
-])
-AC_SUBST(LIBEFENCE)
+AC_MSG_CHECKING([whether to enable readline support])
+AC_ARG_ENABLE(readline,
+	AC_HELP_STRING([--disable-readline],
+		[disable readline support]),
+	[], [enable_readline="yes"])
+AC_MSG_RESULT([$enable_readline])
 
-# -------- check for -lpthread support ----
+LIBREADLINE=""
+AS_IF([test "x$enable_readline" = xyes], [
+	AC_CHECK_LIB([readline], [readline], [
+		LIBREADLINE="-lreadline"
+		AC_DEFINE(HAVE_LIBREADLINE, 1,
+			[readline library is available])
+	])
+])
+AC_SUBST(LIBREADLINE)
 
 AC_MSG_CHECKING([whether to use libpthread for libcfs library])
 AC_ARG_ENABLE([libpthread],
@@ -403,22 +420,18 @@ AC_ARG_ENABLE([libpthread],
 		[disable libpthread]),
 	[], [enable_libpthread="yes"])
 AC_MSG_RESULT([$enable_libpthread])
+
+PTHREAD_LIBS=""
 AS_IF([test "x$enable_libpthread" = xyes], [
-	AC_CHECK_LIB([pthread], [pthread_create],
-		[ENABLE_LIBPTHREAD="yes"],
-		[ENABLE_LIBPTHREAD="no"])
-	AS_IF([test "$ENABLE_LIBPTHREAD" = yes], [
+	AC_CHECK_LIB([pthread], [pthread_create], [
 		PTHREAD_LIBS="-lpthread"
-		AC_DEFINE([HAVE_LIBPTHREAD], 1, [use libpthread])
-	], [
-		PTHREAD_LIBS=""
+		AC_DEFINE([HAVE_LIBPTHREAD], 1,
+			[use libpthread for libcfs library])
 	])
-	AC_SUBST(PTHREAD_LIBS)
 ], [
 	AC_MSG_WARN([Using libpthread for libcfs library is disabled explicitly])
-	ENABLE_LIBPTHREAD="no"
 ])
-AC_SUBST(ENABLE_LIBPTHREAD)
+AC_SUBST(PTHREAD_LIBS)
 ]) # LIBCFS_CONFIGURE
 
 #

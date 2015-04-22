@@ -45,7 +45,9 @@
 #include <string.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <netdb.h>
+#ifdef HAVE_NETDB_H
+# include <netdb.h>
+#endif
 
 #include "svcgssd.h"
 #include "gss_util.h"

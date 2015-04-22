@@ -1807,9 +1807,9 @@ AC_ARG_ENABLE([mpitests],
 				MPI_Initialized(&flag);
 				return 0;
 			}
-		])], [lb_cv_mpi_tests="yes"], [lb_cv_mpi_tests="no"
-			enable_mpitests=$lb_cv_mpi_tests])
+		])], [lb_cv_mpi_tests="yes"], [lb_cv_mpi_tests="no"])
 		])
+		enable_mpitests=$lb_cv_mpi_tests
 		CC=$oldcc
 	fi
 	AC_SUBST(MPICC_WRAPPER)
@@ -1941,20 +1941,19 @@ AS_IF([test $target_cpu == "i686" -o $target_cpu == "x86_64"],
 # maximum MDS thread count
 LC_MDS_MAX_THREADS
 
+# lustre/utils/gss/gss_util.c
+# lustre/utils/gss/gssd_proc.c
+# lustre/utils/gss/krb5_util.c
+# lustre/utils/llog_reader.c
+# lustre/utils/create_iam.c
+# lustre/utils/libiam.c
+AC_CHECK_HEADERS([netdb.h endian.h])
+AC_CHECK_FUNCS([gethostbyname])
+
 # lustre/utils/llverdev.c
 AC_CHECK_HEADERS([blkid/blkid.h])
 
-# libcfs/include/libcfs/linux/linux-prim.h, ...
-AC_CHECK_HEADERS([linux/types.h sys/types.h linux/unistd.h unistd.h])
-
-# libcfs/include/libcfs/linux/linux-prim.h
-AC_CHECK_HEADERS([linux/random.h], [], [],
-		 [#ifdef HAVE_LINUX_TYPES_H
-		  #include <linux/types.h>
-		  #endif
-		 ])
-
-# utils/llverfs.c
+# lustre/utils/llverfs.c
 AC_CHECK_HEADERS([ext2fs/ext2fs.h])
 
 SELINUX=""

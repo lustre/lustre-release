@@ -39,7 +39,9 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <endian.h>
+#ifdef HAVE_ENDIAN_H
+# include <endian.h>
+#endif
 #include <unistd.h>
 #include <fcntl.h>
 
