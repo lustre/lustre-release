@@ -28,6 +28,7 @@
 #include <signal.h>
 #include <sys/ioctl.h>
 #include <dirent.h>
+#include <attr/xattr.h>
 
 #include "mpi.h"
 
@@ -39,64 +40,68 @@
 #define DISPLAY_TIME 100
 
 enum {
-        CREATE   = 'c',
-        LOOKUP   = 'l',
-        MKNOD    = 'm',
-        OPEN     = 'o',
-        STAT     = 's',
-        UNLINK   = 'u',
-        BEGIN    = 'b',
-        ITERS    = 'i',
-        TIME     = 't',
-        DIRFMT   = 'd',
-        NDIRS    = 'D',
-        FILEFMT  = 'f',
-        NFILES   = 'F',
-        NOEXCL   = 'X',
-        STRIPES  = 'S',
-        SEED     = 'r',
-        SEEDFILE = 'R',
-        RANDOM   = 'A',
-        READDIR  = 'B',
-        RECREATE = 'C',
-        IGNORE   = 'E',
-        VERBOSE  = 'V',
-        DEBUG    = 'v',
-        HELP     = 'h',
-	MNT	 = 'M',
-	MNTCOUNT = 'N',
-	MDTCOUNT = 'T',
+	CREATE		= 'c',
+	LOOKUP		= 'l',
+	MKNOD		= 'm',
+	OPEN		= 'o',
+	STAT		= 's',
+	UNLINK		= 'u',
+	BEGIN		= 'b',
+	ITERS		= 'i',
+	TIME		= 't',
+	DIRFMT		= 'd',
+	NDIRS		= 'D',
+	FILEFMT		= 'f',
+	NFILES		= 'F',
+	NOEXCL		= 'X',
+	STRIPES		= 'S',
+	SEED		= 'r',
+	SEEDFILE	= 'R',
+	RANDOM		= 'A',
+	READDIR		= 'B',
+	RECREATE	= 'C',
+	SETXATTR	= 'x',
+	SMALLWRITE	= 'w',
+	IGNORE		= 'E',
+	VERBOSE		= 'V',
+	DEBUG		= 'v',
+	HELP		= 'h',
+	MNT		= 'M',
+	MNTCOUNT	= 'N',
+	MDTCOUNT	= 'T',
 };
 
 struct option longOpts[] = {
-        {"create",        0, NULL, CREATE     },
-        {"lookup",        0, NULL, LOOKUP     },
-        {"mknod",         0, NULL, MKNOD      },
-        {"open",          0, NULL, OPEN       },
-        {"stat",          0, NULL, STAT       },
-        {"unlink",        0, NULL, UNLINK     },
-        {"begin",         1, NULL, BEGIN      },
-        {"iters",         1, NULL, ITERS      },
-        {"time",          1, NULL, TIME       },   /* seconds */
-        {"dirfmt",        1, NULL, DIRFMT     },
-        {"ndirs",         1, NULL, NDIRS      },
-        {"filefmt",       1, NULL, FILEFMT    },
-        {"nfiles",        1, NULL, NFILES     },
-        {"noexcl",        0, NULL, NOEXCL     },
-        {"stripes",       1, NULL, STRIPES    },
-        {"seed",          1, NULL, SEED       },
-        {"seedfile",      1, NULL, SEEDFILE   },
-        {"random_order",  0, NULL, RANDOM     },
-        {"readdir_order", 0, NULL, READDIR    },
-        {"recreate",      0, NULL, RECREATE   },
-        {"ignore",        0, NULL, IGNORE     },
-        {"verbose",       0, NULL, VERBOSE    },
-        {"debug",         0, NULL, DEBUG      },
-        {"help",          0, NULL, HELP       },
-	{"mdtcount",      1, NULL, MDTCOUNT   },
-	{"mntcount",      1, NULL, MNTCOUNT   },
-	{"mntfmt",        1, NULL, MNT        },
-	{ 0,              0, NULL, 0          }
+	{"create",		0, NULL, CREATE     },
+	{"lookup",		0, NULL, LOOKUP     },
+	{"mknod",		0, NULL, MKNOD      },
+	{"open",		0, NULL, OPEN       },
+	{"stat",		0, NULL, STAT       },
+	{"unlink",		0, NULL, UNLINK     },
+	{"begin",		1, NULL, BEGIN      },
+	{"iters",		1, NULL, ITERS      },
+	{"time",		1, NULL, TIME       },   /* seconds */
+	{"dirfmt",		1, NULL, DIRFMT     },
+	{"ndirs",		1, NULL, NDIRS      },
+	{"filefmt",		1, NULL, FILEFMT    },
+	{"nfiles",		1, NULL, NFILES     },
+	{"noexcl",		0, NULL, NOEXCL     },
+	{"stripes",		1, NULL, STRIPES    },
+	{"seed",		1, NULL, SEED       },
+	{"seedfile",		1, NULL, SEEDFILE   },
+	{"random_order",	0, NULL, RANDOM     },
+	{"readdir_order",	0, NULL, READDIR    },
+	{"recreate",		0, NULL, RECREATE   },
+	{"setxattr",		0, NULL, SETXATTR   },
+	{"smallwrite",		0, NULL, SMALLWRITE },
+	{"ignore",		0, NULL, IGNORE     },
+	{"verbose",		0, NULL, VERBOSE    },
+	{"debug",		0, NULL, DEBUG      },
+	{"help",		0, NULL, HELP       },
+	{"mdtcount",		1, NULL, MDTCOUNT   },
+	{"mntcount",		1, NULL, MNTCOUNT   },
+	{"mntfmt",		1, NULL, MNT        },
+	{ 0,			0, NULL, 0          }
 };
 
 int foo1, foo2;
@@ -136,6 +141,12 @@ int    ignore;
 int    verbose;
 int    debug;
 struct stat statbuf;
+bool   with_xattr;
+char   xattrname[] = "user.mdsrate";
+char   xattrbuf[4096];
+/* max xattr name + value length is block size, use 4000 here to avoid ENOSPC */
+int    xattrlen = 4000;
+bool   smallwrite;
 int    mnt_count = -1;
 int    mdt_count = 1;
 char  *mntfmt;
@@ -159,16 +170,19 @@ char  *mntfmt;
 }
 
 char *usage_msg = "usage: %s\n"
-                  "    { --create [ --noexcl ] | --lookup | --mknod |\n"
-                  "      --open | --stat | --unlink  [ --recreate ] [ --ignore ] }\n"
-                  "    [ --help ] [ --verbose ] [ --debug ]\n"
-                  "    { [ --begin <num> ] --nfiles <num> }\n"
-                  "    [ --iters <num> ] [ --time <secs> ]\n"
-                  "    [ --dirfmt <str> ] [ --ndirs  <num> ]\n"
-                  "    [ --filefmt <str> ] [ --stripes <num> ]\n"
-                  "    [ --random_order [--seed <num> | --seedfile <file>] ]\n"
+		  "    { --create [ --noexcl | --setxattr | --smallwrite ] |\n"
+		  "      --lookup | --mknod [ --setxattr ] | --open |\n"
+		  "      --stat | --unlink [ --recreate ] [ --ignore ] |\n"
+		  "      --setxattr }\n"
+		  "    [ --help ] [ --verbose ] [ --debug ]\n"
+		  "    { [ --begin <num> ] --nfiles <num> }\n"
+		  "    [ --iters <num> ] [ --time <secs> ]\n"
+		  "    [ --dirfmt <str> ] [ --ndirs  <num> ]\n"
+		  "    [ --filefmt <str> ] [ --stripes <num> ]\n"
+		  "    [ --random_order [--seed <num> | --seedfile <file>] ]\n"
 		  "    [ --readdir_order ] [ --mntfmt <str> ]\n"
-		  "    [ --mntcount <num> ] [ --mdtcount <num> ]\n";
+		  "    [ --mntcount <num> ] [ --mdtcount <num> ]\n"
+		  "    [ --setxattr ] }\n";
 
 static void
 usage(FILE *stream, char *fmt, ...)
@@ -304,6 +318,23 @@ process_args(int argc, char *argv[])
                         }
                         recreate++;
                         break;
+		case SETXATTR:
+			if (cmd == NULL) {
+				mode = SETXATTR;
+				cmd = (char *)longOpts[index].name;
+			} else if (mode == CREATE || mode == MKNOD) {
+				with_xattr = true;
+			} else {
+				usage(stderr, "--setxattr only makes sense "
+				      "with --create, --mknod or alone.\n");
+			}
+			break;
+		case SMALLWRITE:
+			if (mode != CREATE)
+				usage(stderr, "--smallwrite only applies to "
+					      "--create.\n");
+			smallwrite = true;
+			break;
                 case BEGIN:
                         begin = strtol(optarg, &endptr, 0);
                         if ((*endptr != 0) || (begin < 0)) {
@@ -459,14 +490,15 @@ process_args(int argc, char *argv[])
 			     "same time\n");
 	}
 
-        if (mode == CREATE || mode == MKNOD || mode == UNLINK || mode == STAT) {
-                if (seconds != 0) {
-                        if (nfiles == 0)
-                                nfiles = INT_MAX;
-                } else if (nfiles == 0) {
-                        usage(stderr, "--nfiles or --time must be specified "
-                                      "with %s.\n", cmd);
-                }
+	if (mode == CREATE || mode == MKNOD || mode == UNLINK ||
+	    mode == STAT || mode == SETXATTR) {
+		if (seconds != 0) {
+			if (nfiles == 0)
+				nfiles = INT_MAX;
+		} else if (nfiles == 0) {
+			usage(stderr, "--nfiles or --time must be specified "
+				      "with %s.\n", cmd);
+		}
         } else if (mode == LOOKUP || mode == OPEN) {
                 if (seconds != 0) {
                         if (iters == 0)
@@ -499,11 +531,11 @@ process_args(int argc, char *argv[])
                 dmesg("%s: rank %d seed %d (%s).\n", prog, myrank, seed,
                       (order == RANDOM) ? "random_order" : "readdir_order");
         } else {
-                usage(stderr, "one --create, --mknod, --open, --stat,"
+		usage(stderr, "one --create, --mknod, --open, --stat,"
 #ifdef HAVE_MDC_LOOKUP
-                      " --lookup,"
+		      " --lookup,"
 #endif
-                      " or --unlink must be specifed.");
+		      " --unlink or --setxattr must be specifed.");
         }
 
         /* support for multiple threads in a dir, set begin/end appropriately.*/
@@ -706,24 +738,50 @@ main(int argc, char *argv[])
         nops = lastOps = 0;
 
         switch (mode) {
-        case CREATE:
-                for (; begin <= end && !alarm_caught; begin += dirthreads) {
-                        sprintf(filename, filefmt, begin);
-                        if ((fd = open(filename, openflags, 0644)) < 0) {
-                                if (((rc = errno) == EINTR) && alarm_caught)
-                                        break;
-                                fatal(myrank, "open(%s) error: %s\n",
-                                      filename, strerror(rc));
-                        }
+	case CREATE:
+		for (; begin <= end && !alarm_caught; begin += dirthreads) {
+			snprintf(filename, sizeof(filename), filefmt, begin);
+			fd = open(filename, openflags, 0644);
+			if (fd < 0) {
+				rc = errno;
+				if (rc == EINTR && alarm_caught)
+					break;
+				fatal(myrank, "open(%s) error: %s\n",
+				      filename, strerror(rc));
+			}
 
-                        close(fd);
-                        nops++;
-                        DISPLAY_PROGRESS();
-                }
+			if (with_xattr) {
+				rc = fsetxattr(fd, xattrname, xattrbuf,
+					       xattrlen, XATTR_CREATE);
+				if (rc) {
+					rc = errno;
+					if (rc == EINTR && alarm_caught)
+						break;
+					fatal(myrank,
+					      "setxattr(%s) error: %s\n",
+					      filename, strerror(rc));
+				}
+			}
+			if (smallwrite) {
+				rc = write(fd, xattrbuf, xattrlen);
+				if (rc < 0) {
+					rc = errno;
+					if (rc == EINTR && alarm_caught)
+						break;
+					fatal(myrank,
+					      "write(%s) error: %s\n",
+					      filename, strerror(rc));
+				}
+			}
 
-                dmesg("%d: created %d files, last file '%s'.\n",
-                      myrank, nops, filename);
-                break;
+			close(fd);
+			nops++;
+			DISPLAY_PROGRESS();
+		}
+
+		dmesg("%d: created %d files, last file '%s'.\n",
+		      myrank, nops, filename);
+		break;
 #ifdef HAVE_MDC_LOOKUP
         case LOOKUP:
                 fd = open(dir, O_RDONLY);
@@ -747,21 +805,35 @@ main(int argc, char *argv[])
                 }
                 break;
 #endif
-        case MKNOD:
-                for (; begin <= end && !alarm_caught; begin += dirthreads) {
-                        sprintf(filename, filefmt, begin);
-                        rc = mknod(filename, S_IFREG| 0644, 0);
-                        if (rc) {
-                                if (((rc = errno) == EINTR) && alarm_caught)
-                                        break;
-                                fatal(myrank, "mknod(%s) error: %s\n",
-                                      filename, strerror(rc));
-                        }
+	case MKNOD:
+		for (; begin <= end && !alarm_caught; begin += dirthreads) {
+			snprintf(filename, sizeof(filename), filefmt, begin);
+			rc = mknod(filename, S_IFREG | 0644, 0);
+			if (rc) {
+				rc = errno;
+				if (rc == EINTR && alarm_caught)
+					break;
+				fatal(myrank, "mknod(%s) error: %s\n",
+				      filename, strerror(rc));
+			}
 
-                        nops++;
-                        DISPLAY_PROGRESS();
-                }
-                break;
+			if (with_xattr) {
+				rc = setxattr(filename, xattrname, xattrbuf,
+					      xattrlen, XATTR_CREATE);
+				if (rc) {
+					rc = errno;
+					if (rc == EINTR && alarm_caught)
+						break;
+					fatal(myrank,
+					      "setxattr(%s) error: %s\n",
+					      filename, strerror(rc));
+				}
+			}
+
+			nops++;
+			DISPLAY_PROGRESS();
+		}
+		break;
         case OPEN:
                 for (; nops < iters && !alarm_caught;) {
                         file = next_file();
@@ -816,6 +888,25 @@ main(int argc, char *argv[])
                         DISPLAY_PROGRESS();
                 }
                 break;
+	case SETXATTR:
+		for (; begin <= end && !alarm_caught; begin += dirthreads) {
+			snprintf(filename, sizeof(filename), filefmt, begin);
+			rc = setxattr(filename, xattrname, xattrbuf, xattrlen,
+				      XATTR_CREATE);
+			if (rc) {
+				rc = errno;
+				if (rc == EINTR && alarm_caught)
+					break;
+				if (rc == ENOENT && ignore)
+					continue;
+				fatal(myrank, "setxattr(%s) error: %s\n",
+				      filename, strerror(rc));
+			}
+
+			nops++;
+			DISPLAY_PROGRESS();
+		}
+		break;
         }
 
         rc = MPI_Barrier(MPI_COMM_WORLD);
@@ -844,7 +935,6 @@ main(int argc, char *argv[])
         }
 
         if (myrank == 0) {
-
                 curTime = MPI_Wtime();
                 interval = curTime - startTime;
                 effective_rate = (double) ag_ops / interval;
