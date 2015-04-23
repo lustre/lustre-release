@@ -102,6 +102,12 @@ int xattr_type_filter(struct ll_sb_info *sbi, int xattr_type)
         return 0;
 }
 
+/* xattr related to IMA(Integrity Measurement Architecture) */
+#ifndef XATTR_NAME_IMA
+#define XATTR_NAME_IMA		"security.ima"
+#define XATTR_NAME_EVM		"security.evm"
+#endif
+
 static
 int ll_setxattr_common(struct inode *inode, const char *name,
 		       const void *value, size_t size,
@@ -115,6 +121,13 @@ int ll_setxattr_common(struct inode *inode, const char *name,
         ext_acl_xattr_header *acl = NULL;
         const char *pv = value;
         ENTRY;
+
+	/*FIXME: enable IMA when the conditions are ready */
+	if (strncmp(name, XATTR_NAME_IMA,
+		    sizeof(XATTR_NAME_IMA)) == 0 ||
+	    strncmp(name, XATTR_NAME_EVM,
+		    sizeof(XATTR_NAME_EVM)) == 0)
+		return -EOPNOTSUPP;
 
         xattr_type = get_xattr_type(name);
         rc = xattr_type_filter(sbi, xattr_type);
