@@ -2138,6 +2138,76 @@ test_28() {
 }
 run_test 28 "Concurrent archive/file remove"
 
+test_29a() {
+	# Tests --mntpath and --archive options
+
+	local archive_id=7
+	copytool_setup $SINGLEAGT $MOUNT $archive_id
+
+	# Bad archive number
+	$LFS hsm_remove -m $MOUNT -a 33 0x857765760:0x8:0x2 2>&1 |
+		grep "Invalid argument" ||
+		error "unexpected hsm_remove failure (1)"
+
+	# mntpath is present but file is given
+	$LFS hsm_remove --mntpath $MOUNT --archive 30 /qwerty/uyt 2>&1 |
+		grep "hsm: '/qwerty/uyt' is not a valid FID" ||
+		error "unexpected hsm_remove failure (2)"
+
+	copytool_cleanup
+}
+run_test 29a "Tests --mntpath and --archive options"
+
+test_29b() {
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+	local f=$DIR/$tdir/$tfile
+	local fid=$(make_small $f)
+
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	rm -f $f
+
+	$LFS hsm_remove -m $MOUNT -a $HSM_ARCHIVE_NUMBER $fid
+	wait_request_state $fid REMOVE SUCCEED
+
+	copytool_cleanup
+}
+run_test 29b "Archive/delete/remove by FID from the archive."
+
+test_29c() {
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+	local fid1=$(make_small $DIR/$tdir/$tfile-1)
+	local fid2=$(make_small $DIR/$tdir/$tfile-2)
+	local fid3=$(make_small $DIR/$tdir/$tfile-3)
+
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $DIR/$tdir/$tfile-[1-3]
+	wait_request_state $fid1 ARCHIVE SUCCEED
+	wait_request_state $fid2 ARCHIVE SUCCEED
+	wait_request_state $fid3 ARCHIVE SUCCEED
+
+	rm -f $DIR/$tdir/$tfile-[1-3]
+
+	echo $fid1 > $DIR/$tdir/list
+	echo $fid2 >> $DIR/$tdir/list
+	echo $fid3 >> $DIR/$tdir/list
+
+	$LFS hsm_remove -m $MOUNT -a $HSM_ARCHIVE_NUMBER \
+		--filelist $DIR/$tdir/list
+	wait_request_state $fid1 REMOVE SUCCEED
+	wait_request_state $fid2 REMOVE SUCCEED
+	wait_request_state $fid3 REMOVE SUCCEED
+
+	copytool_cleanup
+}
+run_test 29c "Archive/delete/remove by FID, using a file list."
+
 test_30a() {
 	# restore at exec cannot work on agent node (because of Linux kernel
 	# protection of executables)
