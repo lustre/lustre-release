@@ -219,28 +219,36 @@ unsigned int ll_crypto_tfm_alg_min_keysize(struct crypto_blkcipher *tfm)
 #define clear_inode(i)		end_writeback(i)
 #endif
 
-#ifdef HAVE_DENTRY_D_ALIAS_HLIST
+#ifndef HAVE_DENTRY_D_CHILD
+#define d_child			d_u.d_child
+#endif
+
+#ifdef HAVE_DENTRY_D_U_D_ALIAS
+#define d_alias			d_u.d_alias
+#endif
+
+#ifndef DATA_FOR_LLITE_IS_LIST
 #define ll_d_hlist_node hlist_node
 #define ll_d_hlist_empty(list) hlist_empty(list)
 #define ll_d_hlist_entry(ptr, type, name) hlist_entry(ptr.first, type, name)
 #define ll_d_hlist_for_each(tmp, i_dentry) hlist_for_each(tmp, i_dentry)
-#ifdef HAVE_HLIST_FOR_EACH_3ARG
-#define ll_d_hlist_for_each_entry(dentry, p, i_dentry, alias) \
-	p = NULL; hlist_for_each_entry(dentry, i_dentry, alias)
-#else
-#define ll_d_hlist_for_each_entry(dentry, p, i_dentry, alias) \
-        hlist_for_each_entry(dentry, p, i_dentry, alias)
-#endif
+# ifdef HAVE_HLIST_FOR_EACH_3ARG
+# define ll_d_hlist_for_each_entry(dentry, p, i_dentry) \
+	p = NULL; hlist_for_each_entry(dentry, i_dentry, d_alias)
+# else
+# define ll_d_hlist_for_each_entry(dentry, p, i_dentry) \
+	hlist_for_each_entry(dentry, p, i_dentry, d_alias)
+# endif
 #define DECLARE_LL_D_HLIST_NODE_PTR(name) struct ll_d_hlist_node *name
 #else
 #define ll_d_hlist_node list_head
 #define ll_d_hlist_empty(list) list_empty(list)
 #define ll_d_hlist_entry(ptr, type, name) list_entry(ptr.next, type, name)
 #define ll_d_hlist_for_each(tmp, i_dentry) list_for_each(tmp, i_dentry)
-#define ll_d_hlist_for_each_entry(dentry, p, i_dentry, alias) \
-	list_for_each_entry(dentry, i_dentry, alias)
+#define ll_d_hlist_for_each_entry(dentry, p, i_dentry) \
+	list_for_each_entry(dentry, i_dentry, d_alias)
 #define DECLARE_LL_D_HLIST_NODE_PTR(name) /* nothing */
-#endif
+#endif /* !DATA_FOR_LLITE_IS_LIST */
 
 #ifndef QUOTA_OK
 # define QUOTA_OK 0

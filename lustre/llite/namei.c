@@ -157,14 +157,14 @@ static void ll_invalidate_negative_children(struct inode *dir)
 	DECLARE_LL_D_HLIST_NODE_PTR(p);
 
 	ll_lock_dcache(dir);
-	ll_d_hlist_for_each_entry(dentry, p, &dir->i_dentry, d_alias) {
+	ll_d_hlist_for_each_entry(dentry, p, &dir->i_dentry) {
 		spin_lock(&dentry->d_lock);
 		if (!list_empty(&dentry->d_subdirs)) {
 			struct dentry *child;
 
 			list_for_each_entry_safe(child, tmp_subdir,
 						 &dentry->d_subdirs,
-						 d_u.d_child) {
+						 d_child) {
 				if (child->d_inode == NULL)
 					d_lustre_invalidate(child, 1);
 			}
@@ -364,7 +364,7 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *dentry)
 	discon_alias = invalid_alias = NULL;
 
 	ll_lock_dcache(inode);
-	ll_d_hlist_for_each_entry(alias, p, &inode->i_dentry, d_alias) {
+	ll_d_hlist_for_each_entry(alias, p, &inode->i_dentry) {
 		LASSERT(alias != dentry);
 
 		spin_lock(&alias->d_lock);
