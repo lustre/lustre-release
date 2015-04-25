@@ -3304,6 +3304,8 @@ static inline int osd_get_fid_from_dentry(struct ldiskfs_dir_entry_2 *de,
         if (de->file_type & LDISKFS_DIRENT_LUFID) {
                 rec = (struct osd_fid_pack *) (de->name + de->name_len + 1);
                 rc = osd_fid_unpack((struct lu_fid *)fid, rec);
+		if (rc == 0 && unlikely(!fid_is_sane((struct lu_fid *)fid)))
+			rc = -EINVAL;
         }
 	return rc;
 }
