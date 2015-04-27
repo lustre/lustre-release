@@ -1461,7 +1461,7 @@ ksocknal_close_conn_locked(struct ksock_conn *conn, int error)
 		/* No more connections to this peer_ni */
 
 		if (!list_empty(&peer_ni->ksnp_tx_queue)) {
-				struct ksock_tx *tx;
+			struct ksock_tx *tx;
 
 			LASSERT(conn->ksnc_proto == &ksocknal_protocol_v3x);
 
@@ -1491,8 +1491,7 @@ ksocknal_close_conn_locked(struct ksock_conn *conn, int error)
 
 	spin_lock_bh(&ksocknal_data.ksnd_reaper_lock);
 
-	list_add_tail(&conn->ksnc_list,
-		      &ksocknal_data.ksnd_deathrow_conns);
+	list_add_tail(&conn->ksnc_list, &ksocknal_data.ksnd_deathrow_conns);
 	wake_up(&ksocknal_data.ksnd_reaper_waitq);
 
 	spin_unlock_bh(&ksocknal_data.ksnd_reaper_lock);
