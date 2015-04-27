@@ -1417,6 +1417,76 @@ test_12p() {
 }
 run_test 12p "implicit restore of a file on copytool mount point"
 
+cleanup_test_12q() {
+	trap 0
+	zconf_umount $(facet_host $SINGLEAGT) $MOUNT3 ||
+		error "cannot umount $MOUNT3 on $SINGLEAGT"
+}
+
+test_12q() {
+
+	zconf_mount $(facet_host $SINGLEAGT) $MOUNT3 ||
+		error "cannot mount $MOUNT3 on $SINGLEAGT"
+
+	trap cleanup_test_12q EXIT
+
+	# test needs a running copytool
+	copytool_setup $SINGLEAGT $MOUNT3
+
+	mkdir $DIR/$tdir
+	local f=$DIR/$tdir/$tfile
+	local f2=$DIR2/$tdir/$tfile
+	local fid=$(make_small $f)
+	local orig_size=$(stat -c "%s" $f)
+
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	$LFS hsm_release $f || error "could not release file"
+	check_hsm_flags $f "0x0000000d"
+
+	search_and_kill_copytool
+	sleep 5
+	search_copytools && error "Copytool should have stopped"
+
+	cat $f > /dev/null &
+
+	# wait a bit to allow implicit restore request to be handled.
+	# if not, next stat would also block on layout-lock.
+	sleep 5
+
+	local size=$(stat -c "%s" $f2)
+	[ $size -eq $orig_size ] ||
+		error "$f2: wrong size after archive: $size != $orig_size"
+
+	HSM_ARCHIVE_PURGE=false copytool_setup $SINGLEAGT /mnt/lustre3
+
+	wait
+
+	size=$(stat -c "%s" $f)
+	[ $size -eq $orig_size ] ||
+		error "$f: wrong size after restore: $size != $orig_size"
+
+	size=$(stat -c "%s" $f2)
+	[ $size -eq $orig_size ] ||
+		error "$f2: wrong size after restore: $size != $orig_size"
+
+	:>$f
+
+	size=$(stat -c "%s" $f)
+	[ $size -eq 0 ] ||
+		error "$f: wrong size after overwrite: $size != 0"
+
+	size=$(stat -c "%s" $f2)
+	[ $size -eq 0 ] ||
+		error "$f2: wrong size after overwrite: $size != 0"
+
+	copytool_cleanup
+	zconf_umount $(facet_host $SINGLEAGT) $MOUNT3 ||
+		error "cannot umount $MOUNT3 on $SINGLEAGT"
+}
+run_test 12q "file attributes are refreshed after restore"
+
 test_13() {
 	# test needs a running copytool
 	copytool_setup
