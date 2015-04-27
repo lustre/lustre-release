@@ -2577,13 +2577,9 @@ kiblnd_dev_need_failover(kib_dev_t *dev)
                 return rc;
         }
 
-        if (dev->ibd_hdev->ibh_ibdev == cmid->device) {
-                /* don't need device failover */
-                rdma_destroy_id(cmid);
-                return 0;
-        }
-
-        return 1;
+	rc = dev->ibd_hdev->ibh_ibdev != cmid->device; /* true for failover */
+	rdma_destroy_id(cmid);
+	return rc;
 }
 
 int
