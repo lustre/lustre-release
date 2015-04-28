@@ -402,7 +402,9 @@ struct llapi_layout *llapi_layout_get_by_fd(int fd, uint32_t flags)
 	struct llapi_layout *layout = NULL;
 	ssize_t bytes_read;
 	int object_count;
+	int lum_stripe_count;
 	struct stat st;
+	bool need_swab;
 
 	lum_len = XATTR_SIZE_MAX;
 	lum = malloc(lum_len);
@@ -426,6 +428,14 @@ struct llapi_layout *llapi_layout_get_by_fd(int fd, uint32_t flags)
 
 	object_count = llapi_layout_objects_in_lum(lum, bytes_read);
 
+	need_swab = lum->lmm_magic == __swab32(LOV_MAGIC_V1) ||
+		    lum->lmm_magic == __swab32(LOV_MAGIC_V3);
+
+	if (need_swab)
+		lum_stripe_count = __swab16(lum->lmm_stripe_count);
+	else
+		lum_stripe_count = lum->lmm_stripe_count;
+
 	/* Directories may have a positive non-zero lum->lmm_stripe_count
 	 * yet have an empty lum->lmm_objects array. For non-directories the
 	 * amount of data returned from the kernel must be consistent
@@ -433,13 +443,12 @@ struct llapi_layout *llapi_layout_get_by_fd(int fd, uint32_t flags)
 	if (fstat(fd, &st) < 0)
 		goto out;
 
-	if (!S_ISDIR(st.st_mode) && object_count != lum->lmm_stripe_count) {
+	if (!S_ISDIR(st.st_mode) && object_count != lum_stripe_count) {
 		errno = EINTR;
 		goto out;
 	}
 
-	if (lum->lmm_magic == __swab32(LOV_MAGIC_V1) ||
-	    lum->lmm_magic == __swab32(LOV_MAGIC_V3))
+	if (need_swab)
 		llapi_layout_swab_lov_user_md(lum, object_count);
 
 	layout = llapi_layout_from_lum(lum, object_count);
