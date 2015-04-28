@@ -35,9 +35,9 @@
  */
 
 #include <stdio.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <libcfs/libcfs.h>
 #include <lustre/lustre_idl.h>
 #include <lustre/lustre_lfsck_user.h>
 #include <lustre_disk.h>
