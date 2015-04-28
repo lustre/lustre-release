@@ -226,7 +226,7 @@ static int sendfile_copy(const char *source, int source_gid,
 			source_gid, source, strerror(-rc));
 	}
 
-	fd_out = open(dest, O_WRONLY | O_TRUNC | O_CREAT);
+	fd_out = open(dest, O_WRONLY | O_TRUNC | O_CREAT, 0644);
 	ASSERTF(fd_out >= 0, "creation failed for '%s': %s",
 		dest, strerror(errno));
 
