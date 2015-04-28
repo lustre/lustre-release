@@ -49,7 +49,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <libcfs/libcfs.h>
 #include <lustre/lustre_user.h>
 
 typedef struct flag_mapping {

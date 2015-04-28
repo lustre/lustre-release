@@ -43,7 +43,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <libcfs/libcfs.h>
 #include <lustre/lustreapi.h>
 
 #define ACT_NONE        0
@@ -175,13 +174,15 @@ int main(int argc, char** argv)
                 iv->iov_len = strtoul(argv[optind++], &end, 0);
                 if (*end) {
                         printf("Error iov size\n");
-                        GOTO(out, rc = 1);
+			rc = 1;
+			goto out;
                 }
                 iv->iov_base = mmap(NULL, iv->iov_len, PROT_READ | PROT_WRITE,
                                     MAP_PRIVATE | MAP_ANON, 0, 0);
                 if (iv->iov_base == MAP_FAILED) {
                         printf("No memory %s\n", strerror(errno));
-                        GOTO(out, rc = 1);
+			rc = 1;
+			goto out;
                 }
                 if (act & ACT_WRITE)
                         memset(iv->iov_base, pad, iv->iov_len);
@@ -196,7 +197,8 @@ int main(int argc, char** argv)
 
         if ((act & ACT_SEEK) && (lseek64(fd, offset, SEEK_SET) < 0)) {
                 printf("Cannot seek %s\n", strerror(errno));
-                GOTO(out, rc == 1);
+		rc = 1;
+		goto out;
         }
 
         if (act & ACT_WRITE) {
@@ -204,19 +206,23 @@ int main(int argc, char** argv)
                 if (rc != len) {
                         printf("Write error: %s (rc = %d, len = %ld)\n",
                                 strerror(errno), rc, len);
-                        GOTO(out, rc = 1);
+			rc = 1;
+			goto out;
                 }
         } else if (act & ACT_READ) {
                 rc = readv(fd, iov, iovcnt);
                 if (rc != len) {
                         printf("Read error: %s rc = %d\n", strerror(errno), rc);
-                        GOTO(out, rc = 1);
+			rc = 1;
+			goto out;
                 }
 
                 /* It should return zeroed buf if the read hits hole.*/
                 if (((act & ACT_READHOLE) || (act & ACT_VERIFY)) &&
-                    data_verify(iov, iovcnt, pad))
-                        GOTO(out, rc = 1);
+		    data_verify(iov, iovcnt, pad)) {
+			rc = 1;
+			goto out;
+		}
         }
 
         rc = 0;

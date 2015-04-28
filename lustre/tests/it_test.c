@@ -45,7 +45,6 @@
 
 #define EXPORT_SYMBOL(s)
 
-#include <libcfs/libcfs.h>
 #include <../ldlm/interval_tree.c>
 
 #define dprintf(fmt, args...) //printf(fmt, ##args)

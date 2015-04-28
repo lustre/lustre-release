@@ -53,8 +53,6 @@
 #include <endian.h>
 #endif
 
-#include <libcfs/libcfs.h>
-
 enum {
         /*
          * Maximal format name length.

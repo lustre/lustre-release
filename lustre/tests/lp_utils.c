@@ -49,7 +49,6 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <libcfs/libcfs.h>
 #include "lustre/lustre_user.h"
 #include "lustre/tests/lp_utils.h"
 
