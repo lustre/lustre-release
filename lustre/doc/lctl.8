@@ -283,9 +283,12 @@ Acquire which lustre file was attached to the device node.
 .PP
 .SS Changelogs
 .TP
-.BI changelog_register
+.BI changelog_register " [-n]"
 Register a new changelog user for a particular device.  Changelog entries
 will not be purged beyond any registered users' set point. (See lfs changelog_clear.)
+.br
+.B -n
+Print only the ID of the newly registered user.
 .TP
 .BI changelog_deregister " <id>"
 Unregister an existing changelog user.  If the user's "clear" record number
