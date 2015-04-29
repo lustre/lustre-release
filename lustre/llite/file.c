@@ -99,7 +99,6 @@ void ll_pack_inode2opdata(struct inode *inode, struct md_op_data *op_data,
 	op_data->op_attr_flags = ll_inode_to_ext_flags(inode->i_flags);
         if (fh)
                 op_data->op_handle = *fh;
-        op_data->op_capa1 = ll_mdscapa_get(inode);
 
 	if (LLIF_DATA_MODIFIED & ll_i2info(inode)->lli_flags)
 		op_data->op_bias |= MDS_DATA_MODIFIED;
@@ -332,7 +331,6 @@ static int ll_md_close(struct obd_export *md_exp, struct inode *inode,
 out:
 	LUSTRE_FPRIVATE(file) = NULL;
 	ll_file_data_put(fd);
-	ll_capa_close(inode);
 
 	RETURN(rc);
 }
@@ -672,8 +670,6 @@ restart:
            by ldlm_cancel_lru */
         if (!S_ISREG(inode->i_mode))
                 GOTO(out_och_free, rc);
-
-        ll_capa_open(inode);
 
 	cl_lov_delay_create_clear(&file->f_flags);
 	GOTO(out_och_free, rc);
@@ -2669,7 +2665,6 @@ int ll_fsync(struct file *file, struct dentry *dentry, int datasync)
 	struct inode *inode = dentry->d_inode;
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct ptlrpc_request *req;
-	struct obd_capa *oc;
 	int rc, err;
 	ENTRY;
 
@@ -2698,10 +2693,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int datasync)
 			rc = err;
 	}
 
-	oc = ll_mdscapa_get(inode);
-	err = md_fsync(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode), oc,
-		       &req);
-	capa_put(oc);
+	err = md_fsync(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode), &req);
 	if (!rc)
 		rc = err;
 	if (!err)
@@ -3143,9 +3135,6 @@ static int __ll_inode_revalidate(struct dentry *dentry, __u64 ibits)
                         RETURN(PTR_ERR(op_data));
 
                 op_data->op_valid = valid;
-                /* Once OBD_CONNECT_ATTRFID is not supported, we can't find one
-                 * capa for this inode. Because we only keep capas of dirs
-                 * fresh. */
                 rc = md_getattr(sbi->ll_md_exp, op_data, &req);
                 ll_finish_md_op_data(op_data);
                 if (rc) {
@@ -3645,7 +3634,6 @@ static int ll_layout_fetch(struct inode *inode, struct ldlm_lock *lock)
 
 {
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
-	struct obd_capa *oc;
 	struct ptlrpc_request *req;
 	struct mdt_body *body;
 	void *lvbdata;
@@ -3666,13 +3654,11 @@ static int ll_layout_fetch(struct inode *inode, struct ldlm_lock *lock)
 	 * blocked and then granted via completion ast, we have to fetch
 	 * layout here. Please note that we can't use the LVB buffer in
 	 * completion AST because it doesn't have a large enough buffer */
-	oc = ll_mdscapa_get(inode);
 	rc = ll_get_default_mdsize(sbi, &lmmsize);
 	if (rc == 0)
-		rc = md_getxattr(sbi->ll_md_exp, ll_inode2fid(inode), oc,
+		rc = md_getxattr(sbi->ll_md_exp, ll_inode2fid(inode),
 				OBD_MD_FLXATTR, XATTR_NAME_LOV, NULL, 0,
 				lmmsize, 0, &req);
-	capa_put(oc);
 	if (rc < 0)
 		RETURN(rc);
 

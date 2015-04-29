@@ -52,7 +52,6 @@
 #include <lustre_fld.h>
 #include <lustre_handles.h>
 #include <lustre_intent.h>
-#include <lustre_capa.h>
 #include <lvfs.h>
 
 #define MAX_OBD_DEVICES 8192
@@ -656,7 +655,6 @@ enum obd_cleanup_stage {
 
 /* get/set_info keys */
 #define KEY_ASYNC               "async"
-#define KEY_CAPA_KEY            "capa_key"
 #define KEY_CHANGELOG_CLEAR     "changelog_clear"
 #define KEY_FID2PATH            "fid2path"
 #define KEY_CHECKSUM            "checksum"
@@ -765,10 +763,6 @@ struct md_op_data {
 	__u64                   op_valid; /* OBD_MD_* */
 
 	enum md_op_flags	op_flags;
-
-	/* Capa fields */
-	struct obd_capa        *op_capa1;
-	struct obd_capa        *op_capa2;
 
 	/* Various operation flags. */
 	enum mds_op_bias        op_bias;
@@ -921,8 +915,6 @@ struct lustre_md {
 	struct posix_acl        *posix_acl;
 #endif
 	struct mdt_remote_perm  *remote_perm;
-	struct obd_capa         *mds_capa;
-	struct obd_capa         *oss_capa;
 };
 
 struct md_open_data {
@@ -991,7 +983,7 @@ struct md_ops {
 			 size_t , struct ptlrpc_request **);
 
 	int (*m_fsync)(struct obd_export *, const struct lu_fid *,
-		       struct obd_capa *, struct ptlrpc_request **);
+		       struct ptlrpc_request **);
 
 	int (*m_read_page)(struct obd_export *, struct md_op_data *,
 			   struct md_callback *cb_op, __u64 hash_offset,
@@ -1001,13 +993,11 @@ struct md_ops {
 			struct ptlrpc_request **);
 
 	int (*m_setxattr)(struct obd_export *, const struct lu_fid *,
-			  struct obd_capa *, u64, const char *,
-			  const char *, int, int, int, __u32,
+			  u64, const char *, const char *, int, int, int, u32,
 			  struct ptlrpc_request **);
 
 	int (*m_getxattr)(struct obd_export *, const struct lu_fid *,
-			  struct obd_capa *, u64, const char *,
-			  const char *, int, int, int,
+			  u64, const char *, const char *, int, int, int,
 			  struct ptlrpc_request **);
 
         int (*m_intent_getattr_async)(struct obd_export *,
@@ -1019,9 +1009,7 @@ struct md_ops {
 
 #define MD_STATS_LAST_OP m_revalidate_lock
 
-	int (*m_getstatus)(struct obd_export *, struct lu_fid *,
-			   struct obd_capa **);
-
+	int (*m_getstatus)(struct obd_export *, struct lu_fid *);
 	int (*m_null_inode)(struct obd_export *, const struct lu_fid *);
 
 	int (*m_find_cbdata)(struct obd_export *, const struct lu_fid *,
@@ -1060,15 +1048,8 @@ struct md_ops {
 			       ldlm_policy_data_t *, ldlm_mode_t,
 			       ldlm_cancel_flags_t flags, void *opaque);
 
-	int (*m_renew_capa)(struct obd_export *, struct obd_capa *oc,
-			    renew_capa_cb_t cb);
-
-	int (*m_unpack_capa)(struct obd_export *, struct ptlrpc_request *,
-			     const struct req_msg_field *, struct obd_capa **);
-
 	int (*m_get_remote_perm)(struct obd_export *, const struct lu_fid *,
-				 struct obd_capa *, __u32,
-				 struct ptlrpc_request **);
+				 u32, struct ptlrpc_request **);
 
 	int (*m_get_fid_from_lsm)(struct obd_export *,
 				  const struct lmv_stripe_md *,

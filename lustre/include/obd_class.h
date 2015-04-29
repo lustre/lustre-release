@@ -1291,16 +1291,16 @@ static inline int obd_register_observer(struct obd_device *obd,
 }
 
 /* metadata helpers */
-static inline int md_getstatus(struct obd_export *exp,
-                               struct lu_fid *fid, struct obd_capa **pc)
+static inline int md_getstatus(struct obd_export *exp, struct lu_fid *fid)
 {
-        int rc;
-        ENTRY;
+	int rc;
 
-        EXP_CHECK_MD_OP(exp, getstatus);
-        EXP_MD_COUNTER_INCREMENT(exp, getstatus);
-        rc = MDP(exp->exp_obd, getstatus)(exp, fid, pc);
-        RETURN(rc);
+	ENTRY;
+	EXP_CHECK_MD_OP(exp, getstatus);
+	EXP_MD_COUNTER_INCREMENT(exp, getstatus);
+	rc = MDP(exp->exp_obd, getstatus)(exp, fid);
+
+	RETURN(rc);
 }
 
 static inline int md_getattr(struct obd_export *exp, struct md_op_data *op_data,
@@ -1445,13 +1445,15 @@ static inline int md_setattr(struct obd_export *exp, struct md_op_data *op_data,
 }
 
 static inline int md_fsync(struct obd_export *exp, const struct lu_fid *fid,
-			   struct obd_capa *oc, struct ptlrpc_request **request)
+			   struct ptlrpc_request **request)
 {
 	int rc;
+
 	ENTRY;
 	EXP_CHECK_MD_OP(exp, fsync);
 	EXP_MD_COUNTER_INCREMENT(exp, fsync);
-	rc = MDP(exp->exp_obd, fsync)(exp, fid, oc, request);
+	rc = MDP(exp->exp_obd, fsync)(exp, fid, request);
+
 	RETURN(rc);
 }
 
@@ -1513,34 +1515,32 @@ static inline int md_merge_attr(struct obd_export *exp,
 	RETURN(MDP(exp->exp_obd, merge_attr)(exp, lsm, attr, cb));
 }
 
-static inline int md_setxattr(struct obd_export *exp,
-			      const struct lu_fid *fid, struct obd_capa *oc,
+static inline int md_setxattr(struct obd_export *exp, const struct lu_fid *fid,
 			      u64 valid, const char *name,
 			      const char *input, int input_size,
 			      int output_size, int flags, __u32 suppgid,
 			      struct ptlrpc_request **request)
 {
-        ENTRY;
-        EXP_CHECK_MD_OP(exp, setxattr);
-        EXP_MD_COUNTER_INCREMENT(exp, setxattr);
-        RETURN(MDP(exp->exp_obd, setxattr)(exp, fid, oc, valid, name, input,
-                                           input_size, output_size, flags,
-                                           suppgid, request));
+	ENTRY;
+	EXP_CHECK_MD_OP(exp, setxattr);
+	EXP_MD_COUNTER_INCREMENT(exp, setxattr);
+	RETURN(MDP(exp->exp_obd, setxattr)(exp, fid, valid, name, input,
+					   input_size, output_size, flags,
+					   suppgid, request));
 }
 
-static inline int md_getxattr(struct obd_export *exp,
-			      const struct lu_fid *fid, struct obd_capa *oc,
+static inline int md_getxattr(struct obd_export *exp, const struct lu_fid *fid,
 			      u64 valid, const char *name,
 			      const char *input, int input_size,
 			      int output_size, int flags,
 			      struct ptlrpc_request **request)
 {
-        ENTRY;
-        EXP_CHECK_MD_OP(exp, getxattr);
-        EXP_MD_COUNTER_INCREMENT(exp, getxattr);
-        RETURN(MDP(exp->exp_obd, getxattr)(exp, fid, oc, valid, name, input,
-                                           input_size, output_size, flags,
-                                           request));
+	ENTRY;
+	EXP_CHECK_MD_OP(exp, getxattr);
+	EXP_MD_COUNTER_INCREMENT(exp, getxattr);
+	RETURN(MDP(exp->exp_obd, getxattr)(exp, fid, valid, name, input,
+					   input_size, output_size, flags,
+					   request));
 }
 
 static inline int md_set_open_replay_data(struct obd_export *exp,
@@ -1613,39 +1613,14 @@ static inline int md_init_ea_size(struct obd_export *exp, __u32 ea_size,
 }
 
 static inline int md_get_remote_perm(struct obd_export *exp,
-                                     const struct lu_fid *fid,
-                                     struct obd_capa *oc, __u32 suppgid,
-                                     struct ptlrpc_request **request)
+				     const struct lu_fid *fid, u32 suppgid,
+				     struct ptlrpc_request **request)
 {
-        ENTRY;
-        EXP_CHECK_MD_OP(exp, get_remote_perm);
-        EXP_MD_COUNTER_INCREMENT(exp, get_remote_perm);
-        RETURN(MDP(exp->exp_obd, get_remote_perm)(exp, fid, oc, suppgid,
-                                                  request));
-}
+	ENTRY;
+	EXP_CHECK_MD_OP(exp, get_remote_perm);
+	EXP_MD_COUNTER_INCREMENT(exp, get_remote_perm);
 
-static inline int md_renew_capa(struct obd_export *exp, struct obd_capa *ocapa,
-                                renew_capa_cb_t cb)
-{
-        int rc;
-        ENTRY;
-        EXP_CHECK_MD_OP(exp, renew_capa);
-        EXP_MD_COUNTER_INCREMENT(exp, renew_capa);
-        rc = MDP(exp->exp_obd, renew_capa)(exp, ocapa, cb);
-        RETURN(rc);
-}
-
-static inline int md_unpack_capa(struct obd_export *exp,
-                                 struct ptlrpc_request *req,
-                                 const struct req_msg_field *field,
-                                 struct obd_capa **oc)
-{
-        int rc;
-        ENTRY;
-        EXP_CHECK_MD_OP(exp, unpack_capa);
-        EXP_MD_COUNTER_INCREMENT(exp, unpack_capa);
-        rc = MDP(exp->exp_obd, unpack_capa)(exp, req, field, oc);
-        RETURN(rc);
+	RETURN(MDP(exp->exp_obd, get_remote_perm)(exp, fid, suppgid, request));
 }
 
 static inline int md_intent_getattr_async(struct obd_export *exp,

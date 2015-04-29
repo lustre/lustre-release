@@ -176,7 +176,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	struct inode *root = NULL;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device *obd;
-        struct obd_capa *oc = NULL;
         struct obd_statfs *osfs = NULL;
         struct ptlrpc_request *request = NULL;
         struct obd_connect_data *data = NULL;
@@ -368,16 +367,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 }
         }
 
-        if (data->ocd_connect_flags & OBD_CONNECT_MDS_CAPA) {
-                LCONSOLE_INFO("client enabled MDS capability!\n");
-                sbi->ll_flags |= LL_SBI_MDS_CAPA;
-        }
-
-        if (data->ocd_connect_flags & OBD_CONNECT_OSS_CAPA) {
-                LCONSOLE_INFO("client enabled OSS capability!\n");
-                sbi->ll_flags |= LL_SBI_OSS_CAPA;
-        }
-
         if (data->ocd_connect_flags & OBD_CONNECT_64BITHASH)
                 sbi->ll_flags |= LL_SBI_64BIT_HASH;
 
@@ -477,7 +466,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	mutex_unlock(&sbi->ll_lco.lco_lock);
 
 	fid_zero(&sbi->ll_root_fid);
-	err = md_getstatus(sbi->ll_md_exp, &sbi->ll_root_fid, &oc);
+	err = md_getstatus(sbi->ll_md_exp, &sbi->ll_root_fid);
 	if (err) {
 		CERROR("cannot mds_connect: rc = %d\n", err);
 		GOTO(out_lock_cn_cb, err);
@@ -497,8 +486,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 
 	/* make root inode
 	 * XXX: move this to after cbd setup? */
-	valid = OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS | OBD_MD_FLMDSCAPA |
-		OBD_MD_FLMODEASIZE;
+	valid = OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS | OBD_MD_FLMODEASIZE;
 	if (sbi->ll_flags & LL_SBI_RMT_CLIENT)
 		valid |= OBD_MD_FLRMTPERM;
 	else if (sbi->ll_flags & LL_SBI_ACL)
@@ -510,12 +498,10 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 
 	op_data->op_fid1 = sbi->ll_root_fid;
 	op_data->op_mode = 0;
-	op_data->op_capa1 = oc;
 	op_data->op_valid = valid;
 
 	err = md_getattr(sbi->ll_md_exp, op_data, &request);
-	if (oc)
-		capa_put(oc);
+
 	OBD_FREE_PTR(op_data);
 	if (err) {
 		CERROR("%s: md_getattr failed for root: rc = %d\n",
@@ -935,9 +921,7 @@ void ll_lli_init(struct ll_inode_info *lli)
 	mutex_init(&lli->lli_rmtperm_mutex);
 	/* Do not set lli_fid, it has been initialized already. */
 	fid_zero(&lli->lli_pfid);
-	INIT_LIST_HEAD(&lli->lli_oss_capas);
 	atomic_set(&lli->lli_open_count, 0);
-	lli->lli_mds_capa = NULL;
 	lli->lli_rmtperm_time = 0;
 	lli->lli_mds_read_och = NULL;
         lli->lli_mds_write_och = NULL;
@@ -1099,8 +1083,6 @@ void ll_put_super(struct super_block *sb)
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p - %s\n", sb, profilenm);
-
-        ll_print_capa_stat(sbi);
 
         cfg.cfg_instance = sb;
         lustre_end_log(sb, profilenm, &cfg);
@@ -1448,7 +1430,6 @@ void ll_clear_inode(struct inode *inode)
 #endif
 	lli->lli_inode_magic = LLI_INODE_DEAD;
 
-	ll_clear_inode_capas(inode);
 	if (S_ISDIR(inode->i_mode))
 		ll_dir_clear_lsm_md(inode);
 	else if (S_ISREG(inode->i_mode) && !is_bad_inode(inode))
@@ -1946,16 +1927,6 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 			inode->i_blocks = body->mbo_blocks;
 	}
 
-	if (body->mbo_valid & OBD_MD_FLMDSCAPA) {
-		LASSERT(md->mds_capa);
-		ll_add_capa(inode, md->mds_capa);
-	}
-
-	if (body->mbo_valid & OBD_MD_FLOSSCAPA) {
-		LASSERT(md->oss_capa);
-		ll_add_capa(inode, md->oss_capa);
-	}
-
 	if (body->mbo_valid & OBD_MD_TSTATE) {
 		if (body->mbo_t_state & MS_RESTORE)
 			lli->lli_flags |= LLIF_FILE_RESTORING;
@@ -2446,7 +2417,6 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 
 	ll_i2gids(op_data->op_suppgids, i1, i2);
 	op_data->op_fid1 = *ll_inode2fid(i1);
-	op_data->op_capa1 = ll_mdscapa_get(i1);
 	op_data->op_default_stripe_offset = -1;
 	if (S_ISDIR(i1->i_mode)) {
 		op_data->op_mea1 = ll_i2info(i1)->lli_lsm_md;
@@ -2457,12 +2427,10 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 
 	if (i2) {
 		op_data->op_fid2 = *ll_inode2fid(i2);
-		op_data->op_capa2 = ll_mdscapa_get(i2);
 		if (S_ISDIR(i2->i_mode))
 			op_data->op_mea2 = ll_i2info(i2)->lli_lsm_md;
 	} else {
 		fid_zero(&op_data->op_fid2);
-		op_data->op_capa2 = NULL;
 	}
 
 	if (ll_i2sbi(i1)->ll_flags & LL_SBI_64BIT_HASH)
@@ -2497,8 +2465,6 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 
 void ll_finish_md_op_data(struct md_op_data *op_data)
 {
-        capa_put(op_data->op_capa1);
-        capa_put(op_data->op_capa2);
         OBD_FREE_PTR(op_data);
 }
 

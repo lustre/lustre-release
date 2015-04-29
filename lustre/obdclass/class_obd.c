@@ -513,9 +513,6 @@ static int __init init_obdclass(void)
 {
         int i, err;
 
-        for (i = CAPA_SITE_CLIENT; i < CAPA_SITE_MAX; i++)
-		INIT_LIST_HEAD(&capa_list[i]);
-
         LCONSOLE_INFO("Lustre: Build Version: "BUILD_VERSION"\n");
 
 	spin_lock_init(&obd_types_lock);
@@ -573,10 +570,6 @@ static int __init init_obdclass(void)
                 return err;
 
 	err = lu_global_init();
-	if (err)
-		return err;
-
-	err = lu_capainfo_init();
 	if (err)
 		return err;
 
@@ -660,7 +653,6 @@ static void cleanup_obdclass(void)
 	dt_global_fini();
 #endif /* HAVE_SERVER_SUPPORT */
 	cl_global_fini();
-	lu_capainfo_fini();
 	lu_global_fini();
 
         obd_cleanup_caches();

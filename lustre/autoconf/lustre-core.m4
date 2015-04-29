@@ -215,18 +215,6 @@ LB_CHECK_EXPORT([delete_from_page_cache], [mm/filemap.c],
 ]) # LC_EXPORT_TRUNCATE_COMPLETE_PAGE
 
 #
-# LC_CAPA_CRYPTO
-#
-AC_DEFUN([LC_CAPA_CRYPTO], [
-LB_CHECK_CONFIG_IM([CRYPTO], [],
-	[AC_MSG_ERROR([Lustre capability require that CONFIG_CRYPTO is enabled in your kernel.])])
-LB_CHECK_CONFIG_IM([CRYPTO_HMAC], [],
-	[AC_MSG_ERROR([Lustre capability require that CONFIG_CRYPTO_HMAC is enabled in your kernel.])])
-LB_CHECK_CONFIG_IM([CRYPTO_SHA1], [],
-	[AC_MSG_ERROR([Lustre capability require that CONFIG_CRYPTO_SHA1 is enabled in your kernel.])])
-]) # LC_CAPA_CRYPTO
-
-#
 # LC_CONFIG_RMTCLIENT
 #
 dnl FIXME
@@ -1693,7 +1681,6 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_LLITE_LLOOP_MODULE
 
 	LC_GLIBC_SUPPORT_FHANDLES
-	LC_CAPA_CRYPTO
 	LC_CONFIG_RMTCLIENT
 	LC_CONFIG_GSS
 

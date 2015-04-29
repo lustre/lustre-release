@@ -59,23 +59,6 @@ static void __mdc_pack_body(struct mdt_body *b, __u32 suppgid)
 	b->mbo_capability = cfs_curproc_cap_pack();
 }
 
-void mdc_pack_capa(struct ptlrpc_request *req, const struct req_msg_field *field,
-                   struct obd_capa *oc)
-{
-        struct req_capsule *pill = &req->rq_pill;
-        struct lustre_capa *c;
-
-        if (oc == NULL) {
-                LASSERT(req_capsule_get_size(pill, field, RCL_CLIENT) == 0);
-                return;
-        }
-
-        c = req_capsule_client_get(pill, field);
-        LASSERT(c != NULL);
-        capa_cpy(c, oc);
-        DEBUG_CAPA(D_SEC, c, "pack");
-}
-
 void mdc_swap_layouts_pack(struct ptlrpc_request *req,
 			   struct md_op_data *op_data)
 {
@@ -86,14 +69,10 @@ void mdc_swap_layouts_pack(struct ptlrpc_request *req,
 	b->mbo_fid1 = op_data->op_fid1;
 	b->mbo_fid2 = op_data->op_fid2;
 	b->mbo_valid |= OBD_MD_FLID;
-
-	mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
-	mdc_pack_capa(req, &RMF_CAPA2, op_data->op_capa2);
 }
 
-void mdc_pack_body(struct ptlrpc_request *req,
-		   const struct lu_fid *fid, struct obd_capa *oc,
-		   __u64 valid, size_t ea_size, __u32 suppgid, __u32 flags)
+void mdc_pack_body(struct ptlrpc_request *req, const struct lu_fid *fid,
+		   u64 valid, size_t ea_size, u32 suppgid, u32 flags)
 {
 	struct mdt_body *b = req_capsule_client_get(&req->rq_pill,
 						    &RMF_MDT_BODY);
@@ -105,7 +84,6 @@ void mdc_pack_body(struct ptlrpc_request *req,
 	if (fid) {
 		b->mbo_fid1 = *fid;
 		b->mbo_valid |= OBD_MD_FLID;
-		mdc_pack_capa(req, &RMF_CAPA1, oc);
 	}
 }
 
@@ -142,7 +120,7 @@ static void mdc_pack_name(struct ptlrpc_request *req,
 }
 
 void mdc_readdir_pack(struct ptlrpc_request *req, __u64 pgoff, size_t size,
-		      const struct lu_fid *fid, struct obd_capa *oc)
+		      const struct lu_fid *fid)
 {
         struct mdt_body *b = req_capsule_client_get(&req->rq_pill,
                                                     &RMF_MDT_BODY);
@@ -152,8 +130,6 @@ void mdc_readdir_pack(struct ptlrpc_request *req, __u64 pgoff, size_t size,
 	b->mbo_nlink = size;			/* !! */
 	__mdc_pack_body(b, -1);
 	b->mbo_mode = LUDA_FID | LUDA_TYPE;
-
-	mdc_pack_capa(req, &RMF_CAPA1, oc);
 }
 
 /* packing of MDS records */
@@ -186,8 +162,6 @@ void mdc_create_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 	set_mrc_cr_flags(rec, flags);
 	rec->cr_bias     = op_data->op_bias;
 	rec->cr_umask    = current_umask();
-
-	mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
 
 	mdc_pack_name(req, &RMF_NAME, op_data->op_name, op_data->op_namelen);
 	if (data) {
@@ -255,10 +229,6 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 		rec->cr_suppgid2   = op_data->op_suppgids[1];
 		rec->cr_bias       = op_data->op_bias;
 		rec->cr_old_handle = op_data->op_handle;
-
-		mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
-		/* the next buffer is child capa, which is used for replay,
-		 * will be packed from the data in reply message. */
 
 		if (op_data->op_name) {
 			mdc_pack_name(req, &RMF_NAME, op_data->op_name,
@@ -367,8 +337,6 @@ void mdc_setattr_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
         rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
         mdc_setattr_pack_rec(rec, op_data);
 
-        mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
-
         if (ealen == 0)
                 return;
 
@@ -404,8 +372,6 @@ void mdc_unlink_pack(struct ptlrpc_request *req, struct md_op_data *op_data)
         rec->ul_time    = op_data->op_mod_time;
         rec->ul_bias    = op_data->op_bias;
 
-        mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
-
 	mdc_pack_name(req, &RMF_NAME, op_data->op_name, op_data->op_namelen);
 }
 
@@ -427,9 +393,6 @@ void mdc_link_pack(struct ptlrpc_request *req, struct md_op_data *op_data)
         rec->lk_fid2     = op_data->op_fid2;
         rec->lk_time     = op_data->op_mod_time;
         rec->lk_bias     = op_data->op_bias;
-
-        mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
-        mdc_pack_capa(req, &RMF_CAPA2, op_data->op_capa2);
 
 	mdc_pack_name(req, &RMF_NAME, op_data->op_name, op_data->op_namelen);
 }
@@ -457,9 +420,6 @@ void mdc_rename_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
         rec->rn_mode     = op_data->op_mode;
         rec->rn_bias     = op_data->op_bias;
 
-	mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
-        mdc_pack_capa(req, &RMF_CAPA2, op_data->op_capa2);
-
 	mdc_pack_name(req, &RMF_NAME, old, oldlen);
 
 	if (new != NULL)
@@ -484,8 +444,6 @@ void mdc_getattr_pack(struct ptlrpc_request *req, __u64 valid, __u32 flags,
 	b->mbo_fid1 = op_data->op_fid1;
 	b->mbo_fid2 = op_data->op_fid2;
 	b->mbo_valid |= OBD_MD_FLID;
-
-        mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
 
 	if (op_data->op_name != NULL)
 		mdc_pack_name(req, &RMF_NAME, op_data->op_name,
@@ -525,7 +483,6 @@ void mdc_close_pack(struct ptlrpc_request *req, struct md_op_data *op_data)
         rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
 
         mdc_setattr_pack_rec(rec, op_data);
-        mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
         mdc_ioepoch_pack(epoch, op_data);
 	mdc_intent_close_pack(req, op_data);
 }

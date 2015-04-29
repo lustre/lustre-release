@@ -47,7 +47,6 @@
 enum obd_notify_event;
 struct inode;
 struct lustre_md;
-struct obd_capa;
 struct obd_device;
 struct obd_export;
 struct page;

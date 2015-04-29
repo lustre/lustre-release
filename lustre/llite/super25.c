@@ -167,15 +167,9 @@ static int __init init_lustre_lite(void)
 	do_gettimeofday(&tv);
 	cfs_srand(tv.tv_sec ^ seed[0], tv.tv_usec ^ seed[1]);
 
-	init_timer(&ll_capa_timer);
-	ll_capa_timer.function = ll_capa_timer_callback;
-	rc = ll_capa_thread_start();
-	if (rc != 0)
-		GOTO(out_proc, rc);
-
 	rc = vvp_global_init();
 	if (rc != 0)
-		GOTO(out_capa, rc);
+		GOTO(out_proc, rc);
 
 	cl_inode_fini_env = cl_env_alloc(&cl_inode_fini_refcheck,
 					 LCT_REMEMBER | LCT_NOREF);
@@ -198,9 +192,6 @@ out_inode_fini_env:
 	cl_env_put(cl_inode_fini_env, &cl_inode_fini_refcheck);
 out_vvp:
 	vvp_global_fini();
-out_capa:
-	del_timer(&ll_capa_timer);
-	ll_capa_thread_stop();
 out_proc:
 	lprocfs_remove(&proc_lustre_fs_root);
 out_cache:
@@ -230,11 +221,6 @@ static void __exit exit_lustre_lite(void)
 	ll_xattr_fini();
 	cl_env_put(cl_inode_fini_env, &cl_inode_fini_refcheck);
 	vvp_global_fini();
-	del_timer(&ll_capa_timer);
-	ll_capa_thread_stop();
-	LASSERTF(capa_count[CAPA_SITE_CLIENT] == 0,
-		 "client remaining capa count %d\n",
-		 capa_count[CAPA_SITE_CLIENT]);
 
 	kmem_cache_destroy(ll_inode_cachep);
 	kmem_cache_destroy(ll_rmtperm_hash_cachep);

@@ -45,7 +45,6 @@
 #include <libcfs/libcfs.h>
 #include <dt_object.h>
 #include <obd_support.h>
-#include <lustre_capa.h>
 #include <lustre_fid.h>
 #include <lustre_fld.h>
 #include "fid_internal.h"

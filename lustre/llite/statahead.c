@@ -724,27 +724,16 @@ static void sa_fini_data(struct md_enqueue_info *minfo,
 {
         LASSERT(minfo && einfo);
         iput(minfo->mi_dir);
-        capa_put(minfo->mi_data.op_capa1);
-        capa_put(minfo->mi_data.op_capa2);
         OBD_FREE_PTR(minfo);
         OBD_FREE_PTR(einfo);
 }
 
 /*
  * prepare arguments for async stat RPC.
- *
- * There is race condition between "capa_put" and "ll_statahead_interpret" for
- * accessing "op_data.op_capa[1,2]" as following:
- * "capa_put" releases "op_data.op_capa[1,2]"'s reference count after calling
- * "md_intent_getattr_async". But "ll_statahead_interpret" maybe run first, and
- * fill "op_data.op_capa[1,2]" as POISON, then cause "capa_put" access invalid
- * "ocapa". So here reserve "op_data.op_capa[1,2]" in "pcapa" before calling
- * "md_intent_getattr_async".
  */
 static int sa_prep_data(struct inode *dir, struct inode *child,
 			struct sa_entry *entry, struct md_enqueue_info **pmi,
-			struct ldlm_enqueue_info **pei,
-			struct obd_capa **pcapa)
+			struct ldlm_enqueue_info **pei)
 {
         struct qstr              *qstr = &entry->se_qstr;
         struct md_enqueue_info   *minfo;
@@ -783,8 +772,6 @@ static int sa_prep_data(struct inode *dir, struct inode *child,
 
         *pmi = minfo;
         *pei = einfo;
-        pcapa[0] = op_data->op_capa1;
-        pcapa[1] = op_data->op_capa2;
 
         return 0;
 }
@@ -794,21 +781,16 @@ static int sa_lookup(struct inode *dir, struct sa_entry *entry)
 {
 	struct md_enqueue_info   *minfo;
 	struct ldlm_enqueue_info *einfo;
-	struct obd_capa          *capas[2];
 	int                       rc;
 	ENTRY;
 
-	rc = sa_prep_data(dir, NULL, entry, &minfo, &einfo, capas);
+	rc = sa_prep_data(dir, NULL, entry, &minfo, &einfo);
 	if (rc)
 		RETURN(rc);
 
 	rc = md_intent_getattr_async(ll_i2mdexp(dir), minfo, einfo);
-	if (!rc) {
-		capa_put(capas[0]);
-		capa_put(capas[1]);
-	} else {
+	if (rc < 0)
 		sa_fini_data(minfo, einfo);
-	}
 
 	RETURN(rc);
 }
@@ -828,7 +810,6 @@ static int sa_revalidate(struct inode *dir, struct sa_entry *entry,
 				    .d.lustre.it_lock_handle = 0 };
 	struct md_enqueue_info *minfo;
 	struct ldlm_enqueue_info *einfo;
-	struct obd_capa *capas[2];
 	int rc;
 	ENTRY;
 
@@ -847,7 +828,7 @@ static int sa_revalidate(struct inode *dir, struct sa_entry *entry,
 		RETURN(1);
 	}
 
-	rc = sa_prep_data(dir, inode, entry, &minfo, &einfo, capas);
+	rc = sa_prep_data(dir, inode, entry, &minfo, &einfo);
 	if (rc) {
 		entry->se_inode = NULL;
 		iput(inode);
@@ -855,10 +836,7 @@ static int sa_revalidate(struct inode *dir, struct sa_entry *entry,
 	}
 
 	rc = md_intent_getattr_async(ll_i2mdexp(dir), minfo, einfo);
-	if (!rc) {
-		capa_put(capas[0]);
-		capa_put(capas[1]);
-	} else {
+	if (rc < 0) {
 		entry->se_inode = NULL;
 		iput(inode);
 		sa_fini_data(minfo, einfo);

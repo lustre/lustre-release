@@ -1499,9 +1499,7 @@ out_free_temp:
         return rc;
 }
 
-static int lmv_getstatus(struct obd_export *exp,
-                         struct lu_fid *fid,
-                         struct obd_capa **pc)
+static int lmv_getstatus(struct obd_export *exp, struct lu_fid *fid)
 {
         struct obd_device    *obd = exp->exp_obd;
         struct lmv_obd       *lmv = &obd->u.lmv;
@@ -1512,12 +1510,12 @@ static int lmv_getstatus(struct obd_export *exp,
         if (rc)
                 RETURN(rc);
 
-	rc = md_getstatus(lmv->tgts[0]->ltd_exp, fid, pc);
+	rc = md_getstatus(lmv->tgts[0]->ltd_exp, fid);
 	RETURN(rc);
 }
 
 static int lmv_getxattr(struct obd_export *exp, const struct lu_fid *fid,
-			struct obd_capa *oc, u64 valid, const char *name,
+			u64 valid, const char *name,
 			const char *input, int input_size, int output_size,
 			int flags, struct ptlrpc_request **request)
 {
@@ -1535,14 +1533,14 @@ static int lmv_getxattr(struct obd_export *exp, const struct lu_fid *fid,
         if (IS_ERR(tgt))
                 RETURN(PTR_ERR(tgt));
 
-        rc = md_getxattr(tgt->ltd_exp, fid, oc, valid, name, input,
-                         input_size, output_size, flags, request);
+	rc = md_getxattr(tgt->ltd_exp, fid, valid, name, input,
+			 input_size, output_size, flags, request);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static int lmv_setxattr(struct obd_export *exp, const struct lu_fid *fid,
-			struct obd_capa *oc, u64 valid, const char *name,
+			u64 valid, const char *name,
 			const char *input, int input_size, int output_size,
 			int flags, __u32 suppgid,
 			struct ptlrpc_request **request)
@@ -1561,11 +1559,11 @@ static int lmv_setxattr(struct obd_export *exp, const struct lu_fid *fid,
         if (IS_ERR(tgt))
                 RETURN(PTR_ERR(tgt));
 
-        rc = md_setxattr(tgt->ltd_exp, fid, oc, valid, name, input,
-                         input_size, output_size, flags, suppgid,
-                         request);
+	rc = md_setxattr(tgt->ltd_exp, fid, valid, name, input,
+			 input_size, output_size, flags, suppgid,
+			 request);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static int lmv_getattr(struct obd_export *exp, struct md_op_data *op_data,
@@ -2234,7 +2232,7 @@ static int lmv_setattr(struct obd_export *exp, struct md_op_data *op_data,
 }
 
 static int lmv_fsync(struct obd_export *exp, const struct lu_fid *fid,
-		     struct obd_capa *oc, struct ptlrpc_request **request)
+		     struct ptlrpc_request **request)
 {
 	struct obd_device	*obd = exp->exp_obd;
 	struct lmv_obd		*lmv = &obd->u.lmv;
@@ -2250,7 +2248,7 @@ static int lmv_fsync(struct obd_export *exp, const struct lu_fid *fid,
 	if (IS_ERR(tgt))
 		RETURN(PTR_ERR(tgt));
 
-	rc = md_fsync(tgt->ltd_exp, fid, oc, request);
+	rc = md_fsync(tgt->ltd_exp, fid, request);
 	RETURN(rc);
 }
 
@@ -3200,10 +3198,8 @@ int lmv_clear_open_replay_data(struct obd_export *exp,
         RETURN(md_clear_open_replay_data(tgt->ltd_exp, och));
 }
 
-static int lmv_get_remote_perm(struct obd_export *exp,
-                               const struct lu_fid *fid,
-                               struct obd_capa *oc, __u32 suppgid,
-                               struct ptlrpc_request **request)
+static int lmv_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
+			       u32 suppgid, struct ptlrpc_request **request)
 {
         struct obd_device       *obd = exp->exp_obd;
         struct lmv_obd          *lmv = &obd->u.lmv;
@@ -3219,40 +3215,8 @@ static int lmv_get_remote_perm(struct obd_export *exp,
         if (IS_ERR(tgt))
                 RETURN(PTR_ERR(tgt));
 
-        rc = md_get_remote_perm(tgt->ltd_exp, fid, oc, suppgid, request);
-        RETURN(rc);
-}
-
-static int lmv_renew_capa(struct obd_export *exp, struct obd_capa *oc,
-                          renew_capa_cb_t cb)
-{
-        struct obd_device       *obd = exp->exp_obd;
-        struct lmv_obd          *lmv = &obd->u.lmv;
-        struct lmv_tgt_desc     *tgt;
-        int                      rc;
-        ENTRY;
-
-        rc = lmv_check_connect(obd);
-        if (rc)
-                RETURN(rc);
-
-        tgt = lmv_find_target(lmv, &oc->c_capa.lc_fid);
-        if (IS_ERR(tgt))
-                RETURN(PTR_ERR(tgt));
-
-        rc = md_renew_capa(tgt->ltd_exp, oc, cb);
-        RETURN(rc);
-}
-
-int lmv_unpack_capa(struct obd_export *exp, struct ptlrpc_request *req,
-		    const struct req_msg_field *field, struct obd_capa **oc)
-{
-	struct lmv_obd		*lmv = &exp->exp_obd->u.lmv;
-	struct lmv_tgt_desc	*tgt = lmv->tgts[0];
-
-	if (tgt == NULL || tgt->ltd_exp == NULL)
-		RETURN(-EINVAL);
-	return md_unpack_capa(tgt->ltd_exp, req, field, oc);
+	rc = md_get_remote_perm(tgt->ltd_exp, fid, suppgid, request);
+	RETURN(rc);
 }
 
 int lmv_intent_getattr_async(struct obd_export *exp,
@@ -3456,8 +3420,6 @@ struct md_ops lmv_md_ops = {
 	.m_merge_attr		= lmv_merge_attr,
         .m_set_open_replay_data = lmv_set_open_replay_data,
         .m_clear_open_replay_data = lmv_clear_open_replay_data,
-        .m_renew_capa           = lmv_renew_capa,
-        .m_unpack_capa          = lmv_unpack_capa,
         .m_get_remote_perm      = lmv_get_remote_perm,
         .m_intent_getattr_async = lmv_intent_getattr_async,
 	.m_revalidate_lock      = lmv_revalidate_lock,
