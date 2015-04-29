@@ -55,8 +55,6 @@ static inline struct vvp_req *cl2vvp_req(const struct cl_req_slice *slice)
  *    - o_parent_oid
  *
  *    - o_parent_ver
- *
- *  and capability.
  */
 static void vvp_req_attr_set(const struct lu_env *env,
 			     const struct cl_req_slice *slice,
@@ -69,12 +67,6 @@ static void vvp_req_attr_set(const struct lu_env *env,
 
 	oa = attr->cra_oa;
 	inode = vvp_object_inode(obj);
-
-	if ((flags & OBD_MD_FLOSSCAPA) != 0) {
-		LASSERT(attr->cra_capa == NULL);
-		attr->cra_capa = cl_capa_lookup(inode,
-						slice->crs_req->crq_type);
-	}
 
 	if (slice->crs_req->crq_type == CRT_WRITE) {
 		valid_flags |= OBD_MD_FLMTIME | OBD_MD_FLCTIME |

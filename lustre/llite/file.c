@@ -2608,7 +2608,6 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 	struct cl_env_nest nest;
 	struct lu_env *env;
 	struct cl_io *io;
-	struct obd_capa *capa = NULL;
 	struct cl_fsync_io *fio;
 	int result;
 	ENTRY;
@@ -2621,15 +2620,12 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
-	capa = ll_osscapa_get(inode, CAPA_OPC_OSS_WRITE);
-
 	io = vvp_env_thread_io(env);
 	io->ci_obj = ll_i2info(inode)->lli_clob;
 	io->ci_ignore_layout = ignore_layout;
 
 	/* initialize parameters for sync */
 	fio = &io->u.ci_fsync;
-	fio->fi_capa = capa;
 	fio->fi_start = start;
 	fio->fi_end = end;
 	fio->fi_fid = ll_inode2fid(inode);
@@ -2644,8 +2640,6 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 		result = fio->fi_nr_written;
 	cl_io_fini(env, io);
 	cl_env_nested_put(&nest, env);
-
-	capa_put(capa);
 
 	RETURN(result);
 }

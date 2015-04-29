@@ -2706,11 +2706,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_GETATTR:
                 rc = echo_get_object(&eco, ed, oa);
                 if (rc == 0) {
-			struct obd_info oinfo = {
-				.oi_oa = oa,
-			};
-
-                        rc = obd_getattr(env, ec->ec_exp, &oinfo);
+			rc = obd_getattr(env, ec->ec_exp, oa);
                         echo_put_object(eco);
                 }
                 GOTO(out, rc);
@@ -2721,11 +2717,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
                 rc = echo_get_object(&eco, ed, oa);
                 if (rc == 0) {
-			struct obd_info oinfo = {
-				.oi_oa = oa,
-			};
-
-			rc = obd_setattr(env, ec->ec_exp, &oinfo);
+			rc = obd_setattr(env, ec->ec_exp, oa);
                         echo_put_object(eco);
                 }
                 GOTO(out, rc);

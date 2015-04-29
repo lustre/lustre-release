@@ -786,27 +786,27 @@ static inline int obd_destroy(const struct lu_env *env, struct obd_export *exp,
 }
 
 static inline int obd_getattr(const struct lu_env *env, struct obd_export *exp,
-                              struct obd_info *oinfo)
+			      struct obdo *oa)
 {
-        int rc;
-        ENTRY;
+	int rc;
 
-        EXP_CHECK_DT_OP(exp, getattr);
-        EXP_COUNTER_INCREMENT(exp, getattr);
+	ENTRY;
+	EXP_CHECK_DT_OP(exp, getattr);
+	EXP_COUNTER_INCREMENT(exp, getattr);
+	rc = OBP(exp->exp_obd, getattr)(env, exp, oa);
 
-        rc = OBP(exp->exp_obd, getattr)(env, exp, oinfo);
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static inline int obd_setattr(const struct lu_env *env, struct obd_export *exp,
-			      struct obd_info *oinfo)
+			      struct obdo *oa)
 {
 	int rc;
 
 	ENTRY;
 	EXP_CHECK_DT_OP(exp, setattr);
 	EXP_COUNTER_INCREMENT(exp, setattr);
-	rc = OBP(exp->exp_obd, setattr)(env, exp, oinfo);
+	rc = OBP(exp->exp_obd, setattr)(env, exp, oa);
 
 	RETURN(rc);
 }
@@ -1098,22 +1098,26 @@ static inline int obd_statfs_rqset(struct obd_export *exp,
                                    struct obd_statfs *osfs, __u64 max_age,
                                    __u32 flags)
 {
-        struct ptlrpc_request_set *set = NULL;
-        struct obd_info oinfo = { { { 0 } } };
-        int rc = 0;
-        ENTRY;
+	struct ptlrpc_request_set *set = NULL;
+	struct obd_info oinfo = {
+		.oi_osfs = osfs,
+		.oi_flags = flags,
+	};
+	int rc = 0;
 
-        set =  ptlrpc_prep_set();
-        if (set == NULL)
-                RETURN(-ENOMEM);
+	ENTRY;
 
-        oinfo.oi_osfs = osfs;
-        oinfo.oi_flags = flags;
-        rc = obd_statfs_async(exp, &oinfo, max_age, set);
-        if (rc == 0)
-                rc = ptlrpc_set_wait(set);
-        ptlrpc_set_destroy(set);
-        RETURN(rc);
+	set = ptlrpc_prep_set();
+	if (set == NULL)
+		RETURN(-ENOMEM);
+
+	rc = obd_statfs_async(exp, &oinfo, max_age, set);
+	if (rc == 0)
+		rc = ptlrpc_set_wait(set);
+
+	ptlrpc_set_destroy(set);
+
+	RETURN(rc);
 }
 
 /* @max_age is the oldest time in jiffies that we accept using a cached data.

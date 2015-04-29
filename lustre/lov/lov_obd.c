@@ -1084,28 +1084,30 @@ static int lov_statfs_async(struct obd_export *exp, struct obd_info *oinfo,
 }
 
 static int lov_statfs(const struct lu_env *env, struct obd_export *exp,
-                      struct obd_statfs *osfs, __u64 max_age, __u32 flags)
+		      struct obd_statfs *osfs, __u64 max_age, __u32 flags)
 {
-        struct ptlrpc_request_set *set = NULL;
-        struct obd_info oinfo = { { { 0 } } };
-        int rc = 0;
-        ENTRY;
+	struct ptlrpc_request_set *set = NULL;
+	struct obd_info oinfo = {
+		.oi_osfs = osfs,
+		.oi_flags = flags,
+	};
+	int rc = 0;
 
+	ENTRY;
 
-        /* for obdclass we forbid using obd_statfs_rqset, but prefer using async
-         * statfs requests */
-        set = ptlrpc_prep_set();
-        if (set == NULL)
-                RETURN(-ENOMEM);
+	/* for obdclass we forbid using obd_statfs_rqset, but prefer using async
+	 * statfs requests */
+	set = ptlrpc_prep_set();
+	if (set == NULL)
+		RETURN(-ENOMEM);
 
-        oinfo.oi_osfs = osfs;
-        oinfo.oi_flags = flags;
-        rc = lov_statfs_async(exp, &oinfo, max_age, set);
-        if (rc == 0)
-                rc = ptlrpc_set_wait(set);
-        ptlrpc_set_destroy(set);
+	rc = lov_statfs_async(exp, &oinfo, max_age, set);
+	if (rc == 0)
+		rc = ptlrpc_set_wait(set);
 
-        RETURN(rc);
+	ptlrpc_set_destroy(set);
+
+	RETURN(rc);
 }
 
 static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,

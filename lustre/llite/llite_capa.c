@@ -318,62 +318,6 @@ void ll_capa_thread_stop(void)
 		       thread_is_stopped(&ll_capa_thread));
 }
 
-struct obd_capa *ll_osscapa_get(struct inode *inode, __u64 opc)
-{
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct obd_capa *ocapa;
-        int found = 0;
-
-        ENTRY;
-
-        if ((ll_i2sbi(inode)->ll_flags & LL_SBI_OSS_CAPA) == 0)
-                RETURN(NULL);
-
-        LASSERT(opc == CAPA_OPC_OSS_WRITE || opc == CAPA_OPC_OSS_RW ||
-                opc == CAPA_OPC_OSS_TRUNC);
-
-	spin_lock(&capa_lock);
-	list_for_each_entry(ocapa, &lli->lli_oss_capas, u.cli.lli_list) {
-                if (capa_is_expired(ocapa))
-                        continue;
-                if ((opc & CAPA_OPC_OSS_WRITE) &&
-                    capa_opc_supported(&ocapa->c_capa, CAPA_OPC_OSS_WRITE)) {
-                        found = 1;
-                        break;
-                } else if ((opc & CAPA_OPC_OSS_READ) &&
-                           capa_opc_supported(&ocapa->c_capa,
-                                              CAPA_OPC_OSS_READ)) {
-                        found = 1;
-                        break;
-                } else if ((opc & CAPA_OPC_OSS_TRUNC) &&
-                           capa_opc_supported(&ocapa->c_capa, opc)) {
-                        found = 1;
-                        break;
-                }
-        }
-
-        if (found) {
-                LASSERT(lu_fid_eq(capa_fid(&ocapa->c_capa),
-                                  ll_inode2fid(inode)));
-                LASSERT(ocapa->c_site == CAPA_SITE_CLIENT);
-
-                capa_get(ocapa);
-
-                DEBUG_CAPA(D_SEC, &ocapa->c_capa, "found client");
-	} else {
-		ocapa = NULL;
-
-		if (atomic_read(&ll_capa_debug)) {
-			CERROR("no capability for "DFID" opc "LPX64"\n",
-			       PFID(&lli->lli_fid), opc);
-			atomic_set(&ll_capa_debug, 0);
-		}
-	}
-	spin_unlock(&capa_lock);
-
-	RETURN(ocapa);
-}
-
 struct obd_capa *ll_mdscapa_get(struct inode *inode)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);

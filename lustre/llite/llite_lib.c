@@ -1519,26 +1519,6 @@ static int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data)
 	RETURN(rc);
 }
 
-static int ll_setattr_ost(struct inode *inode, struct iattr *attr)
-{
-        struct obd_capa *capa;
-        int rc;
-
-        if (attr->ia_valid & ATTR_SIZE)
-                capa = ll_osscapa_get(inode, CAPA_OPC_OSS_TRUNC);
-        else
-                capa = ll_mdscapa_get(inode);
-
-	rc = cl_setattr_ost(ll_i2info(inode)->lli_clob, attr, 0, capa);
-
-        if (attr->ia_valid & ATTR_SIZE)
-                ll_truncate_free_capa(capa);
-        else
-                capa_put(capa);
-
-        return rc;
-}
-
 /* If this inode has objects allocated to it (lsm != NULL), then the OST
  * object(s) determine the file size and mtime.  Otherwise, the MDS will
  * keep these values until such a time that objects are allocated for it.
@@ -1703,7 +1683,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 		 * excessive to send mtime/atime updates to OSTs when not
 		 * setting times to past, but it is necessary due to possible
 		 * time de-synchronization between MDT inode and OST objects */
-		rc = ll_setattr_ost(inode, attr);
+		rc = cl_setattr_ost(lli->lli_clob, attr, 0);
 	}
 	EXIT;
 out:
@@ -2106,7 +2086,6 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 		struct iattr *attr;
 		struct md_op_data *op_data;
 		struct cl_object *obj;
-		struct obd_capa *capa;
 
 		if (get_user(flags, (int __user *)arg))
 			RETURN(-EFAULT);
@@ -2135,10 +2114,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 			RETURN(-ENOMEM);
 
 		attr->ia_valid = ATTR_ATTR_FLAG;
-
-		capa = ll_mdscapa_get(inode);
-		rc = cl_setattr_ost(obj, attr, flags, capa);
-		capa_put(capa);
+		rc = cl_setattr_ost(obj, attr, flags);
 
 		OBD_FREE_PTR(attr);
 		RETURN(rc);

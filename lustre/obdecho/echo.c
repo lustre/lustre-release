@@ -170,50 +170,48 @@ static int echo_destroy(const struct lu_env *env, struct obd_export *exp,
 }
 
 static int echo_getattr(const struct lu_env *env, struct obd_export *exp,
-                        struct obd_info *oinfo)
+			struct obdo *oa)
 {
 	struct obd_device *obd = class_exp2obd(exp);
-	u64 id = ostid_id(&oinfo->oi_oa->o_oi);
+	u64 id = ostid_id(&oa->o_oi);
 
-        ENTRY;
-        if (!obd) {
-                CERROR("invalid client cookie "LPX64"\n",
-                       exp->exp_handle.h_cookie);
-                RETURN(-EINVAL);
-        }
+	ENTRY;
+	if (!obd) {
+		CERROR("invalid client cookie "LPX64"\n",
+		       exp->exp_handle.h_cookie);
+		RETURN(-EINVAL);
+	}
 
-        if (!(oinfo->oi_oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: "LPX64"\n",
-                       oinfo->oi_oa->o_valid);
-                RETURN(-EINVAL);
-        }
+	if (!(oa->o_valid & OBD_MD_FLID)) {
+		CERROR("obdo missing FLID valid flag: "LPX64"\n", oa->o_valid);
+		RETURN(-EINVAL);
+	}
 
-	obdo_cpy_md(oinfo->oi_oa, &obd->u.echo.eo_oa, oinfo->oi_oa->o_valid);
-	ostid_set_seq_echo(&oinfo->oi_oa->o_oi);
-	ostid_set_id(&oinfo->oi_oa->o_oi, id);
+	obdo_cpy_md(oa, &obd->u.echo.eo_oa, oa->o_valid);
+	ostid_set_seq_echo(&oa->o_oi);
+	ostid_set_id(&oa->o_oi, id);
 
 	RETURN(0);
 }
 
 static int echo_setattr(const struct lu_env *env, struct obd_export *exp,
-			struct obd_info *oinfo)
+			struct obdo *oa)
 {
-        struct obd_device *obd = class_exp2obd(exp);
+	struct obd_device *obd = class_exp2obd(exp);
 
-        ENTRY;
-        if (!obd) {
-                CERROR("invalid client cookie "LPX64"\n",
-                       exp->exp_handle.h_cookie);
-                RETURN(-EINVAL);
-        }
+	ENTRY;
+	if (!obd) {
+		CERROR("invalid client cookie "LPX64"\n",
+		       exp->exp_handle.h_cookie);
+		RETURN(-EINVAL);
+	}
 
-        if (!(oinfo->oi_oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: "LPX64"\n",
-                       oinfo->oi_oa->o_valid);
-                RETURN(-EINVAL);
-        }
+	if (!(oa->o_valid & OBD_MD_FLID)) {
+		CERROR("obdo missing FLID valid flag: "LPX64"\n", oa->o_valid);
+		RETURN(-EINVAL);
+	}
 
-        memcpy(&obd->u.echo.eo_oa, oinfo->oi_oa, sizeof(*oinfo->oi_oa));
+	obd->u.echo.eo_oa = *oa;
 
 	RETURN(0);
 }

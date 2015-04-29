@@ -73,7 +73,7 @@ int cl_inode_fini_refcheck;
 static DEFINE_MUTEX(cl_inode_fini_guard);
 
 int cl_setattr_ost(struct cl_object *obj, const struct iattr *attr,
-		   unsigned int attr_flags, struct obd_capa *capa)
+		   unsigned int attr_flags)
 {
         struct lu_env *env;
         struct cl_io  *io;
@@ -96,7 +96,6 @@ int cl_setattr_ost(struct cl_object *obj, const struct iattr *attr,
 	io->u.ci_setattr.sa_attr_flags = attr_flags;
 	io->u.ci_setattr.sa_valid = attr->ia_valid;
 	io->u.ci_setattr.sa_parent_fid = lu_object_fid(&obj->co_lu);
-	io->u.ci_setattr.sa_capa = capa;
 
 again:
         if (cl_io_init(env, io, CIT_SETATTR, io->ci_obj) == 0) {

@@ -97,7 +97,6 @@ static void lov_io_sub_inherit(struct cl_io *io, struct lov_io *lio,
 		io->u.ci_setattr.sa_stripe_index = stripe;
 		io->u.ci_setattr.sa_parent_fid =
 					parent->u.ci_setattr.sa_parent_fid;
-		io->u.ci_setattr.sa_capa = parent->u.ci_setattr.sa_capa;
                 if (cl_io_is_trunc(io)) {
                         loff_t new_size = parent->u.ci_setattr.sa_attr.lvb_size;
 
@@ -124,7 +123,6 @@ static void lov_io_sub_inherit(struct cl_io *io, struct lov_io *lio,
 	case CIT_FSYNC: {
 		io->u.ci_fsync.fi_start = start;
 		io->u.ci_fsync.fi_end = end;
-		io->u.ci_fsync.fi_capa = parent->u.ci_fsync.fi_capa;
 		io->u.ci_fsync.fi_fid = parent->u.ci_fsync.fi_fid;
 		io->u.ci_fsync.fi_mode = parent->u.ci_fsync.fi_mode;
 		break;

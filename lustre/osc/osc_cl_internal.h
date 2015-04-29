@@ -77,8 +77,6 @@ struct osc_io {
 	struct osc_extent *oi_trunc;
 	/** write osc_lock for this IO, used by osc_extent_find(). */
 	struct osc_lock   *oi_write_osclock;
-
-	struct obd_info    oi_info;
 	struct obdo        oi_oa;
 	struct osc_async_cbargs {
 		bool		  opc_rpc_sent;

@@ -1125,7 +1125,6 @@ void ll_capa_open(struct inode *inode);
 void ll_capa_close(struct inode *inode);
 
 struct obd_capa *ll_mdscapa_get(struct inode *inode);
-struct obd_capa *ll_osscapa_get(struct inode *inode, __u64 opc);
 
 void ll_truncate_free_capa(struct obd_capa *ocapa);
 void ll_clear_inode_capas(struct inode *inode);
@@ -1331,8 +1330,6 @@ typedef enum llioc_iter (*llioc_callback_t)(struct inode *inode,
 void *ll_iocontrol_register(llioc_callback_t cb, int count, unsigned int *cmd);
 void ll_iocontrol_unregister(void *magic);
 
-struct obd_capa *cl_capa_lookup(struct inode *inode, enum cl_req_type crt);
-
 int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 		       enum cl_fsync_mode mode, int ignore_layout);
 
@@ -1489,7 +1486,7 @@ int ll_getparent(struct file *file, struct getparent __user *arg);
 
 /* lcommon_cl.c */
 int cl_setattr_ost(struct cl_object *obj, const struct iattr *attr,
-		   unsigned int attr_flags, struct obd_capa *capa);
+		   unsigned int attr_flags);
 
 extern struct lu_env *cl_inode_fini_env;
 extern int cl_inode_fini_refcheck;

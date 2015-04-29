@@ -877,20 +877,19 @@ out:
 
  * \param[in] env	execution environment
  * \param[in] exp	OBD export of OFD device
- * \param[in] oinfo	obd_info with setattr parameters
+ * \param[in] oa	setattr parameters
  *
  * \retval		0 if successful
  * \retval		negative value on error
  */
 static int ofd_echo_setattr(const struct lu_env *env, struct obd_export *exp,
-			    struct obd_info *oinfo)
+			    struct obdo *oa)
 {
 	struct ofd_thread_info	*info;
 	struct ofd_device	*ofd = ofd_exp(exp);
 	struct ldlm_namespace	*ns = ofd->ofd_namespace;
 	struct ldlm_resource	*res;
 	struct ofd_object	*fo;
-	struct obdo		*oa = oinfo->oi_oa;
 	struct lu_fid		*fid = &oa->o_oi.oi_fid;
 	struct filter_fid	*ff = NULL;
 	int			 rc = 0;
@@ -903,8 +902,7 @@ static int ofd_echo_setattr(const struct lu_env *env, struct obd_export *exp,
 
 	/* This would be very bad - accidentally truncating a file when
 	 * changing the time or similar - bug 12203. */
-	if (oa->o_valid & OBD_MD_FLSIZE &&
-	    oinfo->oi_policy.l_extent.end != OBD_OBJECT_EOF) {
+	if (oa->o_valid & OBD_MD_FLSIZE) {
 		static char mdsinum[48];
 
 		if (oa->o_valid & OBD_MD_FLFID)
@@ -1153,18 +1151,18 @@ out_sem:
  *
  * \param[in]	  env	execution environment
  * \param[in]	  exp	OBD export of OFD device
- * \param[in,out] oinfo	contains FID of object to get attributes from and
+ * \param[in,out] oa	contains FID of object to get attributes from and
  *			is used to return attributes back
  *
  * \retval		0 if successful
  * \retval		negative value on error
  */
 static int ofd_echo_getattr(const struct lu_env *env, struct obd_export *exp,
-			    struct obd_info *oinfo)
+			    struct obdo *oa)
 {
 	struct ofd_device	*ofd = ofd_exp(exp);
 	struct ofd_thread_info	*info;
-	struct lu_fid		*fid = &oinfo->oi_oa->o_oi.oi_fid;
+	struct lu_fid		*fid = &oa->o_oi.oi_fid;
 	struct ofd_object	*fo;
 	int			 rc = 0;
 
@@ -1178,18 +1176,18 @@ static int ofd_echo_getattr(const struct lu_env *env, struct obd_export *exp,
 
 	LASSERT(fo != NULL);
 	rc = ofd_attr_get(env, fo, &info->fti_attr);
-	oinfo->oi_oa->o_valid = OBD_MD_FLID;
+	oa->o_valid = OBD_MD_FLID;
 	if (rc == 0) {
 		__u64 curr_version;
 
-		obdo_from_la(oinfo->oi_oa, &info->fti_attr,
+		obdo_from_la(oa, &info->fti_attr,
 			     OFD_VALID_FLAGS | LA_UID | LA_GID);
 
 		/* Store object version in reply */
 		curr_version = dt_version_get(env, ofd_object_child(fo));
 		if ((__s64)curr_version != -EOPNOTSUPP) {
-			oinfo->oi_oa->o_valid |= OBD_MD_FLDATAVERSION;
-			oinfo->oi_oa->o_data_version = curr_version;
+			oa->o_valid |= OBD_MD_FLDATAVERSION;
+			oa->o_data_version = curr_version;
 		}
 	}
 
