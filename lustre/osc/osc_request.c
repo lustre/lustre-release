@@ -135,35 +135,6 @@ void osc_set_capa_size(struct ptlrpc_request *req,
                 ;
 }
 
-int osc_getattr_interpret(const struct lu_env *env,
-			  struct ptlrpc_request *req,
-			  struct osc_async_args *aa, int rc)
-{
-        struct ost_body *body;
-        ENTRY;
-
-        if (rc != 0)
-                GOTO(out, rc);
-
-        body = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
-        if (body) {
-		CDEBUG(D_INODE, "mode: %o\n", body->oa.o_mode);
-		lustre_get_wire_obdo(&req->rq_import->imp_connect_data,
-				     aa->aa_oi->oi_oa, &body->oa);
-
-		/* This should really be sent by the OST */
-		aa->aa_oi->oi_oa->o_blksize = DT_MAX_BRW_SIZE;
-		aa->aa_oi->oi_oa->o_valid |= OBD_MD_FLBLKSZ;
-        } else {
-                CDEBUG(D_INFO, "can't unpack ost_body\n");
-                rc = -EPROTO;
-                aa->aa_oi->oi_oa->o_valid = 0;
-        }
-out:
-        rc = aa->aa_oi->oi_cb_up(aa->aa_oi, rc);
-        RETURN(rc);
-}
-
 static int osc_getattr(const struct lu_env *env, struct obd_export *exp,
                        struct obd_info *oinfo)
 {

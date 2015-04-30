@@ -1807,13 +1807,16 @@ error:
  */
 int ll_data_version(struct inode *inode, __u64 *data_version, int flags)
 {
-	struct lu_env	*env;
-	int		refcheck;
-	int		rc;
+	struct cl_object *obj = ll_i2info(inode)->lli_clob;
+	struct lu_env *env;
+	struct cl_io *io;
+	int refcheck;
+	int result;
+
 	ENTRY;
 
 	/* If no file object initialized, we consider its version is 0. */
-	if (ll_i2info(inode)->lli_clob == NULL) {
+	if (obj == NULL) {
 		*data_version = 0;
 		RETURN(0);
 	}
@@ -1822,10 +1825,27 @@ int ll_data_version(struct inode *inode, __u64 *data_version, int flags)
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
-	rc = cl_object_data_version(env, ll_i2info(inode)->lli_clob,
-				    data_version, flags);
+	io = vvp_env_thread_io(env);
+	io->ci_obj = obj;
+	io->u.ci_data_version.dv_data_version = 0;
+	io->u.ci_data_version.dv_flags = flags;
+
+restart:
+	if (cl_io_init(env, io, CIT_DATA_VERSION, io->ci_obj) == 0)
+		result = cl_io_loop(env, io);
+	else
+		result = io->ci_result;
+
+	*data_version = io->u.ci_data_version.dv_data_version;
+
+	cl_io_fini(env, io);
+
+	if (unlikely(io->ci_need_restart))
+		goto restart;
+
 	cl_env_put(env, &refcheck);
-	RETURN(rc);
+
+	RETURN(result);
 }
 
 /*

@@ -229,7 +229,4 @@ struct ldlm_lock *osc_dlmlock_at_pgoff(const struct lu_env *env,
 void osc_pack_req_body(struct ptlrpc_request *req, struct obd_info *oinfo);
 void osc_set_capa_size(struct ptlrpc_request *req,
 		       const struct req_msg_field *field, struct obd_capa *oc);
-int osc_getattr_interpret(const struct lu_env *env,
-			  struct ptlrpc_request *req,
-			  struct osc_async_args *aa, int rc);
 #endif /* OSC_INTERNAL_H */

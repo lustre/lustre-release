@@ -418,47 +418,6 @@ int cl_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 }
 EXPORT_SYMBOL(cl_object_fiemap);
 
-int cl_object_obd_info_get(const struct lu_env *env, struct cl_object *obj,
-			   struct obd_info *oinfo,
-			   struct ptlrpc_request_set *set)
-{
-	struct lu_object_header	*top;
-	int			result = 0;
-	ENTRY;
-
-	top = obj->co_lu.lo_header;
-	list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
-		if (obj->co_ops->coo_obd_info_get != NULL) {
-			result = obj->co_ops->coo_obd_info_get(env, obj, oinfo,
-							       set);
-			if (result != 0)
-				break;
-		}
-	}
-	RETURN(result);
-}
-EXPORT_SYMBOL(cl_object_obd_info_get);
-
-int cl_object_data_version(const struct lu_env *env, struct cl_object *obj,
-			   __u64 *data_version, int flags)
-{
-	struct lu_object_header	*top;
-	int			result = 0;
-	ENTRY;
-
-	top = obj->co_lu.lo_header;
-	list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
-		if (obj->co_ops->coo_data_version != NULL) {
-			result = obj->co_ops->coo_data_version(env, obj,
-							data_version, flags);
-			if (result != 0)
-				break;
-		}
-	}
-	RETURN(result);
-}
-EXPORT_SYMBOL(cl_object_data_version);
-
 int cl_object_layout_get(const struct lu_env *env, struct cl_object *obj,
 			 struct cl_layout *cl)
 {

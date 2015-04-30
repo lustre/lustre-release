@@ -1029,19 +1029,6 @@ do {                                                                            
                  "%p->lsm_magic=%x\n", (lsmp), (lsmp)->lsm_magic);              \
 } while (0)
 
-int lov_getattr_interpret(struct ptlrpc_request_set *rqset, void *data, int rc)
-{
-	struct lov_request_set *lovset = (struct lov_request_set *)data;
-	int err;
-	ENTRY;
-
-	/* don't do attribute merge if this aysnc op failed */
-	if (rc)
-		atomic_set(&lovset->set_completes, 0);
-	err = lov_fini_getattr_set(lovset);
-	RETURN(rc ? rc : err);
-}
-
 int lov_statfs_interpret(struct ptlrpc_request_set *rqset, void *data, int rc)
 {
 	struct lov_request_set *lovset = (struct lov_request_set *)data;

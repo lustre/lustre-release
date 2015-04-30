@@ -145,8 +145,6 @@ struct obd_info {
            - while setattr, the flags used for distinguish punch operation
          */
 	__u64                   oi_flags;
-        /* lsm data specific for every OSC. */
-        struct lov_stripe_md   *oi_md;
         /* obdo data specific for every OSC, if needed at all. */
         struct obdo            *oi_oa;
         /* statfs data specific for every OSC, if needed at all. */

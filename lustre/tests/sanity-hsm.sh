@@ -2525,6 +2525,31 @@ test_36() {
 }
 run_test 36 "Move file during restore"
 
+test_37() {
+	# LU-5683: check that an archived dirty file can be rearchived.
+	copytool_cleanup
+	copytool_setup $SINGLEAGT $MOUNT2
+
+	mkdir -p $DIR/$tdir
+	local f=$DIR/$tdir/$tfile
+	local fid
+
+	fid=$(make_small $f) || error "cannot create small file"
+
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
+	wait_request_state $fid ARCHIVE SUCCEED
+	$LFS hsm_release $f || error "cannot release $f"
+
+	# Dirty file.
+	dd if=/dev/urandom of=$f bs=1M count=1 || error "cannot dirty file"
+
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	copytool_cleanup
+}
+run_test 37 "re-archive a dirty file"
+
 multi_archive() {
 	local prefix=$1
 	local count=$2
