@@ -447,6 +447,8 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} \
 %files -f lustre.files
 %defattr(-,root,root)
 %{_sbindir}/*
+%exclude %{_sbindir}/wirecheck
+%exclude %{_sbindir}/wiretest
 %if %{with zfs}
 %exclude %{_sbindir}/zfsobj2fid
 %endif
