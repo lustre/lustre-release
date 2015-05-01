@@ -439,13 +439,17 @@ static void lod_striped_it_fini(const struct lu_env *env, struct dt_it *di)
 	struct lod_object	*lo = lod_dt_obj(it->lit_obj);
 	struct dt_object	*next;
 
-	LOD_CHECK_STRIPED_IT(env, it, lo);
+	/* If lit_it == NULL, then it means the sub_it has been finished,
+	 * which only happens in failure cases, see lod_striped_it_next() */
+	if (it->lit_it != NULL) {
+		LOD_CHECK_STRIPED_IT(env, it, lo);
 
-	next = lo->ldo_stripe[it->lit_stripe_index];
-	LASSERT(next != NULL);
-	LASSERT(next->do_index_ops != NULL);
+		next = lo->ldo_stripe[it->lit_stripe_index];
+		LASSERT(next != NULL);
+		LASSERT(next->do_index_ops != NULL);
 
-	next->do_index_ops->dio_it.fini(env, it->lit_it);
+		next->do_index_ops->dio_it.fini(env, it->lit_it);
+	}
 
 	/* the iterator not in use any more */
 	it->lit_obj = NULL;
@@ -562,14 +566,15 @@ again:
 
 	next->do_index_ops->dio_it.put(env, it->lit_it);
 	next->do_index_ops->dio_it.fini(env, it->lit_it);
-
-	rc = next->do_ops->do_index_try(env, next, &dt_directory_features);
-	if (rc != 0)
-		RETURN(rc);
+	it->lit_it = NULL;
 
 	next = lo->ldo_stripe[it->lit_stripe_index];
 	LASSERT(next != NULL);
 	LASSERT(next->do_index_ops != NULL);
+
+	rc = next->do_ops->do_index_try(env, next, &dt_directory_features);
+	if (rc != 0)
+		RETURN(rc);
 
 	it_next = next->do_index_ops->dio_it.init(env, next, it->lit_attr);
 	if (!IS_ERR(it_next)) {
