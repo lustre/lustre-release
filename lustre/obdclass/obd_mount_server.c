@@ -1169,8 +1169,8 @@ static int server_register_target(struct lustre_sb_info *lsi)
 				"rc = %d. Is the MGS running?\n",
 				lsi->lsi_svname, rc);
 		} else {
-			CERROR("%s: error registering with the MGS: rc = %d "
-			       "(not fatal)\n", lsi->lsi_svname, rc);
+			CDEBUG(D_HA, "%s: error registering with the MGS: "
+			       "rc = %d (not fatal)\n", lsi->lsi_svname, rc);
 			/* reset the error code for non-fatal error. */
 			rc = 0;
 		}
