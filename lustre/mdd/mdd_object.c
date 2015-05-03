@@ -835,15 +835,20 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 	if (rc)
 		RETURN(rc);
 
-        /* setattr on "close" only change atime, or do nothing */
-	if (la->la_valid == LA_ATIME && la_copy->la_valid == 0)
-                RETURN(0);
+	/* no need to setattr anymore */
+	if (la_copy->la_valid == 0) {
+		CDEBUG(D_INODE, "%s: no valid attribute on "DFID", previous"
+		       "valid is "LPX64"\n", mdd2obd_dev(mdd)->obd_name,
+		       PFID(mdo2fid(mdd_obj)), la->la_valid);
+
+		RETURN(0);
+	}
 
         handle = mdd_trans_create(env, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-	rc = mdd_declare_attr_set(env, mdd, mdd_obj, la, handle);
+	rc = mdd_declare_attr_set(env, mdd, mdd_obj, la_copy, handle);
         if (rc)
                 GOTO(stop, rc);
 
@@ -866,7 +871,8 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 	mdd_write_unlock(env, mdd_obj);
 
 	if (rc == 0)
-		rc = mdd_attr_set_changelog(env, obj, handle, la->la_valid);
+		rc = mdd_attr_set_changelog(env, obj, handle,
+					    la_copy->la_valid);
 
 	GOTO(stop, rc);
 
