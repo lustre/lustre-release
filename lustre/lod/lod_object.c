@@ -3790,7 +3790,6 @@ static int lod_object_unlock_internal(const struct lu_env *env,
 				      struct ldlm_enqueue_info *einfo,
 				      ldlm_policy_data_t *policy)
 {
-	struct lod_object	*lo = lod_dt_obj(dt);
 	struct lod_slave_locks  *slave_locks = einfo->ei_cbdata;
 	int			rc = 0;
 	int			i;
@@ -3800,15 +3799,9 @@ static int lod_object_unlock_internal(const struct lu_env *env,
 		RETURN(0);
 
 	for (i = 1; i < slave_locks->lsl_lock_count; i++) {
-		if (lustre_handle_is_used(&slave_locks->lsl_handle[i])) {
-			int	rc1;
-
-			einfo->ei_cbdata = &slave_locks->lsl_handle[i];
-			rc1 = dt_object_unlock(env, lo->ldo_stripe[i], einfo,
-					       policy);
-			if (rc1 < 0)
-				rc = rc == 0 ? rc1 : rc;
-		}
+		if (lustre_handle_is_used(&slave_locks->lsl_handle[i]))
+			ldlm_lock_decref(&slave_locks->lsl_handle[i],
+					 einfo->ei_mode);
 	}
 
 	RETURN(rc);
@@ -3837,10 +3830,6 @@ static int lod_object_unlock(const struct lu_env *env, struct dt_object *dt,
 
 	if (!S_ISDIR(dt->do_lu.lo_header->loh_attr))
 		RETURN(-ENOTDIR);
-
-	rc = lod_load_striping(env, lo);
-	if (rc != 0)
-		RETURN(rc);
 
 	/* Note: for remote lock for single stripe dir, MDT will cancel
 	 * the lock by lockh directly */
