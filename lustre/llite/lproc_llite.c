@@ -570,29 +570,6 @@ static ssize_t ll_checksum_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(ll_checksum);
 
-static int ll_max_rw_chunk_seq_show(struct seq_file *m, void *v)
-{
-	struct super_block *sb = m->private;
-
-	return seq_printf(m, "%lu\n", ll_s2sbi(sb)->ll_max_rw_chunk);
-}
-
-static ssize_t ll_max_rw_chunk_seq_write(struct file *file,
-					 const char __user *buffer,
-					 size_t count, loff_t *off)
-{
-	struct seq_file *m = file->private_data;
-	struct super_block *sb = m->private;
-        int rc, val;
-
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-        ll_s2sbi(sb)->ll_max_rw_chunk = val;
-        return count;
-}
-LPROC_SEQ_FOPS(ll_max_rw_chunk);
-
 static int ll_rd_track_id(struct seq_file *m, enum stats_track_type type)
 {
 	struct super_block *sb = m->private;
@@ -1023,8 +1000,6 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_max_cached_mb_fops			},
 	{ .name	=	"checksum_pages",
 	  .fops	=	&ll_checksum_fops			},
-	{ .name	=	"max_rw_chunk",
-	  .fops	=	&ll_max_rw_chunk_fops			},
 	{ .name	=	"stats_track_pid",
 	  .fops	=	&ll_track_pid_fops			},
 	{ .name	=	"stats_track_ppid",

@@ -521,9 +521,6 @@ struct ll_sb_info {
         unsigned int              ll_namelen;
         struct file_operations   *ll_fop;
 
-        /* =0 - hold lock over whole read/write
-         * >0 - max. chunk to be read/written w/o lock re-acquiring */
-        unsigned long             ll_max_rw_chunk;
 	unsigned int              ll_md_brw_pages; /* readdir pages per RPC */
 
         struct lu_site           *ll_site;
@@ -557,8 +554,6 @@ struct ll_sb_info {
 	/* root squash */
 	struct root_squash_info	  ll_squash;
 };
-
-#define LL_DEFAULT_MAX_RW_CHUNK      (32 * 1024 * 1024)
 
 /*
  * per file-descriptor read-ahead data.
