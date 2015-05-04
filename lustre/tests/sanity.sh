@@ -5228,6 +5228,8 @@ test_63b() {
 	dd if=/dev/zero of=$DIR/$tfile bs=4k count=1
 	rm $DIR/$tfile
 
+	sync	# sync lest earlier test intercept the fail_loc
+
 	#define OBD_FAIL_OSC_BRW_PREP_REQ        0x406
 	lctl set_param fail_loc=0x80000406
 	$MULTIOP $DIR/$tfile Owy && \
