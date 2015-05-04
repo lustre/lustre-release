@@ -73,8 +73,11 @@ init_agt_vars() {
 		exit 0
 	fi
 
+	# We used to put the HSM archive in $SHARED_DIRECTORY but that
+	# meant NFS issues could hose sanity-hsm sessions. So now we
+	# use $TMP instead.
 	for n in $(seq $AGTCOUNT); do
-		eval export AGTDEV$n=\$\{AGTDEV$n:-"$SHARED_DIRECTORY/arc$n"\}
+		eval export AGTDEV$n=\$\{AGTDEV$n:-"$TMP/arc$n"\}
 		agent=CLIENT$((n + 1))
 		if [[ -z "${!agent}" ]]; then
 			[[ $CLIENTCOUNT -eq 1 ]] && agent=CLIENT1 ||
