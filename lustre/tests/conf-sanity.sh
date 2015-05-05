@@ -982,7 +982,7 @@ test_24a() {
 	# the MDS must remain up until last MDT
 	stop_mds
 	MDS=$(do_facet $SINGLEMDS "$LCTL get_param -n devices" |
-	      awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' | head -n1)
+	      awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' | head -1)
 	[ -z "$MDS" ] && error "No MDT"
 	cleanup_fs2
 	cleanup_nocli || error "cleanup_nocli failed with rc $?"
@@ -1631,7 +1631,7 @@ t32_test() {
 	local img_bspace
 	local img_ispace
 	local fsname=t32fs
-	local nid=$($r $LCTL list_nids | head -n1)
+	local nid=$($r $LCTL list_nids | head -1)
 	local mopts
 	local uuid
 	local nrpcs_orig
@@ -1705,8 +1705,7 @@ t32_test() {
 				"(Need MGS version at least 2.3.59)"; return 0; }
 
 			local osthost=$(facet_active_host ost1)
-			local ostnid=$(do_node $osthost $LCTL list_nids |
-				       head -n1)
+			local ostnid=$(do_node $osthost $LCTL list_nids | head -1)
 
 			mopts=nosvc
 			if [ $fstype == "ldiskfs" ]; then
@@ -2216,7 +2215,7 @@ test_35a() { # bug 12459
 	log "Set up a fake failnode for the MDS"
 	FAKENID="127.0.0.2"
 	local device=$(do_facet $SINGLEMDS "$LCTL get_param -n devices" |
-		       awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' | head -n1)
+		awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' | head -1)
 	do_facet mgs "$LCTL conf_param \
 		      ${device}.failover.node=$(h2$NETTYPE $FAKENID)" ||
 		error "Setting ${device}.failover.node=\
@@ -2274,7 +2273,7 @@ test_35b() { # bug 18674
 	log "Set up a fake failnode for the MDS"
 	FAKENID="127.0.0.2"
 	local device=$(do_facet $SINGLEMDS "$LCTL get_param -n devices" |
-		       awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' | head -n1)
+		awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' | head -1)
 	do_facet mgs "$LCTL conf_param \
 		      ${device}.failover.node=$(h2$NETTYPE $FAKENID)" ||
 		error "Set ${device}.failover.node=\
@@ -3530,64 +3529,49 @@ test_52() {
 }
 run_test 52 "check recovering objects from lost+found"
 
-thread_param_get() {
-	local facet=$1
-	local pbase=$2
-	local param=$3
-
-	do_facet $facet "lctl get_param -n $pbase.$param" || echo 0
-}
-
-cleanup_thread_sanity() {
-	trap 0
-	cleanup
-}
-
 # Checks threads_min/max/started for some service
 #
 # Arguments: service name (OST or MDT), facet (e.g., ost1, $SINGLEMDS), and a
 # parameter pattern prefix like 'ost.*.ost'.
 thread_sanity() {
-	local modname=$1
-	local facet=$2
-	local ppat=$3
-	local opts=$4
+        local modname=$1
+        local facet=$2
+        local parampat=$3
+        local opts=$4
 	local basethr=$5
-	local tmin
-	local tmin2
-	local tmax
-	local tmax2
-	local tstarted
-	local tstarted2
-	local pname
-	local pbase
-	local msg="Insane $modname thread counts"
-	local ncpts
+        local tmin
+        local tmin2
+        local tmax
+        local tmax2
+        local tstarted
+        local paramp
+        local msg="Insane $modname thread counts"
+	local ncpts=$(check_cpt_number $facet)
 	local nthrs
-	shift 4
+        shift 4
 
-	setup
-	check_mount || { error "filesystem is not mounted"; return 40; }
-	trap cleanup_thread_sanity EXIT
+        check_mount || return 41
 
-	ncpts=$(check_cpt_number $facet)
-
-	# We need to expand $ppat, but it may match multiple parameters,
-	# so we'll pick the first one
-	pname=$(do_facet $facet "$LCTL get_param -N $ppat.threads_min" |
-		head -n1)
-	[ -n "$pname" ] || { error "Can't expand $ppat.threads_min"; return 20;}
+        # We need to expand $parampat, but it may match multiple parameters, so
+        # we'll pick the first one
+        if ! paramp=$(do_facet $facet "lctl get_param -N ${parampat}.threads_min"|head -1); then
+                error "Couldn't expand ${parampat}.threads_min parameter name"
+                return 22
+        fi
 
 	# Remove the .threads_min part
-	pbase=${pname%.threads_min}
+	paramp=${paramp%.threads_min}
 
 	# Check for sanity in defaults
-	tmin=$(thread_param_get $facet $pbase threads_min)
-	tmax=$(thread_param_get $facet $pbase threads_max)
-	tstarted=$(thread_param_get $facet $pbase threads_started)
-	lassert 21 "$msg (PDSH problems?)" '(($tstarted && $tmin && $tmax))' ||
+	tmin=$(do_facet $facet "$LCTL get_param -n ${paramp}.threads_min" ||
+	       echo 0)
+	tmax=$(do_facet $facet "$LCTL get_param -n ${paramp}.threads_max" ||
+	       echo 0)
+	tstarted=$(do_facet $facet "$LCTL get_param \
+				    -n ${paramp}.threads_started" || echo 0)
+	lassert 23 "$msg (PDSH problems?)" '(($tstarted && $tmin && $tmax))' ||
 		return $?
-	lassert 22 "$msg" '(($tstarted >= $tmin && $tstarted <= $tmax))' ||
+	lassert 24 "$msg" '(($tstarted >= $tmin && $tstarted <= $tmax ))' ||
 		return $?
 	nthrs=$(expr $tmax - $tmin)
 	if [ $nthrs -lt $ncpts ]; then
@@ -3598,63 +3582,84 @@ thread_sanity() {
 
 	[ $tmin -eq $tmax -a $tmin -eq $tstarted ] &&
 		skip_env "module parameter forced $facet thread count" &&
-		return 0
+		tmin=3 && tmax=$((3 * tmax))
 
 	# Check that we can change min/max
-	do_facet $facet "$LCTL set_param $pbase.threads_min=$((tmin + nthrs))"
-	do_facet $facet "$LCTL set_param $pbase.threads_max=$((tmax - nthrs))"
-	tmin2=$(thread_param_get $facet $pbase threads_min)
-	tmax2=$(thread_param_get $facet $pbase threads_max)
-	lassert 23 "$msg" '(($tmin2 == ($tmin + $nthrs)))' || return $?
-	lassert 24 "$msg" '(($tmax2 == ($tmax - $nthrs)))' || return $?
-
-	sleep 3 # give threads a chance to start
-	tstarted=$(thread_param_get $facet $pbase threads_started)
-	lassert 25 "$msg" '(($tstarted >= $tmin2))' || return $?
+	do_facet $facet "$LCTL set_param \
+			 ${paramp}.threads_min=$((tmin + nthrs))"
+	do_facet $facet "$LCTL set_param \
+			 ${paramp}.threads_max=$((tmax - nthrs))"
+	tmin2=$(do_facet $facet "$LCTL get_param -n ${paramp}.threads_min" ||
+		echo 0)
+	tmax2=$(do_facet $facet "$LCTL get_param -n ${paramp}.threads_max" ||
+		echo 0)
+	lassert 25 "$msg" '(($tmin2 == ($tmin + $nthrs) &&
+			    $tmax2 == ($tmax - $nthrs)))' || return $?
 
 	# Check that we can set min/max to the same value
-	do_facet $facet "$LCTL set_param $pbase.threads_max=$tmin2"
-	tmax2=$(thread_param_get $facet $pbase threads_max)
-	lassert 26 "$msg" '(($tmax2 == $tmin2))' || return $?
+	tmin=$(do_facet $facet "$LCTL get_param -n ${paramp}.threads_min" ||
+	       echo 0)
+	do_facet $facet "$LCTL set_param ${paramp}.threads_max=$tmin"
+	tmin2=$(do_facet $facet "$LCTL get_param -n ${paramp}.threads_min" ||
+		echo 0)
+	tmax2=$(do_facet $facet "$LCTL get_param -n ${paramp}.threads_max" ||
+		echo 0)
+	lassert 26 "$msg" '(($tmin2 == $tmin && $tmax2 == $tmin))' || return $?
 
 	# Check that we can't set max < min
-	do_facet $facet "$LCTL set_param $pbase.threads_max=$((tmin - 1))"
-	tmax2=$(thread_param_get $facet $pbase threads_max)
-	lassert 27 "$msg" '(($tmax2 >= $tmin))' || return $?
+	do_facet $facet "$LCTL set_param ${paramp}.threads_max=$((tmin - 1))"
+	tmin2=$(do_facet $facet "$LCTL get_param -n ${paramp}.threads_min" ||
+		echo 0)
+	tmax2=$(do_facet $facet "$LCTL get_param -n ${paramp}.threads_max" ||
+		echo 0)
+	lassert 27 "$msg" '(($tmin2 <= $tmax2))' || return $?
 
 	# We need to ensure that we get the module options desired; to do this
 	# we set LOAD_MODULES_REMOTE=true and we call setmodopts below.
 	LOAD_MODULES_REMOTE=true
 	cleanup
 	local oldvalue
-	local newvalue="${opts}=$((basethr * ncpts))"
+	local newvalue="${opts}=$(expr $basethr \* $ncpts)"
 	setmodopts -a $modname "$newvalue" oldvalue
 
 	load_modules
 	setup
-	check_mount || { error "filesystem failed remount"; return 41; }
+	check_mount || return 41
 
 	# Restore previous setting of MODOPTS_*
 	setmodopts $modname "$oldvalue"
 
 	# Check that $opts took
-	tmin=$(thread_param_get $facet $pbase threads_min)
-	tmax=$(thread_param_get $facet $pbase threads_max)
-	tstarted=$(thread_param_get $facet $pbase threads_started)
-	lassert 28 "$msg" '(($tstarted == $tmin && $tstarted == $tmax ))' ||
+	tmin=$(do_facet $facet "$LCTL get_param -n ${paramp}.threads_min")
+	tmax=$(do_facet $facet "$LCTL get_param -n ${paramp}.threads_max")
+	tstarted=$(do_facet $facet \
+		   "$LCTL get_param -n ${paramp}.threads_started")
+	lassert 28 "$msg" '(($tstarted >= $tmin && $tstarted <= $tmax ))' ||
 		return $?
+	cleanup
 
-	cleanup_thread_sanity || error "cleanup failed with rc $?"
 	load_modules
+	setup
 }
 
 test_53a() {
-	thread_sanity OST ost1 'ost.*.ost' oss_num_threads 16
+	setup
+	thread_sanity OST ost1 'ost.*.ost' 'oss_num_threads' '16'
+	cleanup || error "cleanup failed with rc $?"
 }
 run_test 53a "check OSS thread count params"
 
 test_53b() {
-	thread_sanity MDT $SINGLEMDS 'mds.*.*' mds_num_threads 16
+	setup
+	local mds=$(do_facet $SINGLEMDS "$LCTL get_param \
+					 -N mds.*.*.threads_max 2>/dev/null")
+	if [ -z "$mds" ]; then
+		#running this on an old MDT
+		thread_sanity MDT $SINGLEMDS 'mdt.*.*.' 'mdt_num_threads' 16
+	else
+		thread_sanity MDT $SINGLEMDS 'mds.*.*.' 'mds_num_threads' 16
+	fi
+	cleanup || error "cleanup failed with $?"
 }
 run_test 53b "check MDS thread count params"
 
@@ -4055,8 +4060,8 @@ test_66() {
 		{ skip "Need MGS version at least 2.3.59"; return 0; }
 
 	setup
-	local OST1_NID=$(do_facet ost1 $LCTL list_nids | head -n1)
-	local MDS_NID=$(do_facet $SINGLEMDS $LCTL list_nids | head -n1)
+	local OST1_NID=$(do_facet ost1 $LCTL list_nids | head -1)
+	local MDS_NID=$(do_facet $SINGLEMDS $LCTL list_nids | head -1)
 
 	echo "replace_nids should fail if MDS, OSTs and clients are UP"
 	do_facet mgs $LCTL replace_nids $FSNAME-OST0000 $OST1_NID &&
@@ -4612,14 +4617,15 @@ test_76a() {
 	setup
 	local MDMB_PARAM="osc.*.max_dirty_mb"
 	echo "Change MGS params"
-	local MAX_DIRTY_MB=$($LCTL get_param -n $MDMB_PARAM | head -n1)
+	local MAX_DIRTY_MB=$($LCTL get_param -n $MDMB_PARAM |
+		head -1)
 	echo "max_dirty_mb: $MAX_DIRTY_MB"
 	local NEW_MAX_DIRTY_MB=$((MAX_DIRTY_MB + MAX_DIRTY_MB))
 	echo "new_max_dirty_mb: $NEW_MAX_DIRTY_MB"
 	do_facet mgs $LCTL set_param -P $MDMB_PARAM=$NEW_MAX_DIRTY_MB
 	wait_update $HOSTNAME "$LCTL get_param -n $MDMB_PARAM |
-		head -n1" $NEW_MAX_DIRTY_MB
-	MAX_DIRTY_MB=$($LCTL get_param -n $MDMB_PARAM | head -n1)
+		head -1" $NEW_MAX_DIRTY_MB
+	MAX_DIRTY_MB=$($LCTL get_param -n $MDMB_PARAM | head -1)
 	echo "$MAX_DIRTY_MB"
 	[ $MAX_DIRTY_MB = $NEW_MAX_DIRTY_MB ] ||
 		error "error while apply max_dirty_mb"
@@ -4628,8 +4634,8 @@ test_76a() {
 	stopall
 	setupall
 	wait_update $HOSTNAME "$LCTL get_param -n $MDMB_PARAM |
-		head -n1" $NEW_MAX_DIRTY_MB
-	MAX_DIRTY_MB=$($LCTL get_param -n $MDMB_PARAM | head -n1)
+		head -1" $NEW_MAX_DIRTY_MB
+	MAX_DIRTY_MB=$($LCTL get_param -n $MDMB_PARAM | head -1)
 	[ $MAX_DIRTY_MB = $NEW_MAX_DIRTY_MB ] ||
 		error "max_dirty_mb is not saved after remount"
 
@@ -4637,15 +4643,15 @@ test_76a() {
 	CLIENT_PARAM="obdfilter.*.client_cache_count"
 	local CLIENT_CACHE_COUNT
 	CLIENT_CACHE_COUNT=$(do_facet ost1 $LCTL get_param -n $CLIENT_PARAM |
-			     head -n1)
+		head -1)
 	echo "client_cache_count: $CLIENT_CACHE_COUNT"
 	NEW_CLIENT_CACHE_COUNT=$((CLIENT_CACHE_COUNT+CLIENT_CACHE_COUNT))
 	echo "new_client_cache_count: $NEW_CLIENT_CACHE_COUNT"
 	do_facet mgs $LCTL set_param -P $CLIENT_PARAM=$NEW_CLIENT_CACHE_COUNT
 	wait_update $(facet_host ost1) "$LCTL get_param -n $CLIENT_PARAM |
-		head -n1" $NEW_CLIENT_CACHE_COUNT
+		head -1" $NEW_CLIENT_CACHE_COUNT
 	CLIENT_CACHE_COUNT=$(do_facet ost1 $LCTL get_param -n $CLIENT_PARAM |
-			     head -n1)
+		head -1)
 	echo "$CLIENT_CACHE_COUNT"
 	[ $CLIENT_CACHE_COUNT = $NEW_CLIENT_CACHE_COUNT ] ||
 		error "error while apply client_cache_count"
@@ -4654,9 +4660,9 @@ test_76a() {
 	stopall
 	setupall
 	wait_update $(facet_host ost1) "$LCTL get_param -n $CLIENT_PARAM |
-		head -n1" $NEW_CLIENT_CACHE_COUNT
+		head -1" $NEW_CLIENT_CACHE_COUNT
 	CLIENT_CACHE_COUNT=$(do_facet ost1 $LCTL get_param -n $CLIENT_PARAM |
-		head -n1)
+		head -1)
 	echo "$CLIENT_CACHE_COUNT"
 	[ $CLIENT_CACHE_COUNT = $NEW_CLIENT_CACHE_COUNT ] ||
 		error "client_cache_count is not saved after remount"
