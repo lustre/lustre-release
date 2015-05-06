@@ -3658,7 +3658,7 @@ static int ll_layout_fetch(struct inode *inode, struct ldlm_lock *lock)
 	       PFID(ll_inode2fid(inode)), ldlm_is_lvb_ready(lock),
 	       lock->l_lvb_data, lock->l_lvb_len);
 
-	if ((lock->l_lvb_data != NULL) && ldlm_is_lvb_ready(lock))
+	if (lock->l_lvb_data != NULL)
 		RETURN(0);
 
 	/* if layout lock was granted right away, the layout is returned
@@ -3694,12 +3694,16 @@ static int ll_layout_fetch(struct inode *inode, struct ldlm_lock *lock)
 
 	memcpy(lvbdata, lmm, lmmsize);
 	lock_res_and_lock(lock);
-	if (lock->l_lvb_data != NULL)
-		OBD_FREE_LARGE(lock->l_lvb_data, lock->l_lvb_len);
-
-	lock->l_lvb_data = lvbdata;
-	lock->l_lvb_len = lmmsize;
+	if (unlikely(lock->l_lvb_data == NULL)) {
+		lock->l_lvb_type = LVB_T_LAYOUT;
+		lock->l_lvb_data = lvbdata;
+		lock->l_lvb_len = lmmsize;
+		lvbdata = NULL;
+	}
 	unlock_res_and_lock(lock);
+
+	if (lvbdata != NULL)
+		OBD_FREE_LARGE(lvbdata, lmmsize);
 
 	EXIT;
 
@@ -3750,10 +3754,9 @@ static int ll_layout_lock_set(struct lustre_handle *lockh, ldlm_mode_t mode,
 	if (rc < 0)
 		GOTO(out, rc);
 
-	/* for layout lock, lmm is returned in lock's lvb.
+	/* for layout lock, lmm is stored in lock's lvb.
 	 * lvb_data is immutable if the lock is held so it's safe to access it
-	 * without res lock. See the description in ldlm_lock_decref_internal()
-	 * for the condition to free lvb_data of layout lock */
+	 * without res lock. */
 	if (lock->l_lvb_data != NULL) {
 		rc = obd_unpackmd(sbi->ll_dt_exp, &md.lsm,
 				  lock->l_lvb_data, lock->l_lvb_len);

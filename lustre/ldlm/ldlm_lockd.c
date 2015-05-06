@@ -1786,22 +1786,6 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
 					   lock->l_lvb_len, lvb_len);
 				GOTO(out, rc = -EINVAL);
 			}
-		} else if (ldlm_has_layout(lock)) { /* for layout lock, lvb has
-						     * variable length */
-			void *lvb_data;
-
-			OBD_ALLOC_LARGE(lvb_data, lvb_len);
-			if (lvb_data == NULL) {
-				LDLM_ERROR(lock, "No memory: %d.\n", lvb_len);
-				GOTO(out, rc = -ENOMEM);
-			}
-
-			lock_res_and_lock(lock);
-			LASSERT(lock->l_lvb_data == NULL);
-			lock->l_lvb_type = LVB_T_LAYOUT;
-			lock->l_lvb_data = lvb_data;
-			lock->l_lvb_len = lvb_len;
-			unlock_res_and_lock(lock);
 		}
 	}
 
