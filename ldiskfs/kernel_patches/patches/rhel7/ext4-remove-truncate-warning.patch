@@ -2,11 +2,11 @@ There will cause a deadlock if invoke ext4_truncate with i_mutex locked
 in lustre. Since lustre has own lock to provide protect so we don't
 need this check at all. 
 
-Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/inode.c
+Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/inode.c
 ===================================================================
---- linux-3.10.0-123.13.2.el7.x86_64.orig/fs/ext4/inode.c
-+++ linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/inode.c
-@@ -3847,8 +3847,6 @@ void ext4_truncate(struct inode *inode)
+--- linux-3.10.0-229.1.2.fc21.x86_64.orig/fs/ext4/inode.c
++++ linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/inode.c
+@@ -3644,8 +3644,6 @@ void ext4_truncate(struct inode *inode)
  	 * or it completely new indode. In those cases we might not
  	 * have i_mutex locked because it's not necessary.
  	 */
@@ -15,3 +15,25 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/inode.c
  	trace_ext4_truncate_enter(inode);
  
  	if (!ext4_can_truncate(inode))
+Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/namei.c
+===================================================================
+--- linux-3.10.0-229.1.2.fc21.x86_64.orig/fs/ext4/namei.c
++++ linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/namei.c
+@@ -3163,8 +3163,6 @@ int ext4_orphan_add(handle_t *handle, st
+ 	if (!sbi->s_journal || is_bad_inode(inode))
+ 		return 0;
+ 
+-	WARN_ON_ONCE(!(inode->i_state & (I_NEW | I_FREEING)) &&
+-		     !mutex_is_locked(&inode->i_mutex));
+ 	/*
+ 	 * Exit early if inode already is on orphan list. This is a big speedup
+ 	 * since we don't have to contend on the global s_orphan_lock.
+@@ -3245,8 +3243,6 @@ int ext4_orphan_del(handle_t *handle, st
+ 	if (!sbi->s_journal && !(sbi->s_mount_state & EXT4_ORPHAN_FS))
+ 		return 0;
+ 
+-	WARN_ON_ONCE(!(inode->i_state & (I_NEW | I_FREEING)) &&
+-		     !mutex_is_locked(&inode->i_mutex));
+ 	/* Do this quick check before taking global s_orphan_lock. */
+ 	if (list_empty(&ei->i_orphan))
+ 		return 0;
