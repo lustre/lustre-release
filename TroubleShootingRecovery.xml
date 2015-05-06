@@ -239,26 +239,18 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
         </section>
         <section>
           <title>Usage</title>
-          <screen>lctl lfsck_start -M | --device
-<replaceable>[MDT,OST]_device</replaceable> \
+<screen>lctl lfsck_start &lt;-M | --device <replaceable>[MDT,OST]_device</replaceable>&gt; \
                     [-A | --all] \
-                    [-c | --create_ostobj
-<replaceable>[on | off]</replaceable>] \
-                    [-C | --create_mdtobj
-<replaceable>[on | off]</replaceable>] \
-                    [-e | --error
-<replaceable>{continue | abort}</replaceable>] \
+                    [-c | --create_ostobj <replaceable>on | off</replaceable>] \
+                    [-C | --create_mdtobj <replaceable>on | off</replaceable>] \
+                    [-e | --error <replaceable>{continue | abort}</replaceable>] \
                     [-h | --help] \
-                    [-n | --dryrun
-<replaceable>[on | off]</replaceable>] \
+                    [-n | --dryrun <replaceable>on | off</replaceable>] \
                     [-o | --orphan] \
                     [-r | --reset] \
-                    [-s | --speed
-<replaceable>ops_per_sec_limit</replaceable>] \
-                    [-t | --type
-<replaceable>lfsck_type[,lfsck_type...]</replaceable>] \
-                    [-w | --window_size
-<replaceable>size</replaceable>]</screen>
+                    [-s | --speed <replaceable>ops_per_sec_limit</replaceable>] \
+                    [-t | --type <replaceable>check_type[,check_type...]</replaceable>] \
+                    [-w | --window_size <replaceable>size</replaceable>]</screen>
         </section>
         <section>
           <title>Options</title>
@@ -292,7 +284,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
                     </para>
                   </entry>
                   <entry>
-                    <para>The MDT or OST device to start LFSCK on.</para>
+                    <para>The MDT or OST target to start LFSCK on.</para>
                   </entry>
                 </row>
                 <row>
@@ -302,9 +294,10 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
                     </para>
                   </entry>
                   <entry>
-                    <para condition='l26'>Start LFSCK on all devices.
-                    This applies to both layout and
-                    namespace consistency checking and repair.</para>
+                    <para condition='l26'>Start LFSCK on all
+                    targets on all servers simultaneously.
+                    By default, both layout and namespace
+                    consistency checking and repair are started.</para>
                   </entry>
                 </row>
                 <row>
@@ -471,8 +464,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
         </section>
         <section>
           <title>Usage</title>
-          <screen>lctl lfsck_stop -M | --device
-<replaceable>[MDT,OST]_device</replaceable> \
+<screen>lctl lfsck_stop &lt;-M | --device <replaceable>[MDT,OST]_device</replaceable>&gt; \
                     [-A | --all] \
                     [-h | --help]</screen>
         </section>
@@ -508,7 +500,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
                     </para>
                   </entry>
                   <entry>
-                    <para>The MDT or OST device to stop LFSCK on.</para>
+                    <para>The MDT or OST target to stop LFSCK on.</para>
                   </entry>
                 </row>
                 <row>
@@ -518,7 +510,8 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
                     </para>
                   </entry>
                   <entry>
-                    <para>Stop LFSCK on all devices.</para>
+                    <para>Stop LFSCK on all targets on all servers
+                    simultaneously.</para>
                   </entry>
                 </row>
                 <row>
@@ -548,13 +541,12 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
           to trace the corresponding LFSCK component status. For OI Scrub, the
           interface is the OSD layer procfs interface, named
           <literal>oi_scrub</literal>. To display OI Scrub status, the standard
-         
           <literal>lctl get_param</literal> command is used as shown in the
           usage below.</para>
         </section>
         <section>
           <title>Usage</title>
-          <screen>lctl get_param -n osd-ldiskfs.<replaceable>FSNAME</replaceable>-[<replaceable>MDT_device|OST_device</replaceable>].oi_scrub</screen>
+          <screen>lctl get_param -n osd-ldiskfs.<replaceable>FSNAME</replaceable>-[<replaceable>MDT_target|OST_target</replaceable>].oi_scrub</screen>
         </section>
         <section>
           <title>Output</title>
@@ -686,13 +678,13 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
                       <listitem>
                         <para>
                         <literal>Success Count</literal> total number of
-                        completed OI_scrub runs on the device.</para>
+                        completed OI_scrub runs on the target.</para>
                       </listitem>
                       <listitem>
                         <para>
                         <literal>Run Time</literal> how long the scrub has run,
                         tally from the time of scanning from the beginning of
-                        the specified MDT device, not include the
+                        the specified MDT target, not include the
                         paused/failure time among checkpoints.</para>
                       </listitem>
                       <listitem>
@@ -747,7 +739,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
         </section>
         <section>
           <title>Usage</title>
-          <screen>lctl get_param -n mdd. <replaceable>FSNAME</replaceable>-<replaceable>MDT_device</replaceable>.lfsck_namespace</screen>
+          <screen>lctl get_param -n mdd. <replaceable>FSNAME</replaceable>-<replaceable>MDT_target</replaceable>.lfsck_namespace</screen>
         </section>
         <section>
           <title>Output</title>
@@ -1043,7 +1035,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
                       <listitem>
                         <para>
                         <literal>Success Count</literal> the total number of
-                        completed LFSCK runs on the device.</para>
+                        completed LFSCK runs on the target.</para>
                       </listitem>
                       <listitem>
                         <para>
@@ -1112,10 +1104,10 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
           <title>Usage</title>
           <screen>lctl get_param -n mdd.
 <replaceable>FSNAME</replaceable>-
-<replaceable>MDT_device</replaceable>.lfsck_layout
+<replaceable>MDT_target</replaceable>.lfsck_layout
 lctl get_param -n obdfilter.
 <replaceable>FSNAME</replaceable>-
-<replaceable>OST_device</replaceable>.lfsck_layout</screen>
+<replaceable>OST_target</replaceable>.lfsck_layout</screen>
         </section>
         <section>
           <title>Output</title>
@@ -1222,7 +1214,7 @@ lctl get_param -n obdfilter.
                       <listitem>
                         <para>
                         <literal>Success Count:</literal> the total number of
-                        completed LFSCK runs on the device.</para>
+                        completed LFSCK runs on the target.</para>
                       </listitem>
                       <listitem>
                         <para>
@@ -1348,9 +1340,9 @@ lctl get_param -n obdfilter.
         </section>
         <section>
           <title>Usage</title>
-          <screen>lctl set_param mdd.${FSNAME}-${MDT_device}.lfsck_speed_limit=
+          <screen>lctl set_param mdd.${FSNAME}-${MDT_target}.lfsck_speed_limit=
 <replaceable>N</replaceable>
-lctl set_param obdfilter.${FSNAME}-${OST_device}.lfsck_speed_limit=
+lctl set_param obdfilter.${FSNAME}-${OST_target}.lfsck_speed_limit=
 <replaceable>N</replaceable></screen>
         </section>
         <section>
@@ -1404,7 +1396,7 @@ lctl set_param obdfilter.${FSNAME}-${OST_device}.lfsck_speed_limit=
         </section>
         <section>
           <title>Usage</title>
-          <screen>lctl set_param osd_ldiskfs.${FSNAME}-${MDT_device}.auto_scrub=<replaceable>N</replaceable></screen>
+          <screen>lctl set_param osd_ldiskfs.${FSNAME}-${MDT_target}.auto_scrub=<replaceable>N</replaceable></screen>
           <para>where
           <replaceable>N</replaceable>is an integer as described below.</para>
           <note condition='l25'><para>Lustre software 2.5 and later supports
