@@ -1284,7 +1284,7 @@ static int ofd_getattr_hdl(struct tgt_session_info *tsi)
 	struct lustre_handle	 lh = { 0 };
 	struct ofd_object	*fo;
 	__u64			 flags = 0;
-	ldlm_mode_t		 lock_mode = LCK_PR;
+	enum ldlm_mode		 lock_mode = LCK_PR;
 	bool			 srvlock;
 	int			 rc;
 	ENTRY;
@@ -2319,11 +2319,11 @@ static int ofd_prolong_extent_locks(struct tgt_session_info *tsi,
 static int ofd_rw_hpreq_lock_match(struct ptlrpc_request *req,
 				   struct ldlm_lock *lock)
 {
-	struct niobuf_remote	*rnb;
-	struct obd_ioobj	*ioo;
-	ldlm_mode_t		 mode;
-	struct ldlm_extent	 ext;
-	__u32			 opc = lustre_msg_get_opc(req->rq_reqmsg);
+	struct niobuf_remote *rnb;
+	struct obd_ioobj *ioo;
+	enum ldlm_mode  mode;
+	struct ldlm_extent ext;
+	__u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
 
 	ENTRY;
 

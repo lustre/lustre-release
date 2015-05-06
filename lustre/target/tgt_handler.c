@@ -1572,8 +1572,8 @@ int tgt_extent_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 		    __u64 start, __u64 end, struct lustre_handle *lh,
 		    int mode, __u64 *flags)
 {
-	ldlm_policy_data_t	 policy;
-	int			 rc;
+	union ldlm_policy_data policy;
+	int rc;
 
 	ENTRY;
 
@@ -1601,7 +1601,7 @@ int tgt_extent_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 }
 EXPORT_SYMBOL(tgt_extent_lock);
 
-void tgt_extent_unlock(struct lustre_handle *lh, ldlm_mode_t mode)
+void tgt_extent_unlock(struct lustre_handle *lh, enum ldlm_mode mode)
 {
 	LASSERT(lustre_handle_is_used(lh));
 	ldlm_lock_decref(lh, mode);
@@ -1610,7 +1610,7 @@ EXPORT_SYMBOL(tgt_extent_unlock);
 
 int tgt_brw_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 		 struct obd_ioobj *obj, struct niobuf_remote *nb,
-		 struct lustre_handle *lh, int mode)
+		 struct lustre_handle *lh, enum ldlm_mode mode)
 {
 	__u64			 flags = 0;
 	int			 nrbufs = obj->ioo_bufcnt;
@@ -1635,7 +1635,7 @@ int tgt_brw_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 }
 
 void tgt_brw_unlock(struct obd_ioobj *obj, struct niobuf_remote *niob,
-		    struct lustre_handle *lh, int mode)
+		    struct lustre_handle *lh, enum ldlm_mode mode)
 {
 	ENTRY;
 

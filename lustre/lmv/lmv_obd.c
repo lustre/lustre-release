@@ -1940,14 +1940,13 @@ lmv_getattr_name(struct obd_export *exp,struct md_op_data *op_data,
          NULL)
 
 static int lmv_early_cancel(struct obd_export *exp, struct lmv_tgt_desc *tgt,
-			    struct md_op_data *op_data,
-			    __u32 op_tgt, ldlm_mode_t mode, int bits, int flag)
+			    struct md_op_data *op_data, __u32 op_tgt,
+			    enum ldlm_mode mode, int bits, int flag)
 {
-	struct lu_fid          *fid = md_op_data_fid(op_data, flag);
-	struct obd_device      *obd = exp->exp_obd;
-	struct lmv_obd         *lmv = &obd->u.lmv;
-	ldlm_policy_data_t      policy = {{ 0 }};
-	int                     rc = 0;
+	struct lu_fid *fid = md_op_data_fid(op_data, flag);
+	struct lmv_obd *lmv = &exp->exp_obd->u.lmv;
+	union ldlm_policy_data policy = { { 0 } };
+	int rc = 0;
 	ENTRY;
 
 	if (!fid_is_sane(fid))
@@ -3033,20 +3032,20 @@ void lmv_free_memmd(struct lmv_stripe_md *lsm)
 EXPORT_SYMBOL(lmv_free_memmd);
 
 static int lmv_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,
-                             ldlm_policy_data_t *policy, ldlm_mode_t mode,
-                             ldlm_cancel_flags_t flags, void *opaque)
+			     union ldlm_policy_data *policy,
+			     enum ldlm_mode mode, enum ldlm_cancel_flags flags,
+			     void *opaque)
 {
-        struct obd_device       *obd = exp->exp_obd;
-        struct lmv_obd          *lmv = &obd->u.lmv;
-        int                      rc = 0;
-        int                      err;
-	__u32                    i;
-        ENTRY;
+	struct lmv_obd *lmv = &exp->exp_obd->u.lmv;
+	int rc = 0;
+	__u32 i;
+	ENTRY;
 
-        LASSERT(fid != NULL);
+	LASSERT(fid != NULL);
 
 	for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
 		struct lmv_tgt_desc *tgt = lmv->tgts[i];
+		int err;
 
 		if (tgt == NULL || tgt->ltd_exp == NULL || !tgt->ltd_active)
 			continue;
@@ -3073,14 +3072,14 @@ int lmv_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data,
 	RETURN(rc);
 }
 
-ldlm_mode_t lmv_lock_match(struct obd_export *exp, __u64 flags,
-                           const struct lu_fid *fid, ldlm_type_t type,
-                           ldlm_policy_data_t *policy, ldlm_mode_t mode,
-                           struct lustre_handle *lockh)
+enum ldlm_mode lmv_lock_match(struct obd_export *exp, __u64 flags,
+			      const struct lu_fid *fid, enum ldlm_type type,
+			      union ldlm_policy_data *policy,
+			      enum ldlm_mode mode, struct lustre_handle *lockh)
 {
 	struct obd_device	*obd = exp->exp_obd;
 	struct lmv_obd		*lmv = &obd->u.lmv;
-	ldlm_mode_t		rc;
+	enum ldlm_mode		rc;
 	int			tgt;
 	int			i;
 	ENTRY;

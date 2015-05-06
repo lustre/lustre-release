@@ -839,8 +839,8 @@ struct lfsck_assistant_data {
 struct lfsck_lock_handle {
 	struct lustre_handle	llh_pdo_lh;
 	struct lustre_handle	llh_reg_lh;
-	ldlm_mode_t		llh_pdo_mode;
-	ldlm_mode_t		llh_reg_mode;
+	enum ldlm_mode		llh_pdo_mode;
+	enum ldlm_mode		llh_reg_mode;
 };
 
 struct lfsck_thread_info {
@@ -872,7 +872,7 @@ struct lfsck_thread_info {
 	struct lfsck_async_interpret_args lti_laia2;
 	struct lfsck_start	lti_start;
 	struct lfsck_stop	lti_stop;
-	ldlm_policy_data_t	lti_policy;
+	union ldlm_policy_data	lti_policy;
 	struct ldlm_enqueue_info lti_einfo;
 	struct ldlm_res_id	lti_resid;
 	union {
@@ -897,11 +897,11 @@ int lfsck_fid_alloc(const struct lu_env *env, struct lfsck_instance *lfsck,
 		    struct lu_fid *fid, bool locked);
 int lfsck_ibits_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
 		     struct dt_object *obj, struct lustre_handle *lh,
-		     __u64 bits, ldlm_mode_t mode);
-void lfsck_ibits_unlock(struct lustre_handle *lh, ldlm_mode_t mode);
+		     __u64 bits, enum ldlm_mode mode);
+void lfsck_ibits_unlock(struct lustre_handle *lh, enum ldlm_mode mode);
 int lfsck_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
 	       struct dt_object *obj, const char *name,
-	       struct lfsck_lock_handle *llh, __u64 bits, ldlm_mode_t mode);
+	       struct lfsck_lock_handle *llh, __u64 bits, enum ldlm_mode mode);
 void lfsck_unlock(struct lfsck_lock_handle *llh);
 int lfsck_find_mdt_idx_by_fid(const struct lu_env *env,
 			      struct lfsck_instance *lfsck,

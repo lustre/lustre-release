@@ -92,8 +92,8 @@ struct osc_fsync_args {
 
 struct osc_enqueue_args {
 	struct obd_export	*oa_exp;
-	ldlm_type_t		oa_type;
-	ldlm_mode_t		oa_mode;
+	enum ldlm_type		oa_type;
+	enum ldlm_mode		oa_mode;
 	__u64			*oa_flags;
 	osc_enqueue_upcall_f	oa_upcall;
 	void			*oa_cookie;
@@ -449,13 +449,13 @@ int osc_sync_base(struct osc_object *obj, struct obdo *oa,
  * locks added to @cancels list. */
 static int osc_resource_get_unused(struct obd_export *exp, struct obdo *oa,
 				   struct list_head *cancels,
-				   ldlm_mode_t mode, __u64 lock_flags)
+				   enum ldlm_mode mode, __u64 lock_flags)
 {
-        struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
-        struct ldlm_res_id res_id;
-        struct ldlm_resource *res;
-        int count;
-        ENTRY;
+	struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
+	struct ldlm_res_id res_id;
+	struct ldlm_resource *res;
+	int count;
+	ENTRY;
 
 	/* Return, i.e. cancel nothing, only if ELC is supported (flag in
 	 * export) but disabled through procfs (flag in NS).
@@ -1873,7 +1873,7 @@ static int osc_set_data_with_check(struct lustre_handle *lockh,
 
 static int osc_enqueue_fini(struct ptlrpc_request *req,
 			    osc_enqueue_upcall_f upcall, void *cookie,
-			    struct lustre_handle *lockh, ldlm_mode_t mode,
+			    struct lustre_handle *lockh, enum ldlm_mode mode,
 			    __u64 *flags, int agl, int errcode)
 {
 	bool intent = *flags & LDLM_FL_HAS_INTENT;
@@ -1910,12 +1910,12 @@ static int osc_enqueue_fini(struct ptlrpc_request *req,
 }
 
 static int osc_enqueue_interpret(const struct lu_env *env,
-                                 struct ptlrpc_request *req,
-                                 struct osc_enqueue_args *aa, int rc)
+				 struct ptlrpc_request *req,
+				 struct osc_enqueue_args *aa, int rc)
 {
 	struct ldlm_lock *lock;
 	struct lustre_handle *lockh = &aa->oa_lockh;
-	ldlm_mode_t mode = aa->oa_mode;
+	enum ldlm_mode mode = aa->oa_mode;
 	struct ost_lvb *lvb = aa->oa_lvb;
 	__u32 lvb_len = sizeof(*lvb);
 	__u64 flags = 0;
@@ -1972,7 +1972,7 @@ struct ptlrpc_request_set *PTLRPCD_SET = (void *)1;
  * is evicted from the cluster -- such scenarious make the life difficult, so
  * release locks just after they are obtained. */
 int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
-		     __u64 *flags, ldlm_policy_data_t *policy,
+		     __u64 *flags, union ldlm_policy_data *policy,
 		     struct ost_lvb *lvb, int kms_valid,
 		     osc_enqueue_upcall_f upcall, void *cookie,
 		     struct ldlm_enqueue_info *einfo,
@@ -1983,7 +1983,7 @@ int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
 	struct ptlrpc_request *req = NULL;
 	int intent = *flags & LDLM_FL_HAS_INTENT;
 	__u64 match_lvb = agl ? 0 : LDLM_FL_LVB_READY;
-	ldlm_mode_t mode;
+	enum ldlm_mode mode;
 	int rc;
 	ENTRY;
 
@@ -2117,20 +2117,20 @@ no_match:
 }
 
 int osc_match_base(struct obd_export *exp, struct ldlm_res_id *res_id,
-		   __u32 type, ldlm_policy_data_t *policy, __u32 mode,
-		   __u64 *flags, void *data, struct lustre_handle *lockh,
-		   int unref)
+		   enum ldlm_type type, union ldlm_policy_data *policy,
+		   enum ldlm_mode mode, __u64 *flags, void *data,
+		   struct lustre_handle *lockh, int unref)
 {
 	struct obd_device *obd = exp->exp_obd;
 	__u64 lflags = *flags;
-	ldlm_mode_t rc;
+	enum ldlm_mode rc;
 	ENTRY;
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_OSC_MATCH))
-                RETURN(-EIO);
+	if (OBD_FAIL_CHECK(OBD_FAIL_OSC_MATCH))
+		RETURN(-EIO);
 
-        /* Filesystem lock extents are extended to page boundaries so that
-         * dealing with the page cache is a little smoother */
+	/* Filesystem lock extents are extended to page boundaries so that
+	 * dealing with the page cache is a little smoother */
 	policy->l_extent.start -= policy->l_extent.start & ~PAGE_MASK;
 	policy->l_extent.end |= ~PAGE_MASK;
 

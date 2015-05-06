@@ -1304,7 +1304,7 @@ check_ldlm_resource_desc(void)
 	BLANK_LINE();
 	CHECK_STRUCT(ldlm_resource_desc);
 	CHECK_MEMBER(ldlm_resource_desc, lr_type);
-	CHECK_MEMBER(ldlm_resource_desc, lr_padding);
+	CHECK_MEMBER(ldlm_resource_desc, lr_pad);
 	CHECK_MEMBER(ldlm_resource_desc, lr_name);
 }
 

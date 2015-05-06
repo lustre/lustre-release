@@ -514,7 +514,7 @@ static int ldlm_cli_pool_recalc(struct ldlm_pool *pl)
          * take into account pl->pl_recalc_time here.
          */
 	ret = ldlm_cancel_lru(ldlm_pl2ns(pl), 0, LCF_ASYNC,
-			       LDLM_CANCEL_LRUR);
+			      LDLM_LRU_FLAG_LRUR);
 
 out:
 	spin_lock(&pl->pl_lock);
@@ -560,7 +560,7 @@ static int ldlm_cli_pool_shrink(struct ldlm_pool *pl,
 	if (nr == 0)
 		return (unused / 100) * sysctl_vfs_cache_pressure;
 	else
-		return ldlm_cancel_lru(ns, nr, LCF_ASYNC, LDLM_CANCEL_SHRINK);
+		return ldlm_cancel_lru(ns, nr, LCF_ASYNC, LDLM_LRU_FLAG_SHRINK);
 }
 
 static struct ldlm_pool_ops ldlm_srv_pool_ops = {
@@ -850,7 +850,7 @@ static void ldlm_pool_proc_fini(struct ldlm_pool *pl)
 }
 
 int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns,
-		   int idx, ldlm_side_t client)
+		   int idx, enum ldlm_side client)
 {
 	int rc;
 	ENTRY;
@@ -1045,7 +1045,7 @@ static struct completion ldlm_pools_comp;
 * count locks from all namespaces (if possible). Returns number of
 * cached locks.
 */
-static unsigned long ldlm_pools_count(ldlm_side_t client, gfp_t gfp_mask)
+static unsigned long ldlm_pools_count(enum ldlm_side client, gfp_t gfp_mask)
 {
 	unsigned long total = 0;
 	int nr_ns;
@@ -1099,7 +1099,7 @@ static unsigned long ldlm_pools_count(ldlm_side_t client, gfp_t gfp_mask)
 	return total;
 }
 
-static unsigned long ldlm_pools_scan(ldlm_side_t client, int nr,
+static unsigned long ldlm_pools_scan(enum ldlm_side client, int nr,
 				     gfp_t gfp_mask)
 {
 	unsigned long freed = 0;
@@ -1181,8 +1181,7 @@ static unsigned long ldlm_pools_cli_scan(struct shrinker *s,
  * cached locks after shrink is finished. All namespaces are asked to
  * cancel approximately equal amount of locks to keep balancing.
  */
-static int ldlm_pools_shrink(ldlm_side_t client, int nr,
-			     gfp_t gfp_mask)
+static int ldlm_pools_shrink(enum ldlm_side client, int nr, gfp_t gfp_mask)
 {
 	unsigned long total = 0;
 
@@ -1217,12 +1216,12 @@ static int ldlm_pools_cli_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
 
 #endif /* HAVE_SHRINKER_COUNT */
 
-int ldlm_pools_recalc(ldlm_side_t client)
+int ldlm_pools_recalc(enum ldlm_side client)
 {
 	unsigned long nr_l = 0, nr_p = 0, l;
-        struct ldlm_namespace *ns;
-        struct ldlm_namespace *ns_old = NULL;
-        int nr, equal = 0;
+	struct ldlm_namespace *ns;
+	struct ldlm_namespace *ns_old = NULL;
+	int nr, equal = 0;
 	/* seconds of sleep if no active namespaces */
 	int time = client ? LDLM_POOL_CLI_DEF_RECALC_PERIOD :
 			    LDLM_POOL_SRV_DEF_RECALC_PERIOD;
@@ -1521,13 +1520,13 @@ int ldlm_pool_recalc(struct ldlm_pool *pl)
 int ldlm_pool_shrink(struct ldlm_pool *pl,
 		     int nr, gfp_t gfp_mask)
 {
-        return 0;
+	return 0;
 }
 
 int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns,
-                   int idx, ldlm_side_t client)
+		   int idx, enum ldlm_side client)
 {
-        return 0;
+	return 0;
 }
 
 void ldlm_pool_fini(struct ldlm_pool *pl)
@@ -1587,11 +1586,11 @@ int ldlm_pools_init(void)
 
 void ldlm_pools_fini(void)
 {
-        return;
+	return;
 }
 
-int ldlm_pools_recalc(ldlm_side_t client)
+int ldlm_pools_recalc(enum ldlm_side client)
 {
-        return 0;
+	return 0;
 }
 #endif /* HAVE_LRU_RESIZE_SUPPORT */

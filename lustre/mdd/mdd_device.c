@@ -940,11 +940,11 @@ static int mdd_recovery_complete(const struct lu_env *env,
 }
 
 int mdd_local_file_create(const struct lu_env *env, struct mdd_device *mdd,
-			  const struct lu_fid *pfid, const char *name, __u32 mode,
-			  struct lu_fid *fid)
+			  const struct lu_fid *pfid, const char *name,
+			  __u32 mode, struct lu_fid *fid)
 {
-	struct dt_object	*parent, *dto;
-	int			 rc;
+	struct dt_object *parent, *dto;
+	int rc;
 
 	ENTRY;
 

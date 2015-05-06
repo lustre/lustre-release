@@ -86,15 +86,15 @@ mdl_mode_t mdt_mdl_lock_modes[] = {
         [LCK_GROUP]   = MDL_GROUP
 };
 
-ldlm_mode_t mdt_dlm_lock_modes[] = {
-        [MDL_MINMODE] = LCK_MINMODE,
-        [MDL_EX]      = LCK_EX,
-        [MDL_PW]      = LCK_PW,
-        [MDL_PR]      = LCK_PR,
-        [MDL_CW]      = LCK_CW,
-        [MDL_CR]      = LCK_CR,
-        [MDL_NL]      = LCK_NL,
-        [MDL_GROUP]   = LCK_GROUP
+enum ldlm_mode mdt_dlm_lock_modes[] = {
+	[MDL_MINMODE]	= LCK_MINMODE,
+	[MDL_EX]	= LCK_EX,
+	[MDL_PW]	= LCK_PW,
+	[MDL_PR]	= LCK_PR,
+	[MDL_CW]	= LCK_CW,
+	[MDL_CR]	= LCK_CR,
+	[MDL_NL]	= LCK_NL,
+	[MDL_GROUP]	= LCK_GROUP
 };
 
 static struct mdt_device *mdt_dev(struct lu_device *d);
@@ -161,15 +161,15 @@ void mdt_set_disposition(struct mdt_thread_info *info,
 		rep->lock_policy_res1 |= op_flag;
 }
 
-void mdt_lock_reg_init(struct mdt_lock_handle *lh, ldlm_mode_t lm)
+void mdt_lock_reg_init(struct mdt_lock_handle *lh, enum ldlm_mode lm)
 {
-        lh->mlh_pdo_hash = 0;
-        lh->mlh_reg_mode = lm;
+	lh->mlh_pdo_hash = 0;
+	lh->mlh_reg_mode = lm;
 	lh->mlh_rreg_mode = lm;
-        lh->mlh_type = MDT_REG_LOCK;
+	lh->mlh_type = MDT_REG_LOCK;
 }
 
-void mdt_lock_pdo_init(struct mdt_lock_handle *lh, ldlm_mode_t lock_mode,
+void mdt_lock_pdo_init(struct mdt_lock_handle *lh, enum ldlm_mode lock_mode,
 		       const struct lu_name *lname)
 {
 	lh->mlh_reg_mode = lock_mode;
@@ -2306,13 +2306,12 @@ int mdt_check_resent_lock(struct mdt_thread_info *info,
 	return 1;
 }
 
-int mdt_remote_object_lock(struct mdt_thread_info *mti,
-			   struct mdt_object *o, const struct lu_fid *fid,
-			   struct lustre_handle *lh, ldlm_mode_t mode,
-			   __u64 ibits, bool nonblock)
+int mdt_remote_object_lock(struct mdt_thread_info *mti, struct mdt_object *o,
+			   const struct lu_fid *fid, struct lustre_handle *lh,
+			   enum ldlm_mode mode, __u64 ibits, bool nonblock)
 {
 	struct ldlm_enqueue_info *einfo = &mti->mti_einfo;
-	ldlm_policy_data_t *policy = &mti->mti_policy;
+	union ldlm_policy_data *policy = &mti->mti_policy;
 	struct ldlm_res_id *res_id = &mti->mti_res_id;
 	int rc = 0;
 	ENTRY;
@@ -2344,12 +2343,12 @@ static int mdt_object_local_lock(struct mdt_thread_info *info,
 				 struct mdt_lock_handle *lh, __u64 ibits,
 				 bool nonblock)
 {
-        struct ldlm_namespace *ns = info->mti_mdt->mdt_namespace;
-        ldlm_policy_data_t *policy = &info->mti_policy;
-        struct ldlm_res_id *res_id = &info->mti_res_id;
+	struct ldlm_namespace *ns = info->mti_mdt->mdt_namespace;
+	union ldlm_policy_data *policy = &info->mti_policy;
+	struct ldlm_res_id *res_id = &info->mti_res_id;
 	__u64 dlmflags;
-        int rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
         LASSERT(!lustre_handle_is_used(&lh->mlh_reg_lh));
         LASSERT(!lustre_handle_is_used(&lh->mlh_pdo_lh));
@@ -2517,24 +2516,23 @@ int mdt_object_lock_try(struct mdt_thread_info *info, struct mdt_object *o,
  * \param mode lock mode
  * \param decref force immediate lock releasing
  */
-static
-void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
-                   ldlm_mode_t mode, int decref)
+static void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
+			  enum ldlm_mode mode, int decref)
 {
-        ENTRY;
+	ENTRY;
 
-        if (lustre_handle_is_used(h)) {
-                if (decref || !info->mti_has_trans ||
-                    !(mode & (LCK_PW | LCK_EX))){
-                        mdt_fid_unlock(h, mode);
-                } else {
-                        struct mdt_device *mdt = info->mti_mdt;
-                        struct ldlm_lock *lock = ldlm_handle2lock(h);
-                        struct ptlrpc_request *req = mdt_info_req(info);
-                        int no_ack = 0;
+	if (lustre_handle_is_used(h)) {
+		if (decref || !info->mti_has_trans ||
+		    !(mode & (LCK_PW | LCK_EX))) {
+			mdt_fid_unlock(h, mode);
+		} else {
+			struct mdt_device *mdt = info->mti_mdt;
+			struct ldlm_lock *lock = ldlm_handle2lock(h);
+			struct ptlrpc_request *req = mdt_info_req(info);
+			int no_ack = 0;
 
-                        LASSERTF(lock != NULL, "no lock for cookie "LPX64"\n",
-                                 h->cookie);
+			LASSERTF(lock != NULL, "no lock for cookie "LPX64"\n",
+				 h->cookie);
 			/* there is no request if mdt_object_unlock() is called
 			 * from mdt_export_cleanup()->mdt_add_dirty_flag() */
 			if (likely(req != NULL)) {
@@ -3404,8 +3402,8 @@ static int mdt_intent_opc(long itopc, struct mdt_thread_info *info,
 }
 
 static int mdt_intent_policy(struct ldlm_namespace *ns,
-                             struct ldlm_lock **lockp, void *req_cookie,
-			     ldlm_mode_t mode, __u64 flags, void *data)
+			     struct ldlm_lock **lockp, void *req_cookie,
+			     enum ldlm_mode mode, __u64 flags, void *data)
 {
 	struct tgt_session_info	*tsi;
 	struct mdt_thread_info	*info;

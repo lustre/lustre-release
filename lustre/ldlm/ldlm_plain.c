@@ -72,7 +72,7 @@ static inline int
 ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 			struct list_head *work_list)
 {
-	ldlm_mode_t req_mode = req->l_req_mode;
+	enum ldlm_mode req_mode = req->l_req_mode;
 	struct ldlm_lock *lock;
 	struct list_head *tmp;
 	int compat = 1;
@@ -134,7 +134,7 @@ ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
  *     would be collected and ASTs sent.
  */
 int ldlm_process_plain_lock(struct ldlm_lock *lock, __u64 *flags,
-			    int first_enq, ldlm_error_t *err,
+			    int first_enq, enum ldlm_error *err,
 			    struct list_head *work_list)
 {
 	struct ldlm_resource *res = lock->l_resource;
@@ -189,14 +189,14 @@ int ldlm_process_plain_lock(struct ldlm_lock *lock, __u64 *flags,
 }
 #endif /* HAVE_SERVER_SUPPORT */
 
-void ldlm_plain_policy_wire_to_local(const ldlm_wire_policy_data_t *wpolicy,
-                                     ldlm_policy_data_t *lpolicy)
+void ldlm_plain_policy_wire_to_local(const union ldlm_wire_policy_data *wpolicy,
+				     union ldlm_policy_data *lpolicy)
 {
-        /* No policy for plain locks */
+	/* No policy for plain locks */
 }
 
-void ldlm_plain_policy_local_to_wire(const ldlm_policy_data_t *lpolicy,
-                                     ldlm_wire_policy_data_t *wpolicy)
+void ldlm_plain_policy_local_to_wire(const union ldlm_policy_data *lpolicy,
+				     union ldlm_wire_policy_data *wpolicy)
 {
-        /* No policy for plain locks */
+	/* No policy for plain locks */
 }

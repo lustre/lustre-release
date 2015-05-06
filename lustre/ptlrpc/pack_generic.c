@@ -2229,16 +2229,16 @@ void lustre_swab_ldlm_res_id (struct ldlm_res_id *id)
                 __swab64s (&id->name[i]);
 }
 
-void lustre_swab_ldlm_policy_data (ldlm_wire_policy_data_t *d)
+void lustre_swab_ldlm_policy_data(union ldlm_wire_policy_data *d)
 {
-        /* the lock data is a union and the first two fields are always an
-         * extent so it's ok to process an LDLM_EXTENT and LDLM_FLOCK lock
-         * data the same way. */
-        __swab64s(&d->l_extent.start);
-        __swab64s(&d->l_extent.end);
-        __swab64s(&d->l_extent.gid);
-        __swab64s(&d->l_flock.lfw_owner);
-        __swab32s(&d->l_flock.lfw_pid);
+	/* the lock data is a union and the first two fields are always an
+	 * extent so it's ok to process an LDLM_EXTENT and LDLM_FLOCK lock
+	 * data the same way. */
+	__swab64s(&d->l_extent.start);
+	__swab64s(&d->l_extent.end);
+	__swab64s(&d->l_extent.gid);
+	__swab64s(&d->l_flock.lfw_owner);
+	__swab32s(&d->l_flock.lfw_pid);
 }
 
 void lustre_swab_ldlm_intent (struct ldlm_intent *i)
@@ -2246,11 +2246,11 @@ void lustre_swab_ldlm_intent (struct ldlm_intent *i)
         __swab64s (&i->opc);
 }
 
-void lustre_swab_ldlm_resource_desc (struct ldlm_resource_desc *r)
+void lustre_swab_ldlm_resource_desc(struct ldlm_resource_desc *r)
 {
-        __swab32s (&r->lr_type);
-        CLASSERT(offsetof(typeof(*r), lr_padding) != 0);
-        lustre_swab_ldlm_res_id (&r->lr_name);
+	__swab32s(&r->lr_type);
+	CLASSERT(offsetof(typeof(*r), lr_pad) != 0);
+	lustre_swab_ldlm_res_id(&r->lr_name);
 }
 
 void lustre_swab_ldlm_lock_desc (struct ldlm_lock_desc *l)

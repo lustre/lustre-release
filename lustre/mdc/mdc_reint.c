@@ -65,11 +65,11 @@ static int mdc_reint(struct ptlrpc_request *request, int level)
  * found by @fid. Found locks are added into @cancel list. Returns the amount of
  * locks added to @cancels list. */
 int mdc_resource_get_unused(struct obd_export *exp, const struct lu_fid *fid,
-			    struct list_head *cancels, ldlm_mode_t mode,
-                            __u64 bits)
+			    struct list_head *cancels, enum ldlm_mode mode,
+			    __u64 bits)
 {
 	struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
-	ldlm_policy_data_t policy = { {0} };
+	union ldlm_policy_data policy = { {0} };
 	struct ldlm_res_id res_id;
 	struct ldlm_resource *res;
 	int count;

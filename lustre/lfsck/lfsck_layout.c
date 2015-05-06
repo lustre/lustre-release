@@ -1955,7 +1955,7 @@ static int lfsck_layout_slave_conditional_destroy(const struct lu_env *env,
 {
 	struct lfsck_thread_info	*info	= lfsck_env_info(env);
 	struct lu_attr			*la	= &info->lti_la;
-	ldlm_policy_data_t		*policy = &info->lti_policy;
+	union ldlm_policy_data		*policy = &info->lti_policy;
 	struct ldlm_res_id		*resid	= &info->lti_resid;
 	struct lfsck_instance		*lfsck	= com->lc_lfsck;
 	struct dt_device		*dev	= lfsck->li_bottom;

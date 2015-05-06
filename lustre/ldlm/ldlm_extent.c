@@ -71,13 +71,13 @@
  * overly wide locks.
  */
 static void ldlm_extent_internal_policy_fixup(struct ldlm_lock *req,
-                                              struct ldlm_extent *new_ex,
-                                              int conflicting)
+					      struct ldlm_extent *new_ex,
+					      int conflicting)
 {
-        ldlm_mode_t req_mode = req->l_req_mode;
-        __u64 req_start = req->l_req_extent.start;
-        __u64 req_end = req->l_req_extent.end;
-        __u64 req_align, mask;
+	enum ldlm_mode req_mode = req->l_req_mode;
+	__u64 req_start = req->l_req_extent.start;
+	__u64 req_end = req->l_req_extent.end;
+	__u64 req_align, mask;
 
         if (conflicting > 32 && (req_mode == LCK_PW || req_mode == LCK_CW)) {
                 if (req_end < req_start + LDLM_MAX_GROWN_EXTENT)
@@ -129,17 +129,17 @@ static void ldlm_extent_internal_policy_fixup(struct ldlm_lock *req,
 static void ldlm_extent_internal_policy_granted(struct ldlm_lock *req,
                                                 struct ldlm_extent *new_ex)
 {
-        struct ldlm_resource *res = req->l_resource;
-        ldlm_mode_t req_mode = req->l_req_mode;
-        __u64 req_start = req->l_req_extent.start;
-        __u64 req_end = req->l_req_extent.end;
-        struct ldlm_interval_tree *tree;
-        struct interval_node_extent limiter = { new_ex->start, new_ex->end };
-        int conflicting = 0;
-        int idx;
-        ENTRY;
+	struct ldlm_resource *res = req->l_resource;
+	enum ldlm_mode req_mode = req->l_req_mode;
+	__u64 req_start = req->l_req_extent.start;
+	__u64 req_end = req->l_req_extent.end;
+	struct ldlm_interval_tree *tree;
+	struct interval_node_extent limiter = { new_ex->start, new_ex->end };
+	int conflicting = 0;
+	int idx;
+	ENTRY;
 
-        lockmode_verify(req_mode);
+	lockmode_verify(req_mode);
 
 	/* Using interval tree to handle the LDLM extent granted locks. */
         for (idx = 0; idx < LCK_MODE_NUM; idx++) {
@@ -184,7 +184,7 @@ ldlm_extent_internal_policy_waiting(struct ldlm_lock *req,
                                     struct ldlm_extent *new_ex)
 {
 	struct ldlm_resource *res = req->l_resource;
-	ldlm_mode_t req_mode = req->l_req_mode;
+	enum ldlm_mode req_mode = req->l_req_mode;
 	__u64 req_start = req->l_req_extent.start;
 	__u64 req_end = req->l_req_extent.end;
 	struct ldlm_lock *lock;
@@ -297,38 +297,38 @@ static void ldlm_extent_policy(struct ldlm_resource *res,
 
 static int ldlm_check_contention(struct ldlm_lock *lock, int contended_locks)
 {
-        struct ldlm_resource *res = lock->l_resource;
-        cfs_time_t now = cfs_time_current();
+	struct ldlm_resource *res = lock->l_resource;
+	cfs_time_t now = cfs_time_current();
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_SET_CONTENTION))
-                return 1;
+	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_SET_CONTENTION))
+		return 1;
 
-        CDEBUG(D_DLMTRACE, "contended locks = %d\n", contended_locks);
-        if (contended_locks > ldlm_res_to_ns(res)->ns_contended_locks)
-                res->lr_contention_time = now;
-        return cfs_time_before(now, cfs_time_add(res->lr_contention_time,
-                cfs_time_seconds(ldlm_res_to_ns(res)->ns_contention_time)));
+	CDEBUG(D_DLMTRACE, "contended locks = %d\n", contended_locks);
+	if (contended_locks > ldlm_res_to_ns(res)->ns_contended_locks)
+		res->lr_contention_time = now;
+	return cfs_time_before(now, cfs_time_add(res->lr_contention_time,
+		cfs_time_seconds(ldlm_res_to_ns(res)->ns_contention_time)));
 }
 
 struct ldlm_extent_compat_args {
 	struct list_head *work_list;
-        struct ldlm_lock *lock;
-        ldlm_mode_t mode;
-        int *locks;
-        int *compat;
+	struct ldlm_lock *lock;
+	enum ldlm_mode mode;
+	int *locks;
+	int *compat;
 };
 
 static enum interval_iter ldlm_extent_compat_cb(struct interval_node *n,
-                                                void *data)
+						void *data)
 {
-        struct ldlm_extent_compat_args *priv = data;
-        struct ldlm_interval *node = to_ldlm_interval(n);
-        struct ldlm_extent *extent;
+	struct ldlm_extent_compat_args *priv = data;
+	struct ldlm_interval *node = to_ldlm_interval(n);
+	struct ldlm_extent *extent;
 	struct list_head *work_list = priv->work_list;
-        struct ldlm_lock *lock, *enq = priv->lock;
-        ldlm_mode_t mode = priv->mode;
-        int count = 0;
-        ENTRY;
+	struct ldlm_lock *lock, *enq = priv->lock;
+	enum ldlm_mode mode = priv->mode;
+	int count = 0;
+	ENTRY;
 
 	LASSERT(!list_empty(&node->li_group));
 
@@ -370,11 +370,11 @@ static enum interval_iter ldlm_extent_compat_cb(struct interval_node *n,
  */
 static int
 ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
-			 __u64 *flags, ldlm_error_t *err,
+			 __u64 *flags, enum ldlm_error *err,
 			 struct list_head *work_list, int *contended_locks)
 {
 	struct ldlm_resource *res = req->l_resource;
-	ldlm_mode_t req_mode = req->l_req_mode;
+	enum ldlm_mode req_mode = req->l_req_mode;
 	__u64 req_start = req->l_req_extent.start;
 	__u64 req_end = req->l_req_extent.end;
 	struct ldlm_lock *lock;
@@ -674,7 +674,7 @@ static void discard_bl_list(struct list_head *bl_list)
  *     would be collected and ASTs sent.
  */
 int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
-			     int first_enq, ldlm_error_t *err,
+			     int first_enq, enum ldlm_error *err,
 			     struct list_head *work_list)
 {
 	struct ldlm_resource *res = lock->l_resource;
@@ -882,15 +882,16 @@ struct ldlm_interval *ldlm_interval_detach(struct ldlm_lock *l)
 	return list_empty(&n->li_group) ? n : NULL;
 }
 
-static inline int lock_mode_to_index(ldlm_mode_t mode)
+static inline int ldlm_mode_to_index(enum ldlm_mode mode)
 {
-        int index;
+	int index;
 
-        LASSERT(mode != 0);
-        LASSERT(IS_PO2(mode));
-        for (index = -1; mode; index++, mode >>= 1) ;
-        LASSERT(index < LCK_MODE_NUM);
-        return index;
+	LASSERT(mode != 0);
+	LASSERT(IS_PO2(mode));
+	for (index = -1; mode != 0; index++, mode >>= 1)
+		/* do nothing */;
+	LASSERT(index < LCK_MODE_NUM);
+	return index;
 }
 
 /** Add newly granted lock into interval tree for the resource. */
@@ -908,9 +909,9 @@ void ldlm_extent_add_lock(struct ldlm_resource *res,
         LASSERT(node != NULL);
         LASSERT(!interval_is_intree(&node->li_node));
 
-        idx = lock_mode_to_index(lock->l_granted_mode);
-        LASSERT(lock->l_granted_mode == 1 << idx);
-        LASSERT(lock->l_granted_mode == res->lr_itree[idx].lit_mode);
+	idx = ldlm_mode_to_index(lock->l_granted_mode);
+	LASSERT(lock->l_granted_mode == 1 << idx);
+	LASSERT(lock->l_granted_mode == res->lr_itree[idx].lit_mode);
 
         /* node extent initialize */
         extent = &lock->l_policy_data.l_extent;
@@ -934,43 +935,43 @@ void ldlm_extent_add_lock(struct ldlm_resource *res,
 /** Remove cancelled lock from resource interval tree. */
 void ldlm_extent_unlink_lock(struct ldlm_lock *lock)
 {
-        struct ldlm_resource *res = lock->l_resource;
-        struct ldlm_interval *node = lock->l_tree_node;
-        struct ldlm_interval_tree *tree;
-        int idx;
+	struct ldlm_resource *res = lock->l_resource;
+	struct ldlm_interval *node = lock->l_tree_node;
+	struct ldlm_interval_tree *tree;
+	int idx;
 
-        if (!node || !interval_is_intree(&node->li_node)) /* duplicate unlink */
-                return;
+	if (!node || !interval_is_intree(&node->li_node)) /* duplicate unlink */
+		return;
 
-        idx = lock_mode_to_index(lock->l_granted_mode);
-        LASSERT(lock->l_granted_mode == 1 << idx);
-        tree = &res->lr_itree[idx];
+	idx = ldlm_mode_to_index(lock->l_granted_mode);
+	LASSERT(lock->l_granted_mode == 1 << idx);
+	tree = &res->lr_itree[idx];
 
-        LASSERT(tree->lit_root != NULL); /* assure the tree is not null */
+	LASSERT(tree->lit_root != NULL); /* assure the tree is not null */
 
-        tree->lit_size--;
-        node = ldlm_interval_detach(lock);
-        if (node) {
-                interval_erase(&node->li_node, &tree->lit_root);
-                ldlm_interval_free(node);
-        }
+	tree->lit_size--;
+	node = ldlm_interval_detach(lock);
+	if (node) {
+		interval_erase(&node->li_node, &tree->lit_root);
+		ldlm_interval_free(node);
+	}
 }
 
-void ldlm_extent_policy_wire_to_local(const ldlm_wire_policy_data_t *wpolicy,
-                                     ldlm_policy_data_t *lpolicy)
+void ldlm_extent_policy_wire_to_local(const union ldlm_wire_policy_data *wpolicy,
+				      union ldlm_policy_data *lpolicy)
 {
-        memset(lpolicy, 0, sizeof(*lpolicy));
-        lpolicy->l_extent.start = wpolicy->l_extent.start;
-        lpolicy->l_extent.end = wpolicy->l_extent.end;
-        lpolicy->l_extent.gid = wpolicy->l_extent.gid;
+	memset(lpolicy, 0, sizeof(*lpolicy));
+	lpolicy->l_extent.start = wpolicy->l_extent.start;
+	lpolicy->l_extent.end = wpolicy->l_extent.end;
+	lpolicy->l_extent.gid = wpolicy->l_extent.gid;
 }
 
-void ldlm_extent_policy_local_to_wire(const ldlm_policy_data_t *lpolicy,
-                                     ldlm_wire_policy_data_t *wpolicy)
+void ldlm_extent_policy_local_to_wire(const union ldlm_policy_data *lpolicy,
+				      union ldlm_wire_policy_data *wpolicy)
 {
-        memset(wpolicy, 0, sizeof(*wpolicy));
-        wpolicy->l_extent.start = lpolicy->l_extent.start;
-        wpolicy->l_extent.end = lpolicy->l_extent.end;
-        wpolicy->l_extent.gid = lpolicy->l_extent.gid;
+	memset(wpolicy, 0, sizeof(*wpolicy));
+	wpolicy->l_extent.start = lpolicy->l_extent.start;
+	wpolicy->l_extent.end = lpolicy->l_extent.end;
+	wpolicy->l_extent.gid = lpolicy->l_extent.gid;
 }
 

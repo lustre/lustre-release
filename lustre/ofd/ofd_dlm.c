@@ -127,26 +127,26 @@ static enum interval_iter ofd_intent_cb(struct interval_node *n, void *args)
  * \retval		negative value on error
  */
 int ofd_intent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
-		      void *req_cookie, ldlm_mode_t mode, __u64 flags,
+		      void *req_cookie, enum ldlm_mode mode, __u64 flags,
 		      void *data)
 {
-	struct ptlrpc_request		*req = req_cookie;
-	struct ldlm_lock		*lock = *lockp, *l = NULL;
-	struct ldlm_resource		*res = lock->l_resource;
-	ldlm_processing_policy		 policy;
-	struct ost_lvb			*res_lvb, *reply_lvb;
-	struct ldlm_reply		*rep;
-	ldlm_error_t			 err;
-	int				 idx, rc, only_liblustre = 1;
-	struct ldlm_interval_tree	*tree;
-	struct ofd_intent_args		 arg;
-	__u32				 repsize[3] = {
+	struct ptlrpc_request *req = req_cookie;
+	struct ldlm_lock *lock = *lockp, *l = NULL;
+	struct ldlm_resource *res = lock->l_resource;
+	ldlm_processing_policy policy;
+	struct ost_lvb *res_lvb, *reply_lvb;
+	struct ldlm_reply *rep;
+	enum ldlm_error err;
+	int idx, rc, only_liblustre = 1;
+	struct ldlm_interval_tree *tree;
+	struct ofd_intent_args arg;
+	__u32 repsize[3] = {
 		[MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
 		[DLM_LOCKREPLY_OFF]   = sizeof(*rep),
 		[DLM_REPLY_REC_OFF]   = sizeof(*reply_lvb)
 	};
-	struct ldlm_glimpse_work	 gl_work;
-	struct list_head		 gl_list;
+	struct ldlm_glimpse_work gl_work;
+	struct list_head gl_list;
 	ENTRY;
 
 	INIT_LIST_HEAD(&gl_list);

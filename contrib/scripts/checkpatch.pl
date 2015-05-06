@@ -357,6 +357,7 @@ my %dep_includes = (
 );
 
 my %dep_functions = (
+	'alloca',			'malloc',
 	'CFS_ATOMIC_INIT',		'ATOMIC_INIT',
 	'cfs_atomic_add',		'atomic_add',
 	'cfs_atomic_add_return',	'atomic_add_return',
@@ -452,8 +453,19 @@ my %dep_functions = (
 	'cfs_hash_lookup_intent_t',	'enum cfs_hash_lookup_intent',
 	'cfs_hash_cond_arg_t',		'struct cfs_hash_cond_arg',
 
+	'ldlm_appetite_t',		'enum ldlm_appetite',
+	'ldlm_cancel_flags_t',		'enum ldlm_cancel_flags',
+	'ldlm_error_t',			'enum ldlm_error',
+	'ldlm_ns_hash_def_t',		'struct ldlm_ns_hash_def',
+	'ldlm_mode_t',			'enum ldlm_mode',
+	'ldlm_ns_type_t',		'enum ldlm_ns_type',
+	'ldlm_policy_data_t',		'enum ldlm_policy_data',
+	'ldlm_policy_res_t',		'enum ldlm_policy_res',
+	'ldlm_side_t',			'enum ldlm_side',
+	'ldlm_type_t',			'enum ldlm_type',
+	'ldlm_wire_policy_data_t',	'union ldlm_wire_policy_data',
+
 	'LPROCFS',			'CONFIG_PROC_FS',
-	'alloca',			'malloc',
 	'mktemp',			'mkstemp',
 	'sprintf',			'snprintf',
 	'strcpy',			'strncpy',

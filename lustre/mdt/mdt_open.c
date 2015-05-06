@@ -779,13 +779,13 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 				struct mdt_lock_handle *lhc,
 				__u64 *ibits)
 {
-	struct md_attr	*ma = &info->mti_attr;
-	__u64		 open_flags = info->mti_spec.sp_cr_flags;
-	ldlm_mode_t	 lm = LCK_CR;
-	bool		 acq_lease = !!(open_flags & MDS_OPEN_LEASE);
-	bool		 try_layout = false;
-	bool		 create_layout = false;
-	int		 rc = 0;
+	struct md_attr *ma = &info->mti_attr;
+	__u64 open_flags = info->mti_spec.sp_cr_flags;
+	enum ldlm_mode lm = LCK_CR;
+	bool acq_lease = !!(open_flags & MDS_OPEN_LEASE);
+	bool try_layout = false;
+	bool create_layout = false;
+	int rc = 0;
 	ENTRY;
 
 	*ibits = 0;

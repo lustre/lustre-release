@@ -56,13 +56,12 @@
 
 static const struct vm_operations_struct ll_file_vm_ops;
 
-void policy_from_vma(ldlm_policy_data_t *policy,
-                            struct vm_area_struct *vma, unsigned long addr,
-                            size_t count)
+void policy_from_vma(union ldlm_policy_data *policy, struct vm_area_struct *vma,
+		     unsigned long addr, size_t count)
 {
 	policy->l_extent.start = ((addr - vma->vm_start) & PAGE_MASK) +
 				 (vma->vm_pgoff << PAGE_CACHE_SHIFT);
-        policy->l_extent.end = (policy->l_extent.start + count - 1) |
+	policy->l_extent.end = (policy->l_extent.start + count - 1) |
 			       ~PAGE_MASK;
 }
 

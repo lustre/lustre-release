@@ -111,15 +111,15 @@ struct ldlm_bl_pool {
 };
 
 struct ldlm_bl_work_item {
-	struct list_head              blwi_entry;
-        struct ldlm_namespace  *blwi_ns;
-        struct ldlm_lock_desc   blwi_ld;
-        struct ldlm_lock       *blwi_lock;
-	struct list_head              blwi_head;
-        int                     blwi_count;
-	struct completion        blwi_comp;
-	ldlm_cancel_flags_t     blwi_flags;
-        int                     blwi_mem_pressure;
+	struct list_head	blwi_entry;
+	struct ldlm_namespace	*blwi_ns;
+	struct ldlm_lock_desc	blwi_ld;
+	struct ldlm_lock	*blwi_lock;
+	struct list_head	blwi_head;
+	int			blwi_count;
+	struct completion	blwi_comp;
+	enum ldlm_cancel_flags	blwi_flags;
+	int			blwi_mem_pressure;
 };
 
 #ifdef HAVE_SERVER_SUPPORT
@@ -1195,25 +1195,25 @@ static void ldlm_svc_get_eopc(const struct ldlm_request *dlm_req,
  * service threads to carry out client lock enqueueing requests.
  */
 int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
-                         struct ptlrpc_request *req,
-                         const struct ldlm_request *dlm_req,
-                         const struct ldlm_callback_suite *cbs)
+			 struct ptlrpc_request *req,
+			 const struct ldlm_request *dlm_req,
+			 const struct ldlm_callback_suite *cbs)
 {
-        struct ldlm_reply *dlm_rep;
+	struct ldlm_reply *dlm_rep;
 	__u64 flags;
-        ldlm_error_t err = ELDLM_OK;
-        struct ldlm_lock *lock = NULL;
-        void *cookie = NULL;
-        int rc = 0;
+	enum ldlm_error err = ELDLM_OK;
+	struct ldlm_lock *lock = NULL;
+	void *cookie = NULL;
+	int rc = 0;
 	struct ldlm_resource *res = NULL;
-        ENTRY;
+	ENTRY;
 
-        LDLM_DEBUG_NOLOCK("server-side enqueue handler START");
+	LDLM_DEBUG_NOLOCK("server-side enqueue handler START");
 
 	ldlm_request_cancel(req, dlm_req, LDLM_ENQUEUE_CANCEL_OFF, LATF_SKIP);
 	flags = ldlm_flags_from_wire(dlm_req->lock_flags);
 
-        LASSERT(req->rq_export);
+	LASSERT(req->rq_export);
 
 	if (ptlrpc_req2svc(req)->srv_stats != NULL)
 		ldlm_svc_get_eopc(dlm_req, ptlrpc_req2svc(req)->srv_stats);
@@ -1965,7 +1965,7 @@ static int ldlm_callback_reply(struct ptlrpc_request *req, int rc)
 }
 
 static int __ldlm_bl_to_thread(struct ldlm_bl_work_item *blwi,
-			       ldlm_cancel_flags_t cancel_flags)
+			       enum ldlm_cancel_flags cancel_flags)
 {
 	struct ldlm_bl_pool *blp = ldlm_state->ldlm_bl_pool;
 	ENTRY;
@@ -1996,7 +1996,7 @@ static inline void init_blwi(struct ldlm_bl_work_item *blwi,
 			     struct ldlm_lock_desc *ld,
 			     struct list_head *cancels, int count,
 			     struct ldlm_lock *lock,
-			     ldlm_cancel_flags_t cancel_flags)
+			     enum ldlm_cancel_flags cancel_flags)
 {
 	init_completion(&blwi->blwi_comp);
 	INIT_LIST_HEAD(&blwi->blwi_head);
@@ -2030,7 +2030,7 @@ static int ldlm_bl_to_thread(struct ldlm_namespace *ns,
 			     struct ldlm_lock_desc *ld,
 			     struct ldlm_lock *lock,
 			     struct list_head *cancels, int count,
-			     ldlm_cancel_flags_t cancel_flags)
+			     enum ldlm_cancel_flags cancel_flags)
 {
 	ENTRY;
 
@@ -2067,7 +2067,7 @@ int ldlm_bl_to_thread_lock(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
 
 int ldlm_bl_to_thread_list(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
 			   struct list_head *cancels, int count,
-			   ldlm_cancel_flags_t cancel_flags)
+			   enum ldlm_cancel_flags cancel_flags)
 {
 	return ldlm_bl_to_thread(ns, ld, NULL, cancels, count, cancel_flags);
 }

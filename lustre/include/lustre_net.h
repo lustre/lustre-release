@@ -697,12 +697,12 @@ struct ptlrpc_reply_state {
          */
         struct lustre_msg     *rs_msg;          /* reply message */
 
-        /** Number of locks awaiting client ACK */
-        int                    rs_nlocks;
-        /** Handles of locks awaiting client reply ACK */
-        struct lustre_handle   rs_locks[RS_MAX_LOCKS];
-        /** Lock modes of locks in \a rs_locks */
-        ldlm_mode_t            rs_modes[RS_MAX_LOCKS];
+	/** Number of locks awaiting client ACK */
+	int			rs_nlocks;
+	/** Handles of locks awaiting client reply ACK */
+	struct lustre_handle	rs_locks[RS_MAX_LOCKS];
+	/** Lock modes of locks in \a rs_locks */
+	enum ldlm_mode		rs_modes[RS_MAX_LOCKS];
 };
 
 struct ptlrpc_thread;

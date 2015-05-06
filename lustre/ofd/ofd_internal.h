@@ -509,7 +509,7 @@ extern struct ldlm_valblock_ops ofd_lvbo;
 
 /* ofd_dlm.c */
 int ofd_intent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
-		      void *req_cookie, ldlm_mode_t mode, __u64 flags,
+		      void *req_cookie, enum ldlm_mode mode, __u64 flags,
 		      void *data);
 
 static inline struct ofd_thread_info *ofd_info(const struct lu_env *env)

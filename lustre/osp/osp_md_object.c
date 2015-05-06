@@ -878,7 +878,7 @@ static int osp_md_object_lock(const struct lu_env *env,
 			      struct dt_object *dt,
 			      struct lustre_handle *lh,
 			      struct ldlm_enqueue_info *einfo,
-			      ldlm_policy_data_t *policy)
+			      union ldlm_policy_data *policy)
 {
 	struct ldlm_res_id	*res_id;
 	struct dt_device	*dt_dev = lu2dt_dev(dt->do_lu.lo_dev);
@@ -886,7 +886,7 @@ static int osp_md_object_lock(const struct lu_env *env,
 	struct ptlrpc_request	*req;
 	int			rc = 0;
 	__u64			flags = 0;
-	ldlm_mode_t		mode;
+	enum ldlm_mode		mode;
 
 	res_id = einfo->ei_res_id;
 	LASSERT(res_id != NULL);
@@ -906,7 +906,7 @@ static int osp_md_object_lock(const struct lu_env *env,
 		RETURN(PTR_ERR(req));
 
 	rc = ldlm_cli_enqueue(osp->opd_exp, &req, einfo, res_id,
-			      (const ldlm_policy_data_t *)policy,
+			      (const union ldlm_policy_data *)policy,
 			      &flags, NULL, 0, LVB_T_NONE, lh, 0);
 
 	ptlrpc_req_finished(req);
@@ -929,7 +929,7 @@ static int osp_md_object_lock(const struct lu_env *env,
 static int osp_md_object_unlock(const struct lu_env *env,
 				struct dt_object *dt,
 				struct ldlm_enqueue_info *einfo,
-				ldlm_policy_data_t *policy)
+				union ldlm_policy_data *policy)
 {
 	struct lustre_handle	*lockh = einfo->ei_cbdata;
 

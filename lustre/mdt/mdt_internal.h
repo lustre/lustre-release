@@ -240,21 +240,21 @@ struct mdt_object {
 };
 
 struct mdt_lock_handle {
-        /* Lock type, reg for cross-ref use or pdo lock. */
-        mdl_type_t              mlh_type;
+	/* Lock type, reg for cross-ref use or pdo lock. */
+	mdl_type_t		mlh_type;
 
-        /* Regular lock */
-        struct lustre_handle    mlh_reg_lh;
-        ldlm_mode_t             mlh_reg_mode;
+	/* Regular lock */
+	struct lustre_handle	mlh_reg_lh;
+	enum ldlm_mode		mlh_reg_mode;
 
-        /* Pdirops lock */
-        struct lustre_handle    mlh_pdo_lh;
-        ldlm_mode_t             mlh_pdo_mode;
-        unsigned int            mlh_pdo_hash;
+	/* Pdirops lock */
+	struct lustre_handle	mlh_pdo_lh;
+	enum ldlm_mode		mlh_pdo_mode;
+	unsigned int		mlh_pdo_hash;
 
 	/* Remote regular lock */
-	struct lustre_handle    mlh_rreg_lh;
-	ldlm_mode_t	     mlh_rreg_mode;
+	struct lustre_handle	mlh_rreg_lh;
+	enum ldlm_mode		mlh_rreg_mode;
 };
 
 enum {
@@ -384,19 +384,16 @@ struct mdt_thread_info {
          * They should be initialized explicitly by the user themselves.
          */
 
-         /* XXX: If something is in a union, make sure they do not conflict */
-
-        struct lu_fid              mti_tmp_fid1;
-        struct lu_fid              mti_tmp_fid2;
-        ldlm_policy_data_t         mti_policy;    /* for mdt_object_lock() and
-                                                   * mdt_rename_lock() */
-        struct ldlm_res_id         mti_res_id;    /* for mdt_object_lock() and
-                                                     mdt_rename_lock()   */
-        union {
-                struct obd_uuid    uuid[2];       /* for mdt_seq_init_cli()  */
-                char               ns_name[48];   /* for mdt_init0()         */
-                struct lustre_cfg_bufs bufs;      /* for mdt_stack_fini()    */
-		struct obd_statfs  osfs;          /* for mdt_statfs()        */
+	/* XXX: If something is in a union, make sure they do not conflict */
+	struct lu_fid			mti_tmp_fid1;
+	struct lu_fid			mti_tmp_fid2;
+	union ldlm_policy_data		mti_policy; /* for mdt_object_lock() */
+	struct ldlm_res_id		mti_res_id; /* and mdt_rename_lock() */
+	union {
+		struct obd_uuid		uuid[2];    /* for mdt_seq_init_cli() */
+		char			ns_name[48];/* for mdt_init0()        */
+		struct lustre_cfg_bufs	bufs;       /* for mdt_stack_fini()   */
+		struct obd_statfs	osfs;       /* for mdt_statfs()       */
                 struct {
                         /* for mdt_readpage()      */
                         struct lu_rdpg     mti_rdpg;
@@ -573,10 +570,10 @@ void mdt_set_disposition(struct mdt_thread_info *info,
 void mdt_clear_disposition(struct mdt_thread_info *info,
 			   struct ldlm_reply *rep, __u64 op_flag);
 
-void mdt_lock_pdo_init(struct mdt_lock_handle *lh, ldlm_mode_t lock_mode,
+void mdt_lock_pdo_init(struct mdt_lock_handle *lh, enum ldlm_mode lock_mode,
 		       const struct lu_name *lname);
 
-void mdt_lock_reg_init(struct mdt_lock_handle *lh, ldlm_mode_t lm);
+void mdt_lock_reg_init(struct mdt_lock_handle *lh, enum ldlm_mode lm);
 
 int mdt_lock_setup(struct mdt_thread_info *info, struct mdt_object *mo,
 		   struct mdt_lock_handle *lh);
@@ -613,7 +610,7 @@ void mdt_client_compatibility(struct mdt_thread_info *info);
 int mdt_remote_object_lock(struct mdt_thread_info *mti,
 			   struct mdt_object *o, const struct lu_fid *fid,
 			   struct lustre_handle *lh,
-			   ldlm_mode_t mode, __u64 ibits, bool nonblock);
+			   enum ldlm_mode mode, __u64 ibits, bool nonblock);
 
 enum mdt_name_flags {
 	MNF_FIX_ANON = 1,
@@ -944,43 +941,41 @@ int mdt_blocking_ast(struct ldlm_lock*, struct ldlm_lock_desc*, void*, int);
 
 /* Issues dlm lock on passed @ns, @f stores it lock handle into @lh. */
 static inline int mdt_fid_lock(struct ldlm_namespace *ns,
-                               struct lustre_handle *lh,
-                               ldlm_mode_t mode,
-                               ldlm_policy_data_t *policy,
-                               const struct ldlm_res_id *res_id,
+			       struct lustre_handle *lh, enum ldlm_mode mode,
+			       union ldlm_policy_data *policy,
+			       const struct ldlm_res_id *res_id,
 			       __u64 flags, const __u64 *client_cookie)
 {
-        int rc;
+	int rc;
 
-        LASSERT(ns != NULL);
-        LASSERT(lh != NULL);
+	LASSERT(ns != NULL);
+	LASSERT(lh != NULL);
 
-        rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS, policy,
-                                    mode, &flags, mdt_blocking_ast,
-                                    ldlm_completion_ast, NULL, NULL, 0,
+	rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS, policy,
+				    mode, &flags, mdt_blocking_ast,
+				    ldlm_completion_ast, NULL, NULL, 0,
 				    LVB_T_NONE, client_cookie, lh);
-        return rc == ELDLM_OK ? 0 : -EIO;
+	return rc == ELDLM_OK ? 0 : -EIO;
 }
 
-static inline void mdt_fid_unlock(struct lustre_handle *lh,
-                                  ldlm_mode_t mode)
+static inline void mdt_fid_unlock(struct lustre_handle *lh, enum ldlm_mode mode)
 {
-        ldlm_lock_decref(lh, mode);
+	ldlm_lock_decref(lh, mode);
 }
 
 extern mdl_mode_t mdt_mdl_lock_modes[];
-extern ldlm_mode_t mdt_dlm_lock_modes[];
+extern enum ldlm_mode mdt_dlm_lock_modes[];
 
-static inline mdl_mode_t mdt_dlm_mode2mdl_mode(ldlm_mode_t mode)
+static inline mdl_mode_t mdt_dlm_mode2mdl_mode(enum ldlm_mode mode)
 {
-        LASSERT(IS_PO2(mode));
-        return mdt_mdl_lock_modes[mode];
+	LASSERT(IS_PO2(mode));
+	return mdt_mdl_lock_modes[mode];
 }
 
-static inline ldlm_mode_t mdt_mdl_mode2dlm_mode(mdl_mode_t mode)
+static inline enum ldlm_mode mdt_mdl_mode2dlm_mode(mdl_mode_t mode)
 {
-        LASSERT(IS_PO2(mode));
-        return mdt_dlm_lock_modes[mode];
+	LASSERT(IS_PO2(mode));
+	return mdt_dlm_lock_modes[mode];
 }
 
 /* mdt_lvb.c */

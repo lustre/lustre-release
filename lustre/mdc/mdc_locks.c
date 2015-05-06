@@ -133,13 +133,13 @@ int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data,
         RETURN(0);
 }
 
-ldlm_mode_t mdc_lock_match(struct obd_export *exp, __u64 flags,
-			   const struct lu_fid *fid, ldlm_type_t type,
-			   ldlm_policy_data_t *policy, ldlm_mode_t mode,
-			   struct lustre_handle *lockh)
+enum ldlm_mode mdc_lock_match(struct obd_export *exp, __u64 flags,
+			      const struct lu_fid *fid, enum ldlm_type type,
+			      union ldlm_policy_data *policy,
+			      enum ldlm_mode mode, struct lustre_handle *lockh)
 {
 	struct ldlm_res_id res_id;
-	ldlm_mode_t rc;
+	enum ldlm_mode rc;
 	ENTRY;
 
 	fid_build_reg_res_name(fid, &res_id);
@@ -150,23 +150,20 @@ ldlm_mode_t mdc_lock_match(struct obd_export *exp, __u64 flags,
 	RETURN(rc);
 }
 
-int mdc_cancel_unused(struct obd_export *exp,
-                      const struct lu_fid *fid,
-                      ldlm_policy_data_t *policy,
-                      ldlm_mode_t mode,
-                      ldlm_cancel_flags_t flags,
-                      void *opaque)
+int mdc_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,
+		      union ldlm_policy_data *policy, enum ldlm_mode mode,
+		      enum ldlm_cancel_flags flags, void *opaque)
 {
-        struct ldlm_res_id res_id;
-        struct obd_device *obd = class_exp2obd(exp);
-        int rc;
+	struct obd_device *obd = class_exp2obd(exp);
+	struct ldlm_res_id res_id;
+	int rc;
 
-        ENTRY;
+	ENTRY;
 
-        fid_build_reg_res_name(fid, &res_id);
-        rc = ldlm_cli_cancel_unused_resource(obd->obd_namespace, &res_id,
-                                             policy, mode, flags, opaque);
-        RETURN(rc);
+	fid_build_reg_res_name(fid, &res_id);
+	rc = ldlm_cli_cancel_unused_resource(obd->obd_namespace, &res_id,
+					     policy, mode, flags, opaque);
+	RETURN(rc);
 }
 
 int mdc_null_inode(struct obd_export *exp,
@@ -267,14 +264,14 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 	__u32			 lmmsize = op_data->op_data_size;
 	struct list_head	 cancels = LIST_HEAD_INIT(cancels);
 	int			 count = 0;
-	int			 mode;
+	enum ldlm_mode		 mode;
 	int			 rc;
-        ENTRY;
+	ENTRY;
 
-        it->it_create_mode = (it->it_create_mode & ~S_IFMT) | S_IFREG;
+	it->it_create_mode = (it->it_create_mode & ~S_IFMT) | S_IFREG;
 
-        /* XXX: openlock is not cancelled for cross-refs. */
-        /* If inode is known, cancel conflicting OPEN locks. */
+	/* XXX: openlock is not cancelled for cross-refs. */
+	/* If inode is known, cancel conflicting OPEN locks. */
 	if (fid_is_sane(&op_data->op_fid2)) {
 		if (it->it_flags & MDS_OPEN_LEASE) { /* try to get lease */
 			if (it->it_flags & FMODE_WRITE)
@@ -750,27 +747,27 @@ int mdc_enqueue(struct obd_export *exp,
 		struct lookup_intent *it, struct md_op_data *op_data,
 		struct lustre_handle *lockh, __u64 extra_lock_flags)
 {
-        struct obd_device     *obddev = class_exp2obd(exp);
-        struct ptlrpc_request *req = NULL;
-	__u64                  flags, saved_flags = extra_lock_flags;
-        int                    rc;
-        struct ldlm_res_id res_id;
-        static const ldlm_policy_data_t lookup_policy =
-                            { .l_inodebits = { MDS_INODELOCK_LOOKUP } };
-        static const ldlm_policy_data_t update_policy =
-                            { .l_inodebits = { MDS_INODELOCK_UPDATE } };
-	static const ldlm_policy_data_t layout_policy =
-			    { .l_inodebits = { MDS_INODELOCK_LAYOUT } };
-	static const ldlm_policy_data_t getxattr_policy = {
-			      .l_inodebits = { MDS_INODELOCK_XATTR } };
-        int                    generation, resends = 0;
-        struct ldlm_reply     *lockrep;
-	enum lvb_type	       lvb_type = 0;
-        ENTRY;
+	struct obd_device *obddev = class_exp2obd(exp);
+	struct ptlrpc_request *req = NULL;
+	__u64 flags, saved_flags = extra_lock_flags;
+	struct ldlm_res_id res_id;
+	static const union ldlm_policy_data lookup_policy = {
+				  .l_inodebits = { MDS_INODELOCK_LOOKUP } };
+	static const union ldlm_policy_data update_policy = {
+				  .l_inodebits = { MDS_INODELOCK_UPDATE } };
+	static const union ldlm_policy_data layout_policy = {
+				  .l_inodebits = { MDS_INODELOCK_LAYOUT } };
+	static const union ldlm_policy_data getxattr_policy = {
+				  .l_inodebits = { MDS_INODELOCK_XATTR } };
+	int generation, resends = 0;
+	struct ldlm_reply *lockrep;
+	enum lvb_type lvb_type = 0;
+	int rc;
+	ENTRY;
 
-        LASSERTF(!it || einfo->ei_type == LDLM_IBITS, "lock type %d\n",
-                 einfo->ei_type);
-        fid_build_reg_res_name(&op_data->op_fid1, &res_id);
+	LASSERTF(!it || einfo->ei_type == LDLM_IBITS, "lock type %d\n",
+		 einfo->ei_type);
+	fid_build_reg_res_name(&op_data->op_fid1, &res_id);
 
 	if (it != NULL) {
 		LASSERT(policy == NULL);
@@ -972,15 +969,15 @@ static int mdc_finish_intent_lock(struct obd_export *exp,
                 LASSERT(it->it_op & (IT_GETATTR | IT_LOOKUP | IT_LAYOUT));
         }
 
-        /* If we already have a matching lock, then cancel the new
-         * one.  We have to set the data here instead of in
-         * mdc_enqueue, because we need to use the child's inode as
-         * the l_ast_data to match, and that's not available until
-         * intent_finish has performed the iget().) */
-        lock = ldlm_handle2lock(lockh);
-        if (lock) {
-                ldlm_policy_data_t policy = lock->l_policy_data;
-                LDLM_DEBUG(lock, "matching against this");
+	/* If we already have a matching lock, then cancel the new
+	 * one.  We have to set the data here instead of in
+	 * mdc_enqueue, because we need to use the child's inode as
+	 * the l_ast_data to match, and that's not available until
+	 * intent_finish has performed the iget().) */
+	lock = ldlm_handle2lock(lockh);
+	if (lock) {
+		union ldlm_policy_data policy = lock->l_policy_data;
+		LDLM_DEBUG(lock, "matching against this");
 
 		LASSERTF(fid_res_name_eq(&mdt_body->mbo_fid1,
 					 &lock->l_resource->lr_name),
@@ -1005,16 +1002,16 @@ static int mdc_finish_intent_lock(struct obd_export *exp,
 }
 
 int mdc_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
-                        struct lu_fid *fid, __u64 *bits)
+			struct lu_fid *fid, __u64 *bits)
 {
-        /* We could just return 1 immediately, but since we should only
-         * be called in revalidate_it if we already have a lock, let's
-         * verify that. */
-        struct ldlm_res_id res_id;
-        struct lustre_handle lockh;
-        ldlm_policy_data_t policy;
-        ldlm_mode_t mode;
-        ENTRY;
+	/* We could just return 1 immediately, but since we should only
+	 * be called in revalidate_it if we already have a lock, let's
+	 * verify that. */
+	struct ldlm_res_id res_id;
+	struct lustre_handle lockh;
+	union ldlm_policy_data policy;
+	enum ldlm_mode mode;
+	ENTRY;
 
         if (it->d.lustre.it_lock_handle) {
                 lockh.cookie = it->d.lustre.it_lock_handle;
@@ -1214,10 +1211,9 @@ int mdc_intent_getattr_async(struct obd_export *exp,
 	/*XXX: Both MDS_INODELOCK_LOOKUP and MDS_INODELOCK_UPDATE are needed
 	 *     for statahead currently. Consider CMD in future, such two bits
 	 *     maybe managed by different MDS, should be adjusted then. */
-	ldlm_policy_data_t	 policy = {
-					.l_inodebits = { MDS_INODELOCK_LOOKUP |
-							 MDS_INODELOCK_UPDATE }
-				 };
+	union ldlm_policy_data policy = {
+				.l_inodebits = { MDS_INODELOCK_LOOKUP |
+						 MDS_INODELOCK_UPDATE } };
 	int			 rc = 0;
 	__u64			 flags = LDLM_FL_HAS_INTENT;
 	ENTRY;

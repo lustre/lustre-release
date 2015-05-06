@@ -364,13 +364,12 @@ int lfsck_fid_alloc(const struct lu_env *env, struct lfsck_instance *lfsck,
 
 static int __lfsck_ibits_lock(const struct lu_env *env,
 			      struct lfsck_instance *lfsck,
-			      struct dt_object *obj,
-			      struct ldlm_res_id *resid,
-			      struct lustre_handle *lh,
-			      __u64 bits, ldlm_mode_t mode)
+			      struct dt_object *obj, struct ldlm_res_id *resid,
+			      struct lustre_handle *lh, __u64 bits,
+			      enum ldlm_mode mode)
 {
 	struct lfsck_thread_info	*info	= lfsck_env_info(env);
-	ldlm_policy_data_t		*policy = &info->lti_policy;
+	union ldlm_policy_data		*policy = &info->lti_policy;
 	__u64				 flags	= LDLM_FL_ATOMIC_CB;
 	int				 rc;
 
@@ -425,7 +424,7 @@ static int __lfsck_ibits_lock(const struct lu_env *env,
  */
 int lfsck_ibits_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
 		     struct dt_object *obj, struct lustre_handle *lh,
-		     __u64 bits, ldlm_mode_t mode)
+		     __u64 bits, enum ldlm_mode mode)
 {
 	struct ldlm_res_id *resid = &lfsck_env_info(env)->lti_resid;
 
@@ -444,7 +443,7 @@ int lfsck_ibits_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
  * \param[in] lh	pointer to the lock handle
  * \param[in] mode	the mode for the ldlm lock to be released
  */
-void lfsck_ibits_unlock(struct lustre_handle *lh, ldlm_mode_t mode)
+void lfsck_ibits_unlock(struct lustre_handle *lh, enum ldlm_mode mode)
 {
 	if (lustre_handle_is_used(lh)) {
 		ldlm_lock_decref(lh, mode);
@@ -477,8 +476,8 @@ void lfsck_ibits_unlock(struct lustre_handle *lh, ldlm_mode_t mode)
  * \retval		negative error number on failure
  */
 int lfsck_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
-		   struct dt_object *obj, const char *name,
-		   struct lfsck_lock_handle *llh, __u64 bits, ldlm_mode_t mode)
+	       struct dt_object *obj, const char *name,
+	       struct lfsck_lock_handle *llh, __u64 bits, enum ldlm_mode mode)
 {
 	struct ldlm_res_id *resid = &lfsck_env_info(env)->lti_resid;
 	int		    rc;

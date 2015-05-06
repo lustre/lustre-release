@@ -130,7 +130,7 @@ static inline void ldlm_flock_blocking_unlink(struct ldlm_lock *req)
 }
 
 static inline void
-ldlm_flock_destroy(struct ldlm_lock *lock, ldlm_mode_t mode, __u64 flags)
+ldlm_flock_destroy(struct ldlm_lock *lock, enum ldlm_mode mode, __u64 flags)
 {
 	ENTRY;
 
@@ -287,22 +287,22 @@ static void ldlm_flock_cancel_on_deadlock(struct ldlm_lock *lock,
  */
 int
 ldlm_process_flock_lock(struct ldlm_lock *req, __u64 *flags, int first_enq,
-			ldlm_error_t *err, struct list_head *work_list)
+			enum ldlm_error *err, struct list_head *work_list)
 {
-        struct ldlm_resource *res = req->l_resource;
-        struct ldlm_namespace *ns = ldlm_res_to_ns(res);
+	struct ldlm_resource *res = req->l_resource;
+	struct ldlm_namespace *ns = ldlm_res_to_ns(res);
 	struct list_head *tmp;
 	struct list_head *ownlocks = NULL;
-        struct ldlm_lock *lock = NULL;
-        struct ldlm_lock *new = req;
-        struct ldlm_lock *new2 = NULL;
-        ldlm_mode_t mode = req->l_req_mode;
-        int local = ns_is_client(ns);
-        int added = (mode == LCK_NL);
-        int overlaps = 0;
-        int splitted = 0;
-        const struct ldlm_callback_suite null_cbs = { NULL };
-        ENTRY;
+	struct ldlm_lock *lock = NULL;
+	struct ldlm_lock *new = req;
+	struct ldlm_lock *new2 = NULL;
+	enum ldlm_mode mode = req->l_req_mode;
+	int local = ns_is_client(ns);
+	int added = (mode == LCK_NL);
+	int overlaps = 0;
+	int splitted = 0;
+	const struct ldlm_callback_suite null_cbs = { NULL };
+	ENTRY;
 
 	CDEBUG(D_DLMTRACE, "flags "LPX64" owner "LPU64" pid %u mode %u start "
 	       LPU64" end "LPU64"\n", *flags,
@@ -661,14 +661,14 @@ ldlm_flock_interrupted_wait(void *data)
 int
 ldlm_flock_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 {
-	struct file_lock		*getlk = lock->l_ast_data;
-        struct obd_device              *obd;
-        struct obd_import              *imp = NULL;
-        struct ldlm_flock_wait_data     fwd;
-        struct l_wait_info              lwi;
-        ldlm_error_t                    err;
-        int                             rc = 0;
-        ENTRY;
+	struct file_lock *getlk = lock->l_ast_data;
+	struct obd_device *obd;
+	struct obd_import *imp = NULL;
+	struct ldlm_flock_wait_data fwd;
+	struct l_wait_info lwi;
+	enum ldlm_error err;
+	int rc = 0;
+	ENTRY;
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT2, 4);
 	if (OBD_FAIL_PRECHECK(OBD_FAIL_LDLM_CP_CB_WAIT3)) {
@@ -840,8 +840,8 @@ int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         RETURN(0);
 }
 
-void ldlm_flock_policy_wire_to_local(const ldlm_wire_policy_data_t *wpolicy,
-				     ldlm_policy_data_t *lpolicy)
+void ldlm_flock_policy_wire_to_local(const union ldlm_wire_policy_data *wpolicy,
+				     union ldlm_policy_data *lpolicy)
 {
 	memset(lpolicy, 0, sizeof(*lpolicy));
 	lpolicy->l_flock.start = wpolicy->l_flock.lfw_start;
@@ -850,14 +850,14 @@ void ldlm_flock_policy_wire_to_local(const ldlm_wire_policy_data_t *wpolicy,
 	lpolicy->l_flock.owner = wpolicy->l_flock.lfw_owner;
 }
 
-void ldlm_flock_policy_local_to_wire(const ldlm_policy_data_t *lpolicy,
-                                     ldlm_wire_policy_data_t *wpolicy)
+void ldlm_flock_policy_local_to_wire(const union ldlm_policy_data *lpolicy,
+				     union ldlm_wire_policy_data *wpolicy)
 {
-        memset(wpolicy, 0, sizeof(*wpolicy));
-        wpolicy->l_flock.lfw_start = lpolicy->l_flock.start;
-        wpolicy->l_flock.lfw_end = lpolicy->l_flock.end;
-        wpolicy->l_flock.lfw_pid = lpolicy->l_flock.pid;
-        wpolicy->l_flock.lfw_owner = lpolicy->l_flock.owner;
+	memset(wpolicy, 0, sizeof(*wpolicy));
+	wpolicy->l_flock.lfw_start = lpolicy->l_flock.start;
+	wpolicy->l_flock.lfw_end = lpolicy->l_flock.end;
+	wpolicy->l_flock.lfw_pid = lpolicy->l_flock.pid;
+	wpolicy->l_flock.lfw_owner = lpolicy->l_flock.owner;
 }
 
 /*

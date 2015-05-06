@@ -229,7 +229,7 @@ static void ldlm_reclaim_ns(void)
 	struct ldlm_namespace	*ns;
 	int			 count = LDLM_RECLAIM_BATCH;
 	int			 ns_nr, nr_processed;
-	ldlm_side_t		 ns_cli = LDLM_NAMESPACE_SERVER;
+	enum ldlm_side		 ns_cli = LDLM_NAMESPACE_SERVER;
 	cfs_duration_t		 age;
 	bool			 skip = true;
 	ENTRY;

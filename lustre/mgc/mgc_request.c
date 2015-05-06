@@ -1067,8 +1067,8 @@ static int mgc_set_mgs_param(struct obd_export *exp,
 }
 
 /* Take a config lock so we can get cancel notifications */
-static int mgc_enqueue(struct obd_export *exp, __u32 type,
-		       ldlm_policy_data_t *policy, __u32 mode,
+static int mgc_enqueue(struct obd_export *exp, enum ldlm_type type,
+		       union ldlm_policy_data *policy, enum ldlm_mode mode,
 		       __u64 *flags, void *bl_cb, void *cp_cb, void *gl_cb,
 		       void *data, __u32 lvb_len, void *lvb_swabber,
 		       struct lustre_handle *lockh)
@@ -1115,14 +1115,14 @@ static int mgc_enqueue(struct obd_export *exp, __u32 type,
         RETURN(rc);
 }
 
-static int mgc_cancel(struct obd_export *exp, ldlm_mode_t mode,
+static int mgc_cancel(struct obd_export *exp, enum ldlm_mode mode,
 		      struct lustre_handle *lockh)
 {
-        ENTRY;
+	ENTRY;
 
-        ldlm_lock_decref(lockh, mode);
+	ldlm_lock_decref(lockh, mode);
 
-        RETURN(0);
+	RETURN(0);
 }
 
 static void mgc_notify_active(struct obd_device *unused)

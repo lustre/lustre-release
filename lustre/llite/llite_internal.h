@@ -827,10 +827,10 @@ extern struct file_operations ll_file_operations_flock;
 extern struct file_operations ll_file_operations_noflock;
 extern struct inode_operations ll_file_inode_operations;
 extern int ll_have_md_lock(struct inode *inode, __u64 *bits,
-                           ldlm_mode_t l_req_mode);
-extern ldlm_mode_t ll_take_md_lock(struct inode *inode, __u64 bits,
-				   struct lustre_handle *lockh, __u64 flags,
-				   ldlm_mode_t mode);
+			   enum ldlm_mode l_req_mode);
+extern enum ldlm_mode ll_take_md_lock(struct inode *inode, __u64 bits,
+				      struct lustre_handle *lockh, __u64 flags,
+				      enum ldlm_mode mode);
 
 int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
@@ -1037,8 +1037,8 @@ static inline struct vvp_io_args *ll_env_args(const struct lu_env *env,
 
 int ll_teardown_mmaps(struct address_space *mapping, __u64 first, __u64 last);
 int ll_file_mmap(struct file * file, struct vm_area_struct * vma);
-void policy_from_vma(ldlm_policy_data_t *policy,
-                struct vm_area_struct *vma, unsigned long addr, size_t count);
+void policy_from_vma(union ldlm_policy_data *policy, struct vm_area_struct *vma,
+		     unsigned long addr, size_t count);
 struct vm_area_struct *our_vma(struct mm_struct *mm, unsigned long addr,
                                size_t count);
 

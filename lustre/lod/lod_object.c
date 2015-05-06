@@ -3881,7 +3881,7 @@ struct lod_slave_locks	{
 static int lod_object_unlock_internal(const struct lu_env *env,
 				      struct dt_object *dt,
 				      struct ldlm_enqueue_info *einfo,
-				      ldlm_policy_data_t *policy)
+				      union ldlm_policy_data *policy)
 {
 	struct lod_slave_locks  *slave_locks = einfo->ei_cbdata;
 	int			rc = 0;

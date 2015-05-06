@@ -69,8 +69,8 @@ static int osc_page_is_dlocked(const struct lu_env *env,
 	struct osc_thread_info *info;
 	struct ldlm_res_id     *resname;
 	struct lustre_handle   *lockh;
-	ldlm_policy_data_t     *policy;
-	ldlm_mode_t             dlmmode;
+	union ldlm_policy_data *policy;
+	enum ldlm_mode          dlmmode;
 	__u64                   flags;
 
 	might_sleep();
@@ -219,12 +219,12 @@ int osc_page_cache_add(const struct lu_env *env,
 	RETURN(result);
 }
 
-void osc_index2policy(ldlm_policy_data_t *policy, const struct cl_object *obj,
-                      pgoff_t start, pgoff_t end)
+void osc_index2policy(union ldlm_policy_data *policy,
+		      const struct cl_object *obj, pgoff_t start, pgoff_t end)
 {
-        memset(policy, 0, sizeof *policy);
-        policy->l_extent.start = cl_offset(obj, start);
-        policy->l_extent.end   = cl_offset(obj, end + 1) - 1;
+	memset(policy, 0, sizeof *policy);
+	policy->l_extent.start = cl_offset(obj, start);
+	policy->l_extent.end   = cl_offset(obj, end + 1) - 1;
 }
 
 static const char *osc_list(struct list_head *head)

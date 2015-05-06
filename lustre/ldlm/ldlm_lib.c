@@ -265,13 +265,13 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 	struct obd_uuid server_uuid;
 	int rq_portal, rp_portal, connect_op;
 	char *name = obddev->obd_type->typ_name;
-	ldlm_ns_type_t ns_type = LDLM_NS_TYPE_UNKNOWN;
-	int rc;
+	enum ldlm_ns_type ns_type = LDLM_NS_TYPE_UNKNOWN;
 	char *cli_name = lustre_cfg_buf(lcfg, 0);
+	int rc;
 	ENTRY;
 
-        /* In a more perfect world, we would hang a ptlrpc_client off of
-         * obd_type and just use the values from there. */
+	/* In a more perfect world, we would hang a ptlrpc_client off of
+	 * obd_type and just use the values from there. */
 	if (!strcmp(name, LUSTRE_OSC_NAME)) {
 		rq_portal = OST_REQUEST_PORTAL;
 		rp_portal = OSC_REPLY_PORTAL;
@@ -2810,7 +2810,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 	EXIT;
 }
 
-ldlm_mode_t lck_compat_array[] = {
+enum ldlm_mode lck_compat_array[] = {
 	[LCK_EX]    = LCK_COMPAT_EX,
 	[LCK_PW]    = LCK_COMPAT_PW,
 	[LCK_PR]    = LCK_COMPAT_PR,
@@ -2825,12 +2825,12 @@ ldlm_mode_t lck_compat_array[] = {
  * Rather arbitrary mapping from LDLM error codes to errno values. This should
  * not escape to the user level.
  */
-int ldlm_error2errno(ldlm_error_t error)
+int ldlm_error2errno(enum ldlm_error error)
 {
-        int result;
+	int result;
 
-        switch (error) {
-        case ELDLM_OK:
+	switch (error) {
+	case ELDLM_OK:
 	case ELDLM_LOCK_MATCHED:
                 result = 0;
                 break;
@@ -2852,22 +2852,22 @@ int ldlm_error2errno(ldlm_error_t error)
         case ELDLM_BAD_NAMESPACE:
                 result = -EBADF;
                 break;
-        default:
-                if (((int)error) < 0)  /* cast to signed type */
-                        result = error; /* as ldlm_error_t can be unsigned */
-                else {
-                        CERROR("Invalid DLM result code: %d\n", error);
-                        result = -EPROTO;
-                }
-        }
-        return result;
+	default:
+		if (((int)error) < 0) { /* cast to signed type */
+			result = error; /* as ldlm_error can be unsigned */
+		} else {
+			CERROR("Invalid DLM result code: %d\n", error);
+			result = -EPROTO;
+		}
+	}
+	return result;
 }
 EXPORT_SYMBOL(ldlm_error2errno);
 
 /**
- * Dual to ldlm_error2errno(): maps errno values back to ldlm_error_t.
+ * Dual to ldlm_error2errno(): maps errno values back to enum ldlm_error.
  */
-ldlm_error_t ldlm_errno2error(int err_no)
+enum ldlm_error ldlm_errno2error(int err_no)
 {
         int error;
 

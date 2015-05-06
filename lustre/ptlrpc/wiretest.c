@@ -3089,10 +3089,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct ldlm_resource_desc, lr_type));
 	LASSERTF((int)sizeof(((struct ldlm_resource_desc *)0)->lr_type) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct ldlm_resource_desc *)0)->lr_type));
-	LASSERTF((int)offsetof(struct ldlm_resource_desc, lr_padding) == 4, "found %lld\n",
-		 (long long)(int)offsetof(struct ldlm_resource_desc, lr_padding));
-	LASSERTF((int)sizeof(((struct ldlm_resource_desc *)0)->lr_padding) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct ldlm_resource_desc *)0)->lr_padding));
+	LASSERTF((int)offsetof(struct ldlm_resource_desc, lr_pad) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct ldlm_resource_desc, lr_pad));
+	LASSERTF((int)sizeof(((struct ldlm_resource_desc *)0)->lr_pad) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct ldlm_resource_desc *)0)->lr_pad));
 	LASSERTF((int)offsetof(struct ldlm_resource_desc, lr_name) == 8, "found %lld\n",
 		 (long long)(int)offsetof(struct ldlm_resource_desc, lr_name));
 	LASSERTF((int)sizeof(((struct ldlm_resource_desc *)0)->lr_name) == 32, "found %lld\n",

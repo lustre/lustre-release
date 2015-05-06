@@ -257,7 +257,7 @@ typedef enum {
   REINT_MAX
 } mds_reint_t;
 
-typedef enum {
+enum ldlm_cmd {
   LDLM_ENQUEUE     = 101,
   LDLM_CONVERT     = 102,
   LDLM_CANCEL      = 103,
@@ -265,7 +265,7 @@ typedef enum {
   LDLM_CP_CALLBACK = 105,
   LDLM_GL_CALLBACK = 106,
   LDLM_LAST_OPC
-} ldlm_cmd_t;
+};
 #define LDLM_FIRST_OPC LDLM_ENQUEUE
 
 enum seq_rpc_opc {
@@ -1214,7 +1214,7 @@ const value_string lustre_op_codes[] = {
   { 901, "FLD_LAST_OPC"},
   { 0, NULL }
 };
-/*const value_string lustre_ldlm_mode_t_vals[] = {*/
+/*const value_string lustre_ldlm_mode_vals[] = {*/
 /*    { LCK_MINMODE, "MINMODE" },*/
 /*    { LCK_EX, "EX" },*/
 /*    { LCK_PW, "PW" },*/
@@ -1227,7 +1227,7 @@ const value_string lustre_op_codes[] = {
 /*};*/
 
 /* detailled version the information came from : http://wiki.lustre.org/images/e/e5/LustreInternals_Architecture.pdf */
-const value_string lustre_ldlm_mode_t_vals[] = {
+const value_string lustre_ldlm_mode_vals[] = {
   { LCK_MINMODE, "MINMODE" },
   { LCK_EX, "Exclusive" },
   { LCK_PW, "Protected Write" },
@@ -1239,7 +1239,7 @@ const value_string lustre_ldlm_mode_t_vals[] = {
   { 0, NULL }
 };
 
-const value_string lustre_ldlm_type_t_vals[] = {
+const value_string lustre_ldlm_type_vals[] = {
   { LDLM_PLAIN, "LDLM_PLAIN" },
   { LDLM_EXTENT,"LDLM_EXTENT" },
   { LDLM_FLOCK, "LDLM_FLOCK" },
@@ -5148,7 +5148,7 @@ lustre_dissect_struct_ldlm_res_id(tvbuff_t *tvb _U_, int offset _U_, packet_info
 /* IDL: } */
 
 int
-lustre_dissect_enum_ldlm_mode_t(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_, int hf_index _U_)
+lustre_dissect_enum_ldlm_mode(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_, int hf_index _U_)
 {
   offset=dissect_uint32(tvb, offset, pinfo, tree, hf_index);
   return offset;
@@ -5164,7 +5164,7 @@ lustre_dissect_enum_ldlm_mode_t(tvbuff_t *tvb _U_, int offset _U_, packet_info *
 /* IDL: } */
 
 int
-lustre_dissect_enum_ldlm_type_t(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_, int hf_index _U_)
+lustre_dissect_enum_ldlm_type(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_, int hf_index _U_)
 {
   offset=dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_resource_desc_lr_type );
   return offset;
@@ -5428,9 +5428,9 @@ lustre_dissect_struct_ldlm_intent(tvbuff_t *tvb _U_, int offset _U_, packet_info
 }
 
 /* IDL: struct ldlm_resource_desc { */
-/* IDL: 	ldlm_type_t lr_type; */
-/* IDL: 	uint32 lr_padding; */
-/* IDL: 	struct ldlm_res_id { */
+/* IDL:		enum ldlm_type lr_type; */
+/* IDL:		uint32 lr_padding; */
+/* IDL:		struct ldlm_res_id { */
 /* IDL: } lr_name; */
 /* IDL: } */
 
@@ -5438,7 +5438,7 @@ static int
 lustre_dissect_element_ldlm_resource_desc_lr_type(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
 {
   /*    offset=dissect_uint32(tvb, offset, pinfo, tree,  hf_lustre_ldlm_resource_desc_lr_type);*/
-  offset=lustre_dissect_enum_ldlm_type_t(tvb, offset, pinfo, tree,  hf_lustre_ldlm_resource_desc_lr_type);
+  offset=lustre_dissect_enum_ldlm_type(tvb, offset, pinfo, tree,  hf_lustre_ldlm_resource_desc_lr_type);
   return offset;
 }
 
@@ -5487,11 +5487,11 @@ lustre_dissect_struct_ldlm_resource_desc(tvbuff_t *tvb _U_, int offset _U_, pack
 
 
 /* IDL: struct ldlm_lock_desc { */
-/* IDL: 	struct ldlm_resource_desc { */
-/* IDL: } l_resource; */
-/* IDL: 	ldlm_mode_t l_req_mode; */
-/* IDL: 	ldlm_mode_t l_granted_mode; */
-/* IDL: 	ldlm_policy_data_t l_policy_data; */
+/* IDL:		struct ldlm_resource_desc { */
+/* IDL:		} l_resource; */
+/* IDL:		enum ldlm_mode l_req_mode; */
+/* IDL:		enum ldlm_mode l_granted_mode; */
+/* IDL:		union ldlm_policy_data l_policy_data; */
 /* IDL: } */
 
 static int
@@ -5504,7 +5504,7 @@ lustre_dissect_element_ldlm_lock_desc_l_resource(tvbuff_t *tvb _U_, int offset _
 static int
 lustre_dissect_element_ldlm_lock_desc_l_req_mode(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
 {
-  offset=lustre_dissect_enum_ldlm_mode_t(tvb, offset, pinfo, tree,  hf_lustre_ldlm_lock_desc_l_req_mode);
+  offset=lustre_dissect_enum_ldlm_mode(tvb, offset, pinfo, tree,  hf_lustre_ldlm_lock_desc_l_req_mode);
 
   return offset;
 }
@@ -5512,7 +5512,7 @@ lustre_dissect_element_ldlm_lock_desc_l_req_mode(tvbuff_t *tvb _U_, int offset _
 static int
 lustre_dissect_element_ldlm_lock_desc_l_granted_mode(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
 {
-  offset=lustre_dissect_enum_ldlm_mode_t(tvb, offset, pinfo, tree,  hf_lustre_ldlm_lock_desc_l_granted_mode);
+  offset=lustre_dissect_enum_ldlm_mode(tvb, offset, pinfo, tree,  hf_lustre_ldlm_lock_desc_l_granted_mode);
 
   return offset;
 }
@@ -5574,7 +5574,7 @@ lustre_dissect_struct_ldlm_lock_desc(tvbuff_t *tvb _U_, int offset _U_, packet_i
 
   lock_req_mode = tvb_get_letohl(tvb,offset);
 
-  display_info_fstr(parent_tree->parent, pinfo->cinfo, COL_INFO, "[%s]", val_to_str(lock_req_mode, lustre_ldlm_mode_t_vals, "Unknown lock"));
+  display_info_fstr(parent_tree->parent, pinfo->cinfo, COL_INFO, "[%s]", val_to_str(lock_req_mode, lustre_ldlm_mode_vals, "Unknown lock"));
 
   offset=lustre_dissect_element_ldlm_lock_desc_l_req_mode(tvb, offset, pinfo, tree);
 
@@ -5590,12 +5590,12 @@ lustre_dissect_struct_ldlm_lock_desc(tvbuff_t *tvb _U_, int offset _U_, packet_i
 
 
 /* IDL: struct ldlm_request { */
-/* IDL: 	uint32 lock_flags; */
-/* IDL: 	uint32 lock_count; */
-/* IDL: 	struct ldlm_lock_desc { */
-/* IDL: } lock_desc; */
-/* IDL: 	struct lustre_handle { */
-/* IDL: } lock_handle[2]; */
+/* IDL:		uint32 lock_flags; */
+/* IDL:		uint32 lock_count; */
+/* IDL:		struct ldlm_lock_desc { */
+/* IDL:		} lock_desc; */
+/* IDL:		struct lustre_handle { */
+/* IDL:		} lock_handle[2]; */
 /* IDL: } */
 
 
@@ -10558,7 +10558,7 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_quota_adjust_qunit_qaq_flags,
       { "Qaq Flags", "lustre.quota_adjust_qunit.qaq_flags", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_lock_desc_l_granted_mode,
-      { "L Granted Mode", "lustre.ldlm_lock_desc.l_granted_mode", FT_UINT16, BASE_DEC, VALS(lustre_ldlm_mode_t_vals), 0, "", HFILL }},
+      { "L Granted Mode", "lustre.ldlm_lock_desc.l_granted_mode", FT_UINT16, BASE_DEC, VALS(lustre_ldlm_mode_vals), 0, "", HFILL }},
     { &hf_lustre_obdo_o_seq,
       { "O SEQ", "lustre.obdo.o_seq", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obdo_o_gid,
@@ -10697,7 +10697,7 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_llog_unlink_rec_padding,
       { "Padding", "lustre.llog_unlink_rec.padding", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_lock_desc_l_req_mode,
-      { "L Req Mode", "lustre.ldlm_lock_desc.l_req_mode", FT_UINT16, BASE_DEC, VALS(lustre_ldlm_mode_t_vals), 0, "", HFILL }},
+      { "L Req Mode", "lustre.ldlm_lock_desc.l_req_mode", FT_UINT16, BASE_DEC, VALS(lustre_ldlm_mode_vals), 0, "", HFILL }},
     { &hf_lustre_ldlm_extent_end,
       { "End", "lustre.ldlm_extent.end", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_gen_rec_lgr_hdr,
@@ -10841,7 +10841,7 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_lov_desc_ld_qos_maxage,
       { "Ld Qos Maxage", "lustre.lov_desc.ld_qos_maxage", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_resource_desc_lr_type,
-      { "Lr Type", "lustre.ldlm_resource_desc.lr_type", FT_UINT16, BASE_DEC, VALS(lustre_ldlm_type_t_vals), 0, "", HFILL }},
+      { "Lr Type", "lustre.ldlm_resource_desc.lr_type", FT_UINT16, BASE_DEC, VALS(lustre_ldlm_type_vals), 0, "", HFILL }},
     { &hf_lustre_llog_setattr_rec_lsr_tail,
       { "Lsr Tail", "lustre.llog_setattr_rec.lsr_tail", FT_NONE,
 		    BASE_NONE, NULL, 0, "", HFILL } },

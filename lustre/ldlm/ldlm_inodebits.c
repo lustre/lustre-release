@@ -80,15 +80,15 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 			    struct list_head *work_list)
 {
 	struct list_head *tmp;
-        struct ldlm_lock *lock;
-        ldlm_mode_t req_mode = req->l_req_mode;
-        __u64 req_bits = req->l_policy_data.l_inodebits.bits;
-        int compat = 1;
-        ENTRY;
+	struct ldlm_lock *lock;
+	enum ldlm_mode req_mode = req->l_req_mode;
+	__u64 req_bits = req->l_policy_data.l_inodebits.bits;
+	int compat = 1;
+	ENTRY;
 
-        LASSERT(req_bits); /* There is no sense in lock with no bits set,
-                              I think. Also such a lock would be compatible
-                               with any other bit lock */
+	/* There is no sense in lock with no bits set, I think.
+	 * Also, such a lock would be compatible with any other bit lock */
+	LASSERT(req_bits != 0);
 
 	list_for_each(tmp, queue) {
 		struct list_head *mode_tail;
@@ -176,7 +176,7 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
  *     would be collected and ASTs sent.
  */
 int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
-                                int first_enq, ldlm_error_t *err,
+				int first_enq, enum ldlm_error *err,
 				struct list_head *work_list)
 {
 	struct ldlm_resource *res = lock->l_resource;
@@ -237,16 +237,16 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
 }
 #endif /* HAVE_SERVER_SUPPORT */
 
-void ldlm_ibits_policy_wire_to_local(const ldlm_wire_policy_data_t *wpolicy,
-                                     ldlm_policy_data_t *lpolicy)
+void ldlm_ibits_policy_wire_to_local(const union ldlm_wire_policy_data *wpolicy,
+				     union ldlm_policy_data *lpolicy)
 {
-        memset(lpolicy, 0, sizeof(*lpolicy));
-        lpolicy->l_inodebits.bits = wpolicy->l_inodebits.bits;
+	memset(lpolicy, 0, sizeof(*lpolicy));
+	lpolicy->l_inodebits.bits = wpolicy->l_inodebits.bits;
 }
 
-void ldlm_ibits_policy_local_to_wire(const ldlm_policy_data_t *lpolicy,
-                                     ldlm_wire_policy_data_t *wpolicy)
+void ldlm_ibits_policy_local_to_wire(const union ldlm_policy_data *lpolicy,
+				     union ldlm_wire_policy_data *wpolicy)
 {
-        memset(wpolicy, 0, sizeof(*wpolicy));
-        wpolicy->l_inodebits.bits = lpolicy->l_inodebits.bits;
+	memset(wpolicy, 0, sizeof(*wpolicy));
+	wpolicy->l_inodebits.bits = lpolicy->l_inodebits.bits;
 }

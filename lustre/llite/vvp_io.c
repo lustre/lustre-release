@@ -389,10 +389,10 @@ static int vvp_mmap_locks(const struct lu_env *env,
 			  struct vvp_io *vio, struct cl_io *io)
 {
 	struct vvp_thread_info *vti = vvp_env_info(env);
-        struct mm_struct       *mm = current->mm;
-        struct vm_area_struct  *vma;
-	struct cl_lock_descr   *descr = &vti->vti_descr;
-        ldlm_policy_data_t      policy;
+	struct mm_struct *mm = current->mm;
+	struct vm_area_struct *vma;
+	struct cl_lock_descr *descr = &vti->vti_descr;
+	union ldlm_policy_data policy;
 #ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
 	struct iovec iov;
 	struct iov_iter i;
@@ -402,10 +402,10 @@ static int vvp_mmap_locks(const struct lu_env *env,
 	int result = 0;
 	ENTRY;
 
-        LASSERT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE);
+	LASSERT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE);
 
-        if (!cl_is_normalio(env, io))
-                RETURN(0);
+	if (!cl_is_normalio(env, io))
+		RETURN(0);
 
 	/* nfs or loop back device write */
 	if (vio->vui_iter == NULL)

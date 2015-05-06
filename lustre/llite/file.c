@@ -252,14 +252,14 @@ int ll_md_real_close(struct inode *inode, fmode_t fmode)
 static int ll_md_close(struct obd_export *md_exp, struct inode *inode,
 		       struct file *file)
 {
-	ldlm_policy_data_t policy = {
+	union ldlm_policy_data policy = {
 		.l_inodebits	= { MDS_INODELOCK_OPEN },
 	};
 	__u64 flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_TEST_LOCK;
 	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct lustre_handle lockh;
-	int lockmode;
+	enum ldlm_mode lockmode;
 	int rc = 0;
 	ENTRY;
 
@@ -2819,8 +2819,8 @@ ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 		.ei_cbdata	= file_lock,
 	};
 	struct md_op_data *op_data;
-	struct lustre_handle lockh = {0};
-	ldlm_policy_data_t flock = {{0}};
+	struct lustre_handle lockh = { 0 };
+	union ldlm_policy_data flock = { { 0 } };
 	int fl_type = file_lock->fl_type;
 	__u64 flags = 0;
 	int rc;
@@ -3117,16 +3117,16 @@ ll_file_noflock(struct file *file, int cmd, struct file_lock *file_lock)
  * \param l_req_mode [IN] searched lock mode
  * \retval boolean, true iff all bits are found
  */
-int ll_have_md_lock(struct inode *inode, __u64 *bits,  ldlm_mode_t l_req_mode)
+int ll_have_md_lock(struct inode *inode, __u64 *bits, enum ldlm_mode l_req_mode)
 {
-        struct lustre_handle lockh;
-        ldlm_policy_data_t policy;
-        ldlm_mode_t mode = (l_req_mode == LCK_MINMODE) ?
-                                (LCK_CR|LCK_CW|LCK_PR|LCK_PW) : l_req_mode;
-        struct lu_fid *fid;
+	struct lustre_handle lockh;
+	union ldlm_policy_data policy;
+	enum ldlm_mode mode = (l_req_mode == LCK_MINMODE) ?
+			      (LCK_CR | LCK_CW | LCK_PR | LCK_PW) : l_req_mode;
+	struct lu_fid *fid;
 	__u64 flags;
-        int i;
-        ENTRY;
+	int i;
+	ENTRY;
 
         if (!inode)
                RETURN(0);
@@ -3158,17 +3158,17 @@ int ll_have_md_lock(struct inode *inode, __u64 *bits,  ldlm_mode_t l_req_mode)
         RETURN(*bits == 0);
 }
 
-ldlm_mode_t ll_take_md_lock(struct inode *inode, __u64 bits,
-			    struct lustre_handle *lockh, __u64 flags,
-			    ldlm_mode_t mode)
+enum ldlm_mode ll_take_md_lock(struct inode *inode, __u64 bits,
+			       struct lustre_handle *lockh, __u64 flags,
+			       enum ldlm_mode mode)
 {
-        ldlm_policy_data_t policy = { .l_inodebits = {bits}};
-        struct lu_fid *fid;
-        ldlm_mode_t rc;
-        ENTRY;
+	union ldlm_policy_data policy = { .l_inodebits = { bits } };
+	struct lu_fid *fid;
+	enum ldlm_mode rc;
+	ENTRY;
 
-        fid = &ll_i2info(inode)->lli_fid;
-        CDEBUG(D_INFO, "trying to match res "DFID"\n", PFID(fid));
+	fid = &ll_i2info(inode)->lli_fid;
+	CDEBUG(D_INFO, "trying to match res "DFID"\n", PFID(fid));
 
 	rc = md_lock_match(ll_i2mdexp(inode), LDLM_FL_BLOCK_GRANTED|flags,
 			   fid, LDLM_IBITS, &policy, mode, lockh);
@@ -3871,7 +3871,7 @@ out:
  * Apply the layout to the inode. Layout lock is held and will be released
  * in this function.
  */
-static int ll_layout_lock_set(struct lustre_handle *lockh, ldlm_mode_t mode,
+static int ll_layout_lock_set(struct lustre_handle *lockh, enum ldlm_mode mode,
 			      struct inode *inode)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
@@ -3955,9 +3955,9 @@ static int ll_layout_refresh_locked(struct inode *inode)
 	struct ll_inode_info  *lli = ll_i2info(inode);
 	struct ll_sb_info     *sbi = ll_i2sbi(inode);
 	struct md_op_data     *op_data;
-	struct lookup_intent   it;
-	struct lustre_handle   lockh;
-	ldlm_mode_t	       mode;
+	struct lookup_intent	it;
+	struct lustre_handle	lockh;
+	enum ldlm_mode		mode;
 	struct ldlm_enqueue_info einfo = {
 		.ei_type = LDLM_IBITS,
 		.ei_mode = LCK_CR,

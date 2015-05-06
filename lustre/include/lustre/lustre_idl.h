@@ -2811,27 +2811,27 @@ static inline bool ldlm_res_eq(const struct ldlm_res_id *res0,
 }
 
 /* lock types */
-typedef enum {
-        LCK_MINMODE = 0,
-        LCK_EX      = 1,
-        LCK_PW      = 2,
-        LCK_PR      = 4,
-        LCK_CW      = 8,
-        LCK_CR      = 16,
-        LCK_NL      = 32,
-        LCK_GROUP   = 64,
-        LCK_COS     = 128,
-        LCK_MAXMODE
+typedef enum ldlm_mode {
+	LCK_MINMODE	= 0,
+	LCK_EX		= 1,
+	LCK_PW		= 2,
+	LCK_PR		= 4,
+	LCK_CW		= 8,
+	LCK_CR		= 16,
+	LCK_NL		= 32,
+	LCK_GROUP	= 64,
+	LCK_COS		= 128,
+	LCK_MAXMODE
 } ldlm_mode_t;
 
 #define LCK_MODE_NUM    8
 
-typedef enum {
-        LDLM_PLAIN     = 10,
-        LDLM_EXTENT    = 11,
-        LDLM_FLOCK     = 12,
-        LDLM_IBITS     = 13,
-        LDLM_MAX_TYPE
+typedef enum ldlm_type {
+	LDLM_PLAIN	= 10,
+	LDLM_EXTENT	= 11,
+	LDLM_FLOCK	= 12,
+	LDLM_IBITS	= 13,
+	LDLM_MAX_TYPE
 } ldlm_type_t;
 
 #define LDLM_MIN_TYPE LDLM_PLAIN
@@ -2873,13 +2873,13 @@ struct ldlm_flock_wire {
  * this ever changes we will need to swab the union differently based
  * on the resource type. */
 
-typedef union {
-        struct ldlm_extent l_extent;
-        struct ldlm_flock_wire l_flock;
-        struct ldlm_inodebits l_inodebits;
+typedef union ldlm_wire_policy_data {
+	struct ldlm_extent	l_extent;
+	struct ldlm_flock_wire	l_flock;
+	struct ldlm_inodebits	l_inodebits;
 } ldlm_wire_policy_data_t;
 
-extern void lustre_swab_ldlm_policy_data (ldlm_wire_policy_data_t *d);
+extern void lustre_swab_ldlm_policy_data(union ldlm_wire_policy_data *d);
 
 union ldlm_gl_desc {
 	struct ldlm_gl_lquota_desc	lquota_desc;
@@ -2894,21 +2894,21 @@ struct ldlm_intent {
 extern void lustre_swab_ldlm_intent (struct ldlm_intent *i);
 
 struct ldlm_resource_desc {
-        ldlm_type_t lr_type;
-        __u32 lr_padding;       /* also fix lustre_swab_ldlm_resource_desc */
-        struct ldlm_res_id lr_name;
+	enum ldlm_type	   lr_type;
+	__u32		   lr_pad; /* also fix lustre_swab_ldlm_resource_desc */
+	struct ldlm_res_id lr_name;
 };
 
 extern void lustre_swab_ldlm_resource_desc (struct ldlm_resource_desc *r);
 
 struct ldlm_lock_desc {
-        struct ldlm_resource_desc l_resource;
-        ldlm_mode_t l_req_mode;
-        ldlm_mode_t l_granted_mode;
-        ldlm_wire_policy_data_t l_policy_data;
+	struct ldlm_resource_desc l_resource;
+	enum ldlm_mode l_req_mode;
+	enum ldlm_mode l_granted_mode;
+	union ldlm_wire_policy_data l_policy_data;
 };
 
-extern void lustre_swab_ldlm_lock_desc (struct ldlm_lock_desc *l);
+extern void lustre_swab_ldlm_lock_desc(struct ldlm_lock_desc *l);
 
 #define LDLM_LOCKREQ_HANDLES 2
 #define LDLM_ENQUEUE_CANCEL_OFF 1

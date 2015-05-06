@@ -150,13 +150,13 @@ static void osc_lock_fini(const struct lu_env *env,
 }
 
 static void osc_lock_build_policy(const struct lu_env *env,
-                                  const struct cl_lock *lock,
-                                  ldlm_policy_data_t *policy)
+				  const struct cl_lock *lock,
+				  union ldlm_policy_data *policy)
 {
-        const struct cl_lock_descr *d = &lock->cll_descr;
+	const struct cl_lock_descr *d = &lock->cll_descr;
 
-        osc_index2policy(policy, d->cld_obj, d->cld_start, d->cld_end);
-        policy->l_extent.gid = d->cld_gid;
+	osc_index2policy(policy, d->cld_obj, d->cld_start, d->cld_end);
+	policy->l_extent.gid = d->cld_gid;
 }
 
 static __u64 osc_enq2ldlm_flags(__u32 enqflags)
@@ -924,7 +924,7 @@ static int osc_lock_enqueue(const struct lu_env *env,
 	struct osc_lock			*oscl  = cl2osc_lock(slice);
 	struct cl_lock			*lock  = slice->cls_lock;
 	struct ldlm_res_id		*resname = &info->oti_resname;
-	ldlm_policy_data_t		*policy  = &info->oti_policy;
+	union ldlm_policy_data		*policy  = &info->oti_policy;
 	osc_enqueue_upcall_f		upcall   = osc_lock_upcall;
 	void				*cookie  = oscl;
 	bool				async    = false;
@@ -1202,12 +1202,12 @@ struct ldlm_lock *osc_dlmlock_at_pgoff(const struct lu_env *env,
 				       enum osc_dap_flags dap_flags)
 {
 	struct osc_thread_info *info = osc_env_info(env);
-	struct ldlm_res_id     *resname = &info->oti_resname;
-	ldlm_policy_data_t     *policy  = &info->oti_policy;
-	struct lustre_handle   lockh;
-	struct ldlm_lock       *lock = NULL;
-	ldlm_mode_t            mode;
-	__u64                  flags;
+	struct ldlm_res_id *resname = &info->oti_resname;
+	union ldlm_policy_data *policy  = &info->oti_policy;
+	struct lustre_handle lockh;
+	struct ldlm_lock *lock = NULL;
+	enum ldlm_mode mode;
+	__u64 flags;
 
 	ENTRY;
 

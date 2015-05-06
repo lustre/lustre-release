@@ -382,12 +382,12 @@ void tgt_io_thread_done(struct ptlrpc_thread *thread);
 int tgt_extent_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 		    __u64 start, __u64 end, struct lustre_handle *lh,
 		    int mode, __u64 *flags);
-void tgt_extent_unlock(struct lustre_handle *lh, ldlm_mode_t mode);
+void tgt_extent_unlock(struct lustre_handle *lh, enum ldlm_mode mode);
 int tgt_brw_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 		 struct obd_ioobj *obj, struct niobuf_remote *nb,
-		 struct lustre_handle *lh, int mode);
+		 struct lustre_handle *lh, enum ldlm_mode mode);
 void tgt_brw_unlock(struct obd_ioobj *obj, struct niobuf_remote *niob,
-		    struct lustre_handle *lh, int mode);
+		    struct lustre_handle *lh, enum ldlm_mode mode);
 int tgt_brw_read(struct tgt_session_info *tsi);
 int tgt_brw_write(struct tgt_session_info *tsi);
 int tgt_hpreq_handler(struct ptlrpc_request *req);
