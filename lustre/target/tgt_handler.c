@@ -1003,11 +1003,6 @@ int tgt_obd_log_cancel(struct tgt_session_info *tsi)
 	return err_serious(-EOPNOTSUPP);
 }
 
-int tgt_obd_qc_callback(struct tgt_session_info *tsi)
-{
-	return err_serious(-EOPNOTSUPP);
-}
-
 int tgt_sendpage(struct tgt_session_info *tsi, struct lu_rdpg *rdpg, int nob)
 {
 	struct tgt_thread_info	*tti = tgt_th_info(tsi->tsi_env);
@@ -1133,7 +1128,6 @@ out:
 struct tgt_handler tgt_obd_handlers[] = {
 TGT_OBD_HDL    (0,	OBD_PING,		tgt_obd_ping),
 TGT_OBD_HDL_VAR(0,	OBD_LOG_CANCEL,		tgt_obd_log_cancel),
-TGT_OBD_HDL_VAR(0,	OBD_QC_CALLBACK,	tgt_obd_qc_callback),
 TGT_OBD_HDL    (0,	OBD_IDX_READ,		tgt_obd_idx_read)
 };
 EXPORT_SYMBOL(tgt_obd_handlers);

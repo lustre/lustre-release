@@ -732,7 +732,6 @@ static struct req_format *req_formats[] = {
         &RQF_MDS_REINT_RENAME,
         &RQF_MDS_REINT_SETATTR,
         &RQF_MDS_REINT_SETXATTR,
-        &RQF_MDS_QUOTACHECK,
         &RQF_MDS_QUOTACTL,
 	&RQF_MDS_HSM_PROGRESS,
 	&RQF_MDS_HSM_CT_REGISTER,
@@ -743,10 +742,8 @@ static struct req_format *req_formats[] = {
 	&RQF_MDS_HSM_REQUEST,
 	&RQF_MDS_SWAP_LAYOUTS,
 	&RQF_OUT_UPDATE,
-	&RQF_QC_CALLBACK,
         &RQF_OST_CONNECT,
         &RQF_OST_DISCONNECT,
-        &RQF_OST_QUOTACHECK,
         &RQF_OST_QUOTACTL,
         &RQF_OST_GETATTR,
         &RQF_OST_SETATTR,
@@ -1271,14 +1268,6 @@ struct req_format RQF_LOG_CANCEL =
         DEFINE_REQ_FMT0("OBD_LOG_CANCEL", log_cancel_client, empty);
 EXPORT_SYMBOL(RQF_LOG_CANCEL);
 
-struct req_format RQF_MDS_QUOTACHECK =
-        DEFINE_REQ_FMT0("MDS_QUOTACHECK", quotactl_only, empty);
-EXPORT_SYMBOL(RQF_MDS_QUOTACHECK);
-
-struct req_format RQF_OST_QUOTACHECK =
-        DEFINE_REQ_FMT0("OST_QUOTACHECK", quotactl_only, empty);
-EXPORT_SYMBOL(RQF_OST_QUOTACHECK);
-
 struct req_format RQF_MDS_QUOTACTL =
         DEFINE_REQ_FMT0("MDS_QUOTACTL", quotactl_only, quotactl_only);
 EXPORT_SYMBOL(RQF_MDS_QUOTACTL);
@@ -1286,10 +1275,6 @@ EXPORT_SYMBOL(RQF_MDS_QUOTACTL);
 struct req_format RQF_OST_QUOTACTL =
         DEFINE_REQ_FMT0("OST_QUOTACTL", quotactl_only, quotactl_only);
 EXPORT_SYMBOL(RQF_OST_QUOTACTL);
-
-struct req_format RQF_QC_CALLBACK =
-        DEFINE_REQ_FMT0("QC_CALLBACK", quotactl_only, empty);
-EXPORT_SYMBOL(RQF_QC_CALLBACK);
 
 struct req_format RQF_QUOTA_DQACQ =
 	DEFINE_REQ_FMT0("QUOTA_DQACQ", quota_body_only, quota_body_only);

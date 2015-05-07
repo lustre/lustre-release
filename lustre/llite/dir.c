@@ -919,10 +919,6 @@ static int quotactl_ioctl(struct ll_sb_info *sbi, struct if_quotactl *qctl)
         ENTRY;
 
         switch (cmd) {
-        case LUSTRE_Q_INVALIDATE:
-        case LUSTRE_Q_FINVALIDATE:
-        case Q_QUOTAON:
-        case Q_QUOTAOFF:
         case Q_SETQUOTA:
         case Q_SETINFO:
                 if (!cfs_capable(CFS_CAP_SYS_ADMIN) ||
@@ -992,10 +988,6 @@ static int quotactl_ioctl(struct ll_sb_info *sbi, struct if_quotactl *qctl)
                 QCTL_COPY(oqctl, qctl);
                 rc = obd_quotactl(sbi->ll_md_exp, oqctl);
                 if (rc) {
-                        if (rc != -EALREADY && cmd == Q_QUOTAON) {
-                                oqctl->qc_cmd = Q_QUOTAOFF;
-                                obd_quotactl(sbi->ll_md_exp, oqctl);
-                        }
                         OBD_FREE_PTR(oqctl);
                         RETURN(rc);
                 }
@@ -1430,118 +1422,6 @@ out_rmdir:
                         ll_putname(filename);
                 return rc;
         }
-	case OBD_IOC_QUOTACHECK: {
-                struct obd_quotactl *oqctl;
-                int error = 0;
-
-                if (!cfs_capable(CFS_CAP_SYS_ADMIN) ||
-                    sbi->ll_flags & LL_SBI_RMT_CLIENT)
-                        RETURN(-EPERM);
-
-                OBD_ALLOC_PTR(oqctl);
-                if (!oqctl)
-                        RETURN(-ENOMEM);
-                oqctl->qc_type = arg;
-                rc = obd_quotacheck(sbi->ll_md_exp, oqctl);
-                if (rc < 0) {
-                        CDEBUG(D_INFO, "md_quotacheck failed: rc %d\n", rc);
-                        error = rc;
-                }
-
-                rc = obd_quotacheck(sbi->ll_dt_exp, oqctl);
-                if (rc < 0)
-                        CDEBUG(D_INFO, "obd_quotacheck failed: rc %d\n", rc);
-
-                OBD_FREE_PTR(oqctl);
-                return error ?: rc;
-        }
-	case OBD_IOC_POLL_QUOTACHECK: {
-                struct if_quotacheck *check;
-
-                if (!cfs_capable(CFS_CAP_SYS_ADMIN) ||
-                    sbi->ll_flags & LL_SBI_RMT_CLIENT)
-                        RETURN(-EPERM);
-
-                OBD_ALLOC_PTR(check);
-                if (!check)
-                        RETURN(-ENOMEM);
-
-                rc = obd_iocontrol(cmd, sbi->ll_md_exp, 0, (void *)check,
-                                   NULL);
-                if (rc) {
-                        CDEBUG(D_QUOTA, "mdc ioctl %d failed: %d\n", cmd, rc);
-			if (copy_to_user((void __user *)arg, check,
-                                             sizeof(*check)))
-				CDEBUG(D_QUOTA, "copy_to_user failed\n");
-                        GOTO(out_poll, rc);
-                }
-
-                rc = obd_iocontrol(cmd, sbi->ll_dt_exp, 0, (void *)check,
-                                   NULL);
-                if (rc) {
-                        CDEBUG(D_QUOTA, "osc ioctl %d failed: %d\n", cmd, rc);
-			if (copy_to_user((void __user *)arg, check,
-                                             sizeof(*check)))
-				CDEBUG(D_QUOTA, "copy_to_user failed\n");
-                        GOTO(out_poll, rc);
-                }
-        out_poll:
-                OBD_FREE_PTR(check);
-                RETURN(rc);
-        }
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 53, 0)
-        case LL_IOC_QUOTACTL_18: {
-                /* copy the old 1.x quota struct for internal use, then copy
-                 * back into old format struct.  For 1.8 compatibility. */
-                struct if_quotactl_18 *qctl_18;
-                struct if_quotactl *qctl_20;
-
-                OBD_ALLOC_PTR(qctl_18);
-                if (!qctl_18)
-                        RETURN(-ENOMEM);
-
-                OBD_ALLOC_PTR(qctl_20);
-                if (!qctl_20)
-                        GOTO(out_quotactl_18, rc = -ENOMEM);
-
-		if (copy_from_user(qctl_18, (void __user *)arg,
-				   sizeof(*qctl_18)))
-                        GOTO(out_quotactl_20, rc = -ENOMEM);
-
-                QCTL_COPY(qctl_20, qctl_18);
-                qctl_20->qc_idx = 0;
-
-                /* XXX: dqb_valid was borrowed as a flag to mark that
-                 *      only mds quota is wanted */
-                if (qctl_18->qc_cmd == Q_GETQUOTA &&
-                    qctl_18->qc_dqblk.dqb_valid) {
-                        qctl_20->qc_valid = QC_MDTIDX;
-                        qctl_20->qc_dqblk.dqb_valid = 0;
-                } else if (qctl_18->obd_uuid.uuid[0] != '\0') {
-                        qctl_20->qc_valid = QC_UUID;
-                        qctl_20->obd_uuid = qctl_18->obd_uuid;
-                } else {
-                        qctl_20->qc_valid = QC_GENERAL;
-                }
-
-                rc = quotactl_ioctl(sbi, qctl_20);
-
-                if (rc == 0) {
-                        QCTL_COPY(qctl_18, qctl_20);
-                        qctl_18->obd_uuid = qctl_20->obd_uuid;
-
-			if (copy_to_user((void __user *)arg, qctl_18,
-                                             sizeof(*qctl_18)))
-                                rc = -EFAULT;
-                }
-
-        out_quotactl_20:
-                OBD_FREE_PTR(qctl_20);
-        out_quotactl_18:
-                OBD_FREE_PTR(qctl_18);
-                RETURN(rc);
-        }
-#endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 53, 0) */
 	case OBD_IOC_QUOTACTL: {
                 struct if_quotactl *qctl;
 

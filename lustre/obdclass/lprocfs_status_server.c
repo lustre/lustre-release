@@ -446,7 +446,6 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
 	LPROCFS_OBD_OP_INIT(num_private_stats, stats, notify);
 	LPROCFS_OBD_OP_INIT(num_private_stats, stats, health_check);
 	LPROCFS_OBD_OP_INIT(num_private_stats, stats, get_uuid);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, quotacheck);
 	LPROCFS_OBD_OP_INIT(num_private_stats, stats, quotactl);
 	LPROCFS_OBD_OP_INIT(num_private_stats, stats, ping);
 	LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_new);

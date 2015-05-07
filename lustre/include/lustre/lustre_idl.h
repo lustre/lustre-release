@@ -1483,7 +1483,7 @@ typedef enum {
         OST_STATFS     = 13,
         OST_SYNC       = 16,
         OST_SET_INFO   = 17,
-        OST_QUOTACHECK = 18,
+	OST_QUOTACHECK = 18, /* not used since 2.4 */
         OST_QUOTACTL   = 19,
 	OST_QUOTA_ADJUST_QUNIT = 20, /* not used since 2.4 */
         OST_LAST_OPC
@@ -2102,7 +2102,7 @@ typedef enum {
 	MDS_SYNC		= 44,
 	MDS_DONE_WRITING	= 45, /* obsolete since 2.8.0 */
 	MDS_SET_INFO		= 46,
-	MDS_QUOTACHECK		= 47,
+	MDS_QUOTACHECK		= 47, /* not used since 2.4 */
 	MDS_QUOTACTL		= 48,
 	MDS_GETXATTR		= 49,
 	MDS_SETXATTR		= 50, /* obsolete, now it's MDS_REINT op */
@@ -3121,7 +3121,7 @@ extern void lustre_swab_cfg_marker(struct cfg_marker *marker,
 typedef enum {
         OBD_PING = 400,
         OBD_LOG_CANCEL,
-        OBD_QC_CALLBACK,
+	OBD_QC_CALLBACK, /* not used since 2.4 */
 	OBD_IDX_READ,
         OBD_LAST_OPC
 } obd_cmd_t;

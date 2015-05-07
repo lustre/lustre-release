@@ -2121,11 +2121,6 @@ static int ofd_quotactl(struct tgt_session_info *tsi)
 	if (repoqc == NULL)
 		RETURN(err_serious(-ENOMEM));
 
-	/* report success for quota on/off for interoperability with current MDT
-	 * stack */
-	if (oqctl->qc_cmd == Q_QUOTAON || oqctl->qc_cmd == Q_QUOTAOFF)
-		RETURN(0);
-
 	*repoqc = *oqctl;
 
 	id = repoqc->qc_id;

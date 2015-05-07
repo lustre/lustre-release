@@ -1933,14 +1933,6 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 		RETURN(err_serious(rc));
 
 	switch (oqctl->qc_cmd) {
-	case Q_QUOTACHECK:
-	case LUSTRE_Q_INVALIDATE:
-	case LUSTRE_Q_FINVALIDATE:
-	case Q_QUOTAON:
-	case Q_QUOTAOFF:
-	case Q_INITQUOTA:
-		/* deprecated, not used any more */
-		RETURN(-EOPNOTSUPP);
 		/* master quotactl */
 	case Q_SETINFO:
 	case Q_SETQUOTA:

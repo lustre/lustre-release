@@ -2112,23 +2112,6 @@ static inline void ldlm_callback_errmsg(struct ptlrpc_request *req,
                 CWARN("Send reply failed, maybe cause bug 21636.\n");
 }
 
-static int ldlm_handle_qc_callback(struct ptlrpc_request *req)
-{
-	struct obd_quotactl *oqctl;
-	struct client_obd *cli = &req->rq_export->exp_obd->u.cli;
-
-	oqctl = req_capsule_client_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
-	if (oqctl == NULL) {
-		CERROR("Can't unpack obd_quotactl\n");
-		RETURN(-EPROTO);
-	}
-
-	oqctl->qc_stat = ptlrpc_status_ntoh(oqctl->qc_stat);
-
-	cli->cl_qchk_stat = oqctl->qc_stat;
-	return 0;
-}
-
 /* TODO: handle requests in a similar way as MDT: see mdt_handle_common() */
 static int ldlm_callback_handler(struct ptlrpc_request *req)
 {
@@ -2208,13 +2191,6 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 rc = llog_origin_handle_close(req);
                 ldlm_callback_reply(req, rc);
                 RETURN(0);
-	case OBD_QC_CALLBACK:
-		req_capsule_set(&req->rq_pill, &RQF_QC_CALLBACK);
-		if (OBD_FAIL_CHECK(OBD_FAIL_OBD_QC_CALLBACK_NET))
-			RETURN(0);
-		rc = ldlm_handle_qc_callback(req);
-		ldlm_callback_reply(req, rc);
-		RETURN(0);
         default:
                 CERROR("unknown opcode %u\n",
                        lustre_msg_get_opc(req->rq_reqmsg));

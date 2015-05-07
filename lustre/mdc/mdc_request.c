@@ -2040,53 +2040,6 @@ static int mdc_ioc_changelog_send(struct obd_device *obd,
 static int mdc_ioc_hsm_ct_start(struct obd_export *exp,
                                 struct lustre_kernelcomm *lk);
 
-static int mdc_quotacheck(struct obd_device *unused, struct obd_export *exp,
-                          struct obd_quotactl *oqctl)
-{
-        struct client_obd       *cli = &exp->exp_obd->u.cli;
-        struct ptlrpc_request   *req;
-        struct obd_quotactl     *body;
-        int                      rc;
-        ENTRY;
-
-        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
-                                        &RQF_MDS_QUOTACHECK, LUSTRE_MDS_VERSION,
-                                        MDS_QUOTACHECK);
-        if (req == NULL)
-                RETURN(-ENOMEM);
-
-        body = req_capsule_client_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
-        *body = *oqctl;
-
-        ptlrpc_request_set_replen(req);
-
-        /* the next poll will find -ENODATA, that means quotacheck is
-         * going on */
-        cli->cl_qchk_stat = -ENODATA;
-        rc = ptlrpc_queue_wait(req);
-        if (rc)
-                cli->cl_qchk_stat = rc;
-        ptlrpc_req_finished(req);
-        RETURN(rc);
-}
-
-static int mdc_quota_poll_check(struct obd_export *exp,
-                                struct if_quotacheck *qchk)
-{
-        struct client_obd *cli = &exp->exp_obd->u.cli;
-        int rc;
-        ENTRY;
-
-        qchk->obd_uuid = cli->cl_target_uuid;
-        memcpy(qchk->obd_type, LUSTRE_MDS_NAME, strlen(LUSTRE_MDS_NAME));
-
-        rc = cli->cl_qchk_stat;
-        /* the client is not the previous one */
-        if (rc == CL_NOT_QUOTACHECKED)
-                rc = -EINTR;
-        RETURN(rc);
-}
-
 static int mdc_quotactl(struct obd_device *unused, struct obd_export *exp,
                         struct obd_quotactl *oqctl)
 {
@@ -2241,9 +2194,6 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 GOTO(out, rc = 0);
         case IOC_OSC_SET_ACTIVE:
                 rc = ptlrpc_set_import_active(imp, data->ioc_offset);
-                GOTO(out, rc);
-        case OBD_IOC_POLL_QUOTACHECK:
-                rc = mdc_quota_poll_check(exp, (struct if_quotacheck *)karg);
                 GOTO(out, rc);
         case OBD_IOC_PING_TARGET:
                 rc = ptlrpc_obd_ping(obd);
@@ -3023,7 +2973,6 @@ static struct obd_ops mdc_obd_ops = {
         .o_process_config   = mdc_process_config,
         .o_get_uuid         = mdc_get_uuid,
         .o_quotactl         = mdc_quotactl,
-        .o_quotacheck       = mdc_quotacheck
 };
 
 static struct md_ops mdc_md_ops = {

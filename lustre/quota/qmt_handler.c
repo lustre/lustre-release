@@ -312,13 +312,6 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 				     dqb->dqb_valid & QIF_BFLAGS);
 		break;
 
-	case Q_QUOTAON:
-	case Q_QUOTAOFF:   /* quota is always turned on on the master */
-		RETURN(0);
-
-	case LUSTRE_Q_INVALIDATE: /* not supported any more */
-		RETURN(-ENOTSUPP);
-
 	default:
 		CERROR("%s: unsupported quotactl command: %d\n",
 		       qmt->qmt_svname, oqctl->qc_cmd);

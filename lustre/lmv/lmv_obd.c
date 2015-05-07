@@ -1175,9 +1175,7 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 			mdc_obd = class_exp2obd(tgt->ltd_exp);
 			mdc_obd->obd_force = obddev->obd_force;
 			err = obd_iocontrol(cmd, tgt->ltd_exp, len, karg, uarg);
-			if (err == -ENODATA && cmd == OBD_IOC_POLL_QUOTACHECK) {
-				RETURN(err);
-			} else if (err) {
+			if (err) {
 				if (tgt->ltd_active) {
 					CERROR("error: iocontrol MDC %s on MDT"
 					       " idx %d cmd %x: err = %d\n",
@@ -3448,32 +3446,6 @@ int lmv_quotactl(struct obd_device *unused, struct obd_export *exp,
         RETURN(rc);
 }
 
-int lmv_quotacheck(struct obd_device *unused, struct obd_export *exp,
-                   struct obd_quotactl *oqctl)
-{
-	struct obd_device	*obd = class_exp2obd(exp);
-	struct lmv_obd		*lmv = &obd->u.lmv;
-	struct lmv_tgt_desc	*tgt;
-	__u32			 i;
-	int			 rc = 0;
-	ENTRY;
-
-	for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
-		int err;
-		tgt = lmv->tgts[i];
-		if (tgt == NULL || tgt->ltd_exp == NULL || !tgt->ltd_active) {
-			CERROR("lmv idx %d inactive\n", i);
-			RETURN(-EIO);
-		}
-
-                err = obd_quotacheck(tgt->ltd_exp, oqctl);
-                if (err && !rc)
-                        rc = err;
-        }
-
-        RETURN(rc);
-}
-
 static int lmv_merge_attr(struct obd_export *exp,
 			  const struct lmv_stripe_md *lsm,
 			  struct cl_attr *attr,
@@ -3533,7 +3505,6 @@ struct obd_ops lmv_obd_ops = {
         .o_notify               = lmv_notify,
         .o_get_uuid             = lmv_get_uuid,
         .o_iocontrol            = lmv_iocontrol,
-        .o_quotacheck           = lmv_quotacheck,
         .o_quotactl             = lmv_quotactl
 };
 

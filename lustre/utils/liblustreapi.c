@@ -3693,52 +3693,6 @@ int llapi_is_lustre_mnt(struct mntent *mnt)
                 strstr(mnt->mnt_fsname, ":/") != NULL);
 }
 
-int llapi_quotacheck(char *mnt, int check_type)
-{
-        DIR *root;
-        int rc;
-
-        root = opendir(mnt);
-        if (!root) {
-                rc = -errno;
-                llapi_error(LLAPI_MSG_ERROR, rc, "open %s failed", mnt);
-                return rc;
-        }
-
-	rc = ioctl(dirfd(root), OBD_IOC_QUOTACHECK, check_type);
-        if (rc < 0)
-                rc = -errno;
-
-        closedir(root);
-        return rc;
-}
-
-int llapi_poll_quotacheck(char *mnt, struct if_quotacheck *qchk)
-{
-        DIR *root;
-        int poll_intvl = 2;
-        int rc;
-
-        root = opendir(mnt);
-        if (!root) {
-                rc = -errno;
-                llapi_error(LLAPI_MSG_ERROR, rc, "open %s failed", mnt);
-                return rc;
-        }
-
-        while (1) {
-		rc = ioctl(dirfd(root), OBD_IOC_POLL_QUOTACHECK, qchk);
-                if (!rc)
-                        break;
-                sleep(poll_intvl);
-                if (poll_intvl < 30)
-                        poll_intvl *= 2;
-        }
-
-        closedir(root);
-        return 0;
-}
-
 int llapi_quotactl(char *mnt, struct if_quotactl *qctl)
 {
         DIR *root;
