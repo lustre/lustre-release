@@ -866,8 +866,79 @@ static int lod_process_config(const struct lu_env *env,
 	}
 
 	case LCFG_PARAM: {
-		struct obd_device *obd = lod2obd(lod);
+		struct obd_device *obd;
+		char *param;
 
+		/* Check if it is activate/deactivate mdc
+		 * lustre-MDTXXXX-osp-MDTXXXX.active=1 */
+		param = lustre_cfg_buf(lcfg, 1);
+		if (strstr(param, "osp") != NULL &&
+		    strstr(param, ".active=") != NULL) {
+			struct lod_tgt_descs	*ltd = &lod->lod_mdt_descs;
+			struct lod_tgt_desc	*sub_tgt = NULL;
+			char *ptr;
+			char *tmp;
+			int i;
+
+			ptr = strstr(param, ".");
+			*ptr = '\0';
+			obd = class_name2obd(param);
+			if (obd == NULL) {
+				CERROR("%s: can not find %s: rc = %d\n",
+				       lod2obd(lod)->obd_name, param, -EINVAL);
+				*ptr = '.';
+				GOTO(out, rc);
+			}
+
+			cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
+				struct lod_tgt_desc *tgt;
+
+				tgt = LTD_TGT(ltd, i);
+				if (tgt->ltd_tgt->dd_lu_dev.ld_obd == obd) {
+					sub_tgt = tgt;
+					break;
+				}
+			}
+
+			if (sub_tgt == NULL) {
+				CERROR("%s: can not find %s: rc = %d\n",
+				       lod2obd(lod)->obd_name, param, -EINVAL);
+				*ptr = '.';
+				GOTO(out, rc);
+			}
+
+			*ptr = '.';
+			tmp = strstr(param, "=");
+			tmp++;
+			if (*tmp == '1') {
+				struct llog_ctxt *ctxt;
+
+				obd = sub_tgt->ltd_tgt->dd_lu_dev.ld_obd;
+				ctxt = llog_get_context(obd,
+						LLOG_UPDATELOG_ORIG_CTXT);
+				if (ctxt == NULL) {
+					rc = llog_setup(env, obd, &obd->obd_olg,
+						       LLOG_UPDATELOG_ORIG_CTXT,
+						    NULL, &llog_common_cat_ops);
+					if (rc < 0)
+						GOTO(out, rc);
+				} else {
+					llog_ctxt_put(ctxt);
+				}
+				rc = lod_sub_prep_llog(env, lod,
+						       sub_tgt->ltd_tgt,
+						       sub_tgt->ltd_index);
+				if (rc == 0)
+					sub_tgt->ltd_active = 1;
+			} else {
+				lod_sub_fini_llog(env, sub_tgt->ltd_tgt,
+						  NULL);
+				sub_tgt->ltd_active = 0;
+			}
+			GOTO(out, rc);
+		}
+
+		obd = lod2obd(lod);
 		rc = class_process_proc_param(PARAM_LOV, obd->obd_vars,
 					      lcfg, obd);
 		if (rc > 0)
@@ -1743,13 +1814,22 @@ static int lod_obd_get_info(const struct lu_env *env, struct obd_export *exp,
 			tgt = MDT_TGT(d, i);
 			LASSERT(tgt != NULL);
 			LASSERT(tgt->ltd_tgt != NULL);
+			if (!tgt->ltd_active)
+				continue;
+
 			ctxt = llog_get_context(tgt->ltd_tgt->dd_lu_dev.ld_obd,
 						LLOG_UPDATELOG_ORIG_CTXT);
 			if (ctxt == NULL) {
+				CDEBUG(D_INFO, "%s: %s is not ready.\n",
+				       obd->obd_name,
+				      tgt->ltd_tgt->dd_lu_dev.ld_obd->obd_name);
 				rc = -EAGAIN;
 				break;
 			}
 			if (ctxt->loc_handle == NULL) {
+				CDEBUG(D_INFO, "%s: %s is not ready.\n",
+				       obd->obd_name,
+				      tgt->ltd_tgt->dd_lu_dev.ld_obd->obd_name);
 				rc = -EAGAIN;
 				llog_ctxt_put(ctxt);
 				break;

@@ -43,6 +43,40 @@
 #include "mdc_internal.h"
 
 #ifdef CONFIG_PROC_FS
+static int mdc_active_seq_show(struct seq_file *m, void *v)
+{
+	struct obd_device *dev = m->private;
+	int rc;
+
+	LPROCFS_CLIMP_CHECK(dev);
+	rc = seq_printf(m, "%d\n", !dev->u.cli.cl_import->imp_deactive);
+	LPROCFS_CLIMP_EXIT(dev);
+	return rc;
+}
+
+static ssize_t mdc_active_seq_write(struct file *file,
+				    const char __user *buffer,
+				    size_t count, loff_t *off)
+{
+	struct obd_device *dev;
+	int val, rc;
+
+	dev = ((struct seq_file *)file->private_data)->private;
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc)
+		return rc;
+	if (val < 0 || val > 1)
+		return -ERANGE;
+
+	/* opposite senses */
+	if (dev->u.cli.cl_import->imp_deactive == val)
+		rc = ptlrpc_set_import_active(dev->u.cli.cl_import, val);
+	else
+		CDEBUG(D_CONFIG, "activate %d: ignoring repeat request\n", val);
+
+	return count;
+}
+LPROC_SEQ_FOPS(mdc_active);
 
 static int mdc_max_rpcs_in_flight_seq_show(struct seq_file *m, void *v)
 {
@@ -208,6 +242,8 @@ struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
 	  .fops	=	&mdc_pinger_recov_fops		},
 	{ .name	=	"rpc_stats",
 	  .fops	=	&mdc_rpc_stats_fops		},
+	{ .name	=	"active",
+	  .fops	=	&mdc_active_fops		},
 	{ NULL }
 };
 #endif /* CONFIG_PROC_FS */

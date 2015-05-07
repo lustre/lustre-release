@@ -3385,6 +3385,52 @@ test_50h() {
 }
 run_test 50h "LU-642: activate deactivated OST"
 
+test_50i() {
+	# prepare MDT/OST, make OSC inactive for OST1
+	[ "$MDSCOUNT" -lt "2" ] && skip_env "$MDSCOUNT < 2, skipping" && return
+
+	[ $(facet_fstype ost1) == zfs ] && import_zpool ost1
+	load_modules
+	do_facet mds2 "$TUNEFS --param mdc.active=0 $(mdsdevname 2)" ||
+		error "tunefs MDT2 failed"
+	start_mds  || error "Unable to start MDT"
+	start_ost  || error "Unable to start OST1"
+	start_ost2 || error "Unable to start OST2"
+	mount_client $MOUNT || error "client start failed"
+
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	$LCTL conf_param ${FSNAME}-MDT0000.mdc.active=0 &&
+		error "deactive MDC0 succeeds"
+	# activate MDC for MDT2
+	local TEST="$LCTL get_param -n mdc.${FSNAME}-MDT0001-mdc-[!M]*.active"
+	set_conf_param_and_check client					\
+		"$TEST" "${FSNAME}-MDT0001.mdc.active" 1 ||
+		error "Unable to activate MDT2"
+
+	$LFS mkdir -i1 $DIR/$tdir/2 || error "mkdir $DIR/$tdir/2 failed"
+	# create some file
+	createmany -o $DIR/$tdir/2/$tfile-%d 1 || error "create files failed"
+
+	rm -rf $DIR/$tdir/2 || error "unlink dir failed"
+
+	# deactivate MDC for MDT2
+	local TEST="$LCTL get_param -n mdc.${FSNAME}-MDT0001-mdc-[!M]*.active"
+	set_conf_param_and_check client					\
+		"$TEST" "${FSNAME}-MDT0001.mdc.active" 0 ||
+		error "Unable to deactivate MDT2"
+
+	$LFS mkdir -i1 $DIR/$tdir/2 &&
+		error "mkdir $DIR/$tdir/2 succeeds after deactive MDT"
+
+	# cleanup
+	umount_client $MOUNT || error "Unable to umount client"
+	stop_mds
+	stop_ost
+	stop_ost 2
+}
+run_test 50i "activate deactivated MDT"
+
 test_51() {
 	local LOCAL_TIMEOUT=20
 
