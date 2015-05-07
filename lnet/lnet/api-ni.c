@@ -2333,6 +2333,7 @@ lnet_ping(lnet_process_id_t id, int timeout_ms, lnet_process_id_t __user *ids,
 
 	rc = -EFAULT;                           /* If I SEGV... */
 
+	memset(&tmpid, 0, sizeof(tmpid));
 	for (i = 0; i < n_ids; i++) {
 		tmpid.pid = info->pi_pid;
 		tmpid.nid = info->pi_ni[i].ns_nid;
