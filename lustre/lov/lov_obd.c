@@ -1141,9 +1141,9 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
                 /* copy UUID */
 		if (copy_to_user(data->ioc_pbuf2, obd2cli_tgt(osc_obd),
-				 min((int)data->ioc_plen2,
-				     (int)sizeof(struct obd_uuid))))
-                        RETURN(-EFAULT);
+				 min_t(unsigned long, data->ioc_plen2,
+				       sizeof(struct obd_uuid))))
+			RETURN(-EFAULT);
 
 		flags = uarg ? *(__u32 __user *)uarg : 0;
                 /* got statfs data */
@@ -1153,10 +1153,10 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 if (rc)
                         RETURN(rc);
 		if (copy_to_user(data->ioc_pbuf1, &stat_buf,
-                                     min((int) data->ioc_plen1,
-                                         (int) sizeof(stat_buf))))
-                        RETURN(-EFAULT);
-                break;
+				 min_t(unsigned long, data->ioc_plen1,
+				       sizeof(struct obd_statfs))))
+			RETURN(-EFAULT);
+		break;
         }
         case OBD_IOC_LOV_GET_CONFIG: {
                 struct obd_ioctl_data *data;
