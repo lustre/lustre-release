@@ -763,23 +763,26 @@ map:
 	return err;
 }
 
-static int osd_ldiskfs_map_nblocks(struct inode *inode, unsigned long block,
-				   unsigned long num, sector_t *blocks,
-				   int create)
+static int osd_ldiskfs_map_nblocks(struct inode *inode, unsigned long index,
+				   int clen, sector_t *blocks, int create)
 {
+	int blocks_per_page = PAGE_CACHE_SIZE >> inode->i_blkbits;
 	struct bpointers bp;
 	int err;
 
-	CDEBUG(D_OTHER, "blocks %lu-%lu requested for inode %u\n",
-	       block, block + num - 1, (unsigned) inode->i_ino);
+	if (index + clen >= inode->i_sb->s_maxbytes >> PAGE_SHIFT)
+		return -EFBIG;
 
 	bp.blocks = blocks;
-	bp.start = block;
-	bp.init_num = bp.num = num;
+	bp.start = index * blocks_per_page;
+	bp.init_num = bp.num = clen * blocks_per_page;
 	bp.create = create;
 
-	err = ldiskfs_ext_walk_space(inode, block, num,
-					 ldiskfs_ext_new_extent_cb, &bp);
+	CDEBUG(D_OTHER, "blocks %lu-%lu requested for inode %u\n",
+	       bp.start, bp.start + bp.num - 1, (unsigned)inode->i_ino);
+
+	err = ldiskfs_ext_walk_space(inode, bp.start, bp.num,
+				     ldiskfs_ext_new_extent_cb, &bp);
 	ldiskfs_ext_invalidate_cache(inode);
 
 	return err;
@@ -818,13 +821,8 @@ static int osd_ldiskfs_map_ext_inode_pages(struct inode *inode,
 					   int pages, sector_t *blocks,
 					   int create)
 {
-	int blocks_per_page = PAGE_CACHE_SIZE >> inode->i_blkbits;
-	int rc = 0, i = 0;
+	int rc = 0, i = 0, clen = 0;
 	struct page *fp = NULL;
-	int clen = 0;
-	pgoff_t extent_max_page_index;
-
-	extent_max_page_index = inode->i_sb->s_maxbytes >> PAGE_SHIFT;
 
 	CDEBUG(D_OTHER, "inode %lu: map %d pages from %lu\n",
 		inode->i_ino, pages, (*page)->index);
@@ -846,25 +844,21 @@ static int osd_ldiskfs_map_ext_inode_pages(struct inode *inode,
 			continue;
 		}
 
-		if (fp->index + i >= extent_max_page_index)
-			GOTO(cleanup, rc = -EFBIG);
-
 		/* process found extent */
-		rc = osd_ldiskfs_map_nblocks(inode, fp->index * blocks_per_page,
-					     clen * blocks_per_page, blocks,
-					     create);
+		rc = osd_ldiskfs_map_nblocks(inode, fp->index, clen,
+					     blocks, create);
 		if (rc)
 			GOTO(cleanup, rc);
 
 		/* look for next extent */
 		fp = NULL;
-		blocks += blocks_per_page * clen;
+		blocks += clen * (PAGE_CACHE_SIZE >> inode->i_blkbits);
 	}
 
 	if (fp)
-		rc = osd_ldiskfs_map_nblocks(inode, fp->index * blocks_per_page,
-					     clen * blocks_per_page, blocks,
-					     create);
+		rc = osd_ldiskfs_map_nblocks(inode, fp->index, clen,
+					     blocks, create);
+
 cleanup:
 	return rc;
 }
@@ -919,7 +913,7 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode, struct page **page,
 			if (++i != pages)
 				continue;
 		}
-		if (fp->index + i >= max_page_index)
+		if (fp->index + clen >= max_page_index)
 			GOTO(cleanup, rc = -EFBIG);
 		/* process found extent */
 		map.m_lblk = fp->index * blocks_per_page;
