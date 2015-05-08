@@ -1129,7 +1129,7 @@ static int mdt_close_handle_unpack(struct mdt_thread_info *info)
 	if (ioepoch == NULL)
 		RETURN(-EPROTO);
 
-	info->mti_close_handle = ioepoch->mio_handle;
+	info->mti_open_handle = ioepoch->mio_open_handle;
 
 	RETURN(0);
 }
@@ -1550,18 +1550,18 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
 	uc->uc_suppgids[1] = rec->cr_suppgid2;
 	uc->uc_umask = rec->cr_umask;
 
-        rr->rr_fid1   = &rec->cr_fid1;
-        rr->rr_fid2   = &rec->cr_fid2;
-        rr->rr_handle = &rec->cr_old_handle;
-        attr->la_mode = rec->cr_mode;
-        attr->la_rdev  = rec->cr_rdev;
-        attr->la_uid   = rec->cr_fsuid;
-        attr->la_gid   = rec->cr_fsgid;
-        attr->la_ctime = rec->cr_time;
-        attr->la_mtime = rec->cr_time;
-        attr->la_atime = rec->cr_time;
-        attr->la_valid = LA_MODE  | LA_RDEV  | LA_UID   | LA_GID |
-                         LA_CTIME | LA_MTIME | LA_ATIME;
+	rr->rr_fid1   = &rec->cr_fid1;
+	rr->rr_fid2   = &rec->cr_fid2;
+	rr->rr_open_handle = &rec->cr_open_handle_old;
+	attr->la_mode = rec->cr_mode;
+	attr->la_rdev  = rec->cr_rdev;
+	attr->la_uid   = rec->cr_fsuid;
+	attr->la_gid   = rec->cr_fsgid;
+	attr->la_ctime = rec->cr_time;
+	attr->la_mtime = rec->cr_time;
+	attr->la_atime = rec->cr_time;
+	attr->la_valid = LA_MODE  | LA_RDEV  | LA_UID   | LA_GID |
+			 LA_CTIME | LA_MTIME | LA_ATIME;
         memset(&info->mti_spec.u, 0, sizeof(info->mti_spec.u));
         info->mti_spec.sp_cr_flags = get_mrc_cr_flags(rec);
         /* Do not trigger ASSERTION if client miss to set such flags. */
@@ -1683,8 +1683,8 @@ static int mdt_resync_unpack(struct mdt_thread_info *info)
 	 * in lustre_swab_mdt_rec_reint() as rr_mtime, so here it needs
 	 * restoring. */
 	if (ptlrpc_req_need_swab(mdt_info_req(info)))
-		__swab64s(&rec->rs_handle.cookie);
-	rr->rr_handle = &rec->rs_handle;
+		__swab64s(&rec->rs_lease_handle.cookie);
+	rr->rr_lease_handle = &rec->rs_lease_handle;
 
 	RETURN(mdt_dlmreq_unpack(info));
 }

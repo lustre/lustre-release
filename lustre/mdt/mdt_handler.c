@@ -66,7 +66,6 @@
 
 #include "mdt_internal.h"
 
-
 static unsigned int max_mod_rpcs_per_client = 8;
 module_param(max_mod_rpcs_per_client, uint, 0644);
 MODULE_PARM_DESC(max_mod_rpcs_per_client, "maximum number of modify RPCs in flight allowed per client");
@@ -5703,7 +5702,7 @@ static int mdt_export_cleanup(struct obd_export *exp)
 
 		/* Remove mfd handle so it can't be found again.
 		 * We are consuming the mfd_list reference here. */
-		class_handle_unhash(&mfd->mfd_handle);
+		class_handle_unhash(&mfd->mfd_open_handle);
 		list_move_tail(&mfd->mfd_list, &closing_list);
 	}
 	spin_unlock(&med->med_open_lock);

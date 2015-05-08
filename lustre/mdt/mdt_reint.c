@@ -2661,7 +2661,7 @@ static int mdt_reint_resync(struct mdt_thread_info *info,
 	if (mdt_object_remote(mo))
 		GOTO(out_obj, rc = -EREMOTE);
 
-	lease = ldlm_handle2lock(rr->rr_handle);
+	lease = ldlm_handle2lock(rr->rr_lease_handle);
 	if (lease == NULL)
 		GOTO(out_obj, rc = -ESTALE);
 

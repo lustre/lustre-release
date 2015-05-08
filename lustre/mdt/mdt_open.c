@@ -49,7 +49,7 @@ static void mdt_mfd_get(void *mfdp)
 {
 }
 
-static struct portals_handle_ops mfd_handle_ops = {
+static struct portals_handle_ops mfd_open_handle_ops = {
 	.hop_addref = mdt_mfd_get,
 	.hop_free   = NULL,
 };
@@ -63,10 +63,10 @@ struct mdt_file_data *mdt_mfd_new(const struct mdt_export_data *med)
 
 	OBD_ALLOC_PTR(mfd);
 	if (mfd != NULL) {
-		INIT_LIST_HEAD(&mfd->mfd_handle.h_link);
-		mfd->mfd_handle.h_owner = med;
+		INIT_LIST_HEAD(&mfd->mfd_open_handle.h_link);
+		mfd->mfd_open_handle.h_owner = med;
 		INIT_LIST_HEAD(&mfd->mfd_list);
-		class_handle_hash(&mfd->mfd_handle, &mfd_handle_ops);
+		class_handle_hash(&mfd->mfd_open_handle, &mfd_open_handle_ops);
 	}
 
 	RETURN(mfd);
@@ -78,19 +78,20 @@ struct mdt_file_data *mdt_mfd_new(const struct mdt_export_data *med)
  * but mfd can be found in mfd list by that handle.
  * Callers need to be holding med_open_lock.
  */
-struct mdt_file_data *mdt_handle2mfd(struct mdt_export_data *med,
-				     const struct lustre_handle *handle,
-				     bool is_replay_or_resent)
+struct mdt_file_data *mdt_open_handle2mfd(struct mdt_export_data *med,
+					const struct lustre_handle *open_handle,
+					bool is_replay_or_resent)
 {
 	struct mdt_file_data   *mfd;
 	ENTRY;
 
-	LASSERT(handle != NULL);
-	mfd = class_handle2object(handle->cookie, med);
+	LASSERT(open_handle != NULL);
+	mfd = class_handle2object(open_handle->cookie, med);
 	/* during dw/setattr replay the mfd can be found by old handle */
 	if (mfd == NULL && is_replay_or_resent) {
 		list_for_each_entry(mfd, &med->med_open_head, mfd_list) {
-			if (mfd->mfd_old_handle.cookie == handle->cookie)
+			if (mfd->mfd_open_handle_old.cookie ==
+			    open_handle->cookie)
 				RETURN(mfd);
 		}
 		mfd = NULL;
@@ -103,7 +104,7 @@ struct mdt_file_data *mdt_handle2mfd(struct mdt_export_data *med,
 void mdt_mfd_free(struct mdt_file_data *mfd)
 {
 	LASSERT(list_empty(&mfd->mfd_list));
-	OBD_FREE_RCU(mfd, sizeof *mfd, &mfd->mfd_handle);
+	OBD_FREE_RCU(mfd, sizeof *mfd, &mfd->mfd_open_handle);
 }
 
 static int mdt_create_data(struct mdt_thread_info *info,
@@ -437,15 +438,16 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
 		 * might be disconnected from server, and
 		 * restart replay, so there maybe some orphan
 		 * mfd here, we should remove them */
-		LASSERT(info->mti_rr.rr_handle != NULL);
+		LASSERT(info->mti_rr.rr_open_handle != NULL);
 		spin_lock(&med->med_open_lock);
-		old_mfd = mdt_handle2mfd(med, info->mti_rr.rr_handle, true);
+		old_mfd = mdt_open_handle2mfd(med, info->mti_rr.rr_open_handle,
+					      true);
 		if (old_mfd != NULL) {
 			CDEBUG(D_HA, "delete orphan mfd = %p, fid = "DFID", "
 			       "cookie = %#llx\n", mfd,
 			       PFID(mdt_object_fid(mfd->mfd_object)),
-			       info->mti_rr.rr_handle->cookie);
-			class_handle_unhash(&old_mfd->mfd_handle);
+			       info->mti_rr.rr_open_handle->cookie);
+			class_handle_unhash(&old_mfd->mfd_open_handle);
 			list_del_init(&old_mfd->mfd_list);
 			spin_unlock(&med->med_open_lock);
 			/* no attr update for that close */
@@ -460,20 +462,20 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
 			CDEBUG(D_HA, "orphan mfd not found, fid = "DFID", "
 			       "cookie = %#llx\n",
 			       PFID(mdt_object_fid(mfd->mfd_object)),
-			       info->mti_rr.rr_handle->cookie);
+			       info->mti_rr.rr_open_handle->cookie);
 		}
 
 		CDEBUG(D_HA, "Store old cookie %#llx in new mfd\n",
-		       info->mti_rr.rr_handle->cookie);
+		       info->mti_rr.rr_open_handle->cookie);
 
-		mfd->mfd_old_handle.cookie = info->mti_rr.rr_handle->cookie;
+		mfd->mfd_open_handle_old = *info->mti_rr.rr_open_handle;
 	}
 
-	repbody->mbo_handle.cookie = mfd->mfd_handle.h_cookie;
+	repbody->mbo_open_handle.cookie = mfd->mfd_open_handle.h_cookie;
 
 	if (req->rq_export->exp_disconnected) {
 		spin_lock(&med->med_open_lock);
-		class_handle_unhash(&mfd->mfd_handle);
+		class_handle_unhash(&mfd->mfd_open_handle);
 		list_del_init(&mfd->mfd_list);
 		spin_unlock(&med->med_open_lock);
 		mdt_mfd_close(info, mfd);
@@ -606,8 +608,9 @@ static int mdt_finish_open(struct mdt_thread_info *info,
 		}
 		spin_unlock(&med->med_open_lock);
 
-                if (mfd != NULL) {
-			repbody->mbo_handle.cookie = mfd->mfd_handle.h_cookie;
+		if (mfd != NULL) {
+			repbody->mbo_open_handle.cookie =
+				mfd->mfd_open_handle.h_cookie;
 			/* set repbody->ea_size for resent case */
 			if (ma->ma_valid & MA_LOV) {
 				LASSERT(ma->ma_lmm_size != 0);
@@ -965,11 +968,11 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 		is_replay_or_resent = req_is_replay(req) ||
 			lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT;
 
-		/* if the request is _not_ a replay request, rr_handle
-		 * may be used to hold an openhandle which is issuing the
+		/* if the request is _not_ a replay request, rr_open_handle
+		 * may be used to hold an open file handle which is issuing the
 		 * lease request, so that this openhandle doesn't count. */
-		mfd = mdt_handle2mfd(med, info->mti_rr.rr_handle,
-				     is_replay_or_resent);
+		mfd = mdt_open_handle2mfd(med, info->mti_rr.rr_open_handle,
+					  is_replay_or_resent);
 		if (mfd != NULL)
 			++open_count;
 
@@ -2339,16 +2342,17 @@ int mdt_close_internal(struct mdt_thread_info *info, struct ptlrpc_request *req,
 
 	med = &req->rq_export->exp_mdt_data;
 	spin_lock(&med->med_open_lock);
-	mfd = mdt_handle2mfd(med, &info->mti_close_handle, req_is_replay(req));
+	mfd = mdt_open_handle2mfd(med, &info->mti_open_handle,
+				  req_is_replay(req));
 	if (mdt_mfd_closed(mfd)) {
 		spin_unlock(&med->med_open_lock);
 		CDEBUG(D_INODE, "no handle for file close: fid = "DFID
 		       ": cookie = %#llx\n", PFID(info->mti_rr.rr_fid1),
-		       info->mti_close_handle.cookie);
+		       info->mti_open_handle.cookie);
 		/** not serious error since bug 3633 */
 		rc = -ESTALE;
 	} else {
-		class_handle_unhash(&mfd->mfd_handle);
+		class_handle_unhash(&mfd->mfd_open_handle);
 		list_del_init(&mfd->mfd_list);
 		spin_unlock(&med->med_open_lock);
 		ret = mdt_mfd_close(info, mfd);
@@ -2399,9 +2403,9 @@ int mdt_close(struct tgt_session_info *tsi)
 		ma->ma_need = MA_INODE | MA_LOV;
 		repbody->mbo_eadatasize = 0;
 		repbody->mbo_aclsize = 0;
-        } else {
-                rc = err_serious(rc);
-        }
+	} else {
+		rc = err_serious(rc);
+	}
 
 	rc = mdt_close_internal(info, req, repbody);
 	if (rc != -ESTALE)

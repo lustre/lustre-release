@@ -1059,7 +1059,7 @@ check_mdt_body(void)
 	CHECK_STRUCT(mdt_body);
 	CHECK_MEMBER(mdt_body, mbo_fid1);
 	CHECK_MEMBER(mdt_body, mbo_fid2);
-	CHECK_MEMBER(mdt_body, mbo_handle);
+	CHECK_MEMBER(mdt_body, mbo_open_handle);
 	CHECK_MEMBER(mdt_body, mbo_valid);
 	CHECK_MEMBER(mdt_body, mbo_size);
 	CHECK_MEMBER(mdt_body, mbo_mtime);
@@ -1139,7 +1139,7 @@ check_mdt_ioepoch(void)
 {
 	BLANK_LINE();
 	CHECK_STRUCT(mdt_ioepoch);
-	CHECK_MEMBER(mdt_ioepoch, mio_handle);
+	CHECK_MEMBER(mdt_ioepoch, mio_open_handle);
 	CHECK_MEMBER(mdt_ioepoch, mio_unused1);
 	CHECK_MEMBER(mdt_ioepoch, mio_unused2);
 	CHECK_MEMBER(mdt_ioepoch, mio_padding);
@@ -1194,7 +1194,7 @@ check_mdt_rec_create(void)
 	CHECK_MEMBER(mdt_rec_create, cr_suppgid2_h);
 	CHECK_MEMBER(mdt_rec_create, cr_fid1);
 	CHECK_MEMBER(mdt_rec_create, cr_fid2);
-	CHECK_MEMBER(mdt_rec_create, cr_old_handle);
+	CHECK_MEMBER(mdt_rec_create, cr_open_handle_old);
 	CHECK_MEMBER(mdt_rec_create, cr_time);
 	CHECK_MEMBER(mdt_rec_create, cr_rdev);
 	CHECK_MEMBER(mdt_rec_create, cr_ioepoch);

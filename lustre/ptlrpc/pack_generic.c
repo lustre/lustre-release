@@ -1899,7 +1899,7 @@ void lustre_swab_mdt_body (struct mdt_body *b)
 
 void lustre_swab_mdt_ioepoch(struct mdt_ioepoch *b)
 {
-	/* mio_handle is opaque */
+	/* mio_open_handle is opaque */
 	CLASSERT(offsetof(typeof(*b), mio_unused1) != 0);
 	CLASSERT(offsetof(typeof(*b), mio_unused2) != 0);
 	CLASSERT(offsetof(typeof(*b), mio_padding) != 0);

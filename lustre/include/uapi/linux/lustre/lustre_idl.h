@@ -1802,7 +1802,7 @@ enum md_transient_state {
 struct mdt_body {
 	struct lu_fid mbo_fid1;
 	struct lu_fid mbo_fid2;
-	struct lustre_handle mbo_handle;
+	struct lustre_handle mbo_open_handle;
 	__u64	mbo_valid;
 	__u64	mbo_size; /* Offset, in the case of MDS_READPAGE */
 	__s64	mbo_mtime;
@@ -1839,7 +1839,7 @@ struct mdt_body {
 }; /* 216 */
 
 struct mdt_ioepoch {
-	struct lustre_handle mio_handle;
+	struct lustre_handle mio_open_handle;
 	__u64 mio_unused1; /* was ioepoch */
 	__u32 mio_unused2; /* was flags */
 	__u32 mio_padding;
@@ -1934,32 +1934,32 @@ enum mds_op_bias {
 
 /* instance of mdt_reint_rec */
 struct mdt_rec_create {
-        __u32           cr_opcode;
-        __u32           cr_cap;
-        __u32           cr_fsuid;
-        __u32           cr_fsuid_h;
-        __u32           cr_fsgid;
-        __u32           cr_fsgid_h;
-        __u32           cr_suppgid1;
-        __u32           cr_suppgid1_h;
-        __u32           cr_suppgid2;
-        __u32           cr_suppgid2_h;
-        struct lu_fid   cr_fid1;
-        struct lu_fid   cr_fid2;
-        struct lustre_handle cr_old_handle; /* handle in case of open replay */
+	__u32		cr_opcode;
+	__u32		cr_cap;
+	__u32		cr_fsuid;
+	__u32		cr_fsuid_h;
+	__u32		cr_fsgid;
+	__u32		cr_fsgid_h;
+	__u32		cr_suppgid1;
+	__u32		cr_suppgid1_h;
+	__u32		cr_suppgid2;
+	__u32		cr_suppgid2_h;
+	struct lu_fid	cr_fid1;
+	struct lu_fid	cr_fid2;
+	struct lustre_handle cr_open_handle_old; /* in case of open replay */
 	__s64		cr_time;
-        __u64           cr_rdev;
-        __u64           cr_ioepoch;
-        __u64           cr_padding_1;   /* rr_blocks */
-        __u32           cr_mode;
-        __u32           cr_bias;
-        /* use of helpers set/get_mrc_cr_flags() is needed to access
-         * 64 bits cr_flags [cr_flags_l, cr_flags_h], this is done to
-         * extend cr_flags size without breaking 1.8 compat */
-        __u32           cr_flags_l;     /* for use with open, low  32 bits  */
-        __u32           cr_flags_h;     /* for use with open, high 32 bits */
-        __u32           cr_umask;       /* umask for create */
-        __u32           cr_padding_4;   /* rr_padding_4 */
+	__u64		cr_rdev;
+	__u64		cr_ioepoch;
+	__u64		cr_padding_1;   /* rr_blocks */
+	__u32		cr_mode;
+	__u32		cr_bias;
+	/* use of helpers set/get_mrc_cr_flags() is needed to access
+	 * 64 bits cr_flags [cr_flags_l, cr_flags_h], this is done to
+	 * extend cr_flags size without breaking 1.8 compat */
+	__u32		cr_flags_l;	/* for use with open, low  32 bits  */
+	__u32		cr_flags_h;	/* for use with open, high 32 bits */
+	__u32		cr_umask;	/* umask for create */
+	__u32		cr_padding_4;   /* rr_padding_4 */
 };
 
 /* instance of mdt_reint_rec */
@@ -2087,7 +2087,7 @@ struct mdt_rec_resync {
 	__u32           rs_suppgid2_h;
 	struct lu_fid   rs_fid;
 	__u8		rs_padding0[sizeof(struct lu_fid)];
-	struct lustre_handle rs_handle;	/* rr_mtime */
+	struct lustre_handle rs_lease_handle;	/* rr_mtime */
 	__s64		rs_padding1;	/* rr_atime */
 	__s64		rs_padding2;	/* rr_ctime */
 	__u64           rs_padding3;	/* rr_size */

@@ -65,7 +65,7 @@ struct mdt_object;
 /* file data for open files on MDS */
 struct mdt_file_data {
 	/**  portals handle must be first */
-	struct portals_handle	mfd_handle;
+	struct portals_handle	mfd_open_handle;
 	/** open mode provided by client */
 	__u64			mfd_mode;
 	/** protected by med_open_lock */
@@ -73,7 +73,7 @@ struct mdt_file_data {
 	/** xid of the open request */
 	__u64			mfd_xid;
 	/** old handle in replay case */
-	struct lustre_handle	mfd_old_handle;
+	struct lustre_handle	mfd_open_handle_old;
 	/** point to opened object */
 	struct mdt_object	*mfd_object;
 };
@@ -351,7 +351,8 @@ enum {
 
 struct mdt_reint_record {
 	enum mds_reint_op		 rr_opcode;
-	const struct lustre_handle	*rr_handle;
+	const struct lustre_handle	*rr_open_handle;
+	const struct lustre_handle	*rr_lease_handle;
 	const struct lu_fid		*rr_fid1;
 	const struct lu_fid		*rr_fid2;
 	struct lu_name			 rr_name;
@@ -481,10 +482,10 @@ struct mdt_thread_info {
 		} som;
 	} mti_u;
 
-	struct lustre_handle	   mti_close_handle;
-	loff_t                     mti_off;
-	struct lu_buf              mti_buf;
-	struct lu_buf              mti_big_buf;
+	struct lustre_handle	   mti_open_handle;
+	loff_t			   mti_off;
+	struct lu_buf		   mti_buf;
+	struct lu_buf		   mti_big_buf;
 
         /* Ops object filename */
         struct lu_name             mti_name;
@@ -821,11 +822,11 @@ void mdt_mfd_set_mode(struct mdt_file_data *mfd,
 		      __u64 mode);
 
 int mdt_reint_open(struct mdt_thread_info *info,
-                   struct mdt_lock_handle *lhc);
+		   struct mdt_lock_handle *lhc);
 
-struct mdt_file_data *mdt_handle2mfd(struct mdt_export_data *med,
-				     const struct lustre_handle *handle,
-				     bool is_replay);
+struct mdt_file_data *mdt_open_handle2mfd(struct mdt_export_data *med,
+					const struct lustre_handle *open_handle,
+					bool is_replay);
 
 int mdt_get_info(struct tgt_session_info *tsi);
 int mdt_attr_get_complex(struct mdt_thread_info *info,

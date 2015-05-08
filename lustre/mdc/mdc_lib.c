@@ -263,7 +263,7 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 		rec->cr_suppgid1   = op_data->op_suppgids[0];
 		rec->cr_suppgid2   = op_data->op_suppgids[1];
 		rec->cr_bias       = op_data->op_bias;
-		rec->cr_old_handle = op_data->op_handle;
+		rec->cr_open_handle_old = op_data->op_open_handle;
 
 		if (op_data->op_name) {
 			mdc_pack_name(req, &RMF_NAME, op_data->op_name,
@@ -367,7 +367,7 @@ static void mdc_setattr_pack_rec(struct mdt_rec_setattr *rec,
 static void mdc_ioepoch_pack(struct mdt_ioepoch *epoch,
 			     struct md_op_data *op_data)
 {
-	epoch->mio_handle = op_data->op_handle;
+	epoch->mio_open_handle = op_data->op_open_handle;
 	epoch->mio_unused1 = 0;
 	epoch->mio_unused2 = 0;
 	epoch->mio_padding = 0;

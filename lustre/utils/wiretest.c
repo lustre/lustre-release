@@ -2319,10 +2319,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct mdt_body, mbo_fid2));
 	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_fid2) == 16, "found %lld\n",
 		 (long long)(int)sizeof(((struct mdt_body *)0)->mbo_fid2));
-	LASSERTF((int)offsetof(struct mdt_body, mbo_handle) == 32, "found %lld\n",
-		 (long long)(int)offsetof(struct mdt_body, mbo_handle));
-	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_handle) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct mdt_body *)0)->mbo_handle));
+	LASSERTF((int)offsetof(struct mdt_body, mbo_open_handle) == 32, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_body, mbo_open_handle));
+	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_open_handle) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_body *)0)->mbo_open_handle));
 	LASSERTF((int)offsetof(struct mdt_body, mbo_valid) == 40, "found %lld\n",
 		 (long long)(int)offsetof(struct mdt_body, mbo_valid));
 	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_valid) == 8, "found %lld\n",
@@ -2521,10 +2521,10 @@ void lustre_assert_wire_constants(void)
 	/* Checks for struct mdt_ioepoch */
 	LASSERTF((int)sizeof(struct mdt_ioepoch) == 24, "found %lld\n",
 		 (long long)(int)sizeof(struct mdt_ioepoch));
-	LASSERTF((int)offsetof(struct mdt_ioepoch, mio_handle) == 0, "found %lld\n",
-		 (long long)(int)offsetof(struct mdt_ioepoch, mio_handle));
-	LASSERTF((int)sizeof(((struct mdt_ioepoch *)0)->mio_handle) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct mdt_ioepoch *)0)->mio_handle));
+	LASSERTF((int)offsetof(struct mdt_ioepoch, mio_open_handle) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_ioepoch, mio_open_handle));
+	LASSERTF((int)sizeof(((struct mdt_ioepoch *)0)->mio_open_handle) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_ioepoch *)0)->mio_open_handle));
 	LASSERTF((int)offsetof(struct mdt_ioepoch, mio_unused1) == 8, "found %lld\n",
 		 (long long)(int)offsetof(struct mdt_ioepoch, mio_unused1));
 	LASSERTF((int)sizeof(((struct mdt_ioepoch *)0)->mio_unused1) == 8, "found %lld\n",
@@ -2693,10 +2693,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct mdt_rec_create, cr_fid2));
 	LASSERTF((int)sizeof(((struct mdt_rec_create *)0)->cr_fid2) == 16, "found %lld\n",
 		 (long long)(int)sizeof(((struct mdt_rec_create *)0)->cr_fid2));
-	LASSERTF((int)offsetof(struct mdt_rec_create, cr_old_handle) == 72, "found %lld\n",
-		 (long long)(int)offsetof(struct mdt_rec_create, cr_old_handle));
-	LASSERTF((int)sizeof(((struct mdt_rec_create *)0)->cr_old_handle) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct mdt_rec_create *)0)->cr_old_handle));
+	LASSERTF((int)offsetof(struct mdt_rec_create, cr_open_handle_old) == 72, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_create, cr_open_handle_old));
+	LASSERTF((int)sizeof(((struct mdt_rec_create *)0)->cr_open_handle_old) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_create *)0)->cr_open_handle_old));
 	LASSERTF((int)offsetof(struct mdt_rec_create, cr_time) == 80, "found %lld\n",
 		 (long long)(int)offsetof(struct mdt_rec_create, cr_time));
 	LASSERTF((int)sizeof(((struct mdt_rec_create *)0)->cr_time) == 8, "found %lld\n",

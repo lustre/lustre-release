@@ -588,41 +588,41 @@ int mdc_free_lustre_md(struct obd_export *exp, struct lustre_md *md)
 
 void mdc_replay_open(struct ptlrpc_request *req)
 {
-        struct md_open_data *mod = req->rq_cb_data;
-        struct ptlrpc_request *close_req;
-        struct obd_client_handle *och;
-        struct lustre_handle old;
-        struct mdt_body *body;
-        ENTRY;
+	struct md_open_data *mod = req->rq_cb_data;
+	struct ptlrpc_request *close_req;
+	struct obd_client_handle *och;
+	struct lustre_handle old_open_handle = { };
+	struct mdt_body *body;
+	ENTRY;
 
-        if (mod == NULL) {
-                DEBUG_REQ(D_ERROR, req,
-                          "Can't properly replay without open data.");
-                EXIT;
-                return;
-        }
+	if (mod == NULL) {
+		DEBUG_REQ(D_ERROR, req,
+			  "Can't properly replay without open data.");
+		EXIT;
+		return;
+	}
 
-        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
-        LASSERT(body != NULL);
+	body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+	LASSERT(body != NULL);
 
 	spin_lock(&req->rq_lock);
 	och = mod->mod_och;
-	if (och && och->och_fh.cookie)
+	if (och && och->och_open_handle.cookie)
 		req->rq_early_free_repbuf = 1;
 	else
 		req->rq_early_free_repbuf = 0;
 	spin_unlock(&req->rq_lock);
 
 	if (req->rq_early_free_repbuf) {
-		struct lustre_handle *file_fh;
+		struct lustre_handle *file_open_handle;
 
 		LASSERT(och->och_magic == OBD_CLIENT_HANDLE_MAGIC);
 
-		file_fh = &och->och_fh;
+		file_open_handle = &och->och_open_handle;
 		CDEBUG(D_HA, "updating handle from %#llx to %#llx\n",
-		       file_fh->cookie, body->mbo_handle.cookie);
-		old = *file_fh;
-		*file_fh = body->mbo_handle;
+		       file_open_handle->cookie, body->mbo_open_handle.cookie);
+		old_open_handle = *file_open_handle;
+		*file_open_handle = body->mbo_open_handle;
 	}
 
 	close_req = mod->mod_close_req;
@@ -636,10 +636,11 @@ void mdc_replay_open(struct ptlrpc_request *req)
 		LASSERT(epoch);
 
 		if (req->rq_early_free_repbuf)
-			LASSERT(!memcmp(&old, &epoch->mio_handle, sizeof(old)));
+			LASSERT(old_open_handle.cookie ==
+				epoch->mio_open_handle.cookie);
 
 		DEBUG_REQ(D_HA, close_req, "updating close body with new fh");
-		epoch->mio_handle = body->mbo_handle;
+		epoch->mio_open_handle = body->mbo_open_handle;
 	}
 	EXIT;
 }
@@ -721,19 +722,20 @@ int mdc_set_open_replay_data(struct obd_export *exp,
 		open_req->rq_commit_cb = mdc_commit_open;
 		open_req->rq_early_free_repbuf = 1;
 		spin_unlock(&open_req->rq_lock);
-        }
+	}
 
 	rec->cr_fid2 = body->mbo_fid1;
-	rec->cr_old_handle.cookie = body->mbo_handle.cookie;
+	rec->cr_open_handle_old = body->mbo_open_handle;
 	open_req->rq_replay_cb = mdc_replay_open;
 	if (!fid_is_sane(&body->mbo_fid1)) {
-                DEBUG_REQ(D_ERROR, open_req, "Saving replay request with "
-                          "insane fid");
-                LBUG();
-        }
+		DEBUG_REQ(D_ERROR, open_req,
+			  "saving replay request with insane FID " DFID,
+			  PFID(&body->mbo_fid1));
+		LBUG();
+	}
 
-        DEBUG_REQ(D_RPCTRACE, open_req, "Set up open replay data");
-        RETURN(0);
+	DEBUG_REQ(D_RPCTRACE, open_req, "Set up open replay data");
+	RETURN(0);
 }
 
 static void mdc_free_open(struct md_open_data *mod)
@@ -777,7 +779,7 @@ int mdc_clear_open_replay_data(struct obd_export *exp,
 
 	spin_lock(&mod->mod_open_req->rq_lock);
 	if (mod->mod_och)
-		mod->mod_och->och_fh.cookie = 0;
+		mod->mod_och->och_open_handle.cookie = 0;
 	mod->mod_open_req->rq_early_free_repbuf = 0;
 	spin_unlock(&mod->mod_open_req->rq_lock);
 	mdc_free_open(mod);
