@@ -154,6 +154,10 @@ static int nrs_orr_key_fill(struct nrs_orr_data *orrd,
 		return 0;
 	}
 
+	/* Bounce unconnected requests to the default policy. */
+	if (req->rq_export == NULL)
+		return -ENOTCONN;
+
 	if (nrq->nr_u.orr.or_orr_set || nrq->nr_u.orr.or_trr_set)
 		memset(&nrq->nr_u.orr.or_key, 0, sizeof(nrq->nr_u.orr.or_key));
 
