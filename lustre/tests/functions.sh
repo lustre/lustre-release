@@ -812,9 +812,6 @@ run_parallel_grouplock() {
     # mpi_run uses mpiuser
     chmod 0777 $testdir
 
-    do_nodes $clients "lctl set_param llite.*.max_rw_chunk=0" ||
-        error "set_param max_rw_chunk=0 failed "
-
     local cmd
     local status=0
     local subtest
