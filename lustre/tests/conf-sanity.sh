@@ -5230,15 +5230,17 @@ test_82b() { # LU-4665
 run_test 82b "specify OSTs for file with --pool and --ost-list options"
 
 test_83() {
-	local dev
-	local ostmnt
-	local fstype
-	local mnt_opts
-
+	[[ $(lustre_version_code ost1) -ge $(version_code 2.6.91) ]] ||
+		{ skip "Need OST version at least 2.6.91" && return 0; }
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
 		skip "Only applicable to ldiskfs-based MDTs"
 		return
 	fi
+
+	local dev
+	local ostmnt
+	local fstype
+	local mnt_opts
 
 	dev=$(ostdevname 1)
 	ostmnt=$(facet_mntpt ost1)
