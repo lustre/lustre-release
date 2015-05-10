@@ -1273,6 +1273,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	if (!lu_name_is_valid(&rr->rr_name))
 		GOTO(out, result = -EPROTO);
 
+again:
         lh = &info->mti_lh[MDT_LH_PARENT];
 	mdt_lock_pdo_init(lh,
 			  (create_flags & MDS_OPEN_CREAT) ? LCK_PW : LCK_PR,
@@ -1306,16 +1307,45 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         if (result != 0 && result != -ENOENT && result != -ESTALE)
                 GOTO(out_parent, result);
 
-        if (result == -ENOENT || result == -ESTALE) {
-                mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
-                if (result == -ESTALE) {
-                        /*
-                         * -ESTALE means the parent is a dead(unlinked) dir, so
-                         * it should return -ENOENT to in accordance with the
-                         * original mds implementaion.
-                         */
-                        GOTO(out_parent, result = -ENOENT);
-                }
+	if (result == -ENOENT || result == -ESTALE) {
+		/* If the object is dead, let's check if the object
+		 * is being migrated to a new object */
+		if (result == -ESTALE) {
+			struct lu_buf lmv_buf;
+
+			lmv_buf.lb_buf = info->mti_xattr_buf;
+			lmv_buf.lb_len = sizeof(info->mti_xattr_buf);
+			rc = mo_xattr_get(info->mti_env,
+					  mdt_object_child(parent),
+					  &lmv_buf, XATTR_NAME_LMV);
+			if (rc > 0) {
+				struct lmv_mds_md_v1 *lmv;
+
+				lmv = lmv_buf.lb_buf;
+				if (le32_to_cpu(lmv->lmv_hash_type) &
+						LMV_HASH_FLAG_MIGRATION) {
+					/* Get the new parent FID and retry */
+					mdt_object_unlock_put(info, parent,
+							      lh, 1);
+					mdt_lock_handle_init(lh);
+					fid_le_to_cpu(
+						(struct lu_fid *)rr->rr_fid1,
+						&lmv->lmv_stripe_fids[1]);
+					goto again;
+				}
+			}
+		}
+
+		mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
+		if (result == -ESTALE) {
+			/*
+			 * -ESTALE means the parent is a dead(unlinked) dir, so
+			 * it should return -ENOENT to in accordance with the
+			 * original mds implementaion.
+			 */
+			GOTO(out_parent, result = -ENOENT);
+		}
+
                 if (!(create_flags & MDS_OPEN_CREAT))
                         GOTO(out_parent, result);
 		if (exp_connect_flags(req->rq_export) & OBD_CONNECT_RDONLY)
@@ -1760,8 +1790,8 @@ out_reprocess:
 	return rc;
 }
 
-static int mdt_close_swap_layouts(struct mdt_thread_info *info,
-				  struct mdt_object *o, struct md_attr *ma)
+int mdt_close_swap_layouts(struct mdt_thread_info *info,
+			   struct mdt_object *o, struct md_attr *ma)
 {
 	struct mdt_lock_handle	*lh1 = &info->mti_lh[MDT_LH_NEW];
 	struct mdt_lock_handle	*lh2 = &info->mti_lh[MDT_LH_OLD];
@@ -1888,8 +1918,10 @@ out_obj:
 out_lease:
 	LDLM_LOCK_PUT(lease);
 
-	ma->ma_valid = 0;
-	ma->ma_need = 0;
+	if (ma != NULL) {
+		ma->ma_valid = 0;
+		ma->ma_need = 0;
+	}
 
 	return rc;
 }
@@ -1970,13 +2002,48 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 	RETURN(rc);
 }
 
+int mdt_close_internal(struct mdt_thread_info *info, struct ptlrpc_request *req,
+		       struct mdt_body *repbody)
+{
+	struct mdt_export_data *med;
+	struct mdt_file_data   *mfd;
+	struct mdt_object      *o;
+	struct md_attr         *ma = &info->mti_attr;
+	int			ret = 0;
+	int			rc = 0;
+	ENTRY;
+
+	med = &req->rq_export->exp_mdt_data;
+	spin_lock(&med->med_open_lock);
+	mfd = mdt_handle2mfd(med, &info->mti_close_handle, req_is_replay(req));
+	if (mdt_mfd_closed(mfd)) {
+		spin_unlock(&med->med_open_lock);
+		CDEBUG(D_INODE, "no handle for file close: fid = "DFID
+		       ": cookie = "LPX64"\n", PFID(info->mti_rr.rr_fid1),
+		       info->mti_close_handle.cookie);
+		/** not serious error since bug 3633 */
+		rc = -ESTALE;
+	} else {
+		class_handle_unhash(&mfd->mfd_handle);
+		list_del_init(&mfd->mfd_list);
+		spin_unlock(&med->med_open_lock);
+
+		/* Do not lose object before last unlink. */
+		o = mfd->mfd_object;
+		mdt_object_get(info->mti_env, o);
+		ret = mdt_mfd_close(info, mfd);
+		if (repbody != NULL)
+			rc = mdt_handle_last_unlink(info, o, ma);
+		mdt_object_put(info->mti_env, o);
+	}
+
+	RETURN(rc ? rc : ret);
+}
+
 int mdt_close(struct tgt_session_info *tsi)
 {
 	struct mdt_thread_info	*info = tsi2mdt_info(tsi);
 	struct ptlrpc_request	*req = tgt_ses_req(tsi);
-        struct mdt_export_data *med;
-        struct mdt_file_data   *mfd;
-        struct mdt_object      *o;
         struct md_attr         *ma = &info->mti_attr;
         struct mdt_body        *repbody = NULL;
         int rc, ret = 0;
@@ -2019,30 +2086,10 @@ int mdt_close(struct tgt_session_info *tsi)
                 rc = err_serious(rc);
         }
 
-        med = &req->rq_export->exp_mdt_data;
-	spin_lock(&med->med_open_lock);
-	mfd = mdt_handle2mfd(med, &info->mti_close_handle, req_is_replay(req));
-	if (mdt_mfd_closed(mfd)) {
-		spin_unlock(&med->med_open_lock);
-		CDEBUG(D_INODE, "no handle for file close: fid = "DFID
-		       ": cookie = "LPX64"\n", PFID(info->mti_rr.rr_fid1),
-		       info->mti_close_handle.cookie);
-		/** not serious error since bug 3633 */
-		rc = -ESTALE;
-	} else {
-		class_handle_unhash(&mfd->mfd_handle);
-		list_del_init(&mfd->mfd_list);
-		spin_unlock(&med->med_open_lock);
+	rc = mdt_close_internal(info, req, repbody);
+	if (rc != -ESTALE)
+		mdt_empty_transno(info, rc);
 
-                /* Do not lose object before last unlink. */
-                o = mfd->mfd_object;
-                mdt_object_get(info->mti_env, o);
-                ret = mdt_mfd_close(info, mfd);
-                if (repbody != NULL)
-                        rc = mdt_handle_last_unlink(info, o, ma);
-                mdt_empty_transno(info, rc);
-                mdt_object_put(info->mti_env, o);
-        }
         if (repbody != NULL) {
                 mdt_client_compatibility(info);
                 rc = mdt_fix_reply(info);

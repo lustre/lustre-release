@@ -1345,6 +1345,8 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info,
 	struct lu_fid           *old_fid = &info->mti_tmp_fid1;
 	struct list_head	lock_list;
 	__u64			lock_ibits;
+	struct ldlm_lock	*lease = NULL;
+	bool			lock_open_sem = false;
 	int			rc;
 	ENTRY;
 
@@ -1413,6 +1415,55 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info,
 	rc = mdt_lock_objects_in_linkea(info, mold, msrcdir, &lock_list);
 	if (rc != 0)
 		GOTO(out_put_child, rc);
+
+	if (info->mti_spec.sp_migrate_close) {
+		struct close_data *data;
+		struct mdt_body	 *repbody;
+		bool lease_broken = false;
+
+		if (!req_capsule_field_present(info->mti_pill, &RMF_MDT_EPOCH,
+				      RCL_CLIENT) ||
+		    !req_capsule_field_present(info->mti_pill, &RMF_CLOSE_DATA,
+				      RCL_CLIENT))
+			GOTO(out_lease, rc = -EPROTO);
+
+		data = req_capsule_client_get(info->mti_pill, &RMF_CLOSE_DATA);
+		if (data == NULL)
+			GOTO(out_lease, rc = -EPROTO);
+
+		lease = ldlm_handle2lock(&data->cd_handle);
+		if (lease == NULL)
+			GOTO(out_lease, rc = -ESTALE);
+
+		/* try to hold open_sem so that nobody else can open the file */
+		if (!down_write_trylock(&mold->mot_open_sem)) {
+			ldlm_lock_cancel(lease);
+			GOTO(out_lease, rc = -EBUSY);
+		}
+
+		lock_open_sem = true;
+		/* Check if the lease open lease has already canceled */
+		lock_res_and_lock(lease);
+		lease_broken = ldlm_is_cancel(lease);
+		unlock_res_and_lock(lease);
+
+		LDLM_DEBUG(lease, DFID " lease broken? %d\n",
+			   PFID(mdt_object_fid(mold)), lease_broken);
+
+		/* Cancel server side lease. Client side counterpart should
+		 * have been cancelled. It's okay to cancel it now as we've
+		 * held mot_open_sem. */
+		ldlm_lock_cancel(lease);
+
+		if (lease_broken)
+			GOTO(out_lease, rc = -EAGAIN);
+out_lease:
+		rc = mdt_close_internal(info, mdt_info_req(info), NULL);
+		repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
+		repbody->mbo_valid |= OBD_MD_CLOSE_INTENT_EXECED;
+		if (rc != 0)
+			GOTO(out_unlock_list, rc);
+	}
 
 	/* 4: lock of the object migrated object */
 	lh_childp = &info->mti_lh[MDT_LH_OLD];
@@ -1505,6 +1556,7 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info,
 			 mdt_object_child(mnew), ma);
 	if (rc != 0)
 		GOTO(out_unlock_new, rc);
+
 out_unlock_new:
 	if (lh_tgtp != NULL)
 		mdt_object_unlock(info, mnew, lh_tgtp, rc);
@@ -1515,6 +1567,13 @@ out_unlock_child:
 	mdt_object_unlock(info, mold, lh_childp, rc);
 out_unlock_list:
 	mdt_unlock_list(info, &lock_list, rc);
+	if (lease != NULL) {
+		ldlm_reprocess_all(lease->l_resource);
+		LDLM_LOCK_PUT(lease);
+	}
+
+	if (lock_open_sem)
+		up_write(&mold->mot_open_sem);
 out_put_child:
 	mdt_object_put(info->mti_env, mold);
 out_unlock_parent:

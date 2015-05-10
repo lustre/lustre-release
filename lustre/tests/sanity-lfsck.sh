@@ -1590,6 +1590,9 @@ test_15c() {
 	[ $MDSCOUNT -lt 2 ] &&
 		skip "We need at least 2 MDSes for this test" && return
 
+	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.55) ] &&
+		skip "Skip the test after 2.7.55 see LU-6437" && return
+
 	echo "#####"
 	echo "According to current metadata migration implementation,"
 	echo "before the old MDT-object is removed, both the new MDT-object"

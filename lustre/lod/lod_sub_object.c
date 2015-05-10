@@ -95,7 +95,9 @@ struct thandle *lod_sub_get_thandle(const struct lu_env *env,
 	if (rc < 0)
 		RETURN(ERR_PTR(rc));
 
-	if (type == LU_SEQ_RANGE_OST)
+	/* th_complex means we need track all of updates for this
+	 * transaction, include changes on OST */
+	if (type == LU_SEQ_RANGE_OST && !th->th_complex)
 		RETURN(tth->tt_master_sub_thandle);
 
 	sub_th = thandle_get_sub(env, th, sub_obj);

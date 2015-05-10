@@ -185,6 +185,7 @@ extern struct req_format RQF_MDS_REINT_SETXATTR;
 extern struct req_format RQF_MDS_QUOTACTL;
 extern struct req_format RQF_QUOTA_DQACQ;
 extern struct req_format RQF_MDS_SWAP_LAYOUTS;
+extern struct req_format RQF_MDS_REINT_MIGRATE;
 /* MDS hsm formats */
 extern struct req_format RQF_MDS_HSM_STATE_GET;
 extern struct req_format RQF_MDS_HSM_STATE_SET;

@@ -1140,7 +1140,7 @@ static long ll_dir_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			GOTO(out_free, rc = -EINVAL);
 		}
 
-		rc = ll_get_fid_by_name(inode, filename, namelen, NULL);
+		rc = ll_get_fid_by_name(inode, filename, namelen, NULL, NULL);
 		if (rc < 0) {
 			CERROR("%s: lookup %.*s failed: rc = %d\n",
 			       ll_get_fsname(inode->i_sb, NULL, 0), namelen,

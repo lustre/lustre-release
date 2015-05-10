@@ -1286,6 +1286,14 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
         else
                 ma->ma_attr_flags &= ~MDS_VTX_BYPASS;
 
+	if (rec->rn_bias & MDS_RENAME_MIGRATE) {
+		req_capsule_extend(info->mti_pill, &RQF_MDS_REINT_MIGRATE);
+		rc = mdt_close_handle_unpack(info);
+		if (rc < 0)
+			RETURN(rc);
+		info->mti_spec.sp_migrate_close = 1;
+	}
+
         info->mti_spec.no_create = !!req_is_replay(mdt_info_req(info));
 
 

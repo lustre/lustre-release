@@ -1825,7 +1825,9 @@ struct thandle {
 	/* local transation, no need to inform other layers */
 				th_local:1,
 	/* Whether we need wait the transaction to be submitted */
-				th_wait_submit:1;
+				th_wait_submit:1,
+	/* complex transaction which will track updates on all targets */
+				th_complex:1;
 };
 
 /**

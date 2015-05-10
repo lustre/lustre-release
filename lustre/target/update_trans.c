@@ -122,11 +122,12 @@ static int sub_declare_updates_write(const struct lu_env *env,
 	 * for example if the the OSP is used to connect to OST */
 	ctxt = llog_get_context(dt->dd_lu_dev.ld_obd,
 				LLOG_UPDATELOG_ORIG_CTXT);
-	LASSERT(ctxt != NULL);
 
 	/* Not ready to record updates yet. */
-	if (ctxt->loc_handle == NULL)
-		GOTO(out_put, rc = 0);
+	if (ctxt == NULL || ctxt->loc_handle == NULL) {
+		llog_ctxt_put(ctxt);
+		return 0;
+	}
 
 	rc = llog_declare_add(env, ctxt->loc_handle,
 			      &record->lur_hdr, sub_th);
@@ -184,12 +185,14 @@ static int sub_updates_write(const struct lu_env *env,
 
 	ctxt = llog_get_context(dt->dd_lu_dev.ld_obd,
 				LLOG_UPDATELOG_ORIG_CTXT);
-	LASSERT(ctxt != NULL);
-
-	/* Not ready to record updates yet, usually happens
-	 * in error handler path */
-	if (ctxt->loc_handle == NULL)
-		GOTO(llog_put, rc = 0);
+	/* If ctxt == NULL, then it means updates on OST (only happens
+	 * during migration), and we do not track those updates for now */
+	/* If ctxt->loc_handle == NULL, then it does not need to record
+	 * update, usually happens in error handler path */
+	if (ctxt == NULL || ctxt->loc_handle == NULL) {
+		llog_ctxt_put(ctxt);
+		RETURN(0);
+	}
 
 	/* Since the cross-MDT updates will includes both local
 	 * and remote updates, the update ops count must > 1 */
@@ -1234,7 +1237,8 @@ static int distribute_txn_cancel_records(const struct lu_env *env,
 
 		obd = st->st_dt->dd_lu_dev.ld_obd;
 		ctxt = llog_get_context(obd, LLOG_UPDATELOG_ORIG_CTXT);
-		LASSERT(ctxt);
+		if (ctxt == NULL)
+			continue;
 		list_for_each_entry(stc, &st->st_cookie_list, stc_list) {
 			cookie = &stc->stc_cookie;
 			if (fid_is_zero(&cookie->lgc_lgl.lgl_oi.oi_fid))

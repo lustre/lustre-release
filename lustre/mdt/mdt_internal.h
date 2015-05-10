@@ -720,6 +720,8 @@ int mdt_remote_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 int mdt_links_read(struct mdt_thread_info *info,
 		   struct mdt_object *mdt_obj,
 		   struct linkea_data *ldata);
+int mdt_close_internal(struct mdt_thread_info *info, struct ptlrpc_request *req,
+		       struct mdt_body *repbody);
 /* mdt_idmap.c */
 int mdt_init_idmap(struct tgt_session_info *tsi);
 void mdt_cleanup_idmap(struct mdt_export_data *);
@@ -871,6 +873,9 @@ bool mdt_hsm_is_action_compat(const struct hsm_action_item *hai,
 int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
 				 struct hsm_progress_kernel *pgs,
 				 const int update_record);
+
+int mdt_close_swap_layouts(struct mdt_thread_info *info,
+			   struct mdt_object *o, struct md_attr *ma);
 
 extern struct lu_context_key       mdt_thread_key;
 
