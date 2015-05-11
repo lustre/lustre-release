@@ -1658,7 +1658,7 @@ t32_test() {
 	echo "  Commit: $img_commit"
 	echo "  Kernel: $img_kernel"
 	echo "    Arch: $img_arch"
-	echo "OST version: $(get_lustre_version ost1)"
+	echo "OST version: $(lustre_build_version ost1)"
 
 	# The conversion can be made only when both of the following
 	# conditions are satisfied:

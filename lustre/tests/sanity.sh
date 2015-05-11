@@ -4945,10 +4945,10 @@ run_test 56x "lfs migration support"
 
 test_56y() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.53) ] &&
-		skip "No HSM support on MDS of $(get_lustre_version)," \
-			 "need 2.4.53 at least" && return
-	local res=""
+		skip "No HSM $(lustre_build_version $SINGLEMDS) MDS < 2.4.53" &&
+		return
 
+	local res=""
 	local dir0=$DIR/$tdir/$testnum
 	mkdir -p $dir0 || error "creating dir $dir0"
 	local f1=$dir0/file1
@@ -12351,8 +12351,8 @@ run_test 228c "NOT shrink the last entry in OI index node to recycle idle leaf"
 
 test_229() { # LU-2482, LU-3448
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.53) ] &&
-		skip "No HSM support on MDS of $(get_lustre_version)," \
-			 "need 2.4.53 at least" && return
+		skip "No HSM $(lustre_build_version $SINGLEMDS) MDS < 2.4.53" &&
+		return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
 
