@@ -11,10 +11,9 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT="                2     5     6    $SANITY_SEC_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$ALWAYS_EXCEPT$EXCEPT" ] && \
-	echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
+[ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
 
-SRCDIR=`dirname $0`
+SRCDIR=$(dirname $0)
 export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 export NAME=${NAME:-local}
 
@@ -74,10 +73,10 @@ sec_cleanup() {
 }
 
 DIR=${DIR:-$MOUNT}
-[ -z "`echo $DIR | grep $MOUNT`" ] && \
+[ -z "$(echo $DIR | grep $MOUNT)" ] &&
 	error "$DIR not in $MOUNT" && sec_cleanup && exit 1
 
-[ `echo $MOUNT | wc -w` -gt 1 ] && \
+[ $(echo $MOUNT | wc -w) -gt 1 ] &&
 	echo "NAME=$MOUNT mounted more than once" && sec_cleanup && exit 0
 
 # for GSS_SUP
@@ -124,19 +123,19 @@ sec_login() {
 	if ! $RUNAS_CMD -u $user -g $group ls $DIR > /dev/null 2>&1; then
 		$RUNAS_CMD -u $user lfs flushctx -k
 		$RUNAS_CMD -u $user krb5_login.sh
-                if ! $RUNAS_CMD -u$user -g$group ls $DIR > /dev/null 2>&1; then
-                        error "init $user $group failed."
-                        exit 2
-                fi
+		if ! $RUNAS_CMD -u$user -g$group ls $DIR > /dev/null 2>&1; then
+			error "init $user $group failed."
+			exit 2
+		fi
 	fi
 }
 
 declare -a identity_old
 
 sec_setup() {
-       	for num in `seq $MDSCOUNT`; do
-       		switch_identity $num true || identity_old[$num]=$?
-       	done
+	for num in $(seq $MDSCOUNT); do
+		switch_identity $num true || identity_old[$num]=$?
+	done
 
 	if ! $RUNAS_CMD -u $ID0 ls $DIR > /dev/null 2>&1; then
 		sec_login $USER0 $USER0
@@ -158,16 +157,16 @@ test_0() {
 
 	if [ "$CLIENT_TYPE" = "remote" ]; then
 		do_facet $SINGLEMDS "echo '* 0 normtown' > $PERM_CONF"
-	        do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
+		do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 		chown $USER0 $DIR/$tdir && error "chown (1)"
 		do_facet $SINGLEMDS "echo '* 0 rmtown' > $PERM_CONF"
-	        do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
+		do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 	else
 		chown $USER0 $DIR/$tdir || error "chown (2)"
 	fi
 
 	$RUNAS_CMD -u $ID0 ls $DIR || error "ls (1)"
-        rm -f $DIR/f0 || error "rm (2)"
+	rm -f $DIR/f0 || error "rm (2)"
 	$RUNAS_CMD -u $ID0 touch $DIR/f0 && error "touch (1)"
 	$RUNAS_CMD -u $ID0 touch $DIR/$tdir/f1 || error "touch (2)"
 	$RUNAS_CMD -u $ID1 touch $DIR/$tdir/f2 && error "touch (3)"
@@ -182,7 +181,7 @@ test_0() {
 
 	if [ "$CLIENT_TYPE" = "remote" ]; then
 		do_facet $SINGLEMDS "rm -f $PERM_CONF"
-	        do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
+		do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 	fi
 }
 run_test 0 "uid permission ============================="
@@ -193,7 +192,7 @@ test_1() {
 
 	if [ "$CLIENT_TYPE" = "remote" ]; then
 		do_facet $SINGLEMDS "echo '* 0 rmtown' > $PERM_CONF"
-	        do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
+		do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 	fi
 
 	rm -rf $DIR/$tdir
@@ -227,18 +226,18 @@ test_1() {
 run_test 1 "setuid/gid ============================="
 
 run_rmtacl_subtest() {
-    $SAVE_PWD/rmtacl/run $SAVE_PWD/rmtacl/$1.test
-    return $?
+	$SAVE_PWD/rmtacl/run $SAVE_PWD/rmtacl/$1.test
+	return $?
 }
 
 # remote_acl
 # for remote client only
 test_2 () {
-	[ "$CLIENT_TYPE" = "local" ] && \
+	[ "$CLIENT_TYPE" = "local" ] &&
 		skip "remote_acl for remote client only" && return
-    	[ -z "$(lctl get_param -n mdc.*-mdc-*.connect_flags | grep ^acl)" ] && \
+	[ -z "$(lctl get_param -n mdc.*-mdc-*.connect_flags | grep ^acl)" ] &&
 		skip "must have acl enabled" && return
-    	[ -z "$(which setfacl 2>/dev/null)" ] && \
+	[ -z "$(which setfacl 2>/dev/null)" ] &&
 		skip "could not find setfacl" && return
 	[ "$UID" != 0 ] && skip "must run as root" && return
 
@@ -250,42 +249,35 @@ test_2 () {
 	sec_login daemon daemon
 	sec_login games users
 
-    	SAVE_UMASK=`umask`
-    	umask 0022
-    	cd $DIR
+	SAVE_UMASK=$(umask)
+	umask 0022
+	cd $DIR
 
-        echo "performing cp ..."
-        run_rmtacl_subtest cp || error "cp"
-    	echo "performing getfacl-noacl..."
-    	run_rmtacl_subtest getfacl-noacl || error "getfacl-noacl"
-    	echo "performing misc..."
-    	run_rmtacl_subtest misc || error "misc"
-    	echo "performing permissions..."
-    	run_rmtacl_subtest permissions || error "permissions"
-    	echo "performing setfacl..."
-    	run_rmtacl_subtest setfacl || error "setfacl"
+	echo "performing cp ..."
+	run_rmtacl_subtest cp || error "cp"
+	echo "performing getfacl-noacl..."
+	run_rmtacl_subtest getfacl-noacl || error "getfacl-noacl"
+	echo "performing misc..."
+	run_rmtacl_subtest misc || error "misc"
+	echo "performing permissions..."
+	run_rmtacl_subtest permissions || error "permissions"
+	echo "performing setfacl..."
+	run_rmtacl_subtest setfacl || error "setfacl"
 
-    	# inheritance test got from HP
-    	echo "performing inheritance..."
-    	cp $SAVE_PWD/rmtacl/make-tree .
-    	chmod +x make-tree
-    	run_rmtacl_subtest inheritance || error "inheritance"
-    	rm -f make-tree
+	# inheritance test got from HP
+	echo "performing inheritance..."
+	cp $SAVE_PWD/rmtacl/make-tree .
+	chmod +x make-tree
+	run_rmtacl_subtest inheritance || error "inheritance"
+	rm -f make-tree
 
-    	cd $SAVE_PWD
-    	umask $SAVE_UMASK
+	cd $SAVE_PWD
+	umask $SAVE_UMASK
 
 	do_facet $SINGLEMDS "rm -f $PERM_CONF"
 	do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 }
 run_test 2 "rmtacl ============================="
-
-# rootsquash
-# root_squash will be redesigned in Lustre 1.7
-test_3() {
-        skip "root_squash will be redesigned in Lustre 1.7" && return
-}
-run_test 3 "rootsquash ============================="
 
 # bug 3285 - supplementary group should always succeed.
 # NB: the supplementary groups are set for local client only,
@@ -305,9 +297,9 @@ test_4() {
 	fi
 
 	rm -rf $DIR/$tdir
-        mkdir -p $DIR/$tdir
-        chmod 0771 $DIR/$tdir
-        chgrp $ID0 $DIR/$tdir
+	mkdir -p $DIR/$tdir
+	chmod 0771 $DIR/$tdir
+	chgrp $ID0 $DIR/$tdir
 	$RUNAS_CMD -u $ID0 ls $DIR/$tdir || error "setgroups (1)"
 	if [ "$CLIENT_TYPE" = "local" ]; then
 		do_facet $SINGLEMDS "echo '* $ID1 setgrp' > $PERM_CONF"
@@ -331,15 +323,15 @@ create_nodemaps() {
 	squash_id default 99 0
 	squash_id default 99 1
 	for (( i = 0; i < NODEMAP_COUNT; i++ )); do
-		if ! do_facet mgs $LCTL nodemap_add			\
-		       	${HOSTNAME_CHECKSUM}_${i}; then
+		local csum=${HOSTNAME_CHECKSUM}_${i}
+
+		if ! do_facet mgs $LCTL nodemap_add $csum; then
 		       	return 1
 		fi
-		out=$(do_facet mgs $LCTL get_param			\
-			nodemap.${HOSTNAME_CHECKSUM}_${i}.id)
+
+		out=$(do_facet mgs $LCTL get_param nodemap.$csum.id)
 		## This needs to return zero if the following statement is 1
-		rc=$(echo $out | grep -c ${HOSTNAME_CHECKSUM}_${i})
-		[[ $rc == 0 ]] && return 1
+		[[ $(echo $out | grep -c $csum) == 0 ]] && return 1
 	done
 	return 0
 }
@@ -347,19 +339,17 @@ create_nodemaps() {
 delete_nodemaps() {
 	local i
 	local out
-	local rc
 
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
-		if ! do_facet mgs $LCTL nodemap_del 			\
-			${HOSTNAME_CHECKSUM}_${i}; then
-			error "nodemap_del ${HOSTNAME_CHECKSUM}_${i} 	\
-				failed with $rc"
+		local csum=${HOSTNAME_CHECKSUM}_${i}
+
+		if ! do_facet mgs $LCTL nodemap_del $csum; then
+			error "nodemap_del $csum failed with $?"
 			return 3
 		fi
-		out=$(do_facet mgs $LCTL get_param 			\
-			nodemap.${HOSTNAME_CHECKSUM}_${i}.id)
-		rc=$(echo $out | grep -c ${HOSTNAME_CHECKSUM}_${i})
-		[[ $rc != 0 ]] && return 1
+
+		out=$(do_facet mgs $LCTL get_param nodemap.$csum.id)
+		[[ $(echo $out | grep -c $csum) != 0 ]] && return 1
 	done
 	return 0
 }
@@ -372,9 +362,8 @@ add_range() {
 
 	for ((j = 0; j < NODEMAP_RANGE_COUNT; j++)); do
 		range="$SUBNET_CHECKSUM.${2}.${j}.[1-253]@tcp"
-		if ! do_facet mgs $cmd --name $1	\
-			--range $range; then
-			rc=$(($rc + 1))
+		if ! do_facet mgs $cmd --name $1 --range $range; then
+			rc=$((rc + 1))
 		fi
 	done
 	return $rc
@@ -388,9 +377,8 @@ delete_range() {
 
 	for ((j = 0; j < NODEMAP_RANGE_COUNT; j++)); do
 		range="$SUBNET_CHECKSUM.${2}.${j}.[1-253]@tcp"
-		if ! do_facet mgs $cmd --name $1	\
-			--range $range; then
-			rc=$(($rc + 1))
+		if ! do_facet mgs $cmd --name $1 --range $range; then
+			rc=$((rc + 1))
 		fi
 	done
 
@@ -399,25 +387,24 @@ delete_range() {
 
 add_idmaps() {
 	local i
-	local j
-	local client_id
-	local fs_id
 	local cmd="$LCTL nodemap_add_idmap"
 	local rc=0
 
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
+		local j
+
 		for ((j = 500; j < NODEMAP_MAX_ID; j++)); do
-			client_id=$j
-			fs_id=$(($j + 1))
-			if ! do_facet mgs $cmd				\
-			--name ${HOSTNAME_CHECKSUM}_${i}		\
-		       	--idtype uid --idmap $client_id:$fs_id; then
-				rc=$(($rc + 1))
+			local csum=${HOSTNAME_CHECKSUM}_${i}
+			local client_id=$j
+			local fs_id=$((j + 1))
+
+			if ! do_facet mgs $cmd --name $csum --idtype uid \
+			     --idmap $client_id:$fs_id; then
+				rc=$((rc + 1))
 			fi
-			if ! do_facet mgs $cmd				\
-			--name ${HOSTNAME_CHECKSUM}_${i}		\
-		       	--idtype gid --idmap $client_id:$fs_id; then
-				rc=$(($rc + 1))
+			if ! do_facet mgs $cmd --name $csum --idtype gid \
+			     --idmap $client_id:$fs_id; then
+				rc=$((rc + 1))
 			fi
 		done
 	done
@@ -427,25 +414,24 @@ add_idmaps() {
 
 delete_idmaps() {
 	local i
-	local j
-	local client_id
-	local fs_id
 	local cmd="$LCTL nodemap_del_idmap"
 	local rc=0
 
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
+		local j
+
 		for ((j = 500; j < NODEMAP_MAX_ID; j++)); do
-			client_id=$j
-			fs_id=$(($j + 1))
-			if ! do_facet mgs $cmd				\
-			--name ${HOSTNAME_CHECKSUM}_${i}		\
-		       	--idtype uid --idmap $client_id:$fs_id; then
-				rc=$(($rc + 1))
+			local csum=${HOSTNAME_CHECKSUM}_${i}
+			local client_id=$j
+			local fs_id=$((j + 1))
+
+			if ! do_facet mgs $cmd --name $csum --idtype uid \
+			     --idmap $client_id:$fs_id; then
+				rc=$((rc + 1))
 			fi
-			if ! do_facet mgs $cmd				\
-			--name ${HOSTNAME_CHECKSUM}_${i}		\
-		       	--idtype gid --idmap $client_id:$fs_id; then
-				rc=$(($rc + 1))
+			if ! do_facet mgs $cmd --name $csum --idtype gid \
+			     --idmap $client_id:$fs_id; then
+				rc=$((rc + 1))
 			fi
 		done
 	done
@@ -466,15 +452,13 @@ modify_flags() {
 	option[1]="trusted"
 
 	for ((idx = 0; idx < 2; idx++)); do
-		if ! do_facet mgs $cmd --name $1	\
-			--property ${option[$idx]}	\
-			--value 1; then
+		if ! do_facet mgs $cmd --name $1 --property ${option[$idx]} \
+		     --value 1; then
 			rc=$((rc + 1))
 		fi
 
-		if ! do_facet mgs $cmd --name $1	\
-			--property ${option[$idx]}	\
-			--value 0; then
+		if ! do_facet mgs $cmd --name $1 --property ${option[$idx]} \
+		     --value 0; then
 			rc=$((rc + 1))
 		fi
 	done
@@ -513,8 +497,6 @@ test_nid() {
 
 test_idmap() {
 	local i
-	local j
-	local fs_id
 	local cmd="$LCTL nodemap_test_id"
 	local rc=0
 
@@ -523,10 +505,12 @@ test_idmap() {
 		return 1
 	fi
 	for ((id = 500; id < NODEMAP_MAX_ID; id++)); do
+		local j
+
 		for ((j = 0; j < NODEMAP_RANGE_COUNT; j++)); do
-			nid="$SUBNET_CHECKSUM.0.${j}.100@tcp"
-			fs_id=$(do_facet mgs $cmd --nid $nid	\
-				--idtype uid --id $id)
+			local nid="$SUBNET_CHECKSUM.0.${j}.100@tcp"
+			local fs_id=$(do_facet mgs $cmd --nid $nid	\
+				      --idtype uid --id $id)
 			if [ $fs_id != $id ]; then
 				echo "expected $id, got $fs_id"
 				rc=$((rc + 1))
@@ -554,11 +538,11 @@ test_idmap() {
 
 	## trust client ids
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
-		if ! do_facet mgs $LCTL nodemap_modify			\
-				--name ${HOSTNAME_CHECKSUM}_${i}	\
-				--property trusted --value 1; then
-			error "nodemap_modify ${HOSTNAME_CHECKSUM}_${i} "
-				"failed with $rc"
+		local csum=${HOSTNAME_CHECKSUM}_${i}
+
+		if ! do_facet mgs $LCTL nodemap_modify --name $csum \
+		     --property trusted --value 1; then
+			error "nodemap_modify $csum failed with $?"
 			return 3
 		fi
 	done
@@ -577,11 +561,11 @@ test_idmap() {
 
 	## ensure allow_root_access is enabled
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
-		if ! do_facet mgs $LCTL nodemap_modify		\
-			--name ${HOSTNAME_CHECKSUM}_${i}	\
-			--property admin --value 1; then
-			error "nodemap_modify ${HOSTNAME_CHECKSUM}_${i} "
-				"failed with $rc"
+		local csum=${HOSTNAME_CHECKSUM}_${i}
+
+		if ! do_facet mgs $LCTL nodemap_modify --name $csum	\
+		     --property admin --value 1; then
+			error "nodemap_modify $csum failed with $?"
 			return 3
 		fi
 	done
@@ -598,8 +582,9 @@ test_idmap() {
 
 	## ensure allow_root_access is disabled
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
-		if ! do_facet mgs $LCTL nodemap_modify		\
-				--name ${HOSTNAME_CHECKSUM}_${i}	\
+		local csum=${HOSTNAME_CHECKSUM}_${i}
+
+		if ! do_facet mgs $LCTL nodemap_modify --name $csum	\
 				--property admin --value 0; then
 			error "nodemap_modify ${HOSTNAME_CHECKSUM}_${i} "
 				"failed with $rc"
@@ -981,19 +966,19 @@ create_fops_nodemaps() {
 			--name c${i} --range $client_nid || return 1
 		do_servers_not_mgs $LCTL set_param nodemap.add_nodemap=c${i} ||
 			return 1
-		do_servers_not_mgs "$LCTL set_param \
-			nodemap.add_nodemap_range='c${i} $client_nid'" ||
+		do_servers_not_mgs "$LCTL set_param " \
+			"nodemap.add_nodemap_range='c${i} $client_nid'" ||
 			return 1
 		for map in ${FOPS_IDMAPS[i]}; do
 			do_facet mgs $LCTL nodemap_add_idmap --name c${i} \
 				--idtype uid --idmap ${map} || return 1
-			do_servers_not_mgs "$LCTL set_param \
-				nodemap.add_nodemap_idmap='c$i uid ${map}'" ||
+			do_servers_not_mgs "$LCTL set_param " \
+				"nodemap.add_nodemap_idmap='c$i uid ${map}'" ||
 				return 1
 			do_facet mgs $LCTL nodemap_add_idmap --name c${i} \
 				--idtype gid --idmap ${map} || return 1
-			do_servers_not_mgs "$LCTL set_param \
-				nodemap.add_nodemap_idmap='c$i gid ${map}'" ||
+			do_servers_not_mgs "$LCTL set_param " \
+				" nodemap.add_nodemap_idmap='c$i gid ${map}'" ||
 				return 1
 		done
 		out1=$(do_facet mgs $LCTL get_param nodemap.c${i}.idmap)
@@ -1070,8 +1055,8 @@ do_create_delete() {
 
 	local res="$c $d"
 	local expected=$(get_cr_del_expected $key)
-	[ "$res" != "$expected" ] && error "test $key expected " \
-		"$expected, got $res" && rc=$(($rc+1))
+	[ "$res" != "$expected" ] &&
+		error "test $key, wanted $expected, got $res" && rc=$((rc + 1))
 	return $rc
 }
 
@@ -1093,18 +1078,18 @@ do_fops_quota_test() {
 	sync; sync_all_data || true
 
 	local qused_new=$(nodemap_check_quota "$run_u")
-	[ $((qused_new)) -lt $((qused_low + 1024)) \
-		-o $((qused_new)) -gt $((qused_high + 1024)) ] &&
-		error "$qused_new != $qused_orig + 1M after write, \
-		      fuzz is $quota_fuzz"
+	[ $((qused_new)) -lt $((qused_low + 1024)) -o \
+	  $((qused_new)) -gt $((qused_high + 1024)) ] &&
+		error "$qused_new != $qused_orig + 1M after write, " \
+		      "fuzz is $quota_fuzz"
 	$run_u rm $testfile && d=1
 	$NODEMAP_TEST_QUOTA && wait_delete_completed_mds
 
 	qused_new=$(nodemap_check_quota "$run_u")
 	[ $((qused_new)) -lt $((qused_low)) \
 		-o $((qused_new)) -gt $((qused_high)) ] &&
-		error "quota not reclaimed, expect $qused_orig got $qused_new, \
-		      fuzz $quota_fuzz"
+		error "quota not reclaimed, expect $qused_orig, " \
+		      "got $qused_new, fuzz $quota_fuzz"
 }
 
 get_fops_mapped_user() {
@@ -1166,8 +1151,8 @@ get_cr_del_expected() {
 	[ "$mapped_user" == "-1" ] &&
 		error "unable to find mapping for client user $cli_user"
 
-	if [ "$mapped_user" == "$mds_user" -a  \
-			$(((mode & 0300) == 0300)) -eq 1 ]; then
+	if [ "$mapped_user" == "$mds_user" -a \
+	     $(((mode & 0300) == 0300)) -eq 1 ]; then
 		echo $SUCCESS
 		return
 	fi
@@ -1205,7 +1190,7 @@ test_fops() {
 		for client in $clients; do
 			local u
 			local admin=$(do_facet mgs $LCTL get_param -n \
-				nodemap.c$cli_i.admin_nodemap)
+				      nodemap.c$cli_i.admin_nodemap)
 			for u in ${client_user_list[$cli_i]}; do
 				local run_u="do_node $client \
 					     $RUNAS_CMD -u$u -g$u -G$u"
@@ -1214,16 +1199,16 @@ test_fops() {
 					local key
 					key="$mapmode:$user:c$cli_i:$u:$mode"
 					do_facet mgs $LCTL nodemap_modify \
-						--name c$cli_i \
-						--property admin \
+						--name c$cli_i		  \
+						--property admin	  \
 						--value 1
 					do_servers_not_mgs $LCTL set_param \
 						nodemap.c$cli_i.admin_nodemap=1
 					do_node $client chmod $mode $DIR/$tdir \
 						|| error unable to chmod $key
 					do_facet mgs $LCTL nodemap_modify \
-						--name c$cli_i \
-						--property admin \
+						--name c$cli_i		  \
+						--property admin	  \
 						--value $admin
 					do_servers_not_mgs $LCTL set_param \
 					    nodemap.c$cli_i.admin_nodemap=$admin
@@ -1255,8 +1240,8 @@ nodemap_test_setup() {
 	local rc
 	local active_nodemap=$1
 
-	do_nodes $(comma_list $(all_mdts_nodes)) $LCTL set_param \
-		mdt.*.identity_upcall=NONE
+	do_nodes $(comma_list $(all_mdts_nodes)) \
+		$LCTL set_param mdt.*.identity_upcall=NONE
 
 	rc=0
 	create_fops_nodemaps
@@ -1411,7 +1396,7 @@ run_test 22 "test nodemap mapped_trusted_admin fileops"
 nodemap_acl_test_setup() {
 	local admin=$(do_facet mgs $LCTL get_param -n nodemap.c0.admin_nodemap)
 	local trust=$(do_facet mgs $LCTL get_param -n \
-		nodemap.c0.trusted_nodemap)
+		      nodemap.c0.trusted_nodemap)
 
 	do_facet mgs $LCTL nodemap_modify --name c0 --property admin --value 1
 	do_facet mgs $LCTL nodemap_modify --name c0 --property trusted --value 1
