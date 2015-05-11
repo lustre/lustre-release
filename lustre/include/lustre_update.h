@@ -88,7 +88,7 @@ static inline void
 	size_t		i;
 
 	if (index >= update->ou_params_count)
-		return NULL;
+		return ERR_PTR(-EINVAL);
 
 	param = &update->ou_params[0];
 	for (i = 0; i < index; i++)

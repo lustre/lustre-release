@@ -256,7 +256,7 @@ static int out_create(struct tgt_session_info *tsi)
 	ENTRY;
 
 	wobdo = object_update_param_get(update, 0, &size);
-	if (wobdo == NULL || size != sizeof(*wobdo)) {
+	if (wobdo == NULL || IS_ERR(wobdo) || size != sizeof(*wobdo)) {
 		CERROR("%s: obdo is NULL, invalid RPC: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), -EPROTO);
 		RETURN(err_serious(-EPROTO));
@@ -270,7 +270,7 @@ static int out_create(struct tgt_session_info *tsi)
 	dof->dof_type = dt_mode_to_dft(attr->la_mode);
 	if (update->ou_params_count > 1) {
 		fid = object_update_param_get(update, 1, &size);
-		if (fid == NULL || size != sizeof(*fid)) {
+		if (fid == NULL || IS_ERR(fid) || size != sizeof(*fid)) {
 			CERROR("%s: invalid fid: rc = %d\n",
 			       tgt_name(tsi->tsi_tgt), -EPROTO);
 			RETURN(err_serious(-EPROTO));
@@ -368,7 +368,7 @@ static int out_attr_set(struct tgt_session_info *tsi)
 	ENTRY;
 
 	wobdo = object_update_param_get(update, 0, &size);
-	if (wobdo == NULL || size != sizeof(*wobdo)) {
+	if (wobdo == NULL || IS_ERR(wobdo) || size != sizeof(*wobdo)) {
 		CERROR("%s: empty obdo in the update: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), -EPROTO);
 		RETURN(err_serious(-EPROTO));
@@ -455,7 +455,7 @@ static int out_xattr_get(struct tgt_session_info *tsi)
 	}
 
 	name = object_update_param_get(update, 0, NULL);
-	if (name == NULL) {
+	if (name == NULL || IS_ERR(name)) {
 		CERROR("%s: empty name for xattr get: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), -EPROTO);
 		RETURN(err_serious(-EPROTO));
@@ -511,7 +511,7 @@ static int out_index_lookup(struct tgt_session_info *tsi)
 		RETURN(-ENOENT);
 
 	name = object_update_param_get(update, 0, NULL);
-	if (name == NULL) {
+	if (name == NULL || IS_ERR(name)) {
 		CERROR("%s: empty name for lookup: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), -EPROTO);
 		RETURN(err_serious(-EPROTO));
@@ -662,18 +662,15 @@ static int out_xattr_set(struct tgt_session_info *tsi)
 	ENTRY;
 
 	name = object_update_param_get(update, 0, NULL);
-	if (name == NULL) {
+	if (name == NULL || IS_ERR(name)) {
 		CERROR("%s: empty name for xattr set: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), -EPROTO);
 		RETURN(err_serious(-EPROTO));
 	}
 
 	buf = object_update_param_get(update, 1, &buf_len);
-	if (buf == NULL || buf_len == 0) {
-		CERROR("%s: empty buf for xattr set: rc = %d\n",
-		       tgt_name(tsi->tsi_tgt), -EPROTO);
+	if (IS_ERR(buf))
 		RETURN(err_serious(-EPROTO));
-	}
 
 	lbuf->lb_buf = buf;
 	lbuf->lb_len = buf_len;
@@ -756,7 +753,7 @@ static int out_xattr_del(struct tgt_session_info *tsi)
 	ENTRY;
 
 	name = object_update_param_get(update, 0, NULL);
-	if (name == NULL) {
+	if (name == NULL || IS_ERR(name)) {
 		CERROR("%s: empty name for xattr set: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), -EPROTO);
 		RETURN(err_serious(-EPROTO));
@@ -1044,17 +1041,17 @@ static int out_index_insert(struct tgt_session_info *tsi)
 	ENTRY;
 
 	name = object_update_param_get(update, 0, NULL);
-	if (name == NULL) {
+	if (name == NULL || IS_ERR(name)) {
 		CERROR("%s: empty name for index insert: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), -EPROTO);
 		RETURN(err_serious(-EPROTO));
 	}
 
 	fid = object_update_param_get(update, 1, &size);
-	if (fid == NULL || size != sizeof(*fid)) {
+	if (fid == NULL || IS_ERR(fid) || size != sizeof(*fid)) {
 		CERROR("%s: invalid fid: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), -EPROTO);
-		       RETURN(err_serious(-EPROTO));
+		RETURN(err_serious(-EPROTO));
 	}
 
 	if (ptlrpc_req_need_swab(tsi->tsi_pill->rc_req))
@@ -1067,7 +1064,7 @@ static int out_index_insert(struct tgt_session_info *tsi)
 	}
 
 	ptype = object_update_param_get(update, 2, &size);
-	if (ptype == NULL || size != sizeof(*ptype)) {
+	if (ptype == NULL || IS_ERR(ptype) || size != sizeof(*ptype)) {
 		CERROR("%s: invalid type for index insert: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), -EPROTO);
 		RETURN(err_serious(-EPROTO));
@@ -1156,7 +1153,7 @@ static int out_index_delete(struct tgt_session_info *tsi)
 		RETURN(-ENOENT);
 
 	name = object_update_param_get(update, 0, NULL);
-	if (name == NULL) {
+	if (name == NULL || IS_ERR(name)) {
 		CERROR("%s: empty name for index delete: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), -EPROTO);
 		RETURN(err_serious(-EPROTO));
@@ -1306,7 +1303,7 @@ static int out_write(struct tgt_session_info *tsi)
 	ENTRY;
 
 	buf = object_update_param_get(update, 0, &buf_len);
-	if (buf == NULL || buf_len == 0) {
+	if (buf == NULL || IS_ERR(buf) || buf_len == 0) {
 		CERROR("%s: empty buf for xattr set: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), -EPROTO);
 		RETURN(err_serious(-EPROTO));
@@ -1315,7 +1312,7 @@ static int out_write(struct tgt_session_info *tsi)
 	lbuf->lb_len = buf_len;
 
 	tmp = object_update_param_get(update, 1, &size);
-	if (tmp == NULL || size != sizeof(*tmp)) {
+	if (tmp == NULL || IS_ERR(tmp) || size != sizeof(*tmp)) {
 		CERROR("%s: empty or wrong size %zu pos: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), size, -EPROTO);
 		RETURN(err_serious(-EPROTO));

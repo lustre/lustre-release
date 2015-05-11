@@ -6946,6 +6946,28 @@ test_102r() {
 	setfattr -n user.$(basename $tfile) $DIR/$tfile || error "setfattr"
 	getfattr -n user.$(basename $tfile) $DIR/$tfile || error "getfattr"
 	rm $DIR/$tfile || error "rm"
+
+	#normal directory
+	mkdir -p $DIR/$tdir || error "mkdir"
+	setfattr -n user.$(basename $tdir) $DIR/$tdir || error "setfattr dir"
+	getfattr -n user.$(basename $tdir) $DIR/$tdir || error "getfattr dir"
+	setfattr -x user.$(basename $tdir) $DIR/$tdir ||
+		error "$testfile error deleting user.author1"
+	getfattr -d -m user.$(basename $tdir) 2> /dev/null |
+		grep "user.$(basename $tdir)" &&
+		error "$tdir did not delete user.$(basename $tdir)"
+	rmdir $DIR/$tdir || error "rmdir"
+
+	#striped directory
+	test_mkdir -p $DIR/$tdir || error "make striped dir"
+	setfattr -n user.$(basename $tdir) $DIR/$tdir || error "setfattr dir"
+	getfattr -n user.$(basename $tdir) $DIR/$tdir || error "getfattr dir"
+	setfattr -x user.$(basename $tdir) $DIR/$tdir ||
+		error "$testfile error deleting user.author1"
+	getfattr -d -m user.$(basename $tdir) 2> /dev/null |
+		grep "user.$(basename $tdir)" &&
+		error "$tdir did not delete user.$(basename $tdir)"
+	rmdir $DIR/$tdir || error "rm striped dir"
 }
 run_test 102r "set EAs with empty values"
 

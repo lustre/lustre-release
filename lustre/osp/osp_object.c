@@ -1146,7 +1146,6 @@ int osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	int			rc;
 	ENTRY;
 
-	LASSERT(buf->lb_len > 0 && buf->lb_buf != NULL);
 	update = thandle_to_dt_update_request(th);
 	LASSERT(update != NULL);
 
