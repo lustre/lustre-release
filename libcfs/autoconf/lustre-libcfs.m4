@@ -183,6 +183,7 @@ dump_trace_address, [
 AC_DEFUN([LC_SHRINK_CONTROL], [
 LB_CHECK_COMPILE([if 'shrink_control' is present],
 shrink_control, [
+	#include <linux/atomic.h>
 	#include <linux/mm.h>
 ],[
 	struct shrink_control tmp = {0};
