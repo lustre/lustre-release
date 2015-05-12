@@ -260,8 +260,6 @@ enum ldlm_policy_res {
         LDLM_POLICY_SKIP_LOCK
 };
 
-typedef enum ldlm_policy_res ldlm_policy_res_t;
-
 #define LDLM_POOL_PROC_READER_SEQ_SHOW(var, type)			\
 	static int lprocfs_##var##_seq_show(struct seq_file *m, void *v)\
 	{								\

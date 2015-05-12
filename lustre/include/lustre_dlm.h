@@ -70,7 +70,7 @@ struct obd_device;
 /**
  * LDLM non-error return states
  */
-typedef enum ldlm_error {
+enum ldlm_error {
 	ELDLM_OK		= 0,
 	ELDLM_LOCK_MATCHED	= 1,
 
@@ -82,7 +82,7 @@ typedef enum ldlm_error {
 
 	ELDLM_NAMESPACE_EXISTS	= 400,
 	ELDLM_BAD_NAMESPACE	= 401,
-} ldlm_error_t;
+};
 
 /**
  * LDLM namespace type.
@@ -91,10 +91,10 @@ typedef enum ldlm_error {
  * decisions about lack of conflicts or do any autonomous lock granting without
  * first speaking to a server.
  */
-typedef enum ldlm_side {
+enum ldlm_side {
 	LDLM_NAMESPACE_SERVER = 0x01,
 	LDLM_NAMESPACE_CLIENT = 0x02
-} ldlm_side_t;
+};
 
 /**
  * The blocking callback is overloaded to perform two functions.  These flags
@@ -301,10 +301,10 @@ struct ldlm_valblock_ops {
  * LDLM pools related, type of lock pool in the namespace.
  * Greedy means release cached locks aggressively
  */
-typedef enum ldlm_appetite {
+enum ldlm_appetite {
 	LDLM_NAMESPACE_GREEDY = 1 << 0,
 	LDLM_NAMESPACE_MODEST = 1 << 1
-} ldlm_appetite_t;
+};
 
 /**
  * Default values for the "max_nolock_size", "contention_time" and
@@ -335,7 +335,7 @@ enum {
 	LDLM_NSS_LAST
 };
 
-typedef enum ldlm_ns_type {
+enum ldlm_ns_type {
 	LDLM_NS_TYPE_UNKNOWN = 0,	/**< invalid type */
 	LDLM_NS_TYPE_MDC,		/**< MDC namespace */
 	LDLM_NS_TYPE_MDT,		/**< MDT namespace */
@@ -343,7 +343,7 @@ typedef enum ldlm_ns_type {
 	LDLM_NS_TYPE_OST,		/**< OST namespace */
 	LDLM_NS_TYPE_MGC,		/**< MGC namespace */
 	LDLM_NS_TYPE_MGT,		/**< MGT namespace */
-} ldlm_ns_type_t;
+};
 
 /**
  * LDLM Namespace.
@@ -612,11 +612,11 @@ struct ldlm_interval_tree {
 #define LUSTRE_TRACKS_LOCK_EXP_REFS (0)
 
 /** Cancel flags. */
-typedef enum ldlm_cancel_flags {
+enum ldlm_cancel_flags {
 	LCF_ASYNC	= 0x1, /* Cancel locks asynchronously. */
 	LCF_LOCAL	= 0x2, /* Cancel locks locally, not notifing server */
 	LCF_BL_AST	= 0x4, /* Cancel LDLM_FL_BL_AST locks in the same RPC */
-} ldlm_cancel_flags_t;
+};
 
 struct ldlm_flock {
 	__u64 start;
@@ -634,8 +634,6 @@ union ldlm_policy_data {
 	struct ldlm_flock l_flock;
 	struct ldlm_inodebits l_inodebits;
 };
-
-typedef union ldlm_policy_data ldlm_policy_data_t;
 
 void ldlm_convert_policy_to_wire(enum ldlm_type type,
 				 const union ldlm_policy_data *lpolicy,
