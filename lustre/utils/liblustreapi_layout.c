@@ -786,7 +786,7 @@ int llapi_layout_pattern_set(struct llapi_layout *layout, uint64_t pattern)
 		return -1;
 	}
 
-	if (pattern != LLAPI_LAYOUT_DEFAULT ||
+	if (pattern != LLAPI_LAYOUT_DEFAULT &&
 	    pattern != LLAPI_LAYOUT_RAID0) {
 		errno = EOPNOTSUPP;
 		return -1;

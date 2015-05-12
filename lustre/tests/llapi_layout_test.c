@@ -173,7 +173,6 @@ void test1(void)
 	llapi_layout_free(layout);
 }
 
-
 #define T2_DESC		"Read test0 file by FD and verify attributes"
 void test2(void)
 {
@@ -218,7 +217,6 @@ void test3(void)
 	__test1_helper(layout);
 	llapi_layout_free(layout);
 }
-
 
 #define T4FILE			"t4"
 #define T4_STRIPE_COUNT		2
@@ -302,7 +300,6 @@ void test6(void)
 	ASSERTF(layout == NULL && errno == EBADF, "errno = %d", errno);
 }
 
-
 #define T7FILE		"t7"
 #define T7_DESC		"llapi_layout_get_by_path EACCES handling"
 void test7(void)
@@ -344,7 +341,6 @@ void test7(void)
 	rc = seteuid(myuid);
 	ASSERTF(rc == 0, "errno = %d", errno);
 }
-
 
 /* llapi_layout_get_by_path() returns default layout for file with no
  * striping attributes. */
@@ -388,8 +384,8 @@ void test8(void)
 	llapi_layout_free(layout);
 }
 
-/* Setting pattern > 0 returns EOPNOTSUPP in errno. */
-#define T9_DESC		"llapi_layout_pattern_set() EOPNOTSUPP handling"
+/* Verify llapi_layout_patter_set() return values for various inputs. */
+#define T9_DESC		"verify llapi_layout_pattern_set() return values"
 void test9(void)
 {
 	struct llapi_layout *layout;
@@ -397,13 +393,27 @@ void test9(void)
 
 	layout = llapi_layout_alloc();
 	ASSERTF(layout != NULL, "errno = %d\n", errno);
+
 	errno = 0;
-	rc = llapi_layout_pattern_set(layout, 1);
+	rc = llapi_layout_pattern_set(layout, LLAPI_LAYOUT_INVALID);
 	ASSERTF(rc == -1 && errno == EOPNOTSUPP, "rc = %d, errno = %d", rc,
 		errno);
+
+	errno = 0;
+	rc = llapi_layout_pattern_set(NULL, LLAPI_LAYOUT_DEFAULT);
+	ASSERTF(rc == -1 && errno == EINVAL, "rc = %d, errno = %d", rc,
+		errno);
+
+	errno = 0;
+	rc = llapi_layout_pattern_set(layout, LLAPI_LAYOUT_DEFAULT);
+	ASSERTF(rc == 0, "rc = %d, errno = %d", rc, errno);
+
+	errno = 0;
+	rc = llapi_layout_pattern_set(layout, LLAPI_LAYOUT_RAID0);
+	ASSERTF(rc == 0, "rc = %d, errno = %d", rc, errno);
+
 	llapi_layout_free(layout);
 }
-
 
 /* Verify stripe_count interfaces return errors as expected */
 #define T10_DESC	"stripe_count error handling"
