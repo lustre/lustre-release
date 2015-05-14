@@ -175,7 +175,7 @@ void t21()
 
         fd = open(file, O_RDWR|O_CREAT, (mode_t)0666);
         if (fd < 0) {
-                printf("error open file: %m\n", file);
+		printf("open(%s) error: %s\n", file, strerror(errno));
                 exit(-1);
         }
 
