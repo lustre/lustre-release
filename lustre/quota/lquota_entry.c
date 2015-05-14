@@ -217,7 +217,7 @@ struct lquota_site *lquota_site_alloc(const struct lu_env *env, void *parent,
 
 	/* allocate hash table */
 	memset(hashname, 0, sizeof(hashname));
-	sprintf(hashname, "LQUOTA_HASH%u", qtype);
+	snprintf(hashname, sizeof(hashname), "LQUOTA_HASH%hu", qtype);
 	site->lqs_hash= cfs_hash_create(hashname, hash_lqs_cur_bits,
 					HASH_LQE_MAX_BITS,
 					min(hash_lqs_cur_bits,
