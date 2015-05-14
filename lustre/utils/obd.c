@@ -3965,14 +3965,16 @@ static int get_array_idx(char *rule, char *format, int **array)
                 /* extract the 3 fields */
                 rc = sscanf(start, "%x-%x/%u", &lo, &hi, &step);
                 switch (rc) {
-                case 0: {
-                        return 0;
-                }
-                case 1: {
-                        array_sz++;
-                        *array = realloc(*array, array_sz * sizeof(int));
-                        if (*array == NULL)
-                                return 0;
+                case 0:
+			goto err;
+		case 1: {
+			void *tmp;
+
+			array_sz++;
+			tmp = realloc(*array, array_sz * sizeof(int));
+			if (tmp == NULL)
+				goto err;
+			*array = tmp;
                         (*array)[array_idx] = lo;
                         array_idx++;
                         break;
@@ -3982,12 +3984,15 @@ static int get_array_idx(char *rule, char *format, int **array)
                         /* do not break to share code with case 3: */
                 }
                 case 3: {
-                        if ((hi < lo) || (step == 0))
-                                return 0;
-                        array_sz += (hi - lo) / step + 1;
-                        *array = realloc(*array, sizeof(int) * array_sz);
-                        if (*array == NULL)
-                                return 0;
+			void *tmp;
+
+			if ((hi < lo) || (step == 0))
+				goto err;
+			array_sz += (hi - lo) / step + 1;
+			tmp = realloc(*array, array_sz * sizeof(int));
+			if (tmp == NULL)
+				goto err;
+			*array = tmp;
                         for (i = lo; i <= hi; i+=step, array_idx++)
                                 (*array)[array_idx] = i;
                         break;
@@ -3999,6 +4004,12 @@ static int get_array_idx(char *rule, char *format, int **array)
 
         } while (ptr != NULL);
         return array_sz;
+err:
+	if (*array != NULL) {
+		free(*array);
+		*array = NULL;
+	}
+	return 0;
 }
 
 static int extract_fsname_poolname(char *arg, char *fsname, char *poolname)

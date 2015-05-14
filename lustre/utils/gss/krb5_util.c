@@ -900,15 +900,15 @@ gssd_get_krb5_machine_cred_list(char ***list)
 	struct gssd_k5_kt_princ *ple;
 
 	/* Assume failure */
-	retval = -1;
-	*list = (char **) NULL;
+	*list = NULL;
 
 	/* Refresh machine credentials */
-	if ((retval = gssd_refresh_krb5_machine_creds())) {
+	retval = gssd_refresh_krb5_machine_creds();
+	if (retval)
 		goto out;
-	}
 
-	if ((l = (char **) malloc(listsize * sizeof(char *))) == NULL) {
+	l = malloc(listsize * sizeof(char *));
+	if (l == NULL) {
 		retval = ENOMEM;
 		goto out;
 	}
@@ -916,27 +916,33 @@ gssd_get_krb5_machine_cred_list(char ***list)
 	for (ple = gssd_k5_kt_princ_list; ple; ple = ple->next) {
 		if (ple->ccname) {
 			if (i + 1 > listsize) {
+				void *tmp;
+
 				listsize += listinc;
-				l = (char **)
-					realloc(l, listsize * sizeof(char *));
-				if (l == NULL) {
+				tmp = realloc(l, listsize * sizeof(char *));
+				if (tmp == NULL) {
 					retval = ENOMEM;
-					goto out;
+					goto out_free;
 				}
+				l = tmp;
 			}
-			if ((l[i++] = strdup(ple->ccname)) == NULL) {
+			l[i] = strdup(ple->ccname);
+			if (l[i++] == NULL) {
 				retval = ENOMEM;
-				goto out;
+				goto out_free;
 			}
 		}
 	}
 	if (i > 0) {
 		l[i] = NULL;
 		*list = l;
-		retval = 0;
-		goto out;
+		return 0;
 	}
-  out:
+out_free:
+	while (i > 0)
+		free(l[i--]);
+	free(l);
+out:
 	return retval;
 }
 

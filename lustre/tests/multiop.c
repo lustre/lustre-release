@@ -515,12 +515,15 @@ int main(int argc, char **argv)
 			if (len <= 0)
 				len = 1;
 			if (bufsize < len) {
-				buf = realloc(buf, len + ALIGN_LEN);
-				if (buf == NULL) {
+				void *tmp;
+				tmp = realloc(buf, len + ALIGN_LEN);
+				if (tmp == NULL) {
+					free(buf);
 					save_errno = errno;
 					perror("allocating buf for read\n");
 					exit(save_errno);
 				}
+				buf = tmp;
 				bufsize = len;
 				buf_align = (char *)((long)(buf + ALIGN_LEN) &
 						     ~ALIGN_LEN);
@@ -608,12 +611,15 @@ int main(int argc, char **argv)
 			if (len <= 0)
 				len = 1;
 			if (bufsize < len) {
-				buf = realloc(buf, len + ALIGN_LEN);
-				if (buf == NULL) {
+				void *tmp;
+				tmp = realloc(buf, len + ALIGN_LEN);
+				if (tmp == NULL) {
+					free(buf);
 					save_errno = errno;
 					perror("allocating buf for write\n");
 					exit(save_errno);
 				}
+				buf = tmp;
 				bufsize = len;
 				buf_align = (char *)((long)(buf + ALIGN_LEN) &
 						     ~ALIGN_LEN);
