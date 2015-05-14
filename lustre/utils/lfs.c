@@ -1050,6 +1050,7 @@ static int lfs_setstripe(int argc, char **argv)
 			fprintf(stderr, "error: %s: stripe count '%d' doesn't "
 				"match the number of OSTs: %d\n",
 				argv[0], st_count, nr_osts);
+			free(param);
 			return CMD_HELP;
 		}
 
