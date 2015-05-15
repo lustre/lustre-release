@@ -303,9 +303,6 @@ restart_nobj=1
 PAGE_SIZE=${PAGE_SIZE:-$(($(getconf PAGE_SIZE) / 1024))}
 PAGE_SIZE=${PAGE_SIZE:-4}
 
-# max buffer_mem (total_threads * buffer size)
-# (to avoid lctl ENOMEM problems)
-max_buffer_mem=$((1024 * 1024))
 snap=1
 clean_srv_OSS=0
 # Customisation variables ends here.
@@ -473,8 +470,7 @@ if (($ndevs <= 0 || ${#host_names[@]} <= 0)); then
 	echo "no devices or hosts specified"
 	cleanup 0 $clean_srv_OSS $cleanup_oscs
 fi
-# Buffers will be spread out among all hosts, so allow for that
-max_buffer_mem=$(( ${max_buffer_mem} * ${#unique_hosts[@]} ))
+
 print_summary "$(date) Obdfilter-survey for case=$case from $(hostname)"
 for ((rsz = $rszlo; rsz <= $rszhi; rsz*=2)); do
 	for ((nobj = $nobjlo; nobj <= $nobjhi; nobj*=2)); do
@@ -509,10 +505,6 @@ for ((rsz = $rszlo; rsz <= $rszhi; rsz*=2)); do
 			      $ndevs $total_size $actual_rsz $total_nobj $total_thr)
 			echo "=======================> $str" >> $workf
 			print_summary -n "$str"
-			if ((total_thr * actual_rsz > max_buffer_mem)); then
-				print_summary "Too much buffer space"
-				continue
-			fi
 
 			# create the objects
 			tmpf="${workf}_tmp"
