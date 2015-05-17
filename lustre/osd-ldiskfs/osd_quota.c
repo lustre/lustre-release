@@ -627,7 +627,7 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 	RETURN(rcu ? rcu : rcg);
 }
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 53, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 56, 0)
 /* Following code is used to migrate old admin quota files (in Linux quota
  * file v2 format) into the new quota global indexes (in IAM format). */
 

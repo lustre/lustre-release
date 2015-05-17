@@ -289,7 +289,7 @@ int lquota_extract_fid(const struct lu_fid *fid, int *pool_id, int *pool_type,
 	RETURN(0);
 }
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 53, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 56, 0)
 /* Index features supported by the global index objects.
  * We actually use one dt_index_features structure for each quota combination
  * of quota type x [inode, block] to allow the ldiskfs OSD to recognize those
@@ -328,7 +328,7 @@ const struct dt_index_features *glb_idx_feature(struct lu_fid *fid)
 			return &dt_quota_bgrp_features;
 	}
 }
-#endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 53, 0) */
+#endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 56, 0) */
 
 static int __init init_lquota(void)
 {
@@ -338,7 +338,7 @@ static int __init init_lquota(void)
 	lquota_key_init_generic(&lquota_thread_key, NULL);
 	lu_context_key_register(&lquota_thread_key);
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 53, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 56, 0)
 	dt_quota_iusr_features = dt_quota_busr_features = dt_quota_glb_features;
 	dt_quota_igrp_features = dt_quota_bgrp_features = dt_quota_glb_features;
 #endif

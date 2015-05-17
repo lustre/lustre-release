@@ -244,7 +244,7 @@ struct dt_object *lquota_disk_glb_find_create(const struct lu_env *env,
 	CDEBUG(D_QUOTA, "look-up/create %sglobal idx file ("DFID")\n",
 	       local ? "local " : "", PFID(fid));
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 53, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 56, 0)
 	/* we use different index feature for each quota type and target type
 	 * for the time being. This is done for on-disk conversion from the old
 	 * quota format. Once this is no longer required, we should just be
