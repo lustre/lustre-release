@@ -1314,6 +1314,7 @@ int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 	rc = lod_ost_pool_init(&lod->lod_pool_info, 0);
 	if (rc)
 		GOTO(out_hash, rc);
+	lod_qos_rr_init(&lod->lod_qos.lq_rr);
 	rc = lod_ost_pool_init(&lod->lod_qos.lq_rr.lqr_pool, 0);
 	if (rc)
 		GOTO(out_pool_info, rc);
