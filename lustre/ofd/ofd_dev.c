@@ -969,7 +969,7 @@ static int ofd_set_info_hdl(struct tgt_session_info *tsi)
  * \retval		negative value on error
  */
 int ofd_fiemap_get(const struct lu_env *env, struct ofd_device *ofd,
-		   struct lu_fid *fid, struct ll_user_fiemap *fiemap)
+		   struct lu_fid *fid, struct fiemap *fiemap)
 {
 	struct ofd_object	*fo;
 	int			 rc;
@@ -1057,13 +1057,13 @@ static int lock_region(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
  */
 static int lock_zero_regions(struct ldlm_namespace *ns,
 			     struct ldlm_res_id *res_id,
-			     struct ll_user_fiemap *fiemap,
+			     struct fiemap *fiemap,
 			     struct list_head *locked)
 {
 	__u64 begin = fiemap->fm_start;
 	unsigned int i;
 	int rc = 0;
-	struct ll_fiemap_extent *fiemap_start = fiemap->fm_extents;
+	struct fiemap_extent *fiemap_start = fiemap->fm_extents;
 
 	ENTRY;
 
@@ -1171,21 +1171,22 @@ static int ofd_get_info_hdl(struct tgt_session_info *tsi)
 		ofd_seq_put(tsi->tsi_env, oseq);
 	} else if (KEY_IS(KEY_FIEMAP)) {
 		struct ll_fiemap_info_key	*fm_key;
-		struct ll_user_fiemap		*fiemap;
+		struct fiemap			*fiemap;
 		struct lu_fid			*fid;
 
 		req_capsule_extend(tsi->tsi_pill, &RQF_OST_GET_INFO_FIEMAP);
 
 		fm_key = req_capsule_client_get(tsi->tsi_pill, &RMF_FIEMAP_KEY);
-		rc = tgt_validate_obdo(tsi, &fm_key->oa);
+		rc = tgt_validate_obdo(tsi, &fm_key->lfik_oa);
 		if (rc)
 			RETURN(err_serious(rc));
 
-		fid = &fm_key->oa.o_oi.oi_fid;
+		fid = &fm_key->lfik_oa.o_oi.oi_fid;
 
 		CDEBUG(D_INODE, "get FIEMAP of object "DFID"\n", PFID(fid));
 
-		replylen = fiemap_count_to_size(fm_key->fiemap.fm_extent_count);
+		replylen = fiemap_count_to_size(
+					fm_key->lfik_fiemap.fm_extent_count);
 		req_capsule_set_size(tsi->tsi_pill, &RMF_FIEMAP_VAL,
 				     RCL_SERVER, replylen);
 
@@ -1197,13 +1198,13 @@ static int ofd_get_info_hdl(struct tgt_session_info *tsi)
 		if (fiemap == NULL)
 			RETURN(-ENOMEM);
 
-		*fiemap = fm_key->fiemap;
+		*fiemap = fm_key->lfik_fiemap;
 		rc = ofd_fiemap_get(tsi->tsi_env, ofd, fid, fiemap);
 
 		/* LU-3219: Lock the sparse areas to make sure dirty
 		 * flushed back from client, then call fiemap again. */
-		if (fm_key->oa.o_valid & OBD_MD_FLFLAGS &&
-		    fm_key->oa.o_flags & OBD_FL_SRVLOCK) {
+		if (fm_key->lfik_oa.o_valid & OBD_MD_FLFLAGS &&
+		    fm_key->lfik_oa.o_flags & OBD_FL_SRVLOCK) {
 			struct list_head locked;
 
 			INIT_LIST_HEAD(&locked);

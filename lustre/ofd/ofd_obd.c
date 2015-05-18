@@ -638,7 +638,7 @@ static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 	struct ofd_thread_info		*info;
 	struct ofd_device		*ofd;
 	struct ll_fiemap_info_key	*fm_key = key;
-	struct ll_user_fiemap		*fiemap = val;
+	struct fiemap			*fiemap = val;
 	int				 rc = 0;
 
 	ENTRY;
@@ -653,7 +653,7 @@ static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 	if (KEY_IS(KEY_FIEMAP)) {
 		info = ofd_info_init(env, exp);
 
-		rc = ostid_to_fid(&info->fti_fid, &fm_key->oa.o_oi,
+		rc = ostid_to_fid(&info->fti_fid, &fm_key->lfik_oa.o_oi,
 				  ofd->ofd_lut.lut_lsd.lsd_osd_index);
 		if (rc != 0)
 			RETURN(rc);

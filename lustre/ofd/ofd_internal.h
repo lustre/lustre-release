@@ -329,7 +329,7 @@ extern void target_recovery_init(struct lu_target *lut, svc_handler_t handler);
 extern struct lu_context_key ofd_thread_key;
 int ofd_postrecov(const struct lu_env *env, struct ofd_device *ofd);
 int ofd_fiemap_get(const struct lu_env *env, struct ofd_device *ofd,
-		   struct lu_fid *fid, struct ll_user_fiemap *fiemap);
+		   struct lu_fid *fid, struct fiemap *fiemap);
 
 /* ofd_obd.c */
 extern struct obd_ops ofd_obd_ops;

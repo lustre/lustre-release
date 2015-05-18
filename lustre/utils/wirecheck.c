@@ -1697,9 +1697,9 @@ check_ll_fiemap_info_key(void)
 {
 	BLANK_LINE();
 	CHECK_STRUCT(ll_fiemap_info_key);
-	CHECK_MEMBER(ll_fiemap_info_key, name[8]);
-	CHECK_MEMBER(ll_fiemap_info_key, oa);
-	CHECK_MEMBER(ll_fiemap_info_key, fiemap);
+	CHECK_MEMBER(ll_fiemap_info_key, lfik_name[8]);
+	CHECK_MEMBER(ll_fiemap_info_key, lfik_oa);
+	CHECK_MEMBER(ll_fiemap_info_key, lfik_fiemap);
 }
 
 static void
@@ -1821,14 +1821,14 @@ static void
 check_ll_user_fiemap(void)
 {
 	BLANK_LINE();
-	CHECK_STRUCT(ll_user_fiemap);
-	CHECK_MEMBER(ll_user_fiemap, fm_start);
-	CHECK_MEMBER(ll_user_fiemap, fm_length);
-	CHECK_MEMBER(ll_user_fiemap, fm_flags);
-	CHECK_MEMBER(ll_user_fiemap, fm_mapped_extents);
-	CHECK_MEMBER(ll_user_fiemap, fm_extent_count);
-	CHECK_MEMBER(ll_user_fiemap, fm_reserved);
-	CHECK_MEMBER(ll_user_fiemap, fm_extents);
+	CHECK_STRUCT(fiemap);
+	CHECK_MEMBER(fiemap, fm_start);
+	CHECK_MEMBER(fiemap, fm_length);
+	CHECK_MEMBER(fiemap, fm_flags);
+	CHECK_MEMBER(fiemap, fm_mapped_extents);
+	CHECK_MEMBER(fiemap, fm_extent_count);
+	CHECK_MEMBER(fiemap, fm_reserved);
+	CHECK_MEMBER(fiemap, fm_extents);
 
 	CHECK_CDEFINE(FIEMAP_FLAG_SYNC);
 	CHECK_CDEFINE(FIEMAP_FLAG_XATTR);
@@ -1839,12 +1839,12 @@ static void
 check_ll_fiemap_extent(void)
 {
 	BLANK_LINE();
-	CHECK_STRUCT(ll_fiemap_extent);
-	CHECK_MEMBER(ll_fiemap_extent, fe_logical);
-	CHECK_MEMBER(ll_fiemap_extent, fe_physical);
-	CHECK_MEMBER(ll_fiemap_extent, fe_length);
-	CHECK_MEMBER(ll_fiemap_extent, fe_flags);
-	CHECK_MEMBER(ll_fiemap_extent, fe_device);
+	CHECK_STRUCT(fiemap_extent);
+	CHECK_MEMBER(fiemap_extent, fe_logical);
+	CHECK_MEMBER(fiemap_extent, fe_physical);
+	CHECK_MEMBER(fiemap_extent, fe_length);
+	CHECK_MEMBER(fiemap_extent, fe_flags);
+	CHECK_MEMBER(fiemap_extent, fe_device);
 
 	CHECK_CDEFINE(FIEMAP_EXTENT_LAST);
 	CHECK_CDEFINE(FIEMAP_EXTENT_UNKNOWN);

@@ -3609,14 +3609,14 @@ struct ost_body {
 
 /* Key for FIEMAP to be used in get_info calls */
 struct ll_fiemap_info_key {
-        char    name[8];
-        struct  obdo oa;
-        struct  ll_user_fiemap fiemap;
+	char		lfik_name[8];
+	struct obdo	lfik_oa;
+	struct fiemap	lfik_fiemap;
 };
 
 extern void lustre_swab_ost_body (struct ost_body *b);
 extern void lustre_swab_ost_last_id(__u64 *id);
-extern void lustre_swab_fiemap(struct ll_user_fiemap *fiemap);
+extern void lustre_swab_fiemap(struct fiemap *fiemap);
 
 extern void lustre_swab_lov_user_md_v1(struct lov_user_md_v1 *lum);
 extern void lustre_swab_lov_user_md_v3(struct lov_user_md_v3 *lum);

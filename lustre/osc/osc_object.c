@@ -271,21 +271,21 @@ static int osc_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 	int				rc;
 	ENTRY;
 
-	fmkey->oa.o_oi = cl2osc(obj)->oo_oinfo->loi_oi;
-	if (!(fmkey->fiemap.fm_flags & FIEMAP_FLAG_SYNC))
+	fmkey->lfik_oa.o_oi = cl2osc(obj)->oo_oinfo->loi_oi;
+	if (!(fmkey->lfik_fiemap.fm_flags & FIEMAP_FLAG_SYNC))
 		goto skip_locking;
 
-	policy.l_extent.start = fmkey->fiemap.fm_start & PAGE_CACHE_MASK;
+	policy.l_extent.start = fmkey->lfik_fiemap.fm_start & PAGE_CACHE_MASK;
 
-	if (OBD_OBJECT_EOF - fmkey->fiemap.fm_length <=
-	    fmkey->fiemap.fm_start + PAGE_CACHE_SIZE - 1)
+	if (OBD_OBJECT_EOF - fmkey->lfik_fiemap.fm_length <=
+	    fmkey->lfik_fiemap.fm_start + PAGE_CACHE_SIZE - 1)
 		policy.l_extent.end = OBD_OBJECT_EOF;
 	else
-		policy.l_extent.end = (fmkey->fiemap.fm_start +
-				       fmkey->fiemap.fm_length +
+		policy.l_extent.end = (fmkey->lfik_fiemap.fm_start +
+				       fmkey->lfik_fiemap.fm_length +
 				       PAGE_CACHE_SIZE - 1) & PAGE_CACHE_MASK;
 
-	ostid_build_res_name(&fmkey->oa.o_oi, &resid);
+	ostid_build_res_name(&fmkey->lfik_oa.o_oi, &resid);
 	mode = ldlm_lock_match(exp->exp_obd->obd_namespace,
 			       LDLM_FL_BLOCK_GRANTED | LDLM_FL_LVB_READY,
 			       &resid, LDLM_EXTENT, &policy,
@@ -296,8 +296,8 @@ static int osc_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 			ldlm_lock_decref(&lockh, LCK_PW);
 		}
 	} else { /* no cached lock, needs acquire lock on server side */
-		fmkey->oa.o_valid |= OBD_MD_FLFLAGS;
-		fmkey->oa.o_flags |= OBD_FL_SRVLOCK;
+		fmkey->lfik_oa.o_valid |= OBD_MD_FLFLAGS;
+		fmkey->lfik_oa.o_flags |= OBD_FL_SRVLOCK;
 	}
 
 skip_locking:

@@ -1847,7 +1847,7 @@ static int fiemap_check_ranges(struct inode *inode,
 #define FIEMAP_MAX_EXTENTS     (UINT_MAX / sizeof(struct fiemap_extent))
 
 static int osd_fiemap_get(const struct lu_env *env, struct dt_object *dt,
-                          struct ll_user_fiemap *fm)
+			  struct fiemap *fm)
 {
 	struct fiemap_extent_info fieinfo = {0, };
 	struct inode *inode = osd_dt_obj(dt)->oo_inode;

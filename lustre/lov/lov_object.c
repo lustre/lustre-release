@@ -1043,7 +1043,7 @@ static int fiemap_calc_last_stripe(struct lov_stripe_md *lsm,
  * \param current_extent [in]	where to start copying in the extent array
  */
 static void fiemap_prepare_and_copy_exts(struct fiemap *fiemap,
-					 struct ll_fiemap_extent *lcl_fm_ext,
+					 struct fiemap_extent *lcl_fm_ext,
 					 int ost_index, unsigned int ext_count,
 					 int current_extent)
 {
@@ -1057,7 +1057,7 @@ static void fiemap_prepare_and_copy_exts(struct fiemap *fiemap,
 
 	/* Copy fm_extent's from fm_local to return buffer */
 	to = (char *)fiemap + fiemap_count_to_size(current_extent);
-	memcpy(to, lcl_fm_ext, ext_count * sizeof(struct ll_fiemap_extent));
+	memcpy(to, lcl_fm_ext, ext_count * sizeof(struct fiemap_extent));
 }
 
 #define FIEMAP_BUFFER_SIZE 4096
@@ -1150,7 +1150,7 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 	struct cl_object	*subobj = NULL;
 	struct lov_obd		*lov = lu2lov_dev(obj->co_lu.lo_dev)->ld_lov;
 	struct fiemap		*fm_local = NULL;
-	struct ll_fiemap_extent	*lcl_fm_ext;
+	struct fiemap_extent	*lcl_fm_ext;
 	loff_t			fm_start;
 	loff_t			fm_end;
 	loff_t			fm_length;
@@ -1186,7 +1186,7 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 		GOTO(out, rc = -ENOTSUPP);
 
 	if (lsm_is_released(lsm)) {
-		if (fiemap->fm_start < fmkey->oa.o_size) {
+		if (fiemap->fm_start < fmkey->lfik_oa.o_size) {
 			/**
 			 * released file, return a minimal FIEMAP if
 			 * request fits in file-size.
@@ -1194,12 +1194,13 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 			fiemap->fm_mapped_extents = 1;
 			fiemap->fm_extents[0].fe_logical = fiemap->fm_start;
 			if (fiemap->fm_start + fiemap->fm_length <
-			    fmkey->oa.o_size)
+			    fmkey->lfik_oa.o_size)
 				fiemap->fm_extents[0].fe_length =
 					fiemap->fm_length;
 			else
 				fiemap->fm_extents[0].fe_length =
-					fmkey->oa.o_size - fiemap->fm_start;
+					fmkey->lfik_oa.o_size -
+					fiemap->fm_start;
 			fiemap->fm_extents[0].fe_flags |=
 				FIEMAP_EXTENT_UNKNOWN | FIEMAP_EXTENT_LAST;
 		}
@@ -1219,11 +1220,11 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 	fm_length = fiemap->fm_length;
 	/* Calculate start stripe, last stripe and length of mapping */
 	start_stripe = lov_stripe_number(lsm, fm_start);
-	fm_end = (fm_length == ~0ULL) ? fmkey->oa.o_size :
+	fm_end = (fm_length == ~0ULL) ? fmkey->lfik_oa.o_size :
 					fm_start + fm_length - 1;
 	/* If fm_length != ~0ULL but fm_start_fm_length-1 exceeds file size */
-	if (fm_end > fmkey->oa.o_size)
-		fm_end = fmkey->oa.o_size;
+	if (fm_end > fmkey->lfik_oa.o_size)
+		fm_end = fmkey->lfik_oa.o_size;
 
 	last_stripe = fiemap_calc_last_stripe(lsm, fm_start, fm_end,
 					      start_stripe, &stripe_count);
@@ -1332,7 +1333,8 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 
 			fm_local->fm_start = lun_start;
 			fm_local->fm_flags &= ~FIEMAP_FLAG_DEVICE_ORDER;
-			memcpy(&fmkey->fiemap, fm_local, sizeof(*fm_local));
+			memcpy(&fmkey->lfik_fiemap, fm_local,
+			       sizeof(*fm_local));
 			*buflen = fiemap_count_to_size(
 						fm_local->fm_extent_count);
 
@@ -1383,7 +1385,7 @@ inactive_tgt:
 			if (lov_stripe_size(lsm,
 					lcl_fm_ext[ext_count - 1].fe_logical +
 					lcl_fm_ext[ext_count - 1].fe_length,
-					cur_stripe) >= fmkey->oa.o_size)
+					cur_stripe) >= fmkey->lfik_oa.o_size)
 				ost_eof = true;
 
 			fiemap_prepare_and_copy_exts(fiemap, lcl_fm_ext,

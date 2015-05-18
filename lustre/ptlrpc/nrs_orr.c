@@ -232,18 +232,18 @@ static int nrs_orr_range_fill_physical(struct ptlrpc_nrs_request *nrq,
 	struct ptlrpc_request     *req = container_of(nrq,
 						      struct ptlrpc_request,
 						      rq_nrq);
-	char			   fiemap_buf[offsetof(struct ll_user_fiemap,
+	char			   fiemap_buf[offsetof(struct fiemap,
 						  fm_extents[ORR_NUM_EXTENTS])];
-	struct ll_user_fiemap     *fiemap = (struct ll_user_fiemap *)fiemap_buf;
+	struct fiemap              *fiemap = (struct fiemap *)fiemap_buf;
 	struct ll_fiemap_info_key  key;
 	loff_t			   start;
 	loff_t			   end;
 	int			   rc;
 
 	key = (typeof(key)) {
-		.name = KEY_FIEMAP,
-		.oa = *oa,
-		.fiemap = {
+		.lfik_name = KEY_FIEMAP,
+		.lfik_oa = *oa,
+		.lfik_fiemap = {
 			.fm_start = range->or_start,
 			.fm_length = range->or_end - range->or_start,
 			.fm_extent_count = ORR_NUM_EXTENTS
