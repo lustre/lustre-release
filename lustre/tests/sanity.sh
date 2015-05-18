@@ -12008,12 +12008,19 @@ test_224c() { # LU-6441
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	local pages_per_rpc=$($LCTL get_param \
 				osc.*.max_pages_per_rpc)
-	local at_max=$(do_facet mgs "$LCTL get_param -n at_max")
-	local timeout=$(do_facet mgs "$LCTL get_param -n timeout")
+	local at_max=$($LCTL get_param -n at_max)
+	local timeout=$($LCTL get_param -n timeout)
+	local test_at="$LCTL get_param -n at_max"
+	local param_at="$FSNAME.sys.at_max"
+	local test_timeout="$LCTL get_param -n timeout"
+	local param_timeout="$FSNAME.sys.timeout"
 
 	$LCTL set_param -n osc.*.max_pages_per_rpc=1024
-	do_facet mgs "$LCTL conf_param $FSNAME.sys.at_max=0"
-	do_facet mgs "$LCTL conf_param $FSNAME.sys.timeout=5"
+
+	set_conf_param_and_check client "$test_at" "$param_at" 0 ||
+		error "conf_param at_max=0 failed"
+	set_conf_param_and_check client "$test_timeout" "$param_timeout" 5 ||
+		error "conf_param timeout=5 failed"
 
 	#define OBD_FAIL_PTLRPC_CLIENT_BULK_CB3   0x520
 	$LCTL set_param fail_loc=0x520
@@ -12021,10 +12028,11 @@ test_224c() { # LU-6441
 	sync
 	$LCTL set_param fail_loc=0
 
-	do_facet mgs "$LCTL conf_param $FSNAME.sys.at_max=" \
-				"$at_max"
-	do_facet mgs "$LCTL conf_param $FSNAME.sys.timeout=" \
-				"$timeout"
+	set_conf_param_and_check client "$test_at" "$param_at" $at_max ||
+		error "conf_param at_max=$at_max failed"
+	set_conf_param_and_check client "$test_timeout" "$param_timeout" \
+		$timeout || error "conf_param timeout=$timeout failed"
+
 	$LCTL set_param -n $pages_per_rpc
 }
 run_test 224c "Don't hang if one of md lost during large bulk RPC"
