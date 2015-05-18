@@ -50,12 +50,12 @@
 void osd_brw_stats_update(struct osd_device *osd, struct osd_iobuf *iobuf)
 {
         struct brw_stats *s = &osd->od_brw_stats;
-        unsigned long    *last_block = NULL;
+	sector_t	 *last_block = NULL;
         struct page     **pages = iobuf->dr_pages;
         struct page      *last_page = NULL;
         unsigned long     discont_pages = 0;
         unsigned long     discont_blocks = 0;
-        unsigned long    *blocks = iobuf->dr_blocks;
+	sector_t	 *blocks = iobuf->dr_blocks;
         int               i, nr_pages = iobuf->dr_npages;
         int               blocks_per_page;
         int               rw = iobuf->dr_rw;

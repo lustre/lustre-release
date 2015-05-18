@@ -10,7 +10,7 @@
  extern void ext4_da_update_reserve_space(struct inode *inode,
  					int used, int quota_claim);
 +extern int ext4_map_inode_page(struct inode *inode, struct page *page,
-+			       unsigned long *blocks, int created);
++			        sector_t *blocks, int created);
 +
  /* ioctl.c */
  extern long ext4_ioctl(struct file *, unsigned int, unsigned long);
@@ -23,7 +23,7 @@
  }
 +
 +int ext4_map_inode_page(struct inode *inode, struct page *page,
-+			unsigned long *blocks, int create)
++			 sector_t *blocks, int create)
 +{
 +	unsigned int blocksize, blocks_per_page;
 +	unsigned long iblock;

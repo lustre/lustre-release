@@ -6,7 +6,7 @@ diff -ur a/fs/ext4/ext4.h b/fs/ext4/ext4.h
  		struct address_space *mapping, loff_t from);
  extern int ext4_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf);
 +extern int ext4_map_inode_page(struct inode *inode, struct page *page,
-+				unsigned long *blocks, int create);
++				sector_t *blocks, int create);
  extern qsize_t *ext4_get_reserved_space(struct inode *inode);
  extern int flush_aio_dio_completed_IO(struct inode *inode);
  extern void ext4_da_update_reserve_space(struct inode *inode,
@@ -19,7 +19,7 @@ diff -ur a/fs/ext4/inode.c b/fs/ext4/inode.c
  }
 +
 +int ext4_map_inode_page(struct inode *inode, struct page *page,
-+			unsigned long *blocks, int create)
++			sector_t *blocks, int create)
 +{
 +	unsigned int blocksize, blocks_per_page;
 +	unsigned long iblock;

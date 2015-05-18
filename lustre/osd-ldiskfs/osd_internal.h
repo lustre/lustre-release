@@ -481,7 +481,7 @@ struct osd_iobuf {
 	struct lu_buf	   dr_pg_buf;
 	struct page      **dr_pages;
 	struct lu_buf	   dr_bl_buf;
-	unsigned long     *dr_blocks;
+	sector_t	  *dr_blocks;
 	unsigned long      dr_start_time;
 	unsigned long      dr_elapsed;  /* how long io took */
 	struct osd_device *dr_dev;

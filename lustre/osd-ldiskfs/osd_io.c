@@ -259,22 +259,22 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
                       struct osd_iobuf *iobuf)
 {
 	int            blocks_per_page = PAGE_CACHE_SIZE >> inode->i_blkbits;
-        struct page  **pages = iobuf->dr_pages;
-        int            npages = iobuf->dr_npages;
-        unsigned long *blocks = iobuf->dr_blocks;
-        int            total_blocks = npages * blocks_per_page;
-        int            sector_bits = inode->i_sb->s_blocksize_bits - 9;
-        unsigned int   blocksize = inode->i_sb->s_blocksize;
-        struct bio    *bio = NULL;
-        struct page   *page;
-        unsigned int   page_offset;
-        sector_t       sector;
-        int            nblocks;
-        int            block_idx;
-        int            page_idx;
-        int            i;
-        int            rc = 0;
-        ENTRY;
+	struct page  **pages = iobuf->dr_pages;
+	int            npages = iobuf->dr_npages;
+	sector_t      *blocks = iobuf->dr_blocks;
+	int            total_blocks = npages * blocks_per_page;
+	int            sector_bits = inode->i_sb->s_blocksize_bits - 9;
+	unsigned int   blocksize = inode->i_sb->s_blocksize;
+	struct bio    *bio = NULL;
+	struct page   *page;
+	unsigned int   page_offset;
+	sector_t       sector;
+	int            nblocks;
+	int            block_idx;
+	int            page_idx;
+	int            i;
+	int            rc = 0;
+	ENTRY;
 
         LASSERT(iobuf->dr_npages == npages);
 
@@ -540,7 +540,7 @@ cleanup:
 #endif
 
 struct bpointers {
-	unsigned long *blocks;
+	sector_t *blocks;
 	unsigned long start;
 	int num;
 	int init_num;
@@ -764,7 +764,7 @@ map:
 }
 
 static int osd_ldiskfs_map_nblocks(struct inode *inode, unsigned long block,
-				   unsigned long num, unsigned long *blocks,
+				   unsigned long num, sector_t *blocks,
 				   int create)
 {
 	struct bpointers bp;
@@ -787,11 +787,11 @@ static int osd_ldiskfs_map_nblocks(struct inode *inode, unsigned long block,
 
 static int osd_ldiskfs_map_bm_inode_pages(struct inode *inode,
 					  struct page **page, int pages,
-					  unsigned long *blocks, int create)
+					  sector_t *blocks, int create)
 {
 	int blocks_per_page = PAGE_CACHE_SIZE >> inode->i_blkbits;
 	pgoff_t bitmap_max_page_index;
-	unsigned long *b;
+	sector_t *b;
 	int rc = 0, i;
 
 	bitmap_max_page_index = LDISKFS_SB(inode->i_sb)->s_bitmap_maxbytes >>
@@ -803,8 +803,9 @@ static int osd_ldiskfs_map_bm_inode_pages(struct inode *inode,
 		}
 		rc = ldiskfs_map_inode_page(inode, *page, b, create);
 		if (rc) {
-			CERROR("ino %lu, blk %lu create %d: rc %d\n",
-			       inode->i_ino, *b, create, rc);
+			CERROR("ino %lu, blk %llu create %d: rc %d\n",
+			       inode->i_ino,
+			       (unsigned long long)*b, create, rc);
 			break;
 		}
 		b += blocks_per_page;
@@ -814,7 +815,7 @@ static int osd_ldiskfs_map_bm_inode_pages(struct inode *inode,
 
 static int osd_ldiskfs_map_ext_inode_pages(struct inode *inode,
 					   struct page **page,
-					   int pages, unsigned long *blocks,
+					   int pages, sector_t *blocks,
 					   int create)
 {
 	int blocks_per_page = PAGE_CACHE_SIZE >> inode->i_blkbits;
@@ -869,7 +870,7 @@ cleanup:
 }
 
 static int osd_ldiskfs_map_inode_pages(struct inode *inode, struct page **page,
-				       int pages, unsigned long *blocks,
+				       int pages, sector_t *blocks,
 				       int create)
 {
 	int rc;
@@ -885,7 +886,7 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode, struct page **page,
 }
 #else
 static int osd_ldiskfs_map_inode_pages(struct inode *inode, struct page **page,
-				       int pages, unsigned long *blocks,
+				       int pages, sector_t *blocks,
 				       int create)
 {
 	int blocks_per_page = PAGE_CACHE_SIZE >> inode->i_blkbits;
