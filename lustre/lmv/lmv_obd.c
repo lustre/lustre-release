@@ -610,11 +610,11 @@ static int lmv_disconnect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
                 mdc_obd->obd_force = obd->obd_force;
                 mdc_obd->obd_fail = obd->obd_fail;
                 mdc_obd->obd_no_recov = obd->obd_no_recov;
-        }
 
-	if (lmv->targets_proc_entry != NULL)
-		lprocfs_remove_proc_entry(mdc_obd->obd_name,
-					  lmv->targets_proc_entry);
+		if (lmv->targets_proc_entry != NULL)
+			lprocfs_remove_proc_entry(mdc_obd->obd_name,
+						  lmv->targets_proc_entry);
+	}
 
 	rc = obd_fid_fini(tgt->ltd_exp->exp_obd);
 	if (rc)
