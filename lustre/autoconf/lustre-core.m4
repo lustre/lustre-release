@@ -838,20 +838,19 @@ lock_manager_ops_lm_xxx, [
 #
 # LC_INODE_DIO_WAIT
 #
-# 3.1 kills inode->i_alloc_sem, use i_dio_count and inode_dio_wait/
-#     inode_dio_done instead.
+# 3.1 kills inode->i_alloc_sem, use i_dio_count and inode_dio_wait
+#     instead.
 # see kernel commit bd5fe6c5eb9c548d7f07fe8f89a150bb6705e8e3
 #
 AC_DEFUN([LC_INODE_DIO_WAIT], [
-LB_CHECK_COMPILE([if 'inode->i_alloc_sem' is killed and use inode_dio_wait/done],
+LB_CHECK_COMPILE([if 'inode->i_alloc_sem' is killed and use inode_dio_wait],
 inode_dio_wait, [
 	#include <linux/fs.h>
 ],[
 	inode_dio_wait((struct inode *)0);
-	inode_dio_done((struct inode *)0);
 ],[
 	AC_DEFINE(HAVE_INODE_DIO_WAIT, 1,
-		[inode->i_alloc_sem is killed and use inode_dio_wait/done])
+		[inode->i_alloc_sem is killed and use inode_dio_wait])
 ])
 ]) # LC_INODE_DIO_WAIT
 

@@ -123,13 +123,9 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #ifdef HAVE_INODE_DIO_WAIT
 /* inode_dio_wait(i) use as-is for write lock */
 # define inode_dio_write_done(i)	do {} while (0) /* for write unlock */
-# define inode_dio_read(i)		atomic_inc(&(i)->i_dio_count)
-/* inode_dio_done(i) use as-is for read unlock */
 #else
 # define inode_dio_wait(i)		down_write(&(i)->i_alloc_sem)
 # define inode_dio_write_done(i)	up_write(&(i)->i_alloc_sem)
-# define inode_dio_read(i)		down_read(&(i)->i_alloc_sem)
-# define inode_dio_done(i)		up_read(&(i)->i_alloc_sem)
 #endif
 
 #ifndef FS_HAS_FIEMAP
