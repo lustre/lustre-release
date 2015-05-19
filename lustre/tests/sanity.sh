@@ -8395,6 +8395,38 @@ test_124b() {
 }
 run_test 124b "lru resize (performance test) ======================="
 
+test_124c() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ -z "$($LCTL get_param -n mdc.*.connect_flags | grep lru_resize)" ] &&
+		skip "no lru resize on server" && return 0
+
+	# cache ununsed locks on client
+	local nr=100
+	cancel_lru_locks mdc
+	test_mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
+	createmany -o $DIR/$tdir/f $nr ||
+		error "failed to create $nr files in $DIR/$tdir"
+	ls -l $DIR/$tdir > /dev/null
+
+	local nsdir="ldlm.namespaces.*-MDT0000-mdc-*"
+	local unused=$($LCTL get_param -n $nsdir.lock_unused_count)
+	local max_age=$($LCTL get_param -n $nsdir.lru_max_age)
+	local recalc_p=$($LCTL get_param -n $nsdir.pool.recalc_period)
+	echo "unused=$unused, max_age=$max_age, recalc_p=$recalc_p"
+
+	# set lru_max_age to 1 sec
+	$LCTL set_param $nsdir.lru_max_age=1000 # jiffies
+	echo "sleep $((recalc_p * 2)) seconds..."
+	sleep $((recalc_p * 2))
+
+	local remaining=$($LCTL get_param -n $nsdir.lock_unused_count)
+	# restore lru_max_age
+	$LCTL set_param -n $nsdir.lru_max_age $max_age
+	[ $remaining -eq 0 ] || error "$remaining locks are not canceled"
+	unlinkmany $DIR/$tdir/f $nr
+}
+run_test 124c "LRUR cancel very aged locks"
+
 test_125() { # 13358
 	[ -z "$(lctl get_param -n llite.*.client_type | grep local)" ] && skip "must run as local client" && return
 	[ -z "$(lctl get_param -n mdc.*-mdc-*.connect_flags | grep acl)" ] && skip "must have acl enabled" && return
