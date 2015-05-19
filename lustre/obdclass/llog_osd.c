@@ -1918,7 +1918,7 @@ int llog_osd_put_cat_list(const struct lu_env *env, struct dt_device *d,
 	lgi->lgi_buf.lb_buf = idarray;
 	rc = dt_declare_record_write(env, o, &lgi->lgi_buf, lgi->lgi_off, th);
 	if (rc)
-		GOTO(out, rc);
+		GOTO(out_trans, rc);
 
 	/* For update log, this happens during initialization,
 	 * see lod_sub_prep_llog(), and we need make sure catlog
