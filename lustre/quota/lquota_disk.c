@@ -244,15 +244,7 @@ struct dt_object *lquota_disk_glb_find_create(const struct lu_env *env,
 	CDEBUG(D_QUOTA, "look-up/create %sglobal idx file ("DFID")\n",
 	       local ? "local " : "", PFID(fid));
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 56, 0)
-	/* we use different index feature for each quota type and target type
-	 * for the time being. This is done for on-disk conversion from the old
-	 * quota format. Once this is no longer required, we should just be
-	 * using dt_quota_glb_features for all global index file */
-	idx_feat = glb_idx_feature(fid);
-#else
 	idx_feat = &dt_quota_glb_features;
-#endif
 
 	/* the filename is composed of the most signicant bits of the FID,
 	 * that's to say the oid which encodes the pool id, pool type and quota
@@ -798,4 +790,3 @@ out:
 	dt_trans_stop(env, dev, th);
 	RETURN(rc);
 }
-EXPORT_SYMBOL(lquota_disk_write_glb);

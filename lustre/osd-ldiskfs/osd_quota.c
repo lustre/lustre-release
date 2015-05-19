@@ -627,379 +627,14 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 	RETURN(rcu ? rcu : rcg);
 }
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 56, 0)
-/* Following code is used to migrate old admin quota files (in Linux quota
- * file v2 format) into the new quota global indexes (in IAM format). */
-
-/* copied from osd_it_acct_get(), only changed the 'type' to -1 */
-static int osd_it_admin_get(const struct lu_env *env, struct dt_it *di,
-			    const struct dt_key *key)
-{
-	struct osd_it_quota	*it = (struct osd_it_quota *)di;
-	int			 type = -1;
-	qid_t			 dqid = *(qid_t *)key;
-	loff_t			 offset;
-	int			 rc;
-	ENTRY;
-
-	offset = find_tree_dqentry(env, it->oiq_obj, type, dqid,
-				   LUSTRE_DQTREEOFF, 0, it);
-	if (offset > 0) { /* Found */
-		RETURN(+1);
-	} else if (offset < 0) { /* Error */
-		QUOTA_IT_READ_ERROR(it, (int)offset);
-		RETURN((int)offset);
-	}
-
-	/* The @key is not found, move to the first valid entry */
-	rc = walk_tree_dqentry(env, it->oiq_obj, type, it->oiq_blk[0], 0,
-			       0, it);
-	if (rc > 0)
-		/* no valid entry found */
-		rc = -ENOENT;
-	RETURN(rc);
-}
-
-static int osd_it_admin_load(const struct lu_env *env,
-			     const struct dt_it *di, __u64 hash)
-{
-	int rc;
-	ENTRY;
-
-	rc = osd_it_admin_get(env, (struct dt_it *)di,
-			      (const struct dt_key *)&hash);
-	RETURN(rc);
-}
-
-static int osd_it_admin_rec(const struct lu_env *env,
-			    const struct dt_it *di,
-			    struct dt_rec *dtrec, __u32 attr)
-{
-	struct osd_it_quota	*it = (struct osd_it_quota *)di;
-	struct lu_buf		 buf;
-	loff_t			 pos;
-	int			 rc;
-	struct lustre_disk_dqblk_v2 *dqblk =
-		(struct lustre_disk_dqblk_v2 *)dtrec;
-	ENTRY;
-
-	buf.lb_buf = dqblk;
-	buf.lb_len = sizeof(*dqblk);
-
-	pos = it->oiq_offset;
-	rc = dt_record_read(env, &it->oiq_obj->oo_dt, &buf, &pos);
-	RETURN(rc);
-}
-
-/* copied from osd_it_acct_next(), only changed the 'type' to -1 */
-static int osd_it_admin_next(const struct lu_env *env, struct dt_it *di)
-{
-	struct osd_it_quota	*it = (struct osd_it_quota *)di;
-	int			 type = -1;
-	int			 depth, rc;
-	uint			 index;
-	ENTRY;
-
-	/* Let's first check if there are any remaining valid entry in the
-	 * current leaf block. Start with the next entry after the current one.
-	 */
-	depth = LUSTRE_DQTREEDEPTH;
-	index = it->oiq_index[depth];
-	if (++index < LUSTRE_DQSTRINBLK) {
-		/* Search for the next valid entry from current index */
-		rc = walk_block_dqentry(env, it->oiq_obj, type,
-					it->oiq_blk[depth], index, it);
-		if (rc < 0) {
-			QUOTA_IT_READ_ERROR(it, rc);
-			RETURN(rc);
-		} else if (rc == 0) {
-			/* Found on entry, @it is already updated to the
-			 * new position in walk_block_dqentry(). */
-			RETURN(0);
-		} else {
-			rc = osd_it_add_processed(it, depth);
-			if (rc)
-				RETURN(rc);
-		}
-	} else {
-		rc = osd_it_add_processed(it, depth);
-		if (rc)
-			RETURN(rc);
-	}
-	rc = 1;
-
-	/* We have consumed all the entries of the current leaf block, move on
-	 * to the next one. */
-	depth--;
-
-	/* We keep searching as long as walk_tree_dqentry() returns +1
-	 * (= no valid entry found). */
-	for (; depth >= 0 && rc > 0; depth--) {
-		index = it->oiq_index[depth];
-		if (++index > 0xff)
-			continue;
-		rc = walk_tree_dqentry(env, it->oiq_obj, type,
-				       it->oiq_blk[depth], depth, index, it);
-	}
-
-	if (rc < 0)
-		QUOTA_IT_READ_ERROR(it, rc);
-	RETURN(rc);
-}
-
-static const struct dt_index_operations osd_admin_index_ops = {
-	.dio_lookup	= osd_acct_index_lookup,
-	.dio_it		= {
-		.init     = osd_it_acct_init,
-		.fini     = osd_it_acct_fini,
-		.get      = osd_it_admin_get,
-		.put      = osd_it_acct_put,
-		.next     = osd_it_admin_next,
-		.key      = osd_it_acct_key,
-		.key_size = osd_it_acct_key_size,
-		.rec      = osd_it_admin_rec,
-		.store    = osd_it_acct_store,
-		.load     = osd_it_admin_load
-	}
-};
-
-static int convert_quota_file(const struct lu_env *env,
-			      struct dt_object *old, struct dt_object *new,
-			      bool isblk)
-{
-	const struct dt_it_ops	*iops = &old->do_index_ops->dio_it;
-	struct osd_object	*obj;
-	struct lu_buf		 buf;
-	struct dt_it		*it;
-	struct dt_key		*key;
-	__u32			 grace;
-	struct lquota_glb_rec	*glb_rec = NULL;
-	loff_t			 pos;
-	int			 rc;
-	struct lustre_disk_dqblk_v2	*dqblk = NULL;
-	struct lustre_disk_dqinfo	*dqinfo = NULL;
-	ENTRY;
-
-	obj = osd_dt_obj(old);
-	LASSERT(obj->oo_inode);
-
-	if (i_size_read(obj->oo_inode) == 0)
-		RETURN(0);
-
-	/* allocate buffers */
-	OBD_ALLOC_PTR(dqinfo);
-	if (dqinfo == NULL)
-		RETURN(-ENOMEM);
-
-	OBD_ALLOC_PTR(glb_rec);
-	if (glb_rec == NULL)
-		GOTO(out, rc = -ENOMEM);
-
-	OBD_ALLOC_PTR(dqblk);
-	if (dqblk == NULL)
-		GOTO(out, rc = -ENOMEM);
-
-	/* convert the old igrace/bgrace */
-	buf.lb_buf = dqinfo;
-	buf.lb_len = sizeof(*dqinfo);
-	pos = LUSTRE_DQINFOOFF;
-
-	rc = dt_record_read(env, old, &buf, &pos);
-	if (rc)
-		GOTO(out, rc);
-
-	/* keep it in little endian */
-	grace = isblk ? dqinfo->dqi_bgrace : dqinfo->dqi_igrace;
-	if (grace != 0) {
-		glb_rec->qbr_time = grace;
-		rc = lquota_disk_write_glb(env, new, 0, glb_rec);
-		if (rc)
-			GOTO(out, rc);
-		glb_rec->qbr_time = 0;
-	}
-
-	/* iterate the old admin file, insert each record into the
-	 * new index file. */
-	it = iops->init(env, old, 0);
-	if (IS_ERR(it))
-		GOTO(out, rc = PTR_ERR(it));
-
-	rc = iops->load(env, it, 0);
-	if (rc == -ENOENT)
-		GOTO(out_it, rc = 0);
-	else if (rc < 0)
-		GOTO(out_it, rc);
-
-	do {
-		key = iops->key(env, it);
-		if (IS_ERR(key))
-			GOTO(out_it, rc = PTR_ERR(key));
-
-		/* skip the root user/group */
-		if (*((__u64 *)key) == 0)
-			goto next;
-
-		rc = iops->rec(env, it, (struct dt_rec *)dqblk, 0);
-		if (rc)
-			GOTO(out_it, rc);
-
-		/* keep the value in little endian */
-		glb_rec->qbr_hardlimit = isblk ? dqblk->dqb_bhardlimit :
-						 dqblk->dqb_ihardlimit;
-		glb_rec->qbr_softlimit = isblk ? dqblk->dqb_bsoftlimit :
-						 dqblk->dqb_isoftlimit;
-
-		rc = lquota_disk_write_glb(env, new, *((__u64 *)key), glb_rec);
-		if (rc)
-			GOTO(out_it, rc);
-next:
-		rc = iops->next(env, it);
-	} while (rc == 0);
-
-	/* reach the end */
-	if (rc > 0)
-		rc = 0;
-
-out_it:
-	iops->put(env, it);
-	iops->fini(env, it);
-out:
-	if (dqblk != NULL)
-		OBD_FREE_PTR(dqblk);
-	if (glb_rec != NULL)
-		OBD_FREE_PTR(glb_rec);
-	if (dqinfo != NULL)
-		OBD_FREE_PTR(dqinfo);
-	return rc;
-}
-
-/* Nobdy else can access the global index now, it's safe to truncate and
- * reinitialize it */
-static int truncate_quota_index(const struct lu_env *env, struct dt_object *dt,
-				const struct dt_index_features *feat)
-{
-	struct osd_device	*osd = osd_obj2dev(osd_dt_obj(dt));
-	struct thandle		*th;
-	struct lu_attr		*attr;
-	struct osd_thandle	*oth;
-	struct inode		*inode;
-	int			 rc;
-	struct iam_container	*bag = &(osd_dt_obj(dt))->oo_dir->od_container;
-	struct lu_buf		*lb = &osd_oti_get(env)->oti_buf;
-	ENTRY;
-
-	LASSERT(bag->ic_root_bh != NULL);
-	iam_container_fini(bag);
-
-	LASSERT(fid_seq(lu_object_fid(&dt->do_lu)) == FID_SEQ_QUOTA_GLB);
-
-	OBD_ALLOC_PTR(attr);
-	if (attr == NULL)
-		RETURN(-ENOMEM);
-
-	attr->la_size = 0;
-	attr->la_valid = LA_SIZE;
-
-	th = dt_trans_create(env, &osd->od_dt_dev);
-	if (IS_ERR(th)) {
-		OBD_FREE_PTR(attr);
-		RETURN(PTR_ERR(th));
-	}
-
-	rc = dt_declare_punch(env, dt, 0, OBD_OBJECT_EOF, th);
-	if (rc)
-		GOTO(out, rc);
-
-	rc = dt_declare_attr_set(env, dt, attr, th);
-	if (rc)
-		GOTO(out, rc);
-
-	inode = osd_dt_obj(dt)->oo_inode;
-	LASSERT(inode);
-
-	/* iam_lfix_create() writes two blocks at the beginning */
-	lb->lb_len = osd_sb(osd)->s_blocksize * 2;
-	rc = dt_declare_record_write(env, dt, lb, 0, th);
-	if (rc)
-		GOTO(out, rc);
-
-	rc = dt_trans_start_local(env, &osd->od_dt_dev, th);
-	if (rc)
-		GOTO(out, rc);
-
-	dt_write_lock(env, dt, 0);
-	rc = dt_punch(env, dt, 0, OBD_OBJECT_EOF, th);
-	if (rc)
-		GOTO(out_lock, rc);
-
-	rc = dt_attr_set(env, dt, attr, th);
-	if (rc)
-		GOTO(out_lock, rc);
-
-	oth = container_of(th, struct osd_thandle, ot_super);
-
-	if (feat->dif_flags & DT_IND_VARKEY)
-		rc = iam_lvar_create(osd_dt_obj(dt)->oo_inode,
-				     feat->dif_keysize_max,
-				     feat->dif_ptrsize,
-				     feat->dif_recsize_max, oth->ot_handle);
-	else
-		rc = iam_lfix_create(osd_dt_obj(dt)->oo_inode,
-				     feat->dif_keysize_max,
-				     feat->dif_ptrsize,
-				     feat->dif_recsize_max, oth->ot_handle);
-out_lock:
-	dt_write_unlock(env, dt);
-out:
-	dt_trans_stop(env, &osd->od_dt_dev, th);
-	OBD_FREE_PTR(attr);
-
-	if (rc == 0) {
-		rc  = iam_container_setup(bag);
-		if (rc != 0)
-			iam_container_fini(bag);
-	}
-	RETURN(rc);
-}
-
-static int set_quota_index_version(const struct lu_env *env,
-				   struct dt_object *dt,
-				   dt_obj_version_t version)
-{
-	struct osd_device	*osd = osd_obj2dev(osd_dt_obj(dt));
-	struct thandle		*th;
-	int			 rc;
-	ENTRY;
-
-	th = dt_trans_create(env, &osd->od_dt_dev);
-	if (IS_ERR(th))
-		RETURN(PTR_ERR(th));
-
-	rc = dt_declare_version_set(env, dt, th);
-	if (rc)
-		GOTO(out, rc);
-
-	rc = dt_trans_start_local(env, &osd->od_dt_dev, th);
-	if (rc)
-		GOTO(out, rc);
-
-	th->th_sync = 1;
-	dt_version_set(env, dt, version, th);
-out:
-	dt_trans_stop(env, &osd->od_dt_dev, th);
-	RETURN(rc);
-}
-
-int osd_quota_migration(const struct lu_env *env, struct dt_object *dt,
-			const struct dt_index_features *feat)
+int osd_quota_migration(const struct lu_env *env, struct dt_object *dt)
 {
 	struct osd_thread_info	*oti = osd_oti_get(env);
 	struct osd_device	*osd = osd_obj2dev(osd_dt_obj(dt));
 	struct dt_object	*root, *parent = NULL, *admin = NULL;
 	dt_obj_version_t	 version;
-	char			*fname;
-	bool			 isblk = false, converted = false;
-	int			 rc;
+	char			*fname, *fnames[] = {ADMIN_USR, ADMIN_GRP};
+	int			 rc, i;
 	ENTRY;
 
 	/* not newly created global index */
@@ -1039,101 +674,46 @@ int osd_quota_migration(const struct lu_env *env, struct dt_object *dt,
 		GOTO(out, rc = PTR_ERR(parent));
 	}
 
-	/* locate quota admin file */
-	if (feat == &dt_quota_iusr_features) {
-		fname = ADMIN_USR;
-		isblk = false;
-	} else if (feat == &dt_quota_busr_features) {
-		fname = ADMIN_USR;
-		isblk = true;
-	} else if (feat == &dt_quota_igrp_features) {
-		fname = ADMIN_GRP;
-		isblk = false;
-	} else {
-		fname = ADMIN_GRP;
-		isblk = true;
-	}
+	/* locate quota admin files */
+	for (i = 0; i < 2; i++) {
+		fname = fnames[i];
+		rc = dt_lookup_dir(env, parent, fname, &oti->oti_fid);
+		if (rc == -ENOENT) {
+			rc = 0;
+			continue;
+		} else if (rc) {
+			CERROR("%s: Failed to lookup %s, rc:%d\n",
+			       osd->od_svname, fname, rc);
+			GOTO(out, rc);
+		}
 
-	rc = dt_lookup_dir(env, parent, fname, &oti->oti_fid);
-	if (rc == -ENOENT) {
-		GOTO(out, rc = 0);
-	} else if (rc) {
-		CERROR("%s: Failed to lookup %s, rc:%d\n",
-		       osd->od_svname, fname, rc);
-		GOTO(out, rc);
-	}
+		admin = dt_locate(env, &osd->od_dt_dev, &oti->oti_fid);
+		if (IS_ERR(admin)) {
+			CERROR("%s: Failed to locate %s "DFID", rc:%d\n",
+			       osd->od_svname, fname, PFID(&oti->oti_fid), rc);
+			GOTO(out, rc = PTR_ERR(admin));
+		}
 
-	admin = dt_locate(env, &osd->od_dt_dev, &oti->oti_fid);
-	if (IS_ERR(admin)) {
-		CERROR("%s: Failed to locate %s "DFID", rc:%d\n",
-		       osd->od_svname, fname, PFID(&oti->oti_fid), rc);
-		GOTO(out, rc = PTR_ERR(admin));
-	}
+		if (!dt_object_exists(admin)) {
+			CERROR("%s: Old admin file %s doesn't exist, but is "
+			       "still referenced in parent directory.\n",
+			       osd->od_svname, fname);
+			lu_object_put(env, &admin->do_lu);
+			GOTO(out, rc = -ENOENT);
+		}
 
-	if (!dt_object_exists(admin)) {
-		CERROR("%s: Old admin file %s doesn't exist, but is still "
-		       " referenced in parent directory.\n",
-		       osd->od_svname, fname);
-		GOTO(out, rc = -ENOENT);
-	}
+		LCONSOLE_WARN("%s: Detected old quota admin file(%s)! If you "
+			      "want to keep the old quota limits settings, "
+			      "please upgrade to lower version(2.5) first to "
+			      "convert them into new format.\n",
+			      osd->od_svname, fname);
 
-	/* truncate the new quota index file in case of any leftovers
-	 * from last failed migration */
-	rc = truncate_quota_index(env, dt, feat);
-	if (rc) {
-		CERROR("%s: Failed to truncate the quota index "DFID", rc:%d\n",
-		       osd->od_svname, PFID(lu_object_fid(&dt->do_lu)), rc);
-		GOTO(out, rc);
-	}
-
-	/* set up indexing operations for the admin file */
-	admin->do_index_ops = &osd_admin_index_ops;
-
-	LCONSOLE_INFO("%s: Migrate %s quota from old admin quota file(%s) to "
-		      "new IAM quota index("DFID").\n", osd->od_svname,
-		      isblk ? "block" : "inode", fname,
-		      PFID(lu_object_fid(&dt->do_lu)));
-
-	/* iterate the admin quota file, and insert each record into
-	 * the new index file */
-	rc = convert_quota_file(env, admin, dt, isblk);
-	if (rc)
-		CERROR("%s: Migrate old admin quota file(%s) failed, rc:%d\n",
-		       osd->od_svname, fname, rc);
-	converted = true;
-out:
-	/* if no migration happen, we need to set the default grace time. */
-	if (!converted && rc == 0) {
-		struct lquota_glb_rec *rec = &oti->oti_quota_rec.lqr_glb_rec;
-
-		rec->qbr_hardlimit = 0;
-		rec->qbr_softlimit = 0;
-		rec->qbr_granted = 0;
-		rec->qbr_time = isblk ? MAX_DQ_TIME : MAX_IQ_TIME;
-
-		rc = lquota_disk_write_glb(env, dt, 0, rec);
-		if (rc)
-			CERROR("%s: Failed to set default grace time for "
-			       "index("DFID"), rc:%d\n", osd->od_svname,
-			       PFID(lu_object_fid(&dt->do_lu)), rc);
-	}
-
-	/* bump index version to 1 (or 2 if migration happened), so the
-	 * migration will be skipped next time. */
-	if (rc == 0) {
-		rc = set_quota_index_version(env , dt, converted ? 2 : 1);
-		if (rc)
-			CERROR("%s: Failed to set quota index("DFID") "
-			       "version, rc:%d\n", osd->od_svname,
-			       PFID(lu_object_fid(&dt->do_lu)), rc);
-	}
-
-	if (admin && !IS_ERR(admin))
 		lu_object_put(env, &admin->do_lu);
+		GOTO(out, rc = -EINVAL);
+	}
+out:
 	if (parent && !IS_ERR(parent))
 		lu_object_put(env, &parent->do_lu);
 	lu_object_put(env, &root->do_lu);
-
 	RETURN(rc);
 }
-#endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 53, 0) */

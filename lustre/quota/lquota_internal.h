@@ -410,6 +410,8 @@ int lquota_disk_write(const struct lu_env *, struct thandle *,
 		      __u32, __u64 *);
 int lquota_disk_update_ver(const struct lu_env *, struct dt_device *,
 			   struct dt_object *, __u64);
+int lquota_disk_write_glb(const struct lu_env *, struct dt_object *, __u64,
+			  struct lquota_glb_rec *);
 
 /* qmt_dev.c */
 int qmt_glb_init(void);

@@ -179,10 +179,6 @@ void qsd_op_end(const struct lu_env *, struct qsd_instance *,
 		struct lquota_trans *);
 void qsd_op_adjust(const struct lu_env *, struct qsd_instance *,
 		   union lquota_id *, int);
-/* This is exported for the ldiskfs quota migration only,
- * see convert_quota_file() */
-int lquota_disk_write_glb(const struct lu_env *, struct dt_object *,
-			  __u64, struct lquota_glb_rec *);
 
 /*
  * Quota information attached to a transaction

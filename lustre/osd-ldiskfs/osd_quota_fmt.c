@@ -64,28 +64,7 @@ static ssize_t quota_read_blk(const struct lu_env *env,
 	ENTRY;
 
 	memset(buf, 0, LUSTRE_DQBLKSIZE);
-
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 56, 0)
-	/* type is set as -1 when reading old admin quota file */
-	if (type != USRQUOTA && type != GRPQUOTA) {
-		struct lu_buf	lu_buffer;
-		loff_t		pos;
-
-		lu_buffer.lb_buf = buf;
-		lu_buffer.lb_len = LUSTRE_DQBLKSIZE;
-		pos = blk << LUSTRE_DQBLKSIZE_BITS;
-
-		ret = dt_record_read(env, &obj->oo_dt, &lu_buffer, &pos);
-
-		if (ret == 0)
-			ret = LUSTRE_DQBLKSIZE;
-		else if (ret == -EBADR || ret == -EFAULT)
-			ret = 0;
-		RETURN(ret);
-	}
-#else
-#warning "remove old quota compatibility code"
-#endif
+	LASSERTF((type == USRQUOTA || type == GRPQUOTA), "type=%d\n", type);
 
 	ret = sb->s_op->quota_read(sb, type, buf, LUSTRE_DQBLKSIZE,
 				   blk << LUSTRE_DQBLKSIZE_BITS);
