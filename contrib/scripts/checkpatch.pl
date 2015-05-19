@@ -3451,6 +3451,11 @@ sub process {
 			WARN("EXPORTED_WORLD_WRITABLE",
 			     "Exporting world writable files is usually an error. Consider more restrictive permissions.\n" . $herecurr);
 		}
+
+		if ($rawline =~ /version 3/) {
+			WARN("GPLV3",
+			     "using GPLv3 is usually wrong\n" . $herecurr);
+		}
 	}
 
 	# If we have no input at all, then there is nothing to report on
