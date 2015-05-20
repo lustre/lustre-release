@@ -6937,11 +6937,15 @@ test_102p() { # LU-4703 setxattr did not check ownership
 run_test 102p "check setxattr(2) correctly fails without permission"
 
 test_102q() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.92) ] &&
+		skip "MDS needs to be at least 2.6.92" && return
 	orphan_linkea_check $DIR/$tfile || error "orphan_linkea_check"
 }
 run_test 102q "flistxattr should not return trusted.link EAs for orphans"
 
 test_102r() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.93) ] &&
+		skip "MDS needs to be at least 2.6.93" && return
 	touch $DIR/$tfile || error "touch"
 	setfattr -n user.$(basename $tfile) $DIR/$tfile || error "setfattr"
 	getfattr -n user.$(basename $tfile) $DIR/$tfile || error "getfattr"
