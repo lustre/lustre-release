@@ -47,7 +47,6 @@ struct llog_process_info {
         int                 lpi_rc;
 	struct completion	lpi_completion;
 	const struct lu_env	*lpi_env;
-
 };
 
 struct llog_thread_info {

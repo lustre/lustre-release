@@ -80,15 +80,14 @@ static void llog_free_handle(struct llog_handle *loghandle)
 	LASSERT(loghandle != NULL);
 
 	/* failed llog_init_handle */
-	if (!loghandle->lgh_hdr)
+	if (loghandle->lgh_hdr == NULL)
 		goto out;
 
 	if (loghandle->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN)
 		LASSERT(list_empty(&loghandle->u.phd.phd_entry));
 	else if (loghandle->lgh_hdr->llh_flags & LLOG_F_IS_CAT)
 		LASSERT(list_empty(&loghandle->u.chd.chd_head));
-	LASSERT(sizeof(*(loghandle->lgh_hdr)) == LLOG_CHUNK_SIZE);
-	OBD_FREE(loghandle->lgh_hdr, LLOG_CHUNK_SIZE);
+	OBD_FREE_LARGE(loghandle->lgh_hdr, loghandle->lgh_hdr_size);
 out:
 	OBD_FREE_PTR(loghandle);
 }
@@ -122,7 +121,7 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
         }
 
 	down_write(&loghandle->lgh_hdr_lock);
-	if (!ext2_clear_bit(index, llh->llh_bitmap)) {
+	if (!ext2_clear_bit(index, LLOG_HDR_BITMAP(llh))) {
 		up_write(&loghandle->lgh_hdr_lock);
 		CDEBUG(D_RPCTRACE, "Catalog index %u already clear?\n", index);
 		RETURN(-ENOENT);
@@ -132,7 +131,7 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 
 	if ((llh->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
 	    (llh->llh_count == 1) &&
-	    (loghandle->lgh_last_idx == (LLOG_BITMAP_BYTES * 8) - 1)) {
+	    (loghandle->lgh_last_idx == LLOG_HDR_BITMAP_SIZE(llh) - 1)) {
 		up_write(&loghandle->lgh_hdr_lock);
 		rc = llog_destroy(env, loghandle);
 		if (rc < 0) {
@@ -159,7 +158,7 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 	RETURN(0);
 out_err:
 	down_write(&loghandle->lgh_hdr_lock);
-	ext2_set_bit(index, llh->llh_bitmap);
+	ext2_set_bit(index, LLOG_HDR_BITMAP(llh));
 	llh->llh_count++;
 	up_write(&loghandle->lgh_hdr_lock);
 	return rc;
@@ -183,17 +182,22 @@ static int llog_read_header(const struct lu_env *env,
 	if (rc == LLOG_EEMPTY) {
 		struct llog_log_hdr *llh = handle->lgh_hdr;
 
+		/* lrh_len should be initialized in llog_init_handle */
 		handle->lgh_last_idx = 0; /* header is record with index 0 */
 		llh->llh_count = 1;         /* for the header record */
 		llh->llh_hdr.lrh_type = LLOG_HDR_MAGIC;
-		llh->llh_hdr.lrh_len = llh->llh_tail.lrt_len = LLOG_CHUNK_SIZE;
-		llh->llh_hdr.lrh_index = llh->llh_tail.lrt_index = 0;
+		LASSERT(handle->lgh_ctxt->loc_chunk_size >=
+						LLOG_MIN_CHUNK_SIZE);
+		llh->llh_hdr.lrh_len = handle->lgh_ctxt->loc_chunk_size;
+		llh->llh_hdr.lrh_index = 0;
 		llh->llh_timestamp = cfs_time_current_sec();
 		if (uuid)
 			memcpy(&llh->llh_tgtuuid, uuid,
 			       sizeof(llh->llh_tgtuuid));
 		llh->llh_bitmap_offset = offsetof(typeof(*llh), llh_bitmap);
-		ext2_set_bit(0, llh->llh_bitmap);
+		ext2_set_bit(0, LLOG_HDR_BITMAP(llh));
+		LLOG_HDR_TAIL(llh)->lrt_len = llh->llh_hdr.lrh_len;
+		LLOG_HDR_TAIL(llh)->lrt_index = llh->llh_hdr.lrh_index;
 		rc = 0;
 	}
 	return rc;
@@ -205,14 +209,18 @@ int llog_init_handle(const struct lu_env *env, struct llog_handle *handle,
 	struct llog_log_hdr	*llh;
 	enum llog_flag		 fmt = flags & LLOG_F_EXT_MASK;
 	int			 rc;
-
+	int			chunk_size = handle->lgh_ctxt->loc_chunk_size;
 	ENTRY;
+
 	LASSERT(handle->lgh_hdr == NULL);
 
-	OBD_ALLOC_PTR(llh);
+	LASSERT(chunk_size >= LLOG_MIN_CHUNK_SIZE);
+	OBD_ALLOC_LARGE(llh, chunk_size);
 	if (llh == NULL)
 		RETURN(-ENOMEM);
+
 	handle->lgh_hdr = llh;
+	handle->lgh_hdr_size = chunk_size;
 	/* first assign flags to use llog_client_ops */
 	llh->llh_flags = flags;
 	rc = llog_read_header(env, handle, uuid);
@@ -261,7 +269,7 @@ int llog_init_handle(const struct lu_env *env, struct llog_handle *handle,
 	llh->llh_flags |= fmt;
 out:
 	if (rc) {
-		OBD_FREE_PTR(llh);
+		OBD_FREE_LARGE(llh, chunk_size);
 		handle->lgh_hdr = NULL;
 	}
 	RETURN(rc);
@@ -275,7 +283,8 @@ static int llog_process_thread(void *arg)
 	struct llog_log_hdr		*llh = loghandle->lgh_hdr;
 	struct llog_process_cat_data	*cd  = lpi->lpi_catdata;
 	char				*buf;
-	__u64				 cur_offset = LLOG_CHUNK_SIZE;
+	int				 chunk_size;
+	__u64				 cur_offset;
 	__u64				 last_offset;
 	int				 rc = 0, index = 1, last_index;
 	int				 saved_index = 0;
@@ -283,35 +292,36 @@ static int llog_process_thread(void *arg)
 
 	ENTRY;
 
-        LASSERT(llh);
+	if (llh == NULL)
+		RETURN(-EINVAL);
 
-        OBD_ALLOC(buf, LLOG_CHUNK_SIZE);
-        if (!buf) {
-                lpi->lpi_rc = -ENOMEM;
+	cur_offset = chunk_size = llh->llh_hdr.lrh_len;
+
+	OBD_ALLOC_LARGE(buf, chunk_size);
+	if (buf == NULL) {
+		lpi->lpi_rc = -ENOMEM;
 		RETURN(0);
-        }
-
-        if (cd != NULL) {
-                last_called_index = cd->lpcd_first_idx;
-                index = cd->lpcd_first_idx + 1;
-        }
-        if (cd != NULL && cd->lpcd_last_idx)
-                last_index = cd->lpcd_last_idx;
-        else
-                last_index = LLOG_BITMAP_BYTES * 8 - 1;
-
-	if (index > last_index) {
-		/* Record is not in this buffer. */
-		GOTO(out, rc);
 	}
 
-        while (rc == 0) {
-                struct llog_rec_hdr *rec;
+	if (cd != NULL) {
+		last_called_index = cd->lpcd_first_idx;
+		index = cd->lpcd_first_idx + 1;
+	}
+	if (cd != NULL && cd->lpcd_last_idx)
+		last_index = cd->lpcd_last_idx;
+	else
+		last_index = LLOG_HDR_BITMAP_SIZE(llh) - 1;
 
-                /* skip records not set in bitmap */
-                while (index <= last_index &&
-                       !ext2_test_bit(index, llh->llh_bitmap))
-                        ++index;
+	if (index > last_index) /* Record is not in this buffer. */
+		GOTO(out, rc);
+
+	while (rc == 0) {
+		struct llog_rec_hdr *rec;
+
+		/* skip records not set in bitmap */
+		while (index <= last_index &&
+		       !ext2_test_bit(index, LLOG_HDR_BITMAP(llh)))
+			++index;
 
                 LASSERT(index <= last_index + 1);
                 if (index == last_index + 1)
@@ -320,19 +330,19 @@ repeat:
                 CDEBUG(D_OTHER, "index: %d last_index %d\n",
                        index, last_index);
 
-                /* get the buf with our target record; avoid old garbage */
-                memset(buf, 0, LLOG_CHUNK_SIZE);
-                last_offset = cur_offset;
+		/* get the buf with our target record; avoid old garbage */
+		memset(buf, 0, chunk_size);
+		last_offset = cur_offset;
 		rc = llog_next_block(lpi->lpi_env, loghandle, &saved_index,
-				     index, &cur_offset, buf, LLOG_CHUNK_SIZE);
-                if (rc)
-                        GOTO(out, rc);
+				     index, &cur_offset, buf, chunk_size);
+		if (rc != 0)
+			GOTO(out, rc);
 
 		/* NB: when rec->lrh_len is accessed it is already swabbed
 		 * since it is used at the "end" of the loop and the rec
 		 * swabbing is done at the beginning of the loop. */
 		for (rec = (struct llog_rec_hdr *)buf;
-		     (char *)rec < buf + LLOG_CHUNK_SIZE;
+		     (char *)rec < buf + chunk_size;
 		     rec = llog_rec_hdr_next(rec)) {
 
 			CDEBUG(D_OTHER, "processing rec 0x%p type %#x\n",
@@ -350,8 +360,7 @@ repeat:
 					GOTO(repeat, rc = 0);
 				GOTO(out, rc = 0); /* no more records */
 			}
-			if (rec->lrh_len == 0 ||
-			    rec->lrh_len > LLOG_CHUNK_SIZE) {
+			if (rec->lrh_len == 0 || rec->lrh_len > chunk_size) {
                                 CWARN("invalid length %d in llog record for "
                                       "index %d/%d\n", rec->lrh_len,
                                       rec->lrh_index, index);
@@ -364,17 +373,17 @@ repeat:
                                 continue;
                         }
 
-                        CDEBUG(D_OTHER,
-                               "lrh_index: %d lrh_len: %d (%d remains)\n",
-                               rec->lrh_index, rec->lrh_len,
-                               (int)(buf + LLOG_CHUNK_SIZE - (char *)rec));
+			CDEBUG(D_OTHER,
+			       "lrh_index: %d lrh_len: %d (%d remains)\n",
+			       rec->lrh_index, rec->lrh_len,
+			       (int)(buf + chunk_size - (char *)rec));
 
                         loghandle->lgh_cur_idx = rec->lrh_index;
                         loghandle->lgh_cur_offset = (char *)rec - (char *)buf +
                                                     last_offset;
 
-                        /* if set, process the callback on this record */
-                        if (ext2_test_bit(index, llh->llh_bitmap)) {
+			/* if set, process the callback on this record */
+			if (ext2_test_bit(index, LLOG_HDR_BITMAP(llh))) {
 				rc = lpi->lpi_cb(lpi->lpi_env, loghandle, rec,
 						 lpi->lpi_cbdata);
 				last_called_index = index;
@@ -409,14 +418,14 @@ out:
 		 * remaining bits in the header */
 		CERROR("Local llog found corrupted\n");
 		while (index <= last_index) {
-			if (ext2_test_bit(index, llh->llh_bitmap) != 0)
+			if (ext2_test_bit(index, LLOG_HDR_BITMAP(llh)) != 0)
 				llog_cancel_rec(lpi->lpi_env, loghandle, index);
 			index++;
 		}
 		rc = 0;
 	}
 
-	OBD_FREE(buf, LLOG_CHUNK_SIZE);
+	OBD_FREE_LARGE(buf, chunk_size);
         lpi->lpi_rc = rc;
         return 0;
 }
@@ -507,36 +516,36 @@ int llog_reverse_process(const struct lu_env *env,
         struct llog_process_cat_data *cd = catdata;
         void *buf;
         int rc = 0, first_index = 1, index, idx;
+	__u32	chunk_size = llh->llh_hdr.lrh_len;
         ENTRY;
 
-        OBD_ALLOC(buf, LLOG_CHUNK_SIZE);
-        if (!buf)
-                RETURN(-ENOMEM);
+	OBD_ALLOC_LARGE(buf, chunk_size);
+	if (buf == NULL)
+		RETURN(-ENOMEM);
 
-        if (cd != NULL)
-                first_index = cd->lpcd_first_idx + 1;
-        if (cd != NULL && cd->lpcd_last_idx)
-                index = cd->lpcd_last_idx;
-        else
-                index = LLOG_BITMAP_BYTES * 8 - 1;
+	if (cd != NULL)
+		first_index = cd->lpcd_first_idx + 1;
+	if (cd != NULL && cd->lpcd_last_idx)
+		index = cd->lpcd_last_idx;
+	else
+		index = LLOG_HDR_BITMAP_SIZE(llh) - 1;
 
-        while (rc == 0) {
-                struct llog_rec_hdr *rec;
-                struct llog_rec_tail *tail;
+	while (rc == 0) {
+		struct llog_rec_hdr *rec;
+		struct llog_rec_tail *tail;
 
-                /* skip records not set in bitmap */
-                while (index >= first_index &&
-                       !ext2_test_bit(index, llh->llh_bitmap))
-                        --index;
+		/* skip records not set in bitmap */
+		while (index >= first_index &&
+		       !ext2_test_bit(index, LLOG_HDR_BITMAP(llh)))
+			--index;
 
-                LASSERT(index >= first_index - 1);
-                if (index == first_index - 1)
-                        break;
+		LASSERT(index >= first_index - 1);
+		if (index == first_index - 1)
+			break;
 
-                /* get the buf with our target record; avoid old garbage */
-                memset(buf, 0, LLOG_CHUNK_SIZE);
-		rc = llog_prev_block(env, loghandle, index, buf,
-				     LLOG_CHUNK_SIZE);
+		/* get the buf with our target record; avoid old garbage */
+		memset(buf, 0, chunk_size);
+		rc = llog_prev_block(env, loghandle, index, buf, chunk_size);
 		if (rc)
 			GOTO(out, rc);
 
@@ -552,13 +561,13 @@ int llog_reverse_process(const struct lu_env *env,
 		LASSERT(idx == index);
 		tail = (void *)rec + rec->lrh_len - sizeof(*tail);
 
-                /* process records in buffer, starting where we found one */
-                while ((void *)tail > buf) {
+		/* process records in buffer, starting where we found one */
+		while ((void *)tail > buf) {
 			if (tail->lrt_index == 0)
 				GOTO(out, rc = 0); /* no more records */
 
-                        /* if set, process the callback on this record */
-                        if (ext2_test_bit(index, llh->llh_bitmap)) {
+			/* if set, process the callback on this record */
+			if (ext2_test_bit(index, LLOG_HDR_BITMAP(llh))) {
 				rec = (void *)tail - tail->lrt_len +
 				      sizeof(*tail);
 
@@ -582,8 +591,8 @@ int llog_reverse_process(const struct lu_env *env,
         }
 
 out:
-        if (buf)
-                OBD_FREE(buf, LLOG_CHUNK_SIZE);
+	if (buf != NULL)
+		OBD_FREE_LARGE(buf, chunk_size);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_reverse_process);

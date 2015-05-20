@@ -264,7 +264,7 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
 		down_write_nested(&loghandle->lgh_lock, LLOGH_LOG);
 		llh = loghandle->lgh_hdr;
 		if (llh == NULL ||
-		    loghandle->lgh_last_idx < LLOG_BITMAP_SIZE(llh) - 1) {
+		    loghandle->lgh_last_idx < LLOG_HDR_BITMAP_SIZE(llh) - 1) {
 			up_read(&cathandle->lgh_lock);
                         RETURN(loghandle);
                 } else {
@@ -284,12 +284,12 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
 		down_write_nested(&loghandle->lgh_lock, LLOGH_LOG);
 		llh = loghandle->lgh_hdr;
 		LASSERT(llh);
-                if (loghandle->lgh_last_idx < LLOG_BITMAP_SIZE(llh) - 1) {
+		if (loghandle->lgh_last_idx < LLOG_HDR_BITMAP_SIZE(llh) - 1) {
 			up_write(&cathandle->lgh_lock);
-                        RETURN(loghandle);
-                } else {
+			RETURN(loghandle);
+		} else {
 			up_write(&loghandle->lgh_lock);
-                }
+		}
         }
 
 	CDEBUG(D_INODE, "use next log\n");
@@ -316,7 +316,7 @@ int llog_cat_add_rec(const struct lu_env *env, struct llog_handle *cathandle,
         int rc;
         ENTRY;
 
-        LASSERT(rec->lrh_len <= LLOG_CHUNK_SIZE);
+	LASSERT(rec->lrh_len <= cathandle->lgh_ctxt->loc_chunk_size);
 	loghandle = llog_cat_current_log(cathandle, th);
 	LASSERT(!IS_ERR(loghandle));
 
@@ -750,28 +750,29 @@ EXPORT_SYMBOL(llog_cat_reverse_process);
 
 static int llog_cat_set_first_idx(struct llog_handle *cathandle, int index)
 {
-        struct llog_log_hdr *llh = cathandle->lgh_hdr;
-        int i, bitmap_size, idx;
-        ENTRY;
+	struct llog_log_hdr *llh = cathandle->lgh_hdr;
+	int i, bitmap_size, idx;
+	ENTRY;
 
-        bitmap_size = LLOG_BITMAP_SIZE(llh);
-        if (llh->llh_cat_idx == (index - 1)) {
-                idx = llh->llh_cat_idx + 1;
-                llh->llh_cat_idx = idx;
-                if (idx == cathandle->lgh_last_idx)
-                        goto out;
-                for (i = (index + 1) % bitmap_size;
-                     i != cathandle->lgh_last_idx;
-                     i = (i + 1) % bitmap_size) {
-                        if (!ext2_test_bit(i, llh->llh_bitmap)) {
-                                idx = llh->llh_cat_idx + 1;
-                                llh->llh_cat_idx = idx;
-                        } else if (i == 0) {
-                                llh->llh_cat_idx = 0;
-                        } else {
-                                break;
-                        }
-                }
+	bitmap_size = LLOG_HDR_BITMAP_SIZE(llh);
+	if (llh->llh_cat_idx == (index - 1)) {
+		idx = llh->llh_cat_idx + 1;
+		llh->llh_cat_idx = idx;
+		if (idx == cathandle->lgh_last_idx)
+			goto out;
+
+		for (i = (index + 1) % bitmap_size;
+		     i != cathandle->lgh_last_idx;
+		     i = (i + 1) % bitmap_size) {
+			if (!ext2_test_bit(i, LLOG_HDR_BITMAP(llh))) {
+				idx = llh->llh_cat_idx + 1;
+				llh->llh_cat_idx = idx;
+			} else if (i == 0) {
+				llh->llh_cat_idx = 0;
+			} else {
+				break;
+			}
+		}
 out:
 		CDEBUG(D_RPCTRACE, "set catlog "DOSTID" first idx %u\n",
 		       POSTID(&cathandle->lgh_id.lgl_oi), llh->llh_cat_idx);

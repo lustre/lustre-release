@@ -895,7 +895,7 @@ int check_and_prepare_update_record(const struct lu_env *env,
 	lur->lur_update_rec.ur_master_transno = 0;
 	lur->lur_update_rec.ur_batchid = 0;
 	lur->lur_update_rec.ur_flags = 0;
-	lur->lur_hdr.lrh_len = LLOG_CHUNK_SIZE;
+	lur->lur_hdr.lrh_len = LLOG_MIN_CHUNK_SIZE;
 
 	tur->tur_update_param_count = 0;
 

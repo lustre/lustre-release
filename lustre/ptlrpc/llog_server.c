@@ -171,7 +171,7 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
 		RETURN(err_serious(-EFAULT));
 
 	req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_SERVER,
-			     LLOG_CHUNK_SIZE);
+			     LLOG_MIN_CHUNK_SIZE);
 	rc = req_capsule_server_pack(&req->rq_pill);
 	if (rc)
 		RETURN(err_serious(-ENOMEM));
@@ -203,7 +203,8 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
 	ptr = req_capsule_server_get(&req->rq_pill, &RMF_EADATA);
 	rc = llog_next_block(req->rq_svc_thread->t_env, loghandle,
 			     &repbody->lgd_saved_index, repbody->lgd_index,
-			     &repbody->lgd_cur_offset, ptr, LLOG_CHUNK_SIZE);
+			     &repbody->lgd_cur_offset, ptr,
+			     LLOG_MIN_CHUNK_SIZE);
 	if (rc)
 		GOTO(out_close, rc);
 	EXIT;
@@ -231,7 +232,7 @@ int llog_origin_handle_prev_block(struct ptlrpc_request *req)
 		RETURN(err_serious(-EFAULT));
 
 	req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_SERVER,
-			     LLOG_CHUNK_SIZE);
+			     LLOG_MIN_CHUNK_SIZE);
 	rc = req_capsule_server_pack(&req->rq_pill);
 	if (rc)
 		RETURN(err_serious(-ENOMEM));
@@ -262,7 +263,7 @@ int llog_origin_handle_prev_block(struct ptlrpc_request *req)
 
 	ptr = req_capsule_server_get(&req->rq_pill, &RMF_EADATA);
 	rc = llog_prev_block(req->rq_svc_thread->t_env, loghandle,
-			     body->lgd_index, ptr, LLOG_CHUNK_SIZE);
+			     body->lgd_index, ptr, LLOG_MIN_CHUNK_SIZE);
 	if (rc)
 		GOTO(out_close, rc);
 

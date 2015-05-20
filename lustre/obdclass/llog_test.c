@@ -51,7 +51,7 @@
 /* This is slightly more than the number of records that can fit into a
  * single llog file, because the llog_log_header takes up some of the
  * space in the first block that cannot be used for the bitmap. */
-#define LLOG_TEST_RECNUM  (LLOG_CHUNK_SIZE * 8)
+#define LLOG_TEST_RECNUM  (LLOG_MIN_CHUNK_SIZE * 8)
 
 static int llog_test_rand;
 static struct obd_uuid uuid = { .uuid = "test_uuid" };
@@ -64,16 +64,16 @@ struct llog_mini_rec {
 
 static int verify_handle(char *test, struct llog_handle *llh, int num_recs)
 {
-        int i;
-        int last_idx = 0;
-        int active_recs = 0;
+	int i;
+	int last_idx = 0;
+	int active_recs = 0;
 
-        for (i = 0; i < LLOG_BITMAP_BYTES * 8; i++) {
-                if (ext2_test_bit(i, llh->lgh_hdr->llh_bitmap)) {
-                        last_idx = i;
-                        active_recs++;
-                }
-        }
+	for (i = 0; i < LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr); i++) {
+		if (ext2_test_bit(i, LLOG_HDR_BITMAP(llh->lgh_hdr))) {
+			last_idx = i;
+			active_recs++;
+		}
+	}
 
         if (active_recs != num_recs) {
                 CERROR("%s: expected %d active recs after write, found %d\n",
@@ -258,7 +258,7 @@ static int llog_test_3(const struct lu_env *env, struct obd_device *obd,
 
 	CWARN("3d: write records with variable size until BITMAP_SIZE, "
 	      "return -ENOSPC\n");
-	for (i = 0; i < LLOG_BITMAP_SIZE(llh->lgh_hdr) + 1; i++) {
+	for (i = 0; i < LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr) + 1; i++) {
 		char			 buf[64];
 		struct llog_rec_hdr	*hdr = (void *)&buf;
 
@@ -372,7 +372,7 @@ static int llog_test_4(const struct lu_env *env, struct obd_device *obd)
 		GOTO(out, rc);
 
 	CWARN("4e: add 5 large records, one record per block\n");
-	buflen = LLOG_CHUNK_SIZE;
+	buflen = LLOG_MIN_CHUNK_SIZE;
 	OBD_ALLOC(buf, buflen);
 	if (buf == NULL)
 		GOTO(out, rc = -ENOMEM);
@@ -719,7 +719,7 @@ static int llog_test_7_sub(const struct lu_env *env, struct llog_ctxt *ctxt)
 		CERROR("7_sub: can't init llog handle: %d\n", rc);
 		GOTO(out_close, rc);
 	}
-	for (i = 0; i < LLOG_BITMAP_SIZE(llh->lgh_hdr); i++) {
+	for (i = 0; i < LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr); i++) {
 		rc = llog_write(env, llh, &llog_records.lrh, LLOG_NEXT_IDX);
 		if (rc == -ENOSPC) {
 			break;
@@ -740,9 +740,9 @@ static int llog_test_7_sub(const struct lu_env *env, struct llog_ctxt *ctxt)
 		CERROR("7_sub: verify handle failed: %d\n", rc);
 		GOTO(out_close, rc);
 	}
-	if (num_recs < LLOG_BITMAP_SIZE(llh->lgh_hdr) - 1)
+	if (num_recs < LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr) - 1)
 		CWARN("7_sub: records are not aligned, written %d from %u\n",
-		      num_recs, LLOG_BITMAP_SIZE(llh->lgh_hdr) - 1);
+		      num_recs, LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr) - 1);
 
 	plain_counter = 0;
 	rc = llog_process(env, llh, test_7_print_cb, "test 7", NULL);

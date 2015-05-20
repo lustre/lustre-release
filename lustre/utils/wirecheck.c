@@ -1629,9 +1629,6 @@ check_llog_log_hdr(void)
 	CHECK_MEMBER(llog_log_hdr, llh_flags);
 	CHECK_MEMBER(llog_log_hdr, llh_cat_idx);
 	CHECK_MEMBER(llog_log_hdr, llh_tgtuuid);
-	CHECK_MEMBER(llog_log_hdr, llh_reserved);
-	CHECK_MEMBER(llog_log_hdr, llh_bitmap);
-	CHECK_MEMBER(llog_log_hdr, llh_tail);
 }
 
 static void

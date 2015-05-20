@@ -295,6 +295,7 @@ struct llog_handle {
 	struct rw_semaphore	 lgh_hdr_lock; /* protect lgh_hdr data */
 	struct llog_logid	 lgh_id; /* id of this log */
 	struct llog_log_hdr	*lgh_hdr;
+	size_t			lgh_hdr_size;
 	struct dt_object	*lgh_obj;
 	int			 lgh_last_idx;
 	int			 lgh_cur_idx; /* used during llog_process */
@@ -342,6 +343,9 @@ struct llog_ctxt {
 	struct dt_object	*loc_dir;
 	struct local_oid_storage *loc_los_nameless;
 	struct local_oid_storage *loc_los_named;
+	/* llog chunk size, and llog record size can not be bigger than
+	 * loc_chunk_size */
+	__u32			 loc_chunk_size;
 };
 
 #define LLOG_PROC_BREAK 0x0001

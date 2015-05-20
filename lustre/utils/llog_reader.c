@@ -202,18 +202,18 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 
 		cur_rec = (struct llog_rec_hdr *)ptr;
 		idx = le32_to_cpu(cur_rec->lrh_index);
-                recs_pr[i] = cur_rec;
+		recs_pr[i] = cur_rec;
 
-                if (ext2_test_bit(idx, (*llog)->llh_bitmap)) {
-                        if (le32_to_cpu(cur_rec->lrh_type) != OBD_CFG_REC)
-                                printf("rec #%d type=%x len=%u\n", idx,
-                                       cur_rec->lrh_type, cur_rec->lrh_len);
-                } else {
-                        printf("Bit %d of %d not set\n", idx, recs_num);
-                        cur_rec->lrh_id = CANCELLED;
-                        /* The header counts only set records */
-                        i--;
-                }
+		if (ext2_test_bit(idx, LLOG_HDR_BITMAP(*llog))) {
+			if (le32_to_cpu(cur_rec->lrh_type) != OBD_CFG_REC)
+				printf("rec #%d type=%x len=%u\n", idx,
+				       cur_rec->lrh_type, cur_rec->lrh_len);
+		} else {
+			printf("Bit %d of %d not set\n", idx, recs_num);
+			cur_rec->lrh_id = CANCELLED;
+			/* The header counts only set records */
+			i--;
+		}
 
                 ptr += le32_to_cpu(cur_rec->lrh_len);
                 if ((ptr - file_buf) > file_size) {
