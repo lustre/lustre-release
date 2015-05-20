@@ -1620,6 +1620,47 @@ vfs_rename_6args, [
 ]) # LC_VFS_RENAME_6ARGS
 
 #
+# LC_DIRECTIO_USE_ITER
+#
+# 3.16 kernel changes direct IO to use iov_iter
+#
+AC_DEFUN([LC_DIRECTIO_USE_ITER], [
+LB_CHECK_COMPILE([if direct IO uses iov_iter],
+direct_io_iter, [
+	#include <linux/fs.h>
+],[
+	struct address_space_operations ops;
+	struct iov_iter *iter = NULL;
+	loff_t offset = 0;
+
+	ops.direct_IO(0, NULL, iter, offset);
+],[
+	AC_DEFINE(HAVE_DIRECTIO_ITER, 1,
+		[direct IO uses iov_iter])
+])
+]) # LC_DIRECTIO_USE_ITER
+
+#
+# LC_IOV_ITER_RW
+#
+# 4.1 kernel has iov_iter_rw
+#
+AC_DEFUN([LC_IOV_ITER_RW], [
+LB_CHECK_COMPILE([if iov_iter_rw exist],
+iov_iter_rw, [
+	#include <linux/fs.h>
+	#include <linux/uio.h>
+],[
+	struct iov_iter *iter = NULL;
+
+	iov_iter_rw(iter);
+],[
+	AC_DEFINE(HAVE_IOV_ITER_RW, 1,
+		[iov_iter_rw exist])
+])
+]) # LC_IOV_ITER_RW
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -1748,6 +1789,12 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 3.15
 	LC_VFS_RENAME_6ARGS
+
+	# 3.16
+	LC_DIRECTIO_USE_ITER
+
+	# 4.1.0
+	LC_IOV_ITER_RW
 
 	#
 	AS_IF([test "x$enable_server" != xno], [
