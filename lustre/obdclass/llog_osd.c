@@ -1548,7 +1548,7 @@ out_unlock:
 	dt_write_unlock(env, o);
 out_trans:
 	dt_trans_stop(env, d, th);
-	if (llog_dir != NULL)
+	if (!(IS_ERR_OR_NULL(llog_dir)))
 		lu_object_put(env, &llog_dir->do_lu);
 	RETURN(rc);
 }
