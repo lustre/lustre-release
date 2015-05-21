@@ -87,11 +87,13 @@ static int verify_handle(char *test, struct llog_handle *llh, int num_recs)
                 RETURN(-ERANGE);
         }
 
-        if (llh->lgh_last_idx < last_idx) {
-                CERROR("%s: handle->last_idx is %d, expected %d after write\n",
-                       test, llh->lgh_last_idx, last_idx);
-                RETURN(-ERANGE);
-        }
+	/* a catalog may wrap */
+	if (!(llh->lgh_hdr->llh_flags & LLOG_F_IS_CAT) &&
+	    (llh->lgh_last_idx < last_idx)) {
+		CERROR("%s: handle->last_idx is %d, expected %d after write\n",
+		       test, llh->lgh_last_idx, last_idx);
+		RETURN(-ERANGE);
+	}
 
         RETURN(0);
 }
@@ -1384,6 +1386,432 @@ out:
 	llog_ctxt_put(ctxt);
 	RETURN(rc);
 }
+
+/* test catalog wrap around */
+static int llog_test_10(const struct lu_env *env, struct obd_device *obd)
+{
+	struct llog_handle	*cath;
+	char			 name[10];
+	int			 rc, rc2, i, enospc, eok;
+	struct llog_mini_rec	 lmr;
+	struct llog_ctxt	*ctxt;
+	struct lu_attr		 la;
+	__u64			 cat_max_size;
+
+	ENTRY;
+
+	ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
+	LASSERT(ctxt);
+
+	lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
+	lmr.lmr_hdr.lrh_type = 0xf00f00;
+
+	snprintf(name, sizeof(name), "%x", llog_test_rand + 2);
+	CWARN("10a: create a catalog log with name: %s\n", name);
+	rc = llog_open_create(env, ctxt, &cath, NULL, name);
+	if (rc) {
+		CERROR("10a: llog_create with name %s failed: %d\n", name, rc);
+		GOTO(ctxt_release, rc);
+	}
+	rc = llog_init_handle(env, cath, LLOG_F_IS_CAT, &uuid);
+	if (rc) {
+		CERROR("10a: can't init llog handle: %d\n", rc);
+		GOTO(out, rc);
+	}
+
+	cat_logid = cath->lgh_id;
+
+	/* force catalog wrap for 5th plain LLOG */
+	cfs_fail_loc = CFS_FAIL_SKIP|OBD_FAIL_CAT_RECORDS;
+	cfs_fail_val = 4;
+
+	CWARN("10b: write %d log records\n", LLOG_TEST_RECNUM);
+	for (i = 0; i < LLOG_TEST_RECNUM; i++) {
+		rc = llog_cat_add(env, cath, &lmr.lmr_hdr, NULL);
+		if (rc) {
+			CERROR("10b: write %d records failed at #%d: %d\n",
+			       LLOG_TEST_RECNUM, i + 1, rc);
+			GOTO(out, rc);
+		}
+	}
+
+	/* make sure 2 new plain llog appears in catalog (+1 with hdr) */
+	rc = verify_handle("10b", cath, 3);
+	if (rc)
+		GOTO(out, rc);
+
+	CWARN("10c: write %d more log records\n", 2 * LLOG_TEST_RECNUM);
+	for (i = 0; i < 2 * LLOG_TEST_RECNUM; i++) {
+		rc = llog_cat_add(env, cath, &lmr.lmr_hdr, NULL);
+		if (rc) {
+			CERROR("10c: write %d records failed at #%d: %d\n",
+			       2*LLOG_TEST_RECNUM, i + 1, rc);
+			GOTO(out, rc);
+		}
+	}
+
+	/* make sure 2 new plain llog appears in catalog (+1 with hdr) */
+	rc = verify_handle("10c", cath, 5);
+	if (rc)
+		GOTO(out, rc);
+
+	/* fill last allocated plain LLOG and reach -ENOSPC condition
+	 * because no slot available in Catalog */
+	enospc = 0;
+	eok = 0;
+	CWARN("10c: write %d more log records\n", LLOG_TEST_RECNUM);
+	for (i = 0; i < LLOG_TEST_RECNUM; i++) {
+		rc = llog_cat_add(env, cath, &lmr.lmr_hdr, NULL);
+		if (rc && rc != -ENOSPC) {
+			CERROR("10c: write %d records failed at #%d: %d\n",
+			       LLOG_TEST_RECNUM, i + 1, rc);
+			GOTO(out, rc);
+		}
+		/* after last added plain LLOG has filled up, all new
+		 * records add should fail with -ENOSPC */
+		if (rc == -ENOSPC) {
+			enospc++;
+		} else {
+			enospc = 0;
+			eok++;
+		}
+	}
+
+	if ((enospc == 0) && (enospc+eok != LLOG_TEST_RECNUM)) {
+		CERROR("10c: all last records adds should have failed with"
+		       " -ENOSPC\n");
+		GOTO(out, rc = -EINVAL);
+	}
+
+	CWARN("10c: wrote %d records then %d failed with ENOSPC\n", eok,
+	      enospc);
+
+	/* make sure no new record in Catalog */
+	rc = verify_handle("10c", cath, 5);
+	if (rc)
+		GOTO(out, rc);
+
+	/* Catalog should have reached its max size for test */
+	rc = dt_attr_get(env, cath->lgh_obj, &la);
+	if (rc) {
+		CERROR("10c: failed to get catalog attrs: %d\n", rc);
+		GOTO(out, rc);
+	}
+	cat_max_size = la.la_size;
+
+	/* cancel all 1st plain llog records to empty it, this will also cause
+	 * its catalog entry to be freed for next forced wrap in 10e */
+	CWARN("10d: Cancel %d records, see one log zapped\n", LLOG_TEST_RECNUM);
+	cancel_count = 0;
+	rc = llog_cat_process(env, cath, llog_cancel_rec_cb, "foobar", 0, 0);
+	if (rc != -LLOG_EEMPTY) {
+		CERROR("10d: process with llog_cancel_rec_cb failed: %d\n", rc);
+		/* need to indicate error if for any reason LLOG_TEST_RECNUM is
+		 * not reached */
+		if (rc == 0)
+			rc = -ERANGE;
+		GOTO(out, rc);
+	}
+
+	CWARN("10d: print the catalog entries.. we expect 3\n");
+	cat_counter = 0;
+	rc = llog_process(env, cath, cat_print_cb, "test 10", NULL);
+	if (rc) {
+		CERROR("10d: process with cat_print_cb failed: %d\n", rc);
+		GOTO(out, rc);
+	}
+	if (cat_counter != 3) {
+		CERROR("10d: %d entries in catalog\n", cat_counter);
+		GOTO(out, rc = -EINVAL);
+	}
+
+	/* verify one down in catalog (+1 with hdr) */
+	rc = verify_handle("10d", cath, 4);
+	if (rc)
+		GOTO(out, rc);
+
+	enospc = 0;
+	eok = 0;
+	CWARN("10e: write %d more log records\n", LLOG_TEST_RECNUM);
+	for (i = 0; i < LLOG_TEST_RECNUM; i++) {
+		rc = llog_cat_add(env, cath, &lmr.lmr_hdr, NULL);
+		if (rc && rc != -ENOSPC) {
+			CERROR("10e: write %d records failed at #%d: %d\n",
+			       LLOG_TEST_RECNUM, i + 1, rc);
+			GOTO(out, rc);
+		}
+		/* after last added plain LLOG has filled up, all new
+		 * records add should fail with -ENOSPC */
+		if (rc == -ENOSPC) {
+			enospc++;
+		} else {
+			enospc = 0;
+			eok++;
+		}
+	}
+
+	if ((enospc == 0) && (enospc+eok != LLOG_TEST_RECNUM)) {
+		CERROR("10e: all last records adds should have failed with"
+		       " -ENOSPC\n");
+		GOTO(out, rc = -EINVAL);
+	}
+
+	CWARN("10e: wrote %d records then %d failed with ENOSPC\n", eok,
+	      enospc);
+
+	CWARN("10e: print the catalog entries.. we expect 4\n");
+	cat_counter = 0;
+	rc = llog_process(env, cath, cat_print_cb, "test 10", NULL);
+	if (rc) {
+		CERROR("10d: process with cat_print_cb failed: %d\n", rc);
+		GOTO(out, rc);
+	}
+	if (cat_counter != 4) {
+		CERROR("10d: %d entries in catalog\n", cat_counter);
+		GOTO(out, rc = -EINVAL);
+	}
+
+	/* make sure 1 new plain llog appears in catalog (+1 with hdr) */
+	rc = verify_handle("10e", cath, 5);
+	if (rc)
+		GOTO(out, rc);
+
+	/* verify catalog has wrap around */
+	if (cath->lgh_last_idx > cath->lgh_hdr->llh_cat_idx) {
+		CERROR("10e: catalog failed to wrap around\n");
+		GOTO(out, rc = -EINVAL);
+	}
+
+	rc = dt_attr_get(env, cath->lgh_obj, &la);
+	if (rc) {
+		CERROR("10e: failed to get catalog attrs: %d\n", rc);
+		GOTO(out, rc);
+	}
+
+	if (la.la_size != cat_max_size) {
+		CERROR("10e: catalog size has changed after it has wrap around,"
+		       " current size = "LPU64", expected size = "LPU64"\n",
+		       la.la_size, cat_max_size);
+		GOTO(out, rc = -EINVAL);
+	}
+	CWARN("10e: catalog successfully wrap around, last_idx %d, first %d\n",
+	      cath->lgh_last_idx, cath->lgh_hdr->llh_cat_idx);
+
+	/* cancel more records to free one more slot in Catalog
+	 * see if it is re-allocated when adding more records */
+	CWARN("10f: Cancel %d records, see one log zapped\n", LLOG_TEST_RECNUM);
+	cancel_count = 0;
+	rc = llog_cat_process(env, cath, llog_cancel_rec_cb, "foobar", 0, 0);
+	if (rc != -LLOG_EEMPTY) {
+		CERROR("10f: process with llog_cancel_rec_cb failed: %d\n", rc);
+		/* need to indicate error if for any reason LLOG_TEST_RECNUM is
+		 * not reached */
+		if (rc == 0)
+			rc = -ERANGE;
+		GOTO(out, rc);
+	}
+
+	CWARN("10f: print the catalog entries.. we expect 3\n");
+	cat_counter = 0;
+	rc = llog_process(env, cath, cat_print_cb, "test 10", NULL);
+	if (rc) {
+		CERROR("10f: process with cat_print_cb failed: %d\n", rc);
+		GOTO(out, rc);
+	}
+	if (cat_counter != 3) {
+		CERROR("10f: %d entries in catalog\n", cat_counter);
+		GOTO(out, rc = -EINVAL);
+	}
+
+	/* verify one down in catalog (+1 with hdr) */
+	rc = verify_handle("10f", cath, 4);
+	if (rc)
+		GOTO(out, rc);
+
+	enospc = 0;
+	eok = 0;
+	CWARN("10f: write %d more log records\n", LLOG_TEST_RECNUM);
+	for (i = 0; i < LLOG_TEST_RECNUM; i++) {
+		rc = llog_cat_add(env, cath, &lmr.lmr_hdr, NULL);
+		if (rc && rc != -ENOSPC) {
+			CERROR("10f: write %d records failed at #%d: %d\n",
+			       LLOG_TEST_RECNUM, i + 1, rc);
+			GOTO(out, rc);
+		}
+		/* after last added plain LLOG has filled up, all new
+		 * records add should fail with -ENOSPC */
+		if (rc == -ENOSPC) {
+			enospc++;
+		} else {
+			enospc = 0;
+			eok++;
+		}
+	}
+
+	if ((enospc == 0) && (enospc+eok != LLOG_TEST_RECNUM)) {
+		CERROR("10f: all last records adds should have failed with"
+		       " -ENOSPC\n");
+		GOTO(out, rc = -EINVAL);
+	}
+
+	CWARN("10f: wrote %d records then %d failed with ENOSPC\n", eok,
+	      enospc);
+
+	/* make sure 1 new plain llog appears in catalog (+1 with hdr) */
+	rc = verify_handle("10f", cath, 5);
+	if (rc)
+		GOTO(out, rc);
+
+	/* verify lgh_last_idx = llh_cat_idx = 2 now */
+	if (cath->lgh_last_idx != cath->lgh_hdr->llh_cat_idx ||
+	    cath->lgh_last_idx != 2) {
+		CERROR("10f: lgh_last_idx = %d vs 2, llh_cat_idx = %d vs 2\n",
+		       cath->lgh_last_idx, cath->lgh_hdr->llh_cat_idx);
+		GOTO(out, rc = -EINVAL);
+	}
+
+	rc = dt_attr_get(env, cath->lgh_obj, &la);
+	if (rc) {
+		CERROR("10f: failed to get catalog attrs: %d\n", rc);
+		GOTO(out, rc);
+	}
+
+	if (la.la_size != cat_max_size) {
+		CERROR("10f: catalog size has changed after it has wrap around,"
+		       " current size = "LPU64", expected size = "LPU64"\n",
+		       la.la_size, cat_max_size);
+		GOTO(out, rc = -EINVAL);
+	}
+
+	/* will llh_cat_idx also successfully wrap ? */
+
+	/* cancel all records in the plain LLOGs referenced by 2 last indexes in
+	 * Catalog */
+
+	/* cancel more records to free one more slot in Catalog */
+	CWARN("10g: Cancel %d records, see one log zapped\n", LLOG_TEST_RECNUM);
+	cancel_count = 0;
+	rc = llog_cat_process(env, cath, llog_cancel_rec_cb, "foobar", 0, 0);
+	if (rc != -LLOG_EEMPTY) {
+		CERROR("10g: process with llog_cancel_rec_cb failed: %d\n", rc);
+		/* need to indicate error if for any reason LLOG_TEST_RECNUM is
+		 * not reached */
+		if (rc == 0)
+			rc = -ERANGE;
+		GOTO(out, rc);
+	}
+
+	CWARN("10g: print the catalog entries.. we expect 3\n");
+	cat_counter = 0;
+	rc = llog_process(env, cath, cat_print_cb, "test 10", NULL);
+	if (rc) {
+		CERROR("10g: process with cat_print_cb failed: %d\n", rc);
+		GOTO(out, rc);
+	}
+	if (cat_counter != 3) {
+		CERROR("10g: %d entries in catalog\n", cat_counter);
+		GOTO(out, rc = -EINVAL);
+	}
+
+	/* verify one down in catalog (+1 with hdr) */
+	rc = verify_handle("10g", cath, 4);
+	if (rc)
+		GOTO(out, rc);
+
+	/* cancel more records to free one more slot in Catalog */
+	CWARN("10g: Cancel %d records, see one log zapped\n", LLOG_TEST_RECNUM);
+	cancel_count = 0;
+	rc = llog_cat_process(env, cath, llog_cancel_rec_cb, "foobar", 0, 0);
+	if (rc != -LLOG_EEMPTY) {
+		CERROR("10g: process with llog_cancel_rec_cb failed: %d\n", rc);
+		/* need to indicate error if for any reason LLOG_TEST_RECNUM is
+		 * not reached */
+		if (rc == 0)
+			rc = -ERANGE;
+		GOTO(out, rc);
+	}
+
+	CWARN("10g: print the catalog entries.. we expect 2\n");
+	cat_counter = 0;
+	rc = llog_process(env, cath, cat_print_cb, "test 10", NULL);
+	if (rc) {
+		CERROR("10g: process with cat_print_cb failed: %d\n", rc);
+		GOTO(out, rc);
+	}
+	if (cat_counter != 2) {
+		CERROR("10g: %d entries in catalog\n", cat_counter);
+		GOTO(out, rc = -EINVAL);
+	}
+
+	/* verify one down in catalog (+1 with hdr) */
+	rc = verify_handle("10g", cath, 3);
+	if (rc)
+		GOTO(out, rc);
+
+	/* verify lgh_last_idx = 2 and llh_cat_idx = 0 now */
+	if (cath->lgh_hdr->llh_cat_idx != 0 ||
+	    cath->lgh_last_idx != 2) {
+		CERROR("10g: lgh_last_idx = %d vs 2, llh_cat_idx = %d vs 0\n",
+		       cath->lgh_last_idx, cath->lgh_hdr->llh_cat_idx);
+		GOTO(out, rc = -EINVAL);
+	}
+
+	/* cancel more records to free one more slot in Catalog */
+	CWARN("10g: Cancel %d records, see one log zapped\n", LLOG_TEST_RECNUM);
+	cancel_count = 0;
+	rc = llog_cat_process(env, cath, llog_cancel_rec_cb, "foobar", 0, 0);
+	if (rc != -LLOG_EEMPTY) {
+		CERROR("10g: process with llog_cancel_rec_cb failed: %d\n", rc);
+		/* need to indicate error if for any reason LLOG_TEST_RECNUM is
+		 * not reached */
+		if (rc == 0)
+			rc = -ERANGE;
+		GOTO(out, rc);
+	}
+
+	CWARN("10g: print the catalog entries.. we expect 1\n");
+	cat_counter = 0;
+	rc = llog_process(env, cath, cat_print_cb, "test 10", NULL);
+	if (rc) {
+		CERROR("10g: process with cat_print_cb failed: %d\n", rc);
+		GOTO(out, rc);
+	}
+	if (cat_counter != 1) {
+		CERROR("10g: %d entries in catalog\n", cat_counter);
+		GOTO(out, rc = -EINVAL);
+	}
+
+	/* verify one down in catalog (+1 with hdr) */
+	rc = verify_handle("10g", cath, 2);
+	if (rc)
+		GOTO(out, rc);
+
+	/* verify lgh_last_idx = 2 and llh_cat_idx = 1 now */
+	if (cath->lgh_hdr->llh_cat_idx != 1 ||
+	    cath->lgh_last_idx != 2) {
+		CERROR("10g: lgh_last_idx = %d vs 2, llh_cat_idx = %d vs 1\n",
+		       cath->lgh_last_idx, cath->lgh_hdr->llh_cat_idx);
+		GOTO(out, rc = -EINVAL);
+	}
+
+	CWARN("10g: llh_cat_idx has also successfully wrapped!\n");
+
+out:
+	cfs_fail_loc = 0;
+	cfs_fail_val = 0;
+
+	CWARN("10: put newly-created catalog\n");
+	rc2 = llog_cat_close(env, cath);
+	if (rc2) {
+		CERROR("10: close log %s failed: %d\n", name, rc2);
+		if (rc == 0)
+			rc = rc2;
+	}
+ctxt_release:
+	llog_ctxt_put(ctxt);
+	RETURN(rc);
+}
+
 /* -------------------------------------------------------------------------
  * Tests above, boring obd functions below
  * ------------------------------------------------------------------------- */
@@ -1435,6 +1863,11 @@ static int llog_run_tests(const struct lu_env *env, struct obd_device *obd)
 	rc = llog_test_9(env, obd);
 	if (rc != 0)
 		GOTO(cleanup, rc);
+
+	rc = llog_test_10(env, obd);
+	if (rc)
+		GOTO(cleanup, rc);
+
 cleanup:
 	err = llog_destroy(env, llh);
 	if (err)

@@ -264,6 +264,10 @@ struct llog_handle {
 	struct llog_log_hdr	*lgh_hdr;
 	size_t			lgh_hdr_size;
 	struct dt_object	*lgh_obj;
+	/* For a Catalog, is the last/newest used index for a plain slot.
+	 * Used in conjunction with llh_cat_idx to handle Catalog wrap-around
+	 * case, after it will have reached LLOG_HDR_BITMAP_SIZE, llh_cat_idx
+	 * will become its upper limit */
 	int			 lgh_last_idx;
 	int			 lgh_cur_idx; /* used during llog_process */
 	__u64			 lgh_cur_offset; /* used during llog_process */

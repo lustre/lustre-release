@@ -65,11 +65,34 @@ static int llog_cat_new_log(const struct lu_env *env,
 {
 	struct llog_thread_info	*lgi = llog_info(env);
 	struct llog_logid_rec	*rec = &lgi->lgi_logid;
-	int			 rc;
 	struct thandle *handle = NULL;
 	struct dt_device *dt = NULL;
+	struct llog_log_hdr	*llh = cathandle->lgh_hdr;
+	int			 rc, index;
 
 	ENTRY;
+
+	index = (cathandle->lgh_last_idx + 1) %
+		(OBD_FAIL_PRECHECK(OBD_FAIL_CAT_RECORDS) ? (cfs_fail_val + 1) :
+						LLOG_HDR_BITMAP_SIZE(llh));
+
+	/* check that new llog index will not overlap with the first one.
+	 * - llh_cat_idx is the index just before the first/oldest still in-use
+	 *	index in catalog
+	 * - lgh_last_idx is the last/newest used index in catalog
+	 *
+	 * When catalog is not wrapped yet then lgh_last_idx is always larger
+	 * than llh_cat_idx. After the wrap around lgh_last_idx re-starts
+	 * from 0 and llh_cat_idx becomes the upper limit for it
+	 *
+	 * Check if catalog has already wrapped around or not by comparing
+	 * last_idx and cat_idx */
+	if ((index == llh->llh_cat_idx + 1 && llh->llh_count > 1) ||
+	    (index == 0 && llh->llh_cat_idx == 0)) {
+		CWARN("%s: there are no more free slots in catalog\n",
+		      loghandle->lgh_ctxt->loc_obd->obd_name);
+		RETURN(-ENOSPC);
+	}
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_LLOG_CREATE_FAILED))
 		RETURN(-ENOSPC);
@@ -146,7 +169,7 @@ static int llog_cat_new_log(const struct lu_env *env,
 	if (rc < 0)
 		GOTO(out, rc);
 
-	CDEBUG(D_OTHER, "new recovery log "DOSTID":%x for index %u of catalog"
+	CDEBUG(D_OTHER, "new plain log "DOSTID":%x for index %u of catalog"
 	       DOSTID"\n", POSTID(&loghandle->lgh_id.lgl_oi),
 	       loghandle->lgh_id.lgl_ogen, rec->lid_hdr.lrh_index,
 	       POSTID(&cathandle->lgh_id.lgl_oi));
@@ -669,7 +692,8 @@ int llog_cat_process_or_fork(const struct lu_env *env,
         d.lpd_startcat = startcat;
         d.lpd_startidx = startidx;
 
-        if (llh->llh_cat_idx > cat_llh->lgh_last_idx) {
+	if (llh->llh_cat_idx >= cat_llh->lgh_last_idx &&
+	    llh->llh_count > 1) {
                 struct llog_process_cat_data cd;
 
                 CWARN("catlog "DOSTID" crosses index zero\n",
@@ -777,7 +801,8 @@ int llog_cat_reverse_process(const struct lu_env *env,
         d.lpd_data = data;
         d.lpd_cb = cb;
 
-	if (llh->llh_cat_idx > cat_llh->lgh_last_idx) {
+	if (llh->llh_cat_idx >= cat_llh->lgh_last_idx &&
+	    llh->llh_count > 1) {
 		CWARN("catalog "DOSTID" crosses index zero\n",
 		      POSTID(&cat_llh->lgh_id.lgl_oi));
 
