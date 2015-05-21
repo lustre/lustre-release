@@ -2648,7 +2648,8 @@ void llapi_lov_dump_user_lmm(struct find_param *param, char *path, int is_dir)
 
 		strlcpy(pool_name, lmmv3->lmm_pool_name, sizeof(pool_name));
 		objects = lmmv3->lmm_objects;
-		lov_dump_user_lmm_v1v3(&param->fp_lmd->lmd_lmm, pool_name,
+		lov_dump_user_lmm_v1v3(&param->fp_lmd->lmd_lmm,
+				       pool_name[0] == '\0' ? NULL : pool_name,
 				       objects, path, is_dir,
 				       param->fp_obd_index, param->fp_max_depth,
 				       param->fp_verbose, param->fp_raw);
@@ -2661,9 +2662,10 @@ void llapi_lov_dump_user_lmm(struct find_param *param, char *path, int is_dir)
 
 		lum = (struct lmv_user_md *)param->fp_lmv_md;
 		strlcpy(pool_name, lum->lum_pool_name, sizeof(pool_name));
-		lmv_dump_user_lmm(lum, pool_name, path,
-				  param->fp_obd_index, param->fp_max_depth,
-				  param->fp_verbose);
+		lmv_dump_user_lmm(lum,
+				  pool_name[0] == '\0' ? NULL : pool_name,
+				  path, param->fp_obd_index,
+				  param->fp_max_depth, param->fp_verbose);
 		break;
 	}
 	default:
