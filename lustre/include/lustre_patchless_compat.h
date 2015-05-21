@@ -38,10 +38,9 @@
 #define LUSTRE_PATCHLESS_COMPAT_H
 
 #include <linux/fs.h>
-
+#include <linux/mm.h>
 #ifndef HAVE_TRUNCATE_COMPLETE_PAGE
 #include <linux/list.h>
-#include <linux/mm.h>
 #include <linux/hash.h>
 
 #ifndef HAVE_DELETE_FROM_PAGE_CACHE /* 2.6.39 */
@@ -87,7 +86,12 @@ truncate_complete_page(struct address_space *mapping, struct page *page)
 #else
 		page->mapping->a_ops->invalidatepage(page, 0);
 #endif
+#ifdef HAVE_CANCEL_DIRTY_PAGE
 	cancel_dirty_page(page, PAGE_SIZE);
+#else
+	if (TestClearPageDirty(page))
+		account_page_cleaned(page, mapping);
+#endif	/* HAVE_CANCEL_DIRTY_PAGE */
 	ClearPageMappedToDisk(page);
 	ll_delete_from_page_cache(page);
 }
