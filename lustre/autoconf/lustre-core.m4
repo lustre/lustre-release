@@ -1629,6 +1629,36 @@ direct_io_iter, [
 ]) # LC_DIRECTIO_USE_ITER
 
 #
+# LC_NFS_FILLDIR_USE_CTX
+#
+# 3.18 kernel moved from void cookie to struct dir_context
+#
+AC_DEFUN([LC_NFS_FILLDIR_USE_CTX], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if filldir_t uses struct dir_context],
+filldir_ctx, [
+	#include <linux/fs.h>
+],[
+	int filldir(struct dir_context *ctx, const char* name,
+		    int i, loff_t off, u64 tmp, unsigned temp)
+	{
+		return 0;
+	}
+
+	struct dir_context ctx = {
+		.actor = filldir,
+	};
+
+	ctx.actor(NULL, "test", 0, (loff_t) 0, 0, 0);
+],[
+	AC_DEFINE(HAVE_FILLDIR_USE_CTX, 1,
+		[filldir_t needs struct dir_context as argument])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_NFS_FILLDIR_USE_CTX
+
+#
 # LC_KIOCB_HAS_NBYTES
 #
 # 3.19 kernel removed ki_nbytes from struct kiocb
@@ -1814,6 +1844,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 3.16
 	LC_DIRECTIO_USE_ITER
+
+	# 3.18
+	LC_NFS_FILLDIR_USE_CTX
 
 	# 3.19
 	LC_KIOCB_HAS_NBYTES
