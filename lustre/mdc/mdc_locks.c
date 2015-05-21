@@ -817,11 +817,6 @@ resend:
         if (IS_ERR(req))
                 RETURN(PTR_ERR(req));
 
-	if (req != NULL && it && it->it_op & IT_CREAT)
-		/* ask ptlrpc not to resend on EINPROGRESS since we have our own
-		 * retry logic */
-		req->rq_no_retry_einprogress = 1;
-
         if (resends) {
                 req->rq_generation_set = 1;
                 req->rq_import_generation = generation;
@@ -879,10 +874,10 @@ resend:
 	lockrep->lock_policy_res2 =
 		ptlrpc_status_ntoh(lockrep->lock_policy_res2);
 
-        /* Retry the create infinitely when we get -EINPROGRESS from
-         * server. This is required by the new quota design. */
-        if (it && it->it_op & IT_CREAT &&
-            (int)lockrep->lock_policy_res2 == -EINPROGRESS) {
+	/* Retry infinitely when the server returns -EINPROGRESS for the
+	 * intent operation, when server returns -EINPROGRESS for acquiring
+	 * intent lock, we'll retry in after_reply(). */
+	if (it && (int)lockrep->lock_policy_res2 == -EINPROGRESS) {
                 mdc_clear_replay_flag(req, rc);
                 ptlrpc_req_finished(req);
                 resends++;

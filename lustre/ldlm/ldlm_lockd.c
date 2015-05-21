@@ -1265,7 +1265,14 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
 			flags |= LDLM_FL_RESENT;
                         GOTO(existing_lock, rc = 0);
 		}
-        }
+	} else {
+		if (ldlm_reclaim_full()) {
+			DEBUG_REQ(D_DLMTRACE, req, "Too many granted locks, "
+				  "reject current enqueue request and let the "
+				  "client retry later.\n");
+			GOTO(out, rc = -EINPROGRESS);
+		}
+	}
 
 	/* The lock's callback data might be set in the policy function */
 	lock = ldlm_lock_create(ns, &dlm_req->lock_desc.l_resource.lr_name,
@@ -2942,6 +2949,12 @@ static int ldlm_setup(void)
 		CERROR("Failed to initialize LDLM pools: %d\n", rc);
 		GOTO(out, rc);
 	}
+
+	rc = ldlm_reclaim_setup();
+	if (rc) {
+		CERROR("Failed to setup reclaim thread: rc = %d\n", rc);
+		GOTO(out, rc);
+	}
 	RETURN(0);
 
  out:
@@ -2961,7 +2974,8 @@ static int ldlm_cleanup(void)
                 RETURN(-EBUSY);
         }
 
-        ldlm_pools_fini();
+	ldlm_reclaim_cleanup();
+	ldlm_pools_fini();
 
 	if (ldlm_state->ldlm_bl_pool != NULL) {
 		struct ldlm_bl_pool *blp = ldlm_state->ldlm_bl_pool;

@@ -912,9 +912,15 @@ void ldlm_pool_add(struct ldlm_pool *pl, struct ldlm_lock *lock)
 	 * cancelled, instead special kind of lock is used to drop them.
 	 * also there is no LRU for flock locks, so no point in tracking
 	 * them anyway.
+	 *
+	 * PLAIN locks are used by config and quota, the quantity is small
+	 * and usually they are not in LRU.
 	 */
-	if (lock->l_resource->lr_type == LDLM_FLOCK)
+	if (lock->l_resource->lr_type == LDLM_FLOCK ||
+	    lock->l_resource->lr_type == LDLM_PLAIN)
 		return;
+
+	ldlm_reclaim_add(lock);
 
 	atomic_inc(&pl->pl_granted);
 	atomic_inc(&pl->pl_grant_rate);
@@ -935,10 +941,14 @@ void ldlm_pool_add(struct ldlm_pool *pl, struct ldlm_lock *lock)
 void ldlm_pool_del(struct ldlm_pool *pl, struct ldlm_lock *lock)
 {
 	/*
-	 * Filter out FLOCK locks. Read above comment in ldlm_pool_add().
+	 * Filter out FLOCK & PLAIN locks. Read above comment in
+	 * ldlm_pool_add().
 	 */
-	if (lock->l_resource->lr_type == LDLM_FLOCK)
+	if (lock->l_resource->lr_type == LDLM_FLOCK ||
+	    lock->l_resource->lr_type == LDLM_PLAIN)
 		return;
+
+	ldlm_reclaim_del(lock);
 
 	LASSERT(atomic_read(&pl->pl_granted) > 0);
 	atomic_dec(&pl->pl_granted);

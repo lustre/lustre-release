@@ -2105,13 +2105,13 @@ static int ldlm_reprocess_res(struct cfs_hash *hs, struct cfs_hash_bd *bd,
  */
 void ldlm_reprocess_all_ns(struct ldlm_namespace *ns)
 {
-        ENTRY;
+	ENTRY;
 
-        if (ns != NULL) {
-                cfs_hash_for_each_nolock(ns->ns_rs_hash,
-                                         ldlm_reprocess_res, NULL);
-        }
-        EXIT;
+	if (ns != NULL) {
+		cfs_hash_for_each_nolock(ns->ns_rs_hash,
+					 ldlm_reprocess_res, NULL, 0);
+	}
+	EXIT;
 }
 
 /**

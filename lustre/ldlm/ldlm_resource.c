@@ -84,6 +84,55 @@ LPROC_SEQ_FOPS_WO_TYPE(ldlm, dump_ns);
 LPROC_SEQ_FOPS_RW_TYPE(ldlm_rw, uint);
 LPROC_SEQ_FOPS_RO_TYPE(ldlm, uint);
 
+/* Lock count is stored in the watermark, and it's display as number of MB
+ * memory consumed by the locks */
+static int seq_watermark_show(struct seq_file *m, void *data)
+{
+	__u64 locknr = *(__u64 *)m->private;
+	return seq_printf(m, LPU64"\n",
+			  (locknr * sizeof(struct ldlm_lock)) >> 20);
+}
+
+static ssize_t seq_watermark_write(struct file *file,
+				   const char __user *buffer, size_t count,
+				   loff_t *off)
+{
+	__u64 watermark;
+	__u64 *data = ((struct seq_file *)file->private_data)->private;
+	int rc;
+
+	rc = lprocfs_write_frac_u64_helper(buffer, count, &watermark, 1 << 20);
+	if (rc) {
+		CERROR("Failed to set LDLM watermark, rc = %d.\n", rc);
+		return rc;
+	} else if (watermark != 0 && watermark < (1 << 20)) {
+		CERROR("Watermark should be greater than 1MB.\n");
+		return -EINVAL;
+	}
+
+	do_div(watermark, sizeof(struct ldlm_lock));
+	*data = watermark;
+
+	if (ldlm_watermark_low != 0 && ldlm_watermark_high != 0 &&
+	    ldlm_watermark_low > ldlm_watermark_high)
+		ldlm_watermark_low = ldlm_watermark_high;
+	return count;
+}
+
+static int seq_watermark_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, seq_watermark_show, PDE_DATA(inode));
+}
+
+static const struct file_operations ldlm_watermark_fops = {
+	.owner		= THIS_MODULE,
+	.open		= seq_watermark_open,
+	.read		= seq_read,
+	.write		= seq_watermark_write,
+	.llseek		= seq_lseek,
+	.release	= lprocfs_single_release,
+};
+
 int ldlm_proc_setup(void)
 {
 	int rc;
@@ -97,6 +146,12 @@ int ldlm_proc_setup(void)
 		{ .name	=	"cancel_unused_locks_before_replay",
 		  .fops	=	&ldlm_rw_uint_fops,
 		  .data	=	&ldlm_cancel_unused_locks_before_replay },
+		{ .name =	"watermark_mb_low",
+		  .fops =	&ldlm_watermark_fops,
+		  .data =	&ldlm_watermark_low },
+		{ .name =	"watermark_mb_high",
+		  .fops =	&ldlm_watermark_fops,
+		  .data =	&ldlm_watermark_high },
 		{ NULL }};
 	ENTRY;
 	LASSERT(ldlm_ns_proc_dir == NULL);
@@ -613,6 +668,7 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
                 nsb = cfs_hash_bd_extra_get(ns->ns_rs_hash, &bd);
                 at_init(&nsb->nsb_at_estimate, ldlm_enqueue_min, 0);
                 nsb->nsb_namespace = ns;
+		nsb->nsb_reclaim_start = 0;
         }
 
         ns->ns_obd      = obd;
@@ -638,6 +694,7 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
         ns->ns_orig_connect_flags = 0;
         ns->ns_connect_flags      = 0;
         ns->ns_stopping           = 0;
+	ns->ns_reclaim_start	  = 0;
         rc = ldlm_namespace_proc_register(ns);
         if (rc != 0) {
                 CERROR("Can't initialize ns proc, rc %d\n", rc);
@@ -797,9 +854,11 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, __u64 flags)
                 return ELDLM_OK;
         }
 
-	cfs_hash_for_each_nolock(ns->ns_rs_hash, ldlm_resource_clean, &flags);
-        cfs_hash_for_each_nolock(ns->ns_rs_hash, ldlm_resource_complain, NULL);
-        return ELDLM_OK;
+	cfs_hash_for_each_nolock(ns->ns_rs_hash, ldlm_resource_clean,
+				 &flags, 0);
+	cfs_hash_for_each_nolock(ns->ns_rs_hash, ldlm_resource_complain,
+				 NULL, 0);
+	return ELDLM_OK;
 }
 EXPORT_SYMBOL(ldlm_namespace_cleanup);
 
@@ -1365,7 +1424,7 @@ void ldlm_namespace_dump(int level, struct ldlm_namespace *ns)
 
 	cfs_hash_for_each_nolock(ns->ns_rs_hash,
 				 ldlm_res_hash_dump,
-				 (void *)(unsigned long)level);
+				 (void *)(unsigned long)level, 0);
 	spin_lock(&ns->ns_lock);
 	ns->ns_next_dump = cfs_time_shift(10);
 	spin_unlock(&ns->ns_lock);

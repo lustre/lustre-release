@@ -9374,6 +9374,79 @@ test_133g() {
 }
 run_test 133g "Check for Oopses on bad io area writes/reads in /proc"
 
+test_134a() {
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.54) ]] &&
+		skip "Need MDS version at least 2.7.54" && return
+
+	mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
+	cancel_lru_locks mdc
+
+	local nsdir="ldlm.namespaces.*-MDT0000-mdc-*"
+	local unused=$($LCTL get_param -n $nsdir.lock_unused_count)
+	[ $unused -eq 0 ] || "$unused locks are not cleared"
+
+	local nr=1000
+	createmany -o $DIR/$tdir/f $nr ||
+		error "failed to create $nr files in $DIR/$tdir"
+	unused=$($LCTL get_param -n $nsdir.lock_unused_count)
+
+	#define OBD_FAIL_LDLM_WATERMARK_LOW     0x327
+	do_facet mds1 $LCTL set_param fail_loc=0x327
+	do_facet mds1 $LCTL set_param fail_val=500
+	touch $DIR/$tdir/m
+
+	echo "sleep 10 seconds ..."
+	sleep 10
+	local lck_cnt=$($LCTL get_param -n $nsdir.lock_unused_count)
+
+	do_facet mds1 $LCTL set_param fail_loc=0
+	do_facet mds1 $LCTL set_param fail_val=0
+	[ $lck_cnt -lt $unused ] ||
+		error "No locks reclaimed, before:$unused, after:$lck_cnt"
+
+	rm $DIR/$tdir/m
+	unlinkmany $DIR/$tdir/f $nr
+}
+run_test 134a "Server reclaims locks when reaching low watermark"
+
+test_134b() {
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.54) ]] &&
+		skip "Need MDS version at least 2.7.54" && return
+
+	mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
+	cancel_lru_locks mdc
+
+	local low_wm=$(do_facet mds1 $LCTL get_param -n ldlm.watermark_mb_low)
+	# disable reclaim temporarily
+	do_facet mds1 $LCTL set_param ldlm.watermark_mb_low=0
+
+	#define OBD_FAIL_LDLM_WATERMARK_HIGH     0x328
+	do_facet mds1 $LCTL set_param fail_loc=0x328
+	do_facet mds1 $LCTL set_param fail_val=500
+
+	$LCTL set_param debug=+trace
+
+	local nr=600
+	createmany -o $DIR/$tdir/f $nr &
+	local create_pid=$!
+
+	echo "Sleep $TIMEOUT seconds ..."
+	sleep $TIMEOUT
+	if ! ps -p $create_pid  > /dev/null 2>&1; then
+		do_facet mds1 $LCTL set_param fail_loc=0
+		do_facet mds1 $LCTL set_param fail_val=0
+		do_facet mds1 $LCTL set_param ldlm.watermark_mb_low=$low_wm
+		error "createmany finished incorrectly!"
+	fi
+	do_facet mds1 $LCTL set_param fail_loc=0
+	do_facet mds1 $LCTL set_param fail_val=0
+	do_facet mds1 $LCTL set_param ldlm.watermark_mb_low=$low_wm
+	wait $create_pid || return 1
+
+	unlinkmany $DIR/$tdir/f $nr
+}
+run_test 134b "Server rejects lock request when reaching high watermark"
+
 test_140() { #bug-17379
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
         test_mkdir -p $DIR/$tdir || error "Creating dir $DIR/$tdir"

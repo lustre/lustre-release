@@ -322,6 +322,10 @@ struct ldlm_ns_bucket {
 	 * fact the network or overall system load is at fault
 	 */
 	struct adaptive_timeout     nsb_at_estimate;
+	/**
+	 * Which res in the bucket should we start with the reclaim.
+	 */
+	int			    nsb_reclaim_start;
 };
 
 enum {
@@ -507,6 +511,11 @@ struct ldlm_namespace {
 	 * recalculation of LDLM pool statistics should be skipped.
 	 */
 	unsigned		ns_stopping:1;
+
+	/**
+	 * Which bucket should we start with the lock reclaim.
+	 */
+	int			ns_reclaim_start;
 };
 
 /**
