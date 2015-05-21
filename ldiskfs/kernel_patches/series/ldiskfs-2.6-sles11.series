@@ -1,4 +1,3 @@
-rhel6.3/ext4-wantedi-2.6.patch
 rhel6.3/ext4-map_inode_page-2.6.18.patch
 rhel6.3/export-ext4-2.6.patch
 rhel6.3/ext4-remove-cond_resched-calls.patch
@@ -16,7 +15,6 @@ rhel6.3/ext4-print-inum-in-htree-warning.patch
 rhel6.3/ext4-prealloc.patch
 rhel6.3/ext4-mballoc-extra-checks.patch
 rhel6.3/ext4-misc.patch
-rhel6.3/ext4-alloc-policy-2.6.patch
 rhel6.3/ext4-pdir-fix.patch
 rhel6.3/ext4-add-more-error-checks-to-ext4_mkdir.patch
 rhel6.3/ext4-osd-iop-common.patch

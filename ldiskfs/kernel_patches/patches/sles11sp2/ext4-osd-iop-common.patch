@@ -164,7 +164,7 @@
  		ext4_handle_sync(handle);
 
 -	inode = ext4_new_inode(handle, dir, S_IFDIR | mode,
--			       &dentry->d_name, ext4_dentry_goal(dir->i_sb, dentry));
+-			       &dentry->d_name, 0);
 -	err = PTR_ERR(inode);
 -	if (IS_ERR(inode))
 -		goto out_stop;
@@ -184,7 +184,7 @@
  	de = (struct ext4_dir_entry_2 *) dir_block->b_data;
  	de->inode = cpu_to_le32(inode->i_ino);
  	de->name_len = 1;
-@@ -1944,18 +1956,47 @@ retry:
+@@ -1944,18 +1956,46 @@ retry:
  	BUFFER_TRACE(dir_block, "call ext4_handle_dirty_metadata");
  	err = ext4_handle_dirty_metadata(handle, inode, dir_block);
  	if (err)
@@ -226,8 +226,7 @@
 +	if (IS_DIRSYNC(dir))
 +		ext4_handle_sync(handle);
 +
-+	inode = ext4_new_inode(handle, dir, S_IFDIR | mode, &dentry->d_name,
-+			       ext4_dentry_goal(dir->i_sb, dentry));
++	inode = ext4_new_inode(handle, dir, S_IFDIR | mode, &dentry->d_name, 0);
 +	err = PTR_ERR(inode);
 +	if (IS_ERR(inode))
  		goto out_stop;
