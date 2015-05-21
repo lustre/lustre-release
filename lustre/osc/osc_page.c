@@ -790,7 +790,6 @@ long osc_lru_reclaim(struct client_obd *cli)
 	ENTRY;
 
 	LASSERT(cache != NULL);
-	LASSERT(!list_empty(&cache->ccc_lru));
 
 	env = cl_env_nested_get(&nest);
 	if (IS_ERR(env))
@@ -814,6 +813,8 @@ long osc_lru_reclaim(struct client_obd *cli)
 	/* Reclaim LRU slots from other client_obd as it can't free enough
 	 * from its own. This should rarely happen. */
 	spin_lock(&cache->ccc_lru_lock);
+	LASSERT(!list_empty(&cache->ccc_lru));
+
 	cache->ccc_lru_shrinkers++;
 	list_move_tail(&cli->cl_lru_osc, &cache->ccc_lru);
 
