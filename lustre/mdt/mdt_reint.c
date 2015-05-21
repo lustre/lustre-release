@@ -483,8 +483,10 @@ static int mdt_lock_slaves(struct mdt_thread_info *mti, struct mdt_object *obj,
 	einfo->ei_type = LDLM_IBITS;
 	einfo->ei_mode = mode;
 	einfo->ei_cb_bl = mdt_remote_blocking_ast;
+	einfo->ei_cb_local_bl = mdt_blocking_ast;
 	einfo->ei_cb_cp = ldlm_completion_ast;
 	einfo->ei_enq_slave = 1;
+	einfo->ei_namespace = mti->mti_mdt->mdt_namespace;
 	memset(policy, 0, sizeof(*policy));
 	policy->l_inodebits.bits = ibits;
 

@@ -1084,9 +1084,11 @@ struct ldlm_enqueue_info {
 	__u32 ei_type;   /** Type of the lock being enqueued. */
 	__u32 ei_mode;   /** Mode of the lock being enqueued. */
 	void *ei_cb_bl;  /** blocking lock callback */
+	void *ei_cb_local_bl;  /** blocking local lock callback */
 	void *ei_cb_cp;  /** lock completion callback */
 	void *ei_cb_gl;  /** lock glimpse callback */
 	void *ei_cbdata; /** Data to be passed into callbacks. */
+	void *ei_namespace; /** lock namespace **/
 	unsigned int ei_enq_slave:1; /* whether enqueue slave stripes */
 };
 

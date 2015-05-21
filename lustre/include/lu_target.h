@@ -66,7 +66,10 @@ struct distribute_txn_replay_req {
  * by this structure */
 struct distribute_txn_replay_req_sub {
 	__u32			dtrqs_mdt_index;
-	struct llog_cookie	dtrqs_llog_cookie;
+
+	/* All of cookies for the update will be linked here */
+	spinlock_t		dtrqs_cookie_list_lock;
+	struct list_head	dtrqs_cookie_list;
 	struct list_head	dtrqs_list;
 };
 

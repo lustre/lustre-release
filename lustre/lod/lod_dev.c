@@ -1101,6 +1101,42 @@ static int lod_trans_cb_add(struct thandle *th,
 }
 
 /**
+ * add noop update to the update records
+ *
+ * Add noop updates to the update records, which is only used in
+ * test right now.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dt	dt device of lod
+ * \param[in] th	thandle
+ * \param[in] count	the count of update records to be added.
+ *
+ * \retval		0 if adding succeeds.
+ * \retval		negative errno if adding fails.
+ */
+static int lod_add_noop_records(const struct lu_env *env,
+				struct dt_device *dt, struct thandle *th,
+				int count)
+{
+	struct top_thandle *top_th;
+	struct lu_fid *fid = &lod_env_info(env)->lti_fid;
+	int i;
+	int rc = 0;
+
+	top_th = container_of(th, struct top_thandle, tt_super);
+	if (top_th->tt_multiple_thandle == NULL)
+		return 0;
+
+	fid_zero(fid);
+	for (i = 0; i < count; i++) {
+		rc = update_record_pack(noop, th, fid);
+		if (rc < 0)
+			return rc;
+	}
+	return rc;
+}
+
+/**
  * Implementation of dt_device_operations::dt_trans_stop() for LOD
  *
  * Stops the set of local transactions using the targets involved
@@ -1111,6 +1147,13 @@ static int lod_trans_cb_add(struct thandle *th,
 static int lod_trans_stop(const struct lu_env *env, struct dt_device *dt,
 			  struct thandle *th)
 {
+	if (OBD_FAIL_CHECK(OBD_FAIL_SPLIT_UPDATE_REC)) {
+		int rc;
+
+		rc = lod_add_noop_records(env, dt, th, 5000);
+		if (rc < 0)
+			RETURN(rc);
+	}
 	return top_trans_stop(env, dt2lod_dev(dt)->lod_child, th);
 }
 

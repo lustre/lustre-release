@@ -1256,12 +1256,14 @@ lmv_out_free:
 		int			mdt_index;
 		int			lum_size;
 		int			stripe_count;
+		int			max_stripe_count;
 		int			i;
 		int			rc;
 
 		if (copy_from_user(&lum, ulmv, sizeof(*ulmv)))
 			RETURN(-EFAULT);
 
+		max_stripe_count = lum.lum_stripe_count;
 		/* lum_magic will indicate which stripe the ioctl will like
 		 * to get, LMV_MAGIC_V1 is for normal LMV stripe, LMV_USER_MAGIC
 		 * is for default LMV stripe */
@@ -1292,6 +1294,13 @@ lmv_out_free:
 		}
 
 		stripe_count = lmv_mds_md_stripe_count_get(lmm);
+		if (max_stripe_count < stripe_count) {
+			lum.lum_stripe_count = stripe_count;
+			if (copy_to_user(ulmv, &lum, sizeof(lum)))
+				GOTO(finish_req, rc = -EFAULT);
+			GOTO(finish_req, rc = -E2BIG);
+		}
+
 		lum_size = lmv_user_md_size(stripe_count, LMV_MAGIC_V1);
 		OBD_ALLOC(tmp, lum_size);
 		if (tmp == NULL)

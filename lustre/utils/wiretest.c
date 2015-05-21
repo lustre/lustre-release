@@ -3738,18 +3738,6 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct llog_log_hdr, llh_tgtuuid));
 	LASSERTF((int)sizeof(((struct llog_log_hdr *)0)->llh_tgtuuid) == 40, "found %lld\n",
 		 (long long)(int)sizeof(((struct llog_log_hdr *)0)->llh_tgtuuid));
-	LASSERTF((int)offsetof(struct llog_log_hdr, llh_reserved) == 84, "found %lld\n",
-		 (long long)(int)offsetof(struct llog_log_hdr, llh_reserved));
-	LASSERTF((int)sizeof(((struct llog_log_hdr *)0)->llh_reserved) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct llog_log_hdr *)0)->llh_reserved));
-	LASSERTF((int)offsetof(struct llog_log_hdr, llh_bitmap) == 88, "found %lld\n",
-		 (long long)(int)offsetof(struct llog_log_hdr, llh_bitmap));
-	LASSERTF((int)sizeof(((struct llog_log_hdr *)0)->llh_bitmap) == 8096, "found %lld\n",
-		 (long long)(int)sizeof(((struct llog_log_hdr *)0)->llh_bitmap));
-	LASSERTF((int)offsetof(struct llog_log_hdr, llh_tail) == 8184, "found %lld\n",
-		 (long long)(int)offsetof(struct llog_log_hdr, llh_tail));
-	LASSERTF((int)sizeof(((struct llog_log_hdr *)0)->llh_tail) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct llog_log_hdr *)0)->llh_tail));
 
 	/* Checks for struct llog_cookie */
 	LASSERTF((int)sizeof(struct llog_cookie) == 32, "found %lld\n",
@@ -4093,10 +4081,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct fiemap_extent, fe_flags));
 	LASSERTF((int)sizeof(((struct fiemap_extent *)0)->fe_flags) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct fiemap_extent *)0)->fe_flags));
-	LASSERTF((int)offsetof(struct fiemap_extent, fe_device) == 44, "found %lld\n",
-		 (long long)(int)offsetof(struct fiemap_extent, fe_device));
-	LASSERTF((int)sizeof(((struct fiemap_extent *)0)->fe_device) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct fiemap_extent *)0)->fe_device));
+	LASSERTF((int)offsetof(struct fiemap_extent, fe_reserved[0]) == 44, "found %lld\n",
+		 (long long)(int)offsetof(struct fiemap_extent, fe_reserved[0]));
+	LASSERTF((int)sizeof(((struct fiemap_extent *)0)->fe_reserved[0]) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct fiemap_extent *)0)->fe_reserved[0]));
 	CLASSERT(FIEMAP_EXTENT_LAST == 0x00000001);
 	CLASSERT(FIEMAP_EXTENT_UNKNOWN == 0x00000002);
 	CLASSERT(FIEMAP_EXTENT_DELALLOC == 0x00000004);

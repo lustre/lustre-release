@@ -130,6 +130,9 @@ int osp_object_update_request_create(struct osp_update_request *our,
 	if (ours == NULL)
 		return -ENOMEM;
 
+	if (size < OUT_UPDATE_INIT_BUFFER_SIZE)
+		size = OUT_UPDATE_INIT_BUFFER_SIZE;
+
 	ours->ours_req = object_update_request_alloc(size);
 
 	if (IS_ERR(ours->ours_req)) {

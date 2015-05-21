@@ -1617,13 +1617,38 @@ static DIR *opendir_parent(char *path)
 
 static int cb_get_dirstripe(char *path, DIR *d, struct find_param *param)
 {
+	int ret;
+
+again:
 	param->fp_lmv_md->lum_stripe_count = param->fp_lmv_stripe_count;
 	if (param->fp_get_default_lmv)
 		param->fp_lmv_md->lum_magic = LMV_USER_MAGIC;
 	else
 		param->fp_lmv_md->lum_magic = LMV_MAGIC_V1;
 
-	return ioctl(dirfd(d), LL_IOC_LMV_GETSTRIPE, param->fp_lmv_md);
+	ret = ioctl(dirfd(d), LL_IOC_LMV_GETSTRIPE, param->fp_lmv_md);
+	if (errno == E2BIG && ret != 0) {
+		int stripe_count;
+		int lmv_size;
+
+		stripe_count = (__u32)param->fp_lmv_md->lum_stripe_count;
+		if (stripe_count <= param->fp_lmv_stripe_count)
+			return ret;
+
+		free(param->fp_lmv_md);
+		param->fp_lmv_stripe_count = stripe_count;
+		lmv_size = lmv_user_md_size(stripe_count, LMV_MAGIC_V1);
+		param->fp_lmv_md = malloc(lmv_size);
+		if (param->fp_lmv_md == NULL) {
+			llapi_error(LLAPI_MSG_ERROR, -ENOMEM,
+				    "error: allocation of %d bytes for ioctl",
+				    lmv_user_md_size(param->fp_lmv_stripe_count,
+						     LMV_MAGIC_V1));
+			return -ENOMEM;
+		}
+		goto again;
+	}
+	return ret;
 }
 
 static int get_lmd_info(char *path, DIR *parent, DIR *dir,

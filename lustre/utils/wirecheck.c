@@ -2167,6 +2167,52 @@ static void check_lfsck_reply(void)
 	CHECK_MEMBER(lfsck_reply, lr_padding_2);
 }
 
+static void check_update_params(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(update_params);
+	CHECK_MEMBER(update_params, up_params);
+}
+
+static void check_update_op(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(update_op);
+	CHECK_MEMBER(update_op, uop_fid);
+	CHECK_MEMBER(update_op, uop_type);
+	CHECK_MEMBER(update_op, uop_param_count);
+	CHECK_MEMBER(update_op, uop_params_off);
+}
+
+static void check_update_ops(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(update_ops);
+	CHECK_MEMBER(update_ops, uops_op);
+}
+
+static void check_update_records(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(update_records);
+	CHECK_MEMBER(update_records, ur_master_transno);
+	CHECK_MEMBER(update_records, ur_batchid);
+	CHECK_MEMBER(update_records, ur_flags);
+	CHECK_MEMBER(update_records, ur_index);
+	CHECK_MEMBER(update_records, ur_update_count);
+	CHECK_MEMBER(update_records, ur_param_count);
+
+	CHECK_VALUE_X(UPDATE_RECORD_CONTINUE);
+}
+
+static void check_llog_update_record(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(llog_update_record);
+	CHECK_MEMBER(llog_update_record, lur_hdr);
+	CHECK_MEMBER(llog_update_record, lur_update_rec);
+}
+
 static void system_string(char *cmdline, char *str, int len)
 {
 	int   fds[2];

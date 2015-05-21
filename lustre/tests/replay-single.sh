@@ -3752,6 +3752,56 @@ test_115() {
 }
 run_test 115 "failover for create/unlink striped directory"
 
+test_116a() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+		skip "Do not support large update log before 2.7.55" &&
+		return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
+	local fail_index=0
+
+	mkdir -p $DIR/$tdir
+	replay_barrier mds1
+
+	# OBD_FAIL_SPLIT_UPDATE_REC       0x1702
+	do_facet mds1 "lctl set_param fail_loc=0x80001702"
+	$LFS setdirstripe -c$MDSCOUNT $DIR/$tdir/striped_dir
+
+	fail mds1
+	$CHECKSTAT -t dir $DIR/$tdir/striped_dir ||
+		error "stried_dir does not exists"
+}
+run_test 116a "large update log master MDT recovery"
+
+test_116b() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+		skip "Do not support large update log before 2.7.55" &&
+		return 0
+
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
+	local fail_index=0
+
+	mkdir -p $DIR/$tdir
+	replay_barrier mds2
+
+	# OBD_FAIL_SPLIT_UPDATE_REC       0x1702
+	do_facet mds2 "lctl set_param fail_loc=0x80001702"
+	$LFS setdirstripe -c$MDSCOUNT $DIR/$tdir/striped_dir
+
+	fail mds2
+	$CHECKSTAT -t dir $DIR/$tdir/striped_dir ||
+		error "stried_dir does not exists"
+}
+run_test 116b "large update log slave MDT recovery"
+
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

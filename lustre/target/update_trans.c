@@ -81,12 +81,17 @@ static void top_multiple_thandle_dump(struct top_multiple_thandle *tmt,
 	       tmt->tmt_result, tmt->tmt_batchid);
 
 	list_for_each_entry(st, &tmt->tmt_sub_thandle_list, st_sub_list) {
-		CDEBUG(mask, "st %p obd %s committed %d sub_th %p "
-		       " cookie "DOSTID": %u\n",
+		struct sub_thandle_cookie *stc;
+
+		CDEBUG(mask, "st %p obd %s committed %d sub_th %p\n",
 		       st, st->st_dt->dd_lu_dev.ld_obd->obd_name,
-		       st->st_committed, st->st_sub_th,
-		       POSTID(&st->st_cookie.lgc_lgl.lgl_oi),
-		       st->st_cookie.lgc_index);
+		       st->st_committed, st->st_sub_th);
+
+		list_for_each_entry(stc, &st->st_cookie_list, stc_list) {
+			CDEBUG(mask, " cookie "DOSTID": %u\n",
+			       POSTID(&stc->stc_cookie.lgc_lgl.lgl_oi),
+			       stc->stc_cookie.lgc_index);
+		}
 	}
 }
 
@@ -99,16 +104,18 @@ static void top_multiple_thandle_dump(struct top_multiple_thandle *tmt,
  * \param[in] env	execution environment
  * \param[in] record	update records being written
  * \param[in] sub_th	sub transaction handle
+ * \param[in] record_size total update record size
  *
  * \retval		0 if writing succeeds
  * \retval		negative errno if writing fails
  */
 static int sub_declare_updates_write(const struct lu_env *env,
 				     struct llog_update_record *record,
-				     struct thandle *sub_th)
+				     struct thandle *sub_th, size_t record_size)
 {
 	struct llog_ctxt	*ctxt;
 	struct dt_device	*dt = sub_th->th_dev;
+	int			left = record_size;
 	int rc;
 
 	/* If ctxt is NULL, it means not need to write update,
@@ -118,14 +125,24 @@ static int sub_declare_updates_write(const struct lu_env *env,
 	LASSERT(ctxt != NULL);
 
 	/* Not ready to record updates yet. */
-	if (ctxt->loc_handle == NULL) {
-		llog_ctxt_put(ctxt);
-		return 0;
+	if (ctxt->loc_handle == NULL)
+		GOTO(out_put, rc = 0);
+
+	rc = llog_declare_add(env, ctxt->loc_handle,
+			      &record->lur_hdr, sub_th);
+	if (rc < 0)
+		GOTO(out_put, rc);
+
+	while (left > ctxt->loc_chunk_size) {
+		rc = llog_declare_add(env, ctxt->loc_handle,
+				      &record->lur_hdr, sub_th);
+		if (rc < 0)
+			GOTO(out_put, rc);
+
+		left -= ctxt->loc_chunk_size;
 	}
 
-	rc = llog_declare_add(env, ctxt->loc_handle, &record->lur_hdr,
-			      sub_th);
-
+out_put:
 	llog_ctxt_put(ctxt);
 
 	return rc;
@@ -148,12 +165,21 @@ static int sub_declare_updates_write(const struct lu_env *env,
  */
 static int sub_updates_write(const struct lu_env *env,
 			     struct llog_update_record *record,
-			     struct thandle *sub_th,
-			     struct llog_cookie *cookie)
+			     struct sub_thandle *sub_th)
 {
-	struct dt_device	*dt = sub_th->th_dev;
+	struct dt_device	*dt = sub_th->st_dt;
 	struct llog_ctxt	*ctxt;
 	int			rc;
+	struct llog_update_record *lur = NULL;
+	struct update_params	*params = NULL;
+	__u32			update_count = 0;
+	__u32			param_count = 0;
+	__u32			last_update_count = 0;
+	__u32			last_param_count = 0;
+	void			*src;
+	void			*start;
+	void			*next;
+	struct sub_thandle_cookie *stc;
 	ENTRY;
 
 	ctxt = llog_get_context(dt->dd_lu_dev.ld_obd,
@@ -162,10 +188,8 @@ static int sub_updates_write(const struct lu_env *env,
 
 	/* Not ready to record updates yet, usually happens
 	 * in error handler path */
-	if (ctxt->loc_handle == NULL) {
-		llog_ctxt_put(ctxt);
-		RETURN(0);
-	}
+	if (ctxt->loc_handle == NULL)
+		GOTO(llog_put, rc = 0);
 
 	/* Since the cross-MDT updates will includes both local
 	 * and remote updates, the update ops count must > 1 */
@@ -174,16 +198,124 @@ static int sub_updates_write(const struct lu_env *env,
 		 "lrh_len %u record_size %zu\n", record->lur_hdr.lrh_len,
 		 llog_update_record_size(record));
 
-	rc = llog_add(env, ctxt->loc_handle, &record->lur_hdr,
-		      cookie, sub_th);
+	if (likely(record->lur_hdr.lrh_len <= ctxt->loc_chunk_size)) {
+		OBD_ALLOC_PTR(stc);
+		if (stc == NULL)
+			GOTO(llog_put, rc = -ENOMEM);
+		INIT_LIST_HEAD(&stc->stc_list);
+
+		rc = llog_add(env, ctxt->loc_handle, &record->lur_hdr,
+			      &stc->stc_cookie, sub_th->st_sub_th);
+
+		CDEBUG(D_INFO, "%s: Add update log "DOSTID":%u: rc = %d\n",
+		       dt->dd_lu_dev.ld_obd->obd_name,
+		       POSTID(&stc->stc_cookie.lgc_lgl.lgl_oi),
+		       stc->stc_cookie.lgc_index, rc);
+
+		if (rc > 0) {
+			list_add(&stc->stc_list, &sub_th->st_cookie_list);
+			rc = 0;
+		} else {
+			OBD_FREE_PTR(stc);
+		}
+
+		GOTO(llog_put, rc);
+	}
+
+	/* Split the records into chunk_size update record */
+	OBD_ALLOC_LARGE(lur, ctxt->loc_chunk_size);
+	if (lur == NULL)
+		GOTO(llog_put, rc = -ENOMEM);
+
+	memcpy(lur, &record->lur_hdr, sizeof(record->lur_hdr));
+	lur->lur_update_rec.ur_update_count = 0;
+	lur->lur_update_rec.ur_param_count = 0;
+	src = &record->lur_update_rec.ur_ops;
+	start = next = src;
+	lur->lur_hdr.lrh_len = llog_update_record_size(lur);
+	params = update_records_get_params(&record->lur_update_rec);
+	do {
+		size_t rec_len;
+
+		if (update_count < record->lur_update_rec.ur_update_count) {
+			next = update_op_next_op((struct update_op *)src);
+		} else {
+			if (param_count == 0)
+				next = update_records_get_params(
+						&record->lur_update_rec);
+			else
+				next = (char *)src +
+					object_update_param_size(
+					(struct object_update_param *)src);
+		}
+
+		rec_len = cfs_size_round((unsigned long)(next - src));
+		/* If its size > llog chunk_size, then write current chunk to
+		 * the update llog. */
+		if (lur->lur_hdr.lrh_len + rec_len + LLOG_MIN_REC_SIZE >
+		    ctxt->loc_chunk_size ||
+		    param_count == record->lur_update_rec.ur_param_count) {
+			lur->lur_update_rec.ur_update_count =
+				update_count > last_update_count ?
+				update_count - last_update_count : 0;
+			lur->lur_update_rec.ur_param_count = param_count -
+							     last_param_count;
+
+			memcpy(&lur->lur_update_rec.ur_ops, start,
+			       (unsigned long)(src - start));
+			if (last_update_count != 0)
+				lur->lur_update_rec.ur_flags |=
+						UPDATE_RECORD_CONTINUE;
+
+			update_records_dump(&lur->lur_update_rec, D_INFO, true);
+			lur->lur_hdr.lrh_len = llog_update_record_size(lur);
+			LASSERT(lur->lur_hdr.lrh_len <= ctxt->loc_chunk_size);
+
+			OBD_ALLOC_PTR(stc);
+			if (stc == NULL)
+				GOTO(llog_put, rc = -ENOMEM);
+			INIT_LIST_HEAD(&stc->stc_list);
+
+			rc = llog_add(env, ctxt->loc_handle,
+				      &lur->lur_hdr,
+				      &stc->stc_cookie, sub_th->st_sub_th);
+
+			CDEBUG(D_INFO, "%s: Add update log "DOSTID":%u"
+			       " rc = %d\n", dt->dd_lu_dev.ld_obd->obd_name,
+			       POSTID(&stc->stc_cookie.lgc_lgl.lgl_oi),
+			       stc->stc_cookie.lgc_index, rc);
+
+			if (rc > 0) {
+				list_add(&stc->stc_list,
+					 &sub_th->st_cookie_list);
+				rc = 0;
+			} else {
+				OBD_FREE_PTR(stc);
+				GOTO(llog_put, rc);
+			}
+
+			last_update_count = update_count;
+			last_param_count = param_count;
+			start = src;
+			lur->lur_update_rec.ur_update_count = 0;
+			lur->lur_update_rec.ur_param_count = 0;
+			lur->lur_hdr.lrh_len = llog_update_record_size(lur);
+		}
+
+		src = next;
+		lur->lur_hdr.lrh_len += cfs_size_round(rec_len);
+		if (update_count < record->lur_update_rec.ur_update_count)
+			update_count++;
+		else if (param_count < record->lur_update_rec.ur_param_count)
+			param_count++;
+		else
+			break;
+	} while (1);
+
+llog_put:
+	if (lur != NULL)
+		OBD_FREE_LARGE(lur, ctxt->loc_chunk_size);
 	llog_ctxt_put(ctxt);
-
-	CDEBUG(D_INFO, "%s: Add update log "DOSTID":%u.\n",
-	       dt->dd_lu_dev.ld_obd->obd_name,
-	       POSTID(&cookie->lgc_lgl.lgl_oi), cookie->lgc_index);
-
-	if (rc > 0)
-		rc = 0;
 
 	RETURN(rc);
 }
@@ -308,6 +440,7 @@ struct sub_thandle *create_sub_thandle(struct top_multiple_thandle *tmt,
 		RETURN(ERR_PTR(-ENOMEM));
 
 	INIT_LIST_HEAD(&st->st_sub_list);
+	INIT_LIST_HEAD(&st->st_cookie_list);
 	st->st_dt = dt_dev;
 
 	list_add(&st->st_sub_list, &tmt->tmt_sub_thandle_list);
@@ -503,7 +636,8 @@ static int declare_updates_write(const struct lu_env *env,
 		if (st->st_sub_th == NULL)
 			continue;
 
-		rc = sub_declare_updates_write(env, record, st->st_sub_th);
+		rc = sub_declare_updates_write(env, record, st->st_sub_th,
+					       tmt->tmt_record_size);
 		if (rc < 0)
 			break;
 	}
@@ -814,8 +948,7 @@ int top_trans_stop(const struct lu_env *env, struct dt_device *master_dev,
 
 		lur = tur->tur_update_records;
 		/* Write updates to the master MDT */
-		rc = sub_updates_write(env, lur, master_st->st_sub_th,
-				       &master_st->st_cookie);
+		rc = sub_updates_write(env, lur, master_st);
 
 		/* Cleanup the common parameters in the update records,
 		 * master transno callback might add more parameters.
@@ -877,8 +1010,7 @@ stop_master_trans:
 			    st->st_sub_th->th_result < 0)
 				continue;
 
-			rc = sub_updates_write(env, lur, st->st_sub_th,
-					       &st->st_cookie);
+			rc = sub_updates_write(env, lur, st);
 			if (rc < 0) {
 				th->th_result = rc;
 				break;
@@ -1052,7 +1184,15 @@ void top_multiple_thandle_destroy(struct top_multiple_thandle *tmt)
 	LASSERT(tmt->tmt_magic == TOP_THANDLE_MAGIC);
 	list_for_each_entry_safe(st, tmp, &tmt->tmt_sub_thandle_list,
 				 st_sub_list) {
+		struct sub_thandle_cookie *stc;
+		struct sub_thandle_cookie *tmp;
+
 		list_del(&st->st_sub_list);
+		list_for_each_entry_safe(stc, tmp, &st->st_cookie_list,
+					 stc_list) {
+			list_del(&stc->stc_list);
+			OBD_FREE_PTR(stc);
+		}
 		OBD_FREE_PTR(st);
 	}
 	OBD_FREE_PTR(tmt);
@@ -1083,23 +1223,27 @@ static int distribute_txn_cancel_records(const struct lu_env *env,
 		struct llog_ctxt	*ctxt;
 		struct obd_device	*obd;
 		struct llog_cookie	*cookie;
+		struct sub_thandle_cookie *stc;
 		int rc;
-
-		cookie = &st->st_cookie;
-		if (fid_is_zero(&cookie->lgc_lgl.lgl_oi.oi_fid))
-			continue;
 
 		obd = st->st_dt->dd_lu_dev.ld_obd;
 		ctxt = llog_get_context(obd, LLOG_UPDATELOG_ORIG_CTXT);
 		LASSERT(ctxt);
+		list_for_each_entry(stc, &st->st_cookie_list, stc_list) {
+			cookie = &stc->stc_cookie;
+			if (fid_is_zero(&cookie->lgc_lgl.lgl_oi.oi_fid))
+				continue;
 
-		rc = llog_cat_cancel_records(env, ctxt->loc_handle, 1,
-					     cookie);
+			rc = llog_cat_cancel_records(env, ctxt->loc_handle, 1,
+						     cookie);
+			CDEBUG(D_HA, "%s: batchid %llu cancel update log "
+			       DOSTID ".%u : rc = %d\n", obd->obd_name,
+			       tmt->tmt_batchid,
+			       POSTID(&cookie->lgc_lgl.lgl_oi),
+			       cookie->lgc_index, rc);
+		}
 
 		llog_ctxt_put(ctxt);
-		CDEBUG(D_HA, "%s: batchid %llu cancel update log "DOSTID
-		       ".%u : rc = %d\n", obd->obd_name, tmt->tmt_batchid,
-		       POSTID(&cookie->lgc_lgl.lgl_oi), cookie->lgc_index, rc);
 	}
 
 	RETURN(0);

@@ -40,10 +40,7 @@
 struct dt_key;
 struct dt_rec;
 struct object_update_param;
-
-struct update_params {
-	struct object_update_param	up_params[0];
-};
+struct llog_update_record;
 
 static inline size_t update_params_size(const struct update_params *params,
 					unsigned int param_count)
@@ -98,13 +95,6 @@ update_params_get_param_buf(const struct update_params *params, __u16 index,
 	return param->oup_buf;
 }
 
-struct update_op {
-	struct lu_fid uop_fid;
-	__u16	uop_type;
-	__u16	uop_param_count;
-	__u16	uop_params_off[0];
-};
-
 static inline size_t
 update_op_size(unsigned int param_count)
 {
@@ -117,11 +107,6 @@ update_op_next_op(const struct update_op *uop)
 	return (struct update_op *)((char *)uop +
 				update_op_size(uop->uop_param_count));
 }
-
-/* All of updates in the mulitple_update_record */
-struct update_ops {
-	struct update_op	uops_op[0];
-};
 
 static inline size_t update_ops_size(const struct update_ops *ops,
 				     unsigned int update_count)
@@ -137,41 +122,6 @@ static inline size_t update_ops_size(const struct update_ops *ops,
 	return total_size;
 }
 
-/*
- * This is the update record format used to store the updates in
- * disk. All updates of the operation will be stored in ur_ops.
- * All of parameters for updates of the operation will be stored
- * in ur_params.
- * To save the space of the record, parameters in ur_ops will only
- * remember their offset in ur_params, so to avoid storing duplicate
- * parameters in ur_params, which can help us save a lot space for
- * operation like creating striped directory.
- */
-struct update_records {
-	__u64			ur_master_transno;
-	__u64			ur_batchid;
-	__u32			ur_flags;
-	__u32			ur_param_count;
-	__u32			ur_update_count;
-	struct update_ops	ur_ops;
-	 /* Note ur_ops has a variable size, so comment out
-	  * the following ur_params, in case some use it directly
-	  * update_records->ur_params
-	  *
-	  * struct update_params	ur_params;
-	  */
-};
-
-struct llog_update_record {
-	struct llog_rec_hdr	lur_hdr;
-	struct update_records	lur_update_rec;
-	/* Note ur_update_rec has a variable size, so comment out
-	 * the following ur_tail, in case someone use it directly
-	 *
-	 * struct llog_rec_tail	lur_tail;
-	 */
-};
-
 static inline struct update_params *
 update_records_get_params(const struct update_records *record)
 {
@@ -183,13 +133,21 @@ update_records_get_params(const struct update_records *record)
 static inline size_t
 update_records_size(const struct update_records *record)
 {
-	struct update_params *params;
+	size_t op_size = 0;
+	size_t param_size = 0;
 
-	params = update_records_get_params(record);
+	if (record->ur_update_count > 0)
+		op_size = update_ops_size(&record->ur_ops,
+					  record->ur_update_count);
+	if (record->ur_param_count > 0) {
+		struct update_params *params;
+
+		params = update_records_get_params(record);
+		param_size = update_params_size(params, record->ur_param_count);
+	}
 
 	return cfs_size_round(offsetof(struct update_records, ur_ops) +
-	       update_ops_size(&record->ur_ops, record->ur_update_count) +
-	       update_params_size(params, record->ur_param_count));
+			      op_size + param_size);
 }
 
 static inline size_t
@@ -336,6 +294,7 @@ struct top_multiple_thandle {
 	__u64			tmt_batchid;
 	int			tmt_result;
 	__u32			tmt_magic;
+	size_t			tmt_record_size;
 	__u32			tmt_committed:1;
 };
 
@@ -350,12 +309,17 @@ struct top_thandle {
 	struct top_multiple_thandle *tt_multiple_thandle;
 };
 
+struct sub_thandle_cookie {
+	struct llog_cookie	stc_cookie;
+	struct list_head	stc_list;
+};
+
 /* Sub thandle is used to track multiple sub thandles under one parent
  * thandle */
 struct sub_thandle {
 	struct thandle		*st_sub_th;
 	struct dt_device	*st_dt;
-	struct llog_cookie	st_cookie;
+	struct list_head	st_cookie_list;
 	struct dt_txn_commit_cb	st_commit_dcb;
 	struct dt_txn_commit_cb	st_stop_dcb;
 	int			st_result;
@@ -515,6 +479,43 @@ int sub_thandle_trans_create(const struct lu_env *env,
 			     struct sub_thandle *st);
 
 /* update_records.c */
+size_t update_records_create_size(const struct lu_env *env,
+				  const struct lu_fid *fid,
+				  const struct lu_attr *attr,
+				  const struct dt_allocation_hint *hint,
+				  struct dt_object_format *dof);
+size_t update_records_attr_set_size(const struct lu_env *env,
+				    const struct lu_fid *fid,
+				    const struct lu_attr *attr);
+size_t update_records_ref_add_size(const struct lu_env *env,
+				   const struct lu_fid *fid);
+size_t update_records_ref_del_size(const struct lu_env *env,
+				   const struct lu_fid *fid);
+size_t update_records_object_destroy_size(const struct lu_env *env,
+					  const struct lu_fid *fid);
+size_t update_records_index_insert_size(const struct lu_env *env,
+					const struct lu_fid *fid,
+					const struct dt_rec *rec,
+					const struct dt_key *key);
+size_t update_records_index_delete_size(const struct lu_env *env,
+					const struct lu_fid *fid,
+					const struct dt_key *key);
+size_t update_records_xattr_set_size(const struct lu_env *env,
+				     const struct lu_fid *fid,
+				     const struct lu_buf *buf,
+				     const char *name,
+				     __u32 flag);
+size_t update_records_xattr_del_size(const struct lu_env *env,
+				     const struct lu_fid *fid,
+				     const char *name);
+size_t update_records_write_size(const struct lu_env *env,
+				 const struct lu_fid *fid,
+				 const struct lu_buf *buf,
+				 __u64 pos);
+size_t update_records_punch_size(const struct lu_env *env,
+				 const struct lu_fid *fid,
+				 __u64 start, __u64 end);
+
 int update_records_create_pack(const struct lu_env *env,
 			       struct update_ops *ops,
 			       unsigned int *op_count,
@@ -616,6 +617,14 @@ int update_records_punch_pack(const struct lu_env *env,
 			      size_t *max_param_size,
 			      const struct lu_fid *fid,
 			      __u64 start, __u64 end);
+int update_records_noop_pack(const struct lu_env *env,
+			     struct update_ops *ops,
+			     unsigned int *op_count,
+			     size_t *max_ops_size,
+			     struct update_params *params,
+			     unsigned int *param_count,
+			     size_t *max_param_size,
+			     const struct lu_fid *fid);
 
 int tur_update_records_extend(struct thandle_update_records *tur,
 			      size_t new_size);
@@ -662,5 +671,18 @@ int tur_update_extend(struct thandle_update_records *tur,
 		}							\
 	}								\
 	ret;								\
+})
+
+#define update_record_size(env, name, th, ...)				\
+({									\
+	struct top_thandle *top_th;					\
+	struct top_multiple_thandle *tmt;				\
+									\
+	top_th = container_of(th, struct top_thandle, tt_super);	\
+									\
+	LASSERT(top_th->tt_multiple_thandle != NULL);			\
+	tmt = top_th->tt_multiple_thandle;				\
+	tmt->tmt_record_size +=						\
+		update_records_##name##_size(env, __VA_ARGS__);		\
 })
 #endif

@@ -561,6 +561,8 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 /* UPDATE */
 #define OBD_FAIL_OUT_UPDATE_NET		0x1700
 #define OBD_FAIL_OUT_UPDATE_NET_REP	0x1701
+#define OBD_FAIL_SPLIT_UPDATE_REC	0x1702
+#define OBD_FAIL_LARGE_STRIPE		0x1703
 
 /* MIGRATE */
 #define OBD_FAIL_MIGRATE_NET_REP		0x1800

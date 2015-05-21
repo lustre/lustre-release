@@ -57,6 +57,7 @@ const char *update_op_str(__u16 opc)
 		[OUT_XATTR_DEL] = "xattr_del",
 		[OUT_PUNCH] = "punch",
 		[OUT_READ] = "read",
+		[OUT_NOOP] = "noop",
 	};
 
 	if (opc < ARRAY_SIZE(opc_str) && opc_str[opc] != NULL)

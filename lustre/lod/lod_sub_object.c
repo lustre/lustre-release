@@ -98,11 +98,13 @@ struct thandle *lod_sub_get_thandle(const struct lu_env *env,
 	if (type == LU_SEQ_RANGE_OST)
 		RETURN(tth->tt_master_sub_thandle);
 
+	sub_th = thandle_get_sub(env, th, sub_obj);
+	if (IS_ERR(sub_th))
+		RETURN(sub_th);
+
 	if (tth->tt_multiple_thandle != NULL && record_update != NULL &&
 	    th->th_result == 0)
 		*record_update = true;
-
-	sub_th = thandle_get_sub(env, th, sub_obj);
 
 	RETURN(sub_th);
 }
@@ -130,10 +132,15 @@ int lod_sub_object_declare_create(const struct lu_env *env,
 				  struct thandle *th)
 {
 	struct thandle *sub_th;
+	bool record_update;
 
-	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		return PTR_ERR(sub_th);
+
+	if (record_update)
+		update_record_size(env, create, th, lu_object_fid(&dt->do_lu),
+				   attr, hint, dof);
 
 	return dt_declare_create(env, dt, attr, hint, dof, sub_th);
 }
@@ -199,12 +206,16 @@ int lod_sub_object_declare_ref_add(const struct lu_env *env,
 				   struct thandle *th)
 {
 	struct thandle	*sub_th;
+	bool		record_update;
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
+
+	if (record_update)
+		update_record_size(env, ref_add, th, lu_object_fid(&dt->do_lu));
 
 	rc = dt_declare_ref_add(env, dt, sub_th);
 
@@ -265,12 +276,16 @@ int lod_sub_object_declare_ref_del(const struct lu_env *env,
 				   struct thandle *th)
 {
 	struct thandle	*sub_th;
+	bool		record_update;
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
+
+	if (record_update)
+		update_record_size(env, ref_del, th, lu_object_fid(&dt->do_lu));
 
 	rc = dt_declare_ref_del(env, dt, sub_th);
 
@@ -331,12 +346,17 @@ int lod_sub_object_declare_destroy(const struct lu_env *env,
 				   struct thandle *th)
 {
 	struct thandle	*sub_th;
+	bool		record_update;
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
+
+	if (record_update)
+		update_record_size(env, object_destroy, th,
+				   lu_object_fid(&dt->do_lu));
 
 	rc = dt_declare_destroy(env, dt, sub_th);
 
@@ -401,10 +421,15 @@ int lod_sub_object_declare_insert(const struct lu_env *env,
 				  struct thandle *th)
 {
 	struct thandle *sub_th;
+	bool		record_update;
 
-	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		return PTR_ERR(sub_th);
+
+	if (record_update)
+		update_record_size(env, index_insert, th,
+				   lu_object_fid(&dt->do_lu), rec, key);
 
 	return dt_declare_insert(env, dt, rec, key, sub_th);
 }
@@ -467,10 +492,15 @@ int lod_sub_object_declare_delete(const struct lu_env *env,
 				  struct thandle *th)
 {
 	struct thandle *sub_th;
+	bool		record_update;
 
-	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		return PTR_ERR(sub_th);
+
+	if (record_update)
+		update_record_size(env, index_delete, th,
+				   lu_object_fid(&dt->do_lu), key);
 
 	return dt_declare_delete(env, dt, key, sub_th);
 }
@@ -533,12 +563,18 @@ int lod_sub_object_declare_xattr_set(const struct lu_env *env,
 				     struct thandle *th)
 {
 	struct thandle	*sub_th;
+	bool		record_update;
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
+
+	if (record_update)
+		update_record_size(env, xattr_set, th,
+				   lu_object_fid(&dt->do_lu),
+				   buf, name, fl);
 
 	rc = dt_declare_xattr_set(env, dt, buf, name, fl, sub_th);
 
@@ -606,12 +642,17 @@ int lod_sub_object_declare_attr_set(const struct lu_env *env,
 				    struct thandle *th)
 {
 	struct thandle	*sub_th;
+	bool		record_update;
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
+
+	if (record_update)
+		update_record_size(env, attr_set, th,
+				   lu_object_fid(&dt->do_lu), attr);
 
 	rc = dt_declare_attr_set(env, dt, attr, sub_th);
 
@@ -677,12 +718,18 @@ int lod_sub_object_declare_xattr_del(const struct lu_env *env,
 				     struct thandle *th)
 {
 	struct thandle	*sub_th;
+	bool		record_update;
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
+
+	if (record_update)
+		update_record_size(env, xattr_del, th,
+				   lu_object_fid(&dt->do_lu),
+				   name);
 
 	rc = dt_declare_xattr_del(env, dt, name, sub_th);
 
@@ -749,12 +796,18 @@ int lod_sub_object_declare_write(const struct lu_env *env,
 				 struct thandle *th)
 {
 	struct thandle	*sub_th;
+	bool		record_update;
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
+
+	if (record_update)
+		update_record_size(env, write, th,
+				   lu_object_fid(&dt->do_lu),
+				   buf, pos);
 
 	rc = dt_declare_write(env, dt, buf, pos, sub_th);
 
@@ -821,12 +874,18 @@ int lod_sub_object_declare_punch(const struct lu_env *env,
 				 struct thandle *th)
 {
 	struct thandle	*sub_th;
+	bool		record_update;
 	int		rc;
 	ENTRY;
 
-	sub_th = lod_sub_get_thandle(env, th, dt, NULL);
+	sub_th = lod_sub_get_thandle(env, th, dt, &record_update);
 	if (IS_ERR(sub_th))
 		RETURN(PTR_ERR(sub_th));
+
+	if (record_update)
+		update_record_size(env, punch, th,
+				   lu_object_fid(&dt->do_lu),
+				   start, end);
 
 	rc = dt_declare_punch(env, dt, start, end, sub_th);
 

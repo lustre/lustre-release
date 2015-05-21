@@ -983,9 +983,6 @@ struct lu_orphan_ent {
 };
 void lustre_swab_orphan_ent(struct lu_orphan_ent *ent);
 
-struct update_ops;
-void lustre_swab_update_ops(struct update_ops *uops, unsigned int op_count);
-
 /** @} lu_fid */
 
 /** \defgroup lu_dir lu_dir
@@ -4023,6 +4020,7 @@ enum update_type {
 	OUT_XATTR_DEL		= 13,
 	OUT_PUNCH		= 14,
 	OUT_READ		= 15,
+	OUT_NOOP		= 16,
 	OUT_LAST
 };
 
@@ -4222,6 +4220,67 @@ struct close_data {
 };
 
 void lustre_swab_close_data(struct close_data *data);
+
+struct update_ops;
+void lustre_swab_update_ops(struct update_ops *uops, unsigned int op_count);
+
+/* Update llog format */
+struct update_op {
+	struct lu_fid	uop_fid;
+	__u16		uop_type;
+	__u16		uop_param_count;
+	__u16		uop_params_off[0];
+};
+
+struct update_ops {
+	struct update_op	uops_op[0];
+};
+
+struct update_params {
+	struct object_update_param	up_params[0];
+};
+
+enum update_records_flag {
+	UPDATE_RECORD_CONTINUE = 1 >> 0,
+};
+/*
+ * This is the update record format used to store the updates in
+ * disk. All updates of the operation will be stored in ur_ops.
+ * All of parameters for updates of the operation will be stored
+ * in ur_params.
+ * To save the space of the record, parameters in ur_ops will only
+ * remember their offset in ur_params, so to avoid storing duplicate
+ * parameters in ur_params, which can help us save a lot space for
+ * operation like creating striped directory.
+ */
+struct update_records {
+	__u64			ur_master_transno;
+	__u64			ur_batchid;
+	__u32			ur_flags;
+	/* If the operation includes multiple updates, then ur_index
+	 * means the index of the update inside the whole updates. */
+	__u32			ur_index;
+	__u32			ur_update_count;
+	__u32			ur_param_count;
+	struct update_ops	ur_ops;
+	 /* Note ur_ops has a variable size, so comment out
+	  * the following ur_params, in case some use it directly
+	  * update_records->ur_params
+	  *
+	  * struct update_params	ur_params;
+	  */
+};
+
+struct llog_update_record {
+	struct llog_rec_hdr     lur_hdr;
+	struct update_records   lur_update_rec;
+	/* Note ur_update_rec has a variable size, so comment out
+	* the following ur_tail, in case someone use it directly
+	*
+	* struct llog_rec_tail lur_tail;
+	*/
+};
+
 
 #endif
 /** @} lustreidl */
