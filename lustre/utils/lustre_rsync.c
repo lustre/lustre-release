@@ -959,12 +959,12 @@ int lr_move(struct lr_info *info)
 			lr_debug(DINFO, "rename returns %d\n", rc1);
                 }
 
-		if (special_src) {
+		if (special_src)
 			rc1 = lr_remove_pc(info->spfid, info->sfid);
-			if (!special_dest)
-				lr_cascade_move(info->sfid, info->dest, info);
-                }
-		if (special_dest)
+
+		if (!special_dest)
+			lr_cascade_move(info->sfid, info->dest, info);
+		else
 			rc1 = lr_add_pc(info->pfid, info->sfid, info->name);
 
                 lr_debug(DINFO, "move: %s [to] %s rc1=%d, errno=%d\n",
