@@ -939,6 +939,9 @@ test_9a() {
 		return 0
 	fi
 
+	[[ $server_version -ge $(version_code 2.7.50) ]] ||
+		{ skip "Need MDS version >= 2.7.50"; return; }
+
 	check_mount_and_prep
 	$LFS mkdir -i 0 $DIR/$tdir/lfsck || error "(1) Fail to mkdir lfsck"
 	$LFS setstripe -c 1 -i -1 $DIR/$tdir/lfsck
@@ -1009,6 +1012,9 @@ test_9b() {
 		skip "Testing on UP system, the speed may be inaccurate."
 		return 0
 	fi
+
+	[[ $server_version -ge $(version_code 2.7.50) ]] ||
+		{ skip "Need MDS version >= 2.7.50"; return; }
 
 	lfsck_prep 0 0
 
