@@ -7,8 +7,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-#Bug number for excepting test      6380
-ALWAYS_EXCEPT="$SANITY_SCRUB_EXCEPT 1b 1c 2 3 4a 4b 4c 5 6 7 8 9 10 15"
+#Bug number for excepting test		6705
+ALWAYS_EXCEPT="$SANITY_SCRUB_EXCEPT	1c 5 10"
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
@@ -578,7 +578,7 @@ test_5() {
 
 	scrub_prep 1000
 	scrub_backup_restore 1
-	echo "starting MDTs with OI scrub disabled"
+	echo "starting MDTs with OI scrub disabled (1)"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
 	scrub_check_status 3 init
 	scrub_check_flags 4 inconsistent
@@ -603,7 +603,7 @@ test_5() {
 	do_nodes $(comma_list $(mdts_nodes)) \
 		$LCTL set_param fail_loc=0 fail_val=0
 
-	echo "starting MDTs with OI scrub disabled"
+	echo "starting MDTs with OI scrub disabled (2)"
 	scrub_start_mds 10 "$MOUNT_OPTS_NOSCRUB"
 	scrub_check_status 11 crashed
 	scrub_stop_mds 12
@@ -863,7 +863,7 @@ run_test 9 "OI scrub speed control"
 test_10a() {
 	scrub_prep 0
 	scrub_backup_restore 1
-	echo "starting mds$n with OI scrub disabled"
+	echo "starting mds$n with OI scrub disabled (1)"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
 	scrub_check_flags 4 inconsistent
 	mount_client $MOUNT || error "(5) Fail to start client!"
@@ -878,7 +878,7 @@ test_10a() {
 	scrub_check_status 7 scanning
 	umount_client $MOUNT || error "(8) Fail to stop client!"
 	scrub_stop_mds 9
-	echo "starting MDTs with OI scrub disabled"
+	echo "starting MDTs with OI scrub disabled (2)"
 	scrub_start_mds 10 "$MOUNT_OPTS_NOSCRUB"
 	scrub_check_status 11 paused
 	scrub_stop_mds 12

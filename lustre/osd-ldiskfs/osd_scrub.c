@@ -1526,6 +1526,8 @@ static int osd_ios_lf_fill(void *buf, const char *name, int namelen,
 			   loff_t offset, __u64 ino, unsigned d_type);
 static int osd_ios_dl_fill(void *buf, const char *name, int namelen,
 			   loff_t offset, __u64 ino, unsigned d_type);
+static int osd_ios_uld_fill(void *buf, const char *name, int namelen,
+			    loff_t offset, __u64 ino, unsigned d_type);
 
 static int
 osd_ios_general_scan(struct osd_thread_info *info, struct osd_device *dev,
@@ -1543,6 +1545,7 @@ enum osd_lf_flags {
 	OLF_HIDE_FID		= 0x0002,
 	OLF_SHOW_NAME		= 0x0004,
 	OLF_NO_OI		= 0x0008,
+	OLF_IDX_IN_FID		= 0x0010,
 };
 
 struct osd_lf_map {
@@ -1662,6 +1665,21 @@ static const struct osd_lf_map osd_lf_maps[] = {
 	{ "BATCHID", { FID_SEQ_LOCAL_FILE, BATCHID_COMMITTED_OID, 0 },
 		OLF_SHOW_NAME, sizeof("BATCHID") - 1, NULL, NULL },
 
+	/* OSP update logs update_log{_dir} use f_seq = FID_SEQ_UPDATE_LOG{_DIR}
+	 * and f_oid = index for their log files.  See lu_update_log{_dir}_fid()
+	 * for more details. */
+
+	/* update_log */
+	{ "update_log", { FID_SEQ_UPDATE_LOG, 0, 0 },
+		OLF_SHOW_NAME | OLF_IDX_IN_FID, sizeof("update_log") - 1,
+		NULL, NULL },
+
+	/* update_log_dir */
+	{ "update_log_dir", { FID_SEQ_UPDATE_LOG_DIR, 0, 0 },
+		OLF_SHOW_NAME | OLF_SCAN_SUBITEMS | OLF_IDX_IN_FID,
+		sizeof("update_log_dir") - 1,
+		osd_ios_general_scan, osd_ios_uld_fill },
+
 	/* lost+found */
 	{ "lost+found", { FID_SEQ_LOCAL_FILE, OSD_LPF_OID, 0 },
 		OLF_SCAN_SUBITEMS, sizeof("lost+found") - 1,
@@ -1764,10 +1782,16 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
 
 	osd_id_gen(id, inode->i_ino, inode->i_generation);
 	if (rc == -ENODATA) {
-		if (fid == NULL || fid_is_zero(fid) || flags & OLF_HIDE_FID)
+		if (fid == NULL || fid_is_zero(fid) || flags & OLF_HIDE_FID) {
 			lu_igif_build(&tfid, inode->i_ino, inode->i_generation);
-		else
+		} else {
 			tfid = *fid;
+			if (flags & OLF_IDX_IN_FID) {
+				LASSERT(dev->od_index >= 0);
+
+				tfid.f_oid = dev->od_index;
+			}
+		}
 		rc = osd_ea_fid_set(info, inode, &tfid, 0, 0);
 		if (rc != 0) {
 			CDEBUG(D_LFSCK, "%s: fail to set LMA for init OI "
@@ -1945,6 +1969,35 @@ static int osd_ios_dl_fill(void *buf, const char *name, int namelen,
 
 	rc = osd_ios_scan_one(fill_buf->oifb_info, dev, child->d_inode,
 			      &map->olm_fid, map->olm_flags);
+	dput(child);
+
+	RETURN(rc);
+}
+
+static int osd_ios_uld_fill(void *buf, const char *name, int namelen,
+			    loff_t offset, __u64 ino, unsigned d_type)
+{
+	struct osd_ios_filldir_buf *fill_buf = buf;
+	struct dentry		   *child;
+	struct lu_fid		    tfid;
+	int			    rc       = 0;
+	ENTRY;
+
+	/* skip any non-DFID format name */
+	if (name[0] != '[')
+		RETURN(0);
+
+	child = osd_ios_lookup_one_len(name, fill_buf->oifb_dentry, namelen);
+	if (IS_ERR(child))
+		RETURN(PTR_ERR(child));
+
+	/* skip the start '[' */
+	sscanf(&name[1], SFID, RFID(&tfid));
+	if (fid_is_sane(&tfid))
+		rc = osd_ios_scan_one(fill_buf->oifb_info, fill_buf->oifb_dev,
+				      child->d_inode, &tfid, 0);
+	else
+		rc = -EIO;
 	dput(child);
 
 	RETURN(rc);

@@ -5842,7 +5842,9 @@ static int osd_device_init0(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 
-	if (server_name_is_ost(o->od_svname))
+	o->od_index = -1; /* -1 means index is invalid */
+	rc = server_name2index(o->od_svname, &o->od_index, NULL);
+	if (rc == LDD_F_SV_TYPE_OST)
 		o->od_is_ost = 1;
 
 	o->od_full_scrub_ratio = OFSR_DEFAULT;

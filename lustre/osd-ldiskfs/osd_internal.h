@@ -240,6 +240,7 @@ struct osd_device {
 				  od_index_in_idif:1;
 
 	__u32			  od_dirent_journal;
+	int			  od_index;
 	struct proc_dir_entry	 *od_proc_entry;
 	struct lprocfs_stats     *od_stats;
 
