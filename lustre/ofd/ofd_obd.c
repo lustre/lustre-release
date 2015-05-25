@@ -688,13 +688,6 @@ int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
 	int rc = 0;
 	ENTRY;
 
-	down_read(&ofd->ofd_lastid_rwsem);
-	/* Currently, for safe, we do not distinguish which LAST_ID is broken,
-	 * we may do that in the future.
-	 * Return -ENOSPC until the LAST_ID rebuilt. */
-	if (unlikely(ofd->ofd_lastid_rebuilding))
-		GOTO(out, rc = -ENOSPC);
-
 	spin_lock(&ofd->ofd_osfs_lock);
 	if (cfs_time_before_64(ofd->ofd_osfs_age, max_age) || max_age == 0) {
 		u64 unstable;
@@ -767,12 +760,9 @@ int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
 		if (from_cache)
 			*from_cache = 1;
 	}
-
 	GOTO(out, rc);
 
 out:
-	up_read(&ofd->ofd_lastid_rwsem);
-
 	return rc;
 }
 
