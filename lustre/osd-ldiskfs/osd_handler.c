@@ -2847,15 +2847,20 @@ static int osd_declare_xattr_set(const struct lu_env *env,
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
-	/* optimistic optimization: LMA is set first and usually fit inode */
 	if (strcmp(name, XATTR_NAME_LMA) == 0) {
-		if (dt_object_exists(dt))
+		/* For non-upgrading case, the LMA is set first and
+		 * usually fit inode. But for upgrade case, the LMA
+		 * may be in another separated EA block. */
+		if (!dt_object_exists(dt))
 			credits = 0;
-		else
+		else if (fl == LU_XATTR_REPLACE)
 			credits = 1;
+		else
+			goto upgrade;
 	} else if (strcmp(name, XATTR_NAME_VERSION) == 0) {
 		credits = 1;
 	} else {
+upgrade:
 		credits = osd_dto_credits_noquota[DTO_XATTR_SET];
 		if (buf && buf->lb_len > sb->s_blocksize) {
 			credits *= (buf->lb_len + sb->s_blocksize - 1) >>
