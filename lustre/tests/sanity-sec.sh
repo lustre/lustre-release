@@ -1273,6 +1273,7 @@ nodemap_test_setup() {
 }
 
 nodemap_test_cleanup() {
+	trap 0
 	delete_fops_nodemaps
 	rc=$?
 	[[ $rc != 0 ]] && error "removing fops nodemaps failed $rc"
@@ -1301,6 +1302,7 @@ test_16() {
 	nodemap_version_check || return 0
 	nodemap_test_setup 0
 
+	trap nodemap_test_cleanup EXIT
 	test_fops all_off
 	nodemap_test_cleanup
 }
@@ -1310,6 +1312,7 @@ test_17() {
 	nodemap_version_check || return 0
 	nodemap_test_setup
 
+	trap nodemap_test_cleanup EXIT
 	nodemap_clients_admin_trusted 0 1
 	test_fops trusted_noadmin 1
 	nodemap_test_cleanup
@@ -1319,6 +1322,8 @@ run_test 17 "test nodemap trusted_noadmin fileops"
 test_18() {
 	nodemap_version_check || return 0
 	nodemap_test_setup
+
+	trap nodemap_test_cleanup EXIT
 	nodemap_clients_admin_trusted 0 0
 	test_fops mapped_noadmin 1
 	nodemap_test_cleanup
@@ -1328,6 +1333,8 @@ run_test 18 "test nodemap mapped_noadmin fileops"
 test_19() {
 	nodemap_version_check || return 0
 	nodemap_test_setup
+
+	trap nodemap_test_cleanup EXIT
 	nodemap_clients_admin_trusted 1 1
 	test_fops trusted_admin 1
 	nodemap_test_cleanup
@@ -1337,6 +1344,8 @@ run_test 19 "test nodemap trusted_admin fileops"
 test_20() {
 	nodemap_version_check || return 0
 	nodemap_test_setup
+
+	trap nodemap_test_cleanup EXIT
 	nodemap_clients_admin_trusted 1 0
 	test_fops mapped_admin 1
 	nodemap_test_cleanup
@@ -1346,6 +1355,8 @@ run_test 20 "test nodemap mapped_admin fileops"
 test_21() {
 	nodemap_version_check || return 0
 	nodemap_test_setup
+
+	trap nodemap_test_cleanup EXIT
 	local x=1
 	local i=0
 	for client in $clients; do
@@ -1368,6 +1379,8 @@ run_test 21 "test nodemap mapped_trusted_noadmin fileops"
 test_22() {
 	nodemap_version_check || return 0
 	nodemap_test_setup
+
+	trap nodemap_test_cleanup EXIT
 	local x=1
 	local i=0
 	for client in $clients; do
@@ -1453,6 +1466,7 @@ test_23() {
 	nodemap_version_check || return 0
 	nodemap_test_setup
 
+	trap nodemap_test_cleanup EXIT
 	# 1 trusted cluster, 1 mapped cluster
 	local unmapped_fs=$((IDBASE+0))
 	local unmapped_c1=$((IDBASE+5))
