@@ -477,6 +477,8 @@ int osd_obj_map_init(const struct lu_env *env, struct osd_device *dev)
 
 	/* prepare structures for MDS */
 	rc = osd_mdt_init(env, dev);
+	if (rc)
+		osd_ost_fini(dev);
 
         RETURN(rc);
 }
