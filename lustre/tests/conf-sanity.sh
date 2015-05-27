@@ -5397,6 +5397,16 @@ test_84() {
 }
 run_test 84 "check recovery_hard_time"
 
+test_85() {
+	[[ $(lustre_version_code ost1) -ge $(version_code 2.7.55) ]] ||
+		{ skip "Need OST version at least 2.7.55" && return 0; }
+##define OBD_FAIL_OSD_OST_EA_FID_SET 0x197
+	do_facet ost1 "lctl set_param fail_loc=0x197"
+	start_ost
+	stop_ost
+}
+run_test 85 "osd_ost init: fail ea_fid_set"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi

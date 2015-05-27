@@ -369,10 +369,8 @@ static int osd_ost_init(const struct lu_env *env, struct osd_device *dev)
 
 	/* to get subdir count from last_rcvd */
 	rc = osd_last_rcvd_subdir_count(dev);
-	if (rc < 0) {
-		OBD_FREE_PTR(dev->od_ost_map);
-		RETURN(rc);
-	}
+	if (rc < 0)
+		GOTO(cleanup_alloc, rc);
 
 	dev->od_ost_map->om_subdir_count = rc;
         rc = 0;
@@ -385,7 +383,7 @@ static int osd_ost_init(const struct lu_env *env, struct osd_device *dev)
 
 	d = ll_lookup_one_len("O", rootd, strlen("O"));
 	if (IS_ERR(d))
-		GOTO(cleanup, rc = PTR_ERR(d));
+		GOTO(cleanup_ctxt, rc = PTR_ERR(d));
 	if (d->d_inode == NULL) {
 		dput(d);
 		/* The lookup() may be called again inside simple_mkdir().
@@ -393,7 +391,7 @@ static int osd_ost_init(const struct lu_env *env, struct osd_device *dev)
 		 * mount time, it will not affect the whole performance. */
 		d = simple_mkdir(rootd, dev->od_mnt, "O", 0755, 1);
 		if (IS_ERR(d))
-			GOTO(cleanup, rc = PTR_ERR(d));
+			GOTO(cleanup_ctxt, rc = PTR_ERR(d));
 
 		/* It is quite probably that the device is new formatted. */
 		dev->od_maybe_new = 1;
@@ -406,16 +404,19 @@ static int osd_ost_init(const struct lu_env *env, struct osd_device *dev)
 	 * has no OI mapping, and only is visible inside the OSD.*/
 	lu_igif_build(fid, inode->i_ino, inode->i_generation);
 	rc = osd_ea_fid_set(info, inode, fid,
-			    LMAC_NOT_IN_OI | LMAC_FID_ON_OST, 0);
+		    LMAC_NOT_IN_OI | LMAC_FID_ON_OST, 0);
+	if (rc)
+		GOTO(cleanup_dentry, rc);
 
-	GOTO(cleanup, rc);
-
-cleanup:
 	pop_ctxt(&save, &new);
-        if (IS_ERR(d)) {
-                OBD_FREE_PTR(dev->od_ost_map);
-                RETURN(PTR_ERR(d));
-        }
+	RETURN(0);
+
+cleanup_dentry:
+	dput(d);
+cleanup_ctxt:
+	pop_ctxt(&save, &new);
+cleanup_alloc:
+	OBD_FREE_PTR(dev->od_ost_map);
 	return rc;
 }
 

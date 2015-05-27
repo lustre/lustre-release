@@ -2366,6 +2366,9 @@ int osd_ea_fid_set(struct osd_thread_info *info, struct inode *inode,
 	if (OBD_FAIL_CHECK(OBD_FAIL_FID_INLMA))
 		RETURN(0);
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_OST_EA_FID_SET))
+		rc = -ENOMEM;
+
 	lustre_lma_init(lma, fid, compat, incompat);
 	lustre_lma_swab(lma);
 
