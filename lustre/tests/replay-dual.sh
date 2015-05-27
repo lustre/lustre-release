@@ -437,11 +437,11 @@ test_18() { # bug 3822 - evicting client with enqueued lock
 	local DLMTRACE=$(do_facet $SINGLEMDS lctl get_param debug)
 	do_facet $SINGLEMDS lctl set_param debug=+dlmtrace
 	mkdir -p $MOUNT1/$tdir || error "mkdir $MOUNT1/$tdir failed"
-	touch $MOUNT1/$tdir/$tfile
-	#define OBD_FAIL_LDLM_ENQUEUE_BLOCKED    0x30b
-	statmany -s $MOUNT1/$tdir/f 1 500 &
+	touch $MOUNT1/$tdir/${tfile}0 || error "touch file failed"
+	statmany -s $MOUNT1/$tdir/$tfile 1 500 &
 	OPENPID=$!
 	NOW=$(date +%s)
+	#define OBD_FAIL_LDLM_ENQUEUE_BLOCKED    0x30b
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x8000030b  # hold enqueue
 	sleep 1
 	#define OBD_FAIL_LDLM_BL_CALLBACK_NET			0x305
