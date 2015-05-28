@@ -837,7 +837,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
                                     struct obd_uuid *cluuid)
 {
         struct obd_export *export;
-        cfs_hash_t *hash = NULL;
+	struct cfs_hash *hash = NULL;
         int rc = 0;
         ENTRY;
 
@@ -1420,7 +1420,7 @@ EXPORT_SYMBOL(obd_export_nid2str);
 
 int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
 {
-	cfs_hash_t *nid_hash;
+	struct cfs_hash *nid_hash;
 	struct obd_export *doomed_exp = NULL;
 	int exports_evicted = 0;
 
@@ -1468,7 +1468,7 @@ EXPORT_SYMBOL(obd_export_evict_by_nid);
 
 int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid)
 {
-	cfs_hash_t *uuid_hash;
+	struct cfs_hash *uuid_hash;
 	struct obd_export *doomed_exp = NULL;
 	struct obd_uuid doomed_uuid;
 	int exports_evicted = 0;

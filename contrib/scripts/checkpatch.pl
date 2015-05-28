@@ -438,6 +438,20 @@ my %dep_functions = (
 
 	'cfs_rcu_head_t',		'struct rcu_head',
 
+	'cfs_hash_lock_t',		'union cfs_hash_lock',
+	'cfs_hash_bucket_t',		'struct cfs_hash_bucket',
+	'cfs_hash_bd_t',		'struct cfs_hash_bd',
+	'cfs_hash_t',			'struct cfs_hash',
+	'cfs_hash_lock_ops_t',		'struct cfs_hash_lock_ops',
+	'cfs_hash_hlist_ops_t',		'struct cfs_hash_hlist_ops',
+	'cfs_hash_ops_t',		'struct cfs_hash_ops',
+	'cfs_hash_head_t',		'struct cfs_hash_head',
+	'cfs_hash_head_dep_t',		'struct cfs_hash_head_dep',
+	'cfs_hash_dhead_t',		'struct cfs_hash_dhead',
+	'cfs_hash_dhead_dep_t',		'struct cfs_hash_dhead_dep',
+	'cfs_hash_lookup_intent_t',	'enum cfs_hash_lookup_intent',
+	'cfs_hash_cond_arg_t',		'struct cfs_hash_cond_arg',
+
 	'LPROCFS',			'CONFIG_PROC_FS',
 	'alloca',			'malloc',
 	'mktemp',			'mkstemp',

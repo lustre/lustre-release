@@ -553,7 +553,7 @@ void qsd_stop_reint_thread(struct qsd_qtype_info *qqi)
 	}
 }
 
-static int qsd_entry_iter_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+static int qsd_entry_iter_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 			     struct hlist_node *hnode, void *data)
 {
 	struct lquota_entry	*lqe;

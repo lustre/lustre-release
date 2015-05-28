@@ -65,7 +65,7 @@ struct qmt_device {
 	 * Once we support quota on non-default pools, then more pools will
 	 * be added to this hash table and pool master setup would have to be
 	 * handled via configuration logs */
-	cfs_hash_t		*qmt_pool_hash;
+	struct cfs_hash		*qmt_pool_hash;
 
 	/* List of pools managed by this master target */
 	struct list_head	 qmt_pool_list;

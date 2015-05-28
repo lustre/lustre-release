@@ -49,9 +49,9 @@
 
 #include "llog_internal.h"
 
-static cfs_hash_ops_t uuid_hash_ops;
-static cfs_hash_ops_t nid_hash_ops;
-static cfs_hash_ops_t nid_stat_hash_ops;
+static struct cfs_hash_ops uuid_hash_ops;
+static struct cfs_hash_ops nid_hash_ops;
+static struct cfs_hash_ops nid_stat_hash_ops;
 
 /*********** string parsing utils *********/
 
@@ -1917,7 +1917,7 @@ EXPORT_SYMBOL(class_manual_cleanup);
  */
 
 static unsigned
-uuid_hash(cfs_hash_t *hs, const void *key, unsigned mask)
+uuid_hash(struct cfs_hash *hs, const void *key, unsigned mask)
 {
         return cfs_hash_djb2_hash(((struct obd_uuid *)key)->uuid,
                                   sizeof(((struct obd_uuid *)key)->uuid), mask);
@@ -1956,7 +1956,7 @@ uuid_export_object(struct hlist_node *hnode)
 }
 
 static void
-uuid_export_get(cfs_hash_t *hs, struct hlist_node *hnode)
+uuid_export_get(struct cfs_hash *hs, struct hlist_node *hnode)
 {
         struct obd_export *exp;
 
@@ -1965,7 +1965,7 @@ uuid_export_get(cfs_hash_t *hs, struct hlist_node *hnode)
 }
 
 static void
-uuid_export_put_locked(cfs_hash_t *hs, struct hlist_node *hnode)
+uuid_export_put_locked(struct cfs_hash *hs, struct hlist_node *hnode)
 {
         struct obd_export *exp;
 
@@ -1973,7 +1973,7 @@ uuid_export_put_locked(cfs_hash_t *hs, struct hlist_node *hnode)
         class_export_put(exp);
 }
 
-static cfs_hash_ops_t uuid_hash_ops = {
+static struct cfs_hash_ops uuid_hash_ops = {
         .hs_hash        = uuid_hash,
         .hs_key         = uuid_key,
         .hs_keycmp      = uuid_keycmp,
@@ -1988,7 +1988,7 @@ static cfs_hash_ops_t uuid_hash_ops = {
  */
 
 static unsigned
-nid_hash(cfs_hash_t *hs, const void *key, unsigned mask)
+nid_hash(struct cfs_hash *hs, const void *key, unsigned mask)
 {
         return cfs_hash_djb2_hash(key, sizeof(lnet_nid_t), mask);
 }
@@ -2026,7 +2026,7 @@ nid_export_object(struct hlist_node *hnode)
 }
 
 static void
-nid_export_get(cfs_hash_t *hs, struct hlist_node *hnode)
+nid_export_get(struct cfs_hash *hs, struct hlist_node *hnode)
 {
         struct obd_export *exp;
 
@@ -2035,7 +2035,7 @@ nid_export_get(cfs_hash_t *hs, struct hlist_node *hnode)
 }
 
 static void
-nid_export_put_locked(cfs_hash_t *hs, struct hlist_node *hnode)
+nid_export_put_locked(struct cfs_hash *hs, struct hlist_node *hnode)
 {
         struct obd_export *exp;
 
@@ -2043,7 +2043,7 @@ nid_export_put_locked(cfs_hash_t *hs, struct hlist_node *hnode)
         class_export_put(exp);
 }
 
-static cfs_hash_ops_t nid_hash_ops = {
+static struct cfs_hash_ops nid_hash_ops = {
         .hs_hash        = nid_hash,
         .hs_key         = nid_key,
         .hs_keycmp      = nid_kepcmp,
@@ -2080,7 +2080,7 @@ nidstats_object(struct hlist_node *hnode)
 }
 
 static void
-nidstats_get(cfs_hash_t *hs, struct hlist_node *hnode)
+nidstats_get(struct cfs_hash *hs, struct hlist_node *hnode)
 {
         struct nid_stat *ns;
 
@@ -2089,7 +2089,7 @@ nidstats_get(cfs_hash_t *hs, struct hlist_node *hnode)
 }
 
 static void
-nidstats_put_locked(cfs_hash_t *hs, struct hlist_node *hnode)
+nidstats_put_locked(struct cfs_hash *hs, struct hlist_node *hnode)
 {
         struct nid_stat *ns;
 
@@ -2097,7 +2097,7 @@ nidstats_put_locked(cfs_hash_t *hs, struct hlist_node *hnode)
         nidstat_putref(ns);
 }
 
-static cfs_hash_ops_t nid_stat_hash_ops = {
+static struct cfs_hash_ops nid_stat_hash_ops = {
         .hs_hash        = nid_hash,
         .hs_key         = nidstats_key,
         .hs_keycmp      = nidstats_keycmp,

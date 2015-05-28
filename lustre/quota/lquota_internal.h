@@ -175,7 +175,7 @@ struct lquota_entry {
  * present.  */
 struct lquota_site {
 	/* Hash table storing lquota_entry structures */
-	cfs_hash_t	*lqs_hash;
+	struct cfs_hash	*lqs_hash;
 
 	/* Quota type, either user or group. */
 	int		 lqs_qtype;

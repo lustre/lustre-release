@@ -107,7 +107,7 @@ struct nrs_orr_key {
 struct nrs_orr_data {
 	struct ptlrpc_nrs_resource	od_res;
 	cfs_binheap_t		       *od_binheap;
-	cfs_hash_t		       *od_obj_hash;
+	struct cfs_hash		       *od_obj_hash;
 	struct kmem_cache	       *od_cache;
 	/**
 	 * Used when a new scheduling round commences, in order to synchronize

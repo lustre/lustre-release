@@ -138,7 +138,7 @@ int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
  * Hash operations for uid/gid <-> osc_quota_info
  */
 static unsigned
-oqi_hashfn(cfs_hash_t *hs, const void *key, unsigned mask)
+oqi_hashfn(struct cfs_hash *hs, const void *key, unsigned mask)
 {
 	return cfs_hash_u32_hash(*((__u32*)key), mask);
 }
@@ -171,17 +171,17 @@ oqi_object(struct hlist_node *hnode)
 }
 
 static void
-oqi_get(cfs_hash_t *hs, struct hlist_node *hnode)
+oqi_get(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 }
 
 static void
-oqi_put_locked(cfs_hash_t *hs, struct hlist_node *hnode)
+oqi_put_locked(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 }
 
 static void
-oqi_exit(cfs_hash_t *hs, struct hlist_node *hnode)
+oqi_exit(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct osc_quota_info *oqi;
 
@@ -194,7 +194,7 @@ oqi_exit(cfs_hash_t *hs, struct hlist_node *hnode)
 #define HASH_QUOTA_CUR_BITS 5
 #define HASH_QUOTA_MAX_BITS 15
 
-static cfs_hash_ops_t quota_hash_ops = {
+static struct cfs_hash_ops quota_hash_ops = {
 	.hs_hash	= oqi_hashfn,
 	.hs_keycmp	= oqi_keycmp,
 	.hs_key		= oqi_key,

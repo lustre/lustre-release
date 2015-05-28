@@ -41,8 +41,8 @@
 
 #include "ptlrpc_internal.h"
 
-static cfs_hash_t *conn_hash = NULL;
-static cfs_hash_ops_t conn_hash_ops;
+static struct cfs_hash *conn_hash;
+static struct cfs_hash_ops conn_hash_ops;
 
 struct ptlrpc_connection *
 ptlrpc_connection_get(lnet_process_id_t peer, lnet_nid_t self,
@@ -164,7 +164,7 @@ void ptlrpc_connection_fini(void) {
  * Hash operations for net_peer<->connection
  */
 static unsigned
-conn_hashfn(cfs_hash_t *hs, const void *key, unsigned mask)
+conn_hashfn(struct cfs_hash *hs, const void *key, unsigned mask)
 {
 	return cfs_hash_djb2_hash(key, sizeof(lnet_process_id_t), mask);
 }
@@ -198,7 +198,7 @@ conn_object(struct hlist_node *hnode)
 }
 
 static void
-conn_get(cfs_hash_t *hs, struct hlist_node *hnode)
+conn_get(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct ptlrpc_connection *conn;
 
@@ -207,7 +207,7 @@ conn_get(cfs_hash_t *hs, struct hlist_node *hnode)
 }
 
 static void
-conn_put_locked(cfs_hash_t *hs, struct hlist_node *hnode)
+conn_put_locked(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct ptlrpc_connection *conn;
 
@@ -216,7 +216,7 @@ conn_put_locked(cfs_hash_t *hs, struct hlist_node *hnode)
 }
 
 static void
-conn_exit(cfs_hash_t *hs, struct hlist_node *hnode)
+conn_exit(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct ptlrpc_connection *conn;
 
@@ -232,7 +232,7 @@ conn_exit(cfs_hash_t *hs, struct hlist_node *hnode)
 	OBD_FREE_PTR(conn);
 }
 
-static cfs_hash_ops_t conn_hash_ops = {
+static struct cfs_hash_ops conn_hash_ops = {
 	.hs_hash	= conn_hashfn,
 	.hs_keycmp	= conn_keycmp,
 	.hs_key		= conn_key,

@@ -66,7 +66,7 @@ rwlock_t nm_range_tree_lock;
  * Hash keyed on nodemap name containing all
  * nodemaps
  */
-static cfs_hash_t *nodemap_hash;
+static struct cfs_hash *nodemap_hash;
 
 /**
  * Nodemap destructor
@@ -114,7 +114,7 @@ void nodemap_putref(struct lu_nodemap *nodemap)
 		nodemap_destroy(nodemap);
 }
 
-static __u32 nodemap_hashfn(cfs_hash_t *hash_body,
+static __u32 nodemap_hashfn(struct cfs_hash *hash_body,
 			    const void *key, unsigned mask)
 {
 	return cfs_hash_djb2_hash(key, strlen(key), mask);
@@ -144,7 +144,7 @@ static void *nodemap_hs_hashobject(struct hlist_node *hnode)
 	return hlist_entry(hnode, struct lu_nodemap, nm_hash);
 }
 
-static void nodemap_hs_get(cfs_hash_t *hs, struct hlist_node *hnode)
+static void nodemap_hs_get(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct lu_nodemap *nodemap;
 
@@ -152,7 +152,7 @@ static void nodemap_hs_get(cfs_hash_t *hs, struct hlist_node *hnode)
 	nodemap_getref(nodemap);
 }
 
-static void nodemap_hs_put_locked(cfs_hash_t *hs,
+static void nodemap_hs_put_locked(struct cfs_hash *hs,
 				  struct hlist_node *hnode)
 {
 	struct lu_nodemap *nodemap;
@@ -161,7 +161,7 @@ static void nodemap_hs_put_locked(cfs_hash_t *hs,
 	nodemap_putref(nodemap);
 }
 
-static cfs_hash_ops_t nodemap_hash_operations = {
+static struct cfs_hash_ops nodemap_hash_operations = {
 	.hs_hash	= nodemap_hashfn,
 	.hs_key		= nodemap_hs_key,
 	.hs_keycmp	= nodemap_hs_keycmp,
@@ -180,7 +180,7 @@ static cfs_hash_ops_t nodemap_hash_operations = {
  * \param	hnode		hash node
  * \param	data		not used here
  */
-static int nodemap_cleanup_iter_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+static int nodemap_cleanup_iter_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 				   struct hlist_node *hnode, void *data)
 {
 	struct lu_nodemap *nodemap;
@@ -1019,7 +1019,7 @@ cleanup:
 	return rc;
 }
 
-static int nm_member_revoke_all_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+static int nm_member_revoke_all_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 				   struct hlist_node *hnode, void *data)
 {
 	struct lu_nodemap *nodemap;

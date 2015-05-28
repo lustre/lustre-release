@@ -440,7 +440,7 @@ static cfs_binheap_ops_t nrs_tbf_heap_ops = {
 	.hop_compare	= tbf_cli_compare,
 };
 
-static unsigned nrs_tbf_jobid_hop_hash(cfs_hash_t *hs, const void *key,
+static unsigned nrs_tbf_jobid_hop_hash(struct cfs_hash *hs, const void *key,
 				  unsigned mask)
 {
 	return cfs_hash_djb2_hash(key, strlen(key), mask);
@@ -469,7 +469,7 @@ static void *nrs_tbf_jobid_hop_object(struct hlist_node *hnode)
 	return hlist_entry(hnode, struct nrs_tbf_client, tc_hnode);
 }
 
-static void nrs_tbf_jobid_hop_get(cfs_hash_t *hs, struct hlist_node *hnode)
+static void nrs_tbf_jobid_hop_get(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct nrs_tbf_client *cli = hlist_entry(hnode,
 						     struct nrs_tbf_client,
@@ -478,7 +478,7 @@ static void nrs_tbf_jobid_hop_get(cfs_hash_t *hs, struct hlist_node *hnode)
 	atomic_inc(&cli->tc_ref);
 }
 
-static void nrs_tbf_jobid_hop_put(cfs_hash_t *hs, struct hlist_node *hnode)
+static void nrs_tbf_jobid_hop_put(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct nrs_tbf_client *cli = hlist_entry(hnode,
 						     struct nrs_tbf_client,
@@ -487,18 +487,19 @@ static void nrs_tbf_jobid_hop_put(cfs_hash_t *hs, struct hlist_node *hnode)
 	atomic_dec(&cli->tc_ref);
 }
 
-static void nrs_tbf_jobid_hop_exit(cfs_hash_t *hs, struct hlist_node *hnode)
+static void
+nrs_tbf_jobid_hop_exit(struct cfs_hash *hs, struct hlist_node *hnode)
 
 {
 	struct nrs_tbf_client *cli = hlist_entry(hnode,
-						     struct nrs_tbf_client,
-						     tc_hnode);
+						 struct nrs_tbf_client,
+						 tc_hnode);
 
 	LASSERT(atomic_read(&cli->tc_ref) == 0);
 	nrs_tbf_cli_fini(cli);
 }
 
-static cfs_hash_ops_t nrs_tbf_jobid_hash_ops = {
+static struct cfs_hash_ops nrs_tbf_jobid_hash_ops = {
 	.hs_hash	= nrs_tbf_jobid_hop_hash,
 	.hs_keycmp	= nrs_tbf_jobid_hop_keycmp,
 	.hs_key		= nrs_tbf_jobid_hop_key,
@@ -514,8 +515,8 @@ static cfs_hash_ops_t nrs_tbf_jobid_hash_ops = {
 				  CFS_HASH_DEPTH)
 
 static struct nrs_tbf_client *
-nrs_tbf_jobid_hash_lookup(cfs_hash_t *hs,
-			  cfs_hash_bd_t *bd,
+nrs_tbf_jobid_hash_lookup(struct cfs_hash *hs,
+			  struct cfs_hash_bd *bd,
 			  const char *jobid)
 {
 	struct hlist_node *hnode;
@@ -542,8 +543,8 @@ nrs_tbf_jobid_cli_find(struct nrs_tbf_head *head,
 {
 	const char		*jobid;
 	struct nrs_tbf_client	*cli;
-	cfs_hash_t		*hs = head->th_cli_hash;
-	cfs_hash_bd_t		 bd;
+	struct cfs_hash		*hs = head->th_cli_hash;
+	struct cfs_hash_bd		 bd;
 
 	jobid = lustre_msg_get_jobid(req->rq_reqmsg);
 	if (jobid == NULL)
@@ -561,8 +562,8 @@ nrs_tbf_jobid_cli_findadd(struct nrs_tbf_head *head,
 {
 	const char		*jobid;
 	struct nrs_tbf_client	*ret;
-	cfs_hash_t		*hs = head->th_cli_hash;
-	cfs_hash_bd_t		 bd;
+	struct cfs_hash		*hs = head->th_cli_hash;
+	struct cfs_hash_bd		 bd;
 
 	jobid = cli->tc_jobid;
 	cfs_hash_bd_get_and_lock(hs, (void *)jobid, &bd, 1);
@@ -580,8 +581,8 @@ static void
 nrs_tbf_jobid_cli_put(struct nrs_tbf_head *head,
 		      struct nrs_tbf_client *cli)
 {
-	cfs_hash_bd_t		 bd;
-	cfs_hash_t		*hs = head->th_cli_hash;
+	struct cfs_hash_bd		 bd;
+	struct cfs_hash		*hs = head->th_cli_hash;
 	struct nrs_tbf_bucket	*bkt;
 	int			 hw;
 	struct list_head	zombies;
@@ -653,7 +654,7 @@ nrs_tbf_jobid_startup(struct ptlrpc_nrs_policy *policy,
 	int			 bits;
 	int			 i;
 	int			 rc;
-	cfs_hash_bd_t		 bd;
+	struct cfs_hash_bd	 bd;
 
 	bits = nrs_tbf_jobid_hash_order();
 	if (bits < NRS_TBF_JOBID_BKT_BITS)
@@ -864,7 +865,7 @@ static struct nrs_tbf_ops nrs_tbf_jobid_ops = {
 #define NRS_TBF_NID_BKT_BITS    8
 #define NRS_TBF_NID_BITS        16
 
-static unsigned nrs_tbf_nid_hop_hash(cfs_hash_t *hs, const void *key,
+static unsigned nrs_tbf_nid_hop_hash(struct cfs_hash *hs, const void *key,
 				  unsigned mask)
 {
 	return cfs_hash_djb2_hash(key, sizeof(lnet_nid_t), mask);
@@ -894,7 +895,7 @@ static void *nrs_tbf_nid_hop_object(struct hlist_node *hnode)
 	return hlist_entry(hnode, struct nrs_tbf_client, tc_hnode);
 }
 
-static void nrs_tbf_nid_hop_get(cfs_hash_t *hs, struct hlist_node *hnode)
+static void nrs_tbf_nid_hop_get(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct nrs_tbf_client *cli = hlist_entry(hnode,
 						     struct nrs_tbf_client,
@@ -903,7 +904,7 @@ static void nrs_tbf_nid_hop_get(cfs_hash_t *hs, struct hlist_node *hnode)
 	atomic_inc(&cli->tc_ref);
 }
 
-static void nrs_tbf_nid_hop_put(cfs_hash_t *hs, struct hlist_node *hnode)
+static void nrs_tbf_nid_hop_put(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct nrs_tbf_client *cli = hlist_entry(hnode,
 						     struct nrs_tbf_client,
@@ -912,7 +913,7 @@ static void nrs_tbf_nid_hop_put(cfs_hash_t *hs, struct hlist_node *hnode)
 	atomic_dec(&cli->tc_ref);
 }
 
-static void nrs_tbf_nid_hop_exit(cfs_hash_t *hs, struct hlist_node *hnode)
+static void nrs_tbf_nid_hop_exit(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct nrs_tbf_client *cli = hlist_entry(hnode,
 						     struct nrs_tbf_client,
@@ -925,7 +926,7 @@ static void nrs_tbf_nid_hop_exit(cfs_hash_t *hs, struct hlist_node *hnode)
 	nrs_tbf_cli_fini(cli);
 }
 
-static cfs_hash_ops_t nrs_tbf_nid_hash_ops = {
+static struct cfs_hash_ops nrs_tbf_nid_hash_ops = {
 	.hs_hash	= nrs_tbf_nid_hop_hash,
 	.hs_keycmp	= nrs_tbf_nid_hop_keycmp,
 	.hs_key		= nrs_tbf_nid_hop_key,

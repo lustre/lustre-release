@@ -73,7 +73,8 @@ struct job_stat {
 	struct obd_job_stats	*js_jobstats;
 };
 
-static unsigned job_stat_hash(cfs_hash_t *hs, const void *key, unsigned mask)
+static unsigned
+job_stat_hash(struct cfs_hash *hs, const void *key, unsigned mask)
 {
 	return cfs_hash_djb2_hash(key, strlen(key), mask);
 }
@@ -98,7 +99,7 @@ static void *job_stat_object(struct hlist_node *hnode)
 	return hlist_entry(hnode, struct job_stat, js_hash);
 }
 
-static void job_stat_get(cfs_hash_t *hs, struct hlist_node *hnode)
+static void job_stat_get(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct job_stat *job;
 	job = hlist_entry(hnode, struct job_stat, js_hash);
@@ -125,19 +126,19 @@ static void job_putref(struct job_stat *job)
 		job_free(job);
 }
 
-static void job_stat_put_locked(cfs_hash_t *hs, struct hlist_node *hnode)
+static void job_stat_put_locked(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct job_stat *job;
 	job = hlist_entry(hnode, struct job_stat, js_hash);
 	job_putref(job);
 }
 
-static void job_stat_exit(cfs_hash_t *hs, struct hlist_node *hnode)
+static void job_stat_exit(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	CERROR("should not have any items\n");
 }
 
-static cfs_hash_ops_t job_stats_hash_ops = {
+static struct cfs_hash_ops job_stats_hash_ops = {
 	.hs_hash       = job_stat_hash,
 	.hs_key        = job_stat_key,
 	.hs_keycmp     = job_stat_keycmp,
@@ -147,7 +148,7 @@ static cfs_hash_ops_t job_stats_hash_ops = {
 	.hs_exit       = job_stat_exit,
 };
 
-static int job_iter_callback(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+static int job_iter_callback(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 			     struct hlist_node *hnode, void *data)
 {
 	time_t oldest = *((time_t *)data);

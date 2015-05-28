@@ -84,7 +84,7 @@ struct lu_nodemap {
 	/* proc directory entry */
 	struct proc_dir_entry	*nm_proc_entry;
 	/* attached client members of this nodemap */
-	cfs_hash_t		*nm_member_hash;
+	struct cfs_hash		*nm_member_hash;
 	/* access by nodemap name */
 	struct hlist_node	nm_hash;
 };

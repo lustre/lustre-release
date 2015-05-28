@@ -38,7 +38,8 @@ static int hash_lqs_cur_bits = HASH_LQE_CUR_BITS;
 CFS_MODULE_PARM(hash_lqs_cur_bits, "i", int, 0444,
                 "the current bits of lqe hash");
 
-static unsigned lqe64_hash_hash(cfs_hash_t *hs, const void *key, unsigned mask)
+static unsigned
+lqe64_hash_hash(struct cfs_hash *hs, const void *key, unsigned mask)
 {
 	return cfs_hash_u64_hash(*((__u64 *)key), mask);
 }
@@ -62,28 +63,28 @@ static void *lqe_hash_object(struct hlist_node *hnode)
 	return hlist_entry(hnode, struct lquota_entry, lqe_hash);
 }
 
-static void lqe_hash_get(cfs_hash_t *hs, struct hlist_node *hnode)
+static void lqe_hash_get(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct lquota_entry *lqe;
 	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
 	lqe_getref(lqe);
 }
 
-static void lqe_hash_put_locked(cfs_hash_t *hs, struct hlist_node *hnode)
+static void lqe_hash_put_locked(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct lquota_entry *lqe;
 	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
 	lqe_putref(lqe);
 }
 
-static void lqe_hash_exit(cfs_hash_t *hs, struct hlist_node *hnode)
+static void lqe_hash_exit(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	CERROR("Should not have any item left!\n");
 }
 
 /* lqe hash methods for 64-bit uid/gid, new hash functions would have to be
  * defined for per-directory quota relying on a 128-bit FID */
-static cfs_hash_ops_t lqe64_hash_ops = {
+static struct cfs_hash_ops lqe64_hash_ops = {
 	.hs_hash       = lqe64_hash_hash,
 	.hs_key        = lqe64_hash_key,
 	.hs_keycmp     = lqe64_hash_keycmp,
@@ -114,7 +115,7 @@ struct lqe_iter_data {
 	bool		lid_free_all;
 };
 
-static int lqe_iter_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+static int lqe_iter_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 		       struct hlist_node *hnode, void *data)
 {
 	struct lqe_iter_data *d = (struct lqe_iter_data *)data;
@@ -151,7 +152,7 @@ static int lqe_iter_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
  * \param free_all - free all entries or only free the entries
  *                   without quota enforce ?
  */
-static void lqe_cleanup(cfs_hash_t *hash, bool free_all)
+static void lqe_cleanup(struct cfs_hash *hash, bool free_all)
 {
 	struct lqe_iter_data	d;
 	int			repeat = 0;

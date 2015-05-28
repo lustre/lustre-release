@@ -1952,8 +1952,9 @@ struct ldlm_cli_cancel_arg {
         void   *lc_opaque;
 };
 
-static int ldlm_cli_hash_cancel_unused(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-				       struct hlist_node *hnode, void *arg)
+static int
+ldlm_cli_hash_cancel_unused(struct cfs_hash *hs, struct cfs_hash_bd *bd,
+			    struct hlist_node *hnode, void *arg)
 {
 	struct ldlm_resource           *res = cfs_hash_object(hs, hnode);
 	struct ldlm_cli_cancel_arg     *lc = arg;
@@ -2047,7 +2048,7 @@ static int ldlm_iter_helper(struct ldlm_lock *lock, void *closure)
         return helper->iter(lock, helper->closure);
 }
 
-static int ldlm_res_iter_helper(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+static int ldlm_res_iter_helper(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 				struct hlist_node *hnode, void *arg)
 
 {

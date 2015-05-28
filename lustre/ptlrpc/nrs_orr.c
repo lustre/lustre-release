@@ -388,7 +388,8 @@ static void nrs_orr_genobjname(struct ptlrpc_nrs_policy *policy, char *name)
 #define NRS_TRR_BKT_BITS	2
 #define NRS_TRR_HASH_FLAGS	CFS_HASH_SPIN_BKTLOCK
 
-static unsigned nrs_orr_hop_hash(cfs_hash_t *hs, const void *key, unsigned mask)
+static unsigned
+nrs_orr_hop_hash(struct cfs_hash *hs, const void *key, unsigned mask)
 {
 	return cfs_hash_djb2_hash(key, sizeof(struct nrs_orr_key), mask);
 }
@@ -416,7 +417,7 @@ static void *nrs_orr_hop_object(struct hlist_node *hnode)
 	return hlist_entry(hnode, struct nrs_orr_object, oo_hnode);
 }
 
-static void nrs_orr_hop_get(cfs_hash_t *hs, struct hlist_node *hnode)
+static void nrs_orr_hop_get(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct nrs_orr_object *orro = hlist_entry(hnode,
 						      struct nrs_orr_object,
@@ -428,14 +429,14 @@ static void nrs_orr_hop_get(cfs_hash_t *hs, struct hlist_node *hnode)
  * Removes an nrs_orr_object the hash and frees its memory, if the object has
  * no active users.
  */
-static void nrs_orr_hop_put_free(cfs_hash_t *hs, struct hlist_node *hnode)
+static void nrs_orr_hop_put_free(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct nrs_orr_object *orro = hlist_entry(hnode,
 						      struct nrs_orr_object,
 						      oo_hnode);
 	struct nrs_orr_data   *orrd = container_of(orro->oo_res.res_parent,
 						   struct nrs_orr_data, od_res);
-	cfs_hash_bd_t	       bd;
+	struct cfs_hash_bd     bd;
 
 	cfs_hash_bd_get_and_lock(hs, &orro->oo_key, &bd, 1);
 
@@ -452,7 +453,7 @@ static void nrs_orr_hop_put_free(cfs_hash_t *hs, struct hlist_node *hnode)
 	OBD_SLAB_FREE_PTR(orro, orrd->od_cache);
 }
 
-static void nrs_orr_hop_put(cfs_hash_t *hs, struct hlist_node *hnode)
+static void nrs_orr_hop_put(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct nrs_orr_object *orro = hlist_entry(hnode,
 						      struct nrs_orr_object,
@@ -469,7 +470,7 @@ static int nrs_trr_hop_keycmp(const void *key, struct hlist_node *hnode)
 	return orro->oo_key.ok_idx == ((struct nrs_orr_key *)key)->ok_idx;
 }
 
-static void nrs_trr_hop_exit(cfs_hash_t *hs, struct hlist_node *hnode)
+static void nrs_trr_hop_exit(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct nrs_orr_object *orro = hlist_entry(hnode,
 						      struct nrs_orr_object,
@@ -484,7 +485,7 @@ static void nrs_trr_hop_exit(cfs_hash_t *hs, struct hlist_node *hnode)
 	OBD_SLAB_FREE_PTR(orro, orrd->od_cache);
 }
 
-static cfs_hash_ops_t nrs_orr_hash_ops = {
+static struct cfs_hash_ops nrs_orr_hash_ops = {
 	.hs_hash	= nrs_orr_hop_hash,
 	.hs_key		= nrs_orr_hop_key,
 	.hs_keycmp	= nrs_orr_hop_keycmp,
@@ -494,7 +495,7 @@ static cfs_hash_ops_t nrs_orr_hash_ops = {
 	.hs_put_locked	= nrs_orr_hop_put,
 };
 
-static cfs_hash_ops_t nrs_trr_hash_ops = {
+static struct cfs_hash_ops nrs_trr_hash_ops = {
 	.hs_hash	= nrs_orr_hop_hash,
 	.hs_key		= nrs_orr_hop_key,
 	.hs_keycmp	= nrs_trr_hop_keycmp,
@@ -616,7 +617,7 @@ static int nrs_orr_init(struct ptlrpc_nrs_policy *policy)
 static int nrs_orr_start(struct ptlrpc_nrs_policy *policy, char *arg)
 {
 	struct nrs_orr_data    *orrd;
-	cfs_hash_ops_t	       *ops;
+	struct cfs_hash_ops	       *ops;
 	unsigned		cur_bits;
 	unsigned		max_bits;
 	unsigned		bkt_bits;

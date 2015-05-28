@@ -47,7 +47,7 @@ void nm_member_putref(struct obd_export *exp)
 {
 }
 
-static __u32 nm_member_hashfn(cfs_hash_t *hash_body,
+static __u32 nm_member_hashfn(struct cfs_hash *hash_body,
 			   const void *key, unsigned mask)
 {
 	return hash_long((unsigned long)key, hash_body->hs_bkt_bits) & mask;
@@ -79,7 +79,7 @@ static void *nm_member_hs_hashobject(struct hlist_node *hnode)
 			   exp_target_data.ted_nodemap_member);
 }
 
-static void nm_member_hs_get(cfs_hash_t *hs, struct hlist_node *hnode)
+static void nm_member_hs_get(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct obd_export	*exp;
 
@@ -88,7 +88,7 @@ static void nm_member_hs_get(cfs_hash_t *hs, struct hlist_node *hnode)
 	nm_member_getref(exp);
 }
 
-static void nm_member_hs_put_locked(cfs_hash_t *hs,
+static void nm_member_hs_put_locked(struct cfs_hash *hs,
 				 struct hlist_node *hnode)
 {
 	struct obd_export	*exp;
@@ -116,7 +116,7 @@ void nm_member_del(struct lu_nodemap *nodemap, struct obd_export *exp)
 	exp->exp_target_data.ted_nodemap = NULL;
 }
 
-static cfs_hash_ops_t nm_member_hash_operations = {
+static struct cfs_hash_ops nm_member_hash_operations = {
 	.hs_hash	= nm_member_hashfn,
 	.hs_key		= nm_member_hs_key,
 	.hs_keycmp	= nm_member_hs_keycmp,
@@ -154,7 +154,7 @@ int nm_member_init_hash(struct lu_nodemap *nodemap)
 /**
  * Callback from deleting a hash member
  */
-static int nm_member_delete_hash_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+static int nm_member_delete_hash_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 				 struct hlist_node *hnode, void *data)
 {
 	struct obd_export	*exp;
@@ -243,7 +243,7 @@ static void nm_member_exp_revoke(struct obd_export *exp)
 	ldlm_revoke_export_locks(exp);
 }
 
-static int nm_member_reclassify_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+static int nm_member_reclassify_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 				   struct hlist_node *hnode, void *data)
 {
 	struct obd_export	*exp;
@@ -304,8 +304,9 @@ void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap)
 	mutex_unlock(&reclassify_nodemap_lock);
 }
 
-static int nm_member_revoke_locks_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-				     struct hlist_node *hnode, void *data)
+static int
+nm_member_revoke_locks_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
+			  struct hlist_node *hnode, void *data)
 {
 	struct obd_export	*exp;
 	exp = hlist_entry(hnode, struct obd_export,

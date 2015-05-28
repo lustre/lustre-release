@@ -159,7 +159,7 @@ static int nodemap_ranges_open(struct inode *inode, struct file *file)
  * \param	data		seq_file to print to
  * \retval	0		success
  */
-static int nodemap_exports_show_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+static int nodemap_exports_show_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 				   struct hlist_node *hnode, void *data)
 {
 	struct seq_file		*m = data;

@@ -509,4 +509,8 @@ static inline void hlist_add_after(struct hlist_node *n,
 	hlist_for_each_entry_from(tpos, pos, member)
 #endif
 
+#ifdef HAVE_HLIST_ADD_AFTER
+#define hlist_add_behind(hnode, tail)	hlist_add_after(tail, hnode)
+#endif /* HAVE_HLIST_ADD_AFTER */
+
 #endif /* __LIBCFS_LUSTRE_LIST_H__ */

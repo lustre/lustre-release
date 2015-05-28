@@ -200,7 +200,7 @@ struct nrs_tbf_head {
 	/**
 	 * Hash of clients.
 	 */
-	cfs_hash_t			*th_cli_hash;
+	struct cfs_hash			*th_cli_hash;
 	/**
 	 * Type of TBF policy.
 	 */

@@ -45,7 +45,7 @@
 struct nrs_crrn_net {
 	struct ptlrpc_nrs_resource	cn_res;
 	cfs_binheap_t		       *cn_binheap;
-	cfs_hash_t		       *cn_cli_hash;
+	struct cfs_hash		       *cn_cli_hash;
 	/**
 	 * Used when a new scheduling round commences, in order to synchronize
 	 * all clients with the new round number.
