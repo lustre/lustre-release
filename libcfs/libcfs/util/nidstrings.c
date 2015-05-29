@@ -104,22 +104,6 @@ static int  libcfs_ip_addr_range_print(char *buffer, int count,
 static bool cfs_num_is_contiguous(struct list_head *nidlist);
 static void cfs_num_min_max(struct list_head *nidlist, __u32 *min, __u32 *max);
 
-struct netstrfns {
-	__u32 nf_type;
-	char	*nf_name;
-	char	*nf_modname;
-	void	(*nf_addr2str)(__u32 addr, char *str, size_t size);
-	int	(*nf_str2addr)(const char *str, int nob, __u32 *addr);
-	int	(*nf_parse_addrlist)(char *str, int len,
-					struct list_head *list);
-	int	(*nf_print_addrlist)(char *buffer, int count,
-				     struct list_head *list);
-	int	(*nf_match_addr)(__u32 addr, struct list_head *list);
-	bool	(*nf_is_contiguous)(struct list_head *nidlist);
-	void	(*nf_min_max)(struct list_head *nidlist, __u32 *min_nid,
-			      __u32 *max_nid);
-};
-
 static struct netstrfns  libcfs_netstrfns[] = {
 	{/* .nf_type      */  LOLND,
 	 /* .nf_name      */  "lo",
