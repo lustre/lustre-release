@@ -253,7 +253,7 @@ int ll_setxattr(struct dentry *dentry, const char *name,
 				return 0; /* b=10667: ignore error */
 
 			memset(&f, 0, sizeof(f)); /* f.f_flags is used below */
-			f.f_dentry = dentry;
+			f.f_path.dentry = dentry;
 			rc = ll_lov_setstripe_ea_info(inode, &f, it_flags, lump,
 						      lum_size);
 			/* b=10667: rc always be 0 here for now */

@@ -104,7 +104,7 @@ ll_fault_io_init(struct vm_area_struct *vma, struct lu_env **env_ret,
 		 unsigned long *ra_flags)
 {
 	struct file	       *file = vma->vm_file;
-	struct inode	       *inode = file->f_dentry->d_inode;
+	struct inode	       *inode = file->f_path.dentry->d_inode;
 	struct cl_io	       *io;
 	struct cl_fault_io     *fio;
 	struct lu_env	       *env;
@@ -217,9 +217,6 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
 	cfs_restore_sigs(set);
 
         if (result == 0) {
-		struct inode *inode = vma->vm_file->f_dentry->d_inode;
-		struct ll_inode_info *lli = ll_i2info(inode);
-
                 lock_page(vmpage);
                 if (vmpage->mapping == NULL) {
                         unlock_page(vmpage);
@@ -402,10 +399,12 @@ static int ll_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
                 result = ll_page_mkwrite0(vma, vmf->page, &retry);
 
                 if (!printed && ++count > 16) {
+			const struct dentry *de = vma->vm_file->f_path.dentry;
+
 			CWARN("app(%s): the page %lu of file "DFID" is under"
 			      " heavy contention\n",
 			      current->comm, vmf->pgoff,
-			      PFID(ll_inode2fid(vma->vm_file->f_dentry->d_inode)));
+			      PFID(ll_inode2fid(de->d_inode)));
                         printed = true;
                 }
         } while (retry);
@@ -439,7 +438,7 @@ static int ll_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
  */
 static void ll_vm_open(struct vm_area_struct * vma)
 {
-	struct inode *inode    = vma->vm_file->f_dentry->d_inode;
+	struct inode *inode    = vma->vm_file->f_path.dentry->d_inode;
 	struct vvp_object *vob = cl_inode2vvp(inode);
 
 	ENTRY;
@@ -454,7 +453,7 @@ static void ll_vm_open(struct vm_area_struct * vma)
  */
 static void ll_vm_close(struct vm_area_struct *vma)
 {
-	struct inode      *inode = vma->vm_file->f_dentry->d_inode;
+	struct inode      *inode = vma->vm_file->f_path.dentry->d_inode;
 	struct vvp_object *vob   = cl_inode2vvp(inode);
 
 	ENTRY;
@@ -490,7 +489,7 @@ static const struct vm_operations_struct ll_file_vm_ops = {
 
 int ll_file_mmap(struct file *file, struct vm_area_struct * vma)
 {
-        struct inode *inode = file->f_dentry->d_inode;
+	struct inode *inode = file->f_path.dentry->d_inode;
         int rc;
         ENTRY;
 

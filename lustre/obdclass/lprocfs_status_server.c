@@ -44,7 +44,7 @@
 
 int lprocfs_evict_client_open(struct inode *inode, struct file *f)
 {
-	struct obd_device *obd = PDE_DATA(f->f_dentry->d_inode);
+	struct obd_device *obd = PDE_DATA(f->f_path.dentry->d_inode);
 
 	atomic_inc(&obd->obd_evict_inprogress);
 	return 0;
@@ -52,7 +52,7 @@ int lprocfs_evict_client_open(struct inode *inode, struct file *f)
 
 int lprocfs_evict_client_release(struct inode *inode, struct file *f)
 {
-	struct obd_device *obd = PDE_DATA(f->f_dentry->d_inode);
+	struct obd_device *obd = PDE_DATA(f->f_path.dentry->d_inode);
 
 	atomic_dec(&obd->obd_evict_inprogress);
 	wake_up(&obd->obd_evict_inprogress_waitq);

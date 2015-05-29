@@ -2984,7 +2984,7 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt,
 
 	dentry->d_inode = inode;
 	dentry->d_sb = inode->i_sb;
-	file->f_dentry = dentry;
+	file->f_path.dentry = dentry;
 	file->f_mapping = inode->i_mapping;
 	file->f_op = inode->i_fop;
 	set_file_inode(file, inode);
@@ -4629,8 +4629,8 @@ static struct dt_it *osd_it_ea_init(const struct lu_env *env,
 		file->f_mode	= FMODE_64BITHASH;
 	else
 		file->f_mode	= FMODE_32BITHASH;
-	file->f_dentry		= obj_dentry;
-	file->f_mapping 	= obj->oo_inode->i_mapping;
+	file->f_path.dentry	= obj_dentry;
+	file->f_mapping		= obj->oo_inode->i_mapping;
 	file->f_op		= obj->oo_inode->i_fop;
 	set_file_inode(file, obj->oo_inode);
 

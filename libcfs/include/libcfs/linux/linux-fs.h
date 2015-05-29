@@ -60,7 +60,7 @@
 	vfs_fsync_range(fp, start, end, datasync)
 #else
 #define ll_vfs_fsync_range(fp, start, end, datasync) \
-	vfs_fsync_range(fp, (fp)->f_dentry, start, end, datasync)
+	vfs_fsync_range(fp, (fp)->f_path.dentry, start, end, datasync)
 #endif
 
 #define flock_type(fl)			((fl)->fl_type)

@@ -828,7 +828,7 @@ ssize_t gss_pipe_upcall(struct file *filp, struct rpc_pipe_msg *msg,
 static
 ssize_t gss_pipe_downcall(struct file *filp, const char *src, size_t mlen)
 {
-        struct rpc_inode        *rpci = RPC_I(filp->f_dentry->d_inode);
+	struct rpc_inode        *rpci = RPC_I(filp->f_path.dentry->d_inode);
         struct gss_upcall_msg   *gss_msg;
         struct ptlrpc_cli_ctx   *ctx;
         struct gss_cli_ctx      *gctx = NULL;

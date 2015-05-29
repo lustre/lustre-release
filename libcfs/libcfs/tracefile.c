@@ -58,8 +58,6 @@ static int thread_running = 0;
 
 static atomic_t cfs_tage_allocated = ATOMIC_INIT(0);
 
-#define filp_size(f)	(i_size_read((f)->f_dentry->d_inode))
-
 static void put_pages_on_tcd_daemon_list(struct page_collection *pc,
 					struct cfs_trace_cpu_data *tcd);
 
@@ -995,14 +993,15 @@ static int tracefiled(void *arg)
 		set_fs(get_ds());
 
 		list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
-                        static loff_t f_pos;
+			struct dentry *de = filp->f_path.dentry;
+			static loff_t f_pos;
 
-                        __LASSERT_TAGE_INVARIANT(tage);
+			__LASSERT_TAGE_INVARIANT(tage);
 
-                        if (f_pos >= (off_t)cfs_tracefile_size)
-                                f_pos = 0;
-			else if (f_pos > (off_t)filp_size(filp))
-				f_pos = filp_size(filp);
+			if (f_pos >= (off_t)cfs_tracefile_size)
+				f_pos = 0;
+			else if (f_pos > i_size_read(de->d_inode))
+				f_pos = i_size_read(de->d_inode);
 
 			rc = vfs_write(filp, page_address(tage->page),
 				       tage->used, &f_pos);

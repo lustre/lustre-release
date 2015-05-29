@@ -1138,7 +1138,8 @@ static int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 
 int ll_readpage(struct file *file, struct page *vmpage)
 {
-	struct cl_object *clob = ll_i2info(file->f_dentry->d_inode)->lli_clob;
+	struct inode *inode = file->f_path.dentry->d_inode;
+	struct cl_object *clob = ll_i2info(inode)->lli_clob;
 	struct ll_cl_context *lcc;
 	const struct lu_env  *env;
 	struct cl_io   *io;

@@ -2006,7 +2006,7 @@ osd_ios_general_scan(struct osd_thread_info *info, struct osd_device *dev,
 	LASSERT(filldir != NULL);
 
 	filp->f_pos = 0;
-	filp->f_dentry = dentry;
+	filp->f_path.dentry = dentry;
 	filp->f_mode = FMODE_64BITHASH;
 	filp->f_mapping = inode->i_mapping;
 	filp->f_op = fops;
@@ -2383,7 +2383,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 		RETURN(PTR_ERR(filp));
 	}
 
-	inode = filp->f_dentry->d_inode;
+	inode = filp->f_path.dentry->d_inode;
 	/* 'What the @fid is' is not imporatant, because the object
 	 * has no OI mapping, and only is visible inside the OSD.*/
 	lu_igif_build(fid, inode->i_ino, inode->i_generation);

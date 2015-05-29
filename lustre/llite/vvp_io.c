@@ -289,7 +289,7 @@ static int vvp_io_fault_iter_init(const struct lu_env *env,
 	struct vvp_io *vio   = cl2vvp_io(env, ios);
 	struct inode  *inode = vvp_object_inode(ios->cis_obj);
 
-	LASSERT(inode == vio->vui_fd->fd_file->f_dentry->d_inode);
+	LASSERT(inode == vio->vui_fd->fd_file->f_path.dentry->d_inode);
 	vio->u.fault.ft_mtime = LTIME_S(inode->i_mtime);
 
 	return 0;
@@ -424,7 +424,8 @@ static int vvp_mmap_locks(const struct lu_env *env,
 
                 down_read(&mm->mmap_sem);
                 while((vma = our_vma(mm, addr, count)) != NULL) {
-                        struct inode *inode = vma->vm_file->f_dentry->d_inode;
+			struct dentry *de = vma->vm_file->f_path.dentry;
+			struct inode *inode = de->d_inode;
                         int flags = CEF_MUST;
 
 			if (ll_file_nolock(vma->vm_file)) {

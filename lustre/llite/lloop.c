@@ -188,7 +188,8 @@ static int do_bio_lustrebacked(struct lloop_device *lo, struct bio *head)
 {
         const struct lu_env  *env   = lo->lo_env;
         struct cl_io         *io    = &lo->lo_io;
-        struct inode         *inode = lo->lo_backing_file->f_dentry->d_inode;
+	struct dentry	     *de    = lo->lo_backing_file->f_path.dentry;
+	struct inode         *inode = de->d_inode;
         struct cl_object     *obj = ll_i2info(inode)->lli_clob;
         pgoff_t               offset;
         int                   ret;
@@ -652,9 +653,8 @@ lo_release(struct gendisk *disk, fmode_t mode)
 static int lo_ioctl(struct block_device *bdev, fmode_t mode,
                     unsigned int cmd, unsigned long arg)
 {
-        struct lloop_device *lo = bdev->bd_disk->private_data;
-        struct inode *inode = NULL;
-        int err = 0;
+	struct lloop_device *lo = bdev->bd_disk->private_data;
+	int err = 0;
 
 	mutex_lock(&lloop_mutex);
         switch (cmd) {
@@ -665,16 +665,16 @@ static int lo_ioctl(struct block_device *bdev, fmode_t mode,
                 break;
         }
 
-        case LL_IOC_LLOOP_INFO: {
-                struct lu_fid fid;
+	case LL_IOC_LLOOP_INFO: {
+		struct inode *inode;
+		struct lu_fid fid;
 
 		if (lo->lo_backing_file == NULL) {
 			err = -ENOENT;
 			break;
 		}
-                if (inode == NULL)
-                        inode = lo->lo_backing_file->f_dentry->d_inode;
-                if (lo->lo_state == LLOOP_BOUND)
+		inode = lo->lo_backing_file->f_path.dentry->d_inode;
+		if (inode != NULL && lo->lo_state == LLOOP_BOUND)
                         fid = ll_i2info(inode)->lli_fid;
                 else
                         fid_zero(&fid);
@@ -726,10 +726,11 @@ static enum llioc_iter lloop_ioctl(struct inode *unused, struct file *file,
         CWARN("Enter llop_ioctl\n");
 
 	mutex_lock(&lloop_mutex);
-        switch (cmd) {
-        case LL_IOC_LLOOP_ATTACH: {
-                struct lloop_device *lo_free = NULL;
-                int i;
+	switch (cmd) {
+	case LL_IOC_LLOOP_ATTACH: {
+		struct inode *inode = file->f_path.dentry->d_inode;
+		struct lloop_device *lo_free = NULL;
+		int i;
 
                 for (i = 0; i < max_loop; i++, lo = NULL) {
                         lo = &loop_dev[i];
@@ -738,12 +739,12 @@ static enum llioc_iter lloop_ioctl(struct inode *unused, struct file *file,
                                         lo_free = lo;
                                 continue;
                         }
-                        if (lo->lo_backing_file->f_dentry->d_inode ==
-                            file->f_dentry->d_inode)
-                                break;
-                }
-                if (lo || !lo_free)
-                        GOTO(out, err = -EBUSY);
+			if (lo->lo_backing_file->f_path.dentry->d_inode ==
+			    inode)
+				break;
+		}
+		if (lo || !lo_free)
+			GOTO(out, err = -EBUSY);
 
                 lo = lo_free;
                 dev = MKDEV(lloop_major, lo->lo_number);

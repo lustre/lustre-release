@@ -2789,8 +2789,8 @@ static int ll_linkea_decode(struct linkea_data *ldata, unsigned int linkno,
  */
 int ll_getparent(struct file *file, struct getparent __user *arg)
 {
-	struct dentry		*dentry = file->f_dentry;
-	struct inode		*inode = file->f_dentry->d_inode;
+	struct dentry		*dentry = file->f_path.dentry;
+	struct inode		*inode = dentry->d_inode;
 	struct linkea_data	*ldata;
 	struct lu_buf		 buf = LU_BUF_NULL;
 	struct lu_name		 ln;
