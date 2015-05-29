@@ -97,6 +97,9 @@ static int osc_object_init(const struct lu_env *env, struct lu_object *obj,
 	spin_lock_init(&osc->oo_ol_spin);
 	INIT_LIST_HEAD(&osc->oo_ol_list);
 
+	atomic_set(&osc->oo_nr_ios, 0);
+	init_waitqueue_head(&osc->oo_io_waitq);
+
 	cl_object_page_init(lu2cl(obj), sizeof(struct osc_page));
 
 	return 0;
@@ -119,6 +122,7 @@ static void osc_object_free(const struct lu_env *env, struct lu_object *obj)
 	LASSERT(atomic_read(&osc->oo_nr_reads) == 0);
 	LASSERT(atomic_read(&osc->oo_nr_writes) == 0);
 	LASSERT(list_empty(&osc->oo_ol_list));
+	LASSERT(atomic_read(&osc->oo_nr_ios) == 0);
 
 	lu_object_fini(obj);
 	OBD_SLAB_FREE_PTR(osc, osc_object_kmem);
@@ -406,6 +410,22 @@ struct lu_object *osc_object_alloc(const struct lu_env *env,
 	} else
 		obj = NULL;
 	return obj;
+}
+
+int osc_object_invalidate(const struct lu_env *env, struct osc_object *osc)
+{
+	struct l_wait_info lwi = { 0 };
+	ENTRY;
+
+	CDEBUG(D_INODE, "Invalidate osc object: %p, # of active IOs: %d\n",
+	       osc, atomic_read(&osc->oo_nr_ios));
+
+	l_wait_event(osc->oo_io_waitq, atomic_read(&osc->oo_nr_ios) == 0, &lwi);
+
+	/* Discard all pages of this object. */
+	osc_cache_truncate_start(env, osc, 0, NULL);
+
+	RETURN(0);
 }
 
 /** @} osc */

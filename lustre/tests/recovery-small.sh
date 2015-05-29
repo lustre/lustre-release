@@ -1822,6 +1822,23 @@ test_107 () {
 }
 run_test 107 "drop reint reply, then restart MDT"
 
+test_108() {
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE -c 1 -i 0 $DIR/$tdir
+
+	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=256 &
+	local dd_pid=$!
+	sleep 0.1
+
+	ost_evict_client
+
+	wait $dd_pid
+
+	client_up || error "reconnect failed"
+	rm -f $DIR/$tdir/$tfile
+}
+run_test 108 "client eviction don't crash"
+
 test_110a () {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
 	local remote_dir=$DIR/$tdir/remote_dir
