@@ -730,9 +730,13 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         if (request->rq_memalloc)
                 mpflag = cfs_memory_pressure_get_and_set();
 
-        rc = sptlrpc_cli_wrap_request(request);
-        if (rc)
-                GOTO(out, rc);
+	rc = sptlrpc_cli_wrap_request(request);
+	if (rc == -ENOMEM)
+		/* set rq_sent so that this request is treated
+		 * as a delayed send in the upper layers */
+		request->rq_sent = cfs_time_current_sec();
+	if (rc)
+		GOTO(out, rc);
 
         /* bulk register should be done after wrap_request() */
         if (request->rq_bulk != NULL) {

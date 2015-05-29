@@ -119,6 +119,7 @@ static struct ptlrpc_enc_page_pool {
         unsigned long    epp_st_lowfree;        /* lowest free pages reached */
         unsigned int     epp_st_max_wqlen;      /* highest waitqueue length */
         cfs_time_t       epp_st_max_wait;       /* in jeffies */
+	unsigned long	 epp_st_outofmem;	/* # of out of mem requests */
 	/*
 	 * pointers to pools
 	 */
@@ -160,6 +161,7 @@ int sptlrpc_proc_enc_pool_seq_show(struct seq_file *m, void *v)
                       "low free mark:           %lu\n"
                       "max waitqueue depth:     %u\n"
 		      "max wait time:           "CFS_TIME_T"/%lu\n"
+		      "out of mem:             %lu\n"
                       ,
 		      totalram_pages,
                       PAGES_PER_POOL,
@@ -179,7 +181,8 @@ int sptlrpc_proc_enc_pool_seq_show(struct seq_file *m, void *v)
 		      page_pools.epp_st_lowfree,
 		      page_pools.epp_st_max_wqlen,
 		      page_pools.epp_st_max_wait,
-		      msecs_to_jiffies(MSEC_PER_SEC)
+		      msecs_to_jiffies(MSEC_PER_SEC),
+		      page_pools.epp_st_outofmem
 		     );
 
 	spin_unlock(&page_pools.epp_lock);
@@ -526,6 +529,24 @@ static int enc_pools_should_grow(int page_needed, long now)
 }
 
 /*
+ * Export the number of free pages in the pool
+ */
+int get_free_pages_in_pool(void)
+{
+	return page_pools.epp_free_pages;
+}
+EXPORT_SYMBOL(get_free_pages_in_pool);
+
+/*
+ * Let outside world know if enc_pool full capacity is reached
+ */
+int pool_is_at_full_capacity(void)
+{
+	return (page_pools.epp_total_pages == page_pools.epp_max_pages);
+}
+EXPORT_SYMBOL(pool_is_at_full_capacity);
+
+/*
  * we allocate the requested pages atomically.
  */
 int sptlrpc_enc_pool_get_pages(struct ptlrpc_bulk_desc *desc)
@@ -574,21 +595,37 @@ again:
 
 			enc_pools_wakeup();
 		} else {
-			if (++page_pools.epp_waitqlen >
-			    page_pools.epp_st_max_wqlen)
-				page_pools.epp_st_max_wqlen =
-						page_pools.epp_waitqlen;
+			if (page_pools.epp_growing) {
+				if (++page_pools.epp_waitqlen >
+				    page_pools.epp_st_max_wqlen)
+					page_pools.epp_st_max_wqlen =
+							page_pools.epp_waitqlen;
 
-			set_current_state(TASK_UNINTERRUPTIBLE);
-			init_waitqueue_entry(&waitlink, current);
-			add_wait_queue(&page_pools.epp_waitq, &waitlink);
+				set_current_state(TASK_UNINTERRUPTIBLE);
+				init_waitqueue_entry(&waitlink, current);
+				add_wait_queue(&page_pools.epp_waitq,
+					       &waitlink);
 
-			spin_unlock(&page_pools.epp_lock);
-			schedule();
-			remove_wait_queue(&page_pools.epp_waitq, &waitlink);
-			LASSERT(page_pools.epp_waitqlen > 0);
-			spin_lock(&page_pools.epp_lock);
-			page_pools.epp_waitqlen--;
+				spin_unlock(&page_pools.epp_lock);
+				schedule();
+				remove_wait_queue(&page_pools.epp_waitq,
+						  &waitlink);
+				LASSERT(page_pools.epp_waitqlen > 0);
+				spin_lock(&page_pools.epp_lock);
+				page_pools.epp_waitqlen--;
+			} else {
+				/* ptlrpcd thread should not sleep in that case,
+				 * or deadlock may occur!
+				 * Instead, return -ENOMEM so that upper layers
+				 * will put request back in queue. */
+				page_pools.epp_st_outofmem++;
+				spin_unlock(&page_pools.epp_lock);
+				OBD_FREE(GET_ENC_KIOV(desc),
+					 desc->bd_iov_count *
+						sizeof(*GET_ENC_KIOV(desc)));
+				GET_ENC_KIOV(desc) = NULL;
+				return -ENOMEM;
+			}
 		}
 
 		LASSERT(page_pools.epp_pages_short >= desc->bd_iov_count);
@@ -778,6 +815,7 @@ int sptlrpc_enc_pool_init(void)
         page_pools.epp_st_lowfree = 0;
         page_pools.epp_st_max_wqlen = 0;
         page_pools.epp_st_max_wait = 0;
+	page_pools.epp_st_outofmem = 0;
 
         enc_pools_alloc();
         if (page_pools.epp_pools == NULL)
@@ -812,13 +850,14 @@ void sptlrpc_enc_pool_fini(void)
 		CDEBUG(D_SEC,
 		       "max pages %lu, grows %u, grow fails %u, shrinks %u, "
 		       "access %lu, missing %lu, max qlen %u, max wait "
-		       CFS_TIME_T"/%lu\n",
+		       CFS_TIME_T"/%lu, out of mem %lu\n",
 		       page_pools.epp_st_max_pages, page_pools.epp_st_grows,
 		       page_pools.epp_st_grow_fails,
 		       page_pools.epp_st_shrinks, page_pools.epp_st_access,
 		       page_pools.epp_st_missings, page_pools.epp_st_max_wqlen,
 		       page_pools.epp_st_max_wait,
-		       msecs_to_jiffies(MSEC_PER_SEC));
+		       msecs_to_jiffies(MSEC_PER_SEC),
+		       page_pools.epp_st_outofmem);
 	}
 }
 

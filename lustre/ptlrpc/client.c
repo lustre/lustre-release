@@ -1478,6 +1478,13 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
         ENTRY;
 
         LASSERT(req->rq_phase == RQ_PHASE_NEW);
+
+	/* do not try to go further if there is not enough memory in enc_pool */
+	if (req->rq_sent && req->rq_bulk != NULL)
+		if (req->rq_bulk->bd_iov_count > get_free_pages_in_pool() &&
+		    pool_is_at_full_capacity())
+			RETURN(-ENOMEM);
+
         if (req->rq_sent && (req->rq_sent > cfs_time_current_sec()) &&
             (!req->rq_generation_set ||
              req->rq_import_generation == imp->imp_generation))
@@ -1568,6 +1575,16 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 	       lustre_msg_get_opc(req->rq_reqmsg));
 
         rc = ptl_send_rpc(req, 0);
+	if (rc == -ENOMEM) {
+		spin_lock(&imp->imp_lock);
+		if (!list_empty(&req->rq_list)) {
+			list_del_init(&req->rq_list);
+			atomic_dec(&req->rq_import->imp_inflight);
+		}
+		spin_unlock(&imp->imp_lock);
+		ptlrpc_rqphase_move(req, RQ_PHASE_NEW);
+		RETURN(rc);
+	}
         if (rc) {
                 DEBUG_REQ(D_HA, req, "send failed (%d); expect timeout", rc);
 		spin_lock(&req->rq_lock);
@@ -1837,6 +1854,14 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 				}
 
 				rc = ptl_send_rpc(req, 0);
+				if (rc == -ENOMEM) {
+					spin_lock(&imp->imp_lock);
+					if (!list_empty(&req->rq_list))
+						list_del_init(&req->rq_list);
+					spin_unlock(&imp->imp_lock);
+					ptlrpc_rqphase_move(req, RQ_PHASE_NEW);
+					continue;
+				}
 				if (rc) {
 					DEBUG_REQ(D_HA, req,
 						  "send failed: rc = %d", rc);
