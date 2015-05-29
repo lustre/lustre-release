@@ -79,14 +79,14 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/namei.c
  	bh = ext4_read_dirblock(dir, 0, INDEX);
  	if (IS_ERR(bh)) {
  		*err = PTR_ERR(bh);
-@@ -714,9 +721,16 @@ dx_probe(const struct qstr *d_name, stru
- 		goto fail;
+@@ -714,10 +721,15 @@ dx_probe(const struct qstr *d_name, stru
  	}
  
--	if ((indirect = info->indirect_levels) > 1) {
--		ext4_warning(dir->i_sb, "Unimplemented inode hash depth: %#06x",
--			     info->indirect_levels);
-+	indirect = info->indirect_levels;
+ 	indirect = info->indirect_levels;
+-	if (indirect > 1) {
+-		ext4_warning(dir->i_sb,
+-			     "inode #%lu: unimplemented hash depth %u",
+-			     dir->i_ino, info->indirect_levels);
 +	if (indirect >= ext4_dir_htree_level(dir->i_sb)) {
 +		ext4_warning(dir->i_sb,
 +			     "inode #%lu: comm %s: htree depth %#06x exceed max depth %u",
@@ -108,7 +108,7 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/namei.c
  	if (frames[0].bh == NULL)
  		return;
  
- 	info = dx_get_dx_info((struct ext4_dir_entry_2*)frames[0].bh->b_data);
+ 	info = dx_get_dx_info((struct ext4_dir_entry_2 *)frames[0].bh->b_data);
 -	if (info->indirect_levels)
 -		brelse(frames[1].bh);
 -	brelse(frames[0].bh);
@@ -268,7 +268,7 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/namei.c
 +				goto cleanup;
 +			}
  		} else {
- 			struct dx_root_info * info;
+ 			struct dx_root_info *info;
 -			dxtrace(printk(KERN_DEBUG
 -				       "Creating second level index...\n"));
 -			memcpy((char *) entries2, (char *) entries,
@@ -280,7 +280,7 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/namei.c
 @@ -2224,21 +2267,14 @@ static int ext4_dx_add_entry(handle_t *h
  			dx_set_block(entries + 0, newblock);
  			info = dx_get_dx_info((struct ext4_dir_entry_2*)
- 					frames[0].bh->b_data);
+ 					      frames[0].bh->b_data);
 -			info->indirect_levels = 1;
 -
 -			/* Add new access path frame */

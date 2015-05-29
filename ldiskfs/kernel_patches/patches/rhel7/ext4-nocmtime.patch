@@ -11,7 +11,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/ext4.h
  static inline struct timespec ext4_current_time(struct inode *inode)
  {
 +	if (IS_NOCMTIME(inode))
-+ 		return inode->i_ctime;
++		return inode->i_ctime;
  	return (inode->i_sb->s_time_gran < NSEC_PER_SEC) ?
  		current_fs_time(inode->i_sb) : CURRENT_TIME_SEC;
  }

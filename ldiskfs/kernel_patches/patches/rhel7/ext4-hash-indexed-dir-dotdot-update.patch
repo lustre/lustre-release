@@ -8,11 +8,11 @@ Index: linux-3.10.0-123.9.3.el7.x86_64/fs/ext4/namei.c
  
 +/* update ".." for hash-indexed directory, split the item "." if necessary */
 +static int ext4_update_dotdot(handle_t *handle, struct dentry *dentry,
-+				 struct inode *inode)
++			      struct inode *inode)
 +{
-+	struct inode * dir = dentry->d_parent->d_inode;
-+	struct buffer_head * dir_block;
-+	struct ext4_dir_entry_2 * de;
++	struct inode *dir = dentry->d_parent->d_inode;
++	struct buffer_head *dir_block;
++	struct ext4_dir_entry_2 *de;
 +	int len, journal = 0, err = 0;
 +
 +	if (IS_ERR(handle))
@@ -57,7 +57,7 @@ Index: linux-3.10.0-123.9.3.el7.x86_64/fs/ext4/namei.c
 +	else
 +		assert(le16_to_cpu(de->rec_len) >= EXT4_DIR_REC_LEN(2));
 +	de->name_len = 2;
-+	strcpy (de->name, "..");
++	strcpy(de->name, "..");
 +	ext4_set_de_type(dir->i_sb, de, S_IFDIR);
 +
 +out_journal:
@@ -66,7 +66,7 @@ Index: linux-3.10.0-123.9.3.el7.x86_64/fs/ext4/namei.c
 +		err = ext4_handle_dirty_dirent_node(handle, dir, dir_block);
 +		ext4_mark_inode_dirty(handle, dir);
 +	}
-+	brelse (dir_block);
++	brelse(dir_block);
 +
 +out:
 +	return err;

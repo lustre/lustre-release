@@ -50,7 +50,7 @@ Index: linux-3.10.0-123.el7.x86_64/fs/ext4/mballoc.c
 -					   grp->bb_free);
 -		set_bit(EXT4_GROUP_INFO_BBITMAP_CORRUPT_BIT, &grp->bb_state);
 +		struct ext4_group_desc *gdp;
-+		gdp = ext4_get_group_desc (sb, group, NULL);
++		gdp = ext4_get_group_desc(sb, group, NULL);
 +		ext4_error(sb, "group %lu: %u blocks in bitmap, %u in bb, "
 +			"%u in gd, %lu pa's\n", (long unsigned int)group,
 +			free, grp->bb_free, ext4_free_group_clusters(sb, gdp),
@@ -209,7 +209,7 @@ Index: linux-3.10.0-123.el7.x86_64/fs/ext4/mballoc.c
 +	int err;
  	int len;
  
-+	gdp = ext4_get_group_desc (sb, group, NULL);
++	gdp = ext4_get_group_desc(sb, group, NULL);
 +	if (gdp == NULL)
 +		return -EIO;
 +
@@ -233,7 +233,7 @@ Index: linux-3.10.0-123.el7.x86_64/fs/ext4/mballoc.c
  		BUG_ON(groupnr != group);
  		ext4_set_bits(bitmap, start, len);
  		preallocated += len;
-+		count ++;
++		count++;
 +	}
 +	if (count + skip != grp->bb_prealloc_nr) {
 +		ext4_error(sb, "lost preallocations: "

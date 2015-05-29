@@ -53,7 +53,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/inode.c
 --- linux-3.10.0-123.13.2.el7.x86_64.orig/fs/ext4/inode.c
 +++ linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/inode.c
 @@ -133,8 +183,6 @@ void ext4_evict_inode(struct inode *inod
-				unsigned int length);
+ 				unsigned int length);
  static int __ext4_journalled_writepage(struct page *page, unsigned int len);
  static int ext4_bh_delay_or_unwritten(handle_t *handle, struct buffer_head *bh);
 -static int ext4_meta_trans_blocks(struct inode *inode, int lblocks,
@@ -135,7 +135,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/inode.c
   */
 -static int ext4_meta_trans_blocks(struct inode *inode, int lblocks,
 +int ext4_meta_trans_blocks(struct inode *inode, int lblocks,
-				  int pextents)
+ 				  int pextents)
  {
  	ext4_group_t groups, ngroups = ext4_get_groups_count(inode->i_sb);
  	int gdpblocks;
@@ -345,7 +345,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/xattr.c
  			size_t offs = le16_to_cpu(last->e_value_offs);
  			if (offs < *min_offs)
  				*min_offs = offs;
-@@ -577,16 +693,171 @@ static size_t ext4_xattr_free_space(stru
+@@ -577,16 +693,172 @@ static size_t ext4_xattr_free_space(stru
  	return (*min_offs - ((void *)last - base) - sizeof(__u32));
  }
  
@@ -370,7 +370,8 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/xattr.c
 +		map.m_lblk = block += ret;
 +		map.m_len = max_blocks -= ret;
 +
-+		ret = ext4_map_blocks(handle, ea_inode, &map, EXT4_GET_BLOCKS_CREATE);
++		ret = ext4_map_blocks(handle, ea_inode, &map,
++				      EXT4_GET_BLOCKS_CREATE);
 +		if (ret <= 0) {
 +			ext4_mark_inode_dirty(handle, ea_inode);
 +			if (ret == -ENOSPC &&
@@ -772,7 +773,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/xattr.c
 +			return -ENOMEM;
 +		memcpy(new_array, *lea_ino_array,
 +		       offsetof(struct ext4_xattr_ino_array,
-+			        xia_inodes[count]));
++				xia_inodes[count]));
 +		kfree(*lea_ino_array);
 +		*lea_ino_array = new_array;
 +	}

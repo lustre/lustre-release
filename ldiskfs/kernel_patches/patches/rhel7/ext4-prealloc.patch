@@ -48,7 +48,7 @@ Index: linux-3.10.0-123.el7.x86_64/fs/ext4/mballoc.c
  /*
   * The routine scans buddy structures (not bitmap!) from given order
   * to max order and tries to find big enough chunk to satisfy the req
-@@ -2263,6 +2282,86 @@ static const struct seq_operations ext4_
+@@ -2263,6 +2282,91 @@ static const struct seq_operations ext4_
  	.show   = ext4_mb_seq_groups_show,
  };
  
@@ -77,8 +77,12 @@ Index: linux-3.10.0-123.el7.x86_64/fs/ext4/mballoc.c
 +	cur = str;
 +	end = str + cnt;
 +	while (cur < end) {
-+		while ((cur < end) && (*cur == ' ')) cur++;
-+		value = simple_strtol(cur, &cur, 0);
++		int rc;
++		while ((cur < end) && (*cur == ' '))
++			cur++;
++		rc = kstrtol(cur, 0, &value);
++		if (rc != 0)
++			return -EINVAL;
 +		if (value == 0)
 +			break;
 +		if (value <= prev)
@@ -97,7 +101,8 @@ Index: linux-3.10.0-123.el7.x86_64/fs/ext4/mballoc.c
 +	cur = str;
 +	end = str + cnt;
 +	while (cur < end && i < num) {
-+	while ((cur < end) && (*cur == ' ')) cur++;
++		while (cur < end && *cur == ' ')
++			cur++;
 +		value = simple_strtol(cur, &cur, 0);
 +		ext4_mb_prealloc_table_add(sbi, value);
 +		i++;
@@ -108,7 +113,7 @@ Index: linux-3.10.0-123.el7.x86_64/fs/ext4/mballoc.c
 +
 +static int mb_prealloc_table_seq_show(struct seq_file *m, void *v)
 +{
-+ 	struct ext4_sb_info *sbi = EXT4_SB(m->private);
++	struct ext4_sb_info *sbi = EXT4_SB(m->private);
 +	int i;
 +
 +	for (i = 0; i < sbi->s_mb_prealloc_table_size; i++)
@@ -123,7 +128,7 @@ Index: linux-3.10.0-123.el7.x86_64/fs/ext4/mballoc.c
 +	return single_open(file, mb_prealloc_table_seq_show, PDE_DATA(inode));
 +}
 +
-+struct file_operations ext4_mb_prealloc_seq_fops = {
++static const struct file_operations ext4_mb_prealloc_seq_fops = {
 +	.owner   = THIS_MODULE,
 +	.open    = mb_prealloc_table_seq_open,
 +	.read    = seq_read,
@@ -375,13 +380,12 @@ Index: linux-3.10.0-123.el7.x86_64/fs/ext4/inode.c
 ===================================================================
 --- linux-3.10.0-123.el7.x86_64.orig/fs/ext4/inode.c
 +++ linux-3.10.0-123.el7.x86_64/fs/ext4/inode.c
-@@ -2476,6 +2476,10 @@ static int ext4_da_writepages(struct add
+@@ -2476,6 +2476,9 @@ static int ext4_da_writepages(struct add
  	if (unlikely(sbi->s_mount_flags & EXT4_MF_FS_ABORTED))
  		return -EROFS;
  
-+	if (wbc->nr_to_write < sbi->s_mb_small_req) {
++	if (wbc->nr_to_write < sbi->s_mb_small_req)
 +		wbc->nr_to_write = sbi->s_mb_small_req;
-+	}
 +
  	if (wbc->range_start == 0 && wbc->range_end == LLONG_MAX)
  		range_whole = 1;

@@ -2,33 +2,14 @@ Index: linux-stage/fs/ext4/super.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/super.c
 +++ linux-stage/fs/ext4/super.c
-@@ -334,6 +334,8 @@ void ext4_journal_abort_handle(const cha
- 	jbd2_journal_abort_handle(handle);
- }
- 
-+EXPORT_SYMBOL(ext4_journal_abort_handle);
-+
- /* Deal with the reporting of failure conditions on a filesystem such as
-  * inconsistencies detected or read IO failures.
-  *
-@@ -3529,6 +3531,8 @@ out_fail:
- 	return ret;
- }
- 
-+EXPORT_SYMBOL(ext4_force_commit);
-+
- /*
-  * Setup any per-fs journal parameters now.  We'll do this both on
-  * initial mount, once the journal has been initialised but before we've
-@@ -4642,6 +4646,12 @@ static void __exit exit_ext4_fs(void)
+@@ -4642,6 +4646,11 @@ static void __exit exit_ext4_fs(void)
  	exit_ext4_system_zone();
  }
  
-+EXPORT_SYMBOL(ext4_xattr_get);
-+EXPORT_SYMBOL(ext4_xattr_set_handle);
 +EXPORT_SYMBOL(ext4_bread);
 +EXPORT_SYMBOL(ext4_journal_start_sb);
 +EXPORT_SYMBOL(__ext4_journal_stop);
++EXPORT_SYMBOL(ext4_force_commit);
 +
  MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
  MODULE_DESCRIPTION("Fourth Extended Filesystem");

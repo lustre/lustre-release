@@ -1516,7 +1516,7 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/namei.c
  	unsigned count, indirect;
 -	struct dx_entry *at, *entries, *p, *q, *m;
 +	struct dx_entry *at, *entries, *p, *q, *m, *dx = NULL;
- 	struct dx_root_info * info;
+ 	struct dx_root_info *info;
  	struct buffer_head *bh;
  	struct dx_frame *frame = frame_in;
 @@ -750,8 +980,15 @@ dx_probe(const struct qstr *d_name, stru

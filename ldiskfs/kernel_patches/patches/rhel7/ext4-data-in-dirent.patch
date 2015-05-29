@@ -30,7 +30,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/dir.c
  				 * dirent test below. */
  				if (ext4_rec_len_from_disk(de->rec_len,
 -					sb->s_blocksize) < EXT4_DIR_REC_LEN(1))
-+					sb->s_blocksize) < __EXT4_DIR_REC_LEN(1))
++				    sb->s_blocksize) < __EXT4_DIR_REC_LEN(1))
  					break;
  				i += ext4_rec_len_from_disk(de->rec_len,
  							    sb->s_blocksize);
@@ -63,14 +63,14 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/dir.c
  
  	while (*p) {
 @@ -452,7 +457,7 @@ int ext4_htree_store_dirent(struct file
-		if (ext4_check_dir_entry(dir, NULL, de, bh,
-					 buf, buf_size, offset))
-			return -EIO;
+ 		if (ext4_check_dir_entry(dir, NULL, de, bh,
+ 					 buf, buf_size, offset))
+ 			return -EIO;
 -		nlen = EXT4_DIR_REC_LEN(de->name_len);
 +		nlen = EXT4_DIR_REC_LEN(de);
-		rlen = ext4_rec_len_from_disk(de->rec_len, buf_size);
-		de = (struct ext4_dir_entry_2 *)((char *)de + rlen);
-		offset += rlen;
+ 		rlen = ext4_rec_len_from_disk(de->rec_len, buf_size);
+ 		de = (struct ext4_dir_entry_2 *)((char *)de + rlen);
+ 		offset += rlen;
 Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/ext4.h
 ===================================================================
 --- linux-3.10.0-123.13.2.el7.x86_64.orig/fs/ext4/ext4.h
@@ -119,10 +119,10 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/ext4.h
 +	__u32  edp_magic;	/* EXT4_LUFID_MAGIC */
 +	char   edp_len;		/* size of edp_data in bytes */
 +	char   edp_data[0];	/* packed array of data */
-+} __attribute__((packed));
++} __packed;
 +
 +static inline unsigned char *ext4_dentry_get_data(struct super_block *sb,
-+		struct ext4_dentry_param* p)
++						  struct ext4_dentry_param *p)
 +
 +{
 +	if (!EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_DIRDATA))
@@ -175,7 +175,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/ext4.h
  
 -	return ext4_filetype_table[filetype];
 +	if (!test_opt(sb, DIRDATA))
-+		return (ext4_filetype_table[fl_index]);
++		return ext4_filetype_table[fl_index];
 +
 +	return (ext4_filetype_table[fl_index]) |
 +		(filetype & EXT4_DIRENT_LUFID);
@@ -236,21 +236,21 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/namei.c
  static struct dx_frame *dx_probe(const struct qstr *d_name,
  				 struct inode *dir,
 @@ -504,11 +505,12 @@ ext4_next_entry(struct ext4_dir_entry_2
-  */
- struct dx_root_info * dx_get_dx_info(struct ext4_dir_entry_2 *de)
+ */
+ struct dx_root_info *dx_get_dx_info(struct ext4_dir_entry_2 *de)
  {
--       /* get dotdot first */
--       de = (struct ext4_dir_entry_2 *)((char *)de + EXT4_DIR_REC_LEN(1));
+-	/* get dotdot first */
+-	de = (struct ext4_dir_entry_2 *)((char *)de + EXT4_DIR_REC_LEN(1));
 +	BUG_ON(de->name_len != 1);
 +	/* get dotdot first */
 +	de = (struct ext4_dir_entry_2 *)((char *)de + EXT4_DIR_REC_LEN(de));
  
--       /* dx root info is after dotdot entry */
--       de = (struct ext4_dir_entry_2 *)((char *)de + EXT4_DIR_REC_LEN(2));
+-	/* dx root info is after dotdot entry */
+-	de = (struct ext4_dir_entry_2 *)((char *)de + EXT4_DIR_REC_LEN(2));
 +	/* dx root info is after dotdot entry */
 +	de = (struct ext4_dir_entry_2 *)((char *)de + EXT4_DIR_REC_LEN(de));
  
-        return (struct dx_root_info *) de;
+ 	return (struct dx_root_info *)de;
  }
 @@ -553,10 +555,16 @@ static inline void dx_set_limit(struct d
  	((struct dx_countlimit *) entries)->limit = cpu_to_le16(value);
@@ -290,14 +290,25 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/namei.c
  			names++;
  		}
  		de = ext4_next_entry(de, size);
-@@ -723,6 +731,7 @@ dx_probe(const struct qstr *d_name, stru
+@@ -723,12 +731,15 @@ dx_probe(const struct qstr *d_name, stru
+ 
  	entries = (struct dx_entry *) (((char *)info) + info->info_length);
  
- 	if (dx_get_limit(entries) != dx_root_limit(dir,
-+						   (struct ext4_dir_entry_2*)bh->b_data,
- 						   info->info_length)) {
- 		ext4_warning(dir->i_sb, "dx entry: limit != root limit");
+-	if (dx_get_limit(entries) != dx_root_limit(dir,
+-						   info->info_length)) {
++	if (dx_get_limit(entries) !=
++	    dx_root_limit(dir, (struct ext4_dir_entry_2 *)bh->b_data,
++			  info->info_length)) {
+ 		ext4_warning(dir->i_sb, "dx entry: limit != root limit "
+ 			     "inode #%lu: dx entry: limit %u != root limit %u",
+ 			     dir->i_ino, dx_get_limit(entries),
+-			     dx_root_limit(dir, info->info_length));
++			     dx_root_limit(dir,
++					  (struct ext4_dir_entry_2 *)bh->b_data,
++					  info->info_length));
  		brelse(bh);
+ 		*err = ERR_BAD_DX_DIR;
+ 		goto fail;
 @@ -916,7 +925,7 @@ static int htree_dirblock_to_tree(struct
  	de = (struct ext4_dir_entry_2 *) bh->b_data;
  	top = (struct ext4_dir_entry_2 *) ((char *) de +
@@ -325,7 +336,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/namei.c
  			if (de > to)
  				memmove(to, de, rec_len);
  			to->rec_len = ext4_rec_len_to_disk(rec_len, blocksize);
-@@ -1664,14 +1673,15 @@ int ext4_find_dest_de(struct inode *dir,
+@@ -1664,14 +1673,16 @@ int ext4_find_dest_de(struct inode *dir,
  		      struct buffer_head *bh,
  		      void *buf, int buf_size,
  		      const char *name, int namelen,
@@ -334,12 +345,13 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/namei.c
  {
  	struct ext4_dir_entry_2 *de;
 -	unsigned short reclen = EXT4_DIR_REC_LEN(namelen);
-+	unsigned short reclen = __EXT4_DIR_REC_LEN(namelen) + (dlen ? *dlen:0);
++	unsigned short reclen = __EXT4_DIR_REC_LEN(namelen) +
++							(dlen ? *dlen : 0);
  	int nlen, rlen;
  	unsigned int offset = 0;
  	char *top;
  
-+	dlen ? *dlen = 0: 0; /* default set to 0 */
++	dlen ? *dlen = 0 : 0; /* default set to 0 */
  	de = (struct ext4_dir_entry_2 *)buf;
  	top = buf + buf_size - reclen;
  	while ((char *) de <= top) {
@@ -408,7 +420,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/namei.c
  
 +	data = ext4_dentry_get_data(inode->i_sb, (struct ext4_dentry_param *)
 +						dentry->d_fsdata);
-	if (ext4_has_metadata_csum(inode->i_sb))
+ 	if (ext4_has_metadata_csum(inode->i_sb))
  		csum_size = sizeof(struct ext4_dir_entry_tail);
  
  	if (!de) {
@@ -426,7 +438,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/namei.c
  
  	/* By now the buffer is marked for journaling */
 -	ext4_insert_dentry(inode, de, blocksize, name, namelen);
-+	/* If we're writing the short form of "dotdot", don't add the data section */
++	/* If writing the short form of "dotdot", don't add the data section */
 +	if (dlen == 1)
 +		data = NULL;
 +	ext4_insert_dentry(inode, de, blocksize, name, namelen, data);
@@ -489,7 +501,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/namei.c
 -		assert(le16_to_cpu(de->rec_len) >= EXT4_DIR_REC_LEN(2));
 +		assert(le16_to_cpu(de->rec_len) >= __EXT4_DIR_REC_LEN(2));
  	de->name_len = 2;
- 	strcpy (de->name, "..");
+ 	strcpy(de->name, "..");
 -	ext4_set_de_type(dir->i_sb, de, S_IFDIR);
 +	if (data != NULL && ext4_get_dirent_data_len(de) >= dlen) {
 +		de->name[2] = 0;
@@ -519,7 +531,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/namei.c
 +	int dot_reclen = 0;
 +
 +	if (dotdot_real_len == 10) {
-+		struct tp_block *tpb = (struct tp_block*)inode;
++		struct tp_block *tpb = (struct tp_block *)inode;
 +		data1 = tpb->data1;
 +		data2 = tpb->data2;
 +		inode = tpb->inode;
@@ -566,7 +578,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/namei.c
 -	strcpy(de->name, "..");
 -	ext4_set_de_type(inode->i_sb, de, S_IFDIR);
  
-	return ext4_next_entry(de, blocksize);
+ 	return ext4_next_entry(de, blocksize);
  }
 @@ -2457,8 +2540,10 @@ struct ext4_dir_entry_2 *ext4_init_dot_d
  }
@@ -596,10 +608,10 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/namei.c
 @@ -2508,7 +2597,8 @@ out:
  /* Initialize @inode as a subdirectory of @dir, and add the
   * "." and ".." entries into the first directory block. */
- int ext4_add_dot_dotdot(handle_t *handle, struct inode * dir,
+ int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
 -			struct inode *inode)
 +			struct inode *inode,
-+                       const void *data1, const void *data2)
++			const void *data1, const void *data2)
  {
  	if (IS_ERR(handle))
  		return PTR_ERR(handle);
@@ -639,7 +651,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/inline.c
  	err = ext4_find_dest_de(dir, inode, iloc->bh,
  				inline_start, inline_size,
 -				name, namelen, &de);
-+ 				name, namelen, &de, NULL);
++				name, namelen, &de, NULL);
  	if (err)
  		return err;
  

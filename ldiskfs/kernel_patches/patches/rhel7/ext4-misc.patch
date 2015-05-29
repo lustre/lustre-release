@@ -121,10 +121,10 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/mballoc.c
 --- linux-3.10.0-123.13.2.el7.x86_64.orig/fs/ext4/mballoc.c
 +++ linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/mballoc.c
 @@ -5281,7 +5281,6 @@ out:
-				void *buddy, void *bitmap, ext4_group_t group)
+ 				void *buddy, void *bitmap, ext4_group_t group)
  {
-	struct ext4_group_info *grp = ext4_get_group_info(sb, group);
+ 	struct ext4_group_info *grp = ext4_get_group_info(sb, group);
 -	struct ext4_sb_info *sbi = EXT4_SB(sb);
-	ext4_grpblk_t max = EXT4_CLUSTERS_PER_GROUP(sb);
-	ext4_grpblk_t i = 0;
-	ext4_grpblk_t first;
+ 	ext4_grpblk_t max = EXT4_CLUSTERS_PER_GROUP(sb);
+ 	ext4_grpblk_t i = 0;
+ 	ext4_grpblk_t first;

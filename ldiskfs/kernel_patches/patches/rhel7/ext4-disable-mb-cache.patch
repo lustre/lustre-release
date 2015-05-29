@@ -85,7 +85,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/xattr.c
 +	if (!test_opt(inode->i_sb, NO_MBCACHE))
 +		ce = mb_cache_entry_get(ext4_xattr_cache, bh->b_bdev,
 +					bh->b_blocknr);
-	BUFFER_TRACE(bh, "get_write_access");
+ 	BUFFER_TRACE(bh, "get_write_access");
  	error = ext4_journal_get_write_access(handle, bh);
  	if (error)
 @@ -1037,8 +1040,10 @@ ext4_xattr_block_set(handle_t *handle, s
@@ -98,7 +98,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/xattr.c
 +			ce = mb_cache_entry_get(ext4_xattr_cache,
 +						bs->bh->b_bdev,
 +						bs->bh->b_blocknr);
-		BUFFER_TRACE(bs->bh, "get_write_access");
+ 		BUFFER_TRACE(bs->bh, "get_write_access");
  		error = ext4_journal_get_write_access(handle, bs->bh);
  		if (error)
 @@ -1055,7 +1060,7 @@ ext4_xattr_block_set(handle_t *handle, s

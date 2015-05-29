@@ -203,14 +203,6 @@ Index: linux-stage/fs/ext4/super.c
  
  void ext4_block_bitmap_set(struct super_block *sb,
  			   struct ext4_group_desc *bg, ext4_fsblk_t blk)
-@@ -386,6 +387,7 @@ void ext4_journal_abort_handle(const cha
- 
- 	jbd2_journal_abort_handle(handle);
- }
-+EXPORT_SYMBOL(ext4_journal_abort_handle);
- 
- static void __save_error_info(struct super_block *sb, const char *func,
- 			    unsigned int line)
 @@ -4280,6 +4282,7 @@ int ext4_force_commit(struct super_block
  
  	return ret;
@@ -219,12 +211,10 @@ Index: linux-stage/fs/ext4/super.c
  
  static void ext4_write_super(struct super_block *sb)
  {
-@@ -5210,6 +5213,12 @@ static void __exit ext4_exit_fs(void)
+@@ -5210,6 +5213,10 @@ static void __exit ext4_exit_fs(void)
  	ext4_exit_pageio();
  }
  
-+EXPORT_SYMBOL(ext4_xattr_get);
-+EXPORT_SYMBOL(ext4_xattr_set_handle);
 +EXPORT_SYMBOL(ext4_bread);
 +EXPORT_SYMBOL(ext4_journal_start_sb);
 +EXPORT_SYMBOL(__ext4_journal_stop);

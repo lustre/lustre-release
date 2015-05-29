@@ -7,7 +7,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/super.c
 @@ -2476,8 +2476,11 @@ static ssize_t sbi_ui_show(struct ext4_a
  			   struct ext4_sb_info *sbi, char *buf)
  {
-	unsigned int *ui = (unsigned int *) (((char *) sbi) + a->u.offset);
+ 	unsigned int *ui = (unsigned int *) (((char *) sbi) + a->u.offset);
 +	unsigned int v = *ui;
  
 -	return snprintf(buf, PAGE_SIZE, "%u\n", *ui);

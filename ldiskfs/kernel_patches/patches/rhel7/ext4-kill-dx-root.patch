@@ -39,15 +39,15 @@ Index: linux-3.10.0-123.9.3.el7.x86_64/fs/ext4/namei.c
   * Future: use high four bits of block for coalesce-on-delete flags
   * Mask them off for now.
   */
-+struct dx_root_info * dx_get_dx_info(struct ext4_dir_entry_2 *de)
++struct dx_root_info *dx_get_dx_info(struct ext4_dir_entry_2 *de)
 +{
-+       /* get dotdot first */
-+       de = (struct ext4_dir_entry_2 *)((char *)de + EXT4_DIR_REC_LEN(1));
++	/* get dotdot first */
++	de = (struct ext4_dir_entry_2 *)((char *)de + EXT4_DIR_REC_LEN(1));
 +
-+       /* dx root info is after dotdot entry */
-+       de = (struct ext4_dir_entry_2 *)((char *)de + EXT4_DIR_REC_LEN(2));
++	/* dx root info is after dotdot entry */
++	de = (struct ext4_dir_entry_2 *)((char *)de + EXT4_DIR_REC_LEN(2));
 +
-+       return (struct dx_root_info *) de;
++	return (struct dx_root_info *)de;
 +}
  
  static inline ext4_lblk_t dx_get_block(struct dx_entry *entry)
@@ -57,7 +57,7 @@ Index: linux-3.10.0-123.9.3.el7.x86_64/fs/ext4/namei.c
  	unsigned count, indirect;
  	struct dx_entry *at, *entries, *p, *q, *m;
 -	struct dx_root *root;
-+	struct dx_root_info * info;
++	struct dx_root_info *info;
  	struct buffer_head *bh;
  	struct dx_frame *frame = frame_in;
  	u32 hash;
@@ -69,14 +69,15 @@ Index: linux-3.10.0-123.9.3.el7.x86_64/fs/ext4/namei.c
 -	if (root->info.hash_version != DX_HASH_TEA &&
 -	    root->info.hash_version != DX_HASH_HALF_MD4 &&
 -	    root->info.hash_version != DX_HASH_LEGACY) {
+-		ext4_warning(dir->i_sb, "Unrecognised inode hash code %d for directory "
+-                             "#%lu", root->info.hash_version, dir->i_ino);
 +
-+	info = dx_get_dx_info((struct ext4_dir_entry_2*)bh->b_data);
++	info = dx_get_dx_info((struct ext4_dir_entry_2 *)bh->b_data);
 +	if (info->hash_version != DX_HASH_TEA &&
 +	    info->hash_version != DX_HASH_HALF_MD4 &&
 +	    info->hash_version != DX_HASH_LEGACY) {
- 		ext4_warning(dir->i_sb, "Unrecognised inode hash code %d for directory "
--                             "#%lu", root->info.hash_version, dir->i_ino);
-+                             "#%lu", info->hash_version, dir->i_ino);
++		ext4_warning(dir->i_sb, "inode #%lu: unrecognised hash code %u",
++			     dir->i_ino, info->hash_version);
  		brelse(bh);
  		*err = ERR_BAD_DX_DIR;
  		goto fail;
@@ -86,25 +87,30 @@ Index: linux-3.10.0-123.9.3.el7.x86_64/fs/ext4/namei.c
  	if (hinfo->hash_version <= DX_HASH_TEA)
  		hinfo->hash_version += EXT4_SB(dir->i_sb)->s_hash_unsigned;
  	hinfo->seed = EXT4_SB(dir->i_sb)->s_hash_seed;
-@@ -702,27 +704,26 @@ dx_probe(const struct qstr *d_name, stru
+@@ -702,28 +704,33 @@ dx_probe(const struct qstr *d_name, stru
  		ext4fs_dirhash(d_name->name, d_name->len, hinfo);
  	hash = hinfo->hash;
  
 -	if (root->info.unused_flags & 1) {
-+	if (info->unused_flags & 1) {
- 		ext4_warning(dir->i_sb, "Unimplemented inode hash flags: %#06x",
+-		ext4_warning(dir->i_sb, "Unimplemented inode hash flags: %#06x",
 -			     root->info.unused_flags);
-+			     info->unused_flags);
++	if (info->unused_flags & 1) {
++		ext4_warning(dir->i_sb,
++			     "inode #%lu: unimplemented hash flags: %#06x",
++			     dir->i_ino, info->unused_flags);
  		brelse(bh);
  		*err = ERR_BAD_DX_DIR;
  		goto fail;
  	}
  
 -	if ((indirect = root->info.indirect_levels) > 1) {
-+	if ((indirect = info->indirect_levels) > 1) {
- 		ext4_warning(dir->i_sb, "Unimplemented inode hash depth: %#06x",
+-		ext4_warning(dir->i_sb, "Unimplemented inode hash depth: %#06x",
 -			     root->info.indirect_levels);
-+			     info->indirect_levels);
++	indirect = info->indirect_levels;
++	if (indirect > 1) {
++		ext4_warning(dir->i_sb,
++			     "inode #%lu: unimplemented hash depth %u",
++			     dir->i_ino, info->indirect_levels);
  		brelse(bh);
  		*err = ERR_BAD_DX_DIR;
  		goto fail;
@@ -112,14 +118,19 @@ Index: linux-3.10.0-123.9.3.el7.x86_64/fs/ext4/namei.c
  
 -	entries = (struct dx_entry *) (((char *)&root->info) +
 -				       root->info.info_length);
-+	entries = (struct dx_entry *) (((char *)info) + info->info_length);
++	entries = (struct dx_entry *)(((char *)info) + info->info_length);
  
  	if (dx_get_limit(entries) != dx_root_limit(dir,
 -						   root->info.info_length)) {
+-		ext4_warning(dir->i_sb, "dx entry: limit != root limit");
 +						   info->info_length)) {
- 		ext4_warning(dir->i_sb, "dx entry: limit != root limit");
++		ext4_warning(dir->i_sb, "dx entry: limit != root limit "
++			     "inode #%lu: dx entry: limit %u != root limit %u",
++			     dir->i_ino, dx_get_limit(entries),
++			     dx_root_limit(dir, info->info_length));
  		brelse(bh);
  		*err = ERR_BAD_DX_DIR;
+ 		goto fail;
 @@ -807,10 +808,12 @@ fail:
  
  static void dx_release (struct dx_frame *frames)
@@ -129,7 +140,7 @@ Index: linux-3.10.0-123.9.3.el7.x86_64/fs/ext4/namei.c
  		return;
  
 -	if (((struct dx_root *) frames[0].bh->b_data)->info.indirect_levels)
-+	info = dx_get_dx_info((struct ext4_dir_entry_2*)frames[0].bh->b_data);
++	info = dx_get_dx_info((struct ext4_dir_entry_2 *)frames[0].bh->b_data);
 +	if (info->indirect_levels)
  		brelse(frames[1].bh);
  	brelse(frames[0].bh);
@@ -161,7 +172,7 @@ Index: linux-3.10.0-123.9.3.el7.x86_64/fs/ext4/namei.c
  	}
 -	root = (struct dx_root *) bh->b_data;
 +
-+	dot_de = (struct ext4_dir_entry_2 *) bh->b_data;
++	dot_de = (struct ext4_dir_entry_2 *)bh->b_data;
 +	dotdot_de = ext4_next_entry(dot_de, blocksize);
  
  	/* The 0th block becomes the root, move the dirents out */
@@ -171,17 +182,17 @@ Index: linux-3.10.0-123.9.3.el7.x86_64/fs/ext4/namei.c
 -	if ((char *) de >= (((char *) root) + blocksize)) {
 +	de = (struct ext4_dir_entry_2 *)((char *)dotdot_de +
 +		ext4_rec_len_from_disk(dotdot_de->rec_len, blocksize));
-+	if ((char *) de >= (((char *) dot_de) + blocksize)) {
++	if ((char *)de >= (((char *)dot_de) + blocksize)) {
  		EXT4_ERROR_INODE(dir, "invalid rec_len for '..'");
  		brelse(bh);
  		return -EIO;
  	}
 -	len = ((char *) root) + (blocksize - csum_size) - (char *) de;
-+	len = ((char *) dot_de) + (blocksize - csum_size) - (char *) de;
++	len = ((char *)dot_de) + (blocksize - csum_size) - (char *)de;
  
  	/* Allocate new block for the 0th block's dirents */
  	bh2 = ext4_append(handle, dir, &block);
-@@ -1850,19 +1853,23 @@ static int make_indexed_dir(handle_t *ha
+@@ -1850,19 +1853,24 @@ static int make_indexed_dir(handle_t *ha
  	}
  
  	/* Initialize the root; the dot dirents already exist */
@@ -192,12 +203,13 @@ Index: linux-3.10.0-123.9.3.el7.x86_64/fs/ext4/namei.c
 -	root->info.info_length = sizeof(root->info);
 -	root->info.hash_version = EXT4_SB(dir->i_sb)->s_def_hash_version;
 -	entries = root->entries;
-+	dotdot_de->rec_len = ext4_rec_len_to_disk(blocksize -
-+			le16_to_cpu(dot_de->rec_len), blocksize);
++	dotdot_de->rec_len =
++		ext4_rec_len_to_disk(blocksize - le16_to_cpu(dot_de->rec_len),
++				     blocksize);
 +
 +	/* initialize hashing info */
 +	dx_info = dx_get_dx_info(dot_de);
-+	memset (dx_info, 0, sizeof(*dx_info));
++	memset(dx_info, 0, sizeof(*dx_info));
 +	dx_info->info_length = sizeof(*dx_info);
 +	dx_info->hash_version = EXT4_SB(dir->i_sb)->s_def_hash_version;
 +
@@ -218,7 +230,7 @@ Index: linux-3.10.0-123.9.3.el7.x86_64/fs/ext4/namei.c
  				goto journal_error;
  			brelse (bh2);
  		} else {
-+			struct dx_root_info * info;
++			struct dx_root_info *info;
  			dxtrace(printk(KERN_DEBUG
  				       "Creating second level index...\n"));
  			memcpy((char *) entries2, (char *) entries,
@@ -227,8 +239,8 @@ Index: linux-3.10.0-123.9.3.el7.x86_64/fs/ext4/namei.c
  			dx_set_count(entries, 1);
  			dx_set_block(entries + 0, newblock);
 -			((struct dx_root *) frames[0].bh->b_data)->info.indirect_levels = 1;
-+			info = dx_get_dx_info((struct ext4_dir_entry_2*)
-+					frames[0].bh->b_data);
++			info = dx_get_dx_info((struct ext4_dir_entry_2 *)
++					      frames[0].bh->b_data);
 +			info->indirect_levels = 1;
  
  			/* Add new access path frame */
