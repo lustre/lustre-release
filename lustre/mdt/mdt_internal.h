@@ -707,6 +707,7 @@ void mdt_dump_lmv(unsigned int level, const union lmv_mds_md *lmv);
 bool allow_client_chgrp(struct mdt_thread_info *info, struct lu_ucred *uc);
 int mdt_check_ucred(struct mdt_thread_info *);
 int mdt_init_ucred(struct mdt_thread_info *, struct mdt_body *);
+int mdt_init_ucred_intent_getattr(struct mdt_thread_info *, struct mdt_body *);
 int mdt_init_ucred_reint(struct mdt_thread_info *);
 void mdt_exit_ucred(struct mdt_thread_info *);
 int mdt_version_get_check(struct mdt_thread_info *, struct mdt_object *, int);

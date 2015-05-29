@@ -298,6 +298,9 @@ check_capabilities:
 		if (md_capable(uc, CFS_CAP_DAC_READ_SEARCH))
 			RETURN(0);
 
+	CDEBUG(D_SEC, "permission denied, mode %x, fsuid %u, uid %u\n",
+	       la->la_mode, uc->uc_fsuid, la->la_uid);
+
 	RETURN(-EACCES);
 }
 
