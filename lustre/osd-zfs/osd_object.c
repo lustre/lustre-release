@@ -1525,8 +1525,10 @@ static int osd_object_ref_add(const struct lu_env *env,
 
 	ENTRY;
 
+	if (!dt_object_exists(dt))
+		RETURN(-ENOENT);
+
 	LASSERT(osd_invariant(obj));
-	LASSERT(dt_object_exists(dt));
 	LASSERT(obj->oo_sa_hdl != NULL);
 
 	oh = container_of0(handle, struct osd_thandle, ot_super);
@@ -1573,7 +1575,7 @@ static int osd_object_ref_del(const struct lu_env *env,
 	write_unlock(&obj->oo_attr_lock);
 
 	rc = osd_object_sa_update(obj, SA_ZPL_LINKS(osd), &nlink, 8, oh);
-	return rc;
+	RETURN(rc);
 }
 
 static int osd_object_sync(const struct lu_env *env, struct dt_object *dt,
