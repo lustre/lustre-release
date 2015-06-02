@@ -100,7 +100,7 @@ xml:id="understandinglustre">
               </entry>
               <entry>
                 <para>
-                  <emphasis role="bold">Tested in Production</emphasis>
+                  <emphasis role="bold">Known Production Usage</emphasis>
                 </para>
               </entry>
             </row>
@@ -143,7 +143,7 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>240 GB/sec I/O</para>
+                <para>2.5 TB/sec I/O </para>
               </entry>
             </row>
             <row>
@@ -161,19 +161,20 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>OSS count:</emphasis>
                 </para>
-                <para>500 OSSs, with up to 4000 OSTs</para>
+                <para>1000 OSSs, with up to 4000 OSTs</para>
               </entry>
               <entry>
                 <para>
                   <emphasis>Single OSS:</emphasis>
                 </para>
-                <para>8 OSTs per OSS,</para>
-                <para>16TB per OST</para>
+                <para>32x 8TB OSTs per OSS,</para>
+                <para>8x 32TB OSTs per OSS</para>
                 <para>
                   <emphasis>OSS count:</emphasis>
                 </para>
                 <para>450 OSSs with 1000 4TB OSTs</para>
                 <para>192 OSSs with 1344 8TB OSTs</para>
+                <para>768 OSSs with 768 72TB OSTs</para>
               </entry>
             </row>
             <row>
@@ -190,7 +191,7 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>2.5 TB/sec</para>
+                <para>10 TB/sec</para>
               </entry>
               <entry>
                 <para>
@@ -200,7 +201,7 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>240 GB/sec</para>
+                <para>2.5 TB/sec</para>
               </entry>
             </row>
             <row>
@@ -219,14 +220,13 @@ xml:id="understandinglustre">
                   <emphasis>MDS count:</emphasis>
                 </para>
                 <para>1 primary + 1 backup</para>
-                <para condition="l24">Up to 4096 MDTs and up to 4096
-                MDSs</para>
+                <para condition="l24">Up to 256 MDTs and up to 256 MDSs</para>
               </entry>
               <entry>
                 <para>
                   <emphasis>Single MDT:</emphasis>
                 </para>
-                <para>1 billion files</para>
+                <para>2 billion files</para>
                 <para>
                   <emphasis>MDS count:</emphasis>
                 </para>
@@ -240,12 +240,12 @@ xml:id="understandinglustre">
                 </para>
               </entry>
               <entry>
-                <para>35000/s create operations,</para>
-                <para>100000/s metadata stat operations</para>
+                <para>50000/s create operations,</para>
+                <para>200000/s metadata stat operations</para>
               </entry>
               <entry>
                 <para>15000/s create operations,</para>
-                <para>35000/s metadata stat operations</para>
+                <para>50000/s metadata stat operations</para>
               </entry>
             </row>
             <row>
@@ -258,11 +258,11 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>Single File:</emphasis>
                 </para>
-                <para>2.5 PB max file size</para>
+                <para>32 PB max file size (ldiskfs), 2^63 bytes (ZFS)</para>
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>512 PB space, 4 billion files</para>
+                <para>512 PB space, 32 billion files</para>
               </entry>
               <entry>
                 <para>
@@ -272,7 +272,7 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>55 PB space, 1 billion files</para>
+                <para>55 PB space, 2 billion files</para>
               </entry>
             </row>
           </tbody>
