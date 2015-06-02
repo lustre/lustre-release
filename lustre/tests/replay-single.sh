@@ -2127,11 +2127,16 @@ run_test 74 "Ensure applications don't fail waiting for OST recovery"
 
 remote_dir_check_80() {
 	local MDTIDX=1
-	local diridx=$($GETSTRIPE -M $remote_dir)
+	local diridx
+	local fileidx
+
+	diridx=$($GETSTRIPE -M $remote_dir) ||
+		error "$GETSTRIPE -M $remote_dir failed"
 	[ $diridx -eq $MDTIDX ] || error "$diridx != $MDTIDX"
 
 	createmany -o $remote_dir/f-%d 20 || error "creation failed"
-	local fileidx=$($GETSTRIPE -M $remote_dir/f-1)
+	fileidx=$($GETSTRIPE -M $remote_dir/f-1) ||
+		error "$GETSTRIPE -M $remote_dir/f-1 failed"
 	[ $fileidx -eq $MDTIDX ] || error "$fileidx != $MDTIDX"
 
 	return 0
