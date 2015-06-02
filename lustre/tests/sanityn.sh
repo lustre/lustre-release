@@ -3081,6 +3081,32 @@ test_77g() {
 }
 run_test 77g "Change TBF type directly"
 
+test_78() { #LU-6673
+	local rc
+
+	for i in $(seq 1 $OSTCOUNT)
+	do
+		do_facet ost"$i" lctl set_param \
+			ost.OSS.ost_io.nrs_policies="orr" &
+		do_facet ost"$i" lctl set_param \
+			ost.OSS.*.nrs_orr_quantum=1
+		rc=$?
+		[ $rc -eq 0 -o $rc -eq 11 ] ||
+			error "Expected set_param to return 0 or EAGAIN"
+	done
+
+	# Cleanup the ORR policy
+	for i in $(seq 1 $OSTCOUNT)
+	do
+		do_facet ost"$i" lctl set_param \
+			ost.OSS.ost_io.nrs_policies="fifo"
+		[ $? -ne 0 ] &&
+			error "failed to set policy back to fifo"
+	done
+	return 0
+}
+run_test 78 "Enable policy and specify tunings right away"
+
 test_80a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	local MDTIDX=1

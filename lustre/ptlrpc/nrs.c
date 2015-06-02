@@ -671,6 +671,13 @@ static int nrs_policy_ctl(struct ptlrpc_nrs *nrs, char *name,
 	if (policy == NULL)
 		GOTO(out, rc = -ENOENT);
 
+	/**
+	 * Wait for the policy to be fully started before attempting
+	 * to operate it.
+	 */
+	if (policy->pol_state == NRS_POL_STATE_STARTING)
+		GOTO(out, rc = -EAGAIN);
+
 	switch (opc) {
 		/**
 		 * Unknown opcode, pass it down to the policy-specific control
