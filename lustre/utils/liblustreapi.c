@@ -1549,7 +1549,7 @@ static int common_param_init(struct find_param *param, char *path)
 		lum_size = PATH_MAX + 1;
 
 	param->fp_lum_size = lum_size;
-	param->fp_lmd = malloc(sizeof(lstat_t) + param->fp_lum_size);
+	param->fp_lmd = calloc(1, sizeof(lstat_t) + param->fp_lum_size);
 	if (param->fp_lmd == NULL) {
 		llapi_error(LLAPI_MSG_ERROR, -ENOMEM,
 			    "error: allocation of %zu bytes for ioctl",
@@ -1558,7 +1558,8 @@ static int common_param_init(struct find_param *param, char *path)
 	}
 
 	param->fp_lmv_stripe_count = 256;
-	param->fp_lmv_md = malloc(lmv_user_md_size(param->fp_lmv_stripe_count,
+	param->fp_lmv_md = calloc(1,
+				  lmv_user_md_size(param->fp_lmv_stripe_count,
 						   LMV_MAGIC_V1));
 	if (param->fp_lmv_md == NULL) {
 		llapi_error(LLAPI_MSG_ERROR, -ENOMEM,
@@ -3025,6 +3026,22 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 	if (decision == 0) {
 		ret = get_lmd_info(path, parent, dir, param->fp_lmd,
 				   param->fp_lum_size);
+		if (ret == 0 && param->fp_lmd->lmd_lmm.lmm_magic == 0 &&
+		    (param->fp_check_pool || param->fp_check_stripe_count ||
+		     param->fp_check_stripe_size || param->fp_check_layout)) {
+			struct lov_user_md *lmm = &param->fp_lmd->lmd_lmm;
+
+			/* We need to "fake" the "use the default" values
+			 * since the lmm struct is zeroed out at this point. */
+			lmm->lmm_magic = LOV_USER_MAGIC_V1;
+			lmm->lmm_pattern = 0xFFFFFFFF;
+			if (!param->fp_raw)
+				ostid_set_seq(&lmm->lmm_oi,
+					      FID_SEQ_LOV_DEFAULT);
+			lmm->lmm_stripe_size = 0;
+			lmm->lmm_stripe_count = 0;
+			lmm->lmm_stripe_offset = -1;
+		}
 		if (ret == 0 && param->fp_mdt_uuid != NULL) {
 			if (dir != NULL) {
 				ret = llapi_file_fget_mdtidx(dirfd(dir),
