@@ -89,8 +89,8 @@ lnet_sock_ioctl(int cmd, unsigned long arg)
 	sock_filp = sock_alloc_file(sock, 0);
 # endif
 #endif
-	if (!sock_filp) {
-		rc = -ENOMEM;
+	if (IS_ERR(sock_filp)) {
+		rc = PTR_ERR(sock_filp);
 		sock_release(sock);
 		goto out;
 	}
