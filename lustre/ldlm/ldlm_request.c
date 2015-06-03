@@ -1645,6 +1645,7 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 
 	while (!list_empty(&ns->ns_unused_list)) {
                 ldlm_policy_res_t result;
+		cfs_time_t last_use = 0;
 
                 /* all unused locks */
                 if (remained-- <= 0)
@@ -1662,6 +1663,10 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 			if (flags & LDLM_CANCEL_NO_WAIT &&
 			    ldlm_is_skipped(lock))
 				/* already processed */
+				continue;
+
+			last_use = lock->l_last_used;
+			if (last_use == cfs_time_current())
 				continue;
 
 			/* Somebody is already doing CANCEL. No need for this
@@ -1710,11 +1715,13 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 		lock_res_and_lock(lock);
 		/* Check flags again under the lock. */
 		if (ldlm_is_canceling(lock) ||
-		    (ldlm_lock_remove_from_lru(lock) == 0)) {
+		    ldlm_lock_remove_from_lru_check(lock, last_use) == 0) {
 			/* Another thread is removing lock from LRU, or
 			 * somebody is already doing CANCEL, or there
 			 * is a blocking request which will send cancel
-			 * by itself, or the lock is no longer unused. */
+			 * by itself, or the lock is no longer unused or
+			 * the lock has been used since the pf() call and
+			 * pages could be put under it. */
 			unlock_res_and_lock(lock);
 			lu_ref_del(&lock->l_reference, __FUNCTION__, current);
 			LDLM_LOCK_RELEASE(lock);

@@ -163,7 +163,9 @@ int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
 int ldlm_run_ast_work(struct ldlm_namespace *ns, struct list_head *rpc_list,
                       ldlm_desc_ast_t ast_type);
 int ldlm_work_gl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq);
-int ldlm_lock_remove_from_lru(struct ldlm_lock *lock);
+int ldlm_lock_remove_from_lru_check(struct ldlm_lock *lock,
+				    cfs_time_t last_use);
+#define ldlm_lock_remove_from_lru(lock) ldlm_lock_remove_from_lru_check(lock, 0)
 int ldlm_lock_remove_from_lru_nolock(struct ldlm_lock *lock);
 void ldlm_lock_add_to_lru_nolock(struct ldlm_lock *lock);
 void ldlm_lock_add_to_lru(struct ldlm_lock *lock);
