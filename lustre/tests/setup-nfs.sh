@@ -21,7 +21,9 @@ setup_nfs() {
         mount -t rpc_pipefs sunrpc /var/lib/nfs/rpc_pipefs; }" || return 1
     sleep 5
 
-    do_nodes $LUSTRE_CLIENT "service nfs restart" || return 1
+	do_nodes $LUSTRE_CLIENT "chkconfig --list nfsserver > /dev/null 2>&1 &&
+				 service nfsserver restart ||
+				 service nfs restart" || return 1
 
 	do_nodes $NFS_CLIENTS "chkconfig --list rpcidmapd 2>/dev/null |
 			       grep -q rpcidmapd && service rpcidmapd restart ||
@@ -57,7 +59,9 @@ cleanup_nfs() {
 			       grep -q rpcidmapd && service rpcidmapd stop ||
 			       true"
 
-    do_nodes $LUSTRE_CLIENT "service nfs stop" || return 1
+	do_nodes $LUSTRE_CLIENT "chkconfig --list nfsserver > /dev/null 2>&1 &&
+				 service nfsserver stop || service nfs stop" ||
+				return 1
 
     do_nodes $LUSTRE_CLIENT "exportfs -u *:$MNTPNT" || return 1
 
