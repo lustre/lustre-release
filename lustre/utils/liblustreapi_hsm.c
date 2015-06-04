@@ -803,12 +803,16 @@ int llapi_hsm_copytool_unregister(struct hsm_copytool_private **priv)
 	if (ct->magic != CT_PRIV_MAGIC)
 		return -EINVAL;
 
+	/* Close the read side of the KUC pipe. This should be done
+	 * before unregistering to avoid deadlock: a ldlm_cb thread
+	 * enters libcfs_kkuc_group_put() acquires kg_sem and blocks
+	 * in pipe_write() due to full pipe; then we attempt to
+	 * unregister and block on kg_sem. */
+	libcfs_ukuc_stop(&ct->kuc);
+
 	/* Tell the kernel to stop sending us messages */
 	ct->kuc.lk_flags = LK_FLG_STOP;
 	ioctl(ct->mnt_fd, LL_IOC_HSM_CT_START, &ct->kuc);
-
-	/* Shut down the kernelcomms */
-	libcfs_ukuc_stop(&ct->kuc);
 
 	llapi_hsm_log_ct_registration(&ct, CT_UNREGISTER);
 
