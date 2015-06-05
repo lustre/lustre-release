@@ -539,8 +539,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         ptlrpc_req_finished(request);
 
 	if (IS_ERR(root)) {
-		if (lmd.lsm)
-			obd_free_memmd(sbi->ll_dt_exp, &lmd.lsm);
 #ifdef CONFIG_FS_POSIX_ACL
                 if (lmd.posix_acl) {
                         posix_acl_release(lmd.posix_acl);
@@ -1844,11 +1842,9 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct mdt_body *body = md->body;
-	struct lov_stripe_md *lsm = md->lsm;
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 
-	LASSERT((lsm != NULL) == ((body->mbo_valid & OBD_MD_FLEASIZE) != 0));
-	if (lsm != NULL)
+	if (body->mbo_valid & OBD_MD_FLEASIZE)
 		cl_file_inode_init(inode, md);
 
 	if (S_ISDIR(inode->i_mode)) {
@@ -2332,7 +2328,7 @@ int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
 			conf.coc_opc = OBJECT_CONF_SET;
 			conf.coc_inode = *inode;
 			conf.coc_lock = lock;
-			conf.u.coc_md = &md;
+			conf.u.coc_layout = md.layout;
 			(void)ll_layout_conf(*inode, &conf);
 		}
 		LDLM_LOCK_PUT(lock);
@@ -2341,8 +2337,6 @@ int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
 	GOTO(out, rc = 0);
 
 out:
-	if (md.lsm != NULL)
-		obd_free_memmd(sbi->ll_dt_exp, &md.lsm);
 	md_free_lustre_md(sbi->ll_md_exp, &md);
 
 cleanup:

@@ -3722,7 +3722,6 @@ static int ll_layout_lock_set(struct lustre_handle *lockh, ldlm_mode_t mode,
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct ll_sb_info    *sbi = ll_i2sbi(inode);
 	struct ldlm_lock *lock;
-	struct lustre_md md = { NULL };
 	struct cl_object_conf conf;
 	int rc = 0;
 	bool lvb_ready;
@@ -3756,34 +3755,17 @@ static int ll_layout_lock_set(struct lustre_handle *lockh, ldlm_mode_t mode,
 
 	/* for layout lock, lmm is stored in lock's lvb.
 	 * lvb_data is immutable if the lock is held so it's safe to access it
-	 * without res lock. */
-	if (lock->l_lvb_data != NULL) {
-		rc = obd_unpackmd(sbi->ll_dt_exp, &md.lsm,
-				  lock->l_lvb_data, lock->l_lvb_len);
-		if (rc < 0) {
-			CERROR("%s: file "DFID" unpackmd error: %d\n",
-				ll_get_fsname(inode->i_sb, NULL, 0),
-				PFID(&lli->lli_fid), rc);
-			GOTO(out, rc);
-		}
-
-		LASSERTF(md.lsm != NULL, "lvb_data = %p, lvb_len = %u\n",
-			 lock->l_lvb_data, lock->l_lvb_len);
-
-		rc = 0;
-	}
-
-	/* set layout to file. Unlikely this will fail as old layout was
+	 * without res lock.
+	 *
+	 * set layout to file. Unlikely this will fail as old layout was
 	 * surely eliminated */
 	memset(&conf, 0, sizeof conf);
 	conf.coc_opc = OBJECT_CONF_SET;
 	conf.coc_inode = inode;
 	conf.coc_lock = lock;
-	conf.u.coc_md = &md;
+	conf.u.coc_layout.lb_buf = lock->l_lvb_data;
+	conf.u.coc_layout.lb_len = lock->l_lvb_len;
 	rc = ll_layout_conf(inode, &conf);
-
-	if (md.lsm != NULL)
-		obd_free_memmd(sbi->ll_dt_exp, &md.lsm);
 
 	/* refresh layout failed, need to wait */
 	wait_layout = rc == -EBUSY;

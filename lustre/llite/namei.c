@@ -124,12 +124,9 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
 	if (inode->i_state & I_NEW) {
 		rc = ll_read_inode2(inode, md);
 		if (rc == 0 && S_ISREG(inode->i_mode) &&
-		    ll_i2info(inode)->lli_clob == NULL) {
-			CDEBUG(D_INODE, "%s: apply lsm %p to inode "DFID"\n",
-				ll_get_fsname(sb, NULL, 0), md->lsm,
-				PFID(ll_inode2fid(inode)));
+		    ll_i2info(inode)->lli_clob == NULL)
 			rc = cl_file_inode_init(inode, md);
-		}
+
 		if (rc != 0) {
 			make_bad_inode(inode);
 			unlock_new_inode(inode);

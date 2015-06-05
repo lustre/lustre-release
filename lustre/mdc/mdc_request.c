@@ -505,9 +505,6 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
         LASSERT(md->body != NULL);
 
 	if (md->body->mbo_valid & OBD_MD_FLEASIZE) {
-		int lmmsize;
-		struct lov_mds_md *lmm;
-
 		if (!S_ISREG(md->body->mbo_mode)) {
 			CDEBUG(D_INFO, "OBD_MD_FLEASIZE set, should be a "
 			       "regular file, but is not\n");
@@ -520,14 +517,12 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
 			GOTO(out, rc = -EPROTO);
 		}
 
-		lmmsize = md->body->mbo_eadatasize;
-                lmm = req_capsule_server_sized_get(pill, &RMF_MDT_MD, lmmsize);
-                if (!lmm)
-                        GOTO(out, rc = -EPROTO);
-
-                rc = obd_unpackmd(dt_exp, &md->lsm, lmm, lmmsize);
-                if (rc < 0)
-                        GOTO(out, rc);
+		md->layout.lb_len = md->body->mbo_eadatasize;
+		md->layout.lb_buf = req_capsule_server_sized_get(pill,
+							&RMF_MDT_MD,
+							md->layout.lb_len);
+		if (md->layout.lb_buf == NULL)
+			GOTO(out, rc = -EPROTO);
 	} else if (md->body->mbo_valid & OBD_MD_FLDIREA) {
 		int lmvsize;
 		struct lov_mds_md *lmv;
@@ -620,8 +615,6 @@ out:
 #ifdef CONFIG_FS_POSIX_ACL
                 posix_acl_release(md->posix_acl);
 #endif
-                if (md->lsm)
-                        obd_free_memmd(dt_exp, &md->lsm);
         }
         return rc;
 }

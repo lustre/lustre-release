@@ -139,12 +139,12 @@ int cl_file_inode_init(struct inode *inode, struct lustre_md *md)
         struct cl_object     *clob;
         struct lu_site       *site;
         struct lu_fid        *fid;
-        struct cl_object_conf conf = {
-                .coc_inode = inode,
-                .u = {
-                        .coc_md    = md
-                }
-        };
+	struct cl_object_conf conf = {
+		.coc_inode = inode,
+		.u = {
+			.coc_layout = md->layout,
+		}
+	};
         int result = 0;
         int refcheck;
 
