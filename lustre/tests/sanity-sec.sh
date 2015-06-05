@@ -292,6 +292,13 @@ run_test 3 "rootsquash ============================="
 # as for remote client, the groups of the specified uid on MDT
 # will be obtained by upcall /sbin/l_getidentity and used.
 test_4() {
+	local server_version=$(lustre_version_code $SINGLEMDS)
+
+	[[ $server_version -ge $(version_code 2.6.93) ]] ||
+	[[ $server_version -ge $(version_code 2.5.35) &&
+	   $server_version -lt $(version_code 2.5.50) ]] ||
+		{ skip "Need MDS version at least 2.6.93 or 2.5.35"; return; }
+
 	if [ "$CLIENT_TYPE" = "remote" ]; then
 		do_facet $SINGLEMDS "echo '* 0 rmtown' > $PERM_CONF"
 	        do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
