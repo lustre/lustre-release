@@ -1629,6 +1629,24 @@ direct_io_iter, [
 ]) # LC_DIRECTIO_USE_ITER
 
 #
+# LC_KIOCB_HAS_NBYTES
+#
+# 3.19 kernel removed ki_nbytes from struct kiocb
+#
+AC_DEFUN([LC_KIOCB_HAS_NBYTES], [
+LB_CHECK_COMPILE([if struct kiocb has ki_nbytes field],
+ki_nbytes, [
+	#include <linux/fs.h>
+],[
+	struct kiocb iocb;
+
+	iocb.ki_nbytes = 0;
+],[
+	AC_DEFINE(HAVE_KI_NBYTES, 1, [ki_nbytes field exist])
+])
+]) # LC_KIOCB_HAS_NBYTES
+
+#
 # LC_CANCEL_DIRTY_PAGE
 #
 # 4.0.0 kernel removed cancle_dirty_page
@@ -1796,6 +1814,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 3.16
 	LC_DIRECTIO_USE_ITER
+
+	# 3.19
+	LC_KIOCB_HAS_NBYTES
 
 	# 4.0.0
 	LC_CANCEL_DIRTY_PAGE
