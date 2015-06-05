@@ -196,6 +196,53 @@ test_10b() {
 }
 run_test 10b "re-send BL AST"
 
+test_10c() {
+	local before=$(date +%s)
+	local evict
+	local mdccli
+	local mdcpath
+	local conn_uuid
+	local workdir
+	local pid
+	local rc
+
+	workdir="${DIR}/${tdir}"
+	mkdir -p ${workdir} || error "can't create workdir $?"
+	stat ${workdir} > /dev/null ||
+		error "failed to stat ${workdir}: $?"
+	mdtidx=$($LFS getdirstripe -i ${workdir})
+	mdtname=$($LFS mdts ${workdir} | grep -e "^$mdtidx:" |
+		  awk '{sub("_UUID", "", $2); print $2;}')
+	#assume one client
+	mdccli=$($LCTL dl | grep "${mdtname}-mdc" | awk '{print $4;}')
+	conn_uuid=$($LCTL get_param -n mdc.${mdccli}.mds_conn_uuid)
+	mdcpath="mdc.${mdccli}.import=connection=${conn_uuid}"
+
+	drop_bl_callback_once "chmod 0777 ${workdir}" &
+	pid=$!
+
+	# let chmod blocked
+	sleep 1
+	# force client reconnect
+	$LCTL set_param "${mdcpath}"
+
+	# wait client reconnect
+	client_reconnect
+	wait $pid
+	rc=$?
+	evict=$($LCTL get_param mdc.${mdccli}.state |
+	   awk -F"[ [,]" '/EVICTED]$/ { if (t<$4) {t=$4;} } END { print t }')
+
+	[[ $evict -le $before ]] ||
+		( $LCTL get_param mdc.$FSNAME-MDT*.state;
+		    error "eviction happened: $EVICT before:$BEFORE" )
+
+	[ $rc -eq 0 ] || error "chmod must finished OK"
+	checkstat -v -p 0777 "${workdir}" ||
+		error "client checkstat failed: $?"
+}
+run_test 10c "re-send BL AST vs reconnect race (LU-5569)"
+
 test_10d() {
 	local before=$(date +%s)
 	local evict
@@ -231,6 +278,7 @@ test_10d() {
 		(do_facet client $LCTL get_param osc.$FSNAME-OST0000*.state;
 		    error "no eviction: $evict before:$before")
 
+	$LCTL set_param fail_err=0
 	rm $TMP/$tfile
 	umount_client $MOUNT2
 }

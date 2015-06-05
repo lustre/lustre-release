@@ -1081,7 +1081,6 @@ struct ptlrpc_request {
 
 	/** early replies go to offset 0, regular replies go after that */
 	unsigned int			 rq_reply_off;
-
 	/** @} */
 
 	/** Fields that help to see if request and reply were swabbed or not */
@@ -1512,7 +1511,7 @@ struct ptlrpc_thread {
         /**
          * service thread pid
          */
-        pid_t t_pid;
+	pid_t t_pid;
         /**
          * put watchdog in the structure per thread b=14840
          */
@@ -2285,8 +2284,8 @@ int ptlrpc_init_import(struct obd_import *imp);
 int ptlrpc_disconnect_import(struct obd_import *imp, int noclose);
 int ptlrpc_import_recovery_state_machine(struct obd_import *imp);
 void deuuidify(char *uuid, const char *prefix, char **uuid_start,
-               int *uuid_len);
-
+	       int *uuid_len);
+void ptlrpc_import_enter_resend(struct obd_import *imp);
 /* ptlrpc/pack_generic.c */
 int ptlrpc_reconnect_import(struct obd_import *imp);
 /** @} */

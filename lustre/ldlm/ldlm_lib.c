@@ -721,13 +721,13 @@ static int target_handle_reconnect(struct lustre_handle *conn,
                                    struct obd_export *exp,
                                    struct obd_uuid *cluuid)
 {
-        ENTRY;
+	struct lustre_handle *hdl;
+	ENTRY;
 
-        if (exp->exp_connection && exp->exp_imp_reverse) {
-                struct lustre_handle *hdl;
+	hdl = &exp->exp_imp_reverse->imp_remote_handle;
+	if (exp->exp_connection && lustre_handle_is_used(hdl)) {
                 struct obd_device *target;
 
-                hdl = &exp->exp_imp_reverse->imp_remote_handle;
                 target = exp->exp_obd;
 
                 /* Might be a re-connect after a partition. */
@@ -797,17 +797,124 @@ static void
 check_and_start_recovery_timer(struct obd_device *obd,
                                struct ptlrpc_request *req, int new_client);
 
+/**
+ * update flags for import during reconnect process
+ */
+static int rev_import_flags_update(struct obd_import *revimp,
+				   struct ptlrpc_request *req)
+{
+	int rc;
+	struct obd_connect_data *data;
+
+	data = req_capsule_client_get(&req->rq_pill, &RMF_CONNECT_DATA);
+
+	if (data->ocd_connect_flags & OBD_CONNECT_AT)
+		revimp->imp_msghdr_flags |= MSGHDR_AT_SUPPORT;
+	else
+		revimp->imp_msghdr_flags &= ~MSGHDR_AT_SUPPORT;
+
+	revimp->imp_msghdr_flags |= MSGHDR_CKSUM_INCOMPAT18;
+
+	rc = sptlrpc_import_sec_adapt(revimp, req->rq_svc_ctx, &req->rq_flvr);
+	if (rc) {
+		CERROR("%s: cannot get reverse import %s security: rc = %d\n",
+			revimp->imp_client->cli_name,
+			libcfs_id2str(req->rq_peer), rc);
+		return rc;
+	}
+
+	return 0;
+}
+
+/**
+ * Allocate a new reverse import for an export.
+ *
+ * \retval -errno in case error hit
+ * \retval 0 if reverse import correctly init
+ **/
+int rev_import_init(struct obd_export *export)
+{
+	struct obd_device *obd = export->exp_obd;
+	struct obd_import *revimp;
+
+	LASSERT(export->exp_imp_reverse == NULL);
+
+	revimp = class_new_import(obd);
+	if (revimp == NULL)
+		return -ENOMEM;
+
+	revimp->imp_remote_handle.cookie = 0ULL;
+	revimp->imp_client = &obd->obd_ldlm_client;
+	revimp->imp_dlm_fake = 1;
+
+	/* it is safe to connect import in new state as no sends possible */
+	spin_lock(&export->exp_lock);
+	export->exp_imp_reverse = revimp;
+	spin_unlock(&export->exp_lock);
+	class_import_put(revimp);
+
+	return 0;
+}
+EXPORT_SYMBOL(rev_import_init);
+
+/**
+ * Handle reconnect for an export.
+ *
+ * \param exp export to handle reconnect process
+ * \param req client reconnect request
+ *
+ * \retval -rc in case securitfy flavor can't be changed
+ * \retval 0 in case none problems
+ */
+static int rev_import_reconnect(struct obd_export *exp,
+				struct ptlrpc_request *req)
+{
+	struct obd_import *revimp = exp->exp_imp_reverse;
+	struct lustre_handle *lh;
+	int rc;
+
+	/* avoid sending a request until import flags are changed */
+	ptlrpc_import_enter_resend(revimp);
+
+	if (revimp->imp_connection != NULL)
+		ptlrpc_connection_put(revimp->imp_connection);
+
+	/*
+	 * client from recovery don't have a handle so we need to take from
+	 * request. it may produce situation when wrong client connected
+	 * to recovery as we trust a client uuid
+	 */
+	lh = req_capsule_client_get(&req->rq_pill, &RMF_CONN);
+	revimp->imp_remote_handle = *lh;
+
+	/* unknown versions will be caught in
+	 * ptlrpc_handle_server_req_in->lustre_unpack_msg() */
+	revimp->imp_msg_magic = req->rq_reqmsg->lm_magic;
+
+	revimp->imp_connection = ptlrpc_connection_addref(exp->exp_connection);
+
+	rc = rev_import_flags_update(revimp, req);
+	if (rc != 0) {
+		/* it is safe to still be in RECOVERY phase as we are not able
+		 * to setup correct security flavor so requests are not able to
+		 * be delivered correctly */
+		return rc;
+	}
+
+	/* resend all rpc's via new connection */
+	return ptlrpc_import_recovery_state_machine(revimp);
+}
+
 int target_handle_connect(struct ptlrpc_request *req)
 {
-	struct obd_device *target = NULL, *targref = NULL;
-        struct obd_export *export = NULL;
-        struct obd_import *revimp;
-	struct obd_import *tmp_imp = NULL;
-        struct lustre_handle conn;
-        struct lustre_handle *tmp;
+	struct obd_device *target = NULL;
+	struct obd_export *export = NULL;
+	/* connect handle - filled from target_handle_reconnect in
+	 * reconnect case */
+	struct lustre_handle conn;
+	struct lustre_handle *tmp;
         struct obd_uuid tgtuuid;
         struct obd_uuid cluuid;
-        struct obd_uuid remote_uuid;
         char *str;
         int rc = 0;
         char *target_start;
@@ -844,6 +951,11 @@ int target_handle_connect(struct ptlrpc_request *req)
 	}
 
 	spin_lock(&target->obd_dev_lock);
+	/* Make sure the target isn't cleaned up while we're here. Yes,
+	 * there's still a race between the above check and our incref here.
+	 * Really, class_uuid2obd should take the ref. */
+	class_incref(target, __func__, current);
+
 	if (target->obd_stopping || !target->obd_set_up) {
 		spin_unlock(&target->obd_dev_lock);
 
@@ -865,11 +977,6 @@ int target_handle_connect(struct ptlrpc_request *req)
 		GOTO(out, rc = -EAGAIN);
 	}
 
-	/* Make sure the target isn't cleaned up while we're here. Yes,
-	 * there's still a race between the above check and our incref here.
-	 * Really, class_uuid2obd should take the ref. */
-	targref = class_incref(target, __FUNCTION__, current);
-
 	target->obd_conn_inprogress++;
 	spin_unlock(&target->obd_dev_lock);
 
@@ -880,21 +987,6 @@ int target_handle_connect(struct ptlrpc_request *req)
         }
 
         obd_str2uuid(&cluuid, str);
-
-	/* XXX Extract a nettype and format accordingly. */
-	switch (sizeof(lnet_nid_t)) {
-	/* NB the casts only avoid compiler warnings. */
-        case 8:
-                snprintf(remote_uuid.uuid, sizeof remote_uuid,
-                         "NET_"LPX64"_UUID", (__u64)req->rq_peer.nid);
-                break;
-        case 4:
-                snprintf(remote_uuid.uuid, sizeof remote_uuid,
-                         "NET_%x_UUID", (__u32)req->rq_peer.nid);
-                break;
-        default:
-                LBUG();
-        }
 
         tmp = req_capsule_client_get(&req->rq_pill, &RMF_CONN);
         if (tmp == NULL)
@@ -1144,8 +1236,10 @@ dont_check_exports:
 			if (mds_conn && OBD_FAIL_CHECK(OBD_FAIL_TGT_RCVG_FLAG))
 				lustre_msg_add_op_flags(req->rq_repmsg,
 							MSG_CONNECT_RECOVERING);
-			if (rc == 0)
+			if (rc == 0) {
 				conn.cookie = export->exp_handle.h_cookie;
+				rc = rev_import_init(export);
+			}
 
 			if (mds_mds_conn)
 				new_mds_mds_conn = true;
@@ -1172,11 +1266,6 @@ dont_check_exports:
                  * obd_connect_data. */
                 memcpy(tmpdata, data, min(tmpsize, size));
         }
-
-        /* If all else goes well, this is our RPC return code. */
-        req->rq_status = 0;
-
-        lustre_msg_set_handle(req->rq_repmsg, &conn);
 
         /* If the client and the server are the same node, we will already
          * have an export that really points to the client's DLM export,
@@ -1224,14 +1313,19 @@ dont_check_exports:
                 ptlrpc_connection_put(export->exp_connection);
         }
 
-        export->exp_connection = ptlrpc_connection_get(req->rq_peer,
-                                                       req->rq_self,
-                                                       &remote_uuid);
-	if (hlist_unhashed(&export->exp_nid_hash)) {
-                cfs_hash_add(export->exp_obd->obd_nid_hash,
-                             &export->exp_connection->c_peer.nid,
-                             &export->exp_nid_hash);
-        }
+	export->exp_connection = ptlrpc_connection_get(req->rq_peer,
+						       req->rq_self,
+						       &cluuid);
+	if (hlist_unhashed(&export->exp_nid_hash))
+		cfs_hash_add(export->exp_obd->obd_nid_hash,
+			     &export->exp_connection->c_peer.nid,
+			     &export->exp_nid_hash);
+
+	lustre_msg_set_handle(req->rq_repmsg, &conn);
+
+	rc = rev_import_reconnect(export, req);
+	if (rc != 0)
+		GOTO(out, rc);
 
 	if (target->obd_recovering && !export->exp_in_recovery && !lw_client) {
                 int has_transno;
@@ -1283,54 +1377,7 @@ dont_check_exports:
 	if (target->obd_recovering && !lw_client)
                 lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECOVERING);
 
-        tmp = req_capsule_client_get(&req->rq_pill, &RMF_CONN);
-        conn = *tmp;
-
-	/* Return -ENOTCONN in case of errors to let client reconnect. */
-	revimp = class_new_import(target);
-	if (revimp == NULL) {
-		CERROR("fail to alloc new reverse import.\n");
-		GOTO(out, rc = -ENOTCONN);
-	}
-
-	spin_lock(&export->exp_lock);
-	if (export->exp_imp_reverse != NULL)
-		/* destroyed import can be still referenced in ctxt */
-		tmp_imp = export->exp_imp_reverse;
-	export->exp_imp_reverse = revimp;
-	spin_unlock(&export->exp_lock);
-
-        revimp->imp_connection = ptlrpc_connection_addref(export->exp_connection);
-        revimp->imp_client = &export->exp_obd->obd_ldlm_client;
-        revimp->imp_remote_handle = conn;
-        revimp->imp_dlm_fake = 1;
-        revimp->imp_state = LUSTRE_IMP_FULL;
-
-	/* Unknown versions will be caught in
-	 * ptlrpc_handle_server_req_in->lustre_unpack_msg(). */
-        revimp->imp_msg_magic = req->rq_reqmsg->lm_magic;
-
-	if (data->ocd_connect_flags & OBD_CONNECT_AT)
-		revimp->imp_msghdr_flags |= MSGHDR_AT_SUPPORT;
-	else
-		revimp->imp_msghdr_flags &= ~MSGHDR_AT_SUPPORT;
-
-	revimp->imp_msghdr_flags |= MSGHDR_CKSUM_INCOMPAT18;
-
-	rc = sptlrpc_import_sec_adapt(revimp, req->rq_svc_ctx, &req->rq_flvr);
-	if (rc) {
-		CERROR("Failed to get sec for reverse import: %d\n", rc);
-		spin_lock(&export->exp_lock);
-		export->exp_imp_reverse = NULL;
-		spin_unlock(&export->exp_lock);
-		class_destroy_import(revimp);
-	}
-
-	class_import_put(revimp);
-
 out:
-	if (tmp_imp != NULL)
-		client_destroy_import(tmp_imp);
 	if (export) {
 		spin_lock(&export->exp_lock);
 		export->exp_connecting = 0;
@@ -1338,15 +1385,14 @@ out:
 
 		class_export_put(export);
 	}
-	if (targref) {
+	if (target != NULL) {
 		spin_lock(&target->obd_dev_lock);
 		target->obd_conn_inprogress--;
 		spin_unlock(&target->obd_dev_lock);
 
-		class_decref(targref, __func__, current);
+		class_decref(target, __func__, current);
 	}
-	if (rc)
-		req->rq_status = rc;
+	req->rq_status = rc;
 	RETURN(rc);
 }
 
