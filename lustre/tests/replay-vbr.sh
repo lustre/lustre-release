@@ -7,6 +7,12 @@ set -e
 # bug number:  16356
 ALWAYS_EXCEPT="12a   $REPLAY_VBR_EXCEPT"
 
+case "$(lsb_release -sr)" in	# only disable tests for el7
+7*)	# bug number:  LU-6455
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 4i 4j 4k 10b"
+	;;
+esac
+
 SAVE_PWD=$PWD
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 SETUP=${SETUP:-}
