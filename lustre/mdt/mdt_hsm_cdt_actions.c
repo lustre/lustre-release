@@ -205,12 +205,10 @@ static int mdt_agent_record_update_cb(const struct lu_env *env,
 	struct llog_agent_req_rec	*larr;
 	struct data_update_cb		*ducb;
 	int				 rc, i;
-	int				 found;
 	ENTRY;
 
 	larr = (struct llog_agent_req_rec *)hdr;
 	ducb = data;
-	found = 0;
 
 	/* check if all done */
 	if (ducb->cookies_count == ducb->cookies_done)
@@ -237,10 +235,8 @@ static int mdt_agent_record_update_cb(const struct lu_env *env,
 
 			larr->arr_status = ducb->status;
 			larr->arr_req_change = ducb->change_time;
-			rc = mdt_agent_llog_update_rec(env, ducb->mdt, llh,
-						       larr);
+			rc = llog_write(env, llh, hdr, hdr->lrh_index);
 			ducb->cookies_done++;
-			found = 1;
 			break;
 		}
 	}
@@ -248,9 +244,6 @@ static int mdt_agent_record_update_cb(const struct lu_env *env,
 	if (rc < 0)
 		CERROR("%s: mdt_agent_llog_update_rec() failed, rc = %d\n",
 		       mdt_obd_name(ducb->mdt), rc);
-
-	if (found == 1)
-		RETURN(LLOG_DEL_RECORD);
 
 	RETURN(rc);
 }
@@ -287,35 +280,6 @@ int mdt_agent_record_update(const struct lu_env *env, struct mdt_device *mdt,
 		       mdt_obd_name(mdt), rc,
 		       agent_req_status2name(status),
 		       cookies_count, ducb.cookies_done);
-	RETURN(rc);
-}
-
-/**
- * update a llog record
- *  cdt_llog_lock must be hold
- * \param env [IN] environment
- * \param mdt [IN] mdt device
- * \param llh [IN] llog handle, must be a catalog handle
- * \param larr [IN] record
- * \retval 0 success
- * \retval -ve failure
- */
-int mdt_agent_llog_update_rec(const struct lu_env *env,
-			      struct mdt_device *mdt, struct llog_handle *llh,
-			      struct llog_agent_req_rec *larr)
-{
-	struct llog_rec_hdr	 saved_hdr;
-	int			 rc;
-	ENTRY;
-
-	/* saved old record info */
-	saved_hdr = larr->arr_hdr;
-	/* add new record with updated values */
-	larr->arr_hdr.lrh_id = 0;
-	larr->arr_hdr.lrh_index = 0;
-	rc = llog_cat_add(env, llh->u.phd.phd_cat_handle, &larr->arr_hdr,
-			  NULL);
-	larr->arr_hdr = saved_hdr;
 	RETURN(rc);
 }
 

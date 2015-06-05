@@ -807,9 +807,6 @@ int mdt_agent_record_add(const struct lu_env *env, struct mdt_device *mdt,
 int mdt_agent_record_update(const struct lu_env *env,
 			    struct mdt_device *mdt, __u64 *cookies,
 			    int cookies_count, enum agent_req_status status);
-int mdt_agent_llog_update_rec(const struct lu_env *env, struct mdt_device *mdt,
-			      struct llog_handle *llh,
-			      struct llog_agent_req_rec *larr);
 
 /* mdt/mdt_hsm_cdt_agent.c */
 extern const struct file_operations mdt_hsm_agent_fops;
