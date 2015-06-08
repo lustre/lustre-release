@@ -192,6 +192,7 @@ int cfs_get_environ(const char *key, char *value, int *val_len)
 	int key_len = strlen(key);
 	unsigned long addr;
 	int rc;
+	bool skip = false;
 	ENTRY;
 
 	buffer = kmalloc(buf_len, GFP_USER);
@@ -236,13 +237,16 @@ int cfs_get_environ(const char *key, char *value, int *val_len)
 			/* The last entry of this buffer cross the buffer
 			 * boundary, reread it in next cycle. */
 			if (unlikely(env_end - env_start == scan_len)) {
-				/* This entry is too large to fit in buffer */
-				if (unlikely(scan_len == this_len)) {
-					CERROR("Too long env variable.\n");
-					GOTO(out, rc = -EINVAL);
-				}
-				addr -= scan_len;
+				/* Just skip the entry larger than page size,
+				 * it can't be jobID env variable. */
+				if (unlikely(scan_len == this_len))
+					skip = true;
+				else
+					addr -= scan_len;
 				break;
+			} else if (unlikely(skip)) {
+				skip = false;
+				goto skip;
 			}
 
 			entry = env_start;
@@ -261,7 +265,7 @@ int cfs_get_environ(const char *key, char *value, int *val_len)
 				*val_len = entry_len;
 				GOTO(out, rc = 0);
 			}
-
+skip:
 			scan_len -= (env_end - env_start + 1);
 			env_start = env_end + 1;
 		}
