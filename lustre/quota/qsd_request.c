@@ -133,7 +133,7 @@ int qsd_send_dqacq(const struct lu_env *env, struct obd_export *exp,
 		ptlrpc_req_finished(req);
 	} else {
 		req->rq_interpret_reply = qsd_dqacq_interpret;
-		ptlrpcd_add_req(req, PDL_POLICY_LOCAL, -1);
+		ptlrpcd_add_req(req);
 	}
 
 	RETURN(rc);
@@ -325,7 +325,7 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 	} else {
 		/* queue lock request and return */
 		req->rq_interpret_reply = qsd_intent_interpret;
-		ptlrpcd_add_req(req, PDL_POLICY_LOCAL, -1);
+		ptlrpcd_add_req(req);
 	}
 
 	RETURN(rc);

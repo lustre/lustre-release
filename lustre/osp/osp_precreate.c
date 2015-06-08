@@ -207,7 +207,7 @@ static int osp_statfs_update(struct osp_device *d)
 	d->opd_statfs_fresh_till = cfs_time_shift(obd_timeout * 1000);
 	d->opd_statfs_update_in_progress = 1;
 
-	ptlrpcd_add_req(req, PDL_POLICY_ROUND, -1);
+	ptlrpcd_add_req(req);
 
 	RETURN(0);
 }

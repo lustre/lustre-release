@@ -96,22 +96,22 @@ EXPORT_SYMBOL(ptlrpc_obd_ping);
 
 static int ptlrpc_ping(struct obd_import *imp)
 {
-        struct ptlrpc_request *req;
-        ENTRY;
+	struct ptlrpc_request	*req;
+	ENTRY;
 
-        req = ptlrpc_prep_ping(imp);
-        if (req == NULL) {
-                CERROR("OOM trying to ping %s->%s\n",
-                       imp->imp_obd->obd_uuid.uuid,
-                       obd2cli_tgt(imp->imp_obd));
-                RETURN(-ENOMEM);
-        }
+	req = ptlrpc_prep_ping(imp);
+	if (req == NULL) {
+		CERROR("OOM trying to ping %s->%s\n",
+		       imp->imp_obd->obd_uuid.uuid,
+		       obd2cli_tgt(imp->imp_obd));
+		RETURN(-ENOMEM);
+	}
 
-        DEBUG_REQ(D_INFO, req, "pinging %s->%s",
-                  imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
-        ptlrpcd_add_req(req, PDL_POLICY_ROUND, -1);
+	DEBUG_REQ(D_INFO, req, "pinging %s->%s",
+		  imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
+	ptlrpcd_add_req(req);
 
-        RETURN(0);
+	RETURN(0);
 }
 
 static void ptlrpc_update_next_ping(struct obd_import *imp, int soon)

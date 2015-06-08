@@ -687,7 +687,7 @@ static int osc_io_data_version_start(const struct lu_env *env,
 	dva = ptlrpc_req_async_args(req);
 	dva->dva_oio = oio;
 
-	ptlrpcd_add_req(req, PDL_POLICY_ROUND, -1);
+	ptlrpcd_add_req(req);
 
 	RETURN(0);
 }

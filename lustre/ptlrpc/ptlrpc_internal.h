@@ -68,7 +68,7 @@ extern struct mutex pinger_mutex;
 
 int ptlrpc_start_thread(struct ptlrpc_service_part *svcpt, int wait);
 /* ptlrpcd.c */
-int ptlrpcd_start(int index, int max, const char *name, struct ptlrpcd_ctl *pc);
+int ptlrpcd_start(struct ptlrpcd_ctl *pc);
 
 /* client.c */
 void ptlrpc_at_adj_net_latency(struct ptlrpc_request *req,

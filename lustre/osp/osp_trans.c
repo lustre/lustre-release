@@ -567,7 +567,7 @@ int osp_unplug_async_request(const struct lu_env *env,
 		args->oaua_waitq = NULL;
 		args->oaua_flow_control = false;
 		req->rq_interpret_reply = osp_update_interpret;
-		ptlrpcd_add_req(req, PDL_POLICY_LOCAL, -1);
+		ptlrpcd_add_req(req);
 	}
 
 	return rc;
@@ -967,7 +967,7 @@ static int osp_send_update_req(const struct lu_env *env,
 			atomic_inc(args->oaua_count);
 		}
 
-		ptlrpcd_add_req(req, PDL_POLICY_LOCAL, -1);
+		ptlrpcd_add_req(req);
 		req = NULL;
 	} else {
 		osp_thandle_get(oth); /* hold for commit callback */

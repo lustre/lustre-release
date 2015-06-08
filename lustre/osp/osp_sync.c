@@ -556,7 +556,7 @@ static void osp_sync_send_new_rpc(struct osp_device *d,
 	jra->jra_magic = OSP_JOB_MAGIC;
 	INIT_LIST_HEAD(&jra->jra_link);
 
-	ptlrpcd_add_req(req, PDL_POLICY_ROUND, -1);
+	ptlrpcd_add_req(req);
 }
 
 

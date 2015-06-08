@@ -917,15 +917,17 @@ ptlrpc_prep_req(struct obd_import *imp, __u32 version, int opcode, int count,
 }
 
 /**
- * Allocate and initialize new request set structure.
+ * Allocate and initialize new request set structure on the current CPT.
  * Returns a pointer to the newly allocated set structure or NULL on error.
  */
 struct ptlrpc_request_set *ptlrpc_prep_set(void)
 {
-	struct ptlrpc_request_set *set;
+	struct ptlrpc_request_set	*set;
+	int				cpt;
 
 	ENTRY;
-	OBD_ALLOC(set, sizeof *set);
+	cpt = cfs_cpt_current(cfs_cpt_table, 0);
+	OBD_CPT_ALLOC(set, cfs_cpt_table, cpt, sizeof *set);
 	if (!set)
 		RETURN(NULL);
 	atomic_set(&set->set_refcount, 1);
@@ -2928,7 +2930,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
 	atomic_inc(&req->rq_import->imp_replay_inflight);
 	ptlrpc_request_addref(req);	/* ptlrpcd needs a ref */
 
-	ptlrpcd_add_req(req, PDL_POLICY_LOCAL, -1);
+	ptlrpcd_add_req(req);
 	RETURN(0);
 }
 
@@ -3172,7 +3174,7 @@ static void ptlrpcd_add_work_req(struct ptlrpc_request *req)
 	req->rq_xid		= ptlrpc_next_xid();
 	req->rq_import_generation = req->rq_import->imp_generation;
 
-	ptlrpcd_add_req(req, PDL_POLICY_ROUND, -1);
+	ptlrpcd_add_req(req);
 }
 
 static int work_interpreter(const struct lu_env *env,

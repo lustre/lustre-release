@@ -128,7 +128,7 @@ int osc_sync_base(struct osc_object *obj, struct obdo *oa,
 
 int osc_process_config_base(struct obd_device *obd, struct lustre_cfg *cfg);
 int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
-		  struct list_head *ext_list, int cmd, pdl_policy_t p);
+		  struct list_head *ext_list, int cmd);
 long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 		   long target, bool force);
 long osc_lru_reclaim(struct client_obd *cli);
