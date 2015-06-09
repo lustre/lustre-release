@@ -631,6 +631,50 @@ free_lrd:
 }
 
 /**
+ * Stop sub recovery thread
+ *
+ * Stop sub recovery thread on all subs.
+ *
+ * \param[in] env	execution environment
+ * \param[in] lod	lod device to do update recovery
+ */
+static void lod_sub_stop_recovery_threads(const struct lu_env *env,
+					  struct lod_device *lod)
+{
+	struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
+	struct ptlrpc_thread	*thread;
+	unsigned int i;
+
+	/* Stop the update log commit cancel threads and finish master
+	 * llog ctxt */
+	thread = &lod->lod_child_recovery_thread;
+	/* Stop recovery thread first */
+	if (thread != NULL && thread->t_flags & SVC_RUNNING) {
+		thread->t_flags = SVC_STOPPING;
+		wake_up(&thread->t_ctl_waitq);
+		wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_STOPPED);
+	}
+
+	lod_getref(ltd);
+	cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
+		struct lod_tgt_desc	*tgt;
+
+		tgt = LTD_TGT(ltd, i);
+		thread = tgt->ltd_recovery_thread;
+		if (thread != NULL && thread->t_flags & SVC_RUNNING) {
+			thread->t_flags = SVC_STOPPING;
+			wake_up(&thread->t_ctl_waitq);
+			wait_event(thread->t_ctl_waitq,
+				   thread->t_flags & SVC_STOPPED);
+			OBD_FREE_PTR(tgt->ltd_recovery_thread);
+			tgt->ltd_recovery_thread = NULL;
+		}
+	}
+
+	lod_putref(lod, ltd);
+}
+
+/**
  * finish all sub llog
  *
  * cleanup all of sub llog ctxt on the LOD.
@@ -653,12 +697,8 @@ static void lod_sub_fini_all_llogs(const struct lu_env *env,
 		struct lod_tgt_desc	*tgt;
 
 		tgt = LTD_TGT(ltd, i);
-		if (tgt->ltd_recovery_thread != NULL) {
-			lod_sub_fini_llog(env, tgt->ltd_tgt,
-					  tgt->ltd_recovery_thread);
-			OBD_FREE_PTR(tgt->ltd_recovery_thread);
-			tgt->ltd_recovery_thread = NULL;
-		}
+		lod_sub_fini_llog(env, tgt->ltd_tgt,
+				  tgt->ltd_recovery_thread);
 	}
 
 	lod_putref(lod, ltd);
@@ -843,6 +883,7 @@ static int lod_process_config(const struct lu_env *env,
 			CDEBUG(D_HA, "%s: can't process %u: %d\n",
 			       lod2obd(lod)->obd_name, lcfg->lcfg_command, rc);
 
+		lod_sub_stop_recovery_threads(env, lod);
 		lod_fini_distribute_txn(env, lod);
 		lod_sub_fini_all_llogs(env, lod);
 		break;
