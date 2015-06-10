@@ -41,10 +41,6 @@
 #ifndef __LIBCFS_USER_TIME_H__
 #define __LIBCFS_USER_TIME_H__
 
-#ifndef __LIBCFS_LIBCFS_H__
-#error Do not #include this file directly. #include <libcfs/libcfs.h> instead
-#endif
-
 /* Portable time API */
 
 /*

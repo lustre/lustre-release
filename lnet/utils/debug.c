@@ -43,9 +43,24 @@
 #define _GNU_SOURCE
 #endif
 
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
-#include <libcfs/libcfs.h>
+
+#include <linux/types.h>
+
 #include <libcfs/util/ioctl.h>
+#include <libcfs/user-time.h>
+#include <libcfs/libcfs_debug.h>
 #include <lnet/lnetctl.h>
 
 static char rawbuf[8192];
