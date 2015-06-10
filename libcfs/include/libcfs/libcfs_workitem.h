@@ -104,11 +104,7 @@ void cfs_wi_exit(struct cfs_wi_sched *sched, cfs_workitem_t *wi);
 int  cfs_wi_startup(void);
 void cfs_wi_shutdown(void);
 
-#ifdef __KERNEL__
 /** # workitem scheduler loops before reschedule */
 #define CFS_WI_RESCHED    128
-#else
-int cfs_wi_check_events(void);
-#endif
 
 #endif /* __LIBCFS_WORKITEM_H__ */

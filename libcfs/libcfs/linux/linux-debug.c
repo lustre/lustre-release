@@ -158,6 +158,7 @@ void libcfs_run_lbug_upcall(struct libcfs_debug_msg_data *msgdata)
 
         libcfs_run_upcall (argv);
 }
+EXPORT_SYMBOL(libcfs_run_lbug_upcall);
 
 /* coverity[+kill] */
 void lbug_with_loc(struct libcfs_debug_msg_data *msgdata)
@@ -180,8 +181,7 @@ void lbug_with_loc(struct libcfs_debug_msg_data *msgdata)
         while (1)
                 schedule();
 }
-
-#ifdef __KERNEL__
+EXPORT_SYMBOL(lbug_with_loc);
 
 #ifdef CONFIG_X86
 #include <linux/nmi.h>
@@ -262,6 +262,7 @@ void libcfs_debug_dumpstack(struct task_struct *tsk)
 	printk("\nCall Trace:\n");
 	libcfs_call_trace(tsk);
 }
+EXPORT_SYMBOL(libcfs_debug_dumpstack);
 
 struct task_struct *libcfs_current(void)
 {
@@ -310,10 +311,3 @@ void libcfs_unregister_panic_notifier(void)
 {
         atomic_notifier_chain_unregister(&panic_notifier_list, &libcfs_panic_notifier);
 }
-
-EXPORT_SYMBOL(libcfs_debug_dumpstack);
-
-#endif /* __KERNEL__ */
-
-EXPORT_SYMBOL(libcfs_run_lbug_upcall);
-EXPORT_SYMBOL(lbug_with_loc);

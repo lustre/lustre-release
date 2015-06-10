@@ -48,12 +48,10 @@
 
 typedef struct cfs_wi_sched {
 	struct list_head		ws_list;	/* chain on global list */
-#ifdef __KERNEL__
 	/** serialised workitems */
 	spinlock_t			ws_lock;
 	/** where schedulers sleep */
 	wait_queue_head_t		ws_waitq;
-#endif
 	/** concurrent workitems */
 	struct list_head		ws_runq;
 	/** rescheduled running-workitems, a workitem can be rescheduled
@@ -89,7 +87,6 @@ static struct cfs_workitem_data {
 	int			wi_stopping;
 } cfs_wi_data;
 
-#ifdef __KERNEL__
 static inline void
 cfs_wi_sched_lock(cfs_wi_sched_t *sched)
 {
@@ -119,22 +116,6 @@ cfs_wi_sched_cansleep(cfs_wi_sched_t *sched)
 	return 1;
 }
 
-#else /* !__KERNEL__ */
-
-static inline void
-cfs_wi_sched_lock(cfs_wi_sched_t *sched)
-{
-	spin_lock(&cfs_wi_data.wi_glock);
-}
-
-static inline void
-cfs_wi_sched_unlock(cfs_wi_sched_t *sched)
-{
-	spin_unlock(&cfs_wi_data.wi_glock);
-}
-
-#endif /* __KERNEL__ */
-
 /* XXX:
  * 0. it only works when called from wi->wi_action.
  * 1. when it returns no one shall try to schedule the workitem.
@@ -147,9 +128,8 @@ cfs_wi_exit(struct cfs_wi_sched *sched, cfs_workitem_t *wi)
 
 	cfs_wi_sched_lock(sched);
 
-#ifdef __KERNEL__
 	LASSERT(wi->wi_running);
-#endif
+
 	if (wi->wi_scheduled) { /* cancel pending schedules */
 		LASSERT(!list_empty(&wi->wi_list));
 		list_del_init(&wi->wi_list);
@@ -226,9 +206,7 @@ cfs_wi_schedule(struct cfs_wi_sched *sched, cfs_workitem_t *wi)
 		sched->ws_nscheduled++;
 		if (!wi->wi_running) {
 			list_add_tail(&wi->wi_list, &sched->ws_runq);
-#ifdef __KERNEL__
 			wake_up(&sched->ws_waitq);
-#endif
 		} else {
 			list_add(&wi->wi_list, &sched->ws_rerunq);
 		}
@@ -239,8 +217,6 @@ cfs_wi_schedule(struct cfs_wi_sched *sched, cfs_workitem_t *wi)
 	return;
 }
 EXPORT_SYMBOL(cfs_wi_schedule);
-
-#ifdef __KERNEL__
 
 static int
 cfs_wi_scheduler (void *arg)
@@ -328,54 +304,6 @@ cfs_wi_scheduler (void *arg)
 	return 0;
 }
 
-#else /* __KERNEL__ */
-
-int
-cfs_wi_check_events (void)
-{
-	int               n = 0;
-	cfs_workitem_t   *wi;
-
-	spin_lock(&cfs_wi_data.wi_glock);
-
-	for (;;) {
-		struct cfs_wi_sched	*sched = NULL;
-		struct cfs_wi_sched	*tmp;
-
-                /** rerunq is always empty for userspace */
-		list_for_each_entry(tmp, &cfs_wi_data.wi_scheds, ws_list) {
-			if (!list_empty(&tmp->ws_runq)) {
-				sched = tmp;
-				break;
-			}
-		}
-
-		if (sched == NULL)
-			break;
-
-		wi = list_entry(sched->ws_runq.next,
-				    cfs_workitem_t, wi_list);
-		list_del_init(&wi->wi_list);
-
-		LASSERT(sched->ws_nscheduled > 0);
-		sched->ws_nscheduled--;
-
-		LASSERT(wi->wi_scheduled);
-		wi->wi_scheduled = 0;
-		spin_unlock(&cfs_wi_data.wi_glock);
-
-		n++;
-		(*wi->wi_action) (wi);
-
-		spin_lock(&cfs_wi_data.wi_glock);
-	}
-
-	spin_unlock(&cfs_wi_data.wi_glock);
-	return n;
-}
-
-#endif
-
 void
 cfs_wi_sched_destroy(struct cfs_wi_sched *sched)
 {
@@ -395,7 +323,6 @@ cfs_wi_sched_destroy(struct cfs_wi_sched *sched)
 
 	spin_unlock(&cfs_wi_data.wi_glock);
 
-#ifdef __KERNEL__
 	wake_up_all(&sched->ws_waitq);
 
 	spin_lock(&cfs_wi_data.wi_glock);
@@ -418,7 +345,7 @@ cfs_wi_sched_destroy(struct cfs_wi_sched *sched)
 	list_del(&sched->ws_list);
 
 	spin_unlock(&cfs_wi_data.wi_glock);
-#endif
+
 	LASSERT(sched->ws_nscheduled == 0);
 
 	LIBCFS_FREE(sched, sizeof(*sched));
@@ -449,15 +376,13 @@ cfs_wi_sched_create(char *name, struct cfs_cpt_table *cptab,
 	sched->ws_cptab = cptab;
 	sched->ws_cpt = cpt;
 
-#ifdef __KERNEL__
 	spin_lock_init(&sched->ws_lock);
 	init_waitqueue_head(&sched->ws_waitq);
-#endif
+
 	INIT_LIST_HEAD(&sched->ws_runq);
 	INIT_LIST_HEAD(&sched->ws_rerunq);
 	INIT_LIST_HEAD(&sched->ws_list);
 
-#ifdef __KERNEL__
 	for (; nthrs > 0; nthrs--)  {
 		char			name[16];
 		struct task_struct	*task;
@@ -500,7 +425,7 @@ cfs_wi_sched_create(char *name, struct cfs_cpt_table *cptab,
 			return rc;
 		}
 	}
-#endif
+
 	spin_lock(&cfs_wi_data.wi_glock);
 	list_add(&sched->ws_list, &cfs_wi_data.wi_scheds);
 	spin_unlock(&cfs_wi_data.wi_glock);
@@ -531,7 +456,6 @@ cfs_wi_shutdown (void)
 	cfs_wi_data.wi_stopping = 1;
 	spin_unlock(&cfs_wi_data.wi_glock);
 
-#ifdef __KERNEL__
 	/* nobody should contend on this list */
 	list_for_each_entry(sched, &cfs_wi_data.wi_scheds, ws_list) {
 		sched->ws_stopping = 1;
@@ -549,7 +473,7 @@ cfs_wi_shutdown (void)
 		}
 		spin_unlock(&cfs_wi_data.wi_glock);
 	}
-#endif
+
 	while (!list_empty(&cfs_wi_data.wi_scheds)) {
 		sched = list_entry(cfs_wi_data.wi_scheds.next,
 				       struct cfs_wi_sched, ws_list);
