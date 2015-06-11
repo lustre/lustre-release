@@ -173,20 +173,21 @@ static struct cfs_hash_ops nodemap_hash_operations = {
 /* end of cfs_hash functions */
 
 /**
- * Helper iterator to clean up nodemap on module exit.
+ * Helper iterator to convert nodemap hash to list.
  *
- * \param	hs		hash structure
- * \param	bd		bucket descriptor
- * \param	hnode		hash node
- * \param	data		not used here
+ * \param	hs			hash structure
+ * \param	bd			bucket descriptor
+ * \param	hnode			hash node
+ * \param	nodemap_list_head	list head for list of nodemaps in hash
  */
 static int nodemap_cleanup_iter_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
-				   struct hlist_node *hnode, void *data)
+				   struct hlist_node *hnode,
+				   void *nodemap_list_head)
 {
-	struct lu_nodemap *nodemap;
+	struct lu_nodemap	*nodemap;
 
 	nodemap = hlist_entry(hnode, struct lu_nodemap, nm_hash);
-	nodemap_putref(nodemap);
+	list_add(&nodemap->nm_list, (struct list_head *)nodemap_list_head);
 
 	return 0;
 }
@@ -196,8 +197,21 @@ static int nodemap_cleanup_iter_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
  */
 void nodemap_cleanup_all(void)
 {
-	cfs_hash_for_each_safe(nodemap_hash, nodemap_cleanup_iter_cb, NULL);
+	struct lu_nodemap *nodemap = NULL;
+	struct list_head *pos, *next;
+	struct list_head nodemap_list_head = LIST_HEAD_INIT(nodemap_list_head);
+
+	cfs_hash_for_each_safe(nodemap_hash, nodemap_cleanup_iter_cb,
+			       &nodemap_list_head);
 	cfs_hash_putref(nodemap_hash);
+
+	/* Because nodemap_destroy might sleep, we can't destroy them
+	 * in cfs_hash_for_each. Instead we build a list and destroy here
+	 */
+	list_for_each_safe(pos, next, &nodemap_list_head) {
+		nodemap = list_entry(pos, struct lu_nodemap, nm_list);
+		nodemap_putref(nodemap);
+	}
 }
 
 /**
@@ -763,6 +777,7 @@ static int nodemap_create(const char *name, bool is_default)
 	}
 
 	INIT_LIST_HEAD(&nodemap->nm_ranges);
+	INIT_LIST_HEAD(&nodemap->nm_list);
 
 	rwlock_init(&nodemap->nm_idmap_lock);
 	nodemap->nm_fs_to_client_uidmap = RB_ROOT;
