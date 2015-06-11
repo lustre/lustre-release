@@ -43,6 +43,8 @@
  * yet */
 #define NODEMAP_PROC_DEBUG 1
 
+static LIST_HEAD(nodemap_pde_list);
+
 /**
  * Reads and prints the idmap for the given nodemap.
  *
@@ -52,10 +54,21 @@
  */
 static int nodemap_idmap_show(struct seq_file *m, void *data)
 {
-	struct lu_nodemap	*nodemap = m->private;
+	struct lu_nodemap	*nodemap;
 	struct lu_idmap		*idmap;
 	struct rb_node		*node;
 	bool			cont = 0;
+	int rc;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(m->private);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap)) {
+		rc = PTR_ERR(nodemap);
+		CERROR("cannot find nodemap '%s': rc = %d\n",
+			(char *)m->private, rc);
+		return rc;
+	}
 
 	seq_printf(m, "[\n");
 	read_lock(&nodemap->nm_idmap_lock);
@@ -84,6 +97,7 @@ static int nodemap_idmap_show(struct seq_file *m, void *data)
 	seq_printf(m, "\n");
 	seq_printf(m, "]\n");
 
+	nodemap_putref(nodemap);
 	return 0;
 }
 
@@ -96,9 +110,7 @@ static int nodemap_idmap_show(struct seq_file *m, void *data)
  */
 static int nodemap_idmap_open(struct inode *inode, struct file *file)
 {
-	struct lu_nodemap *nodemap = PDE_DATA(inode);
-
-	return single_open(file, nodemap_idmap_show, nodemap);
+	return single_open(file, nodemap_idmap_show, PDE_DATA(inode));
 }
 
 /**
@@ -110,15 +122,26 @@ static int nodemap_idmap_open(struct inode *inode, struct file *file)
  */
 static int nodemap_ranges_show(struct seq_file *m, void *data)
 {
-	struct lu_nodemap		*nodemap = m->private;
+	struct lu_nodemap		*nodemap;
 	struct lu_nid_range		*range;
 	struct interval_node_extent	ext;
 	char				start_nidstr[LNET_NIDSTR_SIZE];
 	char				end_nidstr[LNET_NIDSTR_SIZE];
 	bool				cont = false;
+	int rc;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(m->private);
+	if (IS_ERR(nodemap)) {
+		mutex_unlock(&active_config_lock);
+		rc = PTR_ERR(nodemap);
+		CERROR("cannot find nodemap '%s': rc = %d\n",
+			(char *)m->private, rc);
+		return rc;
+	}
 
 	seq_printf(m, "[\n");
-	read_lock(&nm_range_tree_lock);
+	down_read(&active_config->nmc_range_tree_lock);
 	list_for_each_entry(range, &nodemap->nm_ranges, rn_list) {
 		if (cont)
 			seq_printf(m, ",\n");
@@ -129,10 +152,12 @@ static int nodemap_ranges_show(struct seq_file *m, void *data)
 		seq_printf(m, " { id: %u, start_nid: %s, end_nid: %s }",
 			   range->rn_id, start_nidstr, end_nidstr);
 	}
-	read_unlock(&nm_range_tree_lock);
+	up_read(&active_config->nmc_range_tree_lock);
+	mutex_unlock(&active_config_lock);
 	seq_printf(m, "\n");
 	seq_printf(m, "]\n");
 
+	nodemap_putref(nodemap);
 	return 0;
 }
 
@@ -145,9 +170,7 @@ static int nodemap_ranges_show(struct seq_file *m, void *data)
  */
 static int nodemap_ranges_open(struct inode *inode, struct file *file)
 {
-	struct lu_nodemap *nodemap = PDE_DATA(inode);
-
-	return single_open(file, nodemap_ranges_show, nodemap);
+	return single_open(file, nodemap_ranges_show, PDE_DATA(inode));
 }
 
 /**
@@ -159,9 +182,20 @@ static int nodemap_ranges_open(struct inode *inode, struct file *file)
  */
 static int nodemap_exports_show(struct seq_file *m, void *data)
 {
-	struct lu_nodemap *nodemap = m->private;
+	struct lu_nodemap *nodemap;
 	struct obd_export *exp;
 	char nidstr[LNET_NIDSTR_SIZE] = "<unknown>";
+	int rc;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(m->private);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap)) {
+		rc = PTR_ERR(nodemap);
+		CERROR("cannot find nodemap '%s': rc = %d\n",
+			(char *)m->private, rc);
+		return rc;
+	}
 
 	seq_printf(m, "[\n");
 
@@ -180,6 +214,7 @@ static int nodemap_exports_show(struct seq_file *m, void *data)
 	seq_printf(m, "\n");
 	seq_printf(m, "]\n");
 
+	nodemap_putref(nodemap);
 	return 0;
 }
 
@@ -192,9 +227,7 @@ static int nodemap_exports_show(struct seq_file *m, void *data)
  */
 static int nodemap_exports_open(struct inode *inode, struct file *file)
 {
-	struct lu_nodemap	*nodemap = PDE_DATA(inode);
-
-	return single_open(file, nodemap_exports_show, nodemap);
+	return single_open(file, nodemap_exports_show, PDE_DATA(inode));
 }
 
 /**
@@ -241,7 +274,7 @@ nodemap_active_seq_write(struct file *file, const char __user *buffer,
 	if (rc != 0)
 		return -EINVAL;
 
-	nodemap_active = active;
+	nodemap_activate(active);
 
 	return count;
 }
@@ -256,9 +289,22 @@ LPROC_SEQ_FOPS(nodemap_active);
  */
 static int nodemap_id_seq_show(struct seq_file *m, void *data)
 {
-	struct lu_nodemap *nodemap = m->private;
+	struct lu_nodemap *nodemap;
+	int rc;
 
-	return seq_printf(m, "%u\n", nodemap->nm_id);
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(m->private);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap)) {
+		rc = PTR_ERR(nodemap);
+		CERROR("cannot find nodemap '%s': rc = %d\n",
+			(char *)m->private, rc);
+		return rc;
+	}
+
+	rc = seq_printf(m, "%u\n", nodemap->nm_id);
+	nodemap_putref(nodemap);
+	return rc;
 }
 LPROC_SEQ_FOPS_RO(nodemap_id);
 
@@ -271,9 +317,22 @@ LPROC_SEQ_FOPS_RO(nodemap_id);
  */
 static int nodemap_squash_uid_seq_show(struct seq_file *m, void *data)
 {
-	struct lu_nodemap *nodemap = m->private;
+	struct lu_nodemap *nodemap;
+	int rc;
 
-	return seq_printf(m, "%u\n", nodemap->nm_squash_uid);
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(m->private);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap)) {
+		rc = PTR_ERR(nodemap);
+		CERROR("cannot find nodemap '%s': rc = %d\n",
+			(char *)m->private, rc);
+		return rc;
+	}
+
+	rc = seq_printf(m, "%u\n", nodemap->nm_squash_uid);
+	nodemap_putref(nodemap);
+	return rc;
 }
 
 /**
@@ -285,9 +344,22 @@ static int nodemap_squash_uid_seq_show(struct seq_file *m, void *data)
  */
 static int nodemap_squash_gid_seq_show(struct seq_file *m, void *data)
 {
-	struct lu_nodemap *nodemap = m->private;
+	struct lu_nodemap *nodemap;
+	int rc;
 
-	return seq_printf(m, "%u\n", nodemap->nm_squash_gid);
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(m->private);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap)) {
+		rc = PTR_ERR(nodemap);
+		CERROR("cannot find nodemap '%s': rc = %d\n",
+			(char *)m->private, rc);
+		return rc;
+	}
+
+	rc = seq_printf(m, "%u\n", nodemap->nm_squash_gid);
+	nodemap_putref(nodemap);
+	return rc;
 }
 
 /**
@@ -299,9 +371,22 @@ static int nodemap_squash_gid_seq_show(struct seq_file *m, void *data)
  */
 static int nodemap_trusted_seq_show(struct seq_file *m, void *data)
 {
-	struct lu_nodemap *nodemap = m->private;
+	struct lu_nodemap *nodemap;
+	int rc;
 
-	return seq_printf(m, "%d\n", (int)nodemap->nmf_trust_client_ids);
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(m->private);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap)) {
+		rc = PTR_ERR(nodemap);
+		CERROR("cannot find nodemap '%s': rc = %d\n",
+			(char *)m->private, rc);
+		return rc;
+	}
+
+	rc = seq_printf(m, "%d\n", (int)nodemap->nmf_trust_client_ids);
+	nodemap_putref(nodemap);
+	return rc;
 }
 
 /**
@@ -313,9 +398,22 @@ static int nodemap_trusted_seq_show(struct seq_file *m, void *data)
  */
 static int nodemap_admin_seq_show(struct seq_file *m, void *data)
 {
-	struct lu_nodemap *nodemap = m->private;
+	struct lu_nodemap *nodemap;
+	int rc;
 
-	return seq_printf(m, "%d\n", (int)nodemap->nmf_allow_root_access);
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(m->private);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap)) {
+		rc = PTR_ERR(nodemap);
+		CERROR("cannot find nodemap '%s': rc = %d\n",
+			(char *)m->private, rc);
+		return rc;
+	}
+
+	rc = seq_printf(m, "%d\n", (int)nodemap->nmf_allow_root_access);
+	nodemap_putref(nodemap);
+	return rc;
 }
 
 #ifdef NODEMAP_PROC_DEBUG
@@ -370,7 +468,6 @@ nodemap_squash_uid_seq_write(struct file *file, const char __user *buffer,
 {
 	char			 squash[NODEMAP_LPROC_ID_LEN + 1];
 	struct seq_file		*m = file->private_data;
-	struct lu_nodemap	*nodemap = m->private;
 	long unsigned int	 squash_uid;
 	int			 rc;
 
@@ -388,7 +485,9 @@ nodemap_squash_uid_seq_write(struct file *file, const char __user *buffer,
 	if (rc != 0)
 		return -EINVAL;
 
-	nodemap->nm_squash_uid = squash_uid;
+	rc = nodemap_set_squash_uid(m->private, squash_uid);
+	if (rc != 0)
+		return rc;
 
 	return count;
 }
@@ -409,7 +508,6 @@ nodemap_squash_gid_seq_write(struct file *file, const char __user *buffer,
 {
 	char			 squash[NODEMAP_LPROC_ID_LEN + 1];
 	struct seq_file		*m = file->private_data;
-	struct lu_nodemap	*nodemap = m->private;
 	long unsigned int	 squash_gid;
 	int			 rc;
 
@@ -427,7 +525,9 @@ nodemap_squash_gid_seq_write(struct file *file, const char __user *buffer,
 	if (rc != 0)
 		return -EINVAL;
 
-	nodemap->nm_squash_gid = squash_gid;
+	rc = nodemap_set_squash_gid(m->private, squash_gid);
+	if (rc != 0)
+		return rc;
 
 	return count;
 }
@@ -447,17 +547,18 @@ nodemap_trusted_seq_write(struct file *file, const char __user *buffer,
 			  size_t count, loff_t *off)
 {
 	struct seq_file		*m = file->private_data;
-	struct lu_nodemap	*nodemap = m->private;
 	int			flags;
 	int			rc;
 
 	rc = nodemap_proc_read_flag(buffer, count, &flags);
-	if (rc >= 0) {
-		nodemap->nmf_trust_client_ids = !!flags;
-		nm_member_revoke_locks(nodemap);
-	}
+	if (rc < 0)
+		return rc;
 
-	return rc;
+	rc = nodemap_set_trust_client_ids(m->private, flags);
+	if (rc != 0)
+		return rc;
+
+	return count;
 }
 
 /**
@@ -475,17 +576,18 @@ nodemap_admin_seq_write(struct file *file, const char __user *buffer,
 			size_t count, loff_t *off)
 {
 	struct seq_file		*m = file->private_data;
-	struct lu_nodemap	*nodemap = m->private;
 	int			flags;
 	int			rc;
 
 	rc = nodemap_proc_read_flag(buffer, count, &flags);
-	if (rc >= 0) {
-		nodemap->nmf_allow_root_access = !!flags;
-		nm_member_revoke_locks(nodemap);
-	}
+	if (rc < 0)
+		return rc;
 
-	return rc;
+	rc = nodemap_set_allow_root(m->private, flags);
+	if (rc != 0)
+		return rc;
+
+	return count;
 }
 
 /**
@@ -1030,37 +1132,79 @@ int nodemap_procfs_init(void)
 }
 
 /**
+ * Cleanup nodemap proc entry data structures.
+ */
+void nodemap_procfs_exit(void)
+{
+	struct nodemap_pde *nm_pde;
+	struct nodemap_pde *tmp;
+
+	lprocfs_remove(&proc_lustre_nodemap_root);
+	list_for_each_entry_safe(nm_pde, tmp, &nodemap_pde_list,
+				 npe_list_member) {
+		list_del(&nm_pde->npe_list_member);
+		OBD_FREE_PTR(nm_pde);
+	}
+}
+
+/**
+ * Remove a nodemap's procfs entry and related data.
+ */
+void lprocfs_nodemap_remove(struct nodemap_pde *nm_pde)
+{
+	lprocfs_remove(&nm_pde->npe_proc_entry);
+	list_del(&nm_pde->npe_list_member);
+	OBD_FREE_PTR(nm_pde);
+}
+
+/**
  * Register the proc directory for a nodemap
  *
- * \param	name		name of nodemap
+ * \param	nodemap		nodemap to make the proc dir for
  * \param	is_default:	1 if default nodemap
  * \retval	0		success
  */
-int lprocfs_nodemap_register(const char *name,
-			     bool is_default,
-			     struct lu_nodemap *nodemap)
+int lprocfs_nodemap_register(struct lu_nodemap *nodemap, bool is_default)
 {
-	struct proc_dir_entry	*nodemap_proc_entry;
-	int			rc = 0;
+	struct nodemap_pde	*nm_entry;
+	int			 rc = 0;
 
-	if (is_default)
-		nodemap_proc_entry =
-			lprocfs_register(name, proc_lustre_nodemap_root,
-					 lprocfs_default_nodemap_vars,
-					 nodemap);
+	OBD_ALLOC_PTR(nm_entry);
+	if (nm_entry == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	nm_entry->npe_proc_entry = proc_mkdir(nodemap->nm_name,
+					      proc_lustre_nodemap_root);
+	if (IS_ERR(nm_entry->npe_proc_entry))
+		GOTO(out, rc = PTR_ERR(nm_entry->npe_proc_entry));
+
+	snprintf(nm_entry->npe_name, sizeof(nm_entry->npe_name), "%s",
+		 nodemap->nm_name);
+
+	/* Use the nodemap name as stored on the PDE as the private data. This
+	 * is so a nodemap struct can be replaced without updating the proc
+	 * entries.
+	 */
+	rc = lprocfs_add_vars(nm_entry->npe_proc_entry,
+			      (is_default ? lprocfs_default_nodemap_vars :
+					    lprocfs_nodemap_vars),
+			      nm_entry->npe_name);
+	if (rc != 0)
+		lprocfs_remove(&nm_entry->npe_proc_entry);
 	else
-		nodemap_proc_entry =
-			lprocfs_register(name, proc_lustre_nodemap_root,
-					 lprocfs_nodemap_vars,
-					 nodemap);
+		list_add(&nm_entry->npe_list_member, &nodemap_pde_list);
 
-	if (IS_ERR(nodemap_proc_entry)) {
-		rc = PTR_ERR(nodemap_proc_entry);
-		CERROR("cannot create 'nodemap/%s': rc = %d\n", name, rc);
-		nodemap_proc_entry = NULL;
+out:
+	if (rc != 0) {
+		CERROR("cannot create 'nodemap/%s': rc = %d\n",
+		       nodemap->nm_name, rc);
+		if (nm_entry != NULL) {
+			OBD_FREE_PTR(nm_entry);
+			nm_entry = NULL;
+		}
 	}
 
-	nodemap->nm_proc_entry = nodemap_proc_entry;
+	nodemap->nm_pde_data = nm_entry;
 
 	return rc;
 }

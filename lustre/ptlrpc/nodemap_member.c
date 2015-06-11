@@ -126,9 +126,6 @@ static void nm_member_exp_revoke(struct obd_export *exp)
 	ldlm_revoke_export_locks(exp);
 }
 
-/* Mutex used to serialize calls to reclassify_nodemap_lock */
-DEFINE_MUTEX(reclassify_nodemap_lock);
-
 /**
  * Reclassify the members of a nodemap after range changes or activation.
  * This function reclassifies the members of a nodemap based on the member
@@ -136,15 +133,8 @@ DEFINE_MUTEX(reclassify_nodemap_lock);
  * classified as being part of this nodemap are moved to the nodemap whose
  * NID ranges contain the export's NID, and their locks are revoked.
  *
- * Calls to this function are serialized due to a potential deadlock: Say there
- * is a nodemap A and a nodemap B that both need to reclassify their members.
- * If there is a member in nodemap A that should be in nodemap B, reclassify
- * will attempt to add the member to nodemap B. If nodemap B is also
- * reclassifying its members, then its hash is locked and nodemap A's attempt
- * to add will block and wait for nodemap B's reclassify to finish. If
- * nodemap B's reclassify then attempts to reclassify a member that should be
- * in nodemap A, it will also try add the member to nodemap A's locked hash,
- * causing a deadlock.
+ * Callers should hold the active_config_lock and active_config
+ * nmc_range_tree_lock.
  *
  * \param	nodemap		nodemap with members to reclassify
  */
@@ -154,17 +144,13 @@ void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap)
 	struct obd_export *tmp;
 	struct lu_nodemap *new_nodemap;
 
-	/* reclassify only one nodemap at a time to avoid deadlock */
-	mutex_lock(&reclassify_nodemap_lock);
 	mutex_lock(&nodemap->nm_member_list_lock);
 	list_for_each_entry_safe(exp, tmp, &nodemap->nm_member_list,
 				 exp_target_data.ted_nodemap_member) {
 		lnet_nid_t nid = exp->exp_connection->c_peer.nid;
 
-		/* nodemap_classify_nid requires range tree lock */
-		read_lock(&nm_range_tree_lock);
+		/* nodemap_classify_nid requires nmc_range_tree_lock */
 		new_nodemap = nodemap_classify_nid(nid);
-		read_unlock(&nm_range_tree_lock);
 		if (new_nodemap != nodemap) {
 			/* don't use member_del because ted_nodemap
 			 * should never be null
@@ -179,10 +165,13 @@ void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap)
 			mutex_unlock(&new_nodemap->nm_member_list_lock);
 			nm_member_exp_revoke(exp);
 		}
+
+		/* This put won't destroy new_nodemap because any nodemap_del
+		 * call done on new_nodemap blocks on our active_config_lock
+		 */
 		nodemap_putref(new_nodemap);
 	}
 	mutex_unlock(&nodemap->nm_member_list_lock);
-	mutex_unlock(&reclassify_nodemap_lock);
 }
 
 /**

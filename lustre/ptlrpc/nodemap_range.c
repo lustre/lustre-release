@@ -40,14 +40,6 @@
  * controlled to prevent read access during update operations.
  */
 
-static struct interval_node *range_interval_root;
-static atomic_t range_highest_id;
-
-void range_init_tree(void)
-{
-	range_interval_root = NULL;
-}
-
 /*
  * callback for iterating over the interval tree
  *
@@ -77,7 +69,8 @@ static enum interval_iter range_cb(struct interval_node *n, void *data)
  * \param	nodemap		nodemap that contains this range
  * \retval	lu_nid_range on success, NULL on failure
  */
-struct lu_nid_range *range_create(lnet_nid_t start_nid, lnet_nid_t end_nid,
+struct lu_nid_range *range_create(struct nodemap_range_tree *nm_range_tree,
+				  lnet_nid_t start_nid, lnet_nid_t end_nid,
 				  struct lu_nodemap *nodemap)
 {
 	struct lu_nid_range *range;
@@ -93,7 +86,8 @@ struct lu_nid_range *range_create(lnet_nid_t start_nid, lnet_nid_t end_nid,
 		return NULL;
 	}
 
-	range->rn_id = atomic_inc_return(&range_highest_id);
+	nm_range_tree->nmrt_range_highest_id++;
+	range->rn_id = nm_range_tree->nmrt_range_highest_id;
 	range->rn_nodemap = nodemap;
 	interval_set(&range->rn_node, start_nid, end_nid);
 	INIT_LIST_HEAD(&range->rn_list);
@@ -108,7 +102,8 @@ struct lu_nid_range *range_create(lnet_nid_t start_nid, lnet_nid_t end_nid,
  * \param	end_nid			ending nid
  * \retval	matching range or NULL
  */
-struct lu_nid_range *range_find(lnet_nid_t start_nid, lnet_nid_t end_nid)
+struct lu_nid_range *range_find(struct nodemap_range_tree *nm_range_tree,
+				lnet_nid_t start_nid, lnet_nid_t end_nid)
 {
 	struct lu_nid_range		*range = NULL;
 	struct interval_node		*interval = NULL;
@@ -117,7 +112,7 @@ struct lu_nid_range *range_find(lnet_nid_t start_nid, lnet_nid_t end_nid)
 		.end	= end_nid
 	};
 
-	interval = interval_find(range_interval_root, &ext);
+	interval = interval_find(nm_range_tree->nmrt_range_interval_root, &ext);
 
 	if (interval != NULL)
 		range = container_of(interval, struct lu_nid_range,
@@ -147,15 +142,18 @@ void range_destroy(struct lu_nid_range *range)
  * does not overlap so that each nid can belong
  * to exactly one range
  */
-int range_insert(struct lu_nid_range *range)
+int range_insert(struct nodemap_range_tree *nm_range_tree,
+		 struct lu_nid_range *range)
 {
 	struct interval_node_extent ext =
 			range->rn_node.in_extent;
 
-	if (interval_is_overlapped(range_interval_root, &ext) != 0)
+	if (interval_is_overlapped(nm_range_tree->nmrt_range_interval_root,
+				   &ext) != 0)
 		return -EEXIST;
 
-	interval_insert(&range->rn_node, &range_interval_root);
+	interval_insert(&range->rn_node,
+			&nm_range_tree->nmrt_range_interval_root);
 
 	return 0;
 }
@@ -166,12 +164,14 @@ int range_insert(struct lu_nid_range *range)
  *
  * \param	range		range to remove
  */
-void range_delete(struct lu_nid_range *range)
+void range_delete(struct nodemap_range_tree *nm_range_tree,
+		  struct lu_nid_range *range)
 {
 	if (range == NULL || interval_is_intree(&range->rn_node) == 0)
 		return;
 	list_del(&range->rn_list);
-	interval_erase(&range->rn_node, &range_interval_root);
+	interval_erase(&range->rn_node,
+		       &nm_range_tree->nmrt_range_interval_root);
 	range_destroy(range);
 }
 
@@ -180,7 +180,8 @@ void range_delete(struct lu_nid_range *range)
  *
  * \param	nid		nid to search for
  */
-struct lu_nid_range *range_search(lnet_nid_t nid)
+struct lu_nid_range *range_search(struct nodemap_range_tree *nm_range_tree,
+				  lnet_nid_t nid)
 {
 	struct lu_nid_range		*ret = NULL;
 	struct interval_node_extent	ext = {
@@ -188,7 +189,8 @@ struct lu_nid_range *range_search(lnet_nid_t nid)
 		.end	= nid
 	};
 
-	interval_search(range_interval_root, &ext, range_cb, &ret);
+	interval_search(nm_range_tree->nmrt_range_interval_root, &ext,
+			range_cb, &ret);
 
 	return ret;
 }

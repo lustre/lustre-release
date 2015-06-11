@@ -47,6 +47,12 @@ enum nodemap_tree_type {
 	NODEMAP_CLIENT_TO_FS,
 };
 
+struct nodemap_pde {
+	char			 npe_name[LUSTRE_NODEMAP_NAME_LENGTH + 1];
+	struct proc_dir_entry	*npe_proc_entry;
+	struct list_head	 npe_list_member;
+};
+
 /** The nodemap id 0 will be the default nodemap. It will have a configuration
  * set by the MGS, but no ranges will be allowed as all NIDs that do not map
  * will be added to the default nodemap
@@ -81,16 +87,15 @@ struct lu_nodemap {
 	struct rb_root		 nm_fs_to_client_gidmap;
 	/* GID map keyed by remote UID */
 	struct rb_root		 nm_client_to_fs_gidmap;
-	/* proc directory entry */
-	struct proc_dir_entry	*nm_proc_entry;
 	/* attached client members of this nodemap */
 	struct mutex		 nm_member_list_lock;
 	struct list_head	 nm_member_list;
 	/* access by nodemap name */
 	struct hlist_node	 nm_hash;
+	struct nodemap_pde	*nm_pde_data;
 
 	/* used when unloading nodemaps */
-	struct list_head         nm_list;
+	struct list_head	 nm_list;
 };
 
 void nodemap_activate(const bool value);

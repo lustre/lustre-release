@@ -44,29 +44,15 @@
 /* nodemap proc root proc directory under fs/lustre */
 struct proc_dir_entry *proc_lustre_nodemap_root;
 
-/* Highest numerical lu_nodemap.nm_id defined */
-static atomic_t nodemap_highest_id;
-
-/* Simple flag to determine if nodemaps are active */
+/* Copy of config active flag to avoid locking in mapping functions */
 bool nodemap_active;
 
-/**
- * pointer to default nodemap kept to keep from
- * lookup it up in the hash since it is needed
- * more often
+/* Lock protecting the active config, useful primarily when proc and
+ * nodemap_hash might be replaced when loading a new config
+ * Any time the active config is referenced, the lock should be held.
  */
-static struct lu_nodemap *default_nodemap;
-
-/**
- * Lock required to access the range tree.
- */
-rwlock_t nm_range_tree_lock;
-
-/**
- * Hash keyed on nodemap name containing all
- * nodemaps
- */
-static struct cfs_hash *nodemap_hash;
+DEFINE_MUTEX(active_config_lock);
+struct nodemap_config *active_config;
 
 /**
  * Nodemap destructor
@@ -75,22 +61,21 @@ static struct cfs_hash *nodemap_hash;
  */
 static void nodemap_destroy(struct lu_nodemap *nodemap)
 {
-	struct lu_nid_range *range;
-	struct lu_nid_range *range_temp;
+	if (nodemap->nm_pde_data != NULL)
+		lprocfs_nodemap_remove(nodemap->nm_pde_data);
 
-	write_lock(&nm_range_tree_lock);
-	list_for_each_entry_safe(range, range_temp, &nodemap->nm_ranges,
-				 rn_list) {
-		range_delete(range);
-	}
-	write_unlock(&nm_range_tree_lock);
+	mutex_lock(&active_config_lock);
+	down_read(&active_config->nmc_range_tree_lock);
+	nm_member_reclassify_nodemap(nodemap);
+	up_read(&active_config->nmc_range_tree_lock);
+	mutex_unlock(&active_config_lock);
+
+	if (!list_empty(&nodemap->nm_member_list))
+		CWARN("nodemap_destroy failed to reclassify all members\n");
 
 	write_lock(&nodemap->nm_idmap_lock);
 	idmap_delete_tree(nodemap);
 	write_unlock(&nodemap->nm_idmap_lock);
-	nm_member_reclassify_nodemap(nodemap);
-	if (!list_empty(&nodemap->nm_member_list))
-		CWARN("nodemap_destroy failed to reclassify all members\n");
 
 	nm_member_delete_list(nodemap);
 
@@ -105,6 +90,10 @@ static void nodemap_getref(struct lu_nodemap *nodemap)
 	atomic_inc(&nodemap->nm_refcount);
 }
 
+/**
+ * Destroy nodemap if last reference is put. Should be called outside
+ * active_config_lock
+ */
 void nodemap_putref(struct lu_nodemap *nodemap)
 {
 	LASSERT(nodemap != NULL);
@@ -173,64 +162,23 @@ static struct cfs_hash_ops nodemap_hash_operations = {
 /* end of cfs_hash functions */
 
 /**
- * Helper iterator to convert nodemap hash to list.
- *
- * \param	hs			hash structure
- * \param	bd			bucket descriptor
- * \param	hnode			hash node
- * \param	nodemap_list_head	list head for list of nodemaps in hash
- */
-static int nodemap_cleanup_iter_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
-				   struct hlist_node *hnode,
-				   void *nodemap_list_head)
-{
-	struct lu_nodemap	*nodemap;
-
-	nodemap = hlist_entry(hnode, struct lu_nodemap, nm_hash);
-	list_add(&nodemap->nm_list, (struct list_head *)nodemap_list_head);
-
-	return 0;
-}
-
-/**
- * Walk the nodemap_hash and remove all nodemaps.
- */
-void nodemap_cleanup_all(void)
-{
-	struct lu_nodemap *nodemap = NULL;
-	struct list_head *pos, *next;
-	struct list_head nodemap_list_head = LIST_HEAD_INIT(nodemap_list_head);
-
-	cfs_hash_for_each_safe(nodemap_hash, nodemap_cleanup_iter_cb,
-			       &nodemap_list_head);
-	cfs_hash_putref(nodemap_hash);
-
-	/* Because nodemap_destroy might sleep, we can't destroy them
-	 * in cfs_hash_for_each. Instead we build a list and destroy here
-	 */
-	list_for_each_safe(pos, next, &nodemap_list_head) {
-		nodemap = list_entry(pos, struct lu_nodemap, nm_list);
-		nodemap_putref(nodemap);
-	}
-}
-
-/**
  * Initialize nodemap_hash
  *
  * \retval	0		success
  * \retval	-ENOMEM		cannot create hash
  */
-static int nodemap_init_hash(void)
+static int nodemap_init_hash(struct nodemap_config *nmc)
 {
-	nodemap_hash = cfs_hash_create("NODEMAP", HASH_NODEMAP_CUR_BITS,
-				       HASH_NODEMAP_MAX_BITS,
-				       HASH_NODEMAP_BKT_BITS, 0,
-				       CFS_HASH_MIN_THETA,
-				       CFS_HASH_MAX_THETA,
-				       &nodemap_hash_operations,
-				       CFS_HASH_DEFAULT);
+	nmc->nmc_nodemap_hash = cfs_hash_create("NODEMAP",
+						HASH_NODEMAP_CUR_BITS,
+						HASH_NODEMAP_MAX_BITS,
+						HASH_NODEMAP_BKT_BITS, 0,
+						CFS_HASH_MIN_THETA,
+						CFS_HASH_MAX_THETA,
+						&nodemap_hash_operations,
+						CFS_HASH_DEFAULT);
 
-	if (nodemap_hash == NULL) {
+	if (nmc->nmc_nodemap_hash == NULL) {
 		CERROR("cannot create nodemap_hash table\n");
 		return -ENOMEM;
 	}
@@ -262,32 +210,30 @@ static bool nodemap_name_is_valid(const char *name)
 /**
  * Nodemap lookup
  *
- * Look nodemap up in the nodemap hash
+ * Look nodemap up in the active_config nodemap hash. Caller should hold the
+ * active_config_lock.
  *
  * \param	name		name of nodemap
- * \param	nodemap		found nodemap or NULL
- * \retval	lu_nodemap	named nodemap
- * \retval	NULL		nodemap doesn't exist
+ * \retval	nodemap		pointer set to found nodemap
+ * \retval	-EINVAL		name is not valid
+ * \retval	-ENOENT		nodemap not found
  */
-static int nodemap_lookup(const char *name, struct lu_nodemap **nodemap)
+struct lu_nodemap *nodemap_lookup(const char *name)
 {
-	int rc = 0;
-
-	*nodemap = NULL;
+	struct lu_nodemap *nodemap = NULL;
 
 	if (!nodemap_name_is_valid(name))
-		GOTO(out, rc = -EINVAL);
+		return ERR_PTR(-EINVAL);
 
-	*nodemap = cfs_hash_lookup(nodemap_hash, name);
-	if (*nodemap == NULL)
-		rc = -ENOENT;
+	nodemap = cfs_hash_lookup(active_config->nmc_nodemap_hash, name);
+	if (nodemap == NULL)
+		return ERR_PTR(-ENOENT);
 
-out:
-	return rc;
+	return nodemap;
 }
 
 /**
- * Classify the nid into the proper nodemap. Caller must hold
+ * Classify the nid into the proper nodemap. Caller must hold active config and
  * nm_range_tree_lock, and call nodemap_putref when done with nodemap.
  *
  * \param	nid			nid to classify
@@ -299,11 +245,12 @@ struct lu_nodemap *nodemap_classify_nid(lnet_nid_t nid)
 	struct lu_nid_range	*range;
 	struct lu_nodemap	*nodemap;
 
-	range = range_search(nid);
+	range = range_search(&active_config->nmc_range_tree, nid);
 	if (range != NULL)
 		nodemap = range->rn_nodemap;
 	else
-		nodemap = default_nodemap;
+		nodemap = active_config->nmc_default_nodemap;
+
 	nodemap_getref(nodemap);
 
 	return nodemap;
@@ -402,11 +349,17 @@ int nodemap_add_member(lnet_nid_t nid, struct obd_export *exp)
 	struct lu_nodemap	*nodemap;
 	int rc;
 
-	read_lock(&nm_range_tree_lock);
+	mutex_lock(&active_config_lock);
+	down_read(&active_config->nmc_range_tree_lock);
+
 	nodemap = nodemap_classify_nid(nid);
 	rc = nm_member_add(nodemap, exp);
-	read_unlock(&nm_range_tree_lock);
+
+	up_read(&active_config->nmc_range_tree_lock);
+	mutex_unlock(&active_config_lock);
+
 	nodemap_putref(nodemap);
+
 	return rc;
 }
 EXPORT_SYMBOL(nodemap_add_member);
@@ -436,28 +389,47 @@ EXPORT_SYMBOL(nodemap_del_member);
  *
  * \retval	0 on success
  */
-int nodemap_add_idmap(const char *name, enum nodemap_id_type id_type,
-		      const __u32 map[2])
+static int nodemap_add_idmap_helper(struct lu_nodemap *nodemap,
+				    enum nodemap_id_type id_type,
+				    const __u32 map[2])
 {
-	struct lu_nodemap	*nodemap = NULL;
 	struct lu_idmap		*idmap;
 	int			rc = 0;
 
-	rc = nodemap_lookup(name, &nodemap);
-	if (nodemap == NULL || is_default_nodemap(nodemap))
-		GOTO(out, rc = -EINVAL);
-
 	idmap = idmap_create(map[0], map[1]);
 	if (idmap == NULL)
-		GOTO(out_putref, rc = -ENOMEM);
+		GOTO(out, rc = -ENOMEM);
 
 	write_lock(&nodemap->nm_idmap_lock);
 	idmap_insert(id_type, idmap, nodemap);
 	write_unlock(&nodemap->nm_idmap_lock);
 	nm_member_revoke_locks(nodemap);
 
-out_putref:
+out:
+	return rc;
+}
+int nodemap_add_idmap(const char *name, enum nodemap_id_type id_type,
+		      const __u32 map[2])
+{
+	struct lu_nodemap	*nodemap = NULL;
+	int			 rc;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	if (IS_ERR(nodemap)) {
+		mutex_unlock(&active_config_lock);
+		GOTO(out, rc = PTR_ERR(nodemap));
+	}
+
+	if (is_default_nodemap(nodemap))
+		rc = -EINVAL;
+	else
+		rc = nodemap_add_idmap_helper(nodemap, id_type, map);
+
+	mutex_unlock(&active_config_lock);
+
 	nodemap_putref(nodemap);
+
 out:
 	return rc;
 }
@@ -481,24 +453,31 @@ int nodemap_del_idmap(const char *name, enum nodemap_id_type id_type,
 	struct lu_idmap		*idmap = NULL;
 	int			rc = 0;
 
-	rc = nodemap_lookup(name, &nodemap);
-	if (nodemap == NULL || is_default_nodemap(nodemap))
-		GOTO(out, rc = -EINVAL);
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	if (IS_ERR(nodemap)) {
+		mutex_unlock(&active_config_lock);
+		GOTO(out, rc = PTR_ERR(nodemap));
+	}
+
+	if (is_default_nodemap(nodemap))
+		GOTO(out_putref, rc = -EINVAL);
 
 	write_lock(&nodemap->nm_idmap_lock);
 	idmap = idmap_search(nodemap, NODEMAP_CLIENT_TO_FS, id_type,
 			     map[0]);
-	if (idmap == NULL) {
-		write_unlock(&nodemap->nm_idmap_lock);
-		GOTO(out_putref, rc = -EINVAL);
-	}
-
-	idmap_delete(id_type, idmap, nodemap);
+	if (idmap == NULL)
+		rc = -EINVAL;
+	else
+		idmap_delete(id_type, idmap, nodemap);
 	write_unlock(&nodemap->nm_idmap_lock);
-	nm_member_revoke_locks(nodemap);
 
 out_putref:
+	mutex_unlock(&active_config_lock);
+	if (rc == 0)
+		nm_member_revoke_locks(nodemap);
 	nodemap_putref(nodemap);
+
 out:
 	return rc;
 }
@@ -645,46 +624,65 @@ EXPORT_SYMBOL(nodemap_map_acl);
 
 /*
  * add nid range to nodemap
- * \param	name		nodemap name
+ * \param	nodemap		nodemap to add range to
  * \param	range_st	string containing nid range
  * \retval	0 on success
  *
  * add an range to the global range tree and attached the
  * range to the named nodemap.
  */
-int nodemap_add_range(const char *name, const lnet_nid_t nid[2])
+static int nodemap_add_range_helper(struct nodemap_config *config,
+				    struct lu_nodemap *nodemap,
+				    const lnet_nid_t nid[2])
 {
-	struct lu_nodemap	*nodemap = NULL;
 	struct lu_nid_range	*range;
 	int rc;
 
-	rc = nodemap_lookup(name, &nodemap);
-	if (nodemap == NULL || is_default_nodemap(nodemap))
-		GOTO(out, rc = -EINVAL);
+	down_write(&config->nmc_range_tree_lock);
+	range = range_create(&config->nmc_range_tree, nid[0], nid[1], nodemap);
+	if (range == NULL) {
+		up_write(&config->nmc_range_tree_lock);
+		GOTO(out, rc = -ENOMEM);
+	}
 
-	range = range_create(nid[0], nid[1], nodemap);
-	if (range == NULL)
-		GOTO(out_putref, rc = -ENOMEM);
-
-	write_lock(&nm_range_tree_lock);
-	rc = range_insert(range);
+	rc = range_insert(&config->nmc_range_tree, range);
 	if (rc != 0) {
 		CERROR("cannot insert nodemap range into '%s': rc = %d\n",
 		      nodemap->nm_name, rc);
-		write_unlock(&nm_range_tree_lock);
+		up_write(&config->nmc_range_tree_lock);
 		list_del(&range->rn_list);
 		range_destroy(range);
-		GOTO(out_putref, rc = -ENOMEM);
+		GOTO(out, rc = -ENOMEM);
 	}
 
 	list_add(&range->rn_list, &nodemap->nm_ranges);
-	write_unlock(&nm_range_tree_lock);
+	nm_member_reclassify_nodemap(config->nmc_default_nodemap);
+	up_write(&config->nmc_range_tree_lock);
 
-	nm_member_reclassify_nodemap(default_nodemap);
-	nm_member_revoke_locks(default_nodemap);
+	nm_member_revoke_locks(config->nmc_default_nodemap);
 	nm_member_revoke_locks(nodemap);
 
-out_putref:
+out:
+	return rc;
+}
+int nodemap_add_range(const char *name, const lnet_nid_t nid[2])
+{
+	struct lu_nodemap	*nodemap = NULL;
+	int			 rc;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	if (IS_ERR(nodemap)) {
+		mutex_unlock(&active_config_lock);
+		GOTO(out, rc = PTR_ERR(nodemap));
+	}
+
+	if (is_default_nodemap(nodemap))
+		rc = -EINVAL;
+	else
+		rc = nodemap_add_range_helper(active_config, nodemap, nid);
+	mutex_unlock(&active_config_lock);
+
 	nodemap_putref(nodemap);
 out:
 	return rc;
@@ -706,24 +704,31 @@ int nodemap_del_range(const char *name, const lnet_nid_t nid[2])
 	struct lu_nid_range	*range;
 	int			rc = 0;
 
-	rc = nodemap_lookup(name, &nodemap);
-	if (nodemap == NULL || is_default_nodemap(nodemap))
-		GOTO(out, rc = -EINVAL);
-
-	write_lock(&nm_range_tree_lock);
-	range = range_find(nid[0], nid[1]);
-	if (range == NULL) {
-		write_unlock(&nm_range_tree_lock);
-		GOTO(out_putref, rc = -EINVAL);
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	if (IS_ERR(nodemap)) {
+		mutex_unlock(&active_config_lock);
+		GOTO(out, rc = PTR_ERR(nodemap));
 	}
 
-	range_delete(range);
-	write_unlock(&nm_range_tree_lock);
+	if (is_default_nodemap(nodemap))
+		GOTO(out_putref, rc = -EINVAL);
+
+	down_write(&active_config->nmc_range_tree_lock);
+	range = range_find(&active_config->nmc_range_tree, nid[0], nid[1]);
+	if (range == NULL) {
+		up_write(&active_config->nmc_range_tree_lock);
+		GOTO(out_putref, rc = -EINVAL);
+	}
+	range_delete(&active_config->nmc_range_tree, range);
 	nm_member_reclassify_nodemap(nodemap);
-	nm_member_revoke_locks(default_nodemap);
+	up_write(&active_config->nmc_range_tree_lock);
+
+	nm_member_revoke_locks(active_config->nmc_default_nodemap);
 	nm_member_revoke_locks(nodemap);
 
 out_putref:
+	mutex_unlock(&active_config_lock);
 	nodemap_putref(nodemap);
 out:
 	return rc;
@@ -739,20 +744,30 @@ EXPORT_SYMBOL(nodemap_del_range);
  * the default flags should be inherited from the default nodemap.
  * The adds nodemap to nodemap_hash.
  *
+ * Requires that the caller take the active_config_lock
+ *
  * \param	name		name of nodemap
  * \param	is_default	true if default nodemap
- * \retval	0		success
+ * \retval	nodemap		success
  * \retval	-EINVAL		invalid nodemap name
  * \retval	-EEXIST		nodemap already exists
  * \retval	-ENOMEM		cannot allocate memory for nodemap
  */
-static int nodemap_create(const char *name, bool is_default)
+struct lu_nodemap *nodemap_create(const char *name,
+				  struct nodemap_config *config,
+				  bool is_default)
 {
 	struct lu_nodemap	*nodemap = NULL;
-	int			rc = 0;
+	struct cfs_hash		*hash = config->nmc_nodemap_hash;
+	int			 rc = 0;
 
 	if (!nodemap_name_is_valid(name))
 		GOTO(out, rc = -EINVAL);
+
+	if (hash == NULL) {
+		CERROR("Config nodemap hash is NULL, unable to add %s\n", name);
+		GOTO(out, rc = -EINVAL);
+	}
 
 	OBD_ALLOC_PTR(nodemap);
 	if (nodemap == NULL) {
@@ -764,11 +779,11 @@ static int nodemap_create(const char *name, bool is_default)
 
 	/*
 	 * take an extra reference to prevent nodemap from being destroyed
-	 * while its being created.
+	 * while it's being created.
 	 */
 	atomic_set(&nodemap->nm_refcount, 2);
 	snprintf(nodemap->nm_name, sizeof(nodemap->nm_name), "%s", name);
-	rc = cfs_hash_add_unique(nodemap_hash, name, &nodemap->nm_hash);
+	rc = cfs_hash_add_unique(hash, name, &nodemap->nm_hash);
 	if (rc != 0) {
 		OBD_FREE_PTR(nodemap);
 		GOTO(out, rc = -EEXIST);
@@ -794,11 +809,13 @@ static int nodemap_create(const char *name, bool is_default)
 		nodemap->nm_squash_uid = NODEMAP_NOBODY_UID;
 		nodemap->nm_squash_gid = NODEMAP_NOBODY_GID;
 
-		lprocfs_nodemap_register(name, is_default, nodemap);
-
-		default_nodemap = nodemap;
+		config->nmc_default_nodemap = nodemap;
 	} else {
-		nodemap->nm_id = atomic_inc_return(&nodemap_highest_id);
+		struct lu_nodemap *default_nodemap =
+					config->nmc_default_nodemap;
+
+		config->nmc_nodemap_highest_id++;
+		nodemap->nm_id = config->nmc_nodemap_highest_id;
 		nodemap->nmf_trust_client_ids =
 				default_nodemap->nmf_trust_client_ids;
 		nodemap->nmf_allow_root_access =
@@ -808,20 +825,13 @@ static int nodemap_create(const char *name, bool is_default)
 
 		nodemap->nm_squash_uid = default_nodemap->nm_squash_uid;
 		nodemap->nm_squash_gid = default_nodemap->nm_squash_gid;
-
-		lprocfs_nodemap_register(name, is_default, nodemap);
 	}
 
-	if (rc == 0) {
-		nodemap_putref(nodemap);
-		goto out;
-	}
-
-	CERROR("cannot add nodemap: '%s': rc = %d\n", name, rc);
-	nodemap_destroy(nodemap);
+	return nodemap;
 
 out:
-	return rc;
+	CERROR("cannot add nodemap: '%s': rc = %d\n", name, rc);
+	return ERR_PTR(rc);
 }
 
 /**
@@ -837,11 +847,14 @@ int nodemap_set_allow_root(const char *name, bool allow_root)
 	struct lu_nodemap	*nodemap = NULL;
 	int			rc = 0;
 
-	rc = nodemap_lookup(name, &nodemap);
-	if (nodemap == NULL)
-		GOTO(out, rc = -ENOENT);
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap))
+		GOTO(out, rc = PTR_ERR(nodemap));
 
 	nodemap->nmf_allow_root_access = allow_root;
+
 	nm_member_revoke_locks(nodemap);
 	nodemap_putref(nodemap);
 out:
@@ -863,11 +876,14 @@ int nodemap_set_trust_client_ids(const char *name, bool trust_client_ids)
 	struct lu_nodemap	*nodemap = NULL;
 	int			rc = 0;
 
-	rc = nodemap_lookup(name, &nodemap);
-	if (nodemap == NULL)
-		GOTO(out, rc = -ENOENT);
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap))
+		GOTO(out, rc = PTR_ERR(nodemap));
 
 	nodemap->nmf_trust_client_ids = trust_client_ids;
+
 	nm_member_revoke_locks(nodemap);
 	nodemap_putref(nodemap);
 out:
@@ -892,11 +908,14 @@ int nodemap_set_squash_uid(const char *name, uid_t uid)
 	struct lu_nodemap	*nodemap = NULL;
 	int			rc = 0;
 
-	rc = nodemap_lookup(name, &nodemap);
-	if (nodemap == NULL)
-		GOTO(out, rc = -ENOENT);
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap))
+		GOTO(out, rc = PTR_ERR(nodemap));
 
 	nodemap->nm_squash_uid = uid;
+
 	nm_member_revoke_locks(nodemap);
 	nodemap_putref(nodemap);
 out:
@@ -921,11 +940,14 @@ int nodemap_set_squash_gid(const char *name, gid_t gid)
 	struct lu_nodemap	*nodemap = NULL;
 	int			rc = 0;
 
-	rc = nodemap_lookup(name, &nodemap);
-	if (nodemap == NULL)
-		GOTO(out, rc = -ENOENT);
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap))
+		GOTO(out, rc = PTR_ERR(nodemap));
 
 	nodemap->nm_squash_gid = gid;
+
 	nm_member_revoke_locks(nodemap);
 	nodemap_putref(nodemap);
 out:
@@ -956,7 +978,21 @@ EXPORT_SYMBOL(nodemap_can_setquota);
  */
 int nodemap_add(const char *nodemap_name)
 {
-	return nodemap_create(nodemap_name, 0);
+	struct lu_nodemap *nodemap;
+	int rc;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_create(nodemap_name, active_config, 0);
+	if (IS_ERR(nodemap)) {
+		mutex_unlock(&active_config_lock);
+		return PTR_ERR(nodemap);
+	}
+
+	rc = lprocfs_nodemap_register(nodemap, 0);
+	mutex_unlock(&active_config_lock);
+	nodemap_putref(nodemap);
+
+	return rc;
 }
 EXPORT_SYMBOL(nodemap_add);
 
@@ -970,22 +1006,39 @@ EXPORT_SYMBOL(nodemap_add);
  */
 int nodemap_del(const char *nodemap_name)
 {
-	struct	lu_nodemap *nodemap;
-	int	rc = 0;
+	struct lu_nodemap	*nodemap;
+	struct lu_nid_range	*range;
+	struct lu_nid_range	*range_temp;
+	int			 rc = 0;
 
 	if (strcmp(nodemap_name, DEFAULT_NODEMAP) == 0)
-		GOTO(out, rc = -EINVAL);
+		RETURN(-EINVAL);
 
-	nodemap = cfs_hash_del_key(nodemap_hash, nodemap_name);
-	if (nodemap == NULL)
+	mutex_lock(&active_config_lock);
+	nodemap = cfs_hash_del_key(active_config->nmc_nodemap_hash,
+				   nodemap_name);
+	if (nodemap == NULL) {
+		mutex_unlock(&active_config_lock);
 		GOTO(out, rc = -ENOENT);
+	}
+
+	/* erase nodemap from active ranges to prevent client assignment */
+	down_write(&active_config->nmc_range_tree_lock);
+	list_for_each_entry_safe(range, range_temp, &nodemap->nm_ranges,
+				 rn_list)
+		range_delete(&active_config->nmc_range_tree, range);
+	up_write(&active_config->nmc_range_tree_lock);
 
 	/*
 	 * remove procfs here in case nodemap_create called with same name
-	 * before nodemap_destory is run.
+	 * before nodemap_destroy is run.
 	 */
-	lprocfs_remove(&nodemap->nm_proc_entry);
+	lprocfs_nodemap_remove(nodemap->nm_pde_data);
+	nodemap->nm_pde_data = NULL;
+	mutex_unlock(&active_config_lock);
+
 	nodemap_putref(nodemap);
+
 out:
 	return rc;
 }
@@ -998,18 +1051,163 @@ EXPORT_SYMBOL(nodemap_del);
  */
 void nodemap_activate(const bool value)
 {
+	mutex_lock(&active_config_lock);
+	active_config->nmc_nodemap_is_active = value;
+
+	/* copy active value to global to avoid locking in map functions */
 	nodemap_active = value;
+	mutex_unlock(&active_config_lock);
 	nm_member_revoke_all();
 }
 EXPORT_SYMBOL(nodemap_activate);
+
+/**
+ * Helper iterator to convert nodemap hash to list.
+ *
+ * \param	hs			hash structure
+ * \param	bd			bucket descriptor
+ * \param	hnode			hash node
+ * \param	nodemap_list_head	list head for list of nodemaps in hash
+ */
+static int nodemap_cleanup_iter_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
+				   struct hlist_node *hnode,
+				   void *nodemap_list_head)
+{
+	struct lu_nodemap *nodemap;
+
+	nodemap = hlist_entry(hnode, struct lu_nodemap, nm_hash);
+	list_add(&nodemap->nm_list, nodemap_list_head);
+
+	cfs_hash_bd_del_locked(hs, bd, hnode);
+
+	return 0;
+}
+
+/**
+ * Walk the nodemap_hash and remove all nodemaps.
+ */
+void nodemap_config_cleanup(struct nodemap_config *config)
+{
+	struct lu_nodemap	*nodemap = NULL;
+	struct lu_nodemap	*nodemap_temp;
+	struct lu_nid_range	*range;
+	struct lu_nid_range	*range_temp;
+	LIST_HEAD(nodemap_list_head);
+
+	cfs_hash_for_each_safe(config->nmc_nodemap_hash,
+			       nodemap_cleanup_iter_cb, &nodemap_list_head);
+	cfs_hash_putref(config->nmc_nodemap_hash);
+
+	/* Because nodemap_destroy might sleep, we can't destroy them
+	 * in cfs_hash_for_each, so we build a list there and destroy here
+	 */
+	list_for_each_entry_safe(nodemap, nodemap_temp, &nodemap_list_head,
+				 nm_list) {
+		down_write(&config->nmc_range_tree_lock);
+		list_for_each_entry_safe(range, range_temp, &nodemap->nm_ranges,
+					 rn_list)
+			range_delete(&config->nmc_range_tree, range);
+		up_write(&config->nmc_range_tree_lock);
+
+		nodemap_putref(nodemap);
+	}
+}
+
+struct nodemap_config *nodemap_config_alloc(void)
+{
+	struct nodemap_config *config;
+	int rc = 0;
+
+	OBD_ALLOC_PTR(config);
+	if (config == NULL)
+		return ERR_PTR(-ENOMEM);
+
+	rc = nodemap_init_hash(config);
+	if (rc != 0) {
+		OBD_FREE_PTR(config);
+		return ERR_PTR(rc);
+	}
+
+	init_rwsem(&config->nmc_range_tree_lock);
+
+	return config;
+}
+
+void nodemap_config_dealloc(struct nodemap_config *config)
+{
+	nodemap_config_cleanup(config);
+	OBD_FREE_PTR(config);
+}
+
+static int nm_hash_list_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
+			   struct hlist_node *hnode,
+			   void *nodemap_list_head)
+{
+	struct lu_nodemap *nodemap;
+
+	nodemap = hlist_entry(hnode, struct lu_nodemap, nm_hash);
+	list_add(&nodemap->nm_list, nodemap_list_head);
+	return 0;
+}
+
+void nodemap_config_set_active(struct nodemap_config *config)
+{
+	struct nodemap_config	*old_config = active_config;
+	struct lu_nodemap	*nodemap;
+	struct lu_nodemap	*tmp;
+	LIST_HEAD(nodemap_list_head);
+
+	ENTRY;
+
+	LASSERT(active_config != config);
+
+	mutex_lock(&active_config_lock);
+
+	/* move proc entries from already existing nms, create for new nms */
+	cfs_hash_for_each_safe(config->nmc_nodemap_hash,
+			       nm_hash_list_cb, &nodemap_list_head);
+	list_for_each_entry_safe(nodemap, tmp, &nodemap_list_head, nm_list) {
+		struct lu_nodemap *old_nm = NULL;
+
+		if (active_config != NULL)
+			old_nm = cfs_hash_lookup(
+					active_config->nmc_nodemap_hash,
+					nodemap->nm_name);
+		if (old_nm != NULL) {
+			nodemap->nm_pde_data = old_nm->nm_pde_data;
+			old_nm->nm_pde_data = NULL;
+			nodemap_putref(old_nm);
+		} else {
+			bool is_def = (nodemap == config->nmc_default_nodemap);
+
+			lprocfs_nodemap_register(nodemap, is_def);
+		}
+	}
+
+	/* if new config is inactive, deactivate live config before switching */
+	if (!config->nmc_nodemap_is_active)
+		nodemap_active = false;
+	active_config = config;
+	if (config->nmc_nodemap_is_active)
+		nodemap_active = true;
+
+	mutex_unlock(&active_config_lock);
+
+	if (old_config != NULL)
+		nodemap_config_dealloc(old_config);
+
+	nm_member_revoke_all();
+
+	EXIT;
+}
 
 /**
  * Cleanup nodemap module on exit
  */
 void nodemap_mod_exit(void)
 {
-	nodemap_cleanup_all();
-	lprocfs_remove(&proc_lustre_nodemap_root);
+	nodemap_config_dealloc(active_config);
+	nodemap_procfs_exit();
 }
 
 /**
@@ -1017,39 +1215,51 @@ void nodemap_mod_exit(void)
  */
 int nodemap_mod_init(void)
 {
-	int rc = 0;
+	struct nodemap_config	*new_config;
+	struct lu_nodemap	*nodemap;
+	int			 rc = 0;
 
-	rc = nodemap_init_hash();
+	rc = nodemap_procfs_init();
 	if (rc != 0)
-		goto cleanup;
+		return rc;
 
-	rwlock_init(&nm_range_tree_lock);
-	nodemap_procfs_init();
-	rc = nodemap_create(DEFAULT_NODEMAP, 1);
+	new_config = nodemap_config_alloc();
+	if (IS_ERR(new_config)) {
+		nodemap_procfs_exit();
+		GOTO(out, rc = PTR_ERR(new_config));
+	}
 
-cleanup:
-	if (rc != 0)
-		nodemap_mod_exit();
+	nodemap = nodemap_create(DEFAULT_NODEMAP, new_config, 1);
+	if (IS_ERR(nodemap)) {
+		nodemap_config_dealloc(new_config);
+		nodemap_procfs_exit();
+		GOTO(out, rc = PTR_ERR(nodemap));
+	}
 
+	nodemap_config_set_active(new_config);
+	nodemap_putref(nodemap);
+
+out:
 	return rc;
-}
-
-static int nm_member_revoke_all_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
-				   struct hlist_node *hnode, void *data)
-{
-	struct lu_nodemap *nodemap;
-
-	nodemap = hlist_entry(hnode, struct lu_nodemap, nm_hash);
-	nm_member_revoke_locks(nodemap);
-	return 0;
 }
 
 /**
  * Revoke locks for all nodemaps.
  */
-void nm_member_revoke_all()
+void nm_member_revoke_all(void)
 {
-	cfs_hash_for_each_safe(nodemap_hash, nm_member_revoke_all_cb, NULL);
+	struct lu_nodemap *nodemap;
+	struct lu_nodemap *tmp;
+	LIST_HEAD(nodemap_list_head);
+
+	mutex_lock(&active_config_lock);
+	cfs_hash_for_each_safe(active_config->nmc_nodemap_hash,
+			       nm_hash_list_cb, &nodemap_list_head);
+
+	/* revoke_locks sleeps, so can't call in cfs hash cb */
+	list_for_each_entry_safe(nodemap, tmp, &nodemap_list_head, nm_list)
+		nm_member_revoke_locks(nodemap);
+	mutex_unlock(&active_config_lock);
 }
 
 /**
@@ -1065,9 +1275,11 @@ void nodemap_test_nid(lnet_nid_t nid, char *name_buf, size_t name_len)
 {
 	struct lu_nodemap	*nodemap;
 
-	read_lock(&nm_range_tree_lock);
+	mutex_lock(&active_config_lock);
+	down_read(&active_config->nmc_range_tree_lock);
 	nodemap = nodemap_classify_nid(nid);
-	read_unlock(&nm_range_tree_lock);
+	up_read(&active_config->nmc_range_tree_lock);
+	mutex_unlock(&active_config_lock);
 
 	strncpy(name_buf, nodemap->nm_name, name_len);
 	if (name_len > 0)
@@ -1093,9 +1305,11 @@ __u32 nodemap_test_id(lnet_nid_t nid, enum nodemap_id_type idtype,
 	struct lu_nodemap	*nodemap;
 	__u32			 fs_id;
 
-	read_lock(&nm_range_tree_lock);
+	mutex_lock(&active_config_lock);
+	down_read(&active_config->nmc_range_tree_lock);
 	nodemap = nodemap_classify_nid(nid);
-	read_unlock(&nm_range_tree_lock);
+	up_read(&active_config->nmc_range_tree_lock);
+	mutex_unlock(&active_config_lock);
 
 	fs_id = nodemap_map_id(nodemap, idtype, NODEMAP_CLIENT_TO_FS,
 			       client_id);
