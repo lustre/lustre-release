@@ -160,7 +160,7 @@ Summary: osd-ldiskfs contains both ldiskfs and its osd interface in Lustre.
 Requires: lustre-modules = %{version}
 Requires: module-init-tools >= 3.9
 Requires: ldiskfsprogs >= 1.42.7.wc1
-Requires: lustre-osd-ldiskfs-mount
+Requires: lustre-osd-ldiskfs-mount = %{version}
 Provides: lustre-osd
 Obsoletes: lustre-ldiskfs
 Group: Development/Kernel
