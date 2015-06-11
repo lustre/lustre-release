@@ -46,7 +46,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/xattr.h>
-#include <libcfs/libcfs.h>
+#include <libcfs/byteorder.h>
 #include <lustre/lustre_user.h>
 
 int main(int argc, char *argv[])

@@ -35,7 +35,6 @@
  */
 
 #include <stdio.h>
-#include <libcfs/libcfs.h>
 #include <lustre/lustre_idl.h>
 #include <lustre/lustre_lfsck_user.h>
 #include <lustre_disk.h>

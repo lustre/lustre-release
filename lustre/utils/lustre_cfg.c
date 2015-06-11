@@ -50,7 +50,6 @@
 #include <ctype.h>
 #include <glob.h>
 
-#include <libcfs/libcfs.h>
 #include <libcfs/util/string.h>
 #include <libcfs/util/parser.h>
 #include <lnet/nidstr.h>

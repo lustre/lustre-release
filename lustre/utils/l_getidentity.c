@@ -49,7 +49,6 @@
 #include <syslog.h>
 
 #include <libcfs/util/string.h>
-#include <libcfs/libcfs.h>
 #include <lnet/nidstr.h>
 #include <lustre/lustre_user.h>
 #include <lustre/lustre_idl.h>

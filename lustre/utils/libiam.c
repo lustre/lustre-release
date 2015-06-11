@@ -49,7 +49,7 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
-
+#include <sys/ioctl.h>
 #include <sys/types.h>
 
 #ifdef HAVE_ENDIAN_H
@@ -57,7 +57,6 @@
 #endif
 
 #include <libcfs/util/string.h>
-#include <libcfs/libcfs.h>
 #include <lustre/libiam.h>
 
 typedef __u32 lvar_hash_t;

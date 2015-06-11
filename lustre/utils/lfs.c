@@ -55,6 +55,7 @@
 #include <err.h>
 #include <pwd.h>
 #include <grp.h>
+#include <sys/ioctl.h>
 #include <sys/quota.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -67,7 +68,6 @@
 #endif
 
 #include <libcfs/util/string.h>
-#include <libcfs/libcfs.h>
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/parser.h>
 #include <lustre/lustreapi.h>
@@ -940,8 +940,9 @@ static int lfs_setstripe(int argc, char **argv)
 			delete = 1;
 			break;
 		case 'o':
-			nr_osts = parse_targets(osts, ARRAY_SIZE(osts), nr_osts,
-						optarg);
+			nr_osts = parse_targets(osts,
+						sizeof(osts) / sizeof(__u32),
+						nr_osts, optarg);
 			if (nr_osts < 0) {
 				fprintf(stderr,
 					"error: %s: bad OST indices '%s'\n",

@@ -52,8 +52,6 @@
 #include <endian.h>
 #endif
 
-#include <libcfs/libcfs.h>
-
 void usage(void)
 {
         printf("usage: create_iam "

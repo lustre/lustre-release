@@ -72,7 +72,6 @@
 #include <poll.h>
 
 #include <libcfs/util/string.h>
-#include <libcfs/libcfs.h>
 #include <lnet/lnetctl.h>
 #include <lustre/lustreapi.h>
 #include <lustre_ioctl.h>

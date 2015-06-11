@@ -49,7 +49,6 @@
 #define __REQ_LAYOUT_USER__ (1)
 #define EXPORT_SYMBOL(s)
 
-#include <libcfs/libcfs.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_req_layout.h>
 

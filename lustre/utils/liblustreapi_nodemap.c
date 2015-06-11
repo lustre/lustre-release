@@ -27,7 +27,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <libcfs/libcfs.h>
 #include <lustre/lustreapi.h>
 #include "lustreapi_internal.h"
 

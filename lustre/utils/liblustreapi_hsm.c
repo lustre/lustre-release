@@ -55,7 +55,6 @@
 #include <unistd.h>
 #endif
 
-#include <libcfs/libcfs.h>
 #include <lnet/lnetctl.h>
 #include <lustre/lustre_idl.h>
 #include <lustre/lustreapi.h>
@@ -83,8 +82,6 @@ struct hsm_copyaction_private {
 	struct hsm_copy				 copy;
 	lstat_t					 stat;
 };
-
-#include <libcfs/libcfs.h>
 
 enum ct_progress_type {
 	CT_START	= 0,
