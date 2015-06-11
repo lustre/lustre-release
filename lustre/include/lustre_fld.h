@@ -137,8 +137,6 @@ struct lu_client_fld {
         /**
          * Client fld proc entry name. */
         char                     lcf_name[80];
-
-	int			 lcf_flags;
 };
 
 /* Server methods */
