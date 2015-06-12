@@ -1064,7 +1064,7 @@ out:
 			       rc, PFID(mdd_object_fid(mdd_obj)));
 	}
 
-	if (ldata->ld_buf && ldata->ld_buf->lb_len > OBD_ALLOC_BIG)
+	if (is_vmalloc_addr(ldata->ld_buf))
 		/* if we vmalloced a large buffer drop it */
 		lu_buf_free(ldata->ld_buf);
 
@@ -1397,7 +1397,7 @@ out_unlock:
 stop:
 	mdd_trans_stop(env, mdd, rc, handle);
 
-	if (ldata->ld_buf && ldata->ld_buf->lb_len > OBD_ALLOC_BIG)
+	if (is_vmalloc_addr(ldata->ld_buf))
 		/* if we vmalloced a large buffer drop it */
 		lu_buf_free(ldata->ld_buf);
 out_pending:
@@ -2479,7 +2479,7 @@ out_stop:
 	if (rc == 0)
 		rc = rc2;
 out_free:
-	if (ldata->ld_buf && ldata->ld_buf->lb_len > OBD_ALLOC_BIG)
+	if (is_vmalloc_addr(ldata->ld_buf))
 		/* if we vmalloced a large buffer drop it */
 		lu_buf_free(ldata->ld_buf);
 
