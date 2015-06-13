@@ -800,6 +800,13 @@ int llog_open_create(const struct lu_env *env, struct llog_ctxt *ctxt,
 	if (IS_ERR(th))
 		GOTO(out, rc = PTR_ERR(th));
 
+	/* Create the remote update llog object synchronously, which
+	 * happens during inialization process see lod_sub_prep_llog(),
+	 * to make sure the update llog object is created before
+	 * corss-MDT writing updates into the llog object */
+	if (dt_object_remote((*res)->lgh_obj))
+		th->th_sync = 1;
+
 	th->th_wait_submit = 1;
 	rc = llog_declare_create(env, *res, th);
 	if (rc == 0) {
