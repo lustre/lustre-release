@@ -13029,6 +13029,8 @@ test_striped_dir() {
 	local mode=$(stat -c%a $DIR/$tdir/striped_dir)
 	[ "$mode" = "755" ] || error "expect 755 got $mode"
 
+	$LFS getdirstripe $DIR/$tdir/striped_dir > /dev/null 2>&1 ||
+		error "getdirstripe failed"
 	stripe_count=$($LFS getdirstripe -c $DIR/$tdir/striped_dir)
 	if [ "$stripe_count" != "2" ]; then
 		error "stripe_count is $stripe_count, expect 2"

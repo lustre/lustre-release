@@ -2611,7 +2611,8 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 
 	}
 
-	if ((verbose & VERBOSE_POOL) && (pool_name[0] != '\0')) {
+	if ((verbose & VERBOSE_POOL) && pool_name != NULL &&
+	     pool_name[0] != '\0') {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
 		if (verbose & ~VERBOSE_POOL)
 			llapi_printf(LLAPI_MSG_NORMAL, "%slmv_pool:           ",
