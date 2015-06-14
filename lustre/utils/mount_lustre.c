@@ -322,8 +322,7 @@ static int add_mgsnids(struct mount_opts *mop, char *options,
 
 static int clear_update_ondisk(char *source, struct lustre_disk_data *ldd)
 {
-	char always_mountopts[512] = "";
-	char default_mountopts[512] = "";
+	char wanted_mountopts[512] = "";
 	struct mkfs_opts mkop;
 	int ret;
 	int ret2;
@@ -339,8 +338,7 @@ static int clear_update_ondisk(char *source, struct lustre_disk_data *ldd)
 	strncpy(mkop.mo_device, source, sizeof(mkop.mo_device));
 
 	ret = osd_prepare_lustre(&mkop,
-			default_mountopts, sizeof(default_mountopts),
-			always_mountopts, sizeof(always_mountopts));
+				 wanted_mountopts, sizeof(wanted_mountopts));
 	if (ret) {
 		fatal();
 		fprintf(stderr, "Can't prepare device %s: %s\n",

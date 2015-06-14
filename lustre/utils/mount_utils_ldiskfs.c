@@ -944,8 +944,7 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 }
 
 int ldiskfs_prepare_lustre(struct mkfs_opts *mop,
-			   char *default_mountopts, int default_len,
-			   char *always_mountopts, int always_len)
+			   char *wanted_mountopts, size_t len)
 {
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
 	int ret;
@@ -958,9 +957,16 @@ int ldiskfs_prepare_lustre(struct mkfs_opts *mop,
 		mop->mo_flags |= MO_IS_LOOP;
 	}
 
-	strscat(default_mountopts, ",errors=remount-ro", default_len);
 	if (IS_MDT(ldd) || IS_MGS(ldd))
-		strscat(always_mountopts, ",user_xattr", always_len);
+		strscat(wanted_mountopts, ",user_xattr", len);
+
+	return 0;
+}
+
+int ldiskfs_fix_mountopts(struct mkfs_opts *mop, char *mountopts, size_t len)
+{
+	if (strstr(mountopts, "errors=") == NULL)
+		strscat(mountopts, ",errors=remount-ro", len);
 
 	return 0;
 }

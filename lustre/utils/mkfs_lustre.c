@@ -588,8 +588,7 @@ int main(int argc, char *const argv[])
 	struct mkfs_opts mop;
 	struct lustre_disk_data *ldd;
 	char *mountopts = NULL;
-	char always_mountopts[512] = "";
-	char default_mountopts[512] = "";
+	char wanted_mountopts[512] = "";
 	unsigned mount_type;
 	int ret = 0;
 	int ret2 = 0;
@@ -724,33 +723,41 @@ int main(int argc, char *const argv[])
 
         /* These are the permanent mount options (always included) */
 	ret = osd_prepare_lustre(&mop,
-				 default_mountopts, sizeof(default_mountopts),
-				 always_mountopts, sizeof(always_mountopts));
+				 wanted_mountopts, sizeof(wanted_mountopts));
 	if (ret) {
 		fatal();
 		fprintf(stderr, "unable to prepare backend (%d)\n", ret);
 		goto out;
 	}
 
-        if (mountopts) {
-                trim_mountfsoptions(mountopts);
-                (void)check_mountfsoptions(mountopts, default_mountopts, 1);
-                if (check_mountfsoptions(mountopts, always_mountopts, 0)) {
-                        ret = EINVAL;
-                        goto out;
-                }
-                sprintf(ldd->ldd_mount_opts, "%s", mountopts);
-        } else {
+	if (mountopts) {
+		trim_mountfsoptions(mountopts);
+		if (check_mountfsoptions(mountopts, wanted_mountopts)) {
+			ret = EINVAL;
+			goto out;
+		}
+		snprintf(ldd->ldd_mount_opts, sizeof(ldd->ldd_mount_opts),
+			 "%s", mountopts);
+	} else {
 #ifdef TUNEFS
-                if (ldd->ldd_mount_opts[0] == 0)
-                        /* use the defaults unless old opts exist */
+		if (ldd->ldd_mount_opts[0] == 0)
+		/* use the defaults unless old opts exist */
 #endif
-                {
-                        sprintf(ldd->ldd_mount_opts, "%s%s",
-                                always_mountopts, default_mountopts);
-                        trim_mountfsoptions(ldd->ldd_mount_opts);
-                }
-        }
+		{
+			snprintf(ldd->ldd_mount_opts,
+				 sizeof(ldd->ldd_mount_opts),
+				 "%s", wanted_mountopts);
+			trim_mountfsoptions(ldd->ldd_mount_opts);
+		}
+	}
+
+	ret = osd_fix_mountopts(&mop, ldd->ldd_mount_opts,
+				sizeof(ldd->ldd_mount_opts));
+	if (ret) {
+		fatal();
+		fprintf(stderr, "unable to fix mountfsoptions (%d)\n", ret);
+		goto out;
+	}
 
         server_make_name(ldd->ldd_flags, ldd->ldd_svindex,
                          ldd->ldd_fsname, ldd->ldd_svname);

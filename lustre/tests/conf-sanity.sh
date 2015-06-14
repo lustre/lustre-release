@@ -5775,6 +5775,29 @@ test_87() { #LU-6544
 }
 run_test 87 "check if MDT inode can hold EAs with N stripes properly"
 
+test_88() {
+	[ "$(facet_fstype mds1)" == "zfs" ] &&
+		skip "LU-6662: no implementation for ZFS" && return
+
+	load_modules
+
+	add mds1 $(mkfs_opts mds1 $(mdsdevname 1)) \
+		--reformat $(mdsdevname 1) || error "add mds1 failed"
+
+	do_facet mds1 "$TUNEFS $(mdsdevname 1) |
+		grep -e \".*opts:.*errors=remount-ro.*\"" ||
+		error "default mount options is missing"
+
+	add mds1 $(mkfs_opts mds1 $(mdsdevname 1)) \
+		--mountfsoptions="user_xattr,errors=panic" \
+		--reformat $(mdsdevname 1) || error "add mds1 failed"
+
+	do_facet mds1 "$TUNEFS $(mdsdevname 1) |
+		grep -e \".*opts:.*errors=panic.*\"" ||
+		error "user can't override default mount options"
+}
+run_test 88 "check the default mount options can be overridden"
+
 # $1 test directory
 # $2 (optional) value of max_mod_rpcs_in_flight to set
 check_max_mod_rpcs_in_flight() {

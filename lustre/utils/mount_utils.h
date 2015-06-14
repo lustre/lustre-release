@@ -121,7 +121,7 @@ char *strscpy(char *dst, char *src, int buflen);
 int check_mtab_entry(char *spec1, char *spec2, char *mntpt, char *type);
 int update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
 		      int flags, int freq, int pass);
-int check_mountfsoptions(char *mountopts, char *wanted_mountopts, int justwarn);
+int check_mountfsoptions(char *mountopts, char *wanted_mountopts);
 void trim_mountfsoptions(char *s);
 __u64 get_device_size(char* device);
 
@@ -137,8 +137,8 @@ int osd_read_ldd(char *dev, struct lustre_disk_data *ldd);
 int osd_is_lustre(char *dev, unsigned *mount_type);
 int osd_make_lustre(struct mkfs_opts *mop);
 int osd_prepare_lustre(struct mkfs_opts *mop,
-		       char *default_mountopts, int default_len,
-		       char *always_mountopts, int always_len);
+		       char *wanted_mountopts, size_t len);
+int osd_fix_mountopts(struct mkfs_opts *mop, char *mountopts, size_t len);
 int osd_tune_lustre(char *dev, struct mount_opts *mop);
 int osd_label_lustre(struct mount_opts *mop);
 int osd_enable_quota(struct mkfs_opts *mop);
@@ -153,8 +153,9 @@ struct module_backfs_ops {
 	int	(*is_lustre)(char *dev, enum ldd_mount_type *mount_type);
 	int	(*make_lustre)(struct mkfs_opts *mop);
 	int	(*prepare_lustre)(struct mkfs_opts *mop,
-				  char *default_mountopts, int default_len,
-				  char *always_mountopts, int always_len);
+				  char *wanted_mountopts, size_t len);
+	int	(*fix_mountopts)(struct mkfs_opts *mop,
+				 char *mountopts, size_t len);
 	int	(*tune_lustre)(char *dev, struct mount_opts *mop);
 	int	(*label_lustre)(struct mount_opts *mop);
 	int	(*enable_quota)(struct mkfs_opts *mop);
