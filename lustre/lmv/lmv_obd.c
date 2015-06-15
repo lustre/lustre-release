@@ -2185,7 +2185,7 @@ retry_rename:
 	rc = md_rename(target_exp, op_data, old, oldlen, new, newlen,
 		       request);
 
-	if (rc != 0 && rc != -EREMOTE)
+	if (rc != 0 && rc != -EXDEV)
 		RETURN(rc);
 
 	body = req_capsule_server_get(&(*request)->rq_pill, &RMF_MDT_BODY);

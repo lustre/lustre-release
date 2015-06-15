@@ -1761,7 +1761,7 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 			LASSERT(repbody != NULL);
 			repbody->mbo_fid1 = *new_fid;
 			repbody->mbo_valid |= (OBD_MD_FLID | OBD_MD_MDS);
-			GOTO(out_put_old, rc = -EREMOTE);
+			GOTO(out_put_old, rc = -EXDEV);
 		}
 		/* Before locking the target dir, check we do not replace
 		 * a dir with a non-dir, otherwise it may deadlock with
