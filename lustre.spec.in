@@ -188,7 +188,7 @@ LDISKFS hooks for mount/mkfs into a dynamic library.
 %package osd-zfs
 Summary: osd-zfs is the mandatory glue for ZFS support in Lustre.
 Requires: lustre-modules = %{version}, zfs-kmod
-Requires: lustre-osd-zfs-mount
+Requires: lustre-osd-zfs-mount = %{version}
 Provides: lustre-osd
 Group: Development/Kernel
 
