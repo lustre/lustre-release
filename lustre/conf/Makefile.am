@@ -37,7 +37,7 @@
 #
 
 EXTRA_DIST = lustre.dtd slapd-lustre.conf lustre2ldif.xsl top.ldif \
-             99-lustre.rules lustre ldev.conf
+             99-lustre.rules lustre ldev.conf ko2iblnd.conf
 ldapconfdir = $(sysconfdir)/openldap
 
 if UTILS
@@ -54,5 +54,8 @@ sysconfigdir = $(sysconfdir)/sysconfig
 sysconfig_DATA = lustre
 endif
 endif
+
+modprobedir = $(sysconfdir)/modprobe.d
+modprobe_DATA = ko2iblnd.conf
 
 sysconf_DATA = ldev.conf
