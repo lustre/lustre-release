@@ -5275,11 +5275,17 @@ struct osd_filldir_cbs {
  * \retval 0 on success
  * \retval 1 on buffer full
  */
+#ifdef HAVE_FILLDIR_USE_CTX
+static int osd_ldiskfs_filldir(struct dir_context  *buf,
+			       const char *name, int namelen,
+#else
 static int osd_ldiskfs_filldir(void *buf, const char *name, int namelen,
+#endif
                                loff_t offset, __u64 ino,
                                unsigned d_type)
 {
-	struct osd_it_ea	*it   = ((struct osd_filldir_cbs *)buf)->it;
+	struct osd_it_ea	*it   =
+		((struct osd_filldir_cbs *)buf)->it;
 	struct osd_object	*obj  = it->oie_obj;
         struct osd_it_ea_dirent *ent  = it->oie_dirent;
         struct lu_fid           *fid  = &ent->oied_fid;

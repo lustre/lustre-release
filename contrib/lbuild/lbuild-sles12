@@ -11,6 +11,13 @@ WITH_ZFS="Zfs Not Supported"
 
 source ${LBUILD_DIR}/lbuild-sles
 
+kernel_srpm_location() {
+
+    local site="http://mgmt/cobbler/repo_mirror/updates-sles12.1-src"
+    echo "$site/src/"
+
+}
+
 edit_specs() {
 
     # edit the SPECs with our changes
@@ -20,7 +27,7 @@ edit_specs() {
         #cp $TOPDIR/SOURCES/kernel-$spec.spec{,.orig}
         sed -i -e "s/^\(Release: *\).*$/\1${lnxrel}_${buildid}/" \
                -e '/^%setup /a\
-cp  %_sourcedir/linux-3.0-lustre.patch %_builddir/%{name}-%{version}/lustre.patch\
+cp  %_sourcedir/linux-3.12-lustre.patch %_builddir/%{name}-%{version}/lustre.patch\
 ! grep -q lustre.patch %_sourcedir/series.conf && echo -e "\\n\\tlustre.patch" >> %_sourcedir/series.conf' \
           SOURCES/kernel-${spec}.spec || \
             fatal 1 "Error while editing SOURCES/kernel-${spec}.spec"
@@ -76,6 +83,11 @@ unpack_linux_devel_rpm-sles12() {
         fatal 1 "Unpack error for $kernelrpm"
     fi
 
+    if [ -d "${rpmdir}/../noarch" ]; then
+	rpmdir="${rpmdir%/*}"
+	rpmdir="${rpmdir}/noarch"
+    fi
+
     if ! kernelrpm=$(find_rpm "$rpmdir" provides "^kernel-(lustre-)?devel = $wanted_kernel"); then
         fatal 1 "Could not find the kernel-devel in $rpmdir/"
     fi
@@ -100,14 +112,17 @@ find_linux_rpm-sles12() {
     local wanted_kernel="$2"
     local pathtorpms=${3:-"$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH"}
 
-    local PLEV=$(sed -n -e 's/^PATCHLEVEL = //p' /etc/SuSE-release)
-    local site="https://nu.novell.com/repo/\$RCE/SLES12-SP${PLEV}-Updates/sle-12-$(resolve_arch $TARGET_ARCH)/rpm/$(resolve_arch $TARGET_ARCH)"
+    local site="http://mgmt/cobbler/repo_mirror/updates-sles12.1-x86_64"
     if [ ! -f $pathtorpms/kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm ]; then
-        fetch_url "$site/kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm" $pathtorpms
+        fetch_url "$site/x86_64/kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm" $pathtorpms
+    fi
+    # SLES 12 also needs kernel-devel in addition to kernel-default-devel
+    if [ ! -f $pathtorpms/kernel-devel-$wanted_kernel.noarch.rpm ]; then
+        fetch_url "$site/noarch/kernel-devel-$wanted_kernel.noarch.rpm" $pathtorpms
     fi
     # SLES also needs the kernel-source along with kernel-devel
-    if [ ! -f $pathtorpms/kernel-source-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm ]; then
-        fetch_url "$site/kernel-source-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm" $pathtorpms
+    if [ ! -f $pathtorpms/kernel-source-$wanted_kernel.noarch.rpm ]; then
+        fetch_url "$site/noarch/kernel-source-$wanted_kernel.noarch.rpm" $pathtorpms
     fi
     echo "kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm"
 

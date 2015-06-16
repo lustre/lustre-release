@@ -81,15 +81,6 @@ Index: linux-3.12.39-47.1/fs/ext4/namei.c
  
  
  static int ext4_add_nondir(handle_t *handle,
-@@ -2402,7 +2426,7 @@ out:
- 	if (IS_DIRSYNC(dir))
- 		ext4_handle_sync(handle);
- 
--	inode->i_op = &ext4_dir_inode_operations.ops;
-+	inode->i_op = &ext4_dir_inode_operations;
- 	inode->i_fop = &ext4_dir_operations;
- 	return ext4_init_new_dir(handle, dir, inode);
- }
 Index: linux-3.12.39-47.1/fs/ext4/ialloc.c
 ===================================================================
 --- linux-3.12.39-47.1.orig/fs/ext4/ialloc.c

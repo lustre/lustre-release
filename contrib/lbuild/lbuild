@@ -1005,6 +1005,9 @@ build_lustre() {
     RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"_tmppath $TMPDIR\""
     RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"_topdir $TOPDIR\""
 
+    # allow environment setting to override ldiskfs series selection
+    [ -n "$LDISKFS_SERIES" ] && export LDISKFS_SERIES
+
     eval $RPMBUILD $targets $rpmbuildopt "$LUSTRE" $RPMBUILD_DEFS \
         ${osd_zfs:+--with zfs} \
         ${osd_ldiskfs:+--with ldiskfs} 2>&1 || \

@@ -7,6 +7,13 @@ BUILD_GEN+=".0"
 
 source ${LBUILD_DIR}/lbuild-sles
 
+kernel_srpm_location() {
+
+    local PLEV=$(sed -n -e 's/^PATCHLEVEL = //p' /etc/SuSE-release)
+    echo "https://nu.novell.com/repo/\$RCE/SLES11-SP${PLEV}-Updates/sle-11-$(resolve_arch $TARGET_ARCH)/rpm/src/"
+
+}
+
 # the location of the ofed-devel-<version>.<arch>.rpm
 OFED_DEVEL_LOCATION="$KERNELTREE"
 

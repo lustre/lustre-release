@@ -126,10 +126,3 @@ mcpu_rpmbuild_opt() {
 find_linux_release() {
     _find_linux_release $LINUXOBJ
 }
-
-kernel_srpm_location() {
-	local PLEV=$(sed -n -e 's/^PATCHLEVEL = //p' /etc/SuSE-release)
-	local site="https://nu.novell.com/repo/\$RCE/SLES11-SP${PLEV}-Updates/sle-11-$(resolve_arch $TARGET_ARCH)/rpm/src/"
-
-	echo $site
-}

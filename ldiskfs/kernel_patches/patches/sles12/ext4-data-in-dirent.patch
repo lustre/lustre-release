@@ -7,10 +7,10 @@ is present.
 make use of dentry->d_fsdata to pass fid to ext4. so no
 changes in ext4_add_entry() interface required.
 
-Index: linux-3.12.39-47.1/fs/ext4/dir.c
+Index: linux-stage/fs/ext4/dir.c
 ===================================================================
---- linux-3.12.39-47.1.orig/fs/ext4/dir.c
-+++ linux-3.12.39-47.1/fs/ext4/dir.c
+--- linux-stage.orig/fs/ext4/dir.c
++++ linux-stage/fs/ext4/dir.c
 @@ -70,11 +70,11 @@ int __ext4_check_dir_entry(const char *f
  	const int rlen = ext4_rec_len_from_disk(de->rec_len,
  						dir->i_sb->s_blocksize);
@@ -30,7 +30,7 @@ Index: linux-3.12.39-47.1/fs/ext4/dir.c
  				 * dirent test below. */
  				if (ext4_rec_len_from_disk(de->rec_len,
 -					sb->s_blocksize) < EXT4_DIR_REC_LEN(1))
-+				       sb->s_blocksize) < __EXT4_DIR_REC_LEN(1))
++				    sb->s_blocksize) < __EXT4_DIR_REC_LEN(1))
  					break;
  				i += ext4_rec_len_from_disk(de->rec_len,
  							    sb->s_blocksize);
@@ -62,10 +62,10 @@ Index: linux-3.12.39-47.1/fs/ext4/dir.c
  	new_fn->name[dirent->name_len] = 0;
  
  	while (*p) {
-Index: linux-3.12.39-47.1/fs/ext4/ext4.h
+Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
---- linux-3.12.39-47.1.orig/fs/ext4/ext4.h
-+++ linux-3.12.39-47.1/fs/ext4/ext4.h
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
 @@ -960,6 +960,7 @@ struct ext4_inode_info {
  #define EXT4_MOUNT_ERRORS_MASK		0x00070
  #define EXT4_MOUNT_MINIX_DF		0x00080	/* Mimics the Minix statfs */
@@ -174,16 +174,16 @@ Index: linux-3.12.39-47.1/fs/ext4/ext4.h
  }
  
  /* fsync.c */
-@@ -2159,7 +2208,7 @@ extern int ext4_delete_entry(handle_t *h
+@@ -2158,6 +2207,8 @@ extern struct inode *ext4_create_inode(h
+ extern int ext4_delete_entry(handle_t *handle, struct inode * dir,
  			     struct ext4_dir_entry_2 *de_del,
  			     struct buffer_head *bh);
- extern int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
--			       struct inode *inode);
++extern int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
 +			       struct inode *inode, const void *, const void *);
  extern int search_dir(struct buffer_head *bh,
  		      char *search_buf,
  		      int buf_size,
-@@ -2836,6 +2885,28 @@ extern struct mutex ext4__aio_mutex[EXT4
+@@ -2834,6 +2885,28 @@ extern struct mutex ext4__aio_mutex[EXT4
  extern int ext4_resize_begin(struct super_block *sb);
  extern void ext4_resize_end(struct super_block *sb);
  
@@ -212,10 +212,10 @@ Index: linux-3.12.39-47.1/fs/ext4/ext4.h
  #endif	/* __KERNEL__ */
  
  #endif	/* _EXT4_H */
-Index: linux-3.12.39-47.1/fs/ext4/namei.c
+Index: linux-stage/fs/ext4/namei.c
 ===================================================================
---- linux-3.12.39-47.1.orig/fs/ext4/namei.c
-+++ linux-3.12.39-47.1/fs/ext4/namei.c
+--- linux-stage.orig/fs/ext4/namei.c
++++ linux-stage/fs/ext4/namei.c
 @@ -239,7 +239,8 @@ static unsigned dx_get_count(struct dx_e
  static unsigned dx_get_limit(struct dx_entry *entries);
  static void dx_set_count(struct dx_entry *entries, unsigned value);
@@ -501,7 +501,7 @@ Index: linux-3.12.39-47.1/fs/ext4/namei.c
  
  out_journal:
  	if (journal) {
-@@ -2461,37 +2516,70 @@ err_unlock_inode:
+@@ -2463,37 +2518,70 @@ err_unlock_inode:
  	return err;
  }
  
@@ -579,7 +579,7 @@ Index: linux-3.12.39-47.1/fs/ext4/namei.c
  	struct buffer_head *dir_block = NULL;
  	struct ext4_dir_entry_2 *de;
  	struct ext4_dir_entry_tail *t;
-@@ -2520,7 +2608,11 @@ static int ext4_init_new_dir(handle_t *h
+@@ -2522,7 +2610,11 @@ static int ext4_init_new_dir(handle_t *h
  	if (err)
  		goto out;
  	de = (struct ext4_dir_entry_2 *)dir_block->b_data;
@@ -592,26 +592,37 @@ Index: linux-3.12.39-47.1/fs/ext4/namei.c
  	set_nlink(inode, 2);
  	if (csum_size) {
  		t = EXT4_DIRENT_TAIL(dir_block->b_data, blocksize);
-@@ -2540,7 +2632,8 @@ out:
- /* Initialize @inode as a subdirectory of @dir, and add the
-  * "." and ".." entries into the first directory block. */
- int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
--			struct inode *inode)
+@@ -2539,6 +2631,29 @@ out:
+ 	return err;
+ }
+ 
++/* Initialize @inode as a subdirectory of @dir, and add the
++ * "." and ".." entries into the first directory block. */
++int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
 +			struct inode *inode,
 +			const void *data1, const void *data2)
++{
++	int rc;
++
++	if (IS_ERR(handle))
++		return PTR_ERR(handle);
++
++	if (IS_DIRSYNC(dir))
++		ext4_handle_sync(handle);
++
++	inode->i_op = &ext4_dir_inode_operations;
++	inode->i_fop = &ext4_dir_operations;
++	rc = ext4_init_new_dir(handle, dir, inode, data1, data2);
++	if (!rc)
++		rc = ext4_mark_inode_dirty(handle, inode);
++	return rc;
++}
++EXPORT_SYMBOL(ext4_add_dot_dotdot);
++
+ static int ext4_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
  {
- 	if (IS_ERR(handle))
- 		return PTR_ERR(handle);
-@@ -2550,7 +2643,7 @@ int ext4_add_dot_dotdot(handle_t *handle
- 
- 	inode->i_op = &ext4_dir_inode_operations;
- 	inode->i_fop = &ext4_dir_operations;
--	return ext4_init_new_dir(handle, dir, inode);
-+	return ext4_init_new_dir(handle, dir, inode, data1, data2);
- }
- EXPORT_SYMBOL(ext4_add_dot_dotdot);
- 
-@@ -2578,7 +2671,7 @@ retry:
+ 	handle_t *handle;
+@@ -2563,7 +2678,7 @@ retry:
  
  	inode->i_op = &ext4_dir_inode_operations;
  	inode->i_fop = &ext4_dir_operations;
@@ -620,7 +631,7 @@ Index: linux-3.12.39-47.1/fs/ext4/namei.c
  	if (err)
  		goto out_clear_inode;
  	err = ext4_mark_inode_dirty(handle, inode);
-@@ -2630,7 +2723,7 @@ static int empty_dir(struct inode *inode
+@@ -2615,7 +2730,7 @@ static int empty_dir(struct inode *inode
  	}
  
  	sb = inode->i_sb;
@@ -629,10 +640,10 @@ Index: linux-3.12.39-47.1/fs/ext4/namei.c
  		EXT4_ERROR_INODE(inode, "invalid size");
  		return 1;
  	}
-Index: linux-3.12.39-47.1/fs/ext4/inline.c
+Index: linux-stage/fs/ext4/inline.c
 ===================================================================
---- linux-3.12.39-47.1.orig/fs/ext4/inline.c
-+++ linux-3.12.39-47.1/fs/ext4/inline.c
+--- linux-stage.orig/fs/ext4/inline.c
++++ linux-stage/fs/ext4/inline.c
 @@ -998,17 +998,17 @@ static int ext4_add_dirent_to_inline(han
  	int		err;
  	struct ext4_dir_entry_2 *de;
@@ -701,10 +712,10 @@ Index: linux-3.12.39-47.1/fs/ext4/inline.c
  				break;
  			i += ext4_rec_len_from_disk(de->rec_len,
  						    extra_size);
-Index: linux-3.12.39-47.1/fs/ext4/super.c
+Index: linux-stage/fs/ext4/super.c
 ===================================================================
---- linux-3.12.39-47.1.orig/fs/ext4/super.c
-+++ linux-3.12.39-47.1/fs/ext4/super.c
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
 @@ -1133,7 +1133,7 @@ enum {
  	Opt_data_err_abort, Opt_data_err_ignore,
  	Opt_usrjquota, Opt_grpjquota, Opt_offusrjquota, Opt_offgrpjquota,

@@ -1,0 +1,23 @@
+Index: linux-3.12.44-52.10/drivers/md/raid5.c
+===================================================================
+--- linux-3.12.44-52.10.orig/drivers/md/raid5.c
++++ linux-3.12.44-52.10/drivers/md/raid5.c
+@@ -2530,6 +2530,8 @@ static int add_stripe_bio(struct stripe_
+ 		bi->bi_next = *bip;
+ 	*bip = bi;
+ 	raid5_inc_bi_active_stripes(bi);
++	if ((bi->bi_rw & REQ_SYNC) && !forwrite)
++		clear_bit(R5_UPTODATE, &sh->dev[dd_idx].flags);	/* force to read from disk. */
+ 
+ 	if (forwrite) {
+ 		/* check if page is covered */
+@@ -4416,6 +4418,9 @@ static void make_discard_request(struct
+ 		md_write_end(mddev);
+ 		bio_endio(bi, 0);
+ 	}
++
++	if (bi->bi_rw & REQ_SYNC)
++		md_wakeup_thread(mddev->thread);
+ }
+ 
+ static void make_request(struct mddev *mddev, struct bio * bi)
