@@ -1151,6 +1151,12 @@ out:
 			ll_stats_ops_tally(ll_i2sbi(inode),
 					   LPROC_LL_WRITE_BYTES, result);
 			fd->fd_write_failed = false;
+		} else if (result == 0 && rc == 0) {
+			rc = io->ci_result;
+			if (rc < 0)
+				fd->fd_write_failed = true;
+			else
+				fd->fd_write_failed = false;
 		} else if (rc != -ERESTARTSYS) {
 			fd->fd_write_failed = true;
 		}
