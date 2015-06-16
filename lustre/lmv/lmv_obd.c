@@ -810,9 +810,8 @@ static void lmv_hsm_req_build(struct lmv_obd *lmv,
 static int lmv_hsm_ct_unregister(struct lmv_obd *lmv, unsigned int cmd, int len,
 				 struct lustre_kernelcomm *lk, void *uarg)
 {
-	__u32			 i;
-	int			 rc;
-	struct kkuc_ct_data	*kcd = NULL;
+	__u32	i;
+	int	rc;
 	ENTRY;
 
 	/* unregister request (call from llapi_hsm_copytool_fini) */
@@ -830,9 +829,7 @@ static int lmv_hsm_ct_unregister(struct lmv_obd *lmv, unsigned int cmd, int len,
 	 * Unreached coordinators will get EPIPE on next requests
 	 * and will unregister automatically.
 	 */
-	rc = libcfs_kkuc_group_rem(lk->lk_uid, lk->lk_group, (void **)&kcd);
-	if (kcd != NULL)
-		OBD_FREE_PTR(kcd);
+	rc = libcfs_kkuc_group_rem(lk->lk_uid, lk->lk_group);
 
 	RETURN(rc);
 }
@@ -844,7 +841,7 @@ static int lmv_hsm_ct_register(struct lmv_obd *lmv, unsigned int cmd, int len,
 	__u32			 i, j;
 	int			 err, rc;
 	bool			 any_set = false;
-	struct kkuc_ct_data	*kcd;
+	struct kkuc_ct_data	 kcd = { 0 };
 	ENTRY;
 
 	/* All or nothing: try to register to all MDS.
@@ -892,21 +889,14 @@ static int lmv_hsm_ct_register(struct lmv_obd *lmv, unsigned int cmd, int len,
 	if (filp == NULL)
 		RETURN(-EBADF);
 
-	OBD_ALLOC_PTR(kcd);
-	if (kcd == NULL) {
-		fput(filp);
-		RETURN(-ENOMEM);
-	}
-	kcd->kcd_magic = KKUC_CT_DATA_MAGIC;
-	kcd->kcd_uuid = lmv->cluuid;
-	kcd->kcd_archive = lk->lk_data;
+	kcd.kcd_magic = KKUC_CT_DATA_MAGIC;
+	kcd.kcd_uuid = lmv->cluuid;
+	kcd.kcd_archive = lk->lk_data;
 
-	rc = libcfs_kkuc_group_add(filp, lk->lk_uid, lk->lk_group, kcd);
-	if (rc != 0) {
-		if (filp != NULL)
-			fput(filp);
-		OBD_FREE_PTR(kcd);
-	}
+	rc = libcfs_kkuc_group_add(filp, lk->lk_uid, lk->lk_group,
+				   &kcd, sizeof(kcd));
+	if (rc != 0)
+		fput(filp);
 
 	RETURN(rc);
 }
