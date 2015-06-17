@@ -573,8 +573,8 @@ static int mdt_coordinator(void *data)
 
 		hsd.request_cnt = 0;
 
-		rc = cdt_llog_process(mti->mti_env, mdt,
-				      mdt_coordinator_cb, &hsd);
+		rc = cdt_llog_process(mti->mti_env, mdt, mdt_coordinator_cb,
+				      &hsd, WRITE);
 		if (rc < 0)
 			goto clean_cb_alloc;
 
@@ -789,7 +789,7 @@ static int mdt_hsm_pending_restore(struct mdt_thread_info *mti)
 	hrd.hrd_mti = mti;
 
 	rc = cdt_llog_process(mti->mti_env, mti->mti_mdt,
-			      hsm_restore_cb, &hrd);
+			      hsm_restore_cb, &hrd, WRITE);
 
 	RETURN(rc);
 }
@@ -852,7 +852,7 @@ int mdt_hsm_cdt_init(struct mdt_device *mdt)
 	ENTRY;
 
 	init_waitqueue_head(&cdt->cdt_waitq);
-	mutex_init(&cdt->cdt_llog_lock);
+	init_rwsem(&cdt->cdt_llog_lock);
 	init_rwsem(&cdt->cdt_agent_lock);
 	init_rwsem(&cdt->cdt_request_lock);
 	mutex_init(&cdt->cdt_restore_lock);
@@ -1701,8 +1701,7 @@ static int hsm_cancel_all_actions(struct mdt_device *mdt)
 	hcad.mdt = mdt;
 
 	rc = cdt_llog_process(mti->mti_env, mti->mti_mdt,
-			      mdt_cancel_all_cb, &hcad);
-
+			      mdt_cancel_all_cb, &hcad, WRITE);
 out_cdt_state:
 	/* Enable coordinator, unless the coordinator was stopping. */
 	set_cdt_state(cdt, old_state, NULL);

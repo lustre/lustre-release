@@ -80,11 +80,12 @@ void dump_llog_agent_req_rec(const char *prefix,
  * \param mdt [IN] MDT device
  * \param cb [IN] llog callback funtion
  * \param data [IN] llog callback  data
+ * \param rw [IN] cdt_llog_lock mode (READ or WRITE)
  * \retval 0 success
  * \retval -ve failure
  */
 int cdt_llog_process(const struct lu_env *env, struct mdt_device *mdt,
-		     llog_cb_t cb, void *data)
+		     llog_cb_t cb, void *data, int rw)
 {
 	struct obd_device	*obd = mdt2obd_dev(mdt);
 	struct llog_ctxt	*lctxt = NULL;
@@ -96,7 +97,10 @@ int cdt_llog_process(const struct lu_env *env, struct mdt_device *mdt,
 	if (lctxt == NULL || lctxt->loc_handle == NULL)
 		RETURN(-ENOENT);
 
-	mutex_lock(&cdt->cdt_llog_lock);
+	if (rw == READ)
+		down_read(&cdt->cdt_llog_lock);
+	else
+		down_write(&cdt->cdt_llog_lock);
 
 	rc = llog_cat_process(env, lctxt->loc_handle, cb, data, 0, 0);
 	if (rc < 0)
@@ -106,7 +110,12 @@ int cdt_llog_process(const struct lu_env *env, struct mdt_device *mdt,
 		rc = 0;
 
 	llog_ctxt_put(lctxt);
-	mutex_unlock(&cdt->cdt_llog_lock);
+
+	if (rw == READ)
+		up_read(&cdt->cdt_llog_lock);
+	else
+		up_write(&cdt->cdt_llog_lock);
+
 	RETURN(rc);
 }
 
@@ -151,7 +160,7 @@ int mdt_agent_record_add(const struct lu_env *env,
 	if (lctxt == NULL || lctxt->loc_handle == NULL)
 		GOTO(free, rc = -ENOENT);
 
-	mutex_lock(&cdt->cdt_llog_lock);
+	down_write(&cdt->cdt_llog_lock);
 
 	/* in case of cancel request, the cookie is already set to the
 	 * value of the request cookie to be cancelled
@@ -167,7 +176,7 @@ int mdt_agent_record_add(const struct lu_env *env,
 	if (rc > 0)
 		rc = 0;
 
-	mutex_unlock(&cdt->cdt_llog_lock);
+	up_write(&cdt->cdt_llog_lock);
 	llog_ctxt_put(lctxt);
 
 	EXIT;
@@ -274,7 +283,8 @@ int mdt_agent_record_update(const struct lu_env *env, struct mdt_device *mdt,
 	ducb.status = status;
 	ducb.change_time = cfs_time_current_sec();
 
-	rc = cdt_llog_process(env, mdt, mdt_agent_record_update_cb, &ducb);
+	rc = cdt_llog_process(env, mdt, mdt_agent_record_update_cb, &ducb,
+			      WRITE);
 	if (rc < 0)
 		CERROR("%s: cdt_llog_process() failed, rc=%d, cannot update "
 		       "status to %s for %d cookies, done %d\n",
@@ -425,11 +435,11 @@ static int mdt_hsm_actions_proc_show(struct seq_file *s, void *v)
 	if (aai->aai_eof)
 		RETURN(0);
 
-	mutex_lock(&cdt->cdt_llog_lock);
+	down_read(&cdt->cdt_llog_lock);
 	rc = llog_cat_process(&aai->aai_env, aai->aai_ctxt->loc_handle,
 			      hsm_actions_show_cb, s,
 			      aai->aai_cat_index, aai->aai_index);
-	mutex_unlock(&cdt->cdt_llog_lock);
+	up_read(&cdt->cdt_llog_lock);
 	if (rc == 0) /* all llog parsed */
 		aai->aai_eof = true;
 	if (rc == LLOG_PROC_BREAK) /* buffer full */

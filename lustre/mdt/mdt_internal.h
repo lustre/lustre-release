@@ -140,7 +140,7 @@ struct coordinator {
 						       * counter */
 	__u64			 cdt_last_cookie;     /**< last cookie
 						       * allocated */
-	struct mutex		 cdt_llog_lock;       /**< protect llog
+	struct rw_semaphore	 cdt_llog_lock;       /**< protect llog
 						       * access */
 	struct rw_semaphore	 cdt_agent_lock;      /**< protect agent list */
 	struct rw_semaphore	 cdt_request_lock;    /**< protect request
@@ -823,7 +823,7 @@ extern const struct file_operations mdt_hsm_actions_fops;
 void dump_llog_agent_req_rec(const char *prefix,
 			     const struct llog_agent_req_rec *larr);
 int cdt_llog_process(const struct lu_env *env, struct mdt_device *mdt,
-		     llog_cb_t cb, void *data);
+		     llog_cb_t cb, void *data, int rw);
 int mdt_agent_record_add(const struct lu_env *env, struct mdt_device *mdt,
 			 __u64 compound_id, __u32 archive_id,
 			 __u64 flags, struct hsm_action_item *hai);
