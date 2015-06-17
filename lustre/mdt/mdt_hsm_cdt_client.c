@@ -472,41 +472,6 @@ out:
 }
 
 /**
- * get running action on a FID list or from cookie
- * \param mti [IN]
- * \param hal [IN/OUT] requests
- * \retval 0 success
- * \retval -ve failure
- */
-int mdt_hsm_get_running(struct mdt_thread_info *mti,
-			struct hsm_action_list *hal)
-{
-	struct mdt_device	*mdt = mti->mti_mdt;
-	struct coordinator	*cdt = &mdt->mdt_coordinator;
-	struct hsm_action_item	*hai;
-	int			 i;
-	ENTRY;
-
-	hai = hai_first(hal);
-	for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai)) {
-		struct cdt_agent_req *car;
-
-		if (!fid_is_sane(&hai->hai_fid))
-			RETURN(-EINVAL);
-
-		car = mdt_cdt_find_request(cdt, 0, &hai->hai_fid);
-		if (car == NULL) {
-			hai->hai_cookie = 0;
-			hai->hai_action = HSMA_NONE;
-		} else {
-			*hai = *car->car_hai;
-			mdt_cdt_put_request(car);
-		}
-	}
-	RETURN(0);
-}
-
-/**
  * check if a restore is running on a FID
  * this is redundant with mdt_hsm_coordinator_get_running()
  * but as it can be called frequently when getting attr
@@ -581,7 +546,7 @@ int mdt_hsm_get_actions(struct mdt_thread_info *mti,
 	for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai)) {
 		struct cdt_agent_req *car;
 
-		car = mdt_cdt_find_request(cdt, hai->hai_cookie, NULL);
+		car = mdt_cdt_find_request(cdt, hai->hai_cookie);
 		if (car == NULL) {
 			hai->hai_cookie = 0;
 		} else {

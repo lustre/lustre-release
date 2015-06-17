@@ -282,7 +282,7 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 		 * error may happen if coordinator crashes or stopped
 		 * with running request
 		 */
-		car = mdt_cdt_find_request(cdt, larr->arr_hai.hai_cookie, NULL);
+		car = mdt_cdt_find_request(cdt, larr->arr_hai.hai_cookie);
 		if (car == NULL) {
 			last = larr->arr_req_change;
 		} else {
@@ -776,23 +776,33 @@ int mdt_hsm_cdt_init(struct mdt_device *mdt)
 	init_rwsem(&cdt->cdt_request_lock);
 	mutex_init(&cdt->cdt_restore_lock);
 
-	INIT_LIST_HEAD(&cdt->cdt_requests);
+	INIT_LIST_HEAD(&cdt->cdt_request_list);
 	INIT_LIST_HEAD(&cdt->cdt_agents);
 	INIT_LIST_HEAD(&cdt->cdt_restore_hdl);
 
+	cdt->cdt_request_cookie_hash = cfs_hash_create("REQUEST_COOKIE_HASH",
+						       CFS_HASH_BITS_MIN,
+						       CFS_HASH_BITS_MAX,
+						       CFS_HASH_BKT_BITS,
+						       0 /* extra bytes */,
+						       CFS_HASH_MIN_THETA,
+						       CFS_HASH_MAX_THETA,
+						&cdt_request_cookie_hash_ops,
+						       CFS_HASH_DEFAULT);
+	if (cdt->cdt_request_cookie_hash == NULL)
+		RETURN(-ENOMEM);
+
 	rc = lu_env_init(&cdt->cdt_env, LCT_MD_THREAD);
 	if (rc < 0)
-		RETURN(rc);
+		GOTO(out_request_cookie_hash, rc);
 
 	/* for mdt_ucred(), lu_ucred stored in lu_ucred_key */
 	rc = lu_context_init(&cdt->cdt_session, LCT_SERVER_SESSION);
-	if (rc == 0) {
-		lu_context_enter(&cdt->cdt_session);
-		cdt->cdt_env.le_ses = &cdt->cdt_session;
-	} else {
-		lu_env_fini(&cdt->cdt_env);
-		RETURN(rc);
-	}
+	if (rc < 0)
+		GOTO(out_env, rc);
+
+	lu_context_enter(&cdt->cdt_session);
+	cdt->cdt_env.le_ses = &cdt->cdt_session;
 
 	cdt_mti = lu_context_key_get(&cdt->cdt_env.le_ctx, &mdt_thread_key);
 	LASSERT(cdt_mti != NULL);
@@ -812,6 +822,14 @@ int mdt_hsm_cdt_init(struct mdt_device *mdt)
 	cdt->cdt_active_req_timeout = 3600;
 
 	RETURN(0);
+
+out_env:
+	lu_env_fini(&cdt->cdt_env);
+out_request_cookie_hash:
+	cfs_hash_putref(cdt->cdt_request_cookie_hash);
+	cdt->cdt_request_cookie_hash = NULL;
+
+	return rc;
 }
 
 /**
@@ -827,6 +845,9 @@ int  mdt_hsm_cdt_fini(struct mdt_device *mdt)
 	lu_context_fini(cdt->cdt_env.le_ses);
 
 	lu_env_fini(&cdt->cdt_env);
+
+	cfs_hash_putref(cdt->cdt_request_cookie_hash);
+	cdt->cdt_request_cookie_hash = NULL;
 
 	RETURN(0);
 }
@@ -936,10 +957,13 @@ int mdt_hsm_cdt_stop(struct mdt_device *mdt)
 
 	/* start cleaning */
 	down_write(&cdt->cdt_request_lock);
-	list_for_each_entry_safe(car, tmp1, &cdt->cdt_requests,
+	list_for_each_entry_safe(car, tmp1, &cdt->cdt_request_list,
 				 car_request_list) {
+		cfs_hash_del(cdt->cdt_request_cookie_hash,
+			     &car->car_hai->hai_cookie,
+			     &car->car_cookie_hash);
 		list_del(&car->car_request_list);
-		mdt_cdt_free_request(car);
+		mdt_cdt_put_request(car);
 	}
 	up_write(&cdt->cdt_request_lock);
 
@@ -1014,7 +1038,7 @@ int mdt_hsm_add_hal(struct mdt_thread_info *mti,
 			}
 
 			/* find the running request to set it canceled */
-			car = mdt_cdt_find_request(cdt, hai->hai_cookie, NULL);
+			car = mdt_cdt_find_request(cdt, hai->hai_cookie);
 			if (car != NULL) {
 				car->car_canceled = 1;
 				/* uuid has to be changed to the one running the
@@ -1554,7 +1578,7 @@ static int hsm_cancel_all_actions(struct mdt_device *mdt)
 
 	/* send cancel to all running requests */
 	down_read(&cdt->cdt_request_lock);
-	list_for_each_entry(car, &cdt->cdt_requests, car_request_list) {
+	list_for_each_entry(car, &cdt->cdt_request_list, car_request_list) {
 		mdt_cdt_get_request(car);
 		/* request is not yet removed from list, it will be done
 		 * when copytool will return progress

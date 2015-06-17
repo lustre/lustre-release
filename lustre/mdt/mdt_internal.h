@@ -44,7 +44,8 @@
 #ifndef _MDT_INTERNAL_H
 #define _MDT_INTERNAL_H
 
-
+#include <libcfs/libcfs.h>
+#include <libcfs/libcfs_hash.h>
 #include <upcall_cache.h>
 #include <lustre_net.h>
 #include <lustre/lustre_idl.h>
@@ -135,8 +136,11 @@ struct coordinator {
 						       * requests */
 	atomic_t		 cdt_request_count;   /**< current count of
 						       * started requests */
-	struct list_head	 cdt_requests;	      /**< list of started
-						       * requests */
+	/* started requests (struct cdt_agent_req:car_cookie_hash)
+	 * indexed by cookie */
+	struct cfs_hash		*cdt_request_cookie_hash;
+	/* started requests (struct cdt_agent_req:car_request_list) */
+	struct list_head	 cdt_request_list;
 	struct list_head	 cdt_agents;	      /**< list of register
 						       * agents */
 	struct list_head	 cdt_restore_hdl;     /**< list of restore lock
@@ -454,6 +458,7 @@ struct cdt_req_progress {
 };
 
 struct cdt_agent_req {
+	struct hlist_node	 car_cookie_hash;  /**< find req by cookie */
 	struct list_head	 car_request_list; /**< to chain all the req. */
 	atomic_t		 car_refcount;     /**< reference counter */
 	__u64			 car_compound_id;  /**< compound id */
@@ -826,11 +831,10 @@ int mdt_hsm_add_actions(struct mdt_thread_info *info,
 			struct hsm_action_list *hal);
 int mdt_hsm_get_actions(struct mdt_thread_info *mti,
 			struct hsm_action_list *hal);
-int mdt_hsm_get_running(struct mdt_thread_info *mti,
-			struct hsm_action_list *hal);
 bool mdt_hsm_restore_is_running(struct mdt_thread_info *mti,
 				const struct lu_fid *fid);
 /* mdt/mdt_hsm_cdt_requests.c */
+extern struct cfs_hash_ops cdt_request_cookie_hash_ops;
 extern const struct file_operations mdt_hsm_active_requests_fops;
 void dump_requests(char *prefix, struct coordinator *cdt);
 struct cdt_agent_req *mdt_cdt_alloc_request(__u64 compound_id, __u32 archive_id,
@@ -838,9 +842,7 @@ struct cdt_agent_req *mdt_cdt_alloc_request(__u64 compound_id, __u32 archive_id,
 					    struct hsm_action_item *hai);
 void mdt_cdt_free_request(struct cdt_agent_req *car);
 int mdt_cdt_add_request(struct coordinator *cdt, struct cdt_agent_req *new_car);
-struct cdt_agent_req *mdt_cdt_find_request(struct coordinator *cdt,
-					   const __u64 cookie,
-					   const struct lu_fid *fid);
+struct cdt_agent_req *mdt_cdt_find_request(struct coordinator *cdt, u64 cookie);
 void mdt_cdt_get_work_done(struct cdt_agent_req *car, __u64 *done_sz);
 void mdt_cdt_get_request(struct cdt_agent_req *car);
 void mdt_cdt_put_request(struct cdt_agent_req *car);
