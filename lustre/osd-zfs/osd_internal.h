@@ -462,8 +462,6 @@ int osd_fid_lookup(const struct lu_env *env,
 uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
 			    const struct lu_fid *fid, char *buf);
 int osd_options_init(void);
-int osd_convert_root_to_new_seq(const struct lu_env *env,
-				struct osd_device *o);
 int osd_ost_seq_exists(const struct lu_env *env, struct osd_device *osd,
 		       __u64 seq);
 /* osd_index.c */

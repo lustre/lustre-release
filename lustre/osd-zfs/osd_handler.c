@@ -991,10 +991,6 @@ static int osd_mount(const struct lu_env *env,
 	if (rc)
 		GOTO(err, rc);
 
-	rc = osd_convert_root_to_new_seq(env, o);
-	if (rc)
-		GOTO(err, rc);
-
 	/* Use our own ZAP for inode accounting by default, this can be changed
 	 * via procfs to estimate the inode usage from the block usage */
 	o->od_quota_iused_est = 0;
