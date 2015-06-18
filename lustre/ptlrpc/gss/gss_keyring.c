@@ -118,7 +118,11 @@ static int sec_install_rctx_kr(struct ptlrpc_sec *sec,
 }
 
 #define key_cred(tsk)   ((tsk)->cred)
+#ifdef HAVE_CRED_TGCRED
 #define key_tgcred(tsk) ((tsk)->cred->tgcred)
+#else
+#define key_tgcred(tsk) key_cred(tsk)
+#endif
 
 static inline void keyring_upcall_lock(struct gss_sec_keyring *gsec_kr)
 {
@@ -755,7 +759,7 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 	    strcmp(imp->imp_obd->obd_type->typ_name, LUSTRE_OSP_NAME)) {
 		CERROR("obd %s is not a supported device\n",
 			imp->imp_obd->obd_name);
-		RETURN(NULL);
+		GOTO(out, ctx = NULL);
 	}
 
         construct_key_desc(desc, sizeof(desc), sec, vcred->vc_uid);
@@ -1228,8 +1232,15 @@ int gss_svc_install_rctx_kr(struct obd_import *imp,
  ****************************************/
 
 static
+#ifdef HAVE_KEY_TYPE_INSTANTIATE_2ARGS
+int gss_kt_instantiate(struct key *key, struct key_preparsed_payload *prep)
+{
+	const void     *data = prep->data;
+	size_t          datalen = prep->datalen;
+#else
 int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
 {
+#endif
         int             rc;
         ENTRY;
 
@@ -1274,19 +1285,26 @@ int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
  * on the context without fear of loosing refcount.
  */
 static
+#ifdef HAVE_KEY_TYPE_INSTANTIATE_2ARGS
+int gss_kt_update(struct key *key, struct key_preparsed_payload *prep)
+{
+	const void              *data = prep->data;
+	__u32                    datalen32 = (__u32) prep->datalen;
+#else
 int gss_kt_update(struct key *key, const void *data, size_t datalen)
 {
+	__u32                    datalen32 = (__u32) datalen;
+#endif
         struct ptlrpc_cli_ctx   *ctx = key->payload.data;
         struct gss_cli_ctx      *gctx;
         rawobj_t                 tmpobj = RAWOBJ_EMPTY;
-        __u32                    datalen32 = (__u32) datalen;
         int                      rc;
         ENTRY;
 
-        if (data == NULL || datalen == 0) {
-                CWARN("invalid: data %p, len %lu\n", data, (long)datalen);
-                RETURN(-EINVAL);
-        }
+	if (data == NULL || datalen32 == 0) {
+		CWARN("invalid: data %p, len %lu\n", data, (long)datalen32);
+		RETURN(-EINVAL);
+	}
 
         /* if upcall finished negotiation too fast (mostly likely because
          * of local error happened) and call kt_update(), the ctx

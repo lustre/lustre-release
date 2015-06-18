@@ -78,64 +78,69 @@ Kerberos v5 with GSS support not found at $krb5_with
 ])
     fi
   fi
-  AC_MSG_RESULT($KRBDIR)
 
-  dnl Check if -rpath=$(KRBDIR)/lib is needed
-  echo "The current KRBDIR is $KRBDIR"
-  if test "$KRBDIR/lib" = "/lib" -o "$KRBDIR/lib" = "/usr/lib" \
-       -o "$KRBDIR/lib" = "//lib" -o "$KRBDIR/lib" = "/usr//lib" ; then
-    KRBLDFLAGS="";
-  elif /sbin/ldconfig -p | grep > /dev/null "=> $KRBDIR/lib/"; then
-    KRBLDFLAGS="";
-  else
-    KRBLDFLAGS="-Wl,-rpath=$KRBDIR/lib"
-  fi
+  if test "x$KRBDIR" != "x"; then
 
-  dnl Now check for functions within gssapi library
-  AC_CHECK_LIB($gssapi_lib, gss_krb5_export_lucid_sec_context,
-    AC_DEFINE(HAVE_LUCID_CONTEXT_SUPPORT, 1, [Define this if the Kerberos GSS library supports gss_krb5_export_lucid_sec_context]), ,$KRBLIBS)
-  AC_CHECK_LIB($gssapi_lib, gss_krb5_set_allowable_enctypes,
-    AC_DEFINE(HAVE_SET_ALLOWABLE_ENCTYPES, 1, [Define this if the Kerberos GSS library supports gss_krb5_set_allowable_enctypes]), ,$KRBLIBS)
-  AC_CHECK_LIB($gssapi_lib, gss_krb5_ccache_name,
-    AC_DEFINE(HAVE_GSS_KRB5_CCACHE_NAME, 1, [Define this if the Kerberos GSS library supports gss_krb5_ccache_name]), ,$KRBLIBS)
+    AC_MSG_RESULT($KRBDIR)
 
-  dnl Check for newer error message facility
-  AC_CHECK_LIB($gssapi_lib, krb5_get_error_message,
-    AC_DEFINE(HAVE_KRB5_GET_ERROR_MESSAGE, 1, [Define this if the function krb5_get_error_message is available]), ,$KRBLIBS)
+    dnl Check if -rpath=$(KRBDIR)/lib is needed
+    echo "The current KRBDIR is $KRBDIR"
+    if test "$KRBDIR/lib" = "/lib" -o "$KRBDIR/lib" = "/usr/lib" \
+         -o "$KRBDIR/lib" = "//lib" -o "$KRBDIR/lib" = "/usr//lib" ; then
+      KRBLDFLAGS="";
+    elif /sbin/ldconfig -p | grep > /dev/null "=> $KRBDIR/lib/"; then
+      KRBLDFLAGS="";
+    else
+      KRBLDFLAGS="-Wl,-rpath=$KRBDIR/lib"
+    fi
 
-  dnl Check for function to specify addressless tickets
-  AC_CHECK_LIB($gssapi_lib, krb5_get_init_creds_opt_set_addressless,
-    AC_DEFINE(HAVE_KRB5_GET_INIT_CREDS_OPT_SET_ADDRESSLESS, 1, [Define this if the function krb5_get_init_creds_opt_set_addressless is available]), ,$KRBLIBS)
+    dnl Now check for functions within gssapi library
+    AC_CHECK_LIB($gssapi_lib, gss_krb5_export_lucid_sec_context,
+      AC_DEFINE(HAVE_LUCID_CONTEXT_SUPPORT, 1, [Define this if the Kerberos GSS library supports gss_krb5_export_lucid_sec_context]), ,$KRBLIBS)
+    AC_CHECK_LIB($gssapi_lib, gss_krb5_set_allowable_enctypes,
+      AC_DEFINE(HAVE_SET_ALLOWABLE_ENCTYPES, 1, [Define this if the Kerberos GSS library supports gss_krb5_set_allowable_enctypes]), ,$KRBLIBS)
+    AC_CHECK_LIB($gssapi_lib, gss_krb5_ccache_name,
+      AC_DEFINE(HAVE_GSS_KRB5_CCACHE_NAME, 1, [Define this if the Kerberos GSS library supports gss_krb5_ccache_name]), ,$KRBLIBS)
 
-  dnl Check for krb5int_derive_key
-  AC_CHECK_LIB($gssapi_lib, krb5int_derive_key,
-    [HAVE_KRB5INT_DERIVE_KEY=1; AC_DEFINE(HAVE_KRB5INT_DERIVE_KEY, 1, [Define this if the function krb5int_derive_key is available])], ,$KRBLIBS)
+    dnl Check for newer error message facility
+    AC_CHECK_LIB($gssapi_lib, krb5_get_error_message,
+      AC_DEFINE(HAVE_KRB5_GET_ERROR_MESSAGE, 1, [Define this if the function krb5_get_error_message is available]), ,$KRBLIBS)
 
-  dnl Check for krb5_derive_key
-  AC_CHECK_LIB($gssapi_lib, krb5_derive_key,
-    [HAVE_KRB5_DERIVE_KEY=1; AC_DEFINE(HAVE_KRB5_DERIVE_KEY, 1, [Define this if the function krb5_derive_key is available])], ,$KRBLIBS)
+    dnl Check for function to specify addressless tickets
+    AC_CHECK_LIB($gssapi_lib, krb5_get_init_creds_opt_set_addressless,
+      AC_DEFINE(HAVE_KRB5_GET_INIT_CREDS_OPT_SET_ADDRESSLESS, 1, [Define this if the function krb5_get_init_creds_opt_set_addressless is available]), ,$KRBLIBS)
 
-  AS_IF([test "x$HAVE_KRB5INT_DERIVE_KEY" = "x1" -o "x$HAVE_KRB5_DERIVE_KEY" = "x1"],
-        [AC_DEFINE(HAVE_KRB5, 1, [Define this if you have MIT Kerberos libraries])],
-        [KRBDIR=""; AC_MSG_WARN([
+    dnl Check for krb5int_derive_key
+    AC_CHECK_LIB($gssapi_lib, krb5int_derive_key,
+      [HAVE_KRB5INT_DERIVE_KEY=1; AC_DEFINE(HAVE_KRB5INT_DERIVE_KEY, 1, [Define this if the function krb5int_derive_key is available])], ,$KRBLIBS)
+
+    dnl Check for krb5_derive_key
+    AC_CHECK_LIB($gssapi_lib, krb5_derive_key,
+      [HAVE_KRB5_DERIVE_KEY=1; AC_DEFINE(HAVE_KRB5_DERIVE_KEY, 1, [Define this if the function krb5_derive_key is available])], ,$KRBLIBS)
+
+    AS_IF([test "x$HAVE_KRB5INT_DERIVE_KEY" = "x1" -o "x$HAVE_KRB5_DERIVE_KEY" = "x1"],
+          [AC_DEFINE(HAVE_KRB5, 1, [Define this if you have MIT Kerberos libraries])],
+          [KRBDIR=""; AC_MSG_WARN([
 
 Disable gss/krb5 due to missing both
 krb5int_derive_key and krb5_derive_key functions!
 ])
-])
+    ])
 
-  dnl If they specified a directory and it didn't work, give them a warning
-  if test "x$krb5_with" != "x" -a "$krb5_with" != "$KRBDIR"; then
-    AC_MSG_WARN([
+    dnl If they specified a directory and it didn't work, give them a warning
+    if test "x$krb5_with" != "x" -a "$krb5_with" != "$KRBDIR"; then
+      AC_MSG_WARN([
 
 Using $KRBDIR instead of requested value of $krb5_with for Kerberos!
 ])
-  fi
+    fi
 
-  AC_SUBST([KRBDIR])
-  AC_SUBST([KRBLIBS])
-  AC_SUBST([KRBCFLAGS])
-  AC_SUBST([KRBLDFLAGS])
-  AC_SUBST([K5VERS])
+    AC_SUBST([KRBDIR])
+    AC_SUBST([KRBLIBS])
+    AC_SUBST([KRBCFLAGS])
+    AC_SUBST([KRBLDFLAGS])
+    AC_SUBST([K5VERS])
+
+  fi # "x$KRBDIR" != "x"
 
 ])

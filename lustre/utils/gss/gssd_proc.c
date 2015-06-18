@@ -339,29 +339,29 @@ update_client_list(void)
 
 /* Context creation response. */
 struct lustre_gss_init_res {
-        gss_buffer_desc gr_ctx;         /* context handle */
-        u_int           gr_major;       /* major status */
-        u_int           gr_minor;       /* minor status */
-        u_int           gr_win;         /* sequence window */
-        gss_buffer_desc gr_token;       /* token */
+	gss_buffer_desc gr_ctx;         /* context handle */
+	unsigned int    gr_major;       /* major status */
+	unsigned int    gr_minor;       /* minor status */
+	unsigned int    gr_win;         /* sequence window */
+	gss_buffer_desc gr_token;       /* token */
 };
 
 struct lustre_gss_data {
-        int             lgd_established;
-        int             lgd_lustre_svc; /* mds/oss */
-        int             lgd_uid;        /* uid */
-        char           *lgd_uuid;       /* client device uuid */
-        gss_name_t      lgd_name;       /* service name */
+	int             lgd_established;
+	int             lgd_lustre_svc; /* mds/oss */
+	int             lgd_uid;        /* uid */
+	char           *lgd_uuid;       /* client device uuid */
+	gss_name_t      lgd_name;       /* service name */
 
-        gss_OID         lgd_mech;       /* mech OID */
-        u_int           lgd_req_flags;  /* request flags */
-        gss_cred_id_t   lgd_cred;       /* credential */
-        gss_ctx_id_t    lgd_ctx;        /* session context */
-        gss_buffer_desc lgd_rmt_ctx;    /* remote handle of context */
-        uint32_t        lgd_seq_win;    /* sequence window */
+	gss_OID         lgd_mech;       /* mech OID */
+	unsigned int    lgd_req_flags;  /* request flags */
+	gss_cred_id_t   lgd_cred;       /* credential */
+	gss_ctx_id_t    lgd_ctx;        /* session context */
+	gss_buffer_desc lgd_rmt_ctx;    /* remote handle of context */
+	uint32_t        lgd_seq_win;    /* sequence window */
 
-        int             lgd_rpc_err;
-        int             lgd_gss_err;
+	int             lgd_rpc_err;
+	int             lgd_gss_err;
 };
 
 static int

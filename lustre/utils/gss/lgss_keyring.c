@@ -66,34 +66,34 @@ static char *g_service = NULL;
  * all data about negotiation
  */
 struct lgss_nego_data {
-        uint32_t        lnd_established:1;
+	uint32_t        lnd_established:1;
 
-        int             lnd_secid;
-        uint32_t        lnd_uid;
-        uint32_t        lnd_lsvc;
-        char           *lnd_uuid;
+	int             lnd_secid;
+	uint32_t        lnd_uid;
+	uint32_t        lnd_lsvc;
+	char           *lnd_uuid;
 
-        gss_OID         lnd_mech;               /* mech OID */
-        gss_name_t      lnd_svc_name;           /* service name */
-        u_int           lnd_req_flags;          /* request flags */
-        gss_cred_id_t   lnd_cred;               /* credential */
-        gss_ctx_id_t    lnd_ctx;                /* session context */
-        gss_buffer_desc lnd_rmt_ctx;            /* remote handle of context */
-        uint32_t        lnd_seq_win;            /* sequence window */
+	gss_OID         lnd_mech;               /* mech OID */
+	gss_name_t      lnd_svc_name;           /* service name */
+	unsigned int    lnd_req_flags;          /* request flags */
+	gss_cred_id_t   lnd_cred;               /* credential */
+	gss_ctx_id_t    lnd_ctx;                /* session context */
+	gss_buffer_desc lnd_rmt_ctx;            /* remote handle of context */
+	uint32_t        lnd_seq_win;            /* sequence window */
 
-        int             lnd_rpc_err;
-        int             lnd_gss_err;
+	int             lnd_rpc_err;
+	int             lnd_gss_err;
 };
 
 /*
  * context creation response
  */
 struct lgss_init_res {
-        gss_buffer_desc gr_ctx;         /* context handle */
-        u_int           gr_major;       /* major status */
-        u_int           gr_minor;       /* minor status */
-        u_int           gr_win;         /* sequence window */
-        gss_buffer_desc gr_token;       /* token */
+	gss_buffer_desc gr_ctx;         /* context handle */
+	unsigned int    gr_major;       /* major status */
+	unsigned int    gr_minor;       /* minor status */
+	unsigned int    gr_win;         /* sequence window */
+	gss_buffer_desc gr_token;       /* token */
 };
 
 struct keyring_upcall_param {

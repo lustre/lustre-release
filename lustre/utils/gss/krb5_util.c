@@ -669,7 +669,7 @@ static void
 gssd_set_krb5_ccache_name(char *ccname)
 {
 #ifdef USE_GSS_KRB5_CCACHE_NAME
-	u_int	maj_stat, min_stat;
+	unsigned int	maj_stat, min_stat;
 
 	printerr(2, "using gss_krb5_ccache_name to select krb5 ccache %s\n",
 		 ccname);
@@ -1015,7 +1015,7 @@ gssd_destroy_krb5_machine_creds(void)
 int
 limit_krb5_enctypes(struct rpc_gss_sec *sec, uid_t uid)
 {
-	u_int maj_stat, min_stat;
+	unsigned int maj_stat, min_stat;
 	gss_cred_id_t credh;
 	gss_OID_set_desc  desired_mechs;
 	krb5_enctype enctypes[] = {ENCTYPE_DES_CBC_CRC};

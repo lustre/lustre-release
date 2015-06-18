@@ -104,15 +104,15 @@ void print_hexl(int pri, unsigned char *cp, int length)
 	printerr(pri, "\n");
 
 	for (i = 0; i < length; i += 0x10) {
-		printerr(pri, "  %04x: ", (u_int)i);
+		printerr(pri, "  %04x: ", (unsigned int)i);
 		jm = length - i;
 		jm = jm > 16 ? 16 : jm;
 
 		for (j = 0; j < jm; j++) {
 			if ((j % 2) == 1)
-				printerr(pri,"%02x ", (u_int)cp[i+j]);
+				printerr(pri, "%02x ", (unsigned int)cp[i+j]);
 			else
-				printerr(pri,"%02x", (u_int)cp[i+j]);
+				printerr(pri, "%02x", (unsigned int)cp[i+j]);
 		}
 		for (; j < 16; j++) {
 			if ((j % 2) == 1)

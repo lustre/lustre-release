@@ -277,6 +277,40 @@ Cannot enable gss keyring. See above for details.
 ]) # LC_CONFIG_GSS_KEYRING
 
 #
+# LC_HAVE_CRED_TGCRED
+#
+# rhel7 struct cred has no member tgcred
+#
+AC_DEFUN([LC_HAVE_CRED_TGCRED], [
+LB_CHECK_COMPILE([if 'struct cred' has member 'tgcred'],
+cred_tgcred, [
+	#include <linux/cred.h>
+],[
+	((struct cred *)0)->tgcred = NULL;
+],[
+	AC_DEFINE(HAVE_CRED_TGCRED, 1,
+		[struct cred has member tgcred])
+])
+]) # LC_HAVE_CRED_TGCRED
+
+#
+# LC_KEY_TYPE_INSTANTIATE_2ARGS
+#
+# rhel7 key_type->instantiate takes 2 args (struct key, struct key_preparsed_payload)
+#
+AC_DEFUN([LC_KEY_TYPE_INSTANTIATE_2ARGS], [
+LB_CHECK_COMPILE([if 'key_type->instantiate' has two args],
+key_type_instantiate_2args, [
+	#include <linux/key-type.h>
+],[
+	((struct key_type *)0)->instantiate(0, NULL);
+],[
+	AC_DEFINE(HAVE_KEY_TYPE_INSTANTIATE_2ARGS, 1,
+		[key_type->instantiate has two args])
+])
+]) # LC_KEY_TYPE_INSTANTIATE_2ARGS
+
+#
 # LC_CONFIG_SUNRPC
 #
 AC_DEFUN([LC_CONFIG_SUNRPC], [
@@ -304,6 +338,8 @@ AC_MSG_RESULT([$enable_gss])
 
 AS_IF([test "x$enable_gss" != xno], [
 	LC_CONFIG_GSS_KEYRING
+	LC_HAVE_CRED_TGCRED
+	LC_KEY_TYPE_INSTANTIATE_2ARGS
 	sunrpc_required=$enable_gss
 	LC_CONFIG_SUNRPC
 	sunrpc_required="no"
@@ -322,33 +358,17 @@ AS_IF([test "x$enable_gss" != xno], [
 	require_krb5="no"
 
 	AS_IF([test -n "$KRBDIR"], [
-		AC_CHECK_LIB([gssapi], [gss_export_lucid_sec_context], [
-			GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssapi"
-			gss_conf_test="success"
-		], [
-			AC_CHECK_LIB([gssglue], [gss_export_lucid_sec_context], [
-				GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssglue"
-				gss_conf_test="success"
-			], [
-				AS_IF([test "x$enable_gss" = xyes], [
-					AC_MSG_ERROR([
-
-libgssapi or libgssglue is not found, which is required by GSS.
-])
-				], [
-					AC_MSG_WARN([
-
-libgssapi or libgssglue is not found, which is required by GSS.
-])
-				])
-			])
-		])
-		AC_SUBST(GSSAPI_LIBS)
+		gss_conf_test="success"
+	], [
+		AC_MSG_WARN([not found!])
+		gss_conf_test="failure"
 	])
 
 	AS_IF([test "x$gss_conf_test" = xsuccess], [
 		AC_DEFINE([HAVE_GSS], [1], [Define this is if you enable gss])
 		enable_gss="yes"
+	], [
+		enable_gss="no"
 	])
 ])
 ]) # LC_CONFIG_GSS
