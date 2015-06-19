@@ -10,8 +10,6 @@ BUILD_GEN+=".0"
 WITH_ZFS="Zfs Not Supported"
 
 source ${LBUILD_DIR}/lbuild-sles
-# LU-6490 work around
-CONFIGURE_FLAGS="$CONFIGURE_FLAGS --disable-gss"
 
 edit_specs() {
 
