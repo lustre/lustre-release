@@ -1234,10 +1234,14 @@ int osd_statfs(const struct lu_env *env, struct dt_device *d,
 	result = sb->s_op->statfs(sb->s_root, ksfs);
 	if (likely(result == 0)) { /* N.B. statfs can't really fail */
 		statfs_pack(sfs, ksfs);
-		if (sb->s_flags & MS_RDONLY)
+		if (unlikely(sb->s_flags & MS_RDONLY))
 			sfs->os_state = OS_STATE_READONLY;
+		if (LDISKFS_HAS_INCOMPAT_FEATURE(sb,
+					      LDISKFS_FEATURE_INCOMPAT_EXTENTS))
+			sfs->os_maxbytes = sb->s_maxbytes;
+		else
+			sfs->os_maxbytes = LDISKFS_SB(sb)->s_bitmap_maxbytes;
 	}
-
 	spin_unlock(&osd->od_osfs_lock);
 
 	if (unlikely(env == NULL))
@@ -1284,7 +1288,10 @@ static void osd_conf_get(const struct lu_env *env,
         param->ddp_max_nlink    = LDISKFS_LINK_MAX;
 	param->ddp_block_shift  = sb->s_blocksize_bits;
 	param->ddp_mount_type     = LDD_MT_LDISKFS;
-	param->ddp_maxbytes       = sb->s_maxbytes;
+	if (LDISKFS_HAS_INCOMPAT_FEATURE(sb, LDISKFS_FEATURE_INCOMPAT_EXTENTS))
+		param->ddp_maxbytes = sb->s_maxbytes;
+	else
+		param->ddp_maxbytes = LDISKFS_SB(sb)->s_bitmap_maxbytes;
 	/* Overhead estimate should be fairly accurate, so we really take a tiny
 	 * error margin which also avoids fragmenting the filesystem too much */
 	param->ddp_grant_reserved = 2; /* end up to be 1.9% after conversion */

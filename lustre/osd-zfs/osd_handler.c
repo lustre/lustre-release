@@ -441,6 +441,11 @@ static int osd_objset_statfs(struct osd_device *osd, struct obd_statfs *osfs)
 
 	dmu_objset_space(os, &refdbytes, &availbytes, &usedobjs, &availobjs);
 
+	memset(osfs, 0, sizeof(*osfs));
+
+	/* We're a zfs filesystem. */
+	osfs->os_type = UBERBLOCK_MAGIC;
+
 	/*
 	 * ZFS allows multiple block sizes.  For statfs, Linux makes no
 	 * proper distinction between bsize and frsize.  For calculations
@@ -465,7 +470,7 @@ static int osd_objset_statfs(struct osd_device *osd, struct obd_statfs *osfs)
 	 * Rather than report this via os_bavail (which makes users unhappy if
 	 * they can't fill the filesystem 100%), reduce os_blocks as well.
 	 *
-	 * Reserve 0.78% of total space, at least 4MB for small filesystems,
+	 * Reserve 0.78% of total space, at least 16MB for small filesystems,
 	 * for internal files to be created/unlinked when space is tight.
 	 */
 	CLASSERT(OSD_STATFS_RESERVED_SIZE > 0);
@@ -494,17 +499,14 @@ static int osd_objset_statfs(struct osd_device *osd, struct obd_statfs *osfs)
 	/* ZFS XXX: fill in backing dataset FSID/UUID
 	   memcpy(osfs->os_fsid, .... );*/
 
-	/* We're a zfs filesystem. */
-	osfs->os_type = UBERBLOCK_MAGIC;
+	osfs->os_namelen = MAXNAMELEN;
+	osfs->os_maxbytes = OBD_OBJECT_EOF;
 
 	/* ZFS XXX: fill in appropriate OS_STATE_{DEGRADED,READONLY} flags
 	   osfs->os_state = vf_to_stf(vfsp->vfs_flag);
 	   if (sb->s_flags & MS_RDONLY)
-	   osfs->os_state = OS_STATE_READONLY;
+	   osfs->os_state |= OS_STATE_READONLY;
 	 */
-
-	osfs->os_namelen = MAXNAMELEN;
-	osfs->os_maxbytes = OBD_OBJECT_EOF;
 
 	return 0;
 }
