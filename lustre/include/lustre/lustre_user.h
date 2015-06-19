@@ -62,7 +62,8 @@
 #include <lustre/ll_fiemap.h>
 
 #if defined(__x86_64__) || defined(__ia64__) || defined(__ppc64__) || \
-    defined(__craynv) || defined(__mips64__) || defined(__powerpc64__)
+    defined(__craynv) || defined(__mips64__) || defined(__powerpc64__) || \
+    defined(__aarch64__)
 typedef struct stat	lstat_t;
 # define lstat_f	lstat
 # define fstat_f	fstat
