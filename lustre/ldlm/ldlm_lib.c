@@ -1417,6 +1417,7 @@ static int target_exp_enqueue_req_replay(struct ptlrpc_request *req)
         __u64                  transno = lustre_msg_get_transno(req->rq_reqmsg);
         struct obd_export     *exp = req->rq_export;
         struct ptlrpc_request *reqiter;
+	struct ptlrpc_request *dup_req = NULL;
         int                    dup = 0;
 
         LASSERT(exp);
@@ -1425,6 +1426,7 @@ static int target_exp_enqueue_req_replay(struct ptlrpc_request *req)
 	list_for_each_entry(reqiter, &exp->exp_req_replay_queue,
                                 rq_replay_list) {
                 if (lustre_msg_get_transno(reqiter->rq_reqmsg) == transno) {
+			dup_req = reqiter;
                         dup = 1;
                         break;
                 }
@@ -1436,6 +1438,16 @@ static int target_exp_enqueue_req_replay(struct ptlrpc_request *req)
                      (MSG_RESENT | MSG_REPLAY)) != (MSG_RESENT | MSG_REPLAY))
                         CERROR("invalid flags %x of resent replay\n",
                                lustre_msg_get_flags(req->rq_reqmsg));
+
+		if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+			__u32 new_conn;
+
+			new_conn = lustre_msg_get_conn_cnt(req->rq_reqmsg);
+			if (new_conn >
+			    lustre_msg_get_conn_cnt(dup_req->rq_reqmsg))
+				lustre_msg_set_conn_cnt(dup_req->rq_reqmsg,
+							new_conn);
+		}
         } else {
 		list_add_tail(&req->rq_replay_list,
                                   &exp->exp_req_replay_queue);

@@ -1409,6 +1409,7 @@ struct ptlrpc_bulk_frag_ops {
 
 extern const struct ptlrpc_bulk_frag_ops ptlrpc_bulk_kiov_pin_ops;
 extern const struct ptlrpc_bulk_frag_ops ptlrpc_bulk_kiov_nopin_ops;
+extern const struct ptlrpc_bulk_frag_ops ptlrpc_bulk_kvec_ops;
 
 /*
  * Definition of bulk descriptor.

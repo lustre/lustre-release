@@ -100,6 +100,8 @@
 #define lustre_swab_object_update_result NULL
 #define lustre_swab_object_update_reply NULL
 #define lustre_swab_object_update_request NULL
+#define lustre_swab_out_update_header NULL
+#define lustre_swab_out_update_buffer NULL
 
 #define dump_rniobuf NULL
 #define dump_ioo NULL

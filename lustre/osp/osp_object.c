@@ -857,19 +857,21 @@ static int osp_declare_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		mutex_unlock(&osp->opd_async_requests_mutex);
 		osp_oac_xattr_put(oxe);
 	} else {
-		struct osp_update_request *update;
+		struct osp_update_request *our;
+		struct osp_update_request_sub *ours;
 
 		/* XXX: Currently, we trigger the batched async OUT
 		 *	RPC via dt_declare_xattr_get(). It is not
 		 *	perfect solution, but works well now.
 		 *
 		 *	We will improve it in the future. */
-		update = osp->opd_async_requests;
-		if (update != NULL && update->our_req != NULL &&
-		    update->our_req->ourq_count > 0) {
+		our = osp->opd_async_requests;
+		ours = osp_current_object_update_request(our);
+		if (ours != NULL && ours->ours_req != NULL &&
+		    ours->ours_req->ourq_count > 0) {
 			osp->opd_async_requests = NULL;
 			mutex_unlock(&osp->opd_async_requests_mutex);
-			rc = osp_unplug_async_request(env, osp, update);
+			rc = osp_unplug_async_request(env, osp, our);
 		} else {
 			mutex_unlock(&osp->opd_async_requests_mutex);
 		}

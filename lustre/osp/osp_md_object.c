@@ -153,30 +153,6 @@ update_buffer_get_update(struct object_update_request *request,
 	return ptr;
 }
 
-int osp_extend_update_buffer(const struct lu_env *env,
-			     struct osp_update_request *our)
-{
-	struct object_update_request *obj_update_req;
-	size_t new_size = our->our_req_size + OUT_UPDATE_BUFFER_SIZE_ADD;
-
-	/* enlarge object update request size */
-	if (new_size > OUT_UPDATE_BUFFER_SIZE_MAX)
-		return -E2BIG;
-
-	OBD_ALLOC_LARGE(obj_update_req, new_size);
-	if (obj_update_req == NULL)
-		return -ENOMEM;
-
-	memcpy(obj_update_req, our->our_req, our->our_req_size);
-
-	OBD_FREE_LARGE(our->our_req, our->our_req_size);
-
-	our->our_req = obj_update_req;
-	our->our_req_size = new_size;
-
-	return 0;
-}
-
 /**
  * Implementation of dt_object_operations::do_create
  *

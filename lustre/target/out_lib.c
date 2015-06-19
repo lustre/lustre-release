@@ -38,9 +38,6 @@
 #include <obd_class.h>
 #include "tgt_internal.h"
 
-#define OUT_UPDATE_BUFFER_SIZE_ADD	4096
-#define OUT_UPDATE_BUFFER_SIZE_MAX	(256 * 4096)  /* 1MB update size now */
-
 const char *update_op_str(__u16 opc)
 {
 	static const char *opc_str[] = {
@@ -77,21 +74,23 @@ EXPORT_SYMBOL(update_op_str);
  *
  * \params[in] env		execution environment
  * \params[in] update		object update to be filled
- * \params[in] max_update_size	maximum object update size, if the current
- *                              update length equals or exceeds the size, it
- *                              will return -E2BIG.
+ * \params[in,out] max_update_size	maximum object update size, if the
+ *                                      current update length equals or
+ *                                      exceeds the size, it will return -E2BIG.
  * \params[in] update_op	update type
  * \params[in] fid		object FID of the update
- * \params[in] params_count	the count of the update parameters
- * \params[in] params_sizes	the length of each parameters
+ * \params[in] param_count	the count of the update parameters
+ * \params[in] param_sizes	the length of each parameters
  *
  * \retval			0 if packing succeeds.
  * \retval			-E2BIG if packing exceeds the maximum length.
  */
 int out_update_header_pack(const struct lu_env *env,
-			   struct object_update *update, size_t max_update_size,
-			   enum update_type update_op, const struct lu_fid *fid,
-			   unsigned int param_count, __u16 *params_sizes)
+			   struct object_update *update,
+			   size_t *max_update_size,
+			   enum update_type update_op,
+			   const struct lu_fid *fid,
+			   unsigned int param_count, __u16 *param_sizes)
 {
 	struct object_update_param	*param;
 	unsigned int			i;
@@ -100,17 +99,19 @@ int out_update_header_pack(const struct lu_env *env,
 	/* Check whether the packing exceeding the maxima update length */
 	update_size = sizeof(*update);
 	for (i = 0; i < param_count; i++)
-		update_size += cfs_size_round(sizeof(*param) + params_sizes[i]);
+		update_size += cfs_size_round(sizeof(*param) + param_sizes[i]);
 
-	if (unlikely(update_size >= max_update_size))
+	if (unlikely(update_size >= *max_update_size)) {
+		*max_update_size = update_size;
 		return -E2BIG;
+	}
 
 	update->ou_fid = *fid;
 	update->ou_type = update_op;
 	update->ou_params_count = param_count;
 	param = &update->ou_params[0];
 	for (i = 0; i < param_count; i++) {
-		param->oup_len = params_sizes[i];
+		param->oup_len = param_sizes[i];
 		param = (struct object_update_param *)((char *)param +
 			 object_update_param_size(param));
 	}
@@ -134,7 +135,7 @@ int out_update_header_pack(const struct lu_env *env,
  * \retval		negative errno if updates packing fails
  **/
 int out_update_pack(const struct lu_env *env, struct object_update *update,
-		    size_t max_update_size, enum update_type op,
+		    size_t *max_update_size, enum update_type op,
 		    const struct lu_fid *fid, unsigned int param_count,
 		    __u16 *param_sizes, const void **param_bufs)
 {
@@ -175,7 +176,7 @@ EXPORT_SYMBOL(out_update_pack);
  * \retval		negative errno if insertion fails.
  */
 int out_create_pack(const struct lu_env *env, struct object_update *update,
-		    size_t max_update_size, const struct lu_fid *fid,
+		    size_t *max_update_size, const struct lu_fid *fid,
 		    const struct lu_attr *attr, struct dt_allocation_hint *hint,
 		    struct dt_object_format *dof)
 {
@@ -216,7 +217,7 @@ int out_create_pack(const struct lu_env *env, struct object_update *update,
 EXPORT_SYMBOL(out_create_pack);
 
 int out_ref_del_pack(const struct lu_env *env, struct object_update *update,
-		     size_t max_update_size, const struct lu_fid *fid)
+		     size_t *max_update_size, const struct lu_fid *fid)
 {
 	return out_update_pack(env, update, max_update_size, OUT_REF_DEL, fid,
 			       0, NULL, NULL);
@@ -224,7 +225,7 @@ int out_ref_del_pack(const struct lu_env *env, struct object_update *update,
 EXPORT_SYMBOL(out_ref_del_pack);
 
 int out_ref_add_pack(const struct lu_env *env, struct object_update *update,
-		     size_t max_update_size, const struct lu_fid *fid)
+		     size_t *max_update_size, const struct lu_fid *fid)
 {
 	return out_update_pack(env, update, max_update_size, OUT_REF_ADD, fid,
 			       0, NULL, NULL);
@@ -232,7 +233,7 @@ int out_ref_add_pack(const struct lu_env *env, struct object_update *update,
 EXPORT_SYMBOL(out_ref_add_pack);
 
 int out_attr_set_pack(const struct lu_env *env, struct object_update *update,
-		      size_t max_update_size, const struct lu_fid *fid,
+		      size_t *max_update_size, const struct lu_fid *fid,
 		      const struct lu_attr *attr)
 {
 	struct obdo		*obdo;
@@ -256,7 +257,7 @@ int out_attr_set_pack(const struct lu_env *env, struct object_update *update,
 EXPORT_SYMBOL(out_attr_set_pack);
 
 int out_xattr_set_pack(const struct lu_env *env, struct object_update *update,
-		       size_t max_update_size, const struct lu_fid *fid,
+		       size_t *max_update_size, const struct lu_fid *fid,
 		       const struct lu_buf *buf, const char *name, __u32 flag)
 {
 	__u16	sizes[3] = {strlen(name) + 1, buf->lb_len, sizeof(flag)};
@@ -269,7 +270,7 @@ int out_xattr_set_pack(const struct lu_env *env, struct object_update *update,
 EXPORT_SYMBOL(out_xattr_set_pack);
 
 int out_xattr_del_pack(const struct lu_env *env, struct object_update *update,
-		       size_t max_update_size, const struct lu_fid *fid,
+		       size_t *max_update_size, const struct lu_fid *fid,
 		       const char *name)
 {
 	__u16	size = strlen(name) + 1;
@@ -279,10 +280,9 @@ int out_xattr_del_pack(const struct lu_env *env, struct object_update *update,
 }
 EXPORT_SYMBOL(out_xattr_del_pack);
 
-
 int out_index_insert_pack(const struct lu_env *env,
 			  struct object_update *update,
-			  size_t max_update_size, const struct lu_fid *fid,
+			  size_t *max_update_size, const struct lu_fid *fid,
 			  const struct dt_rec *rec, const struct dt_key *key)
 {
 	struct dt_insert_rec	   *rec1 = (struct dt_insert_rec *)rec;
@@ -304,7 +304,7 @@ EXPORT_SYMBOL(out_index_insert_pack);
 
 int out_index_delete_pack(const struct lu_env *env,
 			  struct object_update *update,
-			  size_t max_update_size, const struct lu_fid *fid,
+			  size_t *max_update_size, const struct lu_fid *fid,
 			  const struct dt_key *key)
 {
 	__u16	size = strlen((char *)key) + 1;
@@ -317,7 +317,7 @@ EXPORT_SYMBOL(out_index_delete_pack);
 
 int out_object_destroy_pack(const struct lu_env *env,
 			    struct object_update *update,
-			    size_t max_update_size, const struct lu_fid *fid)
+			    size_t *max_update_size, const struct lu_fid *fid)
 {
 	return out_update_pack(env, update, max_update_size, OUT_DESTROY, fid,
 			       0, NULL, NULL);
@@ -325,7 +325,7 @@ int out_object_destroy_pack(const struct lu_env *env,
 EXPORT_SYMBOL(out_object_destroy_pack);
 
 int out_write_pack(const struct lu_env *env, struct object_update *update,
-		   size_t max_update_size, const struct lu_fid *fid,
+		   size_t *max_update_size, const struct lu_fid *fid,
 		   const struct lu_buf *buf, __u64 pos)
 {
 	__u16		sizes[2] = {buf->lb_len, sizeof(pos)};
@@ -356,7 +356,7 @@ EXPORT_SYMBOL(out_write_pack);
  **/
 int out_index_lookup_pack(const struct lu_env *env,
 			  struct object_update *update,
-			  size_t max_update_size, const struct lu_fid *fid,
+			  size_t *max_update_size, const struct lu_fid *fid,
 			  struct dt_rec *rec, const struct dt_key *key)
 {
 	const void	*name = key;
@@ -368,7 +368,7 @@ int out_index_lookup_pack(const struct lu_env *env,
 EXPORT_SYMBOL(out_index_lookup_pack);
 
 int out_attr_get_pack(const struct lu_env *env, struct object_update *update,
-		      size_t max_update_size, const struct lu_fid *fid)
+		      size_t *max_update_size, const struct lu_fid *fid)
 {
 	return out_update_pack(env, update, max_update_size, OUT_ATTR_GET,
 			       fid, 0, NULL, NULL);
@@ -376,7 +376,7 @@ int out_attr_get_pack(const struct lu_env *env, struct object_update *update,
 EXPORT_SYMBOL(out_attr_get_pack);
 
 int out_xattr_get_pack(const struct lu_env *env, struct object_update *update,
-		       size_t max_update_size, const struct lu_fid *fid,
+		       size_t *max_update_size, const struct lu_fid *fid,
 		       const char *name)
 {
 	__u16 size;
@@ -390,7 +390,7 @@ int out_xattr_get_pack(const struct lu_env *env, struct object_update *update,
 EXPORT_SYMBOL(out_xattr_get_pack);
 
 int out_read_pack(const struct lu_env *env, struct object_update *update,
-		  size_t max_update_length, const struct lu_fid *fid,
+		  size_t *max_update_size, const struct lu_fid *fid,
 		  size_t size, loff_t pos)
 {
 	__u16		sizes[2] = {sizeof(size), sizeof(pos)};
@@ -399,7 +399,7 @@ int out_read_pack(const struct lu_env *env, struct object_update *update,
 	size = cpu_to_le64(size);
 	pos = cpu_to_le64(pos);
 
-	return out_update_pack(env, update, max_update_length, OUT_READ, fid,
+	return out_update_pack(env, update, max_update_size, OUT_READ, fid,
 			       ARRAY_SIZE(sizes), sizes, bufs);
 }
 EXPORT_SYMBOL(out_read_pack);

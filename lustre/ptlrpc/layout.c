@@ -524,7 +524,8 @@ static const struct req_msg_field *mds_setattr_server[] = {
 
 static const struct req_msg_field *mds_update_client[] = {
 	&RMF_PTLRPC_BODY,
-	&RMF_OUT_UPDATE,
+	&RMF_OUT_UPDATE_HEADER,
+	&RMF_OUT_UPDATE_BUF,
 };
 
 static const struct req_msg_field *mds_update_server[] = {
@@ -1189,6 +1190,16 @@ struct req_msg_field RMF_LFSCK_REPLY =
 		    lustre_swab_lfsck_reply, NULL);
 EXPORT_SYMBOL(RMF_LFSCK_REPLY);
 
+struct req_msg_field RMF_OUT_UPDATE_HEADER = DEFINE_MSGF("out_update", 0,
+				sizeof(struct out_update_header),
+				lustre_swab_out_update_header, NULL);
+EXPORT_SYMBOL(RMF_OUT_UPDATE_HEADER);
+
+struct req_msg_field RMF_OUT_UPDATE_BUF = DEFINE_MSGF("update_buf",
+			RMF_F_STRUCT_ARRAY, sizeof(struct out_update_buffer),
+			lustre_swab_out_update_buffer, NULL);
+EXPORT_SYMBOL(RMF_OUT_UPDATE_BUF);
+
 /*
  * Request formats.
  */
@@ -1381,7 +1392,7 @@ struct req_format RQF_MDS_GET_INFO =
 EXPORT_SYMBOL(RQF_MDS_GET_INFO);
 
 struct req_format RQF_OUT_UPDATE =
-	DEFINE_REQ_FMT0("OUT_UPDATE_OBJ", mds_update_client,
+	DEFINE_REQ_FMT0("OUT_UPDATE", mds_update_client,
 			mds_update_server);
 EXPORT_SYMBOL(RQF_OUT_UPDATE);
 

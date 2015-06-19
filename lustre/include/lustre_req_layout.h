@@ -334,6 +334,8 @@ extern struct req_msg_field RMF_U32;
 /* OBJ update format */
 extern struct req_msg_field RMF_OUT_UPDATE;
 extern struct req_msg_field RMF_OUT_UPDATE_REPLY;
+extern struct req_msg_field RMF_OUT_UPDATE_HEADER;
+extern struct req_msg_field RMF_OUT_UPDATE_BUF;
 
 /* LFSCK format */
 extern struct req_msg_field RMF_LFSCK_REQUEST;

@@ -2590,6 +2590,20 @@ void lustre_swab_object_update_reply(struct object_update_reply *our)
 	}
 }
 
+void lustre_swab_out_update_header(struct out_update_header *ouh)
+{
+	__swab32s(&ouh->ouh_magic);
+	__swab32s(&ouh->ouh_count);
+}
+EXPORT_SYMBOL(lustre_swab_out_update_header);
+
+void lustre_swab_out_update_buffer(struct out_update_buffer *oub)
+{
+	__swab32s(&oub->oub_size);
+	__swab32s(&oub->oub_padding);
+}
+EXPORT_SYMBOL(lustre_swab_out_update_buffer);
+
 void lustre_swab_swap_layouts(struct mdc_swap_layouts *msl)
 {
 	__swab64s(&msl->msl_flags);

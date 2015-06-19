@@ -59,6 +59,11 @@ const struct ptlrpc_bulk_frag_ops ptlrpc_bulk_kiov_nopin_ops = {
 };
 EXPORT_SYMBOL(ptlrpc_bulk_kiov_nopin_ops);
 
+const struct ptlrpc_bulk_frag_ops ptlrpc_bulk_kvec_ops = {
+	.add_iov_frag = ptlrpc_prep_bulk_frag,
+};
+EXPORT_SYMBOL(ptlrpc_bulk_kvec_ops);
+
 static int ptlrpc_send_new_req(struct ptlrpc_request *req);
 static int ptlrpcd_check_work(struct ptlrpc_request *req);
 static int ptlrpc_unregister_reply(struct ptlrpc_request *request, int async);
@@ -224,6 +229,7 @@ int ptlrpc_prep_bulk_frag(struct ptlrpc_bulk_desc *desc,
 			  void *frag, int len)
 {
 	struct kvec *iovec;
+	ENTRY;
 
 	LASSERT(desc->bd_iov_count < desc->bd_max_iov);
 	LASSERT(frag != NULL);
@@ -239,7 +245,7 @@ int ptlrpc_prep_bulk_frag(struct ptlrpc_bulk_desc *desc,
 
 	desc->bd_iov_count++;
 
-	return desc->bd_nob;
+	RETURN(desc->bd_nob);
 }
 EXPORT_SYMBOL(ptlrpc_prep_bulk_frag);
 

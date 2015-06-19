@@ -94,6 +94,13 @@ struct osp_precreate {
 	int				 osp_pre_recovering;
 };
 
+struct osp_update_request_sub {
+	struct object_update_request	*ours_req;
+	size_t				ours_req_size;
+	/* Linked to osp_update_request->our_req_list */
+	struct list_head		ours_list;
+};
+
 /**
  * Tracking the updates being executed on this dt_device.
  */
@@ -102,9 +109,8 @@ struct osp_update_request {
 	/* update request result */
 	int				our_rc;
 
-	/* Holding object updates sent to the remote target */
-	struct object_update_request	*our_req;
-	size_t				our_req_size;
+	/* List of osp_update_request_sub */
+	struct list_head		our_req_list;
 
 	struct list_head		our_cb_items;
 
@@ -583,36 +589,47 @@ update_buffer_get_update(struct object_update_request *request,
 int osp_extend_update_buffer(const struct lu_env *env,
 			     struct osp_update_request *our);
 
-#define osp_update_rpc_pack(env, name, update, op, ...)		\
-({								\
-	struct object_update	*object_update;			\
-	size_t			max_update_length;		\
-	struct object_update_request *ureq;			\
-	int			ret;				\
-								\
-	while (1) {							\
-		ureq = update->our_req;					\
-		max_update_length = update->our_req_size -		\
-				    object_update_request_size(ureq);	\
+struct osp_update_request_sub *
+osp_current_object_update_request(struct osp_update_request *our);
+
+int osp_object_update_request_create(struct osp_update_request *our,
+				     size_t size);
+
+#define osp_update_rpc_pack(env, name, our, op, ...)			\
+({									\
+	struct object_update	*object_update;				\
+	size_t			max_update_length;			\
+	struct osp_update_request_sub *ours;				\
+	int ret;							\
 									\
-		object_update = update_buffer_get_update(ureq,		\
-						 ureq->ourq_count);	\
+	while (1) {							\
+		ours = osp_current_object_update_request(our);		\
+		LASSERT(ours != NULL);					\
+		max_update_length = ours->ours_req_size -		\
+			    object_update_request_size(ours->ours_req);	\
+									\
+		object_update = update_buffer_get_update(ours->ours_req,\
+					 ours->ours_req->ourq_count);	\
 		ret = out_##name##_pack(env, object_update,		\
-					max_update_length,		\
+					&max_update_length,		\
 				       __VA_ARGS__);			\
 		if (ret == -E2BIG) {					\
 			int rc1;					\
-			/* extend the buffer and retry */		\
-			rc1 = osp_extend_update_buffer(env, update);	\
+			/* Create new object update request */		\
+			rc1 = osp_object_update_request_create(our,	\
+				max_update_length  +			\
+				offsetof(struct object_update_request,	\
+					 ourq_updates[0]) + 1);		\
 			if (rc1 != 0) {					\
 				ret = rc1;				\
 				break;					\
 			}						\
+			continue;					\
 		} else {						\
 			if (ret == 0) {					\
+				ours->ours_req->ourq_count++;		\
 				object_update->ou_flags |=		\
 						     update->our_flags; \
-				ureq->ourq_count++;			\
 			}						\
 			break;						\
 		}							\
@@ -678,7 +695,7 @@ static inline void osp_thandle_put(struct osp_thandle *oth)
 }
 
 int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
-			const struct object_update_request *ureq,
+			struct osp_update_request *our,
 			struct ptlrpc_request **reqp);
 int osp_remote_sync(const struct lu_env *env, struct osp_device *osp,
 		    struct osp_update_request *update,
