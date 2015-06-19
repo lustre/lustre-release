@@ -903,7 +903,7 @@ int lod_sub_prep_llog(const struct lu_env *env, struct lod_device *lod,
 	ctxt = llog_get_context(obd, LLOG_UPDATELOG_ORIG_CTXT);
 	LASSERT(ctxt != NULL);
 	ctxt->loc_flags |= LLOG_CTXT_FLAG_NORMAL_FID;
-
+	ctxt->loc_chunk_size = LLOG_MIN_CHUNK_SIZE * 4;
 	if (likely(logid_id(&cid->lci_logid) != 0)) {
 		rc = llog_open(env, ctxt, &lgh, &cid->lci_logid, NULL,
 			       LLOG_OPEN_EXISTS);

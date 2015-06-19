@@ -189,7 +189,6 @@ static int llog_osd_read_header(const struct lu_env *env,
 	struct llog_thread_info	*lgi;
 	enum llog_flag		 flags;
 	int			 rc;
-	__u32			max_size = handle->lgh_hdr_size;
 
 	ENTRY;
 
@@ -213,16 +212,21 @@ static int llog_osd_read_header(const struct lu_env *env,
 
 	lgi->lgi_off = 0;
 	lgi->lgi_buf.lb_buf = handle->lgh_hdr;
-	lgi->lgi_buf.lb_len = max_size;
-	rc = dt_record_read(env, o, &lgi->lgi_buf, &lgi->lgi_off);
-	if (rc) {
-		CERROR("%s: error reading log header from "DFID": rc = %d\n",
+	lgi->lgi_buf.lb_len = handle->lgh_hdr_size;
+	rc = dt_read(env, o, &lgi->lgi_buf, &lgi->lgi_off);
+	llh_hdr = &handle->lgh_hdr->llh_hdr;
+	if (rc < sizeof(*llh_hdr) || rc < llh_hdr->lrh_len) {
+		CERROR("%s: error reading "DFID" log header size %d: rc = %d\n",
 		       o->do_lu.lo_dev->ld_obd->obd_name,
-		       PFID(lu_object_fid(&o->do_lu)), rc);
+		       PFID(lu_object_fid(&o->do_lu)), rc < 0 ? 0 : rc,
+		       -EFAULT);
+
+		if (rc >= 0)
+			rc = -EFAULT;
+
 		RETURN(rc);
 	}
 
-	llh_hdr = &handle->lgh_hdr->llh_hdr;
 	if (LLOG_REC_HDR_NEEDS_SWABBING(llh_hdr))
 		lustre_swab_llog_hdr(handle->lgh_hdr);
 
@@ -234,7 +238,7 @@ static int llog_osd_read_header(const struct lu_env *env,
 		       llh_hdr->lrh_type, LLOG_HDR_MAGIC);
 		RETURN(-EIO);
 	} else if (llh_hdr->lrh_len < LLOG_MIN_CHUNK_SIZE ||
-		   llh_hdr->lrh_len > max_size) {
+		   llh_hdr->lrh_len > handle->lgh_hdr_size) {
 		CERROR("%s: incorrectly sized log %s "DFID" header: "
 		       "%#x (expected at least %#x)\n"
 		       "you may need to re-run lconf --write_conf.\n",
@@ -242,6 +246,17 @@ static int llog_osd_read_header(const struct lu_env *env,
 		       handle->lgh_name ? handle->lgh_name : "",
 		       PFID(lu_object_fid(&o->do_lu)),
 		       llh_hdr->lrh_len, LLOG_MIN_CHUNK_SIZE);
+		RETURN(-EIO);
+	} else if (LLOG_HDR_TAIL(handle->lgh_hdr)->lrt_index >
+		   LLOG_HDR_BITMAP_SIZE(handle->lgh_hdr) ||
+		   LLOG_HDR_TAIL(handle->lgh_hdr)->lrt_len !=
+			llh_hdr->lrh_len) {
+		CERROR("%s: incorrectly sized log %s "DFID" tailer: "
+		       "%#x : rc = %d\n",
+		       o->do_lu.lo_dev->ld_obd->obd_name,
+		       handle->lgh_name ? handle->lgh_name : "",
+		       PFID(lu_object_fid(&o->do_lu)),
+		       LLOG_HDR_TAIL(handle->lgh_hdr)->lrt_len, -EIO);
 		RETURN(-EIO);
 	}
 
@@ -276,6 +291,7 @@ static int llog_osd_declare_write_rec(const struct lu_env *env,
 				      int idx, struct thandle *th)
 {
 	struct llog_thread_info	*lgi = llog_info(env);
+	__u32			chunk_size;
 	struct dt_object	*o;
 	int			 rc;
 
@@ -290,7 +306,8 @@ static int llog_osd_declare_write_rec(const struct lu_env *env,
 	o = loghandle->lgh_obj;
 	LASSERT(o);
 
-	lgi->lgi_buf.lb_len = sizeof(struct llog_log_hdr);
+	chunk_size = loghandle->lgh_ctxt->loc_chunk_size;
+	lgi->lgi_buf.lb_len = chunk_size;
 	lgi->lgi_buf.lb_buf = NULL;
 	/* each time we update header */
 	rc = dt_declare_record_write(env, o, &lgi->lgi_buf, 0,
@@ -302,7 +319,7 @@ static int llog_osd_declare_write_rec(const struct lu_env *env,
 	 * the pad record can be inserted so take into account double
 	 * record size
 	 */
-	lgi->lgi_buf.lb_len = rec->lrh_len * 2;
+	lgi->lgi_buf.lb_len = chunk_size * 2;
 	lgi->lgi_buf.lb_buf = NULL;
 	/* XXX: implement declared window or multi-chunks approach */
 	rc = dt_declare_record_write(env, o, &lgi->lgi_buf, -1, th);
@@ -559,9 +576,10 @@ static int llog_osd_write_rec(const struct lu_env *env,
 		if (rc != 0)
 			GOTO(out_remote_unlock, rc);
 
-		lgi->lgi_off = offsetof(typeof(*llh), llh_tail);
+		lgi->lgi_off =  (unsigned long)LLOG_HDR_TAIL(llh) -
+				(unsigned long)llh;
 		lgi->lgi_buf.lb_len = sizeof(llh->llh_tail);
-		lgi->lgi_buf.lb_buf = &llh->llh_tail;
+		lgi->lgi_buf.lb_buf = LLOG_HDR_TAIL(llh);
 		rc = dt_record_write(env, o, &lgi->lgi_buf, &lgi->lgi_off, th);
 		if (rc != 0)
 			GOTO(out_remote_unlock, rc);

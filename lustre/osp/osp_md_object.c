@@ -1133,68 +1133,101 @@ static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
 	struct osp_device	*osp	= lu2osp_dev(dt->do_lu.lo_dev);
 	struct dt_device	*dt_dev	= &osp->opd_dt_dev;
 	struct lu_buf		*lbuf	= &osp_env_info(env)->osi_lb2;
-	struct osp_update_request   *update;
+	struct osp_update_request   *update = NULL;
 	struct object_update_reply *reply;
 	struct out_read_reply	   *orr;
+	char			   *ptr = rbuf->lb_buf;
 	struct ptlrpc_request	   *req = NULL;
+	size_t			   total_length = rbuf->lb_len;
+	size_t			   max_buf_size;
+	loff_t			   offset = *pos;
 	int			   rc;
 	ENTRY;
 
-	/* Because it needs send the update buffer right away,
-	 * just create an update buffer, instead of attaching the
-	 * update_remote list of the thandle.  */
-	update = osp_update_request_create(dt_dev);
-	if (IS_ERR(update))
-		RETURN(PTR_ERR(update));
+	/* Calculate the maxium buffer length for each read request */
+	max_buf_size = OUT_UPDATE_REPLY_SIZE - cfs_size_round(sizeof(*orr)) -
+		       cfs_size_round(sizeof(struct object_update_result)) -
+		       cfs_size_round(offsetof(struct object_update_reply,
+				      ourp_lens[1]));
+	while (total_length > 0) {
+		size_t	read_length;
 
-	rc = osp_update_rpc_pack(env, read, update, OUT_READ,
-				 lu_object_fid(&dt->do_lu), rbuf->lb_len, *pos);
-	if (rc != 0) {
-		CERROR("%s: cannot insert update: rc = %d\n",
-		       dt_dev->dd_lu_dev.ld_obd->obd_name, rc);
-		GOTO(out, rc);
+		/* Because it needs send the update buffer right away,
+		 * just create an update buffer, instead of attaching the
+		 * update_remote list of the thandle.  */
+		update = osp_update_request_create(dt_dev);
+		if (IS_ERR(update))
+			GOTO(out, rc = PTR_ERR(update));
+
+		read_length = total_length > max_buf_size ?
+			      max_buf_size : total_length;
+
+		rc = osp_update_rpc_pack(env, read, update, OUT_READ,
+					 lu_object_fid(&dt->do_lu),
+					 read_length, offset);
+		if (rc != 0) {
+			CERROR("%s: cannot insert update: rc = %d\n",
+			       dt_dev->dd_lu_dev.ld_obd->obd_name, rc);
+			GOTO(out, rc);
+		}
+
+		rc = osp_remote_sync(env, osp, update, &req);
+		if (rc < 0)
+			GOTO(out, rc);
+
+		reply = req_capsule_server_sized_get(&req->rq_pill,
+						     &RMF_OUT_UPDATE_REPLY,
+						     OUT_UPDATE_REPLY_SIZE);
+
+		if (reply->ourp_magic != UPDATE_REPLY_MAGIC) {
+			CERROR("%s: invalid update reply magic %x expected %x:"
+			       " rc = %d\n", dt_dev->dd_lu_dev.ld_obd->obd_name,
+			       reply->ourp_magic, UPDATE_REPLY_MAGIC, -EPROTO);
+			GOTO(out, rc = -EPROTO);
+		}
+
+		rc = object_update_result_data_get(reply, lbuf, 0);
+		if (rc < 0)
+			GOTO(out, rc);
+
+		if (lbuf->lb_len < sizeof(*orr))
+			GOTO(out, rc = -EPROTO);
+
+		orr = lbuf->lb_buf;
+		orr_le_to_cpu(orr, orr);
+		offset = orr->orr_offset;
+		if (orr->orr_size > max_buf_size)
+			GOTO(out, rc = -EPROTO);
+
+		memcpy(ptr, orr->orr_data, orr->orr_size);
+		ptr += orr->orr_size;
+		total_length -= orr->orr_size;
+
+		CDEBUG(D_INFO, "%s: read "DFID" pos "LPU64" len %u left %zu\n",
+		       osp->opd_obd->obd_name, PFID(lu_object_fid(&dt->do_lu)),
+		       offset, orr->orr_size, total_length);
+
+		if (orr->orr_size < read_length)
+			break;
+
+		ptlrpc_req_finished(req);
+		osp_update_request_destroy(update);
+		req = NULL;
+		update = NULL;
 	}
 
-	rc = osp_remote_sync(env, osp, update, &req);
-	if (rc < 0)
-		GOTO(out, rc);
-
-	reply = req_capsule_server_sized_get(&req->rq_pill,
-					     &RMF_OUT_UPDATE_REPLY,
-					     OUT_UPDATE_REPLY_SIZE);
-	if (reply->ourp_magic != UPDATE_REPLY_MAGIC) {
-		CERROR("%s: invalid update reply magic %x expected %x:"
-		       " rc = %d\n", dt_dev->dd_lu_dev.ld_obd->obd_name,
-		       reply->ourp_magic, UPDATE_REPLY_MAGIC, -EPROTO);
-		GOTO(out, rc = -EPROTO);
-	}
-
-	rc = object_update_result_data_get(reply, lbuf, 0);
-	if (rc < 0)
-		GOTO(out, rc);
-
-	if (lbuf->lb_len < sizeof(*orr))
-		GOTO(out, rc = -EPROTO);
-
-	orr = lbuf->lb_buf;
-	orr_le_to_cpu(orr, orr);
-
-	*pos = orr->orr_offset;
-
-	if (orr->orr_size > rbuf->lb_len)
-		GOTO(out, rc = -EPROTO);
-
-	memcpy(rbuf->lb_buf, orr->orr_data, orr->orr_size);
-
-	CDEBUG(D_INFO, "%s: read "DFID" pos "LPU64" len %u\n",
+	total_length = rbuf->lb_len - total_length;
+	*pos = offset;
+	CDEBUG(D_INFO, "%s: total read "DFID" pos "LPU64" len %zu\n",
 	       osp->opd_obd->obd_name, PFID(lu_object_fid(&dt->do_lu)),
-	       *pos, orr->orr_size);
-	GOTO(out, rc = (int)orr->orr_size);
+	       *pos, total_length);
+	GOTO(out, rc = (int)total_length);
 out:
 	if (req != NULL)
 		ptlrpc_req_finished(req);
 
-	osp_update_request_destroy(update);
+	if (update != NULL)
+		osp_update_request_destroy(update);
 
 	return rc;
 }

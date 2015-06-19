@@ -631,9 +631,12 @@ static int out_read(struct tgt_session_info *tsi)
 	}
 	pos = le64_to_cpu(*(__u64 *)(tmp));
 
+	/* Check if the read buffer can hold the read_size */
 	if (size > OUT_UPDATE_REPLY_SIZE -
-		   cfs_size_round((unsigned long)update_result->our_data -
-				  (unsigned long)update_result) - sizeof(pos)) {
+		   cfs_size_round(offsetof(struct object_update_reply,
+					   ourp_lens[1])) -
+		   cfs_size_round(sizeof(*update_result)) -
+		   cfs_size_round(sizeof(*orr))) {
 		CERROR("%s: get %zu the biggest read size is %d: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), size, OUT_UPDATE_REPLY_SIZE,
 		       -EPROTO);
@@ -941,13 +944,11 @@ int out_handle(struct tgt_session_info *tsi)
 	tti->tti_u.update.tti_update_reply = reply;
 	tti->tti_mult_trans = !req_is_replay(tgt_ses_req(tsi));
 
-	/* Walk through updates in the request to execute them synchronously */
+	/* validate the request and calculate the total update count and
+	 * set it to reply */
 	for (i = 0; i < update_buf_count; i++) {
-		struct tgt_handler	*h;
-		struct dt_object	*dt_obj;
-		int			update_count;
 		struct object_update_request *our;
-		int			j;
+		int			update_count;
 
 		our = update_bufs[i];
 		if (ptlrpc_req_need_swab(pill->rc_req))
@@ -958,11 +959,22 @@ int out_handle(struct tgt_session_info *tsi)
 			       " expect %x: rc = %d\n",
 			       tgt_name(tsi->tsi_tgt), our->ourq_magic,
 			       UPDATE_REQUEST_MAGIC, -EPROTO);
-			GOTO(out, rc = -EPROTO);
+			GOTO(out_free, rc = -EPROTO);
 		}
-
-		update_count = our->ourq_count;
+  		update_count = our->ourq_count;
 		reply->ourp_count += update_count;
+ 	}
+ 
+	/* Walk through updates in the request to execute them */
+	for (i = 0; i < update_buf_count; i++) {
+		struct tgt_handler	*h;
+		struct dt_object	*dt_obj;
+		int			update_count;
+		struct object_update_request *our;
+		int			j;
+
+		our = update_bufs[i];
+		update_count = our->ourq_count;
 		for (j = 0; j < update_count; j++) {
 			update = object_update_request_get(our, j, NULL);
 			if (update == NULL)
