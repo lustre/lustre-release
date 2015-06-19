@@ -173,10 +173,15 @@ static void osd_trans_commit_cb(void *cb_data, int error)
 
 static int osd_trans_cb_add(struct thandle *th, struct dt_txn_commit_cb *dcb)
 {
-	struct osd_thandle *oh;
+	struct osd_thandle *oh = container_of0(th, struct osd_thandle,
+					       ot_super);
 
-	oh = container_of0(th, struct osd_thandle, ot_super);
-	list_add(&dcb->dcb_linkage, &oh->ot_dcb_list);
+	LASSERT(dcb->dcb_magic == TRANS_COMMIT_CB_MAGIC);
+	LASSERT(&dcb->dcb_func != NULL);
+	if (dcb->dcb_flags & DCB_TRANS_STOP)
+		list_add(&dcb->dcb_linkage, &oh->ot_stop_dcb_list);
+	else
+		list_add(&dcb->dcb_linkage, &oh->ot_dcb_list);
 
 	return 0;
 }
@@ -247,6 +252,22 @@ static void osd_unlinked_list_emptify(struct osd_device *osd,
 	}
 }
 
+static void osd_trans_stop_cb(struct osd_thandle *oth, int result)
+{
+	struct dt_txn_commit_cb	*dcb;
+	struct dt_txn_commit_cb	*tmp;
+
+	/* call per-transaction stop callbacks if any */
+	list_for_each_entry_safe(dcb, tmp, &oth->ot_stop_dcb_list,
+				 dcb_linkage) {
+		LASSERTF(dcb->dcb_magic == TRANS_COMMIT_CB_MAGIC,
+			 "commit callback entry: magic=%x name='%s'\n",
+			 dcb->dcb_magic, dcb->dcb_name);
+		list_del_init(&dcb->dcb_linkage);
+		dcb->dcb_func(NULL, &oth->ot_super, dcb, result);
+	}
+}
+
 /*
  * Concurrency: shouldn't matter.
  */
@@ -292,6 +313,8 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 		CDEBUG(D_OTHER, "%s: transaction hook failed: rc = %d\n",
 		       osd->od_svname, rc);
 
+	osd_trans_stop_cb(oh, rc);
+
 	LASSERT(oh->ot_tx);
 	txg = oh->ot_tx->tx_txg;
 
@@ -330,6 +353,7 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 
 	oh->ot_tx = tx;
 	INIT_LIST_HEAD(&oh->ot_dcb_list);
+	INIT_LIST_HEAD(&oh->ot_stop_dcb_list);
 	INIT_LIST_HEAD(&oh->ot_unlinked_list);
 	INIT_LIST_HEAD(&oh->ot_sa_list);
 	sema_init(&oh->ot_sa_lock, 1);

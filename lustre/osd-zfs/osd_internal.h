@@ -203,6 +203,7 @@ static inline struct osd_thread_info *osd_oti_get(const struct lu_env *env)
 struct osd_thandle {
 	struct thandle		 ot_super;
 	struct list_head	 ot_dcb_list;
+	struct list_head	 ot_stop_dcb_list;
 	struct list_head	 ot_unlinked_list;
 	struct list_head	 ot_sa_list;
 	struct semaphore	 ot_sa_lock;
