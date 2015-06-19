@@ -1262,6 +1262,7 @@ check_pdo_conflict() {
 test_40a() {
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	touch $DIR2
 	mkdir $DIR1/$tfile &
 	PID1=$!
 	sleep 1
