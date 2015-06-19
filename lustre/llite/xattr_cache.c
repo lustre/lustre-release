@@ -86,7 +86,7 @@ static void ll_xattr_cache_init(struct ll_inode_info *lli)
 	LASSERT(lli != NULL);
 
 	INIT_LIST_HEAD(&lli->lli_xattrs);
-	lli->lli_flags |= LLIF_XATTR_CACHE;
+	ll_file_set_flag(lli, LLIF_XATTR_CACHE);
 }
 
 /**
@@ -258,7 +258,7 @@ static int ll_xattr_cache_list(struct list_head *cache,
  */
 static int ll_xattr_cache_valid(struct ll_inode_info *lli)
 {
-	return !!(lli->lli_flags & LLIF_XATTR_CACHE);
+	return ll_file_test_flag(lli, LLIF_XATTR_CACHE);
 }
 
 /**
@@ -277,7 +277,8 @@ static int ll_xattr_cache_destroy_locked(struct ll_inode_info *lli)
 
 	while (ll_xattr_cache_del(&lli->lli_xattrs, NULL) == 0)
 		/* empty loop */ ;
-	lli->lli_flags &= ~LLIF_XATTR_CACHE;
+
+	ll_file_clear_flag(lli, LLIF_XATTR_CACHE);
 
 	RETURN(0);
 }
