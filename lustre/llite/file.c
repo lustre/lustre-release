@@ -2009,7 +2009,7 @@ free:
 	RETURN(rc);
 }
 
-static int ll_hsm_state_set(struct inode *inode, struct hsm_state_set *hss)
+int ll_hsm_state_set(struct inode *inode, struct hsm_state_set *hss)
 {
 	struct md_op_data	*op_data;
 	int			 rc;
