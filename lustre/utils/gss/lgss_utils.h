@@ -43,8 +43,6 @@
 #include <stdint.h>
 #include <gssapi/gssapi.h>
 
-#include <libcfs/libcfs.h>
-
 #define LGSS_SVC_MGS_STR        "lustre_mgs"
 #define LGSS_SVC_MDS_STR        "lustre_mds"
 #define LGSS_SVC_OSS_STR        "lustre_oss"
@@ -102,13 +100,13 @@ void __logmsg_gss(loglevel_t level, const char *func, const gss_OID mech,
 
 #define logmsg(loglevel, format, args...)                               \
 do {                                                                    \
-        if (unlikely(loglevel <= g_log_level))                          \
+	if (loglevel <= g_log_level)					\
                 __logmsg(loglevel, __FUNCTION__, format, ##args);       \
 } while (0)
 
 #define logmsg_gss(loglevel, mech, major, minor, format, args...)       \
 do {                                                                    \
-        if (unlikely(loglevel <= g_log_level))                          \
+	if (loglevel <= g_log_level)					\
                 __logmsg_gss(loglevel, __FUNCTION__, mech,              \
                              major, minor, format, ##args);             \
 } while (0)

@@ -36,10 +36,10 @@
 #ifndef __LSUPPORT_H__
 #define __LSUPPORT_H__
 
+#include <assert.h>
 #include <unistd.h>
 #include <stdint.h>
 
-#include <libcfs/libcfs.h>
 #include <lnet/types.h>
 
 #define GSSD_CLI        (0)
