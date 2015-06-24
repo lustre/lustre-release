@@ -637,7 +637,7 @@ static inline void llog_skip_over(struct llog_log_hdr *llh, __u64 *off,
 	if (goal > curr) {
 		if (llh->llh_size == 0) {
 			/* variable size records */
-			*off = (*off + (goal - curr - 1) * LLOG_MIN_REC_SIZE);
+			*off = *off + (goal - curr - 1) * LLOG_MIN_REC_SIZE;
 		} else {
 			*off = chunk_size + (goal - 1) * llh->llh_size;
 		}
