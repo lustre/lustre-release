@@ -135,13 +135,10 @@ ll_iget_for_nfs(struct super_block *sb, struct lu_fid *fid, struct lu_fid *paren
                 RETURN(ERR_PTR(-ESTALE));
         }
 
+	/* N.B. d_obtain_alias() drops inode ref on error */
 	result = d_obtain_alias(inode);
-	if (IS_ERR(result)) {
-		iput(inode);
-		RETURN(result);
-	}
 
-        RETURN(result);
+	RETURN(result);
 }
 
 #ifndef FILEID_INVALID
