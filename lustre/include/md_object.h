@@ -98,6 +98,9 @@ typedef enum {
         MDT_PDO_LOCK = (1 << 1)
 } mdl_type_t;
 
+/* lfs rgetfacl permission check */
+#define MAY_RGETFACL    (1 << 14)
+
 /* memory structure for hsm attributes
  * for fields description see the on disk structure hsm_attrs
  * which is defined in lustre_idl.h

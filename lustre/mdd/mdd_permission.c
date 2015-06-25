@@ -313,12 +313,6 @@ int mdd_permission(const struct lu_env *env,
 	struct lu_ucred *uc = NULL;
 	struct lu_attr *pattr = NULL;
 	struct lu_attr *cattr = MDD_ENV_VAR(env, cattr);
-	bool check_create;
-	bool check_link;
-	int check_unlink;
-	int check_rename_src, check_rename_tar;
-	int check_vtx_part, check_vtx_full;
-	int check_rgetfacl;
 	int rc = 0;
 	ENTRY;
 
@@ -342,57 +336,18 @@ int mdd_permission(const struct lu_env *env,
 	if (unlikely(mask & MDS_OPEN_CROSS))
 		mask = accmode(env, cattr, mask & ~MDS_OPEN_CROSS);
 
-	check_create = mask & MAY_CREATE;
-	check_link = mask & MAY_LINK;
-        check_unlink = mask & MAY_UNLINK;
-        check_rename_src = mask & MAY_RENAME_SRC;
-        check_rename_tar = mask & MAY_RENAME_TAR;
-        check_vtx_part = mask & MAY_VTX_PART;
-        check_vtx_full = mask & MAY_VTX_FULL;
-        check_rgetfacl = mask & MAY_RGETFACL;
+	rc = mdd_permission_internal_locked(env, mdd_cobj, cattr,
+					    mask & ~MAY_RGETFACL,
+					    MOR_TGT_CHILD);
 
-        mask &= ~(MAY_CREATE | MAY_LINK |
-                MAY_UNLINK |
-                MAY_RENAME_SRC | MAY_RENAME_TAR |
-                MAY_VTX_PART | MAY_VTX_FULL |
-                MAY_RGETFACL);
-
-	rc = mdd_permission_internal_locked(env, mdd_cobj, cattr, mask,
-					MOR_TGT_CHILD);
-
-	if (!rc && check_create)
-		rc = mdd_may_create(env, mdd_pobj, pattr, mdd_cobj, true);
-
-	if (!rc && check_unlink)
-		rc = mdd_may_unlink(env, mdd_pobj, pattr, cattr);
-
-	if (!rc && (check_rename_src || check_rename_tar))
-		rc = mdd_may_delete(env, mdd_pobj, pattr, mdd_cobj, cattr, NULL,
-				1, check_rename_tar);
-
-        if (!rc && (check_vtx_part || check_vtx_full)) {
-		uc = lu_ucred_assert(env);
-
-		if (!(cattr->la_mode & S_ISVTX) ||
-		    (cattr->la_uid == uc->uc_fsuid) ||
-		    (check_vtx_full && (ma->ma_attr.la_valid & LA_UID) &&
-		     (ma->ma_attr.la_uid == uc->uc_fsuid))) {
-			ma->ma_attr_flags |= MDS_VTX_BYPASS;
-                } else {
-                        ma->ma_attr_flags &= ~MDS_VTX_BYPASS;
-                        if (check_vtx_full)
-                                rc = -EPERM;
-                }
-        }
-
-        if (unlikely(!rc && check_rgetfacl)) {
-                if (likely(!uc))
+	if (unlikely(rc == 0 && (mask & MAY_RGETFACL))) {
+		if (likely(!uc))
 			uc = lu_ucred_assert(env);
 
 		if (cattr->la_uid != uc->uc_fsuid &&
 		    !md_capable(uc, CFS_CAP_FOWNER))
 			rc = -EPERM;
-        }
+	}
 
-        RETURN(rc);
+	RETURN(rc);
 }
