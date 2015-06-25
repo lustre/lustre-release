@@ -502,11 +502,9 @@ static int osd_objset_statfs(struct osd_device *osd, struct obd_statfs *osfs)
 	osfs->os_namelen = MAXNAMELEN;
 	osfs->os_maxbytes = OBD_OBJECT_EOF;
 
-	/* ZFS XXX: fill in appropriate OS_STATE_{DEGRADED,READONLY} flags
-	   osfs->os_state = vf_to_stf(vfsp->vfs_flag);
-	   if (sb->s_flags & MS_RDONLY)
-	   osfs->os_state |= OS_STATE_READONLY;
-	 */
+	if (!spa_writeable(dmu_objset_spa(os)) ||
+	    osd->od_dev_set_rdonly || osd->od_prop_rdonly)
+		osfs->os_state |= OS_STATE_READONLY;
 
 	return 0;
 }
@@ -631,7 +629,7 @@ static int osd_ro(const struct lu_env *env, struct dt_device *d)
 
 	CERROR("%s: *** setting device %s read-only ***\n",
 	       osd->od_svname, LUSTRE_OSD_ZFS_NAME);
-	osd->od_rdonly = 1;
+	osd->od_dev_set_rdonly = 1;
 	spa_freeze(dmu_objset_spa(osd->od_os));
 
 	RETURN(0);
@@ -743,6 +741,13 @@ static void osd_recordsize_changed_cb(void *arg, uint64_t newval)
 	osd->od_max_blksz = newval;
 }
 
+static void osd_readonly_changed_cb(void *arg, uint64_t newval)
+{
+	struct osd_device *osd = arg;
+
+	osd->od_prop_rdonly = !!newval;
+}
+
 /*
  * This function unregisters all registered callbacks.  It's harmless to
  * unregister callbacks that were never registered so it is used to safely
@@ -756,6 +761,8 @@ static void osd_objset_unregister_callbacks(struct osd_device *o)
 				   osd_xattr_changed_cb, o);
 	(void) dsl_prop_unregister(ds, zfs_prop_to_name(ZFS_PROP_RECORDSIZE),
 				   osd_recordsize_changed_cb, o);
+	(void) dsl_prop_unregister(ds, zfs_prop_to_name(ZFS_PROP_READONLY),
+				   osd_readonly_changed_cb, o);
 
 	if (o->arc_prune_cb != NULL) {
 		arc_remove_prune_callback(o->arc_prune_cb);
@@ -784,6 +791,11 @@ static int osd_objset_register_callbacks(struct osd_device *o)
 
 	rc = -dsl_prop_register(ds, zfs_prop_to_name(ZFS_PROP_RECORDSIZE),
 				osd_recordsize_changed_cb, o);
+	if (rc)
+		GOTO(err, rc);
+
+	rc = -dsl_prop_register(ds, zfs_prop_to_name(ZFS_PROP_READONLY),
+				osd_readonly_changed_cb, o);
 	if (rc)
 		GOTO(err, rc);
 
