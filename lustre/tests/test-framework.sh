@@ -4932,6 +4932,18 @@ banner() {
     log "$msg== $(date +"%H:%M:%S (%s)")"
 }
 
+check_dmesg_for_errors() {
+	local res
+	local errors="VFS: Busy inodes after unmount of\|\
+ldiskfs_check_descriptors: Checksum for group 0 failed\|\
+group descriptors corrupted"
+
+	res=$(do_nodes $(comma_list $(nodes_list)) "dmesg" | grep "$errors")
+	[ -z "$res" ] && return 0
+	echo "Kernel error detected: $res"
+	return 1
+}
+
 #
 # Run a single test function and cleanup after it.
 #
@@ -4953,6 +4965,7 @@ run_one() {
 	reset_fail_loc
 	check_grant ${testnum} || error "check_grant $testnum failed with $?"
 	check_catastrophe || error "LBUG/LASSERT detected"
+	check_dmesg_for_errors || error "Error in dmesg detected"
 	if [ "$PARALLEL" != "yes" ]; then
 		ps auxww | grep -v grep | grep -q multiop &&
 					error "multiop still running"
