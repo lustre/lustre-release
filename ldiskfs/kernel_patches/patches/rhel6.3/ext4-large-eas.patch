@@ -705,7 +705,7 @@ Index: linux-stage/fs/ext4/xattr.c
 +	struct ext4_inode *raw_inode;
 +	struct ext4_iloc iloc;
 +	struct ext4_xattr_entry *entry;
-+	int error = 0;
++	int credits = 3, error = 0;
 +
 +	if (!ext4_test_inode_state(inode, EXT4_STATE_XATTR))
 +		goto delete_external_ea;
@@ -732,7 +732,7 @@ Index: linux-stage/fs/ext4/xattr.c
  	if (!EXT4_I(inode)->i_file_acl)
  		goto cleanup;
  	bh = sb_bread(inode->i_sb, EXT4_I(inode)->i_file_acl);
-@@ -1384,11 +1764,74 @@ ext4_xattr_delete_inode(handle_t *handle
+@@ -1384,11 +1764,88 @@ ext4_xattr_delete_inode(handle_t *handle
  			   inode->i_ino, EXT4_I(inode)->i_file_acl);
  		goto cleanup;
  	}
@@ -753,10 +753,10 @@ Index: linux-stage/fs/ext4/xattr.c
 +		int idx = 0;
 +
 +		for (; idx < (*lea_ino_array)->xia_count; ++idx) {
-+			if (!ext4_handle_has_enough_credits(handle, 3)) {
-+				error = ext4_journal_extend(handle, 3);
++			if (!ext4_handle_has_enough_credits(handle, credits)) {
++				error = ext4_journal_extend(handle, credits);
 +				if (error > 0)
-+					error = ext4_journal_restart(handle, 3);
++					error = ext4_journal_restart(handle, credits);
 +				if (error != 0) {
 +					ext4_warning(inode->i_sb,
 +						"couldn't extend journal "
@@ -770,6 +770,20 @@ Index: linux-stage/fs/ext4/xattr.c
 +				continue;
 +			ext4_orphan_add(handle, ea_inode);
 +			/* the inode's i_count will be released by caller */
++		}
++	}
++
++	if (!IS_NOQUOTA(inode))
++		credits += 2 * EXT4_QUOTA_DEL_BLOCKS(inode->i_sb);
++
++	if (!ext4_handle_has_enough_credits(handle, credits)) {
++		error = ext4_journal_extend(handle, credits);
++		if (error > 0)
++			error = ext4_journal_restart(handle, credits);
++		if (error != 0) {
++			ext4_warning(inode->i_sb,
++				"couldn't extend journal (err %d)", error);
++			goto cleanup;
 +		}
 +	}
 +
@@ -807,7 +821,7 @@ Index: linux-stage/fs/ext4/xattr.c
  }
  
  /*
-@@ -1458,10 +1901,9 @@ ext4_xattr_cmp(struct ext4_xattr_header 
+@@ -1458,10 +1915,9 @@ ext4_xattr_cmp(struct ext4_xattr_header
  		    entry1->e_name_index != entry2->e_name_index ||
  		    entry1->e_name_len != entry2->e_name_len ||
  		    entry1->e_value_size != entry2->e_value_size ||
@@ -819,7 +833,7 @@ Index: linux-stage/fs/ext4/xattr.c
  		if (memcmp((char *)header1 + le16_to_cpu(entry1->e_value_offs),
  			   (char *)header2 + le16_to_cpu(entry2->e_value_offs),
  			   le32_to_cpu(entry1->e_value_size)))
-@@ -1546,7 +1988,7 @@ static inline void ext4_xattr_hash_entry
+@@ -1546,7 +2002,7 @@ static inline void ext4_xattr_hash_entry
  		       *name++;
  	}
  
@@ -890,26 +904,26 @@ Index: linux-stage/fs/ext4/inode.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/inode.c
 +++ linux-stage/fs/ext4/inode.c
-@@ -223,6 +223,7 @@ void ext4_delete_inode(struct inode *ino
+@@ -222,6 +222,8 @@ void ext4_delete_inode(struct inode *ino
+ {
  	handle_t *handle;
  	int err;
- 	int extra_credits = 3;
++	int extra_credits = 3;
 +	struct ext4_xattr_ino_array *lea_ino_array = NULL;
  
  	if (ext4_should_order_data(inode))
  		ext4_begin_ordered_truncate(inode, 0);
-@@ -238,8 +239,8 @@ void ext4_delete_inode(struct inode *ino
+@@ -238,7 +239,8 @@ void ext4_delete_inode(struct inode *ino
  	 * protection against it
  	 */
  	sb_start_intwrite(inode->i_sb);
--	handle = ext4_journal_start(inode,
--			blocks_for_truncate(inode) + extra_credits);
+-	handle = ext4_journal_start(inode, blocks_for_truncate(inode)+3);
 +
 +	handle = ext4_journal_start(inode, extra_credits);
  	if (IS_ERR(handle)) {
  		ext4_std_error(inode->i_sb, PTR_ERR(handle));
  		/*
-@@ -251,9 +252,33 @@ void ext4_delete_inode(struct inode *ino
+@@ -251,9 +252,36 @@ void ext4_delete_inode(struct inode *ino
  		sb_end_intwrite(inode->i_sb);
  		goto no_delete;
  	}
@@ -926,6 +940,9 @@ Index: linux-stage/fs/ext4/inode.c
 +			     "couldn't delete inode's xattr (err %d)", err);
 +		goto stop_handle;
 +	}
++
++	if (!IS_NOQUOTA(inode))
++		extra_credits += 2 * EXT4_QUOTA_DEL_BLOCKS(inode->i_sb);
 +
 +	if (!ext4_handle_has_enough_credits(handle,
 +				blocks_for_truncate(inode) + extra_credits)) {
@@ -944,7 +961,7 @@ Index: linux-stage/fs/ext4/inode.c
  	inode->i_size = 0;
  	err = ext4_mark_inode_dirty(handle, inode);
  	if (err) {
-@@ -307,8 +332,12 @@ void ext4_delete_inode(struct inode *ino
+@@ -307,8 +335,12 @@ void ext4_delete_inode(struct inode *ino
  		clear_inode(inode);
  	else
  		ext4_free_inode(handle, inode);

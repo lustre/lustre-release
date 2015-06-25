@@ -81,7 +81,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/inode.c
  	if (IS_ERR(handle)) {
  		ext4_std_error(inode->i_sb, PTR_ERR(handle));
  		/*
-@@ -248,9 +250,33 @@ void ext4_evict_inode(struct inode *inod
+@@ -248,9 +250,36 @@ void ext4_evict_inode(struct inode *inod
  		sb_end_intwrite(inode->i_sb);
  		goto no_delete;
  	}
@@ -98,6 +98,9 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/inode.c
 +			     "couldn't delete inode's xattr (err %d)", err);
 +		goto stop_handle;
 +	}
++
++	if (!IS_NOQUOTA(inode))
++		extra_credits += 2 * EXT4_QUOTA_DEL_BLOCKS(inode->i_sb);
 +
 +	if (!ext4_handle_has_enough_credits(handle,
 +			ext4_blocks_for_truncate(inode) + extra_credits)) {
@@ -116,7 +119,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/inode.c
  	inode->i_size = 0;
  	err = ext4_mark_inode_dirty(handle, inode);
  	if (err) {
-@@ -305,8 +331,12 @@ void ext4_evict_inode(struct inode *inod
+@@ -305,8 +334,12 @@ void ext4_evict_inode(struct inode *inod
  		ext4_clear_inode(inode);
  	else
  		ext4_free_inode(handle, inode);
@@ -129,7 +132,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/inode.c
  	return;
  no_delete:
  	ext4_clear_inode(inode);	/* We must guarantee clearing of inode... */
-@@ -4841,7 +4871,7 @@ static int ext4_index_trans_blocks(struc
+@@ -4841,7 +4874,7 @@ static int ext4_index_trans_blocks(struc
   *
   * Also account for superblock, inode, quota and xattr blocks
   */
@@ -803,7 +806,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/xattr.c
 +	struct ext4_inode *raw_inode;
 +	struct ext4_iloc iloc;
 +	struct ext4_xattr_entry *entry;
-+	int error = 0;
++	int credits = 3, error = 0;
 +
 +	if (!ext4_test_inode_state(inode, EXT4_STATE_XATTR))
 +		goto delete_external_ea;
@@ -830,7 +833,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/xattr.c
  	if (!EXT4_I(inode)->i_file_acl)
  		goto cleanup;
  	bh = sb_bread(inode->i_sb, EXT4_I(inode)->i_file_acl);
-@@ -1468,11 +1848,74 @@ ext4_xattr_delete_inode(handle_t *handle
+@@ -1468,11 +1848,88 @@ ext4_xattr_delete_inode(handle_t *handle
  				 EXT4_I(inode)->i_file_acl);
  		goto cleanup;
  	}
@@ -871,6 +874,20 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/xattr.c
 +		}
 +	}
 +
++	if (!IS_NOQUOTA(inode))
++		credits += 2 * EXT4_QUOTA_DEL_BLOCKS(inode->i_sb);
++
++	if (!ext4_handle_has_enough_credits(handle, credits)) {
++		error = ext4_journal_extend(handle, credits);
++		if (error > 0)
++			error = ext4_journal_restart(handle, credits);
++		if (error != 0) {
++			ext4_warning(inode->i_sb,
++				"couldn't extend journal (err %d)", error);
++			goto cleanup;
++		}
++	}
++
  	ext4_xattr_release_block(handle, inode, bh);
  	EXT4_I(inode)->i_file_acl = 0;
  
@@ -905,7 +922,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/xattr.c
  }
  
  /*
-@@ -1542,10 +1985,9 @@ ext4_xattr_cmp(struct ext4_xattr_header
+@@ -1542,10 +1999,9 @@ ext4_xattr_cmp(struct ext4_xattr_header
  		    entry1->e_name_index != entry2->e_name_index ||
  		    entry1->e_name_len != entry2->e_name_len ||
  		    entry1->e_value_size != entry2->e_value_size ||
@@ -917,7 +934,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/xattr.c
  		if (memcmp((char *)header1 + le16_to_cpu(entry1->e_value_offs),
  			   (char *)header2 + le16_to_cpu(entry2->e_value_offs),
  			   le32_to_cpu(entry1->e_value_size)))
-@@ -1629,7 +2071,7 @@ static inline void ext4_xattr_hash_entry
+@@ -1629,7 +2085,7 @@ static inline void ext4_xattr_hash_entry
  		       *name++;
  	}
  
