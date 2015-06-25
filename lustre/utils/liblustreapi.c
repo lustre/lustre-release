@@ -3757,61 +3757,6 @@ int llapi_quotactl(char *mnt, struct if_quotactl *qctl)
         return rc;
 }
 
-static int cb_quotachown(char *path, DIR *parent, DIR **dirp, void *data,
-			 struct dirent64 *de)
-{
-        struct find_param *param = (struct find_param *)data;
-	DIR *d = dirp == NULL ? NULL : *dirp;
-        lstat_t *st;
-        int rc;
-
-        LASSERT(parent != NULL || d != NULL);
-
-	rc = get_lmd_info(path, parent, d, param->fp_lmd, param->fp_lum_size);
-        if (rc) {
-                if (rc == -ENODATA) {
-			if (!param->fp_obd_uuid && !param->fp_quiet)
-                                llapi_error(LLAPI_MSG_ERROR, -ENODATA,
-                                          "%s has no stripe info", path);
-                        rc = 0;
-                } else if (rc == -ENOENT) {
-                        rc = 0;
-                }
-                return rc;
-        }
-
-	st = &param->fp_lmd->lmd_st;
-
-        /* libc chown() will do extra check, and if the real owner is
-         * the same as the ones to set, it won't fall into kernel, so
-         * invoke syscall directly. */
-        rc = syscall(SYS_chown, path, -1, -1);
-        if (rc)
-                llapi_error(LLAPI_MSG_ERROR, errno,
-                            "error: chown %s", path);
-
-        rc = chmod(path, st->st_mode);
-        if (rc) {
-                rc = -errno;
-                llapi_error(LLAPI_MSG_ERROR, rc, "error: chmod %s (%hu)",
-                            path, st->st_mode);
-        }
-
-        return rc;
-}
-
-int llapi_quotachown(char *path, int flag)
-{
-        struct find_param param;
-
-        memset(&param, 0, sizeof(param));
-	param.fp_recursive = 1;
-	param.fp_verbose = 0;
-	param.fp_quiet = 1;
-
-        return param_callback(path, cb_quotachown, NULL, &param);
-}
-
 #include <pwd.h>
 #include <grp.h>
 #include <mntent.h>
