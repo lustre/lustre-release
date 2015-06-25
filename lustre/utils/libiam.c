@@ -52,10 +52,7 @@
 #include <sys/ioctl.h>
 #include <sys/types.h>
 
-#ifdef HAVE_ENDIAN_H
-#include <endian.h>
-#endif
-
+#include <libcfs/byteorder.h>
 #include <libcfs/util/string.h>
 #include <lustre/libiam.h>
 

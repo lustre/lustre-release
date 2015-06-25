@@ -43,6 +43,7 @@
 #include <dirent.h>
 #include <stdarg.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <utime.h>
 #include <sys/syscall.h>
