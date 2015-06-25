@@ -28,7 +28,7 @@
 #include <signal.h>
 #include <sys/ioctl.h>
 #include <dirent.h>
-#include <attr/xattr.h>
+#include <sys/xattr.h>
 
 #include "mpi.h"
 
