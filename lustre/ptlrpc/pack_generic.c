@@ -1275,6 +1275,23 @@ __u32 lustre_msg_get_cksum(struct lustre_msg *msg)
 	}
 }
 
+__u64 lustre_msg_get_mbits(struct lustre_msg *msg)
+{
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+		if (pb == NULL) {
+			CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+			return 0;
+		}
+		return pb->pb_mbits;
+	}
+	default:
+		CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+		return 0;
+	}
+}
+
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 53, 0)
 /*
  * In 1.6 and 1.8 the checksum was computed only on struct ptlrpc_body as
@@ -1529,6 +1546,20 @@ void lustre_msg_set_cksum(struct lustre_msg *msg, __u32 cksum)
 	}
 }
 
+void lustre_msg_set_mbits(struct lustre_msg *msg, __u64 mbits)
+{
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+
+		LASSERTF(pb != NULL, "invalid msg %p: no ptlrpc body!\n", msg);
+		pb->pb_mbits = mbits;
+		return;
+	}
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
+}
 
 void ptlrpc_request_set_replen(struct ptlrpc_request *req)
 {
@@ -1621,9 +1652,12 @@ void lustre_swab_ptlrpc_body(struct ptlrpc_body *b)
         __swab64s (&b->pb_pre_versions[1]);
         __swab64s (&b->pb_pre_versions[2]);
         __swab64s (&b->pb_pre_versions[3]);
+	__swab64s(&b->pb_mbits);
 	CLASSERT(offsetof(typeof(*b), pb_padding0) != 0);
 	CLASSERT(offsetof(typeof(*b), pb_padding1) != 0);
-	CLASSERT(offsetof(typeof(*b), pb_padding) != 0);
+	CLASSERT(offsetof(typeof(*b), pb_padding64_0) != 0);
+	CLASSERT(offsetof(typeof(*b), pb_padding64_1) != 0);
+	CLASSERT(offsetof(typeof(*b), pb_padding64_2) != 0);
 	/* While we need to maintain compatibility between
 	 * clients and servers without ptlrpc_body_v2 (< 2.3)
 	 * do not swab any fields beyond pb_jobid, as we are

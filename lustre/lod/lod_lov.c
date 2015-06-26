@@ -259,7 +259,8 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 					   OBD_CONNECT_LVB_TYPE |
 					   OBD_CONNECT_VERSION |
 					   OBD_CONNECT_PINGLESS |
-					   OBD_CONNECT_LFSCK;
+					   OBD_CONNECT_LFSCK |
+					   OBD_CONNECT_BULK_MBITS;
 
 		data->ocd_group = tgt_index;
 		ltd = &lod->lod_ost_descs;
@@ -274,7 +275,8 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 					   OBD_CONNECT_FID |
 					   OBD_CONNECT_AT |
 					   OBD_CONNECT_FULL20 |
-					   OBD_CONNECT_LFSCK;
+					   OBD_CONNECT_LFSCK |
+					   OBD_CONNECT_BULK_MBITS;
 		spin_lock(&imp->imp_lock);
 		imp->imp_server_timeout = 1;
 		spin_unlock(&imp->imp_lock);

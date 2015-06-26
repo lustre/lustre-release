@@ -355,7 +355,10 @@ check_ptlrpc_body(void)
 	CHECK_MEMBER(ptlrpc_body, pb_slv);
 	CHECK_CVALUE(PTLRPC_NUM_VERSIONS);
 	CHECK_MEMBER(ptlrpc_body, pb_pre_versions);
-	CHECK_MEMBER(ptlrpc_body, pb_padding);
+	CHECK_MEMBER(ptlrpc_body, pb_mbits);
+	CHECK_MEMBER(ptlrpc_body, pb_padding64_0);
+	CHECK_MEMBER(ptlrpc_body, pb_padding64_1);
+	CHECK_MEMBER(ptlrpc_body, pb_padding64_2);
 	CHECK_CVALUE(LUSTRE_JOBID_SIZE);
 	CHECK_MEMBER(ptlrpc_body, pb_jobid);
 
@@ -378,7 +381,10 @@ check_ptlrpc_body(void)
 	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_limit);
 	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_slv);
 	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_pre_versions);
-	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_padding);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_mbits);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_padding64_0);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_padding64_1);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_padding64_2);
 
 	CHECK_VALUE(MSG_PTLRPC_BODY_OFF);
 	CHECK_VALUE(REQ_REC_OFF);
@@ -521,6 +527,7 @@ check_obd_connect_data(void)
 	CHECK_DEFINE_64X(OBD_CONNECT_UNLINK_CLOSE);
 	CHECK_DEFINE_64X(OBD_CONNECT_MULTIMODRPCS);
 	CHECK_DEFINE_64X(OBD_CONNECT_DIR_STRIPE);
+	CHECK_DEFINE_64X(OBD_CONNECT_BULK_MBITS);
 
 	CHECK_VALUE_X(OBD_CKSUM_CRC32);
 	CHECK_VALUE_X(OBD_CKSUM_ADLER);
