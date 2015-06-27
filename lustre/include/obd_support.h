@@ -54,7 +54,6 @@
 extern struct lprocfs_stats *obd_memory;
 enum {
         OBD_MEMORY_STAT = 0,
-        OBD_MEMORY_PAGES_STAT = 1,
         OBD_STATS_NUM,
 };
 
@@ -76,12 +75,7 @@ extern int at_extra;
 extern unsigned long obd_max_dirty_pages;
 extern atomic_long_t obd_dirty_pages;
 extern atomic_long_t obd_dirty_transit_pages;
-extern unsigned int obd_alloc_fail_rate;
 extern char obd_jobid_var[];
-
-/* lvfs.c */
-int obd_alloc_fail(const void *ptr, const char *name, const char *type,
-                   size_t size, const char *file, int line);
 
 /* Some hash init argument constants */
 #define HASH_POOLS_BKT_BITS 3
@@ -467,8 +461,6 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 
 #define OBD_FAIL_LPROC_REMOVE            0xB00
 
-#define OBD_FAIL_GENERAL_ALLOC           0xC00
-
 #define OBD_FAIL_SEQ                     0x1000
 #define OBD_FAIL_SEQ_QUERY_NET           0x1001
 #define OBD_FAIL_SEQ_EXHAUST		 0x1002
@@ -629,27 +621,15 @@ extern atomic_t libcfs_kmemory;
 #define obd_memory_sum()                                                      \
         lprocfs_stats_collector(obd_memory, OBD_MEMORY_STAT,                  \
                                 LPROCFS_FIELDS_FLAGS_SUM)
-#define obd_pages_add(order)                                                  \
-        lprocfs_counter_add(obd_memory, OBD_MEMORY_PAGES_STAT,                \
-                            (long)(1 << (order)))
-#define obd_pages_sub(order)                                                  \
-        lprocfs_counter_sub(obd_memory, OBD_MEMORY_PAGES_STAT,                \
-                            (long)(1 << (order)))
-#define obd_pages_sum()                                                       \
-        lprocfs_stats_collector(obd_memory, OBD_MEMORY_PAGES_STAT,            \
-                                LPROCFS_FIELDS_FLAGS_SUM)
 
 extern void obd_update_maxusage(void);
 extern __u64 obd_memory_max(void);
-extern __u64 obd_pages_max(void);
 
 #else /* CONFIG_PROC_FS */
 
 extern __u64 obd_alloc;
-extern __u64 obd_pages;
 
 extern __u64 obd_max_alloc;
-extern __u64 obd_max_pages;
 
 static inline void obd_memory_add(long size)
 {
@@ -663,23 +643,9 @@ static inline void obd_memory_sub(long size)
         obd_alloc -= size;
 }
 
-static inline void obd_pages_add(int order)
-{
-        obd_pages += 1<< order;
-        if (obd_pages > obd_max_pages)
-                obd_max_pages = obd_pages;
-}
-
-static inline void obd_pages_sub(int order)
-{
-        obd_pages -= 1<< order;
-}
-
 #define obd_memory_sum() (obd_alloc)
-#define obd_pages_sum()  (obd_pages)
 
 #define obd_memory_max() (obd_max_alloc)
-#define obd_pages_max() (obd_max_pages)
 
 #endif /* !CONFIG_PROC_FS */
 
@@ -705,35 +671,13 @@ static inline void obd_pages_sub(int order)
 
 #endif /* !OBD_DEBUG_MEMUSAGE */
 
-#ifdef RANDOM_FAIL_ALLOC
-#define HAS_FAIL_ALLOC_FLAG OBD_FAIL_CHECK(OBD_FAIL_GENERAL_ALLOC)
-#else
-#define HAS_FAIL_ALLOC_FLAG 0
-#endif
-
-#define OBD_ALLOC_FAIL_BITS 24
-#define OBD_ALLOC_FAIL_MASK ((1 << OBD_ALLOC_FAIL_BITS) - 1)
-#define OBD_ALLOC_FAIL_MULT (OBD_ALLOC_FAIL_MASK / 100)
-
-#define OBD_FREE_RTN0(ptr)                                                    \
-({                                                                            \
-	kfree(ptr);                                                        \
-        (ptr) = NULL;                                                         \
-        0;                                                                    \
-})
-
 #define __OBD_MALLOC_VERBOSE(ptr, cptab, cpt, size, flags)		      \
 do {									      \
 	(ptr) = (cptab) == NULL ?					      \
 		kmalloc(size, flags | __GFP_ZERO) :			      \
 		cfs_cpt_malloc(cptab, cpt, size, flags | __GFP_ZERO);	      \
-        if (likely((ptr) != NULL &&                                           \
-                   (!HAS_FAIL_ALLOC_FLAG || obd_alloc_fail_rate == 0 ||       \
-                    !obd_alloc_fail(ptr, #ptr, "km", size,                    \
-                                    __FILE__, __LINE__) ||                    \
-                    OBD_FREE_RTN0(ptr)))){                                    \
-                OBD_ALLOC_POST(ptr, size, "kmalloced");                       \
-        }                                                                     \
+	if (likely((ptr) != NULL))                                            \
+		OBD_ALLOC_POST(ptr, size, "kmalloced");                       \
 } while (0)
 
 #define OBD_ALLOC_GFP(ptr, size, gfp_mask)				      \
@@ -848,13 +792,8 @@ do {									      \
 	(ptr) = (cptab) == NULL ?					      \
 		kmem_cache_alloc(slab, type | __GFP_ZERO) :		      \
 		cfs_mem_cache_cpt_alloc(slab, cptab, cpt, type | __GFP_ZERO); \
-        if (likely((ptr) != NULL &&                                           \
-                   (!HAS_FAIL_ALLOC_FLAG || obd_alloc_fail_rate == 0 ||       \
-                    !obd_alloc_fail(ptr, #ptr, "slab-", size,                 \
-                                    __FILE__, __LINE__) ||                    \
-                    OBD_SLAB_FREE_RTN0(ptr, slab)))) {                        \
-                OBD_ALLOC_POST(ptr, size, "slab-alloced");                    \
-        }                                                                     \
+	if (likely((ptr)))                                                    \
+		OBD_ALLOC_POST(ptr, size, "slab-alloced");                    \
 } while(0)
 
 #define OBD_SLAB_ALLOC_GFP(ptr, slab, size, flags)			      \
@@ -894,48 +833,5 @@ do {                                                                          \
 
 #define KEY_IS(str) \
         (keylen >= (sizeof(str)-1) && memcmp(key, str, (sizeof(str)-1)) == 0)
-
-/* Wrapper for contiguous page frame allocation */
-#define __OBD_PAGE_ALLOC_VERBOSE(ptr, cptab, cpt, gfp_mask)		      \
-do {									      \
-	(ptr) = (cptab) == NULL ?					      \
-		alloc_page(gfp_mask) :				      \
-		cfs_page_cpt_alloc(cptab, cpt, gfp_mask);		      \
-        if (unlikely((ptr) == NULL)) {                                        \
-                CERROR("alloc_pages of '" #ptr "' %d page(s) / "LPU64" bytes "\
-                       "failed\n", (int)1,                                    \
-		       (__u64)(1 << PAGE_CACHE_SHIFT));                         \
-                CERROR(LPU64" total bytes and "LPU64" total pages "           \
-                       "("LPU64" bytes) allocated by Lustre, "                \
-                       "%d total bytes by LNET\n",                            \
-                       obd_memory_sum(),                                      \
-		       obd_pages_sum() << PAGE_CACHE_SHIFT,                   \
-		       obd_pages_sum(),                                       \
-		       atomic_read(&libcfs_kmemory));                         \
-	} else {                                                              \
-		obd_pages_add(0);                                             \
-                CDEBUG(D_MALLOC, "alloc_pages '" #ptr "': %d page(s) / "      \
-                       LPU64" bytes at %p.\n",                                \
-                       (int)1,                                                \
-		       (__u64)(1 << PAGE_CACHE_SHIFT), ptr);                    \
-        }                                                                     \
-} while (0)
-
-#define OBD_PAGE_ALLOC(ptr, gfp_mask)					      \
-	__OBD_PAGE_ALLOC_VERBOSE(ptr, NULL, 0, gfp_mask)
-#define OBD_PAGE_CPT_ALLOC(ptr, cptab, cpt, gfp_mask)			      \
-	__OBD_PAGE_ALLOC_VERBOSE(ptr, cptab, cpt, gfp_mask)
-
-#define OBD_PAGE_FREE(ptr)                                                    \
-do {                                                                          \
-        LASSERT(ptr);                                                         \
-        obd_pages_sub(0);                                                     \
-        CDEBUG(D_MALLOC, "free_pages '" #ptr "': %d page(s) / "LPU64" bytes " \
-               "at %p.\n",                                                    \
-	       (int)1, (__u64)(1 << PAGE_CACHE_SHIFT),                          \
-               ptr);                                                          \
-	__free_page(ptr);                                                   \
-        (ptr) = (void *)0xdeadbeef;                                           \
-} while (0)
 
 #endif

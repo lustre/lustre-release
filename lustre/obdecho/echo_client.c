@@ -2358,27 +2358,27 @@ static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
                 RETURN(-ENOMEM);
         }
 
-        for (i = 0, pgp = pga, off = offset;
-             i < npages;
+	for (i = 0, pgp = pga, off = offset;
+	     i < npages;
 	     i++, pgp++, off += PAGE_CACHE_SIZE) {
 
-                LASSERT (pgp->pg == NULL);      /* for cleanup */
+		LASSERT(pgp->pg == NULL);	/* for cleanup */
 
-                rc = -ENOMEM;
-                OBD_PAGE_ALLOC(pgp->pg, gfp_mask);
-                if (pgp->pg == NULL)
-                        goto out;
+		rc = -ENOMEM;
+		pgp->pg = alloc_page(gfp_mask);
+		if (pgp->pg == NULL)
+			goto out;
 
-                pages[i] = pgp->pg;
+		pages[i] = pgp->pg;
 		pgp->count = PAGE_CACHE_SIZE;
-                pgp->off = off;
-                pgp->flag = brw_flags;
+		pgp->off = off;
+		pgp->flag = brw_flags;
 
 		if (verify)
 			echo_client_page_debug_setup(pgp->pg, rw,
 						     ostid_id(&oa->o_oi), off,
 						     pgp->count);
-        }
+	}
 
         /* brw mode can only be used at client */
         LASSERT(ed->ed_next != NULL);
@@ -2400,7 +2400,7 @@ static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
 			if (vrc != 0 && rc == 0)
 				rc = vrc;
 		}
-		OBD_PAGE_FREE(pgp->pg);
+		__free_page(pgp->pg);
         }
         OBD_FREE(pga, npages * sizeof(*pga));
         OBD_FREE(pages, npages * sizeof(*pages));

@@ -309,7 +309,7 @@ static int echo_map_nb_to_lb(struct obdo *oa, struct obd_ioobj *obj,
 			/* Take extra ref so __free_pages() can be called OK */
 			get_page(res->lnb_page);
 		} else {
-			OBD_PAGE_ALLOC(res->lnb_page, gfp_mask);
+			res->lnb_page = alloc_page(gfp_mask);
 			if (res->lnb_page == NULL) {
 				CERROR("can't get page for id " DOSTID"\n",
 				       POSTID(&obj->ioo_oid));
@@ -380,7 +380,7 @@ static int echo_finalize_lb(struct obdo *oa, struct obd_ioobj *obj,
 
 		kunmap(page);
 		/* NB see comment above regarding persistent pages */
-		OBD_PAGE_FREE(page);
+		__free_page(page);
 	}
 
 	return rc;
@@ -450,9 +450,9 @@ preprw_cleanup:
         CERROR("cleaning up %u pages (%d obdos)\n", *pages, objcount);
         for (i = 0; i < *pages; i++) {
 		kunmap(res[i].lnb_page);
-		/* NB if this is a persistent page, __free_pages will just
+		/* NB if this is a persistent page, __free_page() will just
 		 * lose the extra ref gained above */
-		OBD_PAGE_FREE(res[i].lnb_page);
+		__free_page(res[i].lnb_page);
 		res[i].lnb_page = NULL;
 		atomic_dec(&obd->u.echo.eo_prep);
 	}
@@ -522,20 +522,20 @@ static int echo_commitrw(const struct lu_env *env, int cmd,
 commitrw_cleanup:
 	atomic_sub(pgs, &obd->u.echo.eo_prep);
 
-        CERROR("cleaning up %d pages (%d obdos)\n",
-               niocount - pgs - 1, objcount);
+	CERROR("cleaning up %d pages (%d obdos)\n",
+	       niocount - pgs - 1, objcount);
 
-        while (pgs < niocount) {
+	while (pgs < niocount) {
 		struct page *page = res[pgs++].lnb_page;
 
-                if (page == NULL)
-                        continue;
+		if (page == NULL)
+			continue;
 
-                /* NB see comment above regarding persistent pages */
-                OBD_PAGE_FREE(page);
+		/* NB see comment above regarding persistent pages */
+		__free_page(page);
 		atomic_dec(&obd->u.echo.eo_prep);
-        }
-        return rc;
+	}
+	return rc;
 }
 
 LPROC_SEQ_FOPS_RO_TYPE(echo, uuid);
@@ -632,13 +632,13 @@ struct obd_ops echo_obd_ops = {
 
 void echo_persistent_pages_fini(void)
 {
-        int     i;
+	int i;
 
-        for (i = 0; i < ECHO_PERSISTENT_PAGES; i++)
-                if (echo_persistent_pages[i] != NULL) {
-                        OBD_PAGE_FREE(echo_persistent_pages[i]);
-                        echo_persistent_pages[i] = NULL;
-                }
+	for (i = 0; i < ECHO_PERSISTENT_PAGES; i++)
+		if (echo_persistent_pages[i] != NULL) {
+			__free_page(echo_persistent_pages[i]);
+			echo_persistent_pages[i] = NULL;
+		}
 }
 
 int echo_persistent_pages_init(void)
@@ -650,7 +650,7 @@ int echo_persistent_pages_init(void)
 		gfp_t gfp_mask = (i < ECHO_PERSISTENT_PAGES/2) ?
 			GFP_IOFS : GFP_HIGHUSER;
 
-		OBD_PAGE_ALLOC(pg, gfp_mask);
+		pg = alloc_page(gfp_mask);
 		if (pg == NULL) {
 			echo_persistent_pages_fini();
 			return -ENOMEM;
