@@ -66,7 +66,7 @@ static int max_reconnect_interval = GNILND_MAX_RECONNECT_TO;
 CFS_MODULE_PARM(max_reconnect_interval, "i", int, 0644,
 		"maximum connection retry interval (seconds)");
 
-static int max_immediate = (2<<10);
+static int max_immediate = 8192;
 CFS_MODULE_PARM(max_immediate, "i", int, 0644,
 		"immediate/RDMA breakpoint");
 

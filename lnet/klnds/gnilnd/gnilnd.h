@@ -99,7 +99,6 @@
 /* fixed constants */
 #define GNILND_MAXDEVS		1		/* max # of GNI devices currently supported */
 #define GNILND_MBOX_CREDITS	256		/* number of credits per mailbox */
-#define GNILND_COOKIE		0xa3579		/* cookie used by along with ptag by GNI */
 #define GNILND_CONN_MAGIC         0xa100f       /* magic value for verifying connection validity */
 /* checksum values */
 #define GNILND_CHECKSUM_OFF		0	/* checksum turned off */
@@ -120,7 +119,6 @@
 #define GNILND_COMPUTE            1             /* compute image */
 #define GNILND_FAST_RECONNECT     1             /* Fast Reconnect option */
 #else
-#define GNILND_SCHED_THREADS      3             /* default # of kgnilnd_scheduler threads */
 #define GNILND_FMABLK             1024          /* default number of mboxes per fmablk */
 #define GNILND_SCHED_NICE         -20		/* default nice value for scheduler threads */
 #define GNILND_COMPUTE            0             /* service image */

@@ -51,6 +51,7 @@
 #else
 #define GNILND_REVERSE_RDMA        GNILND_REVERSE_GET
 #define GNILND_RDMA_DLVR_OPTION    GNI_DLVMODE_PERFORMANCE
+#define GNILND_SCHED_THREADS       7             /* scheduler threads */
 #endif
 
 /* Thread-safe kgni implemented in minor ver 45, code rev 0xb9 */

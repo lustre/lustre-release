@@ -505,8 +505,14 @@ kgnilnd_setup_immediate_buffer(kgn_tx_t *tx, unsigned int niov, struct iovec *io
 	if (nob == 0) {
 		tx->tx_buffer = NULL;
 	} else if (kiov != NULL) {
+
+		if ((niov > 0) && unlikely(niov > (nob/PAGE_SIZE))) {
+			niov = ((nob + offset + PAGE_SIZE - 1) / PAGE_SIZE);
+		}
+
 		LASSERTF(niov > 0 && niov < GNILND_MAX_IMMEDIATE/PAGE_SIZE,
-			 "bad niov %d\n", niov);
+			"bad niov %d msg %p kiov %p iov %p offset %d nob%d\n",
+			niov, msg, kiov, iov, offset, nob);
 
 		while (offset >= kiov->kiov_len) {
 			offset -= kiov->kiov_len;

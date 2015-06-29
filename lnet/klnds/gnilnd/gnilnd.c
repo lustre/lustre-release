@@ -1955,7 +1955,7 @@ kgnilnd_dev_init(kgn_device_t *dev)
 	cq_size = *kgnilnd_tunables.kgn_credits * 2 * 3;
 
 	rrc = kgnilnd_cdm_create(dev->gnd_id, *kgnilnd_tunables.kgn_ptag,
-				 GNILND_COOKIE, 0,
+				 GNI_JOB_CREATE_COOKIE(GNI_PKEY_LND, 0), 0,
 				 &dev->gnd_domain);
 	if (rrc != GNI_RC_SUCCESS) {
 		CERROR("Can't create CDM %d (%d)\n", dev->gnd_id, rrc);
