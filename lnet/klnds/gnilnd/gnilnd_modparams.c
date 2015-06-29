@@ -94,6 +94,9 @@ static int ptag = GNI_PTAG_LND;
 CFS_MODULE_PARM(ptag, "i", int, 0444,
 		"ptag for Gemini CDM");
 
+static int pkey = GNI_JOB_CREATE_COOKIE(GNI_PKEY_LND, 0);
+CFS_MODULE_PARM(pkey, "i", int, 0444, "pkey for CDM");
+
 static int max_retransmits = 1024;
 CFS_MODULE_PARM(max_retransmits, "i", int, 0444,
 		"max retransmits for FMA");
@@ -205,6 +208,7 @@ kgn_tunables_t kgnilnd_tunables = {
 	.kgn_bte_dlvr_mode          = &bte_dlvr_mode,
 	.kgn_bte_relaxed_ordering   = &bte_relaxed_ordering,
 	.kgn_ptag                   = &ptag,
+	.kgn_pkey                   = &pkey,
 	.kgn_max_retransmits        = &max_retransmits,
 	.kgn_nwildcard              = &nwildcard,
 	.kgn_nice                   = &nice,
@@ -310,6 +314,14 @@ static struct ctl_table kgnilnd_ctl_table[] = {
 		INIT_CTL_NAME
 		.procname = "ptag",
 		.data     = &ptag,
+		.maxlen   = sizeof(int),
+		.mode     = 0444,
+		.proc_handler = &proc_dointvec
+	},
+	{
+		INIT_CTL_NAME
+		.procname = "pkey",
+		.data     = &pkey,
 		.maxlen   = sizeof(int),
 		.mode     = 0444,
 		.proc_handler = &proc_dointvec

@@ -458,6 +458,7 @@ typedef struct kgn_tunables {
 	int              *kgn_bte_dlvr_mode;    /* BTE delivery mode mask */
 	int              *kgn_bte_relaxed_ordering; /* relaxed ordering (PASSPW) on BTE transfers */
 	int              *kgn_ptag;             /* PTAG for cdm_create */
+	int              *kgn_pkey;             /* PKEY for cdm_create */
 	int              *kgn_max_retransmits;  /* max number of FMA retransmits */
 	int              *kgn_nwildcard;        /* # wildcard per net to post */
 	int              *kgn_nice;             /* nice value for kgnilnd threads */
