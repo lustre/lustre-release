@@ -577,7 +577,7 @@ kgnilnd_tunables_init()
 
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
 	kgnilnd_tunables.kgn_sysctl =
-		cfs_register_sysctl_table(kgnilnd_top_ctl_table, 0);
+		register_sysctl_table(kgnilnd_top_ctl_table, 0);
 
 	if (kgnilnd_tunables.kgn_sysctl == NULL)
 		CWARN("Can't setup /proc tunables\n");
@@ -629,6 +629,6 @@ kgnilnd_tunables_fini()
 {
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
 	if (kgnilnd_tunables.kgn_sysctl != NULL)
-		cfs_unregister_sysctl_table(kgnilnd_tunables.kgn_sysctl);
+		unregister_sysctl_table(kgnilnd_tunables.kgn_sysctl);
 #endif
 }
