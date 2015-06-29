@@ -58,6 +58,38 @@
 #define GNILND_KGNI_TS_MINOR_VER 0x45
 #define GNILND_TS_ENABLE         1
 
+/* register some memory to allocate a shared mdd */
+static inline gni_return_t
+kgnilnd_register_smdd_buf(kgn_device_t *dev)
+{
+	__u32        flags = GNI_MEM_READWRITE;
+
+	if (*kgnilnd_tunables.kgn_bte_relaxed_ordering) {
+		flags |= GNI_MEM_RELAXED_PI_ORDERING;
+	}
+
+	LIBCFS_ALLOC(dev->gnd_smdd_hold_buf, PAGE_SIZE);
+	if (!dev->gnd_smdd_hold_buf) {
+		CERROR("Can't allocate smdd hold buffer\n");
+		return GNI_RC_ERROR_RESOURCE;
+	}
+
+	return kgnilnd_mem_register(dev->gnd_handle,
+				    (__u64)dev->gnd_smdd_hold_buf,
+				    PAGE_SIZE, NULL, flags,
+				    &dev->gnd_smdd_hold_hndl);
+}
+
+static inline gni_return_t
+kgnilnd_deregister_smdd_buf(kgn_device_t *dev)
+{
+	gni_return_t rc = kgnilnd_mem_deregister(dev->gnd_handle,
+						 &dev->gnd_smdd_hold_hndl, 0);
+	LIBCFS_FREE(dev->gnd_smdd_hold_buf, PAGE_SIZE);
+
+	return rc;
+}
+
 /* plug in our functions for use on the simulator */
 #if !defined(GNILND_USE_RCA)
 

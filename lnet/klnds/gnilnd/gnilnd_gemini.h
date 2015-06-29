@@ -42,4 +42,16 @@
 #define GNILND_KGNI_TS_MINOR_VER 0x44
 #define GNILND_TS_ENABLE         0
 
+static inline gni_return_t
+kgnilnd_register_smdd_buf(kgn_device_t *dev)
+{
+	return GNI_RC_SUCCESS;
+}
+
+static inline gni_return_t
+kgnilnd_deregister_smdd_buf(kgn_device_t *dev)
+{
+	return GNI_RC_SUCCESS;
+}
+
 #endif /* _GNILND_GEMINI_H */

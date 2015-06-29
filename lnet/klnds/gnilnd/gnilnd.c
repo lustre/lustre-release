@@ -2095,6 +2095,11 @@ kgnilnd_dev_init(kgn_device_t *dev)
 		GOTO(failed, rc = -EINVAL);
 	}
 
+	rrc = kgnilnd_register_smdd_buf(dev);
+	if (rrc != GNI_RC_SUCCESS) {
+		GOTO(failed, rc = -EINVAL);
+	}
+
 	RETURN(0);
 
 failed:
@@ -2144,6 +2149,13 @@ kgnilnd_dev_fini(kgn_device_t *dev)
 	LASSERTF(kgnilnd_data.kgn_quiesce_trigger ||
 		atomic_read(&kgnilnd_data.kgn_nthreads) == 0,
 		"tried to shutdown with threads active\n");
+
+	if (dev->gnd_smdd_hold_buf) {
+		rrc = kgnilnd_deregister_smdd_buf(dev);
+		LASSERTF(rrc == GNI_RC_SUCCESS,
+			"bad rc from deregistion of sMDD buffer: %d\n", rrc);
+		dev->gnd_smdd_hold_buf = NULL;
+	}
 
 	if (dev->gnd_rcv_fma_cqh) {
 		rrc = kgnilnd_cq_destroy(dev->gnd_rcv_fma_cqh);

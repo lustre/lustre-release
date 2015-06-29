@@ -589,6 +589,8 @@ typedef struct kgn_device {
 	atomic_t                gnd_n_schedule;
 	atomic_t                gnd_canceled_dgrams; /* # of outstanding cancels */
 	struct rw_semaphore     gnd_conn_sem;       /* serialize connection changes/data movement */
+	void                   *gnd_smdd_hold_buf;  /* buffer to keep smdd */
+	gni_mem_handle_t        gnd_smdd_hold_hndl; /* buffer mem handle */
 } kgn_device_t;
 
 typedef struct kgn_net {
@@ -1982,6 +1984,8 @@ kgnilnd_conn_dgram_type2str(kgn_dgram_type_t type)
 /* pulls in tunables per platform and adds in nid/nic conversion
  * if RCA wasn't available at build time */
 #include "gnilnd_hss_ops.h"
+/* API wrapper functions - include late to pick up all of the other defines */
+#include "gnilnd_api_wrap.h"
 
 #if defined(CONFIG_CRAY_GEMINI)
  #include "gnilnd_gemini.h"
@@ -1991,7 +1995,38 @@ kgnilnd_conn_dgram_type2str(kgn_dgram_type_t type)
  #error "Undefined Network Hardware Type"
 #endif
 
-/* API wrapper functions - include late to pick up all of the other defines */
-#include "gnilnd_api_wrap.h"
+extern uint32_t kgni_driver_version;
+
+static inline void
+kgnilnd_check_kgni_version(void)
+{
+	uint32_t *kdv;
+
+	kgnilnd_data.kgn_enable_gl_mutex = 1;
+	kdv = symbol_get(kgni_driver_version);
+	if (!kdv) {
+		LCONSOLE_INFO("Not using thread safe locking -"
+			" no symbol kgni_driver_version\n");
+		return;
+	}
+
+	/* Thread-safe kgni implemented in minor ver 0x44/45, code rev 0xb9 */
+	if (*kdv < GNI_VERSION_CHECK(0, GNILND_KGNI_TS_MINOR_VER, 0xb9)) {
+		symbol_put(kgni_driver_version);
+		LCONSOLE_INFO("Not using thread safe locking, gni version 0x%x,"
+			" need >= 0x%x\n", *kdv,
+			GNI_VERSION_CHECK(0, GNILND_KGNI_TS_MINOR_VER, 0xb9));
+		return;
+	}
+
+	symbol_put(kgni_driver_version);
+
+	if (!*kgnilnd_tunables.kgn_thread_safe) {
+		return;
+	}
+
+	/* Use thread-safe locking */
+	kgnilnd_data.kgn_enable_gl_mutex = 0;
+}
 
 #endif /* _GNILND_GNILND_H_ */
