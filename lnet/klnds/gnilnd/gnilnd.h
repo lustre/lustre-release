@@ -482,6 +482,7 @@ typedef struct kgn_tunables {
 	int     *kgn_fast_reconn;      /* fast reconnection on conn timeout */
 	int     *kgn_efault_lbug;      /* LBUG on receiving an EFAULT */
 	int     *kgn_max_purgatory;    /* # conns/peer to keep in purgatory */
+	int     *kgn_thread_affinity;  /* bind scheduler threads to cpus */
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
 	cfs_sysctl_table_header_t *kgn_sysctl;  /* sysctl interface */
 #endif
@@ -882,19 +883,8 @@ extern int _kgnilnd_schedule_conn(kgn_conn_t *conn, const char *caller, int line
 #define kgnilnd_schedule_conn(conn)					\
 	_kgnilnd_schedule_conn(conn, __func__, __LINE__, 0);
 
-#define kgnilnd_schedule_conn_refheld(conn, refheld)				\
+#define kgnilnd_schedule_conn_refheld(conn, refheld)			\
 	_kgnilnd_schedule_conn(conn, __func__, __LINE__, refheld);
-
-static inline int
-kgnilnd_thread_start(int(*fn)(void *arg), void *arg, char *name, int id)
-{
-	struct task_struct *thrd = kthread_run(fn, arg, "%s_%02d", name, id);
-	if (IS_ERR(thrd))
-		return PTR_ERR(thrd);
-
-	atomic_inc(&kgnilnd_data.kgn_nthreads);
-	return 0;
-}
 
 static inline void
 kgnilnd_thread_fini(void)
@@ -1773,6 +1763,7 @@ int kgnilnd_reaper(void *arg);
 int kgnilnd_scheduler(void *arg);
 int kgnilnd_dgram_mover(void *arg);
 int kgnilnd_rca(void *arg);
+int kgnilnd_thread_start(int(*fn)(void *arg), void *arg, char *name, int id);
 
 int kgnilnd_create_conn(kgn_conn_t **connp, kgn_device_t *dev);
 int kgnilnd_conn_isdup_locked(kgn_peer_t *peer, kgn_conn_t *newconn);

@@ -42,6 +42,52 @@ lnd_t the_kgnilnd = {
 
 kgn_data_t      kgnilnd_data;
 
+int
+kgnilnd_thread_start(int(*fn)(void *arg), void *arg, char *name, int id)
+{
+	struct task_struct *thrd;
+
+	thrd = kthread_run(fn, arg, "%s_%02d", name, id);
+	if (IS_ERR(thrd))
+		return PTR_ERR(thrd);
+
+	atomic_inc(&kgnilnd_data.kgn_nthreads);
+	return 0;
+}
+
+/* bind scheduler threads to cpus */
+int
+kgnilnd_start_sd_threads(void)
+{
+	int cpu;
+	int i = 0;
+	struct task_struct *task;
+
+	for_each_online_cpu(cpu) {
+		/* don't bind to cpu 0 - all interrupts are processed here */
+		if (cpu == 0)
+			continue;
+
+		task = kthread_create(kgnilnd_scheduler, (void *)((long)i),
+				      "%s_%02d", "kgnilnd_sd", i);
+		if (!IS_ERR(task)) {
+			kthread_bind(task, cpu);
+			wake_up_process(task);
+		} else {
+			CERROR("Can't spawn gnilnd scheduler[%d] %ld\n", i,
+				PTR_ERR(task));
+			return PTR_ERR(task);
+		}
+		atomic_inc(&kgnilnd_data.kgn_nthreads);
+
+		if (++i >= *kgnilnd_tunables.kgn_sched_threads) {
+			break;
+		}
+	}
+
+	return 0;
+}
+
 /* needs write_lock on kgn_peer_conn_lock */
 int
 kgnilnd_close_stale_conns_locked(kgn_peer_t *peer, kgn_conn_t *newconn)
@@ -2384,13 +2430,20 @@ int kgnilnd_base_startup(void)
 	}
 
 	/* threads will load balance across devs as they are available */
-	for (i = 0; i < *kgnilnd_tunables.kgn_sched_threads; i++) {
-		rc = kgnilnd_thread_start(kgnilnd_scheduler, (void *)((long)i),
-					  "kgnilnd_sd", i);
-		if (rc != 0) {
-			CERROR("Can't spawn gnilnd scheduler[%d]: %d\n",
-			       i, rc);
+	if (*kgnilnd_tunables.kgn_thread_affinity) {
+		rc = kgnilnd_start_sd_threads();
+		if (rc != 0)
 			GOTO(failed, rc);
+	} else {
+		for (i = 0; i < *kgnilnd_tunables.kgn_sched_threads; i++) {
+			rc = kgnilnd_thread_start(kgnilnd_scheduler,
+						  (void *)((long)i),
+						  "kgnilnd_sd", i);
+			if (rc != 0) {
+				CERROR("Can't spawn gnilnd scheduler[%d]: %d\n",
+				       i, rc);
+				GOTO(failed, rc);
+			}
 		}
 	}
 
@@ -2420,8 +2473,6 @@ int kgnilnd_base_startup(void)
 			GOTO(failed, rc);
 		}
 	}
-
-
 
 	/* flag everything initialised */
 	kgnilnd_data.kgn_init = GNILND_INIT_ALL;
