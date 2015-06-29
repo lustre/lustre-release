@@ -128,6 +128,11 @@ kgnilnd_check_kgni_version(void)
 	}
 
 	symbol_put(kgni_driver_version);
+
+	if (!*kgnilnd_tunables.kgn_thread_safe) {
+		return;
+	}
+
 	/* Use thread-safe locking */
 	kgnilnd_data.kgn_enable_gl_mutex = 0;
 }

@@ -56,6 +56,7 @@
 
 /* Thread-safe kgni implemented in minor ver 45, code rev 0xb9 */
 #define GNILND_KGNI_TS_MINOR_VER 0x45
+#define GNILND_TS_ENABLE         1
 
 /* plug in our functions for use on the simulator */
 #if !defined(GNILND_USE_RCA)

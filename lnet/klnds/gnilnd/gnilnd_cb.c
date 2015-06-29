@@ -1471,7 +1471,6 @@ kgnilnd_sendmsg_nolock(kgn_tx_t *tx, void *immediate, unsigned int immediatenob,
 	 */
 	msg->gnm_connstamp = conn->gnc_my_connstamp;
 	msg->gnm_payload_len = immediatenob;
-	kgnilnd_conn_mutex_lock(&conn->gnc_smsg_mutex);
 	msg->gnm_seq = atomic_read(&conn->gnc_tx_seq);
 
 	/* always init here - kgn_checksum is a /sys module tunable
@@ -1586,6 +1585,7 @@ kgnilnd_sendmsg(kgn_tx_t *tx, void *immediate, unsigned int immediatenob,
 
 	timestamp = jiffies;
 	kgnilnd_gl_mutex_lock(&dev->gnd_cq_mutex);
+	kgnilnd_conn_mutex_lock(&tx->tx_conn->gnc_smsg_mutex);
 	/* delay in jiffies - we are really concerned only with things that
 	 * result in a schedule() or really holding this off for long times .
 	 * NB - mutex_lock could spin for 2 jiffies before going to sleep to wait */
@@ -1630,7 +1630,8 @@ kgnilnd_sendmsg_trylock(kgn_tx_t *tx, void *immediate, unsigned int immediatenob
 		rc = 0;
 	} else {
 		atomic_inc(&conn->gnc_device->gnd_fast_try);
-		rc = kgnilnd_gl_mutex_trylock(&conn->gnc_device->gnd_cq_mutex);
+		rc = kgnilnd_trylock(&conn->gnc_device->gnd_cq_mutex,
+				     &conn->gnc_smsg_mutex);
 	}
 	if (!rc) {
 		rc = -EAGAIN;

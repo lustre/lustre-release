@@ -248,7 +248,8 @@ kgnilnd_create_conn(kgn_conn_t **connp, kgn_device_t *dev)
 		return -ENOMEM;
 	}
 
-	LIBCFS_ALLOC(conn->gnc_tx_ref_table, GNILND_MAX_MSG_ID * sizeof(void *));
+	conn->gnc_tx_ref_table =
+		kgnilnd_vmalloc(GNILND_MAX_MSG_ID * sizeof(void *));
 	if (conn->gnc_tx_ref_table == NULL) {
 		CERROR("Can't allocate conn tx_ref_table\n");
 		GOTO(failed, rc = -ENOMEM);
@@ -1789,7 +1790,8 @@ kgnilnd_report_node_state(lnet_nid_t nid, int down)
 		 */
 		kgnilnd_txlist_done(&zombies, -ENETRESET);
 		kgnilnd_peer_notify(peer, -ECONNRESET, 0);
-		LCONSOLE_INFO("Recieved down event for nid %lld\n", nid);
+		LCONSOLE_INFO("Received down event for nid %d\n",
+			      LNET_NIDADDR(nid));
 	}
 
 	return 0;

@@ -40,5 +40,6 @@
 
 /* Thread-safe kgni implemented in minor ver 44, code rev 0xb9 */
 #define GNILND_KGNI_TS_MINOR_VER 0x44
+#define GNILND_TS_ENABLE         0
 
 #endif /* _GNILND_GEMINI_H */

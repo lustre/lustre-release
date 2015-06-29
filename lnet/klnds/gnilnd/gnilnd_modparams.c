@@ -192,7 +192,11 @@ CFS_MODULE_PARM(max_conn_purg, "i", int, 0644,
 
 static int thread_affinity = 0;
 CFS_MODULE_PARM(thread_affinity, "i", int, 0444,
-		"scheduler thread affinity default 0 (diabled)");
+		"scheduler thread affinity default 0 (disabled)");
+
+static int thread_safe = GNILND_TS_ENABLE;
+CFS_MODULE_PARM(thread_safe, "i", int, 0444,
+		"Use kgni thread safe API if available");
 
 kgn_tunables_t kgnilnd_tunables = {
 	.kgn_min_reconnect_interval = &min_reconnect_interval,
@@ -233,6 +237,7 @@ kgn_tunables_t kgnilnd_tunables = {
 	.kgn_fast_reconn            = &fast_reconn,
 	.kgn_efault_lbug            = &efault_lbug,
 	.kgn_thread_affinity	    = &thread_affinity,
+	.kgn_thread_safe	    = &thread_safe,
 	.kgn_max_purgatory	    = &max_conn_purg
 };
 
@@ -529,6 +534,14 @@ static struct ctl_table kgnilnd_ctl_table[] = {
 		INIT_CTL_NAME
 		.procname = "thread_affinity"
 		.data	  = &thread_affinity,
+		.maxlen   = sizeof(int),
+		.mode	  = 0444,
+		.proc_handler = &proc_dointvec
+	},
+	{
+		INIT_CTL_NAME
+		.procname = "thread_safe"
+		.data	  = &thread_safe,
 		.maxlen   = sizeof(int),
 		.mode	  = 0444,
 		.proc_handler = &proc_dointvec

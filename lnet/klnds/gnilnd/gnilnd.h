@@ -484,6 +484,7 @@ typedef struct kgn_tunables {
 	int     *kgn_efault_lbug;      /* LBUG on receiving an EFAULT */
 	int     *kgn_max_purgatory;    /* # conns/peer to keep in purgatory */
 	int     *kgn_thread_affinity;  /* bind scheduler threads to cpus */
+	int     *kgn_thread_safe;      /* use thread safe kgni API */
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
 	cfs_sysctl_table_header_t *kgn_sysctl;  /* sysctl interface */
 #endif
@@ -893,14 +894,6 @@ kgnilnd_thread_fini(void)
 	atomic_dec(&kgnilnd_data.kgn_nthreads);
 }
 
-static inline int kgnilnd_gl_mutex_trylock(struct mutex *lock)
-{
-	if (kgnilnd_data.kgn_enable_gl_mutex)
-		return mutex_trylock(lock);
-	else
-		return 1;
-}
-
 static inline void kgnilnd_gl_mutex_lock(struct mutex *lock)
 {
 	if (kgnilnd_data.kgn_enable_gl_mutex)
@@ -938,13 +931,10 @@ static inline void kgnilnd_conn_mutex_unlock(struct mutex *lock)
  * This function must not be used in interrupt context. The
  * mutex must be released by the same task that acquired it.
  */
-static inline int kgnilnd_mutex_trylock(struct mutex *lock)
+static inline int __kgnilnd_mutex_trylock(struct mutex *lock)
 {
 	int             ret;
 	unsigned long   timeout;
-
-	if (!kgnilnd_data.kgn_enable_gl_mutex)
-		return 1;
 
 	LASSERT(!in_interrupt());
 
@@ -955,6 +945,30 @@ static inline int kgnilnd_mutex_trylock(struct mutex *lock)
 			return ret;
 	}
 	return 0;
+}
+
+static inline int kgnilnd_mutex_trylock(struct mutex *lock)
+{
+	if (!kgnilnd_data.kgn_enable_gl_mutex)
+		return 1;
+
+	return __kgnilnd_mutex_trylock(lock);
+}
+
+static inline int kgnilnd_trylock(struct mutex *cq_lock,
+				  struct mutex *c_lock)
+{
+	if (kgnilnd_data.kgn_enable_gl_mutex)
+		return __kgnilnd_mutex_trylock(cq_lock);
+	else
+		return __kgnilnd_mutex_trylock(c_lock);
+}
+
+static inline void *kgnilnd_vmalloc(int size)
+{
+	void *ret = __vmalloc(size, __GFP_HIGHMEM | GFP_NOFS, PAGE_KERNEL);
+	LIBCFS_ALLOC_POST(ret, size);
+	return ret;
 }
 
 /* Copied from DEBUG_REQ in Lustre - the dance is needed to save stack space */
