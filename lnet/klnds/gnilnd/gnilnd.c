@@ -249,7 +249,7 @@ kgnilnd_create_conn(kgn_conn_t **connp, kgn_device_t *dev)
 	}
 
 	conn->gnc_tx_ref_table =
-		kgnilnd_vmalloc(GNILND_MAX_MSG_ID * sizeof(void *));
+		kgnilnd_vzalloc(GNILND_MAX_MSG_ID * sizeof(void *));
 	if (conn->gnc_tx_ref_table == NULL) {
 		CERROR("Can't allocate conn tx_ref_table\n");
 		GOTO(failed, rc = -ENOMEM);
