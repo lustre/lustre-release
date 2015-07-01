@@ -71,7 +71,7 @@ struct tg_export_data {
 
 	/** nodemap this export is a member of */
 	struct lu_nodemap	*ted_nodemap;
-	struct hlist_node	ted_nodemap_member;
+	struct list_head	ted_nodemap_member;
 
 	/* Every reply data fields below are
 	 * protected by ted_lcd_lock */

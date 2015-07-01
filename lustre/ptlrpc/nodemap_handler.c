@@ -89,10 +89,10 @@ static void nodemap_destroy(struct lu_nodemap *nodemap)
 	idmap_delete_tree(nodemap);
 	write_unlock(&nodemap->nm_idmap_lock);
 	nm_member_reclassify_nodemap(nodemap);
-	if (!cfs_hash_is_empty(nodemap->nm_member_hash))
+	if (!list_empty(&nodemap->nm_member_list))
 		CWARN("nodemap_destroy failed to reclassify all members\n");
 
-	nm_member_delete_hash(nodemap);
+	nm_member_delete_list(nodemap);
 
 	OBD_FREE_PTR(nodemap);
 }
@@ -287,7 +287,8 @@ out:
 }
 
 /**
- * classify the nid into the proper nodemap
+ * Classify the nid into the proper nodemap. Caller must hold
+ * nm_range_tree_lock, and call nodemap_putref when done with nodemap.
  *
  * \param	nid			nid to classify
  * \retval	nodemap			nodemap containing the nid
@@ -296,14 +297,17 @@ out:
 struct lu_nodemap *nodemap_classify_nid(lnet_nid_t nid)
 {
 	struct lu_nid_range	*range;
+	struct lu_nodemap	*nodemap;
 
 	range = range_search(nid);
 	if (range != NULL)
-		return range->rn_nodemap;
+		nodemap = range->rn_nodemap;
+	else
+		nodemap = default_nodemap;
+	nodemap_getref(nodemap);
 
-	return default_nodemap;
+	return nodemap;
 }
-EXPORT_SYMBOL(nodemap_classify_nid);
 
 /**
  * simple check for default nodemap
@@ -402,6 +406,7 @@ int nodemap_add_member(lnet_nid_t nid, struct obd_export *exp)
 	nodemap = nodemap_classify_nid(nid);
 	rc = nm_member_add(nodemap, exp);
 	read_unlock(&nm_range_tree_lock);
+	nodemap_putref(nodemap);
 	return rc;
 }
 EXPORT_SYMBOL(nodemap_add_member);
@@ -769,16 +774,11 @@ static int nodemap_create(const char *name, bool is_default)
 		GOTO(out, rc = -EEXIST);
 	}
 
-
-	rc = nm_member_init_hash(nodemap);
-	if (rc != 0) {
-		OBD_FREE_PTR(nodemap);
-		goto out;
-	}
-
 	INIT_LIST_HEAD(&nodemap->nm_ranges);
 	INIT_LIST_HEAD(&nodemap->nm_list);
+	INIT_LIST_HEAD(&nodemap->nm_member_list);
 
+	mutex_init(&nodemap->nm_member_list_lock);
 	rwlock_init(&nodemap->nm_idmap_lock);
 	nodemap->nm_fs_to_client_uidmap = RB_ROOT;
 	nodemap->nm_client_to_fs_uidmap = RB_ROOT;
@@ -1052,3 +1052,55 @@ void nm_member_revoke_all()
 	cfs_hash_for_each_safe(nodemap_hash, nm_member_revoke_all_cb, NULL);
 }
 
+/**
+ * Returns the nodemap classification for a given nid into an ioctl buffer.
+ * Useful for testing the nodemap configuration to make sure it is working as
+ * expected.
+ *
+ * \param	nid		nid to classify
+ * \param[out]	name_buf	buffer to write the nodemap name to
+ * \param	name_len	length of buffer
+ */
+void nodemap_test_nid(lnet_nid_t nid, char *name_buf, size_t name_len)
+{
+	struct lu_nodemap	*nodemap;
+
+	read_lock(&nm_range_tree_lock);
+	nodemap = nodemap_classify_nid(nid);
+	read_unlock(&nm_range_tree_lock);
+
+	strncpy(name_buf, nodemap->nm_name, name_len);
+	if (name_len > 0)
+		name_buf[name_len - 1] = '\0';
+
+	nodemap_putref(nodemap);
+}
+EXPORT_SYMBOL(nodemap_test_nid);
+
+/**
+ * Returns the id mapping for a given nid/id pair. Useful for testing the
+ * nodemap configuration to make sure it is working as expected.
+ *
+ * \param	nid		nid to classify
+ * \param	idtype		uid or gid
+ * \param	client_id	id to map to fs
+ *
+ * \retval	the mapped fs_id of the given client_id
+ */
+__u32 nodemap_test_id(lnet_nid_t nid, enum nodemap_id_type idtype,
+		      __u32 client_id)
+{
+	struct lu_nodemap	*nodemap;
+	__u32			 fs_id;
+
+	read_lock(&nm_range_tree_lock);
+	nodemap = nodemap_classify_nid(nid);
+	read_unlock(&nm_range_tree_lock);
+
+	fs_id = nodemap_map_id(nodemap, idtype, NODEMAP_CLIENT_TO_FS,
+			       client_id);
+	nodemap_putref(nodemap);
+
+	return fs_id;
+}
+EXPORT_SYMBOL(nodemap_test_id);

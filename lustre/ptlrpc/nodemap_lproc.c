@@ -151,48 +151,31 @@ static int nodemap_ranges_open(struct inode *inode, struct file *file)
 }
 
 /**
- * Hash callback, reads and prints the exports attached to this nodemap.
+ * Reads and prints the exports attached to the given nodemap.
  *
- * \param	hs		nodemap member hash
- * \param	bd		unused
- * \param	hnode		current member in hash
- * \param	data		seq_file to print to
- * \retval	0		success
- */
-static int nodemap_exports_show_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
-				   struct hlist_node *hnode, void *data)
-{
-	struct seq_file		*m = data;
-	struct obd_export	*exp;
-	char			nidstr[LNET_NIDSTR_SIZE] = "<unknown>";
-
-	exp = hlist_entry(hnode, struct obd_export,
-			  exp_target_data.ted_nodemap_member);
-	if (exp->exp_connection != NULL)
-		libcfs_nid2str_r(exp->exp_connection->c_peer.nid,
-				 nidstr, sizeof(nidstr));
-
-	seq_printf(m, " { nid: %s, uuid: %s },",
-		   nidstr, exp->exp_client_uuid.uuid);
-
-	return 0;
-}
-
-/**
- * Reads and prints the exports attached to the given nodemap via hash
- * foreach callback.
- *
- * \param	m		seq file in proc fs
+ * \param	m		seq file in proc fs, stores nodemap
  * \param	data		unused
  * \retval	0		success
  */
 static int nodemap_exports_show(struct seq_file *m, void *data)
 {
-	struct lu_nodemap	*nodemap = m->private;
+	struct lu_nodemap *nodemap = m->private;
+	struct obd_export *exp;
+	char nidstr[LNET_NIDSTR_SIZE] = "<unknown>";
 
 	seq_printf(m, "[\n");
 
-	cfs_hash_for_each(nodemap->nm_member_hash, nodemap_exports_show_cb, m);
+	mutex_lock(&nodemap->nm_member_list_lock);
+	list_for_each_entry(exp, &nodemap->nm_member_list,
+			    exp_target_data.ted_nodemap_member) {
+		if (exp->exp_connection != NULL)
+			libcfs_nid2str_r(exp->exp_connection->c_peer.nid,
+					 nidstr, sizeof(nidstr));
+
+		seq_printf(m, " { nid: %s, uuid: %s },",
+			   nidstr, exp->exp_client_uuid.uuid);
+	}
+	mutex_unlock(&nodemap->nm_member_list_lock);
 
 	seq_printf(m, "\n");
 	seq_printf(m, "]\n");

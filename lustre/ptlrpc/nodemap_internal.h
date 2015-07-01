@@ -95,16 +95,17 @@ struct lu_idmap *idmap_search(struct lu_nodemap *nodemap,
 			      enum nodemap_id_type id_type,
 			      __u32 id);
 int nodemap_cleanup_nodemaps(void);
-int nm_member_init_hash(struct lu_nodemap *nodemap);
 int nm_member_add(struct lu_nodemap *nodemap, struct obd_export *exp);
 void nm_member_del(struct lu_nodemap *nodemap, struct obd_export *exp);
-void nm_member_delete_hash(struct lu_nodemap *nodemap);
+void nm_member_delete_list(struct lu_nodemap *nodemap);
+struct lu_nodemap *nodemap_classify_nid(lnet_nid_t nid);
 void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap);
 void nm_member_revoke_locks(struct lu_nodemap *nodemap);
 void nm_member_revoke_all(void);
 
 struct rb_node *nm_rb_next_postorder(const struct rb_node *node);
 struct rb_node *nm_rb_first_postorder(const struct rb_root *root);
+void nodemap_putref(struct lu_nodemap *nodemap);
 
 #define nm_rbtree_postorder_for_each_entry_safe(pos, n,			\
 						root, field)		\
