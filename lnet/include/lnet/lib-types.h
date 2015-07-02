@@ -49,7 +49,6 @@
 #include <linux/kthread.h>
 #include <linux/uio.h>
 #include <linux/types.h>
-#include <net/sock.h>
 
 #include <lnet/lnetctl.h>
 

@@ -406,6 +406,26 @@ AC_SUBST(GNILND)
 ]) # LN_CONFIG_GNILND
 
 #
+# LN_CONFIG_SK_SLEEP
+#
+# 2.6.35 kernel has sk_sleep function
+#
+AC_DEFUN([LN_CONFIG_SK_SLEEP], [
+LB_CHECK_COMPILE([if Linux kernel has 'sk_sleep'],
+sk_sleep, [
+	#ifdef HAVE_COMPAT_RDMA
+	#include <linux/compat-2.6.h>
+	#endif
+	#include <net/sock.h>
+],[
+	sk_sleep(NULL);
+],[
+	AC_DEFINE(HAVE_SK_SLEEP, 1,
+		  [kernel has sk_sleep])
+])
+]) # LN_CONFIG_SK_SLEEP
+
+#
 # LN_CONFIG_TCP_SENDPAGE
 #
 # 2.6.36 tcp_sendpage() first parameter is 'struct sock' instead of 'struct socket'.
@@ -429,7 +449,7 @@ EXTRA_KCFLAGS="$tmp_flags"
 #
 # LN_CONFIG_SK_DATA_READY
 #
-# 2.6.36 tcp_sendpage() first parameter is 'struct sock' instead of 'struct socket'.
+# 3.15 for struct sock the *sk_data_ready() field only takes one argument now
 #
 AC_DEFUN([LN_CONFIG_SK_DATA_READY], [
 tmp_flags="$EXTRA_KCFLAGS"
@@ -461,6 +481,8 @@ LN_CONFIG_AFFINITY
 LN_CONFIG_BACKOFF
 LN_CONFIG_O2IB
 LN_CONFIG_GNILND
+# 2.6.35
+LN_CONFIG_SK_SLEEP
 # 2.6.36
 LN_CONFIG_TCP_SENDPAGE
 # 3.15

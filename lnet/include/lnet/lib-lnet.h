@@ -723,13 +723,6 @@ int lnet_acceptor_port(void);
 int lnet_acceptor_start(void);
 void lnet_acceptor_stop(void);
 
-#ifndef HAVE_SK_SLEEP
-static inline wait_queue_head_t *sk_sleep(struct sock *sk)
-{
-	return sk->sk_sleep;
-}
-#endif
-
 int lnet_ipif_query(char *name, int *up, __u32 *ip, __u32 *mask);
 int lnet_ipif_enumerate(char ***names);
 void lnet_ipif_free_enumeration(char **names, int n);

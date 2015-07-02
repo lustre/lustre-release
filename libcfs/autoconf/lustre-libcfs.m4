@@ -121,23 +121,6 @@ ctl_table_ctl_name, [
 ]) # LIBCFS_SYSCTL_CTLNAME
 
 #
-# LC_SK_SLEEP
-#
-# 2.6.35 kernel has sk_sleep function
-#
-AC_DEFUN([LC_SK_SLEEP], [
-LB_CHECK_COMPILE([if Linux kernel has 'sk_sleep'],
-sk_sleep, [
-	#include <net/sock.h>
-],[
-	sk_sleep(NULL);
-],[
-	AC_DEFINE(HAVE_SK_SLEEP, 1,
-		[kernel has sk_sleep])
-])
-]) # LC_SK_SLEEP
-
-#
 # LIBCFS_KSTRTOUL
 #
 # 2.6.38 kstrtoul is added
@@ -331,8 +314,6 @@ LIBCFS_STACKTRACE_OPS_HAVE_WALK_STACK
 LC_SHRINKER_WANT_SHRINK_PTR
 # 2.6.33
 LIBCFS_SYSCTL_CTLNAME
-# 2.6.35
-LC_SK_SLEEP
 # 2.6.38
 LIBCFS_KSTRTOUL
 # 2.6.39

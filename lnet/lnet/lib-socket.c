@@ -35,6 +35,9 @@
  */
 #define DEBUG_SUBSYSTEM S_LNET
 
+#ifdef HAVE_COMPAT_RDMA
+#include <linux/compat-2.6.h>
+#endif
 #include <linux/if.h>
 #include <linux/in.h>
 #include <linux/net.h>
@@ -553,6 +556,13 @@ lnet_sock_listen(struct socket **sockp,
 	sock_release(*sockp);
 	return rc;
 }
+
+#ifndef HAVE_SK_SLEEP
+static inline wait_queue_head_t *sk_sleep(struct sock *sk)
+{
+	return sk->sk_sleep;
+}
+#endif
 
 int
 lnet_sock_accept(struct socket **newsockp, struct socket *sock)

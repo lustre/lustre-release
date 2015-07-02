@@ -38,6 +38,10 @@
  * Author: Eric Barton <eric@bartonsoftware.com>
  */
 
+#ifdef HAVE_COMPAT_RDMA
+#include <linux/compat-2.6.h>
+#endif
+
 #include <linux/version.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -62,10 +66,6 @@
 #include <linux/pci.h>
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,32)
 #include <linux/pci-dma.h>
-#endif
-
-#ifdef HAVE_COMPAT_RDMA
-#include <linux/compat-2.6.h>
 #endif
 
 #include <net/sock.h>
