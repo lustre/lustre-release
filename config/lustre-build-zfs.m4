@@ -147,8 +147,10 @@ AC_DEFUN([LB_SPL], [
 		AC_MSG_CHECKING([spl file name for module symbols])
 		AS_IF([test -r $splobj/$SYMVERFILE], [
 			splsym=$SYMVERFILE
+			EXTRA_SYMBOLS="$EXTRA_SYMBOLS $splobj/$SYMVERFILE"
 		], [test -r $splobj/module/$SYMVERFILE], [
 			splsym=$SYMVERFILE
+			EXTRA_SYMBOLS="$EXTRA_SYMBOLS $splobj/module/$SYMVERFILE"
 		], [
 			splsym="[Not found]"
 			enable_zfs=no
@@ -159,12 +161,11 @@ AC_DEFUN([LB_SPL], [
 	SPL=${splsrc}
 	SPL_OBJ=${splobj}
 	SPL_VERSION=${splver}
-	SPL_SYMBOLS=${splsym}
 
 	AC_SUBST(SPL)
 	AC_SUBST(SPL_OBJ)
 	AC_SUBST(SPL_VERSION)
-	AC_SUBST(SPL_SYMBOLS)
+	AC_SUBST(EXTRA_SYMBOLS)
 ])
 
 AC_DEFUN([LB_ZFS], [
@@ -253,8 +254,10 @@ AC_DEFUN([LB_ZFS], [
 		AC_MSG_CHECKING([zfs file name for module symbols])
 		AS_IF([test -r $zfsobj/$SYMVERFILE], [
 			zfssym=$SYMVERFILE
+			EXTRA_SYMBOLS="$EXTRA_SYMBOLS $zfsobj/$SYMVERFILE"
 		], [test -r $zfsobj/module/$SYMVERFILE], [
 			zfssym=$SYMVERFILE
+			EXTRA_SYMBOLS="$EXTRA_SYMBOLS $zfsobj/module/$SYMVERFILE"
 		], [
 			zfssym="[Not found]"
 			enable_zfs=no
@@ -265,12 +268,11 @@ AC_DEFUN([LB_ZFS], [
 	ZFS=${zfssrc}
 	ZFS_OBJ=${zfsobj}
 	ZFS_VERSION=${zfsver}
-	ZFS_SYMBOLS=${zfssym}
 
 	AC_SUBST(ZFS)
 	AC_SUBST(ZFS_OBJ)
 	AC_SUBST(ZFS_VERSION)
-	AC_SUBST(ZFS_SYMBOLS)
+	AC_SUBST(EXTRA_SYMBOLS)
 ])
 
 AC_DEFUN([LB_ZFS_DEVEL], [

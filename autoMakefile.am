@@ -74,7 +74,7 @@ lustre-sources:
 if LINUX
 all-am: modules
 
-modules: ldiskfs-sources lustre-sources module-symvers
+modules: ldiskfs-sources lustre-sources
 	$(MAKE) CC="$(CC)" $(CROSS_VARS) -C $(LINUX_OBJ)	     \
 	-f $(PWD)/build/Makefile LUSTRE_LINUX_CONFIG=$(LINUX_CONFIG) \
 	LINUXINCLUDE='-I$$(srctree)/arch/$$(SRCARCH)/include -Iarch/$$(SRCARCH)/include/generated -Iinclude $$(if $$(KBUILD_SRC),-Iinclude2 -I$$(srctree)/include) -I$$(srctree)/arch/$$(SRCARCH)/include/uapi -Iarch/$$(SRCARCH)/include/generated/uapi -I$$(srctree)/include/uapi -Iinclude/generated/uapi -include $(CONFIG_INCLUDE)' \
@@ -194,32 +194,6 @@ EXTRA_DIST += config.h.in
 if USES_DPKG
 EXTRA_DIST += debian/*
 endif
-
-module-symvers-zfs:
-if ZFS_ENABLED
-	@if [ -f @SPL_OBJ@/@SPL_SYMBOLS@ ]; then \
-		cat @SPL_OBJ@/@SPL_SYMBOLS@ >>@SYMVERFILE@; \
-	elif [ -f @SPL_OBJ@/module/@SPL_SYMBOLS@ ]; then \
-		cat @SPL_OBJ@/module/@SPL_SYMBOLS@ >>@SYMVERFILE@; \
-	else \
-		echo -e "\n" \
-		"*** Missing spl symbols. Ensure you have built spl:\n" \
-		"*** - @SPL_OBJ@/@SYMVERFILE@\n"; \
-		exit 1; \
-	fi
-	@if [ -f @ZFS_OBJ@/@ZFS_SYMBOLS@ ]; then \
-		cat @ZFS_OBJ@/@ZFS_SYMBOLS@ >>@SYMVERFILE@; \
-	elif [ -f @ZFS_OBJ@/module/@ZFS_SYMBOLS@ ]; then \
-		cat @ZFS_OBJ@/module/@ZFS_SYMBOLS@ >>@SYMVERFILE@; \
-	else \
-		echo -e "\n" \
-		"*** Missing zfs symbols. Ensure you have built zfs:\n" \
-		"*** - @ZFS_OBJ@/@SYMVERFILE@\n"; \
-		exit 1; \
-	fi
-endif # ZFS_ENABLED
-
-module-symvers: module-symvers-zfs
 
 CSTK=/tmp/checkstack
 CSTKO=/tmp/checkstack.orig
