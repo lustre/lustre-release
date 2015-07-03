@@ -1122,9 +1122,6 @@ void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list)
         else
                 ldlm_resource_add_lock(res, &res->lr_granted, lock);
 
-        if (lock->l_granted_mode < res->lr_most_restr)
-                res->lr_most_restr = lock->l_granted_mode;
-
         ldlm_pool_add(&ldlm_res_to_ns(res)->ns_pool, lock);
         EXIT;
 }

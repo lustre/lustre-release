@@ -46,6 +46,7 @@
 #include "ldlm_internal.h"
 
 struct kmem_cache *ldlm_resource_slab, *ldlm_lock_slab;
+struct kmem_cache *ldlm_interval_tree_slab;
 
 int ldlm_srv_namespace_nr = 0;
 int ldlm_cli_namespace_nr = 0;
@@ -1025,7 +1026,7 @@ struct ldlm_namespace *ldlm_namespace_first_locked(ldlm_side_t client)
 }
 
 /** Create and initialize new resource. */
-static struct ldlm_resource *ldlm_resource_new(void)
+static struct ldlm_resource *ldlm_resource_new(ldlm_type_t type)
 {
 	struct ldlm_resource *res;
 	int idx;
@@ -1034,16 +1035,24 @@ static struct ldlm_resource *ldlm_resource_new(void)
 	if (res == NULL)
 		return NULL;
 
+	if (type == LDLM_EXTENT) {
+		OBD_SLAB_ALLOC(res->lr_itree, ldlm_interval_tree_slab,
+			       sizeof(*res->lr_itree) * LCK_MODE_NUM);
+		if (res->lr_itree == NULL) {
+			OBD_SLAB_FREE_PTR(res, ldlm_resource_slab);
+			return NULL;
+		}
+		/* Initialize interval trees for each lock mode. */
+		for (idx = 0; idx < LCK_MODE_NUM; idx++) {
+			res->lr_itree[idx].lit_size = 0;
+			res->lr_itree[idx].lit_mode = 1 << idx;
+			res->lr_itree[idx].lit_root = NULL;
+		}
+	}
+
 	INIT_LIST_HEAD(&res->lr_granted);
 	INIT_LIST_HEAD(&res->lr_converting);
 	INIT_LIST_HEAD(&res->lr_waiting);
-
-	/* Initialize interval trees for each lock mode. */
-	for (idx = 0; idx < LCK_MODE_NUM; idx++) {
-		res->lr_itree[idx].lit_size = 0;
-		res->lr_itree[idx].lit_mode = 1 << idx;
-		res->lr_itree[idx].lit_root = NULL;
-	}
 
 	atomic_set(&res->lr_refcount, 1);
 	spin_lock_init(&res->lr_lock);
@@ -1093,14 +1102,13 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
 
 	LASSERTF(type >= LDLM_MIN_TYPE && type < LDLM_MAX_TYPE,
 		 "type: %d\n", type);
-	res = ldlm_resource_new();
+	res = ldlm_resource_new(type);
 	if (res == NULL)
 		return ERR_PTR(-ENOMEM);
 
 	res->lr_ns_bucket  = cfs_hash_bd_extra_get(ns->ns_rs_hash, &bd);
 	res->lr_name       = *name;
 	res->lr_type       = type;
-	res->lr_most_restr = LCK_NL;
 
 	cfs_hash_bd_lock(ns->ns_rs_hash, &bd, 1);
 	hnode = (version == cfs_hash_bd_version_get(&bd)) ? NULL :
@@ -1111,6 +1119,9 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
 		cfs_hash_bd_unlock(ns->ns_rs_hash, &bd, 1);
 		/* Clean lu_ref for failed resource. */
 		lu_ref_fini(&res->lr_reference);
+		if (res->lr_itree != NULL)
+			OBD_SLAB_FREE(res->lr_itree, ldlm_interval_tree_slab,
+				      sizeof(*res->lr_itree) * LCK_MODE_NUM);
 		OBD_SLAB_FREE(res, ldlm_resource_slab, sizeof *res);
 found:
 		res = hlist_entry(hnode, struct ldlm_resource, lr_hash);
@@ -1192,6 +1203,9 @@ int ldlm_resource_putref(struct ldlm_resource *res)
 		cfs_hash_bd_unlock(ns->ns_rs_hash, &bd, 1);
 		if (ns->ns_lvbo && ns->ns_lvbo->lvbo_free)
 			ns->ns_lvbo->lvbo_free(res);
+		if (res->lr_itree != NULL)
+			OBD_SLAB_FREE(res->lr_itree, ldlm_interval_tree_slab,
+				      sizeof(*res->lr_itree) * LCK_MODE_NUM);
 		OBD_SLAB_FREE(res, ldlm_resource_slab, sizeof *res);
 		return 1;
 	}
@@ -1222,6 +1236,9 @@ int ldlm_resource_putref_locked(struct ldlm_resource *res)
 		 */
 		if (ns->ns_lvbo && ns->ns_lvbo->lvbo_free)
 			ns->ns_lvbo->lvbo_free(res);
+		if (res->lr_itree != NULL)
+			OBD_SLAB_FREE(res->lr_itree, ldlm_interval_tree_slab,
+				      sizeof(*res->lr_itree) * LCK_MODE_NUM);
 		OBD_SLAB_FREE(res, ldlm_resource_slab, sizeof *res);
 
 		cfs_hash_bd_lock(ns->ns_rs_hash, &bd, 1);
