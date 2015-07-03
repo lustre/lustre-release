@@ -432,6 +432,53 @@ struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 	return inode;
 }
 
+int osd_ldiskfs_add_entry(struct osd_thread_info *info,
+			  handle_t *handle, struct dentry *child,
+			  struct inode *inode, struct htree_lock *hlock)
+{
+	int rc, rc2;
+
+	rc = __ldiskfs_add_entry(handle, child, inode, hlock);
+	if (rc == -ENOBUFS || rc == -ENOSPC) {
+		char fidbuf[FID_LEN + 1];
+		struct lustre_mdt_attrs lma;
+		struct lu_fid fid = { };
+		char *errstr;
+		struct dentry *p_dentry = child->d_parent;
+
+		rc2 = osd_get_lma(info, p_dentry->d_inode, p_dentry,
+				 &lma);
+		if (rc2 == 0) {
+			fid = lma.lma_self_fid;
+			snprintf(fidbuf, sizeof(fidbuf), DFID, PFID(&fid));
+		} else if (rc2 == -ENODATA) {
+			if (unlikely(p_dentry->d_inode ==
+				     inode->i_sb->s_root->d_inode))
+				lu_local_obj_fid(&fid, OSD_FS_ROOT_OID);
+			else if (info->oti_dev && !info->oti_dev->od_is_ost &&
+				 fid_seq_is_mdt0(fid_seq(&fid)))
+				lu_igif_build(&fid, p_dentry->d_inode->i_ino,
+					      p_dentry->d_inode->i_generation);
+			snprintf(fidbuf, sizeof(fidbuf), DFID, PFID(&fid));
+		} else {
+			snprintf(fidbuf, FID_LEN, "%s", "unknown");
+		}
+
+		if (rc == -ENOSPC)
+			errstr = "has reached";
+		else
+			errstr = "is approaching";
+		CWARN("%.16s: directory (inode: %lu FID: %s) %s maximum entry limit\n",
+			LDISKFS_SB(inode->i_sb)->s_es->s_volume_name,
+			p_dentry->d_inode->i_ino, fidbuf, errstr);
+		/* ignore such error now */
+		if (rc == -ENOBUFS)
+			rc = 0;
+	}
+	return rc;
+}
+
+
 static struct inode *
 osd_iget_fid(struct osd_thread_info *info, struct osd_device *dev,
 	     struct osd_inode_id *id, struct lu_fid *fid)
@@ -4151,7 +4198,8 @@ static int __osd_ea_add_rec(struct osd_thread_info *info,
 	child = osd_child_dentry_get(info->oti_env, pobj, name, strlen(name));
 	child->d_fsdata = (void *)ldp;
 	ll_vfs_dq_init(pobj->oo_inode);
-	rc = osd_ldiskfs_add_entry(oth->ot_handle, child, cinode, hlock);
+	rc = osd_ldiskfs_add_entry(info, oth->ot_handle, child,
+				   cinode, hlock);
 	if (rc == 0 && OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_TYPE)) {
 		struct ldiskfs_dir_entry_2	*de;
 		struct buffer_head		*bh;
@@ -5380,6 +5428,7 @@ osd_dirent_reinsert(const struct lu_env *env, handle_t *jh,
 	struct ldiskfs_dentry_param *ldp;
 	int			     namelen	= dentry->d_name.len;
 	int			     rc;
+	struct osd_thread_info     *info	= osd_oti_get(env);
 	ENTRY;
 
 	if (!LDISKFS_HAS_INCOMPAT_FEATURE(inode->i_sb,
@@ -5413,7 +5462,7 @@ osd_dirent_reinsert(const struct lu_env *env, handle_t *jh,
 	osd_get_ldiskfs_dirent_param(ldp, fid);
 	dentry->d_fsdata = (void *)ldp;
 	ll_vfs_dq_init(dir);
-	rc = osd_ldiskfs_add_entry(jh, dentry, inode, hlock);
+	rc = osd_ldiskfs_add_entry(info, jh, dentry, inode, hlock);
 	/* It is too bad, we cannot reinsert the name entry back.
 	 * That means we lose it! */
 	if (rc != 0)

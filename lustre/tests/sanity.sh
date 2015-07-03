@@ -8688,7 +8688,18 @@ set_dir_limits () {
 		do_facet $facet "test -e $LDPROC/$canondev/max_dir_size" ||
 						LDPROC=/sys/fs/ldiskfs
 		do_facet $facet "echo $1 >$LDPROC/$canondev/max_dir_size"
+		do_facet $facet "test -e $LDPROC/$canondev/warning_dir_size" ||
+						LDPROC=/sys/fs/ldiskfs
+		do_facet $facet "echo $2 >$LDPROC/$canondev/warning_dir_size"
 	done
+}
+
+check_mds_dmesg() {
+	local facets=$(get_facets MDS)
+	for facet in ${facets//,/ }; do
+		do_facet $facet "dmesg | tail -3 | grep -q $1" && return 0
+	done
+	return 1
 }
 
 test_129() {
@@ -8700,6 +8711,7 @@ test_129() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	ENOSPC=28
 	EFBIG=27
+	has_warning=0
 
 	rm -rf $DIR/$tdir
 	test_mkdir -p $DIR/$tdir
@@ -8707,8 +8719,8 @@ test_129() {
 	# block size of mds1
 	local MDT_DEV=$(mdsdevname ${SINGLEMDS//mds/})
 	local MDSBLOCKSIZE=$($LCTL get_param -n mdc.*MDT0000*.blocksize)
-	local MAX=$((MDSBLOCKSIZE * 3))
-	set_dir_limits $MAX
+	local MAX=$((MDSBLOCKSIZE * 5))
+	set_dir_limits $MAX $MAX
 	local I=$(stat -c%s "$DIR/$tdir")
 	local J=0
 	local STRIPE_COUNT=1
@@ -8717,14 +8729,24 @@ test_129() {
 	while [[ $I -le $MAX ]]; do
 		$MULTIOP $DIR/$tdir/$J Oc
 		rc=$?
+		if [ $has_warning -eq 0 ]; then
+			check_mds_dmesg '"is approaching"' &&
+				has_warning=1
+		fi
 		#check two errors ENOSPC for new version of ext4 max_dir_size patch
 		#mainline kernel commit df981d03eeff7971ac7e6ff37000bfa702327ef1
 		#and EFBIG for previous versions
 		if [ $rc -eq $EFBIG -o $rc -eq $ENOSPC ]; then
-			set_dir_limits 0
+			set_dir_limits 0 0
 			echo "return code $rc received as expected"
 			multiop $DIR/$tdir/$J Oc ||
 				error_exit "multiop failed w/o dir size limit"
+
+			check_mds_dmesg '"has reached"' ||
+				error_exit "has reached message should be output"
+
+			[ $has_warning ] ||
+				error_exit "warning message should be output"
 
 			I=$(stat -c%s "$DIR/$tdir")
 
@@ -8737,7 +8759,7 @@ test_129() {
 			fi
 			error_exit "current dir size $I, previous limit $MAX"
 		elif [ $rc -ne 0 ]; then
-			set_dir_limits 0
+			set_dir_limits 0 0
 			error_exit "return code $rc received instead of expected " \
 				   "$EFBIG or $ENOSPC, files in dir $I"
 		fi
@@ -8745,7 +8767,7 @@ test_129() {
 		I=$(stat -c%s "$DIR/$tdir")
 	done
 
-	set_dir_limits 0
+	set_dir_limits 0 0
 	error "exceeded dir size limit $MAX($MDSCOUNT) : $I bytes"
 }
 run_test 129 "test directory size limit ========================"

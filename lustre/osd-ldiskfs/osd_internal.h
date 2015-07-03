@@ -169,9 +169,9 @@ struct osd_mdobj {
 struct osd_mdobj_map {
 	struct dentry	*omm_remote_parent;
 };
-
-#define osd_ldiskfs_add_entry(handle, child, cinode, hlock) \
-	__ldiskfs_add_entry(handle, child, cinode, hlock)
+int osd_ldiskfs_add_entry(struct osd_thread_info *info,
+			  handle_t *handle, struct dentry *child,
+			  struct inode *inode, struct htree_lock *hlock);
 
 #define OSD_OTABLE_IT_CACHE_SIZE	64
 #define OSD_OTABLE_IT_CACHE_MASK	(~(OSD_OTABLE_IT_CACHE_SIZE - 1))
