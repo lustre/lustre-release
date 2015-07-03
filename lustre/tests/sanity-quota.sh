@@ -678,7 +678,8 @@ run_test 3 "Block soft limit (start timer, timer goes off, stop timer)"
 test_file_soft() {
 	local TESTFILE=$1
 	local LIMIT=$2
-	local TIMER=$(($3 * 3 / 2))
+	local grace=$3
+	local TIMER=$(($grace * 3 / 2))
 
 	setup_quota_test
 	trap cleanup_quota_test EXIT
@@ -686,13 +687,19 @@ test_file_soft() {
 	echo "Create files to exceed soft limit"
 	$RUNAS createmany -m ${TESTFILE}_ $((LIMIT + 1)) ||
 		quota_error a $TSTUSR "create failure, but expect success"
-	sync; sleep 1; sync
+	local trigger_time=$(date +%s)
+
+	sync_all_data || true
+
+	local cur_time=$(date +%s)
+	[ $(($cur_time - $trigger_time)) -ge $grace ] &&
+		error "Passed grace time $grace, $trigger_time, $cur_time"
 
 	echo "Create file before timer goes off"
 	$RUNAS touch ${TESTFILE}_before ||
 		quota_error a $TSTUSR "failed create before timer expired," \
-			"but expect success"
-	sync; sleep 1; sync
+			"but expect success. $trigger_time, $cur_time"
+	sync_all_data || true
 
 	echo "Sleep $TIMER seconds ..."
 	sleep $TIMER
@@ -707,11 +714,11 @@ test_file_soft() {
 	# hasn't been decreased from the pending write, if we acquire quota
 	# in this window, we'll acquire more than we needed.
 	$RUNAS touch ${TESTFILE}_after_1 ${TESTFILE}_after_2 || true
-	sync; sleep 1; sync
+	sync_all_data || true
 	$RUNAS touch ${TESTFILE}_after_3 &&
 		quota_error a $TSTUSR "create after timer expired," \
 			"but expect EDQUOT"
-	sync; sleep 1; sync
+	sync_all_data || true
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
@@ -726,7 +733,7 @@ test_file_soft() {
 	$RUNAS touch ${TESTFILE}_xxx ||
 		quota_error a $TSTUSR "touch after timer stop failure," \
 			"but expect success"
-	sync; sleep 1; sync
+	sync_all_data || true
 
 	# cleanup
 	cleanup_quota_test
