@@ -4270,15 +4270,13 @@ test_69() {
 	# use OST0000 since it probably has the most creations
 	local OSTNAME=$(ostname_from_index 0)
 	local mdtosc_proc1=$(get_mdtosc_proc_path mds1 $OSTNAME)
-	local last_id=$(do_facet mds1 $LCTL get_param -n \
-			osc.$mdtosc_proc1.prealloc_last_id)
 
 	# Want to have OST LAST_ID over 1.5 * OST_MAX_PRECREATE to
 	# verify that the LAST_ID recovery is working properly.  If
 	# not, then the OST will refuse to allow the MDS connect
 	# because the LAST_ID value is too different from the MDS
 	#define OST_MAX_PRECREATE=20000
-	local num_create=$((20000 * 5))
+	local num_create=$((20000 * 3))
 
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$SETSTRIPE -i 0 $DIR/$tdir || error "$SETSTRIPE -i 0 $DIR/$tdir failed"
@@ -4288,6 +4286,7 @@ test_69() {
 	# filesystem is not inconsistent later on
 	$LFS find $MOUNT --ost 0 | xargs rm
 
+	umount_client $MOUNT || error "umount client failed"
 	stop_ost || error "OST0 stop failure"
 	add ost1 $(mkfs_opts ost1 $(ostdevname 1)) --reformat --replace \
 		$(ostdevname 1) $(ostvdevname 1) ||
@@ -4295,6 +4294,7 @@ test_69() {
 	start_ost || error "OST0 restart failure"
 	wait_osc_import_state mds ost FULL
 
+	mount_client $MOUNT || error "mount client failed"
 	touch $DIR/$tdir/$tfile-last || error "create file after reformat"
 	local idx=$($GETSTRIPE -i $DIR/$tdir/$tfile-last)
 	[ $idx -ne 0 ] && error "$DIR/$tdir/$tfile-last on $idx not 0" || true
