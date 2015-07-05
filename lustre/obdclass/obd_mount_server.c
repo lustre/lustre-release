@@ -884,7 +884,7 @@ static int lustre_disconnect_lwp(struct super_block *sb)
 		/* end log first */
 		cfg->cfg_instance = sb;
 		rc = lustre_end_log(sb, logname, cfg);
-		if (rc != 0)
+		if (rc != 0 && rc != -ENOENT)
 			GOTO(out, rc);
 
 		lsi->lsi_lwp_started = 0;
@@ -993,8 +993,8 @@ static int lustre_start_lwp(struct super_block *sb)
 	cfg->cfg_callback = client_lwp_config_process;
 	cfg->cfg_instance = sb;
 	rc = lustre_process_log(sb, logname, cfg);
-	if (rc == 0)
-		lsi->lsi_lwp_started = 1;
+	/* need to remove config llog from mgc */
+	lsi->lsi_lwp_started = 1;
 
 	GOTO(out, rc);
 
