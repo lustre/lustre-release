@@ -1056,7 +1056,7 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 
 	/* The net statistics after (re-)connect is not valid anymore,
 	 * because may reflect other routing, etc. */
-	at_init(&imp->imp_at.iat_net_latency, 0, 0);
+	at_reinit(&imp->imp_at.iat_net_latency, 0, 0);
 	ptlrpc_at_adj_net_latency(request,
 			lustre_msg_get_service_time(request->rq_repmsg));
 

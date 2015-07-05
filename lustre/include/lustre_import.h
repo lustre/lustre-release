@@ -333,19 +333,37 @@ static inline unsigned int at_timeout2est(unsigned int val)
         return (max((val << 2) / 5, 5U) - 4);
 }
 
-static inline void at_reset(struct adaptive_timeout *at, int val) {
-	spin_lock(&at->at_lock);
+static inline void at_reset_nolock(struct adaptive_timeout *at, int val)
+{
         at->at_current = val;
         at->at_worst_ever = val;
         at->at_worst_time = cfs_time_current_sec();
+}
+
+static inline void at_reset(struct adaptive_timeout *at, int val)
+{
+	spin_lock(&at->at_lock);
+	at_reset_nolock(at, val);
 	spin_unlock(&at->at_lock);
 }
+
 static inline void at_init(struct adaptive_timeout *at, int val, int flags) {
 	memset(at, 0, sizeof(*at));
 	spin_lock_init(&at->at_lock);
 	at->at_flags = flags;
 	at_reset(at, val);
 }
+
+static inline void at_reinit(struct adaptive_timeout *at, int val, int flags)
+{
+	spin_lock(&at->at_lock);
+	at->at_binstart = 0;
+	memset(at->at_hist, 0, sizeof(at->at_hist));
+	at->at_flags = flags;
+	at_reset_nolock(at, val);
+	spin_unlock(&at->at_lock);
+}
+
 extern unsigned int at_min;
 static inline int at_get(struct adaptive_timeout *at) {
         return (at->at_current > at_min) ? at->at_current : at_min;
