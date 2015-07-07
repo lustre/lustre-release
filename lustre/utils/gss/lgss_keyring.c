@@ -44,6 +44,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <string.h>
 #include <errno.h>
 #include <pwd.h>
@@ -160,7 +161,7 @@ int do_nego_rpc(struct lgss_nego_data *lnd,
 
         ret = write(fd, &param, sizeof(param));
         if (ret != sizeof(param)) {
-                logmsg(LL_ERR, "lustre ioctl err: %d\n", strerror(errno));
+		logmsg(LL_ERR, "lustre ioctl err: %s\n", strerror(errno));
                 close(fd);
                 return -EACCES;
         }
@@ -168,8 +169,8 @@ int do_nego_rpc(struct lgss_nego_data *lnd,
 
         logmsg(LL_TRACE, "do_nego_rpc: to parse reply\n");
         if (param.status) {
-                logmsg(LL_ERR, "status: %d (%s)\n",
-                       param.status, strerror((int)param.status));
+		logmsg(LL_ERR, "status: %ld (%s)\n",
+		       param.status, strerror((int)param.status));
 
                 /* kernel return -ETIMEDOUT means the rpc timedout, we should
                  * notify the caller to reinitiate the gss negotiation, by
@@ -197,7 +198,7 @@ int do_nego_rpc(struct lgss_nego_data *lnd,
         memcpy(gr->gr_token.value, p, gr->gr_token.length);
         p += (((gr->gr_token.length + 3) & ~3) / 4);
 
-	logmsg(LL_DEBUG, "do_nego_rpc: receive handle len %d, token len %d, " \
+	logmsg(LL_DEBUG, "do_nego_rpc: receive handle len %zu, token len %zu, "
 	       "res %d\n", gr->gr_ctx.length, gr->gr_token.length, res);
 	return 0;
 }
@@ -475,10 +476,10 @@ static int lgssc_kr_negotiate(key_serial_t keyid, struct lgss_cred *cred,
         OM_uint32               min_stat;
         int                     rc = -1;
 
-        logmsg(LL_TRACE, "child start on behalf of key %08x: "
-               "cred %p, uid %u, svc %u, nid %llx, uids: %u:%u/%u:%u\n",
-               keyid, cred, cred->lc_uid, cred->lc_tgt_svc, cred->lc_tgt_nid,
-               kup->kup_uid, kup->kup_gid, kup->kup_fsuid, kup->kup_fsgid);
+	logmsg(LL_TRACE, "child start on behalf of key %08x: "
+	       "cred %p, uid %u, svc %u, nid %"PRIx64", uids: %u:%u/%u:%u\n",
+	       keyid, cred, cred->lc_uid, cred->lc_tgt_svc, cred->lc_tgt_nid,
+	       kup->kup_uid, kup->kup_gid, kup->kup_fsuid, kup->kup_fsgid);
 
         if (lgss_get_service_str(&g_service, kup->kup_svc, kup->kup_nid)) {
                 logmsg(LL_ERR, "key %08x: failed to construct service "
@@ -594,8 +595,8 @@ static int parse_callout_info(const char *coinfo,
 	uparam->kup_selfnid = strtoll(data[8], NULL, 0);
 
 	logmsg(LL_DEBUG, "parse call out info: secid %d, mech %s, ugid %u:%u, "
-	       "is_root %d, is_mdt %d, is_ost %d, svc %d, nid 0x%llx, tgt %s, "
-	       "self nid 0x%llx\n",
+	       "is_root %d, is_mdt %d, is_ost %d, svc %d, nid 0x%"PRIx64", "
+	       "tgt %s, self nid 0x%"PRIx64"\n",
 	       uparam->kup_secid, uparam->kup_mech,
 	       uparam->kup_uid, uparam->kup_gid,
 	       uparam->kup_is_root, uparam->kup_is_mdt, uparam->kup_is_ost,

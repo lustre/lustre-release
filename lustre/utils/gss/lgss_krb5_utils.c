@@ -255,7 +255,7 @@ int svc_princ_verify_host(krb5_context ctx,
 	if (self_nid != 0) {
 		if (lnet_nid2hostname(self_nid, namebuf, max_namelen)) {
 			logmsg(loglevel,
-			       "can't resolve hostname from nid %llx\n",
+			       "can't resolve hostname from nid %"PRIx64"\n",
 			       self_nid);
 			return -1;
 		}
@@ -444,15 +444,17 @@ int lkrb5_check_root_tgt_cc_base(krb5_context ctx,
                 if (code != 0)
                         break;
 
-                logmsg(LL_DEBUG, "cred: server realm %.*s, type %d, name %.*s; "
-                       "time (%d-%d, renew till %d), valid %d\n",
-                       krb5_princ_realm(ctx, cred.server)->length,
-                       krb5_princ_realm(ctx, cred.server)->data,
-                       krb5_princ_type(ctx, cred.server),
-                       krb5_princ_name(ctx, cred.server)->length,
-                       krb5_princ_name(ctx, cred.server)->data,
-                       cred.times.starttime, cred.times.endtime,
-                       cred.times.renew_till, cred.times.endtime - now);
+		logmsg(LL_DEBUG, "cred: server realm %.*s, type %d, name %.*s; "
+		       "time (%lld-%lld, renew till %lld), valid %lld\n",
+		       krb5_princ_realm(ctx, cred.server)->length,
+		       krb5_princ_realm(ctx, cred.server)->data,
+		       krb5_princ_type(ctx, cred.server),
+		       krb5_princ_name(ctx, cred.server)->length,
+		       krb5_princ_name(ctx, cred.server)->data,
+		       (long long)cred.times.starttime,
+		       (long long)cred.times.endtime,
+		       (long long)cred.times.renew_till,
+		       (long long)(cred.times.endtime - now));
 
                 /* FIXME
                  * we found the princ type is always 0 (KRB5_NT_UNKNOWN), why???

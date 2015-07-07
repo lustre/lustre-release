@@ -94,9 +94,12 @@ extern loglevel_t g_log_level;
 
 void lgss_set_loglevel(loglevel_t level);
 
-void __logmsg(loglevel_t level, const char *func, const char *format, ...);
+void __logmsg(loglevel_t level, const char *func, const char *format, ...)
+	__attribute__((format(printf, 3, 4)));
+
 void __logmsg_gss(loglevel_t level, const char *func, const gss_OID mech,
-                  uint32_t major, uint32_t minor, const char *format, ...);
+		  uint32_t major, uint32_t minor, const char *format, ...)
+	__attribute__((format(printf, 6, 7)));
 
 #define logmsg(loglevel, format, args...)                               \
 do {                                                                    \
@@ -125,8 +128,8 @@ do {                                                                    \
 #define printerr(priority, format, args...)                             \
         logmsg(priority, format, ##args)
 
-#define pgsserr(msg, maj_stat, min_stat, mech)                          \
-        logmsg_gss(LL_ERR, mech, maj_stat, min_stat, "")
+#define pgsserr(msg, maj_stat, min_stat, mech)				\
+	logmsg_gss(LL_ERR, mech, maj_stat, min_stat, msg)
 
 /****************************************
  * GSS MECH, OIDs                       *

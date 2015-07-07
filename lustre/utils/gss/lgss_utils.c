@@ -430,7 +430,8 @@ int lgss_get_service_str(char **string, uint32_t lsvc, uint64_t tgt_nid)
         }
 
         if (lnet_nid2hostname(tgt_nid, namebuf, max_namelen)) {
-                logmsg(LL_ERR,"can't resolve hostname from nid %llx\n",tgt_nid);
+		logmsg(LL_ERR, "cannot resolve hostname from nid %"PRIx64"\n",
+		       tgt_nid);
                 return -1;
         }
 
