@@ -1357,6 +1357,9 @@ test_27d() {
 run_test 27d "create file with default settings ================"
 
 test_27e() {
+	# LU-5839 adds check for existed layout before setting it
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.56) ]] &&
+		skip "Need MDS version at least 2.7.56" && return
 	test_mkdir -p $DIR/d27
 	$SETSTRIPE -c 2 $DIR/d27/f12 || error "setstripe failed"
 	$SETSTRIPE -c 2 $DIR/d27/f12 && error "setstripe succeeded twice"
@@ -10772,6 +10775,8 @@ run_test 162b "striped directory path lookup sanity"
 
 # LU-4239: Verify fid2path works with paths 100 or more directories deep
 test_162c() {
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.51) ]] &&
+		skip "Need MDS version at least 2.7.51" && return
 	test_mkdir $DIR/$tdir.local
 	test_mkdir $DIR/$tdir.remote
 	local lpath=$tdir.local
