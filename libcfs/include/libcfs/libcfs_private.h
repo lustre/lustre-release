@@ -258,8 +258,6 @@ int libcfs_debug_cleanup(void);
 int libcfs_debug_clear_buffer(void);
 int libcfs_debug_mark_buffer(const char *text);
 
-void libcfs_debug_set_level(unsigned int debug_level);
-
 #else  /* !__KERNEL__ */
 # ifdef LIBCFS_DEBUG
 #  undef NDEBUG

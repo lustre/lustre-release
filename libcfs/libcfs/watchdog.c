@@ -203,6 +203,15 @@ static void lcw_dump_stack(struct lc_watchdog *lcw)
         }
 }
 
+/*
+ * Provided watchdog handlers
+ */
+
+static void lc_watchdog_dumplog(pid_t pid, void *data)
+{
+	libcfs_debug_dumplog_internal((void *)((long_ptr_t)pid));
+}
+
 static int lcw_dispatch_main(void *data)
 {
         int                 rc = 0;
@@ -477,16 +486,6 @@ void lc_watchdog_delete(struct lc_watchdog *lcw)
 	EXIT;
 }
 EXPORT_SYMBOL(lc_watchdog_delete);
-
-/*
- * Provided watchdog handlers
- */
-
-void lc_watchdog_dumplog(pid_t pid, void *data)
-{
-        libcfs_debug_dumplog_internal((void *)((long_ptr_t)pid));
-}
-EXPORT_SYMBOL(lc_watchdog_dumplog);
 
 #else   /* !defined(WITH_WATCHDOG) */
 

@@ -312,10 +312,8 @@ void libcfs_unregister_panic_notifier(void)
 }
 
 EXPORT_SYMBOL(libcfs_debug_dumpstack);
-EXPORT_SYMBOL(libcfs_current);
 
 #endif /* __KERNEL__ */
 
-EXPORT_SYMBOL(libcfs_run_upcall);
 EXPORT_SYMBOL(libcfs_run_lbug_upcall);
 EXPORT_SYMBOL(lbug_with_loc);

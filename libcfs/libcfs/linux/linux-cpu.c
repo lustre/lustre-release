@@ -85,7 +85,6 @@ cfs_cpu_core_siblings(int cpu, cpumask_t *mask)
 	/* return cpumask of cores in the same socket */
 	cpumask_copy(mask, topology_core_cpumask(cpu));
 }
-EXPORT_SYMBOL(cfs_cpu_core_siblings);
 
 /* return number of cores in the same socket of \a cpu */
 int
@@ -102,7 +101,6 @@ cfs_cpu_core_nsiblings(int cpu)
 
 	return num;
 }
-EXPORT_SYMBOL(cfs_cpu_core_nsiblings);
 
 /* return cpumask of HTs in the same core */
 void
@@ -110,7 +108,6 @@ cfs_cpu_ht_siblings(int cpu, cpumask_t *mask)
 {
 	cpumask_copy(mask, topology_thread_cpumask(cpu));
 }
-EXPORT_SYMBOL(cfs_cpu_ht_siblings);
 
 /* return number of HTs in the same core of \a cpu */
 int
@@ -134,7 +131,6 @@ cfs_node_to_cpumask(int node, cpumask_t *mask)
 	else
 		cpumask_clear(mask);
 }
-EXPORT_SYMBOL(cfs_node_to_cpumask);
 
 void
 cfs_cpt_table_free(struct cfs_cpt_table *cptab)

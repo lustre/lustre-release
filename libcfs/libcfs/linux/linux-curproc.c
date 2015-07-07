@@ -283,7 +283,6 @@ EXPORT_SYMBOL(cfs_cap_raise);
 EXPORT_SYMBOL(cfs_cap_lower);
 EXPORT_SYMBOL(cfs_cap_raised);
 EXPORT_SYMBOL(cfs_curproc_cap_pack);
-EXPORT_SYMBOL(cfs_curproc_cap_unpack);
 EXPORT_SYMBOL(cfs_capable);
 
 /*

@@ -146,9 +146,6 @@ void lc_watchdog_disable(struct lc_watchdog *lcw);
 /* Clean up the watchdog */
 void lc_watchdog_delete(struct lc_watchdog *lcw);
 
-/* Dump a debug log */
-void lc_watchdog_dumplog(pid_t pid, void *data);
-
 #endif /* __KERNEL__ */
 
 /* need both kernel and user-land acceptor */

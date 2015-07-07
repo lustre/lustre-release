@@ -284,7 +284,7 @@ EXPORT_SYMBOL(cfs_str2num_check);
  * \retval 0 will be returned if it can be parsed, otherwise -EINVAL or
  * -ENOMEM will be returned.
  */
-int
+static int
 cfs_range_expr_parse(struct cfs_lstr *src, unsigned min, unsigned max,
 		     int bracketed, struct cfs_range_expr **expr)
 {
@@ -347,7 +347,6 @@ cfs_range_expr_parse(struct cfs_lstr *src, unsigned min, unsigned max,
 	LIBCFS_FREE(re, sizeof(*re));
 	return -EINVAL;
 }
-EXPORT_SYMBOL(cfs_range_expr_parse);
 
 /**
  * Print the range expression \a re into specified \a buffer.

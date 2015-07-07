@@ -135,10 +135,8 @@ int cfs_crypto_adler32_register(void)
 {
 	return crypto_register_shash(&alg);
 }
-EXPORT_SYMBOL(cfs_crypto_adler32_register);
 
 void cfs_crypto_adler32_unregister(void)
 {
 	crypto_unregister_shash(&alg);
 }
-EXPORT_SYMBOL(cfs_crypto_adler32_unregister);

@@ -61,52 +61,40 @@ EXPORT_SYMBOL(libcfs_debug);
 unsigned int libcfs_debug_mb;
 CFS_MODULE_PARM(libcfs_debug_mb, "i", uint, 0644,
                 "Total debug buffer size.");
-EXPORT_SYMBOL(libcfs_debug_mb);
 
 unsigned int libcfs_printk = D_CANTMASK;
 CFS_MODULE_PARM(libcfs_printk, "i", uint, 0644,
                 "Lustre kernel debug console mask");
-EXPORT_SYMBOL(libcfs_printk);
 
 unsigned int libcfs_console_ratelimit = 1;
 CFS_MODULE_PARM(libcfs_console_ratelimit, "i", uint, 0644,
                 "Lustre kernel debug console ratelimit (0 to disable)");
-EXPORT_SYMBOL(libcfs_console_ratelimit);
 
 unsigned int libcfs_console_max_delay;
 CFS_MODULE_PARM(libcfs_console_max_delay, "l", uint, 0644,
                 "Lustre kernel debug console max delay (jiffies)");
-EXPORT_SYMBOL(libcfs_console_max_delay);
 
 unsigned int libcfs_console_min_delay;
 CFS_MODULE_PARM(libcfs_console_min_delay, "l", uint, 0644,
                 "Lustre kernel debug console min delay (jiffies)");
-EXPORT_SYMBOL(libcfs_console_min_delay);
 
 unsigned int libcfs_console_backoff = CDEBUG_DEFAULT_BACKOFF;
 CFS_MODULE_PARM(libcfs_console_backoff, "i", uint, 0644,
                 "Lustre kernel debug console backoff factor");
-EXPORT_SYMBOL(libcfs_console_backoff);
 
 unsigned int libcfs_debug_binary = 1;
-EXPORT_SYMBOL(libcfs_debug_binary);
 
 unsigned int libcfs_stack = 3 * THREAD_SIZE / 4;
 EXPORT_SYMBOL(libcfs_stack);
-
-unsigned int portal_enter_debugger;
-EXPORT_SYMBOL(portal_enter_debugger);
 
 unsigned int libcfs_catastrophe;
 EXPORT_SYMBOL(libcfs_catastrophe);
 
 unsigned int libcfs_watchdog_ratelimit = 300;
-EXPORT_SYMBOL(libcfs_watchdog_ratelimit);
 
 unsigned int libcfs_panic_on_lbug = 1;
 CFS_MODULE_PARM(libcfs_panic_on_lbug, "i", uint, 0644,
                 "Lustre kernel panic on LBUG");
-EXPORT_SYMBOL(libcfs_panic_on_lbug);
 
 atomic_t libcfs_kmemory = ATOMIC_INIT(0);
 EXPORT_SYMBOL(libcfs_kmemory);
@@ -358,8 +346,6 @@ void libcfs_debug_set_level(unsigned int debug_level)
 	       debug_level);
 	libcfs_debug = debug_level;
 }
-
-EXPORT_SYMBOL(libcfs_debug_set_level);
 
 long libcfs_log_return(struct libcfs_debug_msg_data *msgdata, long rc)
 {
