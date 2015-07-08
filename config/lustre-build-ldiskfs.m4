@@ -23,7 +23,7 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 		case $PLEV in
 		2) LDISKFS_SERIES="3.0-sles11.series"
 			;;
-		3) LDISKFS_SERIES="3.0-sles11sp3.series"
+		3|4) LDISKFS_SERIES="3.0-sles11sp3.series"
 			;;
 		esac
 	])],[LDISKFS_SERIES="3.12-sles12.series"],[LDISKFS_SERIES="3.12-sles12.series"])

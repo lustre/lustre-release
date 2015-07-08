@@ -190,6 +190,7 @@ autodetect_target() {
          rhel6*)  target="2.6-rhel6";;
          rhel7*)  target="3.10-rhel7";;
         sles10*)  target="2.6-sles10";;
+        sles11.4) target="$(uname -r | cut -d . -f 1,2)-sles11sp4";;
         sles11.3) target="$(uname -r | cut -d . -f 1,2)-sles11sp3";;
         sles11*)  target="$(uname -r | cut -d . -f 1,2)-sles11";;
 	sles12*)  target="$(uname -r | cut -d . -f 1,2)-sles12";;
