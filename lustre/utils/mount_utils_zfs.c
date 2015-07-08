@@ -615,25 +615,14 @@ int zfs_init(void)
 {
 	int ret = 0;
 
-	/* If the ZFS libs are not installed, don't print an error to avoid
-	 * spamming ldiskfs users. An error message will still be printed if
-	 * someone tries to do some real work involving a ZFS backend */
-
-	if (libzfs_load_module("zfs") != 0) {
-		/* The ZFS modules are not installed */
-		ret = EINVAL;
-		goto out;
-	}
-
 	g_zfs = libzfs_init();
 	if (g_zfs == NULL) {
 		fprintf(stderr, "Failed to initialize ZFS library\n");
 		ret = EINVAL;
+	} else {
+		osd_zfs_setup = 1;
 	}
-out:
-	osd_zfs_setup = 1;
-	if (ret)
-		zfs_fini();
+
 	return ret;
 }
 
