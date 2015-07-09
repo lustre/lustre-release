@@ -693,10 +693,8 @@ static int nrs_orr_start(struct ptlrpc_nrs_policy *policy, char *arg)
 	RETURN(rc);
 
 failed:
-	if (orrd->od_cache) {
+	if (orrd->od_cache)
 		kmem_cache_destroy(orrd->od_cache);
-		LASSERTF(rc == 0, "Could not destroy od_cache slab\n");
-	}
 	if (orrd->od_binheap != NULL)
 		cfs_binheap_destroy(orrd->od_binheap);
 
