@@ -1893,7 +1893,7 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 		       idx, i, PFID(&fid));
 		idx_array[i] = idx;
 		/* Set the start index for next stripe allocation */
-		if (i < stripe_count)
+		if (i < stripe_count - 1)
 			idx_array[i + 1] = (idx + 1) %
 					   (lod->lod_remote_mdt_count + 1);
 		/* tgt_dt and fid must be ready after search avaible OSP
