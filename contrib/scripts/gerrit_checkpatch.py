@@ -76,6 +76,8 @@ CHECKPATCH_IGNORED_FILES = _getenv_list('CHECKPATCH_IGNORED_FILES', [
         'lustre/utils/wiretest.c',
         '*.patch'])
 CHECKPATCH_IGNORED_KINDS = _getenv_list('CHECKPATCH_IGNORED_KINDS', [
+        'LASSERT',
+        'LCONSOLE',
         'LEADING_SPACE'])
 REVIEW_HISTORY_PATH = os.getenv('REVIEW_HISTORY_PATH', 'REVIEW_HISTORY')
 STYLE_LINK = os.getenv('STYLE_LINK',
@@ -215,6 +217,7 @@ class Reviewer(object):
         self.post_enabled = True
         self.post_interval = 10
         self.update_interval = 300
+        self.request_timeout = 60
 
     def _debug(self, msg, *args):
         """_"""
@@ -234,8 +237,9 @@ class Reviewer(object):
         """
         url = self._url(path)
         try:
-            res = requests.get(url, auth=self.auth)
-        except requests.exceptions.RequestException as exc:
+            res = requests.get(url, auth=self.auth,
+                               timeout=self.request_timeout)
+        except Exception as exc:
             self._error("cannot GET '%s': exception = %s", url, str(exc))
             return None
 
@@ -259,8 +263,8 @@ class Reviewer(object):
         try:
             res = requests.post(url, data=data,
                                 headers={'Content-Type': 'application/json'},
-                                auth=self.auth)
-        except requests.exceptions.RequestException as exc:
+                                auth=self.auth, timeout=self.request_timeout)
+        except Exception as exc:
             self._error("cannot POST '%s': exception = %s", url, str(exc))
             return False
 
@@ -314,6 +318,20 @@ class Reviewer(object):
         """
         return change_id + ' ' + revision in self.history
 
+    def get_change_by_id(self, change_id):
+        """
+        GET one change by id.
+        """
+        path = ('/changes/' + urllib.quote(self.project, safe='') + '~' +
+                urllib.quote(self.branch, safe='') + '~' + change_id +
+                '?o=CURRENT_REVISION')
+        res = self._get(path)
+        if not res:
+            return None
+
+        # Gerrit uses " )]}'" to guard against XSSI.
+        return json.loads(res.content[5:])
+
     def get_changes(self, query):
         """
         GET a list of ChangeInfo()s for all changes matching query.
@@ -332,7 +350,7 @@ class Reviewer(object):
                 '&o=CURRENT_REVISION')
         res = self._get(path)
         if not res:
-            return None
+            return []
 
         # Gerrit uses " )]}'" to guard against XSSI.
         return json.loads(res.content[5:])
@@ -376,12 +394,12 @@ class Reviewer(object):
 
         return self.decode_patch(res.content)
 
-    def set_review(self, change, revision, review_input):
+    def post_review(self, change, revision, review_input):
         """
         POST review_input for the given revision of change.
         """
         path = '/changes/' + change['id'] + '/revisions/' + revision + '/review'
-        self._debug("set_review: path = '%s'", path)
+        self._debug("post_review: path = '%s'", path)
         return self._post(path, review_input)
 
     def check_patch(self, patch):
@@ -404,12 +422,32 @@ class Reviewer(object):
 
         return review_input_and_score(path_line_comments, warning_count)
 
-    def review_change(self, change, force=False):
+    def change_needs_review(self, change):
+        """
+        * Bail if the change isn't open (status is not 'NEW').
+        * Bail if we've already reviewed the current revision.
+        """
+        status = change.get('status')
+        if status != 'NEW':
+            self._debug("change_needs_review: status = %s", status)
+            return False
+
+        current_revision = change.get('current_revision')
+        self._debug("change_needs_review: current_revision = '%s'",
+                    current_revision)
+        if not current_revision:
+            return False
+
+        # Have we already checked this revision?
+        if self.in_history(change['id'], current_revision):
+            self._debug("change_needs_review: already reviewed")
+            return False
+
+        return True
+
+    def review_change(self, change):
         """
         Review the current revision of change.
-        * Bail if the change isn't open (status is not 'NEW').
-        * GET the current revision from gerrit.
-        * Bail if we've already reviewed it (unless force is True).
         * Pipe the patch through checkpatch(es).
         * Save results to review history.
         * POST review to gerrit.
@@ -417,32 +455,21 @@ class Reviewer(object):
         self._debug("review_change: change = %s, subject = '%s'",
                     change['id'], change.get('subject', ''))
 
-        status = change.get('status')
-        if status != 'NEW':
-            self._debug("review_change: status = %s", status)
-            return False
-
         current_revision = change.get('current_revision')
-        self._debug("review_change: current_revision = '%s'", current_revision)
+        self._debug("change_needs_review: current_revision = '%s'",
+                    current_revision)
         if not current_revision:
-            return False
-
-        # Have we already checked this revision?
-        if self.in_history(change['id'], current_revision) and not force:
-            self._debug("review_change: already reviewed")
-            return False
+            return
 
         patch = self.get_patch(change, current_revision)
         if not patch:
             self._debug("review_change: no patch")
-            return False
+            return
 
         review_input, score = self.check_patch(patch)
         self._debug("review_change: score = %d", score)
         self.write_history(change['id'], current_revision, score)
-        self.set_review(change, current_revision, review_input)
-        # Don't POST more than every post_interval seconds.
-        time.sleep(self.post_interval)
+        self.post_review(change, current_revision, review_input)
 
     def update(self):
         """
@@ -457,7 +484,10 @@ class Reviewer(object):
         self._debug("update: got %d open_changes", len(open_changes))
 
         for change in open_changes:
-            self.review_change(change)
+            if self.change_needs_review(change):
+                self.review_change(change)
+                # Don't POST more than every post_interval seconds.
+                time.sleep(self.post_interval)
 
         self.timestamp = new_timestamp
         self.write_history('-', '-', 0)
@@ -478,7 +508,7 @@ class Reviewer(object):
 
 def main():
     """_"""
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(format='%(asctime)s %(message)s', level=logging.DEBUG)
 
     with open(GERRIT_AUTH_PATH) as auth_file:
         auth = json.load(auth_file)
