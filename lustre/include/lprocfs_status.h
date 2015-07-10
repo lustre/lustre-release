@@ -386,13 +386,14 @@ static inline void s2dhms(struct dhms *ts, time_t secs)
 typedef void (*cntr_init_callback)(struct lprocfs_stats *stats);
 
 struct obd_job_stats {
-	struct cfs_hash	       *ojs_hash;
-	struct list_head	ojs_list;
-	rwlock_t		ojs_lock; /* protect the obj_list */
-	cntr_init_callback	ojs_cntr_init_fn;
-	int			ojs_cntr_num;
-	int			ojs_cleanup_interval;
-	time_t			ojs_last_cleanup;
+	struct cfs_hash	       *ojs_hash;	/* hash of jobids */
+	struct list_head	ojs_list;	/* list of job_stat structs */
+	rwlock_t		ojs_lock;	/* protect ojs_list/js_list */
+	unsigned int		ojs_cleanup_interval;/* seconds before expiry */
+	time_t			ojs_last_cleanup; /* previous cleanup time */
+	cntr_init_callback	ojs_cntr_init_fn;/* lprocfs_stats initializer */
+	unsigned short		ojs_cntr_num;	/* number of stats in struct */
+	bool			ojs_cleaning;	/* currently expiring stats */
 };
 
 #ifdef CONFIG_PROC_FS

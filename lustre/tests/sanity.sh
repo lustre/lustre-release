@@ -11440,36 +11440,41 @@ else
 fi
 
 verify_jobstats() {
-	local cmd=$1
-	local target=$2
+	local cmd=($1)
+	shift
+	local facets="$@"
 
-	# clear old jobstats
-	do_facet $SINGLEMDS lctl set_param mdt.*.job_stats="clear"
-	do_facet ost1 lctl set_param obdfilter.*.job_stats="clear"
+# we don't really need to clear the stats for this test to work, since each
+# command has a unique jobid, but it makes debugging easier if needed.
+#	for facet in $facets; do
+#		local dev=$(convert_facet2label $facet)
+#		# clear old jobstats
+#		do_facet $facet lctl set_param *.$dev.job_stats="clear"
+#	done
 
-	# use a new JobID for this test, or we might see an old one
-	[ "$JOBENV" = "FAKE_JOBID" ] && FAKE_JOBID=test_id.$testnum.$RANDOM
+	# use a new JobID for each test, or we might see an old one
+	[ "$JOBENV" = "FAKE_JOBID" ] &&
+		FAKE_JOBID=id.$testnum.$(basename ${cmd[0]}).$RANDOM
 
 	JOBVAL=${!JOBENV}
-	log "Test: $cmd"
+	log "Test: ${cmd[*]}"
 	log "Using JobID environment variable $JOBENV=$JOBVAL"
 
 	if [ $JOBENV = "FAKE_JOBID" ]; then
-		FAKE_JOBID=$JOBVAL $cmd
+		FAKE_JOBID=$JOBVAL ${cmd[*]}
 	else
-		$cmd
+		${cmd[*]}
 	fi
 
-	if [ "$target" = "mdt" -o "$target" = "both" ]; then
-		FACET="$SINGLEMDS" # will need to get MDS number for DNE
-		do_facet $FACET lctl get_param mdt.*.job_stats |
-			grep $JOBVAL || error "No job stats found on MDT $FACET"
-	fi
-	if [ "$target" = "ost" -o "$target" = "both" ]; then
-		FACET=ost1
-		do_facet $FACET lctl get_param obdfilter.*.job_stats |
-			grep $JOBVAL || error "No job stats found on OST $FACET"
-	fi
+	# all files are created on OST0000
+	for facet in $facets; do
+		local stats="*.$(convert_facet2label $facet).job_stats"
+		if [ $(do_facet $facet lctl get_param $stats |
+		       grep -c $JOBVAL) -ne 1 ]; then
+			do_facet $facet lctl get_param $stats
+			error "No jobstats for $JOBVAL found on $facet::$stats"
+		fi
+	done
 }
 
 jobstats_set() {
@@ -11479,6 +11484,13 @@ jobstats_set() {
 	wait_update $HOSTNAME "$LCTL get_param -n jobid_var" $NEW_JOBENV
 }
 
+cleanup_205() {
+	do_facet $SINGLEMDS \
+		$LCTL set_param mdt.*.job_cleanup_interval=$OLD_INTERVAL
+	[ $OLD_JOBENV != $JOBENV ] && jobstats_set $OLD_JOBENV
+	do_facet $SINGLEMDS lctl --device $MDT0 changelog_deregister $CL_USER
+}
+
 test_205() { # Job stats
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
@@ -11486,47 +11498,66 @@ test_205() { # Job stats
 		skip "Server doesn't support jobstats" && return 0
 	[[ $JOBID_VAR = disable ]] && skip "jobstats is disabled" && return
 
-	local cmd
 	OLD_JOBENV=$($LCTL get_param -n jobid_var)
 	if [ $OLD_JOBENV != $JOBENV ]; then
 		jobstats_set $JOBENV
-		trap jobstats_set EXIT
+		trap cleanup_205 EXIT
 	fi
 
-	local user=$(do_facet $SINGLEMDS $LCTL --device $MDT0 \
-		     changelog_register -n)
-	echo "Registered as changelog user $user"
+	CL_USER=$(do_facet $SINGLEMDS lctl --device $MDT0 changelog_register -n)
+	echo "Registered as changelog user $CL_USER"
 
+	OLD_INTERVAL=$(do_facet $SINGLEMDS \
+		       lctl get_param -n mdt.*.job_cleanup_interval)
+	local interval_new=5
+	do_facet $SINGLEMDS \
+		$LCTL set_param mdt.*.job_cleanup_interval=$interval_new
+	local start=$SECONDS
+
+	local cmd
 	# mkdir
-	cmd="mkdir $DIR/$tfile"
-	verify_jobstats "$cmd" "mdt"
+	cmd="mkdir $DIR/$tdir"
+	verify_jobstats "$cmd" "$SINGLEMDS"
 	# rmdir
-	cmd="rm -fr $DIR/$tfile"
-	verify_jobstats "$cmd" "mdt"
+	cmd="rmdir $DIR/$tdir"
+	verify_jobstats "$cmd" "$SINGLEMDS"
+	# mkdir on secondary MDT
+	if [ $MDSCOUNT -gt 1 ]; then
+		cmd="lfs mkdir -i 1 $DIR/$tdir.remote"
+		verify_jobstats "$cmd" "mds2"
+	fi
 	# mknod
 	cmd="mknod $DIR/$tfile c 1 3"
-	verify_jobstats "$cmd" "mdt"
+	verify_jobstats "$cmd" "$SINGLEMDS"
 	# unlink
 	cmd="rm -f $DIR/$tfile"
-	verify_jobstats "$cmd" "mdt"
+	verify_jobstats "$cmd" "$SINGLEMDS"
+	# create all files on OST0000 so verify_jobstats can find OST stats
 	# open & close
 	cmd="$SETSTRIPE -i 0 -c 1 $DIR/$tfile"
-	verify_jobstats "$cmd" "mdt"
+	verify_jobstats "$cmd" "$SINGLEMDS"
 	# setattr
 	cmd="touch $DIR/$tfile"
-	verify_jobstats "$cmd" "both"
+	verify_jobstats "$cmd" "$SINGLEMDS ost1"
 	# write
 	cmd="dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 oflag=sync"
-	verify_jobstats "$cmd" "ost"
+	verify_jobstats "$cmd" "ost1"
 	# read
 	cmd="dd if=$DIR/$tfile of=/dev/null bs=1M count=1 iflag=direct"
-	verify_jobstats "$cmd" "ost"
+	verify_jobstats "$cmd" "ost1"
 	# truncate
 	cmd="$TRUNCATE $DIR/$tfile 0"
-	verify_jobstats "$cmd" "both"
+	verify_jobstats "$cmd" "$SINGLEMDS ost1"
 	# rename
-	cmd="mv -f $DIR/$tfile $DIR/jobstats_test_rename"
-	verify_jobstats "$cmd" "mdt"
+	cmd="mv -f $DIR/$tfile $DIR/$tdir.rename"
+	verify_jobstats "$cmd" "$SINGLEMDS"
+	# jobstats expiry - sleep until old stats should be expired
+	local left=$((interval_new - (SECONDS - start)))
+	[ $left -ge 0 ] && echo "sleep $left for expiry" && sleep $((left + 1))
+	cmd="mkdir $DIR/$tdir.expire"
+	verify_jobstats "$cmd" "$SINGLEMDS"
+	[ $(do_facet $SINGLEMDS lctl get_param *.*.job_stats |
+	    grep -c "job_id.*mkdir") -gt 1 ] && error "old jobstats not expired"
 
 	# Ensure that jobid are present in changelog (if supported by MDS)
 	if [ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.52) ]
@@ -11546,10 +11577,7 @@ test_205() { # Job stats
 			error "Unexpected jobids when jobid_var=$JOBENV"
 	fi
 
-	# cleanup
-	rm -f $DIR/jobstats_test_rename
-
-	[ $OLD_JOBENV != $JOBENV ] && jobstats_set $OLD_JOBENV
+	cleanup_205
 }
 run_test 205 "Verify job stats"
 

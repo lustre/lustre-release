@@ -2981,6 +2981,13 @@ do_nodes() {
     return ${PIPESTATUS[0]}
 }
 
+##
+# Execute commands on a single service's host
+#
+# The \a facet (service) may be on a local or remote node, which is
+# determined at the time the command is run.
+#
+# usage: do_facet $facet command [arg ...]
 do_facet() {
 	local facet=$1
 	shift
