@@ -5821,6 +5821,7 @@ _wait_import_state () {
     local expected=$1
     local CONN_PROC=$2
     local maxtime=${3:-$(max_recovery_time)}
+    local error_on_failure=${4:-1}
     local CONN_STATE
     local i=0
 
@@ -5833,9 +5834,12 @@ _wait_import_state () {
             # reconnect timeout and test can't see real disconnect
             [ "${CONN_STATE}" == "CONNECTING" ] && return 0
         fi
-        [ $i -ge $maxtime ] && \
-            error "can't put import for $CONN_PROC into ${expected} state after $i sec, have ${CONN_STATE}" && \
+	if [ $i -ge $maxtime ]; then
+	    [ $error_on_failure -ne 0 ] && \
+		error "can't put import for $CONN_PROC into ${expected}" \
+		      "state after $i sec, have ${CONN_STATE}"
             return 1
+	fi
         sleep 1
 	# Add uniq for multi-mount case
 	CONN_STATE=$($LCTL get_param -n $CONN_PROC 2>/dev/null | cut -f2 | uniq)
@@ -5850,10 +5854,11 @@ wait_import_state() {
     local state=$1
     local params=$2
     local maxtime=${3:-$(max_recovery_time)}
+    local error_on_failure=${4:-1}
     local param
 
     for param in ${params//,/ }; do
-        _wait_import_state $state $param $maxtime || return
+	_wait_import_state $state $param $maxtime $error_on_failure || return
     done
 }
 
@@ -5955,6 +5960,63 @@ wait_osc_import_state() {
 		done
 	else
 		_wait_osc_import_state "$facet" "$ost_facet" "$expected"
+	fi
+}
+
+_wait_mgc_import_state() {
+	local facet=$1
+	local expected=$2
+	local error_on_failure=${3:-1}
+	local param="mgc.*.mgs_server_uuid"
+	local params=$param
+	local i=0
+
+	# 1. wait the deadline of client 1st request (it could be skipped)
+	# 2. wait the deadline of client 2nd request
+	local maxtime=$(( 2 * $(request_timeout $facet)))
+
+	if [[ $facet == client* ]]; then
+		# During setup time, the osc might not be setup, it need wait
+		# until list_param can return valid value. And also if there
+		# are mulitple osc entries we should list all of them before
+		# go to wait.
+		params=$($LCTL list_param $param 2>/dev/null || true)
+		while [ -z "$params" ]; do
+			if [ $i -ge $maxtime ]; then
+				echo "can't get $param in $maxtime secs"
+				return 1
+			fi
+			sleep 1
+			i=$((i + 1))
+			params=$($LCTL list_param $param 2>/dev/null || true)
+		done
+	fi
+	if ! do_rpc_nodes "$(facet_active_host $facet)" \
+			wait_import_state $expected "$params" $maxtime \
+					  $error_on_failure; then
+		if [ $error_on_failure -ne 0 ]; then
+		    error "import is not in ${expected} state"
+		fi
+		return 1
+	fi
+
+	return 0
+}
+
+wait_mgc_import_state() {
+	local facet=$1
+	local expected=$2
+	local error_on_failure=${3:-1}
+	local num
+
+	if [[ $facet = mds ]]; then
+		for num in $(seq $MDSCOUNT); do
+			_wait_mgc_import_state mds$num "$expected" \
+					       $error_on_failure || return
+		done
+	else
+		_wait_mgc_import_state "$facet" "$expected"
+				       $error_on_failure || return
 	fi
 }
 

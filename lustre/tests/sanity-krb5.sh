@@ -761,23 +761,39 @@ test_151() {
 	# umount everything, modules still loaded
 	stopall
 
+	# start mgs
+	start mgs $(mgsdevname 1) $MDS_MOUNT_OPTS
+
 	# mount mgs with default flavor, in current framework it means mgs+mdt1.
 	# the connection of mgc of mdt1 to mgs is expected fail.
 	DEVNAME=$(mdsdevname 1)
-	start mds1 $DEVNAME $MDS_MOUNT_OPTS &&
+	start mds1 $DEVNAME $MDS_MOUNT_OPTS
+	wait_mgc_import_state mds FULL 0 &&
 	    error "mount with default flavor should have failed"
+	stop mds1
 
 	# mount with unauthorized flavor should fail
 	save_opts=$MDS_MOUNT_OPTS
+	if [ -z "$MDS_MOUNT_OPTS" ]; then
+	    MDS_MOUNT_OPTS="-o mgssec=null"
+	else
 	MDS_MOUNT_OPTS="$MDS_MOUNT_OPTS,mgssec=null"
-	start mds1 $DEVNAME $MDS_MOUNT_OPTS &&
+	fi
+	start mds1 $DEVNAME $MDS_MOUNT_OPTS
+	wait_mgc_import_state mds FULL 0 &&
 	    error "mount with unauthorized flavor should have failed"
 	MDS_MOUNT_OPTS=$save_opts
+	stop mds1
 
 	# mount with designated flavor should succeed
 	save_opts=$MDS_MOUNT_OPTS
+	if [ -z "$MDS_MOUNT_OPTS" ]; then
+	    MDS_MOUNT_OPTS="-o mgssec=krb5p"
+	else
 	MDS_MOUNT_OPTS="$MDS_MOUNT_OPTS,mgssec=krb5p"
-	start mds1 $DEVNAME $MDS_MOUNT_OPTS ||
+	fi
+	start mds1 $DEVNAME $MDS_MOUNT_OPTS
+	wait_mgc_import_state mds FULL 0 ||
 	    error "mount with designated flavor should have succeeded"
 	MDS_MOUNT_OPTS=$save_opts
 
