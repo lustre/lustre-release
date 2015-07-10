@@ -376,6 +376,7 @@ echo '%{_sysconfdir}/sysconfig/lustre' >>lustre.files
 echo '%{_sysconfdir}/init.d/lustre' >>lustre.files
 %endif
 echo '%{_sysconfdir}/init.d/lnet' >>lustre.files
+echo '%{_sysconfdir}/init.d/lsvcgss' >>lustre.files
 %endif
 
 # Create the pristine source directory.

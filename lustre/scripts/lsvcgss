@@ -1,0 +1,42 @@
+#!/bin/bash
+#
+# lsvcgss      Lustre GSS daemon
+#
+# chkconfig: 2345 10 90
+# description: start and stop the lsvcgssd daemon
+#
+
+# Source function library.
+. /etc/init.d/functions
+
+LOCKFILE="/var/lock/subsys/lsvcgssd"
+
+# See how we were called.
+case "$1" in
+	start)
+		echo $"Starting lsvcgssd"
+		/usr/sbin/lsvcgssd
+		RETVAL=$?
+		[ $RETVAL -eq 0 ] && touch $LOCKFILE
+		;;
+	stop)
+		echo $"Stopping lsvcgssd"
+		killall lsvcgssd
+		RETVAL=$?
+		[ $RETVAL -eq 0 ] && rm -f $LOCKFILE
+		;;
+	status)
+		status lsvcgssd
+		RETVAL=$?
+		;;
+	restart|reload)
+		$0 stop
+		$0 start
+		RETVAL=$?
+		;;
+	*)
+		echo $"Usage: $0 {start|stop|restart|reload|status}"
+		exit 1
+esac
+
+exit $RETVAL
