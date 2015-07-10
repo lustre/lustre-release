@@ -528,6 +528,23 @@ static int lwp_import_event(struct obd_device *obd, struct obd_import *imp,
 	return 0;
 }
 
+static int lwp_set_info_async(const struct lu_env *env,
+			      struct obd_export *exp,
+			      u32 keylen, void *key,
+			      u32 vallen, void *val,
+			      struct ptlrpc_request_set *set)
+{
+	ENTRY;
+
+	if (KEY_IS(KEY_SPTLRPC_CONF)) {
+		sptlrpc_conf_client_adapt(exp->exp_obd);
+		RETURN(0);
+	}
+
+	CERROR("Unknown key %s\n", (char *)key);
+	RETURN(-EINVAL);
+}
+
 struct obd_ops lwp_obd_device_ops = {
 	.o_owner	= THIS_MODULE,
 	.o_add_conn	= client_import_add_conn,
@@ -535,4 +552,5 @@ struct obd_ops lwp_obd_device_ops = {
 	.o_connect	= lwp_obd_connect,
 	.o_disconnect	= lwp_obd_disconnect,
 	.o_import_event	= lwp_import_event,
+	.o_set_info_async   = lwp_set_info_async,
 };

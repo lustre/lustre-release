@@ -620,19 +620,22 @@ int class_notify_sptlrpc_conf(const char *fsname, int namelen)
         LASSERT(namelen > 0);
 
 	read_lock(&obd_dev_lock);
-        for (i = 0; i < class_devno_max(); i++) {
-                obd = class_num2obd(i);
+	for (i = 0; i < class_devno_max(); i++) {
+		obd = class_num2obd(i);
 
-                if (obd == NULL || obd->obd_set_up == 0 || obd->obd_stopping)
-                        continue;
+		if (obd == NULL || obd->obd_set_up == 0 || obd->obd_stopping)
+			continue;
 
-                /* only notify mdc, osc, mdt, ost */
-                type = obd->obd_type->typ_name;
-                if (strcmp(type, LUSTRE_MDC_NAME) != 0 &&
-                    strcmp(type, LUSTRE_OSC_NAME) != 0 &&
-                    strcmp(type, LUSTRE_MDT_NAME) != 0 &&
-                    strcmp(type, LUSTRE_OST_NAME) != 0)
-                        continue;
+		/* only notify mdc, osc, osp, lwp, mdt, ost
+		 * because only these have a -sptlrpc llog */
+		type = obd->obd_type->typ_name;
+		if (strcmp(type, LUSTRE_MDC_NAME) != 0 &&
+		    strcmp(type, LUSTRE_OSC_NAME) != 0 &&
+		    strcmp(type, LUSTRE_OSP_NAME) != 0 &&
+		    strcmp(type, LUSTRE_LWP_NAME) != 0 &&
+		    strcmp(type, LUSTRE_MDT_NAME) != 0 &&
+		    strcmp(type, LUSTRE_OST_NAME) != 0)
+			continue;
 
                 if (strncmp(obd->obd_name, fsname, namelen))
                         continue;

@@ -907,9 +907,11 @@ void sptlrpc_conf_client_adapt(struct obd_device *obd)
         struct obd_import  *imp;
         ENTRY;
 
-        LASSERT(strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) == 0 ||
-                strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME) ==0);
-        CDEBUG(D_SEC, "obd %s\n", obd->u.cli.cl_target_uuid.uuid);
+	LASSERT(strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) == 0 ||
+		strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME) == 0 ||
+		strcmp(obd->obd_type->typ_name, LUSTRE_OSP_NAME) == 0 ||
+		strcmp(obd->obd_type->typ_name, LUSTRE_LWP_NAME) == 0);
+	CDEBUG(D_SEC, "obd %s\n", obd->u.cli.cl_target_uuid.uuid);
 
         /* serialize with connect/disconnect import */
 	down_read(&obd->u.cli.cl_sem);

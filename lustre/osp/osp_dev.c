@@ -1688,6 +1688,24 @@ static int osp_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	return rc;
 }
 
+
+static int osp_set_info_async(const struct lu_env *env,
+			      struct obd_export *exp,
+			      u32 keylen, void *key,
+			      u32 vallen, void *val,
+			      struct ptlrpc_request_set *set)
+{
+	ENTRY;
+
+	if (KEY_IS(KEY_SPTLRPC_CONF)) {
+		sptlrpc_conf_client_adapt(exp->exp_obd);
+		RETURN(0);
+	}
+
+	CERROR("Unknown key %s\n", (char *)key);
+	RETURN(-EINVAL);
+}
+
 /**
  * Implementation of obd_ops::o_get_info
  *
@@ -1829,6 +1847,7 @@ static struct obd_ops osp_obd_device_ops = {
 	.o_fid_init	= client_fid_init,
 	.o_fid_fini	= client_fid_fini,
 	.o_fid_alloc	= osp_fid_alloc,
+	.o_set_info_async   = osp_set_info_async,
 };
 
 struct llog_operations osp_mds_ost_orig_logops;
