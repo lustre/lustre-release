@@ -53,6 +53,9 @@
 #define GNILND_RDMA_DLVR_OPTION    GNI_DLVMODE_PERFORMANCE
 #endif
 
+/* Thread-safe kgni implemented in minor ver 45, code rev 0xb9 */
+#define GNILND_KGNI_TS_MINOR_VER 0x45
+
 /* plug in our functions for use on the simulator */
 #if !defined(GNILND_USE_RCA)
 

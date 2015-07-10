@@ -718,8 +718,10 @@ typedef struct kgn_conn {
 	atomic_t            gnc_sched_noop;     /* # sched triggered NOOP */
 	unsigned int        gnc_timeout;        /* infer peer death if no rx for this many seconds */
 	__u32               gnc_cqid;           /* my completion callback id (non-unique) */
-	__u32               gnc_tx_seq;         /* tx msg sequence number */
-	__u32               gnc_rx_seq;         /* rx msg sequence number */
+	atomic_t            gnc_tx_seq;         /* tx msg sequence number */
+	atomic_t            gnc_rx_seq;         /* rx msg sequence number */
+	struct mutex        gnc_smsg_mutex;     /* tx smsg sequence serialization */
+	struct mutex        gnc_rdma_mutex;     /* tx rdma sequence serialization */
 	__u64               gnc_tx_retrans;     /* # retrans on SMSG */
 	atomic_t            gnc_nlive_fma;      /* # live FMA */
 	atomic_t            gnc_nq_rdma;        /* # queued (on device) RDMA */
@@ -864,6 +866,7 @@ typedef struct kgn_data {
 	atomic_t                kgn_rev_copy_buff;    /* # of REV rdma buffer copies */
 	struct socket          *kgn_sock;             /* for Apollo */
 	unsigned long           free_pages_limit;     /* # of free pages reserve from fma block allocations */
+	int                     kgn_enable_gl_mutex;  /* kgni api mtx enable */
 } kgn_data_t;
 
 extern kgn_data_t         kgnilnd_data;
@@ -901,6 +904,38 @@ kgnilnd_thread_fini(void)
 	atomic_dec(&kgnilnd_data.kgn_nthreads);
 }
 
+static inline int kgnilnd_gl_mutex_trylock(struct mutex *lock)
+{
+	if (kgnilnd_data.kgn_enable_gl_mutex)
+		return mutex_trylock(lock);
+	else
+		return 1;
+}
+
+static inline void kgnilnd_gl_mutex_lock(struct mutex *lock)
+{
+	if (kgnilnd_data.kgn_enable_gl_mutex)
+		mutex_lock(lock);
+}
+
+static inline void kgnilnd_gl_mutex_unlock(struct mutex *lock)
+{
+	if (kgnilnd_data.kgn_enable_gl_mutex)
+		mutex_unlock(lock);
+}
+
+static inline void kgnilnd_conn_mutex_lock(struct mutex *lock)
+{
+	if (!kgnilnd_data.kgn_enable_gl_mutex)
+		mutex_lock(lock);
+}
+
+static inline void kgnilnd_conn_mutex_unlock(struct mutex *lock)
+{
+	if (!kgnilnd_data.kgn_enable_gl_mutex)
+		mutex_unlock(lock);
+}
+
 /* like mutex_trylock but with a jiffies spinner. This is to allow certain
  * parts of the code to avoid a scheduler trip when the mutex is held
  *
@@ -918,6 +953,9 @@ static inline int kgnilnd_mutex_trylock(struct mutex *lock)
 {
 	int             ret;
 	unsigned long   timeout;
+
+	if (!kgnilnd_data.kgn_enable_gl_mutex)
+		return 1;
 
 	LASSERT(!in_interrupt());
 
@@ -1936,9 +1974,6 @@ kgnilnd_conn_dgram_type2str(kgn_dgram_type_t type)
 
 #undef DO_TYPE
 
-/* API wrapper functions - include late to pick up all of the other defines */
-#include "gnilnd_api_wrap.h"
-
 /* pulls in tunables per platform and adds in nid/nic conversion
  * if RCA wasn't available at build time */
 #include "gnilnd_hss_ops.h"
@@ -1950,5 +1985,8 @@ kgnilnd_conn_dgram_type2str(kgn_dgram_type_t type)
 #else
  #error "Undefined Network Hardware Type"
 #endif
+
+/* API wrapper functions - include late to pick up all of the other defines */
+#include "gnilnd_api_wrap.h"
 
 #endif /* _GNILND_GNILND_H_ */

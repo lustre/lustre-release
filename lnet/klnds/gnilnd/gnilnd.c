@@ -208,6 +208,8 @@ kgnilnd_create_conn(kgn_conn_t **connp, kgn_device_t *dev)
 		GOTO(failed, rc = -ENOMEM);
 	}
 
+	mutex_init(&conn->gnc_smsg_mutex);
+	mutex_init(&conn->gnc_rdma_mutex);
 	atomic_set(&conn->gnc_refcount, 1);
 	atomic_set(&conn->gnc_reaper_noop, 0);
 	atomic_set(&conn->gnc_sched_noop, 0);
@@ -1615,8 +1617,8 @@ kgnilnd_get_conn_info(kgn_peer_t *peer,
 
 	*device_id = conn->gnc_device->gnd_host_id;
 	*peerstamp = conn->gnc_peerstamp;
-	*tx_seq = conn->gnc_tx_seq;
-	*rx_seq = conn->gnc_rx_seq;
+	*tx_seq = atomic_read(&conn->gnc_tx_seq);
+	*rx_seq = atomic_read(&conn->gnc_rx_seq);
 	*fmaq_len = kgnilnd_count_list(&conn->gnc_fmaq);
 	*nfma = atomic_read(&conn->gnc_nlive_fma);
 	*nrdma = atomic_read(&conn->gnc_nlive_rdma);
@@ -2136,7 +2138,6 @@ kgnilnd_dev_fini(kgn_device_t *dev)
 	EXIT;
 }
 
-
 int kgnilnd_base_startup(void)
 {
 	struct timeval       tv;
@@ -2161,6 +2162,7 @@ int kgnilnd_base_startup(void)
 
 	/* zero pointers, flags etc */
 	memset(&kgnilnd_data, 0, sizeof(kgnilnd_data));
+	kgnilnd_check_kgni_version();
 
 	/* CAVEAT EMPTOR: Every 'Fma' message includes the sender's NID and
 	 * a unique (for all time) connstamp so we can uniquely identify

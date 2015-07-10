@@ -103,6 +103,34 @@
 #define CFS_FAIL_GNI_DGRAM_DEADLINE	0xf053
 #define CFS_FAIL_GNI_DGRAM_DROP_TX	0xf054
 
+extern uint32_t kgni_driver_version;
+
+static inline void
+kgnilnd_check_kgni_version(void)
+{
+	uint32_t *kdv;
+
+	kgnilnd_data.kgn_enable_gl_mutex = 1;
+	kdv = symbol_get(kgni_driver_version);
+	if (!kdv) {
+		LCONSOLE_INFO("Not using thread safe locking -"
+			" no symbol kgni_driver_version\n");
+		return;
+	}
+
+	/* Thread-safe kgni implemented in minor ver 0x44/45, code rev 0xb9 */
+	if (*kdv < GNI_VERSION_CHECK(0, GNILND_KGNI_TS_MINOR_VER, 0xb9)) {
+		symbol_put(kgni_driver_version);
+		LCONSOLE_INFO("Not using thread safe locking, gni version 0x%x,"
+			" need >= 0x%x\n", *kdv,
+			GNI_VERSION_CHECK(0, GNILND_KGNI_TS_MINOR_VER, 0xb9));
+		return;
+	}
+
+	symbol_put(kgni_driver_version);
+	/* Use thread-safe locking */
+	kgnilnd_data.kgn_enable_gl_mutex = 0;
+}
 
 /* helper macros */
 extern void

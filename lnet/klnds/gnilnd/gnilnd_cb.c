@@ -1327,7 +1327,7 @@ search_again:
 	 * if we are sending to the same node faster than 256000/sec.
 	 * To help guard against this, we OR in the tx_seq - that is 32 bits */
 
-	tx->tx_id.txe_chips = (__u32)(jiffies | conn->gnc_tx_seq);
+	tx->tx_id.txe_chips = (__u32)(jiffies | atomic_read(&conn->gnc_tx_seq));
 
 	GNIDBG_TX(D_NET, tx, "set cookie/id/bits", NULL);
 
@@ -1429,7 +1429,8 @@ kgnilnd_sendmsg_nolock(kgn_tx_t *tx, void *immediate, unsigned int immediatenob,
 	 * close message.
 	 */
 	if (atomic_read(&conn->gnc_peer->gnp_dirty_eps) != 0 && msg->gnm_type != GNILND_MSG_CLOSE) {
-		mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
+		kgnilnd_conn_mutex_unlock(&conn->gnc_smsg_mutex);
+		kgnilnd_gl_mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
 		/* Return -ETIME, we are closing the connection already so we dont want to
 		 * have this tx hit the wire. The tx will be killed by the calling function.
 		 * Once the EP is marked dirty the close message will be the last
@@ -1452,7 +1453,8 @@ kgnilnd_sendmsg_nolock(kgn_tx_t *tx, void *immediate, unsigned int immediatenob,
 		libcfs_nid2str(conn->gnc_peer->gnp_nid),
 		cfs_duration_sec(now - newest_last_rx),
 		cfs_duration_sec(GNILND_TIMEOUTRX(timeout)));
-		mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
+		kgnilnd_conn_mutex_unlock(&conn->gnc_smsg_mutex);
+		kgnilnd_gl_mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
 		return -ETIME;
 	}
 
@@ -1463,7 +1465,8 @@ kgnilnd_sendmsg_nolock(kgn_tx_t *tx, void *immediate, unsigned int immediatenob,
 	 */
 	msg->gnm_connstamp = conn->gnc_my_connstamp;
 	msg->gnm_payload_len = immediatenob;
-	msg->gnm_seq = conn->gnc_tx_seq;
+	kgnilnd_conn_mutex_lock(&conn->gnc_smsg_mutex);
+	msg->gnm_seq = atomic_read(&conn->gnc_tx_seq);
 
 	/* always init here - kgn_checksum is a /sys module tunable
 	 * and can be flipped at any point, even between msg init and sending */
@@ -1495,7 +1498,7 @@ kgnilnd_sendmsg_nolock(kgn_tx_t *tx, void *immediate, unsigned int immediatenob,
 
 	switch (rrc) {
 	case GNI_RC_SUCCESS:
-		conn->gnc_tx_seq++;
+		atomic_inc(&conn->gnc_tx_seq);
 		conn->gnc_last_tx = jiffies;
 		/* no locking here as LIVE isn't a list */
 		kgnilnd_tx_add_state_locked(tx, NULL, conn, GNILND_TX_LIVE_FMAQ, 1);
@@ -1509,7 +1512,8 @@ kgnilnd_sendmsg_nolock(kgn_tx_t *tx, void *immediate, unsigned int immediatenob,
 
 		/* serialize with seeing CQ events for completion on this, as well as
 		 * tx_seq */
-		mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
+		kgnilnd_conn_mutex_unlock(&conn->gnc_smsg_mutex);
+		kgnilnd_gl_mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
 
 		atomic_inc(&conn->gnc_device->gnd_short_ntx);
 		atomic64_add(immediatenob, &conn->gnc_device->gnd_short_txbytes);
@@ -1521,8 +1525,8 @@ kgnilnd_sendmsg_nolock(kgn_tx_t *tx, void *immediate, unsigned int immediatenob,
 		/* XXX Nic: We need to figure out how to track this
 		 * - there are bound to be good reasons for it,
 		 * but we want to know when it happens */
-
-		mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
+		kgnilnd_conn_mutex_unlock(&conn->gnc_smsg_mutex);
+		kgnilnd_gl_mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
 		/* We'll handle this error inline - makes the calling logic much more
 		 * clean */
 
@@ -1559,7 +1563,8 @@ kgnilnd_sendmsg_nolock(kgn_tx_t *tx, void *immediate, unsigned int immediatenob,
 		}
 	default:
 		/* handle bad retcode gracefully */
-		mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
+		kgnilnd_conn_mutex_unlock(&conn->gnc_smsg_mutex);
+		kgnilnd_gl_mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
 		return -EIO;
 	}
 }
@@ -1574,7 +1579,7 @@ kgnilnd_sendmsg(kgn_tx_t *tx, void *immediate, unsigned int immediatenob,
 	int              rc;
 
 	timestamp = jiffies;
-	mutex_lock(&dev->gnd_cq_mutex);
+	kgnilnd_gl_mutex_lock(&dev->gnd_cq_mutex);
 	/* delay in jiffies - we are really concerned only with things that
 	 * result in a schedule() or really holding this off for long times .
 	 * NB - mutex_lock could spin for 2 jiffies before going to sleep to wait */
@@ -1619,7 +1624,7 @@ kgnilnd_sendmsg_trylock(kgn_tx_t *tx, void *immediate, unsigned int immediatenob
 		rc = 0;
 	} else {
 		atomic_inc(&conn->gnc_device->gnd_fast_try);
-		rc = mutex_trylock(&conn->gnc_device->gnd_cq_mutex);
+		rc = kgnilnd_gl_mutex_trylock(&conn->gnc_device->gnd_cq_mutex);
 	}
 	if (!rc) {
 		rc = -EAGAIN;
@@ -1983,7 +1988,8 @@ kgnilnd_rdma(kgn_tx_t *tx, int type,
 	tx->tx_rdma_desc.src_cq_hndl = conn->gnc_device->gnd_snd_rdma_cqh;
 
 	timestamp = jiffies;
-	mutex_lock(&conn->gnc_device->gnd_cq_mutex);
+	kgnilnd_conn_mutex_lock(&conn->gnc_rdma_mutex);
+	kgnilnd_gl_mutex_lock(&conn->gnc_device->gnd_cq_mutex);
 	/* delay in jiffies - we are really concerned only with things that
 	 * result in a schedule() or really holding this off for long times .
 	 * NB - mutex_lock could spin for 2 jiffies before going to sleep to wait */
@@ -1992,7 +1998,8 @@ kgnilnd_rdma(kgn_tx_t *tx, int type,
 	rrc = kgnilnd_post_rdma(conn->gnc_ephandle, &tx->tx_rdma_desc);
 
 	if (rrc == GNI_RC_ERROR_RESOURCE) {
-		mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
+		kgnilnd_conn_mutex_unlock(&conn->gnc_rdma_mutex);
+		kgnilnd_gl_mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
 		kgnilnd_unmap_buffer(tx, 0);
 
 		if (tx->tx_buffer_copy != NULL) {
@@ -2012,8 +2019,8 @@ kgnilnd_rdma(kgn_tx_t *tx, int type,
 	kgnilnd_tx_add_state_locked(tx, conn->gnc_peer, conn, GNILND_TX_LIVE_RDMAQ, 1);
 	tx->tx_qtime = jiffies;
 	spin_unlock(&conn->gnc_list_lock);
-
-	mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
+	kgnilnd_gl_mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
+	kgnilnd_conn_mutex_unlock(&conn->gnc_rdma_mutex);
 
 	/* XXX Nic: is this a place we should handle more errors for
 	 * robustness sake */
@@ -2049,14 +2056,14 @@ kgnilnd_release_msg(kgn_conn_t *conn)
 	CDEBUG(D_NET, "consuming %p\n", conn);
 
 	timestamp = jiffies;
-	mutex_lock(&conn->gnc_device->gnd_cq_mutex);
+	kgnilnd_gl_mutex_lock(&conn->gnc_device->gnd_cq_mutex);
 	/* delay in jiffies - we are really concerned only with things that
 	 * result in a schedule() or really holding this off for long times .
 	 * NB - mutex_lock could spin for 2 jiffies before going to sleep to wait */
 	conn->gnc_device->gnd_mutex_delay += (long) jiffies - timestamp;
 
 	rrc = kgnilnd_smsg_release(conn->gnc_ephandle);
-	mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
+	kgnilnd_gl_mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
 
 	LASSERTF(rrc == GNI_RC_SUCCESS, "bad rrc %d\n", rrc);
 	GNIDBG_SMSG_CREDS(D_NET, conn);
@@ -3165,7 +3172,7 @@ kgnilnd_check_rdma_cq(kgn_device_t *dev)
 		}
 
 		if (rrc == GNI_RC_NOT_DONE) {
-			mutex_unlock(&dev->gnd_cq_mutex);
+			kgnilnd_gl_mutex_unlock(&dev->gnd_cq_mutex);
 			CDEBUG(D_INFO, "SEND RDMA CQ %d empty processed %ld\n",
 			       dev->gnd_id, num_processed);
 			return num_processed;
@@ -3182,7 +3189,7 @@ kgnilnd_check_rdma_cq(kgn_device_t *dev)
 
 		rrc = kgnilnd_get_completed(dev->gnd_snd_rdma_cqh, event_data,
 					    &desc);
-		mutex_unlock(&dev->gnd_cq_mutex);
+		kgnilnd_gl_mutex_unlock(&dev->gnd_cq_mutex);
 
 		/* XXX Nic: Need better error handling here... */
 		LASSERTF((rrc == GNI_RC_SUCCESS) ||
@@ -3226,9 +3233,11 @@ kgnilnd_check_rdma_cq(kgn_device_t *dev)
 		}
 
 		/* remove from rdmaq */
+		kgnilnd_conn_mutex_lock(&conn->gnc_rdma_mutex);
 		spin_lock(&conn->gnc_list_lock);
 		kgnilnd_tx_del_state_locked(tx, NULL, conn, GNILND_TX_ALLOCD);
 		spin_unlock(&conn->gnc_list_lock);
+		kgnilnd_conn_mutex_unlock(&conn->gnc_rdma_mutex);
 
 		if (likely(desc->status == GNI_RC_SUCCESS) && rc == 0) {
 			atomic_inc(&dev->gnd_rdma_ntx);
@@ -3319,7 +3328,7 @@ kgnilnd_check_fma_send_cq(kgn_device_t *dev)
 		}
 
 		rrc = kgnilnd_cq_get_event(dev->gnd_snd_fma_cqh, &event_data);
-		mutex_unlock(&dev->gnd_cq_mutex);
+		kgnilnd_gl_mutex_unlock(&dev->gnd_cq_mutex);
 
 		if (rrc == GNI_RC_NOT_DONE) {
 			CDEBUG(D_INFO,
@@ -3385,6 +3394,7 @@ kgnilnd_check_fma_send_cq(kgn_device_t *dev)
 		}
 
 		/* lock tx_list_state and tx_state */
+		kgnilnd_conn_mutex_lock(&conn->gnc_smsg_mutex);
 		spin_lock(&tx->tx_conn->gnc_list_lock);
 
 		GNITX_ASSERTF(tx, tx->tx_list_state == GNILND_TX_LIVE_FMAQ,
@@ -3405,6 +3415,7 @@ kgnilnd_check_fma_send_cq(kgn_device_t *dev)
 		saw_reply = !(tx->tx_state & GNILND_TX_WAITING_REPLY);
 
 		spin_unlock(&tx->tx_conn->gnc_list_lock);
+		kgnilnd_conn_mutex_unlock(&conn->gnc_smsg_mutex);
 
 		if (queued_fma) {
 			CDEBUG(D_NET, "scheduling conn 0x%p->%s for fmaq\n",
@@ -3473,7 +3484,7 @@ kgnilnd_check_fma_rcv_cq(kgn_device_t *dev)
 			return 1;
 		}
 		rrc = kgnilnd_cq_get_event(dev->gnd_rcv_fma_cqh, &event_data);
-		mutex_unlock(&dev->gnd_cq_mutex);
+		kgnilnd_gl_mutex_unlock(&dev->gnd_cq_mutex);
 
 		if (rrc == GNI_RC_NOT_DONE) {
 			CDEBUG(D_INFO, "SMSG RX CQ %d empty data "LPX64" "
@@ -4085,7 +4096,7 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 		RETURN_EXIT;
 
 	timestamp = jiffies;
-	mutex_lock(&conn->gnc_device->gnd_cq_mutex);
+	kgnilnd_gl_mutex_lock(&conn->gnc_device->gnd_cq_mutex);
 	/* delay in jiffies - we are really concerned only with things that
 	 * result in a schedule() or really holding this off for long times .
 	 * NB - mutex_lock could spin for 2 jiffies before going to sleep to wait */
@@ -4114,7 +4125,7 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 		libcfs_nid2str(conn->gnc_peer->gnp_nid),
 		cfs_duration_sec(timestamp - newest_last_rx),
 		cfs_duration_sec(GNILND_TIMEOUTRX(timeout)));
-		mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
+		kgnilnd_gl_mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
 		rc = -ETIME;
 		kgnilnd_close_conn(conn, rc);
 		RETURN_EXIT;
@@ -4123,7 +4134,7 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 	rrc = kgnilnd_smsg_getnext(conn->gnc_ephandle, &prefix);
 
 	if (rrc == GNI_RC_NOT_DONE) {
-		mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
+		kgnilnd_gl_mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
 		CDEBUG(D_INFO, "SMSG RX empty conn 0x%p\n", conn);
 		RETURN_EXIT;
 	}
@@ -4137,7 +4148,7 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 	 */
 
 	if (rrc == GNI_RC_INVALID_STATE) {
-		mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
+		kgnilnd_gl_mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
 		GNIDBG_CONN(D_NETERROR | D_CONSOLE, conn, "Mailbox corruption "
 			"detected closing conn %p from peer %s\n", conn,
 			libcfs_nid2str(conn->gnc_peer->gnp_nid));
@@ -4154,7 +4165,7 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 
 	rx = kgnilnd_alloc_rx();
 	if (rx == NULL) {
-		mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
+		kgnilnd_gl_mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
 		kgnilnd_release_msg(conn);
 		GNIDBG_MSG(D_NETERROR, msg, "Dropping SMSG RX from 0x%p->%s, no RX memory",
 			   conn, libcfs_nid2str(peer->gnp_nid));
@@ -4164,7 +4175,8 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 	GNIDBG_MSG(D_INFO, msg, "SMSG RX on %p", conn);
 
 	timestamp = conn->gnc_last_rx;
-	last_seq = conn->gnc_rx_seq;
+	seq = last_seq = atomic_read(&conn->gnc_rx_seq);
+	atomic_inc(&conn->gnc_rx_seq);
 
 	conn->gnc_last_rx = jiffies;
 	/* stash first rx so we can clear out purgatory
@@ -4172,10 +4184,8 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 	if (conn->gnc_first_rx == 0)
 		conn->gnc_first_rx = jiffies;
 
-	seq = conn->gnc_rx_seq++;
-
 	/* needs to linger to protect gnc_rx_seq like we do with gnc_tx_seq */
-	mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
+	kgnilnd_gl_mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
 	kgnilnd_peer_alive(conn->gnc_peer);
 
 	rx->grx_msg = msg;
@@ -4299,7 +4309,7 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 				       conn, last_seq,
 				       cfs_duration_sec(now - timestamp),
 				       cfs_duration_sec(now - conn->gnc_last_rx_cq),
-				       conn->gnc_tx_seq,
+				       atomic_read(&conn->gnc_tx_seq),
 				       cfs_duration_sec(now - conn->gnc_last_tx),
 				       cfs_duration_sec(now - conn->gnc_last_tx_cq),
 				       cfs_duration_sec(now - conn->gnc_last_noop_want),

@@ -34,4 +34,7 @@
 #define GNILND_REVERSE_RDMA	    GNILND_REVERSE_NONE
 #define GNILND_RDMA_DLVR_OPTION     GNI_DLVMODE_PERFORMANCE
 
+/* Thread-safe kgni implemented in minor ver 44, code rev 0xb9 */
+#define GNILND_KGNI_TS_MINOR_VER 0x44
+
 #endif /* _GNILND_GEMINI_H */
