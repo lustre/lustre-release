@@ -194,11 +194,16 @@ mpi_run () {
 }
 
 nids_list () {
-   local list
-   for i in ${1//,/ }; do
-       list="$list $i@$NETTYPE"
-   done
-   echo $list
+	local list
+	local escape="$2"
+	for i in ${1//,/ }; do
+		if [ "$list" = "" ]; then
+			list="$i@$NETTYPE"
+		else
+			list="$list$escape $i@$NETTYPE"
+		fi
+	done
+	echo $list
 }
 
 # FIXME: all setup/cleanup can be done without rpc.sh

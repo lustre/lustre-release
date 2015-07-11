@@ -2819,24 +2819,27 @@ run_test 76 "Verify open file for 2048 files"
 nrs_write_read() {
 	local n=16
 	local dir=$DIR/$tdir
+	local myRUNAS="$1"
 
 	mkdir $dir || error "mkdir $dir failed"
 	$LFS setstripe -c $OSTCOUNT $dir || error "setstripe to $dir failed"
+	chmod 777 $dir
 
-	do_nodes $CLIENTS dd if=/dev/zero of="$dir/nrs_r_$HOSTNAME"\
+	do_nodes $CLIENTS $myRUNAS dd if=/dev/zero of="$dir/nrs_r_$HOSTNAME"\
 		bs=1M count=$n > /dev/null 2>&1
 
 	for ((i = 0; i < $n; i++)); do
-		do_nodes $CLIENTS dd if=/dev/zero of="$dir/nrs_w_$HOSTNAME"\
-			bs=1M seek=$i count=1 > /dev/null 2>&1 &
+		do_nodes $CLIENTS $myRUNAS dd if=/dev/zero\
+			of="$dir/nrs_w_$HOSTNAME" bs=1M seek=$i count=1\
+			 > /dev/null 2>&1 &
 		local pids_w[$i]=$!
 	done
 	do_nodes $CLIENTS sync;
 	cancel_lru_locks osc
 
 	for ((i = 0; i < $n; i++)); do
-		do_nodes $CLIENTS dd if="$dir/nrs_w_$HOSTNAME" of=/dev/zero\
-			bs=1M seek=$i count=1 > /dev/null 2>&1 &
+		do_nodes $CLIENTS $myRUNAS dd if="$dir/nrs_w_$HOSTNAME"\
+			of=/dev/zero bs=1M seek=$i count=1 > /dev/null 2>&1 &
 		local pids_r[$i]=$!
 	done
 	cancel_lru_locks osc
@@ -2928,6 +2931,149 @@ test_77d() { #LU-3266
 	return 0
 }
 run_test 77d "check TRR nrs policy"
+
+tbf_rule_operate()
+{
+	local facet=$1
+	shift 1
+
+	do_facet $facet lctl set_param \
+		ost.OSS.ost_io.nrs_tbf_rule="$@"
+	[ $? -ne 0 ] &&
+		error "failed to operate on TBF rules"
+}
+
+test_77e() {
+	for i in $(seq 1 $OSTCOUNT)
+	do
+		do_facet ost"$i" lctl set_param \
+			ost.OSS.ost_io.nrs_policies="tbf\ nid"
+		[ $? -ne 0 ] &&
+			error "failed to set TBF policy"
+	done
+
+	# Only operate rules on ost0 since OSTs might run on the same OSS
+	# Add some rules
+	tbf_rule_operate ost0 "start\ localhost\ {0@lo}\ 1000"
+	local address=$(comma_list "$(host_nids_address $CLIENTS $NETTYPE)")
+	local client_nids=$(nids_list $address "\\")
+	tbf_rule_operate ost0 "start\ clients\ {$client_nids}\ 100"
+	tbf_rule_operate ost0 "start\ others\ {*.*.*.*@$NETTYPE}\ 50"
+	nrs_write_read
+
+	# Change the rules
+	tbf_rule_operate ost0 "change\ localhost\ 1001"
+	tbf_rule_operate ost0 "change\ clients\ 101"
+	tbf_rule_operate ost0 "change\ others\ 51"
+	nrs_write_read
+
+	# Stop the rules
+	tbf_rule_operate ost0 "stop\ localhost"
+	tbf_rule_operate ost0 "stop\ clients"
+	tbf_rule_operate ost0 "stop\ others"
+	nrs_write_read
+
+	# Cleanup the TBF policy
+	for i in $(seq 1 $OSTCOUNT)
+	do
+		do_facet ost"$i" lctl set_param \
+			ost.OSS.ost_io.nrs_policies="fifo"
+		[ $? -ne 0 ] &&
+			error "failed to set policy back to fifo"
+	done
+	nrs_write_read
+	return 0
+}
+run_test 77e "check TBF NID nrs policy"
+
+test_77f() {
+	# Configure jobid_var
+	local saved_jobid_var=$($LCTL get_param -n jobid_var)
+	if [ $saved_jobid_var != procname_uid ]; then
+		set_conf_param_and_check client			\
+			"$LCTL get_param -n jobid_var"		\
+			"$FSNAME.sys.jobid_var" procname_uid
+	fi
+
+	for i in $(seq 1 $OSTCOUNT)
+	do
+		do_facet ost"$i" lctl set_param \
+			ost.OSS.ost_io.nrs_policies="tbf\ jobid"
+		[ $? -ne 0 ] &&
+			error "failed to set TBF policy"
+	done
+
+	# Only operate rules on ost0 since OSTs might run on the same OSS
+	# Add some rules
+	tbf_rule_operate ost0 "start\ runas\ {iozone.$RUNAS_ID\ dd.$RUNAS_ID\ tiotest.$RUNAS_ID}\ 1000"
+	tbf_rule_operate ost0 "start\ iozone_runas\ {iozone.$RUNAS_ID}\ 100"
+	tbf_rule_operate ost0 "start\ dd_runas\ {dd.$RUNAS_ID}\ 50"
+	nrs_write_read "$RUNAS"
+
+	# Change the rules
+	tbf_rule_operate ost0 "change\ runas\ 1001"
+	tbf_rule_operate ost0 "change\ iozone_runas\ 101"
+	tbf_rule_operate ost0 "change\ dd_runas\ 51"
+	nrs_write_read "$RUNAS"
+
+	# Stop the rules
+	tbf_rule_operate ost0 "stop\ runas"
+	tbf_rule_operate ost0 "stop\ iozone_runas"
+	tbf_rule_operate ost0 "stop\ dd_runas"
+	nrs_write_read "$RUNAS"
+
+	# Cleanup the TBF policy
+	for i in $(seq 1 $OSTCOUNT)
+	do
+		do_facet ost"$i" lctl set_param \
+			ost.OSS.ost_io.nrs_policies="fifo"
+		[ $? -ne 0 ] &&
+			error "failed to set policy back to fifo"
+	done
+	nrs_write_read "$RUNAS"
+
+	local current_jobid_var=$($LCTL get_param -n jobid_var)
+	if [ $saved_jobid_var != $current_jobid_var ]; then
+		set_conf_param_and_check client			\
+			"$LCTL get_param -n jobid_var"		\
+			"$FSNAME.sys.jobid_var" $saved_jobid_var
+	fi
+	return 0
+}
+run_test 77f "check TBF JobID nrs policy"
+
+test_77g() {
+	for i in $(seq 1 $OSTCOUNT)
+	do
+		do_facet ost"$i" lctl set_param \
+			ost.OSS.ost_io.nrs_policies="tbf\ nid"
+		[ $? -ne 0 ] &&
+			error "failed to set TBF policy"
+	done
+
+	for i in $(seq 1 $OSTCOUNT)
+	do
+		do_facet ost"$i" lctl set_param \
+			ost.OSS.ost_io.nrs_policies="tbf\ jobid"
+		[ $? -ne 0 ] &&
+			error "failed to set TBF policy"
+	done
+
+	# Add a rule that only valid for Jobid TBF. If direct change between
+	# TBF types is not supported, this operation will fail.
+	tbf_rule_operate ost0 "start\ dd_runas\ {dd.$RUNAS_ID}\ 50"
+
+	# Cleanup the TBF policy
+	for i in $(seq 1 $OSTCOUNT)
+	do
+		do_facet ost"$i" lctl set_param \
+			ost.OSS.ost_io.nrs_policies="fifo"
+		[ $? -ne 0 ] &&
+			error "failed to set policy back to fifo"
+	done
+	return 0
+}
+run_test 77g "Change TBF type directly"
 
 test_80() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
