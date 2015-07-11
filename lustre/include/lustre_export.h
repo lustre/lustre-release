@@ -117,7 +117,7 @@ struct filter_export_data {
 	atomic_t		fed_soft_sync_count;
 	int			fed_mod_count;/* items in fed_writing list */
 	__u32			fed_group;
-	__u8			fed_pagesize; /* log2 of client page size */
+	__u8			fed_pagebits; /* log2 of client page size */
 };
 
 struct mgs_export_data {

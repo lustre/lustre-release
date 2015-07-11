@@ -58,12 +58,15 @@ static int osc_refresh_count(const struct lu_env *env,
 static int osc_io_unplug_async(const struct lu_env *env,
 			       struct client_obd *cli, struct osc_object *osc);
 static void osc_free_grant(struct client_obd *cli, unsigned int nr_pages,
-			   unsigned int lost_grant);
+			   unsigned int lost_grant, unsigned int dirty_grant);
 
 static void osc_extent_tree_dump0(int level, struct osc_object *obj,
 				  const char *func, int line);
 #define osc_extent_tree_dump(lvl, obj) \
 	osc_extent_tree_dump0(lvl, obj, __func__, __LINE__)
+
+static void osc_unreserve_grant(struct client_obd *cli, unsigned int reserved,
+				unsigned int unused);
 
 /** \addtogroup osc
  *  @{
@@ -497,15 +500,16 @@ static void osc_extent_remove(struct osc_extent *ext)
 
 /**
  * This function is used to merge extents to get better performance. It checks
- * if @cur and @victim are contiguous at chunk level.
+ * if @cur and @victim are contiguous at block level.
  */
 static int osc_extent_merge(const struct lu_env *env, struct osc_extent *cur,
 			    struct osc_extent *victim)
 {
-	struct osc_object *obj = cur->oe_obj;
-	pgoff_t chunk_start;
-	pgoff_t chunk_end;
-	int ppc_bits;
+	struct osc_object	*obj = cur->oe_obj;
+	struct client_obd	*cli = osc_cli(obj);
+	pgoff_t			 chunk_start;
+	pgoff_t			 chunk_end;
+	int			 ppc_bits;
 
 	LASSERT(cur->oe_state == OES_CACHE);
 	LASSERT(osc_object_is_locked(obj));
@@ -526,11 +530,18 @@ static int osc_extent_merge(const struct lu_env *env, struct osc_extent *cur,
 	    chunk_end + 1 != victim->oe_start >> ppc_bits)
 		return -ERANGE;
 
+	/* overall extent size should not exceed the max supported limit
+	 * reported by the server */
+	if (cur->oe_end - cur->oe_start + 1 +
+	    victim->oe_end - victim->oe_start + 1 > cli->cl_max_extent_pages)
+		return -ERANGE;
+
 	OSC_EXTENT_DUMP(D_CACHE, victim, "will be merged by %p.\n", cur);
 
 	cur->oe_start     = min(cur->oe_start, victim->oe_start);
 	cur->oe_end       = max(cur->oe_end,   victim->oe_end);
-	cur->oe_grants   += victim->oe_grants;
+	/* per-extent tax should be accounted only once for the whole extent */
+	cur->oe_grants   += victim->oe_grants - cli->cl_grant_extent_tax;
 	cur->oe_nr_pages += victim->oe_nr_pages;
 	/* only the following bits are needed to merge */
 	cur->oe_urgent   |= victim->oe_urgent;
@@ -553,6 +564,7 @@ static int osc_extent_merge(const struct lu_env *env, struct osc_extent *cur,
 int osc_extent_release(const struct lu_env *env, struct osc_extent *ext)
 {
 	struct osc_object *obj = ext->oe_obj;
+	struct client_obd *cli = osc_cli(obj);
 	int rc = 0;
 	ENTRY;
 
@@ -569,13 +581,19 @@ int osc_extent_release(const struct lu_env *env, struct osc_extent *ext)
 			osc_extent_state_set(ext, OES_TRUNC);
 			ext->oe_trunc_pending = 0;
 		} else {
+			int grant = 0;
+
 			osc_extent_state_set(ext, OES_CACHE);
 			osc_update_pending(obj, OBD_BRW_WRITE,
 					   ext->oe_nr_pages);
 
 			/* try to merge the previous and next extent. */
-			osc_extent_merge(env, ext, prev_extent(ext));
-			osc_extent_merge(env, ext, next_extent(ext));
+			if (osc_extent_merge(env, ext, prev_extent(ext)) == 0)
+				grant += cli->cl_grant_extent_tax;
+			if (osc_extent_merge(env, ext, next_extent(ext)) == 0)
+				grant += cli->cl_grant_extent_tax;
+			if (grant > 0)
+				osc_unreserve_grant(cli, 0, grant);
 
 			if (ext->oe_urgent)
 				list_move_tail(&ext->oe_link,
@@ -583,7 +601,7 @@ int osc_extent_release(const struct lu_env *env, struct osc_extent *ext)
 		}
 		osc_object_unlock(obj);
 
-		osc_io_unplug_async(env, osc_cli(obj), obj);
+		osc_io_unplug_async(env, cli, obj);
 	}
 	osc_extent_put(env, ext);
 	RETURN(rc);
@@ -658,8 +676,8 @@ static struct osc_extent *osc_extent_find(const struct lu_env *env,
 	}
 
 	/* grants has been allocated by caller */
-	LASSERTF(*grants >= chunksize + cli->cl_extent_tax,
-		 "%u/%u/%u.\n", *grants, chunksize, cli->cl_extent_tax);
+	LASSERTF(*grants >= chunksize + cli->cl_grant_extent_tax,
+		 "%u/%u/%u.\n", *grants, chunksize, cli->cl_grant_extent_tax);
 	LASSERTF((max_end - cur->oe_start) < max_pages, EXTSTR"\n",
 		 EXTPARA(cur));
 
@@ -732,6 +750,13 @@ restart:
 			continue;
 		}
 
+		/* check whether maximum extent size will be hit */
+		if ((ext_chk_end - ext_chk_start + 1 + 1) << ppc_bits >
+		    cli->cl_max_extent_pages) {
+			ext = next_extent(ext);
+			continue;
+		}
+
 		/* it's required that an extent must be contiguous at chunk
 		 * level so that we know the whole extent is covered by grant
 		 * (the pages in the extent are NOT required to be contiguous).
@@ -759,7 +784,7 @@ restart:
 			 * in a gap */
 			if (osc_extent_merge(env, ext, next_extent(ext)) == 0)
 				/* we can save extent tax from next extent */
-				*grants += cli->cl_extent_tax;
+				*grants += cli->cl_grant_extent_tax;
 
 			found = osc_extent_hold(ext);
 		}
@@ -780,7 +805,7 @@ restart:
 	} else if (conflict == NULL) {
 		/* create a new extent */
 		EASSERT(osc_extent_is_overlapped(obj, cur) == 0, cur);
-		cur->oe_grants = chunksize + cli->cl_extent_tax;
+		cur->oe_grants = chunksize + cli->cl_grant_extent_tax;
 		*grants -= cur->oe_grants;
 		LASSERT(*grants >= 0);
 
@@ -865,7 +890,7 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 		lost_grant = PAGE_CACHE_SIZE - count;
 	}
 	if (ext->oe_grants > 0)
-		osc_free_grant(cli, nr_pages, lost_grant);
+		osc_free_grant(cli, nr_pages, lost_grant, ext->oe_grants);
 
 	osc_extent_remove(ext);
 	/* put the refcount for RPC */
@@ -1040,7 +1065,7 @@ static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 	osc_object_unlock(obj);
 
 	if (grants > 0 || nr_pages > 0)
-		osc_free_grant(cli, nr_pages, grants);
+		osc_free_grant(cli, nr_pages, grants, grants);
 
 out:
 	cl_io_fini(env, io);
@@ -1158,8 +1183,13 @@ static int osc_extent_expand(struct osc_extent *ext, pgoff_t index,
 		GOTO(out, rc = 0);
 
 	LASSERT(end_chunk + 1 == chunk);
+
 	/* try to expand this extent to cover @index */
 	end_index = min(ext->oe_max_end, ((chunk + 1) << ppc_bits) - 1);
+
+	/* don't go over the maximum extent size reported by server */
+	if (end_index - ext->oe_start + 1 > cli->cl_max_extent_pages)
+		GOTO(out, rc = -ERANGE);
 
 	next = next_extent(ext);
 	if (next != NULL && next->oe_start <= end_index)
@@ -1327,13 +1357,15 @@ static int osc_completion(const struct lu_env *env, struct osc_async_page *oap,
 
 #define OSC_DUMP_GRANT(lvl, cli, fmt, args...) do {			\
 	struct client_obd *__tmp = (cli);				\
-	CDEBUG(lvl, "%s: grant { dirty: %lu/%lu dirty_pages: %ld/%lu "	\
-	       "dropped: %ld avail: %ld, reserved: %ld, flight: %d }"	\
-	       "lru {in list: %ld, left: %ld, waiters: %d }"fmt"\n",	\
+	CDEBUG(lvl, "%s: grant { dirty: %ld/%ld dirty_pages: %ld/%lu "	\
+	       "dropped: %ld avail: %ld, dirty_grant: %ld, "		\
+	       "reserved: %ld, flight: %d } lru {in list: %ld, "	\
+	       "left: %ld, waiters: %d }" fmt "\n",			\
 	       cli_name(__tmp),						\
 	       __tmp->cl_dirty_pages, __tmp->cl_dirty_max_pages,	\
 	       atomic_long_read(&obd_dirty_pages), obd_max_dirty_pages,	\
 	       __tmp->cl_lost_grant, __tmp->cl_avail_grant,		\
+	       __tmp->cl_dirty_grant,					\
 	       __tmp->cl_reserved_grant, __tmp->cl_w_in_flight,		\
 	       atomic_long_read(&__tmp->cl_lru_in_list),		\
 	       atomic_long_read(&__tmp->cl_lru_busy),			\
@@ -1407,8 +1439,10 @@ static void __osc_unreserve_grant(struct client_obd *cli,
 	if (unused > reserved) {
 		cli->cl_avail_grant += reserved;
 		cli->cl_lost_grant  += unused - reserved;
+		cli->cl_dirty_grant -= unused - reserved;
 	} else {
 		cli->cl_avail_grant += unused;
+		cli->cl_dirty_grant += reserved - unused;
 	}
 }
 
@@ -1436,14 +1470,17 @@ static void osc_unreserve_grant(struct client_obd *cli,
  *    See filter_grant_check() for details.
  */
 static void osc_free_grant(struct client_obd *cli, unsigned int nr_pages,
-			   unsigned int lost_grant)
+			   unsigned int lost_grant, unsigned int dirty_grant)
 {
-	unsigned long grant = (1 << cli->cl_chunkbits) + cli->cl_extent_tax;
+	unsigned long grant;
+
+	grant = (1 << cli->cl_chunkbits) + cli->cl_grant_extent_tax;
 
 	spin_lock(&cli->cl_loi_list_lock);
 	atomic_long_sub(nr_pages, &obd_dirty_pages);
 	cli->cl_dirty_pages -= nr_pages;
 	cli->cl_lost_grant += lost_grant;
+	cli->cl_dirty_grant -= dirty_grant;
 	if (cli->cl_avail_grant < grant && cli->cl_lost_grant >= grant) {
 		/* borrow some grant from truncate to avoid the case that
 		 * truncate uses up all avail grant */
@@ -1452,9 +1489,10 @@ static void osc_free_grant(struct client_obd *cli, unsigned int nr_pages,
 	}
 	osc_wake_cache_waiters(cli);
 	spin_unlock(&cli->cl_loi_list_lock);
-	CDEBUG(D_CACHE, "lost %u grant: %lu avail: %lu dirty: %lu\n",
+	CDEBUG(D_CACHE, "lost %u grant: %lu avail: %lu dirty: %lu/%lu\n",
 	       lost_grant, cli->cl_lost_grant,
-	       cli->cl_avail_grant, cli->cl_dirty_pages << PAGE_CACHE_SHIFT);
+	       cli->cl_avail_grant, cli->cl_dirty_pages << PAGE_CACHE_SHIFT,
+	       cli->cl_dirty_grant);
 }
 
 /**
@@ -2334,7 +2372,7 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 	if (ext != NULL && ext->oe_start <= index && ext->oe_max_end >= index) {
 		/* one chunk plus extent overhead must be enough to write this
 		 * page */
-		grants = (1 << cli->cl_chunkbits) + cli->cl_extent_tax;
+		grants = (1 << cli->cl_chunkbits) + cli->cl_grant_extent_tax;
 		if (ext->oe_end >= index)
 			grants = 0;
 
@@ -2371,7 +2409,7 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 	}
 
 	if (ext == NULL) {
-		tmp = (1 << cli->cl_chunkbits) + cli->cl_extent_tax;
+		tmp = (1 << cli->cl_chunkbits) + cli->cl_grant_extent_tax;
 
 		/* try to find new extent to cover this page */
 		LASSERT(oio->oi_active == NULL);

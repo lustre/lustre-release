@@ -446,10 +446,10 @@ check_obd_connect_data(void)
 	CHECK_MEMBER(obd_connect_data, ocd_index);
 	CHECK_MEMBER(obd_connect_data, ocd_brw_size);
 	CHECK_MEMBER(obd_connect_data, ocd_ibits_known);
-	CHECK_MEMBER(obd_connect_data, ocd_blocksize);
-	CHECK_MEMBER(obd_connect_data, ocd_inodespace);
-	CHECK_MEMBER(obd_connect_data, ocd_grant_extent);
-	CHECK_MEMBER(obd_connect_data, ocd_unused);
+	CHECK_MEMBER(obd_connect_data, ocd_grant_blkbits);
+	CHECK_MEMBER(obd_connect_data, ocd_grant_inobits);
+	CHECK_MEMBER(obd_connect_data, ocd_grant_tax_kb);
+	CHECK_MEMBER(obd_connect_data, ocd_grant_max_blks);
 	CHECK_MEMBER(obd_connect_data, ocd_transno);
 	CHECK_MEMBER(obd_connect_data, ocd_group);
 	CHECK_MEMBER(obd_connect_data, ocd_cksum_types);

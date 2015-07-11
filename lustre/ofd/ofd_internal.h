@@ -161,11 +161,6 @@ struct ofd_device {
 	u64			 ofd_tot_granted;
 	/* grant used by I/Os in progress (between prepare and commit) */
 	u64			 ofd_tot_pending;
-	/* free space threshold over which we stop granting space to clients
-	 * ofd_grant_ratio is stored as a fixed-point fraction using
-	 * OFD_GRANT_RATIO_SHIFT of the remaining free space, not in percentage
-	 * values */
-	int			 ofd_grant_ratio;
 	/* number of clients using grants */
 	int			 ofd_tot_granted_clients;
 
@@ -321,7 +316,10 @@ struct ofd_thread_info {
 	/* Space used by the I/O, used by grant code */
 	unsigned long			 fti_used;
 	struct ost_lvb			 fti_lvb;
-	struct lfsck_request		 fti_lr;
+	union {
+		struct lfsck_request	 fti_lr;
+		struct obd_connect_data	 fti_ocd;
+	};
 };
 
 extern void target_recovery_fini(struct obd_device *obd);
@@ -431,17 +429,6 @@ struct ofd_object *ofd_object_find_exists(const struct lu_env *env,
 }
 
 /* ofd_grants.c */
-#define OFD_GRANT_RATIO_SHIFT 8
-static inline u64 ofd_grant_reserved(struct ofd_device *ofd, u64 bavail)
-{
-	return (bavail * ofd->ofd_grant_ratio) >> OFD_GRANT_RATIO_SHIFT;
-}
-
-static inline int ofd_grant_ratio_conv(int percentage)
-{
-	return (percentage << OFD_GRANT_RATIO_SHIFT) / 100;
-}
-
 static inline int ofd_grant_param_supp(struct obd_export *exp)
 {
 	return !!(exp_connect_flags(exp) & OBD_CONNECT_GRANT_PARAM);
@@ -451,16 +438,6 @@ static inline int ofd_grant_param_supp(struct obd_export *exp)
  * That's 4KB=2^12 which is the biggest block size known to work whatever
  * the client's page size is. */
 #define COMPAT_BSIZE_SHIFT 12
-static inline int ofd_grant_compat(struct obd_export *exp,
-				   struct ofd_device *ofd)
-{
-	/* Clients which don't support OBD_CONNECT_GRANT_PARAM cannot handle
-	 * a block size > page size and consume PAGE_CACHE_SIZE of grant when
-	 * dirtying a page regardless of the block size */
-	return !!(ofd_obd(ofd)->obd_self_export != exp &&
-		  ofd->ofd_blockbits > COMPAT_BSIZE_SHIFT &&
-		  !ofd_grant_param_supp(exp));
-}
 
 static inline int ofd_grant_prohibit(struct obd_export *exp,
 				     struct ofd_device *ofd)
@@ -469,12 +446,13 @@ static inline int ofd_grant_prohibit(struct obd_export *exp,
 	 * clients not supporting OBD_CONNECT_GRANT_PARAM.
 	 * Otherwise, space granted to such a client is inflated since it
 	 * consumes PAGE_CACHE_SIZE of grant space per block */
-	return !!(ofd_grant_compat(exp, ofd) && ofd->ofd_grant_compat_disable);
+	return !!(ofd_obd(ofd)->obd_self_export != exp &&
+		  !ofd_grant_param_supp(exp) && ofd->ofd_grant_compat_disable);
 }
 
 void ofd_grant_sanity_check(struct obd_device *obd, const char *func);
-long ofd_grant_connect(const struct lu_env *env, struct obd_export *exp,
-		       u64 want, bool new_conn);
+void ofd_grant_connect(const struct lu_env *env, struct obd_export *exp,
+		       struct obd_connect_data *data, bool new_conn);
 void ofd_grant_discard(struct obd_export *exp);
 void ofd_grant_prepare_read(const struct lu_env *env, struct obd_export *exp,
 			    struct obdo *oa);

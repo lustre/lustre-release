@@ -1994,14 +1994,14 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 		RETURN(rc);
 
 	switch (cattr->la_mode & S_IFMT) {
-        case S_IFLNK: {
-                unsigned int symlen = strlen(spec->u.sp_symname) + 1;
+	case S_IFLNK: {
+		unsigned int symlen = strlen(spec->u.sp_symname) + 1;
 
-                if (symlen > (1 << m->mdd_dt_conf.ddp_block_shift))
-                        RETURN(-ENAMETOOLONG);
-                else
-                        RETURN(0);
-        }
+		if (symlen > m->mdd_dt_conf.ddp_symlink_max)
+			RETURN(-ENAMETOOLONG);
+		else
+			RETURN(0);
+	}
         case S_IFDIR:
         case S_IFREG:
         case S_IFCHR:

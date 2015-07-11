@@ -75,20 +75,20 @@ typedef enum {
 } mntopt_t;
 
 struct dt_device_param {
-        unsigned           ddp_max_name_len;
-        unsigned           ddp_max_nlink;
-        unsigned           ddp_block_shift;
-        mntopt_t           ddp_mntopts;
-        unsigned           ddp_max_ea_size;
-        int                ddp_mount_type;
-        unsigned long long ddp_maxbytes;
-        /* percentage of available space to reserve for grant error margin */
-        int                ddp_grant_reserved;
-        /* per-inode space consumption */
-        short              ddp_inodespace;
-        /* per-fragment grant overhead to be used by client for grant
-         * calculation */
-        int                ddp_grant_frag;
+	unsigned	   ddp_max_name_len;
+	unsigned	   ddp_max_nlink;
+	unsigned	   ddp_symlink_max;
+	mntopt_t	   ddp_mntopts;
+	unsigned	   ddp_max_ea_size;
+	unsigned	   ddp_mount_type;
+	unsigned long long ddp_maxbytes;
+	/* per-inode space consumption */
+	short		   ddp_inodespace;
+	/* maximum number of blocks in an extent */
+	unsigned	   ddp_max_extent_blks;
+	/* per-extent insertion overhead to be used by client for grant
+	 * calculation */
+	unsigned	   ddp_extent_tax;
 };
 
 /**

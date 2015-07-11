@@ -696,9 +696,9 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 	}
 
 	if (mop->mo_device_kb != 0) {
-		if (mop->mo_device_kb < 8096) {
+		if (mop->mo_device_kb < 32384) {
 			fprintf(stderr, "%s: size of filesystem must be larger "
-				"than 8MB, but is set to %lldKB\n",
+				"than 32MB, but is set to %lldKB\n",
 				progname, (long long)mop->mo_device_kb);
 			return EINVAL;
 		}

@@ -26,10 +26,6 @@
  * Copyright (c) 2012, 2015, Intel Corporation.
  */
 /*
- * This file is part of Lustre, http://www.lustre.org/
- * Lustre is a trademark of Sun Microsystems, Inc.
- */
-/*
  * lustre/ofd/ofd_grant.c
  *
  * This file provides code related to grant space management on Object Storage
@@ -38,6 +34,30 @@
  * that enough space will be available when flushing dirty pages asynchronously.
  * Each client node is granted an initial amount of reserved space at connect
  * time and gets additional space back from OST in bulk write reply.
+ *
+ * We actually support three different cases:
+ * - The client supports the new grant parameters (i.e. OBD_CONNECT_GRANT_PARAM)
+ *   which means that all grant overhead calculation happens on the client side.
+ *   The server reports at connect time the backend filesystem block size, the
+ *   maximum extent size as well as the extent insertion cost and it is then up
+ *   to the osc layer to the track dirty extents and consume grant accordingly
+ *   (see osc_cache.c). In each bulk write request, the client provides how much
+ *   grant space was consumed for this RPC.
+ * - The client does not support OBD_CONNECT_GRANT_PARAM and always assumes a
+ *   a backend file system block size of 4KB. We then have two cases:
+ *   - If the block size is really 4KB, then the client can deal with grant
+ *     allocation for partial block writes, but won't take extent insertion cost
+ *     into account. For such clients, we inflate grant by 100% on the server
+ *     side. It means that when 32MB of grant is hold by the client, 64MB of
+ *     grant space is actually reserved on the server. All grant counters
+ *     provided by such a client are inflated by 100%.
+ *   - The backend filesystem block size is bigger than 4KB, which isn't
+ *     supported by the client. In this case, we emulate a 4KB block size and
+ *     consume one block size on the server for each 4KB of grant returned to
+ *     client. With a 128KB blocksize, it means that 32MB dirty pages of 4KB
+ *     on the client will actually consume 1GB of grant on the server.
+ *     All grant counters provided by such a client are inflated by the block
+ *     size ratio.
  *
  * This file handles the core logic for:
  * - grant allocation strategy
@@ -54,45 +74,59 @@
 
 #include "ofd_internal.h"
 
-/* At least enough to send a couple of 1MB RPCs, even if not max sized */
-#define OFD_GRANT_CHUNK			(2ULL * DT_MAX_BRW_SIZE)
-
 /* Clients typically hold 2x their max_rpcs_in_flight of grant space */
 #define OFD_GRANT_SHRINK_LIMIT(exp)	(2ULL * 8 * exp_max_brw_size(exp))
 
-static inline u64 ofd_grant_from_cli(struct obd_export *exp,
-				     struct ofd_device *ofd, u64 val)
+/* Helpers to inflate/deflate grants for clients that do not support the grant
+ * parameters */
+static inline u64 ofd_grant_inflate(struct ofd_device *ofd, u64 val)
 {
-	if (ofd_grant_compat(exp, ofd))
-		/* clients not supporting OBD_CONNECT_GRANT_PARAM actually
-		 * consume 4KB of grant per block, we should thus inflate
-		 * the grant counters to reflect what was actually consumed */
+	if (ofd->ofd_blockbits > COMPAT_BSIZE_SHIFT)
+		/* Client does not support such large block size, grant
+		 * is thus inflated. We already significantly overestimate
+		 * overhead, no need to add the extent tax in this case */
 		return val << (ofd->ofd_blockbits - COMPAT_BSIZE_SHIFT);
-	return val;
+	/* client can deal with the block size, but does not support per-extent
+	 * grant accounting, inflate grant by 100% for such clients */
+	return val << 1;
 }
 
-static inline u64 ofd_grant_to_cli(struct obd_export *exp,
-				   struct ofd_device *ofd, u64 val)
+/* Companion of ofd_grant_inflate() */
+static inline u64 ofd_grant_deflate(struct ofd_device *ofd, u64 val)
 {
-	if (ofd_grant_compat(exp, ofd))
+	if (ofd->ofd_blockbits > COMPAT_BSIZE_SHIFT)
 		return val >> (ofd->ofd_blockbits - COMPAT_BSIZE_SHIFT);
-	return val;
+	return val >> 1;
 }
 
+/* Grant chunk is used as a unit for grant allocation. It should be inflated
+ * if the client does not support the grant paramaters.
+ * Check connection flag against \a data if not NULL. This is used during
+ * connection creation where exp->exp_connect_data isn't populated yet */
 static inline u64 ofd_grant_chunk(struct obd_export *exp,
-				  struct ofd_device *ofd)
+				  struct ofd_device *ofd,
+				  struct obd_connect_data *data)
 {
+	u64 chunk = exp_max_brw_size(exp);
+	u64 tax;
+
 	if (ofd_obd(ofd)->obd_self_export == exp)
 		/* Grant enough space to handle a big precreate request */
 		return OST_MAX_PRECREATE * ofd->ofd_dt_conf.ddp_inodespace / 2;
 
-	if (ofd_grant_compat(exp, ofd))
+	if ((data == NULL && !ofd_grant_param_supp(exp)) ||
+	    (data != NULL && !OCD_HAS_FLAG(data, GRANT_PARAM)))
 		/* Try to grant enough space to send a full-size RPC */
-		return exp_max_brw_size(exp) <<
-		       (ofd->ofd_blockbits - COMPAT_BSIZE_SHIFT);
+		return ofd_grant_inflate(ofd, chunk);
 
-	/* Try to return enough to send two full RPCs, if needed */
-	return exp_max_brw_size(exp) * 2;
+	/* Try to return enough to send two full-size RPCs
+	 * = 2 * (BRW_size + #extents_in_BRW * grant_tax) */
+	tax = 1ULL << ofd->ofd_blockbits;	     /* block size */
+	tax *= ofd->ofd_dt_conf.ddp_max_extent_blks; /* max extent size */
+	tax = (chunk + tax - 1) / tax;		     /* #extents in a RPC */
+	tax *= ofd->ofd_dt_conf.ddp_extent_tax;	     /* extent tax for a RPC */
+	chunk = (chunk + tax) * 2;		     /* we said two full RPCs */
+	return chunk;
 }
 
 /**
@@ -331,14 +365,6 @@ static u64 ofd_grant_space_left(struct obd_export *exp)
 	/* Withdraw space already granted to clients */
 	left -= tot_granted;
 
-	/* If the left space is below the grant threshold x available space,
-	 * stop granting space to clients.
-	 * The purpose of this threshold is to keep some error margin on the
-	 * overhead estimate made by the OSD layer. If we grant all the free
-	 * space, we have no way (grant space cannot be revoked yet) to
-	 * adjust if the write overhead has been underestimated. */
-	left -= min_t(u64, left, ofd_grant_reserved(ofd, avail));
-
 	/* Align left on block size */
 	left &= ~((1ULL << ofd->ofd_blockbits) - 1);
 
@@ -352,25 +378,26 @@ static u64 ofd_grant_space_left(struct obd_export *exp)
 
 /**
  * Process grant information from obdo structure packed in incoming BRW
+ * and inflate grant counters if required.
  *
- * Grab the dirty and seen grant announcements from the incoming obdo.
+ * Grab the dirty and seen grant announcements from the incoming obdo and
+ * inflate all grant counters passed in the request if the client does not
+ * support the grant parameters.
  * We will later calculate the client's new grant and return it.
  * Caller must hold ofd_grant_lock spinlock.
  *
  * \param[in] env	LU environment supplying osfs storage
  * \param[in] exp	export for which we received the request
  * \param[in,out] oa	incoming obdo sent by the client
- *
  */
 static void ofd_grant_incoming(const struct lu_env *env, struct obd_export *exp,
-			       struct obdo *oa)
+			       struct obdo *oa, long chunk)
 {
 	struct filter_export_data	*fed;
 	struct ofd_device		*ofd = ofd_exp(exp);
 	struct obd_device		*obd = exp->exp_obd;
 	long				 dirty;
 	long				 dropped;
-	long				 grant_chunk;
 	ENTRY;
 
 	assert_spin_locked(&ofd->ofd_grant_lock);
@@ -394,16 +421,23 @@ static void ofd_grant_incoming(const struct lu_env *env, struct obd_export *exp,
 	if ((long long)oa->o_dirty < 0)
 		oa->o_dirty = 0;
 
-	dirty       = ofd_grant_from_cli(exp, ofd, oa->o_dirty);
-	dropped     = ofd_grant_from_cli(exp, ofd, (u64)oa->o_dropped);
-	grant_chunk = ofd_grant_chunk(exp, ofd);
+	/* inflate grant counters if required */
+	if (!ofd_grant_param_supp(exp)) {
+		oa->o_grant	= ofd_grant_inflate(ofd, oa->o_grant);
+		oa->o_dirty	= ofd_grant_inflate(ofd, oa->o_dirty);
+		oa->o_dropped	= ofd_grant_inflate(ofd, (u64)oa->o_dropped);
+		oa->o_undirty	= ofd_grant_inflate(ofd, oa->o_undirty);
+	}
+
+	dirty = oa->o_dirty;
+	dropped = oa->o_dropped;
 
 	/* Update our accounting now so that statfs takes it into account.
 	 * Note that fed_dirty is only approximate and can become incorrect
 	 * if RPCs arrive out-of-order.  No important calculations depend
 	 * on fed_dirty however, but we must check sanity to not assert. */
-	if (dirty > fed->fed_grant + 4 * grant_chunk)
-		dirty = fed->fed_grant + 4 * grant_chunk;
+	if (dirty > fed->fed_grant + 4 * chunk)
+		dirty = fed->fed_grant + 4 * chunk;
 	ofd->ofd_tot_dirty += dirty - fed->fed_dirty;
 	if (fed->fed_grant < dropped) {
 		CDEBUG(D_CACHE,
@@ -460,7 +494,7 @@ static void ofd_grant_shrink(struct obd_export *exp, struct obdo *oa,
 			  OFD_GRANT_SHRINK_LIMIT(exp))
 		return;
 
-	grant_shrink = ofd_grant_from_cli(exp, ofd, oa->o_grant);
+	grant_shrink = oa->o_grant;
 
 	fed = &exp->exp_filter_data;
 	fed->fed_grant       -= grant_shrink;
@@ -484,6 +518,8 @@ static void ofd_grant_shrink(struct obd_export *exp, struct obdo *oa,
  * larger than the minimal supported page size (i.e. 4KB).
  *
  * \param[in] exp	export associated which the write request
+ *			if NULL, then size estimate is done for server-side
+ *			grant allocation.
  * \param[in] ofd	ofd device handling the request
  * \param[in] rnb	network buffer to estimate size of
  *
@@ -494,25 +530,38 @@ static inline u64 ofd_grant_rnb_size(struct obd_export *exp,
 				     struct ofd_device *ofd,
 				     struct niobuf_remote *rnb)
 {
-	u64 blocksize;
+	u64 blksize;
 	u64 bytes;
 	u64 end;
 
-	if (exp && ofd_grant_compat(exp, ofd))
-		blocksize = 1ULL << COMPAT_BSIZE_SHIFT;
+	if (exp && !ofd_grant_param_supp(exp) &&
+	    ofd->ofd_blockbits > COMPAT_BSIZE_SHIFT)
+		blksize = 1ULL << COMPAT_BSIZE_SHIFT;
 	else
-		blocksize = 1ULL << ofd->ofd_blockbits;
+		blksize = 1ULL << ofd->ofd_blockbits;
 
 	/* The network buffer might span several blocks, align it on block
 	 * boundaries */
-	bytes  = rnb->rnb_offset & (blocksize - 1);
+	bytes  = rnb->rnb_offset & (blksize - 1);
 	bytes += rnb->rnb_len;
-	end    = bytes & (blocksize - 1);
+	end    = bytes & (blksize - 1);
 	if (end)
-		bytes += blocksize - end;
-	if (exp)
-		/* Apply per-export pecularities if one is given */
-		bytes = ofd_grant_from_cli(exp, ofd, bytes);
+		bytes += blksize - end;
+
+	if (exp == NULL || ofd_grant_param_supp(exp)) {
+		/* add per-extent insertion cost */
+		u64 max_ext;
+		int nr_ext;
+
+		max_ext = blksize * ofd->ofd_dt_conf.ddp_max_extent_blks;
+		nr_ext = (bytes + max_ext - 1) / max_ext;
+		bytes += nr_ext * ofd->ofd_dt_conf.ddp_extent_tax;
+	} else {
+		/* Inflate grant space if client does not support extent-based
+		 * grant allocation */
+		bytes = ofd_grant_inflate(ofd, (u64)bytes);
+	}
+
 	return bytes;
 }
 
@@ -549,64 +598,92 @@ static void ofd_grant_check(const struct lu_env *env, struct obd_export *exp,
 	unsigned long			 ungranted = 0;
 	unsigned long			 granted = 0;
 	int				 i;
-	int				 resend = 0;
+	bool				 skip = false;
 	struct ofd_thread_info		*info = ofd_info(env);
 
 	ENTRY;
 
 	assert_spin_locked(&ofd->ofd_grant_lock);
 
-	if ((oa->o_valid & OBD_MD_FLFLAGS) &&
-	    (oa->o_flags & OBD_FL_RECOV_RESEND)) {
-		resend = 1;
+	if (obd->obd_recovering) {
+		/* Replaying write. Grant info have been processed already so no
+		 * need to do any enforcement here. It is worth noting that only
+		 * bulk writes with all rnbs having OBD_BRW_FROM_GRANT can be
+		 * replayed. If one page hasn't OBD_BRW_FROM_GRANT set, then
+		 * the whole bulk is written synchronously */
+		skip = true;
+		CDEBUG(D_CACHE, "Replaying write, skipping accounting\n");
+	} else if ((oa->o_valid & OBD_MD_FLFLAGS) &&
+		   (oa->o_flags & OBD_FL_RECOV_RESEND)) {
+		/* Recoverable resend, grant info have already been processed as
+		 * well */
+		skip = true;
 		CDEBUG(D_CACHE, "Recoverable resend arrived, skipping "
 				"accounting\n");
+	} else if (ofd_grant_param_supp(exp) && oa->o_grant_used > 0) {
+		/* Client supports the new grant parameters and is telling us
+		 * how much grant space it consumed for this bulk write.
+		 * Although all rnbs are supposed to have the OBD_BRW_FROM_GRANT
+		 * flag set, we will scan the rnb list and looks for non-cache
+		 * I/O in case it changes in the future */
+		if (fed->fed_grant >= oa->o_grant_used) {
+			/* skip grant accounting for rnbs with
+			 * OBD_BRW_FROM_GRANT and just used grant consumption
+			 * claimed in the request */
+			granted = oa->o_grant_used;
+			skip = true;
+		} else {
+			/* client has used more grants for this request that
+			 * it owns ... */
+			CERROR("%s: cli %s claims %lu GRANT, real grant %lu\n",
+			       exp->exp_obd->obd_name,
+			       exp->exp_client_uuid.uuid,
+			       (unsigned long)oa->o_grant_used, fed->fed_grant);
+
+			/* check whether we can fill the gap with unallocated
+			 * grant */
+			if (*left > (oa->o_grant_used - fed->fed_grant)) {
+				/* ouf .. we are safe for now */
+				granted = fed->fed_grant;
+				ungranted = oa->o_grant_used - granted;
+				*left -= ungranted;
+				skip = true;
+			}
+			/* too bad, but we cannot afford to blow up our grant
+			 * accounting. The loop below will handle each rnb in
+			 * case by case. */
+		}
 	}
 
 	for (i = 0; i < niocount; i++) {
 		int bytes;
 
-		if (obd->obd_recovering) {
-			/* Replaying write. Grant info have been processed
-			 * already so no need to do any enforcement here.
-			 * It is worth noting that only bulk writes with all
-			 * rnbs having OBD_BRW_FROM_GRANT can be replayed.
-			 * If one page hasn't OBD_BRW_FROM_GRANT set, then
-			 * the whole bulk is written synchronously */
-			if (rnb[i].rnb_flags & OBD_BRW_FROM_GRANT) {
-				 rnb[i].rnb_flags |= OBD_BRW_GRANTED;
-				 continue;
-			} else {
-				CERROR("%s: cli %s is replaying OST_WRITE "
-				       "while one rnb hasn't OBD_BRW_FROM_GRANT"
-				       " set (0x%x)\n", exp->exp_obd->obd_name,
-					exp->exp_client_uuid.uuid,
-					rnb[i].rnb_flags);
-
-			}
-		} else if ((oa->o_valid & OBD_MD_FLGRANT) &&
-			   (rnb[i].rnb_flags & OBD_BRW_FROM_GRANT)) {
-			if (resend) {
-				/* This is a recoverable resend so grant
-				 * information have already been processed */
+		if ((rnb[i].rnb_flags & OBD_BRW_FROM_GRANT)) {
+			if (skip) {
 				rnb[i].rnb_flags |= OBD_BRW_GRANTED;
 				continue;
 			}
 
-			/* inflate consumed space if needed */
+			/* compute how much grant space is actually needed for
+			 * this rnb, inflate grant if required */
 			bytes = ofd_grant_rnb_size(exp, ofd, &rnb[i]);
-			if (fed->fed_grant < granted + bytes) {
-				CDEBUG(D_CACHE, "%s: cli %s/%p claims %ld+%d "
-				       "GRANT, real grant %lu idx %d\n",
-				       exp->exp_obd->obd_name,
-				       exp->exp_client_uuid.uuid, exp,
-				       granted, bytes, fed->fed_grant, i);
-			} else {
+			if (fed->fed_grant >= granted + bytes) {
 				granted += bytes;
 				rnb[i].rnb_flags |= OBD_BRW_GRANTED;
 				continue;
 			}
+
+			CDEBUG(D_CACHE, "%s: cli %s/%p claims %ld+%d GRANT, "
+			       "real grant %lu idx %d\n", obd->obd_name,
+			       exp->exp_client_uuid.uuid, exp, granted, bytes,
+			       fed->fed_grant, i);
 		}
+
+		if (obd->obd_recovering)
+			CERROR("%s: cli %s is replaying OST_WRITE while one rnb"
+			       " hasn't OBD_BRW_FROM_GRANT set (0x%x)\n",
+			       obd->obd_name, exp->exp_client_uuid.uuid,
+			       rnb[i].rnb_flags);
 
 		/* Consume grant space on the server.
 		 * Unlike above, ofd_grant_rnb_size() is called with exp = NULL
@@ -614,9 +691,10 @@ static void ofd_grant_check(const struct lu_env *env, struct obd_export *exp,
 		 * done on purpose since the server can deal with large block
 		 * size, unlike some clients */
 		bytes = ofd_grant_rnb_size(NULL, ofd, &rnb[i]);
-		if (*left > ungranted + bytes) {
+		if (*left > bytes) {
 			/* if enough space, pretend it was granted */
 			ungranted += bytes;
+			*left -= bytes;
 			rnb[i].rnb_flags |= OBD_BRW_GRANTED;
 			continue;
 		}
@@ -624,26 +702,25 @@ static void ofd_grant_check(const struct lu_env *env, struct obd_export *exp,
 		/* We can't check for already-mapped blocks here (make sense
 		 * when backend filesystem does not use COW) as it requires
 		 * dropping the grant lock.
-		 * Instead, we clear ~OBD_BRW_GRANTED and in that case we need
+		 * Instead, we clear OBD_BRW_GRANTED and in that case we need
 		 * to go through and verify if all of the blocks not marked
 		 *  BRW_GRANTED are already mapped and we can ignore this error.
 		 */
 		rnb[i].rnb_flags &= ~OBD_BRW_GRANTED;
 		CDEBUG(D_CACHE,"%s: cli %s/%p idx %d no space for %d\n",
-				exp->exp_obd->obd_name,
-				exp->exp_client_uuid.uuid, exp, i, bytes);
+		       obd->obd_name, exp->exp_client_uuid.uuid, exp, i, bytes);
 	}
 
 	/* record in o_grant_used the actual space reserved for the I/O, will be
 	 * used later in ofd_grant_commmit() */
 	oa->o_grant_used = granted + ungranted;
+	info->fti_used = granted + ungranted;
 
+	/* record space used for the I/O, will be used in ofd_grant_commmit() */
 	/* Now substract what the clients has used already.  We don't subtract
 	 * this from the tot_granted yet, so that other client's can't grab
 	 * that space before we have actually allocated our blocks. That
 	 * happens in ofd_grant_commit() after the writes are done. */
-	info->fti_used = granted + ungranted;
-	*left -= ungranted;
 	fed->fed_grant -= granted;
 	fed->fed_pending += oa->o_grant_used;
 	ofd->ofd_tot_granted += ungranted;
@@ -654,8 +731,9 @@ static void ofd_grant_check(const struct lu_env *env, struct obd_export *exp,
 	       "\n", obd->obd_name, exp->exp_client_uuid.uuid, exp,
 	       granted, ungranted, fed->fed_grant, fed->fed_dirty);
 
-	if (obd->obd_recovering)
-		/* don't update dirty accounting during recovery */
+	if (obd->obd_recovering || (oa->o_valid & OBD_MD_FLGRANT) == 0)
+		/* don't update dirty accounting during recovery or
+		 * if grant information got discarded (e.g. during resend) */
 		RETURN_EXIT;
 
 	if (fed->fed_dirty < granted) {
@@ -698,12 +776,12 @@ static void ofd_grant_check(const struct lu_env *env, struct obd_export *exp,
  * \retval			amount of grant space allocated
  */
 static long ofd_grant_alloc(struct obd_export *exp, u64 curgrant,
-			    u64 want, u64 left, bool conservative)
+			    u64 want, u64 left, long chunk,
+			    bool conservative)
 {
 	struct obd_device		*obd = exp->exp_obd;
 	struct ofd_device		*ofd = ofd_exp(exp);
 	struct filter_export_data	*fed = &exp->exp_filter_data;
-	long				 grant_chunk;
 	u64				 grant;
 
 	ENTRY;
@@ -717,12 +795,6 @@ static long ofd_grant_alloc(struct obd_export *exp, u64 curgrant,
 		RETURN(0);
 	}
 
-	/* client not supporting OBD_CONNECT_GRANT_PARAM works with a 4KB block
-	 * size while the reality is different */
-	curgrant = ofd_grant_from_cli(exp, ofd, curgrant);
-	want = ofd_grant_from_cli(exp, ofd, want);
-	grant_chunk = ofd_grant_chunk(exp, ofd);
-
 	/* Grant some fraction of the client's requested grant space so that
 	 * they are not always waiting for write credits (not all of it to
 	 * avoid overgranting in face of multiple RPCs in flight).  This
@@ -732,8 +804,8 @@ static long ofd_grant_alloc(struct obd_export *exp, u64 curgrant,
 	 * has and what we think it has, don't grant very much and let the
 	 * client consume its grant first.  Either it just has lots of RPCs
 	 * in flight, or it was evicted and its grants will soon be used up. */
-	if (curgrant >= want || curgrant >= fed->fed_grant + grant_chunk)
-		   RETURN(0);
+	if (curgrant >= want || curgrant >= fed->fed_grant + chunk)
+		RETURN(0);
 
 	if (obd->obd_recovering)
 		conservative = false;
@@ -743,16 +815,16 @@ static long ofd_grant_alloc(struct obd_export *exp, u64 curgrant,
 		 * one chunk */
 		left >>= 3;
 	grant = min(want - curgrant, left);
-	/* round grant upt to the next block size */
+	/* round grant up to the next block size */
 	grant = (grant + (1 << ofd->ofd_blockbits) - 1) &
 		~((1ULL << ofd->ofd_blockbits) - 1);
 
 	if (!grant)
 		RETURN(0);
 
-	/* Limit to ofd_grant_chunk() if not reconnect/recovery */
-	if ((grant > grant_chunk) && conservative)
-		grant = grant_chunk;
+	/* Limit to grant_chunk if not reconnect/recovery */
+	if ((grant > chunk) && conservative)
+		grant = chunk;
 
 	ofd->ofd_tot_granted += grant;
 	fed->fed_grant += grant;
@@ -775,7 +847,7 @@ static long ofd_grant_alloc(struct obd_export *exp, u64 curgrant,
 	       exp, ofd->ofd_tot_dirty, ofd->ofd_tot_granted,
 	       obd->obd_num_exports);
 
-	RETURN(ofd_grant_to_cli(exp, ofd, grant));
+	RETURN(grant);
 }
 
 /**
@@ -788,27 +860,37 @@ static long ofd_grant_alloc(struct obd_export *exp, u64 curgrant,
  *
  * \param[in] env	LU environment provided by the caller
  * \param[in] exp	client's export which is (re)connecting
- * \param[in] want	how much grant space the client would like to get
+ * \param[in,out] data	obd_connect_data structure sent by the client in the
+ *			connect request
  * \param[in] new_conn	must set to true if this is a new connection and false
  *			for a reconnection
- *
- * \retval		amount of grant space currently owned by the client
  */
-long ofd_grant_connect(const struct lu_env *env, struct obd_export *exp,
-		       u64 want, bool new_conn)
+void ofd_grant_connect(const struct lu_env *env, struct obd_export *exp,
+		       struct obd_connect_data *data, bool new_conn)
 {
 	struct ofd_device		*ofd = ofd_exp(exp);
 	struct filter_export_data	*fed = &exp->exp_filter_data;
 	u64				 left = 0;
-	long				 grant;
+	u64				 want;
+	long				 chunk;
 	int				 from_cache;
 	int				 force = 0; /* can use cached data */
 
 	/* don't grant space to client with read-only access */
-	if ((exp_connect_flags(exp) & OBD_CONNECT_RDONLY) ||
-	    ofd_grant_prohibit(exp, ofd))
-		return 0;
+	if (OCD_HAS_FLAG(data, RDONLY) ||
+	    (!OCD_HAS_FLAG(data, GRANT_PARAM) &&
+	     ofd->ofd_grant_compat_disable)) {
+		data->ocd_grant = 0;
+		data->ocd_connect_flags &= ~(OBD_CONNECT_GRANT |
+					     OBD_CONNECT_GRANT_PARAM);
+		RETURN_EXIT;
+	}
 
+	if (OCD_HAS_FLAG(data, GRANT_PARAM))
+		want = data->ocd_grant;
+	else
+		want = ofd_grant_inflate(ofd, data->ocd_grant);
+	chunk = ofd_grant_chunk(exp, ofd, data);
 refresh:
 	ofd_grant_statfs(env, exp, force, &from_cache);
 
@@ -819,28 +901,37 @@ refresh:
 	left = ofd_grant_space_left(exp);
 
 	/* get fresh statfs data if we are short in ungranted space */
-	if (from_cache && left < 32 * ofd_grant_chunk(exp, ofd)) {
+	if (from_cache && left < 32 * chunk) {
 		spin_unlock(&ofd->ofd_grant_lock);
 		CDEBUG(D_CACHE, "fs has no space left and statfs too old\n");
 		force = 1;
 		goto refresh;
 	}
 
-	ofd_grant_alloc(exp,
-			ofd_grant_to_cli(exp, ofd, (u64)fed->fed_grant),
-			want, left, new_conn);
+	ofd_grant_alloc(exp, (u64)fed->fed_grant, want, left, chunk, new_conn);
 
 	/* return to client its current grant */
-	grant = ofd_grant_to_cli(exp, ofd, (u64)fed->fed_grant);
-	ofd->ofd_tot_granted_clients++;
+	if (OCD_HAS_FLAG(data, GRANT_PARAM))
+		data->ocd_grant = fed->fed_grant;
+	else
+		/* deflate grant */
+		data->ocd_grant = ofd_grant_deflate(ofd,
+						    (u64)fed->fed_grant);
+
+	/* reset dirty accounting */
+	ofd->ofd_tot_dirty -= fed->fed_dirty;
+	fed->fed_dirty = 0;
+
+	if (new_conn && OCD_HAS_FLAG(data, GRANT))
+		ofd->ofd_tot_granted_clients++;
 
 	spin_unlock(&ofd->ofd_grant_lock);
 
-	CDEBUG(D_CACHE, "%s: cli %s/%p ocd_grant: %ld want: "LPU64" left: "
+	CDEBUG(D_CACHE, "%s: cli %s/%p ocd_grant: %d want: "LPU64" left: "
 	       LPU64"\n", exp->exp_obd->obd_name, exp->exp_client_uuid.uuid,
-	       exp, grant, want, left);
+	       exp, data->ocd_grant, want, left);
 
-	return grant;
+	EXIT;
 }
 
 /**
@@ -900,14 +991,15 @@ void ofd_grant_prepare_read(const struct lu_env *env,
 	struct ofd_device	*ofd = ofd_exp(exp);
 	int			 do_shrink;
 	u64			 left = 0;
+	ENTRY;
 
 	if (!oa)
-		return;
+		RETURN_EXIT;
 
 	if ((oa->o_valid & OBD_MD_FLGRANT) == 0)
 		/* The read request does not contain any grant
 		 * information */
-		return;
+		RETURN_EXIT;
 
 	if ((oa->o_valid & OBD_MD_FLFLAGS) &&
 	    (oa->o_flags & OBD_FL_SHRINK_GRANT)) {
@@ -935,8 +1027,9 @@ void ofd_grant_prepare_read(const struct lu_env *env,
 		do_shrink = 0;
 	}
 
-	/* extract incoming grant infomation provided by the client */
-	ofd_grant_incoming(env, exp, oa);
+	/* extract incoming grant information provided by the client and
+	 * inflate grant counters if required */
+	ofd_grant_incoming(env, exp, oa, ofd_grant_chunk(exp, ofd, NULL));
 
 	/* unlike writes, we don't return grants back on reads unless a grant
 	 * shrink request was packed and we decided to turn it down. */
@@ -945,7 +1038,10 @@ void ofd_grant_prepare_read(const struct lu_env *env,
 	else
 		oa->o_grant = 0;
 
+	if (!ofd_grant_param_supp(exp))
+		oa->o_grant = ofd_grant_deflate(ofd, oa->o_grant);
 	spin_unlock(&ofd->ofd_grant_lock);
+	EXIT;
 }
 
 /**
@@ -978,6 +1074,7 @@ void ofd_grant_prepare_write(const struct lu_env *env,
 	u64			 left;
 	int			 from_cache;
 	int			 force = 0; /* can use cached data intially */
+	long			 chunk = ofd_grant_chunk(exp, ofd, NULL);
 	int			 rc;
 
 	ENTRY;
@@ -993,7 +1090,7 @@ refresh:
 	left = ofd_grant_space_left(exp);
 
 	/* Get fresh statfs data if we are short in ungranted space */
-	if (from_cache && left < 32 * ofd_grant_chunk(exp, ofd)) {
+	if (from_cache && left < 32 * chunk) {
 		spin_unlock(&ofd->ofd_grant_lock);
 		CDEBUG(D_CACHE, "%s: fs has no space left and statfs too old\n",
 		       obd->obd_name);
@@ -1004,7 +1101,7 @@ refresh:
 	/* When close to free space exhaustion, trigger a sync to force
 	 * writeback cache to consume required space immediately and release as
 	 * much space as possible. */
-	if (!obd->obd_recovering && force != 2 && left < OFD_GRANT_CHUNK) {
+	if (!obd->obd_recovering && force != 2 && left < chunk) {
 		bool from_grant = true;
 		int  i;
 
@@ -1026,8 +1123,9 @@ refresh:
 		}
 	}
 
-	/* extract incoming grant information provided by the client */
-	ofd_grant_incoming(env, exp, oa);
+	/* extract incoming grant information provided by the client,
+	 * and inflate grant counters if required */
+	ofd_grant_incoming(env, exp, oa, chunk);
 
 	/* check limit */
 	ofd_grant_check(env, exp, oa, rnb, niocount, &left);
@@ -1045,8 +1143,12 @@ refresh:
 	else
 		/* grant more space back to the client if possible */
 		oa->o_grant = ofd_grant_alloc(exp, oa->o_grant, oa->o_undirty,
-					      left, true);
+					      left, chunk, true);
+
+	if (!ofd_grant_param_supp(exp))
+		oa->o_grant = ofd_grant_deflate(ofd, oa->o_grant);
 	spin_unlock(&ofd->ofd_grant_lock);
+	EXIT;
 }
 
 /**
@@ -1137,10 +1239,14 @@ long ofd_grant_create(const struct lu_env *env, struct obd_export *exp, int *nr)
 	/* grant more space for precreate purpose if possible. */
 	wanted = OST_MAX_PRECREATE * ofd->ofd_dt_conf.ddp_inodespace / 2;
 	if (wanted > fed->fed_grant) {
+		long chunk;
+
 		/* always try to book enough space to handle a large precreate
 		 * request */
+		chunk = ofd_grant_chunk(exp, ofd, NULL);
 		wanted -= fed->fed_grant;
-		ofd_grant_alloc(exp, fed->fed_grant, wanted, left, false);
+		ofd_grant_alloc(exp, fed->fed_grant, wanted, left, chunk,
+				false);
 	}
 	spin_unlock(&ofd->ofd_grant_lock);
 	RETURN(granted);

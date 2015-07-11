@@ -148,68 +148,6 @@ static int ofd_grant_precreate_seq_show(struct seq_file *m, void *data)
 LPROC_SEQ_FOPS_RO(ofd_grant_precreate);
 
 /**
- * Show total amount of free space reserved for grants.
- *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
- */
-static int ofd_grant_ratio_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_device *obd = m->private;
-	struct ofd_device *ofd;
-
-	LASSERT(obd != NULL);
-	ofd = ofd_dev(obd->obd_lu_dev);
-	return seq_printf(m, "%d%%\n",
-			  (int) ofd_grant_reserved(ofd, 100));
-}
-
-/**
- * Change amount of free space reserved for grants.
- *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents maximum number
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- *
- * \retval		\a count on success
- * \retval		negative number on error
- */
-static ssize_t
-ofd_grant_ratio_seq_write(struct file *file, const char __user *buffer,
-			  size_t count, loff_t *off)
-{
-	struct seq_file         *m = file->private_data;
-	struct obd_device       *obd = m->private;
-	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
-	int			 val;
-	int			 rc;
-
-	rc = lprocfs_write_helper(buffer, count, &val);
-	if (rc)
-		return rc;
-
-	if (val > 100 || val < 0)
-		return -EINVAL;
-
-	if (val == 0)
-		CWARN("%s: disabling grant error margin\n", obd->obd_name);
-	if (val > 50)
-		CWARN("%s: setting grant error margin >50%%, be warned that "
-		      "a huge part of the free space is now reserved for "
-		      "grants\n", obd->obd_name);
-
-	spin_lock(&ofd->ofd_grant_lock);
-	ofd->ofd_grant_ratio = ofd_grant_ratio_conv(val);
-	spin_unlock(&ofd->ofd_grant_lock);
-	return count;
-}
-LPROC_SEQ_FOPS(ofd_grant_ratio);
-
-/**
  * Show number of precreates allowed in a single transaction.
  *
  * \param[in] m		seq_file handle
@@ -940,8 +878,6 @@ struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	  .fops =	&ofd_tot_granted_fops		},
 	{ .name =	"grant_precreate",
 	  .fops =	&ofd_grant_precreate_fops	},
-	{ .name =	"grant_ratio",
-	  .fops =	&ofd_grant_ratio_fops		},
 	{ .name =	"precreate_batch",
 	  .fops =	&ofd_precreate_batch_fops	},
 	{ .name =	"recovery_status",

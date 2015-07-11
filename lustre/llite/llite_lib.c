@@ -385,6 +385,10 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 		GOTO(out_md_fid, err = -ENODEV);
 	}
 
+	/* pass client page size via ocd_grant_blkbits, the server should report
+	 * back its backend blocksize for grant calculation purpose */
+	data->ocd_grant_blkbits = PAGE_SHIFT;
+
         data->ocd_connect_flags = OBD_CONNECT_GRANT     | OBD_CONNECT_VERSION  |
 				  OBD_CONNECT_REQPORTAL | OBD_CONNECT_BRW_SIZE |
                                   OBD_CONNECT_CANCELSET | OBD_CONNECT_FID      |
@@ -398,6 +402,9 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 				  OBD_CONNECT_LAYOUTLOCK |
 				  OBD_CONNECT_PINGLESS | OBD_CONNECT_LFSCK |
 				  OBD_CONNECT_BULK_MBITS;
+
+	if (!OBD_FAIL_CHECK(OBD_FAIL_OSC_CONNECT_GRANT_PARAM))
+		data->ocd_connect_flags |= OBD_CONNECT_GRANT_PARAM;
 
         if (!OBD_FAIL_CHECK(OBD_FAIL_OSC_CONNECT_CKSUM)) {
                 /* OBD_CONNECT_CKSUM should always be set, even if checksums are

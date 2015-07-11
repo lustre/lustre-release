@@ -173,18 +173,21 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 	else if (data->ocd_connect_flags & OBD_CONNECT_SKIP_ORPHAN)
 		RETURN(-EPROTO);
 
-	if (ofd_grant_param_supp(exp)) {
-		exp->exp_filter_data.fed_pagesize = data->ocd_blocksize;
-		/* ocd_{blocksize,inodespace} are log2 values */
-		data->ocd_blocksize  = ofd->ofd_blockbits;
-		data->ocd_inodespace = ofd->ofd_dt_conf.ddp_inodespace;
-		/* ocd_grant_extent is in 1K blocks */
-		data->ocd_grant_extent = ofd->ofd_dt_conf.ddp_grant_frag >> 10;
+	if (OCD_HAS_FLAG(data, GRANT_PARAM)) {
+		/* client is reporting its page size, for future use */
+		exp->exp_filter_data.fed_pagebits = data->ocd_grant_blkbits;
+		data->ocd_grant_blkbits  = ofd->ofd_blockbits;
+		/* ddp_inodespace may not be power-of-two value, eg. for ldiskfs
+		 * it's LDISKFS_DIR_REC_LEN(20) = 28. */
+		data->ocd_grant_inobits =
+				       fls(ofd->ofd_dt_conf.ddp_inodespace - 1);
+		/* ocd_grant_tax_kb is in 1K byte blocks */
+		data->ocd_grant_tax_kb = ofd->ofd_dt_conf.ddp_extent_tax >> 10;
+		data->ocd_grant_max_blks = ofd->ofd_dt_conf.ddp_max_extent_blks;
 	}
 
-	if (data->ocd_connect_flags & OBD_CONNECT_GRANT)
-		data->ocd_grant = ofd_grant_connect(env, exp, data->ocd_grant,
-						    new_connection);
+	if (OCD_HAS_FLAG(data, GRANT))
+		ofd_grant_connect(env, exp, data, new_connection);
 
 	if (data->ocd_connect_flags & OBD_CONNECT_INDEX) {
 		struct lr_server_data *lsd = &ofd->ofd_lut.lut_lsd;
@@ -508,10 +511,8 @@ static int ofd_destroy_export(struct obd_export *exp)
 	ofd_grant_discard(exp);
 	ofd_fmd_cleanup(exp);
 
-	if (exp_connect_flags(exp) & OBD_CONNECT_GRANT_SHRINK) {
-		if (ofd->ofd_tot_granted_clients > 0)
-			ofd->ofd_tot_granted_clients --;
-	}
+	if (exp_connect_flags(exp) & OBD_CONNECT_GRANT)
+		ofd->ofd_tot_granted_clients--;
 
 	if (!(exp->exp_flags & OBD_OPT_FORCE))
 		ofd_grant_sanity_check(exp->exp_obd, __FUNCTION__);
@@ -848,7 +849,8 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 	if (ofd->ofd_raid_degraded)
 		osfs->os_state |= OS_STATE_DEGRADED;
 
-	if (obd->obd_self_export != exp && ofd_grant_compat(exp, ofd)) {
+	if (obd->obd_self_export != exp && !ofd_grant_param_supp(exp) &&
+	    ofd->ofd_blockbits > COMPAT_BSIZE_SHIFT) {
 		/* clients which don't support OBD_CONNECT_GRANT_PARAM
 		 * should not see a block size > page size, otherwise
 		 * cl_lost_grant goes mad. Therefore, we emulate a 4KB (=2^12)

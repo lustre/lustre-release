@@ -192,6 +192,8 @@ struct client_obd {
 	unsigned long		 cl_dirty_transit;    /* dirty synchronous */
 	unsigned long		 cl_avail_grant;   /* bytes of credit for ost */
 	unsigned long		 cl_lost_grant;    /* lost credits (trunc) */
+	/* grant consumed for dirty pages */
+	unsigned long		 cl_dirty_grant;
 
 	/* since we allocate grant by blocks, we don't know how many grant will
 	 * be used to add a page into cache. As a solution, we reserve maximum
@@ -206,7 +208,11 @@ struct client_obd {
 	/* A chunk is an optimal size used by osc_extent to determine
 	 * the extent size. A chunk is max(PAGE_CACHE_SIZE, OST block size) */
 	int			cl_chunkbits;
-	unsigned int		cl_extent_tax;	/* extent overhead, by bytes */
+	/* extent insertion metadata overhead to be accounted in grant,
+	 * in bytes */
+	unsigned int		cl_grant_extent_tax;
+	/* maximum extent size, in number of pages */
+	unsigned int		cl_max_extent_pages;
 
 	/* keep track of objects that have lois that contain pages which
 	 * have been queued for async brw.  this lock also protects the

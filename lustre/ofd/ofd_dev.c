@@ -634,21 +634,26 @@ static int ofd_prepare(const struct lu_env *env, struct lu_device *pdev,
 static int ofd_recovery_complete(const struct lu_env *env,
 				 struct lu_device *dev)
 {
+	struct ofd_thread_info	*oti = ofd_info(env);
 	struct ofd_device	*ofd = ofd_dev(dev);
 	struct lu_device	*next = &ofd->ofd_osd->dd_lu_dev;
-	int			 rc = 0, max_precreate;
+	int			 rc = 0;
 
 	ENTRY;
 
 	/*
 	 * Grant space for object precreation on the self export.
-	 * This initial reserved space (i.e. 10MB for zfs and 280KB for ldiskfs)
+	 * The initial reserved space (i.e. 10MB for zfs and 280KB for ldiskfs)
 	 * is enough to create 10k objects. More space is then acquired for
 	 * precreation in ofd_grant_create().
 	 */
-	max_precreate = OST_MAX_PRECREATE * ofd->ofd_dt_conf.ddp_inodespace / 2;
-	ofd_grant_connect(env, dev->ld_obd->obd_self_export, max_precreate,
-			  false);
+	memset(&oti->fti_ocd, 0, sizeof(oti->fti_ocd));
+	oti->fti_ocd.ocd_grant = OST_MAX_PRECREATE / 2;
+	oti->fti_ocd.ocd_grant *= ofd->ofd_dt_conf.ddp_inodespace;
+	oti->fti_ocd.ocd_connect_flags = OBD_CONNECT_GRANT |
+					 OBD_CONNECT_GRANT_PARAM;
+	ofd_grant_connect(env, dev->ld_obd->obd_self_export, &oti->fti_ocd,
+			  true);
 	rc = next->ld_ops->ldo_recovery_complete(env, next);
 	RETURN(rc);
 }
@@ -2848,14 +2853,6 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 			   "filter_ldlm_cb_client", &obd->obd_ldlm_client);
 
 	dt_conf_get(env, m->ofd_osd, &m->ofd_dt_conf);
-
-	/* Allow at most ddp_grant_reserved% of the available filesystem space
-	 * to be granted to clients, so that any errors in the grant overhead
-	 * calculations do not allow granting more space to clients than can be
-	 * written. Assumes that in aggregate the grant overhead calculations do
-	 * not have more than ddp_grant_reserved% estimation error in them. */
-	m->ofd_grant_ratio =
-		ofd_grant_ratio_conv(m->ofd_dt_conf.ddp_grant_reserved);
 
 	rc = tgt_init(env, &m->ofd_lut, obd, m->ofd_osd, ofd_common_slice,
 		      OBD_FAIL_OST_ALL_REQUEST_NET,

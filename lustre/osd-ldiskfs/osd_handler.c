@@ -60,6 +60,7 @@
 
 #include <ldiskfs/ldiskfs.h>
 #include <ldiskfs/xattr.h>
+#include <ldiskfs/ldiskfs_extents.h>
 #undef ENTRY
 /*
  * struct OBD_{ALLOC,FREE}*()
@@ -1582,18 +1583,17 @@ static int osd_object_print(const struct lu_env *env, void *cookie,
                     d ? d->id_ops->id_name : "plain");
 }
 
-#define GRANT_FOR_LOCAL_OIDS 32 /* 128kB for last_rcvd, quota files, ... */
-
 /*
  * Concurrency: shouldn't matter.
  */
 int osd_statfs(const struct lu_env *env, struct dt_device *d,
                struct obd_statfs *sfs)
 {
-        struct osd_device  *osd = osd_dt_dev(d);
-        struct super_block *sb = osd_sb(osd);
-        struct kstatfs     *ksfs;
-        int result = 0;
+	struct osd_device	*osd = osd_dt_dev(d);
+	struct super_block	*sb = osd_sb(osd);
+	struct kstatfs		*ksfs;
+	__u64			 reserved;
+	int			 result = 0;
 
 	if (unlikely(osd->od_mnt == NULL))
 		return -EINPROGRESS;
@@ -1607,34 +1607,40 @@ int osd_statfs(const struct lu_env *env, struct dt_device *d,
                 ksfs = &osd_oti_get(env)->oti_ksfs;
         }
 
-	spin_lock(&osd->od_osfs_lock);
 	result = sb->s_op->statfs(sb->s_root, ksfs);
-	if (likely(result == 0)) { /* N.B. statfs can't really fail */
-		statfs_pack(sfs, ksfs);
-		if (unlikely(sb->s_flags & MS_RDONLY))
-			sfs->os_state = OS_STATE_READONLY;
-		if (LDISKFS_HAS_INCOMPAT_FEATURE(sb,
-					      LDISKFS_FEATURE_INCOMPAT_EXTENTS))
-			sfs->os_maxbytes = sb->s_maxbytes;
-		else
-			sfs->os_maxbytes = LDISKFS_SB(sb)->s_bitmap_maxbytes;
-	}
-	spin_unlock(&osd->od_osfs_lock);
+	if (result)
+		goto out;
 
+	statfs_pack(sfs, ksfs);
+	if (unlikely(sb->s_flags & MS_RDONLY))
+		sfs->os_state = OS_STATE_READONLY;
+	if (LDISKFS_HAS_INCOMPAT_FEATURE(sb,
+					 LDISKFS_FEATURE_INCOMPAT_EXTENTS))
+		sfs->os_maxbytes = sb->s_maxbytes;
+	else
+		sfs->os_maxbytes = LDISKFS_SB(sb)->s_bitmap_maxbytes;
+
+	/*
+	 * Reserve some space so to avoid fragmenting the filesystem too much.
+	 * Fragmentation not only impacts performance, but can also increase
+	 * metadata overhead significantly, causing grant calculation to be
+	 * wrong.
+	 *
+	 * Reserve 0.78% of total space, at least 8MB for small filesystems.
+	 */
+	CLASSERT(OSD_STATFS_RESERVED > LDISKFS_MAX_BLOCK_SIZE);
+	reserved = OSD_STATFS_RESERVED >> sb->s_blocksize_bits;
+	if (likely(sfs->os_blocks >= reserved << OSD_STATFS_RESERVED_SHIFT))
+		reserved = sfs->os_blocks >> OSD_STATFS_RESERVED_SHIFT;
+
+	sfs->os_blocks -= reserved;
+	sfs->os_bfree  -= min(reserved, sfs->os_bfree);
+	sfs->os_bavail -= min(reserved, sfs->os_bavail);
+
+out:
 	if (unlikely(env == NULL))
-                OBD_FREE_PTR(ksfs);
-
-	/* Reserve a small amount of space for local objects like last_rcvd,
-	 * llog, quota files, ... */
-	if (sfs->os_bavail <= GRANT_FOR_LOCAL_OIDS) {
-		sfs->os_bavail = 0;
-	} else {
-		sfs->os_bavail -= GRANT_FOR_LOCAL_OIDS;
-		/** Take out metadata overhead for indirect blocks */
-		sfs->os_bavail -= sfs->os_bavail >> (sb->s_blocksize_bits - 3);
-	}
-
-        return result;
+		OBD_FREE_PTR(ksfs);
+	return result;
 }
 
 /**
@@ -1663,21 +1669,23 @@ static void osd_conf_get(const struct lu_env *env,
          */
         param->ddp_max_name_len = LDISKFS_NAME_LEN;
         param->ddp_max_nlink    = LDISKFS_LINK_MAX;
-	param->ddp_block_shift  = sb->s_blocksize_bits;
+	param->ddp_symlink_max  = sb->s_blocksize;
 	param->ddp_mount_type     = LDD_MT_LDISKFS;
 	if (LDISKFS_HAS_INCOMPAT_FEATURE(sb, LDISKFS_FEATURE_INCOMPAT_EXTENTS))
 		param->ddp_maxbytes = sb->s_maxbytes;
 	else
 		param->ddp_maxbytes = LDISKFS_SB(sb)->s_bitmap_maxbytes;
-	/* Overhead estimate should be fairly accurate, so we really take a tiny
-	 * error margin which also avoids fragmenting the filesystem too much */
-	param->ddp_grant_reserved = 2; /* end up to be 1.9% after conversion */
 	/* inode are statically allocated, so per-inode space consumption
 	 * is the space consumed by the directory entry */
 	param->ddp_inodespace     = PER_OBJ_USAGE;
-	/* per-fragment overhead to be used by the client code */
-	param->ddp_grant_frag     = 6 * LDISKFS_BLOCK_SIZE(sb);
-        param->ddp_mntopts      = 0;
+	/* EXT_INIT_MAX_LEN is the theoretical maximum extent size  (32k blocks
+	 * = 128MB) which is unlikely to be hit in real life. Report a smaller
+	 * maximum length to not under count the actual number of extents
+	 * needed for writing a file. */
+	param->ddp_max_extent_blks = EXT_INIT_MAX_LEN >> 2;
+	/* worst-case extent insertion metadata overhead */
+	param->ddp_extent_tax = 6 * LDISKFS_BLOCK_SIZE(sb);
+	param->ddp_mntopts      = 0;
         if (test_opt(sb, XATTR_USER))
                 param->ddp_mntopts |= MNTOPT_USERXATTR;
         if (test_opt(sb, POSIX_ACL))

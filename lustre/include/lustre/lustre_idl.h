@@ -1314,7 +1314,8 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT_LIGHTWEIGHT | OBD_CONNECT_LVB_TYPE|\
 				OBD_CONNECT_LAYOUTLOCK | OBD_CONNECT_FID | \
 				OBD_CONNECT_PINGLESS | OBD_CONNECT_LFSCK | \
-				OBD_CONNECT_BULK_MBITS)
+				OBD_CONNECT_BULK_MBITS | \
+				OBD_CONNECT_GRANT_PARAM)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT | \
 				OBD_CONNECT_FULL20 | OBD_CONNECT_IMP_RECOV | \
@@ -1336,10 +1337,10 @@ struct obd_connect_data {
 	__u32 ocd_index;	 /* LOV index to connect to */
 	__u32 ocd_brw_size;	 /* Maximum BRW size in bytes */
         __u64 ocd_ibits_known;   /* inode bits this client understands */
-        __u8  ocd_blocksize;     /* log2 of the backend filesystem blocksize */
-        __u8  ocd_inodespace;    /* log2 of the per-inode space consumption */
-        __u16 ocd_grant_extent;  /* per-extent grant overhead, in 1K blocks */
-        __u32 ocd_unused;        /* also fix lustre_swab_connect */
+	__u8  ocd_grant_blkbits; /* log2 of the backend filesystem blocksize */
+	__u8  ocd_grant_inobits; /* log2 of the per-inode space consumption */
+	__u16 ocd_grant_tax_kb;  /* extent insertion overhead, in 1K blocks */
+	__u32 ocd_grant_max_blks;/* maximum number of blocks per extent */
         __u64 ocd_transno;       /* first transno from client to be replayed */
         __u32 ocd_group;         /* MDS group on OST */
         __u32 ocd_cksum_types;   /* supported checksum algorithms */
