@@ -183,11 +183,11 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/ext4.h
  }
  
  /* fsync.c */
-@@ -2157,7 +2206,7 @@ extern struct buffer_head * ext4_find_en
- 					    struct ext4_dir_entry_2 ** res_dir,
- 					    int *inlined);
- extern int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
--			       struct inode *inode);
+@@ -2157,6 +2206,8 @@ extern struct buffer_head * ext4_find_en
+ extern int ext4_delete_entry(handle_t *handle, struct inode * dir,
+ 			     struct ext4_dir_entry_2 *de_del,
+ 			     struct buffer_head *bh);
++extern int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
 +			       struct inode *inode, const void *, const void *);
  extern int search_dir(struct buffer_head *bh,
  		      char *search_buf,
@@ -605,25 +605,36 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/namei.c
  	set_nlink(inode, 2);
  	if (csum_size) {
  		t = EXT4_DIRENT_TAIL(dir_block->b_data, blocksize);
-@@ -2508,7 +2597,8 @@ out:
- /* Initialize @inode as a subdirectory of @dir, and add the
-  * "." and ".." entries into the first directory block. */
- int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
--			struct inode *inode)
+@@ -2402,6 +2426,29 @@ out:
+ 	return err;
+ }
+ 
++/* Initialize @inode as a subdirectory of @dir, and add the
++ * "." and ".." entries into the first directory block. */
++int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
 +			struct inode *inode,
 +			const void *data1, const void *data2)
++{
++	int rc;
++
++	if (IS_ERR(handle))
++		return PTR_ERR(handle);
++
++	if (IS_DIRSYNC(dir))
++		ext4_handle_sync(handle);
++
++	inode->i_op = &ext4_dir_inode_operations.ops;
++	inode->i_fop = &ext4_dir_operations;
++	rc = ext4_init_new_dir(handle, dir, inode, data1, data2);
++	if (!rc)
++		rc = ext4_mark_inode_dirty(handle, inode);
++	return rc;
++}
++EXPORT_SYMBOL(ext4_add_dot_dotdot);
++
+ static int ext4_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
  {
- 	if (IS_ERR(handle))
- 		return PTR_ERR(handle);
-@@ -2518,7 +2608,7 @@ int ext4_add_dot_dotdot(handle_t *handle
- 
- 	inode->i_op = &ext4_dir_inode_operations;
- 	inode->i_fop = &ext4_dir_operations;
--	return ext4_init_new_dir(handle, dir, inode);
-+	return ext4_init_new_dir(handle, dir, inode, data1, data2);
- }
- EXPORT_SYMBOL(ext4_add_dot_dotdot);
- 
+ 	handle_t *handle;
 @@ -2546,7 +2636,7 @@ retry:
  
  	inode->i_op = &ext4_dir_inode_operations;
