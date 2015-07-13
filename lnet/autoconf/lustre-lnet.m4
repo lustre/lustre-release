@@ -268,12 +268,12 @@ directory which is likely in ${O2IBPATH%-*}
 		EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -I$O2IBPATH/include"
 		LB_CHECK_COMPILE([whether to enable OpenIB gen2 support],
 		openib_gen2_support, [
-			#include <linux/version.h>
-			#include <linux/pci.h>
-			#include <linux/gfp.h>
 			#ifdef HAVE_COMPAT_RDMA
 			#include <linux/compat-2.6.h>
 			#endif
+			#include <linux/version.h>
+			#include <linux/pci.h>
+			#include <linux/gfp.h>
 			#include <rdma/rdma_cm.h>
 			#include <rdma/ib_cm.h>
 			#include <rdma/ib_verbs.h>
