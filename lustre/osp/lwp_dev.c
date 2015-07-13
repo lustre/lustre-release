@@ -363,11 +363,6 @@ static struct lu_device *lwp_device_fini(const struct lu_env *env,
 
 	imp = m->lpd_obd->u.cli.cl_import;
 
-	if (imp->imp_rq_pool) {
-		ptlrpc_free_rq_pool(imp->imp_rq_pool);
-		imp->imp_rq_pool = NULL;
-	}
-
 	LASSERT(m->lpd_obd);
 	ptlrpc_lprocfs_unregister_obd(m->lpd_obd);
 	lprocfs_obd_cleanup(m->lpd_obd);

@@ -1328,11 +1328,6 @@ static struct lu_device *osp_device_fini(const struct lu_env *env,
 
 	imp = osp->opd_obd->u.cli.cl_import;
 
-	if (imp->imp_rq_pool) {
-		ptlrpc_free_rq_pool(imp->imp_rq_pool);
-		imp->imp_rq_pool = NULL;
-	}
-
 	if (osp->opd_symlink)
 		lprocfs_remove(&osp->opd_symlink);
 

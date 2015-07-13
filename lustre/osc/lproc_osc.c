@@ -96,8 +96,8 @@ static ssize_t osc_max_rpcs_in_flight_seq_write(struct file *file,
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
         struct client_obd *cli = &dev->u.cli;
-        struct ptlrpc_request_pool *pool = cli->cl_import->imp_rq_pool;
         int val, rc;
+	int adding, added, req_count;
 
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc)
@@ -107,8 +107,20 @@ static ssize_t osc_max_rpcs_in_flight_seq_write(struct file *file,
                 return -ERANGE;
 
         LPROCFS_CLIMP_CHECK(dev);
-        if (pool && val > cli->cl_max_rpcs_in_flight)
-                pool->prp_populate(pool, val-cli->cl_max_rpcs_in_flight);
+
+	adding = val - cli->cl_max_rpcs_in_flight;
+	req_count = atomic_read(&osc_pool_req_count);
+	if (adding > 0 && req_count < osc_reqpool_maxreqcount) {
+		/*
+		 * There might be some race which will cause over-limit
+		 * allocation, but it is fine.
+		 */
+		if (req_count + adding > osc_reqpool_maxreqcount)
+			adding = osc_reqpool_maxreqcount - req_count;
+
+		added = osc_rq_pool->prp_populate(osc_rq_pool, adding);
+		atomic_add(added, &osc_pool_req_count);
+	}
 
 	spin_lock(&cli->cl_loi_list_lock);
 	cli->cl_max_rpcs_in_flight = val;
