@@ -3108,17 +3108,8 @@ static void lod_ah_init(const struct lu_env *env,
 	LASSERT(lc->ldo_stripenr == 0);
 	LASSERT(lc->ldo_stripe == NULL);
 
-	/*
-	 * local object may want some hints
-	 * in case of late striping creation, ->ah_init()
-	 * can be called with local object existing
-	 */
-	if (!dt_object_exists(nextc) || dt_object_remote(nextc)) {
-		struct dt_object *obj;
-
-		obj = (nextp != NULL && dt_object_remote(nextp)) ? NULL : nextp;
-		nextc->do_ops->do_ah_init(env, ah, obj, nextc, child_mode);
-	}
+	if (!dt_object_exists(nextc))
+		nextc->do_ops->do_ah_init(env, ah, nextp, nextc, child_mode);
 
 	if (S_ISDIR(child_mode)) {
 		if (lc->ldo_dir_stripe == NULL) {
@@ -3460,10 +3451,20 @@ static int lod_declare_object_create(const struct lu_env *env,
 		 * Note: if dah_eadata != NULL, it means creating the
 		 * striped directory with specified stripeEA, then it
 		 * should ignore the default stripeEA */
-		if ((hint == NULL || hint->dah_eadata == NULL) &&
-		    lo->ldo_dir_stripe_offset != -1 &&
-		    lo->ldo_dir_stripe_offset != ss->ss_node_id)
-			GOTO(out, rc = -EREMOTE);
+		if (hint != NULL && hint->dah_eadata == NULL) {
+			if (OBD_FAIL_CHECK(OBD_FAIL_MDS_STALE_DIR_LAYOUT))
+				GOTO(out, rc = -EREMOTE);
+
+			if (lo->ldo_dir_stripe_offset == -1) {
+				/* child and parent should be in the same MDT */
+				if (hint->dah_parent != NULL &&
+				    dt_object_remote(hint->dah_parent))
+					GOTO(out, rc = -EREMOTE);
+			} else if (lo->ldo_dir_stripe_offset !=
+				   ss->ss_node_id) {
+				GOTO(out, rc = -EREMOTE);
+			}
+		}
 
 		/* Orphan object (like migrating object) does not have
 		 * lod_dir_stripe, see lod_ah_init */
