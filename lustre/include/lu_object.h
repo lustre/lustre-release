@@ -584,13 +584,14 @@ struct lu_site_bkt_data {
 };
 
 enum {
-        LU_SS_CREATED         = 0,
-        LU_SS_CACHE_HIT,
-        LU_SS_CACHE_MISS,
-        LU_SS_CACHE_RACE,
-        LU_SS_CACHE_DEATH_RACE,
-        LU_SS_LRU_PURGED,
-        LU_SS_LAST_STAT
+	LU_SS_CREATED		= 0,
+	LU_SS_CACHE_HIT,
+	LU_SS_CACHE_MISS,
+	LU_SS_CACHE_RACE,
+	LU_SS_CACHE_DEATH_RACE,
+	LU_SS_LRU_PURGED,
+	LU_SS_LRU_LEN,	/* # of objects in lsb_lru lists */
+	LU_SS_LAST_STAT
 };
 
 /**

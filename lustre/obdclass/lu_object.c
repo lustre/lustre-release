@@ -86,6 +86,7 @@ CFS_MODULE_PARM(lu_cache_nr, "l", long, 0644,
 		"Maximum number of objects in lu_object cache");
 
 static void lu_object_free(const struct lu_env *env, struct lu_object *o);
+static __u32 ls_stats_read(struct lprocfs_stats *stats, int idx);
 
 /**
  * Decrease reference counter on object. If last reference is freed, return
@@ -154,6 +155,10 @@ void lu_object_put(const struct lu_env *env, struct lu_object *o)
 		LASSERT(list_empty(&top->loh_lru));
 		list_add_tail(&top->loh_lru, &bkt->lsb_lru);
 		bkt->lsb_lru_len++;
+		lprocfs_counter_incr(site->ls_stats, LU_SS_LRU_LEN);
+		CDEBUG(D_INODE, "Add %p to site lru. hash: %p, bkt: %p, "
+		       "lru_len: %ld\n",
+		       o, site->ls_obj_hash, bkt, bkt->lsb_lru_len);
                 cfs_hash_bd_unlock(site->ls_obj_hash, &bd, 1);
                 return;
         }
@@ -202,7 +207,8 @@ void lu_object_unhash(const struct lu_env *env, struct lu_object *o)
 	top = o->lo_header;
 	set_bit(LU_OBJECT_HEARD_BANSHEE, &top->loh_flags);
 	if (!test_and_set_bit(LU_OBJECT_UNHASHED, &top->loh_flags)) {
-		struct cfs_hash *obj_hash = o->lo_dev->ld_site->ls_obj_hash;
+		struct lu_site *site = o->lo_dev->ld_site;
+		struct cfs_hash *obj_hash = site->ls_obj_hash;
 		struct cfs_hash_bd bd;
 
 		cfs_hash_bd_get_and_lock(obj_hash, &top->loh_fid, &bd, 1);
@@ -212,6 +218,7 @@ void lu_object_unhash(const struct lu_env *env, struct lu_object *o)
 			list_del_init(&top->loh_lru);
 			bkt = cfs_hash_bd_extra_get(obj_hash, &bd);
 			bkt->lsb_lru_len--;
+			lprocfs_counter_decr(site->ls_stats, LU_SS_LRU_LEN);
 		}
 		cfs_hash_bd_del_locked(obj_hash, &bd, &top->loh_hash);
 		cfs_hash_bd_unlock(obj_hash, &bd, 1);
@@ -389,6 +396,7 @@ int lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr)
                                                &bd2, &h->loh_hash);
 			list_move(&h->loh_lru, &dispose);
 			bkt->lsb_lru_len--;
+			lprocfs_counter_decr(s->ls_stats, LU_SS_LRU_LEN);
                         if (did_sth == 0)
                                 did_sth = 1;
 
@@ -604,6 +612,7 @@ static struct lu_object *htable_lookup(struct lu_site *s,
 		if (!list_empty(&h->loh_lru)) {
 			list_del_init(&h->loh_lru);
 			bkt->lsb_lru_len--;
+			lprocfs_counter_decr(s->ls_stats, LU_SS_LRU_LEN);
 		}
                 return lu_object_top(h);
         }
@@ -1098,6 +1107,12 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
                              0, "cache_death_race", "cache_death_race");
         lprocfs_counter_init(s->ls_stats, LU_SS_LRU_PURGED,
                              0, "lru_purged", "lru_purged");
+	/*
+	 * Unlike other counters, lru_len can be decremented so
+	 * need lc_sum instead of just lc_count
+	 */
+	lprocfs_counter_init(s->ls_stats, LU_SS_LRU_LEN,
+			     LPROCFS_CNTR_AVGMINMAX, "lru_len", "lru_len");
 
 	INIT_LIST_HEAD(&s->ls_linkage);
         s->ls_top_dev = top;
@@ -1944,10 +1959,22 @@ static void lu_site_stats_get(struct cfs_hash *hs,
 }
 
 
+/*
+ * lu_cache_shrink_count returns the number of cached objects that are
+ * candidates to be freed by shrink_slab(). A counter, which tracks
+ * the number of items in the site's lru, is maintained in the per cpu
+ * stats of each site. The counter is incremented when an object is added
+ * to a site's lru and decremented when one is removed. The number of
+ * free-able objects is the sum of all per cpu counters for all sites.
+ *
+ * Using a per cpu counter is a compromise solution to concurrent access:
+ * lu_object_put() can update the counter without locking the site and
+ * lu_cache_shrink_count can sum the counters without locking each
+ * ls_obj_hash bucket.
+ */
 static unsigned long lu_cache_shrink_count(struct shrinker *sk,
 					   struct shrink_control *sc)
 {
-	lu_site_stats_t stats;
 	struct lu_site *s;
 	struct lu_site *tmp;
 	unsigned long cached = 0;
@@ -1957,14 +1984,14 @@ static unsigned long lu_cache_shrink_count(struct shrinker *sk,
 
 	mutex_lock(&lu_sites_guard);
 	list_for_each_entry_safe(s, tmp, &lu_sites, ls_linkage) {
-		memset(&stats, 0, sizeof(stats));
-		lu_site_stats_get(s->ls_obj_hash, &stats, 0);
-		cached += stats.lss_total - stats.lss_busy;
+		cached += ls_stats_read(s->ls_stats, LU_SS_LRU_LEN);
 	}
 	mutex_unlock(&lu_sites_guard);
 
 	cached = (cached / 100) * sysctl_vfs_cache_pressure;
-	CDEBUG(D_INODE, "%ld objects cached\n", cached);
+	CDEBUG(D_INODE, "%ld objects cached, cache pressure %d\n",
+	       cached, sysctl_vfs_cache_pressure);
+
 	return cached;
 }
 
@@ -2038,11 +2065,10 @@ static int lu_cache_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
 
 	CDEBUG(D_INODE, "Shrink %lu objects\n", scv.nr_to_scan);
 
-	lu_cache_shrink_scan(shrinker, &scv);
+	if (scv.nr_to_scan != 0)
+		lu_cache_shrink_scan(shrinker, &scv);
 
 	cached = lu_cache_shrink_count(shrinker, &scv);
-	if (scv.nr_to_scan == 0)
-		CDEBUG(D_INODE, "%d objects cached\n", cached);
 	return cached;
 }
 
@@ -2170,12 +2196,19 @@ void lu_global_fini(void)
 static __u32 ls_stats_read(struct lprocfs_stats *stats, int idx)
 {
 #ifdef CONFIG_PROC_FS
-        struct lprocfs_counter ret;
+	struct lprocfs_counter ret;
 
-        lprocfs_stats_collect(stats, idx, &ret);
-        return (__u32)ret.lc_count;
+	lprocfs_stats_collect(stats, idx, &ret);
+	if (idx == LU_SS_LRU_LEN)
+		/*
+		 * protect against counter on cpu A being decremented
+		 * before counter is incremented on cpu B; unlikely
+		 */
+		return (__u32)((ret.lc_sum > 0) ? ret.lc_sum : 0);
+	else
+		return (__u32)ret.lc_count;
 #else
-        return 0;
+	return 0;
 #endif
 }
 
@@ -2190,7 +2223,7 @@ int lu_site_stats_seq_print(const struct lu_site *s, struct seq_file *m)
 	memset(&stats, 0, sizeof(stats));
 	lu_site_stats_get(s->ls_obj_hash, &stats, 1);
 
-	return seq_printf(m, "%d/%d %d/%d %d %d %d %d %d %d %d\n",
+	return seq_printf(m, "%d/%d %d/%d %d %d %d %d %d %d %d %d\n",
 			  stats.lss_busy,
 			  stats.lss_total,
 			  stats.lss_populated,
@@ -2201,29 +2234,31 @@ int lu_site_stats_seq_print(const struct lu_site *s, struct seq_file *m)
 			  ls_stats_read(s->ls_stats, LU_SS_CACHE_MISS),
 			  ls_stats_read(s->ls_stats, LU_SS_CACHE_RACE),
 			  ls_stats_read(s->ls_stats, LU_SS_CACHE_DEATH_RACE),
-			  ls_stats_read(s->ls_stats, LU_SS_LRU_PURGED));
+			  ls_stats_read(s->ls_stats, LU_SS_LRU_PURGED),
+			  ls_stats_read(s->ls_stats, LU_SS_LRU_LEN));
 }
 EXPORT_SYMBOL(lu_site_stats_seq_print);
 
 int lu_site_stats_print(const struct lu_site *s, char *page, int count)
 {
-        lu_site_stats_t stats;
+	lu_site_stats_t stats;
 
-        memset(&stats, 0, sizeof(stats));
-        lu_site_stats_get(s->ls_obj_hash, &stats, 1);
+	memset(&stats, 0, sizeof(stats));
+	lu_site_stats_get(s->ls_obj_hash, &stats, 1);
 
-        return snprintf(page, count, "%d/%d %d/%d %d %d %d %d %d %d %d\n",
-                        stats.lss_busy,
-                        stats.lss_total,
-                        stats.lss_populated,
-                        CFS_HASH_NHLIST(s->ls_obj_hash),
-                        stats.lss_max_search,
-                        ls_stats_read(s->ls_stats, LU_SS_CREATED),
-                        ls_stats_read(s->ls_stats, LU_SS_CACHE_HIT),
+	return snprintf(page, count, "%d/%d %d/%d %d %d %d %d %d %d %d %d\n",
+			stats.lss_busy,
+			stats.lss_total,
+			stats.lss_populated,
+			CFS_HASH_NHLIST(s->ls_obj_hash),
+			stats.lss_max_search,
+			ls_stats_read(s->ls_stats, LU_SS_CREATED),
+			ls_stats_read(s->ls_stats, LU_SS_CACHE_HIT),
                         ls_stats_read(s->ls_stats, LU_SS_CACHE_MISS),
-                        ls_stats_read(s->ls_stats, LU_SS_CACHE_RACE),
-                        ls_stats_read(s->ls_stats, LU_SS_CACHE_DEATH_RACE),
-                        ls_stats_read(s->ls_stats, LU_SS_LRU_PURGED));
+			ls_stats_read(s->ls_stats, LU_SS_CACHE_RACE),
+			ls_stats_read(s->ls_stats, LU_SS_CACHE_DEATH_RACE),
+			ls_stats_read(s->ls_stats, LU_SS_LRU_PURGED),
+			ls_stats_read(s->ls_stats, LU_SS_LRU_LEN));
 }
 
 /**
