@@ -1803,12 +1803,12 @@ static int iam_new_leaf(handle_t *handle, struct iam_leaf *leaf)
 				iam_unlock_htree(path->ip_container, lh);
                         do_corr(schedule());
                         err = iam_txn_dirty(handle, path, new_leaf);
-                        brelse(new_leaf);
                         if (err == 0)
                                 err = ldiskfs_mark_inode_dirty(handle, obj);
                         do_corr(schedule());
                 } else
                         err = -ENOMEM;
+		brelse(new_leaf);
         }
         assert_inv(iam_leaf_check(leaf));
         assert_inv(iam_leaf_check(&iam_leaf_path(leaf)->ip_leaf));
