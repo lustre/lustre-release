@@ -4274,10 +4274,8 @@ static int lfsck_layout_scan_stripes(const struct lu_env *env,
 			struct lu_attr *attr = &info->lti_la;
 
 			rc = dt_attr_get(env, parent, attr);
-			if (rc != 0) {
-				rc = PTR_ERR(lso);
+			if (rc != 0)
 				goto next;
-			}
 
 			lso = lfsck_assistant_object_init(env,
 				lfsck_dto2fid(parent), attr,
