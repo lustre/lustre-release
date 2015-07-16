@@ -71,6 +71,7 @@ usage() {
 
 print_summary () {
     trap 0
+	[ -z "$DEFAULT_SUITES"] && return 0
     [ "$TESTSUITE" == "lfsck" ] && return 0
     [ -n "$ONLY" ] && echo "WARNING: ONLY is set to $(echo $ONLY)"
     local details
@@ -338,6 +339,8 @@ init_test_env() {
 	if ! $RPC_MODE; then
 		rm -f $TMP/*active
 	fi
+
+	export TF_FAIL=${TF_FAIL:-$TMP/tf.fail}
 }
 
 check_cpt_number() {
