@@ -983,6 +983,7 @@ cleanup_34() {
 }
 
 test_34() { #16129
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
         local OPER
         local lock_in
         local lock_out
@@ -1260,6 +1261,7 @@ check_pdo_conflict() {
 # pdirop tests
 # test 40: check non-blocking operations
 test_40a() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	touch $DIR2
@@ -1289,6 +1291,7 @@ test_40a() {
 run_test 40a "pdirops: create vs others =============="
 
 test_40b() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	touch $DIR1/$tfile &
@@ -1318,6 +1321,7 @@ test_40b() {
 run_test 40b "pdirops: open|create and others =============="
 
 test_40c() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -1348,6 +1352,7 @@ test_40c() {
 run_test 40c "pdirops: link and others =============="
 
 test_40d() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -1377,6 +1382,7 @@ test_40d() {
 run_test 40d "pdirops: unlink and others =============="
 
 test_40e() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
