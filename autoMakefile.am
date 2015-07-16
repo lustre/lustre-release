@@ -12,7 +12,7 @@ DIST_SUBDIRS := ldiskfs \
 	@SNMP_DIST_SUBDIR@ \
 	lnet \
 	lustre \
-	config contrib
+	config
 
 AUTOMAKE_OPTIONS = foreign
 
@@ -103,6 +103,11 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec	\
 	lustre-dkms_post-build.sh	\
 	LUSTRE-VERSION-GEN		\
 	LUSTRE-VERSION-FILE
+
+# contrib is a directory.  Putting a directory in EXTRA_DIST
+# recursively includes the entire directory contents in the
+# distribution tarball (the tarball created with "make dist").
+EXTRA_DIST += contrib
 
 rpm-local:
 	@(if test -z "$(RPMBUILD)"; then \
