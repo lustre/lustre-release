@@ -100,6 +100,8 @@ init_agt_vars() {
 				agent=CLIENT2
 		fi
 		eval export agt${n}_HOST=\$\{agt${n}_HOST:-${!agent}\}
+		local var=agt${n}_HOST
+		[[ ! -z "${!var}" ]] || error "agt${n}_HOST is empty!"
 	done
 
 	export SINGLEAGT=${SINGLEAGT:-agt1}

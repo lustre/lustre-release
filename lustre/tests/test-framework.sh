@@ -3215,20 +3215,59 @@ facet_failover_host() {
 	fi
 }
 
+detect_active() {
+	local facet=$1
+	[ "$CLIENTONLY" ] && echo $facet && return
+
+	local failover=$(facet_failover_host $facet)
+
+	# failover is not associated with all facet types:
+	# "AGT" facet type (remote HSM agents) does not
+	# have a failover.
+	[[ -z "$failover" ]] && echo $facet && return
+
+	local host=$(facet_host $facet)
+	local dev=$(facet_device $facet)
+
+	# ${facet}_svc can not be used here because of
+	# facet_active() is called before this var initialized
+	local svc=$(do_node $host $E2LABEL ${dev})
+
+	# active facet is ${facet}failover if device is mounted on failover
+	# on other cases active facet is $facet
+	[[ $dev = $(do_node $failover \
+			lctl get_param -n *.$svc.mntdev 2>/dev/null) ]] &&
+		echo ${facet}failover && return
+
+	echo $facet
+}
+
+init_active() {
+	local facet=$1
+
+	local active=$(detect_active $facet)
+	echo "${facet}active=$active" > $TMP/${facet}active
+}
+
 facet_active() {
-    local facet=$1
-    local activevar=${facet}active
+	local facet=$1
+	local activevar=${facet}active
 
-    if [ -f $TMP/${facet}active ] ; then
-        source $TMP/${facet}active
-    fi
+	# file is missing (nothing to store) if fail() is not
+	# executed during this test session yet;
+	# file content:
+	#      ost1active=ost1failover
+	#      ost1active=ost1
+	# let's detect active facet based on current lustre state
+	if [ ! -f $TMP/${facet}active ] ; then
+		init_active $facet
+	fi
+	source $TMP/${facet}active
 
-    active=${!activevar}
-    if [ -z "$active" ] ; then
-        echo -n ${facet}
-    else
-        echo -n ${active}
-    fi
+	# is ${facet}active set somewhere else?
+	active=${!activevar}
+	[[ -z "$active" ]] && exit 1
+	echo -n ${active}
 }
 
 facet_active_host() {
@@ -3714,13 +3753,6 @@ unmount_fstype() {
 ## MountConf setup
 
 stopall() {
-    # make sure we are using the primary server, so test-framework will
-    # be able to clean up properly.
-    activemds=`facet_active mds1`
-    if [ $activemds != "mds1" ]; then
-        fail mds1
-    fi
-
     local clients=$CLIENTS
     [ -z $clients ] && clients=$(hostname)
 
