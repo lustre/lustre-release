@@ -135,7 +135,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 		  struct list_head *ext_list, int cmd);
 long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 		   long target, bool force);
-long osc_lru_reclaim(struct client_obd *cli);
+long osc_lru_reclaim(struct client_obd *cli, unsigned long npages);
 
 extern spinlock_t osc_ast_guard;
 extern struct lu_kmem_descr osc_caches[];
@@ -164,6 +164,11 @@ static inline int osc_recoverable_error(int rc)
 static inline unsigned long rpcs_in_flight(struct client_obd *cli)
 {
 	return cli->cl_r_in_flight + cli->cl_w_in_flight;
+}
+
+static inline char *cli_name(struct client_obd *cli)
+{
+	return cli->cl_import->imp_obd->obd_name;
 }
 
 #ifndef min_t
