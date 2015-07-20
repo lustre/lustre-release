@@ -67,7 +67,7 @@ struct echo_device {
 	struct echo_client_obd	 *ed_ec;
 
 	struct cl_site		  ed_site_myself;
-	struct cl_site		 *ed_site;
+	struct lu_site		 *ed_site;
 	struct lu_device	 *ed_next;
 	int			  ed_next_ismd;
 	struct lu_client_seq	 *ed_cl_seq;
@@ -605,21 +605,23 @@ static int echo_site_init(const struct lu_env *env, struct echo_device *ed)
                 return rc;
         }
 
-        rc = lu_site_init_finish(&site->cs_lu);
-        if (rc)
-                return rc;
+	rc = lu_site_init_finish(&site->cs_lu);
+	if (rc) {
+		cl_site_fini(site);
+		return rc;
+	}
 
-        ed->ed_site = site;
-        return 0;
+	ed->ed_site = &site->cs_lu;
+	return 0;
 }
 
 static void echo_site_fini(const struct lu_env *env, struct echo_device *ed)
 {
-        if (ed->ed_site) {
-                if (!ed->ed_next_ismd)
-                        cl_site_fini(ed->ed_site);
-                ed->ed_site = NULL;
-        }
+	if (ed->ed_site) {
+		if (!ed->ed_next_ismd)
+			lu_site_fini(ed->ed_site);
+		ed->ed_site = NULL;
+	}
 }
 
 static void *echo_thread_key_init(const struct lu_context *ctx,
@@ -918,11 +920,10 @@ static struct lu_device *echo_device_alloc(const struct lu_env *env,
                         GOTO(out, rc = -EINVAL);
                 }
 
-                next = ld;
-                /* For MD echo client, it will use the site in MDS stack */
-                ed->ed_site_myself.cs_lu = *ls;
-                ed->ed_site = &ed->ed_site_myself;
-                ed->ed_cl.cd_lu_dev.ld_site = &ed->ed_site_myself.cs_lu;
+		next = ld;
+		/* For MD echo client, it will use the site in MDS stack */
+		ed->ed_site = ls;
+		ed->ed_cl.cd_lu_dev.ld_site = ls;
 		rc = echo_fid_init(ed, obd->obd_name, lu_site2seq(ls));
 		if (rc) {
 			CERROR("echo fid init error %d\n", rc);
@@ -955,7 +956,7 @@ static struct lu_device *echo_device_alloc(const struct lu_env *env,
                         if (next->ld_site != NULL)
                                 GOTO(out, rc = -EBUSY);
 
-                        next->ld_site = &ed->ed_site->cs_lu;
+                        next->ld_site = ed->ed_site;
                         rc = next->ld_type->ldt_ops->ldto_device_init(env, next,
                                                      next->ld_type->ldt_name,
                                                      NULL);
@@ -1028,7 +1029,7 @@ static struct lu_device *echo_device_free(const struct lu_env *env,
         CDEBUG(D_INFO, "echo device:%p is going to be freed, next = %p\n",
                ed, next);
 
-        lu_site_purge(env, &ed->ed_site->cs_lu, -1);
+	lu_site_purge(env, ed->ed_site, -1);
 
         /* check if there are objects still alive.
          * It shouldn't have any object because lu_site_purge would cleanup
@@ -1041,7 +1042,7 @@ static struct lu_device *echo_device_free(const struct lu_env *env,
 	spin_unlock(&ec->ec_lock);
 
 	/* purge again */
-	lu_site_purge(env, &ed->ed_site->cs_lu, -1);
+	lu_site_purge(env, ed->ed_site, -1);
 
 	CDEBUG(D_INFO,
 	       "Waiting for the reference of echo object to be dropped\n");
@@ -1054,7 +1055,7 @@ static struct lu_device *echo_device_free(const struct lu_env *env,
 		       "wait for 1 second\n");
 		set_current_state(TASK_UNINTERRUPTIBLE);
 		schedule_timeout(cfs_time_seconds(1));
-		lu_site_purge(env, &ed->ed_site->cs_lu, -1);
+		lu_site_purge(env, ed->ed_site, -1);
 		spin_lock(&ec->ec_lock);
 	}
 	spin_unlock(&ec->ec_lock);
@@ -1071,7 +1072,7 @@ static struct lu_device *echo_device_free(const struct lu_env *env,
 	while (next && !ed->ed_next_ismd)
 		next = next->ld_type->ldt_ops->ldto_device_free(env, next);
 
-        LASSERT(ed->ed_site == lu2cl_site(d->ld_site));
+        LASSERT(ed->ed_site == d->ld_site);
         echo_site_fini(env, ed);
         cl_device_fini(&ed->ed_cl);
         OBD_FREE_PTR(ed);
