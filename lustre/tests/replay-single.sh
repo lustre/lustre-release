@@ -2099,6 +2099,74 @@ test_70b () {
 run_test 70b "dbench ${MDSCOUNT}mdts recovery; $CLIENTCOUNT clients"
 # end multi-client tests
 
+random_fail_mdt() {
+	local max_index=$1
+	local duration=$2
+	local monitor_pid=$3
+	local elapsed
+	local start_ts=$(date +%s)
+	local num_failovers=0
+	local fail_index
+
+	elapsed=$(($(date +%s) - start_ts))
+	while [ $elapsed -lt $duration ]; do
+		fail_index=$((RANDOM%max_index+1))
+		kill -0 $monitor_pid ||
+			error "$monitor_pid stopped"
+		sleep 120
+		replay_barrier mds$fail_index
+		sleep 10
+		# Increment the number of failovers
+		num_failovers=$((num_failovers+1))
+		log "$TESTNAME fail mds$fail_index $num_failovers times"
+		fail mds$fail_index
+		elapsed=$(($(date +%s) - start_ts))
+	done
+}
+
+cleanup_70c() {
+	trap 0
+	kill -9 $tar_70c_pid
+}
+test_70c () {
+	local clients=${CLIENTS:-$HOSTNAME}
+	local rc=0
+
+	zconf_mount_clients $clients $MOUNT
+
+	local duration=300
+	[ "$SLOW" = "no" ] && duration=180
+	# set duration to 900 because it takes some time to boot node
+	[ "$FAILURE_MODE" = HARD ] && duration=600
+
+	local elapsed
+	local start_ts=$(date +%s)
+
+	trap cleanup_70c EXIT
+	(
+		while true; do
+			test_mkdir -p -c$MDSCOUNT $DIR/$tdir || break
+			if [ $MDSCOUNT -ge 2 ]; then
+				$LFS setdirstripe -D -c$MDSCOUNT $DIR/$tdir ||
+				error "set default dirstripe failed"
+			fi
+			cd $DIR/$tdir || break
+			tar cf - /etc | tar xf - || error "tar failed"
+			cd $DIR || break
+			rm -rf $DIR/$tdir || break
+		done
+	)&
+	tar_70c_pid=$!
+	echo "Started tar $tar_70c_pid"
+
+	random_fail_mdt $MDSCOUNT $duration $tar_70c_pid
+	kill -0 $tar_70c_pid || error "tar $tar_70c_pid stopped"
+
+	cleanup_70c
+	true
+}
+run_test 70c "tar ${MDSCOUNT}mdts recovery"
+
 test_73a() {
 	multiop_bg_pause $DIR/$tfile O_tSc ||
 		error "multiop_bg_pause $DIR/$tfile failed"

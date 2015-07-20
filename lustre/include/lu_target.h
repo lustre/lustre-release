@@ -56,6 +56,7 @@ struct distribute_txn_replay_req {
 	struct list_head	dtrq_list;
 	__u64			dtrq_master_transno;
 	__u64			dtrq_batchid;
+	__u64			dtrq_xid;
 
 	/* all of sub updates are linked here */
 	struct list_head	dtrq_sub_list;
@@ -104,11 +105,10 @@ struct target_distribute_txn_data {
 	/* recovery update */
 	distribute_txn_replay_handler_t	tdtd_replay_handler;
 	struct list_head		tdtd_replay_list;
+	struct list_head		tdtd_replay_finish_list;
 	spinlock_t			tdtd_replay_list_lock;
 	/* last replay update transno */
-	__u64				tdtd_last_update_transno;
 	__u32				tdtd_replay_ready:1;
-
 };
 
 struct lu_target {
@@ -475,7 +475,10 @@ distribute_txn_get_next_req(struct target_distribute_txn_data *tdtd);
 void dtrq_destroy(struct distribute_txn_replay_req *dtrq);
 struct distribute_txn_replay_req_sub *
 dtrq_sub_lookup(struct distribute_txn_replay_req *dtrq, __u32 mdt_index);
-
+struct distribute_txn_replay_req *
+distribute_txn_lookup_finish_list(struct target_distribute_txn_data *tdtd,
+				  __u64 transno);
+bool is_req_replayed_by_update(struct ptlrpc_request *req);
 enum {
 	ESERIOUS = 0x0001000
 };

@@ -729,7 +729,7 @@ static int lod_prepare_distribute_txn(const struct lu_env *env,
 		RETURN(-ENOMEM);
 
 	lut = lod2lu_dev(lod)->ld_site->ls_tgt;
-
+	tdtd->tdtd_dt = &lod->lod_dt_dev;
 	rc = distribute_txn_init(env, lut, tdtd,
 		lu_site2seq(lod2lu_dev(lod)->ld_site)->ss_node_id);
 
@@ -739,12 +739,6 @@ static int lod_prepare_distribute_txn(const struct lu_env *env,
 		OBD_FREE_PTR(tdtd);
 		RETURN(rc);
 	}
-
-	tdtd->tdtd_dt = &lod->lod_dt_dev;
-	INIT_LIST_HEAD(&tdtd->tdtd_replay_list);
-	spin_lock_init(&tdtd->tdtd_replay_list_lock);
-	tdtd->tdtd_replay_handler = distribute_txn_replay_handle;
-	tdtd->tdtd_replay_ready = 0;
 
 	lut->lut_tdtd = tdtd;
 

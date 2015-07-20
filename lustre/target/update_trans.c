@@ -1645,8 +1645,13 @@ int distribute_txn_init(const struct lu_env *env,
 	int			rc;
 	ENTRY;
 
-	spin_lock_init(&tdtd->tdtd_batchid_lock);
 	INIT_LIST_HEAD(&tdtd->tdtd_list);
+	INIT_LIST_HEAD(&tdtd->tdtd_replay_finish_list);
+	INIT_LIST_HEAD(&tdtd->tdtd_replay_list);
+	spin_lock_init(&tdtd->tdtd_batchid_lock);
+	spin_lock_init(&tdtd->tdtd_replay_list_lock);
+	tdtd->tdtd_replay_handler = distribute_txn_replay_handle;
+	tdtd->tdtd_replay_ready = 0;
 
 	tdtd->tdtd_batchid = lut->lut_last_transno + 1;
 

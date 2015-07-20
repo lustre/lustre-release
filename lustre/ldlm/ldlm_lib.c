@@ -1502,8 +1502,11 @@ static void target_finish_recovery(struct lu_target *lut)
 	spin_unlock(&obd->obd_recovery_task_lock);
 
 	if (lut->lut_tdtd != NULL &&
-	    !list_empty(&lut->lut_tdtd->tdtd_replay_list))
+	    (!list_empty(&lut->lut_tdtd->tdtd_replay_list) ||
+	    !list_empty(&lut->lut_tdtd->tdtd_replay_finish_list))) {
 		dtrq_list_dump(lut->lut_tdtd, D_ERROR);
+		dtrq_list_destroy(lut->lut_tdtd);
+	}
 
         obd->obd_recovery_end = cfs_time_current_sec();
 
@@ -1770,6 +1773,7 @@ static int check_for_next_transno(struct lu_target *lut)
 {
 	struct ptlrpc_request *req = NULL;
 	struct obd_device *obd = lut->lut_obd;
+	struct target_distribute_txn_data *tdtd = lut->lut_tdtd;
 	int wake_up = 0, connected, completed, queue_len;
 	__u64 req_transno = 0;
 	__u64 update_transno = 0;
@@ -1783,12 +1787,8 @@ static int check_for_next_transno(struct lu_target *lut)
 		req_transno = lustre_msg_get_transno(req->rq_reqmsg);
 	}
 
-	if (lut->lut_tdtd != NULL) {
-		struct target_distribute_txn_data *tdtd;
-
-		tdtd = lut->lut_tdtd;
-		update_transno = distribute_txn_get_next_transno(lut->lut_tdtd);
-	}
+	if (tdtd != NULL)
+		update_transno = distribute_txn_get_next_transno(tdtd);
 
 	connected = atomic_read(&obd->obd_connected_clients);
 	completed = connected - atomic_read(&obd->obd_req_replay_clients);
@@ -1805,6 +1805,13 @@ static int check_for_next_transno(struct lu_target *lut)
 		wake_up = 1;
 	} else if (obd->obd_recovery_expired) {
 		CDEBUG(D_HA, "waking for expired recovery\n");
+		wake_up = 1;
+	} else if (tdtd != NULL && req != NULL &&
+		   is_req_replayed_by_update(req)) {
+		LASSERTF(req_transno < next_transno, "req_transno "LPU64
+			 "next_transno"LPU64"\n", req_transno, next_transno);
+		CDEBUG(D_HA, "waking for duplicate req ("LPU64")\n",
+		       req_transno);
 		wake_up = 1;
 	} else if (req_transno == next_transno ||
 		   (update_transno != 0 && update_transno <= next_transno)) {
@@ -2169,23 +2176,35 @@ static void replay_request_or_update(struct lu_env *env,
 
 		spin_lock(&obd->obd_recovery_task_lock);
 		transno = get_next_transno(lut, &type);
-		if (type == REQUEST_RECOVERY && tdtd != NULL &&
-		    transno == tdtd->tdtd_last_update_transno) {
+		if (type == REQUEST_RECOVERY && transno != 0) {
 			/* Drop replay request from client side, if the
 			 * replay has been executed by update with the
 			 * same transno */
 			req = list_entry(obd->obd_req_replay_queue.next,
 					struct ptlrpc_request, rq_list);
+
 			list_del_init(&req->rq_list);
 			obd->obd_requests_queued_for_recovery--;
 			spin_unlock(&obd->obd_recovery_task_lock);
-			drop_duplicate_replay_req(env, obd, req);
-		} else if (type == REQUEST_RECOVERY && transno != 0) {
-			req = list_entry(obd->obd_req_replay_queue.next,
-					     struct ptlrpc_request, rq_list);
-			list_del_init(&req->rq_list);
-			obd->obd_requests_queued_for_recovery--;
-			spin_unlock(&obd->obd_recovery_task_lock);
+
+			/* Let's check if the request has been redone by
+			 * update replay */
+			if (is_req_replayed_by_update(req)) {
+				struct distribute_txn_replay_req *dtrq;
+
+				dtrq = distribute_txn_lookup_finish_list(tdtd,
+								   req->rq_xid);
+				LASSERT(dtrq != NULL);
+				spin_lock(&tdtd->tdtd_replay_list_lock);
+				list_del_init(&dtrq->dtrq_list);
+				spin_unlock(&tdtd->tdtd_replay_list_lock);
+				dtrq_destroy(dtrq);
+
+				drop_duplicate_replay_req(env, obd, req);
+
+				continue;
+			}
+
 			LASSERT(trd->trd_processing_task == current_pid());
 			DEBUG_REQ(D_HA, req, "processing t"LPD64" from %s",
 				  lustre_msg_get_transno(req->rq_reqmsg),
@@ -2214,13 +2233,27 @@ static void replay_request_or_update(struct lu_env *env,
 			tdtd->tdtd_replay_handler(env, tdtd, dtrq);
 			lu_context_exit(&thread->t_env->le_ctx);
 			extend_recovery_timer(obd, obd_timeout, true);
-			LASSERT(tdtd->tdtd_last_update_transno <= transno);
-			tdtd->tdtd_last_update_transno = transno;
+
+			/* Add it to the replay finish list */
+			spin_lock(&tdtd->tdtd_replay_list_lock);
+			if (dtrq->dtrq_xid != 0) {
+				CDEBUG(D_HA, "Move x"LPU64" t"LPU64
+				       " to finish list\n", dtrq->dtrq_xid,
+				       dtrq->dtrq_master_transno);
+				list_add(&dtrq->dtrq_list,
+					 &tdtd->tdtd_replay_finish_list);
+			} else {
+				dtrq_destroy(dtrq);
+			}
+			spin_unlock(&tdtd->tdtd_replay_list_lock);
+
 			spin_lock(&obd->obd_recovery_task_lock);
-			if (transno > obd->obd_next_recovery_transno)
-				obd->obd_next_recovery_transno = transno;
+			if (transno == obd->obd_next_recovery_transno)
+				obd->obd_next_recovery_transno++;
+			else if (transno > obd->obd_next_recovery_transno)
+				obd->obd_next_recovery_transno = transno + 1;
 			spin_unlock(&obd->obd_recovery_task_lock);
-			dtrq_destroy(dtrq);
+
 		} else {
 			spin_unlock(&obd->obd_recovery_task_lock);
 			LASSERT(list_empty(&obd->obd_req_replay_queue));
@@ -2551,8 +2584,13 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
         CDEBUG(D_HA, "Next recovery transno: "LPU64
                ", current: "LPU64", replaying\n",
                obd->obd_next_recovery_transno, transno);
+
+	/* If the request has been replayed by update replay, then sends this
+	 * request to the recovery thread (replay_request_or_update()), where
+	 * it will be handled */
 	spin_lock(&obd->obd_recovery_task_lock);
-	if (transno < obd->obd_next_recovery_transno) {
+	if (transno < obd->obd_next_recovery_transno &&
+	    !is_req_replayed_by_update(req)) {
 		/* Processing the queue right now, don't re-add. */
 		LASSERT(list_empty(&req->rq_list));
 		spin_unlock(&obd->obd_recovery_task_lock);
