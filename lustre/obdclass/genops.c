@@ -44,6 +44,7 @@
 #include <linux/kthread.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
+#include <lustre_disk.h>
 #include <lustre_kernelcomm.h>
 
 spinlock_t obd_types_lock;
@@ -935,6 +936,16 @@ void class_unlink_export(struct obd_export *exp)
 		cfs_hash_del(exp->exp_obd->obd_uuid_hash,
 			     &exp->exp_client_uuid,
 			     &exp->exp_uuid_hash);
+
+	if (!hlist_unhashed(&exp->exp_gen_hash)) {
+		struct tg_export_data	*ted = &exp->exp_target_data;
+		struct cfs_hash		*hash;
+
+		hash = cfs_hash_getref(exp->exp_obd->obd_gen_hash);
+		cfs_hash_del(hash, &ted->ted_lcd->lcd_generation,
+			     &exp->exp_gen_hash);
+		cfs_hash_putref(hash);
+	}
 
 	list_move(&exp->exp_obd_chain, &exp->exp_obd->obd_unlinked_exports);
 	list_del_init(&exp->exp_obd_chain_timed);

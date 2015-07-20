@@ -1060,6 +1060,58 @@ int tgt_client_del(const struct lu_env *env, struct obd_export *exp)
 }
 EXPORT_SYMBOL(tgt_client_del);
 
+int tgt_add_reply_data(const struct lu_env *env, struct lu_target *tgt,
+		       struct tg_export_data *ted, struct tg_reply_data *trd,
+		       struct thandle *th, bool update_lrd_file)
+{
+	struct lsd_reply_data	*lrd;
+	int	i;
+
+	lrd = &trd->trd_reply;
+	/* update export last transno */
+	mutex_lock(&ted->ted_lcd_lock);
+	if (lrd->lrd_transno > ted->ted_lcd->lcd_last_transno)
+		ted->ted_lcd->lcd_last_transno = lrd->lrd_transno;
+	mutex_unlock(&ted->ted_lcd_lock);
+
+	/* find a empty slot */
+	i = tgt_find_free_reply_slot(tgt);
+	if (unlikely(i < 0)) {
+		CERROR("%s: couldn't find a slot for reply data: "
+		       "rc = %d\n", tgt_name(tgt), i);
+		RETURN(i);
+	}
+	trd->trd_index = i;
+
+	if (update_lrd_file) {
+		loff_t	off;
+		int	rc;
+
+		/* write reply data to disk */
+		off = sizeof(struct lsd_reply_header) + sizeof(*lrd) * i;
+		rc = tgt_reply_data_write(env, tgt, lrd, off, th);
+		if (unlikely(rc != 0)) {
+			CERROR("%s: can't update %s file: rc = %d\n",
+			       tgt_name(tgt), REPLY_DATA, rc);
+			RETURN(rc);
+		}
+	}
+	/* add reply data to target export's reply list */
+	mutex_lock(&ted->ted_lcd_lock);
+	list_add(&trd->trd_list, &ted->ted_reply_list);
+	ted->ted_reply_cnt++;
+	if (ted->ted_reply_cnt > ted->ted_reply_max)
+		ted->ted_reply_max = ted->ted_reply_cnt;
+	mutex_unlock(&ted->ted_lcd_lock);
+
+	CDEBUG(D_TRACE, "add reply %p: xid %llu, transno %llu, "
+	       "tag %hu, client gen %u, slot idx %d\n",
+	       trd, lrd->lrd_xid, lrd->lrd_transno,
+	       trd->trd_tag, lrd->lrd_client_gen, i);
+	RETURN(0);
+}
+EXPORT_SYMBOL(tgt_add_reply_data);
+
 /*
  * last_rcvd & last_committed update callbacks
  */
@@ -1068,6 +1120,8 @@ static int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 				struct thandle *th, struct ptlrpc_request *req)
 {
 	struct tgt_thread_info	*tti = tgt_th_info(env);
+	struct tgt_session_info *tsi = tgt_ses_info(env);
+	struct obd_export	*exp = tsi->tsi_exp;
 	struct tg_export_data	*ted;
 	__u64			*transno_p;
 	int			 rc = 0;
@@ -1075,15 +1129,21 @@ static int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 
 	ENTRY;
 
-	ted = &req->rq_export->exp_target_data;
 
-	lw_client = exp_connect_flags(req->rq_export) & OBD_CONNECT_LIGHTWEIGHT;
+	LASSERT(exp != NULL);
+	ted = &exp->exp_target_data;
+
+	lw_client = exp_connect_flags(exp) & OBD_CONNECT_LIGHTWEIGHT;
 	if (ted->ted_lr_idx < 0 && !lw_client)
 		/* ofd connect may cause transaction before export has
 		 * last_rcvd slot */
 		RETURN(0);
 
-	tti->tti_transno = lustre_msg_get_transno(req->rq_reqmsg);
+	if (req != NULL)
+		tti->tti_transno = lustre_msg_get_transno(req->rq_reqmsg);
+	else
+		/* From update replay, tti_transno should be set already */
+		LASSERT(tti->tti_transno != 0);
 
 	spin_lock(&tgt->lut_translock);
 	if (th->th_result != 0) {
@@ -1110,12 +1170,13 @@ static int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 	CDEBUG(D_INODE, "transno = "LPU64", last_committed = "LPU64"\n",
 	       tti->tti_transno, tgt->lut_obd->obd_last_committed);
 
-	req->rq_transno = tti->tti_transno;
-	lustre_msg_set_transno(req->rq_repmsg, tti->tti_transno);
+	if (req != NULL) {
+		req->rq_transno = tti->tti_transno;
+		lustre_msg_set_transno(req->rq_repmsg, tti->tti_transno);
+	}
 
 	/* if can't add callback, do sync write */
-	th->th_sync |= !!tgt_last_commit_cb_add(th, tgt, req->rq_export,
-						tti->tti_transno);
+	th->th_sync |= !!tgt_last_commit_cb_add(th, tgt, exp, tti->tti_transno);
 
 	if (lw_client) {
 		/* All operations performed by LW clients are synchronous and
@@ -1140,37 +1201,42 @@ static int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 	 * slot, update server data with latest transno then */
 	if (ted->ted_lcd == NULL) {
 		CWARN("commit transaction for disconnected client %s: rc %d\n",
-		      req->rq_export->exp_client_uuid.uuid, rc);
+		      exp->exp_client_uuid.uuid, rc);
 		GOTO(srv_update, rc = 0);
 	}
 
 	/* Target that supports multiple reply data */
-	if (tgt_is_multimodrpcs_client(req->rq_export)) {
+	if (tgt_is_multimodrpcs_client(exp)) {
 		struct tg_reply_data	*trd;
 		struct lsd_reply_data	*lrd;
 		__u64			*pre_versions;
-		int			 i;
-		loff_t			 off;
+		bool			write_update;
 
 		OBD_ALLOC_PTR(trd);
 		if (unlikely(trd == NULL))
 			GOTO(srv_update, rc = -ENOMEM);
 
-		/* update export last transno */
-		mutex_lock(&ted->ted_lcd_lock);
-		if (tti->tti_transno > ted->ted_lcd->lcd_last_transno)
-			ted->ted_lcd->lcd_last_transno = tti->tti_transno;
-		mutex_unlock(&ted->ted_lcd_lock);
-
 		/* fill reply data information */
 		lrd = &trd->trd_reply;
 		lrd->lrd_transno = tti->tti_transno;
-		lrd->lrd_xid = req->rq_xid;
-		lrd->lrd_result = th->th_result;
+		if (req != NULL) {
+			lrd->lrd_xid = req->rq_xid;
+			trd->trd_tag = lustre_msg_get_tag(req->rq_reqmsg);
+			pre_versions = lustre_msg_get_versions(req->rq_repmsg);
+			lrd->lrd_result = th->th_result;
+			lrd->lrd_client_gen = ted->ted_lcd->lcd_generation;
+			write_update = true;
+		} else {
+			LASSERT(tsi->tsi_xid != 0);
+			lrd->lrd_xid = tsi->tsi_xid;
+			lrd->lrd_result = tsi->tsi_result;
+			lrd->lrd_client_gen = tsi->tsi_client_gen;
+			trd->trd_tag = 0;
+			pre_versions = NULL;
+			write_update = false;
+		}
+
 		lrd->lrd_data = opdata;
-		lrd->lrd_client_gen = ted->ted_lcd->lcd_generation;
-		trd->trd_tag = lustre_msg_get_tag(req->rq_reqmsg);
-		pre_versions = lustre_msg_get_versions(req->rq_repmsg);
 		if (pre_versions) {
 			trd->trd_pre_versions[0] = pre_versions[0];
 			trd->trd_pre_versions[1] = pre_versions[1];
@@ -1178,39 +1244,13 @@ static int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 			trd->trd_pre_versions[3] = pre_versions[3];
 		}
 
-		/* find a empty slot */
-		i = tgt_find_free_reply_slot(tgt);
-		if (unlikely(i < 0)) {
-			CERROR("%s: couldn't find a slot for reply data: "
-			       "rc = %d\n", tgt_name(tgt), i);
-			GOTO(srv_update, rc = i);
-		}
-		trd->trd_index = i;
-
-		/* write reply data to disk */
-		off = sizeof(struct lsd_reply_header) + sizeof(*lrd) * i;
-		rc = tgt_reply_data_write(env, tgt, lrd, off, th);
-		if (unlikely(rc != 0)) {
-			CERROR("%s: can't update %s file: rc = %d\n",
-			       tgt_name(tgt), REPLY_DATA, rc);
-			RETURN(rc);
-		}
-
-		/* add reply data to target export's reply list */
-		mutex_lock(&ted->ted_lcd_lock);
-		list_add(&trd->trd_list, &ted->ted_reply_list);
-		ted->ted_reply_cnt++;
-		if (ted->ted_reply_cnt > ted->ted_reply_max)
-			ted->ted_reply_max = ted->ted_reply_cnt;
-		mutex_unlock(&ted->ted_lcd_lock);
-
-		CDEBUG(D_TRACE, "add reply %p: xid %llu, transno %llu, "
-		       "tag %hu, client gen %u, slot idx %d\n",
-		       trd, lrd->lrd_xid, lrd->lrd_transno,
-		       trd->trd_tag, lrd->lrd_client_gen, i);
-
-		GOTO(srv_update, rc = 0);
+		rc = tgt_add_reply_data(env, tgt, ted, trd, th, write_update);
+		GOTO(srv_update, rc);
 	}
+
+	/* Enough for update replay, let's return */
+	if (req == NULL)
+		GOTO(srv_update, rc);
 
 	mutex_lock(&ted->ted_lcd_lock);
 	LASSERT(ergo(tti->tti_transno == 0, th->th_result != 0));
@@ -1405,7 +1445,6 @@ static int tgt_clients_data_init(const struct lu_env *env,
 		    lcd->lcd_generation != 0) {
 			/* compute the highest valid client generation */
 			generation = max(generation, lcd->lcd_generation);
-
 			/* fill client_generation <-> export hash table */
 			rc = cfs_hash_add_unique(hash, &lcd->lcd_generation,
 						 &exp->exp_gen_hash);
@@ -1701,7 +1740,7 @@ int tgt_txn_stop_cb(const struct lu_env *env, struct thandle *th,
 	if (tsi->tsi_exp == NULL)
 		return 0;
 
-	echo_client = (tgt_ses_req(tsi) == NULL);
+	echo_client = (tgt_ses_req(tsi) == NULL && tsi->tsi_xid == 0);
 
 	if (tti->tti_has_trans && !echo_client) {
 		if (tti->tti_mult_trans == 0) {
@@ -1742,7 +1781,6 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 	loff_t			 off;
 	struct cfs_hash		*hash = NULL;
 	struct obd_export	*exp;
-	struct obd_export	*tmp;
 	struct tg_export_data   *ted;
 	int			 reply_data_recovered = 0;
 
@@ -1855,20 +1893,6 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 		}
 		CDEBUG(D_INFO, "%s: %d reply data have been recovered\n",
 		       tgt_name(tgt), reply_data_recovered);
-
-		/* delete entries from client_generation<->export hash */
-		spin_lock(&tgt->lut_obd->obd_dev_lock);
-		list_for_each_entry_safe(exp, tmp,
-					 &tgt->lut_obd->obd_exports,
-					 exp_obd_chain) {
-			struct tg_export_data *ted = &exp->exp_target_data;
-
-			if (!hlist_unhashed(&exp->exp_gen_hash))
-				cfs_hash_del(hash,
-					     &ted->ted_lcd->lcd_generation,
-					     &exp->exp_gen_hash);
-		}
-		spin_unlock(&tgt->lut_obd->obd_dev_lock);
 	}
 
 	spin_lock(&tgt->lut_translock);
@@ -1891,25 +1915,39 @@ out:
 	return rc;
 }
 
+struct tg_reply_data *tgt_lookup_reply_by_xid(struct tg_export_data *ted,
+					      __u64 xid)
+{
+	struct tg_reply_data	*found = NULL;
+	struct tg_reply_data	*reply;
+
+	mutex_lock(&ted->ted_lcd_lock);
+	list_for_each_entry(reply, &ted->ted_reply_list, trd_list) {
+		if (reply->trd_reply.lrd_xid == xid) {
+			found = reply;
+			break;
+		}
+	}
+	mutex_unlock(&ted->ted_lcd_lock);
+	return found;
+}
+EXPORT_SYMBOL(tgt_lookup_reply_by_xid);
+
 /* Look for a reply data matching specified request @req
  * A copy is returned in @trd if the pointer is not NULL
  */
 bool tgt_lookup_reply(struct ptlrpc_request *req, struct tg_reply_data *trd)
 {
 	struct tg_export_data	*ted = &req->rq_export->exp_target_data;
-	struct tg_reply_data	*reply, *tmp;
+	struct tg_reply_data	*reply;
 	bool			 found = false;
 
-	mutex_lock(&ted->ted_lcd_lock);
-	list_for_each_entry_safe(reply, tmp, &ted->ted_reply_list, trd_list) {
-		if (reply->trd_reply.lrd_xid == req->rq_xid) {
-			found = true;
-			break;
-		}
+	reply = tgt_lookup_reply_by_xid(ted, req->rq_xid);
+	if (reply != NULL) {
+		found = true;
+		if (trd != NULL)
+			*trd = *reply;
 	}
-	if (found && trd != NULL)
-		*trd = *reply;
-	mutex_unlock(&ted->ted_lcd_lock);
 
 	CDEBUG(D_TRACE, "%s: lookup reply xid %llu, found %d\n",
 	       tgt_name(class_exp2tgt(req->rq_export)), req->rq_xid,

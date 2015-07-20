@@ -60,6 +60,9 @@ struct distribute_txn_replay_req {
 	/* all of sub updates are linked here */
 	struct list_head	dtrq_sub_list;
 	spinlock_t		dtrq_sub_list_lock;
+
+	/* If the local update has been executed during replay */
+	__u32			dtrq_local_update_executed:1;
 };
 
 /* Each one represents a sub replay item under a distribute
@@ -216,6 +219,11 @@ struct tgt_session_info {
 	bool			 tsi_preprocessed;
 	/* request JobID */
 	char                    *tsi_jobid;
+
+	/* update replay */
+	__u64			tsi_xid;
+	__u32			tsi_result;
+	__u32			tsi_client_gen;
 };
 
 static inline struct tgt_session_info *tgt_ses_info(const struct lu_env *env)
@@ -437,6 +445,11 @@ int tgt_truncate_last_rcvd(const struct lu_env *env, struct lu_target *tg,
 			   loff_t off);
 int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt);
 bool tgt_lookup_reply(struct ptlrpc_request *req, struct tg_reply_data *trd);
+int tgt_add_reply_data(const struct lu_env *env, struct lu_target *tgt,
+		       struct tg_export_data *ted, struct tg_reply_data *trd,
+		       struct thandle *th, bool update_lrd_file);
+struct tg_reply_data *tgt_lookup_reply_by_xid(struct tg_export_data *ted,
+					       __u64 xid);
 
 /* target/update_trans.c */
 int distribute_txn_init(const struct lu_env *env,
