@@ -1566,23 +1566,10 @@ static int distribute_txn_commit_thread(void *_arg)
 		       tdtd->tdtd_committed_batchid);
 		/* update globally committed on a storage */
 		if (batchid > tdtd->tdtd_committed_batchid) {
-			distribute_txn_commit_batchid_update(&env, tdtd,
+			rc = distribute_txn_commit_batchid_update(&env, tdtd,
 							     batchid);
-			spin_lock(&tdtd->tdtd_batchid_lock);
-			if (batchid > tdtd->tdtd_batchid) {
-				/* This might happen during recovery,
-				 * batchid is initialized as last transno,
-				 * and the batchid in the update records
-				 * on other MDTs might be bigger than
-				 * the batchid, so we need update it to
-				 * avoid duplicate batchid. */
-				CDEBUG(D_HA, "%s update batchid from "LPU64
-				       " to "LPU64"\n",
-				       tdtd->tdtd_lut->lut_obd->obd_name,
-				       tdtd->tdtd_batchid, batchid);
-				tdtd->tdtd_batchid = batchid;
-			}
-			spin_unlock(&tdtd->tdtd_batchid_lock);
+			if (rc == 0)
+				batchid = 0;
 		}
 		/* cancel the records for committed batchid's */
 		/* XXX: should we postpone cancel's till the end of recovery? */

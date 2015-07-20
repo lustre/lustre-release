@@ -54,6 +54,8 @@ struct distribute_txn_replay_req {
 	/* linked to the distribute transaction replay
 	 * list (tdtd_replay_list) */
 	struct list_head	dtrq_list;
+	__u64			dtrq_master_transno;
+	__u64			dtrq_batchid;
 
 	/* all of sub updates are linked here */
 	struct list_head	dtrq_sub_list;
