@@ -222,6 +222,9 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 	int count;
 	int i, last_idx;
 
+	*recs = NULL;
+	*recs_number = 0;
+
 	rc = fstat(fd, &st);
 	if (rc < 0) {
 		rc = -errno;
@@ -271,11 +274,13 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 	} else if (count == 0) {
 		llapi_printf(LLAPI_MSG_NORMAL,
 			     "uninitialized llog: zero record number\n");
-		*recs_number = 0;
 		goto clear_file_buf;
 	}
+
 	/* the llog header not countable here.*/
 	recs_num = count - 1;
+	if (recs_num == 0)
+		goto clear_file_buf;
 
 	recs_buf = calloc(recs_num, sizeof(**recs_pr));
 	if (!recs_buf) {
@@ -344,7 +349,6 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 
 	*recs = recs_pr;
 	*recs_number = recs_num;
-
 out:
 	return rc;
 
