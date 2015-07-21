@@ -665,6 +665,11 @@ out:
 	RETURN(rc);
 }
 
+static int out_noop(struct tgt_session_info *tsi)
+{
+	return 0;
+}
+
 #define DEF_OUT_HNDL(opc, name, flags, fn)     \
 [opc - OUT_CREATE] = {					\
 	.th_name    = name,				\
@@ -703,7 +708,7 @@ static struct tgt_handler out_update_ops[] = {
 		     MUTABOR | HABEO_REFERO, out_index_delete),
 	DEF_OUT_HNDL(OUT_WRITE, "out_write", MUTABOR | HABEO_REFERO, out_write),
 	DEF_OUT_HNDL(OUT_READ, "out_read", HABEO_REFERO, out_read),
-
+	DEF_OUT_HNDL(OUT_NOOP, "out_noop", HABEO_REFERO, out_noop),
 };
 
 static struct tgt_handler *out_handler_find(__u32 opc)
