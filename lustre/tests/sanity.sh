@@ -6699,7 +6699,7 @@ grow_xattr() {
 	local xsize=${1:-1024}	# in bytes
 	local file=$DIR/$tfile
 
-	[ -z $(lctl get_param -n mdc.*.connect_flags | grep xattr) ] &&
+	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep xattr)" ] &&
 		skip "must have user_xattr" && return 0
 	[ -z "$(which setfattr 2>/dev/null)" ] &&
 		skip_env "could not find setfattr" && return 0
