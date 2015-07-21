@@ -285,6 +285,7 @@ struct top_multiple_thandle {
 	atomic_t		tmt_refcount;
 	/* Other sub transactions will be listed here. */
 	struct list_head	tmt_sub_thandle_list;
+	spinlock_t		tmt_sub_lock;
 
 	struct list_head	tmt_commit_list;
 	/* All of update records will packed here */

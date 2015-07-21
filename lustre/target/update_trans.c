@@ -468,6 +468,7 @@ static void sub_trans_commit_cb(struct lu_env *env,
 	ENTRY;
 
 	/* Check if all sub thandles are committed */
+	spin_lock(&tmt->tmt_sub_lock);
 	list_for_each_entry(st, &tmt->tmt_sub_thandle_list, st_sub_list) {
 		if (st->st_sub_th == sub_th) {
 			st->st_committed = 1;
@@ -476,6 +477,7 @@ static void sub_trans_commit_cb(struct lu_env *env,
 		if (!st->st_committed)
 			all_committed = false;
 	}
+	spin_unlock(&tmt->tmt_sub_lock);
 
 	if (tmt->tmt_result == 0)
 		tmt->tmt_result = err;
@@ -1075,8 +1077,9 @@ int top_trans_create_tmt(const struct lu_env *env,
 	INIT_LIST_HEAD(&tmt->tmt_sub_thandle_list);
 	INIT_LIST_HEAD(&tmt->tmt_commit_list);
 	atomic_set(&tmt->tmt_refcount, 1);
-
+	spin_lock_init(&tmt->tmt_sub_lock);
 	init_waitqueue_head(&tmt->tmt_stop_waitq);
+
 	top_th->tt_multiple_thandle = tmt;
 
 	return 0;
