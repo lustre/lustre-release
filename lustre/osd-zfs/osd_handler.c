@@ -817,6 +817,7 @@ static int osd_objset_open(struct osd_device *o)
 
 	rc = -dmu_objset_own(o->od_mntdev, DMU_OST_ZFS, B_FALSE, o, &o->od_os);
 	if (rc) {
+		CERROR("%s: can't open %s\n", o->od_svname, o->od_mntdev);
 		o->od_os = NULL;
 		goto out;
 	}
@@ -973,7 +974,7 @@ static int osd_mount(const struct lu_env *env,
 
 	rc = osd_objset_open(o);
 	if (rc)
-		GOTO(err, rc);
+		RETURN(rc);
 
 	o->od_xattr_in_sa = B_TRUE;
 	o->od_max_blksz = SPA_OLD_MAXBLOCKSIZE;
