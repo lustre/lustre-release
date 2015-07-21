@@ -1080,9 +1080,10 @@ restart:
 
 		switch (vio->vui_io_subtype) {
 		case IO_NORMAL:
-			vio->vui_iov = args->u.normal.via_iov;
-			vio->vui_nrsegs = args->u.normal.via_nrsegs;
-			vio->vui_tot_nrsegs = vio->vui_nrsegs;
+			vio->vui_iter = args->u.normal.via_iter;
+#ifndef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
+			vio->vui_tot_nrsegs = vio->vui_iter->nr_segs;
+#endif /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
 			vio->vui_iocb = args->u.normal.via_iocb;
 			/* Direct IO reads must also take range lock,
 			 * or multiple reads will try to work on the same pages
@@ -1129,8 +1130,10 @@ restart:
 
 		/* prepare IO restart */
 		if (count > 0 && args->via_io_subtype == IO_NORMAL) {
-			args->u.normal.via_iov = vio->vui_iov;
-			args->u.normal.via_nrsegs = vio->vui_tot_nrsegs;
+			args->u.normal.via_iter = vio->vui_iter;
+#ifndef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
+			args->u.normal.via_iter->nr_segs = vio->vui_tot_nrsegs;
+#endif /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
 		}
 	}
 	GOTO(out, rc);
@@ -1166,78 +1169,133 @@ out:
 }
 
 /*
+ * Read from a file (through the page cache).
+ */
+static ssize_t ll_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
+{
+	struct vvp_io_args *args;
+	struct lu_env *env;
+	ssize_t result;
+	int refcheck;
+
+	env = cl_env_get(&refcheck);
+	if (IS_ERR(env))
+		return PTR_ERR(env);
+
+	args = ll_env_args(env, IO_NORMAL);
+	args->u.normal.via_iter = to;
+	args->u.normal.via_iocb = iocb;
+
+	result = ll_file_io_generic(env, args, iocb->ki_filp, CIT_READ,
+				    &iocb->ki_pos, iov_iter_count(to));
+	cl_env_put(env, &refcheck);
+	return result;
+}
+
+/*
+ * Write to a file (through the page cache).
+ */
+static ssize_t ll_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
+{
+	struct vvp_io_args *args;
+	struct lu_env *env;
+	ssize_t result;
+	int refcheck;
+
+	env = cl_env_get(&refcheck);
+	if (IS_ERR(env))
+		return PTR_ERR(env);
+
+	args = ll_env_args(env, IO_NORMAL);
+	args->u.normal.via_iter = from;
+	args->u.normal.via_iocb = iocb;
+
+	result = ll_file_io_generic(env, args, iocb->ki_filp, CIT_WRITE,
+				    &iocb->ki_pos, iov_iter_count(from));
+	cl_env_put(env, &refcheck);
+	return result;
+}
+
+#ifndef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
+/*
  * XXX: exact copy from kernel code (__generic_file_aio_write_nolock)
  */
 static int ll_file_get_iov_count(const struct iovec *iov,
-                                 unsigned long *nr_segs, size_t *count)
+				 unsigned long *nr_segs, size_t *count)
 {
-        size_t cnt = 0;
-        unsigned long seg;
+	size_t cnt = 0;
+	unsigned long seg;
 
-        for (seg = 0; seg < *nr_segs; seg++) {
-                const struct iovec *iv = &iov[seg];
+	for (seg = 0; seg < *nr_segs; seg++) {
+		const struct iovec *iv = &iov[seg];
 
-                /*
-                 * If any segment has a negative length, or the cumulative
-                 * length ever wraps negative then return -EINVAL.
-                 */
-                cnt += iv->iov_len;
-                if (unlikely((ssize_t)(cnt|iv->iov_len) < 0))
-                        return -EINVAL;
-                if (access_ok(VERIFY_READ, iv->iov_base, iv->iov_len))
-                        continue;
-                if (seg == 0)
-                        return -EFAULT;
-                *nr_segs = seg;
-                cnt -= iv->iov_len;   /* This segment is no good */
-                break;
-        }
-        *count = cnt;
-        return 0;
+		/*
+		 * If any segment has a negative length, or the cumulative
+		 * length ever wraps negative then return -EINVAL.
+		 */
+		cnt += iv->iov_len;
+		if (unlikely((ssize_t)(cnt|iv->iov_len) < 0))
+			return -EINVAL;
+		if (access_ok(VERIFY_READ, iv->iov_base, iv->iov_len))
+			continue;
+		if (seg == 0)
+			return -EFAULT;
+		*nr_segs = seg;
+		cnt -= iv->iov_len;	/* This segment is no good */
+		break;
+	}
+	*count = cnt;
+	return 0;
 }
 
 static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
 				unsigned long nr_segs, loff_t pos)
 {
-	struct lu_env      *env;
-	struct vvp_io_args *args;
-	struct iovec       *local_iov;
-        size_t              count;
-        ssize_t             result;
-        int                 refcheck;
-        ENTRY;
+	struct iovec *local_iov;
+	struct iov_iter	*to;
+	size_t iov_count;
+	ssize_t result;
+	ENTRY;
 
-        result = ll_file_get_iov_count(iov, &nr_segs, &count);
-        if (result)
-                RETURN(result);
-
-        env = cl_env_get(&refcheck);
-        if (IS_ERR(env))
-                RETURN(PTR_ERR(env));
+	result = ll_file_get_iov_count(iov, &nr_segs, &iov_count);
+	if (result)
+		RETURN(result);
 
 	if (nr_segs == 1) {
+		struct lu_env *env;
+		int refcheck;
+
+		env = cl_env_get(&refcheck);
+		if (IS_ERR(env))
+			RETURN(PTR_ERR(env));
+
 		local_iov = &ll_env_info(env)->lti_local_iov;
 		*local_iov = *iov;
+
+		cl_env_put(env, &refcheck);
 	} else {
 		OBD_ALLOC(local_iov, sizeof(*iov) * nr_segs);
-		if (local_iov == NULL) {
-			cl_env_put(env, &refcheck);
+		if (local_iov == NULL)
 			RETURN(-ENOMEM);
-		}
 
 		memcpy(local_iov, iov, sizeof(*iov) * nr_segs);
 	}
 
-	args = ll_env_args(env, IO_NORMAL);
-	args->u.normal.via_iov = local_iov;
-	args->u.normal.via_nrsegs = nr_segs;
-	args->u.normal.via_iocb = iocb;
+	OBD_ALLOC_PTR(to);
+	if (to == NULL) {
+		result = -ENOMEM;
+		goto out;
+	}
+# ifdef HAVE_IOV_ITER_INIT_DIRECTION
+	iov_iter_init(to, READ, local_iov, nr_segs, iov_count);
+# else /* !HAVE_IOV_ITER_INIT_DIRECTION */
+	iov_iter_init(to, local_iov, nr_segs, iov_count, 0);
+# endif /* HAVE_IOV_ITER_INIT_DIRECTION */
 
-	result = ll_file_io_generic(env, args, iocb->ki_filp, CIT_READ,
-				    &iocb->ki_pos, count);
+	result = ll_file_read_iter(iocb, to);
 
-	cl_env_put(env, &refcheck);
-
+	OBD_FREE_PTR(to);
+out:
 	if (nr_segs > 1)
 		OBD_FREE(local_iov, sizeof(*iov) * nr_segs);
 
@@ -1281,44 +1339,51 @@ static ssize_t ll_file_read(struct file *file, char __user *buf, size_t count,
 static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 				 unsigned long nr_segs, loff_t pos)
 {
-	struct lu_env      *env;
-	struct vvp_io_args *args;
-	struct iovec       *local_iov;
-        size_t              count;
-        ssize_t             result;
-        int                 refcheck;
-        ENTRY;
+	struct iovec *local_iov;
+	struct iov_iter *from;
+	size_t iov_count;
+	ssize_t result;
+	ENTRY;
 
-        result = ll_file_get_iov_count(iov, &nr_segs, &count);
-        if (result)
-                RETURN(result);
-
-        env = cl_env_get(&refcheck);
-        if (IS_ERR(env))
-                RETURN(PTR_ERR(env));
+	result = ll_file_get_iov_count(iov, &nr_segs, &iov_count);
+	if (result)
+		RETURN(result);
 
 	if (nr_segs == 1) {
+		struct lu_env *env;
+		int refcheck;
+
+		env = cl_env_get(&refcheck);
+		if (IS_ERR(env))
+			RETURN(PTR_ERR(env));
+
 		local_iov = &ll_env_info(env)->lti_local_iov;
 		*local_iov = *iov;
+
+		cl_env_put(env, &refcheck);
 	} else {
 		OBD_ALLOC(local_iov, sizeof(*iov) * nr_segs);
-		if (local_iov == NULL) {
-			cl_env_put(env, &refcheck);
+		if (local_iov == NULL)
 			RETURN(-ENOMEM);
-		}
 
 		memcpy(local_iov, iov, sizeof(*iov) * nr_segs);
 	}
 
-	args = ll_env_args(env, IO_NORMAL);
-	args->u.normal.via_iov = local_iov;
-	args->u.normal.via_nrsegs = nr_segs;
-	args->u.normal.via_iocb = iocb;
+	OBD_ALLOC_PTR(from);
+	if (from == NULL) {
+		result = -ENOMEM;
+		goto out;
+	}
+# ifdef HAVE_IOV_ITER_INIT_DIRECTION
+	iov_iter_init(from, WRITE, local_iov, nr_segs, iov_count);
+# else /* !HAVE_IOV_ITER_INIT_DIRECTION */
+	iov_iter_init(from, local_iov, nr_segs, iov_count, 0);
+# endif /* HAVE_IOV_ITER_INIT_DIRECTION */
 
-	result = ll_file_io_generic(env, args, iocb->ki_filp, CIT_WRITE,
-				  &iocb->ki_pos, count);
-	cl_env_put(env, &refcheck);
+	result = ll_file_write_iter(iocb, from);
 
+	OBD_FREE_PTR(from);
+out:
 	if (nr_segs > 1)
 		OBD_FREE(local_iov, sizeof(*iov) * nr_segs);
 
@@ -1355,6 +1420,7 @@ static ssize_t ll_file_write(struct file *file, const char __user *buf,
 	cl_env_put(env, &refcheck);
 	RETURN(result);
 }
+#endif /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
 
 /*
  * Send file content (through pagecache) somewhere with helper
@@ -3393,53 +3459,74 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
 
 /* -o localflock - only provides locally consistent flock locks */
 struct file_operations ll_file_operations = {
-        .read           = ll_file_read,
-	.aio_read    = ll_file_aio_read,
-        .write          = ll_file_write,
-	.aio_write   = ll_file_aio_write,
-        .unlocked_ioctl = ll_file_ioctl,
-        .open           = ll_file_open,
-        .release        = ll_file_release,
-        .mmap           = ll_file_mmap,
-        .llseek         = ll_file_seek,
-        .splice_read    = ll_file_splice_read,
-        .fsync          = ll_fsync,
-        .flush          = ll_flush
+#ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
+	.read		= new_sync_read,
+	.read_iter	= ll_file_read_iter,
+	.write		= new_sync_write,
+	.write_iter	= ll_file_write_iter,
+#else /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
+	.read		= ll_file_read,
+	.aio_read	= ll_file_aio_read,
+	.write		= ll_file_write,
+	.aio_write	= ll_file_aio_write,
+#endif /* HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
+	.unlocked_ioctl	= ll_file_ioctl,
+	.open		= ll_file_open,
+	.release	= ll_file_release,
+	.mmap		= ll_file_mmap,
+	.llseek		= ll_file_seek,
+	.splice_read	= ll_file_splice_read,
+	.fsync		= ll_fsync,
+	.flush		= ll_flush
 };
 
 struct file_operations ll_file_operations_flock = {
-        .read           = ll_file_read,
-	.aio_read    = ll_file_aio_read,
-        .write          = ll_file_write,
-	.aio_write   = ll_file_aio_write,
-        .unlocked_ioctl = ll_file_ioctl,
-        .open           = ll_file_open,
-        .release        = ll_file_release,
-        .mmap           = ll_file_mmap,
-        .llseek         = ll_file_seek,
-        .splice_read    = ll_file_splice_read,
-        .fsync          = ll_fsync,
-        .flush          = ll_flush,
-        .flock          = ll_file_flock,
-        .lock           = ll_file_flock
+#ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
+	.read		= new_sync_read,
+	.read_iter	= ll_file_read_iter,
+	.write		= new_sync_write,
+	.write_iter	= ll_file_write_iter,
+#else /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
+	.read		= ll_file_read,
+	.aio_read	= ll_file_aio_read,
+	.write		= ll_file_write,
+	.aio_write	= ll_file_aio_write,
+#endif /* HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
+	.unlocked_ioctl	= ll_file_ioctl,
+	.open		= ll_file_open,
+	.release	= ll_file_release,
+	.mmap		= ll_file_mmap,
+	.llseek		= ll_file_seek,
+	.splice_read	= ll_file_splice_read,
+	.fsync		= ll_fsync,
+	.flush		= ll_flush,
+	.flock		= ll_file_flock,
+	.lock		= ll_file_flock
 };
 
 /* These are for -o noflock - to return ENOSYS on flock calls */
 struct file_operations ll_file_operations_noflock = {
-        .read           = ll_file_read,
-	.aio_read    = ll_file_aio_read,
-        .write          = ll_file_write,
-	.aio_write   = ll_file_aio_write,
-        .unlocked_ioctl = ll_file_ioctl,
-        .open           = ll_file_open,
-        .release        = ll_file_release,
-        .mmap           = ll_file_mmap,
-        .llseek         = ll_file_seek,
-        .splice_read    = ll_file_splice_read,
-        .fsync          = ll_fsync,
-        .flush          = ll_flush,
-        .flock          = ll_file_noflock,
-        .lock           = ll_file_noflock
+#ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
+	.read		= new_sync_read,
+	.read_iter	= ll_file_read_iter,
+	.write		= new_sync_write,
+	.write_iter	= ll_file_write_iter,
+#else /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
+	.read		= ll_file_read,
+	.aio_read	= ll_file_aio_read,
+	.write		= ll_file_write,
+	.aio_write	= ll_file_aio_write,
+#endif /* HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
+	.unlocked_ioctl	= ll_file_ioctl,
+	.open		= ll_file_open,
+	.release	= ll_file_release,
+	.mmap		= ll_file_mmap,
+	.llseek		= ll_file_seek,
+	.splice_read	= ll_file_splice_read,
+	.fsync		= ll_fsync,
+	.flush		= ll_flush,
+	.flock		= ll_file_noflock,
+	.lock		= ll_file_noflock
 };
 
 struct inode_operations ll_file_inode_operations = {

@@ -68,8 +68,8 @@ struct vvp_io {
 	/**
 	 * I/O vector information to or from which read/write is going.
 	 */
-	struct iovec *vui_iov;
-	unsigned long vui_nrsegs;
+	struct iov_iter *vui_iter;
+#ifndef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
 	/**
 	 * Total iov count for left IO.
 	 */
@@ -78,6 +78,7 @@ struct vvp_io {
 	 * Old length for iov that was truncated partially.
 	 */
 	size_t vui_iov_olen;
+#endif /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
 	/**
 	 * Total size for the left IO.
 	 */

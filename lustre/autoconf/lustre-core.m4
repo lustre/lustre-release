@@ -1656,6 +1656,50 @@ direct_io_iter, [
 ]) # LC_DIRECTIO_USE_ITER
 
 #
+# LC_HAVE_IOV_ITER_INIT_DIRECTION
+#
+#
+# 3.16 linux commit 71d8e532b1549a478e6a6a8a44f309d050294d00
+#      changed iov_iter_init api to start accepting a tag
+#      that defines if its a read or write operation
+#
+AC_DEFUN([LC_HAVE_IOV_ITER_INIT_DIRECTION], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'iov_iter_init' takes a tag],
+iter_init, [
+	#include <linux/uio.h>
+	#include <linux/fs.h>
+],[
+	const struct iovec *iov = NULL;
+
+	iov_iter_init(NULL, READ, iov, 1, 0);
+],[
+	AC_DEFINE(HAVE_IOV_ITER_INIT_DIRECTION, 1,
+		[iov_iter_init handles directional tag])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_HAVE_IOV_ITER_INIT_DIRECTION
+
+#
+# LC_HAVE_FILE_OPERATIONS_READ_WRITE_ITER
+#
+# 3.16 introduces [read|write]_iter to struct file_operations
+#
+AC_DEFUN([LC_HAVE_FILE_OPERATIONS_READ_WRITE_ITER], [
+LB_CHECK_COMPILE([if 'file_operations.[read|write]_iter' exist],
+file_function_iter, [
+	#include <linux/fs.h>
+],[
+	((struct file_operations *)NULL)->read_iter(NULL, NULL);
+	((struct file_operations *)NULL)->write_iter(NULL, NULL);
+],[
+	AC_DEFINE(HAVE_FILE_OPERATIONS_READ_WRITE_ITER, 1,
+		[file_operations.[read|write]_iter functions exist])
+])
+]) # LC_HAVE_FILE_OPERATIONS_READ_WRITE_ITER
+
+#
 # LC_NFS_FILLDIR_USE_CTX
 #
 # 3.18 kernel moved from void cookie to struct dir_context
@@ -1872,6 +1916,8 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 3.16
 	LC_DIRECTIO_USE_ITER
+	LC_HAVE_IOV_ITER_INIT_DIRECTION
+	LC_HAVE_FILE_OPERATIONS_READ_WRITE_ITER
 
 	# 3.18
 	LC_NFS_FILLDIR_USE_CTX

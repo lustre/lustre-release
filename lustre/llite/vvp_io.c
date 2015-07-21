@@ -393,29 +393,37 @@ static int vvp_mmap_locks(const struct lu_env *env,
         struct vm_area_struct  *vma;
 	struct cl_lock_descr   *descr = &vti->vti_descr;
         ldlm_policy_data_t      policy;
-        unsigned long           addr;
-        unsigned long           seg;
-        ssize_t                 count;
-	int                     result = 0;
-        ENTRY;
+#ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
+	struct iovec iov;
+	struct iov_iter i;
+#else
+	unsigned long seg;
+#endif
+	int result = 0;
+	ENTRY;
 
         LASSERT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE);
 
         if (!cl_is_normalio(env, io))
                 RETURN(0);
 
-	if (vio->vui_iov == NULL) /* nfs or loop back device write */
+	/* nfs or loop back device write */
+	if (vio->vui_iter == NULL)
 		RETURN(0);
 
 	/* No MM (e.g. NFS)? No vmas too. */
 	if (mm == NULL)
 		RETURN(0);
 
-	for (seg = 0; seg < vio->vui_nrsegs; seg++) {
-		const struct iovec *iv = &vio->vui_iov[seg];
+#ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
+	iov_for_each(iov, i, *(vio->vui_iter)) {
+#else /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
+	for (seg = 0; seg < vio->vui_iter->nr_segs; seg++) {
+		const struct iovec iov = vio->vui_iter->iov[seg];
+#endif /* HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
+		unsigned long addr = (unsigned long)iov.iov_base;
+		size_t count = iov.iov_len;
 
-                addr = (unsigned long)iv->iov_base;
-                count = iv->iov_len;
                 if (count == 0)
                         continue;
 
@@ -478,24 +486,39 @@ static void vvp_io_advance(const struct lu_env *env,
 	struct vvp_io    *vio = cl2vvp_io(env, ios);
 	struct cl_io     *io  = ios->cis_io;
 	struct cl_object *obj = ios->cis_io->ci_obj;
+#ifndef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
 	struct iovec     *iov;
-
+#endif
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
 
 	if (!cl_is_normalio(env, io))
 		return;
 
-	LASSERT(vio->vui_tot_nrsegs >= vio->vui_nrsegs);
+#ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
+	vio->vui_tot_count -= nob;
+	iov_iter_reexpand(vio->vui_iter, vio->vui_tot_count);
+#else /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
+	LASSERT(vio->vui_tot_nrsegs >= vio->vui_iter->nr_segs);
 	LASSERT(vio->vui_tot_count  >= nob);
 
 	/* Restore the iov changed in vvp_io_update_iov() */
 	if (vio->vui_iov_olen > 0) {
-		vio->vui_iov[vio->vui_nrsegs - 1].iov_len = vio->vui_iov_olen;
+		unsigned long idx = vio->vui_iter->nr_segs - 1;
+
+		/* In the latest kernels iov is const so that
+		 * changes are done using iter helpers. In older
+		 * kernels those helpers don't exist we lustre
+		 * has to do some of the management of the iter
+		 * itself. */
+		iov = (struct iovec *)&vio->vui_iter->iov[idx];
+		iov->iov_len = vio->vui_iov_olen;
 		vio->vui_iov_olen = 0;
 	}
 
-	/* advance iov */
-	iov = vio->vui_iov;
+	/* In the latest kernels special helpers exist to help
+	 * advance the iov but we don't have that in older kernels
+	 * so we need to do the book keeping ourselves. */
+	iov = (struct iovec *)vio->vui_iter->iov;
 	while (nob > 0) {
 		if (iov->iov_len > nob) {
 			iov->iov_len -= nob;
@@ -508,22 +531,29 @@ static void vvp_io_advance(const struct lu_env *env,
 		vio->vui_tot_nrsegs--;
 	}
 
-	vio->vui_iov = iov;
+	vio->vui_iter->iov = iov;
 	vio->vui_tot_count -= nob;
+#endif /* HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
 }
 
 static void vvp_io_update_iov(const struct lu_env *env,
 			      struct vvp_io *vio, struct cl_io *io)
 {
-	int i;
 	size_t size = io->u.ci_rw.crw_count;
+#ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
+	if (!cl_is_normalio(env, io) || vio->vui_iter == NULL)
+		return;
+
+	iov_iter_truncate(vio->vui_iter, size);
+#else /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
+	unsigned long i;
 
 	vio->vui_iov_olen = 0;
 	if (!cl_is_normalio(env, io) || vio->vui_tot_nrsegs == 0)
 		return;
 
 	for (i = 0; i < vio->vui_tot_nrsegs; i++) {
-		struct iovec *iv = &vio->vui_iov[i];
+		struct iovec *iv = (struct iovec *) &vio->vui_iter->iov[i];
 
 		if (iv->iov_len < size) {
 			size -= iv->iov_len;
@@ -536,10 +566,11 @@ static void vvp_io_update_iov(const struct lu_env *env,
 		}
 	}
 
-	vio->vui_nrsegs = i + 1;
-	LASSERTF(vio->vui_tot_nrsegs >= vio->vui_nrsegs,
+	vio->vui_iter->nr_segs = i + 1;
+	LASSERTF(vio->vui_tot_nrsegs >= vio->vui_iter->nr_segs,
 		 "tot_nrsegs: %lu, nrsegs: %lu\n",
-		 vio->vui_tot_nrsegs, vio->vui_nrsegs);
+		 vio->vui_tot_nrsegs, vio->vui_iter->nr_segs);
+#endif /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
 }
 
 static int vvp_io_rw_lock(const struct lu_env *env, struct cl_io *io,
@@ -799,9 +830,14 @@ static int vvp_io_read_start(const struct lu_env *env,
 	switch (vio->vui_io_subtype) {
 	case IO_NORMAL:
 		LASSERT(vio->vui_iocb->ki_pos == pos);
+#ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
+		result = generic_file_read_iter(vio->vui_iocb, vio->vui_iter);
+#else
 		result = generic_file_aio_read(vio->vui_iocb,
-					       vio->vui_iov, vio->vui_nrsegs,
+					       vio->vui_iter->iov,
+					       vio->vui_iter->nr_segs,
 					       vio->vui_iocb->ki_pos);
+#endif
 		break;
 	case IO_SPLICE:
 		result = generic_file_splice_read(file, &pos,
@@ -1054,7 +1090,7 @@ static int vvp_io_write_start(const struct lu_env *env,
 		RETURN(-EFBIG);
 	}
 
-	if (vio->vui_iov == NULL) {
+	if (vio->vui_iter == NULL) {
 		/* from a temp io in ll_cl_init(). */
 		result = 0;
 	} else {
@@ -1066,9 +1102,14 @@ static int vvp_io_write_start(const struct lu_env *env,
 		 * consistency, proper locking to protect against writes,
 		 * trucates, etc. is handled in the higher layers of lustre.
 		 */
+#ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
+		result = generic_file_write_iter(vio->vui_iocb, vio->vui_iter);
+#else
 		result = __generic_file_aio_write(vio->vui_iocb,
-						  vio->vui_iov, vio->vui_nrsegs,
+						  vio->vui_iter->iov,
+						  vio->vui_iter->nr_segs,
 						  &vio->vui_iocb->ki_pos);
+#endif
 		if (result > 0 || result == -EIOCBQUEUED) {
 			ssize_t err;
 
@@ -1437,7 +1478,9 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
                         result = 1;
 		else {
 			vio->vui_tot_count = count;
+#ifndef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
 			vio->vui_tot_nrsegs = 0;
+#endif
 		}
 
 		/* for read/write, we store the jobid in the inode, and
