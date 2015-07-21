@@ -1123,6 +1123,7 @@ struct thandle *thandle_get_sub_by_dt(const struct lu_env *env,
 				      struct dt_device *sub_dt)
 {
 	struct sub_thandle	*st = NULL;
+	struct sub_thandle	*master_st = NULL;
 	struct top_thandle	*top_th;
 	struct thandle		*sub_th = NULL;
 	int			rc = 0;
@@ -1156,19 +1157,29 @@ struct thandle *thandle_get_sub_by_dt(const struct lu_env *env,
 		/* Add master sub th to the top trans list */
 		tmt->tmt_master_sub_dt =
 			top_th->tt_master_sub_thandle->th_dev;
-		st = create_sub_thandle_with_thandle(top_th,
-				top_th->tt_master_sub_thandle);
-		if (IS_ERR(st))
-			GOTO(stop_trans, rc = PTR_ERR(st));
+		master_st = create_sub_thandle_with_thandle(top_th,
+					top_th->tt_master_sub_thandle);
+		if (IS_ERR(master_st)) {
+			rc = PTR_ERR(master_st);
+			master_st = NULL;
+			GOTO(stop_trans, rc);
+		}
 	}
 
 	/* create and init sub th to the top trans list */
 	st = create_sub_thandle_with_thandle(top_th, sub_th);
+	if (IS_ERR(st)) {
+		rc = PTR_ERR(st);
+		st = NULL;
+		GOTO(stop_trans, rc);
+	}
 	st->st_sub_th->th_wait_submit = 1;
 stop_trans:
 	if (rc < 0) {
-		if (st != NULL)
-			OBD_FREE_PTR(st);
+		if (master_st != NULL) {
+			list_del(&master_st->st_sub_list);
+			OBD_FREE_PTR(master_st);
+		}
 		sub_th->th_result = rc;
 		dt_trans_stop(env, sub_dt, sub_th);
 		sub_th = ERR_PTR(rc);
