@@ -39,12 +39,20 @@
 
 #define CBH_ALLOC(ptr, h)						\
 do {									\
-	if ((h)->cbh_flags & CBH_FLAG_ATOMIC_GROW)			\
-		LIBCFS_CPT_ALLOC_GFP((ptr), h->cbh_cptab, h->cbh_cptid,	\
-				     CBH_NOB, GFP_ATOMIC);		\
-	else								\
-		LIBCFS_CPT_ALLOC((ptr), h->cbh_cptab, h->cbh_cptid,	\
-				 CBH_NOB);				\
+	if (h->cbh_cptab) {						\
+		if ((h)->cbh_flags & CBH_FLAG_ATOMIC_GROW)		\
+			LIBCFS_CPT_ALLOC_GFP((ptr), h->cbh_cptab,	\
+					     h->cbh_cptid, CBH_NOB,	\
+					     GFP_ATOMIC);		\
+		else							\
+			LIBCFS_CPT_ALLOC((ptr), h->cbh_cptab,		\
+					 h->cbh_cptid, CBH_NOB);	\
+	} else {							\
+		if ((h)->cbh_flags & CBH_FLAG_ATOMIC_GROW)		\
+			LIBCFS_ALLOC_ATOMIC((ptr), CBH_NOB);		\
+		else							\
+			LIBCFS_ALLOC((ptr), CBH_NOB);   		\
+	}								\
 } while (0)
 
 #define CBH_FREE(ptr)	LIBCFS_FREE(ptr, CBH_NOB)
@@ -164,12 +172,14 @@ cfs_binheap_create(struct cfs_binheap_ops *ops, unsigned int flags,
 
 	LASSERT(ops != NULL);
 	LASSERT(ops->hop_compare != NULL);
-	LASSERT(cptab != NULL);
-	LASSERT(cptid == CFS_CPT_ANY ||
-	       (cptid >= 0 && cptid < cptab->ctb_nparts));
-
-	LIBCFS_CPT_ALLOC(h, cptab, cptid, sizeof(*h));
-	if (h == NULL)
+	if (cptab) {
+		LASSERT(cptid == CFS_CPT_ANY ||
+		       (cptid >= 0 && cptid < cptab->ctb_nparts));
+		LIBCFS_CPT_ALLOC(h, cptab, cptid, sizeof(*h));
+	} else {
+		LIBCFS_ALLOC(h, sizeof(*h));
+	}
+	if (!h)
 		return NULL;
 
 	h->cbh_ops	  = ops;
