@@ -51,8 +51,10 @@ if [ $(facet_fstype $SINGLEMDS) == ldiskfs ] &&
 fi
 
 if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
-# bug number for skipped test:        LU-2836 LU-2836 LU-2059 LU-5638
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 3       6       7d      11 33 34 35"
+# bug number for skipped test:        LU-2836 LU-6836 LU-2836 LU-2059
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 3       4a      6       7d"
+# bug number for skipped test:        LU-5638
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 33 34 35"
 # bug number:     LU-2887
 	ZFS_SLOW="12a"
 fi
