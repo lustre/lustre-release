@@ -1322,7 +1322,7 @@ static int lod_connect_to_osd(const struct lu_env *env, struct lod_device *lod,
 	 * we use "-MDT" to differentiate 2.x from 1.8 */
 
 	if ((p = lustre_cfg_string(cfg, 0)) && strstr(p, "-mdtlov")) {
-		len = strlen(p) + 1;
+		len = strlen(p) + 6;
 		OBD_ALLOC(nextdev, len);
 		if (nextdev == NULL)
 			GOTO(out, rc = -ENOMEM);
