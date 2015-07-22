@@ -121,9 +121,6 @@ extern struct kmem_cache *ldlm_interval_tree_slab;
 int ldlm_resource_putref_locked(struct ldlm_resource *res);
 void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
                                      struct ldlm_lock *new);
-void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
-                               struct obd_import *imp, int force);
-void ldlm_namespace_free_post(struct ldlm_namespace *ns);
 
 /* ldlm_lock.c */
 
@@ -174,7 +171,8 @@ void ldlm_lock_add_to_lru(struct ldlm_lock *lock);
 void ldlm_lock_touch_in_lru(struct ldlm_lock *lock);
 void ldlm_lock_destroy_nolock(struct ldlm_lock *lock);
 
-void ldlm_cancel_locks_for_export(struct obd_export *export);
+int ldlm_export_cancel_blocked_locks(struct obd_export *exp);
+int ldlm_export_cancel_locks(struct obd_export *exp);
 
 /* ldlm_lockd.c */
 int ldlm_bl_to_thread_lock(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
@@ -183,6 +181,7 @@ int ldlm_bl_to_thread_list(struct ldlm_namespace *ns,
 			   struct ldlm_lock_desc *ld,
 			   struct list_head *cancels, int count,
 			   ldlm_cancel_flags_t cancel_flags);
+int ldlm_bl_thread_wakeup(void);
 
 void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
                              struct ldlm_lock_desc *ld, struct ldlm_lock *lock);

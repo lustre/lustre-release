@@ -63,6 +63,10 @@ static void obd_zombie_import_add(struct obd_import *imp);
 static void print_export_data(struct obd_export *exp,
                               const char *status, int locks);
 
+struct list_head obd_stale_exports;
+spinlock_t       obd_stale_export_lock;
+atomic_t         obd_stale_export_num;
+
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
 
@@ -810,14 +814,15 @@ void class_export_put(struct obd_export *exp)
 
 	if (atomic_dec_and_test(&exp->exp_refcount)) {
 		LASSERT(!list_empty(&exp->exp_obd_chain));
-                CDEBUG(D_IOCTL, "final put %p/%s\n",
-                       exp, exp->exp_client_uuid.uuid);
+		LASSERT(list_empty(&exp->exp_stale_list));
+		CDEBUG(D_IOCTL, "final put %p/%s\n",
+		       exp, exp->exp_client_uuid.uuid);
 
-                /* release nid stat refererence */
-                lprocfs_exp_cleanup(exp);
+		/* release nid stat refererence */
+		lprocfs_exp_cleanup(exp);
 
-                obd_zombie_export_add(exp);
-        }
+		obd_zombie_export_add(exp);
+	}
 }
 EXPORT_SYMBOL(class_export_put);
 
@@ -865,6 +870,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
 	INIT_HLIST_NODE(&export->exp_gen_hash);
 	spin_lock_init(&export->exp_bl_list_lock);
 	INIT_LIST_HEAD(&export->exp_bl_list);
+	INIT_LIST_HEAD(&export->exp_stale_list);
 
 	export->exp_sp_peer = LUSTRE_SP_ANY;
 	export->exp_flvr.sf_rpc = SPTLRPC_FLVR_INVALID;
@@ -934,7 +940,10 @@ void class_unlink_export(struct obd_export *exp)
 	list_del_init(&exp->exp_obd_chain_timed);
 	exp->exp_obd->obd_num_exports--;
 	spin_unlock(&exp->exp_obd->obd_dev_lock);
-	class_export_put(exp);
+	atomic_inc(&obd_stale_export_num);
+
+	/* A reference is kept by obd_stale_exports list */
+	obd_stale_export_put(exp);
 }
 
 /* Import management functions */
@@ -1656,6 +1665,7 @@ static int obd_zombie_impexp_check(void *arg)
  * Add export to the obd_zombe thread and notify it.
  */
 static void obd_zombie_export_add(struct obd_export *exp) {
+	atomic_dec(&obd_stale_export_num);
 	spin_lock(&exp->exp_obd->obd_dev_lock);
 	LASSERT(!list_empty(&exp->exp_obd_chain));
 	list_del_init(&exp->exp_obd_chain);
@@ -1723,6 +1733,76 @@ void obd_zombie_barrier(void)
 }
 EXPORT_SYMBOL(obd_zombie_barrier);
 
+
+struct obd_export *obd_stale_export_get(void)
+{
+	struct obd_export *exp = NULL;
+	ENTRY;
+
+	spin_lock(&obd_stale_export_lock);
+	if (!list_empty(&obd_stale_exports)) {
+		exp = list_entry(obd_stale_exports.next,
+				 struct obd_export, exp_stale_list);
+		list_del_init(&exp->exp_stale_list);
+	}
+	spin_unlock(&obd_stale_export_lock);
+
+	if (exp) {
+		CDEBUG(D_DLMTRACE, "Get export %p: total %d\n", exp,
+		       atomic_read(&obd_stale_export_num));
+	}
+	RETURN(exp);
+}
+EXPORT_SYMBOL(obd_stale_export_get);
+
+void obd_stale_export_put(struct obd_export *exp)
+{
+	ENTRY;
+
+	LASSERT(list_empty(&exp->exp_stale_list));
+	if (exp->exp_lock_hash &&
+	    atomic_read(&exp->exp_lock_hash->hs_count)) {
+		CDEBUG(D_DLMTRACE, "Put export %p: total %d\n", exp,
+		       atomic_read(&obd_stale_export_num));
+
+		spin_lock_bh(&exp->exp_bl_list_lock);
+		spin_lock(&obd_stale_export_lock);
+		/* Add to the tail if there is no blocked locks,
+		 * to the head otherwise. */
+		if (list_empty(&exp->exp_bl_list))
+			list_add_tail(&exp->exp_stale_list,
+				      &obd_stale_exports);
+		else
+			list_add(&exp->exp_stale_list,
+				 &obd_stale_exports);
+
+		spin_unlock(&obd_stale_export_lock);
+		spin_unlock_bh(&exp->exp_bl_list_lock);
+	} else {
+		class_export_put(exp);
+	}
+	EXIT;
+}
+EXPORT_SYMBOL(obd_stale_export_put);
+
+/**
+ * Adjust the position of the export in the stale list,
+ * i.e. move to the head of the list if is needed.
+ **/
+void obd_stale_export_adjust(struct obd_export *exp)
+{
+	LASSERT(exp != NULL);
+	spin_lock_bh(&exp->exp_bl_list_lock);
+	spin_lock(&obd_stale_export_lock);
+
+	if (!list_empty(&exp->exp_stale_list) &&
+	    !list_empty(&exp->exp_bl_list))
+		list_move(&exp->exp_stale_list, &obd_stale_exports);
+
+	spin_unlock(&obd_stale_export_lock);
+	spin_unlock_bh(&exp->exp_bl_list_lock);
+}
+EXPORT_SYMBOL(obd_stale_export_adjust);
 
 /**
  * destroy zombie export/import thread.

@@ -1394,6 +1394,10 @@ ldlm_namespace_new(struct obd_device *obd, char *name,
                    ldlm_side_t client, ldlm_appetite_t apt,
                    ldlm_ns_type_t ns_type);
 int ldlm_namespace_cleanup(struct ldlm_namespace *ns, __u64 flags);
+void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
+			       struct obd_import *imp,
+			       int force);
+void ldlm_namespace_free_post(struct ldlm_namespace *ns);
 void ldlm_namespace_free(struct ldlm_namespace *ns,
                          struct obd_import *imp, int force);
 void ldlm_namespace_register(struct ldlm_namespace *ns, ldlm_side_t client);

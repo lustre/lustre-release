@@ -1395,6 +1395,39 @@ test_66()
 }
 run_test 66 "lock enqueue re-send vs client eviction"
 
+test_65() {
+	mount_client $DIR2
+
+	#grant lock1, export2
+	$SETSTRIPE -i -0 $DIR2/$tfile || return 1
+	$MULTIOP $DIR2/$tfile Ow  || return 2
+
+#define OBD_FAIL_LDLM_BL_EVICT            0x31e
+	do_facet ost $LCTL set_param fail_loc=0x31e
+	#get waiting lock2, export1
+	$MULTIOP $DIR/$tfile Ow &
+	PID1=$!
+	# let enqueue to get asleep
+	sleep 2
+
+	#get lock2 blocked
+	$MULTIOP $DIR2/$tfile Ow &
+	PID2=$!
+	sleep 2
+
+	#evict export1
+	ost_evict_client
+
+	sleep 2
+	do_facet ost $LCTL set_param fail_loc=0
+
+	wait $PID1
+	wait $PID2
+
+	umount_client $DIR2
+}
+run_test 65 "lock enqueue for destroyed export"
+
 check_cli_ir_state()
 {
         local NODE=${1:-$HOSTNAME}

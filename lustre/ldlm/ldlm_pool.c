@@ -1223,7 +1223,9 @@ int ldlm_pools_recalc(ldlm_side_t client)
         struct ldlm_namespace *ns;
         struct ldlm_namespace *ns_old = NULL;
         int nr, equal = 0;
-	int time = 50; /* seconds of sleep if no active namespaces */
+	/* seconds of sleep if no active namespaces */
+	int time = client ? LDLM_POOL_CLI_DEF_RECALC_PERIOD :
+			    LDLM_POOL_SRV_DEF_RECALC_PERIOD;
 
 	/*
 	 * No need to setup pool limit for client pools.
@@ -1367,6 +1369,10 @@ int ldlm_pools_recalc(ldlm_side_t client)
 			ldlm_namespace_put(ns);
 		}
         }
+
+	/* Wake up the blocking threads from time to time. */
+	ldlm_bl_thread_wakeup();
+
 	return time;
 }
 

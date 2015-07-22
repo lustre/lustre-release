@@ -688,8 +688,7 @@ int server_disconnect_export(struct obd_export *exp)
 	if (exp->exp_imp_reverse)
 		ptlrpc_cleanup_imp(exp->exp_imp_reverse);
 
-	if (exp->exp_obd->obd_namespace != NULL)
-		ldlm_cancel_locks_for_export(exp);
+	ldlm_bl_thread_wakeup();
 
         /* complete all outstanding replies */
 	spin_lock(&exp->exp_lock);
