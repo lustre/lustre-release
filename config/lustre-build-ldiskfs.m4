@@ -7,6 +7,7 @@ AC_MSG_CHECKING([which ldiskfs series to use])
 AS_IF([test x$RHEL_KERNEL = xyes], [
 	case $RHEL_RELEASE_NO in
 	71)	LDISKFS_SERIES="3.10-rhel7.series"	;;
+	67)	LDISKFS_SERIES="2.6-rhel6.7.series"	;;
 	66)	LDISKFS_SERIES="2.6-rhel6.6.series"	;;
 	65)	LDISKFS_SERIES="2.6-rhel6.5.series"	;;
 	64)	LDISKFS_SERIES="2.6-rhel6.4.series"	;;
