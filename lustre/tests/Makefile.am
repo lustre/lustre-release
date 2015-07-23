@@ -33,6 +33,7 @@ noinst_SCRIPTS += lnet-selftest.sh obdfilter-survey.sh mmp.sh mmp_mark.sh
 noinst_SCRIPTS += sgpdd-survey.sh maloo_upload.sh auster setup-nfs.sh
 noinst_SCRIPTS += mds-survey.sh parallel-scale-nfs.sh large-lun.sh
 noinst_SCRIPTS += parallel-scale-nfsv3.sh parallel-scale-nfsv4.sh
+noinst_SCRIPTS += setup-cifs.sh parallel-scale-cifs.sh
 noinst_SCRIPTS += posix.sh sanity-scrub.sh scrub-performance.sh ha.sh
 noinst_SCRIPTS += sanity-quota-old.sh sanity-lfsck.sh lfsck-performance.sh
 noinst_SCRIPTS += resolveip

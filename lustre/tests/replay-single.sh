@@ -2027,15 +2027,6 @@ check_for_process () {
 	killall_process $clients "$prog" -0
 }
 
-killall_process () {
-	local clients=${1:-$(hostname)}
-	local name=$2
-	local signal=$3
-	local rc=0
-
-	do_nodes $clients "killall $signal $name"
-}
-
 test_70b () {
 	local clients=${CLIENTS:-$HOSTNAME}
 
