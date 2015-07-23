@@ -1900,6 +1900,15 @@ int llog_osd_put_cat_list(const struct lu_env *env, struct dt_device *d,
 	if (rc)
 		GOTO(out, rc);
 
+	/* For update log, this happens during initialization,
+	 * see lod_sub_prep_llog(), and we need make sure catlog
+	 * file ID is written to catlist file(committed) before
+	 * cross-MDT operation write update records to catlog FILE,
+	 * otherwise, during failover these update records might
+	 * missing */
+	if (fid_is_update_log(fid))
+		th->th_sync = 1;
+
 	rc = dt_trans_start_local(env, d, th);
 	if (rc)
 		GOTO(out_trans, rc);
