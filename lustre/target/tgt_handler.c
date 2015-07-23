@@ -389,6 +389,7 @@ static int tgt_handle_request0(struct tgt_session_info *tsi,
 	case SEC_CTX_INIT:
 	case SEC_CTX_INIT_CONT:
 	case SEC_CTX_FINI:
+		CFS_FAIL_TIMEOUT(OBD_FAIL_SEC_CTX_HDL_PAUSE, cfs_fail_val);
 		GOTO(out, rc = 0);
 	}
 
