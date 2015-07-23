@@ -2235,8 +2235,13 @@ static int osd_declare_object_create(const struct lu_env *env,
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
+	/* EA object consumes more credits than regular object: osd_mk_index
+	 * vs. osd_mkreg: osd_mk_index will create 2 blocks for root_node and
+	 * leaf_node, could involves the block, block bitmap, groups, GDT
+	 * change for each block, so add 4 * 2 credits in that case. */
 	osd_trans_declare_op(env, oh, OSD_OT_CREATE,
-			     osd_dto_credits_noquota[DTO_OBJECT_CREATE]);
+			     osd_dto_credits_noquota[DTO_OBJECT_CREATE] +
+			     (dof->dof_type == DFT_INDEX) ? 4 * 2 : 0);
 	/* Reuse idle OI block may cause additional one OI block
 	 * to be changed. */
 	osd_trans_declare_op(env, oh, OSD_OT_INSERT,
