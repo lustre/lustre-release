@@ -1325,13 +1325,41 @@ static int ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 
 	/* set the directory layout */
 	if (lli->lli_lsm_md == NULL) {
+		struct cl_attr	*attr;
 
 		rc = ll_init_lsm_md(inode, md);
 		if (rc != 0)
 			RETURN(rc);
 
 		lli->lli_lsm_md = lsm;
-		/* set lsm_md to NULL, so the following free lustre_md
+
+		OBD_ALLOC_PTR(attr);
+		if (attr == NULL)
+			RETURN(-ENOMEM);
+
+		/* validate the lsm */
+		rc = md_merge_attr(ll_i2mdexp(inode), lsm, attr,
+				   ll_md_blocking_ast);
+		if (rc != 0) {
+			OBD_FREE_PTR(attr);
+			RETURN(rc);
+		}
+
+		if (md->body->mbo_valid & OBD_MD_FLNLINK)
+			md->body->mbo_nlink = attr->cat_nlink;
+		if (md->body->mbo_valid & OBD_MD_FLSIZE)
+			md->body->mbo_size = attr->cat_size;
+		if (md->body->mbo_valid & OBD_MD_FLATIME)
+			md->body->mbo_atime = attr->cat_atime;
+		if (md->body->mbo_valid & OBD_MD_FLCTIME)
+			md->body->mbo_ctime = attr->cat_ctime;
+		if (md->body->mbo_valid & OBD_MD_FLMTIME)
+			md->body->mbo_mtime = attr->cat_mtime;
+
+		OBD_FREE_PTR(attr);
+
+
+			/* set lsm_md to NULL, so the following free lustre_md
 		 * will not free this lsm */
 		md->lmv = NULL;
 		CDEBUG(D_INODE, "Set lsm %p magic %x to "DFID"\n", lsm,
