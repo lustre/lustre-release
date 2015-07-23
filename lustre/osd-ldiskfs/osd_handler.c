@@ -5182,7 +5182,29 @@ again:
 
 	rc = osd_get_lma(info, inode, &info->oti_obj_dentry, lma);
 	if (rc == 0) {
-		LASSERT(!(lma->lma_compat & LMAC_NOT_IN_OI));
+		if (unlikely(lma->lma_compat & LMAC_NOT_IN_OI)) {
+			struct lu_fid *tfid = &lma->lma_self_fid;
+
+			*attr |= LUDA_IGNORE;
+
+			/* It must be REMOTE_PARENT_DIR and as the
+			 * dotdot entry of remote directory */
+			if (unlikely(dot_dotdot != 2 ||
+				     fid_seq(tfid) != FID_SEQ_LOCAL_FILE ||
+				     fid_oid(tfid) != REMOTE_PARENT_DIR_OID)) {
+				CDEBUG(D_LFSCK, "%.16s: expect remote agent "
+				       "parent directory, but got %.*s under "
+				       "dir = %lu/%u with the FID "DFID"\n",
+				       devname, ent->oied_namelen,
+				       ent->oied_name, dir->i_ino,
+				       dir->i_generation, PFID(tfid));
+
+				rc = -EIO;
+			}
+
+
+			GOTO(out_inode, rc);
+		}
 
 		if (fid_is_sane(fid)) {
 			/* FID-in-dirent is valid. */
