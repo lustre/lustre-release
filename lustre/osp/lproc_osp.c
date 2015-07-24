@@ -776,6 +776,43 @@ static struct lprocfs_vars lprocfs_osp_obd_vars[] = {
 	{ NULL }
 };
 
+static struct lprocfs_vars lprocfs_osp_md_vars[] = {
+	{ .name =	"uuid",
+	  .fops =	&osp_uuid_fops			},
+	{ .name =	"ping",
+	  .fops =	&osp_ping_fops,
+	  .proc_mode =	0222				},
+	{ .name =	"connect_flags",
+	  .fops =	&osp_connect_flags_fops		},
+	{ .name =	"mdt_server_uuid",
+	  .fops =	&osp_server_uuid_fops		},
+	{ .name =	"mdt_conn_uuid",
+	  .fops =	&osp_conn_uuid_fops		},
+	{ .name =	"active",
+	  .fops =	&osp_active_fops		},
+	{ .name =	"max_rpcs_in_flight",
+	  .fops =	&osp_max_rpcs_in_flight_fops	},
+	{ .name =	"max_rpcs_in_progress",
+	  .fops =	&osp_max_rpcs_in_prog_fops	},
+	{ .name =	"timeouts",
+	  .fops =	&osp_timeouts_fops		},
+	{ .name =	"import",
+	  .fops =	&osp_import_fops		},
+	{ .name =	"state",
+	  .fops =	&osp_state_fops			},
+	{ .name =	"maxage",
+	  .fops =	&osp_maxage_fops		},
+	{ .name =	"prealloc_status",
+	  .fops =	&osp_pre_status_fops		},
+
+	/* for compatibility reasons */
+	{ .name =	"destroys_in_flight",
+	  .fops =	&osp_destroys_in_flight_fops		},
+	{ .name	=	"lfsck_max_rpcs_in_flight",
+	  .fops	=	&osp_lfsck_max_rpcs_in_flight_fops	},
+	{ NULL }
+};
+
 LPROC_SEQ_FOPS_RO_TYPE(osp, dt_blksize);
 LPROC_SEQ_FOPS_RO_TYPE(osp, dt_kbytestotal);
 LPROC_SEQ_FOPS_RO_TYPE(osp, dt_kbytesfree);
@@ -811,7 +848,10 @@ void osp_lprocfs_init(struct osp_device *osp)
 	struct obd_type		*type;
 	int			 rc;
 
-	obd->obd_vars = lprocfs_osp_obd_vars;
+	if (osp->opd_connect_mdt)
+		obd->obd_vars = lprocfs_osp_md_vars;
+	else
+		obd->obd_vars = lprocfs_osp_obd_vars;
 	if (lprocfs_obd_setup(obd) != 0)
 		return;
 
