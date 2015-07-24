@@ -2729,6 +2729,8 @@ static int mdd_rename(const struct lu_env *env,
 		mdd_tobj = md2mdd_obj(tobj);
 
 	mdd_sobj = mdd_object_find(env, mdd, lf);
+	if (IS_ERR(mdd_sobj))
+		RETURN(PTR_ERR(mdd_sobj));
 
 	rc = mdd_la_get(env, mdd_sobj, cattr);
 	if (rc)
@@ -2757,13 +2759,18 @@ static int mdd_rename(const struct lu_env *env,
 	if (rc < 0)
 		GOTO(out_pending, rc);
 
+	/* FIXME: Should consider tobj and sobj too in rename_lock. */
+	rc = mdd_rename_order(env, mdd, mdd_spobj, pattr, mdd_tpobj);
+	if (rc < 0)
+		GOTO(out_pending, rc);
+
         handle = mdd_trans_create(env, mdd);
         if (IS_ERR(handle))
                 GOTO(out_pending, rc = PTR_ERR(handle));
 
 	memset(ldata, 0, sizeof(*ldata));
-	mdd_linkea_prepare(env, mdd_sobj, NULL, NULL, mdd_object_fid(mdd_tpobj),
-			   ltname, 1, 0, ldata);
+	mdd_linkea_prepare(env, mdd_sobj, mdd_object_fid(mdd_spobj), lsname,
+			   mdd_object_fid(mdd_tpobj), ltname, 1, 0, ldata);
 	rc = mdd_declare_rename(env, mdd, mdd_spobj, mdd_tpobj, mdd_sobj,
 				mdd_tobj, lsname, ltname, ma, ldata, handle);
 	if (rc)
@@ -2773,20 +2780,15 @@ static int mdd_rename(const struct lu_env *env,
         if (rc)
                 GOTO(stop, rc);
 
-        /* FIXME: Should consider tobj and sobj too in rename_lock. */
-	rc = mdd_rename_order(env, mdd, mdd_spobj, pattr, mdd_tpobj);
-	if (rc < 0)
-		GOTO(cleanup_unlocked, rc);
-
 	is_dir = S_ISDIR(cattr->la_mode);
 
-        /* Remove source name from source directory */
+	/* Remove source name from source directory */
 	rc = __mdd_index_delete(env, mdd_spobj, sname, is_dir, handle);
-        if (rc)
-                GOTO(cleanup, rc);
+	if (rc != 0)
+		GOTO(stop, rc);
 
-        /* "mv dir1 dir2" needs "dir1/.." link update */
-        if (is_dir && mdd_sobj && !lu_fid_eq(spobj_fid, tpobj_fid)) {
+	/* "mv dir1 dir2" needs "dir1/.." link update */
+	if (is_dir && !lu_fid_eq(spobj_fid, tpobj_fid)) {
 		rc = __mdd_index_delete_only(env, mdd_sobj, dotdot, handle);
 		if (rc != 0)
 			GOTO(fixup_spobj2, rc);
@@ -2813,13 +2815,25 @@ static int mdd_rename(const struct lu_env *env,
         LASSERT(ma->ma_attr.la_valid & LA_CTIME);
         la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
 
-        /* XXX: mdd_sobj must be local one if it is NOT NULL. */
-	if (mdd_sobj) {
-		la->la_valid = LA_CTIME;
-		rc = mdd_update_time(env, mdd_sobj, cattr, la, handle);
-		if (rc)
-			GOTO(fixup_tpobj, rc);
-	}
+	/* XXX: mdd_sobj must be local one if it is NOT NULL. */
+	la->la_valid = LA_CTIME;
+	rc = mdd_update_time(env, mdd_sobj, cattr, la, handle);
+	if (rc)
+		GOTO(fixup_tpobj, rc);
+
+	/* Update the linkEA for the source object */
+	mdd_write_lock(env, mdd_sobj, MOR_SRC_CHILD);
+	rc = mdd_links_rename(env, mdd_sobj, mdo2fid(mdd_spobj), lsname,
+			      mdo2fid(mdd_tpobj), ltname, handle, ldata,
+			      0, 0);
+	if (rc == -ENOENT)
+		/* Old files might not have EA entry */
+		mdd_links_add(env, mdd_sobj, mdo2fid(mdd_spobj),
+			      lsname, handle, NULL, 0);
+	mdd_write_unlock(env, mdd_sobj);
+	/* We don't fail the transaction if the link ea can't be
+	   updated -- fid2path will use alternate lookup method. */
+	rc = 0;
 
         /* Remove old target object
          * For tobj is remote case cmm layer has processed
@@ -2903,22 +2917,9 @@ static int mdd_rename(const struct lu_env *env,
 	if (mdd_spobj != mdd_tpobj) {
 		la->la_valid = LA_CTIME | LA_MTIME;
 		rc = mdd_update_time(env, mdd_tpobj, tpattr, la, handle);
+		if (rc != 0)
+			GOTO(fixup_tpobj, rc);
 	}
-
-	if (rc == 0 && mdd_sobj) {
-		mdd_write_lock(env, mdd_sobj, MOR_SRC_CHILD);
-		rc = mdd_links_rename(env, mdd_sobj, mdo2fid(mdd_spobj), lsname,
-				      mdo2fid(mdd_tpobj), ltname, handle, NULL,
-				      0, 0);
-                if (rc == -ENOENT)
-                        /* Old files might not have EA entry */
-                        mdd_links_add(env, mdd_sobj, mdo2fid(mdd_spobj),
-				      lsname, handle, NULL, 0);
-                mdd_write_unlock(env, mdd_sobj);
-                /* We don't fail the transaction if the link ea can't be
-                   updated -- fid2path will use alternate lookup method. */
-                rc = 0;
-        }
 
         EXIT;
 
@@ -2973,7 +2974,6 @@ cleanup:
 	if (tobj_locked)
 		mdd_write_unlock(env, mdd_tobj);
 
-cleanup_unlocked:
 	if (rc == 0)
 		rc = mdd_changelog_ns_store(env, mdd, CL_RENAME, cl_flags,
 					    mdd_tobj, tpobj_fid, lf, spobj_fid,
