@@ -33,6 +33,7 @@
 #define MAX_NUM_SHOW_ENTRIES	32
 #define LNET_MAX_STR_LEN	128
 #define LNET_MAX_SHOW_NUM_CPT	128
+#define LNET_UNDEFINED_HOPS	((__u32) -1)
 
 struct lnet_ioctl_net_config {
 	char ni_interfaces[LNET_MAX_INTERFACES][LNET_MAX_STR_LEN];

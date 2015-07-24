@@ -143,12 +143,12 @@ int lustre_lnet_config_route(char *nw, char *gw, int hops, int prio,
 	}
 
 	if (hops == -1) {
-		/* -1 indicates to use the default hop value */
-		hops = 1;
+		/* hops is undefined */
+		hops = LNET_UNDEFINED_HOPS;
 	} else if (hops < 1 || hops > 255) {
 		snprintf(err_str,
 			sizeof(err_str),
-			"\"invalid hop count %d, must be between 0 and 256\"",
+			"\"invalid hop count %d, must be between 1 and 255\"",
 			hops);
 		rc = LUSTRE_CFG_RC_OUT_OF_RANGE_PARAM;
 		goto out;
