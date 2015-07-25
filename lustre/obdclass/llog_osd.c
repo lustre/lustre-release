@@ -422,9 +422,6 @@ static int llog_osd_write_rec(const struct lu_env *env,
 
 		if (idx == LLOG_HEADER_IDX) {
 			/* llog header update */
-			LASSERT(reclen >= sizeof(struct llog_log_hdr));
-			LASSERT(rec == &llh->llh_hdr);
-
 			lgi->lgi_off = 0;
 			lgi->lgi_buf.lb_len = reclen;
 			lgi->lgi_buf.lb_buf = rec;
@@ -1482,6 +1479,67 @@ llog_osd_regular_fid_del_name_entry(const struct lu_env *env,
 	RETURN(rc);
 }
 
+/**
+ * Implementation of the llog_operations::lop_declare_destroy
+ *
+ * This function declare destroys the llog and deletes also entry in the
+ * llog directory in case of named llog. Llog should be opened prior that.
+ *
+ * \param[in] env		execution environment
+ * \param[in] loghandle	llog handle of the current llog
+ *
+ * \retval		0 on successful destroy
+ * \retval		negative value on error
+ */
+static int llog_osd_declare_destroy(const struct lu_env *env,
+				    struct llog_handle *loghandle,
+				    struct thandle *th)
+{
+	struct llog_ctxt	*ctxt;
+	struct dt_object	*o, *llog_dir = NULL;
+	int			 rc;
+
+	ENTRY;
+
+	ctxt = loghandle->lgh_ctxt;
+	LASSERT(ctxt);
+
+	o = loghandle->lgh_obj;
+	LASSERT(o);
+
+	if (loghandle->lgh_name) {
+		llog_dir = llog_osd_dir_get(env, ctxt);
+		if (IS_ERR(llog_dir))
+			RETURN(PTR_ERR(llog_dir));
+
+		rc = dt_declare_delete(env, llog_dir,
+				       (struct dt_key *)loghandle->lgh_name,
+				       th);
+		if (rc < 0)
+			GOTO(out_put, rc);
+	}
+
+	rc = dt_declare_ref_del(env, o, th);
+	if (rc < 0)
+		GOTO(out_put, rc);
+
+	rc = dt_declare_destroy(env, o, th);
+	if (rc < 0)
+		GOTO(out_put, rc);
+
+	if (loghandle->lgh_ctxt->loc_flags & LLOG_CTXT_FLAG_NORMAL_FID) {
+		rc = llog_osd_regular_fid_del_name_entry(env, o, th, true);
+		if (rc < 0)
+			GOTO(out_put, rc);
+	}
+
+out_put:
+	if (!(IS_ERR_OR_NULL(llog_dir)))
+		lu_object_put(env, &llog_dir->do_lu);
+
+	RETURN(rc);
+}
+
 
 /**
  * Implementation of the llog_operations::lop_destroy
@@ -1498,95 +1556,55 @@ llog_osd_regular_fid_del_name_entry(const struct lu_env *env,
  * \retval		negative value on error
  */
 static int llog_osd_destroy(const struct lu_env *env,
-			    struct llog_handle *loghandle)
+			    struct llog_handle *loghandle, struct thandle *th)
 {
 	struct llog_ctxt	*ctxt;
 	struct dt_object	*o, *llog_dir = NULL;
-	struct dt_device	*d;
-	struct thandle		*th;
-	char			*name = NULL;
 	int			 rc;
 
 	ENTRY;
 
 	ctxt = loghandle->lgh_ctxt;
-	LASSERT(ctxt);
+	LASSERT(ctxt != NULL);
 
 	o = loghandle->lgh_obj;
-	LASSERT(o);
+	LASSERT(o != NULL);
 
-	d = lu2dt_dev(o->do_lu.lo_dev);
-	LASSERT(d);
-	LASSERT(d == ctxt->loc_exp->exp_obd->obd_lvfs_ctxt.dt);
-
-	th = dt_trans_create(env, d);
-	if (IS_ERR(th))
-		RETURN(PTR_ERR(th));
+	dt_write_lock(env, o, 0);
+	if (!dt_object_exists(o))
+		GOTO(out_unlock, rc = 0);
 
 	if (loghandle->lgh_name) {
 		llog_dir = llog_osd_dir_get(env, ctxt);
 		if (IS_ERR(llog_dir))
-			GOTO(out_trans, rc = PTR_ERR(llog_dir));
+			RETURN(PTR_ERR(llog_dir));
 
-		name = loghandle->lgh_name;
-		rc = dt_declare_delete(env, llog_dir,
-				       (struct dt_key *)name, th);
-		if (rc)
-			GOTO(out_trans, rc);
+		dt_read_lock(env, llog_dir, 0);
+		rc = dt_delete(env, llog_dir,
+			       (struct dt_key *)loghandle->lgh_name,
+			       th);
+		dt_read_unlock(env, llog_dir);
+		if (rc) {
+			CERROR("%s: can't remove llog %s: rc = %d\n",
+			       o->do_lu.lo_dev->ld_obd->obd_name,
+			       loghandle->lgh_name, rc);
+			GOTO(out_unlock, rc);
+		}
 	}
 
-	rc = dt_declare_ref_del(env, o, th);
+	dt_ref_del(env, o, th);
+	rc = dt_destroy(env, o, th);
 	if (rc < 0)
-		GOTO(out_trans, rc);
-
-	rc = dt_declare_destroy(env, o, th);
-	if (rc)
-		GOTO(out_trans, rc);
+		GOTO(out_unlock, rc);
 
 	if (loghandle->lgh_ctxt->loc_flags & LLOG_CTXT_FLAG_NORMAL_FID) {
-		rc = llog_osd_regular_fid_del_name_entry(env, o, th, true);
+		rc = llog_osd_regular_fid_del_name_entry(env, o, th, false);
 		if (rc < 0)
-			GOTO(out_trans, rc);
-	}
-
-	rc = dt_trans_start_local(env, d, th);
-	if (rc)
-		GOTO(out_trans, rc);
-
-	th->th_wait_submit = 1;
-
-	dt_write_lock(env, o, 0);
-	if (dt_object_exists(o)) {
-		if (name) {
-			dt_read_lock(env, llog_dir, 0);
-			rc = dt_delete(env, llog_dir,
-				       (struct dt_key *) name,
-				       th);
-			dt_read_unlock(env, llog_dir);
-			if (rc) {
-				CERROR("%s: can't remove llog %s: rc = %d\n",
-				       o->do_lu.lo_dev->ld_obd->obd_name,
-				       name, rc);
-				GOTO(out_unlock, rc);
-			}
-		}
-		dt_ref_del(env, o, th);
-		rc = dt_destroy(env, o, th);
-		if (rc)
 			GOTO(out_unlock, rc);
-
-		if (loghandle->lgh_ctxt->loc_flags &
-						LLOG_CTXT_FLAG_NORMAL_FID) {
-			rc = llog_osd_regular_fid_del_name_entry(env, o, th,
-								 false);
-			if (rc < 0)
-				GOTO(out_unlock, rc);
-		}
 	}
+
 out_unlock:
 	dt_write_unlock(env, o);
-out_trans:
-	dt_trans_stop(env, d, th);
 	if (!(IS_ERR_OR_NULL(llog_dir)))
 		lu_object_put(env, &llog_dir->do_lu);
 	RETURN(rc);
@@ -1683,6 +1701,7 @@ struct llog_operations llog_osd_ops = {
 	.lop_next_block		= llog_osd_next_block,
 	.lop_prev_block		= llog_osd_prev_block,
 	.lop_read_header	= llog_osd_read_header,
+	.lop_declare_destroy	= llog_osd_declare_destroy,
 	.lop_destroy		= llog_osd_destroy,
 	.lop_setup		= llog_osd_setup,
 	.lop_cleanup		= llog_osd_cleanup,
@@ -1700,6 +1719,7 @@ struct llog_operations llog_common_cat_ops = {
 	.lop_next_block		= llog_osd_next_block,
 	.lop_prev_block		= llog_osd_prev_block,
 	.lop_read_header	= llog_osd_read_header,
+	.lop_declare_destroy	= llog_osd_declare_destroy,
 	.lop_destroy		= llog_osd_destroy,
 	.lop_setup		= llog_osd_setup,
 	.lop_cleanup		= llog_osd_cleanup,

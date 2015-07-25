@@ -218,8 +218,10 @@ int llog_catalog_list(const struct lu_env *env, struct dt_device *d,
 int llog_initiator_connect(struct llog_ctxt *ctxt);
 
 struct llog_operations {
+	int (*lop_declare_destroy)(const struct lu_env *env,
+			   struct llog_handle *handle, struct thandle *th);
 	int (*lop_destroy)(const struct lu_env *env,
-			   struct llog_handle *handle);
+			   struct llog_handle *handle, struct thandle *th);
 	int (*lop_next_block)(const struct lu_env *env, struct llog_handle *h,
 			      int *curr_idx, int next_idx, __u64 *offset,
 			      void *buf, int len);
@@ -467,24 +469,6 @@ static inline int llog_ctxt_null(struct obd_device *obd, int index)
         return (llog_group_ctxt_null(&obd->obd_olg, index));
 }
 
-static inline int llog_destroy(const struct lu_env *env,
-			       struct llog_handle *handle)
-{
-	struct llog_operations *lop;
-	int rc;
-
-	ENTRY;
-
-	rc = llog_handle2ops(handle, &lop);
-	if (rc)
-		RETURN(rc);
-	if (lop->lop_destroy == NULL)
-		RETURN(-EOPNOTSUPP);
-
-	rc = lop->lop_destroy(env, handle);
-	RETURN(rc);
-}
-
 static inline int llog_next_block(const struct lu_env *env,
 				  struct llog_handle *loghandle, int *cur_idx,
 				  int next_idx, __u64 *cur_offset, void *buf,
@@ -564,6 +548,10 @@ int llog_declare_create(const struct lu_env *env,
 			struct llog_handle *loghandle, struct thandle *th);
 int llog_create(const struct lu_env *env, struct llog_handle *handle,
 		struct thandle *th);
+int llog_trans_destroy(const struct lu_env *env, struct llog_handle *handle,
+		       struct thandle *th);
+int llog_destroy(const struct lu_env *env, struct llog_handle *handle);
+
 int llog_declare_write_rec(const struct lu_env *env,
 			   struct llog_handle *handle,
 			   struct llog_rec_hdr *rec, int idx,

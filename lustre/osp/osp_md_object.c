@@ -956,35 +956,6 @@ int osp_md_declare_object_destroy(const struct lu_env *env,
 }
 
 /**
- * Interpreter call for object destroy
- *
- * Object destroy interpreter, which will be called after destroying
- * the remote object to set flags and status.
- *
- * \param[in] env	execution environment
- * \param[in] reply	update reply
- * \param[in] req	ptlrpc update request for destroying object
- * \param[in] obj	object to be destroyed
- * \param[in] data	data used in this function.
- * \param[in] index	index(position) of destroy update in the whole
- *                      updates
- * \param[in] rc	update result on the remote MDT.
- *
- * \retval		only return 0 for now
- */
-static int osp_md_object_destroy_interpreter(const struct lu_env *env,
-					     struct object_update_reply *reply,
-					     struct ptlrpc_request *req,
-					     struct osp_object *obj,
-					     void *data, int index, int rc)
-{
-	/* not needed in cache any more */
-	set_bit(LU_OBJECT_HEARD_BANSHEE,
-		&obj->opo_obj.do_lu.lo_header->loh_flags);
-	return 0;
-}
-
-/**
  * Implement OSP layer dt_object_operations::do_destroy() interface.
  *
  * Pack the destroy update into the RPC buffer, which will be sent
@@ -1019,8 +990,10 @@ int osp_md_object_destroy(const struct lu_env *env, struct dt_object *dt,
 	if (rc != 0)
 		RETURN(rc);
 
+	set_bit(LU_OBJECT_HEARD_BANSHEE, &dt->do_lu.lo_header->loh_flags);
 	rc = osp_insert_update_callback(env, update, dt2osp_obj(dt), NULL,
-					osp_md_object_destroy_interpreter);
+					NULL);
+
 	RETURN(rc);
 }
 
