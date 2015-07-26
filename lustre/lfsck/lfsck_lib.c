@@ -485,6 +485,7 @@ int lfsck_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
 
 	LASSERT(S_ISDIR(lfsck_object_type(obj)));
 	LASSERT(name != NULL);
+	LASSERT(name[0] != 0);
 	LASSERT(!lustre_handle_is_used(&llh->llh_pdo_lh));
 	LASSERT(!lustre_handle_is_used(&llh->llh_reg_lh));
 
@@ -513,6 +514,7 @@ int lfsck_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
 
 	llh->llh_reg_mode = mode;
 	resid->name[LUSTRE_RES_ID_HSH_OFF] = full_name_hash(name, strlen(name));
+	LASSERT(resid->name[LUSTRE_RES_ID_HSH_OFF] != 0);
 	rc = __lfsck_ibits_lock(env, lfsck, obj, resid, &llh->llh_reg_lh,
 				bits, llh->llh_reg_mode);
 	if (rc != 0)
@@ -985,12 +987,12 @@ static int lfsck_create_lpf(const struct lu_env *env,
 	LASSERT(parent != NULL);
 	LASSERT(lfsck->li_lpf_obj == NULL);
 
+	snprintf(name, 8, "MDT%04x", node);
 	rc = lfsck_lock(env, lfsck, parent, name, llh,
 			MDS_INODELOCK_UPDATE, LCK_PW);
 	if (rc != 0)
 		RETURN(rc);
 
-	snprintf(name, 8, "MDT%04x", node);
 	if (fid_is_zero(&bk->lb_lpf_fid)) {
 		/* There is corner case that: in former LFSCK scanning we have
 		 * created the .lustre/lost+found/MDTxxxx but failed to update
