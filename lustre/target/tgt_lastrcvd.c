@@ -383,6 +383,7 @@ int tgt_client_alloc(struct obd_export *exp)
 	/* Mark that slot is not yet valid, 0 doesn't work here */
 	exp->exp_target_data.ted_lr_idx = -1;
 	INIT_LIST_HEAD(&exp->exp_target_data.ted_reply_list);
+	mutex_init(&exp->exp_target_data.ted_lcd_lock);
 	RETURN(0);
 }
 EXPORT_SYMBOL(tgt_client_alloc);
@@ -885,8 +886,6 @@ int tgt_client_new(const struct lu_env *env, struct obd_export *exp)
 	LASSERT(tgt && tgt->lut_client_bitmap != NULL);
 	if (!strcmp(ted->ted_lcd->lcd_uuid, tgt->lut_obd->obd_uuid.uuid))
 		RETURN(0);
-
-	mutex_init(&ted->ted_lcd_lock);
 
 	if (exp_connect_flags(exp) & OBD_CONNECT_LIGHTWEIGHT)
 		RETURN(0);
