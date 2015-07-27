@@ -326,7 +326,7 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 	}
 	if (name.length >= 0xffff || /* be certain name.length+1 doesn't overflow */
 	    !(sname = calloc(name.length + 1, 1))) {
-		printerr(0, "WARNING: get_ids: error allocating %d bytes "
+		printerr(0, "WARNING: get_ids: error allocating %zu bytes "
 			"for sname\n", name.length + 1);
 		gss_release_buffer(&min_stat, &name);
 		return -1;
@@ -511,7 +511,7 @@ handle_nullreq(FILE *f) {
 	qword_get(&cp, (char *) &lustre_svc, sizeof(lustre_svc));
 	qword_get(&cp, (char *) &nid, sizeof(nid));
 	qword_get(&cp, (char *) &handle_seq, sizeof(handle_seq));
-	printerr(2, "handling req: svc %u, nid %016llx, idx %llx\n",
+	printerr(2, "handling req: svc %u, nid %016llx, idx %"PRIx64"\n",
 		 lustre_svc, nid, handle_seq);
 
 	get_len = qword_get(&cp, in_handle.value, sizeof(in_handle_buf));
@@ -539,7 +539,7 @@ handle_nullreq(FILE *f) {
 	if (in_handle.length != 0) { /* CONTINUE_INIT case */
 		if (in_handle.length != sizeof(ctx)) {
 			printerr(0, "WARNING: handle_nullreq: "
-				    "input handle has unexpected length %d\n",
+				    "input handle has unexpected length %zu\n",
 				    in_handle.length);
 			goto out_err;
 		}
