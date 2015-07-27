@@ -176,14 +176,16 @@ def review_input_and_score(path_line_comments, warning_count):
             'labels': {
                 'Code-Review': code_review_score
                 },
-            'comments': review_comments
+            'comments': review_comments,
+            'notify': 'OWNER',
             }, score
     else:
         return {
             'message': 'Looks good to me.',
             'labels': {
                 'Code-Review': code_review_score
-                }
+                },
+            'notify': 'NONE',
             }, score
 
 
