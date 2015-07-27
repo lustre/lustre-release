@@ -1524,8 +1524,7 @@ static int lov_object_find_cbdata(const struct lu_env *env,
 	ENTRY;
 
 	/* call cl_object_find_cbdata for sub obj */
-	rc = LOV_2DISPATCH_NOLOCK(cl2lov(obj), llo_find_cbdata,
-				  env, obj, iter, data);
+	rc = LOV_2DISPATCH(cl2lov(obj), llo_find_cbdata, env, obj, iter, data);
 	RETURN(rc);
 }
 
