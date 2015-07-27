@@ -671,6 +671,10 @@ kgnilnd_close_conn_locked(kgn_conn_t *conn, int error)
 		conn->gnc_state = GNILND_CONN_CLOSING;
 	}
 
+	if (CFS_FAIL_CHECK(CFS_FAIL_GNI_RDMA_CQ_ERROR)) {
+		msleep_interruptible(MSEC_PER_SEC);
+	}
+
 	/* leave on peer->gnp_conns to make sure we don't let the reaper
 	 * or others try to unlink this peer until the conn is fully
 	 * processed for closing */

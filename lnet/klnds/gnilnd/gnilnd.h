@@ -139,6 +139,8 @@
 
 /* Max number of connections to keep in purgatory per peer */
 #define GNILND_PURGATORY_MAX	  5
+/* Closing, don't put in purgatory */
+#define GNILND_NOPURG             222
 
 /* payload size to add to the base mailbox size
  * This is subtracting 2 from the concurrent_sends as 4 messages are included in the size

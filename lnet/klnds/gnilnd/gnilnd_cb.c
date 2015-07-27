@@ -1164,6 +1164,7 @@ kgnilnd_unmap_buffer(kgn_tx_t *tx, int error)
 		 * verified peer notification  - the theory is that
 		 * a TX error can be communicated in all other cases */
 		if (tx->tx_conn->gnc_state != GNILND_CONN_ESTABLISHED &&
+		    error != -GNILND_NOPURG &&
 		    kgnilnd_check_purgatory_conn(tx->tx_conn)) {
 			kgnilnd_add_purgatory_tx(tx);
 
@@ -3246,6 +3247,11 @@ kgnilnd_check_rdma_cq(kgn_device_t *dev)
 		spin_unlock(&conn->gnc_list_lock);
 		kgnilnd_conn_mutex_unlock(&conn->gnc_rdma_mutex);
 
+		if (CFS_FAIL_CHECK(CFS_FAIL_GNI_RDMA_CQ_ERROR)) {
+			event_data = 1LL << 48;
+			rc = 1;
+		}
+
 		if (likely(desc->status == GNI_RC_SUCCESS) && rc == 0) {
 			atomic_inc(&dev->gnd_rdma_ntx);
 			atomic64_add(tx->tx_nob, &dev->gnd_rdma_txbytes);
@@ -3300,7 +3306,7 @@ kgnilnd_check_rdma_cq(kgn_device_t *dev)
 					 -EFAULT,
 					 rcookie,
 					 tx->tx_msg.gnm_srcnid);
-			kgnilnd_tx_done(tx, -EFAULT);
+			kgnilnd_tx_done(tx, -GNILND_NOPURG);
 			kgnilnd_close_conn(conn, -ECOMM);
 		}
 

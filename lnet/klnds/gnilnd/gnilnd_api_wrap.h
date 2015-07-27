@@ -102,6 +102,7 @@
 #define CFS_FAIL_GNI_SCHED_DEADLINE	0xf052
 #define CFS_FAIL_GNI_DGRAM_DEADLINE	0xf053
 #define CFS_FAIL_GNI_DGRAM_DROP_TX	0xf054
+#define CFS_FAIL_GNI_RDMA_CQ_ERROR	0xf055
 
 /* helper macros */
 extern void
