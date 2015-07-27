@@ -586,6 +586,45 @@ static int osd_obj_update_entry(struct osd_thread_info *info,
 		GOTO(out, rc = -EEXIST);
 	}
 
+	if (fid_is_idif(fid) && fid_is_idif(oi_fid)) {
+		__u32 idx1 = fid_idif_ost_idx(fid);
+		__u32 idx2 = fid_idif_ost_idx(oi_fid);
+		struct ost_id *ostid = &info->oti_ostid;
+		struct lu_fid *tfid = &info->oti_fid3;
+
+		LASSERTF(idx1 == 0 || idx1 == osd->od_index,
+			 "invalid given FID "DFID", not match the "
+			 "device index %u\n", PFID(fid), osd->od_index);
+
+		if (idx1 != idx2) {
+			if (idx1 == 0 && idx2 == osd->od_index) {
+				fid_to_ostid(fid, ostid);
+				ostid_to_fid(tfid, ostid, idx2);
+				if (lu_fid_eq(tfid, oi_fid)) {
+					CERROR("%s: the FID "DFID" is used by "
+					       "two objects(2): %u/%u %u/%u\n",
+					       osd_name(osd), PFID(fid),
+					       oi_id->oii_ino, oi_id->oii_gen,
+					       id->oii_ino, id->oii_gen);
+
+					GOTO(out, rc = -EEXIST);
+				}
+			} else if (idx2 == 0 && idx1 == osd->od_index) {
+				fid_to_ostid(oi_fid, ostid);
+				ostid_to_fid(tfid, ostid, idx1);
+				if (lu_fid_eq(tfid, fid)) {
+					CERROR("%s: the FID "DFID" is used by "
+					       "two objects(2): %u/%u %u/%u\n",
+					       osd_name(osd), PFID(fid),
+					       oi_id->oii_ino, oi_id->oii_gen,
+					       id->oii_ino, id->oii_gen);
+
+					GOTO(out, rc = -EEXIST);
+				}
+			}
+		}
+	}
+
 update:
 	/* There may be temporary inconsistency: On one hand, the new
 	 * object may be referenced by multiple entries, which is out

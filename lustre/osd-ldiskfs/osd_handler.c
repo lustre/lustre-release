@@ -455,7 +455,8 @@ int osd_get_idif(struct osd_thread_info *info, struct inode *inode,
 		rc = 0;
 		ostid_set_seq(ostid, le64_to_cpu(ff->ff_seq));
 		ostid_set_id(ostid, le64_to_cpu(ff->ff_objid));
-		/* XXX: should use real OST index in the future. LU-3569 */
+		/* XXX: use 0 as the index for compatibility, the caller will
+		 *	handle index related issues when necessarry. */
 		ostid_to_fid(fid, ostid, 0);
 	} else if (rc == sizeof(struct filter_fid)) {
 		rc = 1;

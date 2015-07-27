@@ -93,64 +93,6 @@ static void lfsck_di_dir_put(const struct lu_env *env, struct lfsck_instance *lf
 	iops->put(env, di);
 }
 
-static int lfsck_update_lma(const struct lu_env *env,
-			    struct lfsck_instance *lfsck, struct dt_object *obj)
-{
-	struct lfsck_thread_info	*info	= lfsck_env_info(env);
-	struct lfsck_bookmark		*bk	= &lfsck->li_bookmark_ram;
-	struct dt_device		*dev	= lfsck_obj2dev(obj);
-	struct lustre_mdt_attrs 	*lma	= &info->lti_lma;
-	struct lu_buf			*buf;
-	struct thandle			*th;
-	int				 fl;
-	int				 rc;
-	ENTRY;
-
-	if (bk->lb_param & LPF_DRYRUN)
-		RETURN(0);
-
-	buf = lfsck_buf_get(env, info->lti_lma_old, LMA_OLD_SIZE);
-	rc = dt_xattr_get(env, obj, buf, XATTR_NAME_LMA);
-	if (rc < 0) {
-		if (rc != -ENODATA)
-			RETURN(rc);
-
-		fl = LU_XATTR_CREATE;
-		lustre_lma_init(lma, lfsck_dto2fid(obj), LMAC_FID_ON_OST, 0);
-	} else {
-		if (rc != LMA_OLD_SIZE && rc != sizeof(struct lustre_mdt_attrs))
-			RETURN(-EINVAL);
-
-		fl = LU_XATTR_REPLACE;
-		lustre_lma_swab(lma);
-		lustre_lma_init(lma, lfsck_dto2fid(obj),
-				lma->lma_compat | LMAC_FID_ON_OST,
-				lma->lma_incompat);
-	}
-	lustre_lma_swab(lma);
-
-	th = dt_trans_create(env, dev);
-	if (IS_ERR(th))
-		RETURN(PTR_ERR(th));
-
-	buf = lfsck_buf_get(env, lma, sizeof(*lma));
-	rc = dt_declare_xattr_set(env, obj, buf, XATTR_NAME_LMA, fl, th);
-	if (rc != 0)
-		GOTO(stop, rc);
-
-	rc = dt_trans_start_local(env, dev, th);
-	if (rc != 0)
-		GOTO(stop, rc);
-
-	rc = dt_xattr_set(env, obj, buf, XATTR_NAME_LMA, fl, th);
-
-	GOTO(stop, rc);
-
-stop:
-	dt_trans_stop(env, dev, th);
-	return rc;
-}
-
 static int lfsck_parent_fid(const struct lu_env *env, struct dt_object *obj,
 			    struct lu_fid *fid)
 {
@@ -886,7 +828,6 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 
 	do {
 		struct dt_object *target;
-		bool		  update_lma = false;
 
 		if (lfsck->li_di_dir != NULL) {
 			rc = lfsck_master_dir_engine(env, lfsck);
@@ -955,13 +896,23 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 
 			LASSERT(!lfsck->li_master);
 
-			/* It is an old format device, update the LMA. */
 			if (idx != idx1) {
 				struct ost_id *oi = &info->lti_oi;
 
+				if (unlikely(idx1 != 0)) {
+					CDEBUG(D_LFSCK, "%s: invalid IDIF "DFID
+					       ", not match device index %u\n",
+					       lfsck_lfsck2name(lfsck),
+					       PFID(fid), idx);
+
+					goto checkpoint;
+				}
+
+				/* rebuild the IDIF with index to
+				 * avoid double instances for the
+				 * same object. */
 				fid_to_ostid(fid, oi);
 				ostid_to_fid(fid, oi, idx);
-				update_lma = true;
 			}
 		} else if (!fid_is_norm(fid) && !fid_is_igif(fid) &&
 			   !fid_is_last_id(fid) &&
@@ -1003,18 +954,9 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 				goto checkpoint;
 		}
 
-		if (dt_object_exists(target)) {
-			if (update_lma) {
-				rc = lfsck_update_lma(env, lfsck, target);
-				if (rc != 0)
-					CDEBUG(D_LFSCK, "%s: fail to update "
-					       "LMA for "DFID": rc = %d\n",
-					       lfsck_lfsck2name(lfsck),
-					       PFID(lfsck_dto2fid(target)), rc);
-			}
-			if (rc == 0)
-				rc = lfsck_exec_oit(env, lfsck, target);
-		}
+		if (dt_object_exists(target))
+			rc = lfsck_exec_oit(env, lfsck, target);
+
 		lfsck_object_put(env, target);
 		if (rc != 0 && bk->lb_param & LPF_FAILOUT)
 			RETURN(rc);
