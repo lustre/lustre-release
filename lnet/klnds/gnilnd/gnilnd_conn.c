@@ -166,7 +166,7 @@ kgnilnd_alloc_fmablk(kgn_device_t *device, int use_phys)
 			 num_mbox, fma_blk->gnm_blk_size, fma_blk->gnm_mbox_size,
 			 *kgnilnd_tunables.kgn_mbox_per_block);
 
-		LIBCFS_ALLOC(fma_blk->gnm_block, fma_blk->gnm_blk_size);
+		fma_blk->gnm_block = kgnilnd_vzalloc(fma_blk->gnm_blk_size);
 		if (fma_blk->gnm_block == NULL) {
 			CNETERR("could not allocate virtual SMSG mailbox memory, %d bytes\n", fma_blk->gnm_blk_size);
 			rc = -ENOMEM;
