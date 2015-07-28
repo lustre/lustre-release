@@ -1946,7 +1946,7 @@ LNetCtl(unsigned int cmd, void *arg)
 
 		net_config = (struct lnet_ioctl_net_config *)
 			config->cfg_bulk;
-		if (config == NULL || net_config == NULL)
+		if (net_config == NULL)
 			return -1;
 
 		return lnet_get_net_config(config->cfg_count,
