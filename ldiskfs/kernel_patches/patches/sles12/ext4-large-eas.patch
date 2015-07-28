@@ -4,11 +4,11 @@ not be saved in the external EA block, instead it would be saved
 in an external EA inode. So, the patch also helps support a larger
 number of EAs.
 
-Index: linux-3.12.39-47.1/fs/ext4/ext4.h
+Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
---- linux-3.12.39-47.1.orig/fs/ext4/ext4.h
-+++ linux-3.12.39-47.1/fs/ext4/ext4.h
-@@ -1538,6 +1538,7 @@ static inline void ext4_clear_state_flag
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -1545,6 +1545,7 @@ static inline void ext4_clear_state_flag
  					 EXT4_FEATURE_INCOMPAT_EXTENTS| \
  					 EXT4_FEATURE_INCOMPAT_64BIT| \
  					 EXT4_FEATURE_INCOMPAT_FLEX_BG| \
@@ -16,7 +16,7 @@ Index: linux-3.12.39-47.1/fs/ext4/ext4.h
  					 EXT4_FEATURE_INCOMPAT_MMP |	\
  					 EXT4_FEATURE_INCOMPAT_DIRDATA| \
  					 EXT4_FEATURE_INCOMPAT_INLINE_DATA)
-@@ -1938,6 +1939,12 @@ struct mmpd_data {
+@@ -1945,6 +1946,12 @@ struct mmpd_data {
  #define EXT4_MMP_MAX_CHECK_INTERVAL	300UL
  
  /*
@@ -29,7 +29,7 @@ Index: linux-3.12.39-47.1/fs/ext4/ext4.h
   * Function prototypes
   */
  
-@@ -1949,6 +1956,10 @@ struct mmpd_data {
+@@ -1956,6 +1963,10 @@ struct mmpd_data {
  # define ATTRIB_NORET	__attribute__((noreturn))
  # define NORET_AND	noreturn,
  
@@ -40,7 +40,7 @@ Index: linux-3.12.39-47.1/fs/ext4/ext4.h
  /* bitmap.c */
  extern unsigned int ext4_count_free(char *bitmap, unsigned numchars);
  void ext4_inode_bitmap_csum_set(struct super_block *sb, ext4_group_t group,
-@@ -2162,6 +2173,7 @@ extern void ext4_set_inode_flags(struct
+@@ -2169,6 +2180,7 @@ extern void ext4_set_inode_flags(struct
  extern void ext4_get_inode_flags(struct ext4_inode_info *);
  extern int ext4_alloc_da_blocks(struct inode *inode);
  extern void ext4_set_aops(struct inode *inode);
@@ -48,10 +48,10 @@ Index: linux-3.12.39-47.1/fs/ext4/ext4.h
  extern int ext4_writepage_trans_blocks(struct inode *);
  extern int ext4_chunk_trans_blocks(struct inode *, int nrblocks);
  extern int ext4_block_truncate_page(handle_t *handle,
-Index: linux-3.12.39-47.1/fs/ext4/inode.c
+Index: linux-stage/fs/ext4/inode.c
 ===================================================================
---- linux-3.12.39-47.1.orig/fs/ext4/inode.c
-+++ linux-3.12.39-47.1/fs/ext4/inode.c
+--- linux-stage.orig/fs/ext4/inode.c
++++ linux-stage/fs/ext4/inode.c
 @@ -135,8 +135,6 @@ static void ext4_invalidatepage(struct p
  				unsigned int length);
  static int __ext4_journalled_writepage(struct page *page, unsigned int len);
@@ -81,7 +81,7 @@ Index: linux-3.12.39-47.1/fs/ext4/inode.c
  	if (IS_ERR(handle)) {
  		ext4_std_error(inode->i_sb, PTR_ERR(handle));
  		/*
-@@ -248,9 +248,33 @@ void ext4_evict_inode(struct inode *inod
+@@ -248,9 +248,36 @@ void ext4_evict_inode(struct inode *inod
  		sb_end_intwrite(inode->i_sb);
  		goto no_delete;
  	}
@@ -98,6 +98,9 @@ Index: linux-3.12.39-47.1/fs/ext4/inode.c
 +			     "couldn't delete inode's xattr (err %d)", err);
 +		goto stop_handle;
 +	}
++
++	if (!IS_NOQUOTA(inode))
++		extra_credits += 2 * EXT4_QUOTA_DEL_BLOCKS(inode->i_sb);
 +
 +	if (!ext4_handle_has_enough_credits(handle,
 +			ext4_blocks_for_truncate(inode) + extra_credits)) {
@@ -116,7 +119,7 @@ Index: linux-3.12.39-47.1/fs/ext4/inode.c
  	inode->i_size = 0;
  	err = ext4_mark_inode_dirty(handle, inode);
  	if (err) {
-@@ -305,8 +329,12 @@ void ext4_evict_inode(struct inode *inod
+@@ -305,8 +332,12 @@ void ext4_evict_inode(struct inode *inod
  		ext4_clear_inode(inode);
  	else
  		ext4_free_inode(handle, inode);
@@ -129,7 +132,7 @@ Index: linux-3.12.39-47.1/fs/ext4/inode.c
  	return;
  no_delete:
  	ext4_clear_inode(inode);	/* We must guarantee clearing of inode... */
-@@ -4754,7 +4782,7 @@ static int ext4_index_trans_blocks(struc
+@@ -4777,7 +4808,7 @@ static int ext4_index_trans_blocks(struc
   *
   * Also account for superblock, inode, quota and xattr blocks
   */
@@ -138,10 +141,10 @@ Index: linux-3.12.39-47.1/fs/ext4/inode.c
  				  int pextents)
  {
  	ext4_group_t groups, ngroups = ext4_get_groups_count(inode->i_sb);
-Index: linux-3.12.39-47.1/fs/ext4/xattr.c
+Index: linux-stage/fs/ext4/xattr.c
 ===================================================================
---- linux-3.12.39-47.1.orig/fs/ext4/xattr.c
-+++ linux-3.12.39-47.1/fs/ext4/xattr.c
+--- linux-stage.orig/fs/ext4/xattr.c
++++ linux-stage/fs/ext4/xattr.c
 @@ -233,19 +233,26 @@ ext4_xattr_check_block(struct inode *ino
  }
  
@@ -351,7 +354,8 @@ Index: linux-3.12.39-47.1/fs/ext4/xattr.c
 +/*
 + * Write the value of the EA in an inode.
 + */
-+static int
+ static int
+-ext4_xattr_set_entry(struct ext4_xattr_info *i, struct ext4_xattr_search *s)
 +ext4_xattr_inode_write(handle_t *handle, struct inode *ea_inode,
 +		       const void *buf, int bufsize)
 +{
@@ -473,8 +477,7 @@ Index: linux-3.12.39-47.1/fs/ext4/xattr.c
 +/*
 + * Add value of the EA in an inode.
 + */
- static int
--ext4_xattr_set_entry(struct ext4_xattr_info *i, struct ext4_xattr_search *s)
++static int
 +ext4_xattr_inode_set(handle_t *handle, struct inode *inode, int *ea_ino,
 +		     const void *value, size_t value_len)
 +{
@@ -732,11 +735,10 @@ Index: linux-3.12.39-47.1/fs/ext4/xattr.c
  			new_offs = le16_to_cpu(last->e_value_offs) +
  							value_offs_shift;
  			BUG_ON(new_offs + le32_to_cpu(last->e_value_size)
-@@ -1472,19 +1781,91 @@ cleanup:
+@@ -1472,21 +1781,135 @@ cleanup:
  }
  
  
--
 +#define EIA_INCR 16 /* must be 2^n */
 +#define EIA_MASK (EIA_INCR - 1)
 +/* Add the large xattr @ino into @lea_ino_array for later deletion.
@@ -779,6 +781,44 @@ Index: linux-3.12.39-47.1/fs/ext4/xattr.c
 +	(*lea_ino_array)->xia_inodes[(*lea_ino_array)->xia_count++] = ino;
 +	return 0;
 +}
++
++/**
++ * Add xattr inode to orphan list
++ */
++static int
++ext4_xattr_inode_orphan_add(handle_t *handle, struct inode *inode,
++			int credits, struct ext4_xattr_ino_array *lea_ino_array)
++{
++	struct inode *ea_inode = NULL;
++	int idx = 0, error = 0;
++
++	if (lea_ino_array == NULL)
++		return 0;
++
++	for (; idx < lea_ino_array->xia_count; ++idx) {
++		if (!ext4_handle_has_enough_credits(handle, credits)) {
++			error = ext4_journal_extend(handle, credits);
++			if (error > 0)
++				error = ext4_journal_restart(handle, credits);
++
++			if (error != 0) {
++				ext4_warning(inode->i_sb,
++					"couldn't extend journal "
++					"(err %d)", error);
++				return error;
++			}
++		}
++		ea_inode = ext4_xattr_inode_iget(inode,
++				lea_ino_array->xia_inodes[idx], &error);
++		if (error)
++			continue;
++		ext4_orphan_add(handle, ea_inode);
++		/* the inode's i_count will be released by caller */
++	}
++
++	return 0;
++}
+ 
  /*
   * ext4_xattr_delete_inode()
   *
@@ -802,14 +842,15 @@ Index: linux-3.12.39-47.1/fs/ext4/xattr.c
 +	struct ext4_inode *raw_inode;
 +	struct ext4_iloc iloc;
 +	struct ext4_xattr_entry *entry;
-+	int error = 0;
-+
++	int credits = 3, error = 0;
+ 
+-	if (!EXT4_I(inode)->i_file_acl)
 +	if (!ext4_test_inode_state(inode, EXT4_STATE_XATTR))
 +		goto delete_external_ea;
 +
 +	error = ext4_get_inode_loc(inode, &iloc);
 +	if (error)
-+		goto cleanup;
+ 		goto cleanup;
 +	raw_inode = ext4_raw_inode(&iloc);
 +	header = IHDR(inode, raw_inode);
 +	entry = IFIRST(header);
@@ -824,12 +865,18 @@ Index: linux-3.12.39-47.1/fs/ext4/xattr.c
 +		entry->e_value_inum = 0;
 +	}
 +	brelse(iloc.bh);
- 
++
 +delete_external_ea:
- 	if (!EXT4_I(inode)->i_file_acl)
- 		goto cleanup;
++	if (!EXT4_I(inode)->i_file_acl) {
++		/* add xattr inode to orphan list */
++		ext4_xattr_inode_orphan_add(handle, inode, credits,
++						*lea_ino_array);
++		goto cleanup;
++	}
  	bh = sb_bread(inode->i_sb, EXT4_I(inode)->i_file_acl);
-@@ -1499,11 +1880,74 @@ ext4_xattr_delete_inode(handle_t *handle
+ 	if (!bh) {
+ 		EXT4_ERROR_INODE(inode, "block %llu read error",
+@@ -1499,11 +1922,69 @@ ext4_xattr_delete_inode(handle_t *handle
  				 EXT4_I(inode)->i_file_acl);
  		goto cleanup;
  	}
@@ -845,28 +892,22 @@ Index: linux-3.12.39-47.1/fs/ext4/xattr.c
 +	}
 +
 +	/* add xattr inode to orphan list */
-+	if (*lea_ino_array != NULL) {
-+		struct inode *ea_inode = NULL;
-+		int idx = 0;
++	error = ext4_xattr_inode_orphan_add(handle, inode, credits,
++					*lea_ino_array);
++	if (error != 0)
++		goto cleanup;
 +
-+		for (; idx < (*lea_ino_array)->xia_count; ++idx) {
-+			if (!ext4_handle_has_enough_credits(handle, 3)) {
-+				error = ext4_journal_extend(handle, 3);
-+				if (error > 0)
-+					error = ext4_journal_restart(handle, 3);
-+				if (error != 0) {
-+					ext4_warning(inode->i_sb,
-+						"couldn't extend journal "
-+						"(err %d)", error);
-+					goto cleanup;
-+				}
-+			}
-+			ea_inode = ext4_xattr_inode_iget(inode,
-+				(*lea_ino_array)->xia_inodes[idx], &error);
-+			if (error)
-+				continue;
-+			ext4_orphan_add(handle, ea_inode);
-+			/* the inode's i_count will be released by caller */
++	if (!IS_NOQUOTA(inode))
++		credits += 2 * EXT4_QUOTA_DEL_BLOCKS(inode->i_sb);
++
++	if (!ext4_handle_has_enough_credits(handle, credits)) {
++		error = ext4_journal_extend(handle, credits);
++		if (error > 0)
++			error = ext4_journal_restart(handle, credits);
++		if (error != 0) {
++			ext4_warning(inode->i_sb,
++				"couldn't extend journal (err %d)", error);
++			goto cleanup;
 +		}
 +	}
 +
@@ -895,16 +936,17 @@ Index: linux-3.12.39-47.1/fs/ext4/xattr.c
 +				lea_ino_array->xia_inodes[idx], &err);
 +		if (err)
 +			continue;
-+		clear_nlink(ea_inode);
-+		iput(ea_inode);
 +		/* for inode's i_count get from ext4_xattr_delete_inode */
++		if (!list_empty(&EXT4_I(ea_inode)->i_orphan))
++			iput(ea_inode);
++		clear_nlink(ea_inode);
 +		iput(ea_inode);
 +	}
 +	kfree(lea_ino_array);
  }
  
  /*
-@@ -1573,10 +2017,9 @@ ext4_xattr_cmp(struct ext4_xattr_header
+@@ -1573,10 +2054,9 @@ ext4_xattr_cmp(struct ext4_xattr_header
  		    entry1->e_name_index != entry2->e_name_index ||
  		    entry1->e_name_len != entry2->e_name_len ||
  		    entry1->e_value_size != entry2->e_value_size ||
@@ -916,7 +958,7 @@ Index: linux-3.12.39-47.1/fs/ext4/xattr.c
  		if (memcmp((char *)header1 + le16_to_cpu(entry1->e_value_offs),
  			   (char *)header2 + le16_to_cpu(entry2->e_value_offs),
  			   le32_to_cpu(entry1->e_value_size)))
-@@ -1660,7 +2103,7 @@ static inline void ext4_xattr_hash_entry
+@@ -1660,7 +2140,7 @@ static inline void ext4_xattr_hash_entry
  		       *name++;
  	}
  
@@ -925,10 +967,10 @@ Index: linux-3.12.39-47.1/fs/ext4/xattr.c
  		__le32 *value = (__le32 *)((char *)header +
  			le16_to_cpu(entry->e_value_offs));
  		for (n = (le32_to_cpu(entry->e_value_size) +
-Index: linux-3.12.39-47.1/fs/ext4/xattr.h
+Index: linux-stage/fs/ext4/xattr.h
 ===================================================================
---- linux-3.12.39-47.1.orig/fs/ext4/xattr.h
-+++ linux-3.12.39-47.1/fs/ext4/xattr.h
+--- linux-stage.orig/fs/ext4/xattr.h
++++ linux-stage/fs/ext4/xattr.h
 @@ -42,7 +42,7 @@ struct ext4_xattr_entry {
  	__u8	e_name_len;	/* length of name */
  	__u8	e_name_index;	/* attribute name index */
@@ -982,10 +1024,10 @@ Index: linux-3.12.39-47.1/fs/ext4/xattr.h
  extern void ext4_xattr_put_super(struct super_block *);
  
  extern int ext4_expand_extra_isize_ea(struct inode *inode, int new_extra_isize,
-Index: linux-3.12.39-47.1/fs/ext4/ialloc.c
+Index: linux-stage/fs/ext4/ialloc.c
 ===================================================================
---- linux-3.12.39-47.1.orig/fs/ext4/ialloc.c
-+++ linux-3.12.39-47.1/fs/ext4/ialloc.c
+--- linux-stage.orig/fs/ext4/ialloc.c
++++ linux-stage/fs/ext4/ialloc.c
 @@ -252,7 +252,6 @@ void ext4_free_inode(handle_t *handle, s
  	 * as writing the quota to disk may need the lock as well.
  	 */
@@ -994,10 +1036,10 @@ Index: linux-3.12.39-47.1/fs/ext4/ialloc.c
  	dquot_free_inode(inode);
  	dquot_drop(inode);
  
-Index: linux-3.12.39-47.1/fs/ext4/inline.c
+Index: linux-stage/fs/ext4/inline.c
 ===================================================================
---- linux-3.12.39-47.1.orig/fs/ext4/inline.c
-+++ linux-3.12.39-47.1/fs/ext4/inline.c
+--- linux-stage.orig/fs/ext4/inline.c
++++ linux-stage/fs/ext4/inline.c
 @@ -59,7 +59,7 @@ static int get_max_inline_xattr_value_si
  
  	/* Compute min_offs. */
