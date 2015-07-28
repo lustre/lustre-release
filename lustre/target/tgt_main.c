@@ -147,8 +147,10 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 
 	RETURN(0);
 out:
-	if (lut->lut_last_rcvd != NULL)
+	if (lut->lut_last_rcvd != NULL) {
 		lu_object_put(env, &lut->lut_last_rcvd->do_lu);
+		dt_txn_callback_del(lut->lut_bottom, &lut->lut_txn_cb);
+	}
 	lut->lut_last_rcvd = NULL;
 	if (lut->lut_client_bitmap != NULL)
 		OBD_FREE(lut->lut_client_bitmap, LR_MAX_CLIENTS >> 3);
