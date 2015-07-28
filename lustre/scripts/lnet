@@ -175,7 +175,7 @@ case "$1" in
 	}
 	;;
   *)
-	echo $"Usage: lustre {start|stop|status|restart|reload|condrestart}"
+	echo $"Usage: lnet {start|stop|status|restart|reload|condrestart}"
 	exit 1
 esac
 
