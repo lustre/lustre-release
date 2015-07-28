@@ -1603,15 +1603,14 @@ static inline int md_get_remote_perm(struct obd_export *exp,
 }
 
 static inline int md_intent_getattr_async(struct obd_export *exp,
-                                          struct md_enqueue_info *minfo,
-                                          struct ldlm_enqueue_info *einfo)
+					  struct md_enqueue_info *minfo)
 {
-        int rc;
-        ENTRY;
-        EXP_CHECK_MD_OP(exp, intent_getattr_async);
-        EXP_MD_COUNTER_INCREMENT(exp, intent_getattr_async);
-        rc = MDP(exp->exp_obd, intent_getattr_async)(exp, minfo, einfo);
-        RETURN(rc);
+	int rc;
+	ENTRY;
+	EXP_CHECK_MD_OP(exp, intent_getattr_async);
+	EXP_MD_COUNTER_INCREMENT(exp, intent_getattr_async);
+	rc = MDP(exp->exp_obd, intent_getattr_async)(exp, minfo);
+	RETURN(rc);
 }
 
 static inline int md_revalidate_lock(struct obd_export *exp,

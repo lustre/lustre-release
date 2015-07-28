@@ -48,9 +48,8 @@
 #include "mdc_internal.h"
 
 struct mdc_getattr_args {
-        struct obd_export           *ga_exp;
-        struct md_enqueue_info      *ga_minfo;
-        struct ldlm_enqueue_info    *ga_einfo;
+	struct obd_export		*ga_exp;
+	struct md_enqueue_info		*ga_minfo;
 };
 
 int it_open_error(int phase, struct lookup_intent *it)
@@ -1151,16 +1150,16 @@ static int mdc_intent_getattr_async_interpret(const struct lu_env *env,
                                               struct ptlrpc_request *req,
                                               void *args, int rc)
 {
-        struct mdc_getattr_args  *ga = args;
-        struct obd_export        *exp = ga->ga_exp;
-        struct md_enqueue_info   *minfo = ga->ga_minfo;
-        struct ldlm_enqueue_info *einfo = ga->ga_einfo;
-        struct lookup_intent     *it;
-        struct lustre_handle     *lockh;
-        struct obd_device        *obddev;
+	struct mdc_getattr_args  *ga = args;
+	struct obd_export        *exp = ga->ga_exp;
+	struct md_enqueue_info   *minfo = ga->ga_minfo;
+	struct ldlm_enqueue_info *einfo = &minfo->mi_einfo;
+	struct lookup_intent     *it;
+	struct lustre_handle     *lockh;
+	struct obd_device        *obddev;
 	struct ldlm_reply	 *lockrep;
 	__u64                     flags = LDLM_FL_HAS_INTENT;
-        ENTRY;
+	ENTRY;
 
         it    = &minfo->mi_it;
         lockh = &minfo->mi_lockh;
@@ -1193,14 +1192,12 @@ static int mdc_intent_getattr_async_interpret(const struct lu_env *env,
         EXIT;
 
 out:
-        OBD_FREE_PTR(einfo);
         minfo->mi_cb(req, minfo, rc);
         return 0;
 }
 
 int mdc_intent_getattr_async(struct obd_export *exp,
-			     struct md_enqueue_info *minfo,
-			     struct ldlm_enqueue_info *einfo)
+			     struct md_enqueue_info *minfo)
 {
 	struct md_op_data       *op_data = &minfo->mi_data;
 	struct lookup_intent    *it = &minfo->mi_it;
@@ -1208,9 +1205,6 @@ int mdc_intent_getattr_async(struct obd_export *exp,
 	struct mdc_getattr_args *ga;
 	struct obd_device       *obddev = class_exp2obd(exp);
 	struct ldlm_res_id       res_id;
-	/*XXX: Both MDS_INODELOCK_LOOKUP and MDS_INODELOCK_UPDATE are needed
-	 *     for statahead currently. Consider CMD in future, such two bits
-	 *     maybe managed by different MDS, should be adjusted then. */
 	union ldlm_policy_data policy = {
 				.l_inodebits = { MDS_INODELOCK_LOOKUP |
 						 MDS_INODELOCK_UPDATE } };
@@ -1229,27 +1223,26 @@ int mdc_intent_getattr_async(struct obd_export *exp,
 		RETURN(PTR_ERR(req));
 
 	rc = obd_get_request_slot(&obddev->u.cli);
-        if (rc != 0) {
-                ptlrpc_req_finished(req);
-                RETURN(rc);
-        }
+	if (rc != 0) {
+		ptlrpc_req_finished(req);
+		RETURN(rc);
+	}
 
-        rc = ldlm_cli_enqueue(exp, &req, einfo, &res_id, &policy, &flags, NULL,
-			      0, LVB_T_NONE, &minfo->mi_lockh, 1);
-        if (rc < 0) {
+	rc = ldlm_cli_enqueue(exp, &req, &minfo->mi_einfo, &res_id, &policy,
+			      &flags, NULL, 0, LVB_T_NONE, &minfo->mi_lockh, 1);
+	if (rc < 0) {
 		obd_put_request_slot(&obddev->u.cli);
-                ptlrpc_req_finished(req);
-                RETURN(rc);
-        }
+		ptlrpc_req_finished(req);
+		RETURN(rc);
+	}
 
-        CLASSERT(sizeof(*ga) <= sizeof(req->rq_async_args));
-        ga = ptlrpc_req_async_args(req);
-        ga->ga_exp = exp;
-        ga->ga_minfo = minfo;
-        ga->ga_einfo = einfo;
+	CLASSERT(sizeof(*ga) <= sizeof(req->rq_async_args));
+	ga = ptlrpc_req_async_args(req);
+	ga->ga_exp = exp;
+	ga->ga_minfo = minfo;
 
 	req->rq_interpret_reply = mdc_intent_getattr_async_interpret;
 	ptlrpcd_add_req(req);
 
-        RETURN(0);
+	RETURN(0);
 }

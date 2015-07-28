@@ -875,12 +875,13 @@ typedef int (* md_enqueue_cb_t)(struct ptlrpc_request *req,
                                 int rc);
 
 struct md_enqueue_info {
-	struct md_op_data	mi_data;
-	struct lookup_intent	mi_it;
-	struct lustre_handle	mi_lockh;
-	struct inode	       *mi_dir;
-	md_enqueue_cb_t		mi_cb;
-	void		       *mi_cbdata;
+	struct md_op_data		mi_data;
+	struct lookup_intent		mi_it;
+	struct lustre_handle		mi_lockh;
+	struct inode		       *mi_dir;
+	struct ldlm_enqueue_info	mi_einfo;
+	md_enqueue_cb_t			mi_cb;
+	void			       *mi_cbdata;
 };
 
 struct obd_ops {
@@ -1078,9 +1079,8 @@ struct md_ops {
 			  u64, const char *, const char *, int, int, int,
 			  struct ptlrpc_request **);
 
-        int (*m_intent_getattr_async)(struct obd_export *,
-                                      struct md_enqueue_info *,
-                                      struct ldlm_enqueue_info *);
+	int (*m_intent_getattr_async)(struct obd_export *,
+				      struct md_enqueue_info *);
 
         int (*m_revalidate_lock)(struct obd_export *, struct lookup_intent *,
                                  struct lu_fid *, __u64 *bits);
