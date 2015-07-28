@@ -1088,8 +1088,10 @@ void cYAML_build_error(int rc, int seq_no, char *cmd,
 	return;
 
 failed:
+	/* Only reason we get here is if we run out of memory */
 	cYAML_free_tree(r);
 	r = NULL;
+	fprintf(stderr, "error:\n\tfatal: out of memory\n");
 }
 
 struct cYAML *cYAML_build_tree(char *yaml_file,
