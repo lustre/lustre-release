@@ -1347,12 +1347,13 @@ test_32newtarball() {
 	local src=/etc/rc.d
 	local tmp=$TMP/t32_image_create
 
-	if [ $FSNAME != t32fs -o $MDSCOUNT -ne 1 -o								\
-		 \( -z "$MDSDEV" -a -z "$MDSDEV1" \) -o $OSTCOUNT -ne 1 -o			\
-		 -z "$OSTDEV1" ]; then
-		error "Needs FSNAME=t32fs MDSCOUNT=1 MDSDEV1=<nonexistent_file>"	\
-			  "(or MDSDEV, in the case of b1_8) OSTCOUNT=1"					\
-			  "OSTDEV1=<nonexistent_file>"
+	if [ $FSNAME != t32fs -o \( -z "$MDSDEV" -a -z "$MDSDEV1" \) -o	\
+	     $OSTCOUNT -ne 1 -o	-z "$OSTDEV1" ]; then
+		error "Needs FSNAME=t32fs MDSCOUNT=2 "			\
+		      "MDSDEV1=<nonexistent_file>"			\
+		      "MDSDEV2=<nonexistent_file>"			\
+		      "(or MDSDEV, in the case of b1_8)"		\
+		      "OSTCOUNT=1 OSTDEV1=<nonexistent_file>"
 	fi
 
 	mkdir $tmp || {
@@ -1385,7 +1386,7 @@ test_32newtarball() {
 	setupall
 	pushd /mnt/$FSNAME
 	ls -Rni --time-style=+%s >$tmp/img/list
-	find . ! -name .lustre -type f -exec sha1sum {} \; |
+	find ! -name .lustre -type f -exec sha1sum {} \; |
 		sort -k 2 >$tmp/img/sha1sums
 	popd
 	$LCTL get_param -n version | head -n 1 |
@@ -1403,6 +1404,11 @@ test_32newtarball() {
 		{ if (NF == 1) { getline } else { num++ } ; print $num;} }' \
 		| tr -d "*" > $tmp/img/ispace
 
+	if [ $MDSCOUNT -ge 2 ]; then
+		$LFS mkdir -i 1 /mnt/$FSNAME/remote_dir
+		tar cf - -C $tmp/src . | tar xf - -C /mnt/$FSNAME/remote_dir
+	fi
+
 	stopall
 
 	pushd $tmp/src
@@ -1417,6 +1423,10 @@ test_32newtarball() {
 	uname -m >$tmp/img/arch
 
 	mv ${MDSDEV1:-$MDSDEV} $tmp/img
+	for num in $(seq 2 $MDSCOUNT); do
+		local devname=$(mdsdevname $num)
+		mv $devname $tmp/img
+	done
 	mv $OSTDEV1 $tmp/img
 
 	version=$(sed -e 's/\(^[0-9]\+\.[0-9]\+\)\(.*$\)/\1/' $tmp/img/commit |
@@ -1645,14 +1655,16 @@ t32_test() {
 	local list
 	local fstype=$(facet_fstype $SINGLEMDS)
 	local mdt_dev=$tmp/mdt
+	local mdt2_dev=$tmp/mdt2
 	local ost_dev=$tmp/ost
+	local stripe_index
 	local dir
 
 	trap 'trap - RETURN; t32_test_cleanup' RETURN
 
 	load_modules
 	mkdir -p $tmp/mnt/lustre || error "mkdir $tmp/mnt/lustre failed"
-	$r mkdir -p $tmp/mnt/{mdt,ost}
+	$r mkdir -p $tmp/mnt/{mdt,mdt1,ost}
 	$r tar xjvf $tarball -S -C $tmp || {
 		error_noexit "Unpacking the disk image tarball"
 		return 1
@@ -1696,6 +1708,15 @@ t32_test() {
 		error_noexit "tunefs.lustre before mounting the MDT"
 		return 1
 	}
+
+	if $r test -f $mdt2_dev; then
+		$r $TUNEFS --dryrun $mdt2_dev || {
+			$r losetup -a
+			error_noexit "tunefs.lustre before mounting the MDT"
+			return 1
+		}
+	fi
+
 	if [ "$writeconf" ]; then
 		mopts=writeconf
 		if [ $fstype == "ldiskfs" ]; then
@@ -1705,6 +1726,13 @@ t32_test() {
 				error_noexit "Enable mdt quota feature"
 				return 1
 			}
+			if $r test -f $mdt2_dev; then
+				$r $TUNEFS --quota $mdt2_dev || {
+					$r losetup -a
+					error_noexit "Enable mdt quota feature"
+					return 1
+				}
+			fi
 		fi
 	else
 		if [ -n "$($LCTL list_nids | grep -v '\(tcp\|lo\)[[:digit:]]*$')" ]; then
@@ -1740,7 +1768,20 @@ t32_test() {
 	}
 	shall_cleanup_mdt=true
 
-	if [ "$dne_upgrade" != "no" ]; then
+	if $r test -f $mdt2_dev; then
+		mopts=mgsnode=$nid,$mopts
+		$r $MOUNT_CMD -o $mopts $mdt2_dev $tmp/mnt/mdt1 || {
+			$r losetup -a
+			error_noexit "Mounting the MDT"
+			return 1
+		}
+
+		echo "mount new MDT....$mdt2_dev"
+		$r $LCTL set_param -n mdt.${fsname}*.enable_remote_dir=1 ||
+			error_noexit "enable remote dir create failed"
+
+		shall_cleanup_mdt1=true
+	elif [ "$dne_upgrade" != "no" ]; then
 		local fs2mdsdev=$(mdsdevname 1_2)
 		local fs2mdsvdev=$(mdsvdevname 1_2)
 
@@ -1761,7 +1802,6 @@ t32_test() {
 		}
 
 		echo "mount new MDT....$fs2mdsdev"
-		$r mkdir -p $tmp/mnt/mdt1
 		$r $MOUNT_CMD -o $mopts $fs2mdsdev $tmp/mnt/mdt1 || {
 			error_noexit "mount mdt1 failed"
 			return 1
@@ -1884,7 +1924,6 @@ t32_test() {
 			error_noexit "Setting MDT1 \"lov.stripesize\""
 			return 1
 		}
-
 	fi
 
 	if [ "$writeconf" ]; then
@@ -1892,8 +1931,9 @@ t32_test() {
 			error_noexit "Mounting the client"
 			return 1
 		}
+
 		shall_cleanup_lustre=true
-		$LCTL set_param debug="$PTLDEBUG"
+		$r $LCTL set_param debug="$PTLDEBUG"
 
 		t32_verify_quota $node $fsname $tmp/mnt/lustre || {
 			error_noexit "verify quota failed"
@@ -1901,23 +1941,37 @@ t32_test() {
 		}
 
 		if [ "$dne_upgrade" != "no" ]; then
-			$LFS mkdir -i 1 -c2 $tmp/mnt/lustre/remote_dir || {
+			$LFS mkdir -i 1 -c2 $tmp/mnt/lustre/striped_dir || {
 				error_noexit "set remote dir failed"
 				return 1
 			}
 
-			$LFS setdirstripe -D -c2 $tmp/mnt/lustre/remote_dir
-
-			$r $LCTL set_param -n	\
-				mdt.${fsname}*.enable_remote_dir=1 2>/dev/null
+			$LFS setdirstripe -D -c2 $tmp/mnt/lustre/striped_dir
 
 			pushd $tmp/mnt/lustre
-			tar -cf - . --exclude=./remote_dir |
-				tar -xvf - -C remote_dir 1>/dev/null || {
+			tar -cf - . --exclude=./striped_dir \
+				    --exclude=./remote_dir |
+				tar -xvf - -C striped_dir 1>/dev/null || {
 				error_noexit "cp to remote dir failed"
 				return 1
 			}
 			popd
+		fi
+
+		# If it is upgrade from DNE (2.5), then rename the remote dir,
+		# which is created in 2.5 to striped dir.
+		if $r test -f $mdt2_dev; then
+			stripe_index=$(LFS getdirstripe -i	\
+				       $tmp/mnt/lustre/remote_dir)
+			[ $stripe_index -eq 1 ] || {
+				error_noexit "get index $striped_index failed"
+				return 1
+			}
+			mv $tmp/mnt/lustre/remote_dir	\
+				$tmp/mnt/lustre/striped_dir/ || {
+				error_noexit "mv failed"
+				return 1
+			}
 		fi
 
 		dd if=/dev/zero of=$tmp/mnt/lustre/tmp_file bs=10k count=10 || {
@@ -1934,13 +1988,15 @@ t32_test() {
 			# is identical
 			$r cat $tmp/sha1sums | sort -k 2 >$tmp/sha1sums.orig
 			if [ "$dne_upgrade" != "no" ]; then
-				pushd $tmp/mnt/lustre/remote_dir
+				pushd $tmp/mnt/lustre/striped_dir
 			else
 				pushd $tmp/mnt/lustre
 			fi
 
-			find ! -name .lustre -type f -exec sha1sum {} \; |
+			find ! -path "*remote_dir*" ! -name .lustre -type f \
+					-exec sha1sum {} \; |
 				sort -k 2 >$tmp/sha1sums || {
+				popd
 				error_noexit "sha1sum"
 				return 1
 			}
@@ -1949,12 +2005,30 @@ t32_test() {
 				error_noexit "sha1sum verification failed"
 				return 1
 			fi
+
+			# if upgrade from DNE (2.5), then check remote directory
+			if $r test -f $mdt2_dev; then
+				pushd $tmp/mnt/lustre/striped_dir/remote_dir
+				find ! -name .lustre -type f	\
+							-exec sha1sum {} \; |
+					sort -k 2 >$tmp/sha1sums || {
+					popd
+					error_noexit "sha1sum"
+					return 1
+				}
+				popd
+				if ! diff -ub $tmp/sha1sums.orig \
+					      $tmp/sha1sums; then
+					error_noexit "sha1sum dne failed"
+					return 1
+				fi
+			fi
 		else
 			echo "sha1sum verification skipped"
 		fi
 
 		if [ "$dne_upgrade" != "no" ]; then
-			rm -rf $tmp/mnt/lustre/remote_dir || {
+			rm -rf $tmp/mnt/lustre/striped_dir || {
 				error_noexit "remove remote dir failed"
 				return 1
 			}
@@ -1996,6 +2070,7 @@ t32_test() {
 			echo "list verification skipped"
 		fi
 
+		# migrate files/dirs to remote MDT, then move them back
 		if [ $(lustre_version_code mds1) -ge $(version_code 2.7.50) -a \
 		     $dne_upgrade != "no" ]; then
 			$r $LCTL set_param -n	\
@@ -2003,8 +2078,6 @@ t32_test() {
 
 			echo "test migration"
 			pushd $tmp/mnt/lustre
-			# migrate the files/directories to the remote MDT, then
-			# move it back
 			for dir in $(find ! -name .lustre ! -name . -type d); do
 				mdt_index=$($LFS getdirstripe -i $dir)
 				stripe_cnt=$($LFS getdirstripe -c $dir)
