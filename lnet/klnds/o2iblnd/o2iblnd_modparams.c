@@ -126,11 +126,6 @@ static int fmr_cache = 1;
 CFS_MODULE_PARM(fmr_cache, "i", int, 0444,
 		"non-zero to enable FMR caching");
 
-/* NB: this value is shared by all CPTs, it can grow at runtime */
-static int pmr_pool_size = 512;
-CFS_MODULE_PARM(pmr_pool_size, "i", int, 0444,
-		"size of MR cache pmr pool on each CPT");
-
 /*
  * 0: disable failover
  * 1: enable failover if necessary
@@ -170,7 +165,6 @@ kib_tunables_t kiblnd_tunables = {
         .kib_fmr_pool_size          = &fmr_pool_size,
         .kib_fmr_flush_trigger      = &fmr_flush_trigger,
         .kib_fmr_cache              = &fmr_cache,
-        .kib_pmr_pool_size          = &pmr_pool_size,
         .kib_require_priv_port      = &require_privileged_port,
 	.kib_use_priv_port	    = &use_privileged_port,
 	.kib_nscheds		    = &nscheds
@@ -329,14 +323,6 @@ static struct ctl_table kiblnd_ctl_table[] = {
 		INIT_CTL_NAME
 		.procname	= "fmr_cache",
 		.data		= &fmr_cache,
-		.maxlen		= sizeof(int),
-		.mode		= 0444,
-		.proc_handler	= &proc_dointvec
-	},
-	{
-		INIT_CTL_NAME
-		.procname	= "pmr_pool_size",
-		.data		= &pmr_pool_size,
 		.maxlen		= sizeof(int),
 		.mode		= 0444,
 		.proc_handler	= &proc_dointvec
