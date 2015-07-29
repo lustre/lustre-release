@@ -5441,6 +5441,92 @@ test_86() {
 }
 run_test 86 "Replacing mkfs.lustre -G option"
 
+test_87() { #LU-6544
+	[[ $(lustre_version_code $SINGLEMDS1) -ge $(version_code 2.7.56) ]] ||
+		{ skip "Need MDS version at least 2.7.56" && return; }
+	[[ $(facet_fstype $SINGLEMDS) != ldiskfs ]] &&
+		{ skip "Only applicable to ldiskfs-based MDTs" && return; }
+	[[ $OSTCOUNT -gt 69 ]] &&
+		{ skip "Ignore wide striping situation" && return; }
+
+	local mdsdev=$(mdsdevname 1)
+	local mdsvdev=$(mdsvdevname 1)
+	local file=$DIR/$tfile
+	local mntpt=$(facet_mntpt $SINGLEMDS)
+	local used_xattr_blk=0
+	local inode_size=${1:-512}
+	local left_size=0
+	local xtest="trusted.test"
+	local value
+	local orig
+	local i
+
+	#Please see LU-6544 for MDT inode size calculation
+	if [ $OSTCOUNT -gt 26 ]; then
+		inode_size=2048
+	elif [ $OSTCOUNT -gt 5 ]; then
+		inode_size=1024
+	fi
+	left_size=$(expr $inode_size - \
+			156 - \
+			32 - \
+			32 - $OSTCOUNT \* 24 - 16 - 3 -  \
+			24 - 16 - 3 - \
+			24 - 18 - $(expr length $tfile) - 16 - 4)
+	if [ $left_size -le 0 ]; then
+		echo "No space($left_size) is expected in inode."
+		echo "Try 1-byte xattr instead to verify this."
+		left_size=1
+	else
+		echo "Estimate: at most $left_size-byte space left in inode."
+	fi
+
+	unload_modules
+	reformat
+
+	add mds1 $(mkfs_opts mds1 ${mdsdev}) --stripe-count-hint=$OSTCOUNT \
+		--reformat $mdsdev $mdsvdev || error "add mds1 failed"
+	start_mdt 1 > /dev/null || error "start mdt1 failed"
+	for i in $(seq $OSTCOUNT); do
+		start ost$i $(ostdevname $i) $OST_MOUNT_OPTS > /dev/null ||
+			error "start ost$i failed"
+	done
+	mount_client $MOUNT > /dev/null || error "mount client $MOUNT failed"
+	check_mount || error "check client $MOUNT failed"
+
+	#set xattr
+	$SETSTRIPE -c -1 $file || error "$SETSTRIPE -c -1 $file failed"
+	$GETSTRIPE $file || error "$GETSTRIPE $file failed"
+	i=$($GETSTRIPE -c $file)
+	if [ $i -ne $OSTCOUNT ]; then
+		left_size=$(expr $left_size + $(expr $OSTCOUNT - $i) \* 24)
+		echo -n "Since only $i out $OSTCOUNT OSTs are used, "
+		echo -n "the expected left space is changed to "
+		echo "$left_size bytes at most."
+	fi
+	value=$(generate_string $left_size)
+	setfattr -n $xtest -v $value $file
+	orig=$(get_xattr_value $xtest $file)
+	[[ "$orig" != "$value" ]] && error "$xtest changed"
+
+	#Verify if inode has some expected space left
+	umount $MOUNT > /dev/null || error "umount $MOUNT failed"
+	stop_mdt 1 > /dev/null || error "stop mdt1 failed"
+	mount_ldiskfs $SINGLEMDS || error "mount -t ldiskfs $SINGLEMDS failed"
+
+	do_facet $SINGLEMDS ls -sal $mntpt/ROOT/$tfile
+	used_xattr_blk=$(do_facet $SINGLEMDS ls -s $mntpt/ROOT/$tfile |
+			awk '{ print $1 }')
+	[[ $used_xattr_blk -eq 0 ]] &&
+		error "Please check MDS inode size calculation: \
+		       more than $left_size-byte space left in inode."
+	echo "Verified: at most $left_size-byte space left in inode."
+
+	stopall
+}
+run_test 87 "check if MDT inode can hold EAs with N stripes properly"
+
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi
