@@ -3467,9 +3467,11 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
 /* -o localflock - only provides locally consistent flock locks */
 struct file_operations ll_file_operations = {
 #ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
+# ifdef HAVE_SYNC_READ_WRITE
 	.read		= new_sync_read,
-	.read_iter	= ll_file_read_iter,
 	.write		= new_sync_write,
+# endif
+	.read_iter	= ll_file_read_iter,
 	.write_iter	= ll_file_write_iter,
 #else /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
 	.read		= ll_file_read,
@@ -3489,9 +3491,11 @@ struct file_operations ll_file_operations = {
 
 struct file_operations ll_file_operations_flock = {
 #ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
+# ifdef HAVE_SYNC_READ_WRITE
 	.read		= new_sync_read,
-	.read_iter	= ll_file_read_iter,
 	.write		= new_sync_write,
+# endif /* HAVE_SYNC_READ_WRITE */
+	.read_iter	= ll_file_read_iter,
 	.write_iter	= ll_file_write_iter,
 #else /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
 	.read		= ll_file_read,
@@ -3514,9 +3518,11 @@ struct file_operations ll_file_operations_flock = {
 /* These are for -o noflock - to return ENOSYS on flock calls */
 struct file_operations ll_file_operations_noflock = {
 #ifdef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
+# ifdef HAVE_SYNC_READ_WRITE
 	.read		= new_sync_read,
-	.read_iter	= ll_file_read_iter,
 	.write		= new_sync_write,
+# endif /* HAVE_SYNC_READ_WRITE */
+	.read_iter	= ll_file_read_iter,
 	.write_iter	= ll_file_write_iter,
 #else /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
 	.read		= ll_file_read,
