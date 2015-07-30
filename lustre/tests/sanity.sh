@@ -13113,6 +13113,31 @@ test_244()
 }
 run_test 244 "sendfile with group lock tests"
 
+test_245() {
+	local flagname="multi_mod_rpcs"
+	local connect_data_name="max_mod_rpcs"
+	local out
+
+	# check if multiple modify RPCs flag is set
+	out=$($LCTL get_param mdc.$FSNAME-MDT0000-*.import |
+		grep "connect_flags:")
+	echo "$out"
+
+	echo "$out" | grep -qw $flagname
+	if [ $? -ne 0 ]; then
+		echo "connect flag $flagname is not set"
+		return
+	fi
+
+	# check if multiple modify RPCs data is set
+	out=$($LCTL get_param mdc.$FSNAME-MDT0000-*.import)
+	echo "$out"
+
+	echo "$out" | grep -qw $connect_data_name ||
+		error "import should have connect data $connect_data_name"
+}
+run_test 245 "check mdc connection flag/data: multiple modify RPCs"
+
 test_250() {
 	[ "$(facet_fstype ost$(($($GETSTRIPE -i $DIR/$tfile) + 1)))" = "zfs" ] \
 	 && skip "no 16TB file size limit on ZFS" && return

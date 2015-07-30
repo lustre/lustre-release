@@ -405,6 +405,9 @@ static int tgt_handle_request0(struct tgt_session_info *tsi,
 	 */
 	if (OBD_FAIL_CHECK_ORSET(h->th_fail_id, OBD_FAIL_ONCE))
 		RETURN(0);
+	if (unlikely(lustre_msg_get_opc(req->rq_reqmsg) == MDS_REINT &&
+		     OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_MULTI_NET)))
+		RETURN(0);
 
 	rc = tgt_request_preprocess(tsi, h, req);
 	/* pack reply if reply format is fixed */

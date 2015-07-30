@@ -5574,6 +5574,292 @@ test_87() { #LU-6544
 }
 run_test 87 "check if MDT inode can hold EAs with N stripes properly"
 
+# $1 test directory
+# $2 (optional) value of max_mod_rpcs_in_flight to set
+check_max_mod_rpcs_in_flight() {
+	local dir="$1"
+	local mmr="$2"
+	local idx
+	local facet
+	local tmp
+	local i
+
+	idx=$(printf "%04x" $($LFS getdirstripe -i $dir))
+	facet="mds$((0x$idx + 1))"
+
+	if [ -z "$mmr" ]; then
+		# get value of max_mod_rcps_in_flight
+		mmr=$($LCTL get_param -n \
+			mdc.$FSNAME-MDT$idx-mdc-*.max_mod_rpcs_in_flight) ||
+			error "Unable to get max_mod_rpcs_in_flight"
+		echo "max_mod_rcps_in_flight is $mmr"
+	else
+		# set value of max_mod_rpcs_in_flight
+		$LCTL set_param \
+		    mdc.$FSNAME-MDT$idx-mdc-*.max_mod_rpcs_in_flight=$mmr ||
+			error "Unable to set max_mod_rpcs_in_flight to $mmr"
+		echo "max_mod_rpcs_in_flight set to $mmr"
+	fi
+
+	# create mmr+1 files
+	echo "creating $((mmr + 1)) files ..."
+	umask 0022
+	for i in $(seq $((mmr + 1))); do
+		touch $dir/file-$i
+	done
+
+	### part 1 ###
+
+	# consumes mmr-1 modify RPC slots
+	#define OBD_FAIL_MDS_REINT_MULTI_NET     0x159
+	# drop requests on MDT so that RPC slots are consumed
+	# during all the request resend interval
+	do_facet $facet "$LCTL set_param fail_loc=0x159"
+	echo "launch $((mmr - 1)) chmod in parallel ..."
+	for i in $(seq $((mmr - 1))); do
+		chmod 0600 $dir/file-$i &
+	done
+
+	# send one additional modify RPC
+	do_facet $facet "$LCTL set_param fail_loc=0"
+	echo "launch 1 additional chmod in parallel ..."
+	chmod 0600 $dir/file-$mmr &
+	sleep 1
+
+	# check this additional modify RPC get a modify RPC slot
+	# and succeed its operation
+	checkstat -vp 0600 $dir/file-$mmr ||
+		error "Unable to send $mmr modify RPCs in parallel"
+	wait
+
+	### part 2 ###
+
+	# consumes mmr modify RPC slots
+	#define OBD_FAIL_MDS_REINT_MULTI_NET     0x159
+	# drop requests on MDT so that RPC slots are consumed
+	# during all the request resend interval
+	do_facet $facet "$LCTL set_param fail_loc=0x159"
+	echo "launch $mmr chmod in parallel ..."
+	for i in $(seq $mmr); do
+		chmod 0666 $dir/file-$i &
+	done
+
+	# send one additional modify RPC
+	do_facet $facet "$LCTL set_param fail_loc=0"
+	echo "launch 1 additional chmod in parallel ..."
+	chmod 0666 $dir/file-$((mmr + 1)) &
+	sleep 1
+
+	# check this additional modify RPC blocked getting a modify RPC slot
+	checkstat -vp 0644 $dir/file-$((mmr + 1)) ||
+		error "Unexpectedly send $mmr modify RPCs in parallel"
+	wait
+}
+
+test_90a() {
+	reformat
+	if ! combined_mgs_mds ; then
+		start_mgs
+	fi
+	setup
+
+	[[ $($LCTL get_param mdc.*.import |
+	     grep "connect_flags:.*multi_mod_rpc") ]] ||
+		{ skip "Need MDC with 'multi_mod_rpcs' feature"; return 0; }
+
+	# check default value
+	$LFS mkdir -c1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	check_max_mod_rpcs_in_flight $DIR/$tdir
+
+	cleanup
+}
+run_test 90a "check max_mod_rpcs_in_flight is enforced"
+
+test_90b() {
+	local idx
+	local facet
+	local tmp
+	local mmrpc
+
+	setup
+
+	[[ $($LCTL get_param mdc.*.import |
+	     grep "connect_flags:.*multi_mod_rpc") ]] ||
+		{ skip "Need MDC with 'multi_mod_rpcs' feature"; return 0; }
+
+	### test 1.
+	# update max_mod_rpcs_in_flight
+	$LFS mkdir -c1 $DIR/${tdir}1 || error "mkdir $DIR/${tdir}1 failed"
+	check_max_mod_rpcs_in_flight $DIR/${tdir}1 1
+
+	### test 2.
+	# check client is able to send multiple modify RPCs in paralell
+	tmp=$($LCTL get_param -n mdc.$FSNAME-MDT*-mdc-*.import |
+		grep -c "multi_mod_rpcs")
+	if [ "$tmp" -ne $MDSCOUNT ]; then
+		echo "Client not able to send multiple modify RPCs in parallel"
+		cleanup
+		return
+	fi
+
+	# update max_mod_rpcs_in_flight
+	$LFS mkdir -c1 $DIR/${tdir}2 || error "mkdir $DIR/${tdir}2 failed"
+	check_max_mod_rpcs_in_flight $DIR/${tdir}2 5
+
+	### test 3.
+	$LFS mkdir -c1 $DIR/${tdir}3 || error "mkdir $DIR/${tdir}3 failed"
+	idx=$(printf "%04x" $($LFS getdirstripe -i $DIR/${tdir}3))
+	facet="mds$((0x$idx + 1))"
+
+	# save MDT max_mod_rpcs_per_client
+	mmrpc=$(do_facet $facet \
+		    cat /sys/module/mdt/parameters/max_mod_rpcs_per_client)
+
+	# update max_mod_rpcs_in_flight
+	umount_client $MOUNT
+	do_facet $facet \
+		"echo 16 > /sys/module/mdt/parameters/max_mod_rpcs_per_client"
+	mount_client $MOUNT
+	$LCTL set_param mdc.$FSNAME-MDT$idx-mdc-*.max_rpcs_in_flight=17
+	check_max_mod_rpcs_in_flight $DIR/${tdir}3 16
+
+	# restore MDT max_mod_rpcs_per_client initial value
+	do_facet $facet \
+		"echo $mmrpc > /sys/module/mdt/parameters/max_mod_rpcs_per_client"
+
+	rm -rf $DIR/${tdir}?
+	cleanup
+}
+run_test 90b "check max_mod_rpcs_in_flight is enforced after update"
+
+test_90c() {
+	local tmp
+	local mrif
+	local mmrpc
+
+	setup
+
+	[[ $($LCTL get_param mdc.*.import |
+	     grep "connect_flags:.*multi_mod_rpc") ]] ||
+		{ skip "Need MDC with 'multi_mod_rpcs' feature"; return 0; }
+
+	# check client is able to send multiple modify RPCs in paralell
+	tmp=$($LCTL get_param -n mdc.$FSNAME-MDT*-mdc-*.import |
+		grep -c "multi_mod_rpcs")
+	if [ "$tmp" -ne $MDSCOUNT ]; then
+		skip "Client not able to send multiple modify RPCs in parallel"
+		cleanup
+		return
+	fi
+
+	# get max_rpcs_in_flight value
+	mrif=$($LCTL get_param -n mdc.$FSNAME-MDT0000-mdc-*.max_rpcs_in_flight)
+	echo "max_rpcs_in_flight is $mrif"
+
+	# get MDT max_mod_rpcs_per_client
+	mmrpc=$(do_facet mds1 \
+		    cat /sys/module/mdt/parameters/max_mod_rpcs_per_client)
+	echo "max_mod_rpcs_per_client is $mmrpc"
+
+	# testcase 1
+	# attempt to set max_mod_rpcs_in_flight to max_rpcs_in_flight value
+	# prerequisite: set max_mod_rpcs_per_client to max_rpcs_in_flight value
+	umount_client $MOUNT
+	do_facet mds1 \
+		"echo $mrif > /sys/module/mdt/parameters/max_mod_rpcs_per_client"
+	mount_client $MOUNT
+
+	$LCTL set_param \
+	    mdc.$FSNAME-MDT0000-mdc-*.max_mod_rpcs_in_flight=$mrif &&
+	    error "set max_mod_rpcs_in_flight to $mrif should fail"
+
+	umount_client $MOUNT
+	do_facet mds1 \
+		"echo $mmrpc > /sys/module/mdt/parameters/max_mod_rpcs_per_client"
+	mount_client $MOUNT
+
+	# testcase 2
+	# attempt to set max_mod_rpcs_in_flight to max_mod_rpcs_per_client+1
+	# prerequisite: set max_rpcs_in_flight to max_mod_rpcs_per_client+2
+	$LCTL set_param \
+	    mdc.$FSNAME-MDT0000-mdc-*.max_rpcs_in_flight=$((mmrpc + 2))
+
+	$LCTL set_param \
+	    mdc.$FSNAME-MDT0000-mdc-*.max_mod_rpcs_in_flight=$((mmrpc + 1)) &&
+	    error "set max_mod_rpcs_in_flight to $((mmrpc + 1)) should fail"
+
+	cleanup
+}
+run_test 90c "check max_mod_rpcs_in_flight update limits"
+
+test_90d() {
+	local idx
+	local facet
+	local mmr
+	local i
+	local pid
+
+	setup
+
+	[[ $($LCTL get_param mdc.*.import |
+	     grep "connect_flags:.*multi_mod_rpc") ]] ||
+		{ skip "Need MDC with 'multi_mod_rpcs' feature"; return 0; }
+
+	$LFS mkdir -c1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	idx=$(printf "%04x" $($LFS getdirstripe -i $DIR/$tdir))
+	facet="mds$((0x$idx + 1))"
+
+	# check client version supports multislots
+	tmp=$($LCTL get_param -N \
+		mdc.$FSNAME-MDT$idx-mdc-*.max_mod_rpcs_in_flight)
+	if [ -z "$tmp" ]; then
+		skip "Client does not support multiple modify RPCs in flight"
+		cleanup
+		return
+	fi
+
+	# get current value of max_mod_rcps_in_flight
+	mmr=$($LCTL get_param -n \
+		mdc.$FSNAME-MDT$idx-mdc-*.max_mod_rpcs_in_flight)
+	echo "max_mod_rcps_in_flight is $mmr"
+
+	# create mmr files
+	echo "creating $mmr files ..."
+	umask 0022
+	for i in $(seq $mmr); do
+		touch $DIR/$tdir/file-$i
+	done
+
+	# prepare for close RPC
+	multiop_bg_pause $DIR/$tdir/file-close O_c
+	pid=$!
+
+	# consumes mmr modify RPC slots
+	#define OBD_FAIL_MDS_REINT_MULTI_NET     0x159
+	# drop requests on MDT so that RPC slots are consumed
+	# during all the request resend interval
+	do_facet $facet "$LCTL set_param fail_loc=0x159"
+	echo "launch $mmr chmod in parallel ..."
+	for i in $(seq $mmr); do
+		chmod 0600 $DIR/$tdir/file-$i &
+	done
+
+	# send one additional close RPC
+	do_facet $facet "$LCTL set_param fail_loc=0"
+	echo "launch 1 additional close in parallel ..."
+	kill -USR1 $pid
+	cancel_lru_locks mdc
+	sleep 1
+
+	# check this additional close RPC get a modify RPC slot
+	# and multiop process completed
+	[ -d /proc/$pid ] &&
+		error "Unable to send the additional close RPC in parallel"
+	wait
+	rm -rf $DIR/$tdir
+	cleanup
+}
+run_test 90d "check one close RPC is allowed above max_mod_rpcs_in_flight"
 
 if ! combined_mgs_mds ; then
 	stop mgs

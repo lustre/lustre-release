@@ -22,9 +22,8 @@ require_dsh_mds || exit 0
 
 # Skip these tests
 # bug number for skipped tests:
-# b=17466/LU-472 : 61d
-# LU-5319 : 53a 53d
-ALWAYS_EXCEPT="61d 53a 53d $REPLAY_SINGLE_EXCEPT"
+#                                    b=17466/LU-472
+ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT 61d"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 case "$(lsb_release -sr)" in	# only disable tests for el7
@@ -1186,6 +1185,10 @@ run_test 52 "time out lock replay (3764)"
 
 # bug 3462 - simultaneous MDC requests
 test_53a() {
+	[[ $(lctl get_param mdc.*.import |
+	     grep "connect_flags:.*multi_mod_rpc") ]] ||
+		{ skip "Need MDC with 'multi_mod_rpcs' feature"; return 0; }
+
 	cancel_lru_locks mdc    # cleanup locks from former test cases
 	mkdir $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
 	mkdir $DIR/${tdir}-2 || error "mkdir $DIR/${tdir}-2 failed"
@@ -1290,6 +1293,10 @@ test_53c() {
 run_test 53c "|X| open request and close request while two MDC requests in flight"
 
 test_53d() {
+	[[ $(lctl get_param mdc.*.import |
+	     grep "connect_flags:.*multi_mod_rpc") ]] ||
+		{ skip "Need MDC with 'multi_mod_rpcs' feature"; return 0; }
+
 	cancel_lru_locks mdc    # cleanup locks from former test cases
 
 	mkdir $DIR/${tdir}-1 || error "mkdir $DIR/${tdir}-1 failed"
@@ -3087,6 +3094,224 @@ test_101() { #LU-5648
 	rm -rf $DIR/$tdir
 }
 run_test 101 "Shouldn't reassign precreated objs to other files after recovery"
+
+test_102a() {
+	local idx
+	local facet
+	local num
+	local i
+	local pids pid
+
+	[[ $(lctl get_param mdc.*.import |
+	     grep "connect_flags:.*multi_mod_rpc") ]] ||
+		{ skip "Need MDC with 'multi_mod_rpcs' feature"; return 0; }
+
+	$LFS mkdir -c1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	idx=$(printf "%04x" $($LFS getdirstripe -i $DIR/$tdir))
+	facet="mds$((0x$idx + 1))"
+
+	# get current value of max_mod_rcps_in_flight
+	num=$($LCTL get_param -n \
+		mdc.$FSNAME-MDT$idx-mdc-*.max_mod_rpcs_in_flight)
+	# set default value if client does not support multi mod RPCs
+	[ -z "$num" ] && num=1
+
+	echo "creating $num files ..."
+	umask 0022
+	for i in $(seq $num); do
+		touch $DIR/$tdir/file-$i
+	done
+
+	# drop request on MDT to force resend
+	#define OBD_FAIL_MDS_REINT_MULTI_NET 0x159
+	do_facet $facet "$LCTL set_param fail_loc=0x159"
+	echo "launch $num chmod in parallel ($(date +%H:%M:%S)) ..."
+	for i in $(seq $num); do
+		chmod 0600 $DIR/$tdir/file-$i &
+		pids="$pids $!"
+	done
+	sleep 1
+	do_facet $facet "$LCTL set_param fail_loc=0"
+	for pid in $pids; do
+		wait $pid || error "chmod failed"
+	done
+	echo "done ($(date +%H:%M:%S))"
+
+	# check chmod succeed
+	for i in $(seq $num); do
+		checkstat -vp 0600 $DIR/$tdir/file-$i
+	done
+
+	rm -rf $DIR/$tdir
+}
+run_test 102a "check resend (request lost) with multiple modify RPCs in flight"
+
+test_102b() {
+	local idx
+	local facet
+	local num
+	local i
+	local pids pid
+
+	[[ $(lctl get_param mdc.*.import |
+	     grep "connect_flags:.*multi_mod_rpc") ]] ||
+		{ skip "Need MDC with 'multi_mod_rpcs' feature"; return 0; }
+
+	$LFS mkdir -c1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	idx=$(printf "%04x" $($LFS getdirstripe -i $DIR/$tdir))
+	facet="mds$((0x$idx + 1))"
+
+	# get current value of max_mod_rcps_in_flight
+	num=$($LCTL get_param -n \
+		mdc.$FSNAME-MDT$idx-mdc-*.max_mod_rpcs_in_flight)
+	# set default value if client does not support multi mod RPCs
+	[ -z "$num" ] && num=1
+
+	echo "creating $num files ..."
+	umask 0022
+	for i in $(seq $num); do
+		touch $DIR/$tdir/file-$i
+	done
+
+	# drop reply on MDT to force reconstruction
+	#define OBD_FAIL_MDS_REINT_MULTI_NET_REP 0x15a
+	do_facet $facet "$LCTL set_param fail_loc=0x15a"
+	echo "launch $num chmod in parallel ($(date +%H:%M:%S)) ..."
+	for i in $(seq $num); do
+		chmod 0600 $DIR/$tdir/file-$i &
+		pids="$pids $!"
+	done
+	sleep 1
+	do_facet $facet "$LCTL set_param fail_loc=0"
+	for pid in $pids; do
+		wait $pid || error "chmod failed"
+	done
+	echo "done ($(date +%H:%M:%S))"
+
+	# check chmod succeed
+	for i in $(seq $num); do
+		checkstat -vp 0600 $DIR/$tdir/file-$i
+	done
+
+	rm -rf $DIR/$tdir
+}
+run_test 102b "check resend (reply lost) with multiple modify RPCs in flight"
+
+test_102c() {
+	local idx
+	local facet
+	local num
+	local i
+	local pids pid
+
+	[[ $(lctl get_param mdc.*.import |
+	     grep "connect_flags:.*multi_mod_rpc") ]] ||
+		{ skip "Need MDC with 'multi_mod_rpcs' feature"; return 0; }
+
+	$LFS mkdir -c1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	idx=$(printf "%04x" $($LFS getdirstripe -i $DIR/$tdir))
+	facet="mds$((0x$idx + 1))"
+
+	# get current value of max_mod_rcps_in_flight
+	num=$($LCTL get_param -n \
+		mdc.$FSNAME-MDT$idx-mdc-*.max_mod_rpcs_in_flight)
+	# set default value if client does not support multi mod RPCs
+	[ -z "$num" ] && num=1
+
+	echo "creating $num files ..."
+	umask 0022
+	for i in $(seq $num); do
+		touch $DIR/$tdir/file-$i
+	done
+
+	replay_barrier $facet
+
+	# drop reply on MDT
+	#define OBD_FAIL_MDS_REINT_MULTI_NET_REP 0x15a
+	do_facet $facet "$LCTL set_param fail_loc=0x15a"
+	echo "launch $num chmod in parallel ($(date +%H:%M:%S)) ..."
+	for i in $(seq $num); do
+		chmod 0600 $DIR/$tdir/file-$i &
+		pids="$pids $!"
+	done
+	sleep 1
+	do_facet $facet "$LCTL set_param fail_loc=0"
+
+	# fail MDT
+	fail $facet
+
+	for pid in $pids; do
+		wait $pid || error "chmod failed"
+	done
+	echo "done ($(date +%H:%M:%S))"
+
+	# check chmod succeed
+	for i in $(seq $num); do
+		checkstat -vp 0600 $DIR/$tdir/file-$i
+	done
+
+	rm -rf $DIR/$tdir
+}
+run_test 102c "check replay w/o reconstruction with multiple mod RPCs in flight"
+
+test_102d() {
+	local idx
+	local facet
+	local num
+	local i
+	local pids pid
+
+	[[ $(lctl get_param mdc.*.import |
+	     grep "connect_flags:.*multi_mod_rpc") ]] ||
+		{ skip "Need MDC with 'multi_mod_rpcs' feature"; return 0; }
+
+	$LFS mkdir -c1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	idx=$(printf "%04x" $($LFS getdirstripe -i $DIR/$tdir))
+	facet="mds$((0x$idx + 1))"
+
+	# get current value of max_mod_rcps_in_flight
+	num=$($LCTL get_param -n \
+		mdc.$FSNAME-MDT$idx-mdc-*.max_mod_rpcs_in_flight)
+	# set default value if client does not support multi mod RPCs
+	[ -z "$num" ] && num=1
+
+	echo "creating $num files ..."
+	umask 0022
+	for i in $(seq $num); do
+		touch $DIR/$tdir/file-$i
+	done
+
+	# drop reply on MDT
+	#define OBD_FAIL_MDS_REINT_MULTI_NET_REP 0x15a
+	do_facet $facet "$LCTL set_param fail_loc=0x15a"
+	echo "launch $num chmod in parallel ($(date +%H:%M:%S)) ..."
+	for i in $(seq $num); do
+		chmod 0600 $DIR/$tdir/file-$i &
+		pids="$pids $!"
+	done
+	sleep 1
+
+	# write MDT transactions to disk
+	do_facet $facet "sync; sync; sync"
+
+	do_facet $facet "$LCTL set_param fail_loc=0"
+
+	# fail MDT
+	fail $facet
+
+	for pid in $pids; do
+		wait $pid || error "chmod failed"
+	done
+	echo "done ($(date +%H:%M:%S))"
+
+	# check chmod succeed
+	for i in $(seq $num); do
+		checkstat -vp 0600 $DIR/$tdir/file-$i
+	done
+
+	rm -rf $DIR/$tdir
+}
+run_test 102d "check replay & reconstruction with multiple mod RPCs in flight"
 
 check_striped_dir_110()
 {
