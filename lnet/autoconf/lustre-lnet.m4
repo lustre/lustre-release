@@ -188,18 +188,6 @@ AS_IF([test $ENABLEO2IB = "no"], [
 			   -f ${O2IBPATH}/include/rdma/ib_cm.h -a \
 			   -f ${O2IBPATH}/include/rdma/ib_verbs.h -a \
 			   -f ${O2IBPATH}/include/rdma/ib_fmr_pool.h \)], [
-			AS_IF([test \( \( \( -d ${O2IBPATH}/patches -a \
-				   \( "x$OFED" = "xyes" \) \) -o \
-				   -d ${O2IBPATH}/kernel_patches \) -a \
-				   -f ${O2IBPATH}/Makefile \)], [
-				AC_MSG_RESULT([no])
-				AC_MSG_ERROR([
-
-trying to use the, explicit or detected, OFED distribution's source
-directory (${O2IBPATH}) rather than the "development/headers"
-directory which is likely in ${O2IBPATH%-*}
-])
-			])
 			o2ib_found=true
 			break
 		])
@@ -212,11 +200,16 @@ directory which is likely in ${O2IBPATH%-*}
 			*) AC_MSG_ERROR([internal error]) ;;
 		esac
 	else
+		COMPAT_AUTOCONF=""
 		compatrdma_found=false
 		if test -f ${O2IBPATH}/include/linux/compat-2.6.h; then
 			AC_MSG_RESULT([yes])
 			compatrdma_found=true
 			AC_DEFINE(HAVE_COMPAT_RDMA, 1, [compat rdma found])
+			EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -include ${O2IBPATH}/include/linux/compat-2.6.h"
+			if test -f "$O2IBPATH/include/linux/compat_autoconf.h"; then
+				COMPAT_AUTOCONF="$O2IBPATH/include/linux/compat_autoconf.h"
+			fi
 		else
 			AC_MSG_RESULT([no])
 		fi
@@ -226,14 +219,15 @@ directory which is likely in ${O2IBPATH%-*}
 			elif test -f "$O2IBPATH/ofed_patch.mk"; then
 				. "$O2IBPATH/ofed_patch.mk"
 			fi
-		else
+		elif test -z "$COMPAT_AUTOCONF"; then
+			# Depreciated checks
 			if test "x$RHEL_KERNEL" = xyes; then
-				case "$RHEL_RELEASE_NO" in
-					64)
-						EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -DCONFIG_COMPAT_RHEL_6_4" ;;
-					65)
-						EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -DCONFIG_COMPAT_RHEL_6_4 -DCONFIG_COMPAT_RHEL_6_5" ;;
-				esac
+				RHEL_MAJOR=$(awk '/ RHEL_MAJOR / { print [$]3 }' $LINUX_OBJ/include/$VERSION_HDIR/version.h)
+				I=$(awk '/ RHEL_MINOR / { print [$]3 }' $LINUX_OBJ/include/$VERSION_HDIR/version.h)
+				while test "$I" -ge 0; do
+					EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -DCONFIG_COMPAT_RHEL_${RHEL_MAJOR}_$I"
+					I=$(($I-1))
+				done
 			elif test "x$SUSE_KERNEL" = xyes; then
 				SP=$(grep PATCHLEVEL /etc/SuSE-release | sed -e 's/.*= *//')
 				EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -DCONFIG_COMPAT_SLES_11_$SP"
@@ -247,8 +241,10 @@ directory which is likely in ${O2IBPATH%-*}
 			struct kthread_work	*kth_wrk __attribute__ ((unused));
 			flush_kthread_work(kth_wrk);
 		],[
-			EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -DCONFIG_COMPAT_IS_KTHREAD"
 			AC_DEFINE(HAVE_KTHREAD_WORK, 1, [kthread_worker found])
+			if test -z "$COMPAT_AUTOCONF"; then
+				EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -DCONFIG_COMPAT_IS_KTHREAD"
+			fi
 		])
 
 		AC_MSG_CHECKING([whether to use any OFED backport headers])
