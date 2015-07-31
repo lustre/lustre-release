@@ -274,7 +274,7 @@ int llapi_stripe_limit_check(unsigned long long stripe_size, int stripe_offset,
 				stripe_size, page_size);
 		return rc;
 	}
-	if (!llapi_stripe_offset_is_valid(stripe_offset)) {
+	if (!llapi_stripe_index_is_valid(stripe_offset)) {
 		rc = -EINVAL;
 		llapi_error(LLAPI_MSG_ERROR, rc, "error: bad stripe offset %d",
 				stripe_offset);
