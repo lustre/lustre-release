@@ -740,9 +740,10 @@ static int osd_scrub_checkpoint(struct osd_scrub *scrub)
 	return rc;
 }
 
-static void osd_scrub_post(struct osd_scrub *scrub, int result)
+static int osd_scrub_post(struct osd_scrub *scrub, int result)
 {
 	struct scrub_file *sf = &scrub->os_file;
+	int rc;
 	ENTRY;
 
 	CDEBUG(D_LFSCK, "%.16s: OI scrub post, result = %d\n",
@@ -782,10 +783,10 @@ static void osd_scrub_post(struct osd_scrub *scrub, int result)
 	}
 	sf->sf_run_time += cfs_duration_sec(cfs_time_current() + HALF_SEC -
 					    scrub->os_time_last_checkpoint);
-	result = osd_scrub_file_store(scrub);
+	rc = osd_scrub_file_store(scrub);
 	up_write(&scrub->os_rwsem);
 
-	EXIT;
+	RETURN(rc < 0 ? rc : result);
 }
 
 /* iteration engine */
@@ -1502,7 +1503,7 @@ static int osd_scrub_main(void *args)
 	GOTO(post, rc);
 
 post:
-	osd_scrub_post(scrub, rc);
+	rc = osd_scrub_post(scrub, rc);
 	CDEBUG(D_LFSCK, "%.16s: OI scrub: stop, pos = %u: rc = %d\n",
 	       osd_scrub2name(scrub), scrub->os_pos_current, rc);
 
