@@ -2167,6 +2167,145 @@ test_70c () {
 }
 run_test 70c "tar ${MDSCOUNT}mdts recovery"
 
+cleanup_70d() {
+	trap 0
+	kill -9 $mkdir_70d_pid
+}
+
+test_70d () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local clients=${CLIENTS:-$HOSTNAME}
+	local rc=0
+
+	zconf_mount_clients $clients $MOUNT
+
+	local duration=300
+	[ "$SLOW" = "no" ] && duration=180
+	# set duration to 900 because it takes some time to boot node
+	[ "$FAILURE_MODE" = HARD ] && duration=900
+
+	mkdir -p $DIR/$tdir
+
+	local elapsed
+	local start_ts=$(date +%s)
+
+	trap cleanup_70d EXIT
+	(
+		while true; do
+			$LFS mkdir -i0 -c2 $DIR/$tdir/test || {
+				echo "mkdir fails"
+				break
+			}
+			$LFS mkdir -i1 -c2 $DIR/$tdir/test1 || {
+				echo "mkdir fails"
+				break
+			}
+
+			touch $DIR/$tdir/test/a || {
+				echo "touch fails"
+				break;
+			}
+			mkdir $DIR/$tdir/test/b || {
+				echo "mkdir fails"
+				break;
+			}
+			rm -rf $DIR/$tdir/test || {
+				echo "rmdir fails"
+				break
+			}
+
+			touch $DIR/$tdir/test1/a || {
+				echo "touch fails"
+				break;
+			}
+			mkdir $DIR/$tdir/test1/b || {
+				echo "mkdir fails"
+				break;
+			}
+
+			rm -rf $DIR/$tdir/test1 || {
+				echo "rmdir fails"
+				break
+			}
+		done
+	)&
+	mkdir_70d_pid=$!
+	echo "Started  $mkdir_70d_pid"
+
+	random_fail_mdt $MDSCOUNT $duration $mkdir_70d_pid
+	kill -0 $mkdir_70d_pid || error "mkdir/rmdir $mkdir_70d_pid stopped"
+
+	cleanup_70d
+	true
+}
+run_test 70d "mkdir/rmdir striped dir ${MDSCOUNT}mdts recovery"
+
+cleanup_70e() {
+	trap 0
+	kill -9 $rename_70e_pid
+}
+
+test_70e () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local clients=${CLIENTS:-$HOSTNAME}
+	local rc=0
+
+	echo ha > /proc/sys/lnet/debug
+	zconf_mount_clients $clients $MOUNT
+
+	local duration=300
+	[ "$SLOW" = "no" ] && duration=180
+	# set duration to 900 because it takes some time to boot node
+	[ "$FAILURE_MODE" = HARD ] && duration=900
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i0 $DIR/$tdir/test_0
+	$LFS mkdir -i0 $DIR/$tdir/test_1
+	touch $DIR/$tdir/test_0/a
+	touch $DIR/$tdir/test_1/b
+	trap cleanup_70e EXIT
+	(
+		while true; do
+			mrename $DIR/$tdir/test_0/a $DIR/$tdir/test_1/b > \
+						/dev/null || {
+				echo "a->b fails" 
+				break;
+			}
+
+			checkstat $DIR/$tdir/test_0/a && {
+				echo "a still exists"
+				break
+			}
+
+			checkstat $DIR/$tdir/test_1/b || {
+				echo "b still  exists"
+				break
+			}
+
+			touch $DIR/$tdir/test_0/a || {
+				echo "touch a fails"
+				break
+			}
+
+			mrename $DIR/$tdir/test_1/b $DIR/$tdir/test_0/a > \
+						/dev/null || {
+				echo "a->a fails"
+				break;
+			}
+		done
+	)&
+	rename_70e_pid=$!
+	echo "Started  $rename_70e_pid"
+
+	random_fail_mdt 2 $duration $rename_70e_pid
+	kill -0 $rename_70e_pid || error "rename $rename_70e_pid stopped"
+
+	cleanup_70e
+	true
+}
+run_test 70e "rename cross-MDT with random fails"
+
+
 test_73a() {
 	multiop_bg_pause $DIR/$tfile O_tSc ||
 		error "multiop_bg_pause $DIR/$tfile failed"

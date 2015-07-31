@@ -920,6 +920,91 @@ test_25() {
 }
 run_test 25 "replay|resend"
 
+cleanup_26() {
+	trap 0
+	kill -9 $tar_26_pid
+	kill -9 $dbench_26_jpid
+}
+
+test_26() {
+	local clients=${CLIENTS:-$HOSTNAME}
+
+	zconf_mount_clients $clients $MOUNT
+
+	local duration=600
+	[ "$SLOW" = "no" ] && duration=200
+	# set duration to 900 because it takes some time to boot node
+	[ "$FAILURE_MODE" = HARD ] && duration=900
+
+	local elapsed
+	local start_ts=$(date +%s)
+	local rc=0
+
+	trap cleanup_26	EXIT
+	(
+		local tar_dir=$DIR/$tdir/run_tar
+		while true; do
+			test_mkdir -p -c$MDSCOUNT $tar_dir || break
+			[ $MDSCOUNT -ge 2 ] &&
+			$LFS setdirstripe -D -c$MDSCOUNT $tar_dir ||
+				error "set default dirstripe failed"
+			cd $tar_dir || break
+			tar cf - /etc | tar xf - || error "tar failed"
+			cd $DIR/$tdir || break
+			rm -rf $tar_dir || break
+		done
+	)&
+	tar_26_pid=$!
+	echo "Started tar $tar_26_pid"
+
+	(
+		local dbench_dir=$DIR2/$tdir/run_dbench
+		while true; do
+			test_mkdir -p -c$MDSCOUNT $dbench_dir || break
+			[ $MDSCOUNT -ge 2 ] &&
+			$LFS setdirstripe -D -c$MDSCOUNT $dbench_dir ||
+				error "set default dirstripe failed"
+			cd $dbench_dir || break
+			rundbench 1 -D $dbench_dir -t 100 > /dev/null 2&>1 ||
+									break
+			cd $DIR/$tdir || break
+			rm -rf $dbench_dir || break
+		done
+	)&
+	dbench_26_pid=$!
+	echo "Started dbench $dbench_26_pid"
+
+	elapsed=$(($(date +%s) - start_ts))
+	local num_failovers=0
+	local fail_index=1
+	while [ $elapsed -lt $duration ]; do
+		ps auxwww | grep -v grep | grep -q $tar_26_pid ||
+					error "tar $tar_26_pid stopped"
+		ps auxwww | grep -v grep | grep -q $dbench_26_pid ||
+					error "dbench $dbench_26_pid stopped"
+		sleep 2
+		replay_barrier mds$fail_index
+		sleep 2 # give clients a time to do operations
+		# Increment the number of failovers
+		num_failovers=$((num_failovers+1))
+		log "$TESTNAME fail mds$fail_index $num_failovers times"
+		fail mds$fail_index
+		elapsed=$(($(date +%s) - start_ts))
+		if [ $fail_index -ge $MDSCOUNT ]; then
+			fail_index=1
+		else
+			fail_index=$((fail_index+1))
+		fi
+	done
+	# stop the client loads
+	kill -0 $tar_26_pid || error "tar $tar_26_pid stopped"
+	kill -0 $dbench_26_pid || error "dbench $dbench_26_pid stopped"
+	killall -9 dbench
+	cleanup_26
+	true
+}
+run_test 26 "dbench and tar with mds failover"
+
 complete $SECONDS
 SLEEP=$((`date +%s` - $NOW))
 [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP

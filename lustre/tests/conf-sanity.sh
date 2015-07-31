@@ -1646,6 +1646,7 @@ t32_test() {
 	local fstype=$(facet_fstype $SINGLEMDS)
 	local mdt_dev=$tmp/mdt
 	local ost_dev=$tmp/ost
+	local dir
 
 	trap 'trap - RETURN; t32_test_cleanup' RETURN
 
@@ -1907,6 +1908,9 @@ t32_test() {
 
 			$LFS setdirstripe -D -c2 $tmp/mnt/lustre/remote_dir
 
+			$r $LCTL set_param -n	\
+				mdt.${fsname}*.enable_remote_dir=1 2>/dev/null
+
 			pushd $tmp/mnt/lustre
 			tar -cf - . --exclude=./remote_dir |
 				tar -xvf - -C remote_dir 1>/dev/null || {
@@ -1990,6 +1994,41 @@ t32_test() {
 			fi
 		else
 			echo "list verification skipped"
+		fi
+
+		if [ $(lustre_version_code mds1) -ge $(version_code 2.7.50) -a \
+		     $dne_upgrade != "no" ]; then
+			$r $LCTL set_param -n	\
+				mdt.${fsname}*.enable_remote_dir=1 2>/dev/null
+
+			echo "test migration"
+			pushd $tmp/mnt/lustre
+			# migrate the files/directories to the remote MDT, then
+			# move it back
+			for dir in $(find ! -name .lustre ! -name . -type d); do
+				mdt_index=$($LFS getdirstripe -i $dir)
+				stripe_cnt=$($LFS getdirstripe -c $dir)
+				if [ $mdt_index = 0 -a $stripe_cnt -le 1 ]; then
+					$LFS mv -M 1 $dir || {
+					popd
+					error_noexit "migrate MDT1 failed"
+					return 1
+				}
+				fi
+			done
+
+			for dir in $(find ! -name . ! -name .lustre -type d); do
+				mdt_index=$($LFS getdirstripe -i $dir)
+				stripe_cnt=$($LFS getdirstripe -c $dir)
+				if [ $mdt_index = 1 -a $stripe_cnt -le 1 ]; then
+					$LFS mv -M 0 $dir || {
+					popd
+					error_noexit "migrate MDT0 failed"
+					return 1
+				}
+				fi
+			done
+			popd
 		fi
 
 		#
@@ -2102,6 +2141,7 @@ test_32c() {
 		# Do not support 1_8 and 2_1 direct upgrade to DNE2 anymore */
 		echo $tarball | grep "1_8" && continue
 		echo $tarball | grep "2_1" && continue
+		load_modules
 		dne_upgrade=yes t32_test $tarball writeconf || rc=$?
 	done
 	return $rc
