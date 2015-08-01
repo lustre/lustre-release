@@ -919,7 +919,7 @@ int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
 		rc = strlen(za->za_name);
 		if (lb->lb_buf != NULL) {
 			if (counted + rc + 1 > lb->lb_len)
-				RETURN(-ERANGE);
+				GOTO(out_fini, rc = -ERANGE);
 
 			memcpy(lb->lb_buf + counted, za->za_name, rc + 1);
 		}
