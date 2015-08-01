@@ -764,20 +764,21 @@ static int llog_cat_set_first_idx(struct llog_handle *cathandle, int idx)
 	if (llh->llh_cat_idx == (idx - 1)) {
 		llh->llh_cat_idx = idx;
 
-		do {
+		while (idx != cathandle->lgh_last_idx) {
 			idx = (idx + 1) % bitmap_size;
 			if (!ext2_test_bit(idx, LLOG_HDR_BITMAP(llh))) {
 				/* update llh_cat_idx for each unset bit,
-				 * expecting the*/
+				 * expecting the next one is set */
 				llh->llh_cat_idx = idx;
 			} else if (idx == 0) {
 				/* skip header bit */
+				llh->llh_cat_idx = 0;
 				continue;
 			} else {
 				/* the first index is found */
 				break;
 			}
-		} while (idx != cathandle->lgh_last_idx);
+		}
 
 		CDEBUG(D_RPCTRACE, "Set catlog "DOSTID" first idx %u,"
 		       " (last_idx %u)\n", POSTID(&cathandle->lgh_id.lgl_oi),
