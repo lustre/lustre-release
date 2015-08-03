@@ -73,7 +73,7 @@ static int sec_install_rctx_kr(struct ptlrpc_sec *sec,
 /*
  * the timeout is only for the case that upcall child process die abnormally.
  * in any other cases it should finally update kernel key.
- * 
+ *
  * FIXME we'd better to incorporate the client & server side upcall timeouts
  * into the framework of Adaptive Timeouts, but we need to figure out how to
  * make sure that kernel knows the upcall processes is in-progress or died
@@ -1408,11 +1408,31 @@ out:
         RETURN(0);
 }
 
-static
-int gss_kt_match(const struct key *key, const void *desc)
+#ifndef HAVE_KEY_MATCH_DATA
+static int
+gss_kt_match(const struct key *key, const void *desc)
 {
-        return (strcmp(key->description, (const char *) desc) == 0);
+	return (strcmp(key->description, (const char *) desc) == 0);
 }
+#else /* ! HAVE_KEY_MATCH_DATA */
+static bool
+gss_kt_match(const struct key *key, const struct key_match_data *match_data)
+{
+	const char *desc = match_data->raw_data;
+
+	return (strcmp(key->description, desc) == 0);
+}
+
+/*
+ * Preparse the match criterion.
+ */
+static int gss_kt_match_preparse(struct key_match_data *match_data)
+{
+	match_data->lookup_type = KEYRING_SEARCH_LOOKUP_DIRECT;
+	match_data->cmp = gss_kt_match;
+	return 0;
+}
+#endif /* HAVE_KEY_MATCH_DATA */
 
 static
 void gss_kt_destroy(struct key *key)
@@ -1434,13 +1454,17 @@ void gss_kt_describe(const struct key *key, struct seq_file *s)
 
 static struct key_type gss_key_type =
 {
-        .name           = "lgssc",
-        .def_datalen    = 0,
-        .instantiate    = gss_kt_instantiate,
-        .update         = gss_kt_update,
-        .match          = gss_kt_match,
-        .destroy        = gss_kt_destroy,
-        .describe       = gss_kt_describe,
+	.name		= "lgssc",
+	.def_datalen	= 0,
+	.instantiate	= gss_kt_instantiate,
+	.update		= gss_kt_update,
+#ifdef HAVE_KEY_MATCH_DATA
+	.match_preparse = gss_kt_match_preparse,
+#else
+	.match		= gss_kt_match,
+#endif
+	.destroy	= gss_kt_destroy,
+	.describe	= gss_kt_describe,
 };
 
 /****************************************
