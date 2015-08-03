@@ -197,8 +197,6 @@ The following types of layered objects exist in CLIO:
 
 - IO content: struct cl_io, slices are of type cl_io_slice;
 
-- Transfer request: struct cl_req, slices are of type cl_req_slice.
-
 1.5. Instantiation
 ==================
 
@@ -909,8 +907,7 @@ There are two possible modes of transfer initiation on the client:
   efficiently. Example: pages dirtied by the write(2) path. Pages submitted for
   an opportunistic transfer are kept in a "staging area".
 
-In any case, a transfer takes place in the form of a cl_req, which is a
-representation for a network RPC.
+In any case, a transfer takes place in the form of a network RPC.
 
 Pages queued for an opportunistic transfer are placed into a staging area
 (represented as a set of per-object and per-device queues at the OSC layer)
@@ -921,10 +918,6 @@ RPC, RPC alignment, whether or not multi-object RPCs are supported by the
 server, max-RPC-in-flight limitations, size of the staging area, etc. CLIO uses
 osc_extent to group pages for req-formation. osc_extent are further managed in
 a per-object red-black tree for efficient RPC formatting.
-
-For an immediate transfer the IO submits a cl_page_list which the req-formation
-engine slices into cl_req's, possibly adding cached pages to some of the
-resulting req's.
 
 Whenever a page from cl_page_list is added to a newly constructed req, its
 cl_page_operations::cpo_prep() layer methods are called. At that moment, the
@@ -979,45 +972,14 @@ The association between a page and an immediate transfer queue is protected by
 cl_page::cl_mutex. This mutex is acquired when a cl_page is added in a
 cl_page_list and released when a page is removed from the list.
 
-When an RPC is formed, all of its constituent pages are linked together through
-cl_page::cp_flight list hanging off of cl_req::crq_pages. Pages are removed
-from this list just before the transfer completion method is invoked. No
-special lock protects this list, as pages in transfer are under a VM lock.
-
-7.3. Transfer States: Prepare, Completion
-=========================================
-
-The transfer (cl_req) state machine is trivial, and it is not explicitly coded.
-A newly created transfer is in the "prepare" state while pages are collected.
-When all pages are gathered, the transfer enters the "in-flight" state where it
-remains until it reaches the "completion" state where page completion handlers
-are invoked.
-
-The per-layer ->cro_prep() transfer method is called when transfer preparation
-is completed and transfer is about to enter the in-flight state. Similarly, the
-per-layer ->cro_completion() method is called when the transfer completes
-before per-page completion methods are called.
-
-Additionally, before moving a transfer out of the prepare state, the RPC engine
-calls the cl_req_attr_set() function.  This function invokes ->cro_attr_set()
-methods on every layer to fill in RPC header that server uses to determine
-where to get or put data. This replaces the old ->ap_{update,fill}_obdo()
-methods.
-
-Further, cl_req's are not reference counted and access to them is not
-synchronized. This is because they are accessed only by the RPC engine in OSC
-which fully controls RPC life-time, and it uses an internal OSC lock
-(client_obd::cl_loi_list_lock spin-lock) for serialization.
-
-7.4. Page Completion Handlers, Synchronous Transfer
+7.3. Page Completion Handlers, Synchronous Transfer
 ===================================================
 
-When a transfer completes, cl_req completion methods are called on every layer.
-Then, for every transfer page, per-layer page completion methods
-->cpo_completion() are invoked. The page is still under the VM lock at this
-moment.  Completion methods are called bottom-to-top and it is responsibility
-of the last of them (i.e., the completion method of the top-most layer---VVP)
-to release the VM lock.
+When a transfer completes, for every transfer page, per-layer page completion
+methods ->cpo_completion() are invoked. The page is still under the VM lock at
+this moment.  Completion methods are called bottom-to-top and it is
+responsibility of the last of them (i.e., the completion method of the top-most
+layer---VVP) to release the VM lock.
 
 Both immediate and opportunistic transfers are asynchronous in the sense that
 control can return to the caller before the transfer completes. CLIO doesn't
