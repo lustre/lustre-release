@@ -336,8 +336,6 @@ int ptlrpc_start_pinger(void)
 
 	strcpy(pinger_thread.t_name, "ll_ping");
 
-	/* CLONE_VM and CLONE_FILES just avoid a needless copy, because we
-	 * just drop the VM and FILES in kthread_run() right away. */
 	task = kthread_run(ptlrpc_pinger_main, &pinger_thread,
 			   pinger_thread.t_name);
 	if (IS_ERR(task)) {
