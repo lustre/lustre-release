@@ -828,6 +828,18 @@ static int ll_options(char *options, int *flags)
                         *flags &= ~tmp;
                         goto next;
                 }
+		tmp = ll_set_opt("context", s1, 1);
+		if (tmp)
+			goto next;
+		tmp = ll_set_opt("fscontext", s1, 1);
+		if (tmp)
+			goto next;
+		tmp = ll_set_opt("defcontext", s1, 1);
+		if (tmp)
+			goto next;
+		tmp = ll_set_opt("rootcontext", s1, 1);
+		if (tmp)
+			goto next;
 		tmp = ll_set_opt("remote_client", s1, LL_SBI_RMT_CLIENT);
 		if (tmp) {
 			*flags |= tmp;
