@@ -422,11 +422,44 @@ static int llog_osd_write_rec(const struct lu_env *env,
 
 		if (idx == LLOG_HEADER_IDX) {
 			/* llog header update */
+			__u32	*bitmap = LLOG_HDR_BITMAP(llh);
+
 			lgi->lgi_off = 0;
-			lgi->lgi_buf.lb_len = reclen;
-			lgi->lgi_buf.lb_buf = rec;
+
+			/* If it does not indicate the bitmap index
+			 * (reccookie == NULL), then it means update
+			 * the whole update header. Otherwise only
+			 * update header and bits needs to be updated,
+			 * and in DNE cases, it will signaficantly
+			 * shrink the RPC size.
+			 * see distribute_txn_cancel_records()*/
+			if (reccookie == NULL) {
+				lgi->lgi_buf.lb_len = reclen;
+				lgi->lgi_buf.lb_buf = rec;
+				rc = dt_record_write(env, o, &lgi->lgi_buf,
+						     &lgi->lgi_off, th);
+				RETURN(rc);
+			}
+
+			/* update the header */
+			lgi->lgi_buf.lb_len = llh->llh_bitmap_offset;
+			lgi->lgi_buf.lb_buf = llh;
 			rc = dt_record_write(env, o, &lgi->lgi_buf,
 					     &lgi->lgi_off, th);
+			if (rc != 0)
+				RETURN(rc);
+
+			/* update the bitmap */
+			index = reccookie->lgc_index;
+			lgi->lgi_off = llh->llh_bitmap_offset +
+				      (index / (sizeof(*bitmap) * 8)) *
+							sizeof(*bitmap);
+			lgi->lgi_buf.lb_len = sizeof(*bitmap);
+			lgi->lgi_buf.lb_buf =
+					&bitmap[index/(sizeof(*bitmap)*8)];
+			rc = dt_record_write(env, o, &lgi->lgi_buf,
+					     &lgi->lgi_off, th);
+
 			RETURN(rc);
 		} else if (loghandle->lgh_cur_idx > 0) {
 			/**

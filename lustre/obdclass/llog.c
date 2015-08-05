@@ -197,6 +197,7 @@ EXPORT_SYMBOL(llog_destroy);
 int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 		    int index)
 {
+	struct llog_thread_info *lgi = llog_info(env);
 	struct dt_device	*dt;
 	struct llog_log_hdr	*llh = loghandle->lgh_hdr;
 	struct thandle		*th;
@@ -241,13 +242,19 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 		CDEBUG(D_RPCTRACE, "Catalog index %u already clear?\n", index);
 		GOTO(out_unlock, rc);
 	}
+
+	loghandle->lgh_hdr->llh_count--;
+	/* Pass this index to llog_osd_write_rec(), which will use the index
+	 * to only update the necesary bitmap. */
+	lgi->lgi_cookie.lgc_index = index;
 	/* update header */
-	rc = llog_write_rec(env, loghandle, &llh->llh_hdr, NULL,
+	rc = llog_write_rec(env, loghandle, &llh->llh_hdr, &lgi->lgi_cookie,
 			    LLOG_HEADER_IDX, th);
-	if (rc == 0)
-		loghandle->lgh_hdr->llh_count--;
-	else
+	if (rc != 0) {
+		loghandle->lgh_hdr->llh_count++;
 		ext2_set_bit(index, LLOG_HDR_BITMAP(llh));
+		GOTO(out_unlock, rc);
+	}
 
 	if ((llh->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
 	    (llh->llh_count == 1) &&
