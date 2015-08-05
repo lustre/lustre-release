@@ -1255,14 +1255,12 @@ static int kiblnd_resolve_addr(struct rdma_cm_id *cmid,
         unsigned short port;
         int rc;
 
-#ifdef HAVE_OFED_RDMA_SET_REUSEADDR
         /* allow the port to be reused */
         rc = rdma_set_reuseaddr(cmid, 1);
         if (rc != 0) {
                 CERROR("Unable to set reuse on cmid: %d\n", rc);
                 return rc;
         }
-#endif
 
         /* look for a free privileged port */
         for (port = PROT_SOCK-1; port > 0; port--) {
@@ -1283,9 +1281,6 @@ static int kiblnd_resolve_addr(struct rdma_cm_id *cmid,
         }
 
         CERROR("Failed to bind to a free privileged port\n");
-#ifndef HAVE_OFED_RDMA_SET_REUSEADDR
-        CERROR("You may need IB verbs that supports rdma_set_reuseaddr()\n");
-#endif
         return rc;
 }
 
@@ -2980,11 +2975,10 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
                 /* net keeps its ref on conn! */
                 return 0;
 
-#ifdef HAVE_OFED_RDMA_CMEV_TIMEWAIT_EXIT
         case RDMA_CM_EVENT_TIMEWAIT_EXIT:
                 CDEBUG(D_NET, "Ignore TIMEWAIT_EXIT event\n");
                 return 0;
-#endif
+
 	case RDMA_CM_EVENT_DISCONNECTED:
                 conn = (kib_conn_t *)cmid->context;
                 if (conn->ibc_state < IBLND_CONN_ESTABLISHED) {
@@ -3006,11 +3000,9 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
                  * to ignore this */
                 return 0;
 
-#ifdef HAVE_OFED_RDMA_CMEV_ADDRCHANGE
         case RDMA_CM_EVENT_ADDR_CHANGE:
                 LCONSOLE_INFO("Physical link changed (eg hca/port)\n");
                 return 0;
-#endif
         }
 }
 
