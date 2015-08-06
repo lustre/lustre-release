@@ -1211,12 +1211,6 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
                        lustre_msg_get_last_committed(request->rq_repmsg));
         }
 
-	/* LU-6802: Reset replay cursor on successful reconnect */
-	spin_lock(&imp->imp_lock);
-	imp->imp_replay_cursor = &imp->imp_committed_list;
-	imp->imp_last_replay_transno = 0;
-	spin_unlock(&imp->imp_lock);
-
 finish:
 	rc = ptlrpc_import_recovery_state_machine(imp);
 	if (rc == -ENOTCONN) {
