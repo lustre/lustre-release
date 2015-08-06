@@ -156,7 +156,7 @@ Index: linux-stage/fs/ext4/mmp.c
 ===================================================================
 --- /dev/null
 +++ linux-stage/fs/ext4/mmp.c
-@@ -0,0 +1,354 @@
+@@ -0,0 +1,356 @@
 +#include <linux/fs.h>
 +#include <linux/random.h>
 +#include <linux/buffer_head.h>
@@ -218,8 +218,10 @@ Index: linux-stage/fs/ext4/mmp.c
 +       }
 +
 +       mmp = (struct mmp_struct *)((*bh)->b_data);
-+       if (le32_to_cpu(mmp->mmp_magic) != EXT4_MMP_MAGIC)
++       if (le32_to_cpu(mmp->mmp_magic) != EXT4_MMP_MAGIC) {
++		brelse(*bh);
 +               return -EINVAL;
++	}
 +
 +       return 0;
 +}
@@ -324,7 +326,6 @@ Index: linux-stage/fs/ext4/mmp.c
 +                       if (retval) {
 +                               ext4_error(sb, "error reading MMP data: %d",
 +                                          retval);
-+
 +                               EXT4_SB(sb)->s_mmp_tsk = NULL;
 +                               goto failed;
 +                       }
@@ -338,6 +339,7 @@ Index: linux-stage/fs/ext4/mmp.c
 +                                            "The filesystem seems to have been"
 +                                            " multiply mounted.");
 +                               ext4_error(sb, "abort");
++				put_bh(bh_check);
 +                               goto failed;
 +                       }
 +                       put_bh(bh_check);
