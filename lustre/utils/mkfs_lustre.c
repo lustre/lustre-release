@@ -137,7 +137,8 @@ void usage(FILE *out)
 		"\t\t\trequired for all targets other than MGS\n"
 		"\t\t--mgsnode=<nid>[,<...>]: NID(s) of remote MGS\n"
 		"\t\t\trequired for all targets other than MGS\n"
-		"\t\t--mountfsoptions=<opts>: permanent mount options\n"
+		"\t\t--mountfsoptions=<opts>: permanent Lustre mount options\n"
+		"\t\t--backfs-mount-opts=<opts>: backing fs mount options\n"
 		"\t\t--failnode=<nid>[,<...>]: NID(s) of backup failover node\n"
 		"\t\t\tmutually exclusive with --servicenode\n"
 		"\t\t--servicenode=<nid>[,<...>]: NID(s) of service partners\n"
@@ -278,6 +279,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 {
 	static struct option long_opt[] = {
 		{ "backfstype",		required_argument,	NULL, 'b' },
+		{ "backfs-mount-opts",  required_argument,	NULL, 'B' },
 		{ "stripe-count-hint",	required_argument,	NULL, 'c' },
 		{ "comment",		required_argument,	NULL, 'u' },
 		{ "configdev",		required_argument,	NULL, 'C' },
@@ -338,6 +340,9 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			}
                         break;
                 }
+		case 'B':
+			mop->mo_mountopts = optarg;
+			break;
                 case 'c':
                         if (IS_MDT(&mop->mo_ldd)) {
                                 int stripe_count = atol(optarg);

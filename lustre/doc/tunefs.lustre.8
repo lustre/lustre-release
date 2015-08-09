@@ -51,7 +51,7 @@ The Lustre filesystem this service will be part of.  Default is 'lustre'
 Force a particular OST or MDT index 
 .TP
 .BI \--mountfsoptions= opts
-Set  the mount options that will be used when mounting the backing fs.
+Set  the persistent mount options that will be used when Lustre fs.
 WARNING: unlike earlier versions of \fBtunefs.lustre\fR,  this version
 completely replaces the existing mount options with those specified on
 the command line, issuing a warning  on  stderr  if any  of the default
@@ -59,6 +59,9 @@ mount options are omitted.  The defaults for ldiskfs  are
 OST: \fIerrors=remount-ro,mballoc,extents\fR;
 MGS/MDT: \fIerrors=remount-ro,user_xattr\fR.
 \fBDO NOT\fR alter the default mount options unless you know what you are doing.
+.TP
+.BI \--backfs-mount-opts=opts
+Use these options for mounting backing fs while tune.lustre is working.
 .TP
 .BI \--network= net,...
 Network(s) to restrict this ost/mdt to. This option can be repeated as desired.

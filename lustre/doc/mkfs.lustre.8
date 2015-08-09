@@ -86,7 +86,7 @@ Specify a particular OST or MDT index. Required for all targets other than the M
 Format options for the backing fs. For example, ext3 options could be set here.
 .TP
 .BI \--mountfsoptions= opts
-Set the mount options that will be used when mounting the backing fs.
+Set the persistent mount options that will be used when mounting Lustre fs.
 WARNING: unlike earlier versions of \fBmkfs.lustre\fR, this version completely
 replaces the default mount options with those specified on the command line,
 issuing a warning on stderr if any of the default mount options are omitted.
@@ -94,6 +94,9 @@ The defaults for \fIldiskfs\fR are
 OST: \fIerrors=remount-ro,mballoc,extents\fR;
 MGS/MDT: \fIerrors=remount-ro,user_xattr\fR.
 \fBDO NOT\fR alter the default mount options unless you know what you are doing.
+.TP
+.BI \--backfs-mount-opts=opts
+Use these options for mounting backing fs while mkfs.lustre is working.
 .TP
 .BI \--network= net,...
 Network(s) to restrict this ost/mdt to. This option can be repeated as desired.
