@@ -49,7 +49,6 @@ typedef  void (cfs_timer_func_t)(ulong_ptr_t);
 
 void cfs_init_timer(struct timer_list *t);
 void cfs_timer_init(struct timer_list *t, cfs_timer_func_t *func, void *arg);
-void cfs_timer_done(struct timer_list *t);
 void cfs_timer_arm(struct timer_list *t, cfs_time_t deadline);
 void cfs_timer_disarm(struct timer_list *t);
 int  cfs_timer_is_armed(struct timer_list *t);
