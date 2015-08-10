@@ -199,6 +199,11 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 	LASSERT(ost);
 
 	rc = dt_statfs(env, ost->ltd_ost, sfs);
+
+	if (rc == 0 && ((sfs->os_state & OS_STATE_ENOSPC) ||
+	    (sfs->os_state & OS_STATE_ENOINO && sfs->os_fprecreated == 0)))
+		RETURN(-ENOSPC);
+
 	if (rc && rc != -ENOTCONN)
 		CERROR("%s: statfs: rc = %d\n", lod2obd(d)->obd_name, rc);
 
@@ -742,30 +747,6 @@ static int min_stripe_count(__u32 stripe_cnt, int flags)
 #define LOV_CREATE_RESEED_MIN  2000
 
 /**
- * Check if an OST is full.
- *
- * Check whether an OST should be considered full based
- * on the given statfs data.
- *
- * \param[in] msfs	statfs data
- *
- * \retval false	not full
- * \retval true		full
- */
-static int inline lod_qos_dev_is_full(struct obd_statfs *msfs)
-{
-	__u64 used;
-	int   bs = msfs->os_bsize;
-
-	LASSERT(((bs - 1) & bs) == 0);
-
-	/* the minimum of 0.1% used blocks and 1GB bytes. */
-	used = min_t(__u64, (msfs->os_blocks - msfs->os_bfree) >> 10,
-			1 << (31 - ffs(bs)));
-	return (msfs->os_bavail < used);
-}
-
-/**
  * Initialize temporary OST-in-use array.
  *
  * Allocate or extend the array used to mark targets already assigned to a new
@@ -852,14 +833,6 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	rc = lod_statfs_and_check(env, m, ost_idx, sfs);
 	if (rc) {
 		/* this OSP doesn't feel well */
-		goto out_return;
-	}
-
-	/*
-	 * skip full devices
-	 */
-	if (lod_qos_dev_is_full(sfs)) {
-		QOS_DEBUG("#%d is full\n", ost_idx);
 		goto out_return;
 	}
 
@@ -1437,12 +1410,6 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			/* this OSP doesn't feel well */
 			continue;
 		}
-
-		/*
-		 * skip full devices
-		 */
-		if (lod_qos_dev_is_full(sfs))
-			continue;
 
 		if (sfs->os_state & OS_STATE_DEGRADED)
 			continue;

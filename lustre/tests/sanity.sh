@@ -14028,6 +14028,129 @@ test_252() {
 }
 run_test 252 "check lr_reader tool"
 
+test_253_fill_ost() {
+	local size_mb #how many MB should we write to pass watermark
+	local lwm=$3  #low watermark
+	local free_10mb #10% of free space
+
+	free_kb=$($LFS df $MOUNT | grep $1 | awk '{ print $4 }')
+	size_mb=$((free_kb / 1024 - lwm))
+	free_10mb=$((free_kb / 10240))
+	#If 10% of free space cross low watermark use it
+	if (( free_10mb > size_mb )); then
+		size_mb=$free_10mb
+	else
+		#At least we need to store 1.1 of difference between
+		#free space and low watermark
+		size_mb=$((size_mb + size_mb / 10))
+	fi
+	if (( lwm <= $((free_kb / 1024)) )) || [ ! -f $DIR/$tdir/1 ]; then
+		dd if=/dev/zero of=$DIR/$tdir/1 bs=1M count=$size_mb \
+			 oflag=append conv=notrunc
+	fi
+
+	sleep_maxage
+
+	free_kb=$($LFS df $MOUNT | grep $1 | awk '{ print $4 }')
+	echo "OST still has $((free_kb / 1024)) mbytes free"
+}
+
+test_253() {
+	local ostidx=0
+	local rc=0
+
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+
+	local ost_name=$($LFS osts | grep ${ostidx}": " | \
+		awk '{print $2}' | sed -e 's/_UUID$//')
+	# on the mdt's osc
+	local mdtosc_proc1=$(get_mdtosc_proc_path $SINGLEMDS $ost_name)
+	do_facet $SINGLEMDS $LCTL get_param -n \
+		osp.$mdtosc_proc1.reserved_mb_high ||
+		{ skip  "remote MDS does not support reserved_mb_high" &&
+		  return; }
+
+	rm -rf $DIR/$tdir
+	wait_mds_ost_sync
+	wait_delete_completed
+	mkdir $DIR/$tdir
+
+	local last_wm_h=$(do_facet $SINGLEMDS $LCTL get_param -n \
+			osp.$mdtosc_proc1.reserved_mb_high)
+	local last_wm_l=$(do_facet $SINGLEMDS $LCTL get_param -n \
+			osp.$mdtosc_proc1.reserved_mb_low)
+	echo "prev high watermark $last_wm_h, prev low watermark $last_wm_l"
+
+	do_facet mgs $LCTL pool_new $FSNAME.$TESTNAME ||
+		error "Pool creation failed"
+	do_facet mgs $LCTL pool_add $FSNAME.$TESTNAME $ost_name ||
+		error "Adding $ost_name to pool failed"
+
+	# Wait for client to see a OST at pool
+	wait_update $HOSTNAME "$LCTL get_param -n
+		lov.$FSNAME-*.pools.$TESTNAME | sort -u |
+		grep $ost_name" "$ost_name""_UUID" $((TIMEOUT/2)) ||
+		error "Client can not see the pool"
+	$SETSTRIPE $DIR/$tdir -i $ostidx -c 1 -p $FSNAME.$TESTNAME ||
+		error "Setstripe failed"
+
+	dd if=/dev/zero of=$DIR/$tdir/0 bs=1M count=10
+	local blocks=$($LFS df $MOUNT | grep $ost_name | awk '{ print $4 }')
+	echo "OST still has $((blocks/1024)) mbytes free"
+
+	local new_lwm=$((blocks/1024-10))
+	do_facet $SINGLEMDS $LCTL set_param \
+			osp.$mdtosc_proc1.reserved_mb_high=$((new_lwm+5))
+	do_facet $SINGLEMDS $LCTL set_param \
+			osp.$mdtosc_proc1.reserved_mb_low=$new_lwm
+
+	test_253_fill_ost $ost_name $mdtosc_proc1 $new_lwm
+
+	#First enospc could execute orphan deletion so repeat.
+	test_253_fill_ost $ost_name $mdtosc_proc1 $new_lwm
+
+	local oa_status=$(do_facet $SINGLEMDS $LCTL get_param -n \
+			osp.$mdtosc_proc1.prealloc_status)
+	echo "prealloc_status $oa_status"
+
+	dd if=/dev/zero of=$DIR/$tdir/2 bs=1M count=1 &&
+		error "File creation should fail"
+	#object allocation was stopped, but we still able to append files
+	dd if=/dev/zero of=$DIR/$tdir/1 bs=1M seek=6 count=5 oflag=append ||
+		error "Append failed"
+	rm -f $DIR/$tdir/1 $DIR/$tdir/0 $DIR/$tdir/r*
+
+	wait_delete_completed
+
+	sleep_maxage
+
+	for i in $(seq 10 12); do
+		dd if=/dev/zero of=$DIR/$tdir/$i bs=1M count=1 2>/dev/null ||
+			error "File creation failed after rm";
+	done
+
+	oa_status=$(do_facet $SINGLEMDS $LCTL get_param -n \
+			osp.$mdtosc_proc1.prealloc_status)
+	echo "prealloc_status $oa_status"
+
+	if (( oa_status != 0 )); then
+		error "Object allocation still disable after rm"
+	fi
+	do_facet $SINGLEMDS $LCTL set_param \
+			osp.$mdtosc_proc1.reserved_mb_high=$last_wm_h
+	do_facet $SINGLEMDS $LCTL set_param \
+			osp.$mdtosc_proc1.reserved_mb_low=$last_wm_l
+
+
+	do_facet mgs $LCTL pool_remove $FSNAME.$TESTNAME $ost_name ||
+		error "Remove $ost_name from pool failed"
+	do_facet mgs $LCTL pool_destroy $FSNAME.$TESTNAME ||
+		error "Pool destroy fialed"
+}
+run_test 253 "Check object allocation limit"
+
 test_254() {
 	local cl_user
 

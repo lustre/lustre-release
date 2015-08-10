@@ -931,17 +931,8 @@ out:
  * Add a bit of hysteresis so this flag isn't continually flapping,
  * and ensure that new files don't get extremely fragmented due to
  * only a small amount of available space in the filesystem.
- * We want to set the NOSPC flag when there is less than ~0.1% free
- * and clear it when there is at least ~0.2% free space, so:
- *                   avail < ~0.1% max          max = avail + used
- *            1025 * avail < avail + used       used = blocks - free
- *            1024 * avail < used
- *            1024 * avail < blocks - free
- *                   avail < ((blocks - free) >> 10)
- *
- * On very large disk, say 16TB 0.1% will be 16 GB. We don't want to
- * lose that amount of space so in those cases we report no space left
- * if their is less than 1 GB left.
+ * We want to set the ENOSPC when there is less than reserved size
+ * free and clear it when there is at least 2*reserved size free space.
  * the function updates current precreation status used: functional or not
  *
  * \param[in] d		OSP device
@@ -954,43 +945,72 @@ void osp_pre_update_status(struct osp_device *d, int rc)
 {
 	struct obd_statfs	*msfs = &d->opd_statfs;
 	int			 old = d->opd_pre_status;
-	__u64			 used;
+	__u64			 available;
 
 	d->opd_pre_status = rc;
 	if (rc)
 		goto out;
 
 	if (likely(msfs->os_type)) {
-		used = min_t(__u64, (msfs->os_blocks - msfs->os_bfree) >> 10,
-				    1 << 30);
-		if ((msfs->os_ffree < 32) || (msfs->os_bavail < used)) {
+		if (unlikely(d->opd_reserved_mb_high == 0 &&
+			     d->opd_reserved_mb_low == 0)) {
+			/* Use ~0.1% by default to disable object allocation,
+			 * and ~0.2% to enable, size in MB, set both watermark
+			 */
+			spin_lock(&d->opd_pre_lock);
+			if (d->opd_reserved_mb_high == 0 &&
+			    d->opd_reserved_mb_low == 0) {
+				d->opd_reserved_mb_low =
+					((msfs->os_bsize >> 10) *
+					msfs->os_blocks) >> 20;
+				if (d->opd_reserved_mb_low == 0)
+					d->opd_reserved_mb_low = 1;
+				d->opd_reserved_mb_high =
+					(d->opd_reserved_mb_low << 1) + 1;
+			}
+			spin_unlock(&d->opd_pre_lock);
+		}
+		/* in MB */
+		available = (msfs->os_bavail * (msfs->os_bsize >> 10)) >> 10;
+		if (msfs->os_ffree < 32)
+			msfs->os_state |= OS_STATE_ENOINO;
+		else if (msfs->os_ffree > 64)
+			msfs->os_state &= ~OS_STATE_ENOINO;
+
+		if (available < d->opd_reserved_mb_low)
+			msfs->os_state |= OS_STATE_ENOSPC;
+		else if (available > d->opd_reserved_mb_high)
+			msfs->os_state &= ~OS_STATE_ENOSPC;
+		if (msfs->os_state & (OS_STATE_ENOINO | OS_STATE_ENOSPC)) {
 			d->opd_pre_status = -ENOSPC;
 			if (old != -ENOSPC)
-				CDEBUG(D_INFO, "%s: status: %llu blocks, "
-				       "%llu free, %llu used, %llu "
-				       "avail -> %d: rc = %d\n",
+				CDEBUG(D_INFO, "%s: status: %llu blocks, %llu "
+				       "free, %llu avail, %llu MB avail, %u "
+				       "hwm -> %d: rc = %d\n",
 				       d->opd_obd->obd_name, msfs->os_blocks,
-				       msfs->os_bfree, used, msfs->os_bavail,
+				       msfs->os_bfree, msfs->os_bavail,
+				       available, d->opd_reserved_mb_high,
 				       d->opd_pre_status, rc);
 			CDEBUG(D_INFO,
 			       "non-committed changes: %u, in progress: %u\n",
 			       atomic_read(&d->opd_syn_changes),
 			       atomic_read(&d->opd_syn_rpc_in_progress));
-		} else if (old == -ENOSPC) {
+		} else if (unlikely(old == -ENOSPC)) {
 			d->opd_pre_status = 0;
 			spin_lock(&d->opd_pre_lock);
 			d->opd_pre_create_slow = 0;
 			d->opd_pre_create_count = OST_MIN_PRECREATE;
 			spin_unlock(&d->opd_pre_lock);
 			wake_up(&d->opd_pre_waitq);
-			CDEBUG(D_INFO, "%s: no space: %llu blocks, %llu"
-			       " free, %llu used, %llu avail -> %d: "
-			       "rc = %d\n", d->opd_obd->obd_name,
-			       msfs->os_blocks, msfs->os_bfree, used,
-			       msfs->os_bavail, d->opd_pre_status, rc);
+
+			CDEBUG(D_INFO, "%s: space available: %llu blocks, %llu"
+			       " free, %llu avail, %lluMB avail, %u lwm"
+			       " -> %d: rc = %d\n", d->opd_obd->obd_name,
+			       msfs->os_blocks, msfs->os_bfree, msfs->os_bavail,
+			       available, d->opd_reserved_mb_low,
+			       d->opd_pre_status, rc);
 		}
 	}
-
 out:
 	wake_up(&d->opd_pre_user_waitq);
 }
@@ -1593,6 +1613,8 @@ int osp_init_precreate(struct osp_device *d)
 	d->opd_pre_create_count = OST_MIN_PRECREATE;
 	d->opd_pre_min_create_count = OST_MIN_PRECREATE;
 	d->opd_pre_max_create_count = OST_MAX_PRECREATE;
+	d->opd_reserved_mb_high = 0;
+	d->opd_reserved_mb_low = 0;
 
 	spin_lock_init(&d->opd_pre_lock);
 	init_waitqueue_head(&d->opd_pre_waitq);

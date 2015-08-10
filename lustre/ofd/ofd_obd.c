@@ -1439,7 +1439,7 @@ static int ofd_health_check(const struct lu_env *nul, struct obd_device *obd)
 	if (unlikely(rc))
 		GOTO(out, rc);
 
-	if (info->fti_u.osfs.os_state == OS_STATE_READONLY)
+	if (info->fti_u.osfs.os_state & OS_STATE_READONLY)
 		GOTO(out, rc = -EROFS);
 
 #ifdef USE_HEALTH_CHECK_WRITE

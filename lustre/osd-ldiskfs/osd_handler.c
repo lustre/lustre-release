@@ -1988,7 +1988,7 @@ int osd_statfs(const struct lu_env *env, struct dt_device *d,
 
 	statfs_pack(sfs, ksfs);
 	if (unlikely(sb->s_flags & MS_RDONLY))
-		sfs->os_state = OS_STATE_READONLY;
+		sfs->os_state |= OS_STATE_READONLY;
 	if (LDISKFS_HAS_INCOMPAT_FEATURE(sb,
 					 LDISKFS_FEATURE_INCOMPAT_EXTENTS))
 		sfs->os_maxbytes = sb->s_maxbytes;
