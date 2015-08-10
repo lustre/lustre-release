@@ -122,6 +122,11 @@ static const struct dt_object_operations      osd_obj_otable_it_ops;
 static const struct dt_index_operations       osd_index_iam_ops;
 static const struct dt_index_operations       osd_index_ea_ops;
 
+static int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
+			  const struct lu_fid *fid);
+static int osd_process_scheduled_agent_removals(const struct lu_env *env,
+						struct osd_device *osd);
+
 int osd_trans_declare_op2rb[] = {
 	[OSD_OT_ATTR_SET]	= OSD_OT_ATTR_SET,
 	[OSD_OT_PUNCH]		= OSD_OT_MAX,
@@ -236,6 +241,11 @@ struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 		       struct osd_inode_id *id)
 {
 	struct inode *inode = NULL;
+
+	/* if we look for an inode withing a running
+	 * transaction, then we risk to deadlock */
+	/* osd_dirent_check_repair() breaks this */
+	/*LASSERT(current->journal_info == NULL);*/
 
 	inode = ldiskfs_iget(osd_sb(dev), id->oii_ino);
 	if (IS_ERR(inode)) {
@@ -1052,7 +1062,7 @@ static void osd_trans_stop_cb(struct osd_thandle *oth, int result)
 static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 			  struct thandle *th)
 {
-	int                     rc = 0;
+	int                     rc = 0, remove_agents = 0;
 	struct osd_thandle     *oh;
 	struct osd_thread_info *oti = osd_oti_get(env);
 	struct osd_iobuf       *iobuf = &oti->oti_iobuf;
@@ -1062,6 +1072,8 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	ENTRY;
 
 	oh = container_of0(th, struct osd_thandle, ot_super);
+
+	remove_agents = oh->ot_remove_agents;
 
 	qtrans = oh->ot_quota_trans;
 	oh->ot_quota_trans = NULL;
@@ -1116,6 +1128,9 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	osd_fini_iobuf(osd, iobuf);
 	if (!rc)
 		rc = iobuf->dr_error;
+
+	if (unlikely(remove_agents != 0))
+		osd_process_scheduled_agent_removals(env, osd);
 
 	RETURN(rc);
 }
@@ -2558,33 +2573,86 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 }
 
 /**
- * Delete local agent inode for remote entry
+ * when direntry is deleted, we have to take care of possible agent inode
+ * referenced by that. unfortunately we can't do this at that point:
+ * iget() within a running transaction leads to deadlock and we better do
+ * not call that every delete declaration to save performance. so we put
+ * a potention agent inode on a list and process that once the transaction
+ * is over. Notice it's not any worse in terms of real orphans as regular
+ * object destroy doesn't put inodes on the on-disk orphan list. this should
+ * be addressed separately
  */
-static int osd_delete_local_agent_inode(const struct lu_env *env,
-					struct osd_device *osd,
-					const struct lu_fid *fid,
-					__u32 ino, struct osd_thandle *oh)
+static int osd_schedule_agent_inode_removal(const struct lu_env *env,
+					    struct osd_thandle *oh,
+					    __u32 ino)
 {
-	struct osd_thread_info	*oti = osd_oti_get(env);
-	struct osd_inode_id	*id = &oti->oti_id;
-	struct inode		*inode;
-	ENTRY;
+	struct osd_device      *osd = osd_dt_dev(oh->ot_super.th_dev);
+	struct osd_obj_orphan *oor;
 
-	id->oii_ino = le32_to_cpu(ino);
-	id->oii_gen = OSD_OII_NOGEN;
-	inode = osd_iget(oti, osd, id);
-	if (IS_ERR(inode)) {
-		CERROR("%s: iget error "DFID" id %u:%u\n", osd_name(osd),
-		       PFID(fid), id->oii_ino, id->oii_gen);
-		RETURN(PTR_ERR(inode));
+	OBD_ALLOC_PTR(oor);
+	if (oor == NULL)
+		return -ENOMEM;
+
+	oor->oor_ino = ino;
+	oor->oor_env = (struct lu_env *)env;
+	spin_lock(&osd->od_osfs_lock);
+	list_add(&oor->oor_list, &osd->od_orphan_list);
+	spin_unlock(&osd->od_osfs_lock);
+
+	oh->ot_remove_agents = 1;
+
+	return 0;
+
+}
+
+static int osd_process_scheduled_agent_removals(const struct lu_env *env,
+						struct osd_device *osd)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct osd_obj_orphan *oor, *tmp;
+	struct osd_inode_id id;
+	struct list_head list;
+	struct inode *inode;
+	struct lu_fid fid;
+	handle_t *jh;
+	__u32 ino;
+
+	INIT_LIST_HEAD(&list);
+
+	spin_lock(&osd->od_osfs_lock);
+	list_for_each_entry_safe(oor, tmp, &osd->od_orphan_list, oor_list) {
+		if (oor->oor_env == env) {
+			list_del(&oor->oor_list);
+			list_add(&oor->oor_list, &list);
+		}
+	}
+	spin_unlock(&osd->od_osfs_lock);
+
+	list_for_each_entry_safe(oor, tmp, &list, oor_list) {
+
+		ino = oor->oor_ino;
+
+		list_del(&oor->oor_list);
+		OBD_FREE_PTR(oor);
+
+		osd_id_gen(&id, ino, OSD_OII_NOGEN);
+		inode = osd_iget_fid(info, osd, &id, &fid);
+		if (IS_ERR(inode))
+			continue;
+
+		if (!osd_remote_fid(env, osd, &fid)) {
+			iput(inode);
+			continue;
+		}
+
+		jh = osd_journal_start_sb(osd_sb(osd), LDISKFS_HT_MISC, 1);
+		clear_nlink(inode);
+		mark_inode_dirty(inode);
+		ldiskfs_journal_stop(jh);
+		iput(inode);
 	}
 
-	clear_nlink(inode);
-	mark_inode_dirty(inode);
-	CDEBUG(D_INODE, "%s: delete remote inode "DFID" %lu\n",
-		osd_name(osd), PFID(fid), inode->i_ino);
-	iput(inode);
-	RETURN(0);
+	return 0;
 }
 
 /**
@@ -3467,8 +3535,6 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 
         bh = osd_ldiskfs_find_entry(dir, &dentry->d_name, &de, NULL, hlock);
         if (bh) {
-		__u32 ino = 0;
-
 		/* If this is not the ".." entry, it might be a remote DNE
 		 * entry and  we need to check if the FID is for a remote
 		 * MDT.  If the FID is  not in the directory entry (e.g.
@@ -3486,56 +3552,19 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 		if (strcmp((char *)key, dotdot) != 0) {
 			LASSERT(de != NULL);
 			rc = osd_get_fid_from_dentry(de, (struct dt_rec *)fid);
-			/* If Fid is not in dentry, try to get it from LMA */
 			if (rc == -ENODATA) {
-				struct osd_inode_id *id;
-				struct inode *inode;
-
-				/* Before trying to get fid from the inode,
-				 * check whether the inode is valid.
-				 *
-				 * If the inode has been deleted, do not go
-				 * ahead to do osd_ea_fid_get, which will set
-				 * the inode to bad inode, which might cause
-				 * the inode to be deleted uncorrectly */
-				inode = ldiskfs_iget(osd_sb(osd),
-						     le32_to_cpu(de->inode));
-				if (IS_ERR(inode)) {
-					CDEBUG(D_INODE, "%s: "DFID"get inode"
-					       "error.\n", osd_name(osd),
-					       PFID(fid));
-					rc = PTR_ERR(inode);
-				} else {
-					if (likely(inode->i_nlink != 0)) {
-						id = &osd_oti_get(env)->oti_id;
-						rc = osd_ea_fid_get(env, obj,
-						        le32_to_cpu(de->inode),
-								    fid, id);
-					} else {
-						CDEBUG(D_INFO, "%s: %u "DFID
-						       "deleted.\n",
-						       osd_name(osd),
-						       le32_to_cpu(de->inode),
-						       PFID(fid));
-						rc = -ESTALE;
-					}
-					iput(inode);
-				}
+				/* can't get FID, postpone to the end of the
+				 * transaction when iget() is safe */
+				osd_schedule_agent_inode_removal(env, oh,
+						le32_to_cpu(de->inode));
+			} else if (rc == 0 &&
+				   unlikely(osd_remote_fid(env, osd, fid))) {
+				osd_schedule_agent_inode_removal(env, oh,
+						le32_to_cpu(de->inode));
 			}
-			if (rc == 0 &&
-			    unlikely(osd_remote_fid(env, osd, fid)))
-				/* Need to delete agent inode */
-				ino = le32_to_cpu(de->inode);
 		}
                 rc = ldiskfs_delete_entry(oh->ot_handle, dir, de, bh);
                 brelse(bh);
-		if (rc == 0 && unlikely(ino != 0)) {
-			rc = osd_delete_local_agent_inode(env, osd, fid, ino,
-							  oh);
-			if (rc != 0)
-				CERROR("%s: del local inode "DFID": rc = %d\n",
-				       osd_name(osd), PFID(fid), rc);
-		}
         } else {
                 rc = -ENOENT;
         }
@@ -5902,6 +5931,7 @@ static int osd_device_init0(const struct lu_env *env,
 
 	spin_lock_init(&o->od_osfs_lock);
 	mutex_init(&o->od_otable_mutex);
+	INIT_LIST_HEAD(&o->od_orphan_list);
 
 	o->od_read_cache = 1;
 	o->od_writethrough_cache = 1;
