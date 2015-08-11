@@ -470,14 +470,17 @@ static int mdt_lock_slaves(struct mdt_thread_info *mti, struct mdt_object *obj,
 	if (le32_to_cpu(lmv->lmv_magic) != LMV_MAGIC_V1)
 		RETURN(-EINVAL);
 
-	/* Sigh, 0_stripe and master object are different
-	 * object, though they are in the same MDT, to avoid
-	 * adding osd_object_lock here, so we will enqueue the
-	 * stripe0 lock in MDT0 for now */
 	fid_le_to_cpu(fid, &lmv->lmv_stripe_fids[0]);
-	*s0_objp = mdt_object_find_lock(mti, fid, s0_lh, ibits);
-	if (IS_ERR(*s0_objp))
-		RETURN(PTR_ERR(*s0_objp));
+	if (!lu_fid_eq(fid, mdt_object_fid(obj))) {
+		/* Except migrating object, whose 0_stripe and master
+		 * object are the same object, 0_stripe and master
+		 * object are different, though they are in the same
+		 * MDT, to avoid adding osd_object_lock here, so we
+		 * will enqueue the stripe0 lock in MDT0 for now */
+		*s0_objp = mdt_object_find_lock(mti, fid, s0_lh, ibits);
+		if (IS_ERR(*s0_objp))
+			RETURN(PTR_ERR(*s0_objp));
+	}
 
 	memset(einfo, 0, sizeof(*einfo));
 	einfo->ei_type = LDLM_IBITS;
