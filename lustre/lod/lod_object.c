@@ -571,11 +571,11 @@ again:
 
 	next = lo->ldo_stripe[it->lit_stripe_index];
 	LASSERT(next != NULL);
-	LASSERT(next->do_index_ops != NULL);
-
 	rc = next->do_ops->do_index_try(env, next, &dt_directory_features);
 	if (rc != 0)
 		RETURN(rc);
+
+	LASSERT(next->do_index_ops != NULL);
 
 	it_next = next->do_index_ops->dio_it.init(env, next, it->lit_attr);
 	if (!IS_ERR(it_next)) {
