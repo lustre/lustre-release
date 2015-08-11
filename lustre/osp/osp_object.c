@@ -935,32 +935,35 @@ int osp_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	if (unlikely(obj->opo_non_exist))
 		RETURN(-ENOENT);
 
-	oxe = osp_oac_xattr_find(obj, name, false);
-	if (oxe != NULL) {
-		spin_lock(&obj->opo_lock);
-		if (oxe->oxe_ready) {
-			if (!oxe->oxe_exist)
-				GOTO(unlock, rc = -ENODATA);
+	/* Only cache xattr for OST object */
+	if (!osp->opd_connect_mdt) {
+		oxe = osp_oac_xattr_find(obj, name, false);
+		if (oxe != NULL) {
+			spin_lock(&obj->opo_lock);
+			if (oxe->oxe_ready) {
+				if (!oxe->oxe_exist)
+					GOTO(unlock, rc = -ENODATA);
 
-			if (buf->lb_buf == NULL)
+				if (buf->lb_buf == NULL)
+					GOTO(unlock, rc = oxe->oxe_vallen);
+
+				if (buf->lb_len < oxe->oxe_vallen)
+					GOTO(unlock, rc = -ERANGE);
+
+				memcpy(buf->lb_buf, oxe->oxe_value,
+				       oxe->oxe_vallen);
+
 				GOTO(unlock, rc = oxe->oxe_vallen);
 
-			if (buf->lb_len < oxe->oxe_vallen)
-				GOTO(unlock, rc = -ERANGE);
-
-			memcpy(buf->lb_buf, oxe->oxe_value, oxe->oxe_vallen);
-
-			GOTO(unlock, rc = oxe->oxe_vallen);
-
 unlock:
+				spin_unlock(&obj->opo_lock);
+				osp_oac_xattr_put(oxe);
+
+				return rc;
+			}
 			spin_unlock(&obj->opo_lock);
-			osp_oac_xattr_put(oxe);
-
-			return rc;
 		}
-		spin_unlock(&obj->opo_lock);
 	}
-
 	update = osp_update_request_create(dev);
 	if (IS_ERR(update))
 		GOTO(out, rc = PTR_ERR(update));
@@ -1029,7 +1032,7 @@ unlock:
 
 	memcpy(buf->lb_buf, rbuf->lb_buf, rbuf->lb_len);
 	rc = rbuf->lb_len;
-	if (obj->opo_ooa == NULL)
+	if (obj->opo_ooa == NULL || osp->opd_connect_mdt)
 		GOTO(out, rc);
 
 	if (oxe == NULL) {
@@ -1143,6 +1146,7 @@ int osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
 		  struct thandle *th)
 {
 	struct osp_object	*o = dt2osp_obj(dt);
+	struct osp_device	*osp = lu2osp_dev(dt->do_lu.lo_dev);
 	struct osp_update_request *update;
 	struct osp_xattr_entry	*oxe;
 	int			rc;
@@ -1156,7 +1160,7 @@ int osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
 
 	rc = osp_update_rpc_pack(env, xattr_set, update, OUT_XATTR_SET,
 				 lu_object_fid(&dt->do_lu), buf, name, fl);
-	if (rc != 0 || o->opo_ooa == NULL)
+	if (rc != 0 || o->opo_ooa == NULL || osp->opd_connect_mdt)
 		RETURN(rc);
 
 	oxe = osp_oac_xattr_find_or_add(o, name, buf->lb_len);
