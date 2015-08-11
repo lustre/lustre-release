@@ -1558,67 +1558,37 @@ found:
 }
 
 /**
- * Put the request to the export list if the request may become
- * a high priority one.
+ * Check if a request should be assigned with a high priority.
+ *
+ * \retval 	< 0: error occurred
+ *		  0: normal RPC request
+ *		 +1: high priority request
  */
 static int ptlrpc_server_hpreq_init(struct ptlrpc_service_part *svcpt,
 				    struct ptlrpc_request *req)
 {
-	struct list_head	*list;
-	int		 rc, hp = 0;
-
+	int rc;
 	ENTRY;
 
-	if (svcpt->scp_service->srv_ops.so_hpreq_handler) {
+	if (svcpt->scp_service->srv_ops.so_hpreq_handler != NULL) {
 		rc = svcpt->scp_service->srv_ops.so_hpreq_handler(req);
 		if (rc < 0)
 			RETURN(rc);
+
 		LASSERT(rc == 0);
 	}
-	if (req->rq_export) {
-		if (req->rq_ops) {
-			/* Perform request specific check. We should do this
-			 * check before the request is added into exp_hp_rpcs
-			 * list otherwise it may hit swab race at LU-1044. */
-			if (req->rq_ops->hpreq_check) {
-				rc = req->rq_ops->hpreq_check(req);
-				/**
-				 * XXX: Out of all current
-				 * ptlrpc_hpreq_ops::hpreq_check(), only
-				 * ldlm_cancel_hpreq_check() can return an
-				 * error code; other functions assert in
-				 * similar places, which seems odd.
-				 * What also does not seem right is that
-				 * handlers for those RPCs do not assert
-				 * on the same checks, but rather handle the
-				 * error cases. e.g. see ost_rw_hpreq_check(),
-				 * and ost_brw_read(), ost_brw_write().
-				 */
-				if (rc < 0)
-					RETURN(rc);
-				LASSERT(rc == 0 || rc == 1);
-				hp = rc;
-			}
-			list = &req->rq_export->exp_hp_rpcs;
-		} else {
-			list = &req->rq_export->exp_reg_rpcs;
-		}
 
-		/* do search for duplicated xid and the adding to the list
-		 * atomically */
-		spin_lock_bh(&req->rq_export->exp_rpc_lock);
-		rc = ptlrpc_server_check_resend_in_progress(req);
-		if (rc < 0) {
-			spin_unlock_bh(&req->rq_export->exp_rpc_lock);
-			RETURN(rc);
+	if (req->rq_export != NULL && req->rq_ops != NULL) {
+		/* Perform request specific check. We should do this
+		 * check before the request is added into exp_hp_rpcs
+		 * list otherwise it may hit swab race at LU-1044. */
+		if (req->rq_ops->hpreq_check != NULL) {
+			rc = req->rq_ops->hpreq_check(req);
+			LASSERT(rc <= 1); /* can only return error, 0, or 1 */
 		}
-		list_add(&req->rq_exp_list, list);
-		spin_unlock_bh(&req->rq_export->exp_rpc_lock);
 	}
 
-	ptlrpc_nrs_req_initialize(svcpt, req, !!hp);
-
-	RETURN(hp);
+	RETURN(rc);
 }
 
 /** Remove the request from the export list. */
@@ -1665,12 +1635,37 @@ EXPORT_SYMBOL(ptlrpc_hpreq_handler);
 static int ptlrpc_server_request_add(struct ptlrpc_service_part *svcpt,
 				     struct ptlrpc_request *req)
 {
-	int	rc;
+	int rc;
+	bool hp;
 	ENTRY;
 
 	rc = ptlrpc_server_hpreq_init(svcpt, req);
 	if (rc < 0)
 		RETURN(rc);
+
+	hp = rc > 0;
+	ptlrpc_nrs_req_initialize(svcpt, req, hp);
+
+	if (req->rq_export != NULL) {
+		struct obd_export *exp = req->rq_export;
+
+		/* do search for duplicated xid and the adding to the list
+		 * atomically */
+		spin_lock_bh(&exp->exp_rpc_lock);
+		rc = ptlrpc_server_check_resend_in_progress(req);
+		if (rc < 0) {
+			spin_unlock_bh(&exp->exp_rpc_lock);
+
+			ptlrpc_nrs_req_finalize(req);
+			RETURN(rc);
+		}
+
+		if (hp || req->rq_ops != NULL)
+			list_add(&req->rq_exp_list, &exp->exp_hp_rpcs);
+		else
+			list_add(&req->rq_exp_list, &exp->exp_reg_rpcs);
+		spin_unlock_bh(&exp->exp_rpc_lock);
+	}
 
 	/* the current thread is not the processing thread for this request
 	 * since that, but request is in exp_hp_list and can be find there.
@@ -1679,7 +1674,7 @@ static int ptlrpc_server_request_add(struct ptlrpc_service_part *svcpt,
 	req->rq_svc_thread = NULL;
 	req->rq_session.lc_thread = NULL;
 
-	ptlrpc_nrs_req_add(svcpt, req, !!rc);
+	ptlrpc_nrs_req_add(svcpt, req, hp);
 
 	RETURN(0);
 }
