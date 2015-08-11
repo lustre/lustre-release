@@ -999,7 +999,11 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 	if (err)
 		GOTO(out_free, err);
 	lsi->lsi_flags |= LSI_BDI_INITIALIZED;
+#ifdef HAVE_BDI_CAP_MAP_COPY
 	lsi->lsi_bdi.capabilities = BDI_CAP_MAP_COPY;
+#else
+	lsi->lsi_bdi.capabilities = 0;
+#endif
 	err = ll_bdi_register(&lsi->lsi_bdi);
 	if (err)
 		GOTO(out_free, err);
@@ -1213,9 +1217,11 @@ static struct inode *ll_iget_anon_dir(struct super_block *sb,
 		LTIME_S(inode->i_ctime) = 0;
 		inode->i_rdev = 0;
 
+#ifdef HAVE_BACKING_DEV_INFO
 		/* initializing backing dev info. */
 		inode->i_mapping->backing_dev_info =
 						&s2lsi(inode->i_sb)->lsi_bdi;
+#endif
 		inode->i_op = &ll_dir_inode_operations;
 		inode->i_fop = &ll_dir_operations;
 		lli->lli_fid = *fid;
@@ -1972,10 +1978,10 @@ int ll_read_inode2(struct inode *inode, void *opaque)
 
         /* OIDEBUG(inode); */
 
-        /* initializing backing dev info. */
-        inode->i_mapping->backing_dev_info = &s2lsi(inode->i_sb)->lsi_bdi;
-
-
+#ifdef HAVE_BACKING_DEV_INFO
+	/* initializing backing dev info. */
+	inode->i_mapping->backing_dev_info = &s2lsi(inode->i_sb)->lsi_bdi;
+#endif
         if (S_ISREG(inode->i_mode)) {
                 struct ll_sb_info *sbi = ll_i2sbi(inode);
                 inode->i_op = &ll_file_inode_operations;
