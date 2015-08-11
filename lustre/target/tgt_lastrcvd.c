@@ -1871,6 +1871,12 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 		spin_unlock(&tgt->lut_obd->obd_dev_lock);
 	}
 
+	spin_lock(&tgt->lut_translock);
+	/* obd_last_committed is used for compatibility
+	 * with other lustre recovery code */
+	tgt->lut_obd->obd_last_committed = tgt->lut_last_transno;
+	spin_unlock(&tgt->lut_translock);
+
 	rc = 0;
 
 out:
