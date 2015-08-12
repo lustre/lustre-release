@@ -228,7 +228,6 @@ void cfs_srand(unsigned int, unsigned int);
 void cfs_get_random_bytes(void *buf, int size);
 
 #include <libcfs/byteorder.h>
-#include <libcfs/err.h>
 #include <libcfs/libcfs_debug.h>
 #include <libcfs/libcfs_private.h>
 #ifdef __KERNEL__
@@ -244,7 +243,6 @@ void cfs_get_random_bytes(void *buf, int size);
 # include <libcfs/libcfs_hash.h>
 # include <libcfs/libcfs_heap.h>
 # include <libcfs/libcfs_fail.h>
-#endif /* __KERNEL__ */
 
 /* container_of depends on "likely" which is defined in libcfs_private.h */
 static inline void *__container_of(const void *ptr, unsigned long shift)
@@ -257,5 +255,7 @@ static inline void *__container_of(const void *ptr, unsigned long shift)
 
 #define container_of0(ptr, type, member)				\
 	((type *)__container_of((ptr), offsetof(type, member)))
+
+#endif /* __KERNEL__ */
 
 #endif /* _LIBCFS_LIBCFS_H_ */
