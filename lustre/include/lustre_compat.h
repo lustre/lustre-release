@@ -184,6 +184,7 @@ unsigned int ll_crypto_tfm_alg_min_keysize(struct crypto_blkcipher *tfm)
 #ifdef HAVE_BVEC_ITER
 #define bio_idx(bio)			(bio->bi_iter.bi_idx)
 #define bio_set_sector(bio, sector)	(bio->bi_iter.bi_sector = sector)
+#define bvl_to_page(bvl)		(bvl.bv_page)
 #else
 #define bio_idx(bio)			(bio->bi_idx)
 #define bio_set_sector(bio, sector)	(bio->bi_sector = sector)
@@ -191,7 +192,7 @@ unsigned int ll_crypto_tfm_alg_min_keysize(struct crypto_blkcipher *tfm)
 #ifndef HAVE_BIO_END_SECTOR
 #define bio_end_sector(bio)		(bio->bi_sector + bio_sectors(bio))
 #endif
-#define bvec_iter_page(bvec, iter)	(*bvec->bv_page)
+#define bvl_to_page(bvl)		(bvl->bv_page)
 #endif
 
 #ifndef HAVE_BLK_QUEUE_MAX_SEGMENTS

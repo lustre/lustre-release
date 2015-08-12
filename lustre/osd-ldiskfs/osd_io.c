@@ -181,8 +181,8 @@ static void dio_complete_routine(struct bio *bio, int error)
 	if (!test_bit(__REQ_WRITE, &bio->bi_rw)) {
 		bio_for_each_segment(bvl, bio, iter) {
 			if (likely(error == 0))
-				SetPageUptodate(bvec_iter_page(&bvl, iter));
-			LASSERT(PageLocked(bvec_iter_page(&bvl, iter)));
+				SetPageUptodate(bvl_to_page(bvl));
+			LASSERT(PageLocked(bvl_to_page(bvl)));
 		}
 		atomic_dec(&iobuf->dr_dev->od_r_in_flight);
 	} else {
