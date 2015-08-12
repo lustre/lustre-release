@@ -5824,19 +5824,21 @@ mds_on_old_device() {
 }
 
 get_mdtosc_proc_path() {
-    local mds_facet=$1
-    local ost_label=${2:-"*OST*"}
+	local mds_facet=$1
+	local ost_label=${2:-"*OST*"}
 
-    [ "$mds_facet" = "mds" ] && mds_facet=$SINGLEMDS
-    local mdt_label=$(convert_facet2label $mds_facet)
-    local mdt_index=$(echo $mdt_label | sed -e 's/^.*-//')
+	[ "$mds_facet" = "mds" ] && mds_facet=$SINGLEMDS
+	local mdt_label=$(convert_facet2label $mds_facet)
+	local mdt_index=$(echo $mdt_label | sed -e 's/^.*-//')
 
-    if [ $(lustre_version_code $mds_facet) -le $(version_code 1.8.0) ] ||
-       mds_on_old_device $mds_facet; then
-        echo "${ost_label}-osc"
-    else
-        echo "${ost_label}-osc-${mdt_index}"
-    fi
+	if [ $(lustre_version_code $mds_facet) -le $(version_code 1.8.0) ] ||
+	   mds_on_old_device $mds_facet; then
+		echo "${ost_label}-osc"
+	elif [[ $ost_label = *OST* ]]; then
+		echo "${ost_label}-osc-${mdt_index}"
+	else
+		echo "${ost_label}-osp-${mdt_index}"
+	fi
 }
 
 get_osc_import_name() {
@@ -5950,8 +5952,8 @@ _wait_osc_import_state() {
 	local facet=$1
 	local ost_facet=$2
 	local expected=$3
-	local ost=$(get_osc_import_name $facet $ost_facet)
-	local param="osc.${ost}.ost_server_uuid"
+	local target=$(get_osc_import_name $facet $ost_facet)
+	local param="osc.${target}.ost_server_uuid"
 	local params=$param
 	local i=0
 
@@ -5975,6 +5977,16 @@ _wait_osc_import_state() {
 			params=$($LCTL list_param $param 2>/dev/null || true)
 		done
 	fi
+
+	if [[ $ost_facet = mds* ]]; then
+		# no OSP connection to itself
+		if [[ $facet = $ost_facet ]]; then
+			return 0
+		fi
+		param="osp.${target}.mdt_server_uuid"
+		params=$param
+	fi
+
 	if ! do_rpc_nodes "$(facet_active_host $facet)" \
 			wait_import_state $expected "$params" $maxtime; then
 		error "import is not in ${expected} state"
@@ -6053,6 +6065,16 @@ wait_mgc_import_state() {
 	else
 		_wait_mgc_import_state "$facet" "$expected"
 				       $error_on_failure || return
+	fi
+}
+
+wait_dne_interconnect() {
+	local num
+
+	if [ $MDSCOUNT -gt 1 ]; then
+		for num in $(seq $MDSCOUNT); do
+			wait_osc_import_state mds mds$num FULL
+		done
 	fi
 }
 
