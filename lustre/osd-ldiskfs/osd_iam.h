@@ -1020,7 +1020,7 @@ int iam_lvar_create(struct inode *obj,
 #define dxtrace(command) 
 #endif
 
-#define BH_DXLock        25
+#define BH_DXLock        (BH_BITMAP_UPTODATE + 1)
 #define DX_DEBUG (0)
 #if DX_DEBUG
 static struct iam_lock_stats {
