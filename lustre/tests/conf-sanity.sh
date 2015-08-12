@@ -4349,6 +4349,10 @@ test_68() {
 }
 run_test 68 "be able to reserve specific sequences in FLDB"
 
+# Test 69: is about the total number of objects ever created on an OST.
+# so that when it is reformatted the normal MDS->OST orphan recovery won't
+# just "precreate" the missing objects. In the past it might try to recreate
+# millions of objects after an OST was reformatted
 test_69() {
 	local server_version=$(lustre_version_code $SINGLEMDS)
 
@@ -4360,25 +4364,50 @@ test_69() {
 		skip "Need MDS version at least 2.5.0" && return
 
 	setup
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 
 	# use OST0000 since it probably has the most creations
 	local OSTNAME=$(ostname_from_index 0)
 	local mdtosc_proc1=$(get_mdtosc_proc_path mds1 $OSTNAME)
+	local last_id=$(do_facet mds1 $LCTL get_param -n \
+			osc.$mdtosc_proc1.prealloc_last_id)
 
-	# Want to have OST LAST_ID over 1.5 * OST_MAX_PRECREATE to
-	# verify that the LAST_ID recovery is working properly.  If
+	# Want to have OST LAST_ID over 5 * OST_MAX_PRECREATE to
+	# verify that the LAST_ID recovery is working properly. If
 	# not, then the OST will refuse to allow the MDS connect
 	# because the LAST_ID value is too different from the MDS
 	#define OST_MAX_PRECREATE=20000
-	local num_create=$((20000 * 3))
+	local ost_max_pre=20000
+	local num_create=$(( ost_max_pre * 5 + 1 - last_id))
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
-	$SETSTRIPE -i 0 $DIR/$tdir || error "$SETSTRIPE -i 0 $DIR/$tdir failed"
-	createmany -o $DIR/$tdir/$tfile- $num_create ||
-		error "createmany: failed to create $num_create files: $?"
+	# If the LAST_ID is already over 5 * OST_MAX_PRECREATE, we don't
+	# need to create any files. So, skip this section.
+	if [ $num_create -gt 0 ]; then
+		# Check the number of inodes available on OST0
+		local files=0
+		local ifree=$($LFS df -i $MOUNT | awk '/OST0000/ { print $4 }')
+		log "On OST0, $ifree inodes available. Want $num_create."
+
+		$SETSTRIPE -i 0 $DIR/$tdir ||
+			error "$SETSTRIPE -i 0 $DIR/$tdir failed"
+		if [ $ifree -lt 10000 ]; then
+			files=$(( ifree - 50 ))
+		else
+			files=10000
+		fi
+
+		local j=$((num_create / files + 1))
+		for i in $(seq 1 $j); do
+			createmany -o $DIR/$tdir/$tfile-$i- $files ||
+				error "createmany fail create $files files: $?"
+			unlinkmany $DIR/$tdir/$tfile-$i- $files ||
+				error "unlinkmany failed unlink $files files"
+		done
+	fi
+
 	# delete all of the files with objects on OST0 so the
 	# filesystem is not inconsistent later on
-	$LFS find $MOUNT --ost 0 | xargs rm
+	$LFS find $MOUNT --ost 0 -print0 | xargs -0 rm
 
 	umount_client $MOUNT || error "umount client failed"
 	stop_ost || error "OST0 stop failure"
@@ -4393,6 +4422,10 @@ test_69() {
 	local idx=$($GETSTRIPE -i $DIR/$tdir/$tfile-last)
 	[ $idx -ne 0 ] && error "$DIR/$tdir/$tfile-last on $idx not 0" || true
 
+	local iused=$($LFS df -i $MOUNT | awk '/OST0000/ { print $3 }')
+	log "On OST0, $iused used inodes"
+	[ $iused -ge $((ost_max_pre/2 + 1000)) ] &&
+		error "OST replacement created too many inodes; $iused"
 	cleanup || error "cleanup failed with $?"
 }
 run_test 69 "replace an OST with the same index"
