@@ -2309,7 +2309,7 @@ int mdt_check_resent_lock(struct mdt_thread_info *info,
 int mdt_remote_object_lock(struct mdt_thread_info *mti,
 			   struct mdt_object *o, const struct lu_fid *fid,
 			   struct lustre_handle *lh, ldlm_mode_t mode,
-			   __u64 ibits)
+			   __u64 ibits, bool nonblock)
 {
 	struct ldlm_enqueue_info *einfo = &mti->mti_einfo;
 	ldlm_policy_data_t *policy = &mti->mti_policy;
@@ -2328,6 +2328,8 @@ int mdt_remote_object_lock(struct mdt_thread_info *mti,
 	einfo->ei_cb_cp = ldlm_completion_ast;
 	einfo->ei_enq_slave = 0;
 	einfo->ei_res_id = res_id;
+	if (nonblock)
+		einfo->ei_nonblock = 1;
 
 	memset(policy, 0, sizeof(*policy));
 	policy->l_inodebits.bits = ibits;
@@ -2433,6 +2435,7 @@ mdt_object_lock_internal(struct mdt_thread_info *info, struct mdt_object *o,
 			 struct mdt_lock_handle *lh, __u64 ibits,
 			 bool nonblock)
 {
+	struct mdt_lock_handle *local_lh = NULL;
 	int rc;
 	ENTRY;
 
@@ -2442,6 +2445,18 @@ mdt_object_lock_internal(struct mdt_thread_info *info, struct mdt_object *o,
 	/* XXX do not support PERM/LAYOUT/XATTR lock for remote object yet */
 	ibits &= ~(MDS_INODELOCK_PERM | MDS_INODELOCK_LAYOUT |
 		   MDS_INODELOCK_XATTR);
+
+	/* Only enqueue LOOKUP lock for remote object */
+	if (ibits & MDS_INODELOCK_LOOKUP) {
+		rc = mdt_object_local_lock(info, o, lh,
+					   MDS_INODELOCK_LOOKUP,
+					   nonblock);
+		if (rc != ELDLM_OK)
+			RETURN(rc);
+
+		local_lh = lh;
+	}
+
 	if (ibits & MDS_INODELOCK_UPDATE) {
 		/* Sigh, PDO needs to enqueue 2 locks right now, but
 		 * enqueue RPC can only request 1 lock, to avoid extra
@@ -2459,18 +2474,12 @@ mdt_object_lock_internal(struct mdt_thread_info *info, struct mdt_object *o,
 		rc = mdt_remote_object_lock(info, o, mdt_object_fid(o),
 					    &lh->mlh_rreg_lh,
 					    lh->mlh_rreg_mode,
-					    MDS_INODELOCK_UPDATE);
-		if (rc != ELDLM_OK)
+					    MDS_INODELOCK_UPDATE, nonblock);
+		if (rc != ELDLM_OK) {
+			if (local_lh != NULL)
+				mdt_object_unlock(info, o, local_lh, rc);
 			RETURN(rc);
-	}
-
-	/* Only enqueue LOOKUP lock for remote object */
-	if (ibits & MDS_INODELOCK_LOOKUP) {
-		rc = mdt_object_local_lock(info, o, lh,
-					   MDS_INODELOCK_LOOKUP,
-					   nonblock);
-		if (rc != ELDLM_OK)
-			RETURN(rc);
+		}
 	}
 
 	RETURN(0);

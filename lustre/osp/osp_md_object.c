@@ -898,6 +898,9 @@ static int osp_md_object_lock(const struct lu_env *env,
 	if (mode > 0)
 		return ELDLM_OK;
 
+	if (einfo->ei_nonblock)
+		flags |= LDLM_FL_BLOCK_NOWAIT;
+
 	req = ldlm_enqueue_pack(osp->opd_exp, 0);
 	if (IS_ERR(req))
 		RETURN(PTR_ERR(req));

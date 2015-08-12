@@ -912,7 +912,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 		rc = mdt_remote_object_lock(info, mp, mdt_object_fid(mc),
 					    &child_lh->mlh_rreg_lh,
 					    child_lh->mlh_rreg_mode,
-					    MDS_INODELOCK_LOOKUP);
+					    MDS_INODELOCK_LOOKUP, false);
 		if (rc != ELDLM_OK)
 			GOTO(put_child, rc);
 
@@ -1152,7 +1152,7 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
 		rc = mdt_remote_object_lock(info, obj,
 					    &LUSTRE_BFL_FID, lh,
 					    LCK_EX,
-					    MDS_INODELOCK_UPDATE);
+					    MDS_INODELOCK_UPDATE, false);
 		mdt_object_put(info->mti_env, obj);
 	} else {
 		struct ldlm_namespace	*ns = info->mti_mdt->mdt_namespace;
@@ -1309,15 +1309,20 @@ static int mdt_lock_objects_in_linkea(struct mdt_thread_info *info,
 			GOTO(out, rc = -ENOMEM);
 		}
 
+		/* Since this needs to lock all of objects in linkea, to avoid
+		 * deadlocks, because it does not follow parent-child order as
+		 * other MDT operation, let's use try_lock here, i.e. it will
+		 * return immediately once there are conflict locks, and return
+		 * EBUSY to client */
 		mdt_lock_pdo_init(&mll->mll_lh, LCK_PW, &name);
-		rc = mdt_object_lock(info, mdt_pobj, &mll->mll_lh,
-				     MDS_INODELOCK_UPDATE);
-		if (rc != 0) {
-			CERROR("%s: cannot lock "DFID": rc =%d\n",
+		rc = mdt_object_lock_try(info, mdt_pobj, &mll->mll_lh,
+					 MDS_INODELOCK_UPDATE);
+		if (rc == 0) {
+			CDEBUG(D_ERROR, "%s: cannot lock "DFID": rc =%d\n",
 			       mdt_obd_name(mdt), PFID(&fid), rc);
 			mdt_object_put(info->mti_env, mdt_pobj);
 			OBD_FREE_PTR(mll);
-			GOTO(out, rc);
+			GOTO(out, rc = -EBUSY);
 		}
 
 		INIT_LIST_HEAD(&mll->mll_list);
@@ -1475,7 +1480,7 @@ out_lease:
 		rc = mdt_remote_object_lock(info, msrcdir, mdt_object_fid(mold),
 					    &lh_childp->mlh_rreg_lh,
 					    lh_childp->mlh_rreg_mode,
-					    MDS_INODELOCK_LOOKUP);
+					    MDS_INODELOCK_LOOKUP, false);
 		if (rc != ELDLM_OK)
 			GOTO(out_unlock_list, rc);
 
@@ -1527,7 +1532,7 @@ out_lease:
 					    mdt_object_fid(mnew),
 					    &lh_tgtp->mlh_rreg_lh,
 					    lh_tgtp->mlh_rreg_mode,
-					    MDS_INODELOCK_UPDATE);
+					    MDS_INODELOCK_UPDATE, false);
 		if (rc != 0) {
 			lh_tgtp = NULL;
 			GOTO(out_put_new, rc);
@@ -1840,7 +1845,8 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 						    mdt_object_fid(mold),
 						    &lh_oldp->mlh_rreg_lh,
 						    lh_oldp->mlh_rreg_mode,
-						    MDS_INODELOCK_LOOKUP);
+						    MDS_INODELOCK_LOOKUP,
+						    false);
 			if (rc != ELDLM_OK)
 				GOTO(out_put_new, rc);
 
@@ -1885,7 +1891,8 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 						    mdt_object_fid(mold),
 						    &lh_oldp->mlh_rreg_lh,
 						    lh_oldp->mlh_rreg_mode,
-						    MDS_INODELOCK_LOOKUP);
+						    MDS_INODELOCK_LOOKUP,
+						    false);
 			if (rc != ELDLM_OK)
 				GOTO(out_put_new, rc);
 
