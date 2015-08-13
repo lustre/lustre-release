@@ -608,7 +608,7 @@ int jt_lcfg_mgsparam(int argc, char **argv)
 	struct lustre_cfg *lcfg;
 	char *buf = NULL;
 
-#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 7, 53, 0)
+#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 8, 53, 0)
 	fprintf(stderr, "warning: 'lctl conf_param' is deprecated, "
 		"use 'lctl set_param -P' instead\n");
 #endif
