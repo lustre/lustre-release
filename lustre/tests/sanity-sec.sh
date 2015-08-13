@@ -990,7 +990,7 @@ wait_nm_sync() {
 	if ! $is_sync; then
 		echo MGS
 		echo $out1
-		echo OTHER
+		echo OTHER - IP: $node_ip
 		echo $out2
 		error "mgs and $nodemap_name ${key} mismatch, $i attempts"
 	fi
@@ -1608,19 +1608,13 @@ run_test 25 "test save and reload nodemap config"
 test_26() {
 	nodemap_version_check || return 0
 
-	local large_i=13000
+	local large_i=32000
 
-	for ((i = 0; i < large_i; i++)); do
-		((i % 1000 == 0)) && echo $i
-		do_facet mgs $LCTL nodemap_add c$i ||
-			error "cannot add nodemap $i to config"
-	done
+	do_facet mgs "seq -f 'c%g' $large_i | xargs -n1 $LCTL nodemap_add"
+	wait_nm_sync c$large_i admin_nodemap
 
-	for ((i = 0; i < large_i; i++)); do
-		((i % 1000 == 0)) && echo $i
-		do_facet mgs $LCTL nodemap_del c$i ||
-			error "cannot delete nodemap $i from config"
-	done
+	do_facet mgs "seq -f 'c%g' $large_i | xargs -n1 $LCTL nodemap_del"
+	wait_nm_sync c$large_i admin_nodemap
 }
 run_test 26 "test transferring very large nodemap"
 

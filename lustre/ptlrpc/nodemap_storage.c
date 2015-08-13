@@ -839,14 +839,27 @@ int nodemap_index_read(struct lu_env *env,
 		       const struct lu_rdpg *rdpg)
 {
 	struct dt_object	*nodemap_idx = ncf->ncf_obj;
+	__u64			 version;
 	int			 rc = 0;
 
 	ii->ii_keysize = dt_nodemap_features.dif_keysize_max;
 	ii->ii_recsize = dt_nodemap_features.dif_recsize_max;
 
 	dt_read_lock(env, nodemap_idx, 0);
-	rc = dt_index_walk(env, nodemap_idx, rdpg, NULL, ii);
-	CDEBUG(D_INFO, "walked index, hashend %llx\n", ii->ii_hash_end);
+	version = dt_version_get(env, nodemap_idx);
+	if (rdpg->rp_hash != 0 && ii->ii_version != version) {
+		CDEBUG(D_INFO, "nodemap config changed while sending, "
+			       "old "LPU64", new "LPU64"\n",
+		       ii->ii_version,
+		       version);
+		ii->ii_hash_end = 0;
+	} else {
+		rc = dt_index_walk(env, nodemap_idx, rdpg, NULL, ii);
+		CDEBUG(D_INFO, "walked index, hashend %llx\n", ii->ii_hash_end);
+	}
+
+	if (rc >= 0)
+		ii->ii_version = version;
 
 	dt_read_unlock(env, nodemap_idx);
 	return rc;
@@ -873,6 +886,7 @@ int nodemap_get_config_req(struct obd_device *mgs_obd,
 	struct idx_info nodemap_ii;
 	struct ptlrpc_bulk_desc *desc;
 	struct l_wait_info lwi;
+	struct tg_export_data *rqexp_ted = &req->rq_export->exp_target_data;
 	int i;
 	int page_count;
 	int bytes = 0;
@@ -907,12 +921,15 @@ int nodemap_get_config_req(struct obd_device *mgs_obd,
 	rdpg.rp_hash = body->mcb_offset;
 	nodemap_ii.ii_magic = IDX_INFO_MAGIC;
 	nodemap_ii.ii_flags = II_FL_NOHASH;
+	nodemap_ii.ii_version = rqexp_ted->ted_nodemap_version;
 
 	bytes = nodemap_index_read(req->rq_svc_thread->t_env,
 				   mgs_obd->u.obt.obt_nodemap_config_file,
 				   &nodemap_ii, &rdpg);
 	if (bytes < 0)
 		GOTO(out, rc = bytes);
+
+	rqexp_ted->ted_nodemap_version = nodemap_ii.ii_version;
 
 	res = req_capsule_server_get(&req->rq_pill, &RMF_MGS_CONFIG_RES);
 	if (res == NULL)

@@ -84,6 +84,9 @@ struct tg_export_data {
 	struct lu_nodemap	*ted_nodemap;
 	struct list_head	ted_nodemap_member;
 
+	/** last version of nodemap config sent to client */
+	__u64			ted_nodemap_version;
+
 	/* Every reply data fields below are
 	 * protected by ted_lcd_lock */
 	/** List of reply data */

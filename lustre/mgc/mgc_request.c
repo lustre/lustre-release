@@ -1577,19 +1577,8 @@ static int mgc_process_recover_nodemap_log(struct obd_device *obd,
 	struct config_llog_instance *cfg = &cld->cld_cfg;
 	struct mgs_config_body *body;
 	struct mgs_config_res *res;
-
-	/* When a nodemap config is received, we build a new nodemap config,
-	 * with new nodemap structs. We keep track of the most recently added
-	 * nodemap since the config is read ordered by nodemap_id, and so it
-	 * is likely that the next record will be related. Because access to
-	 * the nodemaps is single threaded until the nodemap_config is active,
-	 * we don't need to reference count with recent_nodemap, though
-	 * recent_nodemap should be set to NULL when the nodemap_config
-	 * is either destroyed or set active.
-	 */
 	struct nodemap_config *new_config = NULL;
 	struct lu_nodemap *recent_nodemap = NULL;
-
 	struct ptlrpc_bulk_desc *desc;
 	struct page **pages;
 	__u64 config_read_offset = 0;
@@ -1622,8 +1611,9 @@ static int mgc_process_recover_nodemap_log(struct obd_device *obd,
                         GOTO(out, rc = -ENOMEM);
         }
 
+again:
 #ifdef HAVE_SERVER_SUPPORT
-	if (cld_is_nodemap(cld)) {
+	if (cld_is_nodemap(cld) && config_read_offset == 0) {
 		new_config = nodemap_config_alloc();
 		if (IS_ERR(new_config)) {
 			rc = PTR_ERR(new_config);
@@ -1632,7 +1622,6 @@ static int mgc_process_recover_nodemap_log(struct obd_device *obd,
 		}
 	}
 #endif
-again:
 	LASSERT(cld_is_recover(cld) || cld_is_nodemap(cld));
 	LASSERT(mutex_is_locked(&cld->cld_lock));
 	req = ptlrpc_request_alloc(class_exp2cliimp(cld->cld_mgcexp),
@@ -1705,6 +1694,20 @@ again:
 		GOTO(out, rc = -EINVAL);
 
 	if (ealen == 0) { /* no logs transferred */
+#ifdef HAVE_SERVER_SUPPORT
+		/* config changed since first read RPC */
+		if (cld_is_nodemap(cld) && config_read_offset == 0) {
+			recent_nodemap = NULL;
+			nodemap_config_dealloc(new_config);
+			new_config = NULL;
+
+			CDEBUG(D_INFO, "nodemap config changed in transit, retrying\n");
+
+			/* setting eof to false, we request config again */
+			eof = false;
+			GOTO(out, rc = 0);
+		}
+#endif
 		if (!eof)
 			rc = -EINVAL;
 		GOTO(out, rc);
@@ -1718,6 +1721,15 @@ again:
 		mne_swab = !mne_swab;
 #endif
 
+	/* When a nodemap config is received, we build a new nodemap config,
+	 * with new nodemap structs. We keep track of the most recently added
+	 * nodemap since the config is read ordered by nodemap_id, and so it
+	 * is likely that the next record will be related. Because access to
+	 * the nodemaps is single threaded until the nodemap_config is active,
+	 * we don't need to reference count with recent_nodemap, though
+	 * recent_nodemap should be set to NULL when the nodemap_config
+	 * is either destroyed or set active.
+	 */
 	for (i = 0; i < nrpages && ealen > 0; i++) {
 		int rc2;
 		union lu_page	*ptr;
@@ -1746,15 +1758,17 @@ again:
 	}
 
 out:
-	if (req)
+	if (req) {
 		ptlrpc_req_finished(req);
+		req = NULL;
+	}
 
 	if (rc == 0 && !eof)
 		goto again;
 
 #ifdef HAVE_SERVER_SUPPORT
 	if (new_config != NULL) {
-		recent_nodemap = NULL;
+		/* recent_nodemap cannot be used after set_active/dealloc */
 		if (rc == 0)
 			nodemap_config_set_active(new_config);
 		else
