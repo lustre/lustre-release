@@ -4988,7 +4988,7 @@ log:
 	       "name %s. %s: rc = %d\n", lfsck_lfsck2name(lfsck),
 	       PFID(lfsck_dto2fid(parent)), PFID(lfsck_dto2fid(child)),
 	       type, cname->ln_name,
-	       create ? "Create the lost OST-object as required" :
+	       create ? "Create the lost MDT-object as required" :
 			"Keep the MDT-object there by default", rc);
 
 	if (rc <= 0) {

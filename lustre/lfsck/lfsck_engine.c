@@ -780,8 +780,7 @@ static int lfsck_master_dir_engine(const struct lu_env *env,
 				goto checkpoint;
 		}
 
-		if (ent->lde_attrs & LUDA_IGNORE &&
-		    strcmp(ent->lde_name, dotdot) != 0)
+		if (ent->lde_attrs & LUDA_IGNORE)
 			goto checkpoint;
 
 		/* skip dot entry. */

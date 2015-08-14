@@ -904,6 +904,8 @@ enum lu_dirent_attrs {
 	LUDA_UPGRADE		= 0x1000,
 	/* Ignore this record, go to next directly. */
 	LUDA_IGNORE		= 0x0800,
+	/* Something in the record is unknown, to be verified in further. */
+	LUDA_UNKNOWN		= 0x1000,
 };
 
 #define LU_DIRENT_ATTRS_MASK	0xf800
