@@ -72,6 +72,8 @@ struct lfsck_layout_slave_target {
 	__u64			llst_gen;
 	atomic_t		llst_ref;
 	__u32			llst_index;
+	/* How many times we have failed to get the master status. */
+	int			llst_failures;
 };
 
 struct lfsck_layout_slave_data {
@@ -3442,11 +3444,22 @@ lfsck_layout_slave_async_interpret(const struct lu_env *env,
 	bool				      done  = false;
 
 	if (rc != 0) {
-		/* It is quite probably caused by target crash,
-		 * to make the LFSCK can go ahead, assume that
-		 * the target finished the LFSCK prcoessing. */
-		done = true;
+		/* It is probably caused by network trouble, or target crash,
+		 * it will try several times (depends on the obd_timeout, and
+		 * will not less than 3 times). But to make the LFSCK can go
+		 * ahead, we should not try for ever. After some try but still
+		 * hit failure, it will assume that the target exit the LFSCK
+		 * prcoessing and stop try. */
+		if (rc == -ENOTCONN || rc == -ESHUTDOWN) {
+			int max_try = max_t(int, obd_timeout / 30, 3);
+
+			if (++(llst->llst_failures) > max_try)
+				done = true;
+		} else {
+			done = true;
+		}
 	} else {
+		llst->llst_failures = 0;
 		lr = req_capsule_server_get(&req->rq_pill, &RMF_LFSCK_REPLY);
 		if (lr->lr_status != LS_SCANNING_PHASE1 &&
 		    lr->lr_status != LS_SCANNING_PHASE2)
@@ -3455,8 +3468,9 @@ lfsck_layout_slave_async_interpret(const struct lu_env *env,
 
 	if (done) {
 		CDEBUG(D_LFSCK, "%s: layout LFSCK slave gets the MDT %x "
-		       "status %d\n", lfsck_lfsck2name(com->lc_lfsck),
-		       llst->llst_index, lr != NULL ? lr->lr_status : rc);
+		       "status %d, failures_try %d\n", lfsck_lfsck2name(com->lc_lfsck),
+		       llst->llst_index, lr != NULL ? lr->lr_status : rc,
+		       llst->llst_failures);
 
 		lfsck_layout_llst_del(llsd, llst);
 	}
