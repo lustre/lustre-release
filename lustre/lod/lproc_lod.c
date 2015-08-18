@@ -839,8 +839,10 @@ void lod_procfs_fini(struct lod_device *lod)
 {
 	struct obd_device *obd = lod2obd(lod);
 
-	if (lod->lod_symlink != NULL)
+	if (lod->lod_symlink != NULL) {
 		lprocfs_remove(&lod->lod_symlink);
+		lod->lod_symlink = NULL;
+	}
 
 	if (lod->lod_pool_proc_entry != NULL) {
 		lprocfs_remove(&lod->lod_pool_proc_entry);
