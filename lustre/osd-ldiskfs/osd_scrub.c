@@ -3067,7 +3067,7 @@ int osd_scrub_dump(struct seq_file *m, struct osd_device *dev)
 			      "real-time_speed: "LPU64" objects/sec\n"
 			      "current_position: %u\n"
 			      "lf_scanned: "LPU64"\n"
-			      "lf_reparied: "LPU64"\n"
+			      "lf_repaired: "LPU64"\n"
 			      "lf_failed: "LPU64"\n",
 			      rtime, speed, new_checked, scrub->os_pos_current,
 			      scrub->os_lf_scanned, scrub->os_lf_repaired,
@@ -3080,7 +3080,7 @@ int osd_scrub_dump(struct seq_file *m, struct osd_device *dev)
 			      "real-time_speed: N/A\n"
 			      "current_position: N/A\n"
 			      "lf_scanned: "LPU64"\n"
-			      "lf_reparied: "LPU64"\n"
+			      "lf_repaired: "LPU64"\n"
 			      "lf_failed: "LPU64"\n",
 			      sf->sf_run_time, speed, scrub->os_lf_scanned,
 			      scrub->os_lf_repaired, scrub->os_lf_failed);

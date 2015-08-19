@@ -1072,7 +1072,7 @@ test_14() {
 	mount_client $MOUNT || error "(5) Fail to start client!"
 
 	local LF_REPAIRED=$($SHOW_SCRUB_ON_OST |
-			    awk '/^lf_reparied/ { print $2 }')
+			    awk '/^lf_repa[ri]*ed/ { print $2 }')
 	[ $LF_REPAIRED -gt 0 ] ||
 		error "(6) Some entry under /lost+found should be repaired"
 
