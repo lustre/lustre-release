@@ -1,0 +1,62 @@
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 8fa347b..92b4101 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -2178,6 +2178,7 @@ extern int ext4_ind_remove_space(handle_t *handle, struct inode *inode,
+ /* ioctl.c */
+ extern long ext4_ioctl(struct file *, unsigned int, unsigned long);
+ extern long ext4_compat_ioctl(struct file *, unsigned int, unsigned long);
++extern int __ext4_ioctl_setproject(struct inode *inode, __u32 projid);
+ 
+ /* migrate.c */
+ extern int ext4_ext_migrate(struct inode *);
+diff --git a/fs/ext4/ioctl.c b/fs/ext4/ioctl.c
+index 890f21e..a4443e9 100644
+--- a/fs/ext4/ioctl.c
++++ b/fs/ext4/ioctl.c
+@@ -294,9 +294,8 @@ flags_out:
+ }
+ 
+ #ifdef CONFIG_QUOTA
+-static int ext4_ioctl_setproject(struct file *filp, __u32 projid)
++int __ext4_ioctl_setproject(struct inode *inode, __u32 projid)
+ {
+-	struct inode *inode = file_inode(filp);
+ 	struct super_block *sb = inode->i_sb;
+ 	struct ext4_inode_info *ei = EXT4_I(inode);
+ 	int err, rc;
+@@ -324,10 +323,6 @@ static int ext4_ioctl_setproject(struct file *filp, __u32 projid)
+ 	if (projid_eq(kprojid, EXT4_I(inode)->i_projid))
+ 		return 0;
+ 
+-	err = mnt_want_write_file(filp);
+-	if (err)
+-		return err;
+-
+ 	err = -EPERM;
+ 	mutex_lock(&inode->i_mutex);
+ 	/* Is it quota file? Do not allow user to mess with it */
+@@ -378,6 +373,23 @@ out_stop:
+ 	ext4_journal_stop(handle);
+ out_unlock:
+ 	mutex_unlock(&inode->i_mutex);
++	return err;
++
++
++}
++EXPORT_SYMBOL(__ext4_ioctl_setproject);
++
++static int ext4_ioctl_setproject(struct file *filp, __u32 projid)
++{
++	int err;
++	struct inode *inode = file_inode(filp);
++
++	err = mnt_want_write_file(filp);
++	if (err)
++		return err;
++
++	err = __ext4_ioctl_setproject(inode, projid);
++
+ 	mnt_drop_write_file(filp);
+ 	return err;
+ }

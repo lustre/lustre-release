@@ -28,4 +28,5 @@ rhel7.2/ext4-remove-i_data_sem-from-xattr.patch
 rhel7/ext4-projid-ignore-maxquotas.patch
 rhel7/ext4-projid-feature-support.patch
 rhel7/ext4-projid-quotas.patch
-rhel7ext4-projid-xfs-ioctls.patch
+rhel7/ext4-projid-xfs-ioctls.patch
+rhel7/ext4-export-__ext4_ioctl_setproject-for-lustre.patch
