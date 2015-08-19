@@ -784,21 +784,6 @@ int ofd_attr_get(const struct lu_env *env, struct ofd_object *fo,
 
 	if (ofd_object_exists(fo)) {
 		rc = dt_attr_get(env, ofd_object_child(fo), la);
-
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 53, 0)
-		/* Try to correct for a bug in 2.1.0 (LU-221) that caused
-		 * negative timestamps to appear to be in the far future,
-		 * due old timestamp being stored on disk as an unsigned value.
-		 * This fixes up any bad values stored on disk before
-		 * returning them to the client, and ensures any timestamp
-		 * updates are correct.  LU-1042 */
-		if (unlikely(la->la_atime == LU221_BAD_TIME))
-			la->la_atime = 0;
-		if (unlikely(la->la_mtime == LU221_BAD_TIME))
-			la->la_mtime = 0;
-		if (unlikely(la->la_ctime == LU221_BAD_TIME))
-			la->la_ctime = 0;
-#endif
 	} else {
 		rc = -ENOENT;
 	}

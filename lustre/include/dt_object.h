@@ -2640,8 +2640,6 @@ static inline int dt_lookup(const struct lu_env *env,
         return ret;
 }
 
-#define LU221_BAD_TIME (0x80000000U + 24 * 3600)
-
 struct dt_find_hint {
 	struct lu_fid        *dfh_fid;
 	struct dt_device     *dfh_dt;
