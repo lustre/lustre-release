@@ -277,7 +277,7 @@ static inline int osp_precreate_near_empty_nolock(const struct lu_env *env,
 
 	/* don't consider new precreation till OST is healty and
 	 * has free space */
-	return ((window - d->opd_pre_reserved < d->opd_pre_grow_count / 2) &&
+	return ((window - d->opd_pre_reserved < d->opd_pre_create_count / 2) &&
 		(d->opd_pre_status == 0));
 }
 
@@ -575,9 +575,9 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 	}
 
 	spin_lock(&d->opd_pre_lock);
-	if (d->opd_pre_grow_count > d->opd_pre_max_grow_count / 2)
-		d->opd_pre_grow_count = d->opd_pre_max_grow_count / 2;
-	grow = d->opd_pre_grow_count;
+	if (d->opd_pre_create_count > d->opd_pre_max_create_count / 2)
+		d->opd_pre_create_count = d->opd_pre_max_create_count / 2;
+	grow = d->opd_pre_create_count;
 	spin_unlock(&d->opd_pre_lock);
 
 	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
@@ -633,13 +633,13 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 	if (diff < grow) {
 		/* the OST has not managed to create all the
 		 * objects we asked for */
-		d->opd_pre_grow_count = max(diff, OST_MIN_PRECREATE);
-		d->opd_pre_grow_slow = 1;
+		d->opd_pre_create_count = max(diff, OST_MIN_PRECREATE);
+		d->opd_pre_create_slow = 1;
 	} else {
 		/* the OST is able to keep up with the work,
-		 * we could consider increasing grow_count
+		 * we could consider increasing create_count
 		 * next time if needed */
-		d->opd_pre_grow_slow = 0;
+		d->opd_pre_create_slow = 0;
 	}
 
 	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
@@ -861,10 +861,10 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	spin_lock(&d->opd_pre_lock);
 	diff = osp_fid_diff(&d->opd_last_used_fid, last_fid);
 	if (diff > 0) {
-		d->opd_pre_grow_count = OST_MIN_PRECREATE + diff;
+		d->opd_pre_create_count = OST_MIN_PRECREATE + diff;
 		d->opd_pre_last_created_fid = d->opd_last_used_fid;
 	} else {
-		d->opd_pre_grow_count = OST_MIN_PRECREATE;
+		d->opd_pre_create_count = OST_MIN_PRECREATE;
 		d->opd_pre_last_created_fid = *last_fid;
 	}
 	/*
@@ -874,7 +874,7 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	LASSERT(fid_oid(&d->opd_pre_last_created_fid) <=
 		LUSTRE_DATA_SEQ_MAX_WIDTH);
 	d->opd_pre_used_fid = d->opd_pre_last_created_fid;
-	d->opd_pre_grow_slow = 0;
+	d->opd_pre_create_slow = 0;
 	spin_unlock(&d->opd_pre_lock);
 
 	CDEBUG(D_HA, "%s: Got last_id "DFID" from OST, last_created "DFID
@@ -970,8 +970,8 @@ void osp_pre_update_status(struct osp_device *d, int rc)
 		} else if (old == -ENOSPC) {
 			d->opd_pre_status = 0;
 			spin_lock(&d->opd_pre_lock);
-			d->opd_pre_grow_slow = 0;
-			d->opd_pre_grow_count = OST_MIN_PRECREATE;
+			d->opd_pre_create_slow = 0;
+			d->opd_pre_create_count = OST_MIN_PRECREATE;
 			spin_unlock(&d->opd_pre_lock);
 			wake_up(&d->opd_pre_waitq);
 			CDEBUG(D_INFO, "%s: no space: "LPU64" blocks, "LPU64
@@ -1312,12 +1312,12 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 		 * increase number of precreations
 		 */
 		precreated = osp_objs_precreated(env, d);
-		if (d->opd_pre_grow_count < d->opd_pre_max_grow_count &&
-		    d->opd_pre_grow_slow == 0 &&
-		    precreated <= (d->opd_pre_grow_count / 4 + 1)) {
+		if (d->opd_pre_create_count < d->opd_pre_max_create_count &&
+		    d->opd_pre_create_slow == 0 &&
+		    precreated <= (d->opd_pre_create_count / 4 + 1)) {
 			spin_lock(&d->opd_pre_lock);
-			d->opd_pre_grow_slow = 1;
-			d->opd_pre_grow_count *= 2;
+			d->opd_pre_create_slow = 1;
+			d->opd_pre_create_count *= 2;
 			spin_unlock(&d->opd_pre_lock);
 		}
 
@@ -1544,10 +1544,10 @@ int osp_init_precreate(struct osp_device *d)
 	d->opd_pre_last_created_fid.f_oid = 1;
 	d->opd_pre_reserved = 0;
 	d->opd_got_disconnected = 1;
-	d->opd_pre_grow_slow = 0;
-	d->opd_pre_grow_count = OST_MIN_PRECREATE;
-	d->opd_pre_min_grow_count = OST_MIN_PRECREATE;
-	d->opd_pre_max_grow_count = OST_MAX_PRECREATE;
+	d->opd_pre_create_slow = 0;
+	d->opd_pre_create_count = OST_MIN_PRECREATE;
+	d->opd_pre_min_create_count = OST_MIN_PRECREATE;
+	d->opd_pre_max_create_count = OST_MAX_PRECREATE;
 
 	spin_lock_init(&d->opd_pre_lock);
 	init_waitqueue_head(&d->opd_pre_waitq);

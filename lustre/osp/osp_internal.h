@@ -84,12 +84,12 @@ struct osp_precreate {
 	wait_queue_head_t		 osp_pre_user_waitq;
 	/* current precreation status: working, failed, stopping? */
 	int				 osp_pre_status;
-	/* how many to precreate next time */
-	int				 osp_pre_grow_count;
-	int				 osp_pre_min_grow_count;
-	int				 osp_pre_max_grow_count;
-	/* whether to grow precreation window next time or not */
-	int				 osp_pre_grow_slow;
+	/* how many objects to precreate next time */
+	int				 osp_pre_create_count;
+	int				 osp_pre_min_create_count;
+	int				 osp_pre_max_create_count;
+	/* whether to increase precreation window next time or not */
+	int				 osp_pre_create_slow;
 	/* cleaning up orphans or recreating missing objects */
 	int				 osp_pre_recovering;
 };
@@ -256,10 +256,10 @@ struct osp_device {
 #define opd_pre_reserved		opd_pre->osp_pre_reserved
 #define opd_pre_user_waitq		opd_pre->osp_pre_user_waitq
 #define opd_pre_status			opd_pre->osp_pre_status
-#define opd_pre_grow_count		opd_pre->osp_pre_grow_count
-#define opd_pre_min_grow_count		opd_pre->osp_pre_min_grow_count
-#define opd_pre_max_grow_count		opd_pre->osp_pre_max_grow_count
-#define opd_pre_grow_slow		opd_pre->osp_pre_grow_slow
+#define opd_pre_create_count		opd_pre->osp_pre_create_count
+#define opd_pre_min_create_count	opd_pre->osp_pre_min_create_count
+#define opd_pre_max_create_count	opd_pre->osp_pre_max_create_count
+#define opd_pre_create_slow		opd_pre->osp_pre_create_slow
 #define opd_pre_recovering		opd_pre->osp_pre_recovering
 
 extern struct kmem_cache *osp_object_kmem;
