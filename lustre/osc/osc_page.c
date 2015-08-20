@@ -597,7 +597,7 @@ static void osc_lru_del(struct client_obd *cli, struct osc_page *opg)
 		 * this osc occupies too many LRU pages and kernel is
 		 * stealing one of them. */
 		if (osc_cache_too_much(cli)) {
-			CDEBUG(D_CACHE, "%s: queue LRU workn", cli_name(cli));
+			CDEBUG(D_CACHE, "%s: queue LRU work\n", cli_name(cli));
 			(void)ptlrpcd_queue_work(cli->cl_lru_work);
 		}
 		wake_up(&osc_lru_waitq);
