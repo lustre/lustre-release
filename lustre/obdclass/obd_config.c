@@ -836,18 +836,23 @@ static int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
 
 static struct list_head lustre_profile_list =
 	LIST_HEAD_INIT(lustre_profile_list);
+static DEFINE_SPINLOCK(lustre_profile_list_lock);
 
 struct lustre_profile *class_get_profile(const char * prof)
 {
-        struct lustre_profile *lprof;
+	struct lustre_profile *lprof;
 
-        ENTRY;
+	ENTRY;
+	spin_lock(&lustre_profile_list_lock);
 	list_for_each_entry(lprof, &lustre_profile_list, lp_list) {
-                if (!strcmp(lprof->lp_profile, prof)) {
-                        RETURN(lprof);
-                }
-        }
-        RETURN(NULL);
+		if (!strcmp(lprof->lp_profile, prof)) {
+			lprof->lp_refs++;
+			spin_unlock(&lustre_profile_list_lock);
+			RETURN(lprof);
+		}
+	}
+	spin_unlock(&lustre_profile_list_lock);
+	RETURN(NULL);
 }
 EXPORT_SYMBOL(class_get_profile);
 
@@ -889,7 +894,12 @@ static int class_add_profile(int proflen, char *prof, int osclen, char *osc,
                 memcpy(lprof->lp_md, mdc, mdclen);
         }
 
+	spin_lock(&lustre_profile_list_lock);
+	lprof->lp_refs = 1;
+	lprof->lp_list_deleted = false;
+
 	list_add(&lprof->lp_list, &lustre_profile_list);
+	spin_unlock(&lustre_profile_list_lock);
         RETURN(err);
 
 out:
@@ -905,39 +915,68 @@ out:
 
 void class_del_profile(const char *prof)
 {
-        struct lustre_profile *lprof;
-        ENTRY;
+	struct lustre_profile *lprof;
+	ENTRY;
 
-        CDEBUG(D_CONFIG, "Del profile %s\n", prof);
+	CDEBUG(D_CONFIG, "Del profile %s\n", prof);
 
-        lprof = class_get_profile(prof);
-        if (lprof) {
+	lprof = class_get_profile(prof);
+	if (lprof) {
+		spin_lock(&lustre_profile_list_lock);
+		/* because get profile increments the ref counter */
+		lprof->lp_refs--;
 		list_del(&lprof->lp_list);
-                OBD_FREE(lprof->lp_profile, strlen(lprof->lp_profile) + 1);
-                OBD_FREE(lprof->lp_dt, strlen(lprof->lp_dt) + 1);
-                if (lprof->lp_md)
-                        OBD_FREE(lprof->lp_md, strlen(lprof->lp_md) + 1);
-                OBD_FREE(lprof, sizeof *lprof);
-        }
-        EXIT;
+		lprof->lp_list_deleted = true;
+		spin_unlock(&lustre_profile_list_lock);
+
+		class_put_profile(lprof);
+	}
+	EXIT;
 }
 EXPORT_SYMBOL(class_del_profile);
+
+void class_put_profile(struct lustre_profile *lprof)
+{
+	spin_lock(&lustre_profile_list_lock);
+	if ((--lprof->lp_refs) > 0) {
+		LASSERT(lprof->lp_refs > 0);
+		spin_unlock(&lustre_profile_list_lock);
+		return;
+	}
+	spin_unlock(&lustre_profile_list_lock);
+
+	/* confirm not a negative number */
+	LASSERT(lprof->lp_refs == 0);
+
+	/* At least one class_del_profile/profiles must be called
+	 * on the target profile or lustre_profile_list will corrupt */
+	LASSERT(lprof->lp_list_deleted);
+	OBD_FREE(lprof->lp_profile, strlen(lprof->lp_profile) + 1);
+	OBD_FREE(lprof->lp_dt, strlen(lprof->lp_dt) + 1);
+	if (lprof->lp_md != NULL)
+		OBD_FREE(lprof->lp_md, strlen(lprof->lp_md) + 1);
+	OBD_FREE(lprof, sizeof(*lprof));
+}
+EXPORT_SYMBOL(class_put_profile);
 
 /* COMPAT_146 */
 void class_del_profiles(void)
 {
-        struct lustre_profile *lprof, *n;
-        ENTRY;
+	struct lustre_profile *lprof, *n;
+	ENTRY;
 
+	spin_lock(&lustre_profile_list_lock);
 	list_for_each_entry_safe(lprof, n, &lustre_profile_list, lp_list) {
 		list_del(&lprof->lp_list);
-                OBD_FREE(lprof->lp_profile, strlen(lprof->lp_profile) + 1);
-                OBD_FREE(lprof->lp_dt, strlen(lprof->lp_dt) + 1);
-                if (lprof->lp_md)
-                        OBD_FREE(lprof->lp_md, strlen(lprof->lp_md) + 1);
-                OBD_FREE(lprof, sizeof *lprof);
-        }
-        EXIT;
+		lprof->lp_list_deleted = true;
+		spin_unlock(&lustre_profile_list_lock);
+
+		class_put_profile(lprof);
+
+		spin_lock(&lustre_profile_list_lock);
+	}
+	spin_unlock(&lustre_profile_list_lock);
+	EXIT;
 }
 EXPORT_SYMBOL(class_del_profiles);
 

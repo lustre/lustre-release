@@ -1054,17 +1054,19 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 	sbi->ll_client_common_fill_super_succeeded = 1;
 
 out_free:
-        if (md)
-                OBD_FREE(md, strlen(lprof->lp_md) + instlen + 2);
-        if (dt)
-                OBD_FREE(dt, strlen(lprof->lp_dt) + instlen + 2);
-        if (err)
-                ll_put_super(sb);
-        else if (sbi->ll_flags & LL_SBI_VERBOSE)
-                LCONSOLE_WARN("Mounted %s\n", profilenm);
+	if (md)
+		OBD_FREE(md, strlen(lprof->lp_md) + instlen + 2);
+	if (dt)
+		OBD_FREE(dt, strlen(lprof->lp_dt) + instlen + 2);
+	if (lprof != NULL)
+		class_put_profile(lprof);
+	if (err)
+		ll_put_super(sb);
+	else if (sbi->ll_flags & LL_SBI_VERBOSE)
+		LCONSOLE_WARN("Mounted %s\n", profilenm);
 
-        OBD_FREE_PTR(cfg);
-        RETURN(err);
+	OBD_FREE_PTR(cfg);
+	RETURN(err);
 } /* ll_fill_super */
 
 void ll_put_super(struct super_block *sb)

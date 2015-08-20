@@ -486,37 +486,37 @@ static int obd_init_checks(void)
 
 static int __init init_obdclass(void)
 {
-        int i, err;
+	int i, err;
 
 	spin_lock_init(&obd_stale_export_lock);
 	INIT_LIST_HEAD(&obd_stale_exports);
 	atomic_set(&obd_stale_export_num, 0);
 
-        LCONSOLE_INFO("Lustre: Build Version: "BUILD_VERSION"\n");
+	LCONSOLE_INFO("Lustre: Build Version: "BUILD_VERSION"\n");
 
 	spin_lock_init(&obd_types_lock);
-        obd_zombie_impexp_init();
+	obd_zombie_impexp_init();
 #ifdef CONFIG_PROC_FS
-        obd_memory = lprocfs_alloc_stats(OBD_STATS_NUM,
+	obd_memory = lprocfs_alloc_stats(OBD_STATS_NUM,
 					 LPROCFS_STATS_FLAG_NONE |
 					 LPROCFS_STATS_FLAG_IRQ_SAFE);
-        if (obd_memory == NULL) {
-                CERROR("kmalloc of 'obd_memory' failed\n");
-                RETURN(-ENOMEM);
-        }
+	if (obd_memory == NULL) {
+		CERROR("kmalloc of 'obd_memory' failed\n");
+		RETURN(-ENOMEM);
+	}
 
-        lprocfs_counter_init(obd_memory, OBD_MEMORY_STAT,
-                             LPROCFS_CNTR_AVGMINMAX,
-                             "memused", "bytes");
+	lprocfs_counter_init(obd_memory, OBD_MEMORY_STAT,
+			     LPROCFS_CNTR_AVGMINMAX,
+			     "memused", "bytes");
 #endif
-        err = obd_init_checks();
-        if (err == -EOVERFLOW)
-                return err;
+	err = obd_init_checks();
+	if (err == -EOVERFLOW)
+		return err;
 
-        class_init_uuidlist();
-        err = class_handle_init();
-        if (err)
-                return err;
+	class_init_uuidlist();
+	err = class_handle_init();
+	if (err)
+		return err;
 
 	INIT_LIST_HEAD(&obd_types);
 
@@ -526,24 +526,24 @@ static int __init init_obdclass(void)
 		return err;
 	}
 
-        /* This struct is already zeroed for us (static global) */
-        for (i = 0; i < class_devno_max(); i++)
-                obd_devs[i] = NULL;
+	/* This struct is already zeroed for us (static global) */
+	for (i = 0; i < class_devno_max(); i++)
+		obd_devs[i] = NULL;
 
-        /* Default the dirty page cache cap to 1/2 of system memory.
-         * For clients with less memory, a larger fraction is needed
-         * for other purposes (mostly for BGL). */
+	/* Default the dirty page cache cap to 1/2 of system memory.
+	 * For clients with less memory, a larger fraction is needed
+	 * for other purposes (mostly for BGL). */
 	if (totalram_pages <= 512 << (20 - PAGE_CACHE_SHIFT))
 		obd_max_dirty_pages = totalram_pages / 4;
 	else
 		obd_max_dirty_pages = totalram_pages / 2;
 
-        err = obd_init_caches();
-        if (err)
-                return err;
-        err = class_procfs_init();
-        if (err)
-                return err;
+	err = obd_init_caches();
+	if (err)
+		return err;
+	err = class_procfs_init();
+	if (err)
+		return err;
 
 	err = lu_global_init();
 	if (err)
@@ -567,9 +567,9 @@ static int __init init_obdclass(void)
 	if (err)
 		return err;
 
-        err = lustre_register_fs();
+	err = lustre_register_fs();
 
-        return err;
+	return err;
 }
 
 void obd_update_maxusage(void)

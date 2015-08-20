@@ -1487,9 +1487,13 @@ static void server_put_super(struct super_block *sb)
 		   If there are any setup/cleanup errors, save the lov
 		   name for safety cleanup later. */
 		lprof = class_get_profile(lsi->lsi_svname);
-		if (lprof && lprof->lp_dt) {
-			OBD_ALLOC(extraname, strlen(lprof->lp_dt) + 1);
-			strcpy(extraname, lprof->lp_dt);
+		if (lprof != NULL) {
+			if (lprof->lp_dt != NULL) {
+				OBD_ALLOC(extraname, strlen(lprof->lp_dt) + 1);
+				strncpy(extraname, lprof->lp_dt,
+					strlen(lprof->lp_dt) + 1);
+			}
+			class_put_profile(lprof);
 		}
 
 		obd = class_name2obd(lsi->lsi_svname);
