@@ -80,6 +80,7 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 		RETURN(0);
 
 	spin_lock_init(&lut->lut_translock);
+	spin_lock_init(&lut->lut_client_bitmap_lock);
 
 	OBD_ALLOC(lut->lut_client_bitmap, LR_MAX_CLIENTS >> 3);
 	if (lut->lut_client_bitmap == NULL)
