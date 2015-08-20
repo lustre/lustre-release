@@ -75,27 +75,30 @@ static int verify_handle(char *test, struct llog_handle *llh, int num_recs)
 		}
 	}
 
-        if (active_recs != num_recs) {
-                CERROR("%s: expected %d active recs after write, found %d\n",
-                       test, num_recs, active_recs);
-                RETURN(-ERANGE);
-        }
-
-        if (llh->lgh_hdr->llh_count != num_recs) {
-                CERROR("%s: handle->count is %d, expected %d after write\n",
-                       test, llh->lgh_hdr->llh_count, num_recs);
-                RETURN(-ERANGE);
-        }
-
-	/* a catalog may wrap */
-	if (!(llh->lgh_hdr->llh_flags & LLOG_F_IS_CAT) &&
-	    (llh->lgh_last_idx < last_idx)) {
-		CERROR("%s: handle->last_idx is %d, expected %d after write\n",
-		       test, llh->lgh_last_idx, last_idx);
+	/* check the llog is sane at first, llh_count and lgh_last_idx*/
+	if (llh->lgh_hdr->llh_count != active_recs) {
+		CERROR("%s: handle->count is %d, but there are %d recs found\n",
+		       test, llh->lgh_hdr->llh_count, active_recs);
 		RETURN(-ERANGE);
 	}
 
-        RETURN(0);
+	if (llh->lgh_last_idx != LLOG_HDR_TAIL(llh->lgh_hdr)->lrt_index ||
+	    (!(llh->lgh_hdr->llh_flags & LLOG_F_IS_CAT) &&
+	     llh->lgh_last_idx < last_idx)) {
+		CERROR("%s: lgh_last_idx is %d (%d in the header), last found %d\n",
+		       test, llh->lgh_last_idx,
+		       LLOG_HDR_TAIL(llh->lgh_hdr)->lrt_index, last_idx);
+		RETURN(-ERANGE);
+	}
+
+	/* finally checks against expected value from the caller */
+	if (active_recs != num_recs) {
+		CERROR("%s: expected %d active recs after write, found %d\n",
+		       test, num_recs, active_recs);
+		RETURN(-ERANGE);
+	}
+
+	RETURN(0);
 }
 
 /* Test named-log create/open, close */
@@ -139,14 +142,21 @@ out:
 	RETURN(rc);
 }
 
+static int test_2_cancel_cb(const struct lu_env *env, struct llog_handle *llh,
+			    struct llog_rec_hdr *rec, void *data)
+{
+	return LLOG_DEL_RECORD;
+}
+
 /* Test named-log reopen; returns opened log on success */
 static int llog_test_2(const struct lu_env *env, struct obd_device *obd,
 		       char *name, struct llog_handle **llh)
 {
 	struct llog_ctxt	*ctxt;
-	struct llog_handle	*loghandle;
+	struct llog_handle	*lgh;
 	struct llog_logid	 logid;
 	int			 rc;
+	struct llog_mini_rec	 lmr;
 
 	ENTRY;
 
@@ -170,45 +180,90 @@ static int llog_test_2(const struct lu_env *env, struct obd_device *obd,
 	if (rc)
 		GOTO(out_close_llh, rc);
 
-	/* XXX: there is known issue with tests 2b, MGS is not able to create
-	 * anonymous llog, exit now to allow following tests run.
-	 * It is fixed in upcoming llog over OSD code */
-	GOTO(out_put, rc);
-
 	CWARN("2b: create a log without specified NAME & LOGID\n");
-	rc = llog_open_create(env, ctxt, &loghandle, NULL, NULL);
+	rc = llog_open_create(env, ctxt, &lgh, NULL, NULL);
 	if (rc) {
 		CERROR("2b: create log failed\n");
 		GOTO(out_close_llh, rc);
 	}
-	rc = llog_init_handle(env, loghandle, LLOG_F_IS_PLAIN, &uuid);
+	rc = llog_init_handle(env, lgh, LLOG_F_IS_PLAIN, &uuid);
 	if (rc) {
 		CERROR("2b: can't init llog handle: %d\n", rc);
 		GOTO(out_close, rc);
 	}
 
-	logid = loghandle->lgh_id;
-	llog_close(env, loghandle);
+	logid = lgh->lgh_id;
 
-	CWARN("2c: re-open the log by LOGID\n");
-	rc = llog_open(env, ctxt, &loghandle, &logid, NULL, LLOG_OPEN_EXISTS);
+	lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
+	lmr.lmr_hdr.lrh_type = 0xf02f02;
+
+	/* Check llog header values are correct after record add/cancel */
+	CWARN("2b: write 1 llog records, check llh_count\n");
+	rc = llog_write(env, lgh, &lmr.lmr_hdr, LLOG_NEXT_IDX);
+	if (rc < 0)
+		GOTO(out_close, rc);
+
+	/* in-memory values after record addition */
+	rc = verify_handle("2b", lgh, 2);
+	if (rc < 0)
+		GOTO(out_close, rc);
+
+	/* re-open llog to read on-disk values */
+	llog_close(env, lgh);
+
+	CWARN("2c: re-open the log by LOGID and verify llh_count\n");
+	rc = llog_open(env, ctxt, &lgh, &logid, NULL, LLOG_OPEN_EXISTS);
+	if (rc < 0) {
+		CERROR("2c: re-open log by LOGID failed\n");
+		GOTO(out_close_llh, rc);
+	}
+
+	rc = llog_init_handle(env, lgh, LLOG_F_IS_PLAIN, &uuid);
+	if (rc < 0) {
+		CERROR("2c: can't init llog handle: %d\n", rc);
+		GOTO(out_close, rc);
+	}
+
+	/* check values just read from disk */
+	rc = verify_handle("2c", lgh, 2);
+	if (rc < 0)
+		GOTO(out_close, rc);
+
+	rc = llog_process(env, lgh, test_2_cancel_cb, NULL, NULL);
+	if (rc < 0)
+		GOTO(out_close, rc);
+
+	/* in-memory values */
+	rc = verify_handle("2c", lgh, 1);
+	if (rc < 0)
+		GOTO(out_close, rc);
+
+	/* re-open llog to get on-disk values */
+	llog_close(env, lgh);
+
+	rc = llog_open(env, ctxt, &lgh, &logid, NULL, LLOG_OPEN_EXISTS);
 	if (rc) {
 		CERROR("2c: re-open log by LOGID failed\n");
 		GOTO(out_close_llh, rc);
 	}
 
-	rc = llog_init_handle(env, loghandle, LLOG_F_IS_PLAIN, &uuid);
+	rc = llog_init_handle(env, lgh, LLOG_F_IS_PLAIN, &uuid);
 	if (rc) {
 		CERROR("2c: can't init llog handle: %d\n", rc);
 		GOTO(out_close, rc);
 	}
 
-	CWARN("2b: destroy this log\n");
-	rc = llog_destroy(env, loghandle);
+	/* on-disk values after llog re-open */
+	rc = verify_handle("2c", lgh, 1);
+	if (rc < 0)
+		GOTO(out_close, rc);
+
+	CWARN("2d: destroy this log\n");
+	rc = llog_destroy(env, lgh);
 	if (rc)
 		CERROR("2d: destroy log failed\n");
 out_close:
-	llog_close(env, loghandle);
+	llog_close(env, lgh);
 out_close_llh:
 	if (rc)
 		llog_close(env, *llh);
@@ -218,10 +273,10 @@ out_put:
 	RETURN(rc);
 }
 
-static int records;
-static off_t rec_offset;
-static int paddings;
-static int start_idx;
+static int test_3_rec_num;
+static off_t test_3_rec_off;
+static int test_3_paddings;
+static int test_3_start_idx;
 
 /*
  * Test 3 callback.
@@ -236,46 +291,47 @@ static int test3_check_n_add_cb(const struct lu_env *env,
 {
 	struct llog_gen_rec *lgr = (struct llog_gen_rec *)rec;
 	int *last_rec = data;
+	unsigned cur_idx = test_3_start_idx + test_3_rec_num;
 	int rc;
 
 	if (lgh->lgh_hdr->llh_flags & LLOG_F_IS_FIXSIZE) {
 		LASSERT(lgh->lgh_hdr->llh_size > 0);
 		if (lgh->lgh_cur_offset != lgh->lgh_hdr->llh_hdr.lrh_len +
-				(start_idx + records - 1) *
-				lgh->lgh_hdr->llh_size)
-			CERROR("Wrong record offset in cur_off: "LPU64", should"
-			       " be %u\n", lgh->lgh_cur_offset,
+					(cur_idx - 1) * lgh->lgh_hdr->llh_size)
+			CERROR("Wrong record offset in cur_off: "LPU64", should be %u\n",
+			       lgh->lgh_cur_offset,
 			       lgh->lgh_hdr->llh_hdr.lrh_len +
-			       (start_idx + records - 1) *
-			       lgh->lgh_hdr->llh_size);
+			       (cur_idx - 1) * lgh->lgh_hdr->llh_size);
 	} else {
 		size_t chunk_size = lgh->lgh_hdr->llh_hdr.lrh_len;
 
 		/* For variable size records the start offset is unknown, trust
 		 * the first value and check others are consistent with it. */
-		if (rec_offset == 0)
-			rec_offset = lgh->lgh_cur_offset;
+		if (test_3_rec_off == 0)
+			test_3_rec_off = lgh->lgh_cur_offset;
 
-		if (lgh->lgh_cur_offset != rec_offset) {
+		if (lgh->lgh_cur_offset != test_3_rec_off) {
 			/* there can be padding record */
 			if ((lgh->lgh_cur_offset % chunk_size == 0) &&
-			    (lgh->lgh_cur_offset - rec_offset <
+			    (lgh->lgh_cur_offset - test_3_rec_off <
 			     rec->lrh_len + LLOG_MIN_REC_SIZE)) {
-				rec_offset = lgh->lgh_cur_offset;
-				paddings++;
+				test_3_rec_off = lgh->lgh_cur_offset;
+				test_3_paddings++;
 			} else {
 				CERROR("Wrong record offset in cur_off: "LPU64
 				       ", should be %lld (rec len %u)\n",
 				       lgh->lgh_cur_offset,
-				       (long long)rec_offset, rec->lrh_len);
+				       (long long)test_3_rec_off,
+				       rec->lrh_len);
 			}
 		}
-		rec_offset += rec->lrh_len;
+		test_3_rec_off += rec->lrh_len;
 	}
 
-	if ((start_idx + records + paddings) != rec->lrh_index)
+	cur_idx += test_3_paddings;
+	if (cur_idx != rec->lrh_index)
 		CERROR("Record with wrong index was read: %u, expected %u\n",
-		       rec->lrh_index, start_idx + records + paddings);
+		       rec->lrh_index, cur_idx);
 
 	/* modify all records in place */
 	lgr->lgr_gen.conn_cnt = rec->lrh_index;
@@ -285,14 +341,13 @@ static int test3_check_n_add_cb(const struct lu_env *env,
 
 	/* Add new record to the llog at *last_rec position one by one to
 	 * check that last block is re-read during processing */
-	if ((start_idx + records + paddings) == *last_rec ||
-	    (start_idx + records + paddings) == (*last_rec + 1)) {
+	if (cur_idx == *last_rec || cur_idx == (*last_rec + 1)) {
 		rc = llog_write(env, lgh, rec, LLOG_NEXT_IDX);
 		if (rc < 0)
 			CERROR("cb_test_3: cannot add new record while "
 			       "processing\n");
 	}
-	records++;
+	test_3_rec_num++;
 
 	return rc;
 }
@@ -308,7 +363,7 @@ static int test3_check_cb(const struct lu_env *env, struct llog_handle *lgh,
 		       rec->lrh_index);
 		return -EINVAL;
 	}
-	records++;
+	test_3_rec_num++;
 	return 0;
 }
 
@@ -324,14 +379,14 @@ static int llog_test3_process(const struct lu_env *env,
 	      start);
 	cd.lpcd_first_idx = start - 1;
 	cd.lpcd_last_idx = 0;
-	records = paddings = 0;
+	test_3_rec_num = test_3_paddings = 0;
 	last_idx = lgh->lgh_last_idx;
 	rc = llog_process(env, lgh, cb, &last_idx, &cd);
 	if (rc < 0)
 		return rc;
 	CWARN("test3: total %u records processed with %u paddings\n",
-	      records, paddings);
-	return records;
+	      test_3_rec_num, test_3_paddings);
+	return test_3_rec_num;
 }
 
 /* Test plain llog functionality */
@@ -383,10 +438,11 @@ static int llog_test_3(const struct lu_env *env, struct obd_device *obd,
 	 * the last in the current chunk and second causes the new chunk to be
 	 * created.
 	 */
-	rec_offset = 0;
-	start_idx = 501;
+	test_3_rec_off = 0;
+	test_3_start_idx = 501;
 	expected = 525;
-	rc = llog_test3_process(env, llh, test3_check_n_add_cb, start_idx);
+	rc = llog_test3_process(env, llh, test3_check_n_add_cb,
+				test_3_start_idx);
 	if (rc < 0)
 		RETURN(rc);
 
@@ -400,7 +456,7 @@ static int llog_test_3(const struct lu_env *env, struct obd_device *obd,
 	num_recs += 2;
 
 	/* test modification in place */
-	rc = llog_test3_process(env, llh, test3_check_cb, start_idx);
+	rc = llog_test3_process(env, llh, test3_check_cb, test_3_start_idx);
 	if (rc < 0)
 		RETURN(rc);
 
@@ -441,7 +497,7 @@ static int llog_test_3(const struct lu_env *env, struct obd_device *obd,
 
 		rc = llog_write(env, llh, hdr, LLOG_NEXT_IDX);
 		if (rc < 0) {
-			CERROR("3a: write 566 records failed at #%d: %d\n",
+			CERROR("3b: write 566 records failed at #%d: %d\n",
 			       i + 1, rc);
 			RETURN(rc);
 		}
@@ -452,9 +508,10 @@ static int llog_test_3(const struct lu_env *env, struct obd_device *obd,
 	if (rc)
 		RETURN(rc);
 
-	start_idx = 1026;
+	test_3_start_idx = 1026;
 	expected = 568;
-	rc = llog_test3_process(env, llh, test3_check_n_add_cb, start_idx);
+	rc = llog_test3_process(env, llh, test3_check_n_add_cb,
+				test_3_start_idx);
 	if (rc < 0)
 		RETURN(rc);
 
@@ -467,7 +524,7 @@ static int llog_test_3(const struct lu_env *env, struct obd_device *obd,
 	num_recs += 2;
 
 	/* test modification in place */
-	rc = llog_test3_process(env, llh, test3_check_cb, start_idx);
+	rc = llog_test3_process(env, llh, test3_check_cb, test_3_start_idx);
 	if (rc < 0)
 		RETURN(rc);
 
@@ -503,7 +560,7 @@ static int llog_test_3(const struct lu_env *env, struct obd_device *obd,
 	CWARN("3c: wrote %d more records before end of llog is reached\n",
 	      num_recs);
 
-	rc = verify_handle("3d", llh, num_recs);
+	rc = verify_handle("3c", llh, num_recs);
 
 	RETURN(rc);
 }
