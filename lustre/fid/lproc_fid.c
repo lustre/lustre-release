@@ -91,7 +91,7 @@ lprocfs_fid_write_common(const char __user *buffer, size_t count,
 	rc = sscanf(kernbuf, "[%llx - %llx]\n",
 		    (long long unsigned *)&tmp.lsr_start,
 		    (long long unsigned *)&tmp.lsr_end);
-	if (!range_is_sane(&tmp) || range_is_zero(&tmp) ||
+	if (!lu_seq_range_is_sane(&tmp) || lu_seq_range_is_zero(&tmp) ||
 	    tmp.lsr_start < range->lsr_start || tmp.lsr_end > range->lsr_end)
 		RETURN(-EINVAL);
 	*range = tmp;

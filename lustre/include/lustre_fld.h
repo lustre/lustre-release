@@ -44,6 +44,7 @@
 
 #include <lustre/lustre_idl.h>
 #include <libcfs/libcfs.h>
+#include <lustre/seq_range.h>
 
 struct lu_env;
 struct lu_client_fld;

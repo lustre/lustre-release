@@ -103,7 +103,7 @@ int fld_declare_index_create(const struct lu_env *env,
 	rc = fld_index_lookup(env, fld, new_range->lsr_start, range);
 	if (rc == 0) {
 		/* In case of duplicate entry, the location must be same */
-		LASSERT((range_compare_loc(new_range, range) == 0));
+		LASSERT((lu_seq_range_compare_loc(new_range, range) == 0));
 		GOTO(out, rc = -EEXIST);
 	}
 
@@ -116,7 +116,7 @@ int fld_declare_index_create(const struct lu_env *env,
 	/* Check for merge case, since the fld entry can only be increamental,
 	 * so we will only check whether it can be merged from the left. */
 	if (new_range->lsr_start == range->lsr_end && range->lsr_end != 0 &&
-	    range_compare_loc(new_range, range) == 0) {
+	    lu_seq_range_compare_loc(new_range, range) == 0) {
 		range_cpu_to_be(tmp, range);
 		rc = dt_declare_delete(env, fld->lsf_obj,
 				       (struct dt_key *)&tmp->lsr_start, th);
@@ -182,7 +182,7 @@ int fld_index_create(const struct lu_env *env, struct lu_server_fld *fld,
 	}
 
 	if (new_range->lsr_start == range->lsr_end && range->lsr_end != 0 &&
-	    range_compare_loc(new_range, range) == 0) {
+	    lu_seq_range_compare_loc(new_range, range) == 0) {
 		range_cpu_to_be(tmp, range);
 		rc = dt_delete(env, fld->lsf_obj,
 			       (struct dt_key *)&tmp->lsr_start, th);
@@ -244,11 +244,11 @@ int fld_index_lookup(const struct lu_env *env, struct lu_server_fld *fld,
 
 	rc = fld_cache_lookup(fld->lsf_cache, seq, fld_rec);
 	if (rc == 0) {
-                *range = *fld_rec;
-                if (range_within(range, seq))
-                        rc = 0;
-                else
-                        rc = -ENOENT;
+		*range = *fld_rec;
+		if (lu_seq_range_within(range, seq))
+			rc = 0;
+		else
+			rc = -ENOENT;
         }
 
         CDEBUG(D_INFO, "%s: lookup seq = "LPX64" range : "DRANGE" rc = %d\n",
