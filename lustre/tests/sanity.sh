@@ -13152,6 +13152,28 @@ test_239() {
 }
 run_test 239 "osp_sync test"
 
+test_239a() { #LU-5297
+	touch $DIR/$tfile
+	#define OBD_FAIL_OSP_CHECK_INVALID_REC     0x2100
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x2100
+	chgrp $RUNAS_GID $DIR/$tfile
+	wait_delete_completed
+}
+run_test 239a "process invalid osp sync record correctly"
+
+test_239b() { #LU-5297
+	touch $DIR/$tfile1
+	#define OBD_FAIL_OSP_CHECK_ENOMEM     0x2101
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x2101
+	chgrp $RUNAS_GID $DIR/$tfile1
+	wait_delete_completed
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	touch $DIR/$tfile2
+	chgrp $RUNAS_GID $DIR/$tfile2
+	wait_delete_completed
+}
+run_test 239b "process osp sync record with ENOMEM error correctly"
+
 test_240() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
