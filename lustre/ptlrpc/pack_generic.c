@@ -1292,29 +1292,13 @@ __u64 lustre_msg_get_mbits(struct lustre_msg *msg)
 	}
 }
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 53, 0)
-/*
- * In 1.6 and 1.8 the checksum was computed only on struct ptlrpc_body as
- * it was in 1.6 (88 bytes, smaller than the full size in 1.8).  It makes
- * more sense to compute the checksum on the full ptlrpc_body, regardless
- * of what size it is, but in order to keep interoperability with 1.8 we
- * can optionally also checksum only the first 88 bytes (caller decides). */
-# define ptlrpc_body_cksum_size_compat18         88
-
-__u32 lustre_msg_calc_cksum(struct lustre_msg *msg, int compat18)
-#else
 __u32 lustre_msg_calc_cksum(struct lustre_msg *msg)
-#endif
 {
 	switch (msg->lm_magic) {
 	case LUSTRE_MSG_MAGIC_V2: {
 		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 53, 0)
-		__u32 len = compat18 ? ptlrpc_body_cksum_size_compat18 :
-			    lustre_msg_buflen(msg, MSG_PTLRPC_BODY_OFF);
-#else
 		__u32 len = lustre_msg_buflen(msg, MSG_PTLRPC_BODY_OFF);
-#endif
+
 		unsigned int hsize = 4;
 		__u32 crc;
 

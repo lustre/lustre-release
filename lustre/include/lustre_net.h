@@ -2360,11 +2360,7 @@ __u32 lustre_msg_get_service_time(struct lustre_msg *msg);
 char *lustre_msg_get_jobid(struct lustre_msg *msg);
 __u32 lustre_msg_get_cksum(struct lustre_msg *msg);
 __u64 lustre_msg_get_mbits(struct lustre_msg *msg);
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 53, 0)
-__u32 lustre_msg_calc_cksum(struct lustre_msg *msg, int compat18);
-#else
 __u32 lustre_msg_calc_cksum(struct lustre_msg *msg);
-#endif
 void lustre_msg_set_handle(struct lustre_msg *msg,struct lustre_handle *handle);
 void lustre_msg_set_type(struct lustre_msg *msg, __u32 type);
 void lustre_msg_set_opc(struct lustre_msg *msg, __u32 opc);
