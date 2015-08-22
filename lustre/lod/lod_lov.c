@@ -217,6 +217,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 	struct lod_tgt_descs    *ltd;
 	struct obd_uuid		obd_uuid;
 	bool			for_ost;
+	bool lock = false;
 	ENTRY;
 
 	CDEBUG(D_CONFIG, "osp:%s idx:%d gen:%d\n", osp, index, gen);
@@ -333,6 +334,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 	}
 
 	mutex_lock(&ltd->ltd_mutex);
+	lock = true;
 	if (cfs_bitmap_check(ltd->ltd_tgt_bitmap, index)) {
 		CERROR("%s: device %d is registered already\n", obd->obd_name,
 		       index);
@@ -377,6 +379,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 	ltd->ltd_tgtnr++;
 	mutex_unlock(&ltd->ltd_mutex);
 	lod_putref(lod, ltd);
+	lock = false;
 	if (lod->lod_recovery_completed)
 		ldev->ld_ops->ldo_recovery_complete(env, ldev);
 
@@ -402,8 +405,10 @@ out_fini_llog:
 out_pool:
 	lod_ost_pool_remove(&lod->lod_pool_info, index);
 out_mutex:
-	mutex_unlock(&ltd->ltd_mutex);
-	lod_putref(lod, ltd);
+	if (lock) {
+		mutex_unlock(&ltd->ltd_mutex);
+		lod_putref(lod, ltd);
+	}
 out_desc:
 	OBD_FREE_PTR(tgt_desc);
 out_conn:
