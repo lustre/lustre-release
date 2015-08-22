@@ -3361,6 +3361,80 @@ test_83() {
 }
 run_test 83 "access striped directory while it is being created/unlinked"
 
+test_90() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local pid1
+	local pid2
+	local duration=180
+
+	[ "$SLOW" = "yes" ] && duration=600
+	# Open/Create under striped directory
+	(
+		cd $DIR1
+		while true; do
+			$LFS mkdir -c$MDSCOUNT $tdir > /dev/null 2>&1
+			touch $tdir/f{0..3} > /dev/null 2>&1
+		done
+	) &
+	pid1=$!
+	echo "start pid $pid1 to open/create under striped directory"
+
+	# unlink the striped directory at the same time
+	(
+		cd $DIR2
+		while true; do
+			rm -rf $tdir > /dev/null 2>&1
+		done
+	) &
+	pid2=$!
+	echo "start pid $pid2 to unlink striped directory"
+
+	sleep $duration
+
+	kill $pid1 $pid2
+	wait $pid1 $pid2
+
+	return 0
+}
+run_test 90 "open/create and unlink striped directory"
+
+test_91() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local pid1
+	local pid2
+	local duration=180
+
+	[ "$SLOW" = "yes" ] && duration=600
+	# chmod striped directory
+	(
+		cd $DIR1
+		while true; do
+			$LFS mkdir -c$MDSCOUNT $tdir > /dev/null 2>&1
+			chmod go+w $tdir > /dev/null 2>&1
+		done
+	) &
+	pid1=$!
+	echo "start pid $pid1 to chmod striped directory"
+
+	# unlink the striped directory at the same time
+	(
+		cd $DIR2
+		while true; do
+			rm -rf $tdir > /dev/null 2>&1
+		done
+	) &
+	pid2=$!
+	echo "start pid $pid2 to unlink striped directory"
+
+	sleep $duration
+
+	kill $pid1 $pid2
+	wait $pid1 $pid2
+
+	return 0
+}
+run_test 91 "chmod and unlink striped directory"
+
 log "cleanup: ======================================================"
 
 [ "$(mount | grep $MOUNT2)" ] && umount $MOUNT2
