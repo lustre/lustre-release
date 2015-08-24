@@ -119,12 +119,6 @@ static inline int kstrtoul(const char *s, unsigned int base, unsigned long *res)
 }
 #endif /* !HAVE_KSTRTOUL */
 
-/*
- * No stack-back-tracing in Linux for now.
- */
-struct cfs_stack_trace {
-};
-
 #ifndef WITH_WATCHDOG
 #define WITH_WATCHDOG
 #endif
