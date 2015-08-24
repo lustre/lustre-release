@@ -2608,6 +2608,12 @@ main(int argc, char **argv)
 	check_lfsck_request();
 	check_lfsck_reply();
 
+	check_update_params();
+	check_update_op();
+	check_update_ops();
+	check_update_records();
+	check_llog_update_record();
+
 	printf("}\n\n");
 
 	return 0;
