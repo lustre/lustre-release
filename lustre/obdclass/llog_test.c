@@ -236,7 +236,8 @@ static int test3_check_n_add_cb(const struct lu_env *env,
 	int *last_rec = data;
 	int rc;
 
-	if (lgh->lgh_hdr->llh_size > 0) {
+	if (lgh->lgh_hdr->llh_flags & LLOG_F_IS_FIXSIZE) {
+		LASSERT(lgh->lgh_hdr->llh_size > 0);
 		if (lgh->lgh_cur_offset != lgh->lgh_hdr->llh_hdr.lrh_len +
 				(start_idx + records - 1) *
 				lgh->lgh_hdr->llh_size)
@@ -346,6 +347,7 @@ static int llog_test_3(const struct lu_env *env, struct obd_device *obd,
 	hdr->lrh_len = sizeof(struct llog_gen_rec);
 	hdr->lrh_type = LLOG_GEN_REC;
 	llh->lgh_hdr->llh_size = sizeof(struct llog_gen_rec);
+	llh->lgh_hdr->llh_flags |= LLOG_F_IS_FIXSIZE;
 
 	/* Fill the llog with 64-bytes records, use 1023 records,
 	 * so last chunk will be partially full. Don't change this
@@ -410,7 +412,7 @@ static int llog_test_3(const struct lu_env *env, struct obd_device *obd,
 
 	/* Drop llh_size to 0 to mark llog as variable-size and write
 	 * header to make this change permanent. */
-	llh->lgh_hdr->llh_size = 0;
+	llh->lgh_hdr->llh_flags &= ~LLOG_F_IS_FIXSIZE;
 	llog_write(env, llh, &llh->lgh_hdr->llh_hdr, LLOG_HEADER_IDX);
 
 	hdr->lrh_type = OBD_CFG_REC;
