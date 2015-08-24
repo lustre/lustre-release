@@ -2918,7 +2918,7 @@ test_43() {
 	#   root should be able to access root file after that
 	#
 	local NIDLIST=$($LCTL list_nids all | tr '\n' ' ')
-	NIDLIST="2@elan $NIDLIST 192.168.0.[2,10]@tcp"
+	NIDLIST="2@gni $NIDLIST 192.168.0.[2,10]@tcp"
 	NIDLIST=$(echo $NIDLIST | tr -s ' ' ' ')
 	set_conf_param_and_check mds					\
 		"$LCTL get_param -n mdt.$FSNAME-MDT0000.nosquash_nids"	\
