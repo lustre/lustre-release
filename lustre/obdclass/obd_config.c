@@ -612,16 +612,16 @@ EXPORT_SYMBOL(class_detach);
  */
 int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
-        int err = 0;
-        char *flag;
-        ENTRY;
+	int err = 0;
+	char *flag;
+	ENTRY;
 
-        OBD_RACE(OBD_FAIL_LDLM_RECOV_CLIENTS);
+	OBD_RACE(OBD_FAIL_LDLM_RECOV_CLIENTS);
 
-        if (!obd->obd_set_up) {
-                CERROR("Device %d not setup\n", obd->obd_minor);
-                RETURN(-ENODEV);
-        }
+	if (!obd->obd_set_up) {
+		CERROR("Device %d not setup\n", obd->obd_minor);
+		RETURN(-ENODEV);
+	}
 
 	spin_lock(&obd->obd_dev_lock);
 	if (obd->obd_stopping) {
@@ -638,66 +638,66 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		yield();
 	smp_rmb();
 
-        if (lcfg->lcfg_bufcount >= 2 && LUSTRE_CFG_BUFLEN(lcfg, 1) > 0) {
-                for (flag = lustre_cfg_string(lcfg, 1); *flag != 0; flag++)
-                        switch (*flag) {
-                        case 'F':
-                                obd->obd_force = 1;
-                                break;
-                        case 'A':
-                                LCONSOLE_WARN("Failing over %s\n",
-                                              obd->obd_name);
-                                obd->obd_fail = 1;
-                                obd->obd_no_transno = 1;
-                                obd->obd_no_recov = 1;
-                                if (OBP(obd, iocontrol)) {
-                                        obd_iocontrol(OBD_IOC_SYNC,
-                                                      obd->obd_self_export,
-                                                      0, NULL, NULL);
-                                }
-                                break;
-                        default:
-                                CERROR("Unrecognised flag '%c'\n", *flag);
-                        }
-        }
+	if (lcfg->lcfg_bufcount >= 2 && LUSTRE_CFG_BUFLEN(lcfg, 1) > 0) {
+		for (flag = lustre_cfg_string(lcfg, 1); *flag != 0; flag++)
+			switch (*flag) {
+			case 'F':
+				obd->obd_force = 1;
+				break;
+			case 'A':
+				LCONSOLE_WARN("Failing over %s\n",
+					      obd->obd_name);
+				obd->obd_fail = 1;
+				obd->obd_no_transno = 1;
+				obd->obd_no_recov = 1;
+				if (OBP(obd, iocontrol)) {
+					obd_iocontrol(OBD_IOC_SYNC,
+						      obd->obd_self_export,
+						      0, NULL, NULL);
+				}
+				break;
+			default:
+				CERROR("Unrecognised flag '%c'\n", *flag);
+			}
+	}
 
-        LASSERT(obd->obd_self_export);
+	LASSERT(obd->obd_self_export);
 
-        /* The three references that should be remaining are the
-         * obd_self_export and the attach and setup references. */
+	/* The three references that should be remaining are the
+	 * obd_self_export and the attach and setup references. */
 	if (atomic_read(&obd->obd_refcount) > 3) {
-                /* refcounf - 3 might be the number of real exports
-                   (excluding self export). But class_incref is called
-                   by other things as well, so don't count on it. */
-                CDEBUG(D_IOCTL, "%s: forcing exports to disconnect: %d\n",
+		/* refcounf - 3 might be the number of real exports
+		   (excluding self export). But class_incref is called
+		   by other things as well, so don't count on it. */
+		CDEBUG(D_IOCTL, "%s: forcing exports to disconnect: %d\n",
 		       obd->obd_name, atomic_read(&obd->obd_refcount) - 3);
-                dump_exports(obd, 0);
-                class_disconnect_exports(obd);
-        }
+		dump_exports(obd, 0);
+		class_disconnect_exports(obd);
+	}
 
-        /* Precleanup, we must make sure all exports get destroyed. */
-        err = obd_precleanup(obd, OBD_CLEANUP_EXPORTS);
-        if (err)
-                CERROR("Precleanup %s returned %d\n",
-                       obd->obd_name, err);
+	/* Precleanup, we must make sure all exports get destroyed. */
+	err = obd_precleanup(obd);
+	if (err)
+		CERROR("Precleanup %s returned %d\n",
+		       obd->obd_name, err);
 
-        /* destroy an uuid-export hash body */
-        if (obd->obd_uuid_hash) {
-                cfs_hash_putref(obd->obd_uuid_hash);
-                obd->obd_uuid_hash = NULL;
-        }
+	/* destroy an uuid-export hash body */
+	if (obd->obd_uuid_hash) {
+		cfs_hash_putref(obd->obd_uuid_hash);
+		obd->obd_uuid_hash = NULL;
+	}
 
-        /* destroy a nid-export hash body */
-        if (obd->obd_nid_hash) {
-                cfs_hash_putref(obd->obd_nid_hash);
-                obd->obd_nid_hash = NULL;
-        }
+	/* destroy a nid-export hash body */
+	if (obd->obd_nid_hash) {
+		cfs_hash_putref(obd->obd_nid_hash);
+		obd->obd_nid_hash = NULL;
+	}
 
-        /* destroy a nid-stats hash body */
-        if (obd->obd_nid_stats_hash) {
-                cfs_hash_putref(obd->obd_nid_stats_hash);
-                obd->obd_nid_stats_hash = NULL;
-        }
+	/* destroy a nid-stats hash body */
+	if (obd->obd_nid_stats_hash) {
+		cfs_hash_putref(obd->obd_nid_stats_hash);
+		obd->obd_nid_stats_hash = NULL;
+	}
 
 	/* destroy a client_generation-export hash body */
 	if (obd->obd_gen_hash) {
@@ -705,10 +705,10 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		obd->obd_gen_hash = NULL;
 	}
 
-        class_decref(obd, "setup", obd);
-        obd->obd_set_up = 0;
+	class_decref(obd, "setup", obd);
+	obd->obd_set_up = 0;
 
-        RETURN(0);
+	RETURN(0);
 }
 
 struct obd_device *class_incref(struct obd_device *obd,

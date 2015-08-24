@@ -2738,25 +2738,13 @@ try_next_stripe:
 	goto retry_unlink;
 }
 
-static int lmv_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
+static int lmv_precleanup(struct obd_device *obd)
 {
-        struct lmv_obd *lmv = &obd->u.lmv;
-        int rc = 0;
-
-        switch (stage) {
-        case OBD_CLEANUP_EARLY:
-                /* XXX: here should be calling obd_precleanup() down to
-                 * stack. */
-                break;
-        case OBD_CLEANUP_EXPORTS:
-                fld_client_proc_fini(&lmv->lmv_fld);
-                lprocfs_obd_cleanup(obd);
-		lprocfs_free_md_stats(obd);
-                break;
-        default:
-                break;
-        }
-        RETURN(rc);
+	ENTRY;
+	fld_client_proc_fini(&obd->u.lmv.lmv_fld);
+	lprocfs_obd_cleanup(obd);
+	lprocfs_free_md_stats(obd);
+	RETURN(0);
 }
 
 /**

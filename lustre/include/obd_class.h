@@ -593,32 +593,29 @@ static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
         RETURN(rc);
 }
 
-static inline int obd_precleanup(struct obd_device *obd,
-                                 enum obd_cleanup_stage cleanup_stage)
+static inline int obd_precleanup(struct obd_device *obd)
 {
-        int rc;
-        DECLARE_LU_VARS(ldt, d);
-        ENTRY;
+	int rc;
+	DECLARE_LU_VARS(ldt, d);
+	ENTRY;
 
-        OBD_CHECK_DEV(obd);
-        ldt = obd->obd_type->typ_lu;
-        d = obd->obd_lu_dev;
-        if (ldt != NULL && d != NULL) {
-                if (cleanup_stage == OBD_CLEANUP_EXPORTS) {
-                        struct lu_env env;
+	OBD_CHECK_DEV(obd);
+	ldt = obd->obd_type->typ_lu;
+	d = obd->obd_lu_dev;
+	if (ldt != NULL && d != NULL) {
+		struct lu_env env;
 
-                        rc = lu_env_init(&env, ldt->ldt_ctx_tags);
-                        if (rc == 0) {
-                                ldt->ldt_ops->ldto_device_fini(&env, d);
-                                lu_env_fini(&env);
-                        }
-                }
-        }
-        OBD_CHECK_DT_OP(obd, precleanup, 0);
-        OBD_COUNTER_INCREMENT(obd, precleanup);
+		rc = lu_env_init(&env, ldt->ldt_ctx_tags);
+		if (rc == 0) {
+			ldt->ldt_ops->ldto_device_fini(&env, d);
+			lu_env_fini(&env);
+		}
+	}
+	OBD_CHECK_DT_OP(obd, precleanup, 0);
+	OBD_COUNTER_INCREMENT(obd, precleanup);
 
-        rc = OBP(obd, precleanup)(obd, cleanup_stage);
-        RETURN(rc);
+	rc = OBP(obd, precleanup)(obd);
+	RETURN(rc);
 }
 
 static inline int obd_cleanup(struct obd_device *obd)

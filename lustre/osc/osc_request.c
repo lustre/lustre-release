@@ -2713,50 +2713,35 @@ out_ptlrpcd:
 	RETURN(rc);
 }
 
-static int osc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
+static int osc_precleanup(struct obd_device *obd)
 {
-        int rc = 0;
-        ENTRY;
+	struct client_obd *cli = &obd->u.cli;
+	ENTRY;
 
-        switch (stage) {
-        case OBD_CLEANUP_EARLY: {
-                struct obd_import *imp;
-                imp = obd->u.cli.cl_import;
-                CDEBUG(D_HA, "Deactivating import %s\n", obd->obd_name);
-                /* ptlrpc_abort_inflight to stop an mds_lov_synchronize */
-                ptlrpc_deactivate_import(imp);
-		spin_lock(&imp->imp_lock);
-		imp->imp_pingable = 0;
-		spin_unlock(&imp->imp_lock);
-                break;
-        }
-        case OBD_CLEANUP_EXPORTS: {
-                struct client_obd *cli = &obd->u.cli;
-                /* LU-464
-                 * for echo client, export may be on zombie list, wait for
-                 * zombie thread to cull it, because cli.cl_import will be
-                 * cleared in client_disconnect_export():
-                 *   class_export_destroy() -> obd_cleanup() ->
-                 *   echo_device_free() -> echo_client_cleanup() ->
-                 *   obd_disconnect() -> osc_disconnect() ->
-                 *   client_disconnect_export()
-                 */
-                obd_zombie_barrier();
-                if (cli->cl_writeback_work) {
-                        ptlrpcd_destroy_work(cli->cl_writeback_work);
-                        cli->cl_writeback_work = NULL;
-                }
-		if (cli->cl_lru_work) {
-			ptlrpcd_destroy_work(cli->cl_lru_work);
-			cli->cl_lru_work = NULL;
-		}
-                obd_cleanup_client_import(obd);
-                ptlrpc_lprocfs_unregister_obd(obd);
-                lprocfs_obd_cleanup(obd);
-                break;
-                }
-        }
-        RETURN(rc);
+	/* LU-464
+	 * for echo client, export may be on zombie list, wait for
+	 * zombie thread to cull it, because cli.cl_import will be
+	 * cleared in client_disconnect_export():
+	 *   class_export_destroy() -> obd_cleanup() ->
+	 *   echo_device_free() -> echo_client_cleanup() ->
+	 *   obd_disconnect() -> osc_disconnect() ->
+	 *   client_disconnect_export()
+	 */
+	obd_zombie_barrier();
+	if (cli->cl_writeback_work) {
+		ptlrpcd_destroy_work(cli->cl_writeback_work);
+		cli->cl_writeback_work = NULL;
+	}
+
+	if (cli->cl_lru_work) {
+		ptlrpcd_destroy_work(cli->cl_lru_work);
+		cli->cl_lru_work = NULL;
+	}
+
+	obd_cleanup_client_import(obd);
+	ptlrpc_lprocfs_unregister_obd(obd);
+	lprocfs_obd_cleanup(obd);
+	RETURN(0);
 }
 
 int osc_cleanup(struct obd_device *obd)

@@ -1349,24 +1349,14 @@ static int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
  * special actions, it just invokes target_recovery_cleanup().
  *
  * \param[in] obd	OBD device of OFD
- * \param[in] stage	cleanup stage
  *
  * \retval		0
  */
-static int ofd_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
+static int ofd_precleanup(struct obd_device *obd)
 {
-	int rc = 0;
-
 	ENTRY;
-
-	switch(stage) {
-	case OBD_CLEANUP_EARLY:
-		break;
-	case OBD_CLEANUP_EXPORTS:
-		target_cleanup_recovery(obd);
-		break;
-	}
-	RETURN(rc);
+	target_cleanup_recovery(obd);
+	RETURN(0);
 }
 
 /**
