@@ -976,9 +976,22 @@ kiblnd_destroy_conn (kib_conn_t *conn)
 	if (conn->ibc_state != IBLND_CONN_INIT) {
 		kib_net_t *net = peer->ibp_ni->ni_data;
 
-		kiblnd_peer_decref(peer);
 		rdma_destroy_id(cmid);
 		atomic_dec(&net->ibn_nconns);
+		if (conn->ibc_conn_race) {
+			if (peer->ibp_accepting == 0 &&
+			    !list_empty(&peer->ibp_tx_queue)) {
+				kiblnd_connect_peer(peer);
+			} else  {
+				rwlock_t *glock = &kiblnd_data.kib_global_lock;
+				unsigned long flags;
+
+				write_lock_irqsave(glock, flags);
+				peer->ibp_connecting--;
+				write_unlock_irqrestore(glock, flags);
+			}
+		}
+		kiblnd_peer_decref(peer);
 	}
 
 	LIBCFS_FREE(conn, sizeof(*conn));

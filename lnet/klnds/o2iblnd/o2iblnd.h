@@ -686,11 +686,13 @@ typedef struct kib_conn
 	/* set on comms error */
 	int			ibc_comms_error;
 	/* receive buffers owned */
-	unsigned int		ibc_nrx:16;
+	unsigned short		ibc_nrx;
+	/** rejected by connection race */
+	unsigned short		ibc_conn_race:1;
 	/* scheduled for attention */
-	unsigned int		ibc_scheduled:1;
+	unsigned short		ibc_scheduled:1;
 	/* CQ callback fired */
-	unsigned int		ibc_ready:1;
+	unsigned short		ibc_ready:1;
 	/* time of last send */
 	unsigned long		ibc_last_send;
 	/** link chain for kiblnd_check_conns only */
@@ -1113,6 +1115,7 @@ int  kiblnd_translate_mtu(int value);
 int  kiblnd_dev_failover(kib_dev_t *dev);
 int  kiblnd_create_peer (lnet_ni_t *ni, kib_peer_t **peerp, lnet_nid_t nid);
 void kiblnd_destroy_peer (kib_peer_t *peer);
+void kiblnd_connect_peer(kib_peer_t *peer);
 void kiblnd_destroy_dev (kib_dev_t *dev);
 void kiblnd_unlink_peer_locked (kib_peer_t *peer);
 kib_peer_t *kiblnd_find_peer_locked (lnet_nid_t nid);
