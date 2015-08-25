@@ -91,4 +91,9 @@ int cfs_cpu_core_nsiblings(int cpu);
 int cfs_cpu_ht_nsiblings(int cpu);
 
 #endif /* CONFIG_SMP */
+
+#ifndef HAVE_TOPOLOGY_SIBLING_CPUMASK
+# define topology_sibling_cpumask(cpu)	topology_thread_cpumask(cpu)
+#endif /* HAVE_TOPOLOGY_SIBLING_CPUMASK */
+
 #endif /* __LIBCFS_LINUX_CPU_H__ */

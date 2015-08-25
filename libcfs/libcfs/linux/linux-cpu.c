@@ -106,7 +106,7 @@ cfs_cpu_core_nsiblings(int cpu)
 void
 cfs_cpu_ht_siblings(int cpu, cpumask_t *mask)
 {
-	cpumask_copy(mask, topology_thread_cpumask(cpu));
+	cpumask_copy(mask, topology_sibling_cpumask(cpu));
 }
 
 /* return number of HTs in the same core of \a cpu */
@@ -115,7 +115,7 @@ cfs_cpu_ht_nsiblings(int cpu)
 {
 	int	num;
 
-	num = cpumask_weight(topology_thread_cpumask(cpu));
+	num = cpumask_weight(topology_sibling_cpumask(cpu));
 
 	return num;
 }

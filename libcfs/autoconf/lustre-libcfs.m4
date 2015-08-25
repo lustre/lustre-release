@@ -288,7 +288,7 @@ shrinker_count_objects, [
 # hlist_add_behind
 #
 AC_DEFUN([LIBCFS_HLIST_ADD_AFTER],[
-LB_CHECK_COMPILE([does function hlist_add_after exist'],
+LB_CHECK_COMPILE([does function 'hlist_add_after' exist],
 hlist_add_after, [
 	#include <linux/list.h>
 ],[
@@ -298,6 +298,24 @@ hlist_add_after, [
 		[hlist_add_after is available])
 ])
 ]) # LIBCFS_HLIST_ADD_AFTER
+
+#
+# Kernel version 4.2 changed topology_thread_cpumask
+# to topology_sibling_cpumask
+#
+AC_DEFUN([LIBCFS_HAVE_TOPOLOGY_SIBLING_CPUMASK],[
+LB_CHECK_COMPILE([does function 'topology_sibling_cpumask' exist],
+topology_sibling_cpumask, [
+	#include <linux/topology.h>
+],[
+	const struct cpumask *mask;
+
+	mask = topology_sibling_cpumask(0);
+],[
+	AC_DEFINE(HAVE_TOPOLOGY_SIBLING_CPUMASK, 1,
+		[topology_sibling_cpumask is available])
+])
+]) # LIBCFS_HAVE_TOPOLOGY_SIBLING_CPUMASK
 
 #
 # LIBCFS_PROG_LINUX
@@ -336,6 +354,8 @@ LIBCFS_ENABLE_CRC32C_ACCEL
 LIBCFS_SHRINKER_COUNT
 # 3.17
 LIBCFS_HLIST_ADD_AFTER
+# 4.2
+LIBCFS_HAVE_TOPOLOGY_SIBLING_CPUMASK
 ]) # LIBCFS_PROG_LINUX
 
 #
