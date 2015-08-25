@@ -75,6 +75,19 @@ static inline void ll_delete_from_page_cache(struct page *page)
 #endif /* !HAVE_DELETE_FROM_PAGE_CACHE */
 
 static inline void
+ll_cancel_dirty_page(struct address_space *mapping, struct page *page)
+{
+#ifdef HAVE_NEW_CANCEL_DIRTY_PAGE
+	cancel_dirty_page(page);
+#elif defined(HAVE_CANCEL_DIRTY_PAGE)
+	cancel_dirty_page(page, PAGE_SIZE);
+#else
+	if (TestClearPageDirty(page))
+		account_page_cleaned(page, mapping);
+#endif	/* HAVE_NEW_CANCEL_DIRTY_PAGE */
+}
+
+static inline void
 truncate_complete_page(struct address_space *mapping, struct page *page)
 {
 	if (page->mapping != mapping)
@@ -86,12 +99,8 @@ truncate_complete_page(struct address_space *mapping, struct page *page)
 #else
 		page->mapping->a_ops->invalidatepage(page, 0);
 #endif
-#ifdef HAVE_CANCEL_DIRTY_PAGE
-	cancel_dirty_page(page, PAGE_SIZE);
-#else
-	if (TestClearPageDirty(page))
-		account_page_cleaned(page, mapping);
-#endif	/* HAVE_CANCEL_DIRTY_PAGE */
+
+	ll_cancel_dirty_page(mapping, page);
 	ClearPageMappedToDisk(page);
 	ll_delete_from_page_cache(page);
 }
