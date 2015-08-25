@@ -70,6 +70,8 @@ atomic_t         obd_stale_export_num;
 
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
+void (*sptlrpc_sec_put_superhack)(struct obd_import *imp);
+EXPORT_SYMBOL(sptlrpc_sec_put_superhack);
 
 /*
  * support functions: we could use inter-module communication, but this
@@ -1025,6 +1027,10 @@ void class_import_put(struct obd_import *imp)
 
 	if (atomic_dec_and_test(&imp->imp_refcount)) {
                 CDEBUG(D_INFO, "final put import %p\n", imp);
+		/* Drop security policy instance after all RPCs have
+		 * finished/aborted to let all busy contexts be released. */
+		sptlrpc_sec_put_superhack(imp);
+
                 obd_zombie_import_add(imp);
         }
 
