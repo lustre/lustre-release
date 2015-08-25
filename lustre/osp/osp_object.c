@@ -2124,13 +2124,18 @@ static int osp_object_init(const struct lu_env *env, struct lu_object *o,
 
 		po->opo_obj.do_ops = &osp_md_obj_ops;
 		po->opo_obj.do_body_ops = &osp_md_body_ops;
-		rc = po->opo_obj.do_ops->do_attr_get(env, lu2dt_obj(o), la);
-		if (rc == 0)
-			o->lo_header->loh_attr |=
-				LOHA_EXISTS | (la->la_mode & S_IFMT);
-		if (rc == -ENOENT) {
+		if (conf != NULL && conf->loc_flags & LOC_F_NEW) {
 			po->opo_non_exist = 1;
-			rc = 0;
+		} else {
+			rc = po->opo_obj.do_ops->do_attr_get(env, lu2dt_obj(o),
+							     la);
+			if (rc == 0)
+				o->lo_header->loh_attr |=
+					LOHA_EXISTS | (la->la_mode & S_IFMT);
+			if (rc == -ENOENT) {
+				po->opo_non_exist = 1;
+				rc = 0;
+			}
 		}
 		init_rwsem(&po->opo_sem);
 	}
