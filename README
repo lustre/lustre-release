@@ -18,4 +18,6 @@ In order to improve the quality of patches submitted to the Lustre tree,
 it is possible to automatically check every patch and commit against the
 Lustre Coding Guidelines.  To do this, run in the top-level lustre/ tree:
 
-    cp build/{prepare-,}commit-msg .git/hooks/
+    cd .git/hooks
+    ln -s ../../contrib/git-hooks/{prepare-,}commit-msg ./
+    cd ../..
