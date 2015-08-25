@@ -2155,8 +2155,7 @@ static int mgs_write_log_osp_to_mdt(const struct lu_env *env,
 		GOTO(out_end, rc);
 
 	/* Add mdc(osp) to lod */
-	snprintf(index_str, sizeof(mti->mti_stripe_index), "%d",
-		 mti->mti_stripe_index);
+	snprintf(index_str, sizeof(index_str), "%d", mti->mti_stripe_index);
 	rc = record_base(env, llh, lovname, 0, LCFG_ADD_MDC, mti->mti_uuid,
 			 index_str, "1", NULL);
 	if (rc)
