@@ -58,7 +58,7 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/${NAME}.sh}
 init_logging
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 24D 27m 64b 68 71 77f 78 115 124b"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 24D 27m 64b 68 71 77f 78 115 124b 300o"
 
 if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
 	# bug number for skipped test: LU-4536 LU-1957 LU-2805
@@ -13528,6 +13528,8 @@ test_300d() {
 run_test 300d "check default stripe under striped directory"
 
 test_300e() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+		skip "Need MDS version at least 2.7.55" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	local stripe_count
@@ -13572,6 +13574,8 @@ test_300e() {
 run_test 300e "check rename under striped directory"
 
 test_300f() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+		skip "Need MDS version at least 2.7.55" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	local stripe_count
@@ -13659,6 +13663,8 @@ test_300_check_default_striped_dir()
 }
 
 test_300g() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+		skip "Need MDS version at least 2.7.55" && return
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	local dir
 	local stripe_count
@@ -13690,6 +13696,8 @@ test_300g() {
 run_test 300g "check default striped directory for normal directory"
 
 test_300h() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+		skip "Need MDS version at least 2.7.55" && return
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	local dir
 	local stripe_count
@@ -13718,6 +13726,8 @@ test_300h() {
 run_test 300h "check default striped directory for striped directory"
 
 test_300i() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+		skip "Need MDS version at least 2.7.55" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	local stripe_count
@@ -13784,9 +13794,9 @@ test_300j() {
 run_test 300j "test large update record"
 
 test_300k() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
 		skip "Need MDS version at least 2.7.55" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	local stripe_count
 	local file
@@ -13809,6 +13819,8 @@ test_300k() {
 run_test 300k "test large striped directory"
 
 test_300l() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+		skip "Need MDS version at least 2.7.55" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	local stripe_index
@@ -13830,6 +13842,8 @@ test_300l() {
 run_test 300l "non-root user to create dir under striped dir with stale layout"
 
 test_300m() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+		skip "Need MDS version at least 2.7.55" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	[ $MDSCOUNT -ge 2 ] && skip "Only for single MDT" && return
 
@@ -13870,6 +13884,8 @@ cleanup_300n() {
 }
 
 test_300n() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+		skip "Need MDS version at least 2.7.55" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	local stripe_index
@@ -13907,6 +13923,44 @@ test_300n() {
 	cleanup_300n
 }
 run_test 300n "non-root user to create dir under striped dir with default EA"
+
+test_300o() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+		skip "Need MDS version at least 2.7.55" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local numfree1
+	local numfree2
+
+	mkdir -p $DIR/$tdir
+
+	numfree1=$(lctl get_param -n mdc.*MDT0000*.filesfree)
+	numfree2=$(lctl get_param -n mdc.*MDT0001*.filesfree)
+	if [ $numfree1 -lt 66000 -o $numfree2 -lt 66000 ]; then
+		skip "not enough free inodes $numfree1 $numfree2"
+		return
+	fi
+
+	numfree1=$(lctl get_param -n mdc.*MDT0000-mdc-*.kbytesfree)
+	numfree2=$(lctl get_param -n mdc.*MDT0001-mdc-*.kbytesfree)
+	if [ $numfree1 -lt 300000 -o $numfree2 -lt 300000 ]; then
+		skip "not enough free space $numfree1 $numfree2"
+		return
+	fi
+
+	$LFS setdirstripe -c2 $DIR/$tdir/striped_dir ||
+		error "setdirstripe fails"
+
+	createmany -d $DIR/$tdir/striped_dir/d 131000 ||
+		error "create dirs fails"
+
+	$LCTL set_param ldlm.namespaces.*mdc-*.lru_size=0
+	ls $DIR/$tdir/striped_dir > /dev/null ||
+		error "ls striped dir fails"
+	unlinkmany -d $DIR/$tdir/striped_dir/d 131000 ||
+		error "unlink big striped dir fails"
+}
+run_test 300o "unlink big sub stripe(> 65000 subdirs)"
 
 prepare_remote_file() {
 	mkdir $DIR/$tdir/src_dir ||
