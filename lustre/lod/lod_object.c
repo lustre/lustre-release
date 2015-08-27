@@ -1799,11 +1799,6 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 
 	stripe_count = le32_to_cpu(lum->lum_stripe_count);
 
-	/* shrink the stripe_count to the avaible MDT count */
-	if (stripe_count > lod->lod_remote_mdt_count + 1 &&
-	    !OBD_FAIL_CHECK(OBD_FAIL_LARGE_STRIPE))
-		stripe_count = lod->lod_remote_mdt_count + 1;
-
 	OBD_ALLOC(stripe, sizeof(stripe[0]) * stripe_count);
 	if (stripe == NULL)
 		RETURN(-ENOMEM);
@@ -1996,7 +1991,6 @@ static int lod_declare_xattr_set_lmv(const struct lu_env *env,
 out:
 	RETURN(rc);
 }
-
 
 /**
  * Implementation of dt_object_operations::do_declare_xattr_set.
@@ -3254,8 +3248,6 @@ static void lod_ah_init(const struct lu_env *env,
 			rc = lod_verify_md_striping(d, lum1);
 			if (rc == 0 &&
 				le32_to_cpu(lum1->lum_stripe_count) > 1) {
-				/* Directory will be striped only if
-				 * stripe_count > 1 */
 				lc->ldo_stripenr =
 					le32_to_cpu(lum1->lum_stripe_count);
 				lc->ldo_dir_stripe_offset =
@@ -3282,6 +3274,18 @@ static void lod_ah_init(const struct lu_env *env,
 			lc->ldo_stripenr = 0;
 			lc->ldo_dir_stripe_offset = -1;
 		}
+
+		/* shrink the stripe_count to the avaible MDT count */
+		if (lc->ldo_stripenr > d->lod_remote_mdt_count + 1 &&
+		    !OBD_FAIL_CHECK(OBD_FAIL_LARGE_STRIPE))
+			lc->ldo_stripenr = d->lod_remote_mdt_count + 1;
+
+		/* Directory will be striped only if stripe_count > 1, if
+		 * stripe_count == 1, let's reset stripenr = 0 to avoid
+		 * create single master stripe and also help to unify the
+		 * stripe handling of directories and files */
+		if (lc->ldo_stripenr == 1)
+			lc->ldo_stripenr = 0;
 
 		CDEBUG(D_INFO, "final striping count:%hu, offset:%d\n",
 		       lc->ldo_stripenr, (int)lc->ldo_dir_stripe_offset);
@@ -3550,7 +3554,31 @@ static int lod_declare_object_create(const struct lu_env *env,
 					GOTO(out, rc = -EREMOTE);
 			} else if (lo->ldo_dir_stripe_offset !=
 				   ss->ss_node_id) {
-				GOTO(out, rc = -EREMOTE);
+				struct lod_device *lod;
+				struct lod_tgt_descs *ltd;
+				struct lod_tgt_desc *tgt = NULL;
+				bool found_mdt = false;
+				int i;
+
+				lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+				ltd = &lod->lod_mdt_descs;
+				cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
+					tgt = LTD_TGT(ltd, i);
+					if (tgt->ltd_index ==
+						lo->ldo_dir_stripe_offset) {
+						found_mdt = true;
+						break;
+					}
+				}
+
+				/* If the MDT indicated by stripe_offset can be
+				 * found, then tell client to resend the create
+				 * request to the correct MDT, otherwise return
+				 * error to client */
+				if (found_mdt)
+					GOTO(out, rc = -EREMOTE);
+				else
+					GOTO(out, rc = -EINVAL);
 			}
 		}
 

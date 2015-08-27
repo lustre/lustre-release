@@ -13538,6 +13538,7 @@ test_300_check_default_striped_dir()
 	for dir in $(find $DIR/$tdir/$dirname/*); do
 		stripe_count=$($LFS getdirstripe -c $dir)
 		[ $stripe_count -eq $default_count ] ||
+		[ $stripe_count -eq 0 -o $default_count -eq 1 ] ||
 		error "stripe count $default_count != $stripe_count for $dir"
 
 		stripe_index=$($LFS getdirstripe -i $dir)
@@ -13726,6 +13727,39 @@ test_300l() {
 		error "expect 1 get $stripe_index for $dir"
 }
 run_test 300l "non-root user to create dir under striped dir with stale layout"
+
+test_300m() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -ge 2 ] && skip "Only for single MDT" && return
+
+	mkdir -p $DIR/$tdir/striped_dir
+	$LFS setdirstripe -D -c 1 $DIR/$tdir/striped_dir ||
+		error "set default stripes dir error"
+
+	mkdir $DIR/$tdir/striped_dir/a || error "mkdir a fails"
+
+	stripe_count=$($LFS getdirstripe -c $DIR/$tdir/striped_dir/a)
+	[ $stripe_count -eq 0 ] ||
+			error "expect 0 get $stripe_count for a"
+
+	$LFS setdirstripe -D -c 2 $DIR/$tdir/striped_dir ||
+		error "set default stripes dir error"
+
+	mkdir $DIR/$tdir/striped_dir/b || error "mkdir b fails"
+
+	stripe_count=$($LFS getdirstripe -c $DIR/$tdir/striped_dir/b)
+	[ $stripe_count -eq 0 ] ||
+			error "expect 0 get $stripe_count for b"
+
+	$LFS setdirstripe -D -c1 -i2 $DIR/$tdir/striped_dir ||
+		error "set default stripes dir error"
+
+	mkdir $DIR/$tdir/striped_dir/c &&
+		error "default stripe_index is invalid, mkdir c should fails"
+
+	rm -rf $DIR/$tdir || error "rmdir fails"
+}
+run_test 300m "setstriped directory on single MDT FS"
 
 prepare_remote_file() {
 	mkdir $DIR/$tdir/src_dir ||
