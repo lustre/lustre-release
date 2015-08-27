@@ -1324,7 +1324,7 @@ static int mdt_lock_objects_in_linkea(struct mdt_thread_info *info,
 			OBD_FREE_PTR(mll);
 			GOTO(out, rc = -EBUSY);
 		}
-
+		rc = 0;
 		INIT_LIST_HEAD(&mll->mll_list);
 		mll->mll_obj = mdt_pobj;
 		list_add_tail(&mll->mll_list, lock_list);

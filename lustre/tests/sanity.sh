@@ -12815,6 +12815,50 @@ test_230d() {
 }
 run_test 230d "check migrate big directory"
 
+test_230e() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local i
+	local j
+	local a_fid
+	local b_fid
+
+	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir/migrate_dir
+	mkdir $DIR/$tdir/other_dir
+	touch $DIR/$tdir/migrate_dir/a
+	ln $DIR/$tdir/migrate_dir/a $DIR/$tdir/other_dir/b
+
+	$LFS migrate -m 1 $DIR/$tdir/migrate_dir ||
+		error "migrate dir fails"
+
+	mdt_index=$($LFS getstripe -M $DIR/$tdir/migrate_dir)
+	[ $mdt_index == 1 ] || error "migrate_dir is not on MDT1"
+
+	mdt_index=$($LFS getstripe -M $DIR/$tdir/migrate_dir/a)
+	[ $mdt_index == 0 ] || error "a is not on MDT0"
+
+	$LFS migrate -m 1 $DIR/$tdir/other_dir ||
+		error "migrate dir fails"
+
+	mdt_index=$($LFS getstripe -M $DIR/$tdir/other_dir)
+	[ $mdt_index == 1 ] || error "other_dir is not on MDT1"
+
+	mdt_index=$($LFS getstripe -M $DIR/$tdir/migrate_dir/a)
+	[ $mdt_index == 1 ] || error "a is not on MDT1"
+
+	mdt_index=$($LFS getstripe -M $DIR/$tdir/other_dir/b)
+	[ $mdt_index == 1 ] || error "b is not on MDT1"
+
+	a_fid=$($LFS path2fid $DIR/$tdir/migrate_dir/a)
+	b_fid=$($LFS path2fid $DIR/$tdir/other_dir/b)
+
+	[ "$a_fid" = "$b_fid" ] || error "different fid after migration"
+
+	rm -rf $DIR/$tdir || error "rm dir failed after migration"
+}
+run_test 230e "migrate mulitple link files"
+
 test_231a()
 {
 	# For simplicity this test assumes that max_pages_per_rpc
