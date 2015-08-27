@@ -460,6 +460,7 @@ my %dep_functions = (
 	'strcat',			'strncat',
 	'tempnam',			'mkstemp',
 	'OBD_FREE_LARGE',		'OBD_FREE',
+	'f_dentry',			'f_path.dentry',
 );
 
 my @rawlines = ();

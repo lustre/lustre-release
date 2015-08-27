@@ -2177,7 +2177,7 @@ static inline long ll_lease_type_from_fmode(fmode_t fmode)
 
 static int ll_file_futimes_3(struct file *file, const struct ll_futimes_3 *lfu)
 {
-	struct inode *inode = file->f_dentry->d_inode;
+	struct inode *inode = file->f_path.dentry->d_inode;
 	struct iattr ia = {
 		.ia_valid = ATTR_ATIME | ATTR_ATIME_SET |
 			    ATTR_MTIME | ATTR_MTIME_SET |
@@ -2205,7 +2205,7 @@ static int ll_file_futimes_3(struct file *file, const struct ll_futimes_3 *lfu)
 		RETURN(-EINVAL);
 
 	mutex_lock(&inode->i_mutex);
-	rc = ll_setattr_raw(file->f_dentry, &ia, false);
+	rc = ll_setattr_raw(file->f_path.dentry, &ia, false);
 	mutex_unlock(&inode->i_mutex);
 
 	RETURN(rc);
