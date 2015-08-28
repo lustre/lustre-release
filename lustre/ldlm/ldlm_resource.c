@@ -84,13 +84,11 @@ LPROC_SEQ_FOPS_WO_TYPE(ldlm, dump_ns);
 LPROC_SEQ_FOPS_RW_TYPE(ldlm_rw, uint);
 LPROC_SEQ_FOPS_RO_TYPE(ldlm, uint);
 
-/* Lock count is stored in the watermark, and it's display as number of MB
- * memory consumed by the locks */
+#ifdef HAVE_SERVER_SUPPORT
+
 static int seq_watermark_show(struct seq_file *m, void *data)
 {
-	__u64 locknr = *(__u64 *)m->private;
-	return seq_printf(m, LPU64"\n",
-			  (locknr * sizeof(struct ldlm_lock)) >> 20);
+	return seq_printf(m, LPU64"\n", *(__u64 *)m->private);
 }
 
 static ssize_t seq_watermark_write(struct file *file,
@@ -99,23 +97,51 @@ static ssize_t seq_watermark_write(struct file *file,
 {
 	__u64 watermark;
 	__u64 *data = ((struct seq_file *)file->private_data)->private;
+	bool wm_low = (data == &ldlm_reclaim_threshold_mb) ? true : false;
 	int rc;
 
 	rc = lprocfs_write_frac_u64_helper(buffer, count, &watermark, 1 << 20);
 	if (rc) {
-		CERROR("Failed to set LDLM watermark, rc = %d.\n", rc);
+		CERROR("Failed to set %s, rc = %d.\n",
+		       wm_low ? "lock_reclaim_threshold_mb" : "lock_limit_mb",
+		       rc);
 		return rc;
 	} else if (watermark != 0 && watermark < (1 << 20)) {
-		CERROR("Watermark should be greater than 1MB.\n");
+		CERROR("%s should be greater than 1MB.\n",
+		       wm_low ? "lock_reclaim_threshold_mb" : "lock_limit_mb");
 		return -EINVAL;
 	}
+	watermark >>= 20;
 
-	do_div(watermark, sizeof(struct ldlm_lock));
-	*data = watermark;
+	if (wm_low) {
+		if (ldlm_lock_limit_mb != 0 && watermark > ldlm_lock_limit_mb) {
+			CERROR("lock_reclaim_threshold_mb must be smaller than "
+			       "lock_limit_mb.\n");
+			return -EINVAL;
+		}
 
-	if (ldlm_watermark_low != 0 && ldlm_watermark_high != 0 &&
-	    ldlm_watermark_low > ldlm_watermark_high)
-		ldlm_watermark_low = ldlm_watermark_high;
+		*data = watermark;
+		if (watermark != 0) {
+			watermark <<= 20;
+			do_div(watermark, sizeof(struct ldlm_lock));
+		}
+		ldlm_reclaim_threshold = watermark;
+	} else {
+		if (ldlm_reclaim_threshold_mb != 0 &&
+		    watermark < ldlm_reclaim_threshold_mb) {
+			CERROR("lock_limit_mb must be greater than "
+			       "lock_reclaim_threshold_mb.\n");
+			return -EINVAL;
+		}
+
+		*data = watermark;
+		if (watermark != 0) {
+			watermark <<= 20;
+			do_div(watermark, sizeof(struct ldlm_lock));
+		}
+		ldlm_lock_limit = watermark;
+	}
+
 	return count;
 }
 
@@ -133,6 +159,27 @@ static const struct file_operations ldlm_watermark_fops = {
 	.release	= lprocfs_single_release,
 };
 
+static int seq_granted_show(struct seq_file *m, void *data)
+{
+	return seq_printf(m, LPU64"\n", percpu_counter_sum_positive(
+				(struct percpu_counter *)m->private));
+}
+
+static int seq_granted_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, seq_granted_show, PDE_DATA(inode));
+}
+
+static const struct file_operations ldlm_granted_fops = {
+	.owner	= THIS_MODULE,
+	.open	= seq_granted_open,
+	.read	= seq_read,
+	.llseek	= seq_lseek,
+	.release = seq_release,
+};
+
+#endif /* HAVE_SERVER_SUPPORT */
+
 int ldlm_proc_setup(void)
 {
 	int rc;
@@ -146,12 +193,17 @@ int ldlm_proc_setup(void)
 		{ .name	=	"cancel_unused_locks_before_replay",
 		  .fops	=	&ldlm_rw_uint_fops,
 		  .data	=	&ldlm_cancel_unused_locks_before_replay },
-		{ .name =	"watermark_mb_low",
+#ifdef HAVE_SERVER_SUPPORT
+		{ .name =	"lock_reclaim_threshold_mb",
 		  .fops =	&ldlm_watermark_fops,
-		  .data =	&ldlm_watermark_low },
-		{ .name =	"watermark_mb_high",
+		  .data =	&ldlm_reclaim_threshold_mb },
+		{ .name =	"lock_limit_mb",
 		  .fops =	&ldlm_watermark_fops,
-		  .data =	&ldlm_watermark_high },
+		  .data =	&ldlm_lock_limit_mb },
+		{ .name =	"lock_granted_count",
+		  .fops =	&ldlm_granted_fops,
+		  .data =	&ldlm_granted_total },
+#endif
 		{ NULL }};
 	ENTRY;
 	LASSERT(ldlm_ns_proc_dir == NULL);

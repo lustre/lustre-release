@@ -9492,7 +9492,7 @@ test_134a() {
 	rm $DIR/$tdir/m
 	unlinkmany $DIR/$tdir/f $nr
 }
-run_test 134a "Server reclaims locks when reaching low watermark"
+run_test 134a "Server reclaims locks when reaching lock_reclaim_threshold"
 
 test_134b() {
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.54) ]] &&
@@ -9501,9 +9501,10 @@ test_134b() {
 	mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
 	cancel_lru_locks mdc
 
-	local low_wm=$(do_facet mds1 $LCTL get_param -n ldlm.watermark_mb_low)
+	local low_wm=$(do_facet mds1 $LCTL get_param -n \
+			ldlm.lock_reclaim_threshold_mb)
 	# disable reclaim temporarily
-	do_facet mds1 $LCTL set_param ldlm.watermark_mb_low=0
+	do_facet mds1 $LCTL set_param ldlm.lock_reclaim_threshold_mb=0
 
 	#define OBD_FAIL_LDLM_WATERMARK_HIGH     0x328
 	do_facet mds1 $LCTL set_param fail_loc=0x328
@@ -9520,17 +9521,18 @@ test_134b() {
 	if ! ps -p $create_pid  > /dev/null 2>&1; then
 		do_facet mds1 $LCTL set_param fail_loc=0
 		do_facet mds1 $LCTL set_param fail_val=0
-		do_facet mds1 $LCTL set_param ldlm.watermark_mb_low=$low_wm
+		do_facet mds1 $LCTL set_param \
+			ldlm.lock_reclaim_threshold_mb=${low_wm}m
 		error "createmany finished incorrectly!"
 	fi
 	do_facet mds1 $LCTL set_param fail_loc=0
 	do_facet mds1 $LCTL set_param fail_val=0
-	do_facet mds1 $LCTL set_param ldlm.watermark_mb_low=$low_wm
+	do_facet mds1 $LCTL set_param ldlm.lock_reclaim_threshold_mb=${low_wm}m
 	wait $create_pid || return 1
 
 	unlinkmany $DIR/$tdir/f $nr
 }
-run_test 134b "Server rejects lock request when reaching high watermark"
+run_test 134b "Server rejects lock request when reaching lock_limit_mb"
 
 test_140() { #bug-17379
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return

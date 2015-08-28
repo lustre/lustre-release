@@ -35,42 +35,33 @@
 
 /*
  * To avoid ldlm lock exhausting server memory, two global parameters:
- * ldlm_watermark_low & ldlm_watermark_high are used for reclaiming
+ * ldlm_reclaim_threshold & ldlm_lock_limit are used for reclaiming
  * granted locks and rejecting incoming enqueue requests defensively.
  *
- * ldlm_watermark_low: When the amount of granted locks reaching this
+ * ldlm_reclaim_threshold: When the amount of granted locks reaching this
  * threshold, server start to revoke locks gradually.
  *
- * ldlm_watermark_high: When the amount of granted locks reaching this
+ * ldlm_lock_limit: When the amount of granted locks reaching this
  * threshold, server will return -EINPROGRESS to any incoming enqueue
  * request until the lock count is shrunk below the threshold again.
  *
- * ldlm_watermark_low & ldlm_watermark_high is set to 20% & 30% of the
+ * ldlm_reclaim_threshold & ldlm_lock_limit is set to 20% & 30% of the
  * total memory by default. It is tunable via proc entry, when it's set
  * to 0, the feature is disabled.
  */
 
-/*
- * FIXME:
- *
- * In current implementation, server identifies which locks should be
- * revoked by choosing locks from namespace/resource in a roundrobin
- * manner, which isn't optimal. The ideal way should be server notifies
- * clients to cancel locks voluntarily, because only client knows exactly
- * when the lock is last used.
- *
- * However how to notify client immediately is a problem, one idea
- * is to leverage the glimplse callbacks on some artificial global
- * lock (like quota global lock does), but that requires protocol
- * changes, let's fix it in future long-term solution.
- */
-
-__u64 ldlm_watermark_low;
-__u64 ldlm_watermark_high;
-
 #ifdef HAVE_SERVER_SUPPORT
 
-static struct percpu_counter	ldlm_granted_total;
+/* Lock count is stored in ldlm_reclaim_threshold & ldlm_lock_limit */
+__u64 ldlm_reclaim_threshold;
+__u64 ldlm_lock_limit;
+
+/* Represents ldlm_reclaim_threshold & ldlm_lock_limit in MB, used for
+ * proc interface. */
+__u64 ldlm_reclaim_threshold_mb;
+__u64 ldlm_lock_limit_mb;
+
+struct percpu_counter		ldlm_granted_total;
 static atomic_t			ldlm_nr_reclaimer;
 static cfs_duration_t		ldlm_last_reclaim_age;
 static cfs_time_t		ldlm_last_reclaim_time;
@@ -101,6 +92,17 @@ static inline bool ldlm_lock_reclaimable(struct ldlm_lock *lock)
 	return false;
 }
 
+/**
+ * Callback function for revoking locks from certain resource.
+ *
+ * \param [in] hs	ns_rs_hash
+ * \param [in] bd	current bucket of ns_rsh_hash
+ * \param [in] hnode	hnode of the resource
+ * \param [in] arg	opaque data
+ *
+ * \retval 0		continue the scan
+ * \retval 1		stop the iteration
+ */
 static int ldlm_reclaim_lock_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 				struct hlist_node *hnode, void *arg)
 
@@ -162,6 +164,18 @@ static int ldlm_reclaim_lock_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	return rc;
 }
 
+/**
+ * Revoke locks from the resources of a namespace in a roundrobin
+ * manner.
+ *
+ * \param[in] ns	namespace to do the lock revoke on
+ * \param[in] count	count of lock to be revoked
+ * \param[in] age	only revoke locks older than the 'age'
+ * \param[in] skip	scan from the first lock on resource if the
+ *			'skip' is false, otherwise, continue scan
+ *			from the last scanned position
+ * \param[out] count	count of lock still to be revoked
+ */
 static void ldlm_reclaim_res(struct ldlm_namespace *ns, int *count,
 			     cfs_duration_t age, bool skip)
 {
@@ -224,6 +238,11 @@ static inline cfs_duration_t ldlm_reclaim_age(void)
 	return age;
 }
 
+/**
+ * Revoke certain amount of locks from all the server namespaces
+ * in a roundrobin manner. Lock age is used to avoid reclaim on
+ * the non-aged locks.
+ */
 static void ldlm_reclaim_ns(void)
 {
 	struct ldlm_namespace	*ns;
@@ -290,23 +309,32 @@ void ldlm_reclaim_del(struct ldlm_lock *lock)
 	percpu_counter_sub(&ldlm_granted_total, 1);
 }
 
+/**
+ * Check on the total granted locks: return true if it reaches the
+ * high watermark (ldlm_lock_limit), otherwise return false; It also
+ * triggers lock reclaim if the low watermark (ldlm_reclaim_threshold)
+ * is reached.
+ *
+ * \retval true		high watermark reached.
+ * \retval false	high watermark not reached.
+ */
 bool ldlm_reclaim_full(void)
 {
-	__u64 high = ldlm_watermark_high;
-	__u64 low = ldlm_watermark_low;
+	__u64 high = ldlm_lock_limit;
+	__u64 low = ldlm_reclaim_threshold;
 
 	if (low != 0 && OBD_FAIL_CHECK(OBD_FAIL_LDLM_WATERMARK_LOW))
 		low = cfs_fail_val;
 
 	if (low != 0 &&
-	    percpu_counter_read_positive(&ldlm_granted_total) > low)
+	    percpu_counter_sum_positive(&ldlm_granted_total) > low)
 		ldlm_reclaim_ns();
 
 	if (high != 0 && OBD_FAIL_CHECK(OBD_FAIL_LDLM_WATERMARK_HIGH))
 		high = cfs_fail_val;
 
 	if (high != 0 &&
-	    percpu_counter_read_positive(&ldlm_granted_total) > high)
+	    percpu_counter_sum_positive(&ldlm_granted_total) > high)
 		return true;
 
 	return false;
@@ -322,14 +350,23 @@ static inline __u64 ldlm_ratio2locknr(int ratio)
 	return locknr;
 }
 
+static inline __u64 ldlm_locknr2mb(__u64 locknr)
+{
+	return (locknr * sizeof(struct ldlm_lock) + 512 * 1024) >> 20;
+}
+
 #define LDLM_WM_RATIO_LOW_DEFAULT	20
 #define LDLM_WM_RATIO_HIGH_DEFAULT	30
 
 int ldlm_reclaim_setup(void)
 {
 	atomic_set(&ldlm_nr_reclaimer, 0);
-	ldlm_watermark_low = ldlm_ratio2locknr(LDLM_WM_RATIO_LOW_DEFAULT);
-	ldlm_watermark_high = ldlm_ratio2locknr(LDLM_WM_RATIO_HIGH_DEFAULT);
+
+	ldlm_reclaim_threshold = ldlm_ratio2locknr(LDLM_WM_RATIO_LOW_DEFAULT);
+	ldlm_reclaim_threshold_mb = ldlm_locknr2mb(ldlm_reclaim_threshold);
+	ldlm_lock_limit = ldlm_ratio2locknr(LDLM_WM_RATIO_HIGH_DEFAULT);
+	ldlm_lock_limit_mb = ldlm_locknr2mb(ldlm_lock_limit);
+
 	ldlm_last_reclaim_age = LDLM_RECLAIM_AGE_MAX;
 	ldlm_last_reclaim_time = cfs_time_current();
 
