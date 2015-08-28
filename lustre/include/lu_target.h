@@ -400,6 +400,7 @@ void tgt_register_lfsck_query(int (*query)(const struct lu_env *,
 					   struct lfsck_request *));
 bool req_can_reconstruct(struct ptlrpc_request *req, struct tg_reply_data *trd);
 
+extern struct tgt_handler tgt_sec_ctx_handlers[];
 extern struct tgt_handler tgt_lfsck_handlers[];
 extern struct tgt_handler tgt_obd_handlers[];
 extern struct tgt_handler tgt_dlm_handlers[];

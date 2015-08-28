@@ -1451,6 +1451,22 @@ TGT_LLOG_HDL_VAR(0,	LLOG_ORIGIN_HANDLE_CLOSE,	tgt_llog_close),
 };
 EXPORT_SYMBOL(tgt_llog_handlers);
 
+/*
+ * sec context handlers
+ */
+/* XXX: Implement based on mdt_sec_ctx_handle()? */
+static int tgt_sec_ctx_handle(struct tgt_session_info *tsi)
+{
+	return 0;
+}
+
+struct tgt_handler tgt_sec_ctx_handlers[] = {
+TGT_SEC_HDL_VAR(0,	SEC_CTX_INIT,		tgt_sec_ctx_handle),
+TGT_SEC_HDL_VAR(0,	SEC_CTX_INIT_CONT,	tgt_sec_ctx_handle),
+TGT_SEC_HDL_VAR(0,	SEC_CTX_FINI,		tgt_sec_ctx_handle),
+};
+EXPORT_SYMBOL(tgt_sec_ctx_handlers);
+
 int (*tgt_lfsck_in_notify)(const struct lu_env *env,
 			   struct dt_device *key,
 			   struct lfsck_request *lr,
