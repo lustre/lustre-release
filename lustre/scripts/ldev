@@ -30,7 +30,7 @@ Parse ldev.conf and answer the following queries:
   -z, --zpool LABEL   Print zpool containing LABEL.
   CMD [ARGS] ...      Run CMD in parallel for each device substituting:
                       %f=fsname  %d=device  %i=dec-index %n=main-nid %l=label
-                      %t=srvtype %j=journal %I=hex-index %N=fail-nid
+                      %t=srvtype %j=journal %I=hex-index %N=fail-nid %m=mgs-nid
                       May be used in combination with -l, -f, -a options.
 EOF
 
@@ -111,7 +111,7 @@ sub parse_cmdline
         $conf{execcmd} = " " . join " ", @ARGV;
     }
 
-    parse_nids () if ($conf{execcmd} =~ /(%n|%N)/);
+    parse_nids () if ($conf{execcmd} =~ /(%n|%N|%m)/);
 }
 
 sub parse_config
@@ -124,6 +124,8 @@ sub parse_config
     my %label2raidtab = ();
     my %label2type = ();
     my %label2zpool = ();
+    my %filesys2mgs = ();
+    my %label2hostname = ();
     my @local_labels = ();
     my @foreign_labels = ();
 
@@ -148,6 +150,9 @@ sub parse_config
 
         eparse_line ($line, "elabel_uniq") if (exists $label2dev{$label}
                                          || exists $label2local{$label});
+        /(\w+)-(OST|MDT|MGT|MGS)([0-9a-fA-F]{4})/, $label;
+        my $filesys = $1;
+        my $nodetype = $2;
         $label2dev{$label} = $dev;
         $label2local{$label} = $local;
         $label2journal{$label} = $j if defined $j;
@@ -157,6 +162,10 @@ sub parse_config
             if ($type eq "zfs" && $dev =~ m{^([^/]+)/[^/]+$}) {
                 $label2zpool{$label} = $1;
             }
+        }
+        $label2hostname{$label}=$local;
+        if ($nodetype eq "MGS" or $nodetype eq "MGT") {
+            $filesys2mgs{$filesys} = $label;
         }
 
         if ($local eq $conf{hostname}) {
@@ -183,6 +192,8 @@ sub parse_config
     %{$conf{label2raidtab}} = %label2raidtab;
     %{$conf{label2type}} = %label2type;
     %{$conf{label2zpool}} = %label2zpool;
+    %{$conf{filesys2mgs}} = %filesys2mgs;
+    %{$conf{label2hostname}} = %label2hostname;
 }
 
 sub parse_nids ()
@@ -386,6 +397,8 @@ sub exec_cmd
     my @cmds = ();
     my %label2dev = %{$conf{label2dev}};
     my %label2journal = %{$conf{label2journal}};
+    my %filesys2mgs = %{$conf{filesys2mgs}};
+    my %label2hostname = %{$conf{label2hostname}};
     my %l2f = %{$conf{l2f}};
     my ($nid, $failnid);
 
@@ -415,7 +428,7 @@ sub exec_cmd
         @labels = (@{$conf{local_labels}}, @{$conf{foreign_labels}});
     }
     foreach (@labels) {
-        /(\w+)-(OST|MDT|MGT)([0-9a-fA-F]{4})/;
+        /(\w+)-(OST|MDT|MGT|MGS)([0-9a-fA-F]{4})/;
 
         my $fsname = $1;
         my $type = $2; $type =~ tr/A-Z/a-z/;
@@ -428,6 +441,24 @@ sub exec_cmd
             log_fatal ("%j used but no journal defined for $_\n");
         }
         my $journal = $label2journal{$_};
+        my $mgsnid;
+        if ($cmd =~ /%m/) {
+            if (!exists $filesys2mgs{$fsname}) {
+                 log_fatal ("$fsname has no MGS defined\n");
+            }
+
+            my $mgs = $filesys2mgs{$fsname};
+            if (!exists $label2hostname{$mgs}) {
+                 log_fatal ("$mgs has no hostname defined\n");
+            }
+
+            my %host2nid = %{$conf{host2nid}};
+            $mgs = $label2hostname{$mgs};
+            if (!exists $host2nid{$mgs}) {
+                 log_fatal ("$mgs has no NID defined\n");
+            }
+            $mgsnid = $host2nid{$mgs};
+        }
 
         $cmd =~ s/%f/$fsname/g;  # %f = fsname
         $cmd =~ s/%t/$type/g;    # %t = server type
@@ -438,6 +469,7 @@ sub exec_cmd
         $cmd =~ s/%j/$journal/g; # %j = journal device
         $cmd =~ s/%n/$nid/g;     # %n = nid
         $cmd =~ s/%N/$failnid/g; # %N = failnid
+        $cmd =~ s/%m/$mgsnid/g;  # %m = MGS nid
 
         push @cmds, "$_ $cmd";
     }
