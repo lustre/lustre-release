@@ -1210,10 +1210,12 @@ set_params:
 		if (newval == 0 || newval == ULLONG_MAX || end == buf)
 			goto subdevs;
 
-		/* Don't increase IO request size limit past 32MB.  It is about
-		 * 2x PTLRPC_MAX_BRW_SIZE, but that isn't in a public header. */
-		if (newval > 32 * 1024) {
-			newval = 32 * 1024;
+		/* Don't increase IO request size limit past 16MB.  It is about
+		 * PTLRPC_MAX_BRW_SIZE, but that isn't in a public header.
+		 * Note that even though the block layer allows larger values,
+		 * setting max_sectors_kb = 32768 causes crashes (LU-6974). */
+		if (newval > 16 * 1024) {
+			newval = 16 * 1024;
 			snprintf(buf, sizeof(buf), "%llu", newval);
 		}
 
