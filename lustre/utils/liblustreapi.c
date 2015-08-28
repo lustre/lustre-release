@@ -4645,7 +4645,9 @@ int llapi_create_volatile_idx(char *directory, int idx, int open_flags)
 	if (rc >= sizeof(file_path))
 		return -E2BIG;
 
-	fd = open(file_path, O_RDWR | O_CREAT | open_flags, S_IRUSR | S_IWUSR);
+	fd = open(file_path,
+		  O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | open_flags,
+		  S_IRUSR | S_IWUSR);
 	if (fd < 0) {
 		llapi_error(LLAPI_MSG_ERROR, errno,
 			    "Cannot create volatile file '%s' in '%s'",
