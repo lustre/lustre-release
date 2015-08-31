@@ -2727,8 +2727,18 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 {
         va_list args;
         struct obd_export *exp = lock->l_export;
-        struct ldlm_resource *resource = lock->l_resource;
+	struct ldlm_resource *resource = NULL;
         char *nid = "local";
+
+	/* on server-side resource of lock doesn't change */
+	if ((lock->l_flags & LDLM_FL_NS_SRV) != 0) {
+		if (lock->l_resource != NULL)
+			resource = ldlm_resource_getref(lock->l_resource);
+	} else if (spin_trylock(&lock->l_lock)) {
+		if (lock->l_resource != NULL)
+			resource = ldlm_resource_getref(lock->l_resource);
+		spin_unlock(&lock->l_lock);
+	}
 
         va_start(args, fmt);
 
@@ -2847,5 +2857,6 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 		break;
 	}
 	va_end(args);
+	ldlm_resource_putref(resource);
 }
 EXPORT_SYMBOL(_ldlm_lock_debug);
