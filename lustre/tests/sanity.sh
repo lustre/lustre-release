@@ -16,6 +16,24 @@ ALWAYS_EXCEPT="                42a  42b  42c  42d  45   51d   68b   $SANITY_EXCE
 # bug number for skipped tests: LU-2036
 ALWAYS_EXCEPT="                 76     $ALWAYS_EXCEPT"
 
+is_sles11()						# LU-4341
+{
+	if [ -r /etc/SuSE-release ]
+	then
+		local vers=$(grep VERSION /etc/SuSE-release | awk '{print $3}')
+		local patchlev=$(grep PATCHLEVEL /etc/SuSE-release |
+			awk '{ print $3 }')
+		if [ $vers -eq 11 ] && [ $patchlev -ge 3 ]; then
+			return 0
+		fi
+	fi
+	return 1
+}
+
+if is_sles11; then					# LU-4341
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 170"
+fi
+
 SRCDIR=$(cd $(dirname $0); echo $PWD)
 export PATH=$PATH:/sbin
 
