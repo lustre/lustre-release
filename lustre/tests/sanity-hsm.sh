@@ -2094,13 +2094,42 @@ test_24e() {
 	$LFS hsm_archive $f || error "cannot archive $f"
 	wait_request_state $fid ARCHIVE SUCCEED
 	$LFS hsm_release $f || error "cannot release $f"
-	sleep 5
+	while ! $LFS hsm_state $f | grep released; do
+		sleep 1
+	done
 
 	tar -cf $TMP/$tfile.tar $DIR/$tdir || error "cannot tar $DIR/$tdir"
 
 	copytool_cleanup
 }
 run_test 24e "tar succeeds on HSM released files" # LU-6213
+
+test_24f() {
+
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir -p $DIR/$tdir/d1
+	local f=$DIR/$tdir/$tfile
+	local fid=$(copy_file /etc/hosts $f)
+	sum0=$(md5sum $f)
+	echo $sum0
+	$LFS hsm_archive -a $HSM_ARCHIVE_NUMBER $f ||
+		error "hsm_archive failed"
+	wait_request_state $fid ARCHIVE SUCCEED
+	$LFS hsm_release $f || error "cannot release $f"
+	tar --xattrs -cvf $f.tar -C $DIR/$tdir $tfile
+	rm -f $f
+	sync
+	tar --xattrs -xvf $f.tar -C $DIR/$tdir ||
+		error "Can not recover the tar contents"
+	sum1=$(md5sum $f)
+	echo "Sum0 = $sum0, sum1 = $sum1"
+	[ "$sum0" == "$sum1" ] || error "md5sum mismatch for '$tfile'"
+
+	copytool_cleanup
+}
+run_test 24f "root can archive, release, and restore tar files"
 
 test_25a() {
 	# test needs a running copytool
