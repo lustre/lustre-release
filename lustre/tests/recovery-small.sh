@@ -210,12 +210,13 @@ test_10d() {
 
 	mount_client $MOUNT2
 
+	cancel_lru_locks osc
 	$LFS setstripe -i 0 -c 1 $DIR1/$tfile
 	echo -n hello > $DIR1/$tfile
 
 	stat $DIR2/$tfile >& /dev/null
 	$LCTL set_param fail_err=71
-	drop_bl_callback_once "echo -n \\\", world\\\" >> $DIR2/$tfile"
+	drop_bl_callback "echo -n \\\", world\\\" >> $DIR2/$tfile"
 
 	client_reconnect
 
