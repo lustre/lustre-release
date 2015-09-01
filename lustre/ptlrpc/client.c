@@ -1283,6 +1283,7 @@ static int after_reply(struct ptlrpc_request *req)
         struct obd_device *obd = req->rq_import->imp_obd;
         int rc;
         struct timeval work_start;
+	__u64 committed;
         long timediff;
         ENTRY;
 
@@ -1437,10 +1438,9 @@ static int after_reply(struct ptlrpc_request *req)
                 /*
                  * Replay-enabled imports return commit-status information.
                  */
-                if (lustre_msg_get_last_committed(req->rq_repmsg)) {
-                        imp->imp_peer_committed_transno =
-                                lustre_msg_get_last_committed(req->rq_repmsg);
-                }
+		committed = lustre_msg_get_last_committed(req->rq_repmsg);
+		if (likely(committed > imp->imp_peer_committed_transno))
+			imp->imp_peer_committed_transno = committed;
 
 		ptlrpc_free_committed(imp);
 
