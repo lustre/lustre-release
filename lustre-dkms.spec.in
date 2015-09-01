@@ -19,6 +19,7 @@ Requires:       dkms >= 2.2.0.3-28.git.7c3e7c5
 Requires:       spl-dkms >= 0.6.1
 Requires:       zfs-dkms >= 0.6.1
 Requires:       gcc, make, perl
+Requires:       python-docutils
 Requires:       kernel-devel
 Provides:       %{module}-kmod = %{version}
 Provides:       %{module}-modules = %{version}
