@@ -3287,8 +3287,9 @@ static int osd_index_declare_iam_delete(const struct lu_env *env,
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
 
+	/* Recycle  may cause additional three blocks to be changed. */
 	osd_trans_declare_op(env, oh, OSD_OT_DELETE,
-			     osd_dto_credits_noquota[DTO_INDEX_DELETE]);
+			     osd_dto_credits_noquota[DTO_INDEX_DELETE] + 3);
 
 	return 0;
 }
