@@ -1184,9 +1184,7 @@ static void nrs_tbf_stop(struct ptlrpc_nrs_policy *policy)
 	LASSERT(cfs_binheap_is_empty(head->th_binheap));
 	cfs_binheap_destroy(head->th_binheap);
 	OBD_FREE_PTR(head);
-	spin_lock(&nrs->nrs_lock);
 	nrs->nrs_throttling = 0;
-	spin_unlock(&nrs->nrs_lock);
 	wake_up(&policy->pol_nrs->nrs_svcpt->scp_waitq);
 }
 
