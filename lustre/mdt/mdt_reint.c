@@ -220,47 +220,10 @@ static int mdt_lookup_version_check(struct mdt_thread_info *info,
 
 }
 
-/**
- * mdt_remote_permission: Check whether the remote operation is permitted,
- *
- * Before we implement async cross-MDT updates (DNE phase 2). There are a few
- * limitations here:
- *
- * 1.Only sysadmin can create remote directory and striped directory and
- *   migrate directory now, unless
- *   lctl set_param mdt.*.enable_remote_dir_gid=allow_gid.
- * 2.Remote directory can only be created on MDT0, unless
- *   lctl set_param mdt.*.enable_remote_dir = 1
- * 3.Only new clients can access remote dir( >= 2.4) and striped dir(>= 2.6),
- *   old client will return -ENOTSUPP.
- *
- * XXX these check are only needed for remote synchronization, once async
- * update is supported, these check will be removed.
- *
- * param[in]info:	execution environment.
- * param[in]parent:	the directory of this operation.
- * param[in]child:	the child of this operation.
- *
- * retval	= 0 remote operation is allowed.
- *              < 0 remote operation is denied.
- */
-static int mdt_remote_permission(struct mdt_thread_info *info,
-				 struct mdt_object *parent,
-				 struct mdt_object *child)
+static inline int mdt_remote_permission_check(struct mdt_thread_info *info)
 {
-	struct mdt_device	*mdt = info->mti_mdt;
-	struct lu_ucred		*uc  = mdt_ucred(info);
-	struct md_op_spec	*spec = &info->mti_spec;
-	struct lu_attr          *attr = &info->mti_attr.ma_attr;
-	struct obd_export	*exp = mdt_info_req(info)->rq_export;
-
-	/* Only check create remote directory, striped directory and
-	 * migration */
-	if (mdt_object_remote(parent) == 0 && mdt_object_remote(child) == 0 &&
-	    !(S_ISDIR(attr->la_mode) && spec->u.sp_ea.eadata != NULL &&
-					spec->u.sp_ea.eadatalen != 0) &&
-	    info->mti_rr.rr_opcode != REINT_MIGRATE)
-		return 0;
+	struct lu_ucred	*uc  = mdt_ucred(info);
+	struct mdt_device *mdt = info->mti_mdt;
 
 	if (!md_capable(uc, CFS_CAP_SYS_ADMIN)) {
 		if (uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
@@ -268,16 +231,62 @@ static int mdt_remote_permission(struct mdt_thread_info *info,
 			return -EPERM;
 	}
 
-	if (!mdt_is_dne_client(exp))
-		return -ENOTSUPP;
+	return 0;
+}
 
-	if (S_ISDIR(attr->la_mode) && spec->u.sp_ea.eadata != NULL &&
-	    spec->u.sp_ea.eadatalen != 0) {
+/**
+ * mdt_remote_permission: Check whether the remote operation is permitted,
+ *
+ * Only sysadmin can create remote directory / striped directory,
+ * migrate directory and set default stripedEA on directory, unless
+ *
+ * lctl set_param mdt.*.enable_remote_dir_gid=allow_gid.
+ *
+ * param[in] info: mdt_thread_info.
+ *
+ * retval	= 0 remote operation is allowed.
+ *              < 0 remote operation is denied.
+ */
+static int mdt_remote_permission(struct mdt_thread_info *info)
+{
+	struct md_op_spec *spec = &info->mti_spec;
+	struct lu_attr *attr = &info->mti_attr.ma_attr;
+	struct obd_export *exp = mdt_info_req(info)->rq_export;
+	int rc;
+
+	if (info->mti_rr.rr_opcode == REINT_MIGRATE) {
+		rc = mdt_remote_permission_check(info);
+		if (rc != 0)
+			return rc;
+	}
+
+	if (info->mti_rr.rr_opcode == REINT_CREATE &&
+	    (S_ISDIR(attr->la_mode) && spec->u.sp_ea.eadata != NULL &&
+	     spec->u.sp_ea.eadatalen != 0)) {
 		const struct lmv_user_md *lum = spec->u.sp_ea.eadata;
+
+		/* Only new clients can create remote dir( >= 2.4) and
+		 * striped dir(>= 2.6), old client will return -ENOTSUPP */
+		if (!mdt_is_dne_client(exp))
+			return -ENOTSUPP;
 
 		if (le32_to_cpu(lum->lum_stripe_count) > 1 &&
 		    !mdt_is_striped_client(exp))
 			return -ENOTSUPP;
+
+		rc = mdt_remote_permission_check(info);
+		if (rc != 0)
+			return rc;
+	}
+
+	if (info->mti_rr.rr_opcode == REINT_SETATTR) {
+		struct md_attr *ma = &info->mti_attr;
+
+		if ((ma->ma_valid & MA_LMV)) {
+			rc = mdt_remote_permission_check(info);
+			if (rc != 0)
+				return rc;
+		}
 	}
 
 	return 0;
@@ -351,7 +360,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
         if (likely(!IS_ERR(child))) {
                 struct md_object *next = mdt_object_child(parent);
 
-		rc = mdt_remote_permission(info, parent, child);
+		rc = mdt_remote_permission(info);
 		if (rc != 0)
 			GOTO(out_put_child, rc);
 
@@ -667,6 +676,10 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 	} else if ((ma->ma_valid & MA_LMV) && (ma->ma_valid & MA_INODE)) {
 		struct lu_buf *buf  = &info->mti_buf;
 		struct mdt_lock_handle  *lh;
+
+		rc = mdt_remote_permission(info);
+		if (rc < 0)
+			GOTO(out_put, rc);
 
 		if (ma->ma_attr.la_valid != 0)
 			GOTO(out_put, rc = -EPROTO);
@@ -1414,7 +1427,7 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info,
 		GOTO(out_put_child, rc = -EPERM);
 	}
 
-	rc = mdt_remote_permission(info, msrcdir, mold);
+	rc = mdt_remote_permission(info);
 	if (rc != 0)
 		GOTO(out_put_child, rc);
 

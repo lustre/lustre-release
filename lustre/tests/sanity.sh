@@ -13841,6 +13841,52 @@ test_300m() {
 }
 run_test 300m "setstriped directory on single MDT FS"
 
+cleanup_300n() {
+	local list=$(comma_list $(mdts_nodes))
+
+	trap 0
+	do_nodes $list $LCTL set_param -n mdt.*.enable_remote_dir_gid=0
+}
+
+test_300n() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local stripe_index
+	local list=$(comma_list $(mdts_nodes))
+
+	trap cleanup_300n RETURN EXIT
+	mkdir -p $DIR/$tdir
+	chmod 777 $DIR/$tdir
+	$RUNAS $LFS setdirstripe -i0 -c$MDSCOUNT \
+				$DIR/$tdir/striped_dir > /dev/null 2>&1 &&
+		error "create striped dir succeeds with gid=0"
+
+	do_nodes $list $LCTL set_param -n mdt.*.enable_remote_dir_gid=-1
+	$RUNAS $LFS setdirstripe -i0 -c$MDSCOUNT $DIR/$tdir/striped_dir ||
+		error "create striped dir fails with gid=-1"
+
+	do_nodes $list $LCTL set_param -n mdt.*.enable_remote_dir_gid=0
+	$RUNAS $LFS setdirstripe -i 1 -c$MDSCOUNT -D \
+				$DIR/$tdir/striped_dir > /dev/null 2>&1 &&
+		error "set default striped dir succeeds with gid=0"
+
+
+	do_nodes $list $LCTL set_param -n mdt.*.enable_remote_dir_gid=-1
+	$RUNAS $LFS setdirstripe -i 1 -c$MDSCOUNT -D $DIR/$tdir/striped_dir ||
+		error "set default striped dir fails with gid=-1"
+
+
+	do_nodes $list $LCTL set_param -n mdt.*.enable_remote_dir_gid=0
+	$RUNAS mkdir $DIR/$tdir/striped_dir/test_dir ||
+					error "create test_dir fails"
+	$RUNAS mkdir $DIR/$tdir/striped_dir/test_dir1 ||
+					error "create test_dir1 fails"
+	$RUNAS mkdir $DIR/$tdir/striped_dir/test_dir2 ||
+					error "create test_dir2 fails"
+	cleanup_300n
+}
+run_test 300n "non-root user to create dir under striped dir with default EA"
+
 prepare_remote_file() {
 	mkdir $DIR/$tdir/src_dir ||
 		error "create remote source failed"
