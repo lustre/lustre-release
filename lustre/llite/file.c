@@ -50,10 +50,11 @@
 # include <linux/uidgid.h>
 #endif
 #include <lustre/ll_fiemap.h>
+
 #include <lustre_ioctl.h>
+#include <lustre_swab.h>
 
 #include "cl_object.h"
-
 #include "llite_internal.h"
 #include "vvp_internal.h"
 

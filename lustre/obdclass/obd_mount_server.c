@@ -49,17 +49,21 @@
 #include <linux/types.h>
 #include <linux/selinux.h>
 #include <linux/statfs.h>
-#include <obd.h>
-#include <obd_class.h>
-#include <lustre/lustre_user.h>
 #include <linux/version.h>
-#include <lustre_ioctl.h>
-#include <lustre_log.h>
-#include <lustre_disk.h>
-#include <lustre_param.h>
 #ifdef HAVE_KERNEL_LOCKED
 #include <linux/smp_lock.h>
 #endif
+
+#include <lustre/lustre_idl.h>
+#include <lustre/lustre_user.h>
+
+#include <llog_swab.h>
+#include <lustre_disk.h>
+#include <lustre_ioctl.h>
+#include <lustre_log.h>
+#include <lustre_param.h>
+#include <obd.h>
+#include <obd_class.h>
 
 /*********** mount lookup *********/
 

@@ -54,6 +54,7 @@ struct brw_page;
 /* Linux specific */
 struct key;
 struct seq_file;
+struct lustre_cfg;
 
 /*
  * forward declaration

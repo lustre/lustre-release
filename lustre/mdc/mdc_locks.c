@@ -37,14 +37,17 @@
 #define DEBUG_SUBSYSTEM S_MDC
 
 #include <linux/module.h>
+
 #include <obd.h>
 #include <obd_class.h>
 #include <lustre_dlm.h>
-#include <lustre_fid.h> /* fid_res_name_eq() */
+#include <lustre_fid.h>
 #include <lustre_intent.h>
 #include <lustre_mdc.h>
 #include <lustre_net.h>
 #include <lustre_req_layout.h>
+#include <lustre_swab.h>
+
 #include "mdc_internal.h"
 
 struct mdc_getattr_args {

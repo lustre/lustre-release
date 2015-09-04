@@ -46,11 +46,14 @@
 
 #include <libcfs/libcfs.h>
 
-#include <obd_support.h>
-#include <obd_class.h>
-#include <lustre_net.h>
-#include <obd_cksum.h>
 #include <lustre/ll_fiemap.h>
+
+#include <llog_swab.h>
+#include <lustre_net.h>
+#include <lustre_swab.h>
+#include <obd_cksum.h>
+#include <obd_class.h>
+#include <obd_support.h>
 
 #include "ptlrpc_internal.h"
 

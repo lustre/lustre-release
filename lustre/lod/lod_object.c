@@ -42,16 +42,16 @@
 
 #include <obd.h>
 #include <obd_class.h>
-#include <lustre_ver.h>
 #include <obd_support.h>
-#include <lprocfs_status.h>
 
 #include <lustre_fid.h>
-#include <lustre_param.h>
-#include <lustre_fid.h>
-#include <lustre_lmv.h>
-#include <md_object.h>
 #include <lustre_linkea.h>
+#include <lustre_lmv.h>
+#include <lustre_param.h>
+#include <lustre_swab.h>
+#include <lustre_ver.h>
+#include <lprocfs_status.h>
+#include <md_object.h>
 
 #include "lod_internal.h"
 

@@ -53,6 +53,7 @@
 
 #define DEBUG_SUBSYSTEM S_MDS
 
+#include <llog_swab.h>
 #include <lustre_log.h>
 #include "osp_internal.h"
 

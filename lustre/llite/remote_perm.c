@@ -51,11 +51,13 @@
 # include <linux/uidgid.h>
 #endif
 
-#include <lustre_ha.h>
 #include <lustre_dlm.h>
+#include <lustre_ha.h>
+#include <lustre_param.h>
+#include <lustre_swab.h>
 #include <lprocfs_status.h>
 #include <lustre_disk.h>
-#include <lustre_param.h>
+
 #include "llite_internal.h"
 
 struct kmem_cache *ll_remote_perm_cachep;

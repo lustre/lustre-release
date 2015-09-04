@@ -39,6 +39,7 @@
 #include <obd_class.h>
 #include <lustre_lfsck.h>
 #include <lustre_lmv.h>
+#include <lustre_swab.h>
 
 #include "lod_internal.h"
 

@@ -178,13 +178,6 @@ static inline int lu_seq_range_compare_loc(const struct lu_seq_range *r1,
 		r1->lsr_flags != r2->lsr_flags;
 }
 
-#if !defined(__REQ_LAYOUT_USER__)
-/**
- * byte swap range structure \a range
- */
-
-void lustre_swab_lu_seq_range(struct lu_seq_range *range);
-#endif
 /**
  * printf string and argument list for sequence range
  */

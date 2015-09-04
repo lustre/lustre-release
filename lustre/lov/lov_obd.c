@@ -44,18 +44,20 @@
 #define DEBUG_SUBSYSTEM S_LOV
 #include <libcfs/libcfs.h>
 
-#include <obd_support.h>
+#include <lustre/lustre_idl.h>
+
+#include <cl_object.h>
+#include <lustre_dlm.h>
+#include <lustre_fid.h>
 #include <lustre_ioctl.h>
 #include <lustre_lib.h>
-#include <lustre_net.h>
-#include <lustre/lustre_idl.h>
-#include <lustre_dlm.h>
 #include <lustre_mds.h>
-#include <obd_class.h>
-#include <lprocfs_status.h>
+#include <lustre_net.h>
 #include <lustre_param.h>
-#include <cl_object.h>
-#include <lustre_fid.h>
+#include <lustre_swab.h>
+#include <lprocfs_status.h>
+#include <obd_class.h>
+#include <obd_support.h>
 
 #include "lov_internal.h"
 

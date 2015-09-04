@@ -44,6 +44,7 @@ EXTRA_DIST = \
 	cl_object.h \
 	dt_object.h \
 	interval_tree.h \
+	llog_swab.h \
 	lprocfs_status.h \
 	lu_object.h \
 	lu_ref.h \
@@ -84,6 +85,7 @@ EXTRA_DIST = \
 	lustre_quota.h \
 	lustre_req_layout.h \
 	lustre_sec.h \
+	lustre_swab.h \
 	lustre_update.h \
 	lustre_ver.h \
 	lu_target.h \

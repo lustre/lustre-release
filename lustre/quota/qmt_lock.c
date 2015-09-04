@@ -31,7 +31,9 @@
 #define DEBUG_SUBSYSTEM S_LQUOTA
 
 #include <linux/kthread.h>
+
 #include <lustre_dlm.h>
+#include <lustre_swab.h>
 #include <obd_class.h>
 
 #include "qmt_internal.h"
