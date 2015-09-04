@@ -76,7 +76,6 @@ usage() {
 print_summary () {
     trap 0
 	[ -z "$DEFAULT_SUITES"] && return 0
-    [ "$TESTSUITE" == "lfsck" ] && return 0
     [ -n "$ONLY" ] && echo "WARNING: ONLY is set to $(echo $ONLY)"
     local details
     local form="%-13s %-17s %-9s %s %s\n"
@@ -198,9 +197,8 @@ init_test_env() {
 		fi
 	fi
 
-    export LFSCK_BIN=${LFSCK_BIN:-lfsck}
-    export LFSCK_ALWAYS=${LFSCK_ALWAYS:-"no"} # check fs after each test suite
-    export FSCK_MAX_ERR=4   # File system errors left uncorrected
+	export LFSCK_ALWAYS=${LFSCK_ALWAYS:-"no"} # check fs after test suite
+	export FSCK_MAX_ERR=4   # File system errors left uncorrected
 
 	export ZFS=${ZFS:-zfs}
 	export ZPOOL=${ZPOOL:-zpool}
@@ -2135,9 +2133,12 @@ wait_update () {
 }
 
 wait_update_facet() {
+	local verbose=
+	[ "$1" = "--verbose" ] && verbose="$1" && shift
+
 	local facet=$1
 	shift
-	wait_update $(facet_active_host $facet) "$@"
+	wait_update $verbose $(facet_active_host $facet) "$@"
 }
 
 sync_all_data() {
@@ -4217,88 +4218,31 @@ check_shared_dir() {
 	return 0
 }
 
-# Run e2fsck on MDT and OST(s) to generate databases used for lfsck.
-generate_db() {
-	local i
-	local ostidx
-	local dev
-	local node
-
-	[[ $(lustre_version_code $SINGLEMDS) -ne $(version_code 2.2.0) ]] ||
-		{ skip "Lustre 2.2.0 lacks the patch for LU-1255"; exit 0; }
-
-	check_shared_dir $SHARED_DIRECTORY ||
-		error "$SHARED_DIRECTORY isn't a shared directory"
-
-	export MDSDB=$SHARED_DIRECTORY/mdsdb
-	export OSTDB=$SHARED_DIRECTORY/ostdb
-
-	# DNE is not supported, so when running e2fsck on a DNE filesystem,
-	# we only pass master MDS parameters.
-	run_e2fsck $MDTNODE $MDTDEV "-n --mdsdb $MDSDB"
-
-    i=0
-    ostidx=0
-    OSTDB_LIST=""
-    for node in $(osts_nodes); do
-        for dev in ${OSTDEVS[i]}; do
-            run_e2fsck $node $dev "-n --mdsdb $MDSDB --ostdb $OSTDB-$ostidx"
-            OSTDB_LIST="$OSTDB_LIST $OSTDB-$ostidx"
-            ostidx=$((ostidx + 1))
-        done
-        i=$((i + 1))
-    done
-}
-
-# Run lfsck on server node if lfsck can't be found on client (LU-2571)
-run_lfsck_remote() {
-	local cmd="$LFSCK_BIN -c -l --mdsdb $MDSDB --ostdb $OSTDB_LIST $MOUNT"
-	local client=$1
-	local mounted=true
-	local rc=0
-
-	#Check if lustre is already mounted
-	do_rpc_nodes $client is_mounted $MOUNT || mounted=false
-	if ! $mounted; then
-		zconf_mount $client $MOUNT ||
-			error "failed to mount Lustre on $client"
-	fi
-	#Run lfsck
-	echo $cmd
-	do_node $client $cmd || rc=$?
-	#Umount if necessary
-	if ! $mounted; then
-		zconf_umount $client $MOUNT ||
-			error "failed to unmount Lustre on $client"
-	fi
-
-	[ $rc -le $FSCK_MAX_ERR ] ||
-		error "$cmd returned $rc, should be <= $FSCK_MAX_ERR"
-	echo "lfsck finished with rc=$rc"
-
-	return $rc
-}
-
 run_lfsck() {
-	local facets="client $SINGLEMDS"
-	local found=false
-	local facet
-	local node
-	local rc=0
+	do_nodes $(comma_list $(mdts_nodes) $(osts_nodes)) \
+		$LCTL set_param printk=+lfsck
+	do_facet $SINGLEMDS "$LCTL lfsck_start -M $FSNAME-MDT0000 -r -A -t all"
 
-	for facet in $facets; do
-		node=$(facet_active_host $facet)
-		if check_progs_installed $node $LFSCK_BIN; then
-			found=true
-			break
-		fi
+	for k in $(seq $MDSCOUNT); do
+		# wait up to 10+1 minutes for LFSCK to complete
+		wait_update_facet --verbose mds${k} "$LCTL get_param -n \
+			mdd.$(facet_svc mds${k}).lfsck_layout |
+			awk '/^status/ { print \\\$2 }'" "completed" 600 ||
+			error "MDS${k} layout isn't the expected 'completed'"
+		wait_update_facet --verbose mds${k} "$LCTL get_param -n \
+			mdd.$(facet_svc mds${k}).lfsck_namespace |
+			awk '/^status/ { print \\\$2 }'" "completed" 60 ||
+			error "MDS${k} namespace isn't the expected 'completed'"
 	done
-	! $found && error "None of \"$facets\" supports lfsck"
-
-	run_lfsck_remote $node || rc=$?
-
-	rm -rvf $MDSDB* $OSTDB* || true
-	return $rc
+	local rep_mdt=$(do_nodes $(comma_list $(mdts_nodes)) \
+			$LCTL get_param -n mdd.$FSNAME-*.lfsck_* |
+			awk '/repaired/ { print $2 }' | calc_sum)
+	local rep_ost=$(do_nodes $(comma_list $(osts_nodes)) \
+			$LCTL get_param -n obdfilter.$FSNAME-*.lfsck_* |
+			awk '/repaired/ { print $2 }' | calc_sum)
+	local repaired=$((rep_mdt + rep_ost))
+	[ $repaired -eq 0 ] ||
+		error "lfsck repaired $rep_mdt MDT and $rep_ost OST errors"
 }
 
 dump_file_contents() {
@@ -4356,11 +4300,10 @@ log_zfs_info() {
 }
 
 check_and_cleanup_lustre() {
-    if [ "$LFSCK_ALWAYS" = "yes" -a "$TESTSUITE" != "lfsck" ]; then
-        get_svr_devs
-        generate_db
-        run_lfsck
-    fi
+	if [ "$LFSCK_ALWAYS" = "yes" -a "$TESTSUITE" != "sanity-lfsck" -a \
+	     "$TESTSUITE" != "sanity-scrub" ]; then
+		run_lfsck
+	fi
 
 	if is_mounted $MOUNT; then
 		[ -n "$DIR" ] && rm -rf $DIR/[Rdfs][0-9]* ||

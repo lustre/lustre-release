@@ -4924,8 +4924,8 @@ test_72() { #LU-2634
 
 	for num in $(seq $MDSCOUNT); do
 		add mds${num} $(mkfs_opts mds$num $(mdsdevname $num)) \
-		--reformat $(mdsdevname $num) $(mdsvdevname $num) ||
-		error "add mds $num failed"
+			--reformat $(mdsdevname $num) $(mdsvdevname $num) ||
+			error "add mds $num failed"
 		do_facet mds${num} "$TUNE2FS -O extents $(mdsdevname $num)" ||
 			error "$TUNE2FS failed on mds${num}"
 	done
