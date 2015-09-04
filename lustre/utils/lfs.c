@@ -148,10 +148,12 @@ static int lfs_mv(int argc, char **argv);
 #define MIGRATE_USAGE							\
 	SSM_CMD_COMMON("migrate  ")					\
 	"                 [--block|-b]\n"				\
+	"                 [--non-block|-n]\n"				\
 	"                 <filename>\n"					\
 	SSM_HELP_COMMON							\
 	"\n"								\
-	"\tblock:        Block file access during data migration\n"	\
+	"\tblock:        Block file access during data migration (default)\n" \
+	"\tnon-block:    Abort migrations if concurrent access is detected\n" \
 
 static const char	*progname;
 static bool		 file_lease_supported = true;
@@ -374,7 +376,7 @@ command_t cmdlist[] = {
 };
 
 
-#define MIGRATION_BLOCKS 1
+#define MIGRATION_NONBLOCK	1
 
 /**
  * Internal helper for migrate_copy_data(). Check lease and report error if
@@ -745,16 +747,19 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 		}
 	}
 
-	if (migration_flags & MIGRATION_BLOCKS || !file_lease_supported) {
-		/* Blocking mode, forced if servers do not support file lease */
-		rc = migrate_block(fd, fdv, &st, buf_size, name);
-	} else {
+	if (migration_flags & MIGRATION_NONBLOCK && file_lease_supported) {
 		rc = migrate_nonblock(fd, fdv, &st, buf_size, name);
 		if (rc == 0) {
 			have_lease_rdlck = false;
 			fdv = -1; /* The volatile file is closed as we put the
 				   * lease in non-blocking mode. */
 		}
+	} else {
+		/* Blocking mode (forced if servers do not support file lease).
+		 * It is also the default mode, since we cannot distinguish
+		 * between a broken lease and a server that does not support
+		 * atomic swap/close (LU-6785) */
+		rc = migrate_block(fd, fdv, &st, buf_size, name);
 	}
 
 error:
@@ -881,12 +886,13 @@ static int lfs_setstripe(int argc, char **argv)
 	char				*mdt_idx_arg = NULL;
 	unsigned long long		 size_units = 1;
 	bool				 migrate_mode = false;
+	bool				 migration_block = false;
 	__u64				 migration_flags = 0;
 	__u32				 osts[LOV_MAX_STRIPE_COUNT] = { 0 };
 	int				 nr_osts = 0;
 
 	struct option		 long_opts[] = {
-		/* valid only in migrate mode */
+		/* --block is only valid in migrate mode */
 		{"block",	 no_argument,	    0, 'b'},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
 		/* This formerly implied "stripe-count", but was explicitly
@@ -907,6 +913,8 @@ static int lfs_setstripe(int argc, char **argv)
 		{"stripe_index", required_argument, 0, 'i'},
 		{"mdt-index",	 required_argument, 0, 'm'},
 		{"mdt_index",	 required_argument, 0, 'm'},
+		/* --non-block is only valid in migrate mode */
+		{"non-block",	 no_argument,	    0, 'n'},
 		{"ost-list",     required_argument, 0, 'o'},
 		{"ost_list",     required_argument, 0, 'o'},
 		{"pool",	 required_argument, 0, 'p'},
@@ -928,7 +936,7 @@ static int lfs_setstripe(int argc, char **argv)
 	if (strcmp(argv[0], "migrate") == 0)
 		migrate_mode = true;
 
-	while ((c = getopt_long(argc, argv, "bc:di:m:o:p:s:S:",
+	while ((c = getopt_long(argc, argv, "bc:di:m:no:p:s:S:",
 				long_opts, NULL)) >= 0) {
 		switch (c) {
 		case 0:
@@ -940,7 +948,7 @@ static int lfs_setstripe(int argc, char **argv)
 						" migrate mode\n");
 				return CMD_HELP;
 			}
-			migration_flags |= MIGRATION_BLOCKS;
+			migration_block = true;
 			break;
 		case 'c':
 #if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 53, 0)
@@ -984,6 +992,14 @@ static int lfs_setstripe(int argc, char **argv)
 			}
 			mdt_idx_arg = optarg;
 			break;
+		case 'n':
+			if (!migrate_mode) {
+				fprintf(stderr, "--non-block is valid only for"
+						" migrate mode\n");
+				return CMD_HELP;
+			}
+			migration_flags |= MIGRATION_NONBLOCK;
+			break;
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
 		case 's':
 #if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 53, 0)
@@ -1022,6 +1038,13 @@ static int lfs_setstripe(int argc, char **argv)
 	if (mdt_idx_arg != NULL && optind > 3) {
 		fprintf(stderr, "error: %s: cannot specify -m with other "
 			"options\n", argv[0]);
+		return CMD_HELP;
+	}
+
+	if ((migration_flags & MIGRATION_NONBLOCK) && migration_block) {
+		fprintf(stderr,
+			"error: %s: cannot specify --non-block and --block\n",
+			argv[0]);
 		return CMD_HELP;
 	}
 
