@@ -1567,7 +1567,7 @@ found:
 static int ptlrpc_server_hpreq_init(struct ptlrpc_service_part *svcpt,
 				    struct ptlrpc_request *req)
 {
-	int rc;
+	int rc = 0;
 	ENTRY;
 
 	if (svcpt->scp_service->srv_ops.so_hpreq_handler != NULL) {
