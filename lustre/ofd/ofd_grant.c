@@ -700,7 +700,7 @@ static long ofd_grant_alloc(struct obd_export *exp, u64 curgrant,
 		/* don't grant more than 1/8th of the remaining free space in
 		 * one chunk */
 		left >>= 3;
-	grant = min(want, left);
+	grant = min(want - curgrant, left);
 	/* round grant upt to the next block size */
 	grant = (grant + (1 << ofd->ofd_blockbits) - 1) &
 		~((1ULL << ofd->ofd_blockbits) - 1);
