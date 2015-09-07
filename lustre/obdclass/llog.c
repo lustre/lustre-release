@@ -202,6 +202,8 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 	struct llog_log_hdr	*llh = loghandle->lgh_hdr;
 	struct thandle		*th;
 	int			 rc;
+	int rc1;
+	bool subtract_count = false;
 
 	ENTRY;
 
@@ -244,17 +246,15 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 	}
 
 	loghandle->lgh_hdr->llh_count--;
+	subtract_count = true;
 	/* Pass this index to llog_osd_write_rec(), which will use the index
 	 * to only update the necesary bitmap. */
 	lgi->lgi_cookie.lgc_index = index;
 	/* update header */
 	rc = llog_write_rec(env, loghandle, &llh->llh_hdr, &lgi->lgi_cookie,
 			    LLOG_HEADER_IDX, th);
-	if (rc != 0) {
-		loghandle->lgh_hdr->llh_count++;
-		ext2_set_bit(index, LLOG_HDR_BITMAP(llh));
+	if (rc != 0)
 		GOTO(out_unlock, rc);
-	}
 
 	if ((llh->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
 	    (llh->llh_count == 1) &&
@@ -270,7 +270,7 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 			       loghandle->lgh_ctxt->loc_obd->obd_name,
 			       POSTID(&loghandle->lgh_id.lgl_oi),
 			       loghandle->lgh_id.lgl_ogen, rc);
-			GOTO(out_unlock, rc = 0);
+			GOTO(out_unlock, rc);
 		}
 		rc = LLOG_DEL_PLAIN;
 	}
@@ -279,7 +279,15 @@ out_unlock:
 	mutex_unlock(&loghandle->lgh_hdr_mutex);
 	up_write(&loghandle->lgh_lock);
 out_trans:
-	dt_trans_stop(env, dt, th);
+	rc1 = dt_trans_stop(env, dt, th);
+	if (rc == 0)
+		rc = rc1;
+	if (rc < 0 && subtract_count) {
+		mutex_lock(&loghandle->lgh_hdr_mutex);
+		loghandle->lgh_hdr->llh_count++;
+		ext2_set_bit(index, LLOG_HDR_BITMAP(llh));
+		mutex_unlock(&loghandle->lgh_hdr_mutex);
+	}
 	RETURN(rc);
 }
 

@@ -1112,6 +1112,7 @@ static int llog_osd_open(const struct lu_env *env, struct llog_handle *handle,
 	dt = ctxt->loc_exp->exp_obd->obd_lvfs_ctxt.dt;
 	LASSERT(dt);
 	if (ctxt->loc_flags & LLOG_CTXT_FLAG_NORMAL_FID) {
+		struct lu_object_conf conf = { 0 };
 		if (logid != NULL) {
 			logid_to_fid(logid, &lgi->lgi_fid);
 		} else {
@@ -1122,9 +1123,11 @@ static int llog_osd_open(const struct lu_env *env, struct llog_handle *handle,
 			if (rc < 0)
 				RETURN(rc);
 			rc = 0;
+			conf.loc_flags = LOC_F_NEW;
 		}
 
-		o = dt_locate(env, dt, &lgi->lgi_fid);
+		o = dt_locate_at(env, dt, &lgi->lgi_fid,
+				 dt->dd_lu_dev.ld_site->ls_top_dev, &conf);
 		if (IS_ERR(o))
 			RETURN(PTR_ERR(o));
 

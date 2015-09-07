@@ -66,6 +66,8 @@ static int llog_cat_new_log(const struct lu_env *env,
 	struct llog_thread_info	*lgi = llog_info(env);
 	struct llog_logid_rec	*rec = &lgi->lgi_logid;
 	int			 rc;
+	struct thandle *handle = NULL;
+	struct dt_device *dt = NULL;
 
 	ENTRY;
 
@@ -80,21 +82,57 @@ static int llog_cat_new_log(const struct lu_env *env,
 		loghandle->lgh_hdr = NULL;
 	}
 
+	if (th == NULL) {
+		dt = lu2dt_dev(cathandle->lgh_obj->do_lu.lo_dev);
+
+		handle = dt_trans_create(env, dt);
+		if (IS_ERR(handle))
+			RETURN(PTR_ERR(handle));
+
+		/* Create update llog object synchronously, which
+		 * happens during inialization process see
+		 * lod_sub_prep_llog(), to make sure the update
+		 * llog object is created before corss-MDT writing
+		 * updates into the llog object */
+		if (cathandle->lgh_ctxt->loc_flags & LLOG_CTXT_FLAG_NORMAL_FID)
+			handle->th_sync = 1;
+
+		handle->th_wait_submit = 1;
+
+		rc = llog_declare_create(env, loghandle, handle);
+		if (rc != 0)
+			GOTO(out, rc);
+
+		rec->lid_hdr.lrh_len = sizeof(*rec);
+		rec->lid_hdr.lrh_type = LLOG_LOGID_MAGIC;
+		rec->lid_id = loghandle->lgh_id;
+		rc = llog_declare_write_rec(env, cathandle, &rec->lid_hdr, -1,
+					    handle);
+		if (rc != 0)
+			GOTO(out, rc);
+
+		rc = dt_trans_start_local(env, dt, handle);
+		if (rc != 0)
+			GOTO(out, rc);
+
+		th = handle;
+	}
+
 	rc = llog_create(env, loghandle, th);
 	/* if llog is already created, no need to initialize it */
 	if (rc == -EEXIST) {
-		RETURN(0);
+		GOTO(out, rc = 0);
 	} else if (rc != 0) {
 		CERROR("%s: can't create new plain llog in catalog: rc = %d\n",
 		       loghandle->lgh_ctxt->loc_obd->obd_name, rc);
-		RETURN(rc);
+		GOTO(out, rc);
 	}
 
 	rc = llog_init_handle(env, loghandle,
 			      LLOG_F_IS_PLAIN | LLOG_F_ZAP_WHEN_EMPTY,
 			      &cathandle->lgh_hdr->llh_tgtuuid);
-	if (rc)
-		GOTO(out_destroy, rc);
+	if (rc < 0)
+		GOTO(out, rc);
 
 	/* build the record for this log in the catalog */
 	rec->lid_hdr.lrh_len = sizeof(*rec);
@@ -106,7 +144,7 @@ static int llog_cat_new_log(const struct lu_env *env,
 	rc = llog_write_rec(env, cathandle, &rec->lid_hdr,
 			    &loghandle->u.phd.phd_cookie, LLOG_NEXT_IDX, th);
 	if (rc < 0)
-		GOTO(out_destroy, rc);
+		GOTO(out, rc);
 
 	CDEBUG(D_OTHER, "new recovery log "DOSTID":%x for index %u of catalog"
 	       DOSTID"\n", POSTID(&loghandle->lgh_id.lgl_oi),
@@ -114,10 +152,11 @@ static int llog_cat_new_log(const struct lu_env *env,
 	       POSTID(&cathandle->lgh_id.lgl_oi));
 
 	loghandle->lgh_hdr->llh_cat_idx = rec->lid_hdr.lrh_index;
+out:
+	if (handle != NULL)
+		dt_trans_stop(env, dt, handle);
+
 	RETURN(0);
-out_destroy:
-	llog_destroy(env, loghandle);
-	RETURN(rc);
 }
 
 /* Open an existent log handle and add it to the open list.
@@ -402,11 +441,20 @@ int llog_cat_declare_add_rec(const struct lu_env *env,
 	lirec->lid_hdr.lrh_len = sizeof(*lirec);
 
 	if (!llog_exist(cathandle->u.chd.chd_current_log)) {
-		rc = llog_declare_create(env, cathandle->u.chd.chd_current_log,
-					 th);
-		if (rc)
-			GOTO(out, rc);
-		llog_declare_write_rec(env, cathandle, &lirec->lid_hdr, -1, th);
+		if (dt_object_remote(cathandle->lgh_obj)) {
+			/* If it is remote cat-llog here, let's create the
+			 * remote llog object synchronously, so other threads
+			 * can use it correctly. */
+			rc = llog_cat_new_log(env, cathandle,
+					cathandle->u.chd.chd_current_log, NULL);
+		} else {
+			rc = llog_declare_create(env,
+					cathandle->u.chd.chd_current_log, th);
+			if (rc)
+				GOTO(out, rc);
+			llog_declare_write_rec(env, cathandle,
+					       &lirec->lid_hdr, -1, th);
+		}
 	}
 	/* declare records in the llogs */
 	rc = llog_declare_write_rec(env, cathandle->u.chd.chd_current_log,
@@ -417,9 +465,17 @@ int llog_cat_declare_add_rec(const struct lu_env *env,
 	next = cathandle->u.chd.chd_next_log;
 	if (next) {
 		if (!llog_exist(next)) {
-			rc = llog_declare_create(env, next, th);
-			llog_declare_write_rec(env, cathandle, &lirec->lid_hdr,
-					       -1, th);
+			if (dt_object_remote(cathandle->lgh_obj)) {
+				/* If it is remote cat-llog here, let's create
+				 * the remote remote llog object synchronously,
+				 * so other threads can use it correctly. */
+				rc = llog_cat_new_log(env, cathandle, next,
+						      NULL);
+			} else {
+				rc = llog_declare_create(env, next, th);
+				llog_declare_write_rec(env, cathandle,
+						&lirec->lid_hdr, -1, th);
+			}
 		}
 		/* XXX: we hope for declarations made for existing llog
 		 *	this might be not correct with some backends
