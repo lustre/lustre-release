@@ -905,6 +905,16 @@ struct lu_rdpg {
         struct page           **rp_pages;
 };
 
+/* read buffer params, should be filled out by out */
+struct lu_rdbuf {
+	/** count in bytes */
+	unsigned int	rb_bytes;
+	/** number of pages */
+	unsigned int	rb_nbufs;
+	/** pointers to pages */
+	struct lu_buf	**rb_bufs;
+};
+
 enum lu_xattr_flags {
 	LU_XATTR_REPLACE = (1 << 0),
 	LU_XATTR_CREATE  = (1 << 1)

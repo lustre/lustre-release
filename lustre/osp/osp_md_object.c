@@ -1115,98 +1115,100 @@ static ssize_t osp_md_write(const struct lu_env *env, struct dt_object *dt,
 static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
 			   struct lu_buf *rbuf, loff_t *pos)
 {
-	struct osp_device	*osp	= lu2osp_dev(dt->do_lu.lo_dev);
-	struct dt_device	*dt_dev	= &osp->opd_dt_dev;
-	struct lu_buf		*lbuf	= &osp_env_info(env)->osi_lb2;
-	struct osp_update_request   *update = NULL;
+	struct osp_device *osp = lu2osp_dev(dt->do_lu.lo_dev);
+	struct dt_device *dt_dev	= &osp->opd_dt_dev;
+	struct lu_buf *lbuf = &osp_env_info(env)->osi_lb2;
+	char *ptr = rbuf->lb_buf;
+	struct osp_update_request *update = NULL;
+	struct ptlrpc_request *req = NULL;
+	struct out_read_reply *orr;
+	struct ptlrpc_bulk_desc *desc;
 	struct object_update_reply *reply;
-	struct out_read_reply	   *orr;
-	char			   *ptr = rbuf->lb_buf;
-	struct ptlrpc_request	   *req = NULL;
-	size_t			   total_length = rbuf->lb_len;
-	size_t			   max_buf_size;
-	loff_t			   offset = *pos;
-	int			   rc;
+	__u32 left_size;
+	int nbufs;
+	int i;
+	int rc;
 	ENTRY;
 
-	/* Calculate the maxium buffer length for each read request */
-	max_buf_size = OUT_UPDATE_REPLY_SIZE - cfs_size_round(sizeof(*orr)) -
-		       cfs_size_round(sizeof(struct object_update_result)) -
-		       cfs_size_round(offsetof(struct object_update_reply,
-				      ourp_lens[1]));
-	while (total_length > 0) {
-		size_t	read_length;
+	/* Because it needs send the update buffer right away,
+	 * just create an update buffer, instead of attaching the
+	 * update_remote list of the thandle.  */
+	update = osp_update_request_create(dt_dev);
+	if (IS_ERR(update))
+		GOTO(out, rc = PTR_ERR(update));
 
-		/* Because it needs send the update buffer right away,
-		 * just create an update buffer, instead of attaching the
-		 * update_remote list of the thandle.  */
-		update = osp_update_request_create(dt_dev);
-		if (IS_ERR(update))
-			GOTO(out, rc = PTR_ERR(update));
-
-		read_length = total_length > max_buf_size ?
-			      max_buf_size : total_length;
-
-		rc = osp_update_rpc_pack(env, read, update, OUT_READ,
-					 lu_object_fid(&dt->do_lu),
-					 read_length, offset);
-		if (rc != 0) {
-			CERROR("%s: cannot insert update: rc = %d\n",
-			       dt_dev->dd_lu_dev.ld_obd->obd_name, rc);
-			GOTO(out, rc);
-		}
-
-		rc = osp_remote_sync(env, osp, update, &req);
-		if (rc < 0)
-			GOTO(out, rc);
-
-		reply = req_capsule_server_sized_get(&req->rq_pill,
-						     &RMF_OUT_UPDATE_REPLY,
-						     OUT_UPDATE_REPLY_SIZE);
-
-		if (reply->ourp_magic != UPDATE_REPLY_MAGIC) {
-			CERROR("%s: invalid update reply magic %x expected %x:"
-			       " rc = %d\n", dt_dev->dd_lu_dev.ld_obd->obd_name,
-			       reply->ourp_magic, UPDATE_REPLY_MAGIC, -EPROTO);
-			GOTO(out, rc = -EPROTO);
-		}
-
-		rc = object_update_result_data_get(reply, lbuf, 0);
-		if (rc < 0)
-			GOTO(out, rc);
-
-		if (lbuf->lb_len < sizeof(*orr))
-			GOTO(out, rc = -EPROTO);
-
-		orr = lbuf->lb_buf;
-		orr_le_to_cpu(orr, orr);
-		offset = orr->orr_offset;
-		if (orr->orr_size > max_buf_size)
-			GOTO(out, rc = -EPROTO);
-
-		memcpy(ptr, orr->orr_data, orr->orr_size);
-		ptr += orr->orr_size;
-		total_length -= orr->orr_size;
-
-		CDEBUG(D_INFO, "%s: read "DFID" pos "LPU64" len %u left %zu\n",
-		       osp->opd_obd->obd_name, PFID(lu_object_fid(&dt->do_lu)),
-		       offset, orr->orr_size, total_length);
-
-		if (orr->orr_size < read_length)
-			break;
-
-		ptlrpc_req_finished(req);
-		osp_update_request_destroy(update);
-		req = NULL;
-		update = NULL;
+	rc = osp_update_rpc_pack(env, read, update, OUT_READ,
+				 lu_object_fid(&dt->do_lu),
+				 rbuf->lb_len, *pos);
+	if (rc != 0) {
+		CERROR("%s: cannot insert update: rc = %d\n",
+		       dt_dev->dd_lu_dev.ld_obd->obd_name, rc);
+		GOTO(out, rc);
 	}
 
-	total_length = rbuf->lb_len - total_length;
-	*pos = offset;
-	CDEBUG(D_INFO, "%s: total read "DFID" pos "LPU64" len %zu\n",
-	       osp->opd_obd->obd_name, PFID(lu_object_fid(&dt->do_lu)),
-	       *pos, total_length);
-	GOTO(out, rc = (int)total_length);
+	rc = osp_prep_update_req(env, osp->opd_obd->u.cli.cl_import, update,
+				 &req);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	nbufs = (rbuf->lb_len + OUT_BULK_BUFFER_SIZE - 1) /
+					OUT_BULK_BUFFER_SIZE;
+	/* allocate bulk descriptor */
+	desc = ptlrpc_prep_bulk_imp(req, nbufs, 1,
+				    PTLRPC_BULK_PUT_SINK | PTLRPC_BULK_BUF_KVEC,
+				    MDS_BULK_PORTAL, &ptlrpc_bulk_kvec_ops);
+	if (desc == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	/* split the buffer into small chunk size */
+	left_size = rbuf->lb_len;
+	for (i = 0; i < nbufs; i++) {
+		int read_size;
+
+		read_size = left_size > OUT_BULK_BUFFER_SIZE ?
+				OUT_BULK_BUFFER_SIZE : left_size;
+		desc->bd_frag_ops->add_iov_frag(desc, ptr, read_size);
+
+		ptr += read_size;
+	}
+
+	/* This will only be called with read-only update, and these updates
+	 * might be used to retrieve update log during recovery process, so
+	 * it will be allowed to send during recovery process */
+	req->rq_allow_replay = 1;
+	req->rq_bulk_read = 1;
+	/* send request to master and wait for RPC to complete */
+	rc = ptlrpc_queue_wait(req);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	rc = sptlrpc_cli_unwrap_bulk_read(req, req->rq_bulk,
+					  req->rq_bulk->bd_nob_transferred);
+	if (rc < 0)
+		GOTO(out, rc);
+
+	reply = req_capsule_server_sized_get(&req->rq_pill,
+					     &RMF_OUT_UPDATE_REPLY,
+					     OUT_UPDATE_REPLY_SIZE);
+
+	if (reply->ourp_magic != UPDATE_REPLY_MAGIC) {
+		CERROR("%s: invalid update reply magic %x expected %x:"
+		       " rc = %d\n", dt_dev->dd_lu_dev.ld_obd->obd_name,
+		       reply->ourp_magic, UPDATE_REPLY_MAGIC, -EPROTO);
+		GOTO(out, rc = -EPROTO);
+	}
+
+	rc = object_update_result_data_get(reply, lbuf, 0);
+	if (rc < 0)
+		GOTO(out, rc);
+
+	if (lbuf->lb_len < sizeof(*orr))
+		GOTO(out, rc = -EPROTO);
+
+	orr = lbuf->lb_buf;
+	orr_le_to_cpu(orr, orr);
+	rc = orr->orr_size;
+	*pos = orr->orr_offset;
 out:
 	if (req != NULL)
 		ptlrpc_req_finished(req);
@@ -1214,7 +1216,7 @@ out:
 	if (update != NULL)
 		osp_update_request_destroy(update);
 
-	return rc;
+	RETURN(rc);
 }
 
 /* These body operation will be used to write symlinks during migration etc */

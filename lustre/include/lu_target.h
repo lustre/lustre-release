@@ -372,6 +372,7 @@ int tgt_sec_ctx_init(struct tgt_session_info *tsi);
 int tgt_sec_ctx_init_cont(struct tgt_session_info *tsi);
 int tgt_sec_ctx_fini(struct tgt_session_info *tsi);
 int tgt_sendpage(struct tgt_session_info *tsi, struct lu_rdpg *rdpg, int nob);
+int tgt_send_buffer(struct tgt_session_info *tsi, struct lu_rdbuf *rdbuf);
 int tgt_validate_obdo(struct tgt_session_info *tsi, struct obdo *oa);
 int tgt_sync(const struct lu_env *env, struct lu_target *tgt,
 	     struct dt_object *obj, __u64 start, __u64 end);

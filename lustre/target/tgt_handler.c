@@ -1107,6 +1107,35 @@ int tgt_obd_log_cancel(struct tgt_session_info *tsi)
 	return err_serious(-EOPNOTSUPP);
 }
 
+int tgt_send_buffer(struct tgt_session_info *tsi, struct lu_rdbuf *rdbuf)
+{
+	struct tgt_thread_info	*tti = tgt_th_info(tsi->tsi_env);
+	struct ptlrpc_request	*req = tgt_ses_req(tsi);
+	struct obd_export	*exp = req->rq_export;
+	struct ptlrpc_bulk_desc	*desc;
+	struct l_wait_info	*lwi = &tti->tti_u.rdbuf.tti_wait_info;
+	int			 i;
+	int			 rc;
+
+	ENTRY;
+
+	desc = ptlrpc_prep_bulk_exp(req, rdbuf->rb_nbufs, 1,
+				  PTLRPC_BULK_PUT_SOURCE | PTLRPC_BULK_BUF_KVEC,
+				    MDS_BULK_PORTAL, &ptlrpc_bulk_kvec_ops);
+	if (desc == NULL)
+		RETURN(-ENOMEM);
+
+	for (i = 0; i < rdbuf->rb_nbufs; i++)
+		desc->bd_frag_ops->add_iov_frag(desc,
+					rdbuf->rb_bufs[i]->lb_buf,
+					rdbuf->rb_bufs[i]->lb_len);
+
+	rc = target_bulk_io(exp, desc, lwi);
+	ptlrpc_free_bulk(desc);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(tgt_send_buffer);
+
 int tgt_sendpage(struct tgt_session_info *tsi, struct lu_rdpg *rdpg, int nob)
 {
 	struct tgt_thread_info	*tti = tgt_th_info(tsi->tsi_env);

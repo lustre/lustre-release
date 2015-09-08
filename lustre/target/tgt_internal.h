@@ -77,6 +77,12 @@ struct tgt_thread_info {
 			struct l_wait_info tti_wait_info;
 		} rdpg;
 		struct {
+			/* for out_read()      */
+			struct lu_rdbuf     tti_rdbuf;
+			/* for tgt_sendpage()      */
+			struct l_wait_info tti_wait_info;
+		} rdbuf;
+		struct {
 			struct dt_object_format	   tti_update_dof;
 			struct object_update_reply *tti_update_reply;
 			struct object_update	   *tti_update;

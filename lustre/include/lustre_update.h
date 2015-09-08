@@ -34,8 +34,8 @@
 #include <dt_object.h>
 
 #define OUT_UPDATE_INIT_BUFFER_SIZE	4096
-/* 16KB, the current biggest size is llog header(8KB) */
-#define OUT_UPDATE_REPLY_SIZE		16384
+#define OUT_UPDATE_REPLY_SIZE		4096
+#define OUT_BULK_BUFFER_SIZE		4096
 
 struct dt_key;
 struct dt_rec;

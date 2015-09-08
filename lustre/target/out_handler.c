@@ -598,14 +598,17 @@ static int out_read(struct tgt_session_info *tsi)
 	struct object_update	*update = tti->tti_u.update.tti_update;
 	struct dt_object	*obj = tti->tti_u.update.tti_dt_object;
 	struct object_update_reply *reply = tti->tti_u.update.tti_update_reply;
-	int		index = tti->tti_u.update.tti_update_reply_index;
+	int index = tti->tti_u.update.tti_update_reply_index;
+	struct lu_rdbuf	*rdbuf = &tti->tti_u.rdbuf.tti_rdbuf;
 	struct object_update_result *update_result;
-	struct lu_buf		*lbuf = &tti->tti_buf;
 	struct out_read_reply	*orr;
-	void			*tmp;
-	size_t			size;
-	__u64			pos;
-	int			 rc;
+	void *tmp;
+	size_t size;
+	size_t total_size = 0;
+	__u64 pos;
+	unsigned int i;
+	unsigned int nbufs;
+	int rc = 0;
 	ENTRY;
 
 	update_result = object_update_result_get(reply, index, NULL);
@@ -631,32 +634,62 @@ static int out_read(struct tgt_session_info *tsi)
 	}
 	pos = le64_to_cpu(*(__u64 *)(tmp));
 
-	/* Check if the read buffer can hold the read_size */
-	if (size > OUT_UPDATE_REPLY_SIZE -
-		   cfs_size_round(offsetof(struct object_update_reply,
-					   ourp_lens[1])) -
-		   cfs_size_round(sizeof(*update_result)) -
-		   cfs_size_round(sizeof(*orr))) {
-		CERROR("%s: get %zu the biggest read size is %d: rc = %d\n",
-		       tgt_name(tsi->tsi_tgt), size, OUT_UPDATE_REPLY_SIZE,
-		       -EPROTO);
-		GOTO(out, rc = err_serious(-EPROTO));
-	}
-
 	/* Put the offset into the begining of the buffer in reply */
 	orr = (struct out_read_reply *)update_result->our_data;
 
-	lbuf->lb_buf = orr->orr_data;
-	lbuf->lb_len = size;
+	nbufs = (size + OUT_BULK_BUFFER_SIZE - 1) / OUT_BULK_BUFFER_SIZE;
+	OBD_ALLOC(rdbuf->rb_bufs, nbufs * sizeof(rdbuf->rb_bufs[0]));
+	if (rdbuf->rb_bufs == NULL)
+		GOTO(out, rc = -ENOMEM);
 
-	dt_read_lock(env, obj, MOR_TGT_CHILD);
-	rc = dt_read(env, obj, lbuf, &pos);
-	dt_read_unlock(env, obj);
-	orr->orr_size = rc < 0 ? 0 : rc;
+	rdbuf->rb_nbufs = 0;
+	total_size = 0;
+	for (i = 0; i < nbufs; i++) {
+		__u32 read_size;
+
+		OBD_ALLOC_PTR(rdbuf->rb_bufs[i]);
+		if (rdbuf->rb_bufs[i] == NULL)
+			GOTO(out_free, rc = -ENOMEM);
+
+		read_size = size > OUT_BULK_BUFFER_SIZE ?
+			    OUT_BULK_BUFFER_SIZE : size;
+		OBD_ALLOC(rdbuf->rb_bufs[i]->lb_buf, read_size);
+		if (rdbuf->rb_bufs[i] == NULL)
+			GOTO(out_free, rc = -ENOMEM);
+
+		rdbuf->rb_bufs[i]->lb_len = read_size;
+		dt_read_lock(env, obj, MOR_TGT_CHILD);
+		rc = dt_read(env, obj, rdbuf->rb_bufs[i], &pos);
+		dt_read_unlock(env, obj);
+
+		total_size += rc < 0 ? 0 : rc;
+		if (rc <= 0)
+			break;
+
+		rdbuf->rb_nbufs++;
+		size -= read_size;
+	}
+
+	rdbuf->rb_bytes = total_size;
+	/* send pages to client */
+	rc = tgt_send_buffer(tsi, rdbuf);
+	if (rc < 0)
+		GOTO(out_free, rc);
+
+	orr->orr_size = total_size;
 	orr->orr_offset = pos;
 
 	orr_cpu_to_le(orr, orr);
 	update_result->our_datalen += orr->orr_size;
+out_free:
+	for (i = 0; i < nbufs; i++) {
+		if (rdbuf->rb_bufs[i] != NULL) {
+			OBD_FREE(rdbuf->rb_bufs[i]->lb_buf,
+				 rdbuf->rb_bufs[i]->lb_len);
+			OBD_FREE_PTR(rdbuf->rb_bufs[i]);
+		}
+	}
+	OBD_FREE(rdbuf->rb_bufs, nbufs * sizeof(rdbuf->rb_bufs[0]));
 out:
 	/* Insert read buffer */
 	update_result->our_rc = ptlrpc_status_hton(rc);
