@@ -1,0 +1,103 @@
+Since we could skip corrupt block groups, this patch
+use ext4_warning() intead of ext4_error() to make FS not
+emount RO in default, also fix a leftover from upstream
+commit 163a203ddb36c36d4a1c942
+---
+ fs/ext4/balloc.c  |  6 +++---
+ fs/ext4/ialloc.c  |  8 ++++----
+ fs/ext4/mballoc.c | 13 ++++++++++---
+ 3 files changed, 17 insertions(+), 10 deletions(-)
+
+diff --git a/fs/ext4/balloc.c b/fs/ext4/balloc.c
+index e069155..8ecf06e 100644
+--- a/fs/ext4/balloc.c
++++ b/fs/ext4/balloc.c
+@@ -377,7 +377,7 @@ static void ext4_validate_block_bitmap(struct super_block *sb,
+ 	blk = ext4_valid_block_bitmap(sb, desc, block_group, bh);
+ 	if (unlikely(blk != 0)) {
+ 		ext4_unlock_group(sb, block_group);
+-		ext4_error(sb, "bg %u: block %llu: invalid block bitmap",
++		ext4_warning(sb, "bg %u: block %llu: invalid block bitmap",
+ 			   block_group, blk);
+ 		if (!EXT4_MB_GRP_BBITMAP_CORRUPT(grp))
+ 			percpu_counter_sub(&sbi->s_freeclusters_counter,
+@@ -388,7 +388,7 @@ static void ext4_validate_block_bitmap(struct super_block *sb,
+ 	if (unlikely(!ext4_block_bitmap_csum_verify(sb, block_group,
+ 			desc, bh))) {
+ 		ext4_unlock_group(sb, block_group);
+-		ext4_error(sb, "bg %u: bad block bitmap checksum", block_group);
++		ext4_warning(sb, "bg %u: bad block bitmap checksum", block_group);
+ 		if (!EXT4_MB_GRP_BBITMAP_CORRUPT(grp))
+ 			percpu_counter_sub(&sbi->s_freeclusters_counter,
+ 					   grp->bb_free);
+@@ -446,7 +446,7 @@ ext4_read_block_bitmap_nowait(struct super_block *sb, ext4_group_t block_group)
+ 		ext4_unlock_group(sb, block_group);
+ 		unlock_buffer(bh);
+ 		if (err)
+-			ext4_error(sb, "Checksum bad for grp %u", block_group);
++			ext4_warning(sb, "Checksum bad for grp %u", block_group);
+ 		return bh;
+ 	}
+ 	ext4_unlock_group(sb, block_group);
+diff --git a/fs/ext4/ialloc.c b/fs/ext4/ialloc.c
+index fc65310..4936bff 100644
+--- a/fs/ext4/ialloc.c
++++ b/fs/ext4/ialloc.c
+@@ -77,7 +77,7 @@ static unsigned ext4_init_inode_bitmap(struct super_block *sb,
+ 	/* If checksum is bad mark all blocks and inodes use to prevent
+ 	 * allocation, essentially implementing a per-group read-only flag. */
+ 	if (!ext4_group_desc_csum_verify(sb, block_group, gdp)) {
+-		ext4_error(sb, "Checksum bad for group %u", block_group);
++		ext4_warning(sb, "Checksum bad for group %u", block_group);
+ 		grp = ext4_get_group_info(sb, block_group);
+ 		if (!EXT4_MB_GRP_BBITMAP_CORRUPT(grp))
+ 			percpu_counter_sub(&sbi->s_freeclusters_counter,
+@@ -193,8 +193,8 @@ verify:
+ 					   EXT4_INODES_PER_GROUP(sb) / 8)) {
+ 		ext4_unlock_group(sb, block_group);
+ 		put_bh(bh);
+-		ext4_error(sb, "Corrupt inode bitmap - block_group = %u, "
+-			   "inode_bitmap = %llu", block_group, bitmap_blk);
++		ext4_warning(sb, "Corrupt inode bitmap - block_group = %u, "
++				 "inode_bitmap = %llu", block_group, bitmap_blk);
+ 		grp = ext4_get_group_info(sb, block_group);
+ 		if (!EXT4_MB_GRP_IBITMAP_CORRUPT(grp)) {
+ 			int count;
+@@ -337,7 +337,7 @@ out:
+ 		if (!fatal)
+ 			fatal = err;
+ 	} else {
+-		ext4_error(sb, "bit already cleared for inode %lu", ino);
++		ext4_warning(sb, "bit already cleared for inode %lu", ino);
+ 		if (gdp && !EXT4_MB_GRP_IBITMAP_CORRUPT(grp)) {
+ 			int count;
+ 			count = ext4_free_inodes_count(sb, gdp);
+diff --git a/fs/ext4/mballoc.c b/fs/ext4/mballoc.c
+index d2b07bd..695ccd3 100644
+--- a/fs/ext4/mballoc.c
++++ b/fs/ext4/mballoc.c
+@@ -752,11 +752,18 @@ int ext4_mb_generate_buddy(struct super_block *sb,
+ 	if (free != grp->bb_free) {
+ 		struct ext4_group_desc *gdp;
+ 		gdp = ext4_get_group_desc(sb, group, NULL);
+-		ext4_error(sb, "group %lu: %u blocks in bitmap, %u in bb, "
+-			"%u in gd, %lu pa's\n", (long unsigned int)group,
++		ext4_warning(sb, "group %lu: %u blocks in bitmap, %u in bb, "
++			"%u in gd, %lu pa's block bitmap corrupt",
++			(long unsigned int)group,
+ 			free, grp->bb_free, ext4_free_group_clusters(sb, gdp),
+ 			grp->bb_prealloc_nr);
+-		return -EIO;
++		/*
++		 * If we intend to continue, we consider group descriptor
++		 * corrupt and update bb_free using bitmap value
++		 */
++		grp->bb_free = free;
++		set_bit(EXT4_GROUP_INFO_BBITMAP_CORRUPT_BIT, &grp->bb_state);
++		
+ 	}
+ 	mb_set_largest_free_order(sb, grp);
+ 
+-- 
+1.8.3.1
+
