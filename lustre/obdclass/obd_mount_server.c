@@ -492,7 +492,7 @@ err_lmi:
 }
 EXPORT_SYMBOL(lustre_find_lwp_by_index);
 
-static void lustre_notify_lwp_list(struct obd_export *exp)
+void lustre_notify_lwp_list(struct obd_export *exp)
 {
 	struct lwp_register_item *lri, *tmp;
 	LASSERT(exp != NULL);
@@ -509,6 +509,7 @@ static void lustre_notify_lwp_list(struct obd_export *exp)
 	}
 	mutex_unlock(&lwp_register_list_lock);
 }
+EXPORT_SYMBOL(lustre_notify_lwp_list);
 
 static int lustre_lwp_connect(struct obd_device *lwp)
 {
@@ -560,7 +561,6 @@ static int lustre_lwp_connect(struct obd_device *lwp)
 		if (unlikely(lwp->obd_lwp_export != NULL))
 			class_export_put(lwp->obd_lwp_export);
 		lwp->obd_lwp_export = class_export_get(exp);
-		lustre_notify_lwp_list(exp);
 	}
 
 	GOTO(out, rc);
