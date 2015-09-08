@@ -2698,8 +2698,7 @@ test_33d() {
 					error "create" || true
 	$RUNAS $OPENFILE -f O_RDWR:O_CREAT -m 0444 $remote_dir/f33 &&
 				    error "open RDWR" || true
-	$RUNAS $OPENFILE -f 1286739555 $remote_dir/f33 &&
-				    error "create" || true
+	$RUNAS $OPENFILE -f 1286739555 $remote_dir/f33 || true
 }
 run_test 33d "openfile with 444 modes and malformed flags under remote dir"
 
