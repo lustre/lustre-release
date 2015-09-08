@@ -2958,25 +2958,25 @@ test_77e() {
 			error "failed to set TBF policy"
 	done
 
-	# Only operate rules on ost0 since OSTs might run on the same OSS
+	# Only operate rules on ost1 since OSTs might run on the same OSS
 	# Add some rules
-	tbf_rule_operate ost0 "start\ localhost\ {0@lo}\ 1000"
+	tbf_rule_operate ost1 "start\ localhost\ {0@lo}\ 1000"
 	local address=$(comma_list "$(host_nids_address $CLIENTS $NETTYPE)")
 	local client_nids=$(nids_list $address "\\")
-	tbf_rule_operate ost0 "start\ clients\ {$client_nids}\ 100"
-	tbf_rule_operate ost0 "start\ others\ {*.*.*.*@$NETTYPE}\ 50"
+	tbf_rule_operate ost1 "start\ clients\ {$client_nids}\ 100"
+	tbf_rule_operate ost1 "start\ others\ {*.*.*.*@$NETTYPE}\ 50"
 	nrs_write_read
 
 	# Change the rules
-	tbf_rule_operate ost0 "change\ localhost\ 1001"
-	tbf_rule_operate ost0 "change\ clients\ 101"
-	tbf_rule_operate ost0 "change\ others\ 51"
+	tbf_rule_operate ost1 "change\ localhost\ 1001"
+	tbf_rule_operate ost1 "change\ clients\ 101"
+	tbf_rule_operate ost1 "change\ others\ 51"
 	nrs_write_read
 
 	# Stop the rules
-	tbf_rule_operate ost0 "stop\ localhost"
-	tbf_rule_operate ost0 "stop\ clients"
-	tbf_rule_operate ost0 "stop\ others"
+	tbf_rule_operate ost1 "stop\ localhost"
+	tbf_rule_operate ost1 "stop\ clients"
+	tbf_rule_operate ost1 "stop\ others"
 	nrs_write_read
 
 	# Cleanup the TBF policy
@@ -3009,23 +3009,23 @@ test_77f() {
 			error "failed to set TBF policy"
 	done
 
-	# Only operate rules on ost0 since OSTs might run on the same OSS
+	# Only operate rules on ost1 since OSTs might run on the same OSS
 	# Add some rules
-	tbf_rule_operate ost0 "start\ runas\ {iozone.$RUNAS_ID\ dd.$RUNAS_ID\ tiotest.$RUNAS_ID}\ 1000"
-	tbf_rule_operate ost0 "start\ iozone_runas\ {iozone.$RUNAS_ID}\ 100"
-	tbf_rule_operate ost0 "start\ dd_runas\ {dd.$RUNAS_ID}\ 50"
+	tbf_rule_operate ost1 "start\ runas\ {iozone.$RUNAS_ID\ dd.$RUNAS_ID\ tiotest.$RUNAS_ID}\ 1000"
+	tbf_rule_operate ost1 "start\ iozone_runas\ {iozone.$RUNAS_ID}\ 100"
+	tbf_rule_operate ost1 "start\ dd_runas\ {dd.$RUNAS_ID}\ 50"
 	nrs_write_read "$RUNAS"
 
 	# Change the rules
-	tbf_rule_operate ost0 "change\ runas\ 1001"
-	tbf_rule_operate ost0 "change\ iozone_runas\ 101"
-	tbf_rule_operate ost0 "change\ dd_runas\ 51"
+	tbf_rule_operate ost1 "change\ runas\ 1001"
+	tbf_rule_operate ost1 "change\ iozone_runas\ 101"
+	tbf_rule_operate ost1 "change\ dd_runas\ 51"
 	nrs_write_read "$RUNAS"
 
 	# Stop the rules
-	tbf_rule_operate ost0 "stop\ runas"
-	tbf_rule_operate ost0 "stop\ iozone_runas"
-	tbf_rule_operate ost0 "stop\ dd_runas"
+	tbf_rule_operate ost1 "stop\ runas"
+	tbf_rule_operate ost1 "stop\ iozone_runas"
+	tbf_rule_operate ost1 "stop\ dd_runas"
 	nrs_write_read "$RUNAS"
 
 	# Cleanup the TBF policy
@@ -3067,7 +3067,7 @@ test_77g() {
 
 	# Add a rule that only valid for Jobid TBF. If direct change between
 	# TBF types is not supported, this operation will fail.
-	tbf_rule_operate ost0 "start\ dd_runas\ {dd.$RUNAS_ID}\ 50"
+	tbf_rule_operate ost1 "start\ dd_runas\ {dd.$RUNAS_ID}\ 50"
 
 	# Cleanup the TBF policy
 	for i in $(seq 1 $OSTCOUNT)
