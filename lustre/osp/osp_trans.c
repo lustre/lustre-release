@@ -243,6 +243,51 @@ object_update_request_dump(const struct object_update_request *ourq,
 }
 
 /**
+ * Prepare inline update request
+ *
+ * Prepare OUT update ptlrpc inline request, and the request usually includes
+ * one update buffer, which does not need bulk transfer.
+ *
+ * \param[in] env	execution environment
+ * \param[in] req	ptlrpc request
+ * \param[in] ours	sub osp_update_request to be packed
+ *
+ * \retval		0 if packing succeeds
+ * \retval		negative errno if packing fails
+ */
+int osp_prep_inline_update_req(const struct lu_env *env,
+			       struct ptlrpc_request *req,
+			       struct osp_update_request_sub *ours)
+{
+	struct out_update_header *ouh;
+	__u32 update_req_size = object_update_request_size(ours->ours_req);
+	int rc;
+
+	req_capsule_set_size(&req->rq_pill, &RMF_OUT_UPDATE_HEADER, RCL_CLIENT,
+			     update_req_size + sizeof(*ouh));
+
+	rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, OUT_UPDATE);
+	if (rc != 0)
+		RETURN(rc);
+
+	ouh = req_capsule_client_get(&req->rq_pill, &RMF_OUT_UPDATE_HEADER);
+	ouh->ouh_magic = OUT_UPDATE_HEADER_MAGIC;
+	ouh->ouh_count = 1;
+	ouh->ouh_inline_length = update_req_size;
+
+	memcpy(ouh->ouh_inline_data, ours->ours_req, update_req_size);
+
+	req_capsule_set_size(&req->rq_pill, &RMF_OUT_UPDATE_REPLY,
+			     RCL_SERVER, OUT_UPDATE_REPLY_SIZE);
+
+	ptlrpc_request_set_replen(req);
+	req->rq_request_portal = OUT_PORTAL;
+	req->rq_reply_portal = OSC_REPLY_PORTAL;
+
+	RETURN(rc);
+}
+
+/**
  * Prepare update request.
  *
  * Prepare OUT update ptlrpc request, and the request usually includes
@@ -273,10 +318,29 @@ int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
 		object_update_request_dump(ours->ours_req, D_INFO);
 		buf_count++;
 	}
+	LASSERT(buf_count > 0);
 
 	req = ptlrpc_request_alloc(imp, &RQF_OUT_UPDATE);
 	if (req == NULL)
 		RETURN(-ENOMEM);
+
+	if (buf_count == 1) {
+		ours = list_entry(our->our_req_list.next,
+				  struct osp_update_request_sub, ours_list);
+
+		/* Let's check if it can be packed inline */
+		if (object_update_request_size(ours->ours_req) +
+		    sizeof(struct out_update_header) <
+				OUT_UPDATE_MAX_INLINE_SIZE) {
+			rc = osp_prep_inline_update_req(env, req, ours);
+			if (rc == 0)
+				*reqp = req;
+			GOTO(out_req, rc);
+		}
+	}
+
+	req_capsule_set_size(&req->rq_pill, &RMF_OUT_UPDATE_HEADER, RCL_CLIENT,
+			     sizeof(struct osp_update_request));
 
 	req_capsule_set_size(&req->rq_pill, &RMF_OUT_UPDATE_BUF, RCL_CLIENT,
 			     buf_count * sizeof(*oub));
@@ -288,7 +352,7 @@ int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
 	ouh = req_capsule_client_get(&req->rq_pill, &RMF_OUT_UPDATE_HEADER);
 	ouh->ouh_magic = OUT_UPDATE_HEADER_MAGIC;
 	ouh->ouh_count = buf_count;
-
+	ouh->ouh_inline_length = 0;
 	oub = req_capsule_client_get(&req->rq_pill, &RMF_OUT_UPDATE_BUF);
 	list_for_each_entry(ours, &our->our_req_list, ours_list) {
 		oub->oub_size = ours->ours_req_size;
@@ -336,7 +400,6 @@ out_req:
  * \retval		0 if RPC succeeds.
  * \retval		negative errno if RPC fails.
  */
-
 int osp_remote_sync(const struct lu_env *env, struct osp_device *osp,
 		    struct osp_update_request *our,
 		    struct ptlrpc_request **reqp)

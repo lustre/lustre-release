@@ -1203,9 +1203,8 @@ struct req_msg_field RMF_LFSCK_REPLY =
 		    lustre_swab_lfsck_reply, NULL);
 EXPORT_SYMBOL(RMF_LFSCK_REPLY);
 
-struct req_msg_field RMF_OUT_UPDATE_HEADER = DEFINE_MSGF("out_update", 0,
-				sizeof(struct out_update_header),
-				lustre_swab_out_update_header, NULL);
+struct req_msg_field RMF_OUT_UPDATE_HEADER = DEFINE_MSGF("out_update_header", 0,
+				-1, lustre_swab_out_update_header, NULL);
 EXPORT_SYMBOL(RMF_OUT_UPDATE_HEADER);
 
 struct req_msg_field RMF_OUT_UPDATE_BUF = DEFINE_MSGF("update_buf",

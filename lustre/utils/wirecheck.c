@@ -2111,6 +2111,25 @@ static void check_object_update_reply(void)
 	CHECK_MEMBER(object_update_reply, ourp_lens);
 }
 
+static void check_out_update_header(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(out_update_header);
+	CHECK_MEMBER(out_update_header, ouh_magic);
+	CHECK_MEMBER(out_update_header, ouh_count);
+	CHECK_MEMBER(out_update_header, ouh_inline_length);
+	CHECK_MEMBER(out_update_header, ouh_padding);
+	CHECK_MEMBER(out_update_header, ouh_inline_data);
+}
+
+static void check_out_update_buffer(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(out_update_buffer);
+	CHECK_MEMBER(out_update_buffer, oub_size);
+	CHECK_MEMBER(out_update_buffer, oub_padding);
+}
+
 static void check_lfsck_request(void)
 {
 	BLANK_LINE();
@@ -2604,6 +2623,8 @@ main(int argc, char **argv)
 	check_object_update_request();
 	check_object_update_result();
 	check_object_update_reply();
+	check_out_update_header();
+	check_out_update_buffer();
 
 	check_lfsck_request();
 	check_lfsck_reply();

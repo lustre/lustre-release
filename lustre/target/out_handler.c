@@ -863,10 +863,10 @@ int out_handle(struct tgt_session_info *tsi)
 	struct req_capsule		*pill = tsi->tsi_pill;
 	struct dt_device		*dt = tsi->tsi_tgt->lut_bottom;
 	struct out_update_header	*ouh;
-	struct out_update_buffer	*oub;
+	struct out_update_buffer	*oub = NULL;
 	struct object_update		*update;
 	struct object_update_reply	*reply;
-	struct ptlrpc_bulk_desc		*desc;
+	struct ptlrpc_bulk_desc		*desc = NULL;
 	struct l_wait_info		lwi;
 	void				**update_bufs;
 	int				current_batchid = -1;
@@ -875,16 +875,18 @@ int out_handle(struct tgt_session_info *tsi)
 	unsigned int			reply_index = 0;
 	int				rc = 0;
 	int				rc1 = 0;
-
+	int				ouh_size;
 	ENTRY;
 
 	req_capsule_set(pill, &RQF_OUT_UPDATE);
-	ouh = req_capsule_client_get(pill, &RMF_OUT_UPDATE_HEADER);
-	if (ouh == NULL) {
-		CERROR("%s: No buf!: rc = %d\n", tgt_name(tsi->tsi_tgt),
-		       -EPROTO);
+	ouh_size = req_capsule_get_size(pill, &RMF_OUT_UPDATE_HEADER,
+					RCL_CLIENT);
+	if (ouh_size <= 0)
 		RETURN(err_serious(-EPROTO));
-	}
+
+	ouh = req_capsule_client_get(pill, &RMF_OUT_UPDATE_HEADER);
+	if (ouh == NULL)
+		RETURN(err_serious(-EPROTO));
 
 	if (ouh->ouh_magic != OUT_UPDATE_HEADER_MAGIC) {
 		CERROR("%s: invalid update buffer magic %x expect %x: "
@@ -894,11 +896,8 @@ int out_handle(struct tgt_session_info *tsi)
 	}
 
 	update_buf_count = ouh->ouh_count;
-	if (update_buf_count == 0) {
-		CERROR("%s: empty update: rc = %d\n", tgt_name(tsi->tsi_tgt),
-		       -EPROTO);
+	if (update_buf_count == 0)
 		RETURN(err_serious(-EPROTO));
-	}
 
 	req_capsule_set_size(pill, &RMF_OUT_UPDATE_REPLY, RCL_SERVER,
 			     OUT_UPDATE_REPLY_SIZE);
@@ -913,34 +912,46 @@ int out_handle(struct tgt_session_info *tsi)
 	if (update_bufs == NULL)
 		RETURN(-ENOMEM);
 
-	oub = req_capsule_client_get(pill, &RMF_OUT_UPDATE_BUF);
-	desc = ptlrpc_prep_bulk_exp(pill->rc_req, update_buf_count,
-				    PTLRPC_BULK_OPS_COUNT,
-				    PTLRPC_BULK_GET_SINK |
-				    PTLRPC_BULK_BUF_KVEC,
-				    MDS_BULK_PORTAL, &ptlrpc_bulk_kvec_ops);
-	if (desc == NULL)
-		GOTO(out_free, rc = -ENOMEM);
+	if (ouh->ouh_inline_length > 0) {
+		update_bufs[0] = ouh->ouh_inline_data;
+	} else {
+		struct out_update_buffer *tmp;
 
-	/* NB Having prepped, we must commit... */
-	for (i = 0; i < update_buf_count; i++, oub++) {
-		OBD_ALLOC(update_bufs[i], oub->oub_size);
-		if (update_bufs[i] == NULL)
+		oub = req_capsule_client_get(pill, &RMF_OUT_UPDATE_BUF);
+		if (oub == NULL)
+			GOTO(out_free, rc = -EPROTO);
+
+		desc = ptlrpc_prep_bulk_exp(pill->rc_req, update_buf_count,
+					    PTLRPC_BULK_OPS_COUNT,
+					    PTLRPC_BULK_GET_SINK |
+					    PTLRPC_BULK_BUF_KVEC,
+					    MDS_BULK_PORTAL,
+					    &ptlrpc_bulk_kvec_ops);
+		if (desc == NULL)
 			GOTO(out_free, rc = -ENOMEM);
 
-		desc->bd_frag_ops->add_iov_frag(desc, update_bufs[i],
-						oub->oub_size);
+		tmp = oub;
+		for (i = 0; i < update_buf_count; i++, tmp++) {
+			if (tmp->oub_size >= OUT_MAXREQSIZE)
+				GOTO(out_free, rc = -EPROTO);
+
+			OBD_ALLOC(update_bufs[i], tmp->oub_size);
+			if (update_bufs[i] == NULL)
+				GOTO(out_free, rc = -ENOMEM);
+
+			desc->bd_frag_ops->add_iov_frag(desc, update_bufs[i],
+							tmp->oub_size);
+		}
+
+		pill->rc_req->rq_bulk_write = 1;
+		rc = sptlrpc_svc_prep_bulk(pill->rc_req, desc);
+		if (rc != 0)
+			GOTO(out_free, rc);
+
+		rc = target_bulk_io(pill->rc_req->rq_export, desc, &lwi);
+		if (rc < 0)
+			GOTO(out_free, rc);
 	}
-
-	pill->rc_req->rq_bulk_write = 1;
-	rc = sptlrpc_svc_prep_bulk(pill->rc_req, desc);
-	if (rc != 0)
-		GOTO(out_free, rc);
-
-	rc = target_bulk_io(pill->rc_req->rq_export, desc, &lwi);
-	if (rc < 0)
-		GOTO(out_free, rc);
-
 	/* Prepare the update reply buffer */
 	reply = req_capsule_server_get(pill, &RMF_OUT_UPDATE_REPLY);
 	if (reply == NULL)
@@ -1078,14 +1089,15 @@ out:
 	}
 
 out_free:
-	oub = req_capsule_client_get(pill, &RMF_OUT_UPDATE_BUF);
 	if (update_bufs != NULL) {
-		for (i = 0; i < update_buf_count; i++, oub++) {
-			if (update_bufs[i] != NULL)
-				OBD_FREE(update_bufs[i], oub->oub_size);
+		if (oub != NULL) {
+			for (i = 0; i < update_buf_count; i++, oub++) {
+				if (update_bufs[i] != NULL)
+					OBD_FREE(update_bufs[i], oub->oub_size);
+			}
 		}
-		OBD_FREE(update_bufs, sizeof(update_bufs[0]) *
-					update_buf_count);
+
+		OBD_FREE(update_bufs, sizeof(*update_bufs) * update_buf_count);
 	}
 
 	if (desc != NULL)

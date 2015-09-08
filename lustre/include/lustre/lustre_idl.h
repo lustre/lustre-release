@@ -3947,11 +3947,15 @@ struct object_update_request {
 	struct object_update	ourq_updates[0];
 };
 
-#define OUT_UPDATE_HEADER_MAGIC	0xBDDF0001
+#define OUT_UPDATE_HEADER_MAGIC		0xBDDF0001
+#define OUT_UPDATE_MAX_INLINE_SIZE	4096
 /* Header for updates request between MDTs */
 struct out_update_header {
 	__u32		ouh_magic;
 	__u32		ouh_count;
+	__u32		ouh_inline_length;
+	__u32		ouh_padding;
+	__u32		ouh_inline_data[0];
 };
 
 struct out_update_buffer {
