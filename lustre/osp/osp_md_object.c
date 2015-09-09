@@ -863,7 +863,9 @@ static int osp_md_index_try(const struct lu_env *env,
  * Implementation of dt_object_operations::do_object_lock
  *
  * Enqueue a lock (by ldlm_cli_enqueue()) of remote object on the remote MDT,
- * which will lock the object in the global namespace.
+ * which will lock the object in the global namespace. And because the
+ * cross-MDT locks are relatively rare compared with normal local MDT operation,
+ * let's release it right away, instead of putting it into the LRU list.
  *
  * \param[in] env	execution environment
  * \param[in] dt	object to be locked
@@ -910,6 +912,13 @@ static int osp_md_object_lock(const struct lu_env *env,
 			      &flags, NULL, 0, LVB_T_NONE, lh, 0);
 
 	ptlrpc_req_finished(req);
+	if (rc == ELDLM_OK) {
+		struct ldlm_lock *lock;
+
+		lock = __ldlm_handle2lock(lh, 0);
+		ldlm_set_cbpending(lock);
+		LDLM_LOCK_PUT(lock);
+	}
 
 	return rc == ELDLM_OK ? 0 : -EIO;
 }
