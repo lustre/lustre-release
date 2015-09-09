@@ -30,6 +30,7 @@ SAVED_OSTCOUNT=${OSTCOUNT}
 MDSSIZE=200000
 OSTSIZE=100000
 # no need too much OSTs, to reduce the format/start/stop overhead
+stopall
 [ $OSTCOUNT -gt 4 ] && OSTCOUNT=4
 
 MOUNT_2=""
