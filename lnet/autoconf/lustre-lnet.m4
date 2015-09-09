@@ -329,10 +329,14 @@ AS_IF([test $ENABLEO2IB != "no"], [
 	])
 ])
 #
-# 4.2 introduced struct ib_cq_init_attr
+# 4.2 introduced struct ib_cq_init_attr which is used
+# by ib_create_cq(). Note some OFED stacks only keep
+# their headers in sync with latest kernels but not
+# the functionality which means for infiniband testing
+# we need to always test functionality testings.
 #
 AS_IF([test $ENABLEO2IB != "no"], [
-	LB_CHECK_COMPILE([if 'struct ib_cq_init_attr' exist],
+	LB_CHECK_COMPILE([if 'struct ib_cq_init_attr' is used],
 	ib_cq_init_attr, [
 		#ifdef HAVE_COMPAT_RDMA
 		#include <linux/compat-2.6.h>
@@ -341,10 +345,10 @@ AS_IF([test $ENABLEO2IB != "no"], [
 	],[
 		struct ib_cq_init_attr cq_attr;
 
-		cq_attr.comp_vector = NULL;
+		ib_create_cq(NULL, NULL, NULL, NULL, &cq_attr);
 	],[
 		AC_DEFINE(HAVE_IB_CQ_INIT_ATTR, 1,
-			[struct ib_cq_init_attr exist])
+			[struct ib_cq_init_attr is used by ib_create_cq])
 	])
 ])
 ]) # LN_CONFIG_O2IB
