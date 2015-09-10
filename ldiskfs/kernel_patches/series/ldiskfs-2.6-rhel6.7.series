@@ -44,3 +44,4 @@ rhel6.3/ext4-not-discard-preallocation-umount.patch
 rhel6.3/ext4-journal-path-opt.patch
 rhel6.6/ext4-remove-truncate-warning.patch
 rhel6.6/ext4-corrupted-inode-block-bitmaps-handling-patches.patch
+rhel6.3/ext4-notalloc_under_idatasem.patch
