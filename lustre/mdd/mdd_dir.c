@@ -3667,7 +3667,7 @@ static int mdd_migrate_entries(const struct lu_env *env,
 
 		handle = mdd_trans_create(env, mdd);
 		if (IS_ERR(handle))
-			GOTO(out, rc = PTR_ERR(handle));
+			GOTO(out_put, rc = PTR_ERR(handle));
 
 		/* Note: this transaction is part of migration, and it is not
 		 * the last step of migration, so we set th_local = 1 to avoid
