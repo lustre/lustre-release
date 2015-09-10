@@ -48,7 +48,6 @@ enum cfs_trace_buf_type {
 extern char      cfs_tracefile[TRACEFILE_NAME_SIZE];
 extern long long cfs_tracefile_size;
 
-extern char lnet_upcall[1024];
 /**
  * The path of debug log dump upcall script.
  */

@@ -538,14 +538,6 @@ static struct ctl_table lnet_table[] = {
 	},
 	{
 		INIT_CTL_NAME
-		.procname	= "upcall",
-		.data		= lnet_upcall,
-		.maxlen		= sizeof(lnet_upcall),
-		.mode		= 0644,
-		.proc_handler	= &proc_dostring,
-	},
-	{
-		INIT_CTL_NAME
 		.procname	= "debug_log_upcall",
 		.data		= lnet_debug_log_upcall,
 		.maxlen		= sizeof(lnet_debug_log_upcall),

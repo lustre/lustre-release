@@ -246,8 +246,6 @@ do {									\
 #endif
 
 void libcfs_debug_dumpstack(struct task_struct *tsk);
-void libcfs_run_upcall(char **argv);
-void libcfs_run_lbug_upcall(struct libcfs_debug_msg_data *);
 void libcfs_debug_dumplog(void);
 int libcfs_debug_init(unsigned long bufsize);
 int libcfs_debug_cleanup(void);
