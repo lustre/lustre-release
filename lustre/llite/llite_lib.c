@@ -1329,6 +1329,9 @@ static int ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 		if (rc != 0)
 			RETURN(rc);
 
+		/* set md->lmv to NULL, so the following free lustre_md
+		 * will not free this lsm */
+		md->lmv = NULL;
 		lli->lli_lsm_md = lsm;
 
 		OBD_ALLOC_PTR(attr);
@@ -1356,10 +1359,6 @@ static int ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 
 		OBD_FREE_PTR(attr);
 
-
-			/* set lsm_md to NULL, so the following free lustre_md
-		 * will not free this lsm */
-		md->lmv = NULL;
 		CDEBUG(D_INODE, "Set lsm %p magic %x to "DFID"\n", lsm,
 		       lsm->lsm_md_magic, PFID(ll_inode2fid(inode)));
 		RETURN(0);
