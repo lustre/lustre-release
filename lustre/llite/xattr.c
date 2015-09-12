@@ -37,6 +37,7 @@
 #include <linux/fs.h>
 #include <linux/sched.h>
 #include <linux/mm.h>
+#include <linux/xattr.h>
 #include <linux/selinux.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE
@@ -47,6 +48,14 @@
 #include <lustre_eacl.h>
 
 #include "llite_internal.h"
+
+/* xattr related to IMA(Integrity Measurement Architecture) */
+#ifndef XATTR_NAME_IMA
+#define XATTR_NAME_IMA		"security.ima"
+#endif
+#ifndef XATTR_NAME_EVM
+#define XATTR_NAME_EVM		"security.evm"
+#endif
 
 #define XATTR_USER_T            (1)
 #define XATTR_TRUSTED_T         (2)
@@ -101,12 +110,6 @@ int xattr_type_filter(struct ll_sb_info *sbi, int xattr_type)
 
         return 0;
 }
-
-/* xattr related to IMA(Integrity Measurement Architecture) */
-#ifndef XATTR_NAME_IMA
-#define XATTR_NAME_IMA		"security.ima"
-#define XATTR_NAME_EVM		"security.evm"
-#endif
 
 static
 int ll_setxattr_common(struct inode *inode, const char *name,
