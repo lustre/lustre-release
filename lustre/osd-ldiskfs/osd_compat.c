@@ -586,7 +586,7 @@ static int osd_obj_update_entry(struct osd_thread_info *info,
 		GOTO(out, rc = -EEXIST);
 	}
 
-	if (fid_is_idif(fid) && fid_is_idif(oi_fid)) {
+	if (fid_is_idif(fid) && oi_fid != NULL && fid_is_idif(oi_fid)) {
 		__u32 idx1 = fid_idif_ost_idx(fid);
 		__u32 idx2 = fid_idif_ost_idx(oi_fid);
 		struct ost_id *ostid = &info->oti_ostid;
