@@ -13570,6 +13570,47 @@ test_252() {
 }
 run_test 252 "check lr_reader tool"
 
+test_254() {
+	local cl_user
+
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	do_facet mds1 $LCTL get_param -n mdd.$MDT0.changelog_size ||
+		{ skip "MDS does not support changelog_size" && return; }
+
+	cl_user=$(do_facet mds1 $LCTL --device $MDT0 changelog_register -n)
+	echo "Registered as changelog user $cl_user"
+
+	$LFS changelog_clear $MDT0 $cl_user 0
+
+	local size1=$(do_facet mds1 \
+		      $LCTL get_param -n mdd.$MDT0.changelog_size)
+	echo "Changelog size $size1"
+
+	rm -rf $DIR/$tdir
+	$LFS mkdir -i 0 $DIR/$tdir
+	# change something
+	mkdir -p $DIR/$tdir/pics/2008/zachy
+	touch $DIR/$tdir/pics/2008/zachy/timestamp
+	cp /etc/hosts $DIR/$tdir/pics/2008/zachy/pic1.jpg
+	mv $DIR/$tdir/pics/2008/zachy $DIR/$tdir/pics/zach
+	ln $DIR/$tdir/pics/zach/pic1.jpg $DIR/$tdir/pics/2008/portland.jpg
+	ln -s $DIR/$tdir/pics/2008/portland.jpg $DIR/$tdir/pics/desktop.jpg
+	rm $DIR/$tdir/pics/desktop.jpg
+
+	local size2=$(do_facet mds1 \
+		      $LCTL get_param -n mdd.$MDT0.changelog_size)
+	echo "Changelog size after work $size2"
+
+	do_facet mds1 $LCTL --device $MDT0 changelog_deregister $cl_user
+
+	if (( size2 <= size1 )); then
+		error "Changelog size after work should be greater than original"
+	fi
+	return 0
+}
+run_test 254 "Check changelog size"
+
 test_256() {
 	local cl_user
 	local cat_sl

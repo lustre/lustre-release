@@ -794,7 +794,7 @@ out:
 }
 
 int llog_cat_process_or_fork(const struct lu_env *env,
-			     struct llog_handle *cat_llh,
+			     struct llog_handle *cat_llh, llog_cb_t cat_cb,
 			     llog_cb_t cb, void *data, int startcat,
 			     int startidx, bool fork)
 {
@@ -818,17 +818,17 @@ int llog_cat_process_or_fork(const struct lu_env *env,
 
                 cd.lpcd_first_idx = llh->llh_cat_idx;
                 cd.lpcd_last_idx = 0;
-		rc = llog_process_or_fork(env, cat_llh, llog_cat_process_cb,
+		rc = llog_process_or_fork(env, cat_llh, cat_cb,
 					  &d, &cd, fork);
 		if (rc != 0)
 			RETURN(rc);
 
 		cd.lpcd_first_idx = 0;
 		cd.lpcd_last_idx = cat_llh->lgh_last_idx;
-		rc = llog_process_or_fork(env, cat_llh, llog_cat_process_cb,
+		rc = llog_process_or_fork(env, cat_llh, cat_cb,
 					  &d, &cd, fork);
         } else {
-		rc = llog_process_or_fork(env, cat_llh, llog_cat_process_cb,
+		rc = llog_process_or_fork(env, cat_llh, cat_cb,
 					  &d, NULL, fork);
         }
 
@@ -838,10 +838,61 @@ int llog_cat_process_or_fork(const struct lu_env *env,
 int llog_cat_process(const struct lu_env *env, struct llog_handle *cat_llh,
 		     llog_cb_t cb, void *data, int startcat, int startidx)
 {
-	return llog_cat_process_or_fork(env, cat_llh, cb, data, startcat,
-					startidx, false);
+	return llog_cat_process_or_fork(env, cat_llh, llog_cat_process_cb,
+					cb, data, startcat, startidx, false);
 }
 EXPORT_SYMBOL(llog_cat_process);
+
+static int llog_cat_size_cb(const struct lu_env *env,
+			     struct llog_handle *cat_llh,
+			     struct llog_rec_hdr *rec, void *data)
+{
+	struct llog_process_data *d = data;
+	struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
+	struct llog_handle *llh;
+	int rc;
+	__u64 *cum_size = d->lpd_data;
+	__u64 size;
+
+	ENTRY;
+	if (rec->lrh_type != LLOG_LOGID_MAGIC) {
+		CERROR("%s: invalid record in catalog, rc = %d\n",
+		       cat_llh->lgh_ctxt->loc_obd->obd_name, -EINVAL);
+		RETURN(-EINVAL);
+	}
+	CDEBUG(D_HA, "processing log "DOSTID":%x at index %u of catalog "
+	       DOSTID"\n", POSTID(&lir->lid_id.lgl_oi), lir->lid_id.lgl_ogen,
+	       rec->lrh_index, POSTID(&cat_llh->lgh_id.lgl_oi));
+
+	rc = llog_cat_id2handle(env, cat_llh, &llh, &lir->lid_id);
+	if (rc) {
+		CWARN("%s: cannot find handle for llog "DOSTID": rc = %d\n",
+		      cat_llh->lgh_ctxt->loc_obd->obd_name,
+		      POSTID(&lir->lid_id.lgl_oi), rc);
+		RETURN(0);
+	}
+	size = llog_size(env, llh);
+	*cum_size += size;
+
+	CDEBUG(D_INFO, "Add llog entry "DOSTID" size "LPU64"\n",
+	       POSTID(&llh->lgh_id.lgl_oi), size);
+
+	llog_handle_put(llh);
+
+	RETURN(0);
+
+}
+
+__u64 llog_cat_size(const struct lu_env *env, struct llog_handle *cat_llh)
+{
+	__u64 size = llog_size(env, cat_llh);
+
+	llog_cat_process_or_fork(env, cat_llh, llog_cat_size_cb,
+				 NULL, &size, 0, 0, false);
+
+	return size;
+}
+EXPORT_SYMBOL(llog_cat_size);
 
 static int llog_cat_reverse_process_cb(const struct lu_env *env,
 				       struct llog_handle *cat_llh,

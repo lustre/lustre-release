@@ -178,6 +178,57 @@ static int mdd_changelog_users_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(mdd_changelog_users);
 
+static int mdd_changelog_size_ctxt(const struct lu_env *env,
+				   struct mdd_device *mdd,
+				   int index, __u64 *val)
+{
+	struct llog_ctxt	*ctxt;
+
+	ctxt = llog_get_context(mdd2obd_dev(mdd),
+				index);
+	if (ctxt == NULL)
+		return -ENXIO;
+
+	if (!(ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT)) {
+		CERROR("%s: ChangeLog has wrong flags: rc = %d\n",
+		       ctxt->loc_obd->obd_name, -EINVAL);
+		llog_ctxt_put(ctxt);
+		return -EINVAL;
+	}
+
+	*val += llog_cat_size(env, ctxt->loc_handle);
+
+	llog_ctxt_put(ctxt);
+
+	return 0;
+}
+
+static int mdd_changelog_size_seq_show(struct seq_file *m, void *data)
+{
+	struct lu_env		 env;
+	struct mdd_device	*mdd = m->private;
+	__u64			 tmp = 0;
+	int			 rc;
+
+	rc = lu_env_init(&env, LCT_LOCAL);
+	if (rc)
+		return rc;
+
+	rc = mdd_changelog_size_ctxt(&env, mdd, LLOG_CHANGELOG_ORIG_CTXT, &tmp);
+	if (rc) {
+		lu_env_fini(&env);
+		return rc;
+	}
+
+	rc = mdd_changelog_size_ctxt(&env, mdd, LLOG_CHANGELOG_USER_ORIG_CTXT,
+				     &tmp);
+
+	seq_printf(m, LPU64"\n", tmp);
+	lu_env_fini(&env);
+	return rc;
+}
+LPROC_SEQ_FOPS_RO(mdd_changelog_size);
+
 static int mdd_sync_perm_seq_show(struct seq_file *m, void *data)
 {
 	struct mdd_device *mdd = m->private;
@@ -285,6 +336,8 @@ static struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
 	  .fops =	&mdd_changelog_mask_fops	},
 	{ .name =	"changelog_users",
 	  .fops =	&mdd_changelog_users_fops	},
+	{ .name =	"changelog_size",
+	  .fops =	&mdd_changelog_size_fops	},
 	{ .name =	"sync_permission",
 	  .fops =	&mdd_sync_perm_fops		},
 	{ .name =	"lfsck_speed_limit",
