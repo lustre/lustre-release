@@ -2239,28 +2239,6 @@ int lu_site_stats_seq_print(const struct lu_site *s, struct seq_file *m)
 }
 EXPORT_SYMBOL(lu_site_stats_seq_print);
 
-int lu_site_stats_print(const struct lu_site *s, char *page, int count)
-{
-	lu_site_stats_t stats;
-
-	memset(&stats, 0, sizeof(stats));
-	lu_site_stats_get(s->ls_obj_hash, &stats, 1);
-
-	return snprintf(page, count, "%d/%d %d/%d %d %d %d %d %d %d %d %d\n",
-			stats.lss_busy,
-			stats.lss_total,
-			stats.lss_populated,
-			CFS_HASH_NHLIST(s->ls_obj_hash),
-			stats.lss_max_search,
-			ls_stats_read(s->ls_stats, LU_SS_CREATED),
-			ls_stats_read(s->ls_stats, LU_SS_CACHE_HIT),
-                        ls_stats_read(s->ls_stats, LU_SS_CACHE_MISS),
-			ls_stats_read(s->ls_stats, LU_SS_CACHE_RACE),
-			ls_stats_read(s->ls_stats, LU_SS_CACHE_DEATH_RACE),
-			ls_stats_read(s->ls_stats, LU_SS_LRU_PURGED),
-			ls_stats_read(s->ls_stats, LU_SS_LRU_LEN));
-}
-
 /**
  * Helper function to initialize a number of kmem slab caches at once.
  */

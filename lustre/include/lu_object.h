@@ -1289,7 +1289,6 @@ int  lu_env_refill_by_tags(struct lu_env *env, __u32 ctags, __u32 stags);
  * ll_rd_*()-style functions.
  */
 int lu_site_stats_seq_print(const struct lu_site *s, struct seq_file *m);
-int lu_site_stats_print(const struct lu_site *s, char *page, int count);
 
 /**
  * Common name structure to be passed around for various name related methods.
