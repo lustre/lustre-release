@@ -440,7 +440,7 @@ test_18() { # bug 3822 - evicting client with enqueued lock
 	touch $MOUNT1/$tdir/${tfile}0 || error "touch file failed"
 	statmany -s $MOUNT1/$tdir/$tfile 1 500 &
 	OPENPID=$!
-	NOW=$(date +%s)
+	NOW=$SECONDS
 	#define OBD_FAIL_LDLM_ENQUEUE_BLOCKED    0x30b
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x8000030b  # hold enqueue
 	sleep 1
@@ -923,7 +923,8 @@ run_test 25 "replay|resend"
 cleanup_26() {
 	trap 0
 	kill -9 $tar_26_pid
-	kill -9 $dbench_26_jpid
+	kill -9 $dbench_26_pid
+	killall -9 dbench
 }
 
 test_26() {
@@ -936,8 +937,7 @@ test_26() {
 	# set duration to 900 because it takes some time to boot node
 	[ "$FAILURE_MODE" = HARD ] && duration=900
 
-	local elapsed
-	local start_ts=$(date +%s)
+	local start_ts=$SECONDS
 	local rc=0
 
 	trap cleanup_26	EXIT
@@ -945,9 +945,10 @@ test_26() {
 		local tar_dir=$DIR/$tdir/run_tar
 		while true; do
 			test_mkdir -p -c$MDSCOUNT $tar_dir || break
-			[ $MDSCOUNT -ge 2 ] &&
-			$LFS setdirstripe -D -c$MDSCOUNT $tar_dir ||
-				error "set default dirstripe failed"
+			if [ $MDSCOUNT -ge 2 ]; then
+				$LFS setdirstripe -D -c$MDSCOUNT $tar_dir ||
+					error "set default dirstripe failed"
+			fi
 			cd $tar_dir || break
 			tar cf - /etc | tar xf - || error "tar failed"
 			cd $DIR/$tdir || break
@@ -961,9 +962,10 @@ test_26() {
 		local dbench_dir=$DIR2/$tdir/run_dbench
 		while true; do
 			test_mkdir -p -c$MDSCOUNT $dbench_dir || break
-			[ $MDSCOUNT -ge 2 ] &&
-			$LFS setdirstripe -D -c$MDSCOUNT $dbench_dir ||
-				error "set default dirstripe failed"
+			if [ $MDSCOUNT -ge 2 ]; then
+				$LFS setdirstripe -D -c$MDSCOUNT $dbench_dir ||
+					error "set default dirstripe failed"
+			fi
 			cd $dbench_dir || break
 			rundbench 1 -D $dbench_dir -t 100 > /dev/null 2&>1 ||
 									break
@@ -974,39 +976,33 @@ test_26() {
 	dbench_26_pid=$!
 	echo "Started dbench $dbench_26_pid"
 
-	elapsed=$(($(date +%s) - start_ts))
 	local num_failovers=0
 	local fail_index=1
-	while [ $elapsed -lt $duration ]; do
-		ps auxwww | grep -v grep | grep -q $tar_26_pid ||
-					error "tar $tar_26_pid stopped"
-		ps auxwww | grep -v grep | grep -q $dbench_26_pid ||
-					error "dbench $dbench_26_pid stopped"
+	while [ $((SECONDS - start_ts)) -lt $duration ]; do
+		kill -0 $tar_26_pid || error "tar $tar_26_pid missing"
+		kill -0 $dbench_26_pid || error "dbench $dbench_26_pid missing"
 		sleep 2
 		replay_barrier mds$fail_index
 		sleep 2 # give clients a time to do operations
 		# Increment the number of failovers
-		num_failovers=$((num_failovers+1))
+		num_failovers=$((num_failovers + 1))
 		log "$TESTNAME fail mds$fail_index $num_failovers times"
 		fail mds$fail_index
-		elapsed=$(($(date +%s) - start_ts))
 		if [ $fail_index -ge $MDSCOUNT ]; then
 			fail_index=1
 		else
-			fail_index=$((fail_index+1))
+			fail_index=$((fail_index + 1))
 		fi
 	done
 	# stop the client loads
 	kill -0 $tar_26_pid || error "tar $tar_26_pid stopped"
 	kill -0 $dbench_26_pid || error "dbench $dbench_26_pid stopped"
-	killall -9 dbench
-	cleanup_26
-	true
+	cleanup_26 || true
 }
 run_test 26 "dbench and tar with mds failover"
 
 complete $SECONDS
-SLEEP=$((`date +%s` - $NOW))
+SLEEP=$((SECONDS - $NOW))
 [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
 [ "$MOUNTED2" = yes ] && zconf_umount $HOSTNAME $MOUNT2 || true
 check_and_cleanup_lustre
