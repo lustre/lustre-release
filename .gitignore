@@ -69,6 +69,7 @@ TAGS
 /config.cache
 /config.h
 /config.h.in
+/undef.h
 /INSTALL
 /libtool
 /lustre.spec

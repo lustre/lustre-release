@@ -336,8 +336,8 @@ fi
 #
 AC_DEFUN([LB_CONFIG_HEADERS], [
 AC_CONFIG_HEADERS([config.h])
-CPPFLAGS="-include $PWD/config.h $CPPFLAGS"
-EXTRA_KCFLAGS="-include $PWD/config.h $EXTRA_KCFLAGS"
+CPPFLAGS="-include $PWD/undef.h -include $PWD/config.h $CPPFLAGS"
+EXTRA_KCFLAGS="-include $PWD/undef.h -include $PWD/config.h $EXTRA_KCFLAGS"
 AC_SUBST(EXTRA_KCFLAGS)
 ]) # LB_CONFIG_HEADERS
 

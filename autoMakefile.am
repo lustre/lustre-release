@@ -74,7 +74,7 @@ lustre-sources:
 if LINUX
 all-am: modules
 
-modules: ldiskfs-sources lustre-sources
+modules: undef.h ldiskfs-sources lustre-sources
 	$(MAKE) CC="$(CC)" $(CROSS_VARS) -C $(LINUX_OBJ)	     \
 	-f $(PWD)/build/Makefile LUSTRE_LINUX_CONFIG=$(LINUX_CONFIG) \
 	LINUXINCLUDE='-I$$(srctree)/arch/$$(SRCARCH)/include -Iarch/$$(SRCARCH)/include/generated -Iinclude $$(if $$(KBUILD_SRC),-Iinclude2 -I$$(srctree)/include) -I$$(srctree)/arch/$$(SRCARCH)/include/uapi -Iarch/$$(SRCARCH)/include/generated/uapi -I$$(srctree)/include/uapi -Iinclude/generated/uapi -include $(CONFIG_INCLUDE)' \
@@ -84,7 +84,10 @@ endif # LINUX
 
 endif # MODULES
 
-dist-hook:
+undef.h: config.h.in
+	grep -v config.h.in config.h.in > $@
+
+dist-hook: undef.h
 	find $(distdir) -name .deps -o \
 			-name CVS -o \
 			-name .svn -o \
@@ -97,7 +100,9 @@ dist-hook:
 EXTRA_DIST = @PACKAGE_TARNAME@.spec	\
 	build/Makefile 			\
 	build/Rules.in			\
-	build/gen_filelist.sh
+	build/gen_filelist.sh		\
+	config.h.in			\
+	undef.h
 
 rpm-local:
 	@(if test -z "$(RPMBUILD)"; then \
@@ -148,7 +153,7 @@ srpm: @PACKAGE_TARNAME@.spec dist Makefile
 # However, one cannot really run "make debs" without having done a
 # configure first, so we could use the easier method of digging the
 # version out of the config.h file.
-debs:
+debs: undef.h
 	lversion=$$(sed -ne 's/^#define VERSION "\(.*\)"$$/\1/p' config.h); \
 	cversion=$$(sed -ne '1s/^lustre (\(.*\)-[0-9][0-9]*).*$$/\1/p' debian/changelog); \
 	if [ "$$lversion" != "$$cversion" ]; then \
@@ -193,8 +198,6 @@ debs:
 	   ../lustre-utils_$${VER}_*.deb ../lustre_$${VER}.dsc \
 	   ../lustre_$${VER}_*.changes ../lustre_$${VER}.tar.gz \
 	   ../lustre-client-modules-$${KVERS}_$${VER}_*.deb debs/
-
-EXTRA_DIST += config.h.in
 
 if USES_DPKG
 EXTRA_DIST += debian/*
