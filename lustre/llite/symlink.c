@@ -121,6 +121,7 @@ failed:
         RETURN (rc);
 }
 
+#ifdef HAVE_SYMLINK_OPS_USE_NAMEIDATA
 static void *ll_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
 	struct inode *inode = dentry->d_inode;
@@ -154,8 +155,37 @@ static void *ll_follow_link(struct dentry *dentry, struct nameidata *nd)
 	 */
 	RETURN(request);
 }
+#else
+static const char *ll_follow_link(struct dentry *dentry, void **cookie)
+{
+	struct inode *inode = d_inode(dentry);
+	struct ptlrpc_request *request;
+	char *symname;
+	int rc;
+	ENTRY;
 
+	CDEBUG(D_VFSTRACE, "VFS Op\n");
+	ll_inode_size_lock(inode);
+	rc = ll_readlink_internal(inode, &request, &symname);
+	ll_inode_size_unlock(inode);
+	if (rc < 0) {
+		ptlrpc_req_finished(request);
+		return ERR_PTR(rc);
+	}
+
+	/* symname may contain a pointer to the request message buffer,
+	 * we delay request releasing until ll_put_link then.
+	 */
+	*cookie = request;
+	RETURN(symname);
+}
+#endif /* HAVE_SYMLINK_OPS_USE_NAMEIDATA */
+
+#ifdef HAVE_SYMLINK_OPS_USE_NAMEIDATA
 static void ll_put_link(struct dentry *dentry, struct nameidata *nd, void *cookie)
+#else
+static void ll_put_link(struct inode *unused, void *cookie)
+#endif
 {
 	ptlrpc_req_finished(cookie);
 }

@@ -1890,6 +1890,28 @@ new_cancel_dirty_page, [
 ]) # LC_NEW_CANCEL_DIRTY_PAGE
 
 #
+# LC_SYMLINK_OPS_USE_NAMEIDATA
+#
+# For the 4.2+ kernels the file system internal symlink api no
+# longer uses struct nameidata as a argument
+#
+AC_DEFUN([LC_SYMLINK_OPS_USE_NAMEIDATA], [
+LB_CHECK_COMPILE([if symlink inode operations have struct nameidata argument],
+symlink_use_nameidata, [
+	#include <linux/namei.h>
+	#include <linux/fs.h>
+],[
+	struct nameidata *nd = NULL;
+
+	((struct inode_operations *)0)->follow_link(NULL, nd);
+	((struct inode_operations *)0)->put_link(NULL, nd, NULL);
+],[
+	AC_DEFINE(HAVE_SYMLINK_OPS_USE_NAMEIDATA, 1,
+		[symlink inode operations need struct nameidata argument])
+])
+]) # LC_SYMLINK_OPS_USE_NAMEIDATA
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2046,6 +2068,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.2
 	LC_NEW_CANCEL_DIRTY_PAGE
+	LC_SYMLINK_OPS_USE_NAMEIDATA
 
 	#
 	AS_IF([test "x$enable_server" != xno], [
