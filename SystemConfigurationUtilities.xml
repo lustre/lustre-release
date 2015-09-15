@@ -2723,7 +2723,7 @@ EOF
       <section remap="h5">
         <title><indexterm><primary>lr_reader</primary></indexterm>
 lr_reader</title>
-        <para>The lr_reader utility translates a last received (last_rcvd) file into human-readable form.</para>
+        <para>The lr_reader utility translates the content of the <literal>last_rcvd</literal> and <literal>reply_data</literal> files into human-readable form.</para>
         <para>The following utilities are part of the Lustre I/O kit. For more information, see <xref linkend="benchmarkingtests"/>.</para>
       </section>
       <section remap="h5">

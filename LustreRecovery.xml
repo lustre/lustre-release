@@ -286,6 +286,10 @@
         <para>The lock handle can be found by walking the list of granted locks for the resource looking for one with the appropriate remote file handle (present in the re-sent request). Verify that the lock has the right mode (determined by performing the disposition/request/status analysis above) and is granted to the proper client.</para>
       </section>
     </section>
+    <section remap="h3" condition="l28">
+      <title>Multiple Reply Data per Client</title>
+      <para>Since Lustre 2.8, the MDS is able to save several reply data per client. The reply data are stored in the <literal>reply_data</literal> internal file of the MDT. Additionally to the XID of the request, the transaction number, the result code and the open "disposition", the reply data contains a generation number that identifies the client thanks to the content of the <literal>last_rcvd</literal> file.</para>
+    </section>
   </section>
   <section xml:id="versionbasedrecovery">
     <title><indexterm><primary>Version-based recovery (VBR)</primary></indexterm>Version-based Recovery</title>
