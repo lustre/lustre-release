@@ -4590,7 +4590,12 @@ LNetPut(lnet_nid_t self, struct lnet_handle_md mdh, enum lnet_ack_req ack,
 	if (ack == LNET_ACK_REQ)
 		lnet_attach_rsp_tracker(rspt, cpt, md, mdh);
 
-	rc = lnet_send(self, msg, LNET_NID_ANY);
+	if (CFS_FAIL_CHECK_ORSET(CFS_FAIL_PTLRPC_OST_BULK_CB2,
+				 CFS_FAIL_ONCE))
+		rc = -EIO;
+	else
+		rc = lnet_send(self, msg, LNET_NID_ANY);
+
 	if (rc != 0) {
 		CNETERR("Error sending PUT to %s: %d\n",
 			libcfs_id2str(target), rc);

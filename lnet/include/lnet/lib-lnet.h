@@ -37,6 +37,9 @@
 #ifndef __LNET_LIB_LNET_H__
 #define __LNET_LIB_LNET_H__
 
+/* LNET has 0xeXXX */
+#define CFS_FAIL_PTLRPC_OST_BULK_CB2	0xe000
+
 #ifndef __KERNEL__
 # error This include is only for kernel use.
 #endif

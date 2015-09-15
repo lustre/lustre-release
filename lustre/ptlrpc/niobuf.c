@@ -37,6 +37,7 @@
 #include <obd.h>
 #include <obd_class.h>
 #include "ptlrpc_internal.h"
+#include <lnet/lib-lnet.h> /* for CFS_FAIL_PTLRPC_OST_BULK_CB2 */
 
 /**
  * Helper function. Sends \a len bytes from \a base at offset \a offset
@@ -216,13 +217,10 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 			break;
 		}
 
-		/* LU-6441: last md is not sent and desc->bd_md_count == 1 */
-		if (OBD_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_CLIENT_BULK_CB3,
-					 CFS_FAIL_ONCE) &&
-		    total_md > 1 && posted_md == total_md - 1) {
-			posted_md++;
-			continue;
-		}
+		/* sanity.sh 224c: lets skip last md */
+		if (posted_md == desc->bd_md_max_brw - 1)
+			OBD_FAIL_CHECK_RESET(OBD_FAIL_PTLRPC_CLIENT_BULK_CB3,
+					     CFS_FAIL_PTLRPC_OST_BULK_CB2);
 
 		/* Network is about to get at the memory */
 		if (ptlrpc_is_bulk_put_source(desc->bd_type))

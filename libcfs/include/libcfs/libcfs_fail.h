@@ -49,6 +49,10 @@ enum {
         CFS_FAIL_LOC_VALUE      = 3
 };
 
+/* Failure ranges
+	"0x0100 - 0x3fff" for Lustre
+	"0xe000 - 0xefff" for LNet
+	"0xf000 - 0xffff" for LNDs */
 /* Failure injection control */
 #define CFS_FAIL_MASK_SYS    0x0000FF00
 #define CFS_FAIL_MASK_LOC   (0x000000FF | CFS_FAIL_MASK_SYS)
