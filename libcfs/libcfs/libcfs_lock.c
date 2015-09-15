@@ -54,7 +54,8 @@ EXPORT_SYMBOL(cfs_percpt_lock_free);
  * reason we always allocate cacheline-aligned memory block.
  */
 struct cfs_percpt_lock *
-cfs_percpt_lock_alloc(struct cfs_cpt_table *cptab)
+cfs_percpt_lock_create(struct cfs_cpt_table *cptab,
+		       struct lock_class_key *keys)
 {
 	struct cfs_percpt_lock	*pcl;
 	spinlock_t		*lock;
@@ -72,12 +73,20 @@ cfs_percpt_lock_alloc(struct cfs_cpt_table *cptab)
 		return NULL;
 	}
 
-	cfs_percpt_for_each(lock, i, pcl->pcl_locks)
+	if (keys == NULL) {
+		CWARN("Cannot setup class key for percpt lock, you may see "
+		      "recursive locking warnings which are actually fake.\n");
+	}
+
+	cfs_percpt_for_each(lock, i, pcl->pcl_locks) {
 		spin_lock_init(lock);
+		if (keys != NULL)
+			lockdep_set_class(lock, &keys[i]);
+	}
 
 	return pcl;
 }
-EXPORT_SYMBOL(cfs_percpt_lock_alloc);
+EXPORT_SYMBOL(cfs_percpt_lock_create);
 
 /**
  * lock a CPU partition
