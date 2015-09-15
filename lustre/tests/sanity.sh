@@ -10423,67 +10423,114 @@ test_155_big_load() {
     true
 }
 
+save_writethrough() {
+	local facets=$(get_facets OST)
+
+	save_lustre_params $facets "obdfilter.*.writethrough_cache_enable" > $1
+	save_lustre_params $facets "osd-*.*.writethrough_cache_enable" >> $1
+}
+
 test_155a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	save_writethrough $p
+
 	set_cache read on
 	set_cache writethrough on
 	test_155_small_load
+	restore_lustre_params < $p
+	rm -f $p
 }
 run_test 155a "Verify small file correctness: read cache:on write_cache:on"
 
 test_155b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	save_writethrough $p
+
 	set_cache read on
 	set_cache writethrough off
 	test_155_small_load
+	restore_lustre_params < $p
+	rm -f $p
 }
 run_test 155b "Verify small file correctness: read cache:on write_cache:off"
 
 test_155c() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	save_writethrough $p
+
 	set_cache read off
 	set_cache writethrough on
 	test_155_small_load
+	restore_lustre_params < $p
+	rm -f $p
 }
 run_test 155c "Verify small file correctness: read cache:off write_cache:on"
 
 test_155d() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	save_writethrough $p
+
 	set_cache read off
 	set_cache writethrough off
 	test_155_small_load
+	restore_lustre_params < $p
+	rm -f $p
 }
 run_test 155d "Verify small file correctness: read cache:off write_cache:off"
 
 test_155e() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	save_writethrough $p
+
 	set_cache read on
 	set_cache writethrough on
 	test_155_big_load
+	restore_lustre_params < $p
+	rm -f $p
 }
 run_test 155e "Verify big file correctness: read cache:on write_cache:on"
 
 test_155f() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	save_writethrough $p
+
 	set_cache read on
 	set_cache writethrough off
 	test_155_big_load
+	restore_lustre_params < $p
+	rm -f $p
 }
 run_test 155f "Verify big file correctness: read cache:on write_cache:off"
 
 test_155g() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	save_writethrough $p
+
 	set_cache read off
 	set_cache writethrough on
 	test_155_big_load
+	restore_lustre_params < $p
+	rm -f $p
 }
 run_test 155g "Verify big file correctness: read cache:off write_cache:on"
 
 test_155h() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	save_writethrough $p
+
 	set_cache read off
 	set_cache writethrough off
 	test_155_big_load
+	restore_lustre_params < $p
+	rm -f $p
 }
 run_test 155h "Verify big file correctness: read cache:off write_cache:off"
 
@@ -10494,12 +10541,14 @@ test_156() {
 	local BEFORE
 	local AFTER
 	local file="$DIR/$tfile"
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
 
 	[ "$(facet_fstype ost1)" = "zfs" -a \
 	   $(lustre_version_code ost1 -lt $(version_code 2.6.93)) ] &&
 		skip "LU-1956/LU-2261: stats not implemented on OSD ZFS" &&
 		return
 
+	save_writethrough $p
 	roc_hit_init
 
 	log "Turn on read and write cache"
@@ -10628,6 +10677,8 @@ test_156() {
 	fi
 
 	rm -f $file
+	restore_lustre_params < $p
+	rm -f $p
 }
 run_test 156 "Verification of tunables"
 
@@ -12580,6 +12631,11 @@ run_test 224b "Don't panic on bulk IO failure"
 test_224c() { # LU-6441
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	save_writethrough $p
+	set_cache writethrough on
+
 	local pages_per_rpc=$($LCTL get_param \
 				osc.*.max_pages_per_rpc)
 	local at_max=$($LCTL get_param -n at_max)
@@ -12608,6 +12664,8 @@ test_224c() { # LU-6441
 		$timeout || error "conf_param timeout=$timeout failed"
 
 	$LCTL set_param -n $pages_per_rpc
+	restore_lustre_params < $p
+	rm -f $p
 }
 run_test 224c "Don't hang if one of md lost during large bulk RPC"
 
