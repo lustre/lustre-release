@@ -147,6 +147,11 @@ avoids having the target try to register as a new target with the MGS.
 .BI \--stripe-count-hint= stripes
 Used for optizing MDT inode size
 .TP
+.BI \--force-nohostid
+Ignore unset hostid for ZFS import protection. To set hostid either set
+spl_hostid parameter for spl.ko or set /etc/hostid, see genhostid(1).
+
+.TP
 .BI \--verbose
 Print more information.
 .TP

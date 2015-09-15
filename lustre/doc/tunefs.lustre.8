@@ -75,6 +75,10 @@ Set the NID(s) of the MGS node, required for all targets other than the MGS.
 .BI \--nomgs
 Remove a configuration management service to this target
 .TP
+.BI \--force-nohostid
+Ignore unset hostid for ZFS import protection. To set hostid either set
+spl_hostid option for spl.ko or set /etc/hostid, see genhostid(1).
+.TP
 .BI \--quiet
 Print less information.
 .TP

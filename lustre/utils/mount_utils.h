@@ -74,6 +74,7 @@ extern int failover;
 #define MO_FAILOVER		0x04
 #define MO_DRYRUN		0x08
 #define MO_QUOTA		0x10
+#define MO_NOHOSTID_CHECK	0x20
 
 #define MAX_LOOP_DEVICES	16
 #define INDEX_UNASSIGNED	0xFFFF

@@ -174,6 +174,45 @@ static int zfs_set_prop_params(zfs_handle_t *zhp, char *params)
 	return ret;
 }
 
+static int zfs_check_hostid(struct mkfs_opts *mop)
+{
+	FILE *f;
+	unsigned long hostid;
+	int rc;
+
+	if (strstr(mop->mo_ldd.ldd_params, PARAM_FAILNODE) == NULL)
+		return 0;
+
+	f = fopen("/sys/module/spl/parameters/spl_hostid", "r");
+	if (f == NULL) {
+		fatal();
+		fprintf(stderr, "Failed to open spl_hostid: %s\n",
+			strerror(errno));
+		return errno;
+	}
+	rc = fscanf(f, "%li", &hostid);
+	fclose(f);
+	if (rc != 1) {
+		fatal();
+		fprintf(stderr, "Failed to read spl_hostid: %d\n", rc);
+		return rc;
+	}
+
+	if (hostid == 0) {
+		if (mop->mo_flags & MO_NOHOSTID_CHECK) {
+			fprintf(stderr, "WARNING: spl_hostid not set. ZFS has "
+				"no zpool import protection\n");
+		} else {
+			fatal();
+			fprintf(stderr, "spl_hostid not set. See %s(8)",
+				progname);
+			return EINVAL;
+		}
+	}
+
+	return 0;
+}
+
 static int osd_check_zfs_setup(void)
 {
 	if (osd_zfs_setup == 0) {
@@ -195,13 +234,17 @@ int zfs_write_ldd(struct mkfs_opts *mop)
 	int i, ret = EINVAL;
 
 	if (osd_check_zfs_setup() == 0)
-		return EINVAL;
+		goto out;
 
 	zhp = zfs_open(g_zfs, ds, ZFS_TYPE_FILESYSTEM);
 	if (zhp == NULL) {
 		fprintf(stderr, "Failed to open zfs dataset %s\n", ds);
 		goto out;
 	}
+
+	ret = zfs_check_hostid(mop);
+	if (ret != 0)
+		goto out;
 
 	vprint("Writing %s properties\n", ds);
 
@@ -450,6 +493,10 @@ int zfs_make_lustre(struct mkfs_opts *mop)
 				"--index\n");
 		return EINVAL;
 	}
+
+	ret = zfs_check_hostid(mop);
+	if (ret != 0)
+		goto out;
 
 	pool = strdup(ds);
 	if (pool == NULL)
