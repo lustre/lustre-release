@@ -100,6 +100,15 @@ int class_dentry_readdir(const struct lu_env *env,
 				goto next;
 		}
 
+		/* filter out ".bak" files */
+		/* sizeof(".bak") - 1 == 3 */
+		if (key_sz >= 3 &&
+		    !memcmp(".bak", key + key_sz - 3, 3)) {
+			CDEBUG(D_MGS, "Skipping backup file %.*s\n",
+			       key_sz, key);
+			goto next;
+		}
+
 		de = mgs_direntry_alloc(key_sz + 1);
 		if (de == NULL) {
 			rc = -ENOMEM;
