@@ -583,7 +583,17 @@ static int osd_object_destroy(const struct lu_env *env,
 		       obj->oo_attr.la_gid, rc);
 
 	oid = obj->oo_db->db_object;
-	if (obj->oo_destroy == OSD_DESTROY_SYNC) {
+	if (unlikely(obj->oo_destroy == OSD_DESTROY_NONE)) {
+		/* this may happen if the destroy wasn't declared
+		 * e.g. when the object is created and then destroyed
+		 * in the same transaction - we don't need additional
+		 * space for destroy specifically */
+		LASSERT(obj->oo_attr.la_size <= osd_sync_destroy_max_size);
+		rc = -dmu_object_free(osd->od_os, oid, oh->ot_tx);
+		if (rc)
+			CERROR("%s: failed to free %s "LPU64": rc = %d\n",
+			       osd->od_svname, buf, oid, rc);
+	} else if (obj->oo_destroy == OSD_DESTROY_SYNC) {
 		rc = -dmu_object_free(osd->od_os, oid, oh->ot_tx);
 		if (rc)
 			CERROR("%s: failed to free %s "LPU64": rc = %d\n",
