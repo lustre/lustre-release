@@ -62,10 +62,12 @@ struct osc_extent;
  * State maintained by osc layer for each IO context.
  */
 struct osc_io {
-        /** super class */
-        struct cl_io_slice oi_cl;
-        /** true if this io is lockless. */
-        int                oi_lockless;
+	/** super class */
+	struct cl_io_slice oi_cl;
+	/** true if this io is lockless. */
+	int                oi_lockless:1,
+	/** true if this io is counted as active IO */
+			   oi_is_active:1;
 	/** how many LRU pages are reserved for this IO */
 	unsigned long	   oi_lru_reserved;
 

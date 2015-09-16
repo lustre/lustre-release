@@ -2011,7 +2011,7 @@ int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
 	}
 
 no_match:
-	if (*flags & LDLM_FL_TEST_LOCK)
+	if (*flags & (LDLM_FL_TEST_LOCK | LDLM_FL_MATCH_LOCK))
 		RETURN(-ENOLCK);
 
 	if (intent) {
@@ -2491,7 +2491,11 @@ static int osc_ldlm_resource_invalidate(struct cfs_hash *hs,
 			osc = lock->l_ast_data;
 			cl_object_get(osc2cl(osc));
 		}
-		lock->l_ast_data = NULL;
+
+		/* clear LDLM_FL_CLEANED flag to make sure it will be canceled
+		 * by the 2nd round of ldlm_namespace_clean() call in
+		 * osc_import_event(). */
+		ldlm_clear_cleaned(lock);
 	}
 	unlock_res(res);
 

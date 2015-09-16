@@ -2694,7 +2694,6 @@ again:
 			 * a page already having been flushed by write_page().
 			 * We have to wait for this extent because we can't
 			 * truncate that page. */
-			LASSERT(!ext->oe_hp);
 			OSC_EXTENT_DUMP(D_CACHE, ext,
 					"waiting for busy extent\n");
 			waiting = osc_extent_get(ext);
