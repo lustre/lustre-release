@@ -10,6 +10,8 @@
 /cmknod
 /copy_attr
 /copytool
+/llapi_fid_test
+/llapi_hsm_test
 /llapi_layout_test
 /createdestroy
 /createmany
@@ -21,6 +23,7 @@
 /flocks_test
 /fsx
 /getdents
+/group_lock_test
 /listxattr_size_check
 /iopentest1
 /iopentest2
@@ -53,6 +56,7 @@
 /openfilleddirunlink
 /openme
 /openunlink
+/orphan_linkea_check
 /ostactive
 /reads
 /rename_many
@@ -60,6 +64,7 @@
 /runas
 /rwv
 /sendfile
+/sendfile_grouplock
 /setuid
 /sleeptest
 /small_write

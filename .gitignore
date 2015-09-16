@@ -36,6 +36,7 @@
 *.orig
 *.rej
 *.s
+*-stamp
 *.so
 *.swp
 *.unsigned
@@ -47,6 +48,7 @@ config.log
 config.status
 config.sub
 configure
+debs
 depcomp
 install-sh
 Makefile

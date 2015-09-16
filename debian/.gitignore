@@ -1,3 +1,5 @@
+/*.log
+/*.substvars
 /files
 /linux-patch-lustre
 /lustre-dev
@@ -7,4 +9,3 @@
 /lustre-utils
 /lustre-utils.substvars
 /tmp
-
