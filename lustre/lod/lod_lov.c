@@ -388,7 +388,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 		if (rc != 0) {
 			CERROR("%s: cannot start llog on %s:rc = %d\n",
 			       lod2obd(lod)->obd_name, osp, rc);
-			GOTO(out_pool, rc);
+			GOTO(out_ltd, rc);
 		}
 	}
 
@@ -402,6 +402,19 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 out_fini_llog:
 	lod_sub_fini_llog(env, tgt_desc->ltd_tgt,
 			  tgt_desc->ltd_recovery_thread);
+out_ltd:
+	lod_getref(ltd);
+	mutex_lock(&ltd->ltd_mutex);
+	lock = true;
+	if (!for_ost && LTD_TGT(ltd, index)->ltd_recovery_thread != NULL) {
+		struct ptlrpc_thread *thread;
+
+		thread = LTD_TGT(ltd, index)->ltd_recovery_thread;
+		OBD_FREE_PTR(thread);
+	}
+	ltd->ltd_tgtnr--;
+	cfs_bitmap_clear(ltd->ltd_tgt_bitmap, index);
+	LTD_TGT(ltd, index) = NULL;
 out_pool:
 	lod_ost_pool_remove(&lod->lod_pool_info, index);
 out_mutex:
