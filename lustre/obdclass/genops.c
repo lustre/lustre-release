@@ -944,7 +944,10 @@ void class_unlink_export(struct obd_export *exp)
 		struct tg_export_data	*ted = &exp->exp_target_data;
 		struct cfs_hash		*hash;
 
+		/* Because obd_gen_hash will not be released until
+		 * class_cleanup(), so hash should never be NULL here */
 		hash = cfs_hash_getref(exp->exp_obd->obd_gen_hash);
+		LASSERT(hash != NULL);
 		cfs_hash_del(hash, &ted->ted_lcd->lcd_generation,
 			     &exp->exp_gen_hash);
 		cfs_hash_putref(hash);
