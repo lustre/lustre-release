@@ -46,7 +46,7 @@ if [ "`uname -n`-targets" == "$1" ]; then
 elif [ "`/usr/sbin/ldev -p`-targets" == "$1" ]; then
     service=foreign
 else
-    die: "bad service arg[1]: $*"
+    die "bad service arg[1]: $*"
 fi
 
 # Until multi-mount protect is implemented for ZFS we allow heartbeat to

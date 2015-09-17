@@ -595,6 +595,7 @@ stop_lustre_services ()
 # General lustre health check - not device specific.
 health_check ()
 {
+
 	old_nullglob="`shopt -p nullglob`"
 	shopt -u nullglob
 
@@ -621,14 +622,14 @@ health_check ()
 		OST=""
 		LLITE=""
 
-		VAR=$(lctl get_param -n mdt.*.recovery_status 2>&1)
+		VAR=$(lctl get_param -n mdt.*.recovery_status 2>&1 | grep '^status:'  )
 		if [ $? = 0 ] ; then
-			MDT="YES"
+			MDT=$VAR
 		fi
 
-		VAR=$(lctl get_param -n obdfilter.*.recovery_status 2>&1)
+		VAR=$(lctl get_param -n obdfilter.*.recovery_status 2>&1 | grep '^status:')
 		if [ $? = 0 ] ; then
-                        OST="YES"
+                        OST=$VAR
                 fi
 
                 VAR=$(lctl get_param -n llite.fs* 2>&1)
@@ -659,7 +660,7 @@ health_check ()
 	fi
 
 	# check for servers in recovery
-	if [ -n "$MDT$OST" ] && grep -q RECOV $MDT $OST ; then
+	if [ -n "$MDT$OST" ] && echo $MDT $OST | grep -q RECOV ; then
 		STATE="recovery"
 		RETVAL=0
 	fi
