@@ -563,6 +563,13 @@ static int osd_obj_update_entry(struct osd_thread_info *info,
 		GOTO(out, rc);
 	}
 
+	/* The EA inode should NOT be in OI, old OI scrub may added
+	 * such OI mapping by wrong, replace it. */
+	if (unlikely(osd_is_ea_inode(inode))) {
+		iput(inode);
+		goto update;
+	}
+
 	rc = osd_get_lma(info, inode, dentry, lma);
 	if (rc == -ENODATA) {
 		rc = osd_get_idif(info, inode, dentry, oi_fid);

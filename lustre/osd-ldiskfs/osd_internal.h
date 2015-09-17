@@ -913,6 +913,11 @@ static inline char *osd_name(struct osd_device *osd)
 	return osd->od_dt_dev.dd_lu_dev.ld_obd->obd_name;
 }
 
+static inline bool osd_is_ea_inode(struct inode *inode)
+{
+	return !!(LDISKFS_I(inode)->i_flags & LDISKFS_EA_INODE_FL);
+}
+
 extern const struct dt_body_operations osd_body_ops;
 extern struct lu_context_key osd_key;
 

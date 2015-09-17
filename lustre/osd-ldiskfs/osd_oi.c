@@ -658,6 +658,13 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
 			return rc;
 		}
 
+		/* The EA inode should NOT be in OI, old OI scrub may added
+		 * such OI mapping by wrong, replace it. */
+		if (unlikely(osd_is_ea_inode(inode))) {
+			iput(inode);
+			goto update;
+		}
+
 		rc = osd_get_lma(info, inode, &info->oti_obj_dentry, lma);
 		iput(inode);
 		if (rc == -ENODATA)
