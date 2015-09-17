@@ -1619,8 +1619,6 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 	if (op_data == NULL)
 		GOTO(out, rc = -ENOMEM);
 
-	op_data->op_attr = *attr;
-
 	if (!hsm_import && attr->ia_valid & ATTR_SIZE) {
 		/* If we are changing file size, file content is
 		 * modified, flag it. */
@@ -1628,6 +1626,8 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 		op_data->op_bias |= MDS_DATA_MODIFIED;
 		ll_file_clear_flag(lli, LLIF_DATA_MODIFIED);
 	}
+
+	op_data->op_attr = *attr;
 
 	rc = ll_md_setattr(dentry, op_data);
 	if (rc)
