@@ -82,7 +82,7 @@ static int osp_object_create_interpreter(const struct lu_env *env,
 					 struct osp_object *obj,
 					 void *data, int index, int rc)
 {
-	if (rc != 0) {
+	if (rc != 0 && rc != -EEXIST) {
 		obj->opo_obj.do_lu.lo_header->loh_attr &= ~LOHA_EXISTS;
 		obj->opo_non_exist = 1;
 	}
