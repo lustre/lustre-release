@@ -90,7 +90,7 @@ int osd_acct_obj_lookup(struct osd_thread_info *info, struct osd_device *osd,
  * \param env   - is the environment passed by the caller
  * \param dtobj - is the accounting object
  * \param dtrec - is the record to fill with space usage information
- * \param dtkey - is the id the of the user or group for which we would
+ * \param dtkey - is the id of the user or group for which we would
  *                like to access disk usage.
  *
  * \retval +ve - success : exact match
@@ -112,17 +112,17 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 	__u64			 id = *((__u64 *)dtkey);
 	int			 rc;
 #ifdef HAVE_DQUOT_KQID
-	struct kqid		qid;
+	struct kqid		 qid;
 #endif
 
 	ENTRY;
 
-	memset((void *)dqblk, 0, sizeof(struct obd_dqblk));
+	memset(dqblk, 0, sizeof(*dqblk));
 #ifdef HAVE_DQUOT_KQID
 	qid = make_kqid(&init_user_ns, obj2type(dtobj), id);
 	rc = sb->s_qcop->get_dqblk(sb, qid, dqblk);
 #else
-	rc = sb->s_qcop->get_dqblk(sb, obj2type(dtobj), (qid_t) id, dqblk);
+	rc = sb->s_qcop->get_dqblk(sb, obj2type(dtobj), (qid_t)id, dqblk);
 #endif
 	if (rc)
 		RETURN(rc);
