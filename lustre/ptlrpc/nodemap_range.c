@@ -71,7 +71,7 @@ static enum interval_iter range_cb(struct interval_node *n, void *data)
  */
 struct lu_nid_range *range_create(struct nodemap_range_tree *nm_range_tree,
 				  lnet_nid_t start_nid, lnet_nid_t end_nid,
-				  struct lu_nodemap *nodemap)
+				  struct lu_nodemap *nodemap, unsigned range_id)
 {
 	struct lu_nid_range *range;
 
@@ -86,8 +86,15 @@ struct lu_nid_range *range_create(struct nodemap_range_tree *nm_range_tree,
 		return NULL;
 	}
 
-	nm_range_tree->nmrt_range_highest_id++;
-	range->rn_id = nm_range_tree->nmrt_range_highest_id;
+	/* if we are loading from save, use on disk id num */
+	if (range_id != 0) {
+		if (nm_range_tree->nmrt_range_highest_id < range_id)
+			nm_range_tree->nmrt_range_highest_id = range_id;
+		range->rn_id = range_id;
+	} else {
+		nm_range_tree->nmrt_range_highest_id++;
+		range->rn_id = nm_range_tree->nmrt_range_highest_id;
+	}
 	range->rn_nodemap = nodemap;
 	interval_set(&range->rn_node, start_nid, end_nid);
 	INIT_LIST_HEAD(&range->rn_list);

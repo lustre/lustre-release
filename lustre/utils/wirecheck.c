@@ -2158,6 +2158,58 @@ static void check_out_update_buffer(void)
 	CHECK_MEMBER(out_update_buffer, oub_padding);
 }
 
+static void check_nodemap_cluster_rec(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(nodemap_cluster_rec);
+	CHECK_MEMBER(nodemap_cluster_rec, ncr_name);
+	CHECK_MEMBER(nodemap_cluster_rec, ncr_flags);
+	CHECK_MEMBER(nodemap_cluster_rec, ncr_padding1);
+	CHECK_MEMBER(nodemap_cluster_rec, ncr_padding2);
+	CHECK_MEMBER(nodemap_cluster_rec, ncr_squash_uid);
+	CHECK_MEMBER(nodemap_cluster_rec, ncr_squash_gid);
+}
+
+static void check_nodemap_range_rec(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(nodemap_range_rec);
+	CHECK_MEMBER(nodemap_range_rec, nrr_start_nid);
+	CHECK_MEMBER(nodemap_range_rec, nrr_end_nid);
+	CHECK_MEMBER(nodemap_range_rec, nrr_padding1);
+	CHECK_MEMBER(nodemap_range_rec, nrr_padding2);
+}
+
+static void check_nodemap_id_rec(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(nodemap_id_rec);
+	CHECK_MEMBER(nodemap_id_rec, nir_id_fs);
+	CHECK_MEMBER(nodemap_id_rec, nir_padding1);
+	CHECK_MEMBER(nodemap_id_rec, nir_padding2);
+	CHECK_MEMBER(nodemap_id_rec, nir_padding3);
+	CHECK_MEMBER(nodemap_id_rec, nir_padding4);
+}
+
+static void check_nodemap_global_rec(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(nodemap_global_rec);
+	CHECK_MEMBER(nodemap_global_rec, ngr_is_active);
+	CHECK_MEMBER(nodemap_global_rec, ngr_padding1);
+	CHECK_MEMBER(nodemap_global_rec, ngr_padding2);
+	CHECK_MEMBER(nodemap_global_rec, ngr_padding3);
+	CHECK_MEMBER(nodemap_global_rec, ngr_padding4);
+	CHECK_MEMBER(nodemap_global_rec, ngr_padding5);
+	CHECK_MEMBER(nodemap_global_rec, ngr_padding6);
+}
+
+static void check_nodemap_rec(void)
+{
+	BLANK_LINE();
+	CHECK_UNION(nodemap_rec);
+}
+
 static void check_lfsck_request(void)
 {
 	BLANK_LINE();
@@ -2651,6 +2703,12 @@ main(int argc, char **argv)
 	check_object_update_reply();
 	check_out_update_header();
 	check_out_update_buffer();
+
+	check_nodemap_cluster_rec();
+	check_nodemap_range_rec();
+	check_nodemap_id_rec();
+	check_nodemap_global_rec();
+	check_nodemap_rec();
 
 	check_lfsck_request();
 	check_lfsck_reply();

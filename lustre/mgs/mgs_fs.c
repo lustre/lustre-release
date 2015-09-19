@@ -119,6 +119,8 @@ int mgs_fs_setup(const struct lu_env *env, struct mgs_device *mgs)
 	struct dt_object	*o;
 	struct lu_fid		 rfid;
 	struct dt_object	*root;
+	struct dt_object	*nm_config_file_obj;
+	struct nm_config_file	*nm_config_file;
 	int			 rc;
 
 	ENTRY;
@@ -161,17 +163,52 @@ int mgs_fs_setup(const struct lu_env *env, struct mgs_device *mgs)
 
 	mgs->mgs_configs_dir = o;
 
+	nm_config_file_obj = local_index_find_or_create(env, mgs->mgs_los,
+							mgs->mgs_configs_dir,
+							LUSTRE_NODEMAP_NAME,
+							S_IFREG | S_IRUGO |
+								  S_IWUSR,
+							&dt_nodemap_features);
+	if (IS_ERR(nm_config_file_obj))
+		GOTO(out_configs, rc = PTR_ERR(nm_config_file_obj));
+
+	if (nm_config_file_obj->do_index_ops == NULL) {
+		rc = nm_config_file_obj->do_ops->do_index_try(env,
+							nm_config_file_obj,
+							&dt_nodemap_features);
+		if (rc < 0) {
+			lu_object_put(env, &nm_config_file_obj->do_lu);
+			GOTO(out_configs, rc);
+		}
+	}
+	nm_config_file = nm_config_file_register(env, nm_config_file_obj);
+	if (IS_ERR(nm_config_file)) {
+		lu_object_put(env, &nm_config_file_obj->do_lu);
+		CERROR("%s: error loading nodemap config file, file must be "
+		       "removed via ldiskfs: rc = %ld\n",
+		       mgs->mgs_obd->obd_name, PTR_ERR(nm_config_file));
+		GOTO(out_configs, rc = PTR_ERR(nm_config_file));
+	}
+	mgs->mgs_obd->u.obt.obt_nodemap_config_file = nm_config_file;
+
 	/* create directory to store nid table versions */
 	o = local_file_find_or_create(env, mgs->mgs_los, root, MGS_NIDTBL_DIR,
 				      S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO);
-	if (IS_ERR(o)) {
-		lu_object_put(env, &mgs->mgs_configs_dir->do_lu);
-		mgs->mgs_configs_dir = NULL;
-		GOTO(out_root, rc = PTR_ERR(o));
-	}
+	if (IS_ERR(o))
+		GOTO(out_nm, rc = PTR_ERR(o));
 
 	mgs->mgs_nidtbl_dir = o;
 
+out_nm:
+	if (rc < 0) {
+		nm_config_file_deregister(env, nm_config_file);
+		mgs->mgs_obd->u.obt.obt_nodemap_config_file = NULL;
+	}
+out_configs:
+	if (rc < 0) {
+		lu_object_put(env, &mgs->mgs_configs_dir->do_lu);
+		mgs->mgs_configs_dir = NULL;
+	}
 out_root:
 	lu_object_put(env, &root->do_lu);
 out_los:
@@ -195,6 +232,12 @@ int mgs_fs_cleanup(const struct lu_env *env, struct mgs_device *mgs)
 		lu_object_put(env, &mgs->mgs_nidtbl_dir->do_lu);
 		mgs->mgs_nidtbl_dir = NULL;
 	}
+	if (mgs->mgs_obd->u.obt.obt_nodemap_config_file != NULL) {
+		nm_config_file_deregister(env,
+				mgs->mgs_obd->u.obt.obt_nodemap_config_file);
+		mgs->mgs_obd->u.obt.obt_nodemap_config_file = NULL;
+	}
+
 	if (mgs->mgs_los) {
 		local_oid_storage_fini(env, mgs->mgs_los);
 		mgs->mgs_los = NULL;

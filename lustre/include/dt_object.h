@@ -358,6 +358,9 @@ extern const struct dt_index_features dt_quota_glb_features;
 /* index features supported by the quota slave indexes */
 extern const struct dt_index_features dt_quota_slv_features;
 
+/* index features supported by the nodemap index */
+extern const struct dt_index_features dt_nodemap_features;
+
 /**
  * This is a general purpose dt allocation hint.
  * It now contains the parent object.

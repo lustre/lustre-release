@@ -4710,6 +4710,114 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct out_update_buffer *)0)->oub_padding) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct out_update_buffer *)0)->oub_padding));
 
+	/* Checks for struct nodemap_cluster_rec */
+	LASSERTF((int)sizeof(struct nodemap_cluster_rec) == 32, "found %lld\n",
+		 (long long)(int)sizeof(struct nodemap_cluster_rec));
+	LASSERTF((int)offsetof(struct nodemap_cluster_rec, ncr_name) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_cluster_rec, ncr_name));
+	LASSERTF((int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_name) == 17, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_name));
+	LASSERTF((int)offsetof(struct nodemap_cluster_rec, ncr_flags) == 17, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_cluster_rec, ncr_flags));
+	LASSERTF((int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_flags) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_flags));
+	LASSERTF((int)offsetof(struct nodemap_cluster_rec, ncr_padding1) == 18, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_cluster_rec, ncr_padding1));
+	LASSERTF((int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_padding1) == 2, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_padding1));
+	LASSERTF((int)offsetof(struct nodemap_cluster_rec, ncr_padding2) == 20, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_cluster_rec, ncr_padding2));
+	LASSERTF((int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_padding2) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_padding2));
+	LASSERTF((int)offsetof(struct nodemap_cluster_rec, ncr_squash_uid) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_cluster_rec, ncr_squash_uid));
+	LASSERTF((int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_squash_uid) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_squash_uid));
+	LASSERTF((int)offsetof(struct nodemap_cluster_rec, ncr_squash_gid) == 28, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_cluster_rec, ncr_squash_gid));
+	LASSERTF((int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_squash_gid) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_cluster_rec *)0)->ncr_squash_gid));
+
+	/* Checks for struct nodemap_range_rec */
+	LASSERTF((int)sizeof(struct nodemap_range_rec) == 32, "found %lld\n",
+		 (long long)(int)sizeof(struct nodemap_range_rec));
+	LASSERTF((int)offsetof(struct nodemap_range_rec, nrr_start_nid) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_range_rec, nrr_start_nid));
+	LASSERTF((int)sizeof(((struct nodemap_range_rec *)0)->nrr_start_nid) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_range_rec *)0)->nrr_start_nid));
+	LASSERTF((int)offsetof(struct nodemap_range_rec, nrr_end_nid) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_range_rec, nrr_end_nid));
+	LASSERTF((int)sizeof(((struct nodemap_range_rec *)0)->nrr_end_nid) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_range_rec *)0)->nrr_end_nid));
+	LASSERTF((int)offsetof(struct nodemap_range_rec, nrr_padding1) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_range_rec, nrr_padding1));
+	LASSERTF((int)sizeof(((struct nodemap_range_rec *)0)->nrr_padding1) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_range_rec *)0)->nrr_padding1));
+	LASSERTF((int)offsetof(struct nodemap_range_rec, nrr_padding2) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_range_rec, nrr_padding2));
+	LASSERTF((int)sizeof(((struct nodemap_range_rec *)0)->nrr_padding2) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_range_rec *)0)->nrr_padding2));
+
+	/* Checks for struct nodemap_id_rec */
+	LASSERTF((int)sizeof(struct nodemap_id_rec) == 32, "found %lld\n",
+		 (long long)(int)sizeof(struct nodemap_id_rec));
+	LASSERTF((int)offsetof(struct nodemap_id_rec, nir_id_fs) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_id_rec, nir_id_fs));
+	LASSERTF((int)sizeof(((struct nodemap_id_rec *)0)->nir_id_fs) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_id_rec *)0)->nir_id_fs));
+	LASSERTF((int)offsetof(struct nodemap_id_rec, nir_padding1) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_id_rec, nir_padding1));
+	LASSERTF((int)sizeof(((struct nodemap_id_rec *)0)->nir_padding1) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_id_rec *)0)->nir_padding1));
+	LASSERTF((int)offsetof(struct nodemap_id_rec, nir_padding2) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_id_rec, nir_padding2));
+	LASSERTF((int)sizeof(((struct nodemap_id_rec *)0)->nir_padding2) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_id_rec *)0)->nir_padding2));
+	LASSERTF((int)offsetof(struct nodemap_id_rec, nir_padding3) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_id_rec, nir_padding3));
+	LASSERTF((int)sizeof(((struct nodemap_id_rec *)0)->nir_padding3) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_id_rec *)0)->nir_padding3));
+	LASSERTF((int)offsetof(struct nodemap_id_rec, nir_padding4) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_id_rec, nir_padding4));
+	LASSERTF((int)sizeof(((struct nodemap_id_rec *)0)->nir_padding4) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_id_rec *)0)->nir_padding4));
+
+	/* Checks for struct nodemap_global_rec */
+	LASSERTF((int)sizeof(struct nodemap_global_rec) == 32, "found %lld\n",
+		 (long long)(int)sizeof(struct nodemap_global_rec));
+	LASSERTF((int)offsetof(struct nodemap_global_rec, ngr_is_active) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_global_rec, ngr_is_active));
+	LASSERTF((int)sizeof(((struct nodemap_global_rec *)0)->ngr_is_active) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_global_rec *)0)->ngr_is_active));
+	LASSERTF((int)offsetof(struct nodemap_global_rec, ngr_padding1) == 1, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_global_rec, ngr_padding1));
+	LASSERTF((int)sizeof(((struct nodemap_global_rec *)0)->ngr_padding1) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_global_rec *)0)->ngr_padding1));
+	LASSERTF((int)offsetof(struct nodemap_global_rec, ngr_padding2) == 2, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_global_rec, ngr_padding2));
+	LASSERTF((int)sizeof(((struct nodemap_global_rec *)0)->ngr_padding2) == 2, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_global_rec *)0)->ngr_padding2));
+	LASSERTF((int)offsetof(struct nodemap_global_rec, ngr_padding3) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_global_rec, ngr_padding3));
+	LASSERTF((int)sizeof(((struct nodemap_global_rec *)0)->ngr_padding3) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_global_rec *)0)->ngr_padding3));
+	LASSERTF((int)offsetof(struct nodemap_global_rec, ngr_padding4) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_global_rec, ngr_padding4));
+	LASSERTF((int)sizeof(((struct nodemap_global_rec *)0)->ngr_padding4) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_global_rec *)0)->ngr_padding4));
+	LASSERTF((int)offsetof(struct nodemap_global_rec, ngr_padding5) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_global_rec, ngr_padding5));
+	LASSERTF((int)sizeof(((struct nodemap_global_rec *)0)->ngr_padding5) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_global_rec *)0)->ngr_padding5));
+	LASSERTF((int)offsetof(struct nodemap_global_rec, ngr_padding6) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct nodemap_global_rec, ngr_padding6));
+	LASSERTF((int)sizeof(((struct nodemap_global_rec *)0)->ngr_padding6) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct nodemap_global_rec *)0)->ngr_padding6));
+
+	/* Checks for union nodemap_rec */
+	LASSERTF((int)sizeof(union nodemap_rec) == 32, "found %lld\n",
+		 (long long)(int)sizeof(union nodemap_rec));
+
 	/* Checks for struct lfsck_request */
 	LASSERTF((int)sizeof(struct lfsck_request) == 96, "found %lld\n",
 		 (long long)(int)sizeof(struct lfsck_request));

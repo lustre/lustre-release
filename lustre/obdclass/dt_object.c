@@ -48,7 +48,7 @@
 #include <libcfs/list.h>
 /* fid_be_to_cpu() */
 #include <lustre_fid.h>
-
+#include <lustre_nodemap.h>
 #include <lustre_quota.h>
 
 /* context key constructor/destructor: dt_global_key_init, dt_global_key_fini */
@@ -635,6 +635,17 @@ const struct dt_index_features dt_quota_slv_features = {
 	.dif_ptrsize		= 4
 };
 EXPORT_SYMBOL(dt_quota_slv_features);
+
+/* nodemap files, nodemap_rec size asserted in nodemap_storage.c */
+const struct dt_index_features dt_nodemap_features = {
+	.dif_flags		= DT_IND_UPDATE,
+	.dif_keysize_min	= sizeof(__u64), /* 64-bit nodemap/record id */
+	.dif_keysize_max	= sizeof(__u64), /* 64-bit nodemap/record id */
+	.dif_recsize_min	= sizeof(union nodemap_rec), /* 32 bytes */
+	.dif_recsize_max	= sizeof(union nodemap_rec), /* 32 bytes */
+	.dif_ptrsize		= 4
+};
+EXPORT_SYMBOL(dt_nodemap_features);
 
 /* helper function returning what dt_index_features structure should be used
  * based on the FID sequence. This is used by OBD_IDX_READ RPC */

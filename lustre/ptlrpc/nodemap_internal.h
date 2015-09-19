@@ -33,7 +33,7 @@
 #include <lustre_nodemap.h>
 #include <interval_tree.h>
 
-#define MODULE_STRING "nodemap"
+#define DEFAULT_NODEMAP "default"
 
 /* Default nobody uid and gid values */
 
@@ -100,6 +100,38 @@ struct nodemap_config {
 	struct cfs_hash *nmc_nodemap_hash;
 };
 
+/* first 4 bits of the nodemap_id is the index type */
+struct nodemap_key {
+	__u32 nk_nodemap_id;
+	union {
+		__u32 nk_range_id;
+		__u32 nk_id_client;
+		__u32 nk_unused;
+	};
+};
+
+enum nodemap_idx_type {
+	NODEMAP_EMPTY_IDX = 0,		/* index created with blank record */
+	NODEMAP_CLUSTER_IDX = 1,	/* a nodemap cluster of nodes */
+	NODEMAP_RANGE_IDX = 2,		/* nid range assigned to a nm cluster */
+	NODEMAP_UIDMAP_IDX = 3,		/* uid map assigned to a nm cluster */
+	NODEMAP_GIDMAP_IDX = 4,		/* gid map assigned to a nm cluster */
+	NODEMAP_GLOBAL_IDX = 15,	/* stores nodemap activation status */
+};
+
+#define NM_TYPE_MASK 0x0FFFFFFF
+#define NM_TYPE_SHIFT 28
+
+static inline enum nodemap_idx_type nm_idx_get_type(unsigned int id)
+{
+	return id >> NM_TYPE_SHIFT;
+}
+
+static inline __u32 nm_idx_set_type(unsigned int id, enum nodemap_idx_type t)
+{
+	return (id & NM_TYPE_MASK) | (t << NM_TYPE_SHIFT);
+}
+
 struct nodemap_config *nodemap_config_alloc(void);
 void nodemap_config_dealloc(struct nodemap_config *config);
 void nodemap_config_set_active(struct nodemap_config *config);
@@ -118,7 +150,8 @@ struct lu_nid_range *nodemap_range_find(lnet_nid_t start_nid,
 					lnet_nid_t end_nid);
 struct lu_nid_range *range_create(struct nodemap_range_tree *nm_range_tree,
 				  lnet_nid_t start_nid, lnet_nid_t end_nid,
-				  struct lu_nodemap *nodemap);
+				  struct lu_nodemap *nodemap,
+				  unsigned int range_id);
 void range_destroy(struct lu_nid_range *range);
 int range_insert(struct nodemap_range_tree *nm_range_tree,
 		 struct lu_nid_range *data);
@@ -149,6 +182,14 @@ void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap);
 void nm_member_revoke_locks(struct lu_nodemap *nodemap);
 void nm_member_revoke_all(void);
 
+int nodemap_add_idmap_helper(struct lu_nodemap *nodemap,
+			     enum nodemap_id_type id_type,
+			     const __u32 map[2]);
+int nodemap_add_range_helper(struct nodemap_config *config,
+			     struct lu_nodemap *nodemap,
+			     const lnet_nid_t nid[2],
+			     unsigned int range_id);
+
 struct rb_node *nm_rb_next_postorder(const struct rb_node *node);
 struct rb_node *nm_rb_first_postorder(const struct rb_root *root);
 void nodemap_putref(struct lu_nodemap *nodemap);
@@ -166,4 +207,18 @@ void nodemap_putref(struct lu_nodemap *nodemap);
 		n = (pos && nm_rb_next_postorder(&pos->field)) ?	\
 		rb_entry(nm_rb_next_postorder(&pos->field),		\
 		typeof(*pos), field) : NULL)
+
+int nodemap_idx_nodemap_add(const struct lu_nodemap *nodemap);
+int nodemap_idx_nodemap_update(const struct lu_nodemap *nodemap);
+int nodemap_idx_nodemap_del(const struct lu_nodemap *nodemap);
+int nodemap_idx_idmap_add(const struct lu_nodemap *nodemap,
+			  enum nodemap_id_type id_type,
+			  const __u32 map[2]);
+int nodemap_idx_idmap_del(const struct lu_nodemap *nodemap,
+			  enum nodemap_id_type id_type,
+			  const __u32 map[2]);
+int nodemap_idx_range_add(const struct lu_nid_range *range,
+			  const lnet_nid_t nid[2]);
+int nodemap_idx_range_del(const struct lu_nid_range *range);
+int nodemap_idx_nodemap_activate(bool value);
 #endif  /* _NODEMAP_INTERNAL_H */

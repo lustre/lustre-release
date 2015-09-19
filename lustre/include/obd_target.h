@@ -46,6 +46,7 @@ struct obd_device_target {
 	struct lu_target       *obt_lut;
 	__u64			obt_mount_count;
 	struct obd_job_stats	obt_jobstats;
+	struct nm_config_file	*obt_nodemap_config_file;
 };
 
 #define OBJ_SUBDIR_COUNT 32 /* set to zero for no subdirs */

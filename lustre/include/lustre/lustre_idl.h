@@ -4088,6 +4088,49 @@ struct llog_update_record {
 	*/
 };
 
+/* nodemap records, uses 32 byte record length */
+#define LUSTRE_NODEMAP_NAME_LENGTH 16
+struct nodemap_cluster_rec {
+	char	ncr_name[LUSTRE_NODEMAP_NAME_LENGTH + 1];
+	__u8	ncr_flags;
+	__u16	ncr_padding1;
+	__u32	ncr_padding2;
+	__u32	ncr_squash_uid;
+	__u32	ncr_squash_gid;
+};
+
+/* lnet_nid_t is 8 bytes */
+struct nodemap_range_rec {
+	lnet_nid_t	nrr_start_nid;
+	lnet_nid_t	nrr_end_nid;
+	__u64		nrr_padding1;
+	__u64		nrr_padding2;
+};
+
+struct nodemap_id_rec {
+	__u32	nir_id_fs;
+	__u32	nir_padding1;
+	__u64	nir_padding2;
+	__u64	nir_padding3;
+	__u64	nir_padding4;
+};
+
+struct nodemap_global_rec {
+	__u8	ngr_is_active;
+	__u8	ngr_padding1;
+	__u16	ngr_padding2;
+	__u32	ngr_padding3;
+	__u64	ngr_padding4;
+	__u64	ngr_padding5;
+	__u64	ngr_padding6;
+};
+
+union nodemap_rec {
+	struct nodemap_cluster_rec ncr;
+	struct nodemap_range_rec nrr;
+	struct nodemap_id_rec nir;
+	struct nodemap_global_rec ngr;
+};
 
 #endif
 /** @} lustreidl */
