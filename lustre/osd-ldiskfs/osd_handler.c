@@ -270,6 +270,7 @@ struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 		iput(inode);
 		inode = ERR_PTR(-ENOENT);
 	} else {
+		ldiskfs_clear_inode_state(inode, LDISKFS_STATE_LUSTRE_DESTROY);
 		if (id->oii_gen == OSD_OII_NOGEN)
 			osd_id_gen(id, inode->i_ino, inode->i_generation);
 
@@ -373,6 +374,8 @@ static struct inode *osd_iget_check(struct osd_thread_info *info,
 
 		goto check_oi;
 	}
+
+	ldiskfs_clear_inode_state(inode, LDISKFS_STATE_LUSTRE_DESTROY);
 
 check_oi:
 	if (rc != 0) {
@@ -2523,6 +2526,7 @@ static int osd_object_destroy(const struct lu_env *env,
 
 	osd_trans_exec_op(env, th, OSD_OT_DESTROY);
 
+	ldiskfs_set_inode_state(inode, LDISKFS_STATE_LUSTRE_DESTROY);
 	result = osd_oi_delete(osd_oti_get(env), osd, fid, oh->ot_handle,
 			       OI_CHECK_FLD);
 
@@ -4070,7 +4074,7 @@ static int osd_ea_add_rec(const struct lu_env *env, struct osd_object *pobj,
         return rc;
 }
 
-static void
+static int
 osd_consistency_check(struct osd_thread_info *oti, struct osd_device *dev,
 		      struct osd_idmap_cache *oic)
 {
@@ -4082,19 +4086,39 @@ osd_consistency_check(struct osd_thread_info *oti, struct osd_device *dev,
 	ENTRY;
 
 	if (!fid_is_norm(fid) && !fid_is_igif(fid))
-		RETURN_EXIT;
+		RETURN(0);
 
 	if (scrub->os_pos_current > id->oii_ino)
-		RETURN_EXIT;
+		RETURN(0);
 
 again:
-	rc = osd_oi_lookup(oti, dev, fid, id, OI_CHECK_FLD);
-	if (rc != 0 && rc != -ENOENT)
-		RETURN_EXIT;
+	rc = osd_oi_lookup(oti, dev, fid, id, 0);
+	if (rc == -ENOENT) {
+		struct inode *inode;
 
-	if (rc == 0 && osd_id_eq(id, &oic->oic_lid))
-		RETURN_EXIT;
+		*id = oic->oic_lid;
+		inode = osd_iget(oti, dev, &oic->oic_lid);
 
+		/* The inode has been removed (by race maybe). */
+		if (IS_ERR(inode)) {
+			rc = PTR_ERR(inode);
+
+			RETURN(rc == -ESTALE ? -ENOENT : rc);
+		}
+
+		iput(inode);
+		/* The OI mapping is lost. */
+		if (id->oii_gen != OSD_OII_NOGEN)
+			goto trigger;
+
+		/* The inode may has been reused by others, we do not know,
+		 * leave it to be handled by subsequent osd_fid_lookup(). */
+		RETURN(0);
+	} else if (rc != 0 || osd_id_eq(id, &oic->oic_lid)) {
+		RETURN(rc);
+	}
+
+trigger:
 	if (thread_is_running(&scrub->os_thread)) {
 		rc = osd_oii_insert(dev, oic, rc == -ENOENT);
 		/* There is race condition between osd_oi_lookup and OI scrub.
@@ -4104,7 +4128,7 @@ again:
 		if (unlikely(rc == -EAGAIN))
 			goto again;
 
-		RETURN_EXIT;
+		RETURN(0);
 	}
 
 	if (!dev->od_noscrub && ++once == 1) {
@@ -4118,7 +4142,7 @@ again:
 			goto again;
 	}
 
-	EXIT;
+	RETURN(0);
 }
 
 static int osd_fail_fid_lookup(struct osd_thread_info *oti,
@@ -4304,16 +4328,16 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 			osd_id_gen(id, ino, OSD_OII_NOGEN);
 		}
 
-		if (rc != 0) {
+		if (rc != 0 || osd_remote_fid(env, dev, fid)) {
 			fid_zero(&oic->oic_fid);
+
 			GOTO(out, rc);
 		}
 
-		if (osd_remote_fid(env, dev, fid))
-			GOTO(out, rc = 0);
-
 		osd_add_oi_cache(osd_oti_get(env), osd_obj2dev(obj), id, fid);
-		osd_consistency_check(oti, dev, oic);
+		rc = osd_consistency_check(oti, dev, oic);
+		if (rc != 0)
+			fid_zero(&oic->oic_fid);
 	} else {
 		rc = -ENOENT;
 	}

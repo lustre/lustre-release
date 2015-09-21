@@ -79,6 +79,7 @@ extern struct kmem_cache *dynlock_cachep;
 
 /* OI scrub should skip this inode. */
 #define LDISKFS_STATE_LUSTRE_NOSCRUB	31
+#define LDISKFS_STATE_LUSTRE_DESTROY	30
 
 /** Enable thandle usage statistics */
 #define OSD_THANDLE_STATS (0)

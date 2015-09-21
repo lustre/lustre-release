@@ -615,7 +615,8 @@ out:
 	/* There may be conflict unlink during the OI scrub,
 	 * if happend, then remove the new added OI mapping. */
 	if (ops == DTO_INDEX_INSERT && inode != NULL && !IS_ERR(inode) &&
-	    unlikely(inode->i_nlink == 0))
+	    unlikely(ldiskfs_test_inode_state(inode,
+					      LDISKFS_STATE_LUSTRE_DESTROY)))
 		osd_scrub_refresh_mapping(info, dev, fid, lid,
 				DTO_INDEX_DELETE, false,
 				(val == SCRUB_NEXT_OSTOBJ ||
@@ -627,13 +628,11 @@ out:
 		iput(inode);
 
 	if (oii != NULL) {
-		LASSERT(!list_empty(&oii->oii_list));
+		LASSERT(list_empty(&oii->oii_list));
 
-		spin_lock(&scrub->os_lock);
-		list_del_init(&oii->oii_list);
-		spin_unlock(&scrub->os_lock);
 		OBD_FREE_PTR(oii);
 	}
+
 	RETURN(sf->sf_param & SP_FAILOUT ? rc : 0);
 }
 
@@ -1009,13 +1008,21 @@ static int osd_scrub_next(struct osd_thread_info *info, struct osd_device *dev,
 		return SCRUB_NEXT_EXIT;
 
 	if (!list_empty(&scrub->os_inconsistent_items)) {
-		struct osd_inconsistent_item *oii;
+		spin_lock(&scrub->os_lock);
+		if (likely(!list_empty(&scrub->os_inconsistent_items))) {
+			struct osd_inconsistent_item *oii;
 
-		oii = list_entry(scrub->os_inconsistent_items.next,
-				 struct osd_inconsistent_item, oii_list);
-		*oic = &oii->oii_cache;
-		scrub->os_in_prior = 1;
-		return 0;
+			oii = list_entry(scrub->os_inconsistent_items.next,
+				struct osd_inconsistent_item, oii_list);
+			list_del_init(&oii->oii_list);
+			spin_unlock(&scrub->os_lock);
+
+			*oic = &oii->oii_cache;
+			scrub->os_in_prior = 1;
+
+			return 0;
+		}
+		spin_unlock(&scrub->os_lock);
 	}
 
 	if (noslot)
@@ -1102,8 +1109,10 @@ static int osd_scrub_exec(struct osd_thread_info *info, struct osd_device *dev,
 	}
 
 	rc = osd_scrub_check_update(info, dev, oic, rc);
-	if (rc != 0)
+	if (rc != 0) {
+		scrub->os_in_prior = 0;
 		return rc;
+	}
 
 	rc = osd_scrub_checkpoint(scrub);
 	if (rc != 0) {

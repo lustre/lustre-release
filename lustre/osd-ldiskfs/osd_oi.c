@@ -647,7 +647,7 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
 			return rc;
 
 		if (unlikely(osd_id_eq(id, oi_id)))
-			return 0;
+			return 1;
 
 		/* Check whether the mapping for oi_id is valid or not. */
 		inode = osd_iget(info, osd, oi_id);

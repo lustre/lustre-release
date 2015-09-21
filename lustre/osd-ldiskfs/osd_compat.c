@@ -566,22 +566,19 @@ static int osd_obj_update_entry(struct osd_thread_info *info,
 	rc = osd_get_lma(info, inode, dentry, lma);
 	if (rc == -ENODATA) {
 		rc = osd_get_idif(info, inode, dentry, oi_fid);
-		if (rc > 0) {
+		if (rc > 0 || rc == -ENODATA) {
 			oi_fid = NULL;
 			rc = 0;
 		}
 	}
 	iput(inode);
 
-	/* If the OST-object has neither FID-in-LMA nor FID-in-ff, it is
-	 * either a crashed object or a uninitialized one. Replace it. */
-	if (rc == -ENODATA || oi_fid == NULL)
-		goto update;
-
 	if (rc != 0)
 		GOTO(out, rc);
 
-	if (lu_fid_eq(fid, oi_fid)) {
+	/* If the OST-object has neither FID-in-LMA nor FID-in-ff, it is
+	 * either a crashed object or a uninitialized one. Replace it. */
+	if (oi_fid != NULL && lu_fid_eq(fid, oi_fid)) {
 		CERROR("%s: the FID "DFID" is used by two objects: "
 		       "%u/%u %u/%u\n", osd_name(osd), PFID(fid),
 		       oi_id->oii_ino, oi_id->oii_gen,
