@@ -369,7 +369,7 @@ obd_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len)
 /*	OBD_IOC_PARSE		_IOWR('f', 182, OBD_IOC_DATA_TYPE) */
 /*	OBD_IOC_DORECORD	_IOWR('f', 183, OBD_IOC_DATA_TYPE) */
 #define OBD_IOC_PROCESS_CFG	_IOWR('f', 184, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_DUMP_LOG	_IOWR('f', 185, OBD_IOC_DATA_TYPE)
+/*	OBD_IOC_DUMP_LOG	_IOWR('f', 185, OBD_IOC_DATA_TYPE) */
 /*	OBD_IOC_CLEAR_LOG	_IOWR('f', 186, OBD_IOC_DATA_TYPE) */
 #define OBD_IOC_PARAM		_IOW ('f', 187, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_POOL		_IOWR('f', 188, OBD_IOC_DATA_TYPE)

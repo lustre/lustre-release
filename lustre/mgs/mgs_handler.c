@@ -935,17 +935,6 @@ out_free:
 		rc = mgs_iocontrol_nodemap(&env, mgs, data);
 		break;
 
-	case OBD_IOC_DUMP_LOG: {
-		struct llog_ctxt *ctxt;
-
-		ctxt = llog_get_context(mgs->mgs_obd, LLOG_CONFIG_ORIG_CTXT);
-		rc = class_config_dump_llog(&env, ctxt, data->ioc_inlbuf1,
-					    NULL);
-                llog_ctxt_put(ctxt);
-
-		break;
-        }
-
 	case OBD_IOC_CATLOGLIST:
 		rc = mgs_list_logs(&env, mgs, data);
 		break;

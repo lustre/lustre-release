@@ -1900,33 +1900,6 @@ int class_config_dump_handler(const struct lu_env *env,
 	RETURN(rc);
 }
 
-int class_config_dump_llog(const struct lu_env *env, struct llog_ctxt *ctxt,
-			   char *name, struct config_llog_instance *cfg)
-{
-	struct llog_handle	*llh;
-	int			 rc;
-
-	ENTRY;
-
-	LCONSOLE_INFO("Dumping config log %s\n", name);
-
-	rc = llog_open(env, ctxt, &llh, NULL, name, LLOG_OPEN_EXISTS);
-	if (rc)
-		RETURN(rc);
-
-	rc = llog_init_handle(env, llh, LLOG_F_IS_PLAIN, NULL);
-	if (rc)
-		GOTO(parse_out, rc);
-
-	rc = llog_process(env, llh, class_config_dump_handler, cfg, NULL);
-parse_out:
-	llog_close(env, llh);
-
-	LCONSOLE_INFO("End config log %s\n", name);
-	RETURN(rc);
-}
-EXPORT_SYMBOL(class_config_dump_llog);
-
 /** Call class_cleanup and class_detach.
  * "Manual" only in the sense that we're faking lcfg commands.
  */

@@ -2409,35 +2409,6 @@ int jt_obd_mdc_lookup(int argc, char **argv)
         return rc;
 }
 
-int jt_cfg_dump_log(int argc, char **argv)
-{
-        struct obd_ioctl_data data;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        int rc;
-
-        if (argc != 2)
-                return CMD_HELP;
-
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = cur_device;
-        data.ioc_inllen1 = strlen(argv[1]) + 1;
-        data.ioc_inlbuf1 = argv[1];
-
-        memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(argv[0]));
-                return rc;
-        }
-        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_DUMP_LOG, buf);
-        if (rc < 0)
-                fprintf(stderr, "OBD_IOC_DUMP_LOG failed: %s\n",
-                        strerror(errno));
-
-        return rc;
-}
-
 int jt_llog_catlist(int argc, char **argv)
 {
         struct obd_ioctl_data data;

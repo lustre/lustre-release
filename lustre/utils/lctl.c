@@ -310,9 +310,6 @@ command_t cmdlist[] = {
          "usage: setup <args...>"},
         {"cleanup", jt_obd_cleanup, 0, "cleanup previously setup device\n"
          "usage: cleanup [force | failover]"},
-        {"dump_cfg", jt_cfg_dump_log, 0,
-         "print log of recorded commands for this config to kernel debug log\n"
-         "usage: dump_cfg config-uuid-name"},
 
         /* Test only commands */
         {"==== testing (DANGEROUS) ====", jt_noop, 0, "testing (DANGEROUS)"},

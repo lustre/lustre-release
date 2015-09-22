@@ -171,7 +171,7 @@ struct config_llog_instance {
 	char			*cfg_obdname;
 	void			*cfg_instance;
 	struct super_block	*cfg_sb;
-	struct obd_uuid 	 cfg_uuid;
+	struct obd_uuid		 cfg_uuid;
 	llog_cb_t		 cfg_callback;
 	int			 cfg_last_idx; /* for partial llog processing */
 	int			 cfg_flags;
@@ -179,8 +179,6 @@ struct config_llog_instance {
 };
 int class_config_parse_llog(const struct lu_env *env, struct llog_ctxt *ctxt,
 			    char *name, struct config_llog_instance *cfg);
-int class_config_dump_llog(const struct lu_env *env, struct llog_ctxt *ctxt,
-			   char *name, struct config_llog_instance *cfg);
 
 enum {
 	CONFIG_T_CONFIG  = 0,
