@@ -433,7 +433,17 @@ static int lprocfs_jobstats_seq_show(struct seq_file *p, void *v)
 		return 0;
 	}
 
-	seq_printf(p, "- %-16s %s\n", "job_id:", job->js_jobid);
+	/* Replace the non-printable character in jobid with '?', so
+	 * that the output of jobid will be confined in single line. */
+	seq_printf(p, "- %-16s ", "job_id:");
+	for (i = 0; i < strlen(job->js_jobid); i++) {
+		if (isprint(job->js_jobid[i]) != 0)
+			seq_putc(p, job->js_jobid[i]);
+		else
+			seq_putc(p, '?');
+	}
+	seq_putc(p, '\n');
+
 	seq_printf(p, "  %-16s %ld\n", "snapshot_time:", job->js_timestamp);
 
 	s = job->js_stats;
