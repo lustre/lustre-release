@@ -1844,7 +1844,7 @@ check_seq_oid()
 		log "want: stripe:$stripe_nr ost:$obdidx oid:$oid/$hex seq:$seq"
 
 		seq=$(echo $seq | sed -e "s/^0x//g")
-		if [ $seq == 0 ]; then
+		if [ $seq == 0 ] || [ $(facet_fstype ost$ost) == zfs ]; then
 			oid_hex=$(echo $oid)
 		else
 			oid_hex=$(echo $hex | sed -e "s/^0x//g")
