@@ -7,7 +7,7 @@ TBD Intel Corporation
          2.6.32-504.30.3.el6 (RHEL6.6)
          2.6.32-573.7.1.el6  (RHEL6.7)
          3.10.0-229.20.1.el7 (RHEL7.1)
-         3.0.101-0.47.55     (SLES11 SP3)
+         3.0.101-0.47.67     (SLES11 SP3)
          3.0.101-65          (SLES11 SP4)
          vanilla linux 4.2.1 (ZFS only)
        * Client known to build on unpatched kernels:
@@ -15,7 +15,7 @@ TBD Intel Corporation
          2.6.32-504.30.3.el6 (RHEL6.6)
          2.6.32-573.7.1.el6  (RHEL6.7)
          3.10.0-229.20.1.el7 (RHEL7.1)
-         3.0.101-0.47.55     (SLES11 SP3)
+         3.0.101-0.47.67     (SLES11 SP3)
          3.0.101-65          (SLES11 SP4)
          3.12.39-47          (SLES12)
          vanilla linux 4.2.1
