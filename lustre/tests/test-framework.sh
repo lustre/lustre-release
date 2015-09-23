@@ -594,7 +594,7 @@ load_modules_local() {
 	# 'mount' doesn't look in $PATH, just sbin
 	local mount_lustre=$LUSTRE/utils/mount.lustre
 	if [ -f $mount_lustre ]; then
-		local sbin_mount=/sbin/mount.lustre
+		local sbin_mount=$(readlink -f /sbin)/mount.lustre
 		if grep -qw "$sbin_mount" /proc/mounts; then
 			cmp -s $mount_lustre $sbin_mount || umount $sbin_mount
 		fi
@@ -658,7 +658,7 @@ unload_modules() {
 		fi
 	fi
 
-	local sbin_mount=/sbin/mount.lustre
+	local sbin_mount=$(readlink -f /sbin)/mount.lustre
 	if grep -qe "$sbin_mount " /proc/mounts; then
 		umount $sbin_mount || true
 		[ -s $sbin_mount ] && ! grep -q "STUB MARK" $sbin_mount ||
