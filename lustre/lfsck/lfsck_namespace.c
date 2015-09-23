@@ -1138,9 +1138,9 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 	struct dt_insert_rec		*rec	= &info->lti_dt_rec;
 	struct lfsck_instance		*lfsck	= com->lc_lfsck;
 	/* The child and its name may be on different MDTs. */
+	const struct lu_fid		*pfid	= lfsck_dto2fid(parent);
+	const struct lu_fid		*cfid	= lfsck_dto2fid(child);
 	struct dt_device		*dev	= lfsck->li_next;
-	struct dt_object		*pobj	= NULL;
-	struct dt_object		*cobj	= NULL;
 	struct thandle			*th	= NULL;
 	struct lfsck_lock_handle	*llh	= &info->lti_llh;
 	int				 rc	= 0;
@@ -1149,16 +1149,16 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 	/* @parent/@child may be based on lfsck->li_bottom,
 	 * but here we need the object based on the lfsck->li_next. */
 
-	pobj = lfsck_object_locate(dev, parent);
-	if (IS_ERR(pobj))
-		GOTO(log, rc = PTR_ERR(pobj));
+	parent = lfsck_object_locate(dev, parent);
+	if (IS_ERR(parent))
+		GOTO(log, rc = PTR_ERR(parent));
 
-	if (unlikely(!dt_try_as_dir(env, pobj)))
+	if (unlikely(!dt_try_as_dir(env, parent)))
 		GOTO(log, rc = -ENOTDIR);
 
-	cobj = lfsck_object_locate(dev, child);
-	if (IS_ERR(cobj))
-		GOTO(log, rc = PTR_ERR(cobj));
+	child = lfsck_object_locate(dev, child);
+	if (IS_ERR(child))
+		GOTO(log, rc = PTR_ERR(child));
 
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
 		GOTO(log, rc = 1);
@@ -1172,15 +1172,15 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 	if (IS_ERR(th))
 		GOTO(unlock, rc = PTR_ERR(th));
 
-	rec->rec_type = lfsck_object_type(cobj) & S_IFMT;
-	rec->rec_fid = lfsck_dto2fid(cobj);
-	rc = dt_declare_insert(env, pobj, (const struct dt_rec *)rec,
+	rec->rec_type = lfsck_object_type(child) & S_IFMT;
+	rec->rec_fid = cfid;
+	rc = dt_declare_insert(env, parent, (const struct dt_rec *)rec,
 			       (const struct dt_key *)name, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
 	if (S_ISDIR(rec->rec_type)) {
-		rc = dt_declare_ref_add(env, pobj, th);
+		rc = dt_declare_ref_add(env, parent, th);
 		if (rc != 0)
 			GOTO(stop, rc);
 	}
@@ -1188,11 +1188,11 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 	memset(la, 0, sizeof(*la));
 	la->la_ctime = cfs_time_current_sec();
 	la->la_valid = LA_CTIME;
-	rc = dt_declare_attr_set(env, pobj, la, th);
+	rc = dt_declare_attr_set(env, parent, la, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	rc = dt_declare_attr_set(env, cobj, la, th);
+	rc = dt_declare_attr_set(env, child, la, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
@@ -1200,25 +1200,25 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	rc = dt_insert(env, pobj, (const struct dt_rec *)rec,
+	rc = dt_insert(env, parent, (const struct dt_rec *)rec,
 		       (const struct dt_key *)name, th, 1);
 	if (rc != 0)
 		GOTO(stop, rc);
 
 	if (S_ISDIR(rec->rec_type)) {
-		dt_write_lock(env, pobj, 0);
-		rc = dt_ref_add(env, pobj, th);
-		dt_write_unlock(env, pobj);
+		dt_write_lock(env, parent, 0);
+		rc = dt_ref_add(env, parent, th);
+		dt_write_unlock(env, parent);
 		if (rc != 0)
 			GOTO(stop, rc);
 	}
 
 	la->la_ctime = cfs_time_current_sec();
-	rc = dt_attr_set(env, pobj, la, th);
+	rc = dt_attr_set(env, parent, la, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	rc = dt_attr_set(env, cobj, la, th);
+	rc = dt_attr_set(env, child, la, th);
 
 	GOTO(stop, rc = (rc == 0 ? 1 : rc));
 
@@ -1231,9 +1231,8 @@ unlock:
 log:
 	CDEBUG(D_LFSCK, "%s: namespace LFSCK insert object "DFID" with "
 	       "the name %s and type %o to the parent "DFID": rc = %d\n",
-	       lfsck_lfsck2name(lfsck), PFID(lfsck_dto2fid(child)), name,
-	       lfsck_object_type(child) & S_IFMT,
-	       PFID(lfsck_dto2fid(parent)), rc);
+	       lfsck_lfsck2name(lfsck), PFID(cfid), name,
+	       lfsck_object_type(child) & S_IFMT, PFID(pfid), rc);
 
 	if (rc != 0) {
 		struct lfsck_namespace *ns = com->lc_file_ram;
@@ -1762,7 +1761,7 @@ static int lfsck_namespace_replace_cond(const struct lu_env *env,
 	/* The child and its name may be on different MDTs. */
 	struct dt_device		*dev	= lfsck->li_next;
 	const char			*name	= cname->ln_name;
-	struct dt_object		*pobj	= NULL;
+	const struct lu_fid		*pfid	= lfsck_dto2fid(parent);
 	struct dt_object		*cobj	= NULL;
 	struct lfsck_lock_handle	*pllh	= &info->lti_llh;
 	struct lustre_handle		 clh	= { 0 };
@@ -1775,11 +1774,11 @@ static int lfsck_namespace_replace_cond(const struct lu_env *env,
 	/* @parent/@child may be based on lfsck->li_bottom,
 	 * but here we need the object based on the lfsck->li_next. */
 
-	pobj = lfsck_object_locate(dev, parent);
-	if (IS_ERR(pobj))
-		GOTO(log, rc = PTR_ERR(pobj));
+	parent = lfsck_object_locate(dev, parent);
+	if (IS_ERR(parent))
+		GOTO(log, rc = PTR_ERR(parent));
 
-	if (unlikely(!dt_try_as_dir(env, pobj)))
+	if (unlikely(!dt_try_as_dir(env, parent)))
 		GOTO(log, rc = -ENOTDIR);
 
 	rc = lfsck_lock(env, lfsck, parent, name, pllh,
@@ -1808,7 +1807,7 @@ static int lfsck_namespace_replace_cond(const struct lu_env *env,
 		goto replace;
 	}
 
-	rc = dt_lookup(env, pobj, (struct dt_rec *)&tfid,
+	rc = dt_lookup(env, parent, (struct dt_rec *)&tfid,
 		       (const struct dt_key *)name);
 	if (rc == -ENOENT) {
 		exist = false;
@@ -1864,7 +1863,7 @@ replace:
 	if (rc != 0)
 		GOTO(log, rc);
 
-	rc = linkea_links_find(&ldata, cname, lfsck_dto2fid(pobj));
+	rc = linkea_links_find(&ldata, cname, pfid);
 	/* Someone moved the child, no need to replace. */
 	if (rc != 0)
 		GOTO(log, rc = 0);
@@ -1882,13 +1881,13 @@ replace:
 			GOTO(stop, rc);
 	}
 
-	rc = dt_declare_delete(env, pobj, (const struct dt_key *)name, th);
+	rc = dt_declare_delete(env, parent, (const struct dt_key *)name, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
 	rec->rec_type = S_IFDIR;
 	rec->rec_fid = lfsck_dto2fid(child);
-	rc = dt_declare_insert(env, pobj, (const struct dt_rec *)rec,
+	rc = dt_declare_insert(env, parent, (const struct dt_rec *)rec,
 			       (const struct dt_key *)name, th);
 	if (rc != 0)
 		GOTO(stop, rc);
@@ -1904,11 +1903,11 @@ replace:
 	}
 
 	/* The old name entry maybe not exist. */
-	rc = dt_delete(env, pobj, (const struct dt_key *)name, th);
+	rc = dt_delete(env, parent, (const struct dt_key *)name, th);
 	if (rc != 0 && rc != -ENOENT)
 		GOTO(stop, rc);
 
-	rc = dt_insert(env, pobj, (const struct dt_rec *)rec,
+	rc = dt_insert(env, parent, (const struct dt_rec *)rec,
 		       (const struct dt_key *)name, th, 1);
 
 	GOTO(stop, rc = (rc == 0 ? 1 : rc));
@@ -1927,8 +1926,7 @@ log:
 	       "object "DFID" because of conflict with the object "DFID
 	       " under the parent "DFID" with name %s: rc = %d\n",
 	       lfsck_lfsck2name(lfsck), PFID(cfid),
-	       PFID(lfsck_dto2fid(child)), PFID(lfsck_dto2fid(parent)),
-	       name, rc);
+	       PFID(lfsck_dto2fid(child)), PFID(pfid), name, rc);
 
 	return rc;
 }
@@ -2036,16 +2034,20 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 {
 	struct lfsck_thread_info	*info	= lfsck_env_info(env);
 	struct dt_insert_rec		*rec	= &info->lti_dt_rec;
+	const struct lu_fid		*pfid	= lfsck_dto2fid(parent);
 	const struct lu_fid		*cfid	= lfsck_dto2fid(child);
 	struct lu_fid			 tfid;
 	struct lfsck_instance		*lfsck	= com->lc_lfsck;
-	struct dt_object		*dto;
 	struct dt_device		*dev	= lfsck->li_next;
 	struct thandle			*th	= NULL;
 	struct lfsck_lock_handle        *llh    = &info->lti_llh;
 	struct lustre_handle		 lh	= { 0 };
 	int				 rc	= 0;
 	ENTRY;
+
+	parent = lfsck_object_locate(dev, parent);
+	if (IS_ERR(parent))
+		GOTO(log, rc = PTR_ERR(parent));
 
 	if (unlikely(!dt_try_as_dir(env, parent)))
 		GOTO(log, rc = -ENOTDIR);
@@ -2063,15 +2065,14 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 	if (IS_ERR(th))
 		GOTO(unlock1, rc = PTR_ERR(th));
 
-	dto = dt_object_locate(parent, th->th_dev);
-	rc = dt_declare_delete(env, dto, (const struct dt_key *)name, th);
+	rc = dt_declare_delete(env, parent, (const struct dt_key *)name, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
 	if (update) {
 		rec->rec_type = lfsck_object_type(child) & S_IFMT;
 		rec->rec_fid = cfid;
-		rc = dt_declare_insert(env, dto,
+		rc = dt_declare_insert(env, parent,
 				       (const struct dt_rec *)rec,
 				       (const struct dt_key *)name2, th);
 		if (rc != 0)
@@ -2079,7 +2080,7 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 	}
 
 	if (dec) {
-		rc = dt_declare_ref_del(env, dto, th);
+		rc = dt_declare_ref_del(env, parent, th);
 		if (rc != 0)
 			GOTO(stop, rc);
 	}
@@ -2089,8 +2090,8 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 		GOTO(stop, rc);
 
 
-	dt_write_lock(env, dto, 0);
-	rc = dt_lookup(env, dto, (struct dt_rec *)&tfid,
+	dt_write_lock(env, parent, 0);
+	rc = dt_lookup(env, parent, (struct dt_rec *)&tfid,
 		       (const struct dt_key *)name);
 	/* Someone has removed the bad name entry by race. */
 	if (rc == -ENOENT)
@@ -2107,12 +2108,12 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
 		GOTO(unlock2, rc = 1);
 
-	rc = dt_delete(env, dto, (const struct dt_key *)name, th);
+	rc = dt_delete(env, parent, (const struct dt_key *)name, th);
 	if (rc != 0)
 		GOTO(unlock2, rc);
 
 	if (update) {
-		rc = dt_insert(env, dto,
+		rc = dt_insert(env, parent,
 			       (const struct dt_rec *)rec,
 			       (const struct dt_key *)name2, th, 1);
 		if (rc != 0)
@@ -2120,7 +2121,7 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 	}
 
 	if (dec) {
-		rc = dt_ref_del(env, dto, th);
+		rc = dt_ref_del(env, parent, th);
 		if (rc != 0)
 			GOTO(unlock2, rc);
 	}
@@ -2149,8 +2150,8 @@ log:
 	CDEBUG(D_LFSCK, "%s: namespace LFSCK assistant found bad name "
 	       "entry for: parent "DFID", child "DFID", name %s, type "
 	       "in name entry %o, type claimed by child %o. repair it "
-	       "by %s with new name2 %s: rc = %d\n", lfsck_lfsck2name(lfsck),
-	       PFID(lfsck_dto2fid(parent)), PFID(cfid),
+	       "by %s with new name2 %s: rc = %d\n",
+	       lfsck_lfsck2name(lfsck), PFID(pfid), PFID(cfid),
 	       name, type, update ? lfsck_object_type(child) : 0,
 	       update ? "updating" : "removing", name2, rc);
 
@@ -4789,9 +4790,9 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 	struct dt_object_format		*dof	= &info->lti_dof;
 	struct dt_insert_rec		*rec	= &info->lti_dt_rec;
 	struct lmv_mds_md_v1		*lmv2	= &info->lti_lmv2;
-	struct dt_object		*pobj	= NULL;
-	struct dt_object		*cobj	= NULL;
 	const struct lu_name		*cname;
+	const struct lu_fid		*pfid	= lfsck_dto2fid(parent);
+	const struct lu_fid		*cfid	= lfsck_dto2fid(child);
 	struct linkea_data		 ldata	= { NULL };
 	struct lfsck_lock_handle	*llh	= &info->lti_llh;
 	struct lu_buf			 linkea_buf;
@@ -4817,22 +4818,22 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 	/* We may need to create the sub-objects of the @child via LOD,
 	 * so make the modification based on lfsck->li_next. */
 
-	pobj = lfsck_object_locate(dev, parent);
-	if (IS_ERR(pobj))
-		GOTO(log, rc = PTR_ERR(pobj));
+	parent = lfsck_object_locate(dev, parent);
+	if (IS_ERR(parent))
+		GOTO(log, rc = PTR_ERR(parent));
 
-	if (unlikely(!dt_try_as_dir(env, pobj)))
+	if (unlikely(!dt_try_as_dir(env, parent)))
 		GOTO(log, rc = -ENOTDIR);
 
-	cobj = lfsck_object_locate(dev, child);
-	if (IS_ERR(cobj))
-		GOTO(log, rc = PTR_ERR(cobj));
+	child = lfsck_object_locate(dev, child);
+	if (IS_ERR(child))
+		GOTO(log, rc = PTR_ERR(child));
 
 	rc = linkea_data_new(&ldata, &info->lti_linkea_buf2);
 	if (rc != 0)
 		GOTO(log, rc);
 
-	rc = linkea_add_buf(&ldata, cname, lfsck_dto2fid(pobj));
+	rc = linkea_add_buf(&ldata, cname, pfid);
 	if (rc != 0)
 		GOTO(log, rc);
 
@@ -4841,7 +4842,7 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(log, rc);
 
-	rc = lfsck_namespace_check_exist(env, pobj, cobj, lnr->lnr_name);
+	rc = lfsck_namespace_check_exist(env, parent, child, lnr->lnr_name);
 	if (rc != 0)
 		GOTO(log, rc);
 
@@ -4854,7 +4855,7 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 	la->la_valid = LA_TYPE | LA_MODE | LA_UID | LA_GID |
 			LA_ATIME | LA_MTIME | LA_CTIME;
 
-	cobj->do_ops->do_ah_init(env, hint, pobj, cobj,
+	child->do_ops->do_ah_init(env, hint, parent, child,
 				 la->la_mode & S_IFMT);
 
 	memset(dof, 0, sizeof(*dof));
@@ -4868,33 +4869,33 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 		GOTO(log, rc = PTR_ERR(th));
 
 	/* 1a. create child. */
-	rc = dt_declare_create(env, cobj, la, hint, dof, th);
+	rc = dt_declare_create(env, child, la, hint, dof, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
 	if (S_ISDIR(type)) {
-		if (unlikely(!dt_try_as_dir(env, cobj)))
+		if (unlikely(!dt_try_as_dir(env, child)))
 			GOTO(stop, rc = -ENOTDIR);
 
 		/* 2a. insert dot into child dir */
 		rec->rec_type = S_IFDIR;
-		rec->rec_fid = lfsck_dto2fid(cobj);
-		rc = dt_declare_insert(env, cobj,
+		rec->rec_fid = cfid;
+		rc = dt_declare_insert(env, child,
 				       (const struct dt_rec *)rec,
 				       (const struct dt_key *)dot, th);
 		if (rc != 0)
 			GOTO(stop, rc);
 
 		/* 3a. insert dotdot into child dir */
-		rec->rec_fid = lfsck_dto2fid(pobj);
-		rc = dt_declare_insert(env, cobj,
+		rec->rec_fid = pfid;
+		rc = dt_declare_insert(env, child,
 				       (const struct dt_rec *)rec,
 				       (const struct dt_key *)dotdot, th);
 		if (rc != 0)
 			GOTO(stop, rc);
 
 		/* 4a. increase child nlink */
-		rc = dt_declare_ref_add(env, cobj, th);
+		rc = dt_declare_ref_add(env, child, th);
 		if (rc != 0)
 			GOTO(stop, rc);
 
@@ -4904,7 +4905,7 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 
 			idx = lfsck_shard_name_to_index(env,
 					lnr->lnr_name, lnr->lnr_namelen,
-					type, lfsck_dto2fid(cobj));
+					type, cfid);
 			if (unlikely(idx < 0))
 				GOTO(stop, rc = idx);
 
@@ -4914,7 +4915,7 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 
 			lfsck_lmv_header_cpu_to_le(lmv2, lmv2);
 			lfsck_buf_init(&lmv_buf, lmv2, sizeof(*lmv2));
-			rc = dt_declare_xattr_set(env, cobj, &lmv_buf,
+			rc = dt_declare_xattr_set(env, child, &lmv_buf,
 						  XATTR_NAME_LMV, 0, th);
 			if (rc != 0)
 				GOTO(stop, rc);
@@ -4924,7 +4925,7 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 	/* 6a. insert linkEA for child */
 	lfsck_buf_init(&linkea_buf, ldata.ld_buf->lb_buf,
 		       ldata.ld_leh->leh_len);
-	rc = dt_declare_xattr_set(env, cobj, &linkea_buf,
+	rc = dt_declare_xattr_set(env, child, &linkea_buf,
 				  XATTR_NAME_LINK, 0, th);
 	if (rc != 0)
 		GOTO(stop, rc);
@@ -4933,36 +4934,36 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop, rc = (rc == -EEXIST ? 1 : rc));
 
-	dt_write_lock(env, cobj, 0);
+	dt_write_lock(env, child, 0);
 	/* 1b. create child */
-	rc = dt_create(env, cobj, la, hint, dof, th);
+	rc = dt_create(env, child, la, hint, dof, th);
 	if (rc != 0)
 		GOTO(unlock, rc = (rc == -EEXIST ? 1 : rc));
 
 	if (S_ISDIR(type)) {
 		/* 2b. insert dot into child dir */
 		rec->rec_type = S_IFDIR;
-		rec->rec_fid = lfsck_dto2fid(cobj);
-		rc = dt_insert(env, cobj, (const struct dt_rec *)rec,
+		rec->rec_fid = cfid;
+		rc = dt_insert(env, child, (const struct dt_rec *)rec,
 			       (const struct dt_key *)dot, th, 1);
 		if (rc != 0)
 			GOTO(unlock, rc);
 
 		/* 3b. insert dotdot into child dir */
-		rec->rec_fid = lfsck_dto2fid(pobj);
-		rc = dt_insert(env, cobj, (const struct dt_rec *)rec,
+		rec->rec_fid = pfid;
+		rc = dt_insert(env, child, (const struct dt_rec *)rec,
 			       (const struct dt_key *)dotdot, th, 1);
 		if (rc != 0)
 			GOTO(unlock, rc);
 
 		/* 4b. increase child nlink */
-		rc = dt_ref_add(env, cobj, th);
+		rc = dt_ref_add(env, child, th);
 		if (rc != 0)
 			GOTO(unlock, rc);
 
 		/* 5b. generate slave LMV EA. */
 		if (lnr->lnr_lmv != NULL && lnr->lnr_lmv->ll_lmv_master) {
-			rc = dt_xattr_set(env, cobj, &lmv_buf, XATTR_NAME_LMV,
+			rc = dt_xattr_set(env, child, &lmv_buf, XATTR_NAME_LMV,
 					  0, th);
 			if (rc != 0)
 				GOTO(unlock, rc);
@@ -4970,13 +4971,13 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 	}
 
 	/* 6b. insert linkEA for child. */
-	rc = dt_xattr_set(env, cobj, &linkea_buf,
+	rc = dt_xattr_set(env, child, &linkea_buf,
 			  XATTR_NAME_LINK, 0, th);
 
 	GOTO(unlock, rc);
 
 unlock:
-	dt_write_unlock(env, cobj);
+	dt_write_unlock(env, child);
 
 stop:
 	dt_trans_stop(env, dev, th);
@@ -4986,8 +4987,7 @@ log:
 	CDEBUG(D_LFSCK, "%s: namespace LFSCK assistant found dangling "
 	       "reference for: parent "DFID", child "DFID", type %u, "
 	       "name %s. %s: rc = %d\n", lfsck_lfsck2name(lfsck),
-	       PFID(lfsck_dto2fid(parent)), PFID(lfsck_dto2fid(child)),
-	       type, cname->ln_name,
+	       PFID(pfid), PFID(cfid), type, cname->ln_name,
 	       create ? "Create the lost MDT-object as required" :
 			"Keep the MDT-object there by default", rc);
 
