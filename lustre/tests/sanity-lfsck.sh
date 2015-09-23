@@ -4291,6 +4291,30 @@ test_31h() {
 }
 run_test 31h "Repair the corrupted shard's name entry"
 
+test_32()
+{
+	lfsck_prep 5 5
+	umount_client $MOUNT
+
+	#define OBD_FAIL_LFSCK_ASSISTANT_DIRECT	0x162d
+	do_facet $SINGLEMDS $LCTL set_param fail_val=3 fail_loc=0x162d
+	$START_LAYOUT -r || error "(2) Fail to start LFSCK for layout!"
+
+	local STATUS=$($SHOW_LAYOUT | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "scanning-phase1" ] ||
+		error "(3) Expect 'scanning-phase1', but got '$STATUS'"
+
+	echo "stop ost1"
+	stop ost1 > /dev/null || error "(4) Fail to stop OST1!"
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
+	sleep 1
+
+	echo "stop LFSCK"
+	$STOP_LFSCK || error "(5) Fail to stop LFSCK!"
+}
+run_test 32 "stop LFSCK when some OST failed"
+
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
 OSTSIZE=${SAVED_OSTSIZE}

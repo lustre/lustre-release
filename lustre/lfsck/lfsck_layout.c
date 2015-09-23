@@ -3248,6 +3248,8 @@ static int lfsck_layout_assistant_handler_p1(const struct lu_env *env,
 	if (lso->lso_dead)
 		RETURN(0);
 
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LFSCK_ASSISTANT_DIRECT, cfs_fail_val);
+
 	rc = dt_attr_get(env, child, cla);
 	if (rc == -ENOENT) {
 		parent = lfsck_assistant_object_load(env, lfsck, lso);
@@ -3968,8 +3970,8 @@ static int lfsck_layout_master_checkpoint(const struct lu_env *env,
 	up_write(&com->lc_sem);
 
 	CDEBUG(D_LFSCK, "%s: layout LFSCK master checkpoint at the pos ["
-	       LPU64"]: rc = %d\n", lfsck_lfsck2name(lfsck),
-	       lfsck->li_pos_current.lp_oit_cookie, rc);
+	       LPU64"], status = %d: rc = %d\n", lfsck_lfsck2name(lfsck),
+	       lfsck->li_pos_current.lp_oit_cookie, lo->ll_status, rc);
 
 	return rc;
 }
@@ -4002,8 +4004,8 @@ static int lfsck_layout_slave_checkpoint(const struct lu_env *env,
 	up_write(&com->lc_sem);
 
 	CDEBUG(D_LFSCK, "%s: layout LFSCK slave checkpoint at the pos ["
-	       LPU64"]: rc = %d\n", lfsck_lfsck2name(lfsck),
-	       lfsck->li_pos_current.lp_oit_cookie, rc);
+	       LPU64"], status = %d: rc = %d\n", lfsck_lfsck2name(lfsck),
+	       lfsck->li_pos_current.lp_oit_cookie, lo->ll_status, rc);
 
 	return rc;
 }
@@ -4276,13 +4278,16 @@ static int lfsck_layout_scan_stripes(const struct lu_env *env,
 			goto next;
 		}
 
-		rc = dt_declare_attr_get(env, cobj);
-		if (rc != 0)
-			goto next;
+		if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_ASSISTANT_DIRECT)) {
+			rc = dt_declare_attr_get(env, cobj);
+			if (rc != 0)
+				goto next;
 
-		rc = dt_declare_xattr_get(env, cobj, &buf, XATTR_NAME_FID);
-		if (rc != 0)
-			goto next;
+			rc = dt_declare_xattr_get(env, cobj, &buf,
+						  XATTR_NAME_FID);
+			if (rc != 0)
+				goto next;
+		}
 
 		if (lso == NULL) {
 			struct lu_attr *attr = &info->lti_la;
@@ -4679,13 +4684,13 @@ static int lfsck_layout_slave_post(const struct lu_env *env,
 	int			 rc;
 	bool			 done  = false;
 
+	down_write(&com->lc_sem);
 	rc = lfsck_layout_lastid_store(env, com);
 	if (rc != 0)
 		result = rc;
 
 	LASSERT(lfsck->li_out_notify != NULL);
 
-	down_write(&com->lc_sem);
 	spin_lock(&lfsck->li_lock);
 	if (!init)
 		lo->ll_pos_last_checkpoint =
@@ -5148,12 +5153,14 @@ static void lfsck_layout_slave_quit(const struct lu_env *env,
 
 	LASSERT(llsd != NULL);
 
+	down_write(&com->lc_sem);
 	list_for_each_entry_safe(lls, next, &llsd->llsd_seq_list,
 				 lls_list) {
 		list_del_init(&lls->lls_list);
 		lfsck_object_put(env, lls->lls_lastid_obj);
 		OBD_FREE_PTR(lls);
 	}
+	up_write(&com->lc_sem);
 
 	spin_lock(&llsd->llsd_lock);
 	while (!list_empty(&llsd->llsd_master_list)) {

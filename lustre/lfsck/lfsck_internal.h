@@ -817,6 +817,7 @@ struct lfsck_assistant_data {
 
 	const char				*lad_name;
 	struct ptlrpc_thread			 lad_thread;
+	struct task_struct			*lad_task;
 
 	struct lfsck_assistant_operations	*lad_ops;
 

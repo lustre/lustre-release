@@ -1661,6 +1661,17 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 		 */
 		cond_resched();
 
+		/* If the caller requires to allow to be interpreted by force
+		 * and it has really been interpreted, then move the request
+		 * to RQ_PHASE_INTERPRET phase in spite of what the current
+		 * phase is. */
+		if (unlikely(req->rq_allow_intr && req->rq_intr)) {
+			req->rq_status = -EINTR;
+			ptlrpc_rqphase_move(req, RQ_PHASE_INTERPRET);
+
+			GOTO(interpret, req->rq_status);
+		}
+
                 if (req->rq_phase == RQ_PHASE_NEW &&
                     ptlrpc_send_new_req(req)) {
                         force_timer_recalc = 1;
@@ -2170,7 +2181,8 @@ static void ptlrpc_interrupted_set(void *data)
 			list_entry(tmp, struct ptlrpc_request, rq_set_chain);
 
 		if (req->rq_phase != RQ_PHASE_RPC &&
-		    req->rq_phase != RQ_PHASE_UNREGISTERING)
+		    req->rq_phase != RQ_PHASE_UNREGISTERING &&
+		    !req->rq_allow_intr)
 			continue;
 
 		ptlrpc_mark_interrupted(req);
@@ -2272,6 +2284,11 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
 			lwi = LWI_TIMEOUT_INTR_ALL(cfs_time_seconds(1),
                                                    ptlrpc_expired_set,
                                                    ptlrpc_interrupted_set, set);
+		else if (set->set_allow_intr)
+			lwi = LWI_TIMEOUT_INTR_ALL(
+					cfs_time_seconds(timeout ? timeout : 1),
+					ptlrpc_expired_set,
+					ptlrpc_interrupted_set, set);
                 else
                         /*
                          * At least one request is in flight, so no
@@ -2286,7 +2303,8 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
                 /* LU-769 - if we ignored the signal because it was already
                  * pending when we started, we need to handle it now or we risk
                  * it being ignored forever */
-		if (rc == -ETIMEDOUT && !lwi.lwi_allow_intr &&
+		if (rc == -ETIMEDOUT &&
+		    (!lwi.lwi_allow_intr || set->set_allow_intr) &&
 		    signal_pending(current)) {
 			sigset_t blocked_sigs =
 					   cfs_block_sigsinv(LUSTRE_FATAL_SIGS);
@@ -2815,6 +2833,9 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
 		CERROR("cannot allocate ptlrpc set: rc = %d\n", -ENOMEM);
 		RETURN(-ENOMEM);
 	}
+
+	if (req->rq_allow_intr)
+		set->set_allow_intr = 1;
 
 	/* for distributed debugging */
 	lustre_msg_set_status(req->rq_reqmsg, current_pid());

@@ -31,6 +31,7 @@
 #define DEBUG_SUBSYSTEM S_LFSCK
 
 #include <linux/kthread.h>
+#include <linux/sched.h>
 #include <libcfs/list.h>
 #include <lu_object.h>
 #include <dt_object.h>
@@ -2497,6 +2498,9 @@ void lfsck_post_generic(const struct lu_env *env,
 		lad->lad_exit = 1;
 	lad->lad_to_post = 1;
 
+	CDEBUG(D_LFSCK, "%s: waiting for assistant to do %s post, rc = %d\n",
+	       lfsck_lfsck2name(com->lc_lfsck), lad->lad_name, *result);
+
 	wake_up_all(&athread->t_ctl_waitq);
 	l_wait_event(mthread->t_ctl_waitq,
 		     (*result > 0 && list_empty(&lad->lad_req_list)) ||
@@ -2505,6 +2509,9 @@ void lfsck_post_generic(const struct lu_env *env,
 
 	if (lad->lad_assistant_status < 0)
 		*result = lad->lad_assistant_status;
+
+	CDEBUG(D_LFSCK, "%s: the assistant has done %s post, rc = %d\n",
+	       lfsck_lfsck2name(com->lc_lfsck), lad->lad_name, *result);
 }
 
 int lfsck_double_scan_generic(const struct lu_env *env,
@@ -2520,11 +2527,19 @@ int lfsck_double_scan_generic(const struct lu_env *env,
 	else
 		lad->lad_to_double_scan = 1;
 
+	CDEBUG(D_LFSCK, "%s: waiting for assistant to do %s double_scan, "
+	       "status %d\n",
+	       lfsck_lfsck2name(com->lc_lfsck), lad->lad_name, status);
+
 	wake_up_all(&athread->t_ctl_waitq);
 	l_wait_event(mthread->t_ctl_waitq,
 		     lad->lad_in_double_scan ||
 		     thread_is_stopped(athread),
 		     &lwi);
+
+	CDEBUG(D_LFSCK, "%s: the assistant has done %s double_scan, "
+	       "status %d\n", lfsck_lfsck2name(com->lc_lfsck), lad->lad_name,
+	       lad->lad_assistant_status);
 
 	if (lad->lad_assistant_status < 0)
 		return lad->lad_assistant_status;
@@ -3143,6 +3158,28 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 	}
 
 	thread_set_flags(thread, SVC_STOPPING);
+
+	if (lfsck->li_master) {
+		struct lfsck_component *com;
+		struct lfsck_assistant_data *lad;
+
+		list_for_each_entry(com, &lfsck->li_list_scan, lc_link) {
+			lad = com->lc_data;
+			spin_lock(&lad->lad_lock);
+			if (lad->lad_task != NULL)
+				force_sig(SIGINT, lad->lad_task);
+			spin_unlock(&lad->lad_lock);
+		}
+
+		list_for_each_entry(com, &lfsck->li_list_double_scan, lc_link) {
+			lad = com->lc_data;
+			spin_lock(&lad->lad_lock);
+			if (lad->lad_task != NULL)
+				force_sig(SIGINT, lad->lad_task);
+			spin_unlock(&lad->lad_lock);
+		}
+	}
+
 	spin_unlock(&lfsck->li_lock);
 
 	wake_up_all(&thread->t_ctl_waitq);

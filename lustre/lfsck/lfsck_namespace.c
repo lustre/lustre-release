@@ -3931,10 +3931,10 @@ static int lfsck_namespace_checkpoint(const struct lu_env *env,
 
 log:
 	CDEBUG(D_LFSCK, "%s: namespace LFSCK checkpoint at the pos ["LPU64
-	       ", "DFID", "LPX64"]: rc = %d\n", lfsck_lfsck2name(lfsck),
-	       lfsck->li_pos_current.lp_oit_cookie,
+	       ", "DFID", "LPX64"], status = %d: rc = %d\n",
+	       lfsck_lfsck2name(lfsck), lfsck->li_pos_current.lp_oit_cookie,
 	       PFID(&lfsck->li_pos_current.lp_dir_parent),
-	       lfsck->li_pos_current.lp_dir_cookie, rc);
+	       lfsck->li_pos_current.lp_dir_cookie, ns->ln_status, rc);
 
 	return rc > 0 ? 0 : rc;
 }
