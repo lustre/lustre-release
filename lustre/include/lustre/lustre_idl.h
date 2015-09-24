@@ -610,15 +610,15 @@ static inline void ostid_set_id(struct ost_id *oi, __u64 oid)
 {
 	if (fid_seq_is_mdt0(oi->oi.oi_seq)) {
 		if (oid >= IDIF_MAX_OID) {
-			CERROR("Bad "LPU64" to set "DOSTID"\n",
-				oid, POSTID(oi));
+			CERROR("Bad %llu to set "DOSTID"\n",
+				(unsigned long long)oid, POSTID(oi));
 			return;
 		}
 		oi->oi.oi_id = oid;
 	} else if (fid_is_idif(&oi->oi_fid)) {
 		if (oid >= IDIF_MAX_OID) {
-			CERROR("Bad "LPU64" to set "DOSTID"\n",
-				oid, POSTID(oi));
+			CERROR("Bad %llu to set "DOSTID"\n",
+				(unsigned long long)oid, POSTID(oi));
 			return;
 		}
 		oi->oi_fid.f_seq = fid_idif_seq(oid,
@@ -627,8 +627,8 @@ static inline void ostid_set_id(struct ost_id *oi, __u64 oid)
 		oi->oi_fid.f_ver = oid >> 48;
 	} else {
 		if (oid > OBIF_MAX_OID) {
-			CERROR("Bad "LPU64" to set "DOSTID"\n",
-				oid, POSTID(oi));
+			CERROR("Bad %llu to set "DOSTID"\n",
+				(unsigned long long)oid, POSTID(oi));
 			return;
 		}
 		oi->oi_fid.f_oid = oid;
@@ -644,8 +644,8 @@ static inline int fid_set_id(struct lu_fid *fid, __u64 oid)
 
 	if (fid_is_idif(fid)) {
 		if (oid >= IDIF_MAX_OID) {
-			CERROR("Bad "LPU64" to set "DFID"\n",
-				oid, PFID(fid));
+			CERROR("Bad %llu to set "DFID"\n",
+				(unsigned long long)oid, PFID(fid));
 			return -EBADF;
 		}
 		fid->f_seq = fid_idif_seq(oid, fid_idif_ost_idx(fid));
@@ -653,8 +653,8 @@ static inline int fid_set_id(struct lu_fid *fid, __u64 oid)
 		fid->f_ver = oid >> 48;
 	} else {
 		if (oid > OBIF_MAX_OID) {
-			CERROR("Bad "LPU64" to set "DFID"\n",
-				oid, PFID(fid));
+			CERROR("Bad %llu to set "DFID"\n",
+				(unsigned long long)oid, PFID(fid));
 			return -EBADF;
 		}
 		fid->f_oid = oid;
@@ -2798,9 +2798,11 @@ struct ldlm_res_id {
         __u64 name[RES_NAME_SIZE];
 };
 
-#define DLDLMRES	"["LPX64":"LPX64":"LPX64"]."LPX64i
-#define PLDLMRES(res)	(res)->lr_name.name[0], (res)->lr_name.name[1], \
-			(res)->lr_name.name[2], (res)->lr_name.name[3]
+#define DLDLMRES	"[%#llx:%#llx:%#llx].%#llx"
+#define PLDLMRES(res)	(unsigned long long)(res)->lr_name.name[0],	\
+			(unsigned long long)(res)->lr_name.name[1],	\
+			(unsigned long long)(res)->lr_name.name[2],	\
+			(unsigned long long)(res)->lr_name.name[3]
 
 extern void lustre_swab_ldlm_res_id (struct ldlm_res_id *id);
 

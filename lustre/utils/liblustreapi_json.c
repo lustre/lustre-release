@@ -141,7 +141,7 @@ int llapi_json_write_list(struct llapi_json_item_list **json_items, FILE *fp)
 			fprintf(fp, "%d", item->lji_integer);
 			break;
 		case LLAPI_JSON_BIGNUM:
-			fprintf(fp, LPU64, item->lji_u64);
+			fprintf(fp, "%llu", (unsigned long long)item->lji_u64);
 			break;
 		case LLAPI_JSON_REAL:
 			fprintf(fp, "%f", item->lji_real);
