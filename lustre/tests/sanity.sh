@@ -10589,6 +10589,36 @@ test_160c() {
 }
 run_test 160c "verify that changelog log catch the truncate event"
 
+test_160d() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	local server_version=$(lustre_version_code mds1)
+	local CL_MASK_PARAM="mdd.$MDT0.changelog_mask"
+
+	[[ $server_version -ge $(version_code 2.7.60) ]] ||
+		{ skip "Need MDS version at least 2.7.60+"; return; }
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+
+	# Registration step
+	local USER=$(do_facet mds1 $LCTL --device $MDT0 \
+		changelog_register -n)
+
+	mkdir -p $DIR/$tdir/migrate_dir
+	$LFS changelog_clear $MDT0 $USER 0
+
+	$LFS migrate -m 1 $DIR/$tdir/migrate_dir || error "migrate fails"
+	$LFS changelog $MDT0
+	MIGRATES=$($LFS changelog $MDT0 | tail -5 | grep -c "MIGRT")
+	$LFS changelog_clear $MDT0 $USER 0
+	[ $MIGRATES -eq 1 ] ||
+		error "MIGRATE changelog mask count $MIGRATES != 1"
+
+	# Deregistration step
+	do_facet mds1 $LCTL --device $MDT0 changelog_deregister $USER
+}
+run_test 160d "verify that changelog log catch the migrate event"
+
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	test_mkdir -p -c1 $DIR/$tdir

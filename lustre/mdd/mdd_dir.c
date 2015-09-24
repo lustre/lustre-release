@@ -3762,8 +3762,9 @@ static int mdd_declare_migrate_update_name(const struct lu_env *env,
 					   struct linkea_data *ldata,
 					   struct thandle *handle)
 {
-	struct lu_attr	*la_flag = MDD_ENV_VAR(env, tattr);
-	int		rc;
+	struct mdd_device *mdd = mdo2mdd(&mdd_sobj->mod_obj);
+	struct lu_attr *la_flag = MDD_ENV_VAR(env, tattr);
+	int rc;
 
 	/* Revert IMMUTABLE flag */
 	la_flag->la_valid = LA_FLAGS;
@@ -3842,6 +3843,10 @@ static int mdd_declare_migrate_update_name(const struct lu_env *env,
 		return rc;
 
 	rc = mdo_declare_attr_set(env, mdd_pobj, parent_la, handle);
+	if (rc != 0)
+		return rc;
+
+	rc = mdd_declare_changelog_store(env, mdd, lname, NULL, handle);
 
 	return rc;
 }
@@ -3977,6 +3982,19 @@ static int mdd_migrate_update_name(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(out_unlock, rc);
 
+	rc = mdd_changelog_ns_store(env, mdd, CL_MIGRATE, 0, mdd_tobj,
+			       mdo2fid(mdd_pobj), mdo2fid(mdd_sobj),
+			       mdo2fid(mdd_pobj), lname, lname, handle);
+	if (rc != 0) {
+		CWARN("%s: changelog for migrate %s "DFID
+		      "under "DFID" failed: rc = %d\n",
+		      mdd2obd_dev(mdd)->obd_name, lname->ln_name,
+		      PFID(mdd_object_fid(mdd_sobj)),
+		      PFID(mdd_object_fid(mdd_pobj)), rc);
+		/* Sigh, there are no easy way to migrate back the object, so
+		 * let's reset the result to 0 for now XXX */
+		rc = 0;
+	}
 out_unlock:
 	mdd_write_unlock(env, mdd_sobj);
 
