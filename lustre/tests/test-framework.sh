@@ -2460,6 +2460,13 @@ affected_facets () {
 }
 
 facet_failover() {
+	local E2FSCK_ON_MDT0=false
+	if [ "$1" == "--fsck" ]; then
+		shift
+		[ $(facet_fstype $SINGLEMDS) == ldiskfs ] &&
+			E2FSCK_ON_MDT0=true
+	fi
+
 	local facets=$1
 	local sleep_time=$2
 	local -a affecteds
@@ -2492,6 +2499,9 @@ facet_failover() {
 		echo "Failing ${affecteds[index]} on $host"
 		shutdown_facet $facet
 	done
+
+	$E2FSCK_ON_MDT0 && (run_e2fsck $(facet_active_host $SINGLEMDS) \
+		$(mdsdevname 1) "-n" || error "Running e2fsck")
 
 	for ((index=0; index<$total; index++)); do
 		facet=$(echo ${affecteds[index]} | tr -s " " | cut -d"," -f 1)

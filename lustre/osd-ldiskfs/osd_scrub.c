@@ -1735,7 +1735,19 @@ osd_ios_lookup_one_len(const char *name, struct dentry *parent, int namelen)
 	struct dentry *dentry;
 
 	dentry = ll_lookup_one_len(name, parent, namelen);
-	if (!IS_ERR(dentry) && dentry->d_inode == NULL) {
+	if (IS_ERR(dentry)) {
+		int rc = PTR_ERR(dentry);
+
+		if (rc != -ENOENT)
+			CERROR("Fail to find %.*s in %.*s (%lu/%u): rc = %d\n",
+			       namelen, name, parent->d_name.len,
+			       parent->d_name.name, parent->d_inode->i_ino,
+			       parent->d_inode->i_generation, rc);
+
+		return dentry;
+	}
+
+	if (dentry->d_inode == NULL) {
 		dput(dentry);
 		return ERR_PTR(-ENOENT);
 	}
@@ -2488,8 +2500,29 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 		GOTO(cleanup_inode, rc);
 	} else {
 		if (memcmp(sf->sf_uuid, es->s_uuid, 16) != 0) {
+			struct obd_uuid *old_uuid;
+			struct obd_uuid *new_uuid;
+
+			OBD_ALLOC_PTR(old_uuid);
+			OBD_ALLOC_PTR(new_uuid);
+			if (old_uuid == NULL || new_uuid == NULL) {
+				CERROR("%.16s: UUID has been changed, but"
+				       "failed to allocate RAM for report\n",
+				       LDISKFS_SB(sb)->s_es->s_volume_name);
+			} else {
+				class_uuid_unparse(sf->sf_uuid, old_uuid);
+				class_uuid_unparse(es->s_uuid, new_uuid);
+				CERROR("%.16s: UUID has been changed from "
+				       "%s to %s\n",
+				       LDISKFS_SB(sb)->s_es->s_volume_name,
+				       old_uuid->uuid, new_uuid->uuid);
+			}
 			osd_scrub_file_reset(scrub, es->s_uuid,SF_INCONSISTENT);
 			dirty = 1;
+			if (old_uuid != NULL)
+				OBD_FREE_PTR(old_uuid);
+			if (new_uuid != NULL)
+				OBD_FREE_PTR(new_uuid);
 		} else if (sf->sf_status == SS_SCANNING) {
 			sf->sf_status = SS_CRASHED;
 			dirty = 1;
