@@ -210,11 +210,12 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 	struct obd_connect_data *data = NULL;
 	struct obd_export	*exp = NULL;
 	struct obd_device	*obd;
-	struct lu_device	*ldev;
-	struct dt_device	*d;
+	struct lu_device	*lu_dev;
+	struct dt_device	*dt_dev;
 	int			 rc;
 	struct lod_tgt_desc     *tgt_desc;
 	struct lod_tgt_descs    *ltd;
+	struct lustre_cfg	*lcfg;
 	struct obd_uuid		obd_uuid;
 	bool			for_ost;
 	bool lock = false;
@@ -237,9 +238,15 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 		RETURN(-EINVAL);
 	}
 
+	LASSERT(obd->obd_lu_dev != NULL);
+	LASSERT(obd->obd_lu_dev->ld_site == lod->lod_dt_dev.dd_lu_dev.ld_site);
+
+	lu_dev = obd->obd_lu_dev;
+	dt_dev = lu2dt_dev(lu_dev);
+
 	OBD_ALLOC_PTR(data);
 	if (data == NULL)
-		RETURN(-ENOMEM);
+		GOTO(out_cleanup, rc = -ENOMEM);
 
 	data->ocd_connect_flags = OBD_CONNECT_INDEX | OBD_CONNECT_VERSION;
 	data->ocd_version = LUSTRE_VERSION_CODE;
@@ -292,21 +299,15 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 	if (rc) {
 		CERROR("%s: cannot connect to next dev %s (%d)\n",
 		       obd->obd_name, osp, rc);
-		GOTO(out_free, rc);
+		GOTO(out_cleanup, rc);
 	}
-
-	LASSERT(obd->obd_lu_dev);
-	LASSERT(obd->obd_lu_dev->ld_site == lod->lod_dt_dev.dd_lu_dev.ld_site);
-
-	ldev = obd->obd_lu_dev;
-	d = lu2dt_dev(ldev);
 
 	/* Allocate ost descriptor and fill it */
 	OBD_ALLOC_PTR(tgt_desc);
 	if (!tgt_desc)
 		GOTO(out_conn, rc = -ENOMEM);
 
-	tgt_desc->ltd_tgt    = d;
+	tgt_desc->ltd_tgt    = dt_dev;
 	tgt_desc->ltd_exp    = exp;
 	tgt_desc->ltd_uuid   = obd->u.cli.cl_target_uuid;
 	tgt_desc->ltd_gen    = gen;
@@ -381,7 +382,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 	lod_putref(lod, ltd);
 	lock = false;
 	if (lod->lod_recovery_completed)
-		ldev->ld_ops->ldo_recovery_complete(env, ldev);
+		lu_dev->ld_ops->ldo_recovery_complete(env, lu_dev);
 
 	if (!for_ost && lod->lod_initialized) {
 		rc = lod_sub_init_llog(env, lod, tgt_desc->ltd_tgt);
@@ -392,7 +393,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 		}
 	}
 
-	rc = lfsck_add_target(env, lod->lod_child, d, exp, index, for_ost);
+	rc = lfsck_add_target(env, lod->lod_child, dt_dev, exp, index, for_ost);
 	if (rc != 0) {
 		CERROR("Fail to add LFSCK target: name = %s, type = %s, "
 		       "index = %u, rc = %d\n", osp, type, index, rc);
@@ -426,7 +427,15 @@ out_desc:
 	OBD_FREE_PTR(tgt_desc);
 out_conn:
 	obd_disconnect(exp);
-out_free:
+out_cleanup:
+	/* XXX OSP needs us to send down LCFG_CLEANUP because it uses
+	 * objects from the MDT stack. See LU-7184. */
+	lcfg = &lod_env_info(env)->lti_lustre_cfg;
+	memset(lcfg, 0, sizeof(*lcfg));
+	lcfg->lcfg_version = LUSTRE_CFG_VERSION;
+	lcfg->lcfg_command = LCFG_CLEANUP;
+	lu_dev->ld_ops->ldo_process_config(env, lu_dev, lcfg);
+
 	return rc;
 }
 
