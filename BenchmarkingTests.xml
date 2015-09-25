@@ -301,6 +301,29 @@
           <para>For example, to run a local test with up to two objects (nobjhi), up to two threads (thrhi), and 1024 MB transfer size (size):</para>
           <screen>$ nobjhi=2 thrhi=2 size=1024 case=disk sh obdfilter-survey</screen>
         </listitem>
+        <listitem>
+		<para>Performance measurements for write, rewrite, read etc are provided below:</para>
+		<screen># example output
+Fri Sep 25 11:14:03 EDT 2015 Obdfilter-survey for case=disk from hds1fnb6123
+ost 10 sz 167772160K rsz 1024K obj   10 thr   10 write 10982.73 [ 601.97,2912.91] rewrite 15696.54 [1160.92,3450.85] read 12358.60 [ 938.96,2634.87] 
+...</screen>
+		<para>The file <literal>./lustre-iokit/obdfilter-survey/README.obdfilter-survey</literal>
+		provides an explaination for the output as follows:</para>
+		<screen>ost 10          is the total number of OSTs under test.
+sz 167772160K   is the total amount of data read or written (in bytes).
+rsz 1024K       is the record size (size of each echo_client I/O, in bytes).
+obj    10       is the total number of objects over all OSTs
+thr    10       is the total number of threads over all OSTs and objects
+write           is the test name.  If more tests have been specified they
+           all appear on the same line.
+10982.73        is the aggregate bandwidth over all OSTs measured by
+           dividing the total number of MB by the elapsed time.
+[601.97,2912.91] are the minimum and maximum instantaneous bandwidths seen on
+           any individual OST.
+Note that although the numbers of threads and objects are specifed per-OST
+in the customization section of the script, results are reported aggregated
+over all OSTs.</screen>
+        </listitem>
       </orderedlist>
       <para><emphasis role="italic">To perform a manual run:</emphasis></para>
       <orderedlist>
