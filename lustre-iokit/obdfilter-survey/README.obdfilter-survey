@@ -161,11 +161,11 @@ Script output
 
 The summary file and stdout contain lines like...
 
-ost 8 sz 67108864K rsz 1024 obj    8 thr    8 write  613.54 [ 64.00, 82.00]
+ost 8 sz 67108864K rsz 1024K obj    8 thr    8 write  613.54 [ 64.00, 82.00]
 
 ost 8          is the total number of OSTs under test.
-sz 67108864K   is the total amount of data read or written (in KB).
-rsz 1024       is the record size (size of each echo_client I/O, in KB).
+sz 67108864K   is the total amount of data read or written (in bytes).
+rsz 1024K      is the record size (size of each echo_client I/O, in bytes).
 obj    8       is the total number of objects over all OSTs
 thr    8       is the total number of threads over all OSTs and objects
 write          is the test name.  If more tests have been specified they
