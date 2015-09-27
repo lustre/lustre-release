@@ -5545,11 +5545,13 @@ test_84() {
 	local time_min=$(recovery_time_min)
 	local recovery_duration
 	local completed_clients
+	local correct_clients
 	local wrap_up=5
 
+	load_modules
 	echo "start mds service on $(facet_active_host $facet)"
-	start $facet ${dev} $MDS_MOUNT_OPTS \
-	    "-o recovery_time_hard=$time_min,recovery_time_soft=$time_min" $@ ||
+	start_mds \
+	"-o recovery_time_hard=$time_min,recovery_time_soft=$time_min" $@ ||
 		error "start MDS failed"
 
 	start_ost
@@ -5583,8 +5585,10 @@ test_84() {
 	completed_clients=$(do_facet $SINGLEMDS \
 		"$LCTL get_param -n mdt.$FSNAME-MDT0000.recovery_status" |
 		awk '/completed_clients/ { print $2 }')
-	[ "$completed_clients" = "1/2" ] ||
-		error "completed_clients != 1/2: $completed_clients"
+
+	correct_clients="$MDSCOUNT/$((MDSCOUNT+1))"
+	[ "$completed_clients" = "${correct_clients}" ] ||
+		error "$completed_clients != $correct_clients"
 
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
 	umount_client $MOUNT1

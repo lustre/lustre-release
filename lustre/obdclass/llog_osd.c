@@ -860,10 +860,10 @@ static int llog_osd_next_block(const struct lu_env *env,
 		/* this shouldn't happen */
 		if (tail->lrt_index == 0) {
 			CERROR("%s: invalid llog tail at log id "DOSTID"/%u "
-			       "offset "LPU64"\n",
+			       "offset "LPU64" bytes %d\n",
 			       o->do_lu.lo_dev->ld_obd->obd_name,
 			       POSTID(&loghandle->lgh_id.lgl_oi),
-			       loghandle->lgh_id.lgl_ogen, *cur_offset);
+			       loghandle->lgh_id.lgl_ogen, *cur_offset, rc);
 			GOTO(out, rc = -EINVAL);
 		}
 		if (tail->lrt_index < next_idx) {
