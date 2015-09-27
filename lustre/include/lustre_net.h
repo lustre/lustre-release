@@ -889,7 +889,7 @@ struct ptlrpc_srv_req {
 	/** history sequence # */
 	__u64				 sr_hist_seq;
 	/** the index of service's srv_at_array into which request is linked */
-	time_t				 sr_at_index;
+	__u32				 sr_at_index;
 	/** authed uid */
 	uid_t				 sr_auth_uid;
 	/** authed uid mapped to */
