@@ -195,6 +195,8 @@ struct osp_device {
 	/* found records */
 	struct ptlrpc_thread		 opd_syn_thread;
 	wait_queue_head_t		 opd_syn_waitq;
+	/* list of inflight rpc */
+	struct list_head		 opd_syn_inflight_list;
 	/* list of remotely committed rpc */
 	struct list_head		 opd_syn_committed_there;
 	/* number of changes being under sync */

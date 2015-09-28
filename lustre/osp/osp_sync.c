@@ -98,7 +98,8 @@ static void osp_sync_remove_from_tracker(struct osp_device *d);
 struct osp_job_req_args {
 	/** bytes reserved for ptlrpc_replay_req() */
 	struct ptlrpc_replay_async_args	jra_raa;
-	struct list_head		jra_link;
+	struct list_head		jra_committed_link;
+	struct list_head		jra_inflight_link;
 	__u32				jra_magic;
 };
 
@@ -133,6 +134,56 @@ static inline int osp_sync_has_new_job(struct osp_device *d)
 	return ((d->opd_syn_last_processed_id < d->opd_syn_last_used_id) &&
 		(d->opd_syn_last_processed_id < d->opd_syn_last_committed_id))
 		|| (d->opd_syn_prev_done == 0);
+}
+
+static inline int osp_sync_inflight_conflict(struct osp_device *d,
+					     struct llog_rec_hdr *h)
+{
+	struct osp_job_req_args	*jra;
+	struct ost_id		 ostid;
+	int			 conflict = 0;
+
+	if (h == NULL || h->lrh_type == LLOG_GEN_REC ||
+	    list_empty(&d->opd_syn_inflight_list))
+		return conflict;
+
+	memset(&ostid, 0, sizeof(ostid));
+	switch (h->lrh_type) {
+	case MDS_UNLINK_REC:
+		ostid_set_seq(&ostid, ((struct llog_unlink_rec *)h)->lur_oseq);
+		ostid_set_id(&ostid, ((struct llog_unlink_rec *)h)->lur_oid);
+		break;
+	case MDS_UNLINK64_REC:
+		fid_to_ostid(&((struct llog_unlink64_rec *)h)->lur_fid, &ostid);
+		break;
+	case MDS_SETATTR64_REC:
+		ostid = ((struct llog_setattr64_rec *)h)->lsr_oi;
+		break;
+	default:
+		LBUG();
+	}
+
+	spin_lock(&d->opd_syn_lock);
+	list_for_each_entry(jra, &d->opd_syn_inflight_list, jra_inflight_link) {
+		struct ptlrpc_request	*req;
+		struct ost_body		*body;
+
+		LASSERT(jra->jra_magic == OSP_JOB_MAGIC);
+
+		req = container_of((void *)jra, struct ptlrpc_request,
+				   rq_async_args);
+		body = req_capsule_client_get(&req->rq_pill,
+					      &RMF_OST_BODY);
+		LASSERT(body);
+
+		if (memcmp(&ostid, &body->oa.o_oi, sizeof(ostid)) == 0) {
+			conflict = 1;
+			break;
+		}
+	}
+	spin_unlock(&d->opd_syn_lock);
+
+	return conflict;
 }
 
 static inline int osp_sync_low_in_progress(struct osp_device *d)
@@ -207,6 +258,8 @@ static inline int osp_sync_can_process_new(struct osp_device *d,
 	LASSERT(d);
 
 	if (unlikely(atomic_read(&d->opd_syn_barrier) > 0))
+		return 0;
+	if (unlikely(osp_sync_inflight_conflict(d, rec)))
 		return 0;
 	if (!osp_sync_low_in_progress(d))
 		return 0;
@@ -430,12 +483,12 @@ static void osp_sync_request_commit_cb(struct ptlrpc_request *req)
 
 	jra = ptlrpc_req_async_args(req);
 	LASSERT(jra->jra_magic == OSP_JOB_MAGIC);
-	LASSERT(list_empty(&jra->jra_link));
+	LASSERT(list_empty(&jra->jra_committed_link));
 
 	ptlrpc_request_addref(req);
 
 	spin_lock(&d->opd_syn_lock);
-	list_add(&jra->jra_link, &d->opd_syn_committed_there);
+	list_add(&jra->jra_committed_link, &d->opd_syn_committed_there);
 	spin_unlock(&d->opd_syn_lock);
 
 	/* XXX: some batching wouldn't hurt */
@@ -482,12 +535,12 @@ static int osp_sync_interpret(const struct lu_env *env,
 		 * but object doesn't exist anymore - cancell llog record
 		 */
 		LASSERT(req->rq_transno == 0);
-		LASSERT(list_empty(&jra->jra_link));
+		LASSERT(list_empty(&jra->jra_committed_link));
 
 		ptlrpc_request_addref(req);
 
 		spin_lock(&d->opd_syn_lock);
-		list_add(&jra->jra_link, &d->opd_syn_committed_there);
+		list_add(&jra->jra_committed_link, &d->opd_syn_committed_there);
 		spin_unlock(&d->opd_syn_lock);
 
 		wake_up(&d->opd_syn_waitq);
@@ -525,6 +578,7 @@ static int osp_sync_interpret(const struct lu_env *env,
 	LASSERT(d->opd_syn_rpc_in_flight > 0);
 	spin_lock(&d->opd_syn_lock);
 	d->opd_syn_rpc_in_flight--;
+	list_del_init(&jra->jra_inflight_link);
 	spin_unlock(&d->opd_syn_lock);
 	if (unlikely(atomic_read(&d->opd_syn_barrier) > 0))
 		wake_up(&d->opd_syn_barrier_waitq);
@@ -554,7 +608,10 @@ static void osp_sync_send_new_rpc(struct osp_device *d,
 
 	jra = ptlrpc_req_async_args(req);
 	jra->jra_magic = OSP_JOB_MAGIC;
-	INIT_LIST_HEAD(&jra->jra_link);
+	INIT_LIST_HEAD(&jra->jra_committed_link);
+	spin_lock(&d->opd_syn_lock);
+	list_add_tail(&jra->jra_inflight_link, &d->opd_syn_inflight_list);
+	spin_unlock(&d->opd_syn_lock);
 
 	ptlrpcd_add_req(req);
 }
@@ -954,9 +1011,10 @@ static void osp_sync_process_committed(const struct lu_env *env,
 	while (!list_empty(&list)) {
 		struct osp_job_req_args	*jra;
 
-		jra = list_entry(list.next, struct osp_job_req_args, jra_link);
+		jra = list_entry(list.next, struct osp_job_req_args,
+				 jra_committed_link);
 		LASSERT(jra->jra_magic == OSP_JOB_MAGIC);
-		list_del_init(&jra->jra_link);
+		list_del_init(&jra->jra_committed_link);
 
 		req = container_of((void *)jra, struct ptlrpc_request,
 				   rq_async_args);
@@ -1351,6 +1409,7 @@ int osp_sync_init(const struct lu_env *env, struct osp_device *d)
 	init_waitqueue_head(&d->opd_syn_waitq);
 	init_waitqueue_head(&d->opd_syn_barrier_waitq);
 	init_waitqueue_head(&d->opd_syn_thread.t_ctl_waitq);
+	INIT_LIST_HEAD(&d->opd_syn_inflight_list);
 	INIT_LIST_HEAD(&d->opd_syn_committed_there);
 
 	task = kthread_run(osp_sync_thread, d, "osp-syn-%u-%u",
