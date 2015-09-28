@@ -608,6 +608,67 @@ static int osc_unstable_stats_seq_show(struct seq_file *m, void *v)
 }
 LPROC_SEQ_FOPS_RO(osc_unstable_stats);
 
+static int osc_idle_timeout_seq_show(struct seq_file *m, void *v)
+{
+	struct obd_device *obd = m->private;
+	struct client_obd *cli = &obd->u.cli;
+
+	seq_printf(m, "%u\n", cli->cl_import->imp_idle_timeout);
+	return 0;
+}
+
+static ssize_t osc_idle_timeout_seq_write(struct file *f,
+					  const char __user *buffer,
+					  size_t count, loff_t *off)
+{
+	struct obd_device *dev = ((struct seq_file *)f->private_data)->private;
+	struct client_obd *cli = &dev->u.cli;
+	struct ptlrpc_request *req;
+	__s64 val;
+	int rc;
+
+	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, '1');
+	if (rc)
+		return rc;
+	if (val < 0 || val > 1)
+		return -ERANGE;
+
+	cli->cl_import->imp_idle_timeout = val;
+
+	/* to initiate the connection if it's in IDLE state */
+	if (!val) {
+		req = ptlrpc_request_alloc(cli->cl_import, &RQF_OST_STATFS);
+		if (req != NULL)
+			ptlrpc_req_finished(req);
+	}
+
+	return count;
+}
+LPROC_SEQ_FOPS(osc_idle_timeout);
+
+static int osc_idle_connect_seq_show(struct seq_file *m, void *v)
+{
+	return 0;
+}
+
+static ssize_t osc_idle_connect_seq_write(struct file *f,
+					  const char __user *buffer,
+					  size_t count, loff_t *off)
+{
+	struct obd_device *dev = ((struct seq_file *)f->private_data)->private;
+	struct client_obd *cli = &dev->u.cli;
+	struct ptlrpc_request *req;
+
+	/* to initiate the connection if it's in IDLE state */
+	req = ptlrpc_request_alloc(cli->cl_import, &RQF_OST_STATFS);
+	if (req != NULL)
+		ptlrpc_req_finished(req);
+	ptlrpc_pinger_force(cli->cl_import);
+
+	return count;
+}
+LPROC_SEQ_FOPS(osc_idle_connect);
+
 LPROC_SEQ_FOPS_RO_TYPE(osc, connect_flags);
 LPROC_SEQ_FOPS_RO_TYPE(osc, server_uuid);
 LPROC_SEQ_FOPS_RO_TYPE(osc, timeouts);
@@ -639,6 +700,10 @@ struct lprocfs_vars lprocfs_osc_obd_vars[] = {
 	  .fops	=	&osc_pinger_recov_fops		},
 	{ .name	=	"unstable_stats",
 	  .fops	=	&osc_unstable_stats_fops	},
+	{ .name	=	"idle_timeout",
+	  .fops	=	&osc_idle_timeout_fops		},
+	{ .name	=	"idle_connect",
+	  .fops	=	&osc_idle_connect_fops		},
 	{ NULL }
 };
 

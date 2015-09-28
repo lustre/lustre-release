@@ -7180,29 +7180,6 @@ test_77g() { # bug 10889
 }
 run_test 77g "checksum error on OST write, read"
 
-test_77j() { # bug 13805
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	$GSS && skip_env "could not run with gss"
-
-	#define OBD_FAIL_OSC_CKSUM_ADLER_ONLY    0x40c
-	lctl set_param fail_loc=0x40c
-	remount_client $MOUNT
-	lctl set_param fail_loc=0
-	# wait async osc connect to finish and reflect updated state value
-	local i
-	for (( i=0; i < OSTCOUNT; i++ )) ; do
-		wait_osc_import_state client ost$((i+1)) FULL
-	done
-
-	for VALUE in $(lctl get_param osc.*osc-[^mM]*.checksum_type); do
-		PARAM=$(echo ${VALUE[0]} | cut -d "=" -f1)
-		algo=$(lctl get_param -n $PARAM | sed 's/.*\[\(.*\)\].*/\1/g')
-		[ "$algo" = "adler" ] || error "algo set to $algo instead of adler"
-	done
-	remount_client $MOUNT
-}
-run_test 77j "client only supporting ADLER32"
-
 test_77k() { # LU-10906
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	$GSS && skip_env "could not run with gss"

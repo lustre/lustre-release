@@ -101,19 +101,21 @@ enum lustre_imp_state {
         LUSTRE_IMP_RECOVER    = 8,
         LUSTRE_IMP_FULL       = 9,
         LUSTRE_IMP_EVICTED    = 10,
+	LUSTRE_IMP_IDLE	      = 11,
+	LUSTRE_IMP_LAST
 };
 
 /** Returns test string representation of numeric import state \a state */
 static inline char * ptlrpc_import_state_name(enum lustre_imp_state state)
 {
-        static char* import_state_names[] = {
-                "<UNKNOWN>", "CLOSED",  "NEW", "DISCONN",
-                "CONNECTING", "REPLAY", "REPLAY_LOCKS", "REPLAY_WAIT",
-                "RECOVER", "FULL", "EVICTED",
-        };
+	static char *import_state_names[] = {
+		"<UNKNOWN>", "CLOSED",  "NEW", "DISCONN",
+		"CONNECTING", "REPLAY", "REPLAY_LOCKS", "REPLAY_WAIT",
+		"RECOVER", "FULL", "EVICTED", "IDLE",
+	};
 
-        LASSERT (state <= LUSTRE_IMP_EVICTED);
-        return import_state_names[state];
+	LASSERT(state < LUSTRE_IMP_LAST);
+	return import_state_names[state];
 }
 
 /**
@@ -232,6 +234,8 @@ struct obd_import {
         int                       imp_state_hist_idx;
         /** Current import generation. Incremented on every reconnect */
         int                       imp_generation;
+	/** Idle connection initiated at this generation */
+	int			  imp_initiated_at;
         /** Incremented every time we send reconnection request */
         __u32                     imp_conn_cnt;
        /** 
@@ -303,6 +307,7 @@ struct obd_import {
 				  /* connected but not FULL yet */
 				  imp_connected:1;
 	__u32                     imp_connect_op;
+	__u32			  imp_idle_timeout;
 	struct obd_connect_data   imp_connect_data;
 	__u64                     imp_connect_flags_orig;
 	__u64                     imp_connect_flags2_orig;

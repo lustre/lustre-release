@@ -65,7 +65,8 @@ static loff_t lov_tgt_maxbytes(struct lov_tgt_desc *tgt)
 		return maxbytes;
 
 	spin_lock(&imp->imp_lock);
-	if (imp->imp_state == LUSTRE_IMP_FULL &&
+	if ((imp->imp_state == LUSTRE_IMP_FULL ||
+	    imp->imp_state == LUSTRE_IMP_IDLE) &&
 	    (imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_MAXBYTES) &&
 	    imp->imp_connect_data.ocd_maxbytes > 0)
 		maxbytes = imp->imp_connect_data.ocd_maxbytes;

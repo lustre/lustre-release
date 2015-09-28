@@ -837,7 +837,7 @@ test_22() {
 	fi
 	mount_client $MOUNT || error "mount_client $MOUNT failed"
 	wait_osc_import_state mds ost FULL
-	wait_osc_import_state client ost FULL
+	wait_osc_import_ready client ost
 	check_mount || error "check_mount failed"
 	pass
 
@@ -3354,7 +3354,7 @@ test_46a() {
 	# wait until osts in sync
 	for (( i=2; i<=$OSTCOUNT; i++ )); do
 	    wait_osc_import_state mds ost$i FULL
-	    wait_osc_import_state client ost$i FULL
+	    wait_osc_import_ready client ost$i
 	done
 
 	#second client see all ost's
@@ -3548,7 +3548,7 @@ lazystatfs() {
 	[ $RC1 -ne 0 ] && log "lazystatfs multiop failed"
 	wait $PID || { RC1=$?; log "multiop return error "; }
 
-	$LFS df &
+	$LFS df -l &
 	PID=$!
 	sleep 5
 	kill -s 0 $PID
@@ -3720,7 +3720,7 @@ test_50g() {
 	setup
 	start_ost2 || error "Unable to start OST2"
         wait_osc_import_state mds ost2 FULL
-        wait_osc_import_state client ost2 FULL
+	wait_osc_import_ready client ost2
 
 	local PARAM="${FSNAME}-OST0001.osc.active"
 

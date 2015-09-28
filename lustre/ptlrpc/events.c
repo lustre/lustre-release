@@ -161,12 +161,13 @@ void reply_in_callback(struct lnet_event *ev)
                           ev->mlength, ev->offset, req->rq_replen);
         }
 
-	req->rq_import->imp_last_reply_time = ktime_get_real_seconds();
+	if (lustre_msg_get_opc(req->rq_reqmsg) != OBD_PING)
+		req->rq_import->imp_last_reply_time = ktime_get_real_seconds();
 
 out_wake:
-        /* NB don't unlock till after wakeup; req can disappear under us
-         * since we don't have our own ref */
-        ptlrpc_client_wake_req(req);
+	/* NB don't unlock till after wakeup; req can disappear under us
+	 * since we don't have our own ref */
+	ptlrpc_client_wake_req(req);
 	spin_unlock(&req->rq_lock);
 	EXIT;
 }

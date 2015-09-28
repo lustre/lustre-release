@@ -3379,7 +3379,9 @@ fail() {
 	local clients=${CLIENTS:-$HOSTNAME}
 
 	facet_failover $* || error "failover: $?"
-	wait_clients_import_state "$clients" "$facets" FULL
+	# to initiate all OSC idling connections
+	clients_up
+	wait_clients_import_state "$clients" "$facets" "\(FULL\|IDLE\)"
 	clients_up || error "post-failover stat: $?"
 }
 
@@ -6116,6 +6118,7 @@ check_grant() {
 
 	# sync all the data and make sure no pending data on server
 	do_nodes $clients sync
+	clients_up # initiate all idling connections
 
 	# get client grant
 	client_grant=$(do_nodes $clients \
@@ -6690,7 +6693,7 @@ calc_sum () {
 }
 
 calc_osc_kbytes () {
-	df $MOUNT > /dev/null
+	$LFS df $MOUNT > /dev/null
 	$LCTL get_param -n osc.*[oO][sS][cC][-_][0-9a-f]*.$1 | calc_sum
 }
 
@@ -6828,7 +6831,7 @@ _wait_import_state () {
     local i=0
 
 	CONN_STATE=$($LCTL get_param -n $CONN_PROC 2>/dev/null | cut -f2 | uniq)
-    while [ "${CONN_STATE}" != "${expected}" ]; do
+    while ! echo "${CONN_STATE}" | egrep -q "^${expected}\$" ; do
         if [ "${expected}" == "DISCONN" ]; then
             # for disconn we can check after proc entry is removed
             [ "x${CONN_STATE}" == "x" ] && return 0
@@ -6973,6 +6976,10 @@ wait_osc_import_state() {
 	fi
 }
 
+wait_osc_import_ready() {
+	wait_osc_import_state $1 $2 "\(FULL\|IDLE\)"
+}
+
 _wait_mgc_import_state() {
 	local facet=$1
 	local expected=$2
@@ -7035,7 +7042,7 @@ wait_dne_interconnect() {
 
 	if [ $MDSCOUNT -gt 1 ]; then
 		for num in $(seq $MDSCOUNT); do
-			wait_osc_import_state mds mds$num FULL
+			wait_osc_import_ready mds mds$num
 		done
 	fi
 }
@@ -7088,7 +7095,7 @@ wait_clients_import_state () {
 		local params=$(expand_list $params $proc_path)
 	done
 
-	if ! do_rpc_nodes "$list" wait_import_state_mount $expected $params;
+	if ! do_rpc_nodes "$list" wait_import_state_mount "$expected" $params;
 	then
 		error "import is not in ${expected} state"
 		return 1

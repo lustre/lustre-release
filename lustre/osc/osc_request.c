@@ -56,6 +56,9 @@ struct ptlrpc_request_pool *osc_rq_pool;
 static unsigned int osc_reqpool_mem_max = 5;
 module_param(osc_reqpool_mem_max, uint, 0444);
 
+static int osc_idle_timeout = 20;
+module_param(osc_idle_timeout, uint, 0644);
+
 #define osc_grant_args osc_brw_async_args
 
 struct osc_setattr_args {
@@ -2648,7 +2651,7 @@ static int osc_statfs_async(struct obd_export *exp,
         struct obd_device     *obd = class_exp2obd(exp);
         struct ptlrpc_request *req;
         struct osc_async_args *aa;
-        int                    rc;
+	int rc;
         ENTRY;
 
         /* We could possibly pass max_age in the request (as an absolute
@@ -2666,15 +2669,15 @@ static int osc_statfs_async(struct obd_export *exp,
                 ptlrpc_request_free(req);
                 RETURN(rc);
         }
-        ptlrpc_request_set_replen(req);
-        req->rq_request_portal = OST_CREATE_PORTAL;
-        ptlrpc_at_set_req_timeout(req);
+	ptlrpc_request_set_replen(req);
+	req->rq_request_portal = OST_CREATE_PORTAL;
+	ptlrpc_at_set_req_timeout(req);
 
-        if (oinfo->oi_flags & OBD_STATFS_NODELAY) {
-                /* procfs requests not want stat in wait for avoid deadlock */
-                req->rq_no_resend = 1;
-                req->rq_no_delay = 1;
-        }
+	if (oinfo->oi_flags & OBD_STATFS_NODELAY) {
+		/* procfs requests not want stat in wait for avoid deadlock */
+		req->rq_no_resend = 1;
+		req->rq_no_delay = 1;
+	}
 
 	req->rq_interpret_reply = (ptlrpc_interpterer_t)osc_statfs_interpret;
 	CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
@@ -2688,12 +2691,13 @@ static int osc_statfs_async(struct obd_export *exp,
 static int osc_statfs(const struct lu_env *env, struct obd_export *exp,
 		      struct obd_statfs *osfs, time64_t max_age, __u32 flags)
 {
-        struct obd_device     *obd = class_exp2obd(exp);
-        struct obd_statfs     *msfs;
-        struct ptlrpc_request *req;
-        struct obd_import     *imp = NULL;
-        int rc;
-        ENTRY;
+	struct obd_device     *obd = class_exp2obd(exp);
+	struct obd_statfs     *msfs;
+	struct ptlrpc_request *req;
+	struct obd_import     *imp = NULL;
+	int rc;
+	ENTRY;
+
 
         /*Since the request might also come from lprocfs, so we need
          *sync this with client_disconnect_export Bug15684*/
@@ -2704,49 +2708,48 @@ static int osc_statfs(const struct lu_env *env, struct obd_export *exp,
         if (!imp)
                 RETURN(-ENODEV);
 
-        /* We could possibly pass max_age in the request (as an absolute
-         * timestamp or a "seconds.usec ago") so the target can avoid doing
-         * extra calls into the filesystem if that isn't necessary (e.g.
-         * during mount that would help a bit).  Having relative timestamps
-         * is not so great if request processing is slow, while absolute
-         * timestamps are not ideal because they need time synchronization. */
-        req = ptlrpc_request_alloc(imp, &RQF_OST_STATFS);
+	/* We could possibly pass max_age in the request (as an absolute
+	 * timestamp or a "seconds.usec ago") so the target can avoid doing
+	 * extra calls into the filesystem if that isn't necessary (e.g.
+	 * during mount that would help a bit).  Having relative timestamps
+	 * is not so great if request processing is slow, while absolute
+	 * timestamps are not ideal because they need time synchronization. */
+	req = ptlrpc_request_alloc(imp, &RQF_OST_STATFS);
 
-        class_import_put(imp);
+	class_import_put(imp);
 
-        if (req == NULL)
-                RETURN(-ENOMEM);
+	if (req == NULL)
+		RETURN(-ENOMEM);
 
-        rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_STATFS);
-        if (rc) {
-                ptlrpc_request_free(req);
-                RETURN(rc);
-        }
-        ptlrpc_request_set_replen(req);
-        req->rq_request_portal = OST_CREATE_PORTAL;
-        ptlrpc_at_set_req_timeout(req);
+	rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_STATFS);
+	if (rc) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+	ptlrpc_request_set_replen(req);
+	req->rq_request_portal = OST_CREATE_PORTAL;
+	ptlrpc_at_set_req_timeout(req);
 
-        if (flags & OBD_STATFS_NODELAY) {
-                /* procfs requests not want stat in wait for avoid deadlock */
-                req->rq_no_resend = 1;
-                req->rq_no_delay = 1;
-        }
+	if (flags & OBD_STATFS_NODELAY) {
+		/* procfs requests not want stat in wait for avoid deadlock */
+		req->rq_no_resend = 1;
+		req->rq_no_delay = 1;
+	}
 
-        rc = ptlrpc_queue_wait(req);
-        if (rc)
-                GOTO(out, rc);
+	rc = ptlrpc_queue_wait(req);
+	if (rc)
+		GOTO(out, rc);
 
-        msfs = req_capsule_server_get(&req->rq_pill, &RMF_OBD_STATFS);
-        if (msfs == NULL) {
-                GOTO(out, rc = -EPROTO);
-        }
+	msfs = req_capsule_server_get(&req->rq_pill, &RMF_OBD_STATFS);
+	if (msfs == NULL)
+		GOTO(out, rc = -EPROTO);
 
-        *osfs = *msfs;
+	*osfs = *msfs;
 
-        EXIT;
- out:
-        ptlrpc_req_finished(req);
-        return rc;
+	EXIT;
+out:
+	ptlrpc_req_finished(req);
+	return rc;
 }
 
 static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
@@ -3194,6 +3197,7 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	spin_lock(&osc_shrink_lock);
 	list_add_tail(&cli->cl_shrink_list, &osc_shrink_list);
 	spin_unlock(&osc_shrink_lock);
+	cli->cl_import->imp_idle_timeout = osc_idle_timeout;
 
 	RETURN(0);
 }

@@ -92,10 +92,39 @@ int ptlrpc_obd_ping(struct obd_device *obd)
 }
 EXPORT_SYMBOL(ptlrpc_obd_ping);
 
+static bool ptlrpc_check_import_is_idle(struct obd_import *imp)
+{
+	struct ldlm_namespace *ns = imp->imp_obd->obd_namespace;
+	time64_t now;
+
+	if (!imp->imp_idle_timeout)
+		return false;
+	/* 4 comes from:
+	 *  - client_obd_setup() - hashed import
+	 *  - ptlrpcd_alloc_work()
+	 *  - ptlrpcd_alloc_work()
+	 *  - ptlrpc_pinger_add_import
+	 */
+	if (atomic_read(&imp->imp_refcount) > 4)
+		return false;
+	/* any lock increases ns_bref being a resource holder */
+	if (ns && atomic_read(&ns->ns_bref) > 0)
+		return false;
+
+	now = ktime_get_real_seconds();
+	if (now - imp->imp_last_reply_time < imp->imp_idle_timeout)
+		return false;
+
+	return true;
+}
+
 static int ptlrpc_ping(struct obd_import *imp)
 {
 	struct ptlrpc_request	*req;
 	ENTRY;
+
+	if (ptlrpc_check_import_is_idle(imp))
+		RETURN(ptlrpc_disconnect_and_idle_import(imp));
 
 	req = ptlrpc_prep_ping(imp);
 	if (req == NULL) {

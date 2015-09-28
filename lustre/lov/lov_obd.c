@@ -971,27 +971,30 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
         switch (cmd) {
         case IOC_OBD_STATFS: {
-                struct obd_ioctl_data *data = karg;
-                struct obd_device *osc_obd;
-                struct obd_statfs stat_buf = {0};
-                __u32 index;
+		struct obd_ioctl_data *data = karg;
+		struct obd_device *osc_obd;
+		struct obd_statfs stat_buf = {0};
+		struct obd_import *imp;
+		__u32 index;
 		__u32 flags;
 
-                memcpy(&index, data->ioc_inlbuf2, sizeof(index));
-                if ((index >= count))
-                        RETURN(-ENODEV);
+		memcpy(&index, data->ioc_inlbuf2, sizeof(index));
+		if ((index >= count))
+			RETURN(-ENODEV);
 
-                if (!lov->lov_tgts[index])
-                        /* Try again with the next index */
-                        RETURN(-EAGAIN);
-                if (!lov->lov_tgts[index]->ltd_active)
-                        RETURN(-ENODATA);
+		if (!lov->lov_tgts[index])
+			/* Try again with the next index */
+			RETURN(-EAGAIN);
+		imp = lov->lov_tgts[index]->ltd_exp->exp_obd->u.cli.cl_import;
+		if (!lov->lov_tgts[index]->ltd_active &&
+		    imp->imp_state != LUSTRE_IMP_IDLE)
+			RETURN(-ENODATA);
 
-                osc_obd = class_exp2obd(lov->lov_tgts[index]->ltd_exp);
-                if (!osc_obd)
-                        RETURN(-EINVAL);
+		osc_obd = class_exp2obd(lov->lov_tgts[index]->ltd_exp);
+		if (!osc_obd)
+			RETURN(-EINVAL);
 
-                /* copy UUID */
+		/* copy UUID */
 		if (copy_to_user(data->ioc_pbuf2, obd2cli_tgt(osc_obd),
 				 min_t(unsigned long, data->ioc_plen2,
 				       sizeof(struct obd_uuid))))

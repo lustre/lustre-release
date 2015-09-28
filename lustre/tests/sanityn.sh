@@ -1144,7 +1144,7 @@ cleanup_34() {
 	do_nodes $(comma_list $(osts_nodes)) \
 		"lctl set_param -n fail_loc=0 2>/dev/null || true"
 	for i in $(seq $OSTCOUNT); do
-		wait_osc_import_state client ost$i FULL
+		wait_osc_import_ready client ost$i
 	done
 }
 

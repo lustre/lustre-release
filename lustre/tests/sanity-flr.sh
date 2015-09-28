@@ -64,7 +64,7 @@ stop_osts() {
 	done
 
 	for idx in "$@"; do
-		wait_osc_import_state client ost$idx DISCONN
+		wait_osc_import_state client ost$idx "\(DISCONN\|IDLE\)"
 	done
 }
 

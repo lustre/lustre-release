@@ -106,6 +106,7 @@ static int lov_check_and_wait_active(struct lov_obd *lov, int ost_idx)
 	wait_queue_head_t waitq;
 	struct l_wait_info lwi;
 	struct lov_tgt_desc *tgt;
+	struct obd_import *imp = NULL;
 	int rc = 0;
 
 	mutex_lock(&lov->lov_lock);
@@ -118,7 +119,11 @@ static int lov_check_and_wait_active(struct lov_obd *lov, int ost_idx)
 	if (likely(tgt->ltd_active))
 		GOTO(out, rc = 1);
 
-	if (tgt->ltd_exp && class_exp2cliimp(tgt->ltd_exp)->imp_connect_tried)
+	if (tgt->ltd_exp)
+		imp = class_exp2cliimp(tgt->ltd_exp);
+	if (imp && imp->imp_connect_tried)
+		GOTO(out, rc = 0);
+	if (imp && imp->imp_state == LUSTRE_IMP_IDLE)
 		GOTO(out, rc = 0);
 
 	mutex_unlock(&lov->lov_lock);
@@ -322,47 +327,53 @@ int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
 
         /* We only get block data from the OBD */
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+		struct lov_tgt_desc *ltd = lov->lov_tgts[i];
 		struct lov_request *req;
 
-		if (lov->lov_tgts[i] == NULL ||
-		    (oinfo->oi_flags & OBD_STATFS_NODELAY &&
-		     !lov->lov_tgts[i]->ltd_active)) {
+		if (ltd == NULL) {
 			CDEBUG(D_HA, "lov idx %d inactive\n", i);
 			continue;
 		}
 
 		/* skip targets that have been explicitely disabled by the
 		 * administrator */
-		if (!lov->lov_tgts[i]->ltd_exp) {
+		if (!ltd->ltd_exp) {
 			CDEBUG(D_HA, "lov idx %d administratively disabled\n",
 			       i);
 			continue;
 		}
 
-		if (!lov->lov_tgts[i]->ltd_active)
+		if (oinfo->oi_flags & OBD_STATFS_NODELAY &&
+		    class_exp2cliimp(ltd->ltd_exp)->imp_state !=
+		    LUSTRE_IMP_IDLE && !ltd->ltd_active) {
+			CDEBUG(D_HA, "lov idx %d inactive\n", i);
+			continue;
+		}
+
+		if (!ltd->ltd_active)
 			lov_check_and_wait_active(lov, i);
 
 		OBD_ALLOC(req, sizeof(*req));
 		if (req == NULL)
 			GOTO(out_set, rc = -ENOMEM);
 
-                OBD_ALLOC(req->rq_oi.oi_osfs, sizeof(*req->rq_oi.oi_osfs));
-                if (req->rq_oi.oi_osfs == NULL) {
-                        OBD_FREE(req, sizeof(*req));
-                        GOTO(out_set, rc = -ENOMEM);
-                }
+		OBD_ALLOC(req->rq_oi.oi_osfs, sizeof(*req->rq_oi.oi_osfs));
+		if (req->rq_oi.oi_osfs == NULL) {
+			OBD_FREE(req, sizeof(*req));
+			GOTO(out_set, rc = -ENOMEM);
+		}
 
-                req->rq_idx = i;
-                req->rq_oi.oi_cb_up = cb_statfs_update;
-                req->rq_oi.oi_flags = oinfo->oi_flags;
+		req->rq_idx = i;
+		req->rq_oi.oi_cb_up = cb_statfs_update;
+		req->rq_oi.oi_flags = oinfo->oi_flags;
 
-                lov_set_add_req(req, set);
-        }
-        if (!set->set_count)
-                GOTO(out_set, rc = -EIO);
-        *reqset = set;
-        RETURN(rc);
+		lov_set_add_req(req, set);
+	}
+	if (!set->set_count)
+		GOTO(out_set, rc = -EIO);
+	*reqset = set;
+	RETURN(rc);
 out_set:
-        lov_fini_statfs_set(set);
-        RETURN(rc);
+	lov_fini_statfs_set(set);
+	RETURN(rc);
 }
