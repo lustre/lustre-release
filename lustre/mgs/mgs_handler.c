@@ -1550,7 +1550,7 @@ static void /*__exit*/ mgs_exit(void)
 	class_unregister_type(LUSTRE_MGS_NAME);
 }
 
-MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
+MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre  Management Server (MGS)");
 MODULE_LICENSE("GPL");
 

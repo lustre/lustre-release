@@ -2939,7 +2939,7 @@ static void __exit sptlrpc_gss_exit(void)
         gss_exit_lproc();
 }
 
-MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
+MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("GSS security policy for Lustre");
 MODULE_LICENSE("GPL");
 
