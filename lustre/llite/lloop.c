@@ -414,14 +414,21 @@ static void loop_unplug(struct request_queue *q)
 
 static inline void loop_handle_bio(struct lloop_device *lo, struct bio *bio)
 {
-        int ret;
-        ret = do_bio_lustrebacked(lo, bio);
-        while (bio) {
-                struct bio *tmp = bio->bi_next;
-                bio->bi_next = NULL;
+	int ret;
+
+	ret  = do_bio_lustrebacked(lo, bio);
+	while (bio) {
+		struct bio *tmp = bio->bi_next;
+
+		bio->bi_next = NULL;
+#ifdef HAVE_BIO_ENDIO_USES_ONE_ARG
+		bio->bi_error = ret;
+		bio_endio(bio);
+#else
 		bio_endio(bio, ret);
-                bio = tmp;
-        }
+#endif
+		bio = tmp;
+	}
 }
 
 static inline int loop_active(struct lloop_device *lo)
