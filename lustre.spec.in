@@ -113,6 +113,7 @@ BuildRequires: python-docutils
 %if %{with servers}
 Requires: lustre-osd
 Requires: lustre-osd-mount
+Provides: lustre-client = %{version}-%{fullrelease}
 %endif
 %if %{defined cross_requires}
 Requires: %{cross_requires}
