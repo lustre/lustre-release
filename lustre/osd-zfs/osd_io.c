@@ -862,7 +862,6 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 {
 	struct osd_object *obj  = osd_dt_obj(dt);
 	int                i;
-	unsigned long	   size = 0;
 	loff_t		   eof;
 
 	LASSERT(dt_object_exists(dt));
@@ -877,12 +876,12 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 			continue;
 
 		lnb[i].lnb_rc = lnb[i].lnb_len;
-		size += lnb[i].lnb_rc;
 
-		if (lnb[i].lnb_file_offset + lnb[i].lnb_len > eof) {
-			lnb[i].lnb_rc = eof - lnb[i].lnb_file_offset;
-			if (lnb[i].lnb_rc < 0)
+		if (lnb[i].lnb_file_offset + lnb[i].lnb_len >= eof) {
+			if (eof <= lnb[i].lnb_file_offset)
 				lnb[i].lnb_rc = 0;
+			else
+				lnb[i].lnb_rc = eof - lnb[i].lnb_file_offset;
 
 			/* all subsequent rc should be 0 */
 			while (++i < npages)
