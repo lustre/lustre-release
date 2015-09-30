@@ -1431,6 +1431,8 @@ cleanup_test_12q() {
 }
 
 test_12q() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.58) ] &&
+		skip "need MDS version at least 2.7.58" && return 0
 
 	zconf_mount $(facet_host $SINGLEAGT) $MOUNT3 ||
 		error "cannot mount $MOUNT3 on $SINGLEAGT"
