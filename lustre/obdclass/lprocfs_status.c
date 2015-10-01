@@ -321,9 +321,10 @@ ssize_t lprocfs_uint_seq_write(struct file *file, const char __user *buffer,
 			       size_t count, loff_t *off)
 {
 	int *data = ((struct seq_file *)file->private_data)->private;
-	int val = 0, rc;
+	int rc;
+	__s64 val = 0;
 
-	rc = lprocfs_write_helper(buffer, count, &val);
+	rc = lprocfs_str_to_s64(buffer, count, &val);
 	if (rc < 0)
 		return rc;
 
@@ -353,14 +354,14 @@ lprocfs_atomic_seq_write(struct file *file, const char __user *buffer,
 			size_t count, loff_t *off)
 {
 	atomic_t *atm = ((struct seq_file *)file->private_data)->private;
-	int val = 0;
+	__s64 val = 0;
 	int rc;
 
-	rc = lprocfs_write_helper(buffer, count, &val);
+	rc = lprocfs_str_to_s64(buffer, count, &val);
 	if (rc < 0)
 		return rc;
 
-	if (val <= 0)
+	if (val <= 0 || val > INT_MAX)
 		return -ERANGE;
 
 	atomic_set(atm, val);
@@ -1517,56 +1518,6 @@ __s64 lprocfs_read_helper(struct lprocfs_counter *lc,
 }
 EXPORT_SYMBOL(lprocfs_read_helper);
 
-int lprocfs_write_helper(const char __user *buffer, unsigned long count,
-                         int *val)
-{
-        return lprocfs_write_frac_helper(buffer, count, val, 1);
-}
-EXPORT_SYMBOL(lprocfs_write_helper);
-
-int lprocfs_write_frac_helper(const char __user *buffer, unsigned long count,
-                              int *val, int mult)
-{
-        char kernbuf[20], *end, *pbuf;
-
-        if (count > (sizeof(kernbuf) - 1))
-                return -EINVAL;
-
-	if (copy_from_user(kernbuf, buffer, count))
-                return -EFAULT;
-
-        kernbuf[count] = '\0';
-        pbuf = kernbuf;
-        if (*pbuf == '-') {
-                mult = -mult;
-                pbuf++;
-        }
-
-        *val = (int)simple_strtoul(pbuf, &end, 10) * mult;
-        if (pbuf == end)
-                return -EINVAL;
-
-        if (end != NULL && *end == '.') {
-                int temp_val, pow = 1;
-                int i;
-
-                pbuf = end + 1;
-                if (strlen(pbuf) > 5)
-                        pbuf[5] = '\0'; /*only allow 5bits fractional*/
-
-                temp_val = (int)simple_strtoul(pbuf, &end, 10) * mult;
-
-                if (pbuf < end) {
-                        for (i = 0; i < (end - pbuf); i++)
-                                pow *= 10;
-
-                        *val += temp_val / pow;
-                }
-        }
-        return 0;
-}
-EXPORT_SYMBOL(lprocfs_write_frac_helper);
-
 int lprocfs_read_frac_helper(char *buffer, unsigned long count, long val,
                              int mult)
 {
@@ -1646,77 +1597,298 @@ int lprocfs_seq_read_frac_helper(struct seq_file *m, long val, int mult)
 }
 EXPORT_SYMBOL(lprocfs_seq_read_frac_helper);
 
-int lprocfs_write_u64_helper(const char __user *buffer, unsigned long count,
-			     __u64 *val)
+/* Obtains the conversion factor for the unit specified */
+static int get_mult(char unit, __u64 *mult)
 {
-        return lprocfs_write_frac_u64_helper(buffer, count, val, 1);
+	__u64 units = 1;
+
+	switch (unit) {
+	/* peta, tera, giga, mega, and kilo */
+	case 'p':
+	case 'P':
+		units <<= 10;
+	case 't':
+	case 'T':
+		units <<= 10;
+	case 'g':
+	case 'G':
+		units <<= 10;
+	case 'm':
+	case 'M':
+		units <<= 10;
+	case 'k':
+	case 'K':
+		units <<= 10;
+		break;
+	/* some tests expect % to be accepted */
+	case '%':
+		units = 1;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	*mult = units;
+
+	return 0;
 }
-EXPORT_SYMBOL(lprocfs_write_u64_helper);
 
-int lprocfs_write_frac_u64_helper(const char __user *buffer,
-				  unsigned long count,
-				  __u64 *val, int mult)
+/*
+ * Ensures the numeric string is valid. The function provides the final
+ * multiplier in the case a unit exists at the end of the string. It also
+ * locates the start of the whole and fractional parts (if any). This
+ * function modifies the string so kstrtoull can be used to parse both
+ * the whole and fraction portions. This function also figures out
+ * the base of the number.
+ */
+static int preprocess_numeric_str(char *buffer, __u64 *mult, __u64 def_mult,
+				  bool allow_units, char **whole, char **frac,
+				  unsigned int *base)
 {
-        char kernbuf[22], *end, *pbuf;
-        __u64 whole, frac = 0, units;
-        unsigned frac_d = 1;
+	bool hit_decimal = false;
+	bool hit_unit = false;
+	int rc = 0;
+	char *start;
+	*mult = def_mult;
+	*whole = NULL;
+	*frac = NULL;
+	*base = 10;
 
-        if (count > (sizeof(kernbuf) - 1))
-                return -EINVAL;
+	/* a hex string if it starts with "0x" */
+	if (buffer[0] == '0' && tolower(buffer[1]) == 'x') {
+		*base = 16;
+		buffer += 2;
+	}
+
+	start = buffer;
+
+	while (*buffer) {
+		/* any chars after our unit indicates a malformed string */
+		if (hit_unit)
+			return -EINVAL;
+
+		/* ensure we only hit one decimal */
+		if (*buffer == '.') {
+			if (hit_decimal)
+				return -EINVAL;
+
+			/* if past start, there's a whole part */
+			if (start != buffer)
+				*whole = start;
+
+			*buffer = '\0';
+			start = buffer + 1;
+			hit_decimal = true;
+		} else if (!isdigit(*buffer) &&
+			   !(*base == 16 && isxdigit(*buffer))) {
+			if (allow_units) {
+				/* if we allow units, attempt to get mult */
+				hit_unit = true;
+				rc = get_mult(*buffer, mult);
+				if (rc)
+					return rc;
+
+				/* string stops here, but keep processing */
+				*buffer = '\0';
+			} else {
+				/* bad string */
+				return -EINVAL;
+			}
+		}
+
+		buffer++;
+	}
+
+	if (hit_decimal) {
+		/* hit a decimal, make sure there's a fractional part */
+		if (!*start)
+			return -EINVAL;
+
+		*frac = start;
+	} else {
+		/* didn't hit a decimal, but may have a whole part */
+		if (start != buffer && *start)
+			*whole = start;
+	}
+
+	/* malformed string if we didn't get anything */
+	if (!*frac && !*whole)
+		return -EINVAL;
+
+	return 0;
+}
+
+/*
+ * Parses a numeric string which can contain a whole and fraction portion
+ * into a __u64. Accepts a multiplier to apply to the value parsed. Also
+ * allows the string to have a unit at the end. The function handles
+ * wrapping of the final unsigned value.
+ */
+static int str_to_u64_parse(char *buffer, unsigned long count,
+			    __u64 *val, __u64 def_mult, bool allow_units)
+{
+	__u64 whole = 0;
+	__u64 frac = 0;
+	unsigned int frac_d = 1;
+	__u64 wrap_indicator = ULLONG_MAX;
+	int rc = 0;
+	__u64 mult;
+	char *strwhole;
+	char *strfrac;
+	unsigned int base = 10;
+
+	rc = preprocess_numeric_str(buffer, &mult, def_mult, allow_units,
+				    &strwhole, &strfrac, &base);
+
+	if (rc)
+		return rc;
+
+	if (mult == 0) {
+		*val = 0;
+		return 0;
+	}
+
+	/* the multiplier limits how large the value can be */
+	wrap_indicator /=  mult;
+
+	if (strwhole) {
+		rc = kstrtoull(strwhole, base, &whole);
+		if (rc)
+			return rc;
+
+		if (whole > wrap_indicator)
+			return -ERANGE;
+
+		whole *= mult;
+	}
+
+	if (strfrac) {
+		if (strlen(strfrac) > 10)
+			strfrac[10] = '\0';
+
+		rc = kstrtoull(strfrac, base, &frac);
+		if (rc)
+			return rc;
+
+		/* determine power of fractional portion */
+		while (*strfrac) {
+			frac_d *= base;
+			strfrac++;
+		}
+
+		/* fractional portion is too large to perform calculation */
+		if (frac > wrap_indicator)
+			return -ERANGE;
+
+		frac *= mult;
+		do_div(frac, frac_d);
+	}
+
+	/* check that the sum of whole and fraction fits in u64 */
+	if (whole > (ULLONG_MAX - frac))
+		return -ERANGE;
+
+	*val = whole + frac;
+
+	return 0;
+}
+
+/*
+ * This function parses numeric/hex strings into __s64. It accepts a multiplier
+ * which will apply to the value parsed. It also can allow the string to
+ * have a unit as the last character. The function handles overflow/underflow
+ * of the signed integer.
+ */
+static int str_to_s64_internal(const char __user *buffer, unsigned long count,
+			       __s64 *val, __u64 def_mult, bool allow_units)
+{
+	char kernbuf[22];
+	__u64 tmp;
+	unsigned int offset = 0;
+	int signed sign = 1;
+	__u64 max = LLONG_MAX;
+	int rc = 0;
+
+	if (count > (sizeof(kernbuf) - 1))
+		return -EINVAL;
 
 	if (copy_from_user(kernbuf, buffer, count))
-                return -EFAULT;
+		return -EFAULT;
 
-        kernbuf[count] = '\0';
-        pbuf = kernbuf;
-        if (*pbuf == '-') {
-                mult = -mult;
-                pbuf++;
-        }
+	kernbuf[count] = '\0';
 
-        whole = simple_strtoull(pbuf, &end, 10);
-        if (pbuf == end)
-                return -EINVAL;
-
-        if (end != NULL && *end == '.') {
-                int i;
-                pbuf = end + 1;
-
-                /* need to limit frac_d to a __u32 */
-                if (strlen(pbuf) > 10)
-                        pbuf[10] = '\0';
-
-                frac = simple_strtoull(pbuf, &end, 10);
-                /* count decimal places */
-                for (i = 0; i < (end - pbuf); i++)
-                        frac_d *= 10;
-        }
-
-        units = 1;
-	if (end != NULL) {
-		switch (*end) {
-		case 'p': case 'P':
-			units <<= 10;
-		case 't': case 'T':
-			units <<= 10;
-		case 'g': case 'G':
-			units <<= 10;
-		case 'm': case 'M':
-			units <<= 10;
-		case 'k': case 'K':
-			units <<= 10;
-		}
+	/* keep track of our sign */
+	if (*kernbuf == '-') {
+		sign = -1;
+		offset++;
+		/* equivalent to max = -LLONG_MIN, avoids overflow */
+		max++;
 	}
-        /* Specified units override the multiplier */
-	if (units > 1)
-                mult = mult < 0 ? -units : units;
 
-        frac *= mult;
-        do_div(frac, frac_d);
-        *val = whole * mult + frac;
-        return 0;
+	rc = str_to_u64_parse(kernbuf + offset, count - offset,
+			      &tmp, def_mult, allow_units);
+	if (rc)
+		return rc;
+
+	/* check for overflow/underflow */
+	if (max < tmp)
+		return -ERANGE;
+
+	*val = (__s64)tmp * sign;
+
+	return 0;
 }
-EXPORT_SYMBOL(lprocfs_write_frac_u64_helper);
+
+/**
+ * Convert a user string into a signed 64 bit number. This function produces
+ * an error when the value parsed from the string underflows or
+ * overflows. This function accepts strings which contain digits and
+ * optionally a decimal or hex strings which are prefixed with "0x".
+ *
+ * \param[in] buffer	string consisting of numbers and optionally a decimal
+ * \param[in] count	buffer length
+ * \param[in] val	if successful, the value represented by the string
+ *
+ * \retval		0 on success
+ * \retval		negative number on error
+ */
+int lprocfs_str_to_s64(const char __user *buffer, unsigned long count,
+		       __s64 *val)
+{
+	return str_to_s64_internal(buffer, count, val, 1, false);
+}
+EXPORT_SYMBOL(lprocfs_str_to_s64);
+
+/**
+ * Convert a user string into a signed 64 bit number. This function produces
+ * an error when the value parsed from the string times multiplier underflows or
+ * overflows. This function only accepts strings that contains digits, an
+ * optional decimal, and a char representing a unit at the end. If a unit is
+ * specified in the string, the multiplier provided by the caller is ignored.
+ * This function can also accept hexadecimal strings which are prefixed with
+ * "0x".
+ *
+ * \param[in] buffer	string consisting of numbers, a decimal, and a unit
+ * \param[in] count	buffer length
+ * \param[in] val	if successful, the value represented by the string
+ * \param[in] defunit	default unit if string doesn't contain one
+ *
+ * \retval		0 on success
+ * \retval		negative number on error
+ */
+int lprocfs_str_with_units_to_s64(const char __user *buffer,
+				  unsigned long count, __s64 *val, char defunit)
+{
+	__u64 mult;
+	int rc;
+
+	rc = get_mult(defunit, &mult);
+	if (rc)
+		return rc;
+
+	return str_to_s64_internal(buffer, count, val, mult, true);
+}
+EXPORT_SYMBOL(lprocfs_str_with_units_to_s64);
 
 static char *lprocfs_strnstr(const char *s1, const char *s2, size_t len)
 {

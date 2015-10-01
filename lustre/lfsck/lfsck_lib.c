@@ -2653,7 +2653,7 @@ int lfsck_get_speed(struct seq_file *m, struct dt_device *key)
 }
 EXPORT_SYMBOL(lfsck_get_speed);
 
-int lfsck_set_speed(struct dt_device *key, int val)
+int lfsck_set_speed(struct dt_device *key, __u32 val)
 {
 	struct lu_env		env;
 	struct lfsck_instance  *lfsck;

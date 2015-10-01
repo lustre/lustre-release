@@ -707,19 +707,14 @@ extern int lprocfs_kbytesavail_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_filestotal_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_filesfree_seq_show(struct seq_file *m, void *data);
 
-extern int lprocfs_write_helper(const char __user *buffer, unsigned long count,
-                                int *val);
-extern int lprocfs_write_frac_helper(const char __user *buffer,
-				     unsigned long count,
-				     int *val, int mult);
 extern int lprocfs_seq_read_frac_helper(struct seq_file *m, long val, int mult);
 extern int lprocfs_read_frac_helper(char *buffer, unsigned long count,
                                     long val, int mult);
-extern int lprocfs_write_u64_helper(const char __user *buffer,
-				    unsigned long count, __u64 *val);
-extern int lprocfs_write_frac_u64_helper(const char __user *buffer,
-                                         unsigned long count,
-                                         __u64 *val, int mult);
+extern int lprocfs_str_to_s64(const char __user *buffer, unsigned long count,
+			      __s64 *val);
+extern int lprocfs_str_with_units_to_s64(const char __user *buffer,
+					 unsigned long count, __s64 *val,
+					 char defunit);
 char *lprocfs_find_named_value(const char *buffer, const char *name,
 				size_t *count);
 void lprocfs_oh_tally(struct obd_histogram *oh, unsigned int value);

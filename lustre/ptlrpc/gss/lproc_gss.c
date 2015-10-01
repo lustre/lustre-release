@@ -163,17 +163,19 @@ static ssize_t
 gss_lk_proc_dl_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off)
 {
-        int     val, rc;
+	int rc;
+	__s64 val;
 
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc < 0)
-                return rc;
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc < 0)
+		return rc;
 
-        if (val < 0 || val > 4)
-                return -ERANGE;
+	if (val < 0 || val > 4)
+		return -ERANGE;
 
-        gss_lk_debug_level = val;
-        return count;
+	gss_lk_debug_level = val;
+
+	return count;
 }
 LPROC_SEQ_FOPS(gss_lk_proc_dl);
 

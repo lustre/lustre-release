@@ -87,20 +87,23 @@ static ssize_t
 lod_stripesize_seq_write(struct file *file, const char __user *buffer,
 			 size_t count, loff_t *off)
 {
-	struct seq_file   *m = file->private_data;
+	struct seq_file *m = file->private_data;
 	struct obd_device *dev = m->private;
 	struct lod_device *lod;
-	__u64 val;
+	__s64 val;
 	int rc;
 
 	LASSERT(dev != NULL);
 	lod  = lu2lod_dev(dev->obd_lu_dev);
-	rc = lprocfs_write_u64_helper(buffer, count, &val);
+	rc = lprocfs_str_to_s64(buffer, count, &val);
 	if (rc)
 		return rc;
+	if (val < 0)
+		return -ERANGE;
 
 	lod_fix_desc_stripe_size(&val);
 	lod->lod_desc.ld_default_stripe_size = val;
+
 	return count;
 }
 LPROC_SEQ_FOPS(lod_stripesize);
@@ -144,19 +147,22 @@ static ssize_t
 lod_stripeoffset_seq_write(struct file *file, const char __user *buffer,
 			   size_t count, loff_t *off)
 {
-	struct seq_file   *m = file->private_data;
+	struct seq_file *m = file->private_data;
 	struct obd_device *dev = m->private;
 	struct lod_device *lod;
-	__u64 val;
+	__s64 val;
 	int rc;
 
 	LASSERT(dev != NULL);
 	lod  = lu2lod_dev(dev->obd_lu_dev);
-	rc = lprocfs_write_u64_helper(buffer, count, &val);
+	rc = lprocfs_str_to_s64(buffer, count, &val);
 	if (rc)
 		return rc;
+	if (val < 0)
+		return -ERANGE;
 
 	lod->lod_desc.ld_default_stripe_offset = val;
+
 	return count;
 }
 LPROC_SEQ_FOPS(lod_stripeoffset);
@@ -197,19 +203,25 @@ static ssize_t
 lod_stripetype_seq_write(struct file *file, const char __user *buffer,
 			 size_t count, loff_t *off)
 {
-	struct seq_file   *m = file->private_data;
+	struct seq_file *m = file->private_data;
 	struct obd_device *dev = m->private;
 	struct lod_device *lod;
-	int val, rc;
+	int rc;
+	__u32 pattern;
+	__s64 val;
 
 	LASSERT(dev != NULL);
 	lod  = lu2lod_dev(dev->obd_lu_dev);
-	rc = lprocfs_write_helper(buffer, count, &val);
+	rc = lprocfs_str_to_s64(buffer, count, &val);
 	if (rc)
 		return rc;
+	if (val < 0)
+		return -ERANGE;
 
-	lod_fix_desc_pattern(&val);
-	lod->lod_desc.ld_pattern = val;
+	pattern = val;
+	lod_fix_desc_pattern(&pattern);
+	lod->lod_desc.ld_pattern = pattern;
+
 	return count;
 }
 LPROC_SEQ_FOPS(lod_stripetype);
@@ -251,19 +263,25 @@ static ssize_t
 lod_stripecount_seq_write(struct file *file, const char __user *buffer,
 			  size_t count, loff_t *off)
 {
-	struct seq_file   *m = file->private_data;
+	struct seq_file *m = file->private_data;
 	struct obd_device *dev = m->private;
 	struct lod_device *lod;
-	int val, rc;
+	int rc;
+	__s64 val;
+	__u32 stripe_count;
 
 	LASSERT(dev != NULL);
 	lod  = lu2lod_dev(dev->obd_lu_dev);
-	rc = lprocfs_write_helper(buffer, count, &val);
+	rc = lprocfs_str_to_s64(buffer, count, &val);
 	if (rc)
 		return rc;
+	if (val < 0)
+		return -ERANGE;
 
-	lod_fix_desc_stripe_count(&val);
-	lod->lod_desc.ld_default_stripe_count = val;
+	stripe_count = val;
+	lod_fix_desc_stripe_count(&stripe_count);
+	lod->lod_desc.ld_default_stripe_count = stripe_count;
+
 	return count;
 }
 LPROC_SEQ_FOPS(lod_stripecount);
@@ -376,23 +394,25 @@ static ssize_t
 lod_qos_priofree_seq_write(struct file *file, const char __user *buffer,
 			   size_t count, loff_t *off)
 {
-	struct seq_file   *m = file->private_data;
+	struct seq_file *m = file->private_data;
 	struct obd_device *dev = m->private;
 	struct lod_device *lod;
-	int val, rc;
+	int rc;
+	__s64 val;
 
 	LASSERT(dev != NULL);
 	lod = lu2lod_dev(dev->obd_lu_dev);
 
-	rc = lprocfs_write_helper(buffer, count, &val);
+	rc = lprocfs_str_to_s64(buffer, count, &val);
 	if (rc)
 		return rc;
 
-	if (val > 100)
+	if (val < 0 || val > 100)
 		return -EINVAL;
 	lod->lod_qos.lq_prio_free = (val << 8) / 100;
 	lod->lod_qos.lq_dirty = 1;
 	lod->lod_qos.lq_reset = 1;
+
 	return count;
 }
 LPROC_SEQ_FOPS(lod_qos_priofree);
@@ -439,15 +459,16 @@ static ssize_t
 lod_qos_thresholdrr_seq_write(struct file *file, const char __user *buffer,
 			      size_t count, loff_t *off)
 {
-	struct seq_file   *m = file->private_data;
+	struct seq_file *m = file->private_data;
 	struct obd_device *dev = m->private;
 	struct lod_device *lod;
-	int val, rc;
+	int rc;
+	__s64 val;
 
 	LASSERT(dev != NULL);
 	lod = lu2lod_dev(dev->obd_lu_dev);
 
-	rc = lprocfs_write_helper(buffer, count, &val);
+	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, '%');
 	if (rc)
 		return rc;
 
@@ -456,6 +477,7 @@ lod_qos_thresholdrr_seq_write(struct file *file, const char __user *buffer,
 
 	lod->lod_qos.lq_threshold_rr = (val << 8) / 100;
 	lod->lod_qos.lq_dirty = 1;
+
 	return count;
 }
 LPROC_SEQ_FOPS(lod_qos_thresholdrr);
@@ -496,20 +518,21 @@ static ssize_t
 lod_qos_maxage_seq_write(struct file *file, const char __user *buffer,
 			 size_t count, loff_t *off)
 {
-	struct seq_file		*m = file->private_data;
-	struct obd_device	*dev = m->private;
-	struct lustre_cfg_bufs	 bufs;
-	struct lod_device	*lod;
-	struct lu_device	*next;
-	struct lustre_cfg	*lcfg;
-	char			 str[32];
-	unsigned int		 i;
-	int			 val, rc;
+	struct seq_file *m = file->private_data;
+	struct obd_device *dev = m->private;
+	struct lustre_cfg_bufs bufs;
+	struct lod_device *lod;
+	struct lu_device *next;
+	struct lustre_cfg *lcfg;
+	char str[32];
+	unsigned int i;
+	int rc;
+	__s64 val;
 
 	LASSERT(dev != NULL);
 	lod = lu2lod_dev(dev->obd_lu_dev);
 
-	rc = lprocfs_write_helper(buffer, count, &val);
+	rc = lprocfs_str_to_s64(buffer, count, &val);
 	if (rc)
 		return rc;
 
@@ -521,7 +544,7 @@ lod_qos_maxage_seq_write(struct file *file, const char __user *buffer,
 	 * propogate the value down to OSPs
 	 */
 	lustre_cfg_bufs_reset(&bufs, NULL);
-	sprintf(str, "%smaxage=%d", PARAM_OSP, val);
+	snprintf(str, 32, "%smaxage=%u", PARAM_OSP, (__u32)val);
 	lustre_cfg_bufs_set_string(&bufs, 1, str);
 	lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
 	if (lcfg == NULL)
@@ -698,23 +721,20 @@ static ssize_t
 lod_lmv_failout_seq_write(struct file *file, const char __user *buffer,
 			  size_t count, loff_t *off)
 {
-	struct seq_file		*m	= file->private_data;
-	struct obd_device	*dev	= m->private;
-	struct lod_device	*lod;
-	int			 val	= 0;
-	int			 rc;
+	struct seq_file *m = file->private_data;
+	struct obd_device *dev = m->private;
+	struct lod_device *lod;
+	__s64 val = 0;
+	int rc;
 
 	LASSERT(dev != NULL);
 	lod = lu2lod_dev(dev->obd_lu_dev);
 
-	rc = lprocfs_write_helper(buffer, count, &val);
-	if (rc != 0)
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
 		return rc;
 
-	if (val != 0)
-		lod->lod_lmv_failout = 1;
-	else
-		lod->lod_lmv_failout = 0;
+	lod->lod_lmv_failout = !!val;
 
 	return count;
 }

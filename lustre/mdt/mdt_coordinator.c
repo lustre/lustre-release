@@ -1855,14 +1855,14 @@ mdt_hsm_##VAR##_seq_write(struct file *file, const char __user *buffer,	\
 	struct seq_file		*m = file->private_data;		\
 	struct mdt_device	*mdt = m->private;			\
 	struct coordinator	*cdt = &mdt->mdt_coordinator;		\
-	int			 val;					\
+	__s64			 val;					\
 	int			 rc;					\
 	ENTRY;								\
 									\
-	rc = lprocfs_write_helper(buffer, count, &val);			\
+	rc = lprocfs_str_to_s64(buffer, count, &val);			\
 	if (rc)								\
 		RETURN(rc);						\
-	if (val > 0) {							\
+	if (val > 0 && val < INT_MAX) {					\
 		cdt->VAR = val;						\
 		RETURN(count);						\
 	}								\

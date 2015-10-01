@@ -96,23 +96,24 @@ static ssize_t seq_watermark_write(struct file *file,
 				   const char __user *buffer, size_t count,
 				   loff_t *off)
 {
+	__s64 value;
 	__u64 watermark;
 	__u64 *data = ((struct seq_file *)file->private_data)->private;
 	bool wm_low = (data == &ldlm_reclaim_threshold_mb) ? true : false;
 	int rc;
 
-	rc = lprocfs_write_frac_u64_helper(buffer, count, &watermark, 1 << 20);
+	rc = lprocfs_str_with_units_to_s64(buffer, count, &value, 'M');
 	if (rc) {
 		CERROR("Failed to set %s, rc = %d.\n",
 		       wm_low ? "lock_reclaim_threshold_mb" : "lock_limit_mb",
 		       rc);
 		return rc;
-	} else if (watermark != 0 && watermark < (1 << 20)) {
+	} else if (value != 0 && value < (1 << 20)) {
 		CERROR("%s should be greater than 1MB.\n",
 		       wm_low ? "lock_reclaim_threshold_mb" : "lock_limit_mb");
 		return -EINVAL;
 	}
-	watermark >>= 20;
+	watermark = value >> 20;
 
 	if (wm_low) {
 		if (ldlm_lock_limit_mb != 0 && watermark > ldlm_lock_limit_mb) {

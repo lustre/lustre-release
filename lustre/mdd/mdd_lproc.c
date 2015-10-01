@@ -244,15 +244,17 @@ mdd_sync_perm_seq_write(struct file *file, const char __user *buffer,
 {
 	struct seq_file *m = file->private_data;
 	struct mdd_device *mdd = m->private;
-        int val, rc;
+	int rc;
+	__s64 val;
 
-        LASSERT(mdd != NULL);
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
+	LASSERT(mdd != NULL);
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
+		return rc;
 
-        mdd->mdd_sync_permission = !!val;
-        return count;
+	mdd->mdd_sync_permission = !!val;
+
+	return count;
 }
 LPROC_SEQ_FOPS(mdd_sync_perm);
 
@@ -270,13 +272,15 @@ mdd_lfsck_speed_limit_seq_write(struct file *file, const char __user *buffer,
 {
 	struct seq_file *m = file->private_data;
 	struct mdd_device *mdd = m->private;
-	__u32 val;
+	__s64 val;
 	int rc;
 
 	LASSERT(mdd != NULL);
-	rc = lprocfs_write_helper(buffer, count, &val);
+	rc = lprocfs_str_to_s64(buffer, count, &val);
 	if (rc != 0)
 		return rc;
+	if (val < 0 || val > INT_MAX)
+		return -ERANGE;
 
 	rc = lfsck_set_speed(mdd->mdd_bottom, val);
 	return rc != 0 ? rc : count;
@@ -297,13 +301,17 @@ mdd_lfsck_async_windows_seq_write(struct file *file, const char __user *buffer,
 {
 	struct seq_file   *m = file->private_data;
 	struct mdd_device *mdd = m->private;
-	__u32		   val;
+	__s64		   val;
 	int		   rc;
 
 	LASSERT(mdd != NULL);
-	rc = lprocfs_write_helper(buffer, count, &val);
-	if (rc == 0)
-		rc = lfsck_set_windows(mdd->mdd_bottom, val);
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
+		return rc;
+	if (val < 0 || val > INT_MAX)
+		return -ERANGE;
+
+	rc = lfsck_set_windows(mdd->mdd_bottom, val);
 
 	return rc != 0 ? rc : count;
 }

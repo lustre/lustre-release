@@ -58,10 +58,11 @@ static ssize_t mdc_active_seq_write(struct file *file,
 				    size_t count, loff_t *off)
 {
 	struct obd_device *dev;
-	int val, rc;
+	int rc;
+	__s64 val;
 
 	dev = ((struct seq_file *)file->private_data)->private;
-	rc = lprocfs_write_helper(buffer, count, &val);
+	rc = lprocfs_str_to_s64(buffer, count, &val);
 	if (rc)
 		return rc;
 	if (val < 0 || val > 1)
@@ -71,7 +72,8 @@ static ssize_t mdc_active_seq_write(struct file *file,
 	if (dev->u.cli.cl_import->imp_deactive == val)
 		rc = ptlrpc_set_import_active(dev->u.cli.cl_import, val);
 	else
-		CDEBUG(D_CONFIG, "activate %d: ignoring repeat request\n", val);
+		CDEBUG(D_CONFIG, "activate "LPD64": ignoring repeat request\n",
+		       val);
 
 	return count;
 }
@@ -94,15 +96,19 @@ static ssize_t mdc_max_rpcs_in_flight_seq_write(struct file *file,
 						loff_t *off)
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
-	int val;
+	__s64 val;
 	int rc;
 
-	rc = lprocfs_write_helper(buffer, count, &val);
-	if (rc == 0)
-		rc = obd_set_max_rpcs_in_flight(&dev->u.cli, val);
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
+		return rc;
 
-	if (rc != 0)
-		count = rc;
+	if (val < 0 || val > UINT_MAX)
+		return -ERANGE;
+
+	rc = obd_set_max_rpcs_in_flight(&dev->u.cli, val);
+	if (rc)
+		return rc;
 
 	return count;
 }
@@ -127,18 +133,18 @@ static ssize_t mdc_max_mod_rpcs_in_flight_seq_write(struct file *file,
 {
 	struct obd_device *dev =
 			((struct seq_file *)file->private_data)->private;
-	int val;
+	__s64 val;
 	int rc;
 
-	rc = lprocfs_write_helper(buffer, count, &val);
-	if (rc != 0)
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
 		return rc;
 
 	if (val < 0 || val > USHRT_MAX)
 		return -ERANGE;
 
 	rc = obd_set_max_mod_rpcs_in_flight(&dev->u.cli, val);
-	if (rc != 0)
+	if (rc)
 		count = rc;
 
 	return count;

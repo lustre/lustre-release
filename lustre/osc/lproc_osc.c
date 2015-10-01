@@ -59,21 +59,23 @@ static ssize_t osc_active_seq_write(struct file *file,
 				    size_t count, loff_t *off)
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
-	int val, rc;
+	int rc;
+	__s64 val;
 
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-        if (val < 0 || val > 1)
-                return -ERANGE;
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
+		return rc;
+	if (val < 0 || val > 1)
+		return -ERANGE;
 
-        /* opposite senses */
-        if (dev->u.cli.cl_import->imp_deactive == val)
-                rc = ptlrpc_set_import_active(dev->u.cli.cl_import, val);
-        else
-                CDEBUG(D_CONFIG, "activate %d: ignoring repeat request\n", val);
+	/* opposite senses */
+	if (dev->u.cli.cl_import->imp_deactive == val)
+		rc = ptlrpc_set_import_active(dev->u.cli.cl_import, val);
+	else
+		CDEBUG(D_CONFIG, "activate %d: ignoring repeat request\n",
+			(int)val);
 
-        return count;
+	return count;
 }
 LPROC_SEQ_FOPS(osc_active);
 
@@ -93,20 +95,20 @@ static ssize_t osc_max_rpcs_in_flight_seq_write(struct file *file,
 						size_t count, loff_t *off)
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
-        struct client_obd *cli = &dev->u.cli;
-        int val, rc;
+	struct client_obd *cli = &dev->u.cli;
+	int rc;
 	int adding, added, req_count;
+	__s64 val;
 
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
+		return rc;
+	if (val < 1 || val > OSC_MAX_RIF_MAX)
+		return -ERANGE;
 
-        if (val < 1 || val > OSC_MAX_RIF_MAX)
-                return -ERANGE;
+	LPROCFS_CLIMP_CHECK(dev);
 
-        LPROCFS_CLIMP_CHECK(dev);
-
-	adding = val - cli->cl_max_rpcs_in_flight;
+	adding = (int)val - cli->cl_max_rpcs_in_flight;
 	req_count = atomic_read(&osc_pool_req_count);
 	if (adding > 0 && req_count < osc_reqpool_maxreqcount) {
 		/*
@@ -151,12 +153,14 @@ static ssize_t osc_max_dirty_mb_seq_write(struct file *file,
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
 	struct client_obd *cli = &dev->u.cli;
-	int pages_number, mult, rc;
+	int rc;
+	__s64 pages_number;
 
-	mult = 1 << (20 - PAGE_CACHE_SHIFT);
-	rc = lprocfs_write_frac_helper(buffer, count, &pages_number, mult);
+	rc = lprocfs_str_with_units_to_s64(buffer, count, &pages_number, 'M');
 	if (rc)
 		return rc;
+
+	pages_number >>= PAGE_CACHE_SHIFT;
 
 	if (pages_number <= 0 ||
 	    pages_number >= OSC_MAX_DIRTY_MB_MAX << (20 - PAGE_CACHE_SHIFT) ||
@@ -196,10 +200,8 @@ osc_cached_mb_seq_write(struct file *file, const char __user *buffer,
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
 	struct client_obd *cli = &dev->u.cli;
-	__u64 val;
-	long pages_number;
+	__s64 pages_number;
 	long rc;
-	int mult;
 	char kernbuf[128];
 
 	if (count >= sizeof(kernbuf))
@@ -209,17 +211,13 @@ osc_cached_mb_seq_write(struct file *file, const char __user *buffer,
 		return -EFAULT;
 	kernbuf[count] = 0;
 
-	mult = 1 << (20 - PAGE_CACHE_SHIFT);
 	buffer += lprocfs_find_named_value(kernbuf, "used_mb:", &count) -
 		  kernbuf;
-	rc = lprocfs_write_frac_u64_helper(buffer, count, &val, mult);
-
+	rc = lprocfs_str_with_units_to_s64(buffer, count, &pages_number, 'M');
 	if (rc)
 		return rc;
 
-	if (val > LONG_MAX)
-		return -ERANGE;
-	pages_number = (long)val;
+	pages_number >>= PAGE_CACHE_SHIFT;
 
 	if (pages_number < 0)
 		return -ERANGE;
@@ -268,18 +266,20 @@ static ssize_t osc_cur_grant_bytes_seq_write(struct file *file,
 					     size_t count, loff_t *off)
 {
 	struct obd_device *obd = ((struct seq_file *)file->private_data)->private;
-        struct client_obd *cli = &obd->u.cli;
-        int                rc;
-        __u64              val;
+	struct client_obd *cli = &obd->u.cli;
+	int                rc;
+	__s64              val;
 
-        if (obd == NULL)
-                return 0;
+	if (obd == NULL)
+		return 0;
 
-        rc = lprocfs_write_u64_helper(buffer, count, &val);
-        if (rc)
-                return rc;
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
+		return rc;
+	if (val < 0)
+		return -ERANGE;
 
-        /* this is only for shrinking grant */
+	/* this is only for shrinking grant */
 	spin_lock(&cli->cl_loi_list_lock);
 	if (val >= cli->cl_avail_grant) {
 		spin_unlock(&cli->cl_loi_list_lock);
@@ -288,13 +288,13 @@ static ssize_t osc_cur_grant_bytes_seq_write(struct file *file,
 
 	spin_unlock(&cli->cl_loi_list_lock);
 
-        LPROCFS_CLIMP_CHECK(obd);
-        if (cli->cl_import->imp_state == LUSTRE_IMP_FULL)
-                rc = osc_shrink_grant_to_target(cli, val);
-        LPROCFS_CLIMP_EXIT(obd);
-        if (rc)
-                return rc;
-        return count;
+	LPROCFS_CLIMP_CHECK(obd);
+	if (cli->cl_import->imp_state == LUSTRE_IMP_FULL)
+		rc = osc_shrink_grant_to_target(cli, val);
+	LPROCFS_CLIMP_EXIT(obd);
+	if (rc)
+		return rc;
+	return count;
 }
 LPROC_SEQ_FOPS(osc_cur_grant_bytes);
 
@@ -338,21 +338,22 @@ static ssize_t osc_grant_shrink_interval_seq_write(struct file *file,
 						   size_t count, loff_t *off)
 {
 	struct obd_device *obd = ((struct seq_file *)file->private_data)->private;
-	int val, rc;
+	int rc;
+	__s64 val;
 
 	if (obd == NULL)
 		return 0;
 
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
+		return rc;
 
-        if (val <= 0)
-                return -ERANGE;
+	if (val <= 0 || val > INT_MAX)
+		return -ERANGE;
 
-        obd->u.cli.cl_grant_shrink_interval = val;
+	obd->u.cli.cl_grant_shrink_interval = val;
 
-        return count;
+	return count;
 }
 LPROC_SEQ_FOPS(osc_grant_shrink_interval);
 
@@ -372,18 +373,19 @@ static ssize_t osc_checksum_seq_write(struct file *file,
 				      size_t count, loff_t *off)
 {
 	struct obd_device *obd = ((struct seq_file *)file->private_data)->private;
-	int val, rc;
+	int rc;
+	__s64 val;
 
-        if (obd == NULL)
-                return 0;
+	if (obd == NULL)
+		return 0;
 
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
+		return rc;
 
-        obd->u.cli.cl_checksum = (val ? 1 : 0);
+	obd->u.cli.cl_checksum = !!val;
 
-        return count;
+	return count;
 }
 LPROC_SEQ_FOPS(osc_checksum);
 
@@ -454,13 +456,14 @@ static ssize_t osc_resend_count_seq_write(struct file *file,
 					  size_t count, loff_t *off)
 {
 	struct obd_device *obd = ((struct seq_file *)file->private_data)->private;
-	int val, rc;
+	int rc;
+	__s64 val;
 
-	rc = lprocfs_write_helper(buffer, count, &val);
+	rc = lprocfs_str_to_s64(buffer, count, &val);
 	if (rc)
 		return rc;
 
-	if (val < 0)
+	if (val < 0 || val > INT_MAX)
 		return -EINVAL;
 
 	atomic_set(&obd->u.cli.cl_resends, val);
@@ -484,8 +487,18 @@ static ssize_t osc_contention_seconds_seq_write(struct file *file,
 {
 	struct obd_device *obd = ((struct seq_file *)file->private_data)->private;
 	struct osc_device *od  = obd2osc_dev(obd);
+	int rc;
+	__s64 val;
 
-	return lprocfs_write_helper(buffer, count, &od->od_contention_time) ?: count;
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
+		return rc;
+	if (val < 0 || val > INT_MAX)
+		return -ERANGE;
+
+	od->od_contention_time = val;
+
+	return count;
 }
 LPROC_SEQ_FOPS(osc_contention_seconds);
 
@@ -504,9 +517,18 @@ static ssize_t osc_lockless_truncate_seq_write(struct file *file,
 {
 	struct obd_device *obd = ((struct seq_file *)file->private_data)->private;
         struct osc_device *od  = obd2osc_dev(obd);
+	int rc;
+	__s64 val;
 
-        return lprocfs_write_helper(buffer, count, &od->od_lockless_truncate) ?:
-                count;
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
+		return rc;
+	if (val < 0)
+		return -ERANGE;
+
+	od->od_lockless_truncate = !!val;
+
+	return count;
 }
 LPROC_SEQ_FOPS(osc_lockless_truncate);
 
@@ -532,11 +554,13 @@ static ssize_t osc_obd_max_pages_per_rpc_seq_write(struct file *file,
 	struct client_obd *cli = &dev->u.cli;
 	struct obd_connect_data *ocd = &cli->cl_import->imp_connect_data;
 	int chunk_mask, rc;
-	__u64 val;
+	__s64 val;
 
-	rc = lprocfs_write_u64_helper(buffer, count, &val);
+	rc = lprocfs_str_to_s64(buffer, count, &val);
 	if (rc)
 		return rc;
+	if (val < 0)
+		return -ERANGE;
 
 	/* if the max_pages is specified in bytes, convert to pages */
 	if (val >= ONE_MB_BRW_SIZE)

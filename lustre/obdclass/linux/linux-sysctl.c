@@ -124,7 +124,7 @@ static int
 proc_max_dirty_pages_in_mb(struct ctl_table *table, int write,
 			   void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	__u64 val;
+	__s64 val;
 	int rc = 0;
 
 	if (!table->data || !table->maxlen || !*lenp || (*ppos && !write)) {
@@ -132,13 +132,19 @@ proc_max_dirty_pages_in_mb(struct ctl_table *table, int write,
 		return 0;
 	}
 	if (write) {
-		rc = lprocfs_write_frac_u64_helper(buffer, *lenp, &val,
-					       1 << (20 - PAGE_CACHE_SHIFT));
+		rc = lprocfs_str_with_units_to_s64(buffer, *lenp, &val, 'M');
+		if (rc)
+			return rc;
+
+		if (val < 0)
+			return -ERANGE;
+
+		val >>= PAGE_CACHE_SHIFT;
 
 		/* Don't allow them to let dirty pages exceed 90% of system
 		 * memory and set a hard minimum of 4MB. */
 		if (val > ((totalram_pages / 10) * 9)) {
-			CERROR("Refusing to set max dirty pages to "LPU64", "
+			CERROR("Refusing to set max dirty pages to "LPD64", "
 			       "which is more than 90%% of available RAM; "
 			       "setting to %lu\n", val,
 			       ((totalram_pages / 10) * 9));
