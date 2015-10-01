@@ -1768,6 +1768,25 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_NFS_FILLDIR_USE_CTX
 
 #
+# LC_PERCPU_COUNTER_INIT
+#
+# 3.18	For kernels 3.18 and after percpu_counter_init starts
+#	to pass a GFP_* memory allocation flag for internal
+#	memory allocation purposes.
+#
+AC_DEFUN([LC_PERCPU_COUNTER_INIT], [
+LB_CHECK_COMPILE([if percpu_counter_init uses GFP_* flag as argument],
+percpu_counter_init, [
+	#include <linux/percpu_counter.h>
+],[
+	percpu_counter_init(NULL, 0, GFP_KERNEL);
+],[
+	AC_DEFINE(HAVE_PERCPU_COUNTER_INIT_GFP_FLAG, 1,
+		[percpu_counter_init uses GFP_* flag])
+])
+]) # LC_PERCPU_COUNTER_INIT
+
+#
 # LC_KIOCB_HAS_NBYTES
 #
 # 3.19 kernel removed ki_nbytes from struct kiocb
@@ -2067,6 +2086,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_KEY_MATCH_DATA
 
 	# 3.18
+	LC_PERCPU_COUNTER_INIT
 	LC_NFS_FILLDIR_USE_CTX
 
 	# 3.19
