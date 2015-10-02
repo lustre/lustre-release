@@ -1732,7 +1732,12 @@ got:
 	return bh;
 
 newblock:
-	bh = osd_ldiskfs_append(h, inode, b, e);
+	bh = osd_ldiskfs_append(h, inode, b);
+	if (IS_ERR(bh)) {
+		*e = PTR_ERR(bh);
+		bh = NULL;
+	}
+
 	return bh;
 
 fail:

@@ -1017,22 +1017,31 @@ int iam_lvar_create(struct inode *obj,
 
         sb = obj->i_sb;
         bsize = sb->s_blocksize;
-        root_node = osd_ldiskfs_append(handle, obj, &blknr, &result);
-        leaf_node = osd_ldiskfs_append(handle, obj, &blknr, &result);
-        if (root_node != NULL && leaf_node != NULL) {
-                lvar_root(root_node->b_data, bsize, keysize, ptrsize, recsize);
-                lvar_leaf(leaf_node->b_data, bsize, keysize, ptrsize, recsize);
-                ldiskfs_mark_inode_dirty(handle, obj);
-		result = ldiskfs_handle_dirty_metadata(handle, NULL, root_node);
-		if (result == 0)
-			result = ldiskfs_handle_dirty_metadata(handle, NULL,
-							       leaf_node);
-                if (result != 0)
-                        ldiskfs_std_error(sb, result);
-        }
-        brelse(leaf_node);
-        brelse(root_node);
-        return result;
+	root_node = osd_ldiskfs_append(handle, obj, &blknr);
+	if (IS_ERR(root_node))
+		GOTO(out, result = PTR_ERR(root_node));
+
+	leaf_node = osd_ldiskfs_append(handle, obj, &blknr);
+	if (IS_ERR(leaf_node))
+		GOTO(out_root, result = PTR_ERR(leaf_node));
+
+	lvar_root(root_node->b_data, bsize, keysize, ptrsize, recsize);
+	lvar_leaf(leaf_node->b_data, bsize, keysize, ptrsize, recsize);
+	ldiskfs_mark_inode_dirty(handle, obj);
+	result = ldiskfs_handle_dirty_metadata(handle, NULL, root_node);
+	if (result == 0)
+		result = ldiskfs_handle_dirty_metadata(handle, NULL, leaf_node);
+	if (result != 0)
+		ldiskfs_std_error(sb, result);
+
+	brelse(leaf_node);
+
+	GOTO(out_root, result);
+
+out_root:
+	brelse(root_node);
+out:
+	return result;
 }
 
 static struct iam_operations lvar_ops = {

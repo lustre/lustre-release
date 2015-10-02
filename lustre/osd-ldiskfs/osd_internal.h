@@ -765,7 +765,7 @@ static inline void i_gid_write(struct inode *inode, gid_t gid)
 #ifdef LDISKFS_HT_MISC
 # define osd_journal_start_sb(sb, type, nblock) \
 		ldiskfs_journal_start_sb(sb, type, nblock)
-# define osd_ldiskfs_append(handle, inode, nblock, err) \
+# define osd_ldiskfs_append(handle, inode, nblock) \
 		ldiskfs_append(handle, inode, nblock)
 # define osd_ldiskfs_find_entry(dir, name, de, inlined, lock) \
 		__ldiskfs_find_entry(dir, name, de, inlined, lock)
@@ -777,8 +777,21 @@ static inline void i_gid_write(struct inode *inode, gid_t gid)
 # define LDISKFS_HT_MISC	0
 # define osd_journal_start_sb(sb, type, nblock) \
 		ldiskfs_journal_start_sb(sb, nblock)
-# define osd_ldiskfs_append(handle, inode, nblock, err) \
-		ldiskfs_append(handle, inode, nblock, err)
+
+static inline struct buffer_head *osd_ldiskfs_append(handle_t *handle,
+						     struct inode *inode,
+						     ldiskfs_lblk_t *nblock)
+{
+	struct buffer_head *bh;
+	int err = 0;
+
+	bh = ldiskfs_append(handle, inode, nblock, &err);
+	if (bh == NULL)
+		bh = ERR_PTR(err);
+
+	return bh;
+}
+
 # define osd_ldiskfs_find_entry(dir, name, de, inlined, lock) \
 		__ldiskfs_find_entry(dir, name, de, lock)
 # define osd_journal_start(inode, type, nblocks) \
