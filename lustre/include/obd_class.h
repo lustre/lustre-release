@@ -433,77 +433,74 @@ do {                                                            \
 
 static inline int lprocfs_nid_ldlm_stats_init(struct nid_stat* tmp)
 {
-        /* Always add in ldlm_stats */
-        tmp->nid_ldlm_stats = lprocfs_alloc_stats(LDLM_LAST_OPC - LDLM_FIRST_OPC
-                                                  ,LPROCFS_STATS_FLAG_NOPERCPU);
-        if (tmp->nid_ldlm_stats == NULL)
-                return -ENOMEM;
+	/* Always add in ldlm_stats */
+	tmp->nid_ldlm_stats =
+		lprocfs_alloc_stats(LDLM_LAST_OPC - LDLM_FIRST_OPC,
+				    LPROCFS_STATS_FLAG_NOPERCPU);
+	if (tmp->nid_ldlm_stats == NULL)
+		return -ENOMEM;
 
-        lprocfs_init_ldlm_stats(tmp->nid_ldlm_stats);
+	lprocfs_init_ldlm_stats(tmp->nid_ldlm_stats);
 
-        return lprocfs_register_stats(tmp->nid_proc, "ldlm_stats",
-                                      tmp->nid_ldlm_stats);
+	return lprocfs_register_stats(tmp->nid_proc, "ldlm_stats",
+				      tmp->nid_ldlm_stats);
 }
 
-#define EXP_CHECK_MD_OP(exp, op)                                \
-do {                                                            \
-        if ((exp) == NULL) {                                    \
-                CERROR("obd_" #op ": NULL export\n");           \
-                RETURN(-ENODEV);                                \
-        }                                                       \
-        if ((exp)->exp_obd == NULL || !OBT((exp)->exp_obd)) {   \
-                CERROR("obd_" #op ": cleaned up obd\n");        \
-                RETURN(-EOPNOTSUPP);                            \
-        }                                                       \
-        if (!OBT((exp)->exp_obd) || !MDP((exp)->exp_obd, op)) { \
-                CERROR("obd_" #op ": dev %s/%d no operation\n", \
-                       (exp)->exp_obd->obd_name,                \
-                       (exp)->exp_obd->obd_minor);              \
-                RETURN(-EOPNOTSUPP);                            \
-        }                                                       \
+#define EXP_CHECK_MD_OP(exp, op)					\
+do {									\
+	if ((exp) == NULL) {						\
+		CERROR("obd_" #op ": NULL export\n");			\
+		RETURN(-ENODEV);					\
+	}								\
+	if ((exp)->exp_obd == NULL || !OBT((exp)->exp_obd)) {		\
+		CERROR("obd_" #op ": cleaned up obd\n");		\
+		RETURN(-EOPNOTSUPP);					\
+	}								\
+	if (!OBT((exp)->exp_obd) || !MDP((exp)->exp_obd, op)) {		\
+		CERROR("%s: obd_" #op ": dev %d no operation\n",	\
+		       (exp)->exp_obd->obd_name,			\
+		       (exp)->exp_obd->obd_minor);			\
+		RETURN(-EOPNOTSUPP);					\
+	}								\
 } while (0)
 
 
-#define OBD_CHECK_DT_OP(obd, op, err)                           \
-do {                                                            \
-        if (!OBT(obd) || !OBP((obd), op)) {                     \
-                if (err)                                        \
-                        CERROR("obd_" #op ": dev %d no operation\n",    \
-                               obd->obd_minor);                 \
-                RETURN(err);                                    \
-        }                                                       \
+#define OBD_CHECK_DT_OP(obd, op, err)					\
+do {									\
+	if (!OBT(obd) || !OBP((obd), op)) {				\
+		if (err)						\
+			CERROR("%s: no obd_" #op " operation\n",	\
+			       obd->obd_name);				\
+		RETURN(err);						\
+	}								\
 } while (0)
 
-#define EXP_CHECK_DT_OP(exp, op)                                \
-do {                                                            \
-        if ((exp) == NULL) {                                    \
-                CERROR("obd_" #op ": NULL export\n");           \
-                RETURN(-ENODEV);                                \
-        }                                                       \
-        if ((exp)->exp_obd == NULL || !OBT((exp)->exp_obd)) {   \
-                CERROR("obd_" #op ": cleaned up obd\n");        \
-                RETURN(-EOPNOTSUPP);                            \
-        }                                                       \
-        if (!OBT((exp)->exp_obd) || !OBP((exp)->exp_obd, op)) { \
-                CERROR("obd_" #op ": dev %d no operation\n",    \
-                       (exp)->exp_obd->obd_minor);              \
-                RETURN(-EOPNOTSUPP);                            \
-        }                                                       \
+#define EXP_CHECK_DT_OP(exp, op)					\
+do {									\
+	if ((exp) == NULL) {						\
+		CERROR("obd_" #op ": NULL export\n");			\
+		RETURN(-ENODEV);					\
+	}								\
+	if ((exp)->exp_obd == NULL || !OBT((exp)->exp_obd)) {		\
+		CERROR("obd_" #op ": cleaned up obd\n");		\
+		RETURN(-EOPNOTSUPP);					\
+	}								\
+	OBD_CHECK_DT_OP((exp)->exp_obd, op, -EOPNOTSUPP);		\
 } while (0)
 
-#define CTXT_CHECK_OP(ctxt, op, err)                                 \
-do {                                                                 \
-        if (!OBT(ctxt->loc_obd) || !CTXTP((ctxt), op)) {             \
-                if (err)                                             \
-                        CERROR("lop_" #op ": dev %d no operation\n", \
-                               ctxt->loc_obd->obd_minor);            \
-                RETURN(err);                                         \
-        }                                                            \
+#define CTXT_CHECK_OP(ctxt, op, err)					\
+do {									\
+	if (!OBT(ctxt->loc_obd) || !CTXTP((ctxt), op)) {		\
+		if (err)						\
+			CERROR("%s: no lop_" #op "operation\n",		\
+			       ctxt->loc_obd->obd_name);		\
+		RETURN(err);						\
+	}								\
 } while (0)
 
 static inline int class_devno_max(void)
 {
-        return MAX_OBD_DEVICES;
+	return MAX_OBD_DEVICES;
 }
 
 static inline int obd_get_info(const struct lu_env *env, struct obd_export *exp,
