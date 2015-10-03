@@ -5445,11 +5445,13 @@ again:
 
 			if (jh == NULL) {
 				brelse(bh);
-				if (hlock != NULL)
-					ldiskfs_htree_unlock(hlock);
-				else
-					up_read(&obj->oo_ext_idx_sem);
 				dev->od_dirent_journal = 1;
+				if (hlock != NULL) {
+					ldiskfs_htree_unlock(hlock);
+					hlock = NULL;
+				} else {
+					up_read(&obj->oo_ext_idx_sem);
+				}
 
 				goto again;
 			}
@@ -5479,11 +5481,13 @@ again:
 
 			if (jh == NULL) {
 				brelse(bh);
-				if (hlock != NULL)
-					ldiskfs_htree_unlock(hlock);
-				else
-					up_read(&obj->oo_ext_idx_sem);
 				dev->od_dirent_journal = 1;
+				if (hlock != NULL) {
+					ldiskfs_htree_unlock(hlock);
+					hlock = NULL;
+				} else {
+					up_read(&obj->oo_ext_idx_sem);
+				}
 
 				goto again;
 			}
@@ -5519,11 +5523,13 @@ again:
 
 		if (jh == NULL) {
 			brelse(bh);
-			if (hlock != NULL)
-				ldiskfs_htree_unlock(hlock);
-			else
-				up_read(&obj->oo_ext_idx_sem);
 			dev->od_dirent_journal = 1;
+			if (hlock != NULL) {
+				ldiskfs_htree_unlock(hlock);
+				hlock = NULL;
+			} else {
+				up_read(&obj->oo_ext_idx_sem);
+			}
 
 			goto again;
 		}

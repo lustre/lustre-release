@@ -1490,7 +1490,7 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/namei.c
 +				   struct dx_entry *entries,
 +				   struct dx_entry *at, u32 hash)
 +{
-+	if (!(ext4_htree_lock_data(lck)->ld_flags & EXT4_LB_EXACT)) {
++	if (!(lck && ext4_htree_lock_data(lck)->ld_flags & EXT4_LB_EXACT)) {
 +		return DX_HASH_COL_IGNORE; /* don't care about collision */
 +
 +	} else if (at == entries + dx_get_count(entries) - 1) {
