@@ -2654,6 +2654,8 @@ static int osd_add_dot_dotdot_internal(struct osd_thread_info *info,
 {
 	struct ldiskfs_dentry_param *dot_ldp;
 	struct ldiskfs_dentry_param *dot_dot_ldp;
+	__u32 saved_nlink = dir->i_nlink;
+	int rc;
 
 	dot_dot_ldp = (struct ldiskfs_dentry_param *)info->oti_ldp2;
 	osd_get_ldiskfs_dirent_param(dot_dot_ldp, dot_dot_fid);
@@ -2661,8 +2663,23 @@ static int osd_add_dot_dotdot_internal(struct osd_thread_info *info,
 	dot_ldp = (struct ldiskfs_dentry_param *)info->oti_ldp;
 	dot_ldp->edp_magic = 0;
 
-	return ldiskfs_add_dot_dotdot(oth->ot_handle, parent_dir,
-				      dir, dot_ldp, dot_dot_ldp);
+	rc = ldiskfs_add_dot_dotdot(oth->ot_handle, parent_dir,
+				    dir, dot_ldp, dot_dot_ldp);
+	/* The ldiskfs_add_dot_dotdot() may dir->i_nlink as 2, then
+	 * the subseqent ref_add() will increase the dir->i_nlink
+	 * as 3. That is incorrect for new created directory.
+	 *
+	 * It looks like hack, because we want to make the OSD API
+	 * to be order-independent for new created directory object
+	 * between dt_insert(..) and ref_add() operations.
+	 *
+	 * Here, we only restore the in-RAM dir-inode's nlink attr,
+	 * becuase if the nlink attr is not 2, then there will be
+	 * ref_add() called following the dt_insert(..), such call
+	 * will make both the in-RAM and on-disk dir-inode's nlink
+	 * attr to be set as 2. LU-7447 */
+	set_nlink(dir, saved_nlink);
+	return rc;
 }
 
 /**

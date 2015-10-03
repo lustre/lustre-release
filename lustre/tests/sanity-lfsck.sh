@@ -109,6 +109,19 @@ lfsck_prep() {
 	echo "prepared $(date)."
 }
 
+run_e2fsck_on_mdt0() {
+	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] && return
+
+	stop $SINGLEMDS > /dev/null || error "(0) Fail to the stop MDT0"
+	run_e2fsck $(facet_active_host $SINGLEMDS) $(mdsdevname 1) "-n" |
+		grep "Fix? no" && {
+		run_e2fsck $(facet_active_host $SINGLEMDS) $(mdsdevname 1) "-n"
+		error "(2) Detected inconsistency on MDT0"
+	}
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
+		error "(3) Fail to start MDT0"
+}
+
 test_0() {
 	lfsck_prep 3 3
 
@@ -195,6 +208,8 @@ test_1a() {
 	[ $repaired -eq 1 ] ||
 		error "(5) Fail to repair crashed FID-in-dirent: $repaired"
 
+	run_e2fsck_on_mdt0
+
 	mount_client $MOUNT || error "(6) Fail to start client!"
 
 	#define OBD_FAIL_FID_LOOKUP	0x1505
@@ -239,6 +254,8 @@ test_1b()
 		error "(5) Fail to repair the missing FID-in-LMA: $repaired"
 
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	run_e2fsck_on_mdt0
+
 	mount_client $MOUNT || error "(6) Fail to start client!"
 
 	#define OBD_FAIL_FID_LOOKUP	0x1505
@@ -276,6 +293,8 @@ test_2a() {
 	[ $repaired -eq 1 ] ||
 		error "(5) Fail to repair crashed linkEA: $repaired"
 
+	run_e2fsck_on_mdt0
+
 	mount_client $MOUNT || error "(6) Fail to start client!"
 
 	stat $DIR/$tdir/dummy | grep "Links: 1" > /dev/null ||
@@ -310,6 +329,8 @@ test_2b()
 			 awk '/^updated_phase2/ { print $2 }')
 	[ $repaired -eq 1 ] ||
 		error "(5) Fail to repair crashed linkEA: $repaired"
+
+	run_e2fsck_on_mdt0
 
 	mount_client $MOUNT || error "(6) Fail to start client!"
 
@@ -346,6 +367,8 @@ test_2c()
 	[ $repaired -eq 1 ] ||
 		error "(5) Fail to repair crashed linkEA: $repaired"
 
+	run_e2fsck_on_mdt0
+
 	mount_client $MOUNT || error "(6) Fail to start client!"
 
 	stat $DIR/$tdir/dummy | grep "Links: 1" > /dev/null ||
@@ -380,6 +403,8 @@ test_2d()
 			 awk '/^linkea_repaired/ { print $2 }')
 	[ $repaired -eq 1 ] ||
 		error "(5) Fail to repair crashed linkEA: $repaired"
+
+	run_e2fsck_on_mdt0
 
 	mount_client $MOUNT || error "(6) Fail to start client!"
 
@@ -518,6 +543,8 @@ test_4()
 	[ $repaired -ge 9 ] ||
 		error "(9) Fail to re-generate FID-in-dirent: $repaired"
 
+	run_e2fsck_on_mdt0
+
 	mount_client $MOUNT || error "(10) Fail to start client!"
 
 	#define OBD_FAIL_FID_LOOKUP	0x1505
@@ -575,6 +602,8 @@ test_5()
 
 	[ $repaired -ge 2 ] ||
 		error "(9) Fail to generate FID-in-dirent for IGIF: $repaired"
+
+	run_e2fsck_on_mdt0
 
 	mount_client $MOUNT || error "(10) Fail to start client!"
 

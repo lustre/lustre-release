@@ -663,12 +663,30 @@ static int lfsck_create_lpf_local(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop, rc);
 
+	if (!dt_try_as_dir(env, child))
+		GOTO(stop, rc = -ENOTDIR);
+
 	/* 2a. increase child nlink */
 	rc = dt_declare_ref_add(env, child, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	/* 3a. insert linkEA for child */
+	/* 3a. insert dot into child dir */
+	rec->rec_type = S_IFDIR;
+	rec->rec_fid = cfid;
+	rc = dt_declare_insert(env, child, (const struct dt_rec *)rec,
+			       (const struct dt_key *)dot, th);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	/* 4a. insert dotdot into child dir */
+	rec->rec_fid = &LU_LPF_FID;
+	rc = dt_declare_insert(env, child, (const struct dt_rec *)rec,
+			       (const struct dt_key *)dotdot, th);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	/* 5a. insert linkEA for child */
 	lfsck_buf_init(&linkea_buf, ldata.ld_buf->lb_buf,
 		       ldata.ld_leh->leh_len);
 	rc = dt_declare_xattr_set(env, child, &linkea_buf,
@@ -676,7 +694,7 @@ static int lfsck_create_lpf_local(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	/* 4a. insert name into parent dir */
+	/* 6a. insert name into parent dir */
 	rec->rec_type = S_IFDIR;
 	rec->rec_fid = cfid;
 	rc = dt_declare_insert(env, parent, (const struct dt_rec *)rec,
@@ -684,12 +702,12 @@ static int lfsck_create_lpf_local(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	/* 5a. increase parent nlink */
+	/* 7a. increase parent nlink */
 	rc = dt_declare_ref_add(env, parent, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	/* 6a. update bookmark */
+	/* 8a. update bookmark */
 	rc = dt_declare_record_write(env, bk_obj,
 				     lfsck_buf_get(env, bk, len), 0, th);
 	if (rc != 0)
@@ -700,25 +718,8 @@ static int lfsck_create_lpf_local(const struct lu_env *env,
 		GOTO(stop, rc);
 
 	dt_write_lock(env, child, 0);
-	/* 1b.1. create child */
+	/* 1b. create child */
 	rc = dt_create(env, child, la, NULL, dof, th);
-	if (rc != 0)
-		GOTO(unlock, rc);
-
-	if (unlikely(!dt_try_as_dir(env, child)))
-		GOTO(unlock, rc = -ENOTDIR);
-
-	/* 1b.2. insert dot into child dir */
-	rec->rec_fid = cfid;
-	rc = dt_insert(env, child, (const struct dt_rec *)rec,
-		       (const struct dt_key *)dot, th, 1);
-	if (rc != 0)
-		GOTO(unlock, rc);
-
-	/* 1b.3. insert dotdot into child dir */
-	rec->rec_fid = &LU_LPF_FID;
-	rc = dt_insert(env, child, (const struct dt_rec *)rec,
-		       (const struct dt_key *)dotdot, th, 1);
 	if (rc != 0)
 		GOTO(unlock, rc);
 
@@ -727,14 +728,28 @@ static int lfsck_create_lpf_local(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(unlock, rc);
 
-	/* 3b. insert linkEA for child. */
+	/* 3b. insert dot into child dir */
+	rec->rec_fid = cfid;
+	rc = dt_insert(env, child, (const struct dt_rec *)rec,
+		       (const struct dt_key *)dot, th, 1);
+	if (rc != 0)
+		GOTO(unlock, rc);
+
+	/* 4b. insert dotdot into child dir */
+	rec->rec_fid = &LU_LPF_FID;
+	rc = dt_insert(env, child, (const struct dt_rec *)rec,
+		       (const struct dt_key *)dotdot, th, 1);
+	if (rc != 0)
+		GOTO(unlock, rc);
+
+	/* 5b. insert linkEA for child. */
 	rc = dt_xattr_set(env, child, &linkea_buf,
 			  XATTR_NAME_LINK, 0, th);
 	dt_write_unlock(env, child);
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	/* 4b. insert name into parent dir */
+	/* 6b. insert name into parent dir */
 	rec->rec_fid = cfid;
 	rc = dt_insert(env, parent, (const struct dt_rec *)rec,
 		       (const struct dt_key *)name, th, 1);
@@ -742,7 +757,7 @@ static int lfsck_create_lpf_local(const struct lu_env *env,
 		GOTO(stop, rc);
 
 	dt_write_lock(env, parent, 0);
-	/* 5b. increase parent nlink */
+	/* 7b. increase parent nlink */
 	rc = dt_ref_add(env, parent, th);
 	dt_write_unlock(env, parent);
 	if (rc != 0)
@@ -751,7 +766,7 @@ static int lfsck_create_lpf_local(const struct lu_env *env,
 	bk->lb_lpf_fid = *cfid;
 	lfsck_bookmark_cpu_to_le(&lfsck->li_bookmark_disk, bk);
 
-	/* 6b. update bookmark */
+	/* 8b. update bookmark */
 	rc = dt_record_write(env, bk_obj,
 			     lfsck_buf_get(env, bk, len), &pos, th);
 
@@ -830,12 +845,30 @@ static int lfsck_create_lpf_remote(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop, rc);
 
+	if (!dt_try_as_dir(env, child))
+		GOTO(stop, rc = -ENOTDIR);
+
 	/* 2a. increase child nlink */
 	rc = dt_declare_ref_add(env, child, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	/* 3a. insert linkEA for child */
+	/* 3a. insert dot into child dir */
+	rec->rec_type = S_IFDIR;
+	rec->rec_fid = cfid;
+	rc = dt_declare_insert(env, child, (const struct dt_rec *)rec,
+			       (const struct dt_key *)dot, th);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	/* 4a. insert dotdot into child dir */
+	rec->rec_fid = &LU_LPF_FID;
+	rc = dt_declare_insert(env, child, (const struct dt_rec *)rec,
+			       (const struct dt_key *)dotdot, th);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	/* 5a. insert linkEA for child */
 	lfsck_buf_init(&linkea_buf, ldata.ld_buf->lb_buf,
 		       ldata.ld_leh->leh_len);
 	rc = dt_declare_xattr_set(env, child, &linkea_buf,
@@ -843,7 +876,7 @@ static int lfsck_create_lpf_remote(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop, rc);
 
-	/* 4a. update bookmark */
+	/* 6a. update bookmark */
 	rc = dt_declare_record_write(env, bk_obj,
 				     lfsck_buf_get(env, bk, len), 0, th);
 	if (rc != 0)
@@ -854,26 +887,8 @@ static int lfsck_create_lpf_remote(const struct lu_env *env,
 		GOTO(stop, rc);
 
 	dt_write_lock(env, child, 0);
-	/* 1b.1. create child */
+	/* 1b. create child */
 	rc = dt_create(env, child, la, NULL, dof, th);
-	if (rc != 0)
-		GOTO(unlock, rc);
-
-	if (unlikely(!dt_try_as_dir(env, child)))
-		GOTO(unlock, rc = -ENOTDIR);
-
-	/* 1b.2. insert dot into child dir */
-	rec->rec_type = S_IFDIR;
-	rec->rec_fid = cfid;
-	rc = dt_insert(env, child, (const struct dt_rec *)rec,
-		       (const struct dt_key *)dot, th, 1);
-	if (rc != 0)
-		GOTO(unlock, rc);
-
-	/* 1b.3. insert dotdot into child dir */
-	rec->rec_fid = &LU_LPF_FID;
-	rc = dt_insert(env, child, (const struct dt_rec *)rec,
-		       (const struct dt_key *)dotdot, th, 1);
 	if (rc != 0)
 		GOTO(unlock, rc);
 
@@ -882,7 +897,22 @@ static int lfsck_create_lpf_remote(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(unlock, rc);
 
-	/* 3b. insert linkEA for child */
+	/* 3b. insert dot into child dir */
+	rec->rec_type = S_IFDIR;
+	rec->rec_fid = cfid;
+	rc = dt_insert(env, child, (const struct dt_rec *)rec,
+		       (const struct dt_key *)dot, th, 1);
+	if (rc != 0)
+		GOTO(unlock, rc);
+
+	/* 4b. insert dotdot into child dir */
+	rec->rec_fid = &LU_LPF_FID;
+	rc = dt_insert(env, child, (const struct dt_rec *)rec,
+		       (const struct dt_key *)dotdot, th, 1);
+	if (rc != 0)
+		GOTO(unlock, rc);
+
+	/* 5b. insert linkEA for child */
 	rc = dt_xattr_set(env, child, &linkea_buf,
 			  XATTR_NAME_LINK, 0, th);
 	if (rc != 0)
@@ -891,7 +921,7 @@ static int lfsck_create_lpf_remote(const struct lu_env *env,
 	bk->lb_lpf_fid = *cfid;
 	lfsck_bookmark_cpu_to_le(&lfsck->li_bookmark_disk, bk);
 
-	/* 4b. update bookmark */
+	/* 6b. update bookmark */
 	rc = dt_record_write(env, bk_obj,
 			     lfsck_buf_get(env, bk, len), &pos, th);
 

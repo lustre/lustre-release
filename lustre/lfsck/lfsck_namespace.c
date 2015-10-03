@@ -1395,6 +1395,10 @@ again:
 	if (unlikely(!dt_try_as_dir(env, orphan)))
 		GOTO(stop, rc = -ENOTDIR);
 
+	rc = dt_declare_ref_add(env, orphan, th);
+	if (rc != 0)
+		GOTO(stop, rc);
+
 	rec->rec_type = S_IFDIR;
 	rec->rec_fid = cfid;
 	rc = dt_declare_insert(env, orphan, (const struct dt_rec *)rec,
@@ -1405,13 +1409,6 @@ again:
 	rec->rec_fid = lfsck_dto2fid(parent);
 	rc = dt_declare_insert(env, orphan, (const struct dt_rec *)rec,
 			       (const struct dt_key *)dotdot, th);
-	if (rc == 0)
-		rc = dt_declare_ref_add(env, orphan, th);
-
-	if (rc != 0)
-		GOTO(stop, rc);
-
-	rc = dt_declare_ref_add(env, orphan, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
@@ -1451,6 +1448,10 @@ again:
 	if (rc != 0)
 		GOTO(unlock2, rc);
 
+	rc = dt_ref_add(env, orphan, th);
+	if (rc != 0)
+		GOTO(unlock2, rc);
+
 	rec->rec_fid = cfid;
 	rc = dt_insert(env, orphan, (const struct dt_rec *)rec,
 		       (const struct dt_key *)dot, th, 1);
@@ -1460,10 +1461,6 @@ again:
 	rec->rec_fid = lfsck_dto2fid(parent);
 	rc = dt_insert(env, orphan, (const struct dt_rec *)rec,
 		       (const struct dt_key *)dotdot, th, 1);
-	if (rc != 0)
-		GOTO(unlock2, rc);
-
-	rc = dt_ref_add(env, orphan, th);
 	if (rc != 0)
 		GOTO(unlock2, rc);
 
@@ -4880,7 +4877,12 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 		if (unlikely(!dt_try_as_dir(env, child)))
 			GOTO(stop, rc = -ENOTDIR);
 
-		/* 2a. insert dot into child dir */
+		/* 2a. increase child nlink */
+		rc = dt_declare_ref_add(env, child, th);
+		if (rc != 0)
+			GOTO(stop, rc);
+
+		/* 3a. insert dot into child dir */
 		rec->rec_type = S_IFDIR;
 		rec->rec_fid = cfid;
 		rc = dt_declare_insert(env, child,
@@ -4889,16 +4891,11 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 		if (rc != 0)
 			GOTO(stop, rc);
 
-		/* 3a. insert dotdot into child dir */
+		/* 4a. insert dotdot into child dir */
 		rec->rec_fid = pfid;
 		rc = dt_declare_insert(env, child,
 				       (const struct dt_rec *)rec,
 				       (const struct dt_key *)dotdot, th);
-		if (rc != 0)
-			GOTO(stop, rc);
-
-		/* 4a. increase child nlink */
-		rc = dt_declare_ref_add(env, child, th);
 		if (rc != 0)
 			GOTO(stop, rc);
 
@@ -4944,7 +4941,12 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 		GOTO(unlock, rc = (rc == -EEXIST ? 1 : rc));
 
 	if (S_ISDIR(type)) {
-		/* 2b. insert dot into child dir */
+		/* 2b. increase child nlink */
+		rc = dt_ref_add(env, child, th);
+		if (rc != 0)
+			GOTO(unlock, rc);
+
+		/* 3b. insert dot into child dir */
 		rec->rec_type = S_IFDIR;
 		rec->rec_fid = cfid;
 		rc = dt_insert(env, child, (const struct dt_rec *)rec,
@@ -4952,15 +4954,10 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 		if (rc != 0)
 			GOTO(unlock, rc);
 
-		/* 3b. insert dotdot into child dir */
+		/* 4b. insert dotdot into child dir */
 		rec->rec_fid = pfid;
 		rc = dt_insert(env, child, (const struct dt_rec *)rec,
 			       (const struct dt_key *)dotdot, th, 1);
-		if (rc != 0)
-			GOTO(unlock, rc);
-
-		/* 4b. increase child nlink */
-		rc = dt_ref_add(env, child, th);
 		if (rc != 0)
 			GOTO(unlock, rc);
 
