@@ -194,7 +194,7 @@ static inline void
 		*size = param->oup_len;
 
 	if (param->oup_len == 0)
-		return NULL;
+		return ERR_PTR(-ENODATA);
 
 	return (void *)&param->oup_buf[0];
 }

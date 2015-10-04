@@ -207,7 +207,9 @@ int out_create_pack(const struct lu_env *env, struct object_update *update,
 		RETURN(rc);
 
 	obdo = object_update_param_get(update, 0, NULL);
-	LASSERT(obdo != NULL);
+	if (IS_ERR(obdo))
+		RETURN(PTR_ERR(obdo));
+
 	obdo->o_valid = 0;
 	obdo_from_la(obdo, attr, attr->la_valid);
 	lustre_set_wire_obdo(NULL, obdo, obdo);
@@ -216,7 +218,9 @@ int out_create_pack(const struct lu_env *env, struct object_update *update,
 		struct lu_fid *tmp;
 
 		tmp = object_update_param_get(update, 1, NULL);
-		LASSERT(tmp != NULL);
+		if (IS_ERR(tmp))
+			RETURN(PTR_ERR(tmp));
+
 		fid_cpu_to_le(tmp, parent_fid);
 	}
 
@@ -255,7 +259,9 @@ int out_attr_set_pack(const struct lu_env *env, struct object_update *update,
 		RETURN(rc);
 
 	obdo = object_update_param_get(update, 0, NULL);
-	LASSERT(obdo != NULL);
+	if (IS_ERR(obdo))
+		RETURN(PTR_ERR(obdo));
+
 	obdo->o_valid = 0;
 	obdo_from_la(obdo, attr, attr->la_valid);
 	lustre_set_wire_obdo(NULL, obdo, obdo);
