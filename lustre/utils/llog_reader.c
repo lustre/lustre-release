@@ -258,9 +258,10 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 	ptr = file_buf + le32_to_cpu((*llog)->llh_hdr.lrh_len);
 	i = 0;
 
-	while (i < recs_num) {
+	while (ptr < (file_buf + file_size)) {
 		struct llog_rec_hdr *cur_rec;
 		int idx;
+		unsigned long offset;
 
 		if (ptr + sizeof(struct llog_rec_hdr) >
 		    file_buf + file_size) {
@@ -273,10 +274,17 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 		cur_rec = (struct llog_rec_hdr *)ptr;
 		idx = le32_to_cpu(cur_rec->lrh_index);
 		recs_pr[i] = cur_rec;
-
-		if (ext2_test_bit(idx, LLOG_HDR_BITMAP(*llog))) {
-			printf("rec #%d type=%x len=%u\n", idx,
-			       cur_rec->lrh_type, cur_rec->lrh_len);
+		offset = (unsigned long)ptr - (unsigned long)file_buf;
+		if (cur_rec->lrh_len == 0 ||
+		    cur_rec->lrh_len > (*llog)->llh_hdr.lrh_len) {
+			cur_rec->lrh_len = (*llog)->llh_hdr.lrh_len -
+				offset % (*llog)->llh_hdr.lrh_len;
+			printf("off %lu skip %u to next chunk.\n", offset,
+			       cur_rec->lrh_len);
+			i--;
+		} else if (ext2_test_bit(idx, LLOG_HDR_BITMAP(*llog))) {
+			printf("rec #%d type=%x len=%u offset %lu\n", idx,
+			       cur_rec->lrh_type, cur_rec->lrh_len, offset);
 		} else {
 			printf("Bit %d of %d not set\n", idx, recs_num);
 			cur_rec->lrh_id = CANCELLED;
