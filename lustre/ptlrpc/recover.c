@@ -158,35 +158,25 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
 
 	/* If need to resend the last sent transno (because a reconnect
 	 * has occurred), then stop on the matching req and send it again.
-	 * If, however, the last sent transno has been committed then we
+	 * If, however, the last sent transno has been committed then we 
 	 * continue replay from the next request. */
 	if (req != NULL && imp->imp_resend_replay)
 		lustre_msg_add_flags(req->rq_reqmsg, MSG_RESENT);
 
 	spin_lock(&imp->imp_lock);
-	/* The resend replay request may have been removed from the
-	 * unreplied list. */
-	if (req != NULL && imp->imp_resend_replay &&
-	    list_empty(&req->rq_unreplied_list))
-		ptlrpc_add_unreplied(req);
-
 	imp->imp_resend_replay = 0;
 	spin_unlock(&imp->imp_lock);
 
-	if (req != NULL) {
-		/* The request should have been added back in unreplied list
-		 * by ptlrpc_prepare_replay(). */
-		LASSERT(!list_empty(&req->rq_unreplied_list));
-
-		rc = ptlrpc_replay_req(req);
-		if (rc) {
-			CERROR("recovery replay error %d for req "
-			       LPU64"\n", rc, req->rq_xid);
-			RETURN(rc);
-		}
-		*inflight = 1;
-	}
-	RETURN(rc);
+        if (req != NULL) {
+                rc = ptlrpc_replay_req(req);
+                if (rc) {
+                        CERROR("recovery replay error %d for req "
+                               LPU64"\n", rc, req->rq_xid);
+                        RETURN(rc);
+                }
+                *inflight = 1;
+        }
+        RETURN(rc);
 }
 
 /**

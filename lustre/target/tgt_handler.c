@@ -604,53 +604,6 @@ static struct tgt_handler *tgt_handler_find_check(struct ptlrpc_request *req)
 	RETURN(h);
 }
 
-static int process_req_last_xid(struct ptlrpc_request *req)
-{
-	__u64	last_xid;
-	ENTRY;
-
-	/* check request's xid is consistent with export's last_xid */
-	last_xid = lustre_msg_get_last_xid(req->rq_reqmsg);
-	if (last_xid > req->rq_export->exp_last_xid)
-		req->rq_export->exp_last_xid = last_xid;
-
-	if (req->rq_xid == 0 ||
-	    (req->rq_xid <= req->rq_export->exp_last_xid)) {
-		DEBUG_REQ(D_ERROR, req, "Unexpected xid %llx vs. "
-			  "last_xid %llx\n", req->rq_xid,
-			  req->rq_export->exp_last_xid);
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 93, 0)
-		/* This LBUG() can be triggered in following case:
-		 *
-		 * - Client send a no_resend RPC, like statfs;
-		 * - The RPC timedout (or some other error) on client,
-		 *   then it's removed from the unreplied list;
-		 * - Client send some other request to bump the
-		 *   exp_last_xid on server;
-		 * - The former RPC got chance to be processed;
-		 * - LBUG();
-		 *
-		 * Let's keep this for debug purpose for now, and it
-		 * should be removed when release.
-		 */
-		LBUG();
-#endif
-		req->rq_status = -EPROTO;
-		RETURN(ptlrpc_error(req));
-	}
-
-	/* try to release in-memory reply data */
-	if (tgt_is_multimodrpcs_client(req->rq_export)) {
-		tgt_handle_received_xid(req->rq_export,
-				lustre_msg_get_last_xid(req->rq_reqmsg));
-		if (!(lustre_msg_get_flags(req->rq_reqmsg) &
-		      (MSG_RESENT | MSG_REPLAY)))
-			tgt_handle_tag(req->rq_export,
-				       lustre_msg_get_tag(req->rq_reqmsg));
-	}
-	RETURN(0);
-}
-
 int tgt_request_handle(struct ptlrpc_request *req)
 {
 	struct tgt_session_info	*tsi = tgt_ses_info(req->rq_svc_thread->t_env);
@@ -660,9 +613,8 @@ int tgt_request_handle(struct ptlrpc_request *req)
 	struct lu_target	*tgt;
 	int			 request_fail_id = 0;
 	__u32			 opc = lustre_msg_get_opc(msg);
-	struct obd_device	*obd;
 	int			 rc;
-	bool			 is_connect = false;
+
 	ENTRY;
 
 	/* Refill the context, to make sure all thread keys are allocated */
@@ -676,7 +628,6 @@ int tgt_request_handle(struct ptlrpc_request *req)
 	 * target, otherwise that should be connect operation */
 	if (opc == MDS_CONNECT || opc == OST_CONNECT ||
 	    opc == MGS_CONNECT) {
-		is_connect = true;
 		req_capsule_set(&req->rq_pill, &RQF_CONNECT);
 		rc = target_handle_connect(req);
 		if (rc != 0) {
@@ -720,23 +671,37 @@ int tgt_request_handle(struct ptlrpc_request *req)
 		GOTO(out, rc);
 	}
 
-	/* Skip last_xid processing for the recovery thread, otherwise, the
-	 * last_xid on same request could be processed twice: first time when
-	 * processing the incoming request, second time when the request is
-	 * being processed by recovery thread. */
-	obd = class_exp2obd(req->rq_export);
-	if (is_connect) {
-		/* reset the exp_last_xid on each connection. */
-		req->rq_export->exp_last_xid = 0;
-	} else if (obd->obd_recovery_data.trd_processing_task !=
-		   current_pid()) {
-		rc = process_req_last_xid(req);
-		if (rc)
+	/* check request's xid is consistent with export's last_xid */
+	if (req->rq_export != NULL) {
+		__u64 last_xid = lustre_msg_get_last_xid(req->rq_reqmsg);
+		if (last_xid != 0)
+			req->rq_export->exp_last_xid = last_xid;
+		if (req->rq_xid == 0 ||
+		    req->rq_xid <= req->rq_export->exp_last_xid) {
+			DEBUG_REQ(D_ERROR, req,
+				  "Unexpected xid %llx vs. last_xid %llx\n",
+				  req->rq_xid, req->rq_export->exp_last_xid);
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 93, 0)
+			LBUG();
+#endif
+			req->rq_status = -EPROTO;
+			rc = ptlrpc_error(req);
 			GOTO(out, rc);
+		}
 	}
 
 	request_fail_id = tgt->lut_request_fail_id;
 	tsi->tsi_reply_fail_id = tgt->lut_reply_fail_id;
+
+	/* try to release in-memory reply data */
+	if (tgt_is_multimodrpcs_client(req->rq_export)) {
+		tgt_handle_received_xid(req->rq_export,
+				lustre_msg_get_last_xid(req->rq_reqmsg));
+		if (!(lustre_msg_get_flags(req->rq_reqmsg) &
+		      (MSG_RESENT | MSG_REPLAY)))
+			tgt_handle_tag(req->rq_export,
+				       lustre_msg_get_tag(req->rq_reqmsg));
+	}
 
 	h = tgt_handler_find_check(req);
 	if (IS_ERR(h)) {
