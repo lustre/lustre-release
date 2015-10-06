@@ -161,13 +161,13 @@ struct osc_object {
 	/**
 	 * Radix tree for caching pages
 	 */
-	struct radix_tree_root	oo_tree;
 	spinlock_t		oo_tree_lock;
+	struct radix_tree_root	oo_tree;
 	unsigned long		oo_npages;
 
 	/* Protect osc_lock this osc_object has */
-	spinlock_t		oo_ol_spin;
 	struct list_head	oo_ol_list;
+	spinlock_t		oo_ol_spin;
 
 	/** number of active IOs of this object */
 	atomic_t		oo_nr_ios;
