@@ -1,0 +1,36 @@
+%kernel_module_package(n:v:r:s:f:xp:) %{expand:%( \
+	%global kmodtool %{-s*}%{!-s:REPLACE_ME} \
+	%global kmod_version %{-v*}%{!-v:%{version}} \
+	%global kmod_release %{-r*}%{!-r:%{release}} \
+	%global latest_kernel %(rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}\\\\n' `rpm -q kernel-devel | /usr/lib/rpm/redhat/rpmsort -r | head -n 1` | head -n 1) \
+	%{!?kernel_version:%{expand:%%global kernel_version %{latest_kernel}}} \
+	%global kverrel %(%{kmodtool} verrel %{?kernel_version} 2>/dev/null) \
+	flavors="default" \
+	if [ -z "%*" ]; then \
+		flavors_to_build=$flavors \
+	elif [ -z "%{-x}" ]; then \
+		flavors_to_build="%*" \
+	else \
+		flavors_to_build=" $flavors "\
+		for i in %* \
+		do \
+			flavors_to_build=${flavors_to_build//$i /}
+		done \
+	fi \
+	echo "%%global flavors_to_build ${flavors_to_build:-%%nil}" \
+	echo "%%global kernel_source() /usr/src/kernels/%kverrel\\\$([ %%%%{1} = default ] || echo ".%%%%{1}")" \
+	echo "%%global kernel_module_package_moddir() extra" \
+	if [ ! -z "%{-f*}" ] \
+	then \
+		filelist="%{-f*}" \
+	fi \
+	if [ ! -z "%{-p*}" ] \
+	then \
+		preamble="%{-p*}" \
+	fi \
+	if [ -z "%{kmodtool_generate_buildreqs}" ] \
+	then \
+		nobuildreqs="yes" \
+	fi \
+	override_filelist="$filelist" override_preamble="$preamble" nobuildreqs="$nobuildreqs" kmod_version=%kmod_version kmod_release=%kmod_release %{kmodtool} rpmtemplate %{-n*}%{!-n:%name} %{kverrel} $flavors_to_build 2>/dev/null \
+)}

@@ -17,6 +17,22 @@ USE_KABI=true
 RMAC=$HOME/.rpmmacros
 grep '%dist' $RMAC &> /dev/null || echo '%dist .el7' >> $RMAC
 
+# We modify the RHEL7 kmodtool script, because it expects
+# the kernel source to be in the correct packaged RHEL location.
+# lbuild does not put the source in correct packaged RHEL location.
+RHEL_KMODTOOL=/usr/lib/rpm/redhat/kmodtool
+LBUILD_KMODTOOL="${LBUILD_DIR}/rhel7/kmodtool"
+cp  $RHEL_KMODTOOL $LBUILD_KMODTOOL
+pushd ${LBUILD_DIR}/rhel7
+patch -p1 < kmodtool.patch
+chmod 755 kmodtool
+popd
+# Next we replace %kernel_module_package with one that is nearly
+# identical, but calls lbuild's modified kmodtool script.
+sed -e "s|REPLACE_ME|$LBUILD_KMODTOOL|" \
+    ${LBUILD_DIR}/rhel7/rpmmacros.template > ${LBUILD_DIR}/rhel7/rpmmacros
+cat ${LBUILD_DIR}/rhel7/rpmmacros >> $RMAC
+
 patch_spec() {
     local buildid="$1"
 

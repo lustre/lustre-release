@@ -488,9 +488,6 @@ if test -n "$LINUX" ; then
 		RPMBINARGS="$RPMBINARGS --define \"kobjdir $LINUX_OBJ\""
 	fi
 fi
-if test -n "$KMP_MODDIR" ; then
-	RPMBINARGS="$RPMBINARGS --define \"kmoddir $KMP_MODDIR\""
-fi
 if test x$enable_modules != xyes ; then
 	RPMBINARGS="$RPMBINARGS --without lustre_modules"
 fi

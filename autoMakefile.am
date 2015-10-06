@@ -95,16 +95,17 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec	\
 	build/Makefile 			\
 	build/Rules.in			\
 	config.h.in			\
-	undef.h				\
 	lustre-dkms_pre-build.sh	\
 	lustre-dkms_post-build.sh	\
 	LUSTRE-VERSION-GEN		\
-	LUSTRE-VERSION-FILE
+	LUSTRE-VERSION-FILE		\
+	undef.h
 
 # contrib is a directory.  Putting a directory in EXTRA_DIST
 # recursively includes the entire directory contents in the
 # distribution tarball (the tarball created with "make dist").
 EXTRA_DIST += contrib
+EXTRA_DIST += rpm
 
 rpm-local:
 	@(if test -z "$(RPMBUILD)"; then \
@@ -170,6 +171,7 @@ srpm: @PACKAGE_TARNAME@.spec dist Makefile
 	rpmbuilddir=`mktemp -t -d rpmbuild-@PACKAGE@-$$USER-XXXXXXXX`; \
 	$(MAKE) $(AM_MAKEFLAGS) \
 		rpmbuilddir="$$rpmbuilddir" rpm-local || exit 1; \
+	cp $(top_srcdir)/rpm/* $(top_srcdir); \
 	$(RPMBUILD) \
 		--define "_tmppath $$rpmbuilddir/TMP" \
 		--define "_topdir $$rpmbuilddir" \
