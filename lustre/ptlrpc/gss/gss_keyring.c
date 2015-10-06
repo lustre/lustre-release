@@ -726,7 +726,8 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
         char                     desc[24];
         char                    *coinfo;
         int                      coinfo_size;
-        char                    *co_flags = "";
+	const char		*sec_part_flags = "";
+	char			 svc_flag = '\0';
         ENTRY;
 
         LASSERT(imp != NULL);
@@ -759,34 +760,51 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
                 /* update reverse handle for root user */
                 sec2gsec(sec)->gs_rvs_hdl = gss_get_next_ctx_index();
 
-                switch (sec->ps_part) {
-                case LUSTRE_SP_MDT:
-                        co_flags = "m";
-                        break;
-                case LUSTRE_SP_OST:
-                        co_flags = "o";
-                        break;
-                case LUSTRE_SP_MGC:
-                        co_flags = "rmo";
-                        break;
-                case LUSTRE_SP_CLI:
-                        co_flags = "r";
-                        break;
-                case LUSTRE_SP_MGS:
-                default:
-                        LBUG();
+		switch (sec->ps_part) {
+		case LUSTRE_SP_MDT:
+			sec_part_flags = "m";
+			break;
+		case LUSTRE_SP_OST:
+			sec_part_flags = "o";
+			break;
+		case LUSTRE_SP_MGC:
+			sec_part_flags = "rmo";
+			break;
+		case LUSTRE_SP_CLI:
+			sec_part_flags = "r";
+			break;
+		case LUSTRE_SP_MGS:
+		default:
+			LBUG();
                 }
-        }
 
-        /* in case of setuid, key will be constructed as owner of fsuid/fsgid,
-         * but we do authentication based on real uid/gid. the key permission
-         * bits will be exactly as POS_ALL, so only processes who subscribed
-         * this key could have the access, although the quota might be counted
-         * on others (fsuid/fsgid).
-         *
-         * keyring will use fsuid/fsgid as upcall parameters, so we have to
-         * encode real uid/gid into callout info.
-         */
+		switch (SPTLRPC_FLVR_SVC(sec->ps_flvr.sf_rpc)) {
+		case SPTLRPC_SVC_NULL:
+			svc_flag = 'n';
+			break;
+		case SPTLRPC_SVC_AUTH:
+			svc_flag = 'a';
+			break;
+		case SPTLRPC_SVC_INTG:
+			svc_flag = 'i';
+			break;
+		case SPTLRPC_SVC_PRIV:
+			svc_flag = 'p';
+			break;
+		default:
+			LBUG();
+		}
+	}
+
+	/* in case of setuid, key will be constructed as owner of fsuid/fsgid,
+	 * but we do authentication based on real uid/gid. the key permission
+	 * bits will be exactly as POS_ALL, so only processes who subscribed
+	 * this key could have the access, although the quota might be counted
+	 * on others (fsuid/fsgid).
+	 *
+	 * keyring will use fsuid/fsgid as upcall parameters, so we have to
+	 * encode real uid/gid into callout info.
+	 */
 
 	/* But first we need to make sure the obd type is supported */
 	if (strcmp(imp->imp_obd->obd_type->typ_name, LUSTRE_MDC_NAME) &&
@@ -795,24 +813,24 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 	    strcmp(imp->imp_obd->obd_type->typ_name, LUSTRE_LWP_NAME) &&
 	    strcmp(imp->imp_obd->obd_type->typ_name, LUSTRE_OSP_NAME)) {
 		CERROR("obd %s is not a supported device\n",
-			imp->imp_obd->obd_name);
+		       imp->imp_obd->obd_name);
 		GOTO(out, ctx = NULL);
 	}
 
-        construct_key_desc(desc, sizeof(desc), sec, vcred->vc_uid);
+	construct_key_desc(desc, sizeof(desc), sec, vcred->vc_uid);
 
-        /* callout info format:
-         * secid:mech:uid:gid:flags:svc_type:peer_nid:target_uuid
-         */
+	/* callout info format:
+	 * secid:mech:uid:gid:sec_flags:svc_flag:svc_type:peer_nid:target_uuid
+	 */
         coinfo_size = sizeof(struct obd_uuid) + MAX_OBD_NAME + 64;
         OBD_ALLOC(coinfo, coinfo_size);
         if (coinfo == NULL)
                 goto out;
 
-	snprintf(coinfo, coinfo_size, "%d:%s:%u:%u:%s:%d:"LPX64":%s:"LPX64,
+	snprintf(coinfo, coinfo_size, "%d:%s:%u:%u:%s:%c:%d:"LPX64":%s:"LPX64,
 		 sec->ps_id, sec2gsec(sec)->gs_mech->gm_name,
 		 vcred->vc_uid, vcred->vc_gid,
-		 co_flags, import_to_gss_svc(imp),
+		 sec_part_flags, svc_flag, import_to_gss_svc(imp),
 		 imp->imp_connection->c_peer.nid, imp->imp_obd->obd_name,
 		 imp->imp_connection->c_self);
 
@@ -1070,7 +1088,7 @@ int gss_sec_display_kr(struct ptlrpc_sec *sec, struct seq_file *seq)
                         snprintf(mech, sizeof(mech), "N/A");
                 mech[sizeof(mech) - 1] = '\0';
 
-		seq_printf(seq, "%p: uid %u, ref %d, expire %ld(%+ld), fl %s, "
+		seq_printf(seq, "%p: uid %u, ref %d, expire %lu(%+ld), fl %s, "
 			   "seq %d, win %u, key %08x(ref %d), "
 			   "hdl "LPX64":"LPX64", mech: %s\n",
 			   ctx, ctx->cc_vcred.vc_uid,
@@ -1382,49 +1400,49 @@ int gss_kt_update(struct key *key, const void *data, size_t datalen)
                 goto out;
         }
 
-        if (gctx->gc_win == 0) {
-                __u32   nego_rpc_err, nego_gss_err;
+	if (gctx->gc_win == 0) {
+		__u32   nego_rpc_err, nego_gss_err;
 
-                rc = buffer_extract_bytes(&data, &datalen32, &nego_rpc_err,
-                                          sizeof(nego_rpc_err));
-                if (rc) {
-                        CERROR("failed to extrace rpc rc\n");
-                        goto out;
-                }
+		rc = buffer_extract_bytes(&data, &datalen32, &nego_rpc_err,
+					  sizeof(nego_rpc_err));
+		if (rc) {
+			CERROR("cannot extract RPC: rc = %d\n", rc);
+			goto out;
+		}
 
-                rc = buffer_extract_bytes(&data, &datalen32, &nego_gss_err,
-                                          sizeof(nego_gss_err));
-                if (rc) {
-                        CERROR("failed to extrace gss rc\n");
-                        goto out;
-                }
+		rc = buffer_extract_bytes(&data, &datalen32, &nego_gss_err,
+					  sizeof(nego_gss_err));
+		if (rc) {
+			CERROR("failed to extract gss rc = %d\n", rc);
+			goto out;
+		}
 
-                CERROR("negotiation: rpc err %d, gss err %x\n",
-                       nego_rpc_err, nego_gss_err);
+		CERROR("negotiation: rpc err %d, gss err %x\n",
+		       nego_rpc_err, nego_gss_err);
 
-                rc = nego_rpc_err ? nego_rpc_err : -EACCES;
-        } else {
-                rc = rawobj_extract_local_alloc(&gctx->gc_handle,
-                                                (__u32 **) &data, &datalen32);
-                if (rc) {
-                        CERROR("failed extract handle\n");
-                        goto out;
-                }
+		rc = nego_rpc_err ? nego_rpc_err : -EACCES;
+	} else {
+		rc = rawobj_extract_local_alloc(&gctx->gc_handle,
+						(__u32 **) &data, &datalen32);
+		if (rc) {
+			CERROR("failed extract handle\n");
+			goto out;
+		}
 
-                rc = rawobj_extract_local(&tmpobj, (__u32 **) &data,&datalen32);
-                if (rc) {
-                        CERROR("failed extract mech\n");
-                        goto out;
-                }
+		rc = rawobj_extract_local(&tmpobj, (__u32 **) &data,&datalen32);
+		if (rc) {
+			CERROR("failed extract mech\n");
+			goto out;
+		}
 
-                rc = lgss_import_sec_context(&tmpobj,
-                                             sec2gsec(ctx->cc_sec)->gs_mech,
-                                             &gctx->gc_mechctx);
-                if (rc != GSS_S_COMPLETE)
-                        CERROR("failed import context\n");
-                else
-                        rc = 0;
-        }
+		rc = lgss_import_sec_context(&tmpobj,
+					     sec2gsec(ctx->cc_sec)->gs_mech,
+					     &gctx->gc_mechctx);
+		if (rc != GSS_S_COMPLETE)
+			CERROR("failed import context\n");
+		else
+			rc = 0;
+	}
 out:
         /* we don't care what current status of this ctx, even someone else
          * is operating on the ctx at the same time. we just add up our own

@@ -44,30 +44,31 @@
    (((o1)->length == (o2)->length) && \
     (memcmp((o1)->elements,(o2)->elements,(int) (o1)->length) == 0))
 
-struct mech2file {
+struct oid2mech {
 	gss_OID_desc mech;
-	char         filename[8];
+	char         mechname[8];
 };
 
-struct mech2file m2f[] = {
+static const struct oid2mech o2m[] = {
 	{{9, "\052\206\110\206\367\022\001\002\002"}, "krb5"},
 	{{7, "\053\006\001\005\005\001\003"}, "spkm3"},
 	{{7, "\053\006\001\005\005\001\009"}, "lipkey"},
+	{{12, "\053\006\001\004\001\311\146\215\126\001\000\000"}, "gssnull"},
+	{{12, "\053\006\001\004\001\311\146\215\126\001\000\001"}, "sk"},
 	{{0,0},""},
 };
 
 /*
  * Find the Linux svcgssd downcall file name given the mechanism
  */
-char *
-mech2file(gss_OID mech)
+const char *gss_OID_mech_name(gss_OID mech)
 {
-	struct mech2file *m2fp = m2f;
+	const struct oid2mech *o2mp = o2m;
 
-	while(m2fp->mech.length != 0) {
-		if (g_OID_equal(mech,&m2fp->mech))
-			return(m2fp->filename);
-		m2fp++;
+	while (o2mp->mech.length != 0) {
+		if (g_OID_equal(mech, &o2mp->mech))
+			return o2mp->mechname;
+		o2mp++;
 	}
 	return NULL;
 }

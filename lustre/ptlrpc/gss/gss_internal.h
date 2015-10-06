@@ -92,7 +92,11 @@ unsigned long gss_round_ctx_expiry(unsigned long expiry,
 /*
  * XXX make it visible of kernel and lgssd/lsvcgssd
  */
-#define GSSD_INTERFACE_VERSION          (1)
+enum {
+	GSSD_INTERFACE_VERSION_V1 = 1,
+	GSSD_INTERFACE_VERSION_V2 = 2,
+	GSSD_INTERFACE_VERSION = GSSD_INTERFACE_VERSION_V2,
+};
 
 #define PTLRPC_GSS_VERSION              (1)
 

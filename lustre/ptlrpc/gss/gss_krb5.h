@@ -47,6 +47,8 @@
 #ifndef PTLRPC_GSS_KRB5_H
 #define PTLRPC_GSS_KRB5_H
 
+#include "gss_crypto.h"
+
 /*
  * RFC 4142
  */
@@ -73,25 +75,20 @@ struct krb5_header {
         __u8            kh_cksum[0];    /* checksum */
 };
 
-struct krb5_keyblock {
-	rawobj_t		 kb_key;
-	struct crypto_blkcipher *kb_tfm;
-};
-
 struct krb5_ctx {
-        unsigned int            kc_initiate:1,
-                                kc_cfx:1,
-                                kc_seed_init:1,
-                                kc_have_acceptor_subkey:1;
-        __s32                   kc_endtime;
-        __u8                    kc_seed[16];
-        __u64                   kc_seq_send;
-        __u64                   kc_seq_recv;
-        __u32                   kc_enctype;
-        struct krb5_keyblock    kc_keye;        /* encryption */
-        struct krb5_keyblock    kc_keyi;        /* integrity */
-        struct krb5_keyblock    kc_keyc;        /* checksum */
-        rawobj_t                kc_mech_used;
+	unsigned int		kc_initiate:1,
+				kc_cfx:1,
+				kc_seed_init:1,
+				kc_have_acceptor_subkey:1;
+	__s32			kc_endtime;
+	__u8			kc_seed[16];
+	__u64			kc_seq_send;
+	__u64			kc_seq_recv;
+	__u32			kc_enctype;
+	struct gss_keyblock	kc_keye;	/* encryption */
+	struct gss_keyblock	kc_keyi;	/* integrity */
+	struct gss_keyblock	kc_keyc;	/* checksum */
+	rawobj_t		kc_mech_used;
 };
 
 enum sgn_alg {

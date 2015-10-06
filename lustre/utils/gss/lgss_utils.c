@@ -224,11 +224,23 @@ int lgss_mutex_unlock(lgss_mutex_id_t mid)
  ****************************************/
 
 /* from kerberos source, gssapi_krb5.c */
-gss_OID_desc krb5oid =
-        {9, "\052\206\110\206\367\022\001\002\002"};
-
-gss_OID_desc spkm3oid =
-        {7, "\053\006\001\005\005\001\003"};
+gss_OID_desc krb5oid = {
+	.length = 9,
+	.elements = "\052\206\110\206\367\022\001\002\002"
+};
+gss_OID_desc spkm3oid = {
+	.length = 7,
+	.elements = "\053\006\001\005\005\001\003"
+};
+/* null and sk come from IU's oid space */
+gss_OID_desc nulloid = {
+	.length = 12,
+	.elements = "\053\006\001\004\001\311\146\215\126\001\000\000"
+};
+gss_OID_desc skoid = {
+	.length = 12,
+	.elements = "\053\006\001\004\001\311\146\215\126\001\000\001"
+};
 
 /****************************************
  * log facilities                       *
@@ -362,7 +374,7 @@ struct lgss_cred * lgss_create_cred(struct lgss_mech_type *mech)
 
 void lgss_destroy_cred(struct lgss_cred *cred)
 {
-        lassert(cred->lc_mech);
+	lassert(cred->lc_mech != NULL);
         lassert(cred->lc_mech_cred == NULL);
 
         logmsg(LL_TRACE, "destroying a %s cred at %p\n",
@@ -374,7 +386,7 @@ int lgss_prepare_cred(struct lgss_cred *cred)
 {
         struct lgss_mech_type   *mech = cred->lc_mech;
 
-        lassert(mech);
+	lassert(mech != NULL);
 
         logmsg(LL_TRACE, "preparing %s cred %p\n", mech->lmt_name, cred);
 
@@ -387,13 +399,13 @@ void lgss_release_cred(struct lgss_cred *cred)
 {
         struct lgss_mech_type   *mech = cred->lc_mech;
 
-        lassert(mech);
+	lassert(mech != NULL);
 
         logmsg(LL_TRACE, "releasing %s cred %p\n", mech->lmt_name, cred);
 
         if (cred->lc_mech_cred) {
                 lassert(cred->lc_mech != NULL);
-                lassert(cred->lc_mech->lmt_release_cred);
+		lassert(cred->lc_mech->lmt_release_cred != NULL);
 
                 cred->lc_mech->lmt_release_cred(cred);
         }
@@ -403,13 +415,29 @@ int lgss_using_cred(struct lgss_cred *cred)
 {
         struct lgss_mech_type   *mech = cred->lc_mech;
 
-        lassert(mech);
+	lassert(mech != NULL);
 
         logmsg(LL_TRACE, "using %s cred %p\n", mech->lmt_name, cred);
 
         if (mech->lmt_using_cred)
                 return mech->lmt_using_cred(cred);
         return 0;
+}
+
+int lgss_validate_cred(struct lgss_cred *cred, gss_buffer_desc *token,
+		       gss_buffer_desc *ctx_token)
+{
+	struct lgss_mech_type *mech = cred->lc_mech;
+
+	lassert(mech != NULL);
+
+	logmsg(LL_TRACE, "validate %s cred %p with token %p\n", mech->lmt_name,
+	       cred, token);
+
+	if (mech->lmt_validate_cred)
+		return mech->lmt_validate_cred(cred, token, ctx_token);
+
+	return 0;
 }
 
 /****************************************

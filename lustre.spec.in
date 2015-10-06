@@ -337,6 +337,7 @@ echo '%{_sysconfdir}/ha.d/resource.d/Lustre' >>lustre.files
 # The following scripts are Red Hat specific
 %if %{with servers}
 echo '%{_sysconfdir}/sysconfig/lustre' >>lustre.files
+echo '%{_sysconfdir}/sysconfig/lsvcgss' >>lustre.files
 echo '%{_sysconfdir}/init.d/lustre' >>lustre.files
 %endif
 echo '%{_sysconfdir}/init.d/lnet' >>lustre.files

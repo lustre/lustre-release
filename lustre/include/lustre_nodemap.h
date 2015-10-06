@@ -28,6 +28,7 @@
 #define _LUSTRE_NODEMAP_H
 
 #include <lustre/lustre_idl.h>
+#include <lustre/lustre_user.h>
 
 #define LUSTRE_NODEMAP_NAME "nodemap"
 
@@ -132,7 +133,11 @@ __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 		     enum nodemap_tree_type tree_type, __u32 id);
 ssize_t nodemap_map_acl(struct lu_nodemap *nodemap, void *buf, size_t size,
 			enum nodemap_tree_type tree_type);
+#ifdef HAVE_SERVER_SUPPORT
 void nodemap_test_nid(lnet_nid_t nid, char *name_buf, size_t name_len);
+#else
+#define nodemap_test_nid(nid, name_buf, name_len) do {} while(0)
+#endif
 __u32 nodemap_test_id(lnet_nid_t nid, enum nodemap_id_type idtype,
 		      __u32 client_id);
 struct nm_config_file *nm_config_file_register(const struct lu_env *env,

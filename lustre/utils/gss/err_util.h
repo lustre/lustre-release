@@ -35,5 +35,6 @@ void initerr(char *progname, int verbosity, int fg);
 void printerr(int priority, char *format, ...)
 	      __attribute__((__format__(__printf__, 2, 3)));
 void print_hexl(int pri, unsigned char *cp, int length);
+void print_hex(int pri, unsigned char *cp, int length);
 
 #endif /* _ERR_UTIL_H_ */

@@ -648,7 +648,7 @@ int do_negotiation(struct lustre_gss_data *lgd,
 		return -1;
 	}
 
-	param.version = GSSD_INTERFACE_VERSION;
+	param.version = GSSD_INTERFACE_VERSION_V1;
 	param.uuid = lgd->lgd_uuid;
 	param.lustre_svc = lgd->lgd_lustre_svc;
 	param.uid = lgd->lgd_uid;

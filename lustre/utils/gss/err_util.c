@@ -97,11 +97,15 @@ printit:
 
 void print_hexl(int pri, unsigned char *cp, int length)
 {
-	int i, j, jm;
-	unsigned char c;
-
 	printerr(pri, "length %d\n",length);
 	printerr(pri, "\n");
+	print_hex(pri, cp, length);
+}
+
+void print_hex(int pri, unsigned char *cp, int length)
+{
+	int i, j, jm;
+	unsigned char c;
 
 	for (i = 0; i < length; i += 0x10) {
 		printerr(pri, "  %04x: ", (unsigned int)i);

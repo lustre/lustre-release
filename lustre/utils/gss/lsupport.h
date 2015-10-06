@@ -56,7 +56,17 @@ void gssd_exit_unique(int type);
 #define LUSTRE_GSS_SVC_MDS      1
 #define LUSTRE_GSS_SVC_OSS      2
 
+#define LUSTRE_GSS_SVC_MASK	0x0000FFFF
+#define LUSTRE_GSS_MECH_MASK	0xFFFF0000
+#define LUSTRE_GSS_MECH_SHIFT	16
+
 extern const char * lustre_svc_name[];
+
+enum lgss_mech {
+	LGSS_MECH_KRB5  = 0,
+	LGSS_MECH_NULL  = 1,
+	LGSS_MECH_SK    = 2,
+};
 
 struct lgssd_upcall_data {
         uint32_t        seq;

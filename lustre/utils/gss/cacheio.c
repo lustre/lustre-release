@@ -58,7 +58,7 @@
 #include <errno.h>
 #include "err_util.h"
 
-void qword_add(char **bpp, int *lp, char *str)
+void qword_add(char **bpp, int *lp, const char *str)
 {
 	char *bp = *bpp;
 	int len = *lp;
@@ -154,7 +154,7 @@ void qword_addeol(char **bpp, int *lp)
 
 static char qword_buf[8192];
 static char tmp_buf[8192];
-int qword_print(FILE *f, char *str)
+int qword_print(FILE *f, const char *str)
 {
 	char *bp = qword_buf;
 	int len = sizeof(qword_buf);

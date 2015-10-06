@@ -61,8 +61,9 @@
 #include <obd_class.h>
 #include <obd_support.h>
 #include <lustre/lustre_idl.h>
-#include <lustre_net.h>
 #include <lustre_import.h>
+#include <lustre_net.h>
+#include <lustre_nodemap.h>
 #include <lustre_sec.h>
 
 #include "gss_err.h"
@@ -132,7 +133,7 @@ static inline void _cache_unregister_net(struct cache_detail *cd,
 #endif
 }
 /****************************************
- * rsi cache                            *
+ * rpc sec init (rsi) cache *
  ****************************************/
 
 #define RSI_HASHBITS    (6)
@@ -143,6 +144,7 @@ struct rsi {
 	struct cache_head       h;
 	__u32                   lustre_svc;
 	__u64                   nid;
+	char			nm_name[LUSTRE_NODEMAP_NAME_LENGTH + 1];
 	wait_queue_head_t       waitq;
 	rawobj_t                in_handle, in_token;
 	rawobj_t                out_handle, out_token;
@@ -180,6 +182,7 @@ static void rsi_free(struct rsi *rsi)
         rawobj_free(&rsi->out_token);
 }
 
+/* See handle_req() userspace for where the upcall data is read */
 static void rsi_request(struct cache_detail *cd,
                         struct cache_head *h,
                         char **bpp, int *blen)
@@ -195,6 +198,8 @@ static void rsi_request(struct cache_detail *cd,
 			sizeof(rsi->lustre_svc));
 	qword_addhex(bpp, blen, (char *) &rsi->nid, sizeof(rsi->nid));
 	qword_addhex(bpp, blen, (char *) &index, sizeof(index));
+	qword_addhex(bpp, blen, (char *) rsi->nm_name,
+		     strlen(rsi->nm_name) + 1);
 	qword_addhex(bpp, blen, rsi->in_handle.data, rsi->in_handle.len);
 	qword_addhex(bpp, blen, rsi->in_token.data, rsi->in_token.len);
 	(*bpp)[-1] = '\n';
@@ -225,6 +230,7 @@ static inline void __rsi_init(struct rsi *new, struct rsi *item)
 
 	new->lustre_svc = item->lustre_svc;
 	new->nid = item->nid;
+	memcpy(new->nm_name, item->nm_name, sizeof(item->nm_name));
 	init_waitqueue_head(&new->waitq);
 }
 
@@ -424,7 +430,7 @@ static struct rsi *rsi_update(struct rsi *new, struct rsi *old)
 }
 
 /****************************************
- * rsc cache                            *
+ * rpc sec context (rsc) cache                            *
  ****************************************/
 
 #define RSC_HASHBITS    (10)
@@ -923,9 +929,11 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 	int                        rc = SECSVC_DROP;
 	ENTRY;
 
-        memset(&rsikey, 0, sizeof(rsikey));
-        rsikey.lustre_svc = lustre_svc;
-        rsikey.nid = (__u64) req->rq_peer.nid;
+	memset(&rsikey, 0, sizeof(rsikey));
+	rsikey.lustre_svc = lustre_svc;
+	rsikey.nid = (__u64) req->rq_peer.nid;
+	nodemap_test_nid(req->rq_peer.nid, rsikey.nm_name,
+			 sizeof(rsikey.nm_name));
 
         /* duplicate context handle. for INIT it always 0 */
         if (rawobj_dup(&rsikey.in_handle, &gw->gw_handle)) {

@@ -37,7 +37,7 @@
 #
 
 EXTRA_DIST = lustre.dtd slapd-lustre.conf lustre2ldif.xsl top.ldif \
-             99-lustre.rules lustre ldev.conf ko2iblnd.conf
+             99-lustre.rules lustre ldev.conf ko2iblnd.conf lsvcgss
 ldapconfdir = $(sysconfdir)/openldap
 
 if UTILS
@@ -51,7 +51,7 @@ udevrules_DATA = 99-lustre.rules
 if RHEL
 if SERVER
 sysconfigdir = $(sysconfdir)/sysconfig
-sysconfig_DATA = lustre
+sysconfig_DATA = lustre lsvcgss
 endif
 endif
 

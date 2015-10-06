@@ -176,10 +176,18 @@ sig_hup(int signal)
 }
 
 static void
-usage(char *progname)
+usage(FILE *fp, char *progname)
 {
-	fprintf(stderr, "usage: %s [-n] [-f] [-v] [-r] [-m] [-o] [-g]\n",
+	fprintf(fp, "usage: %s [ -fnvmogk ]\n",
 		progname);
+	fprintf(stderr, "-f      - Run in foreground\n");
+	fprintf(stderr, "-n      - Don't establish kerberos credentials\n");
+	fprintf(stderr, "-v      - Verbosity\n");
+	fprintf(stderr, "-m      - Service MDS\n");
+	fprintf(stderr, "-o      - Service OSS\n");
+	fprintf(stderr, "-g      - Service MGS\n");
+	fprintf(stderr, "-k      - Enable kerberos support\n");
+
 	exit(1);
 }
 
@@ -191,35 +199,40 @@ main(int argc, char *argv[])
 	int verbosity = 0;
 	int opt;
 	int must_srv_mds = 0, must_srv_oss = 0, must_srv_mgs = 0;
-	extern char *optarg;
 	char *progname;
 
-	while ((opt = getopt(argc, argv, "fvrnmog:")) != -1) {
+	while ((opt = getopt(argc, argv, "fnvmogk")) != -1) {
 		switch (opt) {
-			case 'f':
-				fg = 1;
-				break;
-			case 'n':
-				get_creds = 0;
-				break;
-			case 'v':
-				verbosity++;
-				break;
-			case 'm':
-				get_creds = 1;
-				must_srv_mds = 1;
-				break;
-			case 'o':
-				get_creds = 1;
-				must_srv_oss = 1;
-				break;
-			case 'g':
-				get_creds = 1;
-				must_srv_mgs = 1;
-				break;
-			default:
-				usage(argv[0]);
-				break;
+		case 'f':
+			fg = 1;
+			break;
+		case 'n':
+			get_creds = 0;
+			break;
+		case 'v':
+			verbosity++;
+			break;
+		case 'm':
+			get_creds = 1;
+			must_srv_mds = 1;
+			break;
+		case 'o':
+			get_creds = 1;
+			must_srv_oss = 1;
+			break;
+		case 'g':
+			get_creds = 1;
+			must_srv_mgs = 1;
+			break;
+		case 'k':
+			krb_enabled = 1;
+			break;
+		case 'h':
+			usage(stdout, argv[0]);
+			break;
+		default:
+			usage(stderr, argv[0]);
+			break;
 		}
 	}
 
@@ -230,23 +243,23 @@ main(int argc, char *argv[])
 
 	initerr(progname, verbosity, fg);
 
-	if (gssd_check_mechs() != 0) {
-		printerr(0, "ERROR: Problem with gssapi library\n");
-		exit(1);
-	}
+	/* For kerberos use gss mechanisms but ignore for sk and null */
+	if (krb_enabled && gssd_check_mechs() == 0) {
+		if (gssd_get_local_realm()) {
+			printerr(0, "ERROR: Can't get Local Kerberos realm\n");
+			exit(1);
+		}
 
-	if (gssd_get_local_realm()) {
-		printerr(0, "ERROR: Can't get Local Kerberos realm\n");
-		exit(1);
-	}
-  
-	if (get_creds &&
-	    gssd_prepare_creds(must_srv_mgs, must_srv_mds, must_srv_oss)) {
-                printerr(0, "unable to obtain root (machine) credentials\n");
-                printerr(0, "do you have a keytab entry for "
-			    "<lustre_xxs>/<your.host>@<YOUR.REALM> in "
-			    "/etc/krb5.keytab?\n");
-		exit(1);
+		if (get_creds &&
+		    gssd_prepare_creds(must_srv_mgs, must_srv_mds,
+				       must_srv_oss)) {
+			printerr(0, "unable to obtain root (machine) "
+				 "credentials\n");
+			printerr(0, "do you have a keytab entry for "
+				 "<lustre_xxs>/<your.host>@<YOUR.REALM> in "
+				 "/etc/krb5.keytab?\n");
+			exit(1);
+		}
 	}
 
 	if (!fg)

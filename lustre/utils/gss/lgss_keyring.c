@@ -67,23 +67,24 @@ static char *g_service = NULL;
  * all data about negotiation
  */
 struct lgss_nego_data {
-	uint32_t        lnd_established:1;
+	uint32_t	lnd_established:1;
 
-	int             lnd_secid;
-	uint32_t        lnd_uid;
-	uint32_t        lnd_lsvc;
-	char           *lnd_uuid;
+	int		lnd_secid;
+	uint32_t	lnd_uid;
+	uint32_t	lnd_lsvc;
+	char		*lnd_uuid;
 
-	gss_OID         lnd_mech;               /* mech OID */
-	gss_name_t      lnd_svc_name;           /* service name */
-	unsigned int    lnd_req_flags;          /* request flags */
-	gss_cred_id_t   lnd_cred;               /* credential */
-	gss_ctx_id_t    lnd_ctx;                /* session context */
-	gss_buffer_desc lnd_rmt_ctx;            /* remote handle of context */
-	uint32_t        lnd_seq_win;            /* sequence window */
+	gss_OID		lnd_mech;		/* mech OID */
+	gss_name_t	lnd_svc_name;		/* service name */
+	unsigned int	lnd_req_flags;		/* request flags */
+	gss_cred_id_t	lnd_cred;		/* credential */
+	gss_ctx_id_t	lnd_ctx;		/* session context */
+	gss_buffer_desc	lnd_rmt_ctx;		/* remote handle of context */
+	gss_buffer_desc	lnd_ctx_token;		/* context token for kernel */
+	uint32_t	lnd_seq_win;		/* sequence window */
 
-	int             lnd_rpc_err;
-	int             lnd_gss_err;
+	int		lnd_rpc_err;
+	int		lnd_gss_err;
 };
 
 /*
@@ -98,20 +99,21 @@ struct lgss_init_res {
 };
 
 struct keyring_upcall_param {
-	uint32_t        kup_ver;
-	uint32_t        kup_secid;
-	uint32_t        kup_uid;
-	uint32_t        kup_fsuid;
-	uint32_t        kup_gid;
-	uint32_t        kup_fsgid;
-	uint32_t        kup_svc;
-	uint64_t        kup_nid;
-	uint64_t        kup_selfnid;
-	char            kup_tgt[64];
-	char            kup_mech[16];
-	unsigned int    kup_is_root:1,
-		        kup_is_mdt:1,
-		        kup_is_ost:1;
+	uint32_t	kup_ver;
+	uint32_t	kup_secid;
+	uint32_t	kup_uid;
+	uint32_t	kup_fsuid;
+	uint32_t	kup_gid;
+	uint32_t	kup_fsgid;
+	uint32_t	kup_svc;
+	uint64_t	kup_nid;
+	uint64_t	kup_selfnid;
+	char		kup_svc_type;
+	char		kup_tgt[64];
+	char		kup_mech[16];
+	unsigned int	kup_is_root:1,
+			kup_is_mdt:1,
+			kup_is_ost:1;
 };
 
 /****************************************
@@ -176,7 +178,7 @@ int do_nego_rpc(struct lgss_nego_data *lnd,
         logmsg(LL_TRACE, "do_nego_rpc: to parse reply\n");
         if (param.status) {
 		logmsg(LL_ERR, "status: %ld (%s)\n",
-		       param.status, strerror((int)param.status));
+		       param.status, strerror((int)(-param.status)));
 
                 /* kernel return -ETIMEDOUT means the rpc timedout, we should
                  * notify the caller to reinitiate the gss negotiation, by
@@ -195,15 +197,21 @@ int do_nego_rpc(struct lgss_nego_data *lnd,
         gr->gr_minor = *p++;
         gr->gr_win = *p++;
 
-        gr->gr_ctx.length = *p++;
-        gr->gr_ctx.value = malloc(gr->gr_ctx.length);
-        memcpy(gr->gr_ctx.value, p, gr->gr_ctx.length);
-        p += (((gr->gr_ctx.length + 3) & ~3) / 4);
+	gr->gr_ctx.length = *p++;
+	gr->gr_ctx.value = malloc(gr->gr_ctx.length);
+	if (gr->gr_ctx.value == NULL)
+		return -ENOMEM;
+	memcpy(gr->gr_ctx.value, p, gr->gr_ctx.length);
+	p += (((gr->gr_ctx.length + 3) & ~3) / 4);
 
-        gr->gr_token.length = *p++;
-        gr->gr_token.value = malloc(gr->gr_token.length);
-        memcpy(gr->gr_token.value, p, gr->gr_token.length);
-        p += (((gr->gr_token.length + 3) & ~3) / 4);
+	gr->gr_token.length = *p++;
+	gr->gr_token.value = malloc(gr->gr_token.length);
+	if (gr->gr_token.value == NULL) {
+		free(gr->gr_ctx.value);
+		return -ENOMEM;
+	}
+	memcpy(gr->gr_token.value, p, gr->gr_token.length);
+	p += (((gr->gr_token.length + 3) & ~3) / 4);
 
 	logmsg(LL_DEBUG, "do_nego_rpc: receive handle len %zu, token len %zu, "
 	       "res %d\n", gr->gr_ctx.length, gr->gr_token.length, res);
@@ -321,18 +329,18 @@ static int lgssc_negotiation(struct lgss_nego_data *lnd)
  * if return error, the lnd_rpc_err or lnd_gss_err is set.
  */
 static int lgssc_init_nego_data(struct lgss_nego_data *lnd,
-                                struct keyring_upcall_param *kup,
-                                lgss_mech_t mech)
+				struct keyring_upcall_param *kup,
+				enum lgss_mech mech)
 {
         gss_buffer_desc         sname;
         OM_uint32               maj_stat, min_stat;
 
         memset(lnd, 0, sizeof(*lnd));
 
-        lnd->lnd_secid = kup->kup_secid;
-        lnd->lnd_uid = kup->kup_uid;
-        lnd->lnd_lsvc = kup->kup_svc;
-        lnd->lnd_uuid = kup->kup_tgt;
+	lnd->lnd_secid = kup->kup_secid;
+	lnd->lnd_uid = kup->kup_uid;
+	lnd->lnd_lsvc = kup->kup_svc | mech << LUSTRE_GSS_MECH_SHIFT;
+	lnd->lnd_uuid = kup->kup_tgt;
 
         lnd->lnd_established = 0;
         lnd->lnd_svc_name = GSS_C_NO_NAME;
@@ -474,21 +482,14 @@ out:
         return rc;
 }
 
-/*
- * note we inherited assumed authority from parent process
- */
-static int lgssc_kr_negotiate(key_serial_t keyid, struct lgss_cred *cred,
-                              struct keyring_upcall_param *kup)
+static int lgssc_kr_negotiate_krb(key_serial_t keyid, struct lgss_cred *cred,
+				  struct keyring_upcall_param *kup)
 {
-        struct lgss_nego_data   lnd;
-        gss_buffer_desc         token = GSS_C_EMPTY_BUFFER;
-        OM_uint32               min_stat;
-        int                     rc = -1;
+	struct lgss_nego_data lnd;
+	OM_uint32 min_stat;
+	int rc = -1;
 
-	logmsg(LL_TRACE, "child start on behalf of key %08x: "
-	       "cred %p, uid %u, svc %u, nid %"PRIx64", uids: %u:%u/%u:%u\n",
-	       keyid, cred, cred->lc_uid, cred->lc_tgt_svc, cred->lc_tgt_nid,
-	       kup->kup_uid, kup->kup_gid, kup->kup_fsuid, kup->kup_fsgid);
+	memset(&lnd, 0, sizeof(lnd));
 
         if (lgss_get_service_str(&g_service, kup->kup_svc, kup->kup_nid)) {
                 logmsg(LL_ERR, "key %08x: failed to construct service "
@@ -517,29 +518,53 @@ static int lgssc_kr_negotiate(key_serial_t keyid, struct lgss_cred *cred,
                 goto out;
         }
 
-        rc = serialize_context_for_kernel(lnd.lnd_ctx, &token, lnd.lnd_mech);
-        if (rc) {
-                logmsg(LL_ERR, "key %08x: failed to export context\n", keyid);
-                error_kernel_key(keyid, rc, lnd.lnd_gss_err);
-                goto out;
-        }
+	rc = serialize_context_for_kernel(lnd.lnd_ctx, &lnd.lnd_ctx_token,
+					  lnd.lnd_mech);
+	if (rc) {
+		logmsg(LL_ERR, "key %08x: failed to export context\n", keyid);
+		error_kernel_key(keyid, rc, lnd.lnd_gss_err);
+		goto out;
+	}
 
-        rc = update_kernel_key(keyid,  &lnd, &token);
-        if (rc)
-                goto out;
+	rc = update_kernel_key(keyid,  &lnd, &lnd.lnd_ctx_token);
+	if (rc)
+		goto out;
 
-        rc = 0;
-        logmsg(LL_INFO, "key %08x for user %u is updated OK!\n",
-               keyid, kup->kup_uid);
+	rc = 0;
+	logmsg(LL_INFO, "key %08x for user %u is updated OK!\n",
+	       keyid, kup->kup_uid);
 out:
-        if (token.length != 0)
-                gss_release_buffer(&min_stat, &token);
+	if (lnd.lnd_ctx_token.length != 0)
+		gss_release_buffer(&min_stat, &lnd.lnd_ctx_token);
 
-        lgssc_fini_nego_data(&lnd);
+	lgssc_fini_nego_data(&lnd);
 
 out_cred:
-        lgss_release_cred(cred);
-        return rc;
+	lgss_release_cred(cred);
+	return rc;
+}
+
+/*
+ * note we inherited assumed authority from parent process
+ */
+static int lgssc_kr_negotiate(key_serial_t keyid, struct lgss_cred *cred,
+			      struct keyring_upcall_param *kup)
+{
+	int rc;
+
+	logmsg(LL_TRACE, "child start on behalf of key %08x: "
+	       "cred %p, uid %u, svc %u, nid %"PRIx64", uids: %u:%u/%u:%u\n",
+	       keyid, cred, cred->lc_uid, cred->lc_tgt_svc, cred->lc_tgt_nid,
+	       kup->kup_uid, kup->kup_gid, kup->kup_fsuid, kup->kup_fsgid);
+
+	switch (cred->lc_mech->lmt_mech_n) {
+	case LGSS_MECH_KRB5:
+	default:
+		rc = lgssc_kr_negotiate_krb(keyid, cred, kup);
+		break;
+	}
+
+	return rc;
 }
 
 /*
@@ -549,15 +574,16 @@ out_cred:
  *  [2]: uid            (uint)
  *  [3]: gid            (uint)
  *  [4]: flags          (string) FMT: r-root; m-mdt; o-ost
- *  [5]: lustre_svc     (uint)
- *  [6]: target_nid     (uint64)
- *  [7]: target_uuid    (string)
- *  [8]: self_nid        (uint64)
+ *  [5]: svc type       (char)
+ *  [6]: lustre_svc     (int)
+ *  [7]: target_nid     (uint64)
+ *  [8]: target_uuid    (string)
+ *  [9]: self_nid        (uint64)
  */
 static int parse_callout_info(const char *coinfo,
                               struct keyring_upcall_param *uparam)
 {
-	const int       nargs = 9;
+	const int       nargs = 10;
 	char            buf[1024];
 	char           *string = buf;
 	int             length, i;
@@ -584,9 +610,9 @@ static int parse_callout_info(const char *coinfo,
         }
         data[i] = string;
 
-	logmsg(LL_TRACE, "components: %s,%s,%s,%s,%s,%s,%s,%s,%s\n",
-	       data[0], data[1], data[2], data[3], data[4], data[5],
-	       data[6], data[7], data[8]);
+	logmsg(LL_TRACE, "components: %s,%s,%s,%s,%s,%c,%s,%s,%s,%s\n",
+	       data[0], data[1], data[2], data[3], data[4], data[5][0],
+	       data[6], data[7], data[8], data[9]);
 
 	uparam->kup_secid = strtol(data[0], NULL, 0);
 	strlcpy(uparam->kup_mech, data[1], sizeof(uparam->kup_mech));
@@ -598,19 +624,20 @@ static int parse_callout_info(const char *coinfo,
 		uparam->kup_is_mdt = 1;
 	if (strchr(data[4], 'o'))
 		uparam->kup_is_ost = 1;
-	uparam->kup_svc = strtol(data[5], NULL, 0);
-	uparam->kup_nid = strtoll(data[6], NULL, 0);
-	strlcpy(uparam->kup_tgt, data[7], sizeof(uparam->kup_tgt));
-	uparam->kup_selfnid = strtoll(data[8], NULL, 0);
+	uparam->kup_svc_type = data[5][0];
+	uparam->kup_svc = strtol(data[6], NULL, 0);
+	uparam->kup_nid = strtoll(data[7], NULL, 0);
+	strlcpy(uparam->kup_tgt, data[8], sizeof(uparam->kup_tgt));
+	uparam->kup_selfnid = strtoll(data[9], NULL, 0);
 
 	logmsg(LL_DEBUG, "parse call out info: secid %d, mech %s, ugid %u:%u, "
-	       "is_root %d, is_mdt %d, is_ost %d, svc %d, nid 0x%"PRIx64", "
-	       "tgt %s, self nid 0x%"PRIx64"\n",
+	       "is_root %d, is_mdt %d, is_ost %d, svc type %c, svc %d, "
+	       "nid 0x%"PRIx64", tgt %s, self nid 0x%"PRIx64"\n",
 	       uparam->kup_secid, uparam->kup_mech,
 	       uparam->kup_uid, uparam->kup_gid,
 	       uparam->kup_is_root, uparam->kup_is_mdt, uparam->kup_is_ost,
-	       uparam->kup_svc, uparam->kup_nid, uparam->kup_tgt,
-	       uparam->kup_selfnid);
+	       uparam->kup_svc_type, uparam->kup_svc, uparam->kup_nid,
+	       uparam->kup_tgt, uparam->kup_selfnid);
 	return 0;
 }
 
@@ -743,6 +770,8 @@ int main(int argc, char *argv[])
 	cred->lc_root_flags |= uparam.kup_is_ost ? LGSS_ROOT_CRED_OST : 0;
 	cred->lc_tgt_nid = uparam.kup_nid;
 	cred->lc_tgt_svc = uparam.kup_svc;
+	cred->lc_tgt_uuid = uparam.kup_tgt;
+	cred->lc_svc_type = uparam.kup_svc_type;
 	cred->lc_self_nid = uparam.kup_selfnid;
 
         if (lgss_prepare_cred(cred)) {

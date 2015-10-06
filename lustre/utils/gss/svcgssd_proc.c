@@ -50,14 +50,20 @@
 # include <netdb.h>
 #endif
 
+#include <stdbool.h>
+#include <lnet/nidstr.h>
+
 #include "svcgssd.h"
 #include "gss_util.h"
 #include "err_util.h"
 #include "context.h"
 #include "cacheio.h"
 #include "lsupport.h"
+#include "gss_oids.h"
+#include <lustre/lustre_idl.h>
 
-extern char * mech2file(gss_OID mech);
+extern const char *gss_OID_mech_name(gss_OID mech);
+
 #define SVCGSSD_CONTEXT_CHANNEL "/proc/net/rpc/auth.sptlrpc.context/channel"
 #define SVCGSSD_INIT_CHANNEL    "/proc/net/rpc/auth.sptlrpc.init/channel"
 
@@ -73,16 +79,36 @@ struct svc_cred {
 	uid_t    cr_gid;
 };
 
+struct svc_nego_data {
+	/* kernel data*/
+	uint32_t	lustre_svc;
+	lnet_nid_t	nid;
+	uint64_t	handle_seq;
+	char		nm_name[LUSTRE_NODEMAP_NAME_LENGTH + 1];
+	gss_buffer_desc	in_tok;
+	gss_buffer_desc	out_tok;
+	gss_buffer_desc	in_handle;
+	gss_buffer_desc	out_handle;
+	uint32_t	maj_stat;
+	uint32_t	min_stat;
+
+	/* userspace data */
+	gss_OID			mech;
+	gss_ctx_id_t		ctx;
+	gss_buffer_desc		ctx_token;
+};
+
 static int
 do_svc_downcall(gss_buffer_desc *out_handle, struct svc_cred *cred,
-		gss_OID mech, gss_buffer_desc *context_token)
+		gss_OID mechoid, gss_buffer_desc *context_token)
 {
 	FILE *f;
-	char *fname = NULL;
+	const char *mechname;
 	int err;
 
 	printerr(2, "doing downcall\n");
-	if ((fname = mech2file(mech)) == NULL)
+	mechname = gss_OID_mech_name(mechoid);
+	if (mechname == NULL)
 		goto out_err;
 	f = fopen(SVCGSSD_CONTEXT_CHANNEL, "w");
 	if (f == NULL) {
@@ -93,7 +119,7 @@ do_svc_downcall(gss_buffer_desc *out_handle, struct svc_cred *cred,
 	}
 	qword_printhex(f, out_handle->value, out_handle->length);
 	/* XXX are types OK for the rest of this? */
-	qword_printint(f, 0x7fffffff); /*XXX need a better timeout */
+	qword_printint(f, 3600); /* an hour should be sufficient */
 	qword_printint(f, cred->cr_remote);
 	qword_printint(f, cred->cr_usr_root);
 	qword_printint(f, cred->cr_usr_mds);
@@ -101,7 +127,7 @@ do_svc_downcall(gss_buffer_desc *out_handle, struct svc_cred *cred,
 	qword_printint(f, cred->cr_mapped_uid);
 	qword_printint(f, cred->cr_uid);
 	qword_printint(f, cred->cr_gid);
-	qword_print(f, fname);
+	qword_print(f, mechname);
 	qword_printhex(f, context_token->value, context_token->length);
 	err = qword_eol(f);
 	fclose(f);
@@ -133,7 +159,7 @@ send_response(FILE *f, gss_buffer_desc *in_handle, gss_buffer_desc *in_token,
 
 	qword_addhex(&bp, &blen, in_handle->value, in_handle->length);
 	qword_addhex(&bp, &blen, in_token->value, in_token->length);
-	qword_addint(&bp, &blen, 0x7fffffff); /*XXX need a better timeout */
+	qword_addint(&bp, &blen, 3600);	/* an hour should be sufficient */
 	qword_adduint(&bp, &blen, maj_stat);
 	qword_adduint(&bp, &blen, min_stat);
 	qword_addhex(&bp, &blen, out_handle->value, out_handle->length);
@@ -466,117 +492,47 @@ typedef struct gss_union_ctx_id_t {
 	gss_ctx_id_t    internal_ctx_id;
 } gss_union_ctx_id_desc, *gss_union_ctx_id_t;
 
-/*
- * return -1 only if we detect error during reading from upcall channel,
- * all other cases return 0.
- */
-int
-handle_nullreq(FILE *f) {
-	uint64_t		handle_seq;
-	char			in_tok_buf[TOKEN_BUF_SIZE];
-	char			in_handle_buf[15];
-	char			out_handle_buf[15];
-	gss_buffer_desc		in_tok = {.value = in_tok_buf},
-				out_tok = {.value = NULL},
-				in_handle = {.value = in_handle_buf},
-				out_handle = {.value = out_handle_buf},
-				ctx_token = {.value = NULL},
-				ignore_out_tok = {.value = NULL},
-	/* XXX isn't there a define for this?: */
-				null_token = {.value = NULL};
-	uint32_t		lustre_svc;
-	lnet_nid_t		nid;
-	u_int32_t		ret_flags;
-	gss_ctx_id_t		ctx = GSS_C_NO_CONTEXT;
-	gss_name_t		client_name;
-	gss_OID			mech = GSS_C_NO_OID;
-	gss_cred_id_t		svc_cred;
-	u_int32_t		maj_stat = GSS_S_FAILURE, min_stat = 0;
-	u_int32_t		ignore_min_stat;
-	int			get_len;
-	struct svc_cred		cred;
-	static char		*lbuf = NULL;
-	static int		lbuflen = 0;
-	static char		*cp;
+static int handle_krb(struct svc_nego_data *snd)
+{
+	u_int32_t               ret_flags;
+	gss_name_t              client_name;
+	gss_buffer_desc         ignore_out_tok = {.value = NULL};
+	gss_OID                 mech = GSS_C_NO_OID;
+	gss_cred_id_t           svc_cred;
+	u_int32_t               ignore_min_stat;
+	struct svc_cred         cred;
 
-	printerr(2, "handling null request\n");
-
-	if (readline(fileno(f), &lbuf, &lbuflen) != 1) {
-		printerr(0, "WARNING: handle_nullreq: "
-			    "failed reading request\n");
-		return -1;
-	}
-
-	cp = lbuf;
-
-	qword_get(&cp, (char *) &lustre_svc, sizeof(lustre_svc));
-	qword_get(&cp, (char *) &nid, sizeof(nid));
-	qword_get(&cp, (char *) &handle_seq, sizeof(handle_seq));
-	printerr(2, "handling req: svc %u, nid %016llx, idx %"PRIx64"\n",
-		 lustre_svc, nid, handle_seq);
-
-	get_len = qword_get(&cp, in_handle.value, sizeof(in_handle_buf));
-	if (get_len < 0) {
-		printerr(0, "WARNING: handle_nullreq: "
-			    "failed parsing request\n");
-		goto out_err;
-	}
-	in_handle.length = (size_t)get_len;
-
-	printerr(3, "in_handle:\n");
-	print_hexl(3, in_handle.value, in_handle.length);
-
-	get_len = qword_get(&cp, in_tok.value, sizeof(in_tok_buf));
-	if (get_len < 0) {
-		printerr(0, "WARNING: handle_nullreq: "
-			    "failed parsing request\n");
-		goto out_err;
-	}
-	in_tok.length = (size_t)get_len;
-
-	printerr(3, "in_tok:\n");
-	print_hexl(3, in_tok.value, in_tok.length);
-
-	if (in_handle.length != 0) { /* CONTINUE_INIT case */
-		if (in_handle.length != sizeof(ctx)) {
-			printerr(0, "WARNING: handle_nullreq: "
-				    "input handle has unexpected length %zu\n",
-				    in_handle.length);
-			goto out_err;
-		}
-		/* in_handle is the context id stored in the out_handle
-		 * for the GSS_S_CONTINUE_NEEDED case below.  */
-		memcpy(&ctx, in_handle.value, in_handle.length);
-	}
-
-	svc_cred = gssd_select_svc_cred(lustre_svc);
+	svc_cred = gssd_select_svc_cred(snd->lustre_svc);
 	if (!svc_cred) {
-		printerr(0, "no service credential for svc %u\n", lustre_svc);
+		printerr(0, "no service credential for svc %u\n",
+			 snd->lustre_svc);
 		goto out_err;
 	}
 
-	maj_stat = gss_accept_sec_context(&min_stat, &ctx, svc_cred,
-			&in_tok, GSS_C_NO_CHANNEL_BINDINGS, &client_name,
-			&mech, &out_tok, &ret_flags, NULL, NULL);
+	snd->maj_stat = gss_accept_sec_context(&snd->min_stat, &snd->ctx,
+					       svc_cred, &snd->in_tok,
+					       GSS_C_NO_CHANNEL_BINDINGS,
+					       &client_name, &mech,
+					       &snd->out_tok, &ret_flags, NULL,
+					       NULL);
 
-	if (maj_stat == GSS_S_CONTINUE_NEEDED) {
+	if (snd->maj_stat == GSS_S_CONTINUE_NEEDED) {
 		printerr(1, "gss_accept_sec_context GSS_S_CONTINUE_NEEDED\n");
 
 		/* Save the context handle for future calls */
-		out_handle.length = sizeof(ctx);
-		memcpy(out_handle.value, &ctx, sizeof(ctx));
-		goto continue_needed;
-	}
-	else if (maj_stat != GSS_S_COMPLETE) {
+		snd->out_handle.length = sizeof(snd->ctx);
+		memcpy(snd->out_handle.value, &snd->ctx, sizeof(snd->ctx));
+		return 0;
+	} else if (snd->maj_stat != GSS_S_COMPLETE) {
 		printerr(0, "WARNING: gss_accept_sec_context failed\n");
-		pgsserr("handle_nullreq: gss_accept_sec_context",
-			maj_stat, min_stat, mech);
+		pgsserr("handle_krb: gss_accept_sec_context",
+			snd->maj_stat, snd->min_stat, mech);
 		goto out_err;
 	}
 
-	if (get_ids(client_name, mech, &cred, nid, lustre_svc)) {
+	if (get_ids(client_name, mech, &cred, snd->nid, snd->lustre_svc)) {
 		/* get_ids() prints error msg */
-		maj_stat = GSS_S_BAD_NAME; /* XXX ? */
+		snd->maj_stat = GSS_S_BAD_NAME; /* XXX ? */
 		gss_release_name(&ignore_min_stat, &client_name);
 		goto out_err;
 	}
@@ -584,35 +540,150 @@ handle_nullreq(FILE *f) {
 
 	/* Context complete. Pass handle_seq in out_handle to use
 	 * for context lookup in the kernel. */
-	out_handle.length = sizeof(handle_seq);
-	memcpy(out_handle.value, &handle_seq, sizeof(handle_seq));
+	snd->out_handle.length = sizeof(snd->handle_seq);
+	memcpy(snd->out_handle.value, &snd->handle_seq,
+	       sizeof(snd->handle_seq));
 
 	/* kernel needs ctx to calculate verifier on null response, so
 	 * must give it context before doing null call: */
-	if (serialize_context_for_kernel(ctx, &ctx_token, mech)) {
-		printerr(0, "WARNING: handle_nullreq: "
-			    "serialize_context_for_kernel failed\n");
-		maj_stat = GSS_S_FAILURE;
+	if (serialize_context_for_kernel(snd->ctx, &snd->ctx_token, mech)) {
+		printerr(0, "WARNING: handle_krb: "
+			 "serialize_context_for_kernel failed\n");
+		snd->maj_stat = GSS_S_FAILURE;
 		goto out_err;
 	}
 	/* We no longer need the gss context */
-	gss_delete_sec_context(&ignore_min_stat, &ctx, &ignore_out_tok);
+	gss_delete_sec_context(&ignore_min_stat, &snd->ctx, &ignore_out_tok);
+	do_svc_downcall(&snd->out_handle, &cred, mech, &snd->ctx_token);
 
-	do_svc_downcall(&out_handle, &cred, mech, &ctx_token);
-continue_needed:
-	send_response(f, &in_handle, &in_tok, maj_stat, min_stat,
-			&out_handle, &out_tok);
-out:
-	if (ctx_token.value != NULL)
-		free(ctx_token.value);
-	if (out_tok.value != NULL)
-		gss_release_buffer(&ignore_min_stat, &out_tok);
 	return 0;
 
 out_err:
-	if (ctx != GSS_C_NO_CONTEXT)
-		gss_delete_sec_context(&ignore_min_stat, &ctx, &ignore_out_tok);
-	send_response(f, &in_handle, &in_tok, maj_stat, min_stat,
-			&null_token, &null_token);
-	goto out;
+	if (snd->ctx != GSS_C_NO_CONTEXT)
+		gss_delete_sec_context(&ignore_min_stat, &snd->ctx,
+				       &ignore_out_tok);
+
+	return 1;
 }
+
+/*
+ * return -1 only if we detect error during reading from upcall channel,
+ * all other cases return 0.
+ */
+int handle_channel_request(FILE *f)
+{
+	char			in_tok_buf[TOKEN_BUF_SIZE];
+	char			in_handle_buf[15];
+	char			out_handle_buf[15];
+	gss_buffer_desc		ctx_token      = {.value = NULL},
+				null_token     = {.value = NULL};
+	uint32_t		lustre_mech;
+	static char		*lbuf;
+	static int		lbuflen;
+	static char		*cp;
+	int			get_len;
+	int			rc = 1;
+	u_int32_t		ignore_min_stat;
+	struct svc_nego_data	snd = {
+		.in_tok.value		= in_tok_buf,
+		.in_handle.value	= in_handle_buf,
+		.out_handle.value	= out_handle_buf,
+		.maj_stat		= GSS_S_FAILURE,
+		.ctx			= GSS_C_NO_CONTEXT,
+	};
+
+	printerr(2, "handling request\n");
+	if (readline(fileno(f), &lbuf, &lbuflen) != 1) {
+		printerr(0, "WARNING: handle_req: failed reading request\n");
+		return -1;
+	}
+
+	cp = lbuf;
+
+	/* see rsi_request() for the format of data being input here */
+	qword_get(&cp, (char *)&snd.lustre_svc, sizeof(snd.lustre_svc));
+
+	/* lustre_svc is the svc and gss subflavor */
+	lustre_mech = (snd.lustre_svc & LUSTRE_GSS_MECH_MASK) >>
+		      LUSTRE_GSS_MECH_SHIFT;
+	snd.lustre_svc = snd.lustre_svc & LUSTRE_GSS_SVC_MASK;
+	switch (lustre_mech) {
+	case LGSS_MECH_KRB5:
+		if (!krb_enabled) {
+			printerr(1, "WARNING: Request for kerberos but service "
+				 "support not enabled\n");
+			goto ignore;
+		}
+		snd.mech = &krb5oid;
+		break;
+	default:
+		printerr(0, "WARNING: invalid mechanism recevied: %d\n",
+			 lustre_mech);
+		goto out_err;
+		break;
+	}
+
+	qword_get(&cp, (char *)&snd.nid, sizeof(snd.nid));
+	qword_get(&cp, (char *)&snd.handle_seq, sizeof(snd.handle_seq));
+	qword_get(&cp, snd.nm_name, sizeof(snd.nm_name));
+	printerr(2, "handling req: svc %u, nid %016llx, idx %"PRIx64" nodemap "
+		 "%s\n", snd.lustre_svc, snd.nid, snd.handle_seq, snd.nm_name);
+
+	get_len = qword_get(&cp, snd.in_handle.value, sizeof(in_handle_buf));
+	if (get_len < 0) {
+		printerr(0, "WARNING: handle_req: failed parsing request\n");
+		goto out_err;
+	}
+	snd.in_handle.length = (size_t)get_len;
+
+	printerr(3, "in_handle:\n");
+	print_hexl(3, snd.in_handle.value, snd.in_handle.length);
+
+	get_len = qword_get(&cp, snd.in_tok.value, sizeof(in_tok_buf));
+	if (get_len < 0) {
+		printerr(0, "WARNING: handle_req: failed parsing request\n");
+		goto out_err;
+	}
+	snd.in_tok.length = (size_t)get_len;
+
+	printerr(3, "in_tok:\n");
+	print_hexl(3, snd.in_tok.value, snd.in_tok.length);
+
+	if (snd.in_handle.length != 0) { /* CONTINUE_INIT case */
+		if (snd.in_handle.length != sizeof(snd.ctx)) {
+			printerr(0, "WARNING: handle_req: "
+				    "input handle has unexpected length %zu\n",
+				    snd.in_handle.length);
+			goto out_err;
+		}
+		/* in_handle is the context id stored in the out_handle
+		 * for the GSS_S_CONTINUE_NEEDED case below.  */
+		memcpy(&snd.ctx, snd.in_handle.value, snd.in_handle.length);
+	}
+
+	if (lustre_mech == LGSS_MECH_KRB5)
+		rc = handle_krb(&snd);
+	else
+		printerr(0, "WARNING: Received or request for"
+			 "subflavor that is not enabled: %d\n", lustre_mech);
+
+out_err:
+	/* Failures send a null token */
+	if (rc == 0)
+		send_response(f, &snd.in_handle, &snd.in_tok, snd.maj_stat,
+			      snd.min_stat, &snd.out_handle, &snd.out_tok);
+	else
+		send_response(f, &snd.in_handle, &snd.in_tok, snd.maj_stat,
+			      snd.min_stat, &null_token, &null_token);
+
+	/* cleanup buffers */
+	if (snd.ctx_token.value != NULL)
+		free(ctx_token.value);
+	if (snd.out_tok.value != NULL)
+		gss_release_buffer(&ignore_min_stat, &snd.out_tok);
+
+	/* For junk wire data just ignore */
+ignore:
+	return 0;
+}
+
