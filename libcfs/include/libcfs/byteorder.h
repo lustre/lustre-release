@@ -20,7 +20,7 @@
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2014, Intel Corporation.
+ * Copyright (c) 2014, 2015, Intel Corporation.
  * Author: John L. Hammond <john.hammond@intel.com>
  */
 #ifndef _LIBCFS_BYTEORDER_H

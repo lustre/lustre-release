@@ -20,7 +20,11 @@
  * GPL HEADER END
  */
 
-/* Copyright 2014, 2015 Cray Inc, all rights reserved. */
+/*
+ * Copyright 2014, 2015 Cray Inc, all rights reserved.
+ *
+ * Copyright (c) 2015, Intel Corporation.
+ */
 /* Some portions are extracted from llapi_layout_test.c */
 
 /* The purpose of this test is to check some HSM functions. HSM must

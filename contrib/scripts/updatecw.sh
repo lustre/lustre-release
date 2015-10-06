@@ -20,9 +20,9 @@ INTCOPY=${INTCOPY:-"Copyright.*Intel Corporation"}
 #Emails we assume ownership of
 AUTH_WHAM=${AUTH_WHAM:-".*@whamcloud.com"}
 AUTH_INT=${AUTH_INT:-".*@intel.com"}
+AUTHOR=${AUTHOR:-$AUTH_INT|$AUTH_WHAM}
 
-#Post Oracle date
-START=${START:-"2010-06-01"}
+START=${START:-"2010-06-01"}	# Post Oracle date
 ECHOE=${ECHOE:-"echo -e"}
 [ "$($ECHOE foo)" = "-e foo" ] && ECHOE=echo
 
@@ -54,6 +54,55 @@ e5f552b70dccbd2fdf21ec7b7053a01bcbe062c2
 e64d9101cc8ebc61924d6e9db6d7ab3cfa94767c
 f2a9374170e4522b9d2ac3b7096cf2912339d480
 fc1475ebdd64cd8eccc603d629ac6b4dcd222445
+b6332b5c0dfe28d6b574e206ae651262337a8309
+5acebd778f7427e8221e2cd6e463c76649f83ad3
+2b294992edce5af7b79d4300ed3aa1ea6a8db850
+faeb94fe81e4646b3121c263521d30e0e83fa71f
+3b84a1ee5213563945225854a50e9037bb9646db
+c6aab2ca77831852db22b7dc39baed4d06405b7e
+26b8238659974959780cd49de92595b4b0bdf89f
+7817e4c785d075aae76b635dcf799064590833b0
+930dca7253bc2531bffa15dc763db1081cdf32d8
+d843591c30d63bf54024e21b48dec92eb0ec9f68
+1738e70fe6aaf1e07b78a6b89eb11ea115135e69
+353ef58b1d2394c4721a340e2463b07d4069d99c
+b0638b322b8c8adb2cf5f6189efd17ad70f3af2c
+83ae3e2e5b9713822ea4889d832915e791801d90
+315f6e0237b676a7512a4d2fa5765ad57483676e
+7b63a5dab65cde131627bf22d16d6e13cf259686
+6eda93c7b5f65324bdc831100a17c0bef1a3c078
+355a283fce6998f5b5621adc9697d98d0fb72dfe
+e2d2fbc07bf8f45e19d8f3127c3a7088351126d6
+89e685e154daba096c8388e39e279c6e6b342940
+4c3858b3c88d2a2f443d348945229f5995f3e1dd
+d5d5b349f23e769ae4c6307a295c532856af9c21
+be4372fddbada6d026f4188a7e88c6a11d0a83d4
+bb6dbca9c2c9bdcd33663d6449b27a671fcaf902
+65e067d5d90270d4237a7271008561a4b432b94d
+3151aa574e2c9bd3343dad11577cba3c55c16dca
+bca975c7fa261ffb926e8a18d5869b886c65f447
+8fdb46e476f0f54025fd9ff85c274f2ed86315f0
+8f1c8dbe2389e1ef1e1d3387e343fb9a1bb84198
+8daba6a7381a2fb8cc933f7e9486f60e659465d4
+2bac2cd8f7bf7f31b92e976d500d89b958ab1788
+95f85ba9ed5df66a0385755be62254322fc447e1
+8f27184b14a192848429e52ac234805c324e1f7a
+3dc94d835dc3adf871c3603fc91c08bdd36701ff
+25670bb8c21deb64cfbb277bdeeab6e7ee39aa0e
+f4b93dff9a8f4a59976ea864c4e3c2c42faa5770
+aab1d832130ee5c181cf7e0e5aa555244d150b00
+32bd5051a518c57e35f51b7f3c7f739b5ef91b25
+9fdef0896b78d85312269e97962d9818b395f57a
+fdd5596593050d22feef05ecba6ba53c65cb3397
+4817574ad5a31d6dbafc2bd0dfc2b6a33851ea11
+55f2a237320f23cb59df23518f5a72698d4f251c
+06c83e0109b2e934ac8cbcdcb2a22f184fe546f5
+315f6e0237b676a7512a4d2fa5765ad57483676e
+63a296c31a51cf8ac29f6e339e5686192da14769
+6c0fa97869b568a7af2d21e7e4ed2b440b7dfa27
+97da796bd3d9b98f6b65ecce493044a3e7404607
+9bf46408b3c2c8b7f939d7000a9e8df38c3fd6ed
+eebeee9afa368d62b9a0813652a4c14430bd8e35
 EXCLUDE_END
 [ -n "$EXCLUDE" ] && echo "$EXCLUDE" >> $EXCFILE
 
@@ -87,7 +136,7 @@ git ls-files $DIRS | while read FILE; do
 	# %ai author dates holds has bad data, use %ci instead
 	# Exclude revert commits and the patch being reverted.
 	git log --follow --since=$START --pretty=format:"%ci %ae %H" $FILE |
-		grep -v -f $EXCFILE | egrep -e "$AUTH_INT|$AUTH_WHAM" |
+		grep -v -f $EXCFILE | egrep -e "$AUTHOR" |
 		while read YYYY TTTT TZZZ AUTHOR HASH; do
 			REVERT=$(git show -s $HASH |
 				 awk '/This reverts commit/ { print $4 }')
@@ -116,11 +165,6 @@ git ls-files $DIRS | while read FILE; do
 	if [ -z "$(grep "$INTCOPY" <<<"$OLDCOPY")" ]; then
 		ADDCOPY=true
 		OLDCOPY="$(egrep "$OLDCOPY1|$OLDCOPY2" $FILE| tail -n1| tr / .)"
-	fi
-	if [ -n "$(grep "Commissariat" <<<"$OLDCOPY")"]; then
-		INSPECT="** INSPECT **"
-	else
-		INSPECT=""
 	fi
 
 	# Get commit dates
@@ -156,17 +200,22 @@ git ls-files $DIRS | while read FILE; do
 		continue
 
 	if $ADDCOPY; then
-		echo "$FILE: Copyright $YEAR (new Copyright added) $INSPECT"
+		echo "$FILE: $NEWCOPY (newly added) ** INSPECT **"
 		# Add a new copyright line after the existing copyright.
 		# Using a temporary file is ugly, but I couldn't get
 		# newlines into the substitution pattern for some reason,
 		# and this is not a performance-critical process.
 		$ECHOE "${COMMENT}\n${NEWCOPY}" > $TMPFILE
 		# The man page comment .\" (currently .") needs '\' added back
-		sed -e "/$OLDCOPY/r $TMPFILE"
+		sed -e "/$OLDCOPY/r $TMPFILE" \
 		    -e 's/^\."/.\\"/' $FILE > $FILE.tmp
 	else
-		echo "$FILE: Copyright $YEAR $INSPECT"
+		if grep -q "Commissariat" <<<"$OLDCOPY"; then
+			INSPECT="** INSPECT **"
+		else
+			INSPECT=""
+		fi
+		echo "$FILE: $NEWCOPY $INSPECT"
 		# Replace the old copyright line with a new copyright
 		# The man page comment .\" (currently .") needs '\' added back
 		sed -e "s/.*$INTCOPY.*/$NEWCOPY/" \
@@ -177,6 +226,6 @@ git ls-files $DIRS | while read FILE; do
 done
 if [ -s $HASHFILE ]; then
 	echo "commits causing the most changes"
-	sort $HASHFILE | uniq -c | sort -nr | head -20
+	sort $HASHFILE | uniq -c | sort -nr | head -30
 fi
 rm -f $TMPFILE $TMPFILE.2

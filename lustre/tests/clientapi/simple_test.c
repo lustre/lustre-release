@@ -21,7 +21,7 @@
  */
 
 /*
- * Copyright (c) 2013, Intel Corporporation.
+ * Copyright (c) 2013, Intel Corporation.
  * Use is subject to license terms.
  */
 

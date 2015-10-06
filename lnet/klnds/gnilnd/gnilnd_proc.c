@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2009-2012 Cray, Inc.
  *
- * Copyright (c) 2013, Intel Corporation.
+ * Copyright (c) 2013, 2015, Intel Corporation.
  *
  *   Author: Nic Henke <nic@cray.com>
  *
