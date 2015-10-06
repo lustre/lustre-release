@@ -444,6 +444,12 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
 	LASSERT(ldlm_is_res_locked(lock));
 	LASSERT(!ldlm_is_cancel_on_block(lock));
 
+	/* Do not put cross-MDT lock in the waiting list, since we
+	 * will not evict it due to timeout for now */
+	if (lock->l_export != NULL &&
+	    (exp_connect_flags(lock->l_export) & OBD_CONNECT_MDS_MDS))
+		return 0;
+
 	spin_lock_bh(&waiting_locks_spinlock);
 	if (ldlm_is_cancel(lock)) {
 		spin_unlock_bh(&waiting_locks_spinlock);
@@ -556,6 +562,12 @@ int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, int timeout)
 	if (lock->l_export == NULL) {
 		/* We don't have a "waiting locks list" on clients. */
 		LDLM_DEBUG(lock, "client lock: no-op");
+		return 0;
+	}
+
+	if (exp_connect_flags(lock->l_export) & OBD_CONNECT_MDS_MDS) {
+		/* We don't have a "waiting locks list" on OSP. */
+		LDLM_DEBUG(lock, "MDS-MDS lock: no-op");
 		return 0;
 	}
 
