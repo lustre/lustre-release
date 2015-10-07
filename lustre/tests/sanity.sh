@@ -12996,7 +12996,54 @@ test_230e() {
 
 	rm -rf $DIR/$tdir || error "rm dir failed after migration"
 }
-run_test 230e "migrate mulitple link files"
+run_test 230e "migrate mulitple local link files"
+
+test_230f() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local a_fid
+	local ln_fid
+
+	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir/migrate_dir
+	$LFS mkdir -i1 $DIR/$tdir/other_dir
+	touch $DIR/$tdir/migrate_dir/a
+	ln $DIR/$tdir/migrate_dir/a $DIR/$tdir/other_dir/ln1
+	ln $DIR/$tdir/migrate_dir/a $DIR/$tdir/other_dir/ln2
+
+	# a should be migrated to MDT1, since no other links on MDT0
+	$LFS migrate -m 1 $DIR/$tdir/migrate_dir ||
+		error "migrate dir fails"
+	mdt_index=$($LFS getstripe -M $DIR/$tdir/migrate_dir)
+	[ $mdt_index == 1 ] || error "migrate_dir is not on MDT1"
+	mdt_index=$($LFS getstripe -M $DIR/$tdir/migrate_dir/a)
+	[ $mdt_index == 1 ] || error "a is not on MDT1"
+
+	# a should stay on MDT1, because it is a mulitple link file
+	$LFS migrate -m 0 $DIR/$tdir/migrate_dir ||
+		error "migrate dir fails"
+	mdt_index=$($LFS getstripe -M $DIR/$tdir/migrate_dir/a)
+	[ $mdt_index == 1 ] || error "a is not on MDT1"
+
+	$LFS migrate -m 1 $DIR/$tdir/migrate_dir ||
+		error "migrate dir fails"
+
+	a_fid=$($LFS path2fid $DIR/$tdir/migrate_dir/a)
+	ln_fid=$($LFS path2fid $DIR/$tdir/other_dir/ln1)
+	[ "$a_fid" = "$ln_fid" ] || error "different fid after migrate to MDT1"
+
+	rm -rf $DIR/$tdir/other_dir/ln1 || error "unlink ln1 fails"
+	rm -rf $DIR/$tdir/other_dir/ln2 || error "unlink ln2 fails"
+
+	# a should be migrated to MDT0, since no other links on MDT1
+	$LFS migrate -m 0 $DIR/$tdir/migrate_dir ||
+		error "migrate dir fails"
+	mdt_index=$($LFS getstripe -M $DIR/$tdir/migrate_dir/a)
+	[ $mdt_index == 0 ] || error "a is not on MDT0"
+
+	rm -rf $DIR/$tdir || error "rm dir failed after migration"
+}
+run_test 230f "migrate mulitple remote link files"
 
 test_231a()
 {

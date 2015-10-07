@@ -159,6 +159,7 @@ struct mdd_thread_info {
 	struct md_op_spec	  mti_spec;
 	struct dt_insert_rec	  mti_dt_rec;
 	struct lfsck_request	  mti_lr;
+	struct lu_seq_range	  mti_range;
 };
 
 enum mdd_links_add_overflow {

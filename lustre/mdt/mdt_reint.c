@@ -1296,27 +1296,33 @@ static int mdt_lock_objects_in_linkea(struct mdt_thread_info *info,
 
 		linkea_entry_unpack(ldata.ld_lee, &ldata.ld_reclen,
 				    &name, &fid);
-		ldata.ld_lee = (struct link_ea_entry *)((char *)ldata.ld_lee +
-							 ldata.ld_reclen);
 		mdt_pobj = mdt_object_find(info->mti_env, mdt, &fid);
 		if (IS_ERR(mdt_pobj)) {
 			CWARN("%s: cannot find obj "DFID": rc = %ld\n",
 			      mdt_obd_name(mdt), PFID(&fid), PTR_ERR(mdt_pobj));
-			continue;
+			goto next;
 		}
 
 		if (!mdt_object_exists(mdt_pobj)) {
 			CDEBUG(D_INFO, "%s: obj "DFID" does not exist\n",
 			      mdt_obd_name(mdt), PFID(&fid));
 			mdt_object_put(info->mti_env, mdt_pobj);
-			continue;
+			goto next;
+		}
+
+		/* Check if the object already exists in the list */
+		list_for_each_entry(mll, lock_list, mll_list) {
+			if (mll->mll_obj == mdt_pobj) {
+				mdt_object_put(info->mti_env, mdt_pobj);
+				goto next;
+			}
 		}
 
 		if (mdt_pobj == pobj) {
 			CDEBUG(D_INFO, "%s: skipping parent obj "DFID"\n",
 			       mdt_obd_name(mdt), PFID(&fid));
 			mdt_object_put(info->mti_env, mdt_pobj);
-			continue;
+			goto next;
 		}
 
 		OBD_ALLOC_PTR(mll);
@@ -1344,6 +1350,10 @@ static int mdt_lock_objects_in_linkea(struct mdt_thread_info *info,
 		INIT_LIST_HEAD(&mll->mll_list);
 		mll->mll_obj = mdt_pobj;
 		list_add_tail(&mll->mll_list, lock_list);
+next:
+		ldata.ld_lee = (struct link_ea_entry *)((char *)ldata.ld_lee +
+							 ldata.ld_reclen);
+
 	}
 out:
 	if (rc != 0)
