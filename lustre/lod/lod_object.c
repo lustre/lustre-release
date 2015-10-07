@@ -3373,6 +3373,9 @@ static int lod_declare_init_size(const struct lu_env *env,
 	LASSERT(lo->ldo_stripe || lo->ldo_stripenr == 0);
 	LASSERT(lo->ldo_stripe_size > 0);
 
+	if (lo->ldo_stripenr == 0)
+		RETURN(0);
+
 	rc = dt_attr_get(env, next, attr);
 	LASSERT(attr->la_valid & LA_SIZE);
 	if (rc)

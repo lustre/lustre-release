@@ -3032,6 +3032,19 @@ test_58() {
 }
 run_test 58 "Truncate a released file will trigger restore"
 
+test_59() {
+	local fid
+	copytool_setup
+	$MCREATE $DIR/$tfile || error "mcreate failed"
+	$TRUNCATE $DIR/$tfile 42 || error "truncate failed"
+	$LFS hsm_archive $DIR/$tfile || error "archive request failed"
+	fid=$(path2fid $DIR/$tfile)
+	wait_request_state $fid ARCHIVE SUCCEED
+	$LFS hsm_release $DIR/$tfile || error "release failed"
+	copytool_cleanup
+}
+run_test 59 "Release stripeless file with non-zero size"
+
 test_60() {
 	# This test validates the fix for LU-4512. Ensure that the -u
 	# option changes the progress reporting interval from the
