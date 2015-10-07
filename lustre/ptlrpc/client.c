@@ -651,71 +651,66 @@ static void __ptlrpc_free_req_to_pool(struct ptlrpc_request *request)
 	spin_unlock(&pool->prp_lock);
 }
 
-static int __ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
-                                      __u32 version, int opcode,
-                                      int count, __u32 *lengths, char **bufs,
-                                      struct ptlrpc_cli_ctx *ctx)
+int ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
+			     __u32 version, int opcode, char **bufs,
+			     struct ptlrpc_cli_ctx *ctx)
 {
-        struct obd_import  *imp = request->rq_import;
-        int                 rc;
-        ENTRY;
+	int count;
+	struct obd_import *imp;
+	__u32 *lengths;
+	int rc;
 
-        if (unlikely(ctx))
-                request->rq_cli_ctx = sptlrpc_cli_ctx_get(ctx);
-        else {
-                rc = sptlrpc_req_get_ctx(request);
-                if (rc)
-                        GOTO(out_free, rc);
-        }
+	ENTRY;
 
-        sptlrpc_req_set_flavor(request, opcode);
+	count = req_capsule_filled_sizes(&request->rq_pill, RCL_CLIENT);
+	imp = request->rq_import;
+	lengths = request->rq_pill.rc_area[RCL_CLIENT];
 
-        rc = lustre_pack_request(request, imp->imp_msg_magic, count,
-                                 lengths, bufs);
-        if (rc) {
-                LASSERT(!request->rq_pool);
-                GOTO(out_ctx, rc);
-        }
+	if (ctx != NULL) {
+		request->rq_cli_ctx = sptlrpc_cli_ctx_get(ctx);
+	} else {
+		rc = sptlrpc_req_get_ctx(request);
+		if (rc)
+			GOTO(out_free, rc);
+	}
+	sptlrpc_req_set_flavor(request, opcode);
 
-        lustre_msg_add_version(request->rq_reqmsg, version);
-        request->rq_send_state = LUSTRE_IMP_FULL;
-        request->rq_type = PTL_RPC_MSG_REQUEST;
+	rc = lustre_pack_request(request, imp->imp_msg_magic, count,
+				 lengths, bufs);
+	if (rc)
+		GOTO(out_ctx, rc);
 
-        request->rq_req_cbid.cbid_fn  = request_out_callback;
-        request->rq_req_cbid.cbid_arg = request;
+	lustre_msg_add_version(request->rq_reqmsg, version);
+	request->rq_send_state = LUSTRE_IMP_FULL;
+	request->rq_type = PTL_RPC_MSG_REQUEST;
 
-        request->rq_reply_cbid.cbid_fn  = reply_in_callback;
-        request->rq_reply_cbid.cbid_arg = request;
+	request->rq_req_cbid.cbid_fn  = request_out_callback;
+	request->rq_req_cbid.cbid_arg = request;
 
-        request->rq_reply_deadline = 0;
-        request->rq_phase = RQ_PHASE_NEW;
-        request->rq_next_phase = RQ_PHASE_UNDEFINED;
+	request->rq_reply_cbid.cbid_fn  = reply_in_callback;
+	request->rq_reply_cbid.cbid_arg = request;
 
-        request->rq_request_portal = imp->imp_client->cli_request_portal;
-        request->rq_reply_portal = imp->imp_client->cli_reply_portal;
+	request->rq_reply_deadline = 0;
+	request->rq_phase = RQ_PHASE_NEW;
+	request->rq_next_phase = RQ_PHASE_UNDEFINED;
 
-        ptlrpc_at_set_req_timeout(request);
+	request->rq_request_portal = imp->imp_client->cli_request_portal;
+	request->rq_reply_portal = imp->imp_client->cli_reply_portal;
+
+	ptlrpc_at_set_req_timeout(request);
 
 	lustre_msg_set_opc(request->rq_reqmsg, opcode);
 
 	RETURN(0);
+
 out_ctx:
+	LASSERT(!request->rq_pool);
 	sptlrpc_cli_ctx_put(request->rq_cli_ctx, 1);
 out_free:
 	class_import_put(imp);
+
 	return rc;
-}
 
-int ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
-                             __u32 version, int opcode, char **bufs,
-                             struct ptlrpc_cli_ctx *ctx)
-{
-        int count;
-
-        count = req_capsule_filled_sizes(&request->rq_pill, RCL_CLIENT);
-        return __ptlrpc_request_bufs_pack(request, version, opcode, count,
-                                          request->rq_pill.rc_area[RCL_CLIENT],
-                                          bufs, ctx);
 }
 EXPORT_SYMBOL(ptlrpc_request_bufs_pack);
 
@@ -869,46 +864,6 @@ struct ptlrpc_request *ptlrpc_request_alloc_pack(struct obd_import *imp,
         return req;
 }
 EXPORT_SYMBOL(ptlrpc_request_alloc_pack);
-
-/**
- * Prepare request (fetched from pool \a poolif not NULL) on import \a imp
- * for operation \a opcode. Request would contain \a count buffers.
- * Sizes of buffers are described in array \a lengths and buffers themselves
- * are provided by a pointer \a bufs.
- * Returns prepared request structure pointer or NULL on error.
- */
-struct ptlrpc_request *
-ptlrpc_prep_req_pool(struct obd_import *imp,
-                     __u32 version, int opcode,
-                     int count, __u32 *lengths, char **bufs,
-                     struct ptlrpc_request_pool *pool)
-{
-        struct ptlrpc_request *request;
-        int                    rc;
-
-        request = __ptlrpc_request_alloc(imp, pool);
-        if (!request)
-                return NULL;
-
-        rc = __ptlrpc_request_bufs_pack(request, version, opcode, count,
-                                        lengths, bufs, NULL);
-        if (rc) {
-                ptlrpc_request_free(request);
-                request = NULL;
-        }
-        return request;
-}
-
-/**
- * Same as ptlrpc_prep_req_pool, but without pool
- */
-struct ptlrpc_request *
-ptlrpc_prep_req(struct obd_import *imp, __u32 version, int opcode, int count,
-                __u32 *lengths, char **bufs)
-{
-        return ptlrpc_prep_req_pool(imp, version, opcode, count, lengths, bufs,
-                                    NULL);
-}
 
 /**
  * Allocate and initialize new request set structure on the current CPT.

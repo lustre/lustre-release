@@ -2118,13 +2118,6 @@ struct ptlrpc_request *ptlrpc_request_alloc_pack(struct obd_import *imp,
 int ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
                              __u32 version, int opcode, char **bufs,
                              struct ptlrpc_cli_ctx *ctx);
-struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version,
-                                       int opcode, int count, __u32 *lengths,
-                                       char **bufs);
-struct ptlrpc_request *ptlrpc_prep_req_pool(struct obd_import *imp,
-                                             __u32 version, int opcode,
-                                            int count, __u32 *lengths, char **bufs,
-                                            struct ptlrpc_request_pool *pool);
 void ptlrpc_req_finished(struct ptlrpc_request *request);
 void ptlrpc_req_finished_with_imp_lock(struct ptlrpc_request *request);
 struct ptlrpc_request *ptlrpc_request_addref(struct ptlrpc_request *req);
