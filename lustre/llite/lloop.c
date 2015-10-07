@@ -916,4 +916,5 @@ module_exit(lloop_exit);
 CFS_MODULE_PARM(max_loop, "i", int, 0444, "maximum of lloop_device");
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre virtual block device");
+MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");

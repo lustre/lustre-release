@@ -1552,6 +1552,7 @@ static void /*__exit*/ mgs_exit(void)
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre  Management Server (MGS)");
+MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
 module_init(mgs_init);

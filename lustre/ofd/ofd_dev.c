@@ -3055,8 +3055,9 @@ static void __exit ofd_exit(void)
 	class_unregister_type(LUSTRE_OST_NAME);
 }
 
-MODULE_AUTHOR("Intel Corporation. <https://www.hpdd.intel.com/>");
+MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Object Filtering Device");
+MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
 module_init(ofd_init);

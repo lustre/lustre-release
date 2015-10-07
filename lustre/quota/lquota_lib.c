@@ -328,7 +328,7 @@ static void exit_lquota(void)
 	lu_context_key_degister(&lquota_thread_key);
 }
 
-MODULE_AUTHOR("Intel Corporation <http://www.intel.com/>");
+MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Quota");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");

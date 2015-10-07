@@ -3591,7 +3591,7 @@ static void __exit lfsck_exit(void)
 	lu_context_key_degister(&lfsck_thread_key);
 }
 
-MODULE_AUTHOR("Intel Corporation <http://www.intel.com/>");
+MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("LFSCK");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");

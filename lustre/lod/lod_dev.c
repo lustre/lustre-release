@@ -1887,8 +1887,9 @@ static void __exit lod_mod_exit(void)
 	lu_kmem_fini(lod_caches);
 }
 
-MODULE_AUTHOR("Intel Corporation. <https://wiki.hpdd.intel.com/>");
+MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Logical Object Device ("LUSTRE_LOD_NAME")");
+MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
 module_init(lod_mod_init);
