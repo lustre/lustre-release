@@ -2271,6 +2271,7 @@ static void replay_request_or_update(struct lu_env *env,
 			obd->obd_replayed_requests++;
 		} else if (type == UPDATE_RECOVERY && transno != 0) {
 			struct distribute_txn_replay_req *dtrq;
+			bool update_transno = false;
 
 			spin_unlock(&obd->obd_recovery_task_lock);
 
@@ -2289,18 +2290,22 @@ static void replay_request_or_update(struct lu_env *env,
 				       dtrq->dtrq_master_transno);
 				list_add(&dtrq->dtrq_list,
 					 &tdtd->tdtd_replay_finish_list);
+				update_transno = true;
 			} else {
 				dtrq_destroy(dtrq);
 			}
 			spin_unlock(&tdtd->tdtd_replay_list_lock);
 
-			spin_lock(&obd->obd_recovery_task_lock);
-			if (transno == obd->obd_next_recovery_transno)
-				obd->obd_next_recovery_transno++;
-			else if (transno > obd->obd_next_recovery_transno)
-				obd->obd_next_recovery_transno = transno + 1;
-			spin_unlock(&obd->obd_recovery_task_lock);
-
+			if (update_transno) {
+				spin_lock(&obd->obd_recovery_task_lock);
+				if (transno == obd->obd_next_recovery_transno)
+					obd->obd_next_recovery_transno++;
+				else if (transno >
+					 obd->obd_next_recovery_transno)
+					obd->obd_next_recovery_transno =
+								transno + 1;
+				spin_unlock(&obd->obd_recovery_task_lock);
+			}
 		} else {
 			spin_unlock(&obd->obd_recovery_task_lock);
 			LASSERT(list_empty(&obd->obd_req_replay_queue));

@@ -2305,6 +2305,77 @@ test_70e () {
 }
 run_test 70e "rename cross-MDT with random fails"
 
+cleanup_71a() {
+	trap 0
+	kill -9 $mkdir_71a_pid
+}
+
+random_double_fail_mdt() {
+	local max_index=$1
+	local duration=$2
+	local monitor_pid=$3
+	local elapsed
+	local start_ts=$(date +%s)
+	local num_failovers=0
+	local fail_index
+	local second_index
+
+	elapsed=$(($(date +%s) - start_ts))
+	while [ $elapsed -lt $duration ]; do
+		fail_index=$((RANDOM%max_index + 1))
+		if [ $fail_index -eq $max_index ]; then
+			second_index=1
+		else
+			second_index=$((fail_index + 1))
+		fi
+		kill -0 $monitor_pid ||
+			error "$monitor_pid stopped"
+		sleep 120
+		replay_barrier mds$fail_index
+		replay_barrier mds$second_index
+		sleep 10
+		# Increment the number of failovers
+		num_failovers=$((num_failovers+1))
+		log "fail mds$fail_index mds$second_index $num_failovers times"
+		fail mds${fail_index},mds${second_index}
+		elapsed=$(($(date +%s) - start_ts))
+	done
+}
+
+test_71a () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local clients=${CLIENTS:-$HOSTNAME}
+	local rc=0
+
+	zconf_mount_clients $clients $MOUNT
+
+	local duration=300
+	[ "$SLOW" = "no" ] && duration=180
+	# set duration to 900 because it takes some time to boot node
+	[ "$FAILURE_MODE" = HARD ] && duration=900
+
+	mkdir -p $DIR/$tdir
+
+	local elapsed
+	local start_ts=$(date +%s)
+
+	trap cleanup_71a EXIT
+	(
+		while true; do
+			$LFS mkdir -i0 -c2 $DIR/$tdir/test
+			rmdir $DIR/$tdir/test
+		done
+	)&
+	mkdir_71a_pid=$!
+	echo "Started  $mkdir_71a_pid"
+
+	random_double_fail_mdt 2 $duration $mkdir_71a_pid
+	kill -0 $mkdir_71a_pid || error "mkdir/rmdir $mkdir_71a_pid stopped"
+
+	cleanup_71a
+	true
+}
+run_test 71a "mkdir/rmdir striped dir with 2 mdts recovery"
 
 test_73a() {
 	multiop_bg_pause $DIR/$tfile O_tSc ||
