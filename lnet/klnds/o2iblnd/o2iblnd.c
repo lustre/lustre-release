@@ -825,7 +825,7 @@ kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
 	kiblnd_map_rx_descs(conn);
 
 #ifdef HAVE_IB_CQ_INIT_ATTR
-	cq_attr.cqe = IBLND_CQ_ENTRIES(version);
+	cq_attr.cqe = IBLND_CQ_ENTRIES(conn);
 	cq_attr.comp_vector = kiblnd_get_completion_vector(conn, cpt);
 	cq = ib_create_cq(cmid->device,
 			  kiblnd_cq_completion, kiblnd_cq_event, conn,
