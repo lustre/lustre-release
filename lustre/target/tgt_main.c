@@ -98,13 +98,13 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 		rc = PTR_ERR(o);
 		CERROR("%s: cannot open LAST_RCVD: rc = %d\n", tgt_name(lut),
 		       rc);
-		GOTO(out, rc);
+		GOTO(out_put, rc);
 	}
 
 	lut->lut_last_rcvd = o;
 	rc = tgt_server_data_init(env, lut);
 	if (rc < 0)
-		GOTO(out, rc);
+		GOTO(out_put, rc);
 
 	/* prepare transactions callbacks */
 	lut->lut_txn_cb.dtc_txn_start = tgt_txn_start_cb;
@@ -147,12 +147,14 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 		GOTO(out, rc);
 
 	RETURN(0);
+
 out:
+	dt_txn_callback_del(lut->lut_bottom, &lut->lut_txn_cb);
+out_put:
 	if (lut->lut_last_rcvd != NULL) {
 		lu_object_put(env, &lut->lut_last_rcvd->do_lu);
-		dt_txn_callback_del(lut->lut_bottom, &lut->lut_txn_cb);
+		lut->lut_last_rcvd = NULL;
 	}
-	lut->lut_last_rcvd = NULL;
 	if (lut->lut_client_bitmap != NULL)
 		OBD_FREE(lut->lut_client_bitmap, LR_MAX_CLIENTS >> 3);
 	lut->lut_client_bitmap = NULL;
