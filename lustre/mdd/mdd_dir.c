@@ -2293,6 +2293,47 @@ unlock:
 	RETURN(rc);
 }
 
+static int mdd_index_delete(const struct lu_env *env,
+			    struct mdd_object *mdd_pobj,
+			    struct lu_attr *cattr,
+			    const struct lu_name *lname)
+{
+	struct mdd_device *mdd = mdo2mdd(&mdd_pobj->mod_obj);
+	struct thandle *handle;
+	int rc;
+	ENTRY;
+
+	handle = mdd_trans_create(env, mdd);
+	if (IS_ERR(handle))
+		RETURN(PTR_ERR(handle));
+
+	rc = mdo_declare_index_delete(env, mdd_pobj, lname->ln_name,
+				      handle);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	if (S_ISDIR(cattr->la_mode)) {
+		rc = mdo_declare_ref_del(env, mdd_pobj, handle);
+		if (rc != 0)
+			GOTO(stop, rc);
+	}
+
+	/* Since this will only be used in the error handler path,
+	 * Let's set the thandle to be local and not mess the transno */
+	handle->th_local = 1;
+	rc = mdd_trans_start(env, mdd, handle);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = __mdd_index_delete(env, mdd_pobj, lname->ln_name,
+				S_ISDIR(cattr->la_mode), handle);
+	if (rc)
+		GOTO(stop, rc);
+stop:
+	mdd_trans_stop(env, mdd, rc, handle);
+	RETURN(rc);
+}
+
 /*
  * Create object and insert it into namespace.
  */
@@ -2480,8 +2521,16 @@ out_volatile:
 				NULL, handle);
 out_stop:
 	rc2 = mdd_trans_stop(env, mdd, rc, handle);
-	if (rc == 0)
+	if (rc == 0) {
+		/* If creation fails, it is most likely due to the remote update
+		 * failure, because local transaction will mostly succeed at
+		 * this stage. There is no easy way to rollback all of previous
+		 * updates, so let's remove the object from namespace, and
+		 * LFSCK should handle the orphan object. */
+		if (rc2 < 0 && !mdd_object_remote(mdd_pobj))
+			mdd_index_delete(env, mdd_pobj, attr, lname);
 		rc = rc2;
+	}
 out_free:
 	if (is_vmalloc_addr(ldata->ld_buf))
 		/* if we vmalloced a large buffer drop it */

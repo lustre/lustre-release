@@ -14077,6 +14077,22 @@ test_300o() {
 }
 run_test 300o "unlink big sub stripe(> 65000 subdirs)"
 
+test_300p() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	mkdir -p $DIR/$tdir
+
+	#define OBD_FAIL_OUT_ENOSPC	0x1704
+	do_facet mds2 lctl set_param fail_loc=0x80001704
+	$LFS setdirstripe -c2 $DIR/$tdir/bad_striped_dir > /dev/null 2>&1 &&
+			error "create striped directory should fail"
+
+	[ -e $DIR/$tdir/bad_striped_dir ] && error "striped dir exists"
+	true
+}
+run_test 300p "create striped directory without space"
+
 prepare_remote_file() {
 	mkdir $DIR/$tdir/src_dir ||
 		error "create remote source failed"

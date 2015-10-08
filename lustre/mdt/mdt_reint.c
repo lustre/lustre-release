@@ -866,6 +866,23 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
         child_lh = &info->mti_lh[MDT_LH_CHILD];
         mdt_lock_reg_init(child_lh, LCK_EX);
+	if (info->mti_spec.sp_rm_entry) {
+		struct lu_ucred *uc  = mdt_ucred(info);
+
+		if (!mdt_is_dne_client(req->rq_export))
+			/* Return -ENOTSUPP for old client */
+			GOTO(put_child, rc = -ENOTSUPP);
+
+		if (!md_capable(uc, CFS_CAP_SYS_ADMIN))
+			GOTO(put_child, rc = -EPERM);
+
+		ma->ma_need = MA_INODE;
+		ma->ma_valid = 0;
+		rc = mdo_unlink(info->mti_env, mdt_object_child(mp),
+				NULL, &rr->rr_name, ma, no_name);
+		GOTO(put_child, rc);
+	}
+
 	if (mdt_object_remote(mc)) {
 		struct mdt_body	 *repbody;
 
@@ -883,23 +900,6 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 			/* Return -ENOTSUPP for old client */
 			GOTO(put_child, rc = -ENOTSUPP);
 
-		if (info->mti_spec.sp_rm_entry) {
-			struct lu_ucred *uc  = mdt_ucred(info);
-
-			if (!md_capable(uc, CFS_CAP_SYS_ADMIN)) {
-				CERROR("%s: unlink remote entry is only "
-				       "permitted for administrator: rc = %d\n",
-					mdt_obd_name(info->mti_mdt),
-					-EPERM);
-				GOTO(put_child, rc = -EPERM);
-			}
-
-			ma->ma_need = MA_INODE;
-			ma->ma_valid = 0;
-			rc = mdo_unlink(info->mti_env, mdt_object_child(mp),
-					NULL, &rr->rr_name, ma, no_name);
-			GOTO(put_child, rc);
-		}
 		/* Revoke the LOOKUP lock of the remote object granted by
 		 * this MDT. Since the unlink will happen on another MDT,
 		 * it will release the LOOKUP lock right away. Then What
@@ -911,14 +911,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 		repbody->mbo_fid1 = *mdt_object_fid(mc);
 		repbody->mbo_valid |= (OBD_MD_FLID | OBD_MD_MDS);
 		GOTO(unlock_child, rc = -EREMOTE);
-	} else if (info->mti_spec.sp_rm_entry) {
-		rc = -EPERM;
-		CDEBUG(D_INFO, "%s: no rm_entry on local dir '"DNAME"': "
-		       "rc = %d\n",
-		       mdt_obd_name(info->mti_mdt), PNAME(&rr->rr_name), rc);
-		GOTO(put_child, rc);
 	}
-
 	/* We used to acquire MDS_INODELOCK_FULL here but we can't do
 	 * this now because a running HSM restore on the child (unlink
 	 * victim) will hold the layout lock. See LU-4002. */
