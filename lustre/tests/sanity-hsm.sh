@@ -172,6 +172,10 @@ wait_copytools() {
 		echo "copytools still running on $hosts"
 	done
 
+	# try to dump Copytool's stack
+	do_nodesv $hosts "echo 1 >/proc/sys/kernel/sysrq ; " \
+			 "echo t >/proc/sysrq-trigger"
+
 	echo "copytools failed to stop in ${wait_timeout}s"
 
 	return 1
