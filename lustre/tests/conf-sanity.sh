@@ -4108,42 +4108,53 @@ test_61() { # LU-80
 	local large_value="$(generate_string $(max_xattr_size))"
 	local small_value="bar"
 
-    local name="trusted.big"
-    log "save large xattr $name on $file"
-    setfattr -n $name -v $large_value $file ||
-        error "saving $name on $file failed"
+	local name="trusted.big"
+	log "save large xattr $name on $file"
+	setfattr -n $name -v $large_value $file ||
+		error "saving $name on $file failed"
 
-    local new_value=$(get_xattr_value $name $file)
-    [[ "$new_value" != "$large_value" ]] &&
-        error "$name different after saving"
+	local new_value=$(get_xattr_value $name $file)
+	[[ "$new_value" != "$large_value" ]] &&
+		error "$name different after saving"
 
-    log "shrink value of $name on $file"
-    setfattr -n $name -v $small_value $file ||
-        error "shrinking value of $name on $file failed"
+	log "shrink value of $name on $file"
+	setfattr -n $name -v $small_value $file ||
+		error "shrinking value of $name on $file failed"
 
-    new_value=$(get_xattr_value $name $file)
-    [[ "$new_value" != "$small_value" ]] &&
-        error "$name different after shrinking"
+	new_value=$(get_xattr_value $name $file)
+	[[ "$new_value" != "$small_value" ]] &&
+		error "$name different after shrinking"
 
-    log "grow value of $name on $file"
-    setfattr -n $name -v $large_value $file ||
-        error "growing value of $name on $file failed"
+	log "grow value of $name on $file"
+	setfattr -n $name -v $large_value $file ||
+		error "growing value of $name on $file failed"
 
-    new_value=$(get_xattr_value $name $file)
-    [[ "$new_value" != "$large_value" ]] &&
-        error "$name different after growing"
+	new_value=$(get_xattr_value $name $file)
+	[[ "$new_value" != "$large_value" ]] &&
+		error "$name different after growing"
 
-    log "check value of $name on $file after remounting MDS"
-    fail $SINGLEMDS
-    new_value=$(get_xattr_value $name $file)
-    [[ "$new_value" != "$large_value" ]] &&
-        error "$name different after remounting MDS"
+	log "check value of $name on $file after remounting MDS"
+	fail $SINGLEMDS
+	new_value=$(get_xattr_value $name $file)
+	[[ "$new_value" != "$large_value" ]] &&
+		error "$name different after remounting MDS"
 
-    log "remove large xattr $name from $file"
-    setfattr -x $name $file || error "removing $name from $file failed"
+	log "remove large xattr $name from $file"
+	setfattr -x $name $file || error "removing $name from $file failed"
 
-    rm -f $file
-    stopall
+	if $lxattr; then
+		stopall || error "stopping for e2fsck run"
+		for num in $(seq $MDSCOUNT); do
+			run_e2fsck $(facet_active_host mds$num) \
+				$(mdsdevname $num) "-y" ||
+				error "e2fsck MDT$num failed"
+		done
+		setup_noconfig || error "remounting the filesystem failed"
+	fi
+
+	# need to delete this file to avoid problems in other tests
+	rm -f $file
+	stopall || error "stopping systems to turn off large_xattr"
 	if $lxattr; then
 		for num in $(seq $MDSCOUNT); do
 			do_facet mds${num} $TUNE2FS -O ^large_xattr \
