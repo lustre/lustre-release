@@ -496,22 +496,21 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
                 char createtime[26], canceltime[26] = "";
                 time_t time_tmp;
 
-                if (marker->cm_flags & CM_SKIP) {
-                        if (marker->cm_flags & CM_START) {
-                                printf("SKIP START ");
-                                (*skip)++;
-                        } else {
-                                printf(     "END   ");
-                                *skip = 0;
-                        }
-                }
+		if (marker->cm_flags & CM_START &&
+		    marker->cm_flags & CM_SKIP) {
+			printf("SKIP START ");
+			(*skip)++;
+		} else if (marker->cm_flags & CM_END) {
+			printf(     "END   ");
+			*skip = 0;
+		}
 
-                if (marker->cm_flags & CM_EXCLUDE) {
-                        if (marker->cm_flags & CM_START)
-                                printf("EXCLUDE START ");
-                        else
-                                printf("EXCLUDE END   ");
-                }
+		if (marker->cm_flags & CM_EXCLUDE) {
+			if (marker->cm_flags & CM_START)
+				printf("EXCLUDE START ");
+			else
+				printf("EXCLUDE END   ");
+		}
 
                 /* Handle overflow of 32-bit time_t gracefully.
                  * The copy to time_tmp is needed in any case to
