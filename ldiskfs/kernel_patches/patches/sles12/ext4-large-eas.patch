@@ -156,11 +156,10 @@ Index: linux-stage/fs/ext4/xattr.c
  	size_t value_size = le32_to_cpu(entry->e_value_size);
  
 -	if (entry->e_value_block != 0 || value_size > size ||
--	    le16_to_cpu(entry->e_value_offs) + value_size > size)
-+	if ((entry->e_value_inum == 0) &&
-+	   (le16_to_cpu(entry->e_value_offs) + value_size > size))
++	if (!entry->e_value_inum &&
+ 	    le16_to_cpu(entry->e_value_offs) + value_size > size)
 +		return -EIO;
-+	if (entry->e_value_inum != 0 &&
++	if (entry->e_value_inum &&
 +	    (le32_to_cpu(entry->e_value_inum) < EXT4_FIRST_INO(inode->i_sb) ||
 +	     le32_to_cpu(entry->e_value_inum) >
 +	     le32_to_cpu(EXT4_SB(inode->i_sb)->s_es->s_inodes_count)))
@@ -298,7 +297,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			goto cleanup;
 -		memcpy(buffer, bh->b_data + le16_to_cpu(entry->e_value_offs),
 -		       size);
-+		if (entry->e_value_inum != 0) {
++		if (entry->e_value_inum) {
 +			error = ext4_xattr_inode_get(inode,
 +					     le32_to_cpu(entry->e_value_inum),
 +					     buffer, &size);
@@ -326,7 +325,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			goto cleanup;
 -		memcpy(buffer, (void *)IFIRST(header) +
 -		       le16_to_cpu(entry->e_value_offs), size);
-+		if (entry->e_value_inum != 0) {
++		if (entry->e_value_inum) {
 +			error = ext4_xattr_inode_get(inode,
 +					     le32_to_cpu(entry->e_value_inum),
 +					     buffer, &size);
@@ -344,7 +343,7 @@ Index: linux-stage/fs/ext4/xattr.c
  	for (; !IS_LAST_ENTRY(last); last = EXT4_XATTR_NEXT(last)) {
  		*total += EXT4_XATTR_LEN(last->e_name_len);
 -		if (!last->e_value_block && last->e_value_size) {
-+		if (last->e_value_inum == 0 && last->e_value_size > 0) {
++		if (!last->e_value_inum && last->e_value_size) {
  			size_t offs = le16_to_cpu(last->e_value_offs);
  			if (offs < *min_offs)
  				*min_offs = offs;
@@ -519,7 +518,7 @@ Index: linux-stage/fs/ext4/xattr.c
  	last = s->first;
  	for (; !IS_LAST_ENTRY(last); last = EXT4_XATTR_NEXT(last)) {
 -		if (!last->e_value_block && last->e_value_size) {
-+		if (last->e_value_inum == 0 && last->e_value_size > 0) {
++		if (!last->e_value_inum && last->e_value_size) {
  			size_t offs = le16_to_cpu(last->e_value_offs);
  			if (offs < min_offs)
  				min_offs = offs;
@@ -528,8 +527,8 @@ Index: linux-stage/fs/ext4/xattr.c
  	free = min_offs - ((void *)last - s->base) - sizeof(__u32);
  	if (!s->not_found) {
 -		if (!s->here->e_value_block && s->here->e_value_size) {
-+		if (!in_inode && s->here->e_value_inum == 0 &&
-+		    s->here->e_value_size > 0) {
++		if (!in_inode &&
++		    !s->here->e_value_inum && s->here->e_value_size) {
  			size_t size = le32_to_cpu(s->here->e_value_size);
  			free += EXT4_XATTR_SIZE(size);
  		}
@@ -554,8 +553,8 @@ Index: linux-stage/fs/ext4/xattr.c
  		memcpy(s->here->e_name, i->name, name_len);
  	} else {
 -		if (!s->here->e_value_block && s->here->e_value_size) {
-+		if (s->here->e_value_offs > 0 && s->here->e_value_inum == 0 &&
-+		    s->here->e_value_size > 0) {
++		if (!s->here->e_value_inum && s->here->e_value_size &&
++		    s->here->e_value_offs > 0) {
  			void *first_val = s->base + min_offs;
  			size_t offs = le16_to_cpu(s->here->e_value_offs);
  			void *val = s->base + offs;
@@ -571,7 +570,7 @@ Index: linux-stage/fs/ext4/xattr.c
  				last = EXT4_XATTR_NEXT(last);
  			}
  		}
-+		if (s->here->e_value_inum != 0) {
++		if (s->here->e_value_inum) {
 +			ext4_xattr_inode_unlink(inode,
 +					le32_to_cpu(s->here->e_value_inum));
 +			s->here->e_value_inum = 0;
@@ -732,7 +731,7 @@ Index: linux-stage/fs/ext4/xattr.c
  	/* Adjust the value offsets of the entries */
  	for (; !IS_LAST_ENTRY(last); last = EXT4_XATTR_NEXT(last)) {
 -		if (!last->e_value_block && last->e_value_size) {
-+		if (last->e_value_inum == 0 && last->e_value_size > 0) {
++		if (!last->e_value_inum && last->e_value_size) {
  			new_offs = le16_to_cpu(last->e_value_offs) +
  							value_offs_shift;
  			BUG_ON(new_offs + le32_to_cpu(last->e_value_size)
@@ -854,9 +853,9 @@ Index: linux-stage/fs/ext4/xattr.c
  		goto cleanup;
 +	raw_inode = ext4_raw_inode(&iloc);
 +	header = IHDR(inode, raw_inode);
-+	entry = IFIRST(header);
-+	for (; !IS_LAST_ENTRY(entry); entry = EXT4_XATTR_NEXT(entry)) {
-+		if (entry->e_value_inum == 0)
++	for (entry = IFIRST(header); !IS_LAST_ENTRY(entry);
++	     entry = EXT4_XATTR_NEXT(entry)) {
++		if (!entry->e_value_inum)
 +			continue;
 +		if (ext4_expand_ino_array(lea_ino_array,
 +					  entry->e_value_inum) != 0) {
@@ -882,9 +881,9 @@ Index: linux-stage/fs/ext4/xattr.c
  		goto cleanup;
  	}
 +
-+	entry = BFIRST(bh);
-+	for (; !IS_LAST_ENTRY(entry); entry = EXT4_XATTR_NEXT(entry)) {
-+		if (entry->e_value_inum == 0)
++	for (entry = BFIRST(bh); !IS_LAST_ENTRY(entry);
++	     entry = EXT4_XATTR_NEXT(entry)) {
++		if (!entry->e_value_inum)
 +			continue;
 +		if (ext4_expand_ino_array(lea_ino_array,
 +					  entry->e_value_inum) != 0)
@@ -964,7 +963,7 @@ Index: linux-stage/fs/ext4/xattr.c
  	}
  
 -	if (entry->e_value_block == 0 && entry->e_value_size != 0) {
-+	if (entry->e_value_inum == 0 && entry->e_value_size != 0) {
++	if (!entry->e_value_inum && entry->e_value_size) {
  		__le32 *value = (__le32 *)((char *)header +
  			le16_to_cpu(entry->e_value_offs));
  		for (n = (le32_to_cpu(entry->e_value_size) +
