@@ -2891,8 +2891,26 @@ union ldlm_gl_desc {
 
 extern void lustre_swab_gl_desc(union ldlm_gl_desc *);
 
+enum ldlm_intent_flags {
+	IT_OPEN        = 0x00000001,
+	IT_CREAT       = 0x00000002,
+	IT_OPEN_CREAT  = 0x00000003,
+	IT_READDIR     = 0x00000004,
+	IT_GETATTR     = 0x00000008,
+	IT_LOOKUP      = 0x00000010,
+	IT_UNLINK      = 0x00000020,
+	IT_TRUNC       = 0x00000040,
+	IT_GETXATTR    = 0x00000080,
+	IT_EXEC        = 0x00000100,
+	IT_PIN         = 0x00000200,
+	IT_LAYOUT      = 0x00000400,
+	IT_QUOTA_DQACQ = 0x00000800,
+	IT_QUOTA_CONN  = 0x00001000,
+	IT_SETXATTR    = 0x00002000,
+};
+
 struct ldlm_intent {
-        __u64 opc;
+	__u64 opc;
 };
 
 extern void lustre_swab_ldlm_intent (struct ldlm_intent *i);

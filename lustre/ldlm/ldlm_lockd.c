@@ -1445,16 +1445,16 @@ existing_lock:
                                dlm_req->lock_flags, dlm_rep->lock_flags,
                                lock->l_flags);
                         LDLM_ERROR(lock, "sync lock");
-                        if (dlm_req->lock_flags & LDLM_FL_HAS_INTENT) {
-                                struct ldlm_intent *it;
+			if (dlm_req->lock_flags & LDLM_FL_HAS_INTENT) {
+				struct ldlm_intent *it;
 
-                                it = req_capsule_client_get(&req->rq_pill,
-                                                            &RMF_LDLM_INTENT);
-                                if (it != NULL) {
-                                        CERROR("This is intent %s ("LPU64")\n",
-                                               ldlm_it2str(it->opc), it->opc);
-                                }
-                        }
+				it = req_capsule_client_get(&req->rq_pill,
+							    &RMF_LDLM_INTENT);
+				if (it != NULL) {
+					CERROR("This is intent %s ("LPU64")\n",
+					       ldlm_it2str(it->opc), it->opc);
+				}
+			}
                 }
         }
 

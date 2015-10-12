@@ -2227,7 +2227,7 @@ void lustre_swab_ldlm_policy_data(union ldlm_wire_policy_data *d)
 
 void lustre_swab_ldlm_intent (struct ldlm_intent *i)
 {
-        __swab64s (&i->opc);
+	__swab64s(&i->opc);
 }
 
 void lustre_swab_ldlm_resource_desc(struct ldlm_resource_desc *r)

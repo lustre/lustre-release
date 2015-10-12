@@ -3296,54 +3296,55 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
 	RETURN(ELDLM_LOCK_ABORTED);
 }
 
-static int mdt_intent_code(long itcode)
+static int mdt_intent_code(enum ldlm_intent_flags itcode)
 {
-        int rc;
+	int rc;
 
-        switch(itcode) {
-        case IT_OPEN:
-                rc = MDT_IT_OPEN;
-                break;
-        case IT_OPEN|IT_CREAT:
-                rc = MDT_IT_OCREAT;
-                break;
-        case IT_CREAT:
-                rc = MDT_IT_CREATE;
-                break;
-        case IT_READDIR:
-                rc = MDT_IT_READDIR;
-                break;
-        case IT_GETATTR:
-                rc = MDT_IT_GETATTR;
-                break;
-        case IT_LOOKUP:
-                rc = MDT_IT_LOOKUP;
-                break;
-        case IT_UNLINK:
-                rc = MDT_IT_UNLINK;
-                break;
-        case IT_TRUNC:
-                rc = MDT_IT_TRUNC;
-                break;
-        case IT_GETXATTR:
-                rc = MDT_IT_GETXATTR;
-                break;
-        case IT_LAYOUT:
-                rc = MDT_IT_LAYOUT;
-                break;
+	switch (itcode) {
+	case IT_OPEN:
+		rc = MDT_IT_OPEN;
+		break;
+	case IT_OPEN|IT_CREAT:
+		rc = MDT_IT_OCREAT;
+		break;
+	case IT_CREAT:
+		rc = MDT_IT_CREATE;
+		break;
+	case IT_READDIR:
+		rc = MDT_IT_READDIR;
+		break;
+	case IT_GETATTR:
+		rc = MDT_IT_GETATTR;
+		break;
+	case IT_LOOKUP:
+		rc = MDT_IT_LOOKUP;
+		break;
+	case IT_UNLINK:
+		rc = MDT_IT_UNLINK;
+		break;
+	case IT_TRUNC:
+		rc = MDT_IT_TRUNC;
+		break;
+	case IT_GETXATTR:
+		rc = MDT_IT_GETXATTR;
+		break;
+	case IT_LAYOUT:
+		rc = MDT_IT_LAYOUT;
+		break;
 	case IT_QUOTA_DQACQ:
 	case IT_QUOTA_CONN:
 		rc = MDT_IT_QUOTA;
 		break;
-        default:
-                CERROR("Unknown intent opcode: %ld\n", itcode);
-                rc = -EINVAL;
-                break;
-        }
-        return rc;
+	default:
+		CERROR("Unknown intent opcode: 0x%08x\n", itcode);
+		rc = -EINVAL;
+		break;
+	}
+	return rc;
 }
 
-static int mdt_intent_opc(long itopc, struct mdt_thread_info *info,
+static int mdt_intent_opc(enum ldlm_intent_flags itopc,
+			  struct mdt_thread_info *info,
 			  struct ldlm_lock **lockp, __u64 flags)
 {
 	struct req_capsule	*pill = info->mti_pill;
