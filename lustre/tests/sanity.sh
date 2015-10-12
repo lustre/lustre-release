@@ -11654,7 +11654,12 @@ elif [ -n "$LOADL_STEPID" ]; then # LoadLeveller
 elif [ -n "$JOB_ID" ]; then # Sun Grid Engine
 	JOBENV=JOB_ID
 else
-	JOBENV=FAKE_JOBID
+	$LCTL list_param jobid_name > /dev/null 2>&1
+	if [ $? -eq 0 ]; then
+		JOBENV=nodelocal
+	else
+		JOBENV=FAKE_JOBID
+	fi
 fi
 
 verify_jobstats() {
@@ -11675,6 +11680,13 @@ verify_jobstats() {
 		FAKE_JOBID=id.$testnum.$(basename ${cmd[0]}).$RANDOM
 
 	JOBVAL=${!JOBENV}
+
+	[ "$JOBENV" = "nodelocal" ] && {
+		FAKE_JOBID=id.$testnum.$(basename ${cmd[0]}).$RANDOM
+		$LCTL set_param jobid_name=$FAKE_JOBID
+		JOBVAL=$FAKE_JOBID
+	}
+
 	log "Test: ${cmd[*]}"
 	log "Using JobID environment variable $JOBENV=$JOBVAL"
 

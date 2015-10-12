@@ -113,6 +113,8 @@ struct lprocfs_stats *obd_memory = NULL;
 EXPORT_SYMBOL(obd_memory);
 #endif
 
+char obd_jobid_node[LUSTRE_JOBID_SIZE + 1];
+
 /* Get jobid of current process by reading the environment variable
  * stored in between the "env_start" & "env_end" of task struct.
  *
@@ -135,6 +137,12 @@ int lustre_get_jobid(char *jobid)
 	/* Jobstats isn't enabled */
 	if (strcmp(obd_jobid_var, JOBSTATS_DISABLE) == 0)
 		RETURN(0);
+
+	/* Whole node dedicated to single job */
+	if (strcmp(obd_jobid_var, JOBSTATS_NODELOCAL) == 0) {
+		memcpy(jobid, obd_jobid_node, LUSTRE_JOBID_SIZE);
+		RETURN(0);
+	}
 
 	/* Use process name + fsuid as jobid */
 	if (strcmp(obd_jobid_var, JOBSTATS_PROCNAME_UID) == 0) {
