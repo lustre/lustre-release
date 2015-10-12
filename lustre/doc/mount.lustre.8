@@ -114,6 +114,12 @@ Only start the MGC (and MGS, if co-located) for a target service, and not the ac
 .BI nomgs
 Start a MDT with a co-located MGS without starting the MGS.
 .TP
+.BI noscrub
+Not trigger OI scrub automatically when detect some inconsistency, unless it is started explicitly.
+.TP
+.BI skip_lfsck
+Not resume the former paused/crashed LFSCK automatically when mount.
+.TP
 .BI exclude= ostlist
 Start a client or MDT with a (colon-separated) list of known inactive OSTs.
 .TP

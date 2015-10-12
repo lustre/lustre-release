@@ -195,7 +195,8 @@ struct mdt_device {
 
 	unsigned int               mdt_capa_conf:1,
 				   /* Enable remote dir on non-MDT0 */
-				   mdt_enable_remote_dir:1;
+				   mdt_enable_remote_dir:1,
+				   mdt_skip_lfsck:1;
 
 	gid_t			   mdt_enable_remote_dir_gid;
 	/* statfs optimization: we cache a bit  */

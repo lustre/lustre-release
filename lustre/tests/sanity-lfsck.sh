@@ -80,6 +80,7 @@ SHOW_LAYOUT_ON_OST="do_facet ost1 \
 		$LCTL get_param -n obdfilter.${OST_DEV}.lfsck_layout"
 MOUNT_OPTS_SCRUB="-o user_xattr"
 MOUNT_OPTS_NOSCRUB="-o user_xattr,noscrub"
+MOUNT_OPTS_SKIP_LFSCK="-o user_xattr,skip_lfsck"
 
 lfsck_prep() {
 	local ndirs=$1
@@ -939,6 +940,30 @@ test_8()
 	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
 	[ "$STATUS" == "paused" ] ||
 		error "(20) Expect 'paused', but got '$STATUS'"
+
+	echo "stop $SINGLEMDS"
+	stop $SINGLEMDS > /dev/null || error "(20.1) Fail to stop MDS!"
+
+	echo "start $SINGLEMDS without resume LFSCK"
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SKIP_LFSCK > /dev/null ||
+		error "(20.2) Fail to start MDS!"
+
+	timer=0
+	while [ $timer -lt $timeout ]; do
+		STATUS=$(do_facet $SINGLEMDS "$LCTL get_param -n \
+			mdt.${MDT_DEV}.recovery_status |
+			awk '/^status/ { print \\\$2 }'")
+		[ "$STATUS" != "RECOVERING" ] && break;
+		sleep 1
+		timer=$((timer + 1))
+	done
+
+	[ $timer != $timeout ] ||
+		error "(20.3) recovery timeout"
+
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "paused" ] ||
+		error "(20.4) Expect 'paused', but got '$STATUS'"
 
 	#define OBD_FAIL_LFSCK_DELAY3		0x1602
 	do_facet $SINGLEMDS $LCTL set_param fail_val=2 fail_loc=0x1602

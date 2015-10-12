@@ -183,7 +183,8 @@ struct ofd_device {
 				 /* Protected by ofd_lastid_rwsem. */
 				 ofd_lastid_rebuilding:1,
 				 ofd_record_fid_accessed:1,
-				 ofd_lfsck_verify_pfid:1;
+				 ofd_lfsck_verify_pfid:1,
+				 ofd_skip_lfsck:1;
 	struct seq_server_site	 ofd_seq_site;
 	/* the limit of SOFT_SYNC RPCs that will trigger a soft sync */
 	unsigned int		 ofd_soft_sync_limit;

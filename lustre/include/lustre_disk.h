@@ -237,6 +237,7 @@ struct lustre_mount_data {
 
 #define LMD_FLG_SERVER		0x0001	/* Mounting a server */
 #define LMD_FLG_CLIENT		0x0002	/* Mounting a client */
+#define LMD_FLG_SKIP_LFSCK	0x0004	/* NOT auto resume LFSCK when mount */
 #define LMD_FLG_ABORT_RECOV	0x0008	/* Abort recovery */
 #define LMD_FLG_NOSVC		0x0010	/* Only start MGS/MGC for servers,
 					   no other services */

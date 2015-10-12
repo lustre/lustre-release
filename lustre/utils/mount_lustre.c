@@ -101,6 +101,8 @@ void usage(FILE *out)
 		"\t\tabort_recov: abort server recovery handling\n"
 		"\t\tnosvc: only start MGC/MGS obds\n"
 		"\t\tnomgs: only start target obds, using existing MGS\n"
+		"\t\tnoscrub: NOT auto start OI scrub unless start explicitly\n"
+		"\t\tskip_lfsck: NOT auto resume the paused/crashed LFSCK\n"
 		"\t\texclude=<ostname>[:<ostname>] : colon-separated list of "
 		"inactive OSTs (e.g. lustre-OST0001)\n"
 		"\t\tretry=<num>: number of times mount is retried by client\n"

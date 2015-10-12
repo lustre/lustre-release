@@ -167,6 +167,7 @@ static int ofd_stack_init(const struct lu_env *env,
 	struct lu_device	*d;
 	struct ofd_thread_info	*info = ofd_info(env);
 	struct lustre_mount_info *lmi;
+	struct lustre_mount_data *lmd;
 	int			 rc;
 	char			*osdname;
 
@@ -177,6 +178,10 @@ static int ofd_stack_init(const struct lu_env *env,
 		CERROR("Cannot get mount info for %s!\n", dev);
 		RETURN(-ENODEV);
 	}
+
+	lmd = s2lsi(lmi->lmi_sb)->lsi_lmd;
+	if (lmd != NULL && lmd->lmd_flags & LMD_FLG_SKIP_LFSCK)
+		m->ofd_skip_lfsck = 1;
 
 	/* find bottom osd */
 	OBD_ALLOC(osdname, MTI_NAME_MAXLEN);
