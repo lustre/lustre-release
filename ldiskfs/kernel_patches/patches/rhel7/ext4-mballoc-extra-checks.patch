@@ -164,7 +164,7 @@ Index: linux-3.10.0-123.el7.x86_64/fs/ext4/mballoc.c
 +int ext4_mb_check_ondisk_bitmap(struct super_block *sb, void *bitmap,
 +				struct ext4_group_desc *gdp, int group)
 +{
-+	unsigned short max = EXT4_BLOCKS_PER_GROUP(sb);
++	unsigned short max = EXT4_CLUSTERS_PER_GROUP(sb);
 +	unsigned short i, first, free = 0;
 +
 +	i = mb_find_next_zero_bit(bitmap, max, 0);

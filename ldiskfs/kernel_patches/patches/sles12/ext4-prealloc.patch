@@ -30,7 +30,7 @@ Index: linux-3.12.39-47.1/fs/ext4/mballoc.c
 +{
 +	int i;
 +
-+	if (value > (sbi->s_blocks_per_group - 1 - 1 - sbi->s_itb_per_group))
++	if (value > (sbi->s_clusters_per_group - 1 - 1 - sbi->s_itb_per_group))
 +		return;
 +
 +	for (i = 0; i < sbi->s_mb_prealloc_table_size; i++) {
