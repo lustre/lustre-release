@@ -705,10 +705,11 @@ static int osd_obj_add_entry(struct osd_thread_info *info,
 
 	inode = info->oti_inode;
 	if (unlikely(inode == NULL)) {
-		OBD_ALLOC_PTR(inode);
-		if (inode == NULL)
+		struct ldiskfs_inode_info *lii;
+		OBD_ALLOC_PTR(lii);
+		if (lii == NULL)
 			RETURN(-ENOMEM);
-		info->oti_inode = inode;
+		inode = info->oti_inode = &lii->vfs_inode;
 	}
 
 	inode->i_sb = osd_sb(osd);

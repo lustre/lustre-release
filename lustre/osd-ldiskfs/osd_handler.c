@@ -5804,9 +5804,10 @@ static void osd_key_fini(const struct lu_context *ctx,
                          struct lu_context_key *key, void* data)
 {
 	struct osd_thread_info *info = data;
+	struct ldiskfs_inode_info *lli = LDISKFS_I(info->oti_inode);
 
 	if (info->oti_inode != NULL)
-		OBD_FREE_PTR(info->oti_inode);
+		OBD_FREE_PTR(lli);
 	if (info->oti_hlock != NULL)
 		ldiskfs_htree_lock_free(info->oti_hlock);
 	OBD_FREE(info->oti_it_ea_buf, OSD_IT_EA_BUFSIZE);
