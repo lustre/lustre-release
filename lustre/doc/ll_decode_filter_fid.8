@@ -20,12 +20,6 @@ modified by Lustre after that time.
 .PP
 The OST object ID (objid) is useful in case of OST directory corruption,
 though normally the
-.BR ll_recover_lost_found_objs (8)
-utility is able to reconstruct the entire OST object directory hierarchy.
-The MDS FID can be useful to determine which MDS inode an OST object
-is (or was) used by.  The stripe index can be used in conjunction with
-other OST objects to reconstruct the layout of a file even if the MDT
-inode was lost.
 .SH EXAMPLE
 .fi
 root@oss1# cd /mnt/ost/lost+found
@@ -56,4 +50,3 @@ The idx field shows the stripe number of this OST object in the Lustre
 RAID-0 striped file.
 .SH SEE ALSO
 .BR lustre (7),
-.BR ll_recover_lost_found_objs (8)

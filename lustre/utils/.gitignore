@@ -19,7 +19,6 @@
 /mount_lustre
 /tunefs_lustre
 /lreplicate
-/ll_recover_lost_found_objs
 /ltrack_stats
 /lustre_rsync
 /ll_decode_filter_fid

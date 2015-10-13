@@ -35,7 +35,7 @@ endif # TESTS
 
 if SERVER
 sbin_PROGRAMS += mkfs.lustre tunefs.lustre llverdev lr_reader \
-	ll_recover_lost_found_objs ll_decode_filter_fid llog_reader
+		 ll_decode_filter_fid llog_reader
 endif
 if LIBPTHREAD
 sbin_PROGRAMS += lhsmtool_posix
@@ -60,10 +60,6 @@ lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 lustre_rsync_SOURCES = lustre_rsync.c obd.c lustre_cfg.c lustre_rsync.h
 lustre_rsync_LDADD :=  liblustreapi.a $(LIBPTLCTL) $(LIBREADLINE) $(PTHREAD_LIBS)
 lustre_rsync_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
-
-ll_recover_lost_found_objs_SOURCES = ll_recover_lost_found_objs.c
-ll_recover_lost_found_objs_LDADD := $(LIBPTLCTL)
-ll_recover_lost_found_objs_DEPENDENCIES := $(LIBPTLCTL)
 
 if EXT2FS_DEVEL
 EXT2FSLIB = -lext2fs
