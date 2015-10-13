@@ -297,13 +297,17 @@ static int ofd_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
 	if (exp == NULL || obd == NULL || cluuid == NULL)
 		RETURN(-EINVAL);
 
+	rc = nodemap_add_member(*(lnet_nid_t *)client_nid, exp);
+	if (rc != 0 && rc != -EEXIST)
+		RETURN(rc);
+
 	ofd = ofd_dev(obd->obd_lu_dev);
 
 	rc = ofd_parse_connect_data(env, exp, data, false);
 	if (rc == 0)
 		ofd_export_stats_init(ofd, exp, client_nid);
-
-	nodemap_add_member(*(lnet_nid_t *)client_nid, exp);
+	else
+		nodemap_del_member(exp);
 
 	RETURN(rc);
 }
@@ -333,7 +337,6 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 	struct ofd_device	*ofd;
 	struct lustre_handle	 conn = { 0 };
 	int			 rc;
-	lnet_nid_t		*client_nid;
 	ENTRY;
 
 	if (_exp == NULL || obd == NULL || cluuid == NULL)
@@ -348,14 +351,18 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 	exp = class_conn2export(&conn);
 	LASSERT(exp != NULL);
 
+	if (localdata != NULL) {
+		rc = nodemap_add_member(*(lnet_nid_t *)localdata, exp);
+		if (rc != 0 && rc != -EEXIST)
+			GOTO(out, rc);
+	} else {
+		CDEBUG(D_HA, "%s: cannot find nodemap for client %s: "
+		       "nid is null\n", obd->obd_name, cluuid->uuid);
+	}
+
 	rc = ofd_parse_connect_data(env, exp, data, true);
 	if (rc)
 		GOTO(out, rc);
-
-	if (localdata != NULL) {
-		client_nid = localdata;
-		nodemap_add_member(*client_nid, exp);
-	}
 
 	if (obd->obd_replayable) {
 		struct tg_export_data *ted = &exp->exp_target_data;
@@ -373,8 +380,8 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 
 out:
 	if (rc != 0) {
-		nodemap_del_member(exp);
 		class_disconnect(exp);
+		nodemap_del_member(exp);
 		*_exp = NULL;
 	} else {
 		*_exp = exp;
@@ -407,7 +414,6 @@ int ofd_obd_disconnect(struct obd_export *exp)
 	if (!(exp->exp_flags & OBD_OPT_FORCE))
 		ofd_grant_sanity_check(ofd_obd(ofd), __FUNCTION__);
 
-	nodemap_del_member(exp);
 	rc = server_disconnect_export(exp);
 
 	ofd_grant_discard(exp);
@@ -423,6 +429,7 @@ int ofd_obd_disconnect(struct obd_export *exp)
 		lu_env_fini(&env);
 	}
 out:
+	nodemap_del_member(exp);
 	class_export_put(exp);
 	RETURN(rc);
 }

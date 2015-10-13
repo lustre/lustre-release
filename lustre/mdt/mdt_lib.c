@@ -463,27 +463,62 @@ out:
         return rc;
 }
 
-static void mdt_squash_nodemap_id(struct lu_ucred *ucred,
-				  struct lu_nodemap *nodemap)
-{
-	if (ucred->uc_o_uid == nodemap->nm_squash_uid) {
-		ucred->uc_fsuid = nodemap->nm_squash_uid;
-		ucred->uc_fsgid = nodemap->nm_squash_gid;
-		ucred->uc_cap = 0;
-		ucred->uc_suppgids[0] = -1;
-		ucred->uc_suppgids[1] = -1;
-	}
-}
-
-
-static int old_init_ucred(struct mdt_thread_info *info,
-			  struct mdt_body *body, bool drop_fs_cap)
+static int old_init_ucred_common(struct mdt_thread_info *info,
+				  bool drop_fs_cap)
 {
 	struct lu_ucred		*uc = mdt_ucred(info);
 	struct mdt_device	*mdt = info->mti_mdt;
 	struct md_identity	*identity = NULL;
 	struct lu_nodemap	*nodemap =
 		info->mti_exp->exp_target_data.ted_nodemap;
+
+	if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
+		identity = mdt_identity_get(mdt->mdt_identity_cache,
+					    uc->uc_fsuid);
+		if (IS_ERR(identity)) {
+			if (unlikely(PTR_ERR(identity) == -EREMCHG)) {
+				identity = NULL;
+			} else {
+				CDEBUG(D_SEC, "Deny access without identity: "
+				       "uid %u\n", uc->uc_fsuid);
+				RETURN(-EACCES);
+			}
+		}
+	}
+	uc->uc_identity = identity;
+
+	if (nodemap == NULL) {
+		CERROR("%s: cli %s/%p nodemap not set.\n",
+		      mdt2obd_dev(mdt)->obd_name,
+		      info->mti_exp->exp_client_uuid.uuid, info->mti_exp);
+		RETURN(-EACCES);
+	} else if (uc->uc_o_uid == nodemap->nm_squash_uid) {
+		uc->uc_fsuid = nodemap->nm_squash_uid;
+		uc->uc_fsgid = nodemap->nm_squash_gid;
+		uc->uc_cap = 0;
+		uc->uc_suppgids[0] = -1;
+		uc->uc_suppgids[1] = -1;
+	}
+
+	/* process root_squash here. */
+	mdt_root_squash(info, mdt_info_req(info)->rq_peer.nid);
+
+	/* remove fs privilege for non-root user. */
+	if (uc->uc_fsuid)
+		uc->uc_cap &= ~CFS_CAP_FS_MASK;
+	uc->uc_valid = UCRED_OLD;
+	ucred_set_jobid(info, uc);
+
+	return 0;
+}
+
+static int old_init_ucred(struct mdt_thread_info *info,
+			  struct mdt_body *body, bool drop_fs_cap)
+{
+	struct lu_ucred		*uc = mdt_ucred(info);
+	struct lu_nodemap	*nodemap =
+		info->mti_exp->exp_target_data.ted_nodemap;
+	int			 rc;
 	ENTRY;
 
 	body->mbo_uid = nodemap_map_id(nodemap, NODEMAP_UID,
@@ -504,44 +539,19 @@ static int old_init_ucred(struct mdt_thread_info *info,
 	uc->uc_suppgids[0] = body->mbo_suppgid;
 	uc->uc_suppgids[1] = -1;
 	uc->uc_ginfo = NULL;
-	if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
-		identity = mdt_identity_get(mdt->mdt_identity_cache,
-					    uc->uc_fsuid);
-		if (IS_ERR(identity)) {
-			if (unlikely(PTR_ERR(identity) == -EREMCHG)) {
-				identity = NULL;
-			} else {
-				CDEBUG(D_SEC, "Deny access without identity: "
-				       "uid %u\n", uc->uc_fsuid);
-				RETURN(-EACCES);
-			}
-		}
-	}
-	uc->uc_identity = identity;
+	uc->uc_cap = body->mbo_capability;
 
-	mdt_squash_nodemap_id(uc, nodemap);
+	rc = old_init_ucred_common(info, drop_fs_cap);
 
-	/* process root_squash here. */
-	mdt_root_squash(info, mdt_info_req(info)->rq_peer.nid);
-
-	/* remove fs privilege for non-root user. */
-	if (uc->uc_fsuid && drop_fs_cap)
-		uc->uc_cap = body->mbo_capability & ~CFS_CAP_FS_MASK;
-	else
-		uc->uc_cap = body->mbo_capability;
-	uc->uc_valid = UCRED_OLD;
-	ucred_set_jobid(info, uc);
-
-	RETURN(0);
+	RETURN(rc);
 }
 
 static int old_init_ucred_reint(struct mdt_thread_info *info)
 {
 	struct lu_ucred		*uc = mdt_ucred(info);
-	struct mdt_device	*mdt = info->mti_mdt;
-	struct md_identity	*identity = NULL;
 	struct lu_nodemap	*nodemap =
 		info->mti_exp->exp_target_data.ted_nodemap;
+	int			 rc;
 	ENTRY;
 
 	LASSERT(uc != NULL);
@@ -556,31 +566,9 @@ static int old_init_ucred_reint(struct mdt_thread_info *info)
 	uc->uc_o_gid = uc->uc_o_fsgid = uc->uc_gid = uc->uc_fsgid;
 	uc->uc_ginfo = NULL;
 
-	if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
-		identity = mdt_identity_get(mdt->mdt_identity_cache,
-					    uc->uc_fsuid);
-		if (IS_ERR(identity)) {
-			if (unlikely(PTR_ERR(identity) == -EREMCHG)) {
-				identity = NULL;
-			} else {
-				CDEBUG(D_SEC, "Deny access without identity: "
-				       "uid %u\n", uc->uc_fsuid);
-				RETURN(-EACCES);
-			}
-		}
-	}
-	uc->uc_identity = identity;
+	rc = old_init_ucred_common(info, true); /* drop_fs_cap = true */
 
-	/* process root_squash here. */
-	mdt_root_squash(info, mdt_info_req(info)->rq_peer.nid);
-
-	/* remove fs privilege for non-root user. */
-	if (uc->uc_fsuid)
-		uc->uc_cap &= ~CFS_CAP_FS_MASK;
-	uc->uc_valid = UCRED_OLD;
-	ucred_set_jobid(info, uc);
-
-	RETURN(0);
+	RETURN(rc);
 }
 
 static inline int __mdt_init_ucred(struct mdt_thread_info *info,

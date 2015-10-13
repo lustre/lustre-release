@@ -5004,12 +5004,12 @@ static int mdt_obd_disconnect(struct obd_export *exp)
         LASSERT(exp);
         class_export_get(exp);
 
-	nodemap_del_member(exp);
 	rc = server_disconnect_export(exp);
 	if (rc != 0)
 		CDEBUG(D_IOCTL, "server disconnect error: rc = %d\n", rc);
 
 	rc = mdt_export_cleanup(exp);
+	nodemap_del_member(exp);
 	class_export_put(exp);
 	RETURN(rc);
 }
@@ -5057,6 +5057,10 @@ static int mdt_obd_connect(const struct lu_env *env,
 	lexp = class_conn2export(&conn);
 	LASSERT(lexp != NULL);
 
+	rc = nodemap_add_member(*client_nid, lexp);
+	if (rc != 0 && rc != -EEXIST)
+		GOTO(out, rc);
+
 	rc = mdt_connect_internal(lexp, mdt, data);
 	if (rc == 0) {
 		struct lsd_client_data *lcd = lexp->exp_target_data.ted_lcd;
@@ -5064,17 +5068,13 @@ static int mdt_obd_connect(const struct lu_env *env,
 		LASSERT(lcd);
 		memcpy(lcd->lcd_uuid, cluuid, sizeof lcd->lcd_uuid);
 		rc = tgt_client_new(env, lexp);
-		if (rc == 0) {
-			rc = nodemap_add_member(*client_nid, lexp);
-			if (rc != 0 && rc != -EEXIST)
-				goto out;
-
+		if (rc == 0)
 			mdt_export_stats_init(obd, lexp, localdata);
-		}
 	}
 out:
 	if (rc != 0) {
 		class_disconnect(lexp);
+		nodemap_del_member(lexp);
 		*exp = NULL;
 	} else {
 		*exp = lexp;
@@ -5096,12 +5096,15 @@ static int mdt_obd_reconnect(const struct lu_env *env,
 	if (exp == NULL || obd == NULL || cluuid == NULL)
 		RETURN(-EINVAL);
 
+	rc = nodemap_add_member(*client_nid, exp);
+	if (rc != 0 && rc != -EEXIST)
+		RETURN(rc);
+
 	rc = mdt_connect_internal(exp, mdt_dev(obd->obd_lu_dev), data);
-	if (rc == 0) {
-		rc = nodemap_add_member(*client_nid, exp);
-		if (rc == 0 || rc == -EEXIST)
-			mdt_export_stats_init(obd, exp, localdata);
-	}
+	if (rc == 0)
+		mdt_export_stats_init(obd, exp, localdata);
+	else
+		nodemap_del_member(exp);
 
 	RETURN(rc);
 }
