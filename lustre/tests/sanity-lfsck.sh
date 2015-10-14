@@ -22,6 +22,16 @@ init_logging
 
 require_dsh_mds || exit 0
 
+load_modules
+
+if ! check_versions; then
+	skip "It is NOT necessary to test lfsck under interoperation mode"
+	exit 0
+fi
+
+[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.60) ]] &&
+	skip "Need MDS version at least 2.3.60" && exit 0
+
 LTIME=${LTIME:-120}
 
 SAVED_MDSSIZE=${MDSSIZE}
@@ -37,10 +47,6 @@ OSTSIZE=100000
 # build up a clean test environment.
 formatall
 setupall
-
-[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.60) ]] &&
-	skip "Need MDS version at least 2.3.60" && check_and_cleanup_lustre &&
-	exit 0
 
 [[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.4.90) ]] &&
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2c"
