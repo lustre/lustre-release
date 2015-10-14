@@ -1030,7 +1030,7 @@ static void osp_sync_process_committed(const struct lu_env *env,
 				CERROR("%s: can't cancel record: %d\n",
 				       obd->obd_name, rc);
 		} else {
-			DEBUG_REQ(D_ERROR, req, "imp_committed = "LPU64,
+			DEBUG_REQ(D_OTHER, req, "imp_committed = "LPU64,
 				  imp->imp_peer_committed_transno);
 		}
 		ptlrpc_req_finished(req);
