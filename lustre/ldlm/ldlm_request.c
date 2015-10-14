@@ -98,12 +98,7 @@ int ldlm_expired_completion_wait(void *data)
         if (lock->l_conn_export == NULL) {
                 static cfs_time_t next_dump = 0, last_dump = 0;
 
-		LCONSOLE_WARN("lock timed out (enqueued at "CFS_TIME_T", "
-			      CFS_DURATION_T"s ago)\n",
-			      lock->l_last_activity,
-			      cfs_time_sub(cfs_time_current_sec(),
-					   lock->l_last_activity));
-		LDLM_DEBUG(lock, "lock timed out (enqueued at "CFS_TIME_T", "
+		LDLM_ERROR(lock, "lock timed out (enqueued at "CFS_TIME_T", "
 			   CFS_DURATION_T"s ago); not entering recovery in "
 			   "server code, just going back to sleep",
 			   lock->l_last_activity,
