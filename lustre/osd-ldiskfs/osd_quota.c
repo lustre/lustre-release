@@ -102,7 +102,9 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 				 const struct dt_key *dtkey)
 {
 	struct osd_thread_info	*info = osd_oti_get(env);
-#ifdef HAVE_DQUOT_FS_DISK_QUOTA
+#if defined(HAVE_DQUOT_QC_DQBLK)
+	struct qc_dqblk		*dqblk = &info->oti_qdq;
+#elif defined(HAVE_DQUOT_FS_DISK_QUOTA)
 	struct fs_disk_quota	*dqblk = &info->oti_fdq;
 #else
 	struct if_dqblk		*dqblk = &info->oti_dqblk;
@@ -126,7 +128,10 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 #endif
 	if (rc)
 		RETURN(rc);
-#ifdef HAVE_DQUOT_FS_DISK_QUOTA
+#if defined(HAVE_DQUOT_QC_DQBLK)
+	rec->bspace = dqblk->d_space;
+	rec->ispace = dqblk->d_ino_count;
+#elif defined(HAVE_DQUOT_FS_DISK_QUOTA)
 	rec->bspace = dqblk->d_bcount;
 	rec->ispace = dqblk->d_icount;
 #else

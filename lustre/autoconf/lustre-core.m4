@@ -1851,6 +1851,30 @@ ki_nbytes, [
 ]) # LC_KIOCB_HAS_NBYTES
 
 #
+# LC_HAVE_DQUOT_QC_DQBLK
+#
+# 3.19 has quotactl_ops->[sg]et_dqblk that take struct kqid and qc_dqblk
+# Added in commit 14bf61ffe
+#
+AC_DEFUN([LC_HAVE_DQUOT_QC_DQBLK], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'quotactl_ops.set_dqblk' takes struct qc_dqblk],
+qc_dqblk, [
+	#include <linux/fs.h>
+	#include <linux/quota.h>
+],[
+	((struct quotactl_ops *)0)->set_dqblk(NULL, *((struct kqid*)0), (struct qc_dqblk*)0);
+],[
+	AC_DEFINE(HAVE_DQUOT_QC_DQBLK, 1,
+		[quotactl_ops.set_dqblk takes struct qc_dqblk])
+	AC_DEFINE(HAVE_DQUOT_KQID, 1,
+		[quotactl_ops.set_dqblk takes struct kqid])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_HAVE_DQUOT_QC_DQBLK
+
+#
 # LC_BACKING_DEV_INFO_REMOVAL
 #
 # 3.20 kernel removed backing_dev_info from address_space
@@ -2291,6 +2315,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 3.19
 	LC_KIOCB_HAS_NBYTES
+	LC_HAVE_DQUOT_QC_DQBLK
 
 	# 3.20
 	LC_BACKING_DEV_INFO_REMOVAL
