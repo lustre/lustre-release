@@ -132,7 +132,9 @@ void usage(FILE *out)
 		"\t\t--ost: object storage, mutually exclusive with mdt, mgs\n"
 		"\toptions (in order of popularity):\n"
 		"\t\t--index=#N: numerical target index (0..N)\n"
-		"\t\t\trequired for all targets other than the MGS\n"
+		"\t\t\trequired for all targets other than the MGS,\n"
+		"\t\t\ttarget index may either be a decimal number or\n"
+		"\t\t\thexadecimal number starting with '0x'\n"
 		"\t\t--fsname=<8_char_filesystem_name>: fs targets belong to\n"
 		"\t\t\trequired for all targets other than MGS\n"
 		"\t\t--mgsnode=<nid>[,<...>]: NID(s) of remote MGS\n"
@@ -406,10 +408,23 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 case 'h':
                         usage(stdout);
                         return 1;
-                case 'i':
+		case 'i': {
+			char *endptr = NULL;
+			int base;
 			index_option = true;
 			/* LU-2374: check whether it is OST/MDT later */
-			mop->mo_ldd.ldd_svindex = atol(optarg);
+			base = (strlen(optarg) > 1 &&
+				!strncmp(optarg, "0x", 2)) ? 16 : 10;
+			/* Allowed input are base 16 and base 10 numbers only */
+			mop->mo_ldd.ldd_svindex = strtoul(optarg,
+							  &endptr, base);
+			if (*endptr != '\0') {
+				fprintf(stderr, "%s: wrong index %s. "
+					"Target index must be decimal or "
+					"hexadecimal.\n",
+					progname, optarg);
+				return 1;
+			}
 			if (mop->mo_ldd.ldd_svindex >= INDEX_UNASSIGNED) {
 				fprintf(stderr, "%s: wrong index %u. "
 					"Target index must be less than %u.\n",
@@ -418,7 +433,8 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 				return 1;
 			}
 			mop->mo_ldd.ldd_flags &= ~LDD_F_NEED_INDEX;
-                        break;
+			break;
+		}
                 case 'k':
                         strscpy(mop->mo_mkfsopts, optarg,
                                 sizeof(mop->mo_mkfsopts));
