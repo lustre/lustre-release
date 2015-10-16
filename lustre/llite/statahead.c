@@ -1467,8 +1467,10 @@ static int revalidate_statahead_dentry(struct inode *dir,
 				struct dentry *alias;
 
 				alias = ll_splice_alias(inode, *dentryp);
-				if (IS_ERR(alias))
+				if (IS_ERR(alias)) {
+					ll_intent_release(&it);
 					GOTO(out, rc = PTR_ERR(alias));
+				}
 				*dentryp = alias;
 				/* statahead prepared this inode, transfer inode
 				 * refcount from sa_entry to dentry */
@@ -1485,6 +1487,7 @@ static int revalidate_statahead_dentry(struct inode *dir,
 					(*dentryp)->d_name.name,
 					PFID(ll_inode2fid((*dentryp)->d_inode)),
 					PFID(ll_inode2fid(inode)));
+				ll_intent_release(&it);
 				GOTO(out, rc = -ESTALE);
 			}
 
