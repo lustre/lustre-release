@@ -2453,7 +2453,8 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	struct file		   *filp;
 	struct inode		   *inode;
 	struct lu_fid		   *fid    = &info->oti_fid;
-	int			    dirty  = 0;
+	bool			    dirty  = false;
+	bool			    restored = false;
 	int			    rc     = 0;
 	ENTRY;
 
@@ -2507,7 +2508,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 		 * have their FID mapping in OI files already. */
 		if (dev->od_maybe_new)
 			sf->sf_internal_flags = SIF_NO_HANDLE_OLD_FID;
-		dirty = 1;
+		dirty = true;
 	} else if (rc != 0) {
 		GOTO(cleanup_inode, rc);
 	} else {
@@ -2530,14 +2531,15 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 				       old_uuid->uuid, new_uuid->uuid);
 			}
 			osd_scrub_file_reset(scrub, es->s_uuid,SF_INCONSISTENT);
-			dirty = 1;
+			dirty = true;
+			restored = true;
 			if (old_uuid != NULL)
 				OBD_FREE_PTR(old_uuid);
 			if (new_uuid != NULL)
 				OBD_FREE_PTR(new_uuid);
 		} else if (sf->sf_status == SS_SCANNING) {
 			sf->sf_status = SS_CRASHED;
-			dirty = 1;
+			dirty = true;
 		}
 	}
 
@@ -2546,14 +2548,14 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	else
 		scrub->os_pos_current = LDISKFS_FIRST_INO(sb) + 1;
 
-	if (dirty != 0) {
+	if (dirty) {
 		rc = osd_scrub_file_store(scrub);
 		if (rc != 0)
 			GOTO(cleanup_inode, rc);
 	}
 
 	/* Initialize OI files. */
-	rc = osd_oi_init(info, dev);
+	rc = osd_oi_init(info, dev, restored);
 	if (rc < 0)
 		GOTO(cleanup_inode, rc);
 

@@ -815,6 +815,8 @@ trigger:
 					result = -EINPROGRESS;
 				else
 					result = -EREMCHG;
+			} else {
+				result = -EREMCHG;
 			}
 
 			if (fid_is_on_ost(info, dev, fid, OI_CHECK_FLD))

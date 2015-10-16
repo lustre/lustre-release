@@ -139,7 +139,8 @@ enum oi_check_flags {
 };
 
 int osd_oi_mod_init(void);
-int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd);
+int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd,
+		bool restored);
 void osd_oi_fini(struct osd_thread_info *info, struct osd_device *osd);
 int  osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
 		   const struct lu_fid *fid, struct osd_inode_id *id,
