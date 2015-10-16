@@ -5617,11 +5617,11 @@ drop_bl_callback() {
 	return $rc
 }
 
-drop_ldlm_reply() {
-#define OBD_FAIL_LDLM_REPLY              0x30c
+drop_mdt_ldlm_reply() {
+#define OBD_FAIL_MDS_LDLM_REPLY_NET	0x157
     RC=0
-    local list=$(comma_list $(mdts_nodes) $(osts_nodes))
-    do_nodes $list lctl set_param fail_loc=0x30c
+    local list=$(comma_list $(mdts_nodes))
+    do_nodes $list lctl set_param fail_loc=0x157
 
     do_facet client "$@" || RC=$?
 
@@ -5629,11 +5629,11 @@ drop_ldlm_reply() {
     return $RC
 }
 
-drop_ldlm_reply_once() {
-#define OBD_FAIL_LDLM_REPLY              0x30c
+drop_mdt_ldlm_reply_once() {
+#define OBD_FAIL_MDS_LDLM_REPLY_NET	0x157
     RC=0
-    local list=$(comma_list $(mdts_nodes) $(osts_nodes))
-    do_nodes $list lctl set_param fail_loc=0x8000030c
+    local list=$(comma_list $(mdts_nodes))
+    do_nodes $list lctl set_param fail_loc=0x80000157
 
     do_facet client "$@" || RC=$?
 

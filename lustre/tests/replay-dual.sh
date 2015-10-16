@@ -467,7 +467,7 @@ run_test 18 "ldlm_handle_enqueue succeeds on evicted export (3822)"
 
 test_19() { # Bug 10991 - resend of open request does not fail assertion.
     replay_barrier $SINGLEMDS
-    drop_ldlm_reply "createmany -o $DIR/$tfile 1" || return 1
+    drop_mdt_ldlm_reply "createmany -o $DIR/$tfile 1" || return 1
     fail $SINGLEMDS
     checkstat $DIR2/${tfile}0 || return 2
     rm $DIR/${tfile}0 || return 3

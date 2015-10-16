@@ -2554,8 +2554,8 @@ test_73b() {
 	rm -f $DIR/$tfile
 
 	replay_barrier $SINGLEMDS
-	#define OBD_FAIL_LDLM_REPLY       0x30c
-	do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000030c"
+	#define OBD_FAIL_MDS_LDLM_REPLY_NET       0x157
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000157"
 	fail $SINGLEMDS
 	kill -USR1 $pid
 	wait $pid || error "multiop pid failed"
