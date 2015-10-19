@@ -1545,13 +1545,13 @@ static int __init mgs_init(void)
 				   LUSTRE_MGS_NAME, &mgs_device_type);
 }
 
-static void /*__exit*/ mgs_exit(void)
+static void __exit mgs_exit(void)
 {
 	class_unregister_type(LUSTRE_MGS_NAME);
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("Lustre  Management Server (MGS)");
+MODULE_DESCRIPTION("Lustre Management Server (MGS)");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 

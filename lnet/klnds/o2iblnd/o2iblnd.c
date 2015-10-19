@@ -2940,36 +2940,37 @@ static lnd_t the_o2iblnd = {
 	.lnd_recv	= kiblnd_recv,
 };
 
-static void __exit
-kiblnd_module_fini (void)
+static void __exit ko2iblnd_exit(void)
 {
-        lnet_unregister_lnd(&the_o2iblnd);
-        kiblnd_tunables_fini();
+	lnet_unregister_lnd(&the_o2iblnd);
+	kiblnd_tunables_fini();
 }
 
-static int __init
-kiblnd_module_init (void)
+static int __init ko2iblnd_init(void)
 {
-        int    rc;
+	int rc;
 
-        CLASSERT (sizeof(kib_msg_t) <= IBLND_MSG_SIZE);
-        CLASSERT (offsetof(kib_msg_t, ibm_u.get.ibgm_rd.rd_frags[IBLND_MAX_RDMA_FRAGS])
-                  <= IBLND_MSG_SIZE);
-        CLASSERT (offsetof(kib_msg_t, ibm_u.putack.ibpam_rd.rd_frags[IBLND_MAX_RDMA_FRAGS])
-                  <= IBLND_MSG_SIZE);
+	CLASSERT(sizeof(kib_msg_t) <= IBLND_MSG_SIZE);
+	CLASSERT(offsetof(kib_msg_t,
+			  ibm_u.get.ibgm_rd.rd_frags[IBLND_MAX_RDMA_FRAGS]) <=
+		 IBLND_MSG_SIZE);
+	CLASSERT(offsetof(kib_msg_t,
+			  ibm_u.putack.ibpam_rd.rd_frags[IBLND_MAX_RDMA_FRAGS])
+		 <= IBLND_MSG_SIZE);
 
-        rc = kiblnd_tunables_init();
-        if (rc != 0)
-                return rc;
+	rc = kiblnd_tunables_init();
+	if (rc != 0)
+		return rc;
 
-        lnet_register_lnd(&the_o2iblnd);
+	lnet_register_lnd(&the_o2iblnd);
 
-        return 0;
+	return 0;
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("Kernel OpenIB gen2 LND v2.00");
+MODULE_DESCRIPTION("OpenIB gen2 LNet Network Driver");
+MODULE_VERSION("2.8.0");
 MODULE_LICENSE("GPL");
 
-module_init(kiblnd_module_init);
-module_exit(kiblnd_module_fini);
+module_init(ko2iblnd_init);
+module_exit(ko2iblnd_exit);

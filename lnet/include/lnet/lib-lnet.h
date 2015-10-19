@@ -457,8 +457,8 @@ extern lnet_ni_t *lnet_nid2ni_locked(lnet_nid_t nid, int cpt);
 extern lnet_ni_t *lnet_net2ni_locked(__u32 net, int cpt);
 extern lnet_ni_t *lnet_net2ni(__u32 net);
 
-int lnet_init(void);
-void lnet_fini(void);
+int lnet_lib_init(void);
+void lnet_lib_exit(void);
 
 extern int portal_rotor;
 

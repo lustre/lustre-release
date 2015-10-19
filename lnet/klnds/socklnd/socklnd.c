@@ -2865,46 +2865,44 @@ ksocknal_startup (lnet_ni_t *ni)
 }
 
 
-static void __exit
-ksocknal_module_fini (void)
+static void __exit ksocklnd_exit(void)
 {
-        lnet_unregister_lnd(&the_ksocklnd);
-        ksocknal_tunables_fini();
+	lnet_unregister_lnd(&the_ksocklnd);
+	ksocknal_tunables_fini();
 }
 
-static int __init
-ksocknal_module_init (void)
+static int __init ksocklnd_init(void)
 {
-        int    rc;
+	int rc;
 
-        /* check ksnr_connected/connecting field large enough */
-        CLASSERT (SOCKLND_CONN_NTYPES <= 4);
-        CLASSERT (SOCKLND_CONN_ACK == SOCKLND_CONN_BULK_IN);
+	/* check ksnr_connected/connecting field large enough */
+	CLASSERT(SOCKLND_CONN_NTYPES <= 4);
+	CLASSERT(SOCKLND_CONN_ACK == SOCKLND_CONN_BULK_IN);
 
-        /* initialize the_ksocklnd */
-        the_ksocklnd.lnd_type     = SOCKLND;
-        the_ksocklnd.lnd_startup  = ksocknal_startup;
-        the_ksocklnd.lnd_shutdown = ksocknal_shutdown;
-        the_ksocklnd.lnd_ctl      = ksocknal_ctl;
-        the_ksocklnd.lnd_send     = ksocknal_send;
-        the_ksocklnd.lnd_recv     = ksocknal_recv;
-        the_ksocklnd.lnd_notify   = ksocknal_notify;
-        the_ksocklnd.lnd_query    = ksocknal_query;
-        the_ksocklnd.lnd_accept   = ksocknal_accept;
+	/* initialize the_ksocklnd */
+	the_ksocklnd.lnd_type     = SOCKLND;
+	the_ksocklnd.lnd_startup  = ksocknal_startup;
+	the_ksocklnd.lnd_shutdown = ksocknal_shutdown;
+	the_ksocklnd.lnd_ctl      = ksocknal_ctl;
+	the_ksocklnd.lnd_send     = ksocknal_send;
+	the_ksocklnd.lnd_recv     = ksocknal_recv;
+	the_ksocklnd.lnd_notify   = ksocknal_notify;
+	the_ksocklnd.lnd_query    = ksocknal_query;
+	the_ksocklnd.lnd_accept   = ksocknal_accept;
 
-        rc = ksocknal_tunables_init();
-        if (rc != 0)
-                return rc;
+	rc = ksocknal_tunables_init();
+	if (rc != 0)
+		return rc;
 
-        lnet_register_lnd(&the_ksocklnd);
+	lnet_register_lnd(&the_ksocklnd);
 
-        return 0;
+	return 0;
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("Kernel TCP Socket LND v3.0.0");
-MODULE_VERSION("3.0.0");
+MODULE_DESCRIPTION("TCP Socket LNet Network Driver");
+MODULE_VERSION("2.8.0");
 MODULE_LICENSE("GPL");
 
-module_init(ksocknal_module_init);
-module_exit(ksocknal_module_fini);
+module_init(ksocklnd_init);
+module_exit(ksocklnd_exit);

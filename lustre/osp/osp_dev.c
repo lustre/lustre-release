@@ -1900,7 +1900,7 @@ struct llog_operations osp_mds_ost_orig_logops;
  * \retval 0		0 if initialization succeeds.
  * \retval negative	negative errno if initialization failed.
  */
-static int __init osp_mod_init(void)
+static int __init osp_init(void)
 {
 	struct obd_type *type;
 	int rc;
@@ -1952,7 +1952,7 @@ static int __init osp_mod_init(void)
  * This callback is called when kernel unloads OSP module from memory, and
  * it will deregister OSP and LWP device type from obd_types (\see class_obd.c).
  */
-static void __exit osp_mod_exit(void)
+static void __exit osp_exit(void)
 {
 	class_unregister_type(LUSTRE_LWP_NAME);
 	class_unregister_type(LUSTRE_OSP_NAME);
@@ -1960,9 +1960,9 @@ static void __exit osp_mod_exit(void)
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("Lustre OST Proxy Device ("LUSTRE_OSP_NAME")");
+MODULE_DESCRIPTION("Lustre OSD Storage Proxy ("LUSTRE_OSP_NAME")");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(osp_mod_init);
-module_exit(osp_mod_exit);
+module_init(osp_init);
+module_exit(osp_exit);

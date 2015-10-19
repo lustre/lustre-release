@@ -428,13 +428,13 @@ static int __init ost_init(void)
         RETURN(rc);
 }
 
-static void /*__exit*/ ost_exit(void)
+static void __exit ost_exit(void)
 {
 	class_unregister_type(LUSTRE_OSS_NAME);
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("Lustre Object Storage Target (OST) v0.01");
+MODULE_DESCRIPTION("Lustre Object Storage Target (OST)");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 

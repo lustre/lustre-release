@@ -173,17 +173,16 @@ lnet_ioctl(unsigned int cmd, struct libcfs_ioctl_hdr *hdr)
 
 DECLARE_IOCTL_HANDLER(lnet_ioctl_handler, lnet_ioctl);
 
-static int
-lnet_module_init(void)
+static int __init lnet_init(void)
 {
 	int rc;
 	ENTRY;
 
 	mutex_init(&lnet_config_mutex);
 
-	rc = lnet_init();
+	rc = lnet_lib_init();
 	if (rc != 0) {
-		CERROR("lnet_init: error %d\n", rc);
+		CERROR("lnet_lib_init: error %d\n", rc);
 		RETURN(rc);
 	}
 
@@ -193,27 +192,26 @@ lnet_module_init(void)
 	if (config_on_load) {
 		/* Have to schedule a separate thread to avoid deadlocking
 		 * in modload */
-		(void) kthread_run(lnet_configure, NULL, "lnet_initd");
+		(void)kthread_run(lnet_configure, NULL, "lnet_initd");
 	}
 
 	RETURN(0);
 }
 
-static void
-lnet_module_exit(void)
+static void __exit lnet_exit(void)
 {
 	int rc;
 
 	rc = libcfs_deregister_ioctl(&lnet_ioctl_handler);
 	LASSERT(rc == 0);
 
-	lnet_fini();
+	lnet_lib_exit();
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("LNet v3.1");
-MODULE_VERSION("1.0.0");
+MODULE_DESCRIPTION("Lustre Networking layer");
+MODULE_VERSION(LNET_VERSION);
 MODULE_LICENSE("GPL");
 
-module_init(lnet_module_init);
-module_exit(lnet_module_exit);
+module_init(lnet_init);
+module_exit(lnet_exit);

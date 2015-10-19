@@ -6437,7 +6437,7 @@ static struct obd_ops osd_obd_device_ops = {
 	.o_health_check = osd_health_check,
 };
 
-static int __init osd_mod_init(void)
+static int __init osd_init(void)
 {
 	int rc;
 
@@ -6461,7 +6461,7 @@ static int __init osd_mod_init(void)
 	return rc;
 }
 
-static void __exit osd_mod_exit(void)
+static void __exit osd_exit(void)
 {
 	class_unregister_type(LUSTRE_OSD_LDISKFS_NAME);
 	lu_kmem_fini(ldiskfs_caches);
@@ -6472,5 +6472,5 @@ MODULE_DESCRIPTION("Lustre Object Storage Device ("LUSTRE_OSD_LDISKFS_NAME")");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(osd_mod_init);
-module_exit(osd_mod_exit);
+module_init(osd_init);
+module_exit(osd_exit);

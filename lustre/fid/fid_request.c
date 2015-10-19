@@ -568,7 +568,7 @@ EXPORT_SYMBOL(client_fid_fini);
 
 struct proc_dir_entry *seq_type_proc_dir;
 
-static int __init fid_mod_init(void)
+static int __init fid_init(void)
 {
 	seq_type_proc_dir = lprocfs_register(LUSTRE_SEQ_NAME,
 					     proc_lustre_root,
@@ -583,7 +583,7 @@ static int __init fid_mod_init(void)
 	return 0;
 }
 
-static void __exit fid_mod_exit(void)
+static void __exit fid_exit(void)
 {
 # ifdef HAVE_SERVER_SUPPORT
 	fid_server_mod_exit();
@@ -596,9 +596,9 @@ static void __exit fid_mod_exit(void)
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("Lustre FID Module");
+MODULE_DESCRIPTION("Lustre File IDentifier");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(fid_mod_init);
-module_exit(fid_mod_exit);
+module_init(fid_init);
+module_exit(fid_exit);

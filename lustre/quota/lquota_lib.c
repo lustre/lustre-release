@@ -289,7 +289,7 @@ int lquota_extract_fid(const struct lu_fid *fid, int *pool_id, int *pool_type,
 	RETURN(0);
 }
 
-static int __init init_lquota(void)
+static int __init lquota_init(void)
 {
 	int	rc;
 	ENTRY;
@@ -320,7 +320,7 @@ out_key:
 	return rc;
 }
 
-static void exit_lquota(void)
+static void __exit lquota_exit(void)
 {
 	qsd_glb_fini();
 	qmt_glb_fini();
@@ -333,5 +333,5 @@ MODULE_DESCRIPTION("Lustre Quota");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(init_lquota);
-module_exit(exit_lquota);
+module_init(lquota_init);
+module_exit(lquota_exit);

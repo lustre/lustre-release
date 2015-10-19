@@ -2869,7 +2869,7 @@ static void gss_init_at_reply_offset(void)
         gss_at_reply_off_priv = lustre_msg_size_v2(3, buflens);
 }
 
-int __init sptlrpc_gss_init(void)
+static int __init sptlrpc_gss_init(void)
 {
         int rc;
 
@@ -2940,7 +2940,7 @@ static void __exit sptlrpc_gss_exit(void)
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("GSS security policy for Lustre");
+MODULE_DESCRIPTION("Lustre GSS security policy");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 

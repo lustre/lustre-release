@@ -2789,7 +2789,7 @@ static int __init mdc_init(void)
 				   LUSTRE_MDC_NAME, NULL);
 }
 
-static void /*__exit*/ mdc_exit(void)
+static void __exit mdc_exit(void)
 {
         class_unregister_type(LUSTRE_MDC_NAME);
 }

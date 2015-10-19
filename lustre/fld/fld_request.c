@@ -527,7 +527,7 @@ void fld_client_flush(struct lu_client_fld *fld)
 
 struct proc_dir_entry *fld_type_proc_dir;
 
-static int __init fld_mod_init(void)
+static int __init fld_init(void)
 {
 	fld_type_proc_dir = lprocfs_register(LUSTRE_FLD_NAME,
 					     proc_lustre_root,
@@ -542,7 +542,7 @@ static int __init fld_mod_init(void)
 	return 0;
 }
 
-static void __exit fld_mod_exit(void)
+static void __exit fld_exit(void)
 {
 #ifdef HAVE_SERVER_SUPPORT
 	fld_server_mod_exit();
@@ -555,9 +555,9 @@ static void __exit fld_mod_exit(void)
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("Lustre FLD");
+MODULE_DESCRIPTION("Lustre FID Location Database");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(fld_mod_init);
-module_exit(fld_mod_exit);
+module_init(fld_init);
+module_exit(fld_exit);

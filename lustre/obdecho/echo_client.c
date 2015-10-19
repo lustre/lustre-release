@@ -2888,27 +2888,6 @@ static struct obd_ops echo_client_obd_ops = {
         .o_disconnect  = echo_client_disconnect
 };
 
-static int echo_client_init(void)
-{
-        int rc;
-
-	rc = lu_kmem_init(echo_caches);
-	if (rc == 0) {
-		rc = class_register_type(&echo_client_obd_ops, NULL, true, NULL,
-					 LUSTRE_ECHO_CLIENT_NAME,
-					 &echo_device_type);
-		if (rc)
-			lu_kmem_fini(echo_caches);
-	}
-	return rc;
-}
-
-static void echo_client_exit(void)
-{
-        class_unregister_type(LUSTRE_ECHO_CLIENT_NAME);
-        lu_kmem_fini(echo_caches);
-}
-
 static int __init obdecho_init(void)
 {
         int rc;
@@ -2929,7 +2908,14 @@ static int __init obdecho_init(void)
 		goto failed_1;
 # endif
 
-        rc = echo_client_init();
+	rc = lu_kmem_init(echo_caches);
+	if (rc == 0) {
+		rc = class_register_type(&echo_client_obd_ops, NULL, true, NULL,
+					 LUSTRE_ECHO_CLIENT_NAME,
+					 &echo_device_type);
+		if (rc)
+			lu_kmem_fini(echo_caches);
+	}
 
 # ifdef HAVE_SERVER_SUPPORT
         if (rc == 0)
@@ -2943,18 +2929,19 @@ failed_0:
         RETURN(rc);
 }
 
-static void /*__exit*/ obdecho_exit(void)
+static void __exit obdecho_exit(void)
 {
-        echo_client_exit();
+	class_unregister_type(LUSTRE_ECHO_CLIENT_NAME);
+	lu_kmem_fini(echo_caches);
 
-# ifdef HAVE_SERVER_SUPPORT
-        class_unregister_type(LUSTRE_ECHO_NAME);
-        echo_persistent_pages_fini();
-# endif
+#ifdef HAVE_SERVER_SUPPORT
+	class_unregister_type(LUSTRE_ECHO_NAME);
+	echo_persistent_pages_fini();
+#endif
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("Lustre Testing Echo OBD driver");
+MODULE_DESCRIPTION("Lustre Echo Client test driver");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 

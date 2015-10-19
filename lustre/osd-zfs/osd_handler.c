@@ -1356,7 +1356,7 @@ static struct obd_ops osd_obd_device_ops = {
 	.o_fid_alloc	= osd_fid_alloc
 };
 
-int __init osd_init(void)
+static int __init osd_init(void)
 {
 	int rc;
 
@@ -1375,7 +1375,7 @@ int __init osd_init(void)
 	return rc;
 }
 
-void __exit osd_exit(void)
+static void __exit osd_exit(void)
 {
 	class_unregister_type(LUSTRE_OSD_ZFS_NAME);
 	lu_kmem_fini(osd_caches);

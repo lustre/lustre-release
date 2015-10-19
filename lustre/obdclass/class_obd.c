@@ -492,7 +492,7 @@ static int obd_init_checks(void)
 #define obd_init_checks() do {} while(0)
 #endif
 
-static int __init init_obdclass(void)
+static int __init obdclass_init(void)
 {
 	int i, err;
 
@@ -607,9 +607,7 @@ __u64 obd_memory_max(void)
 }
 #endif /* CONFIG_PROC_FS */
 
-/* liblustre doesn't call cleanup_obdclass, apparently.  we carry on in this
- * ifdef to the end of the file to cover module and versioning goo.*/
-static void cleanup_obdclass(void)
+static void __exit obdclass_exit(void)
 {
 	__u64 memory_leaked;
 	__u64 memory_max;
@@ -649,9 +647,9 @@ static void cleanup_obdclass(void)
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("Lustre Class Driver Build Version: " BUILD_VERSION);
+MODULE_DESCRIPTION("Lustre Class Driver");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(init_obdclass);
-module_exit(cleanup_obdclass);
+module_init(obdclass_init);
+module_exit(obdclass_exit);

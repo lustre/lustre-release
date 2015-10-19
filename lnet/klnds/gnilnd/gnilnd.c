@@ -2878,8 +2878,7 @@ out:
 	EXIT;
 }
 
-void __exit
-kgnilnd_module_fini(void)
+static void __exit kgnilnd_exit(void)
 {
 	lnet_unregister_lnd(&the_kgnilnd);
 	kgnilnd_proc_fini();
@@ -2887,8 +2886,7 @@ kgnilnd_module_fini(void)
 	kgnilnd_tunables_fini();
 }
 
-int __init
-kgnilnd_module_init(void)
+static int __init kgnilnd_init(void)
 {
 	int    rc;
 
@@ -2907,8 +2905,9 @@ kgnilnd_module_init(void)
 }
 
 MODULE_AUTHOR("Cray, Inc. <nic@cray.com>");
-MODULE_DESCRIPTION("Kernel Gemini LND v"KGNILND_BUILD_REV);
+MODULE_DESCRIPTION("Gemini LNet Network Driver");
+MODULE_VERSION(KGNILND_BUILD_REV);
 MODULE_LICENSE("GPL");
 
-module_init(kgnilnd_module_init);
-module_exit(kgnilnd_module_fini);
+module_init(kgnilnd_init);
+module_exit(kgnilnd_exit);

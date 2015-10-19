@@ -307,7 +307,7 @@ struct cfs_psdev_ops libcfs_psdev_ops = {
         libcfs_ioctl
 };
 
-static int init_libcfs_module(void)
+static int __init libcfs_init(void)
 {
 	int rc;
 
@@ -370,7 +370,7 @@ cleanup_debug:
 	return rc;
 }
 
-static void exit_libcfs_module(void)
+static void __exit libcfs_exit(void)
 {
 	int rc;
 
@@ -402,9 +402,9 @@ static void exit_libcfs_module(void)
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("Libcfs v3.1");
-MODULE_VERSION("1.0.0");
+MODULE_DESCRIPTION("Lustre helper library");
+MODULE_VERSION(LIBCFS_VERSION);
 MODULE_LICENSE("GPL");
 
-module_init(init_libcfs_module);
-module_exit(exit_libcfs_module);
+module_init(libcfs_init);
+module_exit(libcfs_exit);

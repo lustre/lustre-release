@@ -1584,7 +1584,7 @@ void mdd_generic_thread_stop(struct mdd_generic_thread *thread)
 	}
 }
 
-static int __init mdd_mod_init(void)
+static int __init mdd_init(void)
 {
 	int rc;
 
@@ -1608,16 +1608,16 @@ static int __init mdd_mod_init(void)
 	return rc;
 }
 
-static void __exit mdd_mod_exit(void)
+static void __exit mdd_exit(void)
 {
 	class_unregister_type(LUSTRE_MDD_NAME);
 	lu_kmem_fini(mdd_caches);
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("Lustre Meta-data Device Prototype ("LUSTRE_MDD_NAME")");
+MODULE_DESCRIPTION("Lustre Meta-data Device Driver ("LUSTRE_MDD_NAME")");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(mdd_mod_init);
-module_exit(mdd_mod_exit);
+module_init(mdd_init);
+module_exit(mdd_exit);

@@ -1918,7 +1918,7 @@ static struct obd_ops lod_obd_device_ops = {
 	.o_pool_del     = lod_pool_del,
 };
 
-static int __init lod_mod_init(void)
+static int __init lod_init(void)
 {
 	struct obd_type	*type;
 	int rc;
@@ -1950,7 +1950,7 @@ static int __init lod_mod_init(void)
 	return rc;
 }
 
-static void __exit lod_mod_exit(void)
+static void __exit lod_exit(void)
 {
 	class_unregister_type(LUSTRE_LOD_NAME);
 	lu_kmem_fini(lod_caches);
@@ -1961,6 +1961,5 @@ MODULE_DESCRIPTION("Lustre Logical Object Device ("LUSTRE_LOD_NAME")");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(lod_mod_init);
-module_exit(lod_mod_exit);
-
+module_init(lod_init);
+module_exit(lod_exit);

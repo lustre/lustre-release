@@ -894,27 +894,27 @@ out_mem1:
         return -ENOMEM;
 }
 
-static void lloop_exit(void)
+static void __exit lloop_exit(void)
 {
-        int i;
+	int i;
 
-        ll_iocontrol_unregister(ll_iocontrol_magic);
-        for (i = 0; i < max_loop; i++) {
-                del_gendisk(disks[i]);
-                blk_cleanup_queue(loop_dev[i].lo_queue);
-                put_disk(disks[i]);
-        }
+	ll_iocontrol_unregister(ll_iocontrol_magic);
+	for (i = 0; i < max_loop; i++) {
+		del_gendisk(disks[i]);
+		blk_cleanup_queue(loop_dev[i].lo_queue);
+		put_disk(disks[i]);
+	}
 	unregister_blkdev(lloop_major, "lloop");
 
-        OBD_FREE(disks, max_loop * sizeof(*disks));
-        OBD_FREE(loop_dev, max_loop * sizeof(*loop_dev));
+	OBD_FREE(disks, max_loop * sizeof(*disks));
+	OBD_FREE(loop_dev, max_loop * sizeof(*loop_dev));
 }
-
-module_init(lloop_init);
-module_exit(lloop_exit);
 
 CFS_MODULE_PARM(max_loop, "i", int, 0444, "maximum of lloop_device");
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre virtual block device");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
+
+module_init(lloop_init);
+module_exit(lloop_exit);

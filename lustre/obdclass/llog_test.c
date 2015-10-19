@@ -1993,7 +1993,7 @@ static void __exit llog_test_exit(void)
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("llog test module");
+MODULE_DESCRIPTION("Lustre Log test module");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 

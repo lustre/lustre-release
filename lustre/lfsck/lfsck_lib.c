@@ -3592,7 +3592,7 @@ static void __exit lfsck_exit(void)
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("LFSCK");
+MODULE_DESCRIPTION("Lustre File System Checker");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 

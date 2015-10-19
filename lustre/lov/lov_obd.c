@@ -1497,7 +1497,7 @@ static int __init lov_init(void)
         RETURN(rc);
 }
 
-static void /*__exit*/ lov_exit(void)
+static void __exit lov_exit(void)
 {
 	class_unregister_type(LUSTRE_LOV_NAME);
 	kmem_cache_destroy(lov_oinfo_slab);
@@ -1505,7 +1505,7 @@ static void /*__exit*/ lov_exit(void)
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("Lustre Logical Object Volume OBD driver");
+MODULE_DESCRIPTION("Lustre Logical Object Volume");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 

@@ -2134,7 +2134,7 @@ static int __init mgc_init(void)
 				   LUSTRE_MGC_NAME, NULL);
 }
 
-static void /*__exit*/ mgc_exit(void)
+static void __exit mgc_exit(void)
 {
         class_unregister_type(LUSTRE_MGC_NAME);
 }

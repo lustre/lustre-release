@@ -2899,7 +2899,7 @@ out:
 	RETURN(rc);
 }
 
-static void /*__exit*/ osc_exit(void)
+static void __exit osc_exit(void)
 {
 	remove_shrinker(osc_cache_shrinker);
 	class_unregister_type(LUSTRE_OSC_NAME);

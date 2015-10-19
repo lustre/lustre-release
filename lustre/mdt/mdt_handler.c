@@ -5836,7 +5836,7 @@ static struct lu_device_type mdt_device_type = {
         .ldt_ctx_tags = LCT_MD_THREAD
 };
 
-static int __init mdt_mod_init(void)
+static int __init mdt_init(void)
 {
 	int rc;
 
@@ -5865,7 +5865,7 @@ mds_fini:
 	return rc;
 }
 
-static void __exit mdt_mod_exit(void)
+static void __exit mdt_exit(void)
 {
 	class_unregister_type(LUSTRE_MDT_NAME);
 	mds_mod_exit();
@@ -5877,5 +5877,5 @@ MODULE_DESCRIPTION("Lustre Metadata Target ("LUSTRE_MDT_NAME")");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(mdt_mod_init);
-module_exit(mdt_mod_exit);
+module_init(mdt_init);
+module_exit(mdt_exit);
