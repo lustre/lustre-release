@@ -655,7 +655,7 @@ static const char *obd_connect_names[] = {
 	"fileset_mount",
 	"lock_ahead",
 	"bulk_mbits",
-	"unknown",
+	"compact_obdo",
 	NULL
 };
 
