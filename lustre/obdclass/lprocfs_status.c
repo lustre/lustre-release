@@ -656,6 +656,7 @@ static const char *obd_connect_names[] = {
 	"lock_ahead",
 	"bulk_mbits",
 	"compact_obdo",
+	"second_flags",
 	NULL
 };
 
