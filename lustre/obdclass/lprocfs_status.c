@@ -653,6 +653,7 @@ static const char *obd_connect_names[] = {
 	"multi_mod_rpcs",
 	"dir_stripe",
 	"fileset_mount",
+	"lock_ahead",
 	"bulk_mbits",
 	"unknown",
 	NULL
