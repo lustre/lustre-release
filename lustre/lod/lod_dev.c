@@ -1848,11 +1848,70 @@ static int lod_obd_get_info(const struct lu_env *env, struct obd_export *exp,
 	RETURN(rc);
 }
 
+static int lod_obd_set_info_async(const struct lu_env *env,
+				  struct obd_export *exp,
+				  __u32 keylen, void *key,
+				  __u32 vallen, void *val,
+				  struct ptlrpc_request_set *set)
+{
+	struct obd_device *obd = class_exp2obd(exp);
+	struct lod_device *d;
+	struct lod_tgt_desc *tgt;
+	int no_set = 0;
+	int i, rc = 0, rc2;
+	ENTRY;
+
+	if (set == NULL) {
+		no_set = 1;
+		set = ptlrpc_prep_set();
+		if (!set)
+			RETURN(-ENOMEM);
+	}
+
+	d = lu2lod_dev(obd->obd_lu_dev);
+	lod_getref(&d->lod_ost_descs);
+	lod_foreach_ost(d, i) {
+		tgt = OST_TGT(d, i);
+		LASSERT(tgt && tgt->ltd_tgt);
+		if (!tgt->ltd_active)
+			continue;
+
+		rc2 = obd_set_info_async(env, tgt->ltd_exp, keylen, key,
+					 vallen, val, set);
+		if (rc2 != 0 && rc == 0)
+			rc = rc2;
+	}
+	lod_putref(d, &d->lod_ost_descs);
+
+	lod_getref(&d->lod_mdt_descs);
+	lod_foreach_mdt(d, i) {
+		tgt = MDT_TGT(d, i);
+		LASSERT(tgt && tgt->ltd_tgt);
+		if (!tgt->ltd_active)
+			continue;
+		rc2 = obd_set_info_async(env, tgt->ltd_exp, keylen, key,
+					 vallen, val, set);
+		if (rc2 != 0 && rc == 0)
+			rc = rc2;
+	}
+	lod_putref(d, &d->lod_mdt_descs);
+
+
+	if (no_set) {
+		rc2 = ptlrpc_set_wait(set);
+		if (rc2 == 0 && rc == 0)
+			rc = rc2;
+		ptlrpc_set_destroy(set);
+	}
+	RETURN(rc);
+}
+
 static struct obd_ops lod_obd_device_ops = {
 	.o_owner        = THIS_MODULE,
 	.o_connect      = lod_obd_connect,
 	.o_disconnect   = lod_obd_disconnect,
 	.o_get_info     = lod_obd_get_info,
+	.o_set_info_async = lod_obd_set_info_async,
 	.o_pool_new     = lod_pool_new,
 	.o_pool_rem     = lod_pool_remove,
 	.o_pool_add     = lod_pool_add,

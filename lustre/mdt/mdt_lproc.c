@@ -421,43 +421,84 @@ LPROC_SEQ_FOPS_RO(mdt_site_stats);
 #define BUFLEN (UUID_MAX + 4)
 
 static ssize_t
-lprocfs_mds_evict_client_seq_write(struct file *file,
-				   const char __user *buffer,
+lprocfs_mds_evict_client_seq_write(struct file *file, const char __user *buf,
 				   size_t count, loff_t *off)
 {
+	struct seq_file	  *m = file->private_data;
+	struct obd_device *obd = m->private;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	char *kbuf;
 	char *tmpbuf;
+	int rc = 0;
 
-        OBD_ALLOC(kbuf, BUFLEN);
-        if (kbuf == NULL)
-                return -ENOMEM;
+	OBD_ALLOC(kbuf, BUFLEN);
+	if (kbuf == NULL)
+		return -ENOMEM;
 
-        /*
-         * OBD_ALLOC() will zero kbuf, but we only copy BUFLEN - 1
-         * bytes into kbuf, to ensure that the string is NUL-terminated.
-         * UUID_MAX should include a trailing NUL already.
-         */
-	if (copy_from_user(kbuf, buffer,
-			   min_t(unsigned long, BUFLEN - 1, count))) {
-                count = -EFAULT;
-                goto out;
-        }
-        tmpbuf = cfs_firststr(kbuf, min_t(unsigned long, BUFLEN - 1, count));
+	/*
+	 * OBD_ALLOC() will zero kbuf, but we only copy BUFLEN - 1
+	 * bytes into kbuf, to ensure that the string is NUL-terminated.
+	 * UUID_MAX should include a trailing NUL already.
+	 */
+	if (copy_from_user(kbuf, buf, min_t(unsigned long, BUFLEN - 1, count)))
+		GOTO(out, rc = -EFAULT);
+	tmpbuf = cfs_firststr(kbuf, min_t(unsigned long, BUFLEN - 1, count));
 
-        if (strncmp(tmpbuf, "nid:", 4) != 0) {
-		count = lprocfs_evict_client_seq_write(file, buffer, count,
-						       off);
-                goto out;
-        }
+	if (strncmp(tmpbuf, "nid:", 4) != 0) {
+		count = lprocfs_evict_client_seq_write(file, buf, count, off);
+		goto out;
+	}
 
-        CERROR("NOT implement evict client by nid %s\n", tmpbuf);
+	if (mdt->mdt_opts.mo_evict_tgt_nids) {
+		rc = obd_set_info_async(NULL, mdt->mdt_child_exp,
+					sizeof(KEY_EVICT_BY_NID),
+					KEY_EVICT_BY_NID,
+					strlen(tmpbuf + 4) + 1,
+					tmpbuf + 4, NULL);
+		if (rc)
+			CERROR("Failed to evict nid %s from OSTs: rc %d\n",
+			       tmpbuf + 4, rc);
+	}
+
+	/* See the comments in function lprocfs_wr_evict_client()
+	 * in ptlrpc/lproc_ptlrpc.c for details. - jay */
+	class_incref(obd, __func__, current);
+	obd_export_evict_by_nid(obd, tmpbuf + 4);
+	class_decref(obd, __func__, current);
+
 
 out:
-        OBD_FREE(kbuf, BUFLEN);
-        return count;
+	OBD_FREE(kbuf, BUFLEN);
+	return rc < 0 ? rc : count;
 }
 
 #undef BUFLEN
+
+static int mdt_evict_tgt_nids_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return seq_printf(m, "%u\n", mdt->mdt_opts.mo_evict_tgt_nids);
+}
+
+static ssize_t
+mdt_evict_tgt_nids_seq_write(struct file *file, const char __user *buffer,
+			       size_t count, loff_t *off)
+{
+	struct seq_file   *m = file->private_data;
+	struct obd_device *obd = m->private;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	int val, rc;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc)
+		return rc;
+	mdt->mdt_opts.mo_evict_tgt_nids = !!val;
+	return count;
+}
+LPROC_SEQ_FOPS(mdt_evict_tgt_nids);
+
 
 static int mdt_sec_level_seq_show(struct seq_file *m, void *data)
 {
@@ -668,6 +709,8 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 	  .fops =	&mdt_site_stats_fops			},
 	{ .name =	"evict_client",
 	  .fops =	&mdt_mds_evict_client_fops		},
+	{ .name =	"evict_tgt_nids",
+	  .fops =	&mdt_evict_tgt_nids_fops		},
 	{ .name =	"hash_stats",
 	  .fops =	&mdt_hash_fops				},
 	{ .name =	"sec_level",

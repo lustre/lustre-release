@@ -1690,23 +1690,6 @@ static int osp_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 }
 
 
-static int osp_set_info_async(const struct lu_env *env,
-			      struct obd_export *exp,
-			      u32 keylen, void *key,
-			      u32 vallen, void *val,
-			      struct ptlrpc_request_set *set)
-{
-	ENTRY;
-
-	if (KEY_IS(KEY_SPTLRPC_CONF)) {
-		sptlrpc_conf_client_adapt(exp->exp_obd);
-		RETURN(0);
-	}
-
-	CERROR("Unknown key %s\n", (char *)key);
-	RETURN(-EINVAL);
-}
-
 /**
  * Implementation of obd_ops::o_get_info
  *
@@ -1747,6 +1730,58 @@ static int osp_obd_get_info(const struct lu_env *env, struct obd_export *exp,
 	}
 
 	RETURN(rc);
+}
+
+static int osp_obd_set_info_async(const struct lu_env *env,
+				  struct obd_export *exp,
+				  u32 keylen, void *key,
+				  u32 vallen, void *val,
+				  struct ptlrpc_request_set *set)
+{
+	struct obd_device	*obd = exp->exp_obd;
+	struct obd_import	*imp = obd->u.cli.cl_import;
+	struct osp_device	*osp;
+	struct ptlrpc_request	*req;
+	char			*tmp;
+	int			 rc;
+
+	if (KEY_IS(KEY_SPTLRPC_CONF)) {
+		sptlrpc_conf_client_adapt(exp->exp_obd);
+		RETURN(0);
+	}
+
+	LASSERT(set != NULL);
+	if (!obd->obd_set_up || obd->obd_stopping)
+		RETURN(-EAGAIN);
+	osp = lu2osp_dev(obd->obd_lu_dev);
+
+	req = ptlrpc_request_alloc(imp, &RQF_OBD_SET_INFO);
+	if (req == NULL)
+		RETURN(-ENOMEM);
+
+	req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_KEY,
+			     RCL_CLIENT, keylen);
+	req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_VAL,
+			     RCL_CLIENT, vallen);
+	if (osp->opd_connect_mdt)
+		rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_SET_INFO);
+	else
+		rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_SET_INFO);
+	if (rc) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+
+	tmp = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_KEY);
+	memcpy(tmp, key, keylen);
+	tmp = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_VAL);
+	memcpy(tmp, val, vallen);
+
+	ptlrpc_request_set_replen(req);
+	ptlrpc_set_add_req(set, req);
+	ptlrpc_check_set(NULL, set);
+
+	RETURN(0);
 }
 
 /**
@@ -1842,13 +1877,13 @@ static struct obd_ops osp_obd_device_ops = {
 	.o_connect	= osp_obd_connect,
 	.o_disconnect	= osp_obd_disconnect,
 	.o_get_info     = osp_obd_get_info,
+	.o_set_info_async = osp_obd_set_info_async,
 	.o_import_event	= osp_import_event,
 	.o_iocontrol	= osp_iocontrol,
 	.o_statfs	= osp_obd_statfs,
 	.o_fid_init	= client_fid_init,
 	.o_fid_fini	= client_fid_fini,
 	.o_fid_alloc	= osp_fid_alloc,
-	.o_set_info_async   = osp_set_info_async,
 };
 
 struct llog_operations osp_mds_ost_orig_logops;

@@ -1234,11 +1234,32 @@ static int mdd_obd_get_info(const struct lu_env *env, struct obd_export *exp,
 	RETURN(rc);
 }
 
+static int mdd_obd_set_info_async(const struct lu_env *env,
+				  struct obd_export *exp,
+				  __u32 keylen, void *key,
+				  __u32 vallen, void *val,
+				  struct ptlrpc_request_set *set)
+{
+	struct obd_device	*obd = exp->exp_obd;
+	struct mdd_device	*mdd;
+	int			 rc;
+
+	if (!obd->obd_set_up || obd->obd_stopping)
+		RETURN(-EAGAIN);
+
+	mdd = lu2mdd_dev(obd->obd_lu_dev);
+	LASSERT(mdd);
+	rc = obd_set_info_async(env, mdd->mdd_child_exp, keylen, key,
+				vallen, val, set);
+	RETURN(rc);
+}
+
 static struct obd_ops mdd_obd_device_ops = {
 	.o_owner	= THIS_MODULE,
 	.o_connect	= mdd_obd_connect,
 	.o_disconnect	= mdd_obd_disconnect,
 	.o_get_info     = mdd_obd_get_info,
+	.o_set_info_async = mdd_obd_set_info_async,
 };
 
 static int mdd_changelog_user_register(const struct lu_env *env,

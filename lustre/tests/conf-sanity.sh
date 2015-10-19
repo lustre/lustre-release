@@ -6039,6 +6039,70 @@ test_90d() {
 }
 run_test 90d "check one close RPC is allowed above max_mod_rpcs_in_flight"
 
+check_uuid_on_ost() {
+	local nid=$1
+	do_facet ost1 "$LCTL get_param obdfilter.${FSNAME}*.exports.'$nid'.uuid"
+}
+
+check_uuid_on_mdt() {
+	local nid=$1
+	do_facet $SINGLEMDS "$LCTL get_param mdt.${FSNAME}*.exports.'$nid'.uuid"
+}
+
+test_91() {
+	local uuid
+	local nid
+	local found
+
+	load_modules
+	start_mds || error "MDS start failed"
+	start_ost || error "unable to start OST"
+	mount_client $MOUNT || error "client start failed"
+	check_mount || error "check_mount failed"
+
+	if remote_mds; then
+		nid=$($LCTL list_nids | head -1 | sed  "s/\./\\\./g")
+	else
+		nid="0@lo"
+	fi
+	uuid=$(get_client_uuid $MOUNT)
+
+	echo "list nids on mdt:"
+	do_facet $SINGLEMDS "$LCTL list_param mdt.${FSNAME}*.exports.*"
+	echo "uuid from $nid:"
+	do_facet $SINGLEMDS "$LCTL get_param mdt.${FSNAME}*.exports.'$nid'.uuid"
+
+	found=$(check_uuid_on_mdt $nid | grep $uuid)
+	[ -z "$found" ] && error "can't find $uuid $nid on MDT"
+	found=$(check_uuid_on_ost $nid | grep $uuid)
+	[ -z "$found" ] && error "can't find $uuid $nid on OST"
+
+	# umount the client so it won't reconnect
+	manual_umount_client --force || error "failed to umount $?"
+	# shouldn't disappear on MDS after forced umount
+	found=$(check_uuid_on_mdt $nid | grep $uuid)
+	[ -z "$found" ] && error "can't find $uuid $nid"
+
+	echo "evict $nid"
+	do_facet $SINGLEMDS \
+		"$LCTL set_param -n mdt.${mds1_svc}.evict_client nid:$nid"
+
+	found=$(check_uuid_on_mdt $nid | grep $uuid)
+	[ -n "$found" ] && error "found $uuid $nid on MDT"
+	found=$(check_uuid_on_ost $nid | grep $uuid)
+	[ -n "$found" ] && error "found $uuid $nid on OST"
+
+	# check it didn't reconnect (being umounted)
+	sleep $((TIMEOUT+1))
+	found=$(check_uuid_on_mdt $nid | grep $uuid)
+	[ -n "$found" ] && error "found $uuid $nid on MDT"
+	found=$(check_uuid_on_ost $nid | grep $uuid)
+	[ -n "$found" ] && error "found $uuid $nid on OST"
+
+	cleanup
+}
+run_test 91 "evict-by-nid support"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi
