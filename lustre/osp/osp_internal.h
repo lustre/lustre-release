@@ -111,6 +111,8 @@ struct osp_update_request {
 
 	/* List of osp_update_request_sub */
 	struct list_head		our_req_list;
+	int				our_req_nr;
+	int				our_update_nr;
 
 	struct list_head		our_cb_items;
 
@@ -118,6 +120,7 @@ struct osp_update_request {
 	struct osp_thandle		*our_th;
 	/* linked to the list(ou_list) in osp_updates */
 	struct list_head		our_list;
+	__u32				our_batchid;
 	__u32				our_req_sent:1;
 };
 
@@ -630,8 +633,11 @@ int osp_object_update_request_create(struct osp_update_request *our,
 		} else {						\
 			if (ret == 0) {					\
 				ours->ours_req->ourq_count++;		\
+				(our)->our_update_nr++;			\
+				object_update->ou_batchid =		\
+						     (our)->our_batchid;\
 				object_update->ou_flags |=		\
-						     update->our_flags; \
+						     (our)->our_flags;	\
 			}						\
 			break;						\
 		}							\
@@ -662,7 +668,7 @@ extern struct llog_operations osp_mds_ost_orig_logops;
 /* osp_trans.c */
 int osp_insert_async_request(const struct lu_env *env, enum update_type op,
 			     struct osp_object *obj, int count, __u16 *lens,
-			     const void **bufs, void *data,
+			     const void **bufs, void *data, __u32 repsize,
 			     osp_update_interpreter_t interpreter);
 
 int osp_unplug_async_request(const struct lu_env *env,

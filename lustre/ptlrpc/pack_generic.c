@@ -2518,7 +2518,7 @@ void lustre_swab_object_update(struct object_update *ou)
 
 	__swab16s(&ou->ou_type);
 	__swab16s(&ou->ou_params_count);
-	__swab32s(&ou->ou_master_index);
+	__swab32s(&ou->ou_result_size);
 	__swab32s(&ou->ou_flags);
 	__swab32s(&ou->ou_padding1);
 	__swab64s(&ou->ou_batchid);
@@ -2579,7 +2579,7 @@ void lustre_swab_out_update_header(struct out_update_header *ouh)
 	__swab32s(&ouh->ouh_magic);
 	__swab32s(&ouh->ouh_count);
 	__swab32s(&ouh->ouh_inline_length);
-	__swab32s(&ouh->ouh_padding);
+	__swab32s(&ouh->ouh_reply_size);
 }
 EXPORT_SYMBOL(lustre_swab_out_update_header);
 

@@ -2087,7 +2087,7 @@ static void check_object_update(void)
 	CHECK_STRUCT(object_update);
 	CHECK_MEMBER(object_update, ou_type);
 	CHECK_MEMBER(object_update, ou_params_count);
-	CHECK_MEMBER(object_update, ou_master_index);
+	CHECK_MEMBER(object_update, ou_result_size);
 	CHECK_MEMBER(object_update, ou_flags);
 	CHECK_MEMBER(object_update, ou_padding1);
 	CHECK_MEMBER(object_update, ou_batchid);
@@ -2132,7 +2132,7 @@ static void check_out_update_header(void)
 	CHECK_MEMBER(out_update_header, ouh_magic);
 	CHECK_MEMBER(out_update_header, ouh_count);
 	CHECK_MEMBER(out_update_header, ouh_inline_length);
-	CHECK_MEMBER(out_update_header, ouh_padding);
+	CHECK_MEMBER(out_update_header, ouh_reply_size);
 	CHECK_MEMBER(out_update_header, ouh_inline_data);
 }
 

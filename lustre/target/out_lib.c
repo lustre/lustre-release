@@ -91,11 +91,16 @@ int out_update_header_pack(const struct lu_env *env,
 			   size_t *max_update_size,
 			   enum update_type update_op,
 			   const struct lu_fid *fid,
-			   unsigned int param_count, __u16 *param_sizes)
+			   unsigned int param_count,
+			   __u16 *param_sizes,
+			   __u32 reply_size)
 {
 	struct object_update_param	*param;
 	unsigned int			i;
 	size_t				update_size;
+
+	if (((reply_size + 7) >> 3) >= 1ULL << 16)
+		return -EINVAL;
 
 	/* Check whether the packing exceeding the maxima update length */
 	update_size = sizeof(*update);
@@ -110,6 +115,7 @@ int out_update_header_pack(const struct lu_env *env,
 	update->ou_fid = *fid;
 	update->ou_type = update_op;
 	update->ou_params_count = param_count;
+	update->ou_result_size = reply_size;
 	param = &update->ou_params[0];
 	for (i = 0; i < param_count; i++) {
 		param->oup_len = param_sizes[i];
@@ -138,7 +144,8 @@ int out_update_header_pack(const struct lu_env *env,
 int out_update_pack(const struct lu_env *env, struct object_update *update,
 		    size_t *max_update_size, enum update_type op,
 		    const struct lu_fid *fid, unsigned int param_count,
-		    __u16 *param_sizes, const void **param_bufs)
+		    __u16 *param_sizes, const void **param_bufs,
+		    __u32 reply_size)
 {
 	struct object_update_param	*param;
 	unsigned int			i;
@@ -146,7 +153,7 @@ int out_update_pack(const struct lu_env *env, struct object_update *update,
 	ENTRY;
 
 	rc = out_update_header_pack(env, update, max_update_size, op, fid,
-				    param_count, param_sizes);
+				    param_count, param_sizes, reply_size);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -195,7 +202,7 @@ int out_create_pack(const struct lu_env *env, struct object_update *update,
 	}
 
 	rc = out_update_header_pack(env, update, max_update_size, OUT_CREATE,
-				    fid, buf_count, sizes);
+				    fid, buf_count, sizes, 0);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -221,7 +228,7 @@ int out_ref_del_pack(const struct lu_env *env, struct object_update *update,
 		     size_t *max_update_size, const struct lu_fid *fid)
 {
 	return out_update_pack(env, update, max_update_size, OUT_REF_DEL, fid,
-			       0, NULL, NULL);
+			       0, NULL, NULL, 0);
 }
 EXPORT_SYMBOL(out_ref_del_pack);
 
@@ -229,7 +236,7 @@ int out_ref_add_pack(const struct lu_env *env, struct object_update *update,
 		     size_t *max_update_size, const struct lu_fid *fid)
 {
 	return out_update_pack(env, update, max_update_size, OUT_REF_ADD, fid,
-			       0, NULL, NULL);
+			       0, NULL, NULL, 0);
 }
 EXPORT_SYMBOL(out_ref_add_pack);
 
@@ -243,7 +250,7 @@ int out_attr_set_pack(const struct lu_env *env, struct object_update *update,
 	ENTRY;
 
 	rc = out_update_header_pack(env, update, max_update_size,
-				    OUT_ATTR_SET, fid, 1, &size);
+				    OUT_ATTR_SET, fid, 1, &size, 0);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -266,7 +273,7 @@ int out_xattr_set_pack(const struct lu_env *env, struct object_update *update,
 			       (char *)&flag};
 
 	return out_update_pack(env, update, max_update_size, OUT_XATTR_SET,
-			       fid, ARRAY_SIZE(sizes), sizes, bufs);
+			       fid, ARRAY_SIZE(sizes), sizes, bufs, 0);
 }
 EXPORT_SYMBOL(out_xattr_set_pack);
 
@@ -277,7 +284,7 @@ int out_xattr_del_pack(const struct lu_env *env, struct object_update *update,
 	__u16	size = strlen(name) + 1;
 
 	return out_update_pack(env, update, max_update_size, OUT_XATTR_DEL,
-			       fid, 1, &size, (const void **)&name);
+			       fid, 1, &size, (const void **)&name, 0);
 }
 EXPORT_SYMBOL(out_xattr_del_pack);
 
@@ -299,7 +306,7 @@ int out_index_insert_pack(const struct lu_env *env,
 	fid_cpu_to_le(&rec_fid, rec1->rec_fid);
 
 	return out_update_pack(env, update, max_update_size, OUT_INDEX_INSERT,
-			       fid, ARRAY_SIZE(sizes), sizes, bufs);
+			       fid, ARRAY_SIZE(sizes), sizes, bufs, 0);
 }
 EXPORT_SYMBOL(out_index_insert_pack);
 
@@ -312,7 +319,7 @@ int out_index_delete_pack(const struct lu_env *env,
 	const void *buf = key;
 
 	return out_update_pack(env, update, max_update_size, OUT_INDEX_DELETE,
-			       fid, 1, &size, &buf);
+			       fid, 1, &size, &buf, 0);
 }
 EXPORT_SYMBOL(out_index_delete_pack);
 
@@ -321,7 +328,7 @@ int out_object_destroy_pack(const struct lu_env *env,
 			    size_t *max_update_size, const struct lu_fid *fid)
 {
 	return out_update_pack(env, update, max_update_size, OUT_DESTROY, fid,
-			       0, NULL, NULL);
+			       0, NULL, NULL, 0);
 }
 EXPORT_SYMBOL(out_object_destroy_pack);
 
@@ -336,7 +343,7 @@ int out_write_pack(const struct lu_env *env, struct object_update *update,
 	pos = cpu_to_le64(pos);
 
 	rc = out_update_pack(env, update, max_update_size, OUT_WRITE, fid,
-			     ARRAY_SIZE(sizes), sizes, bufs);
+			     ARRAY_SIZE(sizes), sizes, bufs, 0);
 	return rc;
 }
 EXPORT_SYMBOL(out_write_pack);
@@ -363,8 +370,9 @@ int out_index_lookup_pack(const struct lu_env *env,
 	const void	*name = key;
 	__u16		size = strlen((char *)name) + 1;
 
+	/* XXX: this shouldn't be hardcoded */
 	return out_update_pack(env, update, max_update_size, OUT_INDEX_LOOKUP,
-			       fid, 1, &size, &name);
+			       fid, 1, &size, &name, 256);
 }
 EXPORT_SYMBOL(out_index_lookup_pack);
 
@@ -372,13 +380,13 @@ int out_attr_get_pack(const struct lu_env *env, struct object_update *update,
 		      size_t *max_update_size, const struct lu_fid *fid)
 {
 	return out_update_pack(env, update, max_update_size, OUT_ATTR_GET,
-			       fid, 0, NULL, NULL);
+			       fid, 0, NULL, NULL, sizeof(struct obdo));
 }
 EXPORT_SYMBOL(out_attr_get_pack);
 
 int out_xattr_get_pack(const struct lu_env *env, struct object_update *update,
 		       size_t *max_update_size, const struct lu_fid *fid,
-		       const char *name)
+		       const char *name, const int bufsize)
 {
 	__u16 size;
 
@@ -386,7 +394,7 @@ int out_xattr_get_pack(const struct lu_env *env, struct object_update *update,
 	size = strlen(name) + 1;
 
 	return out_update_pack(env, update, max_update_size, OUT_XATTR_GET,
-			       fid, 1, &size, (const void **)&name);
+			       fid, 1, &size, (const void **)&name, bufsize);
 }
 EXPORT_SYMBOL(out_xattr_get_pack);
 
@@ -397,11 +405,12 @@ int out_read_pack(const struct lu_env *env, struct object_update *update,
 	__u16		sizes[2] = {sizeof(size), sizeof(pos)};
 	const void	*bufs[2] = {&size, &pos};
 
+	LASSERT(size > 0);
 	size = cpu_to_le64(size);
 	pos = cpu_to_le64(pos);
 
 	return out_update_pack(env, update, max_update_size, OUT_READ, fid,
-			       ARRAY_SIZE(sizes), sizes, bufs);
+			       ARRAY_SIZE(sizes), sizes, bufs, size);
 }
 EXPORT_SYMBOL(out_read_pack);
 

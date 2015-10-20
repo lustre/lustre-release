@@ -3952,7 +3952,7 @@ object_update_param_size(const struct object_update_param *param)
 struct object_update {
 	__u16		ou_type;		/* enum update_type */
 	__u16		ou_params_count;	/* update parameters count */
-	__u32		ou_master_index;	/* master MDT/OST index */
+	__u32		ou_result_size;		/* how many bytes can return */
 	__u32		ou_flags;		/* enum update_flag */
 	__u32		ou_padding1;		/* padding 1 */
 	__u64		ou_batchid;		/* op transno on master */
@@ -3978,7 +3978,7 @@ struct out_update_header {
 	__u32		ouh_magic;
 	__u32		ouh_count;
 	__u32		ouh_inline_length;
-	__u32		ouh_padding;
+	__u32		ouh_reply_size;
 	__u32		ouh_inline_data[0];
 };
 

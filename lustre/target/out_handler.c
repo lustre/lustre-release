@@ -185,6 +185,7 @@ static int out_attr_get(struct tgt_session_info *tsi)
 {
 	const struct lu_env	*env = tsi->tsi_env;
 	struct tgt_thread_info	*tti = tgt_th_info(env);
+	struct object_update	*update = tti->tti_u.update.tti_update;
 	struct obdo		*obdo = &tti->tti_u.update.tti_obdo;
 	struct lu_attr		*la = &tti->tti_attr;
 	struct dt_object        *obj = tti->tti_u.update.tti_dt_object;
@@ -192,6 +193,9 @@ static int out_attr_get(struct tgt_session_info *tsi)
 	int			rc;
 
 	ENTRY;
+
+	if (unlikely(update->ou_result_size < sizeof(*obdo)))
+		return -EPROTO;
 
 	if (!lu_object_exists(&obj->do_lu)) {
 		/* Usually, this will be called when the master MDT try
@@ -260,19 +264,15 @@ static int out_xattr_get(struct tgt_session_info *tsi)
 		RETURN(err_serious(-EPROTO));
 	}
 
+	lbuf->lb_len = (int)tti->tti_u.update.tti_update->ou_result_size;
 	lbuf->lb_buf = update_result->our_data;
-	lbuf->lb_len = OUT_UPDATE_REPLY_SIZE -
-		       cfs_size_round((unsigned long)update_result->our_data -
-				      (unsigned long)update_result);
+	if (lbuf->lb_len == 0)
+		lbuf->lb_buf = 0;
 	dt_read_lock(env, obj, MOR_TGT_CHILD);
 	rc = dt_xattr_get(env, obj, lbuf, name);
 	dt_read_unlock(env, obj);
-	if (rc < 0) {
+	if (rc < 0)
 		lbuf->lb_len = 0;
-		GOTO(out, rc);
-	}
-	lbuf->lb_len = rc;
-	rc = 0;
 	CDEBUG(D_INFO, "%s: "DFID" get xattr %s len %d\n",
 	       tgt_name(tsi->tsi_tgt), PFID(lu_object_fid(&obj->do_lu)),
 	       name, (int)lbuf->lb_len);
@@ -281,7 +281,7 @@ static int out_xattr_get(struct tgt_session_info *tsi)
 
 out:
 	object_update_result_insert(reply, lbuf->lb_buf, lbuf->lb_len, idx, rc);
-	RETURN(rc);
+	RETURN(0);
 }
 
 static int out_index_lookup(struct tgt_session_info *tsi)
@@ -294,6 +294,9 @@ static int out_index_lookup(struct tgt_session_info *tsi)
 	int			 rc;
 
 	ENTRY;
+
+	if (unlikely(update->ou_result_size < sizeof(tti->tti_fid1)))
+		return -EPROTO;
 
 	if (!lu_object_exists(&obj->do_lu))
 		RETURN(-ENOENT);
@@ -904,7 +907,8 @@ int out_handle(struct tgt_session_info *tsi)
 	unsigned int			reply_index = 0;
 	int				rc = 0;
 	int				rc1 = 0;
-	int				ouh_size;
+	int				ouh_size, reply_size;
+	int				updates;
 	ENTRY;
 
 	req_capsule_set(pill, &RQF_OUT_UPDATE);
@@ -927,15 +931,6 @@ int out_handle(struct tgt_session_info *tsi)
 	update_buf_count = ouh->ouh_count;
 	if (update_buf_count == 0)
 		RETURN(err_serious(-EPROTO));
-
-	req_capsule_set_size(pill, &RMF_OUT_UPDATE_REPLY, RCL_SERVER,
-			     OUT_UPDATE_REPLY_SIZE);
-	rc = req_capsule_server_pack(pill);
-	if (rc != 0) {
-		CERROR("%s: Can't pack response: rc = %d\n",
-		       tgt_name(tsi->tsi_tgt), rc);
-		RETURN(rc);
-	}
 
 	OBD_ALLOC(update_bufs, sizeof(*update_bufs) * update_buf_count);
 	if (update_bufs == NULL)
@@ -981,19 +976,13 @@ int out_handle(struct tgt_session_info *tsi)
 		if (rc < 0)
 			GOTO(out_free, rc);
 	}
-	/* Prepare the update reply buffer */
-	reply = req_capsule_server_get(pill, &RMF_OUT_UPDATE_REPLY);
-	if (reply == NULL)
-		GOTO(out_free, rc = err_serious(-EPROTO));
-	reply->ourp_magic = UPDATE_REPLY_MAGIC;
-	tti->tti_u.update.tti_update_reply = reply;
-	tti->tti_mult_trans = !req_is_replay(tgt_ses_req(tsi));
-
 	/* validate the request and calculate the total update count and
 	 * set it to reply */
+	reply_size = 0;
+	updates = 0;
 	for (i = 0; i < update_buf_count; i++) {
-		struct object_update_request *our;
-		int			update_count;
+		struct object_update_request	*our;
+		int				 j;
 
 		our = update_bufs[i];
 		if (ptlrpc_req_need_swab(pill->rc_req))
@@ -1006,9 +995,56 @@ int out_handle(struct tgt_session_info *tsi)
 			       UPDATE_REQUEST_MAGIC, -EPROTO);
 			GOTO(out_free, rc = -EPROTO);
 		}
-  		update_count = our->ourq_count;
-		reply->ourp_count += update_count;
+		updates += our->ourq_count;
+
+		/* need to calculate reply size */
+		for (j = 0; j < our->ourq_count; j++) {
+			update = object_update_request_get(our, j, NULL);
+			if (update == NULL)
+				GOTO(out, rc = -EPROTO);
+			if (ptlrpc_req_need_swab(pill->rc_req))
+				lustre_swab_object_update(update);
+
+			if (!fid_is_sane(&update->ou_fid)) {
+				CERROR("%s: invalid FID "DFID": rc = %d\n",
+				       tgt_name(tsi->tsi_tgt),
+				       PFID(&update->ou_fid), -EPROTO);
+				GOTO(out, rc = err_serious(-EPROTO));
+			}
+
+			/* XXX: what ou_result_size can be considered safe? */
+
+			reply_size += sizeof(reply->ourp_lens[0]);
+			reply_size += sizeof(struct object_update_result);
+			reply_size += update->ou_result_size;
+		}
  	}
+	reply_size += sizeof(*reply);
+
+	if (unlikely(reply_size > ouh->ouh_reply_size)) {
+		CERROR("%s: too small reply buf %u for %u, need %u at least\n",
+		       tgt_name(tsi->tsi_tgt), ouh->ouh_reply_size,
+		       updates, reply_size);
+		GOTO(out_free, rc = -EPROTO);
+	}
+
+	req_capsule_set_size(pill, &RMF_OUT_UPDATE_REPLY, RCL_SERVER,
+			     ouh->ouh_reply_size);
+	rc = req_capsule_server_pack(pill);
+	if (rc != 0) {
+		CERROR("%s: Can't pack response: rc = %d\n",
+		       tgt_name(tsi->tsi_tgt), rc);
+		GOTO(out_free, rc = -EPROTO);
+	}
+
+	/* Prepare the update reply buffer */
+	reply = req_capsule_server_get(pill, &RMF_OUT_UPDATE_REPLY);
+	if (reply == NULL)
+		GOTO(out_free, rc = err_serious(-EPROTO));
+	reply->ourp_magic = UPDATE_REPLY_MAGIC;
+	reply->ourp_count = updates;
+	tti->tti_u.update.tti_update_reply = reply;
+	tti->tti_mult_trans = !req_is_replay(tgt_ses_req(tsi));
  
 	/* Walk through updates in the request to execute them */
 	for (i = 0; i < update_buf_count; i++) {
@@ -1022,18 +1058,6 @@ int out_handle(struct tgt_session_info *tsi)
 		update_count = our->ourq_count;
 		for (j = 0; j < update_count; j++) {
 			update = object_update_request_get(our, j, NULL);
-			if (update == NULL)
-				GOTO(out, rc = -EPROTO);
-
-			if (ptlrpc_req_need_swab(pill->rc_req))
-				lustre_swab_object_update(update);
-
-			if (!fid_is_sane(&update->ou_fid)) {
-				CERROR("%s: invalid FID "DFID": rc = %d\n",
-				       tgt_name(tsi->tsi_tgt),
-				       PFID(&update->ou_fid), -EPROTO);
-				GOTO(out, rc = err_serious(-EPROTO));
-			}
 
 			dt_obj = dt_locate(env, dt, &update->ou_fid);
 			if (IS_ERR(dt_obj))

@@ -227,7 +227,7 @@ object_update_result_insert(struct object_update_reply *reply,
 	LASSERT(update_result != NULL);
 
 	update_result->our_rc = ptlrpc_status_hton(rc);
-	if (data_len > 0) {
+	if (data != NULL && data_len > 0) {
 		LASSERT(data != NULL);
 		ptr = (char *)update_result +
 			cfs_size_round(sizeof(struct object_update_reply));
@@ -261,7 +261,7 @@ object_update_result_data_get(const struct object_update_reply *reply,
 	lbuf->lb_buf = update_result->our_data;
 	lbuf->lb_len = update_result->our_datalen;
 
-	return 0;
+	return result;
 }
 
 /**
@@ -390,7 +390,8 @@ struct thandle_exec_args {
 int out_update_pack(const struct lu_env *env, struct object_update *update,
 		    size_t *max_update_size, enum update_type op,
 		    const struct lu_fid *fid, unsigned int params_count,
-		    __u16 *param_sizes, const void **param_bufs);
+		    __u16 *param_sizes, const void **param_bufs,
+		    __u32 reply_size);
 int out_create_pack(const struct lu_env *env, struct object_update *update,
 		    size_t *max_update_size, const struct lu_fid *fid,
 		    const struct lu_attr *attr, struct dt_allocation_hint *hint,
@@ -435,7 +436,8 @@ int out_index_lookup_pack(const struct lu_env *env,
 			  const struct dt_key *key);
 int out_xattr_get_pack(const struct lu_env *env,
 		       struct object_update *update, size_t *max_update_size,
-		       const struct lu_fid *fid, const char *name);
+		       const struct lu_fid *fid, const char *name,
+		       const int bufsize);
 int out_read_pack(const struct lu_env *env, struct object_update *update,
 		  size_t *max_update_length, const struct lu_fid *fid,
 		  size_t size, loff_t pos);

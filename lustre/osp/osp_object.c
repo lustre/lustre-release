@@ -512,6 +512,7 @@ static int osp_declare_attr_get(const struct lu_env *env, struct dt_object *dt)
 	mutex_lock(&osp->opd_async_requests_mutex);
 	rc = osp_insert_async_request(env, OUT_ATTR_GET, obj, 0, NULL, NULL,
 				      &obj->opo_ooa->ooa_attr,
+				      sizeof(struct obdo),
 				      osp_attr_get_interpterer);
 	mutex_unlock(&osp->opd_async_requests_mutex);
 
@@ -851,7 +852,8 @@ static int osp_declare_xattr_get(const struct lu_env *env, struct dt_object *dt,
 
 	mutex_lock(&osp->opd_async_requests_mutex);
 	rc = osp_insert_async_request(env, OUT_XATTR_GET, obj, 1,
-				      &namelen, (const void **)&name, oxe,
+				      &namelen, (const void **)&name,
+				      oxe, buf->lb_len,
 				      osp_xattr_get_interpterer);
 	if (rc != 0) {
 		mutex_unlock(&osp->opd_async_requests_mutex);
@@ -969,7 +971,7 @@ unlock:
 		GOTO(out, rc = PTR_ERR(update));
 
 	rc = osp_update_rpc_pack(env, xattr_get, update, OUT_XATTR_GET,
-				 lu_object_fid(&dt->do_lu), name);
+				 lu_object_fid(&dt->do_lu), name, buf->lb_len);
 	if (rc != 0) {
 		CERROR("%s: Insert update error "DFID": rc = %d\n",
 		       dname, PFID(lu_object_fid(&dt->do_lu)), rc);
@@ -977,7 +979,7 @@ unlock:
 	}
 
 	rc = osp_remote_sync(env, osp, update, &req);
-	if (rc != 0) {
+	if (rc < 0) {
 		if (rc == -ENOENT) {
 			dt->do_lu.lo_header->loh_attr &= ~LOHA_EXISTS;
 			obj->opo_non_exist = 1;
@@ -1025,7 +1027,7 @@ unlock:
 		GOTO(out, rc);
 
 	if (buf->lb_buf == NULL)
-		GOTO(out, rc = rbuf->lb_len);
+		GOTO(out, rc);
 
 	if (unlikely(buf->lb_len < rbuf->lb_len))
 		GOTO(out, rc = -ERANGE);
