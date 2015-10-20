@@ -2160,7 +2160,7 @@ test_24d() {
 	wait_request_state $fid1 RESTORE SUCCEED
 
 	$LFS hsm_release $file1 || error "cannot release '$file1'"
-	dd if=$file2 of=/dev/null bs=1M || "cannot read '$file2'"
+	dd if=$file2 of=/dev/null bs=1M || error "cannot read '$file2'"
 
 	$LFS hsm_release $file2 &&
 		error "release should fail on read-only mount"

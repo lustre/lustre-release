@@ -3296,7 +3296,8 @@ test_26a() {
 	rm -f $DIR/$tdir/d0/foo || error "(4) Fail to unlink $DIR/$tdir/d0/foo"
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
 
-	ls -ail $DIR/$tdir/d0/foo > /dev/null 2>&1 && "(5) 'ls' should fail"
+	ls -ail $DIR/$tdir/d0/foo > /dev/null 2>&1 &&
+		error "(5) 'ls' should fail"
 
 	echo "Trigger namespace LFSCK to repair the missing remote name entry"
 	$START_NAMESPACE -r -A ||
@@ -3343,7 +3344,8 @@ test_26b() {
 	rmdir $DIR/$tdir/d0/foo || error "(3) Fail to rmdir $DIR/$tdir/d0/foo"
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
 
-	ls -ail $DIR/$tdir/d0/foo > /dev/null 2>&1 && "(4) 'ls' should fail"
+	ls -ail $DIR/$tdir/d0/foo > /dev/null 2>&1 &&
+		error "(4) 'ls' should fail"
 
 	echo "Trigger namespace LFSCK to repair the missing remote name entry"
 	$START_NAMESPACE -r -A ||
@@ -3392,7 +3394,7 @@ test_27a() {
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
 
 	rm -rf $DIR/$tdir/d0 || error "(5) Fail to unlink the dir d0"
-	ls -ail $DIR/$tdir/d0 > /dev/null 2>&1 && "(6) 'ls' should fail"
+	ls -ail $DIR/$tdir/d0 > /dev/null 2>&1 && error "(6) 'ls' should fail"
 
 	echo "Trigger namespace LFSCK to repair the lost parent"
 	$START_NAMESPACE -r -A ||
@@ -3444,7 +3446,7 @@ test_27b() {
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
 
 	rmdir $DIR/$tdir/d0 || error "(4) Fail to unlink the dir d0"
-	ls -ail $DIR/$tdir/d0 > /dev/null 2>&1 && "(5) 'ls' should fail"
+	ls -ail $DIR/$tdir/d0 > /dev/null 2>&1 && error "(5) 'ls' should fail"
 
 	echo "Trigger namespace LFSCK to repair the missing remote name entry"
 	$START_NAMESPACE -r -A ||
@@ -3681,7 +3683,7 @@ test_29c() {
 	local foofid=$($LFS path2fid $DIR/$tdir/d0/foo)
 	$LFS fid2path $DIR $foofid
 	local count2=$($LFS fid2path $DIR $foofid | wc -l)
-	[ $count2 -eq 2 ] || "(6) Fail to inject error: $count2"
+	[ $count2 -eq 2 ] || error "(6) Fail to inject error: $count2"
 
 	echo "Trigger namespace LFSCK to repair the nlink count"
 	$START_NAMESPACE -r -A ||
@@ -3770,7 +3772,7 @@ test_30() {
 
 	mount_client $MOUNT || error "(17) Fail to start client!"
 
-	stat $DIR/$tdir/foo/f0 || "(18) f0 is not recovered"
+	stat $DIR/$tdir/foo/f0 || error "(18) f0 is not recovered"
 
 	ls -ail $MOUNT/.lustre/lost+found/
 

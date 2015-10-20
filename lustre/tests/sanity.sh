@@ -9282,14 +9282,14 @@ test_133a() {
 	# verify mdt stats first.
 	mkdir ${testdir} || error "mkdir failed"
 	check_stats $SINGLEMDS "mkdir" 1
-	touch ${testdir}/${tfile} || "touch failed"
+	touch ${testdir}/${tfile} || error "touch failed"
 	check_stats $SINGLEMDS "open" 1
 	check_stats $SINGLEMDS "close" 1
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.8.54) ] && {
-		mknod ${testdir}/${tfile}-pipe p || "mknod failed"
+		mknod ${testdir}/${tfile}-pipe p || error "mknod failed"
 		check_stats $SINGLEMDS "mknod" 2
 	}
-	rm -f ${testdir}/${tfile}-pipe || "pipe remove failed"
+	rm -f ${testdir}/${tfile}-pipe || error "pipe remove failed"
 	check_stats $SINGLEMDS "unlink" 1
 	rm -f ${testdir}/${tfile} || error "file remove failed"
 	check_stats $SINGLEMDS "unlink" 2
@@ -9318,7 +9318,7 @@ test_133b() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	local testdir=$DIR/${tdir}/stats_testdir
 	mkdir -p ${testdir} || error "mkdir failed"
-	touch ${testdir}/${tfile} || "touch failed"
+	touch ${testdir}/${tfile} || error "touch failed"
 	cancel_lru_locks mdc
 
 	# clear stats.
@@ -9623,7 +9623,7 @@ test_134a() {
 
 	local nsdir="ldlm.namespaces.*-MDT0000-mdc-*"
 	local unused=$($LCTL get_param -n $nsdir.lock_unused_count)
-	[ $unused -eq 0 ] || "$unused locks are not cleared"
+	[ $unused -eq 0 ] || error "$unused locks are not cleared"
 
 	local nr=1000
 	createmany -o $DIR/$tdir/f $nr ||
@@ -12428,16 +12428,16 @@ run_test 222a "AGL for ls should not trigger CLIO lock failure ================"
 
 test_222b () {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-       rm -rf $DIR/$tdir
-       test_mkdir -p $DIR/$tdir
-       $SETSTRIPE -c 1 -i 0 $DIR/$tdir
-       createmany -o $DIR/$tdir/$tfile 10
-       cancel_lru_locks mdc
-       cancel_lru_locks osc
-       #define OBD_FAIL_LDLM_AGL_DELAY           0x31a
-       $LCTL set_param fail_loc=0x31a
-       rm -r $DIR/$tdir || "AGL for rmdir failed"
-       $LCTL set_param fail_loc=0
+	rm -rf $DIR/$tdir
+	test_mkdir -p $DIR/$tdir
+	$SETSTRIPE -c 1 -i 0 $DIR/$tdir
+	createmany -o $DIR/$tdir/$tfile 10
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+	#define OBD_FAIL_LDLM_AGL_DELAY           0x31a
+	$LCTL set_param fail_loc=0x31a
+	rm -r $DIR/$tdir || error "AGL for rmdir failed"
+	$LCTL set_param fail_loc=0
 }
 run_test 222b "AGL for rmdir should not trigger CLIO lock failure ============="
 

@@ -395,7 +395,7 @@ run_test 8e "Verify that ptlrpc resends request on -EINPROGRESS"
 test_9() {
 	[ $(lustre_version_code ost1) -ge $(version_code 2.6.54) ] ||
 		{ skip "Need OST version at least 2.6.54"; return; }
-	$SETSTRIPE -i 0 -c 1 $DIR/$tfile || "setstripe failed"
+	$SETSTRIPE -i 0 -c 1 $DIR/$tfile || error "setstripe failed"
 	replay_barrier ost1
 	# do IO
 	dd if=/dev/zero of=$DIR/$tfile count=1 bs=1M > /dev/null ||

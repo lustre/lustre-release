@@ -3457,7 +3457,7 @@ test_81() {
 	touch d0/0	|| error "create 0 failed"
 	mv d0/0	d1/0	|| error "rename d0/0 d1/0 failed"
 	stat d0/0	&& error "stat mv filed succeed"
-	mv $DIR2/$tdir/d1/0 $DIR2/$tdir/d0/0 || "rename d1/0 d0/0 failed"
+	mv $DIR2/$tdir/d1/0 $DIR2/$tdir/d0/0 || error "rename d1/0 d0/0 failed"
 	stat d0/0	|| error "stat failed"
 
 	local t=$(ls -ai $DIR1/$tdir/d0 | sort -u | wc -l)
