@@ -142,6 +142,7 @@ init_test_env() {
 	export TEST_FAILED=false
 	export FAIL_ON_SKIP_ENV=${FAIL_ON_SKIP_ENV:-false}
 	export RPC_MODE=${RPC_MODE:-false}
+	export DO_CLEANUP=${DO_CLEANUP:-true}
 
     export MKE2FS=$MKE2FS
     if [ -z "$MKE2FS" ]; then
@@ -4307,8 +4308,12 @@ check_and_cleanup_lustre() {
 	fi
 
 	if is_mounted $MOUNT; then
-		[ -n "$DIR" ] && rm -rf $DIR/[Rdfs][0-9]* ||
-			error "remove sub-test dirs failed"
+		if $DO_CLEANUP; then
+			[ -n "$DIR" ] && rm -rf $DIR/[Rdfs][0-9]* ||
+				error "remove sub-test dirs failed"
+		else
+			echo "skip cleanup"
+		fi
 		[ "$ENABLE_QUOTA" ] && restore_quota || true
 	fi
 
