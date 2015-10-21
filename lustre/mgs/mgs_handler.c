@@ -565,7 +565,7 @@ static int mgs_llog_open(struct tgt_session_info *tsi)
 
 	logname = req_capsule_client_get(tsi->tsi_pill, &RMF_NAME);
 	if (logname) {
-		char *ptr = strchr(logname, '-');
+		char *ptr = strrchr(logname, '-');
 		int   len = (ptr != NULL) ? (int)(ptr - logname) : 0;
 
 		if (ptr == NULL || len >= sizeof(mgi->mgi_fsname)) {
