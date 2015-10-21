@@ -147,7 +147,7 @@ int  osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
 		   enum oi_check_flags flags);
 int  osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
 		   const struct lu_fid *fid, const struct osd_inode_id *id,
-		   handle_t *th, enum oi_check_flags flags);
+		   handle_t *th, enum oi_check_flags flags, bool *exist);
 int  osd_oi_delete(struct osd_thread_info *info,
 		   struct osd_device *osd, const struct lu_fid *fid,
 		   handle_t *th, enum oi_check_flags flags);

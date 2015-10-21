@@ -779,9 +779,9 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	struct osd_scrub       *scrub;
 	struct scrub_file      *sf;
 	int			result;
-	int			saved  = 0;
-	bool			cached  = true;
-	bool			triggered = false;
+	int			rc1	= 0;
+	bool			cached	= true;
+	bool			remote	= false;
 	ENTRY;
 
 	LINVRNT(osd_invariant(obj));
@@ -847,29 +847,6 @@ iget:
 		if (result == -EREMCHG) {
 
 trigger:
-			if (unlikely(triggered))
-				GOTO(out, result = saved);
-
-			triggered = true;
-			if (thread_is_running(&scrub->os_thread)) {
-				result = -EINPROGRESS;
-			} else if (!dev->od_noscrub) {
-				result = osd_scrub_start(dev, SS_AUTO_FULL |
-					SS_CLEAR_DRYRUN | SS_CLEAR_FAILOUT);
-				LCONSOLE_WARN("%.16s: trigger OI scrub by RPC "
-					      "for "DFID", rc = %d [1]\n",
-					      osd_name(dev), PFID(fid), result);
-				if (result == 0 || result == -EALREADY)
-					result = -EINPROGRESS;
-				else
-					result = -EREMCHG;
-			} else {
-				result = -EREMCHG;
-			}
-
-			if (fid_is_on_ost(info, dev, fid, OI_CHECK_FLD))
-				GOTO(out, result);
-
 			/* We still have chance to get the valid inode: for the
 			 * object which is referenced by remote name entry, the
 			 * object on the local MDT will be linked under the dir
@@ -885,18 +862,54 @@ trigger:
 			 * only happened for the RPC from other MDT during the
 			 * OI scrub, or for the client side RPC with FID only,
 			 * such as FID to path, or from old connected client. */
-			saved = result;
-			result = osd_lookup_in_remote_parent(info, dev,
-							     fid, id);
-			if (result == 0) {
-				cached = true;
-				goto iget;
+			if (!remote &&
+			    !fid_is_on_ost(info, dev, fid, OI_CHECK_FLD)) {
+				rc1 = osd_lookup_in_remote_parent(info, dev,
+								  fid, id);
+				if (rc1 == 0) {
+					remote = true;
+					cached = true;
+					goto iget;
+				}
 			}
 
-			result = saved;
+			if (thread_is_running(&scrub->os_thread)) {
+				if (remote) {
+					osd_add_oi_cache(info, dev, id, fid);
+					osd_oii_insert(dev, oic, true);
+				} else {
+					result = -EINPROGRESS;
+				}
+			} else if (!dev->od_noscrub) {
+				__u32 flags = SS_CLEAR_DRYRUN |
+					      SS_CLEAR_FAILOUT;
+
+				flags |= (remote ? SS_AUTO_PARTIAL :
+						   SS_AUTO_FULL);
+				rc1 = osd_scrub_start(dev, flags);
+				LCONSOLE_WARN("%.16s: trigger OI scrub by RPC "
+					      "for the "DFID" with flags 0x%x,"
+					      " rc = %d\n", osd_name(dev),
+					      PFID(fid), flags, rc1);
+				if (rc1 == 0 || rc1 == -EALREADY) {
+					result = -EINPROGRESS;
+					if (remote) {
+						osd_add_oi_cache(info, dev, id,
+								 fid);
+						osd_oii_insert(dev, oic, true);
+					}
+				} else {
+					result = -EREMCHG;
+				}
+			} else {
+				result = -EREMCHG;
+			}
 		}
 
 		GOTO(out, result);
+	} else if (remote) {
+		result = 0;
+		goto trigger;
 	}
 
 	obj->oo_inode = inode;
@@ -2621,7 +2634,8 @@ static int __osd_oi_insert(const struct lu_env *env, struct osd_object *obj,
 	osd_trans_exec_op(env, th, OSD_OT_INSERT);
 
 	osd_id_gen(id, obj->oo_inode->i_ino, obj->oo_inode->i_generation);
-	rc = osd_oi_insert(info, osd, fid, id, oh->ot_handle, OI_CHECK_FLD);
+	rc = osd_oi_insert(info, osd, fid, id, oh->ot_handle,
+			   OI_CHECK_FLD, NULL);
 	osd_trans_exec_check(env, th, OSD_OT_INSERT);
 
 	return rc;

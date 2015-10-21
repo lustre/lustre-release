@@ -670,7 +670,7 @@ static int osd_oi_iam_refresh(struct osd_thread_info *oti, struct osd_oi *oi,
 
 int osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
 		  const struct lu_fid *fid, const struct osd_inode_id *id,
-		  handle_t *th, enum oi_check_flags flags)
+		  handle_t *th, enum oi_check_flags flags, bool *exist)
 {
 	struct lu_fid	    *oi_fid = &info->oti_fid2;
 	struct osd_inode_id *oi_id  = &info->oti_id2;
@@ -742,6 +742,9 @@ update:
 					(const struct dt_key *)oi_fid, th, false);
 		if (rc != 0)
 			return rc;
+
+		if (exist != NULL)
+			*exist = true;
 	}
 
 	if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE))
