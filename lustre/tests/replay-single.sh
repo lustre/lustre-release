@@ -2992,11 +2992,11 @@ test_85b() { #bug 16774
 	done
 
 	lov_id=$(lctl dl | grep "clilov")
-	addr=$(echo $lov_id | awk '{print $4}' | awk -F '-' '{print $3}')
-	count=$(lctl get_param \
-		-n ldlm.namespaces.*OST0000*$addr.lock_unused_count)
+	addr=$(echo $lov_id | awk '{print $4}' | awk -F '-' '{print $NF}')
+	count=$(lctl get_param -n \
+			  ldlm.namespaces.*OST0000*$addr.lock_unused_count)
 	echo "before recovery: unused locks count = $count"
-	[ $count != 0 ] || error "unused locks ($count) should be zero"
+	[ $count -ne 0 ] || error "unused locks ($count) should be zero"
 
 	fail ost1
 
