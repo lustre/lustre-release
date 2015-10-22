@@ -77,7 +77,7 @@ Index: linux-stage/fs/ext4/xattr.c
  {
  	struct ext4_xattr_entry *entry;
  	size_t name_len;
-@@ -200,11 +207,103 @@ ext4_xattr_find_entry(struct ext4_xattr_
+@@ -200,11 +207,104 @@ ext4_xattr_find_entry(struct ext4_xattr_
  			break;
  	}
  	*pentry = entry;
@@ -124,28 +124,29 @@ Index: linux-stage/fs/ext4/xattr.c
 +	return err;
 +}
 +
-+struct inode *ext4_xattr_inode_iget(struct inode *parent, int ea_ino, int *err)
++struct inode *ext4_xattr_inode_iget(struct inode *parent, unsigned long ea_ino, int *err)
 +{
 +	struct inode *ea_inode = NULL;
 +
 +	ea_inode = ext4_iget(parent->i_sb, ea_ino);
 +	if (IS_ERR(ea_inode) || is_bad_inode(ea_inode)) {
-+		ext4_error(parent->i_sb, "error while reading EA inode %d",
-+			   ea_ino);
-+		*err = -EIO;
++		int rc = IS_ERR(ea_inode) ? PTR_ERR(ea_inode) : 0;
++		ext4_error(parent->i_sb, "error while reading EA inode %lu "
++			   "/ %d %d", ea_ino, rc, is_bad_inode(ea_inode));
++		*err = rc != 0 ? rc : -EIO;
 +		return NULL;
 +	}
 +
 +	if (ea_inode->i_xattr_inode_parent != parent->i_ino ||
 +	    ea_inode->i_generation != parent->i_generation) {
-+		ext4_error(parent->i_sb, "Backpointer from EA inode %d "
++		ext4_error(parent->i_sb, "Backpointer from EA inode %lu "
 +			   "to parent invalid.", ea_ino);
 +		*err = -EINVAL;
 +		goto error;
 +	}
 +
 +	if (!(EXT4_I(ea_inode)->i_flags & EXT4_EA_INODE_FL)) {
-+		ext4_error(parent->i_sb, "EA inode %d does not have "
++		ext4_error(parent->i_sb, "EA inode %lu does not have "
 +			   "EXT4_EA_INODE_FL flag set.\n", ea_ino);
 +		*err = -EINVAL;
 +		goto error;
@@ -163,7 +164,7 @@ Index: linux-stage/fs/ext4/xattr.c
 + * Read the value from the EA inode.
 + */
 +static int
-+ext4_xattr_inode_get(struct inode *inode, int ea_ino, void *buffer,
++ext4_xattr_inode_get(struct inode *inode, unsigned long ea_ino, void *buffer,
 +		     size_t *size)
 +{
 +	struct inode *ea_inode = NULL;
@@ -358,7 +359,7 @@ Index: linux-stage/fs/ext4/xattr.c
 + * Unlink the inode storing the value of the EA.
 + */
 +int
-+ext4_xattr_inode_unlink(struct inode *inode, int ea_ino)
++ext4_xattr_inode_unlink(struct inode *inode, unsigned long ea_ino)
 +{
 +	struct inode *ea_inode = NULL;
 +	int err;
@@ -377,7 +378,7 @@ Index: linux-stage/fs/ext4/xattr.c
 + * Add value of the EA in an inode.
 + */
 +static int
-+ext4_xattr_inode_set(handle_t *handle, struct inode *inode, int *ea_ino,
++ext4_xattr_inode_set(handle_t *handle, struct inode *inode, unsigned long *ea_ino,
 +		     const void *value, size_t value_len)
 +{
 +	struct inode *ea_inode = NULL;
@@ -497,7 +498,7 @@ Index: linux-stage/fs/ext4/xattr.c
  		s->here->e_value_size = cpu_to_le32(i->value_len);
 -		if (i->value_len) {
 +		if (in_inode) {
-+			int ea_ino = le32_to_cpu(s->here->e_value_inum);
++			unsigned long ea_ino = le32_to_cpu(s->here->e_value_inum);
 +			ext4_xattr_inode_set(handle, inode, &ea_ino, i->value,
 +					     i->value_len);
 +			s->here->e_value_inum = cpu_to_le32(ea_ino);
@@ -902,9 +903,9 @@ Index: linux-stage/fs/ext4/xattr.h
  extern int ext4_xattr_set_handle(handle_t *, struct inode *, int, const char *, const void *, size_t, int);
  
 -extern void ext4_xattr_delete_inode(handle_t *, struct inode *);
-+extern struct inode *ext4_xattr_inode_iget(struct inode *parent, int ea_ino,
++extern struct inode *ext4_xattr_inode_iget(struct inode *parent, unsigned long ea_ino,
 +					   int *err);
-+extern int ext4_xattr_inode_unlink(struct inode *inode, int ea_ino);
++extern int ext4_xattr_inode_unlink(struct inode *inode, unsigned long ea_ino);
 +extern int ext4_xattr_delete_inode(handle_t *handle, struct inode *inode,
 +				   struct ext4_xattr_ino_array **array);
 +extern void ext4_xattr_inode_array_free(struct inode *inode,
