@@ -38,21 +38,23 @@
 
 #include <libcfs/libcfs.h>
 
-#include <lustre_dlm.h>
-#include <lustre_net.h>
 #include <lustre/lustre_user.h>
-#include <obd_cksum.h>
-#include <lustre_ha.h>
+
 #include <lprocfs_status.h>
-#include <lustre_ioctl.h>
 #include <lustre_debug.h>
-#include <lustre_param.h>
+#include <lustre_dlm.h>
 #include <lustre_fid.h>
-#include <obd_class.h>
-#include <obd.h>
+#include <lustre_ha.h>
+#include <lustre_ioctl.h>
 #include <lustre_net.h>
-#include "osc_internal.h"
+#include <lustre_obdo.h>
+#include <lustre_param.h>
+#include <obd.h>
+#include <obd_cksum.h>
+#include <obd_class.h>
+
 #include "osc_cl_internal.h"
+#include "osc_internal.h"
 
 atomic_t osc_pool_req_count;
 unsigned int osc_reqpool_maxreqcount;

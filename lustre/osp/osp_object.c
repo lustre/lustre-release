@@ -124,7 +124,9 @@
 
 #define DEBUG_SUBSYSTEM S_MDS
 
+#include <lustre_obdo.h>
 #include <lustre_swab.h>
+
 #include "osp_internal.h"
 
 static inline __u32 osp_dev2node(struct osp_device *osp)

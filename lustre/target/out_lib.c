@@ -32,10 +32,12 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <lu_target.h>
-#include <md_object.h>
+#include <lustre_obdo.h>
 #include <lustre_update.h>
+#include <md_object.h>
 #include <obd.h>
 #include <obd_class.h>
+
 #include "tgt_internal.h"
 
 const char *update_op_str(__u16 opc)

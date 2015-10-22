@@ -44,11 +44,13 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <lu_target.h>
+#include <lustre_obdo.h>
 #include <lustre_update.h>
 #include <lustre_swab.h>
 #include <md_object.h>
 #include <obd.h>
 #include <obd_class.h>
+
 #include "tgt_internal.h"
 
 /**

@@ -80,6 +80,7 @@ EXTRA_DIST = \
 	lustre_nrs_fifo.h \
 	lustre_nrs_orr.h \
 	lustre_nrs_tbf.h \
+	lustre_obdo.h \
 	lustre_param.h \
 	lustre_patchless_compat.h \
 	lustre_quota.h \
