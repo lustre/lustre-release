@@ -156,8 +156,11 @@ LPROC_SEQ_FOPS(osd_brw_stats);
 
 static int osd_stats_init(struct osd_device *osd)
 {
-	int result;
+	int result, i;
 	ENTRY;
+
+	for (i = 0; i < BRW_LAST; i++)
+		spin_lock_init(&osd->od_brw_stats.hist[i].oh_lock);
 
 	osd->od_stats = lprocfs_alloc_stats(LPROC_OSD_LAST, 0);
 	if (osd->od_stats != NULL) {
