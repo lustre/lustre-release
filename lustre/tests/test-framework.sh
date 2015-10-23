@@ -23,6 +23,11 @@ export LOAD_LLOOP=${LOAD_LLOOP:-false}
 
 #export PDSH="pdsh -S -Rssh -w"
 export MOUNT_CMD=${MOUNT_CMD:-"mount -t lustre"}
+export UMOUNT=${UMOUNT:-"umount -d"}
+# sles12 umount has a issue with -d option
+[ -e /etc/SuSE-release ] && grep -w VERSION /etc/SuSE-release | grep -wq 12 && {
+	export UMOUNT="umount"
+}
 
 # function used by scripts run on remote nodes
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
@@ -1301,7 +1306,7 @@ stop() {
     running=$(do_facet ${facet} "grep -c $mntpt' ' /proc/mounts") || true
     if [ ${running} -ne 0 ]; then
         echo "Stopping $mntpt (opts:$@) on $HOST"
-        do_facet ${facet} umount -d $@ $mntpt
+	do_facet ${facet} $UMOUNT $@ $mntpt
     fi
 
 	# umount should block, but we should wait for unrelated obd's
@@ -3222,7 +3227,7 @@ unmount_ldiskfs() {
 	local dev=$(facet_device $facet)
 	local mnt=$(facet_mntpt $facet)
 
-	do_facet $facet umount -d $mnt
+	do_facet $facet $UMOUNT $mnt
 }
 
 var_name() {
@@ -7006,7 +7011,7 @@ mds_backup_restore() {
 	echo "backup data"
 	${rcmd} tar zcf $metadata -C $mntpt/ . > /dev/null 2>&1 || return 3
 	# step 6: umount
-	${rcmd} umount -d $mntpt || return 4
+	${rcmd} $UMOUNT $mntpt || return 4
 	# step 8: reformat dev
 	echo "reformat new device"
 	format_mdt $(facet_number $facet)
@@ -7022,7 +7027,7 @@ mds_backup_restore() {
 	echo "remove recovery logs"
 	${rcmd} rm -fv $mntpt/OBJECTS/* $mntpt/CATALOGS
 	# step 13: umount dev
-	${rcmd} umount -d $mntpt || return 10
+	${rcmd} $UMOUNT $mntpt || return 10
 	# step 14: cleanup tmp backup
 	${rcmd} rm -f $metaea $metadata
 	# step 15: reset device label - it's not virgin on
@@ -7062,7 +7067,7 @@ mds_remove_ois() {
 		done
 	fi
 	# step 4: umount
-	${rcmd} umount -d $mntpt || return 2
+	${rcmd} $UMOUNT $mntpt || return 2
 	# OI files will be recreated when mounted as lustre next time.
 }
 

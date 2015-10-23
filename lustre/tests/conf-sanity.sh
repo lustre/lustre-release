@@ -213,16 +213,17 @@ remount_client() {
 }
 
 umount_client() {
-	local MOUNTPATH=$1
-	echo "umount lustre on ${MOUNTPATH}....."
-	zconf_umount $(hostname) $MOUNTPATH || return 97
+	local mountpath=$1
+	shift
+	echo "umount lustre on $mountpath....."
+	zconf_umount $HOSTNAME $mountpath $@ || return 97
 }
 
 manual_umount_client(){
 	local rc
 	local FORCE=$1
 	echo "manual umount lustre on ${MOUNT}...."
-	do_facet client "umount -d ${FORCE} $MOUNT"
+	do_facet client "umount ${FORCE} $MOUNT"
 	rc=$?
 	return $rc
 }
@@ -344,7 +345,8 @@ test_4() {
 	setup
 	touch $DIR/$tfile || error "touch $DIR/$tfile failed"
 	stop_ost || error "Unable to stop OST1"
-	cleanup
+	umount_client $MOUNT -f || error “unmount $MOUNT failed”
+	cleanup_nocli
 	eno=$?
 	# ok for ost to fail shutdown
 	if [ 202 -ne $eno ] && [ 0 -ne $eno ]; then
@@ -363,7 +365,7 @@ test_5a() {	# was test_5
 	# cleanup may return an error from the failed
 	# disconnects; for now I'll consider this successful
 	# if all the modules have unloaded.
-	umount -d $MOUNT &
+	$UMOUNT -f $MOUNT &
 	UMOUNT_PID=$!
 	sleep 6
 	echo "killing umount"
@@ -458,7 +460,8 @@ test_5d() {
 	start_mds || error "MDS start failed"
 	stop_ost || error "Unable to stop OST1"
 	mount_client $MOUNT || error "mount_client $MOUNT failed"
-	cleanup || error "cleanup_nocli failed with $?"
+	umount_client $MOUNT -f || error "umount_client $MOUNT failed"
+	cleanup_nocli || error "cleanup_nocli failed with $?"
 	grep " $MOUNT " /etc/mtab &&
 		error "$MOUNT entry in mtab after unmount"
 	pass
@@ -841,7 +844,7 @@ test_22() {
 	# check_mount will block trying to contact ost
 	mcreate $DIR/$tfile || error "mcreate $DIR/$tfile failed"
 	rm -f $DIR/$tfile || error "remove $DIR/$tfile failed"
-	umount_client $MOUNT
+	umount_client $MOUNT -f
 	pass
 
 	echo "Client mount with a running ost"
@@ -1477,13 +1480,13 @@ t32_test_cleanup() {
 		umount $tmp/mnt/lustre || rc=$?
 	fi
 	if $shall_cleanup_mdt; then
-		$r umount -d $tmp/mnt/mdt || rc=$?
+		$r $UMOUNT $tmp/mnt/mdt || rc=$?
 	fi
 	if $shall_cleanup_mdt1; then
-		$r umount -d $tmp/mnt/mdt1 || rc=$?
+		$r $UMOUNT $tmp/mnt/mdt1 || rc=$?
 	fi
 	if $shall_cleanup_ost; then
-		$r umount -d $tmp/mnt/ost || rc=$?
+		$r $UMOUNT $tmp/mnt/ost || rc=$?
 	fi
 
 	$r rm -rf $tmp
@@ -1750,7 +1753,7 @@ t32_test() {
 			$r $MOUNT_CMD -o $mopts $mdt_dev $tmp/mnt/mdt
 			$r $LCTL replace_nids $fsname-OST0000 $ostnid
 			$r $LCTL replace_nids $fsname-MDT0000 $nid
-			$r umount -d $tmp/mnt/mdt
+			$r $UMOUNT $tmp/mnt/mdt
 		fi
 
 		mopts=exclude=$fsname-OST0000
@@ -2134,20 +2137,20 @@ t32_test() {
 		shall_cleanup_lustre=false
 	else
 		if [ "$dne_upgrade" != "no" ]; then
-			$r umount -d $tmp/mnt/mdt1 || {
+			$r $UMOUNT $tmp/mnt/mdt1 || {
 				error_noexit "Unmounting the MDT2"
 				return 1
 			}
 			shall_cleanup_mdt1=false
 		fi
 
-		$r umount -d $tmp/mnt/mdt || {
+		$r $UMOUNT $tmp/mnt/mdt || {
 			error_noexit "Unmounting the MDT"
 			return 1
 		}
 		shall_cleanup_mdt=false
 
-		$r umount -d $tmp/mnt/ost || {
+		$r $UMOUNT $tmp/mnt/ost || {
 			error_noexit "Unmounting the OST"
 			return 1
 		}
@@ -2275,7 +2278,7 @@ test_33a() { # bug 12333, was test_33
 	cp /etc/hosts $MOUNT2/ || error "copy /etc/hosts $MOUNT2/ failed"
 	$GETSTRIPE $MOUNT2/hosts || error "$GETSTRIPE $MOUNT2/hosts failed"
 
-	umount -d $MOUNT2
+	umount $MOUNT2
 	stop fs2ost -f
 	stop fs2mds -f
 	cleanup_nocli || error "cleanup_nocli failed with $?"
@@ -2540,7 +2543,7 @@ test_36() { # 12743
                 rc=3
        fi
 
-	umount -d $MOUNT2
+	$UMOUNT $MOUNT2
 	stop fs3ost -f || error "unable to stop OST3"
 	stop fs2ost -f || error "unable to stop OST2"
 	stop fs2mds -f || error "unable to stop second MDS"
@@ -2578,7 +2581,7 @@ test_37() {
 
 	echo mount_op=$mount_op
 
-	do_facet $SINGLEMDS "umount -d $mntpt && rm -f $mdsdev_sym"
+	do_facet $SINGLEMDS "$UMOUNT $mntpt && rm -f $mdsdev_sym"
 
 	if $(echo $mount_op | grep -q "unable to set tunable"); then
 		error "set tunables failed for symlink device"
@@ -3428,7 +3431,7 @@ test_50f() {
 	    stop_ost2 || error "Unable to stop OST2"
 	fi
 
-	umount_client $MOUNT || error "Unable to unmount client"
+	umount_client $MOUNT -f || error "Unable to unmount client"
 	stop_ost || error "Unable to stop OST1"
 	stop_mds || error "Unable to stop MDS"
 	#writeconf to remove all ost2 traces for subsequent tests
@@ -3573,7 +3576,8 @@ test_51() {
 	start_ost2 || error "Unable to start OST1"
 	wait $pid
 	stop_ost2 || error "Unable to stop OST1"
-	cleanup || error "cleanup failed with $?"
+	umount_client $MOUNT -f || error “unmount $MOUNT failed”
+	cleanup_nocli || error “stop server failed”
 	#writeconf to remove all ost2 traces for subsequent tests
 	writeconf_or_reformat
 }
@@ -4217,7 +4221,8 @@ test_64() {
 	stop_ost2 || error "Unable to stop second ost"
 	echo "$LFS df"
 	$LFS df --lazy || error "lfs df failed"
-	cleanup || error "cleanup failed with $?"
+	umount_client $MOUNT -f || error “unmount $MOUNT failed”
+	cleanup_nocli || error "cleanup_nocli failed with $?"
 	#writeconf to remove all ost2 traces for subsequent tests
 	writeconf_or_reformat
 }
@@ -4252,7 +4257,7 @@ test_65() { # LU-2237
 	do_facet $SINGLEMDS \
 		"mount -t $(facet_fstype $SINGLEMDS) $opts $devname $brpt"
 	do_facet $SINGLEMDS "rm -f ${brpt}/last_rcvd"
-	do_facet $SINGLEMDS "umount -d $brpt"
+	do_facet $SINGLEMDS "$UMOUNT $brpt"
 
 	# restart MDS, the "last_rcvd" file should be recreated.
 	start_mds || error "fail to restart the MDS"

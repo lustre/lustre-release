@@ -56,7 +56,6 @@ SOCKETCLIENT=${SOCKETCLIENT:-socketclient}
 MEMHOG=${MEMHOG:-memhog}
 DIRECTIO=${DIRECTIO:-directio}
 ACCEPTOR_PORT=${ACCEPTOR_PORT:-988}
-UMOUNT=${UMOUNT:-"umount -d"}
 STRIPES_PER_OBJ=-1
 CHECK_GRANT=${CHECK_GRANT:-"yes"}
 GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
@@ -2366,7 +2365,7 @@ run_test 31p "remove of open striped directory"
 
 cleanup_test32_mount() {
 	trap 0
-	$UMOUNT -d $DIR/$tdir/ext2-mountpoint
+	$UMOUNT $DIR/$tdir/ext2-mountpoint
 }
 
 test_32a() {
@@ -2573,7 +2572,7 @@ run_test 32p "open d32p/symlink->tmp/symlink->lustre-root/$tfile"
 
 cleanup_testdir_mount() {
 	trap 0
-	$UMOUNT -d $DIR/$tdir
+	$UMOUNT $DIR/$tdir
 }
 
 test_32q() {
@@ -4314,7 +4313,7 @@ cleanup_54c() {
 	loopdev="$DIR/loop54c"
 
 	trap 0
-	$UMOUNT -d $DIR/$tdir || rc=$?
+	$UMOUNT $DIR/$tdir || rc=$?
 	losetup -d $loopdev || true
 	losetup -d $LOOPDEV || true
 	rm -rf $loopdev $DIR/$tfile $DIR/$tdir
