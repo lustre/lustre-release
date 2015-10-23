@@ -14326,6 +14326,15 @@ test_401() { #LU-7437
 }
 run_test 401 "Verify if 'lctl list_param -R' can list parameters recursively"
 
+test_402() {
+	$LFS setdirstripe -i 0 $DIR/$tdir || error "setdirstripe -i 0 failed"
+#define OBD_FAIL_MDS_FLD_LOOKUP 0x15c
+	do_facet mds1 "lctl set_param fail_loc=0x8000015c"
+	touch $DIR/$tdir/$tfile && error "touch should fail with ENOENT" ||
+		echo "Touch failed - OK"
+}
+run_test 402 "Return ENOENT to lod_generate_and_set_lovea"
+
 #
 # tests that do cleanup/setup should be run at the end
 #
