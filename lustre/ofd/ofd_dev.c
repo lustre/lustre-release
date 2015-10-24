@@ -2797,7 +2797,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 
 	info = ofd_info_init(env, NULL);
 	if (info == NULL)
-		RETURN(-EFAULT);
+		GOTO(err_fini_proc, rc = -EFAULT);
 
 	rc = ofd_stack_init(env, m, cfg);
 	if (rc) {
