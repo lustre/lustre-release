@@ -291,12 +291,12 @@ out_trans:
 	RETURN(rc);
 }
 
-static int llog_read_header(const struct lu_env *env,
-			    struct llog_handle *handle,
-			    struct obd_uuid *uuid)
+int llog_read_header(const struct lu_env *env, struct llog_handle *handle,
+		     const struct obd_uuid *uuid)
 {
 	struct llog_operations *lop;
 	int rc;
+	ENTRY;
 
 	rc = llog_handle2ops(handle, &lop);
 	if (rc)
@@ -311,6 +311,7 @@ static int llog_read_header(const struct lu_env *env,
 
 		/* lrh_len should be initialized in llog_init_handle */
 		handle->lgh_last_idx = 0; /* header is record with index 0 */
+		handle->lgh_write_offset = 0;
 		llh->llh_count = 1;         /* for the header record */
 		llh->llh_hdr.lrh_type = LLOG_HDR_MAGIC;
 		LASSERT(handle->lgh_ctxt->loc_chunk_size >=
@@ -322,13 +323,19 @@ static int llog_read_header(const struct lu_env *env,
 			memcpy(&llh->llh_tgtuuid, uuid,
 			       sizeof(llh->llh_tgtuuid));
 		llh->llh_bitmap_offset = offsetof(typeof(*llh), llh_bitmap);
+		/* Since update llog header might also call this function,
+		 * let's reset the bitmap to 0 here */
+		memset(LLOG_HDR_BITMAP(llh), 0, llh->llh_hdr.lrh_len -
+						llh->llh_bitmap_offset -
+						sizeof(llh->llh_tail));
 		ext2_set_bit(0, LLOG_HDR_BITMAP(llh));
 		LLOG_HDR_TAIL(llh)->lrt_len = llh->llh_hdr.lrh_len;
 		LLOG_HDR_TAIL(llh)->lrt_index = llh->llh_hdr.lrh_index;
 		rc = 0;
 	}
-	return rc;
+	RETURN(rc);
 }
+EXPORT_SYMBOL(llog_read_header);
 
 int llog_init_handle(const struct lu_env *env, struct llog_handle *handle,
 		     int flags, struct obd_uuid *uuid)
@@ -571,17 +578,30 @@ out:
 		cd->lpcd_last_idx = last_called_index;
 
 	if (unlikely(rc == -EIO && loghandle->lgh_obj != NULL)) {
-		/* something bad happened to the processing of a local
-		 * llog file, probably I/O error or the log got corrupted..
-		 * to be able to finally release the log we discard any
-		 * remaining bits in the header */
-		CERROR("Local llog found corrupted\n");
-		while (index <= last_index) {
-			if (ext2_test_bit(index, LLOG_HDR_BITMAP(llh)) != 0)
-				llog_cancel_rec(lpi->lpi_env, loghandle, index);
-			index++;
+		if (dt_object_remote(loghandle->lgh_obj)) {
+			/* If it is remote object, then -EIO might means
+			 * disconnection or eviction, let's return -EAGAIN,
+			 * so for update recovery log processing, it will
+			 * retry until the umount or abort recovery, see
+			 * lod_sub_recovery_thread() */
+			CERROR("%s retry remote llog process\n",
+			       loghandle->lgh_ctxt->loc_obd->obd_name);
+			rc = -EAGAIN;
+		} else {
+			/* something bad happened to the processing of a local
+			 * llog file, probably I/O error or the log got
+			 * corrupted to be able to finally release the log we
+			 * discard any remaining bits in the header */
+			CERROR("Local llog found corrupted\n");
+			while (index <= last_index) {
+				if (ext2_test_bit(index,
+						  LLOG_HDR_BITMAP(llh)) != 0)
+					llog_cancel_rec(lpi->lpi_env, loghandle,
+							index);
+				index++;
+			}
+			rc = 0;
 		}
-		rc = 0;
 	}
 
 	OBD_FREE_LARGE(buf, chunk_size);

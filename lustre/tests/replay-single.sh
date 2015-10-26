@@ -4330,6 +4330,35 @@ test_117() {
 }
 run_test 117 "DNE: cross MDT unlink, fail MDT1 and MDT2"
 
+test_118() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.64) ] &&
+		skip "Do not support large update log before 2.7.64" &&
+		return 0
+
+	mkdir -p $DIR/$tdir
+
+	$LFS setdirstripe -c2 $DIR/$tdir/striped_dir ||
+		error "setdirstripe fails"
+	$LFS setdirstripe -c2 $DIR/$tdir/striped_dir1 ||
+		error "setdirstripe fails 1"
+	rm -rf $DIR/$tdir/striped_dir* || error "rmdir fails"
+
+	# OBD_FAIL_INVALIDATE_UPDATE       0x1705
+	do_facet mds1 "lctl set_param fail_loc=0x1705"
+	$LFS setdirstripe -c2 $DIR/$tdir/striped_dir
+	$LFS setdirstripe -c2 $DIR/$tdir/striped_dir1
+	do_facet mds1 "lctl set_param fail_loc=0x0"
+
+	replay_barrier mds1
+	$LFS setdirstripe -c2 $DIR/$tdir/striped_dir
+	$LFS setdirstripe -c2 $DIR/$tdir/striped_dir1
+	fail mds1
+
+	true
+}
+run_test 118 "invalidate osp update will not cause update log corruption"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

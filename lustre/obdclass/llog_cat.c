@@ -176,10 +176,11 @@ static int llog_cat_new_log(const struct lu_env *env,
 
 	loghandle->lgh_hdr->llh_cat_idx = rec->lid_hdr.lrh_index;
 out:
-	if (handle != NULL)
+	if (handle != NULL) {
+		handle->th_result = rc >= 0 ? 0 : rc;
 		dt_trans_stop(env, dt, handle);
-
-	RETURN(0);
+	}
+	RETURN(rc);
 
 out_destroy:
 	/* to signal llog_cat_close() it shouldn't try to destroy the llog,
@@ -382,6 +383,40 @@ next:
 	RETURN(loghandle);
 }
 
+static int llog_cat_update_header(const struct lu_env *env,
+			   struct llog_handle *cathandle)
+{
+	struct llog_handle *loghandle;
+	int rc;
+	ENTRY;
+
+	/* refresh llog */
+	down_write(&cathandle->lgh_lock);
+	if (!cathandle->lgh_stale) {
+		up_write(&cathandle->lgh_lock);
+		RETURN(0);
+	}
+	list_for_each_entry(loghandle, &cathandle->u.chd.chd_head,
+			    u.phd.phd_entry) {
+		if (!llog_exist(loghandle))
+			continue;
+
+		rc = llog_read_header(env, loghandle, NULL);
+		if (rc != 0) {
+			up_write(&cathandle->lgh_lock);
+			GOTO(out, rc);
+		}
+	}
+	rc = llog_read_header(env, cathandle, NULL);
+	if (rc == 0)
+		cathandle->lgh_stale = 0;
+	up_write(&cathandle->lgh_lock);
+	if (rc != 0)
+		GOTO(out, rc);
+out:
+	RETURN(rc);
+}
+
 /* Add a single record to the recovery log(s) using a catalog
  * Returns as llog_write_record
  *
@@ -495,17 +530,31 @@ int llog_cat_declare_add_rec(const struct lu_env *env,
 			 * on the success of this transaction. So let's
 			 * create the llog object synchronously here to
 			 * remove the dependency. */
+create_again:
 			down_read_nested(&cathandle->lgh_lock, LLOGH_CAT);
 			loghandle = cathandle->u.chd.chd_current_log;
 			down_write_nested(&loghandle->lgh_lock, LLOGH_LOG);
-			if (!llog_exist(loghandle))
+			if (cathandle->lgh_stale) {
+				up_write(&loghandle->lgh_lock);
+				up_read(&cathandle->lgh_lock);
+				GOTO(out, rc = -EIO);
+			}
+			if (!llog_exist(loghandle)) {
 				rc = llog_cat_new_log(env, cathandle, loghandle,
 						      NULL);
+				if (rc == -ESTALE)
+					cathandle->lgh_stale = 1;
+			}
 			up_write(&loghandle->lgh_lock);
 			up_read(&cathandle->lgh_lock);
-			if (rc < 0)
+			if (rc == -ESTALE) {
+				rc = llog_cat_update_header(env, cathandle);
+				if (rc != 0)
+					GOTO(out, rc);
+				goto create_again;
+			} else if (rc < 0) {
 				GOTO(out, rc);
-
+			}
 		} else {
 			rc = llog_declare_create(env,
 					cathandle->u.chd.chd_current_log, th);
@@ -515,11 +564,27 @@ int llog_cat_declare_add_rec(const struct lu_env *env,
 					       &lirec->lid_hdr, -1, th);
 		}
 	}
+
+write_again:
 	/* declare records in the llogs */
 	rc = llog_declare_write_rec(env, cathandle->u.chd.chd_current_log,
 				    rec, -1, th);
-	if (rc)
+	if (rc == -ESTALE) {
+		down_write(&cathandle->lgh_lock);
+		if (cathandle->lgh_stale) {
+			up_write(&cathandle->lgh_lock);
+			GOTO(out, rc = -EIO);
+		}
+
+		cathandle->lgh_stale = 1;
+		up_write(&cathandle->lgh_lock);
+		rc = llog_cat_update_header(env, cathandle);
+		if (rc != 0)
+			GOTO(out, rc);
+		goto write_again;
+	} else if (rc < 0) {
 		GOTO(out, rc);
+	}
 
 	next = cathandle->u.chd.chd_next_log;
 	if (next) {

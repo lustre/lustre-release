@@ -946,7 +946,7 @@ int out_handle(struct tgt_session_info *tsi)
 
 		oub = req_capsule_client_get(pill, &RMF_OUT_UPDATE_BUF);
 		if (oub == NULL)
-			GOTO(out_free, rc = -EPROTO);
+			GOTO(out_free, rc = err_serious(-EPROTO));
 
 		desc = ptlrpc_prep_bulk_exp(pill->rc_req, update_buf_count,
 					    PTLRPC_BULK_OPS_COUNT,
@@ -960,7 +960,7 @@ int out_handle(struct tgt_session_info *tsi)
 		tmp = oub;
 		for (i = 0; i < update_buf_count; i++, tmp++) {
 			if (tmp->oub_size >= OUT_MAXREQSIZE)
-				GOTO(out_free, rc = -EPROTO);
+				GOTO(out_free, rc = err_serious(-EPROTO));
 
 			OBD_ALLOC(update_bufs[i], tmp->oub_size);
 			if (update_bufs[i] == NULL)
@@ -973,11 +973,11 @@ int out_handle(struct tgt_session_info *tsi)
 		pill->rc_req->rq_bulk_write = 1;
 		rc = sptlrpc_svc_prep_bulk(pill->rc_req, desc);
 		if (rc != 0)
-			GOTO(out_free, rc);
+			GOTO(out_free, err_serious(rc));
 
 		rc = target_bulk_io(pill->rc_req->rq_export, desc, &lwi);
 		if (rc < 0)
-			GOTO(out_free, rc);
+			GOTO(out_free, err_serious(rc));
 	}
 	/* validate the request and calculate the total update count and
 	 * set it to reply */

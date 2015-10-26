@@ -1614,6 +1614,9 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 		CDEBUG(D_HA, "got connected\n");
 		break;
 	case IMP_EVENT_INVALIDATE:
+		if (d->opd_connect_mdt)
+			osp_invalidate_request(d);
+
 		if (obd->obd_namespace == NULL)
 			break;
 		ldlm_namespace_cleanup(obd->obd_namespace, LDLM_FL_LOCAL_ONLY);

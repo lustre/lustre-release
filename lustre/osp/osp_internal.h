@@ -101,9 +101,6 @@ struct osp_update_request_sub {
 	struct list_head		ours_list;
 };
 
-/**
- * Tracking the updates being executed on this dt_device.
- */
 struct osp_update_request {
 	int				our_flags;
 	/* update request result */
@@ -118,10 +115,15 @@ struct osp_update_request {
 
 	/* points to thandle if this update request belongs to one */
 	struct osp_thandle		*our_th;
+
+	__u64				our_version;
+	/* protect our_list and flag */
+	spinlock_t			our_list_lock;
 	/* linked to the list(ou_list) in osp_updates */
 	struct list_head		our_list;
 	__u32				our_batchid;
-	__u32				our_req_sent:1;
+	__u32				our_req_ready:1;
+
 };
 
 struct osp_updates {
@@ -288,7 +290,8 @@ struct osp_object {
 	struct lu_object_header	opo_header;
 	struct dt_object	opo_obj;
 	unsigned int		opo_reserved:1,
-				opo_non_exist:1;
+				opo_non_exist:1,
+				opo_stale:1;
 
 	/* read/write lock for md osp object */
 	struct rw_semaphore	opo_sem;
@@ -353,7 +356,6 @@ struct osp_thandle {
 	struct list_head	 ot_stop_dcb_list;
 	struct osp_update_request *ot_our;
 	atomic_t		 ot_refcount;
-	__u64			 ot_version;
 };
 
 static inline struct osp_thandle *
@@ -688,7 +690,8 @@ struct osp_update_request *osp_update_request_create(struct dt_device *dt);
 void osp_update_request_destroy(struct osp_update_request *update);
 
 int osp_send_update_thread(void *arg);
-int osp_check_and_set_rpc_version(struct osp_thandle *oth);
+int osp_check_and_set_rpc_version(struct osp_thandle *oth,
+				  struct osp_object *obj);
 
 void osp_thandle_destroy(struct osp_thandle *oth);
 static inline void osp_thandle_get(struct osp_thandle *oth)
@@ -714,6 +717,7 @@ struct thandle *osp_get_storage_thandle(const struct lu_env *env,
 					struct osp_device *osp);
 void osp_trans_callback(const struct lu_env *env,
 			struct osp_thandle *oth, int rc);
+void osp_invalidate_request(struct osp_device *osp);
 /* osp_object.c */
 int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 		 struct lu_attr *attr);
