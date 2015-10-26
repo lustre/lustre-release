@@ -923,6 +923,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 	bool	 mds_conn = false, lw_client = false;
 	bool	 mds_mds_conn = false;
 	bool	 new_mds_mds_conn = false;
+	bool	 target_referenced = false;
         struct obd_connect_data *data, *tmpdata;
         int size, tmpsize;
         lnet_nid_t *client_nid = NULL;
@@ -952,11 +953,6 @@ int target_handle_connect(struct ptlrpc_request *req)
 	}
 
 	spin_lock(&target->obd_dev_lock);
-	/* Make sure the target isn't cleaned up while we're here. Yes,
-	 * there's still a race between the above check and our incref here.
-	 * Really, class_uuid2obd should take the ref. */
-	class_incref(target, __func__, current);
-
 	if (target->obd_stopping || !target->obd_set_up) {
 		spin_unlock(&target->obd_dev_lock);
 
@@ -977,6 +973,12 @@ int target_handle_connect(struct ptlrpc_request *req)
 			       libcfs_nid2str(req->rq_peer.nid));
 		GOTO(out, rc = -EAGAIN);
 	}
+
+	/* Make sure the target isn't cleaned up while we're here. Yes,
+	 * there's still a race between the above check and our incref here.
+	 * Really, class_uuid2obd should take the ref. */
+	class_incref(target, __func__, current);
+	target_referenced = true;
 
 	target->obd_conn_inprogress++;
 	spin_unlock(&target->obd_dev_lock);
@@ -1386,7 +1388,7 @@ out:
 
 		class_export_put(export);
 	}
-	if (target != NULL) {
+	if (target_referenced == true && target != NULL) {
 		spin_lock(&target->obd_dev_lock);
 		target->obd_conn_inprogress--;
 		spin_unlock(&target->obd_dev_lock);
