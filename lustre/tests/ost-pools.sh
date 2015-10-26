@@ -1064,53 +1064,58 @@ create_perf() {
 }
 
 test_18() {
-    set_cleanup_trap
-    local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-    local numsec=15
-    local iter=3
-    local plaindir=$POOL_ROOT/plaindir
-    local pooldir=$POOL_ROOT/pooldir
-    local f1=0
-    local f2=0
-    local f3=0
-    local diff
+	set_cleanup_trap
+	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
+	local numsec=15
+	local iter=3
+	local plaindir=$POOL_ROOT/plaindir
+	local pooldir=$POOL_ROOT/pooldir
+	local f1=0
+	local f2=0
+	local f3=0
+	local diff
 
-    for i in $(seq 1 $iter); do
-        echo "Create performance, iteration $i, $numsec seconds x 3"
+	for i in $(seq 1 $iter); do
+		echo "Create performance, iteration $i, $numsec seconds x 3"
 
-        files1=$(create_perf $plaindir $numsec)
-        echo "iter $i: $files1 creates without pool"
-        f1=$(($f1 + $files1))
+		local files1=$(create_perf $plaindir $numsec)
+		[[ $files1 -eq 0 ]] && error "Zero files created without pool"
+		f1=$((f1 + files1))
+		echo "iter $i: $files1 creates without pool"
 
-        create_pool_nofail $POOL > /dev/null
-        add_pool $POOL $TGT_ALL "$TGT_UUID" > /dev/null
-        create_dir $pooldir $POOL
-        files2=$(create_perf $pooldir $numsec)
-        echo "iter $i: $files2 creates with pool"
-        f2=$(($f2 + $files2))
+		create_pool_nofail $POOL > /dev/null
+		add_pool $POOL $TGT_ALL "$TGT_UUID" > /dev/null
+		create_dir $pooldir $POOL
+		local files2=$(create_perf $pooldir $numsec)
+		[[ $files2 -eq 0 ]] && error "Zero files created with pool"
+		f2=$((f2 + files2))
+		echo "iter $i: $files2 creates with pool"
 
-        destroy_pool $POOL > /dev/null
-        files3=$(create_perf $pooldir $numsec)
-        echo "iter $i: $files3 creates with missing pool"
-        f3=$(($f3 + $files3))
+		destroy_pool $POOL > /dev/null
+		local files3=$(create_perf $pooldir $numsec)
+		[[ $files3 -eq 0 ]] &&
+			error "Zero files created with missing pool"
+		f3=$((f3 + files3))
+		echo "iter $i: $files3 creates with missing pool"
 
-        echo
-    done
+		echo
+	done
 
-    echo Avg files created in $numsec seconds without pool: $((files1 / iter))
-    echo Avg files created in $numsec seconds with pool: $((files2 / iter))
-    echo Avg files created in $numsec seconds missing pool: $((files3 / iter))
+	echo Avg files created in $numsec seconds without pool: $((f1 / iter))
+	echo Avg files created in $numsec seconds with pool: $((f2 / iter))
+	echo Avg files created in $numsec seconds missing pool: $((f3 / iter))
 
-    # Set this high until we establish a baseline for what the degradation
-    # is / should be
-    max=30
-    diff=$((($files1 - $files2) * 100 / $files1))
+	# Set this high until we establish a baseline for what the degradation
+	# is / should be
+	max=30
+
+	diff=$((($f1 - $f2) * 100 / $f1))
 	echo  "No pool / wide pool: $diff %."
 	[ $diff -gt $max ] &&
 		error_ignore bz23408 "Degradation with wide pool is $diff% > $max%"
 
 	max=30
-	diff=$((($files1 - $files3) * 100 / $files1))
+	diff=$((($f1 - $f3) * 100 / $f1))
 	echo  "No pool / missing pool: $diff %."
 	[ $diff -gt $max ] &&
 		error_ignore bz23408 "Degradation with wide pool is $diff% > $max%"
