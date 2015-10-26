@@ -525,14 +525,10 @@ for ((rsz = $rszlo; rsz <= $rszhi; rsz*=2)); do
 
 			# run tests
 			for test in ${tests[@]}; do
-				# Sync all outstanding data
-				for host in ${ost_hosts[@]}; do
-					remote_shell $host \
-					    "lctl set_param -n osd*.*OST*.force_sync 1"
-				done
-
 				declare -a pidarray
 				for host in ${unique_hosts[@]}; do
+					remote_shell $host \
+					    "lctl set_param -n osd*.*OST*.force_sync 1"
 					echo "starting run for test: $test rsz: $rsz " \
 					"threads: $thr objects: $nobj" >> ${vmstatf}_${host}
 				done
