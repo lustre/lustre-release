@@ -660,7 +660,7 @@ static void osd_object_read_lock(const struct lu_env *env,
 
 	LASSERT(osd_invariant(obj));
 
-	down_read(&obj->oo_sem);
+	down_read_nested(&obj->oo_sem, role);
 }
 
 static void osd_object_write_lock(const struct lu_env *env,
@@ -670,7 +670,7 @@ static void osd_object_write_lock(const struct lu_env *env,
 
 	LASSERT(osd_invariant(obj));
 
-	down_write(&obj->oo_sem);
+	down_write_nested(&obj->oo_sem, role);
 }
 
 static void osd_object_read_unlock(const struct lu_env *env,

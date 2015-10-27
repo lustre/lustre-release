@@ -368,7 +368,7 @@ static struct dt_object *__local_file_create(const struct lu_env *env,
 	if (rc)
 		GOTO(trans_stop, rc);
 
-	dt_write_lock(env, dto, 0);
+	dt_write_lock(env, dto, LOS_CHILD);
 	if (dt_object_exists(dto))
 		GOTO(unlock, rc = 0);
 
@@ -399,7 +399,7 @@ static struct dt_object *__local_file_create(const struct lu_env *env,
 
 	rec->rec_fid = fid;
 	rec->rec_type = dto->do_lu.lo_header->loh_attr;
-	dt_write_lock(env, parent, 0);
+	dt_write_lock(env, parent, LOS_PARENT);
 	rc = dt_insert(env, parent, (const struct dt_rec *)rec,
 		       (const struct dt_key *)name, th, 1);
 	if (dti->dti_dof.dof_type == DFT_DIR)
