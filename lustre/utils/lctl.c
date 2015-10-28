@@ -82,34 +82,35 @@ command_t cmdlist[] = {
 
 	/* Network configuration commands */
 	{"===== network config =====", jt_noop, 0, "network config"},
-        {"--net", jt_opt_net, 0,"run <command> after setting network to <net>\n"
-         "usage: --net <tcp/elan/o2ib/...> <command>"},
-        {"network", jt_ptl_network, 0, "configure LNET"
-         "usage: network up|down"},
-        {"net", jt_ptl_network, 0, "configure LNET"
-         "usage: net up|down"},
-        {"list_nids", jt_ptl_list_nids, 0, "list local NIDs"
-         "usage: list_nids [all]"},
-        {"which_nid", jt_ptl_which_nid, 0, "choose a NID"
-         "usage: which_nid NID [NID...]"},
+	{"--net", jt_opt_net, 0, "run <command> after selecting network <net>\n"
+	 "usage: --net <tcp/o2ib/...> <command>"},
+	{"network", jt_ptl_network, 0, "configure LNET"
+	 "usage: network up|down"},
+	{"net", jt_ptl_network, 0, "configure LNET"
+	 "usage: net up|down"},
+	{"list_nids", jt_ptl_list_nids, 0, "list local NIDs"
+	 "usage: list_nids [all]"},
+	{"which_nid", jt_ptl_which_nid, 0, "choose a NID"
+	 "usage: which_nid NID [NID...]"},
 	{"replace_nids", jt_replace_nids, 0,
 	 "replace primary NIDs for a device\n"
 	 "usage: replace_nids <device> <nid1>[,nid2,nid3]"},
-        {"interface_list", jt_ptl_print_interfaces,0,"print interface entries\n"
-         "usage: interface_list"},
-        {"peer_list", jt_ptl_print_peers, 0, "print peer entries\n"
-         "usage: peer_list"},
-        {"conn_list", jt_ptl_print_connections, 0,
-         "print all the connected remote nid\n"
-         "usage: conn_list"},
-        {"route_list", jt_ptl_print_routes, 0,
-         "print the portals routing table, same as show_route\n"
-         "usage: route_list"},
-        {"show_route", jt_ptl_print_routes, 0,
-         "print the portals routing table, same as route_list\n"
-         "usage: show_route"},
-        {"ping", jt_ptl_ping, 0, "Check LNET connectivity\n"
-         "usage: ping nid [timeout] [pid]"},
+	{"interface_list", jt_ptl_print_interfaces, 0,
+	 "print network interface entries\n"
+	 "usage: interface_list"},
+	{"peer_list", jt_ptl_print_peers, 0, "print peer LNet NIDs\n"
+	 "usage: peer_list"},
+	{"conn_list", jt_ptl_print_connections, 0,
+	 "print all the remote LNet connections\n"
+	 "usage: conn_list"},
+	{"route_list", jt_ptl_print_routes, 0,
+	 "print the LNet routing table, same as show_route\n"
+	 "usage: route_list"},
+	{"show_route", jt_ptl_print_routes, 0,
+	 "print the LNet routing table, same as route_list\n"
+	 "usage: show_route"},
+	{"ping", jt_ptl_ping, 0, "Check LNET connectivity\n"
+	 "usage: ping nid [timeout] [pid]"},
 	{"net_drop_add", jt_ptl_drop_add, 0, "Add LNet drop rule\n"
 	 "usage: net_drop_add <-s | --source NID>\n"
 	 "		      <-d | --dest NID>\n"
@@ -269,10 +270,10 @@ command_t cmdlist[] = {
 	 "usage: nodemap_del <nodemap_name>"},
 	{"nodemap_add_range", jt_nodemap_add_range, 0,
 	 "add a range to a nodemap\n"
-	 "usage: nodemap_add_range <NID range>"},
+	 "usage: nodemap_add_range <nid_range>"},
 	{"nodemap_del_range", jt_nodemap_del_range, 0,
 	 "add a range to a nodemap\n"
-	 "usage: nodemap_del_range <NID range>"},
+	 "usage: nodemap_del_range <nid_range>"},
 	{"nodemap_modify", jt_nodemap_modify, 0,
 	 "modify a nodemap parameters"
 	 "usage: nodemap_modify nodemap_name param value"},
@@ -322,30 +323,29 @@ command_t cmdlist[] = {
          "disable writes to the underlying device\n"},
         {"notransno", jt_obd_no_transno, 0,
          "disable sending of committed-transno updates\n"},
-        {"add_uuid", jt_lcfg_add_uuid, 0, "associate a UUID with a nid\n"
-         "usage: add_uuid <uuid> <nid>"},
-        {"del_uuid", jt_lcfg_del_uuid, 0, "delete a UUID association\n"
-         "usage: del_uuid <uuid>"},
-        {"add_peer", jt_ptl_add_peer, 0, "add an peer entry\n"
-         "usage: add_peer <nid> <host> <port>"},
-        {"del_peer", jt_ptl_del_peer, 0, "remove an peer entry\n"
-         "usage: del_peer [<nid>] [<ipaddr|pid>]"},
-        {"add_conn ", jt_lcfg_add_conn, 0,
-         "usage: add_conn <conn_uuid> [priority]\n"},
-        {"del_conn ", jt_lcfg_del_conn, 0,
-         "usage: del_conn <conn_uuid> \n"},
-        {"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote nid\n"
-         "usage: disconnect [<nid>]"},
-        {"push", jt_ptl_push_connection, 0, "flush connection to a remote nid\n"
-         "usage: push [<nid>]"},
-        {"mynid", jt_ptl_mynid, 0, "inform the socknal of the local nid. "
-         "The nid defaults to hostname for tcp networks and is automatically "
-         "setup for elan/myrinet networks.\n"
-         "usage: mynid [<nid>]"},
-        {"fail", jt_ptl_fail_nid, 0, "fail/restore communications.\n"
-         "Omitting the count means indefinitely, 0 means restore, "
-         "otherwise fail 'count' messages.\n"
-         "usage: fail nid|_all_ [count]"},
+	{"add_uuid", jt_lcfg_add_uuid, 0, "associate a UUID with a NID\n"
+	 "usage: add_uuid <uuid> <nid>"},
+	{"del_uuid", jt_lcfg_del_uuid, 0, "delete a UUID association\n"
+	 "usage: del_uuid <uuid>"},
+	{"add_peer", jt_ptl_add_peer, 0, "add an peer entry\n"
+	 "usage: add_peer <nid> <host> <port>"},
+	{"del_peer", jt_ptl_del_peer, 0, "remove an peer entry\n"
+	 "usage: del_peer [<nid>] [<ipaddr|pid>]"},
+	{"add_conn ", jt_lcfg_add_conn, 0,
+	 "usage: add_conn <conn_uuid> [priority]\n"},
+	{"del_conn ", jt_lcfg_del_conn, 0,
+	 "usage: del_conn <conn_uuid>"},
+	{"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote NID\n"
+	 "usage: disconnect [<nid>]"},
+	{"push", jt_ptl_push_connection, 0, "flush connection to a remote NID\n"
+	 "usage: push [<nid>]"},
+	{"mynid", jt_ptl_mynid, 0, "inform the LND of the local NID. "
+	 "The NID defaults to hostname for TCP networks.\n"
+	 "usage: mynid [<nid>]"},
+	{"fail", jt_ptl_fail_nid, 0, "fail/restore network communications\n"
+	 "Omitting the count means indefinitely, 0 means restore, "
+	 "otherwise fail 'count' messages.\n"
+	 "usage: fail nid|_all_ [count]"},
 
         /*Test commands for echo client*/
         {"test_create", jt_obd_test_create, 0,
@@ -467,13 +467,13 @@ command_t cmdlist[] = {
 	{"del_interface", jt_ptl_del_interface, 0, "del interface entry\n"
 	 "usage: del_interface [ip]"},
 	{"add_route", jt_ptl_add_route, 0,
-	 "add an entry to the portals routing table\n"
+	 "add an entry to the LNet routing table\n"
 	 "usage: add_route <gateway> [<hops> [<priority>]]"},
 	{"del_route", jt_ptl_del_route, 0,
-	 "delete route via gateway to targets from the portals routing table\n"
+	 "delete route via gateway to targets from the LNet routing table\n"
 	 "usage: del_route <gateway> [<target>] [<target>]"},
 	{"set_route", jt_ptl_notify_router, 0,
-	 "enable/disable routes via gateway in the portals routing table\n"
+	 "enable/disable routes via gateway in the LNet routing table\n"
 	 "usage: set_route <gateway> <up/down> [<time>]"},
 
 	{ 0, 0, 0, NULL }
@@ -485,7 +485,8 @@ int lctl_main(int argc, char **argv)
 
         setlinebuf(stdout);
 
-        ptl_initialize(argc, argv);
+	if (ptl_initialize(argc, argv) < 0)
+		exit(1);
         if (obd_initialize(argc, argv) < 0)
                 exit(2);
         if (dbg_initialize(argc, argv) < 0)
