@@ -1325,16 +1325,13 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 		static unsigned long last_printed;
 		static int last_credits;
 
-		CWARN("%.16s: too many transaction credits (%d > %d)\n",
-		      LDISKFS_SB(osd_sb(dev))->s_es->s_volume_name,
-		      oh->ot_credits,
-		      osd_journal(dev)->j_max_transaction_buffers);
-
-		osd_trans_dump_creds(env, th);
-
+		/* don't make noise on a tiny testing systems
+		 * actual credits misuse will be caught anyway */
 		if (last_credits != oh->ot_credits &&
 		    time_after(jiffies, last_printed +
-			       msecs_to_jiffies(60 * MSEC_PER_SEC))) {
+			       msecs_to_jiffies(60 * MSEC_PER_SEC)) &&
+		    osd_transaction_size(dev) > 512) {
+			osd_trans_dump_creds(env, th);
 			libcfs_debug_dumpstack(NULL);
 			last_credits = oh->ot_credits;
 			last_printed = jiffies;
