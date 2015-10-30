@@ -136,15 +136,67 @@ static int zfs_set_prop_str(zfs_handle_t *zhp, char *prop, void *val)
 }
 
 /*
+ * Remove a property from zfs property dataset
+ */
+static int zfs_remove_prop(zfs_handle_t *zhp, nvlist_t *nvl, char *propname)
+{
+	nvlist_remove_all(nvl, propname);
+	/* XXX: please replace zfs_prop_inherit() if there is a better function
+	 * to call zfs_ioctl() to update data on-disk.
+	 */
+	return zfs_prop_inherit(zhp, propname, false);
+}
+
+static int zfs_erase_prop(zfs_handle_t *zhp, char *param)
+{
+	nvlist_t *nvl;
+	char propname[ZFS_MAXPROPLEN];
+	int len = strlen(param) + strlen(LDD_PREFIX);
+
+	if (len > ZFS_MAXPROPLEN) {
+		fprintf(stderr, "%s: zfs prop to erase is too long-\n%s\n",
+			progname, param);
+		return EINVAL;
+	}
+
+	nvl = zfs_get_user_props(zhp);
+	if (!nvl)
+		return ENOENT;
+
+	snprintf(propname, len + 1, "%s%s", LDD_PREFIX, param);
+	return zfs_remove_prop(zhp, nvl, propname);
+}
+
+static int zfs_erase_allprops(zfs_handle_t *zhp)
+{
+	nvlist_t *nvl;
+	nvpair_t *curr = NULL;
+
+	nvl = zfs_get_user_props(zhp);
+	if (!nvl)
+		return ENOENT;
+
+	curr = nvlist_next_nvpair(nvl, curr);
+	while (curr) {
+		nvpair_t *next = nvlist_next_nvpair(nvl, curr);
+
+		zfs_remove_prop(zhp, nvl, nvpair_name(curr));
+		curr = next;
+	}
+
+	return 0;
+}
+
+/*
  * Map '<key>=<value> ...' pairs in the passed string to dataset properties
- * of the form 'lustre:<key>=<value>'.  Malformed <key>=<value> pairs will
- * be skipped.
+ * of the form 'lustre:<key>=<value>'. "<key>=" means to remove this key
+ * from the dataset.
  */
 static int zfs_set_prop_params(zfs_handle_t *zhp, char *params)
 {
 	char *params_dup, *token, *key, *value;
 	char *save_token = NULL;
-	char prop_name[ZFS_MAXPROPLEN];
+	char propname[ZFS_MAXPROPLEN];
 	int ret = 0;
 
 	params_dup = strdup(params);
@@ -158,15 +210,20 @@ static int zfs_set_prop_params(zfs_handle_t *zhp, char *params)
 			continue;
 
 		value = strtok(NULL, "=");
-		if (value == NULL)
-			continue;
+		if (!value) {
+			/* remove this prop when its value is null */
+			ret = zfs_erase_prop(zhp, key);
+			if (ret)
+				break;
+		} else {
+			snprintf(propname, strlen(LDD_PREFIX) + strlen(key) + 1,
+				 "%s%s", LDD_PREFIX, key);
+			vprint("  %s=%s\n", propname, value);
 
-		sprintf(prop_name, "%s%s", LDD_PREFIX, key);
-		vprint("  %s=%s\n", prop_name, value);
-
-		ret = zfs_prop_set(zhp, prop_name, value);
-		if (ret)
-			break;
+			ret = zfs_prop_set(zhp, propname, value);
+			if (ret)
+				break;
+		}
 
 		token = strtok_r(NULL, " ", &save_token);
 	}
@@ -263,9 +320,13 @@ int zfs_write_ldd(struct mkfs_opts *mop)
 
 	ret = zfs_check_hostid(mop);
 	if (ret != 0)
-		goto out;
+		goto out_close;
 
 	vprint("Writing %s properties\n", ds);
+
+	if (mop->mo_flags & MO_ERASE_ALL)
+		ret = zfs_erase_allprops(zhp);
+	ret = zfs_set_prop_params(zhp, ldd->ldd_params);
 
 	for (i = 0; special_ldd_prop_params[i].zlpb_prop_name != NULL; i++) {
 		bridge = &special_ldd_prop_params[i];
@@ -275,12 +336,24 @@ int zfs_write_ldd(struct mkfs_opts *mop)
 			goto out_close;
 	}
 
-	ret = zfs_set_prop_params(zhp, ldd->ldd_params);
-
 out_close:
 	zfs_close(zhp);
 out:
 	return ret;
+}
+
+/* Mark a property to be removed by the form of "key=" */
+int zfs_erase_ldd(struct mkfs_opts *mop, char *param)
+{
+	char key[ZFS_MAXPROPLEN] = "";
+
+	if (strlen(LDD_PREFIX) + strlen(param) > ZFS_MAXPROPLEN) {
+		fprintf(stderr, "%s: zfs prop to erase is too long-\n%s\n",
+			progname, param);
+		return EINVAL;
+	}
+	snprintf(key, strlen(param) + 2, "%s=", param);
+	return add_param(mop->mo_ldd.ldd_params, key, "");
 }
 
 static int zfs_get_prop_int(zfs_handle_t *zhp, char *prop, void *val)
@@ -335,21 +408,17 @@ static int zfs_is_special_ldd_prop_param(char *name)
 	return 0;
 }
 
-static int zfs_get_prop_params(zfs_handle_t *zhp, char *param, int len)
+static int zfs_get_prop_params(zfs_handle_t *zhp, char *param)
 {
 	nvlist_t *props;
 	nvpair_t *nvp;
-	char key[ZFS_MAXPROPLEN];
-	char *value;
+	char key[ZFS_MAXPROPLEN] = "";
+	char value[PARAM_MAX] = "";
 	int ret = 0;
 
 	props = zfs_get_user_props(zhp);
 	if (props == NULL)
 		return ENOENT;
-
-	value = malloc(len);
-	if (value == NULL)
-		return ENOMEM;
 
 	nvp = NULL;
 	while (nvp = nvlist_next_nvpair(props, nvp), nvp) {
@@ -364,13 +433,10 @@ static int zfs_get_prop_params(zfs_handle_t *zhp, char *param, int len)
 			continue;
 
 		sprintf(key, "%s=",  nvpair_name(nvp) + strlen(LDD_PREFIX));
-
 		ret = add_param(param, key, value);
 		if (ret)
 			break;
 	}
-
-	free(value);
 
 	return ret;
 }
@@ -403,7 +469,7 @@ int zfs_read_ldd(char *ds,  struct lustre_disk_data *ldd)
 			goto out_close;
 	}
 
-	ret = zfs_get_prop_params(zhp, ldd->ldd_params, 4096);
+	ret = zfs_get_prop_params(zhp, ldd->ldd_params);
 	if (ret && (ret != ENOENT))
 		goto out_close;
 
@@ -413,6 +479,42 @@ out_close:
 	zfs_close(zhp);
 out:
 	return ret;
+}
+
+/* Print ldd params */
+void zfs_print_ldd_params(struct mkfs_opts *mop)
+{
+	char *from = mop->mo_ldd.ldd_params;
+	char *to;
+	int len;
+
+	vprint("Parameters:");
+	while (from) {
+		/* skip those keys to be removed in the form of "key=" */
+		to = strstr(from, "= ");
+		if (!to)
+			/* "key=" may be in the end */
+			if (*(from + strlen(from) - 1) == '=')
+				to = from + strlen(from) - 1;
+
+		/* find " " inward */
+		len = strlen(from);
+		if (to) {
+			len = strlen(from) - strlen(to);
+			while ((*(from + len) != ' ') && len)
+				len--;
+		}
+		if (len)
+			/* no space in the end */
+			vprint("%*.*s", len, len, from);
+
+		/* If there is no "key=" or "key=" is in the end, stop. */
+		if (!to || strlen(to) == 1)
+			break;
+
+		/* skip "=" */
+		from = to + 1;
+	}
 }
 
 int zfs_is_lustre(char *ds, unsigned *mount_type)

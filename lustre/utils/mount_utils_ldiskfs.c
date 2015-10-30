@@ -389,6 +389,15 @@ int ldiskfs_read_ldd(char *dev, struct lustre_disk_data *mo_ldd)
 	return ret;
 }
 
+int ldiskfs_erase_ldd(struct mkfs_opts *mop, char *param)
+{
+	return 0;
+}
+
+void ldiskfs_print_ldd_params(struct mkfs_opts *mop)
+{
+	printf("Parameters:%s\n", mop->mo_ldd.ldd_params);
+}
 
 /* Display the need for the latest e2fsprogs to be installed. make_backfs
  * indicates if the caller is make_lustre_backfs() or not. */

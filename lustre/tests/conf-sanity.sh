@@ -6161,6 +6161,81 @@ test_88() {
 }
 run_test 88 "check the default mount options can be overridden"
 
+test_89() { # LU-7131
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.9.54) ]] ||
+		{ skip "Need MDT version at least 2.9.54" && return 0; }
+
+	local key=failover.node
+	local val1=192.0.2.254@tcp0 # Reserved IPs, see RFC 5735
+	local val2=192.0.2.255@tcp0
+	local mdsdev=$(mdsdevname 1)
+	local params
+
+	stopall
+
+	[ $(facet_fstype mds1) == zfs ] && import_zpool mds1
+	# Check that parameters are added correctly
+	echo "tunefs --param $key=$val1"
+	do_facet mds "$TUNEFS --param $key=$val1 $mdsdev >/dev/null" ||
+		error "tunefs --param $key=$val1 failed"
+	params=$(do_facet mds $TUNEFS --dryrun $mdsdev) ||
+		error "tunefs --dryrun failed"
+	params=${params##*Parameters:}
+	params=${params%%exiting*}
+	[ $(echo $params | tr ' ' '\n' | grep -c $key=$val1) = "1" ] ||
+		error "on-disk parameter not added correctly via tunefs"
+
+	# Check that parameters replace existing instances when added
+	echo "tunefs --param $key=$val2"
+	do_facet mds "$TUNEFS --param $key=$val2 $mdsdev >/dev/null" ||
+		error "tunefs --param $key=$val2 failed"
+	params=$(do_facet mds $TUNEFS --dryrun $mdsdev) ||
+		error "tunefs --dryrun failed"
+	params=${params##*Parameters:}
+	params=${params%%exiting*}
+	[ $(echo $params | tr ' ' '\n' | grep -c $key=) = "1" ] ||
+		error "on-disk parameter not replaced via tunefs"
+	[ $(echo $params | tr ' ' '\n' | grep -c $key=$val2) = "1" ] ||
+		error "on-disk parameter not replaced correctly via tunefs"
+
+	# Check that a parameter is erased properly
+	echo "tunefs --erase-param $key"
+	do_facet mds "$TUNEFS --erase-param $key $mdsdev >/dev/null" ||
+		error "tunefs --erase-param $key failed"
+	params=$(do_facet mds $TUNEFS --dryrun $mdsdev) ||
+		error "tunefs --dryrun failed"
+	params=${params##*Parameters:}
+	params=${params%%exiting*}
+	[ $(echo $params | tr ' ' '\n' | grep -c $key=) = "0" ] ||
+		error "on-disk parameter not erased correctly via tunefs"
+
+	# Check that all the parameters are erased
+	echo "tunefs --erase-params"
+	do_facet mds "$TUNEFS --erase-params $mdsdev >/dev/null" ||
+		error "tunefs --erase-params failed"
+	params=$(do_facet mds $TUNEFS --dryrun $mdsdev) ||
+		error "tunefs --dryrun failed"
+	params=${params##*Parameters:}
+	params=${params%%exiting*}
+	[ -z $params ] ||
+		error "all on-disk parameters not erased correctly via tunefs"
+
+	# Check the order of options --erase-params and --param
+	echo "tunefs --param $key=$val1 --erase-params"
+	do_facet mds \
+		"$TUNEFS --param $key=$val1 --erase-params $mdsdev >/dev/null"||
+		error "tunefs --param $key=$val1 --erase-params failed"
+	params=$(do_facet mds $TUNEFS --dryrun $mdsdev) ||
+		error "tunefs --dryrun failed"
+	params=${params##*Parameters:}
+	params=${params%%exiting*}
+	[ $(echo $params | tr ' ' '\n') == "$key=$val1" ] ||
+		error "on-disk param not added correctly with --erase-params"
+
+	reformat
+}
+run_test 89 "check tunefs --param and --erase-param{s} options"
+
 # $1 test directory
 # $2 (optional) value of max_mod_rpcs_in_flight to set
 check_max_mod_rpcs_in_flight() {

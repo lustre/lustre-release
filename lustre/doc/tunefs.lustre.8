@@ -31,10 +31,14 @@ mounted.
 Set user comment about this disk, ignored by Lustre.
 .TP
 .BI \--dryrun
-Only print what would be done; does not affect the disk
+Only print what would be done; does not affect the disk.
+.TP
+.BI \--erase-param " param"
+Remove all previously stored instances of the parameter \fIparam\fR. Attempts
+to remove a non-existing parameter appear as successful ones.
 .TP
 .BI \--erase-params
-Remove all previous parameter info
+Remove all previously stored parameter info.
 .TP
 .BI \--failnode= nid,...  
 Set the NID(s) of a failover partner. This option can be repeated as desired.
@@ -45,10 +49,10 @@ Set the NID(s) of all service partner. This option treats all nodes as equal
 service nodes. Cannot be used with --failnode.
 .TP
 .BI \--fsname= filesystem_name  
-The Lustre filesystem this service will be part of.  Default is 'lustre'
+The Lustre filesystem this service will be part of.  Default is 'lustre'.
 .TP
 .BI \--index= index
-Force a particular OST or MDT index 
+Force a particular OST or MDT index.
 .TP
 .BI \--mountfsoptions= opts
 Set  the persistent mount options that will be used when Lustre fs.
@@ -67,13 +71,41 @@ Use these options for mounting backing fs while tune.lustre is working.
 Network(s) to restrict this ost/mdt to. This option can be repeated as desired.
 .TP
 .BI \--mgs
-Add a configuration management service to this target
+Add a configuration management service to this target.
 .TP
 .BI \--mgsnode= nid,...  
 Set the NID(s) of the MGS node, required for all targets other than the MGS.
 .TP
 .BI \--nomgs
-Remove a configuration management service to this target
+Remove a configuration management service to this target.
+.TP
+.BI \--param " key=value"
+Set permanent parameter
+.I key
+to value
+.IR value .
+This option can be repeated as desired. All previously stored instances of
+.IR key
+are removed, and new instances specified in the command line are added.
+Typical options might include:
+.RS
+.I \--param sys.timeout=40
+.RS
+System obd timeout
+.RE
+.I \--param lov.stripesize=2M
+.RS
+Default stripe size
+.RE
+.I \--param lov.stripecount=2
+.RS
+Default stripe count
+.RE
+.I \--param failover.mode=failout
+.RS
+Return errors instead of waiting for recovery
+.RE
+.RE
 .TP
 .BI \--force-nohostid
 Ignore unset hostid for ZFS import protection. To set hostid either set
@@ -92,13 +124,13 @@ No clients should be started until all targets have restarted.
 .br
 Correct order of operations is:
 .br
-* Unmount all clients of this filesystem
+* Unmount all clients of this filesystem.
 .br
-* Unmount MDT and all OSTs of this filesystem
+* Unmount MDT and all OSTs of this filesystem.
 .br
-* Run \fBtunefs.lustre --writeconf <device>\fR on every server
+* Run \fBtunefs.lustre --writeconf <device>\fR on every server.
 .br
-* Mount MDT and OSTs
+* Mount MDT and OSTs.
 .br
 * Mount clients
 .TP
@@ -107,12 +139,16 @@ Enable space accounting on old 2.x devices.
 
 .SH EXAMPLES
 .TP
-.B tunefs.lustre --erase-param --mgsnode=<new_nid> --writeconf /dev/sda
+.B tunefs.lustre --erase-params --mgsnode=<new_nid> --writeconf /dev/sda
 Change the MGS NID address. (This should be done on every target disk,
 since they should all be contacting the same MGS.)
 .TP
-.B tunefs.lustre --param="failover.node=192.168.0.13@tcp0" /dev/sda
-Add a failover NID location for this target
+.B tunefs.lustre --param "failover.node=192.168.0.13@tcp0" /dev/sda
++Remove all previous failover NID locations for this target, and add a new
++failover NID location for this target.
++.TP
++.B tunefs.lustre --erase-param failover.node /dev/sda
++Remove all failover NID locations for this target.
 .TP
 .B tunefs.lustre --mgs --mdt --fsname=testfs /dev/sda
 Upgrade an old 1.4.X Lustre MDT to 1.6. The new filesystem name is "testfs". 

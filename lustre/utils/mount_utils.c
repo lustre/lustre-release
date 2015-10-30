@@ -586,6 +586,8 @@ struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type)
 	DLSYM(name, ops, fini);
 	DLSYM(name, ops, read_ldd);
 	DLSYM(name, ops, write_ldd);
+	DLSYM(name, ops, erase_ldd);
+	DLSYM(name, ops, print_ldd_params);
 	DLSYM(name, ops, is_lustre);
 	DLSYM(name, ops, make_lustre);
 	DLSYM(name, ops, prepare_lustre);
@@ -664,6 +666,29 @@ int osd_read_ldd(char *dev, struct lustre_disk_data *ldd)
 		ret = EINVAL;
 
 	return ret;
+}
+
+/* Erase param from the server config files */
+int osd_erase_ldd(struct mkfs_opts *mop, char *param)
+{
+	struct lustre_disk_data *ldd = &mop->mo_ldd;
+	int ret;
+
+	if (backfs_mount_type_okay(ldd->ldd_mount_type))
+		ret = backfs_ops[ldd->ldd_mount_type]->erase_ldd(mop, param);
+	else
+		ret = EINVAL;
+
+	return ret;
+}
+
+/* Print ldd_params */
+void osd_print_ldd_params(struct mkfs_opts *mop)
+{
+	struct lustre_disk_data *ldd = &mop->mo_ldd;
+
+	if (backfs_mount_type_okay(ldd->ldd_mount_type))
+		backfs_ops[ldd->ldd_mount_type]->print_ldd_params(mop);
 }
 
 /* Was this device formatted for Lustre */
