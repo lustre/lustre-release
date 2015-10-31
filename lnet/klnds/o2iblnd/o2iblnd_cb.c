@@ -1290,13 +1290,15 @@ kiblnd_connect_peer (kib_peer_t *peer)
                libcfs_nid2str(peer->ibp_nid), dev->ibd_ifname,
 	       &dev->ibd_ifip, cmid->device->name);
 
-        return;
+	return;
 
  failed2:
-        kiblnd_peer_decref(peer);               /* cmid's ref */
-        rdma_destroy_id(cmid);
+	kiblnd_peer_connect_failed(peer, 1, rc);
+	kiblnd_peer_decref(peer);               /* cmid's ref */
+	rdma_destroy_id(cmid);
+	return;
  failed:
-        kiblnd_peer_connect_failed(peer, 1, rc);
+	kiblnd_peer_connect_failed(peer, 1, rc);
 }
 
 void
