@@ -160,7 +160,7 @@ static const char *ll_follow_link(struct dentry *dentry, void **cookie)
 {
 	struct inode *inode = d_inode(dentry);
 	struct ptlrpc_request *request;
-	char *symname;
+	char *symname = NULL;
 	int rc;
 	ENTRY;
 

@@ -39,6 +39,7 @@
 #ifndef LGSS_UTILS_H
 #define LGSS_UTILS_H
 
+#include <inttypes.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <gssapi/gssapi.h>

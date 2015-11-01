@@ -38,6 +38,7 @@
 #include <sys/param.h>
 #include <sys/stat.h>
 
+#include <inttypes.h>
 #include <pwd.h>
 #include <stdio.h>
 #include <unistd.h>
