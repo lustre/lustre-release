@@ -1337,7 +1337,7 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 			 * lnb->lnb_rc == 0, so it's easy to detect later. */
 			break;
 
-		if (isize < lnb[i].lnb_file_offset + lnb[i].lnb_len - 1)
+		if (isize < lnb[i].lnb_file_offset + lnb[i].lnb_len)
 			lnb[i].lnb_rc = isize - lnb[i].lnb_file_offset;
 		else
 			lnb[i].lnb_rc = lnb[i].lnb_len;
