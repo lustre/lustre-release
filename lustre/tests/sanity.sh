@@ -12975,6 +12975,7 @@ test_230e() {
 	mkdir $DIR/$tdir/other_dir
 	touch $DIR/$tdir/migrate_dir/a
 	ln $DIR/$tdir/migrate_dir/a $DIR/$tdir/other_dir/b
+	ls $DIR/$tdir/other_dir
 
 	$LFS migrate -m 1 $DIR/$tdir/migrate_dir ||
 		error "migrate dir fails"
@@ -13018,6 +13019,7 @@ test_230f() {
 	touch $DIR/$tdir/migrate_dir/a
 	ln $DIR/$tdir/migrate_dir/a $DIR/$tdir/other_dir/ln1
 	ln $DIR/$tdir/migrate_dir/a $DIR/$tdir/other_dir/ln2
+	ls $DIR/$tdir/other_dir
 
 	# a should be migrated to MDT1, since no other links on MDT0
 	$LFS migrate -m 1 $DIR/$tdir/migrate_dir ||

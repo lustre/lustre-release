@@ -1260,6 +1260,7 @@ static int mdt_lock_objects_in_linkea(struct mdt_thread_info *info,
 	struct lu_buf		*buf = &info->mti_big_buf;
 	struct linkea_data	ldata = { NULL };
 	int			count;
+	int			retry_count;
 	int			rc;
 	ENTRY;
 
@@ -1278,6 +1279,10 @@ static int mdt_lock_objects_in_linkea(struct mdt_thread_info *info,
 		RETURN(rc);
 	}
 
+	/* ignore the migrating parent(@pobj) */
+	retry_count = ldata.ld_leh->leh_reccount - 1;
+
+again:
 	LASSERT(ldata.ld_leh != NULL);
 	ldata.ld_lee = (struct link_ea_entry *)(ldata.ld_leh + 1);
 	for (count = 0; count < ldata.ld_leh->leh_reccount; count++) {
@@ -1326,18 +1331,51 @@ static int mdt_lock_objects_in_linkea(struct mdt_thread_info *info,
 
 		/* Since this needs to lock all of objects in linkea, to avoid
 		 * deadlocks, because it does not follow parent-child order as
-		 * other MDT operation, let's use try_lock here, i.e. it will
-		 * return immediately once there are conflict locks, and return
-		 * EBUSY to client */
+		 * other MDT operation, let's use try_lock here and if the lock
+		 * cannot be gotten because of conflicting locks, then drop all
+		 * current locks, send an AST to the client, and start again. */
 		mdt_lock_pdo_init(&mll->mll_lh, LCK_PW, &name);
 		rc = mdt_object_lock_try(info, mdt_pobj, &mll->mll_lh,
 					 MDS_INODELOCK_UPDATE);
 		if (rc == 0) {
-			CDEBUG(D_ERROR, "%s: cannot lock "DFID": rc =%d\n",
-			       mdt_obd_name(mdt), PFID(&fid), rc);
-			mdt_object_put(info->mti_env, mdt_pobj);
+			mdt_unlock_list(info, lock_list, rc);
+
+			CDEBUG(D_INFO, "%s: busy lock on "DFID".\n",
+			       mdt_obd_name(mdt), PFID(&fid));
+
+			if (retry_count == 0) {
+				mdt_object_put(info->mti_env, mdt_pobj);
+				OBD_FREE_PTR(mll);
+				GOTO(out, rc = -EBUSY);
+			}
+
+			rc = mdt_object_lock(info, mdt_pobj, &mll->mll_lh,
+					     MDS_INODELOCK_UPDATE);
+			if (rc != 0) {
+				mdt_object_put(info->mti_env, mdt_pobj);
+				OBD_FREE_PTR(mll);
+				GOTO(out, rc);
+			}
+
+			if (mdt_object_remote(mdt_pobj)) {
+				struct ldlm_lock *lock;
+
+				/* For remote object, Set lock to cb_atomic,
+				 * so lock can be released in blocking_ast()
+				 * immediately, then the next try_lock will
+				 * have better chance to succeds */
+				lock =
+				ldlm_handle2lock(&mll->mll_lh.mlh_rreg_lh);
+				LASSERT(lock != NULL);
+				lock_res_and_lock(lock);
+				ldlm_set_atomic_cb(lock);
+				unlock_res_and_lock(lock);
+				LDLM_LOCK_PUT(lock);
+			}
+			mdt_object_unlock_put(info, mdt_pobj, &mll->mll_lh, rc);
 			OBD_FREE_PTR(mll);
-			GOTO(out, rc = -EBUSY);
+			retry_count--;
+			goto again;
 		}
 		rc = 0;
 		INIT_LIST_HEAD(&mll->mll_list);
@@ -1346,7 +1384,6 @@ static int mdt_lock_objects_in_linkea(struct mdt_thread_info *info,
 next:
 		ldata.ld_lee = (struct link_ea_entry *)((char *)ldata.ld_lee +
 							 ldata.ld_reclen);
-
 	}
 out:
 	if (rc != 0)
