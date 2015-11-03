@@ -3036,6 +3036,10 @@ run_test 58 "Truncate a released file will trigger restore"
 
 test_59() {
 	local fid
+	local server_version=$(lustre_version_code $SINGLEMDS)
+	[[ $server_version -lt $(version_code 2.7.63) ]] &&
+		skip "Need MDS version at least 2.7.63" && return
+
 	copytool_setup
 	$MCREATE $DIR/$tfile || error "mcreate failed"
 	$TRUNCATE $DIR/$tfile 42 || error "truncate failed"
