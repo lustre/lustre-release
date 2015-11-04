@@ -424,6 +424,7 @@ again:
 		if (imp->imp_state != LUSTRE_IMP_CLOSED &&
 		    !imp->imp_deactive &&
 		    imp->imp_connect_flags_orig & OBD_CONNECT_MDS_MDS &&
+		    OCD_HAS_FLAG(&imp->imp_connect_data, LIGHTWEIGHT) &&
 		    rc != -ENOTSUPP) {
 			/* Since LWP is not replayable, so it will keep
 			 * trying unless umount happens or the remote
