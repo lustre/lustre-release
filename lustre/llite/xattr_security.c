@@ -31,6 +31,7 @@
 
 
 #include <linux/security.h>
+#include <linux/selinux.h>
 #include <linux/xattr.h>
 #include "llite_internal.h"
 
