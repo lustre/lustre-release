@@ -682,51 +682,6 @@ retry:
 	RETURN(rc);
 }
 
-/**
- * Policy to grow ZFS block size by write pattern.
- * For sequential write, it grows block size gradually until it reaches the
- * maximum blocksize the dataset can support. Otherwise, it will just use
- * the maximum block size.
- */
-static int osd_grow_blocksize(struct osd_object *obj, struct osd_thandle *oh,
-			      uint64_t start, uint64_t end)
-{
-	struct osd_device	*osd = osd_obj2dev(obj);
-	dmu_buf_impl_t		*db = (dmu_buf_impl_t *)obj->oo_db;
-	dnode_t			*dn;
-	uint32_t		 blksz;
-	int			 rc = 0;
-	ENTRY;
-
-	DB_DNODE_ENTER(db);
-	dn = DB_DNODE(db);
-
-	if (dn->dn_maxblkid > 0) /* can't change block size */
-		GOTO(out, rc);
-
-	blksz = dn->dn_datablksz;
-	if (blksz >= osd->od_max_blksz)
-		GOTO(out, rc);
-
-	/* now ZFS can support up to 16MB block size, and if the write
-	 * is sequential, it just increases the block size gradually */
-	if (start <= blksz) { /* sequential */
-		blksz = (uint32_t)min_t(uint64_t, osd->od_max_blksz, end);
-		if (!is_power_of_2(blksz))
-			blksz = size_roundup_power2(blksz);
-	} else { /* otherwise, use maximum block size */
-		blksz = osd->od_max_blksz;
-	}
-
-	if (blksz > dn->dn_datablksz)
-		rc = -dmu_object_set_blocksize(osd->od_os, dn->dn_object,
-					       blksz, 0, oh->ot_tx);
-	EXIT;
-out:
-	DB_DNODE_EXIT(db);
-	return rc;
-}
-
 static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 			struct niobuf_local *lnb, int npages,
 			struct thandle *th)
@@ -744,14 +699,6 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(th != NULL);
 	oh = container_of0(th, struct osd_thandle, ot_super);
-
-	/* adjust block size. Assume the buffers are sorted. */
-	rc = osd_grow_blocksize(obj, oh, lnb[0].lnb_file_offset,
-				lnb[npages - 1].lnb_file_offset +
-				lnb[npages - 1].lnb_len);
-	if (rc < 0) /* ignore the error */
-		CDEBUG(D_INODE, "obj "DFID": change block size error rc=%d\n",
-		       PFID(lu_object_fid(&dt->do_lu)), rc);
 
 	for (i = 0; i < npages; i++) {
 		CDEBUG(D_INODE, "write %u bytes at %u\n",
