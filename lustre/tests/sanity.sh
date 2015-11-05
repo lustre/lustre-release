@@ -13053,6 +13053,18 @@ test_230f() {
 }
 run_test 230f "migrate mulitple remote link files"
 
+test_230g() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	mkdir -p $DIR/$tdir/migrate_dir
+
+	$LFS migrate -m 1000 $DIR/$tdir/migrate_dir &&
+		error "migrating dir to non-exist MDT succeeds"
+	true
+}
+run_test 230g "migrate dir to non-exist MDT"
+
 test_231a()
 {
 	# For simplicity this test assumes that max_pages_per_rpc
