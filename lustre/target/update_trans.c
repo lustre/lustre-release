@@ -572,6 +572,7 @@ int sub_thandle_trans_create(const struct lu_env *env,
 	st->st_sub_th = sub_th;
 
 	sub_th->th_wait_submit = 1;
+	sub_thandle_register_stop_cb(st, top_th->tt_multiple_thandle);
 	return 0;
 }
 
@@ -661,6 +662,7 @@ static void distribute_txn_assign_batchid(struct top_multiple_thandle *new)
 {
 	struct target_distribute_txn_data *tdtd;
 	struct dt_device *dt = new->tmt_master_sub_dt;
+	struct sub_thandle *st;
 
 	LASSERT(dt != NULL);
 	tdtd = dt2lu_dev(dt)->ld_site->ls_tgt->lut_tdtd;
@@ -668,6 +670,10 @@ static void distribute_txn_assign_batchid(struct top_multiple_thandle *new)
 	new->tmt_batchid = tdtd->tdtd_batchid++;
 	list_add_tail(&new->tmt_commit_list, &tdtd->tdtd_list);
 	spin_unlock(&tdtd->tdtd_batchid_lock);
+	list_for_each_entry(st, &new->tmt_sub_thandle_list, st_sub_list) {
+		if (st->st_sub_th != NULL)
+			sub_thandle_register_commit_cb(st, new);
+	}
 	top_multiple_thandle_get(new);
 	top_multiple_thandle_dump(new, D_INFO);
 }
@@ -684,6 +690,7 @@ void distribute_txn_insert_by_batchid(struct top_multiple_thandle *new)
 	struct dt_device *dt = new->tmt_master_sub_dt;
 	struct top_multiple_thandle *tmt;
 	struct target_distribute_txn_data *tdtd;
+	struct sub_thandle *st;
 	bool	at_head = false;
 
 	LASSERT(dt != NULL);
@@ -701,6 +708,12 @@ void distribute_txn_insert_by_batchid(struct top_multiple_thandle *new)
 		list_add(&new->tmt_commit_list, &tdtd->tdtd_list);
 	}
 	spin_unlock(&tdtd->tdtd_batchid_lock);
+
+	list_for_each_entry(st, &new->tmt_sub_thandle_list, st_sub_list) {
+		if (st->st_sub_th != NULL)
+			sub_thandle_register_commit_cb(st, new);
+	}
+
 	top_multiple_thandle_get(new);
 	top_multiple_thandle_dump(new, D_INFO);
 	if (new->tmt_committed && at_head)
@@ -800,9 +813,6 @@ int top_trans_start(const struct lu_env *env, struct dt_device *master_dev,
 				    st->st_sub_th);
 		if (rc != 0)
 			GOTO(out, rc);
-
-		sub_thandle_register_stop_cb(st, tmt);
-		sub_thandle_register_commit_cb(st, tmt);
 	}
 out:
 	th->th_result = rc;
@@ -1117,6 +1127,7 @@ create_sub_thandle_with_thandle(struct top_thandle *top_th,
 	st->st_sub_th = sub_th;
 
 	sub_th->th_top = &top_th->tt_super;
+	sub_thandle_register_stop_cb(st, top_th->tt_multiple_thandle);
 	return st;
 }
 
