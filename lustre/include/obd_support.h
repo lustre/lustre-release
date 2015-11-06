@@ -320,6 +320,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_OST_STATFS_EINPROGRESS  0x231
 #define OBD_FAIL_OST_SET_INFO_NET        0x232
 #define OBD_FAIL_OST_NODESTROY		 0x233
+#define OBD_FAIL_OST_READ_SIZE		 0x234
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
