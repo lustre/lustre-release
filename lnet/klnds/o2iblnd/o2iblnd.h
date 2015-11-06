@@ -736,6 +736,10 @@ typedef struct kib_peer
 	int			ibp_error;
 	/* when (in jiffies) I was last alive */
 	cfs_time_t		ibp_last_alive;
+	/* max map_on_demand */
+	__u16			ibp_max_frags;
+	/* max_peer_credits */
+	__u16			ibp_queue_depth;
 } kib_peer_t;
 
 extern kib_data_t      kiblnd_data;
@@ -1096,8 +1100,8 @@ int  kiblnd_close_stale_conns_locked (kib_peer_t *peer,
                                       int version, __u64 incarnation);
 int  kiblnd_close_peer_conns_locked (kib_peer_t *peer, int why);
 
-kib_conn_t *kiblnd_create_conn (kib_peer_t *peer, struct rdma_cm_id *cmid,
-				int state, int version, kib_connparams_t *cp);
+kib_conn_t *kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
+			       int state, int version);
 void kiblnd_destroy_conn (kib_conn_t *conn);
 void kiblnd_close_conn (kib_conn_t *conn, int error);
 void kiblnd_close_conn_locked (kib_conn_t *conn, int error);
