@@ -573,7 +573,7 @@ int backfs_mount_type_okay(enum ldd_mount_type mount_type)
 	}
 	if (backfs_ops[mount_type] == NULL) {
 		fatal();
-		fprintf(stderr, "unhandled fs type %d '%s'\n",
+		fprintf(stderr, "unhandled/unloaded fs type %d '%s'\n",
 			mount_type, mt_str(mount_type));
 		return 0;
 	}
@@ -706,14 +706,19 @@ int osd_enable_quota(struct mkfs_opts *mop)
 
 int osd_init(void)
 {
-	int i, ret = 0;
+	int i, rc, ret = EINVAL;
 
 	for (i = 0; i < LDD_MT_LAST; ++i) {
+		rc = 0;
 		backfs_ops[i] = load_backfs_module(i);
 		if (backfs_ops[i] != NULL)
-			ret = backfs_ops[i]->init();
-		if (ret)
-			break;
+			rc = backfs_ops[i]->init();
+		if (rc != 0) {
+			backfs_ops[i]->fini();
+			unload_backfs_module(backfs_ops[i]);
+			backfs_ops[i] = NULL;
+		} else
+			ret = 0;
 	}
 
 	return ret;
