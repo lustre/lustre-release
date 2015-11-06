@@ -541,7 +541,8 @@ static void failed_lock_cleanup(struct ldlm_namespace *ns,
 int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 			  enum ldlm_type type, __u8 with_policy,
 			  enum ldlm_mode mode, __u64 *flags, void *lvb,
-			  __u32 lvb_len, struct lustre_handle *lockh, int rc)
+			  __u32 lvb_len, const struct lustre_handle *lockh,
+			  int rc)
 {
         struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
         int is_replay = *flags & LDLM_FL_REPLAY;
@@ -1025,7 +1026,8 @@ static int ldlm_cli_convert_local(struct ldlm_lock *lock, int new_mode,
  * conversion of locks which are on the waiting or converting queue */
 /* Caller of this code is supposed to take care of lock readers/writers
    accounting */
-int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, __u32 *flags)
+int ldlm_cli_convert(const struct lustre_handle *lockh, int new_mode,
+		     __u32 *flags)
 {
         struct ldlm_request   *body;
         struct ldlm_reply     *reply;
@@ -1340,7 +1342,7 @@ int ldlm_cli_update_pool(struct ptlrpc_request *req)
  *
  * Lock must not have any readers or writers by this time.
  */
-int ldlm_cli_cancel(struct lustre_handle *lockh,
+int ldlm_cli_cancel(const struct lustre_handle *lockh,
 		    enum ldlm_cancel_flags cancel_flags)
 {
 	struct obd_export *exp;

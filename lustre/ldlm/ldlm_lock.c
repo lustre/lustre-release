@@ -714,7 +714,7 @@ void ldlm_add_ast_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
  * r/w reference type is determined by \a mode
  * Calls ldlm_lock_addref_internal.
  */
-void ldlm_lock_addref(struct lustre_handle *lockh, enum ldlm_mode mode)
+void ldlm_lock_addref(const struct lustre_handle *lockh, enum ldlm_mode mode)
 {
 	struct ldlm_lock *lock;
 
@@ -757,7 +757,7 @@ void ldlm_lock_addref_internal_nolock(struct ldlm_lock *lock,
  *
  * \retval -EAGAIN lock is being canceled.
  */
-int ldlm_lock_addref_try(struct lustre_handle *lockh, enum ldlm_mode mode)
+int ldlm_lock_addref_try(const struct lustre_handle *lockh, enum ldlm_mode mode)
 {
         struct ldlm_lock *lock;
         int               result;
@@ -900,7 +900,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, enum ldlm_mode mode)
 /**
  * Decrease reader/writer refcount for LDLM lock with handle \a lockh
  */
-void ldlm_lock_decref(struct lustre_handle *lockh, enum ldlm_mode mode)
+void ldlm_lock_decref(const struct lustre_handle *lockh, enum ldlm_mode mode)
 {
         struct ldlm_lock *lock = __ldlm_handle2lock(lockh, 0);
         LASSERTF(lock != NULL, "Non-existing lock: "LPX64"\n", lockh->cookie);
@@ -915,7 +915,7 @@ EXPORT_SYMBOL(ldlm_lock_decref);
  * drops to zero instead of putting into LRU.
  *
  */
-void ldlm_lock_decref_and_cancel(struct lustre_handle *lockh,
+void ldlm_lock_decref_and_cancel(const struct lustre_handle *lockh,
 				 enum ldlm_mode mode)
 {
         struct ldlm_lock *lock = __ldlm_handle2lock(lockh, 0);
@@ -1501,7 +1501,7 @@ enum ldlm_mode ldlm_lock_match(struct ldlm_namespace *ns, __u64 flags,
 }
 EXPORT_SYMBOL(ldlm_lock_match);
 
-enum ldlm_mode ldlm_revalidate_lock_handle(struct lustre_handle *lockh,
+enum ldlm_mode ldlm_revalidate_lock_handle(const struct lustre_handle *lockh,
 					   __u64 *bits)
 {
 	struct ldlm_lock *lock;
@@ -2290,7 +2290,7 @@ EXPORT_SYMBOL(ldlm_lock_cancel);
 /**
  * Set opaque data into the lock that only makes sense to upper layer.
  */
-int ldlm_lock_set_data(struct lustre_handle *lockh, void *data)
+int ldlm_lock_set_data(const struct lustre_handle *lockh, void *data)
 {
         struct ldlm_lock *lock = ldlm_handle2lock(lockh);
         int rc = -EINVAL;
@@ -2583,7 +2583,7 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock,
  *
  * Used when printing all locks on a resource for debug purposes.
  */
-void ldlm_lock_dump_handle(int level, struct lustre_handle *lockh)
+void ldlm_lock_dump_handle(int level, const struct lustre_handle *lockh)
 {
         struct ldlm_lock *lock;
 
