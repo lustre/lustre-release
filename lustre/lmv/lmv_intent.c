@@ -92,7 +92,7 @@ static int lmv_intent_remote(struct obd_export *exp, struct lookup_intent *it,
 	if (pmode) {
 		plock.cookie = it->it_lock_handle;
 		it->it_lock_mode = 0;
-		it->it_data = NULL;
+		it->it_request = NULL;
 	}
 
 	LASSERT(fid_is_sane(&body->mbo_fid1));
@@ -424,7 +424,7 @@ lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
 
 			/* release the previous request */
 			ptlrpc_req_finished(*reqp);
-			it->it_data = NULL;
+			it->it_request = NULL;
 			*reqp = NULL;
 
 			oinfo = &lsm->lsm_md_oinfo[stripe_index];
