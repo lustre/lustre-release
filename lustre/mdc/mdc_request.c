@@ -1473,17 +1473,20 @@ static int mdc_ioc_fid2path(struct obd_export *exp, struct getinfo_fid2path *gf)
 	if (rc != 0 && rc != -EREMOTE)
 		GOTO(out, rc);
 
-        if (vallen <= sizeof(*gf))
-                GOTO(out, rc = -EPROTO);
-        else if (vallen > sizeof(*gf) + gf->gf_pathlen)
-                GOTO(out, rc = -EOVERFLOW);
+	if (vallen <= sizeof(*gf))
+		GOTO(out, rc = -EPROTO);
+	if (vallen > sizeof(*gf) + gf->gf_pathlen)
+		GOTO(out, rc = -EOVERFLOW);
 
-        CDEBUG(D_IOCTL, "path get "DFID" from "LPU64" #%d\n%s\n",
-               PFID(&gf->gf_fid), gf->gf_recno, gf->gf_linkno, gf->gf_path);
+	CDEBUG(D_IOCTL, "path got "DFID" from "LPU64" #%d: %s\n",
+	       PFID(&gf->gf_fid), gf->gf_recno, gf->gf_linkno,
+	       gf->gf_pathlen < 512 ? gf->gf_path :
+	       /* only log the last 512 characters of the path */
+	       gf->gf_path + gf->gf_pathlen - 512);
 
 out:
-        OBD_FREE(key, keylen);
-        return rc;
+	OBD_FREE(key, keylen);
+	return rc;
 }
 
 static int mdc_ioc_hsm_progress(struct obd_export *exp,
