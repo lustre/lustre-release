@@ -1376,7 +1376,7 @@ static inline int ll_file_nolock(const struct file *file)
 static inline void ll_set_lock_data(struct obd_export *exp, struct inode *inode,
                                     struct lookup_intent *it, __u64 *bits)
 {
-	if (!it->d.lustre.it_lock_set) {
+	if (!it->it_lock_set) {
 		struct lustre_handle handle;
 
 		/* If this inode is a remote object, it will get two
@@ -1386,8 +1386,8 @@ static inline void ll_set_lock_data(struct obd_export *exp, struct inode *inode,
 		 * UPDATE|PERM lock. The inode will be attched to both
 		 * LOOKUP and PERM locks, so revoking either locks will
 		 * case the dcache being cleared */
-		if (it->d.lustre.it_remote_lock_mode) {
-			handle.cookie = it->d.lustre.it_remote_lock_handle;
+		if (it->it_remote_lock_mode) {
+			handle.cookie = it->it_remote_lock_handle;
 			CDEBUG(D_DLMTRACE, "setting l_data to inode "DFID
 			       "(%p) for remote lock "LPX64"\n",
 			       PFID(ll_inode2fid(inode)), inode,
@@ -1395,19 +1395,19 @@ static inline void ll_set_lock_data(struct obd_export *exp, struct inode *inode,
 			md_set_lock_data(exp, &handle.cookie, inode, NULL);
 		}
 
-		handle.cookie = it->d.lustre.it_lock_handle;
+		handle.cookie = it->it_lock_handle;
 
 		CDEBUG(D_DLMTRACE, "setting l_data to inode "DFID"(%p)"
 		       " for lock "LPX64"\n",
 		       PFID(ll_inode2fid(inode)), inode, handle.cookie);
 
 		md_set_lock_data(exp, &handle.cookie, inode,
-				 &it->d.lustre.it_lock_bits);
-		it->d.lustre.it_lock_set = 1;
+				 &it->it_lock_bits);
+		it->it_lock_set = 1;
 	}
 
 	if (bits != NULL)
-		*bits = it->d.lustre.it_lock_bits;
+		*bits = it->it_lock_bits;
 }
 
 static inline void ll_lock_dcache(struct inode *inode)

@@ -592,7 +592,7 @@ static void sa_instantiate(struct ll_statahead_info *sai,
 		}
 	}
 
-        it->d.lustre.it_lock_handle = entry->se_handle;
+	it->it_lock_handle = entry->se_handle;
 	rc = md_revalidate_lock(ll_i2mdexp(dir), it, ll_inode2fid(dir), NULL);
         if (rc != 1)
                 GOTO(out, rc = -EAGAIN);
@@ -683,7 +683,7 @@ static int ll_statahead_interpret(struct ptlrpc_request *req,
 		 * thread enqueues lock on parent in readdir and another
 		 * process enqueues lock on child with parent lock held, eg.
 		 * unlink. */
-		handle = it->d.lustre.it_lock_handle;
+		handle = it->it_lock_handle;
 		ll_intent_drop_lock(it);
 	}
 
@@ -789,7 +789,7 @@ static int sa_revalidate(struct inode *dir, struct sa_entry *entry,
 {
 	struct inode *inode = dentry->d_inode;
 	struct lookup_intent it = { .it_op = IT_GETATTR,
-				    .d.lustre.it_lock_handle = 0 };
+				    .it_lock_handle = 0 };
 	struct md_enqueue_info *minfo;
 	int rc;
 	ENTRY;
@@ -804,7 +804,7 @@ static int sa_revalidate(struct inode *dir, struct sa_entry *entry,
 	rc = md_revalidate_lock(ll_i2mdexp(dir), &it, ll_inode2fid(inode),
 				NULL);
 	if (rc == 1) {
-		entry->se_handle = it.d.lustre.it_lock_handle;
+		entry->se_handle = it.it_lock_handle;
 		ll_intent_release(&it);
 		RETURN(1);
 	}
@@ -1461,7 +1461,7 @@ static int revalidate_statahead_dentry(struct inode *dir,
 	if (entry->se_state == SA_ENTRY_SUCC && entry->se_inode != NULL) {
 		struct inode *inode = entry->se_inode;
 		struct lookup_intent it = { .it_op = IT_GETATTR,
-					    .d.lustre.it_lock_handle =
+					    .it_lock_handle =
 						entry->se_handle };
 		__u64 bits;
 

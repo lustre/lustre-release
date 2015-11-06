@@ -2341,11 +2341,11 @@ int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
 	 * 2. layout was changed by another client
 	 * 3. proc2: refresh layout and layout lock granted
 	 * 4. proc1: to apply a stale layout */
-	if (it != NULL && it->d.lustre.it_lock_mode != 0) {
+	if (it != NULL && it->it_lock_mode != 0) {
 		struct lustre_handle lockh;
 		struct ldlm_lock *lock;
 
-		lockh.cookie = it->d.lustre.it_lock_handle;
+		lockh.cookie = it->it_lock_handle;
 		lock = ldlm_handle2lock(&lockh);
 		LASSERT(lock != NULL);
 		if (ldlm_has_layout(lock)) {

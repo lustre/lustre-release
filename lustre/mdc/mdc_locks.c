@@ -59,40 +59,41 @@ int it_open_error(int phase, struct lookup_intent *it)
 {
 	if (it_disposition(it, DISP_OPEN_LEASE)) {
 		if (phase >= DISP_OPEN_LEASE)
-			return it->d.lustre.it_status;
+			return it->it_status;
 		else
 			return 0;
 	}
-        if (it_disposition(it, DISP_OPEN_OPEN)) {
-                if (phase >= DISP_OPEN_OPEN)
-                        return it->d.lustre.it_status;
-                else
-                        return 0;
-        }
+	if (it_disposition(it, DISP_OPEN_OPEN)) {
+		if (phase >= DISP_OPEN_OPEN)
+			return it->it_status;
+		else
+			return 0;
+	}
 
-        if (it_disposition(it, DISP_OPEN_CREATE)) {
-                if (phase >= DISP_OPEN_CREATE)
-                        return it->d.lustre.it_status;
-                else
-                        return 0;
-        }
+	if (it_disposition(it, DISP_OPEN_CREATE)) {
+		if (phase >= DISP_OPEN_CREATE)
+			return it->it_status;
+		else
+			return 0;
+	}
 
-        if (it_disposition(it, DISP_LOOKUP_EXECD)) {
-                if (phase >= DISP_LOOKUP_EXECD)
-                        return it->d.lustre.it_status;
-                else
-                        return 0;
-        }
+	if (it_disposition(it, DISP_LOOKUP_EXECD)) {
+		if (phase >= DISP_LOOKUP_EXECD)
+			return it->it_status;
+		else
+			return 0;
+	}
 
-        if (it_disposition(it, DISP_IT_EXECD)) {
-                if (phase >= DISP_IT_EXECD)
-                        return it->d.lustre.it_status;
-                else
-                        return 0;
-        }
-        CERROR("it disp: %X, status: %d\n", it->d.lustre.it_disposition,
-               it->d.lustre.it_status);
-        LBUG();
+	if (it_disposition(it, DISP_IT_EXECD)) {
+		if (phase >= DISP_IT_EXECD)
+			return it->it_status;
+		else
+			return 0;
+	}
+
+	CERROR("it disp: %X, status: %d\n", it->it_disposition, it->it_status);
+	LBUG();
+
         return 0;
 }
 EXPORT_SYMBOL(it_open_error);
@@ -529,7 +530,6 @@ static int mdc_finish_enqueue(struct obd_export *exp,
 	struct req_capsule  *pill = &req->rq_pill;
 	struct ldlm_request *lockreq;
 	struct ldlm_reply   *lockrep;
-	struct lustre_intent_data *intent = &it->d.lustre;
 	struct ldlm_lock    *lock;
 	void                *lvb_data = NULL;
 	__u32                lvb_len = 0;
@@ -564,16 +564,16 @@ static int mdc_finish_enqueue(struct obd_export *exp,
 	lockrep = req_capsule_server_get(pill, &RMF_DLM_REP);
 	LASSERT(lockrep != NULL); /* checked by ldlm_cli_enqueue() */
 
-	intent->it_disposition = (int)lockrep->lock_policy_res1;
-	intent->it_status = (int)lockrep->lock_policy_res2;
-	intent->it_lock_mode = einfo->ei_mode;
-	intent->it_lock_handle = lockh->cookie;
-	intent->it_data = req;
+	it->it_disposition = (int)lockrep->lock_policy_res1;
+	it->it_status = (int)lockrep->lock_policy_res2;
+	it->it_lock_mode = einfo->ei_mode;
+	it->it_lock_handle = lockh->cookie;
+	it->it_data = req;
 
 	/* Technically speaking rq_transno must already be zero if
 	 * it_status is in error, so the check is a bit redundant */
-	if ((!req->rq_transno || intent->it_status < 0) && req->rq_replay)
-		mdc_clear_replay_flag(req, intent->it_status);
+	if ((!req->rq_transno || it->it_status < 0) && req->rq_replay)
+		mdc_clear_replay_flag(req, it->it_status);
 
         /* If we're doing an IT_OPEN which did not result in an actual
          * successful open, then we need to remove the bit which saves
@@ -583,11 +583,11 @@ static int mdc_finish_enqueue(struct obd_export *exp,
          * function without doing so, and try to replay a failed create
          * (bug 3440) */
         if (it->it_op & IT_OPEN && req->rq_replay &&
-	    (!it_disposition(it, DISP_OPEN_OPEN) ||intent->it_status != 0))
-		mdc_clear_replay_flag(req, intent->it_status);
+	    (!it_disposition(it, DISP_OPEN_OPEN) || it->it_status != 0))
+		mdc_clear_replay_flag(req, it->it_status);
 
 	DEBUG_REQ(D_RPCTRACE, req, "op: %d disposition: %x, status: %d",
-		  it->it_op, intent->it_disposition, intent->it_status);
+		  it->it_op, it->it_disposition, it->it_status);
 
         /* We know what to expect, so we do any byte flipping required here */
         if (it->it_op & (IT_OPEN | IT_UNLINK | IT_LOOKUP | IT_GETATTR)) {
@@ -879,9 +879,9 @@ resend:
 		}
 		ptlrpc_req_finished(req);
 
-		it->d.lustre.it_lock_handle = 0;
-		it->d.lustre.it_lock_mode = 0;
-		it->d.lustre.it_data = NULL;
+		it->it_lock_handle = 0;
+		it->it_lock_mode = 0;
+		it->it_data = NULL;
 	}
 
 	RETURN(rc);
@@ -909,8 +909,8 @@ static int mdc_finish_intent_lock(struct obd_export *exp,
         if (!it_disposition(it, DISP_IT_EXECD)) {
                 /* The server failed before it even started executing the
                  * intent, i.e. because it couldn't unpack the request. */
-                LASSERT(it->d.lustre.it_status != 0);
-                RETURN(it->d.lustre.it_status);
+		LASSERT(it->it_status != 0);
+		RETURN(it->it_status);
         }
         rc = it_open_error(DISP_IT_EXECD, it);
         if (rc)
@@ -968,16 +968,17 @@ static int mdc_finish_intent_lock(struct obd_export *exp,
                 memcpy(&old_lock, lockh, sizeof(*lockh));
                 if (ldlm_lock_match(NULL, LDLM_FL_BLOCK_GRANTED, NULL,
                                     LDLM_IBITS, &policy, LCK_NL, &old_lock, 0)) {
-                        ldlm_lock_decref_and_cancel(lockh,
-                                                    it->d.lustre.it_lock_mode);
-                        memcpy(lockh, &old_lock, sizeof(old_lock));
-                        it->d.lustre.it_lock_handle = lockh->cookie;
-                }
-        }
+			ldlm_lock_decref_and_cancel(lockh, it->it_lock_mode);
+			memcpy(lockh, &old_lock, sizeof(old_lock));
+			it->it_lock_handle = lockh->cookie;
+		}
+	}
+
 	CDEBUG(D_DENTRY,"D_IT dentry %.*s intent: %s status %d disp %x rc %d\n",
 		(int)op_data->op_namelen, op_data->op_name,
-		ldlm_it2str(it->it_op), it->d.lustre.it_status,
-		it->d.lustre.it_disposition, rc);
+		ldlm_it2str(it->it_op), it->it_status,
+		it->it_disposition, rc);
+
 	RETURN(rc);
 }
 
@@ -993,9 +994,9 @@ int mdc_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
 	enum ldlm_mode mode;
 	ENTRY;
 
-        if (it->d.lustre.it_lock_handle) {
-                lockh.cookie = it->d.lustre.it_lock_handle;
-                mode = ldlm_revalidate_lock_handle(&lockh, bits);
+	if (it->it_lock_handle) {
+		lockh.cookie = it->it_lock_handle;
+		mode = ldlm_revalidate_lock_handle(&lockh, bits);
         } else {
                 fid_build_reg_res_name(fid, &res_id);
                 switch (it->it_op) {
@@ -1035,15 +1036,15 @@ int mdc_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
 				      &lockh);
         }
 
-        if (mode) {
-                it->d.lustre.it_lock_handle = lockh.cookie;
-                it->d.lustre.it_lock_mode = mode;
-        } else {
-                it->d.lustre.it_lock_handle = 0;
-                it->d.lustre.it_lock_mode = 0;
-        }
+	if (mode) {
+		it->it_lock_handle = lockh.cookie;
+		it->it_lock_mode = mode;
+	} else {
+		it->it_lock_handle = 0;
+		it->it_lock_mode = 0;
+	}
 
-        RETURN(!!mode);
+	RETURN(!!mode);
 }
 
 /*
@@ -1062,15 +1063,15 @@ int mdc_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
  * ll_create/ll_open gets called.
  *
  * The server will return to us, in it_disposition, an indication of
- * exactly what d.lustre.it_status refers to.
+ * exactly what it_status refers to.
  *
- * If DISP_OPEN_OPEN is set, then d.lustre.it_status refers to the open() call,
+ * If DISP_OPEN_OPEN is set, then it_status refers to the open() call,
  * otherwise if DISP_OPEN_CREATE is set, then it status is the
  * creation failure mode.  In either case, one of DISP_LOOKUP_NEG or
  * DISP_LOOKUP_POS will be set, indicating whether the child lookup
  * was successful.
  *
- * Else, if DISP_LOOKUP_EXECD then d.lustre.it_status is the rc of the
+ * Else, if DISP_LOOKUP_EXECD then it_status is the rc of the
  * child lookup.
  */
 int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
@@ -1100,7 +1101,7 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 		/* We could just return 1 immediately, but since we should only
 		 * be called in revalidate_it if we already have a lock, let's
 		 * verify that. */
-		it->d.lustre.it_lock_handle = 0;
+		it->it_lock_handle = 0;
 		rc = mdc_revalidate_lock(exp, it, &op_data->op_fid2, NULL);
 		/* Only return failure if it was not GETATTR by cfid
 		   (from inode_revalidate) */
@@ -1122,7 +1123,7 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 	if (rc < 0)
 		RETURN(rc);
 
-	*reqp = it->d.lustre.it_data;
+	*reqp = it->it_data;
         rc = mdc_finish_intent_lock(exp, *reqp, op_data, it, &lockh);
         RETURN(rc);
 }

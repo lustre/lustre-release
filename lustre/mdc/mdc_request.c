@@ -656,7 +656,7 @@ int mdc_set_open_replay_data(struct obd_export *exp,
 	struct md_open_data	*mod;
 	struct mdt_rec_create	*rec;
 	struct mdt_body		*body;
-	struct ptlrpc_request	*open_req = it->d.lustre.it_data;
+	struct ptlrpc_request	*open_req = it->it_data;
 	struct obd_import	*imp = open_req->rq_import;
 	ENTRY;
 
@@ -1318,7 +1318,7 @@ static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
 	}
 
 	rc = 0;
-	mdc_set_lock_data(exp, &it.d.lustre.it_lock_handle, dir, NULL);
+	mdc_set_lock_data(exp, &it.it_lock_handle, dir, NULL);
 
 	rp_param.rp_off = hash_offset;
 	rp_param.rp_hash64 = op_data->op_cli_flags & CLI_HASH64;
@@ -1406,9 +1406,9 @@ hash_collision:
 	}
 	*ppage = page;
 out_unlock:
-	lockh.cookie = it.d.lustre.it_lock_handle;
-	ldlm_lock_decref(&lockh, it.d.lustre.it_lock_mode);
-	it.d.lustre.it_lock_handle = 0;
+	lockh.cookie = it.it_lock_handle;
+	ldlm_lock_decref(&lockh, it.it_lock_mode);
+	it.it_lock_handle = 0;
 	return rc;
 fail:
 	kunmap(page);

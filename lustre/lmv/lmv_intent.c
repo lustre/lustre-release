@@ -88,11 +88,11 @@ static int lmv_intent_remote(struct obd_export *exp, struct lookup_intent *it,
 	/*
 	 * We got LOOKUP lock, but we really need attrs.
 	 */
-	pmode = it->d.lustre.it_lock_mode;
+	pmode = it->it_lock_mode;
 	if (pmode) {
-		plock.cookie = it->d.lustre.it_lock_handle;
-		it->d.lustre.it_lock_mode = 0;
-		it->d.lustre.it_data = NULL;
+		plock.cookie = it->it_lock_handle;
+		it->it_lock_mode = 0;
+		it->it_data = NULL;
 	}
 
 	LASSERT(fid_is_sane(&body->mbo_fid1));
@@ -129,15 +129,15 @@ static int lmv_intent_remote(struct obd_export *exp, struct lookup_intent *it,
 	 * maintain dcache consistency. Thus drop UPDATE|PERM lock here
 	 * and put LOOKUP in request.
 	 */
-	if (it->d.lustre.it_lock_mode != 0) {
-		it->d.lustre.it_remote_lock_handle =
-					it->d.lustre.it_lock_handle;
-		it->d.lustre.it_remote_lock_mode = it->d.lustre.it_lock_mode;
+	if (it->it_lock_mode != 0) {
+		it->it_remote_lock_handle =
+					it->it_lock_handle;
+		it->it_remote_lock_mode = it->it_lock_mode;
 	}
 
 	if (pmode) {
-		it->d.lustre.it_lock_handle = plock.cookie;
-		it->d.lustre.it_lock_mode = pmode;
+		it->it_lock_handle = plock.cookie;
+		it->it_lock_mode = pmode;
 	}
 
 	EXIT;
@@ -215,7 +215,7 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 		if (rc < 0)
 			GOTO(cleanup, rc);
 
-		lockh = (struct lustre_handle *)&it.d.lustre.it_lock_handle;
+		lockh = (struct lustre_handle *)&it.it_lock_handle;
 		if (rc > 0 && req == NULL) {
 			/* slave inode is still valid */
 			CDEBUG(D_INODE, "slave "DFID" is still valid.\n",
@@ -226,10 +226,10 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 			body = req_capsule_server_get(&req->rq_pill,
 						      &RMF_MDT_BODY);
 			if (body == NULL) {
-				if (it.d.lustre.it_lock_mode && lockh) {
+				if (it.it_lock_mode && lockh) {
 					ldlm_lock_decref(lockh,
-						 it.d.lustre.it_lock_mode);
-					it.d.lustre.it_lock_mode = 0;
+						 it.it_lock_mode);
+					it.it_lock_mode = 0;
 				}
 				GOTO(cleanup, rc = -ENOENT);
 			}
@@ -243,9 +243,9 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 		}
 
 		md_set_lock_data(tgt->ltd_exp, &lockh->cookie, inode, NULL);
-		if (it.d.lustre.it_lock_mode != 0 && lockh != NULL) {
-			ldlm_lock_decref(lockh, it.d.lustre.it_lock_mode);
-			it.d.lustre.it_lock_mode = 0;
+		if (it.it_lock_mode != 0 && lockh != NULL) {
+			ldlm_lock_decref(lockh, it.it_lock_mode);
+			it.it_lock_mode = 0;
 		}
 	}
 
@@ -323,9 +323,9 @@ static int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
 	 * Nothing is found, do not access body->fid1 as it is zero and thus
 	 * pointless.
 	 */
-	if ((it->d.lustre.it_disposition & DISP_LOOKUP_NEG) &&
-	    !(it->d.lustre.it_disposition & DISP_OPEN_CREATE) &&
-	    !(it->d.lustre.it_disposition & DISP_OPEN_OPEN))
+	if ((it->it_disposition & DISP_LOOKUP_NEG) &&
+	    !(it->it_disposition & DISP_OPEN_CREATE) &&
+	    !(it->it_disposition & DISP_OPEN_OPEN))
 		RETURN(rc);
 
 	body = req_capsule_server_get(&(*reqp)->rq_pill, &RMF_MDT_BODY);
@@ -424,7 +424,7 @@ lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
 
 			/* release the previous request */
 			ptlrpc_req_finished(*reqp);
-			it->d.lustre.it_data = NULL;
+			it->it_data = NULL;
 			*reqp = NULL;
 
 			oinfo = &lsm->lsm_md_oinfo[stripe_index];
@@ -436,7 +436,7 @@ lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
 			       PFID(&oinfo->lmo_fid));
 
 			op_data->op_fid1 = oinfo->lmo_fid;
-			it->d.lustre.it_disposition &= ~DISP_ENQ_COMPLETE;
+			it->it_disposition &= ~DISP_ENQ_COMPLETE;
 			rc = md_intent_lock(tgt->ltd_exp, op_data, it, reqp,
 					    cb_blocking, extra_lock_flags);
 			if (rc != 0)
@@ -499,23 +499,23 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 	if (rc < 0) {
 		struct lustre_handle lock_handle;
 
-		if (it->d.lustre.it_lock_mode != 0) {
-			lock_handle.cookie = it->d.lustre.it_lock_handle;
+		if (it->it_lock_mode != 0) {
+			lock_handle.cookie = it->it_lock_handle;
 			ldlm_lock_decref(&lock_handle,
-					 it->d.lustre.it_lock_mode);
+					 it->it_lock_mode);
 		}
 
-		it->d.lustre.it_lock_handle = 0;
-		it->d.lustre.it_lock_mode = 0;
+		it->it_lock_handle = 0;
+		it->it_lock_mode = 0;
 
-		if (it->d.lustre.it_remote_lock_mode != 0) {
-			lock_handle.cookie = it->d.lustre.it_remote_lock_handle;
+		if (it->it_remote_lock_mode != 0) {
+			lock_handle.cookie = it->it_remote_lock_handle;
 			ldlm_lock_decref(&lock_handle,
-					 it->d.lustre.it_remote_lock_mode);
+					 it->it_remote_lock_mode);
 		}
 
-		it->d.lustre.it_remote_lock_handle = 0;
-		it->d.lustre.it_remote_lock_mode = 0;
+		it->it_remote_lock_handle = 0;
+		it->it_remote_lock_mode = 0;
 	}
 
 	RETURN(rc);
