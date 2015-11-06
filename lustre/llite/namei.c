@@ -732,13 +732,9 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 		if (dentry->d_inode && it_disposition(it, DISP_OPEN_OPEN)) {
 			/* Open dentry. */
 			if (S_ISFIFO(dentry->d_inode->i_mode)) {
-				/* We cannot call open here as it would
-				 * deadlock.
-				 */
-				if (it_disposition(it, DISP_ENQ_OPEN_REF))
-					ptlrpc_req_finished(
-						       (struct ptlrpc_request *)
-							  it->d.lustre.it_data);
+				/* We cannot call open here as it might
+				 * deadlock. This case is unreachable in
+				 * practice because of OBD_CONNECT_NODEVOH. */
 				rc = finish_no_open(file, de);
 			} else {
 				file->private_data = it;
@@ -814,11 +810,10 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
                         if (dentry->d_inode &&
                             it_disposition(it, DISP_OPEN_OPEN)) { /* nocreate */
                                 if (S_ISFIFO(dentry->d_inode->i_mode)) {
-                                        // We cannot call open here as it would
-                                        // deadlock.
-                                        ptlrpc_req_finished(
-                                                       (struct ptlrpc_request *)
-                                                          it->d.lustre.it_data);
+					/* We cannot call open here as it might
+					 * deadlock. This case is unreachable in
+					 * practice because of
+					 * OBD_CONNECT_NODEVOH. */
                                 } else {
 					struct file *filp;
 
