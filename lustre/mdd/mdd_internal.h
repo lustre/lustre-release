@@ -577,33 +577,22 @@ int mdo_declare_index_insert(const struct lu_env *env, struct mdd_object *obj,
 			     const char *name, struct thandle *handle)
 {
 	struct dt_object *next	= mdd_object_child(obj);
-	int		  rc	= 0;
+	int		  rc;
 
 	/*
 	 * if the object doesn't exist yet, then it's supposed to be created
 	 * and declaration of the creation should be enough to insert ./..
 	 */
 
-	 /* FIXME: remote object should not be awared by MDD layer, but local
-	  * creation does not declare insert ./.. (comments above), which
-	  * is required by remote directory creation.
-	  * This remote check should be removed when mdd_object_exists check is
-	  * removed.
-	  */
-	if (mdd_object_exists(obj) || mdd_object_remote(obj)) {
-		rc = -ENOTDIR;
-		if (dt_try_as_dir(env, next)) {
-			struct dt_insert_rec *rec =
-					&mdd_env_info(env)->mti_dt_rec;
+	rc = -ENOTDIR;
+	if (dt_try_as_dir(env, next)) {
+		struct dt_insert_rec *rec = &mdd_env_info(env)->mti_dt_rec;
 
-			rec->rec_fid = fid;
-			rec->rec_type = type;
-			rc = dt_declare_insert(env, next,
-					       (const struct dt_rec *)rec,
-					       (const struct dt_key *)name,
-					       handle);
-		}
-	 }
+		rec->rec_fid = fid;
+		rec->rec_type = type;
+		rc = dt_declare_insert(env, next, (const struct dt_rec *)rec,
+				       (const struct dt_key *)name, handle);
+	}
 
 	 return rc;
 }

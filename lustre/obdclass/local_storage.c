@@ -339,7 +339,7 @@ static struct dt_object *__local_file_create(const struct lu_env *env,
 	}
 
 	rec->rec_fid = fid;
-	rec->rec_type = dto->do_lu.lo_header->loh_attr;
+	rec->rec_type = attr->la_mode & S_IFMT;
 	rc = dt_declare_insert(env, parent, (const struct dt_rec *)rec,
 			       (const struct dt_key *)name, th);
 	if (rc)
@@ -349,11 +349,14 @@ static struct dt_object *__local_file_create(const struct lu_env *env,
 		if (!dt_try_as_dir(env, dto))
 			GOTO(trans_stop, rc = -ENOTDIR);
 
+		rec->rec_type = S_IFDIR;
+		rec->rec_fid = fid;
 		rc = dt_declare_insert(env, dto, (const struct dt_rec *)rec,
 				(const struct dt_key *)".", th);
 		if (rc != 0)
 			GOTO(trans_stop, rc);
 
+		rec->rec_fid = lu_object_fid(&parent->do_lu);
 		rc = dt_declare_insert(env, dto, (const struct dt_rec *)rec,
 				(const struct dt_key *)"..", th);
 		if (rc != 0)

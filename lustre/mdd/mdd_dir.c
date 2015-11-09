@@ -1447,11 +1447,11 @@ static int mdd_declare_finish_unlink(const struct lu_env *env,
 	if (rc != 0)
 		return rc;
 
-	rc = orph_declare_index_insert(env, obj, mdd_object_type(obj), handle);
+	rc = mdo_declare_destroy(env, obj, handle);
 	if (rc != 0)
 		return rc;
 
-	rc = mdo_declare_destroy(env, obj, handle);
+	rc = orph_declare_index_insert(env, obj, mdd_object_type(obj), handle);
 	if (rc != 0)
 		return rc;
 

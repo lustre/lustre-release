@@ -503,6 +503,8 @@ struct osd_iobuf {
 	unsigned int	   dr_init_at;	/* the line iobuf was initialized */
 };
 
+#define OSD_INS_CACHE_SIZE	8
+
 struct osd_thread_info {
 	const struct lu_env   *oti_env;
 	/**
@@ -566,6 +568,11 @@ struct osd_thread_info {
         };
 
 	struct osd_idmap_cache oti_cache;
+
+	/* dedicated OI cache for insert (which needs inum) */
+	struct osd_idmap_cache *oti_ins_cache;
+	int		       oti_ins_cache_size;
+	int		       oti_ins_cache_used;
 
         int                    oti_r_locks;
         int                    oti_w_locks;
