@@ -486,11 +486,26 @@ int llog_cat_declare_add_rec(const struct lu_env *env,
 
 	if (!llog_exist(cathandle->u.chd.chd_current_log)) {
 		if (dt_object_remote(cathandle->lgh_obj)) {
-			/* If it is remote cat-llog here, let's create the
-			 * remote llog object synchronously, so other threads
-			 * can use it correctly. */
-			rc = llog_cat_new_log(env, cathandle,
-					cathandle->u.chd.chd_current_log, NULL);
+			/* For remote operation, if we put the llog object
+			 * creation in the current transaction, then the
+			 * llog object will not be created on the remote
+			 * target until the transaction stop, if other
+			 * operations start before the transaction stop,
+			 * and use the same llog object, will be dependent
+			 * on the success of this transaction. So let's
+			 * create the llog object synchronously here to
+			 * remove the dependency. */
+			down_read_nested(&cathandle->lgh_lock, LLOGH_CAT);
+			loghandle = cathandle->u.chd.chd_current_log;
+			down_write_nested(&loghandle->lgh_lock, LLOGH_LOG);
+			if (!llog_exist(loghandle))
+				rc = llog_cat_new_log(env, cathandle, loghandle,
+						      NULL);
+			up_write(&loghandle->lgh_lock);
+			up_read(&cathandle->lgh_lock);
+			if (rc < 0)
+				GOTO(out, rc);
+
 		} else {
 			rc = llog_declare_create(env,
 					cathandle->u.chd.chd_current_log, th);
@@ -510,11 +525,27 @@ int llog_cat_declare_add_rec(const struct lu_env *env,
 	if (next) {
 		if (!llog_exist(next)) {
 			if (dt_object_remote(cathandle->lgh_obj)) {
-				/* If it is remote cat-llog here, let's create
-				 * the remote remote llog object synchronously,
-				 * so other threads can use it correctly. */
-				rc = llog_cat_new_log(env, cathandle, next,
-						      NULL);
+				/* For remote operation, if we put the llog
+				 * object creation in the current transaction,
+				 * then the llog object will not be created on
+				 * the remote target until the transaction stop,
+				 * if other operations start before the
+				 * transaction stop, and use the same llog
+				 * object, will be dependent on the success of
+				 * this transaction. So let's create the llog
+				 * object synchronously here to remove the
+				 * dependency. */
+				down_read_nested(&cathandle->lgh_lock,
+						 LLOGH_CAT);
+				next = cathandle->u.chd.chd_next_log;
+				down_write_nested(&next->lgh_lock, LLOGH_LOG);
+				if (!llog_exist(next))
+					rc = llog_cat_new_log(env, cathandle,
+							      next, NULL);
+				up_write(&next->lgh_lock);
+				up_read(&cathandle->lgh_lock);
+				if (rc < 0)
+					GOTO(out, rc);
 			} else {
 				rc = llog_declare_create(env, next, th);
 				llog_declare_write_rec(env, cathandle,
