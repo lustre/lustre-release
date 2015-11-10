@@ -905,16 +905,6 @@ struct lu_rdpg {
         struct page           **rp_pages;
 };
 
-/* read buffer params, should be filled out by out */
-struct lu_rdbuf {
-	/** count in bytes */
-	unsigned int	rb_bytes;
-	/** number of pages */
-	unsigned int	rb_nbufs;
-	/** pointers to pages */
-	struct lu_buf	**rb_bufs;
-};
-
 enum lu_xattr_flags {
 	LU_XATTR_REPLACE = (1 << 0),
 	LU_XATTR_CREATE  = (1 << 1)
@@ -1349,6 +1339,15 @@ struct lu_buf {
 
 #define DLUBUF "(%p %zu)"
 #define PLUBUF(buf) (buf)->lb_buf, (buf)->lb_len
+
+/* read buffer params, should be filled out by out */
+struct lu_rdbuf {
+	/** number of buffers */
+	unsigned int	rb_nbufs;
+	/** pointers to buffers */
+	struct lu_buf	rb_bufs[];
+};
+
 /**
  * One-time initializers, called at obdclass module initialization, not
  * exported.

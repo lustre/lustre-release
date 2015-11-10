@@ -599,7 +599,7 @@ static int out_read(struct tgt_session_info *tsi)
 	struct dt_object	*obj = tti->tti_u.update.tti_dt_object;
 	struct object_update_reply *reply = tti->tti_u.update.tti_update_reply;
 	int index = tti->tti_u.update.tti_update_reply_index;
-	struct lu_rdbuf	*rdbuf = &tti->tti_u.rdbuf.tti_rdbuf;
+	struct lu_rdbuf	*rdbuf;
 	struct object_update_result *update_result;
 	struct out_read_reply	*orr;
 	void *tmp;
@@ -638,8 +638,9 @@ static int out_read(struct tgt_session_info *tsi)
 	orr = (struct out_read_reply *)update_result->our_data;
 
 	nbufs = (size + OUT_BULK_BUFFER_SIZE - 1) / OUT_BULK_BUFFER_SIZE;
-	OBD_ALLOC(rdbuf->rb_bufs, nbufs * sizeof(rdbuf->rb_bufs[0]));
-	if (rdbuf->rb_bufs == NULL)
+	OBD_ALLOC(rdbuf, sizeof(struct lu_rdbuf) +
+			 nbufs * sizeof(rdbuf->rb_bufs[0]));
+	if (rdbuf == NULL)
 		GOTO(out, rc = -ENOMEM);
 
 	rdbuf->rb_nbufs = 0;
@@ -647,19 +648,15 @@ static int out_read(struct tgt_session_info *tsi)
 	for (i = 0; i < nbufs; i++) {
 		__u32 read_size;
 
-		OBD_ALLOC_PTR(rdbuf->rb_bufs[i]);
-		if (rdbuf->rb_bufs[i] == NULL)
-			GOTO(out_free, rc = -ENOMEM);
-
 		read_size = size > OUT_BULK_BUFFER_SIZE ?
 			    OUT_BULK_BUFFER_SIZE : size;
-		OBD_ALLOC(rdbuf->rb_bufs[i]->lb_buf, read_size);
-		if (rdbuf->rb_bufs[i] == NULL)
+		OBD_ALLOC(rdbuf->rb_bufs[i].lb_buf, read_size);
+		if (rdbuf->rb_bufs[i].lb_buf == NULL)
 			GOTO(out_free, rc = -ENOMEM);
 
-		rdbuf->rb_bufs[i]->lb_len = read_size;
+		rdbuf->rb_bufs[i].lb_len = read_size;
 		dt_read_lock(env, obj, MOR_TGT_CHILD);
-		rc = dt_read(env, obj, rdbuf->rb_bufs[i], &pos);
+		rc = dt_read(env, obj, &rdbuf->rb_bufs[i], &pos);
 		dt_read_unlock(env, obj);
 
 		total_size += rc < 0 ? 0 : rc;
@@ -670,7 +667,6 @@ static int out_read(struct tgt_session_info *tsi)
 		size -= read_size;
 	}
 
-	rdbuf->rb_bytes = total_size;
 	/* send pages to client */
 	rc = tgt_send_buffer(tsi, rdbuf);
 	if (rc < 0)
@@ -683,13 +679,13 @@ static int out_read(struct tgt_session_info *tsi)
 	update_result->our_datalen += orr->orr_size;
 out_free:
 	for (i = 0; i < nbufs; i++) {
-		if (rdbuf->rb_bufs[i] != NULL) {
-			OBD_FREE(rdbuf->rb_bufs[i]->lb_buf,
-				 rdbuf->rb_bufs[i]->lb_len);
-			OBD_FREE_PTR(rdbuf->rb_bufs[i]);
+		if (rdbuf->rb_bufs[i].lb_buf != NULL) {
+			OBD_FREE(rdbuf->rb_bufs[i].lb_buf,
+				 rdbuf->rb_bufs[i].lb_len);
 		}
 	}
-	OBD_FREE(rdbuf->rb_bufs, nbufs * sizeof(rdbuf->rb_bufs[0]));
+	OBD_FREE(rdbuf, sizeof(struct lu_rdbuf) +
+			nbufs * sizeof(rdbuf->rb_bufs[0]));
 out:
 	/* Insert read buffer */
 	update_result->our_rc = ptlrpc_status_hton(rc);
