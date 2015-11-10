@@ -949,7 +949,8 @@ static void osp_request_commit_cb(struct ptlrpc_request *req)
 		RETURN_EXIT;
 
 	oth = thandle_to_osp_thandle(th);
-	if (lustre_msg_get_last_committed(req->rq_repmsg))
+	if (req->rq_repmsg != NULL &&
+	    lustre_msg_get_last_committed(req->rq_repmsg))
 		last_committed_transno =
 			lustre_msg_get_last_committed(req->rq_repmsg);
 
