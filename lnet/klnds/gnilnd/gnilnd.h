@@ -970,7 +970,7 @@ static inline int kgnilnd_trylock(struct mutex *cq_lock,
 
 static inline void *kgnilnd_vzalloc(int size)
 {
-	void *ret = __vmalloc(size, __GFP_HIGHMEM | GFP_NOFS | __GFP_ZERO,
+	void *ret = __vmalloc(size, __GFP_HIGHMEM | GFP_NOIO | __GFP_NORETRY | __GFP_ZERO,
 			      PAGE_KERNEL);
 	LIBCFS_ALLOC_POST(ret, size);
 	return ret;
