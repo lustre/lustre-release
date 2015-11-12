@@ -789,9 +789,6 @@ static int listparam_cmdline(int argc, char **argv, struct param_opts *popt)
 
 	popt->po_show_path = 1;
 	popt->po_only_path = 1;
-	popt->po_show_type = 0;
-	popt->po_recursive = 0;
-	popt->po_only_dir = 0;
 
 	while ((ch = getopt(argc, argv, "FRD")) != -1) {
 		switch (ch) {
@@ -863,6 +860,7 @@ int jt_lcfg_listparam(int argc, char **argv)
 	char pattern[PATH_MAX];
 	char *path;
 
+	memset(&popt, 0, sizeof(popt));
 	rc = listparam_cmdline(argc, argv, &popt);
 	if (rc == argc && popt.po_recursive) {
 		rc--;           /* we know at least "-R" is a parameter */
@@ -892,9 +890,6 @@ static int getparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	int ch;
 
 	popt->po_show_path = 1;
-	popt->po_only_path = 0;
-	popt->po_show_type = 0;
-	popt->po_recursive = 0;
 
 	while ((ch = getopt(argc, argv, "FnNR")) != -1) {
 		switch (ch) {
@@ -1030,6 +1025,7 @@ int jt_lcfg_getparam(int argc, char **argv)
 	char pattern[PATH_MAX];
 	char *path;
 
+	memset(&popt, 0, sizeof(popt));
 	rc = getparam_cmdline(argc, argv, &popt);
 	if (rc == argc && popt.po_recursive) {
 		rc--;           /* we know at least "-R" is a parameter */
@@ -1074,14 +1070,11 @@ int jt_nodemap_info(int argc, char **argv)
 {
 	const char		usage_str[] = "usage: nodemap_info "
 					      "[list|nodemap_name|all]\n";
-	struct param_opts	popt = {
-		.po_only_path = 0,
-		.po_show_path = 1,
-		.po_show_type = 0,
-		.po_recursive = 0,
-		.po_only_dir = 0
-	};
+	struct param_opts	popt;
 	int			rc = 0;
+
+	memset(&popt, 0, sizeof(popt));
+	popt.po_show_path = 1;
 
 	if (argc > 2) {
 		fprintf(stderr, usage_str);
@@ -1197,6 +1190,7 @@ int jt_lcfg_setparam(int argc, char **argv)
 	char pattern[PATH_MAX];
 	char *path = NULL, *value = NULL;
 
+	memset(&popt, 0, sizeof(popt));
 	rc = setparam_cmdline(argc, argv, &popt);
 	if (rc < 0 || rc >= argc)
 		return CMD_HELP;
