@@ -1376,18 +1376,18 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			 struct dt_object **stripe, int flags,
 			 struct thandle *th)
 {
-	struct lod_device   *m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
-	struct obd_statfs   *sfs = &lod_env_info(env)->lti_osfs;
+	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	struct obd_statfs *sfs = &lod_env_info(env)->lti_osfs;
 	struct lod_tgt_desc *ost;
-	struct dt_object    *o;
-	__u64		     total_weight = 0;
-	unsigned int	     i;
-	int		     rc = 0;
-	__u32		     nfound, good_osts;
-	__u32		     stripe_cnt = lo->ldo_stripenr;
-	__u32		     stripe_cnt_min;
-	struct pool_desc    *pool = NULL;
-	struct ost_pool    *osts;
+	struct dt_object *o;
+	__u64 total_weight = 0;
+	__u32 nfound, good_osts;
+	__u32 stripe_cnt = lo->ldo_stripenr;
+	__u32 stripe_cnt_min;
+	struct pool_desc *pool = NULL;
+	struct ost_pool *osts;
+	unsigned int i;
+	int rc = 0;
 	ENTRY;
 
 	stripe_cnt_min = min_stripe_count(stripe_cnt, flags);
@@ -1395,30 +1395,30 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		RETURN(-EINVAL);
 
 	if (lo->ldo_pool)
-		pool = lod_find_pool(m, lo->ldo_pool);
+		pool = lod_find_pool(lod, lo->ldo_pool);
 
 	if (pool != NULL) {
 		down_read(&pool_tgt_rw_sem(pool));
 		osts = &(pool->pool_obds);
 	} else {
-		osts = &(m->lod_pool_info);
+		osts = &(lod->lod_pool_info);
 	}
 
 	/* Detect -EAGAIN early, before expensive lock is taken. */
-	if (!lod_qos_is_usable(m))
+	if (!lod_qos_is_usable(lod))
 		GOTO(out_nolock, rc = -EAGAIN);
 
 	/* Do actual allocation, use write lock here. */
-	down_write(&m->lod_qos.lq_rw_sem);
+	down_write(&lod->lod_qos.lq_rw_sem);
 
 	/*
 	 * Check again, while we were sleeping on @lq_rw_sem things could
 	 * change.
 	 */
-	if (!lod_qos_is_usable(m))
+	if (!lod_qos_is_usable(lod))
 		GOTO(out, rc = -EAGAIN);
 
-	rc = lod_qos_calc_ppo(m);
+	rc = lod_qos_calc_ppo(lod);
 	if (rc)
 		GOTO(out, rc);
 
@@ -1429,10 +1429,10 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	good_osts = 0;
 	/* Find all the OSTs that are valid stripe candidates */
 	for (i = 0; i < osts->op_count; i++) {
-		if (!cfs_bitmap_check(m->lod_ost_bitmap, osts->op_array[i]))
+		if (!cfs_bitmap_check(lod->lod_ost_bitmap, osts->op_array[i]))
 			continue;
 
-		rc = lod_statfs_and_check(env, m, osts->op_array[i], sfs);
+		rc = lod_statfs_and_check(env, lod, osts->op_array[i], sfs);
 		if (rc) {
 			/* this OSP doesn't feel well */
 			continue;
@@ -1450,9 +1450,9 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 				   osts->op_array[i] == 0)
 			continue;
 
-		ost = OST_TGT(m,osts->op_array[i]);
+		ost = OST_TGT(lod, osts->op_array[i]);
 		ost->ltd_qos.ltq_usable = 1;
-		lod_qos_calc_weight(m, osts->op_array[i]);
+		lod_qos_calc_weight(lod, osts->op_array[i]);
 		total_weight += ost->ltd_qos.ltq_weight;
 
 		good_osts++;
@@ -1505,10 +1505,10 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		for (i = 0; i < osts->op_count; i++) {
 			__u32 idx = osts->op_array[i];
 
-			if (!cfs_bitmap_check(m->lod_ost_bitmap, idx))
+			if (!cfs_bitmap_check(lod->lod_ost_bitmap, idx))
 				continue;
 
-			ost = OST_TGT(m,idx);
+			ost = OST_TGT(lod, idx);
 
 			if (!ost->ltd_qos.ltq_usable)
 				continue;
@@ -1531,14 +1531,14 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 				continue;
 			lod_qos_ost_in_use(env, nfound, idx);
 
-			o = lod_qos_declare_object_on(env, m, idx, th);
+			o = lod_qos_declare_object_on(env, lod, idx, th);
 			if (IS_ERR(o)) {
 				QOS_DEBUG("can't declare object on #%u: %d\n",
 					  idx, (int) PTR_ERR(o));
 				continue;
 			}
 			stripe[nfound++] = o;
-			lod_qos_used(m, osts, idx, &total_weight);
+			lod_qos_used(lod, osts, idx, &total_weight);
 			rc = 0;
 			break;
 		}
@@ -1557,7 +1557,8 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		 * so it's possible OSP won't be able to provide us with
 		 * an object due to just changed state
 		 */
-		LCONSOLE_INFO("wanted %d, found %d\n", stripe_cnt, nfound);
+		QOS_DEBUG("%s: wanted %d objects, found only %d\n",
+			  lod2obd(lod)->obd_name, stripe_cnt, nfound);
 		for (i = 0; i < nfound; i++) {
 			LASSERT(stripe[i] != NULL);
 			lu_object_put(env, &stripe[i]->do_lu);
@@ -1565,14 +1566,14 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		}
 
 		/* makes sense to rebalance next time */
-		m->lod_qos.lq_dirty = 1;
-		m->lod_qos.lq_same_space = 0;
+		lod->lod_qos.lq_dirty = 1;
+		lod->lod_qos.lq_same_space = 0;
 
 		rc = -EAGAIN;
 	}
 
 out:
-	up_write(&m->lod_qos.lq_rw_sem);
+	up_write(&lod->lod_qos.lq_rw_sem);
 
 out_nolock:
 	if (pool != NULL) {
