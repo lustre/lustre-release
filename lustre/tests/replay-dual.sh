@@ -20,6 +20,7 @@ init_logging
 
 remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 
+#                                   7  (min)"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="21b"
 
 [[ $(facet_fstype $SINGLEMDS) == zfs ]] &&
