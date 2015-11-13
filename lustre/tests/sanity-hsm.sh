@@ -24,6 +24,7 @@ init_logging
 
 MULTIOP=${MULTIOP:-multiop}
 OPENFILE=${OPENFILE:-openfile}
+MMAP_CAT=${MMAP_CAT:-mmap_cat}
 MOUNT_2=${MOUNT_2:-"yes"}
 FAIL_ON_ERROR=false
 
@@ -845,6 +846,23 @@ test_1() {
 
 }
 run_test 1 "lfs hsm flags root/non-root access"
+
+test_1a() {
+	mkdir -p $DIR/$tdir
+	local f=$DIR/$tdir/$tfile
+	local fid=$(make_small $f)
+
+	$LFS hsm_archive $f || error "could not archive file"
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	# Release and check states
+	$LFS hsm_release $f || error "could not release file"
+	echo -n "Verifying released state: "
+	check_hsm_flags $f "0x0000000d"
+
+	$MMAP_CAT $f > /dev/null || error "failed mmap & cat release file"
+}
+run_test 1a "mmap & cat a HSM released file"
 
 test_2() {
 	mkdir -p $DIR/$tdir

@@ -1070,7 +1070,7 @@ int lov_io_init_empty(const struct lu_env *env, struct cl_object *obj,
 	}
 
 	io->ci_result = result < 0 ? result : 0;
-	RETURN(result != 0);
+	RETURN(result);
 }
 
 int lov_io_init_released(const struct lu_env *env, struct cl_object *obj,
@@ -1117,6 +1117,6 @@ int lov_io_init_released(const struct lu_env *env, struct cl_object *obj,
 	}
 
 	io->ci_result = result < 0 ? result : 0;
-	RETURN(result != 0);
+	RETURN(result);
 }
 /** @} lov */

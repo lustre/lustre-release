@@ -132,8 +132,8 @@ void cl_io_fini(const struct lu_env *env, struct cl_io *io)
 	case CIT_READ:
 	case CIT_WRITE:
 	case CIT_DATA_VERSION:
-		break;
 	case CIT_FAULT:
+		break;
 	case CIT_FSYNC:
 		LASSERT(!io->ci_need_restart);
 		break;
