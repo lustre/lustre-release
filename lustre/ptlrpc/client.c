@@ -2927,6 +2927,49 @@ static int ptlrpc_replay_interpret(const struct lu_env *env,
                 DEBUG_REQ(D_ERROR, req, "status %d, old was %d",
                           lustre_msg_get_status(req->rq_repmsg),
                           aa->praa_old_status);
+
+		/* Note: If the replay fails for MDT-MDT recovery, let's
+		 * abort all of the following requests in the replay
+		 * and sending list, because MDT-MDT update requests
+		 * are dependent on each other, see LU-7039 */
+		if (imp->imp_connect_flags_orig & OBD_CONNECT_MDS_MDS) {
+			struct ptlrpc_request *free_req;
+			struct ptlrpc_request *tmp;
+
+			spin_lock(&imp->imp_lock);
+			list_for_each_entry_safe(free_req, tmp,
+						 &imp->imp_replay_list,
+						 rq_replay_list) {
+				ptlrpc_free_request(free_req);
+			}
+
+			list_for_each_entry_safe(free_req, tmp,
+						 &imp->imp_committed_list,
+						 rq_replay_list) {
+				ptlrpc_free_request(free_req);
+			}
+
+			list_for_each_entry_safe(free_req, tmp,
+						&imp->imp_delayed_list,
+						rq_list) {
+				spin_lock(&free_req->rq_lock);
+				free_req->rq_err = 1;
+				free_req->rq_status = -EIO;
+				ptlrpc_client_wake_req(free_req);
+				spin_unlock(&free_req->rq_lock);
+			}
+
+			list_for_each_entry_safe(free_req, tmp,
+						&imp->imp_sending_list,
+						rq_list) {
+				spin_lock(&free_req->rq_lock);
+				free_req->rq_err = 1;
+				free_req->rq_status = -EIO;
+				ptlrpc_client_wake_req(free_req);
+				spin_unlock(&free_req->rq_lock);
+			}
+			spin_unlock(&imp->imp_lock);
+		}
         } else {
                 /* Put it back for re-replay. */
                 lustre_msg_set_status(req->rq_repmsg, aa->praa_old_status);

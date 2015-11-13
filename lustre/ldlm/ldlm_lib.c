@@ -2126,7 +2126,8 @@ static __u64 get_next_replay_req_transno(struct obd_device *obd)
 
 	return transno;
 }
-__u64 get_next_transno(struct lu_target *lut, int *type)
+
+static __u64 get_next_transno(struct lu_target *lut, int *type)
 {
 	struct obd_device *obd = lut->lut_obd;
 	struct target_distribute_txn_data *tdtd = lut->lut_tdtd;
@@ -2221,6 +2222,7 @@ static void replay_request_or_update(struct lu_env *env,
 					     exp_req_replay_healthy)) {
 			abort_req_replay_queue(obd);
 			abort_lock_replay_queue(obd);
+			goto abort;
 		}
 
 		spin_lock(&obd->obd_recovery_task_lock);
@@ -2273,32 +2275,28 @@ static void replay_request_or_update(struct lu_env *env,
 			obd->obd_replayed_requests++;
 		} else if (type == UPDATE_RECOVERY && transno != 0) {
 			struct distribute_txn_replay_req *dtrq;
-			bool update_transno = false;
+			int rc;
 
 			spin_unlock(&obd->obd_recovery_task_lock);
 
 			LASSERT(tdtd != NULL);
 			dtrq = distribute_txn_get_next_req(tdtd);
 			lu_context_enter(&thread->t_env->le_ctx);
-			tdtd->tdtd_replay_handler(env, tdtd, dtrq);
+			rc = tdtd->tdtd_replay_handler(env, tdtd, dtrq);
 			lu_context_exit(&thread->t_env->le_ctx);
 			extend_recovery_timer(obd, obd_timeout, true);
 
-			/* Add it to the replay finish list */
-			spin_lock(&tdtd->tdtd_replay_list_lock);
-			if (dtrq->dtrq_xid != 0) {
+			if (rc == 0 && dtrq->dtrq_xid != 0) {
 				CDEBUG(D_HA, "Move x"LPU64" t"LPU64
 				       " to finish list\n", dtrq->dtrq_xid,
 				       dtrq->dtrq_master_transno);
+
+				/* Add it to the replay finish list */
+				spin_lock(&tdtd->tdtd_replay_list_lock);
 				list_add(&dtrq->dtrq_list,
 					 &tdtd->tdtd_replay_finish_list);
-				update_transno = true;
-			} else {
-				dtrq_destroy(dtrq);
-			}
-			spin_unlock(&tdtd->tdtd_replay_list_lock);
+				spin_unlock(&tdtd->tdtd_replay_list_lock);
 
-			if (update_transno) {
 				spin_lock(&obd->obd_recovery_task_lock);
 				if (transno == obd->obd_next_recovery_transno)
 					obd->obd_next_recovery_transno++;
@@ -2307,9 +2305,17 @@ static void replay_request_or_update(struct lu_env *env,
 					obd->obd_next_recovery_transno =
 								transno + 1;
 				spin_unlock(&obd->obd_recovery_task_lock);
+			} else {
+				dtrq_destroy(dtrq);
+				/* If update recovery fail, then let's abort
+				 * the recovery, otherwise it might cause
+				 * both llog and filesystem corruption */
+				if (rc < 0)
+					obd->obd_force_abort_recovery = 1;
 			}
 		} else {
 			spin_unlock(&obd->obd_recovery_task_lock);
+abort:
 			LASSERT(list_empty(&obd->obd_req_replay_queue));
 			LASSERT(atomic_read(&obd->obd_req_replay_clients) == 0);
 			/** evict exports failed VBR */
