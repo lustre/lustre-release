@@ -13562,6 +13562,69 @@ test_252() {
 }
 run_test 252 "check lr_reader tool"
 
+test_256() {
+	local cl_user
+	local cat_sl
+	local mdt_dev
+
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ "$(facet_fstype mds1)" != "ldiskfs" ] &&
+		skip "non-ldiskfs backend" && return
+
+	mdt_dev=$(mdsdevname 1)
+	echo $mdt_dev
+	cl_user=$(do_facet mds1 \
+	"$LCTL get_param -n mdd.$MDT0.changelog_users | grep cl")
+	if [[ -n $cl_user ]]; then
+		skip "active changelog user"
+		return
+	fi
+
+	cl_user=$(do_facet mds1 $LCTL --device $MDT0 changelog_register -n)
+	echo "Registered as changelog user $cl_user"
+
+	rm -rf $DIR/$tdir
+	mkdir -p $DIR/$tdir
+
+	$LFS changelog_clear $MDT0 $cl_user 0
+
+	# change something
+	touch $DIR/$tdir/{1..10}
+
+	# stop the MDT
+	stop mds1 || error "Fail to stop MDT."
+
+	# remount the MDT
+	start mds1 $mdt_dev $MDS_MOUNT_OPTS || error "Fail to start MDT."
+
+	#after mount new plainllog is used
+	touch $DIR/$tdir/{11..19}
+	cat_sl=$(do_facet mds1 \
+	"$DEBUGFS -R \\\"dump changelog_catalog cat.dmp\\\" $mdt_dev; \
+	 llog_reader cat.dmp | grep \\\"type=1064553b\\\" | wc -l")
+
+	if (( cat_sl != 2 )); then
+		do_facet mds1 $LCTL --device $MDT0 changelog_deregister $cl_user
+		error "Changelog catalog has wrong number of slots $cat_sl"
+	fi
+
+	$LFS changelog_clear $MDT0 $cl_user 0
+
+	cat_sl=$(do_facet mds1 \
+	"$DEBUGFS -R \\\"dump changelog_catalog cat.dmp\\\" $mdt_dev; \
+	 llog_reader cat.dmp | grep \\\"type=1064553b\\\" | wc -l")
+
+	do_facet mds1 $LCTL --device $MDT0 changelog_deregister $cl_user
+
+	if (( cat_sl == 2 )); then
+		error "Empty plain llog was not deleted from changelog catalog"
+	fi
+	if (( cat_sl != 1 )); then
+		error "Active plain llog shouldn\`t be deleted from catalog"
+	fi
+}
+run_test 256 "Check llog delete for empty and not full state"
 
 cleanup_test_300() {
 	trap 0

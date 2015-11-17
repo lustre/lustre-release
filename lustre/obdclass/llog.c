@@ -258,7 +258,10 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 
 	if ((llh->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
 	    (llh->llh_count == 1) &&
-	    (loghandle->lgh_last_idx == LLOG_HDR_BITMAP_SIZE(llh) - 1)) {
+	    ((loghandle->lgh_last_idx == LLOG_HDR_BITMAP_SIZE(llh) - 1) ||
+	     (loghandle->u.phd.phd_cat_handle != NULL &&
+	      loghandle->u.phd.phd_cat_handle->u.chd.chd_current_log !=
+		loghandle))) {
 		rc = llog_trans_destroy(env, loghandle, th);
 		if (rc < 0) {
 			/* Sigh, can not destroy the final plain llog, but
