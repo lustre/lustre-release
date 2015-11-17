@@ -450,25 +450,11 @@ struct sub_thandle *create_sub_thandle(struct top_multiple_thandle *tmt,
 	return st;
 }
 
-/**
- * sub thandle commit callback
- *
- * Mark the sub thandle to be committed and if all sub thandle are committed
- * notify the top thandle.
- *
- * \param[in] env	execution environment
- * \param[in] sub_th	sub thandle being committed
- * \param[in] cb	commit callback
- * \param[in] err	trans result
- */
-static void sub_trans_commit_cb(struct lu_env *env,
-				struct thandle *sub_th,
-				struct dt_txn_commit_cb *cb, int err)
+static void sub_trans_commit_cb_internal(struct top_multiple_thandle *tmt,
+					 struct thandle *sub_th, int err)
 {
 	struct sub_thandle	*st;
-	struct top_multiple_thandle *tmt = cb->dcb_data;
 	bool			all_committed = true;
-	ENTRY;
 
 	/* Check if all sub thandles are committed */
 	spin_lock(&tmt->tmt_sub_lock);
@@ -491,6 +477,26 @@ static void sub_trans_commit_cb(struct lu_env *env,
 	top_multiple_thandle_dump(tmt, D_INFO);
 	top_multiple_thandle_put(tmt);
 	RETURN_EXIT;
+}
+
+/**
+ * sub thandle commit callback
+ *
+ * Mark the sub thandle to be committed and if all sub thandle are committed
+ * notify the top thandle.
+ *
+ * \param[in] env	execution environment
+ * \param[in] sub_th	sub thandle being committed
+ * \param[in] cb	commit callback
+ * \param[in] err	trans result
+ */
+static void sub_trans_commit_cb(struct lu_env *env,
+				struct thandle *sub_th,
+				struct dt_txn_commit_cb *cb, int err)
+{
+	struct top_multiple_thandle *tmt = cb->dcb_data;
+
+	sub_trans_commit_cb_internal(tmt, sub_th, err);
 }
 
 static void sub_thandle_register_commit_cb(struct sub_thandle *st,
@@ -813,6 +819,9 @@ int top_trans_start(const struct lu_env *env, struct dt_device *master_dev,
 				    st->st_sub_th);
 		if (rc != 0)
 			GOTO(out, rc);
+
+		LASSERT(st->st_started == 0);
+		st->st_started = 1;
 	}
 out:
 	th->th_result = rc;
@@ -971,6 +980,7 @@ int top_trans_stop(const struct lu_env *env, struct dt_device *master_dev,
 			CERROR("%s: cannot prepare updates: rc = %d\n",
 			       master_dev->dd_lu_dev.ld_obd->obd_name, rc);
 			th->th_result = rc;
+			write_updates = false;
 			GOTO(stop_master_trans, rc);
 		}
 
@@ -989,6 +999,7 @@ int top_trans_stop(const struct lu_env *env, struct dt_device *master_dev,
 			CERROR("%s: write updates failed: rc = %d\n",
 			       master_dev->dd_lu_dev.ld_obd->obd_name, rc);
 			th->th_result = rc;
+			write_updates = false;
 			GOTO(stop_master_trans, rc);
 		}
 	}
@@ -1004,6 +1015,13 @@ stop_master_trans:
 		master_st->st_sub_th->th_tags = th->th_tags;
 		master_st->st_sub_th->th_result = th->th_result;
 		rc = dt_trans_stop(env, master_st->st_dt, master_st->st_sub_th);
+		/* If it does not write_updates, then we call submit callback
+		 * here, otherwise callback is done through
+		 * osd(osp)_trans_commit_cb() */
+		if (!master_st->st_started &&
+		    !list_empty(&tmt->tmt_commit_list))
+			sub_trans_commit_cb_internal(tmt,
+						master_st->st_sub_th, rc);
 		if (rc < 0) {
 			th->th_result = rc;
 			GOTO(stop_other_trans, rc);

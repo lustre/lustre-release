@@ -330,7 +330,8 @@ struct sub_thandle {
 
 	/* If this sub thandle is committed */
 	bool			st_committed:1,
-				st_stopped:1;
+				st_stopped:1,
+				st_started:1;
 };
 
 struct tx_arg;
