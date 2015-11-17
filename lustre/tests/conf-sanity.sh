@@ -6055,6 +6055,12 @@ test_91() {
 	local found
 
 	load_modules
+
+	[[ $(lustre_version_code ost1) -ge $(version_code 2.7.63) ]] ||
+		{ skip "Need OST version at least 2.7.63" && return 0; }
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.63) ]] ||
+		{ skip "Need MDT version at least 2.7.63" && return 0; }
+
 	start_mds || error "MDS start failed"
 	start_ost || error "unable to start OST"
 	mount_client $MOUNT || error "client start failed"
