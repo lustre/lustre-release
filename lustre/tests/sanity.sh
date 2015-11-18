@@ -4075,87 +4075,62 @@ test_51a() {	# was test_51
 }
 run_test 51a "special situations: split htree with empty entry =="
 
-export NUMTEST=70000
 test_51b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	local BASE=$DIR/d${base}.${TESTSUITE}
+	local dir=$DIR/$tdir
+
+	local nrdirs=$((65536 + 100))
 
 	# cleanup the directory
-	rm -fr $BASE
+	rm -fr $dir
 
-	test_mkdir -p -c1 $BASE
+	test_mkdir -p -c1 $dir
 
 	$LFS df
 	$LFS df -i
-	local mdtidx=$(printf "%04x" $($LFS getstripe -M $BASE))
+	local mdtidx=$(printf "%04x" $($LFS getstripe -M $dir))
 	local numfree=$(lctl get_param -n mdc.$FSNAME-MDT$mdtidx*.filesfree)
-	[[ $numfree -lt 21000 ]] &&
+	[[ $numfree -lt $nrdirs ]] &&
 		skip "not enough free inodes ($numfree) on MDT$mdtidx" &&
 		return
-
-	[[ $numfree -lt $NUMTEST ]] && NUMTEST=$(($numfree - 50)) &&
-		echo "reduced count to $NUMTEST due to inodes on MDT$mdtidx"
 
 	# need to check free space for the directories as well
 	local blkfree=$(lctl get_param -n mdc.$FSNAME-MDT$mdtidx*.kbytesavail)
 	numfree=$((blkfree / 4))
-	[[ $numfree -lt $NUMTEST ]] && NUMTEST=$((numfree - 50)) &&
-		echo "reduced count to $NUMTEST due to blocks on MDT$mdtidx"
+	[[ $numfree -lt $nrdirs ]] && skip "not enough blocks ($numfree)" &&
+		return
 
-	createmany -d $BASE/d $NUMTEST && echo $NUMTEST > $BASE/fnum ||
-	{
-		$LFS df
-		$LFS df -i
-		echo "failed" > $BASE/fnum
-		error "failed to create $NUMTEST subdirs in MDT$mdtidx:$BASE"
-	}
-}
-run_test 51b "exceed 64k subdirectory nlink limit"
+	# create files
+	createmany -d $dir/d $nrdirs ||
+		error "failed to create $nrdirs subdirs in MDT$mdtidx:$dir"
 
-test_51ba() { # LU-993
-	local BASE=$DIR/d${base}.${TESTSUITE}
+	# really created :
+	nrdirs=$(ls -U $dir | wc -l)
+
 	# unlink all but 100 subdirectories, then check it still works
-	local LEFT=100
-	[ -f $BASE/fnum ] && local NUMPREV=$(cat $BASE/fnum) && rm $BASE/fnum
-
-	[ "$NUMPREV" != "failed" ] && NUMTEST=$NUMPREV
-	local DELETE=$((NUMTEST - LEFT))
-
-	# continue on to run this test even if 51b didn't finish,
-	# just to delete the many subdirectories created.
-	[ ! -d "${BASE}/d1" ] && skip "test_51b() not run" && return 0
+	local left=100
+	local delete=$((nrdirs - left))
 
 	# for ldiskfs the nlink count should be 1, but this is OSD specific
 	# and so this is listed for informational purposes only
-	echo "nlink before: $(stat -c %h $BASE), created before: $NUMTEST"
-	unlinkmany -d $BASE/d $DELETE
-	RC=$?
+	echo "nlink before: $(stat -c %h $dir), created before: $nrdirs"
+	unlinkmany -d $dir/d $delete ||
+		error "unlink of first $delete subdirs failed"
 
-	if [ $RC -ne 0 ]; then
-		if [ "$NUMPREV" == "failed" ]; then
-			skip "previous setup failed"
-			return 0
-		else
-			error "unlink of first $DELETE subdirs failed"
-			return $RC
-		fi
-	fi
+	echo "nlink between: $(stat -c %h $dir)"
+	local found=$(ls -U $dir | wc -l)
+	[ $found -ne $left ] &&
+		error "can't find subdirs: found only $found, expected $left"
 
-	echo "nlink between: $(stat -c %h $BASE)"
-	# trim the first line of ls output
-	local FOUND=$(($(ls -l ${BASE} | wc -l) - 1))
-	[ $FOUND -ne $LEFT ] &&
-		error "can't find subdirs: found only $FOUND/$LEFT"
-
-	unlinkmany -d $BASE/d $DELETE $LEFT ||
-		error "unlink of second $LEFT subdirs failed"
+	unlinkmany -d $dir/d $delete $left ||
+		error "unlink of second $left subdirs failed"
 	# regardless of whether the backing filesystem tracks nlink accurately
 	# or not, the nlink count shouldn't be more than "." and ".." here
-	local AFTER=$(stat -c %h $BASE)
-	[[ $AFTER -gt 2 ]] && error "nlink after: $AFTER > 2" ||
-		echo "nlink after: $AFTER"
+	local after=$(stat -c %h $dir)
+	[[ $after -gt 2 ]] && error "nlink after: $after > 2" ||
+		echo "nlink after: $after"
 }
-run_test 51ba "verify nlink for many subdirectory cleanup"
+run_test 51b "exceed 64k subdirectory nlink limit on create, verify unlink"
 
 test_51d() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
