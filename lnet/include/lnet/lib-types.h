@@ -76,11 +76,11 @@ typedef struct lnet_msg {
 	lnet_nid_t		msg_from;
 	__u32			msg_type;
 
-	/* commited for sending */
+	/* committed for sending */
 	unsigned int		msg_tx_committed:1;
 	/* CPT # this message committed for sending */
 	unsigned int		msg_tx_cpt:15;
-	/* commited for receiving */
+	/* committed for receiving */
 	unsigned int		msg_rx_committed:1;
 	/* CPT # this message committed for receiving */
 	unsigned int		msg_rx_cpt:15;
@@ -497,7 +497,7 @@ struct lnet_match_table {
 	unsigned int		mt_cpt;
 	unsigned int		mt_portal;      /* portal index */
 	/* match table is set as "enabled" if there's non-exhausted MD
-	 * attached on mt_mhash, it's only valide for wildcard portal */
+	 * attached on mt_mhash, it's only valid for wildcard portal */
 	unsigned int		mt_enabled;
 	/* bitmap to flag whether MEs on mt_hash are exhausted or not */
 	__u64			mt_exhausted[LNET_MT_EXHAUSTED_BMAP];
@@ -519,7 +519,7 @@ typedef struct lnet_portal {
 	unsigned int		ptl_index;	/* portal ID, reserved */
 	/* flags on this portal: lazy, unique... */
 	unsigned int		ptl_options;
-	/* list of messags which are stealing buffer */
+	/* list of messages which are stealing buffer */
 	struct list_head	ptl_msg_stealing;
 	/* messages blocking for MD */
 	struct list_head	ptl_msg_delayed;

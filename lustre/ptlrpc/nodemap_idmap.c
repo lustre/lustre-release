@@ -245,7 +245,7 @@ struct lu_idmap *idmap_search(struct lu_nodemap *nodemap,
  *
  * \param	nodemap		nodemap to delete trees from
  *
- * This uses the postorder safe traversal code that is commited
+ * This uses the postorder safe traversal code that is committed
  * in a later kernel. Each lu_idmap strucuture is destroyed.
  */
 void idmap_delete_tree(struct lu_nodemap *nodemap)

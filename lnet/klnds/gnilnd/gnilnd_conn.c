@@ -2513,8 +2513,9 @@ kgnilnd_dgram_mover(void *arg)
 		/* last second chance for others to poke us */
 		did_something += xchg(&dev->gnd_dgram_ready, GNILND_DGRAM_IDLE);
 
-		/* check flag variables before comittingi even if we did something;
-		 * if we are after the deadline call schedule */
+		/* check flag variables before committing even if we
+		 * did something; if we are after the deadline call
+		 * schedule */
 		if ((!did_something || time_after(jiffies, deadline)) &&
 		    !kgnilnd_data.kgn_shutdown &&
 		    !kgnilnd_data.kgn_quiesce_trigger) {

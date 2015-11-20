@@ -4134,7 +4134,7 @@ test_31f() {
 	check_mount_and_prep
 
 	echo "Inject failure stub on MDT0 to simulate the case that the"
-	echo "slave MDT-object (that resides on differnt MDT as the master"
+	echo "slave MDT-object (that resides on different MDT as the master"
 	echo "MDT-object resides on) lost the LMV EA."
 
 	#define OBD_FAIL_LFSCK_LOST_SLAVE_LMV	0x162a

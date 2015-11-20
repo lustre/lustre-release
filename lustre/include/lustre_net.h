@@ -1032,7 +1032,7 @@ struct ptlrpc_request {
 	/** bulk match bits */
 	__u64				 rq_mbits;
 	/**
-	 * List item to for replay list. Not yet commited requests get linked
+	 * List item to for replay list. Not yet committed requests get linked
 	 * there.
 	 * Also see \a rq_replay comment above.
 	 * It's also link chain on obd_export::exp_req_replay_queue

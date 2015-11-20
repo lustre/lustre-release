@@ -33,7 +33,7 @@
     # Space separate list of RPMs needed to be installed for 
     # compilation of wireshark
 
-    # Package name(s) (can) vary between differnt distributions
+    # Package name(s) (can) vary between different distributions
     # If distributions 'marked' by same release file, content has to
     # parsed and variable PREREQUISITE_RPMS has to be set accoringly to
     # package name(s) used for each distro.

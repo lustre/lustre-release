@@ -3072,7 +3072,7 @@ kgnilnd_reaper(void *arg)
 				    next_check_time);
 			mod_timer(&timer, (long) jiffies + timeout);
 
-			/* check flag variables before comitting */
+			/* check flag variables before committing */
 			if (!kgnilnd_data.kgn_shutdown &&
 			    !kgnilnd_data.kgn_quiesce_trigger) {
 				CDEBUG(D_INFO, "schedule timeout %ld (%lu sec)\n",

@@ -749,7 +749,7 @@ void tgt_boot_epoch_update(struct lu_target *tgt)
 }
 
 /**
- * commit callback, need to update last_commited value
+ * commit callback, need to update last_committed value
  */
 struct tgt_last_committed_callback {
 	struct dt_txn_commit_cb	 llcc_cb;

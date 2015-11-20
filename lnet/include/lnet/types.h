@@ -213,8 +213,8 @@ typedef struct {
 #define LNET_PROTO_PING_MAGIC		0x70696E67 /* 'ping' */
 
 /* Placeholder for a future "unified" protocol across all LNDs */
-/* Current LNDs that receive a request with this magic will respond with a
- *  *  * "stub" reply using their current protocol */
+/* Current LNDs that receive a request with this magic will respond
+ * with a "stub" reply using their current protocol */
 #define LNET_PROTO_MAGIC		0x45726963 /* ! */
 
 #define LNET_PROTO_TCP_VERSION_MAJOR	1

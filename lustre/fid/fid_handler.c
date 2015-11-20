@@ -211,7 +211,7 @@ static int __seq_set_init(const struct lu_env *env,
  *
  * when lss_lowater_set reaches the end it is replaced with hiwater one and
  * a write operation is initiated to allocate new hiwater range.
- * if last seq write opearion is still not commited, current operation is
+ * if last seq write opearion is still not committed, current operation is
  * flaged as sync write op.
  */
 static int range_alloc_set(const struct lu_env *env,

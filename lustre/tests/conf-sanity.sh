@@ -52,7 +52,7 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
 # use small MDS + OST size to speed formatting time
-# do not use too small MDSSIZE/OSTSIZE, which affect the default jouranl size
+# do not use too small MDSSIZE/OSTSIZE, which affect the default journal size
 # STORED_MDSSIZE is used in test_18
 STORED_MDSSIZE=$MDSSIZE
 STORED_OSTSIZE=$OSTSIZE

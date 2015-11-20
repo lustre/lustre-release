@@ -89,10 +89,10 @@ LB_CHECK_EXPORT([dev_set_rdonly], [block/ll_rw_block.c block/blk-core.c],
 #
 # LC_STACK_SIZE
 #
-# Ensure stack size big than 8k in Lustre server (all kernels)
+# Ensure the stack size is at least 8k in Lustre server (all kernels)
 #
 AC_DEFUN([LC_STACK_SIZE], [
-LB_CHECK_COMPILE([if stack size big than 8k],
+LB_CHECK_COMPILE([if stack size is at least 8k],
 stack_size_8k, [
 	#include <linux/thread_info.h>
 ], [
@@ -636,7 +636,7 @@ EXTRA_KCFLAGS="$tmp_flags"
 #
 # LC_DCACHE_LOCK
 #
-# 2.6.38 dcache_lock removed. rcu-walk commited.
+# 2.6.38 dcache_lock removed. rcu-walk committed.
 #
 AC_DEFUN([LC_DCACHE_LOCK], [
 LB_CHECK_COMPILE([if 'dcache_lock' is exist],

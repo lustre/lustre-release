@@ -379,7 +379,7 @@ void qmt_pool_fini(const struct lu_env *env, struct qmt_device *qmt)
  * pool which are instantiated in this function.
  *
  * \param env - is the environment passed by the caller
- * \param qmt - is the quota master target for which we have to initializa the
+ * \param qmt - is the quota master target for which we have to initialize the
  *              pool configuration
  *
  * \retval - 0 on success, appropriate error on failure
@@ -438,7 +438,7 @@ static int qmt_slv_cnt(const struct lu_env *env, struct lu_fid *glb_fid,
  * Set up on-disk index files associated with each pool.
  *
  * \param env - is the environment passed by the caller
- * \param qmt - is the quota master target for which we have to initializa the
+ * \param qmt - is the quota master target for which we have to initialize the
  *              pool configuration
  * \param qmt_root - is the on-disk directory created for the QMT.
  *
@@ -650,7 +650,7 @@ out:
  * Look-up a lquota_entry in the pool hash and allocate it if not found.
  *
  * \param env - is the environment passed by the caller
- * \param qmt - is the quota master target for which we have to initializa the
+ * \param qmt - is the quota master target for which we have to initialize the
  *              pool configuration
  * \param pool_id   - is the 16-bit identifier of the pool
  * \param pool_type - is the pool type, either LQUOTA_RES_MD or LQUOTA_RES_DT.

@@ -965,7 +965,7 @@ void osp_pre_update_status(struct osp_device *d, int rc)
 				       msfs->os_bfree, used, msfs->os_bavail,
 				       d->opd_pre_status, rc);
 			CDEBUG(D_INFO,
-			       "non-commited changes: %lu, in progress: %u\n",
+			       "non-committed changes: %lu, in progress: %u\n",
 			       d->opd_syn_changes, d->opd_syn_rpc_in_progress);
 		} else if (old == -ENOSPC) {
 			d->opd_pre_status = 0;
