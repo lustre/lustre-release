@@ -1715,8 +1715,6 @@ static int osd_start(struct lustre_sb_info *lsi, unsigned long mflags)
 	rc = obd_connect(NULL, &lsi->lsi_osd_exp,
 			 obd, &obd->obd_uuid, NULL, NULL);
 
-	OBD_FAIL_TIMEOUT(OBD_FAIL_TGT_DELAY_CONNECT, 10);
-
 	if (rc) {
 		obd->obd_force = 1;
 		class_manual_cleanup(obd);
@@ -1748,6 +1746,9 @@ int server_fill_super(struct super_block *sb)
 	struct lustre_sb_info *lsi = s2lsi(sb);
 	int rc;
 	ENTRY;
+
+	/* to simulate target mount race */
+	OBD_RACE(OBD_FAIL_TGT_MOUNT_RACE);
 
 	rc = lsi_prepare(lsi);
 	if (rc)
