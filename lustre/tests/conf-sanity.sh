@@ -2872,7 +2872,7 @@ test_42() { #bug 14693
 }
 run_test 42 "allow client/server mount/unmount with invalid config param"
 
-test_43() {
+test_43a() {
 	[[ $(lustre_version_code mgs) -ge $(version_code 2.5.58) ]] ||
 		{ skip "Need MDS version at least 2.5.58" && return 0; }
 	[ $UID -ne 0 -o $RUNAS_ID -eq 0 ] && skip_env "run as root"
@@ -3020,8 +3020,43 @@ test_43() {
 	touch $DIR/$tdir-rootdir/tfile-2 ||
 		error "$ST: root create permission is denied"
 	echo "$ST: root create permission is granted - ok"
+	cleanup || error "cleanup failed with $?"
 }
-run_test 43 "check root_squash and nosquash_nids"
+run_test 43a "check root_squash and nosquash_nids"
+
+test_43b() { # LU-5690
+	[[ $(lustre_version_code mgs) -ge $(version_code 2.7.62) ]] ||
+		{ skip "Need MGS version 2.7.62+"; return; }
+
+	if [[ -z "$fs2mds_DEV" ]]; then
+		is_blkdev $SINGLEMDS $(mdsdevname ${SINGLEMDS//mds/}) &&
+		skip_env "mixed loopback and real device not working" && return
+	fi
+
+	local fs2mdsdev=$(mdsdevname 1_2)
+	local fs2mdsvdev=$(mdsvdevname 1_2)
+
+	# temporarily use fs2mds as fs2mgs
+	local fs2mgs=fs2mds
+	local fs2mgsdev=$fs2mdsdev
+	local fs2mgsvdev=$fs2mdsvdev
+
+	local fsname=test1234
+
+	load_module llite/lustre
+	local client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
+	local host=${client_ip//*./}
+	local net=${client_ip/%$host/}
+	local nosquash_nids=$(h2$NETTYPE $net[$host,$host,$host])
+
+	add $fs2mgs $(mkfs_opts mgs $fs2mgsdev) --fsname=$fsname \
+		--param mdt.root_squash=$RUNAS_ID:$RUNAS_ID \
+		--param mdt.nosquash_nids=$nosquash_nids \
+		--reformat $fs2mgsdev $fs2mgsvdev || error "add fs2mgs failed"
+	start $fs2mgs $fs2mgsdev $MGS_MOUNT_OPTS  || error "start fs2mgs failed"
+	stop $fs2mgs -f || error "stop fs2mgs failed"
+}
+run_test 43b "parse nosquash_nids with commas in expr_list"
 
 umount_client $MOUNT
 cleanup_nocli
