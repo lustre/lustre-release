@@ -353,7 +353,7 @@ static int lod_sub_recovery_thread(void *arg)
 	struct lod_device		*lod = lrd->lrd_lod;
 	struct dt_device		*dt;
 	struct ptlrpc_thread		*thread = lrd->lrd_thread;
-	struct llog_ctxt		*ctxt;
+	struct llog_ctxt		*ctxt = NULL;
 	struct lu_env			env;
 	int				rc;
 	ENTRY;
@@ -376,17 +376,16 @@ static int lod_sub_recovery_thread(void *arg)
 
 again:
 	rc = lod_sub_prep_llog(&env, lod, dt, lrd->lrd_idx);
-	if (rc != 0)
-		GOTO(out, rc);
+	if (rc == 0) {
+		/* Process the recovery record */
+		ctxt = llog_get_context(dt->dd_lu_dev.ld_obd,
+					LLOG_UPDATELOG_ORIG_CTXT);
+		LASSERT(ctxt != NULL);
+		LASSERT(ctxt->loc_handle != NULL);
 
-	/* Process the recovery record */
-	ctxt = llog_get_context(dt->dd_lu_dev.ld_obd, LLOG_UPDATELOG_ORIG_CTXT);
-	LASSERT(ctxt != NULL);
-	LASSERT(ctxt->loc_handle != NULL);
-
-	rc = llog_cat_process(&env, ctxt->loc_handle,
-			      lod_process_recovery_updates, lrd, 0, 0);
-	llog_ctxt_put(ctxt);
+		rc = llog_cat_process(&env, ctxt->loc_handle,
+				      lod_process_recovery_updates, lrd, 0, 0);
+	}
 
 	if (rc < 0) {
 		struct lu_device *top_device;
@@ -394,14 +393,25 @@ again:
 		top_device = lod->lod_dt_dev.dd_lu_dev.ld_site->ls_top_dev;
 		/* Because the remote target might failover at the same time,
 		 * let's retry here */
-		if (rc == -ETIMEDOUT && dt != lod->lod_child &&
-		    !top_device->ld_obd->obd_force_abort_recovery)
+		if ((rc == -ETIMEDOUT || rc == -EAGAIN || rc == -EIO) &&
+		     dt != lod->lod_child &&
+		    !top_device->ld_obd->obd_force_abort_recovery &&
+		    !top_device->ld_obd->obd_stopping) {
+			if (ctxt != NULL) {
+				if (ctxt->loc_handle != NULL)
+					llog_cat_close(&env,
+						       ctxt->loc_handle);
+				llog_ctxt_put(ctxt);
+			}
 			goto again;
+		}
 
 		CERROR("%s getting update log failed: rc = %d\n",
 		       dt->dd_lu_dev.ld_obd->obd_name, rc);
+		llog_ctxt_put(ctxt);
 		GOTO(out, rc);
 	}
+	llog_ctxt_put(ctxt);
 
 	CDEBUG(D_HA, "%s retrieve update log: rc = %d\n",
 	       dt->dd_lu_dev.ld_obd->obd_name, rc);
