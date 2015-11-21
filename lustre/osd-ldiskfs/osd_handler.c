@@ -2468,9 +2468,11 @@ static int osd_declare_object_destroy(const struct lu_env *env,
 	int		    rc;
 	ENTRY;
 
+	if (inode == NULL)
+		RETURN(-ENOENT);
+
 	oh = container_of0(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
-	LASSERT(inode);
 
 	osd_trans_declare_op(env, oh, OSD_OT_DESTROY,
 			     osd_dto_credits_noquota[DTO_OBJECT_DELETE]);
@@ -2942,6 +2944,9 @@ static int osd_declare_object_ref_del(const struct lu_env *env,
 				      struct thandle *handle)
 {
 	struct osd_thandle *oh;
+
+	if (!dt_object_exists(dt))
+		return -ENOENT;
 
 	LASSERT(!dt_object_remote(dt));
 	LASSERT(handle != NULL);
@@ -3602,7 +3607,8 @@ static int osd_index_declare_ea_delete(const struct lu_env *env,
 			     osd_dto_credits_noquota[DTO_OBJECT_DELETE]);
 
 	inode = osd_dt_obj(dt)->oo_inode;
-	LASSERT(inode);
+	if (inode == NULL)
+		RETURN(-ENOENT);
 
 	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
 				   0, oh, osd_dt_obj(dt), true, NULL, false);
