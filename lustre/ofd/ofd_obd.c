@@ -856,8 +856,11 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 	       osfs->os_files, osfs->os_ffree, osfs->os_state);
 
 	if (OBD_FAIL_CHECK_VALUE(OBD_FAIL_OST_ENOINO,
-				 ofd->ofd_lut.lut_lsd.lsd_osd_index))
-		osfs->os_ffree = 0;
+				 ofd->ofd_lut.lut_lsd.lsd_osd_index)) {
+		/* Reduce free inode count to zero, but keep "used" intact */
+		osfs->os_files -= osfs->os_ffree;
+		osfs->os_ffree -= osfs->os_ffree;
+	}
 
 	/* OS_STATE_READONLY can be set by OSD already */
 	if (ofd->ofd_raid_degraded)
@@ -877,8 +880,12 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 	}
 
 	if (OBD_FAIL_CHECK_VALUE(OBD_FAIL_OST_ENOSPC,
-				 ofd->ofd_lut.lut_lsd.lsd_osd_index))
-		osfs->os_bfree = osfs->os_bavail = 2;
+				 ofd->ofd_lut.lut_lsd.lsd_osd_index)) {
+		/* Reduce free blocks count near zero, but keep "used" intact */
+		osfs->os_bavail -= osfs->os_bavail - 2;
+		osfs->os_blocks -= osfs->os_bfree - 2;
+		osfs->os_bfree -= osfs->os_bfree - 2;
+	}
 
 	EXIT;
 out:
