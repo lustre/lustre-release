@@ -85,11 +85,12 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
 	if (unlikely(mdd_is_dead_obj(mdd_obj)))
 		RETURN(-ESTALE);
 
+	if (!mdd_object_exists(mdd_obj))
+		RETURN(-ESTALE);
+
 	if (mdd_object_remote(mdd_obj)) {
 		CDEBUG(D_INFO, "%s: Object "DFID" locates on remote server\n",
 		       mdd2obd_dev(m)->obd_name, PFID(mdo2fid(mdd_obj)));
-	} else if (!mdd_object_exists(mdd_obj)) {
-		RETURN(-ESTALE);
 	}
 
 	rc = mdd_permission_internal_locked(env, mdd_obj, pattr, mask,
@@ -231,6 +232,10 @@ static int mdd_is_parent(const struct lu_env *env,
 		parent = mdd_object_find(env, mdd, pfid);
 		if (IS_ERR(parent))
 			GOTO(out, rc = PTR_ERR(parent));
+
+		if (!mdd_object_exists(parent))
+			GOTO(out, rc = -EINVAL);
+
 		p1 = parent;
         }
         EXIT;
