@@ -522,11 +522,75 @@ void gss_delete_sec_context_kerberos(void *internal_ctx)
         OBD_FREE_PTR(kctx);
 }
 
-static
-void buf_to_sg(struct scatterlist *sg, void *ptr, int len)
+/*
+ * Should be used for buffers allocated with k/vmalloc().
+ *
+ * Dispose of @sgt with teardown_sgtable().
+ *
+ * @prealloc_sg is to avoid memory allocation inside sg_alloc_table()
+ * in cases where a single sg is sufficient.  No attempt to reduce the
+ * number of sgs by squeezing physically contiguous pages together is
+ * made though, for simplicity.
+ *
+ * This function is copied from the ceph filesystem code.
+ */
+static int setup_sgtable(struct sg_table *sgt, struct scatterlist *prealloc_sg,
+			 const void *buf, unsigned int buf_len)
 {
-	sg_init_table(sg, 1);
-	sg_set_buf(sg, ptr, len);
+	struct scatterlist *sg;
+	const bool is_vmalloc = is_vmalloc_addr(buf);
+	unsigned int off = offset_in_page(buf);
+	unsigned int chunk_cnt = 1;
+	unsigned int chunk_len = PAGE_ALIGN(off + buf_len);
+	int i;
+	int ret;
+
+	if (buf_len == 0) {
+		memset(sgt, 0, sizeof(*sgt));
+		return -EINVAL;
+	}
+
+	if (is_vmalloc) {
+		chunk_cnt = chunk_len >> PAGE_SHIFT;
+		chunk_len = PAGE_SIZE;
+	}
+
+	if (chunk_cnt > 1) {
+		ret = sg_alloc_table(sgt, chunk_cnt, GFP_NOFS);
+		if (ret)
+			return ret;
+	} else {
+		WARN_ON(chunk_cnt != 1);
+		sg_init_table(prealloc_sg, 1);
+		sgt->sgl = prealloc_sg;
+		sgt->nents = sgt->orig_nents = 1;
+	}
+
+	for_each_sg(sgt->sgl, sg, sgt->orig_nents, i) {
+		struct page *page;
+		unsigned int len = min(chunk_len - off, buf_len);
+
+		if (is_vmalloc)
+			page = vmalloc_to_page(buf);
+		else
+			page = virt_to_page(buf);
+
+		sg_set_page(sg, page, len, off);
+
+		off = 0;
+		buf += len;
+		buf_len -= len;
+	}
+
+	WARN_ON(buf_len != 0);
+
+	return 0;
+}
+
+static void teardown_sgtable(struct sg_table *sgt)
+{
+	if (sgt->orig_nents > 1)
+		sg_free_table(sgt);
 }
 
 static
@@ -537,6 +601,7 @@ __u32 krb5_encrypt(struct crypto_blkcipher *tfm,
                    void * out,
                    int length)
 {
+	struct sg_table sg_out;
         struct blkcipher_desc desc;
         struct scatterlist    sg;
         __u8 local_iv[16] = {0};
@@ -555,22 +620,28 @@ __u32 krb5_encrypt(struct crypto_blkcipher *tfm,
 
 	if (crypto_blkcipher_ivsize(tfm) > 16) {
 		CERROR("iv size too large %d\n", crypto_blkcipher_ivsize(tfm));
-                goto out;
-        }
+		goto out;
+	}
 
-        if (iv)
+	if (iv)
 		memcpy(local_iv, iv, crypto_blkcipher_ivsize(tfm));
 
-        memcpy(out, in, length);
-        buf_to_sg(&sg, out, length);
+	memcpy(out, in, length);
+
+	ret = setup_sgtable(&sg_out, &sg, out, length);
+	if (ret != 0)
+		goto out;
 
         if (decrypt)
-		ret = crypto_blkcipher_decrypt_iv(&desc, &sg, &sg, length);
+		ret = crypto_blkcipher_decrypt_iv(&desc, sg_out.sgl,
+						  sg_out.sgl, length);
         else
-		ret = crypto_blkcipher_encrypt_iv(&desc, &sg, &sg, length);
+		ret = crypto_blkcipher_encrypt_iv(&desc, sg_out.sgl,
+						  sg_out.sgl, length);
 
+	teardown_sgtable(&sg_out);
 out:
-        return(ret);
+	return ret;
 }
 
 static inline
@@ -581,9 +652,10 @@ int krb5_digest_hmac(struct crypto_hash *tfm,
                      int iovcnt, lnet_kiov_t *iovs,
                      rawobj_t *cksum)
 {
-        struct hash_desc   desc;
-        struct scatterlist sg[1];
-        int                i;
+	struct hash_desc	desc;
+	struct sg_table		sgt;
+	struct scatterlist	sg[1];
+	int			i, rc;
 
 	crypto_hash_setkey(tfm, key->data, key->len);
         desc.tfm  = tfm;
@@ -594,8 +666,14 @@ int krb5_digest_hmac(struct crypto_hash *tfm,
         for (i = 0; i < msgcnt; i++) {
                 if (msgs[i].len == 0)
                         continue;
-                buf_to_sg(sg, (char *) msgs[i].data, msgs[i].len);
-		crypto_hash_update(&desc, sg, msgs[i].len);
+
+		rc = setup_sgtable(&sgt, sg, msgs[i].data, msgs[i].len);
+		if (rc != 0)
+			return rc;
+
+		crypto_hash_update(&desc, sgt.sgl, msgs[i].len);
+
+		teardown_sgtable(&sgt);
         }
 
         for (i = 0; i < iovcnt; i++) {
@@ -609,8 +687,13 @@ int krb5_digest_hmac(struct crypto_hash *tfm,
         }
 
         if (khdr) {
-                buf_to_sg(sg, (char *) khdr, sizeof(*khdr));
-		crypto_hash_update(&desc, sg, sizeof(*khdr));
+		rc = setup_sgtable(&sgt, sg, (char *) khdr, sizeof(*khdr));
+		if (rc != 0)
+			return rc;
+
+		crypto_hash_update(&desc, sgt.sgl, sizeof(*khdr));
+
+		teardown_sgtable(&sgt);
         }
 
 	return crypto_hash_final(&desc, cksum->data);
@@ -624,9 +707,10 @@ int krb5_digest_norm(struct crypto_hash *tfm,
                      int iovcnt, lnet_kiov_t *iovs,
                      rawobj_t *cksum)
 {
-        struct hash_desc   desc;
-        struct scatterlist sg[1];
-        int                i;
+	struct hash_desc	desc;
+	struct scatterlist	sg[1];
+	struct sg_table		sgt;
+	int			i, rc;
 
         LASSERT(kb->kb_tfm);
         desc.tfm  = tfm;
@@ -637,8 +721,14 @@ int krb5_digest_norm(struct crypto_hash *tfm,
         for (i = 0; i < msgcnt; i++) {
                 if (msgs[i].len == 0)
                         continue;
-                buf_to_sg(sg, (char *) msgs[i].data, msgs[i].len);
-		crypto_hash_update(&desc, sg, msgs[i].len);
+
+		rc = setup_sgtable(&sgt, sg, msgs[i].data, msgs[i].len);
+		if (rc != 0)
+			return rc;
+
+		crypto_hash_update(&desc, sgt.sgl, msgs[i].len);
+
+		teardown_sgtable(&sgt);
         }
 
         for (i = 0; i < iovcnt; i++) {
@@ -652,9 +742,14 @@ int krb5_digest_norm(struct crypto_hash *tfm,
         }
 
         if (khdr) {
-                buf_to_sg(sg, (char *) khdr, sizeof(*khdr));
-		crypto_hash_update(&desc, sg, sizeof(*khdr));
-        }
+		rc = setup_sgtable(&sgt, sg, (char *) khdr, sizeof(*khdr));
+		if (rc != 0)
+			return rc;
+
+		crypto_hash_update(&desc, sgt.sgl, sizeof(*khdr));
+
+		teardown_sgtable(&sgt);
+	}
 
 	crypto_hash_final(&desc, cksum->data);
 
@@ -888,6 +983,7 @@ int krb5_encrypt_rawobjs(struct crypto_blkcipher *tfm,
 {
         struct blkcipher_desc desc;
         struct scatterlist    src, dst;
+	struct sg_table		sg_src, sg_dst;
         __u8                  local_iv[16] = {0}, *buf;
         __u32                 datalen = 0;
         int                   i, rc;
@@ -899,26 +995,44 @@ int krb5_encrypt_rawobjs(struct crypto_blkcipher *tfm,
         desc.flags = 0;
 
         for (i = 0; i < inobj_cnt; i++) {
-                LASSERT(buf + inobjs[i].len <= outobj->data + outobj->len);
+		LASSERT(buf + inobjs[i].len <= outobj->data + outobj->len);
 
-                buf_to_sg(&src, inobjs[i].data, inobjs[i].len);
-                buf_to_sg(&dst, buf, outobj->len - datalen);
+		rc = setup_sgtable(&sg_src, &src, inobjs[i].data,
+				   inobjs[i].len);
+		if (rc != 0)
+			RETURN(rc);
+
+		rc = setup_sgtable(&sg_dst, &dst, buf,
+				   outobj->len - datalen);
+		if (rc != 0) {
+			teardown_sgtable(&sg_src);
+			RETURN(rc);
+		}
 
                 if (mode_ecb) {
                         if (enc)
-				rc = crypto_blkcipher_encrypt(
-                                        &desc, &dst, &src, src.length);
+				rc = crypto_blkcipher_encrypt(&desc, sg_dst.sgl,
+							      sg_src.sgl,
+							      inobjs[i].len);
                         else
-				rc = crypto_blkcipher_decrypt(
-                                        &desc, &dst, &src, src.length);
+				rc = crypto_blkcipher_decrypt(&desc, sg_dst.sgl,
+							      sg_src.sgl,
+							      inobjs[i].len);
                 } else {
                         if (enc)
-				rc = crypto_blkcipher_encrypt_iv(
-                                        &desc, &dst, &src, src.length);
+				rc = crypto_blkcipher_encrypt_iv(&desc,
+								 sg_dst.sgl,
+								 sg_src.sgl,
+								 inobjs[i].len);
                         else
-				rc = crypto_blkcipher_decrypt_iv(
-                                        &desc, &dst, &src, src.length);
+				rc = crypto_blkcipher_decrypt_iv(&desc,
+								 sg_dst.sgl,
+								 sg_src.sgl,
+								 inobjs[i].len);
                 }
+
+		teardown_sgtable(&sg_src);
+		teardown_sgtable(&sg_dst);
 
                 if (rc) {
                         CERROR("encrypt error %d\n", rc);
@@ -947,6 +1061,7 @@ int krb5_encrypt_bulk(struct crypto_blkcipher *tfm,
         struct blkcipher_desc   ciph_desc;
         __u8                    local_iv[16] = {0};
         struct scatterlist      src, dst;
+	struct sg_table		sg_src, sg_dst;
         int                     blocksize, i, rc, nob = 0;
 
 	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
@@ -962,10 +1077,22 @@ int krb5_encrypt_bulk(struct crypto_blkcipher *tfm,
         ciph_desc.flags = 0;
 
         /* encrypt confounder */
-        buf_to_sg(&src, confounder, blocksize);
-        buf_to_sg(&dst, cipher->data, blocksize);
+	rc = setup_sgtable(&sg_src, &src, confounder, blocksize);
+	if (rc != 0)
+		return rc;
 
-	rc = crypto_blkcipher_encrypt_iv(&ciph_desc, &dst, &src, blocksize);
+	rc = setup_sgtable(&sg_dst, &dst, cipher->data, blocksize);
+	if (rc != 0) {
+		teardown_sgtable(&sg_src);
+		return rc;
+	}
+
+	rc = crypto_blkcipher_encrypt_iv(&ciph_desc, sg_dst.sgl,
+					 sg_src.sgl, blocksize);
+
+	teardown_sgtable(&sg_dst);
+	teardown_sgtable(&sg_src);
+
         if (rc) {
                 CERROR("error to encrypt confounder: %d\n", rc);
                 return rc;
@@ -997,11 +1124,23 @@ int krb5_encrypt_bulk(struct crypto_blkcipher *tfm,
         }
 
         /* encrypt krb5 header */
-        buf_to_sg(&src, khdr, sizeof(*khdr));
-        buf_to_sg(&dst, cipher->data + blocksize, sizeof(*khdr));
+	rc = setup_sgtable(&sg_src, &src, khdr, sizeof(*khdr));
+	if (rc != 0)
+		return rc;
 
-	rc = crypto_blkcipher_encrypt_iv(&ciph_desc, &dst, &src,
+	rc = setup_sgtable(&sg_dst, &dst, cipher->data + blocksize,
+			   sizeof(*khdr));
+	if (rc != 0) {
+		teardown_sgtable(&sg_src);
+		return rc;
+	}
+
+	rc = crypto_blkcipher_encrypt_iv(&ciph_desc, sg_dst.sgl, sg_src.sgl,
 					 sizeof(*khdr));
+
+	teardown_sgtable(&sg_dst);
+	teardown_sgtable(&sg_src);
+
         if (rc) {
                 CERROR("error to encrypt krb5 header: %d\n", rc);
                 return rc;
@@ -1042,6 +1181,7 @@ int krb5_decrypt_bulk(struct crypto_blkcipher *tfm,
         struct blkcipher_desc   ciph_desc;
         __u8                    local_iv[16] = {0};
         struct scatterlist      src, dst;
+	struct sg_table		sg_src, sg_dst;
         int                     ct_nob = 0, pt_nob = 0;
         int                     blocksize, i, rc;
 
@@ -1064,10 +1204,22 @@ int krb5_decrypt_bulk(struct crypto_blkcipher *tfm,
         }
 
         /* decrypt head (confounder) */
-        buf_to_sg(&src, cipher->data, blocksize);
-        buf_to_sg(&dst, plain->data, blocksize);
+	rc = setup_sgtable(&sg_src, &src, cipher->data, blocksize);
+	if (rc != 0)
+		return rc;
 
-	rc = crypto_blkcipher_decrypt_iv(&ciph_desc, &dst, &src, blocksize);
+	rc = setup_sgtable(&sg_dst, &dst, plain->data, blocksize);
+	if (rc != 0) {
+		teardown_sgtable(&sg_src);
+		return rc;
+	}
+
+	rc = crypto_blkcipher_decrypt_iv(&ciph_desc, sg_dst.sgl,
+					 sg_src.sgl, blocksize);
+
+	teardown_sgtable(&sg_dst);
+	teardown_sgtable(&sg_src);
+
         if (rc) {
                 CERROR("error to decrypt confounder: %d\n", rc);
                 return rc;
@@ -1157,11 +1309,24 @@ int krb5_decrypt_bulk(struct crypto_blkcipher *tfm,
 			BD_GET_KIOV(desc, i++).kiov_len = 0;
 
         /* decrypt tail (krb5 header) */
-        buf_to_sg(&src, cipher->data + blocksize, sizeof(*khdr));
-        buf_to_sg(&dst, cipher->data + blocksize, sizeof(*khdr));
+	rc = setup_sgtable(&sg_src, &src, cipher->data + blocksize,
+			   sizeof(*khdr));
+	if (rc != 0)
+		return rc;
 
-	rc = crypto_blkcipher_decrypt_iv(&ciph_desc, &dst, &src,
+	rc = setup_sgtable(&sg_dst, &dst, cipher->data + blocksize,
+			   sizeof(*khdr));
+	if (rc != 0) {
+		teardown_sgtable(&sg_src);
+		return rc;
+	}
+
+	rc = crypto_blkcipher_decrypt_iv(&ciph_desc, sg_dst.sgl, sg_src.sgl,
 					 sizeof(*khdr));
+
+	teardown_sgtable(&sg_src);
+	teardown_sgtable(&sg_dst);
+
         if (rc) {
                 CERROR("error to decrypt tail: %d\n", rc);
                 return rc;
