@@ -2394,7 +2394,8 @@ static int do_osd_scrub_start(struct osd_device *dev, __u32 flags)
 again:
 	if (thread_is_running(thread)) {
 		spin_unlock(&scrub->os_lock);
-		if (!(scrub->os_file.sf_flags & SF_AUTO) ||
+		if (!(scrub->os_file.sf_flags & SF_AUTO ||
+		      scrub->os_partial_scan) ||
 		     (flags & (SS_AUTO_FULL | SS_AUTO_PARTIAL)))
 			RETURN(-EALREADY);
 
@@ -2893,6 +2894,8 @@ static int osd_otable_it_load(const struct lu_env *env,
 	/* Forbid to set iteration position after iteration started. */
 	if (it->ooi_user_ready)
 		RETURN(-EPERM);
+
+	LASSERT(!scrub->os_partial_scan);
 
 	if (hash > OSD_OTABLE_MAX_HASH)
 		hash = OSD_OTABLE_MAX_HASH;
