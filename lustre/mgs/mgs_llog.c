@@ -2579,7 +2579,7 @@ out_end:
 			GOTO(out_free, rc);
         }
 	rc = mgs_write_log_osc_to_lov(env, mgs, fsdb, mti, logname, "",
-				      fsdb->fsdb_clilov, LUSTRE_SP_CLI, 0);
+				      fsdb->fsdb_clilov, LUSTRE_SP_CLI, flags);
 out_free:
         name_destroy(&logname);
         RETURN(rc);
