@@ -14249,6 +14249,26 @@ test_400b() { # LU-1606, LU-5011
 }
 run_test 400b "packaged headers can be compiled"
 
+test_401() { #LU-7437
+	local params
+	local procs
+
+	#count the number of parameters by "list_param -R"
+	params=$($LCTL list_param -R '*' 2>/dev/null | wc -l)
+	#count the number of parameters by listing proc files
+	ls -lRL /proc/{fs,sys}/{lnet,lustre} 2>/dev/null |
+		grep -v "^t" | grep -v "^d" > $TMP/$tfile
+	#Since there is no /proc/fs/lnet, we need to remove other
+	#3 directories, /proc/{fs,sys}/lustre and /proc/sys/lnet.
+	procs=$(($(sed /^$/d $TMP/$tfile | wc -l)-3))
+
+	[ $params -eq $procs ] ||
+		error "found $params parameters vs. $procs proc files"
+
+	rm -f $TMP/$tfile
+}
+run_test 401 "Verify if 'lctl list_param -R' can list parameters recursively"
+
 #
 # tests that do cleanup/setup should be run at the end
 #
