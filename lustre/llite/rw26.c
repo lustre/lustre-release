@@ -186,53 +186,6 @@ static int ll_releasepage(struct page *vmpage, RELEASEPAGE_ARG_TYPE gfp_mask)
 
 #define MAX_DIRECTIO_SIZE 2*1024*1024*1024UL
 
-static inline int ll_get_user_pages(int rw, unsigned long user_addr,
-                                    size_t size, struct page ***pages,
-                                    int *max_pages)
-{
-        int result = -ENOMEM;
-
-        /* set an arbitrary limit to prevent arithmetic overflow */
-        if (size > MAX_DIRECTIO_SIZE) {
-                *pages = NULL;
-                return -EFBIG;
-        }
-
-	*max_pages = (user_addr + size + PAGE_CACHE_SIZE - 1) >>
-		     PAGE_CACHE_SHIFT;
-	*max_pages -= user_addr >> PAGE_CACHE_SHIFT;
-
-        OBD_ALLOC_LARGE(*pages, *max_pages * sizeof(**pages));
-        if (*pages) {
-                down_read(&current->mm->mmap_sem);
-                result = get_user_pages(current, current->mm, user_addr,
-                                        *max_pages, (rw == READ), 0, *pages,
-                                        NULL);
-                up_read(&current->mm->mmap_sem);
-                if (unlikely(result <= 0))
-                        OBD_FREE_LARGE(*pages, *max_pages * sizeof(**pages));
-        }
-
-        return result;
-}
-
-/*  ll_free_user_pages - tear down page struct array
- *  @pages: array of page struct pointers underlying target buffer */
-static void ll_free_user_pages(struct page **pages, int npages, int do_dirty)
-{
-        int i;
-
-        for (i = 0; i < npages; i++) {
-                if (pages[i] == NULL)
-                        break;
-                if (do_dirty)
-                        set_page_dirty_lock(pages[i]);
-                page_cache_release(pages[i]);
-        }
-
-        OBD_FREE_LARGE(pages, npages * sizeof(*pages));
-}
-
 ssize_t ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io,
                            int rw, struct inode *inode,
                            struct ll_dio_pages *pv)
@@ -352,6 +305,27 @@ ll_direct_IO_seg(const struct lu_env *env, struct cl_io *io, int rw,
 				   };
 
 	return ll_direct_rw_pages(env, io, rw, inode, &pvec);
+}
+
+/*  ll_free_user_pages - tear down page struct array
+ *  @pages: array of page struct pointers underlying target buffer */
+static void ll_free_user_pages(struct page **pages, int npages, int do_dirty)
+{
+	int i;
+
+	for (i = 0; i < npages; i++) {
+		if (pages[i] == NULL)
+			break;
+		if (do_dirty)
+			set_page_dirty_lock(pages[i]);
+		page_cache_release(pages[i]);
+	}
+
+#if defined(HAVE_DIRECTIO_ITER) || defined(HAVE_IOV_ITER_RW)
+	kvfree(pages);
+#else
+	OBD_FREE(pages, npages * sizeof(*pages));
+#endif
 }
 
 #ifdef KMALLOC_MAX_SIZE
@@ -478,6 +452,37 @@ out:
 	return tot_bytes ? : result;
 }
 #else /* !HAVE_DIRECTIO_ITER && !HAVE_IOV_ITER_RW */
+
+static inline int ll_get_user_pages(int rw, unsigned long user_addr,
+				    size_t size, struct page ***pages,
+				    int *max_pages)
+{
+	int result = -ENOMEM;
+
+	/* set an arbitrary limit to prevent arithmetic overflow */
+	if (size > MAX_DIRECTIO_SIZE) {
+		*pages = NULL;
+		return -EFBIG;
+	}
+
+	*max_pages = (user_addr + size + PAGE_CACHE_SIZE - 1) >>
+		      PAGE_CACHE_SHIFT;
+	*max_pages -= user_addr >> PAGE_CACHE_SHIFT;
+
+	OBD_ALLOC_LARGE(*pages, *max_pages * sizeof(**pages));
+	if (*pages) {
+		down_read(&current->mm->mmap_sem);
+		result = get_user_pages(current, current->mm, user_addr,
+					*max_pages, (rw == READ), 0, *pages,
+					NULL);
+		up_read(&current->mm->mmap_sem);
+		if (unlikely(result <= 0))
+			OBD_FREE(*pages, *max_pages * sizeof(**pages));
+	}
+
+	return result;
+}
+
 static ssize_t
 ll_direct_IO(int rw, struct kiocb *iocb, const struct iovec *iov,
 	     loff_t file_offset, unsigned long nr_segs)
