@@ -683,7 +683,8 @@ test_7a()
 
 	# Generate pool with random name from 1 to 15 characters
 	for i in 1 9 15 ; do
-		POOLNAME=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w $i |
+		POOLNAME=$(echo $$$RANDOM$RANDOM |
+			   tr -dc 'a-zA-Z0-9' | fold -w $i |
 			   head -n 1)
 		echo set poolname to $POOLNAME
 		helper_test_7a $POOLNAME
