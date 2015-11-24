@@ -3516,6 +3516,7 @@ static int lfsck_layout_async_query(const struct lu_env *env,
 	llsaa->llsaa_com = lfsck_component_get(com);
 	llsaa->llsaa_llst = llst;
 	req->rq_interpret_reply = lfsck_layout_slave_async_interpret;
+	req->rq_allow_intr = 1;
 	ptlrpc_set_add_req(set, req);
 
 	RETURN(0);
@@ -3544,6 +3545,7 @@ static int lfsck_layout_async_notify(const struct lu_env *env,
 	tmp = req_capsule_client_get(&req->rq_pill, &RMF_LFSCK_REQUEST);
 	*tmp = *lr;
 	ptlrpc_request_set_replen(req);
+	req->rq_allow_intr = 1;
 	ptlrpc_set_add_req(set, req);
 
 	RETURN(0);
