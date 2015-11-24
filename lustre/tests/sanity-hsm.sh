@@ -698,8 +698,7 @@ make_custom_file_for_progress() {
 	[[ $blksz -gt 0 ]] || error "Invalid stripe size"
 
 	cleanup_large_files
-	check_enough_free_space $fsize $blksz
-	[ $? != 0 ] && return $?
+	check_enough_free_space $fsize $blksz || return $?
 	dd if=/dev/zero of=$file2 count=$fsize bs=$blksz conv=fsync ||
 		file_creation_failure dd $file2 $?
 	path2fid $1 || error "cannot get fid on $1"
