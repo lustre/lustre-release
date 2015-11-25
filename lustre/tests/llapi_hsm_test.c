@@ -522,6 +522,7 @@ void helper_archiving(void (*progress)
 	hur->hur_request.hr_flags = 0;
 	hur->hur_request.hr_itemcount = 1;
 	hur->hur_request.hr_data_len = 0;
+	hur->hur_user_item[0].hui_extent.offset = 0;
 	hur->hur_user_item[0].hui_extent.length = -1;
 
 	rc = llapi_fd2fid(fd, &hur->hur_user_item[0].hui_fid);
