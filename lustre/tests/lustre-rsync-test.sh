@@ -211,6 +211,7 @@ run_test 1 "Simple Replication"
 test_1a() { # LU-5005
 	rm -rf $TGT/root-* 2> /dev/null
 	rm -rf $DIR/root-* 2> /dev/null
+	init_src
 	init_changelog
 
 	# Directory create
@@ -243,6 +244,7 @@ test_1a() { # LU-5005
 	stat $TGT/root-dir1 && error "Dir delete not replicated"
 	stat $TGT/root-file4 && error "File delete not replicated"
 
+	cleanup_src_tgt
 	fini_changelog
 	rm -fr $TGT/root-*
 	rm -fr $DIR/root-*
