@@ -544,35 +544,50 @@ run_connectathon() {
 }
 
 run_ior() {
-    local type=${1:="ssf"}
+	local type=${1:="ssf"}
 
-    IOR=${IOR:-$(which IOR 2> /dev/null || true)}
-    # threads per client
-    ior_THREADS=${ior_THREADS:-2}
-    ior_iteration=${ior_iteration:-1}
-    ior_blockSize=${ior_blockSize:-6}	# GB
-    ior_xferSize=${ior_xferSize:-2m}
-    ior_type=${ior_type:-POSIX}
-    ior_DURATION=${ior_DURATION:-30}	# minutes
+	IOR=${IOR:-$(which IOR 2> /dev/null || true)}
+	# threads per client
+	ior_THREADS=${ior_THREADS:-2}
+	ior_iteration=${ior_iteration:-1}
+	ior_blockSize=${ior_blockSize:-6}
+	ior_blockUnit=${ior_blockUnit:-M}   # K, M, G
+	ior_xferSize=${ior_xferSize:-1M}
+	ior_type=${ior_type:-POSIX}
+	ior_DURATION=${ior_DURATION:-30}        # minutes
+	local multiplier=1
+	case ${ior_blockUnit} in
+		[G])
+			multiplier=$((1024 * 1024 * 1024))
+			;;
+		[M])
+			multiplier=$((1024 * 1024))
+			;;
+		[K])
+			multiplier=1024
+			;;
+		*)      error "Incorrect block unit should be one of [KMG]"
+			;;
+	esac
 
-    [ x$IOR = x ] &&
+	[ x$IOR = x ] &&
         { skip_env "IOR not found" && return; }
 
-    local space=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
-    local total_threads=$(( num_clients * ior_THREADS ))
-    echo "+ $ior_blockSize * 1024 * 1024 * $total_threads "
-    if [ $((space / 2)) -le \
-        $(( ior_blockSize * 1024 * 1024 * total_threads)) ]; then
-        echo "+ $space * 9/10 / 1024 / 1024 / $num_clients / $ior_THREADS"
-        ior_blockSize=$(( space /2 /1024 /1024 / num_clients / ior_THREADS ))
-        [ $ior_blockSize = 0 ] && \
-            skip_env "Need free space more than $((2 * total_threads))GB: \
-                $((total_threads *1024 *1024*2)), have $space" && return
+	# calculate the space in bytes
+	local space=$(df -B 1 -P $DIR | tail -n 1 | awk '{ print $4 }')
+	local total_threads=$((num_clients * ior_THREADS))
+	echo "+ $ior_blockSize * $multiplier * $total_threads "
+	if [ $((space / 2)) -le \
+	     $((ior_blockSize * multiplier * total_threads)) ]; then
+		ior_blockSize=$((space / 2 / multiplier / total_threads))
+		[ $ior_blockSize -eq 0 ] && \
+		skip_env "Need free space more than $((2 * total_threads)) \
+			 ${ior_blockUnit}: have $((space / multiplier))" &&
+			 return
 
-        local reduced_size="$num_clients x $ior_THREADS x $ior_blockSize"
-        echo "free space=$space, Need: $reduced_size GB"
-        echo "(blockSize reduced to $ior_blockSize Gb)"
-    fi
+		echo "(reduced blockSize to $ior_blockSize \
+		     ${ior_blockUnit} bytes)"
+	fi
 
     print_opts IOR ior_THREADS ior_DURATION MACHINEFILE
 
@@ -587,21 +602,23 @@ run_ior() {
         $LFS setstripe $testdir -c -1 ||
             { error "setstripe failed" && return 2; }
     fi
-    #
-    # -b N  blockSize --
-    #       contiguous bytes to write per task (e.g.: 8, 4k, 2m, 1g)"
-    # -o S  testFileName
-    # -t N  transferSize -- size of transfer in bytes (e.g.: 8, 4k, 2m, 1g)"
-    # -w    writeFile -- write file"
-    # -r    readFile -- read existing file"
-    # -W    checkWrite -- check read after write"
-    # -C    reorderTasks -- changes task ordering to n+1 ordering for readback
-    # -T    maxTimeDuration -- max time in minutes to run tests"
-    # -k    keepFile -- keep testFile(s) on program exit
+	#
+	# -b N  blockSize --
+	#       contiguous bytes to write per task (e.g.: 8, 4K, 2M, 1G)"
+	# -o S  testFileName
+	# -t N  transferSize -- size of transfer in bytes (e.g.: 8, 4K, 2M, 1G)"
+	# -w    writeFile -- write file"
+	# -r    readFile -- read existing file"
+	# -W    checkWrite -- check read after write"
+	# -C    reorderTasks -- changes task ordering to n+1 ordering for readback
+	# -T    maxTimeDuration -- max time in minutes to run tests"
+	# -k    keepFile -- keep testFile(s) on program exit
 
-    local cmd="$IOR -a $ior_type -b ${ior_blockSize}g -o $testdir/iorData \
-         -t $ior_xferSize -v -C -w -r -W -i $ior_iteration -T $ior_DURATION -k"
-    [ $type = "fpp" ] && cmd="$cmd -F"
+	local cmd="$IOR -a $ior_type -b ${ior_blockSize}${ior_blockUnit} \
+		-o $testdir/iorData -t $ior_xferSize -v -C -w -r -W \
+		-i $ior_iteration -T $ior_DURATION -k"
+
+	[ $type = "fpp" ] && cmd="$cmd -F"
 
 	echo "+ $cmd"
 	# find out if we need to use srun by checking $SRUN_PARTITION
