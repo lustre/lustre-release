@@ -355,9 +355,9 @@ typedef struct {
          * than LNET_MAX_IOV. The lnet_kiov_t is used to describe page-based
          * fragments that are not necessarily mapped in virtal memory.
          * - LNET_MD_IOVEC bit set: The start field points to the starting
-         * address of an array of struct iovec and the length field specifies
+	 * address of an array of struct kvec and the length field specifies
          * the number of entries in the array. The length can't be bigger
-         * than LNET_MAX_IOV. The struct iovec is used to describe fragments
+	 * than LNET_MAX_IOV. The struct kvec is used to describe fragments
          * that have virtual addresses.
          * - Otherwise: The memory region is contiguous. The start field
          * specifies the starting address for the memory region and the

@@ -114,7 +114,7 @@ typedef struct lnet_msg {
         unsigned int          msg_wanted;
         unsigned int          msg_offset;
         unsigned int          msg_niov;
-        struct iovec         *msg_iov;
+	struct kvec	     *msg_iov;
         lnet_kiov_t          *msg_kiov;
 
         lnet_event_t          msg_ev;
@@ -169,7 +169,7 @@ typedef struct lnet_libmd {
 	lnet_eq_t	       *md_eq;
 	unsigned int		md_niov;	/* # frags */
 	union {
-		struct iovec	iov[LNET_MAX_IOV];
+		struct kvec	iov[LNET_MAX_IOV];
 		lnet_kiov_t	kiov[LNET_MAX_IOV];
 	} md_iov;
 } lnet_libmd_t;
@@ -210,7 +210,7 @@ typedef struct lnet_lnd
         /* In data movement APIs below, payload buffers are described as a set
          * of 'niov' fragments which are...
          * EITHER
-         *    in virtual memory (struct iovec *iov != NULL)
+	 *    in virtual memory (struct kvec *iov != NULL)
          * OR
          *    in pages (kernel only: plt_kiov_t *kiov != NULL).
          * The LND may NOT overwrite these fragment descriptors.
@@ -232,7 +232,7 @@ typedef struct lnet_lnd
          * credit if the LND does flow control. */
         int (*lnd_recv)(struct lnet_ni *ni, void *private, lnet_msg_t *msg,
                         int delayed, unsigned int niov,
-                        struct iovec *iov, lnet_kiov_t *kiov,
+			struct kvec *iov, lnet_kiov_t *kiov,
                         unsigned int offset, unsigned int mlen, unsigned int rlen);
 
         /* lnet_parse() has had to delay processing of this message

@@ -1741,7 +1741,7 @@ int kgnilnd_eager_recv(lnet_ni_t *ni, void *private,
 			lnet_msg_t *lntmsg, void **new_private);
 int kgnilnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
 		int delayed, unsigned int niov,
-		struct iovec *iov, lnet_kiov_t *kiov,
+		struct kvec *iov, lnet_kiov_t *kiov,
 		unsigned int offset, unsigned int mlen, unsigned int rlen);
 
 __u16 kgnilnd_cksum_kiov(unsigned int nkiov, lnet_kiov_t *kiov, unsigned int offset, unsigned int nob, int dump_blob);

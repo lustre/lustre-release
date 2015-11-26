@@ -490,9 +490,9 @@ kgnilnd_nak_rdma(kgn_conn_t *conn, int rx_type, int error, __u64 cookie, lnet_ni
 }
 
 int
-kgnilnd_setup_immediate_buffer(kgn_tx_t *tx, unsigned int niov, struct iovec *iov,
-			       lnet_kiov_t *kiov, unsigned int offset, unsigned int nob)
-
+kgnilnd_setup_immediate_buffer(kgn_tx_t *tx, unsigned int niov,
+			       struct kvec *iov, lnet_kiov_t *kiov,
+			       unsigned int offset, unsigned int nob)
 {
 	kgn_msg_t       *msg = &tx->tx_msg;
 	int              i;
@@ -605,7 +605,7 @@ kgnilnd_setup_immediate_buffer(kgn_tx_t *tx, unsigned int niov, struct iovec *io
 
 int
 kgnilnd_setup_virt_buffer(kgn_tx_t *tx,
-			  unsigned int niov, struct iovec *iov,
+			  unsigned int niov, struct kvec *iov,
 			  unsigned int offset, unsigned int nob)
 
 {
@@ -745,7 +745,7 @@ error:
 
 static inline int
 kgnilnd_setup_rdma_buffer(kgn_tx_t *tx, unsigned int niov,
-			  struct iovec *iov, lnet_kiov_t *kiov,
+			  struct kvec *iov, lnet_kiov_t *kiov,
 			  unsigned int offset, unsigned int nob)
 {
 	int     rc;
@@ -2113,7 +2113,7 @@ kgnilnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 	int               target_is_router = lntmsg->msg_target_is_router;
 	int               routing = lntmsg->msg_routing;
 	unsigned int      niov = lntmsg->msg_niov;
-	struct iovec     *iov = lntmsg->msg_iov;
+	struct kvec      *iov = lntmsg->msg_iov;
 	lnet_kiov_t      *kiov = lntmsg->msg_kiov;
 	unsigned int      offset = lntmsg->msg_offset;
 	unsigned int      nob = lntmsg->msg_len;
@@ -2282,7 +2282,7 @@ kgnilnd_setup_rdma(lnet_ni_t *ni, kgn_rx_t *rx, lnet_msg_t *lntmsg, int mlen)
 	kgn_conn_t    *conn = rx->grx_conn;
 	kgn_msg_t     *rxmsg = rx->grx_msg;
 	unsigned int   niov = lntmsg->msg_niov;
-	struct iovec  *iov = lntmsg->msg_iov;
+	struct kvec   *iov = lntmsg->msg_iov;
 	lnet_kiov_t   *kiov = lntmsg->msg_kiov;
 	unsigned int   offset = lntmsg->msg_offset;
 	unsigned int   nob = lntmsg->msg_len;
@@ -2431,7 +2431,7 @@ kgnilnd_eager_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
 int
 kgnilnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
 	     int delayed, unsigned int niov,
-	     struct iovec *iov, lnet_kiov_t *kiov,
+	     struct kvec *iov, lnet_kiov_t *kiov,
 	     unsigned int offset, unsigned int mlen, unsigned int rlen)
 {
 	kgn_rx_t    *rx = private;

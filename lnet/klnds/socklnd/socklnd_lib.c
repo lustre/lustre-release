@@ -398,12 +398,12 @@ ksocknal_lib_send_iov(ksock_conn_t *conn, ksock_tx_t *tx)
 
 	{
 #if SOCKNAL_SINGLE_FRAG_TX
-		struct iovec	scratch;
-		struct iovec   *scratchiov = &scratch;
-		unsigned int	niov = 1;
+		struct kvec scratch;
+		struct kvec *scratchiov = &scratch;
+		unsigned int niov = 1;
 #else
-                struct iovec   *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
-		unsigned int	niov = tx->tx_niov;
+		struct kvec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
+		unsigned int niov = tx->tx_niov;
 #endif
 		struct msghdr msg = { .msg_flags = MSG_DONTWAIT };
                 int  i;
@@ -417,8 +417,7 @@ ksocknal_lib_send_iov(ksock_conn_t *conn, ksock_tx_t *tx)
 		    nob < tx->tx_resid)
 			msg.msg_flags |= MSG_MORE;
 
-		rc = kernel_sendmsg(sock, &msg, (struct kvec *)scratchiov,
-				    niov, nob);
+		rc = kernel_sendmsg(sock, &msg, scratchiov, niov, nob);
 	}
 	return rc;
 }
@@ -460,14 +459,14 @@ ksocknal_lib_send_kiov(ksock_conn_t *conn, ksock_tx_t *tx)
                 }
         } else {
 #if SOCKNAL_SINGLE_FRAG_TX || !SOCKNAL_RISK_KMAP_DEADLOCK
-		struct iovec	scratch;
-		struct iovec   *scratchiov = &scratch;
+		struct kvec	scratch;
+		struct kvec   *scratchiov = &scratch;
 		unsigned int	niov = 1;
 #else
 #ifdef CONFIG_HIGHMEM
 #warning "XXX risk of kmap deadlock on multiple frags..."
 #endif
-		struct iovec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
+		struct kvec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
 		unsigned int  niov = tx->tx_nkiov;
 #endif
 		struct msghdr msg = { .msg_flags = MSG_DONTWAIT };
@@ -483,7 +482,7 @@ ksocknal_lib_send_kiov(ksock_conn_t *conn, ksock_tx_t *tx)
 		    nob < tx->tx_resid)
 			msg.msg_flags |= MSG_MORE;
 
-		rc = kernel_sendmsg(sock, &msg, (struct kvec *)scratchiov, niov, nob);
+		rc = kernel_sendmsg(sock, &msg, scratchiov, niov, nob);
 
 		for (i = 0; i < niov; i++)
 			kunmap(kiov[i].kiov_page);
@@ -513,14 +512,14 @@ int
 ksocknal_lib_recv_iov (ksock_conn_t *conn)
 {
 #if SOCKNAL_SINGLE_FRAG_RX
-	struct iovec  scratch;
-	struct iovec *scratchiov = &scratch;
+	struct kvec  scratch;
+	struct kvec *scratchiov = &scratch;
 	unsigned int  niov = 1;
 #else
-	struct iovec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
+	struct kvec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
 	unsigned int  niov = conn->ksnc_rx_niov;
 #endif
-	struct iovec *iov = conn->ksnc_rx_iov;
+	struct kvec *iov = conn->ksnc_rx_iov;
 	struct msghdr msg = {
 		.msg_flags      = 0
 	};
@@ -541,8 +540,8 @@ ksocknal_lib_recv_iov (ksock_conn_t *conn)
         }
         LASSERT (nob <= conn->ksnc_rx_nob_wanted);
 
-	rc = kernel_recvmsg(conn->ksnc_sock, &msg,
-		(struct kvec *)scratchiov, niov, nob, MSG_DONTWAIT);
+	rc = kernel_recvmsg(conn->ksnc_sock, &msg, scratchiov, niov, nob,
+			    MSG_DONTWAIT);
 
         saved_csum = 0;
         if (conn->ksnc_proto == &ksocknal_protocol_v2x) {
@@ -579,7 +578,7 @@ ksocknal_lib_kiov_vunmap(void *addr)
 
 static void *
 ksocknal_lib_kiov_vmap(lnet_kiov_t *kiov, int niov,
-                       struct iovec *iov, struct page **pages)
+		       struct kvec *iov, struct page **pages)
 {
         void             *addr;
         int               nob;
@@ -618,15 +617,15 @@ int
 ksocknal_lib_recv_kiov (ksock_conn_t *conn)
 {
 #if SOCKNAL_SINGLE_FRAG_RX || !SOCKNAL_RISK_KMAP_DEADLOCK
-        struct iovec   scratch;
-        struct iovec  *scratchiov = &scratch;
+	struct kvec   scratch;
+	struct kvec  *scratchiov = &scratch;
         struct page  **pages      = NULL;
         unsigned int   niov       = 1;
 #else
 #ifdef CONFIG_HIGHMEM
 #warning "XXX risk of kmap deadlock on multiple frags..."
 #endif
-	struct iovec  *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
+	struct kvec  *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
 	struct page  **pages      = conn->ksnc_scheduler->kss_rx_scratch_pgs;
 	unsigned int   niov       = conn->ksnc_rx_nkiov;
 #endif
@@ -660,8 +659,8 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
 
 	LASSERT (nob <= conn->ksnc_rx_nob_wanted);
 
-	rc = kernel_recvmsg(conn->ksnc_sock, &msg,
-			(struct kvec *)scratchiov, n, nob, MSG_DONTWAIT);
+	rc = kernel_recvmsg(conn->ksnc_sock, &msg, scratchiov, n, nob,
+			    MSG_DONTWAIT);
 
         if (conn->ksnc_msg.ksm_csum != 0) {
                 for (i = 0, sum = rc; sum > 0; i++, sum -= fragnob) {

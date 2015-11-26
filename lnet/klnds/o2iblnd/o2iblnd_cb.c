@@ -668,7 +668,7 @@ kiblnd_map_tx(lnet_ni_t *ni, kib_tx_t *tx, kib_rdma_desc_t *rd, int nfrags)
 
 static int
 kiblnd_setup_rd_iov(lnet_ni_t *ni, kib_tx_t *tx, kib_rdma_desc_t *rd,
-                    unsigned int niov, struct iovec *iov, int offset, int nob)
+		    unsigned int niov, struct kvec *iov, int offset, int nob)
 {
         kib_net_t          *net = ni->ni_data;
         struct page        *page;
@@ -1433,7 +1433,7 @@ kiblnd_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 	int               target_is_router = lntmsg->msg_target_is_router;
 	int               routing = lntmsg->msg_routing;
 	unsigned int      payload_niov = lntmsg->msg_niov;
-	struct iovec     *payload_iov = lntmsg->msg_iov;
+	struct kvec      *payload_iov = lntmsg->msg_iov;
 	lnet_kiov_t      *payload_kiov = lntmsg->msg_kiov;
 	unsigned int      payload_offset = lntmsg->msg_offset;
 	unsigned int      payload_nob = lntmsg->msg_len;
@@ -1599,7 +1599,7 @@ kiblnd_reply (lnet_ni_t *ni, kib_rx_t *rx, lnet_msg_t *lntmsg)
 {
         lnet_process_id_t target = lntmsg->msg_target;
         unsigned int      niov = lntmsg->msg_niov;
-        struct iovec     *iov = lntmsg->msg_iov;
+	struct kvec      *iov = lntmsg->msg_iov;
         lnet_kiov_t      *kiov = lntmsg->msg_kiov;
         unsigned int      offset = lntmsg->msg_offset;
         unsigned int      nob = lntmsg->msg_len;
@@ -1657,9 +1657,9 @@ kiblnd_reply (lnet_ni_t *ni, kib_rx_t *rx, lnet_msg_t *lntmsg)
 }
 
 int
-kiblnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
-             unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
-             unsigned int offset, unsigned int mlen, unsigned int rlen)
+kiblnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
+	    unsigned int niov, struct kvec *iov, lnet_kiov_t *kiov,
+	    unsigned int offset, unsigned int mlen, unsigned int rlen)
 {
         kib_rx_t    *rx = private;
         kib_msg_t   *rxmsg = rx->rx_msg;
