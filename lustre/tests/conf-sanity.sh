@@ -5575,13 +5575,16 @@ test_84() {
 	"-o recovery_time_hard=$time_min,recovery_time_soft=$time_min" $@ ||
 		error "start MDS failed"
 
-	start_ost
-	start_ost2
+	start_ost || error "start OST0000 failed"
+	start_ost2 || error "start OST0001 failed"
 
 	echo "recovery_time=$time_min, timeout=$TIMEOUT, wrap_up=$wrap_up"
 
-	mount_client $MOUNT1 || error "mount failed"
-	mount_client $MOUNT2 || error "mount failed"
+	mount_client $MOUNT1 || error "mount $MOUNT1 failed"
+	mount_client $MOUNT2 || error "mount $MOUNT2 failed"
+	# make sure new superblock labels are sync'd before disabling writes
+	sync_all_data
+	sleep 5
 
 	replay_barrier $SINGLEMDS
 	createmany -o $DIR1/$tfile-%d 1000

@@ -2142,9 +2142,9 @@ wait_update_facet() {
 
 sync_all_data() {
 	do_nodes $(comma_list $(mdts_nodes)) \
-	    "lctl set_param -n osd*.*MDT*.force_sync 1"
+	    "lctl set_param -n osd*.*MDT*.force_sync=1"
 	do_nodes $(comma_list $(osts_nodes)) \
-	    "lctl set_param -n osd*.*OS*.force_sync 1" 2>&1 |
+	    "lctl set_param -n osd*.*OS*.force_sync=1" 2>&1 |
 		grep -v 'Found no match'
 }
 
