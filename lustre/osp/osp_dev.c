@@ -719,8 +719,12 @@ static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
 		      struct obd_statfs *sfs)
 {
 	struct osp_device *d = dt2osp_dev(dev);
+	struct obd_import *imp = d->opd_obd->u.cli.cl_import;
 
 	ENTRY;
+
+	if (imp->imp_state == LUSTRE_IMP_CLOSED)
+		RETURN(-ESHUTDOWN);
 
 	if (unlikely(d->opd_imp_active == 0))
 		RETURN(-ENOTCONN);

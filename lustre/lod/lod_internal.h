@@ -128,7 +128,8 @@ struct lod_tgt_desc {
 	unsigned long      ltd_active:1,/* is this target up for requests */
 			   ltd_activate:1,/* should  target be activated */
 			   ltd_reap:1,  /* should this target be deleted */
-			   ltd_got_update_log:1; /* Already got update log */
+			   ltd_got_update_log:1, /* Already got update log */
+			   ltd_connecting:1; /* target is connecting */
 };
 
 #define TGT_PTRS		256     /* number of pointers at 1st level */
