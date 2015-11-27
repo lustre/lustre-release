@@ -828,7 +828,7 @@ int lustre_lnet_config_buffers(int tiny, int small, int large, int seq_no,
 	}
 
 out:
-	cYAML_build_error(rc, seq_no, DEL_CMD, "buf", err_str, err_rc);
+	cYAML_build_error(rc, seq_no, ADD_CMD, "buf", err_str, err_rc);
 
 	return rc;
 }
@@ -842,9 +842,10 @@ int lustre_lnet_show_routing(int seq_no, struct cYAML **show_rc,
 	int l_errno = 0;
 	char *buf;
 	char *pools[LNET_NRBPOOLS] = {"tiny", "small", "large"};
+	int buf_count[LNET_NRBPOOLS] = {0};
 	struct cYAML *root = NULL, *pools_node = NULL,
 		     *type_node = NULL, *item = NULL, *cpt = NULL,
-		     *first_seq = NULL;
+		     *first_seq = NULL, *buffers = NULL;
 	int i, j;
 	char err_str[LNET_MAX_STR_LEN];
 	char node_name[LNET_MAX_STR_LEN];
@@ -915,6 +916,9 @@ int lustre_lnet_show_routing(int seq_no, struct cYAML **show_rc,
 						pool_cfg->pl_pools[j].
 						   pl_mincredits) == NULL)
 				goto out;
+			/* keep track of the total count for each of the
+			 * tiny, small and large buffers */
+			buf_count[j] += pool_cfg->pl_pools[j].pl_nbuffers;
 		}
 	}
 
@@ -925,6 +929,18 @@ int lustre_lnet_show_routing(int seq_no, struct cYAML **show_rc,
 
 		if (cYAML_create_number(item, "enable", pool_cfg->pl_routing) ==
 		    NULL)
+			goto out;
+	}
+
+	/* create a buffers entry in the show. This is necessary so that
+	 * if the YAML output is used to configure a node, the buffer
+	 * configuration takes hold */
+	buffers = cYAML_create_object(root, "buffers");
+	if (buffers == NULL)
+		goto out;
+
+	for (i = 0; i < LNET_NRBPOOLS; i++) {
+		if (cYAML_create_number(buffers, pools[i], buf_count[i]) == NULL)
 			goto out;
 	}
 
@@ -949,18 +965,14 @@ out:
 	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR || !exist) {
 		cYAML_free_tree(root);
 	} else if (show_rc != NULL && *show_rc != NULL) {
-		struct cYAML *show_node;
-		/* find the routing node, if one doesn't exist then
-		 * insert one.  Otherwise add to the one there
-		 */
-		show_node = cYAML_get_object_item(*show_rc, "routing");
-		if (show_node != NULL && cYAML_is_sequence(show_node)) {
-			cYAML_insert_child(show_node, first_seq);
-			free(pools_node);
-			free(root);
-		} else if (show_node == NULL) {
+		struct cYAML *routing_node;
+		/* there should exist only one routing block and one
+		 * buffers block. If there already exists a previous one
+		 * then don't add another */
+		routing_node = cYAML_get_object_item(*show_rc, "routing");
+		if (routing_node == NULL) {
 			cYAML_insert_sibling((*show_rc)->cy_child,
-						pools_node);
+						root->cy_child);
 			free(root);
 		} else {
 			cYAML_free_tree(root);
