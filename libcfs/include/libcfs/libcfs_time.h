@@ -39,6 +39,7 @@
 
 #ifndef __LIBCFS_TIME_H__
 #define __LIBCFS_TIME_H__
+
 /*
  * generic time manipulation functions.
  */
@@ -106,17 +107,6 @@ static inline void cfs_slow_warning(cfs_time_t now, int seconds, char *msg)
         }                                                       \
         result;                                                 \
 })
-
-/*
- * helper function similar to do_gettimeofday() of Linux kernel
- */
-static inline void cfs_fs_timeval(struct timeval *tv)
-{
-        cfs_fs_time_t time;
-
-        cfs_fs_time_current(&time);
-        cfs_fs_time_usec(&time, tv);
-}
 
 /*
  * return valid time-out based on user supplied one. Currently we only check
