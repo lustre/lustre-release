@@ -1152,9 +1152,10 @@ static int lfsck_assistant_query_others(const struct lu_env *env,
 	memset(lr, 0, sizeof(*lr));
 	lr->lr_event = LE_QUERY;
 	lr->lr_active = com->lc_type;
+
+	memset(laia, 0, sizeof(*laia));
 	laia->laia_com = com;
 	laia->laia_lr = lr;
-	laia->laia_shared = 0;
 
 	if (!list_empty(&lad->lad_mdt_phase1_list)) {
 		ltds = &lfsck->li_mdt_descs;
@@ -1268,9 +1269,10 @@ static int lfsck_assistant_notify_others(const struct lu_env *env,
 
 	lr->lr_index = lfsck_dev_idx(lfsck);
 	lr->lr_active = com->lc_type;
+
+	memset(laia, 0, sizeof(*laia));
 	laia->laia_com = com;
 	laia->laia_lr = lr;
-	laia->laia_shared = 0;
 
 	switch (lr->lr_event) {
 	case LE_START:
@@ -1293,8 +1295,6 @@ static int lfsck_assistant_notify_others(const struct lu_env *env,
 			LASSERT(ltd != NULL);
 
 			laia->laia_ltd = ltd;
-			ltd->ltd_layout_done = 0;
-			ltd->ltd_synced_failures = 0;
 			rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
 					lfsck_async_interpret_common,
 					laia, LFSCK_NOTIFY);

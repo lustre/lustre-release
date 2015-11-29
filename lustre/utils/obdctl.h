@@ -186,5 +186,6 @@ int jt_changelog_deregister(int argc, char **argv);
 /* lustre_lfsck.c */
 int jt_lfsck_start(int argc, char **argv);
 int jt_lfsck_stop(int argc, char **argv);
+int jt_lfsck_query(int argc, char **argv);
 
 #endif

@@ -419,6 +419,10 @@ command_t cmdlist[] = {
 	{"lfsck_stop", jt_lfsck_stop, 0, "stop lfsck(s)\n"
 	 "usage: lfsck_stop <-M | --device [MDT,OST]_device>\n"
 	 "		    [-A | --all] [-h | --help]"},
+	{"lfsck_query", jt_lfsck_query, 0, "check lfsck(s) status\n"
+	 "usage: lfsck_query <-M | --device MDT_device> [-h | --help]\n"
+	 "		     [-t | --type lfsck_type[,lfsck_type...]]\n"
+	 "		     [-w | --wait]"},
 
 	{"==== obsolete (DANGEROUS) ====", jt_noop, 0, "obsolete (DANGEROUS)"},
 	/* some test scripts still use these */

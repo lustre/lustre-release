@@ -34,6 +34,103 @@
 # define _LUSTRE_LFSCK_USER_H
 # include <lustre/lustre_user.h>
 
+/**
+ * state machine:
+ *
+ *					LS_INIT
+ *					   |
+ *				     (lfsck|start)
+ *					   |
+ *					   v
+ *				   LS_SCANNING_PHASE1
+ *					|	^
+ *					|	:
+ *					| (lfsck:restart)
+ *					|	:
+ *					v	:
+ *	-----------------------------------------------------------------
+ *	|		    |^		|^	   |^	      |^	|^
+ *	|		    |:		|:	   |:	      |:	|:
+ *	v		    v:		v:	   v:	      v:	v:
+ * LS_SCANNING_PHASE2	LS_FAILED  LS_STOPPED  LS_PAUSED LS_CRASHED LS_PARTIAL
+ *			  (CO_)       (CO_)	 (CO_)
+ *	|	^	    ^:		^:	   ^:	      ^:	^:
+ *	|	:	    |:		|:	   |:	      |:	|:
+ *	| (lfsck:restart)   |:		|:	   |:	      |:	|:
+ *	v	:	    |v		|v	   |v	      |v	|v
+ *	-----------------------------------------------------------------
+ *	    |
+ *	    v
+ *    LS_COMPLETED
+ */
+enum lfsck_status {
+	/* The lfsck file is new created, for new MDT, upgrading from old disk,
+	 * or re-creating the lfsck file manually. */
+	LS_INIT			= 0,
+
+	/* The first-step system scanning. The checked items during the phase1
+	 * scanning depends on the LFSCK type. */
+	LS_SCANNING_PHASE1	= 1,
+
+	/* The second-step system scanning. The checked items during the phase2
+	 * scanning depends on the LFSCK type. */
+	LS_SCANNING_PHASE2	= 2,
+
+	/* The LFSCK processing has completed for all objects. */
+	LS_COMPLETED		= 3,
+
+	/* The LFSCK exited automatically for failure, will not auto restart. */
+	LS_FAILED		= 4,
+
+	/* The LFSCK is stopped manually, will not auto restart. */
+	LS_STOPPED		= 5,
+
+	/* LFSCK is paused automatically when umount,
+	 * will be restarted automatically when remount. */
+	LS_PAUSED		= 6,
+
+	/* System crashed during the LFSCK,
+	 * will be restarted automatically after recovery. */
+	LS_CRASHED		= 7,
+
+	/* Some OST/MDT failed during the LFSCK, or not join the LFSCK. */
+	LS_PARTIAL		= 8,
+
+	/* The LFSCK is failed because its controller is failed. */
+	LS_CO_FAILED		= 9,
+
+	/* The LFSCK is stopped because its controller is stopped. */
+	LS_CO_STOPPED		= 10,
+
+	/* The LFSCK is paused because its controller is paused. */
+	LS_CO_PAUSED		= 11,
+
+	LS_MAX
+};
+
+static inline const char *lfsck_status2name(int status)
+{
+	static const char * const lfsck_status_names[] = {
+		[LS_INIT]		= "init",
+		[LS_SCANNING_PHASE1]	= "scanning-phase1",
+		[LS_SCANNING_PHASE2]	= "scanning-phase2",
+		[LS_COMPLETED]		= "completed",
+		[LS_FAILED]		= "failed",
+		[LS_STOPPED]		= "stopped",
+		[LS_PAUSED]		= "paused",
+		[LS_CRASHED]		= "crashed",
+		[LS_PARTIAL]		= "partial",
+		[LS_CO_FAILED]		= "co-failed",
+		[LS_CO_STOPPED]		= "co-stopped",
+		[LS_CO_PAUSED]		= "co-paused"
+	};
+
+	if (status < 0 || status >= LS_MAX)
+		return "unknown";
+
+	return lfsck_status_names[status];
+}
+
 enum lfsck_param_flags {
 	/* Reset LFSCK iterator position to the device beginning. */
 	LPF_RESET		= 0x0001,
@@ -58,6 +155,9 @@ enum lfsck_param_flags {
 
 	/* Create MDT-object for dangling name entry. */
 	LPF_CREATE_MDTOBJ	= 0x0080,
+
+	/* Do not return until the LFSCK not running. */
+	LPF_WAIT		= 0x0100,
 };
 
 enum lfsck_type {
@@ -82,6 +182,7 @@ enum lfsck_type {
 #define LFSCK_SPEED_LIMIT_DEF	LFSCK_SPEED_NO_LIMIT
 #define LFSCK_ASYNC_WIN_DEFAULT 1024
 #define LFSCK_ASYNC_WIN_MAX	((__u16)(~0))
+#define LFSCK_TYPE_BITS		16
 
 enum lfsck_start_valid {
 	LSV_SPEED_LIMIT		= 0x00000001,
@@ -118,6 +219,14 @@ struct lfsck_stop {
 	__u16	ls_flags;
 	__u16	ls_padding_1; /* For 64-bits aligned. */
 	__u64	ls_padding_2;
+};
+
+struct lfsck_query {
+	__u16	lu_types;
+	__u16	lu_flags;
+	__u32	lu_mdts_count[LFSCK_TYPE_BITS][LS_MAX + 1];
+	__u32	lu_osts_count[LFSCK_TYPE_BITS][LS_MAX + 1];
+	__u64	lu_repaired[LFSCK_TYPE_BITS];
 };
 
 #endif /* _LUSTRE_LFSCK_USER_H */

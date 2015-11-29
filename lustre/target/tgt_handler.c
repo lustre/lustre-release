@@ -1567,11 +1567,15 @@ EXPORT_SYMBOL(tgt_register_lfsck_in_notify);
 
 static int (*tgt_lfsck_query)(const struct lu_env *env,
 			      struct dt_device *key,
-			      struct lfsck_request *lr) = NULL;
+			      struct lfsck_request *req,
+			      struct lfsck_reply *rep,
+			      struct lfsck_query *que) = NULL;
 
 void tgt_register_lfsck_query(int (*query)(const struct lu_env *,
 					   struct dt_device *,
-					   struct lfsck_request *))
+					   struct lfsck_request *,
+					   struct lfsck_reply *,
+					   struct lfsck_query *))
 {
 	tgt_lfsck_query = query;
 }
@@ -1610,8 +1614,8 @@ static int tgt_handle_lfsck_query(struct tgt_session_info *tsi)
 	if (reply == NULL)
 		RETURN(-ENOMEM);
 
-	rc = tgt_lfsck_query(tsi->tsi_env, tsi->tsi_tgt->lut_bottom, request);
-	reply->lr_status = rc;
+	rc = tgt_lfsck_query(tsi->tsi_env, tsi->tsi_tgt->lut_bottom,
+			     request, reply, NULL);
 
 	RETURN(rc < 0 ? rc : 0);
 }

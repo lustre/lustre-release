@@ -449,6 +449,26 @@ Stop LFSCK on all devices.
 .TP
   -h, --help
 Show this help.
+.TP
+.B lfsck_query \fR<-M | --device MDT_device> [-h | --help]
+    \fR[-t | --type lfsck_type[,lfsck_type...]] [-w | --wait]
+.br
+Get the LFSCK global status via the specified MDT device.
+.TP
+  -M, --device <MDT_device>
+Specify the MDT device on which the LFSCK runs or ever ran.
+.TP
+  -t, --type <lfsck_type[,lfsck_type...]>
+Specify what kind(s) of LFSCK to be checked. If no type is given, the default
+is to check all types of LFSCK status. Valid types are a comma-separated list
+of one or more of: namespace, layout, all
+.TP
+  -h, --help
+Show this help.
+.TP
+  -w, --wait
+Do not return until there is no on-going LFSCK scanning on any target
+associated with this filesystem (MDT or OST).
 .SS Debug
 .TP 
 .BI debug_daemon 

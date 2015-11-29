@@ -68,21 +68,6 @@ static struct list_head lfsck_ost_orphan_list;
 static struct list_head lfsck_mdt_orphan_list;
 static DEFINE_SPINLOCK(lfsck_instance_lock);
 
-static const char *lfsck_status_names[] = {
-	[LS_INIT]		= "init",
-	[LS_SCANNING_PHASE1]	= "scanning-phase1",
-	[LS_SCANNING_PHASE2]	= "scanning-phase2",
-	[LS_COMPLETED]		= "completed",
-	[LS_FAILED]		= "failed",
-	[LS_STOPPED]		= "stopped",
-	[LS_PAUSED]		= "paused",
-	[LS_CRASHED]		= "crashed",
-	[LS_PARTIAL]		= "partial",
-	[LS_CO_FAILED]		= "co-failed",
-	[LS_CO_STOPPED] 	= "co-stopped",
-	[LS_CO_PAUSED]		= "co-paused"
-};
-
 const char *lfsck_flags_names[] = {
 	"scanned-once",
 	"inconsistent",
@@ -109,12 +94,16 @@ enum lfsck_verify_lpf_types {
 	LVLT_BY_NAMEENTRY	= 1,
 };
 
-const char *lfsck_status2names(enum lfsck_status status)
+static inline void
+lfsck_reset_ltd_status(struct lfsck_tgt_desc *ltd, enum lfsck_type type)
 {
-	if (unlikely(status < 0 || status >= LS_MAX))
-		return "unknown";
-
-	return lfsck_status_names[status];
+	if (type == LFSCK_TYPE_LAYOUT) {
+		ltd->ltd_layout_status = LS_MAX;
+		ltd->ltd_layout_repaired = 0;
+	} else {
+		ltd->ltd_namespace_status = LS_MAX;
+		ltd->ltd_namespace_repaired = 0;
+	}
 }
 
 static int lfsck_tgt_descs_init(struct lfsck_tgt_descs *ltds)
@@ -2157,6 +2146,11 @@ int lfsck_async_interpret_common(const struct lu_env *env,
 		}
 
 		if (rc != 0) {
+			if (lr->lr_flags & LEF_QUERY_ALL) {
+				lfsck_reset_ltd_status(ltd, com->lc_type);
+				break;
+			}
+
 			spin_lock(&ltds->ltd_lock);
 			list_del_init(phase_list);
 			list_del_init(list);
@@ -2171,10 +2165,28 @@ int lfsck_async_interpret_common(const struct lu_env *env,
 			CDEBUG(D_LFSCK, "%s: invalid query reply for %s: "
 			       "rc = %d\n", lfsck_lfsck2name(com->lc_lfsck),
 			       lad->lad_name, rc);
+
+			if (lr->lr_flags & LEF_QUERY_ALL) {
+				lfsck_reset_ltd_status(ltd, com->lc_type);
+				break;
+			}
+
 			spin_lock(&ltds->ltd_lock);
 			list_del_init(phase_list);
 			list_del_init(list);
 			spin_unlock(&ltds->ltd_lock);
+			break;
+		}
+
+		if (lr->lr_flags & LEF_QUERY_ALL) {
+			if (com->lc_type == LFSCK_TYPE_LAYOUT) {
+				ltd->ltd_layout_status = reply->lr_status;
+				ltd->ltd_layout_repaired = reply->lr_repaired;
+			} else {
+				ltd->ltd_namespace_status = reply->lr_status;
+				ltd->ltd_namespace_repaired =
+							reply->lr_repaired;
+			}
 			break;
 		}
 
@@ -2323,12 +2335,12 @@ static int lfsck_stop_notify(const struct lu_env *env,
 		if (ltds == &lfsck->li_ost_descs)
 			lr->lr_flags = LEF_TO_OST;
 
+		memset(laia, 0, sizeof(*laia));
 		laia->laia_com = com;
 		laia->laia_ltds = ltds;
 		atomic_inc(&ltd->ltd_ref);
 		laia->laia_ltd = ltd;
 		laia->laia_lr = lr;
-		laia->laia_shared = 0;
 
 		rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
 					 lfsck_async_interpret_common,
@@ -2417,6 +2429,70 @@ int lfsck_async_request(const struct lu_env *env, struct obd_export *exp,
 	ptlrpc_set_add_req(set, req);
 
 	return 0;
+}
+
+int lfsck_query_all(const struct lu_env *env, struct lfsck_component *com)
+{
+	struct lfsck_thread_info	  *info  = lfsck_env_info(env);
+	struct lfsck_request		  *lr	 = &info->lti_lr;
+	struct lfsck_async_interpret_args *laia  = &info->lti_laia;
+	struct lfsck_instance		  *lfsck = com->lc_lfsck;
+	struct lfsck_tgt_descs		  *ltds  = &lfsck->li_mdt_descs;
+	struct lfsck_tgt_desc		  *ltd;
+	struct ptlrpc_request_set	  *set;
+	int				   idx;
+	int				   rc;
+	ENTRY;
+
+	memset(lr, 0, sizeof(*lr));
+	lr->lr_event = LE_QUERY;
+	lr->lr_active = com->lc_type;
+	lr->lr_flags = LEF_QUERY_ALL;
+
+	memset(laia, 0, sizeof(*laia));
+	laia->laia_com = com;
+	laia->laia_lr = lr;
+
+	set = ptlrpc_prep_set();
+	if (set == NULL)
+		RETURN(-ENOMEM);
+
+again:
+	laia->laia_ltds = ltds;
+	down_read(&ltds->ltd_rw_sem);
+	cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+		ltd = lfsck_tgt_get(ltds, idx);
+		LASSERT(ltd != NULL);
+
+		laia->laia_ltd = ltd;
+		up_read(&ltds->ltd_rw_sem);
+		rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
+					 lfsck_async_interpret_common,
+					 laia, LFSCK_QUERY);
+		if (rc != 0) {
+			struct lfsck_assistant_data *lad = com->lc_data;
+
+			CDEBUG(D_LFSCK, "%s: Fail to query %s %x for stat %s: "
+			       "rc = %d\n", lfsck_lfsck2name(lfsck),
+			       (lr->lr_flags & LEF_TO_OST) ? "OST" : "MDT",
+			       ltd->ltd_index, lad->lad_name, rc);
+			lfsck_reset_ltd_status(ltd, com->lc_type);
+			lfsck_tgt_put(ltd);
+		}
+		down_read(&ltds->ltd_rw_sem);
+	}
+	up_read(&ltds->ltd_rw_sem);
+
+	if (com->lc_type == LFSCK_TYPE_LAYOUT && !(lr->lr_flags & LEF_TO_OST)) {
+		ltds = &lfsck->li_ost_descs;
+		lr->lr_flags |= LEF_TO_OST;
+		goto again;
+	}
+
+	rc = ptlrpc_set_wait(set);
+	ptlrpc_set_destroy(set);
+
+	RETURN(rc);
 }
 
 int lfsck_start_assistant(const struct lu_env *env, struct lfsck_component *com,
@@ -2743,10 +2819,9 @@ static int lfsck_stop_all(const struct lu_env *env,
 	lr->lr_active = LFSCK_TYPES_ALL;
 	lr->lr_param = stop->ls_flags;
 
-	laia->laia_com = NULL;
+	memset(laia, 0, sizeof(*laia));
 	laia->laia_ltds = ltds;
 	laia->laia_lr = lr;
-	laia->laia_result = 0;
 	laia->laia_shared = 1;
 
 	down_read(&ltds->ltd_rw_sem);
@@ -2817,10 +2892,9 @@ static int lfsck_start_all(const struct lu_env *env,
 		       LSV_ASYNC_WINDOWS | LSV_CREATE_OSTOBJ |
 		       LSV_CREATE_MDTOBJ;
 
-	laia->laia_com = NULL;
+	memset(laia, 0, sizeof(*laia));
 	laia->laia_ltds = ltds;
 	laia->laia_lr = lr;
-	laia->laia_result = 0;
 	laia->laia_shared = 1;
 
 	down_read(&ltds->ltd_rw_sem);
@@ -2885,6 +2959,9 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 	struct l_wait_info		 lwi    = { 0 };
 	struct lfsck_thread_args	*lta;
 	struct task_struct		*task;
+	struct lfsck_tgt_descs		*ltds;
+	struct lfsck_tgt_desc		*ltd;
+	__u32				 idx;
 	int				 rc     = 0;
 	__u16				 valid  = 0;
 	__u16				 flags  = 0;
@@ -3030,6 +3107,38 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 				GOTO(out, rc);
 		}
 	}
+
+	ltds = &lfsck->li_mdt_descs;
+	down_read(&ltds->ltd_rw_sem);
+	cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+		ltd = lfsck_ltd2tgt(ltds, idx);
+		LASSERT(ltd != NULL);
+
+		ltd->ltd_layout_done = 0;
+		ltd->ltd_namespace_done = 0;
+		ltd->ltd_synced_failures = 0;
+		lfsck_reset_ltd_status(ltd, LFSCK_TYPE_NAMESPACE);
+		lfsck_reset_ltd_status(ltd, LFSCK_TYPE_LAYOUT);
+		list_del_init(&ltd->ltd_layout_phase_list);
+		list_del_init(&ltd->ltd_layout_list);
+		list_del_init(&ltd->ltd_namespace_phase_list);
+		list_del_init(&ltd->ltd_namespace_list);
+	}
+	up_read(&ltds->ltd_rw_sem);
+
+	ltds = &lfsck->li_ost_descs;
+	down_read(&ltds->ltd_rw_sem);
+	cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+		ltd = lfsck_ltd2tgt(ltds, idx);
+		LASSERT(ltd != NULL);
+
+		ltd->ltd_layout_done = 0;
+		ltd->ltd_synced_failures = 0;
+		lfsck_reset_ltd_status(ltd, LFSCK_TYPE_LAYOUT);
+		list_del_init(&ltd->ltd_layout_phase_list);
+		list_del_init(&ltd->ltd_layout_list);
+	}
+	up_read(&ltds->ltd_rw_sem);
 
 trigger:
 	lfsck->li_args_dir = LUDA_64BITHASH | LUDA_VERIFY | LUDA_TYPE;
@@ -3267,29 +3376,97 @@ int lfsck_in_notify(const struct lu_env *env, struct dt_device *key,
 EXPORT_SYMBOL(lfsck_in_notify);
 
 int lfsck_query(const struct lu_env *env, struct dt_device *key,
-		struct lfsck_request *lr)
+		struct lfsck_request *req, struct lfsck_reply *rep,
+		struct lfsck_query *que)
 {
 	struct lfsck_instance  *lfsck;
 	struct lfsck_component *com;
-	int			rc;
+	int			i;
+	int			rc = 0;
+	__u16			type;
 	ENTRY;
 
 	lfsck = lfsck_instance_find(key, true, false);
 	if (unlikely(lfsck == NULL))
 		RETURN(-ENXIO);
 
-	com = lfsck_component_find(lfsck, lr->lr_active);
-	if (likely(com != NULL)) {
-		rc = com->lc_ops->lfsck_query(env, com);
-		lfsck_component_put(env, com);
+	if (que != NULL) {
+		if (que->lu_types == LFSCK_TYPES_ALL)
+			que->lu_types =
+				LFSCK_TYPES_SUPPORTED & ~LFSCK_TYPE_SCRUB;
+
+		if (que->lu_types & ~LFSCK_TYPES_SUPPORTED) {
+			que->lu_types &= ~LFSCK_TYPES_SUPPORTED;
+
+			GOTO(out, rc = -ENOTSUPP);
+		}
+
+		for (i = 0, type = 1 << i; i < LFSCK_TYPE_BITS;
+		     i++, type = 1 << i) {
+			if (!(que->lu_types & type))
+				continue;
+
+again:
+			com = lfsck_component_find(lfsck, type);
+			if (unlikely(com == NULL))
+				GOTO(out, rc = -ENOTSUPP);
+
+			memset(que->lu_mdts_count[i], 0,
+			       sizeof(__u32) * (LS_MAX + 1));
+			memset(que->lu_osts_count[i], 0,
+			       sizeof(__u32) * (LS_MAX + 1));
+			que->lu_repaired[i] = 0;
+			rc = com->lc_ops->lfsck_query(env, com, req, rep,
+						      que, i);
+			lfsck_component_put(env, com);
+			if  (rc < 0)
+				GOTO(out, rc);
+		}
+
+		if (!(que->lu_flags & LPF_WAIT))
+			GOTO(out, rc);
+
+		for (i = 0, type = 1 << i; i < LFSCK_TYPE_BITS;
+		     i++, type = 1 << i) {
+			if (!(que->lu_types & type))
+				continue;
+
+			if (que->lu_mdts_count[i][LS_SCANNING_PHASE1] != 0 ||
+			    que->lu_mdts_count[i][LS_SCANNING_PHASE2] != 0 ||
+			    que->lu_osts_count[i][LS_SCANNING_PHASE1] != 0 ||
+			    que->lu_osts_count[i][LS_SCANNING_PHASE2] != 0) {
+				struct l_wait_info lwi;
+
+				/* If it is required to wait, then sleep
+				 * 3 seconds and try to query again. */
+				lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(3),
+						       NULL,
+						       LWI_ON_SIGNAL_NOOP,
+						       NULL);
+				rc = l_wait_event(lfsck->li_thread.t_ctl_waitq,
+						  0, &lwi);
+				if (rc == -ETIMEDOUT)
+					goto again;
+			}
+		}
 	} else {
-		rc = -ENOTSUPP;
+		com = lfsck_component_find(lfsck, req->lr_active);
+		if (likely(com != NULL)) {
+			rc = com->lc_ops->lfsck_query(env, com, req, rep,
+						      que, -1);
+			lfsck_component_put(env, com);
+		} else {
+			rc = -ENOTSUPP;
+		}
 	}
 
-	lfsck_instance_put(env, lfsck);
+	GOTO(out, rc);
 
-	RETURN(rc);
+out:
+	lfsck_instance_put(env, lfsck);
+	return rc;
 }
+EXPORT_SYMBOL(lfsck_query);
 
 int lfsck_register_namespace(const struct lu_env *env, struct dt_device *key,
 			     struct ldlm_namespace *ns)

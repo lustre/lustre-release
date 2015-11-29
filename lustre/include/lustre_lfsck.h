@@ -38,78 +38,6 @@
 #include <lu_object.h>
 #include <dt_object.h>
 
-/**
- * status machine:
- *
- * 					LS_INIT
- * 					   |
- * 				     (lfsck|start)
- * 					   |
- *					   v
- *				   LS_SCANNING_PHASE1
- *					|	^
- *					|	:
- *					| (lfsck:restart)
- *					|	:
- *					v	:
- *	-----------------------------------------------------------------
- *	|		    |^		|^	   |^	      |^ 	|^
- *	|		    |:		|:	   |:	      |:	|:
- *	v		    v:		v:	   v:	      v: 	v:
- * LS_SCANNING_PHASE2	LS_FAILED  LS_STOPPED  LS_PAUSED LS_CRASHED LS_PARTIAL
- *			  (CO_)       (CO_)	 (CO_)
- *	|	^	    ^:		^:	   ^:	      ^:	^:
- *	|	:	    |:		|:	   |:	      |:	|:
- *	| (lfsck:restart)   |:		|:	   |:	      |:	|:
- *	v	:	    |v		|v	   |v	      |v	|v
- *	-----------------------------------------------------------------
- *	    |
- *	    v
- *    LS_COMPLETED
- */
-enum lfsck_status {
-	/* The lfsck file is new created, for new MDT, upgrading from old disk,
-	 * or re-creating the lfsck file manually. */
-	LS_INIT			= 0,
-
-	/* The first-step system scanning. */
-	LS_SCANNING_PHASE1	= 1,
-
-	/* The second-step system scanning. */
-	LS_SCANNING_PHASE2	= 2,
-
-	/* The LFSCK processing has completed for all objects. */
-	LS_COMPLETED		= 3,
-
-	/* The LFSCK exited automatically for failure, will not auto restart. */
-	LS_FAILED		= 4,
-
-	/* The LFSCK is stopped manually, will not auto restart. */
-	LS_STOPPED		= 5,
-
-	/* LFSCK is paused automatically when umount,
-	 * will be restarted automatically when remount. */
-	LS_PAUSED		= 6,
-
-	/* System crashed during the LFSCK,
-	 * will be restarted automatically after recovery. */
-	LS_CRASHED		= 7,
-
-	/* Some OST/MDT failed during the LFSCK, or not join the LFSCK. */
-	LS_PARTIAL		= 8,
-
-	/* The LFSCK is failed because its controller is failed. */
-	LS_CO_FAILED		= 9,
-
-	/* The LFSCK is stopped because its controller is stopped. */
-	LS_CO_STOPPED		= 10,
-
-	/* The LFSCK is paused because its controller is paused. */
-	LS_CO_PAUSED		= 11,
-
-	LS_MAX
-};
-
 struct lfsck_start_param {
 	struct lfsck_start	*lsp_start;
 	__u32			 lsp_index;
@@ -146,7 +74,8 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 int lfsck_in_notify(const struct lu_env *env, struct dt_device *key,
 		    struct lfsck_request *lr, struct thandle *th);
 int lfsck_query(const struct lu_env *env, struct dt_device *key,
-		struct lfsck_request *lr);
+		struct lfsck_request *req, struct lfsck_reply *rep,
+		struct lfsck_query *que);
 
 int lfsck_get_speed(struct seq_file *m, struct dt_device *key);
 int lfsck_set_speed(struct dt_device *key, int val);

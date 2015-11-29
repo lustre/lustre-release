@@ -4762,7 +4762,7 @@ static int lfsck_layout_dump(const struct lu_env *env,
 		      "status: %s\n",
 		      lo->ll_magic,
 		      bk->lb_version,
-		      lfsck_status2names(lo->ll_status));
+		      lfsck_status2name(lo->ll_status));
 
 	rc = lfsck_bits_dump(m, lo->ll_flags, lfsck_flags_names, "flags");
 	if (rc < 0)
@@ -5393,12 +5393,85 @@ static int lfsck_layout_slave_in_notify(const struct lu_env *env,
 	RETURN(0);
 }
 
-static int lfsck_layout_query(const struct lu_env *env,
-			      struct lfsck_component *com)
+static void lfsck_layout_repaired(struct lfsck_layout *lo, __u64 *count)
+{
+	int i;
+
+	for (i = 0; i < LLIT_MAX; i++)
+		*count += lo->ll_objs_repaired[i];
+}
+
+static int lfsck_layout_query_all(const struct lu_env *env,
+				  struct lfsck_component *com,
+				  __u32 *mdts_count, __u32 *osts_count,
+				  __u64 *repaired)
 {
 	struct lfsck_layout *lo = com->lc_file_ram;
+	struct lfsck_tgt_descs *ltds;
+	struct lfsck_tgt_desc *ltd;
+	int idx;
+	int rc;
+	ENTRY;
 
-	return lo->ll_status;
+	rc = lfsck_query_all(env, com);
+	if (rc != 0)
+		RETURN(rc);
+
+	ltds = &com->lc_lfsck->li_mdt_descs;
+	down_read(&ltds->ltd_rw_sem);
+	cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+		ltd = lfsck_ltd2tgt(ltds, idx);
+		LASSERT(ltd != NULL);
+
+		mdts_count[ltd->ltd_layout_status]++;
+		*repaired += ltd->ltd_layout_repaired;
+	}
+	up_read(&ltds->ltd_rw_sem);
+
+	ltds = &com->lc_lfsck->li_ost_descs;
+	down_read(&ltds->ltd_rw_sem);
+	cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+		ltd = lfsck_ltd2tgt(ltds, idx);
+		LASSERT(ltd != NULL);
+
+		osts_count[ltd->ltd_layout_status]++;
+		*repaired += ltd->ltd_layout_repaired;
+	}
+	up_read(&ltds->ltd_rw_sem);
+
+	down_read(&com->lc_sem);
+	mdts_count[lo->ll_status]++;
+	lfsck_layout_repaired(lo, repaired);
+	up_read(&com->lc_sem);
+
+	RETURN(0);
+}
+
+static int lfsck_layout_query(const struct lu_env *env,
+			      struct lfsck_component *com,
+			      struct lfsck_request *req,
+			      struct lfsck_reply *rep,
+			      struct lfsck_query *que, int idx)
+{
+	struct lfsck_layout *lo = com->lc_file_ram;
+	int rc = 0;
+
+	if (que != NULL) {
+		LASSERT(com->lc_lfsck->li_master);
+
+		rc = lfsck_layout_query_all(env, com,
+					    que->lu_mdts_count[idx],
+					    que->lu_osts_count[idx],
+					    &que->lu_repaired[idx]);
+	} else {
+		down_read(&com->lc_sem);
+		rep->lr_status = lo->ll_status;
+		if (req->lr_flags & LEF_QUERY_ALL)
+			lfsck_layout_repaired(lo, &rep->lr_repaired);
+		up_read(&com->lc_sem);
+	}
+
+	return rc;
 }
 
 /* with lfsck::li_lock held */

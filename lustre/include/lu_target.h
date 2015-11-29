@@ -404,7 +404,9 @@ void tgt_register_lfsck_in_notify(int (*notify)(const struct lu_env *,
 						struct thandle *));
 void tgt_register_lfsck_query(int (*query)(const struct lu_env *,
 					   struct dt_device *,
-					   struct lfsck_request *));
+					   struct lfsck_request *,
+					   struct lfsck_reply *,
+					   struct lfsck_query *));
 bool req_can_reconstruct(struct ptlrpc_request *req, struct tg_reply_data *trd);
 
 extern struct tgt_handler tgt_sec_ctx_handlers[];

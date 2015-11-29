@@ -2628,7 +2628,7 @@ void lustre_swab_lfsck_reply(struct lfsck_reply *lr)
 {
 	__swab32s(&lr->lr_status);
 	CLASSERT(offsetof(typeof(*lr), lr_padding_1) != 0);
-	CLASSERT(offsetof(typeof(*lr), lr_padding_2) != 0);
+	__swab64s(&lr->lr_repaired);
 }
 
 void lustre_swab_orphan_ent(struct lu_orphan_ent *ent)

@@ -4259,7 +4259,7 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 		   "status: %s\n",
 		   ns->ln_magic,
 		   bk->lb_version,
-		   lfsck_status2names(ns->ln_status));
+		   lfsck_status2name(ns->ln_status));
 
 	rc = lfsck_bits_dump(m, ns->ln_flags, lfsck_flags_names, "flags");
 	if (rc < 0)
@@ -4726,12 +4726,81 @@ log:
 	RETURN(0);
 }
 
-static int lfsck_namespace_query(const struct lu_env *env,
-				 struct lfsck_component *com)
+static void lfsck_namespace_repaired(struct lfsck_namespace *ns, __u64 *count)
+{
+	*count += ns->ln_objs_nlink_repaired;
+	*count += ns->ln_dirent_repaired;
+	*count += ns->ln_linkea_repaired;
+	*count += ns->ln_mul_linked_repaired;
+	*count += ns->ln_unmatched_pairs_repaired;
+	*count += ns->ln_dangling_repaired;
+	*count += ns->ln_mul_ref_repaired;
+	*count += ns->ln_bad_type_repaired;
+	*count += ns->ln_lost_dirent_repaired;
+	*count += ns->ln_striped_dirs_disabled;
+	*count += ns->ln_striped_dirs_repaired;
+	*count += ns->ln_striped_shards_repaired;
+	*count += ns->ln_name_hash_repaired;
+	*count += ns->ln_local_lpf_moved;
+}
+
+static int lfsck_namespace_query_all(const struct lu_env *env,
+				     struct lfsck_component *com,
+				     __u32 *mdts_count, __u64 *repaired)
 {
 	struct lfsck_namespace *ns = com->lc_file_ram;
+	struct lfsck_tgt_descs *ltds = &com->lc_lfsck->li_mdt_descs;
+	struct lfsck_tgt_desc *ltd;
+	int idx;
+	int rc;
+	ENTRY;
 
-	return ns->ln_status;
+	rc = lfsck_query_all(env, com);
+	if (rc != 0)
+		RETURN(rc);
+
+	down_read(&ltds->ltd_rw_sem);
+	cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
+		ltd = lfsck_ltd2tgt(ltds, idx);
+		LASSERT(ltd != NULL);
+
+		mdts_count[ltd->ltd_namespace_status]++;
+		*repaired += ltd->ltd_namespace_repaired;
+	}
+	up_read(&ltds->ltd_rw_sem);
+
+	down_read(&com->lc_sem);
+	mdts_count[ns->ln_status]++;
+	lfsck_namespace_repaired(ns, repaired);
+	up_read(&com->lc_sem);
+
+	RETURN(0);
+}
+
+static int lfsck_namespace_query(const struct lu_env *env,
+				 struct lfsck_component *com,
+				 struct lfsck_request *req,
+				 struct lfsck_reply *rep,
+				 struct lfsck_query *que, int idx)
+{
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	int rc = 0;
+
+	if (que != NULL) {
+		LASSERT(com->lc_lfsck->li_master);
+
+		rc = lfsck_namespace_query_all(env, com,
+					       que->lu_mdts_count[idx],
+					       &que->lu_repaired[idx]);
+	} else {
+		down_read(&com->lc_sem);
+		rep->lr_status = ns->ln_status;
+		if (req->lr_flags & LEF_QUERY_ALL)
+			lfsck_namespace_repaired(ns, &rep->lr_repaired);
+		up_read(&com->lc_sem);
+	}
+
+	return rc;
 }
 
 static struct lfsck_operations lfsck_namespace_ops = {

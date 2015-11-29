@@ -4941,6 +4941,8 @@ void lustre_assert_wire_constants(void)
 		(unsigned)LEF_SET_LMV_ALL);
 	LASSERTF(LEF_RECHECK_NAME_HASH == 0x00000010UL, "found 0x%.8xUL\n",
 		(unsigned)LEF_RECHECK_NAME_HASH);
+	LASSERTF(LEF_QUERY_ALL == 0x00000020UL, "found 0x%.8xUL\n",
+		(unsigned)LEF_QUERY_ALL);
 
 	/* Checks for struct lfsck_reply */
 	LASSERTF((int)sizeof(struct lfsck_reply) == 16, "found %lld\n",
@@ -4953,10 +4955,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lfsck_reply, lr_padding_1));
 	LASSERTF((int)sizeof(((struct lfsck_reply *)0)->lr_padding_1) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct lfsck_reply *)0)->lr_padding_1));
-	LASSERTF((int)offsetof(struct lfsck_reply, lr_padding_2) == 8, "found %lld\n",
-		 (long long)(int)offsetof(struct lfsck_reply, lr_padding_2));
-	LASSERTF((int)sizeof(((struct lfsck_reply *)0)->lr_padding_2) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct lfsck_reply *)0)->lr_padding_2));
+	LASSERTF((int)offsetof(struct lfsck_reply, lr_repaired) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct lfsck_reply, lr_repaired));
+	LASSERTF((int)sizeof(((struct lfsck_reply *)0)->lr_repaired) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct lfsck_reply *)0)->lr_repaired));
 
 	/* Checks for struct update_params */
 	LASSERTF((int)sizeof(struct update_params) == 0, "found %lld\n",
