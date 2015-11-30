@@ -19,6 +19,20 @@ example:</para>
 	<para condition='l24'>Lustre software release version 2.4 includes support
 for multiple metadata servers.</para>
 
+    <note xml:id="whichversion"><title>which version?</title>
+    <indexterm><primary>version</primary>
+    <secondary>which version of Lustre am I running?</secondary></indexterm>
+
+    <para>The current version of Lustre
+    that is in use on the client can be found using the command 
+    <literal>lfs get_param version</literal>, for example:
+    <screen>$ lfs get_param version
+version=
+lustre: 2.7.59
+kernel: patchless_client
+build:  v2_7_59_0-g703195a-CHANGED-3.10.0.lustreopa</screen>
+	</para></note>
+		
 	<para>Only the latest revision of this document is made readily available
 because changes are continually arriving. The current and latest revision of
 this manual is available from links maintained at: <link
