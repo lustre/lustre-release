@@ -1,77 +1,150 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustreoperations">
+<?xml version='1.0' encoding='utf-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+xml:id="lustreoperations">
   <title xml:id="lustreoperations.title">Lustre Operations</title>
-  <para>Once you have the Lustre file system up and running, you can use the procedures in this section to perform these basic Lustre administration tasks:</para>
+  <para>Once you have the Lustre file system up and running, you can use the
+  procedures in this section to perform these basic Lustre administration
+  tasks:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438194_42877"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438194_42877" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438194_24122"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438194_24122" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438194_84876"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438194_84876" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438194_69255"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438194_69255" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438194_57420"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438194_57420" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438194_54138"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438194_54138" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438194_88063"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438194_88063" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.lfsmkdir"/></para>
+      <para>
+        <xref linkend="dbdoclet.lfsmkdir" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438194_88980"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438194_88980" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438194_41817"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438194_41817" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438194_70905"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438194_70905" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438194_16954"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438194_16954" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438194_69998"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438194_69998" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438194_30872"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438194_30872" />
+      </para>
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438194_42877">
-    <title><indexterm><primary>operations</primary></indexterm>
-<indexterm><primary>operations</primary><secondary>mounting by label</secondary></indexterm>
-Mounting by Label</title>
-    <para>The file system name is limited to 8 characters. We have encoded the file system and target information in the disk label, so you can mount by label. This allows system administrators to move disks around without worrying about issues such as SCSI disk reordering or getting the <literal>/dev/device</literal> wrong for a shared target. Soon, file system naming will be made as fail-safe as possible. Currently, Linux disk labels are limited to 16 characters. To identify the target within the file system, 8 characters are reserved, leaving 8 characters for the file system name:</para>
-    <screen><replaceable>fsname</replaceable>-MDT0000 or <replaceable>fsname</replaceable>-OST0a19</screen>
+    <title>
+    <indexterm>
+      <primary>operations</primary>
+    </indexterm>
+    <indexterm>
+      <primary>operations</primary>
+      <secondary>mounting by label</secondary>
+    </indexterm>Mounting by Label</title>
+    <para>The file system name is limited to 8 characters. We have encoded the
+    file system and target information in the disk label, so you can mount by
+    label. This allows system administrators to move disks around without
+    worrying about issues such as SCSI disk reordering or getting the 
+    <literal>/dev/device</literal> wrong for a shared target. Soon, file system
+    naming will be made as fail-safe as possible. Currently, Linux disk labels
+    are limited to 16 characters. To identify the target within the file
+    system, 8 characters are reserved, leaving 8 characters for the file system
+    name:</para>
+    <screen>
+<replaceable>fsname</replaceable>-MDT0000 or 
+<replaceable>fsname</replaceable>-OST0a19
+</screen>
     <para>To mount by label, use this command:</para>
-    <screen>mount -t lustre -L <replaceable>file_system_label</replaceable> <replaceable>/mount_point</replaceable></screen>
+    <screen>
+mount -t lustre -L 
+<replaceable>file_system_label</replaceable> 
+<replaceable>/mount_point</replaceable>
+</screen>
     <para>This is an example of mount-by-label:</para>
-    <screen>mds# mount -t lustre -L testfs-MDT0000 /mnt/mdt</screen>
+    <screen>
+mds# mount -t lustre -L testfs-MDT0000 /mnt/mdt
+</screen>
     <caution>
-      <para>Mount-by-label should NOT be used in a multi-path environment or when snapshots are being created of the device, since multiple block devices will have the same label.</para>
+      <para>Mount-by-label should NOT be used in a multi-path environment or
+      when snapshots are being created of the device, since multiple block
+      devices will have the same label.</para>
     </caution>
-    <para>Although the file system name is internally limited to 8 characters, you can mount the clients at any mount point, so file system users are not subjected to short names. Here is an example:</para>
-    <screen>client# mount -t lustre mds0@tcp0:/short <replaceable>/dev/long_mountpoint_name</replaceable></screen>
+    <para>Although the file system name is internally limited to 8 characters,
+    you can mount the clients at any mount point, so file system users are not
+    subjected to short names. Here is an example:</para>
+    <screen>
+client# mount -t lustre mds0@tcp0:/short 
+<replaceable>/dev/long_mountpoint_name</replaceable>
+</screen>
   </section>
   <section xml:id="dbdoclet.50438194_24122">
-    <title><indexterm><primary>operations</primary><secondary>starting</secondary></indexterm>Starting Lustre</title>
-    <para>On the first start of a Lustre file system, the components must be started in the following order:</para>
+    <title>
+    <indexterm>
+      <primary>operations</primary>
+      <secondary>starting</secondary>
+    </indexterm>Starting Lustre</title>
+    <para>On the first start of a Lustre file system, the components must be
+    started in the following order:</para>
     <orderedlist>
       <listitem>
         <para>Mount the MGT.</para>
-		<note><para>If a combined MGT/MDT is present, Lustre will correctly mount the MGT and MDT automatically.</para></note>
+        <note>
+          <para>If a combined MGT/MDT is present, Lustre will correctly mount
+          the MGT and MDT automatically.</para>
+        </note>
       </listitem>
       <listitem>
         <para>Mount the MDT.</para>
-		<note><para condition='l24'>Mount all MDTs if multiple MDTs are present.</para></note>
+        <note>
+          <para condition='l24'>Mount all MDTs if multiple MDTs are
+          present.</para>
+        </note>
       </listitem>
       <listitem>
         <para>Mount the OST(s).</para>
@@ -82,264 +155,592 @@ Mounting by Label</title>
     </orderedlist>
   </section>
   <section xml:id="dbdoclet.50438194_84876">
-    <title><indexterm><primary>operations</primary><secondary>mounting</secondary></indexterm>Mounting a Server</title>
-    <para>Starting a Lustre server is straightforward and only involves the mount command. Lustre servers can be added to <literal>/etc/fstab</literal>:</para>
-    <screen>mount -t lustre</screen>
+    <title>
+    <indexterm>
+      <primary>operations</primary>
+      <secondary>mounting</secondary>
+    </indexterm>Mounting a Server</title>
+    <para>Starting a Lustre server is straightforward and only involves the
+    mount command. Lustre servers can be added to 
+    <literal>/etc/fstab</literal>:</para>
+    <screen>
+mount -t lustre
+</screen>
     <para>The mount command generates output similar to this:</para>
-    <screen>/dev/sda1 on /mnt/test/mdt type lustre (rw)
+    <screen>
+/dev/sda1 on /mnt/test/mdt type lustre (rw)
 /dev/sda2 on /mnt/test/ost0 type lustre (rw)
-192.168.0.21@tcp:/testfs on /mnt/testfs type lustre (rw)</screen>
-    <para>In this example, the MDT, an OST (ost0) and file system (testfs) are mounted.</para>
-    <screen>LABEL=testfs-MDT0000 /mnt/test/mdt lustre defaults,_netdev,noauto 0 0
-LABEL=testfs-OST0000 /mnt/test/ost0 lustre defaults,_netdev,noauto 0 0</screen>
-    <para>In general, it is wise to specify noauto and let your high-availability (HA) package
-      manage when to mount the device. If you are not using failover, make sure that networking has
-      been started before mounting a Lustre server. If you are running Red Hat Enterprise Linux,
-      SUSE Linux Enterprise Server, Debian operating system (and perhaps others), use the
-        <literal>_netdev</literal> flag to ensure that these disks are mounted after the network is
-      up.</para>
-    <para>We are mounting by disk label here. The label of a device can be read with <literal>e2label</literal>. The label of a newly-formatted Lustre server may end in <literal>FFFF</literal> if the <literal>--index</literal> option is not specified to <literal>mkfs.lustre</literal>, meaning that it has yet to be assigned. The assignment takes place when the server is first started, and the disk label is updated.  It is recommended that the <literal>--index</literal> option always be used, which will also ensure that the label is set at format time.</para>
+192.168.0.21@tcp:/testfs on /mnt/testfs type lustre (rw)
+</screen>
+    <para>In this example, the MDT, an OST (ost0) and file system (testfs) are
+    mounted.</para>
+    <screen>
+LABEL=testfs-MDT0000 /mnt/test/mdt lustre defaults,_netdev,noauto 0 0
+LABEL=testfs-OST0000 /mnt/test/ost0 lustre defaults,_netdev,noauto 0 0
+</screen>
+    <para>In general, it is wise to specify noauto and let your
+    high-availability (HA) package manage when to mount the device. If you are
+    not using failover, make sure that networking has been started before
+    mounting a Lustre server. If you are running Red Hat Enterprise Linux, SUSE
+    Linux Enterprise Server, Debian operating system (and perhaps others), use
+    the 
+    <literal>_netdev</literal> flag to ensure that these disks are mounted after
+    the network is up.</para>
+    <para>We are mounting by disk label here. The label of a device can be read
+    with 
+    <literal>e2label</literal>. The label of a newly-formatted Lustre server
+    may end in 
+    <literal>FFFF</literal> if the 
+    <literal>--index</literal> option is not specified to 
+    <literal>mkfs.lustre</literal>, meaning that it has yet to be assigned. The
+    assignment takes place when the server is first started, and the disk label
+    is updated. It is recommended that the 
+    <literal>--index</literal> option always be used, which will also ensure
+    that the label is set at format time.</para>
     <caution>
-      <para>Do not do this when the client and OSS are on the same node, as memory pressure between the client and OSS can lead to deadlocks.</para>
+      <para>Do not do this when the client and OSS are on the same node, as
+      memory pressure between the client and OSS can lead to deadlocks.</para>
     </caution>
     <caution>
-      <para>Mount-by-label should NOT be used in a multi-path environment.</para>
+      <para>Mount-by-label should NOT be used in a multi-path
+      environment.</para>
     </caution>
   </section>
   <section xml:id="dbdoclet.50438194_69255">
-    <title><indexterm><primary>operations</primary><secondary>unmounting</secondary></indexterm>Unmounting a Server</title>
-    <para>To stop a Lustre server, use the <literal>umount <replaceable>/mount</replaceable> <replaceable>point</replaceable></literal> command.</para>
-    <para>For example, to stop <literal>ost0</literal> on mount point <literal>/mnt/test</literal>, run:</para>
-    <screen>$ umount /mnt/test</screen>
-    <para>Gracefully stopping a server with the <literal>umount</literal> command preserves the state of the connected clients. The next time the server is started, it waits for clients to reconnect, and then goes through the recovery procedure.</para>
-    <para>If the force (<literal>-f</literal>) flag is used, then the server evicts all clients and stops WITHOUT recovery. Upon restart, the server does not wait for recovery. Any currently connected clients receive I/O errors until they reconnect.</para>
+    <title>
+    <indexterm>
+      <primary>operations</primary>
+      <secondary>unmounting</secondary>
+    </indexterm>Unmounting a Server</title>
+    <para>To stop a Lustre server, use the 
+    <literal>umount 
+    <replaceable>/mount</replaceable>
+    <replaceable>point</replaceable></literal> command.</para>
+    <para>For example, to stop 
+    <literal>ost0</literal> on mount point 
+    <literal>/mnt/test</literal>, run:</para>
+    <screen>
+$ umount /mnt/test
+</screen>
+    <para>Gracefully stopping a server with the 
+    <literal>umount</literal> command preserves the state of the connected
+    clients. The next time the server is started, it waits for clients to
+    reconnect, and then goes through the recovery procedure.</para>
+    <para>If the force (
+    <literal>-f</literal>) flag is used, then the server evicts all clients and
+    stops WITHOUT recovery. Upon restart, the server does not wait for
+    recovery. Any currently connected clients receive I/O errors until they
+    reconnect.</para>
     <note>
-      <para>If you are using loopback devices, use the <literal>-d</literal> flag. This flag cleans up loop devices and can always be safely specified.</para>
+      <para>If you are using loopback devices, use the 
+      <literal>-d</literal> flag. This flag cleans up loop devices and can
+      always be safely specified.</para>
     </note>
   </section>
   <section xml:id="dbdoclet.50438194_57420">
-    <title><indexterm><primary>operations</primary><secondary>failover</secondary></indexterm>Specifying Failout/Failover Mode for OSTs</title>
-    <para>In a Lustre file system, an OST that has become unreachable because it fails, is taken off
-      the network, or is unmounted can be handled in one of two ways:</para>
+    <title>
+    <indexterm>
+      <primary>operations</primary>
+      <secondary>failover</secondary>
+    </indexterm>Specifying Failout/Failover Mode for OSTs</title>
+    <para>In a Lustre file system, an OST that has become unreachable because
+    it fails, is taken off the network, or is unmounted can be handled in one
+    of two ways:</para>
     <itemizedlist>
       <listitem>
-        <para> In <literal>failout</literal> mode, Lustre clients immediately receive errors (EIOs)
-          after a timeout, instead of waiting for the OST to recover.</para>
+        <para>In 
+        <literal>failout</literal> mode, Lustre clients immediately receive
+        errors (EIOs) after a timeout, instead of waiting for the OST to
+        recover.</para>
       </listitem>
       <listitem>
-        <para> In <literal>failover</literal> mode, Lustre clients wait for the OST to
-          recover.</para>
+        <para>In 
+        <literal>failover</literal> mode, Lustre clients wait for the OST to
+        recover.</para>
       </listitem>
     </itemizedlist>
-    <para>By default, the Lustre file system uses <literal>failover</literal> mode for OSTs. To
-      specify <literal>failout</literal> mode instead, use the
-        <literal>--param=&quot;failover.mode=failout&quot;</literal> option as shown below (entered
-      on one line):</para>
-    <screen>oss# mkfs.lustre --fsname=<replaceable>fsname</replaceable> --mgsnode=<replaceable>mgs_NID</replaceable> --param=failover.mode=failout 
-      --ost --index=<replaceable>ost_index</replaceable> <replaceable>/dev/ost_block_device</replaceable></screen>
-    <para>In the example below, <literal>failout</literal> mode is specified for the OSTs on the MGS
-        <literal>mds0</literal> in the file system <literal>testfs</literal> (entered on one
-      line).</para>
-    <screen>oss# mkfs.lustre --fsname=testfs --mgsnode=mds0 --param=failover.mode=failout 
-      --ost --index=3 /dev/sdb </screen>
+    <para>By default, the Lustre file system uses 
+    <literal>failover</literal> mode for OSTs. To specify 
+    <literal>failout</literal> mode instead, use the 
+    <literal>--param="failover.mode=failout"</literal> option as shown below
+    (entered on one line):</para>
+    <screen>
+oss# mkfs.lustre --fsname=
+<replaceable>fsname</replaceable> --mgsnode=
+<replaceable>mgs_NID</replaceable> --param=failover.mode=failout 
+      --ost --index=
+<replaceable>ost_index</replaceable> 
+<replaceable>/dev/ost_block_device</replaceable>
+</screen>
+    <para>In the example below, 
+    <literal>failout</literal> mode is specified for the OSTs on the MGS 
+    <literal>mds0</literal> in the file system 
+    <literal>testfs</literal>(entered on one line).</para>
+    <screen>
+oss# mkfs.lustre --fsname=testfs --mgsnode=mds0 --param=failover.mode=failout 
+      --ost --index=3 /dev/sdb 
+</screen>
     <caution>
-      <para>Before running this command, unmount all OSTs that will be affected by a change in
-          <literal>failover</literal> / <literal>failout</literal> mode.</para>
+      <para>Before running this command, unmount all OSTs that will be affected
+      by a change in 
+      <literal>failover</literal>/ 
+      <literal>failout</literal> mode.</para>
     </caution>
     <note>
-      <para>After initial file system configuration, use the <literal>tunefs.lustre</literal>
-        utility to change the mode. For example, to set the <literal>failout</literal> mode,
-        run:</para>
-      <para><screen>$ tunefs.lustre --param failover.mode=failout <replaceable>/dev/ost_device</replaceable></screen></para>
+      <para>After initial file system configuration, use the 
+      <literal>tunefs.lustre</literal> utility to change the mode. For example,
+      to set the 
+      <literal>failout</literal> mode, run:</para>
+      <para>
+        <screen>
+$ tunefs.lustre --param failover.mode=failout 
+<replaceable>/dev/ost_device</replaceable>
+</screen>
+      </para>
     </note>
   </section>
   <section xml:id="dbdoclet.50438194_54138">
-    <title><indexterm><primary>operations</primary><secondary>degraded OST RAID</secondary></indexterm>Handling Degraded OST RAID Arrays</title>
-    <para>Lustre includes functionality that notifies Lustre if an external RAID array has degraded performance (resulting in reduced overall file system performance), either because a disk has failed and not been replaced, or because a disk was replaced and is undergoing a rebuild. To avoid a global performance slowdown due to a degraded OST, the MDS can avoid the OST for new object allocation if it is notified of the degraded state.</para>
-    <para>A parameter for each OST, called <literal>degraded</literal>, specifies whether the OST is running in degraded mode or not.</para>
+    <title>
+    <indexterm>
+      <primary>operations</primary>
+      <secondary>degraded OST RAID</secondary>
+    </indexterm>Handling Degraded OST RAID Arrays</title>
+    <para>Lustre includes functionality that notifies Lustre if an external
+    RAID array has degraded performance (resulting in reduced overall file
+    system performance), either because a disk has failed and not been
+    replaced, or because a disk was replaced and is undergoing a rebuild. To
+    avoid a global performance slowdown due to a degraded OST, the MDS can
+    avoid the OST for new object allocation if it is notified of the degraded
+    state.</para>
+    <para>A parameter for each OST, called 
+    <literal>degraded</literal>, specifies whether the OST is running in
+    degraded mode or not.</para>
     <para>To mark the OST as degraded, use:</para>
-    <screen>lctl set_param obdfilter.{OST_name}.degraded=1</screen>
+    <screen>
+lctl set_param obdfilter.{OST_name}.degraded=1
+</screen>
     <para>To mark that the OST is back in normal operation, use:</para>
-    <screen>lctl set_param obdfilter.{OST_name}.degraded=0
+    <screen>
+lctl set_param obdfilter.{OST_name}.degraded=0
 </screen>
     <para>To determine if OSTs are currently in degraded mode, use:</para>
-    <screen>lctl get_param obdfilter.*.degraded
+    <screen>
+lctl get_param obdfilter.*.degraded
 </screen>
-    <para>If the OST is remounted due to a reboot or other condition, the flag resets to <literal>0</literal>.</para>
-    <para>It is recommended that this be implemented by an automated script that monitors the status of individual RAID devices.</para>
+    <para>If the OST is remounted due to a reboot or other condition, the flag
+    resets to 
+    <literal>0</literal>.</para>
+    <para>It is recommended that this be implemented by an automated script
+    that monitors the status of individual RAID devices.</para>
   </section>
   <section xml:id="dbdoclet.50438194_88063">
-    <title><indexterm><primary>operations</primary><secondary>multiple file systems</secondary></indexterm>Running Multiple Lustre File Systems</title>
-    <para>Lustre supports multiple file systems provided the combination of <literal>NID:fsname</literal> is unique. Each file system must be allocated a unique name during creation with the <literal>--fsname</literal> parameter. Unique names for file systems are enforced if a single MGS is present. If multiple MGSs are present (for example if you have an MGS on every MDS) the administrator is responsible for ensuring file system names are unique. A single MGS and unique file system names provides a single point of administration and allows commands to be issued against the file system even if it is not mounted.</para>
-    <para>Lustre supports multiple file systems on a single MGS. With a single MGS fsnames are guaranteed to be unique. Lustre also allows multiple MGSs to co-exist. For example, multiple MGSs will be necessary if multiple file systems on different Lustre software versions are to be concurrently available. With multiple MGSs additional care must be taken to ensure file system names are unique. Each file system should have a unique fsname among all systems that may interoperate in the future.</para>
-    <para>By default, the <literal>mkfs.lustre</literal> command creates a file system named <literal>lustre</literal>. To specify a different file system name (limited to 8 characters) at format time, use the <literal>--fsname</literal> option:</para>
-    <para><screen>mkfs.lustre --fsname=<replaceable>file_system_name</replaceable></screen></para>
+    <title>
+    <indexterm>
+      <primary>operations</primary>
+      <secondary>multiple file systems</secondary>
+    </indexterm>Running Multiple Lustre File Systems</title>
+    <para>Lustre supports multiple file systems provided the combination of 
+    <literal>NID:fsname</literal> is unique. Each file system must be allocated
+    a unique name during creation with the 
+    <literal>--fsname</literal> parameter. Unique names for file systems are
+    enforced if a single MGS is present. If multiple MGSs are present (for
+    example if you have an MGS on every MDS) the administrator is responsible
+    for ensuring file system names are unique. A single MGS and unique file
+    system names provides a single point of administration and allows commands
+    to be issued against the file system even if it is not mounted.</para>
+    <para>Lustre supports multiple file systems on a single MGS. With a single
+    MGS fsnames are guaranteed to be unique. Lustre also allows multiple MGSs
+    to co-exist. For example, multiple MGSs will be necessary if multiple file
+    systems on different Lustre software versions are to be concurrently
+    available. With multiple MGSs additional care must be taken to ensure file
+    system names are unique. Each file system should have a unique fsname among
+    all systems that may interoperate in the future.</para>
+    <para>By default, the 
+    <literal>mkfs.lustre</literal> command creates a file system named 
+    <literal>lustre</literal>. To specify a different file system name (limited
+    to 8 characters) at format time, use the 
+    <literal>--fsname</literal> option:</para>
+    <para>
+      <screen>
+mkfs.lustre --fsname=
+<replaceable>file_system_name</replaceable>
+</screen>
+    </para>
     <note>
-      <para>The MDT, OSTs and clients in the new file system must use the same file system name
-        (prepended to the device name). For example, for a new file system named
-          <literal>foo</literal>, the MDT and two OSTs would be named
-        <literal>foo-MDT0000</literal>, <literal>foo-OST0000</literal>, and
-          <literal>foo-OST0001</literal>.</para>
+      <para>The MDT, OSTs and clients in the new file system must use the same
+      file system name (prepended to the device name). For example, for a new
+      file system named 
+      <literal>foo</literal>, the MDT and two OSTs would be named 
+      <literal>foo-MDT0000</literal>, 
+      <literal>foo-OST0000</literal>, and 
+      <literal>foo-OST0001</literal>.</para>
     </note>
     <para>To mount a client on the file system, run:</para>
-    <screen>client# mount -t lustre <replaceable>mgsnode</replaceable>:<replaceable>/new_fsname</replaceable> <replaceable>/mount_point</replaceable></screen>
-    <para>For example, to mount a client on file system foo at mount point /mnt/foo, run:</para>
-    <screen>client# mount -t lustre mgsnode:/foo /mnt/foo</screen>
+    <screen>
+client# mount -t lustre 
+<replaceable>mgsnode</replaceable>:
+<replaceable>/new_fsname</replaceable> 
+<replaceable>/mount_point</replaceable>
+</screen>
+    <para>For example, to mount a client on file system foo at mount point
+    /mnt/foo, run:</para>
+    <screen>
+client# mount -t lustre mgsnode:/foo /mnt/foo
+</screen>
     <note>
-      <para>If a client(s) will be mounted on several file systems, add the following line to <literal>/etc/xattr.conf</literal> file to avoid problems when files are moved between the file systems: <literal>lustre.* skip</literal></para>
+      <para>If a client(s) will be mounted on several file systems, add the
+      following line to 
+      <literal>/etc/xattr.conf</literal> file to avoid problems when files are
+      moved between the file systems: 
+      <literal>lustre.* skip</literal></para>
     </note>
     <note>
-      <para>To ensure that a new MDT is added to an existing MGS create the MDT by specifying: <literal>--mdt --mgsnode=<replaceable>mgs_NID</replaceable></literal>.</para>
+      <para>To ensure that a new MDT is added to an existing MGS create the MDT
+      by specifying: 
+      <literal>--mdt --mgsnode=
+      <replaceable>mgs_NID</replaceable></literal>.</para>
     </note>
-    <para>A Lustre installation with two file systems (<literal>foo</literal> and <literal>bar</literal>) could look like this, where the MGS node is <literal>mgsnode@tcp0</literal> and the mount points are <literal>/mnt/foo</literal> and <literal>/mnt/bar</literal>.</para>
-    <screen>mgsnode# mkfs.lustre --mgs /dev/sda
-mdtfoonode# mkfs.lustre --fsname=foo --mgsnode=mgsnode@tcp0 --mdt --index=0 /dev/sdb
-ossfoonode# mkfs.lustre --fsname=foo --mgsnode=mgsnode@tcp0 --ost --index=0 /dev/sda
-ossfoonode# mkfs.lustre --fsname=foo --mgsnode=mgsnode@tcp0 --ost --index=1 /dev/sdb
-mdtbarnode# mkfs.lustre --fsname=bar --mgsnode=mgsnode@tcp0 --mdt --index=0 /dev/sda
-ossbarnode# mkfs.lustre --fsname=bar --mgsnode=mgsnode@tcp0 --ost --index=0 /dev/sdc
-ossbarnode# mkfs.lustre --fsname=bar --mgsnode=mgsnode@tcp0 --ost --index=1 /dev/sdd</screen>
-    <para>To mount a client on file system foo at mount point <literal>/mnt/foo</literal>, run:</para>
-    <screen>client# mount -t lustre mgsnode@tcp0:/foo /mnt/foo</screen>
-    <para>To mount a client on file system bar at mount point <literal>/mnt/bar</literal>, run:</para>
-    <screen>client# mount -t lustre mgsnode@tcp0:/bar /mnt/bar</screen>
+    <para>A Lustre installation with two file systems (
+    <literal>foo</literal> and 
+    <literal>bar</literal>) could look like this, where the MGS node is 
+    <literal>mgsnode@tcp0</literal> and the mount points are 
+    <literal>/mnt/foo</literal> and 
+    <literal>/mnt/bar</literal>.</para>
+    <screen>
+mgsnode# mkfs.lustre --mgs /dev/sda
+mdtfoonode# mkfs.lustre --fsname=foo --mgsnode=mgsnode@tcp0 --mdt --index=0
+/dev/sdb
+ossfoonode# mkfs.lustre --fsname=foo --mgsnode=mgsnode@tcp0 --ost --index=0
+/dev/sda
+ossfoonode# mkfs.lustre --fsname=foo --mgsnode=mgsnode@tcp0 --ost --index=1
+/dev/sdb
+mdtbarnode# mkfs.lustre --fsname=bar --mgsnode=mgsnode@tcp0 --mdt --index=0
+/dev/sda
+ossbarnode# mkfs.lustre --fsname=bar --mgsnode=mgsnode@tcp0 --ost --index=0
+/dev/sdc
+ossbarnode# mkfs.lustre --fsname=bar --mgsnode=mgsnode@tcp0 --ost --index=1
+/dev/sdd
+</screen>
+    <para>To mount a client on file system foo at mount point 
+    <literal>/mnt/foo</literal>, run:</para>
+    <screen>
+client# mount -t lustre mgsnode@tcp0:/foo /mnt/foo
+</screen>
+    <para>To mount a client on file system bar at mount point 
+    <literal>/mnt/bar</literal>, run:</para>
+    <screen>
+client# mount -t lustre mgsnode@tcp0:/bar /mnt/bar
+</screen>
   </section>
   <section xml:id="dbdoclet.lfsmkdir" condition='l24'>
-    <title><indexterm><primary>operations</primary><secondary>remote directory</secondary></indexterm>Creating a sub-directory on a given MDT</title>
-	<para>Lustre 2.4 enables individual sub-directories to be serviced by unique MDTs. An administrator can allocate a sub-directory to a given MDT using the command:</para>
-	<screen>client# lfs mkdir –i <replaceable>mdt_index</replaceable> <replaceable>/mount_point/remote_dir</replaceable>
-	</screen>
-	<para>This command will allocate the sub-directory <literal>remote_dir</literal> onto the MDT of index <literal>mdtindex</literal>. For more information on adding additional MDTs and <literal>mdtindex</literal> see <xref linkend='dbdoclet.addmdtindex'/>.</para>
-	<warning><para>An administrator can allocate remote sub-directories to separate MDTs. Creating remote sub-directories in parent directories not hosted on MDT0 is not recommended. This is because the failure of the parent MDT will leave the namespace below it inaccessible. For this reason, by default it is only possible to create remote sub-directories off MDT0. To relax this restriction and enable remote sub-directories off any MDT, an administrator must issue the command <literal>lctl set_param mdd.*.enable_remote_dir=1</literal>.</para></warning>
+    <title>
+    <indexterm>
+      <primary>operations</primary>
+      <secondary>remote directory</secondary>
+    </indexterm>Creating a sub-directory on a given MDT</title>
+    <para>Lustre 2.4 enables individual sub-directories to be serviced by
+    unique MDTs. An administrator can allocate a sub-directory to a given MDT
+    using the command:</para>
+    <screen>
+client# lfs mkdir –i 
+<replaceable>mdt_index</replaceable> 
+<replaceable>/mount_point/remote_dir</replaceable>
+        
+</screen>
+    <para>This command will allocate the sub-directory 
+    <literal>remote_dir</literal> onto the MDT of index 
+    <literal>mdtindex</literal>. For more information on adding additional MDTs
+    and 
+    <literal>mdtindex</literal> see 
+    <xref linkend='dbdoclet.addmdtindex' />.</para>
+    <warning>
+      <para>An administrator can allocate remote sub-directories to separate
+      MDTs. Creating remote sub-directories in parent directories not hosted on
+      MDT0 is not recommended. This is because the failure of the parent MDT
+      will leave the namespace below it inaccessible. For this reason, by
+      default it is only possible to create remote sub-directories off MDT0. To
+      relax this restriction and enable remote sub-directories off any MDT, an
+      administrator must issue the command 
+      <literal>lctl set_param mdd.*.enable_remote_dir=1</literal>.</para>
+    </warning>
   </section>
   <section xml:id="dbdoclet.50438194_88980">
-    <title><indexterm><primary>operations</primary><secondary>parameters</secondary></indexterm>Setting and Retrieving Lustre Parameters</title>
-    <para>Several options are available for setting parameters in Lustre:</para>
+    <title>
+    <indexterm>
+      <primary>operations</primary>
+      <secondary>parameters</secondary>
+    </indexterm>Setting and Retrieving Lustre Parameters</title>
+    <para>Several options are available for setting parameters in
+    Lustre:</para>
     <itemizedlist>
       <listitem>
-        <para> When creating a file system, use mkfs.lustre. See <xref linkend="dbdoclet.50438194_17237"/> below.</para>
+        <para>When creating a file system, use mkfs.lustre. See 
+        <xref linkend="dbdoclet.50438194_17237" />below.</para>
       </listitem>
       <listitem>
-        <para> When a server is stopped, use tunefs.lustre. See <xref linkend="dbdoclet.50438194_55253"/> below.</para>
+        <para>When a server is stopped, use tunefs.lustre. See 
+        <xref linkend="dbdoclet.50438194_55253" />below.</para>
       </listitem>
       <listitem>
-        <para> When the file system is running, use lctl to set or retrieve Lustre parameters. See <xref linkend="dbdoclet.50438194_51490"/> and <xref linkend="dbdoclet.50438194_63247"/> below.</para>
+        <para>When the file system is running, use lctl to set or retrieve
+        Lustre parameters. See 
+        <xref linkend="dbdoclet.50438194_51490" />and 
+        <xref linkend="dbdoclet.50438194_63247" />below.</para>
       </listitem>
     </itemizedlist>
     <section xml:id="dbdoclet.50438194_17237">
-      <title>Setting Tunable Parameters with <literal>mkfs.lustre</literal></title>
-      <para>When the file system is first formatted, parameters can simply be added as a <literal>--param</literal> option to the <literal>mkfs.lustre</literal> command. For example:</para>
-      <screen>mds# mkfs.lustre --mdt --param=&quot;sys.timeout=50&quot; /dev/sda</screen>
-      <para>For more details about creating a file system,see <xref linkend="configuringlustre"/>. For more details about <literal>mkfs.lustre</literal>, see <xref linkend="systemconfigurationutilities"/>.</para>
+      <title>Setting Tunable Parameters with 
+      <literal>mkfs.lustre</literal></title>
+      <para>When the file system is first formatted, parameters can simply be
+      added as a 
+      <literal>--param</literal> option to the 
+      <literal>mkfs.lustre</literal> command. For example:</para>
+      <screen>
+mds# mkfs.lustre --mdt --param="sys.timeout=50" /dev/sda
+</screen>
+      <para>For more details about creating a file system,see 
+      <xref linkend="configuringlustre" />. For more details about 
+      <literal>mkfs.lustre</literal>, see 
+      <xref linkend="systemconfigurationutilities" />.</para>
     </section>
     <section xml:id="dbdoclet.50438194_55253">
-      <title>Setting Parameters with <literal>tunefs.lustre</literal></title>
-      <para>If a server (OSS or MDS) is stopped, parameters can be added to an existing file system
-        using the <literal>--param</literal> option to the <literal>tunefs.lustre</literal> command.
-        For example:</para>
-      <screen>oss# tunefs.lustre --param=failover.node=192.168.0.13@tcp0 /dev/sda</screen>
-      <para>With <literal>tunefs.lustre</literal>, parameters are <emphasis>additive</emphasis> -- new parameters are specified in addition to old parameters, they do not replace them. To erase all old <literal>tunefs.lustre</literal> parameters and just use newly-specified parameters, run:</para>
-      <screen>mds# tunefs.lustre --erase-params --param=<replaceable>new_parameters</replaceable> </screen>
-      <para>The tunefs.lustre command can be used to set any parameter settable in a /proc/fs/lustre file and that has its own OBD device, so it can be specified as <literal><replaceable>obdname|fsname</replaceable>.<replaceable>obdtype</replaceable>.<replaceable>proc_file_name</replaceable>=<replaceable>value</replaceable></literal>. For example:</para>
-      <screen>mds# tunefs.lustre --param mdt.identity_upcall=NONE /dev/sda1</screen>
-      <para>For more details about <literal>tunefs.lustre</literal>, see <xref linkend="systemconfigurationutilities"/>.</para>
+      <title>Setting Parameters with 
+      <literal>tunefs.lustre</literal></title>
+      <para>If a server (OSS or MDS) is stopped, parameters can be added to an
+      existing file system using the 
+      <literal>--param</literal> option to the 
+      <literal>tunefs.lustre</literal> command. For example:</para>
+      <screen>
+oss# tunefs.lustre --param=failover.node=192.168.0.13@tcp0 /dev/sda
+</screen>
+      <para>With 
+      <literal>tunefs.lustre</literal>, parameters are 
+      <emphasis>additive</emphasis>-- new parameters are specified in addition
+      to old parameters, they do not replace them. To erase all old 
+      <literal>tunefs.lustre</literal> parameters and just use newly-specified
+      parameters, run:</para>
+      <screen>
+mds# tunefs.lustre --erase-params --param=
+<replaceable>new_parameters</replaceable> 
+</screen>
+      <para>The tunefs.lustre command can be used to set any parameter settable
+      in a /proc/fs/lustre file and that has its own OBD device, so it can be
+      specified as 
+      <literal>
+      <replaceable>obdname|fsname</replaceable>.
+      <replaceable>obdtype</replaceable>.
+      <replaceable>proc_file_name</replaceable>=
+      <replaceable>value</replaceable></literal>. For example:</para>
+      <screen>
+mds# tunefs.lustre --param mdt.identity_upcall=NONE /dev/sda1
+</screen>
+      <para>For more details about 
+      <literal>tunefs.lustre</literal>, see 
+      <xref linkend="systemconfigurationutilities" />.</para>
     </section>
     <section xml:id="dbdoclet.50438194_51490">
-      <title>Setting Parameters with <literal>lctl</literal></title>
-      <para>When the file system is running, the <literal>lctl</literal> command can be used to set parameters (temporary or permanent) and report current parameter values. Temporary parameters are active as long as the server or client is not shut down. Permanent parameters live through server and client reboots.</para>
+      <title>Setting Parameters with 
+      <literal>lctl</literal></title>
+      <para>When the file system is running, the 
+      <literal>lctl</literal> command can be used to set parameters (temporary
+      or permanent) and report current parameter values. Temporary parameters
+      are active as long as the server or client is not shut down. Permanent
+      parameters live through server and client reboots.</para>
       <note>
-        <para>The lctl list_param command enables users to list all parameters that can be set. See <xref linkend="dbdoclet.50438194_88217"/>.</para>
+        <para>The lctl list_param command enables users to list all parameters
+        that can be set. See 
+        <xref linkend="dbdoclet.50438194_88217" />.</para>
       </note>
-      <para>For more details about the <literal>lctl</literal> command, see the examples in the sections below and <xref linkend="systemconfigurationutilities"/>.</para>
+      <para>For more details about the 
+      <literal>lctl</literal> command, see the examples in the sections below
+      and 
+      <xref linkend="systemconfigurationutilities" />.</para>
       <section remap="h4">
         <title>Setting Temporary Parameters</title>
-        <para>Use <literal>lctl set_param</literal> to set temporary parameters on the node where it is run. These parameters map to items in <literal>/proc/{fs,sys}/{lnet,lustre}</literal>. The <literal>lctl set_param</literal> command uses this syntax:</para>
-        <screen>lctl set_param [-n] <replaceable>obdtype</replaceable>.<replaceable>obdname</replaceable>.<replaceable>proc_file_name</replaceable>=<replaceable>value</replaceable></screen>
+        <para>Use 
+        <literal>lctl set_param</literal> to set temporary parameters on the
+        node where it is run. These parameters map to items in 
+        <literal>/proc/{fs,sys}/{lnet,lustre}</literal>. The 
+        <literal>lctl set_param</literal> command uses this syntax:</para>
+        <screen>
+lctl set_param [-n] 
+<replaceable>obdtype</replaceable>.
+<replaceable>obdname</replaceable>.
+<replaceable>proc_file_name</replaceable>=
+<replaceable>value</replaceable>
+</screen>
         <para>For example:</para>
-        <screen># lctl set_param osc.*.max_dirty_mb=1024
+        <screen>
+# lctl set_param osc.*.max_dirty_mb=1024
 osc.myth-OST0000-osc.max_dirty_mb=32
 osc.myth-OST0001-osc.max_dirty_mb=32
 osc.myth-OST0002-osc.max_dirty_mb=32
 osc.myth-OST0003-osc.max_dirty_mb=32
-osc.myth-OST0004-osc.max_dirty_mb=32</screen>
+osc.myth-OST0004-osc.max_dirty_mb=32
+</screen>
       </section>
       <section xml:id="dbdoclet.50438194_64195">
         <title>Setting Permanent Parameters</title>
-        <para>Use the <literal>lctl conf_param</literal> command to set permanent parameters. In general, the <literal>lctl conf_param</literal> command can be used to specify any parameter settable in a <literal>/proc/fs/lustre</literal> file, with its own OBD device. The <literal>lctl conf_param</literal> command uses this syntax (same as the <literal>mkfs.lustre</literal> and <literal>tunefs.lustre</literal> commands):</para>
-        <screen><replaceable>obdname|fsname</replaceable>.<replaceable>obdtype</replaceable>.<replaceable>proc_file_name</replaceable>=<replaceable>value</replaceable>) </screen>
-        <para>Here are a few examples of <literal>lctl conf_param</literal> commands:</para>
-        <screen>mgs# lctl conf_param testfs-MDT0000.sys.timeout=40
+        <para>Use the 
+        <literal>lctl conf_param</literal> command to set permanent parameters.
+        In general, the 
+        <literal>lctl conf_param</literal> command can be used to specify any
+        parameter settable in a 
+        <literal>/proc/fs/lustre</literal> file, with its own OBD device. The 
+        <literal>lctl conf_param</literal> command uses this syntax (same as the
+        
+        <literal>mkfs.lustre</literal> and 
+        <literal>tunefs.lustre</literal> commands):</para>
+        <screen>
+<replaceable>obdname|fsname</replaceable>.
+<replaceable>obdtype</replaceable>.
+<replaceable>proc_file_name</replaceable>=
+<replaceable>value</replaceable>) 
+</screen>
+        <para>Here are a few examples of 
+        <literal>lctl conf_param</literal> commands:</para>
+        <screen>
+mgs# lctl conf_param testfs-MDT0000.sys.timeout=40
 $ lctl conf_param testfs-MDT0000.mdt.identity_upcall=NONE
 $ lctl conf_param testfs.llite.max_read_ahead_mb=16
 $ lctl conf_param testfs-MDT0000.lov.stripesize=2M
 $ lctl conf_param testfs-OST0000.osc.max_dirty_mb=29.15
 $ lctl conf_param testfs-OST0000.ost.client_cache_seconds=15
-$ lctl conf_param testfs.sys.timeout=40 </screen>
+$ lctl conf_param testfs.sys.timeout=40 
+</screen>
         <caution>
-          <para>Parameters specified with the <literal>lctl conf_param</literal> command are set permanently in the file system&apos;s configuration file on the MGS.</para>
+          <para>Parameters specified with the 
+          <literal>lctl conf_param</literal> command are set permanently in the
+          file system's configuration file on the MGS.</para>
         </caution>
       </section>
       <section xml:id="dbdoclet.setparamp" condition='l25'>
-	<title>Setting Permanent Parameters with lctl set_param -P</title>
-	<para> Use the <literal>lctl set_param -P</literal> to set parameters permanently. This command must be issued on the MGS. The given parameter is set on every host using <literal>lctl</literal> upcall. Parameters map to items in <literal>/proc/{fs,sys}/{lnet,lustre}</literal>. The <literal>lctl set_param</literal> command uses this syntax:</para>
-	<screen>lctl set_param -P <replaceable>obdtype</replaceable>.<replaceable>obdname</replaceable>.<replaceable>proc_file_name</replaceable>=<replaceable>value</replaceable></screen>
-	<para>For example:</para>
-	<screen># lctl set_param -P osc.*.max_dirty_mb=1024
+        <title>Setting Permanent Parameters with lctl set_param -P</title>
+        <para>Use the 
+        <literal>lctl set_param -P</literal> to set parameters permanently. This
+        command must be issued on the MGS. The given parameter is set on every
+        host using 
+        <literal>lctl</literal> upcall. Parameters map to items in 
+        <literal>/proc/{fs,sys}/{lnet,lustre}</literal>. The 
+        <literal>lctl set_param</literal> command uses this syntax:</para>
+        <screen>
+lctl set_param -P 
+<replaceable>obdtype</replaceable>.
+<replaceable>obdname</replaceable>.
+<replaceable>proc_file_name</replaceable>=
+<replaceable>value</replaceable>
+</screen>
+        <para>For example:</para>
+        <screen>
+# lctl set_param -P osc.*.max_dirty_mb=1024
 osc.myth-OST0000-osc.max_dirty_mb=32
 osc.myth-OST0001-osc.max_dirty_mb=32
 osc.myth-OST0002-osc.max_dirty_mb=32
 osc.myth-OST0003-osc.max_dirty_mb=32
-osc.myth-OST0004-osc.max_dirty_mb=32 </screen>
-	<para>Use <literal>-d </literal>  (only with -P) option to delete permanent parameter. Syntax:</para>
-	<screen>lctl set_param -P -d<replaceable>obdtype</replaceable>.<replaceable>obdname</replaceable>.<replaceable>proc_file_name</replaceable></screen>
-	<para>For example:</para>
-	<screen># lctl set_param -P -d osc.*.max_dirty_mb </screen>
+osc.myth-OST0004-osc.max_dirty_mb=32 
+</screen>
+        <para>Use 
+        <literal>-d</literal>(only with -P) option to delete permanent
+        parameter. Syntax:</para>
+        <screen>
+lctl set_param -P -d
+<replaceable>obdtype</replaceable>.
+<replaceable>obdname</replaceable>.
+<replaceable>proc_file_name</replaceable>
+</screen>
+        <para>For example:</para>
+        <screen>
+# lctl set_param -P -d osc.*.max_dirty_mb 
+</screen>
       </section>
       <section xml:id="dbdoclet.50438194_88217">
         <title>Listing Parameters</title>
-        <para>To list Lustre or LNET parameters that are available to set, use the <literal>lctl list_param</literal> command. For example:</para>
-        <screen>lctl list_param [-FR] <replaceable>obdtype</replaceable>.<replaceable>obdname</replaceable></screen>
-        <para>The following arguments are available for the <literal>lctl list_param</literal> command.</para>
-        <para><literal>-F</literal> Add &apos;<literal>/</literal>&apos;, &apos;<literal>@</literal>&apos; or &apos;<literal>=</literal>&apos; for directories, symlinks and writeable files, respectively</para>
-        <para><literal>-R</literal> Recursively lists all parameters under the specified path</para>
+        <para>To list Lustre or LNET parameters that are available to set, use
+        the 
+        <literal>lctl list_param</literal> command. For example:</para>
+        <screen>
+lctl list_param [-FR] 
+<replaceable>obdtype</replaceable>.
+<replaceable>obdname</replaceable>
+</screen>
+        <para>The following arguments are available for the 
+        <literal>lctl list_param</literal> command.</para>
+        <para>
+        <literal>-F</literal> Add '
+        <literal>/</literal>', '
+        <literal>@</literal>' or '
+        <literal>=</literal>' for directories, symlinks and writeable files,
+        respectively</para>
+        <para>
+        <literal>-R</literal> Recursively lists all parameters under the
+        specified path</para>
         <para>For example:</para>
-        <screen>oss# lctl list_param obdfilter.lustre-OST0000 </screen>
+        <screen>
+oss# lctl list_param obdfilter.lustre-OST0000 
+</screen>
       </section>
       <section xml:id="dbdoclet.50438194_63247">
         <title>Reporting Current Parameter Values</title>
-        <para>To report current Lustre parameter values, use the <literal>lctl get_param</literal> command with this syntax:</para>
-        <screen>lctl get_param [-n] <replaceable>obdtype</replaceable>.<replaceable>obdname</replaceable>.<replaceable>proc_file_name</replaceable></screen>
+        <para>To report current Lustre parameter values, use the 
+        <literal>lctl get_param</literal> command with this syntax:</para>
+        <screen>
+lctl get_param [-n] 
+<replaceable>obdtype</replaceable>.
+<replaceable>obdname</replaceable>.
+<replaceable>proc_file_name</replaceable>
+</screen>
         <para>This example reports data on RPC service times.</para>
-        <screen>oss# lctl get_param -n ost.*.ost_io.timeouts
-service : cur 1 worst 30 (at 1257150393, 85d23h58m54s ago) 1 1 1 1 </screen>
-        <para>This example reports the amount of space this client has reserved for writeback cache with each OST:</para>
-        <screen>client# lctl get_param osc.*.cur_grant_bytes
+        <screen>
+oss# lctl get_param -n ost.*.ost_io.timeouts
+service : cur 1 worst 30 (at 1257150393, 85d23h58m54s ago) 1 1 1 1 
+</screen>
+        <para>This example reports the amount of space this client has reserved
+        for writeback cache with each OST:</para>
+        <screen>
+client# lctl get_param osc.*.cur_grant_bytes
 osc.myth-OST0000-osc-ffff8800376bdc00.cur_grant_bytes=2097152
 osc.myth-OST0001-osc-ffff8800376bdc00.cur_grant_bytes=33890304
 osc.myth-OST0002-osc-ffff8800376bdc00.cur_grant_bytes=35418112
 osc.myth-OST0003-osc-ffff8800376bdc00.cur_grant_bytes=2097152
-osc.myth-OST0004-osc-ffff8800376bdc00.cur_grant_bytes=33808384</screen>
+osc.myth-OST0004-osc-ffff8800376bdc00.cur_grant_bytes=33808384
+</screen>
       </section>
     </section>
   </section>
   <section xml:id="dbdoclet.50438194_41817">
-    <title><indexterm><primary>operations</primary><secondary>failover</secondary></indexterm>Specifying NIDs and Failover</title>
-    <para>If a node has multiple network interfaces, it may have multiple NIDs, which must all be
-      identified so other nodes can choose the NID that is appropriate for their network interfaces.
-      Typically, NIDs are specified in a list delimited by commas (<literal>,</literal>). However,
-      when failover nodes are specified, the NIDs are delimited by a colon (<literal>:</literal>) or
-      by repeating a keyword such as <literal>--mgsnode=</literal> or
-        <literal>--servicenode=</literal>). </para>
-    <para>To display the NIDs of all servers in networks configured to work with the Lustre file
-      system, run (while LNET is running):</para>
-    <screen>lctl list_nids</screen>
-    <para>In the example below,  <literal>mds0</literal> and <literal>mds1</literal> are configured
-      as a combined MGS/MDT failover pair and <literal>oss0</literal> and <literal>oss1</literal>
-      are configured as an OST failover pair. The Ethernet address for <literal>mds0</literal> is
-      192.168.10.1, and for <literal>mds1</literal> is 192.168.10.2. The Ethernet addresses for
-        <literal>oss0</literal> and <literal>oss1</literal>  are 192.168.10.20 and 192.168.10.21
-      respectively.</para>
-    <screen>mds0# mkfs.lustre --fsname=testfs --mdt --mgs \
+    <title>
+    <indexterm>
+      <primary>operations</primary>
+      <secondary>failover</secondary>
+    </indexterm>Specifying NIDs and Failover</title>
+    <para>If a node has multiple network interfaces, it may have multiple NIDs,
+    which must all be identified so other nodes can choose the NID that is
+    appropriate for their network interfaces. Typically, NIDs are specified in
+    a list delimited by commas (
+    <literal>,</literal>). However, when failover nodes are specified, the NIDs
+    are delimited by a colon (
+    <literal>:</literal>) or by repeating a keyword such as 
+    <literal>--mgsnode=</literal> or 
+    <literal>--servicenode=</literal>).</para>
+    <para>To display the NIDs of all servers in networks configured to work
+    with the Lustre file system, run (while LNET is running):</para>
+    <screen>
+lctl list_nids
+</screen>
+    <para>In the example below, 
+    <literal>mds0</literal> and 
+    <literal>mds1</literal> are configured as a combined MGS/MDT failover pair
+    and 
+    <literal>oss0</literal> and 
+    <literal>oss1</literal> are configured as an OST failover pair. The Ethernet
+    address for 
+    <literal>mds0</literal> is 192.168.10.1, and for 
+    <literal>mds1</literal> is 192.168.10.2. The Ethernet addresses for 
+    <literal>oss0</literal> and 
+    <literal>oss1</literal> are 192.168.10.20 and 192.168.10.21
+    respectively.</para>
+    <screen>
+mds0# mkfs.lustre --fsname=testfs --mdt --mgs \
         --servicenode=192.168.10.2@tcp0 \
         -–servicenode=192.168.10.1@tcp0 /dev/sda1
 mds0# mount -t lustre /dev/sda1 /mnt/test/mdt
@@ -352,82 +753,147 @@ client# mount -t lustre 192.168.10.1@tcp0:192.168.10.2@tcp0:/testfs \
         /mnt/testfs
 mds0# umount /mnt/mdt
 mds1# mount -t lustre /dev/sda1 /mnt/test/mdt
-mds1# cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status</screen>
-    <para>Where multiple NIDs are specified separated by commas  (for example,
-        <literal>10.67.73.200@tcp,192.168.10.1@tcp</literal>), the two NIDs refer to the same host,
-      and the Lustre software chooses the <emphasis>best</emphasis> one for communication. When a
-      pair of NIDs is separated by a colon (for example,
-        <literal>10.67.73.200@tcp:10.67.73.201@tcp</literal>), the two NIDs refer to two different
-      hosts and are treated as a failover pair (the Lustre software tries the first one, and if that
-      fails, it tries the second one.)</para>
-    <para>Two options to <literal>mkfs.lustre</literal> can be used to specify failover nodes.
-      Introduced in Lustre software release 2.0, the <literal>--servicenode</literal> option is used
-      to specify all service NIDs, including those for primary nodes and failover nodes. When the
-        <literal>--servicenode</literal>option is used, the first service node to load the target
-      device becomes the primary service node, while nodes corresponding to the other specified NIDs
-      become failover locations for the target device. An older option,
-        <literal>--failnode</literal>, specifies just the NIDS of failover nodes. For more
-      information about the <literal>--servicenode</literal> and <literal>--failnode</literal>
-      options, see <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="configuringfailover"
-      />.</para>
+mds1# cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status
+</screen>
+    <para>Where multiple NIDs are specified separated by commas (for example, 
+    <literal>10.67.73.200@tcp,192.168.10.1@tcp</literal>), the two NIDs refer
+    to the same host, and the Lustre software chooses the 
+    <emphasis>best</emphasis>one for communication. When a pair of NIDs is
+    separated by a colon (for example, 
+    <literal>10.67.73.200@tcp:10.67.73.201@tcp</literal>), the two NIDs refer
+    to two different hosts and are treated as a failover pair (the Lustre
+    software tries the first one, and if that fails, it tries the second
+    one.)</para>
+    <para>Two options to 
+    <literal>mkfs.lustre</literal> can be used to specify failover nodes.
+    Introduced in Lustre software release 2.0, the 
+    <literal>--servicenode</literal> option is used to specify all service NIDs,
+    including those for primary nodes and failover nodes. When the 
+    <literal>--servicenode</literal> option is used, the first service node to
+    load the target device becomes the primary service node, while nodes
+    corresponding to the other specified NIDs become failover locations for the
+    target device. An older option, 
+    <literal>--failnode</literal>, specifies just the NIDS of failover nodes.
+    For more information about the 
+    <literal>--servicenode</literal> and 
+    <literal>--failnode</literal> options, see 
+    <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+    linkend="configuringfailover" />.</para>
   </section>
   <section xml:id="dbdoclet.50438194_70905">
-    <title><indexterm><primary>operations</primary><secondary>erasing a file system</secondary></indexterm>Erasing a File System</title>
-    <para>If you want to erase a file system and permanently delete all the data in the file system,
-      run this command on your targets:</para>
-    <screen>$ &quot;mkfs.lustre --reformat&quot;</screen>
-    <para>If you are using a separate MGS and want to keep other file systems defined on that MGS, then set the <literal>writeconf</literal> flag on the MDT for that file system. The <literal>writeconf</literal> flag causes the configuration logs to be erased; they are regenerated the next time the servers start.</para>
-    <para>To set the <literal>writeconf</literal> flag on the MDT:</para>
+    <title>
+    <indexterm>
+      <primary>operations</primary>
+      <secondary>erasing a file system</secondary>
+    </indexterm>Erasing a File System</title>
+    <para>If you want to erase a file system and permanently delete all the
+    data in the file system, run this command on your targets:</para>
+    <screen>
+$ "mkfs.lustre --reformat"
+</screen>
+    <para>If you are using a separate MGS and want to keep other file systems
+    defined on that MGS, then set the 
+    <literal>writeconf</literal> flag on the MDT for that file system. The 
+    <literal>writeconf</literal> flag causes the configuration logs to be
+    erased; they are regenerated the next time the servers start.</para>
+    <para>To set the 
+    <literal>writeconf</literal> flag on the MDT:</para>
     <orderedlist>
       <listitem>
         <para>Unmount all clients/servers using this file system, run:</para>
-        <screen>$ umount /mnt/lustre</screen>
+        <screen>
+$ umount /mnt/lustre
+</screen>
       </listitem>
       <listitem>
         <para>Permanently erase the file system and, presumably, replace it
-	with another file system, run:</para>
-        <screen>$ mkfs.lustre --reformat --fsname spfs --mgs --mdt --index=0 /dev/<emphasis>{mdsdev}</emphasis></screen>
+        with another file system, run:</para>
+        <screen>
+$ mkfs.lustre --reformat --fsname spfs --mgs --mdt --index=0 /dev/
+<emphasis>{mdsdev}</emphasis>
+</screen>
       </listitem>
       <listitem>
-        <para>If you have a separate MGS (that you do not want to reformat), then add the <literal>--writeconf</literal> flag to <literal>mkfs.lustre</literal> on the MDT, run:</para>
-        <screen>$ mkfs.lustre --reformat --writeconf --fsname spfs --mgsnode=<replaceable>mgs_nid</replaceable> --mdt --index=0 <replaceable>/dev/mds_device</replaceable></screen>
+        <para>If you have a separate MGS (that you do not want to reformat),
+        then add the 
+        <literal>--writeconf</literal> flag to 
+        <literal>mkfs.lustre</literal> on the MDT, run:</para>
+        <screen>
+$ mkfs.lustre --reformat --writeconf --fsname spfs --mgsnode=
+<replaceable>mgs_nid</replaceable> --mdt --index=0 
+<replaceable>/dev/mds_device</replaceable>
+</screen>
       </listitem>
     </orderedlist>
     <note>
-      <para>If you have a combined MGS/MDT, reformatting the MDT reformats the MGS as well, causing all configuration information to be lost; you can start building your new file system. Nothing needs to be done with old disks that will not be part of the new file system, just do not mount them.</para>
+      <para>If you have a combined MGS/MDT, reformatting the MDT reformats the
+      MGS as well, causing all configuration information to be lost; you can
+      start building your new file system. Nothing needs to be done with old
+      disks that will not be part of the new file system, just do not mount
+      them.</para>
     </note>
   </section>
   <section xml:id="dbdoclet.50438194_16954">
-    <title><indexterm><primary>operations</primary><secondary>reclaiming space</secondary></indexterm>Reclaiming Reserved Disk Space</title>
-    <para>All current Lustre installations run the ldiskfs file system internally on service nodes.
-      By default, ldiskfs reserves 5% of the disk space to avoid file system fragmentation. In order
-      to reclaim this space, run the following command on your OSS for each OST in the file
-      system:</para>
-    <screen>tune2fs [-m reserved_blocks_percent] /dev/<emphasis>{ostdev}</emphasis></screen>
-    <para>You do not need to shut down Lustre before running this command or restart it afterwards.</para>
+    <title>
+    <indexterm>
+      <primary>operations</primary>
+      <secondary>reclaiming space</secondary>
+    </indexterm>Reclaiming Reserved Disk Space</title>
+    <para>All current Lustre installations run the ldiskfs file system
+    internally on service nodes. By default, ldiskfs reserves 5% of the disk
+    space to avoid file system fragmentation. In order to reclaim this space,
+    run the following command on your OSS for each OST in the file
+    system:</para>
+    <screen>
+tune2fs [-m reserved_blocks_percent] /dev/
+<emphasis>{ostdev}</emphasis>
+</screen>
+    <para>You do not need to shut down Lustre before running this command or
+    restart it afterwards.</para>
     <warning>
-      <para>Reducing the space reservation can cause severe performance degradation as the OST file
-        system becomes more than 95% full, due to difficulty in locating large areas of contiguous
-        free space. This performance degradation may persist even if the space usage drops below 95%
-        again. It is recommended NOT to reduce the reserved disk space below 5%.</para>
+      <para>Reducing the space reservation can cause severe performance
+      degradation as the OST file system becomes more than 95% full, due to
+      difficulty in locating large areas of contiguous free space. This
+      performance degradation may persist even if the space usage drops below
+      95% again. It is recommended NOT to reduce the reserved disk space below
+      5%.</para>
     </warning>
   </section>
   <section xml:id="dbdoclet.50438194_69998">
-    <title><indexterm><primary>operations</primary><secondary>replacing an OST or MDS</secondary></indexterm>Replacing an Existing OST or MDT</title>
-    <para>To copy the contents of an existing OST to a new OST (or an old MDT to a new MDT), follow the process for either OST/MDT backups in
-    <xref linkend='dbdoclet.50438207_71633'/> or
-    <xref linkend='dbdoclet.50438207_21638'/>. For more information on removing a MDT, see <xref linkend='dbdoclet.rmremotedir'/>.</para>
+    <title>
+    <indexterm>
+      <primary>operations</primary>
+      <secondary>replacing an OST or MDS</secondary>
+    </indexterm>Replacing an Existing OST or MDT</title>
+    <para>To copy the contents of an existing OST to a new OST (or an old MDT
+    to a new MDT), follow the process for either OST/MDT backups in 
+    <xref linkend='dbdoclet.50438207_71633' />or 
+    <xref linkend='dbdoclet.50438207_21638' />. For more information on
+    removing a MDT, see 
+    <xref linkend='dbdoclet.rmremotedir' />.</para>
   </section>
   <section xml:id="dbdoclet.50438194_30872">
-    <title><indexterm><primary>operations</primary><secondary>identifying OSTs</secondary></indexterm>Identifying To Which Lustre File an OST Object Belongs</title>
-    <para>Use this procedure to identify the file containing a given object on a given OST.</para>
+    <title>
+    <indexterm>
+      <primary>operations</primary>
+      <secondary>identifying OSTs</secondary>
+    </indexterm>Identifying To Which Lustre File an OST Object Belongs</title>
+    <para>Use this procedure to identify the file containing a given object on
+    a given OST.</para>
     <orderedlist>
       <listitem>
-        <para>On the OST (as root), run <literal>debugfs</literal> to display the file identifier (<literal>FID</literal>) of the file associated with the object.</para>
-        <para>For example, if the object is <literal>34976</literal> on <literal>/dev/lustre/ost_test2</literal>, the debug command is:
-        <screen># debugfs -c -R &quot;stat /O/0/d$((34976 % 32))/34976&quot; /dev/lustre/ost_test2 </screen></para>
-        <para>The command output is:
-        <screen>debugfs 1.42.3.wc3 (15-Aug-2012)
+        <para>On the OST (as root), run 
+        <literal>debugfs</literal> to display the file identifier (
+        <literal>FID</literal>) of the file associated with the object.</para>
+        <para>For example, if the object is 
+        <literal>34976</literal> on 
+        <literal>/dev/lustre/ost_test2</literal>, the debug command is: 
+        <screen>
+# debugfs -c -R "stat /O/0/d$((34976 % 32))/34976" /dev/lustre/ost_test2 
+</screen></para>
+        <para>The command output is: 
+        <screen>
+debugfs 1.42.3.wc3 (15-Aug-2012)
 /dev/lustre/ost_test2: catastrophic mode - not reading inode or group bitmaps
 Inode: 352365   Type: regular    Mode:  0666   Flags: 0x80000
 Generation: 2393149953    Version: 0x0000002a:00005f81
@@ -441,41 +907,60 @@ mtime: 0x4a216b48:00000000 -- Sat May 30 13:22:16 2009
 crtime: 0x4a216b3c:975870dc -- Sat May 30 13:22:04 2009
 Size of extra inode fields: 24
 Extended attributes stored in inode body:
-  fid = &quot;b9 da 24 00 00 00 00 00 6a fa 0d 3f 01 00 00 00 eb 5b 0b 00 00 00 0000 00 00 00 00 00 00 00 00 &quot; (32)
+  fid = "b9 da 24 00 00 00 00 00 6a fa 0d 3f 01 00 00 00 eb 5b 0b 00 00 00 0000
+00 00 00 00 00 00 00 00 " (32)
   fid: objid=34976 seq=0 parent=[0x24dab9:0x3f0dfa6a:0x0] stripe=1
 EXTENTS:
 (0-64):4620544-4620607
 </screen></para>
       </listitem>
       <listitem>
-        <para>For Lustre software release 2.x file systems, the parent FID will be of the form
-          [0x200000400:0x122:0x0] and can be resolved directly using the <literal>lfs fid2path
-            [0x200000404:0x122:0x0] /mnt/lustre</literal> command on any Lustre client, and the
-          process is complete.</para>
+        <para>For Lustre software release 2.x file systems, the parent FID will
+        be of the form [0x200000400:0x122:0x0] and can be resolved directly
+        using the 
+        <literal>lfs fid2path [0x200000404:0x122:0x0]
+        /mnt/lustre</literal> command on any Lustre client, and the process is
+        complete.</para>
       </listitem>
       <listitem>
         <para>In this example the parent inode FID is an upgraded 1.x inode
-	(due to the first part of the FID being below 0x200000400), the
-	MDT inode number is <literal>0x24dab9</literal> and generation <literal>0x3f0dfa6a</literal> and the pathname needs to be resolved using
-	<literal>debugfs</literal>.</para>
+        (due to the first part of the FID being below 0x200000400), the MDT
+        inode number is 
+        <literal>0x24dab9</literal> and generation 
+        <literal>0x3f0dfa6a</literal> and the pathname needs to be resolved
+        using 
+        <literal>debugfs</literal>.</para>
       </listitem>
       <listitem>
-        <para>On the MDS (as root), use <literal>debugfs</literal> to find the file associated with the inode:</para>
-        <screen># debugfs -c -R &quot;ncheck 0x24dab9&quot; /dev/lustre/mdt_test </screen>
+        <para>On the MDS (as root), use 
+        <literal>debugfs</literal> to find the file associated with the
+        inode:</para>
+        <screen>
+# debugfs -c -R "ncheck 0x24dab9" /dev/lustre/mdt_test 
+</screen>
         <para>Here is the command output:</para>
-        <screen>debugfs 1.42.3.wc2 (15-Aug-2012)
+        <screen>
+debugfs 1.42.3.wc2 (15-Aug-2012)
 /dev/lustre/mdt_test: catastrophic mode - not reading inode or group bitmap\
 s
 Inode      Pathname
-2415289    /ROOT/brian-laptop-guest/clients/client11/~dmtmp/PWRPNT/ZD16.BMP</screen>
+2415289    /ROOT/brian-laptop-guest/clients/client11/~dmtmp/PWRPNT/ZD16.BMP
+</screen>
       </listitem>
     </orderedlist>
-    <para>The command lists the inode and pathname associated with the object.</para>
+    <para>The command lists the inode and pathname associated with the
+    object.</para>
     <note>
-      <para><literal>Debugfs</literal>&apos; &apos;&apos;ncheck&apos;&apos; is a brute-force search that may take a long time to complete.</para>
+      <para>
+      <literal>Debugfs</literal>' ''ncheck'' is a brute-force search that may
+      take a long time to complete.</para>
     </note>
     <note>
-      <para>To find the Lustre file from a disk LBA, follow the steps listed in the document at this URL: <link xl:href="http://smartmontools.sourceforge.net/badblockhowto.html">http://smartmontools.sourceforge.net/badblockhowto.html</link>. Then, follow the steps above to resolve the Lustre filename.</para>
+      <para>To find the Lustre file from a disk LBA, follow the steps listed in
+      the document at this URL: 
+      <link xl:href="http://smartmontools.sourceforge.net/badblockhowto.html">
+      http://smartmontools.sourceforge.net/badblockhowto.html</link>. Then,
+      follow the steps above to resolve the Lustre filename.</para>
     </note>
   </section>
 </chapter>

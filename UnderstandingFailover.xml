@@ -1,168 +1,245 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="understandingfailover">
-  <title xml:id="understandingfailover.title">Understanding Failover in a Lustre File System</title>
-  <para>This chapter describes failover in a Lustre file system. It includes:</para>
+<?xml version='1.0' encoding='utf-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+xml:id="understandingfailover">
+  <title xml:id="understandingfailover.title">Understanding Failover in a
+  Lustre File System</title>
+  <para>This chapter describes failover in a Lustre file system. It
+  includes:</para>
   <itemizedlist>
     <listitem>
       <para>
-              <xref linkend="dbdoclet.50540653_59957"/>
-          </para>
+        <xref linkend="dbdoclet.50540653_59957" />
+      </para>
     </listitem>
     <listitem>
       <para>
-              <xref linkend="dbdoclet.50540653_97944"/>
-          </para>
+        <xref linkend="dbdoclet.50540653_97944" />
+      </para>
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50540653_59957">
-      <title><indexterm><primary>failover</primary></indexterm>
-          What is Failover?</title>
-    <para>In a high-availability (HA) system, unscheduled downtime is minimized by using redundant
-      hardware and software components and software components that automate recovery when a failure
-      occurs. If a failure condition occurs, such as the loss of a server or storage device or a
-      network or software fault, the system&apos;s services continue with minimal interruption.
-      Generally, availability is specified as the percentage of time the system is required to be
-      available.</para>
-    <para>Availability is accomplished by replicating hardware and/or software so that when a
-      primary server fails or is unavailable, a standby server can be switched into its place to run
-      applications and associated resources. This process, called <emphasis role="italic"
-        >failover</emphasis>, is automatic in an HA system and, in most cases, completely
-      application-transparent.</para>
-    <para>A failover hardware setup requires a pair of servers with a shared resource (typically a
-      physical storage device, which may be based on SAN, NAS, hardware RAID, SCSI or Fibre Channel
-      (FC) technology). The method of sharing storage should be essentially transparent at the
-      device level; the same physical logical unit number (LUN) should be visible from both servers.
-      To ensure high availability at the physical storage level, we encourage the use of RAID arrays
-      to protect against drive-level failures.</para>
+    <title>
+    <indexterm>
+      <primary>failover</primary>
+    </indexterm>What is Failover?</title>
+    <para>In a high-availability (HA) system, unscheduled downtime is minimized
+    by using redundant hardware and software components and software components
+    that automate recovery when a failure occurs. If a failure condition
+    occurs, such as the loss of a server or storage device or a network or
+    software fault, the system's services continue with minimal interruption.
+    Generally, availability is specified as the percentage of time the system
+    is required to be available.</para>
+    <para>Availability is accomplished by replicating hardware and/or software
+    so that when a primary server fails or is unavailable, a standby server can
+    be switched into its place to run applications and associated resources.
+    This process, called 
+    <emphasis role="italic">failover</emphasis>, is automatic in an HA system
+    and, in most cases, completely application-transparent.</para>
+    <para>A failover hardware setup requires a pair of servers with a shared
+    resource (typically a physical storage device, which may be based on SAN,
+    NAS, hardware RAID, SCSI or Fibre Channel (FC) technology). The method of
+    sharing storage should be essentially transparent at the device level; the
+    same physical logical unit number (LUN) should be visible from both
+    servers. To ensure high availability at the physical storage level, we
+    encourage the use of RAID arrays to protect against drive-level
+    failures.</para>
     <note>
-      <para>The Lustre software does not provide redundancy for data; it depends exclusively on
-        redundancy of backing storage devices. The backing OST storage should be RAID 5 or,
-        preferably, RAID 6 storage. MDT storage should be RAID 1 or RAID 10.</para>
+      <para>The Lustre software does not provide redundancy for data; it
+      depends exclusively on redundancy of backing storage devices. The backing
+      OST storage should be RAID 5 or, preferably, RAID 6 storage. MDT storage
+      should be RAID 1 or RAID 10.</para>
     </note>
     <section remap="h3">
-      <title><indexterm><primary>failover</primary><secondary>capabilities</secondary></indexterm>Failover Capabilities</title>
-      <para>To establish a highly-available Lustre file system, power management software or hardware and high availability (HA) software are used to provide the following failover capabilities:</para>
+      <title>
+      <indexterm>
+        <primary>failover</primary>
+        <secondary>capabilities</secondary>
+      </indexterm>Failover Capabilities</title>
+      <para>To establish a highly-available Lustre file system, power
+      management software or hardware and high availability (HA) software are
+      used to provide the following failover capabilities:</para>
       <itemizedlist>
         <listitem>
-          <para><emphasis role="bold">Resource fencing</emphasis>  - Protects physical storage from simultaneous access by two nodes.</para>
+          <para>
+          <emphasis role="bold">Resource fencing</emphasis>- Protects physical
+          storage from simultaneous access by two nodes.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Resource management</emphasis>  - Starts and stops the Lustre resources as a part of failover, maintains the cluster state, and carries out other resource management tasks.</para>
+          <para>
+          <emphasis role="bold">Resource management</emphasis>- Starts and
+          stops the Lustre resources as a part of failover, maintains the
+          cluster state, and carries out other resource management
+          tasks.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Health monitoring</emphasis> - Verifies the availability of
-            hardware and network resources and responds to health indications provided by the Lustre
-            software.</para>
+          <para>
+          <emphasis role="bold">Health monitoring</emphasis>- Verifies the
+          availability of hardware and network resources and responds to health
+          indications provided by the Lustre software.</para>
         </listitem>
       </itemizedlist>
-      <para>These capabilities can be provided by a variety of software and/or hardware solutions.
-        For more information about using power management software or hardware and high availability
-        (HA) software with a Lustre file system, see <xref linkend="configuringfailover"/>.</para>
-      <para>HA software is responsible for detecting failure of the primary Lustre server node and
-        controlling the failover.The Lustre software works with any HA software that includes
-        resource (I/O) fencing. For proper resource fencing, the HA software must be able to
-        completely power off the failed server or disconnect it from the shared storage device. If
-        two active nodes have access to the same storage device, data may be severely
-        corrupted.</para>
+      <para>These capabilities can be provided by a variety of software and/or
+      hardware solutions. For more information about using power management
+      software or hardware and high availability (HA) software with a Lustre
+      file system, see 
+      <xref linkend="configuringfailover" />.</para>
+      <para>HA software is responsible for detecting failure of the primary
+      Lustre server node and controlling the failover.The Lustre software works
+      with any HA software that includes resource (I/O) fencing. For proper
+      resource fencing, the HA software must be able to completely power off
+      the failed server or disconnect it from the shared storage device. If two
+      active nodes have access to the same storage device, data may be severely
+      corrupted.</para>
     </section>
     <section remap="h3">
-      <title><indexterm><primary>failover</primary><secondary>configuration</secondary></indexterm>Types of Failover Configurations</title>
-      <para>Nodes in a cluster can be configured for failover in several ways. They are often configured in pairs (for example, two OSTs attached to a shared storage device), but other failover configurations are also possible. Failover configurations include:</para>
+      <title>
+      <indexterm>
+        <primary>failover</primary>
+        <secondary>configuration</secondary>
+      </indexterm>Types of Failover Configurations</title>
+      <para>Nodes in a cluster can be configured for failover in several ways.
+      They are often configured in pairs (for example, two OSTs attached to a
+      shared storage device), but other failover configurations are also
+      possible. Failover configurations include:</para>
       <itemizedlist>
         <listitem>
-          <para><emphasis role="bold">Active/passive</emphasis>  pair - In this configuration, the active node provides resources and serves data, while the passive node is usually standing by idle. If the active node fails, the passive node takes over and becomes active.</para>
+          <para>
+          <emphasis role="bold">Active/passive</emphasis>pair - In this
+          configuration, the active node provides resources and serves data,
+          while the passive node is usually standing by idle. If the active
+          node fails, the passive node takes over and becomes active.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Active/active</emphasis>  pair - In this configuration, both nodes are active, each providing a subset of resources. In case of a failure, the second node takes over resources from the failed node.</para>
+          <para>
+          <emphasis role="bold">Active/active</emphasis>pair - In this
+          configuration, both nodes are active, each providing a subset of
+          resources. In case of a failure, the second node takes over resources
+          from the failed node.</para>
         </listitem>
       </itemizedlist>
-      <para>In Lustre software releases previous to Lustre software release 2.4, MDSs can be
-        configured as an active/passive pair, while OSSs can be deployed in an active/active
-        configuration that provides redundancy without extra overhead. Often the standby MDS is the
-        active MDS for another Lustre file system or the MGS, so no nodes are idle in the
-        cluster.</para>
-	<para condition="l24">Lustre software release 2.4 introduces metadata targets for individual
-        sub-directories. Active-active failover configurations are available for MDSs that serve
-        MDTs on shared storage.</para>
+      <para>In Lustre software releases previous to Lustre software release
+      2.4, MDSs can be configured as an active/passive pair, while OSSs can be
+      deployed in an active/active configuration that provides redundancy
+      without extra overhead. Often the standby MDS is the active MDS for
+      another Lustre file system or the MGS, so no nodes are idle in the
+      cluster.</para>
+      <para condition="l24">Lustre software release 2.4 introduces metadata
+      targets for individual sub-directories. Active-active failover
+      configurations are available for MDSs that serve MDTs on shared
+      storage.</para>
     </section>
   </section>
   <section xml:id="dbdoclet.50540653_97944">
-    <title><indexterm>
-        <primary>failover</primary>
-        <secondary>and Lustre</secondary>
-      </indexterm>Failover Functionality in a Lustre File System</title>
-    <para>The failover functionality provided by the Lustre software can be used for the following
-      failover scenario. When a client attempts to do I/O to a failed Lustre target, it continues to
-      try until it receives an answer from any of the configured failover nodes for the Lustre
-      target. A user-space application does not detect anything unusual, except that the I/O may
-      take longer to complete.</para>
-    <para>Failover in a Lustre file system requires that two nodes be configured as a failover pair,
-      which must share one or more storage devices. A Lustre file system can be configured to
-      provide MDT or OST failover.</para>
+    <title>
+    <indexterm>
+      <primary>failover</primary>
+      <secondary>and Lustre</secondary>
+    </indexterm>Failover Functionality in a Lustre File System</title>
+    <para>The failover functionality provided by the Lustre software can be
+    used for the following failover scenario. When a client attempts to do I/O
+    to a failed Lustre target, it continues to try until it receives an answer
+    from any of the configured failover nodes for the Lustre target. A
+    user-space application does not detect anything unusual, except that the
+    I/O may take longer to complete.</para>
+    <para>Failover in a Lustre file system requires that two nodes be
+    configured as a failover pair, which must share one or more storage
+    devices. A Lustre file system can be configured to provide MDT or OST
+    failover.</para>
     <itemizedlist>
       <listitem>
-        <para>For MDT failover, two MDSs can be configured to serve the same MDT. Only one MDS node
-          can serve an MDT at a time.</para>
-        <para condition="l24">Lustresoftware release 2.4 allows multiple MDTs. By placing two or
-          more MDT partitions on storage shared by two MDSs, one MDS can fail and the remaining MDS
-          can begin serving the unserved MDT. This is described as an active/active failover
-          pair.</para>
+        <para>For MDT failover, two MDSs can be configured to serve the same
+        MDT. Only one MDS node can serve an MDT at a time.</para>
+        <para condition="l24">Lustresoftware release 2.4 allows multiple MDTs.
+        By placing two or more MDT partitions on storage shared by two MDSs,
+        one MDS can fail and the remaining MDS can begin serving the unserved
+        MDT. This is described as an active/active failover pair.</para>
       </listitem>
       <listitem>
-        <para>For OST failover, multiple OSS nodes can be configured to be able to serve the same
-          OST. However, only one OSS node can serve the OST at a time. An OST can be moved between
-          OSS nodes that have access to the same storage device using
-            <literal>umount/mount</literal> commands.</para>
+        <para>For OST failover, multiple OSS nodes can be configured to be able
+        to serve the same OST. However, only one OSS node can serve the OST at
+        a time. An OST can be moved between OSS nodes that have access to the
+        same storage device using 
+        <literal>umount/mount</literal> commands.</para>
       </listitem>
     </itemizedlist>
-    <para>The <literal>--servicenode</literal> option is used to set up nodes in a Lustre file
-      system for failover at creation time (using <literal>mkfs.lustre</literal>) or later when the
-      Lustre file system is active (using <literal>tunefs.lustre</literal>). For explanations of
-      these utilities, see <xref linkend="dbdoclet.50438219_75432"/> and <xref
-        linkend="dbdoclet.50438219_39574"/>.</para>
-    <para>Failover capability in a Lustre file system can be used to upgrade the Lustre software
-      between successive minor versions without cluster downtime. For more information, see <xref
-        linkend="upgradinglustre"/>.</para>
-    <para>For information about configuring failover, see <xref linkend="configuringfailover"/>.</para>
+    <para>The 
+    <literal>--servicenode</literal> option is used to set up nodes in a Lustre
+    file system for failover at creation time (using 
+    <literal>mkfs.lustre</literal>) or later when the Lustre file system is
+    active (using 
+    <literal>tunefs.lustre</literal>). For explanations of these utilities, see
+    
+    <xref linkend="dbdoclet.50438219_75432" />and 
+    <xref linkend="dbdoclet.50438219_39574" />.</para>
+    <para>Failover capability in a Lustre file system can be used to upgrade
+    the Lustre software between successive minor versions without cluster
+    downtime. For more information, see 
+    <xref linkend="upgradinglustre" />.</para>
+    <para>For information about configuring failover, see 
+    <xref linkend="configuringfailover" />.</para>
     <note>
-      <para>The Lustre software provides failover functionality only at the file system level. In a
-        complete failover solution, failover functionality for system-level components, such as node
-        failure detection or power control, must be provided by a third-party tool.</para>
+      <para>The Lustre software provides failover functionality only at the
+      file system level. In a complete failover solution, failover
+      functionality for system-level components, such as node failure detection
+      or power control, must be provided by a third-party tool.</para>
     </note>
     <caution>
-      <para>OST failover functionality does not protect against corruption caused by a disk failure.
-        If the storage media (i.e., physical disk) used for an OST fails, it cannot be recovered by
-        functionality provided in the Lustre software. We strongly recommend that some form of RAID
-        be used for OSTs. Lustre functionality assumes that the storage is reliable, so it adds no
-        extra reliability features.</para>
+      <para>OST failover functionality does not protect against corruption
+      caused by a disk failure. If the storage media (i.e., physical disk) used
+      for an OST fails, it cannot be recovered by functionality provided in the
+      Lustre software. We strongly recommend that some form of RAID be used for
+      OSTs. Lustre functionality assumes that the storage is reliable, so it
+      adds no extra reliability features.</para>
     </caution>
     <section remap="h3">
-      <title><indexterm><primary>failover</primary><secondary>MDT</secondary></indexterm>MDT Failover Configuration (Active/Passive)</title>
-      <para>Two MDSs are typically configured as an active/passive failover pair as shown in <xref linkend="understandingfailover.fig.configmdt"/>. Note that both nodes must have access to shared storage for the MDT(s) and the MGS. The primary (active) MDS manages the Lustre system metadata resources. If the primary MDS fails, the secondary (passive) MDS takes over these resources and serves the MDTs and the MGS.</para>
+      <title>
+      <indexterm>
+        <primary>failover</primary>
+        <secondary>MDT</secondary>
+      </indexterm>MDT Failover Configuration (Active/Passive)</title>
+      <para>Two MDSs are typically configured as an active/passive failover
+      pair as shown in 
+      <xref linkend="understandingfailover.fig.configmdt" />. Note that both
+      nodes must have access to shared storage for the MDT(s) and the MGS. The
+      primary (active) MDS manages the Lustre system metadata resources. If the
+      primary MDS fails, the secondary (passive) MDS takes over these resources
+      and serves the MDTs and the MGS.</para>
       <note>
-        <para>In an environment with multiple file systems, the MDSs can be configured in a quasi active/active configuration, with each MDS managing metadata for a subset of the Lustre file system.</para>
+        <para>In an environment with multiple file systems, the MDSs can be
+        configured in a quasi active/active configuration, with each MDS
+        managing metadata for a subset of the Lustre file system.</para>
       </note>
       <figure>
-        <title xml:id="understandingfailover.fig.configmdt"> Lustre failover configuration for a active/passive MDT</title>
+        <title xml:id="understandingfailover.fig.configmdt">Lustre failover
+        configuration for a active/passive MDT</title>
         <mediaobject>
           <imageobject>
-            <imagedata fileref="./figures/MDT_Failover.png"/>
+            <imagedata fileref="./figures/MDT_Failover.png" />
           </imageobject>
           <textobject>
-            <phrase>Lustre failover configuration for an MDT </phrase>
+            <phrase>Lustre failover configuration for an MDT</phrase>
           </textobject>
         </mediaobject>
       </figure>
     </section>
     <section xml:id='dbdoclet.mdtactiveactive' condition='l24'>
-      <title><indexterm><primary>failover</primary><secondary>MDT</secondary></indexterm>MDT Failover Configuration (Active/Active)</title>
-      <para>Multiple MDTs became available with the advent of Lustre software release 2.4. MDTs can
-        be setup as an active/active failover configuration. A failover cluster is built from two
-        MDSs as shown in <xref linkend="understandingfailover.fig.configmdts"/>.</para>
+      <title>
+      <indexterm>
+        <primary>failover</primary>
+        <secondary>MDT</secondary>
+      </indexterm>MDT Failover Configuration (Active/Active)</title>
+      <para>Multiple MDTs became available with the advent of Lustre software
+      release 2.4. MDTs can be setup as an active/active failover
+      configuration. A failover cluster is built from two MDSs as shown in 
+      <xref linkend="understandingfailover.fig.configmdts" />.</para>
       <figure>
-        <title xml:id="understandingfailover.fig.configmdts"> Lustre failover configuration for a active/active MDTs </title>
+        <title xml:id="understandingfailover.fig.configmdts">Lustre failover
+        configuration for a active/active MDTs</title>
         <mediaobject>
           <imageobject>
-            <imagedata scalefit="1" width="50%" fileref="figures/MDTs_Failover.png"/>
+            <imagedata scalefit="1" width="50%"
+            fileref="figures/MDTs_Failover.png" />
           </imageobject>
           <textobject>
             <phrase>Lustre failover configuration for two MDTs</phrase>
@@ -171,26 +248,43 @@
       </figure>
     </section>
     <section remap="h3">
-      <title><indexterm><primary>failover</primary><secondary>OST</secondary></indexterm>OST Failover Configuration (Active/Active)</title>
-      <para>OSTs are usually configured in a load-balanced, active/active failover configuration. A failover cluster is built from two OSSs as shown in <xref linkend="understandingfailover.fig.configost"/>.</para>
+      <title>
+      <indexterm>
+        <primary>failover</primary>
+        <secondary>OST</secondary>
+      </indexterm>OST Failover Configuration (Active/Active)</title>
+      <para>OSTs are usually configured in a load-balanced, active/active
+      failover configuration. A failover cluster is built from two OSSs as
+      shown in 
+      <xref linkend="understandingfailover.fig.configost" />.</para>
       <note>
-        <para>OSSs configured as a failover pair must have shared disks/RAID.</para>
+        <para>OSSs configured as a failover pair must have shared
+        disks/RAID.</para>
       </note>
       <figure>
-        <title xml:id="understandingfailover.fig.configost"> Lustre failover configuration for an OSTs </title>
+        <title xml:id="understandingfailover.fig.configost">Lustre failover
+        configuration for an OSTs</title>
         <mediaobject>
           <imageobject>
-            <imagedata scalefit="1" width="100%" fileref="./figures/OST_Failover.png"/>
+            <imagedata scalefit="1" width="100%"
+            fileref="./figures/OST_Failover.png" />
           </imageobject>
           <textobject>
-            <phrase>Lustre failover configuration for an OSTs </phrase>
+            <phrase>Lustre failover configuration for an OSTs</phrase>
           </textobject>
         </mediaobject>
       </figure>
-      <para>In an active configuration, 50% of the available OSTs are assigned to one OSS and the remaining OSTs are assigned to the other OSS. Each OSS serves as the primary node for half the OSTs and as a failover node for the remaining OSTs.</para>
-      <para>In this mode, if one OSS fails, the other OSS takes over all of the failed OSTs. The clients attempt to connect to each OSS serving the OST, until one of them responds. Data on the OST is written synchronously, and the clients replay transactions that were in progress and uncommitted to disk before the OST failure.</para>
-      <para>For more information about configuring failover, see <xref linkend="configuringfailover"
-        />.</para>
+      <para>In an active configuration, 50% of the available OSTs are assigned
+      to one OSS and the remaining OSTs are assigned to the other OSS. Each OSS
+      serves as the primary node for half the OSTs and as a failover node for
+      the remaining OSTs.</para>
+      <para>In this mode, if one OSS fails, the other OSS takes over all of the
+      failed OSTs. The clients attempt to connect to each OSS serving the OST,
+      until one of them responds. Data on the OST is written synchronously, and
+      the clients replay transactions that were in progress and uncommitted to
+      disk before the OST failure.</para>
+      <para>For more information about configuring failover, see 
+      <xref linkend="configuringfailover" />.</para>
     </section>
   </section>
 </chapter>

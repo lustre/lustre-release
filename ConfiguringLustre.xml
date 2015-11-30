@@ -1,185 +1,315 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configuringlustre">
-  <title xml:id="configuringlustre.title">Configuring a Lustre File System</title>
-  <para>This chapter shows how to configure a simple Lustre file system comprised of a combined
-    MGS/MDT, an OST and a client. It includes:</para>
+<?xml version='1.0' encoding='utf-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+xml:id="configuringlustre">
+  <title xml:id="configuringlustre.title">Configuring a Lustre File
+  System</title>
+  <para>This chapter shows how to configure a simple Lustre file system
+  comprised of a combined MGS/MDT, an OST and a client. It includes:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438267_50692"/>
-          </para>
+      <para>
+        <xref linkend="dbdoclet.50438267_50692" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438267_76752"/>
-          </para>
+      <para>
+        <xref linkend="dbdoclet.50438267_76752" />
+      </para>
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438267_50692">
-      <title>
-          <indexterm><primary>Lustre</primary><secondary>configuring</secondary></indexterm>
-          Configuring a Simple Lustre File System</title>
-    <para>A Lustre file system can be set up in a variety of configurations by using the
-      administrative utilities provided with the Lustre software. The procedure below shows how to
-      configure a simple Lustre file system consisting of a combined MGS/MDS, one OSS with two OSTs,
-      and a client. For an overview of the entire Lustre installation procedure, see <xref
-        linkend="installoverview"/>.</para>
-    <para>This configuration procedure assumes you have completed the following:</para>
+    <title>
+    <indexterm>
+      <primary>Lustre</primary>
+      <secondary>configuring</secondary>
+    </indexterm>Configuring a Simple Lustre File System</title>
+    <para>A Lustre file system can be set up in a variety of configurations by
+    using the administrative utilities provided with the Lustre software. The
+    procedure below shows how to configure a simple Lustre file system
+    consisting of a combined MGS/MDS, one OSS with two OSTs, and a client. For
+    an overview of the entire Lustre installation procedure, see 
+    <xref linkend="installoverview" />.</para>
+    <para>This configuration procedure assumes you have completed the
+    following:</para>
     <itemizedlist>
       <listitem>
-        <para><emphasis>
-            <emphasis role="bold">Set up and configured your hardware</emphasis>
-          </emphasis>. For more information about hardware requirements, see <xref linkend="settinguplustresystem"/>.</para>
+        <para>
+        <emphasis>
+          <emphasis role="bold">Set up and configured your hardware</emphasis>
+        </emphasis>. For more information about hardware requirements, see 
+        <xref linkend="settinguplustresystem" />.</para>
       </listitem>
       <listitem>
-        <para><emphasis role="bold">Downloaded and installed the Lustre software.</emphasis>  For more information about preparing for and installing the Lustre software, see <xref linkend="installinglustre"/>.</para>
+        <para>
+        <emphasis role="bold">Downloaded and installed the Lustre
+        software.</emphasis>For more information about preparing for and
+        installing the Lustre software, see 
+        <xref linkend="installinglustre" />.</para>
       </listitem>
     </itemizedlist>
-    <para>The following optional steps should also be completed, if needed, before the Lustre software is configured:</para>
+    <para>The following optional steps should also be completed, if needed,
+    before the Lustre software is configured:</para>
     <itemizedlist>
       <listitem>
-        <para><emphasis>Set up a hardware or software RAID on block devices to be used as OSTs or MDTs.</emphasis>  For information about setting up RAID, see the documentation for your RAID controller or <xref linkend="configuringstorage"/>.</para>
+        <para>
+        <emphasis>Set up a hardware or software RAID on block devices to be
+        used as OSTs or MDTs.</emphasis>For information about setting up RAID,
+        see the documentation for your RAID controller or 
+        <xref linkend="configuringstorage" />.</para>
       </listitem>
       <listitem>
-        <para><emphasis>Set up network interface bonding on Ethernet interfaces.</emphasis>  For information about setting up network interface bonding, see <xref linkend="settingupbonding"/>.</para>
+        <para>
+        <emphasis>Set up network interface bonding on Ethernet
+        interfaces.</emphasis>For information about setting up network
+        interface bonding, see 
+        <xref linkend="settingupbonding" />.</para>
       </listitem>
       <listitem>
-        <para><emphasis>Set</emphasis> lnet <emphasis>module parameters to specify how Lustre
-            Networking (LNET) is to be configured to work with a Lustre file system and test the
-            LNET configuration.</emphasis> LNET will, by default, use the first TCP/IP interface it
-          discovers on a system. If this network configuration is sufficient, you do not need to
-          configure LNET. LNET configuration is required if you are using InfiniBand or multiple
-          Ethernet interfaces.</para>
+        <para>
+        <emphasis>Set</emphasis>lnet 
+        <emphasis>module parameters to specify how Lustre Networking (LNET) is
+        to be configured to work with a Lustre file system and test the LNET
+        configuration.</emphasis>LNET will, by default, use the first TCP/IP
+        interface it discovers on a system. If this network configuration is
+        sufficient, you do not need to configure LNET. LNET configuration is
+        required if you are using InfiniBand or multiple Ethernet
+        interfaces.</para>
       </listitem>
     </itemizedlist>
-    <para>For information about configuring LNET, see <xref linkend="configuringlnet"/>. For information about testing LNET, see <xref linkend="lnetselftest"/>.</para>
+    <para>For information about configuring LNET, see 
+    <xref linkend="configuringlnet" />. For information about testing LNET, see
+    
+    <xref linkend="lnetselftest" />.</para>
     <itemizedlist>
       <listitem>
-        <para><emphasis>Run the benchmark script <literal>sgpdd-survey</literal> to determine
-            baseline performance of your hardware.</emphasis> Benchmarking your hardware will
-          simplify debugging performance issues that are unrelated to the Lustre software and ensure
-          you are getting the best possible performance with your installation. For information
-          about running <literal>sgpdd-survey</literal>, see <xref linkend="benchmarkingtests"
-          />.</para>
+        <para>
+        <emphasis>Run the benchmark script 
+        <literal>sgpdd-survey</literal> to determine baseline performance of
+        your hardware.</emphasis>Benchmarking your hardware will simplify
+        debugging performance issues that are unrelated to the Lustre software
+        and ensure you are getting the best possible performance with your
+        installation. For information about running 
+        <literal>sgpdd-survey</literal>, see 
+        <xref linkend="benchmarkingtests" />.</para>
       </listitem>
     </itemizedlist>
     <note>
-      <para>The <literal>sgpdd-survey</literal> script overwrites the device being tested so it must
-        be run before the OSTs are configured.</para>
+      <para>The 
+      <literal>sgpdd-survey</literal> script overwrites the device being tested
+      so it must be run before the OSTs are configured.</para>
     </note>
-    <para>To configure a simple Lustre file system, complete these steps:</para>
+    <para>To configure a simple Lustre file system, complete these
+    steps:</para>
     <orderedlist>
       <listitem>
-        <para>Create a combined MGS/MDT file system on a block device. On the MDS node, run:</para>
-        <screen>mkfs.lustre --fsname=<replaceable>fsname</replaceable> --mgs --mdt --index=0 <replaceable>/dev/block_device</replaceable></screen>
-        <para>The default file system name (<literal>fsname</literal>) is <literal>lustre</literal>.</para>
+        <para>Create a combined MGS/MDT file system on a block device. On the
+        MDS node, run:</para>
+        <screen>
+mkfs.lustre --fsname=
+<replaceable>fsname</replaceable> --mgs --mdt --index=0 
+<replaceable>/dev/block_device</replaceable>
+</screen>
+        <para>The default file system name (
+        <literal>fsname</literal>) is 
+        <literal>lustre</literal>.</para>
         <note>
-          <para>If you plan to create multiple file systems, the MGS should be created separately on its own dedicated block device, by running:</para>
-          <screen>mkfs.lustre --fsname=<replaceable>fsname</replaceable> --mgs <replaceable>/dev/block_device</replaceable></screen>
-          <para>See <xref linkend="dbdoclet.50438194_88063"/> for more details.</para> 
+          <para>If you plan to create multiple file systems, the MGS should be
+          created separately on its own dedicated block device, by
+          running:</para>
+          <screen>
+mkfs.lustre --fsname=
+<replaceable>fsname</replaceable> --mgs 
+<replaceable>/dev/block_device</replaceable>
+</screen>
+          <para>See 
+          <xref linkend="dbdoclet.50438194_88063" />for more details.</para>
         </note>
       </listitem>
       <listitem xml:id="dbdoclet.addmdtindex">
-		<para>Optional for Lustre software release 2.4 and later. Add in additional MDTs.</para>
-        <screen>mkfs.lustre --fsname=<replaceable>fsname</replaceable> --mgsnode=<replaceable>nid</replaceable> --mdt --index=1 <replaceable>/dev/block_device</replaceable></screen>
-		<note><para>Up to 4095 additional MDTs can be added.</para></note>
+        <para>Optional for Lustre software release 2.4 and later. Add in
+        additional MDTs.</para>
+        <screen>
+mkfs.lustre --fsname=
+<replaceable>fsname</replaceable> --mgsnode=
+<replaceable>nid</replaceable> --mdt --index=1 
+<replaceable>/dev/block_device</replaceable>
+</screen>
+        <note>
+          <para>Up to 4095 additional MDTs can be added.</para>
+        </note>
       </listitem>
       <listitem>
-        <para>Mount the combined MGS/MDT file system on the block device. On the MDS node, run:</para>
-        <screen>mount -t lustre <replaceable>/dev/block_device</replaceable> <replaceable>/mount_point</replaceable></screen>
+        <para>Mount the combined MGS/MDT file system on the block device. On
+        the MDS node, run:</para>
+        <screen>
+mount -t lustre 
+<replaceable>/dev/block_device</replaceable> 
+<replaceable>/mount_point</replaceable>
+</screen>
         <note>
-          <para>If you have created an MGS and an MDT on separate block devices, mount them both.</para>
+          <para>If you have created an MGS and an MDT on separate block
+          devices, mount them both.</para>
         </note>
       </listitem>
       <listitem xml:id="dbdoclet.50438267_pgfId-1290915">
         <para>Create the OST. On the OSS node, run:</para>
-        <screen>mkfs.lustre --fsname=<replaceable>fsname</replaceable> --mgsnode=<replaceable>MGS_NID</replaceable> --ost --index=<replaceable>OST_index</replaceable> <replaceable>/dev/block_device</replaceable></screen>
-        <para>When you create an OST, you are formatting a <literal>ldiskfs</literal> or <literal>ZFS</literal> file system on a block storage device like you would with any local file system.</para>
-        <para>You can have as many OSTs per OSS as the hardware or drivers allow. For more information about storage and memory requirements for a Lustre file system, see <xref linkend="settinguplustresystem"/>.</para>
-        <para>You can only configure one OST per block device. You should create an OST that uses the raw block device and does not use partitioning.</para>
-        <para>You should specify the OST index number at format time in order to simplify translating the OST number in error messages or file striping to the OSS node and block device later on.</para>
-        <para>If you are using block devices that are accessible from multiple OSS nodes, ensure that you mount the OSTs from only one OSS node at at time. It is strongly recommended that multiple-mount protection be enabled for such devices to prevent serious data corruption. For more information about multiple-mount protection, see <xref linkend="managingfailover"/>.</para>
+        <screen>
+mkfs.lustre --fsname=
+<replaceable>fsname</replaceable> --mgsnode=
+<replaceable>MGS_NID</replaceable> --ost --index=
+<replaceable>OST_index</replaceable> 
+<replaceable>/dev/block_device</replaceable>
+</screen>
+        <para>When you create an OST, you are formatting a 
+        <literal>ldiskfs</literal> or 
+        <literal>ZFS</literal> file system on a block storage device like you
+        would with any local file system.</para>
+        <para>You can have as many OSTs per OSS as the hardware or drivers
+        allow. For more information about storage and memory requirements for a
+        Lustre file system, see 
+        <xref linkend="settinguplustresystem" />.</para>
+        <para>You can only configure one OST per block device. You should
+        create an OST that uses the raw block device and does not use
+        partitioning.</para>
+        <para>You should specify the OST index number at format time in order
+        to simplify translating the OST number in error messages or file
+        striping to the OSS node and block device later on.</para>
+        <para>If you are using block devices that are accessible from multiple
+        OSS nodes, ensure that you mount the OSTs from only one OSS node at at
+        time. It is strongly recommended that multiple-mount protection be
+        enabled for such devices to prevent serious data corruption. For more
+        information about multiple-mount protection, see 
+        <xref linkend="managingfailover" />.</para>
         <note>
-          <para>The Lustre software currently supports block devices up to 128 TB on Red Hat
-            Enterprise Linux 5 and 6 (up to 8 TB on other distributions). If the device size is only
-            slightly larger that 16 TB, it is recommended that you limit the file system size to 16
-            TB at format time. We recommend that you not place DOS partitions on top of RAID 5/6
-            block devices due to negative impacts on performance, but instead format the whole disk
-            for the file system.</para>
+          <para>The Lustre software currently supports block devices up to 128
+          TB on Red Hat Enterprise Linux 5 and 6 (up to 8 TB on other
+          distributions). If the device size is only slightly larger that 16
+          TB, it is recommended that you limit the file system size to 16 TB at
+          format time. We recommend that you not place DOS partitions on top of
+          RAID 5/6 block devices due to negative impacts on performance, but
+          instead format the whole disk for the file system.</para>
         </note>
       </listitem>
       <listitem xml:id="dbdoclet.50438267_pgfId-1293955">
-        <para>Mount the OST. On the OSS node where the OST was created, run:</para>
-        <screen>mount -t lustre <replaceable>/dev/block_device</replaceable> <replaceable>/mount_point</replaceable></screen>
+        <para>Mount the OST. On the OSS node where the OST was created,
+        run:</para>
+        <screen>
+mount -t lustre 
+<replaceable>/dev/block_device</replaceable> 
+<replaceable>/mount_point</replaceable>
+</screen>
         <note>
-          <para>
-              To create additional OSTs, repeat Step <xref linkend="dbdoclet.50438267_pgfId-1290915"/> and Step <xref linkend="dbdoclet.50438267_pgfId-1293955"/>, specifying the next higher OST index number.</para>
+          <para>To create additional OSTs, repeat Step 
+          <xref linkend="dbdoclet.50438267_pgfId-1290915" />and Step 
+          <xref linkend="dbdoclet.50438267_pgfId-1293955" />, specifying the
+          next higher OST index number.</para>
         </note>
       </listitem>
       <listitem xml:id="dbdoclet.50438267_pgfId-1290934">
-        <para>Mount the Lustre file system on the client. On the client node, run:</para>
-        <screen>mount -t lustre <replaceable>MGS_node</replaceable>:/<replaceable>fsname</replaceable> <replaceable>/mount_point</replaceable> 
+        <para>Mount the Lustre file system on the client. On the client node,
+        run:</para>
+        <screen>
+mount -t lustre 
+<replaceable>MGS_node</replaceable>:/
+<replaceable>fsname</replaceable> 
+<replaceable>/mount_point</replaceable> 
 </screen>
         <note>
-          <para>To create additional clients, repeat Step <xref linkend="dbdoclet.50438267_pgfId-1290934"/>.</para>
+          <para>To create additional clients, repeat Step 
+          <xref linkend="dbdoclet.50438267_pgfId-1290934" />.</para>
         </note>
         <note>
-            <para>If you have a problem mounting the file system, check the syslogs on the client and all the servers for errors and also check the network settings. A common issue with newly-installed systems is that <literal>hosts.deny</literal> or firewall rules may prevent connections on port 988.</para>
+          <para>If you have a problem mounting the file system, check the
+          syslogs on the client and all the servers for errors and also check
+          the network settings. A common issue with newly-installed systems is
+          that 
+          <literal>hosts.deny</literal> or firewall rules may prevent
+          connections on port 988.</para>
         </note>
       </listitem>
       <listitem>
-          <para>Verify that the file system started and is working correctly. Do this by running <literal>lfs df</literal>, <literal>dd</literal> and <literal>ls</literal> commands on the client node.</para>
+        <para>Verify that the file system started and is working correctly. Do
+        this by running 
+        <literal>lfs df</literal>, 
+        <literal>dd</literal> and 
+        <literal>ls</literal> commands on the client node.</para>
       </listitem>
       <listitem>
-        <para><emphasis>(Optional)</emphasis> Run benchmarking tools to validate the performance of hardware and software layers in the cluster. Available tools include:</para>
+        <para>
+        <emphasis>(Optional)</emphasis>Run benchmarking tools to validate the
+        performance of hardware and software layers in the cluster. Available
+        tools include:</para>
         <itemizedlist>
           <listitem>
-            <para><literal>obdfilter-survey</literal> - Characterizes the storage performance of a
-              Lustre file system. For details, see <xref linkend="dbdoclet.50438212_26516"/>.</para>
+            <para>
+            <literal>obdfilter-survey</literal>- Characterizes the storage
+            performance of a Lustre file system. For details, see 
+            <xref linkend="dbdoclet.50438212_26516" />.</para>
           </listitem>
           <listitem>
-            <para><literal>ost-survey</literal> - Performs I/O against OSTs to detect anomalies
-              between otherwise identical disk subsystems. For details, see <xref
-                linkend="dbdoclet.50438212_85136"/>.</para>
+            <para>
+            <literal>ost-survey</literal>- Performs I/O against OSTs to detect
+            anomalies between otherwise identical disk subsystems. For details,
+            see 
+            <xref linkend="dbdoclet.50438212_85136" />.</para>
           </listitem>
         </itemizedlist>
       </listitem>
     </orderedlist>
     <section remap="h3">
-        <title>
-            <indexterm><primary>Lustre</primary><secondary>configuring</secondary><tertiary>simple example</tertiary></indexterm>
-            Simple Lustre Configuration Example</title>
-      <para>To see the steps to complete for a simple Lustre file system configuration, follow this
-        example in which a combined MGS/MDT and two OSTs are created to form a file system called
-          <literal>temp</literal>. Three block devices are used, one for the combined MGS/MDS node
-        and one for each OSS node. Common parameters used in the example are listed below, along
-        with individual node parameters.</para>
+      <title>
+      <indexterm>
+        <primary>Lustre</primary>
+        <secondary>configuring</secondary>
+        <tertiary>simple example</tertiary>
+      </indexterm>Simple Lustre Configuration Example</title>
+      <para>To see the steps to complete for a simple Lustre file system
+      configuration, follow this example in which a combined MGS/MDT and two
+      OSTs are created to form a file system called 
+      <literal>temp</literal>. Three block devices are used, one for the
+      combined MGS/MDS node and one for each OSS node. Common parameters used
+      in the example are listed below, along with individual node
+      parameters.</para>
       <informaltable frame="all">
         <tgroup cols="4">
-          <colspec colname="c1" colwidth="2*"/>
-          <colspec colname="c2" colwidth="25*"/>
-          <colspec colname="c3" colwidth="25*"/>
-          <colspec colname="c4" colwidth="25*"/>
+          <colspec colname="c1" colwidth="2*" />
+          <colspec colname="c2" colwidth="25*" />
+          <colspec colname="c3" colwidth="25*" />
+          <colspec colname="c4" colwidth="25*" />
           <thead>
             <row>
               <entry nameend="c2" namest="c1">
-                <para><emphasis role="bold">Common Parameters</emphasis></para>
+                <para>
+                  <emphasis role="bold">Common Parameters</emphasis>
+                </para>
               </entry>
               <entry>
-                <para><emphasis role="bold">Value</emphasis></para>
+                <para>
+                  <emphasis role="bold">Value</emphasis>
+                </para>
               </entry>
               <entry>
-                <para><emphasis role="bold">Description</emphasis></para>
+                <para>
+                  <emphasis role="bold">Description</emphasis>
+                </para>
               </entry>
             </row>
           </thead>
           <tbody>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>&#160;</para>
               </entry>
               <entry>
-                <para> <emphasis role="bold">MGS node</emphasis></para>
+                <para>
+                  <emphasis role="bold">MGS node</emphasis>
+                </para>
               </entry>
               <entry>
-                <para> <literal>10.2.0.1@tcp0</literal></para>
+                <para>
+                  <literal>10.2.0.1@tcp0</literal>
+                </para>
               </entry>
               <entry>
                 <para>Node for the combined MGS/MDS</para>
@@ -187,13 +317,17 @@
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>&#160;</para>
               </entry>
               <entry>
-                <para> <emphasis role="bold">file system</emphasis></para>
+                <para>
+                  <emphasis role="bold">file system</emphasis>
+                </para>
               </entry>
               <entry>
-                <para><literal> temp</literal></para>
+                <para>
+                  <literal>temp</literal>
+                </para>
               </entry>
               <entry>
                 <para>Name of the Lustre file system</para>
@@ -201,16 +335,21 @@
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>&#160;</para>
               </entry>
               <entry>
-                <para> <emphasis role="bold">network type</emphasis></para>
+                <para>
+                  <emphasis role="bold">network type</emphasis>
+                </para>
               </entry>
               <entry>
-                <para> <literal>TCP/IP</literal></para>
+                <para>
+                  <literal>TCP/IP</literal>
+                </para>
               </entry>
               <entry>
-                <para>Network type used for Lustre file system <literal>temp</literal></para>
+                <para>Network type used for Lustre file system 
+                <literal>temp</literal></para>
               </entry>
             </row>
           </tbody>
@@ -218,52 +357,67 @@
       </informaltable>
       <informaltable frame="all">
         <tgroup cols="4">
-          <colspec colname="c1" colwidth="25*"/>
-          <colspec colname="c2" colwidth="25*"/>
-          <colspec colname="c3" colwidth="25*"/>
-          <colspec colname="c4" colwidth="25*"/>
+          <colspec colname="c1" colwidth="25*" />
+          <colspec colname="c2" colwidth="25*" />
+          <colspec colname="c3" colwidth="25*" />
+          <colspec colname="c4" colwidth="25*" />
           <thead>
             <row>
               <entry nameend="c2" namest="c1">
-                <para><emphasis role="bold">Node Parameters</emphasis></para>
+                <para>
+                  <emphasis role="bold">Node Parameters</emphasis>
+                </para>
               </entry>
               <entry>
-                <para><emphasis role="bold">Value</emphasis></para>
+                <para>
+                  <emphasis role="bold">Value</emphasis>
+                </para>
               </entry>
               <entry>
-                <para><emphasis role="bold">Description</emphasis></para>
+                <para>
+                  <emphasis role="bold">Description</emphasis>
+                </para>
               </entry>
             </row>
           </thead>
           <tbody>
             <row>
               <entry nameend="c4" namest="c1">
-                <para> MGS/MDS node</para>
+                <para>MGS/MDS node</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>&#160;</para>
               </entry>
               <entry>
-                <para> <emphasis role="bold">MGS/MDS node</emphasis></para>
+                <para>
+                  <emphasis role="bold">MGS/MDS node</emphasis>
+                </para>
               </entry>
               <entry>
-                <para> <literal>mdt0</literal></para>
+                <para>
+                  <literal>mdt0</literal>
+                </para>
               </entry>
               <entry>
-                <para>MDS in Lustre file system <literal>temp</literal></para>
+                <para>MDS in Lustre file system 
+                <literal>temp</literal></para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>&#160;</para>
               </entry>
               <entry>
-                <para> <emphasis role="bold">block device</emphasis></para>
+                <para>
+                  <emphasis role="bold">block device</emphasis>
+                </para>
               </entry>
               <entry>
-                <para> <literal>/dev/sdb</literal></para>
+                <para>
+                  <literal>/dev/sdb</literal>
+                </para>
               </entry>
               <entry>
                 <para>Block device for the combined MGS/MDS node</para>
@@ -271,119 +425,161 @@
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>&#160;</para>
               </entry>
               <entry>
-                <para> <emphasis role="bold">mount point</emphasis></para>
+                <para>
+                  <emphasis role="bold">mount point</emphasis>
+                </para>
               </entry>
               <entry>
-                <para> <literal>/mnt/mdt</literal></para>
+                <para>
+                  <literal>/mnt/mdt</literal>
+                </para>
               </entry>
               <entry>
-                <para>Mount point for the <literal>mdt0</literal> block device (<literal>/dev/sdb</literal>) on the MGS/MDS node</para>
+                <para>Mount point for the 
+                <literal>mdt0</literal> block device (
+                <literal>/dev/sdb</literal>) on the MGS/MDS node</para>
               </entry>
             </row>
             <row>
               <entry nameend="c4" namest="c1">
-                <para> First OSS node</para>
+                <para>First OSS node</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>&#160;</para>
               </entry>
               <entry>
-                <para> <emphasis role="bold">OSS node</emphasis></para>
+                <para>
+                  <emphasis role="bold">OSS node</emphasis>
+                </para>
               </entry>
               <entry>
-                <para><literal> oss0</literal></para>
+                <para>
+                  <literal>oss0</literal>
+                </para>
               </entry>
               <entry>
-                <para>First OSS node in Lustre file system <literal>temp</literal></para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> &#160;</para>
-              </entry>
-              <entry>
-                <para> <emphasis role="bold">OST</emphasis></para>
-              </entry>
-              <entry>
-                <para><literal>ost0</literal></para>
-              </entry>
-              <entry>
-                <para>First OST in Lustre file system <literal>temp</literal></para>
+                <para>First OSS node in Lustre file system 
+                <literal>temp</literal></para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>&#160;</para>
               </entry>
               <entry>
-                <para> <emphasis role="bold">block device</emphasis></para>
+                <para>
+                  <emphasis role="bold">OST</emphasis>
+                </para>
               </entry>
               <entry>
-                <para> <literal>/dev/sdc</literal></para>
+                <para>
+                  <literal>ost0</literal>
+                </para>
               </entry>
               <entry>
-                <para>Block device for the first OSS node (<literal>oss0</literal>)</para>
+                <para>First OST in Lustre file system 
+                <literal>temp</literal></para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> &#160;</para>
+                <para>&#160;</para>
               </entry>
               <entry>
-                <para> <emphasis role="bold">mount point</emphasis></para>
+                <para>
+                  <emphasis role="bold">block device</emphasis>
+                </para>
               </entry>
               <entry>
-                <para> <literal>/mnt/ost0</literal></para>
+                <para>
+                  <literal>/dev/sdc</literal>
+                </para>
               </entry>
               <entry>
-                <para> Mount point for the <literal>ost0</literal> block device (<literal>/dev/sdc</literal>) on the <literal>oss1</literal> node</para>
+                <para>Block device for the first OSS node (
+                <literal>oss0</literal>)</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>&#160;</para>
+              </entry>
+              <entry>
+                <para>
+                  <emphasis role="bold">mount point</emphasis>
+                </para>
+              </entry>
+              <entry>
+                <para>
+                  <literal>/mnt/ost0</literal>
+                </para>
+              </entry>
+              <entry>
+                <para>Mount point for the 
+                <literal>ost0</literal> block device (
+                <literal>/dev/sdc</literal>) on the 
+                <literal>oss1</literal> node</para>
               </entry>
             </row>
             <row>
               <entry nameend="c4" namest="c1">
-                <para> Second OSS node</para>
+                <para>Second OSS node</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> </para>
+                <para></para>
               </entry>
               <entry>
-                <para> <emphasis role="bold">OSS node</emphasis></para>
+                <para>
+                  <emphasis role="bold">OSS node</emphasis>
+                </para>
               </entry>
               <entry>
-                <para><literal>oss1</literal></para>
+                <para>
+                  <literal>oss1</literal>
+                </para>
               </entry>
               <entry>
-                <para>Second OSS node in Lustre file system <literal>temp</literal></para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> </para>
-              </entry>
-              <entry>
-                <para> <emphasis role="bold">OST</emphasis></para>
-              </entry>
-              <entry>
-                <para> <literal>ost1</literal></para>
-              </entry>
-              <entry>
-                <para>Second OST in Lustre file system <literal>temp</literal></para>
+                <para>Second OSS node in Lustre file system 
+                <literal>temp</literal></para>
               </entry>
             </row>
             <row>
-              <entry/>
               <entry>
-                <para> <emphasis role="bold">block device</emphasis></para>
+                <para></para>
               </entry>
               <entry>
-                <para><literal>/dev/sdd</literal></para>
+                <para>
+                  <emphasis role="bold">OST</emphasis>
+                </para>
+              </entry>
+              <entry>
+                <para>
+                  <literal>ost1</literal>
+                </para>
+              </entry>
+              <entry>
+                <para>Second OST in Lustre file system 
+                <literal>temp</literal></para>
+              </entry>
+            </row>
+            <row>
+              <entry />
+              <entry>
+                <para>
+                  <emphasis role="bold">block device</emphasis>
+                </para>
+              </entry>
+              <entry>
+                <para>
+                  <literal>/dev/sdd</literal>
+                </para>
               </entry>
               <entry>
                 <para>Block device for the second OSS node (oss1)</para>
@@ -391,65 +587,88 @@
             </row>
             <row>
               <entry>
-                <para> </para>
+                <para></para>
               </entry>
               <entry>
-                <para> <emphasis role="bold">mount point</emphasis></para>
+                <para>
+                  <emphasis role="bold">mount point</emphasis>
+                </para>
               </entry>
               <entry>
-                <para><literal>/mnt/ost1</literal></para>
+                <para>
+                  <literal>/mnt/ost1</literal>
+                </para>
               </entry>
               <entry>
-                <para> Mount point for the <literal>ost1</literal> block device (<literal>/dev/sdd</literal>) on the <literal>oss1</literal> node</para>
+                <para>Mount point for the 
+                <literal>ost1</literal> block device (
+                <literal>/dev/sdd</literal>) on the 
+                <literal>oss1</literal> node</para>
               </entry>
             </row>
             <row>
               <entry nameend="c4" namest="c1">
-                <para> Client node</para>
+                <para>Client node</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> </para>
+                <para></para>
               </entry>
               <entry>
-                <para> <emphasis role="bold">client node</emphasis></para>
+                <para>
+                  <emphasis role="bold">client node</emphasis>
+                </para>
               </entry>
               <entry>
-                <para> <literal>client1</literal></para>
+                <para>
+                  <literal>client1</literal>
+                </para>
               </entry>
               <entry>
-                <para>Client in Lustre file system <literal>temp</literal></para>
+                <para>Client in Lustre file system 
+                <literal>temp</literal></para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> </para>
+                <para></para>
               </entry>
               <entry>
-                <para> <emphasis role="bold">mount point</emphasis></para>
+                <para>
+                  <emphasis role="bold">mount point</emphasis>
+                </para>
               </entry>
               <entry>
-                <para> <literal>/lustre</literal></para>
+                <para>
+                  <literal>/lustre</literal>
+                </para>
               </entry>
               <entry>
-                <para>Mount point for Lustre file system <literal>temp</literal> on the
-                    <literal>client1</literal> node</para>
+                <para>Mount point for Lustre file system 
+                <literal>temp</literal> on the 
+                <literal>client1</literal> node</para>
               </entry>
             </row>
           </tbody>
         </tgroup>
       </informaltable>
       <note>
-        <para>We recommend that you use &apos;dotted-quad&apos; notation for IP addresses rather than host names to make it easier to read debug logs and debug configurations with multiple interfaces.</para>
+        <para>We recommend that you use 'dotted-quad' notation for IP addresses
+        rather than host names to make it easier to read debug logs and debug
+        configurations with multiple interfaces.</para>
       </note>
       <para>For this example, complete the steps below:</para>
       <orderedlist>
         <listitem>
-          <para>Create a combined MGS/MDT file system on the block device. On the MDS node, run:</para>
-          <screen>[root@mds /]# mkfs.lustre --fsname=temp --mgs --mdt --index=0 /dev/sdb</screen>
+          <para>Create a combined MGS/MDT file system on the block device. On
+          the MDS node, run:</para>
+          <screen>
+[root@mds /]# mkfs.lustre --fsname=temp --mgs --mdt --index=0 /dev/sdb
+</screen>
           <para>This command generates this output:</para>
-          <screen>    Permanent disk data:
+          <screen>
+    Permanent disk data:
 Target:            temp-MDT0000
 Index:             0
 Lustre FS: temp
@@ -468,27 +687,44 @@ formatting backing filesystem ldiskfs on /dev/sdb
    options                 -i 4096 -I 512 -q -O dir_index,uninit_groups -F
 mkfs_cmd = mkfs.ext2 -j -b 4096 -L temp-MDTffff  -i 4096 -I 512 -q -O 
 dir_index,uninit_groups -F /dev/sdb
-Writing CONFIGS/mountdata </screen>
+Writing CONFIGS/mountdata 
+</screen>
         </listitem>
         <listitem>
-          <para>Mount the combined MGS/MDT file system on the block device. On the MDS node, run:</para>
-          <screen>[root@mds /]# mount -t lustre /dev/sdb /mnt/mdt</screen>
+          <para>Mount the combined MGS/MDT file system on the block device. On
+          the MDS node, run:</para>
+          <screen>
+[root@mds /]# mount -t lustre /dev/sdb /mnt/mdt
+</screen>
           <para>This command generates this output:</para>
-          <screen>Lustre: temp-MDT0000: new disk, initializing 
+          <screen>
+Lustre: temp-MDT0000: new disk, initializing 
 Lustre: 3009:0:(lproc_mds.c:262:lprocfs_wr_identity_upcall()) temp-MDT0000:
 group upcall set to /usr/sbin/l_getidentity
 Lustre: temp-MDT0000.mdt: set parameter identity_upcall=/usr/sbin/l_getidentity
-Lustre: Server temp-MDT0000 on device /dev/sdb has started </screen>
+Lustre: Server temp-MDT0000 on device /dev/sdb has started 
+</screen>
         </listitem>
         <listitem xml:id="dbdoclet.50438267_pgfId-1291170">
-          <para>Create and mount <literal>ost0</literal>.</para>
-          <para>In this example, the OSTs (<literal>ost0</literal> and <literal>ost1</literal>) are being created on different OSS nodes (<literal>oss0</literal> and <literal>oss1</literal> respectively).</para>
+          <para>Create and mount 
+          <literal>ost0</literal>.</para>
+          <para>In this example, the OSTs (
+          <literal>ost0</literal> and 
+          <literal>ost1</literal>) are being created on different OSS nodes (
+          <literal>oss0</literal> and 
+          <literal>oss1</literal> respectively).</para>
           <orderedlist>
             <listitem>
-              <para>Create <literal>ost0</literal>. On <literal>oss0</literal> node, run:</para>
-              <screen>[root@oss0 /]# mkfs.lustre --fsname=temp --mgsnode=10.2.0.1@tcp0 --ost --index=0 /dev/sdc</screen>
+              <para>Create 
+              <literal>ost0</literal>. On 
+              <literal>oss0</literal> node, run:</para>
+              <screen>
+[root@oss0 /]# mkfs.lustre --fsname=temp --mgsnode=10.2.0.1@tcp0 --ost
+--index=0 /dev/sdc
+</screen>
               <para>The command generates this output:</para>
-              <screen>    Permanent disk data:
+              <screen>
+    Permanent disk data:
 Target:            temp-OST0000
 Index:             0
 Lustre FS: temp
@@ -507,31 +743,44 @@ formatting backing filesystem ldiskfs on /dev/sdc
    options                 -I 256 -q -O dir_index,uninit_groups -F
 mkfs_cmd = mkfs.ext2 -j -b 4096 -L temp-OST0000  -I 256 -q -O
 dir_index,uninit_groups -F /dev/sdc
-Writing CONFIGS/mountdata </screen>
+Writing CONFIGS/mountdata 
+</screen>
             </listitem>
             <listitem>
-              <para>Mount ost0 on the OSS on which it was created. On <literal>oss0</literal> node, run:</para>
-              <screen>root@oss0 /] mount -t lustre /dev/sdc /mnt/ost0</screen>
+              <para>Mount ost0 on the OSS on which it was created. On 
+              <literal>oss0</literal> node, run:</para>
+              <screen>
+root@oss0 /] mount -t lustre /dev/sdc /mnt/ost0
+</screen>
               <para>The command generates this output:</para>
-              <screen>LDISKFS-fs: file extents enabled 
+              <screen>
+LDISKFS-fs: file extents enabled 
 LDISKFS-fs: mballoc enabled
 Lustre: temp-OST0000: new disk, initializing
-Lustre: Server temp-OST0000 on device /dev/sdb has started</screen>
+Lustre: Server temp-OST0000 on device /dev/sdb has started
+</screen>
               <para>Shortly afterwards, this output appears:</para>
-              <screen>Lustre: temp-OST0000: received MDS connection from 10.2.0.1@tcp0
-Lustre: MDS temp-MDT0000: temp-OST0000_UUID now active, resetting orphans </screen>
+              <screen>
+Lustre: temp-OST0000: received MDS connection from 10.2.0.1@tcp0
+Lustre: MDS temp-MDT0000: temp-OST0000_UUID now active, resetting orphans 
+</screen>
             </listitem>
           </orderedlist>
         </listitem>
         <listitem>
-          <para>Create and mount <literal>ost1</literal>.</para>
+          <para>Create and mount 
+          <literal>ost1</literal>.</para>
           <orderedlist>
             <listitem>
-              <para>Create ost1. On <literal>oss1</literal> node, run:</para>
-              <screen>[root@oss1 /]# mkfs.lustre --fsname=temp --mgsnode=10.2.0.1@tcp0 \
-           --ost --index=1 /dev/sdd</screen>
+              <para>Create ost1. On 
+              <literal>oss1</literal> node, run:</para>
+              <screen>
+[root@oss1 /]# mkfs.lustre --fsname=temp --mgsnode=10.2.0.1@tcp0 \
+           --ost --index=1 /dev/sdd
+</screen>
               <para>The command generates this output:</para>
-              <screen>    Permanent disk data:
+              <screen>
+    Permanent disk data:
 Target:            temp-OST0001
 Index:             1
 Lustre FS: temp
@@ -550,67 +799,114 @@ formatting backing filesystem ldiskfs on /dev/sdd
    options                 -I 256 -q -O dir_index,uninit_groups -F
 mkfs_cmd = mkfs.ext2 -j -b 4096 -L temp-OST0001  -I 256 -q -O
 dir_index,uninit_groups -F /dev/sdc
-Writing CONFIGS/mountdata </screen>
+Writing CONFIGS/mountdata 
+</screen>
             </listitem>
             <listitem>
-              <para>Mount ost1 on the OSS on which it was created. On <literal>oss1</literal> node, run:</para>
-              <screen>root@oss1 /] mount -t lustre /dev/sdd /mnt/ost1 </screen>
+              <para>Mount ost1 on the OSS on which it was created. On 
+              <literal>oss1</literal> node, run:</para>
+              <screen>
+root@oss1 /] mount -t lustre /dev/sdd /mnt/ost1 
+</screen>
               <para>The command generates this output:</para>
-              <screen>LDISKFS-fs: file extents enabled 
+              <screen>
+LDISKFS-fs: file extents enabled 
 LDISKFS-fs: mballoc enabled
 Lustre: temp-OST0001: new disk, initializing
-Lustre: Server temp-OST0001 on device /dev/sdb has started</screen>
+Lustre: Server temp-OST0001 on device /dev/sdb has started
+</screen>
               <para>Shortly afterwards, this output appears:</para>
-              <screen>Lustre: temp-OST0001: received MDS connection from 10.2.0.1@tcp0
-Lustre: MDS temp-MDT0000: temp-OST0001_UUID now active, resetting orphans </screen>
+              <screen>
+Lustre: temp-OST0001: received MDS connection from 10.2.0.1@tcp0
+Lustre: MDS temp-MDT0000: temp-OST0001_UUID now active, resetting orphans 
+</screen>
             </listitem>
           </orderedlist>
         </listitem>
         <listitem>
-          <para>Mount the Lustre file system on the client. On the client node, run:</para>
-          <screen>root@client1 /] mount -t lustre 10.2.0.1@tcp0:/temp /lustre </screen>
+          <para>Mount the Lustre file system on the client. On the client node,
+          run:</para>
+          <screen>
+root@client1 /] mount -t lustre 10.2.0.1@tcp0:/temp /lustre 
+</screen>
           <para>This command generates this output:</para>
-          <screen>Lustre: Client temp-client has started</screen>
+          <screen>
+Lustre: Client temp-client has started
+</screen>
         </listitem>
         <listitem>
-          <para>Verify that the file system started and is working by running the <literal>df</literal>, <literal>dd</literal> and <literal>ls</literal> commands on the client node.</para>
+          <para>Verify that the file system started and is working by running
+          the 
+          <literal>df</literal>, 
+          <literal>dd</literal> and 
+          <literal>ls</literal> commands on the client node.</para>
           <orderedlist>
             <listitem>
-              <para>Run the <literal>lfs df -h</literal> command:</para>
-              <screen>[root@client1 /] lfs df -h </screen>
-              <para>The <literal>lfs df -h</literal> command lists space usage per OST and the MDT in human-readable format. This command generates output similar to this:</para>
+              <para>Run the 
+              <literal>lfs df -h</literal> command:</para>
+              <screen>
+[root@client1 /] lfs df -h 
+</screen>
+              <para>The 
+              <literal>lfs df -h</literal> command lists space usage per OST and
+              the MDT in human-readable format. This command generates output
+              similar to this:</para>
               <screen>
 UUID               bytes      Used      Available   Use%    Mounted on
 temp-MDT0000_UUID  8.0G      400.0M       7.6G        0%      /lustre[MDT:0]
 temp-OST0000_UUID  800.0G    400.0M     799.6G        0%      /lustre[OST:0]
 temp-OST0001_UUID  800.0G    400.0M     799.6G        0%      /lustre[OST:1]
-filesystem summary:  1.6T    800.0M       1.6T        0%      /lustre</screen>
+filesystem summary:  1.6T    800.0M       1.6T        0%      /lustre
+</screen>
             </listitem>
             <listitem>
-              <para>Run the <literal>lfs df -ih</literal> command.</para>
-              <screen>[root@client1 /] lfs df -ih</screen>
-              <para>The <literal>lfs df -ih</literal> command lists inode usage per OST and the MDT. This command generates output similar to this:</para>
+              <para>Run the 
+              <literal>lfs df -ih</literal> command.</para>
+              <screen>
+[root@client1 /] lfs df -ih
+</screen>
+              <para>The 
+              <literal>lfs df -ih</literal> command lists inode usage per OST
+              and the MDT. This command generates output similar to
+              this:</para>
               <screen>
 UUID              Inodes      IUsed       IFree   IUse%     Mounted on
 temp-MDT0000_UUID   2.5M        32         2.5M      0%       /lustre[MDT:0]
 temp-OST0000_UUID   5.5M        54         5.5M      0%       /lustre[OST:0]
 temp-OST0001_UUID   5.5M        54         5.5M      0%       /lustre[OST:1]
-filesystem summary: 2.5M        32         2.5M      0%       /lustre</screen>
+filesystem summary: 2.5M        32         2.5M      0%       /lustre
+</screen>
             </listitem>
             <listitem>
-              <para>Run the <literal>dd</literal> command:</para>
-              <screen>[root@client1 /] cd /lustre
-[root@client1 /lustre] dd if=/dev/zero of=/lustre/zero.dat bs=4M count=2</screen>
-              <para>The <literal>dd</literal> command verifies write functionality by creating a file containing all zeros (<literal>0</literal>s). In this command, an 8 MB file is created. This command generates output similar to this:</para>
-              <screen>2+0 records in
+              <para>Run the 
+              <literal>dd</literal> command:</para>
+              <screen>
+[root@client1 /] cd /lustre
+[root@client1 /lustre] dd if=/dev/zero of=/lustre/zero.dat bs=4M count=2
+</screen>
+              <para>The 
+              <literal>dd</literal> command verifies write functionality by
+              creating a file containing all zeros (
+              <literal>0</literal>s). In this command, an 8 MB file is created.
+              This command generates output similar to this:</para>
+              <screen>
+2+0 records in
 2+0 records out
-8388608 bytes (8.4 MB) copied, 0.159628 seconds, 52.6 MB/s</screen>
+8388608 bytes (8.4 MB) copied, 0.159628 seconds, 52.6 MB/s
+</screen>
             </listitem>
             <listitem>
-              <para>Run the <literal>ls</literal> command:</para>
-              <screen>[root@client1 /lustre] ls -lsah</screen>
-              <para>The <literal>ls -lsah</literal> command lists files and directories in the current working directory. This command generates output similar to this:</para>
-              <screen>total 8.0M
+              <para>Run the 
+              <literal>ls</literal> command:</para>
+              <screen>
+[root@client1 /lustre] ls -lsah
+</screen>
+              <para>The 
+              <literal>ls -lsah</literal> command lists files and directories in
+              the current working directory. This command generates output
+              similar to this:</para>
+              <screen>
+total 8.0M
 4.0K drwxr-xr-x  2 root root 4.0K Oct 16 15:27 .
 8.0K drwxr-xr-x 25 root root 4.0K Oct 16 15:27 ..
 8.0M -rw-r--r--  1 root root 8.0M Oct 16 15:27 zero.dat 
@@ -620,109 +916,164 @@ filesystem summary: 2.5M        32         2.5M      0%       /lustre</screen>
           </orderedlist>
         </listitem>
       </orderedlist>
-      <para>Once the Lustre file system is configured, it is ready for use.</para>
+      <para>Once the Lustre file system is configured, it is ready for
+      use.</para>
     </section>
   </section>
   <section xml:id="dbdoclet.50438267_76752">
-      <title>
-          <indexterm><primary>Lustre</primary><secondary>configuring</secondary><tertiary>additional options</tertiary></indexterm>
-          Additional Configuration Options</title>
-    <para>This section describes how to scale the Lustre file system or make configuration changes using the Lustre configuration utilities.</para>
+    <title>
+    <indexterm>
+      <primary>Lustre</primary>
+      <secondary>configuring</secondary>
+      <tertiary>additional options</tertiary>
+    </indexterm>Additional Configuration Options</title>
+    <para>This section describes how to scale the Lustre file system or make
+    configuration changes using the Lustre configuration utilities.</para>
     <section remap="h3">
-        <title>
-          <indexterm><primary>Lustre</primary><secondary>configuring</secondary><tertiary>for scale</tertiary></indexterm>
-            Scaling the Lustre File System</title>
-      <para>A Lustre file system can be scaled by adding OSTs or clients. For instructions on creating additional OSTs repeat Step <xref linkend="dbdoclet.50438267_pgfId-1291170"/> and Step <xref linkend="dbdoclet.50438267_pgfId-1293955"/> above. For mounting additional clients, repeat Step <xref linkend="dbdoclet.50438267_pgfId-1290934"/> for each client.</para>
+      <title>
+      <indexterm>
+        <primary>Lustre</primary>
+        <secondary>configuring</secondary>
+        <tertiary>for scale</tertiary>
+      </indexterm>Scaling the Lustre File System</title>
+      <para>A Lustre file system can be scaled by adding OSTs or clients. For
+      instructions on creating additional OSTs repeat Step 
+      <xref linkend="dbdoclet.50438267_pgfId-1291170" />and Step 
+      <xref linkend="dbdoclet.50438267_pgfId-1293955" />above. For mounting
+      additional clients, repeat Step 
+      <xref linkend="dbdoclet.50438267_pgfId-1290934" />for each client.</para>
     </section>
     <section remap="h3">
-        <title>
-          <indexterm><primary>Lustre</primary><secondary>configuring</secondary><tertiary>striping</tertiary></indexterm>
-            Changing Striping Defaults</title>
-      <para>The default settings for the file layout stripe pattern are shown in <xref linkend="configuringlustre.tab.stripe"/>.</para>
+      <title>
+      <indexterm>
+        <primary>Lustre</primary>
+        <secondary>configuring</secondary>
+        <tertiary>striping</tertiary>
+      </indexterm>Changing Striping Defaults</title>
+      <para>The default settings for the file layout stripe pattern are shown
+      in 
+      <xref linkend="configuringlustre.tab.stripe" />.</para>
       <table frame="none" xml:id="configuringlustre.tab.stripe">
         <title>Default stripe pattern</title>
         <tgroup cols="3">
-          <colspec colname="c1" colwidth="13*"/>
-          <colspec colname="c2" colwidth="13*"/>
-          <colspec colname="c3" colwidth="13*"/>
+          <colspec colname="c1" colwidth="13*" />
+          <colspec colname="c2" colwidth="13*" />
+          <colspec colname="c3" colwidth="13*" />
           <tbody>
             <row>
               <entry>
-                <para><emphasis role="bold">File Layout Parameter</emphasis></para>
+                <para>
+                  <emphasis role="bold">File Layout Parameter</emphasis>
+                </para>
               </entry>
               <entry>
-                <para><emphasis role="bold">Default</emphasis></para>
+                <para>
+                  <emphasis role="bold">Default</emphasis>
+                </para>
               </entry>
               <entry>
-                <para><emphasis role="bold">Description</emphasis></para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>stripe_size</literal></para>
-              </entry>
-              <entry>
-                <para> 1 MB</para>
-              </entry>
-              <entry>
-                <para> Amount of data to write to one OST before moving to the next OST.</para>
+                <para>
+                  <emphasis role="bold">Description</emphasis>
+                </para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <literal>stripe_count</literal></para>
+                <para>
+                  <literal>stripe_size</literal>
+                </para>
               </entry>
               <entry>
-                <para> 1</para>
+                <para>1 MB</para>
               </entry>
               <entry>
-                <para> The number of OSTs to use for a single file.</para>
+                <para>Amount of data to write to one OST before moving to the
+                next OST.</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <literal>start_ost</literal></para>
+                <para>
+                  <literal>stripe_count</literal>
+                </para>
               </entry>
               <entry>
-                <para> -1</para>
+                <para>1</para>
               </entry>
               <entry>
-                <para> The first OST where objects are created for each file. The default -1 allows the MDS to choose the starting index based on available space and load balancing. <emphasis>It&apos;s strongly recommended not to change the default for this parameter to a value other than -1.</emphasis></para>
+                <para>The number of OSTs to use for a single file.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>
+                  <literal>start_ost</literal>
+                </para>
+              </entry>
+              <entry>
+                <para>-1</para>
+              </entry>
+              <entry>
+                <para>The first OST where objects are created for each file.
+                The default -1 allows the MDS to choose the starting index
+                based on available space and load balancing. 
+                <emphasis>It's strongly recommended not to change the default
+                for this parameter to a value other than -1.</emphasis></para>
               </entry>
             </row>
           </tbody>
         </tgroup>
       </table>
-      <para>Use the <literal>lfs setstripe</literal> command described in <xref linkend="managingstripingfreespace"/> to change the file layout configuration.</para>
+      <para>Use the 
+      <literal>lfs setstripe</literal> command described in 
+      <xref linkend="managingstripingfreespace" />to change the file layout
+      configuration.</para>
     </section>
     <section remap="h3">
-        <title>
-          <indexterm><primary>Lustre</primary><secondary>configuring</secondary><tertiary>utilities</tertiary></indexterm>
-            Using the Lustre Configuration Utilities</title>
-      <para>If additional configuration is necessary, several configuration utilities are available:</para>
+      <title>
+      <indexterm>
+        <primary>Lustre</primary>
+        <secondary>configuring</secondary>
+        <tertiary>utilities</tertiary>
+      </indexterm>Using the Lustre Configuration Utilities</title>
+      <para>If additional configuration is necessary, several configuration
+      utilities are available:</para>
       <itemizedlist>
         <listitem>
-          <para><literal>mkfs.lustre</literal>  - Use to format a disk for a Lustre service.</para>
+          <para>
+          <literal>mkfs.lustre</literal>- Use to format a disk for a Lustre
+          service.</para>
         </listitem>
         <listitem>
-          <para><literal>tunefs.lustre</literal>  - Use to modify configuration information on a Lustre target disk.</para>
+          <para>
+          <literal>tunefs.lustre</literal>- Use to modify configuration
+          information on a Lustre target disk.</para>
         </listitem>
         <listitem>
-          <para><literal>lctl</literal> - Use to directly control Lustre features via an
-              <literal>ioctl</literal> interface, allowing various configuration, maintenance and
-            debugging features to be accessed.</para>
+          <para>
+          <literal>lctl</literal>- Use to directly control Lustre features via
+          an 
+          <literal>ioctl</literal> interface, allowing various configuration,
+          maintenance and debugging features to be accessed.</para>
         </listitem>
         <listitem>
-          <para><literal>mount.lustre</literal>  - Use to start a Lustre client or target service.</para>
+          <para>
+          <literal>mount.lustre</literal>- Use to start a Lustre client or
+          target service.</para>
         </listitem>
       </itemizedlist>
-      <para>For examples using these utilities, see the topic <xref linkend="systemconfigurationutilities"/></para>
-      <para>The <literal>lfs</literal> utility is useful for configuring and querying a variety of options related to files. For more information, see <xref linkend="userutilities"/>.</para>
+      <para>For examples using these utilities, see the topic 
+      <xref linkend="systemconfigurationutilities" /></para>
+      <para>The 
+      <literal>lfs</literal> utility is useful for configuring and querying a
+      variety of options related to files. For more information, see 
+      <xref linkend="userutilities" />.</para>
       <note>
-        <para>Some sample scripts are included in the directory where the Lustre software is
-          installed. If you have installed the Lustre source code, the scripts are located in the
-            <literal>lustre/tests</literal> sub-directory. These scripts enable quick setup of some
-          simple standard Lustre configurations.</para>
+        <para>Some sample scripts are included in the directory where the
+        Lustre software is installed. If you have installed the Lustre source
+        code, the scripts are located in the 
+        <literal>lustre/tests</literal> sub-directory. These scripts enable
+        quick setup of some simple standard Lustre configurations.</para>
       </note>
     </section>
   </section>

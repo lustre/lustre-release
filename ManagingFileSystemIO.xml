@@ -1,34 +1,65 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="managingfilesystemio">
-  <title xml:id="managingfilesystemio.title">Managing the File System and I/O</title>
-  <para>This chapter describes file striping and I/O options, and includes the following sections:</para>
+<?xml version='1.0' encoding='utf-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+xml:id="managingfilesystemio">
+  <title xml:id="managingfilesystemio.title">Managing the File System and
+  I/O</title>
+  <para>This chapter describes file striping and I/O options, and includes the
+  following sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438211_17536"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438211_17536" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438211_75549"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438211_75549" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438211_11204"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438211_11204" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438211_80295"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438211_80295" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438211_61024"/></para>
+      <para>
+        <xref linkend="dbdoclet.50438211_61024" />
+      </para>
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438211_17536">
-      <title><indexterm><primary>I/O</primary></indexterm>
-          <indexterm><primary>I/O</primary><secondary>full OSTs</secondary></indexterm>
-          Handling Full OSTs</title>
-    <para>Sometimes a Lustre file system becomes unbalanced, often due to incorrectly-specified stripe settings, or when very large files are created that are not striped over all of the OSTs. If an OST is full and an attempt is made to write more information to the file system, an error occurs. The procedures below describe how to handle a full OST.</para>
-    <para>The MDS will normally handle space balancing automatically at file creation time, and this procedure is normally not needed, but may be desirable in certain circumstances (e.g. when creating very large files that would consume more than the total free space of the full OSTs).</para>
+    <title>
+    <indexterm>
+      <primary>I/O</primary>
+    </indexterm>
+    <indexterm>
+      <primary>I/O</primary>
+      <secondary>full OSTs</secondary>
+    </indexterm>Handling Full OSTs</title>
+    <para>Sometimes a Lustre file system becomes unbalanced, often due to
+    incorrectly-specified stripe settings, or when very large files are created
+    that are not striped over all of the OSTs. If an OST is full and an attempt
+    is made to write more information to the file system, an error occurs. The
+    procedures below describe how to handle a full OST.</para>
+    <para>The MDS will normally handle space balancing automatically at file
+    creation time, and this procedure is normally not needed, but may be
+    desirable in certain circumstances (e.g. when creating very large files
+    that would consume more than the total free space of the full OSTs).</para>
     <section remap="h3">
-      <title><indexterm><primary>I/O</primary><secondary>OST space usage</secondary></indexterm>Checking OST Space Usage</title>
+      <title>
+      <indexterm>
+        <primary>I/O</primary>
+        <secondary>OST space usage</secondary>
+      </indexterm>Checking OST Space Usage</title>
       <para>The example below shows an unbalanced file system:</para>
-      <screen>client# lfs df -h
+      <screen>
+client# lfs df -h
 UUID                       bytes           Used            Available       \
 Use%            Mounted on
 lustre-MDT0000_UUID        4.4G            214.5M          3.9G            \
@@ -47,28 +78,46 @@ lustre-OST0005_UUID        2.0G            743.3M          1.1G            \
 36%             /mnt/lustre[OST:5]
  
 filesystem summary:        11.8G           5.4G            5.8G            \
-45%             /mnt/lustre</screen>
-      <para>In this case, OST:2 is almost full and when an attempt is made to write additional information to the file system (even with uniform striping over all the OSTs), the write command fails as follows:</para>
-      <screen>client# lfs setstripe /mnt/lustre 4M 0 -1
+45%             /mnt/lustre
+</screen>
+      <para>In this case, OST:2 is almost full and when an attempt is made to
+      write additional information to the file system (even with uniform
+      striping over all the OSTs), the write command fails as follows:</para>
+      <screen>
+client# lfs setstripe /mnt/lustre 4M 0 -1
 client# dd if=/dev/zero of=/mnt/lustre/test_3 bs=10M count=100
-dd: writing &apos;/mnt/lustre/test_3&apos;: No space left on device
+dd: writing '/mnt/lustre/test_3': No space left on device
 98+0 records in
 97+0 records out
-1017192448 bytes (1.0 GB) copied, 23.2411 seconds, 43.8 MB/s</screen>
+1017192448 bytes (1.0 GB) copied, 23.2411 seconds, 43.8 MB/s
+</screen>
     </section>
     <section remap="h3">
-      <title><indexterm><primary>I/O</primary><secondary>taking OST offline</secondary></indexterm>Taking a Full OST Offline</title>
-      <para>To avoid running out of space in the file system, if the OST usage is imbalanced and one or more OSTs are close to being full while there are others that have a lot of space, the full OSTs may optionally be deactivated at the MDS to prevent the MDS from allocating new objects there.</para>
+      <title>
+      <indexterm>
+        <primary>I/O</primary>
+        <secondary>taking OST offline</secondary>
+      </indexterm>Taking a Full OST Offline</title>
+      <para>To avoid running out of space in the file system, if the OST usage
+      is imbalanced and one or more OSTs are close to being full while there
+      are others that have a lot of space, the full OSTs may optionally be
+      deactivated at the MDS to prevent the MDS from allocating new objects
+      there.</para>
       <orderedlist>
         <listitem>
           <para>Log into the MDS server:</para>
-          <screen>client# ssh root@192.168.0.10 
-root@192.168.0.10&apos;s password: 
-Last login: Wed Nov 26 13:35:12 2008 from 192.168.0.6</screen>
+          <screen>
+client# ssh root@192.168.0.10 
+root@192.168.0.10's password: 
+Last login: Wed Nov 26 13:35:12 2008 from 192.168.0.6
+</screen>
         </listitem>
         <listitem>
-          <para>Use the <literal>lctl dl</literal> command to show the status of all file system components:</para>
-          <screen>mds# lctl dl 
+          <para>Use the 
+          <literal>lctl dl</literal> command to show the status of all file
+          system components:</para>
+          <screen>
+mds# lctl dl 
 0 UP mgs MGS MGS 9 
 1 UP mgc MGC192.168.0.10@tcp e384bb0e-680b-ce25-7bc9-81655dd1e813 5
 2 UP mdt MDS MDS_uuid 3
@@ -79,15 +128,21 @@ Last login: Wed Nov 26 13:35:12 2008 from 192.168.0.6</screen>
 7 UP osc lustre-OST0002-osc lustre-mdtlov_UUID 5
 8 UP osc lustre-OST0003-osc lustre-mdtlov_UUID 5
 9 UP osc lustre-OST0004-osc lustre-mdtlov_UUID 5
-10 UP osc lustre-OST0005-osc lustre-mdtlov_UUID 5</screen>
+10 UP osc lustre-OST0005-osc lustre-mdtlov_UUID 5
+</screen>
         </listitem>
         <listitem>
-          <para>Use <literal>lctl</literal> deactivate to take the full OST offline:</para>
-          <screen>mds# lctl --device 7 deactivate</screen>
+          <para>Use 
+          <literal>lctl</literal> deactivate to take the full OST
+          offline:</para>
+          <screen>
+mds# lctl --device 7 deactivate
+</screen>
         </listitem>
         <listitem>
           <para>Display the status of the file system components:</para>
-          <screen>mds# lctl dl 
+          <screen>
+mds# lctl dl 
 0 UP mgs MGS MGS 9
 1 UP mgc MGC192.168.0.10@tcp e384bb0e-680b-ce25-7bc9-81655dd1e813 5
 2 UP mdt MDS MDS_uuid 3
@@ -98,39 +153,70 @@ Last login: Wed Nov 26 13:35:12 2008 from 192.168.0.6</screen>
 7 IN osc lustre-OST0002-osc lustre-mdtlov_UUID 5
 8 UP osc lustre-OST0003-osc lustre-mdtlov_UUID 5
 9 UP osc lustre-OST0004-osc lustre-mdtlov_UUID 5
-10 UP osc lustre-OST0005-osc lustre-mdtlov_UUID 5</screen>
+10 UP osc lustre-OST0005-osc lustre-mdtlov_UUID 5
+</screen>
         </listitem>
       </orderedlist>
-      <para>The device list shows that OST0002 is now inactive. When new files are created in the file system, they will only use the remaining active OSTs. Either manual space rebalancing can be done by migrating data to other OSTs, as shown in the next section, or normal file deletion and creation can be allowed to passively rebalance the space usage.</para>
+      <para>The device list shows that OST0002 is now inactive. When new files
+      are created in the file system, they will only use the remaining active
+      OSTs. Either manual space rebalancing can be done by migrating data to
+      other OSTs, as shown in the next section, or normal file deletion and
+      creation can be allowed to passively rebalance the space usage.</para>
     </section>
     <section remap="h3">
-        <title>
-            <indexterm><primary>I/O</primary><secondary>migrating data</secondary></indexterm>
-            <indexterm><primary>maintenance</primary><secondary>full OSTs</secondary></indexterm>
-            Migrating Data within a File System</title>
-      <para>As stripes cannot be moved within the file system, data must be migrated manually by copying and renaming the file, removing the original file, and renaming the new file with the original file name. The simplest way to do this is to use the <literal>lfs_migrate</literal> command (see <xref linkend="dbdoclet.50438206_42260"/>). However, the steps for migrating a file by hand are also shown here for reference.</para>
+      <title>
+      <indexterm>
+        <primary>I/O</primary>
+        <secondary>migrating data</secondary>
+      </indexterm>
+      <indexterm>
+        <primary>maintenance</primary>
+        <secondary>full OSTs</secondary>
+      </indexterm>Migrating Data within a File System</title>
+      <para>As stripes cannot be moved within the file system, data must be
+      migrated manually by copying and renaming the file, removing the original
+      file, and renaming the new file with the original file name. The simplest
+      way to do this is to use the 
+      <literal>lfs_migrate</literal> command (see 
+      <xref linkend="dbdoclet.50438206_42260" />). However, the steps for
+      migrating a file by hand are also shown here for reference.</para>
       <orderedlist>
         <listitem>
           <para>Identify the file(s) to be moved.</para>
-          <para>In the example below, output from the <literal>getstripe</literal> command indicates that the file <literal>test_2</literal> is located entirely on OST2:</para>
-          <screen>client# lfs getstripe /mnt/lustre/test_2
+          <para>In the example below, output from the 
+          <literal>getstripe</literal> command indicates that the file 
+          <literal>test_2</literal> is located entirely on OST2:</para>
+          <screen>
+client# lfs getstripe /mnt/lustre/test_2
 /mnt/lustre/test_2
 obdidx     objid   objid   group
-     2      8     0x8       0</screen>
+     2      8     0x8       0
+</screen>
         </listitem>
         <listitem>
-          <para>To move single object(s), create a new copy and remove the original. Enter:</para>
-          <screen>client# cp -a /mnt/lustre/test_2 /mnt/lustre/test_2.tmp
-client# mv /mnt/lustre/test_2.tmp /mnt/lustre/test_2</screen>
+          <para>To move single object(s), create a new copy and remove the
+          original. Enter:</para>
+          <screen>
+client# cp -a /mnt/lustre/test_2 /mnt/lustre/test_2.tmp
+client# mv /mnt/lustre/test_2.tmp /mnt/lustre/test_2
+</screen>
         </listitem>
         <listitem>
           <para>To migrate large files from one or more OSTs, enter:</para>
-          <screen>client# lfs find --ost <replaceable>ost_name</replaceable> -size +1G | lfs_migrate -y</screen>
+          <screen>
+client# lfs find --ost 
+<replaceable>ost_name</replaceable> -size +1G | lfs_migrate -y
+</screen>
         </listitem>
         <listitem>
           <para>Check the file system balance.</para>
-          <para>The <literal>df</literal> output in the example below shows a more balanced system compared to the <literal>df</literal> output in the example in <xref linkend="dbdoclet.50438211_17536"/>.</para>
-          <screen>client# lfs df -h
+          <para>The 
+          <literal>df</literal> output in the example below shows a more
+          balanced system compared to the 
+          <literal>df</literal> output in the example in 
+          <xref linkend="dbdoclet.50438211_17536" />.</para>
+          <screen>
+client# lfs df -h
 UUID                 bytes         Used            Available       Use%    \
         Mounted on
 lustre-MDT0000_UUID   4.4G         214.5M          3.9G            4%      \
@@ -149,18 +235,26 @@ lustre-OST0005_UUID   2.0G         1.3G            610.1M          64%     \
         /mnt/lustre[OST:5]
  
 filesystem summary:  11.8G 7.3G            3.9G    61%                     \
-/mnt/lustre</screen>
+/mnt/lustre
+</screen>
         </listitem>
       </orderedlist>
     </section>
     <section remap="h3">
-        <title>
-            <indexterm><primary>I/O</primary><secondary>bringing OST online</secondary></indexterm>
-            <indexterm><primary>maintenance</primary><secondary>bringing OST online</secondary></indexterm>
-            
-            Returning an Inactive OST Back Online</title>
-      <para>Once the deactivated OST(s) no longer are severely imbalanced, due to either active or passive data redistribution, they should be reactivated so they will again have new files allocated on them.</para>
-      <screen>[mds]# lctl --device 7 activate
+      <title>
+      <indexterm>
+        <primary>I/O</primary>
+        <secondary>bringing OST online</secondary>
+      </indexterm>
+      <indexterm>
+        <primary>maintenance</primary>
+        <secondary>bringing OST online</secondary>
+      </indexterm>Returning an Inactive OST Back Online</title>
+      <para>Once the deactivated OST(s) no longer are severely imbalanced, due
+      to either active or passive data redistribution, they should be
+      reactivated so they will again have new files allocated on them.</para>
+      <screen>
+[mds]# lctl --device 7 activate
 [mds]# lctl dl
   0 UP mgs MGS MGS 9
   1 UP mgc MGC192.168.0.10@tcp e384bb0e-680b-ce25-7bc9-816dd1e813 5
@@ -177,12 +271,21 @@ filesystem summary:  11.8G 7.3G            3.9G    61%                     \
     </section>
   </section>
   <section xml:id="dbdoclet.50438211_75549">
-      <title>
-            <indexterm><primary>I/O</primary><secondary>pools</secondary></indexterm>
-            <indexterm><primary>maintenance</primary><secondary>pools</secondary></indexterm>
-            <indexterm><primary>pools</primary></indexterm>
-          Creating and Managing OST Pools</title>
-    <para>The OST pools feature enables users to group OSTs together to make object placement more flexible. A &apos;pool&apos; is the name associated with an arbitrary subset of OSTs in a Lustre cluster.</para>
+    <title>
+    <indexterm>
+      <primary>I/O</primary>
+      <secondary>pools</secondary>
+    </indexterm>
+    <indexterm>
+      <primary>maintenance</primary>
+      <secondary>pools</secondary>
+    </indexterm>
+    <indexterm>
+      <primary>pools</primary>
+    </indexterm>Creating and Managing OST Pools</title>
+    <para>The OST pools feature enables users to group OSTs together to make
+    object placement more flexible. A 'pool' is the name associated with an
+    arbitrary subset of OSTs in a Lustre cluster.</para>
     <para>OST pools follow these rules:</para>
     <itemizedlist>
       <listitem>
@@ -192,23 +295,36 @@ filesystem summary:  11.8G 7.3G            3.9G    61%                     \
         <para>No ordering of OSTs in a pool is defined or implied.</para>
       </listitem>
       <listitem>
-        <para>Stripe allocation within a pool follows the same rules as the normal stripe allocator.</para>
+        <para>Stripe allocation within a pool follows the same rules as the
+        normal stripe allocator.</para>
       </listitem>
       <listitem>
-        <para>OST membership in a pool is flexible, and can change over time.</para>
+        <para>OST membership in a pool is flexible, and can change over
+        time.</para>
       </listitem>
     </itemizedlist>
-    <para>When an OST pool is defined, it can be used to allocate files. When file or directory striping is set to a pool, only OSTs in the pool are candidates for striping. If a stripe_index is specified which refers to an OST that is not a member of the pool, an error is returned.</para>
-    <para>OST pools are used only at file creation. If the definition of a pool changes (an OST is added or removed or the pool is destroyed), already-created files are not affected.</para>
+    <para>When an OST pool is defined, it can be used to allocate files. When
+    file or directory striping is set to a pool, only OSTs in the pool are
+    candidates for striping. If a stripe_index is specified which refers to an
+    OST that is not a member of the pool, an error is returned.</para>
+    <para>OST pools are used only at file creation. If the definition of a pool
+    changes (an OST is added or removed or the pool is destroyed),
+    already-created files are not affected.</para>
     <note>
-      <para>An error (<literal>EINVAL</literal>) results if you create a file using an empty pool.</para>
+      <para>An error (
+      <literal>EINVAL</literal>) results if you create a file using an empty
+      pool.</para>
     </note>
     <note>
-      <para>If a directory has pool striping set and the pool is subsequently removed, the new files created in this directory have the (non-pool) default striping pattern for that directory applied and no error is returned.</para>
+      <para>If a directory has pool striping set and the pool is subsequently
+      removed, the new files created in this directory have the (non-pool)
+      default striping pattern for that directory applied and no error is
+      returned.</para>
     </note>
     <section remap="h3">
       <title>Working with OST Pools</title>
-      <para>OST pools are defined in the configuration log on the MGS. Use the lctl command to:</para>
+      <para>OST pools are defined in the configuration log on the MGS. Use the
+      lctl command to:</para>
       <itemizedlist>
         <listitem>
           <para>Create/destroy a pool</para>
@@ -220,207 +336,401 @@ filesystem summary:  11.8G 7.3G            3.9G    61%                     \
           <para>List pools and OSTs in a specific pool</para>
         </listitem>
       </itemizedlist>
-      <para>The lctl command MUST be run on the MGS. Another requirement for managing OST pools is to either have the MDT and MGS on the same node or have a Lustre client mounted on the MGS node, if it is separate from the MDS. This is needed to validate the pool commands being run are correct.</para>
+      <para>The lctl command MUST be run on the MGS. Another requirement for
+      managing OST pools is to either have the MDT and MGS on the same node or
+      have a Lustre client mounted on the MGS node, if it is separate from the
+      MDS. This is needed to validate the pool commands being run are
+      correct.</para>
       <caution>
-        <para>Running the <literal>writeconf</literal> command on the MDS erases all pools information (as well as any other parameters set using <literal>lctl conf_param</literal>). We recommend that the pools definitions (and <literal>conf_param</literal> settings) be executed using a script, so they can be reproduced easily after a <literal>writeconf</literal> is performed.</para>
+        <para>Running the 
+        <literal>writeconf</literal> command on the MDS erases all pools
+        information (as well as any other parameters set using 
+        <literal>lctl conf_param</literal>). We recommend that the pools
+        definitions (and 
+        <literal>conf_param</literal> settings) be executed using a script, so
+        they can be reproduced easily after a 
+        <literal>writeconf</literal> is performed.</para>
       </caution>
       <para>To create a new pool, run:</para>
-      <screen>mgs# lctl pool_new <replaceable>fsname</replaceable>.<replaceable>poolname</replaceable></screen>
+      <screen>
+mgs# lctl pool_new 
+<replaceable>fsname</replaceable>.
+<replaceable>poolname</replaceable>
+</screen>
       <note>
         <para>The pool name is an ASCII string up to 16 characters.</para>
       </note>
       <para>To add the named OST to a pool, run:</para>
-      <screen>mgs# lctl pool_add <replaceable>fsname</replaceable>.<replaceable>poolname</replaceable> <replaceable>ost_list</replaceable></screen>
+      <screen>
+mgs# lctl pool_add 
+<replaceable>fsname</replaceable>.
+<replaceable>poolname</replaceable> 
+<replaceable>ost_list</replaceable>
+</screen>
       <para>Where:</para>
       <itemizedlist>
         <listitem>
-          <para><literal><replaceable>ost_list</replaceable> is <replaceable>fsname</replaceable>-OST<replaceable>index_range</replaceable></literal></para>
+          <para>
+            <literal>
+            <replaceable>ost_list</replaceable>is 
+            <replaceable>fsname</replaceable>-OST
+            <replaceable>index_range</replaceable></literal>
+          </para>
         </listitem>
         <listitem>
-          <para><literal><replaceable>index_range</replaceable> is <replaceable>ost_index_start</replaceable>-<replaceable>ost_index_end[,index_range]</replaceable></literal> or <literal><replaceable>ost_index_start</replaceable>-<replaceable>ost_index_end/step</replaceable></literal></para>
+          <para>
+          <literal>
+          <replaceable>index_range</replaceable>is 
+          <replaceable>ost_index_start</replaceable>-
+          <replaceable>ost_index_end[,index_range]</replaceable></literal> or 
+          <literal>
+          <replaceable>ost_index_start</replaceable>-
+          <replaceable>ost_index_end/step</replaceable></literal></para>
         </listitem>
       </itemizedlist>
-      <para>If the leading <literal><replaceable>fsname</replaceable></literal> and/or ending <literal>_UUID</literal> are missing, they are automatically added.</para>
-      <para> For example, to add even-numbered OSTs to <literal>pool1</literal> on file system
-          <literal>lustre</literal>, run a single command (<literal>pool_add</literal>) to add many
-        OSTs to the pool at one time:</para>
-      <para><screen>lctl pool_add lustre.pool1 OST[0-10/2]</screen></para>
+      <para>If the leading 
+      <literal>
+        <replaceable>fsname</replaceable>
+      </literal> and/or ending 
+      <literal>_UUID</literal> are missing, they are automatically added.</para>
+      <para>For example, to add even-numbered OSTs to 
+      <literal>pool1</literal> on file system 
+      <literal>lustre</literal>, run a single command (
+      <literal>pool_add</literal>) to add many OSTs to the pool at one
+      time:</para>
+      <para>
+        <screen>
+lctl pool_add lustre.pool1 OST[0-10/2]
+</screen>
+      </para>
       <note>
-        <para>Each time an OST is added to a pool, a new <literal>llog</literal> configuration record is created. For convenience, you can run a single command.</para>
+        <para>Each time an OST is added to a pool, a new 
+        <literal>llog</literal> configuration record is created. For
+        convenience, you can run a single command.</para>
       </note>
       <para>To remove a named OST from a pool, run:</para>
-      <screen>mgs# lctl pool_remove <replaceable>fsname</replaceable>.<replaceable>poolname</replaceable> <replaceable>ost_list</replaceable></screen>
+      <screen>
+mgs# lctl pool_remove 
+<replaceable>fsname</replaceable>.
+<replaceable>poolname</replaceable> 
+<replaceable>ost_list</replaceable>
+</screen>
       <para>To destroy a pool, run:</para>
-      <screen>mgs# lctl pool_destroy <replaceable>fsname</replaceable>.<replaceable>poolname</replaceable></screen>
+      <screen>
+mgs# lctl pool_destroy 
+<replaceable>fsname</replaceable>.
+<replaceable>poolname</replaceable>
+</screen>
       <note>
-        <para>All OSTs must be removed from a pool before it can be destroyed.</para>
+        <para>All OSTs must be removed from a pool before it can be
+        destroyed.</para>
       </note>
       <para>To list pools in the named file system, run:</para>
-      <screen>mgs# lctl pool_list <replaceable>fsname|pathname</replaceable></screen>
+      <screen>
+mgs# lctl pool_list 
+<replaceable>fsname|pathname</replaceable>
+</screen>
       <para>To list OSTs in a named pool, run:</para>
-      <screen>lctl pool_list <replaceable>fsname</replaceable>.<replaceable>poolname</replaceable></screen>
+      <screen>
+lctl pool_list 
+<replaceable>fsname</replaceable>.
+<replaceable>poolname</replaceable>
+</screen>
       <section remap="h4">
         <title>Using the lfs Command with OST Pools</title>
-        <para>Several lfs commands can be run with OST pools. Use the <literal>lfs setstripe</literal> command to associate a directory with an OST pool. This causes all new regular files and directories in the directory to be created in the pool. The lfs command can be used to list pools in a file system and OSTs in a named pool.</para>
-        <para>To associate a directory with a pool, so all new files and directories will be created in the pool, run:</para>
-        <screen>client# lfs setstripe --pool|-p pool_name <replaceable>filename|dirname</replaceable> </screen>
+        <para>Several lfs commands can be run with OST pools. Use the 
+        <literal>lfs setstripe</literal> command to associate a directory with
+        an OST pool. This causes all new regular files and directories in the
+        directory to be created in the pool. The lfs command can be used to
+        list pools in a file system and OSTs in a named pool.</para>
+        <para>To associate a directory with a pool, so all new files and
+        directories will be created in the pool, run:</para>
+        <screen>
+client# lfs setstripe --pool|-p pool_name 
+<replaceable>filename|dirname</replaceable> 
+</screen>
         <para>To set striping patterns, run:</para>
-        <screen>client# lfs setstripe [--size|-s stripe_size] [--offset|-o start_ost]
+        <screen>
+client# lfs setstripe [--size|-s stripe_size] [--offset|-o start_ost]
            [--count|-c stripe_count] [--pool|-p pool_name]
-           <replaceable>dir|filename</replaceable></screen>
+           
+<replaceable>dir|filename</replaceable>
+</screen>
         <note>
-          <para>If you specify striping with an invalid pool name, because the pool does not exist or the pool name was mistyped, <literal>lfs setstripe</literal> returns an error. Run <literal>lfs pool_list</literal> to make sure the pool exists and the pool name is entered correctly.</para>
+          <para>If you specify striping with an invalid pool name, because the
+          pool does not exist or the pool name was mistyped, 
+          <literal>lfs setstripe</literal> returns an error. Run 
+          <literal>lfs pool_list</literal> to make sure the pool exists and the
+          pool name is entered correctly.</para>
         </note>
         <note>
-          <para>The <literal>--pool</literal> option for lfs setstripe is compatible with other modifiers. For example, you can set striping on a directory to use an explicit starting index.</para>
+          <para>The 
+          <literal>--pool</literal> option for lfs setstripe is compatible with
+          other modifiers. For example, you can set striping on a directory to
+          use an explicit starting index.</para>
         </note>
       </section>
     </section>
     <section remap="h3">
-      <title><indexterm><primary>pools</primary><secondary>usage tips</secondary></indexterm>Tips for Using OST Pools</title>
+      <title>
+      <indexterm>
+        <primary>pools</primary>
+        <secondary>usage tips</secondary>
+      </indexterm>Tips for Using OST Pools</title>
       <para>Here are several suggestions for using OST pools.</para>
       <itemizedlist>
         <listitem>
-          <para>A directory or file can be given an extended attribute (EA), that restricts striping to a pool.</para>
+          <para>A directory or file can be given an extended attribute (EA),
+          that restricts striping to a pool.</para>
         </listitem>
         <listitem>
-          <para>Pools can be used to group OSTs with the same technology or performance (slower or faster), or that are preferred for certain jobs. Examples are SATA OSTs versus SAS OSTs or remote OSTs versus local OSTs.</para>
+          <para>Pools can be used to group OSTs with the same technology or
+          performance (slower or faster), or that are preferred for certain
+          jobs. Examples are SATA OSTs versus SAS OSTs or remote OSTs versus
+          local OSTs.</para>
         </listitem>
         <listitem>
-          <para>A file created in an OST pool tracks the pool by keeping the pool name in the file LOV EA.</para>
+          <para>A file created in an OST pool tracks the pool by keeping the
+          pool name in the file LOV EA.</para>
         </listitem>
       </itemizedlist>
     </section>
   </section>
   <section xml:id="dbdoclet.50438211_11204">
-    <title><indexterm><primary>I/O</primary><secondary>adding an OST</secondary></indexterm>Adding an OST to a Lustre File System</title>
+    <title>
+    <indexterm>
+      <primary>I/O</primary>
+      <secondary>adding an OST</secondary>
+    </indexterm>Adding an OST to a Lustre File System</title>
     <para>To add an OST to existing Lustre file system:</para>
     <orderedlist>
       <listitem>
         <para>Add a new OST by passing on the following commands, run:</para>
-        <screen>oss# mkfs.lustre --fsname=spfs --mgsnode=mds16@tcp0 --ost --index=12 /dev/sda
+        <screen>
+oss# mkfs.lustre --fsname=spfs --mgsnode=mds16@tcp0 --ost --index=12 /dev/sda
 oss# mkdir -p /mnt/test/ost12
-oss# mount -t lustre /dev/sda /mnt/test/ost12</screen>
+oss# mount -t lustre /dev/sda /mnt/test/ost12
+</screen>
       </listitem>
       <listitem>
         <para>Migrate the data (possibly).</para>
-        <para>The file system is quite unbalanced when new empty OSTs are added. New file creations are automatically balanced. If this is a scratch file system or files are pruned at a regular interval, then no further work may be needed. Files existing prior to the expansion can be rebalanced with an in-place copy, which can be done with a simple script.</para>
-        <para>The basic method is to copy existing files to a temporary file, then move the temp file over the old one. This should not be attempted with files which are currently being written to by users or applications. This operation redistributes the stripes over the entire set of OSTs.</para>
+        <para>The file system is quite unbalanced when new empty OSTs are
+        added. New file creations are automatically balanced. If this is a
+        scratch file system or files are pruned at a regular interval, then no
+        further work may be needed. Files existing prior to the expansion can
+        be rebalanced with an in-place copy, which can be done with a simple
+        script.</para>
+        <para>The basic method is to copy existing files to a temporary file,
+        then move the temp file over the old one. This should not be attempted
+        with files which are currently being written to by users or
+        applications. This operation redistributes the stripes over the entire
+        set of OSTs.</para>
         <para>A very clever migration script would do the following:</para>
         <itemizedlist>
           <listitem>
-            <para> Examine the current distribution of data.</para>
+            <para>Examine the current distribution of data.</para>
           </listitem>
           <listitem>
-            <para> Calculate how much data should move from each full OST to the empty ones.</para>
+            <para>Calculate how much data should move from each full OST to the
+            empty ones.</para>
           </listitem>
           <listitem>
-            <para> Search for files on a given full OST (using <literal>lfs getstripe</literal>).</para>
+            <para>Search for files on a given full OST (using 
+            <literal>lfs getstripe</literal>).</para>
           </listitem>
           <listitem>
-            <para> Force the new destination OST (using <literal>lfs setstripe</literal>).</para>
+            <para>Force the new destination OST (using 
+            <literal>lfs setstripe</literal>).</para>
           </listitem>
           <listitem>
-            <para> Copy only enough files to address the imbalance.</para>
+            <para>Copy only enough files to address the imbalance.</para>
           </listitem>
         </itemizedlist>
       </listitem>
     </orderedlist>
-    <para>If a Lustre file system administrator wants to explore this approach further, per-OST
-      disk-usage statistics can be found under
-      <literal>/proc/fs/lustre/osc/*/rpc_stats</literal></para>
+    <para>If a Lustre file system administrator wants to explore this approach
+    further, per-OST disk-usage statistics can be found under 
+    <literal>/proc/fs/lustre/osc/*/rpc_stats</literal></para>
   </section>
   <section xml:id="dbdoclet.50438211_80295">
-    <title><indexterm><primary>I/O</primary><secondary>direct</secondary></indexterm>Performing Direct I/O</title>
-    <para>The Lustre software supports the <literal>O_DIRECT</literal> flag to open.</para>
-    <para>Applications using the <literal>read()</literal> and <literal>write()</literal> calls must supply buffers aligned on a page boundary (usually 4 K). If the alignment is not correct, the call returns <literal>-EINVAL</literal>. Direct I/O may help performance in cases where the client is doing a large amount of I/O and is CPU-bound (CPU utilization 100%).</para>
+    <title>
+    <indexterm>
+      <primary>I/O</primary>
+      <secondary>direct</secondary>
+    </indexterm>Performing Direct I/O</title>
+    <para>The Lustre software supports the 
+    <literal>O_DIRECT</literal> flag to open.</para>
+    <para>Applications using the 
+    <literal>read()</literal> and 
+    <literal>write()</literal> calls must supply buffers aligned on a page
+    boundary (usually 4 K). If the alignment is not correct, the call returns 
+    <literal>-EINVAL</literal>. Direct I/O may help performance in cases where
+    the client is doing a large amount of I/O and is CPU-bound (CPU utilization
+    100%).</para>
     <section remap="h3">
       <title>Making File System Objects Immutable</title>
-      <para>An immutable file or directory is one that cannot be modified, renamed or removed. To do this:</para>
-      <screen>chattr +i <replaceable>file</replaceable></screen>
-      <para>To remove this flag, use <literal>chattr -i</literal></para>
+      <para>An immutable file or directory is one that cannot be modified,
+      renamed or removed. To do this:</para>
+      <screen>
+chattr +i 
+<replaceable>file</replaceable>
+</screen>
+      <para>To remove this flag, use 
+      <literal>chattr -i</literal></para>
     </section>
   </section>
   <section xml:id="dbdoclet.50438211_61024">
     <title>Other I/O Options</title>
-    <para>This section describes other I/O options, including checksums, and the ptlrpcd thread pool.</para>
+    <para>This section describes other I/O options, including checksums, and
+    the ptlrpcd thread pool.</para>
     <section remap="h3">
       <title>Lustre Checksums</title>
-      <para>To guard against network data corruption, a Lustre client can perform two types of data checksums: in-memory (for data in client memory) and wire (for data sent over the network). For each checksum type, a 32-bit checksum of the data read or written on both the client and server is computed, to ensure that the data has not been corrupted in transit over the network. The <literal>ldiskfs</literal> backing file system does NOT do any persistent checksumming, so it does not detect corruption of data in the OST file system.</para>
-      <para>The checksumming feature is enabled, by default, on individual client nodes. If the client or OST detects a checksum mismatch, then an error is logged in the syslog of the form:</para>
-      <screen>LustreError: BAD WRITE CHECKSUM: changed in transit before arrival at OST: \
+      <para>To guard against network data corruption, a Lustre client can
+      perform two types of data checksums: in-memory (for data in client
+      memory) and wire (for data sent over the network). For each checksum
+      type, a 32-bit checksum of the data read or written on both the client
+      and server is computed, to ensure that the data has not been corrupted in
+      transit over the network. The 
+      <literal>ldiskfs</literal> backing file system does NOT do any persistent
+      checksumming, so it does not detect corruption of data in the OST file
+      system.</para>
+      <para>The checksumming feature is enabled, by default, on individual
+      client nodes. If the client or OST detects a checksum mismatch, then an
+      error is logged in the syslog of the form:</para>
+      <screen>
+LustreError: BAD WRITE CHECKSUM: changed in transit before arrival at OST: \
 from 192.168.1.1@tcp inum 8991479/2386814769 object 1127239/0 extent [10240\
-0-106495]</screen>
-      <para>If this happens, the client will re-read or re-write the affected data up to five times to get a good copy of the data over the network. If it is still not possible, then an I/O error is returned to the application.</para>
+0-106495]
+</screen>
+      <para>If this happens, the client will re-read or re-write the affected
+      data up to five times to get a good copy of the data over the network. If
+      it is still not possible, then an I/O error is returned to the
+      application.</para>
       <para>To enable both types of checksums (in-memory and wire), run:</para>
-      <screen>lctl set_param llite.*.checksum_pages=1</screen>
-      <para>To disable both types of checksums (in-memory and wire), run:</para>
-      <screen>lctl set_param llite.*.checksum_pages=0</screen>
+      <screen>
+lctl set_param llite.*.checksum_pages=1
+</screen>
+      <para>To disable both types of checksums (in-memory and wire),
+      run:</para>
+      <screen>
+lctl set_param llite.*.checksum_pages=0
+</screen>
       <para>To check the status of a wire checksum, run:</para>
-      <screen>lctl get_param osc.*.checksums</screen>
+      <screen>
+lctl get_param osc.*.checksums
+</screen>
       <section remap="h4">
         <title>Changing Checksum Algorithms</title>
-        <para>By default, the Lustre software uses the adler32 checksum algorithm, because it is
-          robust and has a lower impact on performance than crc32. The Lustre file system
-          administrator can change the checksum algorithm via <literal>lctl get_param</literal>,
-          depending on what is supported in the kernel.</para>
-        <para>To check which checksum algorithm is being used by the Lustre software, run:</para>
-        <screen>$ lctl get_param osc.*.checksum_type</screen>
+        <para>By default, the Lustre software uses the adler32 checksum
+        algorithm, because it is robust and has a lower impact on performance
+        than crc32. The Lustre file system administrator can change the
+        checksum algorithm via 
+        <literal>lctl get_param</literal>, depending on what is supported in
+        the kernel.</para>
+        <para>To check which checksum algorithm is being used by the Lustre
+        software, run:</para>
+        <screen>
+$ lctl get_param osc.*.checksum_type
+</screen>
         <para>To change the wire checksum algorithm, run:</para>
-        <screen>$ lctl set_param osc.*.checksum_type=<replaceable>algorithm</replaceable></screen>
+        <screen>
+$ lctl set_param osc.*.checksum_type=
+<replaceable>algorithm</replaceable>
+</screen>
         <note>
-          <para>The in-memory checksum always uses the adler32 algorithm, if available, and only falls back to crc32 if adler32 cannot be used.</para>
+          <para>The in-memory checksum always uses the adler32 algorithm, if
+          available, and only falls back to crc32 if adler32 cannot be
+          used.</para>
         </note>
-        <para>In the following example, the <literal>lctl get_param</literal> command is used to
-          determine that the Lustre software is using the adler32 checksum algorithm. Then the
-            <literal>lctl set_param</literal> command is used to change the checksum algorithm to
-          crc32. A second <literal>lctl get_param</literal> command confirms that the crc32 checksum
-          algorithm is now in use.</para>
-        <screen>$ lctl get_param osc.*.checksum_type
+        <para>In the following example, the 
+        <literal>lctl get_param</literal> command is used to determine that the
+        Lustre software is using the adler32 checksum algorithm. Then the 
+        <literal>lctl set_param</literal> command is used to change the checksum
+        algorithm to crc32. A second 
+        <literal>lctl get_param</literal> command confirms that the crc32
+        checksum algorithm is now in use.</para>
+        <screen>
+$ lctl get_param osc.*.checksum_type
 osc.lustre-OST0000-osc-ffff81012b2c48e0.checksum_type=crc32 [adler]
 $ lctl set_param osc.*.checksum_type=crc32
 osc.lustre-OST0000-osc-ffff81012b2c48e0.checksum_type=crc32
 $ lctl get_param osc.*.checksum_type
-osc.lustre-OST0000-osc-ffff81012b2c48e0.checksum_type=[crc32] adler</screen>
+osc.lustre-OST0000-osc-ffff81012b2c48e0.checksum_type=[crc32] adler
+</screen>
       </section>
-</section>
-<section remap="h3">
-<title>Ptlrpc Thread Pool </title>
-<para>Releases prior to Lustre software release 2.2 used two portal RPC daemons for each
-        client/server pair. One daemon handled all synchronous IO requests, and the second daemon
-        handled all asynchronous (non-IO) RPCs. The increasing use of large SMP nodes for Lustre
-        servers exposed some scaling issues. The lack of threads for large SMP nodes resulted in
-        cases where a single CPU would be 100% utilized and other CPUs would be relativity idle.
-        This is especially noticeable when a single client traverses a large directory. </para>
-<para>Lustre software release 2.2.x implements a ptlrpc thread pool, so that multiple threads can be
-        created to serve asynchronous RPC requests. The number of threads spawned is controlled at
-        module load time using module options. By default one thread is spawned per CPU, with a
-        minimum of 2 threads spawned irrespective of module options. </para>
-<para>One of the issues with thread operations is the cost of moving a thread context from one CPU to another with the resulting loss of CPU cache warmth. To reduce this cost, ptlrpc threads can be bound to a CPU. However, if the CPUs are busy, a bound thread may not be able to respond quickly, as the bound CPU may be busy with other tasks and the thread must wait to schedule. </para>
-      <para>Because of these considerations, the pool of ptlrpc threads can be a mixture of bound and unbound threads.   The system operator can balance the thread mixture based on system size and workload. </para>
-<section>
+    </section>
+    <section remap="h3">
+      <title>Ptlrpc Thread Pool</title>
+      <para>Releases prior to Lustre software release 2.2 used two portal RPC
+      daemons for each client/server pair. One daemon handled all synchronous
+      IO requests, and the second daemon handled all asynchronous (non-IO)
+      RPCs. The increasing use of large SMP nodes for Lustre servers exposed
+      some scaling issues. The lack of threads for large SMP nodes resulted in
+      cases where a single CPU would be 100% utilized and other CPUs would be
+      relativity idle. This is especially noticeable when a single client
+      traverses a large directory.</para>
+      <para>Lustre software release 2.2.x implements a ptlrpc thread pool, so
+      that multiple threads can be created to serve asynchronous RPC requests.
+      The number of threads spawned is controlled at module load time using
+      module options. By default one thread is spawned per CPU, with a minimum
+      of 2 threads spawned irrespective of module options.</para>
+      <para>One of the issues with thread operations is the cost of moving a
+      thread context from one CPU to another with the resulting loss of CPU
+      cache warmth. To reduce this cost, ptlrpc threads can be bound to a CPU.
+      However, if the CPUs are busy, a bound thread may not be able to respond
+      quickly, as the bound CPU may be busy with other tasks and the thread
+      must wait to schedule.</para>
+      <para>Because of these considerations, the pool of ptlrpc threads can be
+      a mixture of bound and unbound threads. The system operator can balance
+      the thread mixture based on system size and workload.</para>
+      <section>
         <title>ptlrpcd parameters</title>
-        <para>These parameters should be set in <literal>/etc/modprobe.conf </literal>     or in the <literal> etc/modprobe.d</literal> directory, as options for the ptlrpc module. <screen>options ptlrpcd max_ptlrpcds=XXX
+        <para>These parameters should be set in 
+        <literal>/etc/modprobe.conf</literal> or in the 
+        <literal>etc/modprobe.d</literal> directory, as options for the ptlrpc
+        module. 
+        <screen>
+options ptlrpcd max_ptlrpcds=XXX
 </screen></para>
-<para>Sets the number of ptlrpcd threads created at module load time. The default if not specified is one thread per CPU, including hyper-threaded CPUs.  The lower bound is 2 (old prlrpcd behaviour)  <screen>options ptlrpcd ptlrpcd_bind_policy=[1-4]
+        <para>Sets the number of ptlrpcd threads created at module load time.
+        The default if not specified is one thread per CPU, including
+        hyper-threaded CPUs. The lower bound is 2 (old prlrpcd behaviour) 
+        <screen>
+options ptlrpcd ptlrpcd_bind_policy=[1-4]
 </screen></para>
-<para> Controls the binding of threads to CPUs. There are four policy options. </para>
-	<itemizedlist>
-       <listitem>
-	<para><literal role="bold">PDB_POLICY_NONE </literal>(ptlrpcd_bind_policy=1) All threads are unbound.</para>
-	</listitem>
-        <listitem>
-	<para><literal role="bold">PDB_POLICY_FULL </literal>(ptlrpcd_bind_policy=2) All threads attempt to bind to a CPU. </para>
-	</listitem>
-       <listitem>
-	<para><literal role="bold">PDB_POLICY_PAIR </literal>(ptlrpcd_bind_policy=3) This is the default policy. Threads are allocated as a bound/unbound pair. Each thread (bound or free) has a partner thread. The partnering is used by the ptlrpcd load policy, which determines how threads are allocated to CPUs. </para>
-	</listitem>
-       <listitem>
-	<para><literal role="bold">PDB_POLICY_NEIGHBOR </literal>(ptlrpcd_bind_policy=4) Threads are allocated as a bound/unbound pair. Each thread (bound or free) has two partner threads. </para>
-	</listitem>
-          </itemizedlist>
-
-</section>
-</section>
+        <para>Controls the binding of threads to CPUs. There are four policy
+        options.</para>
+        <itemizedlist>
+          <listitem>
+            <para>
+            <literal role="bold">
+            PDB_POLICY_NONE</literal>(ptlrpcd_bind_policy=1) All threads are
+            unbound.</para>
+          </listitem>
+          <listitem>
+            <para>
+            <literal role="bold">
+            PDB_POLICY_FULL</literal>(ptlrpcd_bind_policy=2) All threads
+            attempt to bind to a CPU.</para>
+          </listitem>
+          <listitem>
+            <para>
+            <literal role="bold">
+            PDB_POLICY_PAIR</literal>(ptlrpcd_bind_policy=3) This is the
+            default policy. Threads are allocated as a bound/unbound pair. Each
+            thread (bound or free) has a partner thread. The partnering is used
+            by the ptlrpcd load policy, which determines how threads are
+            allocated to CPUs.</para>
+          </listitem>
+          <listitem>
+            <para>
+            <literal role="bold">
+            PDB_POLICY_NEIGHBOR</literal>(ptlrpcd_bind_policy=4) Threads are
+            allocated as a bound/unbound pair. Each thread (bound or free) has
+            two partner threads.</para>
+          </listitem>
+        </itemizedlist>
+      </section>
+    </section>
   </section>
 </chapter>
