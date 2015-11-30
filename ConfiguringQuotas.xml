@@ -1,164 +1,249 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configuringquotas">
-  <title xml:id="configuringquotas.title">Configuring and Managing Quotas</title>
-  <para>This chapter describes how to configure quotas and includes the following sections:</para>
+<?xml version='1.0' encoding='utf-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+xml:id="configuringquotas">
+  <title xml:id="configuringquotas.title">Configuring and Managing
+  Quotas</title>
+  <para>This chapter describes how to configure quotas and includes the
+  following sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="quota_configuring"/></para>
+      <para>
+        <xref linkend="quota_configuring" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="enabling_disk_quotas"/></para>
+      <para>
+        <xref linkend="enabling_disk_quotas" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="quota_administration"/></para>
+      <para>
+        <xref linkend="quota_administration" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="quota_allocation"/></para>
+      <para>
+        <xref linkend="quota_allocation" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="quota_interoperability"/></para>
+      <para>
+        <xref linkend="quota_interoperability" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="granted_cache_and_quota_limits"/></para>
+      <para>
+        <xref linkend="granted_cache_and_quota_limits" />
+      </para>
     </listitem>
     <listitem>
-      <para><xref linkend="lustre_quota_statistics"/></para>
+      <para>
+        <xref linkend="lustre_quota_statistics" />
+      </para>
     </listitem>
   </itemizedlist>
   <section xml:id="quota_configuring">
-      <title>
-          <indexterm><primary>Quotas</primary><secondary>configuring</secondary></indexterm>Working with Quotas</title>
-    <para>Quotas allow a system administrator to limit the amount of disk space a user or group can use. Quotas are set by root, and can be specified for individual users and/or groups. Before a file is written to a partition where quotas are set, the quota of the creator&apos;s group is checked. If a quota exists, then the file size counts towards the group&apos;s quota. If no quota exists, then the owner&apos;s user quota is checked before the file is written. Similarly, inode usage for specific functions can be controlled if a user over-uses the allocated space.</para>
-    <para>Lustre quota enforcement differs from standard Linux quota enforcement in several ways:</para>
+    <title>
+    <indexterm>
+      <primary>Quotas</primary>
+      <secondary>configuring</secondary>
+    </indexterm>Working with Quotas</title>
+    <para>Quotas allow a system administrator to limit the amount of disk space
+    a user or group can use. Quotas are set by root, and can be specified for
+    individual users and/or groups. Before a file is written to a partition
+    where quotas are set, the quota of the creator's group is checked. If a
+    quota exists, then the file size counts towards the group's quota. If no
+    quota exists, then the owner's user quota is checked before the file is
+    written. Similarly, inode usage for specific functions can be controlled if
+    a user over-uses the allocated space.</para>
+    <para>Lustre quota enforcement differs from standard Linux quota
+    enforcement in several ways:</para>
     <itemizedlist>
       <listitem>
-        <para>Quotas are administered via the <literal>lfs</literal> and <literal>lctl</literal> commands (post-mount).</para>
+        <para>Quotas are administered via the
+        <literal>lfs</literal> and
+        <literal>lctl</literal> commands (post-mount).</para>
       </listitem>
       <listitem>
-        <para>Quotas are distributed (as the Lustre file system is a distributed file system), which
-          has several ramifications.</para>
+        <para>Quotas are distributed (as the Lustre file system is a
+        distributed file system), which has several ramifications.</para>
       </listitem>
       <listitem>
         <para>Quotas are allocated and consumed in a quantized fashion.</para>
       </listitem>
       <listitem>
-      <para>Client does not set the <literal>usrquota</literal> or <literal>grpquota</literal>
-          options to mount. As of Lustre software release 2.4, space accounting is always enabled by
-          default and quota enforcement can be enabled/disabled on a per-file system basis with
-            <literal>lctl conf_param</literal>. It is worth noting that both <literal>lfs
-            quotaon</literal> and <literal>quota_type</literal> are deprecated as of Lustre software
-          release 2.4.0.</para>
+        <para>Client does not set the
+        <literal>usrquota</literal> or
+        <literal>grpquota</literal> options to mount. As of Lustre software
+        release 2.4, space accounting is always enabled by default and quota
+        enforcement can be enabled/disabled on a per-file system basis with
+        <literal>lctl conf_param</literal>. It is worth noting that both
+        <literal>lfs quotaon</literal> and
+        <literal>quota_type</literal> are deprecated as of Lustre software
+        release 2.4.0.</para>
       </listitem>
     </itemizedlist>
     <caution>
-      <para>Although a quota feature is available in the Lustre software, root quotas are NOT
-        enforced.</para>
-      <para><literal>lfs setquota -u root</literal> (limits are not enforced)</para>
-      <para><literal>lfs quota -u root</literal> (usage includes internal Lustre data that is dynamic in size and does not accurately reflect mount point visible block and inode usage).</para>
+      <para>Although a quota feature is available in the Lustre software, root
+      quotas are NOT enforced.</para>
+      <para>
+      <literal>lfs setquota -u root</literal> (limits are not enforced)</para>
+      <para>
+      <literal>lfs quota -u root</literal> (usage includes internal Lustre data
+      that is dynamic in size and does not accurately reflect mount point
+      visible block and inode usage).</para>
     </caution>
   </section>
   <section xml:id="enabling_disk_quotas">
-    <title><indexterm><primary>Quotas</primary><secondary>enabling disk</secondary></indexterm>Enabling Disk Quotas</title>
-    <para>Prior to Lustre software release 2.4.0, enabling quota involved a full file system scan
-      via <literal>lfs quotacheck</literal>. All file systems formatted with Lustre software release
-      2.4.0 or newer no longer require quotacheck to be run since up-to-date accounting information
-      are now always maintained by the OSD layer, regardless of the quota enforcement status. </para>
+    <title>
+    <indexterm>
+      <primary>Quotas</primary>
+      <secondary>enabling disk</secondary>
+    </indexterm>Enabling Disk Quotas</title>
+    <para>Prior to Lustre software release 2.4.0, enabling quota involved a
+    full file system scan via
+    <literal>lfs quotacheck</literal>. All file systems formatted with Lustre
+    software release 2.4.0 or newer no longer require quotacheck to be run
+    since up-to-date accounting information are now always maintained by the
+    OSD layer, regardless of the quota enforcement status.</para>
     <section remap="h3" condition="l24">
-      <title>Enabling Disk Quotas (Lustre Software Release 2.4 and later)</title>
-      <para>Although quota enforcement is managed by the Lustre software, each OSD implementation
-        relies on the backend file system to maintain per-user/group block and inode usage:</para>
+      <title>Enabling Disk Quotas (Lustre Software Release 2.4 and
+      later)</title>
+      <para>Although quota enforcement is managed by the Lustre software, each
+      OSD implementation relies on the backend file system to maintain
+      per-user/group block and inode usage:</para>
       <itemizedlist>
         <listitem>
-          <para>For ldiskfs backends, <literal>mkfs.lustre</literal> now creates empty quota files
-            and enables the QUOTA feature flag in the superblock which turns quota accounting on at
-            mount time automatically. e2fsck was also modified to fix the quota files when the QUOTA
-            feature flag is present.</para>
+          <para>For ldiskfs backends,
+          <literal>mkfs.lustre</literal> now creates empty quota files and
+          enables the QUOTA feature flag in the superblock which turns quota
+          accounting on at mount time automatically. e2fsck was also modified
+          to fix the quota files when the QUOTA feature flag is present.</para>
         </listitem>
         <listitem>
-          <para>For ZFS backend, accounting ZAPs are created and maintained by the ZFS file system
-            itself. While ZFS tracks per-user and group block usage, it does not handle inode
-            accounting. The ZFS OSD implements its own support for inode tracking. Two options are
-            available:</para>
+          <para>For ZFS backend, accounting ZAPs are created and maintained by
+          the ZFS file system itself. While ZFS tracks per-user and group block
+          usage, it does not handle inode accounting. The ZFS OSD implements
+          its own support for inode tracking. Two options are available:</para>
           <orderedlist>
             <listitem>
-              <para> The ZFS OSD can estimate the number of inodes in-use based on the number of
-                blocks used by a given user or group. This mode can be enabled by running the
-                following command on the server running the target: <literal>lctl set_param
-                  osd-zfs.${FSNAME}-${TARGETNAME}.quota_iused_estimate=1</literal>.</para>
+              <para>The ZFS OSD can estimate the number of inodes in-use based
+              on the number of blocks used by a given user or group. This mode
+              can be enabled by running the following command on the server
+              running the target:
+              <literal>lctl set_param
+              osd-zfs.${FSNAME}-${TARGETNAME}.quota_iused_estimate=1</literal>.</para>
             </listitem>
             <listitem>
-              <para> Similarly to block accounting, dedicated ZAPs are also created the ZFS OSD to
-                maintain per-user and group inode usage. This is the default mode which corresponds
-                to <literal>quota_iused_estimate</literal> set to 0.</para>
+              <para>Similarly to block accounting, dedicated ZAPs are also
+              created the ZFS OSD to maintain per-user and group inode usage.
+              This is the default mode which corresponds to
+              <literal>quota_iused_estimate</literal> set to 0.</para>
             </listitem>
           </orderedlist>
         </listitem>
       </itemizedlist>
-      <para>As a result, <literal>lfs quotacheck</literal> is now deprecated and not required any
-        more when running Lustre software release 2.4 on the servers.</para>
-      <para>Lustre file systems formatted with a Lustre release prior to 2.4.0 can be still safely
-        upgraded to release 2.4.0, but won't have functional space usage report until
-          <literal>tunefs.lustre --quota</literal> is run against all targets. This command sets the
-        QUOTA feature flag in the superblock and runs e2fsck (as a result, the target must be
-        offline) to build the per-UID/GID disk usage database. </para>
+      <para>As a result,
+      <literal>lfs quotacheck</literal> is now deprecated and not required any
+      more when running Lustre software release 2.4 on the servers.</para>
+      <para>Lustre file systems formatted with a Lustre release prior to 2.4.0
+      can be still safely upgraded to release 2.4.0, but won't have functional
+      space usage report until
+      <literal>tunefs.lustre --quota</literal> is run against all targets. This
+      command sets the QUOTA feature flag in the superblock and runs e2fsck (as
+      a result, the target must be offline) to build the per-UID/GID disk usage
+      database.</para>
       <caution>
-        <para>Lustre software release 2.4 and beyond requires a version of e2fsprogs that supports
-          quota (i.e. newer or equal to 1.42.3.wc1) to be installed on the server nodes using
-          ldiskfs backend (e2fsprogs isn't needed with ZFS backend). In general, we recommend to use
-          the latest e2fsprogs version available on <link
-            xl:href="http://downloads.hpdd.intel.com/e2fsprogs/"
-            >http://downloads.hpdd.intel.com/public/e2fsprogs/</link>.</para>
-      
-        <para>The ldiskfs OSD relies on the standard Linux quota to maintain accounting information
-          on disk. As a consequence, the Linux kernel running on the Lustre servers using ldiskfs
-          backend must have <literal>CONFIG_QUOTA</literal>, <literal>CONFIG_QUOTACTL</literal> and
-            <literal>CONFIG_QFMT_V2</literal> enabled.</para>
+        <para>Lustre software release 2.4 and beyond requires a version of
+        e2fsprogs that supports quota (i.e. newer or equal to 1.42.3.wc1) to be
+        installed on the server nodes using ldiskfs backend (e2fsprogs isn't
+        needed with ZFS backend). In general, we recommend to use the latest
+        e2fsprogs version available on
+        <link xl:href="http://downloads.hpdd.intel.com/e2fsprogs/">
+        http://downloads.hpdd.intel.com/public/e2fsprogs/</link>.</para>
+        <para>The ldiskfs OSD relies on the standard Linux quota to maintain
+        accounting information on disk. As a consequence, the Linux kernel
+        running on the Lustre servers using ldiskfs backend must have
+        <literal>CONFIG_QUOTA</literal>,
+        <literal>CONFIG_QUOTACTL</literal> and
+        <literal>CONFIG_QFMT_V2</literal> enabled.</para>
       </caution>
-      <para>As of Lustre software release 2.4.0, quota enforcement is thus turned on/off
-        independently of space accounting which is always enabled. <literal>lfs
-            quota<replaceable>on|off</replaceable></literal> as well as the per-target
-          <literal>quota_type</literal> parameter are deprecated in favor of a single per-file
-        system quota parameter controlling inode/block quota enforcement. Like all permanent
-        parameters, this quota parameter can be set via <literal>lctl conf_param</literal> on the
-        MGS via the following syntax:</para>
-      <screen>lctl conf_param <replaceable>fsname</replaceable>.quota.<replaceable>ost|mdt</replaceable>=<replaceable>u|g|ug|none</replaceable></screen>
+      <para>As of Lustre software release 2.4.0, quota enforcement is thus
+      turned on/off independently of space accounting which is always enabled.
+      <literal>lfs quota
+      <replaceable>on|off</replaceable></literal> as well as the per-target
+      <literal>quota_type</literal> parameter are deprecated in favor of a
+      single per-file system quota parameter controlling inode/block quota
+      enforcement. Like all permanent parameters, this quota parameter can be
+      set via
+      <literal>lctl conf_param</literal> on the MGS via the following
+      syntax:</para>
+      <screen>
+lctl conf_param
+<replaceable>fsname</replaceable>.quota.
+<replaceable>ost|mdt</replaceable>=
+<replaceable>u|g|ug|none</replaceable>
+</screen>
       <itemizedlist>
         <listitem>
-          <para><literal>ost</literal> -- to configure block quota managed by OSTs</para>
+          <para>
+          <literal>ost</literal>-- to configure block quota managed by
+          OSTs</para>
         </listitem>
         <listitem>
-          <para><literal>mdt</literal> -- to configure inode quota managed by MDTs</para>
+          <para>
+          <literal>mdt</literal>-- to configure inode quota managed by
+          MDTs</para>
         </listitem>
         <listitem>
-          <para><literal>u</literal> -- to enable quota enforcement for users only</para>
+          <para>
+          <literal>u</literal>-- to enable quota enforcement for users
+          only</para>
         </listitem>
         <listitem>
-          <para><literal>g</literal> -- to enable quota enforcement for groups only</para>
+          <para>
+          <literal>g</literal>-- to enable quota enforcement for groups
+          only</para>
         </listitem>
         <listitem>
-          <para><literal>ug</literal> -- to enable quota enforcement for both users and
-            groups</para>
+          <para>
+          <literal>ug</literal>-- to enable quota enforcement for both users
+          and groups</para>
         </listitem>
         <listitem>
-          <para><literal>none</literal> -- to disable quota enforcement for both users and
-            groups</para>
+          <para>
+          <literal>none</literal>-- to disable quota enforcement for both users
+          and groups</para>
         </listitem>
       </itemizedlist>
       <para>Examples:</para>
       <para>To turn on user and group quotas for block only on file system
-          <literal>testfs1</literal>, run:</para>
-      <screen>$ lctl conf_param testfs1.quota.ost=ug</screen>
-      <para>To turn on group quotas for inodes on file system <literal>testfs2</literal>,
-        run:</para>
-      <screen>$ lctl conf_param testfs2.quota.mdt=g</screen>
-      <para>To turn off user and group quotas for both inode and block on file system
-          <literal>testfs3</literal>, run:</para>
-      <screen>$ lctl conf_param testfs3.quota.ost=none</screen>
-      <screen>$ lctl conf_param testfs3.quota.mdt=none</screen>
-      <para>Once the quota parameter set on the MGS, all targets which are part of the file system
-        will be notified of the new quota settings and enable/disable quota enforcement as needed.
-        The per-target enforcement status can still be verified by running the following command on
-        the Lustre servers:</para>
-      <screen>$ lctl get_param osd-*.*.quota_slave.info
+      <literal>testfs1</literal>, run:</para>
+      <screen>
+$ lctl conf_param testfs1.quota.ost=ug
+</screen>
+      <para>To turn on group quotas for inodes on file system
+      <literal>testfs2</literal>, run:</para>
+      <screen>
+$ lctl conf_param testfs2.quota.mdt=g
+</screen>
+      <para>To turn off user and group quotas for both inode and block on file
+      system
+      <literal>testfs3</literal>, run:</para>
+      <screen>
+$ lctl conf_param testfs3.quota.ost=none
+</screen>
+      <screen>
+$ lctl conf_param testfs3.quota.mdt=none
+</screen>
+      <para>Once the quota parameter set on the MGS, all targets which are part
+      of the file system will be notified of the new quota settings and
+      enable/disable quota enforcement as needed. The per-target enforcement
+      status can still be verified by running the following command on the
+      Lustre servers:</para>
+      <screen>
+$ lctl get_param osd-*.*.quota_slave.info
 osd-zfs.testfs-MDT0000.quota_slave.info=
 target name:    testfs-MDT0000
 pool ID:        0
@@ -166,182 +251,359 @@ type:           md
 quota enabled:  ug
 conn to master: setup
 user uptodate:  glb[1],slv[1],reint[0]
-group uptodate: glb[1],slv[1],reint[0]</screen>
+group uptodate: glb[1],slv[1],reint[0]
+</screen>
       <caution>
-        <para>Lustre software release 2.4 comes with a new quota protocol and a new on-disk format,
-          be sure to check the Interoperability section below (see <xref
-            linkend="quota_interoperability"/>.) when migrating to release 2.4</para>
+        <para>Lustre software release 2.4 comes with a new quota protocol and a
+        new on-disk format, be sure to check the Interoperability section below
+        (see
+        <xref linkend="quota_interoperability" />.) when migrating to release
+        2.4</para>
       </caution>
     </section>
     <section remap="h3">
-      <title>Enabling Disk Quotas (Lustre Releases Previous to Release 2.4 )</title>
-      <para><note>
-          <?oxy_custom_start type="oxy_content_highlight" color="255,64,0"?>
-          <para><?oxy_custom_end?>In Lustre software releases previous to release 2.4, when new OSTs
-            are added to the file system, quotas are not automatically propagated to the new OSTs.
-            As a workaround, clear and then reset quotas for each user or group using the
-              <literal>lfs setquota</literal> command. In the example below, quotas are cleared and
-            reset for user <literal>bob</literal> on file system <literal>testfs</literal>:
-            <screen>$ lfs setquota -u bob -b 0 -B 0 -i 0 -I 0 /mnt/testfs 
-$ lfs setquota -u bob -b 307200 -B 309200 -i 10000 -I 11000 /mnt/testfs</screen></para>
-        </note>For Lustre software releases older than release 2.4, <literal>lfs
-          quotacheck</literal> must be first run from a client node to create quota files on the
-        Lustre targets (i.e. the MDT and OSTs). <literal>lfs quotacheck</literal> requires the file
-        system to be quiescent (i.e. no modifying operations like write, truncate, create or delete
-        should run concurrently). Failure to follow this caution may result in inaccurate user/group
-        disk usage. Operations that do not change Lustre files (such as read or mount) are okay to
-        run. <literal>lfs quotacheck</literal> performs a scan on all the Lustre targets to
-        calculates the block/inode usage for each user/group. If the Lustre file system has many
-        files, <literal>quotacheck</literal> may take a long time to complete. Several options can
-        be passed to <literal>lfs quotacheck</literal>:</para>
-      <screen># lfs quotacheck -ug /mnt/testfs</screen>
+      <title>Enabling Disk Quotas (Lustre Releases Previous to Release 2.4
+      )</title>
+      <para>
+      <note>
+        <?oxy_custom_start type="oxy_content_highlight" color="255,64,0"?>
+        <para><?oxy_custom_end?>
+        In Lustre software releases previous to release 2.4, when new OSTs are
+        added to the file system, quotas are not automatically propagated to
+        the new OSTs. As a workaround, clear and then reset quotas for each
+        user or group using the
+        <literal>lfs setquota</literal> command. In the example below, quotas
+        are cleared and reset for user
+        <literal>bob</literal> on file system
+        <literal>testfs</literal>:
+        <screen>
+$ lfs setquota -u bob -b 0 -B 0 -i 0 -I 0 /mnt/testfs
+$ lfs setquota -u bob -b 307200 -B 309200 -i 10000 -I 11000 /mnt/testfs
+</screen></para>
+      </note>For Lustre software releases older than release 2.4,
+      <literal>lfs quotacheck</literal> must be first run from a client node to
+      create quota files on the Lustre targets (i.e. the MDT and OSTs).
+      <literal>lfs quotacheck</literal> requires the file system to be quiescent
+      (i.e. no modifying operations like write, truncate, create or delete
+      should run concurrently). Failure to follow this caution may result in
+      inaccurate user/group disk usage. Operations that do not change Lustre
+      files (such as read or mount) are okay to run.
+      <literal>lfs quotacheck</literal> performs a scan on all the Lustre
+      targets to calculates the block/inode usage for each user/group. If the
+      Lustre file system has many files,
+      <literal>quotacheck</literal> may take a long time to complete. Several
+      options can be passed to
+      <literal>lfs quotacheck</literal>:</para>
+      <screen>
+# lfs quotacheck -ug /mnt/testfs
+</screen>
       <itemizedlist>
         <listitem>
-          <para><literal>u</literal> -- checks the user disk quota information</para>
+          <para>
+          <literal>u</literal>-- checks the user disk quota information</para>
         </listitem>
         <listitem>
-          <para><literal>g</literal> -- checks the group disk quota information</para>
+          <para>
+          <literal>g</literal>-- checks the group disk quota information</para>
         </listitem>
       </itemizedlist>
-      <para>By default, quota is turned on after <literal>quotacheck</literal> completes. However,
-        this setting isn't persistent and quota will have to be enabled again (via <literal>lfs
-          quotaon</literal>) if one of the Lustre targets is restarted. <literal>lfs
-          quotaoff</literal> is used to turn off quota.</para>
-      <para>To enable quota permanently with a Lustre software release older than release 2.4, the
-          <literal>quota_type</literal> parameter must be used. This requires setting
-          <literal>mdd.quota_type</literal> and <literal>ost.quota_type</literal>, respectively, on
-        the MDT and OSTs. <literal>quota_type</literal> can be set to the string
-          <literal>u</literal> (user), <literal>g</literal> (group) or <literal>ug</literal> for
-        both users and groups. This parameter can be specified at <literal>mkfs</literal> time
-          (<literal>mkfs.lustre --param mdd.quota_type=ug</literal>) or with
-          <literal>tunefs.lustre</literal>. As an example:</para>
-      <screen>tunefs.lustre --param ost.quota_type=ug $ost_dev</screen>
-      <para>When using <literal>mkfs.lustre --param mdd.quota_type=ug</literal> or
-          <literal>tunefs.lustre --param ost.quota_type=ug</literal>, be sure to run the command on
-        all OSTs and the MDT. Otherwise, abnormal results may occur.</para>
+      <para>By default, quota is turned on after
+      <literal>quotacheck</literal> completes. However, this setting isn't
+      persistent and quota will have to be enabled again (via
+      <literal>lfs quotaon</literal>) if one of the Lustre targets is
+      restarted.
+      <literal>lfs quotaoff</literal> is used to turn off quota.</para>
+      <para>To enable quota permanently with a Lustre software release older
+      than release 2.4, the
+      <literal>quota_type</literal> parameter must be used. This requires
+      setting
+      <literal>mdd.quota_type</literal> and
+      <literal>ost.quota_type</literal>, respectively, on the MDT and OSTs.
+      <literal>quota_type</literal> can be set to the string
+      <literal>u</literal> (user),
+      <literal>g</literal> (group) or
+      <literal>ug</literal> for both users and groups. This parameter can be
+      specified at
+      <literal>mkfs</literal> time (
+      <literal>mkfs.lustre --param mdd.quota_type=ug</literal>) or with
+      <literal>tunefs.lustre</literal>. As an example:</para>
+      <screen>
+tunefs.lustre --param ost.quota_type=ug $ost_dev
+</screen>
+      <para>When using
+      <literal>mkfs.lustre --param mdd.quota_type=ug</literal> or
+      <literal>tunefs.lustre --param ost.quota_type=ug</literal>, be sure to
+      run the command on all OSTs and the MDT. Otherwise, abnormal results may
+      occur.</para>
     </section>
-
   </section>
   <section xml:id="quota_administration">
-    <title><indexterm><primary>Quotas</primary><secondary>creating</secondary></indexterm>Quota Administration</title>
-    <para>Once the file system is up and running, quota limits on blocks and files can be set for
-      both user and group. This is controlled via three quota parameters:</para>
-    <para><emphasis role="bold">Grace period</emphasis> -- The period of time (in seconds) within which users are allowed to exceed their soft limit. There are four types of grace periods:</para>
+    <title>
+    <indexterm>
+      <primary>Quotas</primary>
+      <secondary>creating</secondary>
+    </indexterm>Quota Administration</title>
+    <para>Once the file system is up and running, quota limits on blocks and
+    files can be set for both user and group. This is controlled via three
+    quota parameters:</para>
+    <para>
+    <emphasis role="bold">Grace period</emphasis>-- The period of time (in
+    seconds) within which users are allowed to exceed their soft limit. There
+    are four types of grace periods:</para>
     <itemizedlist>
       <listitem>
-        <para> user block soft limit</para>
+        <para>user block soft limit</para>
       </listitem>
       <listitem>
-        <para> user inode soft limit</para>
+        <para>user inode soft limit</para>
       </listitem>
       <listitem>
-        <para> group block soft limit</para>
+        <para>group block soft limit</para>
       </listitem>
       <listitem>
-        <para> group inode soft limit</para>
+        <para>group inode soft limit</para>
       </listitem>
     </itemizedlist>
-    <para>The grace period applies to all users. The user block soft limit is for all users who are using a blocks quota.</para>
-    <para><emphasis role="bold">Soft limit</emphasis> -- The grace timer is started once the soft limit is exceeded. At this point, the user/group can still allocate block/inode. When the grace time expires and if the user is still above the soft limit, the soft limit becomes a hard limit and the user/group can't allocate any new block/inode any more. The user/group should then delete files to be under the soft limit. The soft limit MUST be smaller than the hard limit. If the soft limit is not needed, it should be set to zero (0).</para>
-      <para><emphasis role="bold">Hard limit</emphasis> -- Block or inode allocation will fail with <literal>EDQUOT</literal> (i.e. quota exceeded) when the hard limit is reached. The hard limit is the absolute limit. When a grace period is set, one can exceed the soft limit within the grace period if under the hard limit.</para>
-    <para>Due to the distributed nature of a Lustre file system and the need to mainain performance
-      under load, those quota parameters may not be 100% accurate. The quota settings can be
-      manipulated via the <literal>lfs</literal> command which includes several options to work with
-      quotas:</para>
+    <para>The grace period applies to all users. The user block soft limit is
+    for all users who are using a blocks quota.</para>
+    <para>
+    <emphasis role="bold">Soft limit</emphasis>-- The grace timer is started
+    once the soft limit is exceeded. At this point, the user/group can still
+    allocate block/inode. When the grace time expires and if the user is still
+    above the soft limit, the soft limit becomes a hard limit and the
+    user/group can't allocate any new block/inode any more. The user/group
+    should then delete files to be under the soft limit. The soft limit MUST be
+    smaller than the hard limit. If the soft limit is not needed, it should be
+    set to zero (0).</para>
+    <para>
+    <emphasis role="bold">Hard limit</emphasis>-- Block or inode allocation
+    will fail with
+    <literal>EDQUOT</literal>(i.e. quota exceeded) when the hard limit is
+    reached. The hard limit is the absolute limit. When a grace period is set,
+    one can exceed the soft limit within the grace period if under the hard
+    limit.</para>
+    <para>Due to the distributed nature of a Lustre file system and the need to
+    mainain performance under load, those quota parameters may not be 100%
+    accurate. The quota settings can be manipulated via the
+    <literal>lfs</literal> command which includes several options to work with
+    quotas:</para>
     <itemizedlist>
       <listitem>
-        <para><varname>quota</varname>     -- displays general quota information (disk usage and limits)</para>
+        <para>
+        <varname>quota</varname>-- displays general quota information (disk
+        usage and limits)</para>
       </listitem>
       <listitem>
-        <para><varname>setquota</varname>  -- specifies quota limits and tunes the grace period. By default, the grace period is one week.</para>
+        <para>
+        <varname>setquota</varname>-- specifies quota limits and tunes the
+        grace period. By default, the grace period is one week.</para>
       </listitem>
     </itemizedlist>
-    <para> Usage:</para>
-    <screen>lfs quota [-q] [-v] [-h] [-o obd_uuid] [-u|-g <replaceable>uname|uid|gname|gid</replaceable>]  <replaceable>/mount_point</replaceable>
-lfs quota -t <replaceable>-u|-g</replaceable> <replaceable>/mount_point</replaceable>
-lfs setquota <replaceable>-u|--user|-g|--group</replaceable> <replaceable>username|groupname</replaceable> [-b <replaceable>block-softlimit</replaceable>] \
-             [-B <replaceable>block_hardlimit</replaceable>] [-i <replaceable>inode_softlimit</replaceable>] \
-             [-I <replaceable>inode_hardlimit</replaceable>] <replaceable>/mount_point</replaceable></screen>
-    <para>To display general quota information (disk usage and limits) for the user running the command and his primary group, run:</para>
-    <screen>$ lfs quota /mnt/testfs </screen>
-    <para>To display general quota information for a specific user (&quot;<literal>bob</literal>&quot; in this example), run:</para>
-    <screen>$ lfs quota -u bob /mnt/testfs</screen>
-    <para>To display general quota information for a specific user (&quot;<literal>bob</literal>&quot; in this example) and detailed quota statistics for each MDT and OST, run:</para>
-    <screen>$ lfs quota -u bob -v /mnt/testfs</screen>
-    <para>To display general quota information for a specific group (&quot;<literal>eng</literal>&quot; in this example), run:</para>
-    <screen>$ lfs quota -g eng /mnt/testfs</screen>
+    <para>Usage:</para>
+    <screen>
+lfs quota [-q] [-v] [-h] [-o obd_uuid] [-u|-g
+<replaceable>uname|uid|gname|gid</replaceable>]
+<replaceable>/mount_point</replaceable>
+lfs quota -t
+<replaceable>-u|-g</replaceable>
+<replaceable>/mount_point</replaceable>
+lfs setquota
+<replaceable>-u|--user|-g|--group</replaceable>
+<replaceable>username|groupname</replaceable> [-b
+<replaceable>block-softlimit</replaceable>] \
+             [-B
+<replaceable>block_hardlimit</replaceable>] [-i
+<replaceable>inode_softlimit</replaceable>] \
+             [-I
+<replaceable>inode_hardlimit</replaceable>]
+<replaceable>/mount_point</replaceable>
+</screen>
+    <para>To display general quota information (disk usage and limits) for the
+    user running the command and his primary group, run:</para>
+    <screen>
+$ lfs quota /mnt/testfs
+</screen>
+    <para>To display general quota information for a specific user ("
+    <literal>bob</literal>" in this example), run:</para>
+    <screen>
+$ lfs quota -u bob /mnt/testfs
+</screen>
+    <para>To display general quota information for a specific user ("
+    <literal>bob</literal>" in this example) and detailed quota statistics for
+    each MDT and OST, run:</para>
+    <screen>
+$ lfs quota -u bob -v /mnt/testfs
+</screen>
+    <para>To display general quota information for a specific group ("
+    <literal>eng</literal>" in this example), run:</para>
+    <screen>
+$ lfs quota -g eng /mnt/testfs
+</screen>
     <para>To display block and inode grace times for user quotas, run:</para>
-    <screen>$ lfs quota -t -u /mnt/testfs</screen>
-    <para>To set user or group quotas for a specific ID (&quot;bob&quot; in this example), run:</para>
-    <screen>$ lfs setquota -u bob -b 307200 -B 309200 -i 10000 -I 11000 /mnt/testfs</screen>
-    <para>In this example, the quota for user &quot;bob&quot; is set to 300 MB (309200*1024) and the hard limit is 11,000 files. Therefore, the inode hard limit should be 11000.</para>
-    <para>The quota command displays the quota allocated and consumed by each Lustre target. Using the previous <literal>setquota</literal> example, running this <literal>lfs</literal> quota command:</para>
-    <screen>$ lfs quota -u bob -v /mnt/testfs </screen>
+    <screen>
+$ lfs quota -t -u /mnt/testfs
+</screen>
+    <para>To set user or group quotas for a specific ID ("bob" in this
+    example), run:</para>
+    <screen>
+$ lfs setquota -u bob -b 307200 -B 309200 -i 10000 -I 11000 /mnt/testfs
+</screen>
+    <para>In this example, the quota for user "bob" is set to 300 MB
+    (309200*1024) and the hard limit is 11,000 files. Therefore, the inode hard
+    limit should be 11000.</para>
+    <para>The quota command displays the quota allocated and consumed by each
+    Lustre target. Using the previous
+    <literal>setquota</literal> example, running this
+    <literal>lfs</literal> quota command:</para>
+    <screen>
+$ lfs quota -u bob -v /mnt/testfs
+</screen>
     <para>displays this command output:</para>
-    <screen>Disk quotas for user bob (uid 6000):
+    <screen>
+Disk quotas for user bob (uid 6000):
 Filesystem          kbytes quota limit grace files quota limit grace
 /mnt/testfs         0      30720 30920 -     0     10000 11000 -
 testfs-MDT0000_UUID 0      -      8192 -     0     -     2560  -
 testfs-OST0000_UUID 0      -      8192 -     0     -     0     -
 testfs-OST0001_UUID 0      -      8192 -     0     -     0     -
-Total allocated inode limit: 2560, total allocated block limit: 24576</screen>
-  <para>Global quota limits are stored in dedicated index files (there is one such index per quota type) on the quota master target (aka QMT). The QMT runs on MDT0000 and exports the global indexes via /proc. The global indexes can thus be dumped via the following command: <screen># lctl get_param qmt.testfs-QMT0000.*.glb-*</screen> The format of global indexes depends on the OSD type. The ldiskfs OSD uses an IAM files while the ZFS OSD creates dedicated ZAPs.</para>
-  <para>Each slave also stores a copy of this global index locally. When the global index is modified on the master, a glimpse callback is issued on the global quota lock to notify all slaves that the global index has been modified. This glimpse callback includes information about the identifier subject to the change. If the global index on the QMT is modified while a slave is disconnected, the index version is used to determine whether the slave copy of the global index isn't uptodate any more. If so, the slave fetches the whole index again and updates the local copy. The slave copy of the global index is also exported via /proc and can be accessed via the following command: <screen>lctl get_param osd-*.*.quota_slave.limit*</screen></para>
-  <note>
-  <para>Prior to 2.4, global quota limits used to be stored in administrative quota files using the on-disk format of the linux quota file. When upgrading MDT0000 to 2.4, those administrative quota files are converted into IAM indexes automatically, conserving existing quota limits previously set by the administrator.</para>
-  </note>
+Total allocated inode limit: 2560, total allocated block limit: 24576
+</screen>
+    <para>Global quota limits are stored in dedicated index files (there is one
+    such index per quota type) on the quota master target (aka QMT). The QMT
+    runs on MDT0000 and exports the global indexes via /proc. The global
+    indexes can thus be dumped via the following command:
+    <screen>
+# lctl get_param qmt.testfs-QMT0000.*.glb-*
+</screen>The format of global indexes depends on the OSD type. The ldiskfs OSD
+uses an IAM files while the ZFS OSD creates dedicated ZAPs.</para>
+    <para>Each slave also stores a copy of this global index locally. When the
+    global index is modified on the master, a glimpse callback is issued on the
+    global quota lock to notify all slaves that the global index has been
+    modified. This glimpse callback includes information about the identifier
+    subject to the change. If the global index on the QMT is modified while a
+    slave is disconnected, the index version is used to determine whether the
+    slave copy of the global index isn't uptodate any more. If so, the slave
+    fetches the whole index again and updates the local copy. The slave copy of
+    the global index is also exported via /proc and can be accessed via the
+    following command:
+    <screen>
+lctl get_param osd-*.*.quota_slave.limit*
+</screen></para>
+    <note>
+      <para>Prior to 2.4, global quota limits used to be stored in
+      administrative quota files using the on-disk format of the linux quota
+      file. When upgrading MDT0000 to 2.4, those administrative quota files are
+      converted into IAM indexes automatically, conserving existing quota
+      limits previously set by the administrator.</para>
+    </note>
   </section>
   <section xml:id="quota_allocation">
-    <title><indexterm><primary>Quotas</primary><secondary>allocating</secondary></indexterm>Quota Allocation</title>
-    <para>In a Lustre file system, quota must be properly allocated or users may experience
-      unnecessary failures. The file system block quota is divided up among the OSTs within the file
-      system. Each OST requests an allocation which is increased up to the quota limit. The quota
-      allocation is then <emphasis role="italic">quantized</emphasis> to reduce the number of
-      quota-related request traffic.</para>
-    <para>The Lustre quota system distributes quotas from the Quota Master Target (aka QMT). Only one QMT instance is supported for now and only runs on the same node as MDT0000. All OSTs and MDTs set up a Quota Slave Device (aka QSD) which connects to the QMT to allocate/release quota space. The QSD is setup directly from the OSD layer.</para>
-    <para>To reduce quota requests, quota space is initially allocated to QSDs in very large chunks. How much unused quota space can be hold by a target is controlled by the qunit size. When quota space for a given ID is close to exhaustion on the QMT, the qunit size is reduced and QSDs are notified of the new qunit size value via a glimpse callback. Slaves are then responsible for releasing quota space above the new qunit value. The qunit size isn't shrunk indefinitely and there is a minimal value of 1MB for blocks and 1,024 for inodes. This means that the quota space rebalancing process will stop when this mininum value is reached. As a result, quota exceeded can be returned while many slaves still have 1MB or 1,024 inodes of spare quota space.</para>
-    <para>If we look at the <literal>setquota</literal> example again, running this <literal>lfs quota</literal> command:</para>
-    <screen># lfs quota -u bob -v /mnt/testfs
+    <title>
+    <indexterm>
+      <primary>Quotas</primary>
+      <secondary>allocating</secondary>
+    </indexterm>Quota Allocation</title>
+    <para>In a Lustre file system, quota must be properly allocated or users
+    may experience unnecessary failures. The file system block quota is divided
+    up among the OSTs within the file system. Each OST requests an allocation
+    which is increased up to the quota limit. The quota allocation is then
+    <emphasis role="italic">quantized</emphasis>to reduce the number of
+    quota-related request traffic.</para>
+    <para>The Lustre quota system distributes quotas from the Quota Master
+    Target (aka QMT). Only one QMT instance is supported for now and only runs
+    on the same node as MDT0000. All OSTs and MDTs set up a Quota Slave Device
+    (aka QSD) which connects to the QMT to allocate/release quota space. The
+    QSD is setup directly from the OSD layer.</para>
+    <para>To reduce quota requests, quota space is initially allocated to QSDs
+    in very large chunks. How much unused quota space can be hold by a target
+    is controlled by the qunit size. When quota space for a given ID is close
+    to exhaustion on the QMT, the qunit size is reduced and QSDs are notified
+    of the new qunit size value via a glimpse callback. Slaves are then
+    responsible for releasing quota space above the new qunit value. The qunit
+    size isn't shrunk indefinitely and there is a minimal value of 1MB for
+    blocks and 1,024 for inodes. This means that the quota space rebalancing
+    process will stop when this mininum value is reached. As a result, quota
+    exceeded can be returned while many slaves still have 1MB or 1,024 inodes
+    of spare quota space.</para>
+    <para>If we look at the
+    <literal>setquota</literal> example again, running this
+    <literal>lfs quota</literal> command:</para>
+    <screen>
+# lfs quota -u bob -v /mnt/testfs
 </screen>
     <para>displays this command output:</para>
-    <screen>Disk quotas for user bob (uid 500):
+    <screen>
+Disk quotas for user bob (uid 500):
 Filesystem          kbytes quota limit grace       files  quota limit grace
-/mnt/testfs         30720* 30720 30920 6d23h56m44s 10101* 10000 11000 6d23h59m50s
+/mnt/testfs         30720* 30720 30920 6d23h56m44s 10101* 10000 11000
+6d23h59m50s
 testfs-MDT0000_UUID 0      -     0     -           10101  -     10240
 testfs-OST0000_UUID 0      -     1024  -           -      -     -
 testfs-OST0001_UUID 30720* -     29896 -           -      -     -
-Total allocated inode limit: 10240, total allocated block limit: 30920</screen>
-    <para>The total quota limit of 30,920 is allocated to user bob, which is further distributed to two OSTs.</para>
-    <para>Values appended with &apos;<literal>*</literal>&apos; show that the quota limit has been exceeded, causing the following error when trying to write or create a file:</para>
-    <para><screen>$ cp: writing `/mnt/testfs/foo`: Disk quota exceeded.</screen></para>
+Total allocated inode limit: 10240, total allocated block limit: 30920
+</screen>
+    <para>The total quota limit of 30,920 is allocated to user bob, which is
+    further distributed to two OSTs.</para>
+    <para>Values appended with '
+    <literal>*</literal>' show that the quota limit has been exceeded, causing
+    the following error when trying to write or create a file:</para>
+    <para>
+      <screen>
+$ cp: writing `/mnt/testfs/foo`: Disk quota exceeded.
+</screen>
+    </para>
     <note>
-      <para>It is very important to note that the block quota is consumed per OST and the inode quota per MDS. Therefore, when the quota is consumed on one OST (resp. MDT), the client may not be able to create files regardless of the quota available on other OSTs (resp. MDTs).</para>
-      <para>Setting the quota limit below the minimal qunit size may prevent the user/group from all file creation. It is thus recommended to use soft/hard limits which are a multiple of the number of OSTs * the minimal qunit size.</para>
+      <para>It is very important to note that the block quota is consumed per
+      OST and the inode quota per MDS. Therefore, when the quota is consumed on
+      one OST (resp. MDT), the client may not be able to create files
+      regardless of the quota available on other OSTs (resp. MDTs).</para>
+      <para>Setting the quota limit below the minimal qunit size may prevent
+      the user/group from all file creation. It is thus recommended to use
+      soft/hard limits which are a multiple of the number of OSTs * the minimal
+      qunit size.</para>
     </note>
-    <para> To determine the total number of inodes, use <literal>lfs df -i</literal> (and also <literal>lctl get_param *.*.filestotal</literal>). For more information on using the <literal>lfs df -i</literal> command and the command output, see <xref linkend="dbdoclet.50438209_35838"/>.</para>
-    <para>Unfortunately, the <literal>statfs</literal> interface does not report the free inode
-      count directly, but instead reports the total inode and used inode counts. The free inode
-      count is calculated for <literal>df</literal> from (total inodes - used inodes). It is not
-      critical to know the total inode count for a file system. Instead, you should know
-      (accurately), the free inode count and the used inode count for a file system. The Lustre
-      software manipulates the total inode count in order to accurately report the other two
-      values.</para>
+    <para>To determine the total number of inodes, use
+    <literal>lfs df -i</literal>(and also
+    <literal>lctl get_param *.*.filestotal</literal>). For more information on
+    using the
+    <literal>lfs df -i</literal> command and the command output, see
+    <xref linkend="dbdoclet.50438209_35838" />.</para>
+    <para>Unfortunately, the
+    <literal>statfs</literal> interface does not report the free inode count
+    directly, but instead reports the total inode and used inode counts. The
+    free inode count is calculated for
+    <literal>df</literal> from (total inodes - used inodes). It is not critical
+    to know the total inode count for a file system. Instead, you should know
+    (accurately), the free inode count and the used inode count for a file
+    system. The Lustre software manipulates the total inode count in order to
+    accurately report the other two values.</para>
   </section>
   <section xml:id="quota_interoperability">
-    <title><indexterm><primary>Quotas</primary><secondary>Interoperability</secondary></indexterm>Interoperability</title>
-    <para>The new quota protocol introduced in Lustre software release 2.4.0 <emphasis role="bold"
-        >isn't compatible</emphasis> with the old one. As a consequence, <emphasis role="bold">all
-        Lustre servers must be upgraded to release 2.4.0 for quota to be functional</emphasis>.
-      Quota limits set on the Lustre file system prior to the upgrade will be automatically migrated
-      to the new quota index format. As for accounting information with ldiskfs backend, they will
-      be regenerated by running <literal>tunefs.lustre --quota</literal> against all targets. It is
-      worth noting that running <literal>tunefs.lustre --quota</literal> is <emphasis role="bold"
-        >mandatory</emphasis> for all targets formatted with a Lustre software release older than
-      release 2.4.0, otherwise quota enforcement as well as accounting won't be functional.</para>
-    <para>Besides, the quota protocol in release 2.4 takes for granted that the Lustre client
-      supports the <literal>OBD_CONNECT_EINPROGRESS</literal> connect flag. Clients supporting this
-      flag will retry indefinitely when the server returns <literal>EINPROGRESS</literal> in a
-      reply. Here is the list of Lustre client version which are compatible with release 2.4:</para>
+    <title>
+    <indexterm>
+      <primary>Quotas</primary>
+      <secondary>Interoperability</secondary>
+    </indexterm>Interoperability</title>
+    <para>The new quota protocol introduced in Lustre software release 2.4.0
+    <emphasis role="bold">isn't compatible</emphasis>with the old one. As a
+    consequence,
+    <emphasis role="bold">all Lustre servers must be upgraded to release 2.4.0
+    for quota to be functional</emphasis>. Quota limits set on the Lustre file
+    system prior to the upgrade will be automatically migrated to the new quota
+    index format. As for accounting information with ldiskfs backend, they will
+    be regenerated by running
+    <literal>tunefs.lustre --quota</literal> against all targets. It is worth
+    noting that running
+    <literal>tunefs.lustre --quota</literal> is
+    <emphasis role="bold">mandatory</emphasis>for all targets formatted with a
+    Lustre software release older than release 2.4.0, otherwise quota
+    enforcement as well as accounting won't be functional.</para>
+    <para>Besides, the quota protocol in release 2.4 takes for granted that the
+    Lustre client supports the
+    <literal>OBD_CONNECT_EINPROGRESS</literal> connect flag. Clients supporting
+    this flag will retry indefinitely when the server returns
+    <literal>EINPROGRESS</literal> in a reply. Here is the list of Lustre client
+    version which are compatible with release 2.4:</para>
     <itemizedlist>
       <listitem>
         <para>Release 2.3-based clients and beyond</para>
@@ -352,166 +614,256 @@ Total allocated inode limit: 10240, total allocated block limit: 30920</screen>
       <listitem>
         <para>Release 2.1 clients newer or equal to release 2.1.4</para>
       </listitem>
-  </itemizedlist>
+    </itemizedlist>
   </section>
   <section xml:id="granted_cache_and_quota_limits">
-    <title><indexterm><primary>Quotas</primary><secondary>known issues</secondary></indexterm>Granted Cache and Quota Limits</title>
-    <para>In a Lustre file system, granted cache does not respect quota limits. In this situation,
-      OSTs grant cache to a Lustre client to accelerate I/O. Granting cache causes writes to be
-      successful in OSTs, even if they exceed the quota limits, and will overwrite them.</para>
+    <title>
+    <indexterm>
+      <primary>Quotas</primary>
+      <secondary>known issues</secondary>
+    </indexterm>Granted Cache and Quota Limits</title>
+    <para>In a Lustre file system, granted cache does not respect quota limits.
+    In this situation, OSTs grant cache to a Lustre client to accelerate I/O.
+    Granting cache causes writes to be successful in OSTs, even if they exceed
+    the quota limits, and will overwrite them.</para>
     <para>The sequence is:</para>
     <orderedlist>
       <listitem>
         <para>A user writes files to the Lustre file system.</para>
       </listitem>
       <listitem>
-        <para>If the Lustre client has enough granted cache, then it returns &apos;success&apos; to users and arranges the writes to the OSTs.</para>
+        <para>If the Lustre client has enough granted cache, then it returns
+        'success' to users and arranges the writes to the OSTs.</para>
       </listitem>
       <listitem>
-        <para>Because Lustre clients have delivered success to users, the OSTs cannot fail these writes.</para>
+        <para>Because Lustre clients have delivered success to users, the OSTs
+        cannot fail these writes.</para>
       </listitem>
     </orderedlist>
-    <para>Because of granted cache, writes always overwrite quota limitations. For example, if you set a 400 GB quota on user A and use IOR to write for user A from a bundle of clients, you will write much more data than 400 GB, and cause an out-of-quota error (<literal>EDQUOT</literal>).</para>
+    <para>Because of granted cache, writes always overwrite quota limitations.
+    For example, if you set a 400 GB quota on user A and use IOR to write for
+    user A from a bundle of clients, you will write much more data than 400 GB,
+    and cause an out-of-quota error (
+    <literal>EDQUOT</literal>).</para>
     <note>
-      <para>The effect of granted cache on quota limits can be mitigated, but not eradicated. Reduce the maximum amount of dirty data on the clients (minimal value is 1MB):</para>
+      <para>The effect of granted cache on quota limits can be mitigated, but
+      not eradicated. Reduce the maximum amount of dirty data on the clients
+      (minimal value is 1MB):</para>
       <itemizedlist>
         <listitem>
-          <para><literal>lctl set_param osc.*.max_dirty_mb=8</literal></para>
+          <para>
+            <literal>lctl set_param osc.*.max_dirty_mb=8</literal>
+          </para>
         </listitem>
       </itemizedlist>
     </note>
   </section>
   <section xml:id="lustre_quota_statistics">
-    <title><indexterm><primary>Quotas</primary><secondary>statistics</secondary></indexterm>Lustre Quota Statistics</title>
-    <para>The Lustre software includes statistics that monitor quota activity, such as the kinds of
-      quota RPCs sent during a specific period, the average time to complete the RPCs, etc. These
-      statistics are useful to measure performance of a Lustre file system.</para>
-    <para>Each quota statistic consists of a quota event and <literal>min_time</literal>, <literal>max_time</literal> and <literal>sum_time</literal> values for the event.</para>
+    <title>
+    <indexterm>
+      <primary>Quotas</primary>
+      <secondary>statistics</secondary>
+    </indexterm>Lustre Quota Statistics</title>
+    <para>The Lustre software includes statistics that monitor quota activity,
+    such as the kinds of quota RPCs sent during a specific period, the average
+    time to complete the RPCs, etc. These statistics are useful to measure
+    performance of a Lustre file system.</para>
+    <para>Each quota statistic consists of a quota event and
+    <literal>min_time</literal>,
+    <literal>max_time</literal> and
+    <literal>sum_time</literal> values for the event.</para>
     <informaltable frame="all">
       <tgroup cols="2">
-        <colspec colname="c1" colwidth="50*"/>
-        <colspec colname="c2" colwidth="50*"/>
+        <colspec colname="c1" colwidth="50*" />
+        <colspec colname="c2" colwidth="50*" />
         <thead>
           <row>
             <entry>
-              <para><emphasis role="bold">Quota Event</emphasis></para>
+              <para>
+                <emphasis role="bold">Quota Event</emphasis>
+              </para>
             </entry>
             <entry>
-              <para><emphasis role="bold">Description</emphasis></para>
+              <para>
+                <emphasis role="bold">Description</emphasis>
+              </para>
             </entry>
           </row>
         </thead>
         <tbody>
           <row>
             <entry>
-              <para> <emphasis role="bold">sync_acq_req</emphasis></para>
+              <para>
+                <emphasis role="bold">sync_acq_req</emphasis>
+              </para>
             </entry>
             <entry>
-              <para> Quota slaves send a acquiring_quota request and wait for its return.</para>
-            </entry>
-          </row>
-          <row>
-            <entry>
-              <para> <emphasis role="bold">sync_rel_req</emphasis></para>
-            </entry>
-            <entry>
-              <para> Quota slaves send a releasing_quota request and wait for its return.</para>
+              <para>Quota slaves send a acquiring_quota request and wait for
+              its return.</para>
             </entry>
           </row>
           <row>
             <entry>
-              <para> <emphasis role="bold">async_acq_req</emphasis></para>
+              <para>
+                <emphasis role="bold">sync_rel_req</emphasis>
+              </para>
             </entry>
             <entry>
-              <para> Quota slaves send an acquiring_quota request and do not wait for its return.</para>
-            </entry>
-          </row>
-          <row>
-            <entry>
-              <para> <emphasis role="bold">async_rel_req</emphasis></para>
-            </entry>
-            <entry>
-              <para> Quota slaves send a releasing_quota request and do not wait for its return.</para>
+              <para>Quota slaves send a releasing_quota request and wait for
+              its return.</para>
             </entry>
           </row>
           <row>
             <entry>
-              <para> <emphasis role="bold">wait_for_blk_quota (lquota_chkquota)</emphasis></para>
+              <para>
+                <emphasis role="bold">async_acq_req</emphasis>
+              </para>
             </entry>
             <entry>
-              <para> Before data is written to OSTs, the OSTs check if the remaining block quota is sufficient. This is done in the lquota_chkquota function.</para>
-            </entry>
-          </row>
-          <row>
-            <entry>
-              <para> <emphasis role="bold">wait_for_ino_quota (lquota_chkquota)</emphasis></para>
-            </entry>
-            <entry>
-              <para> Before files are created on the MDS, the MDS checks if the remaining inode quota is sufficient. This is done in the lquota_chkquota function.</para>
+              <para>Quota slaves send an acquiring_quota request and do not
+              wait for its return.</para>
             </entry>
           </row>
           <row>
             <entry>
-              <para> <emphasis role="bold">wait_for_blk_quota (lquota_pending_commit)</emphasis></para>
+              <para>
+                <emphasis role="bold">async_rel_req</emphasis>
+              </para>
             </entry>
             <entry>
-              <para> After blocks are written to OSTs, relative quota information is updated. This is done in the lquota_pending_commit function.</para>
-            </entry>
-          </row>
-          <row>
-            <entry>
-              <para> <emphasis role="bold">wait_for_ino_quota (lquota_pending_commit)</emphasis></para>
-            </entry>
-            <entry>
-              <para> After files are created, relative quota information is updated. This is done in the lquota_pending_commit function.</para>
+              <para>Quota slaves send a releasing_quota request and do not wait
+              for its return.</para>
             </entry>
           </row>
           <row>
             <entry>
-              <para> <emphasis role="bold">wait_for_pending_blk_quota_req (qctxt_wait_pending_dqacq)</emphasis></para>
+              <para>
+                <emphasis role="bold">wait_for_blk_quota
+                (lquota_chkquota)</emphasis>
+              </para>
             </entry>
             <entry>
-              <para> On the MDS or OSTs, there is one thread sending a quota request for a specific UID/GID for block quota at any time. At that time, if other threads need to do this too, they should wait. This is done in the qctxt_wait_pending_dqacq function.</para>
-            </entry>
-          </row>
-          <row>
-            <entry>
-              <para> <emphasis role="bold">wait_for_pending_ino_quota_req (qctxt_wait_pending_dqacq)</emphasis></para>
-            </entry>
-            <entry>
-              <para> On the MDS, there is one thread sending a quota request for a specific UID/GID for inode quota at any time. If other threads need to do this too, they should wait. This is done in the qctxt_wait_pending_dqacq function.</para>
+              <para>Before data is written to OSTs, the OSTs check if the
+              remaining block quota is sufficient. This is done in the
+              lquota_chkquota function.</para>
             </entry>
           </row>
           <row>
             <entry>
-              <para> <emphasis role="bold">nowait_for_pending_blk_quota_req (qctxt_wait_pending_dqacq)</emphasis></para>
+              <para>
+                <emphasis role="bold">wait_for_ino_quota
+                (lquota_chkquota)</emphasis>
+              </para>
             </entry>
             <entry>
-              <para> On the MDS or OSTs, there is one thread sending a quota request for a specific UID/GID for block quota at any time. When threads enter qctxt_wait_pending_dqacq, they do not need to wait. This is done in the qctxt_wait_pending_dqacq function.</para>
-            </entry>
-          </row>
-          <row>
-            <entry>
-              <para> <emphasis role="bold">nowait_for_pending_ino_quota_req (qctxt_wait_pending_dqacq)</emphasis></para>
-            </entry>
-            <entry>
-              <para> On the MDS, there is one thread sending a quota request for a specific UID/GID for inode quota at any time. When threads enter qctxt_wait_pending_dqacq, they do not need to wait. This is done in the qctxt_wait_pending_dqacq function.</para>
+              <para>Before files are created on the MDS, the MDS checks if the
+              remaining inode quota is sufficient. This is done in the
+              lquota_chkquota function.</para>
             </entry>
           </row>
           <row>
             <entry>
-              <para> <emphasis role="bold">quota_ctl</emphasis></para>
+              <para>
+                <emphasis role="bold">wait_for_blk_quota
+                (lquota_pending_commit)</emphasis>
+              </para>
             </entry>
             <entry>
-              <para> The quota_ctl statistic is generated when lfs <literal>setquota</literal>, <literal>lfs quota</literal> and so on, are issued.</para>
+              <para>After blocks are written to OSTs, relative quota
+              information is updated. This is done in the lquota_pending_commit
+              function.</para>
             </entry>
           </row>
           <row>
             <entry>
-              <para> <emphasis role="bold">adjust_qunit</emphasis></para>
+              <para>
+                <emphasis role="bold">wait_for_ino_quota
+                (lquota_pending_commit)</emphasis>
+              </para>
             </entry>
             <entry>
-              <para> Each time qunit is adjusted, it is counted.</para>
+              <para>After files are created, relative quota information is
+              updated. This is done in the lquota_pending_commit
+              function.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>
+                <emphasis role="bold">wait_for_pending_blk_quota_req
+                (qctxt_wait_pending_dqacq)</emphasis>
+              </para>
+            </entry>
+            <entry>
+              <para>On the MDS or OSTs, there is one thread sending a quota
+              request for a specific UID/GID for block quota at any time. At
+              that time, if other threads need to do this too, they should
+              wait. This is done in the qctxt_wait_pending_dqacq
+              function.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>
+                <emphasis role="bold">wait_for_pending_ino_quota_req
+                (qctxt_wait_pending_dqacq)</emphasis>
+              </para>
+            </entry>
+            <entry>
+              <para>On the MDS, there is one thread sending a quota request for
+              a specific UID/GID for inode quota at any time. If other threads
+              need to do this too, they should wait. This is done in the
+              qctxt_wait_pending_dqacq function.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>
+                <emphasis role="bold">nowait_for_pending_blk_quota_req
+                (qctxt_wait_pending_dqacq)</emphasis>
+              </para>
+            </entry>
+            <entry>
+              <para>On the MDS or OSTs, there is one thread sending a quota
+              request for a specific UID/GID for block quota at any time. When
+              threads enter qctxt_wait_pending_dqacq, they do not need to wait.
+              This is done in the qctxt_wait_pending_dqacq function.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>
+                <emphasis role="bold">nowait_for_pending_ino_quota_req
+                (qctxt_wait_pending_dqacq)</emphasis>
+              </para>
+            </entry>
+            <entry>
+              <para>On the MDS, there is one thread sending a quota request for
+              a specific UID/GID for inode quota at any time. When threads
+              enter qctxt_wait_pending_dqacq, they do not need to wait. This is
+              done in the qctxt_wait_pending_dqacq function.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>
+                <emphasis role="bold">quota_ctl</emphasis>
+              </para>
+            </entry>
+            <entry>
+              <para>The quota_ctl statistic is generated when lfs
+              <literal>setquota</literal>,
+              <literal>lfs quota</literal> and so on, are issued.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>
+                <emphasis role="bold">adjust_qunit</emphasis>
+              </para>
+            </entry>
+            <entry>
+              <para>Each time qunit is adjusted, it is counted.</para>
             </entry>
           </row>
         </tbody>
@@ -519,23 +871,40 @@ Total allocated inode limit: 10240, total allocated block limit: 30920</screen>
     </informaltable>
     <section remap="h3">
       <title>Interpreting Quota Statistics</title>
-      <para>Quota statistics are an important measure of the performance of a Lustre file system.
-        Interpreting these statistics correctly can help you diagnose problems with quotas, and may
-        indicate adjustments to improve system performance.</para>
+      <para>Quota statistics are an important measure of the performance of a
+      Lustre file system. Interpreting these statistics correctly can help you
+      diagnose problems with quotas, and may indicate adjustments to improve
+      system performance.</para>
       <para>For example, if you run this command on the OSTs:</para>
-      <screen>lctl get_param lquota.testfs-OST0000.stats</screen>
+      <screen>
+lctl get_param lquota.testfs-OST0000.stats
+</screen>
       <para>You will get a result similar to this:</para>
-      <screen>snapshot_time                                1219908615.506895 secs.usecs
+      <screen>
+snapshot_time                                1219908615.506895 secs.usecs
 async_acq_req                              1 samples [us]  32 32 32
 async_rel_req                              1 samples [us]  5 5 5
 nowait_for_pending_blk_quota_req(qctxt_wait_pending_dqacq) 1 samples [us] 2\
  2 2
 quota_ctl                          4 samples [us]  80 3470 4293
 adjust_qunit                               1 samples [us]  70 70 70
-....</screen>
-      <para>In the first line, <literal>snapshot_time</literal> indicates when the statistics were taken. The remaining lines list the quota events and their associated data.</para>
-      <para>In the second line, the <literal>async_acq_req</literal> event occurs one time. The <literal>min_time</literal>, <literal>max_time</literal> and <literal>sum_time</literal> statistics for this event are 32, 32 and 32, respectively. The unit is microseconds (μs).</para>
-      <para>In the fifth line, the quota_ctl event occurs four times. The <literal>min_time</literal>, <literal>max_time</literal> and <literal>sum_time</literal> statistics for this event are 80, 3470 and 4293, respectively. The unit is microseconds (μs).</para>
+....
+</screen>
+      <para>In the first line,
+      <literal>snapshot_time</literal> indicates when the statistics were taken.
+      The remaining lines list the quota events and their associated
+      data.</para>
+      <para>In the second line, the
+      <literal>async_acq_req</literal> event occurs one time. The
+      <literal>min_time</literal>,
+      <literal>max_time</literal> and
+      <literal>sum_time</literal> statistics for this event are 32, 32 and 32,
+      respectively. The unit is microseconds (μs).</para>
+      <para>In the fifth line, the quota_ctl event occurs four times. The
+      <literal>min_time</literal>,
+      <literal>max_time</literal> and
+      <literal>sum_time</literal> statistics for this event are 80, 3470 and
+      4293, respectively. The unit is microseconds (μs).</para>
     </section>
   </section>
 </chapter>
