@@ -11,6 +11,8 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs check <mds|osts|servers>
 .br
+.B lfs data_version [-n] \fB<filename>\fR
+.br
 .B lfs df [-i] [-h] [--lazy] [--pool|-p <fsname>[.<pool>] [path]
 .br
 .B lfs fid2path [--link <linkno>] <fsname|rootpath> <fid> ...
@@ -29,17 +31,30 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs getname [-h]|[path ...]
 .br
-.B lfs getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v] 
+.B lfs getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v]
         \fB[--stripe-count|-c ] [--stripe-index|-i] [--mdt-index|-M]
         \fB[--stripe-size|-S] [--directory|-d]
         \fB[--layout|-L]
         \fB[--pool|-p] [--recursive|-r] [--raw|-R] <dirname|filename> ...\fR
 .br
-.B lfs setstripe [--stripe-size|-S stripe_size] [--stripe-count|-c stripe_count]
-        \fB[--stripe-index|-i start_ost_index] [--pool|-p <poolname>]
-        \fB[--ost-list|-o <ost_indices>] <directory|filename>\fR
+.B lfs migrate \fB-m <mdt_index>\fR
+.IR directory
 .br
-.B lfs setstripe -d <dir>
+.B lfs migrate [\fB-c | --stripe-count <stripe_count>\fR]
+               [\fB-i | --stripe-index <start_ost_idx>\fR]
+               [\fB-S | --stripe-size <stripe_size>\fR]
+               [\fB-p | --pool <pool_name>\fR]
+               [\fB-o | --ost-list <ost_indices>\fR]
+               [\fB-b | --block\fR]
+               [\fB-n | --non-block\fR]
+.IR file|directory
+.br
+.B lfs mkdir [\fB-c | --count <stripe_count>\fR]
+             [\fB-i | --index <mdt_idx>\fR]
+             [\fB-h | --hash-type <hash_name>\fR]
+             [\fB-m | --mode <mode>\fR]
+             [\fB-D | --default\fR]
+.IR directory
 .br
 .B lfs osts
 .RB [ path ]
@@ -71,25 +86,29 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
              \fB<filesystem>\fR
 .br
 .B lfs setquota -t <-u|-g>
-             \fB[--block-grace <block-grace>]
-             \fB[--inode-grace <inode-grace>]
+             \fB[--block-grace <block-grace>]\fR
+             \fB[--inode-grace <inode-grace>]\fR
              \fB<filesystem>\fR
 .br
 .B lfs setquota -t <-u|-g>
-             \fB[-b <block-grace>] [-i <inode-grace>]
+             \fB[-b <block-grace>] [-i <inode-grace>]\fR
              \fB<filesystem>\fR
 .br
+.B lfs setstripe [--stripe-size|-S stripe_size] [--stripe-count|-c stripe_count]
+        \fB[--stripe-index|-i start_ost_index] [--pool|-p <poolname>]
+        \fB[--ost-list|-o <ost_indices>] <directory|filename>\fR
 .br
-.B lfs swap_layouts <filename1> <filename2>
-.br
-.B lfs data_version [-n] \fB<filename>\fR
+.B lfs setstripe -d <dir>
 .br
 .B lfs --version
 .br
 .B lfs help
 .SH DESCRIPTION
 .B lfs
-can be used to create a new file with a specific striping pattern, determine the default striping pattern, gather the extended attributes (object numbers and location) for a specific file. It can be invoked interactively without any arguments or in a non-interactive mode with one of the arguements supported. 
+can be used to create a new file with a specific striping pattern, determine
+the default striping pattern, gather the extended attributes (object numbers
+and location) for a specific file. It can be invoked interactively without any
+arguments or in a non-interactive mode with one of the arguments supported.
 .SH OPTIONS
 The various options supported by lfs are listed and explained below:
 .TP
@@ -102,7 +121,7 @@ interest to a particular consumer <id>, potentially allowing the MDT to
 free up disk space. An <endrec> of 0 indicates the current last record.
 Changelog consumers must be registered on the MDT node using \fBlctl\fR.
 .TP
-.B check 
+.B check
 Display the status of MDS or OSTs (as specified in the command) or all the servers (MDS and OSTs)
 .TP
 .B df [-i] [-h] [--lazy] [--pool|-p <fsname>[.<pool>] [path]
@@ -116,7 +135,7 @@ The \fB--lazy\fR/\fB-l\fR option skips any OST that is currently disconnected
 from the client.  This avoids blocking the \fBdf\fR output if an OST is down,
 and only returns the space on the OSTs that can currently be accessed.
 .TP
-.B find 
+.B find
 To search the directory tree rooted at the given dir/file name for the files that match the given parameters: \fB--atime\fR (file was last accessed N*24 hours ago), \fB--ctime\fR (file's status was last changed N*24 hours ago), \fB--mtime\fR (file's data was last modified N*24 hours ago), \fB--obd\fR (file has an object on a specific OST or OSTs), \fB--size\fR (file has size in bytes, or \fBk\fRilo-, \fBM\fRega-, \fBG\fRiga-, \fBT\fRera-, \fBP\fReta-, or \fBE\fRxabytes if a suffix is given), \fB--type\fR (file has the type: \fBb\fRlock, \fBc\fRharacter, \fBd\fRirectory, \fBp\fRipe, \fBf\fRile, sym\fBl\fRink, \fBs\fRocket, or \fBD\fRoor (Solaris)), \fB--uid\fR (file has specific numeric user ID), \fB--user\fR (file owned by specific user, numeric user ID allowed), \fB--gid\fR (file has specific group ID), \fB--group\fR (file belongs to specific group, numeric group ID allowed), \fB--layout\fR (file has a raid0 layout or is released). The option \fB--maxdepth\fR limits find to decend at most N levels of directory tree. The options \fB--print\fR and \fB--print0\fR print full file name, followed by a newline or NUL character correspondingly.  Using \fB!\fR before an option negates its meaning (\fIfiles NOT matching the parameter\fR).  Using \fB+\fR before a numeric value means \fIfiles with the parameter OR MORE\fR, while \fB-\fR before a numeric value means \fIfiles with the parameter OR LESS\fR.
 .TP
 .B getname [-h]|[path ...]
@@ -125,13 +144,13 @@ instance. If one or more \fBpath\fR entries are provided, then only the
 Lustre instance for these mount points is returned. If the path given is not on
 a Lustre instance 'No such device' is reported.
 .TP
-.B osts 
+.B osts
 .RB [ path ]
 List all the OSTs for all mounted filesystems. If a \fBpath\fR is provided
 that is located on a lustre mounted file system then only the OSTs belonging
 to that filesystem are displayed.
 .TP
-.B getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v] 
+.B getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v]
         \fB[--count | -c ] [--index | -i | --offset | -o  ]
         \fB[--pool | -p ] [--size | -s ] [--directory | -d ]
         \fB[--layout | -L]
@@ -146,7 +165,7 @@ only want specific striping information then the options of
 .BR --offset ,
 .BR --layout ,
 or
-.B --pool  
+.B --pool
 can be used to return only the specific fields.
 .br
 If the
@@ -256,7 +275,7 @@ line, tab-separated.
 .TP
 .B pool_list
 .RI { filesystem }[ .poolname "] | {" pathname }
-List the pools in 
+List the pools in
 .I filesystem
 or
 .IR pathname ,
@@ -301,32 +320,27 @@ Even without -n, race conditions are possible and data version should be
 checked before and after an operation to be confident the data did not change
 during it.
 .TP
-.B mkdir <--index|-i mdt_index> <dir>
-Allocate a new directory on a specified MDT.  
-
-The "lfs mkdir" command is only executable by root unless
-"mdt.*.enable_remote_dir_gid" is set via "lctl set_param" to be either a
-non-zero GID to limit it to a single group (e.g. "operator" or "admin"),
-or "-1" to allow any group to create remote directories.
-
-The root of the file system is on MDT0000, and directories and files inherit the
-MDT of their parent directory unless a different MDT is specified with this
-command.
-
-By default, only directories on MDT0000 can contain directories that are not on
-the same MDT.  However, if "mdt.*.enable_remote_dir" is set non-zero on an MDT
-then it will allow creating remote directories that have parents other than
-MDT0000. This is restricted to avoid creating directory trees that have
-intermediate path components on a series different MDTs and become unavailable
-if any of the intermediate MDTs are offline.
+.B mkdir
+lfs mkdir is documented in the man page: lfs-mkdir(1). NOTE:
+.B lfs setdirstripe
+is an alias of the command
+.B lfs mkdir
+.TP
+.B mv
+lfs mv is deprecated, use lfs
+.B migrate
+instead.
+.TP
+.B migrate
+See lfs-migrate(1).
 .TP
 .B --version
 Output the build version of the lfs utility. Use "lctl lustre_build_version" to get the version of the Lustre kernel modules
 .TP
-.B help 
+.B help
 Provides brief help on the various arguments
 .TP
-.B exit/quit 
+.B exit/quit
 Quit the interactive lfs session
 .SH EXAMPLES
 .TP
@@ -348,16 +362,16 @@ Recursively list all regular files in given directory more than 30 days old
 .B $ lfs find --obd OST2-UUID /mnt/lustre/
 Recursively list all files in a given directory that have objects on OST2-UUID.
 .tP
-.B $ lfs check servers 
+.B $ lfs check servers
 Check the status of all servers (MDT, OST)
 .TP
 .B $ lfs osts
 List all the OSTs
 .TP
-.B $ lfs df -h 
+.B $ lfs df -h
 Lists space usage per OST and MDT in human readable format.
 .TP
-.B $ lfs df -i 
+.B $ lfs df -i
 Lists inode usage per OST and MDT
 .TP
 .B $ lfs df --pool <filesystem>[.<pool>] | <pathname>
@@ -396,5 +410,7 @@ The lfs command is part of the Lustre filesystem.
 .BR lfs-setdirstripe (1),
 .BR lfs-getdirstripe (1),
 .BR lfs-mkdir (1),
+.BR lfs_migrate (1),
+.BR lfs-migrate (1),
 .BR lctl (8),
 .BR lustre (7)

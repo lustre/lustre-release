@@ -356,13 +356,29 @@ command_t cmdlist[] = {
 	{"swap_layouts", lfs_swap_layouts, 0, "Swap layouts between 2 files.\n"
 	 "usage: swap_layouts <path1> <path2>"},
 	{"migrate", lfs_setstripe, 0,
-	 "migrate file/directory between MDTs, or migrate file from one OST "
+	 "migrate a directory between MDTs.\n"
+	 "usage: migrate --mdt-index <mdt_idx> [--verbose|-v] "
+	 "<directory>\n"
+	 "\tmdt_idx:      index of the destination MDT\n"},
+	{"migrate", lfs_setstripe, 0,
+	 "migrate file objects from one OST "
 	 "layout\nto another (may be not safe with concurent writes).\n"
-	 "usage: migrate   [--mdt-index|-m <mdt_idx>] [--verbose|-v] "
-	 "<directory|filename>\n"
-	 "\tmdt_idx:      MDT index to migrate to\n"
-	 " or\n"
-	 MIGRATE_USAGE},
+	 "usage: migrate "
+	 "[--stripe-count|-c] <stripe_count>\n"
+	 "[--stripe-index|-i] <start_ost_index>\n"
+	 "[--stripe-size|-S] <stripe_size>\n"
+	 "[--pool|-p] <pool_name>\n"
+	 "[--ost-list|-o] <ost_indices>\n"
+	 "[--block|-b]\n"
+	 "[--non-block|-n]\n"
+	 "<file|directory>\n"
+	 "\tstripe_count:     number of OSTs to stripe a file over\n"
+	 "\tstripe_ost_index: index of the first OST to stripe a file over\n"
+	 "\tstripe_size:      number of bytes to store before moving to the next OST\n"
+	 "\tpool_name:        name of the predefined pool of OSTs\n"
+	 "\tost_indices:      OSTs to stripe over, in order\n"
+	 "\tblock:            wait for the operation to return before continuing\n"
+	 "\tnon-block:        do not wait for the operation to return.\n"},
 	{"mv", lfs_mv, 0,
 	 "To move directories between MDTs. This command is deprecated, "
 	 "use \"migrate\" instead.\n"
