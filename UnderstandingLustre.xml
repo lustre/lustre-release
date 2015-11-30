@@ -512,6 +512,13 @@ xml:id="understandinglustre">
           machines share storage for two or more MDTs. After the failure of one
           MDS, the remaining MDS begins serving the MDT(s) of the failed
           MDS.</para>
+          <para condition="l28">Since Lustre software release 2.8,
+          multiple MDTs can be employed to share the inode records for files
+          contained in a single directory. A directory for which inode records
+          are distributed across multiple MDTs is known as a <emphasis>striped
+          directory</emphasis>. In the case of a Lustre filesystem the inode
+          records maybe also be referred to as the 'metadata' portion of the
+          file record.</para>
         </listitem>
         <listitem>
           <para>

@@ -5,79 +5,7 @@ xml:id="lustreoperations">
   <title xml:id="lustreoperations.title">Lustre Operations</title>
   <para>Once you have the Lustre file system up and running, you can use the
   procedures in this section to perform these basic Lustre administration
-  tasks:</para>
-  <itemizedlist>
-    <listitem>
-      <para>
-        <xref linkend="dbdoclet.50438194_42877" />
-      </para>
-    </listitem>
-    <listitem>
-      <para>
-        <xref linkend="dbdoclet.50438194_24122" />
-      </para>
-    </listitem>
-    <listitem>
-      <para>
-        <xref linkend="dbdoclet.50438194_84876" />
-      </para>
-    </listitem>
-    <listitem>
-      <para>
-        <xref linkend="dbdoclet.50438194_69255" />
-      </para>
-    </listitem>
-    <listitem>
-      <para>
-        <xref linkend="dbdoclet.50438194_57420" />
-      </para>
-    </listitem>
-    <listitem>
-      <para>
-        <xref linkend="dbdoclet.50438194_54138" />
-      </para>
-    </listitem>
-    <listitem>
-      <para>
-        <xref linkend="dbdoclet.50438194_88063" />
-      </para>
-    </listitem>
-    <listitem>
-      <para>
-        <xref linkend="dbdoclet.lfsmkdir" />
-      </para>
-    </listitem>
-    <listitem>
-      <para>
-        <xref linkend="dbdoclet.50438194_88980" />
-      </para>
-    </listitem>
-    <listitem>
-      <para>
-        <xref linkend="dbdoclet.50438194_41817" />
-      </para>
-    </listitem>
-    <listitem>
-      <para>
-        <xref linkend="dbdoclet.50438194_70905" />
-      </para>
-    </listitem>
-    <listitem>
-      <para>
-        <xref linkend="dbdoclet.50438194_16954" />
-      </para>
-    </listitem>
-    <listitem>
-      <para>
-        <xref linkend="dbdoclet.50438194_69998" />
-      </para>
-    </listitem>
-    <listitem>
-      <para>
-        <xref linkend="dbdoclet.50438194_30872" />
-      </para>
-    </listitem>
-  </itemizedlist>
+  tasks.</para>
   <section xml:id="dbdoclet.50438194_42877">
     <title>
     <indexterm>
@@ -442,16 +370,15 @@ client# mount -t lustre mgsnode@tcp0:/bar /mnt/bar
     unique MDTs. An administrator can allocate a sub-directory to a given MDT
     using the command:</para>
     <screen>
-client# lfs mkdir –i 
-<replaceable>mdt_index</replaceable> 
+client# lfs mkdir –i
+<replaceable>mdt_index</replaceable>
 <replaceable>/mount_point/remote_dir</replaceable>
-        
 </screen>
-    <para>This command will allocate the sub-directory 
-    <literal>remote_dir</literal> onto the MDT of index 
+    <para>This command will allocate the sub-directory
+    <literal>remote_dir</literal> onto the MDT of index
     <literal>mdtindex</literal>. For more information on adding additional MDTs
     and 
-    <literal>mdtindex</literal> see 
+    <literal>mdtindex</literal> see
     <xref linkend='dbdoclet.addmdtindex' />.</para>
     <warning>
       <para>An administrator can allocate remote sub-directories to separate
@@ -460,9 +387,56 @@ client# lfs mkdir –i
       will leave the namespace below it inaccessible. For this reason, by
       default it is only possible to create remote sub-directories off MDT0. To
       relax this restriction and enable remote sub-directories off any MDT, an
-      administrator must issue the command 
-      <literal>lctl set_param mdd.*.enable_remote_dir=1</literal>.</para>
+      administrator must issue the command
+      <literal>lctl set_param mdt.*.enable_remote_dir=1</literal>.</para>
     </warning>
+    <para condition='l28'>With Lustre software version 2.8, a new
+    tunable is available to allow users with a specific group ID to create
+    and delete remote and striped directories. This tunable is
+    <literal>enable_remote_dir_gid</literal>. For example, setting this
+    parameter to the 'wheel' or 'admin' group ID allows users with that GID
+    to create and delete remote and striped directories. Setting this
+    parameter to <literal>-1</literal> on MDT0 to permanently allow any
+    non-root users create and delete remote and striped directories. For
+    example:
+    <screen>lctl set_param -P mdt.*.enable_remote_dir_gid=-1</screen>
+    </para>
+  </section>
+  <section xml:id="dbdoclet.lfsmkdirdne2" condition='l28'>
+    <title>
+    <indexterm>
+      <primary>operations</primary>
+      <secondary>striped directory</secondary>
+    </indexterm>
+    <indexterm>
+      <primary>operations</primary>
+      <secondary>mkdir</secondary>
+    </indexterm>
+    <indexterm>
+      <primary>operations</primary>
+      <secondary>setdirstripe</secondary>
+    </indexterm>
+    <indexterm>
+      <primary>striping</primary>
+      <secondary>metadata</secondary>
+    </indexterm>Creating a directory striped across multiple MDTs</title>
+	<para>Lustre 2.8 enables individual files in a given directory to
+    record their metadata on separate MDTs (a <emphasis>striped
+    directory</emphasis>). The result of this is that metadata requests for
+    files in a striped directory are serviced by multiple MDTs and metadata
+    service load is distributed over all the MDTs that service a given
+    directory. By distributing metadata service load over multiple MDTs,
+    performance can be improved beyond the limit of single MDT
+    performance. Prior to the development of this feature all files in a
+    directory must record their metadata on a single MDT.</para>
+    <para>This command to stripe a directory over
+	<replaceable>mdt_count</replaceable> MDTs is:
+	</para>
+    <screen>
+client# lfs setdirstripe -c
+<replaceable>mdt_count</replaceable>
+<replaceable>/mount_point/new_directory</replaceable>
+</screen>
   </section>
   <section xml:id="dbdoclet.50438194_88980">
     <title>

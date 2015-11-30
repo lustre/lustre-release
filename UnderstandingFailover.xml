@@ -150,7 +150,7 @@ xml:id="understandingfailover">
       <listitem>
         <para>For MDT failover, two MDSs can be configured to serve the same
         MDT. Only one MDS node can serve an MDT at a time.</para>
-        <para condition="l24">Lustresoftware release 2.4 allows multiple MDTs.
+        <para condition="l24">Lustre software release 2.4 allows multiple MDTs.
         By placing two or more MDT partitions on storage shared by two MDSs,
         one MDS can fail and the remaining MDS can begin serving the unserved
         MDT. This is described as an active/active failover pair.</para>
