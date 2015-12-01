@@ -1419,6 +1419,7 @@ static inline gni_return_t kgnilnd_mem_register(
 	switch (rrc)  {
 	case GNI_RC_SUCCESS:
 	case GNI_RC_ERROR_RESOURCE:
+	case GNI_RC_ERROR_NOMEM:
 		break;
 	case GNI_RC_INVALID_PARAM:
 		GNILND_API_SWBUG(
