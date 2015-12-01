@@ -1,51 +1,31 @@
-<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustretuning">
+<?xml version='1.0' encoding='utf-8'?>
+<chapter xmlns="http://docbook.org/ns/docbook"
+xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
+xml:id="lustretuning">
   <title xml:id="lustretuning.title">Tuning a Lustre File System</title>
-  <para>This chapter contains information about tuning a Lustre file system for better performance
-    and includes the following sections:</para>
-  <itemizedlist>
-    <listitem>
-      <para><xref linkend="dbdoclet.50438272_55226"/></para>
-    </listitem>
-    <listitem>
-      <para><xref linkend="dbdoclet.mdstuning"/></para>
-    </listitem>
-    <listitem>
-      <para><xref linkend="dbdoclet.50438272_73839"/></para>
-    </listitem>
-    <listitem>
-      <para><xref linkend="dbdoclet.libcfstuning"/></para>
-    </listitem>
-    <listitem>
-      <para><xref linkend="dbdoclet.lndtuning"/></para>
-    </listitem>
-    <listitem>
-      <para><xref linkend="dbdoclet.nrstuning"/></para>
-    </listitem>
-    <listitem>
-      <para><xref linkend="dbdoclet.50438272_25884"/></para>
-    </listitem>
-    <listitem>
-      <para><xref linkend="dbdoclet.50438272_80545"/></para>
-    </listitem>
-    <listitem>
-      <para><xref linkend="dbdoclet.50438272_45406"/></para>
-    </listitem>
-  </itemizedlist>
+  <para>This chapter contains information about tuning a Lustre file system for
+  better performance.</para>
   <note>
-    <para>Many options in the Lustre software are set by means of kernel module parameters. These
-      parameters are contained in the <literal>/etc/modprobe.d/lustre.conf</literal> file.</para>
+    <para>Many options in the Lustre software are set by means of kernel module
+    parameters. These parameters are contained in the 
+    <literal>/etc/modprobe.d/lustre.conf</literal> file.</para>
   </note>
   <section xml:id="dbdoclet.50438272_55226">
-      <title>
-          <indexterm><primary>tuning</primary></indexterm>
-<indexterm><primary>tuning</primary><secondary>service threads</secondary></indexterm>
-          Optimizing the Number of Service Threads</title>
-    <para>An OSS can have a minimum of two service threads and a maximum of 512 service threads. The
-      number of service threads is a function of how much RAM and how many CPUs are on each OSS node
-      (1 thread / 128MB * num_cpus). If the load on the OSS node is high, new service threads will
-      be started in order to process more requests concurrently, up to 4x the initial number of
-      threads (subject to the maximum of 512). For a 2GB 2-CPU system, the default thread count is
-      32 and the maximum thread count is 128.</para>
+    <title>
+    <indexterm>
+      <primary>tuning</primary>
+    </indexterm>
+    <indexterm>
+      <primary>tuning</primary>
+      <secondary>service threads</secondary>
+    </indexterm>Optimizing the Number of Service Threads</title>
+    <para>An OSS can have a minimum of two service threads and a maximum of 512
+    service threads. The number of service threads is a function of how much
+    RAM and how many CPUs are on each OSS node (1 thread / 128MB * num_cpus).
+    If the load on the OSS node is high, new service threads will be started in
+    order to process more requests concurrently, up to 4x the initial number of
+    threads (subject to the maximum of 512). For a 2GB 2-CPU system, the
+    default thread count is 32 and the maximum thread count is 128.</para>
     <para>Increasing the size of the thread pool may help when:</para>
     <itemizedlist>
       <listitem>
@@ -64,314 +44,568 @@
         <para>Clients are overwhelming the storage capacity</para>
       </listitem>
       <listitem>
-        <para>There are lots of &quot;slow I/O&quot; or similar messages</para>
+        <para>There are lots of "slow I/O" or similar messages</para>
       </listitem>
     </itemizedlist>
-    <para>Increasing the number of I/O threads allows the kernel and storage to aggregate many writes together for more efficient disk I/O. The OSS thread pool is shared--each thread allocates approximately 1.5 MB (maximum RPC size + 0.5 MB) for internal I/O buffers.</para>
-    <para>It is very important to consider memory consumption when increasing the thread pool size. Drives are only able to sustain a certain amount of parallel I/O activity before performance is degraded, due to the high number of seeks and the OST threads just waiting for I/O. In this situation, it may be advisable to decrease the load by decreasing the number of OST threads.</para>
-    <para>Determining the optimum number of OST threads is a process of trial and error, and varies for each particular configuration. Variables include the number of OSTs on each OSS, number and speed of disks, RAID configuration, and available RAM. You may want to start with a number of OST threads equal to the number of actual disk spindles on the node. If you use RAID, subtract any dead spindles not used for actual data (e.g., 1 of N of spindles for RAID5, 2 of N spindles for RAID6), and monitor the performance of clients during usual workloads. If performance is degraded, increase the thread count and see how that works until performance is degraded again or you reach satisfactory performance.</para>
+    <para>Increasing the number of I/O threads allows the kernel and storage to
+    aggregate many writes together for more efficient disk I/O. The OSS thread
+    pool is shared--each thread allocates approximately 1.5 MB (maximum RPC
+    size + 0.5 MB) for internal I/O buffers.</para>
+    <para>It is very important to consider memory consumption when increasing
+    the thread pool size. Drives are only able to sustain a certain amount of
+    parallel I/O activity before performance is degraded, due to the high
+    number of seeks and the OST threads just waiting for I/O. In this
+    situation, it may be advisable to decrease the load by decreasing the
+    number of OST threads.</para>
+    <para>Determining the optimum number of OST threads is a process of trial
+    and error, and varies for each particular configuration. Variables include
+    the number of OSTs on each OSS, number and speed of disks, RAID
+    configuration, and available RAM. You may want to start with a number of
+    OST threads equal to the number of actual disk spindles on the node. If you
+    use RAID, subtract any dead spindles not used for actual data (e.g., 1 of N
+    of spindles for RAID5, 2 of N spindles for RAID6), and monitor the
+    performance of clients during usual workloads. If performance is degraded,
+    increase the thread count and see how that works until performance is
+    degraded again or you reach satisfactory performance.</para>
     <note>
-      <para>If there are too many threads, the latency for individual I/O requests can become very high and should be avoided. Set the desired maximum thread count permanently using the method described above.</para>
+      <para>If there are too many threads, the latency for individual I/O
+      requests can become very high and should be avoided. Set the desired
+      maximum thread count permanently using the method described above.</para>
     </note>
     <section>
-      <title><indexterm><primary>tuning</primary><secondary>OSS threads</secondary></indexterm>Specifying the OSS Service Thread Count</title>
-      <para>The <literal>oss_num_threads</literal> parameter enables the number of OST service threads to be specified at module load time on the OSS nodes:</para>
-      <screen>options ost oss_num_threads={N}</screen>
-      <para>After startup, the minimum and maximum number of OSS thread counts can be set via the <literal>{service}.thread_{min,max,started}</literal> tunable. To change the tunable at runtime, run:</para>
-      <para><screen>lctl {get,set}_param {service}.thread_{min,max,started}</screen></para>
-      <para>Lustre software release 2.3 introduced binding service threads to CPU partition. This
-        works in a similar fashion to binding of threads on MDS. MDS thread tuning is covered in
-          <xref linkend="dbdoclet.mdsbinding"/>.</para>
-    <itemizedlist>
-      <listitem>
-        <para><literal>oss_cpts=[EXPRESSION]</literal> binds the default OSS service on CPTs defined by <literal>[EXPRESSION]</literal>.</para>
-      </listitem>
-      <listitem>
-        <para><literal>oss_io_cpts=[EXPRESSION]</literal> binds the IO OSS service on CPTs defined by <literal>[EXPRESSION]</literal>.</para>
-      </listitem>
-    </itemizedlist>
-
-      <para>For further details, see <xref linkend="dbdoclet.50438271_87260"/>.</para>
-    </section>
-    <section xml:id="dbdoclet.mdstuning">
-      <title><indexterm><primary>tuning</primary><secondary>MDS threads</secondary></indexterm>Specifying the MDS Service Thread Count</title>
-      <para>The <literal>mds_num_threads</literal> parameter enables the number of MDS service threads to be specified at module load time on the MDS node:</para>
-      <screen>options mds mds_num_threads={N}</screen>
-      <para>After startup, the minimum and maximum number of MDS thread counts can be set via the <literal>{service}.thread_{min,max,started}</literal> tunable. To change the tunable at runtime, run:</para>
-      <para><screen>lctl {get,set}_param {service}.thread_{min,max,started}</screen></para>
-      <para>For details, see <xref linkend="dbdoclet.50438271_87260"/>.</para>
-      <para>At this time, no testing has been done to determine the optimal number of MDS threads. The default value varies, based on server size, up to a maximum of 32. The maximum number of threads (<literal>MDS_MAX_THREADS</literal>) is 512.</para>
-      <note>
-        <para>The OSS and MDS automatically start new service threads dynamically, in response to server load within a factor of 4. The default value is calculated the same way as before. Setting the <literal>_mu_threads</literal> module parameter disables automatic thread creation behavior.</para>
-      </note>
-	<para>Lustre software release 2.3 introduced new parameters to provide more control to
-        administrators.</para>
-	    <itemizedlist>
-        <listitem>
-          <para><literal>mds_rdpg_num_threads</literal> controls the number of threads in providing
-            the read page service. The read page service handles file close and readdir
-            operations.</para>
-        </listitem>
-        <listitem>
-          <para><literal>mds_attr_num_threads</literal> controls the number of threads in providing
-            the setattr service to clients running Lustre software release 1.8.</para>
-        </listitem>
-      </itemizedlist>
-	<note><para>Default values for the thread counts are automatically selected. The values are chosen to best exploit the number of CPUs present in the system and to provide best overall performance for typical workloads.</para></note>
-    </section>
-  </section>
-    <section xml:id="dbdoclet.mdsbinding" condition='l23'>
-      <title><indexterm><primary>tuning</primary><secondary>MDS binding</secondary></indexterm>Binding MDS Service Thread to CPU Partitions</title>
-	<para>With the introduction of Node Affinity (<xref linkend="nodeaffdef"/>) in Lustre software
-      release 2.3, MDS threads can be bound to particular CPU partitions (CPTs). Default values for
-      bindings are selected automatically to provide good overall performance for a given CPU count.
-      However, an administrator can deviate from these setting if they choose.</para>
-	    <itemizedlist>
-	      <listitem>
-		<para><literal>mds_num_cpts=[EXPRESSION]</literal> binds the default MDS service threads to CPTs defined by <literal>EXPRESSION</literal>. For example <literal>mdt_num_cpts=[0-3]</literal> will bind the MDS service threads to <literal>CPT[0,1,2,3]</literal>.</para>
-	      </listitem>
-	      <listitem>
-		<para><literal>mds_rdpg_num_cpts=[EXPRESSION]</literal> binds the read page service threads to CPTs defined by <literal>EXPRESSION</literal>. The read page service handles file close and readdir requests. For example <literal>mdt_rdpg_num_cpts=[4]</literal> will bind the read page threads to <literal>CPT4</literal>.</para>
-	      </listitem>
-	      <listitem>
-		<para><literal>mds_attr_num_cpts=[EXPRESSION]</literal> binds the setattr service threads to CPTs defined by <literal>EXPRESSION</literal>.</para>
-	      </listitem>
-	    </itemizedlist>
-  </section>
-  <section xml:id="dbdoclet.50438272_73839">
       <title>
       <indexterm>
-        <primary>LNET</primary>
-        <secondary>tuning</secondary>
-      </indexterm><indexterm>
         <primary>tuning</primary>
-        <secondary>LNET</secondary>
-      </indexterm>Tuning LNET Parameters</title>
-    <para>This section describes LNET tunables, the use of which may be necessary on some systems to
-      improve performance. To test the performance of your Lustre network, see <xref linkend='lnetselftest'/>.</para>
-    <section remap="h3">
-      <title>Transmit and Receive Buffer Size</title>
-      <para>The kernel allocates buffers for sending and receiving messages on a network.</para>
-      <para><literal>ksocklnd</literal> has separate parameters for the transmit and receive buffers.</para>
-      <screen>options ksocklnd tx_buffer_size=0 rx_buffer_size=0
+        <secondary>OSS threads</secondary>
+      </indexterm>Specifying the OSS Service Thread Count</title>
+      <para>The 
+      <literal>oss_num_threads</literal> parameter enables the number of OST
+      service threads to be specified at module load time on the OSS
+      nodes:</para>
+      <screen>
+options ost oss_num_threads={N}
 </screen>
-      <para>If these parameters are left at the default value (0), the system automatically tunes the transmit and receive buffer size. In almost every case, this default produces the best performance. Do not attempt to tune these parameters unless you are a network expert.</para>
-    </section>
-    <section remap="h3">
-      <title>Hardware Interrupts (<literal>enable_irq_affinity</literal>)</title>
-      <para>The hardware interrupts that are generated by network adapters may be handled by any CPU in the system. In some cases, we would like network traffic to remain local to a single CPU to help keep the processor cache warm and minimize the impact of context switches. This is helpful when an SMP system has more than one network interface and ideal when the number of interfaces equals the number of CPUs. To enable the <literal>enable_irq_affinity</literal> parameter, enter:</para>
-      <screen>options ksocklnd enable_irq_affinity=1</screen>
-      <para>In other cases, if you have an SMP platform with a single fast interface such as 10 Gb
-        Ethernet and more than two CPUs, you may see performance improve by turning this parameter
-        off.</para>
-      <screen>options ksocklnd enable_irq_affinity=0</screen>
-      <para>By default, this parameter is off. As always, you should test the performance to compare the impact of changing this parameter.</para>
-    </section>
-	<section condition='l23'><title><indexterm><primary>tuning</primary><secondary>Network interface binding</secondary></indexterm>Binding Network Interface Against CPU Partitions</title>
-	<para>Lustre software release 2.3 and beyond provide enhanced network interface control. The
-        enhancement means that an administrator can bind an interface to one or more CPU partitions.
-        Bindings are specified as options to the LNET modules. For more information on specifying
-        module options, see <xref linkend="dbdoclet.50438293_15350"/></para>
-	<para>For example, <literal>o2ib0(ib0)[0,1]</literal> will ensure that all messages
-        for <literal>o2ib0</literal> will be handled by LND threads executing on
-          <literal>CPT0</literal> and <literal>CPT1</literal>. An additional example might be:
-          <literal>tcp1(eth0)[0]</literal>. Messages for <literal>tcp1</literal> are handled by
-        threads on <literal>CPT0</literal>.</para>
-    </section>
-	<section><title><indexterm><primary>tuning</primary><secondary>Network interface credits</secondary></indexterm>Network Interface Credits</title>
-      <para>Network interface (NI) credits are shared across all CPU partitions (CPT). For example,
-        if a machine has four CPTs and the number of NI credits is 512, then each partition has 128
-        credits. If a large number of CPTs exist on the system, LNET checks and validates the NI
-        credits for each CPT to ensure each CPT has a workable number of credits. For example, if a
-        machine has 16 CPTs and the number of NI credits is 256, then each partition only has 16
-        credits. 16 NI credits is low and could negatively impact performance. As a result, LNET
-        automatically adjusts the credits to 8*<literal>peer_credits</literal>
-          (<literal>peer_credits</literal> is 8 by default), so each partition has 64
-        credits.</para>
-      <para>Increasing the number of <literal>credits</literal>/<literal>peer_credits</literal> can
-        improve the performance of high latency networks (at the cost of consuming more memory) by
-        enabling LNET to send more inflight messages to a specific network/peer and keep the
-        pipeline saturated.</para>
-      <para>An administrator can modify the NI credit count using <literal>ksoclnd</literal> or
-          <literal>ko2iblnd</literal>. In the example below, 256 credits are applied to TCP
-        connections.</para>
-      <screen>ksocklnd credits=256</screen>
-      <para>Applying 256 credits to IB connections can be achieved with:</para>
-      <screen>ko2iblnd credits=256</screen>
-      <note condition="l23">
-        <para>In Lustre software release 2.3 and beyond, LNET may revalidate the NI credits, so the
-          administrator's request may not persist.</para>
-      </note>
-	</section>
-	<section><title><indexterm><primary>tuning</primary><secondary>router buffers</secondary></indexterm>Router Buffers</title>
-      <para>When a node is set up as an LNET router, three pools of buffers are allocated: tiny,
-        small and large. These pools are allocated per CPU partition and are used to buffer messages
-        that arrive at the router to be forwarded to the next hop. The three different buffer sizes
-        accommodate different size messages. </para>
-      <para>If a message arrives that can fit in a tiny buffer then a tiny buffer is used, if a
-        message doesn’t fit in a tiny buffer, but fits in a small buffer, then a small buffer is
-        used. Finally if a message does not fit in either a tiny buffer or a small buffer, a large
-        buffer is used.</para>
-      <para>Router buffers are shared by all CPU partitions. For a machine with a large number of
-        CPTs, the router buffer number may need to be specified manually for best performance. A low
-        number of router buffers risks starving the CPU partitions of resources.</para>
+      <para>After startup, the minimum and maximum number of OSS thread counts
+      can be set via the 
+      <literal>{service}.thread_{min,max,started}</literal> tunable. To change
+      the tunable at runtime, run:</para>
+      <para>
+        <screen>
+lctl {get,set}_param {service}.thread_{min,max,started}
+</screen>
+      </para>
+      <para>Lustre software release 2.3 introduced binding service threads to
+      CPU partition. This works in a similar fashion to binding of threads on
+      MDS. MDS thread tuning is covered in 
+      <xref linkend="dbdoclet.mdsbinding" />.</para>
       <itemizedlist>
         <listitem>
-          <para><literal>tiny_router_buffers</literal>: Zero payload buffers used for signals and
-            acknowledgements.</para>
+          <para>
+          <literal>oss_cpts=[EXPRESSION]</literal> binds the default OSS service
+          on CPTs defined by 
+          <literal>[EXPRESSION]</literal>.</para>
         </listitem>
         <listitem>
-          <para><literal>small_router_buffers</literal>: 4 KB payload buffers for small
-            messages</para>
-        </listitem>
-        <listitem>
-          <para><literal>large_router_buffers</literal>: 1 MB maximum payload buffers, corresponding
-            to the recommended RPC size of 1 MB.</para>
+          <para>
+          <literal>oss_io_cpts=[EXPRESSION]</literal> binds the IO OSS service
+          on CPTs defined by 
+          <literal>[EXPRESSION]</literal>.</para>
         </listitem>
       </itemizedlist>
-      <para>The default setting for router buffers typically results in acceptable performance. LNET
-        automatically sets a default value to reduce the likelihood of resource starvation. The size
-        of a router buffer can be modified as shown in the example below. In this example, the size
-        of the large buffer is modified using the <literal>large_router_buffers</literal>
-        parameter.</para>
-      <screen>lnet large_router_buffers=8192</screen>
-      <note condition="l23">
-        <para>In Lustre software release 2.3 and beyond, LNET may revalidate the router buffer
-          setting, so the administrator's request may not persist.</para>
+      <para>For further details, see 
+      <xref linkend="dbdoclet.50438271_87260" />.</para>
+    </section>
+    <section xml:id="dbdoclet.mdstuning">
+      <title>
+      <indexterm>
+        <primary>tuning</primary>
+        <secondary>MDS threads</secondary>
+      </indexterm>Specifying the MDS Service Thread Count</title>
+      <para>The 
+      <literal>mds_num_threads</literal> parameter enables the number of MDS
+      service threads to be specified at module load time on the MDS
+      node:</para>
+      <screen>
+options mds mds_num_threads={N}
+</screen>
+      <para>After startup, the minimum and maximum number of MDS thread counts
+      can be set via the 
+      <literal>{service}.thread_{min,max,started}</literal> tunable. To change
+      the tunable at runtime, run:</para>
+      <para>
+        <screen>
+lctl {get,set}_param {service}.thread_{min,max,started}
+</screen>
+      </para>
+      <para>For details, see 
+      <xref linkend="dbdoclet.50438271_87260" />.</para>
+      <para>At this time, no testing has been done to determine the optimal
+      number of MDS threads. The default value varies, based on server size, up
+      to a maximum of 32. The maximum number of threads (
+      <literal>MDS_MAX_THREADS</literal>) is 512.</para>
+      <note>
+        <para>The OSS and MDS automatically start new service threads
+        dynamically, in response to server load within a factor of 4. The
+        default value is calculated the same way as before. Setting the 
+        <literal>_mu_threads</literal> module parameter disables automatic
+        thread creation behavior.</para>
       </note>
-	</section>
-	<section><title><indexterm><primary>tuning</primary><secondary>portal round-robin</secondary></indexterm>Portal Round-Robin</title>
-	<para>Portal round-robin defines the policy LNET applies to deliver events and messages to the
-        upper layers. The upper layers are PLRPC service or LNET selftest.</para>
-	<para>If portal round-robin is disabled, LNET will deliver messages to CPTs based on a hash of the
-        source NID. Hence, all messages from a specific peer will be handled by the same CPT. This
-        can reduce data traffic between CPUs. However, for some workloads, this behavior may result
-        in poorly balancing loads across the CPU.</para>
-	<para>If portal round-robin is enabled, LNET will round-robin incoming events across all CPTs. This
-        may balance load better across the CPU but can incur a cross CPU overhead.</para>
-	<para>The current policy can be changed by an administrator with <literal>echo <replaceable>value</replaceable> &gt; /proc/sys/lnet/portal_rotor</literal>. There are four options for <literal><replaceable>value</replaceable></literal>:</para>
+      <para>Lustre software release 2.3 introduced new parameters to provide
+      more control to administrators.</para>
+      <itemizedlist>
+        <listitem>
+          <para>
+          <literal>mds_rdpg_num_threads</literal> controls the number of threads
+          in providing the read page service. The read page service handles
+          file close and readdir operations.</para>
+        </listitem>
+        <listitem>
+          <para>
+          <literal>mds_attr_num_threads</literal> controls the number of threads
+          in providing the setattr service to clients running Lustre software
+          release 1.8.</para>
+        </listitem>
+      </itemizedlist>
+      <note>
+        <para>Default values for the thread counts are automatically selected.
+        The values are chosen to best exploit the number of CPUs present in the
+        system and to provide best overall performance for typical
+        workloads.</para>
+      </note>
+    </section>
+  </section>
+  <section xml:id="dbdoclet.mdsbinding" condition='l23'>
+    <title>
+    <indexterm>
+      <primary>tuning</primary>
+      <secondary>MDS binding</secondary>
+    </indexterm>Binding MDS Service Thread to CPU Partitions</title>
+    <para>With the introduction of Node Affinity (
+    <xref linkend="nodeaffdef" />) in Lustre software release 2.3, MDS threads
+    can be bound to particular CPU partitions (CPTs). Default values for
+    bindings are selected automatically to provide good overall performance for
+    a given CPU count. However, an administrator can deviate from these setting
+    if they choose.</para>
     <itemizedlist>
       <listitem>
-        <para><literal>OFF</literal></para>
-		<para>Disable portal round-robin on all incoming requests.</para>
+        <para>
+        <literal>mds_num_cpts=[EXPRESSION]</literal> binds the default MDS
+        service threads to CPTs defined by 
+        <literal>EXPRESSION</literal>. For example 
+        <literal>mdt_num_cpts=[0-3]</literal> will bind the MDS service threads
+        to 
+        <literal>CPT[0,1,2,3]</literal>.</para>
       </listitem>
       <listitem>
-        <para><literal>ON</literal></para>
-		<para>Enable portal round-robin on all incoming requests.</para>
+        <para>
+        <literal>mds_rdpg_num_cpts=[EXPRESSION]</literal> binds the read page
+        service threads to CPTs defined by 
+        <literal>EXPRESSION</literal>. The read page service handles file close
+        and readdir requests. For example 
+        <literal>mdt_rdpg_num_cpts=[4]</literal> will bind the read page threads
+        to 
+        <literal>CPT4</literal>.</para>
       </listitem>
       <listitem>
-        <para><literal>RR_RT</literal></para>
-		<para>Enable portal round-robin only for routed messages.</para>
-      </listitem>
-      <listitem>
-        <para><literal>HASH_RT</literal></para>
-		<para>Routed messages will be delivered to the upper layer by hash of source NID (instead of NID of router.) This is the default value.</para>
+        <para>
+        <literal>mds_attr_num_cpts=[EXPRESSION]</literal> binds the setattr
+        service threads to CPTs defined by 
+        <literal>EXPRESSION</literal>.</para>
       </listitem>
     </itemizedlist>
-
+  </section>
+  <section xml:id="dbdoclet.50438272_73839">
+    <title>
+    <indexterm>
+      <primary>LNET</primary>
+      <secondary>tuning</secondary>
+    </indexterm>
+    <indexterm>
+      <primary>tuning</primary>
+      <secondary>LNET</secondary>
+    </indexterm>Tuning LNET Parameters</title>
+    <para>This section describes LNET tunables, the use of which may be
+    necessary on some systems to improve performance. To test the performance
+    of your Lustre network, see 
+    <xref linkend='lnetselftest' />.</para>
+    <section remap="h3">
+      <title>Transmit and Receive Buffer Size</title>
+      <para>The kernel allocates buffers for sending and receiving messages on
+      a network.</para>
+      <para>
+      <literal>ksocklnd</literal> has separate parameters for the transmit and
+      receive buffers.</para>
+      <screen>
+options ksocklnd tx_buffer_size=0 rx_buffer_size=0
+</screen>
+      <para>If these parameters are left at the default value (0), the system
+      automatically tunes the transmit and receive buffer size. In almost every
+      case, this default produces the best performance. Do not attempt to tune
+      these parameters unless you are a network expert.</para>
+    </section>
+    <section remap="h3">
+      <title>Hardware Interrupts (
+      <literal>enable_irq_affinity</literal>)</title>
+      <para>The hardware interrupts that are generated by network adapters may
+      be handled by any CPU in the system. In some cases, we would like network
+      traffic to remain local to a single CPU to help keep the processor cache
+      warm and minimize the impact of context switches. This is helpful when an
+      SMP system has more than one network interface and ideal when the number
+      of interfaces equals the number of CPUs. To enable the 
+      <literal>enable_irq_affinity</literal> parameter, enter:</para>
+      <screen>
+options ksocklnd enable_irq_affinity=1
+</screen>
+      <para>In other cases, if you have an SMP platform with a single fast
+      interface such as 10 Gb Ethernet and more than two CPUs, you may see
+      performance improve by turning this parameter off.</para>
+      <screen>
+options ksocklnd enable_irq_affinity=0
+</screen>
+      <para>By default, this parameter is off. As always, you should test the
+      performance to compare the impact of changing this parameter.</para>
+    </section>
+    <section condition='l23'>
+      <title>
+      <indexterm>
+        <primary>tuning</primary>
+        <secondary>Network interface binding</secondary>
+      </indexterm>Binding Network Interface Against CPU Partitions</title>
+      <para>Lustre software release 2.3 and beyond provide enhanced network
+      interface control. The enhancement means that an administrator can bind
+      an interface to one or more CPU partitions. Bindings are specified as
+      options to the LNET modules. For more information on specifying module
+      options, see 
+      <xref linkend="dbdoclet.50438293_15350" /></para>
+      <para>For example, 
+      <literal>o2ib0(ib0)[0,1]</literal> will ensure that all messages for 
+      <literal>o2ib0</literal> will be handled by LND threads executing on 
+      <literal>CPT0</literal> and 
+      <literal>CPT1</literal>. An additional example might be: 
+      <literal>tcp1(eth0)[0]</literal>. Messages for 
+      <literal>tcp1</literal> are handled by threads on 
+      <literal>CPT0</literal>.</para>
+    </section>
+    <section>
+      <title>
+      <indexterm>
+        <primary>tuning</primary>
+        <secondary>Network interface credits</secondary>
+      </indexterm>Network Interface Credits</title>
+      <para>Network interface (NI) credits are shared across all CPU partitions
+      (CPT). For example, if a machine has four CPTs and the number of NI
+      credits is 512, then each partition has 128 credits. If a large number of
+      CPTs exist on the system, LNET checks and validates the NI credits for
+      each CPT to ensure each CPT has a workable number of credits. For
+      example, if a machine has 16 CPTs and the number of NI credits is 256,
+      then each partition only has 16 credits. 16 NI credits is low and could
+      negatively impact performance. As a result, LNET automatically adjusts
+      the credits to 8*
+      <literal>peer_credits</literal>(
+      <literal>peer_credits</literal> is 8 by default), so each partition has 64
+      credits.</para>
+      <para>Increasing the number of 
+      <literal>credits</literal>/
+      <literal>peer_credits</literal> can improve the performance of high
+      latency networks (at the cost of consuming more memory) by enabling LNET
+      to send more inflight messages to a specific network/peer and keep the
+      pipeline saturated.</para>
+      <para>An administrator can modify the NI credit count using 
+      <literal>ksoclnd</literal> or 
+      <literal>ko2iblnd</literal>. In the example below, 256 credits are
+      applied to TCP connections.</para>
+      <screen>
+ksocklnd credits=256
+</screen>
+      <para>Applying 256 credits to IB connections can be achieved with:</para>
+      <screen>
+ko2iblnd credits=256
+</screen>
+      <note condition="l23">
+        <para>In Lustre software release 2.3 and beyond, LNET may revalidate
+        the NI credits, so the administrator's request may not persist.</para>
+      </note>
+    </section>
+    <section>
+      <title>
+      <indexterm>
+        <primary>tuning</primary>
+        <secondary>router buffers</secondary>
+      </indexterm>Router Buffers</title>
+      <para>When a node is set up as an LNET router, three pools of buffers are
+      allocated: tiny, small and large. These pools are allocated per CPU
+      partition and are used to buffer messages that arrive at the router to be
+      forwarded to the next hop. The three different buffer sizes accommodate
+      different size messages.</para>
+      <para>If a message arrives that can fit in a tiny buffer then a tiny
+      buffer is used, if a message doesn’t fit in a tiny buffer, but fits in a
+      small buffer, then a small buffer is used. Finally if a message does not
+      fit in either a tiny buffer or a small buffer, a large buffer is
+      used.</para>
+      <para>Router buffers are shared by all CPU partitions. For a machine with
+      a large number of CPTs, the router buffer number may need to be specified
+      manually for best performance. A low number of router buffers risks
+      starving the CPU partitions of resources.</para>
+      <itemizedlist>
+        <listitem>
+          <para>
+          <literal>tiny_router_buffers</literal>: Zero payload buffers used for
+          signals and acknowledgements.</para>
+        </listitem>
+        <listitem>
+          <para>
+          <literal>small_router_buffers</literal>: 4 KB payload buffers for
+          small messages</para>
+        </listitem>
+        <listitem>
+          <para>
+          <literal>large_router_buffers</literal>: 1 MB maximum payload
+          buffers, corresponding to the recommended RPC size of 1 MB.</para>
+        </listitem>
+      </itemizedlist>
+      <para>The default setting for router buffers typically results in
+      acceptable performance. LNET automatically sets a default value to reduce
+      the likelihood of resource starvation. The size of a router buffer can be
+      modified as shown in the example below. In this example, the size of the
+      large buffer is modified using the 
+      <literal>large_router_buffers</literal> parameter.</para>
+      <screen>
+lnet large_router_buffers=8192
+</screen>
+      <note condition="l23">
+        <para>In Lustre software release 2.3 and beyond, LNET may revalidate
+        the router buffer setting, so the administrator's request may not
+        persist.</para>
+      </note>
+    </section>
+    <section>
+      <title>
+      <indexterm>
+        <primary>tuning</primary>
+        <secondary>portal round-robin</secondary>
+      </indexterm>Portal Round-Robin</title>
+      <para>Portal round-robin defines the policy LNET applies to deliver
+      events and messages to the upper layers. The upper layers are PLRPC
+      service or LNET selftest.</para>
+      <para>If portal round-robin is disabled, LNET will deliver messages to
+      CPTs based on a hash of the source NID. Hence, all messages from a
+      specific peer will be handled by the same CPT. This can reduce data
+      traffic between CPUs. However, for some workloads, this behavior may
+      result in poorly balancing loads across the CPU.</para>
+      <para>If portal round-robin is enabled, LNET will round-robin incoming
+      events across all CPTs. This may balance load better across the CPU but
+      can incur a cross CPU overhead.</para>
+      <para>The current policy can be changed by an administrator with 
+      <literal>echo 
+      <replaceable>value</replaceable>&gt;
+      /proc/sys/lnet/portal_rotor</literal>. There are four options for 
+      <literal>
+        <replaceable>value</replaceable>
+      </literal>:</para>
+      <itemizedlist>
+        <listitem>
+          <para>
+            <literal>OFF</literal>
+          </para>
+          <para>Disable portal round-robin on all incoming requests.</para>
+        </listitem>
+        <listitem>
+          <para>
+            <literal>ON</literal>
+          </para>
+          <para>Enable portal round-robin on all incoming requests.</para>
+        </listitem>
+        <listitem>
+          <para>
+            <literal>RR_RT</literal>
+          </para>
+          <para>Enable portal round-robin only for routed messages.</para>
+        </listitem>
+        <listitem>
+          <para>
+            <literal>HASH_RT</literal>
+          </para>
+          <para>Routed messages will be delivered to the upper layer by hash of
+          source NID (instead of NID of router.) This is the default
+          value.</para>
+        </listitem>
+      </itemizedlist>
     </section>
     <section>
       <title>LNET Peer Health</title>
-      <para>Two options are available to help determine peer health:<itemizedlist>
-          <listitem>
-            <para><literal>peer_timeout</literal> - The timeout (in seconds) before an aliveness
-              query is sent to a peer. For example, if <literal>peer_timeout</literal> is set to
-                <literal>180sec</literal>, an aliveness query is sent to the peer every 180 seconds.
-              This feature only takes effect if the node is configured as an LNET router.</para>
-            <para>In a routed environment, the <literal>peer_timeout</literal> feature should always
-              be on (set to a value in seconds) on routers. If the router checker has been enabled,
-              the feature should be turned off by setting it to 0 on clients and servers.</para>
-            <para>For a non-routed scenario, enabling the <literal>peer_timeout</literal> option
-              provides health information such as whether a peer is alive or not. For example, a
-              client is able to determine if an MGS or OST is up when it sends it a message. If a
-              response is received, the peer is alive; otherwise a timeout occurs when the request
-              is made.</para>
-            <para>In general, <literal>peer_timeout</literal> should be set to no less than the LND
-              timeout setting. For more information about LND timeouts, see <xref
-                xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_c24_nt5_dl"/>.</para>
-            <para>When the <literal>o2iblnd</literal> (IB) driver is used,
-                <literal>peer_timeout</literal> should be at least twice the value of the
-                <literal>ko2iblnd</literal> keepalive option. for more information about keepalive
-              options, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-                linkend="section_ngq_qhy_zl"/>.</para>
-          </listitem>
-          <listitem>
-            <para><literal>avoid_asym_router_failure</literal> – When set to 1, the router checker
-              running on the client or a server periodically pings all the routers corresponding to
-              the NIDs identified in the routes parameter setting on the node to determine the
-              status of each router interface. The default setting is 1. (For more information about
-              the LNET routes parameter, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-                linkend="dbdoclet.50438216_71227"/></para>
-            <para>A router is considered down if any of its NIDs are down. For example, router X has
-              three NIDs: <literal>Xnid1</literal>, <literal>Xnid2</literal>, and
-                <literal>Xnid3</literal>. A client is connected to the router via
-                <literal>Xnid1</literal>. The client has router checker enabled. The router checker
-              periodically sends a ping to the router via <literal>Xnid1</literal>. The router
-              responds to the ping with the status of each of its NIDs. In this case, it responds
-              with <literal>Xnid1=up</literal>, <literal>Xnid2=up</literal>,
-                <literal>Xnid3=down</literal>. If <literal>avoid_asym_router_failure==1</literal>,
-              the router is considered down if any of its NIDs are down, so router X is considered
-              down and will not be used for routing messages. If
-                <literal>avoid_asym_router_failure==0</literal>, router X will continue to be used
-              for routing messages.</para>
-          </listitem>
-        </itemizedlist></para>
-      <para>The following router checker parameters must be set to the maximum value of the
-        corresponding setting for this option on any client or server:<itemizedlist>
-          <listitem>
-            <para><literal>dead_router_check_interval</literal></para>
-          </listitem>
-          <listitem>
-            <para>
-              <literal>live_router_check_interval</literal></para>
-          </listitem>
-          <listitem>
-            <para><literal>router_ping_timeout</literal></para>
-          </listitem>
-        </itemizedlist></para>
-      <para>For example, the <literal>dead_router_check_interval</literal> parameter on any router
-        must be MAX.</para>
+      <para>Two options are available to help determine peer health:
+      <itemizedlist>
+        <listitem>
+          <para>
+          <literal>peer_timeout</literal>- The timeout (in seconds) before an
+          aliveness query is sent to a peer. For example, if 
+          <literal>peer_timeout</literal> is set to 
+          <literal>180sec</literal>, an aliveness query is sent to the peer
+          every 180 seconds. This feature only takes effect if the node is
+          configured as an LNET router.</para>
+          <para>In a routed environment, the 
+          <literal>peer_timeout</literal> feature should always be on (set to a
+          value in seconds) on routers. If the router checker has been enabled,
+          the feature should be turned off by setting it to 0 on clients and
+          servers.</para>
+          <para>For a non-routed scenario, enabling the 
+          <literal>peer_timeout</literal> option provides health information
+          such as whether a peer is alive or not. For example, a client is able
+          to determine if an MGS or OST is up when it sends it a message. If a
+          response is received, the peer is alive; otherwise a timeout occurs
+          when the request is made.</para>
+          <para>In general, 
+          <literal>peer_timeout</literal> should be set to no less than the LND
+          timeout setting. For more information about LND timeouts, see 
+          <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+          linkend="section_c24_nt5_dl" />.</para>
+          <para>When the 
+          <literal>o2iblnd</literal>(IB) driver is used, 
+          <literal>peer_timeout</literal> should be at least twice the value of
+          the 
+          <literal>ko2iblnd</literal> keepalive option. for more information
+          about keepalive options, see 
+          <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+          linkend="section_ngq_qhy_zl" />.</para>
+        </listitem>
+        <listitem>
+          <para>
+          <literal>avoid_asym_router_failure</literal>– When set to 1, the
+          router checker running on the client or a server periodically pings
+          all the routers corresponding to the NIDs identified in the routes
+          parameter setting on the node to determine the status of each router
+          interface. The default setting is 1. (For more information about the
+          LNET routes parameter, see 
+          <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+          linkend="dbdoclet.50438216_71227" /></para>
+          <para>A router is considered down if any of its NIDs are down. For
+          example, router X has three NIDs: 
+          <literal>Xnid1</literal>, 
+          <literal>Xnid2</literal>, and 
+          <literal>Xnid3</literal>. A client is connected to the router via 
+          <literal>Xnid1</literal>. The client has router checker enabled. The
+          router checker periodically sends a ping to the router via 
+          <literal>Xnid1</literal>. The router responds to the ping with the
+          status of each of its NIDs. In this case, it responds with 
+          <literal>Xnid1=up</literal>, 
+          <literal>Xnid2=up</literal>, 
+          <literal>Xnid3=down</literal>. If 
+          <literal>avoid_asym_router_failure==1</literal>, the router is
+          considered down if any of its NIDs are down, so router X is
+          considered down and will not be used for routing messages. If 
+          <literal>avoid_asym_router_failure==0</literal>, router X will
+          continue to be used for routing messages.</para>
+        </listitem>
+      </itemizedlist></para>
+      <para>The following router checker parameters must be set to the maximum
+      value of the corresponding setting for this option on any client or
+      server:
+      <itemizedlist>
+        <listitem>
+          <para>
+            <literal>dead_router_check_interval</literal>
+          </para>
+        </listitem>
+        <listitem>
+          <para>
+            <literal>live_router_check_interval</literal>
+          </para>
+        </listitem>
+        <listitem>
+          <para>
+            <literal>router_ping_timeout</literal>
+          </para>
+        </listitem>
+      </itemizedlist></para>
+      <para>For example, the 
+      <literal>dead_router_check_interval</literal> parameter on any router must
+      be MAX.</para>
     </section>
   </section>
   <section xml:id="dbdoclet.libcfstuning">
-      <title><indexterm><primary>tuning</primary><secondary>libcfs</secondary></indexterm>libcfs Tuning</title>
-<para>By default, the Lustre software will automatically generate CPU partitions (CPT) based on the
-      number of CPUs in the system. The CPT number will be 1 if the online CPU number is less than
-      five.</para>
-        <para>The CPT number can be explicitly set on the libcfs module using <literal>cpu_npartitions=NUMBER</literal>. The value of <literal>cpu_npartitions</literal> must be an integer between 1 and the number of online CPUs.</para>
-<tip><para>Setting CPT to 1 will disable most of the SMP Node Affinity functionality.</para></tip>
-        <section>
-                <title>CPU Partition String Patterns</title>
-        <para>CPU partitions can be described using string pattern notation. For example:</para>
-    <itemizedlist>
-      <listitem>
-        <para><literal>cpu_pattern="0[0,2,4,6] 1[1,3,5,7]</literal></para>
-                <para>Create two CPTs, CPT0 contains CPU[0, 2, 4, 6]. CPT1 contains CPU[1,3,5,7].</para>
-      </listitem>
-      <listitem> <para><literal>cpu_pattern="N 0[0-3] 1[4-7]</literal></para>
-                <para>Create two CPTs, CPT0 contains all CPUs in NUMA node[0-3], CPT1 contains all CPUs in NUMA node [4-7].</para>
-      </listitem>
-    </itemizedlist>
-        <para>The current configuration of the CPU partition can be read from
-          <literal>/proc/sys/lnet/cpu_partitions</literal></para>
-        </section>
+    <title>
+    <indexterm>
+      <primary>tuning</primary>
+      <secondary>libcfs</secondary>
+    </indexterm>libcfs Tuning</title>
+    <para>By default, the Lustre software will automatically generate CPU
+    partitions (CPT) based on the number of CPUs in the system. The CPT number
+    will be 1 if the online CPU number is less than five.</para>
+    <para>The CPT number can be explicitly set on the libcfs module using 
+    <literal>cpu_npartitions=NUMBER</literal>. The value of 
+    <literal>cpu_npartitions</literal> must be an integer between 1 and the
+    number of online CPUs.</para>
+    <tip>
+      <para>Setting CPT to 1 will disable most of the SMP Node Affinity
+      functionality.</para>
+    </tip>
+    <section>
+      <title>CPU Partition String Patterns</title>
+      <para>CPU partitions can be described using string pattern notation. For
+      example:</para>
+      <itemizedlist>
+        <listitem>
+          <para>
+            <literal>cpu_pattern="0[0,2,4,6] 1[1,3,5,7]</literal>
+          </para>
+          <para>Create two CPTs, CPT0 contains CPU[0, 2, 4, 6]. CPT1 contains
+          CPU[1,3,5,7].</para>
+        </listitem>
+        <listitem>
+          <para>
+            <literal>cpu_pattern="N 0[0-3] 1[4-7]</literal>
+          </para>
+          <para>Create two CPTs, CPT0 contains all CPUs in NUMA node[0-3], CPT1
+          contains all CPUs in NUMA node [4-7].</para>
+        </listitem>
+      </itemizedlist>
+      <para>The current configuration of the CPU partition can be read from 
+      <literal>/proc/sys/lnet/cpu_partitions</literal></para>
+    </section>
   </section>
   <section xml:id="dbdoclet.lndtuning">
-      <title><indexterm><primary>tuning</primary><secondary>LND tuning</secondary></indexterm>LND Tuning</title>
-      <para>LND tuning allows the number of threads per CPU partition to be specified. An administrator can set the threads for both <literal>ko2iblnd</literal> and <literal>ksocklnd</literal> using the <literal>nscheds</literal> parameter. This adjusts the number of threads for each partition, not the overall number of threads on the LND.</para>
-                <note><para>Lustre software release 2.3 has greatly decreased the default number of threads for
-          <literal>ko2iblnd</literal> and <literal>ksocklnd</literal> on high-core count machines.
-        The current default values are automatically set and are chosen to work well across a number
-        of typical scenarios.</para></note>
+    <title>
+    <indexterm>
+      <primary>tuning</primary>
+      <secondary>LND tuning</secondary>
+    </indexterm>LND Tuning</title>
+    <para>LND tuning allows the number of threads per CPU partition to be
+    specified. An administrator can set the threads for both 
+    <literal>ko2iblnd</literal> and 
+    <literal>ksocklnd</literal> using the 
+    <literal>nscheds</literal> parameter. This adjusts the number of threads for
+    each partition, not the overall number of threads on the LND.</para>
+    <note>
+      <para>Lustre software release 2.3 has greatly decreased the default
+      number of threads for 
+      <literal>ko2iblnd</literal> and 
+      <literal>ksocklnd</literal> on high-core count machines. The current
+      default values are automatically set and are chosen to work well across a
+      number of typical scenarios.</para>
+    </note>
   </section>
   <section xml:id="dbdoclet.nrstuning" condition='l24'>
-    <title><indexterm><primary>tuning</primary><secondary>Network Request Scheduler (NRS) Tuning</secondary></indexterm>Network Request Scheduler (NRS) Tuning</title>
-      <para>The Network Request Scheduler (NRS) allows the administrator to influence the order in which RPCs are handled at servers, on a per-PTLRPC service basis, by providing different policies that can be activated and tuned in order to influence the RPC ordering. The aim of this is to provide for better performance, and possibly discrete performance characteristics using future policies.</para>
-      <para>The NRS policy state of a PTLRPC service can be read and set via the <literal>{service}.nrs_policies</literal> tunable. To read a PTLRPC service's NRS policy state, run:</para>
-      <screen>lctl get_param {service}.nrs_policies</screen>
-      <para>For example, to read the NRS policy state of the <literal>ost_io</literal> service,
-      run:</para>
-      <screen>$ lctl get_param ost.OSS.ost_io.nrs_policies
+    <title>
+    <indexterm>
+      <primary>tuning</primary>
+      <secondary>Network Request Scheduler (NRS) Tuning</secondary>
+    </indexterm>Network Request Scheduler (NRS) Tuning</title>
+    <para>The Network Request Scheduler (NRS) allows the administrator to
+    influence the order in which RPCs are handled at servers, on a per-PTLRPC
+    service basis, by providing different policies that can be activated and
+    tuned in order to influence the RPC ordering. The aim of this is to provide
+    for better performance, and possibly discrete performance characteristics
+    using future policies.</para>
+    <para>The NRS policy state of a PTLRPC service can be read and set via the 
+    <literal>{service}.nrs_policies</literal> tunable. To read a PTLRPC
+    service's NRS policy state, run:</para>
+    <screen>
+lctl get_param {service}.nrs_policies
+</screen>
+    <para>For example, to read the NRS policy state of the 
+    <literal>ost_io</literal> service, run:</para>
+    <screen>
+$ lctl get_param ost.OSS.ost_io.nrs_policies
 ost.OSS.ost_io.nrs_policies=
 
 regular_requests:
@@ -423,391 +657,736 @@ high_priority_requests:
     fallback: no
     queued: 0
     active: 0
-      </screen>
-      <para>NRS policy state is shown in either one or two sections, depending on the PTLRPC service being queried. The first section is named <literal>regular_requests</literal> and is available for all PTLRPC services, optionally followed by a second section which is named <literal>high_priority_requests</literal>. This is because some PTLRPC services are able to treat some types of RPCs as higher priority ones, such that they are handled by the server with higher priority compared to other, regular RPC traffic. For PTLRPC services that do not support high-priority RPCs, you will only see the <literal>regular_requests</literal> section.</para>
-      <para>There is a separate instance of each NRS policy on each PTLRPC service for handling regular and high-priority RPCs (if the service supports high-priority RPCs). For each policy instance, the following fields are shown:</para>
-      <informaltable frame="all">
-        <tgroup cols="2">
-          <colspec colname="c1" colwidth="50*"/>
-          <colspec colname="c2" colwidth="50*"/>
-          <thead>
-            <row>
-              <entry>
-                <para><emphasis role="bold">Field</emphasis></para>
-              </entry>
-              <entry>
-                <para><emphasis role="bold">Description</emphasis></para>
-              </entry>
-            </row>
-          </thead>
-          <tbody>
-            <row>
-              <entry>
-                <para> <literal> name </literal></para>
-              </entry>
-              <entry>
-                <para>The name of the policy.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal> state </literal></para>
-              </entry>
-              <entry>
-		      <para>The state of the policy; this can be any of <literal>invalid, stopping, stopped, starting, started</literal>. A fully enabled policy is in the <literal> started</literal> state.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal> fallback </literal></para>
-              </entry>
-              <entry>
-		      <para>Whether the policy is acting as a fallback policy or not. A fallback policy is used to handle RPCs that other enabled policies fail to handle, or do not support the handling of. The possible values are <literal>no, yes</literal>. Currently, only the FIFO policy can act as a fallback policy.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal> queued </literal></para>
-              </entry>
-              <entry>
-                <para>The number of RPCs that the policy has waiting to be serviced.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal> active </literal></para>
-              </entry>
-              <entry>
-                <para>The number of RPCs that the policy is currently handling.</para>
-              </entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
-      <para>To enable an NRS policy on a PTLRPC service run:</para>
-      <screen>lctl set_param {service}.nrs_policies=<replaceable>policy_name</replaceable></screen>
-      <para>This will enable the policy <replaceable>policy_name</replaceable> for both regular and high-priority RPCs (if the PLRPC service supports high-priority RPCs) on the given service. For example, to enable the CRR-N NRS policy for the ldlm_cbd service, run:</para>
-      <screen>$ lctl set_param ldlm.services.ldlm_cbd.nrs_policies=crrn
+      
+</screen>
+    <para>NRS policy state is shown in either one or two sections, depending on
+    the PTLRPC service being queried. The first section is named 
+    <literal>regular_requests</literal> and is available for all PTLRPC
+    services, optionally followed by a second section which is named 
+    <literal>high_priority_requests</literal>. This is because some PTLRPC
+    services are able to treat some types of RPCs as higher priority ones, such
+    that they are handled by the server with higher priority compared to other,
+    regular RPC traffic. For PTLRPC services that do not support high-priority
+    RPCs, you will only see the 
+    <literal>regular_requests</literal> section.</para>
+    <para>There is a separate instance of each NRS policy on each PTLRPC
+    service for handling regular and high-priority RPCs (if the service
+    supports high-priority RPCs). For each policy instance, the following
+    fields are shown:</para>
+    <informaltable frame="all">
+      <tgroup cols="2">
+        <colspec colname="c1" colwidth="50*" />
+        <colspec colname="c2" colwidth="50*" />
+        <thead>
+          <row>
+            <entry>
+              <para>
+                <emphasis role="bold">Field</emphasis>
+              </para>
+            </entry>
+            <entry>
+              <para>
+                <emphasis role="bold">Description</emphasis>
+              </para>
+            </entry>
+          </row>
+        </thead>
+        <tbody>
+          <row>
+            <entry>
+              <para>
+                <literal>name</literal>
+              </para>
+            </entry>
+            <entry>
+              <para>The name of the policy.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>
+                <literal>state</literal>
+              </para>
+            </entry>
+            <entry>
+              <para>The state of the policy; this can be any of 
+              <literal>invalid, stopping, stopped, starting, started</literal>.
+              A fully enabled policy is in the 
+              <literal>started</literal> state.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>
+                <literal>fallback</literal>
+              </para>
+            </entry>
+            <entry>
+              <para>Whether the policy is acting as a fallback policy or not. A
+              fallback policy is used to handle RPCs that other enabled
+              policies fail to handle, or do not support the handling of. The
+              possible values are 
+              <literal>no, yes</literal>. Currently, only the FIFO policy can
+              act as a fallback policy.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>
+                <literal>queued</literal>
+              </para>
+            </entry>
+            <entry>
+              <para>The number of RPCs that the policy has waiting to be
+              serviced.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>
+                <literal>active</literal>
+              </para>
+            </entry>
+            <entry>
+              <para>The number of RPCs that the policy is currently
+              handling.</para>
+            </entry>
+          </row>
+        </tbody>
+      </tgroup>
+    </informaltable>
+    <para>To enable an NRS policy on a PTLRPC service run:</para>
+    <screen>
+lctl set_param {service}.nrs_policies=
+<replaceable>policy_name</replaceable>
+</screen>
+    <para>This will enable the policy 
+    <replaceable>policy_name</replaceable>for both regular and high-priority
+    RPCs (if the PLRPC service supports high-priority RPCs) on the given
+    service. For example, to enable the CRR-N NRS policy for the ldlm_cbd
+    service, run:</para>
+    <screen>
+$ lctl set_param ldlm.services.ldlm_cbd.nrs_policies=crrn
 ldlm.services.ldlm_cbd.nrs_policies=crrn
-      </screen>
-      <para>For PTLRPC services that support high-priority RPCs, you can also supply an optional <replaceable>reg|hp</replaceable> token, in order to enable an NRS policy for handling only regular or high-priority RPCs on a given PTLRPC service, by running:</para>
-      <screen>lctl set_param {service}.nrs_policies="<replaceable>policy_name</replaceable> <replaceable>reg|hp</replaceable>"</screen>
-      <para>For example, to enable the TRR policy for handling only regular, but not high-priority
-      RPCs on the <literal>ost_io</literal> service, run:</para>
-      <screen>$ lctl set_param ost.OSS.ost_io.nrs_policies="trr reg"
+      
+</screen>
+    <para>For PTLRPC services that support high-priority RPCs, you can also
+    supply an optional 
+    <replaceable>reg|hp</replaceable>token, in order to enable an NRS policy
+    for handling only regular or high-priority RPCs on a given PTLRPC service,
+    by running:</para>
+    <screen>
+lctl set_param {service}.nrs_policies="
+<replaceable>policy_name</replaceable> 
+<replaceable>reg|hp</replaceable>"
+</screen>
+    <para>For example, to enable the TRR policy for handling only regular, but
+    not high-priority RPCs on the 
+    <literal>ost_io</literal> service, run:</para>
+    <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_policies="trr reg"
 ost.OSS.ost_io.nrs_policies="trr reg"
-      </screen>
-      <note>
-	<para>When enabling an NRS policy, the policy name must be given in lower-case characters, otherwise the operation will fail with an error message.</para>
-      </note>
+      
+</screen>
+    <note>
+      <para>When enabling an NRS policy, the policy name must be given in
+      lower-case characters, otherwise the operation will fail with an error
+      message.</para>
+    </note>
     <section>
-      <title><indexterm>
-          <primary>tuning</primary>
-          <secondary>Network Request Scheduler (NRS) Tuning</secondary>
-          <tertiary>first in, first out (FIFO) policy</tertiary>
-        </indexterm>First In, First Out (FIFO) policy</title>
-      <para>The first in, first out (FIFO) policy handles RPCs in a service in the same order as
-        they arrive from the LNET layer, so no special processing takes place to modify the RPC
-        handling stream. FIFO is the default policy for all types of RPCs on all PTLRPC services,
-        and is always enabled irrespective of the state of other policies, so that it can be used as
-        a backup policy, in case a more elaborate policy that has been enabled fails to handle an
-        RPC, or does not support handling a given type of RPC.</para>
-      <para> The FIFO policy has no tunables that adjust its behaviour.</para>
+      <title>
+      <indexterm>
+        <primary>tuning</primary>
+        <secondary>Network Request Scheduler (NRS) Tuning</secondary>
+        <tertiary>first in, first out (FIFO) policy</tertiary>
+      </indexterm>First In, First Out (FIFO) policy</title>
+      <para>The first in, first out (FIFO) policy handles RPCs in a service in
+      the same order as they arrive from the LNET layer, so no special
+      processing takes place to modify the RPC handling stream. FIFO is the
+      default policy for all types of RPCs on all PTLRPC services, and is
+      always enabled irrespective of the state of other policies, so that it
+      can be used as a backup policy, in case a more elaborate policy that has
+      been enabled fails to handle an RPC, or does not support handling a given
+      type of RPC.</para>
+      <para>The FIFO policy has no tunables that adjust its behaviour.</para>
     </section>
     <section>
-      <title><indexterm>
-          <primary>tuning</primary>
-          <secondary>Network Request Scheduler (NRS) Tuning</secondary>
-          <tertiary>client round-robin over NIDs (CRR-N) policy</tertiary>
-        </indexterm>Client Round-Robin over NIDs (CRR-N) policy</title>
-      <para>The client round-robin over NIDs (CRR-N) policy performs batched round-robin scheduling
-        of all types of RPCs, with each batch consisting of RPCs originating from the same client
-        node, as identified by its NID. CRR-N aims to provide for better resource utilization across
-        the cluster, and to help shorten completion times of jobs in some cases, by distributing
-        available bandwidth more evenly across all clients.</para>
-      <para>The CRR-N policy can be enabled on all types of PTLRPC services, and has the following
-        tunable that can be used to adjust its behavior:</para>
+      <title>
+      <indexterm>
+        <primary>tuning</primary>
+        <secondary>Network Request Scheduler (NRS) Tuning</secondary>
+        <tertiary>client round-robin over NIDs (CRR-N) policy</tertiary>
+      </indexterm>Client Round-Robin over NIDs (CRR-N) policy</title>
+      <para>The client round-robin over NIDs (CRR-N) policy performs batched
+      round-robin scheduling of all types of RPCs, with each batch consisting
+      of RPCs originating from the same client node, as identified by its NID.
+      CRR-N aims to provide for better resource utilization across the cluster,
+      and to help shorten completion times of jobs in some cases, by
+      distributing available bandwidth more evenly across all clients.</para>
+      <para>The CRR-N policy can be enabled on all types of PTLRPC services,
+      and has the following tunable that can be used to adjust its
+      behavior:</para>
       <itemizedlist>
-	<listitem>
-	  <para><literal>{service}.nrs_crrn_quantum</literal></para>
-	  <para>The <literal>{service}.nrs_crrn_quantum</literal> tunable determines the maximum allowed size of each batch of RPCs; the unit of measure is in number of RPCs. To read the maximum allowed batch size of a CRR-N policy, run:</para>
-	  <screen>lctl get_param {service}.nrs_crrn_quantum</screen>
-	  <para>For example, to read the maximum allowed batch size of a CRR-N policy on the ost_io service, run:</para>
-	  <screen>$ lctl get_param ost.OSS.ost_io.nrs_crrn_quantum
+        <listitem>
+          <para>
+            <literal>{service}.nrs_crrn_quantum</literal>
+          </para>
+          <para>The 
+          <literal>{service}.nrs_crrn_quantum</literal> tunable determines the
+          maximum allowed size of each batch of RPCs; the unit of measure is in
+          number of RPCs. To read the maximum allowed batch size of a CRR-N
+          policy, run:</para>
+          <screen>
+lctl get_param {service}.nrs_crrn_quantum
+</screen>
+          <para>For example, to read the maximum allowed batch size of a CRR-N
+          policy on the ost_io service, run:</para>
+          <screen>
+$ lctl get_param ost.OSS.ost_io.nrs_crrn_quantum
 ost.OSS.ost_io.nrs_crrn_quantum=reg_quantum:16
 hp_quantum:8
-	  </screen>
-	  <para>You can see that there is a separate maximum allowed batch size value for regular (<literal>reg_quantum</literal>) and high-priority (<literal>hp_quantum</literal>) RPCs (if the PTLRPC service supports high-priority RPCs).</para>
-	  <para>To set the maximum allowed batch size of a CRR-N policy on a given service, run:</para>
-	  <screen>lctl set_param {service}.nrs_crrn_quantum=<replaceable>1-65535</replaceable></screen>
-	  <para>This will set the maximum allowed batch size on a given service, for both regular and high-priority RPCs (if the PLRPC service supports high-priority RPCs), to the indicated value.</para>
-	  <para>For example, to set the maximum allowed batch size on the ldlm_canceld service to 16 RPCs, run:</para>
-	  <screen>$ lctl set_param ldlm.services.ldlm_canceld.nrs_crrn_quantum=16
+          
+</screen>
+          <para>You can see that there is a separate maximum allowed batch size
+          value for regular (
+          <literal>reg_quantum</literal>) and high-priority (
+          <literal>hp_quantum</literal>) RPCs (if the PTLRPC service supports
+          high-priority RPCs).</para>
+          <para>To set the maximum allowed batch size of a CRR-N policy on a
+          given service, run:</para>
+          <screen>
+lctl set_param {service}.nrs_crrn_quantum=
+<replaceable>1-65535</replaceable>
+</screen>
+          <para>This will set the maximum allowed batch size on a given
+          service, for both regular and high-priority RPCs (if the PLRPC
+          service supports high-priority RPCs), to the indicated value.</para>
+          <para>For example, to set the maximum allowed batch size on the
+          ldlm_canceld service to 16 RPCs, run:</para>
+          <screen>
+$ lctl set_param ldlm.services.ldlm_canceld.nrs_crrn_quantum=16
 ldlm.services.ldlm_canceld.nrs_crrn_quantum=16
-	  </screen>
-	  <para>For PTLRPC services that support high-priority RPCs, you can also specify a different maximum allowed batch size for regular and high-priority RPCs, by running:</para>
-	  <screen>$ lctl set_param {service}.nrs_crrn_quantum=<replaceable>reg_quantum|hp_quantum</replaceable>:<replaceable>1-65535</replaceable>"</screen>
-	  <para>For example, to set the maximum allowed batch size on the ldlm_canceld service, for high-priority RPCs to 32, run:</para>
-	  <screen>$ lctl set_param ldlm.services.ldlm_canceld.nrs_crrn_quantum="hp_quantum:32"
+          
+</screen>
+          <para>For PTLRPC services that support high-priority RPCs, you can
+          also specify a different maximum allowed batch size for regular and
+          high-priority RPCs, by running:</para>
+          <screen>
+$ lctl set_param {service}.nrs_crrn_quantum=
+<replaceable>reg_quantum|hp_quantum</replaceable>:
+<replaceable>1-65535</replaceable>"
+</screen>
+          <para>For example, to set the maximum allowed batch size on the
+          ldlm_canceld service, for high-priority RPCs to 32, run:</para>
+          <screen>
+$ lctl set_param ldlm.services.ldlm_canceld.nrs_crrn_quantum="hp_quantum:32"
 ldlm.services.ldlm_canceld.nrs_crrn_quantum=hp_quantum:32
-	  </screen>
-	  <para>By using the last method, you can also set the maximum regular and high-priority RPC batch sizes to different values, in a single command invocation.</para>
-	</listitem>
+          
+</screen>
+          <para>By using the last method, you can also set the maximum regular
+          and high-priority RPC batch sizes to different values, in a single
+          command invocation.</para>
+        </listitem>
       </itemizedlist>
     </section>
     <section>
-      <title><indexterm>
-          <primary>tuning</primary>
-          <secondary>Network Request Scheduler (NRS) Tuning</secondary>
-          <tertiary>object-based round-robin (ORR) policy</tertiary>
-        </indexterm>Object-based Round-Robin (ORR) policy</title>
-      <para>The object-based round-robin (ORR) policy performs batched round-robin scheduling of
-        bulk read write (brw) RPCs, with each batch consisting of RPCs that pertain to the same
-        backend-file system object, as identified by its OST FID.</para>
-      <para>The ORR policy is only available for use on the ost_io service. The RPC batches it forms can potentially consist of mixed bulk read and bulk write RPCs. The RPCs in each batch are ordered in an ascending manner, based on either the file offsets, or the physical disk offsets of each RPC (only applicable to bulk read RPCs).</para>
-      <para>The aim of the ORR policy is to provide for increased bulk read throughput in some cases, by ordering bulk read RPCs (and potentially bulk write RPCs), and thus minimizing costly disk seek operations. Performance may also benefit from any resulting improvement in resource utilization, or by taking advantage of better locality of reference between RPCs.</para>
-      <para>The ORR policy has the following tunables that can be used to adjust its behaviour:</para>
+      <title>
+      <indexterm>
+        <primary>tuning</primary>
+        <secondary>Network Request Scheduler (NRS) Tuning</secondary>
+        <tertiary>object-based round-robin (ORR) policy</tertiary>
+      </indexterm>Object-based Round-Robin (ORR) policy</title>
+      <para>The object-based round-robin (ORR) policy performs batched
+      round-robin scheduling of bulk read write (brw) RPCs, with each batch
+      consisting of RPCs that pertain to the same backend-file system object,
+      as identified by its OST FID.</para>
+      <para>The ORR policy is only available for use on the ost_io service. The
+      RPC batches it forms can potentially consist of mixed bulk read and bulk
+      write RPCs. The RPCs in each batch are ordered in an ascending manner,
+      based on either the file offsets, or the physical disk offsets of each
+      RPC (only applicable to bulk read RPCs).</para>
+      <para>The aim of the ORR policy is to provide for increased bulk read
+      throughput in some cases, by ordering bulk read RPCs (and potentially
+      bulk write RPCs), and thus minimizing costly disk seek operations.
+      Performance may also benefit from any resulting improvement in resource
+      utilization, or by taking advantage of better locality of reference
+      between RPCs.</para>
+      <para>The ORR policy has the following tunables that can be used to
+      adjust its behaviour:</para>
       <itemizedlist>
-	<listitem>
-	  <para><literal>ost.OSS.ost_io.nrs_orr_quantum</literal></para>
-	  <para>The <literal>ost.OSS.ost_io.nrs_orr_quantum</literal> tunable determines the maximum allowed size of each batch of RPCs; the unit of measure is in number of RPCs. To read the maximum allowed batch size of the ORR policy, run:</para>
-	  <screen>$ lctl get_param ost.OSS.ost_io.nrs_orr_quantum
+        <listitem>
+          <para>
+            <literal>ost.OSS.ost_io.nrs_orr_quantum</literal>
+          </para>
+          <para>The 
+          <literal>ost.OSS.ost_io.nrs_orr_quantum</literal> tunable determines
+          the maximum allowed size of each batch of RPCs; the unit of measure
+          is in number of RPCs. To read the maximum allowed batch size of the
+          ORR policy, run:</para>
+          <screen>
+$ lctl get_param ost.OSS.ost_io.nrs_orr_quantum
 ost.OSS.ost_io.nrs_orr_quantum=reg_quantum:256
 hp_quantum:16
-	  </screen>
-	  <para>You can see that there is a separate maximum allowed batch size value for regular (<literal>reg_quantum</literal>) and high-priority (<literal>hp_quantum</literal>) RPCs (if the PTLRPC service supports high-priority RPCs).</para>
-	  <para>To set the maximum allowed batch size for the ORR policy, run:</para>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_orr_quantum=<replaceable>1-65535</replaceable></screen>
-	  <para>This will set the maximum allowed batch size for both regular and high-priority RPCs, to the indicated value.</para>
-	  <para>You can also specify a different maximum allowed batch size for regular and high-priority RPCs, by running:</para>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_orr_quantum=<replaceable>reg_quantum|hp_quantum</replaceable>:<replaceable>1-65535</replaceable></screen>
-	  <para>For example, to set the maximum allowed batch size for regular RPCs to 128, run:</para>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_orr_quantum=reg_quantum:128
+          
+</screen>
+          <para>You can see that there is a separate maximum allowed batch size
+          value for regular (
+          <literal>reg_quantum</literal>) and high-priority (
+          <literal>hp_quantum</literal>) RPCs (if the PTLRPC service supports
+          high-priority RPCs).</para>
+          <para>To set the maximum allowed batch size for the ORR policy,
+          run:</para>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_orr_quantum=
+<replaceable>1-65535</replaceable>
+</screen>
+          <para>This will set the maximum allowed batch size for both regular
+          and high-priority RPCs, to the indicated value.</para>
+          <para>You can also specify a different maximum allowed batch size for
+          regular and high-priority RPCs, by running:</para>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_orr_quantum=
+<replaceable>reg_quantum|hp_quantum</replaceable>:
+<replaceable>1-65535</replaceable>
+</screen>
+          <para>For example, to set the maximum allowed batch size for regular
+          RPCs to 128, run:</para>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_orr_quantum=reg_quantum:128
 ost.OSS.ost_io.nrs_orr_quantum=reg_quantum:128
-	  </screen>
-	  <para>By using the last method, you can also set the maximum regular and high-priority RPC batch sizes to different values, in a single command invocation.</para>
-	</listitem>
-	<listitem>
-	  <para><literal>ost.OSS.ost_io.nrs_orr_offset_type</literal></para>
-	  <para>The <literal>ost.OSS.ost_io.nrs_orr_offset_type</literal> tunable determines whether the ORR policy orders RPCs within each batch based on logical file offsets or physical disk offsets. To read the offset type value for the ORR policy, run:</para>
-	  <screen>$ lctl get_param ost.OSS.ost_io.nrs_orr_offset_type
+          
+</screen>
+          <para>By using the last method, you can also set the maximum regular
+          and high-priority RPC batch sizes to different values, in a single
+          command invocation.</para>
+        </listitem>
+        <listitem>
+          <para>
+            <literal>ost.OSS.ost_io.nrs_orr_offset_type</literal>
+          </para>
+          <para>The 
+          <literal>ost.OSS.ost_io.nrs_orr_offset_type</literal> tunable
+          determines whether the ORR policy orders RPCs within each batch based
+          on logical file offsets or physical disk offsets. To read the offset
+          type value for the ORR policy, run:</para>
+          <screen>
+$ lctl get_param ost.OSS.ost_io.nrs_orr_offset_type
 ost.OSS.ost_io.nrs_orr_offset_type=reg_offset_type:physical
 hp_offset_type:logical
-	  </screen>
-	  <para>You can see that there is a separate offset type value for regular (<literal>reg_offset_type</literal>) and high-priority (<literal>hp_offset_type</literal>) RPCs.</para>
-	  <para>To set the ordering type for the ORR policy, run:</para>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_orr_offset_type=<replaceable>physical|logical</replaceable></screen>
-	  <para>This will set the offset type for both regular and high-priority RPCs, to the indicated value.</para>
-	  <para>You can also specify a different offset type for regular and high-priority RPCs, by running:</para>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_orr_offset_type=<replaceable>reg_offset_type|hp_offset_type</replaceable>:<replaceable>physical|logical</replaceable></screen>
-	  <para>For example, to set the offset type for high-priority RPCs to physical disk offsets, run:</para>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_orr_offset_type=hp_offset_type:physical
-ost.OSS.ost_io.nrs_orr_offset_type=hp_offset_type:physical</screen>
-	  <para>By using the last method, you can also set offset type for regular and high-priority RPCs to different values, in a single command invocation.</para>
-	  <note><para>Irrespective of the value of this tunable, only logical offsets can, and are used for ordering bulk write RPCs.</para></note>
-	</listitem>
-	<listitem>
-	  <para><literal>ost.OSS.ost_io.nrs_orr_supported</literal></para>
-	  <para>The <literal>ost.OSS.ost_io.nrs_orr_supported</literal> tunable determines the type of RPCs that the ORR policy will handle. To read the types of supported RPCs by the ORR policy, run:</para>
-	  <screen>$ lctl get_param ost.OSS.ost_io.nrs_orr_supported
+          
+</screen>
+          <para>You can see that there is a separate offset type value for
+          regular (
+          <literal>reg_offset_type</literal>) and high-priority (
+          <literal>hp_offset_type</literal>) RPCs.</para>
+          <para>To set the ordering type for the ORR policy, run:</para>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_orr_offset_type=
+<replaceable>physical|logical</replaceable>
+</screen>
+          <para>This will set the offset type for both regular and
+          high-priority RPCs, to the indicated value.</para>
+          <para>You can also specify a different offset type for regular and
+          high-priority RPCs, by running:</para>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_orr_offset_type=
+<replaceable>reg_offset_type|hp_offset_type</replaceable>:
+<replaceable>physical|logical</replaceable>
+</screen>
+          <para>For example, to set the offset type for high-priority RPCs to
+          physical disk offsets, run:</para>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_orr_offset_type=hp_offset_type:physical
+ost.OSS.ost_io.nrs_orr_offset_type=hp_offset_type:physical
+</screen>
+          <para>By using the last method, you can also set offset type for
+          regular and high-priority RPCs to different values, in a single
+          command invocation.</para>
+          <note>
+            <para>Irrespective of the value of this tunable, only logical
+            offsets can, and are used for ordering bulk write RPCs.</para>
+          </note>
+        </listitem>
+        <listitem>
+          <para>
+            <literal>ost.OSS.ost_io.nrs_orr_supported</literal>
+          </para>
+          <para>The 
+          <literal>ost.OSS.ost_io.nrs_orr_supported</literal> tunable determines
+          the type of RPCs that the ORR policy will handle. To read the types
+          of supported RPCs by the ORR policy, run:</para>
+          <screen>
+$ lctl get_param ost.OSS.ost_io.nrs_orr_supported
 ost.OSS.ost_io.nrs_orr_supported=reg_supported:reads
 hp_supported=reads_and_writes
-	  </screen>
-	  <para>You can see that there is a separate supported 'RPC types' value for regular (<literal>reg_supported</literal>) and high-priority (<literal>hp_supported</literal>) RPCs.</para>
-	  <para>To set the supported RPC types for the ORR policy, run:</para>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_orr_supported=<replaceable>reads|writes|reads_and_writes</replaceable></screen>
-	  <para>This will set the supported RPC types for both regular and high-priority RPCs, to the indicated value.</para>
-	  <para>You can also specify a different supported 'RPC types' value for regular and high-priority RPCs, by running:</para>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_orr_supported=<replaceable>reg_supported|hp_supported</replaceable>:<replaceable>reads|writes|reads_and_writes</replaceable></screen>
-	  <para>For example, to set the supported RPC types to bulk read and bulk write RPCs for regular requests, run:</para>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_orr_supported=reg_supported:reads_and_writes
+          
+</screen>
+          <para>You can see that there is a separate supported 'RPC types'
+          value for regular (
+          <literal>reg_supported</literal>) and high-priority (
+          <literal>hp_supported</literal>) RPCs.</para>
+          <para>To set the supported RPC types for the ORR policy, run:</para>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_orr_supported=
+<replaceable>reads|writes|reads_and_writes</replaceable>
+</screen>
+          <para>This will set the supported RPC types for both regular and
+          high-priority RPCs, to the indicated value.</para>
+          <para>You can also specify a different supported 'RPC types' value
+          for regular and high-priority RPCs, by running:</para>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_orr_supported=
+<replaceable>reg_supported|hp_supported</replaceable>:
+<replaceable>reads|writes|reads_and_writes</replaceable>
+</screen>
+          <para>For example, to set the supported RPC types to bulk read and
+          bulk write RPCs for regular requests, run:</para>
+          <screen>
+$ lctl set_param
 ost.OSS.ost_io.nrs_orr_supported=reg_supported:reads_and_writes
-	  </screen>
-	  <para>By using the last method, you can also set the supported RPC types for regular and high-priority RPC to different values, in a single command invocation.</para>
-	</listitem>
+ost.OSS.ost_io.nrs_orr_supported=reg_supported:reads_and_writes
+          
+</screen>
+          <para>By using the last method, you can also set the supported RPC
+          types for regular and high-priority RPC to different values, in a
+          single command invocation.</para>
+        </listitem>
       </itemizedlist>
     </section>
     <section>
-      <title><indexterm>
-          <primary>tuning</primary>
-          <secondary>Network Request Scheduler (NRS) Tuning</secondary>
-          <tertiary>Target-based round-robin (TRR) policy</tertiary>
-        </indexterm>Target-based Round-Robin (TRR) policy</title>
-      <para>The target-based round-robin (TRR) policy performs batched round-robin scheduling of brw
-        RPCs, with each batch consisting of RPCs that pertain to the same OST, as identified by its
-        OST index.</para>
-      <para>The TRR policy is identical to the object-based round-robin (ORR) policy, apart from
-        using the brw RPC's target OST index instead of the backend-fs object's OST FID, for
-        determining the RPC scheduling order. The goals of TRR are effectively the same as for ORR,
-        and it uses the following tunables to adjust its behaviour:</para>
+      <title>
+      <indexterm>
+        <primary>tuning</primary>
+        <secondary>Network Request Scheduler (NRS) Tuning</secondary>
+        <tertiary>Target-based round-robin (TRR) policy</tertiary>
+      </indexterm>Target-based Round-Robin (TRR) policy</title>
+      <para>The target-based round-robin (TRR) policy performs batched
+      round-robin scheduling of brw RPCs, with each batch consisting of RPCs
+      that pertain to the same OST, as identified by its OST index.</para>
+      <para>The TRR policy is identical to the object-based round-robin (ORR)
+      policy, apart from using the brw RPC's target OST index instead of the
+      backend-fs object's OST FID, for determining the RPC scheduling order.
+      The goals of TRR are effectively the same as for ORR, and it uses the
+      following tunables to adjust its behaviour:</para>
       <itemizedlist>
-	<listitem>
-	  <para><literal>ost.OSS.ost_io.nrs_trr_quantum</literal></para>
-	  <para>The purpose of this tunable is exactly the same as for the <literal>ost.OSS.ost_io.nrs_orr_quantum</literal> tunable for the ORR policy, and you can use it in exactly the same way.</para>
-	</listitem>
-	<listitem>
-	  <para><literal>ost.OSS.ost_io.nrs_trr_offset_type</literal></para>
-	  <para>The purpose of this tunable is exactly the same as for the <literal>ost.OSS.ost_io.nrs_orr_offset_type</literal> tunable for the ORR policy, and you can use it in exactly the same way.</para>
-	</listitem>
-	<listitem>
-	  <para><literal>ost.OSS.ost_io.nrs_trr_supported</literal></para>
-	  <para>The purpose of this tunable is exactly the same as for the <literal>ost.OSS.ost_io.nrs_orr_supported</literal> tunable for the ORR policy, and you can use it in exactly the sme way.</para>
-	</listitem>
+        <listitem>
+          <para>
+            <literal>ost.OSS.ost_io.nrs_trr_quantum</literal>
+          </para>
+          <para>The purpose of this tunable is exactly the same as for the 
+          <literal>ost.OSS.ost_io.nrs_orr_quantum</literal> tunable for the ORR
+          policy, and you can use it in exactly the same way.</para>
+        </listitem>
+        <listitem>
+          <para>
+            <literal>ost.OSS.ost_io.nrs_trr_offset_type</literal>
+          </para>
+          <para>The purpose of this tunable is exactly the same as for the 
+          <literal>ost.OSS.ost_io.nrs_orr_offset_type</literal> tunable for the
+          ORR policy, and you can use it in exactly the same way.</para>
+        </listitem>
+        <listitem>
+          <para>
+            <literal>ost.OSS.ost_io.nrs_trr_supported</literal>
+          </para>
+          <para>The purpose of this tunable is exactly the same as for the 
+          <literal>ost.OSS.ost_io.nrs_orr_supported</literal> tunable for the
+          ORR policy, and you can use it in exactly the sme way.</para>
+        </listitem>
       </itemizedlist>
     </section>
     <section condition='l26'>
-      <title><indexterm>
-          <primary>tuning</primary>
-          <secondary>Network Request Scheduler (NRS) Tuning</secondary>
-          <tertiary>Token Bucket Filter (TBF) policy</tertiary>
-        </indexterm>Token Bucket Filter (TBF) policy</title>
-	<para>The TBF (Token Bucket Filter) is a Lustre NRS policy which enables Lustre services
-		to enforce the RPC rate limit on clients/jobs for QoS (Quality of Service) purposes.</para>
+      <title>
+      <indexterm>
+        <primary>tuning</primary>
+        <secondary>Network Request Scheduler (NRS) Tuning</secondary>
+        <tertiary>Token Bucket Filter (TBF) policy</tertiary>
+      </indexterm>Token Bucket Filter (TBF) policy</title>
+      <para>The TBF (Token Bucket Filter) is a Lustre NRS policy which enables
+      Lustre services to enforce the RPC rate limit on clients/jobs for QoS
+      (Quality of Service) purposes.</para>
       <figure>
-        <title> The internal structure of TBF policy </title>
+        <title>The internal structure of TBF policy</title>
         <mediaobject>
           <imageobject>
-            <imagedata scalefit="1" width="100%" fileref="figures/TBF_policy.svg"/>
+            <imagedata scalefit="1" width="100%"
+            fileref="figures/TBF_policy.svg" />
           </imageobject>
           <textobject>
             <phrase>The internal structure of TBF policy</phrase>
           </textobject>
         </mediaobject>
       </figure>
-      <para>When a RPC request arrives, TBF policy puts it to a waiting queue according to its
-	classification. The classification of RPC requests is based on either NID or JobID of the
-	RPC according to the configure of TBF. TBF policy maintains multiple queues in the system,
-	one queue for each category in the classification of RPC requests. The requests waits for
-	tokens in the FIFO queue before they have been handled so as to keep the RPC rates under the limits.</para>
-<para>When Lustre services are too busy to handle all of the requests in time, all of the
-	specified rates of the queues will not be satisfied. Nothing bad will happen except
-	some of the RPC rates are slower than configured. In this case, the queue with higher
-	rate will have an advantage over the queues with lower rates, but none of them will be starved.</para>
-<para>To manage the RPC rate of queues, we don't need to set the rate of each queue manually.
-	Instead, we define rules which TBF policy matches to determine RPC rate limits. All of
-	the defined rules are organized as an ordered list. Whenever a queue is newly created,
-	it goes though the rule list and takes the first matched rule as its rule, so that the
-	queue knows its RPC token rate. A rule can be added to or removed from the list at run
-	time. Whenever the list of rules is changed, the queues will update their matched rules.</para>
+      <para>When a RPC request arrives, TBF policy puts it to a waiting queue
+      according to its classification. The classification of RPC requests is
+      based on either NID or JobID of the RPC according to the configure of
+      TBF. TBF policy maintains multiple queues in the system, one queue for
+      each category in the classification of RPC requests. The requests waits
+      for tokens in the FIFO queue before they have been handled so as to keep
+      the RPC rates under the limits.</para>
+      <para>When Lustre services are too busy to handle all of the requests in
+      time, all of the specified rates of the queues will not be satisfied.
+      Nothing bad will happen except some of the RPC rates are slower than
+      configured. In this case, the queue with higher rate will have an
+      advantage over the queues with lower rates, but none of them will be
+      starved.</para>
+      <para>To manage the RPC rate of queues, we don't need to set the rate of
+      each queue manually. Instead, we define rules which TBF policy matches to
+      determine RPC rate limits. All of the defined rules are organized as an
+      ordered list. Whenever a queue is newly created, it goes though the rule
+      list and takes the first matched rule as its rule, so that the queue
+      knows its RPC token rate. A rule can be added to or removed from the list
+      at run time. Whenever the list of rules is changed, the queues will
+      update their matched rules.</para>
       <itemizedlist>
-	<listitem>
-	  <para><literal>ost.OSS.ost_io.nrs_tbf_rule</literal></para>
-	  <para>The format of the rule start command of TBF policy is as follows:</para>
-	  <screen>$ lctl set_param x.x.x.nrs_tbf_rule=
-		  "[reg|hp] start <replaceable>rule_name</replaceable> <replaceable>arguments</replaceable>..."</screen>
-	  <para>The '<replaceable>rule_name</replaceable>' argument is a string which identifies a rule.
-		  The format of the '<replaceable>arguments</replaceable>' is changing according to the
-		  type of the TBF policy. For the NID based TBF policy, its format is as follows:</para>
-	  <screen>$ lctl set_param x.x.x.nrs_tbf_rule=
-		  "[reg|hp] start <replaceable>rule_name</replaceable> {<replaceable>nidlist</replaceable>} <replaceable>rate</replaceable>"</screen>
-	  <para>The format of '<replaceable>nidlist</replaceable>' argument is the same as the
-		  format when configuring LNET route. The '<replaceable>rate</replaceable>' argument is
-		  the RPC rate of the rule, means the upper limit number of requests per second.</para>
-	  <para>Following commands are valid. Please note that a newly started rule is prior to old rules,
-		so the order of starting rules is critical too.</para>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-		  "start other_clients {192.168.*.*@tcp} 50"</screen>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-		  "start loginnode {192.168.1.1@tcp} 100"</screen>
-	  <para>General rule can be replaced by two rules (reg and hp) as follows:</para>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-		  "reg start loginnode {192.168.1.1@tcp} 100"</screen>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-		  "hp start loginnode {192.168.1.1@tcp} 100"</screen>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-		  "start computes {192.168.1.[2-128]@tcp} 500"</screen>
-	  <para>The above rules will put an upper limit for servers to process at most 5x as many RPCs
-		  from compute nodes as login nodes.</para>
-	  <para>For the JobID (please see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-		linkend="dbdoclet.jobstats"/> for more details) based TBF policy, its format is as follows:</para>
-	  <screen>$ lctl set_param x.x.x.nrs_tbf_rule=
-		  "[reg|hp] start <replaceable>name</replaceable> {<replaceable>jobid_list</replaceable>} <replaceable>rate</replaceable>"</screen>
-	  <para>Following commands are valid:</para>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-		  "start user1 {iozone.500 dd.500} 100"</screen>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-		  "start iozone_user1 {iozone.500} 100"</screen>
-	  <para>Same as nid, could use reg and hp rules separately:</para>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-		  "hp start iozone_user1 {iozone.500} 100"</screen>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-		  "reg start iozone_user1 {iozone.500} 100"</screen>
-	  <para>The format of the rule change command of TBF policy is as follows:</para>
-	  <screen>$ lctl set_param x.x.x.nrs_tbf_rule=
-		  "[reg|hp] change <replaceable>rule_name</replaceable> <replaceable>rate</replaceable>"</screen>
-	  <para>Following commands are valid:</para>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="change loginnode 200"</screen>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="reg change loginnode 200"</screen>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="hp change loginnode 200"</screen>
-	  <para>The format of the rule stop command of TBF policy is as follows:</para>
-	  <screen>$ lctl set_param x.x.x.nrs_tbf_rule="[reg|hp] stop <replaceable>rule_name</replaceable>"</screen>
-	  <para>Following commands are valid:</para>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop loginnode"</screen>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="reg stop loginnode"</screen>
-	  <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="hp stop loginnode"</screen>
-	</listitem>
+        <listitem>
+          <para>
+            <literal>ost.OSS.ost_io.nrs_tbf_rule</literal>
+          </para>
+          <para>The format of the rule start command of TBF policy is as
+          follows:</para>
+          <screen>
+$ lctl set_param x.x.x.nrs_tbf_rule=
+                  "[reg|hp] start 
+<replaceable>rule_name</replaceable> 
+<replaceable>arguments</replaceable>..."
+</screen>
+          <para>The '
+          <replaceable>rule_name</replaceable>' argument is a string which
+          identifies a rule. The format of the '
+          <replaceable>arguments</replaceable>' is changing according to the
+          type of the TBF policy. For the NID based TBF policy, its format is
+          as follows:</para>
+          <screen>
+$ lctl set_param x.x.x.nrs_tbf_rule=
+                  "[reg|hp] start 
+<replaceable>rule_name</replaceable> {
+<replaceable>nidlist</replaceable>} 
+<replaceable>rate</replaceable>"
+</screen>
+          <para>The format of '
+          <replaceable>nidlist</replaceable>' argument is the same as the
+          format when configuring LNET route. The '
+          <replaceable>rate</replaceable>' argument is the RPC rate of the
+          rule, means the upper limit number of requests per second.</para>
+          <para>Following commands are valid. Please note that a newly started
+          rule is prior to old rules, so the order of starting rules is
+          critical too.</para>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+                  "start other_clients {192.168.*.*@tcp} 50"
+</screen>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+                  "start loginnode {192.168.1.1@tcp} 100"
+</screen>
+          <para>General rule can be replaced by two rules (reg and hp) as
+          follows:</para>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+                  "reg start loginnode {192.168.1.1@tcp} 100"
+</screen>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+                  "hp start loginnode {192.168.1.1@tcp} 100"
+</screen>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+                  "start computes {192.168.1.[2-128]@tcp} 500"
+</screen>
+          <para>The above rules will put an upper limit for servers to process
+          at most 5x as many RPCs from compute nodes as login nodes.</para>
+          <para>For the JobID (please see 
+          <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+          linkend="dbdoclet.jobstats" />for more details) based TBF policy, its
+          format is as follows:</para>
+          <screen>
+$ lctl set_param x.x.x.nrs_tbf_rule=
+                  "[reg|hp] start 
+<replaceable>name</replaceable> {
+<replaceable>jobid_list</replaceable>} 
+<replaceable>rate</replaceable>"
+</screen>
+          <para>Following commands are valid:</para>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+                  "start user1 {iozone.500 dd.500} 100"
+</screen>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+                  "start iozone_user1 {iozone.500} 100"
+</screen>
+          <para>Same as nid, could use reg and hp rules separately:</para>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+                  "hp start iozone_user1 {iozone.500} 100"
+</screen>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+                  "reg start iozone_user1 {iozone.500} 100"
+</screen>
+          <para>The format of the rule change command of TBF policy is as
+          follows:</para>
+          <screen>
+$ lctl set_param x.x.x.nrs_tbf_rule=
+                  "[reg|hp] change 
+<replaceable>rule_name</replaceable> 
+<replaceable>rate</replaceable>"
+</screen>
+          <para>Following commands are valid:</para>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="change loginnode 200"
+</screen>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="reg change loginnode 200"
+</screen>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="hp change loginnode 200"
+</screen>
+          <para>The format of the rule stop command of TBF policy is as
+          follows:</para>
+          <screen>
+$ lctl set_param x.x.x.nrs_tbf_rule="[reg|hp] stop 
+<replaceable>rule_name</replaceable>"
+</screen>
+          <para>Following commands are valid:</para>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop loginnode"
+</screen>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="reg stop loginnode"
+</screen>
+          <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="hp stop loginnode"
+</screen>
+        </listitem>
       </itemizedlist>
     </section>
   </section>
   <section xml:id="dbdoclet.50438272_25884">
-      <title><indexterm><primary>tuning</primary><secondary>lockless I/O</secondary></indexterm>Lockless I/O Tunables</title>
-    <para>The lockless I/O tunable feature allows servers to ask clients to do lockless I/O (liblustre-style where the server does the locking) on contended files.</para>
+    <title>
+    <indexterm>
+      <primary>tuning</primary>
+      <secondary>lockless I/O</secondary>
+    </indexterm>Lockless I/O Tunables</title>
+    <para>The lockless I/O tunable feature allows servers to ask clients to do
+    lockless I/O (liblustre-style where the server does the locking) on
+    contended files.</para>
     <para>The lockless I/O patch introduces these tunables:</para>
     <itemizedlist>
       <listitem>
-        <para><emphasis role="bold">OST-side:</emphasis></para>
-        <screen>/proc/fs/lustre/ldlm/namespaces/filter-lustre-*
+        <para>
+          <emphasis role="bold">OST-side:</emphasis>
+        </para>
+        <screen>
+/proc/fs/lustre/ldlm/namespaces/filter-lustre-*
 </screen>
-        <para><literal>contended_locks</literal> - If the number of lock conflicts in the scan of granted and waiting queues at contended_locks is exceeded, the resource is considered to be contended.</para>
-        <para><literal>contention_seconds</literal> - The resource keeps itself in a contended state as set in the parameter.</para>
-        <para><literal>max_nolock_bytes</literal> - Server-side locking set only for requests less than the blocks set in the <literal>max_nolock_bytes</literal> parameter. If this tunable is set to zero (0), it disables server-side locking for read/write requests.</para>
+        <para>
+        <literal>contended_locks</literal>- If the number of lock conflicts in
+        the scan of granted and waiting queues at contended_locks is exceeded,
+        the resource is considered to be contended.</para>
+        <para>
+        <literal>contention_seconds</literal>- The resource keeps itself in a
+        contended state as set in the parameter.</para>
+        <para>
+        <literal>max_nolock_bytes</literal>- Server-side locking set only for
+        requests less than the blocks set in the 
+        <literal>max_nolock_bytes</literal> parameter. If this tunable is set to
+        zero (0), it disables server-side locking for read/write
+        requests.</para>
       </listitem>
       <listitem>
-        <para><emphasis role="bold">Client-side:</emphasis></para>
-        <screen>/proc/fs/lustre/llite/lustre-*</screen>
-        <para><literal>contention_seconds</literal> - <literal>llite</literal> inode remembers its contended state for the time specified in this parameter.</para>
+        <para>
+          <emphasis role="bold">Client-side:</emphasis>
+        </para>
+        <screen>
+/proc/fs/lustre/llite/lustre-*
+</screen>
+        <para>
+        <literal>contention_seconds</literal>- 
+        <literal>llite</literal> inode remembers its contended state for the
+        time specified in this parameter.</para>
       </listitem>
       <listitem>
-        <para><emphasis role="bold">Client-side statistics:</emphasis></para>
-        <para>The <literal>/proc/fs/lustre/llite/lustre-*/stats</literal> file has new rows for lockless I/O statistics.</para>
-        <para><literal>lockless_read_bytes</literal> and <literal>lockless_write_bytes</literal> - To count the total bytes read or written, the client makes its own decisions based on the request size. The client does not communicate with the server if the request size is smaller than the <literal>min_nolock_size</literal>, without acquiring locks by the client.</para>
+        <para>
+          <emphasis role="bold">Client-side statistics:</emphasis>
+        </para>
+        <para>The 
+        <literal>/proc/fs/lustre/llite/lustre-*/stats</literal> file has new
+        rows for lockless I/O statistics.</para>
+        <para>
+        <literal>lockless_read_bytes</literal> and 
+        <literal>lockless_write_bytes</literal>- To count the total bytes read
+        or written, the client makes its own decisions based on the request
+        size. The client does not communicate with the server if the request
+        size is smaller than the 
+        <literal>min_nolock_size</literal>, without acquiring locks by the
+        client.</para>
       </listitem>
     </itemizedlist>
   </section>
   <section xml:id="dbdoclet.50438272_80545">
-    <title><indexterm>
-        <primary>tuning</primary>
-        <secondary>for small files</secondary>
-      </indexterm>Improving Lustre File System Performance When Working with Small Files</title>
-    <para>An environment where an application writes small file chunks from many clients to a single
-      file will result in bad I/O performance. To improve the performance of the Lustre file system
-      with small files:</para>
+    <title>
+    <indexterm>
+      <primary>tuning</primary>
+      <secondary>for small files</secondary>
+    </indexterm>Improving Lustre File System Performance When Working with
+    Small Files</title>
+    <para>An environment where an application writes small file chunks from
+    many clients to a single file will result in bad I/O performance. To
+    improve the performance of the Lustre file system with small files:</para>
     <itemizedlist>
       <listitem>
-        <para>Have the application aggregate writes some amount before submitting them to the Lustre
-          file system. By default, the Lustre software enforces POSIX coherency semantics, so it
-          results in lock ping-pong between client nodes if they are all writing to the same file at
-          one time.</para>
+        <para>Have the application aggregate writes some amount before
+        submitting them to the Lustre file system. By default, the Lustre
+        software enforces POSIX coherency semantics, so it results in lock
+        ping-pong between client nodes if they are all writing to the same file
+        at one time.</para>
       </listitem>
       <listitem>
-        <para>Have the application do 4kB <literal>O_DIRECT</literal> sized I/O to the file and disable locking on the output file. This avoids partial-page IO submissions and, by disabling locking, you avoid contention between clients.</para>
+        <para>Have the application do 4kB 
+        <literal>O_DIRECT</literal> sized I/O to the file and disable locking on
+        the output file. This avoids partial-page IO submissions and, by
+        disabling locking, you avoid contention between clients.</para>
       </listitem>
       <listitem>
         <para>Have the application write contiguous data.</para>
       </listitem>
       <listitem>
-        <para>Add more disks or use SSD disks for the OSTs. This dramatically improves the IOPS rate. Consider creating larger OSTs rather than many smaller OSTs due to less overhead (journal, connections, etc).</para>
+        <para>Add more disks or use SSD disks for the OSTs. This dramatically
+        improves the IOPS rate. Consider creating larger OSTs rather than many
+        smaller OSTs due to less overhead (journal, connections, etc).</para>
       </listitem>
       <listitem>
-        <para>Use RAID-1+0 OSTs instead of RAID-5/6. There is RAID parity overhead for writing small chunks of data to disk.</para>
+        <para>Use RAID-1+0 OSTs instead of RAID-5/6. There is RAID parity
+        overhead for writing small chunks of data to disk.</para>
       </listitem>
     </itemizedlist>
   </section>
   <section xml:id="dbdoclet.50438272_45406">
-    <title><indexterm><primary>tuning</primary><secondary>write performance</secondary></indexterm>Understanding Why Write Performance is Better Than Read Performance</title>
-    <para>Typically, the performance of write operations on a Lustre cluster is better than read operations. When doing writes, all clients are sending write RPCs asynchronously. The RPCs are allocated, and written to disk in the order they arrive. In many cases, this allows the back-end storage to aggregate writes efficiently.</para>
-    <para>In the case of read operations, the reads from clients may come in a different order and need a lot of seeking to get read from the disk. This noticeably hampers the read throughput.</para>
-    <para>Currently, there is no readahead on the OSTs themselves, though the clients do readahead. If there are lots of clients doing reads it would not be possible to do any readahead in any case because of memory consumption (consider that even a single RPC (1 MB) readahead for 1000 clients would consume 1 GB of RAM).</para>
-    <para>For file systems that use socklnd (TCP, Ethernet) as interconnect, there is also additional CPU overhead because the client cannot receive data without copying it from the network buffers. In the write case, the client CAN send data without the additional data copy. This means that the client is more likely to become CPU-bound during reads than writes.</para>
+    <title>
+    <indexterm>
+      <primary>tuning</primary>
+      <secondary>write performance</secondary>
+    </indexterm>Understanding Why Write Performance is Better Than Read
+    Performance</title>
+    <para>Typically, the performance of write operations on a Lustre cluster is
+    better than read operations. When doing writes, all clients are sending
+    write RPCs asynchronously. The RPCs are allocated, and written to disk in
+    the order they arrive. In many cases, this allows the back-end storage to
+    aggregate writes efficiently.</para>
+    <para>In the case of read operations, the reads from clients may come in a
+    different order and need a lot of seeking to get read from the disk. This
+    noticeably hampers the read throughput.</para>
+    <para>Currently, there is no readahead on the OSTs themselves, though the
+    clients do readahead. If there are lots of clients doing reads it would not
+    be possible to do any readahead in any case because of memory consumption
+    (consider that even a single RPC (1 MB) readahead for 1000 clients would
+    consume 1 GB of RAM).</para>
+    <para>For file systems that use socklnd (TCP, Ethernet) as interconnect,
+    there is also additional CPU overhead because the client cannot receive
+    data without copying it from the network buffers. In the write case, the
+    client CAN send data without the additional data copy. This means that the
+    client is more likely to become CPU-bound during reads than writes.</para>
   </section>
 </chapter>
