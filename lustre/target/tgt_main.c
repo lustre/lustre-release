@@ -151,6 +151,8 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 out:
 	dt_txn_callback_del(lut->lut_bottom, &lut->lut_txn_cb);
 out_put:
+	obd->u.obt.obt_magic = 0;
+	obd->u.obt.obt_lut = NULL;
 	if (lut->lut_last_rcvd != NULL) {
 		lu_object_put(env, &lut->lut_last_rcvd->do_lu);
 		lut->lut_last_rcvd = NULL;

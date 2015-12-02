@@ -308,7 +308,7 @@ static void tgt_free_reply_data(struct lu_target *lut,
 {
 	CDEBUG(D_TRACE, "%s: free reply data %p: xid %llu, transno %llu, "
 	       "client gen %u, slot idx %d\n",
-	       tgt_name(lut), trd, trd->trd_reply.lrd_xid,
+	       lut == NULL ? "" : tgt_name(lut), trd, trd->trd_reply.lrd_xid,
 	       trd->trd_reply.lrd_transno, trd->trd_reply.lrd_client_gen,
 	       trd->trd_index);
 
@@ -316,7 +316,8 @@ static void tgt_free_reply_data(struct lu_target *lut,
 
 	list_del(&trd->trd_list);
 	ted->ted_reply_cnt--;
-	tgt_clear_reply_slot(lut, trd->trd_index);
+	if (lut != NULL)
+		tgt_clear_reply_slot(lut, trd->trd_index);
 	OBD_FREE_PTR(trd);
 }
 
@@ -331,7 +332,7 @@ static void tgt_release_reply_data(struct lu_target *lut,
 {
 	CDEBUG(D_TRACE, "%s: release reply data %p: xid %llu, transno %llu, "
 	       "client gen %u, slot idx %d\n",
-	       tgt_name(lut), trd, trd->trd_reply.lrd_xid,
+	       lut == NULL ? "" : tgt_name(lut), trd, trd->trd_reply.lrd_xid,
 	       trd->trd_reply.lrd_transno, trd->trd_reply.lrd_client_gen,
 	       trd->trd_index);
 
@@ -418,9 +419,12 @@ void tgt_client_free(struct obd_export *exp)
 	OBD_FREE_PTR(ted->ted_lcd);
 	ted->ted_lcd = NULL;
 
-	/* Slot may be not yet assigned */
-	if (ted->ted_lr_idx < 0)
+	/* Target may have been freed (see LU-7430)
+	 * Slot may be not yet assigned */
+	if (exp->exp_obd->u.obt.obt_magic != OBT_MAGIC ||
+	    ted->ted_lr_idx < 0)
 		return;
+
 	/* Clear bit when lcd is freed */
 	LASSERT(lut && lut->lut_client_bitmap);
 	if (!test_and_clear_bit(ted->ted_lr_idx, lut->lut_client_bitmap)) {
