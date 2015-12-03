@@ -58,7 +58,9 @@ struct nrs_tbf_client {
 	char				 tc_jobid[LUSTRE_JOBID_SIZE];
 	/** Reference number of the client. */
 	atomic_t			 tc_ref;
-	/** Likage to rule. */
+	/** Lock to protect rule and linkage. */
+	spinlock_t			 tc_rule_lock;
+	/** Linkage to rule. */
 	struct list_head	         tc_linkage;
 	/** Pointer to rule. */
 	struct nrs_tbf_rule		*tc_rule;
@@ -115,6 +117,8 @@ struct nrs_tbf_rule {
 	__u64				 tr_nsecs;
 	/** Token bucket depth. */
 	__u64				 tr_depth;
+	/** Lock to protect the list of clients. */
+	spinlock_t			 tr_rule_lock;
 	/** List of client. */
 	struct list_head		 tr_cli_list;
 	/** Flags of the rule. */
