@@ -59,7 +59,9 @@ fi
 if [ "x$CHROOT" == "xyes" ]; then
 	echo "copying necessary libs to $DIR"
 	cp `which dbench` $DIR
-	LIBS71=$(ldd $DIR/dbench|sed -e 's/\t*//' -e 's/.*=> //' -e 's/ .*//' -e 's/^\///')
+	LIBS71=$(ldd $DIR/dbench |
+		sed -e 's/\t*//' -e 's/.*=> //' -e 's/ .*//' -e 's/^\///' |
+		grep -v 'linux-vdso.so.1')
 	tar -C / -chf - $LIBS71 | tar -C $DIR -xvf -
 	if [ "${PIPESTATUS[*]}" != "0 0" ]; then
 		echo "can't copy libs $LIBS71 to $DIR"
