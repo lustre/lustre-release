@@ -36,8 +36,9 @@
  */
 
 #define DEBUG_SUBSYSTEM S_OSC
+#include <lustre_osc.h>
 
-#include "osc_cl_internal.h"
+#include "osc_internal.h"
 
 static void osc_lru_del(struct client_obd *cli, struct osc_page *opg);
 static void osc_lru_use(struct client_obd *cli, struct osc_page *opg);

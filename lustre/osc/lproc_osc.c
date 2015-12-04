@@ -37,6 +37,8 @@
 #include <obd_class.h>
 #include <lprocfs_status.h>
 #include <linux/seq_file.h>
+#include <lustre_osc.h>
+
 #include "osc_internal.h"
 
 #ifdef CONFIG_PROC_FS

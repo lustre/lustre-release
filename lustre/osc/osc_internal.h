@@ -35,69 +35,15 @@
 
 #define OAP_MAGIC 8675309
 
+#include <lustre_osc.h>
+
 extern atomic_t osc_pool_req_count;
 extern unsigned int osc_reqpool_maxreqcount;
 extern struct ptlrpc_request_pool *osc_rq_pool;
 
-struct lu_env;
-
-enum async_flags {
-        ASYNC_READY = 0x1, /* ap_make_ready will not be called before this
-                              page is added to an rpc */
-        ASYNC_URGENT = 0x2, /* page must be put into an RPC before return */
-        ASYNC_COUNT_STABLE = 0x4, /* ap_refresh_count will not be called
-                                     to give the caller a chance to update
-                                     or cancel the size of the io */
-        ASYNC_HP = 0x10,
-};
-
-struct osc_async_page {
-        int                     oap_magic;
-        unsigned short          oap_cmd;
-        unsigned short          oap_interrupted:1;
-
-	struct list_head	oap_pending_item;
-	struct list_head	oap_rpc_item;
-
-	loff_t			oap_obj_off;
-        unsigned                oap_page_off;
-        enum async_flags        oap_async_flags;
-
-        struct brw_page         oap_brw_page;
-
-        struct ptlrpc_request   *oap_request;
-        struct client_obd       *oap_cli;
-	struct osc_object       *oap_obj;
-
-	spinlock_t		 oap_lock;
-};
-
-#define oap_page        oap_brw_page.pg
-#define oap_count       oap_brw_page.count
-#define oap_brw_flags   oap_brw_page.flag
-
-static inline struct osc_async_page *brw_page2oap(struct brw_page *pga)
-{
-	return (struct osc_async_page *)container_of(pga, struct osc_async_page,
-						     oap_brw_page);
-}
-
-struct osc_cache_waiter {
-	struct list_head	ocw_entry;
-	wait_queue_head_t	ocw_waitq;
-	struct osc_async_page  *ocw_oap;
-	int                     ocw_grant;
-	int                     ocw_rc;
-};
-
 void osc_wake_cache_waiters(struct client_obd *cli);
 int osc_shrink_grant_to_target(struct client_obd *cli, __u64 target_bytes);
 void osc_update_next_shrink(struct client_obd *cli);
-
-/*
- * cl integration.
- */
-#include <cl_object.h>
 
 extern struct ptlrpc_request_set *PTLRPCD_SET;
 
@@ -153,6 +99,24 @@ static inline int lproc_osc_attach_seqstat(struct obd_device *dev) {return 0;}
 
 extern struct lu_device_type osc_device_type;
 
+static inline int osc_is_object(const struct lu_object *obj)
+{
+	return obj->lo_dev->ld_type == &osc_device_type;
+}
+
+static inline struct osc_lock *osc_lock_at(const struct cl_lock *lock)
+{
+	return cl2osc_lock(cl_lock_at(lock, &osc_device_type));
+}
+
+int osc_lock_init(const struct lu_env *env, struct cl_object *obj,
+		  struct cl_lock *lock, const struct cl_io *io);
+int osc_io_init(const struct lu_env *env, struct cl_object *obj,
+		struct cl_io *io);
+struct lu_object *osc_object_alloc(const struct lu_env *env,
+				   const struct lu_object_header *hdr,
+				   struct lu_device *dev);
+
 static inline int osc_recoverable_error(int rc)
 {
         return (rc == -EIO || rc == -EROFS || rc == -ENOMEM ||
@@ -173,34 +137,6 @@ static inline char *cli_name(struct client_obd *cli)
 #define min_t(type,x,y) \
         ({ type __x = (x); type __y = (y); __x < __y ? __x: __y; })
 #endif
-
-struct osc_device {
-        struct cl_device    od_cl;
-        struct obd_export  *od_exp;
-
-        /* Write stats is actually protected by client_obd's lock. */
-        struct osc_stats {
-                uint64_t     os_lockless_writes;          /* by bytes */
-                uint64_t     os_lockless_reads;           /* by bytes */
-                uint64_t     os_lockless_truncates;       /* by times */
-        } od_stats;
-
-        /* configuration item(s) */
-        int                 od_contention_time;
-        int                 od_lockless_truncate;
-};
-
-static inline struct osc_device *obd2osc_dev(const struct obd_device *d)
-{
-        return container_of0(d->obd_lu_dev, struct osc_device, od_cl.cd_lu_dev);
-}
-
-extern struct kmem_cache *osc_quota_kmem;
-struct osc_quota_info {
-	/** linkage for quota hash table */
-	struct hlist_node oqi_hash;
-	u32		  oqi_id;
-};
 
 struct osc_async_args {
 	struct obd_info	*aa_oi;

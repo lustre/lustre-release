@@ -29,6 +29,8 @@
  */
 
 #include <obd.h>
+#include <lustre_osc.h>
+
 #include "osc_internal.h"
 
 static inline struct osc_quota_info *osc_oqi_alloc(u32 id)

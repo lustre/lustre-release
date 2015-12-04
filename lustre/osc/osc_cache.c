@@ -37,7 +37,8 @@
 
 #define DEBUG_SUBSYSTEM S_OSC
 
-#include "osc_cl_internal.h"
+#include <lustre_osc.h>
+
 #include "osc_internal.h"
 
 static int extent_debug; /* set it to be true for more debug */

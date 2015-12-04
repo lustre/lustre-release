@@ -36,29 +36,13 @@
  */
 
 #define DEBUG_SUBSYSTEM S_OSC
+#include <lustre_osc.h>
 
-#include "osc_cl_internal.h"
+#include "osc_internal.h"
 
 /** \addtogroup osc
  *  @{
  */
-
-/*****************************************************************************
- *
- * Type conversions.
- *
- */
-
-static struct lu_object *osc2lu(struct osc_object *osc)
-{
-        return &osc->oo_cl.co_lu;
-}
-
-static struct osc_object *lu2osc(const struct lu_object *obj)
-{
-        LINVRNT(osc_is_object(obj));
-        return container_of0(obj, struct osc_object, oo_cl.co_lu);
-}
 
 /*****************************************************************************
  *

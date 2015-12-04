@@ -38,26 +38,13 @@
 #define DEBUG_SUBSYSTEM S_OSC
 
 #include <lustre_obdo.h>
+#include <lustre_osc.h>
 
-#include "osc_cl_internal.h"
+#include "osc_internal.h"
 
-/** \addtogroup osc 
- *  @{ 
+/** \addtogroup osc
+ *  @{
  */
-
-/*****************************************************************************
- *
- * Type conversions.
- *
- */
-
-static struct osc_io *cl2osc_io(const struct lu_env *env,
-                                const struct cl_io_slice *slice)
-{
-        struct osc_io *oio = container_of0(slice, struct osc_io, oi_cl);
-        LINVRNT(oio == osc_env_io(env));
-        return oio;
-}
 
 /*****************************************************************************
  *

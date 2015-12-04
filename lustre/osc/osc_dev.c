@@ -38,11 +38,12 @@
 
 /* class_name2obd() */
 #include <obd_class.h>
+#include <lustre_osc.h>
 
-#include "osc_cl_internal.h"
+#include "osc_internal.h"
 
-/** \addtogroup osc 
- * @{ 
+/** \addtogroup osc
+ * @{
  */
 
 struct kmem_cache *osc_lock_kmem;
@@ -87,17 +88,6 @@ struct lu_kmem_descr osc_caches[] = {
                 .ckd_cache = NULL
         }
 };
-
-/*****************************************************************************
- *
- * Type conversions.
- *
- */
-
-static struct lu_device *osc2lu_dev(struct osc_device *osc)
-{
-        return &osc->od_cl.cd_lu_dev;
-}
 
 /*****************************************************************************
  *

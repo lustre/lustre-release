@@ -48,8 +48,8 @@
 #include <obd.h>
 #include <obd_cksum.h>
 #include <obd_class.h>
+#include <lustre_osc.h>
 
-#include "osc_cl_internal.h"
 #include "osc_internal.h"
 
 atomic_t osc_pool_req_count;

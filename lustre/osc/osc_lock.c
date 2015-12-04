@@ -40,8 +40,9 @@
 #include <libcfs/libcfs.h>
 /* fid_build_reg_res_name() */
 #include <lustre_fid.h>
+#include <lustre_osc.h>
 
-#include "osc_cl_internal.h"
+#include "osc_internal.h"
 
 /** \addtogroup osc
  *  @{
