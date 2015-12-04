@@ -172,12 +172,23 @@ xml:id="installinglustre">
                   </row>
                   <row>
                     <entry>
-                      <code>lustre-ldiskfs-</code>
+                      <code>lustre-osd-ldiskfs-</code>
                       <replaceable>ver</replaceable>
                       <code>_lustre.</code>
                       <replaceable>arch</replaceable>
                     </entry>
                     <entry>Lustre back-end file system tools</entry>
+                  </row>
+                  <row>
+                    <entry>
+                      <code>lustre-zfs-ldiskfs-</code>
+                      <replaceable>ver</replaceable>
+                      <code>_lustre.</code>
+                      <replaceable>arch</replaceable>
+                    </entry>
+                    <entry>Lustre back-end file system tools for ZFS. This is 
+                    an alternative to 
+                    <literal>lustre-osd-ldiskfs</literal></entry>
                   </row>
                   <row>
                     <entry>
@@ -348,7 +359,7 @@ xml:id="installinglustre">
                 <code>kernel-debuginfo</code>, 
                 <code>kernel-debuginfo-common</code>, 
                 <code>lustre-debuginfo</code>, 
-                <code>lustre-ldiskfs-debuginfo</code>- Versions of required
+                <code>lustre-osd-ldiskfs-debuginfo</code>- Versions of required
                 packages with debugging symbols and other debugging options
                 enabled for use in troubleshooting.</para>
               </listitem>
