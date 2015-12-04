@@ -145,7 +145,7 @@ int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
 }
 
 static int cl_io_get(struct inode *inode, struct lu_env **envout,
-		     struct cl_io **ioout, int *refcheck)
+		     struct cl_io **ioout, __u16 *refcheck)
 {
 	struct lu_env		*env;
 	struct cl_io		*io;
@@ -182,8 +182,8 @@ int cl_glimpse_size0(struct inode *inode, int agl)
          */
         struct lu_env          *env = NULL;
         struct cl_io           *io  = NULL;
+	__u16                   refcheck;
         int                     result;
-        int                     refcheck;
 
         ENTRY;
 

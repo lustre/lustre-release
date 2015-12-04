@@ -126,7 +126,7 @@ int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
         struct cl_lock         *lock;
         struct cl_lock_descr   *descr;
         __u32                   enqflags;
-        int                     refcheck;
+	__u16                   refcheck;
         int                     rc;
 
         env = cl_env_get(&refcheck);
@@ -180,7 +180,7 @@ void cl_put_grouplock(struct ll_grouplock *lg)
 	struct lu_env  *env  = lg->lg_env;
 	struct cl_io   *io   = lg->lg_io;
 	struct cl_lock *lock = lg->lg_lock;
-	int             refcheck;
+	__u16             refcheck;
 
 	LASSERT(lg->lg_env != NULL);
 	LASSERT(lg->lg_gid != 0);

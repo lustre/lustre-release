@@ -88,7 +88,7 @@ static void ll_invalidatepage(struct page *vmpage,
         struct cl_page   *page;
         struct cl_object *obj;
 
-        int refcheck;
+	__u16 refcheck;
 
         LASSERT(PageLocked(vmpage));
         LASSERT(!PageWriteback(vmpage));
@@ -362,7 +362,7 @@ ll_direct_IO(
 	ssize_t count = iov_iter_count(iter);
 	ssize_t tot_bytes = 0, result = 0;
 	size_t size = MAX_DIO_SIZE;
-	int refcheck;
+	__u16 refcheck;
 
 	/* FIXME: io smaller than PAGE_SIZE is broken on ia64 ??? */
 	if ((file_offset & ~PAGE_MASK) || (count & ~PAGE_MASK))
@@ -495,7 +495,7 @@ ll_direct_IO(int rw, struct kiocb *iocb, const struct iovec *iov,
 	ssize_t tot_bytes = 0, result = 0;
 	unsigned long seg = 0;
 	size_t size = MAX_DIO_SIZE;
-	int refcheck;
+	__u16 refcheck;
 	ENTRY;
 
         /* FIXME: io smaller than PAGE_SIZE is broken on ia64 ??? */

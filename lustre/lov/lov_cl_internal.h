@@ -121,7 +121,7 @@ struct lov_device_emerg {
          *
          * \see cl_env_get()
          */
-        int                 emrg_refcheck;
+	__u16               emrg_refcheck;
 };
 
 struct lov_device {
@@ -381,40 +381,39 @@ struct lov_thread_info {
  * State that lov_io maintains for every sub-io.
  */
 struct lov_io_sub {
-        int                  sub_stripe;
-        /**
-         * sub-io for a stripe. Ideally sub-io's can be stopped and resumed
-         * independently, with lov acting as a scheduler to maximize overall
-         * throughput.
-         */
-        struct cl_io        *sub_io;
-        /**
-         * Linkage into a list (hanging off lov_io::lis_active) of all
-         * sub-io's active for the current IO iteration.
-         */
+	__u16			sub_stripe;
+	/**
+	 * environment's refcheck.
+	 *
+	 * \see cl_env_get()
+	 */
+	__u16			sub_refcheck;
+	__u16			sub_reenter;
+	/**
+	 * true, iff cl_io_init() was successfully executed against
+	 * lov_io_sub::sub_io.
+	 */
+	__u16			sub_io_initialized:1,
+	/**
+	 * True, iff lov_io_sub::sub_io and lov_io_sub::sub_env weren't
+	 * allocated, but borrowed from a per-device emergency pool.
+	 */
+				sub_borrowed:1;
+	/**
+	 * Linkage into a list (hanging off lov_io::lis_active) of all
+	 * sub-io's active for the current IO iteration.
+	 */
 	struct list_head	sub_linkage;
-        /**
-         * true, iff cl_io_init() was successfully executed against
-         * lov_io_sub::sub_io.
-         */
-        int                  sub_io_initialized;
-        /**
-         * True, iff lov_io_sub::sub_io and lov_io_sub::sub_env weren't
-         * allocated, but borrowed from a per-device emergency pool.
-         */
-        int                  sub_borrowed;
-        /**
-         * environment, in which sub-io executes.
-         */
-        struct lu_env *sub_env;
-        /**
-         * environment's refcheck.
-         *
-         * \see cl_env_get()
-         */
-        int                  sub_refcheck;
-        int                  sub_refcheck2;
-        int                  sub_reenter;
+	/**
+	 * sub-io for a stripe. Ideally sub-io's can be stopped and resumed
+	 * independently, with lov acting as a scheduler to maximize overall
+	 * throughput.
+	 */
+	struct cl_io		*sub_io;
+	/**
+	 * environment, in which sub-io executes.
+	 */
+	struct lu_env		*sub_env;
 };
 
 /**

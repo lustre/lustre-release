@@ -772,7 +772,7 @@ static int lov_layout_change(const struct lu_env *unused,
 	const struct lov_layout_operations *new_ops;
 	void *cookie;
 	struct lu_env *env;
-	int refcheck;
+	__u16 refcheck;
 	int rc;
 	ENTRY;
 

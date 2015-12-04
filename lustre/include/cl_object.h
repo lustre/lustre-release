@@ -2453,23 +2453,23 @@ void cl_sync_io_end(const struct lu_env *env, struct cl_sync_io *anchor);
  * @{ */
 
 struct cl_env_nest {
-        int   cen_refcheck;
-        void *cen_cookie;
+	__u16   cen_refcheck;
+	void *cen_cookie;
 };
 
-struct lu_env *cl_env_peek       (int *refcheck);
-struct lu_env *cl_env_get        (int *refcheck);
-struct lu_env *cl_env_alloc      (int *refcheck, __u32 tags);
-struct lu_env *cl_env_nested_get (struct cl_env_nest *nest);
-void           cl_env_put        (struct lu_env *env, int *refcheck);
-void           cl_env_nested_put (struct cl_env_nest *nest, struct lu_env *env);
-void          *cl_env_reenter    (void);
-void           cl_env_reexit     (void *cookie);
-void           cl_env_implant    (struct lu_env *env, int *refcheck);
-void           cl_env_unplant    (struct lu_env *env, int *refcheck);
-unsigned       cl_env_cache_purge(unsigned nr);
-struct lu_env *cl_env_percpu_get (void);
-void           cl_env_percpu_put (struct lu_env *env);
+struct lu_env *cl_env_peek(__u16 *refcheck);
+struct lu_env *cl_env_get(__u16 *refcheck);
+struct lu_env *cl_env_alloc(__u16 *refcheck, __u32 tags);
+struct lu_env *cl_env_nested_get(struct cl_env_nest *nest);
+void cl_env_put(struct lu_env *env, __u16 *refcheck);
+void cl_env_nested_put(struct cl_env_nest *nest, struct lu_env *env);
+void *cl_env_reenter(void);
+void cl_env_reexit(void *cookie);
+void cl_env_implant(struct lu_env *env, __u16 *refcheck);
+void cl_env_unplant(struct lu_env *env, __u16 *refcheck);
+unsigned cl_env_cache_purge(unsigned nr);
+struct lu_env *cl_env_percpu_get(void);
+void cl_env_percpu_put(struct lu_env *env);
 
 /** @} cl_env */
 

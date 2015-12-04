@@ -64,7 +64,7 @@
  * mutex.
  */
 struct lu_env *cl_inode_fini_env;
-int cl_inode_fini_refcheck;
+__u16 cl_inode_fini_refcheck;
 
 /**
  * A mutex serializing calls to slp_inode_fini() under extreme memory
@@ -78,7 +78,7 @@ int cl_setattr_ost(struct cl_object *obj, const struct iattr *attr,
         struct lu_env *env;
         struct cl_io  *io;
         int            result;
-        int            refcheck;
+	__u16          refcheck;
 
         ENTRY;
 
@@ -142,7 +142,7 @@ int cl_file_inode_init(struct inode *inode, struct lustre_md *md)
 		}
 	};
         int result = 0;
-        int refcheck;
+	__u16 refcheck;
 
 	LASSERT(md->body->mbo_valid & OBD_MD_FLID);
 	LASSERT(S_ISREG(inode->i_mode));
@@ -228,7 +228,7 @@ void cl_inode_fini(struct inode *inode)
 	struct lu_env           *env;
 	struct ll_inode_info    *lli  = ll_i2info(inode);
         struct cl_object        *clob = lli->lli_clob;
-        int refcheck;
+	__u16  refcheck;
         int emergency;
 
         if (clob != NULL) {

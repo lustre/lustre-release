@@ -138,7 +138,7 @@ static inline int return_if_equal(struct ldlm_lock *lock, void *data)
 static int find_cbdata(struct inode *inode)
 {
 	struct lu_env			*env;
-	int				refcheck;
+	__u16				refcheck;
 	struct ll_sb_info		*sbi = ll_i2sbi(inode);
 	int				rc = 0;
 	ENTRY;

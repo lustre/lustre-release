@@ -317,7 +317,7 @@ int cl_sb_init(struct super_block *sb)
         struct cl_device  *cl;
         struct lu_env     *env;
         int rc = 0;
-        int refcheck;
+	__u16 refcheck;
 
         sbi  = ll_s2sbi(sb);
         env = cl_env_get(&refcheck);
@@ -339,7 +339,7 @@ int cl_sb_fini(struct super_block *sb)
         struct ll_sb_info *sbi;
         struct lu_env     *env;
         struct cl_device  *cld;
-        int                refcheck;
+	__u16              refcheck;
         int                result;
 
         ENTRY;
@@ -541,7 +541,7 @@ static int vvp_pgcache_show(struct seq_file *f, void *v)
 	struct cl_object        *clob;
 	struct lu_env           *env;
 	struct vvp_pgcache_id    id;
-	int                      refcheck;
+	__u16                    refcheck;
 	int                      result;
 
 	env = cl_env_get(&refcheck);
@@ -587,7 +587,7 @@ static void *vvp_pgcache_start(struct seq_file *f, loff_t *pos)
 {
         struct ll_sb_info *sbi;
         struct lu_env     *env;
-        int                refcheck;
+	__u16              refcheck;
 
         sbi = f->private;
 
@@ -611,7 +611,7 @@ static void *vvp_pgcache_next(struct seq_file *f, void *v, loff_t *pos)
 {
         struct ll_sb_info *sbi;
         struct lu_env     *env;
-        int                refcheck;
+	__u16              refcheck;
 
         env = cl_env_get(&refcheck);
         if (!IS_ERR(env)) {

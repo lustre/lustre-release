@@ -433,7 +433,7 @@ ll_max_cached_mb_seq_write(struct file *file, const char __user *buffer,
 	long diff = 0;
 	long nrpages = 0;
 	long pages_number;
-	int refcheck;
+	__u16 refcheck;
 	int mult;
 	long rc;
 	char kernbuf[128];

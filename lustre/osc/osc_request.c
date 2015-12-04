@@ -2533,7 +2533,7 @@ static int osc_import_event(struct obd_device *obd,
         case IMP_EVENT_INVALIDATE: {
                 struct ldlm_namespace *ns = obd->obd_namespace;
                 struct lu_env         *env;
-                int                    refcheck;
+		__u16                  refcheck;
 
 		ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
 

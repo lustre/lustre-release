@@ -529,7 +529,7 @@ static ssize_t ll_getxattr_lov(struct inode *inode, void *buf, size_t buf_size)
 			.cl_buf.lb_buf = buf,
 			.cl_buf.lb_len = buf_size,
 		};
-		int refcheck;
+		__u16 refcheck;
 
 		if (obj == NULL)
 			RETURN(-ENODATA);

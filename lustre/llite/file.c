@@ -1175,7 +1175,7 @@ static ssize_t ll_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 	struct vvp_io_args *args;
 	struct lu_env *env;
 	ssize_t result;
-	int refcheck;
+	__u16 refcheck;
 
 	env = cl_env_get(&refcheck);
 	if (IS_ERR(env))
@@ -1199,7 +1199,7 @@ static ssize_t ll_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	struct vvp_io_args *args;
 	struct lu_env *env;
 	ssize_t result;
-	int refcheck;
+	__u16 refcheck;
 
 	env = cl_env_get(&refcheck);
 	if (IS_ERR(env))
@@ -1262,7 +1262,7 @@ static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
 
 	if (nr_segs == 1) {
 		struct lu_env *env;
-		int refcheck;
+		__u16 refcheck;
 
 		env = cl_env_get(&refcheck);
 		if (IS_ERR(env))
@@ -1308,7 +1308,7 @@ static ssize_t ll_file_read(struct file *file, char __user *buf, size_t count,
 	struct iovec   iov = { .iov_base = buf, .iov_len = count };
         struct kiocb  *kiocb;
         ssize_t        result;
-        int            refcheck;
+	__u16          refcheck;
         ENTRY;
 
         env = cl_env_get(&refcheck);
@@ -1350,7 +1350,7 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 
 	if (nr_segs == 1) {
 		struct lu_env *env;
-		int refcheck;
+		__u16 refcheck;
 
 		env = cl_env_get(&refcheck);
 		if (IS_ERR(env))
@@ -1397,7 +1397,7 @@ static ssize_t ll_file_write(struct file *file, const char __user *buf,
 			       .iov_len = count };
         struct kiocb  *kiocb;
         ssize_t        result;
-        int            refcheck;
+	__u16          refcheck;
         ENTRY;
 
         env = cl_env_get(&refcheck);
@@ -1431,7 +1431,7 @@ static ssize_t ll_file_splice_read(struct file *in_file, loff_t *ppos,
         struct lu_env      *env;
         struct vvp_io_args *args;
         ssize_t             result;
-        int                 refcheck;
+	__u16               refcheck;
         ENTRY;
 
         env = cl_env_get(&refcheck);
@@ -1590,7 +1590,7 @@ static int ll_file_getstripe(struct inode *inode,
 			     struct lov_user_md __user *lum)
 {
 	struct lu_env	*env;
-	int		refcheck;
+	__u16		refcheck;
 	int		rc;
 	ENTRY;
 
@@ -1768,7 +1768,7 @@ static int ll_do_fiemap(struct inode *inode, struct fiemap *fiemap,
 			size_t num_bytes)
 {
 	struct lu_env			*env;
-	int				refcheck;
+	__u16				refcheck;
 	int				rc = 0;
 	struct ll_fiemap_info_key	fmkey = { .lfik_name = KEY_FIEMAP, };
 	ENTRY;
@@ -1874,7 +1874,7 @@ int ll_data_version(struct inode *inode, __u64 *data_version, int flags)
 	struct cl_object *obj = ll_i2info(inode)->lli_clob;
 	struct lu_env *env;
 	struct cl_io *io;
-	int refcheck;
+	__u16  refcheck;
 	int result;
 
 	ENTRY;

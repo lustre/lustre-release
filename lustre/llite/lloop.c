@@ -450,7 +450,7 @@ static int loop_thread(void *data)
         unsigned long total_count = 0;
 
         struct lu_env *env;
-        int refcheck;
+	__u16 refcheck;
         int ret = 0;
 
         set_user_nice(current, -20);

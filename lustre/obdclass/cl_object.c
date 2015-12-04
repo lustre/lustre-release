@@ -893,7 +893,7 @@ static inline struct cl_env *cl_env_container(struct lu_env *env)
         return container_of(env, struct cl_env, ce_lu);
 }
 
-struct lu_env *cl_env_peek(int *refcheck)
+struct lu_env *cl_env_peek(__u16 *refcheck)
 {
         struct lu_env *env;
         struct cl_env *cle;
@@ -927,7 +927,7 @@ struct lu_env *cl_env_peek(int *refcheck)
  *
  * \see cl_env_put()
  */
-struct lu_env *cl_env_get(int *refcheck)
+struct lu_env *cl_env_get(__u16 *refcheck)
 {
         struct lu_env *env;
 
@@ -952,7 +952,7 @@ EXPORT_SYMBOL(cl_env_get);
  *
  * \see cl_env_get()
  */
-struct lu_env *cl_env_alloc(int *refcheck, __u32 tags)
+struct lu_env *cl_env_alloc(__u16 *refcheck, __u32 tags)
 {
         struct lu_env *env;
 
@@ -1010,7 +1010,7 @@ EXPORT_SYMBOL(cl_env_cache_purge);
  * this thread is using environment and it is returned to the allocation
  * cache, or freed straight away, if cache is large enough.
  */
-void cl_env_put(struct lu_env *env, int *refcheck)
+void cl_env_put(struct lu_env *env, __u16 *refcheck)
 {
         struct cl_env *cle;
 
@@ -1072,7 +1072,7 @@ EXPORT_SYMBOL(cl_env_reexit);
  *
  * \see cl_env_unplant()
  */
-void cl_env_implant(struct lu_env *env, int *refcheck)
+void cl_env_implant(struct lu_env *env, __u16 *refcheck)
 {
         struct cl_env *cle = cl_env_container(env);
 
@@ -1087,7 +1087,7 @@ EXPORT_SYMBOL(cl_env_implant);
 /**
  * Detach environment installed earlier by cl_env_implant().
  */
-void cl_env_unplant(struct lu_env *env, int *refcheck)
+void cl_env_unplant(struct lu_env *env, __u16 *refcheck)
 {
         struct cl_env *cle = cl_env_container(env);
 

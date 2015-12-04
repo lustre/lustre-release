@@ -1115,7 +1115,7 @@ cl_echo_object_find(struct echo_device *d, const struct ost_id *oi)
 	struct cl_object *obj;
 	struct lov_oinfo *oinfo = NULL;
 	struct lu_fid *fid;
-	int refcheck;
+	__u16  refcheck;
 	int rc;
 	ENTRY;
 
@@ -1175,7 +1175,7 @@ static int cl_echo_object_put(struct echo_object *eco)
 {
         struct lu_env *env;
         struct cl_object *obj = echo_obj2cl(eco);
-        int refcheck;
+	__u16  refcheck;
         ENTRY;
 
         env = cl_env_get(&refcheck);
@@ -1295,9 +1295,9 @@ static int cl_echo_object_brw(struct echo_object *eco, int rw, u64 offset,
         struct cl_page          *clp;
         struct lustre_handle    lh = { 0 };
         int page_size = cl_page_size(obj);
-        int refcheck;
         int rc;
         int i;
+	__u16 refcheck;
         ENTRY;
 
 	LASSERT((offset & ~PAGE_MASK) == 0);
@@ -2060,7 +2060,7 @@ static int echo_md_handler(struct echo_device *ed, int command,
 	struct echo_thread_info *info;
         struct lu_device      *ld = ed->ed_next;
         struct lu_env         *env;
-        int                    refcheck;
+	__u16                  refcheck;
         struct lu_object      *parent;
         char                  *name = NULL;
         int                    namelen = data->ioc_plen2;
@@ -2644,7 +2644,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	}
         case OBD_IOC_ECHO_ALLOC_SEQ: {
                 struct lu_env   *cl_env;
-                int              refcheck;
+		__u16            refcheck;
                 __u64            seq;
                 int              max_count;
 
