@@ -84,18 +84,6 @@
     %endif
 %endif
 
-%if %{defined cross_path} && %{defined post_script}
-%define rpm_post_base %(dirname %{cross_path})/%{lustre_name}
-%endif
-
-# SUSE don't support .debug_info section from cross compiler:
-# /usr/lib/rpm/debugedit: Unhandled relocation 10 in .debug_info section
-%if %{defined cross_path} && 0%{?suse_version}
-%global __debug_install_post %{nil}
-%global __debug_package %{nil}
-%global debug_package %{nil}
-%endif
-
 Summary: Lustre File System
 Name: %{lustre_name}
 Version: %{version}
@@ -117,16 +105,11 @@ Requires: lustre-osd
 Requires: lustre-osd-mount
 Provides: lustre-client = %{version}-%{fullrelease}
 %endif
-%if %{defined cross_requires}
-Requires: %{cross_requires}
-AutoReqProv: no
-%else
 # GSS requires this: BuildRequires: pkgconfig, libgssapi-devel >= 0.10
 %if %{_vendor}=="redhat" || %{_vendor}=="fedora"
 #suse don't support selinux
 BuildRequires: libselinux-devel
 Requires: libselinux
-%endif
 %endif
 
 %description
@@ -135,10 +118,6 @@ Userspace tools and files for the Lustre file system.
 %if %{with lustre_modules}
 %package modules
 Summary: Kernel Lustre modules for Linux %{kversion}
-%if %{defined cross_requires}
-Requires: %{cross_requires}
-AutoReqProv: no
-%else
 # for SLES11, we need nothing here
 %if %{_vendor}=="redhat" || %{_vendor}=="fedora"
 %if %{defined krequires}
@@ -149,7 +128,6 @@ Requires: kernel = %{krequires}
 %if %{with lnet_dlc}
 Requires: libyaml
 BuildRequires: libyaml-devel
-%endif
 %endif
 %endif
 Group: Development/Kernel
@@ -419,40 +397,7 @@ echo '%{_bindir}/req_layout' >>lustre-tests.files
 echo '%{_sbindir}/wirecheck' >>lustre-tests.files
 echo '%{_sbindir}/wiretest' >>lustre-tests.files
 %if %{with lustre_modules}
-echo '%{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/llog_test.ko' >>lustre-tests.files
-%endif
-%endif
-
-%if %{defined cross_path}
-%if %{defined rpm_post_base}
-POST_SCRIPT=$RPM_BUILD_DIR/lustre-%{version}/%{post_script}
-if [ -f $POST_SCRIPT ]; then
-	cp -f $POST_SCRIPT $RPM_BUILD_ROOT/%{rpm_post_base}.sh
-	echo '%attr(0555, root, root) %{rpm_post_base}.sh' >>lustre.files
-	cp -f $POST_SCRIPT $RPM_BUILD_ROOT/%{rpm_post_base}-modules.sh
-%if %{with ldiskfs}
-	cp -f $POST_SCRIPT $RPM_BUILD_ROOT/%{rpm_post_base}-osd-ldiskfs.sh
-%if %{with lustre_utils}
-	cp -f $POST_SCRIPT $RPM_BUILD_ROOT/%{rpm_post_base}-mount-osd-ldiskfs.sh
-%endif
-%endif
-%if %{with zfs}
-	cp -f $POST_SCRIPT $RPM_BUILD_ROOT/%{rpm_post_base}-osd-zfs.sh
-%if %{with lustre_utils}
-	cp -f $POST_SCRIPT $RPM_BUILD_ROOT/%{rpm_post_base}-mount-osd-zfs.sh
-%endif
-%endif
-%if %{with lustre_tests}
-	cp -f $POST_SCRIPT $RPM_BUILD_ROOT/%{rpm_post_base}-tests.sh
-	echo '%attr(0555, root, root) %{rpm_post_base}-tests.sh' >>lustre-tests.files
-%endif
-fi
-%endif
-%else
-%if %{with lustre_modules}
-# mark modules executable for find-debuginfo.sh
-find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} \
-    -name \*.ko -type f -exec chmod u+x {} \;
+echo '/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/llog_test.ko' >>lustre-tests.files
 %endif
 %endif
 
@@ -477,7 +422,7 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} \
 
 %{_bindir}/lfs
 %{_bindir}/lfs_migrate
-%{?rootdir}/sbin/mount.lustre
+/sbin/mount.lustre
 %{_libdir}/libptlctl.a
 %{_libdir}/libcfsutil.a
 %{_libdir}/liblustreapi.a
@@ -496,19 +441,16 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} \
 %if %{with lustre_modules}
 %files modules
 %defattr(-,root,root)
-%{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/*
+/lib/modules/%{kversion}/%{kmoddir}/*
 %if %{with lustre_tests}
-%exclude %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/llog_test.ko
+%exclude /lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/llog_test.ko
 %endif
 %if %{with ldiskfs}
-%exclude %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/ldiskfs.ko
-%exclude %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_ldiskfs.ko
+%exclude /lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/ldiskfs.ko
+%exclude /lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_ldiskfs.ko
 %endif
 %if %{with zfs}
-%exclude %{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_zfs.ko
-%endif
-%if %{defined rpm_post_base}
-%attr(0555, root, root) %{rpm_post_base}-modules.sh
+%exclude /lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_zfs.ko
 %endif
 %doc COPYING
 %doc ChangeLog-lustre
@@ -517,36 +459,24 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} \
 %if %{with ldiskfs}
 %files osd-ldiskfs
 %defattr(-,root,root)
-%{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/ldiskfs.ko
-%{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_ldiskfs.ko
-%if %{defined rpm_post_base}
-%attr(0555, root, root) %{rpm_post_base}-osd-ldiskfs.sh
-%endif
+/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/ldiskfs.ko
+/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_ldiskfs.ko
 %if %{with lustre_utils}
 %files osd-ldiskfs-mount
 %defattr(-,root,root)
 %{_libdir}/@PACKAGE@/mount_osd_ldiskfs.so
-%if %{defined rpm_post_base}
-%attr(0555, root, root) %{rpm_post_base}-mount-osd-ldiskfs.sh
-%endif
 %endif
 %endif
 
 %if %{with zfs}
 %files osd-zfs
 %defattr(-,root,root)
-%{?rootdir}/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_zfs.ko
+/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/osd_zfs.ko
 %{_sbindir}/zfsobj2fid
-%if %{defined rpm_post_base}
-%attr(0555, root, root) %{rpm_post_base}-osd-zfs.sh
-%endif
 %if %{with lustre_utils}
 %files osd-zfs-mount
 %defattr(-,root,root)
 %{_libdir}/@PACKAGE@/mount_osd_zfs.so
-%if %{defined rpm_post_base}
-%attr(0555, root, root) %{rpm_post_base}-mount-osd-zfs.sh
-%endif
 %endif
 %endif
 %endif # with lustre_modules
@@ -588,25 +518,8 @@ find $RPM_BUILD_ROOT%{?rootdir}/lib/modules/%{kversion}/%{kmoddir} \
 %doc lustre-iokit/stats-collect/README.iokit-lstats
 %endif
 
-%if %{defined rpm_post_base}
-%post
-if [ -x %{rpm_post_base}.sh ]; then
-	%{rpm_post_base}.sh %{cross_path} create
-fi
-
-%preun
-if [ -x %{rpm_post_base}.sh ]; then
-	%{rpm_post_base}.sh %{cross_path} remove
-fi
-%endif
-
 %if %{with lustre_modules}
 %post modules
-%if %{defined rpm_post_base}
-if [ -x %{rpm_post_base}-modules.sh ]; then
-	%{rpm_post_base}-modules.sh %{cross_path} create
-fi
-%else
 if [ -f /boot/System.map-%{kversion} ]; then
 	depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
 else
@@ -640,15 +553,9 @@ if sysctl kernel.unsupported >/dev/null 2>&1 &&
 
      into /etc/modprobe.d/unsupported_modules"
 fi
-%endif
 
 %if %{with ldiskfs}
 %post osd-ldiskfs
-%if %{defined rpm_post_base}
-if [ -x %{rpm_post_base}-osd-ldiskfs.sh ]; then
-	%{rpm_post_base}-osd-ldiskfs.sh %{cross_path} create
-fi
-%else
 if [ -f /boot/System.map-%{kversion} ]; then
        depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
 else
@@ -682,22 +589,10 @@ if sysctl kernel.unsupported >/dev/null 2>&1 &&
 
      into /etc/modprobe.d/unsupported_modules"
 fi
-%endif
-%if %{with lustre_utils} && %{defined rpm_post_base}
-%post osd-ldiskfs-mount
-if [ -x %{rpm_post_base}-mount-osd-ldiskfs.sh ]; then
-	%{rpm_post_base}-mount-osd-ldiskfs.sh %{cross_path} create
-fi
-%endif
 %endif
 
 %if %{with zfs}
 %post osd-zfs
-%if %{defined rpm_post_base}
-if [ -x %{rpm_post_base}-osd-zfs.sh ]; then
-	%{rpm_post_base}-osd-zfs.sh %{cross_path} create
-fi
-%else
 if [ -f /boot/System.map-%{kversion} ]; then
        depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
 else
@@ -732,61 +627,23 @@ if sysctl kernel.unsupported >/dev/null 2>&1 &&
      into /etc/modprobe.d/unsupported_modules"
 fi
 %endif
-%if %{with lustre_utils} && %{defined rpm_post_base}
-%post osd-zfs-mount
-if [ -x %{rpm_post_base}-mount-osd-zfs.sh ]; then
-	%{rpm_post_base}-mount-osd-zfs.sh %{cross_path} create
-fi
-%endif
-%endif
 
 %preun modules
-%if %{defined rpm_post_base}
-if [ -x %{rpm_post_base}-modules.sh ]; then
-	%{rpm_post_base}-modules.sh %{cross_path} remove
-fi
-%else
 MODULES_RPM_NAME=$(rpm -q %{name}-modules | grep "%{version}-%{release}")
 rpm -ql $MODULES_RPM_NAME | grep '\.ko$' > /var/run/%{name}-modules || true
-%endif
 
 %if %{with ldiskfs}
 %preun osd-ldiskfs
-%if %{defined rpm_post_base}
-if [ -x %{rpm_post_base}-osd-ldiskfs.sh ]; then
-	%{rpm_post_base}-osd-ldiskfs.sh %{cross_path} remove
-fi
-%else
 OSD_LDISKFS_RPM_NAME=$(rpm -q %{name}-osd-ldiskfs | grep "%{version}-%{release}")
 rpm -ql $OSD_LDISKFS_RPM_NAME | grep '\.ko$' > /var/run/%{name}-osd-ldiskfs || true
-%endif
-%if %{with lustre_utils} && %{defined rpm_post_base}
-%preun osd-ldiskfs-mount
-if [ -x %{rpm_post_base}-mount-osd-ldiskfs.sh ]; then
-	%{rpm_post_base}-mount-osd-ldiskfs.sh %{cross_path} remove
-fi
-%endif
 %endif
 
 %if %{with zfs}
 %preun osd-zfs
-%if %{defined rpm_post_base}
-if [ -x %{rpm_post_base}-osd-zfs.sh ]; then
-	%{rpm_post_base}-osd-zfs.sh %{cross_path} remove
-fi
-%else
 OSD_ZFS_RPM_NAME=$(rpm -q %{name}-osd-zfs | grep "%{version}-%{release}")
 rpm -ql $OSD_ZFS_RPM_NAME | grep '\.ko$' > /var/run/%{name}-osd-zfs || true
 %endif
-%if %{with lustre_utils} && %{defined rpm_post_base}
-%preun osd-zfs-mount
-if [ -x %{rpm_post_base}-mount-osd-zfs.sh ]; then
-	%{rpm_post_base}-mount-osd-zfs.sh %{cross_path} remove
-fi
-%endif
-%endif
 
-%if %{undefined cross_path}
 %postun modules
 if [ -f /boot/System.map-%{kversion} ]; then
 	depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
@@ -850,21 +707,9 @@ if [ -x /sbin/weak-modules ]; then
 fi
 rm /var/run/%{name}-osd-zfs
 %endif
-%endif
 %endif # with lustre_modules
 
 %if %{with lustre_tests}
-%if %{defined rpm_post_base}
-%post tests
-if [ -x %{rpm_post_base}-tests.sh ]; then
-	%{rpm_post_base}-tests.sh %{cross_path} create
-fi
-
-%preun tests
-if [ -x %{rpm_post_base}-tests.sh ]; then
-	%{rpm_post_base}-tests.sh %{cross_path} remove
-fi
-%else
 %if %{with lustre_modules}
 %post tests
 if [ -f /boot/System.map-%{kversion} ]; then
@@ -879,7 +724,6 @@ if [ -f /boot/System.map-%{kversion} ]; then
 else
 	depmod -ae %{kversion} || exit 0
 fi
-%endif
 %endif
 %endif
 

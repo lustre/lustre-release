@@ -75,7 +75,7 @@ if LINUX
 all-am: modules
 
 modules: undef.h ldiskfs-sources lustre-sources
-	$(MAKE) CC="$(CC)" $(CROSS_VARS) -C $(LINUX_OBJ)	     \
+	$(MAKE) CC="$(CC)" -C $(LINUX_OBJ) \
 	-f $(PWD)/build/Makefile LUSTRE_LINUX_CONFIG=$(LINUX_CONFIG) \
 	LINUXINCLUDE='-I$$(srctree)/arch/$$(SRCARCH)/include -Iarch/$$(SRCARCH)/include/generated -Iinclude $$(if $$(KBUILD_SRC),-Iinclude2 -I$$(srctree)/include) -I$$(srctree)/arch/$$(SRCARCH)/include/uapi -Iarch/$$(SRCARCH)/include/generated/uapi -I$$(srctree)/include/uapi -Iinclude/generated/uapi -include $(CONFIG_INCLUDE)' \
 	$(MODULE_TARGET)=$(PWD) -o tmp_include_depends -o scripts -o \
@@ -100,7 +100,6 @@ dist-hook: undef.h
 EXTRA_DIST = @PACKAGE_TARNAME@.spec	\
 	build/Makefile 			\
 	build/Rules.in			\
-	build/gen_filelist.sh		\
 	config.h.in			\
 	undef.h				\
 	lustre-dkms_pre-build.sh	\

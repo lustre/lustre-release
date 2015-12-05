@@ -115,7 +115,7 @@ AC_ARG_WITH([kmp-moddir],
 AC_MSG_RESULT($KMP_MODDIR)
 AC_SUBST(KMP_MODDIR)
 
-moduledir='$(CROSS_PATH)/lib/modules/$(LINUXRELEASE)/$(KMP_MODDIR)/kernel'
+moduledir='/lib/modules/$(LINUXRELEASE)/$(KMP_MODDIR)/kernel'
 AC_SUBST(moduledir)
 
 modulefsdir='$(moduledir)/fs/$(PACKAGE)'
@@ -138,49 +138,6 @@ AS_IF([grep -q Modules.symvers $LINUX/scripts/Makefile.modpost],
 ])
 SYMVERFILE=$lb_cv_module_symvers
 AC_SUBST(SYMVERFILE)
-])
-
-#
-# LB_LINUX_CROSS
-#
-# check for cross compilation
-#
-AC_DEFUN([LB_LINUX_CROSS], [
-AC_CACHE_CHECK([for cross compilation], lb_cv_cross, [
-lb_cv_cross="no"
-AS_IF([test "x$cross_compiling" = xyes],
-	[AS_CASE([$host_vendor],
-		[k1om | mpss], [
-			# The K1OM architecture is an extension of the x86 architecture
-			# and in MPSS 2.1 it's defined in $host_vendor. But in MPSS 3.x
-			# it's defined in $host_arch. So, try to support both case.
-			lb_cv_cross=$($CC -v 2>&1 | grep Target: | sed -e 's/Target: //')
-			AS_IF([test "$lb_cv_cross" != x86_64-k1om-linux -a \
-				    "$lb_cv_cross" != k1om-mpss-linux], [
-				AC_MSG_ERROR([Cross compiler not found in PATH.])
-			])
-		])
-	])
-])
-AS_IF([test "$lb_cv_cross" = x86_64-k1om-linux -o \
-	    "$lb_cv_cross" = k1om-mpss-linux], [
-	CROSS_VARS="ARCH=k1om CROSS_COMPILE=${lb_cv_cross}-"
-	CROSS_PATH="${CROSS_PATH:=/opt/lustre/$VERSION/$lb_cv_cross}"
-	CCAS=$CC
-	# need to produce special section for debuginfo extraction
-	LDFLAGS="$LDFLAGS -Wl,--build-id"
-	EXTRA_KLDFLAGS="$EXTRA_KLDFLAGS -Wl,--build-id"
-	AS_IF([test "x$enable_server" != xno], [
-		AC_MSG_WARN([Disabling server (not supported for $lb_cv_cross).])
-		enable_server="no"
-	])
-	AS_IF([test "x$enable_mpitests" != xno], [
-		AC_MSG_WARN([Disabling MPI tests (not supported for $lb_cv_cross).])
-		enable_mpitests="no"
-	])
-])
-AC_SUBST(CROSS_VARS)
-AC_SUBST(CROSS_PATH)
 ])
 
 #
@@ -349,7 +306,6 @@ Consult build/README.kernel-source for details.
 ])
 
 # this is needed before we can build modules
-LB_LINUX_CROSS
 LB_LINUX_VERSION
 
 # --- check that we can build modules at all
@@ -546,7 +502,7 @@ AC_DEFUN([LB_LINUX_COMPILE_IFELSE],
 [m4_ifvaln([$1], [AC_LANG_CONFTEST([AC_LANG_SOURCE([$1])])])dnl
 rm -f build/conftest.o build/conftest.mod.c build/conftest.ko
 SUBARCH=$(echo $target_cpu | sed -e 's/powerpc64le/powerpc/' -e 's/powerpc64/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/' -e 's/k1om/x86/' -e 's/aarch64/arm64/')
-AS_IF([AC_TRY_COMMAND(cp conftest.c build && make -d [$2] ${LD:+"LD=$LD"} CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_OFED_INCLUDE -I$LINUX/arch/$SUBARCH/include -Iinclude -Iarch/$SUBARCH/include/generated -I$LINUX/include -Iinclude2 -I$LINUX/include/uapi -Iinclude/generated -I$LINUX/arch/$SUBARCH/include/uapi -Iarch/$SUBARCH/include/generated/uapi -I$LINUX/include/uapi -Iinclude/generated/uapi ${SPL_OBJ:+-include $SPL_OBJ/spl_config.h} ${ZFS_OBJ:+-include $ZFS_OBJ/zfs_config.h} ${SPL:+-I$SPL -I$SPL/include } ${ZFS:+-I$ZFS -I$ZFS/include} -include $CONFIG_INCLUDE" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $CROSS_VARS $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
+AS_IF([AC_TRY_COMMAND(cp conftest.c build && make -d [$2] ${LD:+"LD=$LD"} CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_OFED_INCLUDE -I$LINUX/arch/$SUBARCH/include -Iinclude -Iarch/$SUBARCH/include/generated -I$LINUX/include -Iinclude2 -I$LINUX/include/uapi -Iinclude/generated -I$LINUX/arch/$SUBARCH/include/uapi -Iarch/$SUBARCH/include/generated/uapi -I$LINUX/include/uapi -Iinclude/generated/uapi ${SPL_OBJ:+-include $SPL_OBJ/spl_config.h} ${ZFS_OBJ:+-include $ZFS_OBJ/zfs_config.h} ${SPL:+-I$SPL -I$SPL/include } ${ZFS:+-I$ZFS -I$ZFS/include} -include $CONFIG_INCLUDE" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
 	[$4],
 	[_AC_MSG_LOG_CONFTEST
 m4_ifvaln([$5],[$5])dnl])

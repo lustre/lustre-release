@@ -360,11 +360,11 @@ AC_DEFUN([LB_PATH_DEFAULTS], [
 # directories for binaries
 AC_PREFIX_DEFAULT([/usr])
 
-sysconfdir='$(CROSS_PATH)/etc'
+sysconfdir='/etc'
 AC_SUBST(sysconfdir)
 
 # Directories for documentation and demos.
-docdir='$(datadir)/doc/$(PACKAGE)'
+docdir='${datadir}/doc/$(PACKAGE)'
 AC_SUBST(docdir)
 
 LIBCFS_PATH_DEFAULTS
@@ -559,24 +559,6 @@ fi
 if test -n "$KMP_MODDIR" ; then
 	RPMBINARGS="$RPMBINARGS --define \"kmoddir $KMP_MODDIR\""
 fi
-if test -n "$CROSS_PATH" ; then
-	if test x$enable_server = xyes ; then
-		echo -e "\n"
-		"*** Don't support cross compilation for the Intel(R) Xeon Phi(TM) card.\n"
-		exit 1
-	fi
-	CROSS_SUFFIX="-mic"
-	RPMBINARGS="$RPMBINARGS --define \"post_script build/gen_filelist.sh\""
-	RPMBINARGS="$RPMBINARGS --define \"cross_path $CROSS_PATH\""
-	RPMBINARGS="$RPMBINARGS --define \"rootdir %{cross_path}\""
-	RPMBINARGS="$RPMBINARGS --define \"_prefix %{cross_path}/usr\""
-	RPMBINARGS="$RPMBINARGS --define \"_mandir %{_prefix}/share/man\""
-	RPMBINARGS="$RPMBINARGS --define \"_sysconfdir %{cross_path}/etc\""
-	RPMBINARGS="$RPMBINARGS --define \"make_args $CROSS_VARS\""
-	if test x$CC_TARGET_ARCH = x"x86_64-k1om-linux" ; then
-		RPMBINARGS="$RPMBINARGS --define \"cross_requires intel-mic-gpl\""
-	fi
-fi
 if test x$enable_modules != xyes ; then
 	RPMBINARGS="$RPMBINARGS --without lustre_modules"
 fi
@@ -588,9 +570,6 @@ if test x$enable_utils != xyes ; then
 fi
 if test x$enable_server != xyes ; then
 	RPMBINARGS="$RPMBINARGS --without servers"
-	if test -n "$CROSS_SUFFIX" ; then
-		RPMBINARGS="$RPMBINARGS --define \"lustre_name lustre-client$CROSS_SUFFIX\""
-	fi
 fi
 if test x$enable_ldiskfs != xyes ; then
 	RPMBINARGS="$RPMBINARGS --without ldiskfs"
