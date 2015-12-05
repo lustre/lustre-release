@@ -1722,6 +1722,18 @@ int tgt_txn_start_cb(const struct lu_env *env, struct thandle *th,
 	if (rc)
 		return rc;
 
+	if (tgt_is_multimodrpcs_client(tsi->tsi_exp)) {
+		tti->tti_off = atomic_read(&tgt->lut_num_clients) * 8
+				* sizeof(struct lsd_reply_data);
+		tti->tti_buf.lb_buf = NULL;
+		tti->tti_buf.lb_len = sizeof(struct lsd_reply_data);
+		dto = dt_object_locate(tgt->lut_reply_data, th->th_dev);
+		rc = dt_declare_record_write(env, dto, &tti->tti_buf,
+					     tti->tti_off, th);
+		if (rc)
+			return rc;
+	}
+
 	if (tsi->tsi_vbr_obj != NULL &&
 	    !lu_object_remote(&tsi->tsi_vbr_obj->do_lu)) {
 		dto = dt_object_locate(tsi->tsi_vbr_obj, th->th_dev);
