@@ -148,8 +148,12 @@ is unspecified, all the parameters will be shown.
 .br
   ...
 .TP
-.BI get_param " [-n|-N|-F] <parameter ...>"
+.BI get_param " [-F|-n|-N|-R] <parameter ...>"
 Get the value of Lustre or LNET parameter.
+.br
+.B -F
+When -N specified, add '/', '@' or '=' for directories, symlinks and writeable files, respectively.
+.br
 .br
 .B -n
 Print only the value and not parameter name.
@@ -157,8 +161,8 @@ Print only the value and not parameter name.
 .B -N
 Print only matched parameter names and not the values. (Especially useful when using patterns.)
 .br
-.B -F
-When -N specified, add '/', '@' or '=' for directories, symlinks and writeable files, respectively.
+.B -R
+Print all of the parameter names below the specified name.
 .br
 .B Examples:
 .br
