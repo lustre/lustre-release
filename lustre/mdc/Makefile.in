@@ -4,7 +4,8 @@ mdc-objs :=	mdc_request.o \
 		lproc_mdc.o \
 		mdc_lib.o \
 		mdc_locks.o \
-		mdc_changelog.o
+		mdc_changelog.o \
+		mdc_dev.o
 
 EXTRA_DIST = $(mdc-objs:.o=.c) mdc_internal.h
 

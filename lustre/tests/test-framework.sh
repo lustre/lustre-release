@@ -611,18 +611,18 @@ load_modules_local() {
 				LNETLND="socklnd/ksocklnd"
 		esac
 	fi
-    load_module ../lnet/klnds/$LNETLND
-    load_module obdclass/obdclass
-    load_module ptlrpc/ptlrpc
-    load_module ptlrpc/gss/ptlrpc_gss
-    load_module fld/fld
-    load_module fid/fid
-    load_module lmv/lmv
-    load_module mdc/mdc
-    load_module osc/osc
-    load_module lov/lov
-    load_module mgc/mgc
-    load_module obdecho/obdecho
+	load_module ../lnet/klnds/$LNETLND
+	load_module obdclass/obdclass
+	load_module ptlrpc/ptlrpc
+	load_module ptlrpc/gss/ptlrpc_gss
+	load_module fld/fld
+	load_module fid/fid
+	load_module lmv/lmv
+	load_module osc/osc
+	load_module mdc/mdc
+	load_module lov/lov
+	load_module mgc/mgc
+	load_module obdecho/obdecho
 	if ! client_only; then
 		SYMLIST=/proc/kallsyms
 		grep -q crc16 $SYMLIST ||

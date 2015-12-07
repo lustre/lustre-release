@@ -2477,7 +2477,7 @@ static void mdc_llog_finish(struct obd_device *obd)
 	EXIT;
 }
 
-static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
+int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 {
 	int				rc;
 	ENTRY;
@@ -2576,10 +2576,12 @@ static int mdc_cleanup(struct obd_device *obd)
         return client_obd_cleanup(obd);
 }
 
-static int mdc_process_config(struct obd_device *obd, size_t len, void *buf)
+int mdc_process_config(struct obd_device *obd, size_t len, void *buf)
 {
-        struct lustre_cfg *lcfg = buf;
-	int rc = class_process_proc_param(PARAM_MDC, obd->obd_vars, lcfg, obd);
+	struct lustre_cfg *lcfg = buf;
+	int rc;
+
+	rc = class_process_proc_param(PARAM_MDC, obd->obd_vars, lcfg, obd);
 	return (rc > 0 ? 0: rc);
 }
 
@@ -2637,7 +2639,7 @@ static struct md_ops mdc_md_ops = {
 static int __init mdc_init(void)
 {
 	return class_register_type(&mdc_obd_ops, &mdc_md_ops, true, NULL,
-				   LUSTRE_MDC_NAME, NULL);
+				   LUSTRE_MDC_NAME, &mdc_device_type);
 }
 
 static void __exit mdc_exit(void)

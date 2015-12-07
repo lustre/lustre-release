@@ -47,11 +47,16 @@
  */
 
 struct kmem_cache *osc_lock_kmem;
+EXPORT_SYMBOL(osc_lock_kmem);
 struct kmem_cache *osc_object_kmem;
+EXPORT_SYMBOL(osc_object_kmem);
+
 struct kmem_cache *osc_thread_kmem;
 struct kmem_cache *osc_session_kmem;
 struct kmem_cache *osc_extent_kmem;
+EXPORT_SYMBOL(osc_extent_kmem);
 struct kmem_cache *osc_quota_kmem;
+EXPORT_SYMBOL(osc_quota_kmem);
 
 struct lu_kmem_descr osc_caches[] = {
         {
@@ -161,27 +166,30 @@ static const struct lu_device_operations osc_lu_ops = {
         .ldo_recovery_complete = NULL
 };
 
-static int osc_device_init(const struct lu_env *env, struct lu_device *d,
-                           const char *name, struct lu_device *next)
+int osc_device_init(const struct lu_env *env, struct lu_device *d,
+		    const char *name, struct lu_device *next)
 {
         RETURN(0);
 }
+EXPORT_SYMBOL(osc_device_init);
 
-static struct lu_device *osc_device_fini(const struct lu_env *env,
-                                         struct lu_device *d)
+struct lu_device *osc_device_fini(const struct lu_env *env,
+				  struct lu_device *d)
 {
 	return NULL;
 }
+EXPORT_SYMBOL(osc_device_fini);
 
-static struct lu_device *osc_device_free(const struct lu_env *env,
-                                         struct lu_device *d)
+struct lu_device *osc_device_free(const struct lu_env *env,
+				  struct lu_device *d)
 {
-        struct osc_device *od = lu2osc_dev(d);
+	struct osc_device *od = lu2osc_dev(d);
 
-        cl_device_fini(lu2cl_dev(d));
-        OBD_FREE_PTR(od);
-        return NULL;
+	cl_device_fini(lu2cl_dev(d));
+	OBD_FREE_PTR(od);
+	return NULL;
 }
+EXPORT_SYMBOL(osc_device_free);
 
 static struct lu_device *osc_device_alloc(const struct lu_env *env,
                                           struct lu_device_type *t,

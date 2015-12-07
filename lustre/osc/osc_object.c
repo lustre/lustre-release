@@ -49,14 +49,13 @@
  * Object operations.
  *
  */
-
-static int osc_object_init(const struct lu_env *env, struct lu_object *obj,
-                           const struct lu_object_conf *conf)
+int osc_object_init(const struct lu_env *env, struct lu_object *obj,
+		    const struct lu_object_conf *conf)
 {
         struct osc_object           *osc   = lu2osc(obj);
         const struct cl_object_conf *cconf = lu2cl_conf(conf);
 
-        osc->oo_oinfo = cconf->u.coc_oinfo;
+	osc->oo_oinfo = cconf->u.coc_oinfo;
 #ifdef CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK
 	mutex_init(&osc->oo_debug_mutex);
 #endif
@@ -84,8 +83,9 @@ static int osc_object_init(const struct lu_env *env, struct lu_object *obj,
 
 	return 0;
 }
+EXPORT_SYMBOL(osc_object_init);
 
-static void osc_object_free(const struct lu_env *env, struct lu_object *obj)
+void osc_object_free(const struct lu_env *env, struct lu_object *obj)
 {
 	struct osc_object *osc = lu2osc(obj);
 
@@ -107,22 +107,24 @@ static void osc_object_free(const struct lu_env *env, struct lu_object *obj)
 	lu_object_fini(obj);
 	OBD_SLAB_FREE_PTR(osc, osc_object_kmem);
 }
+EXPORT_SYMBOL(osc_object_free);
 
 int osc_lvb_print(const struct lu_env *env, void *cookie,
-                  lu_printer_t p, const struct ost_lvb *lvb)
+		  lu_printer_t p, const struct ost_lvb *lvb)
 {
 	return (*p)(env, cookie, "size: %llu mtime: %llu atime: %llu "
 		    "ctime: %llu blocks: %llu",
                     lvb->lvb_size, lvb->lvb_mtime, lvb->lvb_atime,
                     lvb->lvb_ctime, lvb->lvb_blocks);
 }
+EXPORT_SYMBOL(osc_lvb_print);
 
-static int osc_object_print(const struct lu_env *env, void *cookie,
-                            lu_printer_t p, const struct lu_object *obj)
+int osc_object_print(const struct lu_env *env, void *cookie,
+		     lu_printer_t p, const struct lu_object *obj)
 {
-	struct osc_object   *osc   = lu2osc(obj);
-	struct lov_oinfo    *oinfo = osc->oo_oinfo;
-	struct osc_async_rc *ar    = &oinfo->loi_ar;
+	struct osc_object *osc = lu2osc(obj);
+	struct lov_oinfo *oinfo = osc->oo_oinfo;
+	struct osc_async_rc *ar = &oinfo->loi_ar;
 
 	(*p)(env, cookie, "id: "DOSTID" "
 	     "idx: %d gen: %d kms_valid: %u kms %llu "
@@ -133,20 +135,22 @@ static int osc_object_print(const struct lu_env *env, void *cookie,
 	osc_lvb_print(env, cookie, p, &oinfo->loi_lvb);
 	return 0;
 }
+EXPORT_SYMBOL(osc_object_print);
 
 
-static int osc_attr_get(const struct lu_env *env, struct cl_object *obj,
-                        struct cl_attr *attr)
+int osc_attr_get(const struct lu_env *env, struct cl_object *obj,
+		 struct cl_attr *attr)
 {
-        struct lov_oinfo *oinfo = cl2osc(obj)->oo_oinfo;
+	struct lov_oinfo *oinfo = cl2osc(obj)->oo_oinfo;
 
-        cl_lvb2attr(attr, &oinfo->loi_lvb);
-        attr->cat_kms = oinfo->loi_kms_valid ? oinfo->loi_kms : 0;
-        return 0;
+	cl_lvb2attr(attr, &oinfo->loi_lvb);
+	attr->cat_kms = oinfo->loi_kms_valid ? oinfo->loi_kms : 0;
+	return 0;
 }
+EXPORT_SYMBOL(osc_attr_get);
 
-static int osc_attr_update(const struct lu_env *env, struct cl_object *obj,
-			   const struct cl_attr *attr, unsigned valid)
+int osc_attr_update(const struct lu_env *env, struct cl_object *obj,
+		    const struct cl_attr *attr, unsigned valid)
 {
 	struct lov_oinfo *oinfo = cl2osc(obj)->oo_oinfo;
 	struct ost_lvb   *lvb   = &oinfo->loi_lvb;
@@ -168,17 +172,18 @@ static int osc_attr_update(const struct lu_env *env, struct cl_object *obj,
 	}
 	return 0;
 }
+EXPORT_SYMBOL(osc_attr_update);
 
-static int osc_object_glimpse(const struct lu_env *env,
-                              const struct cl_object *obj, struct ost_lvb *lvb)
+int osc_object_glimpse(const struct lu_env *env, const struct cl_object *obj,
+		       struct ost_lvb *lvb)
 {
-        struct lov_oinfo *oinfo = cl2osc(obj)->oo_oinfo;
+	struct lov_oinfo *oinfo = cl2osc(obj)->oo_oinfo;
 
-        ENTRY;
-        lvb->lvb_size   = oinfo->loi_kms;
-        lvb->lvb_blocks = oinfo->loi_lvb.lvb_blocks;
-        RETURN(0);
+	lvb->lvb_size = oinfo->loi_kms;
+	lvb->lvb_blocks = oinfo->loi_lvb.lvb_blocks;
+	return 0;
 }
+EXPORT_SYMBOL(osc_object_glimpse);
 
 static int osc_object_ast_clear(struct ldlm_lock *lock, void *data)
 {

@@ -498,6 +498,29 @@ void osc_object_clear_contended(struct osc_object *obj);
 int osc_object_is_contended(struct osc_object *obj);
 int osc_lock_is_lockless(const struct osc_lock *olck);
 
+/* osc_dev.c */
+int osc_device_init(const struct lu_env *env, struct lu_device *d,
+		    const char *name, struct lu_device *next);
+struct lu_device *osc_device_fini(const struct lu_env *env,
+				  struct lu_device *d);
+struct lu_device *osc_device_free(const struct lu_env *env,
+				  struct lu_device *d);
+
+/* osc_object.c */
+int osc_object_init(const struct lu_env *env, struct lu_object *obj,
+		    const struct lu_object_conf *conf);
+void osc_object_free(const struct lu_env *env, struct lu_object *obj);
+int osc_lvb_print(const struct lu_env *env, void *cookie,
+		  lu_printer_t p, const struct ost_lvb *lvb);
+int osc_object_print(const struct lu_env *env, void *cookie,
+		     lu_printer_t p, const struct lu_object *obj);
+int osc_attr_get(const struct lu_env *env, struct cl_object *obj,
+		 struct cl_attr *attr);
+int osc_attr_update(const struct lu_env *env, struct cl_object *obj,
+		    const struct cl_attr *attr, unsigned valid);
+int osc_object_glimpse(const struct lu_env *env, const struct cl_object *obj,
+		       struct ost_lvb *lvb);
+
 /*****************************************************************************
  *
  * Accessors and type conversions.
