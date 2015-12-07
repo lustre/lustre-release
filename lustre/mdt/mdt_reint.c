@@ -1619,7 +1619,7 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info,
 		lease_broken = ldlm_is_cancel(lease);
 		unlock_res_and_lock(lease);
 
-		LDLM_DEBUG(lease, DFID " lease broken? %d\n",
+		LDLM_DEBUG(lease, DFID " lease broken? %d",
 			   PFID(mdt_object_fid(mold)), lease_broken);
 
 		/* Cancel server side lease. Client side counterpart should

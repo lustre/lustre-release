@@ -1320,11 +1320,11 @@ EXPORT_SYMBOL(ldlm_resource_putref);
  * Add a lock into a given resource into specified lock list.
  */
 void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
-                            struct ldlm_lock *lock)
+			    struct ldlm_lock *lock)
 {
 	check_res_locked(res);
 
-	LDLM_DEBUG(lock, "About to add this lock:\n");
+	LDLM_DEBUG(lock, "About to add this lock");
 
 	if (ldlm_is_destroyed(lock)) {
 		CDEBUG(D_OTHER, "Lock destroyed, not adding to resource\n");
@@ -1349,7 +1349,7 @@ void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
         check_res_locked(res);
 
         ldlm_resource_dump(D_INFO, res);
-        LDLM_DEBUG(new, "About to insert this lock after %p:\n", original);
+	LDLM_DEBUG(new, "About to insert this lock after %p: ", original);
 
 	if (ldlm_is_destroyed(new)) {
 		CDEBUG(D_OTHER, "Lock destroyed, not adding to resource\n");

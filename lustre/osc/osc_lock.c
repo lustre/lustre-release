@@ -1197,7 +1197,7 @@ int osc_lock_init(const struct lu_env *env,
 	if (io->ci_type == CIT_WRITE || cl_io_is_mkwrite(io))
 		osc_lock_set_writer(env, io, obj, oscl);
 
-	LDLM_DEBUG_NOLOCK("lock %p, osc lock %p, flags "LPX64"\n",
+	LDLM_DEBUG_NOLOCK("lock %p, osc lock %p, flags "LPX64,
 			  lock, oscl, oscl->ols_flags);
 
 	return 0;

@@ -916,7 +916,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 
 			lock->l_req_extent = policy->l_extent;
 		}
-		LDLM_DEBUG(lock, "client-side enqueue START, flags "LPX64"\n",
+		LDLM_DEBUG(lock, "client-side enqueue START, flags "LPX64,
 			   *flags);
 	}
 

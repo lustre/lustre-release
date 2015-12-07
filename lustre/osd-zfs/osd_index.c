@@ -519,7 +519,7 @@ struct osd_object *osd_object_find(const struct lu_env *env,
 			child = osd_obj(lo);
 		else
 			LU_OBJECT_DEBUG(D_ERROR, env, luch,
-					"%s: object can't be located "DFID"\n",
+					"%s: object can't be located "DFID,
 					osd_dev(ludev)->od_svname, PFID(fid));
 
 		if (child == NULL) {
@@ -530,7 +530,7 @@ struct osd_object *osd_object_find(const struct lu_env *env,
 		}
 	} else {
 		LU_OBJECT_DEBUG(D_ERROR, env, luch,
-				"%s: lu_object does not exists "DFID"\n",
+				"%s: lu_object does not exists "DFID,
 				osd_dev(ludev)->od_svname, PFID(fid));
 		lu_object_put(env, luch);
 		child = ERR_PTR(-ENOENT);

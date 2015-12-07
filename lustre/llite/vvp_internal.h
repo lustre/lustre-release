@@ -323,7 +323,7 @@ static inline struct vvp_lock *cl2vvp_lock(const struct cl_lock_slice *slice)
 	do {								\
 		if (unlikely(!(expr))) {				\
 			LU_OBJECT_DEBUG(D_ERROR, (env), &(clob)->co_lu, \
-					#expr "\n");			\
+					#expr);				\
 			LINVRNT(0);					\
 		}							\
 	} while (0)

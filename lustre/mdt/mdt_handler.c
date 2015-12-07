@@ -1422,7 +1422,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 		if (!mdt_object_exists(child)) {
 			LU_OBJECT_DEBUG(D_INFO, info->mti_env,
 					&child->mot_obj,
-					"remote object doesn't exist.\n");
+					"remote object doesn't exist.");
 			mdt_object_unlock(info, child, lhc, 1);
 			RETURN(-ENOENT);
 		}
@@ -1462,7 +1462,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 	if (unlikely(!mdt_object_exists(parent)) && lu_name_is_valid(lname)) {
 		LU_OBJECT_DEBUG(D_INODE, info->mti_env,
 				&parent->mot_obj,
-				"Parent doesn't exist!\n");
+				"Parent doesn't exist!");
 		RETURN(-ESTALE);
 	}
 
@@ -1533,7 +1533,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 	if (!mdt_object_exists(child)) {
 		LU_OBJECT_DEBUG(D_INODE, info->mti_env,
 				&child->mot_obj,
-				"Object doesn't exist!\n");
+				"Object doesn't exist!");
 		GOTO(out_child, rc = -ENOENT);
 	}
 
@@ -2381,7 +2381,7 @@ int mdt_remote_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		}
 		break;
 	case LDLM_CB_CANCELING:
-		LDLM_DEBUG(lock, "Revoke remote lock\n");
+		LDLM_DEBUG(lock, "Revoke remote lock");
 		/* discard slc lock here so that it can be cleaned anytime,
 		 * especially for cleanup_resource() */
 		tgt_discard_slc_lock(lock);
@@ -2408,7 +2408,7 @@ int mdt_check_resent_lock(struct mdt_thread_info *info,
 			/* Lock is pinned by ldlm_handle_enqueue0() as it is
 			 * a resend case, however, it could be already destroyed
 			 * due to client eviction or a raced cancel RPC. */
-			LDLM_DEBUG_NOLOCK("Invalid lock handle "LPX64"\n",
+			LDLM_DEBUG_NOLOCK("Invalid lock handle "LPX64,
 					  lhc->mlh_reg_lh.cookie);
 			RETURN(-ESTALE);
 		}

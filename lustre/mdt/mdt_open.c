@@ -1145,7 +1145,7 @@ static int mdt_cross_open(struct mdt_thread_info *info,
 		       mdt_obd_name(info->mti_mdt), PFID(fid), -EFAULT);
 		LU_OBJECT_DEBUG(D_WARNING, info->mti_env,
 				&o->mot_obj,
-				"Object isn't on this server! FLD error?\n");
+				"Object isn't on this server! FLD error?");
                 rc = -EFAULT;
 	} else {
 		if (mdt_object_exists(o)) {
@@ -1646,7 +1646,7 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	lease_broken = ldlm_is_cancel(lease);
 	unlock_res_and_lock(lease);
 
-	LDLM_DEBUG(lease, DFID " lease broken? %d\n",
+	LDLM_DEBUG(lease, DFID " lease broken? %d",
 		   PFID(mdt_object_fid(o)), lease_broken);
 
 	/* Cancel server side lease. Client side counterpart should
@@ -1769,7 +1769,7 @@ out_close:
 		CERROR("%s: error closing volatile file "DFID": rc = %d\n",
 		       mdt_obd_name(info->mti_mdt), PFID(&data->cd_fid), rc2);
 	LU_OBJECT_DEBUG(D_HSM, info->mti_env, &orphan->mot_obj,
-			"object closed\n");
+			"object closed");
 	mdt_object_put(info->mti_env, orphan);
 
 out_unlock:
@@ -1864,7 +1864,7 @@ int mdt_close_swap_layouts(struct mdt_thread_info *info,
 	lease_broken = ldlm_is_cancel(lease);
 	unlock_res_and_lock(lease);
 
-	LDLM_DEBUG(lease, DFID " lease broken? %d\n",
+	LDLM_DEBUG(lease, DFID " lease broken? %d",
 		   PFID(mdt_object_fid(o)), lease_broken);
 
 	/* Cancel server side lease. Client side counterpart should

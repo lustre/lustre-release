@@ -2275,28 +2275,28 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
         lock_res_and_lock(lock);
 	lock->l_flags |= ldlm_flags_from_wire(dlm_req->lock_flags &
 					      LDLM_FL_AST_MASK);
-        if (lustre_msg_get_opc(req->rq_reqmsg) == LDLM_BL_CALLBACK) {
-                /* If somebody cancels lock and cache is already dropped,
-                 * or lock is failed before cp_ast received on client,
-                 * we can tell the server we have no lock. Otherwise, we
-                 * should send cancel after dropping the cache. */
+	if (lustre_msg_get_opc(req->rq_reqmsg) == LDLM_BL_CALLBACK) {
+		/* If somebody cancels lock and cache is already dropped,
+		 * or lock is failed before cp_ast received on client,
+		 * we can tell the server we have no lock. Otherwise, we
+		 * should send cancel after dropping the cache. */
 		if ((ldlm_is_canceling(lock) && ldlm_is_bl_done(lock)) ||
-		    ldlm_is_failed(lock)) {
-                        LDLM_DEBUG(lock, "callback on lock "
-                                   LPX64" - lock disappeared\n",
-                                   dlm_req->lock_handle[0].cookie);
-                        unlock_res_and_lock(lock);
-                        LDLM_LOCK_RELEASE(lock);
-                        rc = ldlm_callback_reply(req, -EINVAL);
-                        ldlm_callback_errmsg(req, "Operate on stale lock", rc,
-                                             &dlm_req->lock_handle[0]);
-                        RETURN(0);
-                }
+		     ldlm_is_failed(lock)) {
+			LDLM_DEBUG(lock, "callback on lock "
+				   LPX64" - lock disappeared",
+				   dlm_req->lock_handle[0].cookie);
+			unlock_res_and_lock(lock);
+			LDLM_LOCK_RELEASE(lock);
+			rc = ldlm_callback_reply(req, -EINVAL);
+			ldlm_callback_errmsg(req, "Operate on stale lock", rc,
+					     &dlm_req->lock_handle[0]);
+			RETURN(0);
+		}
 		/* BL_AST locks are not needed in LRU.
 		 * Let ldlm_cancel_lru() be fast. */
-                ldlm_lock_remove_from_lru(lock);
+		ldlm_lock_remove_from_lru(lock);
 		ldlm_set_bl_ast(lock);
-        }
+	}
         unlock_res_and_lock(lock);
 
         /* We want the ost thread to get this reply so that it can respond

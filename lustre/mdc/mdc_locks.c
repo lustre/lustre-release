@@ -691,7 +691,7 @@ static int mdc_finish_enqueue(struct obd_export *exp,
 	    !(lockrep->lock_flags & LDLM_FL_BLOCKED_MASK)) {
 		void *lmm;
 
-		LDLM_DEBUG(lock, "layout lock returned by: %s, lvb_len: %d\n",
+		LDLM_DEBUG(lock, "layout lock returned by: %s, lvb_len: %d",
 			ldlm_it2str(it->it_op), lvb_len);
 
 		OBD_ALLOC_LARGE(lmm, lvb_len);
