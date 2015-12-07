@@ -1732,6 +1732,16 @@ enum ldlm_error ldlm_lock_enqueue(struct ldlm_namespace *ns,
                         }
                         *flags |= LDLM_FL_LOCK_CHANGED;
                         RETURN(0);
+		} else if (rc != ELDLM_OK &&
+			   lock->l_req_mode == lock->l_granted_mode) {
+			LASSERT(*flags & LDLM_FL_RESENT);
+			/* It may happen that ns_policy returns an error in
+			 * resend case, object may be unlinked or just some
+			 * error occurs. It is unclear if lock reached the
+			 * client in the original reply, just leave the lock on
+			 * server, not returning it again to client. Due to
+			 * LU-6529, the server will not OOM. */
+			RETURN(rc);
                 } else if (rc != ELDLM_OK ||
                            (rc == ELDLM_OK && (*flags & LDLM_FL_INTENT_ONLY))) {
                         ldlm_lock_destroy(lock);

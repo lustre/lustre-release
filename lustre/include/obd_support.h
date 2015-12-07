@@ -248,6 +248,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_MDS_REINT_MULTI_NET     0x159
 #define OBD_FAIL_MDS_REINT_MULTI_NET_REP 0x15a
 #define OBD_FAIL_MDS_LLOG_CREATE_FAILED2 0x15b
+#define OBD_FAIL_MDS_INTENT_DELAY		0x160
 
 /* layout lock */
 #define OBD_FAIL_MDS_NO_LL_GETATTR	 0x170
@@ -297,7 +298,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_OST_BRW_PAUSE_BULK      0x214
 #define OBD_FAIL_OST_ENOSPC              0x215
 #define OBD_FAIL_OST_EROFS               0x216
-#define OBD_FAIL_OST_ENOENT              0x217
+#define OBD_FAIL_SRV_ENOENT              0x217
 /*	OBD_FAIL_OST_QUOTACHECK_NET      0x218 obsolete since 2.4 */
 #define OBD_FAIL_OST_QUOTACTL_NET        0x219
 #define OBD_FAIL_OST_CHECKSUM_RECEIVE    0x21a

@@ -711,7 +711,7 @@ int ofd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 
 	LASSERT(oa != NULL);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT)) {
+	if (OBD_FAIL_CHECK(OBD_FAIL_SRV_ENOENT)) {
 		struct ofd_seq		*oseq;
 
 		oseq = ofd_seq_load(env, ofd, ostid_seq(&oa->o_oi));

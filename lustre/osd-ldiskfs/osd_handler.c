@@ -747,7 +747,7 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	LASSERT(info);
 	oic = &info->oti_cache;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT))
+	if (OBD_FAIL_CHECK(OBD_FAIL_SRV_ENOENT))
 		RETURN(-ENOENT);
 
 	/* For the object is created as locking anchor, or for the object to

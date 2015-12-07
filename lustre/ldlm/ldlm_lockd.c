@@ -1515,7 +1515,7 @@ existing_lock:
 			}
 		}
 
-		if (rc != 0) {
+		if (rc != 0 && !(flags & LDLM_FL_RESENT)) {
 			if (lock->l_export) {
 				ldlm_lock_cancel(lock);
 			} else {
