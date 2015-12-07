@@ -107,7 +107,7 @@
 #define MDC_REPLY_PORTAL               10
 //#define MDC_BULK_PORTAL              11
 #define MDS_REQUEST_PORTAL             12
-//#define MDS_REPLY_PORTAL             13
+#define MDS_IO_PORTAL			13
 #define MDS_BULK_PORTAL                14
 #define LDLM_CB_REQUEST_PORTAL         15
 #define LDLM_CB_REPLY_PORTAL           16
@@ -845,8 +845,9 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT_FLOCK_DEAD | \
 				OBD_CONNECT_DISP_STRIPE | OBD_CONNECT_LFSCK | \
 				OBD_CONNECT_OPEN_BY_FID | \
-				OBD_CONNECT_DIR_STRIPE | \
-				OBD_CONNECT_BULK_MBITS | \
+				OBD_CONNECT_DIR_STRIPE | OBD_CONNECT_GRANT | \
+				OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_SRVLOCK | \
+				OBD_CONNECT_BULK_MBITS | OBD_CONNECT_CKSUM | \
 				OBD_CONNECT_MULTIMODRPCS | \
 				OBD_CONNECT_SUBTREE | OBD_CONNECT_LARGE_ACL | \
 				OBD_CONNECT_FLAGS2)
@@ -1602,8 +1603,9 @@ typedef enum {
  * will grant LOOKUP_LOCK. */
 #define MDS_INODELOCK_PERM   0x000010
 #define MDS_INODELOCK_XATTR  0x000020	/* extended attributes */
+#define MDS_INODELOCK_DOM    0x000040 /* Data for data-on-mdt files */
 
-#define MDS_INODELOCK_MAXSHIFT 5
+#define MDS_INODELOCK_MAXSHIFT 6
 /* This FULL lock is useful to take on unlink sort of operations */
 #define MDS_INODELOCK_FULL ((1<<(MDS_INODELOCK_MAXSHIFT+1))-1)
 

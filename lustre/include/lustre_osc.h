@@ -521,6 +521,9 @@ int osc_attr_update(const struct lu_env *env, struct cl_object *obj,
 int osc_object_glimpse(const struct lu_env *env, const struct cl_object *obj,
 		       struct ost_lvb *lvb);
 
+/* osc_request.c */
+void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd);
+
 /*****************************************************************************
  *
  * Accessors and type conversions.

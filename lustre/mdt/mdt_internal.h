@@ -272,6 +272,8 @@ struct mdt_object {
 	spinlock_t		mot_write_lock;
         /* Lock to protect create_data */
 	struct mutex		mot_lov_mutex;
+	/* lock to protect read/write stages for Data-on-MDT files */
+	struct rw_semaphore	mot_dom_sem;
 	/* Lock to protect lease open.
 	 * Lease open acquires write lock; normal open acquires read lock */
 	struct rw_semaphore	mot_open_sem;
@@ -643,6 +645,8 @@ int mdt_object_lock_try(struct mdt_thread_info *info, struct mdt_object *mo,
 
 void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *mo,
 		       struct mdt_lock_handle *lh, int decref);
+void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
+		   enum ldlm_mode mode, int decref);
 
 struct mdt_object *mdt_object_new(const struct lu_env *env,
 				  struct mdt_device *,
@@ -1074,9 +1078,12 @@ enum {
         LPROC_MDT_SETXATTR,
         LPROC_MDT_STATFS,
         LPROC_MDT_SYNC,
-        LPROC_MDT_SAMEDIR_RENAME,
-        LPROC_MDT_CROSSDIR_RENAME,
-        LPROC_MDT_LAST,
+	LPROC_MDT_SAMEDIR_RENAME,
+	LPROC_MDT_CROSSDIR_RENAME,
+	LPROC_MDT_IO_READ,
+	LPROC_MDT_IO_WRITE,
+	LPROC_MDT_IO_PUNCH,
+	LPROC_MDT_LAST,
 };
 void mdt_counter_incr(struct ptlrpc_request *req, int opcode);
 void mdt_stats_counter_init(struct lprocfs_stats *stats);
@@ -1116,5 +1123,25 @@ static inline char *mdt_req_get_jobid(struct ptlrpc_request *req)
 
 	return jobid;
 }
+
+/* MDT IO */
+
+#define VALID_FLAGS (LA_TYPE | LA_MODE | LA_SIZE | LA_BLOCKS | \
+		     LA_BLKSIZE | LA_ATIME | LA_MTIME | LA_CTIME)
+
+int mdt_obd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
+		   struct obdo *oa, int objcount, struct obd_ioobj *obj,
+		   struct niobuf_remote *rnb, int *nr_local,
+		   struct niobuf_local *lnb);
+
+int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
+		     struct obdo *oa, int objcount, struct obd_ioobj *obj,
+		     struct niobuf_remote *rnb, int npages,
+		     struct niobuf_local *lnb, int old_rc);
+int mdt_punch_hdl(struct tgt_session_info *tsi);
+
+/* grants */
+long mdt_grant_connect(const struct lu_env *env, struct obd_export *exp,
+		       u64 want, bool conservative);
 
 #endif /* _MDT_INTERNAL_H */

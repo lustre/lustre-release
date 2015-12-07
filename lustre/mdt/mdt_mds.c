@@ -64,6 +64,7 @@ struct mds_device {
 	struct ptlrpc_service	*mds_mdsc_service;
 	struct ptlrpc_service	*mds_mdss_service;
 	struct ptlrpc_service	*mds_fld_service;
+	struct ptlrpc_service	*mds_io_service;
 	struct mutex		 mds_health_mutex;
 	struct kset		*mds_kset;
 };
@@ -74,6 +75,10 @@ struct mds_device {
 static unsigned long mds_num_threads;
 module_param(mds_num_threads, ulong, 0444);
 MODULE_PARM_DESC(mds_num_threads, "number of MDS service threads to start");
+
+int mds_max_io_threads = 512;
+module_param(mds_max_io_threads, int, 0444);
+MODULE_PARM_DESC(mds_max_io_threads, "maximum number of MDS IO service threads");
 
 static char *mds_num_cpts;
 module_param(mds_num_cpts, charp, 0444);
@@ -133,6 +138,10 @@ static void mds_stop_ptlrpc_service(struct mds_device *m)
 	if (m->mds_fld_service != NULL) {
 		ptlrpc_unregister_service(m->mds_fld_service);
 		m->mds_fld_service = NULL;
+	}
+	if (m->mds_io_service != NULL) {
+		ptlrpc_unregister_service(m->mds_io_service);
+		m->mds_io_service = NULL;
 	}
 	mutex_unlock(&m->mds_health_mutex);
 
@@ -440,6 +449,43 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 		GOTO(err_mds_svc, rc);
 	}
 
+	memset(&conf, 0, sizeof(conf));
+	conf = (typeof(conf)) {
+		.psc_name		= LUSTRE_MDT_NAME "_io",
+		.psc_watchdog_factor	= MDT_SERVICE_WATCHDOG_FACTOR,
+		.psc_buf		= {
+			.bc_nbufs		= OST_NBUFS,
+			.bc_buf_size		= OST_IO_BUFSIZE,
+			.bc_req_max_size	= OST_IO_MAXREQSIZE,
+			.bc_rep_max_size	= OST_IO_MAXREPSIZE,
+			.bc_req_portal		= MDS_IO_PORTAL,
+			.bc_rep_portal		= MDC_REPLY_PORTAL,
+		},
+		.psc_thr		= {
+			.tc_thr_name		= "ll_mdt_io",
+			.tc_thr_factor		= OSS_THR_FACTOR,
+			.tc_nthrs_init		= OSS_NTHRS_INIT,
+			.tc_nthrs_base		= OSS_NTHRS_BASE,
+			.tc_nthrs_max		= mds_max_io_threads,
+			.tc_cpu_affinity	= 1,
+			.tc_ctx_tags		= LCT_DT_THREAD | LCT_MD_THREAD,
+		},
+		.psc_ops		= {
+			.so_thr_init		= tgt_io_thread_init,
+			.so_thr_done		= tgt_io_thread_done,
+			.so_req_handler		= tgt_request_handle,
+			.so_req_printer		= target_print_req,
+		},
+	};
+	m->mds_io_service = ptlrpc_register_service(&conf, m->mds_kset,
+						    procfs_entry);
+	if (IS_ERR(m->mds_io_service)) {
+		rc = PTR_ERR(m->mds_io_service);
+		CERROR("failed to start MDT I/O service: %d\n", rc);
+		m->mds_io_service = NULL;
+		GOTO(err_mds_svc, rc);
+	}
+
 	EXIT;
 err_mds_svc:
 	if (rc)
@@ -554,6 +600,7 @@ static int mds_health_check(const struct lu_env *env, struct obd_device *obd)
 	rc |= ptlrpc_service_health_check(mds->mds_mdsc_service);
 	rc |= ptlrpc_service_health_check(mds->mds_mdss_service);
 	rc |= ptlrpc_service_health_check(mds->mds_fld_service);
+	rc |= ptlrpc_service_health_check(mds->mds_io_service);
 	mutex_unlock(&mds->mds_health_mutex);
 
 	return rc != 0 ? 1 : 0;

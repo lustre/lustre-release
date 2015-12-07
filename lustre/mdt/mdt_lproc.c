@@ -894,6 +894,8 @@ void mdt_counter_incr(struct ptlrpc_request *req, int opcode)
 
 void mdt_stats_counter_init(struct lprocfs_stats *stats)
 {
+	LASSERT(stats && stats->ls_num >= LPROC_MDT_LAST);
+
         lprocfs_counter_init(stats, LPROC_MDT_OPEN, 0, "open", "reqs");
         lprocfs_counter_init(stats, LPROC_MDT_CLOSE, 0, "close", "reqs");
         lprocfs_counter_init(stats, LPROC_MDT_MKNOD, 0, "mknod", "reqs");
@@ -912,6 +914,11 @@ void mdt_stats_counter_init(struct lprocfs_stats *stats)
                              "samedir_rename", "reqs");
         lprocfs_counter_init(stats, LPROC_MDT_CROSSDIR_RENAME, 0,
                              "crossdir_rename", "reqs");
+	lprocfs_counter_init(stats, LPROC_MDT_IO_READ,
+			     LPROCFS_CNTR_AVGMINMAX, "read_bytes", "bytes");
+	lprocfs_counter_init(stats, LPROC_MDT_IO_WRITE,
+			     LPROCFS_CNTR_AVGMINMAX, "write_bytes", "bytes");
+	lprocfs_counter_init(stats, LPROC_MDT_IO_PUNCH, 0, "punch", "reqs");
 }
 
 int mdt_procfs_init(struct mdt_device *mdt, const char *name)

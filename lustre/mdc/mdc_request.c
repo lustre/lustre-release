@@ -56,6 +56,7 @@
 #include <uapi/linux/lustre/lustre_param.h>
 #include <lustre_swab.h>
 #include <obd_class.h>
+#include <lustre_osc.h>
 
 #include "mdc_internal.h"
 
@@ -2354,7 +2355,15 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
 	LASSERT(imp->imp_obd == obd);
 
 	switch (event) {
+	case IMP_EVENT_DISCON: {
+		struct client_obd *cli = &obd->u.cli;
 
+		spin_lock(&cli->cl_loi_list_lock);
+		cli->cl_avail_grant = 0;
+		cli->cl_lost_grant = 0;
+		spin_unlock(&cli->cl_loi_list_lock);
+		break;
+	}
 	case IMP_EVENT_INACTIVE: {
 		struct client_obd *cli = &obd->u.cli;
 		/*
@@ -2382,10 +2391,15 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
 		if (rc == 0)
 			rc = mdc_kuc_reregister(imp);
 		break;
-	case IMP_EVENT_OCD:
+	case IMP_EVENT_OCD: {
+		struct obd_connect_data *ocd = &imp->imp_connect_data;
+
+		if (OCD_HAS_FLAG(ocd, GRANT))
+			osc_init_grant(&obd->u.cli, ocd);
+
 		rc = obd_notify_observer(obd, obd, OBD_NOTIFY_OCD);
 		break;
-	case IMP_EVENT_DISCON:
+	}
 	case IMP_EVENT_DEACTIVATE:
 	case IMP_EVENT_ACTIVATE:
 		break;

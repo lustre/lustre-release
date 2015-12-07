@@ -902,7 +902,7 @@ static int osc_del_shrink_grant(struct client_obd *client)
                                          TIMEOUT_GRANT);
 }
 
-static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
+void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
 {
 	/*
 	 * ocd_grant is the total grant amount we're expect to hold: if we've
@@ -959,6 +959,7 @@ static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
 	    list_empty(&cli->cl_grant_shrink_list))
 		osc_add_shrink_grant(cli);
 }
+EXPORT_SYMBOL(osc_init_grant);
 
 /* We assume that the reason this OSC got a short read is because it read
  * beyond the end of a stripe file; i.e. lustre is reading a sparse file
