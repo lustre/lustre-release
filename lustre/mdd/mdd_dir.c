@@ -3547,6 +3547,9 @@ static int mdd_migrate_create(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop_trans, rc);
 
+	/* don't set nlink from the original object */
+	la->la_valid &= ~LA_NLINK;
+
 	/* create the target object */
 	rc = mdd_object_create(env, mdd_pobj, mdd_tobj, la, spec, NULL, NULL,
 			       hint, handle);
