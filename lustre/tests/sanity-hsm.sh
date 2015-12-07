@@ -145,15 +145,36 @@ get_mdt_devices() {
 }
 
 search_copytools() {
-	local agents=${1:-$(facet_active_host $SINGLEAGT)}
-	do_nodesv $agents "pgrep -x $HSMTOOL_BASE"
+	local hosts=${1:-$(facet_active_host $SINGLEAGT)}
+	do_nodesv $hosts "pgrep -x $HSMTOOL_BASE"
 }
 
-search_and_kill_copytool() {
-	local agents=${1:-$(facet_active_host $SINGLEAGT)}
+kill_copytools() {
+	local hosts=${1:-$(facet_active_host $SINGLEAGT)}
 
-	echo "Killing existing copytools on $agents"
-	do_nodesv $agents "killall -q $HSMTOOL_BASE" || true
+	echo "Killing existing copytools on $hosts"
+	do_nodesv $hosts "killall -q $HSMTOOL_BASE" || true
+}
+
+wait_copytools() {
+	local hosts=${1:-$(facet_active_host $SINGLEAGT)}
+	local wait_timeout=200
+	local wait_start=$SECONDS
+	local wait_end=$((wait_start + wait_timeout))
+
+	while ((SECONDS < wait_end)); do
+		sleep 2
+		if ! search_copytools $hosts; then
+			echo "copytools stopped in $((SECONDS - wait_start))s"
+			return 0
+		fi
+
+		echo "copytools still running on $hosts"
+	done
+
+	echo "copytools failed to stop in ${wait_timeout}s"
+
+	return 1
 }
 
 copytool_monitor_setup() {
@@ -275,31 +296,14 @@ copytool_cleanup() {
 	trap - EXIT
 	local agt_facet=$SINGLEAGT
 	local agt_hosts=${1:-$(facet_active_host $agt_facet)}
-	local end_wait=$(( SECONDS + TIMEOUT ))
 	local hsm_root=$(copytool_device $agt_facet)
 	local i
 	local facet
 	local param
 	local -a state
 
-	do_nodesv $agt_hosts "pkill -INT -x $HSMTOOL_BASE" || return 0
-
-	while (( SECONDS < end_wait )); do
-		sleep 2
-		do_nodesv $agt_hosts "pgrep -x $HSMTOOL_BASE"
-		if [ $? -ne 0 ]; then
-			echo "copytool is stopped on $agt_hosts"
-			break
-		fi
-		echo "copytool still running on $agt_hosts"
-	done
-
-	if do_nodesv $agt_hosts "pgrep -x $HSMTOOL_BASE"; then
-		error "copytool failed to stop in ${TIMEOUT}s"
-	else
-		echo "copytool has stopped in " \
-		     "$((TIMEOUT - (end_wait - SECONDS)))s"
-	fi
+	kill_copytools $agt_hosts
+	wait_copytools $agt_hosts || error "copytools failed to stop"
 
 	# Clean all CDTs orphans requests from previous tests that
 	# would otherwise need to timeout to clear.
@@ -327,7 +331,6 @@ copytool_cleanup() {
 		# Restore old CDT state.
 		do_facet $facet "$LCTL set_param $param=${state[$i]}"
 	done
-
 
 	for ((i = 0; i < MDSCOUNT; i++)); do
 		# Only check CDTs that we stopped in the first loop.
@@ -794,7 +797,7 @@ get_mdt_devices
 init_agt_vars
 
 # cleanup from previous bad setup
-search_and_kill_copytool
+kill_copytools
 
 # for recovery tests, coordinator needs to be started at mount
 # so force it
@@ -1494,9 +1497,8 @@ test_12q() {
 	$LFS hsm_release $f || error "could not release file"
 	check_hsm_flags $f "0x0000000d"
 
-	search_and_kill_copytool
-	sleep 5
-	search_copytools && error "Copytool should have stopped"
+	kill_copytools
+	wait_copytools || error "copytool failed to stop"
 
 	cat $f > /dev/null &
 
