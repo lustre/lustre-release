@@ -125,6 +125,7 @@ struct lu_context_key osc_key = {
         .lct_init = osc_key_init,
         .lct_fini = osc_key_fini
 };
+EXPORT_SYMBOL(osc_key);
 
 static void *osc_session_init(const struct lu_context *ctx,
 			      struct lu_context_key *key)
@@ -149,6 +150,7 @@ struct lu_context_key osc_session_key = {
         .lct_init = osc_session_init,
         .lct_fini = osc_session_fini
 };
+EXPORT_SYMBOL(osc_session_key);
 
 /* type constructor/destructor: osc_type_{init,fini,start,stop}(). */
 LU_TYPE_INIT_FINI(osc, &osc_key, &osc_session_key);

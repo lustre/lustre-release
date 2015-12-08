@@ -457,16 +457,17 @@ extern struct lu_context_key osc_session_key;
 
 #define OSC_FLAGS (ASYNC_URGENT|ASYNC_READY)
 
+/* osc_page.c */
 int osc_page_init(const struct lu_env *env, struct cl_object *obj,
 		  struct cl_page *page, pgoff_t ind);
 void osc_index2policy(union ldlm_policy_data *policy, const struct cl_object *obj,
 		      pgoff_t start, pgoff_t end);
-int  osc_lvb_print(const struct lu_env *env, void *cookie,
-		   lu_printer_t p, const struct ost_lvb *lvb);
-
 void osc_lru_add_batch(struct client_obd *cli, struct list_head *list);
 void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
 		     enum cl_req_type crt, int brw_flags);
+int lru_queue_work(const struct lu_env *env, void *data);
+
+/* osc_cache.c */
 int osc_cancel_async_page(const struct lu_env *env, struct osc_page *ops);
 int osc_set_async_flags(struct osc_object *obj, struct osc_page *opg,
 			u32 async_flags);
@@ -489,7 +490,6 @@ int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
 			      pgoff_t start, pgoff_t end, int hp, int discard);
 int osc_cache_wait_range(const struct lu_env *env, struct osc_object *obj,
 			 pgoff_t start, pgoff_t end);
-
 int osc_io_unplug0(const struct lu_env *env, struct client_obd *cli,
 		   struct osc_object *osc, int async);
 
@@ -546,6 +546,37 @@ int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 		       struct ptlrpc_request_set *set);
 int osc_ldlm_resource_invalidate(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 				 struct hlist_node *hnode, void *arg);
+
+int osc_punch_send(struct obd_export *exp, struct obdo *oa,
+		   obd_enqueue_update_f upcall, void *cookie);
+
+/* osc_io.c */
+int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
+		  enum cl_req_type crt, struct cl_2queue *queue);
+int osc_io_commit_async(const struct lu_env *env,
+			const struct cl_io_slice *ios,
+			struct cl_page_list *qin, int from, int to,
+			cl_commit_cbt cb);
+int osc_io_iter_init(const struct lu_env *env, const struct cl_io_slice *ios);
+void osc_io_iter_fini(const struct lu_env *env,
+		      const struct cl_io_slice *ios);
+int osc_io_write_iter_init(const struct lu_env *env,
+			   const struct cl_io_slice *ios);
+void osc_io_write_iter_fini(const struct lu_env *env,
+			    const struct cl_io_slice *ios);
+int osc_io_fault_start(const struct lu_env *env, const struct cl_io_slice *ios);
+void osc_io_setattr_end(const struct lu_env *env,
+			const struct cl_io_slice *slice);
+int osc_io_read_start(const struct lu_env *env,
+		      const struct cl_io_slice *slice);
+int osc_io_write_start(const struct lu_env *env,
+		       const struct cl_io_slice *slice);
+void osc_io_end(const struct lu_env *env, const struct cl_io_slice *slice);
+
+int osc_io_fsync_start(const struct lu_env *env,
+		       const struct cl_io_slice *slice);
+void osc_io_fsync_end(const struct lu_env *env,
+		      const struct cl_io_slice *slice);
 
 /*****************************************************************************
  *

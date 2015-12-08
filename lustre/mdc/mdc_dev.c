@@ -37,23 +37,155 @@
 
 #include "mdc_internal.h"
 
-int mdc_page_init(const struct lu_env *env, struct cl_object *obj,
-		  struct cl_page *page, pgoff_t index)
-{
-	return -ENOTSUPP;
-}
-
 int mdc_lock_init(const struct lu_env *env,
 		  struct cl_object *obj, struct cl_lock *lock,
 		  const struct cl_io *unused)
 {
-	return -ENOTSUPP;
+	return 0;
 }
 
-int mdc_io_init(const struct lu_env *env,
-		struct cl_object *obj, struct cl_io *io)
+/**
+ * IO operations.
+ *
+ * An implementation of cl_io_operations specific methods for MDC layer.
+ *
+ */
+static int mdc_async_upcall(void *a, int rc)
 {
-	return -ENOTSUPP;
+	struct osc_async_cbargs *args = a;
+
+	args->opc_rc = rc;
+	complete(&args->opc_sync);
+	return 0;
+}
+
+static int mdc_io_setattr_start(const struct lu_env *env,
+				const struct cl_io_slice *slice)
+{
+	struct cl_io *io = slice->cis_io;
+	struct osc_io *oio = cl2osc_io(env, slice);
+	struct cl_object *obj = slice->cis_obj;
+	struct lov_oinfo *loi = cl2osc(obj)->oo_oinfo;
+	struct cl_attr *attr = &osc_env_info(env)->oti_attr;
+	struct obdo *oa = &oio->oi_oa;
+	struct osc_async_cbargs *cbargs = &oio->oi_cbarg;
+	__u64 size = io->u.ci_setattr.sa_attr.lvb_size;
+	unsigned int ia_valid = io->u.ci_setattr.sa_valid;
+	int rc;
+
+	/* silently ignore non-truncate setattr for Data-on-MDT object */
+	if (cl_io_is_trunc(io)) {
+		/* truncate cache dirty pages first */
+		rc = osc_cache_truncate_start(env, cl2osc(obj), size,
+					      &oio->oi_trunc);
+		if (rc < 0)
+			return rc;
+	}
+
+	if (oio->oi_lockless == 0) {
+		cl_object_attr_lock(obj);
+		rc = cl_object_attr_get(env, obj, attr);
+		if (rc == 0) {
+			struct ost_lvb *lvb = &io->u.ci_setattr.sa_attr;
+			unsigned int cl_valid = 0;
+
+			if (ia_valid & ATTR_SIZE) {
+				attr->cat_size = attr->cat_kms = size;
+				cl_valid = (CAT_SIZE | CAT_KMS);
+			}
+			if (ia_valid & ATTR_MTIME_SET) {
+				attr->cat_mtime = lvb->lvb_mtime;
+				cl_valid |= CAT_MTIME;
+			}
+			if (ia_valid & ATTR_ATIME_SET) {
+				attr->cat_atime = lvb->lvb_atime;
+				cl_valid |= CAT_ATIME;
+			}
+			if (ia_valid & ATTR_CTIME_SET) {
+				attr->cat_ctime = lvb->lvb_ctime;
+				cl_valid |= CAT_CTIME;
+			}
+			rc = cl_object_attr_update(env, obj, attr, cl_valid);
+		}
+		cl_object_attr_unlock(obj);
+		if (rc < 0)
+			return rc;
+	}
+
+	if (!(ia_valid & ATTR_SIZE))
+		return 0;
+
+	memset(oa, 0, sizeof(*oa));
+	oa->o_oi = loi->loi_oi;
+	oa->o_mtime = attr->cat_mtime;
+	oa->o_atime = attr->cat_atime;
+	oa->o_ctime = attr->cat_ctime;
+
+	oa->o_size = size;
+	oa->o_blocks = OBD_OBJECT_EOF;
+	oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP | OBD_MD_FLATIME |
+		      OBD_MD_FLCTIME | OBD_MD_FLMTIME | OBD_MD_FLSIZE |
+		      OBD_MD_FLBLOCKS;
+	if (oio->oi_lockless) {
+		oa->o_flags = OBD_FL_SRVLOCK;
+		oa->o_valid |= OBD_MD_FLFLAGS;
+	}
+
+	init_completion(&cbargs->opc_sync);
+
+	rc = osc_punch_send(osc_export(cl2osc(obj)), oa,
+			    mdc_async_upcall, cbargs);
+	cbargs->opc_rpc_sent = rc == 0;
+	return rc;
+}
+
+static struct cl_io_operations mdc_io_ops = {
+	.op = {
+		[CIT_READ] = {
+			.cio_iter_init = osc_io_iter_init,
+			.cio_iter_fini = osc_io_iter_fini,
+			.cio_start     = osc_io_read_start,
+		},
+		[CIT_WRITE] = {
+			.cio_iter_init = osc_io_write_iter_init,
+			.cio_iter_fini = osc_io_write_iter_fini,
+			.cio_start     = osc_io_write_start,
+			.cio_end       = osc_io_end,
+		},
+		[CIT_SETATTR] = {
+			.cio_iter_init = osc_io_iter_init,
+			.cio_iter_fini = osc_io_iter_fini,
+			.cio_start     = mdc_io_setattr_start,
+			.cio_end       = osc_io_setattr_end,
+		},
+		/* no support for data version so far */
+		[CIT_DATA_VERSION] = {
+			.cio_start = NULL,
+			.cio_end   = NULL,
+		},
+		[CIT_FAULT] = {
+			.cio_iter_init = osc_io_iter_init,
+			.cio_iter_fini = osc_io_iter_fini,
+			.cio_start     = osc_io_fault_start,
+			.cio_end       = osc_io_end,
+		},
+		[CIT_FSYNC] = {
+			.cio_start = osc_io_fsync_start,
+			.cio_end   = osc_io_fsync_end,
+		},
+	},
+	.cio_submit	  = osc_io_submit,
+	.cio_commit_async = osc_io_commit_async,
+};
+
+int mdc_io_init(const struct lu_env *env, struct cl_object *obj,
+		struct cl_io *io)
+{
+	struct osc_io *oio = osc_env_io(env);
+
+	CL_IO_SLICE_CLEAN(oio, oi_cl);
+	cl_io_slice_add(io, &oio->oi_cl, obj, &mdc_io_ops);
+	return 0;
 }
 
 /**
@@ -77,7 +209,7 @@ static void mdc_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 }
 
 static const struct cl_object_operations mdc_ops = {
-	.coo_page_init = mdc_page_init,
+	.coo_page_init = osc_page_init,
 	.coo_lock_init = mdc_lock_init,
 	.coo_io_init = mdc_io_init,
 	.coo_attr_get = osc_attr_get,
