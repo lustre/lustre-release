@@ -4294,6 +4294,41 @@ test_116b() {
 }
 run_test 116b "large update log slave MDT recovery"
 
+test_117() {
+	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
+	local index
+	local mds_indexs
+
+	mkdir -p $DIR/$tdir
+	$LFS setdirstripe -i0 -c$MDSCOUNT $DIR/$tdir/remote_dir
+	$LFS setdirstripe -i1 -c$MDSCOUNT $DIR/$tdir/remote_dir_1
+	sleep 2
+
+	# Let's set rdonly on all MDTs, so client will send
+	# replay requests on all MDTs and replay these requests
+	# at the same time. This test will verify the recovery
+	# will not be deadlock in this case, LU-7531.
+	for ((index = 0; index < $((MDSCOUNT)); index++)); do
+		replay_barrier mds$((index + 1))
+		if [ -z $mds_indexs ]; then
+			mds_indexs="${mds_indexs}mds$((index+1))"
+		else
+			mds_indexs="${mds_indexs},mds$((index+1))"
+		fi
+	done
+
+	rm -rf $DIR/$tdir/remote_dir
+	rm -rf $DIR/$tdir/remote_dir_1
+
+	fail $mds_indexs
+
+	rm -rf $DIR/$tdir || error "rmdir failed"
+}
+run_test 117 "DNE: cross MDT unlink, fail MDT1 and MDT2"
 
 complete $SECONDS
 check_and_cleanup_lustre

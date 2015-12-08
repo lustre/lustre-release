@@ -2447,14 +2447,19 @@ static int target_start_recovery_thread(struct lu_target *lut,
 	struct obd_device *obd = lut->lut_obd;
 	int rc = 0;
 	struct target_recovery_data *trd = &obd->obd_recovery_data;
+	int index;
 
 	memset(trd, 0, sizeof(*trd));
 	init_completion(&trd->trd_starting);
 	init_completion(&trd->trd_finishing);
 	trd->trd_recovery_handler = handler;
 
+	rc = server_name2index(obd->obd_name, &index, NULL);
+	if (rc < 0)
+		return rc;
+
 	if (!IS_ERR(kthread_run(target_recovery_thread,
-				lut, "tgt_recov"))) {
+				lut, "tgt_recover_%d", index))) {
 		wait_for_completion(&trd->trd_starting);
 		LASSERT(obd->obd_recovering != 0);
 	} else {

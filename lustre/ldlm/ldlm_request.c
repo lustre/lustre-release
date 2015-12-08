@@ -1224,6 +1224,21 @@ int ldlm_cli_cancel_req(struct obd_export *exp, struct list_head *cancels,
                         GOTO(out, rc);
                 }
 
+		/* If OSP want cancel cross-MDT lock, let's not block it in
+		 * in recovery, otherwise the lock will not released, if
+		 * the remote target is also in recovery, and it also need
+		 * this lock, it might cause deadlock. */
+		if (exp_connect_flags(exp) & OBD_CONNECT_MDS_MDS &&
+		    exp->exp_obd->obd_lu_dev != NULL &&
+		    exp->exp_obd->obd_lu_dev->ld_site != NULL) {
+			struct lu_device *top_dev;
+
+			top_dev = exp->exp_obd->obd_lu_dev->ld_site->ls_top_dev;
+			if (top_dev != NULL &&
+			    top_dev->ld_obd->obd_recovering)
+				req->rq_allow_replay = 1;
+		}
+
                 req->rq_request_portal = LDLM_CANCEL_REQUEST_PORTAL;
                 req->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
                 ptlrpc_at_set_req_timeout(req);

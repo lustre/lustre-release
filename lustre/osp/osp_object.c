@@ -1690,6 +1690,7 @@ static int osp_it_fetch(const struct lu_env *env, struct osp_it *it)
 	struct lu_device	 *dev	= it->ooi_obj->do_lu.lo_dev;
 	struct osp_device	 *osp	= lu2osp_dev(dev);
 	struct page		**pages;
+	struct lu_device *top_device;
 	struct ptlrpc_request	 *req	= NULL;
 	struct ptlrpc_bulk_desc  *desc;
 	struct idx_info 	 *ii;
@@ -1724,6 +1725,13 @@ static int osp_it_fetch(const struct lu_env *env, struct osp_it *it)
 		ptlrpc_request_free(req);
 		RETURN(rc);
 	}
+
+	/* Let's allow this request during recovery, otherwise
+	 * if the remote target is also in recovery status,
+	 * it might cause deadlock */
+	top_device = dev->ld_site->ls_top_dev;
+	if (top_device->ld_obd->obd_recovering)
+		req->rq_allow_replay = 1;
 
 	req->rq_request_portal = OUT_PORTAL;
 	ii = req_capsule_client_get(&req->rq_pill, &RMF_IDX_INFO);
