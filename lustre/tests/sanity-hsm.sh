@@ -4615,6 +4615,66 @@ test_405() {
 }
 run_test 405 "archive and release under striped directory"
 
+test_406() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.64) ] &&
+		skip "need MDS version at least 2.7.64" && return 0
+
+	local fid
+	local mdt_index
+
+	copytool_setup
+	mkdir -p $DIR/$tdir
+	fid=$(make_small $DIR/$tdir/$tfile)
+	echo "old fid $fid"
+
+	$LFS hsm_archive $DIR/$tdir/$tfile
+	wait_request_state "$fid" ARCHIVE SUCCEED
+	$LFS hsm_release $DIR/$tdir/$tfile
+
+	# Should migrate $tdir but not $tfile.
+	$LFS mv -M1 $DIR/$tdir &&
+		error "migrating HSM an archived file should fail"
+
+	$LFS hsm_restore $DIR/$tdir/$tfile
+	wait_request_state "$fid" RESTORE SUCCEED
+
+	$LFS hsm_remove $DIR/$tdir/$tfile ||
+		error "cannot remove $DIR/$tdir/$tfile from archive"
+
+	cat $DIR/$tdir/$tfile > /dev/null ||
+		error "cannot read $DIR/$tdir/$tfile"
+
+	$LFS mv -M1 $DIR/$tdir/$tfile ||
+		error "cannot complete migration after HSM remove"
+
+	mdt_index=$($LFS getstripe -M $DIR/$tdir)
+	if ((mdt_index != 1)); then
+		error "expected MDT index 1, got $mdt_index"
+	fi
+
+	# Refresh fid after migration.
+	fid=$(path2fid $DIR/$tdir/$tfile)
+	echo "new fid $fid"
+
+	$LFS hsm_archive $DIR/$tdir/$tfile
+	wait_request_state "$fid" ARCHIVE SUCCEED 1
+
+	lctl set_param debug=+trace
+	$LFS hsm_release $DIR/$tdir/$tfile ||
+		error "cannot release $DIR/$tdir/$tfile"
+
+	$LFS hsm_restore $DIR/$tdir/$tfile
+	wait_request_state "$fid" RESTORE SUCCEED 1
+
+	cat $DIR/$tdir/$tfile > /dev/null ||
+		error "cannot read $DIR/$tdir/$tfile"
+
+	copytool_cleanup
+}
+run_test 406 "attempting to migrate HSM archived files is safe"
+
 test_500()
 {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.92) ] &&
