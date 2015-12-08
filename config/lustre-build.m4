@@ -449,7 +449,6 @@ AC_DEFUN([LB_CONFIG_FILES], [
 		[Rules:build/Rules.in]
 		AC_PACKAGE_TARNAME[.spec]
 		AC_PACKAGE_TARNAME[-dkms.spec]
-		lustre/scripts/dkms.mkconf
 		contrib/Makefile
 		contrib/lbuild/Makefile
 		contrib/scripts/Makefile
@@ -461,9 +460,10 @@ AC_DEFUN([LB_CONFIG_FILES], [
 		lustre-iokit/sgpdd-survey/Makefile
 		lustre-iokit/mds-survey/Makefile
 		lustre-iokit/ior-survey/Makefile
-		lustre-iokit/stats-collect/Makefile,
-		[chmod +x lustre/scripts/dkms.mkconf]
+		lustre-iokit/stats-collect/Makefile
 	)
+	AC_CONFIG_FILES([lustre/scripts/dkms.mkconf],
+			[chmod +x lustre/scripts/dkms.mkconf])
 ])
 
 #
