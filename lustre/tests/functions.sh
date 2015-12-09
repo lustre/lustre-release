@@ -1037,3 +1037,21 @@ run_fs_test() {
 
 	rm -rf $testdir
 }
+
+ior_mdtest_parallel() {
+	local rc1=0
+	local rc2=0
+	local type=$1
+
+	run_ior $type &
+	local pids=$!
+
+	run_mdtest $type || rc2=$?
+	[[ $rc2 -ne 0 ]] && echo "mdtest failed with error $rc2"
+
+	wait $pids || rc1=$?
+	[[ $rc1 -ne 0 ]] && echo "ior failed with error $rc1"
+
+	[[ $rc1 -ne 0 || $rc2 -ne 0 ]] && return 1
+	return 0
+}
