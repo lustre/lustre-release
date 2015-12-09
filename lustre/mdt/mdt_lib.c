@@ -472,6 +472,13 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 	struct lu_nodemap	*nodemap =
 		info->mti_exp->exp_target_data.ted_nodemap;
 
+	if (nodemap == NULL) {
+		CDEBUG(D_SEC, "%s: cli %s/%p nodemap not set.\n",
+		       mdt2obd_dev(mdt)->obd_name,
+		       info->mti_exp->exp_client_uuid.uuid, info->mti_exp);
+		RETURN(-EACCES);
+	}
+
 	if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
 		identity = mdt_identity_get(mdt->mdt_identity_cache,
 					    uc->uc_fsuid);
@@ -487,12 +494,7 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 	}
 	uc->uc_identity = identity;
 
-	if (nodemap == NULL) {
-		CERROR("%s: cli %s/%p nodemap not set.\n",
-		      mdt2obd_dev(mdt)->obd_name,
-		      info->mti_exp->exp_client_uuid.uuid, info->mti_exp);
-		RETURN(-EACCES);
-	} else if (uc->uc_o_uid == nodemap->nm_squash_uid) {
+	if (uc->uc_o_uid == nodemap->nm_squash_uid) {
 		uc->uc_fsuid = nodemap->nm_squash_uid;
 		uc->uc_fsgid = nodemap->nm_squash_gid;
 		uc->uc_cap = 0;
