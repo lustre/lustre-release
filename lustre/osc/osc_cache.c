@@ -2316,8 +2316,8 @@ __must_hold(&cli->cl_loi_list_lock)
 	}
 }
 
-static int osc_io_unplug0(const struct lu_env *env, struct client_obd *cli,
-			  struct osc_object *osc, int async)
+int osc_io_unplug0(const struct lu_env *env, struct client_obd *cli,
+		   struct osc_object *osc, int async)
 {
 	int rc = 0;
 
@@ -2335,18 +2335,7 @@ static int osc_io_unplug0(const struct lu_env *env, struct client_obd *cli,
 	}
 	return rc;
 }
-
-static int osc_io_unplug_async(const struct lu_env *env,
-				struct client_obd *cli, struct osc_object *osc)
-{
-	return osc_io_unplug0(env, cli, osc, 1);
-}
-
-void osc_io_unplug(const struct lu_env *env, struct client_obd *cli,
-		   struct osc_object *osc)
-{
-	(void)osc_io_unplug0(env, cli, osc, 0);
-}
+EXPORT_SYMBOL(osc_io_unplug0);
 
 int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
 			struct page *page, loff_t offset)

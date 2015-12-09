@@ -305,8 +305,11 @@ struct client_obd {
 	struct mutex		  cl_mgc_mutex;
 	struct local_oid_storage *cl_mgc_los;
 	struct dt_object	 *cl_mgc_configs_dir;
-	atomic_t		  cl_mgc_refcount;
 	struct obd_export        *cl_mgc_mgsexp;
+	atomic_t		  cl_mgc_refcount;
+	/* in-flight control list and total RPCs counter */
+	struct list_head	 cl_flight_waiters;
+	__u32			 cl_rpcs_in_flight;
 
         /* checksumming for data sent over the network */
 	unsigned int		 cl_checksum:1, /* 0 = disabled, 1 = enabled */

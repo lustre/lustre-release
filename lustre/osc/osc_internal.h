@@ -44,6 +44,7 @@ extern struct ptlrpc_request_pool *osc_rq_pool;
 void osc_wake_cache_waiters(struct client_obd *cli);
 int osc_shrink_grant_to_target(struct client_obd *cli, __u64 target_bytes);
 void osc_update_next_shrink(struct client_obd *cli);
+int lru_queue_work(const struct lu_env *env, void *data);
 
 extern struct ptlrpc_request_set *PTLRPCD_SET;
 

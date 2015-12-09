@@ -489,9 +489,23 @@ int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
 			      pgoff_t start, pgoff_t end, int hp, int discard);
 int osc_cache_wait_range(const struct lu_env *env, struct osc_object *obj,
 			 pgoff_t start, pgoff_t end);
-void osc_io_unplug(const struct lu_env *env, struct client_obd *cli,
-		   struct osc_object *osc);
-int lru_queue_work(const struct lu_env *env, void *data);
+
+int osc_io_unplug0(const struct lu_env *env, struct client_obd *cli,
+		   struct osc_object *osc, int async);
+
+static inline int osc_io_unplug_async(const struct lu_env *env,
+				      struct client_obd *cli,
+				      struct osc_object *osc)
+{
+	return osc_io_unplug0(env, cli, osc, 1);
+}
+
+static inline void osc_io_unplug(const struct lu_env *env,
+				 struct client_obd *cli,
+				 struct osc_object *osc)
+{
+	(void)osc_io_unplug0(env, cli, osc, 0);
+}
 
 void osc_object_set_contended(struct osc_object *obj);
 void osc_object_clear_contended(struct osc_object *obj);
@@ -520,9 +534,18 @@ int osc_attr_update(const struct lu_env *env, struct cl_object *obj,
 		    const struct cl_attr *attr, unsigned valid);
 int osc_object_glimpse(const struct lu_env *env, const struct cl_object *obj,
 		       struct ost_lvb *lvb);
+int osc_object_invalidate(const struct lu_env *env, struct osc_object *osc);
 
 /* osc_request.c */
 void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd);
+int osc_setup_common(struct obd_device *obd, struct lustre_cfg *lcfg);
+int osc_precleanup_common(struct obd_device *obd);
+int osc_cleanup_common(struct obd_device *obd);
+int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
+		       u32 keylen, void *key, u32 vallen, void *val,
+		       struct ptlrpc_request_set *set);
+int osc_ldlm_resource_invalidate(struct cfs_hash *hs, struct cfs_hash_bd *bd,
+				 struct hlist_node *hnode, void *arg);
 
 /*****************************************************************************
  *
