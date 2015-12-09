@@ -3260,13 +3260,6 @@ static int __init ofd_init(void)
 		return(rc);
 	}
 
-	rc = ofd_dlm_init();
-	if (rc) {
-		lu_kmem_fini(ofd_caches);
-		ofd_fmd_exit();
-		return rc;
-	}
-
 	rc = class_register_type(&ofd_obd_ops, NULL, true, NULL,
 				 LUSTRE_OST_NAME, &ofd_device_type);
 	return rc;
@@ -3281,7 +3274,6 @@ static int __init ofd_init(void)
 static void __exit ofd_exit(void)
 {
 	ofd_fmd_exit();
-	ofd_dlm_exit();
 	lu_kmem_fini(ofd_caches);
 	class_unregister_type(LUSTRE_OST_NAME);
 }

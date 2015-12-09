@@ -1608,6 +1608,8 @@ typedef enum {
 #define MDS_INODELOCK_MAXSHIFT 6
 /* This FULL lock is useful to take on unlink sort of operations */
 #define MDS_INODELOCK_FULL ((1<<(MDS_INODELOCK_MAXSHIFT+1))-1)
+/* DOM lock shouldn't be canceled early, use this macro for ELC */
+#define MDS_INODELOCK_ELC (MDS_INODELOCK_FULL & ~MDS_INODELOCK_DOM)
 
 /* NOTE: until Lustre 1.8.7/2.1.1 the fid_ver() was packed into name[2],
  * but was moved into name[1] along with the OID to avoid consuming the
@@ -2360,6 +2362,8 @@ enum ldlm_intent_flags {
 	IT_QUOTA_DQACQ = 0x00000800,
 	IT_QUOTA_CONN  = 0x00001000,
 	IT_SETXATTR    = 0x00002000,
+	IT_GLIMPSE     = 0x00004000,
+	IT_BRW	       = 0x00008000,
 };
 
 struct ldlm_intent {

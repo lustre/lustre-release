@@ -660,7 +660,7 @@ static int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 
         if (rc != 0)
                 GOTO(out_unlock, rc);
-
+	mdt_dom_obj_lvb_update(info->mti_env, mo, false);
         EXIT;
 out_unlock:
 	mdt_unlock_slaves(info, mo, lockpart, s0_lh, s0_obj, einfo, rc);
@@ -795,11 +795,11 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 
 	mdt_pack_attr2body(info, repbody, &ma->ma_attr, mdt_object_fid(mo));
 
-        EXIT;
+	EXIT;
 out_put:
-        mdt_object_put(info->mti_env, mo);
+	mdt_object_put(info->mti_env, mo);
 out:
-        if (rc == 0)
+	if (rc == 0)
 		mdt_counter_incr(req, LPROC_MDT_SETATTR);
 
         mdt_client_compatibility(info);
@@ -873,6 +873,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 	bool cos_incompat = false;
 	int no_name = 0;
 	int rc;
+
 	ENTRY;
 
 	DEBUG_REQ(D_INODE, req, "unlink "DFID"/"DNAME"", PFID(rr->rr_fid1),
@@ -1044,32 +1045,39 @@ relock:
 			mdt_object_child(mc), &rr->rr_name, ma, no_name);
 
 	mutex_unlock(&mc->mot_lov_mutex);
+	if (rc != 0)
+		GOTO(unlock_child, rc);
 
-	if (rc == 0 && !lu_object_is_dying(&mc->mot_header))
+	if (!lu_object_is_dying(&mc->mot_header)) {
 		rc = mdt_attr_get_complex(info, mc, ma);
-	if (rc == 0)
-		mdt_handle_last_unlink(info, mc, ma);
+		if (rc)
+			GOTO(out_stat, rc);
+	} else {
+		mdt_dom_check_and_discard(info, mc);
+	}
+	mdt_handle_last_unlink(info, mc, ma);
 
-        if (ma->ma_valid & MA_INODE) {
-                switch (ma->ma_attr.la_mode & S_IFMT) {
-                case S_IFDIR:
+out_stat:
+	if (ma->ma_valid & MA_INODE) {
+		switch (ma->ma_attr.la_mode & S_IFMT) {
+		case S_IFDIR:
 			mdt_counter_incr(req, LPROC_MDT_RMDIR);
-                        break;
-                case S_IFREG:
-                case S_IFLNK:
-                case S_IFCHR:
-                case S_IFBLK:
-                case S_IFIFO:
-                case S_IFSOCK:
+			break;
+		case S_IFREG:
+		case S_IFLNK:
+		case S_IFCHR:
+		case S_IFBLK:
+		case S_IFIFO:
+		case S_IFSOCK:
 			mdt_counter_incr(req, LPROC_MDT_UNLINK);
-                        break;
-                default:
-                        LASSERTF(0, "bad file type %o unlinking\n",
-                                 ma->ma_attr.la_mode);
-                }
-        }
+			break;
+		default:
+			LASSERTF(0, "bad file type %o unlinking\n",
+				ma->ma_attr.la_mode);
+		}
+	}
 
-        EXIT;
+	EXIT;
 
 unlock_child:
 	mdt_unlock_slaves(info, mc, MDS_INODELOCK_UPDATE, s0_lh, s0_obj, einfo,
@@ -2106,8 +2114,10 @@ relock:
 	/* handle last link of tgt object */
 	if (rc == 0) {
 		mdt_counter_incr(req, LPROC_MDT_RENAME);
-		if (mnew)
+		if (mnew) {
 			mdt_handle_last_unlink(info, mnew, ma);
+			mdt_dom_check_and_discard(info, mnew);
+		}
 
 		mdt_rename_counter_tally(info, info->mti_mdt, req,
 					 msrcdir, mtgtdir);

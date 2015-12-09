@@ -419,8 +419,7 @@ extern struct ldlm_valblock_ops ofd_lvbo;
 
 /* ofd_dlm.c */
 extern struct kmem_cache *ldlm_glimpse_work_kmem;
-int ofd_dlm_init(void);
-void ofd_dlm_exit(void);
+
 int ofd_intent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
 		      void *req_cookie, enum ldlm_mode mode, __u64 flags,
 		      void *data);

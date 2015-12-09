@@ -49,6 +49,17 @@
  * Object operations.
  *
  */
+static void osc_obj_build_res_name(struct osc_object *osc,
+				   struct ldlm_res_id *resname)
+{
+	ostid_build_res_name(&osc->oo_oinfo->loi_oi, resname);
+}
+
+static const struct osc_object_operations osc_object_ops = {
+	.oto_build_res_name = osc_obj_build_res_name,
+	.oto_dlmlock_at_pgoff = osc_obj_dlmlock_at_pgoff,
+};
+
 int osc_object_init(const struct lu_env *env, struct lu_object *obj,
 		    const struct lu_object_conf *conf)
 {
@@ -78,6 +89,8 @@ int osc_object_init(const struct lu_env *env, struct lu_object *obj,
 
 	atomic_set(&osc->oo_nr_ios, 0);
 	init_waitqueue_head(&osc->oo_io_waitq);
+
+	LASSERT(osc->oo_obj_ops != NULL);
 
 	cl_object_page_init(lu2cl(obj), sizeof(struct osc_page));
 
@@ -189,23 +202,28 @@ static int osc_object_ast_clear(struct ldlm_lock *lock, void *data)
 {
 	ENTRY;
 
+	CDEBUG(D_DLMTRACE, "obj: %p/%p, lock %p\n",
+		data, lock->l_ast_data, lock);
+
+	LASSERT(lock->l_granted_mode == lock->l_req_mode);
 	if (lock->l_ast_data == data)
 		lock->l_ast_data = NULL;
 	RETURN(LDLM_ITER_CONTINUE);
 }
 
-static int osc_object_prune(const struct lu_env *env, struct cl_object *obj)
+int osc_object_prune(const struct lu_env *env, struct cl_object *obj)
 {
-	struct osc_object       *osc = cl2osc(obj);
-	struct ldlm_res_id      *resname = &osc_env_info(env)->oti_resname;
+	struct osc_object  *osc = cl2osc(obj);
+	struct ldlm_res_id *resname = &osc_env_info(env)->oti_resname;
 
 	/* DLM locks don't hold a reference of osc_object so we have to
 	 * clear it before the object is being destroyed. */
-	ostid_build_res_name(&osc->oo_oinfo->loi_oi, resname);
+	osc_build_res_name(osc, resname);
 	ldlm_resource_iterate(osc_export(osc)->exp_obd->obd_namespace, resname,
 			      osc_object_ast_clear, osc);
 	return 0;
 }
+EXPORT_SYMBOL(osc_object_prune);
 
 static int osc_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 			     struct ll_fiemap_info_key *fmkey,
@@ -292,18 +310,6 @@ drop_lock:
 	RETURN(rc);
 }
 
-void osc_object_set_contended(struct osc_object *obj)
-{
-        obj->oo_contention_time = cfs_time_current();
-        /* mb(); */
-        obj->oo_contended = 1;
-}
-
-void osc_object_clear_contended(struct osc_object *obj)
-{
-        obj->oo_contended = 0;
-}
-
 int osc_object_is_contended(struct osc_object *obj)
 {
         struct osc_device *dev  = lu2osc_dev(obj->oo_cl.co_lu.lo_dev);
@@ -329,6 +335,7 @@ int osc_object_is_contended(struct osc_object *obj)
         }
         return 1;
 }
+EXPORT_SYMBOL(osc_object_is_contended);
 
 /**
  * Implementation of struct cl_object_operations::coo_req_attr_set() for osc
@@ -441,6 +448,7 @@ struct lu_object *osc_object_alloc(const struct lu_env *env,
 		lu_object_init(obj, NULL, dev);
 		osc->oo_cl.co_ops = &osc_ops;
 		obj->lo_ops = &osc_lu_obj_ops;
+		osc->oo_obj_ops = &osc_object_ops;
 	} else
 		obj = NULL;
 	return obj;

@@ -842,7 +842,9 @@ struct ldlm_lock {
 
 	/** Private storage for lock user. Opaque to LDLM. */
 	void			*l_ast_data;
-
+	/* separate ost_lvb used mostly by Data-on-MDT for now.
+	 * It is introduced to don't mix with layout lock data. */
+	struct ost_lvb		 l_ost_lvb;
 	/*
 	 * Server-side-only members.
 	 */
@@ -1009,6 +1011,12 @@ static inline bool ldlm_has_layout(struct ldlm_lock *lock)
 {
 	return lock->l_resource->lr_type == LDLM_IBITS &&
 		lock->l_policy_data.l_inodebits.bits & MDS_INODELOCK_LAYOUT;
+}
+
+static inline bool ldlm_has_dom(struct ldlm_lock *lock)
+{
+	return lock->l_resource->lr_type == LDLM_IBITS &&
+		lock->l_policy_data.l_inodebits.bits & MDS_INODELOCK_DOM;
 }
 
 static inline char *

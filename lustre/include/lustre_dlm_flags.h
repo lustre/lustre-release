@@ -392,7 +392,7 @@
 
 /** l_flags bits marked as "ast" bits */
 #define LDLM_FL_AST_MASK                (LDLM_FL_FLOCK_DEADLOCK		|\
-					 LDLM_FL_AST_DISCARD_DATA)
+					 LDLM_FL_DISCARD_DATA)
 
 /** l_flags bits marked as "blocked" bits */
 #define LDLM_FL_BLOCKED_MASK            (LDLM_FL_BLOCK_GRANTED		|\

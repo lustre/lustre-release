@@ -1152,6 +1152,7 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
 
 	RETURN(rc);
 }
+EXPORT_SYMBOL(ldlm_server_glimpse_ast);
 
 int ldlm_glimpse_locks(struct ldlm_resource *res,
 		       struct list_head *gl_work_list)
@@ -1363,7 +1364,6 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
 		lock->l_req_extent = lock->l_policy_data.l_extent;
 
 existing_lock:
-
         if (flags & LDLM_FL_HAS_INTENT) {
                 /* In this case, the reply buffer is allocated deep in
                  * local_lock_enqueue by the policy function. */
@@ -3232,11 +3232,22 @@ int ldlm_init(void)
 	if (ldlm_interval_tree_slab == NULL)
 		goto out_interval;
 
+#ifdef HAVE_SERVER_SUPPORT
+	ldlm_glimpse_work_kmem = kmem_cache_create("ldlm_glimpse_work_kmem",
+					sizeof(struct ldlm_glimpse_work),
+					0, 0, NULL);
+	if (ldlm_glimpse_work_kmem == NULL)
+		goto out_interval_tree;
+#endif
+
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
 	class_export_dump_hook = ldlm_dump_export_locks;
 #endif
 	return 0;
-
+#ifdef HAVE_SERVER_SUPPORT
+out_interval_tree:
+	kmem_cache_destroy(ldlm_interval_tree_slab);
+#endif
 out_interval:
 	kmem_cache_destroy(ldlm_interval_slab);
 out_lock:
@@ -3259,4 +3270,7 @@ void ldlm_exit(void)
 	kmem_cache_destroy(ldlm_lock_slab);
 	kmem_cache_destroy(ldlm_interval_slab);
 	kmem_cache_destroy(ldlm_interval_tree_slab);
+#ifdef HAVE_SERVER_SUPPORT
+	kmem_cache_destroy(ldlm_glimpse_work_kmem);
+#endif
 }

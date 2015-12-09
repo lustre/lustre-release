@@ -51,25 +51,6 @@ struct ofd_intent_args {
 	int			error;
 };
 
-int ofd_dlm_init(void)
-{
-	ldlm_glimpse_work_kmem = kmem_cache_create("ldlm_glimpse_work_kmem",
-					     sizeof(struct ldlm_glimpse_work),
-					     0, 0, NULL);
-	if (ldlm_glimpse_work_kmem == NULL)
-		return -ENOMEM;
-	else
-		return 0;
-}
-
-void ofd_dlm_exit(void)
-{
-	if (ldlm_glimpse_work_kmem) {
-		kmem_cache_destroy(ldlm_glimpse_work_kmem);
-		ldlm_glimpse_work_kmem = NULL;
-	}
-}
-
 /**
  * OFD interval callback.
  *

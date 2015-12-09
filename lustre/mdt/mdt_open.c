@@ -2074,8 +2074,10 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 	atomic_dec(&o->mot_open_count);
 	mdt_handle_last_unlink(info, o, ma);
 
-        if (!MFD_CLOSED(mode))
-                rc = mo_close(info->mti_env, next, ma, mode);
+	if (!MFD_CLOSED(mode)) {
+		rc = mo_close(info->mti_env, next, ma, mode);
+		mdt_dom_check_and_discard(info, o);
+	}
 
 	/* adjust open and lease count */
 	if (mode & MDS_OPEN_LEASE) {

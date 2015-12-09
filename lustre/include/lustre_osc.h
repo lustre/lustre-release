@@ -182,6 +182,73 @@ struct osc_thread_info {
 	struct lu_buf		oti_ladvise_buf;
 };
 
+static inline __u64 osc_enq2ldlm_flags(__u32 enqflags)
+{
+	__u64 result = 0;
+
+	CDEBUG(D_DLMTRACE, "flags: %x\n", enqflags);
+
+	LASSERT((enqflags & ~CEF_MASK) == 0);
+
+	if (enqflags & CEF_NONBLOCK)
+		result |= LDLM_FL_BLOCK_NOWAIT;
+	if (enqflags & CEF_GLIMPSE)
+		result |= LDLM_FL_HAS_INTENT;
+	if (enqflags & CEF_DISCARD_DATA)
+		result |= LDLM_FL_AST_DISCARD_DATA;
+	if (enqflags & CEF_PEEK)
+		result |= LDLM_FL_TEST_LOCK;
+	if (enqflags & CEF_LOCK_MATCH)
+		result |= LDLM_FL_MATCH_LOCK;
+	if (enqflags & CEF_LOCK_NO_EXPAND)
+		result |= LDLM_FL_NO_EXPANSION;
+	if (enqflags & CEF_SPECULATIVE)
+		result |= LDLM_FL_SPECULATIVE;
+	return result;
+}
+
+typedef int (*osc_enqueue_upcall_f)(void *cookie, struct lustre_handle *lockh,
+				    int rc);
+
+struct osc_enqueue_args {
+	struct obd_export	*oa_exp;
+	enum ldlm_type		oa_type;
+	enum ldlm_mode		oa_mode;
+	__u64			*oa_flags;
+	osc_enqueue_upcall_f	oa_upcall;
+	void			*oa_cookie;
+	struct ost_lvb		*oa_lvb;
+	struct lustre_handle	oa_lockh;
+	bool			oa_speculative;
+};
+
+/**
+ * Bit flags for osc_dlm_lock_at_pageoff().
+ */
+enum osc_dap_flags {
+	/**
+	 * Just check if the desired lock exists, it won't hold reference
+	 * count on lock.
+	 */
+	OSC_DAP_FL_TEST_LOCK = 1 << 0,
+	/**
+	 * Return the lock even if it is being canceled.
+	 */
+	OSC_DAP_FL_CANCELING = 1 << 1
+};
+
+/*
+ * The set of operations which are different for MDC and OSC objects
+ */
+struct osc_object_operations {
+	void (*oto_build_res_name)(struct osc_object *osc,
+				   struct ldlm_res_id *resname);
+	struct ldlm_lock* (*oto_dlmlock_at_pgoff)(const struct lu_env *env,
+						struct osc_object *obj,
+						pgoff_t index,
+						enum osc_dap_flags dap_flags);
+};
+
 struct osc_object {
 	struct cl_object	oo_cl;
 	struct lov_oinfo	*oo_oinfo;
@@ -242,8 +309,23 @@ struct osc_object {
 	atomic_t		oo_nr_ios;
 	wait_queue_head_t	oo_io_waitq;
 
+	const struct osc_object_operations *oo_obj_ops;
 	bool			oo_initialized;
 };
+
+static inline void osc_build_res_name(struct osc_object *osc,
+				      struct ldlm_res_id *resname)
+{
+	return osc->oo_obj_ops->oto_build_res_name(osc, resname);
+}
+
+static inline struct ldlm_lock *osc_dlmlock_at_pgoff(const struct lu_env *env,
+						    struct osc_object *obj,
+						    pgoff_t index,
+						    enum osc_dap_flags flags)
+{
+	return obj->oo_obj_ops->oto_dlmlock_at_pgoff(env, obj, index, flags);
+}
 
 static inline void osc_object_lock(struct osc_object *obj)
 {
@@ -272,6 +354,18 @@ static inline int osc_object_is_locked(struct osc_object *obj)
 	 */
 	return 1;
 #endif
+}
+
+static inline void osc_object_set_contended(struct osc_object *obj)
+{
+	obj->oo_contention_time = cfs_time_current();
+	/* mb(); */
+	obj->oo_contended = 1;
+}
+
+static inline void osc_object_clear_contended(struct osc_object *obj)
+{
+	obj->oo_contended = 0;
 }
 
 /*
@@ -350,7 +444,8 @@ struct osc_lock {
 	enum osc_lock_state	ols_state;
 	/** lock value block */
 	struct ost_lvb		ols_lvb;
-
+	/** Lockless operations to be used by lockless lock */
+	const struct cl_lock_operations *ols_lockless_ops;
 	/**
 	 * true, if ldlm_lock_addref() was called against
 	 * osc_lock::ols_lock. This is used for sanity checking.
@@ -402,6 +497,10 @@ struct osc_lock {
 				ols_speculative:1;
 };
 
+static inline int osc_lock_is_lockless(const struct osc_lock *ols)
+{
+	return (ols->ols_cl.cls_ops == ols->ols_lockless_ops);
+}
 
 /**
  * Page state private for osc layer.
@@ -507,10 +606,13 @@ static inline void osc_io_unplug(const struct lu_env *env,
 	(void)osc_io_unplug0(env, cli, osc, 0);
 }
 
-void osc_object_set_contended(struct osc_object *obj);
-void osc_object_clear_contended(struct osc_object *obj);
-int osc_object_is_contended(struct osc_object *obj);
-int osc_lock_is_lockless(const struct osc_lock *olck);
+typedef int (*osc_page_gang_cbt)(const struct lu_env *, struct cl_io *,
+				 struct osc_page *, void *);
+int osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
+			struct osc_object *osc, pgoff_t start, pgoff_t end,
+			osc_page_gang_cbt cb, void *cbdata);
+int osc_discard_cb(const struct lu_env *env, struct cl_io *io,
+		   struct osc_page *ops, void *cbdata);
 
 /* osc_dev.c */
 int osc_device_init(const struct lu_env *env, struct lu_device *d,
@@ -535,6 +637,10 @@ int osc_attr_update(const struct lu_env *env, struct cl_object *obj,
 int osc_object_glimpse(const struct lu_env *env, const struct cl_object *obj,
 		       struct ost_lvb *lvb);
 int osc_object_invalidate(const struct lu_env *env, struct osc_object *osc);
+int osc_object_is_contended(struct osc_object *obj);
+int osc_object_find_cbdata(const struct lu_env *env, struct cl_object *obj,
+			   ldlm_iterator_t iter, void *data);
+int osc_object_prune(const struct lu_env *env, struct cl_object *obj);
 
 /* osc_request.c */
 void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd);
@@ -572,11 +678,27 @@ int osc_io_read_start(const struct lu_env *env,
 int osc_io_write_start(const struct lu_env *env,
 		       const struct cl_io_slice *slice);
 void osc_io_end(const struct lu_env *env, const struct cl_io_slice *slice);
-
 int osc_io_fsync_start(const struct lu_env *env,
 		       const struct cl_io_slice *slice);
 void osc_io_fsync_end(const struct lu_env *env,
 		      const struct cl_io_slice *slice);
+void osc_read_ahead_release(const struct lu_env *env, void *cbdata);
+
+/* osc_lock.c */
+void osc_lock_to_lockless(const struct lu_env *env, struct osc_lock *ols,
+			  int force);
+void osc_lock_wake_waiters(const struct lu_env *env, struct osc_object *osc,
+			   struct osc_lock *oscl);
+int osc_lock_enqueue_wait(const struct lu_env *env, struct osc_object *obj,
+			  struct osc_lock *oscl);
+void osc_lock_set_writer(const struct lu_env *env, const struct cl_io *io,
+			 struct cl_object *obj, struct osc_lock *oscl);
+int osc_lock_print(const struct lu_env *env, void *cookie,
+		   lu_printer_t p, const struct cl_lock_slice *slice);
+void osc_lock_cancel(const struct lu_env *env,
+		     const struct cl_lock_slice *slice);
+void osc_lock_fini(const struct lu_env *env, struct cl_lock_slice *slice);
+int osc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data);
 
 /*****************************************************************************
  *
@@ -825,18 +947,6 @@ struct osc_extent {
 	unsigned int		oe_mppr;
 };
 
-int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
-		      int sent, int rc);
-int osc_extent_release(const struct lu_env *env, struct osc_extent *ext);
-
-int osc_lock_discard_pages(const struct lu_env *env, struct osc_object *osc,
-			   pgoff_t start, pgoff_t end, bool discard_pages);
-
-typedef int (*osc_page_gang_cbt)(const struct lu_env *, struct cl_io *,
-				 struct osc_page *, void *);
-int osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
-			 struct osc_object *osc, pgoff_t start, pgoff_t end,
-			 osc_page_gang_cbt cb, void *cbdata);
 /** @} osc */
 
 #endif /* LUSTRE_OSC_H */

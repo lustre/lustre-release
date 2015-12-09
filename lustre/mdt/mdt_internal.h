@@ -767,6 +767,13 @@ void mdt_thread_info_init(struct ptlrpc_request *req,
 			  struct mdt_thread_info *mti);
 void mdt_thread_info_fini(struct mdt_thread_info *mti);
 struct mdt_thread_info *tsi2mdt_info(struct tgt_session_info *tsi);
+void mdt_intent_fixup_resent(struct mdt_thread_info *info,
+			     struct ldlm_lock *new_lock,
+			     struct mdt_lock_handle *lh, __u64 flags);
+int mdt_intent_lock_replace(struct mdt_thread_info *info,
+			    struct ldlm_lock **lockp,
+			    struct mdt_lock_handle *lh,
+			    __u64 flags, int result);
 
 int mdt_hsm_attr_set(struct mdt_thread_info *info, struct mdt_object *obj,
 		     const struct md_hsm *mh);
@@ -1010,6 +1017,11 @@ static inline int is_identity_get_disabled(struct upcall_cache *cache)
 
 int mdt_blocking_ast(struct ldlm_lock*, struct ldlm_lock_desc*, void*, int);
 
+static int mdt_dom_glimpse_ast(struct ldlm_lock *lock, void *reqp)
+{
+	return -ELDLM_NO_LOCK_DATA;
+}
+
 /* Issues dlm lock on passed @ns, @f stores it lock handle into @lh. */
 static inline int mdt_fid_lock(struct ldlm_namespace *ns,
 			       struct lustre_handle *lh, enum ldlm_mode mode,
@@ -1018,14 +1030,16 @@ static inline int mdt_fid_lock(struct ldlm_namespace *ns,
 			       __u64 flags, const __u64 *client_cookie)
 {
 	int rc;
+	bool glimpse = policy->l_inodebits.bits & MDS_INODELOCK_DOM;
 
 	LASSERT(ns != NULL);
 	LASSERT(lh != NULL);
 
 	rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS, policy,
 				    mode, &flags, mdt_blocking_ast,
-				    ldlm_completion_ast, NULL, NULL, 0,
-				    LVB_T_NONE, client_cookie, lh);
+				    ldlm_completion_ast,
+				    glimpse ? mdt_dom_glimpse_ast : NULL,
+				    NULL, 0, LVB_T_NONE, client_cookie, lh);
 	return rc == ELDLM_OK ? 0 : -EIO;
 }
 
@@ -1058,6 +1072,9 @@ static inline enum ldlm_mode mdt_mdl_mode2dlm_mode(mdl_mode_t mode)
 
 /* mdt_lvb.c */
 extern struct ldlm_valblock_ops mdt_lvbo;
+int mdt_dom_lvb_is_valid(struct ldlm_resource *res);
+int mdt_dom_lvbo_update(struct ldlm_resource *res, struct ldlm_lock *lock,
+			struct ptlrpc_request *req, bool increase_only);
 
 void mdt_enable_cos(struct mdt_device *, int);
 int mdt_cos_is_enabled(struct mdt_device *);
@@ -1139,9 +1156,29 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		     struct niobuf_remote *rnb, int npages,
 		     struct niobuf_local *lnb, int old_rc);
 int mdt_punch_hdl(struct tgt_session_info *tsi);
+int mdt_glimpse_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
+			struct ldlm_lock **lockp, __u64 flags);
+int mdt_brw_enqueue(struct mdt_thread_info *info, struct ldlm_namespace *ns,
+		    struct ldlm_lock **lockp, __u64 flags);
+void mdt_dom_discard_data(struct mdt_thread_info *info,
+			  const struct lu_fid *fid);
+int mdt_dom_disk_lvbo_update(const struct lu_env *env, struct mdt_object *mo,
+			     struct ldlm_resource *res, bool increase_only);
+void mdt_dom_obj_lvb_update(const struct lu_env *env, struct mdt_object *mo,
+			    bool increase_only);
+int mdt_dom_lvb_alloc(struct ldlm_resource *res);
+
+static inline void mdt_dom_check_and_discard(struct mdt_thread_info *mti,
+					     struct mdt_object *mo)
+{
+	if (lu_object_is_dying(&mo->mot_header) &&
+	    S_ISREG(lu_object_attr(&mo->mot_obj)))
+		mdt_dom_discard_data(mti, mdt_object_fid(mo));
+}
 
 /* grants */
 long mdt_grant_connect(const struct lu_env *env, struct obd_export *exp,
 		       u64 want, bool conservative);
+extern struct kmem_cache *ldlm_glimpse_work_kmem;
 
 #endif /* _MDT_INTERNAL_H */

@@ -676,9 +676,6 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
 			else
 				b->mbo_blocks = 1;
 			b->mbo_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
-		} else if (lov_pattern(ma->ma_lmm->lmm_pattern) ==
-			   LOV_PATTERN_MDT) {
-			b->mbo_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 		}
 	}
 
@@ -3275,13 +3272,14 @@ enum mdt_it_code {
         MDT_IT_GETXATTR,
         MDT_IT_LAYOUT,
 	MDT_IT_QUOTA,
-        MDT_IT_NR
+	MDT_IT_GLIMPSE,
+	MDT_IT_BRW,
+	MDT_IT_NR
 };
 
 static int mdt_intent_getattr(enum mdt_it_code opcode,
-                              struct mdt_thread_info *info,
-                              struct ldlm_lock **,
-			      __u64);
+			      struct mdt_thread_info *info,
+			      struct ldlm_lock **, __u64);
 
 static int mdt_intent_getxattr(enum mdt_it_code opcode,
 				struct mdt_thread_info *info,
@@ -3296,6 +3294,20 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                             struct mdt_thread_info *info,
                             struct ldlm_lock **,
 			    __u64);
+static int mdt_intent_glimpse(enum mdt_it_code opcode,
+			      struct mdt_thread_info *info,
+			      struct ldlm_lock **lockp, __u64 flags)
+{
+	return mdt_glimpse_enqueue(info, info->mti_mdt->mdt_namespace,
+				   lockp, flags);
+}
+static int mdt_intent_brw(enum mdt_it_code opcode,
+			  struct mdt_thread_info *info,
+			  struct ldlm_lock **lockp, __u64 flags)
+{
+	return mdt_brw_enqueue(info, info->mti_mdt->mdt_namespace,
+			       lockp, flags);
+}
 
 static struct mdt_it_flavor {
         const struct req_format *it_fmt;
@@ -3367,14 +3379,24 @@ static struct mdt_it_flavor {
 		.it_fmt   = &RQF_LDLM_INTENT_LAYOUT,
 		.it_flags = 0,
 		.it_act   = mdt_intent_layout
-	}
+	},
+	[MDT_IT_GLIMPSE] = {
+		.it_fmt = &RQF_LDLM_INTENT,
+		.it_flags = 0,
+		.it_act = mdt_intent_glimpse,
+	},
+	[MDT_IT_BRW] = {
+		.it_fmt = &RQF_LDLM_INTENT,
+		.it_flags = 0,
+		.it_act = mdt_intent_brw,
+	},
+
 };
 
-static int
-mdt_intent_lock_replace(struct mdt_thread_info *info,
-			struct ldlm_lock **lockp,
-			struct mdt_lock_handle *lh,
-			__u64 flags, int result)
+int mdt_intent_lock_replace(struct mdt_thread_info *info,
+			    struct ldlm_lock **lockp,
+			    struct mdt_lock_handle *lh,
+			    __u64 flags, int result)
 {
         struct ptlrpc_request  *req = mdt_info_req(info);
         struct ldlm_lock       *lock = *lockp;
@@ -3450,6 +3472,8 @@ mdt_intent_lock_replace(struct mdt_thread_info *info,
         new_lock->l_export = class_export_lock_get(req->rq_export, new_lock);
         new_lock->l_blocking_ast = lock->l_blocking_ast;
         new_lock->l_completion_ast = lock->l_completion_ast;
+	if (ldlm_has_dom(new_lock))
+		new_lock->l_glimpse_ast = ldlm_server_glimpse_ast;
         new_lock->l_remote_handle = lock->l_remote_handle;
         new_lock->l_flags &= ~LDLM_FL_LOCAL;
 
@@ -3465,10 +3489,9 @@ mdt_intent_lock_replace(struct mdt_thread_info *info,
         RETURN(ELDLM_LOCK_REPLACED);
 }
 
-static void mdt_intent_fixup_resent(struct mdt_thread_info *info,
-				    struct ldlm_lock *new_lock,
-				    struct mdt_lock_handle *lh,
-				    __u64 flags)
+void mdt_intent_fixup_resent(struct mdt_thread_info *info,
+			     struct ldlm_lock *new_lock,
+			     struct mdt_lock_handle *lh, __u64 flags)
 {
         struct ptlrpc_request  *req = mdt_info_req(info);
         struct ldlm_request    *dlmreq;
@@ -3883,6 +3906,12 @@ static int mdt_intent_code(enum ldlm_intent_flags itcode)
 	case IT_QUOTA_CONN:
 		rc = MDT_IT_QUOTA;
 		break;
+	case IT_GLIMPSE:
+		rc = MDT_IT_GLIMPSE;
+		break;
+	case IT_BRW:
+		rc = MDT_IT_BRW;
+		break;
 	default:
 		CERROR("Unknown intent opcode: 0x%08x\n", itcode);
 		rc = -EINVAL;
@@ -3963,6 +3992,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
 	struct ptlrpc_request	*req  =  req_cookie;
 	struct ldlm_intent	*it;
 	struct req_capsule	*pill;
+	const struct ldlm_lock_desc *ldesc;
 	int rc;
 
 	ENTRY;
@@ -3972,11 +4002,12 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
 	tsi = tgt_ses_info(req->rq_svc_thread->t_env);
 
 	info = tsi2mdt_info(tsi);
-        LASSERT(info != NULL);
-        pill = info->mti_pill;
-        LASSERT(pill->rc_req == req);
+	LASSERT(info != NULL);
+	pill = info->mti_pill;
+	LASSERT(pill->rc_req == req);
+	ldesc = &info->mti_dlm_req->lock_desc;
 
-        if (req->rq_reqmsg->lm_bufcount > DLM_INTENT_IT_OFF) {
+	if (req->rq_reqmsg->lm_bufcount > DLM_INTENT_IT_OFF) {
 		req_capsule_extend(pill, &RQF_LDLM_INTENT_BASIC);
                 it = req_capsule_client_get(pill, &RMF_LDLM_INTENT);
                 if (it != NULL) {
@@ -3989,20 +4020,18 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
                          * ibits corrupted somewhere in mdt_intent_opc().
                          * The case for client miss to set ibits has been
                          * processed by others. */
-                        LASSERT(ergo(info->mti_dlm_req->lock_desc.l_resource.\
-                                        lr_type == LDLM_IBITS,
-                                     info->mti_dlm_req->lock_desc.\
-                                        l_policy_data.l_inodebits.bits != 0));
-                } else
-                        rc = err_serious(-EFAULT);
-        } else {
-                /* No intent was provided */
-                LASSERT(pill->rc_fmt == &RQF_LDLM_ENQUEUE);
+			LASSERT(ergo(ldesc->l_resource.lr_type == LDLM_IBITS,
+				ldesc->l_policy_data.l_inodebits.bits != 0));
+		} else {
+			rc = err_serious(-EFAULT);
+		}
+	} else {
+		/* No intent was provided */
 		req_capsule_set_size(pill, &RMF_DLM_LVB, RCL_SERVER, 0);
-                rc = req_capsule_server_pack(pill);
-                if (rc)
-                        rc = err_serious(rc);
-        }
+		rc = req_capsule_server_pack(pill);
+		if (rc)
+			rc = err_serious(rc);
+	}
 	mdt_thread_info_fini(info);
 	RETURN(rc);
 }

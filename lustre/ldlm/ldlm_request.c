@@ -1817,8 +1817,8 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 		lock->l_flags |= LDLM_FL_CBPENDING | LDLM_FL_CANCELING;
 
 		if ((lru_flags & LDLM_LRU_FLAG_CLEANUP) &&
-		    lock->l_resource->lr_type == LDLM_EXTENT &&
-		    lock->l_granted_mode == LCK_PR)
+		    (lock->l_resource->lr_type == LDLM_EXTENT ||
+		     ldlm_has_dom(lock)) && lock->l_granted_mode == LCK_PR)
 			ldlm_set_discard_data(lock);
 
 		/* We can't re-add to l_lru as it confuses the

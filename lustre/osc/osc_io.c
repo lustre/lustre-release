@@ -56,8 +56,7 @@ static void osc_io_fini(const struct lu_env *env, const struct cl_io_slice *io)
 {
 }
 
-static void osc_read_ahead_release(const struct lu_env *env,
-				   void *cbdata)
+void osc_read_ahead_release(const struct lu_env *env, void *cbdata)
 {
 	struct ldlm_lock *dlmlock = cbdata;
 	struct lustre_handle lockh;
@@ -66,6 +65,7 @@ static void osc_read_ahead_release(const struct lu_env *env,
 	ldlm_lock_decref(&lockh, LCK_PR);
 	LDLM_LOCK_PUT(dlmlock);
 }
+EXPORT_SYMBOL(osc_read_ahead_release);
 
 static int osc_io_read_ahead(const struct lu_env *env,
 			     const struct cl_io_slice *ios,
