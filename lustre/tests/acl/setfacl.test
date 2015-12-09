@@ -8,7 +8,7 @@ Setfacl utility tests. Run these tests on a filesystem with ACL support.
 	$ sg bin
 	$ umask 027
 	$ touch g
-	$ ls -dl g | awk '{print $1}'
+	$ ls -dl g | awk '{sub(/\\./, "", $1); print $1}'
 	> -rw-r-----
 	
 	$ setfacl -m m:- g

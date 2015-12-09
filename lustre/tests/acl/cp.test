@@ -9,7 +9,7 @@ The cp utility should only copy ACLs if `-p' is given.
 	> -rw-rw-r--+
 	
 	$ cp f g
-	$ ls -l g | awk -- '{ print $1 }'
+	$ ls -l g | awk -- '{sub(/\\./, "", $1); print $1 }'
 	> -rw-r--r--
 	
 	$ rm g

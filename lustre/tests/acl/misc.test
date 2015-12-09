@@ -253,7 +253,7 @@ Add some users and groups
 Symlink in directory with default ACL?
 	 
 	$ ln -s d d/l
-	$ ls -dl d/l | awk '{print $1}'
+	$ ls -dl d/l | awk 'sub(/\\./, "", $1); {print $1}'
 	> lrwxrwxrwx
 
 	$ ls -dl -L d/l | awk '{print $1}'
@@ -347,7 +347,7 @@ Remove the default ACL
 Reset to base entries
 	 
 	$ setfacl -b d
-	$ ls -dl d | awk '{print $1}'
+	$ ls -dl d | awk '{sub(/\\./, "", $1); print $1}'
 	> drwxr-x---
 
 	$ getfacl --omit-header d
@@ -359,7 +359,7 @@ Reset to base entries
 Now, chmod should change the group_obj entry
 	 
 	$ chmod 775 d
-	$ ls -dl d | awk '{print $1}'
+	$ ls -dl d | awk '{sub(/\\./, "", $1); print $1}'
 	> drwxrwxr-x
 	
 	$ getfacl --omit-header d
