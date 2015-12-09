@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <chapter xmlns="http://docbook.org/ns/docbook"
 xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US"
-xml:id="userutilities">
+xml:id="userutilities"
+xmlns:xi="http://www.w3.org/2001/XInclude">
   <title xml:id="userutilities.title">User Utilities</title>
   <para>This chapter describes user utilities.</para>
   <section xml:id="dbdoclet.50438206_94597">
@@ -36,7 +37,8 @@ lfs getstripe [--obd|-O <replaceable>ost_name</replaceable>] [--quiet|-q] [--ver
               [--recursive|-r] [--raw|-R] [-M] 
               <replaceable>dirname|filename</replaceable> ...
 lfs setstripe [--size|-s stripe_size] [--count|-c <replaceable>stripe_count</replaceable>]
-              [--index|-i|--offset|-o <replaceable>start_ost_index</replaceable>]
+              [--stripe-index|-i <replaceable>start_ost_index</replaceable>]
+              [--ost-list|-o <replaceable>ost_indicies</replaceable>]
               [--pool|-p <replaceable>pool</replaceable>]
               <replaceable>dirname|filename</replaceable>
 lfs setstripe -d <replaceable>dir</replaceable>
@@ -647,7 +649,7 @@ lfs help
               </entry>
               <entry>
                 <para>
-                  <literal>--index --offset start_ost_index</literal>
+                  <literal>--stripe-index start_ost_index</literal>
                 </para>
               </entry>
               <entry>
@@ -661,6 +663,22 @@ lfs help
                 <literal>start_ost_index</literal> value has no relevance on
                 whether the MDS will use round-robin or QoS weighted allocation
                 for the remaining stripes in the file.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>&#160;</para>
+              </entry>
+              <entry>
+                <para>
+                  <literal>--ost-index ost_indices</literal>
+                </para>
+              </entry>
+              <entry>
+				<para>This option is used to specify the exact stripe
+                layout on the the file system. <literal>ost_indices</literal>
+                is a list of OSTs referenced by their indices and index ranges
+                separated by commas, e.g. <literal>1,2-4,7</literal>.</para>
               </entry>
             </row>
             <row>
