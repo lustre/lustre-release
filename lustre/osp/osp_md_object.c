@@ -1129,7 +1129,7 @@ static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
 	struct dt_device *dt_dev	= &osp->opd_dt_dev;
 	struct lu_buf *lbuf = &osp_env_info(env)->osi_lb2;
 	char *ptr = rbuf->lb_buf;
-	struct osp_update_request *update = NULL;
+	struct osp_update_request *update;
 	struct ptlrpc_request *req = NULL;
 	struct out_read_reply *orr;
 	struct ptlrpc_bulk_desc *desc;
@@ -1145,7 +1145,7 @@ static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
 	 * update_remote list of the thandle.  */
 	update = osp_update_request_create(dt_dev);
 	if (IS_ERR(update))
-		GOTO(out, rc = PTR_ERR(update));
+		RETURN(PTR_ERR(update));
 
 	rc = osp_update_rpc_pack(env, read, update, OUT_READ,
 				 lu_object_fid(&dt->do_lu),
@@ -1153,13 +1153,13 @@ static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
 	if (rc != 0) {
 		CERROR("%s: cannot insert update: rc = %d\n",
 		       dt_dev->dd_lu_dev.ld_obd->obd_name, rc);
-		GOTO(out, rc);
+		GOTO(out_update, rc);
 	}
 
 	rc = osp_prep_update_req(env, osp->opd_obd->u.cli.cl_import, update,
 				 &req);
 	if (rc != 0)
-		GOTO(out, rc);
+		GOTO(out_update, rc);
 
 	nbufs = (rbuf->lb_len + OUT_BULK_BUFFER_SIZE - 1) /
 					OUT_BULK_BUFFER_SIZE;
@@ -1220,11 +1220,10 @@ static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
 	rc = orr->orr_size;
 	*pos = orr->orr_offset;
 out:
-	if (req != NULL)
-		ptlrpc_req_finished(req);
+	ptlrpc_req_finished(req);
 
-	if (update != NULL)
-		osp_update_request_destroy(update);
+out_update:
+	osp_update_request_destroy(update);
 
 	RETURN(rc);
 }
