@@ -12,7 +12,7 @@ dnl # --with-zfs=yes    headers in one of the following places.  Because zfs
 dnl #                   support was explicitly required if the headers cannot
 dnl #                   be located it is treated as a fatal error.
 dnl #
-dnl #                       * /var/lib/dkms/zfs/${VERSION}/build
+dnl #                       * /var/lib/dkms/zfs/${VERSION}/source
 dnl #                       * /usr/src/zfs-${VERSION}/${LINUXRELEASE}
 dnl #                       * /usr/src/zfs-${VERSION}
 dnl #                       * ../spl/
@@ -42,7 +42,7 @@ dnl # --with-spl=no
 dnl #
 dnl # --with-spl      - Enable spl support and attempt to autodetect the spl
 dnl # --with-spl=yes    headers in one of the following places in this order:
-dnl #                   * /var/lib/dkms/spl/${VERSION}/build
+dnl #                   * /var/lib/dkms/spl/${VERSION}/source
 dnl #                   * /usr/src/spl-${VERSION}/${LINUXRELEASE}
 dnl #                   * /usr/src/spl-${VERSION}
 dnl #                   * ../spl/
@@ -72,7 +72,7 @@ AC_DEFUN([LB_SPL], [
 	dnl # source directory.  In order of preference:
 	dnl #
 	splver=$(ls -1 /usr/src/ | grep -m1 spl | cut -f2 -d'-')
-	splsrc0="/var/lib/dkms/spl/${splver}/build"
+	spldkms="/var/lib/dkms/spl/${splver}"
 	splsrc1="/usr/src/spl-${splver}/${LINUXRELEASE}"
 	splsrc2="/usr/src/spl-${splver}"
 	splsrc3="../spl/"
@@ -80,8 +80,8 @@ AC_DEFUN([LB_SPL], [
 
 	AC_MSG_CHECKING([spl source directory])
 	AS_IF([test -z "${splsrc}"], [
-		AS_IF([test -e "${splsrc0}/spl.release.in"], [
-			splsrc=${splsrc0}
+		AS_IF([test -e "${spldkms}/source/spl.release.in"], [
+			splsrc=${spldkms}/source
 		], [test -e "${splsrc1}/spl.release.in"], [
 			splsrc=${splsrc1}
 		], [test -e "${splsrc2}/spl.release.in"], [
@@ -109,7 +109,13 @@ AC_DEFUN([LB_SPL], [
 	dnl #
 	AC_MSG_CHECKING([spl build directory])
 	AS_IF([test -z "$splobj"], [
-		AS_IF([test -e "${splsrc}/${LINUXRELEASE}/spl_config.h"], [
+		AS_IF([test "${splsrc}" = "${spldkms}/source"], [
+			AS_IF([test -e "${spldkms}/${LINUXRELEASE}/${target_cpu}/spl_config.h"], [
+				splobj=${spldkms}/${LINUXRELEASE}/${target_cpu}
+			], [
+				splobj="[Not found]"
+			])
+		],[test -e "${splsrc}/${LINUXRELEASE}/spl_config.h"], [
 			splobj="${splsrc}/${LINUXRELEASE}"
 		], [test -e "${splsrc}/spl_config.h"], [
 			splobj="${splsrc}"
@@ -179,7 +185,7 @@ AC_DEFUN([LB_ZFS], [
 	dnl # source directory.  In order of preference:
 	dnl #
 	zfsver=$(ls -1 /usr/src/ | grep -m1 zfs | cut -f2 -d'-')
-	zfssrc0="/var/lib/dkms/zfs/${zfsver}/build"
+	zfsdkms="/var/lib/dkms/zfs/${zfsver}"
 	zfssrc1="/usr/src/zfs-${zfsver}/${LINUXRELEASE}"
 	zfssrc2="/usr/src/zfs-${zfsver}"
 	zfssrc3="../zfs/"
@@ -187,8 +193,8 @@ AC_DEFUN([LB_ZFS], [
 
 	AC_MSG_CHECKING([zfs source directory])
 	AS_IF([test -z "${zfssrc}"], [
-		AS_IF([test -e "${zfssrc0}/zfs.release.in"], [
-			zfssrc=${zfssrc0}
+		AS_IF([test -e "${zfsdkms}/source/zfs.release.in"], [
+			zfssrc=${zfsdkms}/source
 		], [test -e "${zfssrc1}/zfs.release.in"], [
 			zfssrc=${zfssrc1}
 		], [test -e "${zfssrc2}/zfs.release.in"], [
@@ -216,7 +222,13 @@ AC_DEFUN([LB_ZFS], [
 	dnl #
 	AC_MSG_CHECKING([zfs build directory])
 	AS_IF([test -z "$zfsobj"], [
-		AS_IF([test -e "${zfssrc}/${LINUXRELEASE}/zfs_config.h"], [
+		AS_IF([test "${zfssrc}" = "${zfsdkms}/source"], [
+			AS_IF([test -e "${zfsdkms}/${LINUXRELEASE}/${target_cpu}/zfs_config.h"], [
+				zfsobj=${zfsdkms}/${LINUXRELEASE}/${target_cpu}
+			], [
+				zfsobj="[Not found]"
+			])
+		], [test -e "${zfssrc}/${LINUXRELEASE}/zfs_config.h"], [
 			zfsobj="${zfssrc}/${LINUXRELEASE}"
 		], [test -e "${zfssrc}/zfs_config.h"], [
 			zfsobj="${zfssrc}"
