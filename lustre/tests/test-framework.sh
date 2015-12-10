@@ -1223,6 +1223,8 @@ mount_facet() {
 	local opt=${facet}_opt
 	local mntpt=$(facet_mntpt $facet)
 	local opts="${!opt} $@"
+	local fstype=$(facet_fstype $facet)
+	local devicelabel
 
 	module_loaded lustre || load_modules
 
@@ -1235,6 +1237,16 @@ mount_facet() {
 		# import ZFS storage pool
 		import_zpool $facet || return ${PIPESTATUS[0]}
 	fi
+
+	case $fstype in
+	ldiskfs)
+		devicelabel=$(do_facet ${facet} "$E2LABEL ${!dev}");;
+	zfs)
+		devicelabel=$(do_facet ${facet} "$ZFS get -H -o value \
+						lustre:svname ${!dev}");;
+	*)
+		error "unknown fstype!";;
+	esac
 
 	echo "Starting ${facet}: $opts ${!dev} $mntpt"
 	# for testing LU-482 error handling in mount_facets() and test_0a()
@@ -1261,7 +1273,6 @@ mount_facet() {
 	if [[ $opts =~ .*nosvc.* ]]; then
 		echo "Start ${!dev} without service"
 	else
-		local fstype=$(facet_fstype $facet)
 
 		case $fstype in
 		ldiskfs)
@@ -1278,6 +1289,12 @@ mount_facet() {
 			error "unknown fstype!";;
 		esac
 	fi
+
+	# commit the device label change to disk
+	if [[ $devicelabel =~ (:[a-zA-Z]{3}[0-9]{4}) ]]; then
+		do_facet $facet "sync; sync; sync"
+	fi
+
 
 	label=$(devicelabel ${facet} ${!dev})
 	[ -z "$label" ] && echo no label for ${!dev} && exit 1
