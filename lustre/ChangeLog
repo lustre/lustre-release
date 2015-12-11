@@ -19,7 +19,7 @@ TBD Intel Corporation
          3.0.101-65          (SLES11 SP4)
          3.12.39-47          (SLES12)
          vanilla linux 4.2.1
-       * Recommended e2fsprogs version: 1.42.13.wc3 or newer
+       * Recommended e2fsprogs version: 1.42.13.wc4 or newer
        * Recommended ZFS / SPL version: 0.6.5.3
        * Tested with ZFS / SPL version: 0.6.5.3
        * NFS export disabled when stack size < 8192 (32-bit Lustre clients),
