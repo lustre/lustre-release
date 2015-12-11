@@ -2174,6 +2174,16 @@ nid                    refs   peer    max   tx    min
           value is 91 percent. When the free space priority is set to 100, weighting is based
           entirely on free space and location is no longer used by the striping algorthm.</para>
       </listitem>
+      <listitem>
+        <para condition="l29"><literal>reserved_mb_low</literal> - The low watermark used to stop
+          object allocation if available space is less than it. The default is 0.1 percent of total
+          OST size.</para>
+      </listitem>
+       <listitem>
+        <para condition="l29"><literal>reserved_mb_high</literal> - The high watermark used to start
+          object allocation if available space is more than it. The default is 0.2 percent of total
+          OST size.</para>
+      </listitem>
     </itemizedlist>
     <para>For more information about monitoring and managing free space, see <xref
         xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438209_10424"/>.</para>

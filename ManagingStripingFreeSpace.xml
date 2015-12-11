@@ -381,7 +381,16 @@ osc.lustre-OST0002-osc.ost_conn_uuid=192.168.20.1@tcp</screen></para>
       preference to location (spreading out stripes across OSSs to increase network bandwidth
       utilization) and the weighted allocator gives preference to available space (balancing loads
       across OSTs). Threshold and weighting factors for these two algorithms can be adjusted by the
-      user. This section describes how to check available free space on disks and how free space is
+      user. The MDT reserves 0.1 percent of total OST space and 32 inodes for each OST. The MDT
+      stops object allocation for the OST if available space is less than reserved or the OST has
+      fewer than 32 free inodes. The MDT starts object allocation when available space is twice
+      as big as the reserved space and the OST has more than 64 free inodes. Note, clients
+      could appened existing files no matter what object allocation state is.</para>
+    <para condition="l29"> The reserved space for each OST can be adjusted by the user. Use the
+      <literal>lctl set_param</literal> command, for example the next command reserve 1GB space
+      for all OSTs.
+      <screen>lctl set_param -P osp.*.reserved_mb_low=1024</screen></para>
+    <para>This section describes how to check available free space on disks and how free space is
       allocated. It then describes how to set the threshold and weighting factors for the allocation
       algorithms.</para>
     <section xml:id="dbdoclet.50438209_35838">
