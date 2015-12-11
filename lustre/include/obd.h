@@ -155,6 +155,12 @@ enum {
  */
 #define OBD_MAX_DEFAULT_EA_SIZE		4096
 
+enum obd_cl_sem_lock_class {
+	OBD_CLI_SEM_NORMAL,
+	OBD_CLI_SEM_MGC,
+	OBD_CLI_SEM_MDCOSC,
+};
+
 struct mdc_rpc_lock;
 struct obd_import;
 struct client_obd {

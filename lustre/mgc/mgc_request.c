@@ -553,10 +553,13 @@ static void do_requeue(struct config_llog_data *cld)
 
 	LASSERT(atomic_read(&cld->cld_refcount) > 0);
 
-	/* Do not run mgc_process_log on a disconnected export or an
+	/*
+	 * Do not run mgc_process_log on a disconnected export or an
 	 * export which is being disconnected. Take the client
-	 * semaphore to make the check non-racy. */
-	down_read(&cld->cld_mgcexp->exp_obd->u.cli.cl_sem);
+	 * semaphore to make the check non-racy.
+	 */
+	down_read_nested(&cld->cld_mgcexp->exp_obd->u.cli.cl_sem,
+			 OBD_CLI_SEM_MGC);
 	if (cld->cld_mgcexp->exp_obd->u.cli.cl_conn_count != 0) {
 		CDEBUG(D_MGC, "updating log %s\n", cld->cld_logname);
 		rc = mgc_process_log(cld->cld_mgcexp->exp_obd, cld);

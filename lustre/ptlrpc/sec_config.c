@@ -921,8 +921,8 @@ void sptlrpc_conf_client_adapt(struct obd_device *obd)
 		strcmp(obd->obd_type->typ_name, LUSTRE_LWP_NAME) == 0);
 	CDEBUG(D_SEC, "obd %s\n", obd->u.cli.cl_target_uuid.uuid);
 
-        /* serialize with connect/disconnect import */
-	down_read(&obd->u.cli.cl_sem);
+	/* serialize with connect/disconnect import */
+	down_read_nested(&obd->u.cli.cl_sem, OBD_CLI_SEM_MDCOSC);
 
 	imp = obd->u.cli.cl_import;
 	if (imp) {
