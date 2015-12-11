@@ -410,10 +410,8 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
 
         rc = ptlrpc_request_bufs_pack(req, LUSTRE_OBD_VERSION, SEC_CTX_FINI,
                                       NULL, ctx);
-        if (rc) {
-                ptlrpc_request_free(req);
-                GOTO(out_ref, rc);
-        }
+	if (rc)
+		GOTO(out_ref, rc);
 
         /* fix the user desc */
         if (req->rq_pack_udesc) {
