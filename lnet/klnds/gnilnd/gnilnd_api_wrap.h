@@ -1416,10 +1416,16 @@ static inline gni_return_t kgnilnd_mem_register(
 			dst_cq_hndl, flags, mem_hndl);
 	}
 
+	/* gni_mem_register may return GNI_RC_ERROR_NOMEM under memory
+	 * pressure but the upper layers only know about resource errors
+	 */
+	if (rrc == GNI_RC_ERROR_NOMEM) {
+		rrc = GNI_RC_ERROR_RESOURCE;
+	}
+
 	switch (rrc)  {
 	case GNI_RC_SUCCESS:
 	case GNI_RC_ERROR_RESOURCE:
-	case GNI_RC_ERROR_NOMEM:
 		break;
 	case GNI_RC_INVALID_PARAM:
 		GNILND_API_SWBUG(
