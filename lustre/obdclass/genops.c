@@ -2085,6 +2085,8 @@ int obd_set_max_rpcs_in_flight(struct client_obd *cli, __u32 max)
 	spin_lock(&cli->cl_loi_list_lock);
 	old = cli->cl_max_rpcs_in_flight;
 	cli->cl_max_rpcs_in_flight = max;
+	client_adjust_max_dirty(cli);
+
 	diff = max - old;
 
 	/* We increase the max_rpcs_in_flight, then wakeup some waiters. */

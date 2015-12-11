@@ -976,6 +976,28 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 	body->lock_flags = ldlm_flags_to_wire(*flags);
 	body->lock_handle[0] = *lockh;
 
+	/* extended LDLM opcodes in client stats */
+	if (exp->exp_obd->obd_svc_stats != NULL) {
+		bool glimpse = *flags & LDLM_FL_HAS_INTENT;
+
+		/* OST glimpse has no intent buffer */
+		if (req_capsule_has_field(&req->rq_pill, &RMF_LDLM_INTENT,
+					  RCL_CLIENT)) {
+			struct ldlm_intent *it;
+
+			it = req_capsule_client_get(&req->rq_pill,
+						    &RMF_LDLM_INTENT);
+			glimpse = (it && (it->opc == IT_GLIMPSE));
+		}
+
+		if (!glimpse)
+			ldlm_svc_get_eopc(body, exp->exp_obd->obd_svc_stats);
+		else
+			lprocfs_counter_incr(exp->exp_obd->obd_svc_stats,
+					     PTLRPC_LAST_CNTR +
+					     LDLM_GLIMPSE_ENQUEUE);
+	}
+
 	if (async) {
 		LASSERT(reqp != NULL);
 		RETURN(0);

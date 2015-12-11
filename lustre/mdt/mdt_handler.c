@@ -3983,6 +3983,18 @@ static int mdt_intent_opc(enum ldlm_intent_flags itopc,
 	RETURN(rc);
 }
 
+static void mdt_ptlrpc_stats_update(struct ptlrpc_request *req,
+				    enum ldlm_intent_flags it_opc)
+{
+	struct lprocfs_stats *srv_stats = ptlrpc_req2svc(req)->srv_stats;
+
+	/* update stats when IT code is known */
+	if (srv_stats != NULL)
+		lprocfs_counter_incr(srv_stats,
+				PTLRPC_LAST_CNTR + (it_opc == IT_GLIMPSE ?
+				LDLM_GLIMPSE_ENQUEUE : LDLM_IBITS_ENQUEUE));
+}
+
 static int mdt_intent_policy(struct ldlm_namespace *ns,
 			     struct ldlm_lock **lockp, void *req_cookie,
 			     enum ldlm_mode mode, __u64 flags, void *data)
@@ -4009,17 +4021,18 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
 
 	if (req->rq_reqmsg->lm_bufcount > DLM_INTENT_IT_OFF) {
 		req_capsule_extend(pill, &RQF_LDLM_INTENT_BASIC);
-                it = req_capsule_client_get(pill, &RMF_LDLM_INTENT);
-                if (it != NULL) {
-                        rc = mdt_intent_opc(it->opc, info, lockp, flags);
-                        if (rc == 0)
-                                rc = ELDLM_OK;
+		it = req_capsule_client_get(pill, &RMF_LDLM_INTENT);
+		if (it != NULL) {
+			mdt_ptlrpc_stats_update(req, it->opc);
+			rc = mdt_intent_opc(it->opc, info, lockp, flags);
+			if (rc == 0)
+				rc = ELDLM_OK;
 
-                        /* Lock without inodebits makes no sense and will oops
-                         * later in ldlm. Let's check it now to see if we have
-                         * ibits corrupted somewhere in mdt_intent_opc().
-                         * The case for client miss to set ibits has been
-                         * processed by others. */
+			/* Lock without inodebits makes no sense and will oops
+			 * later in ldlm. Let's check it now to see if we have
+			 * ibits corrupted somewhere in mdt_intent_opc().
+			 * The case for client miss to set ibits has been
+			 * processed by others. */
 			LASSERT(ergo(ldesc->l_resource.lr_type == LDLM_IBITS,
 				ldesc->l_policy_data.l_inodebits.bits != 0));
 		} else {

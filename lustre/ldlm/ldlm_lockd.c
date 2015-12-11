@@ -1185,40 +1185,6 @@ struct ldlm_lock *ldlm_request_lock(struct ptlrpc_request *req)
 }
 EXPORT_SYMBOL(ldlm_request_lock);
 
-static void ldlm_svc_get_eopc(const struct ldlm_request *dlm_req,
-                       struct lprocfs_stats *srv_stats)
-{
-        int lock_type = 0, op = 0;
-
-        lock_type = dlm_req->lock_desc.l_resource.lr_type;
-
-        switch (lock_type) {
-        case LDLM_PLAIN:
-                op = PTLRPC_LAST_CNTR + LDLM_PLAIN_ENQUEUE;
-                break;
-        case LDLM_EXTENT:
-                if (dlm_req->lock_flags & LDLM_FL_HAS_INTENT)
-                        op = PTLRPC_LAST_CNTR + LDLM_GLIMPSE_ENQUEUE;
-                else
-                        op = PTLRPC_LAST_CNTR + LDLM_EXTENT_ENQUEUE;
-                break;
-        case LDLM_FLOCK:
-                op = PTLRPC_LAST_CNTR + LDLM_FLOCK_ENQUEUE;
-                break;
-        case LDLM_IBITS:
-                op = PTLRPC_LAST_CNTR + LDLM_IBITS_ENQUEUE;
-                break;
-        default:
-                op = 0;
-                break;
-        }
-
-        if (op)
-                lprocfs_counter_incr(srv_stats, op);
-
-        return;
-}
-
 /**
  * Main server-side entry point into LDLM for enqueue. This is called by ptlrpc
  * service threads to carry out client lock enqueueing requests.
@@ -1244,7 +1210,9 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
 
 	LASSERT(req->rq_export);
 
-	if (ptlrpc_req2svc(req)->srv_stats != NULL)
+	/* for intent enqueue the stat will be updated inside intent policy */
+	if (ptlrpc_req2svc(req)->srv_stats != NULL &&
+	    !(dlm_req->lock_flags & LDLM_FL_HAS_INTENT))
 		ldlm_svc_get_eopc(dlm_req, ptlrpc_req2svc(req)->srv_stats);
 
         if (req->rq_export && req->rq_export->exp_nid_stats &&

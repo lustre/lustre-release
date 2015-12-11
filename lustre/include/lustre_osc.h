@@ -565,6 +565,8 @@ void osc_lru_add_batch(struct client_obd *cli, struct list_head *list);
 void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
 		     enum cl_req_type crt, int brw_flags);
 int lru_queue_work(const struct lu_env *env, void *data);
+long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
+		    long target, bool force);
 
 /* osc_cache.c */
 int osc_cancel_async_page(const struct lu_env *env, struct osc_page *ops);
@@ -591,6 +593,7 @@ int osc_cache_wait_range(const struct lu_env *env, struct osc_object *obj,
 			 pgoff_t start, pgoff_t end);
 int osc_io_unplug0(const struct lu_env *env, struct client_obd *cli,
 		   struct osc_object *osc, int async);
+void osc_wake_cache_waiters(struct client_obd *cli);
 
 static inline int osc_io_unplug_async(const struct lu_env *env,
 				      struct client_obd *cli,

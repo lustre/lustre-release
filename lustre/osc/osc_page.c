@@ -685,6 +685,7 @@ long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 	}
 	RETURN(count > 0 ? count : rc);
 }
+EXPORT_SYMBOL(osc_lru_shrink);
 
 /**
  * Reclaim LRU pages by an IO thread. The caller wants to reclaim at least

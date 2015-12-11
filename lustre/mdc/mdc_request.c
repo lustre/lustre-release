@@ -2511,6 +2511,7 @@ int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 	lprocfs_obd_setup(obd, false);
 	lprocfs_alloc_md_stats(obd, 0);
 #endif
+
 	sptlrpc_lprocfs_cliobd_attach(obd);
 	ptlrpc_lprocfs_register_obd(obd);
 
