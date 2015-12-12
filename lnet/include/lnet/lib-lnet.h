@@ -72,9 +72,9 @@ extern lnet_t  the_lnet;			/* THE network */
 
 static inline int lnet_is_route_alive(lnet_route_t *route)
 {
-	if (!route->lr_gateway->lp_alive)
+	if (!route->lr_gateway->lpni_alive)
 		return 0; /* gateway is down */
-	if ((route->lr_gateway->lp_ping_feats &
+	if ((route->lr_gateway->lpni_ping_feats &
 	     LNET_PING_FEAT_NI_STATUS) == 0)
 		return 1; /* no NI status, assume it's alive */
 	/* has NI status, check # down NIs */
@@ -379,27 +379,27 @@ lnet_handle2me(lnet_handle_me_t *handle)
 }
 
 static inline void
-lnet_peer_addref_locked(lnet_peer_t *lp)
+lnet_peer_ni_addref_locked(struct lnet_peer_ni *lp)
 {
-	LASSERT(lp->lp_refcount > 0);
-	lp->lp_refcount++;
+	LASSERT (atomic_read(&lp->lpni_refcount) > 0);
+	atomic_inc(&lp->lpni_refcount);
 }
 
-extern void lnet_destroy_peer_locked(lnet_peer_t *lp);
+extern void lnet_destroy_peer_ni_locked(struct lnet_peer_ni *lp);
 
 static inline void
-lnet_peer_decref_locked(lnet_peer_t *lp)
+lnet_peer_ni_decref_locked(struct lnet_peer_ni *lp)
 {
-	LASSERT(lp->lp_refcount > 0);
-	lp->lp_refcount--;
-	if (lp->lp_refcount == 0)
-		lnet_destroy_peer_locked(lp);
+	LASSERT (atomic_read(&lp->lpni_refcount) > 0);
+	atomic_dec(&lp->lpni_refcount);
+	if (atomic_read(&lp->lpni_refcount) == 0)
+		lnet_destroy_peer_ni_locked(lp);
 }
 
 static inline int
-lnet_isrouter(lnet_peer_t *lp)
+lnet_isrouter(struct lnet_peer_ni *lp)
 {
-	return lp->lp_rtr_refcount != 0;
+	return lp->lpni_rtr_refcount != 0;
 }
 
 static inline void
@@ -488,6 +488,7 @@ lnet_net2rnethash(__u32 net)
 extern lnd_t the_lolnd;
 extern int avoid_asym_router_failure;
 
+extern unsigned int lnet_nid_cpt_hash(lnet_nid_t nid, unsigned int number);
 extern int lnet_cpt_of_nid_locked(lnet_nid_t nid, struct lnet_ni *ni);
 extern int lnet_cpt_of_nid(lnet_nid_t nid, struct lnet_ni *ni);
 extern lnet_ni_t *lnet_nid2ni_locked(lnet_nid_t nid, int cpt);
@@ -502,7 +503,8 @@ void lnet_lib_exit(void);
 extern int portal_rotor;
 
 int lnet_notify(lnet_ni_t *ni, lnet_nid_t peer, int alive, cfs_time_t when);
-void lnet_notify_locked(lnet_peer_t *lp, int notifylnd, int alive, cfs_time_t when);
+void lnet_notify_locked(struct lnet_peer_ni *lp, int notifylnd, int alive,
+			cfs_time_t when);
 int lnet_add_route(__u32 net, __u32 hops, lnet_nid_t gateway_nid,
 		   unsigned int priority);
 int lnet_check_routes(void);
@@ -777,7 +779,7 @@ int lnet_peer_buffer_credits(struct lnet_net *net);
 
 int lnet_router_checker_start(void);
 void lnet_router_checker_stop(void);
-void lnet_router_ni_update_locked(lnet_peer_t *gw, __u32 net);
+void lnet_router_ni_update_locked(struct lnet_peer_ni *gw, __u32 net);
 void lnet_swap_pinginfo(struct lnet_ping_info *info);
 
 int lnet_parse_ip2nets(char **networksp, char *ip2nets);
@@ -788,9 +790,8 @@ bool lnet_net_unique(__u32 net_id, struct list_head *nilist,
 		     struct lnet_net **net);
 bool lnet_ni_unique_net(struct list_head *nilist, char *iface);
 
-int lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid, int cpt);
-lnet_peer_t *lnet_find_peer_locked(struct lnet_peer_table *ptable,
-				   lnet_nid_t nid);
+int lnet_nid2peerni_locked(struct lnet_peer_ni **lpp, lnet_nid_t nid, int cpt);
+struct lnet_peer_ni *lnet_find_peer_ni_locked(lnet_nid_t nid, int cpt);
 void lnet_peer_tables_cleanup(lnet_ni_t *ni);
 void lnet_peer_tables_destroy(void);
 int lnet_peer_tables_create(void);
@@ -803,11 +804,11 @@ int lnet_get_peer_info(__u32 peer_index, __u64 *nid,
 		       __u32 *peer_tx_qnob);
 
 static inline void
-lnet_peer_set_alive(lnet_peer_t *lp)
+lnet_peer_set_alive(struct lnet_peer_ni *lp)
 {
-	lp->lp_last_alive = lp->lp_last_query = cfs_time_current();
-	if (!lp->lp_alive)
-		lnet_notify_locked(lp, 0, 1, lp->lp_last_alive);
+	lp->lpni_last_alive = lp->lpni_last_query = cfs_time_current();
+	if (!lp->lpni_alive)
+		lnet_notify_locked(lp, 0, 1, lp->lpni_last_alive);
 }
 
 #endif

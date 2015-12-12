@@ -224,8 +224,8 @@ proc_lnet_routes(struct ctl_table *table, int write, void __user *buffer,
 			__u32	     net	= rnet->lrn_net;
 			__u32 hops		= route->lr_hops;
 			unsigned int priority	= route->lr_priority;
-			lnet_nid_t   nid	= route->lr_gateway->lp_nid;
-			int	     alive	= lnet_is_route_alive(route);
+			lnet_nid_t   nid	= route->lr_gateway->lpni_nid;
+			int          alive	= lnet_is_route_alive(route);
 
 			s += snprintf(s, tmpstr + tmpsiz - s,
 				      "%-8s %4u %8u %7s %s\n",
@@ -300,7 +300,7 @@ proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 		*ppos = LNET_PROC_POS_MAKE(0, ver, 0, off);
 	} else {
 		struct list_head *r;
-		struct lnet_peer *peer = NULL;
+		struct lnet_peer_ni *peer = NULL;
 		int		  skip = off - 1;
 
 		lnet_net_lock(0);
@@ -315,8 +315,9 @@ proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 		r = the_lnet.ln_routers.next;
 
 		while (r != &the_lnet.ln_routers) {
-			lnet_peer_t *lp = list_entry(r, lnet_peer_t,
-						     lp_rtr_list);
+			struct lnet_peer_ni *lp =
+			  list_entry(r, struct lnet_peer_ni,
+				     lpni_rtr_list);
 
 			if (skip == 0) {
 				peer = lp;
@@ -328,22 +329,22 @@ proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 		}
 
 		if (peer != NULL) {
-			lnet_nid_t nid = peer->lp_nid;
+			lnet_nid_t nid = peer->lpni_nid;
 			cfs_time_t now = cfs_time_current();
-			cfs_time_t deadline = peer->lp_ping_deadline;
-			int nrefs     = peer->lp_refcount;
-			int nrtrrefs  = peer->lp_rtr_refcount;
-			int alive_cnt = peer->lp_alive_count;
-			int alive     = peer->lp_alive;
-			int pingsent  = !peer->lp_ping_notsent;
+			cfs_time_t deadline = peer->lpni_ping_deadline;
+			int nrefs     = atomic_read(&peer->lpni_refcount);
+			int nrtrrefs  = peer->lpni_rtr_refcount;
+			int alive_cnt = peer->lpni_alive_count;
+			int alive     = peer->lpni_alive;
+			int pingsent  = !peer->lpni_ping_notsent;
 			int last_ping = cfs_duration_sec(cfs_time_sub(now,
-						     peer->lp_ping_timestamp));
+						     peer->lpni_ping_timestamp));
 			int down_ni   = 0;
 			lnet_route_t *rtr;
 
-			if ((peer->lp_ping_feats &
+			if ((peer->lpni_ping_feats &
 			     LNET_PING_FEAT_NI_STATUS) != 0) {
-				list_for_each_entry(rtr, &peer->lp_routes,
+				list_for_each_entry(rtr, &peer->lpni_routes,
 						    lr_gwlist) {
 					/* downis on any route should be the
 					 * number of downis on the gateway */
@@ -396,6 +397,8 @@ proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 	return rc;
 }
 
+/* TODO: there should be no direct access to ptable. We should add a set
+ * of APIs that give access to the ptable and its members */
 static int
 proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
 		size_t *lenp, loff_t *ppos)
@@ -437,7 +440,7 @@ proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
 
 		hoff++;
 	} else {
-		struct lnet_peer	*peer;
+		struct lnet_peer_ni	*peer;
 		struct list_head	*p;
 		int			skip;
  again:
@@ -461,15 +464,16 @@ proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
 				p = ptable->pt_hash[hash].next;
 
 			while (p != &ptable->pt_hash[hash]) {
-				lnet_peer_t *lp = list_entry(p, lnet_peer_t,
-							     lp_hashlist);
+				struct lnet_peer_ni *lp =
+				  list_entry(p, struct lnet_peer_ni,
+					     lpni_hashlist);
 				if (skip == 0) {
 					peer = lp;
 
 					/* minor optimization: start from idx+1
 					 * on next iteration if we've just
-					 * drained lp_hashlist */
-					if (lp->lp_hashlist.next ==
+					 * drained lpni_hashlist */
+					if (lp->lpni_hashlist.next ==
 					    &ptable->pt_hash[hash]) {
 						hoff = 1;
 						hash++;
@@ -481,7 +485,7 @@ proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
 				}
 
 				skip--;
-				p = lp->lp_hashlist.next;
+				p = lp->lpni_hashlist.next;
 			}
 
 			if (peer != NULL)
@@ -493,26 +497,26 @@ proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
                 }
 
 		if (peer != NULL) {
-			lnet_nid_t nid       = peer->lp_nid;
-			int nrefs     = peer->lp_refcount;
+			lnet_nid_t nid = peer->lpni_nid;
+			int nrefs = atomic_read(&peer->lpni_refcount);
 			int lastalive = -1;
 			char *aliveness = "NA";
-			int maxcr = peer->lp_net->net_tunables.lct_peer_tx_credits;
-			int txcr = peer->lp_txcredits;
-			int mintxcr = peer->lp_mintxcredits;
-			int rtrcr = peer->lp_rtrcredits;
-			int minrtrcr = peer->lp_minrtrcredits;
-			int txqnob = peer->lp_txqnob;
+			int maxcr = peer->lpni_net->net_tunables.lct_peer_tx_credits;
+			int txcr = peer->lpni_txcredits;
+			int mintxcr = peer->lpni_mintxcredits;
+			int rtrcr = peer->lpni_rtrcredits;
+			int minrtrcr = peer->lpni_minrtrcredits;
+			int txqnob = peer->lpni_txqnob;
 
 			if (lnet_isrouter(peer) ||
 			    lnet_peer_aliveness_enabled(peer))
-				aliveness = peer->lp_alive ? "up" : "down";
+				aliveness = peer->lpni_alive ? "up" : "down";
 
 			if (lnet_peer_aliveness_enabled(peer)) {
 				cfs_time_t     now = cfs_time_current();
 				cfs_duration_t delta;
 
-				delta = cfs_time_sub(now, peer->lp_last_alive);
+				delta = cfs_time_sub(now, peer->lpni_last_alive);
 				lastalive = cfs_duration_sec(delta);
 
 				/* No need to mess up peers contents with

@@ -589,6 +589,7 @@ lnet_prepare(lnet_pid_t requested_pid)
 	the_lnet.ln_pid = requested_pid;
 
 	INIT_LIST_HEAD(&the_lnet.ln_test_peers);
+	INIT_LIST_HEAD(&the_lnet.ln_peers);
 	INIT_LIST_HEAD(&the_lnet.ln_nets);
 	INIT_LIST_HEAD(&the_lnet.ln_routers);
 	INIT_LIST_HEAD(&the_lnet.ln_drop_rules);
@@ -745,7 +746,7 @@ lnet_get_net_locked(__u32 net_id)
 	return NULL;
 }
 
-static unsigned int
+unsigned int
 lnet_nid_cpt_hash(lnet_nid_t nid, unsigned int number)
 {
 	__u64		key = nid;
