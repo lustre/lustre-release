@@ -46,8 +46,11 @@ static int lnet_tbnob = 0;			/* track text buf allocation */
 #define LNET_MAX_TEXTBUF_NOB	 (64<<10)	/* bound allocation */
 #define LNET_SINGLE_TEXTBUF_NOB  (4<<10)
 
+#define SPACESTR " \t\v\r\n"
+#define DELIMITERS ":()[]"
+
 static void
-lnet_syntax(char *name, char *str, int offset, int width)
+lnet_syntax(const char *name, const char *str, int offset, int width)
 {
 	static char dots[LNET_SINGLE_TEXTBUF_NOB];
 	static char dashes[LNET_SINGLE_TEXTBUF_NOB];
@@ -76,26 +79,220 @@ lnet_issep (char c)
 	}
 }
 
-int
-lnet_net_unique(__u32 net, struct list_head *nilist)
+bool
+lnet_net_unique(__u32 net_id, struct list_head *netlist,
+		struct lnet_net **net)
 {
-	struct list_head *tmp;
-	lnet_ni_t	 *ni;
+	struct lnet_net  *net_l;
 
-	list_for_each(tmp, nilist) {
-		ni = list_entry(tmp, lnet_ni_t, ni_list);
-
-		if (LNET_NIDNET(ni->ni_nid) == net)
-			return 0;
+	list_for_each_entry(net_l, netlist, net_list) {
+		if (net_l->net_id == net_id) {
+			if (net != NULL)
+				*net = net_l;
+			return false;
+		}
 	}
 
-	return 1;
+	return true;
+}
+
+/* check that the NI is unique within the list of NIs already added to
+ * a network */
+bool
+lnet_ni_unique_net(struct list_head *nilist, char *iface)
+{
+	struct list_head *tmp;
+	struct lnet_ni *ni;
+
+	list_for_each(tmp, nilist) {
+		ni = list_entry(tmp, struct lnet_ni, ni_netlist);
+
+		if (ni->ni_interfaces[0] != NULL &&
+		    strncmp(ni->ni_interfaces[0], iface, strlen(iface)) == 0)
+			return false;
+	}
+
+	return true;
+}
+
+/* check that the NI is unique to the interfaces with in the same NI.
+ * This is only a consideration if use_tcp_bonding is set */
+static bool
+lnet_ni_unique_ni(char *iface_list[LNET_MAX_INTERFACES], char *iface)
+{
+	int i;
+	for (i = 0; i < LNET_MAX_INTERFACES; i++) {
+		if (iface_list[i] != NULL &&
+		    strncmp(iface_list[i], iface, strlen(iface)) == 0)
+			return false;
+	}
+
+	return true;
+}
+
+static bool
+in_array(__u32 *array, __u32 size, __u32 value)
+{
+	int i;
+
+	for (i = 0; i < size; i++) {
+		if (array[i] == value)
+			return false;
+	}
+
+	return true;
+}
+
+static int
+lnet_net_append_cpts(__u32 *cpts, __u32 ncpts, struct lnet_net *net)
+{
+	__u32 *added_cpts = NULL;
+	int i, j = 0, rc = 0;
+
+	/*
+	 * no need to go futher since a subset of the NIs already exist on
+	 * all CPTs
+	 */
+	if (net->net_ncpts == LNET_CPT_NUMBER)
+		return 0;
+
+	if (cpts == NULL) {
+		/* there is an NI which will exist on all CPTs */
+		if (net->net_cpts != NULL)
+			LIBCFS_FREE(net->net_cpts, sizeof(*net->net_cpts) *
+				    net->net_ncpts);
+		net->net_cpts = NULL;
+		net->net_ncpts = LNET_CPT_NUMBER;
+		return 0;
+	}
+
+	if (net->net_cpts == NULL) {
+		LIBCFS_ALLOC(net->net_cpts, sizeof(*net->net_cpts) * ncpts);
+		if (net->net_cpts == NULL)
+			return -ENOMEM;
+		memcpy(net->net_cpts, cpts, ncpts);
+		return 0;
+	}
+
+	LIBCFS_ALLOC(added_cpts, sizeof(*added_cpts) * LNET_CPT_NUMBER);
+	if (added_cpts == NULL)
+		return -ENOMEM;
+
+	for (i = 0; i < ncpts; i++) {
+		if (!in_array(net->net_cpts, net->net_ncpts, cpts[i])) {
+			added_cpts[j] = cpts[i];
+			j++;
+		}
+	}
+
+	/* append the new cpts if any to the list of cpts in the net */
+	if (j > 0) {
+		__u32 *array = NULL, *loc;
+		__u32 total_entries = j + net->net_ncpts;
+
+		LIBCFS_ALLOC(array, sizeof(*net->net_cpts) * total_entries);
+		if (array == NULL) {
+			rc = -ENOMEM;
+			goto failed;
+		}
+
+		memcpy(array, net->net_cpts, net->net_ncpts);
+		loc = array + net->net_ncpts;
+		memcpy(loc, added_cpts, j);
+
+		LIBCFS_FREE(net->net_cpts, sizeof(*net->net_cpts) *
+			    net->net_ncpts);
+		net->net_ncpts = total_entries;
+		net->net_cpts = array;
+	}
+
+failed:
+	LIBCFS_FREE(added_cpts, sizeof(*added_cpts) * LNET_CPT_NUMBER);
+
+	return rc;
+}
+
+static void
+lnet_net_remove_cpts(__u32 *cpts, __u32 ncpts, struct lnet_net *net)
+{
+	struct lnet_ni *ni;
+	int rc;
+
+	/*
+	 * Operation Assumption:
+	 *	This function is called after an NI has been removed from
+	 *	its parent net.
+	 *
+	 * if we're removing an NI which exists on all CPTs then
+	 * we have to check if any of the other NIs on this net also
+	 * exists on all CPTs. If none, then we need to build our Net CPT
+	 * list based on the remaining NIs.
+	 *
+	 * If the NI being removed exist on a subset of the CPTs then we
+	 * alo rebuild the Net CPT list based on the remaining NIs, which
+	 * should resutl in the expected Net CPT list.
+	 */
+
+	/*
+	 * sometimes this function can be called due to some failure
+	 * creating an NI, before any of the cpts are allocated, so check
+	 * for that case and don't do anything
+	 */
+	if (ncpts == 0)
+		return;
+
+	if (ncpts == LNET_CPT_NUMBER) {
+		/*
+		 * first iteration through the NI list in the net to see
+		 * if any of the NIs exist on all the CPTs. If one is
+		 * found then our job is done.
+		 */
+		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+			if (ni->ni_ncpts == LNET_CPT_NUMBER)
+				return;
+		}
+	}
+
+	/*
+	 * Rebuild the Net CPT list again, thereby only including only the
+	 * CPTs which the remaining NIs are associated with.
+	 */
+	if (net->net_cpts != NULL) {
+		LIBCFS_FREE(net->net_cpts,
+			sizeof(*net->net_cpts) * net->net_ncpts);
+		net->net_cpts = NULL;
+	}
+
+	list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+		rc = lnet_net_append_cpts(ni->ni_cpts, ni->ni_ncpts,
+					  net);
+		if (rc != 0) {
+			CERROR("Out of Memory\n");
+			/*
+			 * do our best to keep on going. Delete
+			 * the net cpts and set it to NULL. This
+			 * way we can keep on going but less
+			 * efficiently, since memory accesses might be
+			 * accross CPT lines.
+			 */
+			if (net->net_cpts != NULL) {
+				LIBCFS_FREE(net->net_cpts,
+						sizeof(*net->net_cpts) *
+						net->net_ncpts);
+				net->net_cpts = NULL;
+				net->net_ncpts = LNET_CPT_NUMBER;
+			}
+			return;
+		}
+	}
 }
 
 void
 lnet_ni_free(struct lnet_ni *ni)
 {
 	int i;
+
+	lnet_net_remove_cpts(ni->ni_cpts, ni->ni_ncpts, ni->ni_net);
 
 	if (ni->ni_refs != NULL)
 		cfs_percpt_free(ni->ni_refs);
@@ -105,9 +302,6 @@ lnet_ni_free(struct lnet_ni *ni)
 
 	if (ni->ni_cpts != NULL)
 		cfs_expr_list_values_free(ni->ni_cpts, ni->ni_ncpts);
-
-	if (ni->ni_lnd_tunables != NULL)
-		LIBCFS_FREE(ni->ni_lnd_tunables, sizeof(*ni->ni_lnd_tunables));
 
 	for (i = 0; i < LNET_MAX_INTERFACES &&
 		    ni->ni_interfaces[i] != NULL; i++) {
@@ -122,29 +316,143 @@ lnet_ni_free(struct lnet_ni *ni)
 	LIBCFS_FREE(ni, sizeof(*ni));
 }
 
+void
+lnet_net_free(struct lnet_net *net)
+{
+	struct list_head *tmp, *tmp2;
+	struct lnet_ni *ni;
+
+	LASSERT(list_empty(&net->net_ni_zombie));
+
+	/*
+	 * delete any nis that haven't been added yet. This could happen
+	 * if there is a failure on net startup
+	 */
+	list_for_each_safe(tmp, tmp2, &net->net_ni_added) {
+		ni = list_entry(tmp, struct lnet_ni, ni_netlist);
+		list_del_init(&ni->ni_netlist);
+		lnet_ni_free(ni);
+	}
+
+	/* delete any nis which have been started. */
+	list_for_each_safe(tmp, tmp2, &net->net_ni_list) {
+		ni = list_entry(tmp, struct lnet_ni, ni_netlist);
+		list_del_init(&ni->ni_netlist);
+		lnet_ni_free(ni);
+	}
+
+	if (net->net_cpts != NULL)
+		LIBCFS_FREE(net->net_cpts,
+			    sizeof(*net->net_cpts) * net->net_ncpts);
+
+	LIBCFS_FREE(net, sizeof(*net));
+}
+
+struct lnet_net *
+lnet_net_alloc(__u32 net_id, struct list_head *net_list)
+{
+	struct lnet_net		*net;
+
+	if (!lnet_net_unique(net_id, net_list, NULL)) {
+		CERROR("Duplicate net %s. Ignore\n",
+		       libcfs_net2str(net_id));
+		return NULL;
+	}
+
+	LIBCFS_ALLOC(net, sizeof(*net));
+	if (net == NULL) {
+		CERROR("Out of memory creating network %s\n",
+		       libcfs_net2str(net_id));
+		return NULL;
+	}
+
+	INIT_LIST_HEAD(&net->net_list);
+	INIT_LIST_HEAD(&net->net_ni_list);
+	INIT_LIST_HEAD(&net->net_ni_added);
+	INIT_LIST_HEAD(&net->net_ni_zombie);
+
+	net->net_id = net_id;
+	net->net_state = LNET_NET_STATE_INIT;
+
+	/* initialize global paramters to undefiend */
+	net->net_tunables.lct_peer_timeout = -1;
+	net->net_tunables.lct_max_tx_credits = -1;
+	net->net_tunables.lct_peer_tx_credits = -1;
+	net->net_tunables.lct_peer_rtr_credits = -1;
+
+	list_add_tail(&net->net_list, net_list);
+
+	return net;
+}
+
+static int
+lnet_ni_add_interface(struct lnet_ni *ni, char *iface)
+{
+	int niface = 0;
+
+	if (ni == NULL)
+		return -ENOMEM;
+
+	if (!lnet_ni_unique_ni(ni->ni_interfaces, iface))
+		return -EINVAL;
+
+	/* Allocate a separate piece of memory and copy
+	 * into it the string, so we don't have
+	 * a depencency on the tokens string.  This way we
+	 * can free the tokens at the end of the function.
+	 * The newly allocated ni_interfaces[] can be
+	 * freed when freeing the NI */
+	while (niface < LNET_MAX_INTERFACES &&
+	       ni->ni_interfaces[niface] != NULL)
+		niface++;
+
+	if (niface >= LNET_MAX_INTERFACES) {
+		LCONSOLE_ERROR_MSG(0x115, "Too many interfaces "
+				   "for net %s\n",
+				   libcfs_net2str(LNET_NIDNET(ni->ni_nid)));
+		return -EINVAL;
+	}
+
+	LIBCFS_ALLOC(ni->ni_interfaces[niface],
+		     strlen(iface) + 1);
+
+	if (ni->ni_interfaces[niface] == NULL) {
+		CERROR("Can't allocate net interface name\n");
+		return -ENOMEM;
+	}
+
+	strncpy(ni->ni_interfaces[niface], iface,
+		strlen(iface) + 1);
+
+	return 0;
+}
+
+/* allocate and add to the provided network */
 lnet_ni_t *
-lnet_ni_alloc(__u32 net, struct cfs_expr_list *el, struct list_head *nilist)
+lnet_ni_alloc(struct lnet_net *net, struct cfs_expr_list *el, char *iface)
 {
 	struct lnet_tx_queue	*tq;
 	struct lnet_ni		*ni;
 	int			rc;
 	int			i;
 
-	if (!lnet_net_unique(net, nilist)) {
-		LCONSOLE_ERROR_MSG(0x111, "Duplicate network specified: %s\n",
-				   libcfs_net2str(net));
-		return NULL;
-	}
+	if (iface != NULL)
+		/* make sure that this NI is unique in the net it's
+		 * being added to */
+		if (!lnet_ni_unique_net(&net->net_ni_added, iface))
+			return NULL;
 
 	LIBCFS_ALLOC(ni, sizeof(*ni));
 	if (ni == NULL) {
-		CERROR("Out of memory creating network %s\n",
-		       libcfs_net2str(net));
+		CERROR("Out of memory creating network interface %s%s\n",
+		       libcfs_net2str(net->net_id),
+		       (iface != NULL) ? iface : "");
 		return NULL;
 	}
 
 	spin_lock_init(&ni->ni_lock);
 	INIT_LIST_HEAD(&ni->ni_cptlist);
+	INIT_LIST_HEAD(&ni->ni_netlist);
 	ni->ni_refs = cfs_percpt_alloc(lnet_cpt_table(),
 				       sizeof(*ni->ni_refs[0]));
 	if (ni->ni_refs == NULL)
@@ -164,8 +472,9 @@ lnet_ni_alloc(__u32 net, struct cfs_expr_list *el, struct list_head *nilist)
 	} else {
 		rc = cfs_expr_list_values(el, LNET_CPT_NUMBER, &ni->ni_cpts);
 		if (rc <= 0) {
-			CERROR("Failed to set CPTs for NI %s: %d\n",
-			       libcfs_net2str(net), rc);
+			CERROR("Failed to set CPTs for NI %s(%s): %d\n",
+			       libcfs_net2str(net->net_id),
+			       (iface != NULL) ? iface : "", rc);
 			goto failed;
 		}
 
@@ -178,8 +487,9 @@ lnet_ni_alloc(__u32 net, struct cfs_expr_list *el, struct list_head *nilist)
 		ni->ni_ncpts = rc;
 	}
 
+	ni->ni_net = net;
 	/* LND will fill in the address part of the NID */
-	ni->ni_nid = LNET_MKNID(net, 0);
+	ni->ni_nid = LNET_MKNID(net->net_id, 0);
 
 	/* Store net namespace in which current ni is being created */
 	if (current->nsproxy->net_ns != NULL)
@@ -188,25 +498,41 @@ lnet_ni_alloc(__u32 net, struct cfs_expr_list *el, struct list_head *nilist)
 		ni->ni_net_ns = NULL;
 
 	ni->ni_last_alive = ktime_get_real_seconds();
-	list_add_tail(&ni->ni_list, nilist);
+	ni->ni_state = LNET_NI_STATE_INIT;
+	rc = lnet_net_append_cpts(ni->ni_cpts, ni->ni_ncpts, net);
+	if (rc != 0)
+		goto failed;
+	list_add_tail(&ni->ni_netlist, &net->net_ni_added);
+
+	/* if an interface name is provided then make sure to add in that
+	 * interface name in NI */
+	if (iface != NULL)
+		if (lnet_ni_add_interface(ni, iface) != 0)
+			goto failed;
+
 	return ni;
- failed:
+failed:
 	lnet_ni_free(ni);
 	return NULL;
 }
 
+/*
+ * Parse the networks string and create the matching set of NIs on the
+ * nilist.
+ */
 int
-lnet_parse_networks(struct list_head *nilist, char *networks)
+lnet_parse_networks(struct list_head *netlist, char *networks,
+		    bool use_tcp_bonding)
 {
-	struct cfs_expr_list *el = NULL;
+	struct cfs_expr_list *net_el = NULL;
+	struct cfs_expr_list *ni_el = NULL;
 	int		tokensize;
 	char		*tokens;
 	char		*str;
-	char		*tmp;
-	struct lnet_ni	*ni;
-	__u32		net;
+	struct lnet_net *net;
+	struct lnet_ni	*ni = NULL;
+	__u32		net_id;
 	int		nnets = 0;
-	struct list_head *temp_node;
 
 	if (networks == NULL) {
 		CERROR("networks string is undefined\n");
@@ -229,173 +555,238 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 	}
 
 	memcpy(tokens, networks, tokensize);
-	str = tmp = tokens;
+	str = tokens;
 
-	while (str != NULL && *str != 0) {
-		char	*comma = strchr(str, ',');
-		char	*bracket = strchr(str, '(');
-		char	*square = strchr(str, '[');
-		char	*iface;
-		int	niface;
-		int	rc;
+	/*
+	 * Main parser loop.
+	 *
+	 * NB we don't check interface conflicts here; it's the LNDs
+	 * responsibility (if it cares at all)
+	 */
+	do {
+		char *nistr;
+		char *elstr;
+		char *name;
+		int rc;
 
-		/* NB we don't check interface conflicts here; it's the LNDs
-		 * responsibility (if it cares at all) */
+		/*
+		 * Parse a network string into its components.
+		 *
+		 * <name>{"("...")"}{"["<el>"]"}
+		 */
 
-		if (square != NULL && (comma == NULL || square < comma)) {
-			/* i.e: o2ib0(ib0)[1,2], number between square
-			 * brackets are CPTs this NI needs to be bond */
-			if (bracket != NULL && bracket > square) {
-				tmp = square;
+		/* Network name (mandatory) */
+		while (isspace(*str))
+			*str++ = '\0';
+		if (!*str)
+			break;
+		name = str;
+		str += strcspn(str, SPACESTR ":()[],");
+		while (isspace(*str))
+			*str++ = '\0';
+
+		/* Interface list (optional) */
+		if (*str == '(') {
+			*str++ = '\0';
+			nistr = str;
+			str += strcspn(str, ")");
+			if (*str != ')') {
+				str = nistr;
 				goto failed_syntax;
 			}
+			do {
+				*str++ = '\0';
+			} while (isspace(*str));
+		} else {
+			nistr = NULL;
+		}
 
-			tmp = strchr(square, ']');
-			if (tmp == NULL) {
-				tmp = square;
+		/* CPT expression (optional) */
+		if (*str == '[') {
+			elstr = str;
+			str += strcspn(str, "]");
+			if (*str != ']') {
+				str = elstr;
 				goto failed_syntax;
 			}
-
-			rc = cfs_expr_list_parse(square, tmp - square + 1,
-						 0, LNET_CPT_NUMBER - 1, &el);
+			rc = cfs_expr_list_parse(elstr, str - elstr + 1,
+						0, LNET_CPT_NUMBER - 1,
+						&net_el);
 			if (rc != 0) {
-				tmp = square;
+				str = elstr;
 				goto failed_syntax;
 			}
-
-			while (square <= tmp)
-				*square++ = ' ';
+			*elstr = '\0';
+			do {
+				*str++ = '\0';
+			} while (isspace(*str));
 		}
 
-		if (bracket == NULL ||
-		    (comma != NULL && comma < bracket)) {
+		/* Bad delimiters */
+		if (*str && (strchr(DELIMITERS, *str) != NULL))
+			goto failed_syntax;
 
-			/* no interface list specified */
+		/* go to the next net if it exits */
+		str += strcspn(str, ",");
+		if (*str == ',')
+			*str++ = '\0';
 
-			if (comma != NULL)
-				*comma++ = 0;
-			net = libcfs_str2net(cfs_trimwhite(str));
-
-			if (net == LNET_NIDNET(LNET_NID_ANY)) {
-				LCONSOLE_ERROR_MSG(0x113, "Unrecognised network"
-						   " type\n");
-				tmp = str;
-				goto failed_syntax;
-			}
-
-			if (LNET_NETTYP(net) != LOLND && /* LO is implicit */
-			    lnet_ni_alloc(net, el, nilist) == NULL)
-				goto failed;
-
-			if (el != NULL) {
-				cfs_expr_list_free(el);
-				el = NULL;
-			}
-
-			str = comma;
-			continue;
-		}
-
-		*bracket = 0;
-		net = libcfs_str2net(cfs_trimwhite(str));
-		if (net == LNET_NIDNET(LNET_NID_ANY)) {
-			tmp = str;
+		/*
+		 * At this point the name is properly terminated.
+		 */
+		net_id = libcfs_str2net(name);
+		if (net_id == LNET_NIDNET(LNET_NID_ANY)) {
+			LCONSOLE_ERROR_MSG(0x113,
+					"Unrecognised network type\n");
+			str = name;
 			goto failed_syntax;
 		}
 
-		ni = lnet_ni_alloc(net, el, nilist);
-		if (ni == NULL)
+		if (LNET_NETTYP(net_id) == LOLND) {
+			/* Loopback is implicit, and there can be only one. */
+			if (net_el) {
+				cfs_expr_list_free(net_el);
+				net_el = NULL;
+			}
+			/* Should we error out instead? */
+			continue;
+		}
+
+		/*
+		 * All network paramaters are now known.
+		 */
+		nnets++;
+
+		/* always allocate a net, since we will eventually add an
+		 * interface to it, or we will fail, in which case we'll
+		 * just delete it */
+		net = lnet_net_alloc(net_id, netlist);
+		if (IS_ERR_OR_NULL(net))
 			goto failed;
 
-		if (el != NULL) {
-			cfs_expr_list_free(el);
-			el = NULL;
+		if (!nistr ||
+		    (use_tcp_bonding && LNET_NETTYP(net_id) == SOCKLND)) {
+			/*
+			 * No interface list was specified, allocate a
+			 * ni using the defaults.
+			 */
+			ni = lnet_ni_alloc(net, net_el, NULL);
+			if (IS_ERR_OR_NULL(ni))
+				goto failed;
+
+			if (!nistr) {
+				if (net_el) {
+					cfs_expr_list_free(net_el);
+					net_el = NULL;
+				}
+				continue;
+			}
 		}
 
-		niface = 0;
-		iface = bracket + 1;
-
-		bracket = strchr(iface, ')');
-		if (bracket == NULL) {
-			tmp = iface;
-			goto failed_syntax;
-		}
-
-		*bracket = 0;
 		do {
-			comma = strchr(iface, ',');
-			if (comma != NULL)
-				*comma++ = 0;
+			elstr = NULL;
 
-			iface = cfs_trimwhite(iface);
-			if (*iface == 0) {
-				tmp = iface;
+			/* Interface name (mandatory) */
+			while (isspace(*nistr))
+				*nistr++ = '\0';
+			name = nistr;
+			nistr += strcspn(nistr, SPACESTR "[],");
+			while (isspace(*nistr))
+				*nistr++ = '\0';
+
+			/* CPT expression (optional) */
+			if (*nistr == '[') {
+				elstr = nistr;
+				nistr += strcspn(nistr, "]");
+				if (*nistr != ']') {
+					str = elstr;
+					goto failed_syntax;
+				}
+				rc = cfs_expr_list_parse(elstr,
+							nistr - elstr + 1,
+							0, LNET_CPT_NUMBER - 1,
+							&ni_el);
+				if (rc != 0) {
+					str = elstr;
+					goto failed_syntax;
+				}
+				*elstr = '\0';
+				do {
+					*nistr++ = '\0';
+				} while (isspace(*nistr));
+			} else {
+				ni_el = net_el;
+			}
+
+			/*
+			 * End of single interface specificaton,
+			 * advance to the start of the next one, if
+			 * any.
+			 */
+			if (*nistr == ',') {
+				do {
+					*nistr++ = '\0';
+				} while (isspace(*nistr));
+				if (!*nistr) {
+					str = nistr;
+					goto failed_syntax;
+				}
+			} else if (*nistr) {
+				str = nistr;
 				goto failed_syntax;
 			}
 
-			if (niface == LNET_MAX_INTERFACES) {
-				LCONSOLE_ERROR_MSG(0x115, "Too many interfaces "
-						   "for net %s\n",
-						   libcfs_net2str(net));
-				goto failed;
-			}
-
-			/* Allocate a separate piece of memory and copy
-			 * into it the string, so we don't have
-			 * a depencency on the tokens string.  This way we
-			 * can free the tokens at the end of the function.
-			 * The newly allocated ni_interfaces[] can be
-			 * freed when freeing the NI */
-			LIBCFS_ALLOC(ni->ni_interfaces[niface],
-				     strlen(iface) + 1);
-			if (ni->ni_interfaces[niface] == NULL) {
-				CERROR("Can't allocate net interface name\n");
-				goto failed;
-			}
-			strncpy(ni->ni_interfaces[niface], iface,
-				strlen(iface));
-			niface++;
-			iface = comma;
-		} while (iface != NULL);
-
-		str = bracket + 1;
-		comma = strchr(bracket + 1, ',');
-		if (comma != NULL) {
-			*comma = 0;
-			str = cfs_trimwhite(str);
-			if (*str != 0) {
-				tmp = str;
+			/*
+			 * At this point the name is properly terminated.
+			 */
+			if (!*name) {
+				str = name;
 				goto failed_syntax;
 			}
-			str = comma + 1;
-			continue;
-		}
 
-		str = cfs_trimwhite(str);
-		if (*str != 0) {
-			tmp = str;
-			goto failed_syntax;
-		}
-	}
+			if (use_tcp_bonding &&
+			    LNET_NETTYP(net->net_id) == SOCKLND) {
+				rc = lnet_ni_add_interface(ni, name);
+				if (rc != 0)
+					goto failed;
+			} else {
+				ni = lnet_ni_alloc(net, ni_el, name);
+				if (IS_ERR_OR_NULL(ni))
+					goto failed;
+			}
 
-	list_for_each(temp_node, nilist)
-		nnets++;
+			if (ni_el) {
+				if (ni_el != net_el) {
+					cfs_expr_list_free(ni_el);
+					ni_el = NULL;
+				}
+			}
+		} while (*nistr);
+
+		if (net_el) {
+			cfs_expr_list_free(net_el);
+			net_el = NULL;
+		}
+	} while (*str);
 
 	LIBCFS_FREE(tokens, tokensize);
 	return nnets;
 
  failed_syntax:
-	lnet_syntax("networks", networks, (int)(tmp - tokens), strlen(tmp));
+	lnet_syntax("networks", networks, (int)(str - tokens), strlen(str));
  failed:
-	while (!list_empty(nilist)) {
-		ni = list_entry(nilist->next, lnet_ni_t, ni_list);
+	/* free the net list and all the nis on each net */
+	while (!list_empty(netlist)) {
+		net = list_entry(netlist->next, struct lnet_net, net_list);
 
-		list_del(&ni->ni_list);
-		lnet_ni_free(ni);
+		list_del_init(&net->net_list);
+		lnet_net_free(net);
 	}
 
-	if (el != NULL)
-		cfs_expr_list_free(el);
+	if (ni_el && ni_el != net_el)
+		cfs_expr_list_free(ni_el);
+	if (net_el)
+		cfs_expr_list_free(net_el);
 
 	LIBCFS_FREE(tokens, tokensize);
 

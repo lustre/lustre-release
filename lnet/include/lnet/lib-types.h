@@ -87,34 +87,37 @@ typedef struct lnet_msg {
 	/* ready for pending on RX delay list */
 	unsigned int		msg_rx_ready_delay:1;
 
-	unsigned int	      msg_vmflush:1;	  /* VM trying to free memory */
-	unsigned int	      msg_target_is_router:1; /* sending to a router */
-	unsigned int	      msg_routing:1;	  /* being forwarded */
-	unsigned int	      msg_ack:1;	  /* ack on finalize (PUT) */
-	unsigned int	      msg_sending:1;	  /* outgoing message */
-	unsigned int	      msg_receiving:1;	  /* being received */
-	unsigned int	      msg_txcredit:1;	  /* taken an NI send credit */
-	unsigned int	      msg_peertxcredit:1; /* taken a peer send credit */
-	unsigned int	      msg_rtrcredit:1;	  /* taken a globel router credit */
-	unsigned int	      msg_peerrtrcredit:1; /* taken a peer router credit */
-	unsigned int	      msg_onactivelist:1; /* on the activelist */
+	unsigned int          msg_vmflush:1;      /* VM trying to free memory */
+	unsigned int          msg_target_is_router:1; /* sending to a router */
+	unsigned int          msg_routing:1;      /* being forwarded */
+	unsigned int          msg_ack:1;          /* ack on finalize (PUT) */
+	unsigned int          msg_sending:1;      /* outgoing message */
+	unsigned int          msg_receiving:1;    /* being received */
+	unsigned int          msg_txcredit:1;     /* taken an NI send credit */
+	unsigned int          msg_peertxcredit:1; /* taken a peer send credit */
+	unsigned int          msg_rtrcredit:1;    /* taken a globel router credit */
+	unsigned int          msg_peerrtrcredit:1; /* taken a peer router credit */
+	unsigned int          msg_onactivelist:1; /* on the activelist */
 	unsigned int	      msg_rdma_get:1;
 
-	struct lnet_peer     *msg_txpeer;	  /* peer I'm sending to */
-	struct lnet_peer     *msg_rxpeer;	  /* peer I received from */
+	struct lnet_peer     *msg_txpeer;         /* peer I'm sending to */
+	struct lnet_peer     *msg_rxpeer;         /* peer I received from */
 
-	void		     *msg_private;
+	void                 *msg_private;
 	struct lnet_libmd    *msg_md;
+	/* the NI the message was sent or received over */
+	struct lnet_ni       *msg_txni;
+	struct lnet_ni       *msg_rxni;
 
-	unsigned int	      msg_len;
-	unsigned int	      msg_wanted;
-	unsigned int	      msg_offset;
-	unsigned int	      msg_niov;
+	unsigned int          msg_len;
+	unsigned int          msg_wanted;
+	unsigned int          msg_offset;
+	unsigned int          msg_niov;
 	struct kvec	     *msg_iov;
-	lnet_kiov_t	     *msg_kiov;
+	lnet_kiov_t          *msg_kiov;
 
-	lnet_event_t	      msg_ev;
-	lnet_hdr_t	      msg_hdr;
+	lnet_event_t          msg_ev;
+	lnet_hdr_t            msg_hdr;
 } lnet_msg_t;
 
 
@@ -263,29 +266,123 @@ struct lnet_tx_queue {
 	struct list_head	tq_delayed;	/* delayed TXs */
 };
 
+enum lnet_net_state {
+	/* set when net block is allocated */
+	LNET_NET_STATE_INIT = 0,
+	/* set when NIs in net are started successfully */
+	LNET_NET_STATE_ACTIVE,
+	/* set if all NIs in net are in FAILED state */
+	LNET_NET_STATE_INACTIVE,
+	/* set when shutting down a NET */
+	LNET_NET_STATE_DELETING
+};
+
+enum lnet_ni_state {
+	/* set when NI block is allocated */
+	LNET_NI_STATE_INIT = 0,
+	/* set when NI is started successfully */
+	LNET_NI_STATE_ACTIVE,
+	/* set when LND notifies NI failed */
+	LNET_NI_STATE_FAILED,
+	/* set when LND notifies NI degraded */
+	LNET_NI_STATE_DEGRADED,
+	/* set when shuttding down NI */
+	LNET_NI_STATE_DELETING
+};
+
+struct lnet_net {
+	/* chain on the ln_nets */
+	struct list_head	net_list;
+
+	/* net ID, which is compoed of
+	 * (net_type << 16) | net_num.
+	 * net_type can be one of the enumarated types defined in
+	 * lnet/include/lnet/nidstr.h */
+	__u32			net_id;
+
+	/* priority of the network */
+	__u32			net_prio;
+
+	/* total number of CPTs in the array */
+	__u32			net_ncpts;
+
+	/* cumulative CPTs of all NIs in this net */
+	__u32			*net_cpts;
+
+	/* network tunables */
+	struct lnet_ioctl_config_lnd_cmn_tunables net_tunables;
+
+	/*
+	 * boolean to indicate that the tunables have been set and
+	 * shouldn't be reset
+	 */
+	bool			net_tunables_set;
+
+	/* procedural interface */
+	lnd_t			*net_lnd;
+
+	/* list of NIs on this net */
+	struct list_head	net_ni_list;
+
+	/* list of NIs being added, but not started yet */
+	struct list_head	net_ni_added;
+
+	/* dying LND instances */
+	struct list_head	net_ni_zombie;
+
+	/* network state */
+	enum lnet_net_state	net_state;
+};
+
 typedef struct lnet_ni {
+	/* chain on the lnet_net structure */
+	struct list_head	ni_netlist;
+
+	/* chain on net_ni_cpt */
+	struct list_head	ni_cptlist;
+
 	spinlock_t		ni_lock;
-	struct list_head	ni_list;	/* chain on ln_nis */
-	struct list_head	ni_cptlist;	/* chain on ln_nis_cpt */
-	int			ni_maxtxcredits; /* # tx credits  */
-	/* # per-peer send credits */
-	int			ni_peertxcredits;
-	/* # per-peer router buffer credits */
-	int			ni_peerrtrcredits;
-	/* seconds to consider peer dead */
-	int			ni_peertimeout;
-	int			ni_ncpts;	/* number of CPTs */
-	__u32			*ni_cpts;	/* bond NI on some CPTs */
-	lnet_nid_t		ni_nid;		/* interface's NID */
-	void			*ni_data;	/* instance-specific data */
-	lnd_t			*ni_lnd;	/* procedural interface */
-	struct lnet_tx_queue	**ni_tx_queues;	/* percpt TX queues */
-	int			**ni_refs;	/* percpt reference count */
-	time64_t		ni_last_alive;	/* when I was last alive */
-	struct lnet_ni_status	*ni_status;	/* my health status */
+
+	/* number of CPTs */
+	int			ni_ncpts;
+
+	/* bond NI on some CPTs */
+	__u32			*ni_cpts;
+
+	/* interface's NID */
+	lnet_nid_t		ni_nid;
+
+	/* instance-specific data */
+	void			*ni_data;
+
+	/* percpt TX queues */
+	struct lnet_tx_queue	**ni_tx_queues;
+
+	/* percpt reference count */
+	int			**ni_refs;
+
+	/* when I was last alive */
+	long			ni_last_alive;
+
+	/* pointer to parent network */
+	struct lnet_net		*ni_net;
+
+	/* my health status */
+	lnet_ni_status_t	*ni_status;
+
+	/* NI FSM */
+	enum lnet_ni_state	ni_state;
+
 	/* per NI LND tunables */
-	struct lnet_ioctl_config_lnd_tunables *ni_lnd_tunables;
-	/* equivalent interfaces to use */
+	struct lnet_lnd_tunables ni_lnd_tunables;
+
+	/* lnd tunables set explicitly */
+	bool ni_lnd_tunables_set;
+
+	/*
+	 * equivalent interfaces to use
+	 * This is an array because socklnd bonding can still be configured
+	 */
 	char			*ni_interfaces[LNET_MAX_INTERFACES];
 	struct net		*ni_net_ns;     /* original net namespace */
 } lnet_ni_t;
@@ -362,8 +459,8 @@ typedef struct lnet_peer {
 	cfs_time_t		lp_last_alive;
 	/* when lp_ni was queried last time */
 	cfs_time_t		lp_last_query;
-	/* interface peer is on */
-	lnet_ni_t		*lp_ni;
+	/* network peer is on */
+	struct lnet_net		*lp_net;
 	lnet_nid_t		lp_nid;		/* peer's NID */
 	int			lp_refcount;	/* # refs */
 	int			lp_cpt;		/* CPT this peer attached on */
@@ -392,7 +489,7 @@ struct lnet_peer_table {
 /* peer aliveness is enabled only on routers for peers in a network where the
  * lnet_ni_t::ni_peertimeout has been set to a positive value */
 #define lnet_peer_aliveness_enabled(lp) (the_lnet.ln_routing != 0 && \
-					 (lp)->lp_ni->ni_peertimeout > 0)
+					 (lp)->lp_net->net_tunables.lct_peer_timeout > 0)
 
 typedef struct {
 	struct list_head	lr_list;	/* chain on net */
@@ -470,6 +567,7 @@ enum {
 struct lnet_match_info {
 	__u64			mi_mbits;
 	lnet_process_id_t	mi_id;
+	unsigned int		mi_cpt;
 	unsigned int		mi_opc;
 	unsigned int		mi_portal;
 	unsigned int		mi_rlength;
@@ -597,13 +695,12 @@ typedef struct
 	struct list_head		ln_test_peers;
 	struct list_head		ln_drop_rules;
 	struct list_head		ln_delay_rules;
-
-	struct list_head		ln_nis;		/* LND instances */
-	/* NIs bond on specific CPT(s) */
-	struct list_head		ln_nis_cpt;
-	/* dying LND instances */
-	struct list_head		ln_nis_zombie;
-	lnet_ni_t			*ln_loni;	/* the loopback NI */
+	/* LND instances */
+	struct list_head		ln_nets;
+	/* the loopback NI */
+	struct lnet_ni			*ln_loni;
+	/* network zombie list */
+	struct list_head		ln_net_zombie;
 
 	/* remote networks with routes to them */
 	struct list_head		*ln_remote_nets_hash;

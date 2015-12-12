@@ -317,7 +317,7 @@ kiblnd_create_peer(lnet_ni_t *ni, kib_peer_t **peerp, lnet_nid_t nid)
 {
 	kib_peer_t	*peer;
 	kib_net_t	*net = ni->ni_data;
-	int		cpt = lnet_cpt_of_nid(nid);
+	int		cpt = lnet_cpt_of_nid(nid, ni);
 	unsigned long   flags;
 
 	LASSERT(net != NULL);
@@ -334,7 +334,7 @@ kiblnd_create_peer(lnet_ni_t *ni, kib_peer_t **peerp, lnet_nid_t nid)
 	peer->ibp_error = 0;
 	peer->ibp_last_alive = 0;
 	peer->ibp_max_frags = kiblnd_cfg_rdma_frags(peer->ibp_ni);
-	peer->ibp_queue_depth = ni->ni_peertxcredits;
+	peer->ibp_queue_depth = ni->ni_net->net_tunables.lct_peer_tx_credits;
 	atomic_set(&peer->ibp_refcount, 1);	/* 1 ref for caller */
 
 	INIT_LIST_HEAD(&peer->ibp_list);	/* not in the peer table yet */
@@ -722,7 +722,7 @@ kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
 
 	dev = net->ibn_dev;
 
-	cpt = lnet_cpt_of_nid(peer->ibp_nid);
+	cpt = lnet_cpt_of_nid(peer->ibp_nid, peer->ibp_ni);
 	sched = kiblnd_data.kib_scheds[cpt];
 
 	LASSERT(sched->ibs_nthreads > 0);
@@ -1391,7 +1391,7 @@ kiblnd_find_rd_dma_mr(struct lnet_ni *ni, kib_rdma_desc_t *rd,
 	int	mod;
 	__u16	nfrags;
 
-	tunables = &ni->ni_lnd_tunables->lt_tun_u.lt_o2ib;
+	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
 	mod = tunables->lnd_map_on_demand;
 	nfrags = (negotiated_nfrags != -1) ? negotiated_nfrags : mod;
 
@@ -2395,7 +2395,7 @@ kiblnd_net_init_pools(kib_net_t *net, lnet_ni_t *ni, __u32 *cpts, int ncpts)
 	int		rc;
 	int		i;
 
-	tunables = &ni->ni_lnd_tunables->lt_tun_u.lt_o2ib;
+	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
 
 	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 	if (tunables->lnd_map_on_demand == 0) {
@@ -3177,7 +3177,7 @@ kiblnd_startup (lnet_ni_t *ni)
         int                       rc;
 	int			  newdev;
 
-        LASSERT (ni->ni_lnd == &the_o2iblnd);
+        LASSERT (ni->ni_net->net_lnd == &the_o2iblnd);
 
         if (kiblnd_data.kib_init == IBLND_INIT_NOTHING) {
                 rc = kiblnd_base_startup();

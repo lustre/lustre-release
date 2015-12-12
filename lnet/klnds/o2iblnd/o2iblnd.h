@@ -782,7 +782,7 @@ kiblnd_cfg_rdma_frags(struct lnet_ni *ni)
 	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
 	int mod;
 
-	tunables = &ni->ni_lnd_tunables->lt_tun_u.lt_o2ib;
+	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
 	mod = tunables->lnd_map_on_demand;
 	return mod != 0 ? mod : IBLND_MAX_RDMA_FRAGS;
 }
@@ -801,7 +801,7 @@ kiblnd_concurrent_sends(int version, struct lnet_ni *ni)
 	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
 	int concurrent_sends;
 
-	tunables = &ni->ni_lnd_tunables->lt_tun_u.lt_o2ib;
+	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
 	concurrent_sends = tunables->lnd_concurrent_sends;
 
 	if (version == IBLND_MSG_VERSION_1) {
@@ -941,7 +941,7 @@ kiblnd_need_noop(kib_conn_t *conn)
 	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
 
 	LASSERT(conn->ibc_state >= IBLND_CONN_ESTABLISHED);
-	tunables = &ni->ni_lnd_tunables->lt_tun_u.lt_o2ib;
+	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
 
         if (conn->ibc_outstanding_credits <
 	    IBLND_CREDITS_HIGHWATER(tunables, conn->ibc_version) &&

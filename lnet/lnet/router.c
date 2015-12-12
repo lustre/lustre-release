@@ -55,17 +55,17 @@ module_param(auto_down, int, 0444);
 MODULE_PARM_DESC(auto_down, "Automatically mark peers down on comms error");
 
 int
-lnet_peer_buffer_credits(lnet_ni_t *ni)
+lnet_peer_buffer_credits(struct lnet_net *net)
 {
 	/* NI option overrides LNet default */
-	if (ni->ni_peerrtrcredits > 0)
-		return ni->ni_peerrtrcredits;
+	if (net->net_tunables.lct_peer_rtr_credits > 0)
+		return net->net_tunables.lct_peer_rtr_credits;
 	if (peer_buffer_credits > 0)
 		return peer_buffer_credits;
 
 	/* As an approximation, allow this peer the same number of router
 	 * buffers as it is allowed outstanding sends */
-	return ni->ni_peertxcredits;
+	return net->net_tunables.lct_peer_tx_credits;
 }
 
 /* forward ref's */
@@ -148,13 +148,14 @@ lnet_ni_notify_locked(lnet_ni_t *ni, lnet_peer_t *lp)
 		lp->lp_notifylnd = 0;
 		lp->lp_notify	 = 0;
 
-		if (notifylnd && ni->ni_lnd->lnd_notify != NULL) {
+		if (notifylnd && ni->ni_net->net_lnd->lnd_notify != NULL) {
 			lnet_net_unlock(lp->lp_cpt);
 
 			/* A new notification could happen now; I'll handle it
 			 * when control returns to me */
 
-			(ni->ni_lnd->lnd_notify)(ni, lp->lp_nid, alive);
+			(ni->ni_net->net_lnd->lnd_notify)(ni, lp->lp_nid,
+							  alive);
 
 			lnet_net_lock(lp->lp_cpt);
 		}
@@ -216,7 +217,7 @@ lnet_rtr_decref_locked(lnet_peer_t *lp)
 }
 
 lnet_remotenet_t *
-lnet_find_net_locked (__u32 net)
+lnet_find_rnet_locked(__u32 net)
 {
 	lnet_remotenet_t *rnet;
 	struct list_head *tmp;
@@ -240,8 +241,7 @@ static void lnet_shuffle_seed(void)
 	__u32 lnd_type;
 	__u32 seed[2];
 	struct timespec64 ts;
-	lnet_ni_t *ni;
-	struct list_head *tmp;
+	lnet_ni_t *ni = NULL;
 
 	if (seeded)
 		return;
@@ -250,8 +250,7 @@ static void lnet_shuffle_seed(void)
 
 	/* Nodes with small feet have little entropy
 	 * the NID for this node gives the most entropy in the low bits */
-	list_for_each(tmp, &the_lnet.ln_nis) {
-		ni = list_entry(tmp, lnet_ni_t, ni_list);
+	while ((ni = lnet_get_next_ni_locked(NULL, ni))) {
 		lnd_type = LNET_NETTYP(LNET_NIDNET(ni->ni_nid));
 
 		if (lnd_type != LOLND)
@@ -356,7 +355,7 @@ lnet_add_route(__u32 net, __u32 hops, lnet_nid_t gateway,
 
 	LASSERT(!the_lnet.ln_shutdown);
 
-	rnet2 = lnet_find_net_locked(net);
+	rnet2 = lnet_find_rnet_locked(net);
 	if (rnet2 == NULL) {
 		/* new network */
 		list_add_tail(&rnet->lrn_list, lnet_net2rnethash(net));
@@ -381,12 +380,12 @@ lnet_add_route(__u32 net, __u32 hops, lnet_nid_t gateway,
 		lnet_peer_addref_locked(route->lr_gateway); /* +1 for notify */
 		lnet_add_route_to_rnet(rnet2, route);
 
-		ni = route->lr_gateway->lp_ni;
+		ni = lnet_get_next_ni_locked(route->lr_gateway->lp_net, NULL);
 		lnet_net_unlock(LNET_LOCK_EX);
 
 		/* XXX Assume alive */
-		if (ni->ni_lnd->lnd_notify != NULL)
-			(ni->ni_lnd->lnd_notify)(ni, gateway, 1);
+		if (ni->ni_net->net_lnd->lnd_notify != NULL)
+			(ni->ni_net->net_lnd->lnd_notify)(ni, gateway, 1);
 
 		lnet_net_lock(LNET_LOCK_EX);
 	}
@@ -444,8 +443,8 @@ lnet_check_routes(void)
 					continue;
 				}
 
-				if (route->lr_gateway->lp_ni ==
-				    route2->lr_gateway->lp_ni)
+				if (route->lr_gateway->lp_net ==
+				    route2->lr_gateway->lp_net)
 					continue;
 
 				nid1 = route->lr_gateway->lp_nid;
@@ -833,8 +832,8 @@ lnet_router_ni_update_locked(lnet_peer_t *gw, __u32 net)
 static void
 lnet_update_ni_status_locked(void)
 {
-	lnet_ni_t	*ni;
-	time64_t now;
+	lnet_ni_t	*ni = NULL;
+	time64_t	now;
 	int		timeout;
 
 	LASSERT(the_lnet.ln_routing);
@@ -843,8 +842,8 @@ lnet_update_ni_status_locked(void)
 		  MAX(live_router_check_interval, dead_router_check_interval);
 
 	now = ktime_get_real_seconds();
-	list_for_each_entry(ni, &the_lnet.ln_nis, ni_list) {
-		if (ni->ni_lnd->lnd_type == LOLND)
+	while ((ni = lnet_get_next_ni_locked(NULL, ni))) {
+		if (ni->ni_net->net_lnd->lnd_type == LOLND)
 			continue;
 
 		if (now < ni->ni_last_alive + timeout)
@@ -977,8 +976,9 @@ static void
 lnet_ping_router_locked (lnet_peer_t *rtr)
 {
 	lnet_rc_data_t *rcd = NULL;
-	cfs_time_t	now = cfs_time_current();
-	int		secs;
+	cfs_time_t      now = cfs_time_current();
+	int             secs;
+	struct lnet_ni  *ni;
 
 	lnet_peer_addref_locked(rtr);
 
@@ -987,7 +987,8 @@ lnet_ping_router_locked (lnet_peer_t *rtr)
 		lnet_notify_locked(rtr, 1, 0, now);
 
 	/* Run any outstanding notifications */
-	lnet_ni_notify_locked(rtr->lp_ni, rtr);
+	ni = lnet_get_next_ni_locked(rtr->lp_net, NULL);
+	lnet_ni_notify_locked(ni, rtr);
 
 	if (!lnet_isrouter(rtr) ||
 	    the_lnet.ln_rc_state != LNET_RC_STATE_RUNNING) {
@@ -1242,7 +1243,7 @@ rescan:
 		list_for_each(entry, &the_lnet.ln_routers) {
 			rtr = list_entry(entry, lnet_peer_t, lp_rtr_list);
 
-			cpt2 = lnet_cpt_of_nid_locked(rtr->lp_nid);
+			cpt2 = rtr->lp_cpt;
 			if (cpt != cpt2) {
 				lnet_net_unlock(cpt);
 				cpt = cpt2;
@@ -1718,7 +1719,7 @@ lnet_notify(lnet_ni_t *ni, lnet_nid_t nid, int alive, cfs_time_t when)
 {
 	struct lnet_peer	*lp = NULL;
 	cfs_time_t		now = cfs_time_current();
-	int			cpt = lnet_cpt_of_nid(nid);
+	int			cpt = lnet_cpt_of_nid(nid, ni);
 
 	LASSERT (!in_interrupt ());
 

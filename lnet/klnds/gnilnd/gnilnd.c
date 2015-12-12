@@ -2684,9 +2684,9 @@ kgnilnd_startup(lnet_ni_t *ni)
 	kgn_net_t        *net;
 	ENTRY;
 
-	LASSERTF(ni->ni_lnd == &the_kgnilnd,
+	LASSERTF(ni->ni_net->net_lnd == &the_kgnilnd,
 		"bad LND 0x%p != the_kgnilnd @ 0x%p\n",
-		ni->ni_lnd, &the_kgnilnd);
+		ni->ni_net->net_lnd, &the_kgnilnd);
 
 	if (kgnilnd_data.kgn_init == GNILND_INIT_NOTHING) {
 		rc = kgnilnd_base_startup();
