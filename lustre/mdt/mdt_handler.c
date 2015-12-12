@@ -2259,7 +2259,8 @@ int mdt_remote_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 	switch (flag) {
 	case LDLM_CB_BLOCKING:
 		ldlm_lock2handle(lock, &lockh);
-		rc = ldlm_cli_cancel(&lockh, LCF_ASYNC);
+		rc = ldlm_cli_cancel(&lockh,
+			ldlm_is_atomic_cb(lock) ? 0 : LCF_ASYNC);
 		if (rc < 0) {
 			CDEBUG(D_INODE, "ldlm_cli_cancel: %d\n", rc);
 			RETURN(rc);

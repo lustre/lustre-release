@@ -1340,8 +1340,9 @@ again:
 		if (rc == 0) {
 			mdt_unlock_list(info, lock_list, rc);
 
-			CDEBUG(D_INFO, "%s: busy lock on "DFID".\n",
-			       mdt_obd_name(mdt), PFID(&fid));
+			CDEBUG(D_INFO, "%s: busy lock on "DFID" %s retry %d\n",
+			       mdt_obd_name(mdt), PFID(&fid), name.ln_name,
+			       retry_count);
 
 			if (retry_count == 0) {
 				mdt_object_put(info->mti_env, mdt_pobj);
