@@ -20,10 +20,11 @@
  * GPL HEADER END
  */
 /*
- * Copyright (C) 2013, Trustees of Indiana University
+ * Copyright (C) 2013, 2015, Trustees of Indiana University
  *
  * Copyright (c) 2014, Intel Corporation.
  *
+ * Author: Jeremy Filizetti <jfilizet@iu.edu>
  * Author: Andrew Korty <ajk@iu.edu>
  */
 
@@ -44,6 +45,7 @@
 #include "gss_asn1.h"
 
 struct null_ctx {
+	__u64 nc_token;
 };
 
 static
@@ -51,12 +53,17 @@ __u32 gss_import_sec_context_null(rawobj_t *inbuf, struct gss_ctx *gss_context)
 {
 	struct null_ctx *null_context;
 
-	if (inbuf == NULL || inbuf->data == NULL)
+	if (inbuf == NULL || inbuf->data == NULL ||
+	    inbuf->len != sizeof(*null_context)) {
+		CDEBUG(D_SEC, "Invalid input buffer for null context\n");
 		return GSS_S_FAILURE;
+	}
 
 	OBD_ALLOC_PTR(null_context);
 	if (null_context == NULL)
 		return GSS_S_FAILURE;
+
+	memcpy(&null_context->nc_token, inbuf->data, inbuf->len);
 
 	gss_context->internal_ctx_id = null_context;
 	CDEBUG(D_SEC, "successfully imported null context\n");
@@ -87,7 +94,8 @@ static
 __u32 gss_inquire_context_null(struct gss_ctx *gss_context,
 			       unsigned long *endtime)
 {
-	*endtime = 0;
+	/* quick timeout for testing purposes */
+	*endtime = cfs_time_current_sec() + 60;
 	return GSS_S_COMPLETE;
 }
 
@@ -142,12 +150,28 @@ int gss_display_null(struct gss_ctx *gss_context, char *buf, int bufsize)
 	return snprintf(buf, bufsize, "null");
 }
 
+static
+__u32 gss_get_mic_null(struct gss_ctx *gss_context, int message_count,
+		       rawobj_t *messages, int iov_count, lnet_kiov_t *iovs,
+		       rawobj_t *token)
+{
+	return GSS_S_COMPLETE;
+}
+
+static
+__u32 gss_verify_mic_null(struct gss_ctx *gss_context, int message_count,
+			  rawobj_t *messages, int iov_count, lnet_kiov_t *iovs,
+			  rawobj_t *token)
+{
+	return GSS_S_COMPLETE;
+}
+
 static struct gss_api_ops gss_null_ops = {
 	.gss_import_sec_context     = gss_import_sec_context_null,
 	.gss_copy_reverse_context   = gss_copy_reverse_context_null,
 	.gss_inquire_context        = gss_inquire_context_null,
-	.gss_get_mic                = NULL,
-	.gss_verify_mic             = NULL,
+	.gss_get_mic                = gss_get_mic_null,
+	.gss_verify_mic             = gss_verify_mic_null,
 	.gss_wrap                   = gss_wrap_null,
 	.gss_unwrap                 = gss_unwrap_null,
 	.gss_prep_bulk              = gss_prep_bulk_null,

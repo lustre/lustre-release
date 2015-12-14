@@ -237,7 +237,7 @@ enum sptlrpc_bulk_service {
 		  SPTLRPC_MECH_GSS_SK,                  \
 		  SPTLRPC_SVC_INTG,                     \
 		  SPTLRPC_BULK_DEFAULT,                 \
-		  SPTLRPC_BULK_SVC_PRIV)
+		  SPTLRPC_BULK_SVC_INTG)
 #define SPTLRPC_FLVR_SKPI                               \
 	MAKE_FLVR(SPTLRPC_POLICY_GSS,                   \
 		  SPTLRPC_MECH_GSS_SK,                  \
@@ -864,6 +864,20 @@ struct ptlrpc_sec {
 	cfs_time_t			ps_gc_interval;	/* in seconds */
 	cfs_time_t			ps_gc_next;	/* in seconds */
 };
+
+static inline int flvr_is_rootonly(__u32 flavor)
+{
+	return (SPTLRPC_FLVR_POLICY(flavor) == SPTLRPC_POLICY_GSS &&
+		(SPTLRPC_FLVR_MECH(flavor) == SPTLRPC_MECH_GSS_NULL ||
+		 SPTLRPC_FLVR_MECH(flavor) == SPTLRPC_MECH_GSS_SK));
+}
+
+static inline int flvr_allows_user_desc(__u32 flavor)
+{
+	return (SPTLRPC_FLVR_POLICY(flavor) == SPTLRPC_POLICY_GSS &&
+		(SPTLRPC_FLVR_MECH(flavor) == SPTLRPC_MECH_GSS_NULL ||
+		 SPTLRPC_FLVR_MECH(flavor) == SPTLRPC_MECH_GSS_SK));
+}
 
 static inline int sec_is_reverse(struct ptlrpc_sec *sec)
 {

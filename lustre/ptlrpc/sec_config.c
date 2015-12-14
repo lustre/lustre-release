@@ -838,6 +838,14 @@ static void inline flavor_set_flags(struct sptlrpc_flavor *sf,
                 if (fl_udesc && sf->sf_rpc != SPTLRPC_FLVR_NULL)
                         sf->sf_flags |= PTLRPC_SEC_FL_UDESC;
         }
+
+	/* Some flavors use a single uid (0) context */
+	if (flvr_is_rootonly(sf->sf_rpc))
+		sf->sf_flags |= PTLRPC_SEC_FL_ROOTONLY;
+
+	/* User descriptor might need to be cleared */
+	if (flvr_allows_user_desc(sf->sf_rpc) == 0)
+		sf->sf_flags &= ~PTLRPC_SEC_FL_UDESC;
 }
 
 void sptlrpc_conf_choose_flavor(enum lustre_sec_part from,

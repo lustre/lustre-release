@@ -195,7 +195,8 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
                         RETURN(-EACCES);
                 }
         } else {
-                if (req->rq_auth_uid != pud->pud_uid) {
+		if (!flvr_is_rootonly(req->rq_flvr.sf_rpc) &&
+		    req->rq_auth_uid != pud->pud_uid) {
                         CDEBUG(D_SEC, "local client %s: auth uid %u "
                                "while client claims %u:%u/%u:%u\n",
                                libcfs_nid2str(peernid), req->rq_auth_uid,
@@ -403,7 +404,8 @@ int mdt_check_ucred(struct mdt_thread_info *info)
                         RETURN(-EACCES);
                 }
         } else {
-                if (req->rq_auth_uid != pud->pud_uid) {
+		if (!flvr_is_rootonly(req->rq_flvr.sf_rpc) &&
+		    req->rq_auth_uid != pud->pud_uid) {
                         CDEBUG(D_SEC, "local client %s: auth uid %u "
                                "while client claims %u:%u/%u:%u\n",
                                libcfs_nid2str(peernid), req->rq_auth_uid,
