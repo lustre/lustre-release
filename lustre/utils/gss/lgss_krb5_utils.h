@@ -17,6 +17,8 @@
 
 #include "lgss_utils.h"
 
+extern struct lgss_mech_type lgss_mech_null;
+extern struct lgss_mech_type lgss_mech_sk;
 extern struct lgss_mech_type lgss_mech_krb5;
 
 /*

@@ -220,6 +220,71 @@ out_params:
 	return rc;
 }
 
+/* This is used by incomplete GSSAPI implementations that can't use
+ * gss_init_sec_context and will parse the token themselves (gssnull and sk).
+ * Callers should have cred->lc_mech_token pointing to a gss_buffer_desc
+ * token to send to the peer as part of the SEC_CTX_INIT operation.  The return
+ * RPC's token with be in gr.gr_token which is validated using
+ * lgss_validate_cred. */
+static int lgssc_negotiation_manual(struct lgss_nego_data *lnd,
+				    struct lgss_cred *cred)
+{
+	struct lgss_init_res gr;
+	OM_uint32 min_stat;
+	int rc;
+
+	logmsg(LL_TRACE, "starting gss negotation\n");
+	memset(&gr, 0, sizeof(gr));
+
+	lnd->lnd_rpc_err = do_nego_rpc(lnd, &cred->lc_mech_token, &gr);
+	if (lnd->lnd_rpc_err) {
+		logmsg(LL_ERR, "negotiation rpc error %d\n", lnd->lnd_rpc_err);
+		rc = lnd->lnd_rpc_err;
+		goto out_error;
+	}
+
+	if (gr.gr_major == GSS_S_CONTINUE_NEEDED) {
+		rc = -EAGAIN;
+		goto out_error;
+
+	} else if (gr.gr_major != GSS_S_COMPLETE) {
+		lnd->lnd_gss_err = gr.gr_major;
+		logmsg(LL_ERR, "negotiation gss error %x\n", lnd->lnd_gss_err);
+		rc = -ENOTCONN;
+		goto out_error;
+	}
+
+	if (gr.gr_ctx.length == 0 || gr.gr_token.length == 0) {
+		logmsg(LL_ERR, "zero length context or token received\n");
+		rc = -EINVAL;
+		goto out_error;
+	}
+
+	rc = lgss_validate_cred(cred, &gr.gr_token, &lnd->lnd_ctx_token);
+	if (rc) {
+		logmsg(LL_ERR, "peer token failed validation\n");
+		goto out_error;
+	}
+
+	lnd->lnd_established = 1;
+	lnd->lnd_seq_win = gr.gr_win;
+	lnd->lnd_rmt_ctx = gr.gr_ctx;
+
+	if (gr.gr_token.length != 0)
+		gss_release_buffer(&min_stat, &gr.gr_token);
+
+	logmsg(LL_DEBUG, "successfully negotiated a context\n");
+	return 0;
+
+out_error:
+	if (gr.gr_ctx.length != 0)
+		gss_release_buffer(&min_stat, &gr.gr_ctx);
+	if (gr.gr_token.length != 0)
+		gss_release_buffer(&min_stat, &gr.gr_token);
+
+	return rc;
+}
+
 /*
  * if return error, the lnd_rpc_err or lnd_gss_err is set.
  */
@@ -350,14 +415,21 @@ static int lgssc_init_nego_data(struct lgss_nego_data *lnd,
         lnd->lnd_seq_win = 0;
 
         switch (mech) {
-        case LGSS_MECH_KRB5:
-                lnd->lnd_mech = (gss_OID) &krb5oid;
-                lnd->lnd_req_flags = GSS_C_MUTUAL_FLAG;
-                break;
-        default:
-                logmsg(LL_ERR, "invalid mech: %d\n", mech);
-                lnd->lnd_rpc_err = -EACCES;
-                return -1;
+	case LGSS_MECH_KRB5:
+		lnd->lnd_mech = (gss_OID)&krb5oid;
+		lnd->lnd_req_flags = GSS_C_MUTUAL_FLAG;
+		break;
+	case LGSS_MECH_NULL:
+		lnd->lnd_mech = (gss_OID)&nulloid;
+		break;
+	case LGSS_MECH_SK:
+		lnd->lnd_mech = (gss_OID)&skoid;
+		lnd->lnd_req_flags = GSS_C_MUTUAL_FLAG;
+		break;
+	default:
+		logmsg(LL_ERR, "invalid mech: %d\n", mech);
+		lnd->lnd_rpc_err = -EACCES;
+		return -1;
         }
 
         sname.value = g_service;
@@ -544,6 +616,72 @@ out_cred:
 	return rc;
 }
 
+static int lgssc_kr_negotiate_manual(key_serial_t keyid, struct lgss_cred *cred,
+				     struct keyring_upcall_param *kup)
+{
+	struct lgss_nego_data   lnd;
+	OM_uint32               min_stat;
+	int                     rc;
+
+retry:
+	memset(&lnd, 0, sizeof(lnd));
+
+	rc = lgss_get_service_str(&g_service, kup->kup_svc, kup->kup_nid);
+	if (rc) {
+		logmsg(LL_ERR, "key %08x: failed to construct service "
+		       "string\n", keyid);
+		error_kernel_key(keyid, -EACCES, 0);
+		goto out_cred;
+	}
+
+	rc = lgss_using_cred(cred);
+	if (rc) {
+		logmsg(LL_ERR, "key %08x: can't use cred\n", keyid);
+		error_kernel_key(keyid, -EACCES, 0);
+		goto out_cred;
+	}
+
+	rc = lgssc_init_nego_data(&lnd, kup, cred->lc_mech->lmt_mech_n);
+	if (rc) {
+		logmsg(LL_ERR, "key %08x: failed to initialize "
+		       "negotiation data\n", keyid);
+		error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err);
+		goto out_cred;
+	}
+
+	/*
+	 * Handles the negotiation but then calls lgss_validate to make sure
+	 * the token is valid.  It also populates the lnd_ctx_token for the
+	 * update to the kernel key
+	 */
+	rc = lgssc_negotiation_manual(&lnd, cred);
+	if (rc == -EAGAIN) {
+		logmsg(LL_ERR, "Failed negotiation must retry\n");
+		goto retry;
+
+	} else if (rc) {
+		logmsg(LL_ERR, "key %08x: failed to negotiate\n", keyid);
+		error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err);
+		goto out;
+	}
+
+	rc = update_kernel_key(keyid,  &lnd, &lnd.lnd_ctx_token);
+	if (rc)
+		goto out;
+
+	logmsg(LL_INFO, "key %08x for user %u is updated OK!\n",
+	       keyid, kup->kup_uid);
+out:
+	if (lnd.lnd_ctx_token.length != 0)
+		gss_release_buffer(&min_stat, &lnd.lnd_ctx_token);
+
+	lgssc_fini_nego_data(&lnd);
+
+out_cred:
+	lgss_release_cred(cred);
+	return rc;
+}
+
 /*
  * note we inherited assumed authority from parent process
  */
@@ -558,6 +696,10 @@ static int lgssc_kr_negotiate(key_serial_t keyid, struct lgss_cred *cred,
 	       kup->kup_uid, kup->kup_gid, kup->kup_fsuid, kup->kup_fsgid);
 
 	switch (cred->lc_mech->lmt_mech_n) {
+	case LGSS_MECH_NULL:
+	case LGSS_MECH_SK:
+		rc = lgssc_kr_negotiate_manual(keyid, cred, kup);
+		break;
 	case LGSS_MECH_KRB5:
 	default:
 		rc = lgssc_kr_negotiate_krb(keyid, cred, kup);

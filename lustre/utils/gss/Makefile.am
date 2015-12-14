@@ -8,7 +8,7 @@ LIBCFS := $(top_builddir)/libcfs/libcfs/libcfs.a
 sbin_PROGRAMS = lsvcgssd l_idmap
 
 if GSS_KEYRING
-sbin_PROGRAMS += lgss_keyring
+sbin_PROGRAMS += lgss_keyring lgss_sk
 endif
 
 if GSS_PIPEFS
@@ -22,6 +22,7 @@ COMMON_SRCS = \
         context_heimdal.c \
         context_spkm3.c \
         gss_util.c \
+        sk_utils.c \
         gss_oids.c \
         err_util.c \
         lsupport.c \
@@ -30,6 +31,7 @@ COMMON_SRCS = \
         err_util.h \
         gss_oids.h \
         gss_util.h \
+        sk_utils.h \
         lsupport.h
 
 lgssd_SOURCES = \
@@ -59,7 +61,7 @@ lsvcgssd_SOURCES = \
         svcgssd.h
 
 lsvcgssd_CFLAGS = $(AM_CFLAGS) $(CFLAGS) $(KRBCFLAGS)
-lsvcgssd_LDADD = $(LIBCFS) $(GSSAPI_LIBS) $(KRBLIBS)
+lsvcgssd_LDADD = $(LIBCFS) $(GSSAPI_LIBS) $(KRBLIBS) -lcrypto -lssl -lkeyutils -lm
 lsvcgssd_LDFLAGS = $(KRBLDFLAGS)
 lsvcgssd_DEPENDENCIES = $(LIBCFS)
 
@@ -79,16 +81,32 @@ lgss_keyring_SOURCES = \
 	context_mit.c \
 	context_heimdal.c \
 	lgss_krb5_utils.c \
+	lgss_null_utils.c \
+	lgss_sk_utils.c \
 	lgss_utils.c \
 	lsupport.c \
-	\
+	err_util.c \
+	sk_utils.c \
 	lgss_krb5_utils.h \
 	lgss_utils.h \
+	sk_utils.h \
+	err_util.h \
 	lsupport.h
 
 lgss_keyring_CFLAGS = $(AM_CFLAGS) $(CFLAGS) $(KRBCFLAGS) -D _NEW_BUILD_
-lgss_keyring_LDADD = $(LIBCFS) -lkeyutils $(GSSAPI_LIBS) $(KRBLIBS)
+lgss_keyring_LDADD = $(LIBCFS) $(GSSAPI_LIBS) $(KRBLIBS) -lcrypto -lssl -lm -lkeyutils
 lgss_keyring_LDFLAGS = $(KRBLDFLAGS)
 lgss_keyring_DEPENDENCIES = $(LIBCFS)
+
+lgss_sk_SOURCES = \
+	lgss_sk.c \
+	err_util.c \
+	sk_utils.c \
+	sk_utils.h
+
+lgss_sk_CFLAGS = $(AM_CFLAGS) $(CFLAGS) $(KRBCFLAGS)
+lgss_sk_LDADD = $(LIBCFS) $(GSSAPI_LIBS) $(KRBLIBS) -lcrypto -lssl -lm -lkeyutils
+lgss_sk_LDFLAGS = $(KRBLDFLAGS)
+lgss_sk_DEPENDENCIES = $(LIBCFS)
 
 EXTRA_DIST =

@@ -48,6 +48,8 @@
 #include "svcgssd.h"
 #include "err_util.h"
 
+#define GSS_RPC_FILE "/proc/net/rpc/auth.sptlrpc.init/channel"
+
 /*
  * nfs4 in-kernel cache implementation make upcall failed directly
  * if there's no listener detected. so here we should keep the init

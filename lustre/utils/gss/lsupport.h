@@ -68,6 +68,20 @@ enum lgss_mech {
 	LGSS_MECH_SK    = 2,
 };
 
+enum {
+	/* sec part flags */
+	LGSS_ROOT_CRED_ROOT     = 0x01,
+	LGSS_ROOT_CRED_MDT      = 0x02,
+	LGSS_ROOT_CRED_OST      = 0x04,
+	/* service type flags */
+	LGSS_SVC_NULL		= 0x10,
+	LGSS_SVC_AUTH		= 0x20,
+	LGSS_SVC_INTG		= 0x40,
+	LGSS_SVC_PRIV		= 0x80,
+	/* Number of sec part flags */
+	LGSS_ROOT_CRED_NR       = 3,
+};
+
 struct lgssd_upcall_data {
         uint32_t        seq;
         uint32_t        uid;
@@ -77,7 +91,9 @@ struct lgssd_upcall_data {
         char            obd[64];
 };
 
-#define GSSD_INTERFACE_VERSION        (1)
+#define GSSD_INTERFACE_VERSION          GSSD_INTERFACE_VERSION_V2
+#define GSSD_INTERFACE_VERSION_V2       (2)
+#define GSSD_INTERFACE_VERSION_V1       (1)
 
 struct lgssd_ioctl_param {
         int             version;        /* in   */

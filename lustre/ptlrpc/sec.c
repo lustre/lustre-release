@@ -1410,24 +1410,6 @@ void flavor_copy(struct sptlrpc_flavor *dst, struct sptlrpc_flavor *src)
         *dst = *src;
 }
 
-static void sptlrpc_import_sec_adapt_inplace(struct obd_import *imp,
-                                             struct ptlrpc_sec *sec,
-                                             struct sptlrpc_flavor *sf)
-{
-        char    str1[32], str2[32];
-
-        if (sec->ps_flvr.sf_flags != sf->sf_flags)
-                CDEBUG(D_SEC, "changing sec flags: %s -> %s\n",
-                       sptlrpc_secflags2str(sec->ps_flvr.sf_flags,
-                                            str1, sizeof(str1)),
-                       sptlrpc_secflags2str(sf->sf_flags,
-                                            str2, sizeof(str2)));
-
-	spin_lock(&sec->ps_lock);
-	flavor_copy(&sec->ps_flvr, sf);
-	spin_unlock(&sec->ps_lock);
-}
-
 /**
  * To get an appropriate ptlrpc_sec for the \a imp, according to the current
  * configuration. Upon called, imp->imp_sec may or may not be NULL.
@@ -1492,14 +1474,6 @@ int sptlrpc_import_sec_adapt(struct obd_import *imp,
                        obd_uuid2str(&conn->c_remote_uuid),
                        sptlrpc_flavor2name(&sec->ps_flvr, str, sizeof(str)),
                        sptlrpc_flavor2name(&sf, str2, sizeof(str2)));
-
-                if (SPTLRPC_FLVR_POLICY(sf.sf_rpc) ==
-                    SPTLRPC_FLVR_POLICY(sec->ps_flvr.sf_rpc) &&
-                    SPTLRPC_FLVR_MECH(sf.sf_rpc) ==
-                    SPTLRPC_FLVR_MECH(sec->ps_flvr.sf_rpc)) {
-                        sptlrpc_import_sec_adapt_inplace(imp, sec, &sf);
-                        GOTO(out, rc);
-                }
         } else if (SPTLRPC_FLVR_BASE(sf.sf_rpc) !=
                    SPTLRPC_FLVR_BASE(SPTLRPC_FLVR_NULL)) {
                 CDEBUG(D_SEC, "import %s->%s netid %x: select flavor %s\n",

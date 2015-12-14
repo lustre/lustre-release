@@ -10,7 +10,9 @@
 . /etc/init.d/functions
 
 LOCKFILE="/var/lock/subsys/lsvcgssd"
-LSVCGSSDARGS="-k"
+# -k -- Enable kerberos support
+# -s -- Enable shared key support
+LSVCGSSDARGS="-k -s"
 
 # Check for and source configuration file
 [ -f /etc/sysconfig/lsvcgss ] && . /etc/sysconfig/lsvcgss

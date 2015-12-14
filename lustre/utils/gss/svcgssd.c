@@ -59,6 +59,10 @@
 #include "err_util.h"
 #include "lsupport.h"
 
+int null_enabled;
+int krb_enabled;
+int sk_enabled;
+
 void
 closeall(int min)
 {
@@ -187,6 +191,8 @@ usage(FILE *fp, char *progname)
 	fprintf(stderr, "-o      - Service OSS\n");
 	fprintf(stderr, "-g      - Service MGS\n");
 	fprintf(stderr, "-k      - Enable kerberos support\n");
+	fprintf(stderr, "-s      - Enable shared key support\n");
+	fprintf(stderr, "-z      - Enable gssnull support\n");
 
 	exit(1);
 }
@@ -201,7 +207,7 @@ main(int argc, char *argv[])
 	int must_srv_mds = 0, must_srv_oss = 0, must_srv_mgs = 0;
 	char *progname;
 
-	while ((opt = getopt(argc, argv, "fnvmogk")) != -1) {
+	while ((opt = getopt(argc, argv, "fnvmogksz")) != -1) {
 		switch (opt) {
 		case 'f':
 			fg = 1;
@@ -229,6 +235,12 @@ main(int argc, char *argv[])
 			break;
 		case 'h':
 			usage(stdout, argv[0]);
+			break;
+		case 's':
+			sk_enabled = 1;
+			break;
+		case 'z':
+			null_enabled = 1;
 			break;
 		default:
 			usage(stderr, argv[0]);

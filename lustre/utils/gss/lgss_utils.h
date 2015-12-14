@@ -163,14 +163,6 @@ struct lgss_mech_type {
 					      gss_buffer_desc *ctx_token);
 };
 
-enum {
-        LGSS_ROOT_CRED_ROOT     = 0x01,
-        LGSS_ROOT_CRED_MDT      = 0x02,
-        LGSS_ROOT_CRED_OST      = 0x04,
-
-        LGSS_ROOT_CRED_NR       = 3
-};
-
 struct lgss_cred {
 	int			lc_uid;
 	unsigned int		lc_root_flags;

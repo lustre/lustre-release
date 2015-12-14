@@ -60,9 +60,8 @@
 #include "cacheio.h"
 #include "lsupport.h"
 #include "gss_oids.h"
+#include "sk_utils.h"
 #include <lustre/lustre_idl.h>
-
-extern const char *gss_OID_mech_name(gss_OID mech);
 
 #define SVCGSSD_CONTEXT_CHANNEL "/proc/net/rpc/auth.sptlrpc.context/channel"
 #define SVCGSSD_INIT_CHANNEL    "/proc/net/rpc/auth.sptlrpc.init/channel"
@@ -155,8 +154,7 @@ send_response(FILE *f, gss_buffer_desc *in_handle, gss_buffer_desc *in_token,
 	/* XXXARG: */
 	int g;
 
-	printerr(2, "sending null reply\n");
-
+	printerr(2, "sending reply\n");
 	qword_addhex(&bp, &blen, in_handle->value, in_handle->length);
 	qword_addhex(&bp, &blen, in_token->value, in_token->length);
 	qword_addint(&bp, &blen, 3600);	/* an hour should be sufficient */
@@ -166,7 +164,7 @@ send_response(FILE *f, gss_buffer_desc *in_handle, gss_buffer_desc *in_token,
 	qword_addhex(&bp, &blen, out_token->value, out_token->length);
 	qword_addeol(&bp, &blen);
 	if (blen <= 0) {
-		printerr(0, "WARNING: send_respsonse: message too long\n");
+		printerr(0, "WARNING: send_response: message too long\n");
 		return -1;
 	}
 	g = open(SVCGSSD_INIT_CHANNEL, O_WRONLY);
@@ -492,6 +490,221 @@ typedef struct gss_union_ctx_id_t {
 	gss_ctx_id_t    internal_ctx_id;
 } gss_union_ctx_id_desc, *gss_union_ctx_id_t;
 
+int handle_sk(struct svc_nego_data *snd)
+{
+	struct sk_cred *skc = NULL;
+	struct svc_cred cred;
+	gss_buffer_desc bufs[7];
+	gss_buffer_desc remote_pub_key = GSS_C_EMPTY_BUFFER;
+	char *target;
+	uint32_t rc = GSS_S_FAILURE;
+	uint32_t flags;
+	int numbufs = 7;
+	int i;
+
+	printerr(3, "Handling sk request\n");
+
+	/* See lgss_sk_using_cred() for client side token
+	 * bufs returned are in this order:
+	 * bufs[0] - iv
+	 * bufs[1] - p
+	 * bufs[2] - remote_pub_key
+	 * bufs[3] - target
+	 * bufs[4] - nodemap_hash
+	 * bufs[5] - flags
+	 * bufs[6] - hmac */
+	i = sk_decode_netstring(bufs, numbufs, &snd->in_tok);
+	if (i < numbufs) {
+		printerr(0, "Invalid netstring token received from peer\n");
+		rc = GSS_S_DEFECTIVE_TOKEN;
+		goto out_err;
+	}
+
+	/* target must be a null terminated string */
+	i = bufs[3].length - 1;
+	target = bufs[3].value;
+	if (i >= 0 && target[i] != '\0') {
+		printerr(0, "Invalid target from netstring\n");
+		for (i = 0; i < numbufs; i++)
+			free(bufs[i].value);
+		goto out_err;
+	}
+
+	memcpy(&flags, bufs[5].value, sizeof(flags));
+	skc = sk_create_cred(target, snd->nm_name, be32_to_cpu(flags));
+	if (!skc) {
+		printerr(0, "Failed to create sk credentials\n");
+		for (i = 0; i < numbufs; i++)
+			free(bufs[i].value);
+		goto out_err;
+	}
+
+	/* Take control of all the allocated buffers from decoding */
+	skc->sc_kctx.skc_iv = bufs[0];
+	skc->sc_p = bufs[1];
+	remote_pub_key = bufs[2];
+	skc->sc_nodemap_hash = bufs[4];
+	skc->sc_hmac = bufs[6];
+
+	/* Verify that the peer has used a key size greater to or equal
+	 * the size specified by the key file */
+	if (skc->sc_flags & LGSS_SVC_PRIV &&
+	    skc->sc_p.length < skc->sc_session_keylen) {
+		printerr(0, "Peer DH parameters do not meet the size required "
+			 "by keyfile\n");
+		goto out_err;
+	}
+
+	/* Verify HMAC from peer.  Ideally this would happen before anything
+	 * else but we don't have enough information to lookup key without the
+	 * token (fsname and cluster_hash) so it's done shortly after. */
+	rc = sk_verify_hmac(skc, bufs, numbufs - 1, EVP_sha256(),
+			    &skc->sc_hmac);
+	free(bufs[3].value);
+	free(bufs[5].value);
+	if (rc != GSS_S_COMPLETE) {
+		printerr(0, "HMAC verification error: 0x%x from peer %s\n",
+			 rc, libcfs_nid2str((lnet_nid_t) snd->nid));
+		goto out_err;
+	}
+
+	/* Check that the cluster hash matches the hash of nodemap name */
+	rc = sk_verify_hash(snd->nm_name, EVP_sha256(), &skc->sc_nodemap_hash);
+	if (rc != GSS_S_COMPLETE) {
+		printerr(0, "Cluster hash failed validation: 0x%x\n", rc);
+		goto out_err;
+	}
+
+	rc = sk_gen_params(skc, false);
+	if (rc != GSS_S_COMPLETE) {
+		printerr(0, "Failed to generate DH params for responder\n");
+		goto out_err;
+	}
+	if (sk_compute_key(skc, &remote_pub_key)) {
+		printerr(0, "Failed to compute session key from DH params\n");
+		goto out_err;
+	}
+	if (sk_kdf(skc, snd->nid, &snd->in_tok)) {
+		printerr(0, "Failed to calulate derviced session key\n");
+		goto out_err;
+	}
+	if (sk_serialize_kctx(skc, &snd->ctx_token)) {
+		printerr(0, "Failed to serialize context for kernel\n");
+		goto out_err;
+	}
+
+	/* Server reply only contains the servers public key and HMAC */
+	bufs[0] = skc->sc_pub_key;
+	if (sk_sign_bufs(&skc->sc_kctx.skc_shared_key, bufs, 1, EVP_sha256(),
+			 &skc->sc_hmac)) {
+		printerr(0, "Failed to sign parameters\n");
+		goto out_err;
+	}
+	bufs[1] = skc->sc_hmac;
+	if (sk_encode_netstring(bufs, 2, &snd->out_tok)) {
+		printerr(0, "Failed to encode netstring for token\n");
+		goto out_err;
+	}
+
+	printerr(2, "Created netstring of %zd bytes\n", snd->out_tok.length);
+
+	snd->out_handle.length = sizeof(snd->handle_seq);
+	memcpy(snd->out_handle.value, &snd->handle_seq,
+	       sizeof(snd->handle_seq));
+	snd->maj_stat = GSS_S_COMPLETE;
+
+	/* fix credentials */
+	memset(&cred, 0, sizeof(cred));
+	cred.cr_mapped_uid = -1;
+
+	if (skc->sc_flags & LGSS_ROOT_CRED_ROOT)
+		cred.cr_usr_root = 1;
+	if (skc->sc_flags & LGSS_ROOT_CRED_MDT)
+		cred.cr_usr_mds = 1;
+	if (skc->sc_flags & LGSS_ROOT_CRED_OST)
+		cred.cr_usr_oss = 1;
+
+	do_svc_downcall(&snd->out_handle, &cred, snd->mech, &snd->ctx_token);
+
+	/* cleanup ctx_token, out_tok is cleaned up in handle_channel_req */
+	free(remote_pub_key.value);
+	free(snd->ctx_token.value);
+	snd->ctx_token.length = 0;
+
+	printerr(3, "sk returning success\n");
+	return 0;
+
+out_err:
+	snd->maj_stat = rc;
+	if (remote_pub_key.value)
+		free(remote_pub_key.value);
+	if (snd->ctx_token.value)
+		free(snd->ctx_token.value);
+	snd->ctx_token.length = 0;
+
+	if (skc)
+		sk_free_cred(skc);
+	printerr(3, "sk returning failure\n");
+	return -1;
+}
+
+int handle_null(struct svc_nego_data *snd)
+{
+	struct svc_cred cred;
+	uint64_t tmp;
+	uint32_t flags;
+
+	/* null just uses the same token as the return token and for
+	 * for sending to the kernel.  It is a single uint64_t. */
+	if (snd->in_tok.length != sizeof(uint64_t)) {
+		snd->maj_stat = GSS_S_DEFECTIVE_TOKEN;
+		printerr(0, "Invalid token size (%zd) received\n",
+			 snd->in_tok.length);
+		return -1;
+	}
+	snd->out_tok.length = snd->in_tok.length;
+	snd->out_tok.value = malloc(snd->out_tok.length);
+	if (!snd->out_tok.value) {
+		snd->maj_stat = GSS_S_FAILURE;
+		printerr(0, "Failed to allocate out_tok\n");
+		return -1;
+	}
+
+	snd->ctx_token.length = snd->in_tok.length;
+	snd->ctx_token.value = malloc(snd->ctx_token.length);
+	if (!snd->ctx_token.value) {
+		snd->maj_stat = GSS_S_FAILURE;
+		printerr(0, "Failed to allocate ctx_token\n");
+		return -1;
+	}
+
+	snd->out_handle.length = sizeof(snd->handle_seq);
+	memcpy(snd->out_handle.value, &snd->handle_seq,
+	       sizeof(snd->handle_seq));
+	snd->maj_stat = GSS_S_COMPLETE;
+
+	memcpy(&tmp, snd->in_tok.value, sizeof(tmp));
+	tmp = be64_to_cpu(tmp);
+	flags = (uint32_t)(tmp & 0x00000000ffffffff);
+	memset(&cred, 0, sizeof(cred));
+	cred.cr_mapped_uid = -1;
+
+	if (flags & LGSS_ROOT_CRED_ROOT)
+		cred.cr_usr_root = 1;
+	if (flags & LGSS_ROOT_CRED_MDT)
+		cred.cr_usr_mds = 1;
+	if (flags & LGSS_ROOT_CRED_OST)
+		cred.cr_usr_oss = 1;
+
+	do_svc_downcall(&snd->out_handle, &cred, snd->mech, &snd->ctx_token);
+
+	/* cleanup ctx_token, out_tok is cleaned up in handle_channel_req */
+	free(snd->ctx_token.value);
+	snd->ctx_token.length = 0;
+
+	return 0;
+}
+
 static int handle_krb(struct svc_nego_data *snd)
 {
 	u_int32_t               ret_flags;
@@ -594,7 +807,7 @@ int handle_channel_request(FILE *f)
 
 	printerr(2, "handling request\n");
 	if (readline(fileno(f), &lbuf, &lbuflen) != 1) {
-		printerr(0, "WARNING: handle_req: failed reading request\n");
+		printerr(0, "WARNING: failed reading request\n");
 		return -1;
 	}
 
@@ -616,6 +829,22 @@ int handle_channel_request(FILE *f)
 		}
 		snd.mech = &krb5oid;
 		break;
+	case LGSS_MECH_NULL:
+		if (!null_enabled) {
+			printerr(1, "WARNING: Request for gssnull but service "
+				 "support not enabled\n");
+			goto ignore;
+		}
+		snd.mech = &nulloid;
+		break;
+	case LGSS_MECH_SK:
+		if (!sk_enabled) {
+			printerr(1, "WARNING: Request for sk but service "
+				 "support not enabled\n");
+			goto ignore;
+		}
+		snd.mech = &skoid;
+		break;
 	default:
 		printerr(0, "WARNING: invalid mechanism recevied: %d\n",
 			 lustre_mech);
@@ -631,7 +860,7 @@ int handle_channel_request(FILE *f)
 
 	get_len = qword_get(&cp, snd.in_handle.value, sizeof(in_handle_buf));
 	if (get_len < 0) {
-		printerr(0, "WARNING: handle_req: failed parsing request\n");
+		printerr(0, "WARNING: failed parsing request\n");
 		goto out_err;
 	}
 	snd.in_handle.length = (size_t)get_len;
@@ -641,7 +870,7 @@ int handle_channel_request(FILE *f)
 
 	get_len = qword_get(&cp, snd.in_tok.value, sizeof(in_tok_buf));
 	if (get_len < 0) {
-		printerr(0, "WARNING: handle_req: failed parsing request\n");
+		printerr(0, "WARNING: failed parsing request\n");
 		goto out_err;
 	}
 	snd.in_tok.length = (size_t)get_len;
@@ -651,9 +880,8 @@ int handle_channel_request(FILE *f)
 
 	if (snd.in_handle.length != 0) { /* CONTINUE_INIT case */
 		if (snd.in_handle.length != sizeof(snd.ctx)) {
-			printerr(0, "WARNING: handle_req: "
-				    "input handle has unexpected length %zu\n",
-				    snd.in_handle.length);
+			printerr(0, "WARNING: input handle has unexpected "
+				 "length %zu\n", snd.in_handle.length);
 			goto out_err;
 		}
 		/* in_handle is the context id stored in the out_handle
@@ -663,6 +891,10 @@ int handle_channel_request(FILE *f)
 
 	if (lustre_mech == LGSS_MECH_KRB5)
 		rc = handle_krb(&snd);
+	else if (lustre_mech == LGSS_MECH_SK)
+		rc = handle_sk(&snd);
+	else if (lustre_mech == LGSS_MECH_NULL)
+		rc = handle_null(&snd);
 	else
 		printerr(0, "WARNING: Received or request for"
 			 "subflavor that is not enabled: %d\n", lustre_mech);
@@ -686,4 +918,3 @@ out_err:
 ignore:
 	return 0;
 }
-

@@ -1424,14 +1424,18 @@ struct ladvise_hdr {
 
 /* Shared key */
 enum sk_crypt_alg {
-	SK_CRYPT_AES_CTR        = 0,
-	SK_CRYPT_MAX            = 1,
+	SK_CRYPT_INVALID	= -1,
+	SK_CRYPT_EMPTY		= 0,
+	SK_CRYPT_AES256_CTR	= 1,
+	SK_CRYPT_MAX		= 2,
 };
 
 enum sk_hmac_alg {
-	SK_HMAC_SHA256  = 0,
-	SK_HMAC_SHA512  = 1,
-	SK_HMAC_MAX     = 2,
+	SK_HMAC_INVALID	= -1,
+	SK_HMAC_EMPTY	= 0,
+	SK_HMAC_SHA256	= 1,
+	SK_HMAC_SHA512	= 2,
+	SK_HMAC_MAX	= 3,
 };
 
 struct sk_crypt_type {

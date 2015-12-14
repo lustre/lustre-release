@@ -41,9 +41,13 @@ int handle_channel_request(FILE *f);
 void svcgssd_run(void);
 int gssd_prepare_creds(int must_srv_mgs, int must_srv_mds, int must_srv_oss);
 gss_cred_id_t gssd_select_svc_cred(int lustre_svc);
+const char *gss_OID_mech_name(gss_OID mech);
 
 extern char *mds_local_realm;
 extern char *oss_local_realm;
+extern int null_enabled;
+extern int krb_enabled;
+extern int sk_enabled;
 
 #define GSSD_SERVICE_NAME	"lustre"
 

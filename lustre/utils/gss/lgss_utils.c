@@ -116,7 +116,7 @@ static struct lgss_mutex_s {
         key_t           sem_key;
         int             sem_id;
 } lgss_mutexes[LGSS_MUTEX_MAX] = {
-        [LGSS_MUTEX_KRB5]       = { "keyring",  0x4292d473, 0 },
+	[LGSS_MUTEX_KRB5] = { "keyring", 0x4292d473, 0 },
 };
 
 static int lgss_mutex_get(struct lgss_mutex_s *mutex)
@@ -338,9 +338,13 @@ void __logmsg_gss(loglevel_t level, const char *func, const gss_OID mech,
 
 struct lgss_mech_type *lgss_name2mech(const char *mech_name)
 {
-        if (strcmp(mech_name, "krb5") == 0)
-                return &lgss_mech_krb5;
-        return NULL;
+	if (strcmp(mech_name, "krb5") == 0)
+		return &lgss_mech_krb5;
+	if (strcmp(mech_name, "gssnull") == 0)
+		return &lgss_mech_null;
+	if (strcmp(mech_name, "sk") == 0)
+		return &lgss_mech_sk;
+	return NULL;
 }
 
 int lgss_mech_initialize(struct lgss_mech_type *mech)

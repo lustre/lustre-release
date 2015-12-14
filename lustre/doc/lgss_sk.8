@@ -1,0 +1,110 @@
+.TH lgss_sk 8 "2016 Jan 12" Lustre "configuration utilities"
+.SH NAME
+lgss_sk \- Lustre GSS Shared-Key tool
+.SH SYNOPSIS
+.B "lgss_sk [OPTIONS] -r <keyfile> | -w <keyfile> | -m <keyfile> | -l <keyfile>"
+.br
+.SH DESCRIPTION
+.B lgss_sk
+can be used to read, write, modify, and load the contents of a shared-key keyfile.
+.SH OPTIONS
+.B lgss_sk
+accepts the following options:
+.TP
+.I "-l, --load <keyfile>"
+Load key from file into user's session keyring.
+.TP
+.I "-m, --modify <keyfile>"
+Modify a file's key attributes.
+.TP
+.I "-r, --read <keyfile>"
+Show file's key attributes.
+.TP
+.I "-w, --write <keyfile>"
+Generate key file.
+.HP
+Load Options:
+.TP
+.I "-t, --type <type>"
+Key type (mgs, server, client).
+.HP
+Modify/Write Options:
+.TP
+.I "-c, --crypt <num>"
+Cipher for encryption (Default: AES-256-CTR)
+.RS
+AES-256-CTR
+.RE
+.TP
+.I "-h, --hmac <num>"
+Hash alg for HMAC (Default: SHA256)
+.RS
+SHA256
+.br
+SHA512
+.RE
+.TP
+.I "-e, --expire <num>"
+Seconds before contexts from key expire (Default: 604800 seconds).
+.TP
+.I "-f, --fsname <name>"
+File system name for key.
+.TP
+.I "-g, --mgsnids <nids>"
+Comma seperated list of MGS NIDs.  Only required when mgssec is used (Default: "").
+.TP
+.I "-n, --nodemap <name>"
+Nodemap name for key (Default: "default").
+.TP
+.I "-s, --session <len>"
+Session key length in bits (Default: 1024).
+.TP
+.I "-k, --shared <len>"
+Shared key length in bits (Default: 256).
+.TP
+.I "-d, --data <file>"
+Shared key entopy data source (default: /dev/random).  It is possible to
+use /dev/urandom for testing, but this may provide less security in some
+cases.  You may need to press keys on the keyboard or move the mouse
+(if directly attached to the system) or cause disk IO (if system is remote),
+in order to generate entropy for the key if there is not a hardware random
+number generator on the system.
+.HP
+Other Options:
+.TP
+.I "-v, --verbose"
+Increase verbosity for errors.
+.SH EXAMPLES
+Write a key for file system 'tank' for a client in the biology nodemap:
+.IP
+.nf
+[root@server ~]# lgss_sk -f tank -n biology -w tank.biology.key
+.fi
+.LP
+Add MGS NIDs to existing key:
+.IP
+.nf
+[root@server ~]# lgss_sk -g 192.168.1.101@tcp,10.10.0.101@o2ib \\
+-m tank.biology.key
+.fi
+.LP
+Show key attributes:
+.IP
+.nf
+[root@server ~]# lgss_sk -r tank.biology.key
+Version:        1
+HMAC alg:       SHA256
+Crypt alg:      AES-256-CTR
+Ctx Expiration: 2147483647 seconds
+Shared keylen:  256 bits
+Session keylen: 1024 bits
+File system:    tank
+MGS NIDs:       192.168.1.101@tcp 10.10.0.101@o2ib
+Nodemap name:   biology
+Shared key:
+  0000: e486 65a8 b0d6 a8bc 17c4 8316 7f5a 701d  ..e..........Zp.
+  0010: 5d6a 7b42 ed35 49cf 5ae9 0638 b12d e3d6  ]j{B.5I.Z..8.-..
+.fi
+.br
+.SH "SEE ALSO"
+.BR nids (5)
