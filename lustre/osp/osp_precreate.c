@@ -1084,6 +1084,8 @@ static int osp_precreate_thread(void *_arg)
 	struct osp_device	*d = _arg;
 	struct ptlrpc_thread	*thread = &d->opd_pre_thread;
 	struct l_wait_info	 lwi = { 0 };
+	struct l_wait_info	 lwi2 = LWI_TIMEOUT(cfs_time_seconds(5),
+						    back_to_sleep, NULL);
 	struct lu_env		 env;
 	int			 rc;
 
@@ -1137,7 +1139,11 @@ static int osp_precreate_thread(void *_arg)
 			continue;
 		}
 
-		osp_statfs_update(d);
+		if (osp_statfs_update(d)) {
+			l_wait_event(d->opd_pre_waitq,
+				     !osp_precreate_running(d), &lwi2);
+			continue;
+		}
 
 		/*
 		 * Clean up orphans or recreate missing objects.
@@ -1164,7 +1170,8 @@ static int osp_precreate_thread(void *_arg)
 				break;
 
 			if (osp_statfs_need_update(d))
-				osp_statfs_update(d);
+				if (osp_statfs_update(d))
+					break;
 
 			/* To avoid handling different seq in precreate/orphan
 			 * cleanup, it will hold precreate until current seq is
