@@ -19,6 +19,11 @@ if UTILS
 
 if GSS
 SUBDIRS = gss
+GSSSRC = gss/sk_utils.c gss/sk_utils.h gss/err_util.c gss/err_util.h
+GSSLIB = -lcrypto -lssl -lkeyutils -lm
+else
+GSSSRC =
+GSSLIB =
 endif
 
 # mount only finds helpers in /sbin
@@ -137,19 +142,19 @@ mount_osd_ldiskfs_la_LDFLAGS  := -shared -export-dynamic -module -avoid-version
 mount_osd_ldiskfs_la_LIBADD   := $(SELINUX)
 endif # LDISKFS_ENABLED
 
-mount_lustre_SOURCES = mount_lustre.c mount_utils.c mount_utils.h
+mount_lustre_SOURCES = mount_lustre.c mount_utils.c mount_utils.h $(GSSSRC)
 mount_lustre_CPPFLAGS := ${MNTMODCFLAGS}
 mount_lustre_LDFLAGS  := ${MNTMODLDFLAGS}
-mount_lustre_LDADD    := $(LIBPTLCTL) $(SELINUX) $(LDLIBMOUNT)
+mount_lustre_LDADD    := $(LIBPTLCTL) $(SELINUX) $(LDLIBMOUNT) $(GSSLIB)
 mount_lustre_DEPENDENCIES := $(LIBPTLCTL)
 
-mkfs_lustre_SOURCES = mkfs_lustre.c mount_utils.c mount_utils.h
+mkfs_lustre_SOURCES = mkfs_lustre.c mount_utils.c mount_utils.h $(GSSSRC)
 mkfs_lustre_CPPFLAGS := -UTUNEFS ${MNTMODCFLAGS}
 mkfs_lustre_LDFLAGS  := ${MNTMODLDFLAGS}
-mkfs_lustre_LDADD    := $(LIBPTLCTL) $(LDLIBMOUNT)
+mkfs_lustre_LDADD    := $(LIBPTLCTL) $(LDLIBMOUNT) $(GSSLIB)
 mkfs_lustre_DEPENDENCIES := $(LIBPTLCTL)
 
-tunefs_lustre_SOURCES = mkfs_lustre.c mount_utils.c mount_utils.h
+tunefs_lustre_SOURCES = mkfs_lustre.c mount_utils.c mount_utils.h $(GSSSRC)
 tunefs_lustre_CPPFLAGS := -DTUNEFS ${MNTMODCFLAGS}
 tunefs_lustre_LDFLAGS  := ${MNTMODLDFLAGS}
 tunefs_lustre_LDADD    := $(mkfs_lustre_LDADD)

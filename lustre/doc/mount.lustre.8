@@ -105,6 +105,13 @@ Enable FID to path translation by regular users.
 .BI nouser_fid2path
 Disable FID to path translation by regular users.  Root and process with
 CAP_DAC_READ_SEARCH can still perform FID to path translation.
+.TP
+.BI skpath= file|directory
+Path to a file or directory with the keyfile(s) to load for this mount command.
+Keys are inserted into the KEY_SPEC_SESSION_KEYRING keyring with a description
+containing "lustre:" and a suffix which depends on whether the context of the
+mount command is for an MGS, MDT/OST, or client.
+This option is only available when built with --enable-gss.
 .PP
 In addition to the standard mount options and backing disk type
 (e.g. ext3) options listed in

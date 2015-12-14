@@ -100,6 +100,9 @@ struct mount_opts {
 	char	*mo_usource;		/* user-specified mount device */
 	char	*mo_source;		/* our mount device name */
 	char	 mo_target[PATH_MAX];	/* mount directory */
+#ifdef HAVE_GSS
+	char	 mo_skpath[PATH_MAX];	/* shared key file/directory */
+#endif
 	int	 mo_nomtab;
 	int	 mo_fake;
 	int	 mo_force;
@@ -119,6 +122,10 @@ int get_mountdata(char *, struct lustre_disk_data *);
 #define IS_OST(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_OST)
 #undef IS_MGS
 #define IS_MGS(data)  ((data)->ldd_flags & LDD_F_SV_TYPE_MGS)
+#undef IS_SERVER
+#define IS_SERVER(data) ((data)->ldd_flags & (LDD_F_SV_TYPE_MGS | \
+			  LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST))
+
 
 /* mkfs/mount helper functions */
 void fatal(void);
@@ -176,5 +183,5 @@ struct module_backfs_ops {
 
 struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type);
 void unload_backfs_ops(struct module_backfs_ops *ops);
-
+int load_shared_keys(struct mount_opts *mop);
 #endif

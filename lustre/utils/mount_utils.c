@@ -52,7 +52,14 @@
 #include <sys/stat.h>
 #include <sys/utsname.h>
 #include <linux/loop.h>
+#include <sys/types.h>
+#include <dirent.h>
 #include <dlfcn.h>
+
+#ifdef HAVE_GSS
+#include <keyutils.h>
+#include <lustre/utils/gss/sk_utils.h>
+#endif
 
 #include "mount_utils.h"
 
@@ -873,3 +880,89 @@ int file_create(char *path, __u64 size)
 
 	return 0;
 }
+
+#ifdef HAVE_GSS
+int load_shared_keys(struct mount_opts *mop)
+{
+	DIR *dir;
+	struct dirent *dentry;
+	struct stat sbuf;
+	char fullpath[PATH_MAX];
+	char *path = mop->mo_skpath;
+	int type = 0;
+	int rc;
+
+	if (IS_SERVER(&mop->mo_ldd)) {
+		if (IS_MGS(&mop->mo_ldd))
+			type |= SK_TYPE_MGS;
+		if (IS_MDT(&mop->mo_ldd) || IS_OST(&mop->mo_ldd))
+			type |= SK_TYPE_SERVER | SK_TYPE_CLIENT;
+	} else {
+		type |= SK_TYPE_CLIENT;
+	}
+
+	/* init logging */
+	sk_init_logging(NULL, 1, 1);
+
+	rc = stat(path, &sbuf);
+	if (rc < 0) {
+		fprintf(stderr, "stat() failed for key %s: %s\n", path,
+			strerror(errno));
+		return -errno;
+	}
+
+	/* Load individual keys or a directory of them */
+	if (S_ISREG(sbuf.st_mode)) {
+		return sk_load_keyfile(path, type);
+	} else if (!S_ISDIR(sbuf.st_mode)) {
+		fprintf(stderr, "Invalid shared key path: %s\n", path);
+		return -ENOKEY;
+	}
+
+	dir = opendir(path);
+	if (dir == NULL) {
+		fprintf(stderr, "Unable to open shared key directory: %s\n",
+			path);
+		return -ENOENT;
+	}
+
+	/* Loop through the files in the directory attempting to load them.
+	 * Any issue with loading the keyfile is treated as an error although
+	 * the loop continues until all files have been attempted.  This will
+	 * allow all errors be reported at once rather then requiring
+	 * incremental corrections to fix each one and try again. */
+	while ((dentry = readdir(dir)) != NULL) {
+		if (strcmp(".", dentry->d_name) == 0 ||
+		    strcmp("..", dentry->d_name) == 0)
+			continue;
+
+		rc = snprintf(fullpath, PATH_MAX, "%s/%s", path,
+			      dentry->d_name);
+		if (rc >= PATH_MAX) {
+			fprintf(stderr, "Path too long for %s/%s\n",
+				path, dentry->d_name);
+			rc = -ENAMETOOLONG;
+			continue;
+		}
+
+		rc = stat(fullpath, &sbuf);
+		if (rc < 0) {
+			fprintf(stderr, "Unable to stat %s: %s\n", fullpath,
+				strerror(errno));
+			rc = -errno;
+			continue;
+		}
+
+		if (!S_ISREG(sbuf.st_mode))
+			continue;
+
+		rc = sk_load_keyfile(fullpath, type);
+		if (rc) {
+			fprintf(stderr, "Failed to load key %s\n", fullpath);
+		}
+	}
+	closedir(dir);
+
+	return rc;
+}
+#endif
