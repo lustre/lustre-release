@@ -182,7 +182,7 @@ static void rsi_free(struct rsi *rsi)
         rawobj_free(&rsi->out_token);
 }
 
-/* See handle_req() userspace for where the upcall data is read */
+/* See handle_channel_req() userspace for where the upcall data is read */
 static void rsi_request(struct cache_detail *cd,
                         struct cache_head *h,
                         char **bpp, int *blen)
@@ -1017,8 +1017,11 @@ cache_check:
         if (!rsci) {
                 CERROR("authentication failed\n");
 
-                if (!gss_pack_err_notify(req, GSS_S_FAILURE, 0))
-                        rc = SECSVC_COMPLETE;
+		/* gss mechanism returned major and minor code so we return
+		 * those in error message */
+		if (!gss_pack_err_notify(req, rsip->major_status,
+					 rsip->minor_status))
+			rc = SECSVC_COMPLETE;
 
                 GOTO(out, rc);
         } else {
