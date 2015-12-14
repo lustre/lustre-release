@@ -851,7 +851,7 @@ void sptlrpc_req_set_flavor(struct ptlrpc_request *req, int opcode)
         LASSERT(req->rq_cli_ctx->cc_sec);
         LASSERT(req->rq_bulk_read == 0 || req->rq_bulk_write == 0);
 
-        /* special security flags accoding to opcode */
+	/* special security flags according to opcode */
         switch (opcode) {
         case OST_READ:
         case MDS_READPAGE:

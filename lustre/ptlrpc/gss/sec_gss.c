@@ -386,23 +386,25 @@ void gss_cli_ctx_uptodate(struct gss_cli_ctx *gctx)
          * destroying server side context when it be destroyed. */
 	set_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags);
 
-        if (sec_is_reverse(ctx->cc_sec)) {
-                CWARN("server installed reverse ctx %p idx "LPX64", "
-                      "expiry %lu(%+lds)\n", ctx,
-                      gss_handle_to_u64(&gctx->gc_handle),
-                      ctx->cc_expire, ctx->cc_expire - cfs_time_current_sec());
+	if (sec_is_reverse(ctx->cc_sec)) {
+		CWARN("server installed reverse ctx %p idx "LPX64", "
+		      "expiry %lu(%+lds)\n", ctx,
+		      gss_handle_to_u64(&gctx->gc_handle),
+		      ctx->cc_expire,
+		      cfs_time_sub(ctx->cc_expire, cfs_time_current_sec()));
         } else {
-                CWARN("client refreshed ctx %p idx "LPX64" (%u->%s), "
-                      "expiry %lu(%+lds)\n", ctx,
-                      gss_handle_to_u64(&gctx->gc_handle),
-                      ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
-                      ctx->cc_expire, ctx->cc_expire - cfs_time_current_sec());
+		CWARN("client refreshed ctx %p idx "LPX64" (%u->%s), "
+		      "expiry %lu(%+lds)\n", ctx,
+		      gss_handle_to_u64(&gctx->gc_handle),
+		      ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
+		      ctx->cc_expire,
+		      cfs_time_sub(ctx->cc_expire, cfs_time_current_sec()));
 
-                /* install reverse svc ctx for root context */
-                if (ctx->cc_vcred.vc_uid == 0)
-                        gss_sec_install_rctx(ctx->cc_sec->ps_import,
-                                             ctx->cc_sec, ctx);
-        }
+		/* install reverse svc ctx for root context */
+		if (ctx->cc_vcred.vc_uid == 0)
+			gss_sec_install_rctx(ctx->cc_sec->ps_import,
+					     ctx->cc_sec, ctx);
+	}
 
         sptlrpc_cli_ctx_wakeup(ctx);
 }
