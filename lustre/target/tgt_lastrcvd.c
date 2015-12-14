@@ -1729,8 +1729,15 @@ int tgt_txn_start_cb(const struct lu_env *env, struct thandle *th,
 		return rc;
 
 	if (tgt_is_multimodrpcs_client(tsi->tsi_exp)) {
-		tti->tti_off = atomic_read(&tgt->lut_num_clients) * 8
-				* sizeof(struct lsd_reply_data);
+		/*
+		 * Use maximum possible file offset for declaration to ensure
+		 * ZFS will reserve enough credits for a write anywhere in this
+		 * file, since we don't know where in the file the write will be
+		 * because a replay slot has not been assigned.  This should be
+		 * replaced by dmu_tx_hold_append() when available.
+		 */
+		tti->tti_off = atomic_read(&tgt->lut_num_clients) * 8 *
+				sizeof(struct lsd_reply_data);
 		tti->tti_buf.lb_buf = NULL;
 		tti->tti_buf.lb_len = sizeof(struct lsd_reply_data);
 		dto = dt_object_locate(tgt->lut_reply_data, th->th_dev);
