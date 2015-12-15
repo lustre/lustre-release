@@ -2828,7 +2828,6 @@ test_41a() { #bug 14134
 	stop ost1 -f || error "unable to stop OST1"
 	stop_mds || error "Unable to stop MDS"
 	stop_mds || error "Unable to stop MDS on second try"
-	unload_modules_conf || error "unload_modules_conf failed"
 }
 run_test 41a "mount mds with --nosvc and --nomgs"
 
@@ -2980,7 +2979,6 @@ test_42() { #bug 14693
 
 	do_facet mgs $LCTL conf_param $FSNAME.sys.some_wrong_param=20
 	cleanup || error "stopping $FSNAME failed with invalid sys param"
-	load_modules
 	setup
 	check_mount || error "client was not mounted with invalid sys param"
 	cleanup || error "stopping $FSNAME failed with invalid sys param"
@@ -3660,7 +3658,6 @@ test_50i() {
 	[ "$MDSCOUNT" -lt "2" ] && skip_env "$MDSCOUNT < 2, skipping" && return
 
 	[ $(facet_fstype ost1) == zfs ] && import_zpool ost1
-	load_modules
 	do_facet mds2 "$TUNEFS --param mdc.active=0 $(mdsdevname 2)" ||
 		error "tunefs MDT2 failed"
 	start_mds  || error "Unable to start MDT"
@@ -3959,7 +3956,6 @@ thread_sanity() {
 	local newvalue="${opts}=$(expr $basethr \* $ncpts)"
 	setmodopts -a $modname "$newvalue" oldvalue
 
-	load_modules
 	setup
 	check_mount || return 41
 
@@ -3975,7 +3971,6 @@ thread_sanity() {
 		return $?
 	cleanup
 
-	load_modules
 	setup
 }
 
@@ -4956,7 +4951,6 @@ test_72() { #LU-2634
 run_test 72 "test fast symlink with extents flag enabled"
 
 test_73() { #LU-3006
-	load_modules
 	[ $(facet_fstype ost1) == zfs ] && import_zpool ost1
 	do_facet ost1 "$TUNEFS --failnode=1.2.3.4@$NETTYPE $(ostdevname 1)" ||
 		error "1st tunefs failed"
@@ -5706,7 +5700,6 @@ test_84() {
 	local correct_clients
 	local wrap_up=5
 
-	load_modules
 	echo "start mds service on $(facet_active_host $facet)"
 	start_mds \
 	"-o recovery_time_hard=$time_min,recovery_time_soft=$time_min" $@ ||
@@ -6216,8 +6209,6 @@ test_91() {
 	local uuid
 	local nid
 	local found
-
-	load_modules
 
 	[[ $(lustre_version_code ost1) -ge $(version_code 2.7.63) ]] ||
 		{ skip "Need OST version at least 2.7.63" && return 0; }

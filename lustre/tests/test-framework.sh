@@ -1224,6 +1224,8 @@ mount_facet() {
 	local mntpt=$(facet_mntpt $facet)
 	local opts="${!opt} $@"
 
+	module_loaded lustre || load_modules
+
 	if [ $(facet_fstype $facet) == ldiskfs ] &&
 	   ! do_facet $facet test -b ${!dev}; then
 		opts=$(csa_add "$opts" -o loop)
@@ -1287,19 +1289,19 @@ mount_facet() {
 
 # start facet device options
 start() {
-    local facet=$1
-    shift
-    local device=$1
-    shift
-    eval export ${facet}_dev=${device}
-    eval export ${facet}_opt=\"$@\"
+	local facet=$1
+	shift
+	local device=$1
+	shift
+	eval export ${facet}_dev=${device}
+	eval export ${facet}_opt=\"$@\"
 
-    local varname=${facet}failover_dev
-    if [ -n "${!varname}" ] ; then
-        eval export ${facet}failover_dev=${!varname}
-    else
-        eval export ${facet}failover_dev=$device
-    fi
+	local varname=${facet}failover_dev
+	if [ -n "${!varname}" ] ; then
+		eval export ${facet}failover_dev=${!varname}
+	else
+		eval export ${facet}failover_dev=$device
+	fi
 
 	local mntpt=$(facet_mntpt $facet)
 	do_facet ${facet} mkdir -p $mntpt
