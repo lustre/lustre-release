@@ -1445,7 +1445,9 @@ out_rmdir:
 			st.st_atime	= body->mbo_atime;
 			st.st_mtime	= body->mbo_mtime;
 			st.st_ctime	= body->mbo_ctime;
-			st.st_ino	= inode->i_ino;
+			st.st_ino	= cl_fid_build_ino(&body->mbo_fid1,
+						sbi->ll_flags &
+						LL_SBI_32BIT_API);
 
 			lmdp = (struct lov_user_mds_data __user *)arg;
 			if (copy_to_user(&lmdp->lmd_st, &st, sizeof(st)))
