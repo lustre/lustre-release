@@ -4744,6 +4744,7 @@ static struct cfg_interop_param mdt_interop_param[] = {
 	{ "mdt.group_upcall",	NULL },
 	{ "mdt.quota_type",	NULL },
 	{ "mdd.quota_type",	NULL },
+	{ "mdt.som",		NULL },
 	{ "mdt.rootsquash",	"mdt.root_squash" },
 	{ "mdt.nosquash_nid",	"mdt.nosquash_nids" },
 	{ NULL }
