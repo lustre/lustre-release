@@ -752,17 +752,7 @@ static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
 	       LPU64" files, "LPU64" free files\n", d->opd_obd->obd_name,
 	       sfs->os_blocks, sfs->os_bfree, sfs->os_bavail,
 	       sfs->os_files, sfs->os_ffree);
-
-	/* ENOSPC could be for two reasons,
-	 * 1) not enough inodes 2) not enough blocks
-	 * for 1) lod should use preallocated objects
-	 * and for 2) shouldn`t. So, here for ENOSPC
-	 * different values is returned to spend preallocated.
-	 */
-	if (d->opd_pre_status == -ENOSPC && sfs->os_ffree < 32)
-		RETURN(0);
-
-	RETURN(d->opd_pre_status);
+	RETURN(0);
 }
 
 static int osp_sync_timeout(void *data)
