@@ -681,14 +681,17 @@ int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,
 {
 	int				 rc;
 
+	LASSERT(mdd_obj != NULL);
+	LASSERT(handle != NULL);
+
 	/* Not recording */
 	if (!(mdd->mdd_cl.mc_flags & CLM_ON))
 		RETURN(0);
 	if ((mdd->mdd_cl.mc_mask & (1 << type)) == 0)
 		RETURN(0);
 
-	LASSERT(mdd_obj != NULL);
-	LASSERT(handle != NULL);
+	if (mdd_is_volatile_obj(mdd_obj))
+		RETURN(0);
 
 	if ((type >= CL_MTIME) && (type <= CL_ATIME) &&
 	    cfs_time_before_64(mdd->mdd_cl.mc_starttime, mdd_obj->mod_cltime)) {

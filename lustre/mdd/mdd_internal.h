@@ -117,6 +117,7 @@ enum mod_flags {
 	/* The dir object has been unlinked */
 	DEAD_OBJ   = 1 << 0,
 	ORPHAN_OBJ = 1 << 1,
+	VOLATILE_OBJ = 1 << 4,
 };
 
 struct mdd_object {
@@ -424,6 +425,11 @@ static inline umode_t mdd_object_type(const struct mdd_object *obj)
 static inline int mdd_is_dead_obj(struct mdd_object *obj)
 {
         return obj && obj->mod_flags & DEAD_OBJ;
+}
+
+static inline bool mdd_is_volatile_obj(struct mdd_object *obj)
+{
+	return obj->mod_flags & VOLATILE_OBJ;
 }
 
 static inline int mdd_object_exists(struct mdd_object *obj)

@@ -2447,6 +2447,7 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 
 	if (unlikely(spec->sp_cr_flags & MDS_OPEN_VOLATILE)) {
 		mdd_write_lock(env, son, MOR_TGT_CHILD);
+		son->mod_flags |= VOLATILE_OBJ;
 		rc = __mdd_orphan_add(env, son, handle);
 		GOTO(out_volatile, rc);
 	} else {
