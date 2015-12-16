@@ -216,8 +216,15 @@ mmp_init() {
     mmp_is_enabled $MMP_MDS $MMP_MDSDEV || \
         error "MMP was not enabled on $MMP_MDSDEV on $MMP_MDS"
 
-    mmp_is_enabled $MMP_OSS $MMP_OSTDEV || \
-        error "MMP was not enabled on $MMP_OSTDEV on $MMP_OSS"
+	mmp_is_enabled $MMP_OSS $MMP_OSTDEV || \
+	{
+		do_facet $MMP_OSS "$DUMPE2FS -h $MMP_OSTDEV"
+		log "Try to enable again:"
+		enable_mmp $MMP_OSS $MMP_OSTDEV
+		log "Verify again:"
+		do_facet $MMP_OSS "$DUMPE2FS -h $MMP_OSTDEV"
+		error "MMP was not enabled on $MMP_OSTDEV on $MMP_OSS"
+	}
 }
 
 # Disable the MMP feature on the Lustre server targets
