@@ -26,26 +26,13 @@
 #   Amir Shehata <amir.shehata@intel.com>
 #
 
-AM_CFLAGS  := -fPIC \
-	      -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS=1 \
-	      -I$(top_builddir)/lnet/utils \
-	      -I$(top_builddir)/lnet/utils/cyaml
-AM_LDFLAGS := -L$(top_builddir)/libcfs/libcfs
-
-lib_LIBRARIES = liblnetconfig.a
-noinst_LIBRARIES = liblnetconfigtmp.a
+lib_LTLIBRARIES = liblnetconfig.la
 
 CYAML := $(top_builddir)/lnet/utils/cyaml/cyaml.c \
 	 $(top_builddir)/lnet/utils/cyaml/cyaml.h
-liblnetconfigtmp_a_SOURCES := liblnetconfig.c liblnetconfig.h $(CYAML)
-
-# build static and share lib lnet config library
-liblnetconfig.a : liblnetconfigtmp.a
-	rm -f liblnetconfig.a liblnetconfig.so
-	$(CC) $(LDFLAGS) $(AM_LDFLAGS) -shared -o liblnetconfig.so `$(AR) -t liblnetconfigtmp.a`
-	mv liblnetconfigtmp.a liblnetconfig.a
-
-install-exec-hook:
-	cp liblnetconfig.so  $(DESTDIR)$(libdir)/
+liblnetconfig_la_SOURCES  = liblnetconfig.c liblnetconfig.h $(CYAML)
+liblnetconfig_la_CPPFLAGS = -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 \
+			    -DLUSTRE_UTILS=1 -I$(top_builddir)/lnet/utils/cyaml
+liblnetconfig_la_LDFLAGS = -L$(top_builddir)/libcfs/libcfs -version-info 1:0:0
 
 EXTRA_DIST =

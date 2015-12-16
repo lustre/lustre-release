@@ -41,7 +41,6 @@ AM_LDFLAGS := -L.
 
 if BUILD_DLC
 SUBDIRS = lnetconfig
-AM_LDFLAGS += -L$(top_builddir)/lnet/utils/lnetconfig
 endif # BUILD_DLC
 
 LIBCFS= $(top_builddir)/libcfs/libcfs/libcfs.a
@@ -72,7 +71,7 @@ libptlctl_a_SOURCES = portals.c debug.c
 
 CYAML := $(top_builddir)/lnet/utils/cyaml/cyaml.c
 lnetctl_SOURCES = lnetctl.c $(CYAML)
-lnetctl_LDADD = -llnetconfig $(LIBCFSUTIL) $(LIBCFS) \
-		$(LIBREADLINE) $(LIBEFENCE) -lyaml -lm
-lnetctl_DEPENDENCIES = $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.so
+lnetctl_LDADD = $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.la \
+		$(LIBCFSUTIL) $(LIBCFS) $(LIBREADLINE) $(LIBEFENCE) -lyaml -lm
+lnetctl_DEPENDENCIES = $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.la
 endif # UTILS

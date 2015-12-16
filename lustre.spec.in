@@ -10,6 +10,8 @@
 %bcond_without lustre_modules
 %bcond_with lnet_dlc
 %bcond_without manpages
+%bcond_without shared
+%bcond_without static
 
 %if %{without servers}
     # --without servers overrides --with {ldiskfs|zfs}
@@ -338,6 +340,8 @@ fi
 	%{?with_lustre_tests:--enable-tests}%{!?with_lustre_tests:--disable-tests} \
 	%{?with_lustre_utils:--enable-utils}%{!?with_lustre_utils:--disable-utils} \
 	%{?with_lustre_modules:--enable-modules}%{!?with_lustre_modules:--disable-modules} \
+	%{!?with_shared:--disable-shared} \
+	%{!?with_static:--disable-static} \
 	%{!?with_lustre_iokit:--disable-iokit} \
 	%{!?with_ldiskfs:--disable-ldiskfs} \
 	%{!?with_servers:--disable-server} \
@@ -385,8 +389,14 @@ chmod -R go-w lustre-source/lustre-%{version}
 find $RPM_BUILD_ROOT -name \*.so -type f -exec chmod +x {} \;
 
 %if %{with lnet_dlc}
+rm -f $RPM_BUILD_ROOT%{_libdir}/liblnetconfig.la
+%if %{with static}
 echo '%attr(-, root, root) %{_libdir}/liblnetconfig.a' >>lustre.files
+%endif
+%if %{with shared}
 echo '%attr(-, root, root) %{_libdir}/liblnetconfig.so' >>lustre.files
+echo '%attr(-, root, root) %{_libdir}/liblnetconfig.so.*' >>lustre.files
+%endif
 %endif
 
 %if %{with ldiskfs}

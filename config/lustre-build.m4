@@ -534,6 +534,8 @@ for arg; do
 		--with-release=* ) ;;
 		--with-kmp-moddir=* ) ;;
 		--with-linux=* | --with-linux-obj=* ) ;;
+		--enable-shared | --disable-shared ) ;;
+		--enable-static | --disable-static ) ;;
 		--enable-ldiskfs | --disable-ldiskfs ) ;;
 		--enable-modules | --disable-modules ) ;;
 		--enable-server | --disable-server ) ;;
@@ -604,6 +606,12 @@ if test x$USE_DLC = xyes ; then
 fi
 if test x$enable_manpages != xyes ; then
 	RPMBINARGS="$RPMBINARGS --without manpages"
+fi
+if test x$enable_shared != xyes ; then
+	RPMBINARGS="$RPMBINARGS --without shared"
+fi
+if test x$enable_static != xyes ; then
+	RPMBINARGS="$RPMBINARGS --without static"
 fi
 
 RPMBUILD_BINARY_ARGS=$RPMBINARGS
