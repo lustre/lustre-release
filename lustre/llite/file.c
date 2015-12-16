@@ -1249,6 +1249,8 @@ static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
 	struct iov_iter	*to;
 	size_t iov_count;
 	ssize_t result;
+	struct lu_env *env = NULL;
+	__u16 refcheck;
 	ENTRY;
 
 	result = ll_file_get_iov_count(iov, &nr_segs, &iov_count);
@@ -1256,8 +1258,6 @@ static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
 		RETURN(result);
 
 	if (nr_segs == 1) {
-		struct lu_env *env;
-		__u16 refcheck;
 
 		env = cl_env_get(&refcheck);
 		if (IS_ERR(env))
@@ -1266,7 +1266,6 @@ static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
 		local_iov = &ll_env_info(env)->lti_local_iov;
 		*local_iov = *iov;
 
-		cl_env_put(env, &refcheck);
 	} else {
 		OBD_ALLOC(local_iov, sizeof(*iov) * nr_segs);
 		if (local_iov == NULL)
@@ -1290,7 +1289,9 @@ static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
 
 	OBD_FREE_PTR(to);
 out:
-	if (nr_segs > 1)
+	if (nr_segs == 1)
+		cl_env_put(env, &refcheck);
+	else
 		OBD_FREE(local_iov, sizeof(*iov) * nr_segs);
 
 	RETURN(result);
@@ -1337,6 +1338,8 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 	struct iov_iter *from;
 	size_t iov_count;
 	ssize_t result;
+	struct lu_env *env = NULL;
+	__u16 refcheck;
 	ENTRY;
 
 	result = ll_file_get_iov_count(iov, &nr_segs, &iov_count);
@@ -1344,17 +1347,12 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 		RETURN(result);
 
 	if (nr_segs == 1) {
-		struct lu_env *env;
-		__u16 refcheck;
-
 		env = cl_env_get(&refcheck);
 		if (IS_ERR(env))
 			RETURN(PTR_ERR(env));
 
 		local_iov = &ll_env_info(env)->lti_local_iov;
 		*local_iov = *iov;
-
-		cl_env_put(env, &refcheck);
 	} else {
 		OBD_ALLOC(local_iov, sizeof(*iov) * nr_segs);
 		if (local_iov == NULL)
@@ -1378,7 +1376,9 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 
 	OBD_FREE_PTR(from);
 out:
-	if (nr_segs > 1)
+	if (nr_segs == 1)
+		cl_env_put(env, &refcheck);
+	else
 		OBD_FREE(local_iov, sizeof(*iov) * nr_segs);
 
 	RETURN(result);
