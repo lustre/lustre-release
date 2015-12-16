@@ -28,9 +28,8 @@ xml:id="installinglustre">
     </indexterm>Preparing to Install the Lustre Software</title>
     <para>You can install the Lustre software from downloaded packages (RPMs)
     or directly from the source code. This chapter describes how to install the
-    Lustre RPM packages. For information about installing from source code, see
-    
-    <xref linkend="installinglustrefromsourcecode" />.</para>
+    Lustre RPM packages. Instructions to install from source code are beyond
+    the scope of this document, and can be found elsewhere online.</para>
     <para>The Lustre RPM packages have been tested on the Linux distributions
     listed in the table below.</para>
     <para>

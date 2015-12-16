@@ -360,12 +360,16 @@
           <secondary>large_xattr</secondary>
           <tertiary>ea_inode</tertiary>
         </indexterm>File and File System Limits</title>
-      <para><xref linkend="settinguplustresystem.tab2"/> describes file and file system size limits.
-        These limits are imposed by either the Lustre architecture or the Linux virtual file system
-        (VFS) and virtual memory subsystems. In a few cases, a limit is defined within the code and
-        can be changed by re-compiling the Lustre software (see <xref
-          linkend="installinglustrefromsourcecode"/>). In these cases, the indicated limit was used
-        for testing of the Lustre software. </para>
+
+	 <para><xref linkend="settinguplustresystem.tab2"/> describes
+     file and file system size limits.  These limits are imposed by either
+     the Lustre architecture or the Linux virtual file system (VFS) and
+     virtual memory subsystems. In a few cases, a limit is defined within
+     the code and can be changed by re-compiling the Lustre software.
+     Instructions to install from source code are beyond the scope of this
+     document, and can be found elsewhere online. In these cases, the
+     indicated limit was used for testing of the Lustre software. </para>
+
       <table frame="all">
         <title xml:id="settinguplustresystem.tab2">File and file system limits</title>
         <tgroup cols="3">
