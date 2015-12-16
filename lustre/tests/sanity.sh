@@ -13079,6 +13079,33 @@ test_230g() {
 }
 run_test 230g "migrate dir to non-exist MDT"
 
+test_230h() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.64) ] &&
+		skip "Need MDS version at least 2.7.64" && return
+	local mdt_index
+
+	mkdir -p $DIR/$tdir/migrate_dir
+
+	$LFS migrate -m1 $DIR &&
+		error "migrating mountpoint1 should fail"
+
+	$LFS migrate -m1 $DIR/$tdir/.. &&
+		error "migrating mountpoint2 should fail"
+
+	$LFS migrate -m1 $DIR/$tdir/migrate_dir/.. ||
+		error "migrating $tdir fail"
+
+	mdt_index=$($LFS getstripe -M $DIR/$tdir)
+	[ $mdt_index == 1 ] || error "$mdt_index != 1 after migration"
+
+	mdt_index=$($LFS getstripe -M $DIR/$tdir/migrate_dir)
+	[ $mdt_index == 1 ] || error "$mdt_index != 1 after migration"
+
+}
+run_test 230h "migrate .. and root"
+
 test_231a()
 {
 	# For simplicity this test assumes that max_pages_per_rpc

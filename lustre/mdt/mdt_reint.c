@@ -1449,6 +1449,9 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info,
 	if (!fid_is_md_operative(old_fid))
 		GOTO(out_unlock_parent, rc = -EPERM);
 
+	if (lu_fid_eq(old_fid, &info->mti_mdt->mdt_md_root_fid))
+		GOTO(out_unlock_parent, rc = -EPERM);
+
 	mold = mdt_object_find(info->mti_env, info->mti_mdt, old_fid);
 	if (IS_ERR(mold))
 		GOTO(out_unlock_parent, rc = PTR_ERR(mold));

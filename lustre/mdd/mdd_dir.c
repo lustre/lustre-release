@@ -1163,10 +1163,15 @@ struct lu_buf *mdd_links_get(const struct lu_env *env,
 int mdd_links_write(const struct lu_env *env, struct mdd_object *mdd_obj,
 		    struct linkea_data *ldata, struct thandle *handle)
 {
-	const struct lu_buf *buf = mdd_buf_get_const(env, ldata->ld_buf->lb_buf,
-						     ldata->ld_leh->leh_len);
+	const struct lu_buf *buf;
 	int		    rc;
 
+	if (ldata == NULL || ldata->ld_buf == NULL ||
+	    ldata->ld_leh == NULL)
+		return 0;
+
+	buf = mdd_buf_get_const(env, ldata->ld_buf->lb_buf,
+				ldata->ld_leh->leh_len);
 	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_LINKEA))
 		return 0;
 
@@ -1951,7 +1956,8 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 	ENTRY;
 
         /* EEXIST check */
-        if (mdd_is_dead_obj(obj))
+	if (mdd_is_dead_obj(obj) ||
+	    pattr->la_flags & LUSTRE_SLAVE_DEAD_FL)
                 RETURN(-ENOENT);
 
 	/*
@@ -3418,7 +3424,7 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 					     buf, 0, handle);
 		if (rc != 0)
 			return rc;
-	} else if (S_ISDIR(la->la_mode)) {
+	} else if (S_ISDIR(la->la_mode) && ldata != NULL) {
 		rc = mdd_declare_links_add(env, mdd_tobj, handle, ldata,
 					   MLAO_IGNORE);
 		if (rc != 0)
@@ -3502,7 +3508,12 @@ static int mdd_migrate_create(const struct lu_env *env,
 		}
 	} else if (S_ISDIR(la->la_mode)) {
 		rc = mdd_links_read(env, mdd_sobj, ldata);
-		if (rc < 0 && rc != -ENODATA)
+		if (rc == -ENODATA) {
+			/* ignore the non-linkEA error */
+			ldata = NULL;
+			rc = 0;
+		}
+		if (rc < 0)
 			RETURN(rc);
 	}
 
@@ -3542,7 +3553,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(stop_trans, rc);
 
-	if (S_ISDIR(la->la_mode)) {
+	if (S_ISDIR(la->la_mode) && ldata != NULL) {
 		rc = mdd_links_write(env, mdd_tobj, ldata, handle);
 		if (rc != 0)
 			GOTO(stop_trans, rc);
