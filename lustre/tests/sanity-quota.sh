@@ -2301,6 +2301,9 @@ run_test 35 "Usage is still accessible across reboot"
 # chown/chgrp to the file created with MDS_OPEN_DELAY_CREATE
 # LU-5006
 test_37() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.93) ] &&
+		skip "Old server doesn't have LU-5006 fix." && return
+
 	setup_quota_test || error "setup quota failed with $?"
 	trap cleanup_quota_test EXIT
 
