@@ -137,7 +137,7 @@ static int __init lustre_init(void)
 
 	ll_rmtperm_hash_cachep = kmem_cache_create("ll_rmtperm_hash_cache",
 						   REMOTE_PERM_HASHSIZE *
-						   sizeof(struct list_head),
+						   sizeof(struct hlist_head),
 						   0, 0, NULL);
 	if (ll_rmtperm_hash_cachep == NULL)
 		GOTO(out_cache, rc = -ENOMEM);

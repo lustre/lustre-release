@@ -2414,20 +2414,20 @@ static int echo_client_prep_commit(const struct lu_env *env,
 	struct niobuf_local	*lnb;
 	struct niobuf_remote	 rnb;
 	u64			 off;
-	u64			 npages, tot_pages;
+	u64			 npages, tot_pages, apc;
 	int i, ret = 0, brw_flags = 0;
 
-        ENTRY;
+	ENTRY;
 
 	if (count <= 0 || (count & ~PAGE_CACHE_MASK) != 0)
 		RETURN(-EINVAL);
 
-	npages = batch >> PAGE_CACHE_SHIFT;
+	apc = npages = batch >> PAGE_CACHE_SHIFT;
 	tot_pages = count >> PAGE_CACHE_SHIFT;
 
-	OBD_ALLOC(lnb, npages * sizeof(struct niobuf_local));
+	OBD_ALLOC(lnb, apc * sizeof(struct niobuf_local));
 	if (lnb == NULL)
-		GOTO(out, ret = -ENOMEM);
+		RETURN(-ENOMEM);
 
 	if (rw == OBD_BRW_WRITE && async)
 		brw_flags |= OBD_BRW_ASYNC;
@@ -2448,10 +2448,10 @@ static int echo_client_prep_commit(const struct lu_env *env,
 		ioo.ioo_bufcnt = 1;
 		off += npages * PAGE_CACHE_SIZE;
 
-                lpages = npages;
+		lpages = npages;
 		ret = obd_preprw(env, rw, exp, oa, 1, &ioo, &rnb, &lpages, lnb);
-                if (ret != 0)
-                        GOTO(out, ret);
+		if (ret != 0)
+			GOTO(out, ret);
 
 		for (i = 0; i < lpages; i++) {
 			struct page *page = lnb[i].lnb_page;
@@ -2482,8 +2482,8 @@ static int echo_client_prep_commit(const struct lu_env *env,
 
 		ret = obd_commitrw(env, rw, exp, oa, 1, &ioo, &rnb, npages, lnb,
 				   ret);
-                if (ret != 0)
-                        GOTO(out, ret);
+		if (ret != 0)
+			break;
 
 		/* Reuse env context. */
 		lu_context_exit((struct lu_context *)&env->le_ctx);
@@ -2491,8 +2491,8 @@ static int echo_client_prep_commit(const struct lu_env *env,
 	}
 
 out:
-	if (lnb)
-		OBD_FREE(lnb, npages * sizeof(struct niobuf_local));
+	OBD_FREE(lnb, apc * sizeof(struct niobuf_local));
+
 	RETURN(ret);
 }
 

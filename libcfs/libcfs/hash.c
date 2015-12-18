@@ -1231,23 +1231,23 @@ cfs_hash_find_or_add(struct cfs_hash *hs, const void *key,
 	struct cfs_hash_bd     bds[2];
 	int               bits = 0;
 
-	LASSERT(hlist_unhashed(hnode));
+	LASSERTF(hlist_unhashed(hnode), "hnode = %p\n", hnode);
 
-        cfs_hash_lock(hs, 0);
-        cfs_hash_dual_bd_get_and_lock(hs, key, bds, 1);
+	cfs_hash_lock(hs, 0);
+	cfs_hash_dual_bd_get_and_lock(hs, key, bds, 1);
 
-        cfs_hash_key_validate(hs, key, hnode);
-        ehnode = cfs_hash_dual_bd_findadd_locked(hs, bds, key,
-                                                 hnode, noref);
-        cfs_hash_dual_bd_unlock(hs, bds, 1);
+	cfs_hash_key_validate(hs, key, hnode);
+	ehnode = cfs_hash_dual_bd_findadd_locked(hs, bds, key,
+						 hnode, noref);
+	cfs_hash_dual_bd_unlock(hs, bds, 1);
 
-        if (ehnode == hnode) /* new item added */
-                bits = cfs_hash_rehash_bits(hs);
-        cfs_hash_unlock(hs, 0);
-        if (bits > 0)
-                cfs_hash_rehash(hs, cfs_hash_rehash_inline(hs));
+	if (ehnode == hnode) /* new item added */
+		bits = cfs_hash_rehash_bits(hs);
+	cfs_hash_unlock(hs, 0);
+	if (bits > 0)
+		cfs_hash_rehash(hs, cfs_hash_rehash_inline(hs));
 
-        return ehnode;
+	return ehnode;
 }
 
 /**

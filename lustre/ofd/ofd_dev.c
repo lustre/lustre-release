@@ -834,60 +834,52 @@ int ofd_fid_init(const struct lu_env *env, struct ofd_device *ofd)
 	ss->ss_lu = lu->ld_site;
 	ss->ss_node_id = ofd->ofd_lut.lut_lsd.lsd_osd_index;
 
+	OBD_ALLOC(name, sizeof(obd_name) * 2 + 10);
+	if (name == NULL)
+		return -ENOMEM;
+
 	OBD_ALLOC_PTR(ss->ss_server_seq);
 	if (ss->ss_server_seq == NULL)
-		GOTO(out_free, rc = -ENOMEM);
-
-	OBD_ALLOC(name, strlen(obd_name) + 10);
-	if (!name) {
-		OBD_FREE_PTR(ss->ss_server_seq);
-		ss->ss_server_seq = NULL;
-		GOTO(out_free, rc = -ENOMEM);
-	}
+		GOTO(out_name, rc = -ENOMEM);
 
 	rc = seq_server_init(env, ss->ss_server_seq, ofd->ofd_osd, obd_name,
 			     LUSTRE_SEQ_SERVER, ss);
 	if (rc) {
 		CERROR("%s : seq server init error %d\n", obd_name, rc);
-		GOTO(out_free, rc);
+		GOTO(out_server, rc);
 	}
 	ss->ss_server_seq->lss_space.lsr_index = ss->ss_node_id;
 
 	OBD_ALLOC_PTR(ss->ss_client_seq);
 	if (ss->ss_client_seq == NULL)
-		GOTO(out_free, rc = -ENOMEM);
+		GOTO(out_server, rc = -ENOMEM);
 
-	snprintf(name, strlen(obd_name) + 6, "%p-super", obd_name);
+	/*
+	 * It always printed as "%p", so that the name is unique in the kernel,
+	 * even if the filesystem is mounted twice. So sizeof(.) * 2 is enough.
+	 */
+	snprintf(name, sizeof(obd_name) * 2 + 7, "%p-super", obd_name);
 	rc = seq_client_init(ss->ss_client_seq, NULL, LUSTRE_SEQ_DATA,
 			     name, NULL);
 	if (rc) {
 		CERROR("%s : seq client init error %d\n", obd_name, rc);
-		GOTO(out_free, rc);
+		GOTO(out_client, rc);
 	}
-	OBD_FREE(name, strlen(obd_name) + 10);
-	name = NULL;
 
 	rc = seq_server_set_cli(env, ss->ss_server_seq, ss->ss_client_seq);
 
-out_free:
 	if (rc) {
-		if (ss->ss_server_seq) {
-			seq_server_fini(ss->ss_server_seq, env);
-			OBD_FREE_PTR(ss->ss_server_seq);
-			ss->ss_server_seq = NULL;
-		}
-
-		if (ss->ss_client_seq) {
-			seq_client_fini(ss->ss_client_seq);
-			OBD_FREE_PTR(ss->ss_client_seq);
-			ss->ss_client_seq = NULL;
-		}
-
-		if (name) {
-			OBD_FREE(name, strlen(obd_name) + 10);
-			name = NULL;
-		}
+out_client:
+		seq_client_fini(ss->ss_client_seq);
+		OBD_FREE_PTR(ss->ss_client_seq);
+		ss->ss_client_seq = NULL;
+out_server:
+		seq_server_fini(ss->ss_server_seq, env);
+		OBD_FREE_PTR(ss->ss_server_seq);
+		ss->ss_server_seq = NULL;
 	}
+out_name:
+	OBD_FREE(name, sizeof(obd_name) * 2 + 10);
 
 	return rc;
 }
