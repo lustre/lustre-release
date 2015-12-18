@@ -5219,19 +5219,19 @@ run_test 60a "llog_test run from kernel module and test llog_reader =========="
 test_60b() { # bug 6411
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	dmesg > $DIR/$tfile
-	LLOG_COUNT=`dmesg | awk "/$TEST60_HEAD/{marker = 1; from_marker = 0;}
-				 /llog.test/ {
-					 if (marker)
-						 from_marker++
-					 from_begin++
-				 }
-				 END {
-					 if (marker)
-						 print from_marker
-					 else
-						 print from_begin
-				 }"`
-	[[ $LLOG_COUNT -gt 50 ]] &&
+	LLOG_COUNT=$(dmesg | awk "/$TEST60_HEAD/ { marker = 1; from_marker = 0; }
+				/llog.test/ {
+					if (marker)
+						from_marker++
+					from_begin++
+				}
+				END {
+					if (marker)
+						print from_marker
+					else
+						print from_begin
+				}")
+	[[ $LLOG_COUNT -gt 100 ]] &&
 		error "CDEBUG_LIMIT not limiting messages ($LLOG_COUNT)" || true
 }
 run_test 60b "limit repeated messages from CERROR/CWARN ========"
