@@ -136,7 +136,7 @@ Index: linux-stage/fs/ext4/xattr.c
 +		return NULL;
 +	}
 +
-+	if (ea_inode->i_xattr_inode_parent != parent->i_ino ||
++	if (EXT4_XATTR_INODE_GET_PARENT(ea_inode) != parent->i_ino ||
 +	    ea_inode->i_generation != parent->i_generation) {
 +		ext4_error(parent->i_sb, "Backpointer from EA inode %lu "
 +			   "to parent invalid.", ea_ino);
@@ -347,7 +347,7 @@ Index: linux-stage/fs/ext4/xattr.c
 +		 * A back-pointer from EA inode to parent inode will be useful
 +		 * for e2fsck.
 +		 */
-+		ea_inode->i_xattr_inode_parent = inode->i_ino;
++		EXT4_XATTR_INODE_SET_PARENT(ea_inode, inode->i_ino);
 +		unlock_new_inode(ea_inode);
 +	}
 +
@@ -881,11 +881,22 @@ Index: linux-stage/fs/ext4/xattr.h
  	__le32	e_value_size;	/* size of attribute value */
  	__le32	e_hash;		/* hash value of name and value */
  	char	e_name[0];	/* attribute name */
-@@ -63,6 +63,15 @@ struct ext4_xattr_entry {
+@@ -63,6 +63,26 @@ struct ext4_xattr_entry {
  		EXT4_I(inode)->i_extra_isize))
  #define IFIRST(hdr) ((struct ext4_xattr_entry *)((hdr)+1))
  
-+#define i_xattr_inode_parent i_mtime.tv_sec
++/*
++ * Link EA inode back to parent one using i_mtime field.
++ * Extra integer type conversion added to ignore higher
++ * bits in i_mtime.tv_sec which might be set by ext4_get()
++ */
++#define EXT4_XATTR_INODE_SET_PARENT(inode, inum)      \
++do {                                                  \
++      (inode)->i_mtime.tv_sec = inum;                 \
++} while(0)
++
++#define EXT4_XATTR_INODE_GET_PARENT(inode)            \
++((__u32)(inode)->i_mtime.tv_sec)
 +
 +/*
 + * The minimum size of EA value when you start storing it in an external inode
