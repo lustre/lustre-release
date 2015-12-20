@@ -39,7 +39,7 @@ eval "$LCTL <<-EOF || RC=2
 	cleanup
 	detach
 EOF"
-rmmod -vw llog_test || RC2=3
+rmmod -v llog_test || RC2=3
 [ $RC -eq 0 -a "$RC2" ] && RC=$RC2
 
 exit $RC
