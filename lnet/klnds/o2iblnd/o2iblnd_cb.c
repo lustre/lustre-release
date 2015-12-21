@@ -1234,7 +1234,7 @@ static int kiblnd_resolve_addr(struct rdma_cm_id *cmid,
         return rc;
 }
 
-void
+static void
 kiblnd_connect_peer (kib_peer_t *peer)
 {
         struct rdma_cm_id *cmid;
@@ -2459,7 +2459,7 @@ kiblnd_reconnect (kib_conn_t *conn, int version,
 {
 	kib_peer_t	*peer = conn->ibc_peer;
 	char		*reason;
-	int		 retry_now = 0;
+	int		 retry = 0;
 	unsigned long	 flags;
 
         LASSERT (conn->ibc_state == IBLND_CONN_ACTIVE_CONNECT);
@@ -2476,15 +2476,7 @@ kiblnd_reconnect (kib_conn_t *conn, int version,
              peer->ibp_version != version) &&
             peer->ibp_connecting == 1 &&
             peer->ibp_accepting == 0) {
-		if (why == IBLND_REJECT_CONN_RACE) {
-			/* don't reconnect immediately, intensive reconnecting
-			 * may consume a lot of memory. kiblnd_destroy_conn
-			 * will reconnect after releasing all resources of
-			 * this connection */
-			conn->ibc_conn_race = 1;
-		} else {
-			retry_now = 1;
-		}
+		retry = 1;
 		peer->ibp_connecting++;
 		peer->ibp_version     = version;
 		peer->ibp_incarnation = incarnation;
@@ -2492,7 +2484,7 @@ kiblnd_reconnect (kib_conn_t *conn, int version,
 
 	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
-	if (!retry_now)
+	if (!retry)
                 return;
 
         switch (why) {
@@ -2534,6 +2526,10 @@ kiblnd_reconnect (kib_conn_t *conn, int version,
 
         case IBLND_REJECT_CONN_STALE:
                 reason = "stale";
+                break;
+
+        case IBLND_REJECT_CONN_RACE:
+                reason = "conn race";
                 break;
 
         case IBLND_REJECT_CONN_UNCOMPAT:
