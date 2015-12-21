@@ -331,7 +331,7 @@ __must_hold(&the_lnet.ln_eq_wait_lock)
 	cfs_time_t      now;
 
 	if (tms == 0)
-		return -1; /* don't want to wait and no new event */
+		return -ENXIO; /* don't want to wait and no new event */
 
 	init_waitqueue_entry(&wl, current);
 	set_current_state(TASK_INTERRUPTIBLE);

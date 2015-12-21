@@ -1149,30 +1149,30 @@ lnet_compare_routes(lnet_route_t *r1, lnet_route_t *r2)
 		return 1;
 
 	if (r1->lr_priority > r2->lr_priority)
-		return -1;
+		return -ERANGE;
 
 	if (r1_hops < r2_hops)
 		return 1;
 
 	if (r1_hops > r2_hops)
-		return -1;
+		return -ERANGE;
 
 	if (p1->lp_txqnob < p2->lp_txqnob)
 		return 1;
 
 	if (p1->lp_txqnob > p2->lp_txqnob)
-		return -1;
+		return -ERANGE;
 
 	if (p1->lp_txcredits > p2->lp_txcredits)
 		return 1;
 
 	if (p1->lp_txcredits < p2->lp_txcredits)
-		return -1;
+		return -ERANGE;
 
 	if (r1->lr_seq - r2->lr_seq <= 0)
 		return 1;
 
-	return -1;
+	return -ERANGE;
 }
 
 static lnet_peer_t *
@@ -1488,7 +1488,7 @@ lnet_parse_put(lnet_ni_t *ni, lnet_msg_t *msg)
 			libcfs_id2str(info.mi_id), info.mi_portal,
 			info.mi_mbits, info.mi_roffset, info.mi_rlength, rc);
 
-		return ENOENT;	/* +ve: OK but no match */
+		return -ENOENT;	/* -ve: OK but no match */
 	}
 }
 
@@ -1520,7 +1520,7 @@ lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg, int rdma_get)
 			" offset %d length %d\n",
 			libcfs_id2str(info.mi_id), info.mi_portal,
 			info.mi_mbits, info.mi_roffset, info.mi_rlength);
-		return ENOENT;	/* +ve: OK but no match */
+		return -ENOENT;	/* -ve: OK but no match */
 	}
 
 	LASSERT(rc == LNET_MATCHMD_OK);
@@ -1588,7 +1588,7 @@ lnet_parse_reply(lnet_ni_t *ni, lnet_msg_t *msg)
                                md->md_me->me_portal);
 
 		lnet_res_unlock(cpt);
-                return ENOENT;                  /* +ve: OK but no match */
+		return -ENOENT;	/* -ve: OK but no match */
         }
 
         LASSERT (md->md_offset == 0);
@@ -1604,7 +1604,7 @@ lnet_parse_reply(lnet_ni_t *ni, lnet_msg_t *msg)
                         rlength, hdr->msg.reply.dst_wmd.wh_object_cookie,
                         mlength);
 		lnet_res_unlock(cpt);
-                return ENOENT;          /* +ve: OK but no match */
+		return -ENOENT;	/* -ve: OK but no match */
         }
 
         CDEBUG(D_NET, "%s: Reply from %s of length %d/%d into md "LPX64"\n",
@@ -1657,7 +1657,7 @@ lnet_parse_ack(lnet_ni_t *ni, lnet_msg_t *msg)
                                md->md_me->me_portal);
 
 		lnet_res_unlock(cpt);
-                return ENOENT;                  /* +ve! */
+		return -ENOENT;                  /* -ve! */
         }
 
         CDEBUG(D_NET, "%s: ACK from %s into md "LPX64"\n",
@@ -1726,7 +1726,7 @@ lnet_parse_local(lnet_ni_t *ni, lnet_msg_t *msg)
 		return -EPROTO;
 	}
 
-	LASSERT(rc == 0 || rc == ENOENT);
+	LASSERT(rc == 0 || rc == -ENOENT);
 	return rc;
 }
 
