@@ -1874,6 +1874,7 @@ check_seq_oid()
 				$(facet_mntpt ost$ost)/$obj_file)
 			unmount_fstype ost$ost
 			start ost$ost $dev $OST_MOUNT_OPTS
+			clients_up
 		fi
 
 		[ -z "$ff" ] && error "$obj_file: no filter_fid info"
