@@ -1833,16 +1833,19 @@ mount.lustre</title>
           <tbody>
             <row>
               <entry>
-                <para> <literal><replaceable>mgs_nid</replaceable>:/<replaceable>fsname</replaceable></literal></para>
+                <para> <literal><replaceable>mgs_nid</replaceable>:/<replaceable>fsname</replaceable><replaceable>[/subdir]</replaceable></literal></para>
                 <para>&#160;</para>
               </entry>
               <entry>
-                <para> Mounts the Lustre file system named <literal>fsname</literal> on the client
-                  by contacting the Management Service at <literal>mgsspec</literal> on the pathname
-                  given by <literal>directory</literal>. The format for <literal>mgsspec</literal>
-                  is defined below. A mounted client file system appears in fstab(5) and is usable,
-                  like any local file system, and provides a full POSIX standard-compliant
-                  interface.</para>
+              <para> Mounts the Lustre file system named
+              <literal>fsname</literal> (optionally under subdirectory
+		      <literal>subdir</literal> if specified) on the client by
+              contacting the Management Service at <literal>mgsspec</literal> on
+              the pathname given by <literal>directory</literal>.  The format
+              for <literal>mgsspec</literal> is defined below. A mounted client
+              file system appears in fstab(5) and is usable, like any local file
+              system, and provides a full POSIX standard-compliant interface.
+              </para>
               </entry>
             </row>
             <row>
@@ -2089,8 +2092,15 @@ mount.lustre</title>
     </section>
     <section remap="h5">
       <title>Examples</title>
-      <para>Starts a client for the Lustre file system testfs at mount point /mnt/myfilesystem. The Management Service is running on a node reachable from this client via the cfs21@tcp0 NID.</para>
-      <screen>mount -t lustre cfs21@tcp0:/testfs /mnt/myfilesystem</screen>
+      <para>Starts a client for the Lustre file system
+      <replaceable>chipfs</replaceable> at mount point
+      <replaceable>/mnt/chip</replaceable>. The Management Service is running on
+      a node reachable from this client via the cfs21@tcp0 NID.</para>
+      <screen>mount -t lustre cfs21@tcp0:/chipfs /mnt/chip</screen>
+      <para condition='l29'>Similiar to the above example, but mounting a
+      subdirectory under <replaceable>chipfs</replaceable> as a fileset.
+      <screen>mount -t lustre cfs21@tcp0:/chipfs/v1_0 /mnt/chipv1_0</screen>
+      </para>
       <para>Starts the Lustre metadata target service from /dev/sda1 on mount point /mnt/test/mdt.</para>
       <screen>mount -t lustre /dev/sda1 /mnt/test/mdt</screen>
       <para>Starts the testfs-MDT0000 service (using the disk label), but aborts the recovery process.</para>
@@ -2703,6 +2713,79 @@ lr_reader</title>
         <screen>$ mount -t lustre -o flock mds@tcp0:/lustre /mnt/client</screen>
         <para>You can check it in /etc/mtab. It should look like,</para>
         <screen>mds@tcp0:/lustre /mnt/client lustre rw,flock         0       0</screen>
+      </section>
+    </section>
+    <section remap="h3" condition='l29'>
+      <title><indexterm><primary>fileset</primary></indexterm>Fileset Feature</title>
+      <para> With the fileset feature, Lustre now provides subdirectory mount
+      support.  Subdirectory mounts, also referred to as filesets, allow a
+      client to mount a child directory of a parent filesystem, thereby limiting
+      the filesystem namespace visibility on a specific client.  A common use
+      case is for a client to use a subdirectory mount when there is a desire to
+      limit the visibility of the entire filesystem namesapce to aid in the
+      prevention of accidental file deletions outside of the subdirectory
+      mount.</para>
+      <para>It is important to note that invocation of the subdirectory mount is
+      voluntary by the client and not does prevent access to files that are
+      visibile in multiple subdirectory mounts via hard links.  Furthermore, it
+      does not prevent the client from subsequently mounting the whole file
+      system without a subdirectory being specified.</para>
+      <figure>
+        <title xml:id="understandinglustre.fig.fileset">
+        <indexterm>
+          <primary>Lustre</primary>
+          <secondary>fileset</secondary>
+        </indexterm>Lustre fileset</title>
+        <mediaobject>
+          <imageobject>
+            <imagedata scalefit="1" width="100%"
+            fileref="./figures/fileset.png" />
+          </imageobject>
+          <textobject>
+            <phrase>Lustre file system fileset feature</phrase>
+          </textobject>
+        </mediaobject>
+      </figure>
+      <section remap="h4">
+        <title>Examples</title>
+        <para>The following example will mount the
+        <literal>chipfs</literal> filesystem on client1 and create a
+        subdirectory <literal>v1_1</literal> within that filesystem.  Client2
+        will then mount only the <literal>v1_1</literal> subdirectory as a
+        fileset, thereby limiting access to anything else in the
+        <literal>chipfs</literal> filesystem from client2.</para>
+        <screen>client1# mount -t lustre mgs@tcp:/chipfs /mnt/chip
+client1# mkdir /mnt/chip/v1_1</screen>
+        <screen>client2# mount -t lustre mgs@tcp:/chipfs/v1_1 /mnt/chipv1_1</screen>
+    <para>You can check the created mounts in /etc/mtab. It should look like
+    the following:</para>
+    <screen><replaceable>client1</replaceable>
+mds@tcp0:/chipfs/ /mnt/chip lustre rw         0       0
+</screen><screen>
+<replaceable>client2</replaceable>
+mds@tcp0:/chipfs/v1_1 /mnt/chipv1_1 lustre rw         0       0</screen>
+	<para>Create a directory under the /mnt/chip mount, and get its FID</para>
+    <screen>client1# mkdir /mnt/chip/v1_2
+client1# lfs path2fid /mnt/chip/v1_2
+[0x200000400:0x2:0x0]
+</screen>
+	<para>If you try resolve the FID of the <literal>/mnt/chip/v1_2</literal>
+    path (as created in the example above) on client2, an error will be returned
+    as the FID can not be resolved on client2 since it is not part of the
+    mounted fileset on that client.  Recall that the fileset on client2 mounted
+    the <literal>v1_1</literal> subdirectory beneath the top level
+    <literal>chipfs</literal> filesystem.
+    </para>
+    <screen>client2# lfs fid2path /mnt/chip/v1_2 [0x200000400:0x2:0x0]
+fid2path: error on FID [0x200000400:0x2:0x0]: No such file or directory</screen>
+    <para>Subdirectory mounts do not have the <literal>.lustre</literal>
+    pseudo directory, which prevents clients from opening or accessing files
+    only by FID.</para>
+    <screen>client1# ls /mnt/chipfs/.lustre
+        fid  lost+found</screen>
+    <screen>client2# ls /mnt/chipv1_1/.lustre
+        ls: cannot access /mnt/chipv1_1/.lustre: No such file or directory
+    </screen>
       </section>
     </section>
   </section>
