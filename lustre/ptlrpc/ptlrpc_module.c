@@ -90,7 +90,6 @@ static __init int ptlrpc_init(void)
 		GOTO(err_portals, rc);
 
 	ptlrpc_put_connection_superhack = ptlrpc_connection_put;
-	sptlrpc_sec_put_superhack = sptlrpc_import_sec_put;
 
 	rc = ptlrpc_start_pinger();
 	if (rc)

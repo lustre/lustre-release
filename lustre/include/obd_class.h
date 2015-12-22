@@ -1686,7 +1686,6 @@ struct lwp_register_item {
  * <shaver> // XXX do not look into _superhack with remaining eye
  * <shaver> // XXX if this were any uglier, I'd get my own show on MTV */
 extern int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
-extern void (*sptlrpc_sec_put_superhack)(struct obd_import *imp);
 
 /* obd_mount.c */
 #ifdef HAVE_SERVER_SUPPORT
