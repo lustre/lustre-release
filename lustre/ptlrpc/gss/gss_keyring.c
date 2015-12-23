@@ -874,28 +874,30 @@ void flush_user_ctx_cache_kr(struct ptlrpc_sec *sec,
 
         construct_key_desc(desc, sizeof(desc), sec, uid);
 
-        /* there should be only one valid key, but we put it in the
-         * loop in case of any weird cases */
-        for (;;) {
-                key = request_key(&gss_key_type, desc, NULL);
-                if (IS_ERR(key)) {
-                        CDEBUG(D_SEC, "No more key found for current user\n");
-                        break;
-                }
+	/* there should be only one valid key, but we put it in the
+	 * loop in case of any weird cases */
+	for (;;) {
+		key = request_key(&gss_key_type, desc, NULL);
+		if (IS_ERR(key)) {
+			CDEBUG(D_SEC, "No more key found for current user\n");
+			break;
+		}
 
-                down_write(&key->sem);
+		down_write(&key->sem);
 
-                kill_key_locked(key);
+		kill_key_locked(key);
 
-                /* kill_key_locked() should usually revoke the key, but we
-                 * revoke it again to make sure, e.g. some case the key may
-                 * not well coupled with a context. */
-                key_revoke_locked(key);
+		/* kill_key_locked() should usually revoke the key, but we
+		 * revoke it again to make sure, e.g. some case the key may
+		 * not well coupled with a context. */
+		key_revoke_locked(key);
 
-                up_write(&key->sem);
+		up_write(&key->sem);
 
-                key_put(key);
-        }
+		request_key_unlink(key);
+
+		key_put(key);
+	}
 }
 
 /*
@@ -1412,7 +1414,8 @@ out:
 static int
 gss_kt_match(const struct key *key, const void *desc)
 {
-	return (strcmp(key->description, (const char *) desc) == 0);
+	return strcmp(key->description, (const char *) desc) == 0 &&
+		!test_bit(KEY_FLAG_REVOKED, &key->flags);
 }
 #else /* ! HAVE_KEY_MATCH_DATA */
 static bool
@@ -1420,7 +1423,8 @@ gss_kt_match(const struct key *key, const struct key_match_data *match_data)
 {
 	const char *desc = match_data->raw_data;
 
-	return (strcmp(key->description, desc) == 0);
+	return strcmp(key->description, desc) == 0 &&
+		!test_bit(KEY_FLAG_REVOKED, &key->flags);
 }
 
 /*
