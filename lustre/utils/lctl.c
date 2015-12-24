@@ -398,9 +398,6 @@ command_t cmdlist[] = {
         {"test_brw", jt_obd_test_brw, 0,
          "do <num> bulk read/writes (<npages> per I/O, on OST object <objid>)\n"
          "usage: test_brw [t]<num> [write [verbose [npages [[t]objid]]]]"},
-        {"memhog", jt_ptl_memhog, 0,
-         "memory pressure testing\n"
-         "usage: memhog <page count> [<gfp flags>]"},
         {"getobjversion", jt_get_obj_version, 0,
          "get the version of an object on servers\n"
 	 "usage: getobjversion <fid>\n"

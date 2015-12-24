@@ -40,149 +40,6 @@
 #include <libcfs/libcfs_crypto.h>
 #include <lnet/lib-lnet.h>
 
-static void
-kportal_memhog_free (struct libcfs_device_userstate *ldu)
-{
-	struct page **level0p = &ldu->ldu_memhog_root_page;
-	struct page **level1p;
-	struct page **level2p;
-	int           count1;
-	int           count2;
-
-	if (*level0p != NULL) {
-		level1p = (struct page **)page_address(*level0p);
-		count1 = 0;
-
-		while (count1 < PAGE_CACHE_SIZE/sizeof(struct page *) &&
-		       *level1p != NULL) {
-
-			level2p = (struct page **)page_address(*level1p);
-			count2 = 0;
-
-			while (count2 < PAGE_CACHE_SIZE/sizeof(struct page *) &&
-			       *level2p != NULL) {
-
-				__free_page(*level2p);
-				ldu->ldu_memhog_pages--;
-				level2p++;
-				count2++;
-			}
-
-			__free_page(*level1p);
-			ldu->ldu_memhog_pages--;
-			level1p++;
-			count1++;
-		}
-
-		__free_page(*level0p);
-		ldu->ldu_memhog_pages--;
-
-		*level0p = NULL;
-	}
-
-	LASSERT(ldu->ldu_memhog_pages == 0);
-}
-
-static int
-kportal_memhog_alloc(struct libcfs_device_userstate *ldu, int npages,
-		     gfp_t flags)
-{
-	struct page **level0p;
-	struct page **level1p;
-	struct page **level2p;
-	int           count1;
-	int           count2;
-
-	LASSERT(ldu->ldu_memhog_pages == 0);
-	LASSERT(ldu->ldu_memhog_root_page == NULL);
-
-	if (npages < 0)
-		return -EINVAL;
-
-	if (npages == 0)
-		return 0;
-
-	level0p = &ldu->ldu_memhog_root_page;
-	*level0p = alloc_page(flags);
-	if (*level0p == NULL)
-		return -ENOMEM;
-	ldu->ldu_memhog_pages++;
-
-	level1p = (struct page **)page_address(*level0p);
-	count1 = 0;
-	memset(level1p, 0, PAGE_CACHE_SIZE);
-
-	while (ldu->ldu_memhog_pages < npages &&
-	       count1 < PAGE_CACHE_SIZE/sizeof(struct page *)) {
-
-		if (signal_pending(current))
-			return -EINTR;
-
-		*level1p = alloc_page(flags);
-		if (*level1p == NULL)
-			return -ENOMEM;
-		ldu->ldu_memhog_pages++;
-
-		level2p = (struct page **)page_address(*level1p);
-		count2 = 0;
-		memset(level2p, 0, PAGE_CACHE_SIZE);
-
-		while (ldu->ldu_memhog_pages < npages &&
-		       count2 < PAGE_CACHE_SIZE/sizeof(struct page *)) {
-
-			if (signal_pending(current))
-				return -EINTR;
-
-			*level2p = alloc_page(flags);
-			if (*level2p == NULL)
-				return -ENOMEM;
-			ldu->ldu_memhog_pages++;
-
-			level2p++;
-			count2++;
-		}
-
-		level1p++;
-		count1++;
-	}
-
-	return 0;
-}
-
-/* called when opening /dev/device */
-static int libcfs_psdev_open(unsigned long flags, void *args)
-{
-	struct libcfs_device_userstate *ldu;
-	ENTRY;
-
-	try_module_get(THIS_MODULE);
-
-	LIBCFS_ALLOC(ldu, sizeof(*ldu));
-	if (ldu != NULL) {
-		ldu->ldu_memhog_pages = 0;
-		ldu->ldu_memhog_root_page = NULL;
-	}
-	*(struct libcfs_device_userstate **)args = ldu;
-
-	RETURN(0);
-}
-
-/* called when closing /dev/device */
-static int libcfs_psdev_release(unsigned long flags, void *args)
-{
-	struct libcfs_device_userstate *ldu;
-	ENTRY;
-
-	ldu = (struct libcfs_device_userstate *)args;
-	if (ldu != NULL) {
-		kportal_memhog_free(ldu);
-		LIBCFS_FREE(ldu, sizeof(*ldu));
-	}
-
-	module_put(THIS_MODULE);
-	RETURN(0);
-}
-
 static DECLARE_RWSEM(ioctl_list_sem);
 static LIST_HEAD(ioctl_list);
 
@@ -216,8 +73,7 @@ int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand)
 }
 EXPORT_SYMBOL(libcfs_deregister_ioctl);
 
-static int libcfs_ioctl(struct cfs_psdev_file *pfile,
-			unsigned long cmd, void __user *uparam)
+int libcfs_ioctl(unsigned long cmd, void __user *uparam)
 {
 	struct libcfs_ioctl_data *data = NULL;
 	struct libcfs_ioctl_hdr  *hdr;
@@ -248,10 +104,6 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile,
 	case IOC_LIBCFS_CLEAR_DEBUG:
 		libcfs_debug_clear_buffer();
 		break;
-	/*
-	 * case IOC_LIBCFS_PANIC:
-	 * Handled in arch/cfs_module.c
-	 */
 	case IOC_LIBCFS_MARK_DEBUG:
 		if (data == NULL ||
 		    data->ioc_inlbuf1 == NULL ||
@@ -259,20 +111,6 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile,
 			GOTO(out, err = -EINVAL);
 
 		libcfs_debug_mark_buffer(data->ioc_inlbuf1);
-		break;
-
-	case IOC_LIBCFS_MEMHOG:
-		if (data == NULL)
-			GOTO(out, err = -EINVAL);
-
-		if (pfile->private_data == NULL)
-			GOTO(out, err = -EINVAL);
-
-		kportal_memhog_free(pfile->private_data);
-		err = kportal_memhog_alloc(pfile->private_data,
-					   data->ioc_count, data->ioc_flags);
-		if (err != 0)
-			kportal_memhog_free(pfile->private_data);
 		break;
 
 	default: {
@@ -298,14 +136,6 @@ out:
 	LIBCFS_FREE(hdr, hdr->ioc_len);
 	RETURN(err);
 }
-
-struct cfs_psdev_ops libcfs_psdev_ops = {
-        libcfs_psdev_open,
-        libcfs_psdev_release,
-        NULL,
-        NULL,
-        libcfs_ioctl
-};
 
 static int __init libcfs_init(void)
 {

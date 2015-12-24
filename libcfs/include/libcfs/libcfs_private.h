@@ -438,12 +438,6 @@ do {                                                            \
 # define CFS_CURRENT_TIME time(0)
 #endif
 
-struct libcfs_device_userstate
-{
-	int		ldu_memhog_pages;
-	struct page	*ldu_memhog_root_page;
-};
-
 /* what used to be in portals_lib.h */
 #ifndef MIN
 # define MIN(a,b) (((a)<(b)) ? (a): (b))

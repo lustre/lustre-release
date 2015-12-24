@@ -861,28 +861,3 @@ int jt_dbg_modules(int argc, char **argv)
 	fclose(file);
 	return 0;
 }
-
-int jt_dbg_panic(int argc, char **argv)
-{
-	int			 rc;
-	struct libcfs_ioctl_data data;
-
-	if (argc != 1) {
-		fprintf(stderr, "usage: %s\n", argv[0]);
-		return 0;
-	}
-
-	memset(&data, 0, sizeof(data));
-	if (libcfs_ioctl_pack(&data, &buf, max) != 0) {
-		fprintf(stderr, "libcfs_ioctl_pack failed.\n");
-		return -1;
-	}
-
-	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_PANIC, buf);
-	if (rc) {
-		fprintf(stderr, "IOC_LIBCFS_PANIC failed: %s\n",
-			strerror(errno));
-		return -1;
-	}
-	return 0;
-}

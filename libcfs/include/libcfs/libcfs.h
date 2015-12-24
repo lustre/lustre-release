@@ -154,31 +154,7 @@ void lc_watchdog_delete(struct lc_watchdog *lcw);
 #define LNET_ACCEPTOR_MIN_RESERVED_PORT    512
 #define LNET_ACCEPTOR_MAX_RESERVED_PORT    1023
 
-/*
- * libcfs pseudo device operations
- *
- * struct struct miscdevice and
- * misc_register() and
- * misc_deregister() are declared in
- * libcfs/<os>/<os>-prim.h
- *
- * It's just draft now.
- */
-
-struct cfs_psdev_file {
-        unsigned long   off;
-        void            *private_data;
-        unsigned long   reserved1;
-        unsigned long   reserved2;
-};
-
-struct cfs_psdev_ops {
-	int (*p_open)(unsigned long, void *);
-	int (*p_close)(unsigned long, void *);
-	int (*p_read)(struct cfs_psdev_file *, char *, unsigned long);
-	int (*p_write)(struct cfs_psdev_file *, char *, unsigned long);
-	int (*p_ioctl)(struct cfs_psdev_file *, unsigned long, void __user *);
-};
+int libcfs_ioctl(unsigned long cmd, void __user *uparam);
 
 /*
  * Drop into debugger, if possible. Implementation is provided by platform.

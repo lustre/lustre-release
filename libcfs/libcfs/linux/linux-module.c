@@ -103,42 +103,27 @@ failed:
 static int
 libcfs_psdev_open(struct inode * inode, struct file * file)
 {
-	struct libcfs_device_userstate **pdu = NULL;
-	int    rc = 0;
-
 	if (!inode)
-		return (-EINVAL);
-	pdu = (struct libcfs_device_userstate **)&file->private_data;
-	if (libcfs_psdev_ops.p_open != NULL)
-		rc = libcfs_psdev_ops.p_open(0, (void *)pdu);
-	else
-		return (-EPERM);
-	return rc;
+		return -EINVAL;
+
+	try_module_get(THIS_MODULE);
+	return 0;
 }
 
 /* called when closing /dev/device */
 static int
 libcfs_psdev_release(struct inode * inode, struct file * file)
 {
-	struct libcfs_device_userstate *pdu;
-	int    rc = 0;
-
 	if (!inode)
-		return (-EINVAL);
-	pdu = file->private_data;
-	if (libcfs_psdev_ops.p_close != NULL)
-		rc = libcfs_psdev_ops.p_close(0, (void *)pdu);
-	else
-		rc = -EPERM;
-	return rc;
+		return -EINVAL;
+
+	module_put(THIS_MODULE);
+	return 0;
 }
 
-static long libcfs_ioctl(struct file *file,
-			 unsigned int cmd, unsigned long arg)
+static long
+libcfs_psdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-	struct cfs_psdev_file	 pfile;
-	int    rc = 0;
-
 	if (!capable(CAP_SYS_ADMIN))
 		return -EACCES;
 
@@ -147,35 +132,16 @@ static long libcfs_ioctl(struct file *file,
 	    _IOC_NR(cmd) > IOC_LIBCFS_MAX_NR) {
 		CDEBUG(D_IOCTL, "invalid ioctl ( type %d, nr %d, size %d )\n",
 		       _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
-		return (-EINVAL);
+		return -EINVAL;
 	}
 
-	/* Handle platform-dependent IOC requests */
-	switch (cmd) {
-	case IOC_LIBCFS_PANIC:
-		if (!cfs_capable(CFS_CAP_SYS_BOOT))
-			return (-EPERM);
-		panic("debugctl-invoked panic");
-		return (0);
-	case IOC_LIBCFS_MEMHOG:
-		if (!cfs_capable(CFS_CAP_SYS_ADMIN))
-			return -EPERM;
-		/* go thought */
-	}
-
-	pfile.off = 0;
-	pfile.private_data = file->private_data;
-	if (libcfs_psdev_ops.p_ioctl != NULL)
-		rc = libcfs_psdev_ops.p_ioctl(&pfile, cmd, (void __user *)arg);
-	else
-		rc = -EPERM;
-	return (rc);
+	return libcfs_ioctl(cmd, (void __user *)arg);
 }
 
 static struct file_operations libcfs_fops = {
-	unlocked_ioctl: libcfs_ioctl,
-	open :          libcfs_psdev_open,
-	release :       libcfs_psdev_release
+	.unlocked_ioctl = libcfs_psdev_ioctl,
+	.open		= libcfs_psdev_open,
+	.release	= libcfs_psdev_release
 };
 
 struct miscdevice libcfs_dev = {
