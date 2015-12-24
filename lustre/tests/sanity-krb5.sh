@@ -466,10 +466,10 @@ test_99() {
 	echo "original general rules: $nrule_old"
 
 	for ((i = $nrule_old; i < $max; i++)); do
-		set_rule $FSNAME elan$i any krb5n || error "set rule $i"
+		set_rule $FSNAME ${NETTYPE}$i any krb5n || error "set rule $i"
 	done
 	for ((i = $nrule_old; i < $max; i++)); do
-		set_rule $FSNAME elan$i any || error "remove rule $i"
+		set_rule $FSNAME ${NETTYPE}$i any || error "remove rule $i"
 	done
 
 	nrule_new=$(do_facet mgs lctl get_param -n mgs.MGS.live.$FSNAME \
@@ -486,10 +486,10 @@ test_99() {
 	echo "original target rules: $nrule_old"
 
 	for ((i = $nrule_old; i < $max; i++)); do
-		set_rule $FSNAME-MDT0000 elan$i any krb5i || error "set rule $i"
+		set_rule $FSNAME-MDT0000 ${NETTYPE}$i any krb5i || error "set rule $i"
 	done
 	for ((i = $nrule_old; i < $max; i++)); do
-		set_rule $FSNAME-MDT0000 elan$i any || error "remove rule $i"
+		set_rule $FSNAME-MDT0000 ${NETTYPE}$i any || error "remove rule $i"
 	done
 
 	nrule_new=$(do_facet mgs lctl get_param -n mgs.MGS.live.$FSNAME \
@@ -760,6 +760,9 @@ test_151() {
 
 	# umount everything, modules still loaded
 	stopall
+
+	# start gss daemon on mgs node
+	combined_mgs_mds || start_gss_daemons $mgs_HOST "$LSVCGSSD -v"
 
 	# start mgs
 	start mgs $(mgsdevname 1) $MDS_MOUNT_OPTS
