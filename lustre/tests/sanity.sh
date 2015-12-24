@@ -13128,16 +13128,20 @@ test_231a()
 
 	# clear the OSC stats
 	$LCTL set_param osc.*.stats=0 &>/dev/null
+	stop_writeback
 
 	# Client writes $bulk_size - there must be 1 rpc for $max_pages.
 	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=$bulk_size count=1 \
 		oflag=direct &>/dev/null || error "dd failed"
 
+	sync; sleep 1; sync # just to be safe
 	local nrpcs=$($LCTL get_param osc.*.stats |awk '/ost_write/ {print $2}')
 	if [ x$nrpcs != "x1" ]; then
-		error "found $nrpc ost_write RPCs, not 1 as expected"
+		$LCTL get_param osc.*.stats
+		error "found $nrpcs ost_write RPCs, not 1 as expected"
 	fi
 
+	start_writeback
 	# Drop the OSC cache, otherwise we will read from it
 	cancel_lru_locks osc
 
@@ -13150,7 +13154,8 @@ test_231a()
 
 	nrpcs=$($LCTL get_param osc.*.stats | awk '/ost_read/ { print $2 }')
 	if [ x$nrpcs != "x1" ]; then
-		error "found $nrpc ost_read RPCs, not 1 as expected"
+		$LCTL get_param osc.*.stats
+		error "found $nrpcs ost_read RPCs, not 1 as expected"
 	fi
 }
 run_test 231a "checking that reading/writing of BRW RPC size results in one RPC"
