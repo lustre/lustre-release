@@ -2042,6 +2042,22 @@ test_27c() {
 }
 run_test 27c "lfs quota should support human-readable output"
 
+test_27d() {
+	local softlimit=1.5
+	local hardlimit=2.3
+	local limit
+
+	$LFS setquota -u $TSTID -b ${softlimit}p -B ${hardlimit}P $DIR ||
+		error "set fraction block limit failed"
+	limit=$($LFS quota -u $TSTID -h $DIR | grep $DIR | awk '{print $3}')
+	[ $limit == ${softlimit}P ] || error "get fraction softlimit failed"
+	limit=$($LFS quota -u $TSTID -h $DIR | grep $DIR | awk '{print $4}')
+	[ $limit == ${hardlimit}P ] || error "get fraction hardlimit failed"
+
+	resetquota -u $TSTUSR
+}
+run_test 27d "lfs setquota should support fraction block limit"
+
 test_30() {
 	local LIMIT=4 # 4MB
 	local TESTFILE="$DIR/$tdir/$tfile"

@@ -187,55 +187,67 @@ llapi_log_callback_t llapi_info_callback_set(llapi_log_callback_t cb)
 int llapi_parse_size(const char *optarg, unsigned long long *size,
 		     unsigned long long *size_units, int bytes_spec)
 {
-        char *end;
+	char *end;
+	char *argbuf = (char *)optarg;
+	unsigned long long frac = 0, frac_d = 1;
 
-        if (strncmp(optarg, "-", 1) == 0)
-                return -1;
+	if (strncmp(optarg, "-", 1) == 0)
+		return -1;
 
-        if (*size_units == 0)
-                *size_units = 1;
+	if (*size_units == 0)
+		*size_units = 1;
 
-        *size = strtoull(optarg, &end, 0);
+	*size = strtoull(argbuf, &end, 0);
+	if (end != NULL && *end == '.') {
+		int i;
 
-        if (*end != '\0') {
-                if ((*end == 'b') && *(end + 1) == '\0' &&
-                    (*size & (~0ULL << (64 - 9))) == 0 &&
-                    !bytes_spec) {
-                        *size_units = 1 << 9;
-                } else if ((*end == 'b') &&
-                           *(end + 1) == '\0' &&
-                           bytes_spec) {
-                        *size_units = 1;
-                } else if ((*end == 'k' || *end == 'K') &&
-                           *(end + 1) == '\0' &&
-                           (*size & (~0ULL << (64 - 10))) == 0) {
-                        *size_units = 1 << 10;
-                } else if ((*end == 'm' || *end == 'M') &&
-                           *(end + 1) == '\0' &&
-                           (*size & (~0ULL << (64 - 20))) == 0) {
-                        *size_units = 1 << 20;
-                } else if ((*end == 'g' || *end == 'G') &&
-                           *(end + 1) == '\0' &&
-                           (*size & (~0ULL << (64 - 30))) == 0) {
-                        *size_units = 1 << 30;
-                } else if ((*end == 't' || *end == 'T') &&
-                           *(end + 1) == '\0' &&
-                           (*size & (~0ULL << (64 - 40))) == 0) {
-                        *size_units = 1ULL << 40;
-                } else if ((*end == 'p' || *end == 'P') &&
-                           *(end + 1) == '\0' &&
-                           (*size & (~0ULL << (64 - 50))) == 0) {
-                        *size_units = 1ULL << 50;
-                } else if ((*end == 'e' || *end == 'E') &&
-                           *(end + 1) == '\0' &&
-                           (*size & (~0ULL << (64 - 60))) == 0) {
-                        *size_units = 1ULL << 60;
-                } else {
-                        return -1;
-                }
-        }
-        *size *= *size_units;
-        return 0;
+		argbuf = end + 1;
+		frac = strtoull(argbuf, &end, 10);
+		/* count decimal places */
+		for (i = 0; i < (end - argbuf); i++)
+			frac_d *= 10;
+	}
+
+	if (*end != '\0') {
+		if ((*end == 'b') && *(end + 1) == '\0' &&
+		    (*size & (~0ULL << (64 - 9))) == 0 &&
+		    !bytes_spec) {
+			*size_units = 1 << 9;
+		} else if ((*end == 'b') &&
+			   *(end + 1) == '\0' &&
+			   bytes_spec) {
+			*size_units = 1;
+		} else if ((*end == 'k' || *end == 'K') &&
+			   *(end + 1) == '\0' &&
+			   (*size & (~0ULL << (64 - 10))) == 0) {
+			*size_units = 1 << 10;
+		} else if ((*end == 'm' || *end == 'M') &&
+			   *(end + 1) == '\0' &&
+			   (*size & (~0ULL << (64 - 20))) == 0) {
+			*size_units = 1 << 20;
+		} else if ((*end == 'g' || *end == 'G') &&
+			   *(end + 1) == '\0' &&
+			   (*size & (~0ULL << (64 - 30))) == 0) {
+			*size_units = 1 << 30;
+		} else if ((*end == 't' || *end == 'T') &&
+			   *(end + 1) == '\0' &&
+			   (*size & (~0ULL << (64 - 40))) == 0) {
+			*size_units = 1ULL << 40;
+		} else if ((*end == 'p' || *end == 'P') &&
+			   *(end + 1) == '\0' &&
+			   (*size & (~0ULL << (64 - 50))) == 0) {
+			*size_units = 1ULL << 50;
+		} else if ((*end == 'e' || *end == 'E') &&
+			   *(end + 1) == '\0' &&
+			   (*size & (~0ULL << (64 - 60))) == 0) {
+			*size_units = 1ULL << 60;
+		} else {
+			return -1;
+		}
+	}
+	*size = *size * *size_units + frac * *size_units / frac_d;
+
+	return 0;
 }
 
 /* XXX: llapi_xxx() functions return negative values upon failure */
