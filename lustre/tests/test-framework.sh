@@ -1382,70 +1382,6 @@ quota_type() {
 	return $rc
 }
 
-# XXX This function is kept for interoperability with old server (< 2.3.50),
-#     it should be removed whenever we drop the interoperability for such
-#     server.
-restore_quota_old() {
-	local mntpt=${1:-$MOUNT}
-	local quota_type=$(quota_type $FSNAME | grep MDT | cut -d "=" -f2)
-	if [ ! "$old_QUOTA_TYPE" ] ||
-		[ "$quota_type" = "$old_QUOTA_TYPE" ]; then
-		return
-	fi
-	quota_save_version $old_QUOTA_TYPE
-}
-
-# XXX This function is kept for interoperability with old server (< 2.3.50),
-#     it should be removed whenever we drop the interoperability for such
-#     server.
-setup_quota_old(){
-	local mntpt=$1
-
-	# no quota enforcement for now and accounting works out of the box
-	return
-
-    # We need save the original quota_type params, and restore them after testing
-
-    # Suppose that quota type the same on mds and ost
-    local quota_type=$(quota_type | grep MDT | cut -d "=" -f2)
-    [ ${PIPESTATUS[0]} -eq 0 ] || error "quota_type failed!"
-    echo "[HOST:$HOSTNAME] [old_quota_type:$quota_type] [new_quota_type:$QUOTA_TYPE]"
-    if [ "$quota_type" != "$QUOTA_TYPE" ]; then
-        export old_QUOTA_TYPE=$quota_type
-        quota_save_version $QUOTA_TYPE
-    else
-        qtype=$(tr -c -d "ug" <<< $QUOTA_TYPE)
-        $LFS quotacheck -$qtype $mntpt || error "quotacheck has failed for $type"
-    fi
-
-    local quota_usrs=$QUOTA_USERS
-
-    # get_filesystem_size
-    local disksz=$(lfs_df $mntpt | grep "summary"  | awk '{print $2}')
-    local blk_soft=$((disksz + 1024))
-    local blk_hard=$((blk_soft + blk_soft / 20)) # Go 5% over
-
-    local Inodes=$(lfs_df -i $mntpt | grep "summary"  | awk '{print $2}')
-    local i_soft=$Inodes
-    local i_hard=$((i_soft + i_soft / 20))
-
-    echo "Total disk size: $disksz  block-softlimit: $blk_soft block-hardlimit:
-        $blk_hard inode-softlimit: $i_soft inode-hardlimit: $i_hard"
-
-    local cmd
-    for usr in $quota_usrs; do
-        echo "Setting up quota on $HOSTNAME:$mntpt for $usr..."
-        for type in u g; do
-            cmd="$LFS setquota -$type $usr -b $blk_soft -B $blk_hard -i $i_soft -I $i_hard $mntpt"
-            echo "+ $cmd"
-            eval $cmd || error "$cmd FAILED!"
-        done
-        # display the quota status
-        echo "Quota settings for $usr : "
-        $LFS quota -v -u $usr $mntpt || true
-    done
-}
-
 # get mdt quota type
 mdt_quota_type() {
 	local varsvc=${SINGLEMDS}_svc
@@ -1463,11 +1399,6 @@ ost_quota_type() {
 
 # restore old quota type settings
 restore_quota() {
-	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ]; then
-		restore_quota_old
-		return
-	fi
-
 	if [ "$old_MDT_QUOTA_TYPE" ]; then
 		do_facet mgs $LCTL conf_param \
 			$FSNAME.quota.mdt=$old_MDT_QUOTA_TYPE
@@ -1503,11 +1434,6 @@ mdt_free_inodes() {
 }
 
 setup_quota(){
-	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ]; then
-		setup_quota_old $1
-		return
-	fi
-
 	local mntpt=$1
 
 	# save old quota type & set new quota type

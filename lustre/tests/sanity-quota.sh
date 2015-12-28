@@ -38,17 +38,11 @@ DIRECTIO=${DIRECTIO:-$LUSTRE/tests/directio}
 require_dsh_mds || exit 0
 require_dsh_ost || exit 0
 
-# XXX Once we drop the interoperability with old server (< 2.3.50), the
-#     sanity-quota-old.sh should be removed.
-if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ]; then
-	exec $LUSTRE/tests/sanity-quota-old.sh
-fi
-
 # Does e2fsprogs support quota feature?
 if [ $(facet_fstype $SINGLEMDS) == ldiskfs ] &&
 	do_facet $SINGLEMDS "! $DEBUGFS -c -R supported_features |
 		grep -q 'quota'"; then
-	skip "e2fsprogs doesn't support quota" && exit 0
+	skip_env "e2fsprogs doesn't support quota" && exit 0
 fi
 
 if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
