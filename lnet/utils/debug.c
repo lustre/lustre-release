@@ -59,6 +59,7 @@
 #include <linux/types.h>
 
 #include <libcfs/util/ioctl.h>
+#include <libcfs/util/param.h>
 #include <libcfs/user-time.h>
 #include <libcfs/libcfs_debug.h>
 #include <lnet/lnetctl.h>
@@ -75,21 +76,34 @@ static int debug_mask = ~0;
 static const char *libcfs_debug_subsystems[] = LIBCFS_DEBUG_SUBSYS_NAMES;
 static const char *libcfs_debug_masks[] = LIBCFS_DEBUG_MASKS_NAMES;
 
-#define DAEMON_CTL_NAME		"/proc/sys/lnet/daemon_file"
-#define SUBSYS_DEBUG_CTL_NAME	"/proc/sys/lnet/subsystem_debug"
-#define DEBUG_CTL_NAME		"/proc/sys/lnet/debug"
-#define DUMP_KERNEL_CTL_NAME	"/proc/sys/lnet/dump_kernel"
+#define DAEMON_CTL_NAME		"daemon_file"
+#define SUBSYS_DEBUG_CTL_NAME	"subsystem_debug"
+#define DEBUG_CTL_NAME		"debug"
+#define DUMP_KERNEL_CTL_NAME	"dump_kernel"
 
+/*
+ * Open the parameter file "debug" which controls the debugging
+ * flags used to determine what information ends up in the lustre
+ * logs collected by lctl dk or the debug daemon.
+ */
 static int
 dbg_open_ctlhandle(const char *str)
 {
-	int fd;
-	fd = open(str, O_WRONLY);
-	if (fd < 0) {
-		fprintf(stderr, "open %s failed: %s\n", str,
-			strerror(errno));
+	glob_t path;
+	int fd, rc;
+
+	rc = cfs_get_param_paths(&path, str);
+	if (rc != 0) {
+		fprintf(stderr, "invalid parameter '%s'\n", str);
 		return -1;
 	}
+
+	fd = open(path.gl_pathv[0], O_WRONLY);
+	if (fd < 0)
+		fprintf(stderr, "open '%s' failed: %s\n",
+			path.gl_pathv[0], strerror(errno));
+
+	cfs_free_param_data(&path);
 	return fd;
 }
 
@@ -183,22 +197,20 @@ int jt_dbg_show(int argc, char **argv)
 	return 0;
 }
 
-static int applymask(char* procpath, int value)
+static int applymask(char *param, int value)
 {
 	int	rc;
 	char	buf[64];
 	int	len = snprintf(buf, 64, "%d", value);
 
-	int fd = dbg_open_ctlhandle(procpath);
-	if (fd == -1) {
-		fprintf(stderr, "Unable to open %s: %s\n",
-			procpath, strerror(errno));
+	int fd = dbg_open_ctlhandle(param);
+	if (fd < 0)
 		return fd;
-	}
+
 	rc = dbg_write_cmd(fd, buf, len+1);
 	if (rc != 0) {
 		fprintf(stderr, "Write to %s failed: %s\n",
-			procpath, strerror(errno));
+			param, strerror(errno));
 	}
 
 	dbg_close_ctlhandle(fd);
@@ -210,7 +222,7 @@ static void applymask_all(unsigned int subs_mask, unsigned int debug_mask)
 {
 	applymask(SUBSYS_DEBUG_CTL_NAME, subs_mask);
 	applymask(DEBUG_CTL_NAME, debug_mask);
-	printf("Applied subsystem_debug=%d, debug=%d to /proc/sys/lnet\n",
+	printf("Applied subsystem_debug=%d, debug=%d to lnet\n",
 	       subs_mask, debug_mask);
 }
 

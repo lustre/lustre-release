@@ -1,1 +1,1 @@
-EXTRA_DIST = ioctl.h parser.h string.h
+EXTRA_DIST = ioctl.h parser.h param.h string.h

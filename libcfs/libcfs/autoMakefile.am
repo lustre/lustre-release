@@ -39,8 +39,8 @@
 SUBDIRS = linux util
 DIST_SUBDIRS = linux util
 
-noinst_LIBRARIES= libcfs.a
-libcfs_a_SOURCES  := util/string.c util/nidstrings.c
+noinst_LIBRARIES  = libcfs.a
+libcfs_a_SOURCES  := util/string.c util/nidstrings.c util/param.c
 libcfs_a_CPPFLAGS := -D_GNU_SOURCE
 libcfs_a_CPPFLAGS += -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64
 libcfs_a_CFLAGS   := -fPIC

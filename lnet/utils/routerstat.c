@@ -34,14 +34,18 @@
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
-#include <stdio.h>
 #include <errno.h>
-#include <string.h>
 #include <fcntl.h>
-#include <unistd.h>
+#include <glob.h>
+#include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/time.h>
+#include <unistd.h>
+
+#include <libcfs/util/param.h>
 
 double
 timenow ()
@@ -168,28 +172,36 @@ do_stat (int fd)
    last = timenow();
 }
 
-int main (int argc, char **argv)
+int main(int argc, char **argv)
 {
-   int  interval = 0;
-   int  fd;
+	int interval = 0;
+	glob_t path;
+	int fd;
 
-   if (argc > 1)
-      interval = atoi (argv[1]);
+	if (argc > 1)
+		interval = atoi(argv[1]);
 
-   fd = open ("/proc/sys/lnet/stats", O_RDONLY);
-   if (fd < 0)
-   {
-      fprintf (stderr, "Can't open stat: %s\n", strerror (errno));
-      return (1);
-   }
+	if (cfs_get_param_paths(&path, "stats") != 0) {
+		fprintf(stderr, "LNet stats not available\n");
+		return 1;
+	}
 
-   do_stat (fd);
-   if (interval == 0)
-      return (0);
+	fd = open(path.gl_pathv[0], O_RDONLY);
+	if (fd < 0) {
+		fprintf(stderr, "failed to open '%s': %s\n", path.gl_pathv[0],
+			strerror(errno));
+		cfs_free_param_data(&path);
+		return 1;
+	}
+	cfs_free_param_data(&path);
 
-   for (;;)
-   {
-      sleep (interval);
-      do_stat (fd);
-   }
+	do_stat(fd);
+	if (interval == 0)
+		return 0;
+
+	while (1) {
+		sleep(interval);
+		do_stat(fd);
+	}
+	/* Never reached */
 }
