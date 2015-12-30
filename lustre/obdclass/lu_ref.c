@@ -138,8 +138,10 @@ void lu_ref_init_loc(struct lu_ref *ref, const char *func, const int line)
 
 void lu_ref_fini(struct lu_ref *ref)
 {
+	spin_lock(&ref->lf_guard);
 	REFASSERT(ref, list_empty(&ref->lf_list));
 	REFASSERT(ref, ref->lf_refs == 0);
+	spin_unlock(&ref->lf_guard);
 	spin_lock(&lu_ref_refs_guard);
 	list_del_init(&ref->lf_linkage);
 	spin_unlock(&lu_ref_refs_guard);
@@ -260,9 +262,8 @@ void lu_ref_set_at(struct lu_ref *ref, struct lu_ref_link *link,
 		   const char *scope,
 		   const void *source0, const void *source1)
 {
-	REFASSERT(ref, link != NULL && !IS_ERR(link));
-
 	spin_lock(&ref->lf_guard);
+	REFASSERT(ref, link != NULL && !IS_ERR(link));
 	REFASSERT(ref, link->ll_ref == ref);
 	REFASSERT(ref, lu_ref_link_eq(link, scope, source0));
 	link->ll_source = source1;
@@ -272,8 +273,8 @@ void lu_ref_set_at(struct lu_ref *ref, struct lu_ref_link *link,
 void lu_ref_del_at(struct lu_ref *ref, struct lu_ref_link *link,
 		   const char *scope, const void *source)
 {
-	REFASSERT(ref, link != NULL && !IS_ERR(link));
 	spin_lock(&ref->lf_guard);
+	REFASSERT(ref, link != NULL && !IS_ERR(link));
 	REFASSERT(ref, link->ll_ref == ref);
 	REFASSERT(ref, lu_ref_link_eq(link, scope, source));
 	list_del(&link->ll_linkage);
