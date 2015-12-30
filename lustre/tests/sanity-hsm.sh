@@ -3162,7 +3162,7 @@ test_60() {
 	local elapsed=$((finish_at - start_at))
 
 	# Ensure that the progress update occurred within the expected window.
-	if [ $elapsed -lt $interval ]; then
+	if [ $elapsed -lt $((interval - 1)) ]; then
 		error "Expected progress update after at least $interval seconds"
 	fi
 
