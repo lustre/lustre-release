@@ -688,8 +688,8 @@ static inline void obd_memory_sub(long size)
 #define __OBD_MALLOC_VERBOSE(ptr, cptab, cpt, size, flags)		      \
 do {									      \
 	(ptr) = (cptab) == NULL ?					      \
-		kmalloc(size, flags | __GFP_ZERO) :			      \
-		cfs_cpt_malloc(cptab, cpt, size, flags | __GFP_ZERO);	      \
+		kmalloc(size, (flags) | __GFP_ZERO) :			      \
+		cfs_cpt_malloc(cptab, cpt, size, (flags) | __GFP_ZERO);	      \
 	if (likely((ptr) != NULL))                                            \
 		OBD_ALLOC_POST(ptr, size, "kmalloced");                       \
 } while (0)
@@ -802,10 +802,10 @@ do {									      \
 
 #define __OBD_SLAB_ALLOC_VERBOSE(ptr, slab, cptab, cpt, size, type)	      \
 do {									      \
-	LASSERT(ergo((type) != GFP_ATOMIC, !in_interrupt()));	      \
+	LASSERT(ergo((type) != GFP_ATOMIC, !in_interrupt()));		      \
 	(ptr) = (cptab) == NULL ?					      \
-		kmem_cache_alloc(slab, type | __GFP_ZERO) :		      \
-		cfs_mem_cache_cpt_alloc(slab, cptab, cpt, type | __GFP_ZERO); \
+		kmem_cache_alloc(slab, (type) | __GFP_ZERO) :		      \
+		cfs_mem_cache_cpt_alloc(slab, cptab, cpt, (type) | __GFP_ZERO); \
 	if (likely((ptr)))                                                    \
 		OBD_ALLOC_POST(ptr, size, "slab-alloced");                    \
 } while(0)
