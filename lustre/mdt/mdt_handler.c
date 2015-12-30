@@ -3172,12 +3172,23 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 	struct layout_intent *layout;
 	struct lu_fid *fid;
 	struct mdt_object *obj = NULL;
+	int layout_size = 0;
 	int rc = 0;
 	ENTRY;
 
 	if (opcode != MDT_IT_LAYOUT) {
 		CERROR("%s: Unknown intent (%d)\n", mdt_obd_name(info->mti_mdt),
 			opcode);
+		RETURN(-EINVAL);
+	}
+
+	layout = req_capsule_client_get(info->mti_pill, &RMF_LAYOUT_INTENT);
+	if (layout == NULL)
+		RETURN(-EPROTO);
+
+	if (layout->li_opc != LAYOUT_INTENT_ACCESS) {
+		CERROR("%s: Unsupported layout intent opc %d\n",
+		       mdt_obd_name(info->mti_mdt), layout->li_opc);
 		RETURN(-EINVAL);
 	}
 
@@ -3189,40 +3200,33 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 
 	obj = mdt_object_find(info->mti_env, info->mti_mdt, fid);
 	if (IS_ERR(obj))
-		RETURN(PTR_ERR(obj));
+		GOTO(out, rc = PTR_ERR(obj));
 
 	if (mdt_object_exists(obj) && !mdt_object_remote(obj)) {
-		/* get the length of lsm */
-		rc = mdt_attr_get_eabuf_size(info, obj);
-		if (rc < 0) {
-			mdt_object_put(info->mti_env, obj);
-			RETURN(rc);
-		}
+		layout_size = mdt_attr_get_eabuf_size(info, obj);
+		if (layout_size < 0)
+			GOTO(out_obj, rc = layout_size);
 
-		if (rc > info->mti_mdt->mdt_max_mdsize)
-			info->mti_mdt->mdt_max_mdsize = rc;
+		if (layout_size > info->mti_mdt->mdt_max_mdsize)
+			info->mti_mdt->mdt_max_mdsize = layout_size;
 	}
 
+	(*lockp)->l_lvb_type = LVB_T_LAYOUT;
+	req_capsule_set_size(info->mti_pill, &RMF_DLM_LVB, RCL_SERVER,
+			     layout_size);
+	rc = req_capsule_server_pack(info->mti_pill);
+	GOTO(out_obj, rc);
+
+out_obj:
 	mdt_object_put(info->mti_env, obj);
 
-	(*lockp)->l_lvb_type = LVB_T_LAYOUT;
-	req_capsule_set_size(info->mti_pill, &RMF_DLM_LVB, RCL_SERVER, rc);
-	rc = req_capsule_server_pack(info->mti_pill);
-	if (rc != 0)
-		RETURN(-EINVAL);
-
-	if (lustre_handle_is_used(&lhc->mlh_reg_lh))
+	if (rc == 0 && lustre_handle_is_used(&lhc->mlh_reg_lh))
 		rc = mdt_intent_lock_replace(info, lockp, lhc, flags);
 
-	layout = req_capsule_client_get(info->mti_pill, &RMF_LAYOUT_INTENT);
-	LASSERT(layout != NULL);
-	if (layout->li_opc == LAYOUT_INTENT_ACCESS)
-		/* return to normal/resent ldlm handling */
-		RETURN(rc);
+out:
+	lhc->mlh_reg_lh.cookie = 0;
 
-	CERROR("%s: Unsupported layout intent (%d)\n",
-		mdt_obd_name(info->mti_mdt), layout->li_opc);
-	RETURN(-EINVAL);
+	return rc;
 }
 
 static int mdt_intent_reint(enum mdt_it_code opcode,
