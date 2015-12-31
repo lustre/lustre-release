@@ -4133,7 +4133,8 @@ test_55() {
 		sync
 
 		echo checking size of lov_objid for ost index $i
-		LOV_OBJID_SIZE=$(do_facet mds1 "$DEBUGFS -R 'stat lov_objid' $mdsdev 2>/dev/null" | grep ^User | awk '{print $6}')
+		LOV_OBJID_SIZE=$(do_facet mds1 "$DEBUGFS -R 'stat lov_objid' $mdsdev 2>/dev/null" |
+				 grep ^User | awk -F 'Size: ' '{print $2}')
 		if [ "$LOV_OBJID_SIZE" != $(lov_objid_size $i) ]; then
 			error "lov_objid size has to be $(lov_objid_size $i), not $LOV_OBJID_SIZE"
 		else

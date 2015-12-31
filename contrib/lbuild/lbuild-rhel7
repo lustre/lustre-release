@@ -8,7 +8,7 @@ BUILD_GEN+=".0"
 
 SPEC_NAME="kernel.spec"
 DEVEL_PATH_ARCH_DELIMETER="."
-USE_KABI=true
+USE_KABI=false
 
 # force local definition of %dist into ~/.rpmmacros
 # to avoid verbose extended strings like ".el7.centos"
