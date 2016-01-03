@@ -71,7 +71,7 @@ static int osp_active_seq_show(struct seq_file *m, void *data)
  * \retval		negative number on error
  */
 static ssize_t
-osp_active_seq_write(struct file *file, const char *buffer,
+osp_active_seq_write(struct file *file, const char __user *buffer,
 			size_t count, loff_t *off)
 {
 	struct seq_file   *m = file->private_data;
@@ -166,7 +166,8 @@ static int osp_syn_changes_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t osp_syn_changes_seq_write(struct file *file, const char *buffer,
+static ssize_t osp_syn_changes_seq_write(struct file *file,
+					 const char __user *buffer,
 					 size_t count, loff_t *off)
 {
 	struct seq_file		*m	= file->private_data;
@@ -216,7 +217,7 @@ static int osp_max_rpcs_in_flight_seq_show(struct seq_file *m, void *data)
  * \retval		negative number on error
  */
 static ssize_t
-osp_max_rpcs_in_flight_seq_write(struct file *file, const char *buffer,
+osp_max_rpcs_in_flight_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off)
 {
 	struct seq_file		*m = file->private_data;
@@ -269,7 +270,7 @@ static int osp_max_rpcs_in_prog_seq_show(struct seq_file *m, void *data)
  * \retval		negative number on error
  */
 static ssize_t
-osp_max_rpcs_in_prog_seq_write(struct file *file, const char *buffer,
+osp_max_rpcs_in_prog_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off)
 {
 	struct seq_file		*m = file->private_data;
@@ -323,7 +324,7 @@ static int osp_create_count_seq_show(struct seq_file *m, void *data)
  * \retval		negative number on error
  */
 static ssize_t
-osp_create_count_seq_write(struct file *file, const char *buffer,
+osp_create_count_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off)
 {
 	struct seq_file		*m = file->private_data;
@@ -391,7 +392,7 @@ static int osp_max_create_count_seq_show(struct seq_file *m, void *data)
  * \retval		negative number on error
  */
 static ssize_t
-osp_max_create_count_seq_write(struct file *file, const char *buffer,
+osp_max_create_count_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off)
 {
 	struct seq_file		*m = file->private_data;
@@ -551,7 +552,7 @@ static int osp_maxage_seq_show(struct seq_file *m, void *data)
  * \retval		negative number on error
  */
 static ssize_t
-osp_maxage_seq_write(struct file *file, const char *buffer,
+osp_maxage_seq_write(struct file *file, const char __user *buffer,
 			size_t count, loff_t *off)
 {
 	struct seq_file		*m = file->private_data;

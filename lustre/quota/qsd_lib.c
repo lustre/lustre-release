@@ -143,7 +143,7 @@ LPROC_SEQ_FOPS_RO(qsd_enabled);
 /* force reintegration procedure to be executed.
  * Used for test/debugging purpose */
 static ssize_t
-lprocfs_force_reint_seq_write(struct file *file, const char *buffer,
+lprocfs_force_reint_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off)
 {
 	struct qsd_instance *qsd = ((struct seq_file *)file->private_data)->private;
@@ -189,7 +189,7 @@ static int qsd_timeout_seq_show(struct seq_file *m, void *data)
 }
 
 static ssize_t
-qsd_timeout_seq_write(struct file *file, const char *buffer,
+qsd_timeout_seq_write(struct file *file, const char __user *buffer,
 			size_t count, loff_t *off)
 {
 	struct qsd_instance *qsd = ((struct seq_file *)file->private_data)->private;

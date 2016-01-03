@@ -1198,7 +1198,7 @@ void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd)
 EXPORT_SYMBOL(ptlrpc_lprocfs_unregister_obd);
 
 ssize_t
-lprocfs_ping_seq_write(struct file *file, const char *buffer,
+lprocfs_ping_seq_write(struct file *file, const char __user *buffer,
 		       size_t count, loff_t *off)
 {
 	struct seq_file		*m = file->private_data;
@@ -1306,7 +1306,7 @@ int lprocfs_pinger_recov_seq_show(struct seq_file *m, void *n)
 EXPORT_SYMBOL(lprocfs_pinger_recov_seq_show);
 
 ssize_t
-lprocfs_pinger_recov_seq_write(struct file *file, const char *buffer,
+lprocfs_pinger_recov_seq_write(struct file *file, const char __user *buffer,
 			       size_t count, loff_t *off)
 {
 	struct seq_file	  *m	= file->private_data;

@@ -139,7 +139,8 @@ static int osd_brw_stats_seq_show(struct seq_file *seq, void *v)
 	return 0;
 }
 
-static ssize_t osd_brw_stats_seq_write(struct file *file, const char *buf,
+static ssize_t osd_brw_stats_seq_write(struct file *file,
+				       const char __user *buf,
 				       size_t len, loff_t *off)
 {
 	struct seq_file *seq = file->private_data;

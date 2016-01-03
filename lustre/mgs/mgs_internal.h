@@ -236,11 +236,11 @@ int mgs_ir_init_fs(const struct lu_env *env, struct mgs_device *mgs,
 void mgs_ir_fini_fs(struct mgs_device *mgs, struct fs_db *fsdb);
 void mgs_ir_notify_complete(struct fs_db *fsdb);
 int  mgs_get_ir_logs(struct ptlrpc_request *req);
-int  lprocfs_wr_ir_state(struct file *file, const char *buffer,
+int  lprocfs_wr_ir_state(struct file *file, const char __user *buffer,
 			 size_t count, void *data);
 int  lprocfs_rd_ir_state(struct seq_file *seq, void *data);
 ssize_t
-lprocfs_ir_timeout_seq_write(struct file *file, const char *buffer,
+lprocfs_ir_timeout_seq_write(struct file *file, const char __user *buffer,
 			     size_t count, loff_t *off);
 int  lprocfs_ir_timeout_seq_show(struct seq_file *seq, void *data);
 void mgs_fsc_cleanup(struct obd_export *exp);

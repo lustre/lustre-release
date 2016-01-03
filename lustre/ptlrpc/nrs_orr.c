@@ -1277,7 +1277,8 @@ no_hp:
  * almost identical; it can be reworked and then reused for ORR/TRR.
  */
 static ssize_t
-ptlrpc_lprocfs_nrs_orr_quantum_seq_write(struct file *file, const char *buffer,
+ptlrpc_lprocfs_nrs_orr_quantum_seq_write(struct file *file,
+					 const char __user *buffer,
 					 size_t count, loff_t *off)
 {
 	struct seq_file		    *m = file->private_data;
@@ -1491,7 +1492,8 @@ no_hp:
  */
 static ssize_t
 ptlrpc_lprocfs_nrs_orr_offset_type_seq_write(struct file *file,
-					     const char *buffer, size_t count,
+					     const char __user *buffer,
+					      size_t count,
 					     loff_t *off)
 {
 	struct seq_file		    *m = file->private_data;
@@ -1750,7 +1752,8 @@ no_hp:
  */
 static ssize_t
 ptlrpc_lprocfs_nrs_orr_supported_seq_write(struct file *file,
-					   const char *buffer, size_t count,
+					   const char __user *buffer,
+					   size_t count,
 					   loff_t *off)
 {
 	struct seq_file		    *m = file->private_data;

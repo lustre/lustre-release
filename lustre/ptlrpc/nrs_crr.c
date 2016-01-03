@@ -700,7 +700,8 @@ no_hp:
  */
 static ssize_t
 ptlrpc_lprocfs_nrs_crrn_quantum_seq_write(struct file *file,
-					  const char *buffer, size_t count,
+					  const char __user *buffer,
+					  size_t count,
 					  loff_t *off)
 {
 	struct ptlrpc_service	    *svc = ((struct seq_file *)file->private_data)->private;

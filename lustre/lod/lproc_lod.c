@@ -83,7 +83,7 @@ static int lod_stripesize_seq_show(struct seq_file *m, void *v)
  * \retval negative	error code if failed
  */
 static ssize_t
-lod_stripesize_seq_write(struct file *file, const char *buffer,
+lod_stripesize_seq_write(struct file *file, const char __user *buffer,
 			 size_t count, loff_t *off)
 {
 	struct seq_file   *m = file->private_data;
@@ -139,7 +139,7 @@ static int lod_stripeoffset_seq_show(struct seq_file *m, void *v)
  * \retval negative	error code if failed
  */
 static ssize_t
-lod_stripeoffset_seq_write(struct file *file, const char *buffer,
+lod_stripeoffset_seq_write(struct file *file, const char __user *buffer,
 			   size_t count, loff_t *off)
 {
 	struct seq_file   *m = file->private_data;
@@ -191,7 +191,7 @@ static int lod_stripetype_seq_show(struct seq_file *m, void *v)
  * \retval negative	error code if failed
  */
 static ssize_t
-lod_stripetype_seq_write(struct file *file, const char *buffer,
+lod_stripetype_seq_write(struct file *file, const char __user *buffer,
 			 size_t count, loff_t *off)
 {
 	struct seq_file   *m = file->private_data;
@@ -244,7 +244,7 @@ static int lod_stripecount_seq_show(struct seq_file *m, void *v)
  * \retval negative	error code otherwise
  */
 static ssize_t
-lod_stripecount_seq_write(struct file *file, const char *buffer,
+lod_stripecount_seq_write(struct file *file, const char __user *buffer,
 			  size_t count, loff_t *off)
 {
 	struct seq_file   *m = file->private_data;
@@ -427,7 +427,7 @@ static int lod_qos_thresholdrr_seq_show(struct seq_file *m, void *v)
  * \retval negative	error code if failed
  */
 static ssize_t
-lod_qos_thresholdrr_seq_write(struct file *file, const char *buffer,
+lod_qos_thresholdrr_seq_write(struct file *file, const char __user *buffer,
 			      size_t count, loff_t *off)
 {
 	struct seq_file   *m = file->private_data;
@@ -483,7 +483,7 @@ static int lod_qos_maxage_seq_show(struct seq_file *m, void *v)
  * \retval negative	error code if failed
  */
 static ssize_t
-lod_qos_maxage_seq_write(struct file *file, const char *buffer,
+lod_qos_maxage_seq_write(struct file *file, const char __user *buffer,
 			 size_t count, loff_t *off)
 {
 	struct seq_file		*m = file->private_data;
@@ -683,7 +683,7 @@ static int lod_lmv_failout_seq_show(struct seq_file *m, void *v)
  * \retval negative	error code if failed
  */
 static ssize_t
-lod_lmv_failout_seq_write(struct file *file, const char *buffer,
+lod_lmv_failout_seq_write(struct file *file, const char __user *buffer,
 			  size_t count, loff_t *off)
 {
 	struct seq_file		*m	= file->private_data;

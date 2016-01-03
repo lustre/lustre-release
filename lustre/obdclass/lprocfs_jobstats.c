@@ -641,7 +641,7 @@ int lprocfs_job_interval_seq_show(struct seq_file *m, void *data)
 EXPORT_SYMBOL(lprocfs_job_interval_seq_show);
 
 ssize_t
-lprocfs_job_interval_seq_write(struct file *file, const char *buffer,
+lprocfs_job_interval_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off)
 {
 	struct obd_device *obd;

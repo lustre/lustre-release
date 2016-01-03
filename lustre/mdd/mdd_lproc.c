@@ -50,7 +50,7 @@
 #include "mdd_internal.h"
 
 static ssize_t
-mdd_atime_diff_seq_write(struct file *file, const char *buffer,
+mdd_atime_diff_seq_write(struct file *file, const char __user *buffer,
 			 size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
@@ -97,7 +97,7 @@ static int mdd_changelog_mask_seq_show(struct seq_file *m, void *data)
 }
 
 static ssize_t
-mdd_changelog_mask_seq_write(struct file *file, const char *buffer,
+mdd_changelog_mask_seq_write(struct file *file, const char __user *buffer,
 			     size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
@@ -186,7 +186,7 @@ static int mdd_sync_perm_seq_show(struct seq_file *m, void *data)
 }
 
 static ssize_t
-mdd_sync_perm_seq_write(struct file *file, const char *buffer,
+mdd_sync_perm_seq_write(struct file *file, const char __user *buffer,
 			size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
@@ -212,7 +212,7 @@ static int mdd_lfsck_speed_limit_seq_show(struct seq_file *m, void *data)
 }
 
 static ssize_t
-mdd_lfsck_speed_limit_seq_write(struct file *file, const char *buffer,
+mdd_lfsck_speed_limit_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
@@ -239,7 +239,7 @@ static int mdd_lfsck_async_windows_seq_show(struct seq_file *m, void *data)
 }
 
 static ssize_t
-mdd_lfsck_async_windows_seq_write(struct file *file, const char *buffer,
+mdd_lfsck_async_windows_seq_write(struct file *file, const char __user *buffer,
 				  size_t count, loff_t *off)
 {
 	struct seq_file   *m = file->private_data;

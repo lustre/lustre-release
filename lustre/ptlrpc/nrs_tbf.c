@@ -1746,7 +1746,8 @@ out:
 extern struct nrs_core nrs_core;
 #define LPROCFS_WR_NRS_TBF_MAX_CMD (4096)
 static ssize_t
-ptlrpc_lprocfs_nrs_tbf_rule_seq_write(struct file *file, const char *buffer,
+ptlrpc_lprocfs_nrs_tbf_rule_seq_write(struct file *file,
+				      const char __user *buffer,
 				      size_t count, loff_t *off)
 {
 	struct seq_file		  *m = file->private_data;

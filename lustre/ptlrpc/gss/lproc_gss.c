@@ -158,7 +158,7 @@ static int gss_lk_proc_dl_seq_show(struct seq_file *m, void *v)
 }
 
 static ssize_t
-gss_lk_proc_dl_seq_write(struct file *file, const char *buffer,
+gss_lk_proc_dl_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off)
 {
         int     val, rc;
