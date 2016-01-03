@@ -60,7 +60,7 @@ CFS_MODULE_PARM(rnet_htable_size, "i", int, 0444,
 		"size of remote network hash table");
 
 static int lnet_ping(lnet_process_id_t id, int timeout_ms,
-		     lnet_process_id_t *ids, int n_ids);
+		     lnet_process_id_t __user *ids, int n_ids);
 
 static char *
 lnet_get_routes(void)
