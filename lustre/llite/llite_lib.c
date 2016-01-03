@@ -2358,7 +2358,6 @@ int ll_obd_statfs(struct inode *inode, void __user *arg)
         char *buf = NULL;
         struct obd_ioctl_data *data = NULL;
         __u32 type;
-	__u32 __user flags;	/* not user, but obd_iocontrol is abused */
         int len = 0, rc;
 
         if (!inode || !(sbi = ll_i2sbi(inode)))
@@ -2387,8 +2386,7 @@ int ll_obd_statfs(struct inode *inode, void __user *arg)
         else
                 GOTO(out_statfs, rc = -ENODEV);
 
-	flags = (type & LL_STATFS_NODELAY) ? OBD_STATFS_NODELAY : 0;
-	rc = obd_iocontrol(IOC_OBD_STATFS, exp, len, buf, &flags);
+	rc = obd_iocontrol(IOC_OBD_STATFS, exp, len, buf, NULL);
         if (rc)
                 GOTO(out_statfs, rc);
 out_statfs:
