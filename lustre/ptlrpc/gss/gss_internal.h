@@ -470,7 +470,7 @@ __u32 g_verify_token_header(rawobj_t *mech, int *body_size,
 
 
 /* gss_cli_upcall.c */
-int gss_do_ctx_init_rpc(char *buffer, unsigned long count);
+int gss_do_ctx_init_rpc(char __user *buffer, unsigned long count);
 int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx);
 
 int  __init gss_init_cli_upcall(void);

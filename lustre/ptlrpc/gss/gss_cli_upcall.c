@@ -218,19 +218,19 @@ int ctx_init_parse_reply(struct lustre_msg *msg, int swabbed,
 struct lgssd_ioctl_param {
         int             version;        /* in   */
         int             secid;          /* in   */
-        char           *uuid;           /* in   */
+	char __user    *uuid;		/* in   */
         int             lustre_svc;     /* in   */
         uid_t           uid;            /* in   */
         gid_t           gid;            /* in   */
         long            send_token_size;/* in   */
-        char           *send_token;     /* in   */
+	char __user    *send_token;     /* in   */
         long            reply_buf_size; /* in   */
-        char           *reply_buf;      /* in   */
+	char __user    *reply_buf;	/* in   */
         long            status;         /* out  */
         long            reply_length;   /* out  */
 };
 
-int gss_do_ctx_init_rpc(__user char *buffer, unsigned long count)
+int gss_do_ctx_init_rpc(char __user *buffer, unsigned long count)
 {
         struct obd_import        *imp;
         struct ptlrpc_request    *req;
