@@ -867,8 +867,9 @@ int mdt_hsm_cdt_fini(struct mdt_device *mdt);
 int mdt_hsm_cdt_wakeup(struct mdt_device *mdt);
 
 /* coordinator control /proc interface */
-ssize_t mdt_hsm_cdt_control_seq_write(struct file *file, const char *buffer,
-					size_t count, loff_t *off);
+ssize_t mdt_hsm_cdt_control_seq_write(struct file *file,
+				      const char __user *buffer,
+				      size_t count, loff_t *off);
 int mdt_hsm_cdt_control_seq_show(struct seq_file *m, void *data);
 int hsm_cdt_procfs_init(struct mdt_device *mdt);
 void hsm_cdt_procfs_fini(struct mdt_device *mdt);
