@@ -2057,8 +2057,8 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
                       "timed out for sent delay" : "timed out for slow reply"),
                   req->rq_sent, req->rq_real_sent);
 
-        if (imp != NULL && obd_debug_peer_on_timeout)
-                LNetCtl(IOC_LIBCFS_DEBUG_PEER, &imp->imp_connection->c_peer);
+	if (imp != NULL && obd_debug_peer_on_timeout)
+		LNetDebugPeer(imp->imp_connection->c_peer);
 
         ptlrpc_unregister_reply(req, async_unlink);
         ptlrpc_unregister_bulk(req, async_unlink);
