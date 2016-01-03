@@ -1855,7 +1855,7 @@ out:
 }
 
 /**
- * IOC_LIBCFS_PORTALS_COMPATIBILITY is now deprecated, don't use it.
+ * LNet ioctl handler.
  *
  */
 int
@@ -2033,10 +2033,6 @@ LNetCtl(unsigned int cmd, void *arg)
 				   cfs_time_current() -
 				   cfs_time_seconds(cfs_time_current_sec() -
 						    (time_t)data->ioc_u64[0]));
-
-	case IOC_LIBCFS_PORTALS_COMPATIBILITY:
-		/* This can be removed once lustre stops calling it */
-		return 0;
 
 	case IOC_LIBCFS_LNET_DIST:
 		rc = LNetDist(data->ioc_nid, &data->ioc_nid, &data->ioc_u32[1]);
