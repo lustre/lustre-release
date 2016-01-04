@@ -13102,6 +13102,20 @@ test_230h() {
 }
 run_test 230h "migrate .. and root"
 
+test_230i() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	mkdir -p $DIR/$tdir/migrate_dir
+
+	$LFS migrate -m 1 $DIR/$tdir/migrate_dir/ ||
+		error "migration fails with a tailing slash"
+
+	$LFS migrate -m 0 $DIR/$tdir/migrate_dir// ||
+		error "migration fails with two tailing slashes"
+}
+run_test 230i "lfs migrate -m tolerates trailing slashes"
+
 test_231a()
 {
 	# For simplicity this test assumes that max_pages_per_rpc

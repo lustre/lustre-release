@@ -1359,21 +1359,21 @@ static int cb_common_fini(char *path, DIR *parent, DIR **dirp, void *data,
 }
 
 /* set errno upon failure */
-static DIR *opendir_parent(char *path)
+static DIR *opendir_parent(const char *path)
 {
-        DIR *parent;
-        char *fname;
-        char c;
+	char *path_copy;
+	char *parent_path;
+	DIR *parent;
 
-        fname = strrchr(path, '/');
-        if (fname == NULL)
-                return opendir(".");
+	path_copy = strdup(path);
+	if (path_copy == NULL)
+		return NULL;
 
-        c = fname[1];
-        fname[1] = '\0';
-        parent = opendir(path);
-        fname[1] = c;
-        return parent;
+	parent_path = dirname(path_copy);
+	parent = opendir(parent_path);
+	free(path_copy);
+
+	return parent;
 }
 
 static int cb_get_dirstripe(char *path, DIR *d, struct find_param *param)
@@ -3018,6 +3018,7 @@ static int cb_migrate_mdt_init(char *path, DIR *parent, DIR **dirp,
 	struct obd_ioctl_data	data = { 0 };
 	int			fd;
 	int			ret;
+	char			*path_copy;
 	char			*filename;
 	bool			retry = false;
 
@@ -3038,7 +3039,8 @@ static int cb_migrate_mdt_init(char *path, DIR *parent, DIR **dirp,
 
 	fd = dirfd(tmp_parent);
 
-	filename = basename(path);
+	path_copy = strdup(path);
+	filename = basename(path_copy);
 	data.ioc_inlbuf1 = (char *)filename;
 	data.ioc_inllen1 = strlen(filename) + 1;
 	data.ioc_inlbuf2 = (char *)&param->fp_mdt_index;
@@ -3089,6 +3091,8 @@ out:
 
 	if (parent == NULL)
 		closedir(tmp_parent);
+
+	free(path_copy);
 
 	return ret;
 }
