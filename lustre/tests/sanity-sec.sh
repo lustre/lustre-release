@@ -470,6 +470,9 @@ modify_flags() {
 }
 
 squash_id() {
+	[ $(lustre_version_code mgs) -lt $(version_code 2.5.53) ] &&
+		skip "No nodemap on $(lustre_build_version mgs) MGS < 2.5.53" &&
+		return
 	local cmd
 
 	cmd[0]="$LCTL nodemap_modify --property squash_uid"
