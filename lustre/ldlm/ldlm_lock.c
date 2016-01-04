@@ -1110,23 +1110,26 @@ void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list)
 	if (work_list && lock->l_completion_ast != NULL)
 		ldlm_add_ast_work_item(lock, NULL, work_list);
 
-	/* We should not add locks to granted list in the following cases:
-	 * - this is an UNLOCK but not a real lock;
-	 * - this is a TEST lock;
-	 * - this is a F_CANCELLK lock (async flock has req_mode == 0)
-	 * - this is a deadlock (flock cannot be granted) */
-	if (lock->l_req_mode == 0 ||
-	    lock->l_req_mode == LCK_NL ||
-	    ldlm_is_test_lock(lock) ||
-	    ldlm_is_flock_deadlock(lock))
-		RETURN_EXIT;
-
         if (res->lr_type == LDLM_PLAIN || res->lr_type == LDLM_IBITS)
                 ldlm_grant_lock_with_skiplist(lock);
         else if (res->lr_type == LDLM_EXTENT)
                 ldlm_extent_add_lock(res, lock);
-        else
-                ldlm_resource_add_lock(res, &res->lr_granted, lock);
+	else if (res->lr_type == LDLM_FLOCK) {
+		/* We should not add locks to granted list in the following
+		 * cases:
+		 * - this is an UNLOCK but not a real lock;
+		 * - this is a TEST lock;
+		 * - this is a F_CANCELLK lock (async flock has req_mode == 0)
+		 * - this is a deadlock (flock cannot be granted) */
+		if (lock->l_req_mode == 0 ||
+		    lock->l_req_mode == LCK_NL ||
+		    ldlm_is_test_lock(lock) ||
+		    ldlm_is_flock_deadlock(lock))
+			RETURN_EXIT;
+		ldlm_resource_add_lock(res, &res->lr_granted, lock);
+	} else {
+		LBUG();
+	}
 
         ldlm_pool_add(&ldlm_res_to_ns(res)->ns_pool, lock);
         EXIT;
