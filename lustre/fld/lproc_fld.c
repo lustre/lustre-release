@@ -87,22 +87,29 @@ static ssize_t
 fld_proc_hash_seq_write(struct file *file, const char __user *buffer,
 			size_t count, loff_t *off)
 {
-	struct lu_client_fld *fld = ((struct seq_file *)file->private_data)->private;
-        struct lu_fld_hash *hash = NULL;
-        int i;
-	ENTRY;
+	struct lu_client_fld *fld;
+	struct lu_fld_hash *hash = NULL;
+	char fh_name[8];
+	int i;
 
-        LASSERT(fld != NULL);
+	if (count > sizeof(fh_name))
+		return -ENAMETOOLONG;
 
-        for (i = 0; fld_hash[i].fh_name != NULL; i++) {
-                if (count != strlen(fld_hash[i].fh_name))
-                        continue;
+	if (copy_from_user(fh_name, buffer, count) != 0)
+		return -EFAULT;
 
-                if (!strncmp(fld_hash[i].fh_name, buffer, count)) {
-                        hash = &fld_hash[i];
-                        break;
-                }
-        }
+	fld = ((struct seq_file *)file->private_data)->private;
+	LASSERT(fld != NULL);
+
+	for (i = 0; fld_hash[i].fh_name != NULL; i++) {
+		if (count != strlen(fld_hash[i].fh_name))
+			continue;
+
+		if (!strncmp(fld_hash[i].fh_name, fh_name, count)) {
+			hash = &fld_hash[i];
+			break;
+		}
+	}
 
 	if (hash != NULL) {
 		spin_lock(&fld->lcf_lock);
@@ -113,7 +120,7 @@ fld_proc_hash_seq_write(struct file *file, const char __user *buffer,
 		       fld->lcf_name, hash->fh_name);
 	}
 
-	RETURN(count);
+	return count;
 }
 
 static ssize_t
