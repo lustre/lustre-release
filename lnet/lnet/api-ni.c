@@ -62,6 +62,15 @@ module_param(use_tcp_bonding, int, 0444);
 MODULE_PARM_DESC(use_tcp_bonding,
 		 "Set to 1 to use socklnd bonding. 0 to use Multi-Rail");
 
+/*
+ * This sequence number keeps track of how many times DLC was used to
+ * update the configuration. It is incremented on any DLC update and
+ * checked when sending a message to determine if there is a need to
+ * re-run the selection algorithm to handle configuration change.
+ * Look at lnet_select_pathway() for more details on its usage.
+ */
+static atomic_t lnet_dlc_seq_no = ATOMIC_INIT(0);
+
 static int lnet_ping(lnet_process_id_t id, signed long timeout,
 		     lnet_process_id_t __user *ids, int n_ids);
 
@@ -1565,6 +1574,7 @@ lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 
 	lnet_net_lock(LNET_LOCK_EX);
 	list_splice_tail(&local_ni_list, &net_l->net_ni_list);
+	lnet_incr_dlc_seq();
 	lnet_net_unlock(LNET_LOCK_EX);
 
 	/* if the network is not unique then we don't want to keep
@@ -2241,6 +2251,16 @@ out:
 	mutex_unlock(&the_lnet.ln_api_mutex);
 
 	return rc;
+}
+
+void lnet_incr_dlc_seq(void)
+{
+	atomic_inc(&lnet_dlc_seq_no);
+}
+
+__u32 lnet_get_dlc_seq_locked(void)
+{
+	return atomic_read(&lnet_dlc_seq_no);
 }
 
 /**

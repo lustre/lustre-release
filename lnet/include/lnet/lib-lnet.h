@@ -496,6 +496,7 @@ extern lnet_ni_t *lnet_nid2ni_addref(lnet_nid_t nid);
 extern lnet_ni_t *lnet_net2ni_locked(__u32 net, int cpt);
 extern lnet_ni_t *lnet_net2ni(__u32 net);
 bool lnet_is_ni_healthy_locked(struct lnet_ni *ni);
+struct lnet_net *lnet_get_net_locked(__u32 net_id);
 
 int lnet_lib_init(void);
 void lnet_lib_exit(void);
@@ -789,19 +790,69 @@ int lnet_parse_networks(struct list_head *nilist, char *networks,
 bool lnet_net_unique(__u32 net_id, struct list_head *nilist,
 		     struct lnet_net **net);
 bool lnet_ni_unique_net(struct list_head *nilist, char *iface);
+void lnet_incr_dlc_seq(void);
+__u32 lnet_get_dlc_seq_locked(void);
 
+struct lnet_peer_ni *lnet_get_next_peer_ni_locked(struct lnet_peer *peer,
+						  struct lnet_peer_net *peer_net,
+						  struct lnet_peer_ni *prev);
+int lnet_find_or_create_peer_locked(lnet_nid_t dst_nid, int cpt,
+				    struct lnet_peer **peer);
 int lnet_nid2peerni_locked(struct lnet_peer_ni **lpp, lnet_nid_t nid, int cpt);
 struct lnet_peer_ni *lnet_find_peer_ni_locked(lnet_nid_t nid, int cpt);
 void lnet_peer_tables_cleanup(lnet_ni_t *ni);
 void lnet_peer_tables_destroy(void);
 int lnet_peer_tables_create(void);
 void lnet_debug_peer(lnet_nid_t nid);
+struct lnet_peer_net *lnet_peer_get_net_locked(struct lnet_peer *peer,
+					       __u32 net_id);
+bool lnet_peer_is_ni_pref_locked(struct lnet_peer_ni *lpni,
+				 struct lnet_ni *ni);
 int lnet_get_peer_info(__u32 peer_index, __u64 *nid,
 		       char alivness[LNET_MAX_STR_LEN],
 		       __u32 *cpt_iter, __u32 *refcount,
 		       __u32 *ni_peer_tx_credits, __u32 *peer_tx_credits,
 		       __u32 *peer_rtr_credits, __u32 *peer_min_rtr_credtis,
 		       __u32 *peer_tx_qnob);
+
+static inline bool
+lnet_is_peer_ni_healthy_locked(struct lnet_peer_ni *lpni)
+{
+	return lpni->lpni_healthy;
+}
+
+static inline void
+lnet_set_peer_ni_health_locked(struct lnet_peer_ni *lpni, bool health)
+{
+	lpni->lpni_healthy = health;
+}
+
+static inline bool
+lnet_is_peer_net_healthy_locked(struct lnet_peer_net *peer_net)
+{
+	struct lnet_peer_ni *lpni;
+
+	list_for_each_entry(lpni, &peer_net->lpn_peer_nis,
+			    lpni_on_peer_net_list) {
+		if (lnet_is_peer_ni_healthy_locked(lpni))
+			return true;
+	}
+
+	return false;
+}
+
+static inline bool
+lnet_is_peer_healthy_locked(struct lnet_peer *peer)
+{
+	struct lnet_peer_net *peer_net;
+
+	list_for_each_entry(peer_net, &peer->lp_peer_nets, lpn_on_peer_list) {
+		if (lnet_is_peer_net_healthy_locked(peer_net))
+			return true;
+	}
+
+	return false;
+}
 
 static inline void
 lnet_peer_set_alive(struct lnet_peer_ni *lp)

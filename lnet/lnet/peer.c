@@ -224,6 +224,93 @@ lnet_find_peer_ni_locked(lnet_nid_t nid, int cpt)
 	return lpni;
 }
 
+int
+lnet_find_or_create_peer_locked(lnet_nid_t dst_nid, int cpt, struct lnet_peer **peer)
+{
+	struct lnet_peer_ni *lpni;
+
+	lpni = lnet_find_peer_ni_locked(dst_nid, cpt);
+	if (!lpni) {
+		int rc;
+		rc = lnet_nid2peerni_locked(&lpni, dst_nid, cpt);
+		if (rc != 0)
+			return rc;
+	}
+
+	*peer = lpni->lpni_peer_net->lpn_peer;
+	lnet_peer_ni_decref_locked(lpni);
+
+	return 0;
+}
+
+struct lnet_peer_ni *
+lnet_get_next_peer_ni_locked(struct lnet_peer *peer,
+			     struct lnet_peer_net *peer_net,
+			     struct lnet_peer_ni *prev)
+{
+	struct lnet_peer_ni *lpni;
+	struct lnet_peer_net *net = peer_net;
+
+	if (!prev) {
+		if (!net)
+			net = list_entry(peer->lp_peer_nets.next,
+					 struct lnet_peer_net,
+					 lpn_on_peer_list);
+		lpni = list_entry(net->lpn_peer_nis.next, struct lnet_peer_ni,
+				  lpni_on_peer_net_list);
+
+		return lpni;
+	}
+
+	if (prev->lpni_on_peer_net_list.next ==
+	    &prev->lpni_peer_net->lpn_peer_nis) {
+		/*
+		 * if you reached the end of the peer ni list and the peer
+		 * net is specified then there are no more peer nis in that
+		 * net.
+		 */
+		if (net)
+			return NULL;
+
+		/*
+		 * we reached the end of this net ni list. move to the
+		 * next net
+		 */
+		if (prev->lpni_peer_net->lpn_on_peer_list.next ==
+		    &peer->lp_peer_nets)
+			/* no more nets and no more NIs. */
+			return NULL;
+
+		/* get the next net */
+		net = list_entry(prev->lpni_peer_net->lpn_on_peer_list.next,
+				 struct lnet_peer_net,
+				 lpn_on_peer_list);
+		/* get the ni on it */
+		lpni = list_entry(net->lpn_peer_nis.next, struct lnet_peer_ni,
+				  lpni_on_peer_net_list);
+
+		return lpni;
+	}
+
+	/* there are more nis left */
+	lpni = list_entry(prev->lpni_on_peer_net_list.next,
+			  struct lnet_peer_ni, lpni_on_peer_net_list);
+
+	return lpni;
+}
+
+bool
+lnet_peer_is_ni_pref_locked(struct lnet_peer_ni *lpni, struct lnet_ni *ni)
+{
+	int i;
+
+	for (i = 0; i < lpni->lpni_pref_nnids; i++) {
+		if (lpni->lpni_pref_nids[i] == ni->ni_nid)
+			return true;
+	}
+	return false;
+}
+
 static void
 lnet_try_destroy_peer_hierarchy_locked(struct lnet_peer_ni *lpni)
 {
@@ -292,6 +379,17 @@ lnet_build_peer_hierarchy(struct lnet_peer_ni *lpni)
 	list_add_tail(&peer->lp_on_lnet_peer_list, &the_lnet.ln_peers);
 
 	return 0;
+}
+
+struct lnet_peer_net *
+lnet_peer_get_net_locked(struct lnet_peer *peer, __u32 net_id)
+{
+	struct lnet_peer_net *peer_net;
+	list_for_each_entry(peer_net, &peer->lp_peer_nets, lpn_on_peer_list) {
+		if (peer_net->lpn_net_id == net_id)
+			return peer_net;
+	}
+	return NULL;
 }
 
 void
@@ -405,12 +503,19 @@ lnet_nid2peerni_locked(struct lnet_peer_ni **lpnip, lnet_nid_t nid, int cpt)
 	}
 
 	lpni->lpni_net = lnet_get_net_locked(LNET_NIDNET(lpni->lpni_nid));
-	lpni->lpni_txcredits    =
-	lpni->lpni_mintxcredits =
-		lpni->lpni_net->net_tunables.lct_peer_tx_credits;
-	lpni->lpni_rtrcredits    =
-	lpni->lpni_minrtrcredits =
-		lnet_peer_buffer_credits(lpni->lpni_net);
+	if (lpni->lpni_net) {
+		lpni->lpni_txcredits    =
+		lpni->lpni_mintxcredits =
+			lpni->lpni_net->net_tunables.lct_peer_tx_credits;
+		lpni->lpni_rtrcredits    =
+		lpni->lpni_minrtrcredits =
+			lnet_peer_buffer_credits(lpni->lpni_net);
+	} else {
+		CDEBUG(D_NET, "peer_ni %s is not directly connected\n",
+		       libcfs_nid2str(nid));
+	}
+
+	lnet_set_peer_ni_health_locked(lpni, true);
 
 	list_add_tail(&lpni->lpni_hashlist,
 			&ptable->pt_hash[lnet_nid2peerhash(nid)]);
