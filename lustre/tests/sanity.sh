@@ -11791,6 +11791,7 @@ test_205() { # Job stats
 	cmd="dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 oflag=sync"
 	verify_jobstats "$cmd" "ost1"
 	# read
+	cancel_lru_locks osc
 	cmd="dd if=$DIR/$tfile of=/dev/null bs=1M count=1 iflag=direct"
 	verify_jobstats "$cmd" "ost1"
 	# truncate
