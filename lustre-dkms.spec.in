@@ -75,8 +75,8 @@ cat << EOF > lustre-dkms_post-add.sh
 if [ \$1 = "lustre-client" ] ; then
 	SERVER="--disable-server"
 else
-	SPL_VERSION=\$(dkms status -m spl -k \$3/\$5 | awk -F', ' '{print \$2; exit 0}' | sed 's/: added\\\$//')
-	ZFS_VERSION=\$(dkms status -m zfs -k \$3/\$5 | awk -F', ' '{print \$2; exit 0}' | sed 's/: added\\\$//')
+	SPL_VERSION=\$(dkms status -m spl -k \$3/\$5 | awk -F', ' '{print \$2; exit 0}' | sed 's/: added\$//')
+	ZFS_VERSION=\$(dkms status -m zfs -k \$3/\$5 | awk -F', ' '{print \$2; exit 0}' | sed 's/: added\$//')
 
 	SERVER="--enable-server --disable-ldiskfs --with-linux=\$4 --with-linux-obj=\$4 \\
 	       --with-spl=\$6/spl-\${SPL_VERSION} \\
