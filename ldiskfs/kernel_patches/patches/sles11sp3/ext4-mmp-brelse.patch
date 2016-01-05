@@ -1,0 +1,23 @@
+--- linux-stage.orig/fs/ext4/mmp.c	2015-11-01 15:42:38.069175571 +0530
++++ linux-stage/fs/ext4/mmp.c	2015-11-01 15:46:53.840174791 +0530
+@@ -59,8 +59,11 @@
+ 	}
+ 
+ 	mmp = (struct mmp_struct *)((*bh)->b_data);
+-	if (le32_to_cpu(mmp->mmp_magic) != EXT4_MMP_MAGIC)
++	if (le32_to_cpu(mmp->mmp_magic) != EXT4_MMP_MAGIC) {
++		brelse(*bh);
++		*bh = NULL;
+ 		return -EINVAL;
++	}
+ 
+ 	return 0;
+ }
+@@ -178,6 +180,7 @@
+ 					     "The filesystem seems to have been"
+ 					     " multiply mounted.");
+ 				ext4_error(sb, "abort");
++				put_bh(bh_check);
+ 				goto failed;
+ 			}
+ 			put_bh(bh_check);

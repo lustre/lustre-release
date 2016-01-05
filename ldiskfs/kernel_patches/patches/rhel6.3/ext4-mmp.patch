@@ -156,7 +156,7 @@ Index: linux-stage/fs/ext4/mmp.c
 ===================================================================
 --- /dev/null
 +++ linux-stage/fs/ext4/mmp.c
-@@ -0,0 +1,356 @@
+@@ -0,0 +1,357 @@
 +#include <linux/fs.h>
 +#include <linux/random.h>
 +#include <linux/buffer_head.h>
@@ -220,6 +220,7 @@ Index: linux-stage/fs/ext4/mmp.c
 +       mmp = (struct mmp_struct *)((*bh)->b_data);
 +       if (le32_to_cpu(mmp->mmp_magic) != EXT4_MMP_MAGIC) {
 +		brelse(*bh);
++		*bh = NULL;
 +               return -EINVAL;
 +	}
 +

@@ -17,3 +17,4 @@ sles12/ext4-pdirop.patch
 rhel7/ext4-max-dir-size.patch
 rhel7/ext4-remove-truncate-warning.patch
 sles12/ext4-corrupted-inode-block-bitmaps-handling-patches.patch
+rhel7/ext4-mmp-brelse.patch
