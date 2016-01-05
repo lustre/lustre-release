@@ -3007,10 +3007,10 @@ decided:
 }
 
 static int cb_migrate_mdt_init(char *path, DIR *parent, DIR **dirp,
-		      void *param_data, struct dirent64 *de)
+			       void *param_data, struct dirent64 *de)
 {
 	struct find_param	*param = (struct find_param *)param_data;
-	DIR			*dir = parent;
+	DIR			*tmp_parent = parent;
 	char			raw[OBD_MAX_IOCTL_BUFFER] = {'\0'};
 	char			*rawbuf = raw;
 	struct obd_ioctl_data	data = { 0 };
@@ -3023,8 +3023,8 @@ static int cb_migrate_mdt_init(char *path, DIR *parent, DIR **dirp,
 		closedir(*dirp);
 
 	if (parent == NULL) {
-		dir = opendir_parent(path);
-		if (dir == NULL) {
+		tmp_parent = opendir_parent(path);
+		if (tmp_parent == NULL) {
 			*dirp = NULL;
 			ret = -errno;
 			llapi_error(LLAPI_MSG_ERROR, ret,
@@ -3033,7 +3033,7 @@ static int cb_migrate_mdt_init(char *path, DIR *parent, DIR **dirp,
 		}
 	}
 
-	fd = dirfd(dir);
+	fd = dirfd(tmp_parent);
 
 	filename = basename(path);
 	data.ioc_inlbuf1 = (char *)filename;
@@ -3066,16 +3066,15 @@ out:
 		 * on the client side, and re-open to get the
 		 * new directory handle */
 		*dirp = opendir(path);
-		if (dirp == NULL) {
+		if (*dirp == NULL) {
 			ret = -errno;
 			llapi_error(LLAPI_MSG_ERROR, ret,
 				    "%s: Failed to open '%s'", __func__, path);
-			return ret;
 		}
 	}
 
 	if (parent == NULL)
-		closedir(dir);
+		closedir(tmp_parent);
 
 	return ret;
 }
