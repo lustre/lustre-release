@@ -483,7 +483,8 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 		identity = mdt_identity_get(mdt->mdt_identity_cache,
 					    uc->uc_fsuid);
 		if (IS_ERR(identity)) {
-			if (unlikely(PTR_ERR(identity) == -EREMCHG)) {
+			if (unlikely(PTR_ERR(identity) == -EREMCHG ||
+				     uc->uc_cap & CFS_CAP_FS_MASK)) {
 				identity = NULL;
 			} else {
 				CDEBUG(D_SEC, "Deny access without identity: "
@@ -506,7 +507,7 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 	mdt_root_squash(info, mdt_info_req(info)->rq_peer.nid);
 
 	/* remove fs privilege for non-root user. */
-	if (uc->uc_fsuid)
+	if (uc->uc_fsuid && drop_fs_cap)
 		uc->uc_cap &= ~CFS_CAP_FS_MASK;
 	uc->uc_valid = UCRED_OLD;
 	ucred_set_jobid(info, uc);

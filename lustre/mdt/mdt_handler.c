@@ -1552,7 +1552,7 @@ static int mdt_getattr_name(struct tgt_session_info *tsi)
 	repbody->mbo_eadatasize = 0;
 	repbody->mbo_aclsize = 0;
 
-        rc = mdt_init_ucred(info, reqbody);
+        rc = mdt_init_ucred_intent_getattr(info, reqbody);
         if (unlikely(rc))
                 GOTO(out_shrink, rc);
 
