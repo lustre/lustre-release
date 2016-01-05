@@ -4640,13 +4640,13 @@ test_406() {
 	$LFS hsm_restore $DIR/$tdir/$tfile
 	wait_request_state "$fid" RESTORE SUCCEED
 
-	$LFS hsm_remove $DIR/$tdir/$tfile ||
-		error "cannot remove $DIR/$tdir/$tfile from archive"
+	$LFS hsm_remove $DIR/$tdir/$tfile
+	wait_request_state "$fid" REMOVE SUCCEED
 
 	cat $DIR/$tdir/$tfile > /dev/null ||
 		error "cannot read $DIR/$tdir/$tfile"
 
-	$LFS mv -M1 $DIR/$tdir/$tfile ||
+	$LFS mv -M1 $DIR/$tdir ||
 		error "cannot complete migration after HSM remove"
 
 	mdt_index=$($LFS getstripe -M $DIR/$tdir)
