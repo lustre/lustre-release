@@ -282,9 +282,6 @@ struct obd_import {
 				  imp_server_timeout:1,
 				  /* VBR: imp in delayed recovery */
 				  imp_delayed_recovery:1,
-				  /* VBR: if gap was found then no lock replays
-				   */
-				  imp_no_lock_replay:1,
 				  /* recovery by versions was failed */
 				  imp_vbr_failed:1,
 				  /* force an immidiate ping */

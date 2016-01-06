@@ -614,26 +614,26 @@ struct lustre_msg_v2 {
 #define LUSTRE_LOG_VERSION	0x00050000
 #define LUSTRE_MGS_VERSION	0x00060000
 
-/* pb_flags that apply to all requests */
-#define MSG_LAST_REPLAY		    0x0001
-#define MSG_RESENT		    0x0002
-#define MSG_REPLAY		    0x0004
-/* #define MSG_AT_SUPPORT	    0x0008 obsolete 1.5 */
-#define MSG_DELAY_REPLAY	    0x0010
-#define MSG_VERSION_REPLAY	    0x0020
-#define MSG_REQ_REPLAY_DONE	    0x0040
-#define MSG_LOCK_REPLAY_DONE	    0x0080
+/* pb_flags that apply to all request messages */
+/* #define MSG_LAST_REPLAY	0x0001 obsolete 2.0 => {REQ,LOCK}_REPLAY_DONE */
+#define MSG_RESENT		0x0002 /* was previously sent, no reply seen */
+#define MSG_REPLAY		0x0004 /* was processed, got reply, recovery */
+/* #define MSG_AT_SUPPORT	0x0008 obsolete since 1.5, AT always enabled */
+/* #define MSG_DELAY_REPLAY	0x0010 obsolete since 2.0 */
+/* #define MSG_VERSION_REPLAY	0x0020 obsolete since 1.8.2, VBR always on */
+#define MSG_REQ_REPLAY_DONE	0x0040 /* request replay over, locks next */
+#define MSG_LOCK_REPLAY_DONE	0x0080 /* lock replay over, client done */
 
-/* pb_op_flags for all connect opcodes (MDS_CONNECT, OST_CONNECT) */
-#define MSG_CONNECT_RECOVERING	0x00000001
-#define MSG_CONNECT_RECONNECT	0x00000002
-#define MSG_CONNECT_REPLAYABLE	0x00000004
-/* #define MSG_CONNECT_PEER	0x00000008 removed 1.5 */
-#define MSG_CONNECT_LIBCLIENT	0x00000010
-#define MSG_CONNECT_INITIAL	0x00000020
-#define MSG_CONNECT_ASYNC	0x00000040
+/* pb_op_flags for connect opcodes: MDS_CONNECT, OST_CONNECT, MGS_CONNECT */
+#define MSG_CONNECT_RECOVERING	0x00000001 /* target is in recovery */
+#define MSG_CONNECT_RECONNECT	0x00000002 /* tgt already has client import */
+#define MSG_CONNECT_REPLAYABLE	0x00000004 /* target supports RPC replay */
+/* #define MSG_CONNECT_PEER	0x00000008 obsolete since 1.2, removed in 1.5 */
+#define MSG_CONNECT_LIBCLIENT	0x00000010 /* obsolete since 2.3, removed 2.6 */
+#define MSG_CONNECT_INITIAL	0x00000020 /* first client connection attempt */
+/* #define MSG_CONNECT_ASYNC	0x00000040 obsolete since 1.5 */
 #define MSG_CONNECT_NEXT_VER	0x00000080 /* use next version of lustre_msg */
-#define MSG_CONNECT_TRANSNO	0x00000100 /* report transno */
+#define MSG_CONNECT_TRANSNO	0x00000100 /* client sent transno in replay */
 
 /* number of previous object versions in pb_pre_versions[] */
 #define PTLRPC_NUM_VERSIONS     4

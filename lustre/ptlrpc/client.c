@@ -2972,7 +2972,6 @@ static int ptlrpc_replay_interpret(const struct lu_env *env,
 		DEBUG_REQ(D_WARNING, req, "Version mismatch during replay\n");
 		spin_lock(&imp->imp_lock);
 		imp->imp_vbr_failed = 1;
-		imp->imp_no_lock_replay = 1;
 		spin_unlock(&imp->imp_lock);
 		lustre_msg_set_status(req->rq_repmsg, aa->praa_old_status);
         } else {
@@ -2986,9 +2985,6 @@ static int ptlrpc_replay_interpret(const struct lu_env *env,
         }
 
 	spin_lock(&imp->imp_lock);
-	/** if replays by version then gap occur on server, no trust to locks */
-	if (lustre_msg_get_flags(req->rq_repmsg) & MSG_VERSION_REPLAY)
-		imp->imp_no_lock_replay = 1;
 	imp->imp_last_replay_transno = lustre_msg_get_transno(req->rq_reqmsg);
 	spin_unlock(&imp->imp_lock);
         LASSERT(imp->imp_last_replay_transno);

@@ -769,7 +769,6 @@ static void obd_import_flags2str(struct obd_import *imp, struct seq_file *m)
 	flag2str(deactive);
 	flag2str(replayable);
 	flag2str(delayed_recovery);
-	flag2str(no_lock_replay);
 	flag2str(vbr_failed);
 	flag2str(pingable);
 	flag2str(resend_replay);

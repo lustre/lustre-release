@@ -1012,16 +1012,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)MSGHDR_AT_SUPPORT);
 	LASSERTF(MSGHDR_CKSUM_INCOMPAT18 == 2, "found %lld\n",
 		 (long long)MSGHDR_CKSUM_INCOMPAT18);
-	LASSERTF(MSG_LAST_REPLAY == 0x00000001UL, "found 0x%.8xUL\n",
-		(unsigned)MSG_LAST_REPLAY);
 	LASSERTF(MSG_RESENT == 0x00000002UL, "found 0x%.8xUL\n",
 		(unsigned)MSG_RESENT);
 	LASSERTF(MSG_REPLAY == 0x00000004UL, "found 0x%.8xUL\n",
 		(unsigned)MSG_REPLAY);
-	LASSERTF(MSG_DELAY_REPLAY == 0x00000010UL, "found 0x%.8xUL\n",
-		(unsigned)MSG_DELAY_REPLAY);
-	LASSERTF(MSG_VERSION_REPLAY == 0x00000020UL, "found 0x%.8xUL\n",
-		(unsigned)MSG_VERSION_REPLAY);
 	LASSERTF(MSG_REQ_REPLAY_DONE == 0x00000040UL, "found 0x%.8xUL\n",
 		(unsigned)MSG_REQ_REPLAY_DONE);
 	LASSERTF(MSG_LOCK_REPLAY_DONE == 0x00000080UL, "found 0x%.8xUL\n",
@@ -1036,8 +1030,6 @@ void lustre_assert_wire_constants(void)
 		(unsigned)MSG_CONNECT_LIBCLIENT);
 	LASSERTF(MSG_CONNECT_INITIAL == 0x00000020UL, "found 0x%.8xUL\n",
 		(unsigned)MSG_CONNECT_INITIAL);
-	LASSERTF(MSG_CONNECT_ASYNC == 0x00000040UL, "found 0x%.8xUL\n",
-		(unsigned)MSG_CONNECT_ASYNC);
 	LASSERTF(MSG_CONNECT_NEXT_VER == 0x00000080UL, "found 0x%.8xUL\n",
 		(unsigned)MSG_CONNECT_NEXT_VER);
 	LASSERTF(MSG_CONNECT_TRANSNO == 0x00000100UL, "found 0x%.8xUL\n",
