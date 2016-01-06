@@ -41,6 +41,7 @@
 /memhog
 /mkdirmany
 /mlink
+/mmap_cat
 /mmap_sanity
 /mrename
 /multifstat
