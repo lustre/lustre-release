@@ -660,7 +660,9 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 		if (now >= last_report_time + opt.o_report_int) {
 			last_report_time = now;
 			CT_TRACE("%%"LPU64" ", 100 * write_total / length);
-			he.length = write_total;
+			/* only give the length of the write since the last
+			 * progress report */
+			he.length = offset - he.offset;
 			rc = llapi_hsm_action_progress(hcp, &he, length, 0);
 			if (rc < 0) {
 				/* Action has been canceled or something wrong
@@ -669,6 +671,7 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 					 " '%s'->'%s' failed", src, dst);
 				goto out;
 			}
+			he.offset = offset;
 		}
 		rc = 0;
 	}
