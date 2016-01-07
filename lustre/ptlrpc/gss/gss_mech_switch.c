@@ -323,27 +323,27 @@ __u32 lgss_unwrap_bulk(struct gss_ctx *context_handle,
 
 __u32 lgss_delete_sec_context(struct gss_ctx **context_handle)
 {
-        struct gss_api_mech *mech;
+	struct gss_api_mech *mech;
 
-        CDEBUG(D_SEC, "deleting %p\n", *context_handle);
+	if (!*context_handle)
+		return GSS_S_NO_CONTEXT;
 
-        if (!*context_handle)
-                return(GSS_S_NO_CONTEXT);
+	CDEBUG(D_SEC, "deleting %p\n", *context_handle);
 
-        mech = (*context_handle)->mech_type;
+	mech = (*context_handle)->mech_type;
 	if ((*context_handle)->internal_ctx_id != NULL) {
-                LASSERT(mech);
-                LASSERT(mech->gm_ops);
-                LASSERT(mech->gm_ops->gss_delete_sec_context);
-                mech->gm_ops->gss_delete_sec_context(
-                                        (*context_handle)->internal_ctx_id);
-        }
-        if (mech)
-                lgss_mech_put(mech);
+		LASSERT(mech);
+		LASSERT(mech->gm_ops);
+		LASSERT(mech->gm_ops->gss_delete_sec_context);
+		mech->gm_ops->gss_delete_sec_context(
+			(*context_handle)->internal_ctx_id);
+	}
+	if (mech)
+		lgss_mech_put(mech);
 
-        OBD_FREE_PTR(*context_handle);
-        *context_handle=NULL;
-        return GSS_S_COMPLETE;
+	OBD_FREE_PTR(*context_handle);
+	*context_handle = NULL;
+	return GSS_S_COMPLETE;
 }
 
 int lgss_display(struct gss_ctx *ctx,
