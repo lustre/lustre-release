@@ -1700,7 +1700,9 @@ int distribute_txn_init(const struct lu_env *env,
 
 	init_waitqueue_head(&lut->lut_tdtd_commit_thread.t_ctl_waitq);
 	init_waitqueue_head(&tdtd->tdtd_commit_thread_waitq);
+	init_waitqueue_head(&tdtd->tdtd_recovery_threads_waitq);
 	atomic_set(&tdtd->tdtd_refcount, 0);
+	atomic_set(&tdtd->tdtd_recovery_threads_count, 0);
 
 	tdtd->tdtd_lut = lut;
 	rc = distribute_txn_commit_batchid_init(env, tdtd);

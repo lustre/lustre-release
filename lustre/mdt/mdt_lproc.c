@@ -688,6 +688,9 @@ LPROC_SEQ_FOPS_RW_TYPE(mdt, ir_factor);
 LPROC_SEQ_FOPS_RW_TYPE(mdt, nid_stats_clear);
 LPROC_SEQ_FOPS(mdt_hsm_cdt_control);
 
+LPROC_SEQ_FOPS_RW_TYPE(mdt, recovery_time_hard);
+LPROC_SEQ_FOPS_RW_TYPE(mdt, recovery_time_soft);
+
 static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 	{ .name =	"uuid",
 	  .fops =	&mdt_uuid_fops				},
@@ -733,6 +736,10 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 	  .fops =	&mdt_enable_remote_dir_gid_fops		},
 	{ .name =	"hsm_control",
 	  .fops =	&mdt_hsm_cdt_control_fops		},
+	{ .name =	"recovery_time_hard",
+	  .fops =	&mdt_recovery_time_hard_fops	},
+	{ .name =	"recovery_time_soft",
+	  .fops =	&mdt_recovery_time_soft_fops	},
 	{ NULL }
 };
 

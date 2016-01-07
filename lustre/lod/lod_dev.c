@@ -331,6 +331,10 @@ static int lod_process_recovery_updates(const struct lu_env *env,
 	       POSTID(&llh->lgh_id.lgl_oi), rec->lrh_index);
 	lut = lod2lu_dev(lrd->lrd_lod)->ld_site->ls_tgt;
 
+	if (lut->lut_obd->obd_stopping ||
+	    lut->lut_obd->obd_abort_recovery)
+		return -EIO;
+
 	return insert_update_records_to_replay_list(lut->lut_tdtd,
 					(struct llog_update_record *)rec,
 					cookie, index);
@@ -355,6 +359,9 @@ static int lod_sub_recovery_thread(void *arg)
 	struct ptlrpc_thread		*thread = lrd->lrd_thread;
 	struct llog_ctxt		*ctxt = NULL;
 	struct lu_env			env;
+	struct lu_target *lut;
+
+
 	int				rc;
 	ENTRY;
 
@@ -369,6 +376,8 @@ static int lod_sub_recovery_thread(void *arg)
 		RETURN(rc);
 	}
 
+	lut = lod2lu_dev(lod)->ld_site->ls_tgt;
+	atomic_inc(&lut->lut_tdtd->tdtd_recovery_threads_count);
 	if (lrd->lrd_ltd == NULL)
 		dt = lod->lod_child;
 	else
@@ -395,7 +404,7 @@ again:
 		 * let's retry here */
 		if ((rc == -ETIMEDOUT || rc == -EAGAIN || rc == -EIO) &&
 		     dt != lod->lod_child &&
-		    !top_device->ld_obd->obd_force_abort_recovery &&
+		    !top_device->ld_obd->obd_abort_recovery &&
 		    !top_device->ld_obd->obd_stopping) {
 			if (ctxt != NULL) {
 				if (ctxt->loc_handle != NULL)
@@ -409,6 +418,13 @@ again:
 		CERROR("%s getting update log failed: rc = %d\n",
 		       dt->dd_lu_dev.ld_obd->obd_name, rc);
 		llog_ctxt_put(ctxt);
+
+		spin_lock(&top_device->ld_obd->obd_dev_lock);
+		if (!top_device->ld_obd->obd_abort_recovery &&
+		    !top_device->ld_obd->obd_stopping)
+			top_device->ld_obd->obd_abort_recovery = 1;
+		spin_unlock(&top_device->ld_obd->obd_dev_lock);
+
 		GOTO(out, rc);
 	}
 	llog_ctxt_put(ctxt);
@@ -436,9 +452,6 @@ again:
 		}
 
 		if (all_got_log) {
-			struct lu_target *lut;
-
-			lut = lod2lu_dev(lod)->ld_site->ls_tgt;
 			CDEBUG(D_HA, "%s got update logs from all MDTs.\n",
 			       lut->lut_obd->obd_name);
 			lut->lut_tdtd->tdtd_replay_ready = 1;
@@ -449,6 +462,8 @@ again:
 out:
 	OBD_FREE_PTR(lrd);
 	thread->t_flags = SVC_STOPPED;
+	atomic_dec(&lut->lut_tdtd->tdtd_recovery_threads_count);
+	wake_up(&lut->lut_tdtd->tdtd_recovery_threads_waitq);
 	wake_up(&thread->t_ctl_waitq);
 	lu_env_fini(&env);
 	RETURN(rc);

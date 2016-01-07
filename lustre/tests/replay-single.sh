@@ -4359,6 +4359,92 @@ test_118() {
 }
 run_test 118 "invalidate osp update will not cause update log corruption"
 
+test_119() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.64) ] &&
+		skip "Do not support large update log before 2.7.64" &&
+		return 0
+	local stripe_count
+	local hard_timeout=$(do_facet mds1 \
+		"lctl get_param -n mdt.$FSNAME-MDT0000.recovery_time_hard")
+
+	local clients=${CLIENTS:-$HOSTNAME}
+	local time_min=$(recovery_time_min)
+
+	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir/tmp
+	rmdir $DIR/$tdir/tmp
+
+	replay_barrier mds1
+	mkdir $DIR/$tdir/dir_1
+	for ((i = 0; i < 20; i++)); do
+		$LFS setdirstripe -c2 $DIR/$tdir/stripe_dir-$i
+	done
+
+	stop mds1
+	change_active mds1
+	wait_for_facet mds1
+
+	#define OBD_FAIL_TGT_REPLAY_DELAY  0x714
+	do_facet mds1 $LCTL set_param fail_loc=0x80000714
+	#sleep (timeout + 5), so mds will evict the client exports,
+	#but DNE update recovery will keep going.
+	do_facet mds1 $LCTL set_param fail_val=$((time_min + 5))
+
+	mount_facet mds1 "-o recovery_time_hard=$time_min"
+
+	wait_clients_import_state "$clients" mds1 FULL
+
+	clients_up || clients_up || error "failover df: $?"
+
+	#revert back the hard timeout
+	do_facet mds1 $LCTL set_param \
+		mdt.$FSNAME-MDT0000.recovery_time_hard=$hard_timeout
+
+	for ((i = 0; i < 20; i++)); do
+		stripe_count=$($LFS getdirstripe -c $DIR/$tdir/stripe_dir-$i)
+		[ $stripe_count == 2 ] || {
+			error "stripe_dir-$i creation replay fails"
+			break
+		}
+	done
+}
+run_test 119 "timeout of normal replay does not cause DNE replay fails  "
+
+test_120() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.64) ] &&
+		skip "Do not support large update log before 2.7.64" &&
+		return 0
+
+	mkdir $DIR/$tdir
+	replay_barrier_nosync mds1
+	for ((i = 0; i < 20; i++)); do
+		mkdir $DIR/$tdir/dir-$i || {
+			error "create dir-$i fails"
+			break
+		}
+		$LFS setdirstripe -c2 $DIR/$tdir/stripe_dir-$i || {
+			error "create stripe_dir-$i fails"
+			break
+		}
+	done
+
+	fail_abort mds1
+
+	for ((i = 0; i < 20; i++)); do
+		[ ! -e "$DIR/$tdir/dir-$i" ] || {
+			error "dir-$i still exists"
+			break
+		}
+		[ ! -e "$DIR/$tdir/stripe_dir-$i" ] || {
+			error "stripe_dir-$i still exists"
+			break
+		}
+	done
+}
+run_test 120 "DNE fail abort should stop both normal and DNE replay"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

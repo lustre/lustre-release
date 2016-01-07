@@ -5609,7 +5609,7 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 break;
 	case OBD_IOC_ABORT_RECOVERY:
 		CERROR("%s: Aborting recovery for device\n", mdt_obd_name(mdt));
-		obd->obd_force_abort_recovery = 1;
+		obd->obd_abort_recovery = 1;
 		target_stop_recovery_thread(obd);
 		rc = 0;
 		break;

@@ -722,62 +722,73 @@ static int target_handle_reconnect(struct lustre_handle *conn,
                                    struct obd_export *exp,
                                    struct obd_uuid *cluuid)
 {
+	struct obd_device *target;
 	struct lustre_handle *hdl;
+	cfs_time_t now;
+	cfs_time_t deadline;
+	int timeout;
+	int rc = 0;
 	ENTRY;
 
 	hdl = &exp->exp_imp_reverse->imp_remote_handle;
-	if (exp->exp_connection && lustre_handle_is_used(hdl)) {
-                struct obd_device *target;
+	if (!exp->exp_connection || !lustre_handle_is_used(hdl)) {
+		conn->cookie = exp->exp_handle.h_cookie;
+		CDEBUG(D_HA, "connect export for UUID '%s' at %p,"
+		       " cookie "LPX64"\n", cluuid->uuid, exp, conn->cookie);
+		RETURN(0);
+	}
 
-                target = exp->exp_obd;
+	target = exp->exp_obd;
 
-                /* Might be a re-connect after a partition. */
-                if (!memcmp(&conn->cookie, &hdl->cookie, sizeof conn->cookie)) {
-                        if (target->obd_recovering) {
-                                int timeout = cfs_duration_sec(cfs_time_sub(
-                                        cfs_timer_deadline(
-                                        &target->obd_recovery_timer),
-                                        cfs_time_current()));
+	/* Might be a re-connect after a partition. */
+	if (memcmp(&conn->cookie, &hdl->cookie, sizeof conn->cookie)) {
+		LCONSOLE_WARN("%s: already connected client %s (at %s) "
+			      "with handle "LPX64". Rejecting client "
+			      "with the same UUID trying to reconnect "
+			      "with handle "LPX64"\n", target->obd_name,
+			      obd_uuid2str(&exp->exp_client_uuid),
+			      obd_export_nid2str(exp),
+			      hdl->cookie, conn->cookie);
+		memset(conn, 0, sizeof *conn);
+		/* target_handle_connect() treats EALREADY and
+		 * -EALREADY differently.  -EALREADY is an error
+		 * (same UUID, different handle). */
+		RETURN(-EALREADY);
+	}
 
-                                LCONSOLE_WARN("%s: Client %s (at %s) reconnect"
-                                        "ing, waiting for %d clients in recov"
-                                        "ery for %d:%.02d\n", target->obd_name,
-                                        obd_uuid2str(&exp->exp_client_uuid),
-                                        obd_export_nid2str(exp),
-                                        target->obd_max_recoverable_clients,
-                                        timeout / 60, timeout % 60);
-                        } else {
-                                LCONSOLE_WARN("%s: Client %s (at %s) "
-                                        "reconnecting\n", target->obd_name,
-                                        obd_uuid2str(&exp->exp_client_uuid),
-                                        obd_export_nid2str(exp));
-                        }
+	if (!target->obd_recovering) {
+		LCONSOLE_WARN("%s: Client %s (at %s) reconnecting\n",
+			target->obd_name, obd_uuid2str(&exp->exp_client_uuid),
+			obd_export_nid2str(exp));
+		GOTO(out_already, rc);
+	}
 
-                        conn->cookie = exp->exp_handle.h_cookie;
-                        /* target_handle_connect() treats EALREADY and
-                         * -EALREADY differently.  EALREADY means we are
-                         * doing a valid reconnect from the same client. */
-                        RETURN(EALREADY);
-                } else {
-			LCONSOLE_WARN("%s: already connected client %s (at %s) "
-				      "with handle "LPX64". Rejecting client "
-				      "with the same UUID trying to reconnect "
-				      "with handle "LPX64"\n", target->obd_name,
-				      obd_uuid2str(&exp->exp_client_uuid),
-				      obd_export_nid2str(exp),
-				      hdl->cookie, conn->cookie);
-                        memset(conn, 0, sizeof *conn);
-                        /* target_handle_connect() treats EALREADY and
-                         * -EALREADY differently.  -EALREADY is an error
-                         * (same UUID, different handle). */
-                        RETURN(-EALREADY);
-                }
-        }
+	now = cfs_time_current();
+	deadline = cfs_timer_deadline(&target->obd_recovery_timer);
+	if (cfs_time_before(now, deadline)) {
+		timeout = cfs_duration_sec(cfs_time_sub(deadline, now));
+		LCONSOLE_WARN("%s: Client %s (at %s) reconnecting,"
+			" waiting for %d clients in recovery for"
+			" %d:%.02d\n", target->obd_name,
+			obd_uuid2str(&exp->exp_client_uuid),
+			obd_export_nid2str(exp),
+			target->obd_max_recoverable_clients,
+			timeout / 60, timeout % 60);
+	} else {
+		timeout = cfs_duration_sec(cfs_time_sub(now, deadline));
+		LCONSOLE_WARN("%s: Recovery already passed deadline"
+			" %d:%.02d, It is most likely due to DNE"
+			" recovery is failed or stuck, please wait a"
+			" few more minutes or abort the recovery.\n",
+			target->obd_name, timeout / 60, timeout % 60);
+	}
 
-        conn->cookie = exp->exp_handle.h_cookie;
-        CDEBUG(D_HA, "connect export for UUID '%s' at %p, cookie "LPX64"\n",
-               cluuid->uuid, exp, conn->cookie);
-        RETURN(0);
+out_already:
+	conn->cookie = exp->exp_handle.h_cookie;
+	/* target_handle_connect() treats EALREADY and
+	 * -EALREADY differently.  EALREADY means we are
+	 * doing a valid reconnect from the same client. */
+	RETURN(EALREADY);
 }
 
 void target_client_add_cb(struct obd_device *obd, __u64 transno, void *cb_data,
@@ -1550,13 +1561,6 @@ static void target_finish_recovery(struct lu_target *lut)
 	}
 	spin_unlock(&obd->obd_recovery_task_lock);
 
-	if (lut->lut_tdtd != NULL &&
-	    (!list_empty(&lut->lut_tdtd->tdtd_replay_list) ||
-	    !list_empty(&lut->lut_tdtd->tdtd_replay_finish_list))) {
-		dtrq_list_dump(lut->lut_tdtd, D_ERROR);
-		dtrq_list_destroy(lut->lut_tdtd);
-	}
-
         obd->obd_recovery_end = cfs_time_current_sec();
 
 	/* When recovery finished, cleanup orphans on MDS and OST. */
@@ -1632,7 +1636,6 @@ void target_cleanup_recovery(struct obd_device *obd)
 		return;
 	}
 	obd->obd_recovering = obd->obd_abort_recovery = 0;
-	obd->obd_force_abort_recovery = 0;
 	spin_unlock(&obd->obd_dev_lock);
 
 	spin_lock(&obd->obd_recovery_task_lock);
@@ -1673,8 +1676,7 @@ static void target_start_recovery_timer(struct obd_device *obd)
 		return;
 
 	spin_lock(&obd->obd_dev_lock);
-	if (!obd->obd_recovering || obd->obd_abort_recovery ||
-	    obd->obd_force_abort_recovery) {
+	if (!obd->obd_recovering || obd->obd_abort_recovery) {
 		spin_unlock(&obd->obd_dev_lock);
 		return;
 	}
@@ -1715,8 +1717,7 @@ static void extend_recovery_timer(struct obd_device *obd, int drt, bool extend)
 	int to;
 
 	spin_lock(&obd->obd_dev_lock);
-	if (!obd->obd_recovering || obd->obd_abort_recovery ||
-	    obd->obd_force_abort_recovery) {
+	if (!obd->obd_recovering || obd->obd_abort_recovery) {
 		spin_unlock(&obd->obd_dev_lock);
                 return;
         }
@@ -1801,6 +1802,14 @@ static inline int exp_req_replay_healthy(struct obd_export *exp)
 	return (!exp->exp_req_replay_needed ||
 		atomic_read(&exp->exp_replay_count) > 0);
 }
+
+
+static inline int exp_req_replay_healthy_or_from_mdt(struct obd_export *exp)
+{
+	return (exp_connect_flags(exp) & OBD_CONNECT_MDS_MDS) ||
+	       exp_req_replay_healthy(exp);
+}
+
 /** if export done lock_replay or has replay in queue */
 static inline int exp_lock_replay_healthy(struct obd_export *exp)
 {
@@ -1816,6 +1825,12 @@ static inline int exp_vbr_healthy(struct obd_export *exp)
 static inline int exp_finished(struct obd_export *exp)
 {
         return (exp->exp_in_recovery && !exp->exp_lock_replay_needed);
+}
+
+static inline int exp_finished_or_from_mdt(struct obd_export *exp)
+{
+	return (exp_connect_flags(exp) & OBD_CONNECT_MDS_MDS) ||
+		exp_finished(exp);
 }
 
 static int check_for_next_transno(struct lu_target *lut)
@@ -1849,7 +1864,7 @@ static int check_for_next_transno(struct lu_target *lut)
 	       obd->obd_max_recoverable_clients, connected, completed,
 	       queue_len, req_transno, next_transno);
 
-	if (obd->obd_abort_recovery || obd->obd_force_abort_recovery) {
+	if (obd->obd_abort_recovery) {
 		CDEBUG(D_HA, "waking for aborted recovery\n");
 		wake_up = 1;
 	} else if (obd->obd_recovery_expired) {
@@ -1910,7 +1925,7 @@ static int check_for_next_lock(struct lu_target *lut)
 	} else if (atomic_read(&obd->obd_lock_replay_clients) == 0) {
 		CDEBUG(D_HA, "waking for completed lock replay\n");
 		wake_up = 1;
-	} else if (obd->obd_abort_recovery || obd->obd_force_abort_recovery) {
+	} else if (obd->obd_abort_recovery) {
 		CDEBUG(D_HA, "waking for aborted recovery\n");
 		wake_up = 1;
 	} else if (obd->obd_recovery_expired) {
@@ -1932,11 +1947,59 @@ static int target_recovery_overseer(struct lu_target *lut,
 				    int (*health_check)(struct obd_export *))
 {
 	struct obd_device	*obd = lut->lut_obd;
+	struct target_distribute_txn_data *tdtd;
 repeat:
 	if ((obd->obd_recovery_start != 0) && (cfs_time_current_sec() >=
 	      (obd->obd_recovery_start + obd->obd_recovery_time_hard))) {
-		CWARN("recovery is aborted by hard timeout\n");
-		obd->obd_abort_recovery = 1;
+		__u64 next_update_transno = 0;
+
+		/* Only abort the recovery if there are no update recovery
+		 * left in the queue */
+		spin_lock(&obd->obd_recovery_task_lock);
+		if (lut->lut_tdtd != NULL) {
+			next_update_transno =
+				distribute_txn_get_next_transno(lut->lut_tdtd);
+
+			tdtd = lut->lut_tdtd;
+			/* If next_update_transno == 0, it probably because
+			 * updatelog retrieve threads did not get any records
+			 * yet, let's wait those threads stopped */
+			if (next_update_transno == 0) {
+				struct l_wait_info lwi = { 0 };
+
+				l_wait_event(tdtd->tdtd_recovery_threads_waitq,
+				       atomic_read(
+				       &tdtd->tdtd_recovery_threads_count) == 0,
+				       &lwi);
+
+				next_update_transno =
+					distribute_txn_get_next_transno(
+								lut->lut_tdtd);
+			}
+		}
+
+		if (next_update_transno != 0 && !obd->obd_abort_recovery) {
+			obd->obd_next_recovery_transno = next_update_transno;
+			spin_unlock(&obd->obd_recovery_task_lock);
+			/* Disconnect unfinished exports from clients, and
+			 * keep connection from MDT to make sure the update
+			 * recovery will still keep trying until some one
+			 * manually abort the recovery */
+			class_disconnect_stale_exports(obd,
+						exp_finished_or_from_mdt);
+			/* Abort all of replay and replay lock req from
+			 * clients */
+			abort_req_replay_queue(obd);
+			abort_lock_replay_queue(obd);
+			CDEBUG(D_HA, "%s: there are still update replay ("LPX64
+			       ")in the queue.\n", obd->obd_name,
+			       next_update_transno);
+		} else {
+			obd->obd_abort_recovery = 1;
+			spin_unlock(&obd->obd_recovery_task_lock);
+			CWARN("%s recovery is aborted by hard timeout\n",
+			      obd->obd_name);
+		}
 	}
 
 	while (wait_event_timeout(obd->obd_next_transno_waitq,
@@ -1944,8 +2007,22 @@ repeat:
 				  msecs_to_jiffies(60 * MSEC_PER_SEC)) == 0)
 		/* wait indefinitely for event, but don't trigger watchdog */;
 
-	if (obd->obd_abort_recovery || obd->obd_force_abort_recovery) {
+	if (obd->obd_abort_recovery) {
 		CWARN("recovery is aborted, evict exports in recovery\n");
+		if (lut->lut_tdtd != NULL) {
+			struct l_wait_info lwi = { 0 };
+
+			tdtd = lut->lut_tdtd;
+			/* Let's wait all of the update log recovery thread
+			 * finished */
+			l_wait_event(tdtd->tdtd_recovery_threads_waitq,
+			 atomic_read(&tdtd->tdtd_recovery_threads_count) == 0,
+			     &lwi);
+			/* Then abort the update recovery list */
+			dtrq_list_dump(lut->lut_tdtd, D_ERROR);
+			dtrq_list_destroy(lut->lut_tdtd);
+		}
+
 		/** evict exports which didn't finish recovery yet */
 		class_disconnect_stale_exports(obd, exp_finished);
 		return 1;
@@ -1956,6 +2033,7 @@ repeat:
 			      "evict stale exports\n", obd->obd_name);
 		/** evict cexports with no replay in queue, they are stalled */
 		class_disconnect_stale_exports(obd, health_check);
+
 		/** continue with VBR */
 		spin_lock(&obd->obd_dev_lock);
 		obd->obd_version_recov = 1;
@@ -2082,9 +2160,6 @@ static int check_for_recovery_ready(struct lu_target *lut)
 	       obd->obd_max_recoverable_clients, obd->obd_abort_recovery,
 	       obd->obd_recovery_expired);
 
-	if (obd->obd_force_abort_recovery)
-		return 1;
-
 	if (!obd->obd_abort_recovery && !obd->obd_recovery_expired) {
 		LASSERT(clnts <= obd->obd_max_recoverable_clients);
 		if (clnts + obd->obd_stale_clients <
@@ -2093,11 +2168,15 @@ static int check_for_recovery_ready(struct lu_target *lut)
 	}
 
 	if (lut->lut_tdtd != NULL) {
-		if (!lut->lut_tdtd->tdtd_replay_ready) {
+		if (!lut->lut_tdtd->tdtd_replay_ready &&
+		    !obd->obd_abort_recovery) {
 			/* Let's extend recovery timer, in case the recovery
 			 * timer expired, and some clients got evicted */
 			extend_recovery_timer(obd, obd->obd_recovery_timeout,
 					      true);
+			CDEBUG(D_HA, "%s update recovery is not ready,"
+			       " extend recovery %d\n", obd->obd_name,
+			       obd->obd_recovery_timeout);
 			return 0;
 		} else {
 			dtrq_list_dump(lut->lut_tdtd, D_HA);
@@ -2219,7 +2298,7 @@ static void replay_request_or_update(struct lu_env *env,
 		CFS_FAIL_TIMEOUT_MS(OBD_FAIL_TGT_REPLAY_DELAY, 300);
 
 		if (target_recovery_overseer(lut, check_for_next_transno,
-					     exp_req_replay_healthy)) {
+					exp_req_replay_healthy_or_from_mdt)) {
 			abort_req_replay_queue(obd);
 			abort_lock_replay_queue(obd);
 			goto abort;
@@ -2307,11 +2386,6 @@ static void replay_request_or_update(struct lu_env *env,
 				spin_unlock(&obd->obd_recovery_task_lock);
 			} else {
 				dtrq_destroy(dtrq);
-				/* If update recovery fail, then let's abort
-				 * the recovery, otherwise it might cause
-				 * both llog and filesystem corruption */
-				if (rc < 0)
-					obd->obd_force_abort_recovery = 1;
 			}
 		} else {
 			spin_unlock(&obd->obd_recovery_task_lock);

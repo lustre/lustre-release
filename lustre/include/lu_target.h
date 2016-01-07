@@ -109,6 +109,10 @@ struct target_distribute_txn_data {
 	spinlock_t			tdtd_replay_list_lock;
 	/* last replay update transno */
 	__u32				tdtd_replay_ready:1;
+
+	/* Manage the llog recovery threads */
+	atomic_t		tdtd_recovery_threads_count;
+	wait_queue_head_t	tdtd_recovery_threads_waitq;
 };
 
 struct lu_target {

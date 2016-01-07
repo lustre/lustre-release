@@ -6219,6 +6219,31 @@ max_recovery_time() {
 	echo -n $service_time
 }
 
+recovery_time_min() {
+	local connection_switch_min=5
+	local connection_switch_inc=5
+	local connection_switch_max
+	local reconnect_delay_max
+	local initial_connect_timeout
+	local max
+	local timout_20
+
+	#connection_switch_max=min(50, max($connection_switch_min,$TIMEOUT)
+	(($connection_switch_min > $TIMEOUT)) &&
+		max=$connection_switch_min || max=$TIMEOUT
+	(($max < 50)) && connection_switch_max=$max || connection_switch_max=50
+
+	#initial_connect_timeout = max(connection_switch_min, obd_timeout/20)
+	timeout_20=$((TIMEOUT/20))
+	(($connection_switch_min > $timeout_20)) &&
+		initial_connect_timeout=$connection_switch_min ||
+		initial_connect_timeout=$timeout_20
+
+	reconnect_delay_max=$((connection_switch_max + connection_switch_inc + \
+			       initial_connect_timeout))
+	echo $((2 * reconnect_delay_max))
+}
+
 get_clients_mount_count () {
     local clients=${CLIENTS:-`hostname`}
 
