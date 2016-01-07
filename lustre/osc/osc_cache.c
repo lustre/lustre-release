@@ -362,9 +362,9 @@ static void osc_extent_put(const struct lu_env *env, struct osc_extent *ext)
 		LASSERT(!ext->oe_intree);
 
 		if (ext->oe_dlmlock != NULL) {
-			lu_ref_add(&ext->oe_dlmlock->l_reference,
+			lu_ref_del(&ext->oe_dlmlock->l_reference,
 				   "osc_extent", ext);
-			LDLM_LOCK_PUT(ext->oe_dlmlock);
+			LDLM_LOCK_RELEASE(ext->oe_dlmlock);
 			ext->oe_dlmlock = NULL;
 		}
 		cl_object_put(env, osc2cl(ext->oe_obj));
