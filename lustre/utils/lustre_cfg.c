@@ -41,7 +41,10 @@
  * Author: Robert Read <rread@clusterfs.com>
  */
 
+#include <errno.h>
+#include <fcntl.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <unistd.h>

@@ -58,9 +58,11 @@
 #include <stdarg.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
-#include <sys/types.h>
 #include <sys/syscall.h>
+#include <sys/time.h>
+#include <sys/types.h>
 #include <sys/xattr.h>
+#include <time.h>
 #include <fnmatch.h>
 #include <libgen.h> /* for dirname() */
 #ifdef HAVE_LINUX_UNISTD_H

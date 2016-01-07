@@ -42,6 +42,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <poll.h>
+#include <sys/ioctl.h>
 #include <time.h>
 
 #include <lustre/lustreapi.h>

@@ -32,6 +32,7 @@
  * Author: Henri Doreau <henri.doreau@cea.fr>
  */
 
+#include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>

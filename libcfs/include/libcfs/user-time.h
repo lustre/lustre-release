@@ -82,7 +82,14 @@
 
 #ifndef __KERNEL__
 
-#define ONE_BILLION ((u_int64_t)1000000000)
+#include <stdarg.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <sys/time.h>
+#include <time.h>
+
+#define ONE_BILLION ((uint64_t)1000000000)
 #define ONE_MILLION 1000000
 
 /*

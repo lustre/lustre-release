@@ -40,8 +40,10 @@
  * Author: Robert Read <rread@clusterfs.com>
  */
 
+#include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <libcfs/util/parser.h>
 #include <lnet/lnetctl.h>
 #include "obdctl.h"

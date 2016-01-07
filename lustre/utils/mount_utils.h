@@ -48,6 +48,14 @@
 #define _SPL_ZFS_H
 #define _SPL_SIGNAL_H
 #endif
+#include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+
 #include <lustre_disk.h>
 #include <lustre_param.h>
 

@@ -40,12 +40,15 @@
  * Author: Nikita Danilov <nikita@clusterfs.com>
  */
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <linux/types.h>
 
+#define ARRAY_SIZE(a) ((sizeof(a)) / (sizeof((a)[0])))
 #define __REQ_LAYOUT_USER__ (1)
 #define EXPORT_SYMBOL(s)
 

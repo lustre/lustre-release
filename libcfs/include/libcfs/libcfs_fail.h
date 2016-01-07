@@ -156,7 +156,6 @@ static inline int cfs_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
 #define CFS_FAULT_CHECK(id)			\
 	CFS_FAIL_CHECK(CFS_FAULT | (id))
 
-#ifdef __KERNEL__
 /* The idea here is to synchronise two threads to force a race. The
  * first thread that calls this with a matching fail_loc is put to
  * sleep. The next thread that calls with the same fail_loc wakes up
@@ -179,9 +178,5 @@ static inline void cfs_race(__u32 id)
 	}
 }
 #define CFS_RACE(id) cfs_race(id)
-#else
-/* sigh.  an expedient fix until CFS_RACE is fixed up */
-#define CFS_RACE(foo) do {} while(0)
-#endif
 
 #endif /* _LIBCFS_FAIL_H */

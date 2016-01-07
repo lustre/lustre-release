@@ -78,17 +78,6 @@
 
 #ifndef HAVE_LIBCFS_CPT
 
-#ifndef __KERNEL__
-typedef struct nodemask { DECLARE_BITMAP(bits, 1); } nodemask_t;
-typedef struct cpumask  { DECLARE_BITMAP(bits, 1); } cpumask_t;
-
-#define node_set(node, dst) __node_set((node), &(dst))
-static __always_inline void __node_set(int node, nodemask_t *dstp)
-{
-	set_bit(node, dstp->bits);
-}
-#endif /* __KERNEL__ */
-
 struct cfs_cpt_table {
 	/* # of CPU partitions */
 	int			ctb_nparts;

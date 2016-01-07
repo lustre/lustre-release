@@ -483,19 +483,6 @@ static inline size_t cfs_round_strlen(char *fset)
 	return cfs_size_round(strlen(fset) + 1);
 }
 
-/* roundup \a val to power2 */
-static inline size_t cfs_power2_roundup(size_t val)
-{
-	if (val != LOWEST_BIT_SET(val)) { /* not a power of 2 already */
-		do {
-			val &= ~LOWEST_BIT_SET(val);
-		} while (val != LOWEST_BIT_SET(val));
-		/* ...and round up */
-		val <<= 1;
-	}
-	return val;
-}
-
 #define LOGL(var,len,ptr)                                       \
 do {                                                            \
         if (var)                                                \

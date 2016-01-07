@@ -36,6 +36,7 @@
 #include <string.h>
 #include <errno.h>
 #include <getopt.h>
+#include <sys/ioctl.h>
 #include <time.h>
 
 #include "obdctl.h"

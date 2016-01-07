@@ -267,6 +267,13 @@ do {                                                                    \
 
 #endif /* __KERNEL__ */
 
+/*
+ * Lustre Error Checksum: calculates checksum
+ * of Hex number by XORing each bit.
+ */
+#define LERRCHKSUM(hexnum) (((hexnum) & 0xf) ^ ((hexnum) >> 4 & 0xf) ^ \
+			   ((hexnum) >> 8 & 0xf))
+
 #define CWARN(format, ...)          CDEBUG_LIMIT(D_WARNING, format, ## __VA_ARGS__)
 #define CERROR(format, ...)         CDEBUG_LIMIT(D_ERROR, format, ## __VA_ARGS__)
 #define CNETERR(format, a...)       CDEBUG_LIMIT(D_NETERROR, format, ## a)

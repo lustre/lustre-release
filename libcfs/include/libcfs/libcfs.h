@@ -40,49 +40,13 @@
 #include <libcfs/types.h>
 #include <libcfs/list.h>
 
-#ifdef __KERNEL__
-# include <libcfs/linux/libcfs.h>
-#else /* !__KERNEL__ */
-# include <assert.h>
-# include <ctype.h>
-# include <errno.h>
-# include <fcntl.h>
-# include <limits.h>
-# include <signal.h>
-# include <stdarg.h>
-# include <stdbool.h>
-# include <stddef.h>
-# include <stdint.h>
-# include <stdio.h>
-# include <stdlib.h>
-# include <string.h>
-# include <time.h>
-# include <sys/ioctl.h>
-# include <sys/socket.h>
-# include <sys/stat.h>
-# include <sys/time.h>
-# include <sys/types.h>
+#ifndef __KERNEL__
 # include <libcfs/user-time.h>
-#endif /* __KERNEL__ */
-
-#include "curproc.h"
+# else /* __KERNEL__ */
+# include <libcfs/linux/libcfs.h>
+# include "curproc.h"
 
 #define LIBCFS_VERSION	"0.5.0"
-
-#ifndef ARRAY_SIZE
-#define ARRAY_SIZE(a) ((sizeof (a)) / (sizeof ((a)[0])))
-#endif
-
-#if !defined(swap)
-#define swap(x,y) do { typeof(x) z = x; x = y; y = z; } while (0)
-#endif
-
-#if !defined(container_of)
-/* given a pointer @ptr to the field @member embedded into type (usually
- * struct) @type, return pointer to the embedding instance of @type. */
-#define container_of(ptr, type, member) \
-        ((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
-#endif
 
 static inline int __is_po2(unsigned long long val)
 {
@@ -94,38 +58,13 @@ static inline int __is_po2(unsigned long long val)
 #define LOWEST_BIT_SET(x) ((x) & ~((x) - 1))
 
 /* Sparse annotations */
-#ifdef __KERNEL__
-# if !defined(__must_hold)
-#  ifdef __CHECKER__
-#   define __must_hold(x) __attribute__((context(x, 1, 1)))
-#  else	/* __CHECKER__ */
-#   define __must_hold(x)
-#  endif /* !__CHECKER__ */
-# endif /* !__must_hold */
-#else /* __KERNEL__ */
-# define __acquires(x)
-# define __releases(x)
-# define __must_hold(x)
-#endif /* !__KERNEL__ */
-
-/*
- * Lustre Error Checksum: calculates checksum
- * of Hex number by XORing each bit.
- */
-#define LERRCHKSUM(hexnum) (((hexnum) & 0xf) ^ ((hexnum) >> 4 & 0xf) ^ \
-                           ((hexnum) >> 8 & 0xf))
-
-/*
- * Some (nomina odiosa sunt) platforms define NULL as naked 0. This confuses
- * Lustre RETURN(NULL) macro.
- */
-#if defined(NULL)
-#undef NULL
-#endif
-
-#define NULL ((void *)0)
-
-#ifdef __KERNEL__
+#if !defined(__must_hold)
+# ifdef __CHECKER__
+#  define __must_hold(x) __attribute__((context(x, 1, 1)))
+# else	/* __CHECKER__ */
+#  define __must_hold(x)
+# endif /* !__CHECKER__ */
+#endif /* !__must_hold */
 
 /* libcfs watchdogs */
 struct lc_watchdog;
@@ -147,8 +86,6 @@ void lc_watchdog_disable(struct lc_watchdog *lcw);
 
 /* Clean up the watchdog */
 void lc_watchdog_delete(struct lc_watchdog *lcw);
-
-#endif /* __KERNEL__ */
 
 /* need both kernel and user-land acceptor */
 #define LNET_ACCEPTOR_MIN_RESERVED_PORT    512
@@ -179,6 +116,7 @@ unsigned int cfs_rand(void);
 /* seed the generator */
 void cfs_srand(unsigned int, unsigned int);
 void cfs_get_random_bytes(void *buf, int size);
+#endif /* __KERNEL__ */
 
 #include <libcfs/byteorder.h>
 #include <libcfs/libcfs_debug.h>

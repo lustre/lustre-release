@@ -43,7 +43,7 @@
 #ifndef __LIBCFS_CURPROC_H__
 #define __LIBCFS_CURPROC_H__
 
-#if !defined(HAVE_UIDGID_HEADER) || !defined(__KERNEL__)
+#ifndef HAVE_UIDGID_HEADER
 
 #ifndef _LINUX_UIDGID_H
 #define _LINUX_UIDGID_H
@@ -56,14 +56,6 @@ typedef gid_t kgid_t;
 
 #define GLOBAL_ROOT_UID	 0
 #define GLOBAL_ROOT_GID	 0
-
-#ifndef __KERNEL__
-struct user_namespace {
-	unsigned int pad;
-};
-
-extern struct user_namespace init_user_ns;
-#endif
 
 static inline uid_t __kuid_val(kuid_t uid)
 {

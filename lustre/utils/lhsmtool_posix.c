@@ -37,9 +37,12 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
+#include <ctype.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <dirent.h>
 #include <errno.h>
 #include <getopt.h>
@@ -47,10 +50,12 @@
 #include <time.h>
 #include <unistd.h>
 #include <utime.h>
+#include <signal.h>
 #include <sys/time.h>
 #include <sys/xattr.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
+
 #include <libcfs/util/string.h>
 #include <lustre/lustre_idl.h>
 #include <lustre/lustreapi.h>

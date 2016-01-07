@@ -34,7 +34,10 @@
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
+#include <errno.h>
 #include <stdio.h>
+#include <string.h>
+
 #include <lustre/lustre_idl.h>
 #include <lustre/lustre_lfsck_user.h>
 #include <lustre_disk.h>
