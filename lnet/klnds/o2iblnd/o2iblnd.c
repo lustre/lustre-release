@@ -367,9 +367,7 @@ kiblnd_destroy_peer (kib_peer_t *peer)
 	LASSERT(net != NULL);
 	LASSERT (atomic_read(&peer->ibp_refcount) == 0);
 	LASSERT(!kiblnd_peer_active(peer));
-	LASSERT(peer->ibp_connecting == 0);
-	LASSERT(peer->ibp_accepting == 0);
-	LASSERT(list_empty(&peer->ibp_conns));
+	LASSERT(kiblnd_peer_idle(peer));
 	LASSERT(list_empty(&peer->ibp_tx_queue));
 
 	LIBCFS_FREE(peer, sizeof(*peer));
@@ -393,10 +391,7 @@ kiblnd_find_peer_locked (lnet_nid_t nid)
 	list_for_each(tmp, peer_list) {
 
 		peer = list_entry(tmp, kib_peer_t, ibp_list);
-
-		LASSERT(peer->ibp_connecting > 0 ||	/* creating conns */
-			peer->ibp_accepting > 0 ||
-			!list_empty(&peer->ibp_conns));	/* active conn */
+		LASSERT(!kiblnd_peer_idle(peer));
 
 		if (peer->ibp_nid != nid)
 			continue;
@@ -437,9 +432,7 @@ kiblnd_get_peer_info(lnet_ni_t *ni, int index,
 		list_for_each(ptmp, &kiblnd_data.kib_peers[i]) {
 
 			peer = list_entry(ptmp, kib_peer_t, ibp_list);
-			LASSERT(peer->ibp_connecting > 0 ||
-				peer->ibp_accepting > 0 ||
-				!list_empty(&peer->ibp_conns));
+			LASSERT(!kiblnd_peer_idle(peer));
 
 			if (peer->ibp_ni != ni)
 				continue;
@@ -506,9 +499,7 @@ kiblnd_del_peer (lnet_ni_t *ni, lnet_nid_t nid)
 	for (i = lo; i <= hi; i++) {
 		list_for_each_safe(ptmp, pnxt, &kiblnd_data.kib_peers[i]) {
 			peer = list_entry(ptmp, kib_peer_t, ibp_list);
-			LASSERT(peer->ibp_connecting > 0 ||
-				peer->ibp_accepting > 0 ||
-				!list_empty(&peer->ibp_conns));
+			LASSERT(!kiblnd_peer_idle(peer));
 
 			if (peer->ibp_ni != ni)
 				continue;
@@ -551,9 +542,7 @@ kiblnd_get_conn_by_idx(lnet_ni_t *ni, int index)
 		list_for_each(ptmp, &kiblnd_data.kib_peers[i]) {
 
 			peer = list_entry(ptmp, kib_peer_t, ibp_list);
-			LASSERT(peer->ibp_connecting > 0 ||
-				peer->ibp_accepting > 0 ||
-				!list_empty(&peer->ibp_conns));
+			LASSERT(!kiblnd_peer_idle(peer));
 
 			if (peer->ibp_ni != ni)
 				continue;
@@ -913,7 +902,7 @@ kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
         return conn;
 
  failed_2:
-        kiblnd_destroy_conn(conn);
+	kiblnd_destroy_conn(conn, true);
  failed_1:
         LIBCFS_FREE(init_qp_attr, sizeof(*init_qp_attr));
  failed_0:
@@ -921,7 +910,7 @@ kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
 }
 
 void
-kiblnd_destroy_conn (kib_conn_t *conn)
+kiblnd_destroy_conn(kib_conn_t *conn, bool free_conn)
 {
 	struct rdma_cm_id *cmid = conn->ibc_cmid;
 	kib_peer_t        *peer = conn->ibc_peer;
@@ -985,7 +974,8 @@ kiblnd_destroy_conn (kib_conn_t *conn)
 		atomic_dec(&net->ibn_nconns);
 	}
 
-	LIBCFS_FREE(conn, sizeof(*conn));
+	if (free_conn)
+		LIBCFS_FREE(conn, sizeof(*conn));
 }
 
 int
@@ -1065,9 +1055,7 @@ kiblnd_close_matching_conns(lnet_ni_t *ni, lnet_nid_t nid)
 		list_for_each_safe(ptmp, pnxt, &kiblnd_data.kib_peers[i]) {
 
 			peer = list_entry(ptmp, kib_peer_t, ibp_list);
-			LASSERT(peer->ibp_connecting > 0 ||
-				peer->ibp_accepting > 0 ||
-				!list_empty(&peer->ibp_conns));
+			LASSERT(!kiblnd_peer_idle(peer));
 
 			if (peer->ibp_ni != ni)
 				continue;
@@ -1154,12 +1142,8 @@ kiblnd_query(lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
 	read_lock_irqsave(glock, flags);
 
 	peer = kiblnd_find_peer_locked(nid);
-	if (peer != NULL) {
-		LASSERT(peer->ibp_connecting > 0 || /* creating conns */
-			peer->ibp_accepting > 0 ||
-			!list_empty(&peer->ibp_conns));  /* active conn */
+	if (peer != NULL)
 		last_alive = peer->ibp_last_alive;
-	}
 
 	read_unlock_irqrestore(glock, flags);
 
@@ -2506,6 +2490,8 @@ kiblnd_base_shutdown(void)
                 }
 		LASSERT(list_empty(&kiblnd_data.kib_connd_zombies));
 		LASSERT(list_empty(&kiblnd_data.kib_connd_conns));
+		LASSERT(list_empty(&kiblnd_data.kib_reconn_list));
+		LASSERT(list_empty(&kiblnd_data.kib_reconn_wait));
 
 		/* flag threads to terminate; wake and wait for them to die */
 		kiblnd_data.kib_shutdown = 1;
@@ -2657,6 +2643,9 @@ kiblnd_base_startup(void)
 	spin_lock_init(&kiblnd_data.kib_connd_lock);
 	INIT_LIST_HEAD(&kiblnd_data.kib_connd_conns);
 	INIT_LIST_HEAD(&kiblnd_data.kib_connd_zombies);
+	INIT_LIST_HEAD(&kiblnd_data.kib_reconn_list);
+	INIT_LIST_HEAD(&kiblnd_data.kib_reconn_wait);
+
 	init_waitqueue_head(&kiblnd_data.kib_connd_waitq);
 	init_waitqueue_head(&kiblnd_data.kib_failover_waitq);
 
