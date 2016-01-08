@@ -179,6 +179,9 @@ set_mmp_update_interval() {
 	return ${PIPESTATUS[0]}
 }
 
+I_ENABLED_MDS=0
+I_ENABLED_OSS=0
+
 # Enable the MMP feature on the Lustre server targets.
 mmp_init() {
 	init_vars
@@ -193,63 +196,50 @@ mmp_init() {
 		exit
 	fi
 
-    # The MMP feature is automatically enabled by mkfs.lustre for
-    # new file system at format time if failover is being used.
-    # Otherwise, the Lustre administrator has to manually enable
-    # this feature when the file system is unmounted.
-
-    local var=${MMP_MDS}failover_HOST
-    if [ -z "${!var}" ]; then
-        log "Failover is not used on MDS, enabling MMP manually..."
-        enable_mmp $MMP_MDS $MMP_MDSDEV || \
-            error "failed to enable MMP on $MMP_MDSDEV on $MMP_MDS"
-    fi
-
-    var=${MMP_OSS}failover_HOST
-    if [ -z "${!var}" ]; then
-        log "Failover is not used on OSS, enabling MMP manually..."
-        enable_mmp $MMP_OSS $MMP_OSTDEV || \
-            error "failed to enable MMP on $MMP_OSTDEV on $MMP_OSS"
-    fi
-
-    # check whether the MMP feature is enabled or not
-    mmp_is_enabled $MMP_MDS $MMP_MDSDEV || \
-        error "MMP was not enabled on $MMP_MDSDEV on $MMP_MDS"
-
-	mmp_is_enabled $MMP_OSS $MMP_OSTDEV || \
+	mmp_is_enabled $MMP_MDS $MMP_MDSDEV ||
 	{
-		do_facet $MMP_OSS "$DUMPE2FS -h $MMP_OSTDEV"
-		log "Try to enable again:"
-		enable_mmp $MMP_OSS $MMP_OSTDEV
-		log "Verify again:"
-		do_facet $MMP_OSS "$DUMPE2FS -h $MMP_OSTDEV"
-		error "MMP was not enabled on $MMP_OSTDEV on $MMP_OSS"
+		log "MMP is not enabled on MDS, enabling it manually..."
+		enable_mmp $MMP_MDS $MMP_MDSDEV ||
+			error "failed to enable MMP on $MMP_MDSDEV on $MMP_MDS"
+		I_ENABLED_MDS=1
 	}
+
+	mmp_is_enabled $MMP_OSS $MMP_OSTDEV ||
+	{
+		log "MMP is not enabled on OSS, enabling it manually..."
+		enable_mmp $MMP_OSS $MMP_OSTDEV ||
+			error "failed to enable MMP on $MMP_OSTDEV on $MMP_OSS"
+		I_ENABLED_OSS=1
+	}
+
+	# check whether the MMP feature is enabled or not
+	mmp_is_enabled $MMP_MDS $MMP_MDSDEV ||
+		error "MMP was not enabled on $MMP_MDSDEV on $MMP_MDS"
+
+	mmp_is_enabled $MMP_OSS $MMP_OSTDEV ||
+		error "MMP was not enabled on $MMP_OSTDEV on $MMP_OSS"
 }
 
 # Disable the MMP feature on the Lustre server targets
-# which did not use failover.
 mmp_fini() {
 
-    local var=${MMP_MDS}failover_HOST
-    if [ -z "${!var}" ]; then
-        log "Failover is not used on MDS, disabling MMP manually..."
-        disable_mmp $MMP_MDS $MMP_MDSDEV || \
-            error "failed to disable MMP on $MMP_MDSDEV on $MMP_MDS"
-        mmp_is_enabled $MMP_MDS $MMP_MDSDEV && \
-            error "MMP was not disabled on $MMP_MDSDEV on $MMP_MDS"
-    fi
+	if [ $I_ENABLED_MDS -eq 1 ]; then
+		log "Disabling MMP on $MMP_MDSDEV on $MMP_MDS manually..."
+		disable_mmp $MMP_MDS $MMP_MDSDEV ||
+			error "failed to disable MMP on $MMP_MDSDEV on $MMP_MDS"
+		mmp_is_enabled $MMP_MDS $MMP_MDSDEV &&
+			error "MMP was not disabled on $MMP_MDSDEV on $MMP_MDS"
+	fi
 
-    var=${MMP_OSS}failover_HOST
-    if [ -z "${!var}" ]; then
-        log "Failover is not used on OSS, disabling MMP manually..."
-        disable_mmp $MMP_OSS $MMP_OSTDEV || \
-            error "failed to disable MMP on $MMP_OSTDEV on $MMP_OSS"
-        mmp_is_enabled $MMP_OSS $MMP_OSTDEV && \
-            error "MMP was not disabled on $MMP_OSTDEV on $MMP_OSS"
-    fi
+	if [ $I_ENABLED_OSS -eq 1 ]; then
+		log "Disabling MMP on $MMP_OSTDEV on $MMP_OSS manually..."
+		disable_mmp $MMP_OSS $MMP_OSTDEV ||
+			error "failed to disable MMP on $MMP_OSTDEV on $MMP_OSS"
+		mmp_is_enabled $MMP_OSS $MMP_OSTDEV &&
+			error "MMP was not disabled on $MMP_OSTDEV on $MMP_OSS"
+	fi
 
-    return 0
+	return 0
 }
 
 # Mount the shared target on the failover server after some interval it's
