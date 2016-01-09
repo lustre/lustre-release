@@ -1039,7 +1039,6 @@ unlock:
 		GOTO(out, rc = -ERANGE);
 
 	memcpy(buf->lb_buf, rbuf->lb_buf, rbuf->lb_len);
-	rc = rbuf->lb_len;
 	if (obj->opo_ooa == NULL || osp->opd_connect_mdt)
 		GOTO(out, rc);
 

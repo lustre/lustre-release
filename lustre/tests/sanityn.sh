@@ -3544,6 +3544,29 @@ test_91() {
 }
 run_test 91 "chmod and unlink striped directory"
 
+test_92() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	local fd=$(free_fd)
+	local cmd="exec $fd<$DIR1/$tdir"
+	$LFS setdirstripe -c$MDSCOUNT $DIR1/$tdir || error "mkdir $tdir fails"
+	eval $cmd
+	cmd="exec $fd<&-"
+	trap "eval $cmd" EXIT
+	cd $DIR1/$tdir || error "cd $DIR1/$tdir fails"
+	rmdir ../$tdir || error "rmdir ../$tdir fails"
+
+	#define OBD_FAIL_LLITE_NO_CHECK_DEAD  0x1408
+	$LCTL set_param fail_loc=0x1408
+	mkdir $DIR2/$tdir/dir && error "create dir succeeds"
+	$LFS setdirstripe -i1 $DIR2/$tdir/remote_dir &&
+		error "create remote dir succeeds"
+	$LCTL set_param fail_loc=0
+	eval $cmd
+	return 0
+}
+run_test 92 "create remote directory under orphan directory"
+
 log "cleanup: ======================================================"
 
 # kill and wait in each test only guarentee script finish, but command in script
