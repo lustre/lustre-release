@@ -65,13 +65,26 @@ static int mdd_xattr_get(const struct lu_env *env,
 int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
 	       struct lu_attr *la)
 {
-        if (mdd_object_exists(obj) == 0) {
-                CERROR("%s: object "DFID" not found: rc = -2\n",
-                       mdd_obj_dev_name(obj), PFID(mdd_object_fid(obj)));
-                return -ENOENT;
-        }
+	int rc;
 
-	return mdo_attr_get(env, obj, la);
+	if (mdd_object_exists(obj) == 0) {
+		CERROR("%s: object "DFID" not found: rc = -2\n",
+		       mdd_obj_dev_name(obj), PFID(mdd_object_fid(obj)));
+		return -ENOENT;
+	}
+
+	rc = mdo_attr_get(env, obj, la);
+	if (unlikely(rc != 0)) {
+		if (rc == -ENOENT)
+			obj->mod_flags |= DEAD_OBJ;
+		return rc;
+	}
+
+	if (la->la_valid & LA_FLAGS &&
+	    la->la_flags & LUSTRE_ORPHAN_FL)
+		obj->mod_flags |= ORPHAN_OBJ | DEAD_OBJ;
+
+	return 0;
 }
 
 struct mdd_thread_info *mdd_env_info(const struct lu_env *env)

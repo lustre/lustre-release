@@ -195,8 +195,10 @@ enum lma_incompat {
 	LMAI_REMOTE_PARENT	= 0x00000004, /* the parent of the object
 						 is on the remote MDT */
 	LMAI_STRIPED		= 0x00000008, /* striped directory inode */
+	LMAI_ORPHAN		= 0x00000010, /* inode is orphan */
+	LMA_INCOMPAT_SUPP	= (LMAI_AGENT | LMAI_REMOTE_PARENT | \
+				   LMAI_STRIPED | LMAI_ORPHAN)
 };
-#define LMA_INCOMPAT_SUPP	(LMAI_AGENT | LMAI_REMOTE_PARENT | LMAI_STRIPED)
 
 extern void lustre_lma_swab(struct lustre_mdt_attrs *lma);
 extern void lustre_lma_init(struct lustre_mdt_attrs *lma,
@@ -2107,18 +2109,44 @@ enum {
 #define MDS_STATUS_CONN 1
 #define MDS_STATUS_LOV 2
 
-/* these should be identical to their EXT4_*_FL counterparts, they are
- * redefined here only to avoid dragging in fs/ext4/ext4.h */
-#define LUSTRE_SYNC_FL		0x00000008 /* Synchronous updates */
-#define LUSTRE_IMMUTABLE_FL	0x00000010 /* Immutable file */
-#define LUSTRE_APPEND_FL	0x00000020 /* writes to file may only append */
-#define LUSTRE_NODUMP_FL	0x00000040 /* do not dump file */
-#define LUSTRE_NOATIME_FL	0x00000080 /* do not update atime */
-#define LUSTRE_INDEX_FL		0x00001000 /* hash-indexed directory */
-#define LUSTRE_DIRSYNC_FL	0x00010000 /* dirsync behaviour (dir only) */
-#define LUSTRE_TOPDIR_FL	0x00020000 /* Top of directory hierarchies*/
-#define LUSTRE_DIRECTIO_FL	0x00100000 /* Use direct i/o */
-#define LUSTRE_INLINE_DATA_FL	0x10000000 /* Inode has inline data. */
+enum {
+	/* these should be identical to their EXT4_*_FL counterparts, they are
+	 * redefined here only to avoid dragging in fs/ext4/ext4.h */
+	LUSTRE_SYNC_FL = 0x00000008, /* Synchronous updates */
+	LUSTRE_IMMUTABLE_FL = 0x00000010, /* Immutable file */
+	LUSTRE_APPEND_FL = 0x00000020, /* writes to file may only append */
+	LUSTRE_NODUMP_FL = 0x00000040, /* do not dump file */
+	LUSTRE_NOATIME_FL = 0x00000080, /* do not update atime */
+	LUSTRE_INDEX_FL = 0x00001000, /* hash-indexed directory */
+	LUSTRE_DIRSYNC_FL = 0x00010000, /* dirsync behaviour (dir only) */
+	LUSTRE_TOPDIR_FL = 0x00020000, /* Top of directory hierarchies*/
+	LUSTRE_DIRECTIO_FL = 0x00100000, /* Use direct i/o */
+	LUSTRE_INLINE_DATA_FL = 0x10000000, /* Inode has inline data. */
+
+	/* These flags will not be identical to any EXT4_*_FL counterparts,
+	 * and only reserved for lustre purpose. Note: these flags might
+	 * be conflict with some of EXT4 flags, so
+	 * 1. these conflict flags needs to be removed when the flag is
+	 * wired by la_flags see osd_attr_get().
+	 * 2. If these flags needs to be stored into inode, they will be
+	 * stored in LMA. see LMAI_XXXX */
+	LUSTRE_ORPHAN_FL = 0x00002000,
+
+	LUSTRE_LMA_FL_MASKS = LUSTRE_ORPHAN_FL,
+};
+
+/* LUSTRE_LMA_FL_MASKS defines which flags will be stored in LMA */
+
+static inline int lma_to_lustre_flags(__u32 lma_flags)
+{
+	return (lma_flags & LMAI_ORPHAN) ? LUSTRE_ORPHAN_FL : 0;
+}
+
+static inline int lustre_to_lma_flags(__u32 la_flags)
+{
+	return (la_flags & LUSTRE_ORPHAN_FL) ? LMAI_ORPHAN : 0;
+}
+
 
 #ifdef __KERNEL__
 /* Convert wire LUSTRE_*_FL to corresponding client local VFS S_* values
@@ -2576,7 +2604,14 @@ struct lmv_mds_md_v1 {
 #define LMV_HASH_TYPE_MASK 0x0000ffff
 
 #define LMV_HASH_FLAG_MIGRATION	0x80000000
+
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 10, 53, 0)
+/* Since lustre 2.8, this flag will not be needed, instead this DEAD
+ * and orphan flags will be stored in LMA (see LMAI_ORPHAN)
+ * Keep this flag just for LFSCK, because it still might meet such
+ * flag when it checks the old FS */
 #define LMV_HASH_FLAG_DEAD	0x40000000
+#endif
 #define LMV_HASH_FLAG_BAD_TYPE	0x20000000
 
 /* The striped directory has ever lost its master LMV EA, then LFSCK

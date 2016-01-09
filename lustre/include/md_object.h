@@ -289,14 +289,6 @@ struct md_object {
         const struct md_dir_operations    *mo_dir_ops;
 };
 
-/* Mark the object to be dead, and can not be accessed anymore.
- * XXX, right now, it will only be used for striped directory to
- * mark the slave stripes dead, when deleting master object. It will be
- * stored in slave LMV EA (see lod_mark_dead_object), which is only
- * temporary, and will be removed later when we have proper way to mark
- * the dead object. */
-#define LUSTRE_SLAVE_DEAD_FL		0x80000000
-
 static inline struct md_device *lu2md_dev(const struct lu_device *d)
 {
         LASSERT(IS_ERR(d) || lu_device_is_md(d));

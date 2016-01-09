@@ -1065,78 +1065,6 @@ static int lod_attr_get(const struct lu_env *env,
 }
 
 /**
- * Mark all of the striped directory sub-stripes dead.
- *
- * When a striped object is a subject to removal, we have
- * to mark all the stripes to prevent further access to
- * them (e.g. create a new file in those). So we mark
- * all the stripes with LMV_HASH_FLAG_DEAD. The function
- * can be used to declare the changes and to apply them.
- * If the object isn't striped, then just return success.
- *
- * \param[in] env	execution environment
- * \param[in] dt	the striped object
- * \param[in] handle	transaction handle
- * \param[in] declare	whether to declare the change or apply
- *
- * \retval		0 on success
- * \retval		negative if failed
- **/
-static int lod_mark_dead_object(const struct lu_env *env,
-				struct dt_object *dt,
-				struct thandle *th,
-				bool declare)
-{
-	struct lod_object	*lo = lod_dt_obj(dt);
-	struct lmv_mds_md_v1	*lmv;
-	__u32			dead_hash_type;
-	int			rc;
-	int			i;
-
-	ENTRY;
-
-	if (!S_ISDIR(dt->do_lu.lo_header->loh_attr))
-		RETURN(0);
-
-	rc = lod_load_striping_locked(env, lo);
-	if (rc != 0)
-		RETURN(rc);
-
-	if (lo->ldo_stripenr == 0)
-		RETURN(0);
-
-	rc = lod_get_lmv_ea(env, lo);
-	if (rc <= 0)
-		RETURN(rc);
-
-	lmv = lod_env_info(env)->lti_ea_store;
-	lmv->lmv_magic = cpu_to_le32(LMV_MAGIC_STRIPE);
-	dead_hash_type = le32_to_cpu(lmv->lmv_hash_type) | LMV_HASH_FLAG_DEAD;
-	lmv->lmv_hash_type = cpu_to_le32(dead_hash_type);
-	for (i = 0; i < lo->ldo_stripenr; i++) {
-		struct lu_buf buf;
-
-		lmv->lmv_master_mdt_index = i;
-		buf.lb_buf = lmv;
-		buf.lb_len = sizeof(*lmv);
-		if (declare) {
-			rc = lod_sub_object_declare_xattr_set(env,
-						lo->ldo_stripe[i], &buf,
-						XATTR_NAME_LMV,
-						LU_XATTR_REPLACE, th);
-		} else {
-			rc = lod_sub_object_xattr_set(env, lo->ldo_stripe[i],
-						      &buf, XATTR_NAME_LMV,
-						      LU_XATTR_REPLACE, th);
-		}
-		if (rc != 0)
-			break;
-	}
-
-	RETURN(rc);
-}
-
-/**
  * Implementation of dt_object_operations::do_declare_attr_set.
  *
  * If the object is striped, then apply the changes to all the stripes.
@@ -1153,13 +1081,6 @@ static int lod_declare_attr_set(const struct lu_env *env,
 	struct lod_object *lo = lod_dt_obj(dt);
 	int                rc, i;
 	ENTRY;
-
-	/* Set dead object on all other stripes */
-	if (attr->la_valid & LA_FLAGS && !(attr->la_valid & ~LA_FLAGS) &&
-	    attr->la_flags & LUSTRE_SLAVE_DEAD_FL) {
-		rc = lod_mark_dead_object(env, dt, th, true);
-		RETURN(rc);
-	}
 
 	/*
 	 * declare setattr on the local object
@@ -1252,13 +1173,6 @@ static int lod_attr_set(const struct lu_env *env,
 	struct lod_object	*lo = lod_dt_obj(dt);
 	int			rc, i;
 	ENTRY;
-
-	/* Set dead object on all other stripes */
-	if (attr->la_valid & LA_FLAGS && !(attr->la_valid & ~LA_FLAGS) &&
-	    attr->la_flags & LUSTRE_SLAVE_DEAD_FL) {
-		rc = lod_mark_dead_object(env, dt, th, false);
-		RETURN(rc);
-	}
 
 	/*
 	 * apply changes to the local object

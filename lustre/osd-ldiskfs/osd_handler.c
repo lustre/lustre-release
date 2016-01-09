@@ -1013,8 +1013,22 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 
 	result = osd_fid_lookup(env, obj, lu_object_fid(l), conf);
 	obj->oo_dt.do_body_ops = &osd_body_ops_new;
-	if (result == 0 && obj->oo_inode != NULL)
+	if (result == 0 && obj->oo_inode != NULL) {
+		struct osd_thread_info *oti = osd_oti_get(env);
+		struct lustre_mdt_attrs *lma = &oti->oti_mdt_attrs;
+
 		osd_object_init0(obj);
+		result = osd_get_lma(oti, obj->oo_inode,
+				     &oti->oti_obj_dentry, lma);
+		if (result == 0) {
+			/* Convert LMAI flags to lustre LMA flags
+			 * and cache it to oo_lma_flags */
+			obj->oo_lma_flags =
+				lma_to_lustre_flags(lma->lma_incompat);
+		} else if (result == -ENODATA) {
+			result = 0;
+		}
+	}
 
 	LINVRNT(osd_invariant(obj));
 	return result;
@@ -1902,7 +1916,6 @@ static struct timespec *osd_inode_time(const struct lu_env *env,
 	return t;
 }
 
-
 static void osd_inode_getattr(const struct lu_env *env,
 			      struct inode *inode, struct lu_attr *attr)
 {
@@ -1919,7 +1932,7 @@ static void osd_inode_getattr(const struct lu_env *env,
 	attr->la_blocks	 = inode->i_blocks;
 	attr->la_uid	 = i_uid_read(inode);
 	attr->la_gid	 = i_gid_read(inode);
-	attr->la_flags	 = LDISKFS_I(inode)->i_flags;
+	attr->la_flags	 = ll_inode_to_ext_flags(inode->i_flags);
 	attr->la_nlink	 = inode->i_nlink;
 	attr->la_rdev	 = inode->i_rdev;
 	attr->la_blksize = 1 << inode->i_blkbits;
@@ -1932,7 +1945,9 @@ static int osd_attr_get(const struct lu_env *env,
 {
 	struct osd_object *obj = osd_dt_obj(dt);
 
-	if (!dt_object_exists(dt))
+	if (unlikely(!dt_object_exists(dt)))
+		return -ENOENT;
+	if (unlikely(obj->oo_destroyed))
 		return -ENOENT;
 
 	LASSERT(!dt_object_remote(dt));
@@ -1940,7 +1955,10 @@ static int osd_attr_get(const struct lu_env *env,
 
 	spin_lock(&obj->oo_guard);
 	osd_inode_getattr(env, obj->oo_inode, attr);
+	if (obj->oo_lma_flags & LUSTRE_ORPHAN_FL)
+		attr->la_flags |= LUSTRE_ORPHAN_FL;
 	spin_unlock(&obj->oo_guard);
+
 	return 0;
 }
 
@@ -1971,6 +1989,9 @@ static int osd_declare_attr_set(const struct lu_env *env,
 
 	osd_trans_declare_op(env, oh, OSD_OT_ATTR_SET,
 			     osd_dto_credits_noquota[DTO_ATTR_SET_BASE]);
+
+	osd_trans_declare_op(env, oh, OSD_OT_XATTR_SET,
+			     osd_dto_credits_noquota[DTO_XATTR_SET]);
 
 	if (attr == NULL || obj->oo_inode == NULL)
 		RETURN(rc);
@@ -2216,10 +2237,41 @@ static int osd_attr_set(const struct lu_env *env,
 	spin_lock(&obj->oo_guard);
 	rc = osd_inode_setattr(env, inode, attr);
 	spin_unlock(&obj->oo_guard);
+	if (rc != 0)
+		GOTO(out, rc);
 
-        if (!rc)
-		ll_dirty_inode(inode, I_DIRTY_DATASYNC);
+	ll_dirty_inode(inode, I_DIRTY_DATASYNC);
 
+	if (!(attr->la_valid & LA_FLAGS))
+		GOTO(out, rc);
+
+	/* Let's check if there are extra flags need to be set into LMA */
+	if (attr->la_flags & LUSTRE_LMA_FL_MASKS) {
+		struct osd_thread_info *info = osd_oti_get(env);
+		struct lustre_mdt_attrs *lma = &info->oti_mdt_attrs;
+
+		rc = osd_get_lma(info, inode, &info->oti_obj_dentry, lma);
+		if (rc != 0)
+			GOTO(out, rc);
+
+		lma->lma_incompat |=
+			lustre_to_lma_flags(attr->la_flags);
+		lustre_lma_swab(lma);
+		rc = __osd_xattr_set(info, inode, XATTR_NAME_LMA,
+				     lma, sizeof(*lma), XATTR_REPLACE);
+		if (rc != 0) {
+			struct osd_device *osd = osd_obj2dev(obj);
+
+			CWARN("%s: set "DFID" lma flags %u failed: rc = %d\n",
+			      osd_name(osd), PFID(lu_object_fid(&dt->do_lu)),
+			      lma->lma_incompat, rc);
+		} else {
+			obj->oo_lma_flags =
+				attr->la_flags & LUSTRE_LMA_FL_MASKS;
+		}
+		osd_trans_exec_check(env, handle, OSD_OT_XATTR_SET);
+	}
+out:
 	osd_trans_exec_check(env, handle, OSD_OT_ATTR_SET);
 
         return rc;
@@ -2467,20 +2519,20 @@ static void osd_attr_init(struct osd_thread_info *info, struct osd_object *obj,
 	if (result)
 		return;
 
-        if (attr->la_valid != 0) {
-                result = osd_inode_setattr(info->oti_env, inode, attr);
-                /*
-                 * The osd_inode_setattr() should always succeed here.  The
-                 * only error that could be returned is EDQUOT when we are
-                 * trying to change the UID or GID of the inode. However, this
-                 * should not happen since quota enforcement is no longer
-                 * enabled on ldiskfs (lquota takes care of it).
-                 */
+	if (attr->la_valid != 0) {
+		result = osd_inode_setattr(info->oti_env, inode, attr);
+		/*
+		 * The osd_inode_setattr() should always succeed here.  The
+		 * only error that could be returned is EDQUOT when we are
+		 * trying to change the UID or GID of the inode. However, this
+		 * should not happen since quota enforcement is no longer
+		 * enabled on ldiskfs (lquota takes care of it).
+		 */
 		LASSERTF(result == 0, "%d\n", result);
 		ll_dirty_inode(inode, I_DIRTY_DATASYNC);
-        }
+	}
 
-        attr->la_valid = valid;
+	attr->la_valid = valid;
 }
 
 /**

@@ -129,6 +129,9 @@ struct osd_object {
 	spinlock_t		oo_guard;
 
 	__u32			oo_destroyed:1;
+
+	/* the i_flags in LMA */
+	__u32			oo_lma_flags;
         /**
          * Following two members are used to indicate the presence of dot and
          * dotdot in the given directory. This is required for interop mode

@@ -380,8 +380,6 @@ int mdd_may_create(const struct lu_env *env, struct mdd_object *pobj,
 		   const struct lu_attr *pattr, struct mdd_object *cobj,
 		   bool check_perm)
 {
-	struct mdd_thread_info *info = mdd_env_info(env);
-	struct lu_buf	*xbuf;
 	int rc = 0;
 	ENTRY;
 
@@ -390,18 +388,6 @@ int mdd_may_create(const struct lu_env *env, struct mdd_object *pobj,
 
 	if (mdd_is_dead_obj(pobj))
 		RETURN(-ENOENT);
-
-	/* If the parent is a sub-stripe, check whether it is dead */
-	xbuf = mdd_buf_get(env, info->mti_key, sizeof(info->mti_key));
-	rc = mdo_xattr_get(env, pobj, xbuf, XATTR_NAME_LMV);
-	if (unlikely(rc > 0)) {
-		struct lmv_mds_md_v1  *lmv1 = xbuf->lb_buf;
-
-		if (le32_to_cpu(lmv1->lmv_magic) == LMV_MAGIC_STRIPE &&
-		    le32_to_cpu(lmv1->lmv_hash_type) & LMV_HASH_FLAG_DEAD)
-			RETURN(-ESTALE);
-	}
-	rc = 0;
 
 	if (check_perm)
 		rc = mdd_permission_internal_locked(env, pobj, pattr,
@@ -1418,21 +1404,18 @@ out_pending:
         return rc;
 }
 
-static int mdd_mark_dead_object(const struct lu_env *env,
+static int mdd_mark_orphan_object(const struct lu_env *env,
 				struct mdd_object *obj, struct thandle *handle,
 				bool declare)
 {
 	struct lu_attr *attr = MDD_ENV_VAR(env, la_for_start);
 	int rc;
 
-	if (!declare)
-		obj->mod_flags |= DEAD_OBJ;
-
 	if (!S_ISDIR(mdd_object_type(obj)))
 		return 0;
 
 	attr->la_valid = LA_FLAGS;
-	attr->la_flags = LUSTRE_SLAVE_DEAD_FL;
+	attr->la_flags = LUSTRE_ORPHAN_FL;
 
 	if (declare)
 		rc = mdo_declare_attr_set(env, obj, attr, handle);
@@ -1448,7 +1431,10 @@ static int mdd_declare_finish_unlink(const struct lu_env *env,
 {
 	int	rc;
 
-	rc = mdd_mark_dead_object(env, obj, handle, true);
+	/* Sigh, we do not know if the unlink object will become orphan in
+	 * declare phase, but fortunately the flags here does not matter
+	 * in current declare implementation */
+	rc = mdd_mark_orphan_object(env, obj, handle, true);
 	if (rc != 0)
 		return rc;
 
@@ -1471,34 +1457,35 @@ int mdd_finish_unlink(const struct lu_env *env,
 		      struct thandle *th)
 {
 	int rc = 0;
-        int is_dir = S_ISDIR(ma->ma_attr.la_mode);
-        ENTRY;
+	int is_dir = S_ISDIR(ma->ma_attr.la_mode);
+	ENTRY;
 
-        LASSERT(mdd_write_locked(env, obj) != 0);
+	LASSERT(mdd_write_locked(env, obj) != 0);
 
 	if (ma->ma_attr.la_nlink == 0 || is_dir) {
-		rc = mdd_mark_dead_object(env, obj, th, false);
-		if (rc != 0)
-			RETURN(rc);
+		/* add new orphan and the object
+		 * will be deleted during mdd_close() */
+		obj->mod_flags |= DEAD_OBJ;
+		if (obj->mod_count) {
+			rc = mdd_mark_orphan_object(env, obj, th, false);
+			if (rc != 0)
+				RETURN(rc);
 
-                /* add new orphan and the object
-                 * will be deleted during mdd_close() */
-                if (obj->mod_count) {
-                        rc = __mdd_orphan_add(env, obj, th);
-                        if (rc == 0)
-                                CDEBUG(D_HA, "Object "DFID" is inserted into "
-                                        "orphan list, open count = %d\n",
-                                        PFID(mdd_object_fid(obj)),
-                                        obj->mod_count);
-                        else
-                                CERROR("Object "DFID" fail to be an orphan, "
-                                       "open count = %d, maybe cause failed "
-                                       "open replay\n",
-                                        PFID(mdd_object_fid(obj)),
-                                        obj->mod_count);
-                } else {
+			rc = __mdd_orphan_add(env, obj, th);
+			if (rc == 0)
+				CDEBUG(D_HA, "Object "DFID" is inserted into "
+					"orphan list, open count = %d\n",
+					PFID(mdd_object_fid(obj)),
+					obj->mod_count);
+			else
+				CERROR("Object "DFID" fail to be an orphan, "
+				       "open count = %d, maybe cause failed "
+				       "open replay\n",
+					PFID(mdd_object_fid(obj)),
+					obj->mod_count);
+		} else {
 			rc = mdo_destroy(env, obj, th);
-                }
+		}
 	} else if (!is_dir) {
 		/* old files may not have link ea; ignore errors */
 		mdd_links_del(env, obj, mdo2fid(pobj), lname, th);
@@ -1732,14 +1719,22 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 	rc = mdd_finish_unlink(env, mdd_cobj, ma, mdd_pobj, lname, handle);
 
 	/* fetch updated nlink */
-	if (rc == 0)
-		rc = mdd_la_get(env, mdd_cobj, cattr);
+	if (rc != 0)
+		GOTO(cleanup, rc);
 
-	/* if object is removed then we can't get its attrs, use last get */
+	rc = mdd_la_get(env, mdd_cobj, cattr);
+	/* if object is removed then we can't get its attrs,
+	 * use last get */
+	if (rc == -ENOENT) {
+		cattr->la_nlink = 0;
+		rc = 0;
+	}
+
 	if (cattr->la_nlink == 0) {
 		ma->ma_attr = *cattr;
 		ma->ma_valid |= MA_INODE;
 	}
+
 	EXIT;
 cleanup:
 	if (likely(mdd_cobj != NULL))
@@ -1955,10 +1950,9 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 	int rc;
 	ENTRY;
 
-        /* EEXIST check */
-	if (mdd_is_dead_obj(obj) ||
-	    pattr->la_flags & LUSTRE_SLAVE_DEAD_FL)
-                RETURN(-ENOENT);
+	/* EEXIST check */
+	if (mdd_is_dead_obj(obj))
+		RETURN(-ENOENT);
 
 	/*
          * In some cases this lookup is not needed - we know before if name
@@ -2955,7 +2949,12 @@ static int mdd_rename(const struct lu_env *env,
 
 		/* fetch updated nlink */
 		rc = mdd_la_get(env, mdd_tobj, tattr);
-		if (rc != 0) {
+		if (rc == -ENOENT) {
+			/* the object got removed, let's
+			 * return the latest known attributes */
+			tattr->la_nlink = 0;
+			rc = 0;
+		} else if (rc != 0) {
 			CERROR("%s: Failed to get nlink for tobj "
 				DFID": rc = %d\n",
 				mdd2obd_dev(mdd)->obd_name,
