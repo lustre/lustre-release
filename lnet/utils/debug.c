@@ -92,7 +92,7 @@ dbg_open_ctlhandle(const char *str)
 	glob_t path;
 	int fd, rc;
 
-	rc = cfs_get_param_paths(&path, str);
+	rc = cfs_get_param_paths(&path, "%s", str);
 	if (rc != 0) {
 		fprintf(stderr, "invalid parameter '%s'\n", str);
 		return -1;
