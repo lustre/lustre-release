@@ -26,7 +26,7 @@ rootsbin_PROGRAMS = mount.lustre
 bin_SCRIPTS   = llstat llobdstat plot-llstat
 bin_PROGRAMS  = lfs
 sbin_SCRIPTS  = ldlm_debug_upcall
-sbin_PROGRAMS = lctl l_getidentity llverfs lustre_rsync ltrack_stats
+sbin_PROGRAMS = lctl l_getidentity llverfs lustre_rsync
 
 if TESTS
 bin_PROGRAMS  += req_layout
@@ -157,8 +157,6 @@ tunefs_lustre_DEPENDENCIES := $(mkfs_lustre_DEPENDENCIES)
 l_getidentity_SOURCES = l_getidentity.c
 l_getidentity_LDADD := $(LIBPTLCTL)
 l_getidentity_DEPENDENCIES := $(LIBPTLCTL)
-
-ltrack_stats_SOURCES = ltrack_stats.c
 
 lhsmtool_posix_SOURCES = lhsmtool_posix.c
 lhsmtool_posix_LDADD := liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS)
