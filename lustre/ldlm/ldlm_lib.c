@@ -436,6 +436,8 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 	init_waitqueue_head(&cli->cl_mod_rpcs_waitq);
 	cli->cl_mod_tag_bitmap = NULL;
 
+	INIT_LIST_HEAD(&cli->cl_chg_dev_linkage);
+
 	if (connect_op == MDS_CONNECT) {
 		cli->cl_max_mod_rpcs_in_flight = cli->cl_max_rpcs_in_flight - 1;
 		OBD_ALLOC(cli->cl_mod_tag_bitmap,

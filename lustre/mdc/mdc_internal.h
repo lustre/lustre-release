@@ -139,6 +139,11 @@ enum ldlm_mode mdc_lock_match(struct obd_export *exp, __u64 flags,
 			      union ldlm_policy_data *policy,
 			      enum ldlm_mode mode, struct lustre_handle *lockh);
 
+
+int mdc_changelog_cdev_init(struct obd_device *obd);
+
+void mdc_changelog_cdev_finish(struct obd_device *obd);
+
 static inline int mdc_prep_elc_req(struct obd_export *exp,
 				   struct ptlrpc_request *req, int opc,
 				   struct list_head *cancels, int count)

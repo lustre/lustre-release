@@ -992,13 +992,6 @@ static inline void changelog_remap_rec(struct changelog_rec *rec,
 	rec->cr_flags = (rec->cr_flags & CLF_FLAGMASK) | crf_wanted;
 }
 
-struct ioc_changelog {
-        __u64 icc_recno;
-        __u32 icc_mdtindex;
-        __u32 icc_id;
-        __u32 icc_flags;
-};
-
 enum changelog_message_type {
         CL_RECORD = 10, /* message is a changelog_rec */
         CL_EOF    = 11, /* at end of current changelog */

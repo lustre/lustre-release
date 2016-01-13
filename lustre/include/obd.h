@@ -325,13 +325,15 @@ struct client_obd {
 	struct lu_client_seq    *cl_seq;
 	struct rw_semaphore	 cl_seq_rwsem;
 
-	atomic_t             cl_resends; /* resend count */
+	atomic_t		 cl_resends; /* resend count */
 
 	/* ptlrpc work for writeback in ptlrpcd context */
 	void			*cl_writeback_work;
 	void			*cl_lru_work;
 	/* hash tables for osc_quota_info */
 	struct cfs_hash		*cl_quota_hash[LL_MAXQUOTAS];
+	/* Links to the global list of registered changelog devices */
+	struct list_head	 cl_chg_dev_linkage;
 };
 #define obd2cli_tgt(obd) ((char *)(obd)->u.cli.cl_target_uuid.uuid)
 

@@ -1546,14 +1546,6 @@ out_rmdir:
 		RETURN(obd_iocontrol(cmd, sbi->ll_md_exp, 0, NULL,
 				     (void __user *)arg));
         }
-        case OBD_IOC_CHANGELOG_SEND:
-        case OBD_IOC_CHANGELOG_CLEAR:
-		if (!cfs_capable(CFS_CAP_SYS_ADMIN))
-			RETURN(-EPERM);
-
-		rc = copy_and_ioctl(cmd, sbi->ll_md_exp, (void __user *)arg,
-                                    sizeof(struct ioc_changelog));
-                RETURN(rc);
 	case OBD_IOC_FID2PATH:
 		RETURN(ll_fid2path(inode, (void __user *)arg));
 	case LL_IOC_GETPARENT:

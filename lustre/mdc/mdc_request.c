@@ -34,7 +34,6 @@
 
 #include <linux/init.h>
 #include <linux/kthread.h>
-#include <linux/miscdevice.h>
 #include <linux/module.h>
 #include <linux/pagemap.h>
 #include <linux/user_namespace.h>
@@ -1794,171 +1793,6 @@ out:
 	return rc;
 }
 
-static struct kuc_hdr *changelog_kuc_hdr(char *buf, size_t len, __u32 flags)
-{
-	struct kuc_hdr *lh = (struct kuc_hdr *)buf;
-
-	LASSERT(len <= KUC_CHANGELOG_MSG_MAXSIZE);
-
-	lh->kuc_magic = KUC_MAGIC;
-	lh->kuc_transport = KUC_TRANSPORT_CHANGELOG;
-	lh->kuc_flags = flags;
-	lh->kuc_msgtype = CL_RECORD;
-	lh->kuc_msglen = len;
-	return lh;
-}
-
-struct changelog_show {
-	__u64				 cs_startrec;
-	enum changelog_send_flag	 cs_flags;
-	struct file			*cs_fp;
-	char				*cs_buf;
-	struct obd_device		*cs_obd;
-};
-
-static inline char *cs_obd_name(struct changelog_show *cs)
-{
-	return cs->cs_obd->obd_name;
-}
-
-static int changelog_kkuc_cb(const struct lu_env *env, struct llog_handle *llh,
-			     struct llog_rec_hdr *hdr, void *data)
-{
-	struct changelog_show		*cs = data;
-	struct llog_changelog_rec	*rec = (struct llog_changelog_rec *)hdr;
-	struct kuc_hdr			*lh;
-	size_t				 len;
-	int				 rc;
-	ENTRY;
-
-	if (rec->cr_hdr.lrh_type != CHANGELOG_REC) {
-		rc = -EINVAL;
-		CERROR("%s: not a changelog rec %x/%d: rc = %d\n",
-		       cs_obd_name(cs), rec->cr_hdr.lrh_type,
-		       rec->cr.cr_type, rc);
-		RETURN(rc);
-	}
-
-	if (rec->cr.cr_index < cs->cs_startrec) {
-		/* Skip entries earlier than what we are interested in */
-		CDEBUG(D_HSM, "rec=%llu start=%llu\n",
-		       rec->cr.cr_index, cs->cs_startrec);
-		RETURN(0);
-	}
-
-	CDEBUG(D_HSM, "%llu %02d%-5s %llu 0x%x t="DFID" p="DFID" %.*s\n",
-	       rec->cr.cr_index, rec->cr.cr_type,
-	       changelog_type2str(rec->cr.cr_type), rec->cr.cr_time,
-	       rec->cr.cr_flags & CLF_FLAGMASK,
-	       PFID(&rec->cr.cr_tfid), PFID(&rec->cr.cr_pfid),
-	       rec->cr.cr_namelen, changelog_rec_name(&rec->cr));
-
-	len = sizeof(*lh) + changelog_rec_size(&rec->cr) + rec->cr.cr_namelen;
-
-        /* Set up the message */
-        lh = changelog_kuc_hdr(cs->cs_buf, len, cs->cs_flags);
-        memcpy(lh + 1, &rec->cr, len - sizeof(*lh));
-
-        rc = libcfs_kkuc_msg_put(cs->cs_fp, lh);
-	CDEBUG(D_HSM, "kucmsg fp %p len %zu rc %d\n", cs->cs_fp, len, rc);
-
-        RETURN(rc);
-}
-
-static int mdc_changelog_send_thread(void *csdata)
-{
-	struct changelog_show	*cs = csdata;
-	struct llog_ctxt	*ctxt = NULL;
-	struct llog_handle	*llh = NULL;
-	struct kuc_hdr		*kuch;
-	enum llog_flag		 flags = LLOG_F_IS_CAT;
-	int			 rc;
-
-	CDEBUG(D_HSM, "changelog to fp=%p start %llu\n",
-	       cs->cs_fp, cs->cs_startrec);
-
-	OBD_ALLOC(cs->cs_buf, KUC_CHANGELOG_MSG_MAXSIZE);
-	if (cs->cs_buf == NULL)
-		GOTO(out, rc = -ENOMEM);
-
-	/* Set up the remote catalog handle */
-	ctxt = llog_get_context(cs->cs_obd, LLOG_CHANGELOG_REPL_CTXT);
-	if (ctxt == NULL)
-		GOTO(out, rc = -ENOENT);
-	rc = llog_open(NULL, ctxt, &llh, NULL, CHANGELOG_CATALOG,
-		       LLOG_OPEN_EXISTS);
-	if (rc) {
-		CERROR("%s: fail to open changelog catalog: rc = %d\n",
-		       cs_obd_name(cs), rc);
-		GOTO(out, rc);
-	}
-
-	if (cs->cs_flags & CHANGELOG_FLAG_JOBID)
-		flags |= LLOG_F_EXT_JOBID;
-
-	rc = llog_init_handle(NULL, llh, flags, NULL);
-	if (rc) {
-		CERROR("llog_init_handle failed %d\n", rc);
-		GOTO(out, rc);
-	}
-
-	rc = llog_cat_process(NULL, llh, changelog_kkuc_cb, cs, 0, 0);
-
-	/* Send EOF no matter what our result */
-	kuch = changelog_kuc_hdr(cs->cs_buf, sizeof(*kuch), cs->cs_flags);
-	kuch->kuc_msgtype = CL_EOF;
-	libcfs_kkuc_msg_put(cs->cs_fp, kuch);
-
-out:
-	fput(cs->cs_fp);
-	if (llh)
-		llog_cat_close(NULL, llh);
-	if (ctxt)
-		llog_ctxt_put(ctxt);
-	if (cs->cs_buf)
-		OBD_FREE(cs->cs_buf, KUC_CHANGELOG_MSG_MAXSIZE);
-	OBD_FREE_PTR(cs);
-	return rc;
-}
-
-static int mdc_ioc_changelog_send(struct obd_device *obd,
-                                  struct ioc_changelog *icc)
-{
-	struct changelog_show *cs;
-	struct task_struct *task;
-	int rc;
-
-        /* Freed in mdc_changelog_send_thread */
-        OBD_ALLOC_PTR(cs);
-        if (!cs)
-                return -ENOMEM;
-
-	cs->cs_obd = obd;
-	cs->cs_startrec = icc->icc_recno;
-	/* matching fput in mdc_changelog_send_thread */
-	cs->cs_fp = fget(icc->icc_id);
-	cs->cs_flags = icc->icc_flags;
-
-	/*
-	 * New thread because we should return to user app before
-	 * writing into our pipe
-	 */
-	task = kthread_run(mdc_changelog_send_thread, cs,
-			   "mdc_clg_send_thread");
-	if (IS_ERR(task)) {
-		rc = PTR_ERR(task);
-		CERROR("%s: cannot start changelog thread: rc = %d\n",
-		       cs_obd_name(cs), rc);
-		OBD_FREE_PTR(cs);
-	} else {
-		rc = 0;
-		CDEBUG(D_HSM, "%s: started changelog thread\n",
-		       cs_obd_name(cs));
-	}
-
-	return rc;
-}
-
 static int mdc_ioc_hsm_ct_start(struct obd_export *exp,
                                 struct lustre_kernelcomm *lk);
 
@@ -2058,30 +1892,18 @@ out:
 static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			 void *karg, void __user *uarg)
 {
-        struct obd_device *obd = exp->exp_obd;
-        struct obd_ioctl_data *data = karg;
-        struct obd_import *imp = obd->u.cli.cl_import;
-        int rc;
-        ENTRY;
+	struct obd_device *obd = exp->exp_obd;
+	struct obd_ioctl_data *data = karg;
+	struct obd_import *imp = obd->u.cli.cl_import;
+	int rc;
+	ENTRY;
 
 	if (!try_module_get(THIS_MODULE)) {
 		CERROR("%s: cannot get module '%s'\n", obd->obd_name,
 		       module_name(THIS_MODULE));
 		return -EINVAL;
 	}
-        switch (cmd) {
-        case OBD_IOC_CHANGELOG_SEND:
-                rc = mdc_ioc_changelog_send(obd, karg);
-                GOTO(out, rc);
-        case OBD_IOC_CHANGELOG_CLEAR: {
-                struct ioc_changelog *icc = karg;
-                struct changelog_setinfo cs =
-                        {.cs_recno = icc->icc_recno, .cs_id = icc->icc_id};
-                rc = obd_set_info_async(NULL, exp, strlen(KEY_CHANGELOG_CLEAR),
-                                        KEY_CHANGELOG_CLEAR, sizeof(cs), &cs,
-                                        NULL);
-                GOTO(out, rc);
-        }
+	switch (cmd) {
 	case OBD_IOC_FID2PATH:
 		rc = mdc_ioc_fid2path(exp, karg);
 		GOTO(out, rc);
@@ -2106,31 +1928,31 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	case LL_IOC_HSM_REQUEST:
 		rc = mdc_ioc_hsm_request(exp, karg);
 		GOTO(out, rc);
-        case OBD_IOC_CLIENT_RECOVER:
-                rc = ptlrpc_recover_import(imp, data->ioc_inlbuf1, 0);
-                if (rc < 0)
-                        GOTO(out, rc);
-                GOTO(out, rc = 0);
-        case IOC_OSC_SET_ACTIVE:
-                rc = ptlrpc_set_import_active(imp, data->ioc_offset);
-                GOTO(out, rc);
-        case OBD_IOC_PING_TARGET:
-                rc = ptlrpc_obd_ping(obd);
-                GOTO(out, rc);
-        /*
-         * Normally IOC_OBD_STATFS, OBD_IOC_QUOTACTL iocontrol are handled by
-         * LMV instead of MDC. But when the cluster is upgraded from 1.8,
-         * there'd be no LMV layer thus we might be called here. Eventually
-         * this code should be removed.
-         * bz20731, LU-592.
-         */
-        case IOC_OBD_STATFS: {
-                struct obd_statfs stat_buf = {0};
+	case OBD_IOC_CLIENT_RECOVER:
+		rc = ptlrpc_recover_import(imp, data->ioc_inlbuf1, 0);
+		if (rc < 0)
+			GOTO(out, rc);
+		GOTO(out, rc = 0);
+	case IOC_OSC_SET_ACTIVE:
+		rc = ptlrpc_set_import_active(imp, data->ioc_offset);
+		GOTO(out, rc);
+	case OBD_IOC_PING_TARGET:
+		rc = ptlrpc_obd_ping(obd);
+		GOTO(out, rc);
+	/*
+	 * Normally IOC_OBD_STATFS, OBD_IOC_QUOTACTL iocontrol are handled by
+	 * LMV instead of MDC. But when the cluster is upgraded from 1.8,
+	 * there'd be no LMV layer thus we might be called here. Eventually
+	 * this code should be removed.
+	 * bz20731, LU-592.
+	 */
+	case IOC_OBD_STATFS: {
+		struct obd_statfs stat_buf = {0};
 
-                if (*((__u32 *) data->ioc_inlbuf2) != 0)
-                        GOTO(out, rc = -ENODEV);
+		if (*((__u32 *) data->ioc_inlbuf2) != 0)
+			GOTO(out, rc = -ENODEV);
 
-                /* copy UUID */
+		/* copy UUID */
 		if (copy_to_user(data->ioc_pbuf2, obd2cli_tgt(obd),
 				 min((int)data->ioc_plen2,
 				     (int)sizeof(struct obd_uuid))))
@@ -2143,12 +1965,12 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			GOTO(out, rc);
 
 		if (copy_to_user(data->ioc_pbuf1, &stat_buf,
-                                     min((int) data->ioc_plen1,
-                                         (int) sizeof(stat_buf))))
-                        GOTO(out, rc = -EFAULT);
+				     min((int) data->ioc_plen1,
+					 (int) sizeof(stat_buf))))
+			GOTO(out, rc = -EFAULT);
 
-                GOTO(out, rc = 0);
-        }
+		GOTO(out, rc = 0);
+	}
 	case OBD_IOC_QUOTACTL: {
 		struct if_quotactl *qctl = karg;
 		struct obd_quotactl *oqctl;
@@ -2663,16 +2485,28 @@ static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 
 	rc = mdc_llog_init(obd);
         if (rc) {
-                mdc_cleanup(obd);
-                CERROR("failed to setup llogging subsystems\n");
-		RETURN(rc);
+                CERROR("%s: failed to setup llogging subsystems: rc = %d\n",
+		       obd->obd_name, rc);
+		GOTO(err_mdc_cleanup, rc);
         }
 
-        RETURN(rc);
+	rc = mdc_changelog_cdev_init(obd);
+	if (rc) {
+		CERROR("%s: failed to setup changelog char device: rc = %d\n",
+		       obd->obd_name, rc);
+		GOTO(err_mdc_cleanup, rc);
+	}
+
+	EXIT;
+err_mdc_cleanup:
+	if (rc)
+		client_obd_cleanup(obd);
 
 err_ptlrpcd_decref:
-        ptlrpcd_decref();
-        RETURN(rc);
+	if (rc)
+	        ptlrpcd_decref();
+
+        return rc;
 }
 
 /* Initialize the default and maximum LOV EA sizes.  This allows
@@ -2706,6 +2540,8 @@ static int mdc_precleanup(struct obd_device *obd)
 	/* Failsafe, ok if racy */
 	if (obd->obd_type->typ_refcnt <= 1)
 		libcfs_kkuc_group_rem(0, KUC_GRP_HSM);
+
+	mdc_changelog_cdev_finish(obd);
 
 	obd_cleanup_client_import(obd);
 	ptlrpc_lprocfs_unregister_obd(obd);
