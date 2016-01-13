@@ -196,17 +196,6 @@ int lustre_lnet_show_routing(int seq_no, struct cYAML **show_rc,
 			     struct cYAML **err_rc);
 
 /*
- * lustre_lnet_show_peer_credits
- *   Shows credit details on the peers in the system
- *
- *     seq_no - sequence number of the command
- *     show_rc - YAML structure of the resultant show
- *     err_rc - YAML strucutre of the resultant return code.
- */
-int lustre_lnet_show_peer_credits(int seq_no, struct cYAML **show_rc,
-				  struct cYAML **err_rc);
-
-/*
  * lustre_lnet_show_stats
  *   Shows internal LNET statistics.  This is useful to display the
  *   current LNET activity, such as number of messages route, etc
@@ -217,6 +206,56 @@ int lustre_lnet_show_peer_credits(int seq_no, struct cYAML **show_rc,
  */
 int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
 			   struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_config_peer_nid
+ *   Add a peer nid to an peer identified by knid. If no knid is given
+ *   then the first nid in the nid list becomes the primary nid for
+ *   a newly created peer.
+ *   Otherwise if knid is provided an it's unique then a new peer is
+ *   created with knid as the primary NID and the nids in the nid list as
+ *   secondary nids.
+ *   If any of the peers nids provided in with exception to the knid is
+ *   not unique the operation fails. Some peer nids might have already
+ *   been added. It's the role of the caller of this API to remove the
+ *   added NIDs if they wish.
+ *
+ *     knid - Key NID of the peer
+ *     nid - list of nids to add
+ *     seq_no - sequence number of the command
+ *     err_rc - YAML strucutre of the resultant return code.
+ */
+int lustre_lnet_config_peer_nid(char *knid, char **nid, int seq_no,
+				struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_del_peer_nid
+ *  Delete the nids identified in the nid list from the peer identified by
+ *  knid. If knid is NULL or it doesn't identify a peer the operation
+ *  fails and no change happens to the system.
+ *  The operation is aborted on the first NID that fails to be deleted.
+ *
+ *     knid - Key NID of the peer
+ *     nid - list of nids to add
+ *     seq_no - sequence number of the command
+ *     err_rc - YAML strucutre of the resultant return code.
+ */
+int lustre_lnet_del_peer_nid(char *knid, char **nid, int seq_no,
+			     struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_show_peer
+ *   Show the peer identified by knid. If knid is NULL all peers in the
+ *   system are shown.
+ *
+ *     knid - Key NID of the peer
+ *     seq_no - sequence number of the command
+ *     show_rc - YAML structure of the resultant show
+ *     err_rc - YAML strucutre of the resultant return code.
+ *
+ */
+int lustre_lnet_show_peer(char *knid, int seq_no, struct cYAML **show_rc,
+			  struct cYAML **err_rc);
 
 /*
  * lustre_yaml_config

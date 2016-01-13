@@ -1487,7 +1487,7 @@ pick_peer:
 		 * received the message on if possible. If not, then pick
 		 * a peer_ni to send to
 		 */
-		best_lpni = lnet_find_peer_ni_locked(dst_nid, cpt);
+		best_lpni = lnet_find_peer_ni_locked(dst_nid);
 		if (best_lpni) {
 			lnet_peer_ni_decref_locked(best_lpni);
 			goto send;
@@ -1527,7 +1527,7 @@ pick_peer:
 			libcfs_nid2str(best_gw->lpni_nid),
 			lnet_msgtyp2str(msg->msg_type), msg->msg_len);
 
-		best_lpni = lnet_find_peer_ni_locked(dst_nid, cpt);
+		best_lpni = lnet_find_peer_ni_locked(dst_nid);
 		LASSERT(best_lpni != NULL);
 		lnet_peer_ni_decref_locked(best_lpni);
 

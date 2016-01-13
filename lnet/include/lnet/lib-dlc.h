@@ -125,24 +125,34 @@ struct lnet_ioctl_config_data {
 	char cfg_bulk[0];
 };
 
+struct lnet_peer_ni_credit_info {
+	char cr_aliveness[LNET_MAX_STR_LEN];
+	__u32 cr_refcount;
+	__s32 cr_ni_peer_tx_credits;
+	__s32 cr_peer_tx_credits;
+	__s32 cr_peer_rtr_credits;
+	__s32 cr_peer_min_rtr_credits;
+	__u32 cr_peer_tx_qnob;
+	__u32 cr_ncpt;
+};
+
 struct lnet_ioctl_peer {
 	struct libcfs_ioctl_hdr pr_hdr;
 	__u32 pr_count;
 	__u32 pr_pad;
-	__u64 pr_nid;
+	lnet_nid_t pr_nid;
 
 	union {
-		struct {
-			char cr_aliveness[LNET_MAX_STR_LEN];
-			__u32 cr_refcount;
-			__u32 cr_ni_peer_tx_credits;
-			__u32 cr_peer_tx_credits;
-			__u32 cr_peer_rtr_credits;
-			__u32 cr_peer_min_rtr_credits;
-			__u32 cr_peer_tx_qnob;
-			__u32 cr_ncpt;
-		} pr_peer_credits;
+		struct lnet_peer_ni_credit_info  pr_peer_credits;
 	} pr_lnd_u;
+};
+
+struct lnet_ioctl_peer_cfg {
+	struct libcfs_ioctl_hdr prcfg_hdr;
+	lnet_nid_t prcfg_key_nid;
+	lnet_nid_t prcfg_cfg_nid;
+	__u32 prcfg_idx;
+	char prcfg_bulk[0];
 };
 
 struct lnet_ioctl_lnet_stats {
