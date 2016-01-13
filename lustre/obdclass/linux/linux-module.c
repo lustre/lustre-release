@@ -245,8 +245,10 @@ static int obd_proc_health_seq_show(struct seq_file *m, void *data)
 	bool healthy = true;
 	int i;
 
-	if (libcfs_catastrophe)
+	if (libcfs_catastrophe) {
 		seq_printf(m, "LBUG\n");
+		healthy = false;
+	}
 
 	read_lock(&obd_dev_lock);
 	for (i = 0; i < class_devno_max(); i++) {
