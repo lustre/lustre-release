@@ -94,11 +94,18 @@ static int mgs_exception(struct tgt_session_info *tsi)
 	RETURN(0);
 }
 
+static inline bool str_starts_with(const char *str, const char *prefix)
+{
+	return strncmp(str, prefix, strlen(prefix)) == 0;
+}
+
 static int mgs_set_info(struct tgt_session_info *tsi)
 {
 	struct mgs_thread_info	*mgi;
 	struct mgs_send_param	*msp, *rep_msp;
 	struct lustre_cfg	*lcfg;
+	size_t			 param_len;
+	char			*s;
 	int			 rc;
 
 	ENTRY;
@@ -110,6 +117,20 @@ static int mgs_set_info(struct tgt_session_info *tsi)
 	msp = req_capsule_client_get(tsi->tsi_pill, &RMF_MGS_SEND_PARAM);
 	if (msp == NULL)
 		RETURN(err_serious(-EFAULT));
+
+	param_len = strnlen(msp->mgs_param, sizeof(msp->mgs_param));
+	if (param_len == 0 || param_len == sizeof(msp->mgs_param))
+		RETURN(-EINVAL);
+
+	/* We only allow '*.lov.stripe{size,count,offset}=*' from an RPC. */
+	s = strchr(msp->mgs_param, '.');
+	if (s == NULL)
+		RETURN(-EINVAL);
+
+	if (!str_starts_with(s + 1, "lov.stripesize=") &&
+	    !str_starts_with(s + 1, "lov.stripecount=") &&
+	    !str_starts_with(s + 1, "lov.stripeoffset="))
+		RETURN(-EINVAL);
 
 	/* Construct lustre_cfg structure to pass to function mgs_setparam */
 	lustre_cfg_bufs_reset(&mgi->mgi_bufs, NULL);
