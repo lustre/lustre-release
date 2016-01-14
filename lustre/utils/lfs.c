@@ -3607,19 +3607,30 @@ static int lfs_changelog(int argc, char **argv)
 
 static int lfs_changelog_clear(int argc, char **argv)
 {
-        long long endrec;
-        int rc;
+	long long endrec;
+	int rc;
 
-        if (argc != 4)
-                return CMD_HELP;
+	if (argc != 4)
+		return CMD_HELP;
 
-        endrec = strtoll(argv[3], NULL, 10);
+	endrec = strtoll(argv[3], NULL, 10);
 
-        rc = llapi_changelog_clear(argv[1], argv[2], endrec);
-        if (rc)
-                fprintf(stderr, "%s error: %s\n", argv[0],
-                        strerror(errno = -rc));
-        return rc;
+	rc = llapi_changelog_clear(argv[1], argv[2], endrec);
+
+	if (rc == -EINVAL)
+		fprintf(stderr, "%s: record out of range: %llu\n",
+			argv[0], endrec);
+	else if (rc == -ENOENT)
+		fprintf(stderr, "%s: no changelog user: %s\n",
+			argv[0], argv[2]);
+	else if (rc)
+		fprintf(stderr, "%s error: %s\n", argv[0],
+			strerror(-rc));
+
+	if (rc)
+		errno = -rc;
+
+	return rc;
 }
 
 static int lfs_fid2path(int argc, char **argv)

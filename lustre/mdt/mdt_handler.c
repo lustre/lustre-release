@@ -5857,30 +5857,6 @@ int mdt_get_info(struct tgt_session_info *tsi)
 	RETURN(rc);
 }
 
-/* Pass the ioc down */
-static int mdt_ioc_child(struct lu_env *env, struct mdt_device *mdt,
-			 unsigned int cmd, int len, void *data)
-{
-	struct lu_context ioctl_session;
-	struct md_device *next = mdt->mdt_child;
-	int rc;
-	ENTRY;
-
-        rc = lu_context_init(&ioctl_session, LCT_SERVER_SESSION);
-	if (rc)
-		RETURN(rc);
-	ioctl_session.lc_thread = (struct ptlrpc_thread *)current;
-	lu_context_enter(&ioctl_session);
-	env->le_ses = &ioctl_session;
-
-	LASSERT(next->md_ops->mdo_iocontrol);
-	rc = next->md_ops->mdo_iocontrol(env, next, cmd, len, data);
-
-	lu_context_exit(&ioctl_session);
-	lu_context_fini(&ioctl_session);
-	RETURN(rc);
-}
-
 static int mdt_ioc_version_get(struct mdt_thread_info *mti, void *karg)
 {
 	struct obd_ioctl_data *data = karg;
@@ -5962,7 +5938,9 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_CHANGELOG_REG:
         case OBD_IOC_CHANGELOG_DEREG:
         case OBD_IOC_CHANGELOG_CLEAR:
-                rc = mdt_ioc_child(&env, mdt, cmd, len, karg);
+		rc = mdt->mdt_child->md_ops->mdo_iocontrol(&env,
+							   mdt->mdt_child,
+							   cmd, len, karg);
                 break;
 	case OBD_IOC_START_LFSCK: {
 		struct md_device *next = mdt->mdt_child;
