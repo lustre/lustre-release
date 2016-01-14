@@ -48,7 +48,6 @@
 #include <utime.h>
 #include <sys/syscall.h>
 #include <fnmatch.h>
-#include <glob.h>
 #include <signal.h>
 #ifdef HAVE_LINUX_UNISTD_H
 #include <linux/unistd.h>
