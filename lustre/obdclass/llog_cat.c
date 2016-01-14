@@ -101,7 +101,7 @@ static int llog_cat_new_log(const struct lu_env *env,
 		/* If llog object is remote and creation is failed, lgh_hdr
 		 * might be left over here, free it first */
 		LASSERT(!llog_exist(loghandle));
-		OBD_FREE_PTR(loghandle->lgh_hdr);
+		OBD_FREE_LARGE(loghandle->lgh_hdr, loghandle->lgh_hdr_size);
 		loghandle->lgh_hdr = NULL;
 	}
 
