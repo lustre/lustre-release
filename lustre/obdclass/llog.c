@@ -43,6 +43,7 @@
 
 #define DEBUG_SUBSYSTEM S_LOG
 
+#include <linux/pid_namespace.h>
 #include <linux/kthread.h>
 #include <llog_swab.h>
 #include <lustre_log.h>
@@ -630,6 +631,22 @@ static int llog_process_thread_daemonize(void *arg)
 	struct llog_process_info	*lpi = arg;
 	struct lu_env			 env;
 	int				 rc;
+	struct nsproxy			*new_ns, *curr_ns = current->nsproxy;
+
+	task_lock(lpi->lpi_reftask);
+	new_ns = lpi->lpi_reftask->nsproxy;
+	if (curr_ns != new_ns) {
+		get_nsproxy(new_ns);
+
+		current->nsproxy = new_ns;
+		/* XXX: we should call put_nsproxy() instead of
+		 * atomic_dec(&ns->count) directly. But put_nsproxy() cannot be
+		 * used outside of the kernel itself, because it calls
+		 * free_nsproxy() which is not exported by the kernel
+		 * (defined in kernel/nsproxy.c) */
+		atomic_dec(&curr_ns->count);
+	}
+	task_unlock(lpi->lpi_reftask);
 
 	unshare_fs_struct();
 
@@ -656,15 +673,15 @@ int llog_process_or_fork(const struct lu_env *env,
 
         ENTRY;
 
-        OBD_ALLOC_PTR(lpi);
-        if (lpi == NULL) {
-                CERROR("cannot alloc pointer\n");
-                RETURN(-ENOMEM);
-        }
-        lpi->lpi_loghandle = loghandle;
-        lpi->lpi_cb        = cb;
-        lpi->lpi_cbdata    = data;
-        lpi->lpi_catdata   = catdata;
+	OBD_ALLOC_PTR(lpi);
+	if (lpi == NULL) {
+		CERROR("cannot alloc pointer\n");
+		RETURN(-ENOMEM);
+	}
+	lpi->lpi_loghandle = loghandle;
+	lpi->lpi_cb        = cb;
+	lpi->lpi_cbdata    = data;
+	lpi->lpi_catdata   = catdata;
 
 	if (fork) {
 		struct task_struct *task;
@@ -673,6 +690,10 @@ int llog_process_or_fork(const struct lu_env *env,
 		 * init the new one in llog_process_thread_daemonize. */
 		lpi->lpi_env = NULL;
 		init_completion(&lpi->lpi_completion);
+		/* take reference to current, so that
+		 * llog_process_thread_daemonize() can use it to switch to
+		 * namespace associated with current  */
+		lpi->lpi_reftask = current;
 		task = kthread_run(llog_process_thread_daemonize, lpi,
 				   "llog_process_thread");
 		if (IS_ERR(task)) {

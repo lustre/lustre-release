@@ -36,13 +36,14 @@
 #include <lustre_log.h>
 
 struct llog_process_info {
-        struct llog_handle *lpi_loghandle;
-        llog_cb_t           lpi_cb;
-        void               *lpi_cbdata;
-        void               *lpi_catdata;
-        int                 lpi_rc;
-	struct completion	lpi_completion;
+	struct llog_handle	*lpi_loghandle;
+	llog_cb_t		 lpi_cb;
+	void			*lpi_cbdata;
+	void			*lpi_catdata;
+	int			 lpi_rc;
+	struct completion	 lpi_completion;
 	const struct lu_env	*lpi_env;
+	struct task_struct      *lpi_reftask;
 };
 
 struct llog_thread_info {

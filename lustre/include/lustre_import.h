@@ -204,9 +204,10 @@ struct obd_import {
          * some seciruty-related fields
          * @{
          */
-        struct ptlrpc_sec        *imp_sec;
+	struct ptlrpc_sec        *imp_sec;
 	struct mutex		  imp_sec_mutex;
-        cfs_time_t                imp_sec_expire;
+	cfs_time_t                imp_sec_expire;
+	pid_t			  imp_sec_refpid;
         /** @} */
 
 	/** Wait queue for those who need to wait for recovery completion */

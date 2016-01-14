@@ -1,7 +1,8 @@
 # GSS daemons & tools Makefile
 
 AM_CFLAGS := -fPIC \
-	     -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS=1
+	     -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS=1 \
+	     -D_GNU_SOURCE
 
 LIBCFS := $(top_builddir)/libcfs/libcfs/libcfs.a
 
