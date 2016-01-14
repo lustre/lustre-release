@@ -578,7 +578,9 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 		seq_printf(m, "COMPLETE\n");
 		seq_printf(m, "recovery_start: %lu\n", obd->obd_recovery_start);
 		seq_printf(m, "recovery_duration: %lu\n",
-			   obd->obd_recovery_end - obd->obd_recovery_start);
+			   obd->obd_recovery_end ?
+			   obd->obd_recovery_end - obd->obd_recovery_start :
+			   cfs_time_current_sec() - obd->obd_recovery_start);
 		/* Number of clients that have completed recovery */
 		seq_printf(m, "completed_clients: %d/%d\n",
 			   obd->obd_max_recoverable_clients -
