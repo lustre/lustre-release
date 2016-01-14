@@ -1081,6 +1081,10 @@ run_test 24w "Reading a file larger than 4Gb"
 
 test_24x() {
 	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs" && return
+
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.56) ]] &&
+		skip "Need MDS version at least 2.7.56" && return
+
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
