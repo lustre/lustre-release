@@ -229,8 +229,11 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 	if (rc < 0)
 		GOTO(out_trans, rc);
 
-	if ((llh->llh_flags & LLOG_F_ZAP_WHEN_EMPTY))
+	if ((llh->llh_flags & LLOG_F_ZAP_WHEN_EMPTY)) {
 		rc = llog_declare_destroy(env, loghandle, th);
+		if (rc < 0)
+			GOTO(out_trans, rc);
+	}
 
 	th->th_wait_submit = 1;
 	rc = dt_trans_start_local(env, dt, th);
