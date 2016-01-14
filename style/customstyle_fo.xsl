@@ -110,7 +110,7 @@
         <xsl:with-param name="master-reference" select="$master-reference"/>
       </xsl:call-template>
 
-	<fo:block-container id='${chunkid}'
+	<fo:block-container id='chapterdecoration-{$chunkid}'
 			padding='5pt'
 			border-color='gray'
 			border-style='solid'
