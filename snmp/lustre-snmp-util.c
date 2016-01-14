@@ -728,8 +728,13 @@ error_out :
 extern int mds_stats_values(char * name_value, unsigned long long * nb_sample, unsigned long long * min, unsigned long long * max, unsigned long long * sum, unsigned long long * sum_square)
 {
   unsigned long long tmp_nb_sample=0,tmp_min=0,tmp_max=0,tmp_sum=0,tmp_sum_square=0;
+  glob_t path;
+
 /*we parse the three MDS stat files and sum values*/
-  if( stats_values(FILEPATH_MDS_SERVER_STATS,name_value,&tmp_nb_sample,&tmp_min,&tmp_max,&tmp_sum,&tmp_sum_square) == ERROR ) {
+  if (cfs_get_param_paths(&path, "mdt/MDS/mds/stats") != 0)
+    return ERROR;
+  if( stats_values(path.gl_pathv[0],name_value,&tmp_nb_sample,&tmp_min,&tmp_max,&tmp_sum,&tmp_sum_square) == ERROR ) {
+    cfs_free_param_data(&path);
     return ERROR;
   } else {
     *nb_sample=tmp_nb_sample;
@@ -738,8 +743,12 @@ extern int mds_stats_values(char * name_value, unsigned long long * nb_sample, u
     *sum=tmp_sum;
     *sum_square=tmp_sum_square;
   }
+  cfs_free_param_data(&path);
 
-  if( stats_values(FILEPATH_MDS_SERVER_READPAGE_STATS,name_value,&tmp_nb_sample,&tmp_min,&tmp_max,&tmp_sum,&tmp_sum_square) == ERROR ) {
+  if (cfs_get_param_paths(&path, "mdt/MDS/mds_readpage/stats") != 0)
+    return ERROR;
+  if( stats_values(path.gl_pathv[0],name_value,&tmp_nb_sample,&tmp_min,&tmp_max,&tmp_sum,&tmp_sum_square) == ERROR ) {
+    cfs_free_param_data(&path);
     return ERROR;
   } else {
     *nb_sample += tmp_nb_sample;
@@ -748,8 +757,12 @@ extern int mds_stats_values(char * name_value, unsigned long long * nb_sample, u
     *sum += tmp_sum;
     *sum_square += tmp_sum_square;
   }
+  cfs_free_param_data(&path);
 
-  if( stats_values(FILEPATH_MDS_SERVER_SETATTR_STATS,name_value,&tmp_nb_sample,&tmp_min,&tmp_max,&tmp_sum,&tmp_sum_square) == ERROR ) {
+  if (cfs_get_param_paths(&path, "mdt/MDS/mds_setattr/stats") != 0)
+    return ERROR;
+  if( stats_values(path.gl_pathv[0],name_value,&tmp_nb_sample,&tmp_min,&tmp_max,&tmp_sum,&tmp_sum_square) == ERROR ) {
+    cfs_free_param_data(&path);
     return ERROR;
   } else {
     *nb_sample += tmp_nb_sample;
@@ -758,6 +771,7 @@ extern int mds_stats_values(char * name_value, unsigned long long * nb_sample, u
     *sum += tmp_sum;
     *sum_square += tmp_sum_square;
   }
+  cfs_free_param_data(&path);
   
   return SUCCESS;
 }

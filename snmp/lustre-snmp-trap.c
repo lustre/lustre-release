@@ -232,16 +232,23 @@ void health_poll_worker(unsigned int registration_number, void *clientarg)
     FILE    *fptr = NULL;
     char string[MAX_LINE_SIZE];
     int b_seen_portals_catastrophe = 0;
-    const char *filename =  g_health_check_test_file == 0 ? 
-            LUSTRE_PATH FILENAME_SYSHEALTHCHECK : 
-            g_health_check_test_file;
-    
+    char *filename;
+    glob_t path;
+
+    if (cfs_get_param_paths(&path, "health_check") != 0)
+        return;
+
+    filename = g_health_check_test_file == 0 ? path.gl_pathv[0] : g_health_check_test_file;
+
     /*DEBUGMSGTL(("lsnmpd","health_entry_parser(%s)\n",filename));*/
 
     /* Open the file.  Use the test file env variable if
        there is one */    
     fptr = fopen(filename,"r");
         
+    /* Free parameter's path string */
+    cfs_free_param_data(&path);
+
     /* If the path is not found do nothing */
     if( NULL == fptr)
         return;

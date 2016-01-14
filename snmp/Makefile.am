@@ -9,8 +9,10 @@ liblustresnmp_la_SOURCES =	\
 	lustre-snmp-util.c	\
 	lustre-snmp-util.h
 
+LIBCFS = $(top_builddir)/libcfs/libcfs/libcfs.a
+
 liblustresnmp_la_CFLAGS := $(NET_SNMP_CFLAGS)
-liblustresnmp_la_LIBADD := $(NET_SNMP_LIBS)
+liblustresnmp_la_LIBADD := $(NET_SNMP_LIBS) $(LIBCFS)
 liblustresnmp_la_LDFLAGS := -version-info 1:0:0
 
 SUBDIRS =

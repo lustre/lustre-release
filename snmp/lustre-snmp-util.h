@@ -39,6 +39,8 @@
 #ifndef LUSTRE_SNMP_UTIL_H
 #define LUSTRE_SNMP_UTIL_H
 
+#include <libcfs/util/param.h>
+
 /*
  * Definitions of magic values
  */
@@ -125,22 +127,7 @@
 #define LNETROUTEBYTES      120
 #define LNETDROPBYTES       121
 
-/* Defining the proc paths for Lustre file system */
-#define LUSTRE_PATH                 "/proc/fs/lustre/"
-#define LNET_PATH                   "/proc/sys/lnet/"
-#define OSD_PATH                    LUSTRE_PATH "obdfilter/"
-#define OSC_PATH                    LUSTRE_PATH "osc/"
-#define MDS_PATH                    LUSTRE_PATH "mds/"
-#define MDC_PATH                    LUSTRE_PATH "mdc/"
-#define CLIENT_PATH                 LUSTRE_PATH "llite/"
-#define LOV_PATH                    LUSTRE_PATH "lov/"
-#define LDLM_PATH                   LUSTRE_PATH "ldlm/namespaces/"
-#define FILEPATH_MDS_SERVER_STATS             LUSTRE_PATH "mdt/MDS/mds/stats"
-#define FILEPATH_MDS_SERVER_READPAGE_STATS             LUSTRE_PATH "mdt/MDS/mds_readpage/stats"
-#define FILEPATH_MDS_SERVER_SETATTR_STATS             LUSTRE_PATH "mdt/MDS/mds_setattr/stats"
-
 /* Common procfs file entries that are refrenced in mulitple locations*/
-#define FILENAME_SYSHEALTHCHECK     "health_check"
 #define FILENAME_SYS_STATUS         "/var/lustre/sysStatus"
 
 #define FILENAME_NUM_REF            "num_refs"
