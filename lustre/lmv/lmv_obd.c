@@ -1190,51 +1190,6 @@ hsm_req_err:
         RETURN(rc);
 }
 
-#if 0
-static int lmv_all_chars_policy(int count, const char *name,
-                                int len)
-{
-        unsigned int c = 0;
-
-        while (len > 0)
-                c += name[--len];
-        c = c % count;
-        return c;
-}
-
-static int lmv_nid_policy(struct lmv_obd *lmv)
-{
-        struct obd_import *imp;
-        __u32              id;
-
-        /*
-         * XXX: To get nid we assume that underlying obd device is mdc.
-         */
-        imp = class_exp2cliimp(lmv->tgts[0].ltd_exp);
-        id = imp->imp_connection->c_self ^ (imp->imp_connection->c_self >> 32);
-        return id % lmv->desc.ld_tgt_count;
-}
-
-static int lmv_choose_mds(struct lmv_obd *lmv, struct md_op_data *op_data,
-                          placement_policy_t placement)
-{
-        switch (placement) {
-        case PLACEMENT_CHAR_POLICY:
-                return lmv_all_chars_policy(lmv->desc.ld_tgt_count,
-                                            op_data->op_name,
-                                            op_data->op_namelen);
-        case PLACEMENT_NID_POLICY:
-                return lmv_nid_policy(lmv);
-
-        default:
-                break;
-        }
-
-        CERROR("Unsupported placement policy %x\n", placement);
-        return -EINVAL;
-}
-#endif
-
 /**
  * This is _inode_ placement policy function (not name).
  */
@@ -1373,7 +1328,6 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	lmv->desc.ld_active_tgt_count = 0;
 	lmv->max_def_easize = 0;
 	lmv->max_easize = 0;
-	lmv->lmv_placement = PLACEMENT_CHAR_POLICY;
 
 	spin_lock_init(&lmv->lmv_lock);
 	mutex_init(&lmv->lmv_init_mutex);

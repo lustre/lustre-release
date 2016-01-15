@@ -60,78 +60,6 @@ static int lmv_numobd_seq_show(struct seq_file *m, void *v)
 }
 LPROC_SEQ_FOPS_RO(lmv_numobd);
 
-static const char *placement_name[] = {
-        [PLACEMENT_CHAR_POLICY] = "CHAR",
-	[PLACEMENT_NID_POLICY]  = "NID",
-	[PLACEMENT_INVAL_POLICY]  = "INVAL"
-};
-
-static placement_policy_t placement_name2policy(char *name, int len)
-{
-        int                     i;
-
-        for (i = 0; i < PLACEMENT_MAX_POLICY; i++) {
-                if (!strncmp(placement_name[i], name, len))
-                        return i;
-        }
-        return PLACEMENT_INVAL_POLICY;
-}
-
-static const char *placement_policy2name(placement_policy_t placement)
-{
-        LASSERT(placement < PLACEMENT_MAX_POLICY);
-        return placement_name[placement];
-}
-
-static int lmv_placement_seq_show(struct seq_file *m, void *v)
-{
-	struct obd_device	*dev = (struct obd_device *)m->private;
-        struct lmv_obd          *lmv;
-
-        LASSERT(dev != NULL);
-        lmv = &dev->u.lmv;
-	seq_printf(m, "%s\n", placement_policy2name(lmv->lmv_placement));
-	return 0;
-}
-
-#define MAX_POLICY_STRING_SIZE 64
-
-static ssize_t lmv_placement_seq_write(struct file *file,
-				       const char __user *buffer,
-				       size_t count, loff_t *off)
-{
-	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
-        char                     dummy[MAX_POLICY_STRING_SIZE + 1];
-        int                      len = count;
-        placement_policy_t       policy;
-        struct lmv_obd          *lmv;
-
-	if (copy_from_user(dummy, buffer, MAX_POLICY_STRING_SIZE))
-                return -EFAULT;
-
-        LASSERT(dev != NULL);
-        lmv = &dev->u.lmv;
-
-        if (len > MAX_POLICY_STRING_SIZE)
-                len = MAX_POLICY_STRING_SIZE;
-
-        if (dummy[len - 1] == '\n')
-                len--;
-        dummy[len] = '\0';
-
-        policy = placement_name2policy(dummy, len);
-        if (policy != PLACEMENT_INVAL_POLICY) {
-		spin_lock(&lmv->lmv_lock);
-		lmv->lmv_placement = policy;
-		spin_unlock(&lmv->lmv_lock);
-        } else {
-                CERROR("Invalid placement policy \"%s\"!\n", dummy);
-                return -EINVAL;
-        }
-        return count;
-}
-LPROC_SEQ_FOPS(lmv_placement);
-
 static int lmv_activeobd_seq_show(struct seq_file *m, void *v)
 {
 	struct obd_device	*dev = (struct obd_device *)m->private;
@@ -229,8 +157,6 @@ LPROC_SEQ_FOPS_RO_TYPE(lmv, uuid);
 struct lprocfs_vars lprocfs_lmv_obd_vars[] = {
 	{ .name	=	"numobd",
 	  .fops	=	&lmv_numobd_fops	},
-	{ .name	=	"placement",
-	  .fops	=	&lmv_placement_fops	},
 	{ .name	=	"activeobd",
 	  .fops	=	&lmv_activeobd_fops	},
 	{ .name	=	"uuid",
