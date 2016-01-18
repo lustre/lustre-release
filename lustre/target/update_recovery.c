@@ -443,7 +443,7 @@ again:
 	 * we do not need lock here */
 	if (replace_record) {
 		/* Replace the update record and master transno */
-		OBD_FREE(dtrq->dtrq_lur, dtrq->dtrq_lur_size);
+		OBD_FREE_LARGE(dtrq->dtrq_lur, dtrq->dtrq_lur_size);
 		dtrq->dtrq_lur = NULL;
 		dtrq->dtrq_lur_size = llog_update_record_size(lur);
 		OBD_ALLOC_LARGE(dtrq->dtrq_lur, dtrq->dtrq_lur_size);

@@ -2439,12 +2439,12 @@ static int ptlrpc_main(void *arg)
 		goto out_srv_fini;
 	}
 
-        /* Alloc reply state structure for this one */
-        OBD_ALLOC_LARGE(rs, svc->srv_max_reply_size);
-        if (!rs) {
-                rc = -ENOMEM;
-                goto out_srv_fini;
-        }
+	/* Alloc reply state structure for this one */
+	OBD_ALLOC_LARGE(rs, svc->srv_max_reply_size);
+	if (!rs) {
+		rc = -ENOMEM;
+		goto out_srv_fini;
+	}
 
 	spin_lock(&svcpt->scp_lock);
 

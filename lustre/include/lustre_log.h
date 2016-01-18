@@ -263,7 +263,7 @@ struct llog_handle {
 	struct rw_semaphore	 lgh_lock;
 	struct mutex		 lgh_hdr_mutex; /* protect lgh_hdr data */
 	struct llog_logid	 lgh_id; /* id of this log */
-	struct llog_log_hdr	*lgh_hdr;
+	struct llog_log_hdr	*lgh_hdr; /* may be vmalloc'd */
 	size_t			lgh_hdr_size;
 	struct dt_object	*lgh_obj;
 	/* For a Catalog, is the last/newest used index for a plain slot.

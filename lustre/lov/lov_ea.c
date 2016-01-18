@@ -116,14 +116,14 @@ err:
 
 void lsm_free_plain(struct lov_stripe_md *lsm)
 {
-        __u16 stripe_count = lsm->lsm_stripe_count;
-        int i;
+	__u16 stripe_count = lsm->lsm_stripe_count;
+	int i;
 
-        for (i = 0; i < stripe_count; i++)
-                OBD_SLAB_FREE(lsm->lsm_oinfo[i], lov_oinfo_slab,
-                              sizeof(struct lov_oinfo));
-        OBD_FREE_LARGE(lsm, sizeof(struct lov_stripe_md) +
-                       stripe_count * sizeof(struct lov_oinfo *));
+	for (i = 0; i < stripe_count; i++)
+		OBD_SLAB_FREE(lsm->lsm_oinfo[i], lov_oinfo_slab,
+			      sizeof(struct lov_oinfo));
+	OBD_FREE_LARGE(lsm, sizeof(struct lov_stripe_md) +
+		       stripe_count * sizeof(struct lov_oinfo *));
 }
 
 /* Find minimum stripe maxbytes value.  For inactive or

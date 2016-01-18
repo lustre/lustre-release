@@ -754,8 +754,6 @@ do {									      \
 		OBD_CPT_VMALLOC(ptr, cptab, cpt, size);			      \
 } while (0)
 
-#define OBD_FREE_LARGE(ptr, size) OBD_FREE(ptr, size)
-
 #ifdef CONFIG_DEBUG_SLAB
 #define POISON(ptr, c, s) do {} while (0)
 #define POISON_PTR(ptr)  ((void)0)
@@ -765,23 +763,29 @@ do {									      \
 #endif
 
 #ifdef POISON_BULK
-#define POISON_PAGE(page, val) do { memset(kmap(page), val, PAGE_CACHE_SIZE);   \
+#define POISON_PAGE(page, val) do { memset(kmap(page), val, PAGE_CACHE_SIZE); \
                                     kunmap(page); } while (0)
 #else
 #define POISON_PAGE(page, val) do { } while (0)
 #endif
 
-#define OBD_FREE(ptr, size)                                                   \
-do {                                                                          \
-	if (is_vmalloc_addr(ptr)) {                                           \
+#define OBD_FREE(ptr, size)						      \
+do {									      \
+	OBD_FREE_PRE(ptr, size, "kfreed");				      \
+	kfree(ptr);							      \
+	POISON_PTR(ptr);						      \
+} while (0)
+
+#define OBD_FREE_LARGE(ptr, size)					      \
+do {									      \
+	if (is_vmalloc_addr(ptr)) {					      \
 		OBD_FREE_PRE(ptr, size, "vfreed");			      \
-		vfree(ptr);		                                      \
-	} else {                                                              \
-		OBD_FREE_PRE(ptr, size, "kfreed");                            \
-		kfree(ptr);                                                   \
+		vfree(ptr);						      \
+		POISON_PTR(ptr);					      \
+	} else {							      \
+		OBD_FREE(ptr, size);					      \
 	}                                                                     \
-	POISON_PTR(ptr);                                                      \
-} while(0)
+} while (0)
 
 #define OBD_FREE_RCU(ptr, size, handle)					      \
 do {									      \

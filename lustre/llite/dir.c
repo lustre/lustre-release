@@ -1587,10 +1587,8 @@ out_rmdir:
 			RETURN(-ENOMEM);
 
 		/* Copy the whole struct */
-		if (copy_from_user(hur, (void __user *)arg, totalsize)) {
-			OBD_FREE_LARGE(hur, totalsize);
-			RETURN(-EFAULT);
-		}
+		if (copy_from_user(hur, (void __user *)arg, totalsize))
+			GOTO(out_hur, rc = -EFAULT);
 
 		if (hur->hur_request.hr_action == HUA_RELEASE) {
 			const struct lu_fid *fid;
@@ -1615,6 +1613,7 @@ out_rmdir:
 					   hur, NULL);
 		}
 
+out_hur:
 		OBD_FREE_LARGE(hur, totalsize);
 
 		RETURN(rc);

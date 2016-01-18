@@ -598,7 +598,7 @@ struct lfsck_lmv {
 					 ll_inline:1,
 					 ll_failed:1,
 					 ll_ignore:1;
-	struct lfsck_slave_lmv_rec	*ll_lslr;
+	struct lfsck_slave_lmv_rec	*ll_lslr; /* may be vmalloc'd */
 };
 
 /* If the namespace LFSCK finds that the master MDT-object of a striped

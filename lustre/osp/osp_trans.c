@@ -211,7 +211,7 @@ void osp_update_request_destroy(struct osp_update_request *our)
 	list_for_each_entry_safe(ours, tmp, &our->our_req_list, ours_list) {
 		list_del(&ours->ours_list);
 		if (ours->ours_req != NULL)
-			OBD_FREE(ours->ours_req, ours->ours_req_size);
+			OBD_FREE_LARGE(ours->ours_req, ours->ours_req_size);
 		OBD_FREE_PTR(ours);
 	}
 	OBD_FREE_PTR(our);

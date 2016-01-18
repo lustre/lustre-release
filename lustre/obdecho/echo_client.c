@@ -230,7 +230,7 @@ struct echo_thread_info {
 	struct md_attr          eti_ma;
 	struct lu_name          eti_lname;
 	/* per-thread values, can be re-used */
-	void			*eti_big_lmm;
+	void			*eti_big_lmm; /* may be vmalloc'd */
 	int			eti_big_lmmsize;
 	char                    eti_name[20];
 	struct lu_buf           eti_buf;

@@ -269,11 +269,11 @@ object_update_result_data_get(const struct object_update_reply *reply,
  * distribution.
  */
 struct thandle_update_records {
-	/* All of updates for the cross-MDT operation. */
+	/* All of updates for the cross-MDT operation, vmalloc'd. */
 	struct llog_update_record	*tur_update_records;
 	size_t				tur_update_records_buf_size;
 
-	/* All of parameters for the cross-MDT operation */
+	/* All of parameters for the cross-MDT operation, vmalloc'd */
 	struct update_params    *tur_update_params;
 	unsigned int		tur_update_param_count;
 	size_t			tur_update_params_buf_size;

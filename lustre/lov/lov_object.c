@@ -1208,7 +1208,7 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 	 */
 	if (lsm->lsm_stripe_count > 1 && !(fiemap->fm_flags &
 					   FIEMAP_FLAG_DEVICE_ORDER))
-		GOTO(out, rc = -ENOTSUPP);
+		GOTO(out_lsm, rc = -ENOTSUPP);
 
 	if (lsm_is_released(lsm)) {
 		if (fiemap->fm_start < fmkey->lfik_oa.o_size) {
@@ -1229,7 +1229,7 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 			fiemap->fm_extents[0].fe_flags |=
 				FIEMAP_EXTENT_UNKNOWN | FIEMAP_EXTENT_LAST;
 		}
-		GOTO(out, rc = 0);
+		GOTO(out_lsm, rc = 0);
 	}
 
 	if (fiemap_count_to_size(fiemap->fm_extent_count) < buffer_size)
@@ -1237,7 +1237,7 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 
 	OBD_ALLOC_LARGE(fm_local, buffer_size);
 	if (fm_local == NULL)
-		GOTO(out, rc = -ENOMEM);
+		GOTO(out_lsm, rc = -ENOMEM);
 	lcl_fm_ext = &fm_local->fm_extents[0];
 	count_local = fiemap_size_to_count(buffer_size);
 
@@ -1256,7 +1256,7 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 	fm_end_offset = fiemap_calc_fm_end_offset(fiemap, lsm, fm_start, fm_end,
 						  &start_stripe);
 	if (fm_end_offset == -EINVAL)
-		GOTO(out, rc = -EINVAL);
+		GOTO(out_fm_local, rc = -EINVAL);
 
 	/**
 	 * Requested extent count exceeds the fiemap buffer size, shrink our
@@ -1286,7 +1286,7 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 			continue;
 
 		if (lov_oinfo_is_dummy(lsm->lsm_oinfo[cur_stripe]))
-			GOTO(out, rc = -EIO);
+			GOTO(out_fm_local, rc = -EIO);
 
 		/* If this is a continuation FIEMAP call and we are on
 		 * starting stripe then lun_start needs to be set to
@@ -1315,7 +1315,7 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 		subobj = lov_find_subobj(env, cl2lov(obj), lsm,
 					     cur_stripe);
 		if (IS_ERR(subobj))
-			GOTO(out, rc = PTR_ERR(subobj));
+			GOTO(out_fm_local, rc = PTR_ERR(subobj));
 		/* If the output buffer is very large and the objects have many
 		 * extents we may need to loop on a single OST repeatedly */
 		ost_eof = false;
@@ -1448,10 +1448,10 @@ skip_last_device_calc:
 obj_put:
 	if (subobj != NULL)
 		cl_object_put(env, subobj);
-out:
-	if (fm_local != NULL)
-		OBD_FREE_LARGE(fm_local, buffer_size);
+out_fm_local:
+	OBD_FREE_LARGE(fm_local, buffer_size);
 
+out_lsm:
 	lov_lsm_put(lsm);
 
 	return rc;

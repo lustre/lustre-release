@@ -158,23 +158,23 @@ int null_alloc_reqbuf(struct ptlrpc_sec *sec,
                       struct ptlrpc_request *req,
                       int msgsize)
 {
-        if (!req->rq_reqbuf) {
-                int alloc_size = size_roundup_power2(msgsize);
+	if (!req->rq_reqbuf) {
+		int alloc_size = size_roundup_power2(msgsize);
 
-                LASSERT(!req->rq_pool);
-                OBD_ALLOC_LARGE(req->rq_reqbuf, alloc_size);
-                if (!req->rq_reqbuf)
-                        return -ENOMEM;
+		LASSERT(!req->rq_pool);
+		OBD_ALLOC_LARGE(req->rq_reqbuf, alloc_size);
+		if (!req->rq_reqbuf)
+			return -ENOMEM;
 
-                req->rq_reqbuf_len = alloc_size;
-        } else {
-                LASSERT(req->rq_pool);
-                LASSERT(req->rq_reqbuf_len >= msgsize);
-                memset(req->rq_reqbuf, 0, msgsize);
-        }
+		req->rq_reqbuf_len = alloc_size;
+	} else {
+		LASSERT(req->rq_pool);
+		LASSERT(req->rq_reqbuf_len >= msgsize);
+		memset(req->rq_reqbuf, 0, msgsize);
+	}
 
-        req->rq_reqmsg = req->rq_reqbuf;
-        return 0;
+	req->rq_reqmsg = req->rq_reqbuf;
+	return 0;
 }
 
 static
@@ -200,17 +200,17 @@ int null_alloc_repbuf(struct ptlrpc_sec *sec,
                       struct ptlrpc_request *req,
                       int msgsize)
 {
-        /* add space for early replied */
-        msgsize += lustre_msg_early_size();
+	/* add space for early replied */
+	msgsize += lustre_msg_early_size();
 
-        msgsize = size_roundup_power2(msgsize);
+	msgsize = size_roundup_power2(msgsize);
 
-        OBD_ALLOC_LARGE(req->rq_repbuf, msgsize);
-        if (!req->rq_repbuf)
-                return -ENOMEM;
+	OBD_ALLOC_LARGE(req->rq_repbuf, msgsize);
+	if (!req->rq_repbuf)
+		return -ENOMEM;
 
-        req->rq_repbuf_len = msgsize;
-        return 0;
+	req->rq_repbuf_len = msgsize;
+	return 0;
 }
 
 static
@@ -247,12 +247,12 @@ int null_enlarge_reqbuf(struct ptlrpc_sec *sec,
         /* request from pool should always have enough buffer */
         LASSERT(!req->rq_pool || req->rq_reqbuf_len >= newmsg_size);
 
-        if (req->rq_reqbuf_len < newmsg_size) {
-                alloc_size = size_roundup_power2(newmsg_size);
+	if (req->rq_reqbuf_len < newmsg_size) {
+		alloc_size = size_roundup_power2(newmsg_size);
 
-                OBD_ALLOC_LARGE(newbuf, alloc_size);
-                if (newbuf == NULL)
-                        return -ENOMEM;
+		OBD_ALLOC_LARGE(newbuf, alloc_size);
+		if (newbuf == NULL)
+			return -ENOMEM;
 
 		/* Must lock this, so that otherwise unprotected change of
 		 * rq_reqmsg is not racing with parallel processing of
@@ -262,11 +262,11 @@ int null_enlarge_reqbuf(struct ptlrpc_sec *sec,
 		 * there */
 		if (req->rq_import)
 			spin_lock(&req->rq_import->imp_lock);
-                memcpy(newbuf, req->rq_reqbuf, req->rq_reqlen);
+		memcpy(newbuf, req->rq_reqbuf, req->rq_reqlen);
 
-                OBD_FREE_LARGE(req->rq_reqbuf, req->rq_reqbuf_len);
-                req->rq_reqbuf = req->rq_reqmsg = newbuf;
-                req->rq_reqbuf_len = alloc_size;
+		OBD_FREE_LARGE(req->rq_reqbuf, req->rq_reqbuf_len);
+		req->rq_reqbuf = req->rq_reqmsg = newbuf;
+		req->rq_reqbuf_len = alloc_size;
 
 		if (req->rq_import)
 			spin_unlock(&req->rq_import->imp_lock);
@@ -319,12 +319,12 @@ int null_alloc_rs(struct ptlrpc_request *req, int msgsize)
                 /* pre-allocated */
                 LASSERT(rs->rs_size >= rs_size);
         } else {
-                OBD_ALLOC_LARGE(rs, rs_size);
-                if (rs == NULL)
-                        return -ENOMEM;
+		OBD_ALLOC_LARGE(rs, rs_size);
+		if (rs == NULL)
+			return -ENOMEM;
 
-                rs->rs_size = rs_size;
-        }
+		rs->rs_size = rs_size;
+	}
 
 	rs->rs_svc_ctx = req->rq_svc_ctx;
 	atomic_inc(&req->rq_svc_ctx->sc_refcount);

@@ -912,7 +912,7 @@ struct ptlrpc_srv_req {
 	struct ptlrpc_svc_ctx		*sr_svc_ctx;
 	/** (server side), pointed directly into req buffer */
 	struct ptlrpc_user_desc		*sr_user_desc;
-	/** separated reply state */
+	/** separated reply state, may be vmalloc'd */
 	struct ptlrpc_reply_state	*sr_reply_state;
 	/** server-side hp handlers */
 	struct ptlrpc_hpreq_ops		*sr_ops;
@@ -1073,9 +1073,9 @@ struct ptlrpc_request {
 
 
 	/** various buffer pointers */
-	struct lustre_msg		*rq_reqbuf;      /**< req wrapper */
-	char				*rq_repbuf;      /**< rep buffer */
-	struct lustre_msg		*rq_repdata;     /**< rep wrapper msg */
+	struct lustre_msg		*rq_reqbuf;  /**< req wrapper, vmalloc*/
+	char				*rq_repbuf;  /**< rep buffer, vmalloc */
+	struct lustre_msg		*rq_repdata; /**< rep wrapper msg */
 	/** only in priv mode */
 	struct lustre_msg		*rq_clrbuf;
         int                      rq_reqbuf_len;  /* req wrapper buf len */
@@ -1501,30 +1501,30 @@ enum {
  * Definition of server service thread structure
  */
 struct ptlrpc_thread {
-        /**
-         * List of active threads in svc->srv_threads
-         */
+	/**
+	 * List of active threads in svc->srv_threads
+	 */
 	struct list_head t_link;
-        /**
-         * thread-private data (preallocated memory)
-         */
-        void *t_data;
-        __u32 t_flags;
-        /**
-         * service thread index, from ptlrpc_start_threads
-         */
-        unsigned int t_id;
-        /**
-         * service thread pid
-         */
+	/**
+	 * thread-private data (preallocated vmalloc'd memory)
+	 */
+	void *t_data;
+	__u32 t_flags;
+	/**
+	 * service thread index, from ptlrpc_start_threads
+	 */
+	unsigned int t_id;
+	/**
+	 * service thread pid
+	 */
 	pid_t t_pid;
-        /**
-         * put watchdog in the structure per thread b=14840
-         */
-        struct lc_watchdog *t_watchdog;
-        /**
-         * the svc this thread belonged to b=18582
-         */
+	/**
+	 * put watchdog in the structure per thread b=14840
+	 */
+	struct lc_watchdog *t_watchdog;
+	/**
+	 * the svc this thread belonged to b=18582
+	 */
 	struct ptlrpc_service_part	*t_svcpt;
 	wait_queue_head_t		t_ctl_waitq;
 	struct lu_env			*t_env;

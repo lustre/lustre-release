@@ -553,10 +553,10 @@ int ptlrpc_add_rqs_to_pool(struct ptlrpc_request_pool *pool, int num_rq)
 		if (!msg) {
 			ptlrpc_request_cache_free(req);
 			return i;
-                }
-                req->rq_reqbuf = msg;
-                req->rq_reqbuf_len = size;
-                req->rq_pool = pool;
+		}
+		req->rq_reqbuf = msg;
+		req->rq_reqbuf_len = size;
+		req->rq_pool = pool;
 		spin_lock(&pool->prp_lock);
 		list_add_tail(&req->rq_list, &pool->prp_req_list);
 	}

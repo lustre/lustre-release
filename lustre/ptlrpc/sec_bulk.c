@@ -121,7 +121,7 @@ static struct ptlrpc_enc_page_pool {
         cfs_time_t       epp_st_max_wait;       /* in jeffies */
 	unsigned long	 epp_st_outofmem;	/* # of out of mem requests */
 	/*
-	 * pointers to pools
+	 * pointers to pools, may be vmalloc'd
 	 */
 	struct page    ***epp_pools;
 } page_pools;
@@ -764,20 +764,20 @@ EXPORT_SYMBOL(sptlrpc_enc_pool_del_user);
 
 static inline void enc_pools_alloc(void)
 {
-        LASSERT(page_pools.epp_max_pools);
-        OBD_ALLOC_LARGE(page_pools.epp_pools,
-                        page_pools.epp_max_pools *
-                        sizeof(*page_pools.epp_pools));
+	LASSERT(page_pools.epp_max_pools);
+	OBD_ALLOC_LARGE(page_pools.epp_pools,
+			page_pools.epp_max_pools *
+			sizeof(*page_pools.epp_pools));
 }
 
 static inline void enc_pools_free(void)
 {
-        LASSERT(page_pools.epp_max_pools);
-        LASSERT(page_pools.epp_pools);
+	LASSERT(page_pools.epp_max_pools);
+	LASSERT(page_pools.epp_pools);
 
-        OBD_FREE_LARGE(page_pools.epp_pools,
-                       page_pools.epp_max_pools *
-                       sizeof(*page_pools.epp_pools));
+	OBD_FREE_LARGE(page_pools.epp_pools,
+		       page_pools.epp_max_pools *
+		       sizeof(*page_pools.epp_pools));
 }
 
 int sptlrpc_enc_pool_init(void)

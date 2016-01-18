@@ -813,6 +813,7 @@ struct ldlm_lock {
 
 	/**
 	 * Temporary storage for a LVB received during an enqueue operation.
+	 * May be vmalloc'd, so needs to be freed with OBD_FREE_LARGE().
 	 */
 	__u32			l_lvb_len;
 	void			*l_lvb_data;

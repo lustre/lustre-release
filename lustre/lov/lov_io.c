@@ -298,20 +298,21 @@ static int lov_io_subio_init(const struct lu_env *env, struct lov_io *lio,
 	LASSERT(lio->lis_object != NULL);
 	lsm = lio->lis_object->lo_lsm;
 
-        /*
-         * Need to be optimized, we can't afford to allocate a piece of memory
-         * when writing a page. -jay
-         */
-        OBD_ALLOC_LARGE(lio->lis_subs,
-                        lsm->lsm_stripe_count * sizeof lio->lis_subs[0]);
-        if (lio->lis_subs != NULL) {
-                lio->lis_nr_subios = lio->lis_stripe_count;
-                lio->lis_single_subio_index = -1;
-                lio->lis_active_subios = 0;
-                result = 0;
-        } else
-                result = -ENOMEM;
-        RETURN(result);
+	/*
+	 * Need to be optimized, we can't afford to allocate a piece of memory
+	 * when writing a page. -jay
+	 */
+	OBD_ALLOC_LARGE(lio->lis_subs,
+			lsm->lsm_stripe_count * sizeof lio->lis_subs[0]);
+	if (lio->lis_subs != NULL) {
+		lio->lis_nr_subios = lio->lis_stripe_count;
+		lio->lis_single_subio_index = -1;
+		lio->lis_active_subios = 0;
+		result = 0;
+	} else
+		result = -ENOMEM;
+
+	RETURN(result);
 }
 
 static int lov_io_slice_init(struct lov_io *lio,

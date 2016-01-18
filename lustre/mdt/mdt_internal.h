@@ -420,7 +420,7 @@ struct mdt_thread_info {
 
         /* Ops object filename */
         struct lu_name             mti_name;
-	/* per-thread values, can be re-used */
+	/* per-thread values, can be re-used, may be vmalloc'd */
 	void			  *mti_big_lmm;
 	int			   mti_big_lmmsize;
 	/* big_lmm buffer was used and must be used in reply */

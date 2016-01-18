@@ -47,7 +47,7 @@
  * operation, and updates on each MDTs are linked to
  * dtr_sub_list */
 struct distribute_txn_replay_req {
-	/* update record */
+	/* update record, may be vmalloc'd */
 	struct llog_update_record *dtrq_lur;
 	int			dtrq_lur_size;
 

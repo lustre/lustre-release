@@ -570,15 +570,15 @@ int plain_alloc_reqbuf(struct ptlrpc_sec *sec,
 
         alloc_len = lustre_msg_size_v2(PLAIN_PACK_SEGMENTS, buflens);
 
-        if (!req->rq_reqbuf) {
-                LASSERT(!req->rq_pool);
+	if (!req->rq_reqbuf) {
+		LASSERT(!req->rq_pool);
 
-                alloc_len = size_roundup_power2(alloc_len);
-                OBD_ALLOC_LARGE(req->rq_reqbuf, alloc_len);
-                if (!req->rq_reqbuf)
-                        RETURN(-ENOMEM);
+		alloc_len = size_roundup_power2(alloc_len);
+		OBD_ALLOC_LARGE(req->rq_reqbuf, alloc_len);
+		if (!req->rq_reqbuf)
+			RETURN(-ENOMEM);
 
-                req->rq_reqbuf_len = alloc_len;
+		req->rq_reqbuf_len = alloc_len;
         } else {
                 LASSERT(req->rq_pool);
                 LASSERT(req->rq_reqbuf_len >= alloc_len);
@@ -598,13 +598,13 @@ static
 void plain_free_reqbuf(struct ptlrpc_sec *sec,
                        struct ptlrpc_request *req)
 {
-        ENTRY;
-        if (!req->rq_pool) {
-                OBD_FREE_LARGE(req->rq_reqbuf, req->rq_reqbuf_len);
-                req->rq_reqbuf = NULL;
-                req->rq_reqbuf_len = 0;
-        }
-        EXIT;
+	ENTRY;
+	if (!req->rq_pool) {
+		OBD_FREE_LARGE(req->rq_reqbuf, req->rq_reqbuf_len);
+		req->rq_reqbuf = NULL;
+		req->rq_reqbuf_len = 0;
+	}
+	EXIT;
 }
 
 static
@@ -631,12 +631,12 @@ int plain_alloc_repbuf(struct ptlrpc_sec *sec,
 
         alloc_len = size_roundup_power2(alloc_len);
 
-        OBD_ALLOC_LARGE(req->rq_repbuf, alloc_len);
-        if (!req->rq_repbuf)
-                RETURN(-ENOMEM);
+	OBD_ALLOC_LARGE(req->rq_repbuf, alloc_len);
+	if (!req->rq_repbuf)
+		RETURN(-ENOMEM);
 
-        req->rq_repbuf_len = alloc_len;
-        RETURN(0);
+	req->rq_repbuf_len = alloc_len;
+	RETURN(0);
 }
 
 static
@@ -682,12 +682,12 @@ int plain_enlarge_reqbuf(struct ptlrpc_sec *sec,
         /* request from pool should always have enough buffer */
         LASSERT(!req->rq_pool || req->rq_reqbuf_len >= newbuf_size);
 
-        if (req->rq_reqbuf_len < newbuf_size) {
-                newbuf_size = size_roundup_power2(newbuf_size);
+	if (req->rq_reqbuf_len < newbuf_size) {
+		newbuf_size = size_roundup_power2(newbuf_size);
 
-                OBD_ALLOC_LARGE(newbuf, newbuf_size);
-                if (newbuf == NULL)
-                        RETURN(-ENOMEM);
+		OBD_ALLOC_LARGE(newbuf, newbuf_size);
+		if (newbuf == NULL)
+			RETURN(-ENOMEM);
 
 		/* Must lock this, so that otherwise unprotected change of
 		 * rq_reqmsg is not racing with parallel processing of
@@ -698,24 +698,24 @@ int plain_enlarge_reqbuf(struct ptlrpc_sec *sec,
 		if (req->rq_import)
 			spin_lock(&req->rq_import->imp_lock);
 
-                memcpy(newbuf, req->rq_reqbuf, req->rq_reqbuf_len);
+		memcpy(newbuf, req->rq_reqbuf, req->rq_reqbuf_len);
 
-                OBD_FREE_LARGE(req->rq_reqbuf, req->rq_reqbuf_len);
-                req->rq_reqbuf = newbuf;
-                req->rq_reqbuf_len = newbuf_size;
-                req->rq_reqmsg = lustre_msg_buf(req->rq_reqbuf,
-                                                PLAIN_PACK_MSG_OFF, 0);
+		OBD_FREE_LARGE(req->rq_reqbuf, req->rq_reqbuf_len);
+		req->rq_reqbuf = newbuf;
+		req->rq_reqbuf_len = newbuf_size;
+		req->rq_reqmsg = lustre_msg_buf(req->rq_reqbuf,
+						PLAIN_PACK_MSG_OFF, 0);
 
 		if (req->rq_import)
 			spin_unlock(&req->rq_import->imp_lock);
-        }
+	}
 
-        _sptlrpc_enlarge_msg_inplace(req->rq_reqbuf, PLAIN_PACK_MSG_OFF,
-                                     newmsg_size);
-        _sptlrpc_enlarge_msg_inplace(req->rq_reqmsg, segment, newsize);
+	_sptlrpc_enlarge_msg_inplace(req->rq_reqbuf, PLAIN_PACK_MSG_OFF,
+				     newmsg_size);
+	_sptlrpc_enlarge_msg_inplace(req->rq_reqmsg, segment, newsize);
 
-        req->rq_reqlen = newmsg_size;
-        RETURN(0);
+	req->rq_reqlen = newmsg_size;
+	RETURN(0);
 }
 
 /****************************************
@@ -819,16 +819,16 @@ int plain_alloc_rs(struct ptlrpc_request *req, int msgsize)
 
         rs = req->rq_reply_state;
 
-        if (rs) {
-                /* pre-allocated */
-                LASSERT(rs->rs_size >= rs_size);
-        } else {
-                OBD_ALLOC_LARGE(rs, rs_size);
-                if (rs == NULL)
-                        RETURN(-ENOMEM);
+	if (rs) {
+		/* pre-allocated */
+		LASSERT(rs->rs_size >= rs_size);
+	} else {
+		OBD_ALLOC_LARGE(rs, rs_size);
+		if (rs == NULL)
+			RETURN(-ENOMEM);
 
-                rs->rs_size = rs_size;
-        }
+		rs->rs_size = rs_size;
+	}
 
 	rs->rs_svc_ctx = req->rq_svc_ctx;
 	atomic_inc(&req->rq_svc_ctx->sc_refcount);

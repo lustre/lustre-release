@@ -288,7 +288,7 @@ struct lod_it {
 };
 
 struct lod_thread_info {
-	/* per-thread buffer for LOV EA */
+	/* per-thread buffer for LOV EA, may be vmalloc'd */
 	void             *lti_ea_store;
 	__u32             lti_ea_store_size;
 	/* per-thread buffer for LMV EA */

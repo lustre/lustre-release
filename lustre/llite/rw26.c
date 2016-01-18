@@ -324,7 +324,7 @@ static void ll_free_user_pages(struct page **pages, int npages, int do_dirty)
 #if defined(HAVE_DIRECTIO_ITER) || defined(HAVE_IOV_ITER_RW)
 	kvfree(pages);
 #else
-	OBD_FREE(pages, npages * sizeof(*pages));
+	OBD_FREE_LARGE(pages, npages * sizeof(*pages));
 #endif
 }
 
@@ -477,7 +477,7 @@ static inline int ll_get_user_pages(int rw, unsigned long user_addr,
 					NULL);
 		up_read(&current->mm->mmap_sem);
 		if (unlikely(result <= 0))
-			OBD_FREE(*pages, *max_pages * sizeof(**pages));
+			OBD_FREE_LARGE(*pages, *max_pages * sizeof(**pages));
 	}
 
 	return result;

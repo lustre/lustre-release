@@ -242,6 +242,8 @@ struct lov_object {
 			 * When top-object is destroyed (lov_delete_raid0())
 			 * it releases its reference to a sub-object and waits
 			 * until the latter is finally destroyed.
+			 *
+			 * May be vmalloc'd, must be freed with OBD_FREE_LARGE.
 			 */
 			struct lovsub_object **lo_sub;
 			/**
@@ -442,30 +444,31 @@ struct lov_io {
          * (stripe), used by ci_io_loop().
          */
 	loff_t			 lis_pos;
-        /**
-         * end position with in a file, for the current stripe io. This is
-         * exclusive (i.e., next offset after last byte affected by io).
-         */
+	/**
+	 * end position with in a file, for the current stripe io. This is
+	 * exclusive (i.e., next offset after last byte affected by io).
+	 */
 	loff_t			 lis_endpos;
 
-        int                lis_mem_frozen;
-        int                lis_stripe_count;
-        int                lis_active_subios;
+	int			lis_mem_frozen;
+	int			lis_stripe_count;
+	int			lis_active_subios;
 
-        /**
-         * the index of ls_single_subio in ls_subios array
-         */
-        int                lis_single_subio_index;
-        struct cl_io       lis_single_subio;
+	/**
+	 * the index of ls_single_subio in ls_subios array
+	 */
+	int			lis_single_subio_index;
+	struct cl_io		lis_single_subio;
 
-        /**
-         * size of ls_subios array, actually the highest stripe #
-         */
-        int                lis_nr_subios;
-        struct lov_io_sub *lis_subs;
-        /**
-         * List of active sub-io's.
-         */
+	/**
+	 * size of ls_subios array, actually the highest stripe #
+	 * May be vmalloc'd, must be freed with OBD_FREE_LARGE().
+	 */
+	int			lis_nr_subios;
+	struct lov_io_sub	*lis_subs;
+	/**
+	 * List of active sub-io's.
+	 */
 	struct list_head	lis_active;
 };
 

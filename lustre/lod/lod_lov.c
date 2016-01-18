@@ -613,6 +613,7 @@ int lod_ea_store_resize(struct lod_thread_info *info, size_t size)
 	if (info->lti_ea_store == NULL)
 		RETURN(-ENOMEM);
 	info->lti_ea_store_size = round;
+
 	RETURN(0);
 }
 

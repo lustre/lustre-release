@@ -95,7 +95,7 @@ struct osp_precreate {
 };
 
 struct osp_update_request_sub {
-	struct object_update_request	*ours_req;
+	struct object_update_request	*ours_req; /* may be vmalloc'd */
 	size_t				ours_req_size;
 	/* Linked to osp_update_request->our_req_list */
 	struct list_head		ours_list;
