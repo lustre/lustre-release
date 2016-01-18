@@ -1293,9 +1293,6 @@ lmv_out_free:
 
 		/* Get default LMV EA */
 		if (lum.lum_magic == LMV_USER_MAGIC) {
-			if (rc != 0)
-				GOTO(finish_req, rc);
-
 			if (lmmsize > sizeof(*ulmv))
 				GOTO(finish_req, rc = -EINVAL);
 
