@@ -1553,6 +1553,12 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 static void osd_object_release(const struct lu_env *env,
                                struct lu_object *l)
 {
+	struct osd_object *o = osd_obj(l);
+	/* nobody should be releasing a non-destroyed object with nlink=0
+	 * the API allows this, but ldiskfs doesn't like and then report
+	 * this inode as deleted */
+	if (unlikely(!o->oo_destroyed && o->oo_inode && o->oo_inode->i_nlink == 0))
+		LBUG();
 }
 
 /*
