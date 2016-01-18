@@ -4562,33 +4562,10 @@ set_nodes_failloc () {
 }
 
 cancel_lru_locks() {
-    $LCTL mark "cancel_lru_locks $1 start"
-
-    if [ $1 != "MGC" ]; then
-	for d in $(lctl get_param -N ldlm.namespaces.*.lru_size |
-		 egrep -i $1); do
-	    $LCTL set_param -n $d=clear
-	done
-	$LCTL get_param ldlm.namespaces.*.lock_unused_count | egrep -i $1 |
-		grep -v '=0'
-    else
-	for d in $(find \
-		/{proc,sys}/fs/lustre/ldlm/namespaces/*$1*/lru_size \
-		2> /dev/null); do
-	    echo "clear" > $d
-	done
-
-	for d in $(find \
-		/{proc,sys}/fs/lustre/ldlm/namespaces/*$1*/lock_unused_count \
-		2> /dev/null); do
-	    if [ $(cat $d) != 0 ]; then
-		echo "ldlm.namespaces.$(echo "$d" |
-			cut -f 7 -d'/').lock_unused_count=$(cat $d)"
-	    fi
-	done
-    fi
-
-    $LCTL mark "cancel_lru_locks $1 stop"
+	#$LCTL mark "cancel_lru_locks $1 start"
+	$LCTL set_param -n ldlm.namespaces.*$1*.lru_size=clear
+	$LCTL get_param ldlm.namespaces.*$1*.lock_unused_count | grep -v '=0'
+	#$LCTL mark "cancel_lru_locks $1 stop"
 }
 
 default_lru_size()

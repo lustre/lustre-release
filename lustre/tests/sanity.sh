@@ -9423,31 +9423,24 @@ test_133e() {
 }
 run_test 133e "Verifying OST {read,write}_bytes nid stats ================="
 
+proc_dirs=""
+for dir in /proc/fs/lustre/ /proc/sys/lnet/ /proc/sys/lustre/ \
+	   /sys/fs/lustre/ /sys/fs/lnet/ /sys/kernel/debug/lustre/; do
+	[[ -d $dir ]] && proc_dirs+=" $dir"
+done
+
 test_133f() {
-	local proc_dirs
-
-	local dirs="/proc/fs/lustre/ /proc/sys/lnet/ /proc/sys/lustre/ \
-/sys/fs/lustre/ /sys/fs/lnet/"
-	local dir
-	for dir in $dirs; do
-		if [ -d $dir ]; then
-			proc_dirs="$proc_dirs $dir"
-		fi
-	done
-
-	local facet
-
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 	# First without trusting modes.
 	find $proc_dirs -exec cat '{}' \; &> /dev/null
 
 	# Second verifying readability.
-	find $proc_dirs \
-		-type f \
-		-exec cat '{}' \; &> /dev/null ||
-			error "proc file read failed"
+	$LCTL get_param -R &> /dev/null || error "proc file read failed"
 
+	# eventually, this can also be replaced with "lctl get_param -R",
+	# but not until that option is always available on the server
+	local facet
 	for facet in $SINGLEMDS ost1; do
 		do_facet $facet find $proc_dirs \
 			! -name req_history \
@@ -9463,20 +9456,7 @@ test_133f() {
 run_test 133f "Check for LBUGs/Oopses/unreadable files in /proc"
 
 test_133g() {
-	local proc_dirs
-
-	local dirs="/proc/fs/lustre/ /proc/sys/lnet/ /proc/sys/lustre/ \
-/sys/fs/lustre/ /sys/fs/lnet/"
-	local dir
-	for dir in $dirs; do
-		if [ -d $dir ]; then
-			proc_dirs="$proc_dirs $dir"
-		fi
-	done
-
-	local facet
-
-	# Second verifying readability.
+	# Second verifying writability.
 	find $proc_dirs \
 		-type f \
 		-not -name force_lbug \
@@ -9490,6 +9470,7 @@ test_133g() {
 	[ $(lustre_version_code ost1) -le $(version_code 2.5.54) ] &&
 		skip "Too old lustre on ost1" && return
 
+	local facet
 	for facet in $SINGLEMDS ost1; do
 		do_facet $facet find $proc_dirs \
 			-type f \
@@ -13380,7 +13361,7 @@ run_test 240 "race between ldlm enqueue and the connection RPC (no ASSERT)"
 test_241_bio() {
 	for LOOP in $(seq $1); do
 		dd if=$DIR/$tfile of=/dev/null bs=40960 count=1 2>/dev/null
-		cancel_lru_locks osc
+		cancel_lru_locks osc || true
 	done
 }
 
@@ -14307,22 +14288,13 @@ test_400b() { # LU-1606, LU-5011
 run_test 400b "packaged headers can be compiled"
 
 test_401() { #LU-7437
-	local params
-	local procs
-
 	#count the number of parameters by "list_param -R"
-	params=$($LCTL list_param -R '*' 2>/dev/null | wc -l)
+	local params=$($LCTL list_param -R '*' 2>/dev/null | wc -l)
 	#count the number of parameters by listing proc files
-	ls -lRL /proc/{fs,sys}/{lnet,lustre} 2>/dev/null |
-		grep -v "^t" | grep -v "^d" > $TMP/$tfile
-	#Since there is no /proc/fs/lnet, we need to remove other
-	#3 directories, /proc/{fs,sys}/lustre and /proc/sys/lnet.
-	procs=$(($(sed /^$/d $TMP/$tfile | wc -l)-3))
+	local procs=$(find -L $proc_dirs -mindepth 1 2>/dev/null | wc -l)
 
 	[ $params -eq $procs ] ||
 		error "found $params parameters vs. $procs proc files"
-
-	rm -f $TMP/$tfile
 }
 run_test 401 "Verify if 'lctl list_param -R' can list parameters recursively"
 

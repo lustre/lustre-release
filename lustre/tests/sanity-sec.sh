@@ -1514,14 +1514,8 @@ test_24() {
 	nodemap_test_setup
 
 	trap nodemap_test_cleanup EXIT
-	for node in $(all_server_nodes); do
-		local node_ip=$(host_nids_address $node $NETTYPE)
-		do_node $node_ip 'find /proc/fs/lustre/nodemap -exec \
-			cat {} \;' &> /dev/null
-		do_node $node_ip 'find /proc/fs/lustre/nodemap \
-			-type f -perm /444 | xargs cat' &> /dev/null ||
-				error "proc readable file read failed"
-	done
+	do_nodes $(comma_list $(all_server_nodes)) $LCTL get_param -R nodemap ||
+		error "proc readable file read failed"
 
 	nodemap_test_cleanup
 }
