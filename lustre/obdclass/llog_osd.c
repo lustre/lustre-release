@@ -558,6 +558,19 @@ static int llog_osd_write_rec(const struct lu_env *env,
 	orig_last_idx = loghandle->lgh_last_idx;
 	orig_write_offset = loghandle->lgh_write_offset;
 	lgi->lgi_off = lgi->lgi_attr.la_size;
+
+	if (loghandle->lgh_max_size > 0 &&
+	    lgi->lgi_off >= loghandle->lgh_max_size) {
+		CDEBUG(D_OTHER, "llog is getting too large (%u > %u) at %u "
+		       DOSTID"\n", (unsigned)lgi->lgi_off,
+		       loghandle->lgh_max_size,
+		       (int)loghandle->lgh_last_idx,
+		       POSTID(&loghandle->lgh_id.lgl_oi));
+		/* this is to signal that this llog is full */
+		loghandle->lgh_last_idx = LLOG_HDR_BITMAP_SIZE(llh) - 1;
+		RETURN(-ENOSPC);
+	}
+
 	left = chunk_size - (lgi->lgi_off & (chunk_size - 1));
 	/* NOTE: padding is a record, but no bit is set */
 	if (left != 0 && left != reclen &&

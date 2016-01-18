@@ -275,6 +275,7 @@ struct llog_handle {
 	__u64			 lgh_cur_offset; /* used during llog_process */
 	/* used during llog_osd_write_rec */
 	__u64			 lgh_write_offset;
+	int			 lgh_max_size;
 	struct llog_ctxt	*lgh_ctxt;
 	union {
 		struct plain_handle_data	 phd;

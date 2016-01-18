@@ -55,6 +55,7 @@ struct llog_thread_info {
 	struct dt_insert_rec		 lgi_dt_rec;
 	struct lu_seq_range		 lgi_range;
 	struct llog_cookie		 lgi_cookie;
+	struct obd_statfs		 lgi_statfs;
 	char				 lgi_name[32];
 };
 

@@ -171,6 +171,25 @@ static int llog_cat_new_log(const struct lu_env *env,
 	       POSTID(&cathandle->lgh_id.lgl_oi));
 
 	loghandle->lgh_hdr->llh_cat_idx = rec->lid_hdr.lrh_index;
+
+	/* limit max size of plain llog so that space can be
+	 * released sooner, especially on small filesystems */
+	/* 2MB for the cases when free space hasn't been learned yet */
+	loghandle->lgh_max_size = 2 << 20;
+	dt = lu2dt_dev(cathandle->lgh_obj->do_lu.lo_dev);
+	rc = dt_statfs(env, dt, &lgi->lgi_statfs);
+	if (rc == 0 && lgi->lgi_statfs.os_bfree > 0) {
+		__u64 freespace = (lgi->lgi_statfs.os_bfree *
+				  lgi->lgi_statfs.os_bsize) >> 6;
+		if (freespace < loghandle->lgh_max_size)
+			loghandle->lgh_max_size = freespace;
+		/* shouldn't be > 128MB in any case?
+		 * it's 256K records of 512 bytes each */
+		if (freespace > (128 << 20))
+			loghandle->lgh_max_size = 128 << 20;
+	}
+	rc = 0;
+
 out:
 	if (handle != NULL) {
 		handle->th_result = rc >= 0 ? 0 : rc;

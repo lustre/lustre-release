@@ -515,7 +515,18 @@ repeat:
 				 * while llog_processing, check this is not
 				 * the case and re-read the current chunk
 				 * otherwise. */
+				int records;
 				if (index > loghandle->lgh_last_idx)
+					GOTO(out, rc = 0);
+				/* <2 records means no more records
+				 * if the last record we processed was
+				 * the final one, then the underlying
+				 * object might have been destroyed yet.
+				 * we better don't access that.. */
+				mutex_lock(&loghandle->lgh_hdr_mutex);
+				records = loghandle->lgh_hdr->llh_count;
+				mutex_unlock(&loghandle->lgh_hdr_mutex);
+				if (records <= 1)
 					GOTO(out, rc = 0);
 				CDEBUG(D_OTHER, "Re-read last llog buffer for "
 				       "new records, index %u, last %u\n",
