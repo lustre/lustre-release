@@ -30,7 +30,7 @@ CFS_MODULE_PARM(credits, "i", int, 0444,
 		"# concurrent sends");
 
 static int eager_credits = 256 * 1024;
-CFS_MODULE_PARM(eager_credits, "i", int, 0444,
+CFS_MODULE_PARM(eager_credits, "i", int, 0644,
 		"# eager buffers");
 
 static int peer_credits = 16;
@@ -66,8 +66,8 @@ static int max_reconnect_interval = GNILND_MAX_RECONNECT_TO;
 CFS_MODULE_PARM(max_reconnect_interval, "i", int, 0644,
 		"maximum connection retry interval (seconds)");
 
-static int max_immediate = 8192;
-CFS_MODULE_PARM(max_immediate, "i", int, 0644,
+static int max_immediate = 2048;
+CFS_MODULE_PARM(max_immediate, "i", int, 0444,
 		"immediate/RDMA breakpoint");
 
 static int checksum = GNILND_CHECKSUM_DEFAULT;
