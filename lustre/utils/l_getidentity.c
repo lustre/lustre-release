@@ -48,6 +48,7 @@
 #include <libgen.h>
 #include <syslog.h>
 
+#include <libcfs/util/param.h>
 #include <libcfs/util/string.h>
 #include <lnet/nidstr.h>
 #include <lustre/lustre_user.h>
@@ -74,11 +75,11 @@ static char *progname;
 
 static void usage(void)
 {
-        fprintf(stderr,
-                "\nusage: %s {mdtname} {uid}\n"
-                "Normally invoked as an upcall from Lustre, set via:\n"
-                "/proc/fs/lustre/mdt/${mdtname}/identity_upcall\n",
-                progname);
+	fprintf(stderr,
+		"\nusage: %s {mdtname} {uid}\n"
+		"Normally invoked as an upcall from Lustre, set via:\n"
+		"lctl set_param mdt.${mdtname}.identity_upcall={path to upcall}\n",
+		progname);
 }
 
 static int compare_u32(const void *v1, const void *v2)
@@ -418,11 +419,11 @@ static void show_result(struct identity_downcall_data *data)
 
 int main(int argc, char **argv)
 {
-        char *end;
-        struct identity_downcall_data *data = NULL;
-        char procname[1024];
-        unsigned long uid;
-        int fd, rc = -EINVAL, size, maxgroups;
+	char *end;
+	struct identity_downcall_data *data = NULL;
+	glob_t path;
+	unsigned long uid;
+	int fd, rc = -EINVAL, size, maxgroups;
 
         progname = basename(argv[0]);
         if (argc != 3) {
@@ -472,26 +473,33 @@ downcall:
                 goto out;
         }
 
-        snprintf(procname, sizeof(procname),
-                 "/proc/fs/lustre/mdt/%s/identity_info", argv[1]);
-        fd = open(procname, O_WRONLY);
-        if (fd < 0) {
-                errlog("can't open file %s: %s\n", procname, strerror(errno));
-                rc = -1;
-                goto out;
-        }
+	rc = cfs_get_param_paths(&path, "mdt/%s/identity_info", argv[1]);
+	if (rc != 0) {
+		rc = -errno;
+		goto out;
+	}
 
-        rc = write(fd, data, size);
-        close(fd);
-        if (rc != size) {
-                errlog("partial write ret %d: %s\n", rc, strerror(errno));
-                rc = -1;
-        } else {
-                rc = 0;
-        }
+	fd = open(path.gl_pathv[0], O_WRONLY);
+	if (fd < 0) {
+		errlog("can't open file '%s':%s\n", path.gl_pathv[0],
+		       strerror(errno));
+		rc = -errno;
+		goto out_params;
+	}
 
+	rc = write(fd, data, size);
+	close(fd);
+	if (rc != size) {
+		errlog("partial write ret %d: %s\n", rc, strerror(errno));
+		rc = -1;
+	} else {
+		rc = 0;
+	}
+
+out_params:
+	cfs_free_param_data(&path);
 out:
-        if (data != NULL)
-                free(data);
-        return rc;
+	if (data != NULL)
+		free(data);
+	return rc;
 }

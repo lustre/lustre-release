@@ -29,7 +29,7 @@
 
 /* The purpose of this test is to check some HSM functions. HSM must
  * be enabled before running it:
- *   echo enabled > /proc/fs/lustre/mdt/lustre-MDT0000/hsm_control
+ *   lctl set_param mdt.$FSNAME-MDT0000.hsm_control=enabled
  */
 
 /* All tests return 0 on success and non zero on error. The program will

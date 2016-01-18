@@ -88,6 +88,7 @@ nobase_test_DATA = $(nobase_noinst_DATA)
 endif # TESTS
 
 mmap_sanity_SOURCES= mmap_sanity.c
+mmap_sanity_LDADD=$(LIBCFS)
 
 multiop_LDADD=$(LIBLUSTREAPI) $(LIBCFS) $(PTHREAD_LIBS)
 llapi_layout_test_LDADD=$(LIBLUSTREAPI)

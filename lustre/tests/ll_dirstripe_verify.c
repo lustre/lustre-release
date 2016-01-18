@@ -51,15 +51,10 @@
 #include <errno.h>
 #include <dirent.h>
 
+#include <libcfs/util/param.h>
 #include <lustre/lustreapi.h>
 
 #define MAX_LOV_UUID_COUNT      1000
-union {
-        struct obd_uuid uuid;
-        char name[0];
-} lov;
-#define lov_uuid lov.uuid
-#define lov_name lov.name
 
 /* Returns bytes read on success and a negative value on failure.
  * If zero bytes are read it will be treated as failure as such
@@ -96,44 +91,33 @@ int read_proc_entry(char *proc_path, char *buf, int len)
 	return rc;
 }
 
-int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
-            struct lov_user_md *lum_file2)
+int compare(struct obd_uuid *puuid, struct lov_user_md *lum_dir,
+	    struct lov_user_md *lum_file1, struct lov_user_md *lum_file2)
 {
-        int stripe_count = 0, min_stripe_count = 0, def_stripe_count = 1;
-        int stripe_size = 0;
-        int stripe_offset = -1;
-        int ost_count;
-        char buf[128];
-        char lov_path[PATH_MAX];
-        char tmp_path[PATH_MAX];
-        int i;
-        FILE *fp;
+	int stripe_count = 0, min_stripe_count = 0, def_stripe_count = 1;
+	int stripe_size = 0;
+	int stripe_offset = -1;
+	int ost_count;
+	char buf[128];
+	glob_t path;
+	int i;
 
-	fp = popen("\\ls -d  /proc/fs/lustre/lov/*clilov* | head -1", "r");
-	if (fp == NULL) {
-		llapi_error(LLAPI_MSG_ERROR, -errno,
-			    "open(lustre/lov/*clilov*) failed");
+	if (cfs_get_param_paths(&path, "lov/%s/stripecount", puuid->uuid) != 0)
 		return 2;
-        }
-
-	if (fscanf(fp, "%s", lov_path) < 1) {
-		llapi_error(LLAPI_MSG_ERROR, -EINVAL,
-			    "read(lustre/lov/*clilov*) failed");
-		pclose(fp);
-		return 3;
-	}
-
-        pclose(fp);
-
-        snprintf(tmp_path, sizeof(tmp_path) - 1, "%s/stripecount",
-                 lov_path);
-        if (read_proc_entry(tmp_path, buf, sizeof(buf)) < 0)
+	if (read_proc_entry(path.gl_pathv[0], buf, sizeof(buf)) < 0) {
+		cfs_free_param_data(&path);
                 return 5;
-        def_stripe_count = (short)atoi(buf);
+	}
+	cfs_free_param_data(&path);
+	def_stripe_count = (short)atoi(buf);
 
-        snprintf(tmp_path, sizeof(tmp_path) - 1, "%s/numobd", lov_path);
-        if (read_proc_entry(tmp_path, buf, sizeof(buf)) < 0)
+	if (cfs_get_param_paths(&path, "lov/%s/numobd", puuid->uuid) != 0)
+		return 2;
+	if (read_proc_entry(path.gl_pathv[0], buf, sizeof(buf)) < 0) {
+		cfs_free_param_data(&path);
                 return 6;
+	}
+	cfs_free_param_data(&path);
         ost_count = atoi(buf);
 
         if (lum_dir == NULL) {
@@ -175,10 +159,14 @@ int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
         if (lum_dir != NULL)
                 stripe_size = (int)lum_dir->lmm_stripe_size;
         if (stripe_size == 0) {
-                snprintf(tmp_path, sizeof(tmp_path) - 1, "%s/stripesize",
-                         lov_path);
-                if (read_proc_entry(tmp_path, buf, sizeof(buf)) < 0)
-                        return 5;
+		if (cfs_get_param_paths(&path, "lov/%s/stripesize",
+					puuid->uuid) != 0)
+			return 2;
+		if (read_proc_entry(path.gl_pathv[0], buf, sizeof(buf)) < 0) {
+			cfs_free_param_data(&path);
+			return 5;
+		}
+		cfs_free_param_data(&path);
 
                 stripe_size = atoi(buf);
         }
@@ -221,17 +209,17 @@ int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
 
 int main(int argc, char **argv)
 {
-        DIR * dir;
-        struct lov_user_md *lum_dir, *lum_file1 = NULL, *lum_file2 = NULL;
-        int rc;
-        int lum_size;
+	struct lov_user_md *lum_dir, *lum_file1 = NULL, *lum_file2 = NULL;
+	struct obd_uuid uuid;
+	int lum_size, rc;
+	DIR *dir;
 
-        if (argc < 3) {
-                llapi_err_noerrno(LLAPI_MSG_ERROR,
-                                "Usage: %s <dirname> <filename1> [filename2]\n",
-                                argv[0]);
-                return 1;
-        }
+	if (argc < 3) {
+		llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "Usage: %s <dirname> <filename1> [filename2]\n",
+				  argv[0]);
+		return 1;
+	}
 
 	dir = opendir(argv[1]);
 	if (dir == NULL) {
@@ -264,7 +252,7 @@ int main(int argc, char **argv)
 	}
 
 	/* XXX should be llapi_lov_getname() */
-	rc = llapi_file_get_lov_uuid(argv[1], &lov_uuid);
+	rc = llapi_file_get_lov_uuid(argv[1], &uuid);
 	if (rc) {
 		llapi_error(LLAPI_MSG_ERROR, rc,
 			    "error: can't get lov name for %s",
@@ -306,16 +294,16 @@ int main(int argc, char **argv)
 		}
 	}
 
-	rc = compare(lum_dir, lum_file1, lum_file2);
+	rc = compare(&uuid, lum_dir, lum_file1, lum_file2);
 
 cleanup:
-        closedir(dir);
-        if (lum_dir != NULL)
-                free(lum_dir);
-        if (lum_file1 != NULL)
-                free(lum_file1);
-        if (lum_file2 != NULL)
-                free(lum_file2);
+	closedir(dir);
+	if (lum_dir != NULL)
+		free(lum_dir);
+	if (lum_file1 != NULL)
+		free(lum_file1);
+	if (lum_file2 != NULL)
+		free(lum_file2);
 
-        return rc;
+	return rc;
 }

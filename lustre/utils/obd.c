@@ -53,7 +53,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
-#include <glob.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -65,6 +64,7 @@
 
 #include "obdctl.h"
 #include <libcfs/util/ioctl.h>
+#include <libcfs/util/param.h>
 #include <libcfs/util/parser.h>
 #include <libcfs/util/string.h>
 
@@ -79,7 +79,6 @@
 #include <lustre_param.h>
 
 #define MAX_STRING_SIZE 128
-#define DEVICES_LIST "/proc/fs/lustre/devices"
 
 #if HAVE_LIBPTHREAD
 #include <sys/ipc.h>
@@ -944,52 +943,52 @@ int jt_get_version(int argc, char **argv)
 
 static void print_obd_line(char *s)
 {
-        char buf[MAX_STRING_SIZE];
-        char obd_name[MAX_OBD_NAME];
-        FILE *fp = NULL;
-        char *ptr;
-
-	snprintf(buf, sizeof(buf), " %%*d %%*s osc %%%zus %%*s %%*d ",
-		 sizeof(obd_name) - 1);
+	const char *param = "osc/%s/ost_conn_uuid";
+	char buf[MAX_STRING_SIZE];
+	char obd_name[MAX_OBD_NAME];
+	FILE *fp = NULL;
+	glob_t path;
+	char *ptr;
+retry:
+	/* obd device type is the first 3 characters of param name */
+	snprintf(buf, sizeof(buf), " %%*d %%*s %.3s %%%zus %%*s %%*d ",
+		 param, sizeof(obd_name) - 1);
 	if (sscanf(s, buf, obd_name) == 0)
-                goto try_mdc;
-        snprintf(buf, sizeof(buf),
-                 "/proc/fs/lustre/osc/%s/ost_conn_uuid", obd_name);
-        if ((fp = fopen(buf, "r")) == NULL)
-                goto try_mdc;
-        goto got_one;
-
+		goto try_mdc;
+	if (cfs_get_param_paths(&path, param, obd_name) != 0)
+		goto try_mdc;
+	fp = fopen(path.gl_pathv[0], "r");
+	if (fp == NULL) {
+		/* need to free path data before retry */
+		cfs_free_param_data(&path);
 try_mdc:
-	snprintf(buf, sizeof(buf), " %%*d %%*s mdc %%%zus %%*s %%*d ",
-		 sizeof(obd_name) - 1);
-	if (sscanf(s, buf, obd_name) == 0)
-                goto fail;
-        snprintf(buf, sizeof(buf),
-                 "/proc/fs/lustre/mdc/%s/mds_conn_uuid", obd_name);
-        if ((fp = fopen(buf, "r")) == NULL)
-                goto fail;
+		if (param[0] == 'o') { /* failed with osc, try mdc */
+			param = "mdc/%s/mds_conn_uuid";
+			goto retry;
+		}
+		buf[0] = '\0';
+		goto fail_print;
+	}
 
-got_one:
-        /* should not ignore fgets(3)'s return value */
-        if (!fgets(buf, sizeof(buf), fp)) {
-                fprintf(stderr, "reading from %s: %s", buf, strerror(errno));
-                fclose(fp);
-                return;
-        }
-        fclose(fp);
+	/* should not ignore fgets(3)'s return value */
+	if (!fgets(buf, sizeof(buf), fp)) {
+		fprintf(stderr, "reading from %s: %s", buf, strerror(errno));
+		goto fail_close;
+	}
 
-        /* trim trailing newlines */
-        ptr = strrchr(buf, '\n');
-        if (ptr) *ptr = '\0';
-        ptr = strrchr(s, '\n');
-        if (ptr) *ptr = '\0';
+fail_close:
+	fclose(fp);
+	cfs_free_param_data(&path);
 
-        printf("%s %s\n", s, buf);
-        return;
-
-fail:
-        printf("%s", s);
-        return;
+	/* trim trailing newlines */
+	ptr = strrchr(buf, '\n');
+	if (ptr)
+		*ptr = '\0';
+fail_print:
+	ptr = strrchr(s, '\n');
+	if (ptr)
+		*ptr = '\0';
+	printf("%s%s%s\n", s, buf[0] ? " " : "", buf);
 }
 
 /* get device list by ioctl */
@@ -1032,10 +1031,10 @@ int jt_obd_list_ioctl(int argc, char **argv)
 
 int jt_obd_list(int argc, char **argv)
 {
-        int rc;
-        char buf[MAX_STRING_SIZE];
-        FILE *fp = NULL;
-        int print_obd = 0;
+	char buf[MAX_STRING_SIZE];
+	int print_obd = 0;
+	glob_t path;
+	FILE *fp;
 
         if (argc > 2)
                 return CMD_HELP;
@@ -1046,10 +1045,14 @@ int jt_obd_list(int argc, char **argv)
                         return CMD_HELP;
         }
 
-        fp = fopen(DEVICES_LIST, "r");
+	if (cfs_get_param_paths(&path, "devices") != 0)
+		return -errno;
+
+	fp = fopen(path.gl_pathv[0], "r");
         if (fp == NULL) {
-                fprintf(stderr, "error: %s: %s opening "DEVICES_LIST"\n",
-                        jt_cmdname(argv[0]), strerror(rc =  errno));
+		fprintf(stderr, "error: %s: %s opening %s\n",
+			jt_cmdname(argv[0]), strerror(errno), path.gl_pathv[0]);
+		cfs_free_param_data(&path);
                 return jt_obd_list_ioctl(argc, argv);
         }
 
@@ -1059,6 +1062,7 @@ int jt_obd_list(int argc, char **argv)
                 else
                         printf("%s", buf);
 
+	cfs_free_param_data(&path);
         fclose(fp);
         return 0;
 }

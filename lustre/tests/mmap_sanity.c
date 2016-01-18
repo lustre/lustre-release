@@ -39,6 +39,7 @@
 #include <sys/wait.h>
 #include <sys/time.h>
 #include <sys/mman.h>
+#include <limits.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -46,6 +47,8 @@
 #include <getopt.h>
 #include <string.h>
 #include <errno.h>
+
+#include <libcfs/util/param.h>
 
 char *dir = NULL, *dir2 = NULL;
 long page_size;
@@ -437,62 +440,56 @@ out_close:
         return rc;
 }
 
-static int cancel_lru_locks(char *prefix)
+static int cancel_lru_locks(char *filter)
 {
-        char cmd[256], line[1024];
-        FILE *file;
-        pid_t child;
-        int len = 1024, rc = 0;
+	glob_t paths;
+	pid_t child;
+	int rc, i;
 
-        child = fork();
-        if (child < 0)
-                return -errno;
-        else if (child) {
-                int status;
-                rc = waitpid(child, &status, WNOHANG);
-                if (rc == child)
-                        rc = 0;
-                return rc;
-        }
+	child = fork();
+	if (child < 0)
+		return -errno;
+	else if (child) {
+		int status;
 
-        if (prefix)
-                sprintf(cmd,
-                        "ls /proc/fs/lustre/ldlm/namespaces/*-%s-*/lru_size",
-                        prefix);
-        else
-                sprintf(cmd, "ls /proc/fs/lustre/ldlm/namespaces/*/lru_size");
+		rc = waitpid(child, &status, WNOHANG);
+		if (rc == child)
+			rc = 0;
+		return rc;
+	}
 
-        file = popen(cmd, "r");
-        if (file == NULL) {
-                perror("popen()");
-                return -errno;
-        }
+	if (filter != NULL)
+		rc = cfs_get_param_paths(&paths,
+					"ldlm/namespaces/*-%s-*/lru_size",
+					filter);
+	else
+		rc = cfs_get_param_paths(&paths,
+					"ldlm/namespaces/*/lru_size");
+	if (rc != 0)
+		return -EINVAL;
 
-        while (fgets(line, len, file)) {
-                FILE *f;
+	for (i = 0; i < paths.gl_pathc; i++) {
+		FILE *f = fopen(paths.gl_pathv[i], "r");
+		if (f == NULL) {
+			rc = -errno;
+			fprintf(stderr, "cannot open '%s': %s\n",
+				paths.gl_pathv[i], strerror(errno));
+			break;
+		}
 
-                if (!strlen(line))
-                        continue;
-                /* trim newline character */
-                *(line + strlen(line) - 1) = '\0';
-                f = fopen(line, "w");
-                if (f == NULL) {
-                        perror("fopen()");
-                        rc = -errno;
-                        break;
-                }
-                rc = fwrite("clear", strlen("clear") + 1, 1, f);
-                if (rc < 1) {
-                        perror("fwrite()");
-                        rc = -errno;
-                        fclose(f);
-                        break;
-                }
-                fclose(f);
-        }
+		rc = fwrite("clear", strlen("clear") + 1, 1, f);
+		if (rc < 1) {
+			rc = -errno;
+			fprintf(stderr, "fwrite failed for '%s': %s\n",
+				paths.gl_pathv[i], strerror(errno));
+			fclose(f);
+			break;
+		}
+		fclose(f);
+	}
 
-        pclose(file);
-        _exit(rc);
+	cfs_free_param_data(&paths);
+	_exit(rc);
 }
 
 /* don't dead lock while read/write file to/from the buffer which

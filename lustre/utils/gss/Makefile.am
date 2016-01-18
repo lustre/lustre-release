@@ -3,8 +3,7 @@
 AM_CFLAGS := -fPIC \
 	     -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS=1
 
-LIBCFS := $(top_builddir)/libcfs/libcfs/libcfsutil.a \
-	  $(top_builddir)/libcfs/libcfs/libcfs.a
+LIBCFS := $(top_builddir)/libcfs/libcfs/libcfs.a
 
 sbin_PROGRAMS = lsvcgssd l_idmap
 
