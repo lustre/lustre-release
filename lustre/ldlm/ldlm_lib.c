@@ -2567,7 +2567,7 @@ static int target_recovery_thread(void *arg)
 
         lu_context_fini(&env->le_ctx);
         trd->trd_processing_task = 0;
-	complete(&trd->trd_finishing);
+	complete_all(&trd->trd_finishing);
 
 	tgt_io_thread_done(thread);
 out_env_remove:
