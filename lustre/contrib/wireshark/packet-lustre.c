@@ -84,9 +84,11 @@ const true_false_string lnet_flags_set_truth = { "Set", "Unset" };
 
 
 
-#define LOV_MAGIC_V1      0x0BD10BD0
-#define LOV_MAGIC         LOV_MAGIC_V1
-#define LOV_MAGIC_JOIN_V1 0x0BD20BD0
+#define LOV_MAGIC_V1    0x0BD10BD0
+#define LOV_MAGIC_V3	0x0BD30BD0
+
+/* defined in lustre/include/lustre/lustre_user.h */
+#define LOV_MAXPOOLNAME 15
 
 /* defined in lustre/include/lustre/lustre_idl.h */
 typedef enum {
@@ -436,6 +438,7 @@ static gint ett_lustre_ptlrpc_body = -1;
 static gint ett_lustre_lustre_handle_v2 = -1;
 static gint ett_lustre_obd_connect_data = -1;
 static gint ett_lustre_lov_mds_md_v1 = -1;
+static gint ett_lustre_lov_mds_md_v3 = -1;
 static gint ett_lustre_lov_ost_data_v1 = -1;
 static gint ett_lustre_obd_statfs = -1;
 static gint ett_lustre_obd_ioobj = -1;
@@ -507,6 +510,7 @@ static gint ett_lustre_quota_body = -1;
 static gint ett_lustre_lquota_id = -1;
 static gint ett_lustre_layout_intent = -1;
 static gint ett_lustre_xattrs = -1;
+static gint ett_lustre_ost_id = -1;
 
 /* -----------------------------------------------*/
 /* Header field declarations */
@@ -826,7 +830,6 @@ static int hf_lustre_ptlrpc_body_pb_timeout = -1;
 static int hf_lustre_obd_statfs_os_bavail = -1;
 static int hf_lustre_obd_statfs_os_bsize = -1;
 static int hf_lustre_lustre_msg_v2_lm_repsize = -1;
-static int hf_lustre_lov_mds_md_v1_lmm_stripe_size = -1;
 static int hf_lustre_lustre_msg_v1_lm_last_xid = -1;
 static int hf_lustre_ll_fid_f_type = -1;
 static int hf_lustre_lustre_msg_v2_lm_cksum = -1;
@@ -834,7 +837,6 @@ static int hf_lustre_lustre_msg_v2_lm_buflens = -1;
 static int hf_lustre_lustre_msg_v1_lm_status = -1;
 static int hf_lustre_lustre_msg_v1_lm_type = -1;
 static int hf_lustre_niobuf_remote_len = -1;
-static int hf_lustre_lov_mds_md_v1_lmm_magic = -1;
 static int hf_lustre_ptlrpc_body_pb_op_flags = -1;
 static int hf_lustre_ptlrpc_body_pb_type = -1;
 static int hf_lustre_obd_connect_data_ocd_nllg = -1;
@@ -846,7 +848,6 @@ static int hf_lustre_ptlrpc_body_pb_flags = -1;
 static int hf_lustre_obd_statfs_os_spare4 = -1;
 static int hf_lustre_obd_connect_data_ocd_group = -1;
 static int hf_lustre_lov_ost_data_v1_l_object_seq = -1;
-static int hf_lustre_lov_mds_md_v1_lmm_object_seq = -1;
 static int hf_lustre_obd_connect_data_ocd_brw_size = -1;
 static int hf_lustre_ptlrpc_body_pb_limit = -1;
 static int hf_lustre_obd_statfs_os_maxbytes = -1;
@@ -854,8 +855,6 @@ static int hf_lustre_obd_statfs_os_spare5 = -1;
 static int hf_lustre_lustre_msg_v2_lm_flags = -1;
 static int hf_lustre_obd_statfs_os_ffree = -1;
 static int hf_lustre_obd_statfs_os_files = -1;
-static int hf_lustre_lov_mds_md_v1_lmm_stripe_count = -1;
-static int hf_lustre_lov_mds_md_v1_lmm_layout_gen = -1;
 static int hf_lustre_lustre_msg_v1_lm_flags = -1;
 static int hf_lustre_lustre_msg_v1_lm_last_committed = -1;
 static int hf_lustre_obd_statfs_os_spare9 = -1;
@@ -874,12 +873,10 @@ static int hf_lustre_lov_ost_data_v1_l_object_id = -1;
 static int hf_lustre_lov_ost_data_v1_l_ost_gen = -1;
 static int hf_lustre_obd_statfs_os_bfree = -1;
 static int hf_lustre_obd_connect_data_ocd_version = -1;
-static int hf_lustre_lov_mds_md_v1_lmm_objects = -1;
 static int hf_lustre_obd_statfs_os_namelen = -1;
 static int hf_lustre_obd_statfs_os_blocks = -1;
 static int hf_lustre_lustre_msg_v2_lm_secflvr = -1;
 static int hf_lustre_lustre_msg_v1_lm_transno = -1;
-static int hf_lustre_lov_mds_md_v1_lmm_pattern = -1;
 static int hf_lustre_lustre_msg_v1_lm_opc = -1;
 static int hf_lustre_obd_connect_data_ocd_grant = -1;
 static int hf_lustre_obd_ioobj_ioo_bufcnt = -1;
@@ -896,7 +893,6 @@ static int hf_lustre_obd_statfs_os_spare6 = -1;
 static int hf_lustre_obd_statfs_os_state = -1;
 static int hf_lustre_obd_statfs_os_spare3 = -1;
 static int hf_lustre_lustre_msg_v2_lm_magic = -1;
-static int hf_lustre_lov_mds_md_v1_lmm_object_id = -1;
 static int hf_lustre_ptlrpc_body_pb_last_seen = -1;
 static int hf_lustre_obd_ioobj_ioo_max_brw = -1;
 static int hf_lustre_ptlrpc_body_pb_last_xid = -1;
@@ -1189,6 +1185,22 @@ static int hf_lustre_layout_intent_flags = -1;
 static int hf_lustre_layout_intent_start = -1;
 static int hf_lustre_layout_intent_end = -1;
 
+/* mds md v1 and v3 */
+static int hf_lustre_lov_mds_md_lmm_magic = -1;
+static int hf_lustre_lov_mds_md_lmm_pattern = -1;
+static int hf_lustre_lov_mds_md_lmm_object_id = -1;	/* v1 only */
+static int hf_lustre_lov_mds_md_lmm_oi = -1;		/* v3 only */
+static int hf_lustre_lov_mds_md_lmm_object_seq = -1;	/* v1 only */
+static int hf_lustre_lov_mds_md_lmm_stripe_size = -1;
+static int hf_lustre_lov_mds_md_lmm_stripe_count = -1;
+static int hf_lustre_lov_mds_md_lmm_layout_gen = -1;
+static int hf_lustre_lov_mds_md_lmm_pool_name = -1;	/* v3 only */
+static int hf_lustre_lov_mds_md_lmm_objects = -1;
+
+/* struct ost_id */
+static int hf_lustre_ost_id_oi_id = -1;
+static int hf_lustre_ost_id_oi_seq = -1;
+
 static int hf_lustre_generic_data = -1;
 /* --------------------------------------------------------------------*/
 
@@ -1227,6 +1239,7 @@ const value_string lustre_ldlm_opcode[] = {
 
 const value_string lustre_lov_magic[] = {
   { LOV_MAGIC_V1,   "LOV_MAGIC_V1" },
+  { LOV_MAGIC_V3,   "LOV_MAGIC_V3" },
   {0, NULL}
 };
 
@@ -1557,6 +1570,7 @@ dissect_uint8
   proto_tree_add_item(tree, hfindex, tvb, offset, 1, TRUE);
   return offset+1;
 }
+
 /* -------------------------------------------------------------------------    */
 
 /* dissect raw data */
@@ -1623,6 +1637,37 @@ lustre_dissect_struct_hmac(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo
   return offset;
 }
 
+/* struct ost_id { */
+/* 	union { */
+/* 		struct { */
+/* 			__u64	oi_id; */
+/* 			__u64	oi_seq; */
+/* 		} oi; */
+/* 		struct lu_fid oi_fid; */
+/* 	}; */
+/* }; */
+int
+lustre_dissect_struct_ostid(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_,
+			    proto_tree *parent_tree _U_, int hf_index _U_)
+{
+  proto_item *item = NULL;
+  proto_tree *tree = NULL;
+  int old_offset;
+
+  old_offset=offset;
+
+  if (parent_tree) {
+    item = proto_tree_add_item(parent_tree, hf_index, tvb, offset, -1, TRUE);
+    tree = proto_item_add_subtree(item, ett_lustre_ost_id);
+  }
+
+  offset = dissect_uint64(tvb, offset, pinfo, tree, hf_lustre_ost_id_oi_id);
+  offset = dissect_uint64(tvb, offset, pinfo, tree, hf_lustre_ost_id_oi_seq);
+
+  proto_item_set_len(item, offset-old_offset);
+
+  return offset;
+}
 /* ------------------------------------------------------------------------ */
 
 
@@ -1944,25 +1989,82 @@ lustre_dissect_struct_lov_mds_md_v1(tvbuff_t *tvb _U_, int offset _U_, packet_in
 	}
 
 	offset = dissect_uint32(tvb, offset, pinfo, tree,
-				hf_lustre_lov_mds_md_v1_lmm_magic);
+				hf_lustre_lov_mds_md_lmm_magic);
 	offset = dissect_uint32(tvb, offset, pinfo, tree,
-				hf_lustre_lov_mds_md_v1_lmm_pattern);
+				hf_lustre_lov_mds_md_lmm_pattern);
 	offset = dissect_uint64(tvb, offset, pinfo, tree,
-				hf_lustre_lov_mds_md_v1_lmm_object_id);
+				hf_lustre_lov_mds_md_lmm_object_id);
 	offset = dissect_uint64(tvb, offset, pinfo, tree,
-				hf_lustre_lov_mds_md_v1_lmm_object_seq);
+				hf_lustre_lov_mds_md_lmm_object_seq);
 	offset = dissect_uint32(tvb, offset, pinfo, tree,
-				hf_lustre_lov_mds_md_v1_lmm_stripe_size);
+				hf_lustre_lov_mds_md_lmm_stripe_size);
 
 	stripe_count = tvb_get_letohs(tvb, offset);
 	offset = dissect_uint16(tvb, offset, pinfo, tree,
-				hf_lustre_lov_mds_md_v1_lmm_stripe_count);
+				hf_lustre_lov_mds_md_lmm_stripe_count);
 	offset = dissect_uint16(tvb, offset, pinfo, tree,
-				hf_lustre_lov_mds_md_v1_lmm_layout_gen);
+				hf_lustre_lov_mds_md_lmm_layout_gen);
 
 	for (i = 0; i < stripe_count; ++i)
 		offset = lustre_dissect_struct_lov_ost_data_v1(tvb, offset,
-				pinfo, tree, hf_lustre_lov_mds_md_v1_lmm_objects);
+				pinfo, tree, hf_lustre_lov_mds_md_lmm_objects);
+
+	proto_item_set_len(item, offset-old_offset);
+
+	return offset;
+}
+
+
+/* struct lov_mds_md_v3 {            /\* LOV EA mds/wire data (little-endian) *\/ */
+/* 	__u32 lmm_magic;          /\* magic number = LOV_MAGIC_V3 *\/ */
+/* 	__u32 lmm_pattern;        /\* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 *\/ */
+/* 	struct ost_id	lmm_oi;	  /\* LOV object ID *\/ */
+/* 	__u32 lmm_stripe_size;    /\* size of stripe in bytes *\/ */
+/* 	/\* lmm_stripe_count used to be __u32 *\/ */
+/* 	__u16 lmm_stripe_count;   /\* num stripes in use for this object *\/ */
+/* 	__u16 lmm_layout_gen;     /\* layout generation number *\/ */
+/* 	char  lmm_pool_name[LOV_MAXPOOLNAME + 1]; /\* must be 32bit aligned *\/ */
+/* 	struct lov_ost_data_v1 lmm_objects[0]; /\* per-stripe data *\/ */
+/* }; */
+
+int
+lustre_dissect_struct_lov_mds_md_v3(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *parent_tree _U_, int hf_index _U_)
+{
+	proto_item *item = NULL;
+	proto_tree *tree = NULL;
+	int old_offset, i;
+
+	guint16 stripe_count;
+
+	old_offset=offset;
+
+	if (parent_tree) {
+		item = proto_tree_add_item(parent_tree, hf_index,
+					   tvb, offset, -1, TRUE);
+		tree = proto_item_add_subtree(item, ett_lustre_lov_mds_md_v3);
+	}
+
+	offset = dissect_uint32(tvb, offset, pinfo, tree,
+				hf_lustre_lov_mds_md_lmm_magic);
+	offset = dissect_uint32(tvb, offset, pinfo, tree,
+				hf_lustre_lov_mds_md_lmm_pattern);
+	offset = lustre_dissect_struct_ostid(tvb, offset, pinfo, tree,
+				hf_lustre_lov_mds_md_lmm_oi);
+	offset = dissect_uint32(tvb, offset, pinfo, tree,
+				hf_lustre_lov_mds_md_lmm_stripe_size);
+
+	stripe_count = tvb_get_letohs(tvb, offset);
+	offset = dissect_uint16(tvb, offset, pinfo, tree,
+				hf_lustre_lov_mds_md_lmm_stripe_count);
+	offset = dissect_uint16(tvb, offset, pinfo, tree,
+				hf_lustre_lov_mds_md_lmm_layout_gen);
+	offset = lustre_dissect_struct_element_data(tvb, offset, pinfo, tree,
+				hf_lustre_lov_mds_md_lmm_pool_name,
+				LOV_MAXPOOLNAME+1);
+
+	for (i = 0; i < stripe_count; ++i)
+		offset = lustre_dissect_struct_lov_ost_data_v1(tvb, offset,
+				pinfo, tree, hf_lustre_lov_mds_md_lmm_objects);
 
 	proto_item_set_len(item, offset-old_offset);
 
@@ -1983,6 +2085,10 @@ lustre_dissect_struct_lov_mds_md(tvbuff_t *tvb _U_, int offset _U_, packet_info 
   switch(magic) {
   case LOV_MAGIC_V1:
     offset=lustre_dissect_struct_lov_mds_md_v1(tvb,offset,pinfo,parent_tree,
+					       hf_index);
+    break;
+  case LOV_MAGIC_V3:
+    offset=lustre_dissect_struct_lov_mds_md_v3(tvb,offset,pinfo,parent_tree,
 					       hf_index);
     break;
   default:
@@ -9258,7 +9364,7 @@ lustre_mds_opcode_process(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo 
     case MDS_GETATTR:
       offset=lustre_dissect_struct_mdt_body(tvb, offset, pinfo, tree, hf_lustre_mdt_body);
       if (pb_type == PTL_RPC_MSG_REPLY) { /*  [mdt_md][acl][capa1][capa2] */
-	offset=lustre_dissect_element_string(tvb, offset, pinfo, tree,
+	offset=lustre_dissect_struct_lov_mds_md(tvb, offset, pinfo, tree,
 					     hf_lustre_mds_md_data,
 					     LUSTRE_REPLY_REC_OFF+1);
 	offset=lustre_dissect_struct_acl(tvb, offset, pinfo, tree,
@@ -9333,7 +9439,7 @@ lustre_mds_opcode_process(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo 
 	/* [mdt_body][mdt_md][??][capa1][capa2] */
 	offset=lustre_dissect_struct_mdt_body(tvb, offset, pinfo, tree, hf_lustre_mdt_body) ;
 
-	offset=lustre_dissect_struct_lov_mds_md(tvb,offset,pinfo,tree,hf_lustre_lov_mds_md_v1, LUSTRE_REPLY_REC_OFF+1);
+	offset=lustre_dissect_struct_lov_mds_md(tvb,offset,pinfo,tree,hf_lustre_mds_md_data, LUSTRE_REPLY_REC_OFF+1);
 
 	if(LUSTRE_BUFFER_LEN(LUSTRE_REPLY_REC_OFF+2) > 0)
 	  /* open : ...[ACL]...
@@ -9486,7 +9592,7 @@ lustre_ldlm_opcode_process(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo
       if (LUSTRE_BUFFER_LEN(LUSTRE_DLM_REPLY_REC_OFF) > 0)
 	offset=lustre_dissect_struct_mdt_body(tvb, offset, pinfo, tree,
 					      hf_lustre_mdt_body);
-      offset=lustre_dissect_struct_lov_mds_md(tvb,offset,pinfo,tree,hf_lustre_lov_mds_md_v1,
+      offset=lustre_dissect_struct_lov_mds_md(tvb,offset,pinfo,tree,hf_lustre_mds_md_data,
 					      LUSTRE_DLM_REPLY_REC_OFF+1);
 
       /* ldlm_intent_server : ACL */
@@ -11006,8 +11112,6 @@ void proto_register_dcerpc_lustre(void)
       { "Os Bsize", "lustre.obd_statfs.os_bsize", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_lustre_msg_v2_lm_repsize,
       { "Lm Repsize", "lustre.lustre_msg_v2.lm_repsize", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_mds_md_v1_lmm_stripe_size,
-      { "Lmm Stripe Size", "lustre.lov_mds_md_v1.lmm_stripe_size", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_lustre_msg_v1_lm_last_xid,
       { "Lm Last Xid", "lustre.lustre_msg_v1.lm_last_xid", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ll_fid_f_type,
@@ -11022,8 +11126,6 @@ void proto_register_dcerpc_lustre(void)
       { "Lm Type", "lustre.lustre_msg_v1.lm_type", FT_UINT32, BASE_DEC, VALS(lustre_LMTypes), 0, "", HFILL }},
     { &hf_lustre_niobuf_remote_len,
       { "Len", "lustre.niobuf_remote.len", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_mds_md_v1_lmm_magic,
-      { "Lmm Magic", "lustre.lov_mds_md_v1.lmm_magic", FT_UINT32, BASE_HEX, VALS(lustre_lov_magic) , 0, "", HFILL }},
     { &hf_lustre_ptlrpc_body_pb_op_flags,
       { "Pb Op Flags", "lustre.ptlrpc_body.pb_op_flags", FT_UINT32, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_ost_lvb_lvb_ctime,
@@ -11060,8 +11162,6 @@ void proto_register_dcerpc_lustre(void)
       { "Ocd Group", "lustre.obd_connect_data.ocd_group", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_lov_ost_data_v1_l_object_seq,
       { "L Object SEQ", "lustre.lov_ost_data_v1.l_object_seq", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_mds_md_v1_lmm_object_seq,
-      { "Lmm Object SEQ", "lustre.lov_mds_md_v1.lmm_object_seq", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obd_connect_data_ocd_brw_size,
       { "Ocd Brw Size", "lustre.obd_connect_data.ocd_brw_size", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ptlrpc_body_pb_limit,
@@ -11076,10 +11176,6 @@ void proto_register_dcerpc_lustre(void)
       { "Os Ffree", "lustre.obd_statfs.os_ffree", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obd_statfs_os_files,
       { "Os Files", "lustre.obd_statfs.os_files", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_mds_md_v1_lmm_stripe_count,
-      { "Lmm Stripe Count", "lustre.lov_mds_md_v1.lmm_stripe_count", FT_UINT16, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_mds_md_v1_lmm_layout_gen,
-      { "Lmm Layout Generation", "lustre.lov_mds_md_v1.lmm_layout_gen", FT_UINT16, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_lustre_msg_v1_lm_flags,
       { "Lm Flags", "lustre.lustre_msg_v1.lm_flags", FT_UINT32, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_lustre_msg_v1_lm_last_committed,
@@ -11116,9 +11212,6 @@ void proto_register_dcerpc_lustre(void)
 	{ &hf_lustre_obd_connect_data_ocd_version,
 	  { "Ocd Version", "lustre.obd_connect_data.ocd_version",
 	    FT_NONE, BASE_NONE, NULL, 0, "", HFILL } },
-	{ &hf_lustre_lov_mds_md_v1_lmm_objects,
-	  { "Lmm Objects", "lustre.lov_mds_md_v1.lmm_objects", FT_NONE,
-	    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_obd_statfs_os_namelen,
       { "Os Namelen", "lustre.obd_statfs.os_namelen", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obd_statfs_os_blocks,
@@ -11127,8 +11220,6 @@ void proto_register_dcerpc_lustre(void)
       { "Lm Secflvr", "lustre.lustre_msg_v2.lm_secflvr", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_lustre_msg_v1_lm_transno,
       { "Lm Transno", "lustre.lustre_msg_v1.lm_transno", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_mds_md_v1_lmm_pattern,
-      { "Lmm Pattern", "lustre.lov_mds_md_v1.lmm_pattern", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_lustre_msg_v1_lm_opc,
       { "Lm Opc", "lustre.lustre_msg_v1.lm_opc", FT_UINT32, BASE_DEC, VALS(lustre_op_codes), 0, "", HFILL }},
     { &hf_lustre_obd_connect_data_ocd_grant,
@@ -11171,8 +11262,6 @@ void proto_register_dcerpc_lustre(void)
       { "Os Spare3", "lustre.obd_statfs.os_spare3", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_lustre_msg_v2_lm_magic,
       { "Lm Magic", "lustre.lustre_msg_v2.lm_magic", FT_UINT32, BASE_HEX, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_mds_md_v1_lmm_object_id,
-      { "Lmm Object Id", "lustre.lov_mds_md_v1.lmm_object_id", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ptlrpc_body_pb_last_seen,
       { "Pb Last Seen", "lustre.ptlrpc_body.pb_last_seen", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obd_ioobj_ioo_max_brw,  /* TODO : create the
@@ -11281,12 +11370,8 @@ void proto_register_dcerpc_lustre(void)
       { "O Uid", "lustre.obdo.o_uid", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_xattr_name,
       { "mds xattr name", "lustre.mds_xattr_name", FT_STRING, BASE_NONE, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_mds_md_v1,
-      { "lov mds md v1", "lustre.lov_mds_md_v1", FT_NONE, BASE_NONE, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_cookie,
       { "llog cookie", "lustre.llog_cookie", FT_NONE, BASE_NONE, NULL, 0, "", HFILL }},
-    { &hf_lustre_mds_md_data,
-      { "mds md data", "lustre.mds_md_data", FT_NONE, BASE_NONE, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_reint_opcode,
       { "mds reint opcode", "lustre.mds_reint_opcode", FT_STRING, BASE_NONE, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_xattr_eadata,
@@ -11300,6 +11385,35 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_reint_new_name,
       { "mds reint new name", "lustre.mds_reint_new_name", FT_STRING, BASE_NONE, NULL, 0, "", HFILL }},
 
+    { &hf_lustre_mds_md_data,
+      { "mds md data", "lustre.lov_mds_md", FT_NONE, BASE_NONE, NULL, 0, "", HFILL }},
+    { &hf_lustre_lov_mds_md_v1,
+      { "lov mds md", "lustre.lov_mds_md", FT_NONE, BASE_NONE, NULL, 0, "", HFILL }},
+    { &hf_lustre_lov_mds_md_lmm_magic,
+      { "Lmm Magic", "lustre.lov_mds_md.lmm_magic", FT_UINT32, BASE_HEX, VALS(lustre_lov_magic) , 0, "", HFILL }},
+    { &hf_lustre_lov_mds_md_lmm_stripe_size,
+      { "Lmm Stripe Size", "lustre.lov_mds_md.lmm_stripe_size", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
+    { &hf_lustre_lov_mds_md_lmm_object_id,
+      { "Lmm Object Id", "lustre.lov_mds_md.lmm_object_id", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
+    { &hf_lustre_lov_mds_md_lmm_oi,
+      { "Lmm Object Id", "lustre.lov_mds_md.lmm_oi", FT_NONE, BASE_NONE, NULL, 0, "", HFILL }},
+    { &hf_lustre_lov_mds_md_lmm_object_seq,
+      { "Lmm Object SEQ", "lustre.lov_mds_md.lmm_object_seq", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
+    { &hf_lustre_lov_mds_md_lmm_stripe_count,
+      { "Lmm Stripe Count", "lustre.lov_mds_md.lmm_stripe_count", FT_UINT16, BASE_DEC, NULL, 0, "", HFILL }},
+    { &hf_lustre_lov_mds_md_lmm_pattern,
+      { "Lmm Pattern", "lustre.lov_mds_md.lmm_pattern", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
+    { &hf_lustre_lov_mds_md_lmm_layout_gen,
+      { "Lmm Layout Generation", "lustre.lov_mds_md.lmm_layout_gen", FT_UINT16, BASE_DEC, NULL, 0, "", HFILL }},
+    { &hf_lustre_lov_mds_md_lmm_pool_name,
+      { "Lmm Poolname", "lustre.lov_mds_md.lmm_poolname", FT_STRING, BASE_NONE, NULL, 0, "", HFILL } },
+    { &hf_lustre_lov_mds_md_lmm_objects,
+      { "Lmm Objects", "lustre.lov_mds_md.lmm_objects", FT_NONE, BASE_NONE, NULL, 0, "", HFILL } },
+
+    { &hf_lustre_ost_id_oi_id,
+      { "OI Object Id", "lustre.ost_id.oi.oi_id", FT_UINT64, BASE_HEX, NULL, 0, "", HFILL }},
+    { &hf_lustre_ost_id_oi_seq,
+      { "OI Object Seq", "lustre.ost_id.oi.oi_seq", FT_UINT64, BASE_HEX, NULL, 0, "", HFILL }},
 
     { &hf_lustre_obdo_o_valid,
       { "O Valid", "lustre.obdo.o_valid", FT_UINT64, BASE_HEX, NULL, 0, "", HFILL }},
@@ -11999,6 +12113,7 @@ void proto_register_dcerpc_lustre(void)
     &ett_lustre_lustre_handle_v2,
     &ett_lustre_obd_connect_data,
     &ett_lustre_lov_mds_md_v1,
+    &ett_lustre_lov_mds_md_v3,
     &ett_lustre_lov_ost_data_v1,
     &ett_lustre_obd_statfs,
     &ett_lustre_obd_ioobj,
@@ -12071,6 +12186,7 @@ void proto_register_dcerpc_lustre(void)
     &ett_lustre_lquota_id,
     &ett_lustre_layout_intent,
     &ett_lustre_xattrs,
+    &ett_lustre_ost_id,
 	};
 
   proto_lustre = proto_register_protocol("Lustre", "lustre", "lustre");
