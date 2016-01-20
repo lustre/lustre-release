@@ -69,6 +69,7 @@ enum {
 
 #define LU_SITE_BITS_MIN    12
 #define LU_SITE_BITS_MAX    24
+#define LU_SITE_BITS_MAX_CL 19
 /**
  * total 256 buckets, we don't want too many buckets because:
  * - consume too much memory
@@ -921,6 +922,7 @@ static unsigned long lu_htable_order(struct lu_device *top)
 {
 	unsigned long cache_size;
 	unsigned long bits;
+	unsigned long bits_max = LU_SITE_BITS_MAX;
 
 	/*
 	 * For ZFS based OSDs the cache should be disabled by default.  This
@@ -933,6 +935,9 @@ static unsigned long lu_htable_order(struct lu_device *top)
 		lu_cache_nr = LU_CACHE_NR_ZFS_LIMIT;
 		return LU_SITE_BITS_MIN;
 	}
+
+	if (strcmp(top->ld_type->ldt_name, LUSTRE_VVP_NAME) == 0)
+		bits_max = LU_SITE_BITS_MAX_CL;
 
         /*
          * Calculate hash table size, assuming that we want reasonable
@@ -964,7 +969,8 @@ static unsigned long lu_htable_order(struct lu_device *top)
         for (bits = 1; (1 << bits) < cache_size; ++bits) {
                 ;
         }
-        return bits;
+
+	return clamp_t(typeof(bits), bits, LU_SITE_BITS_MIN, bits_max);
 }
 
 static unsigned lu_obj_hop_hash(struct cfs_hash *hs,
@@ -1060,10 +1066,8 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
 
 	memset(s, 0, sizeof *s);
 	mutex_init(&s->ls_purge_mutex);
-	bits = lu_htable_order(top);
 	snprintf(name, sizeof(name), "lu_site_%s", top->ld_type->ldt_name);
-	for (bits = clamp_t(typeof(bits), bits,
-			    LU_SITE_BITS_MIN, LU_SITE_BITS_MAX);
+	for (bits = lu_htable_order(top);
 	     bits >= LU_SITE_BITS_MIN; bits--) {
 		s->ls_obj_hash = cfs_hash_create(name, bits, bits,
 						 bits - LU_SITE_BKT_BITS,
