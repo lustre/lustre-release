@@ -399,6 +399,11 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 	if (rc == 0) {
 		LASSERT(obj->oo_db == NULL);
 		rc = __osd_obj2dbuf(env, osd->od_os, oid, &obj->oo_db);
+		/* EEXIST will be returned if object is being deleted in ZFS */
+		if (rc == -EEXIST) {
+			rc = 0;
+			GOTO(out, rc);
+		}
 		if (rc != 0) {
 			CERROR("%s: lookup "DFID"/"LPX64" failed: rc = %d\n",
 			       osd->od_svname, PFID(lu_object_fid(l)), oid, rc);
