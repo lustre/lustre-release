@@ -659,9 +659,6 @@ load_target() {
         # kernel.  don't make it look like one
         if $PATCHLESS || [ -n "$SERIES" ]; then
             EXTRA_VERSION=$(echo $EXTRA_VERSION | sed -e "s/\(.*_lustre\)\..*/\1/")
-            if ! $PATCHLESS && [ -n "$BUILDID" ]; then
-                EXTRA_VERSION="${EXTRA_VERSION}.${BUILDID}"
-            fi
         fi
     fi
     # EXTRA_VERSION=${EXTRA_VERSION//-/_}
@@ -1926,10 +1923,6 @@ done
 check_options
 
 unpack_lustre
-
-# XXX - should we _always_ get the buildid from the META file?  what are the
-# other (i.e. non-lustre-tarball use cases of lbuild)?
-BUILDID=$(sed -n -e 's/^BUILDID = //p' lustre/META)
 
 load_target
 

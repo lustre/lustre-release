@@ -93,9 +93,6 @@ dist-hook: undef.h
 			-name .svn -o \
 			-name .git -o \
 			-name .#* -exec rm -rf {} \;
-	$(MAKE) $(AM_MAKEFLAGS) \
-		top_distdir="$(top_distdir)" distdir="$(distdir)" \
-		module-dist-hook
 
 EXTRA_DIST = @PACKAGE_TARNAME@.spec	\
 	build/Makefile 			\
@@ -103,7 +100,9 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec	\
 	config.h.in			\
 	undef.h				\
 	lustre-dkms_pre-build.sh	\
-	lustre-dkms_post-build.sh
+	lustre-dkms_post-build.sh	\
+	LUSTRE-VERSION-GEN		\
+	LUSTRE-VERSION-FILE
 
 rpm-local:
 	@(if test -z "$(RPMBUILD)"; then \
@@ -252,16 +251,3 @@ checkstack-update:
 
 checkstack-clean:
 	rm -f ${CSTK} ${CSTKO}
-
-module-dist-hook:
-	@if [ -d .git ]; then \
-		perl lustre/scripts/version_tag.pl \
-			--make_META > $(distdir)/META; \
-	elif [ -f META ]; then \
-		cp META $(distdir)/META; \
-	else \
-		echo -e "\n" \
-		"*** I have no idea how to create a META file in $(distdir).\n"\
-		"*** Please file a bug at https://jira.hpdd.intel.com/\n"; \
-		exit 1; \
-	fi

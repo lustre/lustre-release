@@ -91,10 +91,6 @@ BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/llite/"
 DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/extra/lustre/"
 EOF
 
-sed -i 's/BUILDID[[:print:]]*/BUILDID = %{buildid}/' META
-sed -i 's/PRISTINE[[:print:]]*/PRISTINE = 1/' META
-cp META ldiskfs/META
-
 %install
 if [ "$RPM_BUILD_ROOT" != "/" ]; then
     rm -rf $RPM_BUILD_ROOT

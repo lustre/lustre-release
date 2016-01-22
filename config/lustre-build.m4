@@ -1,14 +1,4 @@
 #
-# LB_CHECK_VERSION
-#
-# Verify that LUSTRE_VERSION was defined properly
-#
-AC_DEFUN([LB_CHECK_VERSION], [
-AS_IF([test "LUSTRE_VERSION" = "LUSTRE""_VERSION"],
-	[AC_MSG_ERROR([This script was not built with a version number.])])
-]) # LB_CHECK_VERSION
-
-#
 # LB_CANONICAL_SYSTEM
 #
 # fixup $target_os for use in other places
@@ -23,84 +13,12 @@ AC_SUBST(lb_target_os)
 ]) # LB_CANONICAL_SYSTEM
 
 #
-# LB_DOWNSTREAM_RELEASE
+# LB_DOWNSTREAM_RELEASE (DEPRECATED)
 #
 AC_DEFUN([LB_DOWNSTREAM_RELEASE],
-[AC_ARG_WITH([downstream-release],
-	AC_HELP_STRING([--with-downstream-release=string],
-		[set a string in the BUILD_VERSION and RPM Release: (default is nothing)]),
-	[DOWNSTREAM_RELEASE=$with_downstream_release],
-	[ # if not specified, see if it's in the META file
-	AS_IF([test -f META],
-		[DOWNSTREAM_RELEASE=$(sed -ne '/^LOCAL_VERSION =/s/.*= *//p' META)])
-	])
-AC_SUBST(DOWNSTREAM_RELEASE)
-]) # LB_DOWNSTREAM_RELEASE
-
-#
-# LB_BUILDID
-#
-# Check if the source is a GA release and if not, set a "BUILDID"
-#
-# Currently there are at least two ways/modes of/for doing this.  One
-# is if we are in a valid git repository, the other is if we are in a
-# non-git source tree of some form.  Building the latter from the former
-# will be handled here.
-AC_DEFUN([LB_BUILDID], [
-AC_CACHE_CHECK([for buildid], [lb_cv_buildid], [
-lb_cv_buildid=""
-AS_IF([git branch >/dev/null 2>&1], [
-	ffw=0
-	hash=""
-	ver=$(git describe --match v[[0-9]]_*_[[0-9]]* --tags)
-	if [[[ $ver = *-*-* ]]]; then
-		hash=${ver##*-}
-		ffw=${ver#*-}
-		ffw=${ffw%-*}
-		ver=${ver%%-*}
-	fi
-	# it's tempting to use [[ $ver =~ ^v([0-9]+_)+([0-9]+|RC[0-9]+)$ ]]
-	# here but the portability of the regex on the right is dismal
-	# (thanx suse)
-	if echo "$ver" | egrep -q "^v([[0-9]]+_)+([[0-9]]+|RC[[0-9]]+)$"; then
-		ver=$(echo $ver | sed -e 's/^v\(.*\)/\1/' \
-				      -e 's/_RC[[0-9]].*$//' -e 's/_/./g')
-	fi
-
-	# a "lustre fix" value of .0 should be truncated
-	if [[[ $ver = *.*.*.0 ]]]; then
-		ver=${ver%.0}
-	fi
-	# ditto for a "lustre fix" value of _0
-	if [[[ $ver = v*_*_*_0 ]]]; then
-		ver=${ver%_0}
-	fi
-	if [[[ $ver = v*_*_* ]]]; then
-		ver=${ver#v}
-		ver=${ver//_/.}
-	fi
-
-	if test "$ver" != "$VERSION"; then
-		AC_MSG_WARN([most recent tag found: $ver does not match current version $VERSION.])
-	fi
-
-	if test "$ffw" != "0"; then
-		lb_cv_buildid="$hash"
-	fi
-], [test -f META], [
-	lb_cv_buildid=$(sed -ne '/^BUILDID =/s/.*= *//p' META)
-])
-])
-AS_IF([test -z "$lb_cv_buildid"], [
-	AC_MSG_WARN([
-
-FIXME: I don't know how to deal with source trees outside of git that
-don't have a META file. Not setting a buildid.
-])
-])
-BUILDID=$lb_cv_buildid
-AC_SUBST(BUILDID)
-]) # LB_BUILDID
+[AC_ARG_WITH([downstream-release],,
+	AC_MSG_ERROR([--downstream-release was deprecated.  Please read Documentation/versioning.txt.])
+)]) # LB_DOWNSTREAM_RELEASE
 
 #
 # LB_CHECK_FILE
@@ -605,7 +523,6 @@ LB_CONFIG_DIST
 
 LB_DOWNSTREAM_RELEASE
 LB_USES_DPKG
-LB_BUILDID
 
 LB_LIBCFS_DIR
 

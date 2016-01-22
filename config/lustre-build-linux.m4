@@ -81,9 +81,7 @@ AC_ARG_WITH([release],
 	AC_HELP_STRING([--with-release=string],
 		[set the release string (default=$kvers_YYYYMMDDhhmm)]),
 	[RELEASE=$withval], [
-	RELEASE=""
-	AS_IF([test "$DOWNSTREAM_RELEASE"], [RELEASE="${DOWNSTREAM_RELEASE}_"])
-	RELEASE="$RELEASE$(echo $LINUXRELEASE | tr '-' '_')_$BUILDID"])
+	RELEASE="$(echo $LINUXRELEASE | tr '-' '_')"])
 AC_MSG_RESULT($RELEASE)
 AC_SUBST(RELEASE)
 

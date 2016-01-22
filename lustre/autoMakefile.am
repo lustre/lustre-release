@@ -68,8 +68,10 @@ all-recursive: lustre_build_version
 BUILD_VER_H=$(top_builddir)/lustre/include/lustre/lustre_build_version.h
 
 lustre_build_version:
-	perl $(top_builddir)/lustre/scripts/version_tag.pl $(top_srcdir) $(top_builddir) > tmpver
-	echo "#define LUSTRE_RELEASE @RELEASE@" >> tmpver
+	echo -n "#define BUILD_VERSION \"" > tmpver
+	cat $(top_builddir)/LUSTRE-VERSION-FILE | tr -d '\n' | \
+		sed -e 's/^LUSTRE_VERSION = //' >> tmpver
+	echo "\"" >> tmpver
 	cmp -s $(BUILD_VER_H) tmpver > tmpdiff 2> /dev/null &&		\
                 $(RM) tmpver tmpdiff ||					\
 		mv -f tmpver $(BUILD_VER_H)

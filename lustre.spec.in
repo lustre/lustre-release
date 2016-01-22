@@ -28,20 +28,16 @@
 # as an alternative to this implementation we could simply "make -C $kdir kernelversion"
 %{!?kversion: %global kversion %(files="include/generated/utsrelease.h include/linux/utsrelease.h include/linux/version.h"; for f in $files; do if test -r %{kobjdir}/$f && grep UTS_RELEASE %{kobjdir}/$f >/dev/null; then sed -ne '/^#define UTS_RELEASE/s/.*"\\(.*\\)"$/\\1/p' %{kobjdir}/$f; break; fi; done)}
 
-%define buildid %(if [ -n "@BUILDID@" ]; then echo "_@BUILDID@"; fi)
-
 %if 0%{?build_src_rpm}
     %{!?myrelease: %global myrelease 1}
 %else
-    %{!?downstream_release: %global downstream_release "@DOWNSTREAM_RELEASE@"}
-    %{!?myrelease: %global myrelease %(if [ -n "%downstream_release" ]; then echo -n "%{downstream_release}_"; fi; echo %kversion | tr '-' '_')}
+    %{!?myrelease: %global myrelease %(echo %kversion | tr '-' '_')}
     # for those uses that don't want the -smp/-bigsmp (or the .arch) on the end
     # of %kversion
     %define krequires %(echo %{kversion} | sed -e 's/\.x86_64$//' -e 's/\.i[3456]86$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/[-.]ppc64$//' -e 's/\.aarch64$//' -e 's/-default$//')
 %endif
 
-# always append the buildid, even when the caller defines %release
-%define fullrelease %{myrelease}%{buildid}
+%define fullrelease %{myrelease}
 
 # in order to get kernel symset and/or kernel module dependencies into
 # the RPM, in order to support weak-modules, the internal dependency gen-

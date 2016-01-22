@@ -1,0 +1,37 @@
+#!/bin/sh
+
+DEFAULT_VERSION=2.8.50
+LVF=LUSTRE-VERSION-FILE
+
+LF='
+'
+
+if test -d ${GIT_DIR:-.git} -o -f .git &&
+        VN=$(git describe --match "[0-9]*" --abbrev=7 HEAD 2>/dev/null) &&
+        case "$VN" in
+        *$LF*) (exit 1) ;;
+        [0-9]*)
+                git update-index -q --refresh
+                test -z "$(git diff-index --name-only HEAD --)" ||
+                VN="$VN-dirty" ;;
+        esac
+then
+        VN=$(echo "$VN" | sed -e 's/-/_/g');
+elif test -r $LVF
+then
+        VN=$(sed -e 's/^LUSTRE_VERSION = //' <$LVF)
+else
+        VN="$DEFAULT_VERSION"
+fi
+
+if test -r $LVF
+then
+        VC=$(sed -e 's/^LUSTRE_VERSION = //' <$LVF)
+else
+        VC=unset
+fi
+test "$VN" = "$VC" || {
+        echo "LUSTRE_VERSION = $VN" >$LVF
+}
+
+echo $VN
