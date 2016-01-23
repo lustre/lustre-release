@@ -3057,6 +3057,7 @@ out_pending:
  **/
 static int mdd_linkea_update_child_internal(const struct lu_env *env,
 					    struct mdd_object *parent,
+					    struct mdd_object *newparent,
 					    struct mdd_object *child,
 					    const char *name, int namelen,
 					    struct thandle *handle,
@@ -3093,7 +3094,7 @@ static int mdd_linkea_update_child_internal(const struct lu_env *env,
 				    &lname, &fid);
 
 		if (strncmp(lname.ln_name, name, namelen) != 0 ||
-		    lu_fid_eq(&fid, mdd_object_fid(parent))) {
+		    !lu_fid_eq(&fid, mdd_object_fid(parent))) {
 			ldata.ld_lee = (struct link_ea_entry *)
 				       ((char *)ldata.ld_lee +
 					ldata.ld_reclen);
@@ -3103,10 +3104,10 @@ static int mdd_linkea_update_child_internal(const struct lu_env *env,
 		CDEBUG(D_INFO, "%s: update "DFID" with %.*s:"DFID"\n",
 		       mdd2obd_dev(mdd)->obd_name, PFID(mdd_object_fid(child)),
 		       lname.ln_namelen, lname.ln_name,
-		       PFID(mdd_object_fid(parent)));
+		       PFID(mdd_object_fid(newparent)));
 		/* update to the new parent fid */
 		linkea_entry_pack(ldata.ld_lee, &lname,
-				  mdd_object_fid(parent));
+				  mdd_object_fid(newparent));
 		if (declare)
 			rc = mdd_declare_links_add(env, child, handle, &ldata,
 						   MLAO_IGNORE);
@@ -3119,21 +3120,25 @@ static int mdd_linkea_update_child_internal(const struct lu_env *env,
 
 static int mdd_linkea_declare_update_child(const struct lu_env *env,
 					   struct mdd_object *parent,
+					   struct mdd_object *newparent,
 					   struct mdd_object *child,
 					   const char *name, int namelen,
 					   struct thandle *handle)
 {
-	return mdd_linkea_update_child_internal(env, parent, child, name,
+	return mdd_linkea_update_child_internal(env, parent, newparent,
+						child, name,
 						namelen, handle, true);
 }
 
 static int mdd_linkea_update_child(const struct lu_env *env,
 				   struct mdd_object *parent,
+				   struct mdd_object *newparent,
 				   struct mdd_object *child,
 				   const char *name, int namelen,
 				   struct thandle *handle)
 {
-	return mdd_linkea_update_child_internal(env, parent, child, name,
+	return mdd_linkea_update_child_internal(env, parent, newparent,
+						child, name,
 						namelen, handle, false);
 }
 
@@ -3729,7 +3734,7 @@ static int mdd_migrate_entries(const struct lu_env *env,
 				GOTO(out_put, rc);
 		}
 
-		rc = mdd_linkea_declare_update_child(env, mdd_tobj,
+		rc = mdd_linkea_declare_update_child(env, mdd_sobj,mdd_tobj,
 						     child, name,
 						     strlen(name),
 						     handle);
@@ -3768,7 +3773,8 @@ static int mdd_migrate_entries(const struct lu_env *env,
 				GOTO(out_put, rc);
 		}
 
-		rc = mdd_linkea_update_child(env, mdd_tobj, child, name,
+		rc = mdd_linkea_update_child(env, mdd_sobj, mdd_tobj,
+					     child, name,
 					     strlen(name), handle);
 
 out_put:
