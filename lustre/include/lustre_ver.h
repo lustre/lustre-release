@@ -1,14 +1,16 @@
 #ifndef _LUSTRE_VER_H_
 #define _LUSTRE_VER_H_
-/* This file automatically generated from lustre/include/lustre_ver.h.in,
- * based on parameters in lustre/autoconf/lustre-version.ac.
- * Changes made directly to this file will be lost. */
 
-#define LUSTRE_MAJOR @AC_LUSTRE_MAJOR@
-#define LUSTRE_MINOR @AC_LUSTRE_MINOR@
-#define LUSTRE_PATCH @AC_LUSTRE_PATCH@
-#define LUSTRE_FIX @AC_LUSTRE_FIX@
-#define LUSTRE_VERSION_STRING "@PACKAGE_VERSION@"
+/*
+ * LUSTRE_VERSION_STRING
+ *
+ * Note that some files may seem to include this header unnecessarily.
+ * If the file uses LUSTRE_VERSION_STRING, it is likely doing the include
+ * for compatibility with the Lustre code in the Linux kernel.
+ * In the Linux kernel, they are likely hard coding LUSTRE_VERSION_STRING
+ * right here in this file.  The out-of-kernel Lustre code generates
+ * LUSTRE_VERSION_STRING in autoconf with AC_DEFINE.
+ */
 
 #define OBD_OCD_VERSION(major, minor, patch, fix)			\
 	(((major) << 24) + ((minor) << 16) + ((patch) << 8) + (fix))

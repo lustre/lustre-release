@@ -836,7 +836,7 @@ build_lustre() {
 
 # Only zfs Lustre DKMS Server is supported
 build_lustre_dkms() {
-    local ver=$(eval echo  $(awk '/LUSTRE_VERSION_STRING/ {print $3}'  lustre/include/lustre_ver.h))
+    local ver=$(sed -n -e 's/^LUSTRE_VERSION = //p' LUSTRE-VERSION-FILE)
     echo "Building Lustre DKMS RPMs for: $BUILD_ARCHS..."
     ./configure --enable-dist || return 255
 
