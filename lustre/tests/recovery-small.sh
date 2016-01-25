@@ -2258,7 +2258,7 @@ test_130_base() {
 
 	# Prevent interference from layout intent RPCs due to
 	# asynchronous writeback. These will be tested in 130c below.
-	sync
+	do_nodes ${CLIENTS:-$HOSTNAME} sync
 
 	# get only LOOKUP lock on $tdir
 	cancel_lru_locks mdc
@@ -2309,7 +2309,7 @@ run_test 130b "enqueue resend on a stale inode"
 test_130c() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
-	sync
+	do_nodes ${CLIENTS:-$HOSTNAME} sync
 	echo XXX > $DIR/$tfile
 
 	cancel_lru_locks mdc
