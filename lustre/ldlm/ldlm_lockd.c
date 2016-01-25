@@ -68,7 +68,7 @@ struct ldlm_cb_async_args {
 
 static struct ldlm_state *ldlm_state;
 
-inline cfs_time_t round_timeout(cfs_time_t timeout)
+static inline cfs_time_t round_timeout(cfs_time_t timeout)
 {
         return cfs_time_seconds((int)cfs_duration_sec(cfs_time_sub(timeout, 0)) + 1);
 }
