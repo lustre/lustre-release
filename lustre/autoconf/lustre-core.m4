@@ -1948,6 +1948,32 @@ bio_endio, [
 ]) # LC_BIO_ENDIO_USES_ONE_ARG
 
 #
+# LC_HAVE_LOOP_CTL_GET_FREE
+#
+# 4.x kernel have moved userspace APIs to
+# the separate directory and all of them
+# support LOOP_CTL_GET_FREE
+#
+AC_DEFUN([LC_HAVE_LOOP_CTL_GET_FREE], [
+LB_CHECK_FILE([$LINUX/include/linux/loop.h], [
+	LB_CHECK_COMPILE([if have 'HAVE_LOOP_CTL_GET_FREE'],
+	LOOP_CTL_GET_FREE, [
+		#include <linux/loop.h>
+	],[
+		int i;
+
+		i = LOOP_CTL_GET_FREE;
+	],[
+		AC_DEFINE(HAVE_LOOP_CTL_GET_FREE, 1,
+			[LOOP_CTL_GET_FREE exist])
+	])
+],[
+	AC_DEFINE(HAVE_LOOP_CTL_GET_FREE, 1,
+		[kernel has LOOP_CTL_GET_FREE])
+])
+]) # LC_HAVE_LOOP_CTL_GET_FREE
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2012,6 +2038,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_FILE_LLSEEK_SIZE
 	LC_INODE_PERMISION_2ARGS
 	LC_RADIX_EXCEPTION_ENTRY
+	LC_HAVE_LOOP_CTL_GET_FREE
 
 	# 3.2
 	LC_HAVE_VOID_MAKE_REQUEST_FN

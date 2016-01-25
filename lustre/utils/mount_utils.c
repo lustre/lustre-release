@@ -365,7 +365,7 @@ int loop_setup(struct mkfs_opts *mop)
 		char cmd[PATH_MAX];
 		int cmdsz = sizeof(cmd);
 
-#ifdef LOOP_CTL_GET_FREE
+#ifdef HAVE_LOOP_CTL_GET_FREE
 		ret = open("/dev/loop-control", O_RDWR);
 		if (ret < 0) {
 			fprintf(stderr, "%s: can't access loop control\n", progname);
