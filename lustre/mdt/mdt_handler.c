@@ -1015,7 +1015,8 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 
 	rc = mdt_attr_get_complex(info, o, ma);
 	if (unlikely(rc)) {
-		CERROR("%s: getattr error for "DFID": rc = %d\n",
+		CDEBUG(rc == -ENOENT ? D_OTHER : D_ERROR,
+		       "%s: getattr error for "DFID": rc = %d\n",
 		       mdt_obd_name(info->mti_mdt),
 		       PFID(mdt_object_fid(o)), rc);
 		RETURN(rc);

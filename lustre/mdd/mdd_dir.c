@@ -4217,7 +4217,8 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *pobj,
 	 * the file is being opened by someone else right now */
 	mdd_read_lock(env, mdd_sobj, MOR_SRC_CHILD);
 	if (mdd_sobj->mod_count > 0) {
-		CERROR("%s: "DFID"%s is already opened count %d: rc = %d\n",
+		CDEBUG(D_OTHER,
+		       "%s: "DFID"%s is already opened count %d: rc = %d\n",
 		       mdd2obd_dev(mdd)->obd_name,
 		       PFID(mdd_object_fid(mdd_sobj)), lname->ln_name,
 		       mdd_sobj->mod_count, -EBUSY);

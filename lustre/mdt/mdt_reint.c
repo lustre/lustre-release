@@ -1528,7 +1528,7 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info,
 	/* 1: lock the source dir. */
 	msrcdir = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
 	if (IS_ERR(msrcdir)) {
-		CERROR("%s: cannot find source dir "DFID" : rc = %d\n",
+		CDEBUG(D_OTHER, "%s: cannot find source dir "DFID" : rc = %d\n",
 			mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
 			(int)PTR_ERR(msrcdir));
 		RETURN(PTR_ERR(msrcdir));
@@ -1567,14 +1567,14 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info,
 		GOTO(out_unlock_parent, rc = PTR_ERR(mold));
 
 	if (mdt_object_remote(mold)) {
-		CERROR("%s: source "DFID" is on the remote MDT\n",
+		CDEBUG(D_OTHER, "%s: source "DFID" is on the remote MDT\n",
 		       mdt_obd_name(info->mti_mdt), PFID(old_fid));
 		GOTO(out_put_child, rc = -EREMOTE);
 	}
 
 	if (S_ISREG(lu_object_attr(&mold->mot_obj)) &&
 	    !mdt_object_remote(msrcdir)) {
-		CERROR("%s: parent "DFID" is still on the same"
+		CDEBUG(D_OTHER, "%s: parent "DFID" is still on the same"
 		       " MDT, which should be migrated first:"
 		       " rc = %d\n", mdt_obd_name(info->mti_mdt),
 		       PFID(mdt_object_fid(msrcdir)), -EPERM);
@@ -1670,7 +1670,8 @@ out_lease:
 
 	if ((ma->ma_valid & MA_HSM) && ma->ma_hsm.mh_flags != 0) {
 		rc = -ENOSYS;
-		CERROR("%s: cannot migrate HSM archived file "DFID": rc = %d\n",
+		CDEBUG(D_OTHER,
+		       "%s: cannot migrate HSM archived file "DFID": rc = %d\n",
 		       mdt_obd_name(info->mti_mdt), PFID(old_fid), rc);
 		GOTO(out_unlock_child, rc);
 	}
@@ -1689,7 +1690,7 @@ out_lease:
 		lmv_le_to_cpu(ma->ma_lmv, ma->ma_lmv);
 		lmm1 = &ma->ma_lmv->lmv_md_v1;
 		if (!(lmm1->lmv_hash_type & LMV_HASH_FLAG_MIGRATION)) {
-			CERROR("%s: can not migrate striped dir "DFID
+			CDEBUG(D_OTHER, "%s: can not migrate striped dir "DFID
 			       ": rc = %d\n", mdt_obd_name(info->mti_mdt),
 			       PFID(mdt_object_fid(mold)), -EPERM);
 			GOTO(out_unlock_child, rc = -EPERM);
@@ -1704,7 +1705,8 @@ out_lease:
 			GOTO(out_unlock_child, rc = PTR_ERR(mnew));
 
 		if (!mdt_object_remote(mnew)) {
-			CERROR("%s: "DFID" being migrated is on this MDT:"
+			CDEBUG(D_OTHER,
+			       "%s: "DFID" being migrated is on this MDT:"
 			       " rc  = %d\n", mdt_obd_name(info->mti_mdt),
 			       PFID(rr->rr_fid2), -EPERM);
 			GOTO(out_put_new, rc = -EPERM);
@@ -1727,7 +1729,7 @@ out_lease:
 		if (IS_ERR(mnew))
 			GOTO(out_unlock_child, rc = PTR_ERR(mnew));
 		if (!mdt_object_remote(mnew)) {
-			CERROR("%s: Migration "DFID" is on this MDT:"
+			CDEBUG(D_OTHER, "%s: Migration "DFID" is on this MDT:"
 			       " rc = %d\n", mdt_obd_name(info->mti_mdt),
 			       PFID(rr->rr_fid2), -EXDEV);
 			GOTO(out_put_new, rc = -EXDEV);

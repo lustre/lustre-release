@@ -67,11 +67,8 @@ int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
 {
 	int rc;
 
-	if (mdd_object_exists(obj) == 0) {
-		CERROR("%s: object "DFID" not found: rc = -2\n",
-		       mdd_obj_dev_name(obj), PFID(mdd_object_fid(obj)));
+	if (mdd_object_exists(obj) == 0)
 		return -ENOENT;
-	}
 
 	rc = mdo_attr_get(env, obj, la);
 	if (unlikely(rc != 0)) {
