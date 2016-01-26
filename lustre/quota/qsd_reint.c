@@ -532,11 +532,12 @@ out:
 	qqi->qqi_reint = 0;
 	write_unlock(&qsd->qsd_lock);
 
-	qqi_putref(qqi);
-	lu_ref_del(&qqi->qqi_reference, "reint_thread", thread);
-
 	thread_set_flags(thread, SVC_STOPPED);
 	wake_up(&thread->t_ctl_waitq);
+
+	lu_ref_del(&qqi->qqi_reference, "reint_thread", thread);
+	qqi_putref(qqi);
+
 	return rc;
 }
 
