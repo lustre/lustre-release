@@ -318,16 +318,22 @@ struct osd_object {
 	sa_handle_t		*oo_sa_hdl;
 	nvlist_t		*oo_sa_xattr;
 	struct list_head	 oo_sa_linkage;
-	struct list_head	 oo_unlinked_linkage;
 
+	/* used to implement osd_object_*_{lock|unlock} */
 	struct rw_semaphore	 oo_sem;
+
+	/* to serialize some updates: destroy vs. others,
+	 * xattr_set, etc */
+	struct rw_semaphore	 oo_guard;
+
+	/* protected by oo_guard */
+	struct list_head	 oo_unlinked_linkage;
 
 	/* cached attributes */
 	rwlock_t		 oo_attr_lock;
 	struct lu_attr		 oo_attr;
 
-	/* protects extended attributes and oo_unlinked_linkage */
-	struct semaphore	 oo_guard;
+	/* external dnode holding large EAs, protected by oo_guard */
 	uint64_t		 oo_xattr;
 	enum osd_destroy_type	 oo_destroy;
 
@@ -520,6 +526,10 @@ osd_xattr_set_internal(const struct lu_env *env, struct osd_object *obj,
 {
 	int rc;
 
+	if (unlikely(!dt_object_exists(&obj->oo_dt) || obj->oo_destroyed))
+		return -ENOENT;
+
+	LASSERT(obj->oo_db);
 	if (osd_obj2dev(obj)->od_xattr_in_sa) {
 		rc = __osd_sa_xattr_set(env, obj, buf, name, fl, oh);
 		if (rc == -EFBIG)

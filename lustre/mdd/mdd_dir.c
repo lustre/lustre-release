@@ -1593,7 +1593,7 @@ static bool mdd_hsm_archive_exists(const struct lu_env *env,
 		if (rc < 0)
 			RETURN(false);
 
-		ma->ma_valid = MA_HSM;
+		ma->ma_valid |= MA_HSM;
 	}
 	if (ma->ma_hsm.mh_flags & HS_EXISTS)
 		RETURN(true);
@@ -1621,7 +1621,7 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 	struct mdd_object *mdd_cobj = NULL;
 	struct mdd_device *mdd = mdo2mdd(pobj);
 	struct thandle    *handle;
-	int rc, is_dir = 0;
+	int rc, is_dir = 0, cl_flags = 0;
 	ENTRY;
 
 	/* cobj == NULL means only delete name entry */
@@ -1642,6 +1642,11 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 			RETURN(rc);
 
 		is_dir = S_ISDIR(cattr->la_mode);
+		/* search for an existing archive.
+		 * we should check ahead as the object
+		 * can be destroyed in this transaction */
+		if (mdd_hsm_archive_exists(env, mdd_cobj, ma))
+			cl_flags |= CLF_UNLINK_HSM_EXISTS;
 	}
 
 	rc = mdd_unlink_sanity_check(env, mdd_pobj, pattr, mdd_cobj, cattr);
@@ -1719,11 +1724,10 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 	ma->ma_attr = *cattr;
 	ma->ma_valid |= MA_INODE;
 	rc = mdd_finish_unlink(env, mdd_cobj, ma, mdd_pobj, lname, handle);
-
-	/* fetch updated nlink */
 	if (rc != 0)
 		GOTO(cleanup, rc);
 
+	/* fetch updated nlink */
 	rc = mdd_la_get(env, mdd_cobj, cattr);
 	/* if object is removed then we can't get its attrs,
 	 * use last get */
@@ -1743,14 +1747,10 @@ cleanup:
 		mdd_write_unlock(env, mdd_cobj);
 
 	if (rc == 0) {
-		int cl_flags = 0;
-
-		if (cattr->la_nlink == 0) {
+		if (cattr->la_nlink == 0)
 			cl_flags |= CLF_UNLINK_LAST;
-			/* search for an existing archive */
-			if (mdd_hsm_archive_exists(env, mdd_cobj, ma))
-				cl_flags |= CLF_UNLINK_HSM_EXISTS;
-		}
+		else
+			cl_flags &= ~CLF_UNLINK_HSM_EXISTS;
 
 		rc = mdd_changelog_ns_store(env, mdd,
 			is_dir ? CL_RMDIR : CL_UNLINK, cl_flags,
@@ -2804,6 +2804,11 @@ static int mdd_rename(const struct lu_env *env,
 		rc = mdd_la_get(env, mdd_tobj, tattr);
 		if (rc)
 			GOTO(out_pending, rc);
+		/* search for an existing archive.
+		 * we should check ahead as the object
+		 * can be destroyed in this transaction */
+		if (mdd_hsm_archive_exists(env, mdd_tobj, ma))
+			cl_flags |= CLF_RENAME_LAST_EXISTS;
 	}
 
 	rc = mdd_la_get(env, mdd_tpobj, tpattr);
@@ -2967,11 +2972,10 @@ static int mdd_rename(const struct lu_env *env,
 		ma->ma_attr = *tattr;
 		ma->ma_valid |= MA_INODE;
 
-		if (tattr->la_nlink == 0) {
+		if (tattr->la_nlink == 0)
 			cl_flags |= CLF_RENAME_LAST;
-			if (mdd_hsm_archive_exists(env, mdd_tobj, ma))
-				cl_flags |= CLF_RENAME_LAST_EXISTS;
-		}
+		else
+			cl_flags &= ~CLF_RENAME_LAST_EXISTS;
         }
 
 	la->la_valid = LA_CTIME | LA_MTIME;
