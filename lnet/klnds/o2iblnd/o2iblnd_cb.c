@@ -562,7 +562,7 @@ kiblnd_kvaddr_to_page (unsigned long vaddr)
 }
 
 static int
-kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, int nob)
+kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, __u32 nob)
 {
 	kib_hca_dev_t		*hdev;
 	__u64			*pages = tx->tx_pages;
@@ -589,16 +589,16 @@ kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, int nob)
 	cpt = tx->tx_pool->tpo_pool.po_owner->ps_cpt;
 
 	fps = net->ibn_fmr_ps[cpt];
-	rc = kiblnd_fmr_pool_map(fps, pages, npages, 0, &tx->fmr);
-        if (rc != 0) {
-                CERROR ("Can't map %d pages: %d\n", npages, rc);
-                return rc;
-        }
+	rc = kiblnd_fmr_pool_map(fps, pages, npages, nob, 0, (rd != tx->tx_rd),
+				 &tx->fmr);
+	if (rc != 0) {
+		CERROR("Can't map %d pages: %d\n", npages, rc);
+		return rc;
+	}
 
 	/* If rd is not tx_rd, it's going to get sent to a peer, who will need
 	 * the rkey */
-	rd->rd_key = (rd != tx->tx_rd) ? tx->fmr.fmr_pfmr->fmr->rkey :
-					 tx->fmr.fmr_pfmr->fmr->lkey;
+	rd->rd_key = tx->fmr.fmr_key;
 	rd->rd_frags[0].rf_addr &= ~hdev->ibh_page_mask;
 	rd->rd_frags[0].rf_nob   = nob;
 	rd->rd_nfrags = 1;
@@ -613,10 +613,8 @@ kiblnd_unmap_tx(lnet_ni_t *ni, kib_tx_t *tx)
 
 	LASSERT(net != NULL);
 
-	if (net->ibn_fmr_ps != NULL && tx->fmr.fmr_pfmr != NULL) {
+	if (net->ibn_fmr_ps != NULL)
 		kiblnd_fmr_pool_unmap(&tx->fmr, tx->tx_status);
-		tx->fmr.fmr_pfmr = NULL;
-	}
 
         if (tx->tx_nfrags != 0) {
                 kiblnd_dma_unmap_sg(tx->tx_pool->tpo_hdev->ibh_ibdev,
@@ -631,8 +629,8 @@ kiblnd_map_tx(lnet_ni_t *ni, kib_tx_t *tx, kib_rdma_desc_t *rd, int nfrags)
 	kib_hca_dev_t *hdev  = tx->tx_pool->tpo_hdev;
 	kib_net_t     *net   = ni->ni_data;
 	struct ib_mr  *mr    = NULL;
-	__u32	       nob;
-	int	       i;
+	__u32 nob;
+	int i;
 
         /* If rd is not tx_rd, it's going to get sent to a peer and I'm the
          * RDMA sink */
@@ -847,14 +845,26 @@ __must_hold(&conn->ibc_lock)
                 /* close_conn will launch failover */
                 rc = -ENETDOWN;
         } else {
-		struct ib_send_wr *wrq = &tx->tx_wrq[tx->tx_nwrq - 1];
+		struct kib_fast_reg_descriptor *frd = tx->fmr.fmr_frd;
+		struct ib_send_wr *bad = &tx->tx_wrq[tx->tx_nwrq - 1];
+		struct ib_send_wr *wrq = tx->tx_wrq;
 
-		LASSERTF(wrq->wr_id == kiblnd_ptr2wreqid(tx, IBLND_WID_TX),
+		if (frd != NULL) {
+			if (!frd->frd_valid) {
+				wrq = &frd->frd_inv_wr;
+				wrq->next = &frd->frd_fastreg_wr;
+			} else {
+				wrq = &frd->frd_fastreg_wr;
+			}
+			frd->frd_fastreg_wr.next = tx->tx_wrq;
+		}
+
+		LASSERTF(bad->wr_id == kiblnd_ptr2wreqid(tx, IBLND_WID_TX),
 			 "bad wr_id "LPX64", opc %d, flags %d, peer: %s\n",
-			 wrq->wr_id, wrq->opcode, wrq->send_flags,
+			 bad->wr_id, bad->opcode, bad->send_flags,
 			 libcfs_nid2str(conn->ibc_peer->ibp_nid));
-		wrq = NULL;
-		rc = ib_post_send(conn->ibc_cmid->qp, tx->tx_wrq, &wrq);
+		bad = NULL;
+		rc = ib_post_send(conn->ibc_cmid->qp, wrq, &bad);
 	}
 
         conn->ibc_last_send = jiffies;
@@ -3398,9 +3408,15 @@ kiblnd_qp_event(struct ib_event *event, void *arg)
 static void
 kiblnd_complete (struct ib_wc *wc)
 {
-        switch (kiblnd_wreqid2type(wc->wr_id)) {
-        default:
-                LBUG();
+	switch (kiblnd_wreqid2type(wc->wr_id)) {
+	default:
+		LBUG();
+
+	case IBLND_WID_MR:
+		if (wc->status != IB_WC_SUCCESS &&
+		    wc->status != IB_WC_WR_FLUSH_ERR)
+			CNETERR("FastReg failed: %d\n", wc->status);
+		return;
 
         case IBLND_WID_RDMA:
                 /* We only get RDMA completion notification if it fails.  All

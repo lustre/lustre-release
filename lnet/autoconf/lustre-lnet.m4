@@ -528,6 +528,33 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LN_CONFIG_SK_DATA_READY
 
 #
+# LN_CONFIG_IB_INC_RKEY
+#
+AC_DEFUN([LN_CONFIG_IB_INC_RKEY], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if function 'ib_inc_rkey' is defined],
+ib_inc_rkey, [
+	#ifdef HAVE_COMPAT_RDMA
+	#undef PACKAGE_NAME
+	#undef PACKAGE_TARNAME
+	#undef PACKAGE_VERSION
+	#undef PACKAGE_STRING
+	#undef PACKAGE_BUGREPORT
+	#undef PACKAGE_URL
+	#include <linux/compat-2.6.h>
+	#endif
+	#include <rdma/ib_verbs.h>
+],[
+	(void)ib_inc_rkey(0);
+],[
+	AC_DEFINE(HAVE_IB_INC_RKEY, 1,
+		  [function ib_inc_rkey exist])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LN_CONFIG_IB_INC_RKEY
+
+#
 # LN_PROG_LINUX
 #
 # LNet linux kernel checks
@@ -540,6 +567,7 @@ LN_CONFIG_AFFINITY
 LN_CONFIG_BACKOFF
 LN_CONFIG_O2IB
 LN_CONFIG_GNILND
+LN_CONFIG_IB_INC_RKEY
 # 2.6.35
 LN_CONFIG_SK_SLEEP
 # 2.6.36

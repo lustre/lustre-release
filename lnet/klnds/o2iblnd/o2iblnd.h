@@ -337,20 +337,40 @@ typedef struct
 	cfs_time_t		fps_next_retry;
 } kib_fmr_poolset_t;
 
+struct kib_fast_reg_descriptor { /* For fast registration */
+	struct list_head		 frd_list;
+	struct ib_send_wr		 frd_inv_wr;
+	struct ib_send_wr		 frd_fastreg_wr;
+	struct ib_mr			*frd_mr;
+	struct ib_fast_reg_page_list    *frd_frpl;
+	bool				 frd_valid;
+};
+
 typedef struct
 {
 	struct list_head	fpo_list;	/* chain on pool list */
 	struct kib_hca_dev     *fpo_hdev;	/* device for this pool */
 	kib_fmr_poolset_t      *fpo_owner;	/* owner of this pool */
-	struct ib_fmr_pool     *fpo_fmr_pool;	/* IB FMR pool */
+	union {
+		struct {
+			struct ib_fmr_pool *fpo_fmr_pool; /* IB FMR pool */
+		} fmr;
+		struct { /* For fast registration */
+			struct list_head  fpo_pool_list;
+			int		  fpo_pool_size;
+		} fast_reg;
+	};
 	cfs_time_t		fpo_deadline;	/* deadline of this pool */
 	int			fpo_failed;	/* fmr pool is failed */
 	int			fpo_map_count;	/* # of mapped FMR */
+	int			fpo_is_fmr;
 } kib_fmr_pool_t;
 
 typedef struct {
-        struct ib_pool_fmr     *fmr_pfmr;               /* IB pool fmr */
-        kib_fmr_pool_t         *fmr_pool;               /* pool of FMR */
+	kib_fmr_pool_t			*fmr_pool;	/* pool of FMR */
+	struct ib_pool_fmr		*fmr_pfmr;	/* IB pool fmr */
+	struct kib_fast_reg_descriptor	*fmr_frd;
+	u32				 fmr_key;
 } kib_fmr_t;
 
 typedef struct kib_net
@@ -755,6 +775,19 @@ typedef struct kib_peer
 	__u16			ibp_queue_depth;
 } kib_peer_t;
 
+#ifndef HAVE_IB_INC_RKEY
+/**
+ * ib_inc_rkey - increments the key portion of the given rkey. Can be used
+ * for calculating a new rkey for type 2 memory windows.
+ * @rkey - the rkey to increment.
+ */
+static inline u32 ib_inc_rkey(u32 rkey)
+{
+	const u32 mask = 0x000000ff;
+	return ((rkey + 1) & mask) | (rkey & ~mask);
+}
+#endif
+
 extern kib_data_t      kiblnd_data;
 
 extern void kiblnd_hdev_destroy(kib_hca_dev_t *hdev);
@@ -939,11 +972,12 @@ kiblnd_queue2str(kib_conn_t *conn, struct list_head *q)
 /* CAVEAT EMPTOR: We rely on descriptor alignment to allow us to use the
  * lowest bits of the work request id to stash the work item type. */
 
-#define IBLND_WID_INVAL 0
-#define IBLND_WID_TX    1
-#define IBLND_WID_RX    2
-#define IBLND_WID_RDMA  3
-#define IBLND_WID_MASK  3UL
+#define IBLND_WID_INVAL	0
+#define IBLND_WID_TX	1
+#define IBLND_WID_RX	2
+#define IBLND_WID_RDMA	3
+#define IBLND_WID_MR	4
+#define IBLND_WID_MASK	7UL
 
 static inline __u64
 kiblnd_ptr2wreqid (void *ptr, int type)
@@ -1099,8 +1133,8 @@ void kiblnd_unmap_rx_descs(kib_conn_t *conn);
 void kiblnd_pool_free_node(kib_pool_t *pool, struct list_head *node);
 struct list_head *kiblnd_pool_alloc_node(kib_poolset_t *ps);
 
-int  kiblnd_fmr_pool_map(kib_fmr_poolset_t *fps, __u64 *pages,
-                         int npages, __u64 iov, kib_fmr_t *fmr);
+int  kiblnd_fmr_pool_map(kib_fmr_poolset_t *fps, __u64 *pages, int npages,
+			 __u32 nob, __u64 iov, bool is_rx, kib_fmr_t *fmr);
 void kiblnd_fmr_pool_unmap(kib_fmr_t *fmr, int status);
 
 int  kiblnd_tunables_init(void);
