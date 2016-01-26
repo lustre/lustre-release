@@ -1614,18 +1614,21 @@ int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 		const struct dt_index_features *feat)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
+	int rc = 0;
 	ENTRY;
+
+	down_read(&obj->oo_guard);
 
 	/*
 	 * XXX: implement support for fixed-size keys sorted with natural
 	 *      numerical way (not using internal hash value)
 	 */
 	if (feat->dif_flags & DT_IND_RANGE)
-		RETURN(-ERANGE);
+		GOTO(out, rc = -ERANGE);
 
 	if (unlikely(feat == &dt_otable_features)) {
 		dt->do_index_ops = &osd_zfs_otable_ops;
-		RETURN(0);
+		GOTO(out, rc = 0);
 	}
 
 	LASSERT(!dt_object_exists(dt) || obj->oo_db != NULL);
@@ -1633,7 +1636,7 @@ int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 		if (!dt_object_exists(dt) || osd_object_is_zap(obj->oo_db))
 			dt->do_index_ops = &osd_dir_ops;
 		else
-			RETURN(-ENOTDIR);
+			GOTO(out, rc = -ENOTDIR);
 	} else if (unlikely(feat == &dt_acct_features)) {
 		LASSERT(fid_is_acct(lu_object_fid(&dt->do_lu)));
 		dt->do_index_ops = &osd_acct_index_ops;
@@ -1641,20 +1644,20 @@ int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 		/* For index file, we don't support variable key & record sizes
 		 * and the key has to be unique */
 		if ((feat->dif_flags & ~DT_IND_UPDATE) != 0)
-			RETURN(-EINVAL);
+			GOTO(out, rc = -EINVAL);
 
 		if (feat->dif_keysize_max > ZAP_MAXNAMELEN)
-			RETURN(-E2BIG);
+			GOTO(out, rc = -E2BIG);
 		if (feat->dif_keysize_max != feat->dif_keysize_min)
-			RETURN(-EINVAL);
+			GOTO(out, rc = -EINVAL);
 
 		/* As for the record size, it should be a multiple of 8 bytes
 		 * and smaller than the maximum value length supported by ZAP.
 		 */
 		if (feat->dif_recsize_max > ZAP_MAXVALUELEN)
-			RETURN(-E2BIG);
+			GOTO(out, rc = -E2BIG);
 		if (feat->dif_recsize_max != feat->dif_recsize_min)
-			RETURN(-EINVAL);
+			GOTO(out, rc = -EINVAL);
 
 		obj->oo_keysize = feat->dif_keysize_max;
 		obj->oo_recsize = feat->dif_recsize_max;
@@ -1668,5 +1671,8 @@ int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 		dt->do_index_ops = &osd_index_ops;
 	}
 
-	RETURN(0);
+out:
+	up_read(&obj->oo_guard);
+
+	RETURN(rc);
 }

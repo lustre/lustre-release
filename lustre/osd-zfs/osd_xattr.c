@@ -229,6 +229,9 @@ int __osd_xattr_get(const struct lu_env *env, struct osd_object *obj,
 {
 	int rc;
 
+	if (unlikely(!dt_object_exists(&obj->oo_dt) || obj->oo_destroyed))
+		return -ENOENT;
+
 	/* check SA_ZPL_DXATTR first then fallback to directory xattr */
 	rc = __osd_sa_xattr_get(env, obj, buf, name, sizep);
 	if (rc != -ENOENT)
@@ -247,16 +250,15 @@ int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(obj->oo_db != NULL);
 	LASSERT(osd_invariant(obj));
-	LASSERT(dt_object_exists(dt));
 
 	if (!osd_obj2dev(obj)->od_posix_acl &&
 	    (strcmp(name, POSIX_ACL_XATTR_ACCESS) == 0 ||
 	     strcmp(name, POSIX_ACL_XATTR_DEFAULT) == 0))
 		RETURN(-EOPNOTSUPP);
 
-	down(&obj->oo_guard);
+	down_read(&obj->oo_guard);
 	rc = __osd_xattr_get(env, obj, buf, name, &size);
-	up(&obj->oo_guard);
+	up_read(&obj->oo_guard);
 
 	if (rc == -ENOENT)
 		rc = -ENODATA;
@@ -275,6 +277,9 @@ void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,
 	uint64_t           xa_data_obj;
 	int                rc = 0;
 	int                here;
+
+	if (unlikely(obj->oo_destroyed))
+		return;
 
 	here = dt_object_exists(&obj->oo_dt);
 
@@ -341,9 +346,9 @@ int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(handle != NULL);
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 
-	down(&obj->oo_guard);
+	down_read(&obj->oo_guard);
 	__osd_xattr_declare_set(env, obj, buf->lb_len, name, oh);
-	up(&obj->oo_guard);
+	up_read(&obj->oo_guard);
 
 	RETURN(0);
 }
@@ -593,8 +598,6 @@ int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(handle != NULL);
 	LASSERT(osd_invariant(obj));
-	LASSERT(dt_object_exists(dt));
-	LASSERT(obj->oo_db);
 
 	if (!osd_obj2dev(obj)->od_posix_acl &&
 	    (strcmp(name, POSIX_ACL_XATTR_ACCESS) == 0 ||
@@ -607,11 +610,11 @@ int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 
-	down(&obj->oo_guard);
+	down_write(&obj->oo_guard);
 	CDEBUG(D_INODE, "Setting xattr %s with size %d\n",
 		name, (int)buf->lb_len);
 	rc = osd_xattr_set_internal(env, obj, buf, name, fl, oh);
-	up(&obj->oo_guard);
+	up_write(&obj->oo_guard);
 
 	RETURN(rc);
 }
@@ -660,22 +663,22 @@ int osd_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
 	ENTRY;
 
 	LASSERT(handle != NULL);
-	LASSERT(dt_object_exists(dt));
 	LASSERT(osd_invariant(obj));
 
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_tx != NULL);
 	LASSERT(obj->oo_db != NULL);
 
-	down(&obj->oo_guard);
-	__osd_xattr_declare_del(env, obj, name, oh);
-	up(&obj->oo_guard);
+	down_read(&obj->oo_guard);
+	if (likely(dt_object_exists(&obj->oo_dt) && !obj->oo_destroyed))
+		__osd_xattr_declare_del(env, obj, name, oh);
+	up_read(&obj->oo_guard);
 
 	RETURN(0);
 }
 
-int __osd_sa_xattr_del(const struct lu_env *env, struct osd_object *obj,
-		       const char *name, struct osd_thandle *oh)
+static int __osd_sa_xattr_del(const struct lu_env *env, struct osd_object *obj,
+			      const char *name, struct osd_thandle *oh)
 {
 	int rc;
 
@@ -691,12 +694,15 @@ int __osd_sa_xattr_del(const struct lu_env *env, struct osd_object *obj,
 	return rc;
 }
 
-int __osd_xattr_del(const struct lu_env *env, struct osd_object *obj,
-		    const char *name, struct osd_thandle *oh)
+static int __osd_xattr_del(const struct lu_env *env, struct osd_object *obj,
+			   const char *name, struct osd_thandle *oh)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
 	uint64_t           xa_data_obj;
 	int                rc;
+
+	if (unlikely(!dt_object_exists(&obj->oo_dt) || obj->oo_destroyed))
+		return -ENOENT;
 
 	/* try remove xattr from SA at first */
 	rc = __osd_sa_xattr_del(env, obj, name, oh);
@@ -745,9 +751,9 @@ int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 	     strcmp(name, POSIX_ACL_XATTR_DEFAULT) == 0))
 		RETURN(-EOPNOTSUPP);
 
-	down(&obj->oo_guard);
+	down_write(&obj->oo_guard);
 	rc = __osd_xattr_del(env, obj, name, oh);
-	up(&obj->oo_guard);
+	up_write(&obj->oo_guard);
 
 	RETURN(rc);
 }
@@ -892,7 +898,7 @@ int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(osd_invariant(obj));
 	LASSERT(dt_object_exists(dt));
 
-	down(&obj->oo_guard);
+	down_read(&obj->oo_guard);
 
 	rc = osd_sa_xattr_list(env, obj, lb);
 	if (rc < 0)
@@ -936,7 +942,7 @@ int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
 out_fini:
 	osd_zap_cursor_fini(zc);
 out:
-	up(&obj->oo_guard);
+	up_read(&obj->oo_guard);
 	RETURN(rc);
 
 }
