@@ -1950,9 +1950,11 @@ relock:
 
 	/* Check if @mtgtdir is subdir of @mold, before locking child
 	 * to avoid reverse locking. */
-	rc = mdt_is_subdir(info, mtgtdir, old_fid);
-	if (rc)
-		GOTO(out_put_old, rc);
+	if (mtgtdir != msrcdir) {
+		rc = mdt_is_subdir(info, mtgtdir, old_fid);
+		if (rc)
+			GOTO(out_put_old, rc);
+	}
 
 	tgt_vbr_obj_set(info->mti_env, mdt_obj2dt(mold));
 	/* save version after locking */
@@ -2031,9 +2033,11 @@ relock:
 
 		/* Check if @msrcdir is subdir of @mnew, before locking child
 		 * to avoid reverse locking. */
-		rc = mdt_is_subdir(info, msrcdir, new_fid);
-		if (rc)
-			GOTO(out_unlock_old, rc);
+		if (mtgtdir != msrcdir) {
+			rc = mdt_is_subdir(info, msrcdir, new_fid);
+			if (rc)
+				GOTO(out_unlock_old, rc);
+		}
 
 		/* We used to acquire MDS_INODELOCK_FULL here but we
 		 * can't do this now because a running HSM restore on
