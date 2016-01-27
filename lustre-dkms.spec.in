@@ -51,58 +51,45 @@ This package contains the dkms Lustre kernel modules.
 %build
 cat << EOF > dkms.conf
 # Embryonic lustre-dkms dkms.conf to allow for on-target accurate and full
-# version re-create during first dkms add stage.
+# version re-create during first run of Lustre DKMS module build step.
 PACKAGE_NAME=%{module}
 PACKAGE_VERSION=%{version}
-POST_ADD="lustre-dkms_post-add.sh \$module \$module_version \$kernelver \
+PACKAGE_CONFIG="/etc/sysconfig/lustre"
+PRE_BUILD="lustre-dkms_pre-build.sh \$module \$module_version \$kernelver \
 	 \$kernel_source_dir \$arch \$source_tree \$dkms_tree"
-# at least one DEST_MODULE_LOCATION[] element, along with an install
-# path made of either "extra" or "updates" subdir, are required during
-# dkms.conf validity check of "dkms add" step.
-DEST_MODULE_LOCATION[${#DEST_MODULE_LOCATION[@]}]="/extra/lnet/"
+POST_BUILD="lustre-dkms_post-build.sh \$module \$module_version \$kernelver \
+	 \$kernel_source_dir \$arch \$source_tree \$dkms_tree"
 EOF
-
-cat << EOF > lustre-dkms_post-add.sh
-#!/bin/bash
-# \$1 : \$module
-# \$2 : \$module_version
-# \$3 : \$kernelver
-# \$4 : \$kernel_source_dir
-# \$5 : \$arch
-# \$6 : \$source_tree
-# \$7 : \$dkms_tree
-
-if [ \$1 = "lustre-client" ] ; then
-	SERVER="--disable-server"
-else
-	SPL_VERSION=\$(dkms status -m spl -k \$3/\$5 | awk -F', ' '{print \$2; exit 0}' | sed 's/: added\$//')
-	ZFS_VERSION=\$(dkms status -m zfs -k \$3/\$5 | awk -F', ' '{print \$2; exit 0}' | sed 's/: added\$//')
-
-	SERVER="--enable-server --disable-ldiskfs --with-linux=\$4 --with-linux-obj=\$4 \\
-	       --with-spl=\$6/spl-\${SPL_VERSION} \\
-	       --with-spl-obj=\$7/spl/\${SPL_VERSION}/\$3/\$5 \\
-	       --with-zfs=\$6/zfs-\${ZFS_VERSION} \\
-	       --with-zfs-obj=\$7/zfs/\${ZFS_VERSION}/\$3/\$5"
-fi
-
-rpm -qa | grep krb5-devel >/dev/null
-if [ \$? == 0 ] ; then
-        GSS="--enable-gss"
-else
-        GSS="--disable-gss"
-fi
-
-# run a configure pass to clean "--enable-dist" only effect and also to
-# ensure local/on-target environment to be taken into account
-./configure --enable-modules --disable-iokit --disable-snmp --disable-doc \\
-        --disable-utils --disable-tests --disable-maintainer-mode \\
-        \$GSS \$SERVER \\
-        --disable-manpages --disable-dlc
-# re-create dkms.conf based on this
-lustre/scripts/dkms.mkconf -n \$1 -v \$2 -f ./dkms.conf
+%if %{with servers}
+cat << EOF >> dkms.conf
+BUILD_DEPENDS[0]="zfs"
 EOF
+%endif
+cat << EOF >> dkms.conf
+AUTOINSTALL="yes"
+REMAKE_INITRD="no"
+MAKE[0]="make"
+# just have to set STRIP[0], it will become the new default.
+STRIP[0]="\$(
+  [[ -r \${PACKAGE_CONFIG} ]] \\
+  && source \${PACKAGE_CONFIG} \\
+  && shopt -q -s extglob \\
+  && [[ \${LUSTRE_DKMS_DISABLE_STRIP,,} == @(y|yes) ]] \\
+  && echo -n no
+)"
 
-chmod 755 lustre-dkms_post-add.sh
+# at least one module's set of BUILT_MODULE_NAME[]/BUILT_MODULE_LOCATION[]
+# elements, along with an install path made of either "extra" or "updates"
+# subdir in its DEST_MODULE_LOCATION[] element, are required to fake during
+# dkms.conf validity checks of "dkms [add,build]" steps.
+# Final/full correct BUILT_MODULE_NAME[]/BUILT_MODULE_LOCATION[]/
+# DEST_MODULE_LOCATION[] sets of values for all modules will be fixed during
+# on-target post-configure run of dkms.mkconf as part of build step.
+# it must be for a module shared by both lustre[-client]-dkms packages.
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lustre"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/llite/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/extra/lustre/"
+EOF
 
 sed -i 's/BUILDID[[:print:]]*/BUILDID = %{buildid}/' META
 sed -i 's/PRISTINE[[:print:]]*/PRISTINE = 1/' META
@@ -147,6 +134,9 @@ dkms remove -m %{module} -v %{version} --all --rpm_safe_upgrade
 exit 0
 
 %changelog
+* Sat Jan 23 2016 Bruno Faccini <bruno.faccini@intel.com>
+ - detect and handle cases where [spl,zfs]-dkms packages are not built
+ - also handle on-target configure issues
 * Wed Oct  7 2015 Bruno Faccini <bruno.faccini@intel.com>
  - adapted for Lustre Client DKMS creation
  - allow for on-target reconfig to prevent static deps requires

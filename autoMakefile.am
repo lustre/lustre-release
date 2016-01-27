@@ -102,7 +102,9 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec	\
 	build/Rules.in			\
 	build/gen_filelist.sh		\
 	config.h.in			\
-	undef.h
+	undef.h				\
+	lustre-dkms_pre-build.sh	\
+	lustre-dkms_post-build.sh
 
 rpm-local:
 	@(if test -z "$(RPMBUILD)"; then \

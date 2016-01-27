@@ -2,96 +2,37 @@
 
 PROG=$0
 
-pkgcfg=/etc/sysconfig/lustre
-
-while getopts "n:v:c:f:" opt; do
+while getopts "n:v:f:" opt; do
 	case $opt in
 		n) pkgname=$OPTARG ;;
 		v) pkgver=$OPTARG  ;;
-		c) pkgcfg=$OPTARG ;;
 		f) filename=$OPTARG ;;
 	esac
 done
 
 if [ -z "${pkgname}" -o -z "${pkgver}" -o -z "${filename}" ]; then
-	echo "Usage: $PROG -n <pkgname> -v <pkgver> -c <pkgcfg> -f <filename>"
+	echo "Usage: $PROG -n <pkgname> -v <pkgver> -f <filename>"
 	exit 1
 fi
 
 rpm -qa | grep krb5-devel >/dev/null
 if [ $? == 0 ] ; then
-	GSS="--enable-gss"
+	GSS="yes"
 else
-	GSS="--disable-gss"
+	GSS="no"
 fi
 
 cat >${filename} <<EOF
 PACKAGE_NAME="${pkgname}"
 PACKAGE_VERSION="${pkgver}"
-PACKAGE_CONFIG="${pkgcfg}"
-EOF
-if [ $pkgname = "lustre" ] ; then
-	cat >>${filename} <<EOF
-SPL_VERSION=\$(dkms status -m spl -k \${kernelver}/\${arch} | awk -F', ' '{print \$2; exit 0}' | sed 's/: added\$//')
-ZFS_VERSION=\$(dkms status -m zfs -k \${kernelver}/\${arch} | awk -F', ' '{print \$2; exit 0}' | sed 's/: added\$//')
-EOF
-fi
-cat >>${filename} <<EOF
-# allow to re-evaluate krb5-devel presence during dkms re-adds and to re-create dkms.conf
-# accordingly!
-POST_ADD="lustre-dkms_post-add.sh \$module \$module_version \$kernelver \$kernel_source_dir \
+PACKAGE_CONFIG="/etc/sysconfig/lustre"
+# re-evaluate/create dkms.conf on-target based on local build-time products/dependencies
+# (like krb5-devel presence) and also upon configure results/errors before dkms builds
+PRE_BUILD="lustre-dkms_pre-build.sh \$module \$module_version \$kernelver \$kernel_source_dir \
 	 \$arch \$source_tree \$dkms_tree"
-PRE_BUILD="configure
-  --prefix=/usr
-  --with-linux=\${kernel_source_dir}
-  --with-linux-obj=\${kernel_source_dir}
-  --enable-modules
-EOF
-if [ $pkgname = "lustre-client" ] ; then
-	cat >>${filename} <<EOF
-  --disable-server
-EOF
-else
-	cat >>${filename} <<EOF
-  --enable-server
-  --with-spl=\${source_tree}/spl-\${SPL_VERSION}
-  --with-spl-obj=\${dkms_tree}/spl/\${SPL_VERSION}/\${kernelver}/\${arch}
-  --with-zfs=\${source_tree}/zfs-\${ZFS_VERSION}
-  --with-zfs-obj=\${dkms_tree}/zfs/\${ZFS_VERSION}/\${kernelver}/\${arch}
-  --disable-ldiskfs
-EOF
-fi
-cat >>${filename} <<EOF
-  --disable-iokit
-  --disable-snmp
-  --disable-doc
-  --disable-utils
-  $GSS
-  --disable-tests
-  --disable-maintainer-mode
-  --disable-manpages
-  --disable-dlc
-  \$(
-    [[ -r \${PACKAGE_CONFIG} ]] \\
-    && source \${PACKAGE_CONFIG} \\
-    && shopt -q -s extglob \\
-    && \\
-    {
-      if [[ \${LUSTRE_DKMS_DISABLE_CDEBUG,,} == @(y|yes) ]]
-      then
-        echo --disable-libcfs-cdebug
-      fi
-      if [[ \${LUSTRE_DKMS_DISABLE_TRACE,,} == @(y|yes) ]]
-      then
-        echo --disable-libcfs-trace
-      fi
-      if [[ \${LUSTRE_DKMS_DISABLE_ASSERT,,} == @(y|yes) ]]
-      then
-        echo --disable-libcfs-assert
-      fi
-    }
-  )
-"
+# to ensure all just built Lustre kernel modules will be saved for further install
+POST_BUILD="lustre-dkms_post-build.sh \$module \$module_version \$kernelver \$kernel_source_dir \
+	 \$arch \$source_tree \$dkms_tree"
 EOF
 if [ $pkgname = "lustre" ] ; then
 	cat >>${filename} <<EOF
@@ -164,7 +105,7 @@ BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lustre"
 BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/llite/"
 DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/@KMP_MODDIR@/lustre/"
 EOF
-if [ $GSS = "--enable-gss" ] ; then
+if [ $GSS = "yes" ] ; then
 	cat >>${filename} <<EOF
 BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="ptlrpc_gss"
 BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/ptlrpc/gss/"
