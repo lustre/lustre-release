@@ -146,6 +146,15 @@ unregister_ioc_dev(int dev_id)
 	ioc_dev_list[dev_id].dev_fd = -1;
 }
 
+static inline size_t libcfs_ioctl_packlen(struct libcfs_ioctl_data *data)
+{
+	size_t len = sizeof(*data);
+
+	len += (data->ioc_inllen1 + 7) & ~7;
+	len += (data->ioc_inllen2 + 7) & ~7;
+	return len;
+}
+
 int libcfs_ioctl_pack(struct libcfs_ioctl_data *data, char **pbuf,
                                     int max)
 {
@@ -174,9 +183,6 @@ int libcfs_ioctl_pack(struct libcfs_ioctl_data *data, char **pbuf,
 		       data->ioc_inllen2);
 		ptr += ((data->ioc_inllen2 + 7) & ~7);
 	}
-
-	if (libcfs_ioctl_is_invalid(overlay))
-		return 1;
 
 	return 0;
 }

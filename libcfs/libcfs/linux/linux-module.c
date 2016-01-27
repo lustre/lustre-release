@@ -40,6 +40,55 @@
 
 #define LNET_MINOR 240
 
+static inline size_t libcfs_ioctl_packlen(struct libcfs_ioctl_data *data)
+{
+	size_t len = sizeof(*data);
+
+	len += (data->ioc_inllen1 + 7) & ~7;
+	len += (data->ioc_inllen2 + 7) & ~7;
+	return len;
+}
+
+static bool libcfs_ioctl_is_invalid(struct libcfs_ioctl_data *data)
+{
+	if (data->ioc_hdr.ioc_len > BIT(30))
+		return true;
+
+	if (data->ioc_inllen1 > BIT(30))
+		return true;
+
+	if (data->ioc_inllen2 > BIT(30))
+		return true;
+
+	if (data->ioc_inlbuf1 && !data->ioc_inllen1)
+		return true;
+
+	if (data->ioc_inlbuf2 && !data->ioc_inllen2)
+		return true;
+
+	if (data->ioc_pbuf1 && !data->ioc_plen1)
+		return true;
+
+	if (data->ioc_pbuf2 && !data->ioc_plen2)
+		return true;
+
+	if (data->ioc_plen1 && !data->ioc_pbuf1)
+		return true;
+
+	if (data->ioc_plen2 && !data->ioc_pbuf2)
+		return true;
+
+	if (libcfs_ioctl_packlen(data) != data->ioc_hdr.ioc_len)
+		return true;
+
+	if (data->ioc_inllen1 &&
+	    data->ioc_bulk[((data->ioc_inllen1 + 7) & ~7) +
+			     data->ioc_inllen2 - 1] != '\0')
+		return true;
+
+	return false;
+}
+
 int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data)
 {
 	ENTRY;

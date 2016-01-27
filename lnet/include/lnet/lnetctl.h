@@ -124,63 +124,9 @@ struct lnet_fault_stat {
 
 /** @} lnet_fault_simulation */
 
-#define LNET_DEV_ID 0
-#define LNET_DEV_PATH "/dev/lnet"
-#define LNET_DEV_MAJOR 10
-#define LNET_DEV_MINOR 240
-#define OBD_DEV_ID 1
-#define OBD_DEV_NAME "obd"
-#define OBD_DEV_PATH "/dev/" OBD_DEV_NAME
-#define OBD_DEV_MAJOR 10
-#define OBD_DEV_MINOR 241
-#define SMFS_DEV_ID  2
-#define SMFS_DEV_PATH "/dev/snapdev"
-#define SMFS_DEV_MAJOR 10
-#define SMFS_DEV_MINOR 242
-
-int ptl_initialize(int argc, char **argv);
-int jt_ptl_network(int argc, char **argv);
-int jt_ptl_list_nids(int argc, char **argv);
-int jt_ptl_which_nid(int argc, char **argv);
-int jt_ptl_print_interfaces(int argc, char **argv);
-int jt_ptl_add_interface(int argc, char **argv);
-int jt_ptl_del_interface(int argc, char **argv);
-int jt_ptl_print_peers (int argc, char **argv);
-int jt_ptl_add_peer (int argc, char **argv);
-int jt_ptl_del_peer (int argc, char **argv);
-int jt_ptl_print_connections (int argc, char **argv);
-int jt_ptl_disconnect(int argc, char **argv);
-int jt_ptl_push_connection(int argc, char **argv);
-int jt_ptl_ping(int argc, char **argv);
-int jt_ptl_mynid(int argc, char **argv);
-int jt_ptl_add_uuid(int argc, char **argv);
-int jt_ptl_add_uuid_old(int argc, char **argv); /* backwards compatibility  */
-int jt_ptl_close_uuid(int argc, char **argv);
-int jt_ptl_del_uuid(int argc, char **argv);
-int jt_ptl_add_route (int argc, char **argv);
-int jt_ptl_del_route (int argc, char **argv);
-int jt_ptl_notify_router (int argc, char **argv);
-int jt_ptl_print_routes (int argc, char **argv);
-int jt_ptl_fail_nid (int argc, char **argv);
-int jt_ptl_testprotocompat(int argc, char **argv);
-int jt_ptl_drop_add(int argc, char **argv);
-int jt_ptl_drop_del(int argc, char **argv);
-int jt_ptl_drop_reset(int argc, char **argv);
-int jt_ptl_drop_list(int argc, char **argv);
-int jt_ptl_delay_add(int argc, char **argv);
-int jt_ptl_delay_del(int argc, char **argv);
-int jt_ptl_delay_reset(int argc, char **argv);
-int jt_ptl_delay_list(int argc, char **argv);
-
-int dbg_initialize(int argc, char **argv);
-int jt_dbg_filter(int argc, char **argv);
-int jt_dbg_show(int argc, char **argv);
-int jt_dbg_list(int argc, char **argv);
-int jt_dbg_debug_kernel(int argc, char **argv);
-int jt_dbg_debug_daemon(int argc, char **argv);
-int jt_dbg_debug_file(int argc, char **argv);
-int jt_dbg_clear_debug_buf(int argc, char **argv);
-int jt_dbg_mark_debug_buf(int argc, char **argv);
-int jt_dbg_modules(int argc, char **argv);
+#define LNET_DEV_ID	0
+#define LNET_DEV_PATH	"/dev/lnet"
+#define LNET_DEV_MAJOR	10
+#define LNET_DEV_MINOR	240
 
 #endif

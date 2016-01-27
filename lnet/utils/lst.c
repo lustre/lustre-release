@@ -54,6 +54,7 @@
 #include <lnet/lnetctl.h>
 #include <lnet/lnetst.h>
 #include <lnet/lnet.h>
+#include <utils/obdctl.h>
 
 lst_sid_t LST_INVALID_SID = {LNET_NID_ANY, -1};
 static lst_sid_t           session_id;

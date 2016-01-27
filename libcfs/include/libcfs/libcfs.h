@@ -154,8 +154,6 @@ void lc_watchdog_delete(struct lc_watchdog *lcw);
 #define LNET_ACCEPTOR_MIN_RESERVED_PORT    512
 #define LNET_ACCEPTOR_MAX_RESERVED_PORT    1023
 
-int libcfs_ioctl(unsigned long cmd, void __user *uparam);
-
 /*
  * Drop into debugger, if possible. Implementation is provided by platform.
  */
@@ -198,6 +196,9 @@ void cfs_get_random_bytes(void *buf, int size);
 # include <libcfs/libcfs_hash.h>
 # include <libcfs/libcfs_heap.h>
 # include <libcfs/libcfs_fail.h>
+
+int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data);
+int libcfs_ioctl(unsigned long cmd, void __user *uparam);
 
 /* container_of depends on "likely" which is defined in libcfs_private.h */
 static inline void *__container_of(const void *ptr, unsigned long shift)

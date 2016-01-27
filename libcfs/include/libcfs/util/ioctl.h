@@ -49,6 +49,20 @@
 
 #include <libcfs/libcfs_ioctl.h>
 
+#define LIBCFS_IOC_INIT(data)					\
+do {								\
+	memset(&(data), 0, sizeof(data));			\
+	(data).ioc_hdr.ioc_version = LIBCFS_IOCTL_VERSION;	\
+	(data).ioc_hdr.ioc_len = sizeof(data);			\
+} while (0)
+
+#define LIBCFS_IOC_INIT_V2(data, hdr)			\
+do {							\
+	memset(&(data), 0, sizeof(data));		\
+	(data).hdr.ioc_version = LIBCFS_IOCTL_VERSION2;	\
+	(data).hdr.ioc_len = sizeof(data);		\
+} while (0)
+
 /* FIXME - rename these to libcfs_ */
 int libcfs_ioctl_pack(struct libcfs_ioctl_data *data, char **pbuf, int max);
 void libcfs_ioctl_unpack(struct libcfs_ioctl_data *data, char *pbuf);
