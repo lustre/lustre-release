@@ -111,7 +111,7 @@ static int out_create(struct tgt_session_info *tsi)
 	if (IS_ERR(wobdo) || size != sizeof(*wobdo)) {
 		CERROR("%s: obdo is NULL, invalid RPC: rc = %ld\n",
 		       tgt_name(tsi->tsi_tgt), PTR_ERR(wobdo));
-		RETURN(err_serious(PTR_ERR(wobdo)));
+		RETURN(PTR_ERR(wobdo));
 	}
 
 	if (ptlrpc_req_need_swab(tsi->tsi_pill->rc_req))
@@ -125,14 +125,14 @@ static int out_create(struct tgt_session_info *tsi)
 		if (IS_ERR(fid) || size != sizeof(*fid)) {
 			CERROR("%s: invalid fid: rc = %ld\n",
 			       tgt_name(tsi->tsi_tgt), PTR_ERR(fid));
-			RETURN(err_serious(PTR_ERR(fid)));
+			RETURN(PTR_ERR(fid));
 		}
 		if (ptlrpc_req_need_swab(tsi->tsi_pill->rc_req))
 			lustre_swab_lu_fid(fid);
 		if (!fid_is_sane(fid)) {
 			CERROR("%s: invalid fid "DFID": rc = %d\n",
 			       tgt_name(tsi->tsi_tgt), PFID(fid), -EPROTO);
-			RETURN(err_serious(-EPROTO));
+			RETURN(-EPROTO);
 		}
 	}
 
@@ -164,7 +164,7 @@ static int out_attr_set(struct tgt_session_info *tsi)
 	if (IS_ERR(wobdo) || size != sizeof(*wobdo)) {
 		CERROR("%s: empty obdo in the update: rc = %ld\n",
 		       tgt_name(tsi->tsi_tgt), PTR_ERR(wobdo));
-		RETURN(err_serious(PTR_ERR(wobdo)));
+		RETURN(PTR_ERR(wobdo));
 	}
 
 	attr->la_valid = 0;
@@ -256,14 +256,14 @@ static int out_xattr_get(struct tgt_session_info *tsi)
 	if (IS_ERR(name)) {
 		CERROR("%s: empty name for xattr get: rc = %ld\n",
 		       tgt_name(tsi->tsi_tgt), PTR_ERR(name));
-		RETURN(err_serious(PTR_ERR(name)));
+		RETURN(PTR_ERR(name));
 	}
 
 	update_result = object_update_result_get(reply, 0, NULL);
 	if (update_result == NULL) {
 		CERROR("%s: empty name for xattr get: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), -EPROTO);
-		RETURN(err_serious(-EPROTO));
+		RETURN(-EPROTO);
 	}
 
 	lbuf->lb_len = (int)tti->tti_u.update.tti_update->ou_result_size;
@@ -307,7 +307,7 @@ static int out_index_lookup(struct tgt_session_info *tsi)
 	if (IS_ERR(name)) {
 		CERROR("%s: empty name for lookup: rc = %ld\n",
 		       tgt_name(tsi->tsi_tgt), PTR_ERR(name));
-		RETURN(err_serious(PTR_ERR(name)));
+		RETURN(PTR_ERR(name));
 	}
 
 	dt_read_lock(env, obj, MOR_TGT_CHILD);
@@ -359,13 +359,13 @@ static int out_xattr_set(struct tgt_session_info *tsi)
 	if (IS_ERR(name)) {
 		CERROR("%s: empty name for xattr set: rc = %ld\n",
 		       tgt_name(tsi->tsi_tgt), PTR_ERR(name));
-		RETURN(err_serious(PTR_ERR(name)));
+		RETURN(PTR_ERR(name));
 	}
 
 	/* If buffer == NULL (-ENODATA), then it might mean delete xattr */
 	buf = object_update_param_get(update, 1, &buf_len);
 	if (IS_ERR(buf) && PTR_ERR(buf) != -ENODATA)
-		RETURN(err_serious(PTR_ERR(buf)));
+		RETURN(PTR_ERR(buf));
 
 	lbuf->lb_buf = buf;
 	lbuf->lb_len = buf_len;
@@ -374,7 +374,7 @@ static int out_xattr_set(struct tgt_session_info *tsi)
 	if (IS_ERR(tmp) || size != sizeof(*tmp)) {
 		CERROR("%s: emptry or wrong size %zu flag: rc = %ld\n",
 		       tgt_name(tsi->tsi_tgt), size, PTR_ERR(tmp));
-		RETURN(err_serious(PTR_ERR(tmp)));
+		RETURN(PTR_ERR(tmp));
 	}
 
 	if (ptlrpc_req_need_swab(tsi->tsi_pill->rc_req))
@@ -401,7 +401,7 @@ static int out_xattr_del(struct tgt_session_info *tsi)
 	if (IS_ERR(name)) {
 		CERROR("%s: empty name for xattr set: rc = %ld\n",
 		       tgt_name(tsi->tsi_tgt), PTR_ERR(name));
-		RETURN(err_serious(PTR_ERR(name)));
+		RETURN(PTR_ERR(name));
 	}
 
 	rc = out_tx_xattr_del(tsi->tsi_env, obj, name, &tti->tti_tea,
@@ -464,14 +464,14 @@ static int out_index_insert(struct tgt_session_info *tsi)
 	if (IS_ERR(name)) {
 		CERROR("%s: empty name for index insert: rc = %ld\n",
 		       tgt_name(tsi->tsi_tgt), PTR_ERR(name));
-		RETURN(err_serious(PTR_ERR(name)));
+		RETURN(PTR_ERR(name));
 	}
 
 	fid = object_update_param_get(update, 1, &size);
 	if (IS_ERR(fid) || size != sizeof(*fid)) {
 		CERROR("%s: invalid fid: rc = %ld\n",
 		       tgt_name(tsi->tsi_tgt), PTR_ERR(fid));
-		RETURN(err_serious(PTR_ERR(fid)));
+		RETURN(PTR_ERR(fid));
 	}
 
 	if (ptlrpc_req_need_swab(tsi->tsi_pill->rc_req))
@@ -480,14 +480,14 @@ static int out_index_insert(struct tgt_session_info *tsi)
 	if (!fid_is_sane(fid)) {
 		CERROR("%s: invalid FID "DFID": rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), PFID(fid), -EPROTO);
-		RETURN(err_serious(-EPROTO));
+		RETURN(-EPROTO);
 	}
 
 	ptype = object_update_param_get(update, 2, &size);
 	if (IS_ERR(ptype) || size != sizeof(*ptype)) {
 		CERROR("%s: invalid type for index insert: rc = %ld\n",
 		       tgt_name(tsi->tsi_tgt), PTR_ERR(ptype));
-		RETURN(err_serious(PTR_ERR(ptype)));
+		RETURN(PTR_ERR(ptype));
 	}
 
 	if (ptlrpc_req_need_swab(tsi->tsi_pill->rc_req))
@@ -519,7 +519,7 @@ static int out_index_delete(struct tgt_session_info *tsi)
 	if (IS_ERR(name)) {
 		CERROR("%s: empty name for index delete: rc = %ld\n",
 		       tgt_name(tsi->tsi_tgt), PTR_ERR(name));
-		RETURN(err_serious(PTR_ERR(name)));
+		RETURN(PTR_ERR(name));
 	}
 
 	rc = out_tx_index_delete(tsi->tsi_env, obj, (const struct dt_key *)name,
@@ -542,7 +542,7 @@ static int out_destroy(struct tgt_session_info *tsi)
 	if (!fid_is_sane(fid)) {
 		CERROR("%s: invalid FID "DFID": rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), PFID(fid), -EPROTO);
-		RETURN(err_serious(-EPROTO));
+		RETURN(-EPROTO);
 	}
 
 	if (!lu_object_exists(&obj->do_lu))
@@ -574,7 +574,7 @@ static int out_write(struct tgt_session_info *tsi)
 	if (IS_ERR(buf) || buf_len == 0) {
 		CERROR("%s: empty buf for xattr set: rc = %ld\n",
 		       tgt_name(tsi->tsi_tgt), PTR_ERR(buf));
-		RETURN(err_serious(PTR_ERR(buf)));
+		RETURN(PTR_ERR(buf));
 	}
 	lbuf->lb_buf = buf;
 	lbuf->lb_len = buf_len;
@@ -583,7 +583,7 @@ static int out_write(struct tgt_session_info *tsi)
 	if (IS_ERR(tmp) || size != sizeof(*tmp)) {
 		CERROR("%s: empty or wrong size %zu pos: rc = %ld\n",
 		       tgt_name(tsi->tsi_tgt), size, PTR_ERR(tmp));
-		RETURN(err_serious(PTR_ERR(tmp)));
+		RETURN(PTR_ERR(tmp));
 	}
 
 	if (ptlrpc_req_need_swab(tsi->tsi_pill->rc_req))
@@ -628,7 +628,7 @@ static int out_read(struct tgt_session_info *tsi)
 	if (IS_ERR(tmp)) {
 		CERROR("%s: empty size for read: rc = %ld\n",
 		       tgt_name(tsi->tsi_tgt), PTR_ERR(tmp));
-		GOTO(out, rc = err_serious(PTR_ERR(tmp)));
+		GOTO(out, rc = PTR_ERR(tmp));
 	}
 	size = le64_to_cpu(*(size_t *)(tmp));
 
@@ -636,7 +636,7 @@ static int out_read(struct tgt_session_info *tsi)
 	if (IS_ERR(tmp)) {
 		CERROR("%s: empty pos for read: rc = %ld\n",
 		       tgt_name(tsi->tsi_tgt), PTR_ERR(tmp));
-		GOTO(out, rc = err_serious(PTR_ERR(tmp)));
+		GOTO(out, rc = PTR_ERR(tmp));
 	}
 	pos = le64_to_cpu(*(__u64 *)(tmp));
 
@@ -937,7 +937,7 @@ int out_handle(struct tgt_session_info *tsi)
 
 	OBD_ALLOC(update_bufs, sizeof(*update_bufs) * update_buf_count);
 	if (update_bufs == NULL)
-		RETURN(-ENOMEM);
+		RETURN(err_serious(-ENOMEM));
 
 	if (ouh->ouh_inline_length > 0) {
 		update_bufs[0] = ouh->ouh_inline_data;
@@ -955,7 +955,7 @@ int out_handle(struct tgt_session_info *tsi)
 					    MDS_BULK_PORTAL,
 					    &ptlrpc_bulk_kvec_ops);
 		if (desc == NULL)
-			GOTO(out_free, rc = -ENOMEM);
+			GOTO(out_free, rc = err_serious(-ENOMEM));
 
 		tmp = oub;
 		for (i = 0; i < update_buf_count; i++, tmp++) {
@@ -964,7 +964,7 @@ int out_handle(struct tgt_session_info *tsi)
 
 			OBD_ALLOC(update_bufs[i], tmp->oub_size);
 			if (update_bufs[i] == NULL)
-				GOTO(out_free, rc = -ENOMEM);
+				GOTO(out_free, rc = err_serious(-ENOMEM));
 
 			desc->bd_frag_ops->add_iov_frag(desc, update_bufs[i],
 							tmp->oub_size);
@@ -973,11 +973,11 @@ int out_handle(struct tgt_session_info *tsi)
 		pill->rc_req->rq_bulk_write = 1;
 		rc = sptlrpc_svc_prep_bulk(pill->rc_req, desc);
 		if (rc != 0)
-			GOTO(out_free, err_serious(rc));
+			GOTO(out_free, rc = err_serious(rc));
 
 		rc = target_bulk_io(pill->rc_req->rq_export, desc, &lwi);
 		if (rc < 0)
-			GOTO(out_free, err_serious(rc));
+			GOTO(out_free, rc = err_serious(rc));
 	}
 	/* validate the request and calculate the total update count and
 	 * set it to reply */
@@ -996,7 +996,7 @@ int out_handle(struct tgt_session_info *tsi)
 			       " expect %x: rc = %d\n",
 			       tgt_name(tsi->tsi_tgt), our->ourq_magic,
 			       UPDATE_REQUEST_MAGIC, -EPROTO);
-			GOTO(out_free, rc = -EPROTO);
+			GOTO(out_free, rc = err_serious(-EPROTO));
 		}
 		updates += our->ourq_count;
 
@@ -1004,7 +1004,7 @@ int out_handle(struct tgt_session_info *tsi)
 		for (j = 0; j < our->ourq_count; j++) {
 			update = object_update_request_get(our, j, NULL);
 			if (update == NULL)
-				GOTO(out, rc = -EPROTO);
+				GOTO(out, rc = err_serious(-EPROTO));
 			if (ptlrpc_req_need_swab(pill->rc_req))
 				lustre_swab_object_update(update);
 
@@ -1028,7 +1028,7 @@ int out_handle(struct tgt_session_info *tsi)
 		CERROR("%s: too small reply buf %u for %u, need %u at least\n",
 		       tgt_name(tsi->tsi_tgt), ouh->ouh_reply_size,
 		       updates, reply_size);
-		GOTO(out_free, rc = -EPROTO);
+		GOTO(out_free, rc = err_serious(-EPROTO));
 	}
 
 	req_capsule_set_size(pill, &RMF_OUT_UPDATE_REPLY, RCL_SERVER,
@@ -1037,13 +1037,13 @@ int out_handle(struct tgt_session_info *tsi)
 	if (rc != 0) {
 		CERROR("%s: Can't pack response: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), rc);
-		GOTO(out_free, rc = -EPROTO);
+		GOTO(out_free, rc = err_serious(-EPROTO));
 	}
 
 	/* Prepare the update reply buffer */
 	reply = req_capsule_server_get(pill, &RMF_OUT_UPDATE_REPLY);
 	if (reply == NULL)
-		GOTO(out_free, rc = err_serious(-EPROTO));
+		GOTO(out_free, rc = -EPROTO);
 	reply->ourp_magic = UPDATE_REPLY_MAGIC;
 	reply->ourp_count = updates;
 	tti->tti_u.update.tti_update_reply = reply;
