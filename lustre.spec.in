@@ -405,7 +405,6 @@ echo '%{_libdir}/libiam.a' >>lustre.files
 
 if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/snmp ] ; then
 	echo '%{_libdir}/lustre/snmp' >>lustre.files
-	echo '%{_datadir}/lustre/snmp/mibs' >>lustre.files
 fi
 
 find $RPM_BUILD_ROOT%{_libdir}/@PACKAGE@ \
