@@ -499,8 +499,13 @@ again:
 		 * then try next target in the list, until trying all targets
 		 * or fld lookup succeeds */
 		spin_lock(&fld->lcf_lock);
-		if (target->ft_chain.next == fld->lcf_targets.prev)
-			target = list_entry(fld->lcf_targets.next,
+
+		/* If the next entry in the list is the head of the list,
+		 * move to the next entry after the head and retrieve
+		 * the target. Else retreive the next target entry. */
+
+		if (target->ft_chain.next == &fld->lcf_targets)
+			target = list_entry(target->ft_chain.next->next,
 					    struct lu_fld_target, ft_chain);
 		else
 			target = list_entry(target->ft_chain.next,
