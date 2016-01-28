@@ -889,18 +889,10 @@ static int osp_md_object_lock(const struct lu_env *env,
 	struct lu_device	*top_device;
 	struct ptlrpc_request	*req;
 	int			rc = 0;
-	__u64			flags = 0;
-	enum ldlm_mode		mode;
+	__u64			flags = LDLM_FL_NO_LRU;
 
 	res_id = einfo->ei_res_id;
 	LASSERT(res_id != NULL);
-
-	mode = ldlm_lock_match(osp->opd_obd->obd_namespace,
-			       LDLM_FL_BLOCK_GRANTED, res_id,
-			       einfo->ei_type, policy,
-			       einfo->ei_mode, lh, 0);
-	if (mode > 0)
-		return ELDLM_OK;
 
 	if (einfo->ei_nonblock)
 		flags |= LDLM_FL_BLOCK_NOWAIT;
