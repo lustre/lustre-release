@@ -43,6 +43,12 @@
 #define WANT_FD     0x4
 #define WANT_INDEX  0x8
 #define WANT_ERROR  0x10
+
+/* mount point listings in /proc/mounts */
+#ifndef PROC_MOUNTS
+#define PROC_MOUNTS "/proc/mounts"
+#endif
+
 int get_root_path(int want, char *fsname, int *outfd, char *path, int index);
 int root_ioctl(const char *mdtname, int opc, void *data, int *mdtidxp,
 	       int want_error);
