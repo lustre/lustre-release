@@ -35,7 +35,7 @@
 #ifndef _LUSTREAPI_INTERNAL_H_
 #define _LUSTREAPI_INTERNAL_H_
 
-#include <glob.h>
+#include <libcfs/util/param.h>
 #include <uapi_kernelcomm.h>
 
 #define WANT_PATH   0x1

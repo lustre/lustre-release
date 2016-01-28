@@ -9429,7 +9429,8 @@ run_test 133e "Verifying OST {read,write}_bytes nid stats ================="
 
 proc_dirs=""
 for dir in /proc/fs/lustre/ /proc/sys/lnet/ /proc/sys/lustre/ \
-	   /sys/fs/lustre/ /sys/fs/lnet/ /sys/kernel/debug/lustre/; do
+	   /sys/fs/lustre/ /sys/fs/lnet/ /sys/kernel/debug/lnet/ \
+	   /sys/kernel/debug/lustre/; do
 	[[ -d $dir ]] && proc_dirs+=" $dir"
 done
 
@@ -9440,7 +9441,7 @@ test_133f() {
 	find $proc_dirs -exec cat '{}' \; &> /dev/null
 
 	# Second verifying readability.
-	$LCTL get_param -R &> /dev/null || error "proc file read failed"
+	$LCTL get_param -R '*' &> /dev/null || error "proc file read failed"
 
 	# eventually, this can also be replaced with "lctl get_param -R",
 	# but not until that option is always available on the server
@@ -14311,7 +14312,8 @@ test_401() { #LU-7437
 	#count the number of parameters by "list_param -R"
 	local params=$($LCTL list_param -R '*' 2>/dev/null | wc -l)
 	#count the number of parameters by listing proc files
-	local procs=$(find -L $proc_dirs -mindepth 1 2>/dev/null | wc -l)
+	local procs=$(find -L $proc_dirs -mindepth 1 -printf '%P\n' 2>/dev/null |
+		      sort -u | wc -l)
 
 	[ $params -eq $procs ] ||
 		error "found $params parameters vs. $procs proc files"
