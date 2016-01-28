@@ -1309,6 +1309,203 @@ void test29(void)
 	llapi_layout_free(layout);
 }
 
+#define T30FILE		"f30"
+#define T30_DESC	"create composite file, traverse components"
+void test30(void)
+{
+	int rc, fd;
+	uint64_t start[3], end[3];
+	uint64_t s, e;
+	struct llapi_layout *layout;
+	char path[PATH_MAX];
+
+	start[0] = 0;
+	end[0] = 64 * 1024 * 1024; /* 64m */
+	start[1] = end[0];
+	end[1] = 1 * 1024 * 1024 * 1024; /* 1G */
+	start[2] = end[1];
+	end[2] = LUSTRE_EOF;
+
+	if (num_osts < 2)
+		return;
+
+	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T30FILE);
+
+	rc = unlink(path);
+	ASSERTF(rc >= 0 || errno == ENOENT, "errno = %d", errno);
+
+	layout = llapi_layout_alloc();
+	ASSERTF(layout != NULL, "errno %d", errno);
+
+	rc = llapi_layout_stripe_count_set(layout, 1);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	/* add component without adjusting previous component's extent
+	 * end will fail. */
+	rc = llapi_layout_comp_add(layout);
+	ASSERTF(rc == -1 && errno == EINVAL, "rc %d, errno %d", rc, errno);
+
+	rc = llapi_layout_comp_extent_set(layout, start[0], end[0]);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	rc = llapi_layout_comp_add(layout);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	/* set non-contiguous extent will fail */
+	rc = llapi_layout_comp_extent_set(layout, end[0] * 2, end[1]);
+	ASSERTF(rc == -1 && errno == EINVAL, "rc %d, errno %d", rc, errno);
+
+	rc = llapi_layout_comp_extent_set(layout, start[1], end[1]);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	rc = llapi_layout_comp_add(layout);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	rc = llapi_layout_comp_extent_set(layout, start[2], end[2]);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	/* create composite file */
+	fd = llapi_layout_file_create(path, 0, 0660, layout);
+	ASSERTF(fd >= 0, "path = %s, fd = %d, errno = %d", path, fd, errno);
+
+	llapi_layout_free(layout);
+
+	/* traverse & verify all components */
+	layout = llapi_layout_get_by_path(path, 0);
+	ASSERTF(layout != NULL, "errno = %d", errno);
+
+	/* current component should be the tail component */
+	rc = llapi_layout_comp_extent_get(layout, &s, &e);
+	ASSERTF(rc == 0, "errno %d", errno);
+	ASSERTF(s == start[2] && e == end[2],
+		"s: %"PRIu64", e: %"PRIu64"", s, e);
+
+	rc = llapi_layout_comp_move(layout, LLAPI_LAYOUT_COMP_POS_FIRST);
+	ASSERTF(rc == 0, "rc %d, errno %d", rc, errno);
+
+	/* delete non-tail component will fail */
+	rc = llapi_layout_comp_del(layout);
+	ASSERTF(rc == -1 && errno == EINVAL, "rc %d, errno %d", rc, errno);
+
+	rc = llapi_layout_comp_extent_get(layout, &s, &e);
+	ASSERTF(rc == 0, "errno %d", errno);
+	ASSERTF(s == start[0] && e == end[0],
+		"s: %"PRIu64", e: %"PRIu64"", s, e);
+
+	rc = llapi_layout_comp_move(layout, LLAPI_LAYOUT_COMP_POS_NEXT);
+	ASSERTF(rc == 0, "rc %d, errno %d", rc,  errno);
+
+	rc = llapi_layout_comp_extent_get(layout, &s, &e);
+	ASSERTF(rc == 0, "errno %d", errno);
+	ASSERTF(s == start[1] && e == end[1],
+		"s: %"PRIu64", e: %"PRIu64"", s, e);
+
+	rc = llapi_layout_comp_move(layout, LLAPI_LAYOUT_COMP_POS_NEXT);
+	ASSERTF(rc == 0, "rc %d, errno %d", rc,  errno);
+
+	rc = llapi_layout_comp_del(layout);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	llapi_layout_free(layout);
+}
+
+#define T31FILE		"f31"
+#define T31_DESC	"add/delete component to/from existing file"
+void test31(void)
+{
+	int rc, fd, i;
+	uint64_t start[2], end[2];
+	uint64_t s, e;
+	uint32_t id[2];
+	struct llapi_layout *layout;
+	char path[PATH_MAX];
+
+	start[0] = 0;
+	end[0] = 64 * 1024 * 1024; /* 64m */
+	start[1] = end[0];
+	end[1] = LUSTRE_EOF;
+
+	if (num_osts < 2)
+		return;
+
+	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T31FILE);
+
+	rc = unlink(path);
+	ASSERTF(rc >= 0 || errno == ENOENT, "errno = %d", errno);
+
+	layout = llapi_layout_alloc();
+	ASSERTF(layout != NULL, "errno %d", errno);
+
+	rc = llapi_layout_stripe_count_set(layout, 1);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	rc = llapi_layout_comp_extent_set(layout, start[0], end[0]);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	/* create composite file */
+	fd = llapi_layout_file_create(path, 0, 0660, layout);
+	ASSERTF(fd >= 0, "path = %s, fd = %d, errno = %d", path, fd, errno);
+	llapi_layout_free(layout);
+
+	layout = llapi_layout_alloc();
+	ASSERTF(layout != NULL, "errno %d", errno);
+
+	rc = llapi_layout_stripe_count_set(layout, 2);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	rc = llapi_layout_comp_extent_set(layout, start[1], end[1]);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	/* add comopnent to existing file */
+	rc = llapi_layout_file_comp_add(path, layout);
+	ASSERTF(rc == 0, "errno %d", errno);
+	llapi_layout_free(layout);
+
+	/* verify the composite layout after adding */
+	layout = llapi_layout_get_by_path(path, 0);
+	ASSERTF(layout != NULL, "errno = %d", errno);
+
+	rc = llapi_layout_comp_move(layout, LLAPI_LAYOUT_COMP_POS_FIRST);
+	ASSERTF(rc == 0, "rc %d, errno %d", rc, errno);
+	i = 0;
+	do {
+		rc = llapi_layout_comp_extent_get(layout, &s, &e);
+		ASSERTF(rc == 0 && i < 2, "i %d, errno %d", i, errno);
+		ASSERTF(s == start[i] && e == end[i],
+			"i: %d s: %"PRIu64", e: %"PRIu64"", i, s, e);
+
+		rc = llapi_layout_comp_id_get(layout, &id[i]);
+		ASSERTF(rc == 0 && id[i] != 0, "i %d, errno %d, id %d",
+			i, errno, id[i]);
+
+		rc = llapi_layout_comp_move(layout, LLAPI_LAYOUT_COMP_POS_NEXT);
+		ASSERTF(rc >= 0, "i %d, rc %d, errno %d", i, rc, errno);
+
+		i++;
+	} while (rc == 0);
+
+	llapi_layout_free(layout);
+
+	/* delete non-tail component will fail */
+	rc = llapi_layout_file_comp_del(path, id[0]);
+	ASSERTF(rc < 0 && errno == EINVAL, "rc %d, errno %d", rc, errno);
+
+	rc = llapi_layout_file_comp_del(path, id[1]);
+	ASSERTF(rc == 0, "rc %d, errno %d", rc, errno);
+
+	/* verify the composite layout after deleting */
+	layout = llapi_layout_get_by_path(path, 0);
+	ASSERTF(layout != NULL, "errno = %d", errno);
+
+	rc = llapi_layout_comp_move(layout, LLAPI_LAYOUT_COMP_POS_FIRST);
+	ASSERTF(rc == 0, "rc %d, errno %d", rc, errno);
+
+	rc = llapi_layout_comp_extent_get(layout, &s, &e);
+	ASSERTF(rc == 0, "errno %d", errno);
+	ASSERTF(s == start[0] && e == end[0],
+		"s: %"PRIu64", e: %"PRIu64"", s, e);
+}
+
 #define TEST_DESC_LEN	50
 struct test_tbl_entry {
 	void (*tte_fn)(void);
@@ -1346,8 +1543,11 @@ static struct test_tbl_entry test_tbl[] = {
 	{ .tte_fn = &test26, .tte_desc = T26_DESC, .tte_skip = false },
 	{ .tte_fn = &test27, .tte_desc = T27_DESC, .tte_skip = false },
 	{ .tte_fn = &test28, .tte_desc = T28_DESC, .tte_skip = false },
-	{ .tte_fn = &test29, .tte_desc = T29_DESC, .tte_skip = false }
+	{ .tte_fn = &test29, .tte_desc = T29_DESC, .tte_skip = false },
+	{ .tte_fn = &test30, .tte_desc = T30_DESC, .tte_skip = false },
+	{ .tte_fn = &test31, .tte_desc = T31_DESC, .tte_skip = false },
 };
+
 #define NUM_TESTS	(sizeof(test_tbl) / sizeof(struct test_tbl_entry))
 
 void print_test_desc(int test_num, const char *test_desc, const char *status)

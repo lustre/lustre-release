@@ -688,6 +688,77 @@ int llapi_layout_file_open(const char *path, int open_flags, mode_t mode,
 int llapi_layout_file_create(const char *path, int open_flags, int mode,
 			     const struct llapi_layout *layout);
 
+/**
+ * Fetch the start and end offset of the current layout component.
+ */
+int llapi_layout_comp_extent_get(const struct llapi_layout *layout,
+				 uint64_t *start, uint64_t *end);
+/**
+ * Set the extent of current layout component.
+ */
+int llapi_layout_comp_extent_set(struct llapi_layout *layout,
+				 uint64_t start, uint64_t end);
+/**
+ * Gets the attribute flags of the current component.
+ */
+int llapi_layout_comp_flags_get(const struct llapi_layout *layout,
+				uint32_t *flags);
+/**
+ * Sets the specified flags of the current component leaving other flags as-is.
+ */
+int llapi_layout_comp_flags_set(struct llapi_layout *layout, uint32_t flags);
+/**
+ * Clears the flags specified in the flags leaving other flags as-is.
+ */
+int llapi_layout_comp_flags_clear(struct llapi_layout *layout, uint32_t flags);
+/**
+ * Fetches the file-unique component ID of the current layout component.
+ */
+int llapi_layout_comp_id_get(const struct llapi_layout *layout, uint32_t *id);
+/**
+ * Adds one component to the existing composite or plain layout.
+ */
+int llapi_layout_comp_add(struct llapi_layout *layout);
+/**
+ * Deletes the current layout component from the composite layout.
+ */
+int llapi_layout_comp_del(struct llapi_layout *layout);
+
+enum {
+	LLAPI_LAYOUT_COMP_POS_NEXT = 0,
+	LLAPI_LAYOUT_COMP_POS_FIRST = 1,
+	LLAPI_LAYOUT_COMP_POS_LAST = 2
+};
+
+/**
+ * Move the current component pointer by specified component ID.
+ */
+int llapi_layout_comp_move_at(struct llapi_layout *layout, uint32_t id);
+/**
+ * Move the current component pointer to a specified position.
+ */
+int llapi_layout_comp_move(struct llapi_layout *layout, uint32_t pos);
+/**
+ * Add layout components to an existing file.
+ */
+int llapi_layout_file_comp_add(const char *path,
+			       const struct llapi_layout *layout);
+/**
+ * Delete component(s) by the specified component id (accepting lcme_id
+ * wildcards also) from an existing file.
+ */
+int llapi_layout_file_comp_del(const char *path, uint32_t id);
+/**
+ * Change flags or other parameters of the component(s) by component ID of an
+ * existing file. The component to be modified is specified by the
+ * comp->lcme_id value, which must be an unique component ID. The new
+ * attributes are passed in by @comp and @valid is used to specify which
+ * attributes in the component are going to be changed.
+ */
+int llapi_layout_file_comp_set(const char *path,
+			       const struct llapi_layout *comp,
+			       uint32_t valid);
+
 /** @} llapi */
 
 #endif

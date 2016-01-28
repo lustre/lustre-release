@@ -2050,11 +2050,9 @@ static int sattr_get_defaults(const char *const fsname,
  * next time they are needed. Only a single filesystem's attributes are
  * cached at a time.
  */
-static int sattr_cache_get_defaults(const char *const fsname,
-                                    const char *const pathname,
-                                    unsigned int *scount,
-                                    unsigned int *ssize,
-                                    unsigned int *soffset)
+int sattr_cache_get_defaults(const char *const fsname,
+			     const char *const pathname, unsigned int *scount,
+			     unsigned int *ssize, unsigned int *soffset)
 {
         static struct {
                 char fsname[PATH_MAX + 1];

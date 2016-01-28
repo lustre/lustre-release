@@ -2053,7 +2053,7 @@ test_27D() {
 
 	local skip27D
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.64) ] &&
-		skip27D = "-s 29"
+		skip27D = "-s 29,30,31"
 	llapi_layout_test -d$DIR/$tdir -p$POOL -o$OSTCOUNT $skip27D ||
 		error "llapi_layout_test failed"
 
