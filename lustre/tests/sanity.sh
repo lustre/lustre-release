@@ -7724,31 +7724,113 @@ test_110() {
 }
 run_test 110 "filename length checking"
 
+#
+# Purpose: To verify dynamic thread (OSS) creation.
+#
 test_115() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	OSTIO_pre=$(ps -e | grep ll_ost_io | awk '{ print $4 }'| sort -n |
-		tail -1 | cut -c11-20)
-	[ -z "$OSTIO_pre" ] && skip "no OSS threads" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+
+	# Lustre does not stop service threads once they are started.
+	# Reset number of running threads to default.
+	stopall
+	setupall
+
+	local OSTIO_pre
+	local save_params="$TMP/sanity-$TESTNAME.parameters"
+
+	# Get ll_ost_io count before I/O
+	OSTIO_pre=$(do_facet ost1 \
+		"$LCTL get_param ost.OSS.ost_io.threads_started | cut -d= -f2")
+	# Exit if lustre is not running (ll_ost_io not running).
+	[ -z "$OSTIO_pre" ] && error "no OSS threads"
+
 	echo "Starting with $OSTIO_pre threads"
+	local thread_max=$((OSTIO_pre * 2))
+	local rpc_in_flight=$((thread_max * 2))
+	# Number of I/O Process proposed to be started.
+	local nfiles
+	local facets=$(get_facets OST)
 
-	NUMTEST=20000
-	NUMFREE=$(df -i -P $DIR | tail -n 1 | awk '{ print $4 }')
-	[[ $NUMFREE -lt $NUMTEST ]] && NUMTEST=$(($NUMFREE - 1000))
-	echo "$NUMTEST creates/unlinks"
-	test_mkdir -p $DIR/$tdir
-	createmany -o $DIR/$tdir/$tfile $NUMTEST
-	unlinkmany $DIR/$tdir/$tfile $NUMTEST
+	save_lustre_params client \
+		"osc.*OST*.max_rpcs_in_flight" > $save_params
+	save_lustre_params $facets \
+		"ost.OSS.ost_io.threads_max" >> $save_params
 
-	OSTIO_post=$(ps -e | grep ll_ost_io | awk '{ print $4 }' | sort -n |
-		tail -1 | cut -c11-20)
+	# Set in_flight to $rpc_in_flight
+	$LCTL set_param osc.*OST*.max_rpcs_in_flight=$rpc_in_flight ||
+		error "Failed to set max_rpcs_in_flight to $rpc_in_flight"
+	nfiles=${rpc_in_flight}
+	# Set ost thread_max to $thread_max
+	do_facet ost1 \
+		"$LCTL set_param ost.OSS.ost_io.threads_max=$thread_max"
 
-	# don't return an error
-	[ $OSTIO_post == $OSTIO_pre ] && echo \
-	    "WARNING: No new ll_ost_io threads were created ($OSTIO_pre)" &&
-	    echo "This may be fine, depending on what ran before this test" &&
-	    echo "and how fast this system is." && return
+	# 5 Minutes should be sufficient for max number of OSS
+	# threads(thread_max) to be created.
+	local timeout=300
 
-	echo "Started with $OSTIO_pre threads, ended with $OSTIO_post"
+	# Start I/O.
+	local WTL=${WTL:-"$LUSTRE/tests/write_time_limit"}
+	mkdir -p $DIR/$tdir
+	for i in $(seq $nfiles); do
+		local file=$DIR/$tdir/${tfile}-$i
+		$LFS setstripe -c -1 -i 0 $file
+		($WTL $file $timeout)&
+	done
+
+	# I/O Started - Wait for thread_started to reach thread_max or report
+	# error if thread_started is more than thread_max.
+	echo "Waiting for thread_started to reach thread_max"
+	local thread_started=0
+	local end_time=$((SECONDS + timeout))
+
+	while [ $SECONDS -le $end_time ] ; do
+		echo -n "."
+		# Get ost i/o thread_started count.
+		thread_started=$(do_facet ost1 \
+			"$LCTL get_param \
+			ost.OSS.ost_io.threads_started | cut -d= -f2")
+		# Break out if thread_started is equal/greater than thread_max
+		if [[ $thread_started -ge $thread_max ]]; then
+			echo ll_ost_io thread_started $thread_started, \
+				equal/greater than thread_max $thread_max
+			break
+		fi
+		sleep 1
+	done
+
+	# Cleanup - We have the numbers, Kill i/o jobs if running.
+	jobcount=($(jobs -p))
+	for i in $(seq 0 $((${#jobcount[@]}-1)))
+	do
+		kill -9 ${jobcount[$i]}
+		if [ $? -ne 0 ] ; then
+			echo Warning: \
+			Failed to Kill \'WTL\(I/O\)\' with pid ${jobcount[$i]}
+		fi
+	done
+
+	# Cleanup files left by WTL binary.
+	for i in $(seq $nfiles); do
+		local file=$DIR/$tdir/${tfile}-$i
+		rm -rf $file
+		if [ $? -ne 0 ] ; then
+			echo "Warning: Failed to delete file $file"
+		fi
+	done
+
+	restore_lustre_params <$save_params
+	rm -f $save_params || echo "Warning: delete file '$save_params' failed"
+
+	# Error out if no new thread has started or Thread started is greater
+	# than thread max.
+	if [[ $thread_started -le $OSTIO_pre ||
+			$thread_started -gt $thread_max ]]; then
+		error "ll_ost_io: thread_started $thread_started" \
+		      "OSTIO_pre $OSTIO_pre, thread_max $thread_max." \
+		      "No new thread started or thread started greater " \
+		      "than thread_max."
+	fi
 }
 run_test 115 "verify dynamic thread creation===================="
 
