@@ -327,11 +327,64 @@ cfs_expr_list_match(__u32 value, struct cfs_expr_list *expr_list)
 }
 
 /**
+ * Convert express list (\a expr_list) to an array of all matched values
+ *
+ * \retval N N is total number of all matched values
+ * \retval 0 if expression list is empty
+ * \retval < 0 for failure
+ */
+int
+cfs_expr_list_values(struct cfs_expr_list *expr_list, int max, __u32 **valpp)
+{
+	struct cfs_range_expr	*expr;
+	__u32			*val;
+	int			count = 0;
+	int			i;
+
+	list_for_each_entry(expr, &expr_list->el_exprs, re_link) {
+		for (i = expr->re_lo; i <= expr->re_hi; i++) {
+			if (((i - expr->re_lo) % expr->re_stride) == 0)
+				count++;
+		}
+	}
+
+	if (count == 0) /* empty expression list */
+		return 0;
+
+	if (count > max)
+		return -EINVAL;
+
+	val = calloc(sizeof(val[0]), count);
+	if (val == NULL)
+		return -ENOMEM;
+
+	count = 0;
+	list_for_each_entry(expr, &expr_list->el_exprs, re_link) {
+		for (i = expr->re_lo; i <= expr->re_hi; i++) {
+			if (((i - expr->re_lo) % expr->re_stride) == 0)
+				val[count++] = i;
+		}
+	}
+
+	*valpp = val;
+	return count;
+}
+
+void
+cfs_expr_list_values_free(__u32 *values, int num)
+{
+	/* This array is allocated by LIBCFS_ALLOC(), so it shouldn't be freed
+	 * by OBD_FREE() if it's called by module other than libcfs & LNet,
+	 * otherwise we will see fake memory leak */
+	free(values);
+}
+
+/**
  * Frees cfs_range_expr structures of \a expr_list.
  *
  * \retval none
  */
-static void
+void
 cfs_expr_list_free(struct cfs_expr_list *expr_list)
 {
 	while (!list_empty(&expr_list->el_exprs)) {

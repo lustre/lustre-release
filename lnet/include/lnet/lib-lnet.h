@@ -470,6 +470,9 @@ lnet_net_alloc(__u32 net_type, struct list_head *netlist);
 struct lnet_ni *
 lnet_ni_alloc(struct lnet_net *net, struct cfs_expr_list *el,
 	      char *iface);
+struct lnet_ni *
+lnet_ni_alloc_w_cpt_array(struct lnet_net *net, __u32 *cpts, __u32 ncpts,
+			  char *iface);
 
 static inline int
 lnet_nid2peerhash(lnet_nid_t nid)
@@ -494,7 +497,7 @@ extern int lnet_cpt_of_nid(lnet_nid_t nid, struct lnet_ni *ni);
 extern lnet_ni_t *lnet_nid2ni_locked(lnet_nid_t nid, int cpt);
 extern lnet_ni_t *lnet_nid2ni_addref(lnet_nid_t nid);
 extern lnet_ni_t *lnet_net2ni_locked(__u32 net, int cpt);
-extern lnet_ni_t *lnet_net2ni(__u32 net);
+extern lnet_ni_t *lnet_net2ni_addref(__u32 net);
 bool lnet_is_ni_healthy_locked(struct lnet_ni *ni);
 struct lnet_net *lnet_get_net_locked(__u32 net_id);
 
@@ -543,9 +546,10 @@ int lnet_rtrpools_enable(void);
 void lnet_rtrpools_disable(void);
 void lnet_rtrpools_free(int keep_pools);
 lnet_remotenet_t *lnet_find_rnet_locked(__u32 net);
-int lnet_dyn_add_ni(lnet_pid_t requested_pid,
-		    struct lnet_ioctl_config_data *conf);
-int lnet_dyn_del_ni(__u32 net);
+int lnet_dyn_add_net(struct lnet_ioctl_config_data *conf);
+int lnet_dyn_del_net(__u32 net);
+int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf);
+int lnet_dyn_del_ni(struct lnet_ioctl_config_ni *conf);
 int lnet_clear_lazy_portal(struct lnet_ni *ni, int portal, char *reason);
 struct lnet_net *lnet_get_net_locked(__u32 net_id);
 
@@ -800,6 +804,7 @@ int lnet_find_or_create_peer_locked(lnet_nid_t dst_nid, int cpt,
 				    struct lnet_peer **peer);
 int lnet_nid2peerni_locked(struct lnet_peer_ni **lpp, lnet_nid_t nid, int cpt);
 struct lnet_peer_ni *lnet_find_peer_ni_locked(lnet_nid_t nid);
+void lnet_peer_net_added(struct lnet_net *net);
 void lnet_peer_tables_cleanup(lnet_ni_t *ni);
 void lnet_peer_uninit(void);
 int lnet_peer_tables_create(void);

@@ -2749,7 +2749,8 @@ ksocknal_net_start_threads(ksock_net_t *net, __u32 *cpts, int ncpts)
 	int	rc;
 	int	i;
 
-	LASSERT(ncpts > 0 && ncpts <= cfs_cpt_number(lnet_cpt_table()));
+	if (ncpts > 0 && ncpts > cfs_cpt_number(lnet_cpt_table()))
+		return -EINVAL;
 
 	for (i = 0; i < ncpts; i++) {
 		struct ksock_sched_info	*info;

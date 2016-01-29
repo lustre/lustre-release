@@ -82,15 +82,7 @@ int cfs_expr_list_print(char *buffer, int count,
 			struct cfs_expr_list *expr_list);
 int cfs_expr_list_values(struct cfs_expr_list *expr_list,
 			 int max, __u32 **values);
-static inline void
-cfs_expr_list_values_free(__u32 *values, int num)
-{
-	/* This array is allocated by LIBCFS_ALLOC(), so it shouldn't be freed
-	 * by OBD_FREE() if it's called by module other than libcfs & LNet,
-	 * otherwise we will see fake memory leak */
-	LIBCFS_FREE(values, num * sizeof(values[0]));
-}
-
+void cfs_expr_list_values_free(__u32 *values, int num);
 void cfs_expr_list_free(struct cfs_expr_list *expr_list);
 int cfs_expr_list_parse(char *str, int len, unsigned min, unsigned max,
 			struct cfs_expr_list **elpp);

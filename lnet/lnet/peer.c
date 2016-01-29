@@ -46,6 +46,28 @@ lnet_peer_remove_from_remote_list(struct lnet_peer_ni *lpni)
 	}
 }
 
+void
+lnet_peer_net_added(struct lnet_net *net)
+{
+	struct lnet_peer_ni *lpni, *tmp;
+
+	list_for_each_entry_safe(lpni, tmp, &the_lnet.ln_remote_peer_ni_list,
+				 lpni_on_remote_peer_ni_list) {
+
+		if (LNET_NIDNET(lpni->lpni_nid) == net->net_id) {
+			lpni->lpni_net = net;
+			lpni->lpni_txcredits =
+			lpni->lpni_mintxcredits =
+				lpni->lpni_net->net_tunables.lct_peer_tx_credits;
+			lpni->lpni_rtrcredits =
+			lpni->lpni_minrtrcredits =
+				lnet_peer_buffer_credits(lpni->lpni_net);
+
+			lnet_peer_remove_from_remote_list(lpni);
+		}
+	}
+}
+
 static void
 lnet_peer_tables_destroy(void)
 {
@@ -552,7 +574,8 @@ lnet_add_peer_ni_to_peer(lnet_nid_t key_nid, lnet_nid_t nid)
 	lpni->lpni_net = lnet_get_net_locked(LNET_NIDNET(lpni->lpni_nid));
 	if (lpni->lpni_net != NULL) {
 		lpni->lpni_txcredits    =
-		lpni->lpni_mintxcredits = lpni->lpni_net->net_peertxcredits;
+		lpni->lpni_mintxcredits =
+			lpni->lpni_net->net_tunables.lct_peer_tx_credits;
 		lpni->lpni_rtrcredits =
 		lpni->lpni_minrtrcredits = lnet_peer_buffer_credits(lpni->lpni_net);
 	} else {
@@ -944,7 +967,7 @@ int lnet_get_peer_info(__u32 idx, lnet_nid_t *primary_nid, lnet_nid_t *nid,
 
 	peer_ni_info->cr_refcount = atomic_read(&lpni->lpni_refcount);
 	peer_ni_info->cr_ni_peer_tx_credits = (lpni->lpni_net != NULL) ?
-		lpni->lpni_net->net_peertxcredits : 0;
+		lpni->lpni_net->net_tunables.lct_peer_tx_credits : 0;
 	peer_ni_info->cr_peer_tx_credits = lpni->lpni_txcredits;
 	peer_ni_info->cr_peer_rtr_credits = lpni->lpni_rtrcredits;
 	peer_ni_info->cr_peer_min_rtr_credits = lpni->lpni_mintxcredits;

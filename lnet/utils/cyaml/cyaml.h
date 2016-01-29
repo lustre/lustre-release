@@ -86,7 +86,7 @@ typedef bool (*cYAML_walk_cb)(struct cYAML *, void *, void**);
  */
 struct cYAML *cYAML_build_tree(char *yaml_file, const char *yaml_blk,
 				size_t yaml_blk_size,
-				struct cYAML **err_str);
+				struct cYAML **err_str, bool debug);
 
 /*
  * cYAML_print_tree

@@ -27,9 +27,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/parser.h>
 #include <lnet/lnetctl.h>
+#include <lnet/nidstr.h>
 #include "cyaml/cyaml.h"
 #include "lnetconfig/liblnetconfig.h"
 
@@ -39,10 +41,10 @@
 static int jt_config_lnet(int argc, char **argv);
 static int jt_unconfig_lnet(int argc, char **argv);
 static int jt_add_route(int argc, char **argv);
-static int jt_add_net(int argc, char **argv);
+static int jt_add_ni(int argc, char **argv);
 static int jt_set_routing(int argc, char **argv);
 static int jt_del_route(int argc, char **argv);
-static int jt_del_net(int argc, char **argv);
+static int jt_del_ni(int argc, char **argv);
 static int jt_show_route(int argc, char **argv);
 static int jt_show_net(int argc, char **argv);
 static int jt_show_routing(int argc, char **argv);
@@ -81,7 +83,7 @@ command_t route_cmds[] = {
 };
 
 command_t net_cmds[] = {
-	{"add", jt_add_net, 0, "add a network\n"
+	{"add", jt_add_ni, 0, "add a network\n"
 	 "\t--net: net name (e.g. tcp0)\n"
 	 "\t--if: physical interface (e.g. eth0)\n"
 	 "\t--ip2net: specify networks based on IP address patterns\n"
@@ -90,8 +92,9 @@ command_t net_cmds[] = {
 	 "\t--peer-buffer-credits: the number of buffer credits per peer\n"
 	 "\t--credits: Network Interface credits\n"
 	 "\t--cpt: CPU Partitions configured net uses (e.g. [0,1]\n"},
-	{"del", jt_del_net, 0, "delete a network\n"
-	 "\t--net: net name (e.g. tcp0)\n"},
+	{"del", jt_del_ni, 0, "delete a network\n"
+	 "\t--net: net name (e.g. tcp0)\n"
+	 "\t--if: physical interface (e.g. eth0)\n"},
 	{"show", jt_show_net, 0, "show networks\n"
 	 "\t--net: net name (e.g. tcp0) to filter on\n"
 	 "\t--verbose: display detailed output per network\n"},
@@ -423,12 +426,19 @@ static int jt_add_route(int argc, char **argv)
 	return rc;
 }
 
-static int jt_add_net(int argc, char **argv)
+static int jt_add_ni(int argc, char **argv)
 {
-	char *network = NULL, *intf = NULL, *ip2net = NULL, *cpt = NULL;
+	char *ip2net = NULL;
 	long int pto = -1, pc = -1, pbc = -1, cre = -1;
 	struct cYAML *err_rc = NULL;
-	int rc, opt;
+	int rc, opt, num_global_cpts = 0;
+	struct lnet_dlc_network_descr nw_descr;
+	struct cfs_expr_list *global_cpts = NULL;
+	struct lnet_ioctl_config_lnd_tunables tunables;
+	bool found = false;
+
+	memset(&tunables, 0, sizeof(tunables));
+	lustre_lnet_init_nw_descr(&nw_descr);
 
 	const char *const short_options = "n:i:p:t:c:b:r:s:h";
 	const struct option long_options[] = {
@@ -448,10 +458,16 @@ static int jt_add_net(int argc, char **argv)
 				   long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'n':
-			network = optarg;
+			nw_descr.nw_id = libcfs_str2net(optarg);
 			break;
 		case 'i':
-			intf = optarg;
+			rc = lustre_lnet_parse_interfaces(optarg, &nw_descr);
+			if (rc != 0) {
+				cYAML_build_error(-1, -1, "ni", "add",
+						"bad interface list",
+						&err_rc);
+				goto failed;
+			}
 			break;
 		case 'p':
 			ip2net = optarg;
@@ -489,7 +505,10 @@ static int jt_add_net(int argc, char **argv)
 			}
 			break;
 		case 's':
-			cpt = optarg;
+			num_global_cpts =
+				cfs_expr_list_parse(optarg,
+						 strlen(optarg),
+						 0, UINT_MAX, &global_cpts);
 			break;
 		case 'h':
 			print_help(net_cmds, "net", "add");
@@ -499,9 +518,23 @@ static int jt_add_net(int argc, char **argv)
 		}
 	}
 
-	rc = lustre_lnet_config_net(network, intf, ip2net, pto, pc, pbc,
-				    cre, cpt, -1, NULL, &err_rc);
+	if (pto > 0 || pc > 0 || pbc > 0 || cre > 0) {
+		tunables.lt_cmn.lct_peer_timeout = pto;
+		tunables.lt_cmn.lct_peer_tx_credits = pc;
+		tunables.lt_cmn.lct_peer_rtr_credits = pbc;
+		tunables.lt_cmn.lct_max_tx_credits = cre;
+		found = true;
+	}
 
+	rc = lustre_lnet_config_ni(&nw_descr,
+				   (num_global_cpts > 0) ? global_cpts: NULL,
+				   ip2net, (found) ? &tunables : NULL,
+				   -1, &err_rc);
+
+	if (global_cpts != NULL)
+		cfs_expr_list_free(global_cpts);
+
+failed:
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
 
@@ -551,15 +584,18 @@ static int jt_del_route(int argc, char **argv)
 	return rc;
 }
 
-static int jt_del_net(int argc, char **argv)
+static int jt_del_ni(int argc, char **argv)
 {
-	char *network = NULL;
 	struct cYAML *err_rc = NULL;
 	int rc, opt;
+	struct lnet_dlc_network_descr nw_descr;
 
-	const char *const short_options = "n:h";
+	lustre_lnet_init_nw_descr(&nw_descr);
+
+	const char *const short_options = "n:i:h";
 	const struct option long_options[] = {
 		{ "net", 1, NULL, 'n' },
+		{ "if", 1, NULL, 'i' },
 		{ "help", 0, NULL, 'h' },
 		{ NULL, 0, NULL, 0 },
 	};
@@ -568,7 +604,16 @@ static int jt_del_net(int argc, char **argv)
 				   long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'n':
-			network = optarg;
+			nw_descr.nw_id = libcfs_str2net(optarg);
+			break;
+		case 'i':
+			rc = lustre_lnet_parse_interfaces(optarg, &nw_descr);
+			if (rc != 0) {
+				cYAML_build_error(-1, -1, "ni", "add",
+						"bad interface list",
+						&err_rc);
+				goto out;
+			}
 			break;
 		case 'h':
 			print_help(net_cmds, "net", "del");
@@ -578,8 +623,9 @@ static int jt_del_net(int argc, char **argv)
 		}
 	}
 
-	rc = lustre_lnet_del_net(network, -1, &err_rc);
+	rc = lustre_lnet_del_ni(&nw_descr, -1, &err_rc);
 
+out:
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
 
