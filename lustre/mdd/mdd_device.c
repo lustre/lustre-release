@@ -266,7 +266,48 @@ static int llog_changelog_cancel(const struct lu_env *env,
 static struct llog_operations changelog_orig_logops;
 
 static int
-mdd_changelog_on(const struct lu_env *env, struct mdd_device *mdd, int on);
+mdd_changelog_write_header(const struct lu_env *env, struct mdd_device *mdd,
+			   int markerflags);
+
+static int
+mdd_changelog_on(const struct lu_env *env, struct mdd_device *mdd)
+{
+	int rc = 0;
+
+	if ((mdd->mdd_cl.mc_flags & CLM_ON) != 0)
+		return rc;
+
+	LCONSOLE_INFO("%s: changelog on\n", mdd2obd_dev(mdd)->obd_name);
+	if (mdd->mdd_cl.mc_flags & CLM_ERR) {
+		CERROR("Changelogs cannot be enabled due to error "
+		       "condition (see %s log).\n",
+		       mdd2obd_dev(mdd)->obd_name);
+		rc = -ESRCH;
+	} else {
+		spin_lock(&mdd->mdd_cl.mc_lock);
+		mdd->mdd_cl.mc_flags |= CLM_ON;
+		spin_unlock(&mdd->mdd_cl.mc_lock);
+		rc = mdd_changelog_write_header(env, mdd, CLM_START);
+	}
+	return rc;
+}
+
+static int
+mdd_changelog_off(const struct lu_env *env, struct mdd_device *mdd)
+{
+	int rc = 0;
+
+	if ((mdd->mdd_cl.mc_flags & CLM_ON) != CLM_ON)
+		return rc;
+
+	LCONSOLE_INFO("%s: changelog off\n", mdd2obd_dev(mdd)->obd_name);
+	rc = mdd_changelog_write_header(env, mdd, CLM_FINI);
+	spin_lock(&mdd->mdd_cl.mc_lock);
+	mdd->mdd_cl.mc_flags &= ~CLM_ON;
+	spin_unlock(&mdd->mdd_cl.mc_lock);
+
+	return rc;
+}
 
 static int mdd_changelog_llog_init(const struct lu_env *env,
 				   struct mdd_device *mdd)
@@ -349,7 +390,7 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 
 	/* If we have registered users, assume we want changelogs on */
 	if (mdd->mdd_cl.mc_lastuser > 0) {
-		rc = mdd_changelog_on(env, mdd, 1);
+		rc = mdd_changelog_on(env, mdd);
 		if (rc < 0)
 			GOTO(out_uclose, rc);
 	}
@@ -408,39 +449,6 @@ static void mdd_changelog_fini(const struct lu_env *env,
 		llog_cat_close(env, ctxt->loc_handle);
 		llog_cleanup(env, ctxt);
 	}
-}
-
-static int
-mdd_changelog_write_header(const struct lu_env *env, struct mdd_device *mdd,
-			   int markerflags);
-
-/* Start / stop recording */
-static int
-mdd_changelog_on(const struct lu_env *env, struct mdd_device *mdd, int on)
-{
-        int rc = 0;
-
-        if ((on == 1) && ((mdd->mdd_cl.mc_flags & CLM_ON) == 0)) {
-                LCONSOLE_INFO("%s: changelog on\n", mdd2obd_dev(mdd)->obd_name);
-                if (mdd->mdd_cl.mc_flags & CLM_ERR) {
-                        CERROR("Changelogs cannot be enabled due to error "
-                               "condition (see %s log).\n",
-                               mdd2obd_dev(mdd)->obd_name);
-                        rc = -ESRCH;
-                } else {
-			spin_lock(&mdd->mdd_cl.mc_lock);
-			mdd->mdd_cl.mc_flags |= CLM_ON;
-			spin_unlock(&mdd->mdd_cl.mc_lock);
-			rc = mdd_changelog_write_header(env, mdd, CLM_START);
-		}
-	} else if ((on == 0) && ((mdd->mdd_cl.mc_flags & CLM_ON) == CLM_ON)) {
-		LCONSOLE_INFO("%s: changelog off\n",mdd2obd_dev(mdd)->obd_name);
-		rc = mdd_changelog_write_header(env, mdd, CLM_FINI);
-		spin_lock(&mdd->mdd_cl.mc_lock);
-		mdd->mdd_cl.mc_flags &= ~CLM_ON;
-		spin_unlock(&mdd->mdd_cl.mc_lock);
-	}
-	return rc;
 }
 
 /** Remove entries with indicies up to and including \a endrec from the
@@ -1281,10 +1289,10 @@ static int mdd_changelog_user_register(const struct lu_env *env,
                 RETURN(-ENOMEM);
         }
 
-        /* Assume we want it on since somebody registered */
-        rc = mdd_changelog_on(env, mdd, 1);
-        if (rc)
-                GOTO(out, rc);
+	/* Assume we want it on since somebody registered */
+	rc = mdd_changelog_on(env, mdd);
+	if (rc)
+		GOTO(out, rc);
 
         rec->cur_hdr.lrh_len = sizeof(*rec);
         rec->cur_hdr.lrh_type = CHANGELOG_USER_REC;
@@ -1431,11 +1439,11 @@ static int mdd_changelog_user_purge(const struct lu_env *env,
                rc = -ENOENT;
         }
 
-        if (!rc && data.mcud_usercount == 0)
-                /* No more users; turn changelogs off */
-                rc = mdd_changelog_on(env, mdd, 0);
+	if (!rc && data.mcud_usercount == 0)
+		/* No more users; turn changelogs off */
+		rc = mdd_changelog_off(env, mdd);
 
-        RETURN (rc);
+	RETURN(rc);
 }
 
 /** mdd_iocontrol
