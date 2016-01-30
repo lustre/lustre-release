@@ -630,7 +630,7 @@ static int osp_update_interpret(const struct lu_env *env,
 	}
 
 	/* Unpack the results from the reply message. */
-	if (req->rq_repmsg != NULL) {
+	if (req->rq_repmsg != NULL && req->rq_replied) {
 		reply = req_capsule_server_sized_get(&req->rq_pill,
 						     &RMF_OUT_UPDATE_REPLY,
 						     OUT_UPDATE_REPLY_SIZE);
