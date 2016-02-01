@@ -1219,6 +1219,10 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
             info->mti_spec.u.sp_ea.eadata == NULL)
                 GOTO(out, result = err_serious(-EINVAL));
 
+	if (create_flags & FMODE_WRITE &&
+	    exp_connect_flags(req->rq_export) & OBD_CONNECT_RDONLY)
+		GOTO(out, result = -EROFS);
+
 	CDEBUG(D_INODE, "I am going to open "DFID"/("DNAME"->"DFID") "
 	       "cr_flag="LPO64" mode=0%06o msg_flag=0x%x\n",
 	       PFID(rr->rr_fid1), PNAME(&rr->rr_name),

@@ -578,6 +578,10 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 			RETURN(dentry == save ? NULL : dentry);
 	}
 
+	if (it->it_op & IT_OPEN && it->it_flags & FMODE_WRITE &&
+	    dentry->d_sb->s_flags & MS_RDONLY)
+		RETURN(ERR_PTR(-EROFS));
+
 	if (it->it_op & IT_CREAT)
 		opc = LUSTRE_OPC_CREATE;
 	else
