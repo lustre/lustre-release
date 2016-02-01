@@ -634,10 +634,8 @@ static int process_req_last_xid(struct ptlrpc_request *req)
 		 *   exp_last_xid on server;
 		 * - The former RPC got chance to be processed;
 		 */
-		if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)) {
-			req->rq_status = -EPROTO;
-			RETURN(ptlrpc_error(req));
-		}
+		if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY))
+			RETURN(-EPROTO);
 	}
 
 	/* try to release in-memory reply data */
@@ -732,8 +730,11 @@ int tgt_request_handle(struct ptlrpc_request *req)
 	} else if (obd->obd_recovery_data.trd_processing_task !=
 		   current_pid()) {
 		rc = process_req_last_xid(req);
-		if (rc)
+		if (rc) {
+			req->rq_status = rc;
+			rc = ptlrpc_error(req);
 			GOTO(out, rc);
+		}
 	}
 
 	request_fail_id = tgt->lut_request_fail_id;
