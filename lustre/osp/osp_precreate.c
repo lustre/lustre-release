@@ -1239,6 +1239,7 @@ static int osp_precreate_ready_condition(const struct lu_env *env,
 	if (d->opd_pre_status != 0 &&
 	    d->opd_pre_status != -EAGAIN &&
 	    d->opd_pre_status != -ENODEV &&
+	    d->opd_pre_status != -ENOTCONN &&
 	    d->opd_pre_status != -ENOSPC) {
 		/* DEBUG LU-3230 */
 		if (d->opd_pre_status != -EIO)
