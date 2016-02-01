@@ -38,6 +38,8 @@ kgnilnd_map_fmablk(kgn_device_t *device, kgn_fma_memblock_t *fma_blk)
 {
 	gni_return_t            rrc;
 	__u32                   flags = GNI_MEM_READWRITE;
+	static unsigned long    reg_to;
+	int                     rfto = *kgnilnd_tunables.kgn_reg_fail_timeout;
 
 	if (fma_blk->gnm_state == GNILND_FMABLK_PHYS) {
 		flags |= GNI_MEM_PHYS_CONT;
@@ -52,13 +54,24 @@ kgnilnd_map_fmablk(kgn_device_t *device, kgn_fma_memblock_t *fma_blk)
 				   fma_blk->gnm_blk_size, device->gnd_rcv_fma_cqh,
 				   flags, &fma_blk->gnm_hndl);
 	if (rrc != GNI_RC_SUCCESS) {
-		/* XXX Nic: need a way to silence this for runtime stuff that is ok to fail
-		 * -- like when under MDD or GART pressure on big systems
-		 */
+		if (rfto != GNILND_REGFAILTO_DISABLE) {
+			if (reg_to == 0) {
+				reg_to = jiffies + cfs_time_seconds(rfto);
+			} else if (time_after(jiffies, reg_to)) {
+				CERROR("FATAL:fmablk registration has failed "
+				       "for %ld seconds.\n",
+				       cfs_duration_sec(jiffies - reg_to) +
+						rfto);
+				LBUG();
+			}
+		}
+
 		CNETERR("register fmablk failed 0x%p mbox_size %d flags %u\n",
 			fma_blk, fma_blk->gnm_mbox_size, flags);
 		RETURN(-ENOMEM);
 	}
+
+	reg_to = 0;
 
 	/* PHYS_CONT memory isn't really mapped, at least not in GART -
 	 *  but all mappings chew up a MDD

@@ -165,6 +165,9 @@
 #define GNILND_LASTRX(conn) (time_after(conn->gnc_last_rx, conn->gnc_last_rx_cq) \
 				? conn->gnc_last_rx : conn->gnc_last_rx_cq)
 
+/* fmablk registration failures timeout before failing node */
+#define GNILND_REGFAILTO_DISABLE  -1
+
 /************************************************************************
  * Enum, flag and tag data
  */
@@ -485,6 +488,7 @@ typedef struct kgn_tunables {
 	int     *kgn_fast_reconn;      /* fast reconnection on conn timeout */
 	int     *kgn_efault_lbug;      /* LBUG on receiving an EFAULT */
 	int     *kgn_max_purgatory;    /* # conns/peer to keep in purgatory */
+	int     *kgn_reg_fail_timeout; /* registration failure timeout */
 	int     *kgn_thread_affinity;  /* bind scheduler threads to cpus */
 	int     *kgn_thread_safe;      /* use thread safe kgni API */
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
