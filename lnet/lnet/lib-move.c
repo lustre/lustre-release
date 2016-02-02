@@ -2497,11 +2497,36 @@ LNetDist(lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
                         return local_nid_dist_zero ? 0 : 1;
                 }
 
-                if (LNET_NIDNET(ni->ni_nid) == dstnet) {
-                        if (srcnidp != NULL)
-                                *srcnidp = ni->ni_nid;
-                        if (orderp != NULL)
-                                *orderp = order;
+		if (LNET_NIDNET(ni->ni_nid) == dstnet) {
+			if (ni->ni_interfaces[0] != NULL) {
+				/* Check if ni's address is the one visible in
+				 * current namespace.
+				 * If not, assign order above 0xffff0000,
+				 * to make this ni not a priority. */
+				int i, up, rc;
+				__u32 mask, addr;
+				char *name;
+				for (i = 0; i < ARRAY_SIZE(ni->ni_interfaces);
+				     i++) {
+					if (ni->ni_interfaces[i] == NULL)
+						continue;
+					name = ni->ni_interfaces[i];
+					rc = lnet_ipif_query(name, &up, &addr,
+							     &mask);
+					if ((rc != 0) || (rc == 0 &&
+					     (!up ||
+					      LNET_NIDADDR(ni->ni_nid) !=
+					      addr))) {
+						order += 0xffff0000;
+						break;
+					}
+				}
+			}
+
+			if (srcnidp != NULL)
+				*srcnidp = ni->ni_nid;
+			if (orderp != NULL)
+				*orderp = order;
 			lnet_net_unlock(cpt);
 			return 1;
 		}
