@@ -553,8 +553,9 @@ static void append_unique(char *buf, char *prefix, char *key, char *val,
 
 		strscat(buf, key, maxbuflen);
 		if (val != NULL) {
-			strscat(buf, "=", maxbuflen);
+			strscat(buf, "=\"", maxbuflen);
 			strscat(buf, val, maxbuflen);
+			strscat(buf, "\"", maxbuflen);
 		}
 	}
 }
