@@ -3811,9 +3811,9 @@ test_52() {
 	echo
 
 	# backup files
-	echo backup files to $TMP/files
+	echo backup files to $TMP/$tdir
 	local files=$(find $DIR/$tdir -type f -newer $TMP/modified_first)
-	copy_files_xattrs $(hostname) $TMP/files $TMP/file_xattrs $files ||
+	copy_files_xattrs $(hostname) $TMP/$tdir $TMP/file_xattrs $files ||
 		error "Unable to copy files"
 
 	umount_client $MOUNT || error "Unable to umount client"
@@ -3853,10 +3853,10 @@ test_52() {
 		error "Some entry under /lost+found should be repaired"
 
 	# compare files
-	diff_files_xattrs $(hostname) $TMP/files $TMP/file_xattrs $files ||
+	diff_files_xattrs $(hostname) $TMP/$tdir $TMP/file_xattrs $files ||
 		error "Unable to diff files"
 
-	rm -rf $TMP/files $TMP/file_xattrs ||
+	rm -rf $TMP/$tdir $TMP/file_xattrs ||
 		error "Unable to delete temporary files"
 	do_node $ost1node "rm -rf $ost1tmp" ||
 		error "Unable to delete temporary files"

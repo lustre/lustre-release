@@ -8,8 +8,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 13297 2108 9789 3637 9789 3561 12622 5188
-ALWAYS_EXCEPT="                42a  42b  42c  42d  45   51d   68b   $SANITY_EXCEPT"
+# bug number for skipped test: 13297 2108 9789 3637 9789 3561 5188
+ALWAYS_EXCEPT="                42a  42b  42c  42d  45   68b   $SANITY_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # with LOD/OSP landing
@@ -4121,11 +4121,11 @@ test_51d() {
 		skip_env "skipping test with few OSTs" && return
 	test_mkdir -p $DIR/$tdir
 	createmany -o $DIR/$tdir/t- 1000
-	$GETSTRIPE $DIR/$tdir > $TMP/files
+	$GETSTRIPE $DIR/$tdir > $TMP/$tfile
 	for N in $(seq 0 $((OSTCOUNT - 1))); do
 		OBJS[$N]=$(awk -vobjs=0 '($1 == '$N') { objs += 1 } \
-			END { printf("%0.0f", objs) }' $TMP/files)
-		OBJS0[$N]=$(grep -A 1 idx $TMP/files | awk -vobjs=0 \
+			END { printf("%0.0f", objs) }' $TMP/$tfile)
+		OBJS0[$N]=$(grep -A 1 idx $TMP/$tfile | awk -vobjs=0 \
 			'($1 == '$N') { objs += 1 } \
 			END { printf("%0.0f", objs) }')
 		log "OST$N has ${OBJS[$N]} objects, ${OBJS0[$N]} are index 0"
@@ -4149,8 +4149,9 @@ test_51d() {
 			      " (${OBJS0[$N]} < ${OBJS0[$NLAST]}"
 		NLAST=$N
 	done
+	rm -f $TMP/$tfile
 }
-run_test 51d "check object distribution ===================="
+run_test 51d "check object distribution"
 
 test_51e() {
 	if [ "$(facet_fstype $SINGLEMDS)" != ldiskfs ]; then
@@ -4184,10 +4185,10 @@ test_52a() {
 	lsattr $DIR/$tdir/foo | egrep -q "^-+a[-e]+ $DIR/$tdir/foo" ||
 						     error "lsattr"
 	chattr -a $DIR/$tdir/foo || error "chattr -a failed"
-        cp -r $DIR/$tdir /tmp/
-	rm -fr $DIR/$tdir || error "cleanup rm failed"
+	cp -r $DIR/$tdir $TMP/
+	rm -fr $DIR/$tdir $TMP/$tdir || error "cleanup rm failed"
 }
-run_test 52a "append-only flag test (should return errors) ====="
+run_test 52a "append-only flag test (should return errors)"
 
 test_52b() {
 	[ -f $DIR/$tdir/foo ] && chattr -i $DIR/$tdir/foo
@@ -8751,11 +8752,13 @@ test_127b() { # bug LU-333
                 esac
         done < $TMP/${tfile}.tmp
 
-        #check that we actually got some stats
-        [ "$read_bytes" ] || error "Missing read_bytes stats"
-        [ "$write_bytes" ] || error "Missing write_bytes stats"
-        [ "$read_bytes" != 0 ] || error "no read done"
-        [ "$write_bytes" != 0 ] || error "no write done"
+	#check that we actually got some stats
+	[ "$read_bytes" ] || error "Missing read_bytes stats"
+	[ "$write_bytes" ] || error "Missing write_bytes stats"
+	[ "$read_bytes" != 0 ] || error "no read done"
+	[ "$write_bytes" != 0 ] || error "no write done"
+
+	rm -f $TMP/${tfile}.tmp
 }
 run_test 127b "verify the llite client stats are sane"
 
@@ -8767,8 +8770,9 @@ test_128() { # bug 15212
 	EOF
 
 	result=$(grep error $TMP/$tfile.log)
-	rm -f $DIR/$tfile
-	[ -z "$result" ] || error "consecutive find's under interactive lfs failed"
+	rm -f $DIR/$tfile $TMP/$tfile.log
+	[ -z "$result" ] ||
+		error "consecutive find's under interactive lfs failed"
 }
 run_test 128 "interactive lfs for 2 consecutive find's"
 
@@ -10231,6 +10235,7 @@ test_154f() {
 
 	rm -f $DIR/f
 	restore_lustre_params < $save
+	rm -f $save
 }
 run_test 154f "get parent fids by reading link ea"
 
@@ -14594,6 +14599,7 @@ test_400a() { # LU-1606, was conf-sanity test_74
 		$CC -Wall -Werror $extra_flags -llustreapi -o $out $prog ||
 			error "client api broken"
 	done
+	rm -f $out
 }
 run_test 400a "Lustre client api program can compile and link"
 
@@ -14626,6 +14632,7 @@ test_400b() { # LU-1606, LU-5011
 		$CC -Wall -Werror -include $header -c -x c /dev/null -o $out ||
 			error "cannot compile '$header'"
 	done
+	rm -f $out
 }
 run_test 400b "packaged headers can be compiled"
 
