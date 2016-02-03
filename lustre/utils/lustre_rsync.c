@@ -391,31 +391,39 @@ int lr_copy_data(struct lr_info *info)
                 info->bufsize = bufsize;
         }
 
-        while (1) {
-                rsize = read(fd_src, info->buf, bufsize);
-                if (rsize == 0) {
-                        break;
-                } else if (rsize < 0) {
-                        rc = -errno;
-                        goto out;
-                }
-                errno = 0;
-                if (write(fd_dest, info->buf, rsize) != rsize) {
-                        if (errno != 0)
-                                rc = -errno;
-                        else
-                                rc = -EINTR;
-                }
-        }
-        fsync(fd_dest);
+	while (1) {
+		char *buf;
+		int wsize;
+
+		buf = info->buf;
+		rsize = read(fd_src, buf, bufsize);
+		if (rsize == 0) {
+			rc = 0;
+			break;
+		}
+		if (rsize < 0) {
+			rc = -errno;
+			break;
+		}
+		do {
+			wsize = write(fd_dest, buf, rsize);
+			if (wsize <= 0) {
+				rc = -errno;
+				break;
+			}
+			rsize -= wsize;
+			buf += wsize;
+		} while (rsize > 0);
+	}
+	fsync(fd_dest);
 
 out:
-        if (fd_src != -1)
-                close(fd_src);
-        if (fd_dest != -1)
-                close(fd_dest);
+	if (fd_src != -1)
+		close(fd_src);
+	if (fd_dest != -1)
+		close(fd_dest);
 
-        return rc;
+	return rc;
 }
 
 /* Copy data from source to destination */
