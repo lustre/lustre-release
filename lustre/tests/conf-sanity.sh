@@ -4,8 +4,8 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 
-# bug number for skipped test:     LU-7428
-ALWAYS_EXCEPT="$CONF_SANITY_EXCEPT 84"
+# bug number for skipped test:
+ALWAYS_EXCEPT="$CONF_SANITY_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 is_sles11()						# LU-2181
