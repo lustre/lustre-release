@@ -30,6 +30,7 @@ unload_dep_module() {
 
 lsmod | grep obdclass > /dev/null && $LCTL dl
 lsmod | grep $FSTYPE > /dev/null && unload_dep_module $FSTYPE
+lsmod | grep ptlrpc > /dev/null && unload_dep_module ptlrpc
 lsmod | grep libcfs > /dev/null && unload_dep_module libcfs
 
 MODULES=$($LCTL modules | awk '{ print $2 }')
