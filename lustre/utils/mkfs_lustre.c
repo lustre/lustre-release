@@ -359,6 +359,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			/* Must update the mgs logs */
 			ldd->ldd_flags |= LDD_F_UPDATE;
 			if (opt == 'f') {
+				ldd->ldd_flags &= ~LDD_F_NO_PRIMNODE;
 				failnode_set = 1;
 			} else {
 				ldd->ldd_flags |= LDD_F_NO_PRIMNODE;
