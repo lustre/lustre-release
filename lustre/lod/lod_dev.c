@@ -319,7 +319,7 @@ static int lod_process_recovery_updates(const struct lu_env *env,
 		CERROR("%s broken update record! index %u "DOSTID":%u :"
 		       " rc = %d\n", lod2obd(lrd->lrd_lod)->obd_name, index,
 		       POSTID(&llh->lgh_id.lgl_oi), rec->lrh_index, -EIO);
-		return -EIO;
+		return -EINVAL;
 	}
 
 	cookie->lgc_lgl = llh->lgh_id;
@@ -333,7 +333,7 @@ static int lod_process_recovery_updates(const struct lu_env *env,
 
 	if (lut->lut_obd->obd_stopping ||
 	    lut->lut_obd->obd_abort_recovery)
-		return -EIO;
+		return -ESHUTDOWN;
 
 	return insert_update_records_to_replay_list(lut->lut_tdtd,
 					(struct llog_update_record *)rec,
