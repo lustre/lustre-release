@@ -1574,7 +1574,7 @@ out_shrink:
 }
 
 static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
-                         void *karg, void *uarg);
+			 void *karg, void __user *uarg);
 
 static int mdt_set_info(struct tgt_session_info *tsi)
 {
@@ -5710,7 +5710,7 @@ static int mdt_ioc_version_get(struct mdt_thread_info *mti, void *karg)
 
 /* ioctls on obd dev */
 static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
-                         void *karg, void *uarg)
+			 void *karg, void __user *uarg)
 {
         struct lu_env      env;
         struct obd_device *obd = exp->exp_obd;

@@ -2555,7 +2555,7 @@ static int echo_client_brw_ioctl(const struct lu_env *env, int rw,
 
 static int
 echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
-                      void *karg, void *uarg)
+		      void *karg, void __user *uarg)
 {
 #ifdef HAVE_SERVER_SUPPORT
 	struct tgt_session_info *tsi;

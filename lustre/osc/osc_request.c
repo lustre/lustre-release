@@ -2265,7 +2265,7 @@ static int osc_statfs(const struct lu_env *env, struct obd_export *exp,
 }
 
 static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
-                         void *karg, void *uarg)
+			 void *karg, void __user *uarg)
 {
         struct obd_device *obd = exp->exp_obd;
         struct obd_ioctl_data *data = karg;

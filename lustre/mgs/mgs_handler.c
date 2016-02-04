@@ -863,7 +863,7 @@ out_pool:
 
 /* from mdt_iocontrol */
 static int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
-			 void *karg, void *uarg)
+			 void *karg, void __user *uarg)
 {
 	struct mgs_device *mgs = exp2mgs_dev(exp);
         struct obd_ioctl_data *data = karg;

@@ -1284,7 +1284,7 @@ out:
  * \retval		negative value on error
  */
 static int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
-			 void *karg, void *uarg)
+			 void *karg, void __user *uarg)
 {
 	struct lu_env		 env;
 	struct ofd_device	*ofd = ofd_exp(exp);

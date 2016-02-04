@@ -1654,7 +1654,7 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
  * \retval negative	negative errno if the ioctl handling failed.
  */
 static int osp_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
-			 void *karg, void *uarg)
+			 void *karg, void __user *uarg)
 {
 	struct obd_device	*obd = exp->exp_obd;
 	struct osp_device	*d;
