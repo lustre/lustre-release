@@ -1405,6 +1405,9 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		if (!cfs_bitmap_check(lod->lod_ost_bitmap, osts->op_array[i]))
 			continue;
 
+		ost = OST_TGT(lod, osts->op_array[i]);
+		ost->ltd_qos.ltq_usable = 0;
+
 		rc = lod_statfs_and_check(env, lod, osts->op_array[i], sfs);
 		if (rc) {
 			/* this OSP doesn't feel well */
@@ -1420,7 +1423,6 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 				   osts->op_array[i] == 0)
 			continue;
 
-		ost = OST_TGT(lod, osts->op_array[i]);
 		ost->ltd_qos.ltq_usable = 1;
 		lod_qos_calc_weight(lod, osts->op_array[i]);
 		total_weight += ost->ltd_qos.ltq_weight;

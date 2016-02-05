@@ -1650,7 +1650,7 @@ test_27u() { # bug 4900
 	createmany -o $DIR/$tdir/t- 1000
 	do_nodes $list $LCTL set_param fail_loc=0
 
-	TLOG=$DIR/$tfile.getstripe
+	TLOG=$TMP/$tfile.getstripe
 	$GETSTRIPE $DIR/$tdir > $TLOG
 	OBJS=$(awk -vobj=0 '($1 == 0) { obj += 1 } END { print obj; }' $TLOG)
 	unlinkmany $DIR/$tdir/t- 1000
