@@ -3673,6 +3673,72 @@ int jt_nodemap_del_range(int argc, char **argv)
 }
 
 /**
+ * set a fileset on a nodemap
+ *
+ * \param	argc		number of args
+ * \param	argv[]		variable string arguments
+ *
+ * --name			nodemap name
+ * --fileset			fileset name
+ *
+ * \retval			0 on success
+ */
+int jt_nodemap_set_fileset(int argc, char **argv)
+{
+	char *nodemap_name = NULL;
+	char *fileset_name = NULL;
+	int   rc = 0;
+	int   c;
+
+	static struct option long_options[] = {
+		{
+			.name		= "name",
+			.has_arg	= required_argument,
+			.flag		= 0,
+			.val		= 'n',
+		},
+		{
+			.name		= "fileset",
+			.has_arg	= required_argument,
+			.flag		= 0,
+			.val		= 'f',
+		},
+		{
+			NULL
+		}
+	};
+
+	while ((c = getopt_long(argc, argv, "n:f:",
+				long_options, NULL)) != -1) {
+		switch (c) {
+		case 'n':
+			nodemap_name = optarg;
+			break;
+		case 'f':
+			fileset_name = optarg;
+			break;
+		}
+	}
+
+	if (nodemap_name == NULL || fileset_name == NULL) {
+		fprintf(stderr, "usage: nodemap_set_fileset --name <name> "
+				"--fileset <fileset>\n");
+		return -1;
+	}
+
+	rc = nodemap_cmd(LCFG_NODEMAP_SET_FILESET, NULL, 0, argv[0],
+			 nodemap_name, fileset_name, NULL);
+	if (rc != 0) {
+		errno = -rc;
+		fprintf(stderr, "error: %s: cannot set fileset '%s' on nodemap "
+				"'%s': rc = %d\n",
+			jt_cmdname(argv[0]), fileset_name, nodemap_name, rc);
+	}
+
+	return rc;
+}
+
+/**
  * modify a nodemap's behavior
  *
  * \param	argc		number of args

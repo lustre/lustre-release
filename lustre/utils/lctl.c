@@ -285,6 +285,9 @@ command_t cmdlist[] = {
 	 "add a UID or GID mapping to a nodemap"},
 	{"nodemap_del_idmap", jt_nodemap_del_idmap, 0,
 	 "delete a UID or GID mapping from a nodemap"},
+	{"nodemap_set_fileset", jt_nodemap_set_fileset, 0,
+	 "set a fileset on a nodemap\n"
+	 "usage: nodemap_set_fileset <fileset>"},
 	{"nodemap_test_nid", jt_nodemap_test_nid, 0,
 	 "usage: nodemap_test_nid <nid>"},
 	{"nodemap_test_id", jt_nodemap_test_id, 0,

@@ -4169,6 +4169,9 @@ int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 			rc = nodemap_del_idmap(nodemap_name, NODEMAP_GID,
 					       idmap);
 		break;
+	case LCFG_NODEMAP_SET_FILESET:
+		rc = nodemap_set_fileset(nodemap_name, param);
+		break;
 	default:
 		rc = -EINVAL;
 	}

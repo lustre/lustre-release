@@ -91,6 +91,8 @@ struct lu_nodemap {
 	/* access by nodemap name */
 	struct hlist_node	 nm_hash;
 	struct nodemap_pde	*nm_pde_data;
+	/* fileset the nodes of this nodemap are restricted to */
+	char			 nm_fileset[PATH_MAX+1];
 
 	/* used when loading/unloading nodemaps */
 	struct list_head	 nm_list;
@@ -123,6 +125,8 @@ int nodemap_add_idmap(const char *name, enum nodemap_id_type id_type,
 		      const __u32 map[2]);
 int nodemap_del_idmap(const char *name, enum nodemap_id_type id_type,
 		      const __u32 map[2]);
+int nodemap_set_fileset(const char *name, const char *fileset);
+char *nodemap_get_fileset(const struct lu_nodemap *nodemap);
 __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 		     enum nodemap_id_type id_type,
 		     enum nodemap_tree_type tree_type, __u32 id);

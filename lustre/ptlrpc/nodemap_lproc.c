@@ -168,6 +168,61 @@ static int nodemap_ranges_open(struct inode *inode, struct file *file)
 }
 
 /**
+ * Reads and prints the fileset for the given nodemap.
+ *
+ * \param	m		seq file in proc fs
+ * \param	data		unused
+ * \retval	0		success
+ */
+static int nodemap_fileset_seq_show(struct seq_file *m, void *data)
+{
+	struct lu_nodemap *nodemap;
+	int rc;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(m->private);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap)) {
+		rc = PTR_ERR(nodemap);
+		CERROR("cannot find nodemap '%s': rc = %d\n",
+			(char *)m->private, rc);
+		return rc;
+	}
+
+	rc = seq_printf(m, "%s\n", nodemap->nm_fileset);
+	nodemap_putref(nodemap);
+	return rc;
+}
+
+/**
+ * Set a fileset on a nodemap.
+ *
+ * \param[in] file      proc file
+ * \param[in] buffer    string, "<fileset>"
+ * \param[in] count     \a buffer length
+ * \param[in] off       unused
+ * \retval              \a count on success
+ * \retval              negative number on error
+ */
+static ssize_t
+nodemap_fileset_seq_write(struct file *file,
+				      const char __user *buffer,
+				      size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	int rc = 0;
+
+	if (count > 0)
+		rc = nodemap_set_fileset(m->private, buffer);
+
+	if (rc != 0)
+		return -EINVAL;
+
+	return count;
+}
+LPROC_SEQ_FOPS(nodemap_fileset);
+
+/**
  * Reads and prints the exports attached to the given nodemap.
  *
  * \param	m		seq file in proc fs, stores nodemap
@@ -1057,6 +1112,10 @@ static struct lprocfs_vars lprocfs_nodemap_vars[] = {
 	{
 		.name		= "ranges",
 		.fops		= &nodemap_ranges_fops,
+	},
+	{
+		.name		= "fileset",
+		.fops		= &nodemap_fileset_fops,
 	},
 	{
 		.name		= "exports",

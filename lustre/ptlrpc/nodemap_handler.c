@@ -831,6 +831,72 @@ out:
 EXPORT_SYMBOL(nodemap_del_range);
 
 /**
+ * set fileset on nodemap
+ * \param	name		nodemap to set fileset on
+ * \param	fileset		string containing fileset
+ * \retval	0 on success
+ *
+ * set a fileset on the named nodemap
+ */
+static int nodemap_set_fileset_helper(struct nodemap_config *config,
+				      struct lu_nodemap *nodemap,
+				      const char *fileset)
+{
+	int rc = 0;
+
+	/* we allow fileset = "" which means clear fileset info */
+	if (fileset == NULL || (fileset[0] != 0 && fileset[0] != '/'))
+		rc = -EINVAL;
+	else if (strlcpy(nodemap->nm_fileset, fileset,
+			 sizeof(nodemap->nm_fileset)) >=
+		 sizeof(nodemap->nm_fileset))
+		rc = -ENAMETOOLONG;
+
+	return rc;
+}
+
+int nodemap_set_fileset(const char *name, const char *fileset)
+{
+	struct lu_nodemap	*nodemap = NULL;
+	int			 rc = 0;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	if (IS_ERR(nodemap)) {
+		mutex_unlock(&active_config_lock);
+		GOTO(out, rc = PTR_ERR(nodemap));
+	}
+
+	if (is_default_nodemap(nodemap))
+		rc = -EINVAL;
+	else
+		rc = nodemap_set_fileset_helper(active_config, nodemap,
+						fileset);
+	mutex_unlock(&active_config_lock);
+
+	nodemap_putref(nodemap);
+out:
+	return rc;
+}
+EXPORT_SYMBOL(nodemap_set_fileset);
+
+/**
+ * get fileset defined on nodemap
+ * \param	nodemap		nodemap to get fileset from
+ * \retval	fileset name, or NULL if not defined or not activated
+ *
+ * get the fileset defined on the nodemap
+ */
+char *nodemap_get_fileset(const struct lu_nodemap *nodemap)
+{
+	if (!nodemap_active || is_default_nodemap(nodemap))
+		return NULL;
+	else
+		return (char *)nodemap->nm_fileset;
+}
+EXPORT_SYMBOL(nodemap_get_fileset);
+
+/**
  * Nodemap constructor
  *
  * Creates an lu_nodemap structure and assigns sane default
@@ -923,6 +989,7 @@ struct lu_nodemap *nodemap_create(const char *name,
 
 		nodemap->nm_squash_uid = default_nodemap->nm_squash_uid;
 		nodemap->nm_squash_gid = default_nodemap->nm_squash_gid;
+		nodemap->nm_fileset[0] = 0;
 	}
 
 	return nodemap;
