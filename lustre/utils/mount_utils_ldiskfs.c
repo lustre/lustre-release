@@ -93,8 +93,11 @@ extern char *progname;
 #define DUMMY_FILE_NAME_LEN             25
 #define EXT3_DIRENT_SIZE                DUMMY_FILE_NAME_LEN
 
+static void append_unique(char *buf, char *prefix, char *key, char *val,
+			  size_t maxbuflen);
+
 /*
- * Concatenate context of the temporary mount point iff selinux is enabled
+ * Concatenate context of the temporary mount point if selinux is enabled
  */
 #ifdef HAVE_SELINUX
 static void append_context_for_mount(char *mntpt, struct mkfs_opts *mop)
@@ -109,8 +112,9 @@ static void append_context_for_mount(char *mntpt, struct mkfs_opts *mop)
 	}
 
 	if (fcontext != NULL) {
-		strcat(mop->mo_ldd.ldd_mount_opts, ",context=");
-		strcat(mop->mo_ldd.ldd_mount_opts, fcontext);
+		append_unique(mop->mo_ldd.ldd_mount_opts,
+			      ",", "context", fcontext,
+			      sizeof(mop->mo_ldd.ldd_mount_opts));
 		freecon(fcontext);
 	}
 }
