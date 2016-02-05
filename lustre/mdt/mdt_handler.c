@@ -356,8 +356,10 @@ static int mdt_get_root(struct tgt_session_info *tsi)
 	struct mdt_thread_info	*info = tsi2mdt_info(tsi);
 	struct mdt_device	*mdt = info->mti_mdt;
 	struct mdt_body		*repbody;
-	char			*fileset;
+	char			*fileset = NULL, *buffer = NULL;
 	int			 rc;
+	struct obd_export	*exp = info->mti_exp;
+	char			*nodemap_fileset;
 
 	ENTRY;
 
@@ -373,7 +375,27 @@ static int mdt_get_root(struct tgt_session_info *tsi)
 		fileset = req_capsule_client_get(info->mti_pill, &RMF_NAME);
 		if (fileset == NULL)
 			GOTO(out, rc = err_serious(-EFAULT));
+	}
 
+	nodemap_fileset = nodemap_get_fileset(exp->exp_target_data.ted_nodemap);
+	if (nodemap_fileset && nodemap_fileset[0]) {
+		if (fileset) {
+			/* consider fileset from client as a sub-fileset
+			 * of the nodemap one */
+			OBD_ALLOC(buffer, PATH_MAX + 1);
+			if (buffer == NULL)
+				GOTO(out, rc = err_serious(-ENOMEM));
+			if (snprintf(buffer, PATH_MAX + 1, "%s/%s",
+				     nodemap_fileset, fileset) >= PATH_MAX + 1)
+				GOTO(out, rc = err_serious(-EINVAL));
+			fileset = buffer;
+		} else {
+			/* enforce fileset as specified in the nodemap */
+			fileset = nodemap_fileset;
+		}
+	}
+
+	if (fileset) {
 		rc = mdt_lookup_fileset(info, fileset, &repbody->mbo_fid1);
 		if (rc < 0)
 			GOTO(out, rc = err_serious(rc));
@@ -385,6 +407,8 @@ static int mdt_get_root(struct tgt_session_info *tsi)
 	EXIT;
 out:
 	mdt_thread_info_fini(info);
+	if (buffer)
+		OBD_FREE(buffer, PATH_MAX+1);
 	return rc;
 }
 
