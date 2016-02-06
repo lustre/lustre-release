@@ -14389,17 +14389,42 @@ test_400b() { # LU-1606, LU-5011
 }
 run_test 400b "packaged headers can be compiled"
 
-test_401() { #LU-7437
+test_401a() { #LU-7437
 	#count the number of parameters by "list_param -R"
 	local params=$($LCTL list_param -R '*' 2>/dev/null | wc -l)
 	#count the number of parameters by listing proc files
-	local procs=$(find -L $proc_dirs -mindepth 1 -printf '%P\n' 2>/dev/null |
+	local procs=$(find -L $proc_dirs -mindepth 1 -printf '%P\n' 2>/dev/null|
 		      sort -u | wc -l)
 
 	[ $params -eq $procs ] ||
 		error "found $params parameters vs. $procs proc files"
+
+	# test the list_param -D option only returns directories
+	params=$($LCTL list_param -R -D '*' 2>/dev/null | wc -l)
+	#count the number of parameters by listing proc directories
+	procs=$(find -L $proc_dirs -mindepth 1 -type d -printf '%P\n' 2>/dev/null |
+		sort -u | wc -l)
+
+	[ $params -eq $procs ] ||
+		error "found $params parameters vs. $procs proc files"
 }
-run_test 401 "Verify if 'lctl list_param -R' can list parameters recursively"
+run_test 401a "Verify if 'lctl list_param -R' can list parameters recursively"
+
+test_401b() {
+	local save=$($LCTL get_param -n jobid_var)
+	local tmp=testing
+
+	$LCTL set_param foo=bar jobid_var=$tmp bar=baz &&
+		error "no error returned when setting bad parameters"
+
+	local jobid_new=$($LCTL get_param -n foe jobid_var baz)
+	[[ "$jobid_new" == "$tmp" ]] || error "jobid tmp $jobid_new != $tmp"
+
+	$LCTL set_param -n fog=bam jobid_var=$save bat=fog
+	local jobid_old=$($LCTL get_param -n foe jobid_var bag)
+	[[ "$jobid_old" == "$save" ]] || error "jobid new $jobid_old != $save"
+}
+run_test 401b "Verify 'lctl {get,set}_param' continue after error"
 
 test_402() {
 	$LFS setdirstripe -i 0 $DIR/$tdir || error "setdirstripe -i 0 failed"

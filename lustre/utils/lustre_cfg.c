@@ -689,12 +689,6 @@ display_name(const char *filename, struct stat *st, struct param_opts *popt)
 			suffix = "@";
 		else if (st->st_mode & S_IWUSR)
 			suffix = "=";
-
-		if (suffix != NULL)
-			suffix_len = strlen(suffix);
-	} else if (popt->po_only_dir) {
-		if (!S_ISDIR(st->st_mode))
-			return NULL;
 	}
 
 	/* Take the original filename string and chop off the glob addition */
@@ -703,8 +697,9 @@ display_name(const char *filename, struct stat *st, struct param_opts *popt)
 		tmp = strstr(filename, "/lnet/");
 		if (tmp != NULL)
 			tmp += strlen("/lnet/");
-	} else
+	} else {
 		tmp += strlen("/lustre/");
+	}
 
 	/* Allocate return string */
 	param_name = strdup(tmp);
@@ -717,10 +712,13 @@ display_name(const char *filename, struct stat *st, struct param_opts *popt)
 
 	/* Append the indicator to entries if needed. */
 	if (popt->po_show_type && suffix != NULL) {
-		param_name = realloc(param_name,
-				     suffix_len + strlen(param_name) + 1);
-		if (param_name != NULL)
+		suffix_len = strlen(suffix);
+
+		tmp = realloc(param_name, suffix_len + strlen(param_name) + 1);
+		if (tmp != NULL) {
+			param_name = tmp;
 			strncat(param_name, suffix, suffix_len);
+		}
 	}
 
 	return param_name;
@@ -864,6 +862,12 @@ enum parameter_operation {
 	SET_PARAM,
 };
 
+char *parameter_opname[] = {
+	[LIST_PARAM] = "list_param",
+	[GET_PARAM] = "get_param",
+	[SET_PARAM] = "set_param",
+};
+
 /**
  * Read the value of parameter
  *
@@ -889,13 +893,16 @@ read_param(const char *path, const char *param_name, struct param_opts *popt)
 	if (fd < 0) {
 		rc = -errno;
 		fprintf(stderr,
-			"error: get_param: opening('%s') failed: %s\n",
+			"error: get_param: opening '%s': %s\n",
 			path, strerror(errno));
 		return rc;
 	}
 
 	buf = calloc(1, page_size);
 	if (buf == NULL) {
+		fprintf(stderr,
+			"error: get_param: allocating '%s' buffer: %s\n",
+			path, strerror(errno));
 		close(fd);
 		return -ENOMEM;
 	}
@@ -909,7 +916,7 @@ read_param(const char *path, const char *param_name, struct param_opts *popt)
 			rc = -errno;
 			if (errno != EIO) {
 				fprintf(stderr, "error: get_param: "
-					"read('%s') failed: %s\n",
+					"reading '%s': %s\n",
 					param_name, strerror(errno));
 			}
 			break;
@@ -934,8 +941,8 @@ read_param(const char *path, const char *param_name, struct param_opts *popt)
 
 		if (fwrite(buf, 1, count, stdout) != count) {
 			rc = -errno;
-			fprintf(stderr, "error: get_param: "
-				"write to stdout failed: %s\n",
+			fprintf(stderr,
+				"error: get_param: write to stdout: %s\n",
 				strerror(errno));
 			break;
 		}
@@ -971,7 +978,7 @@ write_param(const char *path, const char *param_name, struct param_opts *popt,
 	fd = open(path, O_WRONLY);
 	if (fd < 0) {
 		rc = -errno;
-		fprintf(stderr, "error: set_param: opening %s: %s\n",
+		fprintf(stderr, "error: set_param: opening '%s': %s\n",
 			path, strerror(errno));
 		return rc;
 	}
@@ -980,18 +987,18 @@ write_param(const char *path, const char *param_name, struct param_opts *popt,
 	if (count < 0) {
 		rc = -errno;
 		if (errno != EIO) {
-			fprintf(stderr, "error: set_param: setting "
-				"%s=%s: %s\n", path, value,
-				strerror(errno));
+			fprintf(stderr, "error: set_param: setting %s=%s: %s\n",
+				path, value, strerror(errno));
 		}
 	} else if (count < strlen(value)) { /* Truncate case */
 		rc = -EINVAL;
-		fprintf(stderr, "error: set_param: setting "
-			"%s=%s: wrote only %zd\n", path, value, count);
+		fprintf(stderr, "error: set_param: setting %s=%s: "
+			"wrote only %zd\n", path, value, count);
 	} else if (popt->po_show_path) {
 		printf("%s=%s\n", param_name, value);
 	}
 	close(fd);
+
 	return rc;
 }
 
@@ -1004,7 +1011,7 @@ write_param(const char *path, const char *param_name, struct param_opts *popt,
  * \param[in] mode		what operation to perform with the parameter
  *
  * \retval number of bytes written on success.
- * \retval -errno on error.
+ * \retval -errno on error and prints error message.
  */
 static int
 param_display(struct param_opts *popt, char *pattern, char *value,
@@ -1013,14 +1020,15 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 	int dir_count = 0;
 	char **dir_cache;
 	glob_t paths;
+	char *opname = parameter_opname[mode];
 	int rc, i;
 
 	rc = cfs_get_param_paths(&paths, "%s", pattern);
 	if (rc != 0) {
 		rc = -errno;
 		if (!popt->po_recursive) {
-			fprintf(stderr, "error: '%s': %s\n",
-				pattern, strerror(errno));
+			fprintf(stderr, "error: %s: param_path '%s': %s\n",
+				opname, pattern, strerror(errno));
 		}
 		return rc;
 	}
@@ -1028,23 +1036,37 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 	dir_cache = calloc(paths.gl_pathc, sizeof(char *));
 	if (dir_cache == NULL) {
 		rc = -ENOMEM;
+		fprintf(stderr,
+			"error: %s: allocating '%s' dir_cache[%zd]: %s\n",
+			opname, pattern, paths.gl_pathc, strerror(-rc));
 		goto out_param;
 	}
 
-	for (i = 0; i  < paths.gl_pathc; i++) {
+	for (i = 0; i < paths.gl_pathc; i++) {
 		char *param_name = NULL, *tmp;
 		char pathname[PATH_MAX];
 		struct stat st;
+		int rc2;
 
 		if (stat(paths.gl_pathv[i], &st) == -1) {
-			rc = -errno;
-			break;
+			fprintf(stderr, "error: %s: stat '%s': %s\n",
+				opname, paths.gl_pathv[i], strerror(errno));
+			if (rc == 0)
+				rc = -errno;
+			continue;
 		}
+
+		if (popt->po_only_dir && !S_ISDIR(st.st_mode))
+			continue;
 
 		param_name = display_name(paths.gl_pathv[i], &st, popt);
 		if (param_name == NULL) {
-			rc = -ENOMEM;
-			break;
+			fprintf(stderr,
+				"error: %s: generating name for '%s': %s\n",
+				opname, paths.gl_pathv[i], strerror(ENOMEM));
+			if (rc == 0)
+				rc = -ENOMEM;
+			continue;
 		}
 
 		/**
@@ -1084,12 +1106,13 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 			break;
 		case SET_PARAM:
 			if (S_ISREG(st.st_mode)) {
-				rc = write_param(paths.gl_pathv[i], param_name,
-						 popt, value);
+				rc2 = write_param(paths.gl_pathv[i],
+						  param_name, popt, value);
+				if (rc2 < 0 && rc == 0)
+					rc = rc2;
 			}
 			break;
 		case LIST_PARAM:
-		default:
 			if (popt->po_show_path)
 				printf("%s\n", param_name);
 			break;
@@ -1104,11 +1127,15 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 		}
 
 		/* Turn param_name into file path format */
-		rc = clean_path(popt, param_name);
-		if (rc < 0) {
+		rc2 = clean_path(popt, param_name);
+		if (rc2 < 0) {
+			fprintf(stderr, "error: %s: cleaning '%s': %s\n",
+				opname, param_name, strerror(-rc2));
 			free(param_name);
 			param_name = NULL;
-			break;
+			if (rc == 0)
+				rc = rc2;
+			continue;
 		}
 
 		/* Use param_name to grab subdirectory tree from full path */
@@ -1120,21 +1147,32 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 
 		/* Shouldn't happen but just in case */
 		if (tmp == NULL) {
-			rc = -EINVAL;
-			break;
+			if (rc == 0)
+				rc = -EINVAL;
+			continue;
 		}
 
-		rc = snprintf(pathname, sizeof(pathname), "%s/*", tmp);
-		if (rc < 0) {
-			break;
-		} else if (rc >= sizeof(pathname)) {
-			rc = -EINVAL;
-			break;
+		rc2 = snprintf(pathname, sizeof(pathname), "%s/*", tmp);
+		if (rc2 < 0) {
+			/* snprintf() should never an error, and if it does
+			 * there isn't much point trying to use fprintf() */
+			continue;
+		}
+		if (rc >= sizeof(pathname)) {
+			fprintf(stderr, "error: %s: overflow processing '%s'\n",
+				opname, pathname);
+			if (rc == 0)
+				rc = -EINVAL;
+			continue;
 		}
 
-		rc = param_display(popt, pathname, value, mode);
-		if (rc != 0 && rc != -ENOENT)
-			break;
+		rc2 = param_display(popt, pathname, value, mode);
+		if (rc2 != 0 && rc2 != -ENOENT) {
+			/* errors will be printed by param_display() */
+			if (rc == 0)
+				rc = rc2;
+			continue;
+		}
 	}
 
 	for (i = 0; i < dir_count; i++)
@@ -1183,15 +1221,27 @@ int jt_lcfg_listparam(int argc, char **argv)
 		return CMD_HELP;
 
 	for (i = index; i < argc; i++) {
+		int rc2;
+
 		path = argv[i];
 
-		rc = clean_path(&popt, path);
-		if (rc < 0)
-			break;
+		rc2 = clean_path(&popt, path);
+		if (rc2 < 0) {
+			fprintf(stderr, "error: %s: cleaning '%s': %s\n",
+				jt_cmdname(argv[0]), path, strerror(-rc2));
+			if (rc == 0)
+				rc = rc2;
+			continue;
+		}
 
-		rc = param_display(&popt, path, NULL, LIST_PARAM);
-		if (rc < 0)
-			break;
+		rc2 = param_display(&popt, path, NULL, LIST_PARAM);
+		if (rc2 < 0) {
+			fprintf(stderr, "error: %s: listing '%s': %s\n",
+				jt_cmdname(argv[0]), path, strerror(-rc2));
+			if (rc == 0)
+				rc = rc2;
+			continue;
+		}
 	}
 
 	return rc;
@@ -1237,16 +1287,26 @@ int jt_lcfg_getparam(int argc, char **argv)
 		return CMD_HELP;
 
 	for (i = index; i < argc; i++) {
+		int rc2;
+
 		path = argv[i];
 
-		rc = clean_path(&popt, path);
-		if (rc < 0)
-			break;
+		rc2 = clean_path(&popt, path);
+		if (rc2 < 0) {
+			fprintf(stderr, "error: %s: cleaning '%s': %s\n",
+				jt_cmdname(argv[0]), path, strerror(-rc2));
+			if (rc == 0)
+				rc = rc2;
+			continue;
+		}
 
-		rc = param_display(&popt, path, NULL,
+		rc2 = param_display(&popt, path, NULL,
 				   popt.po_only_path ? LIST_PARAM : GET_PARAM);
-		if (rc < 0)
-			break;
+		if (rc2 < 0) {
+			if (rc == 0)
+				rc = rc2;
+			continue;
+		}
 	}
 
 	return rc;
@@ -1342,14 +1402,32 @@ int jt_lcfg_setparam(int argc, char **argv)
 		return jt_lcfg_mgsparam2(argc, argv, &popt);
 
 	for (i = index; i < argc; i++) {
+		int rc2;
+
 		value = strchr(argv[i], '=');
 		if (value != NULL) {
 			/* format: set_param a=b */
+			if (path != NULL) {
+				/* broken value "set_param a b=c" */
+				fprintf(stderr,
+					"error: %s: setting %s=%s: bad value\n",
+					jt_cmdname(argv[0]), path, argv[i]);
+				if (rc == 0)
+					rc = EINVAL;
+				path = NULL;
+				break;
+			}
 			*value = '\0';
 			value++;
 			path = argv[i];
-			if (*value == '\0')
-				break;
+			if (*value == '\0') {
+				fprintf(stderr,
+					"error: %s: setting %s: no value\n",
+					jt_cmdname(argv[0]), path);
+				if (rc == 0)
+					rc = EINVAL;
+				continue;
+			}
 		} else {
 			/* format: set_param a b */
 			if (path == NULL) {
@@ -1360,17 +1438,21 @@ int jt_lcfg_setparam(int argc, char **argv)
 			}
 		}
 
-		rc = clean_path(&popt, path);
-		if (rc < 0)
-			break;
+		rc2 = clean_path(&popt, path);
+		if (rc2 < 0) {
+			fprintf(stderr, "error: %s: cleaning %s: %s\n",
+				jt_cmdname(argv[0]), path, strerror(-rc2));
+			if (rc == 0)
+				rc = rc2;
+			continue;
+		}
 
-		rc = param_display(&popt, path, value, SET_PARAM);
+		rc2 = param_display(&popt, path, value, SET_PARAM);
+		if (rc == 0)
+			rc = rc2;
 		path = NULL;
 		value = NULL;
 	}
-	if (path != NULL && (value == NULL || *value == '\0'))
-		fprintf(stderr, "error: %s: setting %s=: %s\n",
-			jt_cmdname(argv[0]), path, strerror(rc = EINVAL));
 
 	return rc;
 }
