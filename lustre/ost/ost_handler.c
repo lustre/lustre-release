@@ -47,6 +47,10 @@
 #include <obd_class.h>
 #include "ost_internal.h"
 
+int oss_max_threads = 512;
+CFS_MODULE_PARM(oss_max_threads, "i", int, 0444,
+		"maximum number of OSS service threads");
+
 static int oss_num_threads;
 CFS_MODULE_PARM(oss_num_threads, "i", int, 0444,
                 "number of OSS service threads to start");
@@ -112,7 +116,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 			.tc_thr_factor		= OSS_THR_FACTOR,
 			.tc_nthrs_init		= OSS_NTHRS_INIT,
 			.tc_nthrs_base		= OSS_NTHRS_BASE,
-			.tc_nthrs_max		= OSS_NTHRS_MAX,
+			.tc_nthrs_max		= oss_max_threads,
 			.tc_nthrs_user		= oss_num_threads,
 			.tc_cpu_affinity	= 1,
 			.tc_ctx_tags		= LCT_DT_THREAD,
@@ -214,7 +218,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 			.tc_thr_factor		= OSS_THR_FACTOR,
 			.tc_nthrs_init		= OSS_NTHRS_INIT,
 			.tc_nthrs_base		= OSS_NTHRS_BASE,
-			.tc_nthrs_max		= OSS_NTHRS_MAX,
+			.tc_nthrs_max		= oss_max_threads,
 			.tc_nthrs_user		= oss_num_threads,
 			.tc_cpu_affinity	= 1,
 			.tc_ctx_tags		= LCT_DT_THREAD,

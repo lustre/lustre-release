@@ -456,7 +456,6 @@
 				NUM_CACHEPAGES >> (28 - PAGE_CACHE_SHIFT))
 #define OSS_NTHRS_INIT		(PTLRPC_NTHRS_INIT + 1)
 #define OSS_NTHRS_BASE		64
-#define OSS_NTHRS_MAX		512
 
 /* threads for handling "create" request */
 #define OSS_CR_THR_FACTOR	1
