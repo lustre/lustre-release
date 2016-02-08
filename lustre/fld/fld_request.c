@@ -425,10 +425,15 @@ again:
 	}
 
 	if (rc != 0) {
-		if (imp->imp_state != LUSTRE_IMP_CLOSED && !imp->imp_deactive) {
+		if (imp->imp_state != LUSTRE_IMP_CLOSED &&
+		    !imp->imp_deactive &&
+		    imp->imp_connect_flags_orig & OBD_CONNECT_MDS_MDS &&
+		    rc != -ENOTSUPP) {
 			/* Since LWP is not replayable, so it will keep
-			 * trying unless umount happens, otherwise it would
-			 * cause unecessary failure of the application. */
+			 * trying unless umount happens or the remote
+			 * target does not support the operation, otherwise
+			 * it would cause unecessary failure of the
+			 * application. */
 			ptlrpc_req_finished(req);
 			rc = 0;
 			goto again;
