@@ -848,24 +848,34 @@ kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
 
 	conn->ibc_sched = sched;
 
-        rc = rdma_create_qp(cmid, conn->ibc_hdev->ibh_pd, init_qp_attr);
-        if (rc != 0) {
-                CERROR("Can't create QP: %d, send_wr: %d, recv_wr: %d\n",
-                       rc, init_qp_attr->cap.max_send_wr,
-                       init_qp_attr->cap.max_recv_wr);
-                goto failed_2;
-        }
+	do {
+		rc = rdma_create_qp(cmid, conn->ibc_hdev->ibh_pd, init_qp_attr);
+		if (!rc || init_qp_attr->cap.max_send_wr < 16)
+			break;
 
-        LIBCFS_FREE(init_qp_attr, sizeof(*init_qp_attr));
+		init_qp_attr->cap.max_send_wr -= init_qp_attr->cap.max_send_wr / 4;
+	} while (rc);
 
-        /* 1 ref for caller and each rxmsg */
+	if (rc) {
+		CERROR("Can't create QP: %d, send_wr: %d, recv_wr: %d\n",
+			rc, init_qp_attr->cap.max_send_wr,
+			init_qp_attr->cap.max_recv_wr);
+		goto failed_2;
+	}
+
+	if (init_qp_attr->cap.max_send_wr != IBLND_SEND_WRS(conn))
+		CDEBUG(D_NET, "original send wr %d, created with %d\n",
+			IBLND_SEND_WRS(conn), init_qp_attr->cap.max_send_wr);
+
+	LIBCFS_FREE(init_qp_attr, sizeof(*init_qp_attr));
+
+	/* 1 ref for caller and each rxmsg */
 	atomic_set(&conn->ibc_refcount, 1 + IBLND_RX_MSGS(conn));
 	conn->ibc_nrx = IBLND_RX_MSGS(conn);
 
-        /* post receives */
+	/* post receives */
 	for (i = 0; i < IBLND_RX_MSGS(conn); i++) {
-		rc = kiblnd_post_rx(&conn->ibc_rxs[i],
-				    IBLND_POSTRX_NO_CREDIT);
+		rc = kiblnd_post_rx(&conn->ibc_rxs[i], IBLND_POSTRX_NO_CREDIT);
 		if (rc != 0) {
 			CERROR("Can't post rxmsg: %d\n", rc);
 
