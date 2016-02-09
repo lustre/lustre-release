@@ -736,6 +736,15 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
           component,
           <literal>lctl get_param</literal> should be used as described in the
           usage below.</para>
+          <para>The LFSCK namespace status output refers to phase 1 and phase 2.
+          Phase 1 is when the LFSCK main engine, which runs on each MDT,
+          linearly scans its local device, guaranteeing that all local objects
+          are checked.  However, there are certain cases in which LFSCK cannot
+          know whether an object is consistent or cannot repair an inconsistency
+          until the phase 1 scanning is completed. During phase 2 of the
+          namespace check, objects with multiple hard-links, objects with remote
+          parents, and other objects which couldn't be verified during phase 1
+          will be checked.</para>
         </section>
         <section>
           <title>Usage</title>
@@ -1099,6 +1108,13 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
           <literal>lfsck_layout</literal>. To show the status of this component
           <literal>lctl get_param</literal> should be used as described in the
           usage below.</para>
+          <para>The LFSCK layout status output refers to phase 1 and phase 2.
+          Phase 1 is when the LFSCK main engine, which runs on each MDT/OST,
+          linearly scans its local device, guaranteeing that all local objects
+          are checked. During phase 1 of layout LFSCK, the OST-objects which are
+          not referenced by any MDT-object are recorded in a bitmap. During
+          phase 2 of the layout check, the OST-objects in the bitmap will be
+          re-scanned to check whether they are really orphan objects.</para>
         </section>
         <section>
           <title>Usage</title>
