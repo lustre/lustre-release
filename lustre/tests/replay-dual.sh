@@ -968,8 +968,7 @@ test_26() {
 					error "set default dirstripe failed"
 			fi
 			cd $dbench_dir || break
-			rundbench 1 -D $dbench_dir -t 100 > /dev/null 2&>1 ||
-									break
+			rundbench 1 -D $dbench_dir -t 100 &>/dev/null || break
 			cd $DIR/$tdir || break
 			rm -rf $dbench_dir || break
 		done
