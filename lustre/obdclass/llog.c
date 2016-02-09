@@ -262,6 +262,8 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 	     (loghandle->u.phd.phd_cat_handle != NULL &&
 	      loghandle->u.phd.phd_cat_handle->u.chd.chd_current_log !=
 		loghandle))) {
+		/* never try to destroy it again */
+		llh->llh_flags &= ~LLOG_F_ZAP_WHEN_EMPTY;
 		rc = llog_trans_destroy(env, loghandle, th);
 		if (rc < 0) {
 			/* Sigh, can not destroy the final plain llog, but
