@@ -5,6 +5,7 @@ pre.programlisting, pre.screen
 
 div.versionbox {
   border: 1px solid gray;
+  margin-top: 12px;
 }
 
 span.versionlabel {

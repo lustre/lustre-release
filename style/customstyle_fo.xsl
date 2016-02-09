@@ -16,6 +16,10 @@
 <xsl:param name="autotoc.label.in.hyperlink" select="1"></xsl:param>
 <xsl:param name="section.label.includes.component.label" select="1"></xsl:param>
 
+<!-- TODO: ideally generalize customstyle_common.xsl suffeciently
+     so that is can be included in this file. Currently, this file
+	 duplicates customerstyle_common.xsl with some minor differences. -->
+
 <!--  textdecoration_1 applies the style to the text to highlight an region
 		of the documentation refers to a lustre specific version.
 

@@ -513,8 +513,10 @@ border: none; background: none; font-weight: none; color: none; }
 
                     <xsl:call-template name="user.header.content"/>
 
-                    <xsl:copy-of select="$content"/>
-
+					<xsl:call-template name='condition-decorator'>
+						<xsl:with-param name='content' select="$content"/>
+					</xsl:call-template>
+						
                     <xsl:call-template name="user.footer.content"/>
 
 					<!-- Redundant since the upper navigation bar always visible -->
@@ -826,6 +828,9 @@ border: none; background: none; font-weight: none; color: none; }
                 <span class="file">
                     <a href="{substring-after($href, $base.dir)}"  tabindex="1">
                         <xsl:value-of select="$title"/>
+						<xsl:call-template name="condition-title">
+                        	<xsl:with-param name="condition" select="@condition"/>
+						</xsl:call-template>
                     </a>
                 </span>
                 <xsl:if test="part|reference|preface|chapter|bibliography|appendix|article|topic|glossary|section|simplesect|sect1|sect2|sect3|sect4|sect5|refentry|colophon|bibliodiv">
