@@ -1666,11 +1666,13 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 			   struct md_attr *ma)
 {
 	struct mdt_lock_handle *lh = &info->mti_lh[MDT_LH_LAYOUT];
+	struct lu_ucred	       *uc = mdt_ucred(info);
 	struct close_data      *data;
 	struct ldlm_lock       *lease;
 	struct mdt_object      *orphan;
 	struct md_attr         *orp_ma;
 	struct lu_buf          *buf;
+	cfs_cap_t		cap;
 	bool			lease_broken;
 	int                     rc;
 	int                     rc2;
@@ -1769,8 +1771,10 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 
 	orp_ma = &info->mti_u.hsm.attr;
 	orp_ma->ma_attr.la_mode = S_IFREG | S_IWUSR;
-	orp_ma->ma_attr.la_uid = ma->ma_attr.la_uid;
-	orp_ma->ma_attr.la_gid = ma->ma_attr.la_gid;
+	/* We use root ownership to bypass potential quota
+	 * restrictions on the user and group of the file. */
+	orp_ma->ma_attr.la_uid = 0;
+	orp_ma->ma_attr.la_gid = 0;
 	orp_ma->ma_attr.la_valid = LA_MODE | LA_UID | LA_GID;
 	orp_ma->ma_lmm = ma->ma_lmm;
 	orp_ma->ma_lmm_size = ma->ma_lmm_size;
@@ -1799,20 +1803,25 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	if (rc != 0)
 		GOTO(out_close, rc);
 
+	/* The orphan has root ownership so we need to raise
+	 * CAP_FOWNER to set the HSM attributes. */
+	cap = uc->uc_cap;
+	uc->uc_cap |= MD_CAP_TO_MASK(CFS_CAP_FOWNER);
 	rc = mo_xattr_set(info->mti_env, mdt_object_child(orphan), buf,
 			  XATTR_NAME_HSM, 0);
+	uc->uc_cap = cap;
+	if (rc != 0)
+		GOTO(out_layout_lock, rc);
 
-	if (rc == 0)
-		/* Swap layout with orphan object */
-		rc = mo_swap_layouts(info->mti_env, mdt_object_child(o),
-				     mdt_object_child(orphan),
-				     SWAP_LAYOUTS_MDS_HSM);
-
-	/* Release exclusive LL */
-	mdt_object_unlock(info, o, lh, 1);
-
+	/* Swap layout with orphan objects. */
+	rc = mo_swap_layouts(info->mti_env, mdt_object_child(o),
+			     mdt_object_child(orphan),
+			     SWAP_LAYOUTS_MDS_HSM);
 	EXIT;
 
+out_layout_lock:
+	/* Release exclusive LL */
+	mdt_object_unlock(info, o, lh, 1);
 out_close:
 	/* Close orphan object anyway */
 	rc2 = mo_close(info->mti_env, mdt_object_child(orphan), orp_ma,
