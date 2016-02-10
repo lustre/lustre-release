@@ -45,6 +45,14 @@ racer_cleanup()
 			killall -0 $P.sh
 			[[ $? -eq 0 ]] && (( rc+=1 ))
 		done
+
+		# Kill dd processes to speedup cleanup
+		local pids=$(ps uax | grep "$DIR" | grep dd | grep -v grep |
+				awk '{print $2}')
+		for pid in $pids; do
+			kill $pid
+		done
+
 		if [[ $rc -eq 0 ]]; then
 			echo there should be NO racer processes:
 			ps uww -C "${RACER_PROGS// /.sh,}.sh"
