@@ -132,7 +132,7 @@ void cfs_tracefile_write_unlock()
 	up_write(&cfs_tracefile_sem);
 }
 
-cfs_trace_buf_type_t cfs_trace_buf_idx_get()
+enum cfs_trace_buf_type cfs_trace_buf_idx_get()
 {
 	if (in_irq())
 		return CFS_TCD_TYPE_IRQ;

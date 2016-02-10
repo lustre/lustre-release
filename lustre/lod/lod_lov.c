@@ -148,7 +148,7 @@ void lod_putref(struct lod_device *lod, struct lod_tgt_descs *ltd)
  */
 static int ltd_bitmap_resize(struct lod_tgt_descs *ltd, __u32 newsize)
 {
-	cfs_bitmap_t *new_bitmap, *old_bitmap = NULL;
+	struct cfs_bitmap *new_bitmap, *old_bitmap = NULL;
 	int	      rc = 0;
 	ENTRY;
 

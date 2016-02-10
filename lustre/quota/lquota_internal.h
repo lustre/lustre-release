@@ -339,7 +339,7 @@ void lquota_lqe_debug0(struct lquota_entry *lqe,
 	__attribute__ ((format (printf, 3, 4)));
 
 #define LQUOTA_DEBUG_LIMIT(mask, lqe, fmt, a...) do {                          \
-	static cfs_debug_limit_state_t _lquota_cdls;                           \
+	static struct cfs_debug_limit_state _lquota_cdls;		       \
 	LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, mask, &_lquota_cdls);              \
 	lquota_lqe_debug(&msgdata, mask, &_lquota_cdls, lqe, "$$$ "fmt" ",     \
 			 ##a);                                                 \

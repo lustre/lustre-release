@@ -79,7 +79,7 @@ struct nrs_tbf_client {
 	/** List of queued requests. */
 	struct list_head		 tc_list;
 	/** Node in binary heap. */
-	cfs_binheap_node_t		 tc_node;
+	struct cfs_binheap_node		 tc_node;
 	/** Whether the client is in heap. */
 	bool				 tc_in_heap;
 	/** Sequence of the newest rule. */
@@ -200,7 +200,7 @@ struct nrs_tbf_head {
 	/**
 	 * Heap of queues.
 	 */
-	cfs_binheap_t			*th_binheap;
+	struct cfs_binheap		*th_binheap;
 	/**
 	 * Hash of clients.
 	 */

@@ -51,7 +51,7 @@ do {									\
 
 /**
  * Grows the capacity of a binary heap so that it can handle a larger number of
- * \e cfs_binheap_node_t objects.
+ * \e struct cfs_binheap_node objects.
  *
  * \param[in] h The binary heap
  *
@@ -59,10 +59,10 @@ do {									\
  * \retval -ENOMEM OOM error
  */
 static int
-cfs_binheap_grow(cfs_binheap_t *h)
+cfs_binheap_grow(struct cfs_binheap *h)
 {
-	cfs_binheap_node_t ***frag1 = NULL;
-	cfs_binheap_node_t  **frag2;
+	struct cfs_binheap_node ***frag1 = NULL;
+	struct cfs_binheap_node  **frag2;
 	int hwm = h->cbh_hwm;
 
 	/* need a whole new chunk of pointers */
@@ -155,12 +155,12 @@ cfs_binheap_grow(cfs_binheap_t *h)
  * \retval valid-pointer A newly-created and initialized binary heap object
  * \retval NULL		 error
  */
-cfs_binheap_t *
-cfs_binheap_create(cfs_binheap_ops_t *ops, unsigned int flags,
+struct cfs_binheap *
+cfs_binheap_create(struct cfs_binheap_ops *ops, unsigned int flags,
 		   unsigned count, void *arg, struct cfs_cpt_table *cptab,
 		   int cptid)
 {
-	cfs_binheap_t *h;
+	struct cfs_binheap *h;
 
 	LASSERT(ops != NULL);
 	LASSERT(ops->hop_compare != NULL);
@@ -202,7 +202,7 @@ EXPORT_SYMBOL(cfs_binheap_create);
  * \param[in] h The binary heap object
  */
 void
-cfs_binheap_destroy(cfs_binheap_t *h)
+cfs_binheap_destroy(struct cfs_binheap *h)
 {
 	int idx0;
 	int idx1;
@@ -253,8 +253,8 @@ EXPORT_SYMBOL(cfs_binheap_destroy);
  *
  * \retval valid-pointer A double pointer to a heap pointer entry
  */
-static cfs_binheap_node_t **
-cfs_binheap_pointer(cfs_binheap_t *h, unsigned int idx)
+static struct cfs_binheap_node **
+cfs_binheap_pointer(struct cfs_binheap *h, unsigned int idx)
 {
 	if (idx < CBH_SIZE)
 		return &(h->cbh_elements1[idx]);
@@ -278,8 +278,8 @@ cfs_binheap_pointer(cfs_binheap_t *h, unsigned int idx)
  * \retval valid-pointer The requested heap node
  * \retval NULL		 Supplied index is out of bounds
  */
-cfs_binheap_node_t *
-cfs_binheap_find(cfs_binheap_t *h, unsigned int idx)
+struct cfs_binheap_node *
+cfs_binheap_find(struct cfs_binheap *h, unsigned int idx)
 {
 	if (idx >= h->cbh_nelements)
 		return NULL;
@@ -298,12 +298,12 @@ EXPORT_SYMBOL(cfs_binheap_find);
  * \retval 0 The position of \a e in the tree was not changed
  */
 static int
-cfs_binheap_bubble(cfs_binheap_t *h, cfs_binheap_node_t *e)
+cfs_binheap_bubble(struct cfs_binheap *h, struct cfs_binheap_node *e)
 {
 	unsigned int	     cur_idx = e->chn_index;
-	cfs_binheap_node_t **cur_ptr;
+	struct cfs_binheap_node **cur_ptr;
 	unsigned int	     parent_idx;
-	cfs_binheap_node_t **parent_ptr;
+	struct cfs_binheap_node **parent_ptr;
 	int		     did_sth = 0;
 
 	cur_ptr = cfs_binheap_pointer(h, cur_idx);
@@ -341,17 +341,17 @@ cfs_binheap_bubble(cfs_binheap_t *h, cfs_binheap_node_t *e)
  * \retval 0 The position of \a e in the tree was not changed
  */
 static int
-cfs_binheap_sink(cfs_binheap_t *h, cfs_binheap_node_t *e)
+cfs_binheap_sink(struct cfs_binheap *h, struct cfs_binheap_node *e)
 {
 	unsigned int	     n = h->cbh_nelements;
 	unsigned int	     child_idx;
-	cfs_binheap_node_t **child_ptr;
-	cfs_binheap_node_t  *child;
+	struct cfs_binheap_node **child_ptr;
+	struct cfs_binheap_node  *child;
 	unsigned int	     child2_idx;
-	cfs_binheap_node_t **child2_ptr;
-	cfs_binheap_node_t  *child2;
+	struct cfs_binheap_node **child2_ptr;
+	struct cfs_binheap_node  *child2;
 	unsigned int	     cur_idx;
-	cfs_binheap_node_t **cur_ptr;
+	struct cfs_binheap_node **cur_ptr;
 	int		     did_sth = 0;
 
 	cur_idx = e->chn_index;
@@ -406,9 +406,9 @@ cfs_binheap_sink(cfs_binheap_t *h, cfs_binheap_node_t *e)
  * \retval != 0 error
  */
 int
-cfs_binheap_insert(cfs_binheap_t *h, cfs_binheap_node_t *e)
+cfs_binheap_insert(struct cfs_binheap *h, struct cfs_binheap_node *e)
 {
-	cfs_binheap_node_t **new_ptr;
+	struct cfs_binheap_node **new_ptr;
 	unsigned int	     new_idx = h->cbh_nelements;
 	int		     rc;
 
@@ -442,12 +442,12 @@ EXPORT_SYMBOL(cfs_binheap_insert);
  * \param[in] e The node
  */
 void
-cfs_binheap_remove(cfs_binheap_t *h, cfs_binheap_node_t *e)
+cfs_binheap_remove(struct cfs_binheap *h, struct cfs_binheap_node *e)
 {
 	unsigned int	     n = h->cbh_nelements;
 	unsigned int	     cur_idx = e->chn_index;
-	cfs_binheap_node_t **cur_ptr;
-	cfs_binheap_node_t  *last;
+	struct cfs_binheap_node **cur_ptr;
+	struct cfs_binheap_node  *last;
 
 	LASSERT(cur_idx != CBH_POISON);
 	LASSERT(cur_idx < n);
@@ -480,7 +480,7 @@ EXPORT_SYMBOL(cfs_binheap_remove);
  * \param[in] e The node
  */
 void
-cfs_binheap_relocate(cfs_binheap_t *h, cfs_binheap_node_t *e)
+cfs_binheap_relocate(struct cfs_binheap *h, struct cfs_binheap_node *e)
 {
 	if (!cfs_binheap_bubble(h, e))
 		cfs_binheap_sink(h, e);

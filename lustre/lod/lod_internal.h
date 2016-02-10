@@ -153,7 +153,7 @@ struct lod_tgt_descs {
 	/* number of registered TGTs */
 	__u32			ltd_tgtnr;
 	/* bitmap of TGTs available */
-	cfs_bitmap_t		*ltd_tgt_bitmap;
+	struct cfs_bitmap	*ltd_tgt_bitmap;
 	/* TGTs scheduled to be deleted */
 	__u32			ltd_death_row;
 	/* Table refcount used for delayed deletion */

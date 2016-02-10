@@ -524,7 +524,8 @@ static struct cfs_hash_ops nrs_trr_hash_ops = {
  * \retval 0 e1 > e2
  * \retval 1 e1 < e2
  */
-static int orr_req_compare(cfs_binheap_node_t *e1, cfs_binheap_node_t *e2)
+static int
+orr_req_compare(struct cfs_binheap_node *e1, struct cfs_binheap_node *e2)
 {
 	struct ptlrpc_nrs_request *nrq1;
 	struct ptlrpc_nrs_request *nrq2;
@@ -579,7 +580,7 @@ static int orr_req_compare(cfs_binheap_node_t *e1, cfs_binheap_node_t *e2)
 /**
  * ORR binary heap operations
  */
-static cfs_binheap_ops_t nrs_orr_heap_ops = {
+static struct cfs_binheap_ops nrs_orr_heap_ops = {
 	.hop_enter	= NULL,
 	.hop_exit	= NULL,
 	.hop_compare	= orr_req_compare,
@@ -944,7 +945,7 @@ struct ptlrpc_nrs_request *nrs_orr_req_get(struct ptlrpc_nrs_policy *policy,
 					   bool peek, bool force)
 {
 	struct nrs_orr_data	  *orrd = policy->pol_private;
-	cfs_binheap_node_t	  *node = cfs_binheap_root(orrd->od_binheap);
+	struct cfs_binheap_node	  *node = cfs_binheap_root(orrd->od_binheap);
 	struct ptlrpc_nrs_request *nrq;
 
 	nrq = unlikely(node == NULL) ? NULL :
@@ -1119,7 +1120,7 @@ static void nrs_orr_req_del(struct ptlrpc_nrs_policy *policy,
 	 */
 	if (unlikely(is_root)) {
 		/** Peek at the next request to be served */
-		cfs_binheap_node_t *node = cfs_binheap_root(orrd->od_binheap);
+		struct cfs_binheap_node *node = cfs_binheap_root(orrd->od_binheap);
 
 		/** No more requests */
 		if (unlikely(node == NULL)) {

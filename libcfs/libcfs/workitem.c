@@ -46,7 +46,7 @@
 
 #define CFS_WS_NAME_LEN         16
 
-typedef struct cfs_wi_sched {
+struct cfs_wi_sched {
 	struct list_head		ws_list;	/* chain on global list */
 	/** serialised workitems */
 	spinlock_t			ws_lock;
@@ -74,13 +74,13 @@ typedef struct cfs_wi_sched {
 	unsigned int		ws_starting:1;
 	/** scheduler name */
 	char			ws_name[CFS_WS_NAME_LEN];
-} cfs_wi_sched_t;
+};
 
 static struct cfs_workitem_data {
 	/** serialize */
 	spinlock_t		wi_glock;
 	/** list of all schedulers */
-	struct list_head		wi_scheds;
+	struct list_head	wi_scheds;
 	/** WI module is initialized */
 	int			wi_init;
 	/** shutting down the whole WI module */
@@ -88,19 +88,19 @@ static struct cfs_workitem_data {
 } cfs_wi_data;
 
 static inline void
-cfs_wi_sched_lock(cfs_wi_sched_t *sched)
+cfs_wi_sched_lock(struct cfs_wi_sched *sched)
 {
 	spin_lock(&sched->ws_lock);
 }
 
 static inline void
-cfs_wi_sched_unlock(cfs_wi_sched_t *sched)
+cfs_wi_sched_unlock(struct cfs_wi_sched *sched)
 {
 	spin_unlock(&sched->ws_lock);
 }
 
 static inline int
-cfs_wi_sched_cansleep(cfs_wi_sched_t *sched)
+cfs_wi_sched_cansleep(struct cfs_wi_sched *sched)
 {
 	cfs_wi_sched_lock(sched);
 	if (sched->ws_stopping) {
@@ -121,7 +121,7 @@ cfs_wi_sched_cansleep(cfs_wi_sched_t *sched)
  * 1. when it returns no one shall try to schedule the workitem.
  */
 void
-cfs_wi_exit(struct cfs_wi_sched *sched, cfs_workitem_t *wi)
+cfs_wi_exit(struct cfs_wi_sched *sched, struct cfs_workitem *wi)
 {
 	LASSERT(!in_interrupt()); /* because we use plain spinlock */
 	LASSERT(!sched->ws_stopping);
@@ -151,7 +151,7 @@ EXPORT_SYMBOL(cfs_wi_exit);
  * cancel schedule request of workitem \a wi
  */
 int
-cfs_wi_deschedule(struct cfs_wi_sched *sched, cfs_workitem_t *wi)
+cfs_wi_deschedule(struct cfs_wi_sched *sched, struct cfs_workitem *wi)
 {
 	int	rc;
 
@@ -192,7 +192,7 @@ EXPORT_SYMBOL(cfs_wi_deschedule);
  * be added, and even dynamic creation of serialised queues might be supported.
  */
 void
-cfs_wi_schedule(struct cfs_wi_sched *sched, cfs_workitem_t *wi)
+cfs_wi_schedule(struct cfs_wi_sched *sched, struct cfs_workitem *wi)
 {
 	LASSERT(!in_interrupt()); /* because we use plain spinlock */
 	LASSERT(!sched->ws_stopping);
@@ -219,9 +219,9 @@ cfs_wi_schedule(struct cfs_wi_sched *sched, cfs_workitem_t *wi)
 EXPORT_SYMBOL(cfs_wi_schedule);
 
 static int
-cfs_wi_scheduler (void *arg)
+cfs_wi_scheduler(void *arg)
 {
-	struct cfs_wi_sched	*sched = (cfs_wi_sched_t *)arg;
+	struct cfs_wi_sched *sched = (struct cfs_wi_sched *)arg;
 
 	cfs_block_allsigs();
 
@@ -244,12 +244,12 @@ cfs_wi_scheduler (void *arg)
 	while (!sched->ws_stopping) {
 		int		nloops = 0;
 		int		rc;
-		cfs_workitem_t *wi;
+		struct cfs_workitem *wi;
 
 		while (!list_empty(&sched->ws_runq) &&
 		       nloops < CFS_WI_RESCHED) {
 			wi = list_entry(sched->ws_runq.next,
-					    cfs_workitem_t, wi_list);
+					struct cfs_workitem, wi_list);
 			LASSERT(wi->wi_scheduled && !wi->wi_running);
 
 			list_del_init(&wi->wi_list);
@@ -438,7 +438,7 @@ EXPORT_SYMBOL(cfs_wi_sched_create);
 int
 cfs_wi_startup(void)
 {
-	memset(&cfs_wi_data, 0, sizeof(cfs_wi_data));
+	memset(&cfs_wi_data, 0, sizeof(struct cfs_workitem_data));
 
 	spin_lock_init(&cfs_wi_data.wi_glock);
 	INIT_LIST_HEAD(&cfs_wi_data.wi_scheds);

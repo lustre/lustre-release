@@ -36,18 +36,19 @@
 #ifndef _LIBCFS_BITMAP_H_
 #define _LIBCFS_BITMAP_H_
 
-typedef struct {
-	unsigned int  size;
+struct cfs_bitmap {
+	unsigned int size;
 	unsigned long data[0];
-} cfs_bitmap_t;
+};
 
 #define CFS_BITMAP_SIZE(nbits) \
-     (((nbits/BITS_PER_LONG)+1)*sizeof(long)+sizeof(cfs_bitmap_t))
+	(((nbits / BITS_PER_LONG) + 1) * sizeof(long) + \
+	sizeof(struct cfs_bitmap))
 
 static inline
-cfs_bitmap_t *CFS_ALLOCATE_BITMAP(int size)
+struct cfs_bitmap *CFS_ALLOCATE_BITMAP(int size)
 {
-	cfs_bitmap_t *ptr;
+	struct cfs_bitmap *ptr;
 
 	LIBCFS_ALLOC(ptr, CFS_BITMAP_SIZE(size));
 	if (ptr == NULL)
@@ -58,7 +59,7 @@ cfs_bitmap_t *CFS_ALLOCATE_BITMAP(int size)
 	RETURN(ptr);
 }
 
-static inline void CFS_RESET_BITMAP(cfs_bitmap_t *bitmap)
+static inline void CFS_RESET_BITMAP(struct cfs_bitmap *bitmap)
 {
 	if (bitmap->size > 0) {
 		int nbits = bitmap->size;
@@ -71,38 +72,38 @@ static inline void CFS_RESET_BITMAP(cfs_bitmap_t *bitmap)
 #define CFS_FREE_BITMAP(ptr)	LIBCFS_FREE(ptr, CFS_BITMAP_SIZE(ptr->size))
 
 static inline
-void cfs_bitmap_set(cfs_bitmap_t *bitmap, int nbit)
+void cfs_bitmap_set(struct cfs_bitmap *bitmap, int nbit)
 {
 	set_bit(nbit, bitmap->data);
 }
 
 static inline
-void cfs_bitmap_clear(cfs_bitmap_t *bitmap, int nbit)
+void cfs_bitmap_clear(struct cfs_bitmap *bitmap, int nbit)
 {
 	test_and_clear_bit(nbit, bitmap->data);
 }
 
 static inline
-int cfs_bitmap_check(cfs_bitmap_t *bitmap, int nbit)
+int cfs_bitmap_check(struct cfs_bitmap *bitmap, int nbit)
 {
 	return test_bit(nbit, bitmap->data);
 }
 
 static inline
-int cfs_bitmap_test_and_clear(cfs_bitmap_t *bitmap, int nbit)
+int cfs_bitmap_test_and_clear(struct cfs_bitmap *bitmap, int nbit)
 {
 	return test_and_clear_bit(nbit, bitmap->data);
 }
 
 /* return 0 is bitmap has none set bits */
 static inline
-int cfs_bitmap_check_empty(cfs_bitmap_t *bitmap)
+int cfs_bitmap_check_empty(struct cfs_bitmap *bitmap)
 {
 	return find_first_bit(bitmap->data, bitmap->size) == bitmap->size;
 }
 
 static inline
-void cfs_bitmap_copy(cfs_bitmap_t *new, cfs_bitmap_t *old)
+void cfs_bitmap_copy(struct cfs_bitmap *new, struct cfs_bitmap *old)
 {
 	size_t newsize;
 

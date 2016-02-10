@@ -43,11 +43,11 @@
  * the tree (as this is an implementation of a min-heap) to be removed by users
  * for consumption.
  *
- * Users of the heap should embed a \e cfs_binheap_node_t object instance on
- * every object of the set that they wish the binary heap instance to handle,
- * and (at a minimum) provide a cfs_binheap_ops_t::hop_compare() implementation
- * which is used by the heap as the binary predicate during its internal sorting
- * operations.
+ * Users of the heap should embed a \e struct cfs_binheap_node object instance
+ * on every object of the set that they wish the binary heap instance to handle,
+ * and (at a minimum) provide a struct cfs_binheap_ops::hop_compare()
+ * implementation which is used by the heap as the binary predicate during its
+ * internal sorting operations.
  *
  * The current implementation enforces no locking scheme, and so assumes the
  * user caters for locking between calls to insert, delete and lookup
@@ -61,17 +61,17 @@
  * Binary heap node.
  *
  * Objects of this type are embedded into objects of the ordered set that is to
- * be maintained by a \e cfs_binheap_t instance.
+ * be maintained by a \e struct cfs_binheap instance.
  */
-typedef struct {
+struct cfs_binheap_node {
 	/** Index into the binary tree */
 	unsigned int	chn_index;
-} cfs_binheap_node_t;
+};
 
 #define CBH_SHIFT	9
 #define CBH_SIZE       (1 << CBH_SHIFT)		    /* # ptrs per level */
 #define CBH_MASK       (CBH_SIZE - 1)
-#define CBH_NOB        (CBH_SIZE * sizeof(cfs_binheap_node_t *))
+#define CBH_NOB        (CBH_SIZE * sizeof(struct cfs_binheap_node *))
 
 #define CBH_POISON	0xdeadbeef
 
@@ -87,7 +87,7 @@ struct cfs_binheap;
 /**
  * Binary heap operations.
  */
-typedef struct {
+struct cfs_binheap_ops {
 	/**
 	 * Called right before inserting a node into the binary heap.
 	 *
@@ -100,7 +100,7 @@ typedef struct {
 	 * \retval != 0 error
 	 */
 	int		(*hop_enter)(struct cfs_binheap *h,
-				     cfs_binheap_node_t *e);
+				     struct cfs_binheap_node *e);
 	/**
 	 * Called right after removing a node from the binary heap.
 	 *
@@ -110,7 +110,7 @@ typedef struct {
 	 * \param[in] e The node
 	 */
 	void		(*hop_exit)(struct cfs_binheap *h,
-				    cfs_binheap_node_t *e);
+				    struct cfs_binheap_node *e);
 	/**
 	 * A binary predicate which is called during internal heap sorting
 	 * operations, and used in order to determine the relevant ordering of
@@ -127,22 +127,22 @@ typedef struct {
 	 * \see cfs_binheap_bubble()
 	 * \see cfs_biheap_sink()
 	 */
-	int		(*hop_compare)(cfs_binheap_node_t *a,
-				       cfs_binheap_node_t *b);
-} cfs_binheap_ops_t;
+	int		(*hop_compare)(struct cfs_binheap_node *a,
+				       struct cfs_binheap_node *b);
+};
 
 /**
  * Binary heap object.
  *
- * Sorts elements of type \e cfs_binheap_node_t
+ * Sorts elements of type \e struct cfs_binheap_node
  */
-typedef struct cfs_binheap {
+struct cfs_binheap {
 	/** Triple indirect */
-	cfs_binheap_node_t  ****cbh_elements3;
+	struct cfs_binheap_node  ****cbh_elements3;
 	/** double indirect */
-	cfs_binheap_node_t   ***cbh_elements2;
+	struct cfs_binheap_node   ***cbh_elements2;
 	/** single indirect */
-	cfs_binheap_node_t    **cbh_elements1;
+	struct cfs_binheap_node    **cbh_elements1;
 	/** # elements referenced */
 	unsigned int		cbh_nelements;
 	/** high water mark */
@@ -150,46 +150,48 @@ typedef struct cfs_binheap {
 	/** user flags */
 	unsigned int		cbh_flags;
 	/** operations table */
-	cfs_binheap_ops_t      *cbh_ops;
+	struct cfs_binheap_ops *cbh_ops;
 	/** private data */
 	void		       *cbh_private;
 	/** associated CPT table */
 	struct cfs_cpt_table   *cbh_cptab;
-	/** associated CPT id of this cfs_binheap_t::cbh_cptab */
+	/** associated CPT id of this struct cfs_binheap::cbh_cptab */
 	int			cbh_cptid;
-} cfs_binheap_t;
+};
 
-void cfs_binheap_destroy(cfs_binheap_t *h);
-cfs_binheap_t *cfs_binheap_create(cfs_binheap_ops_t *ops, unsigned int flags,
-				  unsigned count, void *arg,
-				  struct cfs_cpt_table *cptab, int cptid);
-cfs_binheap_node_t *cfs_binheap_find(cfs_binheap_t *h, unsigned int idx);
-int cfs_binheap_insert(cfs_binheap_t *h, cfs_binheap_node_t *e);
-void cfs_binheap_remove(cfs_binheap_t *h, cfs_binheap_node_t *e);
-void cfs_binheap_relocate(cfs_binheap_t *h, cfs_binheap_node_t *e);
+void cfs_binheap_destroy(struct cfs_binheap *h);
+struct cfs_binheap *
+cfs_binheap_create(struct cfs_binheap_ops *ops, unsigned int flags,
+		   unsigned count, void *arg, struct cfs_cpt_table *cptab,
+		   int cptid);
+struct cfs_binheap_node *
+cfs_binheap_find(struct cfs_binheap *h, unsigned int idx);
+int cfs_binheap_insert(struct cfs_binheap *h, struct cfs_binheap_node *e);
+void cfs_binheap_remove(struct cfs_binheap *h, struct cfs_binheap_node *e);
+void cfs_binheap_relocate(struct cfs_binheap *h, struct cfs_binheap_node *e);
 
 static inline int
-cfs_binheap_size(cfs_binheap_t *h)
+cfs_binheap_size(struct cfs_binheap *h)
 {
 	return h->cbh_nelements;
 }
 
 static inline int
-cfs_binheap_is_empty(cfs_binheap_t *h)
+cfs_binheap_is_empty(struct cfs_binheap *h)
 {
 	return h->cbh_nelements == 0;
 }
 
-static inline cfs_binheap_node_t *
-cfs_binheap_root(cfs_binheap_t *h)
+static inline struct cfs_binheap_node *
+cfs_binheap_root(struct cfs_binheap *h)
 {
 	return cfs_binheap_find(h, 0);
 }
 
-static inline cfs_binheap_node_t *
-cfs_binheap_remove_root(cfs_binheap_t *h)
+static inline struct cfs_binheap_node *
+cfs_binheap_remove_root(struct cfs_binheap *h)
 {
-	cfs_binheap_node_t *e = cfs_binheap_find(h, 0);
+	struct cfs_binheap_node *e = cfs_binheap_find(h, 0);
 
 	if (e != NULL)
 		cfs_binheap_remove(h, e);

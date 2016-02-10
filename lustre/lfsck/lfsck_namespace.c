@@ -271,7 +271,7 @@ static int lfsck_namespace_load_bitmap(const struct lu_env *env,
 	struct dt_object		*obj	= com->lc_obj;
 	struct lfsck_assistant_data	*lad	= com->lc_data;
 	struct lfsck_namespace		*ns	= com->lc_file_ram;
-	cfs_bitmap_t			*bitmap = lad->lad_bitmap;
+	struct cfs_bitmap			*bitmap = lad->lad_bitmap;
 	ssize_t				 size;
 	__u32				 nbits;
 	int				 rc;
@@ -288,7 +288,7 @@ static int lfsck_namespace_load_bitmap(const struct lu_env *env,
 
 	if (nbits > bitmap->size) {
 		__u32 new_bits = bitmap->size;
-		cfs_bitmap_t *new_bitmap;
+		struct cfs_bitmap *new_bitmap;
 
 		while (new_bits < nbits)
 			new_bits <<= 1;
@@ -388,7 +388,7 @@ static int lfsck_namespace_store(const struct lu_env *env,
 	struct lfsck_namespace		*ns	= com->lc_file_ram;
 	struct lfsck_assistant_data	*lad	= com->lc_data;
 	struct dt_device		*dev	= lfsck_obj2dev(obj);
-	cfs_bitmap_t			*bitmap	= NULL;
+	struct cfs_bitmap		*bitmap	= NULL;
 	struct thandle			*handle;
 	__u32				 nbits	= 0;
 	int				 len    = com->lc_file_size;

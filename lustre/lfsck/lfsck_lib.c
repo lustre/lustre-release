@@ -191,8 +191,8 @@ static int __lfsck_add_target(const struct lu_env *env,
 	if (index >= ltds->ltd_tgts_bitmap->size) {
 		__u32 newsize = max((__u32)ltds->ltd_tgts_bitmap->size,
 				    (__u32)BITS_PER_LONG);
-		cfs_bitmap_t *old_bitmap = ltds->ltd_tgts_bitmap;
-		cfs_bitmap_t *new_bitmap;
+		struct cfs_bitmap *old_bitmap = ltds->ltd_tgts_bitmap;
+		struct cfs_bitmap *new_bitmap;
 
 		while (newsize < index + 1)
 			newsize <<= 1;

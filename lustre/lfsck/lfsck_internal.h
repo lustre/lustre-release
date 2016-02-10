@@ -475,7 +475,7 @@ struct lfsck_tgt_descs {
 	struct lfsck_tgt_desc_idx	*ltd_tgts_idx[TGT_PTRS];
 
 	/* bitmap of TGTs available */
-	cfs_bitmap_t			*ltd_tgts_bitmap;
+	struct cfs_bitmap			*ltd_tgts_bitmap;
 
 	/* for lfsck_tgt_desc::ltd_xxx_list */
 	spinlock_t			 ltd_lock;
@@ -828,7 +828,7 @@ struct lfsck_assistant_data {
 
 	struct lfsck_assistant_operations	*lad_ops;
 
-	cfs_bitmap_t				*lad_bitmap;
+	struct cfs_bitmap				*lad_bitmap;
 
 	__u32					 lad_touch_gen;
 	int					 lad_prefetched;
@@ -1405,7 +1405,7 @@ static inline void lfsck_lad_set_bitmap(const struct lu_env *env,
 					__u32 index)
 {
 	struct lfsck_assistant_data	*lad	= com->lc_data;
-	cfs_bitmap_t			*bitmap	= lad->lad_bitmap;
+	struct cfs_bitmap		*bitmap	= lad->lad_bitmap;
 
 	LASSERT(com->lc_lfsck->li_master);
 	LASSERT(bitmap != NULL);

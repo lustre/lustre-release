@@ -1000,7 +1000,7 @@ do {                                                                          \
 #define GNIDBG_MSG(level, msg, fmt, args...)                                  \
 do {                                                                          \
 	if ((level) & (D_ERROR | D_WARNING | D_NETERROR)) {                   \
-	    static cfs_debug_limit_state_t cdls;                              \
+	    static struct cfs_debug_limit_state cdls;                         \
 	    LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, level, &cdls);                \
 	    kgnilnd_debug_msg(&msgdata, level, &cdls, msg,                    \
 			      "$$ "fmt" from %s ", ## args,                   \
@@ -1017,7 +1017,7 @@ do {                                                                          \
 #define GNIDBG_TOMSG(level, msg, fmt, args...)                                \
 do {                                                                          \
 	if ((level) & (D_ERROR | D_WARNING | D_NETERROR)) {                   \
-	    static cfs_debug_limit_state_t cdls;                              \
+	    static struct cfs_debug_limit_state cdls;                         \
 	    LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, level, &cdls);                \
 	    kgnilnd_debug_msg(&msgdata, level, &cdls, msg,                    \
 			      "$$ "fmt" ", ## args);                          \
@@ -1046,7 +1046,7 @@ do {                                                                           \
 #define GNIDBG_CONN(level, conn, fmt, args...)                                  \
 do {                                                                            \
 	if ((level) & (D_ERROR | D_WARNING | D_NETERROR)) {                     \
-	    static cfs_debug_limit_state_t cdls;                                \
+	    static struct cfs_debug_limit_state cdls;                           \
 	    LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, level, &cdls);                  \
 	    kgnilnd_debug_conn(&msgdata, level, &cdls, conn,                    \
 			       "$$ "fmt" ", ## args);                           \
@@ -1075,7 +1075,7 @@ do {                                                                           \
 #define GNIDBG_TX(level, tx, fmt, args...)                                      \
 do {                                                                            \
 	if ((level) & (D_ERROR | D_WARNING | D_NETERROR)) {                     \
-	    static cfs_debug_limit_state_t cdls;                                \
+	    static struct cfs_debug_limit_state cdls;                           \
 	    LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, level, &cdls);                  \
 	    kgnilnd_debug_tx(&msgdata, level, &cdls, tx,                        \
 			      "$$ "fmt" ", ## args);                            \

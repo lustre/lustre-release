@@ -763,7 +763,7 @@ static int lfsck_layout_load_bitmap(const struct lu_env *env,
 	struct dt_object		*obj	= com->lc_obj;
 	struct lfsck_assistant_data	*lad	= com->lc_data;
 	struct lfsck_layout		*lo	= com->lc_file_ram;
-	cfs_bitmap_t			*bitmap = lad->lad_bitmap;
+	struct cfs_bitmap			*bitmap = lad->lad_bitmap;
 	loff_t				 pos	= com->lc_file_size;
 	ssize_t				 size;
 	__u32				 nbits;
@@ -781,7 +781,7 @@ static int lfsck_layout_load_bitmap(const struct lu_env *env,
 
 	if (nbits > bitmap->size) {
 		__u32 new_bits = bitmap->size;
-		cfs_bitmap_t *new_bitmap;
+		struct cfs_bitmap *new_bitmap;
 
 		while (new_bits < nbits)
 			new_bits <<= 1;
@@ -889,7 +889,7 @@ static int lfsck_layout_store(const struct lu_env *env,
 	struct lfsck_layout	*lo	= com->lc_file_disk;
 	struct thandle		*th;
 	struct dt_device	*dev	= lfsck_obj2dev(obj);
-	cfs_bitmap_t		*bitmap = NULL;
+	struct cfs_bitmap	*bitmap = NULL;
 	loff_t			 pos;
 	ssize_t			 size	= com->lc_file_size;
 	__u32			 nbits	= 0;

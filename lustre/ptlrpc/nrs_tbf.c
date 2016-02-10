@@ -416,7 +416,8 @@ nrs_tbf_command(struct ptlrpc_nrs_policy *policy,
  * \retval 0 e1 > e2
  * \retval 1 e1 < e2
  */
-static int tbf_cli_compare(cfs_binheap_node_t *e1, cfs_binheap_node_t *e2)
+static int
+tbf_cli_compare(struct cfs_binheap_node *e1, struct cfs_binheap_node *e2)
 {
 	struct nrs_tbf_client *cli1;
 	struct nrs_tbf_client *cli2;
@@ -443,7 +444,7 @@ static int tbf_cli_compare(cfs_binheap_node_t *e1, cfs_binheap_node_t *e2)
 /**
  * TBF binary heap operations
  */
-static cfs_binheap_ops_t nrs_tbf_heap_ops = {
+static struct cfs_binheap_ops nrs_tbf_heap_ops = {
 	.hop_enter	= NULL,
 	.hop_exit	= NULL,
 	.hop_compare	= tbf_cli_compare,
@@ -1376,7 +1377,7 @@ struct ptlrpc_nrs_request *nrs_tbf_req_get(struct ptlrpc_nrs_policy *policy,
 	struct nrs_tbf_head	  *head = policy->pol_private;
 	struct ptlrpc_nrs_request *nrq = NULL;
 	struct nrs_tbf_client     *cli;
-	cfs_binheap_node_t	  *node;
+	struct cfs_binheap_node	  *node;
 
 	assert_spin_locked(&policy->pol_nrs->nrs_svcpt->scp_req_lock);
 
