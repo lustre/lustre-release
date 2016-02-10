@@ -12,6 +12,7 @@ fi
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
+racer=$LUSTRE/tests/racer/racer.sh
 . $LUSTRE/tests/setup-nfs.sh
 
 check_and_setup_lustre
@@ -97,6 +98,11 @@ test_iorfpp() {
     run_ior "fpp"
 }
 run_test iorfpp "iorfpp"
+
+test_racer_on_nfs() {
+	$racer $CLIENTS
+}
+run_test racer_on_nfs "racer on NFS client"
 
 # cleanup nfs
 cleanup_nfs "$MOUNT" "$lustre_client" "$CLIENTS" || \
