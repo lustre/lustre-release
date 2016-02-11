@@ -537,65 +537,66 @@ int client_connect_import(const struct lu_env *env,
 	bool			is_mdc = false;
 	ENTRY;
 
-        *exp = NULL;
+	*exp = NULL;
 	down_write(&cli->cl_sem);
 	if (cli->cl_conn_count > 0)
                 GOTO(out_sem, rc = -EALREADY);
 
-        rc = class_connect(&conn, obd, cluuid);
-        if (rc)
-                GOTO(out_sem, rc);
+	rc = class_connect(&conn, obd, cluuid);
+	if (rc)
+		GOTO(out_sem, rc);
 
-        cli->cl_conn_count++;
-        *exp = class_conn2export(&conn);
+	cli->cl_conn_count++;
+	*exp = class_conn2export(&conn);
 
-        LASSERT(obd->obd_namespace);
+	LASSERT(obd->obd_namespace);
 
-        imp->imp_dlm_handle = conn;
-        rc = ptlrpc_init_import(imp);
-        if (rc != 0)
-                GOTO(out_ldlm, rc);
+	imp->imp_dlm_handle = conn;
+	rc = ptlrpc_init_import(imp);
+	if (rc != 0)
+		GOTO(out_ldlm, rc);
 
-        ocd = &imp->imp_connect_data;
-        if (data) {
-                *ocd = *data;
+	ocd = &imp->imp_connect_data;
+	if (data) {
+		*ocd = *data;
 		is_mdc = strncmp(imp->imp_obd->obd_type->typ_name,
 				 LUSTRE_MDC_NAME, 3) == 0;
 		if (is_mdc)
 			data->ocd_connect_flags |= OBD_CONNECT_MULTIMODRPCS;
-                imp->imp_connect_flags_orig = data->ocd_connect_flags;
-        }
+		imp->imp_connect_flags_orig = data->ocd_connect_flags;
+		imp->imp_connect_flags2_orig = data->ocd_connect_flags2;
+	}
 
-        rc = ptlrpc_connect_import(imp);
-        if (rc != 0) {
+	rc = ptlrpc_connect_import(imp);
+	if (rc != 0) {
 		if (data && is_mdc)
 			data->ocd_connect_flags &= ~OBD_CONNECT_MULTIMODRPCS;
-                LASSERT (imp->imp_state == LUSTRE_IMP_DISCON);
-                GOTO(out_ldlm, rc);
-        }
+		LASSERT(imp->imp_state == LUSTRE_IMP_DISCON);
+		GOTO(out_ldlm, rc);
+	}
 	LASSERT(*exp != NULL && (*exp)->exp_connection);
 
-        if (data) {
-                LASSERTF((ocd->ocd_connect_flags & data->ocd_connect_flags) ==
-                         ocd->ocd_connect_flags, "old "LPX64", new "LPX64"\n",
-                         data->ocd_connect_flags, ocd->ocd_connect_flags);
-                data->ocd_connect_flags = ocd->ocd_connect_flags;
+	if (data) {
+		LASSERTF((ocd->ocd_connect_flags & data->ocd_connect_flags) ==
+			 ocd->ocd_connect_flags, "old "LPX64", new "LPX64"\n",
+			 data->ocd_connect_flags, ocd->ocd_connect_flags);
+		data->ocd_connect_flags = ocd->ocd_connect_flags;
 		/* clear the flag as it was not set and is not known
 		 * by upper layers */
 		if (is_mdc)
 			data->ocd_connect_flags &= ~OBD_CONNECT_MULTIMODRPCS;
-        }
+	}
 
-        ptlrpc_pinger_add_import(imp);
+	ptlrpc_pinger_add_import(imp);
 
-        EXIT;
+	EXIT;
 
-        if (rc) {
+	if (rc) {
 out_ldlm:
-                cli->cl_conn_count--;
-                class_disconnect(*exp);
-                *exp = NULL;
-        }
+		cli->cl_conn_count--;
+		class_disconnect(*exp);
+		*exp = NULL;
+	}
 out_sem:
 	up_write(&cli->cl_sem);
 

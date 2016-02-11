@@ -513,6 +513,7 @@ static int lwp_obd_connect(const struct lu_env *env, struct obd_export **exp,
 
 	ocd->ocd_version = LUSTRE_VERSION_CODE;
 	imp->imp_connect_flags_orig = ocd->ocd_connect_flags;
+	imp->imp_connect_flags2_orig = ocd->ocd_connect_flags2;
 
 	rc = ptlrpc_connect_import(imp);
 	if (rc != 0) {

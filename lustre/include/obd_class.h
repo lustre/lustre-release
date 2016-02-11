@@ -101,7 +101,8 @@ char *obd_export_nid2str(struct obd_export *exp);
 
 int obd_export_evict_by_nid(struct obd_device *obd, const char *nid);
 int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid);
-int obd_connect_flags2str(char *page, int count, __u64 flags, char *sep);
+int obd_connect_flags2str(char *page, int count, __u64 flags, __u64 flags2,
+			  const char *sep);
 
 int obd_zombie_impexp_init(void);
 void obd_zombie_impexp_stop(void);

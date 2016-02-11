@@ -312,16 +312,19 @@ struct obd_import {
 				  imp_connect_tried:1,
 				  /* connected but not FULL yet */
 				  imp_connected:1;
-        __u32                     imp_connect_op;
-        struct obd_connect_data   imp_connect_data;
-        __u64                     imp_connect_flags_orig;
-        int                       imp_connect_error;
+	__u32                     imp_connect_op;
+	struct obd_connect_data   imp_connect_data;
+	__u64                     imp_connect_flags_orig;
+	__u64                     imp_connect_flags2_orig;
+	int                       imp_connect_error;
 
-        __u32                     imp_msg_magic;
-        __u32                     imp_msghdr_flags;       /* adjusted based on server capability */
+	__u32                     imp_msg_magic;
+				  /* adjusted based on server capability */
+	__u32                     imp_msghdr_flags;
 
-        struct imp_at             imp_at;                 /* adaptive timeout data */
-        time_t                    imp_last_reply_time;    /* for health check */
+				  /* adaptive timeout data */
+	struct imp_at             imp_at;
+	time_t                    imp_last_reply_time;    /* for health check */
 };
 
 /* import.c */

@@ -164,6 +164,7 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 	fed->fed_group = data->ocd_group;
 
 	data->ocd_connect_flags &= OST_CONNECT_SUPPORTED;
+	data->ocd_connect_flags2 &= OST_CONNECT_SUPPORTED2;
 	data->ocd_version = LUSTRE_VERSION_CODE;
 
 	/* Kindly make sure the SKIP_ORPHAN flag is from MDS. */

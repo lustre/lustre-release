@@ -1250,6 +1250,9 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT_BULK_MBITS	 0x2000000000000000ULL
 #define OBD_CONNECT_OBDOPACK	 0x4000000000000000ULL /* compact OUT obdo */
 #define OBD_CONNECT_FLAGS2	 0x8000000000000000ULL /* second flags word */
+/* ocd_connect_flags2 flags */
+#define OBD_CONNECT2_FILE_SECCTX	0x1ULL /* set file security context at create */
+
 /* XXX README XXX:
  * Please DO NOT add flag values here before first ensuring that this same
  * flag value is not in use on some other branch.  Please clear any such
@@ -1297,7 +1300,10 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT_DIR_STRIPE | \
 				OBD_CONNECT_BULK_MBITS | \
 				OBD_CONNECT_MULTIMODRPCS | \
-				OBD_CONNECT_SUBTREE)
+				OBD_CONNECT_SUBTREE | \
+				OBD_CONNECT_FLAGS2)
+
+#define MDT_CONNECT_SUPPORTED2 OBD_CONNECT2_FILE_SECCTX
 
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
@@ -1318,11 +1324,17 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT_PINGLESS | OBD_CONNECT_LFSCK | \
 				OBD_CONNECT_BULK_MBITS | \
 				OBD_CONNECT_GRANT_PARAM)
-#define ECHO_CONNECT_SUPPORTED (0)
+#define OST_CONNECT_SUPPORTED2 0
+
+#define ECHO_CONNECT_SUPPORTED 0
+#define ECHO_CONNECT_SUPPORTED2 0
+
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT | \
 				OBD_CONNECT_FULL20 | OBD_CONNECT_IMP_RECOV | \
 				OBD_CONNECT_MNE_SWAB | OBD_CONNECT_PINGLESS |\
 				OBD_CONNECT_BULK_MBITS)
+
+#define MGS_CONNECT_SUPPORTED2 0
 
 /* Features required for this version of the client to work with server */
 #define CLIENT_CONNECT_MDT_REQD (OBD_CONNECT_IBITS | OBD_CONNECT_FID | \

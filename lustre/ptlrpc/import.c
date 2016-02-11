@@ -647,19 +647,19 @@ static int ptlrpc_first_transno(struct obd_import *imp, __u64 *transno)
  */
 int ptlrpc_connect_import(struct obd_import *imp)
 {
-        struct obd_device *obd = imp->imp_obd;
-        int initial_connect = 0;
-        int set_transno = 0;
-        __u64 committed_before_reconnect = 0;
-        struct ptlrpc_request *request;
-        char *bufs[] = { NULL,
-                         obd2cli_tgt(imp->imp_obd),
-                         obd->obd_uuid.uuid,
-                         (char *)&imp->imp_dlm_handle,
-                         (char *)&imp->imp_connect_data };
-        struct ptlrpc_connect_async_args *aa;
-        int rc;
-        ENTRY;
+	struct obd_device *obd = imp->imp_obd;
+	int initial_connect = 0;
+	int set_transno = 0;
+	__u64 committed_before_reconnect = 0;
+	struct ptlrpc_request *request;
+	char *bufs[] = { NULL,
+			 obd2cli_tgt(imp->imp_obd),
+			 obd->obd_uuid.uuid,
+			 (char *)&imp->imp_dlm_handle,
+			 (char *)&imp->imp_connect_data };
+	struct ptlrpc_connect_async_args *aa;
+	int rc;
+	ENTRY;
 
 	spin_lock(&imp->imp_lock);
 	if (imp->imp_state == LUSTRE_IMP_CLOSED) {
@@ -677,91 +677,92 @@ int ptlrpc_connect_import(struct obd_import *imp)
 		RETURN(-EALREADY);
 	}
 
-        IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_CONNECTING);
+	IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_CONNECTING);
 
-        imp->imp_conn_cnt++;
-        imp->imp_resend_replay = 0;
+	imp->imp_conn_cnt++;
+	imp->imp_resend_replay = 0;
 
-        if (!lustre_handle_is_used(&imp->imp_remote_handle))
-                initial_connect = 1;
-        else
-                committed_before_reconnect = imp->imp_peer_committed_transno;
+	if (!lustre_handle_is_used(&imp->imp_remote_handle))
+		initial_connect = 1;
+	else
+		committed_before_reconnect = imp->imp_peer_committed_transno;
 
-        set_transno = ptlrpc_first_transno(imp,
-                                           &imp->imp_connect_data.ocd_transno);
+	set_transno = ptlrpc_first_transno(imp,
+					   &imp->imp_connect_data.ocd_transno);
 	spin_unlock(&imp->imp_lock);
 
-        rc = import_select_connection(imp);
-        if (rc)
-                GOTO(out, rc);
+	rc = import_select_connection(imp);
+	if (rc)
+		GOTO(out, rc);
 
 	rc = sptlrpc_import_sec_adapt(imp, NULL, NULL);
-        if (rc)
-                GOTO(out, rc);
+	if (rc)
+		GOTO(out, rc);
 
-        /* Reset connect flags to the originally requested flags, in case
-         * the server is updated on-the-fly we will get the new features. */
-        imp->imp_connect_data.ocd_connect_flags = imp->imp_connect_flags_orig;
+	/* Reset connect flags to the originally requested flags, in case
+	 * the server is updated on-the-fly we will get the new features. */
+	imp->imp_connect_data.ocd_connect_flags = imp->imp_connect_flags_orig;
+	imp->imp_connect_data.ocd_connect_flags2 = imp->imp_connect_flags2_orig;
 	/* Reset ocd_version each time so the server knows the exact versions */
 	imp->imp_connect_data.ocd_version = LUSTRE_VERSION_CODE;
-        imp->imp_msghdr_flags &= ~MSGHDR_AT_SUPPORT;
-        imp->imp_msghdr_flags &= ~MSGHDR_CKSUM_INCOMPAT18;
+	imp->imp_msghdr_flags &= ~MSGHDR_AT_SUPPORT;
+	imp->imp_msghdr_flags &= ~MSGHDR_CKSUM_INCOMPAT18;
 
-        rc = obd_reconnect(NULL, imp->imp_obd->obd_self_export, obd,
-                           &obd->obd_uuid, &imp->imp_connect_data, NULL);
-        if (rc)
-                GOTO(out, rc);
+	rc = obd_reconnect(NULL, imp->imp_obd->obd_self_export, obd,
+			   &obd->obd_uuid, &imp->imp_connect_data, NULL);
+	if (rc)
+		GOTO(out, rc);
 
-        request = ptlrpc_request_alloc(imp, &RQF_MDS_CONNECT);
-        if (request == NULL)
-                GOTO(out, rc = -ENOMEM);
+	request = ptlrpc_request_alloc(imp, &RQF_MDS_CONNECT);
+	if (request == NULL)
+		GOTO(out, rc = -ENOMEM);
 
-        rc = ptlrpc_request_bufs_pack(request, LUSTRE_OBD_VERSION,
-                                      imp->imp_connect_op, bufs, NULL);
-        if (rc) {
-                ptlrpc_request_free(request);
-                GOTO(out, rc);
-        }
+	rc = ptlrpc_request_bufs_pack(request, LUSTRE_OBD_VERSION,
+				      imp->imp_connect_op, bufs, NULL);
+	if (rc) {
+		ptlrpc_request_free(request);
+		GOTO(out, rc);
+	}
 
-        /* Report the rpc service time to the server so that it knows how long
-         * to wait for clients to join recovery */
-        lustre_msg_set_service_time(request->rq_reqmsg,
-                                    at_timeout2est(request->rq_timeout));
+	/* Report the rpc service time to the server so that it knows how long
+	 * to wait for clients to join recovery */
+	lustre_msg_set_service_time(request->rq_reqmsg,
+				    at_timeout2est(request->rq_timeout));
 
-        /* The amount of time we give the server to process the connect req.
-         * import_select_connection will increase the net latency on
-         * repeated reconnect attempts to cover slow networks.
-         * We override/ignore the server rpc completion estimate here,
-         * which may be large if this is a reconnect attempt */
-        request->rq_timeout = INITIAL_CONNECT_TIMEOUT;
-        lustre_msg_set_timeout(request->rq_reqmsg, request->rq_timeout);
+	/* The amount of time we give the server to process the connect req.
+	 * import_select_connection will increase the net latency on
+	 * repeated reconnect attempts to cover slow networks.
+	 * We override/ignore the server rpc completion estimate here,
+	 * which may be large if this is a reconnect attempt */
+	request->rq_timeout = INITIAL_CONNECT_TIMEOUT;
+	lustre_msg_set_timeout(request->rq_reqmsg, request->rq_timeout);
 
-        request->rq_no_resend = request->rq_no_delay = 1;
-        request->rq_send_state = LUSTRE_IMP_CONNECTING;
-        /* Allow a slightly larger reply for future growth compatibility */
-        req_capsule_set_size(&request->rq_pill, &RMF_CONNECT_DATA, RCL_SERVER,
-                             sizeof(struct obd_connect_data)+16*sizeof(__u64));
-        ptlrpc_request_set_replen(request);
-        request->rq_interpret_reply = ptlrpc_connect_interpret;
+	request->rq_no_resend = request->rq_no_delay = 1;
+	request->rq_send_state = LUSTRE_IMP_CONNECTING;
+	/* Allow a slightly larger reply for future growth compatibility */
+	req_capsule_set_size(&request->rq_pill, &RMF_CONNECT_DATA, RCL_SERVER,
+			     sizeof(struct obd_connect_data)+16*sizeof(__u64));
+	ptlrpc_request_set_replen(request);
+	request->rq_interpret_reply = ptlrpc_connect_interpret;
 
-        CLASSERT(sizeof (*aa) <= sizeof (request->rq_async_args));
-        aa = ptlrpc_req_async_args(request);
-        memset(aa, 0, sizeof *aa);
+	CLASSERT(sizeof(*aa) <= sizeof(request->rq_async_args));
+	aa = ptlrpc_req_async_args(request);
+	memset(aa, 0, sizeof *aa);
 
-        aa->pcaa_peer_committed = committed_before_reconnect;
-        aa->pcaa_initial_connect = initial_connect;
+	aa->pcaa_peer_committed = committed_before_reconnect;
+	aa->pcaa_initial_connect = initial_connect;
 
-        if (aa->pcaa_initial_connect) {
+	if (aa->pcaa_initial_connect) {
 		spin_lock(&imp->imp_lock);
 		imp->imp_replayable = 1;
 		spin_unlock(&imp->imp_lock);
-                lustre_msg_add_op_flags(request->rq_reqmsg,
-                                        MSG_CONNECT_INITIAL);
-        }
+		lustre_msg_add_op_flags(request->rq_reqmsg,
+					MSG_CONNECT_INITIAL);
+	}
 
-        if (set_transno)
-                lustre_msg_add_op_flags(request->rq_reqmsg,
-                                        MSG_CONNECT_TRANSNO);
+	if (set_transno)
+		lustre_msg_add_op_flags(request->rq_reqmsg,
+					MSG_CONNECT_TRANSNO);
 
 	DEBUG_REQ(D_RPCTRACE, request, "(re)connect request (timeout %d)",
 		  request->rq_timeout);
@@ -1052,10 +1053,19 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 	/* check that server granted subset of flags we asked for. */
 	if ((ocd->ocd_connect_flags & imp->imp_connect_flags_orig) !=
 	    ocd->ocd_connect_flags) {
-		CERROR("%s: Server didn't granted asked subset of flags: "
-		       "asked="LPX64" grranted="LPX64"\n",
-		       imp->imp_obd->obd_name,imp->imp_connect_flags_orig,
+		CERROR("%s: Server didn't grant requested subset of flags: "
+		       "asked="LPX64" granted="LPX64"\n",
+		       imp->imp_obd->obd_name, imp->imp_connect_flags_orig,
 		       ocd->ocd_connect_flags);
+		GOTO(out, rc = -EPROTO);
+	}
+
+	if ((ocd->ocd_connect_flags2 & imp->imp_connect_flags2_orig) !=
+	    ocd->ocd_connect_flags2) {
+		CERROR("%s: Server didn't grant requested subset of flags2: "
+		       "asked="LPX64" granted="LPX64"\n",
+		       imp->imp_obd->obd_name, imp->imp_connect_flags2_orig,
+		       ocd->ocd_connect_flags2);
 		GOTO(out, rc = -EPROTO);
 	}
 
