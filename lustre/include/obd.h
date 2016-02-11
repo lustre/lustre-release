@@ -834,6 +834,11 @@ struct md_op_data {
 	__u64			op_data_version;
 	struct lustre_handle	op_lease_handle;
 
+	/* File security context, for creates. */
+	const char	       *op_file_secctx_name;
+	void		       *op_file_secctx;
+	__u32			op_file_secctx_size;
+
 	/* default stripe offset */
 	__u32			op_default_stripe_offset;
 };

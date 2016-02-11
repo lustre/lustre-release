@@ -50,6 +50,7 @@
 #ifdef HAVE_UIDGID_HEADER
 # include <linux/uidgid.h>
 #endif
+#include <linux/security.h>
 
 #include <lustre_ioctl.h>
 #include <lustre_ha.h>
@@ -161,6 +162,12 @@ static void ll_free_sbi(struct super_block *sb)
 	EXIT;
 }
 
+static inline int obd_connect_has_secctx(struct obd_connect_data *data)
+{
+	return data->ocd_connect_flags & OBD_CONNECT_FLAGS2 &&
+	       data->ocd_connect_flags2 & OBD_CONNECT2_FILE_SECCTX;
+}
+
 static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                                     struct vfsmount *mnt)
 {
@@ -247,6 +254,10 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	/* always ping even if server suppress_pings */
 	if (sbi->ll_flags & LL_SBI_ALWAYS_PING)
 		data->ocd_connect_flags &= ~OBD_CONNECT_PINGLESS;
+
+#ifdef HAVE_SECURITY_DENTRY_INIT_SECURITY
+	data->ocd_connect_flags2 |= OBD_CONNECT2_FILE_SECCTX;
+#endif /* HAVE_SECURITY_DENTRY_INIT_SECURITY */
 
 	data->ocd_brw_size = MD_MAX_BRW_SIZE;
 
@@ -351,6 +362,9 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 
 	if (data->ocd_connect_flags & OBD_CONNECT_LAYOUTLOCK)
 		sbi->ll_flags |= LL_SBI_LAYOUT_LOCK;
+
+	if (obd_connect_has_secctx(data))
+		sbi->ll_flags |= LL_SBI_FILE_SECCTX;
 
 	if (data->ocd_ibits_known & MDS_INODELOCK_XATTR) {
 		if (!(data->ocd_connect_flags & OBD_CONNECT_MAX_EASIZE)) {
@@ -2465,6 +2479,8 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 
 void ll_finish_md_op_data(struct md_op_data *op_data)
 {
+	security_release_secctx(op_data->op_file_secctx,
+				op_data->op_file_secctx_size);
         OBD_FREE_PTR(op_data);
 }
 

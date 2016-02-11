@@ -591,11 +591,22 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 	op_data = ll_prep_md_op_data(NULL, parent, NULL, dentry->d_name.name,
 				     dentry->d_name.len, 0, opc, NULL);
 	if (IS_ERR(op_data))
-		RETURN((void *)op_data);
+		GOTO(out, retval = ERR_CAST(op_data));
 
 	/* enforce umask if acl disabled or MDS doesn't support umask */
 	if (!IS_POSIXACL(parent) || !exp_connect_umask(ll_i2mdexp(parent)))
 		it->it_create_mode &= ~current_umask();
+
+	if (it->it_op & IT_CREAT &&
+	    ll_i2sbi(parent)->ll_flags & LL_SBI_FILE_SECCTX) {
+		rc = ll_dentry_init_security(dentry, it->it_create_mode,
+					     &dentry->d_name,
+					     &op_data->op_file_secctx_name,
+					     &op_data->op_file_secctx,
+					     &op_data->op_file_secctx_size);
+		if (rc < 0)
+			GOTO(out, retval = ERR_PTR(rc));
+	}
 
 	rc = md_intent_lock(ll_i2mdexp(parent), op_data, it, &req,
 			    &ll_md_blocking_ast, 0);
@@ -920,9 +931,11 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry,
 
 	d_instantiate(dentry, inode);
 
-	rc = ll_init_security(dentry, inode, dir);
-	if (rc)
-		RETURN(rc);
+	if (!(ll_i2sbi(inode)->ll_flags & LL_SBI_FILE_SECCTX)) {
+		rc = ll_inode_init_security(dentry, inode, dir);
+		if (rc)
+			RETURN(rc);
+	}
 
 	RETURN(0);
 }
@@ -962,16 +975,26 @@ static int ll_new_node(struct inode *dir, struct dentry *dchild,
                 tgt_len = strlen(tgt) + 1;
 
 again:
-        op_data = ll_prep_md_op_data(NULL, dir, NULL, name->name,
-                                     name->len, 0, opc, NULL);
-        if (IS_ERR(op_data))
-                GOTO(err_exit, err = PTR_ERR(op_data));
+	op_data = ll_prep_md_op_data(NULL, dir, NULL, name->name,
+				     name->len, 0, opc, NULL);
+	if (IS_ERR(op_data))
+		GOTO(err_exit, err = PTR_ERR(op_data));
+
+	if (sbi->ll_flags & LL_SBI_FILE_SECCTX) {
+		err = ll_dentry_init_security(dchild, mode, &dchild->d_name,
+					      &op_data->op_file_secctx_name,
+					      &op_data->op_file_secctx,
+					      &op_data->op_file_secctx_size);
+		if (err < 0)
+			GOTO(err_exit, err);
+	}
 
 	err = md_create(sbi->ll_md_exp, op_data, tgt, tgt_len, mode,
 			from_kuid(&init_user_ns, current_fsuid()),
 			from_kgid(&init_user_ns, current_fsgid()),
 			cfs_curproc_cap_pack(), rdev, &request);
 	ll_finish_md_op_data(op_data);
+	op_data = NULL;
 	if (err < 0 && err != -EREMOTE)
 		GOTO(err_exit, err);
 
@@ -1018,16 +1041,21 @@ again:
 
 	d_instantiate(dchild, inode);
 
-	err = ll_init_security(dchild, inode, dir);
-	if (err)
-		GOTO(err_exit, err);
+	if (!(sbi->ll_flags & LL_SBI_FILE_SECCTX)) {
+		err = ll_inode_init_security(dchild, inode, dir);
+		if (err)
+			GOTO(err_exit, err);
+	}
 
-        EXIT;
+	EXIT;
 err_exit:
 	if (request != NULL)
 		ptlrpc_req_finished(request);
 
-        return err;
+	if (!IS_ERR_OR_NULL(op_data))
+		ll_finish_md_op_data(op_data);
+
+	return err;
 }
 
 static int ll_mknod(struct inode *dir, struct dentry *dchild, ll_umode_t mode,

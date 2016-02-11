@@ -295,6 +295,13 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 	req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT,
 			     max(lmmsize, obddev->u.cli.cl_default_mds_easize));
 
+	req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX_NAME,
+			     RCL_CLIENT, op_data->op_file_secctx_name != NULL ?
+			     strlen(op_data->op_file_secctx_name) + 1 : 0);
+
+	req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX, RCL_CLIENT,
+			     op_data->op_file_secctx_size);
+
 	rc = ldlm_prep_enqueue_req(exp, req, &cancels, count);
 	if (rc < 0) {
 		ptlrpc_request_free(req);

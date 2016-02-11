@@ -438,22 +438,30 @@ static int ll_send_mgc_param(struct obd_export *mgc, char *string)
 /**
  * Create striped directory with specified stripe(@lump)
  *
- * param[in]parent	the parent of the directory.
- * param[in]lump	the specified stripes.
- * param[in]dirname	the name of the directory.
- * param[in]mode	the specified mode of the directory.
+ * \param[in] dparent	the parent of the directory.
+ * \param[in] lump	the specified stripes.
+ * \param[in] dirname	the name of the directory.
+ * \param[in] mode	the specified mode of the directory.
  *
- * retval		=0 if striped directory is being created successfully.
+ * \retval		=0 if striped directory is being created successfully.
  *                      <0 if the creation is failed.
  */
-static int ll_dir_setdirstripe(struct inode *parent, struct lmv_user_md *lump,
+static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 			       const char *dirname, umode_t mode)
 {
+	struct inode *parent = dparent->d_inode;
 	struct ptlrpc_request *request = NULL;
 	struct md_op_data *op_data;
 	struct ll_sb_info *sbi = ll_i2sbi(parent);
 	struct inode *inode = NULL;
-	struct dentry dentry;
+	struct dentry dentry = {
+		.d_parent = dparent,
+		.d_name = {
+			.name = dirname,
+			.len = strlen(dirname),
+			.hash = full_name_hash(dirname, strlen(dirname)),
+		},
+	};
 	int err;
 	ENTRY;
 
@@ -483,33 +491,50 @@ static int ll_dir_setdirstripe(struct inode *parent, struct lmv_user_md *lump,
 				     strlen(dirname), mode, LUSTRE_OPC_MKDIR,
 				     lump);
 	if (IS_ERR(op_data))
-		GOTO(err_exit, err = PTR_ERR(op_data));
+		RETURN(PTR_ERR(op_data));
+
+	if (sbi->ll_flags & LL_SBI_FILE_SECCTX) {
+		/* selinux_dentry_init_security() uses dentry->d_parent and name
+		 * to determine the security context for the file. So our fake
+		 * dentry should be real enough for this purpose. */
+		err = ll_dentry_init_security(&dentry, mode, &dentry.d_name,
+					      &op_data->op_file_secctx_name,
+					      &op_data->op_file_secctx,
+					      &op_data->op_file_secctx_size);
+		if (err < 0)
+			GOTO(out_op_data, err);
+	}
 
 	op_data->op_cli_flags |= CLI_SET_MEA;
 	err = md_create(sbi->ll_md_exp, op_data, lump, sizeof(*lump), mode,
 			from_kuid(&init_user_ns, current_fsuid()),
 			from_kgid(&init_user_ns, current_fsgid()),
 			cfs_curproc_cap_pack(), 0, &request);
-	ll_finish_md_op_data(op_data);
 	if (err)
-		GOTO(err_exit, err);
+		GOTO(out_request, err);
 
 	CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_SETDIRSTRIPE_PAUSE, cfs_fail_val);
 
 	err = ll_prep_inode(&inode, request, parent->i_sb, NULL);
 	if (err)
-		GOTO(err_exit, err);
+		GOTO(out_inode, err);
 
-	memset(&dentry, 0, sizeof(dentry));
 	dentry.d_inode = inode;
 
-	err = ll_init_security(&dentry, inode, parent);
-	iput(inode);
-	if (err)
-		GOTO(err_exit, err);
+	if (!(sbi->ll_flags & LL_SBI_FILE_SECCTX)) {
+		err = ll_inode_init_security(&dentry, inode, parent);
+		if (err)
+			GOTO(out_inode, err);
+	}
 
-err_exit:
+out_inode:
+	if (inode != NULL)
+		iput(inode);
+out_request:
 	ptlrpc_req_finished(request);
+out_op_data:
+	ll_finish_md_op_data(op_data);
+
 	return err;
 }
 
@@ -1093,6 +1118,7 @@ static char *ll_getname(const char __user *filename)
 
 static long ll_dir_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
+	struct dentry *dentry = file_dentry(file);
 	struct inode *inode = file_inode(file);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct obd_ioctl_data *data;
@@ -1201,7 +1227,7 @@ out_free:
 #else
 		mode = data->ioc_type;
 #endif
-		rc = ll_dir_setdirstripe(inode, lum, filename, mode);
+		rc = ll_dir_setdirstripe(dentry, lum, filename, mode);
 lmv_out_free:
 		obd_ioctl_freedata(buf, len);
 		RETURN(rc);

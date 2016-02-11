@@ -852,6 +852,41 @@ int mdt_name_unpack(struct req_capsule *pill,
 	return 0;
 }
 
+static int mdt_file_secctx_unpack(struct req_capsule *pill,
+				  const char **secctx_name,
+				  void **secctx, size_t *secctx_size)
+{
+	const char *name;
+	size_t name_size;
+
+	*secctx_name = NULL;
+	*secctx = NULL;
+	*secctx_size = 0;
+
+	if (!req_capsule_has_field(pill, &RMF_FILE_SECCTX_NAME, RCL_CLIENT) ||
+	    !req_capsule_field_present(pill, &RMF_FILE_SECCTX_NAME, RCL_CLIENT))
+		return 0;
+
+	name_size = req_capsule_get_size(pill, &RMF_FILE_SECCTX_NAME,
+					 RCL_CLIENT);
+	if (name_size == 0)
+		return 0;
+
+	name = req_capsule_client_get(pill, &RMF_FILE_SECCTX_NAME);
+	if (strnlen(name, name_size) != name_size - 1)
+		return -EPROTO;
+
+	if (!req_capsule_has_field(pill, &RMF_FILE_SECCTX, RCL_CLIENT) ||
+	    !req_capsule_field_present(pill, &RMF_FILE_SECCTX, RCL_CLIENT))
+		return -EPROTO;
+
+	*secctx_name = name;
+	*secctx = req_capsule_client_get(pill, &RMF_FILE_SECCTX);
+	*secctx_size = req_capsule_get_size(pill, &RMF_FILE_SECCTX, RCL_CLIENT);
+
+	return 0;
+}
+
 static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 {
 	struct lu_ucred		*uc = mdt_ucred(info);
@@ -1087,6 +1122,12 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 		}
 	}
 
+	rc = mdt_file_secctx_unpack(pill, &sp->sp_cr_file_secctx_name,
+				    &sp->sp_cr_file_secctx,
+				    &sp->sp_cr_file_secctx_size);
+	if (rc < 0)
+		RETURN(rc);
+
 	rc = mdt_dlmreq_unpack(info);
 	RETURN(rc);
 }
@@ -1278,6 +1319,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         struct mdt_reint_record *rr   = &info->mti_rr;
         struct ptlrpc_request   *req  = mdt_info_req(info);
         struct md_op_spec       *sp   = &info->mti_spec;
+	int rc;
         ENTRY;
 
         CLASSERT(sizeof(struct mdt_rec_create) == sizeof(struct mdt_rec_reint));
@@ -1337,7 +1379,11 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
 			rr->rr_eadatalen = MIN_MD_SIZE;
 	}
 
-        RETURN(0);
+	rc = mdt_file_secctx_unpack(pill, &sp->sp_cr_file_secctx_name,
+				    &sp->sp_cr_file_secctx,
+				    &sp->sp_cr_file_secctx_size);
+
+	RETURN(rc);
 }
 
 static int mdt_setxattr_unpack(struct mdt_thread_info *info)

@@ -29,11 +29,55 @@
  * Handler for storing security labels as extended attributes.
  */
 
-
+#include <linux/types.h>
 #include <linux/security.h>
 #include <linux/selinux.h>
 #include <linux/xattr.h>
 #include "llite_internal.h"
+
+#ifndef XATTR_SELINUX_SUFFIX
+# define XATTR_SELINUX_SUFFIX "selinux"
+#endif
+
+#ifndef XATTR_NAME_SELINUX
+# define XATTR_NAME_SELINUX XATTR_SECURITY_PREFIX XATTR_SELINUX_SUFFIX
+#endif
+
+/*
+ * Check for LL_SBI_FILE_SECCTX before calling.
+ */
+int ll_dentry_init_security(struct dentry *dentry, int mode, struct qstr *name,
+			    const char **secctx_name, void **secctx,
+			    __u32 *secctx_size)
+{
+#ifdef HAVE_SECURITY_DENTRY_INIT_SECURITY
+	int rc;
+
+	/* security_dentry_init_security() is strange. Like
+	 * security_inode_init_security() it may return a context (provided a
+	 * Linux security module is enabled) but unlike
+	 * security_inode_init_security() it does not return to us the name of
+	 * the extended attribute to store the context under (for example
+	 * "security.selinux"). So we only call it when we think we know what
+	 * the name of the extended attribute will be. This is OK-ish since
+	 * SELinux is the only module that implements
+	 * security_dentry_init_security(). Note that the NFS client code just
+	 * calls it and assumes that if anything is returned then it must come
+	 * from SELinux. */
+
+	if (!selinux_is_enabled())
+		return 0;
+
+	rc = security_dentry_init_security(dentry, mode, name, secctx,
+					   secctx_size);
+	if (rc < 0)
+		return rc;
+
+	*secctx_name = XATTR_NAME_SELINUX;
+#endif /* HAVE_SECURITY_DENTRY_INIT_SECURITY */
+
+	return 0;
+}
 
 #ifdef HAVE_SECURITY_IINITSEC_CALLBACK
 /**
@@ -89,7 +133,8 @@ ll_initxattrs(struct inode *inode, const struct xattr *xattr_array,
  * \retval < 0      failure to get security context or set xattr
  */
 int
-ll_init_security(struct dentry *dentry, struct inode *inode, struct inode *dir)
+ll_inode_init_security(struct dentry *dentry, struct inode *inode,
+		       struct inode *dir)
 {
 	if (!selinux_is_enabled())
 		return 0;
@@ -109,7 +154,8 @@ ll_init_security(struct dentry *dentry, struct inode *inode, struct inode *dir)
  * \retval < 0      failure to get security context or set xattr
  */
 int
-ll_init_security(struct dentry *dentry, struct inode *inode, struct inode *dir)
+ll_inode_init_security(struct dentry *dentry, struct inode *inode,
+		       struct inode *dir)
 {
 	int err;
 	size_t len, name_len;

@@ -1431,6 +1431,23 @@ block_device_ops_release_return_int, [
 ]) # LC_BLKDEV_RELEASE_RETURN_INT
 
 #
+# LC_HAVE_SECURITY_DENTRY_INIT_SECURITY
+#
+# 3.10 introduced security_dentry_init_security()
+#
+AC_DEFUN([LC_HAVE_SECURITY_DENTRY_INIT_SECURITY], [
+LB_CHECK_COMPILE([if 'security_dentry_init_security' is defined],
+security_dentry_init_security, [
+	#include <linux/security.h>
+],[
+	security_dentry_init_security(NULL, 0, NULL, NULL, NULL);
+],[
+	AC_DEFINE(HAVE_SECURITY_DENTRY_INIT_SECURITY, 1,
+		[security_dentry_init_security' is defined])
+])
+]) # LC_HAVE_SECURITY_DENTRY_INIT_SECURITY
+
+#
 # LC_INVALIDATE_RANGE
 #
 # 3.11 invalidatepage requires the length of the range to invalidate
@@ -2276,6 +2293,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_BLKDEV_RELEASE_RETURN_INT
 	LC_HAVE_REMOVE_PROC_SUBTREE
 	LC_HAVE_PROC_REMOVE
+	LC_HAVE_SECURITY_DENTRY_INIT_SECURITY
 
 	# 3.11
 	LC_INVALIDATE_RANGE

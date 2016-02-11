@@ -119,6 +119,30 @@ static void mdc_pack_name(struct ptlrpc_request *req,
 	LASSERT(cpy_len == name_len && lu_name_is_valid_2(buf, cpy_len));
 }
 
+void mdc_file_secctx_pack(struct ptlrpc_request *req, const char *secctx_name,
+			  const void *secctx, size_t secctx_size)
+{
+	void *buf;
+	size_t buf_size;
+
+	if (secctx_name == NULL)
+		return;
+
+	buf = req_capsule_client_get(&req->rq_pill, &RMF_FILE_SECCTX_NAME);
+	buf_size = req_capsule_get_size(&req->rq_pill, &RMF_FILE_SECCTX_NAME,
+					RCL_CLIENT);
+
+	LASSERT(buf_size == strlen(secctx_name) + 1);
+	memcpy(buf, secctx_name, buf_size);
+
+	buf = req_capsule_client_get(&req->rq_pill, &RMF_FILE_SECCTX);
+	buf_size = req_capsule_get_size(&req->rq_pill, &RMF_FILE_SECCTX,
+					RCL_CLIENT);
+
+	LASSERT(buf_size == secctx_size);
+	memcpy(buf, secctx, buf_size);
+}
+
 void mdc_readdir_pack(struct ptlrpc_request *req, __u64 pgoff, size_t size,
 		      const struct lu_fid *fid)
 {
@@ -168,6 +192,10 @@ void mdc_create_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 		tmp = req_capsule_client_get(&req->rq_pill, &RMF_EADATA);
 		memcpy(tmp, data, datalen);
 	}
+
+	mdc_file_secctx_pack(req, op_data->op_file_secctx_name,
+			     op_data->op_file_secctx,
+			     op_data->op_file_secctx_size);
 }
 
 static inline __u64 mds_pack_open_flags(__u64 flags)
@@ -237,6 +265,10 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 			if (op_data->op_bias & MDS_CREATE_VOLATILE)
 				cr_flags |= MDS_OPEN_VOLATILE;
 		}
+
+		mdc_file_secctx_pack(req, op_data->op_file_secctx_name,
+				     op_data->op_file_secctx,
+				     op_data->op_file_secctx_size);
 	}
 
 	if (lmm) {

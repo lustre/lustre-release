@@ -139,8 +139,13 @@ struct md_op_spec {
                 } sp_ea;
         } u;
 
-        /** Create flag from client: such as MDS_OPEN_CREAT, and others. */
-        __u64      sp_cr_flags;
+	/** Create flag from client: such as MDS_OPEN_CREAT, and others. */
+	__u64      sp_cr_flags;
+
+	/* File security context for creates. */
+	const char	*sp_cr_file_secctx_name; /* (security) xattr name */
+	void		*sp_cr_file_secctx; /* xattr value */
+	size_t		 sp_cr_file_secctx_size; /* xattr value size */
 
 	/** don't create lov objects or llog cookie - this replay */
 	unsigned int no_create:1,

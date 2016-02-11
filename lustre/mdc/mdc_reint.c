@@ -197,6 +197,13 @@ rebuild:
         req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT,
                              data && datalen ? datalen : 0);
 
+	req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX_NAME,
+			     RCL_CLIENT, op_data->op_file_secctx_name != NULL ?
+			     strlen(op_data->op_file_secctx_name) + 1 : 0);
+
+	req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX, RCL_CLIENT,
+			     op_data->op_file_secctx_size);
+
 	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
 	if (rc) {
 		ptlrpc_request_free(req);
