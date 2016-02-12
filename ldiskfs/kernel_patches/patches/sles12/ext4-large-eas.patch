@@ -20,7 +20,7 @@ Index: linux-stage/fs/ext4/ext4.h
  #define EXT4_MMP_MAX_CHECK_INTERVAL	300UL
  
  /*
-+ * Maximum size of xattr attributes for FEATURE_INCOMPAT_EA_INODE 1Mb
++ * Maximum size of xattr attributes for FEATURE_INCOMPAT_EA_INODE 1MB
 + * This limit is arbitrary, but is reasonable for the xattr API.
 + */
 +#define EXT4_XATTR_MAX_LARGE_EA_SIZE    (1024 * 1024)
@@ -81,17 +81,12 @@ Index: linux-stage/fs/ext4/inode.c
  	if (IS_ERR(handle)) {
  		ext4_std_error(inode->i_sb, PTR_ERR(handle));
  		/*
-@@ -248,9 +248,36 @@ void ext4_evict_inode(struct inode *inod
- 		sb_end_intwrite(inode->i_sb);
- 		goto no_delete;
- 	}
--
+@@ -251,6 +251,32 @@ void ext4_evict_inode(struct inode *inod
+ 
  	if (IS_SYNC(inode))
  		ext4_handle_sync(handle);
 +
-+	/*
-+	 * Delete xattr inode before deleting the main inode.
-+	 */
++	/* Delete xattr inode before deleting the main inode. */
 +	err = ext4_xattr_delete_inode(handle, inode, &lea_ino_array);
 +	if (err) {
 +		ext4_warning(inode->i_sb,
@@ -119,11 +114,8 @@ Index: linux-stage/fs/ext4/inode.c
  	inode->i_size = 0;
  	err = ext4_mark_inode_dirty(handle, inode);
  	if (err) {
-@@ -305,8 +332,12 @@ void ext4_evict_inode(struct inode *inod
- 		ext4_clear_inode(inode);
- 	else
+@@ -307,6 +334,9 @@ void ext4_evict_inode(struct inode *inod
  		ext4_free_inode(handle, inode);
-+
  	ext4_journal_stop(handle);
  	sb_end_intwrite(inode->i_sb);
 +
@@ -132,7 +124,7 @@ Index: linux-stage/fs/ext4/inode.c
  	return;
  no_delete:
  	ext4_clear_inode(inode);	/* We must guarantee clearing of inode... */
-@@ -4777,7 +4808,7 @@ static int ext4_index_trans_blocks(struc
+@@ -4777,7 +4807,7 @@ static int ext4_index_trans_blocks(struc
   *
   * Also account for superblock, inode, quota and xattr blocks
   */
@@ -183,7 +175,7 @@ Index: linux-stage/fs/ext4/xattr.c
  {
  	struct ext4_xattr_entry *entry;
  	size_t name_len;
-@@ -265,11 +272,104 @@ ext4_xattr_find_entry(struct ext4_xattr_
+@@ -265,11 +272,109 @@ ext4_xattr_find_entry(struct ext4_xattr_
  			break;
  	}
  	*pentry = entry;
@@ -196,8 +188,7 @@ Index: linux-stage/fs/ext4/xattr.c
 +/*
 + * Read the EA value from an inode.
 + */
-+static int
-+ext4_xattr_inode_read(struct inode *ea_inode, void *buf, size_t *size)
++static int ext4_xattr_inode_read(struct inode *ea_inode, void *buf, size_t *size)
 +{
 +	unsigned long block = 0;
 +	struct buffer_head *bh = NULL;
@@ -230,7 +221,14 @@ Index: linux-stage/fs/ext4/xattr.c
 +	return err;
 +}
 +
-+struct inode *ext4_xattr_inode_iget(struct inode *parent, unsigned long ea_ino, int *err)
++/*
++ * Fetch the xattr inode from disk.
++ *
++ * The xattr inode stores the parent inode number and generation so that
++ * the kernel and e2fsck can verify the xattr inode is valid upon access.
++ */
++struct inode *ext4_xattr_inode_iget(struct inode *parent,
++				    unsigned long ea_ino, int *err)
 +{
 +	struct inode *ea_inode = NULL;
 +
@@ -269,9 +267,8 @@ Index: linux-stage/fs/ext4/xattr.c
 +/*
 + * Read the value from the EA inode.
 + */
-+static int
-+ext4_xattr_inode_get(struct inode *inode, unsigned long ea_ino, void *buffer,
-+		     size_t *size)
++static int ext4_xattr_inode_get(struct inode *inode, unsigned long ea_ino,
++				void *buffer, size_t *size)
 +{
 +	struct inode *ea_inode = NULL;
 +	int err;
@@ -610,7 +607,7 @@ Index: linux-stage/fs/ext4/xattr.c
  		bs->s.here = bs->s.first;
  		error = ext4_xattr_find_entry(&bs->s.here, i->name_index,
 -					      i->name, bs->bh->b_size, 1);
-+					     i->name, bs->bh->b_size, 1, inode);
++					      i->name, bs->bh->b_size, 1, inode);
  		if (error && error != -ENODATA)
  			goto cleanup;
  		bs->s.not_found = error;
@@ -997,13 +994,13 @@ Index: linux-stage/fs/ext4/xattr.h
 + * Extra integer type conversion added to ignore higher
 + * bits in i_mtime.tv_sec which might be set by ext4_get()
 + */
-+#define EXT4_XATTR_INODE_SET_PARENT(inode, inum)      \
-+do {                                                  \
-+      (inode)->i_mtime.tv_sec = inum;                 \
++#define EXT4_XATTR_INODE_SET_PARENT(inode, inum)	\
++do {							\
++	(inode)->i_mtime.tv_sec = inum;			\
 +} while(0)
 +
-+#define EXT4_XATTR_INODE_GET_PARENT(inode)            \
-+((__u32)(inode)->i_mtime.tv_sec)
++#define EXT4_XATTR_INODE_GET_PARENT(inode)		\
++	((__u32)(inode)->i_mtime.tv_sec)
 +
 +/*
 + * The minimum size of EA value when you start storing it in an external inode
