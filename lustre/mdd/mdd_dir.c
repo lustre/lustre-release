@@ -1467,10 +1467,6 @@ int mdd_finish_unlink(const struct lu_env *env,
 		 * will be deleted during mdd_close() */
 		obj->mod_flags |= DEAD_OBJ;
 		if (obj->mod_count) {
-			rc = mdd_mark_orphan_object(env, obj, th, false);
-			if (rc != 0)
-				RETURN(rc);
-
 			rc = __mdd_orphan_add(env, obj, th);
 			if (rc == 0)
 				CDEBUG(D_HA, "Object "DFID" is inserted into "
@@ -1483,6 +1479,12 @@ int mdd_finish_unlink(const struct lu_env *env,
 				       "open replay\n",
 					PFID(mdd_object_fid(obj)),
 					obj->mod_count);
+
+			/* mark object as an orphan here, not
+			 * before __mdd_orphan_add() as racing
+			 * mdd_la_get() may propagate ORPHAN_OBJ
+			 * causing the asserition */
+			rc = mdd_mark_orphan_object(env, obj, th, false);
 		} else {
 			rc = mdo_destroy(env, obj, th);
 		}
