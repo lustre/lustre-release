@@ -2040,6 +2040,8 @@ run_test 27D "validate llapi_layout API"
 # accessing a widely striped file.
 test_27E() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code client) -lt $(version_code 2.5.57) ] &&
+		skip "client does not have LU-3338 fix" && return
 
 	# 72 bytes is the minimum space required to store striping
 	# information for a file striped across one OST:
@@ -2074,7 +2076,7 @@ test_28() { # bug 2091
 run_test 28 "create/mknod/mkdir with bad file types ============"
 
 test_29() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return 0
 	cancel_lru_locks mdc
 	test_mkdir $DIR/d29
 	touch $DIR/d29/foo
@@ -2085,7 +2087,7 @@ test_29() {
 	for lock_count in $(lctl get_param -n ldlm.namespaces.*mdc*.lock_count); do
 		let LOCKCOUNTORIG=$LOCKCOUNTORIG+$lock_count
 	done
-	[ $LOCKCOUNTORIG -eq 0 ] && echo "No mdc lock count" && return 1
+	[ $LOCKCOUNTORIG -eq 0 ] && error "No mdc lock count" && return 1
 
 	declare -i LOCKUNUSEDCOUNTORIG=0
 	for unused_count in $(lctl get_param -n ldlm.namespaces.*mdc*.lock_unused_count); do
@@ -3902,7 +3904,6 @@ test_48b() { # bug 2399
 	test_mkdir .foo && error "'mkdir .foo' worked after removing cwd"
 	ls . > /dev/null && error "'ls .' worked after removing cwd"
 	ls .. > /dev/null || error "'ls ..' failed after removing cwd"
-	is_patchless || ( cd . && error "'cd .' worked after removing cwd" )
 	test_mkdir . && error "'mkdir .' worked after removing cwd"
 	rmdir . && error "'rmdir .' worked after removing cwd"
 	ln -s . foo && error "'ln -s .' worked after removing cwd"
@@ -3923,8 +3924,6 @@ test_48c() { # bug 2350
 	test_mkdir .foo && error "mkdir .foo worked after removing cwd"
 	$TRACE ls . && error "'ls .' worked after removing cwd"
 	$TRACE ls .. || error "'ls ..' failed after removing cwd"
-	is_patchless || ( $TRACE cd . &&
-			error "'cd .' worked after removing cwd" )
 	$TRACE test_mkdir . && error "'mkdir .' worked after removing cwd"
 	$TRACE rmdir . && error "'rmdir .' worked after removing cwd"
 	$TRACE ln -s . foo && error "'ln -s .' worked after removing cwd"
@@ -3946,13 +3945,10 @@ test_48d() { # bug 2350
 	test_mkdir .foo && error "mkdir .foo worked after removing parent"
 	$TRACE ls . && error "'ls .' worked after removing parent"
 	$TRACE ls .. && error "'ls ..' worked after removing parent"
-	is_patchless || ( $TRACE cd . &&
-			error "'cd .' worked after recreate parent" )
 	$TRACE test_mkdir . && error "'mkdir .' worked after removing parent"
 	$TRACE rmdir . && error "'rmdir .' worked after removing parent"
 	$TRACE ln -s . foo && error "'ln -s .' worked after removing parent"
-	is_patchless || ( $TRACE cd .. &&
-			error "'cd ..' worked after removing parent" || true )
+	true
 }
 run_test 48d "Access removed parent subdir (should return errors)"
 
@@ -10715,8 +10711,7 @@ run_test 161a "link ea sanity"
 
 test_161b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "skipping remote directory test" && return
+	[ $MDSCOUNT -lt 2 ] && skip "skipping remote directory test" && return
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 

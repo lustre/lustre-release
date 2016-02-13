@@ -5438,12 +5438,7 @@ get_random_entry () {
 }
 
 client_only () {
-    [ "$CLIENTONLY" ] || [ "$CLIENTMODSONLY" = yes ]
-}
-
-is_patchless ()
-{
-    lctl get_param version | grep -q patchless
+	[ "$CLIENTONLY" ] || [ "$CLIENTMODSONLY" = yes ]
 }
 
 check_versions () {
