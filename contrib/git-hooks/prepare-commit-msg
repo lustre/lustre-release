@@ -31,7 +31,10 @@ grep -qs "^$SIGNOFF" "$1" || echo "# $SIGNOFF" >> "$1"
 if [ -x "$CHECKPATCH" ]; then
 	echo "" >> "$1"
 	echo "#" >> "$1"
-	git diff --cached | $CHECKPATCH $CHECKPATCH_OPTS - | sed -e 's/^/# /' >> "$1"
+	[ -d ".git/rebase-apply" -o -d ".git/rebase-merge" ] &&
+		DIFFOPT="HEAD" || DIFFOPT="--cached"
+	git diff $DIFFOPT | $CHECKPATCH $CHECKPATCH_OPTS - |
+		sed -e 's/^/# /' >> "$1"
 fi
 
 # Cause Vim to wrap text at 70 columns to match commit message style.
