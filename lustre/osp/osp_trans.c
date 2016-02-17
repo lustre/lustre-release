@@ -77,6 +77,7 @@ struct osp_update_args {
 	atomic_t		 *oaua_count;
 	wait_queue_head_t	 *oaua_waitq;
 	bool			  oaua_flow_control;
+	const struct lu_env	 *oaua_update_env;
 };
 
 /**
@@ -619,6 +620,17 @@ static int osp_update_interpret(const struct lu_env *env,
 	if (our == NULL)
 		RETURN(0);
 
+	/* Sigh env might be NULL in some cases, see
+	 * this calling path.
+	 * osp_send_update_thread()
+	 *  ptlrpc_set_wait() ----> null env.
+	 *   ptlrpc_check_set()
+	 *    osp_update_interpret()
+	 * Let's use env in oaua for this case.
+	 */
+	if (env == NULL)
+		env = oaua->oaua_update_env;
+
 	oaua->oaua_update = NULL;
 	oth = our->our_th;
 	if (oaua->oaua_flow_control) {
@@ -728,6 +740,10 @@ int osp_unplug_async_request(const struct lu_env *env,
 		args->oaua_update = our;
 		args->oaua_count = NULL;
 		args->oaua_waitq = NULL;
+		/* Note: this is asynchronous call for the request, so the
+		 * interrupte cb and current function will be different
+		 * thread, so we need use different env */
+		args->oaua_update_env = NULL;
 		args->oaua_flow_control = false;
 		req->rq_interpret_reply = osp_update_interpret;
 		ptlrpcd_add_req(req);
@@ -1106,6 +1122,9 @@ static int osp_send_update_req(const struct lu_env *env,
 
 	args = ptlrpc_req_async_args(req);
 	args->oaua_update = our;
+	/* set env to NULL, in case the interrupt cb and current function
+	 * are in different thread */
+	args->oaua_update_env = NULL;
 	osp_thandle_get(oth); /* hold for update interpret */
 	req->rq_interpret_reply = osp_update_interpret;
 	if (!oth->ot_super.th_wait_submit && !oth->ot_super.th_sync) {
@@ -1149,6 +1168,10 @@ static int osp_send_update_req(const struct lu_env *env,
 		if (top_device->ld_obd->obd_recovering)
 			req->rq_allow_replay = 1;
 
+		/* Because this req will be synchronus, i.e. it will be called
+		 * in the same thread, so it will be safe to use current
+		 * env */
+		args->oaua_update_env = env;
 		if (osp->opd_connect_mdt)
 			osp_get_rpc_lock(osp);
 		rc = ptlrpc_queue_wait(req);
