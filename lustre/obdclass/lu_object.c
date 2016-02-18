@@ -357,7 +357,7 @@ int lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr)
 	struct cfs_hash_bd            bd2;
 	struct list_head	 dispose;
 	int                      did_sth;
-	unsigned int		 start;
+	unsigned int		 start = 0;
         int                      count;
         int                      bnr;
 	unsigned int             i;
@@ -370,7 +370,8 @@ int lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr)
          * Under LRU list lock, scan LRU list and move unreferenced objects to
          * the dispose list, removing them from LRU and hash table.
          */
-        start = s->ls_purge_start;
+	if (nr != ~0)
+		start = s->ls_purge_start;
 	bnr = (nr == ~0) ? -1 : nr / (int)CFS_HASH_NBKT(s->ls_obj_hash) + 1;
  again:
 	/*
