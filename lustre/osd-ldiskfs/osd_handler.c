@@ -3196,7 +3196,7 @@ static int osd_object_ref_add(const struct lu_env *env,
 	struct osd_thandle *oh;
 	int		    rc = 0;
 
-	if (!dt_object_exists(dt))
+	if (!dt_object_exists(dt) || obj->oo_destroyed)
 		return -ENOENT;
 
 	LINVRNT(osd_invariant(obj));
