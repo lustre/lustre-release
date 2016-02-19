@@ -31,10 +31,8 @@
 #include <linux/types.h>
 
 #ifndef __KERNEL__
-# include <limits.h> /* LONG_MAX */
-# include <stdbool.h> /* bool */
-# include <stddef.h> /* size_t */
-#endif /* !__KERNEL__ */
+# error This include is only for kernel use.
+#endif
 
 #if defined(_ASM_GENERIC_INT_L64_H)
 # define LPF64 "l"
@@ -55,16 +53,6 @@
 #define LPLX "%#lx"
 #define LPPID "%d"
 
-#ifndef BITS_PER_LONG
-# if LONG_MAX == 9223372036854775807
-#  define BITS_PER_LONG 64
-# elif LONG_MAX == 2147483647
-#  define BITS_PER_LONG 32
-# else /* LONG_MAX == 2147483647 */
-#  error "cannot define BITS_PER_LONG"
-# endif /* LONG_MAX != 2147483647 */
-#endif /* !BITS_PER_LONG */
-
 #if BITS_PER_LONG == 64
 # define LI_POISON ((int)0x5a5a5a5a5a5a5a5a)
 # define LL_POISON ((long)0x5a5a5a5a5a5a5a5a)
@@ -79,10 +67,5 @@
 
 typedef unsigned long ulong_ptr_t;
 typedef long long_ptr_t;
-
-#ifndef __KERNEL__
-/* Sparse annotation. */
-#define __user
-#endif
 
 #endif /* _LIBCFS_TYPES_H */

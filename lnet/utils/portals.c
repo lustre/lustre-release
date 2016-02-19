@@ -21,6 +21,7 @@
  */
 #include <errno.h>
 #include <getopt.h>
+#include <inttypes.h>
 #include <limits.h>
 #ifdef HAVE_NETDB_H
 # include <netdb.h>
@@ -635,17 +636,15 @@ jt_ptl_print_peers (int argc, char **argv)
 			else
 				state = data.ioc_flags & 0xffff ? "C" : "U";
 
-			printf ("%-20s (%d) %s [%d] "LPU64" "
-				"sq %d/%d tx %d/%d/%d\n",
-				libcfs_nid2str(data.ioc_nid), /* peer nid */
-				data.ioc_net, /* gemini device id */
-				state, /* peer is Connecting, Up, or Down */
-				data.ioc_count,   /* peer refcount */
-				data.ioc_u64[0], /* peerstamp */
-				data.ioc_u32[2], data.ioc_u32[3], /* tx and rx seq */
-				/* fmaq, nfma, nrdma */
-				data.ioc_u32[0], data.ioc_u32[1], data.ioc_u32[4]
-				);
+			printf("%-20s (%d) %s [%d] %ju sq %d/%d tx %d/%d/%d\n",
+			       libcfs_nid2str(data.ioc_nid), /* peer nid */
+			       data.ioc_net, /* gemini device id */
+			       state, /* peer is Connecting, Up, or Down */
+			       data.ioc_count,   /* peer refcount */
+			       (uintmax_t)data.ioc_u64[0], /* peerstamp */
+			       data.ioc_u32[2], data.ioc_u32[3], /* tx and rx seq */
+			       /* fmaq, nfma, nrdma */
+			       data.ioc_u32[0], data.ioc_u32[1], data.ioc_u32[4]);
                 } else {
                         printf ("%-20s [%d]\n",
                                 libcfs_nid2str(data.ioc_nid), data.ioc_count);
@@ -1620,29 +1619,35 @@ fault_simul_rule_list(__u32 opc, char *name, int argc, char **argv)
 		libcfs_ioctl_unpack(&data, ioc_buf);
 
 		if (opc == LNET_CTL_DROP_LIST) {
-			printf("%s->%s (1/%d | %d) ptl "LPX64", msg %x, "
-			       LPU64"/"LPU64", PUT "LPU64", ACK "LPU64", GET "
-			       LPU64", REP "LPU64"\n",
+			printf("%s->%s (1/%d | %d) ptl %#jx, msg %x, "
+			       "%ju/%ju, PUT %ju, ACK %ju, GET "
+			       "%ju, REP %ju\n",
 			       libcfs_nid2str(attr.fa_src),
 			       libcfs_nid2str(attr.fa_dst),
 			       attr.u.drop.da_rate, attr.u.drop.da_interval,
-			       attr.fa_ptl_mask, attr.fa_msg_mask,
-			       stat.u.drop.ds_dropped, stat.fs_count,
-			       stat.fs_put, stat.fs_ack,
-			       stat.fs_get, stat.fs_reply);
+			       (uintmax_t)attr.fa_ptl_mask, attr.fa_msg_mask,
+			       (uintmax_t)stat.u.drop.ds_dropped,
+			       (uintmax_t)stat.fs_count,
+			       (uintmax_t)stat.fs_put,
+			       (uintmax_t)stat.fs_ack,
+			       (uintmax_t)stat.fs_get,
+			       (uintmax_t)stat.fs_reply);
 
 		} else if (opc == LNET_CTL_DELAY_LIST) {
-			printf("%s->%s (1/%d | %d, latency %d) ptl "LPX64
-			       ", msg %x, "LPU64"/"LPU64", PUT "LPU64
-			       ", ACK "LPU64", GET "LPU64", REP "LPU64"\n",
+			printf("%s->%s (1/%d | %d, latency %d) ptl %#jx"
+			       ", msg %x, %ju/%ju, PUT %ju"
+			       ", ACK %ju, GET %ju, REP %ju\n",
 			       libcfs_nid2str(attr.fa_src),
 			       libcfs_nid2str(attr.fa_dst),
 			       attr.u.delay.la_rate, attr.u.delay.la_interval,
 			       attr.u.delay.la_latency,
-			       attr.fa_ptl_mask, attr.fa_msg_mask,
-			       stat.u.delay.ls_delayed, stat.fs_count,
-			       stat.fs_put, stat.fs_ack, stat.fs_get,
-			       stat.fs_reply);
+			       (uintmax_t)attr.fa_ptl_mask, attr.fa_msg_mask,
+			       (uintmax_t)stat.u.delay.ls_delayed,
+			       (uintmax_t)stat.fs_count,
+			       (uintmax_t)stat.fs_put,
+			       (uintmax_t)stat.fs_ack,
+			       (uintmax_t)stat.fs_get,
+			       (uintmax_t)stat.fs_reply);
 		}
 	}
 	printf("found total %d\n", pos);

@@ -37,13 +37,13 @@
 #ifndef __LIBCFS_LIBCFS_H__
 #define __LIBCFS_LIBCFS_H__
 
-#include <libcfs/types.h>
 #include <libcfs/list.h>
 
 #ifndef __KERNEL__
 # include <libcfs/user-time.h>
 # else /* __KERNEL__ */
 # include <libcfs/linux/libcfs.h>
+# include <libcfs/types.h>
 # include "curproc.h"
 
 #define LIBCFS_VERSION	"0.5.0"

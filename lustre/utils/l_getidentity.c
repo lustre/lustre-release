@@ -34,6 +34,7 @@
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
+#include <stdbool.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -412,7 +413,8 @@ static void show_result(struct identity_downcall_data *data)
 
                 pdd = &data->idd_perms[i];
 
-                printf("  "LPX64"\t0x%x\n", pdd->pdd_nid, pdd->pdd_perm);
+		printf("  %#jx\t0x%x\n", (uintmax_t)pdd->pdd_nid,
+		       pdd->pdd_perm);
         }
         printf("\n");
 }

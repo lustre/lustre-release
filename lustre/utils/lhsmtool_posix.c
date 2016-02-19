@@ -547,8 +547,9 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 
 	if (hai->hai_extent.offset > (__u64)src_st.st_size) {
 		rc = -EINVAL;
-		CT_ERROR(rc, "Trying to start reading past end ("LPU64" > "
-			 "%jd) of '%s' source file", hai->hai_extent.offset,
+		CT_ERROR(rc, "Trying to start reading past end (%ju > "
+			 "%jd) of '%s' source file",
+			 (uintmax_t)hai->hai_extent.offset,
 			 (intmax_t)src_st.st_size, src);
 		return rc;
 	}
@@ -590,8 +591,8 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 		goto out;
 	}
 
-	CT_TRACE("start copy of "LPU64" bytes from '%s' to '%s'",
-		 length, src, dst);
+	CT_TRACE("start copy of %ju bytes from '%s' to '%s'",
+		 (uintmax_t)length, src, dst);
 
 	while (write_total < length) {
 		ssize_t	rsize;
@@ -664,7 +665,7 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 		now = time(NULL);
 		if (now >= last_report_time + opt.o_report_int) {
 			last_report_time = now;
-			CT_TRACE("%%"LPU64" ", 100 * write_total / length);
+			CT_TRACE("%%%ju ", (uintmax_t)(100 * write_total / length));
 			/* only give the length of the write since the last
 			 * progress report */
 			he.length = offset - he.offset;
@@ -705,8 +706,8 @@ out:
 	if (buf != NULL)
 		free(buf);
 
-	CT_TRACE("copied "LPU64" bytes in %f seconds",
-		 length, ct_now() - start_ct_now);
+	CT_TRACE("copied %ju bytes in %f seconds",
+		 (uintmax_t)length, ct_now() - start_ct_now);
 
 	return rc;
 }
@@ -840,8 +841,8 @@ static int ct_fini(struct hsm_copyaction_private **phcp,
 	int				 rc;
 
 	CT_TRACE("Action completed, notifying coordinator "
-		 "cookie="LPX64", FID="DFID", hp_flags=%d err=%d",
-		 hai->hai_cookie, PFID(&hai->hai_fid),
+		 "cookie=%#jx, FID="DFID", hp_flags=%d err=%d",
+		 (uintmax_t)hai->hai_cookie, PFID(&hai->hai_fid),
 		 hp_flags, -ct_rc);
 
 	ct_path_lustre(lstr, sizeof(lstr), opt.o_mnt, &hai->hai_fid);
@@ -859,8 +860,8 @@ static int ct_fini(struct hsm_copyaction_private **phcp,
 	rc = llapi_hsm_action_end(phcp, &hai->hai_extent, hp_flags, abs(ct_rc));
 	if (rc == -ECANCELED)
 		CT_ERROR(rc, "completed action on '%s' has been canceled: "
-			 "cookie="LPX64", FID="DFID, lstr, hai->hai_cookie,
-			 PFID(&hai->hai_fid));
+			 "cookie=%#jx, FID="DFID, lstr,
+			 (uintmax_t)hai->hai_cookie, PFID(&hai->hai_fid));
 	else if (rc < 0)
 		CT_ERROR(rc, "llapi_hsm_action_end() on '%s' failed", lstr);
 	else
@@ -1281,9 +1282,9 @@ static int ct_process_item(struct hsm_action_item *hai, const long hal_flags)
 		int		linkno = 0;
 
 		sprintf(fid, DFID, PFID(&hai->hai_fid));
-		CT_TRACE("'%s' action %s reclen %d, cookie="LPX64,
+		CT_TRACE("'%s' action %s reclen %d, cookie=%#jx",
 			 fid, hsm_copytool_action2name(hai->hai_action),
-			 hai->hai_len, hai->hai_cookie);
+			 hai->hai_len, (uintmax_t)hai->hai_cookie);
 		rc = llapi_fid2path(opt.o_mnt, fid, path,
 				    sizeof(path), &recno, &linkno);
 		if (rc < 0)
@@ -1766,7 +1767,7 @@ static int ct_max_sequence(void)
 		path[sizeof(path) - 1] = '\0';
 	}
 
-	printf("max_sequence: "LPX64"\n", seq);
+	printf("max_sequence: %#jx\n", (uintmax_t)seq);
 
 	return 0;
 }

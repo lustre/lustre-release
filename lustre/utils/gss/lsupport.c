@@ -47,6 +47,7 @@
 #include <sys/ipc.h>
 #include <sys/sem.h>
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <pwd.h>

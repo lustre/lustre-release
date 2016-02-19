@@ -36,6 +36,7 @@
  * Author: You Feng <youfeng@clusterfs.com>
  */
 
+#include <limits.h>
 #include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,7 +49,6 @@
 #include <unistd.h>
 #include <time.h>
 #include <errno.h>
-#include <libcfs/libcfs.h>
 #include <lustre/lustre_user.h>
 #include "lp_utils.h"
 

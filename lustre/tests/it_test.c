@@ -37,12 +37,15 @@
  *
  * Author: jay <jxiong@clusterfs.com>
  */
-
+#include <inttypes.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <sys/time.h>
+
+#include <linux/types.h>
 
 #define EXPORT_SYMBOL(s)
 
@@ -54,9 +57,6 @@
         fprintf(stderr, "\nError:" fmt, ##args);        \
         abort();                                        \
 } while(0)
-
-#define __F(ext)         (ext)->start, (ext)->end
-#define __S              "["LPX64":"LPX64"]"
 
 #define ALIGN_SIZE       4096
 #define ALIGN_MASK       (~(ALIGN_SIZE - 1))
@@ -84,14 +84,16 @@ static enum interval_iter cb(struct interval_node *n, void *args)
         static int count = 1;
 
         if (node->hit == 1) {
-                error("A duplicate node "__S" access found\n",
-                       __F(&n->in_extent));
+		error("A duplicate node [%#jx:%#jx] access found\n",
+		      (uintmax_t)n->in_extent.start,
+		      (uintmax_t)n->in_extent.end);
                 return INTERVAL_ITER_CONT;
         }
 
         if (node->valid == 0) {
-                error("A deleted node "__S" being accessed\n",
-                       __F(&n->in_extent));
+		error("A deleted node [%#jx:%#jx] being accessed\n",
+		      (uintmax_t)n->in_extent.start,
+		      (uintmax_t)n->in_extent.end);
                 return INTERVAL_ITER_STOP;
         }
 
@@ -99,7 +101,8 @@ static enum interval_iter cb(struct interval_node *n, void *args)
                 dprintf("\n");
                 count = 1;
         }
-        dprintf(""__S" ", __F(&n->in_extent));
+	dprintf("[%#jx:%#jx] ", (uintmax_t)n->in_extent.start,
+		(uintmax_t)n->in_extent.end);
         fflush(stdout);
 
         node->hit = 1;
@@ -120,8 +123,8 @@ static int it_test_search(struct interval_node *root)
                 if (ext.end > max_count)
                         ext.end = max_count;
 
-                dprintf("\n\nSearching the node overlapped "__S" ..\n",
-                        __F(&ext));
+		dprintf("\n\nSearching the node overlapped [%#jx:%#jx] ..\n",
+			(uintmax_t)ext.start, (uintmax_t)ext.end);
 
                 interval_search(root, &ext, cb, NULL);
 
@@ -135,16 +138,18 @@ static int it_test_search(struct interval_node *root)
 
                         if (extent_overlapped(&ext, &n->node.in_extent) &&
                             n->hit == 0)
-                                error("node "__S" overlaps" __S","
+				error("node [%#jx:%#jx] overlaps [%#jx:%#jx],"
                                       "but never to be hit.\n",
-                                      __F(&n->node.in_extent),
-                                      __F(&ext));
+				      (uintmax_t)n->node.in_extent.start,
+				      (uintmax_t)n->node.in_extent.end,
+				      (uintmax_t)ext.start, (uintmax_t)ext.end);
 
                         if (!extent_overlapped(&ext, &n->node.in_extent) &&
                             n->hit)
-                                error("node "__S" overlaps" __S", but hit.\n",
-                                      __F(&n->node.in_extent),
-                                      __F(&ext));
+				error("node [%#jx:%#jx] overlaps [%#jx:%#jx], but hit.\n",
+				      (uintmax_t)n->node.in_extent.start,
+				      (uintmax_t)n->node.in_extent.end,
+				      (uintmax_t)ext.start, (uintmax_t)ext.end);
                 }
                 if (err) error("search error\n");
                 dprintf("ok.\n");
@@ -166,11 +171,12 @@ static int it_test_iterate(struct interval_node *root)
         for (i = 0; i < it_count; i++) {
                 if (it_array[i].valid == 0)
                         continue;
-                if (it_array[i].hit == 0)
-                        error("Node "__S" is not accessed\n",
-                              __F(&it_array[i].node.in_extent));
-        }
-
+		if (it_array[i].hit == 0) {
+			error("Node [%#jx:%#jx] is not accessed\n",
+			      (uintmax_t)it_array[i].node.in_extent.start,
+			      (uintmax_t)it_array[i].node.in_extent.end);
+		}
+	}
         return 0;
 }
 
@@ -204,11 +210,14 @@ static int it_test_find(struct interval_node *root)
                         continue;
 
                 ext = &it_array[idx].node.in_extent;
-                dprintf("Try to find "__S"\n", __F(ext));
-                if (!interval_find(root, ext))
-                        error("interval_find, try to find "__S"\n", __F(ext));
-        }
-        return 0;
+		dprintf("Try to find [%#jx:%#jx]\n", (uintmax_t)ext->start,
+			(uintmax_t)ext->end);
+		if (!interval_find(root, ext)) {
+			error("interval_find, try to find [%#jx:%#jx]\n",
+			      (uintmax_t)ext->start, (uintmax_t)ext->end);
+		}
+	}
+	return 0;
 }
 
 /* sanity test is tightly coupled with implementation, so when you changed
@@ -228,7 +237,7 @@ static enum interval_iter sanity_cb(struct interval_node *node, void *args)
 
                 if (tmp->in_max_high > max_high) {
                         dprintf("max high sanity check, max_high is %llu,"
-                                "child max_high: %llu"__S"\n",
+				"child max_high: %llu[%#jx:%#jx]\n",
                                 max_high, tmp->in_max_high,
                                 __F(&tmp->in_extent));
                         goto err;
@@ -246,13 +255,13 @@ static enum interval_iter sanity_cb(struct interval_node *node, void *args)
                 int count;
 err:
                 count = 1;
-                dprintf("node"__S":%llu Child list:\n",
+		dprintf("node[%#jx:%#jx]:%llu Child list:\n",
                         node->in_extent.start,
                         node->in_extent.end,
                         node->in_max_high);
 
                 interval_for_each(tmp, node) {
-                        dprintf(""__S":%llu ",
+			dprintf("[%#jx:%#jx]:%llu ",
                                 __F(&tmp->in_extent),
                                 tmp->in_max_high);
                         if (count++ == 8) {
@@ -311,15 +320,20 @@ static int it_test_search_hole(struct interval_node *root)
         ext2 = ext;
 
         interval_expand(root, &ext, NULL);
-        dprintf("Extending "__S" to .."__S"\n", __F(&ext2), __F(&ext));
+	dprintf("Extending [%#jx:%#jx] to ..[%#jx:%#jx]\n",
+		(uintmax_t)ext2.start, (uintmax_t)ext2.end,
+		(uintmax_t)ext.start, (uintmax_t)ext.end);
         for (i = 0; i < it_count; i++) {
                 n = &it_array[i];
                 if (n->valid == 0)
                         continue;
 
                 if (extent_overlapped(&ext, &n->node.in_extent)) {
-                        error("Extending "__S" to .."__S" overlaps node"__S"\n",
-                                __F(&ext2), __F(&ext), __F(&n->node.in_extent));
+			error("Extending [%#jx:%#jx] to ..[%#jx:%#jx] overlaps node[%#jx:%#jx]\n",
+			      (uintmax_t)ext2.start, (uintmax_t)ext2.end,
+			      (uintmax_t)ext.start, (uintmax_t)ext.end,
+			      (uintmax_t)n->node.in_extent.start,
+			      (uintmax_t)n->node.in_extent.end);
                 }
 
                 if (n->node.in_extent.end < ext2.start)
@@ -332,8 +346,9 @@ static int it_test_search_hole(struct interval_node *root)
         /* only expanding high right now */
         if (ext2.start != ext.start || high != ext.end) {
                 ext2.start = low, ext2.end = high;
-                error("Real extending result:"__S", expected:"__S"\n",
-                       __F(&ext), __F(&ext2));
+		error("Real extending result:[%#jx:%#jx], expected:[%#jx:%#jx]\n",
+		      (uintmax_t)ext.start, (uintmax_t)ext.end,
+		      (uintmax_t)ext2.start, (uintmax_t)ext2.end);
         }
 
         return 0;
@@ -374,7 +389,8 @@ static int it_test_performance(struct interval_node *root, unsigned long len)
                 ext.end = max_count;
         }
 
-        dprintf("Extent search"__S"\n", __F(&ext));
+	dprintf("Extent search[%#jx:%#jx]\n", (uintmax_t)ext.start,
+		(uintmax_t)ext.end);
 
         /* list */
         contended_count = 0;
@@ -420,8 +436,9 @@ static struct interval_node *it_test_helper(struct interval_node *root)
                 if (n->valid) {
                         if (!interval_find(root, &n->node.in_extent))
                                 error("Cannot find an existent node\n");
-                        dprintf("Erasing a node "__S"\n",
-                                __F(&n->node.in_extent));
+			dprintf("Erasing a node [%#jx:%#jx]\n",
+				(uintmax_t)n->node.in_extent.start,
+				(uintmax_t)n->node.in_extent.end);
                         interval_erase(&n->node, &root);
                         n->valid = 0;
 			list_del_init(&n->list);
@@ -434,8 +451,9 @@ static struct interval_node *it_test_helper(struct interval_node *root)
                         interval_set(&n->node, low, high);
                         while (interval_insert(&n->node, &root))
                                 interval_set(&n->node, low, ++high);
-                        dprintf("Adding a node "__S"\n",
-                                __F(&n->node.in_extent));
+			dprintf("Adding a node [%#jx:%#jx]\n",
+				(uintmax_t)n->node.in_extent.start,
+				(uintmax_t)n->node.in_extent.end);
                         n->valid = 1;
 			list_add(&n->list, &header);
                 }

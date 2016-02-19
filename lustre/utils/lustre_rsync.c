@@ -1445,7 +1445,8 @@ void lr_print_status(struct lr_info *info)
         if (statuslog != NULL)
                 printf("Statuslog: %s\n", statuslog);
         printf("Changelog registration: %s\n", status->ls_registration);
-        printf("Starting changelog record: "LPD64"\n", status->ls_last_recno);
+	printf("Starting changelog record: %jd\n",
+	       (uintmax_t)status->ls_last_recno);
         if (noxattr)
                 printf("Replicate xattrs: no\n");
         if (noclear)

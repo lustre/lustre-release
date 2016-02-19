@@ -2947,7 +2947,7 @@ static void print_quota_title(char *name, struct if_quotactl *qctl,
 static void kbytes2str(__u64 num, char *buf, int buflen, bool h)
 {
 	if (!h) {
-		snprintf(buf, buflen, LPU64, num);
+		snprintf(buf, buflen, "%ju", (uintmax_t)num);
 	} else {
 		if (num >> 40)
 			snprintf(buf, buflen, "%5.4gP",
@@ -2962,7 +2962,7 @@ static void kbytes2str(__u64 num, char *buf, int buflen, bool h)
 			snprintf(buf, buflen, "%5.4gM",
 				 (double)num / (1 << 10));
 		else
-			snprintf(buf, buflen, LPU64"%s", num, "k");
+			snprintf(buf, buflen, "%ju%s", (uintmax_t)num, "k");
 	}
 }
 
@@ -3039,16 +3039,17 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 			diff2str(dqb->dqb_itime, timebuf, now);
 
 		sprintf(numbuf[0], (dqb->dqb_valid & QIF_INODES) ?
-			LPU64 : "["LPU64"]", dqb->dqb_curinodes);
+			"%ju" : "[%ju]", (uintmax_t)dqb->dqb_curinodes);
 
 		if (type == QC_GENERAL)
 			sprintf(numbuf[1], (dqb->dqb_valid & QIF_ILIMITS) ?
-				LPU64 : "["LPU64"]", dqb->dqb_isoftlimit);
+				"%ju" : "[%ju]",
+				(uintmax_t)dqb->dqb_isoftlimit);
 		else
 			sprintf(numbuf[1], "%s", "-");
 
 		sprintf(numbuf[2], (dqb->dqb_valid & QIF_ILIMITS) ?
-			LPU64 : "["LPU64"]", dqb->dqb_ihardlimit);
+			"%ju" : "[%ju]", (uintmax_t)dqb->dqb_ihardlimit);
 
 		if (type != QC_OSTIDX)
 			printf(" %7s%c %6s %7s %7s",
@@ -3260,8 +3261,9 @@ ug_output:
 				      &total_balloc);
 		kbytes2str(total_balloc, strbuf, sizeof(strbuf),
 			   human_readable);
-		printf("Total allocated inode limit: "LPU64", total "
-		       "allocated block limit: %s\n", total_ialloc, strbuf);
+		printf("Total allocated inode limit: %ju, total "
+		       "allocated block limit: %s\n", (uintmax_t)total_ialloc,
+		       strbuf);
 	}
 
         if (rc1 || rc2 || rc3 || inacc)
@@ -3441,8 +3443,8 @@ static int lfs_changelog(int argc, char **argv)
 
 		secs = rec->cr_time >> 30;
 		gmtime_r(&secs, &ts);
-		printf(LPU64" %02d%-5s %02d:%02d:%02d.%06d %04d.%02d.%02d "
-		       "0x%x t="DFID, rec->cr_index, rec->cr_type,
+		printf("%ju %02d%-5s %02d:%02d:%02d.%06d %04d.%02d.%02d "
+		       "0x%x t="DFID, (uintmax_t) rec->cr_index, rec->cr_type,
 		       changelog_type2str(rec->cr_type),
 		       ts.tm_hour, ts.tm_min, ts.tm_sec,
 		       (int)(rec->cr_time & ((1<<30) - 1)),
@@ -3706,7 +3708,7 @@ static int lfs_data_version(int argc, char **argv)
 	if (rc < 0)
 		err(errno, "cannot get version for %s", path);
 	else
-		printf(LPU64 "\n", data_version);
+		printf("%ju" "\n", (uintmax_t)data_version);
 
 	close(fd);
 	return rc;

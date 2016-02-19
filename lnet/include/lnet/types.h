@@ -40,8 +40,7 @@
 /** \addtogroup lnet
  * @{ */
 
-#include <libcfs/types.h>
-
+#include <linux/types.h>
 /** \addtogroup lnet_addr
  * @{ */
 

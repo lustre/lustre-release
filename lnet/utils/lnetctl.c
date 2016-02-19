@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <libcfs/util/ioctl.h>
 #include <libcfs/util/parser.h>
 #include <lnet/lnetctl.h>
 #include "cyaml/cyaml.h"

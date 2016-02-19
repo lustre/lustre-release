@@ -39,6 +39,7 @@
 #define _GNU_SOURCE
 #endif
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -50,7 +51,6 @@
 #include <sys/stat.h>
 #include <linux/types.h>
 
-#include <libcfs/types.h>
 #include <libcfs/byteorder.h>
 
 #define READ  1
@@ -71,33 +71,33 @@ int block_debug_setup(void *addr, int len, __u64 off, __u64 id)
         return 0;
 }
 
-int block_debug_check(char *who, void *addr, int size, __u64 off, __u64 id)
+int block_debug_check(char *who, void *addr, int size, uint64_t off, uint64_t id)
 {
-        __u64 ne_off;
+	uint64_t ne_off;
         int err = 0;
 
         ne_off = le64_to_cpu(off);
         id = le64_to_cpu(id);
         if (memcmp(addr, (char *)&ne_off, LPDS)) {
-		fprintf(stderr, "%s: for offset "LPU64" off: "LPX64" != "LPX64"\n",
-                       who, off, *(__u64 *)addr, ne_off);
+		fprintf(stderr, "%s: for offset %"PRIu64" off: %"PRIx64" != %"PRIx64"\n",
+			who, off, *(uint64_t *)addr, ne_off);
                 err = -EINVAL;
         }
         if (memcmp(addr + LPDS, (char *)&id, LPDS)) {
-		fprintf(stderr, "%s: for offset "LPU64" id: "LPX64" != "LPX64"\n",
-                       who, off, *(__u64 *)(addr + LPDS), id);
+		fprintf(stderr, "%s: for offset %"PRIu64" id: %"PRIx64" != %"PRIx64"\n",
+			who, off, *(uint64_t *)(addr + LPDS), id);
                 err = -EINVAL;
         }
 
         addr += size - LPDS - LPDS;
         if (memcmp(addr, (char *)&ne_off, LPDS)) {
-		fprintf(stderr, "%s: for offset "LPU64" end off: "LPX64" != "LPX64"\n",
-                       who, off, *(__u64 *)addr, ne_off);
+		fprintf(stderr, "%s: for offset %"PRIu64" end off: %"PRIx64" != %"PRIx64"\n",
+			who, off, *(uint64_t *)addr, ne_off);
                 err = -EINVAL;
         }
         if (memcmp(addr + LPDS, (char *)&id, LPDS)) {
-		fprintf(stderr, "%s: for offset "LPU64" end id: "LPX64" != "LPX64"\n",
-                       who, off, *(__u64 *)(addr + LPDS), id);
+		fprintf(stderr, "%s: for offset %"PRIu64" end id: %"PRIx64" != %"PRIx64"\n",
+			who, off, *(uint64_t *)(addr + LPDS), id);
                 err = -EINVAL;
         }
 
@@ -119,7 +119,7 @@ int main(int argc, char **argv)
         char *buf;
         long long count, last, offset;
         long pg_vec, len;
-        __u64 objid;
+	uint64_t objid;
         struct stat st;
         int flags = 0;
         int cmd = 0;
@@ -188,7 +188,7 @@ int main(int argc, char **argv)
                 objid = 3;
         }
 
-        printf("%s: %s on %s(objid "LPX64") for %llux%ld pages \n",
+	printf("%s: %s on %s(objid %"PRIx64") for %llux%ld pages \n",
                argv[0],
 #ifdef O_DIRECT
                flags & O_DIRECT ? "directio" : "i/o",

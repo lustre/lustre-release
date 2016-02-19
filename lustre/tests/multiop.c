@@ -37,10 +37,11 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE /* pull in O_DIRECTORY in bits/fcntl.h */
 #endif
-#include <stdio.h>
-#include <fcntl.h>
-#include <string.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <stdio.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
@@ -649,7 +650,7 @@ int main(int argc, char **argv)
 					" %d\n", rc);
 				exit(-rc);
 			}
-			printf("dataversion is "LPU64"\n", dv);
+			printf("dataversion is %ju\n", (uintmax_t)dv);
 			break;
                 case 'y':
                         if (fsync(fd) == -1) {

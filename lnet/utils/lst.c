@@ -39,6 +39,7 @@
  */
 #include <errno.h>
 #include <getopt.h>
+#include <inttypes.h>
 #include <pwd.h>
 #include <unistd.h>
 #include <stdarg.h>
@@ -661,8 +662,8 @@ jt_lst_show_session(int argc, char **argv)
                 return -1;
         }
 
-	fprintf(stdout, "%s ID: "LPU64"@%s, KEY: %d FEATURES: %x NODES: %d\n",
-		name, sid.ses_stamp, libcfs_nid2str(sid.ses_nid),
+	fprintf(stdout, "%s ID: %ju@%s, KEY: %d FEATURES: %x NODES: %d\n",
+		name, (uintmax_t)sid.ses_stamp, libcfs_nid2str(sid.ses_nid),
 		key, feats, ndinfo.nle_nnode);
 
         return 0;

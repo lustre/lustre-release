@@ -41,6 +41,8 @@
  */
 
 #include <errno.h>
+#include <limits.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
@@ -67,8 +69,8 @@ static inline int ext2_test_bit(int nr, const void *addr)
 	return (tmp[nr >> 3] >> (nr & 7)) & 1;
 #else
 	const unsigned long *tmp = addr;
-	return ((1UL << (nr & (BITS_PER_LONG - 1))) &
-		((tmp)[nr / BITS_PER_LONG])) != 0;
+	return ((1UL << (nr & (__WORDSIZE - 1))) &
+		((tmp)[nr / __WORDSIZE])) != 0;
 #endif
 }
 
@@ -145,12 +147,13 @@ static void print_log_path(struct llog_logid_rec *lid, int is_ext)
 
 	if (is_ext)
 		snprintf(object_path, sizeof(object_path),
-			 "O/"LPU64"/d%u/%u", fid_from_logid.f_seq,
-			 fid_from_logid.f_oid % 32, fid_from_logid.f_oid);
+			 "O/%ju/d%u/%u", (uintmax_t)fid_from_logid.f_seq,
+			 fid_from_logid.f_oid % 32,
+			 fid_from_logid.f_oid);
 	else
 		snprintf(object_path, sizeof(object_path),
-			 "oi."LPU64"/"DFID_NOBRACE,
-			 fid_from_logid.f_seq & (OSD_OI_FID_NR - 1) ,
+			 "oi.%ju/"DFID_NOBRACE,
+			 (uintmax_t)(fid_from_logid.f_seq & (OSD_OI_FID_NR - 1)),
 			 PFID(&fid_from_logid));
 
 	printf("ogen=%X id="DOSTID" path=%s\n",
@@ -366,8 +369,8 @@ static void print_1_cfg(struct lustre_cfg *lcfg)
         int i;
 
         if (lcfg->lcfg_nid)
-                printf("nid=%s("LPX64")  ", libcfs_nid2str(lcfg->lcfg_nid),
-                       lcfg->lcfg_nid);
+		printf("nid=%s(%#jx)  ", libcfs_nid2str(lcfg->lcfg_nid),
+		       (uintmax_t)lcfg->lcfg_nid);
         if (lcfg->lcfg_nal)
                 printf("nal=%d ", lcfg->lcfg_nal);
         for (i = 0; i <  lcfg->lcfg_bufcount; i++)
@@ -389,8 +392,9 @@ static void print_setup_cfg(struct lustre_cfg *lcfg)
                 desc = (struct lov_desc*)(lustre_cfg_string(lcfg, 1));
                 printf("\t\tuuid=%s  ", (char*)desc->ld_uuid.uuid);
                 printf("stripe:cnt=%u ", desc->ld_default_stripe_count);
-                printf("size="LPU64" ", desc->ld_default_stripe_size);
-                printf("offset="LPU64" ", desc->ld_default_stripe_offset);
+		printf("size=%ju ", (uintmax_t)desc->ld_default_stripe_size);
+		printf("offset=%ju ",
+		       (uintmax_t)desc->ld_default_stripe_offset);
                 printf("pattern=%#x", desc->ld_pattern);
         } else {
                 printf("setup     ");
@@ -595,23 +599,25 @@ static void print_hsm_action(struct llog_agent_req_rec *larr)
 
 	sz = larr->arr_hai.hai_len - sizeof(larr->arr_hai);
 	printf("lrh=[type=%X len=%d idx=%d] fid="DFID
-	       " compound/cookie="LPX64"/"LPX64
-	       " status=%s action=%s archive#=%d flags="LPX64
-	       " create="LPU64" change="LPU64
-	       " extent="LPX64"-"LPX64" gid="LPX64" datalen=%d"
+	       " compound/cookie=%#jx/%#jx"
+	       " status=%s action=%s archive#=%d flags=%#jx"
+	       " create=%ju change=%ju"
+	       " extent=%#jx-%#jx gid=%#jx datalen=%d"
 	       " data=[%s]\n",
 	       larr->arr_hdr.lrh_type,
 	       larr->arr_hdr.lrh_len, larr->arr_hdr.lrh_index,
 	       PFID(&larr->arr_hai.hai_fid),
-	       larr->arr_compound_id, larr->arr_hai.hai_cookie,
+	       (uintmax_t)larr->arr_compound_id,
+	       (uintmax_t)larr->arr_hai.hai_cookie,
 	       agent_req_status2name(larr->arr_status),
 	       hsm_copytool_action2name(larr->arr_hai.hai_action),
 	       larr->arr_archive_id,
-	       larr->arr_flags,
-	       larr->arr_req_create, larr->arr_req_change,
-	       larr->arr_hai.hai_extent.offset,
-	       larr->arr_hai.hai_extent.length,
-	       larr->arr_hai.hai_gid, sz,
+	       (uintmax_t)larr->arr_flags,
+	       (uintmax_t)larr->arr_req_create,
+	       (uintmax_t)larr->arr_req_change,
+	       (uintmax_t)larr->arr_hai.hai_extent.offset,
+	       (uintmax_t)larr->arr_hai.hai_extent.length,
+	       (uintmax_t)larr->arr_hai.hai_gid, sz,
 	       hai_dump_data_field(&larr->arr_hai, buf, sizeof(buf)));
 }
 

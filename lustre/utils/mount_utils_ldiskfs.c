@@ -921,8 +921,8 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 
 	vprint("formatting backing filesystem %s on %s\n",
 	       MT_STR(&mop->mo_ldd), dev);
-	vprint("\ttarget name  %s\n", mop->mo_ldd.ldd_svname);
-	vprint("\t4k blocks     "LPU64"\n", block_count);
+	vprint("\ttarget name   %s\n", mop->mo_ldd.ldd_svname);
+	vprint("\t4k blocks     %ju\n", (uintmax_t)block_count);
 	vprint("\toptions       %s\n", mop->mo_mkfsopts);
 
 	/* mkfs_cmd's trailing space is important! */
@@ -930,7 +930,8 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 	strscat(mkfs_cmd, " ", sizeof(mkfs_cmd));
 	strscat(mkfs_cmd, dev, sizeof(mkfs_cmd));
 	if (block_count != 0) {
-		sprintf(buf, " "LPU64, block_count);
+		snprintf(buf, sizeof(buf), " %ju",
+			 (uintmax_t)block_count);
 		strscat(mkfs_cmd, buf, sizeof(mkfs_cmd));
 	}
 

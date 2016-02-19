@@ -28,7 +28,9 @@
 #ifndef LUSTRE_IOCTL_H_
 #define LUSTRE_IOCTL_H_
 
+#include <linux/types.h>
 #include <libcfs/libcfs.h>
+#include <libcfs/util/ioctl.h>
 #include <lustre/lustre_idl.h>
 
 #ifdef __KERNEL__

@@ -48,6 +48,7 @@
  * @{
  */
 
+#include <linux/types.h>
 #include <libcfs/libcfs.h>
 #include <lnet/types.h>
 
