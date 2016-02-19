@@ -370,7 +370,7 @@ static void *mdt_hsm_actions_proc_start(struct seq_file *s, loff_t *pos)
 	/* first call = rewind */
 	if (*pos == 0) {
 		aai->aai_cat_index = 0;
-		aai->aai_index = -1;
+		aai->aai_index = 0;
 		aai->aai_eof = false;
 		*pos = 1;
 	}
@@ -471,7 +471,7 @@ static int mdt_hsm_actions_proc_show(struct seq_file *s, void *v)
 	mutex_lock(&cdt->cdt_llog_lock);
 	rc = llog_cat_process(&aai->aai_env, aai->aai_ctxt->loc_handle,
 			      hsm_actions_show_cb, s,
-			      aai->aai_cat_index, aai->aai_index + 1);
+			      aai->aai_cat_index, aai->aai_index);
 	mutex_unlock(&cdt->cdt_llog_lock);
 	if (rc == 0) /* all llog parsed */
 		aai->aai_eof = true;
