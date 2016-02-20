@@ -49,6 +49,7 @@
 #include <lustre_dlm.h>
 #include <lustre_disk.h>
 #include <lustre_log.h>
+#include <lustre_nodemap.h>
 #include <lustre_swab.h>
 #include <obd_class.h>
 
@@ -80,8 +81,9 @@ static int mgc_name2resid(char *name, int len, struct ldlm_res_id *res_id,
                 break;
 	case CONFIG_T_RECOVER:
 	case CONFIG_T_PARAMS:
-                resname = type;
-                break;
+	case CONFIG_T_NODEMAP:
+		resname = type;
+		break;
         default:
                 LBUG();
         }
@@ -145,22 +147,24 @@ static void config_log_put(struct config_llog_data *cld)
 		list_del(&cld->cld_list_chain);
 		spin_unlock(&config_list_lock);
 
-                CDEBUG(D_MGC, "dropping config log %s\n", cld->cld_logname);
+		CDEBUG(D_MGC, "dropping config log %s\n", cld->cld_logname);
 
-                if (cld->cld_recover)
-                        config_log_put(cld->cld_recover);
-                if (cld->cld_sptlrpc)
-                        config_log_put(cld->cld_sptlrpc);
+		if (cld->cld_recover)
+			config_log_put(cld->cld_recover);
+		if (cld->cld_sptlrpc)
+			config_log_put(cld->cld_sptlrpc);
 		if (cld->cld_params)
 			config_log_put(cld->cld_params);
-                if (cld_is_sptlrpc(cld))
-                        sptlrpc_conf_log_stop(cld->cld_logname);
+		if (cld->cld_nodemap)
+			config_log_put(cld->cld_nodemap);
+		if (cld_is_sptlrpc(cld))
+			sptlrpc_conf_log_stop(cld->cld_logname);
 
-                class_export_put(cld->cld_mgcexp);
-                OBD_FREE(cld, sizeof(*cld) + strlen(cld->cld_logname) + 1);
-        }
+		class_export_put(cld->cld_mgcexp);
+		OBD_FREE(cld, sizeof(*cld) + strlen(cld->cld_logname) + 1);
+	}
 
-        EXIT;
+	EXIT;
 }
 
 /* Find a config log by name */
@@ -198,21 +202,22 @@ struct config_llog_data *config_log_find(char *logname,
 
 static
 struct config_llog_data *do_config_log_add(struct obd_device *obd,
-                                           char *logname,
-                                           int type,
-                                           struct config_llog_instance *cfg,
-                                           struct super_block *sb)
+					   char *logname,
+					   int type,
+					   struct config_llog_instance *cfg,
+					   struct super_block *sb)
 {
-        struct config_llog_data *cld;
-        int                      rc;
-        ENTRY;
+	struct config_llog_data *cld;
+	int rc;
 
-        CDEBUG(D_MGC, "do adding config log %s:%p\n", logname,
+	ENTRY;
+
+	CDEBUG(D_MGC, "do adding config log %s:%p\n", logname,
 	       cfg ? cfg->cfg_instance : NULL);
 
-        OBD_ALLOC(cld, sizeof(*cld) + strlen(logname) + 1);
-        if (!cld)
-                RETURN(ERR_PTR(-ENOMEM));
+	OBD_ALLOC(cld, sizeof(*cld) + strlen(logname) + 1);
+	if (!cld)
+		RETURN(ERR_PTR(-ENOMEM));
 
 	strcpy(cld->cld_logname, logname);
 	if (cfg)
@@ -226,32 +231,33 @@ struct config_llog_data *do_config_log_add(struct obd_device *obd,
 	cld->cld_type = type;
 	atomic_set(&cld->cld_refcount, 1);
 
-        /* Keep the mgc around until we are done */
-        cld->cld_mgcexp = class_export_get(obd->obd_self_export);
+	/* Keep the mgc around until we are done */
+	cld->cld_mgcexp = class_export_get(obd->obd_self_export);
 
-        if (cld_is_sptlrpc(cld)) {
-                sptlrpc_conf_log_start(logname);
-                cld->cld_cfg.cfg_obdname = obd->obd_name;
-        }
+	if (cld_is_sptlrpc(cld)) {
+		sptlrpc_conf_log_start(logname);
+		cld->cld_cfg.cfg_obdname = obd->obd_name;
+	}
 
-        rc = mgc_logname2resid(logname, &cld->cld_resid, type);
+	rc = mgc_logname2resid(logname, &cld->cld_resid, type);
 
 	spin_lock(&config_list_lock);
 	list_add(&cld->cld_list_chain, &config_llog_list);
 	spin_unlock(&config_list_lock);
 
-        if (rc) {
-                config_log_put(cld);
-                RETURN(ERR_PTR(rc));
-        }
+	if (rc) {
+		config_log_put(cld);
+		RETURN(ERR_PTR(rc));
+	}
 
-        if (cld_is_sptlrpc(cld)) {
-                rc = mgc_process_log(obd, cld);
+	if (cld_is_sptlrpc(cld) || cld_is_nodemap(cld)) {
+		rc = mgc_process_log(obd, cld);
 		if (rc && rc != -ENOENT)
-                        CERROR("failed processing sptlrpc log: %d\n", rc);
-        }
+			CERROR("%s: failed processing log, type %d: rc = %d\n",
+			       obd->obd_name, type, rc);
+	}
 
-        RETURN(cld);
+	RETURN(cld);
 }
 
 static struct config_llog_data *config_recover_log_add(struct obd_device *obd,
@@ -308,62 +314,73 @@ static struct config_llog_data *config_params_log_add(struct obd_device *obd,
  * Each instance may be at a different point in the log.
  */
 static int config_log_add(struct obd_device *obd, char *logname,
-                          struct config_llog_instance *cfg,
-                          struct super_block *sb)
+			  struct config_llog_instance *cfg,
+			  struct super_block *sb)
 {
 	struct lustre_sb_info	*lsi = s2lsi(sb);
 	struct config_llog_data *cld;
 	struct config_llog_data *sptlrpc_cld;
 	struct config_llog_data *params_cld;
+	struct config_llog_data *nodemap_cld;
 	char			seclogname[32];
 	char			*ptr;
 	int			rc;
 	ENTRY;
 
-        CDEBUG(D_MGC, "adding config log %s:%p\n", logname, cfg->cfg_instance);
+	CDEBUG(D_MGC, "adding config log %s:%p\n", logname, cfg->cfg_instance);
 
-        /*
-         * for each regular log, the depended sptlrpc log name is
-         * <fsname>-sptlrpc. multiple regular logs may share one sptlrpc log.
-         */
-        ptr = strrchr(logname, '-');
-        if (ptr == NULL || ptr - logname > 8) {
-                CERROR("logname %s is too long\n", logname);
-                RETURN(-EINVAL);
-        }
+	/*
+	 * for each regular log, the depended sptlrpc log name is
+	 * <fsname>-sptlrpc. multiple regular logs may share one sptlrpc log.
+	 */
+	ptr = strrchr(logname, '-');
+	if (ptr == NULL || ptr - logname > 8) {
+		CERROR("logname %s is too long\n", logname);
+		RETURN(-EINVAL);
+	}
 
-        memcpy(seclogname, logname, ptr - logname);
-        strcpy(seclogname + (ptr - logname), "-sptlrpc");
+	memcpy(seclogname, logname, ptr - logname);
+	strcpy(seclogname + (ptr - logname), "-sptlrpc");
 
-        sptlrpc_cld = config_log_find(seclogname, NULL);
-        if (sptlrpc_cld == NULL) {
-                sptlrpc_cld = do_config_log_add(obd, seclogname,
-                                                CONFIG_T_SPTLRPC, NULL, NULL);
-                if (IS_ERR(sptlrpc_cld)) {
-                        CERROR("can't create sptlrpc log: %s\n", seclogname);
-			GOTO(out_err, rc = PTR_ERR(sptlrpc_cld));
-                }
-        }
+	sptlrpc_cld = config_log_find(seclogname, NULL);
+	if (sptlrpc_cld == NULL) {
+		sptlrpc_cld = do_config_log_add(obd, seclogname,
+						CONFIG_T_SPTLRPC, NULL, NULL);
+		if (IS_ERR(sptlrpc_cld)) {
+			CERROR("can't create sptlrpc log: %s\n", seclogname);
+			GOTO(out, rc = PTR_ERR(sptlrpc_cld));
+		}
+	}
+
+	nodemap_cld = config_log_find(LUSTRE_NODEMAP_NAME, NULL);
+	if (!nodemap_cld && IS_SERVER(lsi) && !IS_MGS(lsi)) {
+		nodemap_cld = do_config_log_add(obd, LUSTRE_NODEMAP_NAME,
+						CONFIG_T_NODEMAP, NULL, NULL);
+		if (IS_ERR(nodemap_cld)) {
+			rc = PTR_ERR(nodemap_cld);
+			CERROR("%s: cannot create nodemap log: rc = %d\n",
+			       obd->obd_name, rc);
+			GOTO(out_sptlrpc, rc);
+		}
+	}
+
 	params_cld = config_params_log_add(obd, cfg, sb);
 	if (IS_ERR(params_cld)) {
 		rc = PTR_ERR(params_cld);
 		CERROR("%s: can't create params log: rc = %d\n",
 		       obd->obd_name, rc);
-		GOTO(out_err1, rc);
+		GOTO(out_nodemap, rc);
 	}
 
 	cld = do_config_log_add(obd, logname, CONFIG_T_CONFIG, cfg, sb);
 	if (IS_ERR(cld)) {
 		CERROR("can't create log: %s\n", logname);
-		GOTO(out_err2, rc = PTR_ERR(cld));
+		GOTO(out_params, rc = PTR_ERR(cld));
 	}
 
-	cld->cld_sptlrpc = sptlrpc_cld;
-	cld->cld_params = params_cld;
-
-        LASSERT(lsi->lsi_lmd);
-        if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOIR)) {
-                struct config_llog_data *recover_cld;
+	LASSERT(lsi->lsi_lmd);
+	if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOIR)) {
+		struct config_llog_data *recover_cld;
 		ptr = strrchr(seclogname, '-');
 		if (ptr != NULL) {
 			*ptr = 0;
@@ -374,25 +391,32 @@ static int config_log_add(struct obd_device *obd, char *logname,
 			config_log_put(cld);
 			RETURN(-EINVAL);
 		}
-                recover_cld = config_recover_log_add(obd, seclogname, cfg, sb);
+		recover_cld = config_recover_log_add(obd, seclogname, cfg, sb);
 		if (IS_ERR(recover_cld))
-			GOTO(out_err3, rc = PTR_ERR(recover_cld));
+			GOTO(out_cld, rc = PTR_ERR(recover_cld));
 		cld->cld_recover = recover_cld;
 	}
 
+	cld->cld_sptlrpc = sptlrpc_cld;
+	cld->cld_params = params_cld;
+	cld->cld_nodemap = nodemap_cld;
+
 	RETURN(0);
 
-out_err3:
+out_cld:
 	config_log_put(cld);
 
-out_err2:
+out_params:
 	config_log_put(params_cld);
 
-out_err1:
+out_nodemap:
+	config_log_put(nodemap_cld);
+
+out_sptlrpc:
 	config_log_put(sptlrpc_cld);
 
-out_err:
-	RETURN(rc);
+out:
+	return rc;
 }
 
 DEFINE_MUTEX(llog_process_lock);
@@ -401,36 +425,38 @@ DEFINE_MUTEX(llog_process_lock);
  */
 static int config_log_end(char *logname, struct config_llog_instance *cfg)
 {
-        struct config_llog_data *cld;
-        struct config_llog_data *cld_sptlrpc = NULL;
+	struct config_llog_data *cld;
+	struct config_llog_data *cld_sptlrpc = NULL;
 	struct config_llog_data *cld_params = NULL;
-        struct config_llog_data *cld_recover = NULL;
-        int rc = 0;
-        ENTRY;
+	struct config_llog_data *cld_recover = NULL;
+	struct config_llog_data *cld_nodemap = NULL;
+	int rc = 0;
 
-        cld = config_log_find(logname, cfg);
-        if (cld == NULL)
-                RETURN(-ENOENT);
+	ENTRY;
+
+	cld = config_log_find(logname, cfg);
+	if (cld == NULL)
+		RETURN(-ENOENT);
 
 	mutex_lock(&cld->cld_lock);
-        /*
-         * if cld_stopping is set, it means we didn't start the log thus
-         * not owning the start ref. this can happen after previous umount:
-         * the cld still hanging there waiting for lock cancel, and we
-         * remount again but failed in the middle and call log_end without
-         * calling start_log.
-         */
-        if (unlikely(cld->cld_stopping)) {
+	/*
+	 * if cld_stopping is set, it means we didn't start the log thus
+	 * not owning the start ref. this can happen after previous umount:
+	 * the cld still hanging there waiting for lock cancel, and we
+	 * remount again but failed in the middle and call log_end without
+	 * calling start_log.
+	 */
+	if (unlikely(cld->cld_stopping)) {
 		mutex_unlock(&cld->cld_lock);
-                /* drop the ref from the find */
-                config_log_put(cld);
-                RETURN(rc);
-        }
+		/* drop the ref from the find */
+		config_log_put(cld);
+		RETURN(rc);
+	}
 
-        cld->cld_stopping = 1;
+	cld->cld_stopping = 1;
 
-        cld_recover = cld->cld_recover;
-        cld->cld_recover = NULL;
+	cld_recover = cld->cld_recover;
+	cld->cld_recover = NULL;
 	mutex_unlock(&cld->cld_lock);
 
 	if (cld_recover) {
@@ -445,10 +471,12 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
 	cld->cld_sptlrpc = NULL;
 	cld_params = cld->cld_params;
 	cld->cld_params = NULL;
+	cld_nodemap = cld->cld_nodemap;
+	cld->cld_nodemap = NULL;
 	spin_unlock(&config_list_lock);
 
-        if (cld_sptlrpc)
-                config_log_put(cld_sptlrpc);
+	if (cld_sptlrpc)
+		config_log_put(cld_sptlrpc);
 
 	if (cld_params) {
 		mutex_lock(&cld_params->cld_lock);
@@ -457,14 +485,21 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
 		config_log_put(cld_params);
 	}
 
-        /* drop the ref from the find */
-        config_log_put(cld);
-        /* drop the start ref */
-        config_log_put(cld);
+	if (cld_nodemap) {
+		mutex_lock(&cld_nodemap->cld_lock);
+		cld_nodemap->cld_stopping = 1;
+		mutex_unlock(&cld_nodemap->cld_lock);
+		config_log_put(cld_nodemap);
+	}
 
-        CDEBUG(D_MGC, "end config log %s (%d)\n", logname ? logname : "client",
-               rc);
-        RETURN(rc);
+	/* drop the ref from the find */
+	config_log_put(cld);
+	/* drop the start ref */
+	config_log_put(cld);
+
+	CDEBUG(D_MGC, "end config log %s (%d)\n", logname ? logname : "client",
+	       rc);
+	RETURN(rc);
 }
 
 #ifdef CONFIG_PROC_FS
@@ -1532,24 +1567,40 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 
 /**
  * This function is called if this client was notified for target restarting
- * by the MGS. A CONFIG_READ RPC is going to send to fetch recovery logs.
+ * by the MGS. A CONFIG_READ RPC is going to send to fetch recovery or
+ * nodemap logs.
  */
-static int mgc_process_recover_log(struct obd_device *obd,
-                                   struct config_llog_data *cld)
+static int mgc_process_recover_nodemap_log(struct obd_device *obd,
+					   struct config_llog_data *cld)
 {
-        struct ptlrpc_request *req = NULL;
-        struct config_llog_instance *cfg = &cld->cld_cfg;
-        struct mgs_config_body *body;
-        struct mgs_config_res  *res;
-        struct ptlrpc_bulk_desc *desc;
+	struct ptlrpc_request *req = NULL;
+	struct config_llog_instance *cfg = &cld->cld_cfg;
+	struct mgs_config_body *body;
+	struct mgs_config_res *res;
+
+	/* When a nodemap config is received, we build a new nodemap config,
+	 * with new nodemap structs. We keep track of the most recently added
+	 * nodemap since the config is read ordered by nodemap_id, and so it
+	 * is likely that the next record will be related. Because access to
+	 * the nodemaps is single threaded until the nodemap_config is active,
+	 * we don't need to reference count with recent_nodemap, though
+	 * recent_nodemap should be set to NULL when the nodemap_config
+	 * is either destroyed or set active.
+	 */
+	struct nodemap_config *new_config = NULL;
+	struct lu_nodemap *recent_nodemap = NULL;
+
+	struct ptlrpc_bulk_desc *desc;
 	struct page **pages;
-        int nrpages;
-        bool eof = true;
+	__u64 config_read_offset = 0;
+	int nrpages;
+	bool eof = true;
 	bool mne_swab = false;
-        int i;
-        int ealen;
-        int rc;
-        ENTRY;
+	int i;
+	int ealen;
+	int rc;
+
+	ENTRY;
 
         /* allocate buffer for bulk transfer.
          * if this is the first time for this mgs to read logs,
@@ -1558,7 +1609,7 @@ static int mgc_process_recover_log(struct obd_device *obd,
          * small and CONFIG_READ_NRPAGES will be used.
          */
         nrpages = CONFIG_READ_NRPAGES;
-        if (cfg->cfg_last_idx == 0) /* the first time */
+	if (cfg->cfg_last_idx == 0 || cld_is_nodemap(cld))
                 nrpages = CONFIG_READ_NRPAGES_INIT;
 
         OBD_ALLOC(pages, sizeof(*pages) * nrpages);
@@ -1571,29 +1622,42 @@ static int mgc_process_recover_log(struct obd_device *obd,
                         GOTO(out, rc = -ENOMEM);
         }
 
+#ifdef HAVE_SERVER_SUPPORT
+	if (cld_is_nodemap(cld)) {
+		new_config = nodemap_config_alloc();
+		if (IS_ERR(new_config)) {
+			rc = PTR_ERR(new_config);
+			new_config = NULL;
+			GOTO(out, rc);
+		}
+	}
+#endif
 again:
-        LASSERT(cld_is_recover(cld));
+	LASSERT(cld_is_recover(cld) || cld_is_nodemap(cld));
 	LASSERT(mutex_is_locked(&cld->cld_lock));
-        req = ptlrpc_request_alloc(class_exp2cliimp(cld->cld_mgcexp),
-                                   &RQF_MGS_CONFIG_READ);
-        if (req == NULL)
-                GOTO(out, rc = -ENOMEM);
+	req = ptlrpc_request_alloc(class_exp2cliimp(cld->cld_mgcexp),
+				   &RQF_MGS_CONFIG_READ);
+	if (req == NULL)
+		GOTO(out, rc = -ENOMEM);
 
-        rc = ptlrpc_request_pack(req, LUSTRE_MGS_VERSION, MGS_CONFIG_READ);
-        if (rc)
-                GOTO(out, rc);
+	rc = ptlrpc_request_pack(req, LUSTRE_MGS_VERSION, MGS_CONFIG_READ);
+	if (rc)
+		GOTO(out, rc);
 
-        /* pack request */
-        body = req_capsule_client_get(&req->rq_pill, &RMF_MGS_CONFIG_BODY);
-        LASSERT(body != NULL);
-        LASSERT(sizeof(body->mcb_name) > strlen(cld->cld_logname));
+	/* pack request */
+	body = req_capsule_client_get(&req->rq_pill, &RMF_MGS_CONFIG_BODY);
+	LASSERT(body != NULL);
+	LASSERT(sizeof(body->mcb_name) > strlen(cld->cld_logname));
 	if (strlcpy(body->mcb_name, cld->cld_logname, sizeof(body->mcb_name))
 	    >= sizeof(body->mcb_name))
 		GOTO(out, rc = -E2BIG);
-        body->mcb_offset = cfg->cfg_last_idx + 1;
-        body->mcb_type   = cld->cld_type;
+	if (cld_is_nodemap(cld))
+		body->mcb_offset = config_read_offset;
+	else
+		body->mcb_offset = cfg->cfg_last_idx + 1;
+	body->mcb_type   = cld->cld_type;
 	body->mcb_bits   = PAGE_CACHE_SHIFT;
-        body->mcb_units  = nrpages;
+	body->mcb_units  = nrpages;
 
 	/* allocate bulk transfer descriptor */
 	desc = ptlrpc_prep_bulk_imp(req, nrpages, 1,
@@ -1607,26 +1671,35 @@ again:
 		desc->bd_frag_ops->add_kiov_frag(desc, pages[i], 0,
 						 PAGE_CACHE_SIZE);
 
-        ptlrpc_request_set_replen(req);
-        rc = ptlrpc_queue_wait(req);
-        if (rc)
-                GOTO(out, rc);
+	ptlrpc_request_set_replen(req);
+	rc = ptlrpc_queue_wait(req);
+	if (rc)
+		GOTO(out, rc);
 
-        res = req_capsule_server_get(&req->rq_pill, &RMF_MGS_CONFIG_RES);
-        if (res->mcr_size < res->mcr_offset)
-                GOTO(out, rc = -EINVAL);
+	res = req_capsule_server_get(&req->rq_pill, &RMF_MGS_CONFIG_RES);
+	if (!res)
+		GOTO(out, rc = -EPROTO);
 
-        /* always update the index even though it might have errors with
-         * handling the recover logs */
-        cfg->cfg_last_idx = res->mcr_offset;
-        eof = res->mcr_offset == res->mcr_size;
+	if (cld_is_nodemap(cld)) {
+		config_read_offset = res->mcr_offset;
+		eof = config_read_offset == II_END_OFF;
+	} else {
+		if (res->mcr_size < res->mcr_offset)
+			GOTO(out, rc = -EINVAL);
 
-        CDEBUG(D_INFO, "Latest version "LPD64", more %d.\n",
-               res->mcr_offset, eof == false);
+		/* always update the index even though it might have errors with
+		 * handling the recover logs
+		 */
+		cfg->cfg_last_idx = res->mcr_offset;
+		eof = res->mcr_offset == res->mcr_size;
 
-        ealen = sptlrpc_cli_unwrap_bulk_read(req, req->rq_bulk, 0);
-        if (ealen < 0)
-                GOTO(out, rc = ealen);
+		CDEBUG(D_INFO, "Latest version "LPD64", more %d.\n",
+		       res->mcr_offset, eof == false);
+	}
+
+	ealen = sptlrpc_cli_unwrap_bulk_read(req, req->rq_bulk, 0);
+	if (ealen < 0)
+		GOTO(out, rc = ealen);
 
 	if (ealen > nrpages << PAGE_CACHE_SHIFT)
 		GOTO(out, rc = -EINVAL);
@@ -1647,28 +1720,47 @@ again:
 
 	for (i = 0; i < nrpages && ealen > 0; i++) {
 		int rc2;
-		void *ptr;
+		union lu_page	*ptr;
 
 		ptr = kmap(pages[i]);
-		rc2 = mgc_apply_recover_logs(obd, cld, res->mcr_offset, ptr,
-					     min_t(int, ealen, PAGE_CACHE_SIZE),
-					     mne_swab);
+		if (cld_is_nodemap(cld))
+			rc2 = nodemap_process_idx_pages(new_config, ptr,
+						       &recent_nodemap);
+		else
+			rc2 = mgc_apply_recover_logs(obd, cld, res->mcr_offset,
+						     ptr,
+						     min_t(int, ealen,
+							   PAGE_CACHE_SIZE),
+						     mne_swab);
 		kunmap(pages[i]);
 		if (rc2 < 0) {
-			CWARN("Process recover log %s error %d\n",
-			      cld->cld_logname, rc2);
+			CWARN("%s: error processing %s log %s: rc = %d\n",
+			      obd->obd_name,
+			      cld_is_nodemap(cld) ? "nodemap" : "recovery",
+			      cld->cld_logname,
+			      rc2);
 			break;
-                }
+		}
 
 		ealen -= PAGE_CACHE_SIZE;
-        }
+	}
 
 out:
-        if (req)
-                ptlrpc_req_finished(req);
+	if (req)
+		ptlrpc_req_finished(req);
 
-        if (rc == 0 && !eof)
-                goto again;
+	if (rc == 0 && !eof)
+		goto again;
+
+#ifdef HAVE_SERVER_SUPPORT
+	if (new_config != NULL) {
+		recent_nodemap = NULL;
+		if (rc == 0)
+			nodemap_config_set_active(new_config);
+		else
+			nodemap_config_dealloc(new_config);
+	}
+#endif
 
 	if (pages) {
 		for (i = 0; i < nrpages; i++) {
@@ -1951,24 +2043,26 @@ restart:
 	}
 
 
-        if (cld_is_recover(cld)) {
-                rc = 0; /* this is not a fatal error for recover log */
-                if (rcl == 0) {
-                        rc = mgc_process_recover_log(mgc, cld);
-			if (rc != 0) {
-				CERROR("%s: recover log %s failed: rc = %d"
-				       "not fatal.\n", mgc->obd_name,
-				       cld->cld_logname, rc);
-				rc = 0;
+	if (cld_is_recover(cld) || cld_is_nodemap(cld)) {
+		if (!rcl)
+			rc = mgc_process_recover_nodemap_log(mgc, cld);
+		else if (cld_is_nodemap(cld))
+			rc = rcl;
+
+		if (cld_is_recover(cld) && rc) {
+			if (!rcl) {
+				CERROR("%s: recover log %s failed, not fatal: rc = %d\n",
+				       mgc->obd_name, cld->cld_logname, rc);
 				cld->cld_lostlock = 1;
 			}
+			rc = 0; /* this is not a fatal error for recover log */
 		}
-        } else {
-                rc = mgc_process_cfg_log(mgc, cld, rcl != 0);
-        }
+	} else {
+		rc = mgc_process_cfg_log(mgc, cld, rcl != 0);
+	}
 
-        CDEBUG(D_MGC, "%s: configuration from log '%s' %sed (%d).\n",
-               mgc->obd_name, cld->cld_logname, rc ? "fail" : "succeed", rc);
+	CDEBUG(D_MGC, "%s: configuration from log '%s' %sed (%d).\n",
+	       mgc->obd_name, cld->cld_logname, rc ? "fail" : "succeed", rc);
 
 	mutex_unlock(&cld->cld_lock);
 

@@ -803,7 +803,8 @@ out:
  * \param obj - is the index object to parse
  * \param rdpg - is the lu_rdpg descriptor associated with the transfer
  * \param filler - is the callback function responsible for filling a lu_page
- *                 with key/record pairs in the format wanted by the caller
+ *                 with key/record pairs in the format wanted by the caller.
+ *                 If NULL, uses dt_index_page_build
  * \param arg    - is an opaq argument passed to the filler function
  *
  * \retval sum (in bytes) of all filled lu_pages
@@ -821,6 +822,9 @@ int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
 
 	LASSERT(rdpg->rp_pages != NULL);
 	LASSERT(obj->do_index_ops != NULL);
+
+	if (filler == NULL)
+		filler = dt_index_page_build;
 
 	nob = rdpg->rp_count;
 	if (nob == 0)

@@ -92,6 +92,8 @@ static void nodemap_destroy(struct lu_nodemap *nodemap)
 void nodemap_getref(struct lu_nodemap *nodemap)
 {
 	atomic_inc(&nodemap->nm_refcount);
+	CDEBUG(D_INFO, "GETting nodemap %s(p=%p) : new refcount %d\n",
+	       nodemap->nm_name, nodemap, atomic_read(&nodemap->nm_refcount));
 }
 
 /**
@@ -104,6 +106,10 @@ void nodemap_putref(struct lu_nodemap *nodemap)
 		return;
 
 	LASSERT(atomic_read(&nodemap->nm_refcount) > 0);
+
+	CDEBUG(D_INFO, "PUTting nodemap %s(p=%p) : new refcount %d\n",
+	       nodemap->nm_name, nodemap,
+	       atomic_read(&nodemap->nm_refcount) - 1);
 
 	if (atomic_dec_and_test(&nodemap->nm_refcount))
 		nodemap_destroy(nodemap);
@@ -1202,36 +1208,6 @@ static int nodemap_cleanup_iter_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	return 0;
 }
 
-/**
- * Walk the nodemap_hash and remove all nodemaps.
- */
-void nodemap_config_cleanup(struct nodemap_config *config)
-{
-	struct lu_nodemap	*nodemap = NULL;
-	struct lu_nodemap	*nodemap_temp;
-	struct lu_nid_range	*range;
-	struct lu_nid_range	*range_temp;
-	LIST_HEAD(nodemap_list_head);
-
-	cfs_hash_for_each_safe(config->nmc_nodemap_hash,
-			       nodemap_cleanup_iter_cb, &nodemap_list_head);
-	cfs_hash_putref(config->nmc_nodemap_hash);
-
-	/* Because nodemap_destroy might sleep, we can't destroy them
-	 * in cfs_hash_for_each, so we build a list there and destroy here
-	 */
-	list_for_each_entry_safe(nodemap, nodemap_temp, &nodemap_list_head,
-				 nm_list) {
-		down_write(&config->nmc_range_tree_lock);
-		list_for_each_entry_safe(range, range_temp, &nodemap->nm_ranges,
-					 rn_list)
-			range_delete(&config->nmc_range_tree, range);
-		up_write(&config->nmc_range_tree_lock);
-
-		nodemap_putref(nodemap);
-	}
-}
-
 struct nodemap_config *nodemap_config_alloc(void)
 {
 	struct nodemap_config *config;
@@ -1251,12 +1227,42 @@ struct nodemap_config *nodemap_config_alloc(void)
 
 	return config;
 }
+EXPORT_SYMBOL(nodemap_config_alloc);
 
+/**
+ * Walk the nodemap_hash and remove all nodemaps.
+ */
 void nodemap_config_dealloc(struct nodemap_config *config)
 {
-	nodemap_config_cleanup(config);
+	struct lu_nodemap	*nodemap = NULL;
+	struct lu_nodemap	*nodemap_temp;
+	struct lu_nid_range	*range;
+	struct lu_nid_range	*range_temp;
+	LIST_HEAD(nodemap_list_head);
+
+	cfs_hash_for_each_safe(config->nmc_nodemap_hash,
+			       nodemap_cleanup_iter_cb, &nodemap_list_head);
+	cfs_hash_putref(config->nmc_nodemap_hash);
+
+	/* Because nodemap_destroy might sleep, we can't destroy them
+	 * in cfs_hash_for_each, so we build a list there and destroy here
+	 */
+	list_for_each_entry_safe(nodemap, nodemap_temp, &nodemap_list_head,
+				 nm_list) {
+		down_write(&config->nmc_range_tree_lock);
+
+		/* move members to new config */
+		nm_member_reclassify_nodemap(nodemap);
+		list_for_each_entry_safe(range, range_temp, &nodemap->nm_ranges,
+					 rn_list)
+			range_delete(&config->nmc_range_tree, range);
+		up_write(&config->nmc_range_tree_lock);
+
+		nodemap_putref(nodemap);
+	}
 	OBD_FREE_PTR(config);
 }
+EXPORT_SYMBOL(nodemap_config_dealloc);
 
 static int nm_hash_list_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 			   struct hlist_node *hnode,
@@ -1319,6 +1325,7 @@ void nodemap_config_set_active(struct nodemap_config *config)
 
 	EXIT;
 }
+EXPORT_SYMBOL(nodemap_config_set_active);
 
 /**
  * Cleanup nodemap module on exit

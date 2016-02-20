@@ -78,34 +78,6 @@ struct lu_idmap {
 	struct rb_node	id_fs_to_client;
 };
 
-struct nodemap_range_tree {
-	struct interval_node *nmrt_range_interval_root;
-	unsigned int nmrt_range_highest_id;
-};
-
-struct nodemap_config {
-	/* Highest numerical lu_nodemap.nm_id defined */
-	unsigned int nmc_nodemap_highest_id;
-
-	/* Simple flag to determine if nodemaps are active */
-	bool nmc_nodemap_is_active;
-
-	/* Pointer to default nodemap as it is needed more often */
-	struct lu_nodemap *nmc_default_nodemap;
-
-	/**
-	 * Lock required to access the range tree.
-	 */
-	struct rw_semaphore nmc_range_tree_lock;
-	struct nodemap_range_tree nmc_range_tree;
-
-	/**
-	 * Hash keyed on nodemap name containing all
-	 * nodemaps
-	 */
-	struct cfs_hash *nmc_nodemap_hash;
-};
-
 /* first 4 bits of the nodemap_id is the index type */
 struct nodemap_key {
 	__u32 nk_nodemap_id;
@@ -138,9 +110,6 @@ static inline __u32 nm_idx_set_type(unsigned int id, enum nodemap_idx_type t)
 	return (id & NM_TYPE_MASK) | (t << NM_TYPE_SHIFT);
 }
 
-struct nodemap_config *nodemap_config_alloc(void);
-void nodemap_config_dealloc(struct nodemap_config *config);
-void nodemap_config_set_active(struct nodemap_config *config);
 struct lu_nodemap *nodemap_create(const char *name,
 				  struct nodemap_config *config,
 				  bool is_default);
