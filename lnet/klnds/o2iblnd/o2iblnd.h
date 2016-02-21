@@ -531,11 +531,6 @@ typedef struct
 #define IBLND_MSG_GET_REQ           0xd6        /* getreq (sink->src) */
 #define IBLND_MSG_GET_DONE          0xd7        /* completion (src->sink: all OK) */
 
-/* flag to show a peer can understand connrace protocol */
-#define IBLND_CONNREQ_NOOP	    (1U << 0)
-/* want to win connrace */
-#define IBLND_CONNREQ_WIN_WISH	    (1U << 1)
-
 typedef struct {
         __u32            ibr_magic;             /* sender's magic */
         __u16            ibr_version;           /* sender's version */
@@ -657,8 +652,6 @@ typedef struct kib_conn
 	__u16			ibc_version;
 	/* reconnect later */
 	__u16			ibc_reconnect:1;
-	/* rejected by connrace */
-	__u16			ibc_connrace:1;
 	/* which instance of the peer */
 	__u64			ibc_incarnation;
 	/* # users */
@@ -752,8 +745,6 @@ typedef struct kib_peer
 	unsigned short		ibp_connecting;
 	/* reconnect this peer later */
 	unsigned short		ibp_reconnecting:1;
-	/* wish to win the connrace */
-	unsigned short	     ibp_connrace_win:1;
 	/* # consecutive reconnection attempts to this peer */
 	unsigned int		ibp_reconnected;
 	/* errno on closing this peer */
@@ -838,25 +829,6 @@ do {                                                            \
 	if (atomic_dec_and_test(&(peer)->ibp_refcount))     	\
 		kiblnd_destroy_peer(peer);                      \
 } while (0)
-
-static inline bool
-kiblnd_peer_win_race(kib_peer_t *peer, kib_msg_t *msg)
-{
-	if (!peer->ibp_connecting)
-		return true; /* no race */
-
-	if (msg->ibm_credits & IBLND_CONNREQ_NOOP) {
-		/* peer can understand connrace protocol */
-
-		if (msg->ibm_credits & IBLND_CONNREQ_WIN_WISH)
-			return true; /* peer has win wish */
-
-		if (peer->ibp_connrace_win)
-			return false; /* I wish to win, reject peer */
-	}
-	/* tie-break connection race in favour of the higher NID */
-	return peer->ibp_nid > peer->ibp_ni->ni_nid;
-}
 
 static inline bool
 kiblnd_peer_connecting(kib_peer_t *peer)
@@ -1148,7 +1120,7 @@ int  kiblnd_translate_mtu(int value);
 int  kiblnd_dev_failover(kib_dev_t *dev);
 int  kiblnd_create_peer(lnet_ni_t *ni, kib_peer_t **peerp, lnet_nid_t nid);
 void kiblnd_destroy_peer (kib_peer_t *peer);
-bool kiblnd_reconnect_peer(kib_peer_t *peer, bool connrace_win);
+bool kiblnd_reconnect_peer(kib_peer_t *peer);
 void kiblnd_destroy_dev (kib_dev_t *dev);
 void kiblnd_unlink_peer_locked (kib_peer_t *peer);
 kib_peer_t *kiblnd_find_peer_locked (lnet_nid_t nid);
