@@ -139,8 +139,10 @@ void reply_in_callback(lnet_event_t *ev)
 
                 req->rq_early_count++; /* number received, client side */
 
-                if (req->rq_replied)   /* already got the real reply */
-                        goto out_wake;
+		/* already got the real reply or buffers are already unlinked */
+		if (req->rq_replied ||
+		    req->rq_reply_unlinked == 1)
+			goto out_wake;
 
                 req->rq_early = 1;
                 req->rq_reply_off = ev->offset;
