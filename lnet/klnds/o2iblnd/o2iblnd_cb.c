@@ -1308,7 +1308,7 @@ kiblnd_connect_peer (kib_peer_t *peer)
 }
 
 bool
-kiblnd_reconnect_peer(kib_peer_t *peer, bool connrace_win)
+kiblnd_reconnect_peer(kib_peer_t *peer)
 {
 	rwlock_t	 *glock = &kiblnd_data.kib_global_lock;
 	char		 *reason = NULL;
@@ -1343,17 +1343,6 @@ kiblnd_reconnect_peer(kib_peer_t *peer, bool connrace_win)
 
 	peer->ibp_connecting++;
 	peer->ibp_reconnected++;
-
-	LASSERT(!peer->ibp_connrace_win);
-	/*
-	 * If I have lost connrace for enough times and want to win the race,
-	 * I need to flag this peer so I can use IBLND_CONNREQ_WIN_WISH for
-	 * the next connection request, and reject incoming connection request
-	 * from the peer.
-	 */
-	if (peer->ibp_nid > peer->ibp_ni->ni_nid)
-		peer->ibp_connrace_win = connrace_win;
-
 	write_unlock_irqrestore(glock, flags);
 
 	kiblnd_connect_peer(peer);
@@ -2063,7 +2052,6 @@ kiblnd_peer_connect_failed(kib_peer_t *peer, int active, int error)
 	if (active) {
 		LASSERT (peer->ibp_connecting > 0);
 		peer->ibp_connecting--;
-		peer->ibp_connrace_win = 0;
 	} else {
 		LASSERT (peer->ibp_accepting > 0);
 		peer->ibp_accepting--;
@@ -2147,12 +2135,10 @@ kiblnd_connreq_done(kib_conn_t *conn, int status)
 	kiblnd_conn_addref(conn);	/* +1 ref for ibc_list */
 	list_add(&conn->ibc_list, &peer->ibp_conns);
 	peer->ibp_reconnected = 0;
-	if (active) {
+	if (active)
 		peer->ibp_connecting--;
-		peer->ibp_connrace_win = 0;
-	} else {
+	else
 		peer->ibp_accepting--;
-	}
 
         if (peer->ibp_version == 0) {
                 peer->ibp_version     = conn->ibc_version;
@@ -2420,7 +2406,9 @@ kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
                         goto failed;
                 }
 
-                if (!kiblnd_peer_win_race(peer2, reqmsg)) {
+                /* tie-break connection race in favour of the higher NID */
+                if (peer2->ibp_connecting != 0 &&
+                    nid < ni->ni_nid) {
 			write_unlock_irqrestore(g_lock, flags);
 
                         CWARN("Conn race %s\n", libcfs_nid2str(peer2->ibp_nid));
@@ -2726,7 +2714,6 @@ kiblnd_rejected (kib_conn_t *conn, int reason, void *priv, int priv_nob)
 
                         switch (rej->ibr_why) {
                         case IBLND_REJECT_CONN_RACE:
-				conn->ibc_connrace = 1;
                         case IBLND_REJECT_CONN_STALE:
                         case IBLND_REJECT_CONN_UNCOMPAT:
 			case IBLND_REJECT_MSG_QUEUE_SIZE:
@@ -2875,16 +2862,13 @@ kiblnd_active_connect (struct rdma_cm_id *cmid)
         __u64                    incarnation;
         unsigned long            flags;
         int                      rc;
-	int			 connreq = IBLND_CONNREQ_NOOP;
 
 	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
-
-	if (peer->ibp_connrace_win)
-		connreq |= IBLND_CONNREQ_WIN_WISH;
 
 	incarnation = peer->ibp_incarnation;
 	version     = (peer->ibp_version == 0) ? IBLND_MSG_VERSION :
 						 peer->ibp_version;
+
 	read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
 	conn = kiblnd_create_conn(peer, cmid, IBLND_CONN_ACTIVE_CONNECT,
@@ -2907,8 +2891,8 @@ kiblnd_active_connect (struct rdma_cm_id *cmid)
 	msg->ibm_u.connparams.ibcp_max_frags    = conn->ibc_max_frags;
 	msg->ibm_u.connparams.ibcp_max_msg_size = IBLND_MSG_SIZE;
 
-	kiblnd_pack_msg(peer->ibp_ni, msg, version, connreq,
-			peer->ibp_nid, incarnation);
+        kiblnd_pack_msg(peer->ibp_ni, msg, version,
+                        0, peer->ibp_nid, incarnation);
 
         memset(&cp, 0, sizeof(cp));
         cp.private_data        = msg;
@@ -3292,21 +3276,12 @@ kiblnd_connd (void *arg)
 				continue;
 
 			conn->ibc_peer = peer;
-			if (peer->ibp_reconnected < KIB_RECONN_HIGH_RACE) {
-				/* reset ibc_connrace because it is still too
-				 * early to break the normal connrace protocol
-				 */
-				conn->ibc_connrace = 0;
+			if (peer->ibp_reconnected < KIB_RECONN_HIGH_RACE)
 				list_add_tail(&conn->ibc_list,
 					      &kiblnd_data.kib_reconn_list);
-			} else {
-				/* want to win the next connrace, don't reset
-				 * conn->ibc_connrace so kiblnd_reconnect_peer
-				 * can see the win wish.
-				 */
+			else
 				list_add_tail(&conn->ibc_list,
 					      &kiblnd_data.kib_reconn_wait);
-			}
 		}
 
 		if (!list_empty(&kiblnd_data.kib_connd_conns)) {
@@ -3340,8 +3315,7 @@ kiblnd_connd (void *arg)
 			spin_unlock_irqrestore(lock, flags);
 			dropped_lock = 1;
 
-			reconn += kiblnd_reconnect_peer(conn->ibc_peer,
-						        conn->ibc_connrace);
+			reconn += kiblnd_reconnect_peer(conn->ibc_peer);
 			kiblnd_peer_decref(conn->ibc_peer);
 			LIBCFS_FREE(conn, sizeof(*conn));
 
