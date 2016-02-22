@@ -103,8 +103,9 @@ struct lu_nodemap {
  * not be needed.
  */
 struct nm_config_file {
-	struct dt_object	*ncf_obj;
-	struct list_head	ncf_list;
+	struct local_oid_storage	*ncf_los;
+	struct dt_object		*ncf_obj;
+	struct list_head		 ncf_list;
 };
 
 void nodemap_activate(const bool value);
@@ -139,10 +140,18 @@ void nodemap_test_nid(lnet_nid_t nid, char *name_buf, size_t name_len);
 #endif
 __u32 nodemap_test_id(lnet_nid_t nid, enum nodemap_id_type idtype,
 		      __u32 client_id);
+
+enum nm_config_file_type {
+	NCFT_MGS,
+	NCFT_TGT,
+};
 struct nm_config_file *nm_config_file_register(const struct lu_env *env,
-					       struct dt_object *obj);
+					       struct dt_object *obj,
+					       struct local_oid_storage *los,
+					       enum nm_config_file_type ncf_type);
 void nm_config_file_deregister(const struct lu_env *env,
-			       struct nm_config_file *ncf);
+			       struct nm_config_file *ncf,
+			       enum nm_config_file_type ncf_type);
 struct lu_nodemap *nodemap_get_from_exp(struct obd_export *exp);
 void nodemap_putref(struct lu_nodemap *nodemap);
 
@@ -177,7 +186,7 @@ struct nodemap_config {
 
 struct nodemap_config *nodemap_config_alloc(void);
 void nodemap_config_dealloc(struct nodemap_config *config);
-void nodemap_config_set_active(struct nodemap_config *config);
+void nodemap_config_set_active_mgc(struct nodemap_config *config);
 
 int nodemap_process_idx_pages(struct nodemap_config *config, union lu_page *lip,
 			      struct lu_nodemap **recent_nodemap);

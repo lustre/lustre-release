@@ -70,14 +70,15 @@ static void nodemap_destroy(struct lu_nodemap *nodemap)
 	down_read(&active_config->nmc_range_tree_lock);
 	nm_member_reclassify_nodemap(nodemap);
 	up_read(&active_config->nmc_range_tree_lock);
-	mutex_unlock(&active_config_lock);
-
-	if (!list_empty(&nodemap->nm_member_list))
-		CWARN("nodemap_destroy failed to reclassify all members\n");
 
 	write_lock(&nodemap->nm_idmap_lock);
 	idmap_delete_tree(nodemap);
 	write_unlock(&nodemap->nm_idmap_lock);
+
+	mutex_unlock(&active_config_lock);
+
+	if (!list_empty(&nodemap->nm_member_list))
+		CWARN("nodemap_destroy failed to reclassify all members\n");
 
 	nm_member_delete_list(nodemap);
 
@@ -264,6 +265,7 @@ struct lu_nodemap *nodemap_classify_nid(lnet_nid_t nid)
 	else
 		nodemap = active_config->nmc_default_nodemap;
 
+	LASSERT(nodemap != NULL);
 	nodemap_getref(nodemap);
 
 	return nodemap;
@@ -361,6 +363,7 @@ int nodemap_add_member(lnet_nid_t nid, struct obd_export *exp)
 {
 	struct lu_nodemap *nodemap;
 	int rc;
+	ENTRY;
 
 	mutex_lock(&active_config_lock);
 	down_read(&active_config->nmc_range_tree_lock);
@@ -373,7 +376,7 @@ int nodemap_add_member(lnet_nid_t nid, struct obd_export *exp)
 
 	nodemap_putref(nodemap);
 
-	return rc;
+	RETURN(rc);
 }
 EXPORT_SYMBOL(nodemap_add_member);
 
@@ -1352,6 +1355,7 @@ void nodemap_config_set_active(struct nodemap_config *config)
 	ENTRY;
 
 	LASSERT(active_config != config);
+	LASSERT(config->nmc_default_nodemap);
 
 	mutex_lock(&active_config_lock);
 
@@ -1392,7 +1396,6 @@ void nodemap_config_set_active(struct nodemap_config *config)
 
 	EXIT;
 }
-EXPORT_SYMBOL(nodemap_config_set_active);
 
 /**
  * Cleanup nodemap module on exit

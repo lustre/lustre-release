@@ -110,6 +110,7 @@ static inline __u32 nm_idx_set_type(unsigned int id, enum nodemap_idx_type t)
 	return (id & NM_TYPE_MASK) | (t << NM_TYPE_SHIFT);
 }
 
+void nodemap_config_set_active(struct nodemap_config *config);
 struct lu_nodemap *nodemap_create(const char *name,
 				  struct nodemap_config *config,
 				  bool is_default);
