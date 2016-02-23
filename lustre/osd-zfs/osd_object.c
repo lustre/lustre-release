@@ -1577,12 +1577,9 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(osd_invariant(obj));
 
 	rc = osd_init_lma(env, obj, fid, oh);
-	if (rc) {
+	if (rc != 0)
 		CERROR("%s: can not set LMA on "DFID": rc = %d\n",
 		       osd->od_svname, PFID(fid), rc);
-		/* ignore errors during LMA initialization */
-		rc = 0;
-	}
 
 out:
 	up_write(&obj->oo_guard);

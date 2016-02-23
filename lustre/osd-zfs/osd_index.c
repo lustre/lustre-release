@@ -228,8 +228,96 @@ static inline void osd_it_append_attrs(struct lu_dirent *ent, __u32 attr,
 	ent->lde_attrs = cpu_to_le32(ent->lde_attrs);
 }
 
+/**
+ * Get the object's FID from its LMA EA.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] osd	pointer to the OSD device
+ * \param[in] oid	the object's local identifier
+ * \param[out] fid	the buffer to hold the object's FID
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
+static int osd_get_fid_by_oid(const struct lu_env *env, struct osd_device *osd,
+			      uint64_t oid, struct lu_fid *fid)
+{
+	struct objset		*os	  = osd->od_os;
+	struct osd_thread_info	*oti	  = osd_oti_get(env);
+	struct lustre_mdt_attrs	*lma	  =
+			(struct lustre_mdt_attrs *)oti->oti_buf;
+	struct lu_buf		 buf;
+	nvlist_t		*sa_xattr = NULL;
+	sa_handle_t		*sa_hdl   = NULL;
+	uchar_t			*nv_value = NULL;
+	uint64_t		 xattr	  = ZFS_NO_OBJECT;
+	int			 size	  = 0;
+	int			 rc;
+	ENTRY;
+
+	rc = __osd_xattr_load(osd, oid, &sa_xattr);
+	if (rc == -ENOENT)
+		goto regular;
+
+	if (rc != 0)
+		GOTO(out, rc);
+
+	rc = -nvlist_lookup_byte_array(sa_xattr, XATTR_NAME_LMA, &nv_value,
+				       &size);
+	if (rc == -ENOENT)
+		goto regular;
+
+	if (rc != 0)
+		GOTO(out, rc);
+
+	if (unlikely(size > sizeof(oti->oti_buf)))
+		GOTO(out, rc = -ERANGE);
+
+	memcpy(lma, nv_value, size);
+
+	goto found;
+
+regular:
+	rc = -sa_handle_get(os, oid, NULL, SA_HDL_PRIVATE, &sa_hdl);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	rc = -sa_lookup(sa_hdl, SA_ZPL_XATTR(osd), &xattr, 8);
+	sa_handle_destroy(sa_hdl);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	buf.lb_buf = lma;
+	buf.lb_len = sizeof(oti->oti_buf);
+	rc = __osd_xattr_get_large(env, osd, xattr, &buf,
+				   XATTR_NAME_LMA, &size);
+	if (rc != 0)
+		GOTO(out, rc);
+
+found:
+	if (size < sizeof(*lma))
+		GOTO(out, rc = -EIO);
+
+	lustre_lma_swab(lma);
+	if (unlikely((lma->lma_incompat & ~LMA_INCOMPAT_SUPP) ||
+		     CFS_FAIL_CHECK(OBD_FAIL_OSD_LMA_INCOMPAT))) {
+		CWARN("%s: unsupported incompat LMA feature(s) %#x for "
+		      "oid = "LPX64"\n", osd->od_svname,
+		      lma->lma_incompat & ~LMA_INCOMPAT_SUPP, oid);
+		GOTO(out, rc = -EOPNOTSUPP);
+	} else {
+		*fid = lma->lma_self_fid;
+		GOTO(out, rc = 0);
+	}
+
+out:
+	if (sa_xattr != NULL)
+		nvlist_free(sa_xattr);
+	return rc;
+}
+
 /*
- * as we don't know FID, we can't use LU object, so this function
+ * As we don't know FID, we can't use LU object, so this function
  * partially duplicate __osd_xattr_get() which is built around
  * LU-object and uses it to cache data like regular EA dnode, etc
  */
@@ -238,80 +326,23 @@ static int osd_find_parent_by_dnode(const struct lu_env *env,
 				    struct lu_fid *fid)
 {
 	struct osd_device	*osd = osd_obj2dev(osd_dt_obj(o));
-	struct lustre_mdt_attrs	*lma;
-	struct lu_buf		 buf;
 	sa_handle_t		*sa_hdl;
-	nvlist_t		*nvbuf = NULL;
-	uchar_t			*value;
-	uint64_t		 dnode;
-	int			 rc, size;
+	uint64_t		 dnode = ZFS_NO_OBJECT;
+	int			 rc;
 	ENTRY;
 
 	/* first of all, get parent dnode from own attributes */
 	LASSERT(osd_dt_obj(o)->oo_db);
 	rc = -sa_handle_get(osd->od_os, osd_dt_obj(o)->oo_db->db_object,
 			    NULL, SA_HDL_PRIVATE, &sa_hdl);
-	if (rc)
+	if (rc != 0)
 		RETURN(rc);
 
-	dnode = ZFS_NO_OBJECT;
 	rc = -sa_lookup(sa_hdl, SA_ZPL_PARENT(osd), &dnode, 8);
 	sa_handle_destroy(sa_hdl);
-	if (rc)
-		RETURN(rc);
+	if (rc == 0)
+		rc = osd_get_fid_by_oid(env, osd, dnode, fid);
 
-	/* now get EA buffer */
-	rc = __osd_xattr_load(osd, dnode, &nvbuf);
-	if (rc)
-		GOTO(regular, rc);
-
-	/* XXX: if we get that far.. should we cache the result? */
-
-	/* try to find LMA attribute */
-	LASSERT(nvbuf != NULL);
-	rc = -nvlist_lookup_byte_array(nvbuf, XATTR_NAME_LMA, &value, &size);
-	if (rc == 0 && size >= sizeof(*lma)) {
-		lma = (struct lustre_mdt_attrs *)value;
-		lustre_lma_swab(lma);
-		*fid = lma->lma_self_fid;
-		GOTO(out, rc = 0);
-	}
-
-regular:
-	/* no LMA attribute in SA, let's try regular EA */
-
-	/* first of all, get parent dnode storing regular EA */
-	rc = -sa_handle_get(osd->od_os, dnode, NULL, SA_HDL_PRIVATE, &sa_hdl);
-	if (rc)
-		GOTO(out, rc);
-
-	dnode = ZFS_NO_OBJECT;
-	rc = -sa_lookup(sa_hdl, SA_ZPL_XATTR(osd), &dnode, 8);
-	sa_handle_destroy(sa_hdl);
-	if (rc)
-		GOTO(out, rc);
-
-	CLASSERT(sizeof(*lma) <= sizeof(osd_oti_get(env)->oti_buf));
-	buf.lb_buf = osd_oti_get(env)->oti_buf;
-	buf.lb_len = sizeof(osd_oti_get(env)->oti_buf);
-
-	/* now try to find LMA */
-	rc = __osd_xattr_get_large(env, osd, dnode, &buf,
-				   XATTR_NAME_LMA, &size);
-	if (rc == 0 && size >= sizeof(*lma)) {
-		lma = buf.lb_buf;
-		lustre_lma_swab(lma);
-		*fid = lma->lma_self_fid;
-		GOTO(out, rc = 0);
-	} else if (rc < 0) {
-		GOTO(out, rc);
-	} else {
-		GOTO(out, rc = -EIO);
-	}
-
-out:
-	if (nvbuf != NULL)
-		nvlist_free(nvbuf);
 	RETURN(rc);
 }
 
@@ -407,12 +438,22 @@ static int osd_dir_lookup(const struct lu_env *env, struct dt_object *dt,
 		}
 	}
 
+	memset(&oti->oti_zde.lzd_fid, 0, sizeof(struct lu_fid));
 	rc = -zap_lookup(osd->od_os, obj->oo_db->db_object,
 			 (char *)key, 8, sizeof(oti->oti_zde) / 8,
 			 (void *)&oti->oti_zde);
-	memcpy(rec, &oti->oti_zde.lzd_fid, sizeof(struct lu_fid));
+	if (rc != 0)
+		RETURN(rc);
 
-	RETURN(rc == 0 ? 1 : rc);
+	if (likely(fid_is_sane(&oti->oti_zde.lzd_fid))) {
+		memcpy(rec, &oti->oti_zde.lzd_fid, sizeof(struct lu_fid));
+		RETURN(1);
+	}
+
+	rc = osd_get_fid_by_oid(env, osd, oti->oti_zde.lzd_reg.zde_dnode,
+				(struct lu_fid *)rec);
+
+	RETURN(rc == 0 ? 1 : (rc == -ENOENT ? -ENODATA : rc));
 }
 
 static int osd_declare_dir_insert(const struct lu_env *env,
