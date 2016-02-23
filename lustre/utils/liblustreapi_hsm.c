@@ -1126,12 +1126,18 @@ int llapi_hsm_action_begin(struct hsm_copyaction_private **phcp,
 			goto err_out;
 	}
 
+	/* Since remove is atomic there is no need to send an initial
+	 * MDS_HSM_PROGRESS RPC. */
+	if (hai->hai_action == HSMA_REMOVE)
+		goto out_log;
+
 	rc = ioctl(ct->mnt_fd, LL_IOC_HSM_COPY_START, &hcp->copy);
 	if (rc < 0) {
 		rc = -errno;
 		goto err_out;
 	}
 
+out_log:
 	llapi_hsm_log_ct_progress(&hcp, hai, CT_START, 0, 0);
 
 ok_out:
