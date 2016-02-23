@@ -269,6 +269,11 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 
 		request->hal_used_sz += cfs_size_round(hai->hai_len);
 		request->hal->hal_count++;
+
+		if (hai->hai_action != HSMA_CANCEL)
+			cdt_agent_record_hash_add(cdt, hai->hai_cookie,
+						  llh->lgh_hdr->llh_cat_idx,
+						  hdr->lrh_index);
 		break;
 	}
 	case ARS_STARTED: {
@@ -324,6 +329,8 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 			 * to the client, for which an error will be
 			 * sent back, leading to an endless cycle of
 			 * cancellation. */
+			cdt_agent_record_hash_del(cdt,
+						  larr->arr_hai.hai_cookie);
 			RETURN(LLOG_DEL_RECORD);
 		}
 
@@ -343,8 +350,11 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 	case ARS_CANCELED:
 	case ARS_SUCCEED:
 		if ((larr->arr_req_change + cdt->cdt_grace_delay) <
-		    cfs_time_current_sec())
+		    cfs_time_current_sec()) {
+			cdt_agent_record_hash_del(cdt,
+						  larr->arr_hai.hai_cookie);
 			RETURN(LLOG_DEL_RECORD);
+		}
 		break;
 	}
 	RETURN(0);
@@ -568,7 +578,7 @@ static int mdt_coordinator(void *data)
 		hsd.request_cnt = 0;
 
 		rc = cdt_llog_process(mti->mti_env, mdt, mdt_coordinator_cb,
-				      &hsd, WRITE);
+				      &hsd, 0, 0, WRITE);
 		if (rc < 0)
 			goto clean_cb_alloc;
 
@@ -782,8 +792,8 @@ static int mdt_hsm_pending_restore(struct mdt_thread_info *mti)
 
 	hrd.hrd_mti = mti;
 
-	rc = cdt_llog_process(mti->mti_env, mti->mti_mdt,
-			      hsm_restore_cb, &hrd, WRITE);
+	rc = cdt_llog_process(mti->mti_env, mti->mti_mdt, hsm_restore_cb, &hrd,
+			      0, 0, READ);
 
 	RETURN(rc);
 }
@@ -869,9 +879,21 @@ int mdt_hsm_cdt_init(struct mdt_device *mdt)
 	if (cdt->cdt_request_cookie_hash == NULL)
 		RETURN(-ENOMEM);
 
+	cdt->cdt_agent_record_hash = cfs_hash_create("AGENT_RECORD_HASH",
+						     CFS_HASH_BITS_MIN,
+						     CFS_HASH_BITS_MAX,
+						     CFS_HASH_BKT_BITS,
+						     0 /* extra bytes */,
+						     CFS_HASH_MIN_THETA,
+						     CFS_HASH_MAX_THETA,
+						     &cdt_agent_record_hash_ops,
+						     CFS_HASH_DEFAULT);
+	if (cdt->cdt_agent_record_hash == NULL)
+		GOTO(out_request_cookie_hash, rc = -ENOMEM);
+
 	rc = lu_env_init(&cdt->cdt_env, LCT_MD_THREAD);
 	if (rc < 0)
-		GOTO(out_request_cookie_hash, rc);
+		GOTO(out_agent_record_hash, rc);
 
 	/* for mdt_ucred(), lu_ucred stored in lu_ucred_key */
 	rc = lu_context_init(&cdt->cdt_session, LCT_SERVER_SESSION);
@@ -902,6 +924,9 @@ int mdt_hsm_cdt_init(struct mdt_device *mdt)
 
 out_env:
 	lu_env_fini(&cdt->cdt_env);
+out_agent_record_hash:
+	cfs_hash_putref(cdt->cdt_agent_record_hash);
+	cdt->cdt_agent_record_hash = NULL;
 out_request_cookie_hash:
 	cfs_hash_putref(cdt->cdt_request_cookie_hash);
 	cdt->cdt_request_cookie_hash = NULL;
@@ -922,6 +947,9 @@ int  mdt_hsm_cdt_fini(struct mdt_device *mdt)
 	lu_context_fini(cdt->cdt_env.le_ses);
 
 	lu_env_fini(&cdt->cdt_env);
+
+	cfs_hash_putref(cdt->cdt_agent_record_hash);
+	cdt->cdt_agent_record_hash = NULL;
 
 	cfs_hash_putref(cdt->cdt_request_cookie_hash);
 	cdt->cdt_request_cookie_hash = NULL;
@@ -1694,8 +1722,8 @@ static int hsm_cancel_all_actions(struct mdt_device *mdt)
 	/* cancel all on-disk records */
 	hcad.mdt = mdt;
 
-	rc = cdt_llog_process(mti->mti_env, mti->mti_mdt,
-			      mdt_cancel_all_cb, &hcad, WRITE);
+	rc = cdt_llog_process(mti->mti_env, mti->mti_mdt, mdt_cancel_all_cb,
+			      &hcad, 0, 0, WRITE);
 out_cdt_state:
 	/* Enable coordinator, unless the coordinator was stopping. */
 	set_cdt_state(cdt, old_state, NULL);

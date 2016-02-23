@@ -167,6 +167,11 @@ struct coordinator {
 						       * agents */
 	struct list_head	 cdt_restore_hdl;     /**< list of restore lock
 						       * handles */
+
+	/* Hash of cookies to locations of record locations in agent
+	 * request log. */
+	struct cfs_hash		*cdt_agent_record_hash;
+
 	/* Bitmasks indexed by the HSMA_XXX constants. */
 	__u64			 cdt_user_request_mask;
 	__u64			 cdt_group_request_mask;
@@ -823,13 +828,19 @@ extern const struct file_operations mdt_hsm_actions_fops;
 void dump_llog_agent_req_rec(const char *prefix,
 			     const struct llog_agent_req_rec *larr);
 int cdt_llog_process(const struct lu_env *env, struct mdt_device *mdt,
-		     llog_cb_t cb, void *data, int rw);
+		     llog_cb_t cb, void *data, u32 start_cat_idx,
+		     u32 start_rec_idx, int rw);
 int mdt_agent_record_add(const struct lu_env *env, struct mdt_device *mdt,
 			 __u64 compound_id, __u32 archive_id,
 			 __u64 flags, struct hsm_action_item *hai);
 int mdt_agent_record_update(const struct lu_env *env,
 			    struct mdt_device *mdt, __u64 *cookies,
 			    int cookies_count, enum agent_req_status status);
+void cdt_agent_record_hash_add(struct coordinator *cdt, u64 cookie, u32 cat_idt,
+			       u32 rec_idx);
+void cdt_agent_record_hash_lookup(struct coordinator *cdt, u64 cookie,
+				  u32 *cat_idt, u32 *rec_idx);
+void cdt_agent_record_hash_del(struct coordinator *cdt, u64 cookie);
 
 /* mdt/mdt_hsm_cdt_agent.c */
 extern const struct file_operations mdt_hsm_agent_fops;
@@ -859,6 +870,7 @@ bool mdt_hsm_restore_is_running(struct mdt_thread_info *mti,
 				const struct lu_fid *fid);
 /* mdt/mdt_hsm_cdt_requests.c */
 extern struct cfs_hash_ops cdt_request_cookie_hash_ops;
+extern struct cfs_hash_ops cdt_agent_record_hash_ops;
 extern const struct file_operations mdt_hsm_active_requests_fops;
 void dump_requests(char *prefix, struct coordinator *cdt);
 struct cdt_agent_req *mdt_cdt_alloc_request(__u64 compound_id, __u32 archive_id,
