@@ -1,0 +1,29 @@
+.TH llapi_layout_comp_id_get 3 "2015 Nov 4" "Lustre User API"
+.SH NAME
+llapi_layout_comp_id_get  \- get the ID of a layout component.
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_layout_comp_id_get(const struct llapi_layout *" layout ",
+.BI "                             uint32_t *" id );
+.fi
+.SH DESCRIPTION
+.PP
+Return the unique numeric
+.I id
+of the current component of
+.IR layout .
+.PP
+.SH RETURN VALUES
+Return 0 on success, or -1 if an error occurred (in which case, errno is
+set appropriately).
+.SH ERRORS
+.TP 15
+.SM EINVAL
+An invalid argument was specified.
+.SH "SEE ALSO"
+.BR llapi_layout_alloc (3),
+.BR llapi_layout_file_open (3),
+.BR llapi_layout (7),
+.BR liblustreapi (7)

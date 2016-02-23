@@ -1,0 +1,36 @@
+.TH llapi_layout_file_comp_add 3 "2015 Nov 4" "Lustre User API"
+.SH NAME
+llapi_layout_file_comp_add  \- add one or more components into an
+existing file.
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_layout_file_comp_add(const char *" path ",
+.BI "                               const struct llapi_layout *" layout );
+.fi
+.SH DESCRIPTION
+.PP
+Add component(s) specified in
+.I layout
+into the existing file
+.IR path .
+.PP
+.SH RETURN VALUES
+Return 0 on success, or -1 if an error occurred (in which case, errno is
+set appropriately).
+.SH ERRORS
+.TP 15
+.SM EINVAL
+An invalid argument was specified.
+.TP
+.SM ENOENT
+.I path
+doesn't exist.
+.SH "SEE ALSO"
+.BR llapi_layout_alloc (3),
+.BR llapi_layout_file_open (3),
+.BR llapi_layout_comp_add (3),
+.BR llapi_layout_comp_del (3),
+.BR llapi_layout (7),
+.BR liblustreapi (7)
