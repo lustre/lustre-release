@@ -659,7 +659,7 @@ static int ll_statahead_interpret(struct ptlrpc_request *req,
 	struct ll_statahead_info *sai = lli->lli_sai;
 	struct sa_entry *entry = (struct sa_entry *)minfo->mi_cbdata;
 	__u64 handle = 0;
-	bool wakeup;
+	wait_queue_head_t *waitq = NULL;
 	ENTRY;
 
 	if (it_disposition(it, DISP_LOOKUP_NEG))
@@ -689,7 +689,8 @@ static int ll_statahead_interpret(struct ptlrpc_request *req,
 
 	spin_lock(&lli->lli_sa_lock);
 	if (rc != 0) {
-		wakeup = __sa_make_ready(sai, entry, rc);
+		if (__sa_make_ready(sai, entry, rc))
+			waitq = &sai->sai_waitq;
 	} else {
 		entry->se_minfo = minfo;
 		entry->se_req = ptlrpc_request_addref(req);
@@ -698,12 +699,14 @@ static int ll_statahead_interpret(struct ptlrpc_request *req,
 		 * for readpage and other tries to enqueue lock on child
 		 * with parent's lock held, for example: unlink. */
 		entry->se_handle = handle;
-		wakeup = !sa_has_callback(sai);
+		if (!sa_has_callback(sai))
+			waitq = &sai->sai_thread.t_ctl_waitq;
+
 		list_add_tail(&entry->se_list, &sai->sai_interim_entries);
 	}
 	sai->sai_replied++;
-	if (wakeup)
-		wake_up(&sai->sai_thread.t_ctl_waitq);
+	if (waitq != NULL)
+		wake_up(waitq);
 	spin_unlock(&lli->lli_sa_lock);
 
 	RETURN(rc);
@@ -1396,7 +1399,7 @@ static int revalidate_statahead_dentry(struct inode *dir,
 	struct sa_entry *entry = NULL;
 	struct l_wait_info lwi = { 0 };
 	struct ll_dentry_data *ldd;
-	struct ll_inode_info *lli;
+	struct ll_inode_info *lli = ll_i2info(dir);
 	int rc = 0;
 	ENTRY;
 
@@ -1439,9 +1442,11 @@ static int revalidate_statahead_dentry(struct inode *dir,
 		sa_handle_callback(sai);
 
 	if (!sa_ready(entry)) {
+		spin_lock(&lli->lli_sa_lock);
 		sai->sai_index_wait = entry->se_index;
+		spin_unlock(&lli->lli_sa_lock);
 		lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(30), NULL,
-					LWI_ON_SIGNAL_NOOP, NULL);
+				       LWI_ON_SIGNAL_NOOP, NULL);
 		rc = l_wait_event(sai->sai_waitq, sa_ready(entry), &lwi);
 		if (rc < 0) {
 			/*
@@ -1506,7 +1511,6 @@ out:
 	 * dentry_may_statahead().
 	 */
 	ldd = ll_d2d(*dentryp);
-	lli = ll_i2info(dir);
 	/* ldd can be NULL if llite lookup failed. */
 	if (ldd != NULL)
 		ldd->lld_sa_generation = lli->lli_sa_generation;
