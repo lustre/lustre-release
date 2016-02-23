@@ -533,12 +533,7 @@ struct ll_sb_info {
 				  ll_xattr_cache_enabled:1,
 				  ll_client_common_fill_super_succeeded:1;
 
-	/* per-conn chain of SBs */
-	struct list_head		ll_conn_chain;
         struct lustre_client_ocd  ll_lco;
-
-	/*please don't ask -p*/
-	struct list_head	ll_orphan_dentry_list;
 
         struct lprocfs_stats     *ll_stats; /* lprocfs stats counter */
 
