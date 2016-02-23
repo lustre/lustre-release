@@ -165,9 +165,9 @@ typedef struct lnet_libmd {
 	int			md_refcount;
 	unsigned int		md_options;
 	unsigned int		md_flags;
+	unsigned int		md_niov;	/* # frags at end of struct */
 	void		       *md_user_ptr;
 	lnet_eq_t	       *md_eq;
-	unsigned int		md_niov;	/* # frags */
 	union {
 		struct kvec	iov[LNET_MAX_IOV];
 		lnet_kiov_t	kiov[LNET_MAX_IOV];
