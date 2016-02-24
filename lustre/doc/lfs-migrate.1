@@ -36,6 +36,7 @@ For the case of OST object migration:
 .B [--ost-list|-o \fIost_indices\fR]
 .B [--block|-b]
 .B [--non-block|-n] \fIfile|directory\fR
+.B [--component-end|-E \fIcomp_end\fR]
 .br
 Migrate can also be used for OST objects by omitting \fI-m\fR option. In this
 mode, the command has identical options to
@@ -44,21 +45,28 @@ The difference between migrate and setstripe is that \fImigrate\fR will
 re-layout the data in existing files using the new layout parameter by copying
 the data from the existing OST(s) to the new OST(s). In contrast,
 \fIsetstripe\fR is used for creating new files with the specified layout.  For
-more information, see setstripe in lfs(1).
+more information, see lfs-setstripe(1).
 .P
 NOTE: lfs migrate has a complementary script
 .B lfs_migrate
 which is used to provide extra functionality when migrating file data
 between OSTs and has a separate man page.
 .SH EXAMPLES
-Move the inodes contained in ./testremote from their current MDT to the
-MDT with index 0:
-.HP
+.TP
 .B $ lfs migrate -m 0 ./testremote
+Move the inodes contained in ./testremote from their current MDT to the
+MDT with index 0.
+.TP
+.B $ lfs migrate -c 2 /mnt/lustre/file1
+This migrate the file into a new layout with 2 stripes.
+.TP
+.B $ lfs migrate -E 64M -c 1 -E 256M -c 4 -E -1 -c -1 /mnt/lustre/file1
+This migrate the file into a three components composite layout.
 .SH AUTHOR
 The lfs command is part of the Lustre filesystem.
 .SH SEE ALSO
 .BR lfs (1),
+.BR lfs-setstripe (1),
 .BR lfs-setdirstripe (1),
 .BR lfs-getdirstripe (1),
 .BR lfs-mkdir (1),
