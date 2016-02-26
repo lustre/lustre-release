@@ -38,11 +38,9 @@
 #include <errno.h>
 #include <unistd.h>
 #include <getopt.h>
-
-#ifndef HAVE_FIEMAP
-# include <linux/types.h>
-# include <linux/fiemap.h>
-#endif
+#include <linux/types.h>
+#include <linux/fs.h>
+#include <lustre/lustre_user.h>
 
 #ifndef FS_IOC_FIEMAP
 # define FS_IOC_FIEMAP (_IOWR('f', 11, struct fiemap))
@@ -67,7 +65,7 @@ int check_fiemap(int fd, long long orig_size)
 	memset(&fiemap_buf, 0, sizeof(fiemap_buf));
 
 	fiemap->fm_start = 0;
-	fiemap->fm_flags = FIEMAP_FLAG_SYNC;
+	fiemap->fm_flags = (FIEMAP_FLAG_SYNC | FIEMAP_FLAG_DEVICE_ORDER);
 	fiemap->fm_extent_count = count;
 	fiemap->fm_length = FIEMAP_MAX_OFFSET;
 

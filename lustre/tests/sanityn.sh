@@ -2766,7 +2766,7 @@ test_70b() { # LU-2781
 }
 run_test 70b "remove files after calling rm_entry"
 
-test_71() {
+test_71a() {
 	local server_version=$(lustre_version_code $SINGLEMDS)
 
 	[[ $server_version -lt $(version_code 2.1.6) ]] &&
@@ -2775,7 +2775,8 @@ test_71() {
 	# Patch not applied to 2.2 and 2.3 branches
 	[[ $server_version -ge $(version_code 2.2.0) ]] &&
 	[[ $server_version -lt $(version_code 2.4.0) ]] &&
-		skip "Need MDS version at least 2.4.0" && return
+		skip "Need MDS version earlier than 2.2.0 or at least 2.4.0" &&
+			return
 
 	checkfiemap --test ||
 		{ skip "checkfiemap not runnable: $?" && return; }
@@ -2807,7 +2808,32 @@ test_71() {
 	echo $can2
 	[ $can3 -eq $can4 ] || error $((can2-can1)) "cancel RPC occured."
 }
-run_test 71 "correct file map just after write operation is finished"
+run_test 71a "correct file map just after write operation is finished"
+
+test_71b() {
+	local server_version=$(lustre_version_code $SINGLEMDS)
+
+	[[ $server_version -lt $(version_code 2.1.6) ]] &&
+		skip "Need MDS version at least 2.1.6" && return
+
+	# Patch not applied to 2.2 and 2.3 branches
+	[[ $server_version -ge $(version_code 2.2.0) ]] &&
+	[[ $server_version -lt $(version_code 2.4.0) ]] &&
+		skip "Need MDS version earlier than 2.2.0 or at least 2.4.0" &&
+			return
+	[[ $OSTCOUNT -ge 2 ]] || { skip "need at least 2 osts"; return; }
+
+	checkfiemap --test ||
+		{ skip "error $?: checkfiemap failed" && return; }
+
+	$LFS setstripe -c -1 $DIR1 || error "setstripe failed"
+	dd if=/dev/urandom of=$DIR1/$tfile bs=40K count=1
+	[ "$(facet_fstype ost$(($($GETSTRIPE -i $DIR1/$tfile) + 1)))" = \
+		"zfs" ] &&
+		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS" && return 0
+	checkfiemap $DIR1/$tfile 40960 || error "checkfiemap failed"
+}
+run_test 71b "check fiemap support for stripecount > 1"
 
 test_72() {
 	local p="$TMP/sanityN-$TESTNAME.parameters"
