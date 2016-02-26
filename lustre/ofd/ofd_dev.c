@@ -2021,6 +2021,8 @@ static int ofd_punch_hdl(struct tgt_session_info *tsi)
 
 	ENTRY;
 
+	OBD_FAIL_TIMEOUT(OBD_FAIL_OST_PAUSE_PUNCH, cfs_fail_val);
+
 	/* check that we do support OBD_CONNECT_TRUNCLOCK. */
 	CLASSERT(OST_CONNECT_SUPPORTED & OBD_CONNECT_TRUNCLOCK);
 
@@ -2546,6 +2548,10 @@ static int ofd_punch_hpreq_lock_match(struct ptlrpc_request *req,
 				      struct ldlm_lock *lock)
 {
 	struct tgt_session_info	*tsi;
+	struct obdo		*oa;
+	struct ldlm_extent	 ext;
+
+	ENTRY;
 
 	/* Don't use tgt_ses_info() to get session info, because lock_match()
 	 * can be called while request has no processing thread yet. */
@@ -2558,9 +2564,20 @@ static int ofd_punch_hpreq_lock_match(struct ptlrpc_request *req,
 	LASSERT(tsi->tsi_ost_body != NULL);
 	if (tsi->tsi_ost_body->oa.o_valid & OBD_MD_FLHANDLE &&
 	    tsi->tsi_ost_body->oa.o_handle.cookie == lock->l_handle.h_cookie)
-		return 1;
+		RETURN(1);
 
-	return 0;
+	oa = &tsi->tsi_ost_body->oa;
+	ext.start = oa->o_size;
+	ext.end   = oa->o_blocks;
+
+	LASSERT(lock->l_resource != NULL);
+	if (!ostid_res_name_eq(&oa->o_oi, &lock->l_resource->lr_name))
+		RETURN(0);
+
+	if (!(lock->l_granted_mode & (LCK_PW | LCK_GROUP)))
+		RETURN(0);
+
+	RETURN(ldlm_extent_overlap(&lock->l_policy_data.l_extent, &ext));
 }
 
 /**

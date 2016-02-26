@@ -2344,6 +2344,41 @@ test_130c() {
 }
 run_test 130c "layout intent resend on a stale inode"
 
+test_132() {
+	local before=$(date +%s)
+	local evict
+
+	mount_client $MOUNT2 || error "mount filed"
+
+	rm -f $DIR/$tfile
+	# get a lock on client so that export would reach the stale list
+	$SETSTRIPE -i 0 $DIR/$tfile || error "setstripe failed"
+	dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1 conv=fsync ||
+		error "dd failed"
+
+	#define OBD_FAIL_OST_PAUSE_PUNCH         0x236
+	do_facet ost1 $LCTL set_param fail_val=120 fail_loc=0x80000236
+
+	$TRUNCATE $DIR/$tfile 100 &
+
+	sleep 1
+	dd if=/dev/zero of=$DIR2/$tfile bs=4096 count=1 conv=notrunc ||
+		error "dd failed"
+
+	wait
+	umount_client $MOUNT2
+
+	evict=$(do_facet client $LCTL get_param \
+		osc.$FSNAME-OST0000-osc-*/state |
+	    awk -F"[ [,]" '/EVICTED ]$/ { if (t<$5) {t=$5;} } END { print t }')
+
+	[ -z "$evict" ] || [[ $evict -le $before ]] ||
+		(do_facet client $LCTL get_param \
+			osc.$FSNAME-OST0000-osc-*/state;
+		    error "eviction happened: $evict before:$before")
+}
+run_test 132 "long punch"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
