@@ -14477,6 +14477,58 @@ test_401b() {
 }
 run_test 401b "Verify 'lctl {get,set}_param' continue after error"
 
+test_401c() {
+	local jobid_var_old=$($LCTL get_param -n jobid_var)
+	local jobid_var_new
+
+	$LCTL set_param jobid_var= &&
+		error "no error returned for 'set_param a='"
+
+	jobid_var_new=$($LCTL get_param -n jobid_var)
+	[[ "$jobid_var_old" == "$jobid_var_new" ]] ||
+		error "jobid_var was changed by setting without value"
+
+	$LCTL set_param jobid_var &&
+		error "no error returned for 'set_param a'"
+
+	jobid_var_new=$($LCTL get_param -n jobid_var)
+	[[ "$jobid_var_old" == "$jobid_var_new" ]] ||
+		error "jobid_var was changed by setting without value"
+}
+run_test 401c "Verify 'lctl set_param' without value fails in either format."
+
+test_401d() {
+	local jobid_var_old=$($LCTL get_param -n jobid_var)
+	local jobid_var_new
+	local new_value="foo=bar"
+
+	$LCTL set_param jobid_var=$new_value ||
+		error "'set_param a=b' did not accept a value containing '='"
+
+	jobid_var_new=$($LCTL get_param -n jobid_var)
+	[[ "$jobid_var_new" == "$new_value" ]] ||
+		error "'set_param a=b' failed on a value containing '='"
+
+	# Reset the jobid_var to test the other format
+	$LCTL set_param jobid_var=$jobid_var_old
+	jobid_var_new=$($LCTL get_param -n jobid_var)
+	[[ "$jobid_var_new" == "$jobid_var_old" ]] ||
+		error "failed to reset jobid_var"
+
+	$LCTL set_param jobid_var $new_value ||
+		error "'set_param a b' did not accept a value containing '='"
+
+	jobid_var_new=$($LCTL get_param -n jobid_var)
+	[[ "$jobid_var_new" == "$new_value" ]] ||
+		error "'set_param a b' failed on a value containing '='"
+
+	$LCTL set_param jobid_var $jobid_var_old
+	jobid_var_new=$($LCTL get_param -n jobid_var)
+	[[ "$jobid_var_new" == "$jobid_var_old" ]] ||
+		error "failed to reset jobid_var"
+}
+run_test 401d "Verify 'lctl set_param' accepts values containing '='"
+
 test_402() {
 	$LFS setdirstripe -i 0 $DIR/$tdir || error "setdirstripe -i 0 failed"
 #define OBD_FAIL_MDS_FLD_LOOKUP 0x15c
