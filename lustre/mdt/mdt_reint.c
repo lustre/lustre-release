@@ -1907,6 +1907,10 @@ relock:
 
 		rc = mdt_object_lock_save(info, msrcdir, lh_srcdirp, 0,
 					  cos_incompat);
+		if (rc != 0) {
+			mdt_object_unlock(info, mtgtdir, lh_tgtdirp, rc);
+			GOTO(out_put_tgtdir, rc);
+		}
 	} else {
 		rc = mdt_object_lock_save(info, msrcdir, lh_srcdirp, 0,
 					  cos_incompat);
@@ -1925,9 +1929,11 @@ relock:
 						cos_incompat);
 			OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_PDO_LOCK2, 10);
 		}
+		if (rc != 0) {
+			mdt_object_unlock(info, msrcdir, lh_srcdirp, rc);
+			GOTO(out_put_tgtdir, rc);
+		}
 	}
-	if (rc)
-		GOTO(out_unlock_parents, rc);
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME4, 5);
 	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME2, 5);
