@@ -2118,6 +2118,123 @@ test_112a() {
 }
 run_test 112a "bulk resend while orignal request is in progress"
 
+test_115_read() {
+	local fail1=$1
+	local fail2=$2
+
+	df $DIR
+	dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1
+	cancel_lru_locks osc
+
+	# OST_READ       =  3,
+	$LCTL set_param fail_loc=$fail1 fail_val=3
+	dd of=/dev/null if=$DIR/$tfile bs=4096 count=1 &
+	pid=$!
+	sleep 1
+
+	set_nodes_failloc "$(osts_nodes)" $fail2
+
+	wait $pid || error "dd failed"
+	return 0
+}
+
+test_115_write() {
+	local fail1=$1
+	local fail2=$2
+	local error=$3
+	local fail_val2=${4:-0}
+
+	df $DIR
+	touch $DIR/$tfile
+
+	# OST_WRITE      =  4,
+	$LCTL set_param fail_loc=$fail1 fail_val=4
+	dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1 oflag=dsync &
+	pid=$!
+	sleep 1
+
+	df $MOUNT
+	set_nodes_failloc "$(osts_nodes)" $fail2 $fail_val2
+
+	wait $pid
+	rc=$?
+	[ $error -eq 0 ] && [ $rc -ne 0 ] && error "dd error ($rc)"
+	[ $error -ne 0 ] && [ $rc -eq 0 ] && error "dd success"
+	return 0
+}
+
+test_115a() {
+	[ $(lustre_version_code ost1) -lt $(version_code 2.8.50) ] &&
+		skip "need at least 2.8.50 on OST" && return 0
+
+	#define OBD_FAIL_PTLRPC_LONG_REQ_UNLINK  0x51b
+	#define OBD_FAIL_PTLRPC_DROP_BULK	 0x51a
+	test_115_read 0x8000051b 0x8000051a
+}
+run_test 115a "read: late REQ MDunlink and no bulk"
+
+test_115b() {
+	[ $(lustre_version_code ost1) -lt $(version_code 2.8.50) ] &&
+		skip "need at least 2.8.50 on OST" && return 0
+
+	#define OBD_FAIL_PTLRPC_LONG_REQ_UNLINK  0x51b
+	#define OBD_FAIL_OST_ENOSPC              0x215
+
+	# pass $OSTCOUNT for the fail_loc to be caught
+	# appropriately by the IO thread
+	test_115_write 0x8000051b 0x80000215 1 $OSTCOUNT
+}
+run_test 115b "write: late REQ MDunlink and no bulk"
+
+test_115c() {
+	[ $(lustre_version_code ost1) -lt $(version_code 2.8.50) ] &&
+		skip "need at least 2.8.50 on OST" && return 0
+
+	#define OBD_FAIL_PTLRPC_LONG_REPL_UNLINK 0x50f
+	#define OBD_FAIL_PTLRPC_DROP_BULK	 0x51a
+	test_115_read 0x8000050f 0x8000051a
+}
+run_test 115c "read: late Reply MDunlink and no bulk"
+
+test_115d() {
+	[ $(lustre_version_code ost1) -lt $(version_code 2.8.50) ] &&
+		skip "need at least 2.8.50 on OST" && return 0
+
+	#define OBD_FAIL_PTLRPC_LONG_REPL_UNLINK 0x50f
+	#define OBD_FAIL_OST_ENOSPC              0x215
+	test_115_write 0x8000050f 0x80000215 0
+}
+run_test 115d "write: late Reply MDunlink and no bulk"
+
+test_115e() {
+	[ $(lustre_version_code ost1) -lt $(version_code 2.8.50) ] &&
+		skip "need at least 2.8.50 on OST" && return 0
+
+	#define OBD_FAIL_PTLRPC_LONG_BULK_UNLINK 0x510
+	#define OBD_FAIL_OST_ALL_REPLY_NET       0x211
+	test_115_read 0x80000510 0x80000211
+}
+run_test 115e "read: late Bulk MDunlink and no reply"
+
+test_115f() {
+	[ $(lustre_version_code ost1) -lt $(version_code 2.8.50) ] &&
+		skip "need at least 2.8.50 on OST" && return 0
+
+	#define OBD_FAIL_PTLRPC_LONG_REQ_UNLINK  0x51b
+	#define OBD_FAIL_OST_ALL_REPLY_NET       0x211
+	test_115_read 0x8000051b 0x80000211
+}
+run_test 115f "read: late REQ MDunlink and no reply"
+
+test_115g() {
+	[ $(lustre_version_code ost1) -lt $(version_code 2.8.50) ] &&
+		skip "need at least 2.8.50 on OST" && return 0
+
+	#define OBD_FAIL_PTLRPC_LONG_BOTH_UNLINK 0x51c
+	test_115_read 0x8000051c 0
+}
+run_test 115g "read: late REQ MDunlink and Reply MDunlink"
+
 # parameters: fail_loc CMD RC
 test_120_reply() {
 	local PID

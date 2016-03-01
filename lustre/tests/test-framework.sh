@@ -4631,7 +4631,8 @@ clear_failloc() {
 }
 
 set_nodes_failloc () {
-	do_nodes $(comma_list $1)  lctl set_param fail_val=0 fail_loc=$2
+	local fv=${3:-0}
+	do_nodes $(comma_list $1)  lctl set_param fail_val=$fv fail_loc=$2
 }
 
 cancel_lru_locks() {
