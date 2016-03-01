@@ -149,7 +149,11 @@ struct rsi {
 	int                     major_status, minor_status;
 };
 
+#ifdef HAVE_CACHE_HEAD_HLIST
+static struct hlist_head rsi_table[RSI_HASHMAX];
+#else
 static struct cache_head *rsi_table[RSI_HASHMAX];
+#endif
 static struct cache_detail rsi_cache;
 static struct rsi *rsi_update(struct rsi *new, struct rsi *old);
 static struct rsi *rsi_lookup(struct rsi *item);
@@ -242,7 +246,11 @@ static void rsi_put(struct kref *ref)
 {
         struct rsi *rsi = container_of(ref, struct rsi, h.ref);
 
-        LASSERT(rsi->h.next == NULL);
+#ifdef HAVE_CACHE_HEAD_HLIST
+	LASSERT(rsi->h.cache_list.next == NULL);
+#else
+	LASSERT(rsi->h.next == NULL);
+#endif
         rsi_free(rsi);
         OBD_FREE_PTR(rsi);
 }
@@ -430,7 +438,11 @@ struct rsc {
         struct gss_svc_ctx      ctx;
 };
 
+#ifdef HAVE_CACHE_HEAD_HLIST
+static struct hlist_head rsc_table[RSC_HASHMAX];
+#else
 static struct cache_head *rsc_table[RSC_HASHMAX];
+#endif
 static struct cache_detail rsc_cache;
 static struct rsc *rsc_update(struct rsc *new, struct rsc *old);
 static struct rsc *rsc_lookup(struct rsc *item);
@@ -477,7 +489,11 @@ static void rsc_put(struct kref *ref)
 {
         struct rsc *rsci = container_of(ref, struct rsc, h.ref);
 
+#ifdef HAVE_CACHE_HEAD_HLIST
+	LASSERT(rsci->h.cache_list.next == NULL);
+#else
         LASSERT(rsci->h.next == NULL);
+#endif
         rsc_free(rsci);
         OBD_FREE_PTR(rsci);
 }
@@ -693,24 +709,41 @@ typedef int rsc_entry_match(struct rsc *rscp, long data);
 
 static void rsc_flush(rsc_entry_match *match, long data)
 {
-        struct cache_head **ch;
+#ifdef HAVE_CACHE_HEAD_HLIST
+	struct cache_head *ch = NULL;
+	struct hlist_head *head;
+#else
+	struct cache_head **ch;
+#endif
         struct rsc *rscp;
         int n;
         ENTRY;
 
 	write_lock(&rsc_cache.hash_lock);
         for (n = 0; n < RSC_HASHMAX; n++) {
-                for (ch = &rsc_cache.hash_table[n]; *ch;) {
-                        rscp = container_of(*ch, struct rsc, h);
+#ifdef HAVE_CACHE_HEAD_HLIST
+		head = &rsc_cache.hash_table[n];
+		hlist_for_each_entry(ch, head, cache_list) {
+			rscp = container_of(ch, struct rsc, h);
+#else
+		for (ch = &rsc_cache.hash_table[n]; *ch;) {
+			rscp = container_of(*ch, struct rsc, h);
+#endif
 
                         if (!match(rscp, data)) {
-                                ch = &((*ch)->next);
+#ifndef HAVE_CACHE_HEAD_HLIST
+				ch = &((*ch)->next);
+#endif
                                 continue;
                         }
 
                         /* it seems simply set NEGATIVE doesn't work */
-                        *ch = (*ch)->next;
-                        rscp->h.next = NULL;
+#ifdef HAVE_CACHE_HEAD_HLIST
+			hlist_del_init(&ch->cache_list);
+#else
+			*ch = (*ch)->next;
+			rscp->h.next = NULL;
+#endif
                         cache_get(&rscp->h);
 			set_bit(CACHE_NEGATIVE, &rscp->h.flags);
                         COMPAT_RSC_PUT(&rscp->h, &rsc_cache);

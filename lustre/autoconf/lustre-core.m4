@@ -1974,6 +1974,23 @@ LB_CHECK_FILE([$LINUX/include/linux/loop.h], [
 ]) # LC_HAVE_LOOP_CTL_GET_FREE
 
 #
+# LC_HAVE_CACHE_HEAD_HLIST
+#
+# 4.3 kernel swiched to hlist for cache_head
+#
+AC_DEFUN([LC_HAVE_CACHE_HEAD_HLIST], [
+LB_CHECK_COMPILE([if 'struct cache_head' has 'cache_list' field],
+cache_head_has_hlist, [
+	#include <linux/sunrpc/cache.h>
+],[
+	do {} while(sizeof(((struct cache_head *)0)->cache_list));
+],[
+	AC_DEFINE(HAVE_CACHE_HEAD_HLIST, 1,
+		[cache_head has hlist cache_list])
+])
+]) # LC_HAVE_CACHE_HEAD_HLIST
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2134,6 +2151,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_NEW_CANCEL_DIRTY_PAGE
 	LC_BIO_ENDIO_USES_ONE_ARG
 	LC_SYMLINK_OPS_USE_NAMEIDATA
+
+	# 4.3
+	LC_HAVE_CACHE_HEAD_HLIST
 
 	#
 	AS_IF([test "x$enable_server" != xno], [
