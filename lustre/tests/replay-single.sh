@@ -2130,8 +2130,10 @@ random_fail_mdt() {
 
 cleanup_70c() {
 	trap 0
-	kill -9 $tar_70c_pid
+	rm -f $DIR/replay-single.70c.lck
+	rm -rf /$DIR/$tdir
 }
+
 test_70c () {
 	local clients=${CLIENTS:-$HOSTNAME}
 	local rc=0
@@ -2148,16 +2150,14 @@ test_70c () {
 
 	trap cleanup_70c EXIT
 	(
-		while true; do
+		while [ ! -e $DIR/replay-single.70c.lck ]; do
 			test_mkdir -p -c$MDSCOUNT $DIR/$tdir || break
 			if [ $MDSCOUNT -ge 2 ]; then
 				$LFS setdirstripe -D -c$MDSCOUNT $DIR/$tdir ||
 				error "set default dirstripe failed"
 			fi
 			cd $DIR/$tdir || break
-			tar cf - /etc | tar xf - || error "tar failed"
-			cd $DIR || break
-			rm -rf $DIR/$tdir || break
+			tar cf - /etc | tar xf - || error "tar failed in loop"
 		done
 	)&
 	tar_70c_pid=$!
@@ -2165,6 +2165,9 @@ test_70c () {
 
 	random_fail_mdt $MDSCOUNT $duration $tar_70c_pid
 	kill -0 $tar_70c_pid || error "tar $tar_70c_pid stopped"
+
+	touch $DIR/replay-single.70c.lck
+	wait $tar_70c_pid || error "$?: tar failed"
 
 	cleanup_70c
 	true
