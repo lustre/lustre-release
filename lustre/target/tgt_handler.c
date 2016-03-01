@@ -1977,7 +1977,8 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 	/* Check if client was evicted while we were doing i/o before touching
 	 * network */
 	if (likely(rc == 0 &&
-		   !CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CLIENT_BULK_CB2))) {
+		   !CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CLIENT_BULK_CB2) &&
+		   !CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_DROP_BULK))) {
 		rc = target_bulk_io(exp, desc, &lwi);
 		no_reply = rc != 0;
 	}

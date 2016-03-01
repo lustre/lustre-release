@@ -3198,8 +3198,8 @@ test_45() { #17310
 	df -h $MOUNT &
 	log "sleep 60 sec"
 	sleep 60
-	#define OBD_FAIL_PTLRPC_LONG_UNLINK   0x50f
-	do_facet client "$LCTL set_param fail_loc=0x50f"
+#define OBD_FAIL_PTLRPC_LONG_REPL_UNLINK   0x50f
+	do_facet client "$LCTL set_param fail_loc=0x50f fail_val=0"
 	log "sleep 10 sec"
 	sleep 10
 	manual_umount_client --force || error "manual_umount_client failed"
