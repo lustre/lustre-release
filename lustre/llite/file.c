@@ -2918,6 +2918,11 @@ ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 	if (!(flags & LDLM_FL_TEST_LOCK))
 		file_lock->fl_type = fl_type;
 
+#ifdef HAVE_LOCKS_LOCK_FILE_WAIT
+	if ((rc == 0 || file_lock->fl_type == F_UNLCK) &&
+	    !(flags & LDLM_FL_TEST_LOCK))
+		rc2  = locks_lock_file_wait(file, file_lock);
+#else
         if ((file_lock->fl_flags & FL_FLOCK) &&
             (rc == 0 || file_lock->fl_type == F_UNLCK))
 		rc2  = flock_lock_file_wait(file, file_lock);
@@ -2925,6 +2930,7 @@ ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
             (rc == 0 || file_lock->fl_type == F_UNLCK) &&
             !(flags & LDLM_FL_TEST_LOCK))
 		rc2  = posix_lock_file_wait(file, file_lock);
+#endif /* HAVE_LOCKS_LOCK_FILE_WAIT */
 
 	if (rc2 && file_lock->fl_type != F_UNLCK) {
 		einfo.ei_mode = LCK_NL;

@@ -1991,6 +1991,24 @@ cache_head_has_hlist, [
 ]) # LC_HAVE_CACHE_HEAD_HLIST
 
 #
+# LC_HAVE_LOCKS_LOCK_FILE_WAIT
+#
+# 4.4 kernel have moved locks API users to
+# locks_lock_inode_wait()
+#
+AC_DEFUN([LC_HAVE_LOCKS_LOCK_FILE_WAIT], [
+LB_CHECK_COMPILE([if 'locks_lock_file_wait' exists],
+locks_lock_file_wait, [
+	#include <linux/fs.h>
+],[
+	locks_lock_file_wait(NULL, NULL);
+],[
+	AC_DEFINE(HAVE_LOCKS_LOCK_FILE_WAIT, 1,
+		[kernel has locks_lock_file_wait])
+])
+]) # LC_HAVE_LOCKS_LOCK_FILE_WAIT
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2154,6 +2172,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.3
 	LC_HAVE_CACHE_HEAD_HLIST
+
+	# 4.4
+	LC_HAVE_LOCKS_LOCK_FILE_WAIT
 
 	#
 	AS_IF([test "x$enable_server" != xno], [
