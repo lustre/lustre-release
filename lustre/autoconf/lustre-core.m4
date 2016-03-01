@@ -2009,6 +2009,26 @@ locks_lock_file_wait, [
 ]) # LC_HAVE_LOCKS_LOCK_FILE_WAIT
 
 #
+# LC_HAVE_QC_MAKE_REQUEST_FN
+#
+# 4.4 request_queue.make_request_fn defined as function returns with blk_qc_t
+# see kernel commit dece16353ef47d8d33f5302bc158072a9d65e26f
+#
+AC_DEFUN([LC_HAVE_QC_MAKE_REQUEST_FN], [
+LB_CHECK_COMPILE([if 'request_queue.make_request_fn' returns blk_qc_t],
+make_request_fn_blk_qc_t, [
+	#include <linux/blkdev.h>
+],[
+	blk_qc_t ret;
+	make_request_fn *mrf;
+	ret = mrf(NULL, NULL);
+],[
+	AC_DEFINE(HAVE_QC_MAKE_REQUEST_FN, 1,
+		[request_queue.make_request_fn returns blk_qc_t])
+])
+]) # LC_HAVE_QC_MAKE_REQUEST_FN
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2175,6 +2195,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.4
 	LC_HAVE_LOCKS_LOCK_FILE_WAIT
+	LC_HAVE_QC_MAKE_REQUEST_FN
 
 	#
 	AS_IF([test "x$enable_server" != xno], [
