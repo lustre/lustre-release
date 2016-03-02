@@ -1443,6 +1443,9 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		if (lod_qos_dev_is_full(sfs))
 			continue;
 
+		if (sfs->os_state & OS_STATE_DEGRADED)
+			continue;
+
 		/* Fail Check before osc_precreate() is called
 		   so we can only 'fail' single OSC. */
 		if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) &&
