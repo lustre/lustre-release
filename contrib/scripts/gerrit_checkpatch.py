@@ -57,6 +57,7 @@ GERRIT_HOST = os.getenv('GERRIT_HOST', 'review.whamcloud.com')
 GERRIT_PROJECT = os.getenv('GERRIT_PROJECT', 'fs/lustre-release')
 GERRIT_BRANCH = os.getenv('GERRIT_BRANCH', 'master')
 GERRIT_AUTH_PATH = os.getenv('GERRIT_AUTH_PATH', 'GERRIT_AUTH')
+GERRIT_CHANGE_NUMBER = os.getenv('GERRIT_CHANGE_NUMBER', None)
 
 # GERRIT_AUTH should contain a single JSON dictionary of the form:
 # {
@@ -70,6 +71,7 @@ GERRIT_AUTH_PATH = os.getenv('GERRIT_AUTH_PATH', 'GERRIT_AUTH')
 # }
 
 CHECKPATCH_PATHS = _getenv_list('CHECKPATCH_PATHS', ['checkpatch.pl'])
+CHECKPATCH_ARGS = os.getenv('CHECKPATCH_ARGS','--show-types -').split(' ')
 CHECKPATCH_IGNORED_FILES = _getenv_list('CHECKPATCH_IGNORED_FILES', [
         'lustre/contrib/wireshark/packet-lustre.c',
         'lustre/ptlrpc/wiretest.c',
@@ -81,7 +83,7 @@ CHECKPATCH_IGNORED_KINDS = _getenv_list('CHECKPATCH_IGNORED_KINDS', [
         'LEADING_SPACE'])
 REVIEW_HISTORY_PATH = os.getenv('REVIEW_HISTORY_PATH', 'REVIEW_HISTORY')
 STYLE_LINK = os.getenv('STYLE_LINK',
-        'https://wiki.hpdd.intel.com/display/PUB/Coding+Guidelines')
+        'http://wiki.lustre.org/Lustre_Coding_Style_Guidelines')
 
 USE_CODE_REVIEW_SCORE = False
 
@@ -105,7 +107,7 @@ def parse_checkpatch_output(out, path_line_comments, warning_count):
 
         path_comments = path_line_comments.setdefault(path, {})
         line_comments = path_comments.setdefault(line, [])
-        line_comments.append('(style) ' + message)
+        line_comments.append('(style) %s\n' % message)
         warning_count[0] += 1
 
     level = None # 'ERROR', 'WARNING'
@@ -411,7 +413,7 @@ class Reviewer(object):
         warning_count = [0]
 
         for path in CHECKPATCH_PATHS:
-            pipe = subprocess.Popen([path, '--show-types', '-'],
+            pipe = subprocess.Popen([path] + CHECKPATCH_ARGS,
                                     stdin=subprocess.PIPE,
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE)
@@ -492,6 +494,18 @@ class Reviewer(object):
         self.timestamp = new_timestamp
         self.write_history('-', '-', 0)
 
+    def update_single_change(self, change):
+
+        self.load_history()
+
+        open_changes = self.get_changes({'status':'open',
+                                         'change':change})
+        self._debug("update: got %d open_changes", len(open_changes))
+
+        for change in open_changes:
+            if self.change_needs_review(change):
+                self.review_change(change)
+
     def run(self):
         """
         * Load review history.
@@ -517,7 +531,11 @@ def main():
 
     reviewer = Reviewer(GERRIT_HOST, GERRIT_PROJECT, GERRIT_BRANCH,
                         username, password, REVIEW_HISTORY_PATH)
-    reviewer.run()
+
+    if GERRIT_CHANGE_NUMBER:
+        reviewer.update_single_change(GERRIT_CHANGE_NUMBER)
+    else:
+        reviewer.run()
 
 
 if __name__ == "__main__":
