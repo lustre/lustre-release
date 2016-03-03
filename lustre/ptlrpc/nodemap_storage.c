@@ -71,6 +71,7 @@ static struct nm_config_file *nodemap_mgs_ncf;
 enum nm_flag_shifts {
 	NM_FL_ALLOW_ROOT_ACCESS = 0x1,
 	NM_FL_TRUST_CLIENT_IDS = 0x2,
+	NM_FL_DENY_UNKNOWN = 0x4,
 };
 
 static void nodemap_cluster_key_init(struct nodemap_key *nk, unsigned int nm_id)
@@ -89,8 +90,12 @@ static void nodemap_cluster_rec_init(union nodemap_rec *nr,
 	nr->ncr.ncr_squash_uid = cpu_to_le32(nodemap->nm_squash_uid);
 	nr->ncr.ncr_squash_gid = cpu_to_le32(nodemap->nm_squash_gid);
 	nr->ncr.ncr_flags = cpu_to_le32(
-		(nodemap->nmf_trust_client_ids ? NM_FL_TRUST_CLIENT_IDS : 0) |
-		(nodemap->nmf_allow_root_access ? NM_FL_ALLOW_ROOT_ACCESS : 0));
+		(nodemap->nmf_trust_client_ids ?
+			NM_FL_TRUST_CLIENT_IDS : 0) |
+		(nodemap->nmf_allow_root_access ?
+			NM_FL_ALLOW_ROOT_ACCESS : 0) |
+		(nodemap->nmf_deny_unknown ?
+			NM_FL_DENY_UNKNOWN : 0));
 }
 
 static void nodemap_idmap_key_init(struct nodemap_key *nk, unsigned int nm_id,
@@ -640,6 +645,8 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 					flags & NM_FL_ALLOW_ROOT_ACCESS;
 		nodemap->nmf_trust_client_ids =
 					flags & NM_FL_TRUST_CLIENT_IDS;
+		nodemap->nmf_deny_unknown =
+					flags & NM_FL_DENY_UNKNOWN;
 
 		if (*recent_nodemap == NULL) {
 			*recent_nodemap = nodemap;

@@ -42,6 +42,17 @@ squash_gid
 .RS 4
 Defaults to 99. The group ID that unknown groups (if not trusted) and root (if not admin) should be mapped to.
 .RE
+.PP
+deny_unknown
+.RS 4
+Defaults to off. If set to on then unknown (squashed) users will be denied
+access to the filesystem completely instead of just being squashed. Users are
+considered unknown by nodemap if the admin flag is off and the user is root, or
+trusted are set to off and the user is not mapped.
+
+Note: directory entries cached by a Lustre client may be visible to unknown
+users located on the same client, though the contents of the files will not be.
+.RE
 
 .I value
 is the value to set for the property. Should be 0 or 1 for admin and trusted.

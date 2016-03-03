@@ -118,6 +118,7 @@ enum lcfg_command_type {
 	LCFG_NODEMAP_TEST_NID   = 0x00ce055, /**< test for nodemap membership */
 	LCFG_NODEMAP_TEST_ID	= 0x00ce056, /**< test uid/gid mapping */
 	LCFG_NODEMAP_SET_FILESET   = 0x00ce057, /**< set fileset */
+	LCFG_NODEMAP_DENY_UNKNOWN  = 0x00ce058, /**< deny squashed nodemap users */
 };
 
 struct lustre_cfg_bufs {

@@ -463,6 +463,33 @@ static int nodemap_admin_seq_show(struct seq_file *m, void *data)
 	return 0;
 }
 
+/**
+ * Reads and prints the deny_unknown flag for the given nodemap.
+ *
+ * \param	m		seq file in proc fs
+ * \param	data		unused
+ * \retval	0		success
+ */
+static int nodemap_deny_unknown_seq_show(struct seq_file *m, void *data)
+{
+	struct lu_nodemap *nodemap;
+	int rc;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(m->private);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap)) {
+		rc = PTR_ERR(nodemap);
+		CERROR("cannot find nodemap '%s': rc = %d\n",
+			(char *)m->private, rc);
+		return rc;
+	}
+
+	seq_printf(m, "%d\n", (int)nodemap->nmf_deny_unknown);
+	nodemap_putref(nodemap);
+	return 0;
+}
+
 #ifdef NODEMAP_PROC_DEBUG
 /**
  * Helper functions to set nodemap flags.
@@ -1067,6 +1094,8 @@ LPROC_SEQ_FOPS_RO(nodemap_squash_uid);
 LPROC_SEQ_FOPS_RO(nodemap_squash_gid);
 #endif
 
+LPROC_SEQ_FOPS_RO(nodemap_deny_unknown);
+
 const struct file_operations nodemap_ranges_fops = {
 	.open			= nodemap_ranges_open,
 	.read			= seq_read,
@@ -1100,6 +1129,10 @@ static struct lprocfs_vars lprocfs_nodemap_vars[] = {
 	{
 		.name		= "admin_nodemap",
 		.fops		= &nodemap_admin_fops,
+	},
+	{
+		.name		= "deny_unknown",
+		.fops		= &nodemap_deny_unknown_fops,
 	},
 	{
 		.name		= "squash_uid",

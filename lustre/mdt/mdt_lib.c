@@ -405,6 +405,18 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 	struct mdt_device	*mdt = info->mti_mdt;
 	struct md_identity	*identity = NULL;
 
+	if (nodemap && uc->uc_o_uid == nodemap->nm_squash_uid) {
+		/* deny access before we get identity ref */
+		if (nodemap->nmf_deny_unknown)
+			RETURN(-EACCES);
+
+		uc->uc_fsuid = nodemap->nm_squash_uid;
+		uc->uc_fsgid = nodemap->nm_squash_gid;
+		uc->uc_cap = 0;
+		uc->uc_suppgids[0] = -1;
+		uc->uc_suppgids[1] = -1;
+	}
+
 	if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
 		identity = mdt_identity_get(mdt->mdt_identity_cache,
 					    uc->uc_fsuid);
@@ -421,14 +433,6 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 	}
 	uc->uc_identity = identity;
 
-	if (nodemap && uc->uc_o_uid == nodemap->nm_squash_uid) {
-		uc->uc_fsuid = nodemap->nm_squash_uid;
-		uc->uc_fsgid = nodemap->nm_squash_gid;
-		uc->uc_cap = 0;
-		uc->uc_suppgids[0] = -1;
-		uc->uc_suppgids[1] = -1;
-	}
-
 	/* process root_squash here. */
 	mdt_root_squash(info, mdt_info_req(info)->rq_peer.nid);
 
@@ -437,6 +441,8 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 		uc->uc_cap &= ~CFS_CAP_FS_MASK;
 	uc->uc_valid = UCRED_OLD;
 	ucred_set_jobid(info, uc);
+
+	EXIT;
 
 	return 0;
 }

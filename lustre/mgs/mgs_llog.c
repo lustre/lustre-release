@@ -4163,6 +4163,10 @@ int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 		bool_switch = simple_strtoul(param, NULL, 10);
 		rc = nodemap_set_allow_root(nodemap_name, bool_switch);
 		break;
+	case LCFG_NODEMAP_DENY_UNKNOWN:
+		bool_switch = simple_strtoul(param, NULL, 10);
+		rc = nodemap_set_deny_unknown(nodemap_name, bool_switch);
+		break;
 	case LCFG_NODEMAP_TRUSTED:
 		bool_switch = simple_strtoul(param, NULL, 10);
 		rc = nodemap_set_trust_client_ids(nodemap_name, bool_switch);

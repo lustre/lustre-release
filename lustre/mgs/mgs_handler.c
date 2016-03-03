@@ -763,6 +763,7 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 		break;
 	case LCFG_NODEMAP_ADMIN:
 	case LCFG_NODEMAP_TRUSTED:
+	case LCFG_NODEMAP_DENY_UNKNOWN:
 	case LCFG_NODEMAP_SQUASH_UID:
 	case LCFG_NODEMAP_SQUASH_GID:
 		if (lcfg->lcfg_bufcount != 4)

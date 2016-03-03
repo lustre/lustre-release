@@ -265,7 +265,7 @@ command_t cmdlist[] = {
 	{"=== Nodemap ===", jt_noop, 0, "nodemap management"},
 	{"nodemap_activate", jt_nodemap_activate, 0,
 	 "activate nodemap idmapping functions\n"
-	 "usage: nodemap_activate"},
+	 "usage: nodemap_activate {0|1}"},
 	{"nodemap_add", jt_nodemap_add, 0,
 	 "add a new nodemap\n"
 	 "usage: nodemap_add <nodemap_name>"},

@@ -1005,6 +1005,7 @@ struct lu_nodemap *nodemap_create(const char *name,
 	if (is_default || default_nodemap == NULL) {
 		nodemap->nmf_trust_client_ids = 0;
 		nodemap->nmf_allow_root_access = 0;
+		nodemap->nmf_deny_unknown = 0;
 
 		nodemap->nm_squash_uid = NODEMAP_NOBODY_UID;
 		nodemap->nm_squash_gid = NODEMAP_NOBODY_GID;
@@ -1016,6 +1017,8 @@ struct lu_nodemap *nodemap_create(const char *name,
 				default_nodemap->nmf_trust_client_ids;
 		nodemap->nmf_allow_root_access =
 				default_nodemap->nmf_allow_root_access;
+		nodemap->nmf_deny_unknown =
+				default_nodemap->nmf_deny_unknown;
 
 		nodemap->nm_squash_uid = default_nodemap->nm_squash_uid;
 		nodemap->nm_squash_gid = default_nodemap->nm_squash_gid;
@@ -1030,12 +1033,39 @@ out:
 }
 
 /**
- * update flag to turn on or off nodemap functions
+ * Set the nmf_deny_unknown flag to true or false.
  * \param	name		nodemap name
- * \param	admin_string	string containing updated value
+ * \param	deny_unknown	if true, squashed users will get EACCES
  * \retval	0 on success
  *
- * Update admin flag to turn on or off nodemap functions.
+ */
+int nodemap_set_deny_unknown(const char *name, bool deny_unknown)
+{
+	struct lu_nodemap	*nodemap = NULL;
+	int			rc = 0;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap))
+		GOTO(out, rc = PTR_ERR(nodemap));
+
+	nodemap->nmf_deny_unknown = deny_unknown;
+	rc = nodemap_idx_nodemap_update(nodemap);
+
+	nm_member_revoke_locks(nodemap);
+	nodemap_putref(nodemap);
+out:
+	return rc;
+}
+EXPORT_SYMBOL(nodemap_set_deny_unknown);
+
+/**
+ * Set the nmf_allow_root_access flag to true or false.
+ * \param	name		nodemap name
+ * \param	allow_root	if true, nodemap will not squash the root user
+ * \retval	0 on success
+ *
  */
 int nodemap_set_allow_root(const char *name, bool allow_root)
 {
@@ -1059,13 +1089,12 @@ out:
 EXPORT_SYMBOL(nodemap_set_allow_root);
 
 /**
- * updated trust_client_ids flag for nodemap
+ * Set the nmf_trust_client_ids flag to true or false.
  *
- * \param	name		nodemap name
- * \param	trust_string	new value for trust flag
+ * \param	name			nodemap name
+ * \param	trust_client_ids	if true, nodemap will not map its IDs
  * \retval	0 on success
  *
- * Update the trust_client_ids flag for a nodemap.
  */
 int nodemap_set_trust_client_ids(const char *name, bool trust_client_ids)
 {
@@ -1089,10 +1118,10 @@ out:
 EXPORT_SYMBOL(nodemap_set_trust_client_ids);
 
 /**
- * update the squash_uid for a nodemap
+ * Update the squash_uid for a nodemap.
  *
  * \param	name		nodemap name
- * \param	uid_string	string containing new squash_uid value
+ * \param	uid		the new uid to squash unknown users to
  * \retval	0 on success
  *
  * Update the squash_uid for a nodemap. The squash_uid is the uid
@@ -1125,7 +1154,7 @@ EXPORT_SYMBOL(nodemap_set_squash_uid);
  * Update the squash_gid for a nodemap.
  *
  * \param	name		nodemap name
- * \param	gid_string	string containing new squash_gid value
+ * \param	gid		the new gid to squash unknown gids to
  * \retval	0 on success
  *
  * Update the squash_gid for a nodemap. The squash_uid is the gid

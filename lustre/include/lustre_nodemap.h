@@ -64,6 +64,7 @@ struct lu_nodemap {
 	char			 nm_name[LUSTRE_NODEMAP_NAME_LENGTH + 1];
 	/* flags to govern nodemap behavior */
 	bool			 nmf_trust_client_ids:1,
+				 nmf_deny_unknown:1,
 				 nmf_allow_root_access:1;
 	/* unique ID set by MGS */
 	unsigned int		 nm_id;
@@ -119,6 +120,7 @@ int nodemap_add_range(const char *name, const lnet_nid_t nid[2]);
 int nodemap_del_range(const char *name, const lnet_nid_t nid[2]);
 int nodemap_set_allow_root(const char *name, bool allow_root);
 int nodemap_set_trust_client_ids(const char *name, bool trust_client_ids);
+int nodemap_set_deny_unknown(const char *name, bool deny_unknown);
 int nodemap_set_squash_uid(const char *name, uid_t uid);
 int nodemap_set_squash_gid(const char *name, gid_t gid);
 bool nodemap_can_setquota(const struct lu_nodemap *nodemap);
