@@ -182,6 +182,10 @@ enum sptlrpc_bulk_service {
         MAKE_BASE_SUBFLVR(SPTLRPC_MECH_GSS_KRB5, SPTLRPC_SVC_INTG)
 #define SPTLRPC_SUBFLVR_KRB5P                                           \
         MAKE_BASE_SUBFLVR(SPTLRPC_MECH_GSS_KRB5, SPTLRPC_SVC_PRIV)
+#define SPTLRPC_SUBFLVR_SKN                                             \
+	MAKE_BASE_SUBFLVR(SPTLRPC_MECH_GSS_SK, SPTLRPC_SVC_NULL)
+#define SPTLRPC_SUBFLVR_SKA                                             \
+	MAKE_BASE_SUBFLVR(SPTLRPC_MECH_GSS_SK, SPTLRPC_SVC_AUTH)
 #define SPTLRPC_SUBFLVR_SKI                                             \
 	MAKE_BASE_SUBFLVR(SPTLRPC_MECH_GSS_SK, SPTLRPC_SVC_INTG)
 #define SPTLRPC_SUBFLVR_SKPI                                            \
@@ -232,6 +236,18 @@ enum sptlrpc_bulk_service {
                   SPTLRPC_SVC_PRIV,                     \
                   SPTLRPC_BULK_DEFAULT,                 \
                   SPTLRPC_BULK_SVC_PRIV)
+#define SPTLRPC_FLVR_SKN                                \
+	MAKE_FLVR(SPTLRPC_POLICY_GSS,                   \
+		  SPTLRPC_MECH_GSS_SK,                  \
+		  SPTLRPC_SVC_NULL,                     \
+		  SPTLRPC_BULK_DEFAULT,                 \
+		  SPTLRPC_BULK_SVC_NULL)
+#define SPTLRPC_FLVR_SKA                                \
+	MAKE_FLVR(SPTLRPC_POLICY_GSS,                   \
+		  SPTLRPC_MECH_GSS_SK,                  \
+		  SPTLRPC_SVC_AUTH,                     \
+		  SPTLRPC_BULK_DEFAULT,                 \
+		  SPTLRPC_BULK_SVC_NULL)
 #define SPTLRPC_FLVR_SKI                                \
 	MAKE_FLVR(SPTLRPC_POLICY_GSS,                   \
 		  SPTLRPC_MECH_GSS_SK,                  \

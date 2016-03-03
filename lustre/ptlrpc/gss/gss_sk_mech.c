@@ -723,6 +723,18 @@ static struct gss_api_ops gss_sk_ops = {
 
 static struct subflavor_desc gss_sk_sfs[] = {
 	{
+		.sf_subflavor   = SPTLRPC_SUBFLVR_SKN,
+		.sf_qop         = 0,
+		.sf_service     = SPTLRPC_SVC_NULL,
+		.sf_name        = "skn"
+	},
+	{
+		.sf_subflavor   = SPTLRPC_SUBFLVR_SKA,
+		.sf_qop         = 0,
+		.sf_service     = SPTLRPC_SVC_AUTH,
+		.sf_name        = "ska"
+	},
+	{
 		.sf_subflavor   = SPTLRPC_SUBFLVR_SKI,
 		.sf_qop         = 0,
 		.sf_service     = SPTLRPC_SVC_INTG,
@@ -747,7 +759,7 @@ static struct gss_api_mech gss_sk_mech = {
 		"\053\006\001\004\001\311\146\215\126\001\000\001",
 	},
 	.gm_ops         = &gss_sk_ops,
-	.gm_sf_num      = 2,
+	.gm_sf_num      = 4,
 	.gm_sfs         = gss_sk_sfs,
 };
 
