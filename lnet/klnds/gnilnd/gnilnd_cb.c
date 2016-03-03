@@ -507,7 +507,8 @@ kgnilnd_setup_immediate_buffer(kgn_tx_t *tx, unsigned int niov,
 	} else if (kiov != NULL) {
 
 		if ((niov > 0) && unlikely(niov > (nob/PAGE_SIZE))) {
-			niov = ((nob + offset + PAGE_SIZE - 1) / PAGE_SIZE);
+			niov = ((nob + offset + kiov->kiov_offset + PAGE_SIZE - 1) /
+				PAGE_SIZE);
 		}
 
 		LASSERTF(niov > 0 && niov < GNILND_MAX_IMMEDIATE/PAGE_SIZE,
