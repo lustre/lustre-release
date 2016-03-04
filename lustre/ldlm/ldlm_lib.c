@@ -1117,25 +1117,43 @@ int target_handle_connect(struct ptlrpc_request *req)
 		class_export_put(export);
 		export = NULL;
 		rc = -EALREADY;
-	} else if ((mds_conn || lw_client) && export->exp_connection != NULL) {
+	} else if ((mds_conn || lw_client ||
+		    data->ocd_connect_flags & OBD_CONNECT_MDS_MDS) &&
+		   export->exp_connection != NULL) {
 		spin_unlock(&export->exp_lock);
-		if (req->rq_peer.nid != export->exp_connection->c_peer.nid)
+		if (req->rq_peer.nid != export->exp_connection->c_peer.nid) {
 			/* MDS or LWP reconnected after failover. */
 			LCONSOLE_WARN("%s: Received %s connection from "
 			    "%s, removing former export from %s\n",
 			    target->obd_name, mds_conn ? "MDS" : "LWP",
 			    libcfs_nid2str(req->rq_peer.nid),
 			    libcfs_nid2str(export->exp_connection->c_peer.nid));
-		else
+		} else {
 			/* New MDS connection from the same NID. */
 			LCONSOLE_WARN("%s: Received new %s connection from "
 				"%s, removing former export from same NID\n",
 				target->obd_name, mds_conn ? "MDS" : "LWP",
 				libcfs_nid2str(req->rq_peer.nid));
-                class_fail_export(export);
-                class_export_put(export);
-                export = NULL;
-                rc = 0;
+		}
+
+		if (req->rq_peer.nid == export->exp_connection->c_peer.nid &&
+		    data->ocd_connect_flags & OBD_CONNECT_MDS_MDS) {
+			/* Because exports between MDTs will always be
+			 * kept, let's do not fail such export if they
+			 * come from the same NID, otherwise it might
+			 * cause eviction between MDTs, which might
+			 * cause namespace inconsistency */
+			spin_lock(&export->exp_lock);
+			export->exp_connecting = 1;
+			spin_unlock(&export->exp_lock);
+			conn.cookie = export->exp_handle.h_cookie;
+			rc = EALREADY;
+		} else {
+			class_fail_export(export);
+			class_export_put(export);
+			export = NULL;
+			rc = 0;
+		}
         } else if (export->exp_connection != NULL &&
                    req->rq_peer.nid != export->exp_connection->c_peer.nid &&
                    (lustre_msg_get_op_flags(req->rq_reqmsg) &
