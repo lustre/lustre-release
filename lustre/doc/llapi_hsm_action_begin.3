@@ -1,0 +1,89 @@
+.
+.TH LLAPI_HSM_ACTION_BEGIN 3 "2014-09-24" "" "Lustre HSM User API"
+.SH NAME
+llapi_hsm_action_begin \- Lustre API copytool management
+.
+.SH SYNOPSIS
+.sp
+\fB#include <lustre/lustreapi.h>\fP
+.sp
+\fBint llapi_hsm_action_begin(struct hsm_copyaction_private **\fPphcp\fB,
+const struct hsm_copytool_private *\fPct\fB, const struct
+hsm_action_item *\fPhai\fB, int\fP restore_mdt_index\fB, int\fP
+restore_open_flags\fB, bool\fP is_error\fB)\fP
+.sp
+\fBint llapi_hsm_action_end(struct hsm_copyaction_private **\fPphcp\fB,
+const struct hsm_extent *\fPhe\fB, int\fP hp_flags\fB, int\fP errval\fB)\fP
+.sp
+\fBint llapi_hsm_action_progress(struct hsm_copyaction_private *\fPhcp\fB,
+const struct hsm_extent *\fPhe\fB, __u64\fP total\fB, int\fP hp_flags\fB)\fP
+.sp
+\fBint llapi_hsm_action_get_dfid(const struct hsm_copyaction_private *\fPhcp\fB,
+lustre_fid  *\fPfid\fB)\fP
+.sp
+\fBint llapi_hsm_action_get_fd(const struct hsm_copyaction_private *\fPhcp\fB)\fP
+.SH DESCRIPTION
+.sp
+When a copytool is ready to process an HSM action received through
+\fBllapi_hsm_copytool_recv\fP(), it must first call
+\fBllapi_hsm_action_begin\fP() to initialize the internal action
+state, stored in \fIphcp\fP\&. \fIct\fP is the opaque copytools handle
+previously returned by \fBllapi_hsm_copytool_register\fP(). \fIhai\fP is
+the request. \fIrestore_mdt_index\fP and \fIrestore_open_flags\fP are only
+used for an \fBHSMA_RESTORE\fP type of request. \fIrestore_mdt_index\fP is
+the MDT index on which to create the restored file, or \-1 for
+default. If the copytool does not intend to process the request, it
+should set \fIis_error\fP to \fBtrue\fP, and then call
+\fBllapi_hsm_action_end\fP().
+.sp
+While performing a copy (i.e. the HSM request is either
+\fBHSMA_ARCHIVE\fP or \fBHSMA_RESTORE\fP), the copytool can inform Lustre
+of the progress of the operation with \fBllapi_hsm_action_progress\fP(). \fIhe\fP is the interval (\fIoffset\fP, \fIlength\fP) of the data copied. Each
+interval must be unique; i.e. there must not be any overlap. \fIlength\fP
+is the total length that is expected to be transfered. \fIhp_flags\fP
+should be 0. The progress can be checked on any Lustre client by
+calling \fBllapi_hsm_current_action\fP(), or by using \fBlfs
+hsm_action\fP\&.
+.sp
+Once the HSM request has been performed, the destination file must be
+closed, and \fBllapi_hsm_action_end\fP() must be called to free\-up the
+allocated ressources and signal Lustre that the file is now available
+to consumers. \fIerrval\fP is set to 0 on success. On error, it must be an
+errno, and hp_flags can be set to \fBHP_FLAG_RETRY\fP if the request is
+retryable, 0 otherwise. \fIhe\fP is the interval (\fIoffset\fP, \fIlength\fP) of
+the data copied. It can be the \fIhai_extent\fP of the HSM request.
+.sp
+For a restore operation, a volatile file, invisible to ls, is
+created. \fBllapi_hsm_action_get_fd\fP() will return a file descriptor
+to it. It is the responsibility of the copytool to close the returned
+file descriptor when the data transfer is
+done. \fBllapi_hsm_action_get_dfid\fP() will return the FID of the volatile
+file, which can then be used with \fBllapi_open_by_fid\fP() to open
+the file in a different process, or on a different node.
+.sp
+\fBllapi_hsm_action_get_fd\fP() and \fBllapi_hsm_action_get_dfid\fP()
+can be called for an archive operation too. The returned file
+descriptor and the FID are from the file to be archived.
+.SH RETURN VALUE
+.sp
+\fBllapi_hsm_action_get_fd\fP() returns a file descriptor on
+success. The other functions return 0 on success. All functions return
+a negative errno on failure.
+.SH ERRORS
+.sp
+The negative errno can be, but is not limited to:
+.TP
+.B \fB\-EINVAL\fP An invalid value was passed, the copytool is not
+registered, ...
+.TP
+.B \fB\-ENOMEM\fP Not enough memory to allocate a resource.
+.SH SEE ALSO
+.sp
+\fBllapi_hsm_copytool_register\fP(3), \fBllapi_hsm_copytool_recv\fP(3),
+\fBlustreapi\fP(7), \fBlfs\fP(1)
+.sp
+See \fIlhsmtool_posix.c\fP in the Lustre sources for a use case of this
+API.
+.SH AUTHOR
+Frank Zago
+.

@@ -1,0 +1,63 @@
+.
+.TH LUSTREAPI 7 "2014-09-21" "" "The Lustre API library"
+.SH NAME
+lustreapi \- The Lustre API library
+.
+.SH SYNOPSIS
+.sp
+\fB#include <lustre/lustreapi.h>\fP
+.SH DESCRIPTION
+.sp
+The lustreapi library provides functions to access and/or modify
+settings specific to the Lustre filesystem (allocation policies,
+quotas, etc).
+.sp
+The library provides the following functions:
+.sp
+.SH HSM FUNCTIONS
+.sp
+int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
+const char *mnt, int archive_count, int *archives,
+int rfd_flags)
+.sp
+int llapi_hsm_copytool_unregister(struct hsm_copytool_private **priv)
+.sp
+int llapi_hsm_copytool_get_fd(struct hsm_copytool_private *ct)
+.sp
+int llapi_hsm_copytool_recv(struct hsm_copytool_private *priv,
+struct hsm_action_list **hal, int *msgsize)
+.sp
+struct hsm_action_item *hai_first(struct hsm_action_list *hal)
+.sp
+struct hsm_action_item *hai_next(struct hsm_action_item *hai)
+.sp
+int llapi_hsm_action_begin(struct hsm_copyaction_private **phcp,
+const struct hsm_copytool_private *ct, const struct
+hsm_action_item *hai, int restore_mdt_index, int
+restore_open_flags, bool is_error)
+.sp
+int llapi_hsm_action_end(struct hsm_copyaction_private **phcp,
+const struct hsm_extent *he, int hp_flags, int errval)
+.sp
+int llapi_hsm_action_progress(struct hsm_copyaction_private *hcp,
+const struct hsm_extent *he, __u64 total, int hp_flags)
+.sp
+int llapi_hsm_action_get_dfid(const struct hsm_copyaction_private *hcp,
+lustre_fid *fid)
+.sp
+int llapi_hsm_action_get_fd(const struct hsm_copyaction_private *hcp)
+.SH SEE ALSO
+.sp
+\fBlustre\fP(7),
+\fBllapi_file_create\fP(3),
+\fBllapi_file_open\fP(3),
+\fBllapi_file_get_stripe\fP(3),
+\fBllapi_layout\fP(3),
+\fBllapi_quotactl\fP(3),
+\fBllapi_hsm_action_begin\fP(3),
+\fBllapi_hsm_copytool_register\fP(3),
+\fBllapi_hsm_state_get\fP(3),
+\fBllapi_hsm_state_set\fP(3)
+.SH AUTHOR
+Lustre contributors
+.

@@ -97,9 +97,6 @@ Obsoletes: lustre-lite, lustre-lite-utils, lustre-ldap nfs-utils-lustre
 Provides: lustre-lite = %{version}, lustre-lite-utils = %{version}
 Requires: %{name}-modules = %{version}
 BuildRequires: libtool
-%if %{with manpages}
-BuildRequires: python-docutils
-%endif
 %if %{with servers}
 Requires: lustre-osd
 Requires: lustre-osd-mount

@@ -320,13 +320,6 @@ AC_ARG_ENABLE([manpages],
 			[skip creation and inclusion of man pages (default is enable)]),
 	[], [enable_manpages="yes"])
 AC_MSG_RESULT([$enable_manpages])
-AS_IF([test "x$enable_manpages" = xyes], [
-AC_CHECK_PROGS(RST2MAN, [rst2man rst2man.py], [])
-  if test "x$RST2MAN" = "x"; then
-    AC_MSG_ERROR(
-      [rst2man is needed to build the man pages. Install python-docutils.])
-fi
-])
 ]) # LB_CONFIG_MANPAGES
 
 #
