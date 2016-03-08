@@ -131,6 +131,7 @@ char *strscpy(char *dst, char *src, int buflen);
 int check_mtab_entry(char *spec1, char *spec2, char *mntpt, char *type);
 int update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
 		      int flags, int freq, int pass);
+int update_utab_entry(struct mount_opts *mop);
 int check_mountfsoptions(char *mountopts, char *wanted_mountopts);
 void trim_mountfsoptions(char *s);
 __u64 get_device_size(char* device);

@@ -239,6 +239,52 @@ static int mtab_is_proc(const char *mtab)
 	return 1;
 }
 
+#ifdef HAVE_LIBMOUNT
+
+# include <libmount/libmount.h>
+
+/*
+ * The libmount is part of util-linux since 2.18.
+ * We use it to update utab to avoid umount would
+ * blocked in some rare case.
+ */
+int update_utab_entry(struct mount_opts *mop)
+{
+	struct libmnt_fs *fs = mnt_new_fs();
+	struct libmnt_update *upd;
+	int rc;
+
+	mnt_fs_set_source(fs, mop->mo_source);
+	mnt_fs_set_target(fs, mop->mo_target);
+	mnt_fs_set_fstype(fs, "lustre");
+	mnt_fs_set_attributes(fs, "lustre");
+
+	upd = mnt_new_update();
+	if (!upd)
+		return -ENOMEM;
+
+	rc = mnt_update_set_fs(upd, mop->mo_nomtab ? MS_REMOUNT : 0, NULL, fs);
+	if (rc == 1) /* update is unnecessary */
+		rc = 0;
+	if (rc) {
+		fprintf(stderr,
+			"error: failed to save utab entry: rc = %d\n", rc);
+	} else {
+		rc = mnt_update_table(upd, NULL);
+	}
+
+	mnt_free_update(upd);
+	mnt_free_fs(fs);
+
+	return rc;
+}
+#else
+int update_utab_entry(struct mount_opts *mop)
+{
+	return 0;
+}
+#endif /* HAVE_LIBMOUNT */
+
 int update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
 		int flags, int freq, int pass)
 {
