@@ -79,7 +79,7 @@ Acked-by: Jeff Mahoney <jeffm@suse.com>
 +	/* Add the jce to transaction's private list */
 +	jce->jce_func = func;
 +	spin_lock(&sbi->s_md_lock);
-+	list_add_tail(&jce->jce_list, &handle->h_transaction->t_private_list);
++	list_add(&jce->jce_list, &handle->h_transaction->t_private_list);
 +	spin_unlock(&sbi->s_md_lock);
 +}
 +
