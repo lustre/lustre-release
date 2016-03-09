@@ -5210,13 +5210,6 @@ out:
 		*exp = NULL;
 	} else {
 		*exp = lexp;
-		/* Because we do not want this export to be evicted by pinger,
-		 * let's not add this export to the timed chain list. */
-		if (data->ocd_connect_flags & OBD_CONNECT_MDS_MDS) {
-			spin_lock(&lexp->exp_obd->obd_dev_lock);
-			list_del_init(&lexp->exp_obd_chain_timed);
-			spin_unlock(&lexp->exp_obd->obd_dev_lock);
-		}
 	}
 
 	RETURN(rc);
