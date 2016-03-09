@@ -50,14 +50,14 @@ clients_arr=($clients)
 
 ID0=${ID0:-500}
 ID1=${ID1:-501}
-USER0=$(grep :$ID0:$ID0: /etc/passwd | cut -d: -f1)
-USER1=$(grep :$ID1:$ID1: /etc/passwd | cut -d: -f1)
+USER0=$(getent passwd | grep :$ID0:$ID0: | cut -d: -f1)
+USER1=$(getent passwd | grep :$ID1:$ID1: | cut -d: -f1)
 
 [ -z "$USER0" ] &&
-	skip "need to add user0 ($ID0:$ID0) to /etc/passwd" && exit 0
+	skip "need to add user0 ($ID0:$ID0)" && exit 0
 
 [ -z "$USER1" ] &&
-	skip "need to add user1 ($ID1:$ID1) to /etc/passwd" && exit 0
+	skip "need to add user1 ($ID1:$ID1)" && exit 0
 
 IDBASE=${IDBASE:-60000}
 

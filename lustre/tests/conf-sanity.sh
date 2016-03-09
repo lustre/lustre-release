@@ -2992,7 +2992,7 @@ test_43a() {
 	[ $UID -ne 0 -o $RUNAS_ID -eq 0 ] && skip_env "run as root"
 
 	ID1=${ID1:-501}
-	USER1=$(cat /etc/passwd | grep :$ID1:$ID1: | cut -d: -f1)
+	USER1=$(getent passwd | grep :$ID1:$ID1: | cut -d: -f1)
 	[ -z "$USER1" ] && skip_env "missing user with uid=$ID1 gid=$ID1" &&
 		return
 
