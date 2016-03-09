@@ -8125,16 +8125,20 @@ run_test 120d "Early Lock Cancel: setattr test"
 
 test_120e() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        test_mkdir -p -c1 $DIR/$tdir
-        [ -z "`lctl get_param -n mdc.*.connect_flags | grep early_lock_cancel`" ] && \
-               skip "no early lock cancel on server" && return 0
-        lru_resize_disable mdc
-        lru_resize_disable osc
-        dd if=/dev/zero of=$DIR/$tdir/f1 count=1
-        cancel_lru_locks mdc
-        cancel_lru_locks osc
-        dd if=$DIR/$tdir/f1 of=/dev/null
-        stat $DIR/$tdir $DIR/$tdir/f1 > /dev/null
+	! $($LCTL get_param -n mdc.*.connect_flags | grep -q early_lock_can) &&
+		skip "no early lock cancel on server" && return 0
+	local dlmtrace_set=false
+
+	test_mkdir -p -c1 $DIR/$tdir
+	lru_resize_disable mdc
+	lru_resize_disable osc
+	! $LCTL get_param debug | grep -q dlmtrace &&
+		$LCTL set_param debug=+dlmtrace && dlmtrace_set=true
+	dd if=/dev/zero of=$DIR/$tdir/f1 count=1
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+	dd if=$DIR/$tdir/f1 of=/dev/null
+	stat $DIR/$tdir $DIR/$tdir/f1 > /dev/null
 	# XXX client can not do early lock cancel of OST lock
 	# during unlink (LU-4206), so cancel osc lock now.
 	cancel_lru_locks osc
@@ -8150,8 +8154,11 @@ test_120e() {
 	       awk '/ldlm_cancel/ {print $2}')
 	blk2=$($LCTL get_param -n ldlm.services.ldlm_cbd.stats |
 	       awk '/ldlm_bl_callback/ {print $2}')
-	[ $can1 -eq $can2 ] || error $((can2-can1)) "cancel RPC occured."
-	[ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
+	[ $can1 -ne $can2 ] && error "$((can2 - can1)) cancel RPC occured" &&
+		$LCTL dk $TMP/cancel.debug.txt
+	[ $blk1 -ne $blk2 ] && error "$((blk2 - blk1)) blocking RPC occured" &&
+		$LCTL dk $TMP/blocking.debug.txt
+	$dlmtrace_set && $LCTL set_param debug=-dlmtrace
 	lru_resize_enable mdc
 	lru_resize_enable osc
 }
