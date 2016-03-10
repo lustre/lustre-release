@@ -1208,7 +1208,7 @@ out:
  * Get local thandle for osp_thandle
  *
  * Get the local OSD thandle from the OSP thandle. Currently, there
- * are a few OSP API (osp_object_create() and osp_sync_add()) needs
+ * are a few OSP API (osp_create() and osp_sync_add()) needs
  * to update the object on local OSD device.
  *
  * If the osp_thandle comes from normal stack (MDD->LOD->OSP), then

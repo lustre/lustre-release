@@ -1989,7 +1989,7 @@ static int mdd_create_sanity_check(const struct lu_env *env,
         RETURN(rc);
 }
 
-static int mdd_declare_object_create(const struct lu_env *env,
+static int mdd_declare_create_object(const struct lu_env *env,
 				     struct mdd_device *mdd,
 				     struct mdd_object *p, struct mdd_object *c,
 				     struct lu_attr *attr,
@@ -2002,10 +2002,10 @@ static int mdd_declare_object_create(const struct lu_env *env,
 	const struct lu_buf *buf;
 	int rc;
 
-	rc = mdd_declare_object_create_internal(env, p, c, attr, handle, spec,
+	rc = mdd_declare_create_object_internal(env, p, c, attr, handle, spec,
 						hint);
-        if (rc)
-                GOTO(out, rc);
+	if (rc)
+		GOTO(out, rc);
 
 #ifdef CONFIG_FS_POSIX_ACL
 	if (def_acl_buf->lb_len > 0 && S_ISDIR(attr->la_mode)) {
@@ -2081,7 +2081,7 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
 {
 	int rc;
 
-	rc = mdd_declare_object_create(env, mdd, p, c, attr, handle, spec,
+	rc = mdd_declare_create_object(env, mdd, p, c, attr, handle, spec,
 				       def_acl_buf, acl_buf, hint);
 	if (rc)
 		GOTO(out, rc);
@@ -2167,18 +2167,18 @@ static int mdd_acl_init(const struct lu_env *env, struct mdd_object *pobj,
 /**
  * Create a metadata object and initialize it, set acl, xattr.
  **/
-static int mdd_object_create(const struct lu_env *env, struct mdd_object *pobj,
+static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 			     struct mdd_object *son, struct lu_attr *attr,
 			     struct md_op_spec *spec, struct lu_buf *acl_buf,
 			     struct lu_buf *def_acl_buf,
 			     struct dt_allocation_hint *hint,
 			     struct thandle *handle)
 {
-	const struct lu_buf    *buf;
-	int			rc;
+	const struct lu_buf *buf;
+	int rc;
 
 	mdd_write_lock(env, son, MOR_TGT_CHILD);
-	rc = mdd_object_create_internal(env, NULL, son, attr, handle, spec,
+	rc = mdd_create_object_internal(env, NULL, son, attr, handle, spec,
 					hint);
 	if (rc)
 		GOTO(unlock, rc);
@@ -2245,7 +2245,6 @@ static int mdd_object_create(const struct lu_env *env, struct mdd_object *pobj,
 		struct dt_object *dt = mdd_object_child(son);
 		const char *target_name = spec->u.sp_symname;
 		int sym_len = strlen(target_name);
-		const struct lu_buf *buf;
 		loff_t pos = 0;
 
 		buf = mdd_buf_get_const(env, target_name, sym_len);
@@ -2331,12 +2330,51 @@ stop:
 	RETURN(rc);
 }
 
-/*
+/**
  * Create object and insert it into namespace.
+ *
+ * Two operations have to be performed:
+ *
+ *  - an allocation of a new object (->do_create()), and
+ *  - an insertion into a parent index (->dio_insert()).
+ *
+ * Due to locking, operation order is not important, when both are
+ * successful, *but* error handling cases are quite different:
+ *
+ *  - if insertion is done first, and following object creation fails,
+ *  insertion has to be rolled back, but this operation might fail
+ *  also leaving us with dangling index entry.
+ *
+ *  - if creation is done first, is has to be undone if insertion fails,
+ *  leaving us with leaked space, which is not good but not fatal.
+ *
+ * It seems that creation-first is simplest solution, but it is sub-optimal
+ * in the frequent
+ *
+ * $ mkdir foo
+ * $ mkdir foo
+ *
+ * case, because second mkdir is bound to create object, only to
+ * destroy it immediately.
+ *
+ * To avoid this follow local file systems that do double lookup:
+ *
+ * 0. lookup -> -EEXIST (mdd_create_sanity_check())
+ * 1. create            (mdd_create_object_internal())
+ * 2. insert            (__mdd_index_insert(), lookup again)
+ *
+ * \param[in] pobj	parent object
+ * \param[in] lname	name of child being created
+ * \param[in,out] child	child object being created
+ * \param[in] spec	additional create parameters
+ * \param[in] ma	attributes for new child object
+ *
+ * \retval		0 on success
+ * \retval		negative errno on failure
  */
 static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 		      const struct lu_name *lname, struct md_object *child,
-		      struct md_op_spec *spec, struct md_attr* ma)
+		      struct md_op_spec *spec, struct md_attr *ma)
 {
 	struct mdd_thread_info	*info = mdd_env_info(env);
 	struct lu_attr		*la = &info->mti_la_for_fix;
@@ -2355,42 +2393,6 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	int			 rc2;
 	ENTRY;
 
-        /*
-         * Two operations have to be performed:
-         *
-         *  - an allocation of a new object (->do_create()), and
-         *
-         *  - an insertion into a parent index (->dio_insert()).
-         *
-         * Due to locking, operation order is not important, when both are
-         * successful, *but* error handling cases are quite different:
-         *
-         *  - if insertion is done first, and following object creation fails,
-         *  insertion has to be rolled back, but this operation might fail
-         *  also leaving us with dangling index entry.
-         *
-         *  - if creation is done first, is has to be undone if insertion
-         *  fails, leaving us with leaked space, which is neither good, nor
-         *  fatal.
-         *
-         * It seems that creation-first is simplest solution, but it is
-         * sub-optimal in the frequent
-         *
-         *         $ mkdir foo
-         *         $ mkdir foo
-         *
-         * case, because second mkdir is bound to create object, only to
-         * destroy it immediately.
-         *
-         * To avoid this follow local file systems that do double lookup:
-         *
-         *     0. lookup -> -EEXIST (mdd_create_sanity_check())
-         *
-         *     1. create            (mdd_object_create_internal())
-         *
-         *     2. insert            (__mdd_index_insert(), lookup again)
-         */
-
 	rc = mdd_la_get(env, mdd_pobj, pattr);
 	if (rc != 0)
 		RETURN(rc);
@@ -2400,7 +2402,7 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	if (rc)
 		RETURN(rc);
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_DQACQ_NET))
+	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_DQACQ_NET))
 		GOTO(out_free, rc = -EINPROGRESS);
 
 	handle = mdd_trans_create(env, mdd);
@@ -2434,14 +2436,14 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	rc = mdd_declare_create(env, mdd, mdd_pobj, son, lname, attr,
 				handle, spec, ldata, &def_acl_buf, &acl_buf,
 				hint);
-        if (rc)
-                GOTO(out_stop, rc);
+	if (rc)
+		GOTO(out_stop, rc);
 
-        rc = mdd_trans_start(env, mdd, handle);
-        if (rc)
-                GOTO(out_stop, rc);
+	rc = mdd_trans_start(env, mdd, handle);
+	if (rc)
+		GOTO(out_stop, rc);
 
-	rc = mdd_object_create(env, mdd_pobj, son, attr, spec, &acl_buf,
+	rc = mdd_create_object(env, mdd_pobj, son, attr, spec, &acl_buf,
 			       &def_acl_buf, hint, handle);
 	if (rc != 0)
 		GOTO(out_stop, rc);
@@ -3415,7 +3417,7 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 	int			rc;
 	int			mgr_easize;
 
-	rc = mdd_declare_object_create_internal(env, mdd_pobj, mdd_tobj, la,
+	rc = mdd_declare_create_object_internal(env, mdd_pobj, mdd_tobj, la,
 						handle, spec, NULL);
 	if (rc != 0)
 		return rc;
@@ -3565,7 +3567,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 	la->la_valid &= ~LA_NLINK;
 
 	/* create the target object */
-	rc = mdd_object_create(env, mdd_pobj, mdd_tobj, la, spec, NULL, NULL,
+	rc = mdd_create_object(env, mdd_pobj, mdd_tobj, la, spec, NULL, NULL,
 			       hint, handle);
 	if (rc != 0)
 		GOTO(stop_trans, rc);

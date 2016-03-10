@@ -52,7 +52,7 @@
  * = import is disconnected =
  *
  * = import is inactive =
- *   in this case osp_declare_object_create() returns an error
+ *   in this case osp_declare_create() returns an error
  *
  */
 

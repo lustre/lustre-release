@@ -889,7 +889,7 @@ out:
  *
  * Supplemental function to destroy object by FID, it is used by request
  * handler and by ofd_echo_destroy() below to find object by FID, lock it
- * and call ofd_object_destroy() finally.
+ * and call ofd_destroy() finally.
  *
  * \param[in] env	execution environment
  * \param[in] ofd	OFD device
@@ -929,7 +929,7 @@ int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
 
 	LASSERT(fo != NULL);
 
-	rc = ofd_object_destroy(env, fo, orphan);
+	rc = ofd_destroy(env, fo, orphan);
 	EXIT;
 
 	ofd_object_put(env, fo);

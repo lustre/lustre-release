@@ -114,19 +114,19 @@ struct osd_oi {
 extern const int osd_dto_credits_noquota[];
 
 struct osd_object {
-        struct dt_object        oo_dt;
-        /**
-         * Inode for file system object represented by this osd_object. This
-         * inode is pinned for the whole duration of lu_object life.
-         *
-         * Not modified concurrently (either setup early during object
-         * creation, or assigned by osd_object_create() under write lock).
-         */
-        struct inode           *oo_inode;
-        /**
-         * to protect index ops.
-         */
-        struct htree_lock_head *oo_hl_head;
+	struct dt_object        oo_dt;
+	/**
+	 * Inode for file system object represented by this osd_object. This
+	 * inode is pinned for the whole duration of lu_object life.
+	 *
+	 * Not modified concurrently (either setup early during object
+	 * creation, or assigned by osd_create() under write lock).
+	 */
+	struct inode           *oo_inode;
+	/**
+	 * to protect index ops.
+	 */
+	struct htree_lock_head *oo_hl_head;
 	struct rw_semaphore	oo_ext_idx_sem;
 	struct rw_semaphore	oo_sem;
 	struct osd_directory	*oo_dir;

@@ -421,10 +421,8 @@ int out_create_pack(const struct lu_env *env, struct object_update *update,
 		    size_t *max_update_size, const struct lu_fid *fid,
 		    const struct lu_attr *attr, struct dt_allocation_hint *hint,
 		    struct dt_object_format *dof);
-int out_object_destroy_pack(const struct lu_env *env,
-			    struct object_update *update,
-			    size_t *max_update_size,
-			    const struct lu_fid *fid);
+int out_destroy_pack(const struct lu_env *env, struct object_update *update,
+		     size_t *max_update_size, const struct lu_fid *fid);
 int out_index_delete_pack(const struct lu_env *env,
 			  struct object_update *update, size_t *max_update_size,
 			  const struct lu_fid *fid, const struct dt_key *key);
@@ -519,8 +517,8 @@ size_t update_records_ref_add_size(const struct lu_env *env,
 				   const struct lu_fid *fid);
 size_t update_records_ref_del_size(const struct lu_env *env,
 				   const struct lu_fid *fid);
-size_t update_records_object_destroy_size(const struct lu_env *env,
-					  const struct lu_fid *fid);
+size_t update_records_destroy_size(const struct lu_env *env,
+				   const struct lu_fid *fid);
 size_t update_records_index_insert_size(const struct lu_env *env,
 					const struct lu_fid *fid,
 					const struct dt_rec *rec,
@@ -580,14 +578,13 @@ int update_records_ref_del_pack(const struct lu_env *env,
 				unsigned int *param_count,
 				size_t *max_param_size,
 				const struct lu_fid *fid);
-int update_records_object_destroy_pack(const struct lu_env *env,
-				       struct update_ops *ops,
-				       unsigned int *op_count,
-				       size_t *max_ops_size,
-				       struct update_params *params,
-				       unsigned int *param_count,
-				       size_t *max_param_size,
-				       const struct lu_fid *fid);
+int update_records_destroy_pack(const struct lu_env *env,
+				struct update_ops *ops, unsigned int *op_count,
+				size_t *max_ops_size,
+				struct update_params *params,
+				unsigned int *param_count,
+				size_t *max_param_size,
+				const struct lu_fid *fid);
 int update_records_index_insert_pack(const struct lu_env *env,
 				     struct update_ops *ops,
 				     unsigned int *op_count,

@@ -790,15 +790,12 @@ int osp_it_key_rec(const struct lu_env *env, const struct dt_it *di,
 		   void *key_rec);
 int osp_it_next_page(const struct lu_env *env, struct dt_it *di);
 /* osp_md_object.c */
-int osp_md_declare_object_create(const struct lu_env *env,
-				 struct dt_object *dt,
-				 struct lu_attr *attr,
-				 struct dt_allocation_hint *hint,
-				 struct dt_object_format *dof,
-				 struct thandle *th);
-int osp_md_object_create(const struct lu_env *env, struct dt_object *dt,
-			 struct lu_attr *attr, struct dt_allocation_hint *hint,
-			 struct dt_object_format *dof, struct thandle *th);
+int osp_md_declare_create(const struct lu_env *env, struct dt_object *dt,
+			  struct lu_attr *attr, struct dt_allocation_hint *hint,
+			  struct dt_object_format *dof, struct thandle *th);
+int osp_md_create(const struct lu_env *env, struct dt_object *dt,
+		  struct lu_attr *attr, struct dt_allocation_hint *hint,
+		  struct dt_object_format *dof, struct thandle *th);
 int osp_md_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 			    const struct lu_attr *attr, struct thandle *th);
 int osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,

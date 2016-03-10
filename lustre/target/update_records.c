@@ -564,12 +564,12 @@ EXPORT_SYMBOL(update_records_ref_del_pack);
  *
  * \retval		size of object destroy update.
  */
-size_t update_records_object_destroy_size(const struct lu_env *env,
+size_t update_records_destroy_size(const struct lu_env *env,
 					  const struct lu_fid *fid)
 {
 	return update_records_update_size(0, NULL);
 }
-EXPORT_SYMBOL(update_records_object_destroy_size);
+EXPORT_SYMBOL(update_records_destroy_size);
 
 /**
  * Pack object destroy update
@@ -588,7 +588,7 @@ EXPORT_SYMBOL(update_records_object_destroy_size);
  * \retval		0 if packing succeeds.
  * \retval		negative errno if packing fails.
  */
-int update_records_object_destroy_pack(const struct lu_env *env,
+int update_records_destroy_pack(const struct lu_env *env,
 				       struct update_ops *ops,
 				       unsigned int *op_count,
 				       size_t *max_ops_size,
@@ -601,7 +601,7 @@ int update_records_object_destroy_pack(const struct lu_env *env,
 					  max_ops_size, params, param_count,
 					  max_param_size, 0, NULL, NULL);
 }
-EXPORT_SYMBOL(update_records_object_destroy_pack);
+EXPORT_SYMBOL(update_records_destroy_pack);
 
 /**
  * Calculate index insert update size

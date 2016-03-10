@@ -1443,30 +1443,24 @@ again:
 		/* version of child will be changed */
 		tgt_vbr_obj_set(info->mti_env, mdt_obj2dt(child));
 
-                /* Not found and with MDS_OPEN_CREAT: let's create it. */
-                mdt_set_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
+		/* Not found and with MDS_OPEN_CREAT: let's create it. */
+		mdt_set_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
 
-                /* Let lower layers know what is lock mode on directory. */
-                info->mti_spec.sp_cr_mode =
-                        mdt_dlm_mode2mdl_mode(lh->mlh_pdo_mode);
+		/* Let lower layers know what is lock mode on directory. */
+		info->mti_spec.sp_cr_mode =
+			mdt_dlm_mode2mdl_mode(lh->mlh_pdo_mode);
 
-                /*
-                 * Do not perform lookup sanity check. We know that name does
-                 * not exist.
-                 */
-                info->mti_spec.sp_cr_lookup = 0;
-                info->mti_spec.sp_feat = &dt_directory_features;
+		/* Don't do lookup sanity check. We know name doesn't exist. */
+		info->mti_spec.sp_cr_lookup = 0;
+		info->mti_spec.sp_feat = &dt_directory_features;
 
-		result = mdo_create(info->mti_env,
-				    mdt_object_child(parent),
-				    &rr->rr_name,
-				    mdt_object_child(child),
-				    &info->mti_spec,
-				    &info->mti_attr);
-                if (result == -ERESTART) {
-                        mdt_clear_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
-                        GOTO(out_child, result);
-                } else {
+		result = mdo_create(info->mti_env, mdt_object_child(parent),
+				    &rr->rr_name, mdt_object_child(child),
+				    &info->mti_spec, &info->mti_attr);
+		if (result == -ERESTART) {
+			mdt_clear_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
+			GOTO(out_child, result);
+		} else {
 			mdt_prep_ma_buf_from_rep(info, child, ma);
 			/* XXX: we should call this once, see few lines below */
 			if (result == 0)

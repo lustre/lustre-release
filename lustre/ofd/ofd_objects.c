@@ -730,7 +730,7 @@ unlock:
  * \retval		0 if successful
  * \retval		negative value on error
  */
-int ofd_object_destroy(const struct lu_env *env, struct ofd_object *fo,
+int ofd_destroy(const struct lu_env *env, struct ofd_object *fo,
 		       int orphan)
 {
 	struct ofd_device	*ofd = ofd_obj2dev(fo);

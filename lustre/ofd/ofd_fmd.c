@@ -264,7 +264,7 @@ struct ofd_mod_data *ofd_fmd_get(struct obd_export *exp, const struct lu_fid *fi
  * Drop FMD list reference so it will disappear when last reference is dropped
  * to zero.
  *
- * This function is called from ofd_object_destroy() and may only affect
+ * This function is called from ofd_destroy() and may only affect
  * the one client that is doing the unlink and at worst we have an stale entry
  * referencing an object that should never be used again.
  *

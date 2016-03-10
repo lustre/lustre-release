@@ -330,14 +330,13 @@ int out_index_delete_pack(const struct lu_env *env,
 }
 EXPORT_SYMBOL(out_index_delete_pack);
 
-int out_object_destroy_pack(const struct lu_env *env,
-			    struct object_update *update,
-			    size_t *max_update_size, const struct lu_fid *fid)
+int out_destroy_pack(const struct lu_env *env, struct object_update *update,
+		     size_t *max_update_size, const struct lu_fid *fid)
 {
 	return out_update_pack(env, update, max_update_size, OUT_DESTROY, fid,
 			       0, NULL, NULL, 0);
 }
-EXPORT_SYMBOL(out_object_destroy_pack);
+EXPORT_SYMBOL(out_destroy_pack);
 
 int out_write_pack(const struct lu_env *env, struct object_update *update,
 		   size_t *max_update_size, const struct lu_fid *fid,

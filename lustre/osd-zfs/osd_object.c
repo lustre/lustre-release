@@ -447,7 +447,7 @@ osd_object_unlinked_add(struct osd_object *obj, struct osd_thandle *oh)
 	LASSERT(obj->oo_destroy == OSD_DESTROY_ASYNC);
 
 	/* the object is supposed to be exclusively locked by
-	 * the caller (osd_object_destroy()), while the transaction
+	 * the caller (osd_destroy()), while the transaction
 	 * (oh) is per-thread and not shared */
 	if (likely(list_empty(&obj->oo_unlinked_linkage))) {
 		list_add(&obj->oo_unlinked_linkage, &oh->ot_unlinked_list);
@@ -480,9 +480,8 @@ osd_object_set_destroy_type(struct osd_object *obj)
 	up_write(&obj->oo_guard);
 }
 
-static int osd_declare_object_destroy(const struct lu_env *env,
-				      struct dt_object *dt,
-				      struct thandle *th)
+static int osd_declare_destroy(const struct lu_env *env, struct dt_object *dt,
+			       struct thandle *th)
 {
 	const struct lu_fid	*fid = lu_object_fid(&dt->do_lu);
 	struct osd_object	*obj = osd_dt_obj(dt);
@@ -532,8 +531,8 @@ static int osd_declare_object_destroy(const struct lu_env *env,
 	RETURN(0);
 }
 
-static int osd_object_destroy(const struct lu_env *env,
-			      struct dt_object *dt, struct thandle *th)
+static int osd_destroy(const struct lu_env *env, struct dt_object *dt,
+		       struct thandle *th)
 {
 	struct osd_thread_info	*info = osd_oti_get(env);
 	char			*buf = info->oti_str;
@@ -649,8 +648,8 @@ static int osd_object_print(const struct lu_env *env, void *cookie,
 	return (*p)(env, cookie, LUSTRE_OSD_ZFS_NAME"-object@%p", o);
 }
 
-static void osd_object_read_lock(const struct lu_env *env,
-				 struct dt_object *dt, unsigned role)
+static void osd_read_lock(const struct lu_env *env, struct dt_object *dt,
+			  unsigned role)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
 
@@ -659,8 +658,8 @@ static void osd_object_read_lock(const struct lu_env *env,
 	down_read_nested(&obj->oo_sem, role);
 }
 
-static void osd_object_write_lock(const struct lu_env *env,
-				  struct dt_object *dt, unsigned role)
+static void osd_write_lock(const struct lu_env *env, struct dt_object *dt,
+			   unsigned role)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
 
@@ -669,8 +668,7 @@ static void osd_object_write_lock(const struct lu_env *env,
 	down_write_nested(&obj->oo_sem, role);
 }
 
-static void osd_object_read_unlock(const struct lu_env *env,
-				   struct dt_object *dt)
+static void osd_read_unlock(const struct lu_env *env, struct dt_object *dt)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
 
@@ -678,17 +676,15 @@ static void osd_object_read_unlock(const struct lu_env *env,
 	up_read(&obj->oo_sem);
 }
 
-static void osd_object_write_unlock(const struct lu_env *env,
-                                    struct dt_object *dt)
+static void osd_write_unlock(const struct lu_env *env, struct dt_object *dt)
 {
-        struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_object *obj = osd_dt_obj(dt);
 
-        LASSERT(osd_invariant(obj));
+	LASSERT(osd_invariant(obj));
 	up_write(&obj->oo_sem);
 }
 
-static int osd_object_write_locked(const struct lu_env *env,
-				   struct dt_object *dt)
+static int osd_write_locked(const struct lu_env *env, struct dt_object *dt)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
 	int rc = 1;
@@ -1070,12 +1066,11 @@ static void osd_ah_init(const struct lu_env *env, struct dt_allocation_hint *ah,
 	}
 }
 
-static int osd_declare_object_create(const struct lu_env *env,
-				     struct dt_object *dt,
-				     struct lu_attr *attr,
-				     struct dt_allocation_hint *hint,
-				     struct dt_object_format *dof,
-				     struct thandle *handle)
+static int osd_declare_create(const struct lu_env *env, struct dt_object *dt,
+			      struct lu_attr *attr,
+			      struct dt_allocation_hint *hint,
+			      struct dt_object_format *dof,
+			      struct thandle *handle)
 {
 	const struct lu_fid	*fid = lu_object_fid(&dt->do_lu);
 	struct osd_object	*obj = osd_dt_obj(dt);
@@ -1432,11 +1427,9 @@ static osd_obj_type_f osd_create_type_f(enum dt_format_type type)
 /*
  * Concurrency: @dt is write locked.
  */
-static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
-			     struct lu_attr *attr,
-			     struct dt_allocation_hint *hint,
-			     struct dt_object_format *dof,
-			     struct thandle *th)
+static int osd_create(const struct lu_env *env, struct dt_object *dt,
+		      struct lu_attr *attr, struct dt_allocation_hint *hint,
+		      struct dt_object_format *dof, struct thandle *th)
 {
 	struct osd_thread_info	*info = osd_oti_get(env);
 	struct lustre_mdt_attrs	*lma = &info->oti_mdt_attrs;
@@ -1541,9 +1534,8 @@ out:
 	RETURN(rc);
 }
 
-static int osd_declare_object_ref_add(const struct lu_env *env,
-				      struct dt_object *dt,
-				      struct thandle *th)
+static int osd_declare_ref_add(const struct lu_env *env, struct dt_object *dt,
+			       struct thandle *th)
 {
 	return osd_declare_attr_set(env, dt, NULL, th);
 }
@@ -1551,9 +1543,8 @@ static int osd_declare_object_ref_add(const struct lu_env *env,
 /*
  * Concurrency: @dt is write locked.
  */
-static int osd_object_ref_add(const struct lu_env *env,
-			      struct dt_object *dt,
-			      struct thandle *handle)
+static int osd_ref_add(const struct lu_env *env, struct dt_object *dt,
+		       struct thandle *handle)
 {
 	struct osd_object	*obj = osd_dt_obj(dt);
 	struct osd_thandle	*oh;
@@ -1583,9 +1574,8 @@ out:
 	RETURN(rc);
 }
 
-static int osd_declare_object_ref_del(const struct lu_env *env,
-				      struct dt_object *dt,
-				      struct thandle *handle)
+static int osd_declare_ref_del(const struct lu_env *env, struct dt_object *dt,
+			       struct thandle *handle)
 {
 	return osd_declare_attr_set(env, dt, NULL, handle);
 }
@@ -1593,9 +1583,8 @@ static int osd_declare_object_ref_del(const struct lu_env *env,
 /*
  * Concurrency: @dt is write locked.
  */
-static int osd_object_ref_del(const struct lu_env *env,
-			      struct dt_object *dt,
-			      struct thandle *handle)
+static int osd_ref_del(const struct lu_env *env, struct dt_object *dt,
+		       struct thandle *handle)
 {
 	struct osd_object	*obj = osd_dt_obj(dt);
 	struct osd_thandle	*oh;
@@ -1649,24 +1638,24 @@ static int osd_invalidate(const struct lu_env *env, struct dt_object *dt)
 }
 
 static struct dt_object_operations osd_obj_ops = {
-	.do_read_lock		= osd_object_read_lock,
-	.do_write_lock		= osd_object_write_lock,
-	.do_read_unlock		= osd_object_read_unlock,
-	.do_write_unlock	= osd_object_write_unlock,
-	.do_write_locked	= osd_object_write_locked,
+	.do_read_lock		= osd_read_lock,
+	.do_write_lock		= osd_write_lock,
+	.do_read_unlock		= osd_read_unlock,
+	.do_write_unlock	= osd_write_unlock,
+	.do_write_locked	= osd_write_locked,
 	.do_attr_get		= osd_attr_get,
 	.do_declare_attr_set	= osd_declare_attr_set,
 	.do_attr_set		= osd_attr_set,
 	.do_ah_init		= osd_ah_init,
-	.do_declare_create	= osd_declare_object_create,
-	.do_create		= osd_object_create,
-	.do_declare_destroy	= osd_declare_object_destroy,
-	.do_destroy		= osd_object_destroy,
+	.do_declare_create	= osd_declare_create,
+	.do_create		= osd_create,
+	.do_declare_destroy	= osd_declare_destroy,
+	.do_destroy		= osd_destroy,
 	.do_index_try		= osd_index_try,
-	.do_declare_ref_add	= osd_declare_object_ref_add,
-	.do_ref_add		= osd_object_ref_add,
-	.do_declare_ref_del	= osd_declare_object_ref_del,
-	.do_ref_del		= osd_object_ref_del,
+	.do_declare_ref_add	= osd_declare_ref_add,
+	.do_ref_add		= osd_ref_add,
+	.do_declare_ref_del	= osd_declare_ref_del,
+	.do_ref_del		= osd_ref_del,
 	.do_xattr_get		= osd_xattr_get,
 	.do_declare_xattr_set	= osd_declare_xattr_set,
 	.do_xattr_set		= osd_xattr_set,
@@ -1695,6 +1684,6 @@ static int osd_otable_it_attr_get(const struct lu_env *env,
 }
 
 static struct dt_object_operations osd_obj_otable_it_ops = {
-        .do_attr_get    = osd_otable_it_attr_get,
-        .do_index_try   = osd_index_try,
+	.do_attr_get		= osd_otable_it_attr_get,
+	.do_index_try		= osd_index_try,
 };

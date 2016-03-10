@@ -714,7 +714,7 @@ static struct dt_object *lod_qos_declare_object_on(const struct lu_env *env,
 
 	dt = container_of(n, struct dt_object, do_lu);
 
-	rc = lod_sub_object_declare_create(env, dt, NULL, NULL, NULL, th);
+	rc = lod_sub_declare_create(env, dt, NULL, NULL, NULL, th);
 	if (rc < 0) {
 		CDEBUG(D_OTHER, "can't declare creation on #%u: %d\n",
 		       ost_idx, rc);
@@ -2111,8 +2111,8 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 			o = lod_comp->llc_stripe[i];
 			LASSERT(o);
 
-			rc = lod_sub_object_declare_create(env, o, attr, NULL,
-							   NULL, th);
+			rc = lod_sub_declare_create(env, o, attr, NULL,
+						    NULL, th);
 			if (rc < 0) {
 				CERROR("can't declare create: %d\n", rc);
 				break;

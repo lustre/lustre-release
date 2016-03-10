@@ -371,7 +371,7 @@ int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
 int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,
 		     __u64 start, __u64 end, struct lu_attr *la,
 		     struct filter_fid *ff, struct obdo *oa);
-int ofd_object_destroy(const struct lu_env *, struct ofd_object *, int);
+int ofd_destroy(const struct lu_env *, struct ofd_object *, int);
 int ofd_attr_get(const struct lu_env *env, struct ofd_object *fo,
 		 struct lu_attr *la);
 int ofd_attr_handle_id(const struct lu_env *env, struct ofd_object *fo,

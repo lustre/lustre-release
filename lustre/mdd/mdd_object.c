@@ -338,7 +338,7 @@ int mdd_invalidate(const struct lu_env *env, struct md_object *obj)
 	return mdo_invalidate(env, md2mdd_obj(obj));
 }
 
-int mdd_declare_object_create_internal(const struct lu_env *env,
+int mdd_declare_create_object_internal(const struct lu_env *env,
 				       struct mdd_object *p,
 				       struct mdd_object *c,
 				       struct lu_attr *attr,
@@ -346,15 +346,14 @@ int mdd_declare_object_create_internal(const struct lu_env *env,
 				       const struct md_op_spec *spec,
 				       struct dt_allocation_hint *hint)
 {
-        struct dt_object_format *dof = &mdd_env_info(env)->mti_dof;
-        const struct dt_index_features *feat = spec->sp_feat;
-        int rc;
-        ENTRY;
+	struct dt_object_format *dof = &mdd_env_info(env)->mti_dof;
+	const struct dt_index_features *feat = spec->sp_feat;
+	int rc;
+	ENTRY;
 
 	if (feat != &dt_directory_features && feat != NULL) {
-                dof->dof_type = DFT_INDEX;
+		dof->dof_type = DFT_INDEX;
 		dof->u.dof_idx.di_feat = feat;
-
 	} else {
 		dof->dof_type = dt_mode_to_dft(attr->la_mode);
 		if (dof->dof_type == DFT_REGULAR) {
@@ -368,24 +367,24 @@ int mdd_declare_object_create_internal(const struct lu_env *env,
 		}
 	}
 
-	rc = mdo_declare_create_obj(env, c, attr, hint, dof, handle);
+	rc = mdo_declare_create_object(env, c, attr, hint, dof, handle);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
-int mdd_object_create_internal(const struct lu_env *env, struct mdd_object *p,
+int mdd_create_object_internal(const struct lu_env *env, struct mdd_object *p,
 			       struct mdd_object *c, struct lu_attr *attr,
 			       struct thandle *handle,
 			       const struct md_op_spec *spec,
 			       struct dt_allocation_hint *hint)
 {
-        struct dt_object_format *dof = &mdd_env_info(env)->mti_dof;
-        int rc;
-        ENTRY;
+	struct dt_object_format *dof = &mdd_env_info(env)->mti_dof;
+	int rc;
+	ENTRY;
 
 	LASSERT(!mdd_object_exists(c));
 
-	rc = mdo_create_obj(env, c, attr, hint, dof, handle);
+	rc = mdo_create_object(env, c, attr, hint, dof, handle);
 
 	RETURN(rc);
 }
@@ -394,15 +393,15 @@ int mdd_attr_set_internal(const struct lu_env *env, struct mdd_object *obj,
 			  const struct lu_attr *attr, struct thandle *handle,
 			  int needacl)
 {
-        int rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
 	rc = mdo_attr_set(env, obj, attr, handle);
 #ifdef CONFIG_FS_POSIX_ACL
-        if (!rc && (attr->la_valid & LA_MODE) && needacl)
-                rc = mdd_acl_chmod(env, obj, attr->la_mode, handle);
+	if (!rc && (attr->la_valid & LA_MODE) && needacl)
+		rc = mdd_acl_chmod(env, obj, attr->la_mode, handle);
 #endif
-        RETURN(rc);
+	RETURN(rc);
 }
 
 int mdd_update_time(const struct lu_env *env, struct mdd_object *obj,

@@ -77,11 +77,11 @@
  *
  * \retval		only return 0 for now
  */
-static int osp_object_create_interpreter(const struct lu_env *env,
-					 struct object_update_reply *reply,
-					 struct ptlrpc_request *req,
-					 struct osp_object *obj,
-					 void *data, int index, int rc)
+static int osp_create_interpreter(const struct lu_env *env,
+				  struct object_update_reply *reply,
+				  struct ptlrpc_request *req,
+				  struct osp_object *obj,
+				  void *data, int index, int rc)
 {
 	if (rc != 0 && rc != -EEXIST) {
 		obj->opo_obj.do_lu.lo_header->loh_attr &= ~LOHA_EXISTS;
@@ -113,12 +113,9 @@ static int osp_object_create_interpreter(const struct lu_env *env,
  * \retval		0 if preparation succeeds.
  * \retval		negative errno if preparation fails.
  */
-int osp_md_declare_object_create(const struct lu_env *env,
-				 struct dt_object *dt,
-				 struct lu_attr *attr,
-				 struct dt_allocation_hint *hint,
-				 struct dt_object_format *dof,
-				 struct thandle *th)
+int osp_md_declare_create(const struct lu_env *env, struct dt_object *dt,
+			  struct lu_attr *attr, struct dt_allocation_hint *hint,
+			  struct dt_object_format *dof, struct thandle *th)
 {
 	return osp_trans_update_request_create(th);
 }
@@ -156,9 +153,9 @@ update_buffer_get_update(struct object_update_request *request,
  * \retval		0 if packing creation succeeds.
  * \retval		negative errno if packing creation fails.
  */
-int osp_md_object_create(const struct lu_env *env, struct dt_object *dt,
-			 struct lu_attr *attr, struct dt_allocation_hint *hint,
-			 struct dt_object_format *dof, struct thandle *th)
+int osp_md_create(const struct lu_env *env, struct dt_object *dt,
+		  struct lu_attr *attr, struct dt_allocation_hint *hint,
+		  struct dt_object_format *dof, struct thandle *th)
 {
 	struct osp_update_request	*update;
 	struct osp_object		*obj = dt2osp_obj(dt);
@@ -174,7 +171,7 @@ int osp_md_object_create(const struct lu_env *env, struct dt_object *dt,
 		GOTO(out, rc);
 
 	rc = osp_insert_update_callback(env, update, dt2osp_obj(dt), NULL,
-					osp_object_create_interpreter);
+					osp_create_interpreter);
 
 	if (rc < 0)
 		GOTO(out, rc);
@@ -358,7 +355,7 @@ int osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,
 /**
  * Implementation of dt_object_operations::do_read_lock
  *
- * osp_md_object_{read,write}_lock() will only lock the remote object in the
+ * osp_md_{read,write}_lock() will only lock the remote object in the
  * local cache, which uses the semaphore (opo_sem) inside the osp_object to
  * lock the object. Note: it will not lock the object in the whole cluster,
  * which relies on the LDLM lock.
@@ -367,8 +364,8 @@ int osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,
  * \param[in] dt	object to be locked
  * \param[in] role	lock role from MDD layer, see mdd_object_role().
  */
-static void osp_md_object_read_lock(const struct lu_env *env,
-				    struct dt_object *dt, unsigned role)
+static void osp_md_read_lock(const struct lu_env *env, struct dt_object *dt,
+			     unsigned role)
 {
 	struct osp_object  *obj = dt2osp_obj(dt);
 
@@ -387,8 +384,8 @@ static void osp_md_object_read_lock(const struct lu_env *env,
  * \param[in] dt	object to be locked
  * \param[in] role	lock role from MDD layer, see mdd_object_role().
  */
-static void osp_md_object_write_lock(const struct lu_env *env,
-				     struct dt_object *dt, unsigned role)
+static void osp_md_write_lock(const struct lu_env *env, struct dt_object *dt,
+			      unsigned role)
 {
 	struct osp_object *obj = dt2osp_obj(dt);
 
@@ -406,8 +403,7 @@ static void osp_md_object_write_lock(const struct lu_env *env,
  * \param[in] env	execution environment
  * \param[in] dt	object to be unlocked
  */
-static void osp_md_object_read_unlock(const struct lu_env *env,
-				      struct dt_object *dt)
+static void osp_md_read_unlock(const struct lu_env *env, struct dt_object *dt)
 {
 	struct osp_object *obj = dt2osp_obj(dt);
 
@@ -422,8 +418,7 @@ static void osp_md_object_read_unlock(const struct lu_env *env,
  * \param[in] env	execution environment
  * \param[in] dt	object to be unlocked
  */
-static void osp_md_object_write_unlock(const struct lu_env *env,
-				       struct dt_object *dt)
+static void osp_md_write_unlock(const struct lu_env *env, struct dt_object *dt)
 {
 	struct osp_object *obj = dt2osp_obj(dt);
 
@@ -440,8 +435,7 @@ static void osp_md_object_write_unlock(const struct lu_env *env,
  * \param[in] env	execution environment
  * \param[in] dt	object to be tested
  */
-static int osp_md_object_write_locked(const struct lu_env *env,
-				      struct dt_object *dt)
+static int osp_md_write_locked(const struct lu_env *env, struct dt_object *dt)
 {
 	struct osp_object *obj = dt2osp_obj(dt);
 
@@ -935,8 +929,8 @@ static int osp_md_object_unlock(const struct lu_env *env,
  * \retval		0 for success
  * \retval		negative error number on failure
  */
-int osp_md_declare_object_destroy(const struct lu_env *env,
-			       struct dt_object *dt, struct thandle *th)
+int osp_md_declare_destroy(const struct lu_env *env, struct dt_object *dt,
+			   struct thandle *th)
 {
 	return osp_trans_update_request_create(th);
 }
@@ -956,8 +950,8 @@ int osp_md_declare_object_destroy(const struct lu_env *env,
  * \retval		0 for success
  * \retval		negative error number on failure
  */
-int osp_md_object_destroy(const struct lu_env *env, struct dt_object *dt,
-			  struct thandle *th)
+int osp_md_destroy(const struct lu_env *env, struct dt_object *dt,
+		   struct thandle *th)
 {
 	struct osp_object		*o = dt2osp_obj(dt);
 	struct osp_device		*osp = lu2osp_dev(dt->do_lu.lo_dev);
@@ -971,7 +965,7 @@ int osp_md_object_destroy(const struct lu_env *env, struct dt_object *dt,
 	update = thandle_to_osp_update_request(th);
 	LASSERT(update != NULL);
 
-	rc = osp_update_rpc_pack(env, object_destroy, update, OUT_DESTROY,
+	rc = osp_update_rpc_pack(env, destroy, update, OUT_DESTROY,
 				 lu_object_fid(&dt->do_lu));
 	if (rc != 0)
 		RETURN(rc);
@@ -984,19 +978,19 @@ int osp_md_object_destroy(const struct lu_env *env, struct dt_object *dt,
 }
 
 struct dt_object_operations osp_md_obj_ops = {
-	.do_read_lock         = osp_md_object_read_lock,
-	.do_write_lock        = osp_md_object_write_lock,
-	.do_read_unlock       = osp_md_object_read_unlock,
-	.do_write_unlock      = osp_md_object_write_unlock,
-	.do_write_locked      = osp_md_object_write_locked,
-	.do_declare_create    = osp_md_declare_object_create,
-	.do_create            = osp_md_object_create,
+	.do_read_lock         = osp_md_read_lock,
+	.do_write_lock        = osp_md_write_lock,
+	.do_read_unlock       = osp_md_read_unlock,
+	.do_write_unlock      = osp_md_write_unlock,
+	.do_write_locked      = osp_md_write_locked,
+	.do_declare_create    = osp_md_declare_create,
+	.do_create            = osp_md_create,
 	.do_declare_ref_add   = osp_md_declare_ref_add,
 	.do_ref_add           = osp_md_ref_add,
 	.do_declare_ref_del   = osp_md_declare_ref_del,
 	.do_ref_del           = osp_md_ref_del,
-	.do_declare_destroy   = osp_md_declare_object_destroy,
-	.do_destroy           = osp_md_object_destroy,
+	.do_declare_destroy   = osp_md_declare_destroy,
+	.do_destroy           = osp_md_destroy,
 	.do_ah_init           = osp_md_ah_init,
 	.do_attr_get	      = osp_attr_get,
 	.do_declare_attr_set  = osp_md_declare_attr_set,

@@ -1284,7 +1284,7 @@ int osp_invalidate(const struct lu_env *env, struct dt_object *dt)
  *
  * If the transaction is a remote transaction and the FID for the OST-object
  * has been assigned already, then handle it as creating (remote) MDT object
- * via osp_md_declare_object_create(). This function is usually used for LFSCK
+ * via osp_md_declare_create(). This function is usually used for LFSCK
  * to re-create the lost OST object. Otherwise, if it is not replay case, the
  * OSP will reserve pre-created object for the subsequent create operation;
  * if the MDT side cached pre-created objects are less than some threshold,
@@ -1301,12 +1301,10 @@ int osp_invalidate(const struct lu_env *env, struct dt_object *dt)
  * \retval		0 for success
  * \retval		negative error number on failure
  */
-static int osp_declare_object_create(const struct lu_env *env,
-				     struct dt_object *dt,
-				     struct lu_attr *attr,
-				     struct dt_allocation_hint *hint,
-				     struct dt_object_format *dof,
-				     struct thandle *th)
+static int osp_declare_create(const struct lu_env *env, struct dt_object *dt,
+			      struct lu_attr *attr,
+			      struct dt_allocation_hint *hint,
+			      struct dt_object_format *dof, struct thandle *th)
 {
 	struct osp_thread_info	*osi = osp_env_info(env);
 	struct osp_device	*d = lu2osp_dev(dt->do_lu.lo_dev);
@@ -1320,7 +1318,7 @@ static int osp_declare_object_create(const struct lu_env *env,
 	if (is_only_remote_trans(th) && !fid_is_zero(fid)) {
 		LASSERT(fid_is_sane(fid));
 
-		rc = osp_md_declare_object_create(env, dt, attr, hint, dof, th);
+		rc = osp_md_declare_create(env, dt, attr, hint, dof, th);
 
 		RETURN(rc);
 	}
@@ -1395,7 +1393,7 @@ static int osp_declare_object_create(const struct lu_env *env,
  *
  * If the transaction is a remote transaction and the FID for the OST-object
  * has been assigned already, then handle it as handling MDT object via the
- * osp_md_object_create(). For other cases, the OSP will assign FID to the
+ * osp_md_create(). For other cases, the OSP will assign FID to the
  * object to be created, and update last_used Object ID (OID) file.
  *
  * \param[in] env	pointer to the thread context
@@ -1409,10 +1407,9 @@ static int osp_declare_object_create(const struct lu_env *env,
  * \retval		0 for success
  * \retval		negative error number on failure
  */
-static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
-			     struct lu_attr *attr,
-			     struct dt_allocation_hint *hint,
-			     struct dt_object_format *dof, struct thandle *th)
+static int osp_create(const struct lu_env *env, struct dt_object *dt,
+		      struct lu_attr *attr, struct dt_allocation_hint *hint,
+		      struct dt_object_format *dof, struct thandle *th)
 {
 	struct osp_thread_info	*osi = osp_env_info(env);
 	struct osp_device	*d = lu2osp_dev(dt->do_lu.lo_dev);
@@ -1426,7 +1423,7 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 	    !fid_is_zero(lu_object_fid(&dt->do_lu))) {
 		LASSERT(fid_is_sane(lu_object_fid(&dt->do_lu)));
 
-		rc = osp_md_object_create(env, dt, attr, hint, dof, th);
+		rc = osp_md_create(env, dt, attr, hint, dof, th);
 		if (rc == 0)
 			o->opo_non_exist = 0;
 
@@ -1526,8 +1523,8 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
  * \retval		0 for success
  * \retval		negative error number on failure
  */
-int osp_declare_object_destroy(const struct lu_env *env,
-			       struct dt_object *dt, struct thandle *th)
+int osp_declare_destroy(const struct lu_env *env, struct dt_object *dt,
+			struct thandle *th)
 {
 	struct osp_object	*o = dt2osp_obj(dt);
 	struct osp_device	*osp = lu2osp_dev(dt->do_lu.lo_dev);
@@ -1558,8 +1555,8 @@ int osp_declare_object_destroy(const struct lu_env *env,
  * \retval		0 for success
  * \retval		negative error number on failure
  */
-static int osp_object_destroy(const struct lu_env *env, struct dt_object *dt,
-			      struct thandle *th)
+static int osp_destroy(const struct lu_env *env, struct dt_object *dt,
+		       struct thandle *th)
 {
 	struct osp_object	*o = dt2osp_obj(dt);
 	struct osp_device	*osp = lu2osp_dev(dt->do_lu.lo_dev);
@@ -2111,10 +2108,10 @@ static struct dt_object_operations osp_obj_ops = {
 	.do_xattr_get		= osp_xattr_get,
 	.do_declare_xattr_set	= osp_declare_xattr_set,
 	.do_xattr_set		= osp_xattr_set,
-	.do_declare_create	= osp_declare_object_create,
-	.do_create		= osp_object_create,
-	.do_declare_destroy	= osp_declare_object_destroy,
-	.do_destroy		= osp_object_destroy,
+	.do_declare_create	= osp_declare_create,
+	.do_create		= osp_create,
+	.do_declare_destroy	= osp_declare_destroy,
+	.do_destroy		= osp_destroy,
 	.do_index_try		= osp_index_try,
 };
 

@@ -313,9 +313,8 @@ static int orph_index_delete(const struct lu_env *env,
 }
 
 
-static int orphan_object_destroy(const struct lu_env *env,
-				 struct mdd_object *obj,
-				 struct dt_key *key)
+static int orphan_destroy(const struct lu_env *env, struct mdd_object *obj,
+			  struct dt_key *key)
 {
 	struct thandle *th = NULL;
 	struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
@@ -374,25 +373,24 @@ stop:
  * \retval -ve error
  */
 static int orph_key_test_and_del(const struct lu_env *env,
-                                 struct mdd_device *mdd,
-                                 struct lu_fid *lf,
-                                 struct dt_key *key)
+				 struct mdd_device *mdd, struct lu_fid *lf,
+				 struct dt_key *key)
 {
-        struct mdd_object *mdo;
-        int rc;
+	struct mdd_object *mdo;
+	int rc;
 
-        mdo = mdd_object_find(env, mdd, lf);
+	mdo = mdd_object_find(env, mdd, lf);
 
-        if (IS_ERR(mdo))
-                return PTR_ERR(mdo);
+	if (IS_ERR(mdo))
+		return PTR_ERR(mdo);
 
-        rc = -EBUSY;
-        if (mdo->mod_count == 0) {
-                CDEBUG(D_HA, "Found orphan "DFID", delete it\n", PFID(lf));
-                rc = orphan_object_destroy(env, mdo, key);
-                if (rc) /* so replay-single.sh test_37 works */
-                        CERROR("%s: error unlinking orphan "DFID" from "
-                               "PENDING: rc = %d\n",
+	rc = -EBUSY;
+	if (mdo->mod_count == 0) {
+		CDEBUG(D_HA, "Found orphan "DFID", delete it\n", PFID(lf));
+		rc = orphan_destroy(env, mdo, key);
+		if (rc) /* so replay-single.sh test_37 works */
+			CERROR("%s: error unlinking orphan "DFID" from "
+			       "PENDING: rc = %d\n",
 			       mdd2obd_dev(mdd)->obd_name, PFID(lf), rc);
         } else {
                 mdd_write_lock(env, mdo, MOR_TGT_CHILD);

@@ -431,7 +431,7 @@ static int mdt_lock_slaves(struct mdt_thread_info *mti, struct mdt_object *obj,
  * 2 - child. Version of child by FID. Must be ENOENT. It is mostly sanity
  * check.
  */
-static int mdt_md_create(struct mdt_thread_info *info)
+static int mdt_create(struct mdt_thread_info *info)
 {
 	struct mdt_device       *mdt = info->mti_mdt;
 	struct mdt_object       *parent;
@@ -846,7 +846,7 @@ static int mdt_reint_create(struct mdt_thread_info *info,
 		RETURN(err_serious(-EOPNOTSUPP));
 	}
 
-	rc = mdt_md_create(info);
+	rc = mdt_create(info);
 	RETURN(rc);
 }
 

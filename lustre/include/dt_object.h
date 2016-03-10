@@ -966,10 +966,8 @@ struct dt_object_operations {
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
 	 */
-	int (*do_object_sync)(const struct lu_env *env,
-			      struct dt_object *obj,
-			      __u64 start,
-			      __u64 end);
+	int (*do_object_sync)(const struct lu_env *env, struct dt_object *obj,
+			      __u64 start, __u64 end);
 
 	/**
 	 * Lock object.
