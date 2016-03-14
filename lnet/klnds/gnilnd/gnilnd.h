@@ -459,7 +459,8 @@ typedef struct kgn_tunables {
 	int              *kgn_max_immediate;    /* immediate payload breakpoint */
 	int              *kgn_checksum;         /* checksum data */
 	int              *kgn_checksum_dump;    /* dump raw data to D_INFO log when checksumming */
-	int              *kgn_bte_dlvr_mode;    /* BTE delivery mode mask */
+	int		 *kgn_bte_put_dlvr_mode; /* BTE Put delivery mode */
+	int              *kgn_bte_get_dlvr_mode; /* BTE Get delivery mode */
 	int              *kgn_bte_relaxed_ordering; /* relaxed ordering (PASSPW) on BTE transfers */
 	int              *kgn_ptag;             /* PTAG for cdm_create */
 	int              *kgn_pkey;             /* PKEY for cdm_create */

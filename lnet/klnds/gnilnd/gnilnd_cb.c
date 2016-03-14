@@ -1970,8 +1970,10 @@ kgnilnd_rdma(kgn_tx_t *tx, int type,
 	tx->tx_rdma_desc.remote_mem_hndl = sink->gnrd_key;
 	tx->tx_rdma_desc.length = desc_nob;
 	tx->tx_nob_rdma = nob;
-	if (*kgnilnd_tunables.kgn_bte_dlvr_mode)
-		tx->tx_rdma_desc.dlvr_mode = *kgnilnd_tunables.kgn_bte_dlvr_mode;
+	if (post_type == GNI_POST_RDMA_PUT && *kgnilnd_tunables.kgn_bte_put_dlvr_mode)
+		tx->tx_rdma_desc.dlvr_mode = *kgnilnd_tunables.kgn_bte_put_dlvr_mode;
+	if (post_type == GNI_POST_RDMA_GET && *kgnilnd_tunables.kgn_bte_get_dlvr_mode)
+		tx->tx_rdma_desc.dlvr_mode = *kgnilnd_tunables.kgn_bte_get_dlvr_mode;
 	/* prep final completion message */
 	kgnilnd_init_msg(&tx->tx_msg, type, tx->tx_msg.gnm_srcnid);
 	tx->tx_msg.gnm_u.completion.gncm_cookie = cookie;

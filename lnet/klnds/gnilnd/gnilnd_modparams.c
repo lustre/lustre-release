@@ -78,9 +78,13 @@ static int checksum_dump = 0;
 module_param(checksum_dump, int, 0644);
 MODULE_PARM_DESC(checksum_dump, "0: None, 1: dump log on failure, 2: payload data to D_INFO log");
 
-static int bte_dlvr_mode = GNILND_RDMA_DLVR_OPTION;
-module_param(bte_dlvr_mode, int, 0644);
-MODULE_PARM_DESC(bte_dlvr_mode, "enable hashing for BTE (RDMA) transfers");
+static int bte_put_dlvr_mode = GNILND_RDMA_DLVR_OPTION;
+module_param(bte_put_dlvr_mode, int, 0644);
+MODULE_PARM_DESC(bte_put_dlvr_mode, "Modify BTE Put Routing Option");
+
+static int bte_get_dlvr_mode = GNILND_RDMA_DLVR_OPTION;
+module_param(bte_get_dlvr_mode, int, 0644);
+MODULE_PARM_DESC(bte_get_dlvr_mode, "Modify BTE Get Routing Option");
 
 static int bte_relaxed_ordering = 1;
 module_param(bte_relaxed_ordering, int, 0644);
@@ -213,7 +217,8 @@ kgn_tunables_t kgnilnd_tunables = {
 	.kgn_max_immediate          = &max_immediate,
 	.kgn_checksum               = &checksum,
 	.kgn_checksum_dump          = &checksum_dump,
-	.kgn_bte_dlvr_mode          = &bte_dlvr_mode,
+	.kgn_bte_put_dlvr_mode      = &bte_put_dlvr_mode,
+	.kgn_bte_get_dlvr_mode      = &bte_get_dlvr_mode,
 	.kgn_bte_relaxed_ordering   = &bte_relaxed_ordering,
 	.kgn_ptag                   = &ptag,
 	.kgn_pkey                   = &pkey,
