@@ -482,17 +482,19 @@ static void osc_lru_del(struct client_obd *cli, struct osc_page *opg)
 }
 
 /**
- * Delete page from LRUlist for redirty.
+ * Delete page from LRU list for redirty.
  */
 static void osc_lru_use(struct client_obd *cli, struct osc_page *opg)
 {
 	/* If page is being transferred for the first time,
 	 * ops_lru should be empty */
-	if (opg->ops_in_lru && !list_empty(&opg->ops_lru)) {
+	if (opg->ops_in_lru) {
 		spin_lock(&cli->cl_lru_list_lock);
-		__osc_lru_del(cli, opg);
+		if (!list_empty(&opg->ops_lru)) {
+			__osc_lru_del(cli, opg);
+			atomic_long_inc(&cli->cl_lru_busy);
+		}
 		spin_unlock(&cli->cl_lru_list_lock);
-		atomic_long_inc(&cli->cl_lru_busy);
 	}
 }
 
