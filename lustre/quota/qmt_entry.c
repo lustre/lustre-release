@@ -425,7 +425,7 @@ void qmt_adjust_edquot(struct lquota_entry *lqe, __u64 now)
 
 		/* See comment in qmt_adjust_qunit(). LU-4139 */
 		if (qmt_hard_exhausted(lqe) ||
-		    pool->qpi_key >> 16 == LQUOTA_RES_MD) {
+		    pool->qpi_key >> 16 != LQUOTA_RES_DT) {
 			/* we haven't reached the minimal qunit yet so there is
 			 * still hope that the rebalancing process might free
 			 * up some quota space */
@@ -443,9 +443,7 @@ void qmt_adjust_edquot(struct lquota_entry *lqe, __u64 now)
 				    	       lqe->lqe_revoke_time))
 				RETURN_EXIT;
 		} else {
-			/* When exceeding softlimit, block qunit will be shrunk
-			 * to (4 * least_qunit) finally. */
-			if (lqe->lqe_qunit > (pool->qpi_least_qunit << 2))
+			if (lqe->lqe_qunit > pool->qpi_soft_least_qunit)
 				RETURN_EXIT;
 		}
 
@@ -487,12 +485,11 @@ static __u64 qmt_calc_softlimit(struct lquota_entry *lqe, bool *oversoft)
 	LASSERT(lqe->lqe_softlimit != 0);
 	*oversoft = false;
 	/* No need to do special tweaking for inode limit */
-	if (pool->qpi_key >> 16 == LQUOTA_RES_MD)
+	if (pool->qpi_key >> 16 != LQUOTA_RES_DT)
 		return lqe->lqe_softlimit;
 
-	/* Added (least_qunit * 4) as margin */
 	if (lqe->lqe_granted <= lqe->lqe_softlimit +
-				(pool->qpi_least_qunit << 2)) {
+				pool->qpi_soft_least_qunit) {
 		return lqe->lqe_softlimit;
 	} else if (lqe->lqe_hardlimit != 0) {
 		*oversoft = true;
@@ -531,7 +528,7 @@ __u64 qmt_alloc_expand(struct lquota_entry *lqe, __u64 granted, __u64 spare)
 		remaining = qmt_calc_softlimit(lqe, &oversoft);
 		if (remaining == 0)
 			remaining = lqe->lqe_granted +
-				    (pool->qpi_least_qunit << 2);
+				    pool->qpi_soft_least_qunit;
 	} else {
 		remaining = lqe->lqe_hardlimit;
 	}
@@ -600,10 +597,10 @@ void qmt_adjust_qunit(const struct lu_env *env, struct lquota_entry *lqe)
 		bool oversoft;
 		/* As a compromise of write performance and the grace time
 		 * accuracy, the block qunit size will be shrunk to
-		 * (4 * least_qunit) when over softlimit. LU-4139. */
+		 * qpi_soft_least_qunit when over softlimit. LU-4139. */
 		limit = qmt_calc_softlimit(lqe, &oversoft);
 		if (oversoft)
-			qunit2 = pool->qpi_least_qunit << 2;
+			qunit2 = pool->qpi_soft_least_qunit;
 		if (limit == 0)
 			GOTO(done, qunit = qunit2);
 	} else if (lqe->lqe_hardlimit != 0) {

@@ -859,65 +859,6 @@ int lprocfs_wr_root_squash(const char __user *buffer, unsigned long count,
 int lprocfs_wr_nosquash_nids(const char __user *buffer, unsigned long count,
 			     struct root_squash_info *squash, char *name);
 
-/* all quota proc functions */
-extern int lprocfs_quota_rd_bunit(char *page, char **start,
-                                  off_t off, int count,
-                                  int *eof, void *data);
-extern int lprocfs_quota_wr_bunit(struct file *file, const char *buffer,
-                                  unsigned long count, void *data);
-extern int lprocfs_quota_rd_btune(char *page, char **start,
-                                  off_t off, int count,
-                                  int *eof, void *data);
-extern int lprocfs_quota_wr_btune(struct file *file, const char *buffer,
-                                  unsigned long count, void *data);
-extern int lprocfs_quota_rd_iunit(char *page, char **start,
-                                  off_t off, int count,
-                                  int *eof, void *data);
-extern int lprocfs_quota_wr_iunit(struct file *file, const char *buffer,
-                                  unsigned long count, void *data);
-extern int lprocfs_quota_rd_itune(char *page, char **start,
-                                  off_t off, int count,
-                                  int *eof, void *data);
-extern int lprocfs_quota_wr_itune(struct file *file, const char *buffer,
-                                  unsigned long count, void *data);
-extern int lprocfs_quota_rd_type(char *page, char **start, off_t off, int count,
-                                 int *eof, void *data);
-extern int lprocfs_quota_wr_type(struct file *file, const char *buffer,
-                                 unsigned long count, void *data);
-extern int lprocfs_quota_rd_switch_seconds(char *page, char **start, off_t off,
-                                           int count, int *eof, void *data);
-extern int lprocfs_quota_wr_switch_seconds(struct file *file,
-                                           const char *buffer,
-                                           unsigned long count, void *data);
-extern int lprocfs_quota_rd_sync_blk(char *page, char **start, off_t off,
-                                     int count, int *eof, void *data);
-extern int lprocfs_quota_wr_sync_blk(struct file *file, const char *buffer,
-                                     unsigned long count, void *data);
-extern int lprocfs_quota_rd_switch_qs(char *page, char **start, off_t off,
-                                      int count, int *eof, void *data);
-extern int lprocfs_quota_wr_switch_qs(struct file *file,
-                                      const char *buffer,
-                                      unsigned long count, void *data);
-extern int lprocfs_quota_rd_boundary_factor(char *page, char **start, off_t off,
-                                            int count, int *eof, void *data);
-extern int lprocfs_quota_wr_boundary_factor(struct file *file,
-                                            const char *buffer,
-                                            unsigned long count, void *data);
-extern int lprocfs_quota_rd_least_bunit(char *page, char **start, off_t off,
-                                        int count, int *eof, void *data);
-extern int lprocfs_quota_wr_least_bunit(struct file *file,
-                                        const char *buffer,
-                                        unsigned long count, void *data);
-extern int lprocfs_quota_rd_least_iunit(char *page, char **start, off_t off,
-                                        int count, int *eof, void *data);
-extern int lprocfs_quota_wr_least_iunit(struct file *file,
-                                        const char *buffer,
-                                        unsigned long count, void *data);
-extern int lprocfs_quota_rd_qs_factor(char *page, char **start, off_t off,
-                                      int count, int *eof, void *data);
-extern int lprocfs_quota_wr_qs_factor(struct file *file,
-                                      const char *buffer,
-                                      unsigned long count, void *data);
 #else /* !CONFIG_PROC_FS */
 
 #define proc_lustre_root NULL

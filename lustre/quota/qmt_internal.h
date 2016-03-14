@@ -139,6 +139,22 @@ struct qmt_pool_info {
 	/* Global quota parameters which apply to all quota type */
 	/* the least value of qunit */
 	unsigned long		 qpi_least_qunit;
+
+	/* Least value of qunit when soft limit is exceeded.
+	 *
+	 * When soft limit is exceeded, qunit will be shrinked to least_qunit
+	 * (1M for block limit), that results in significant write performance
+	 * drop since the client will turn to sync write from now on.
+	 *
+	 * To retain the write performance in an acceptable level, we choose
+	 * to sacrifice grace time accuracy a bit and use a larger least_qunit
+	 * when soft limit is exceeded. It's (qpi_least_qunit * 4) by default,
+	 * and user may enlarge it via procfs to get even better performance
+	 * (with the cost of losing more grace time accuracy).
+	 *
+	 * See qmt_calc_softlimit().
+	 */
+	unsigned long		 qpi_soft_least_qunit;
 };
 
 /*

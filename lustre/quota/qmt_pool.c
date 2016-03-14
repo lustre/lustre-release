@@ -171,9 +171,52 @@ static int qpi_state_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(qpi_state);
 
+static int qpi_soft_least_qunit_seq_show(struct seq_file *m, void *data)
+{
+	struct qmt_pool_info	*pool = m->private;
+	LASSERT(pool != NULL);
+
+	return seq_printf(m, "%lu\n", pool->qpi_soft_least_qunit);
+}
+
+static ssize_t
+qpi_soft_least_qunit_seq_write(struct file *file, const char __user *buffer,
+			       size_t count, loff_t *off)
+{
+	struct qmt_pool_info	*pool;
+	int	qunit, rc;
+	s64	least_qunit;
+
+	pool = ((struct seq_file *)file->private_data)->private;
+	LASSERT(pool != NULL);
+
+	/* Not tuneable for inode limit */
+	if (pool->qpi_key >> 16 != LQUOTA_RES_DT)
+		return -EINVAL;
+
+	rc = lprocfs_str_to_s64(buffer, count, &least_qunit);
+	if (rc)
+		return rc;
+
+	/* Miminal qpi_soft_least_qunit */
+	qunit = pool->qpi_least_qunit << 2;
+	/* The value must be power of miminal qpi_soft_least_qunit, see
+	 * how the qunit is adjusted in qmt_adjust_qunit(). */
+	while (qunit > 0 && qunit < least_qunit)
+		qunit <<= 2;
+	if (qunit <= 0)
+		qunit = INT_MAX & ~3;
+
+	pool->qpi_soft_least_qunit = qunit;
+	return count;
+}
+LPROC_SEQ_FOPS(qpi_soft_least_qunit);
+
 static struct lprocfs_vars lprocfs_quota_qpi_vars[] = {
 	{ .name	=	"info",
 	  .fops	=	&qpi_state_fops	},
+	{ .name =	"soft_least_qunit",
+	  .fops =	&qpi_soft_least_qunit_fops },
 	{ NULL }
 };
 
@@ -211,6 +254,10 @@ static int qmt_pool_alloc(const struct lu_env *env, struct qmt_device *qmt,
 
 	/* set up least qunit size to use for this pool */
 	pool->qpi_least_qunit = LQUOTA_LEAST_QUNIT(pool_type);
+	if (pool_type == LQUOTA_RES_DT)
+		pool->qpi_soft_least_qunit = pool->qpi_least_qunit << 2;
+	else
+		pool->qpi_soft_least_qunit = pool->qpi_least_qunit;
 
 	/* create pool proc directory */
 	sprintf(qti->qti_buf, "%s-0x%x", RES_NAME(pool_type), pool_id);
