@@ -915,13 +915,6 @@ int mdt_hsm_cdt_init(struct mdt_device *mdt)
 	cdt->cdt_policy = CDT_DEFAULT_POLICY;
 	cdt->cdt_active_req_timeout = 3600;
 
-	/* Initialize cdt_compound_id here to allow its usage for
-	 * delayed requests from RAoLU policy */
-	atomic_set(&cdt->cdt_compound_id, cfs_time_current_sec());
-
-	/* by default do not remove archives on last unlink */
-	cdt->cdt_remove_archive_on_last_unlink = false;
-
 	RETURN(0);
 }
 
@@ -973,6 +966,7 @@ int mdt_hsm_cdt_start(struct mdt_device *mdt)
 
 	cdt->cdt_state = CDT_INIT;
 
+	atomic_set(&cdt->cdt_compound_id, cfs_time_current_sec());
 	/* just need to be larger than previous one */
 	/* cdt_last_cookie is protected by cdt_llog_lock */
 	cdt->cdt_last_cookie = cfs_time_current_sec();
@@ -2212,36 +2206,6 @@ mdt_hsm_other_request_mask_seq_write(struct file *file, const char __user *buf,
 					   &cdt->cdt_other_request_mask);
 }
 
-static int mdt_hsm_cdt_raolu_seq_show(struct seq_file *m, void *data)
-{
-	struct mdt_device	*mdt = m->private;
-	struct coordinator	*cdt = &mdt->mdt_coordinator;
-	ENTRY;
-
-	seq_printf(m, "%d\n", (int)cdt->cdt_remove_archive_on_last_unlink);
-	RETURN(0);
-}
-
-static ssize_t
-mdt_hsm_cdt_raolu_seq_write(struct file *file, const char __user *buffer,
-			  size_t count, loff_t *off)
-
-{
-	struct seq_file		*m = file->private_data;
-	struct mdt_device	*mdt = m->private;
-	struct coordinator	*cdt = &mdt->mdt_coordinator;
-	int			 val;
-	int			 rc;
-	ENTRY;
-
-	rc = lprocfs_write_helper(buffer, count, &val);
-	if (rc < 0)
-		RETURN(rc);
-
-	cdt->cdt_remove_archive_on_last_unlink = val;
-	RETURN(count);
-}
-
 LPROC_SEQ_FOPS(mdt_hsm_cdt_loop_period);
 LPROC_SEQ_FOPS(mdt_hsm_cdt_grace_delay);
 LPROC_SEQ_FOPS(mdt_hsm_cdt_active_req_timeout);
@@ -2250,7 +2214,6 @@ LPROC_SEQ_FOPS(mdt_hsm_cdt_default_archive_id);
 LPROC_SEQ_FOPS(mdt_hsm_user_request_mask);
 LPROC_SEQ_FOPS(mdt_hsm_group_request_mask);
 LPROC_SEQ_FOPS(mdt_hsm_other_request_mask);
-LPROC_SEQ_FOPS(mdt_hsm_cdt_raolu);
 
 static struct lprocfs_vars lprocfs_mdt_hsm_vars[] = {
 	{ .name	=	"agents",
@@ -2278,7 +2241,5 @@ static struct lprocfs_vars lprocfs_mdt_hsm_vars[] = {
 	  .fops	=	&mdt_hsm_group_request_mask_fops,	},
 	{ .name	=	"other_request_mask",
 	  .fops	=	&mdt_hsm_other_request_mask_fops,	},
-	{ .name	=	"remove_archive_on_last_unlink",
-	  .fops	=	&mdt_hsm_cdt_raolu_fops,		},
 	{ 0 }
 };

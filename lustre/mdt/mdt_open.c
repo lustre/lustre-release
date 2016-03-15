@@ -2036,7 +2036,8 @@ int mdt_close_internal(struct mdt_thread_info *info, struct ptlrpc_request *req,
 		o = mfd->mfd_object;
 		mdt_object_get(info->mti_env, o);
 		ret = mdt_mfd_close(info, mfd);
-		rc = mdt_handle_last_unlink(info, o, ma);
+		if (repbody != NULL)
+			rc = mdt_handle_last_unlink(info, o, ma);
 		mdt_object_put(info->mti_env, o);
 	}
 
