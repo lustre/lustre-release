@@ -545,20 +545,22 @@ typedef struct {
 	lnet_process_id_t   target;
 	/** The identifier (nid, pid) of the initiator. */
 	lnet_process_id_t   initiator;
+	/** The source NID on the initiator. */
+	lnet_process_id_t   source;
 	/**
 	 * The NID of the immediate sender. If the request has been forwarded
 	 * by routers, this is the NID of the last hop; otherwise it's the
-	 * same as the initiator.
+	 * same as the source.
 	 */
-	lnet_nid_t	    sender;
+	lnet_nid_t          sender;
 	/** Indicates the type of the event. */
 	lnet_event_kind_t   type;
 	/** The portal table index specified in the request */
-	unsigned int	    pt_index;
+	unsigned int        pt_index;
 	/** A copy of the match bits specified in the request. */
-	__u64		    match_bits;
+	__u64               match_bits;
 	/** The length (in bytes) specified in the request. */
-	unsigned int	    rlength;
+	unsigned int        rlength;
 	/**
 	 * The length (in bytes) of the data that was manipulated by the
 	 * operation. For truncated operations, the manipulated length will be
@@ -566,7 +568,7 @@ typedef struct {
 	 * see lnet_md_t). For all other operations, the manipulated length
 	 * will be the length of the requested operation, i.e. rlength.
 	 */
-	unsigned int	    mlength;
+	unsigned int        mlength;
 	/**
 	 * The handle to the MD associated with the event. The handle may be
 	 * invalid if the MD has been unlinked.
@@ -577,31 +579,31 @@ typedef struct {
 	 * been processed. In particular, the threshold field in md will
 	 * reflect the value of the threshold after the operation occurred.
 	 */
-	lnet_md_t	    md;
+	lnet_md_t           md;
 	/**
 	 * 64 bits of out-of-band user data. Only valid for LNET_EVENT_PUT.
 	 * \see LNetPut
 	 */
-	__u64		    hdr_data;
+	__u64               hdr_data;
 	/**
 	 * Indicates the completion status of the operation. It's 0 for
 	 * successful operations, otherwise it's an error code.
 	 */
-	int		    status;
+	int                 status;
 	/**
 	 * Indicates whether the MD has been unlinked. Note that:
 	 * - An event with unlinked set is the last event on the MD.
 	 * - This field is also set for an explicit LNET_EVENT_UNLINK event.
 	 * \see LNetMDUnlink
 	 */
-	int		    unlinked;
+	int                 unlinked;
 	/**
 	 * The displacement (in bytes) into the memory region that the
 	 * operation used. The offset can be determined by the operation for
 	 * a remote managed MD or by the local MD.
 	 * \see lnet_md_t::options
 	 */
-	unsigned int	    offset;
+	unsigned int        offset;
 	/**
 	 * The sequence number for this event. Sequence numbers are unique
 	 * to each event.

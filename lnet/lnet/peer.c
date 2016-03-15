@@ -386,6 +386,24 @@ lnet_peer_is_ni_pref_locked(struct lnet_peer_ni *lpni, struct lnet_ni *ni)
 	return false;
 }
 
+lnet_nid_t
+lnet_peer_primary_nid(lnet_nid_t nid)
+{
+	struct lnet_peer_ni *lpni;
+	lnet_nid_t primary_nid = nid;
+	int cpt;
+
+	cpt = lnet_net_lock_current();
+	lpni = lnet_find_peer_ni_locked(nid);
+	if (lpni) {
+		primary_nid = lpni->lpni_peer_net->lpn_peer->lp_primary_nid;
+		lnet_peer_ni_decref_locked(lpni);
+	}
+	lnet_net_unlock(cpt);
+
+	return primary_nid;
+}
+
 static void
 lnet_try_destroy_peer_hierarchy_locked(struct lnet_peer_ni *lpni)
 {

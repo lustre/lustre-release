@@ -1369,23 +1369,6 @@ again:
 		}
 	}
 
-	if (best_ni == the_lnet.ln_loni) {
-		/* No send credit hassles with LOLND */
-		msg->msg_hdr.dest_nid = cpu_to_le64(best_ni->ni_nid);
-		if (!msg->msg_routing)
-			msg->msg_hdr.src_nid = cpu_to_le64(best_ni->ni_nid);
-		msg->msg_target.nid = best_ni->ni_nid;
-		lnet_msg_commit(msg, cpt);
-
-		lnet_ni_addref_locked(best_ni, cpt);
-		lnet_net_unlock(cpt);
-		msg->msg_txni = best_ni;
-		lnet_ni_send(best_ni, msg);
-
-		*lo_sent = true;
-		return 0;
-	}
-
 	if (best_ni)
 		goto pick_peer;
 
@@ -1570,6 +1553,23 @@ set_ni:
 		goto send;
 
 pick_peer:
+	if (best_ni == the_lnet.ln_loni) {
+		/* No send credit hassles with LOLND */
+		lnet_ni_addref_locked(best_ni, cpt);
+		msg->msg_hdr.dest_nid = cpu_to_le64(best_ni->ni_nid);
+		if (!msg->msg_routing)
+			msg->msg_hdr.src_nid = cpu_to_le64(best_ni->ni_nid);
+		msg->msg_target.nid = best_ni->ni_nid;
+		lnet_msg_commit(msg, cpt);
+
+		lnet_net_unlock(cpt);
+		msg->msg_txni = best_ni;
+		lnet_ni_send(best_ni, msg);
+
+		*lo_sent = true;
+		return 0;
+	}
+
 	lpni = NULL;
 
 	if (msg->msg_type == LNET_MSG_REPLY ||
@@ -1849,7 +1849,8 @@ lnet_parse_put(lnet_ni_t *ni, lnet_msg_t *msg)
 	hdr->msg.put.ptl_index	= le32_to_cpu(hdr->msg.put.ptl_index);
 	hdr->msg.put.offset	= le32_to_cpu(hdr->msg.put.offset);
 
-	info.mi_id.nid	= hdr->src_nid;
+	/* Primary peer NID. */
+	info.mi_id.nid	= msg->msg_initiator;
 	info.mi_id.pid	= hdr->src_pid;
 	info.mi_opc	= LNET_MD_OP_PUT;
 	info.mi_portal	= hdr->msg.put.ptl_index;
@@ -1899,6 +1900,7 @@ lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg, int rdma_get)
 {
 	struct lnet_match_info	info;
 	lnet_hdr_t		*hdr = &msg->msg_hdr;
+	lnet_process_id_t	source_id;
 	struct lnet_handle_wire	reply_wmd;
 	int			rc;
 
@@ -1908,7 +1910,10 @@ lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg, int rdma_get)
 	hdr->msg.get.sink_length  = le32_to_cpu(hdr->msg.get.sink_length);
 	hdr->msg.get.src_offset	  = le32_to_cpu(hdr->msg.get.src_offset);
 
-	info.mi_id.nid	= hdr->src_nid;
+	source_id.nid = hdr->src_nid;
+	source_id.pid = hdr->src_pid;
+	/* Primary peer NID */
+	info.mi_id.nid	= msg->msg_initiator;
 	info.mi_id.pid	= hdr->src_pid;
 	info.mi_opc	= LNET_MD_OP_GET;
 	info.mi_portal	= hdr->msg.get.ptl_index;
@@ -1931,7 +1936,7 @@ lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg, int rdma_get)
 
 	reply_wmd = hdr->msg.get.return_wmd;
 
-	lnet_prep_send(msg, LNET_MSG_REPLY, info.mi_id,
+	lnet_prep_send(msg, LNET_MSG_REPLY, source_id,
 		       msg->msg_offset, msg->msg_wanted);
 
 	msg->msg_hdr.msg.reply.dst_wmd = reply_wmd;
@@ -2383,6 +2388,8 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
 		msg->msg_hdr.dest_pid	= dest_pid;
 		msg->msg_hdr.payload_length = payload_length;
 	}
+	/* Multi-Rail: Primary NID of source. */
+	msg->msg_initiator = lnet_peer_primary_nid(src_nid);
 
 	lnet_net_lock(cpt);
 	rc = lnet_nid2peerni_locked(&msg->msg_rxpeer, from_nid, cpt);
@@ -2701,6 +2708,8 @@ lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *getmsg)
 	       libcfs_nid2str(ni->ni_nid), libcfs_id2str(peer_id), getmd);
 
 	/* setup information for lnet_build_msg_event */
+	msg->msg_initiator = lnet_peer_primary_nid(peer_id.nid);
+	/* Cheaper: msg->msg_initiator = getmsg->msg_txpeer->lp_nid; */
 	msg->msg_from = peer_id.nid;
 	msg->msg_type = LNET_MSG_GET; /* flag this msg as an "optimized" GET */
 	msg->msg_hdr.src_nid = peer_id.nid;

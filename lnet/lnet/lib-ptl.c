@@ -682,7 +682,8 @@ lnet_ptl_attach_md(lnet_me_t *me, lnet_libmd_t *md,
 		LASSERT(msg->msg_rx_delayed || head == &ptl->ptl_msg_stealing);
 
 		hdr   = &msg->msg_hdr;
-		info.mi_id.nid	= hdr->src_nid;
+		/* Multi-Rail: Primary peer NID */
+		info.mi_id.nid	= msg->msg_initiator;
 		info.mi_id.pid	= hdr->src_pid;
 		info.mi_opc	= LNET_MD_OP_PUT;
 		info.mi_portal	= hdr->msg.put.ptl_index;
