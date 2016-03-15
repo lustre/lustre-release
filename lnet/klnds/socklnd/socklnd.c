@@ -37,6 +37,7 @@
  * Author: Eric Barton <eric@bartonsoftware.com>
  */
 
+#include <linux/pci.h>
 #include "socklnd.h"
 
 static lnd_t                   the_ksocklnd;
@@ -2772,9 +2773,11 @@ ksocknal_net_start_threads(ksock_net_t *net, __u32 *cpts, int ncpts)
 int
 ksocknal_startup (lnet_ni_t *ni)
 {
-        ksock_net_t  *net;
-        int           rc;
-        int           i;
+	ksock_net_t  *net;
+	int           rc;
+	int           i;
+	struct net_device *net_dev;
+	int node_id;
 
         LASSERT (ni->ni_net->net_lnd == &the_ksocklnd);
 
@@ -2802,6 +2805,7 @@ ksocknal_startup (lnet_ni_t *ni)
 			*ksocknal_tunables.ksnd_peerrtrcredits;
 		ni->ni_net->net_tunables_set = true;
 	}
+
 
         if (ni->ni_interfaces[0] == NULL) {
                 rc = ksocknal_enumerate_interfaces(net);
@@ -2835,8 +2839,19 @@ ksocknal_startup (lnet_ni_t *ni)
 			strlcpy(net->ksnn_interfaces[i].ksni_name,
 				ni->ni_interfaces[i],
 				sizeof(net->ksnn_interfaces[i].ksni_name));
+
 		}
 		net->ksnn_ninterfaces = i;
+	}
+
+	net_dev = dev_get_by_name(&init_net,
+				  net->ksnn_interfaces[0].ksni_name);
+	if (net_dev != NULL) {
+		node_id = dev_to_node(&net_dev->dev);
+		ni->dev_cpt = cfs_cpt_of_node(lnet_cpt_table(), node_id);
+		dev_put(net_dev);
+	} else {
+		ni->dev_cpt = CFS_CPT_ANY;
 	}
 
 	/* call it before add it to ksocknal_data.ksnd_nets */

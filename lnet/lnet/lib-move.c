@@ -1289,6 +1289,10 @@ lnet_select_pathway(lnet_nid_t src_nid, lnet_nid_t dst_nid,
 	int			best_credits = 0;
 	__u32			seq, seq2;
 	int			best_lpni_credits = INT_MIN;
+	int			md_cpt = 0;
+	int			shortest_distance = INT_MAX;
+	int			distance = 0;
+	bool			found_ir = false;
 
 again:
 	/*
@@ -1307,11 +1311,19 @@ again:
 	routing = false;
 	local_net = NULL;
 	best_ni = NULL;
+	shortest_distance = INT_MAX;
+	found_ir = false;
 
 	if (the_lnet.ln_shutdown) {
 		lnet_net_unlock(cpt);
 		return -ESHUTDOWN;
 	}
+
+	if (msg->msg_md != NULL)
+		/* get the cpt of the MD, used during NUMA based selection */
+		md_cpt = lnet_cpt_of_cookie(msg->msg_md->md_lh.lh_cookie);
+	else
+		md_cpt = CFS_CPT_ANY;
 
 	/*
 	 * initialize the variables which could be reused if we go to
@@ -1438,34 +1450,114 @@ again:
 			continue;
 
 		/*
-		 * Second jab at determining best_ni
-		 * if we get here then the peer we're trying to send
-		 * to is on a directly connected network, and we'll
-		 * need to pick the local_ni on that network to send
-		 * from
+		 * Iterate through the NIs in this local Net and select
+		 * the NI to send from. The selection is determined by
+		 * these 3 criterion in the following priority:
+		 *	1. NUMA
+		 *	2. NI available credits
+		 *	3. Round Robin
 		 */
 		while ((ni = lnet_get_next_ni_locked(local_net, ni))) {
 			if (!lnet_is_ni_healthy_locked(ni))
 				continue;
-			/* TODO: compare NUMA distance */
-			if (ni->ni_tx_queues[cpt]->tq_credits <=
-			    best_credits) {
-				/*
-				 * all we want is to read tq_credits
-				 * value as an approximation of how
-				 * busy the NI is. No need to grab a lock
-				 */
-				continue;
-			} else if (best_ni) {
-				if ((best_ni)->ni_seq - ni->ni_seq <= 0)
-					continue;
-				(best_ni)->ni_seq = ni->ni_seq + 1;
-			}
 
+			/*
+			 * calculate the distance from the cpt on which
+			 * the message memory is allocated to the CPT of
+			 * the NI's physical device
+			 */
+			distance = cfs_cpt_distance(lnet_cpt_table(),
+						    md_cpt,
+						    ni->dev_cpt);
+
+			/*
+			 * If we already have a closer NI within the NUMA
+			 * range provided, then there is no need to
+			 * consider the current NI. Move on to the next
+			 * one.
+			 */
+			if (distance > shortest_distance &&
+			    distance > lnet_get_numa_range())
+				continue;
+
+			if (distance < shortest_distance &&
+			    distance > lnet_get_numa_range()) {
+				/*
+				 * The current NI is the closest one that we
+				 * have found, even though it's not in the
+				 * NUMA range specified. This occurs if
+				 * the NUMA range is less than the least
+				 * of the distances in the system.
+				 * In effect NUMA range consideration is
+				 * turned off.
+				 */
+				shortest_distance = distance;
+			} else if ((distance <= shortest_distance &&
+				    distance < lnet_get_numa_range()) ||
+				   distance == shortest_distance) {
+				/*
+				 * This NI is either within range or it's
+				 * equidistant. In both of these cases we
+				 * would want to select the NI based on
+				 * its available credits first, and then
+				 * via Round Robin.
+				 */
+				if (distance <= shortest_distance &&
+				    distance < lnet_get_numa_range()) {
+					/*
+					 * If this is the first NI that's
+					 * within range, then set the
+					 * shortest distance to the range
+					 * specified by the user. In
+					 * effect we're saying that all
+					 * NIs that fall within this NUMA
+					 * range shall be dealt with as
+					 * having equal NUMA weight. Which
+					 * will mean that we should select
+					 * through that set by their
+					 * available credits first
+					 * followed by Round Robin.
+					 *
+					 * And since this is the first NI
+					 * in the range, let's just set it
+					 * as our best_ni for now. The
+					 * following NIs found in the
+					 * range will be dealt with as
+					 * mentioned previously.
+					 */
+					shortest_distance = lnet_get_numa_range();
+					if (!found_ir) {
+						found_ir = true;
+						goto set_ni;
+					}
+				}
+				/*
+				 * This NI is NUMA equidistant let's
+				 * select using credits followed by Round
+				 * Robin.
+				 */
+				if (ni->ni_tx_queues[cpt]->tq_credits <
+					best_credits) {
+					continue;
+				} else if (ni->ni_tx_queues[cpt]->tq_credits ==
+						best_credits) {
+					if (best_ni) {
+						if (best_ni->ni_seq <= ni->ni_seq)
+							continue;
+					}
+				}
+			}
+set_ni:
 			best_ni = ni;
 			best_credits = ni->ni_tx_queues[cpt]->tq_credits;
 		}
 	}
+	/*
+	 * Now that we selected the NI to use increment its sequence
+	 * number so the Round Robin algorithm will detect that it has
+	 * been used and pick the next NI.
+	 */
+	best_ni->ni_seq++;
 
 	if (!best_ni) {
 		lnet_net_unlock(cpt);
@@ -1550,28 +1642,51 @@ pick_peer:
 	best_lpni = NULL;
 	while ((lpni = lnet_get_next_peer_ni_locked(peer, peer_net, lpni))) {
 		/*
-		 * if this peer ni is not healty just skip it, no point in
+		 * if this peer ni is not healthy just skip it, no point in
 		 * examining it further
 		 */
 		if (!lnet_is_peer_ni_healthy_locked(lpni))
 			continue;
 		ni_is_pref = lnet_peer_is_ni_pref_locked(lpni, best_ni);
 
+		/* if this is a preferred peer use it */
 		if (!preferred && ni_is_pref) {
 			preferred = true;
 		} else if (preferred && !ni_is_pref) {
+			/*
+			 * this is not the preferred peer so let's ignore
+			 * it.
+			 */
 			continue;
-		} if (lpni->lpni_txcredits <= best_lpni_credits)
+		} if (lpni->lpni_txcredits < best_lpni_credits)
+			/*
+			 * We already have a peer that has more credits
+			 * available than this one. No need to consider
+			 * this peer further.
+			 */
 			continue;
-		else if (best_lpni) {
-			if (best_lpni->lpni_seq - lpni->lpni_seq <= 0)
-				continue;
-			best_lpni->lpni_seq = lpni->lpni_seq + 1;
+		else if (lpni->lpni_txcredits == best_lpni_credits) {
+			/*
+			 * The best peer found so far and the current peer
+			 * have the same number of available credits let's
+			 * make sure to select between them using Round
+			 * Robin
+			 */
+			if (best_lpni) {
+				if (best_lpni->lpni_seq <= lpni->lpni_seq)
+					continue;
+			}
 		}
 
 		best_lpni = lpni;
 		best_lpni_credits = lpni->lpni_txcredits;
 	}
+
+	/*
+	 * Increment sequence number of the peer selected so that we can
+	 * pick the next one in Round Robin.
+	 */
+	best_lpni->lpni_seq++;
 
 	/* if we still can't find a peer ni then we can't reach it */
 	if (!best_lpni) {
@@ -1579,7 +1694,7 @@ pick_peer:
 		lnet_net_unlock(cpt);
 		LCONSOLE_WARN("no peer_ni found on peer net %s\n",
 				libcfs_net2str(net_id));
-		goto again;
+		return -EHOSTUNREACH;
 	}
 
 send:

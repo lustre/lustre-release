@@ -189,6 +189,35 @@ int lustre_lnet_enable_routing(int enable, int seq_no,
 			       struct cYAML **err_rc);
 
 /*
+ * lustre_lnet_config_numa_range
+ *   Set the NUMA range which impacts the NIs to be selected
+ *   during sending. If the NUMA range is large the NUMA
+ *   distance between the message memory and the NI becomes
+ *   less significant. The NUMA range is a relative number
+ *   with no other meaning besides allowing a wider breadth
+ *   for picking an NI to send from.
+ *
+ *   range - numa range value.
+ *   seq_no - sequence number of the request
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_config_numa_range(int range, int seq_no,
+				  struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_show_num_range
+ *   Get the currently set NUMA range
+ *
+ *   seq_no - sequence number of the request
+ *   show_rc - [OUT] struct cYAML tree containing NUMA range info
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
+				struct cYAML **err_rc);
+
+/*
  * lustre_lnet_config_buffers
  *   Send down an IOCTL to configure routing buffer sizes.  A value of 0 means
  *   default that particular buffer to default size. A value of -1 means

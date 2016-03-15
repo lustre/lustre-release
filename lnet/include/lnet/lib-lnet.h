@@ -796,6 +796,7 @@ bool lnet_net_unique(__u32 net_id, struct list_head *nilist,
 bool lnet_ni_unique_net(struct list_head *nilist, char *iface);
 void lnet_incr_dlc_seq(void);
 __u32 lnet_get_dlc_seq_locked(void);
+inline __u32 lnet_get_numa_range(void);
 
 struct lnet_peer_ni *lnet_get_next_peer_ni_locked(struct lnet_peer *peer,
 						  struct lnet_peer_net *peer_net,

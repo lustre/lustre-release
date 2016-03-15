@@ -161,6 +161,7 @@ struct lnet_ioctl_config_ni {
 	__u32			lic_status;
 	__u32			lic_tcp_bonding;
 	__u32			lic_idx;
+	__s32			lic_dev_cpt;
 	char 			lic_bulk[0];
 };
 
@@ -210,6 +211,11 @@ struct lnet_ioctl_peer_cfg {
 	lnet_nid_t prcfg_cfg_nid;
 	__u32 prcfg_idx;
 	char prcfg_bulk[0];
+};
+
+struct lnet_ioctl_numa_range {
+	struct libcfs_ioctl_hdr nr_hdr;
+	__u32 nr_range;
 };
 
 struct lnet_ioctl_lnet_stats {

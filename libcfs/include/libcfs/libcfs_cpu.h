@@ -109,6 +109,10 @@ struct cfs_cpt_table *cfs_cpt_table_alloc(unsigned int ncpt);
  */
 int cfs_cpt_table_print(struct cfs_cpt_table *cptab, char *buf, int len);
 /**
+ * print distance information of cpt-table
+ */
+int cfs_cpt_distance_print(struct cfs_cpt_table *cptab, char *buf, int len);
+/**
  * return total number of CPU partitions in \a cptab
  */
 int
@@ -137,6 +141,14 @@ int cfs_cpt_current(struct cfs_cpt_table *cptab, int remap);
  * shadow HW processor ID \a CPU to CPU-partition ID by \a cptab
  */
 int cfs_cpt_of_cpu(struct cfs_cpt_table *cptab, int cpu);
+/**
+ * shadow HW node ID \a NODE to CPU-partition ID by \a cptab
+ */
+int cfs_cpt_of_node(struct cfs_cpt_table *cptab, int node);
+/**
+ * NUMA distance between \a cpt1 and \a cpt2 in \a cptab
+ */
+unsigned cfs_cpt_distance(struct cfs_cpt_table *cptab, int cpt1, int cpt2);
 /**
  * bind current thread on a CPU-partition \a cpt of \a cptab
  */

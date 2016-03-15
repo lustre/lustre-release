@@ -45,6 +45,8 @@ EXPORT_SYMBOL(cfs_cpt_table);
 
 #define CFS_CPU_VERSION_MAGIC           0xbabecafe
 
+#define CFS_CPT_DISTANCE		1	/* Arbitrary positive value */
+
 struct cfs_cpt_table *
 cfs_cpt_table_alloc(unsigned int ncpt)
 {
@@ -58,6 +60,7 @@ cfs_cpt_table_alloc(unsigned int ncpt)
 	LIBCFS_ALLOC(cptab, sizeof(*cptab));
 	if (cptab != NULL) {
 		cptab->ctb_version = CFS_CPU_VERSION_MAGIC;
+		cpu_set(0, cptab->ctb_cpumask);
 		node_set(0, cptab->ctb_nodemask);
 		cptab->ctb_nparts  = ncpt;
 	}
@@ -90,6 +93,20 @@ cfs_cpt_table_print(struct cfs_cpt_table *cptab, char *buf, int len)
 EXPORT_SYMBOL(cfs_cpt_table_print);
 
 int
+cfs_cpt_distance_print(struct cfs_cpt_table *cptab, char *buf, int len)
+{
+	int	rc = 0;
+
+	rc = snprintf(buf, len, "%d\t: %d:%d\n", 0, CFS_CPT_DISTANCE);
+	len -= rc;
+	if (len <= 0)
+		return -EFBIG;
+
+	return rc;
+}
+EXPORT_SYMBOL(cfs_cpt_distance_print);
+
+int
 cfs_cpt_number(struct cfs_cpt_table *cptab)
 {
 	return 1;
@@ -110,12 +127,26 @@ cfs_cpt_online(struct cfs_cpt_table *cptab, int cpt)
 }
 EXPORT_SYMBOL(cfs_cpt_online);
 
+cpumask_t *
+cfs_cpt_cpumask(struct cfs_cpt_table *cptab, int cpt)
+{
+	return &cptab->ctb_mask;
+}
+EXPORT_SYMBOL(cfs_cpt_cpumask);
+
 nodemask_t *
 cfs_cpt_nodemask(struct cfs_cpt_table *cptab, int cpt)
 {
 	return &cptab->ctb_nodemask;
 }
-EXPORT_SYMBOL(cfs_cpt_cpumask);
+EXPORT_SYMBOL(cfs_cpt_nodemask);
+
+unsigned
+cfs_cpt_distance(struct cfs_cpt_table *cptab, int cpt1, int cpt2)
+{
+	return CFS_CPT_DISTANCE;
+}
+EXPORT_SYMBOL(cfs_cpt_distance);
 
 int
 cfs_cpt_set_cpu(struct cfs_cpt_table *cptab, int cpt, int cpu)
@@ -197,6 +228,13 @@ cfs_cpt_of_cpu(struct cfs_cpt_table *cptab, int cpu)
 	return 0;
 }
 EXPORT_SYMBOL(cfs_cpt_of_cpu);
+
+int
+cfs_cpt_of_node(struct cfs_cpt_table *cptab, int node)
+{
+	return 0;
+}
+EXPORT_SYMBOL(cfs_cpt_of_node);
 
 int
 cfs_cpt_bind(struct cfs_cpt_table *cptab, int cpt)

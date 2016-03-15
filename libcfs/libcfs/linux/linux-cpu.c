@@ -83,8 +83,12 @@ cfs_cpt_table_free(struct cfs_cpt_table *cptab)
 
 	if (cptab->ctb_cpu2cpt != NULL) {
 		LIBCFS_FREE(cptab->ctb_cpu2cpt,
-			    num_possible_cpus() *
-			    sizeof(cptab->ctb_cpu2cpt[0]));
+			    nr_cpu_ids * sizeof(cptab->ctb_cpu2cpt[0]));
+	}
+
+	if (cptab->ctb_node2cpt != NULL) {
+		LIBCFS_FREE(cptab->ctb_node2cpt,
+			    nr_node_ids * sizeof(cptab->ctb_node2cpt[0]));
 	}
 
 	for (i = 0; cptab->ctb_parts != NULL && i < cptab->ctb_nparts; i++) {
@@ -97,6 +101,12 @@ cfs_cpt_table_free(struct cfs_cpt_table *cptab)
 
 		if (part->cpt_cpumask != NULL)
 			LIBCFS_FREE(part->cpt_cpumask, cpumask_size());
+
+		if (part->cpt_distance) {
+			LIBCFS_FREE(part->cpt_distance,
+				cptab->ctb_nparts *
+					sizeof(part->cpt_distance[0]));
+		}
 	}
 
 	if (cptab->ctb_parts != NULL) {
@@ -132,12 +142,20 @@ cfs_cpt_table_alloc(unsigned int ncpt)
 		goto failed;
 
 	LIBCFS_ALLOC(cptab->ctb_cpu2cpt,
-		     num_possible_cpus() * sizeof(cptab->ctb_cpu2cpt[0]));
+		     nr_cpu_ids * sizeof(cptab->ctb_cpu2cpt[0]));
 	if (cptab->ctb_cpu2cpt == NULL)
 		goto failed;
 
 	memset(cptab->ctb_cpu2cpt, -1,
-	       num_possible_cpus() * sizeof(cptab->ctb_cpu2cpt[0]));
+	       nr_cpu_ids * sizeof(cptab->ctb_cpu2cpt[0]));
+
+	LIBCFS_ALLOC(cptab->ctb_node2cpt,
+		     nr_node_ids * sizeof(cptab->ctb_node2cpt[0]));
+	if (cptab->ctb_node2cpt == NULL)
+		goto failed;
+
+	memset(cptab->ctb_node2cpt, -1,
+	       nr_node_ids * sizeof(cptab->ctb_node2cpt[0]));
 
 	LIBCFS_ALLOC(cptab->ctb_parts, ncpt * sizeof(cptab->ctb_parts[0]));
 	if (cptab->ctb_parts == NULL)
@@ -147,8 +165,16 @@ cfs_cpt_table_alloc(unsigned int ncpt)
 		struct cfs_cpu_partition *part = &cptab->ctb_parts[i];
 
 		LIBCFS_ALLOC(part->cpt_cpumask, cpumask_size());
+		if (!part->cpt_cpumask)
+			goto failed;
+
 		LIBCFS_ALLOC(part->cpt_nodemask, sizeof(*part->cpt_nodemask));
-		if (part->cpt_cpumask == NULL || part->cpt_nodemask == NULL)
+		if (!part->cpt_nodemask)
+			goto failed;
+
+		LIBCFS_ALLOC(part->cpt_distance,
+			cptab->ctb_nparts * sizeof(part->cpt_distance[0]));
+		if (!part->cpt_distance)
 			goto failed;
 	}
 
@@ -164,29 +190,26 @@ int
 cfs_cpt_table_print(struct cfs_cpt_table *cptab, char *buf, int len)
 {
 	char	*tmp = buf;
-	int	rc = 0;
+	int	rc = -EFBIG;
 	int	i;
 	int	j;
 
 	for (i = 0; i < cptab->ctb_nparts; i++) {
-		if (len > 0) {
-			rc = snprintf(tmp, len, "%d\t: ", i);
-			len -= rc;
-		}
-
-		if (len <= 0) {
-			rc = -EFBIG;
+		if (len <= 0)
 			goto out;
-		}
+
+		rc = snprintf(tmp, len, "%d\t:", i);
+		len -= rc;
+
+		if (len <= 0)
+			goto out;
 
 		tmp += rc;
 		for_each_cpu(j, cptab->ctb_parts[i].cpt_cpumask) {
-			rc = snprintf(tmp, len, "%d ", j);
+			rc = snprintf(tmp, len, " %d", j);
 			len -= rc;
-			if (len <= 0) {
-				rc = -EFBIG;
+			if (len <= 0)
 				goto out;
-			}
 			tmp += rc;
 		}
 
@@ -194,14 +217,55 @@ cfs_cpt_table_print(struct cfs_cpt_table *cptab, char *buf, int len)
 		tmp++;
 		len--;
 	}
-
-out:
+	rc = 0;
+ out:
 	if (rc < 0)
 		return rc;
 
 	return tmp - buf;
 }
 EXPORT_SYMBOL(cfs_cpt_table_print);
+
+int
+cfs_cpt_distance_print(struct cfs_cpt_table *cptab, char *buf, int len)
+{
+	char	*tmp = buf;
+	int	rc = -EFBIG;
+	int	i;
+	int	j;
+
+	for (i = 0; i < cptab->ctb_nparts; i++) {
+		if (len <= 0)
+			goto out;
+
+		rc = snprintf(tmp, len, "%d\t:", i);
+		len -= rc;
+
+		if (len <= 0)
+			goto out;
+
+		tmp += rc;
+		for (j = 0; j < cptab->ctb_nparts; j++) {
+			rc = snprintf(tmp, len, " %d:%d",
+				j, cptab->ctb_parts[i].cpt_distance[j]);
+			len -= rc;
+			if (len <= 0)
+				goto out;
+			tmp += rc;
+		}
+
+		*tmp = '\n';
+		tmp++;
+		len--;
+	}
+	rc = 0;
+ out:
+	if (rc < 0)
+		return rc;
+
+	return tmp - buf;
+}
+EXPORT_SYMBOL(cfs_cpt_distance_print);
 
 int
 cfs_cpt_number(struct cfs_cpt_table *cptab)
@@ -254,11 +318,139 @@ cfs_cpt_nodemask(struct cfs_cpt_table *cptab, int cpt)
 }
 EXPORT_SYMBOL(cfs_cpt_nodemask);
 
+unsigned
+cfs_cpt_distance(struct cfs_cpt_table *cptab, int cpt1, int cpt2)
+{
+	LASSERT(cpt1 == CFS_CPT_ANY || (cpt1 >= 0 && cpt1 < cptab->ctb_nparts));
+	LASSERT(cpt2 == CFS_CPT_ANY || (cpt2 >= 0 && cpt2 < cptab->ctb_nparts));
+
+	if (cpt1 == CFS_CPT_ANY || cpt2 == CFS_CPT_ANY)
+		return cptab->ctb_distance;
+
+	return cptab->ctb_parts[cpt1].cpt_distance[cpt2];
+}
+EXPORT_SYMBOL(cfs_cpt_distance);
+
+/*
+ * Calculate the maximum NUMA distance between all nodes in the
+ * from_mask and all nodes in the to_mask.
+ */
+static unsigned
+cfs_cpt_distance_calculate(nodemask_t *from_mask, nodemask_t *to_mask)
+{
+	unsigned maximum;
+	unsigned distance;
+	int to;
+	int from;
+
+	maximum = 0;
+	for_each_node_mask(from, *from_mask) {
+		for_each_node_mask(to, *to_mask) {
+			distance = node_distance(from, to);
+			if (maximum < distance)
+				maximum = distance;
+		}
+	}
+	return maximum;
+}
+
+static void cfs_cpt_add_cpu(struct cfs_cpt_table *cptab, int cpt, int cpu)
+{
+	cptab->ctb_cpu2cpt[cpu] = cpt;
+
+	cpumask_set_cpu(cpu, cptab->ctb_cpumask);
+	cpumask_set_cpu(cpu, cptab->ctb_parts[cpt].cpt_cpumask);
+}
+
+static void cfs_cpt_del_cpu(struct cfs_cpt_table *cptab, int cpt, int cpu)
+{
+	cpumask_clear_cpu(cpu, cptab->ctb_parts[cpt].cpt_cpumask);
+	cpumask_clear_cpu(cpu, cptab->ctb_cpumask);
+
+	cptab->ctb_cpu2cpt[cpu] = -1;
+}
+
+static void cfs_cpt_add_node(struct cfs_cpt_table *cptab, int cpt, int node)
+{
+	int cpt2;
+	struct cfs_cpu_partition *part;
+	struct cfs_cpu_partition *part2;
+
+	if (!node_isset(node, *cptab->ctb_nodemask)) {
+		/* first time node is added to the CPT table */
+		node_set(node, *cptab->ctb_nodemask);
+		cptab->ctb_node2cpt[node] = cpt;
+		cptab->ctb_distance = cfs_cpt_distance_calculate(
+							cptab->ctb_nodemask,
+							cptab->ctb_nodemask);
+	}
+
+	part = &cptab->ctb_parts[cpt];
+	if (!node_isset(node, *part->cpt_nodemask)) {
+		/* first time node is added to this CPT */
+		node_set(node, *part->cpt_nodemask);
+		for (cpt2 = 0; cpt2 < cptab->ctb_nparts; cpt2++) {
+			part2 = &cptab->ctb_parts[cpt2];
+			part->cpt_distance[cpt2] = cfs_cpt_distance_calculate(
+						part->cpt_nodemask,
+						part2->cpt_nodemask);
+			part2->cpt_distance[cpt] = cfs_cpt_distance_calculate(
+						part2->cpt_nodemask,
+						part->cpt_nodemask);
+		}
+	}
+}
+
+static void cfs_cpt_del_node(struct cfs_cpt_table *cptab, int cpt, int node)
+{
+	int cpu;
+	int cpt2;
+	struct cfs_cpu_partition *part;
+	struct cfs_cpu_partition *part2;
+
+	part = &cptab->ctb_parts[cpt];
+
+	for_each_cpu(cpu, part->cpt_cpumask) {
+		/* this CPT has other CPU belonging to this node? */
+		if (cpu_to_node(cpu) == node)
+			break;
+	}
+
+	if (cpu >= nr_cpu_ids && node_isset(node,  *part->cpt_nodemask)) {
+		/* No more CPUs in the node for this CPT. */
+		node_clear(node, *part->cpt_nodemask);
+		for (cpt2 = 0; cpt2 < cptab->ctb_nparts; cpt2++) {
+			part2 = &cptab->ctb_parts[cpt2];
+			if (node_isset(node, *part2->cpt_nodemask))
+				cptab->ctb_node2cpt[node] = cpt2;
+			part->cpt_distance[cpt2] = cfs_cpt_distance_calculate(
+						part->cpt_nodemask,
+						part2->cpt_nodemask);
+			part2->cpt_distance[cpt] = cfs_cpt_distance_calculate(
+						part2->cpt_nodemask,
+						part->cpt_nodemask);
+		}
+	}
+
+	for_each_cpu(cpu, cptab->ctb_cpumask) {
+		/* this CPT-table has other CPUs belonging to this node? */
+		if (cpu_to_node(cpu) == node)
+			break;
+	}
+
+	if (cpu >= nr_cpu_ids && node_isset(node, *cptab->ctb_nodemask)) {
+		/* No more CPUs in the table for this node. */
+		node_clear(node, *cptab->ctb_nodemask);
+		cptab->ctb_node2cpt[node] = -1;
+		cptab->ctb_distance =
+			cfs_cpt_distance_calculate(cptab->ctb_nodemask,
+					cptab->ctb_nodemask);
+	}
+}
+
 int
 cfs_cpt_set_cpu(struct cfs_cpt_table *cptab, int cpt, int cpu)
 {
-	int	node;
-
 	LASSERT(cpt >= 0 && cpt < cptab->ctb_nparts);
 
 	if (cpu < 0 || cpu >= nr_cpu_ids || !cpu_online(cpu)) {
@@ -272,23 +464,11 @@ cfs_cpt_set_cpu(struct cfs_cpt_table *cptab, int cpt, int cpu)
 		return 0;
 	}
 
-	cptab->ctb_cpu2cpt[cpu] = cpt;
-
 	LASSERT(!cpumask_test_cpu(cpu, cptab->ctb_cpumask));
 	LASSERT(!cpumask_test_cpu(cpu, cptab->ctb_parts[cpt].cpt_cpumask));
 
-	cpumask_set_cpu(cpu, cptab->ctb_cpumask);
-	cpumask_set_cpu(cpu, cptab->ctb_parts[cpt].cpt_cpumask);
-
-	node = cpu_to_node(cpu);
-
-	/* first CPU of @node in this CPT table */
-	if (!node_isset(node, *cptab->ctb_nodemask))
-		node_set(node, *cptab->ctb_nodemask);
-
-	/* first CPU of @node in this partition */
-	if (!node_isset(node, *cptab->ctb_parts[cpt].cpt_nodemask))
-		node_set(node, *cptab->ctb_parts[cpt].cpt_nodemask);
+	cfs_cpt_add_cpu(cptab, cpt, cpu);
+	cfs_cpt_add_node(cptab, cpt, cpu_to_node(cpu));
 
 	return 1;
 }
@@ -297,9 +477,6 @@ EXPORT_SYMBOL(cfs_cpt_set_cpu);
 void
 cfs_cpt_unset_cpu(struct cfs_cpt_table *cptab, int cpt, int cpu)
 {
-	int	node;
-	int	i;
-
 	LASSERT(cpt == CFS_CPT_ANY || (cpt >= 0 && cpt < cptab->ctb_nparts));
 
 	if (cpu < 0 || cpu >= nr_cpu_ids) {
@@ -325,32 +502,8 @@ cfs_cpt_unset_cpu(struct cfs_cpt_table *cptab, int cpt, int cpu)
 	LASSERT(cpumask_test_cpu(cpu, cptab->ctb_parts[cpt].cpt_cpumask));
 	LASSERT(cpumask_test_cpu(cpu, cptab->ctb_cpumask));
 
-	cpumask_clear_cpu(cpu, cptab->ctb_parts[cpt].cpt_cpumask);
-	cpumask_clear_cpu(cpu, cptab->ctb_cpumask);
-	cptab->ctb_cpu2cpt[cpu] = -1;
-
-	node = cpu_to_node(cpu);
-
-	LASSERT(node_isset(node, *cptab->ctb_parts[cpt].cpt_nodemask));
-	LASSERT(node_isset(node, *cptab->ctb_nodemask));
-
-	for_each_cpu(i, cptab->ctb_parts[cpt].cpt_cpumask) {
-		/* this CPT has other CPU belonging to this node? */
-		if (cpu_to_node(i) == node)
-			break;
-	}
-
-	if (i >= nr_cpu_ids)
-		node_clear(node, *cptab->ctb_parts[cpt].cpt_nodemask);
-
-	for_each_cpu(i, cptab->ctb_cpumask) {
-		/* this CPT-table has other CPU belonging to this node? */
-		if (cpu_to_node(i) == node)
-			break;
-	}
-
-	if (i >= nr_cpu_ids)
-		node_clear(node, *cptab->ctb_nodemask);
+	cfs_cpt_del_cpu(cptab, cpt, cpu);
+	cfs_cpt_del_node(cptab, cpt, cpu_to_node(cpu));
 }
 EXPORT_SYMBOL(cfs_cpt_unset_cpu);
 
@@ -367,8 +520,8 @@ cfs_cpt_set_cpumask(struct cfs_cpt_table *cptab, int cpt, const cpumask_t *mask)
 	}
 
 	for_each_cpu(cpu, mask) {
-		if (!cfs_cpt_set_cpu(cptab, cpt, cpu))
-			return 0;
+		cfs_cpt_add_cpu(cptab, cpt, cpu);
+		cfs_cpt_add_node(cptab, cpt, cpu_to_node(cpu));
 	}
 
 	return 1;
@@ -390,18 +543,22 @@ int
 cfs_cpt_set_node(struct cfs_cpt_table *cptab, int cpt, int node)
 {
 	const cpumask_t *mask;
-	int		rc;
+	int		cpu;
 
-	if (node < 0 || node >= MAX_NUMNODES) {
+	if (node < 0 || node >= nr_node_ids) {
 		CDEBUG(D_INFO,
 		       "Invalid NUMA id %d for CPU partition %d\n", node, cpt);
 		return 0;
 	}
 
 	mask = cpumask_of_node(node);
-	rc = cfs_cpt_set_cpumask(cptab, cpt, mask);
 
-	return rc;
+	for_each_cpu(cpu, mask)
+		cfs_cpt_add_cpu(cptab, cpt, cpu);
+
+	cfs_cpt_add_node(cptab, cpt, node);
+
+	return 1;
 }
 EXPORT_SYMBOL(cfs_cpt_set_node);
 
@@ -409,16 +566,20 @@ void
 cfs_cpt_unset_node(struct cfs_cpt_table *cptab, int cpt, int node)
 {
 	const cpumask_t *mask;
+	int cpu;
 
-	if (node < 0 || node >= MAX_NUMNODES) {
+	if (node < 0 || node >= nr_node_ids) {
 		CDEBUG(D_INFO,
 		       "Invalid NUMA id %d for CPU partition %d\n", node, cpt);
 		return;
 	}
 
 	mask = cpumask_of_node(node);
-	cfs_cpt_unset_cpumask(cptab, cpt, mask);
 
+	for_each_cpu(cpu, mask)
+		cfs_cpt_del_cpu(cptab, cpt, cpu);
+
+	cfs_cpt_del_node(cptab, cpt, node);
 }
 EXPORT_SYMBOL(cfs_cpt_unset_node);
 
@@ -505,6 +666,16 @@ cfs_cpt_of_cpu(struct cfs_cpt_table *cptab, int cpu)
 	return cptab->ctb_cpu2cpt[cpu];
 }
 EXPORT_SYMBOL(cfs_cpt_of_cpu);
+
+int
+cfs_cpt_of_node(struct cfs_cpt_table *cptab, int node)
+{
+	if (node < 0 || node > nr_node_ids)
+		return CFS_CPT_ANY;
+
+	return cptab->ctb_node2cpt[node];
+}
+EXPORT_SYMBOL(cfs_cpt_of_node);
 
 int
 cfs_cpt_bind(struct cfs_cpt_table *cptab, int cpt)
@@ -834,7 +1005,7 @@ cfs_cpt_table_create_pattern(char *pattern)
 		return cptab;
 	}
 
-	high = node ? MAX_NUMNODES - 1 : nr_cpu_ids - 1;
+	high = node ? nr_node_ids - 1 : nr_cpu_ids - 1;
 
 	for (str = cfs_trimwhite(pattern), c = 0;; c++) {
 		struct cfs_range_expr	*range;

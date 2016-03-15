@@ -3176,6 +3176,7 @@ kiblnd_startup (lnet_ni_t *ni)
         unsigned long             flags;
         int                       rc;
 	int			  newdev;
+	int			  node_id;
 
         LASSERT (ni->ni_net->net_lnd == &the_o2iblnd);
 
@@ -3219,13 +3220,16 @@ kiblnd_startup (lnet_ni_t *ni)
 	newdev = ibdev == NULL;
 	/* hmm...create kib_dev even for alias */
 	if (ibdev == NULL || strcmp(&ibdev->ibd_ifname[0], ifname) != 0)
-                ibdev = kiblnd_create_dev(ifname);
+		ibdev = kiblnd_create_dev(ifname);
 
-        if (ibdev == NULL)
-                goto failed;
+	if (ibdev == NULL)
+		goto failed;
 
-        net->ibn_dev = ibdev;
-        ni->ni_nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), ibdev->ibd_ifip);
+	node_id = dev_to_node(ibdev->ibd_hdev->ibh_ibdev->dma_device);
+	ni->dev_cpt = cfs_cpt_of_node(lnet_cpt_table(), node_id);
+
+	net->ibn_dev = ibdev;
+	ni->ni_nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), ibdev->ibd_ifip);
 
 	rc = kiblnd_dev_start_threads(ibdev, newdev,
 				      ni->ni_cpts, ni->ni_ncpts);

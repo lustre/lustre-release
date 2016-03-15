@@ -1561,6 +1561,10 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 							== NULL)
 				goto out;
 
+			if (cYAML_create_number(item, "dev cpt",
+						ni_data->lic_dev_cpt) == NULL)
+				goto out;
+
 			/* out put the CPTs in the format: "[x,x,x,...]" */
 			limit = str_buf + str_buf_len - 3;
 			pos += snprintf(pos, limit - pos, "\"[");
@@ -1650,6 +1654,40 @@ out:
 	cYAML_build_error(rc, seq_no,
 			 (enable) ? ADD_CMD : DEL_CMD,
 			 "routing", err_str, err_rc);
+
+	return rc;
+}
+
+int lustre_lnet_config_numa_range(int range, int seq_no, struct cYAML **err_rc)
+{
+	struct lnet_ioctl_numa_range data;
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	if (range < 0) {
+		snprintf(err_str,
+			 sizeof(err_str),
+			 "\"range must be >= 0\"");
+		rc = LUSTRE_CFG_RC_OUT_OF_RANGE_PARAM;
+		goto out;
+	}
+
+	LIBCFS_IOC_INIT_V2(data, nr_hdr);
+	data.nr_range = range;
+
+	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_SET_NUMA_RANGE, &data);
+	if (rc != 0) {
+		rc = -errno;
+		snprintf(err_str,
+			 sizeof(err_str),
+			 "\"cannot configure buffers: %s\"", strerror(errno));
+		goto out;
+	}
+
+out:
+	cYAML_build_error(rc, seq_no, ADD_CMD, "numa_range", err_str, err_rc);
 
 	return rc;
 }
@@ -2015,6 +2053,62 @@ out:
 
 	cYAML_build_error(rc, seq_no, SHOW_CMD, "peer", err_str,
 			  err_rc);
+
+	return rc;
+}
+
+int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
+				struct cYAML **err_rc)
+{
+	struct lnet_ioctl_numa_range data;
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	int l_errno;
+	char err_str[LNET_MAX_STR_LEN];
+	struct cYAML *root = NULL, *range = NULL;
+
+	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+
+	LIBCFS_IOC_INIT_V2(data, nr_hdr);
+
+	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_NUMA_RANGE, &data);
+	if (rc != 0) {
+		l_errno = errno;
+		snprintf(err_str,
+			 sizeof(err_str),
+			 "\"cannot get numa range: %s\"",
+			 strerror(l_errno));
+		rc = -l_errno;
+		goto out;
+	}
+
+	root = cYAML_create_object(NULL, NULL);
+	if (root == NULL)
+		goto out;
+
+	range = cYAML_create_object(root, "numa");
+	if (range == NULL)
+		goto out;
+
+	if (cYAML_create_number(range, "range",
+				data.nr_range) == NULL)
+		goto out;
+
+	if (show_rc == NULL)
+		cYAML_print_tree(root);
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+out:
+	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_free_tree(root);
+	} else if (show_rc != NULL && *show_rc != NULL) {
+		cYAML_insert_sibling((*show_rc)->cy_child,
+					root->cy_child);
+		free(root);
+	} else {
+		*show_rc = root;
+	}
+
+	cYAML_build_error(rc, seq_no, SHOW_CMD, "numa", err_str, err_rc);
 
 	return rc;
 }
