@@ -487,7 +487,7 @@ static int jt_add_net(int argc, char **argv)
 	}
 
 	rc = lustre_lnet_config_net(network, intf, ip2net, pto, pc, pbc,
-				    cre, cpt, -1, &err_rc);
+				    cre, cpt, -1, NULL, &err_rc);
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);

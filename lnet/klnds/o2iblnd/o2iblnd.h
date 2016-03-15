@@ -99,21 +99,10 @@ typedef struct
 	int              *kib_timeout;          /* comms timeout (seconds) */
 	int              *kib_keepalive;        /* keepalive timeout (seconds) */
 	int              *kib_ntx;              /* # tx descs */
-	int              *kib_credits;          /* # concurrent sends */
-	int              *kib_peertxcredits;    /* # concurrent sends to 1 peer */
-	int              *kib_peerrtrcredits;   /* # per-peer router buffer credits */
-	int              *kib_peercredits_hiw;  /* # when eagerly to return credits */
-	int              *kib_peertimeout;      /* seconds to consider peer dead */
 	char            **kib_default_ipif;     /* default IPoIB interface */
 	int              *kib_retry_count;
 	int              *kib_rnr_retry_count;
-	int              *kib_concurrent_sends; /* send work queue sizing */
 	int		 *kib_ib_mtu;		/* IB MTU */
-	int              *kib_map_on_demand;    /* map-on-demand if RD has more fragments
-						 * than this value, 0 disable map-on-demand */
-	int              *kib_fmr_pool_size;    /* # FMRs in pool */
-	int              *kib_fmr_flush_trigger; /* When to trigger FMR flush */
-	int              *kib_fmr_cache;        /* enable FMR pool cache? */
 #if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
 	struct ctl_table_header *kib_sysctl;  /* sysctl interface */
 #endif
@@ -131,12 +120,10 @@ extern kib_tunables_t  kiblnd_tunables;
 #define IBLND_CREDITS_DEFAULT        8          /* default # of peer credits */
 #define IBLND_CREDITS_MAX          ((typeof(((kib_msg_t*) 0)->ibm_credits)) - 1)  /* Max # of peer credits */
 
-#define IBLND_MSG_QUEUE_SIZE(v)    ((v) == IBLND_MSG_VERSION_1 ? \
-                                     IBLND_MSG_QUEUE_SIZE_V1 :   \
-                                     *kiblnd_tunables.kib_peertxcredits) /* # messages/RDMAs in-flight */
-#define IBLND_CREDITS_HIGHWATER(v) ((v) == IBLND_MSG_VERSION_1 ? \
-                                     IBLND_CREDIT_HIGHWATER_V1 : \
-                                     *kiblnd_tunables.kib_peercredits_hiw) /* when eagerly to return credits */
+/* when eagerly to return credits */
+#define IBLND_CREDITS_HIGHWATER(t, v) ((v) == IBLND_MSG_VERSION_1 ? \
+					IBLND_CREDIT_HIGHWATER_V1 : \
+					t->lnd_peercredits_hiw)
 
 #ifdef HAVE_RDMA_CREATE_ID_4ARG
 #define kiblnd_rdma_create_id(cb, dev, ps, qpt) rdma_create_id(cb, dev, ps, qpt)
@@ -144,32 +131,12 @@ extern kib_tunables_t  kiblnd_tunables;
 #define kiblnd_rdma_create_id(cb, dev, ps, qpt) rdma_create_id(cb, dev, ps)
 #endif
 
-static inline int
-kiblnd_concurrent_sends_v1(void)
-{
-        if (*kiblnd_tunables.kib_concurrent_sends > IBLND_MSG_QUEUE_SIZE_V1 * 2)
-                return IBLND_MSG_QUEUE_SIZE_V1 * 2;
-
-        if (*kiblnd_tunables.kib_concurrent_sends < IBLND_MSG_QUEUE_SIZE_V1 / 2)
-                return IBLND_MSG_QUEUE_SIZE_V1 / 2;
-
-        return *kiblnd_tunables.kib_concurrent_sends;
-}
-
-#define IBLND_CONCURRENT_SENDS(v)  ((v) == IBLND_MSG_VERSION_1 ? \
-                                     kiblnd_concurrent_sends_v1() : \
-                                     *kiblnd_tunables.kib_concurrent_sends)
 /* 2 OOB shall suffice for 1 keepalive and 1 returning credits */
 #define IBLND_OOB_CAPABLE(v)       ((v) != IBLND_MSG_VERSION_1)
 #define IBLND_OOB_MSGS(v)           (IBLND_OOB_CAPABLE(v) ? 2 : 0)
 
 #define IBLND_MSG_SIZE              (4<<10)                 /* max size of queued messages (inc hdr) */
 #define IBLND_MAX_RDMA_FRAGS         LNET_MAX_IOV           /* max # of fragments supported */
-#define IBLND_CFG_RDMA_FRAGS       (*kiblnd_tunables.kib_map_on_demand != 0 ? \
-                                    *kiblnd_tunables.kib_map_on_demand :      \
-                                     IBLND_MAX_RDMA_FRAGS)  /* max # of fragments configured by user */
-#define IBLND_RDMA_FRAGS(v)        ((v) == IBLND_MSG_VERSION_1 ? \
-                                     IBLND_MAX_RDMA_FRAGS : IBLND_CFG_RDMA_FRAGS)
 
 /************************/
 /* derived constants... */
@@ -189,7 +156,8 @@ kiblnd_concurrent_sends_v1(void)
 /* WRs and CQEs (per connection) */
 #define IBLND_RECV_WRS(c)            IBLND_RX_MSGS(c)
 #define IBLND_SEND_WRS(c)	\
-	((c->ibc_max_frags + 1) * IBLND_CONCURRENT_SENDS(c->ibc_version))
+	((c->ibc_max_frags + 1) * kiblnd_concurrent_sends(c->ibc_version, \
+							  c->ibc_peer->ibp_ni))
 #define IBLND_CQ_ENTRIES(c)         (IBLND_RECV_WRS(c) + IBLND_SEND_WRS(c))
 
 struct kib_hca_dev;
@@ -331,6 +299,7 @@ typedef struct
 	int			fps_cpt;		/* CPT id */
 	int			fps_pool_size;
 	int			fps_flush_trigger;
+	int			fps_cache;
 	/* is allocating new pool */
 	int			fps_increasing;
 	/* time stamp for retry if failed to allocate */
@@ -792,6 +761,48 @@ extern kib_data_t      kiblnd_data;
 
 extern void kiblnd_hdev_destroy(kib_hca_dev_t *hdev);
 
+int kiblnd_msg_queue_size(int version, struct lnet_ni *ni);
+
+/* max # of fragments configured by user */
+static inline int
+kiblnd_cfg_rdma_frags(struct lnet_ni *ni)
+{
+	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
+	int mod;
+
+	tunables = &ni->ni_lnd_tunables->lt_tun_u.lt_o2ib;
+	mod = tunables->lnd_map_on_demand;
+	return mod != 0 ? mod : IBLND_MAX_RDMA_FRAGS;
+}
+
+static inline int
+kiblnd_rdma_frags(int version, struct lnet_ni *ni)
+{
+	return version == IBLND_MSG_VERSION_1 ?
+	  IBLND_MAX_RDMA_FRAGS :
+	  kiblnd_cfg_rdma_frags(ni);
+}
+
+static inline int
+kiblnd_concurrent_sends(int version, struct lnet_ni *ni)
+{
+	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
+	int concurrent_sends;
+
+	tunables = &ni->ni_lnd_tunables->lt_tun_u.lt_o2ib;
+	concurrent_sends = tunables->lnd_concurrent_sends;
+
+	if (version == IBLND_MSG_VERSION_1) {
+		if (concurrent_sends > IBLND_MSG_QUEUE_SIZE_V1 * 2)
+			return IBLND_MSG_QUEUE_SIZE_V1 * 2;
+
+		if (concurrent_sends < IBLND_MSG_QUEUE_SIZE_V1 / 2)
+			return IBLND_MSG_QUEUE_SIZE_V1 / 2;
+	}
+
+	return concurrent_sends;
+}
+
 static inline void
 kiblnd_hdev_addref_locked(kib_hca_dev_t *hdev)
 {
@@ -914,10 +925,14 @@ kiblnd_send_keepalive(kib_conn_t *conn)
 static inline int
 kiblnd_need_noop(kib_conn_t *conn)
 {
-        LASSERT (conn->ibc_state >= IBLND_CONN_ESTABLISHED);
+	lnet_ni_t *ni = conn->ibc_peer->ibp_ni;
+	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
+
+	LASSERT(conn->ibc_state >= IBLND_CONN_ESTABLISHED);
+	tunables = &ni->ni_lnd_tunables->lt_tun_u.lt_o2ib;
 
         if (conn->ibc_outstanding_credits <
-            IBLND_CREDITS_HIGHWATER(conn->ibc_version) &&
+	    IBLND_CREDITS_HIGHWATER(tunables, conn->ibc_version) &&
             !kiblnd_send_keepalive(conn))
                 return 0; /* No need to send NOOP */
 
@@ -1125,8 +1140,7 @@ static inline unsigned int kiblnd_sg_dma_len(struct ib_device *dev,
 #define KIBLND_CONN_PARAM(e)            ((e)->param.conn.private_data)
 #define KIBLND_CONN_PARAM_LEN(e)        ((e)->param.conn.private_data_len)
 
-struct ib_mr *kiblnd_find_rd_dma_mr(kib_hca_dev_t *hdev,
-				    kib_rdma_desc_t *rd,
+struct ib_mr *kiblnd_find_rd_dma_mr(struct lnet_ni *ni, kib_rdma_desc_t *rd,
 				    int negotiated_nfrags);
 void kiblnd_map_rx_descs(kib_conn_t *conn);
 void kiblnd_unmap_rx_descs(kib_conn_t *conn);
@@ -1137,6 +1151,7 @@ int  kiblnd_fmr_pool_map(kib_fmr_poolset_t *fps, __u64 *pages, int npages,
 			 __u32 nob, __u64 iov, bool is_rx, kib_fmr_t *fmr);
 void kiblnd_fmr_pool_unmap(kib_fmr_t *fmr, int status);
 
+int  kiblnd_tunables_setup(struct lnet_ni *ni);
 int  kiblnd_tunables_init(void);
 void kiblnd_tunables_fini(void);
 

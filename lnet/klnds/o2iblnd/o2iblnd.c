@@ -337,8 +337,8 @@ kiblnd_create_peer(lnet_ni_t *ni, kib_peer_t **peerp, lnet_nid_t nid)
 	peer->ibp_nid = nid;
 	peer->ibp_error = 0;
 	peer->ibp_last_alive = 0;
-	peer->ibp_max_frags = IBLND_CFG_RDMA_FRAGS;
-	peer->ibp_queue_depth = *kiblnd_tunables.kib_peertxcredits;
+	peer->ibp_max_frags = kiblnd_cfg_rdma_frags(peer->ibp_ni);
+	peer->ibp_queue_depth = ni->ni_peertxcredits;
 	atomic_set(&peer->ibp_refcount, 1);	/* 1 ref for caller */
 
 	INIT_LIST_HEAD(&peer->ibp_list);	/* not in the peer table yet */
@@ -1386,16 +1386,22 @@ kiblnd_map_tx_pool(kib_tx_pool_t *tpo)
 }
 
 struct ib_mr *
-kiblnd_find_rd_dma_mr(kib_hca_dev_t *hdev, kib_rdma_desc_t *rd,
+kiblnd_find_rd_dma_mr(struct lnet_ni *ni, kib_rdma_desc_t *rd,
 		      int negotiated_nfrags)
 {
-	__u16	nfrags = (negotiated_nfrags != -1) ?
-	  negotiated_nfrags : *kiblnd_tunables.kib_map_on_demand;
+	kib_net_t     *net   = ni->ni_data;
+	kib_hca_dev_t *hdev  = net->ibn_dev->ibd_hdev;
+	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
+	int	mod;
+	__u16	nfrags;
+
+	tunables = &ni->ni_lnd_tunables->lt_tun_u.lt_o2ib;
+	mod = tunables->lnd_map_on_demand;
+	nfrags = (negotiated_nfrags != -1) ? negotiated_nfrags : mod;
 
 	LASSERT(hdev->ibh_mrs != NULL);
 
-	if (*kiblnd_tunables.kib_map_on_demand > 0 &&
-	    nfrags <= rd->rd_nfrags)
+	if (mod > 0 && nfrags <= rd->rd_nfrags)
 		return NULL;
 
 	return hdev->ibh_mrs;
@@ -1443,16 +1449,20 @@ kiblnd_destroy_fmr_pool_list(struct list_head *head)
 	}
 }
 
-static int kiblnd_fmr_pool_size(int ncpts)
+static int
+kiblnd_fmr_pool_size(struct lnet_ioctl_config_o2iblnd_tunables *tunables,
+		     int ncpts)
 {
-	int size = *kiblnd_tunables.kib_fmr_pool_size / ncpts;
+	int size = tunables->lnd_fmr_pool_size / ncpts;
 
 	return max(IBLND_FMR_POOL, size);
 }
 
-static int kiblnd_fmr_flush_trigger(int ncpts)
+static int
+kiblnd_fmr_flush_trigger(struct lnet_ioctl_config_o2iblnd_tunables *tunables,
+			 int ncpts)
 {
-	int size = *kiblnd_tunables.kib_fmr_flush_trigger / ncpts;
+	int size = tunables->lnd_fmr_flush_trigger / ncpts;
 
 	return max(IBLND_FMR_POOL_FLUSH, size);
 }
@@ -1468,7 +1478,7 @@ static int kiblnd_alloc_fmr_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t *fpo)
 		.dirty_watermark   = fps->fps_flush_trigger,
 		.flush_function    = NULL,
 		.flush_arg         = NULL,
-		.cache             = !!*kiblnd_tunables.kib_fmr_cache};
+		.cache             = !!fps->fps_cache };
 	int rc = 0;
 
 	fpo->fmr.fpo_fmr_pool = ib_create_fmr_pool(fpo->fpo_hdev->ibh_pd,
@@ -1644,8 +1654,9 @@ kiblnd_fini_fmr_poolset(kib_fmr_poolset_t *fps)
 }
 
 static int
-kiblnd_init_fmr_poolset(kib_fmr_poolset_t *fps, int cpt, kib_net_t *net,
-			int pool_size, int flush_trigger)
+kiblnd_init_fmr_poolset(kib_fmr_poolset_t *fps, int cpt, int ncpts,
+			kib_net_t *net,
+			struct lnet_ioctl_config_o2iblnd_tunables *tunables)
 {
 	kib_fmr_pool_t *fpo;
 	int		rc;
@@ -1654,8 +1665,11 @@ kiblnd_init_fmr_poolset(kib_fmr_poolset_t *fps, int cpt, kib_net_t *net,
 
 	fps->fps_net = net;
 	fps->fps_cpt = cpt;
-	fps->fps_pool_size = pool_size;
-	fps->fps_flush_trigger = flush_trigger;
+
+	fps->fps_pool_size = kiblnd_fmr_pool_size(tunables, ncpts);
+	fps->fps_flush_trigger = kiblnd_fmr_flush_trigger(tunables, ncpts);
+	fps->fps_cache = tunables->lnd_fmr_cache;
+
 	spin_lock_init(&fps->fps_lock);
 	INIT_LIST_HEAD(&fps->fps_pool_list);
 	INIT_LIST_HEAD(&fps->fps_failed_pool_list);
@@ -2271,15 +2285,18 @@ kiblnd_net_fini_pools(kib_net_t *net)
 }
 
 static int
-kiblnd_net_init_pools(kib_net_t *net, __u32 *cpts, int ncpts)
+kiblnd_net_init_pools(kib_net_t *net, lnet_ni_t *ni, __u32 *cpts, int ncpts)
 {
+	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
 	unsigned long	flags;
 	int		cpt;
 	int		rc;
 	int		i;
 
+	tunables = &ni->ni_lnd_tunables->lt_tun_u.lt_o2ib;
+
 	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
-	if (*kiblnd_tunables.kib_map_on_demand == 0) {
+	if (tunables->lnd_map_on_demand == 0) {
 		read_unlock_irqrestore(&kiblnd_data.kib_global_lock,
 					   flags);
 		goto create_tx_pool;
@@ -2287,10 +2304,9 @@ kiblnd_net_init_pools(kib_net_t *net, __u32 *cpts, int ncpts)
 
 	read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
-	if (*kiblnd_tunables.kib_fmr_pool_size <
-	    *kiblnd_tunables.kib_ntx / 4) {
+	if (tunables->lnd_fmr_pool_size < *kiblnd_tunables.kib_ntx / 4) {
 		CERROR("Can't set fmr pool size (%d) < ntx / 4(%d)\n",
-		       *kiblnd_tunables.kib_fmr_pool_size,
+		       tunables->lnd_fmr_pool_size,
 		       *kiblnd_tunables.kib_ntx / 4);
 		rc = -EINVAL;
 		goto failed;
@@ -2313,9 +2329,8 @@ kiblnd_net_init_pools(kib_net_t *net, __u32 *cpts, int ncpts)
 
 	for (i = 0; i < ncpts; i++) {
 		cpt = (cpts == NULL) ? i : cpts[i];
-		rc = kiblnd_init_fmr_poolset(net->ibn_fmr_ps[cpt], cpt, net,
-					     kiblnd_fmr_pool_size(ncpts),
-					     kiblnd_fmr_flush_trigger(ncpts));
+		rc = kiblnd_init_fmr_poolset(net->ibn_fmr_ps[cpt], cpt, ncpts,
+					     net, tunables);
 		if (rc != 0) {
 			CERROR("Can't initialize FMR pool for CPT %d: %d\n",
 			       cpt, rc);
@@ -3070,10 +3085,7 @@ kiblnd_startup (lnet_ni_t *ni)
 	do_gettimeofday(&tv);
 	net->ibn_incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
 
-        ni->ni_peertimeout    = *kiblnd_tunables.kib_peertimeout;
-        ni->ni_maxtxcredits   = *kiblnd_tunables.kib_credits;
-        ni->ni_peertxcredits  = *kiblnd_tunables.kib_peertxcredits;
-        ni->ni_peerrtrcredits = *kiblnd_tunables.kib_peerrtrcredits;
+	kiblnd_tunables_setup(ni);
 
         if (ni->ni_interfaces[0] != NULL) {
                 /* Use the IPoIB interface specified in 'networks=' */
@@ -3112,7 +3124,7 @@ kiblnd_startup (lnet_ni_t *ni)
 	if (rc != 0)
 		goto failed;
 
-	rc = kiblnd_net_init_pools(net, ni->ni_cpts, ni->ni_ncpts);
+	rc = kiblnd_net_init_pools(net, ni, ni->ni_cpts, ni->ni_ncpts);
         if (rc != 0) {
                 CERROR("Failed to initialize NI pools: %d\n", rc);
                 goto failed;
