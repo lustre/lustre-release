@@ -1224,10 +1224,11 @@ static int lfs_setstripe(int argc, char **argv)
 			/* Save the first error encountered. */
 			if (result2 == 0)
 				result2 = result;
-			fprintf(stderr,
-				"error: %s: %s file '%s' failed\n",
+			fprintf(stderr, "error: %s: %s file '%s' failed: %s\n",
 				argv[0], migrate_mode ? "migrate" : "create",
-				fname);
+				fname,
+				pool_name_arg != NULL && result == EINVAL ?
+				"OST not in pool?" : strerror(result));
 			continue;
 		}
 	}
