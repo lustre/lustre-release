@@ -79,13 +79,6 @@ struct cfs_cpt_data {
 
 static struct cfs_cpt_data	cpt_data;
 
-void
-cfs_cpu_core_siblings(int cpu, cpumask_t *mask)
-{
-	/* return cpumask of cores in the same socket */
-	cpumask_copy(mask, topology_core_cpumask(cpu));
-}
-
 /* return number of cores in the same socket of \a cpu */
 int
 cfs_cpu_core_nsiblings(int cpu)
@@ -94,7 +87,7 @@ cfs_cpu_core_nsiblings(int cpu)
 
 	mutex_lock(&cpt_data.cpt_mutex);
 
-	cfs_cpu_core_siblings(cpu, cpt_data.cpt_cpumask);
+	cpumask_copy(cpt_data.cpt_cpumask, topology_core_cpumask(cpu));
 	num = cpumask_weight(cpt_data.cpt_cpumask);
 
 	mutex_unlock(&cpt_data.cpt_mutex);
@@ -681,7 +674,7 @@ cfs_cpt_choose_ncpus(struct cfs_cpt_table *cptab, int cpt,
 		cpu = cpumask_first(node);
 
 		/* get cpumask for cores in the same socket */
-		cfs_cpu_core_siblings(cpu, socket);
+		cpumask_copy(socket, topology_core_cpumask(cpu));
 		cpumask_and(socket, socket, node);
 
 		LASSERT(!cpumask_empty(socket));
@@ -690,7 +683,7 @@ cfs_cpt_choose_ncpus(struct cfs_cpt_table *cptab, int cpt,
 			int     i;
 
 			/* get cpumask for hts in the same core */
-			cfs_cpu_ht_siblings(cpu, core);
+			cpumask_copy(core, topology_sibling_cpumask(cpu));
 			cpumask_and(core, core, node);
 
 			LASSERT(!cpumask_empty(core));
@@ -1038,7 +1031,8 @@ cfs_cpu_notify(struct notifier_block *self, unsigned long action, void *hcpu)
 
 		mutex_lock(&cpt_data.cpt_mutex);
 		/* if all HTs in a core are offline, it may break affinity */
-		cfs_cpu_ht_siblings(cpu, cpt_data.cpt_cpumask);
+		cpumask_copy(cpt_data.cpt_cpumask,
+			     topology_sibling_cpumask(cpu));
 		warn = cpumask_any_and(cpt_data.cpt_cpumask,
 				       cpu_online_mask) >= nr_cpu_ids;
 		mutex_unlock(&cpt_data.cpt_mutex);

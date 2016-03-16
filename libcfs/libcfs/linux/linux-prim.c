@@ -84,16 +84,6 @@ cfs_time_t cfs_timer_deadline(struct timer_list *t)
 }
 EXPORT_SYMBOL(cfs_timer_deadline);
 
-void cfs_enter_debugger(void)
-{
-#if defined(CONFIG_KGDB)
-//        BREAKPOINT();
-#else
-        /* nothing */
-#endif
-}
-EXPORT_SYMBOL(cfs_enter_debugger);
-
 sigset_t
 cfs_block_allsigs(void)
 {

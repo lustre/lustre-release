@@ -340,13 +340,6 @@ int libcfs_debug_mark_buffer(const char *text)
 #undef DEBUG_SUBSYSTEM
 #define DEBUG_SUBSYSTEM S_LNET
 
-void libcfs_debug_set_level(unsigned int debug_level)
-{
-	printk(KERN_WARNING "Lustre: Setting portals debug level to %08x\n",
-	       debug_level);
-	libcfs_debug = debug_level;
-}
-
 long libcfs_log_return(struct libcfs_debug_msg_data *msgdata, long rc)
 {
         libcfs_debug_msg(msgdata, "Process leaving (rc=%lu : %ld : %lx)\n",

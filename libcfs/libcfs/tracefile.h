@@ -83,7 +83,6 @@ int cfs_trace_copyin_string(char *knl_buffer, int knl_buffer_nob,
 int cfs_trace_copyout_string(char __user *usr_buffer, int usr_buffer_nob,
                              const char *knl_str, char *append);
 int cfs_trace_allocate_string_buffer(char **str, int nob);
-void cfs_trace_free_string_buffer(char *str, int nob);
 int cfs_trace_dump_debug_buffer_usrstr(void __user *usr_str, int usr_str_nob);
 int cfs_trace_daemon_command(char *str);
 int cfs_trace_daemon_command_usrstr(void __user *usr_str, int usr_str_nob);
@@ -275,12 +274,6 @@ static inline char *cfs_trace_get_console_buffer(void)
 	unsigned int j = cfs_trace_buf_idx_get();
 
 	return cfs_trace_console_buffers[i][j];
-}
-
-static inline void
-cfs_trace_put_console_buffer(char *buffer)
-{
-	put_cpu();
 }
 
 static inline struct cfs_trace_cpu_data *cfs_trace_get_tcd(void)

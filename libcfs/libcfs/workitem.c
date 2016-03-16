@@ -87,32 +87,20 @@ static struct cfs_workitem_data {
 	int			wi_stopping;
 } cfs_wi_data;
 
-static inline void
-cfs_wi_sched_lock(struct cfs_wi_sched *sched)
-{
-	spin_lock(&sched->ws_lock);
-}
-
-static inline void
-cfs_wi_sched_unlock(struct cfs_wi_sched *sched)
-{
-	spin_unlock(&sched->ws_lock);
-}
-
 static inline int
 cfs_wi_sched_cansleep(struct cfs_wi_sched *sched)
 {
-	cfs_wi_sched_lock(sched);
+	spin_lock(&sched->ws_lock);
 	if (sched->ws_stopping) {
-		cfs_wi_sched_unlock(sched);
+		spin_unlock(&sched->ws_lock);
 		return 0;
 	}
 
 	if (!list_empty(&sched->ws_runq)) {
-		cfs_wi_sched_unlock(sched);
+		spin_unlock(&sched->ws_lock);
 		return 0;
 	}
-	cfs_wi_sched_unlock(sched);
+	spin_unlock(&sched->ws_lock);
 	return 1;
 }
 
@@ -126,7 +114,7 @@ cfs_wi_exit(struct cfs_wi_sched *sched, struct cfs_workitem *wi)
 	LASSERT(!in_interrupt()); /* because we use plain spinlock */
 	LASSERT(!sched->ws_stopping);
 
-	cfs_wi_sched_lock(sched);
+	spin_lock(&sched->ws_lock);
 
 	LASSERT(wi->wi_running);
 
@@ -141,7 +129,7 @@ cfs_wi_exit(struct cfs_wi_sched *sched, struct cfs_workitem *wi)
 	LASSERT(list_empty(&wi->wi_list));
 
 	wi->wi_scheduled = 1; /* LBUG future schedule attempts */
-	cfs_wi_sched_unlock(sched);
+	spin_unlock(&sched->ws_lock);
 
 	return;
 }
@@ -163,7 +151,7 @@ cfs_wi_deschedule(struct cfs_wi_sched *sched, struct cfs_workitem *wi)
          * means the workitem will not be scheduled and will not have
          * any race with wi_action.
          */
-	cfs_wi_sched_lock(sched);
+	spin_lock(&sched->ws_lock);
 
 	rc = !(wi->wi_running);
 
@@ -179,7 +167,7 @@ cfs_wi_deschedule(struct cfs_wi_sched *sched, struct cfs_workitem *wi)
 
 	LASSERT (list_empty(&wi->wi_list));
 
-	cfs_wi_sched_unlock(sched);
+	spin_unlock(&sched->ws_lock);
 	return rc;
 }
 EXPORT_SYMBOL(cfs_wi_deschedule);
@@ -197,7 +185,7 @@ cfs_wi_schedule(struct cfs_wi_sched *sched, struct cfs_workitem *wi)
 	LASSERT(!in_interrupt()); /* because we use plain spinlock */
 	LASSERT(!sched->ws_stopping);
 
-	cfs_wi_sched_lock(sched);
+	spin_lock(&sched->ws_lock);
 
 	if (!wi->wi_scheduled) {
 		LASSERT (list_empty(&wi->wi_list));
@@ -213,7 +201,7 @@ cfs_wi_schedule(struct cfs_wi_sched *sched, struct cfs_workitem *wi)
 	}
 
 	LASSERT (!list_empty(&wi->wi_list));
-	cfs_wi_sched_unlock(sched);
+	spin_unlock(&sched->ws_lock);
 	return;
 }
 EXPORT_SYMBOL(cfs_wi_schedule);
@@ -239,7 +227,7 @@ cfs_wi_scheduler(void *arg)
 
 	spin_unlock(&cfs_wi_data.wi_glock);
 
-	cfs_wi_sched_lock(sched);
+	spin_lock(&sched->ws_lock);
 
 	while (!sched->ws_stopping) {
 		int		nloops = 0;
@@ -260,13 +248,12 @@ cfs_wi_scheduler(void *arg)
                         wi->wi_running   = 1;
                         wi->wi_scheduled = 0;
 
-
-                        cfs_wi_sched_unlock(sched);
+			spin_unlock(&sched->ws_lock);
                         nloops++;
 
                         rc = (*wi->wi_action) (wi);
 
-                        cfs_wi_sched_lock(sched);
+			spin_lock(&sched->ws_lock);
                         if (rc != 0) /* WI should be dead, even be freed! */
                                 continue;
 
@@ -281,21 +268,21 @@ cfs_wi_scheduler(void *arg)
                 }
 
 		if (!list_empty(&sched->ws_runq)) {
-			cfs_wi_sched_unlock(sched);
+			spin_unlock(&sched->ws_lock);
 			/* don't sleep because some workitems still
 			 * expect me to come back soon */
 			cond_resched();
-			cfs_wi_sched_lock(sched);
+			spin_lock(&sched->ws_lock);
 			continue;
 		}
 
-		cfs_wi_sched_unlock(sched);
+		spin_unlock(&sched->ws_lock);
 		rc = wait_event_interruptible_exclusive(sched->ws_waitq,
 				!cfs_wi_sched_cansleep(sched));
-		cfs_wi_sched_lock(sched);
+		spin_lock(&sched->ws_lock);
         }
 
-        cfs_wi_sched_unlock(sched);
+	spin_unlock(&sched->ws_lock);
 
 	spin_lock(&cfs_wi_data.wi_glock);
 	sched->ws_nthreads--;
