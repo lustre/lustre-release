@@ -2073,6 +2073,10 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
         ma->ma_need |= MA_INODE;
         ma->ma_valid &= ~MA_INODE;
 
+	LASSERT(atomic_read(&o->mot_open_count) > 0);
+	atomic_dec(&o->mot_open_count);
+	mdt_handle_last_unlink(info, o, ma);
+
         if (!MFD_CLOSED(mode))
                 rc = mo_close(info->mti_env, next, ma, mode);
 
@@ -2082,8 +2086,6 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 		atomic_dec(&o->mot_lease_count);
 	}
 
-	LASSERT(atomic_read(&o->mot_open_count) > 0);
-	atomic_dec(&o->mot_open_count);
 	mdt_mfd_free(mfd);
 	mdt_object_put(info->mti_env, o);
 
@@ -2095,8 +2097,6 @@ int mdt_close_internal(struct mdt_thread_info *info, struct ptlrpc_request *req,
 {
 	struct mdt_export_data *med;
 	struct mdt_file_data   *mfd;
-	struct mdt_object      *o;
-	struct md_attr         *ma = &info->mti_attr;
 	int			ret = 0;
 	int			rc = 0;
 	ENTRY;
@@ -2115,14 +2115,7 @@ int mdt_close_internal(struct mdt_thread_info *info, struct ptlrpc_request *req,
 		class_handle_unhash(&mfd->mfd_handle);
 		list_del_init(&mfd->mfd_list);
 		spin_unlock(&med->med_open_lock);
-
-		/* Do not lose object before last unlink. */
-		o = mfd->mfd_object;
-		mdt_object_get(info->mti_env, o);
 		ret = mdt_mfd_close(info, mfd);
-		if (repbody != NULL)
-			rc = mdt_handle_last_unlink(info, o, ma);
-		mdt_object_put(info->mti_env, o);
 	}
 
 	RETURN(rc ? rc : ret);

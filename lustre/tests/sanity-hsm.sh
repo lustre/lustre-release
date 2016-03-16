@@ -738,6 +738,15 @@ get_request_count() {
 		"awk -vn=0 '/'$fid'.*action='$request'/ {n++}; END {print n}'"
 }
 
+# Ensure the number of HSM request for a given FID is correct
+# assert_request_count FID REQUEST_TYPE COUNT [ERROR_MSG]
+assert_request_count() {
+	local request_count=$(get_request_count $1 $2)
+	local default_error_msg=("expected $3 '$2' request(s) for '$1', found "
+				"'$request_count'")
+	[ $request_count -eq $3 ] || error "${4:-"${default_error_msg[@]}"}"
+}
+
 wait_all_done() {
 	local timeout=$1
 	local fid=$2
@@ -2339,6 +2348,222 @@ test_26() {
 	copytool_cleanup
 }
 run_test 26 "Remove the archive of a valid file"
+
+cleanup_test_26a() {
+	trap 0
+	set_hsm_param remove_archive_on_last_unlink 0
+	set_hsm_param loop_period $orig_loop_period
+	set_hsm_param grace_delay $orig_grace_delay
+	copytool_cleanup
+}
+
+test_26a() {
+	local raolu=$(get_hsm_param remove_archive_on_last_unlink)
+	[[ $raolu -eq 0 ]] || error "RAoLU policy should be off"
+
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+	local f=$DIR/$tdir/$tfile
+	local fid=$(copy_file /etc/passwd $f)
+
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	local f2=$DIR/$tdir/${tfile}_2
+	local fid2=$(copy_file /etc/passwd $f2)
+
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f2
+	wait_request_state $fid2 ARCHIVE SUCCEED
+
+	local f3=$DIR/$tdir/${tfile}_3
+	local fid3=$(copy_file /etc/passwd $f3)
+
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f3
+	wait_request_state $fid3 ARCHIVE SUCCEED
+
+	trap cleanup_test_26a EXIT
+
+	# set a long grace_delay vs short loop_period
+	local orig_loop_period=$(get_hsm_param loop_period)
+	local orig_grace_delay=$(get_hsm_param grace_delay)
+	set_hsm_param loop_period 10
+	set_hsm_param grace_delay 100
+
+	rm -f $f
+
+	set_hsm_param remove_archive_on_last_unlink 1
+
+	ln "$f3" "$f3"_bis || error "Unable to create hard-link"
+	rm -f $f3
+
+	rm -f $f2
+
+	set_hsm_param remove_archive_on_last_unlink 0
+
+	wait_request_state $fid2 REMOVE SUCCEED
+
+	assert_request_count $fid REMOVE 0 \
+		"Unexpected archived data remove request for $f"
+	assert_request_count $fid3 REMOVE 0 \
+		"Unexpected archived data remove request for $f3"
+
+	cleanup_test_26a
+}
+run_test 26a "Remove Archive On Last Unlink (RAoLU) policy"
+
+cleanup_test_26b() {
+	trap 0
+	set_hsm_param remove_archive_on_last_unlink 0
+	copytool_cleanup
+}
+
+test_26b() {
+
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+	local f=$DIR/$tdir/$tfile
+	local fid=$(copy_file /etc/passwd $f)
+
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	trap cleanup_test_26b EXIT
+
+	set_hsm_param remove_archive_on_last_unlink 1
+
+	cdt_shutdown
+	cdt_check_state stopped
+
+	rm -f $f
+
+	set_hsm_param remove_archive_on_last_unlink 0
+
+	wait_request_state $fid REMOVE WAITING
+
+	cdt_enable
+	# copytool must re-register
+	kill_copytools
+	wait_copytools || error "copytool failed to stop"
+	HSM_ARCHIVE_PURGE=false copytool_setup
+
+	wait_request_state $fid REMOVE SUCCEED
+
+	cleanup_test_26b
+}
+run_test 26b "RAoLU policy when CDT off"
+
+cleanup_test_26c() {
+	trap 0
+	set_hsm_param remove_archive_on_last_unlink 0
+	set_hsm_param loop_period $orig_loop_period
+	set_hsm_param grace_delay $orig_grace_delay
+	copytool_cleanup
+}
+
+test_26c() {
+
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+	local f=$DIR/$tdir/$tfile
+	local fid=$(copy_file /etc/passwd $f)
+
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	local f2=$DIR/$tdir/${tfile}_2
+	local fid2=$(copy_file /etc/passwd $f2)
+
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f2
+	wait_request_state $fid2 ARCHIVE SUCCEED
+
+	trap cleanup_test_26c EXIT
+
+	# set a long grace_delay vs short loop_period
+	local orig_loop_period=$(get_hsm_param loop_period)
+	local orig_grace_delay=$(get_hsm_param grace_delay)
+	set_hsm_param loop_period 10
+	set_hsm_param grace_delay 100
+
+	set_hsm_param remove_archive_on_last_unlink 1
+
+	multiop_bg_pause $f O_c || error "open $f failed"
+	local pid=$!
+
+	rm -f $f
+	rm -f $f2
+
+	wait_request_state $fid2 REMOVE SUCCEED
+	assert_request_count $fid REMOVE 0 \
+		"Unexpected archived data remove request for $f"
+
+	kill -USR1 $pid || error "multiop early exit"
+	# should reach autotest timeout if multiop fails to trap
+	# signal, close file, and exit ...
+	wait $pid || error
+
+	set_hsm_param remove_archive_on_last_unlink 0
+
+	wait_request_state $fid REMOVE SUCCEED
+
+	cleanup_test_26c
+}
+run_test 26c "RAoLU effective when file closed"
+
+cleanup_test_26d() {
+	trap 0
+	set_hsm_param remove_archive_on_last_unlink 0
+	set_hsm_param loop_period $orig_loop_period
+	set_hsm_param grace_delay $orig_grace_delay
+	copytool_cleanup
+}
+
+test_26d() {
+
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+	local f=$DIR/$tdir/$tfile
+	local fid=$(copy_file /etc/motd $f 1)
+
+	$LFS hsm_archive $f || error "could not archive file"
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	trap cleanup_test_26d EXIT
+
+	# set a long grace_delay vs short loop_period
+	local orig_loop_period=$(get_hsm_param loop_period)
+	local orig_grace_delay=$(get_hsm_param grace_delay)
+	set_hsm_param loop_period 10
+	set_hsm_param grace_delay 100
+
+	set_hsm_param remove_archive_on_last_unlink 1
+
+	multiop_bg_pause $f O_c || error "multiop failed"
+	local MULTIPID=$!
+
+	rm -f $f
+
+	mds_evict_client
+
+	set_hsm_param remove_archive_on_last_unlink 0
+
+	wait_request_state $fid REMOVE SUCCEED
+
+	client_up || client_up || true
+
+	kill -USR1 $MULTIPID
+	wait $MULTIPID || error "multiop close failed"
+
+	cleanup_test_26d
+}
+run_test 26d "RAoLU when Client eviction"
 
 test_27a() {
 	# test needs a running copytool
