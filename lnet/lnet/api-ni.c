@@ -290,7 +290,7 @@ static lnd_t *lnet_find_lnd_by_type(__u32 type)
 void
 lnet_register_lnd (lnd_t *lnd)
 {
-	LNET_MUTEX_LOCK(&the_lnet.ln_lnd_mutex);
+	mutex_lock(&the_lnet.ln_lnd_mutex);
 
 	LASSERT(libcfs_isknown_lnd(lnd->lnd_type));
 	LASSERT(lnet_find_lnd_by_type(lnd->lnd_type) == NULL);
@@ -300,14 +300,14 @@ lnet_register_lnd (lnd_t *lnd)
 
 	CDEBUG(D_NET, "%s LND registered\n", libcfs_lnd2str(lnd->lnd_type));
 
-	LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
+	mutex_unlock(&the_lnet.ln_lnd_mutex);
 }
 EXPORT_SYMBOL(lnet_register_lnd);
 
 void
 lnet_unregister_lnd (lnd_t *lnd)
 {
-	LNET_MUTEX_LOCK(&the_lnet.ln_lnd_mutex);
+	mutex_lock(&the_lnet.ln_lnd_mutex);
 
 	LASSERT(lnet_find_lnd_by_type(lnd->lnd_type) == lnd);
 	LASSERT(lnd->lnd_refcount == 0);
@@ -315,7 +315,7 @@ lnet_unregister_lnd (lnd_t *lnd)
 	list_del(&lnd->lnd_list);
 	CDEBUG(D_NET, "%s LND unregistered\n", libcfs_lnd2str(lnd->lnd_type));
 
-	LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
+	mutex_unlock(&the_lnet.ln_lnd_mutex);
 }
 EXPORT_SYMBOL(lnet_unregister_lnd);
 
@@ -1260,17 +1260,17 @@ lnet_startup_lndni(struct lnet_ni *ni, struct lnet_ioctl_config_data *conf)
 		goto failed0;
 	}
 
-	LNET_MUTEX_LOCK(&the_lnet.ln_lnd_mutex);
+	mutex_lock(&the_lnet.ln_lnd_mutex);
 	lnd = lnet_find_lnd_by_type(lnd_type);
 
 	if (lnd == NULL) {
-		LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
+		mutex_unlock(&the_lnet.ln_lnd_mutex);
 		rc = request_module("%s", libcfs_lnd2modname(lnd_type));
-		LNET_MUTEX_LOCK(&the_lnet.ln_lnd_mutex);
+		mutex_lock(&the_lnet.ln_lnd_mutex);
 
 		lnd = lnet_find_lnd_by_type(lnd_type);
 		if (lnd == NULL) {
-			LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
+			mutex_unlock(&the_lnet.ln_lnd_mutex);
 			CERROR("Can't load LND %s, module %s, rc=%d\n",
 			       libcfs_lnd2str(lnd_type),
 			       libcfs_lnd2modname(lnd_type), rc);
@@ -1297,7 +1297,7 @@ lnet_startup_lndni(struct lnet_ni *ni, struct lnet_ioctl_config_data *conf)
 		LIBCFS_ALLOC(ni->ni_lnd_tunables,
 			     sizeof(*ni->ni_lnd_tunables));
 		if (ni->ni_lnd_tunables == NULL) {
-			LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
+			mutex_unlock(&the_lnet.ln_lnd_mutex);
 			rc = -ENOMEM;
 			goto failed0;
 		}
@@ -1307,7 +1307,7 @@ lnet_startup_lndni(struct lnet_ni *ni, struct lnet_ioctl_config_data *conf)
 
 	rc = (lnd->lnd_startup)(ni);
 
-	LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
+	mutex_unlock(&the_lnet.ln_lnd_mutex);
 
 	if (rc != 0) {
 		LCONSOLE_ERROR_MSG(0x105, "Error %d starting up LNI %s\n",
@@ -1524,19 +1524,19 @@ LNetNIInit(lnet_pid_t requested_pid)
 
 	INIT_LIST_HEAD(&net_head);
 
-	LNET_MUTEX_LOCK(&the_lnet.ln_api_mutex);
+	mutex_lock(&the_lnet.ln_api_mutex);
 
 	CDEBUG(D_OTHER, "refs %d\n", the_lnet.ln_refcount);
 
 	if (the_lnet.ln_refcount > 0) {
 		rc = the_lnet.ln_refcount++;
-		LNET_MUTEX_UNLOCK(&the_lnet.ln_api_mutex);
+		mutex_unlock(&the_lnet.ln_api_mutex);
 		return rc;
 	}
 
 	rc = lnet_prepare(requested_pid);
 	if (rc != 0) {
-		LNET_MUTEX_UNLOCK(&the_lnet.ln_api_mutex);
+		mutex_unlock(&the_lnet.ln_api_mutex);
 		return rc;
 	}
 
@@ -1598,7 +1598,7 @@ LNetNIInit(lnet_pid_t requested_pid)
 	lnet_fault_init();
 	lnet_proc_init();
 
-	LNET_MUTEX_UNLOCK(&the_lnet.ln_api_mutex);
+	mutex_unlock(&the_lnet.ln_api_mutex);
 
 	return 0;
 
@@ -1615,7 +1615,7 @@ failed1:
 failed0:
 	lnet_unprepare();
 	LASSERT(rc < 0);
-	LNET_MUTEX_UNLOCK(&the_lnet.ln_api_mutex);
+	mutex_unlock(&the_lnet.ln_api_mutex);
 	while (!list_empty(&net_head)) {
 		struct lnet_ni *ni;
 		ni = list_entry(net_head.next, struct lnet_ni, ni_list);
@@ -1638,7 +1638,7 @@ EXPORT_SYMBOL(LNetNIInit);
 int
 LNetNIFini()
 {
-        LNET_MUTEX_LOCK(&the_lnet.ln_api_mutex);
+	mutex_lock(&the_lnet.ln_api_mutex);
 
         LASSERT (the_lnet.ln_refcount > 0);
 
@@ -1662,7 +1662,7 @@ LNetNIFini()
                 lnet_unprepare();
         }
 
-        LNET_MUTEX_UNLOCK(&the_lnet.ln_api_mutex);
+	mutex_unlock(&the_lnet.ln_api_mutex);
         return 0;
 }
 EXPORT_SYMBOL(LNetNIFini);
@@ -1796,7 +1796,7 @@ lnet_dyn_add_ni(lnet_pid_t requested_pid, struct lnet_ioctl_config_data *conf)
 	if (rc <= 0)
 		return rc == 0 ? -EINVAL : rc;
 
-	LNET_MUTEX_LOCK(&the_lnet.ln_api_mutex);
+	mutex_lock(&the_lnet.ln_api_mutex);
 
 	if (rc > 1) {
 		rc = -EINVAL; /* only add one interface per call */
@@ -1839,7 +1839,7 @@ lnet_dyn_add_ni(lnet_pid_t requested_pid, struct lnet_ioctl_config_data *conf)
 	}
 
 	lnet_ping_target_update(pinfo, md_handle);
-	LNET_MUTEX_UNLOCK(&the_lnet.ln_api_mutex);
+	mutex_unlock(&the_lnet.ln_api_mutex);
 
 	return 0;
 
@@ -1847,7 +1847,7 @@ failed1:
 	lnet_ping_md_unlink(pinfo, &md_handle);
 	lnet_ping_info_free(pinfo);
 failed0:
-	LNET_MUTEX_UNLOCK(&the_lnet.ln_api_mutex);
+	mutex_unlock(&the_lnet.ln_api_mutex);
 	while (!list_empty(&net_head)) {
 		ni = list_entry(net_head.next, struct lnet_ni, ni_list);
 		list_del_init(&ni->ni_list);
@@ -1868,7 +1868,7 @@ lnet_dyn_del_ni(__u32 net)
 	if (LNET_NETTYP(net) == LOLND)
 		return -EINVAL;
 
-	LNET_MUTEX_LOCK(&the_lnet.ln_api_mutex);
+	mutex_lock(&the_lnet.ln_api_mutex);
 	/* create and link a new ping info, before removing the old one */
 	rc = lnet_ping_info_setup(&pinfo, &md_handle,
 				  lnet_get_ni_count() - 1, false);
@@ -1895,7 +1895,7 @@ failed:
 	lnet_ping_md_unlink(pinfo, &md_handle);
 	lnet_ping_info_free(pinfo);
 out:
-	LNET_MUTEX_UNLOCK(&the_lnet.ln_api_mutex);
+	mutex_unlock(&the_lnet.ln_api_mutex);
 
 	return rc;
 }
@@ -1931,7 +1931,7 @@ LNetCtl(unsigned int cmd, void *arg)
 		if (config->cfg_hdr.ioc_len < sizeof(*config))
 			return -EINVAL;
 
-		LNET_MUTEX_LOCK(&the_lnet.ln_api_mutex);
+		mutex_lock(&the_lnet.ln_api_mutex);
 		rc = lnet_add_route(config->cfg_net,
 				    config->cfg_config_u.cfg_route.rtr_hop,
 				    config->cfg_nid,
@@ -1943,7 +1943,7 @@ LNetCtl(unsigned int cmd, void *arg)
 				lnet_del_route(config->cfg_net,
 					       config->cfg_nid);
 		}
-		LNET_MUTEX_UNLOCK(&the_lnet.ln_api_mutex);
+		mutex_unlock(&the_lnet.ln_api_mutex);
 		return rc;
 
 	case IOC_LIBCFS_DEL_ROUTE:
@@ -1952,9 +1952,9 @@ LNetCtl(unsigned int cmd, void *arg)
 		if (config->cfg_hdr.ioc_len < sizeof(*config))
 			return -EINVAL;
 
-		LNET_MUTEX_LOCK(&the_lnet.ln_api_mutex);
+		mutex_lock(&the_lnet.ln_api_mutex);
 		rc = lnet_del_route(config->cfg_net, config->cfg_nid);
-		LNET_MUTEX_UNLOCK(&the_lnet.ln_api_mutex);
+		mutex_unlock(&the_lnet.ln_api_mutex);
 		return rc;
 
 	case IOC_LIBCFS_GET_ROUTE:
@@ -1999,14 +1999,14 @@ LNetCtl(unsigned int cmd, void *arg)
 		if (config->cfg_hdr.ioc_len < sizeof(*config))
 			return -EINVAL;
 
-		LNET_MUTEX_LOCK(&the_lnet.ln_api_mutex);
+		mutex_lock(&the_lnet.ln_api_mutex);
 		if (config->cfg_config_u.cfg_buffers.buf_enable) {
 			rc = lnet_rtrpools_enable();
-			LNET_MUTEX_UNLOCK(&the_lnet.ln_api_mutex);
+			mutex_unlock(&the_lnet.ln_api_mutex);
 			return rc;
 		}
 		lnet_rtrpools_disable();
-		LNET_MUTEX_UNLOCK(&the_lnet.ln_api_mutex);
+		mutex_unlock(&the_lnet.ln_api_mutex);
 		return 0;
 
 	case IOC_LIBCFS_ADD_BUF:
@@ -2015,14 +2015,14 @@ LNetCtl(unsigned int cmd, void *arg)
 		if (config->cfg_hdr.ioc_len < sizeof(*config))
 			return -EINVAL;
 
-		LNET_MUTEX_LOCK(&the_lnet.ln_api_mutex);
+		mutex_lock(&the_lnet.ln_api_mutex);
 		rc = lnet_rtrpools_adjust(config->cfg_config_u.cfg_buffers.
 						buf_tiny,
 					  config->cfg_config_u.cfg_buffers.
 						buf_small,
 					  config->cfg_config_u.cfg_buffers.
 						buf_large);
-		LNET_MUTEX_UNLOCK(&the_lnet.ln_api_mutex);
+		mutex_unlock(&the_lnet.ln_api_mutex);
 		return rc;
 
 	case IOC_LIBCFS_GET_BUF: {
