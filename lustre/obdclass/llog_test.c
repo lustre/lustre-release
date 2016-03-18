@@ -1480,6 +1480,15 @@ static int llog_test_10(const struct lu_env *env, struct obd_device *obd)
 	cat_logid = cath->lgh_id;
 	dt = lu2dt_dev(cath->lgh_obj->do_lu.lo_dev);
 
+	/* sync device to commit all recent LLOG changes to disk and avoid
+	 * to consume a huge space with delayed journal commit callbacks
+	 * particularly on low memory nodes or VMs */
+	rc = dt_sync(env, dt);
+	if (rc) {
+		CERROR("10c: sync failed: %d\n", rc);
+		GOTO(out, rc);
+	}
+
 	/* force catalog wrap for 5th plain LLOG */
 	cfs_fail_loc = CFS_FAIL_SKIP|OBD_FAIL_CAT_RECORDS;
 	cfs_fail_val = 4;
