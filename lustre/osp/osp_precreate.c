@@ -610,6 +610,9 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 
 	ptlrpc_request_set_replen(req);
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_OSP_FAKE_PRECREATE))
+		GOTO(ready, rc = 0);
+
 	rc = ptlrpc_queue_wait(req);
 	if (rc) {
 		CERROR("%s: can't precreate: rc = %d\n", d->opd_obd->obd_name,
@@ -623,6 +626,8 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 		GOTO(out_req, rc = -EPROTO);
 
 	ostid_to_fid(fid, &body->oa.o_oi, d->opd_index);
+
+ready:
 	if (osp_fid_diff(fid, &d->opd_pre_used_fid) <= 0) {
 		CERROR("%s: precreate fid "DFID" < local used fid "DFID
 		       ": rc = %d\n", d->opd_obd->obd_name,
