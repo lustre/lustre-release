@@ -2296,19 +2296,24 @@ void lu_object_assign_fid(const struct lu_env *env, struct lu_object *o,
 {
 	struct lu_site		*s = o->lo_dev->ld_site;
 	struct lu_fid		*old = &o->lo_header->loh_fid;
-	struct lu_object	*shadow;
-	wait_queue_t		 waiter;
 	struct cfs_hash		*hs;
 	struct cfs_hash_bd	 bd;
-	__u64			 version = 0;
 
 	LASSERT(fid_is_zero(old));
 
+	/* supposed to be unique */
 	hs = s->ls_obj_hash;
 	cfs_hash_bd_get_and_lock(hs, (void *)fid, &bd, 1);
-	shadow = htable_lookup(s, &bd, fid, &waiter, &version);
-	/* supposed to be unique */
-	LASSERT(IS_ERR(shadow) && PTR_ERR(shadow) == -ENOENT);
+#ifdef CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK
+	{
+		__u64                    version = 0;
+		wait_queue_t             waiter;
+		struct lu_object        *shadow;
+		shadow = htable_lookup(s, &bd, fid, &waiter, &version);
+		/* supposed to be unique */
+		LASSERT(IS_ERR(shadow) && PTR_ERR(shadow) == -ENOENT);
+	}
+#endif
 	*old = *fid;
 	cfs_hash_bd_add_locked(hs, &bd, &o->lo_header->loh_hash);
 	cfs_hash_bd_unlock(hs, &bd, 1);
