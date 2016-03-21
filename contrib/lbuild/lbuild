@@ -65,7 +65,6 @@ REUSEBUILD=
 # should cached products be used or force rebuilding?
 USE_BUILD_CACHE=true
 # what does this do exactly?  does it imply no kernel build?
-NORPM=false
 IOKITRPM=true
 OSDLDISKFSRPM=true
 OSDZFSRPM=false
@@ -145,7 +144,7 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
     Use ccache
 
   --norpm
-    Do not build RPMs (compile only mode)
+    Unused.
 
   --patchless
     Build lustre client only
@@ -393,6 +392,8 @@ compare_version () {
             return 1
         fi
     done
+
+    return 0
 }
 
 uniqify() {
@@ -766,6 +767,7 @@ do_patch_linux() {
 build_lustre() {
     local linux="$1"
     local linuxobj="$2"
+    local configure_args=""
 
     cp "$LUSTRE" SOURCES
 
@@ -777,16 +779,6 @@ build_lustre() {
     fi
 
     echo "Building Lustre RPMs for: $BUILD_ARCHS..."
-    local targets arch
-    for arch in $BUILD_ARCHS; do
-        targets="--target $arch $targets"
-    done
-
-    local rpmbuildopt='-tb'
-    if $NORPM; then
-        rpmbuildopt='-tc'
-        echo NORPM mode. Only compiling.
-    fi
 
     # If server we now build the spl and zfs modules against the lustre kernel.
     # These are required prior to the building of lustre server. Client does
@@ -800,54 +792,46 @@ build_lustre() {
     fi
 
     if $PATCHLESS; then
-        RPMBUILD_DEFS="$RPMBUILD_DEFS --without servers"
-        if [ -n "$CROSS_SUFFIX" ]; then
-            RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"lustre_name lustre-client$CROSS_SUFFIX\""
-        fi
+        configure_args="$configure_args --disable-server"
     fi
 
     # ditto for the lustre-tests boolean
     if ! $LUSTRE_TESTS; then
-        RPMBUILD_DEFS="$RPMBUILD_DEFS --without lustre_tests"
+        configure_args="$configure_args --disable-tests"
     fi
 
     if ! $IOKITRPM; then
-        RPMBUILD_DEFS="$RPMBUILD_DEFS --without lustre_iokit"
+        configure_args="$configure_args --disable-iokit"
     fi
 
-    local osd_zfs=""
-    if $OSDZFSRPM; then
-        osd_zfs="yes"
+    if ! $OSDZFSRPM; then
+        configure_args="$configure_args --without-zfs"
     fi
 
-    local osd_ldiskfs=""
-    if $OSDLDISKFSRPM; then
-        osd_ldiskfs="yes"
+    if ! $OSDLDISKFSRPM; then
+        configure_args="$configure_args --disable-ldiskfs"
     fi
 
-    RPMBUILD_DEFS="$RPMBUILD_DEFS ${FIND_REQUIRES:+--define \"__find_requires $FIND_REQUIRES\"}"
-    RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"configure_args ${CONFIGURE_FLAGS}\""
-    RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"kdir $linux\""
-    RPMBUILD_DEFS="$RPMBUILD_DEFS ${linuxobj:+--define \"kobjdir $linuxobj\"}"
-    RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"_tmppath $TMPDIR\""
-    RPMBUILD_DEFS="$RPMBUILD_DEFS --define \"_topdir $TOPDIR\""
+    configure_args="$configure_args --with-linux=$linux"
+    configure_args="$configure_args ${linuxobj:+--with-linux-obj=$linuxobj}"
 
     # allow environment setting to override ldiskfs series selection
     [ -n "$LDISKFS_SERIES" ] && export LDISKFS_SERIES
 
-    eval $RPMBUILD $targets $rpmbuildopt "$LUSTRE" $RPMBUILD_DEFS \
-        ${osd_zfs:+--with zfs} \
-        ${osd_ldiskfs:+--with ldiskfs} 2>&1 || \
+    ./configure $configure_args $CONFIGURE_FLAGS 2>&1 ||
+        fatal 1 "Error in configure."
+    make rpms 2>&1 ||
         fatal 1 "Error building rpms for $BUILD_ARCHS."
 
-    if $DO_SRC; then
-        if ! eval $RPMBUILD -ts "$LUSTRE" $RPMBUILD_DEFS 2>&1; then
-            popd >/dev/null
-            return 255
-        fi
-    fi
+    # move RPMs into place where they are expected to be
+    for arch in $BUILD_ARCHS; do
+        mv -f lustre-*.${arch}.rpm $TOPDIR/RPMS/${arch}/
+    done
+    mv -f lustre-*.src.rpm $TOPDIR/SRPMS/
+
     popd >/dev/null
 
+    return 0
 }
 
 # Only zfs Lustre DKMS Server is supported
@@ -1010,10 +994,9 @@ stage() {
         rpmdir="${STAGEDIR}/${CANONICAL_TARGET}-${arch}"
         echo "${0##*/}: Copying RPMs into ${rpmdir}"
         mkdir -p "${rpmdir}"
-        cp -v RPMS/${arch}/*.rpm "${rpmdir}"
-        if [ -d RPMS/noarch ]; then
-            cp -v RPMS/noarch/*.rpm "${rpmdir}"
-        fi
+        for rpm in $(ls RPMS/${arch}/*.rpm RPMS/noarch/*.rpm); do
+            cp -v $rpm "${rpmdir}"
+        done
     done
 
     cp -v "$LUSTRE" "$STAGEDIR"
@@ -1830,7 +1813,6 @@ while [ "$1" ]; do
             shift 2
             ;;
         --norpm)
-            NORPM=true
             shift
             ;;
         --noiokit)
