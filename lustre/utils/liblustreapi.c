@@ -1628,26 +1628,26 @@ int llapi_file_fget_lmv_uuid(int fd, struct obd_uuid *lov_name)
 
 int llapi_file_get_lov_uuid(const char *path, struct obd_uuid *lov_uuid)
 {
-        int fd, rc;
+	int fd, rc;
 
-        fd = open(path, O_RDONLY);
-        if (fd < 0) {
-                rc = -errno;
-                llapi_error(LLAPI_MSG_ERROR, rc, "error opening %s", path);
-                return rc;
-        }
+	fd = open(path, O_RDONLY | O_NONBLOCK);
+	if (fd < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "error opening %s", path);
+		return rc;
+	}
 
-        rc = llapi_file_fget_lov_uuid(fd, lov_uuid);
+	rc = llapi_file_fget_lov_uuid(fd, lov_uuid);
 
-        close(fd);
-        return rc;
+	close(fd);
+	return rc;
 }
 
 int llapi_file_get_lmv_uuid(const char *path, struct obd_uuid *lov_uuid)
 {
 	int fd, rc;
 
-	fd = open(path, O_RDONLY);
+	fd = open(path, O_RDONLY | O_NONBLOCK);
 	if (fd < 0) {
 		rc = -errno;
 		llapi_error(LLAPI_MSG_ERROR, rc, "error opening %s", path);
@@ -2412,44 +2412,44 @@ void llapi_lov_dump_user_lmm(struct find_param *param, char *path, int is_dir)
 
 int llapi_file_get_stripe(const char *path, struct lov_user_md *lum)
 {
-        const char *fname;
-        char *dname;
-        int fd, rc = 0;
+	const char *fname;
+	char *dname;
+	int fd, rc = 0;
 
-        fname = strrchr(path, '/');
+	fname = strrchr(path, '/');
 
-        /* It should be a file (or other non-directory) */
-        if (fname == NULL) {
-                dname = (char *)malloc(2);
-                if (dname == NULL)
-                        return -ENOMEM;
-                strcpy(dname, ".");
-                fname = (char *)path;
-        } else {
-                dname = (char *)malloc(fname - path + 1);
-                if (dname == NULL)
-                        return -ENOMEM;
-                strncpy(dname, path, fname - path);
-                dname[fname - path] = '\0';
-                fname++;
-        }
+	/* It should be a file (or other non-directory) */
+	if (fname == NULL) {
+		dname = (char *)malloc(2);
+		if (dname == NULL)
+			return -ENOMEM;
+		strcpy(dname, ".");
+		fname = (char *)path;
+	} else {
+		dname = (char *)malloc(fname - path + 1);
+		if (dname == NULL)
+			return -ENOMEM;
+		strncpy(dname, path, fname - path);
+		dname[fname - path] = '\0';
+		fname++;
+	}
 
-        fd = open(dname, O_RDONLY);
-        if (fd == -1) {
-                rc = -errno;
-                free(dname);
-                return rc;
-        }
+	fd = open(dname, O_RDONLY | O_NONBLOCK);
+	if (fd == -1) {
+		rc = -errno;
+		free(dname);
+		return rc;
+	}
 
-        strcpy((char *)lum, fname);
-        if (ioctl(fd, IOC_MDC_GETFILESTRIPE, (void *)lum) == -1)
-                rc = -errno;
+	strcpy((char *)lum, fname);
+	if (ioctl(fd, IOC_MDC_GETFILESTRIPE, (void *)lum) == -1)
+		rc = -errno;
 
-        if (close(fd) == -1 && rc == 0)
-                rc = -errno;
+	if (close(fd) == -1 && rc == 0)
+		rc = -errno;
 
-        free(dname);
-        return rc;
+	free(dname);
+	return rc;
 }
 
 int llapi_file_lookup(int dirfd, const char *name)
