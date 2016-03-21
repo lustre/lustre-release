@@ -491,7 +491,6 @@ static void osp_thandle_invalidate_object(const struct lu_env *env,
 		struct object_update_request *our_req = ours->ours_req;
 		unsigned int i;
 		struct lu_object *obj;
-		struct osp_object *osp_obj;
 
 		for (i = 0; i < our_req->ourq_count; i++) {
 			struct object_update *update;
@@ -512,13 +511,7 @@ static void osp_thandle_invalidate_object(const struct lu_env *env,
 			if (IS_ERR(obj))
 				break;
 
-			osp_obj = lu2osp_obj(obj);
-			if (osp_obj->opo_ooa != NULL) {
-				spin_lock(&osp_obj->opo_lock);
-				osp_obj->opo_ooa->ooa_attr.la_valid = 0;
-				osp_obj->opo_stale = 1;
-				spin_unlock(&osp_obj->opo_lock);
-			}
+			osp_invalidate(env, lu2dt_obj(obj));
 			lu_object_put(env, obj);
 		}
 	}

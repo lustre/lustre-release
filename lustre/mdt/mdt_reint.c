@@ -323,7 +323,7 @@ static int mdt_unlock_slaves(struct mdt_thread_info *mti,
 			/* borrow s0_lh temporarily to do mdt unlock */
 			mdt_lock_reg_init(s0_lh, einfo->ei_mode);
 			s0_lh->mlh_rreg_lh = slave_locks->handles[i];
-			mdt_object_unlock(mti, obj, s0_lh, decref);
+			mdt_object_unlock(mti, NULL, s0_lh, decref);
 			slave_locks->handles[i].cookie = 0ull;
 		}
 	}
@@ -386,6 +386,8 @@ static int mdt_lock_slaves(struct mdt_thread_info *mti, struct mdt_object *obj,
 	int rc;
 	ENTRY;
 
+	memset(einfo, 0, sizeof(*einfo));
+
 	rc = mdt_init_slaves(mti, obj, s0_fid);
 	if (rc <= 0)
 		RETURN(rc);
@@ -409,7 +411,6 @@ static int mdt_lock_slaves(struct mdt_thread_info *mti, struct mdt_object *obj,
 		}
 	}
 
-	memset(einfo, 0, sizeof(*einfo));
 	einfo->ei_type = LDLM_IBITS;
 	einfo->ei_mode = mode;
 	einfo->ei_cb_bl = mdt_remote_blocking_ast;
@@ -752,21 +753,10 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 			GOTO(out_put, rc = -EPROTO);
 
 		rc = mdt_attr_set(info, mo, ma);
-                if (rc)
-                        GOTO(out_put, rc);
-	} else if ((ma->ma_valid & MA_LOV) && (ma->ma_valid & MA_INODE)) {
-		struct lu_buf *buf  = &info->mti_buf;
-
-		if (ma->ma_attr.la_valid != 0)
-			GOTO(out_put, rc = -EPROTO);
-
-		buf->lb_buf = ma->ma_lmm;
-		buf->lb_len = ma->ma_lmm_size;
-		rc = mo_xattr_set(info->mti_env, mdt_object_child(mo),
-				  buf, XATTR_NAME_LOV, 0);
 		if (rc)
 			GOTO(out_put, rc);
-	} else if ((ma->ma_valid & MA_LMV) && (ma->ma_valid & MA_INODE)) {
+	} else if ((ma->ma_valid & (MA_LOV | MA_LMV)) &&
+		   (ma->ma_valid & MA_INODE)) {
 		struct lu_buf *buf  = &info->mti_buf;
 		struct mdt_lock_handle  *lh;
 
@@ -780,15 +770,21 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 		lh = &info->mti_lh[MDT_LH_PARENT];
 		mdt_lock_reg_init(lh, LCK_PW);
 
-		rc = mdt_object_lock(info, mo, lh,
-				     MDS_INODELOCK_XATTR);
+		rc = mdt_object_lock(info, mo, lh, MDS_INODELOCK_XATTR);
 		if (rc != 0)
 			GOTO(out_put, rc);
 
-		buf->lb_buf = ma->ma_lmv;
-		buf->lb_len = ma->ma_lmv_size;
-		rc = mo_xattr_set(info->mti_env, mdt_object_child(mo),
-				  buf, XATTR_NAME_DEFAULT_LMV, 0);
+		if (ma->ma_valid & MA_LOV) {
+			buf->lb_buf = ma->ma_lmm;
+			buf->lb_len = ma->ma_lmm_size;
+		} else {
+			buf->lb_buf = ma->ma_lmv;
+			buf->lb_len = ma->ma_lmv_size;
+		}
+		rc = mo_xattr_set(info->mti_env, mdt_object_child(mo), buf,
+				  (ma->ma_valid & MA_LOV) ?
+					XATTR_NAME_LOV : XATTR_NAME_DEFAULT_LMV,
+				  0);
 
 		mdt_object_unlock(info, mo, lh, rc);
 		if (rc)
@@ -1021,7 +1017,7 @@ relock:
 		rc = mdt_remote_object_lock(info, mp, mdt_object_fid(mc),
 					    &child_lh->mlh_rreg_lh,
 					    child_lh->mlh_rreg_mode,
-					    MDS_INODELOCK_LOOKUP, false);
+					    MDS_INODELOCK_LOOKUP, false, false);
 		if (rc != ELDLM_OK)
 			GOTO(put_child, rc);
 
@@ -1275,7 +1271,7 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
 		rc = mdt_remote_object_lock(info, obj,
 					    &LUSTRE_BFL_FID, lh,
 					    LCK_EX,
-					    MDS_INODELOCK_UPDATE, false);
+					    MDS_INODELOCK_UPDATE, false, false);
 		mdt_object_put(info->mti_env, obj);
 	} else {
 		struct ldlm_namespace *ns = info->mti_mdt->mdt_namespace;
@@ -1654,7 +1650,7 @@ out_lease:
 		rc = mdt_remote_object_lock(info, msrcdir, mdt_object_fid(mold),
 					    &lh_childp->mlh_rreg_lh,
 					    lh_childp->mlh_rreg_mode,
-					    MDS_INODELOCK_LOOKUP, false);
+					    MDS_INODELOCK_LOOKUP, false, false);
 		if (rc != ELDLM_OK)
 			GOTO(out_unlock_list, rc);
 
@@ -1720,7 +1716,7 @@ out_lease:
 					    mdt_object_fid(mnew),
 					    &lh_tgtp->mlh_rreg_lh,
 					    lh_tgtp->mlh_rreg_mode,
-					    MDS_INODELOCK_UPDATE, false);
+					    MDS_INODELOCK_UPDATE, false, false);
 		if (rc != 0) {
 			lh_tgtp = NULL;
 			GOTO(out_put_new, rc);
@@ -2032,7 +2028,7 @@ relock:
 						    &lh_oldp->mlh_rreg_lh,
 						    lh_oldp->mlh_rreg_mode,
 						    MDS_INODELOCK_LOOKUP,
-						    false);
+						    false, false);
 			if (rc != ELDLM_OK)
 				GOTO(out_put_new, rc);
 
@@ -2081,7 +2077,7 @@ relock:
 						    &lh_oldp->mlh_rreg_lh,
 						    lh_oldp->mlh_rreg_mode,
 						    MDS_INODELOCK_LOOKUP,
-						    false);
+						    false, false);
 			if (rc != ELDLM_OK)
 				GOTO(out_put_old, rc);
 

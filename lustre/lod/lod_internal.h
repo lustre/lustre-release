@@ -180,8 +180,8 @@ struct lod_device {
 	/* lov settings descriptor storing static information */
 	struct lov_desc	      lod_desc;
 
-	/* use to protect ld_active_tgt_count and all ltd_active */
-	spinlock_t	     lod_desc_lock;
+	/* protect ld_active_tgt_count, ltd_active and lod_md_root */
+	spinlock_t	     lod_lock;
 
 	/* Description of OST */
 	struct lod_tgt_descs  lod_ost_descs;
@@ -210,6 +210,9 @@ struct lod_device {
 	enum lustre_sec_part   lod_sp_me;
 
 	struct proc_dir_entry *lod_symlink;
+
+	/* ROOT object, used to fetch FS default striping */
+	struct lod_object      *lod_md_root;
 };
 
 #define lod_osts	lod_ost_descs.ltd_tgts
@@ -226,58 +229,77 @@ struct lod_device {
 #define ltd_mdt			ltd_tgt
 #define lod_mdt_desc		lod_tgt_desc
 
-struct lod_dir_stripe_info {
-	__u32	ldsi_stripe_offset;
-	__u32	ldsi_def_stripenr;
-	__u32	ldsi_def_stripe_offset;
-	__u32	ldsi_def_hash_type;
-	__u32	ldsi_hash_type;
-
-	unsigned int ldsi_def_striping_set:1,
-		     ldsi_def_striping_cached:1,
-		     ldsi_striped:1;
+struct lod_default_striping {
+	/* default LOV */
+	__u32		lds_def_stripe_size;
+	__u16		lds_def_stripenr;
+	__u16		lds_def_stripe_offset;
+	char		lds_def_pool[LOV_MAXPOOLNAME + 1];
+	/* default LMV */
+	__u32		lds_dir_def_stripenr;
+	__u32		lds_dir_def_stripe_offset;
+	__u32		lds_dir_def_hash_type;
+	/* flags whether default striping is set */
+	__u32		lds_def_striping_set:1,
+			lds_dir_def_striping_set:1;
 };
 
-/*
- * XXX: shrink this structure, currently it's 72bytes on 32bit arch,
- *      so, slab will be allocating 128bytes
- */
 struct lod_object {
-	struct dt_object   ldo_obj;
-
-	/* if object is striped, then the next fields describe stripes */
-	/* For striped directory, ldo_stripenr == slave stripe count */
-	__u16		   ldo_stripenr;
-	__u16		   ldo_layout_gen;
-	__u32		   ldo_stripe_size;
-	__u32		   ldo_pattern;
-	__u16		   ldo_released_stripenr;
-	char		  *ldo_pool;
-	struct dt_object **ldo_stripe;
-	/* to know how much memory to free, ldo_stripenr can be less */
-	/* default striping for directory represented by this object
-	 * is cached in stripenr/stripe_size */
-	unsigned int	   ldo_stripes_allocated:16,
-			   ldo_striping_cached:1,
-			   ldo_def_striping_set:1,
-			   ldo_def_striping_cached:1,
-	/* ldo_dir_slave_stripe indicate this is a slave stripe of
-	 * a striped dir */
-			   ldo_dir_slave_stripe:1;
-	__u32		   ldo_def_stripe_size;
-	__u16		   ldo_def_stripenr;
-	__u16		   ldo_def_stripe_offset;
-	struct lod_dir_stripe_info	*ldo_dir_stripe;
+	struct dt_object			     ldo_obj;
+	union {
+		/* file stripe */
+		struct {
+			/*
+			 * don't change field order, because both file and
+			 * directory use ldo_stripenr/ldo_stripes_allocated
+			 * to access stripe number.
+			 */
+			__u16			     ldo_stripenr;
+			__u16			     ldo_stripes_allocated;
+			__u16			     ldo_layout_gen;
+			__u16			     ldo_released_stripenr;
+			__u32			     ldo_pattern;
+			__u32			     ldo_stripe_size;
+			__u16			     ldo_stripe_offset;
+			char			    *ldo_pool;
+		};
+		/* directory stripe */
+		struct {
+			__u16			     ldo_dir_stripenr;
+			__u16			     ldo_dir_stripes_allocated;
+			__u32			     ldo_dir_stripe_offset;
+			__u32			     ldo_dir_hash_type;
+			__u32			     ldo_dir_slave_stripe:1,
+						     ldo_dir_striped:1;
+			/*
+			 * default striping is not cached, so this field is
+			 * invalid after create, make sure it's used by
+			 * lod_dir_striping_create_internal() only.
+			 */
+			struct lod_default_striping *ldo_def_striping;
+		};
+	};
+	struct dt_object			   **ldo_stripe;
 };
 
-#define ldo_dir_stripe_offset	ldo_dir_stripe->ldsi_stripe_offset
-#define ldo_dir_def_stripenr	ldo_dir_stripe->ldsi_def_stripenr
-#define ldo_dir_hash_type	ldo_dir_stripe->ldsi_hash_type
-#define ldo_dir_def_hash_type	ldo_dir_stripe->ldsi_def_hash_type
-#define ldo_dir_striped		ldo_dir_stripe->ldsi_striped
-#define ldo_dir_def_striping_set	ldo_dir_stripe->ldsi_def_striping_set
-#define ldo_dir_def_striping_cached	ldo_dir_stripe->ldsi_def_striping_cached
-#define ldo_dir_def_stripe_offset	ldo_dir_stripe->ldsi_def_stripe_offset
+static inline int lod_object_set_pool(struct lod_object *lo, const char *pool)
+{
+	int len;
+
+	if (lo->ldo_pool != NULL) {
+		len = strlen(lo->ldo_pool) + 1;
+		OBD_FREE(lo->ldo_pool, len);
+		lo->ldo_pool = NULL;
+	}
+	if (pool != NULL) {
+		len = strlen(pool) + 1;
+		OBD_ALLOC(lo->ldo_pool, len);
+		if (lo->ldo_pool == NULL)
+			return -ENOMEM;
+		strlcpy(lo->ldo_pool, pool, len);
+	}
+	return 0;
+}
 
 struct lod_it {
 	struct dt_object	*lit_obj; /* object from the layer below */
@@ -289,25 +311,28 @@ struct lod_it {
 
 struct lod_thread_info {
 	/* per-thread buffer for LOV EA, may be vmalloc'd */
-	void             *lti_ea_store;
-	__u32             lti_ea_store_size;
+	void			       *lti_ea_store;
+	__u32				lti_ea_store_size;
 	/* per-thread buffer for LMV EA */
-	struct lu_buf     lti_buf;
-	struct ost_id     lti_ostid;
-	struct lu_fid     lti_fid;
-	struct obd_statfs lti_osfs;
-	struct lu_attr    lti_attr;
-	struct lod_it	  lti_it;
-	struct ldlm_res_id lti_res_id;
+	struct lu_buf			lti_buf;
+	struct ost_id			lti_ostid;
+	struct lu_fid			lti_fid;
+	struct obd_statfs		lti_osfs;
+	struct lu_attr			lti_attr;
+	struct lod_it			lti_it;
+	struct ldlm_res_id		lti_res_id;
 	/* used to hold lu_dirent, sizeof(struct lu_dirent) + NAME_MAX */
-	char		  lti_key[sizeof(struct lu_dirent) + NAME_MAX];
-	struct dt_object_format lti_format;
-	struct lu_name	  lti_name;
-	struct lu_buf	  lti_linkea_buf;
-	struct dt_insert_rec lti_dt_rec;
-	struct llog_catid lti_cid;
-	struct llog_cookie lti_cookie;
-	struct lustre_cfg lti_lustre_cfg;
+	char				lti_key[sizeof(struct lu_dirent) +
+						NAME_MAX];
+	struct dt_object_format		lti_format;
+	struct lu_name			lti_name;
+	struct lu_buf			lti_linkea_buf;
+	struct dt_insert_rec		lti_dt_rec;
+	struct llog_catid		lti_cid;
+	struct llog_cookie		lti_cookie;
+	struct lustre_cfg		lti_lustre_cfg;
+	/* used to store parent default striping in create */
+	struct lod_default_striping	lti_def_striping;
 };
 
 extern const struct lu_device_operations lod_lu_ops;
@@ -489,7 +514,6 @@ extern struct dt_object_operations lod_obj_ops;
 extern struct lu_object_operations lod_lu_obj_ops;
 int lod_load_lmv_shards(const struct lu_env *env, struct lod_object *lo,
 			struct lu_buf *buf, bool resize);
-int lod_object_set_pool(struct lod_object *o, char *pool);
 int lod_declare_striped_object(const struct lu_env *env, struct dt_object *dt,
 			       struct lu_attr *attr,
 			       const struct lu_buf *lovea, struct thandle *th);

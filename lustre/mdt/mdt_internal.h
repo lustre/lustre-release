@@ -199,10 +199,13 @@ struct mdt_device {
 				   mdt_skip_lfsck:1;
 
 	gid_t			   mdt_enable_remote_dir_gid;
+
+	/* lock for osfs and md_root */
+	spinlock_t		   mdt_lock;
+
 	/* statfs optimization: we cache a bit  */
 	struct obd_statfs	   mdt_osfs;
 	__u64			   mdt_osfs_age;
-	spinlock_t		   mdt_osfs_lock;
 
         /* root squash */
 	struct root_squash_info    mdt_squash;
@@ -222,20 +225,19 @@ struct mdt_device {
 
 	/* MDT device async commit count, used for debug and sanity test */
 	atomic_t		   mdt_async_commit_count;
+
+	struct mdt_object	  *mdt_md_root;
 };
 
 #define MDT_SERVICE_WATCHDOG_FACTOR	(2)
 #define MDT_COS_DEFAULT         (0)
 
-enum mdt_object_flags {
-	/** lov object has been created. */
-	MOF_LOV_CREATED		= 1 << 0,
-};
-
 struct mdt_object {
 	struct lu_object_header	mot_header;
 	struct lu_object	mot_obj;
-	enum mdt_object_flags	mot_flags;
+	unsigned int		mot_lov_created:1,  /* lov object created */
+				mot_cache_attr:1;   /* enable remote object
+						     * attribute cache */
 	int			mot_write_count;
 	spinlock_t		mot_write_lock;
         /* Lock to protect create_data */
@@ -626,7 +628,8 @@ void mdt_client_compatibility(struct mdt_thread_info *info);
 int mdt_remote_object_lock(struct mdt_thread_info *mti,
 			   struct mdt_object *o, const struct lu_fid *fid,
 			   struct lustre_handle *lh,
-			   enum ldlm_mode mode, __u64 ibits, bool nonblock);
+			   enum ldlm_mode mode, __u64 ibits, bool nonblock,
+			   bool cache);
 
 enum mdt_name_flags {
 	MNF_FIX_ANON = 1,

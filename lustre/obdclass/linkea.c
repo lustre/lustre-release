@@ -132,8 +132,8 @@ int linkea_add_buf(struct linkea_data *ldata, const struct lu_name *lname,
 	ldata->ld_reclen = linkea_entry_pack(ldata->ld_lee, lname, pfid);
 	ldata->ld_leh->leh_len += ldata->ld_reclen;
 	ldata->ld_leh->leh_reccount++;
-	CDEBUG(D_INODE, "New link_ea name '%.*s' is added\n",
-	       lname->ln_namelen, lname->ln_name);
+	CDEBUG(D_INODE, "New link_ea name '"DFID":%.*s' is added\n",
+	       PFID(pfid), lname->ln_namelen, lname->ln_name);
 	return 0;
 }
 EXPORT_SYMBOL(linkea_add_buf);

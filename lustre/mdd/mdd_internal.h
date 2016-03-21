@@ -302,6 +302,7 @@ int mdd_changelog_ns_store(const struct lu_env *env, struct mdd_device *mdd,
 			   const struct lu_name *tname,
 			   const struct lu_name *sname,
 			   struct thandle *handle);
+int mdd_invalidate(const struct lu_env *env, struct md_object *obj);
 int mdd_declare_object_create_internal(const struct lu_env *env,
 				       struct mdd_object *p,
 				       struct mdd_object *c,
@@ -569,6 +570,12 @@ mdo_xattr_list(const struct lu_env *env, struct mdd_object *obj,
 		return -ENOENT;
 
 	return dt_xattr_list(env, next, buf);
+}
+
+static inline int
+mdo_invalidate(const struct lu_env *env, struct mdd_object *obj)
+{
+	return dt_invalidate(env, mdd_object_child(obj));
 }
 
 static inline

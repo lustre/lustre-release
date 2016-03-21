@@ -4003,6 +4003,11 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt,
 	RETURN(rc);
 }
 
+static int osd_invalidate(const struct lu_env *env, struct dt_object *dt)
+{
+	return 0;
+}
+
 /*
  * Index operations.
  */
@@ -4170,6 +4175,7 @@ static const struct dt_object_operations osd_obj_ops = {
         .do_xattr_del         = osd_xattr_del,
         .do_xattr_list        = osd_xattr_list,
         .do_object_sync       = osd_object_sync,
+	.do_invalidate	      = osd_invalidate,
 };
 
 /**

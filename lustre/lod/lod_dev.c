@@ -975,6 +975,11 @@ static int lod_process_config(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 	case LCFG_PRE_CLEANUP: {
+		if (lod->lod_md_root != NULL) {
+			lu_object_put(env, &lod->lod_md_root->ldo_obj.do_lu);
+			lod->lod_md_root = NULL;
+		}
+
 		lod_sub_process_config(env, lod, &lod->lod_mdt_descs, lcfg);
 		lod_sub_process_config(env, lod, &lod->lod_ost_descs, lcfg);
 		next = &lod->lod_child->dd_lu_dev;
@@ -1562,7 +1567,7 @@ static int lod_init0(const struct lu_env *env, struct lod_device *lod,
 	if (rc)
 		GOTO(out_pools, rc);
 
-	spin_lock_init(&lod->lod_desc_lock);
+	spin_lock_init(&lod->lod_lock);
 	spin_lock_init(&lod->lod_connects_lock);
 	lod_tgt_desc_init(&lod->lod_mdt_descs);
 	lod_tgt_desc_init(&lod->lod_ost_descs);

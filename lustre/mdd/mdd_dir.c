@@ -4211,6 +4211,7 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *pobj,
 	struct mdd_object	*mdd_tobj = md2mdd_obj(tobj);
 	struct lu_attr		*so_attr = MDD_ENV_VAR(env, cattr);
 	struct lu_attr		*pattr = MDD_ENV_VAR(env, pattr);
+	bool			created = false;
 	int			rc;
 
 	ENTRY;
@@ -4269,6 +4270,7 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *pobj,
 					lname, so_attr);
 		if (rc != 0)
 			GOTO(put, rc);
+		created = true;
 	}
 
 	LASSERT(mdd_object_exists(mdd_tobj));
@@ -4295,6 +4297,10 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *pobj,
 				     ma);
 	if (rc != 0)
 		GOTO(put, rc);
+
+	/* newly created target was not locked, don't cache its attributes */
+	if (created)
+		mdd_invalidate(env, tobj);
 put:
 	RETURN(rc);
 }

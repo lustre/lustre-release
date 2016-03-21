@@ -339,6 +339,11 @@ static int mdd_xattr_list(const struct lu_env *env, struct md_object *obj,
 	RETURN(rc);
 }
 
+int mdd_invalidate(const struct lu_env *env, struct md_object *obj)
+{
+	return mdo_invalidate(env, md2mdd_obj(obj));
+}
+
 int mdd_declare_object_create_internal(const struct lu_env *env,
 				       struct mdd_object *p,
 				       struct mdd_object *c,
@@ -2066,6 +2071,7 @@ const struct md_object_operations mdd_obj_ops = {
 	.moo_xattr_get		= mdd_xattr_get,
 	.moo_xattr_set		= mdd_xattr_set,
 	.moo_xattr_list		= mdd_xattr_list,
+	.moo_invalidate		= mdd_invalidate,
 	.moo_xattr_del		= mdd_xattr_del,
 	.moo_swap_layouts	= mdd_swap_layouts,
 	.moo_open		= mdd_open,

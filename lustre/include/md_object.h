@@ -214,6 +214,8 @@ struct md_object_operations {
 				 struct md_object *obj,
 				 struct ldlm_enqueue_info *einfo,
 				 union ldlm_policy_data *policy);
+
+	int (*moo_invalidate)(const struct lu_env *env, struct md_object *obj);
 };
 
 /**
@@ -400,6 +402,12 @@ static inline int mo_xattr_list(const struct lu_env *env,
 {
         LASSERT(m->mo_ops->moo_xattr_list);
         return m->mo_ops->moo_xattr_list(env, m, buf);
+}
+
+static inline int mo_invalidate(const struct lu_env *env, struct md_object *m)
+{
+	LASSERT(m->mo_ops->moo_invalidate);
+	return m->mo_ops->moo_invalidate(env, m);
 }
 
 static inline int mo_swap_layouts(const struct lu_env *env,

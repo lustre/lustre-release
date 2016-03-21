@@ -448,15 +448,15 @@ static int mdt_statfs(struct tgt_session_info *tsi)
 		rc = next->md_ops->mdo_statfs(info->mti_env, next, osfs);
 		if (rc)
 			GOTO(out, rc);
-		spin_lock(&info->mti_mdt->mdt_osfs_lock);
+		spin_lock(&info->mti_mdt->mdt_lock);
 		info->mti_mdt->mdt_osfs = *osfs;
 		info->mti_mdt->mdt_osfs_age = cfs_time_current_64();
-		spin_unlock(&info->mti_mdt->mdt_osfs_lock);
+		spin_unlock(&info->mti_mdt->mdt_lock);
 	} else {
 		/** use cached statfs data */
-		spin_lock(&info->mti_mdt->mdt_osfs_lock);
+		spin_lock(&info->mti_mdt->mdt_lock);
 		*osfs = info->mti_mdt->mdt_osfs;
-		spin_unlock(&info->mti_mdt->mdt_osfs_lock);
+		spin_unlock(&info->mti_mdt->mdt_lock);
 	}
 
 	if (rc == 0)
@@ -1237,17 +1237,13 @@ out:
  */
 static void mdt_swap_lov_flag(struct mdt_object *o1, struct mdt_object *o2)
 {
-	__u64	o1_flags;
+	unsigned int o1_lov_created = o1->mot_lov_created;
 
 	mutex_lock(&o1->mot_lov_mutex);
 	mutex_lock(&o2->mot_lov_mutex);
 
-	o1_flags = o1->mot_flags;
-	o1->mot_flags = (o1->mot_flags & ~MOF_LOV_CREATED) |
-			(o2->mot_flags & MOF_LOV_CREATED);
-
-	o2->mot_flags = (o2->mot_flags & ~MOF_LOV_CREATED) |
-			(o1_flags & MOF_LOV_CREATED);
+	o1->mot_lov_created = o2->mot_lov_created;
+	o2->mot_lov_created = o1_lov_created;
 
 	mutex_unlock(&o2->mot_lov_mutex);
 	mutex_unlock(&o1->mot_lov_mutex);
@@ -2375,12 +2371,13 @@ int mdt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 int mdt_remote_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 			    void *data, int flag)
 {
-	struct lustre_handle lockh;
-	int		  rc;
+	int rc = 0;
 	ENTRY;
 
 	switch (flag) {
-	case LDLM_CB_BLOCKING:
+	case LDLM_CB_BLOCKING: {
+		struct lustre_handle lockh;
+
 		ldlm_lock2handle(lock, &lockh);
 		rc = ldlm_cli_cancel(&lockh,
 			ldlm_is_atomic_cb(lock) ? 0 : LCF_ASYNC);
@@ -2389,17 +2386,46 @@ int mdt_remote_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 			RETURN(rc);
 		}
 		break;
-	case LDLM_CB_CANCELING:
-		LDLM_DEBUG(lock, "Revoke remote lock");
+	}
+	case LDLM_CB_CANCELING: {
+		LDLM_DEBUG(lock, "Revoke remote lock\n");
+
 		/* discard slc lock here so that it can be cleaned anytime,
 		 * especially for cleanup_resource() */
 		tgt_discard_slc_lock(lock);
+
+		/* once we cache lock, l_ast_data is set to mdt_object */
+		if (lock->l_ast_data != NULL) {
+			struct mdt_object *mo = lock->l_ast_data;
+			struct lu_env env;
+
+			rc = lu_env_init(&env, LCT_MD_THREAD);
+			if (unlikely(rc != 0)) {
+				struct obd_device *obd;
+
+				obd = ldlm_lock_to_ns(lock)->ns_obd;
+				CWARN("%s: lu_env initialization failed, object"
+				      "%p "DFID" is leaked!\n",
+				      obd->obd_name, mo,
+				      PFID(mdt_object_fid(mo)));
+				RETURN(rc);
+			}
+
+			if (lock->l_policy_data.l_inodebits.bits &
+			    (MDS_INODELOCK_XATTR | MDS_INODELOCK_UPDATE)) {
+				rc = mo_invalidate(&env, mdt_object_child(mo));
+				mo->mot_cache_attr = 0;
+			}
+			mdt_object_put(&env, mo);
+			lu_env_fini(&env);
+		}
 		break;
+	}
 	default:
 		LBUG();
 	}
 
-	RETURN(0);
+	RETURN(rc);
 }
 
 int mdt_check_resent_lock(struct mdt_thread_info *info,
@@ -2439,7 +2465,8 @@ int mdt_check_resent_lock(struct mdt_thread_info *info,
 
 int mdt_remote_object_lock(struct mdt_thread_info *mti, struct mdt_object *o,
 			   const struct lu_fid *fid, struct lustre_handle *lh,
-			   enum ldlm_mode mode, __u64 ibits, bool nonblock)
+			   enum ldlm_mode mode, __u64 ibits, bool nonblock,
+			   bool cache)
 {
 	struct ldlm_enqueue_info *einfo = &mti->mti_einfo;
 	union ldlm_policy_data *policy = &mti->mti_policy;
@@ -2460,12 +2487,24 @@ int mdt_remote_object_lock(struct mdt_thread_info *mti, struct mdt_object *o,
 	einfo->ei_res_id = res_id;
 	if (nonblock)
 		einfo->ei_nonblock = 1;
+	if (cache) {
+		/*
+		 * if we cache lock, couple lock with mdt_object, so that object
+		 * can be easily found in lock ASTs.
+		 */
+		mdt_object_get(mti->mti_env, o);
+		einfo->ei_cbdata = o;
+	}
 
 	memset(policy, 0, sizeof(*policy));
 	policy->l_inodebits.bits = ibits;
 
 	rc = mo_object_lock(mti->mti_env, mdt_object_child(o), lh, einfo,
 			    policy);
+	if (rc < 0 && cache) {
+		mdt_object_put(mti->mti_env, o);
+		einfo->ei_cbdata = NULL;
+	}
 	RETURN(rc);
 }
 
@@ -2614,7 +2653,8 @@ mdt_object_lock_internal(struct mdt_thread_info *info, struct mdt_object *o,
 		rc = mdt_remote_object_lock(info, o, mdt_object_fid(o),
 					    &lh->mlh_rreg_lh,
 					    lh->mlh_rreg_mode,
-					    MDS_INODELOCK_UPDATE, nonblock);
+					    MDS_INODELOCK_UPDATE, nonblock,
+					    false);
 		if (rc != ELDLM_OK) {
 			if (local_lh != NULL)
 				mdt_object_unlock(info, o, local_lh, rc);
@@ -2742,17 +2782,24 @@ static void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
  * \param decref force immediate lock releasing
  */
 static void mdt_save_remote_lock(struct mdt_thread_info *info,
-				 struct lustre_handle *h, enum ldlm_mode mode,
-				 int decref)
+				 struct mdt_object *o, struct lustre_handle *h,
+				 enum ldlm_mode mode, int decref)
 {
 	ENTRY;
 
 	if (lustre_handle_is_used(h)) {
+		struct ldlm_lock *lock = ldlm_handle2lock(h);
+
+		if (o != NULL &&
+		    (lock->l_policy_data.l_inodebits.bits &
+		     (MDS_INODELOCK_XATTR | MDS_INODELOCK_UPDATE)))
+			mo_invalidate(info->mti_env, mdt_object_child(o));
+
 		if (decref || !info->mti_has_trans ||
 		    !(mode & (LCK_PW | LCK_EX))) {
 			ldlm_lock_decref_and_cancel(h, mode);
+			LDLM_LOCK_PUT(lock);
 		} else {
-			struct ldlm_lock *lock = ldlm_handle2lock(h);
 			struct ptlrpc_request *req = mdt_info_req(info);
 
 			LASSERT(req != NULL);
@@ -2784,7 +2831,8 @@ void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
 
 	mdt_save_lock(info, &lh->mlh_pdo_lh, lh->mlh_pdo_mode, decref);
 	mdt_save_lock(info, &lh->mlh_reg_lh, lh->mlh_reg_mode, decref);
-	mdt_save_remote_lock(info, &lh->mlh_rreg_lh, lh->mlh_rreg_mode, decref);
+	mdt_save_remote_lock(info, o, &lh->mlh_rreg_lh, lh->mlh_rreg_mode,
+			     decref);
 
 	EXIT;
 }
@@ -4446,6 +4494,11 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 	struct lfsck_stop	 stop;
 	ENTRY;
 
+	if (m->mdt_md_root != NULL) {
+		mdt_object_put(env, m->mdt_md_root);
+		m->mdt_md_root = NULL;
+	}
+
 	stop.ls_status = LS_PAUSED;
 	stop.ls_flags = 0;
 	next->md_ops->mdo_iocontrol(env, next, OBD_IOC_STOP_LFSCK, 0, &stop);
@@ -4566,7 +4619,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	m->mdt_squash.rsi_gid = 0;
 	INIT_LIST_HEAD(&m->mdt_squash.rsi_nosquash_nids);
 	init_rwsem(&m->mdt_squash.rsi_sem);
-	spin_lock_init(&m->mdt_osfs_lock);
+	spin_lock_init(&m->mdt_lock);
 	m->mdt_osfs_age = cfs_time_shift_64(-1000);
 	m->mdt_enable_remote_dir = 0;
 	m->mdt_enable_remote_dir_gid = 0;
@@ -4902,8 +4955,10 @@ static int mdt_object_print(const struct lu_env *env, void *cookie,
 	struct mdt_object *mdto = mdt_obj((struct lu_object *)o);
 
 	return (*p)(env, cookie,
-		    LUSTRE_MDT_NAME"-object@%p(flags=%d, writecount=%d)",
-		    mdto, mdto->mot_flags, mdto->mot_write_count);
+		    LUSTRE_MDT_NAME"-object@%p(%s %s, writecount=%d)",
+		    mdto, mdto->mot_lov_created ? "lov_created" : "",
+		    mdto->mot_cache_attr ? "cache_attr" : "",
+		    mdto->mot_write_count);
 }
 
 static int mdt_prepare(const struct lu_env *env,

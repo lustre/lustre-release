@@ -123,7 +123,7 @@ static int mdt_create_data(struct mdt_thread_info *info,
 	ma->ma_need = MA_INODE | MA_LOV;
 	ma->ma_valid = 0;
 	mutex_lock(&o->mot_lov_mutex);
-	if (!(o->mot_flags & MOF_LOV_CREATED)) {
+	if (!o->mot_lov_created) {
 		rc = mdo_create_data(info->mti_env,
 				     p ? mdt_object_child(p) : NULL,
 				     mdt_object_child(o), spec, ma);
@@ -131,7 +131,7 @@ static int mdt_create_data(struct mdt_thread_info *info,
 			rc = mdt_attr_get_complex(info, o, ma);
 
 		if (rc == 0 && ma->ma_valid & MA_LOV)
-			o->mot_flags |= MOF_LOV_CREATED;
+			o->mot_lov_created = 1;
 	}
 
 	mutex_unlock(&o->mot_lov_mutex);
@@ -1172,6 +1172,48 @@ out:
         RETURN(rc);
 }
 
+/*
+ * find root object and take its xattr lock if it's on remote MDT, later create
+ * may use fs default striping (which is stored in root xattr).
+ */
+static int mdt_lock_root_xattr(struct mdt_thread_info *info,
+			       struct mdt_device *mdt)
+{
+	struct mdt_object *md_root = mdt->mdt_md_root;
+	struct lustre_handle lhroot;
+	int rc;
+
+	if (md_root == NULL) {
+		lu_root_fid(&info->mti_tmp_fid1);
+		md_root = mdt_object_find(info->mti_env, mdt,
+					  &info->mti_tmp_fid1);
+		if (IS_ERR(md_root))
+			return PTR_ERR(md_root);
+
+		spin_lock(&mdt->mdt_lock);
+		if (mdt->mdt_md_root != NULL)
+			mdt_object_put(info->mti_env, mdt->mdt_md_root);
+		mdt->mdt_md_root = md_root;
+		spin_unlock(&mdt->mdt_lock);
+	}
+
+	if (md_root->mot_cache_attr || !mdt_object_remote(md_root))
+		return 0;
+
+	rc = mdt_remote_object_lock(info, md_root, mdt_object_fid(md_root),
+				    &lhroot, LCK_PR, MDS_INODELOCK_XATTR,
+				    false, true);
+	if (rc < 0)
+		return rc;
+
+	md_root->mot_cache_attr = 1;
+
+	/* don't cancel this lock, so that we know the cached xattr is valid. */
+	ldlm_lock_decref(&lhroot, LCK_PR);
+
+	return 0;
+}
+
 int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 {
         struct mdt_device       *mdt = info->mti_mdt;
@@ -1263,17 +1305,21 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 		GOTO(out, result);
 	}
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK))
-                GOTO(out, result = err_serious(-ENOMEM));
+	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK))
+		GOTO(out, result = err_serious(-ENOMEM));
 
-        mdt_set_disposition(info, ldlm_rep,
-                            (DISP_IT_EXECD | DISP_LOOKUP_EXECD));
+	mdt_set_disposition(info, ldlm_rep,
+			    (DISP_IT_EXECD | DISP_LOOKUP_EXECD));
 
 	if (!lu_name_is_valid(&rr->rr_name))
 		GOTO(out, result = -EPROTO);
 
+	result = mdt_lock_root_xattr(info, mdt);
+	if (result < 0)
+		GOTO(out, result);
+
 again:
-        lh = &info->mti_lh[MDT_LH_PARENT];
+	lh = &info->mti_lh[MDT_LH_PARENT];
 	mdt_lock_pdo_init(lh,
 			  (create_flags & MDS_OPEN_CREAT) ? LCK_PW : LCK_PR,
 			  &rr->rr_name);
