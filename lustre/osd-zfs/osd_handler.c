@@ -1028,7 +1028,8 @@ static int osd_mount(const struct lu_env *env,
 	osd_unlinked_drain(env, o);
 err:
 	if (rc) {
-		dmu_objset_disown(o->od_os, o);
+		if (o->od_os)
+			dmu_objset_disown(o->od_os, o);
 		o->od_os = NULL;
 	}
 
