@@ -530,6 +530,9 @@ load_modules_local() {
 	fi
 
 	load_module ../libcfs/libcfs/libcfs
+	# Prevent local MODOPTS_LIBCFS being passed as part of environment
+	# variable to remote nodes
+	unset MODOPTS_LIBCFS
 
     [ "$PTLDEBUG" ] && lctl set_param debug="$PTLDEBUG"
     [ "$SUBSYSTEM" ] && lctl set_param subsystem_debug="${SUBSYSTEM# }"
