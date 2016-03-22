@@ -157,7 +157,8 @@ static int lsm_unpackmd_common(struct lov_obd *lov,
 			       struct lov_ost_data_v1 *objects)
 {
 	struct lov_oinfo *loi;
-	loff_t stripe_maxbytes = LLONG_MAX;
+	loff_t min_stripe_maxbytes = 0;
+	loff_t lov_bytes;
 	unsigned int stripe_count;
 	unsigned int i;
 
@@ -197,18 +198,21 @@ static int lsm_unpackmd_common(struct lov_obd *lov,
 			continue;
 		}
 
-		stripe_maxbytes = min_t(loff_t, stripe_maxbytes,
-					lov_tgt_maxbytes(
-					lov->lov_tgts[loi->loi_ost_idx]));
+		lov_bytes = lov_tgt_maxbytes(lov->lov_tgts[loi->loi_ost_idx]);
+		if (min_stripe_maxbytes == 0 || lov_bytes < min_stripe_maxbytes)
+			min_stripe_maxbytes = lov_bytes;
 	}
 
-	if (stripe_maxbytes == LLONG_MAX)
-		stripe_maxbytes = LUSTRE_EXT3_STRIPE_MAXBYTES;
+	if (min_stripe_maxbytes == 0)
+		min_stripe_maxbytes = LUSTRE_EXT3_STRIPE_MAXBYTES;
 
-	if (lsm->lsm_stripe_count == 0)
-		lsm->lsm_maxbytes = stripe_maxbytes * lov->desc.ld_tgt_count;
+	stripe_count = lsm->lsm_stripe_count ?: lov->desc.ld_tgt_count;
+	lov_bytes = min_stripe_maxbytes * stripe_count;
+
+	if (lov_bytes < min_stripe_maxbytes) /* handle overflow */
+		lsm->lsm_maxbytes = MAX_LFS_FILESIZE;
 	else
-		lsm->lsm_maxbytes = stripe_maxbytes * lsm->lsm_stripe_count;
+		lsm->lsm_maxbytes = lov_bytes;
 
 	return 0;
 }

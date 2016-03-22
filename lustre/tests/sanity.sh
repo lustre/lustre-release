@@ -13773,6 +13773,19 @@ test_248() {
 }
 run_test 248 "fast read verification"
 
+test_249() { # LU-7890
+	rm -f $DIR/$tfile
+	$SETSTRIPE -c 1 $DIR/$tfile
+
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.53) ] &&
+	skip "Need at least version 2.8.54"
+
+	# Offset 2T == 4k * 512M
+	dd if=/dev/zero of=$DIR/$tfile bs=4k count=1 seek=512M ||
+		error "dd to 2T offset failed"
+}
+run_test 249 "Write above 2T file size"
+
 test_250() {
 	[ "$(facet_fstype ost$(($($GETSTRIPE -i $DIR/$tfile) + 1)))" = "zfs" ] \
 	 && skip "no 16TB file size limit on ZFS" && return
