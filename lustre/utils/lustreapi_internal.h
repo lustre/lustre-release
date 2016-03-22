@@ -127,5 +127,4 @@ int libcfs_ukuc_stop(struct lustre_kernelcomm *l);
 int libcfs_ukuc_get_rfd(struct lustre_kernelcomm *link);
 int libcfs_ukuc_msg_get(struct lustre_kernelcomm *l, char *buf, int maxsize,
 			int transport);
-
 #endif /* _LUSTREAPI_INTERNAL_H_ */

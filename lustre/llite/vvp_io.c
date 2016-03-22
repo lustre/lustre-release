@@ -1443,7 +1443,10 @@ static const struct cl_io_operations vvp_io_ops = {
 		},
 		[CIT_MISC] = {
 			.cio_fini	= vvp_io_fini
-		}
+		},
+		[CIT_LADVISE] = {
+			.cio_fini	= vvp_io_fini
+		},
 	},
 	.cio_read_ahead = vvp_io_read_ahead
 };

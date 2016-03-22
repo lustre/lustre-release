@@ -85,7 +85,8 @@ liblustreapitmp_a_SOURCES = liblustreapi.c liblustreapi_hsm.c \
 			    liblustreapi_lease.c liblustreapi_util.c \
 			    liblustreapi_kernelconn.c liblustreapi_param.c \
 			    $(top_builddir)/libcfs/libcfs/util/string.c \
-			    $(top_builddir)/libcfs/libcfs/util/param.c
+			    $(top_builddir)/libcfs/libcfs/util/param.c \
+			    liblustreapi_ladvise.c
 if UTILS
 # build static and shared lib lustreapi
 liblustreapi.a : liblustreapitmp.a

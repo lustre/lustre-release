@@ -294,6 +294,7 @@ struct ll_futimes_3 {
 #define LL_IOC_MIGRATE			_IOR('f', 247, int)
 #define LL_IOC_FID2MDTIDX		_IOWR('f', 248, struct lu_fid)
 #define LL_IOC_GETPARENT		_IOWR('f', 249, struct getparent)
+#define LL_IOC_LADVISE			_IOR('f', 250, struct lu_ladvise)
 
 /* Lease types for use as arg and return of LL_IOC_{GET,SET}_LEASE ioctl. */
 enum ll_lease_type {
@@ -1388,6 +1389,38 @@ struct llapi_json_item_list {
 	int			ljil_item_count;
 	struct llapi_json_item	*ljil_items;
 };
+
+enum lu_ladvise_type {
+	LU_LADVISE_INVALID	= 0,
+};
+
+#define LU_LADVISE_NAMES {						\
+}
+
+struct lu_ladvise {
+	__u64 lla_advice;
+	__u64 lla_start;
+	__u64 lla_end;
+	__u64 lla_padding;
+};
+
+enum ladvise_flag {
+	LF_ASYNC	= 0x00000001,
+};
+
+#define LADVISE_MAGIC 0x1ADF1CE0
+#define LF_MASK LF_ASYNC
+
+struct ladvise_hdr {
+	__u32			lah_magic;	/* LADVISE_MAGIC */
+	__u32			lah_count;	/* number of advices */
+	__u64			lah_flags;	/* from enum ladvise_flag */
+	__u64			lah_padding1;	/* unused */
+	__u64			lah_padding2;	/* unused */
+	struct lu_ladvise	lah_advise[0];
+};
+
+#define LAH_COUNT_MAX	(1024)
 
 /** @} lustreuser */
 

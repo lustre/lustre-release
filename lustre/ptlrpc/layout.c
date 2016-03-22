@@ -651,6 +651,13 @@ static const struct req_msg_field *ost_get_fiemap_client[] = {
         &RMF_FIEMAP_VAL
 };
 
+static const struct req_msg_field *ost_ladvise[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_OST_BODY,
+	&RMF_OST_LADVISE_HDR,
+	&RMF_OST_LADVISE,
+};
+
 static const struct req_msg_field *ost_get_fiemap_server[] = {
         &RMF_PTLRPC_BODY,
         &RMF_FIEMAP_VAL
@@ -772,12 +779,13 @@ static struct req_format *req_formats[] = {
         &RQF_OST_GET_INFO_LAST_ID,
 	&RQF_OST_GET_INFO_LAST_FID,
 	&RQF_OST_SET_INFO_LAST_FID,
-        &RQF_OST_GET_INFO_FIEMAP,
-        &RQF_LDLM_ENQUEUE,
-        &RQF_LDLM_ENQUEUE_LVB,
-        &RQF_LDLM_CONVERT,
-        &RQF_LDLM_CANCEL,
-        &RQF_LDLM_CALLBACK,
+	&RQF_OST_GET_INFO_FIEMAP,
+	&RQF_OST_LADVISE,
+	&RQF_LDLM_ENQUEUE,
+	&RQF_LDLM_ENQUEUE_LVB,
+	&RQF_LDLM_CONVERT,
+	&RQF_LDLM_CANCEL,
+	&RQF_LDLM_CALLBACK,
         &RQF_LDLM_CP_CALLBACK,
         &RQF_LDLM_BL_CALLBACK,
         &RQF_LDLM_GL_CALLBACK,
@@ -1201,6 +1209,18 @@ struct req_msg_field RMF_LFSCK_REPLY =
 	DEFINE_MSGF("lfsck_reply", 0, sizeof(struct lfsck_reply),
 		    lustre_swab_lfsck_reply, NULL);
 EXPORT_SYMBOL(RMF_LFSCK_REPLY);
+
+struct req_msg_field RMF_OST_LADVISE_HDR =
+	DEFINE_MSGF("ladvise_request", 0,
+		    sizeof(struct ladvise_hdr),
+		    lustre_swab_ladvise_hdr, NULL);
+EXPORT_SYMBOL(RMF_OST_LADVISE_HDR);
+
+struct req_msg_field RMF_OST_LADVISE =
+	DEFINE_MSGF("ladvise_request", RMF_F_STRUCT_ARRAY,
+		    sizeof(struct lu_ladvise),
+		    lustre_swab_ladvise, NULL);
+EXPORT_SYMBOL(RMF_OST_LADVISE);
 
 struct req_msg_field RMF_OUT_UPDATE_HEADER = DEFINE_MSGF("out_update_header", 0,
 				-1, lustre_swab_out_update_header, NULL);
@@ -1658,6 +1678,10 @@ EXPORT_SYMBOL(RQF_LFSCK_NOTIFY);
 struct req_format RQF_LFSCK_QUERY =
 	DEFINE_REQ_FMT0("LFSCK_QUERY", obd_lfsck_request, obd_lfsck_reply);
 EXPORT_SYMBOL(RQF_LFSCK_QUERY);
+
+struct req_format RQF_OST_LADVISE =
+	DEFINE_REQ_FMT0("OST_LADVISE", ost_ladvise, ost_body_only);
+EXPORT_SYMBOL(RQF_OST_LADVISE);
 
 #if !defined(__REQ_LAYOUT_USER__)
 

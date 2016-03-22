@@ -111,6 +111,7 @@ struct osc_thread_info {
 	pgoff_t			oti_fn_index; /* first non-overlapped index */
 	struct cl_sync_io	oti_anchor;
 	struct cl_req_attr	oti_req_attr;
+	struct lu_buf		oti_ladvise_buf;
 };
 
 struct osc_object {

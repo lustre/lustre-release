@@ -1,0 +1,58 @@
+.TH LFS-LADVISE 1 2015-11-30 "Lustre" "Lustre Utilities"
+.SH NAME
+lfs ladvise \- give file access advices or hints to server.
+.SH SYNOPSIS
+.br
+.B lfs ladvise [--advice|-a ADVICE ] [--background|-b]
+        \fB[--start|-s START[kMGT]]
+        \fB{[--end|-e END[kMGT]] | [--length|-l LENGTH[kMGT]]}
+        \fB<FILE> ...\fR
+.br
+.SH DESCRIPTION
+Give file access advices or hints to Lustre server side, usually OSS. This lfs
+utility is simlar to Linux fadvise() system call, except it can forward the
+advices from Lustre clients to servers.
+.SH OPTIONS
+.TP
+\fB\-a\fR, \fB\-\-advice\fR=\fIADVICE\fR
+Give advice or hint of type \fIADVICE\fR.
+.TP
+\fB\-b\fR, \fB\-\-background
+Enable the advices to be sent and handled asynchronously.
+.TP
+\fB\-s\fR, \fB\-\-start\fR=\fISTART_OFFSET\fR
+File range starts from \fISTART_OFFSET\fR.
+.TP
+\fB\-e\fR, \fB\-\-end\fR=\fIEND_OFFSET\fR
+File range ends at (not including) \fIEND_OFFSET\fR.
+This option may not be specified at the same time as the -l option.
+.TP
+\fB\-l\fR, \fB\-\-length\fR=\fILENGTH\fR
+File range has length of \fILENGTH\fR. This option may not be specified at the
+same time as the -e option.
+.SH NOTE
+.PP
+Typically, the "lfs ladvise" forwards the advice to Lustre servers without
+guaranteeing what and when servers will react to the advice. Actions may or
+may not triggered when the advices are recieved, depending on the type of the
+advice as well as the real-time decision of the affected server-side
+components.
+
+A typical usage of ladvise is to enable applications and users with external
+knowledge to intervene in server-side cache management. For example, if a
+bunch of different clients are doing small random reads of a file, prefetching
+pages into OSS cache with big linear reads before the random IO is a net
+benefit. Fetching all that data into each client cache with fadvise() may not
+be, due to much more data being sent to the client.
+
+The main difference between Linux fadvise() system call and ladvise is that
+fadvise() is only a client side mechanism that does not pass the advice to the
+filesystem, while ladvise can send advices or hints to Lustre server sides.
+
+.SH AVAILABILITY
+The lfs ladvise command is part of the Lustre filesystem.
+.SH SEE ALSO
+.BR lfs (1),
+.BR fadvise (2),
+.BR llapi_ladvise (3),
+.BR lustre (7)

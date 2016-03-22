@@ -70,6 +70,7 @@ static struct ll_rpc_opcode {
         { OST_QUOTACHECK,   "ost_quotacheck" },
         { OST_QUOTACTL,     "ost_quotactl" },
         { OST_QUOTA_ADJUST_QUNIT, "ost_quota_adjust_qunit" },
+	{ OST_LADVISE,      "ost_ladvise" },
         { MDS_GETATTR,      "mds_getattr" },
         { MDS_GETATTR_NAME, "mds_getattr_lock" },
         { MDS_CLOSE,        "mds_close" },

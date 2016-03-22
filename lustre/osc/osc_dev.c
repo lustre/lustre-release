@@ -123,8 +123,10 @@ static void *osc_key_init(const struct lu_context *ctx,
 static void osc_key_fini(const struct lu_context *ctx,
                          struct lu_context_key *key, void *data)
 {
-        struct osc_thread_info *info = data;
-        OBD_SLAB_FREE_PTR(info, osc_thread_kmem);
+	struct osc_thread_info *info = data;
+
+	lu_buf_free(&info->oti_ladvise_buf);
+	OBD_SLAB_FREE_PTR(info, osc_thread_kmem);
 }
 
 struct lu_context_key osc_key = {

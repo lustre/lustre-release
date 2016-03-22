@@ -104,7 +104,9 @@ void lustre_assert_wire_constants(void)
 		 (long long)OST_QUOTACTL);
 	LASSERTF(OST_QUOTA_ADJUST_QUNIT == 20, "found %lld\n",
 		 (long long)OST_QUOTA_ADJUST_QUNIT);
-	LASSERTF(OST_LAST_OPC == 21, "found %lld\n",
+	LASSERTF(OST_LADVISE == 21, "found %lld\n",
+		 (long long)OST_LADVISE);
+	LASSERTF(OST_LAST_OPC == 22, "found %lld\n",
 		 (long long)OST_LAST_OPC);
 	LASSERTF(OBD_OBJECT_EOF == 0xffffffffffffffffULL, "found 0x%.16llxULL\n",
 		 OBD_OBJECT_EOF);
@@ -5023,4 +5025,54 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct llog_update_record, lur_update_rec));
 	LASSERTF((int)sizeof(((struct llog_update_record *)0)->lur_update_rec) == 32, "found %lld\n",
 		 (long long)(int)sizeof(((struct llog_update_record *)0)->lur_update_rec));
+
+	/* Checks for struct lu_ladvise */
+	LASSERTF((int)sizeof(struct lu_ladvise) == 32, "found %lld\n",
+		 (long long)(int)sizeof(struct lu_ladvise));
+	LASSERTF((int)offsetof(struct lu_ladvise, lla_advice) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct lu_ladvise, lla_advice));
+	LASSERTF((int)sizeof(((struct lu_ladvise *)0)->lla_advice) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct lu_ladvise *)0)->lla_advice));
+	LASSERTF((int)offsetof(struct lu_ladvise, lla_start) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct lu_ladvise, lla_start));
+	LASSERTF((int)sizeof(((struct lu_ladvise *)0)->lla_start) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct lu_ladvise *)0)->lla_start));
+	LASSERTF((int)offsetof(struct lu_ladvise, lla_end) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct lu_ladvise, lla_end));
+	LASSERTF((int)sizeof(((struct lu_ladvise *)0)->lla_end) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct lu_ladvise *)0)->lla_end));
+	LASSERTF((int)offsetof(struct lu_ladvise, lla_padding) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct lu_ladvise, lla_padding));
+	LASSERTF((int)sizeof(((struct lu_ladvise *)0)->lla_padding) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct lu_ladvise *)0)->lla_padding));
+
+	/* Checks for struct ladvise_hdr */
+	LASSERTF(LADVISE_MAGIC == 0x1ADF1CE0, "found 0x%.8x\n",
+		 LADVISE_MAGIC);
+	LASSERTF((int)sizeof(struct ladvise_hdr) == 32, "found %lld\n",
+		 (long long)(int)sizeof(struct ladvise_hdr));
+	LASSERTF((int)offsetof(struct ladvise_hdr, lah_magic) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct ladvise_hdr, lah_magic));
+	LASSERTF((int)sizeof(((struct ladvise_hdr *)0)->lah_magic) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct ladvise_hdr *)0)->lah_magic));
+	LASSERTF((int)offsetof(struct ladvise_hdr, lah_count) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct ladvise_hdr, lah_count));
+	LASSERTF((int)sizeof(((struct ladvise_hdr *)0)->lah_count) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct ladvise_hdr *)0)->lah_count));
+	LASSERTF((int)offsetof(struct ladvise_hdr, lah_flags) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct ladvise_hdr, lah_flags));
+	LASSERTF((int)sizeof(((struct ladvise_hdr *)0)->lah_flags) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct ladvise_hdr *)0)->lah_flags));
+	LASSERTF((int)offsetof(struct ladvise_hdr, lah_padding1) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct ladvise_hdr, lah_padding1));
+	LASSERTF((int)sizeof(((struct ladvise_hdr *)0)->lah_padding1) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct ladvise_hdr *)0)->lah_padding1));
+	LASSERTF((int)offsetof(struct ladvise_hdr, lah_padding2) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct ladvise_hdr, lah_padding2));
+	LASSERTF((int)sizeof(((struct ladvise_hdr *)0)->lah_padding2) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct ladvise_hdr *)0)->lah_padding2));
+	LASSERTF((int)offsetof(struct ladvise_hdr, lah_advise) == 32, "found %lld\n",
+		 (long long)(int)offsetof(struct ladvise_hdr, lah_advise));
+	LASSERTF((int)sizeof(((struct ladvise_hdr *)0)->lah_advise) == 0, "found %lld\n",
+		 (long long)(int)sizeof(((struct ladvise_hdr *)0)->lah_advise));
 }

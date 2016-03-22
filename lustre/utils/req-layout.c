@@ -49,12 +49,12 @@
 
 #include <linux/types.h>
 
-#define ARRAY_SIZE(a) ((sizeof(a)) / (sizeof((a)[0])))
 #define __REQ_LAYOUT_USER__ (1)
 #define EXPORT_SYMBOL(s)
 
 #include <lustre/lustre_idl.h>
 #include <lustre_req_layout.h>
+#include <lustre/lustreapi.h>
 
 #define lustre_swab_generic_32s NULL
 #define lustre_swab_lu_seq_range NULL
@@ -114,6 +114,8 @@
 #define lustre_swab_lmv_user_md NULL
 #define lustre_swab_lfsck_request NULL
 #define lustre_swab_lfsck_reply NULL
+#define lustre_swab_ladvise_hdr NULL
+#define lustre_swab_ladvise NULL
 
 /*
  * Yes, include .c file.

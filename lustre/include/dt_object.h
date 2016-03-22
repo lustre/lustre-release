@@ -1318,6 +1318,27 @@ struct dt_body_operations {
 			   __u64 start,
 			   __u64 end,
 			   struct thandle *th);
+	/**
+	 * Give advices on specified region in an object.
+	 *
+	 * This method is used to give advices about access pattern on an
+	 * given region of the object. The disk filesystem understands
+	 * the advices and tunes cache/read-ahead policies.
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] start	the start of the region affected
+	 * \param[in] end	the end of the region affected
+	 * \param[in] advice	advice type
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int   (*dbo_ladvise)(const struct lu_env *env,
+			     struct dt_object *dt,
+			     __u64 start,
+			     __u64 end,
+			     enum lu_ladvise_type advice);
 };
 
 /**
@@ -2391,6 +2412,15 @@ static inline int dt_punch(const struct lu_env *env, struct dt_object *dt,
         LASSERT(dt->do_body_ops);
         LASSERT(dt->do_body_ops->dbo_punch);
 	return dt->do_body_ops->dbo_punch(env, dt, start, end, th);
+}
+
+static inline int dt_ladvise(const struct lu_env *env, struct dt_object *dt,
+			     __u64 start, __u64 end, int advice)
+{
+	LASSERT(dt);
+	LASSERT(dt->do_body_ops);
+	LASSERT(dt->do_body_ops->dbo_ladvise);
+	return dt->do_body_ops->dbo_ladvise(env, dt, start, end, advice);
 }
 
 static inline int dt_fiemap_get(const struct lu_env *env, struct dt_object *d,

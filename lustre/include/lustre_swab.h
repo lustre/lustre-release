@@ -116,5 +116,7 @@ void lustre_swab_object_update_reply(struct object_update_reply *our);
 void lustre_swab_swap_layouts(struct mdc_swap_layouts *msl);
 void lustre_swab_close_data(struct close_data *data);
 void lustre_swab_lmv_user_md(struct lmv_user_md *lum);
+void lustre_swab_ladvise(struct lu_ladvise *ladvise);
+void lustre_swab_ladvise_hdr(struct ladvise_hdr *ladvise_hdr);
 
 #endif

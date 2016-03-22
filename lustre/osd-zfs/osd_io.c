@@ -906,6 +906,20 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 				 false));
 }
 
+static int osd_ladvise(const struct lu_env *env, struct dt_object *dt,
+		       __u64 start, __u64 end, enum lu_ladvise_type advice)
+{
+	int	rc;
+	ENTRY;
+
+	switch (advice) {
+	default:
+		rc = -ENOTSUPP;
+		break;
+	}
+
+	RETURN(rc);
+}
 
 struct dt_body_operations osd_body_ops = {
 	.dbo_read			= osd_read,
@@ -919,4 +933,5 @@ struct dt_body_operations osd_body_ops = {
 	.dbo_read_prep			= osd_read_prep,
 	.dbo_declare_punch		= osd_declare_punch,
 	.dbo_punch			= osd_punch,
+	.dbo_ladvise			= osd_ladvise,
 };

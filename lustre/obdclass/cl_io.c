@@ -143,6 +143,8 @@ void cl_io_fini(const struct lu_env *env, struct cl_io *io)
 		LASSERT(ergo(io->ci_ignore_layout || !io->ci_verify_layout,
 				!io->ci_need_restart));
 		break;
+	case CIT_LADVISE:
+		break;
 	default:
 		LBUG();
 	}

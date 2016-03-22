@@ -1919,6 +1919,21 @@ static int osd_fiemap_get(const struct lu_env *env, struct dt_object *dt,
 	return rc;
 }
 
+static int osd_ladvise(const struct lu_env *env, struct dt_object *dt,
+		       __u64 start, __u64 end, enum lu_ladvise_type advice)
+{
+	int	rc;
+	ENTRY;
+
+	switch (advice) {
+	default:
+		rc = -ENOTSUPP;
+		break;
+	}
+
+	RETURN(rc);
+}
+
 /*
  * in some cases we may need declare methods for objects being created
  * e.g., when we create symlink
@@ -1928,17 +1943,18 @@ const struct dt_body_operations osd_body_ops_new = {
 };
 
 const struct dt_body_operations osd_body_ops = {
-        .dbo_read                 = osd_read,
-        .dbo_declare_write        = osd_declare_write,
-        .dbo_write                = osd_write,
-        .dbo_bufs_get             = osd_bufs_get,
-        .dbo_bufs_put             = osd_bufs_put,
-        .dbo_write_prep           = osd_write_prep,
-        .dbo_declare_write_commit = osd_declare_write_commit,
-        .dbo_write_commit         = osd_write_commit,
-        .dbo_read_prep            = osd_read_prep,
-        .dbo_declare_punch         = osd_declare_punch,
-        .dbo_punch                 = osd_punch,
-        .dbo_fiemap_get           = osd_fiemap_get,
+	.dbo_read			= osd_read,
+	.dbo_declare_write		= osd_declare_write,
+	.dbo_write			= osd_write,
+	.dbo_bufs_get			= osd_bufs_get,
+	.dbo_bufs_put			= osd_bufs_put,
+	.dbo_write_prep			= osd_write_prep,
+	.dbo_declare_write_commit	= osd_declare_write_commit,
+	.dbo_write_commit		= osd_write_commit,
+	.dbo_read_prep			= osd_read_prep,
+	.dbo_declare_punch		= osd_declare_punch,
+	.dbo_punch			= osd_punch,
+	.dbo_fiemap_get			= osd_fiemap_get,
+	.dbo_ladvise			= osd_ladvise,
 };
 

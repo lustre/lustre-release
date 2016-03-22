@@ -213,6 +213,7 @@ extern struct req_format RQF_OST_GET_INFO_LAST_ID;
 extern struct req_format RQF_OST_GET_INFO_LAST_FID;
 extern struct req_format RQF_OST_SET_INFO_LAST_FID;
 extern struct req_format RQF_OST_GET_INFO_FIEMAP;
+extern struct req_format RQF_OST_LADVISE;
 
 /* LDLM req_format */
 extern struct req_format RQF_LDLM_ENQUEUE;
@@ -341,6 +342,9 @@ extern struct req_msg_field RMF_OUT_UPDATE_BUF;
 /* LFSCK format */
 extern struct req_msg_field RMF_LFSCK_REQUEST;
 extern struct req_msg_field RMF_LFSCK_REPLY;
+
+extern struct req_msg_field RMF_OST_LADVISE_HDR;
+extern struct req_msg_field RMF_OST_LADVISE;
 /** @} req_layout */
 
 #endif /* _LUSTRE_REQ_LAYOUT_H__ */
