@@ -187,8 +187,8 @@ int __osd_object_attr_get(const struct lu_env *env, struct osd_device *o,
 			  struct osd_object *obj, struct lu_attr *la)
 {
 	struct osa_attr	*osa = &osd_oti_get(env)->oti_osa;
+	sa_bulk_attr_t	*bulk = osd_oti_get(env)->oti_attr_bulk;
 	sa_handle_t	*sa_hdl;
-	sa_bulk_attr_t	*bulk;
 	int		 cnt = 0;
 	int		 rc;
 	ENTRY;
@@ -199,10 +199,6 @@ int __osd_object_attr_get(const struct lu_env *env, struct osd_device *o,
 			    SA_HDL_PRIVATE, &sa_hdl);
 	if (rc)
 		RETURN(rc);
-
-	OBD_ALLOC(bulk, sizeof(sa_bulk_attr_t) * 9);
-	if (bulk == NULL)
-		GOTO(out_sa, rc = -ENOMEM);
 
 	la->la_valid |= LA_ATIME | LA_MTIME | LA_CTIME | LA_MODE | LA_TYPE |
 			LA_SIZE | LA_UID | LA_GID | LA_FLAGS | LA_NLINK;
@@ -216,10 +212,11 @@ int __osd_object_attr_get(const struct lu_env *env, struct osd_device *o,
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_UID(o), NULL, &osa->uid, 8);
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_GID(o), NULL, &osa->gid, 8);
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_FLAGS(o), NULL, &osa->flags, 8);
+	LASSERT(cnt <= ARRAY_SIZE(osd_oti_get(env)->oti_attr_bulk));
 
 	rc = -sa_bulk_lookup(sa_hdl, bulk, cnt);
 	if (rc)
-		GOTO(out_bulk, rc);
+		GOTO(out_sa, rc);
 
 	la->la_atime = osa->atime[0];
 	la->la_mtime = osa->mtime[0];
@@ -256,12 +253,10 @@ int __osd_object_attr_get(const struct lu_env *env, struct osd_device *o,
 	if (S_ISCHR(la->la_mode) || S_ISBLK(la->la_mode)) {
 		rc = -sa_lookup(sa_hdl, SA_ZPL_RDEV(o), &osa->rdev, 8);
 		if (rc)
-			GOTO(out_bulk, rc);
+			GOTO(out_sa, rc);
 		la->la_rdev = osa->rdev;
 		la->la_valid |= LA_RDEV;
 	}
-out_bulk:
-	OBD_FREE(bulk, sizeof(sa_bulk_attr_t) * 9);
 out_sa:
 	sa_handle_destroy(sa_hdl);
 
@@ -929,11 +924,11 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 			const struct lu_attr *la, struct thandle *handle)
 {
 	struct osd_thread_info	*info = osd_oti_get(env);
+	sa_bulk_attr_t		*bulk = osd_oti_get(env)->oti_attr_bulk;
 	struct osd_object	*obj = osd_dt_obj(dt);
 	struct osd_device	*osd = osd_obj2dev(obj);
 	struct osd_thandle	*oh;
 	struct osa_attr		*osa = &info->oti_osa;
-	sa_bulk_attr_t		*bulk;
 	__u64			 valid = la->la_valid;
 	int			 cnt;
 	int			 rc = 0;
@@ -1001,10 +996,6 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 			}
 		}
 	}
-
-	OBD_ALLOC(bulk, sizeof(sa_bulk_attr_t) * 10);
-	if (bulk == NULL)
-		GOTO(out, rc = -ENOMEM);
 
 	/* do both accounting updates outside oo_attr_lock below */
 	if ((valid & LA_UID) && (la->la_uid != obj->oo_attr.la_uid)) {
@@ -1099,9 +1090,9 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 	obj->oo_attr.la_valid |= valid;
 	write_unlock(&obj->oo_attr_lock);
 
+	LASSERT(cnt <= ARRAY_SIZE(osd_oti_get(env)->oti_attr_bulk));
 	rc = osd_object_sa_bulk_update(obj, bulk, cnt, oh);
 
-	OBD_FREE(bulk, sizeof(sa_bulk_attr_t) * 10);
 out:
 	up_read(&obj->oo_guard);
 	RETURN(rc);
@@ -1200,8 +1191,8 @@ int __osd_attr_init(const struct lu_env *env, struct osd_device *osd,
 		    uint64_t oid, dmu_tx_t *tx, struct lu_attr *la,
 		    uint64_t parent)
 {
-	sa_bulk_attr_t	*bulk;
-	sa_handle_t	*sa_hdl;
+	sa_handle_t     *sa_hdl;
+	sa_bulk_attr_t	*bulk = osd_oti_get(env)->oti_attr_bulk;
 	struct osa_attr	*osa = &osd_oti_get(env)->oti_osa;
 	uint64_t	 gen;
 	uint64_t	 crtime[2];
@@ -1230,11 +1221,6 @@ int __osd_attr_init(const struct lu_env *env, struct osd_device *osd,
 	if (rc)
 		return rc;
 
-	OBD_ALLOC(bulk, sizeof(sa_bulk_attr_t) * 13);
-	if (bulk == NULL) {
-		rc = -ENOMEM;
-		goto out;
-	}
 	/*
 	 * we need to create all SA below upon object create.
 	 *
@@ -1259,11 +1245,10 @@ int __osd_attr_init(const struct lu_env *env, struct osd_device *osd,
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_CRTIME(osd), NULL, crtime, 16);
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_LINKS(osd), NULL, &osa->nlink, 8);
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_RDEV(osd), NULL, &osa->rdev, 8);
+	LASSERT(cnt <= ARRAY_SIZE(osd_oti_get(env)->oti_attr_bulk));
 
 	rc = -sa_replace_all_by_template(sa_hdl, bulk, cnt, tx);
 
-	OBD_FREE(bulk, sizeof(sa_bulk_attr_t) * 13);
-out:
 	sa_handle_destroy(sa_hdl);
 	return rc;
 }
