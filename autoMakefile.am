@@ -61,20 +61,17 @@ doxygen-%: build/doxyfile.%
 	doxygen $<
 
 if MODULES
-.PHONY: ldiskfs-sources lustre-sources
+.PHONY: ldiskfs-sources
 
 ldiskfs-sources:
 if LDISKFS_ENABLED
 	$(MAKE) sources -C @LDISKFS_SUBDIR@ || exit $$?
 endif
 
-lustre-sources:
-	$(MAKE) sources -C lustre || exit $$?
-
 if LINUX
 all-am: modules
 
-modules: undef.h ldiskfs-sources lustre-sources
+modules: undef.h ldiskfs-sources
 	$(MAKE) CC="$(CC)" -C $(LINUX_OBJ) \
 	-f $(PWD)/build/Makefile LUSTRE_LINUX_CONFIG=$(LINUX_CONFIG) \
 	LINUXINCLUDE='-I$$(srctree)/arch/$$(SRCARCH)/include -Iarch/$$(SRCARCH)/include/generated -Iinclude $$(if $$(KBUILD_SRC),-Iinclude2 -I$$(srctree)/include) -I$$(srctree)/arch/$$(SRCARCH)/include/uapi -Iarch/$$(SRCARCH)/include/generated/uapi -I$$(srctree)/include/uapi -Iinclude/generated/uapi -include $(CONFIG_INCLUDE)' \

@@ -73,7 +73,6 @@
 #include <lprocfs_status.h>
 #include <lustre_ioctl.h>
 #include <lustre_ver.h>
-#include <lustre/lustre_build_version.h>
 
 int proc_version;
 
@@ -217,7 +216,7 @@ static int obd_proc_version_seq_show(struct seq_file *m, void *v)
 {
 	seq_printf(m, "lustre: %s\nkernel: %s\nbuild:  %s\n",
 		   LUSTRE_VERSION_STRING, "patchless_client",
-		   BUILD_VERSION);
+		   LUSTRE_VERSION_STRING);
 	return 0;
 }
 LPROC_SEQ_FOPS_RO(obd_proc_version);
