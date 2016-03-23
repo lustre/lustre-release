@@ -128,10 +128,9 @@ osd_oi_lookup(const struct lu_env *env, struct osd_device *o,
 	if (rc >= sizeof(oi->oi_name))
 		return -E2BIG;
 
-	rc = 0;
 	oi->oi_zapid = zde->zde_dnode;
 
-	return rc;
+	return 0;
 }
 
 /**
@@ -505,6 +504,8 @@ osd_oi_remove_table(const struct lu_env *env, struct osd_device *o, int key)
 
 	oi = o->od_oi_table[key];
 	if (oi) {
+		if (oi->oi_db)
+			sa_buf_rele(oi->oi_db, osd_obj_tag);
 		OBD_FREE_PTR(oi);
 		o->od_oi_table[key] = NULL;
 	}
@@ -534,6 +535,7 @@ osd_oi_add_table(const struct lu_env *env, struct osd_device *o,
 	}
 
 	o->od_oi_table[key] = oi;
+	__osd_obj2dbuf(env, o->od_os, oi->oi_zapid, &oi->oi_db);
 
 	return 0;
 }

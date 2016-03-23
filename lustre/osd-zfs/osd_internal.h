@@ -54,6 +54,7 @@
 #include <sys/nvpair.h>
 #include <sys/zfs_znode.h>
 #include <sys/zap.h>
+#include <sys/dbuf.h>
 
 /**
  * By design including kmem.h overrides the Linux slab interfaces to provide
@@ -221,6 +222,7 @@ struct osd_thandle {
 struct osd_oi {
 	char			oi_name[OSD_OI_NAME_SIZE]; /* unused */
 	uint64_t		oi_zapid;
+	dmu_buf_t	       *oi_db;
 };
 
 struct osd_seq {
