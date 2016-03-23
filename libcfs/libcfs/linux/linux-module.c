@@ -149,27 +149,6 @@ failed:
 	RETURN(err);
 }
 
-static int
-libcfs_psdev_open(struct inode * inode, struct file * file)
-{
-	if (!inode)
-		return -EINVAL;
-
-	try_module_get(THIS_MODULE);
-	return 0;
-}
-
-/* called when closing /dev/device */
-static int
-libcfs_psdev_release(struct inode * inode, struct file * file)
-{
-	if (!inode)
-		return -EINVAL;
-
-	module_put(THIS_MODULE);
-	return 0;
-}
-
 static long
 libcfs_psdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
@@ -188,9 +167,8 @@ libcfs_psdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 }
 
 static struct file_operations libcfs_fops = {
+	.owner		= THIS_MODULE,
 	.unlocked_ioctl = libcfs_psdev_ioctl,
-	.open		= libcfs_psdev_open,
-	.release	= libcfs_psdev_release
 };
 
 struct miscdevice libcfs_dev = {
