@@ -1496,27 +1496,69 @@ obdfilter.lol-OST0001.sync_journal=0</screen>
 obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
     </section>
     <section xml:id="dbdoclet.TuningModRPCs" condition='l28'>
-      <title><indexterm><primary>proc</primary><secondary>client metadata performance</secondary></indexterm>Tuning the Client Metadata RPC Stream</title>
-      <para>The client metadata RPC stream represents the metadata RPCs issued in parallel by a client to a MDT target. The metadata RPCs can be split in two categories: the requests that do not modify the file system (like getattr operation), and the requests that do modify the file system (like create, unlink, setattr operations). To help optimize the client metadata RPC stream, several tuning variables are provided to adjust behavior according to network conditions and cluster size.</para>
-      <para>Note that increasing the number of metadata RPCs issued in parallel might improve the performance metadata intensive parallel applications, but as a consequence it will consum more memory on the client and on the MDS.</para>
+      <title>
+        <indexterm>
+          <primary>proc</primary>
+          <secondary>client metadata performance</secondary>
+        </indexterm>
+        Tuning the Client Metadata RPC Stream
+      </title>
+      <para>The client metadata RPC stream represents the metadata RPCs issued
+        in parallel by a client to a MDT target. The metadata RPCs can be split
+        in two categories: the requests that do not modify the file system
+        (like getattr operation), and the requests that do modify the file system
+        (like create, unlink, setattr operations). To help optimize the client
+        metadata RPC stream, several tuning variables are provided to adjust
+        behavior according to network conditions and cluster size.</para>
+      <para>Note that increasing the number of metadata RPCs issued in parallel
+        might improve the performance metadata intensive parallel applications,
+        but as a consequence it will consume more memory on the client and on
+        the MDS.</para>
       <section>
         <title>Configuring the Client Metadata RPC Stream</title>
-        <para>The MDC <literal>max_rpcs_in_flight</literal> parameter defines the maximum number of metadata RPCs, both modifying and non-modifying RPCs, that can be sent in parallel by a client to a MDT target. This includes every file system metadata operations, such as file or directory stat, creation, unlink. The default setting is 8, minimum setting is 1 and maximum setting is 256.</para>
-        <para>To set the <literal>max_rpcs_in_flight</literal> parameter, run the following command on the Lustre client:</para>
-        <screen>$ lctl set_param mdc.*.max_rcps_in_flight=16</screen>
-        <para>The MDC <literal>max_mod_rpcs_in_flight</literal> parameter defines the maximum number of file system modifying RPCs that can be sent in parallel by a client to a MDT target. For example, the Lustre client sends modify RPCs when it performs file or directory creation, unlink, access permission modification or ownership modification. The default setting is 7, minimum setting is 1 and maximum setting is 256.</para>
-        <para>To set the <literal>max_mod_rpcs_in_flight</literal> parameter, run the following command on the Lustre client:</para>
-        <screen>$ lctl set_param mdc.*.max_mod_rcps_in_flight=12</screen>
-        <para>The <literal>max_mod_rpcs_in_flight</literal> value must be strictly less than the <literal>max_rpcs_in_flight</literal> value. It must also be less or equal to the MDT <literal>max_mod_rpcs_per_client</literal> value. If one of theses conditions is not enforced, the setting fails and an explicit message is written in the Lustre log.</para>
-        <para>The MDT <literal>max_mod_rpcs_per_client</literal> parameter is a tunable of the kernel module <literal>mdt</literal> that defines the maximum number of file system modifying RPCs in flight allowed per client. The parameter can be updated at runtime, but the change is effective to new client connections only. The default setting is 8.</para>
-        <para>To set the <literal>max_mod_rpcs_per_client</literal> parameter, run the following command on the MDS:</para>
-        <screen>$ echo 12 > /sys/module/mdt/parameters/max_mod_rpcs_per_client</screen>
+        <para>The MDC <literal>max_rpcs_in_flight</literal> parameter defines
+          the maximum number of metadata RPCs, both modifying and
+          non-modifying RPCs, that can be sent in parallel by a client to a MDT
+          target. This includes every file system metadata operations, such as
+          file or directory stat, creation, unlink. The default setting is 8,
+          minimum setting is 1 and maximum setting is 256.</para>
+        <para>To set the <literal>max_rpcs_in_flight</literal> parameter, run
+          the following command on the Lustre client:</para>
+        <screen>client$ lctl set_param mdc.*.max_rcps_in_flight=16</screen>
+        <para>The MDC <literal>max_mod_rpcs_in_flight</literal> parameter
+          defines the maximum number of file system modifying RPCs that can be
+          sent in parallel by a client to a MDT target. For example, the Lustre
+          client sends modify RPCs when it performs file or directory creation,
+          unlink, access permission modification or ownership modification. The
+          default setting is 7, minimum setting is 1 and maximum setting is
+          256.</para>
+        <para>To set the <literal>max_mod_rpcs_in_flight</literal> parameter,
+          run the following command on the Lustre client:</para>
+        <screen>client$ lctl set_param mdc.*.max_mod_rcps_in_flight=12</screen>
+        <para>The <literal>max_mod_rpcs_in_flight</literal> value must be
+          strictly less than the <literal>max_rpcs_in_flight</literal> value.
+          It must also be less or equal to the MDT
+          <literal>max_mod_rpcs_per_client</literal> value. If one of theses
+          conditions is not enforced, the setting fails and an explicit message
+          is written in the Lustre log.</para>
+        <para>The MDT <literal>max_mod_rpcs_per_client</literal> parameter is a
+          tunable of the kernel module <literal>mdt</literal> that defines the
+          maximum number of file system modifying RPCs in flight allowed per
+          client. The parameter can be updated at runtime, but the change is
+          effective to new client connections only. The default setting is 8.
+        </para>
+        <para>To set the <literal>max_mod_rpcs_per_client</literal> parameter,
+          run the following command on the MDS:</para>
+        <screen>mds$ echo 12 > /sys/module/mdt/parameters/max_mod_rpcs_per_client</screen>
       </section>
       <section>
         <title>Monitoring the Client Metadata RPC Stream</title>
-        <para>The <literal>rpc_stats</literal> file contains histogram data showing information about modify metadata RPCs. It can be helpful to identify the level of parallelism achieved by an application doing modify metadata operations.</para>
+        <para>The <literal>rpc_stats</literal> file contains histogram data
+          showing information about modify metadata RPCs. It can be helpful to
+          identify the level of parallelism achieved by an application doing
+          modify metadata operations.</para>
         <para><emphasis role="bold">Example:</emphasis></para>
-        <screen>$ lctl get_param mdc.testfs-MDT0000-mdt-ffff88077fb3a000.rpc_stats
+        <screen>client$ lctl get_param mdc.*.rpc_stats
 snapshot_time:         1441876896.567070 (secs.usecs)
 modify_RPCs_in_flight:  0
 
@@ -1537,11 +1579,28 @@ rpcs in flight        rpcs   % cum %
 12:                   4540  18 100</screen>
         <para>The file information includes:</para>
         <itemizedlist>
-          <listitem><para><literal>snapshot_time</literal> - UNIX epoch instant the file was read.</para></listitem>
-          <listitem><para><literal>modify_RPCs_in_flight</literal> - Number of modify RPCs issued by the MDC, but not completed at the time of the snapshot. This value should always be less than or equal to <literal>max_mod_rpcs_in_flight</literal>.</para></listitem>
-          <listitem><para><literal>rpcs in flight</literal> - Number of modify RPCs that are pending when a RPC is sent, the relative percentage (<literal>%</literal>) of total modify RPCs, and the cumulative percentage (<literal>cum %</literal>) to that point.</para></listitem>
+          <listitem>
+            <para><literal>snapshot_time</literal> - UNIX epoch instant the
+              file was read.</para>
+          </listitem>
+          <listitem>
+            <para><literal>modify_RPCs_in_flight</literal> - Number of modify
+              RPCs issued by the MDC, but not completed at the time of the
+              snapshot. This value should always be less than or equal to
+              <literal>max_mod_rpcs_in_flight</literal>.</para>
+          </listitem>
+          <listitem>
+            <para><literal>rpcs in flight</literal> - Number of modify RPCs
+              that are pending when a RPC is sent, the relative percentage
+              (<literal>%</literal>) of total modify RPCs, and the cumulative
+              percentage (<literal>cum %</literal>) to that point.</para>
+          </listitem>
         </itemizedlist>
-        <para>If a large proportion of modify metadata RPCs are issued with a number of pending metadata RPCs close to the <literal>max_mod_rpcs_in_flight</literal> value, it means the <literal>max_mod_rpcs_in_flight</literal> value could be increased to improve the modify metadata performance.</para>
+        <para>If a large proportion of modify metadata RPCs are issued with a
+          number of pending metadata RPCs close to the
+          <literal>max_mod_rpcs_in_flight</literal> value, it means the
+          <literal>max_mod_rpcs_in_flight</literal> value could be increased to
+          improve the modify metadata performance.</para>
       </section>
     </section>
   </section>
