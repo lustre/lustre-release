@@ -417,6 +417,9 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 		RETURN(0);
 	}
 
+	if (conf != NULL && conf->loc_flags & LOC_F_NEW)
+		GOTO(out, rc = 0);
+
 	rc = osd_fid_lookup(env, osd, lu_object_fid(l), &oid);
 	if (rc == 0) {
 		LASSERT(obj->oo_db == NULL);
