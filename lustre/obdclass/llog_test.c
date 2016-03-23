@@ -311,8 +311,10 @@ static int test3_check_n_add_cb(const struct lu_env *env,
 			test_3_rec_off = lgh->lgh_cur_offset;
 
 		if (lgh->lgh_cur_offset != test_3_rec_off) {
+			__u64 tmp = lgh->lgh_cur_offset;
+
 			/* there can be padding record */
-			if ((lgh->lgh_cur_offset % chunk_size == 0) &&
+			if ((do_div(tmp, chunk_size) == 0) &&
 			    (lgh->lgh_cur_offset - test_3_rec_off <
 			     rec->lrh_len + LLOG_MIN_REC_SIZE)) {
 				test_3_rec_off = lgh->lgh_cur_offset;

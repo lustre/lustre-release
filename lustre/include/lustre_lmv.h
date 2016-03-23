@@ -130,13 +130,11 @@ lmv_hash_all_chars(unsigned int count, const char *name, int namelen)
 static inline unsigned int
 lmv_hash_fnv1a(unsigned int count, const char *name, int namelen)
 {
-	__u64	hash;
+	__u64 hash;
 
 	hash = lustre_hash_fnv_1a_64(name, namelen);
 
-	hash = hash % count;
-
-	return hash;
+	return do_div(hash, count);
 }
 
 static inline int lmv_name_to_stripe_index(__u32 lmv_hash_type,

@@ -296,7 +296,8 @@ nrs_tbf_rule_start(struct ptlrpc_nrs_policy *policy,
 
 	memcpy(rule->tr_name, start->tc_name, strlen(start->tc_name));
 	rule->tr_rpc_rate = start->tc_rpc_rate;
-	rule->tr_nsecs = NSEC_PER_SEC / rule->tr_rpc_rate;
+	rule->tr_nsecs = NSEC_PER_SEC;
+	do_div(rule->tr_nsecs, rule->tr_rpc_rate);
 	rule->tr_depth = tbf_depth;
 	atomic_set(&rule->tr_ref, 1);
 	INIT_LIST_HEAD(&rule->tr_cli_list);
@@ -346,7 +347,8 @@ nrs_tbf_rule_change(struct ptlrpc_nrs_policy *policy,
 		return -ENOENT;
 
 	rule->tr_rpc_rate = change->tc_rpc_rate;
-	rule->tr_nsecs = NSEC_PER_SEC / rule->tr_rpc_rate;
+	rule->tr_nsecs = NSEC_PER_SEC;
+	do_div(rule->tr_nsecs, rule->tr_rpc_rate);
 	rule->tr_generation++;
 	nrs_tbf_rule_put(rule);
 
@@ -1399,14 +1401,15 @@ struct ptlrpc_nrs_request *nrs_tbf_req_get(struct ptlrpc_nrs_policy *policy,
 	} else {
 		__u64 now = ktime_to_ns(ktime_get());
 		__u64 passed;
-		long  ntoken;
+		__u64 ntoken;
 		__u64 deadline;
 
 		deadline = cli->tc_check_time +
 			  cli->tc_nsecs;
 		LASSERT(now >= cli->tc_check_time);
 		passed = now - cli->tc_check_time;
-		ntoken = (passed * cli->tc_rpc_rate) / NSEC_PER_SEC;
+		ntoken = passed * cli->tc_rpc_rate;
+		do_div(ntoken, NSEC_PER_SEC);
 		ntoken += cli->tc_ntoken;
 		if (ntoken > cli->tc_depth)
 			ntoken = cli->tc_depth;

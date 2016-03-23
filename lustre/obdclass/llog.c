@@ -422,7 +422,7 @@ static int llog_process_thread(void *arg)
 	struct llog_process_cat_data	*cd  = lpi->lpi_catdata;
 	char				*buf;
 	size_t				 chunk_size;
-	__u64				 cur_offset;
+	__u64				 cur_offset, tmp_offset;
 	int				 rc = 0, index = 1, last_index;
 	int				 saved_index = 0;
 	int				 last_called_index = 0;
@@ -482,7 +482,8 @@ repeat:
 		 * The absolute offset of the current chunk is calculated
 		 * from cur_offset value and stored in chunk_offset variable.
 		 */
-		if (cur_offset % chunk_size != 0) {
+		tmp_offset = cur_offset;
+		if (do_div(tmp_offset, chunk_size) != 0) {
 			partial_chunk = true;
 			chunk_offset = cur_offset & ~(chunk_size - 1);
 		} else {
