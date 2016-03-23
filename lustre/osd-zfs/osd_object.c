@@ -954,6 +954,15 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 	if (!S_ISREG(dt->do_lu.lo_header->loh_attr))
 		valid &= ~(LA_SIZE | LA_BLOCKS);
 
+	if (valid & LA_CTIME && la->la_ctime == obj->oo_attr.la_ctime)
+		valid &= ~LA_CTIME;
+
+	if (valid & LA_MTIME && la->la_mtime == obj->oo_attr.la_mtime)
+		valid &= ~LA_MTIME;
+
+	if (valid & LA_ATIME && la->la_atime == obj->oo_attr.la_atime)
+		valid &= ~LA_ATIME;
+
 	if (valid == 0)
 		GOTO(out, rc = 0);
 
