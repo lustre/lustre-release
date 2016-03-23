@@ -43,7 +43,6 @@
 
 #define LNET_ONLY
 
-#include <linux/ktime.h>
 #include <libcfs/libcfs.h>
 #include <lnet/api.h>
 #include <lnet/lib-lnet.h>

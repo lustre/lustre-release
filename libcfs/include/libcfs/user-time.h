@@ -53,6 +53,9 @@
  *  cfs_duration_t    represents time interval with resolution of internal
  *                    platform clock
  *
+ *  cfs_fs_time_t     represents instance in world-visible time. This is
+ *                    used in file-system time-stamps
+ *
  *  cfs_time_t     cfs_time_current(void);
  *  cfs_time_t     cfs_time_add    (cfs_time_t, cfs_duration_t);
  *  cfs_duration_t cfs_time_sub    (cfs_time_t, cfs_time_t);
@@ -64,6 +67,13 @@
  *  time_t         cfs_duration_sec (cfs_duration_t);
  *  void           cfs_duration_usec(cfs_duration_t, struct timeval *);
  *  void           cfs_duration_nsec(cfs_duration_t, struct timespec *);
+ *
+ *  void           cfs_fs_time_current(cfs_fs_time_t *);
+ *  time_t         cfs_fs_time_sec    (cfs_fs_time_t *);
+ *  void           cfs_fs_time_usec   (cfs_fs_time_t *, struct timeval *);
+ *  void           cfs_fs_time_nsec   (cfs_fs_time_t *, struct timespec *);
+ *  int            cfs_fs_time_before (cfs_fs_time_t *, cfs_fs_time_t *);
+ *  int            cfs_fs_time_beforeq(cfs_fs_time_t *, cfs_fs_time_t *);
  *
  *  CFS_TIME_FORMAT
  *  CFS_DURATION_FORMAT
@@ -86,6 +96,7 @@
  * Liblustre. time(2) based implementation.
  */
 
+typedef time_t cfs_fs_time_t;
 typedef time_t cfs_time_t;
 typedef time_t cfs_duration_t;
 
@@ -127,6 +138,38 @@ static inline void cfs_duration_nsec(cfs_duration_t d, struct timespec *s)
 {
         s->tv_sec = d;
         s->tv_nsec = 0;
+}
+
+static inline void cfs_fs_time_current(cfs_fs_time_t *t)
+{
+        time(t);
+}
+
+static inline time_t cfs_fs_time_sec(cfs_fs_time_t *t)
+{
+        return *t;
+}
+
+static inline void cfs_fs_time_usec(cfs_fs_time_t *t, struct timeval *v)
+{
+        v->tv_sec = *t;
+        v->tv_usec = 0;
+}
+
+static inline void cfs_fs_time_nsec(cfs_fs_time_t *t, struct timespec *s)
+{
+        s->tv_sec = *t;
+        s->tv_nsec = 0;
+}
+
+static inline int cfs_fs_time_before(cfs_fs_time_t *t1, cfs_fs_time_t *t2)
+{
+        return *t1 < *t2;
+}
+
+static inline int cfs_fs_time_beforeq(cfs_fs_time_t *t1, cfs_fs_time_t *t2)
+{
+        return *t1 <= *t2;
 }
 
 #define CFS_TICK                (1)

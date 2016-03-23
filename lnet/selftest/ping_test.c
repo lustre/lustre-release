@@ -91,7 +91,7 @@ ping_client_prep_rpc(sfw_test_unit_t *tsu,
 	srpc_ping_reqst_t   *req;
 	sfw_test_instance_t *tsi = tsu->tsu_instance;
 	sfw_session_t       *sn  = tsi->tsi_batch->bat_session;
-	struct timespec64 ts;
+	struct timeval       tv;
 	int		     rc;
 
 	LASSERT(sn != NULL);
@@ -109,9 +109,9 @@ ping_client_prep_rpc(sfw_test_unit_t *tsu,
 	req->pnr_seq = lst_ping_data.pnd_counter++;
 	spin_unlock(&lst_ping_data.pnd_lock);
 
-	ktime_get_real_ts64(&ts);
-	req->pnr_time_sec  = ts.tv_sec;
-	req->pnr_time_usec = ts.tv_nsec / NSEC_PER_USEC;
+	cfs_fs_timeval(&tv);
+	req->pnr_time_sec  = tv.tv_sec;
+	req->pnr_time_usec = tv.tv_usec;
 
 	return rc;
 }
@@ -120,12 +120,12 @@ static void
 ping_client_done_rpc (sfw_test_unit_t *tsu, srpc_client_rpc_t *rpc)
 {
         sfw_test_instance_t *tsi = tsu->tsu_instance;
-	sfw_session_t *sn = tsi->tsi_batch->bat_session;
-	srpc_ping_reqst_t *reqst = &rpc->crpc_reqstmsg.msg_body.ping_reqst;
-	srpc_ping_reply_t *reply = &rpc->crpc_replymsg.msg_body.ping_reply;
-	struct timespec64 ts;
+        sfw_session_t       *sn = tsi->tsi_batch->bat_session;
+        srpc_ping_reqst_t   *reqst = &rpc->crpc_reqstmsg.msg_body.ping_reqst;
+        srpc_ping_reply_t   *reply = &rpc->crpc_replymsg.msg_body.ping_reply;
+        struct timeval       tv;
 
-	LASSERT(sn != NULL);
+        LASSERT (sn != NULL);
 
         if (rpc->crpc_status != 0) {
                 if (!tsi->tsi_stopping) /* rpc could have been aborted */
@@ -160,10 +160,10 @@ ping_client_done_rpc (sfw_test_unit_t *tsu, srpc_client_rpc_t *rpc)
                 return;
         }
 
-	ktime_get_real_ts64(&ts);
+        cfs_fs_timeval(&tv);
         CDEBUG (D_NET, "%d reply in %u usec\n", reply->pnr_seq,
-		(unsigned)((ts.tv_sec - reqst->pnr_time_sec) * 1000000 +
-			   (ts.tv_nsec / NSEC_PER_USEC - reqst->pnr_time_usec)));
+                (unsigned)((tv.tv_sec - (unsigned)reqst->pnr_time_sec) * 1000000
+                           + (tv.tv_usec - reqst->pnr_time_usec)));
         return;
 }
 
