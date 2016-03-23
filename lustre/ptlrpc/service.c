@@ -2917,9 +2917,11 @@ int ptlrpc_hr_init(void)
 		atomic_set(&hrp->hrp_nstopped, 0);
 
 		hrp->hrp_nthrs = cfs_cpt_weight(ptlrpc_hr.hr_cpt_table, i);
-		hrp->hrp_nthrs /= weight;
 
-		LASSERT(hrp->hrp_nthrs > 0);
+		hrp->hrp_nthrs /= weight;
+		if (hrp->hrp_nthrs == 0)
+			hrp->hrp_nthrs = 1;
+
 		OBD_CPT_ALLOC(hrp->hrp_thrs, ptlrpc_hr.hr_cpt_table, i,
 			      hrp->hrp_nthrs * sizeof(*hrt));
 		if (hrp->hrp_thrs == NULL)
