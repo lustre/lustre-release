@@ -243,7 +243,8 @@ static int ldiskfs_osd_fstype_seq_show(struct seq_file *m, void *data)
 	struct osd_device *osd = osd_dt_dev((struct dt_device *)m->private);
 
 	LASSERT(osd != NULL);
-	return seq_printf(m, "ldiskfs\n");
+	seq_puts(m, "ldiskfs\n");
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(ldiskfs_osd_fstype);
 
@@ -255,7 +256,8 @@ static int ldiskfs_osd_mntdev_seq_show(struct seq_file *m, void *data)
 	if (unlikely(osd->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	return seq_printf(m, "%s\n", osd->od_mntdev);
+	seq_printf(m, "%s\n", osd->od_mntdev);
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(ldiskfs_osd_mntdev);
 
@@ -267,7 +269,8 @@ static int ldiskfs_osd_cache_seq_show(struct seq_file *m, void *data)
 	if (unlikely(osd->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	return seq_printf(m, "%u\n", osd->od_read_cache);
+	seq_printf(m, "%u\n", osd->od_read_cache);
+	return 0;
 }
 
 static ssize_t
@@ -300,7 +303,8 @@ static int ldiskfs_osd_wcache_seq_show(struct seq_file *m, void *data)
 	if (unlikely(osd->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	return seq_printf(m, "%u\n", osd->od_writethrough_cache);
+	seq_printf(m, "%u\n", osd->od_writethrough_cache);
+	return 0;
 }
 
 static ssize_t
@@ -351,7 +355,8 @@ LPROC_SEQ_FOPS_WO_TYPE(ldiskfs, osd_force_sync);
 
 static int ldiskfs_osd_pdo_seq_show(struct seq_file *m, void *data)
 {
-	return seq_printf(m, "%s\n", ldiskfs_pdo ? "ON" : "OFF");
+	seq_printf(m, "%s\n", ldiskfs_pdo ? "ON" : "OFF");
+	return 0;
 }
 
 static ssize_t
@@ -378,7 +383,8 @@ static int ldiskfs_osd_auto_scrub_seq_show(struct seq_file *m, void *data)
 	if (unlikely(dev->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	return seq_printf(m, "%d\n", !dev->od_noscrub);
+	seq_printf(m, "%d\n", !dev->od_noscrub);
+	return 0;
 }
 
 static ssize_t
@@ -411,7 +417,8 @@ static int ldiskfs_osd_full_scrub_ratio_seq_show(struct seq_file *m, void *data)
 	if (unlikely(dev->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	return seq_printf(m, LPU64"\n", dev->od_full_scrub_ratio);
+	seq_printf(m, LPU64"\n", dev->od_full_scrub_ratio);
+	return 0;
 }
 
 static ssize_t
@@ -448,8 +455,9 @@ static int ldiskfs_osd_full_scrub_threshold_rate_seq_show(struct seq_file *m,
 	if (unlikely(dev->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	return seq_printf(m, LPU64" (bad OI mappings/minute)\n",
-			  dev->od_full_scrub_threshold_rate);
+	seq_printf(m, LPU64" (bad OI mappings/minute)\n",
+		   dev->od_full_scrub_threshold_rate);
+	return 0;
 }
 
 static ssize_t
@@ -481,7 +489,8 @@ LPROC_SEQ_FOPS(ldiskfs_osd_full_scrub_threshold_rate);
 static int
 ldiskfs_osd_track_declares_assert_seq_show(struct seq_file *m, void *data)
 {
-	return seq_printf(m, "%d\n", ldiskfs_track_declares_assert);
+	seq_printf(m, "%d\n", ldiskfs_track_declares_assert);
+	return 0;
 }
 
 static ssize_t
@@ -522,7 +531,8 @@ static int ldiskfs_osd_readcache_seq_show(struct seq_file *m, void *data)
 	if (unlikely(osd->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	return seq_printf(m, LPU64"\n", osd->od_readcache_max_filesize);
+	seq_printf(m, LPU64"\n", osd->od_readcache_max_filesize);
+	return 0;
 }
 
 static ssize_t
@@ -558,7 +568,8 @@ static int ldiskfs_osd_index_in_idif_seq_show(struct seq_file *m, void *data)
 	if (unlikely(dev->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	return seq_printf(m, "%d\n", (int)(dev->od_index_in_idif));
+	seq_printf(m, "%d\n", (int)(dev->od_index_in_idif));
+	return 0;
 }
 
 static ssize_t

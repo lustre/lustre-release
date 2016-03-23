@@ -833,9 +833,10 @@ static int nrs_tbf_jobid_rule_init(struct ptlrpc_nrs_policy *policy,
 static int
 nrs_tbf_jobid_rule_dump(struct nrs_tbf_rule *rule, struct seq_file *m)
 {
-	return seq_printf(m, "%s {%s} %llu, ref %d\n", rule->tr_name,
+	seq_printf(m, "%s {%s} %llu, ref %d\n", rule->tr_name,
 			  rule->tr_jobids_str, rule->tr_rpc_rate,
 			  atomic_read(&rule->tr_ref) - 1);
+	return 0;
 }
 
 static int
@@ -1038,9 +1039,10 @@ static int nrs_tbf_nid_rule_init(struct ptlrpc_nrs_policy *policy,
 static int
 nrs_tbf_nid_rule_dump(struct nrs_tbf_rule *rule, struct seq_file *m)
 {
-	return seq_printf(m, "%s {%s} %llu, ref %d\n", rule->tr_name,
+	seq_printf(m, "%s {%s} %llu, ref %d\n", rule->tr_name,
 			  rule->tr_nids_str, rule->tr_rpc_rate,
 			  atomic_read(&rule->tr_ref) - 1);
+	return 0;
 }
 
 static int

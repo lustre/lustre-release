@@ -2184,8 +2184,8 @@ int obd_mod_rpc_stats_seq_show(struct client_obd *cli,
 		unsigned long mod = cli->cl_mod_rpcs_hist.oh_buckets[i];
 		mod_cum += mod;
 		seq_printf(seq, "%d:\t\t%10lu %3lu %3lu\n",
-				 i, mod, pct(mod, mod_tot),
-				 pct(mod_cum, mod_tot));
+			   i, mod, pct(mod, mod_tot),
+			   pct(mod_cum, mod_tot));
 		if (mod_cum == mod_tot)
 			break;
 	}

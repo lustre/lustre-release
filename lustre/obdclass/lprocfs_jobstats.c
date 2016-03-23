@@ -636,7 +636,8 @@ int lprocfs_job_interval_seq_show(struct seq_file *m, void *data)
 		return -ENODEV;
 
 	stats = &obd->u.obt.obt_jobstats;
-	return seq_printf(m, "%d\n", stats->ojs_cleanup_interval);
+	seq_printf(m, "%d\n", stats->ojs_cleanup_interval);
+	return 0;
 }
 EXPORT_SYMBOL(lprocfs_job_interval_seq_show);
 

@@ -77,7 +77,6 @@ static int qsd_state_seq_show(struct seq_file *m, void *data)
 {
 	struct qsd_instance	*qsd = m->private;
 	char			 enabled[5];
-	int			 rc;
 
 	LASSERT(qsd != NULL);
 
@@ -89,14 +88,14 @@ static int qsd_state_seq_show(struct seq_file *m, void *data)
 	if (strlen(enabled) == 0)
 		strcat(enabled, "none");
 
-	rc = seq_printf(m, "target name:    %s\n"
-			"pool ID:        %d\n"
-			"type:           %s\n"
-			"quota enabled:  %s\n"
-			"conn to master: %s\n",
-			qsd->qsd_svname, qsd->qsd_pool_id,
-			qsd->qsd_is_md ? "md" : "dt", enabled,
-			qsd->qsd_exp_valid ? "setup" : "not setup yet");
+	seq_printf(m, "target name:    %s\n"
+		   "pool ID:        %d\n"
+		   "type:           %s\n"
+		   "quota enabled:  %s\n"
+		   "conn to master: %s\n",
+		   qsd->qsd_svname, qsd->qsd_pool_id,
+		   qsd->qsd_is_md ? "md" : "dt", enabled,
+		   qsd->qsd_exp_valid ? "setup" : "not setup yet");
 
 	if (qsd->qsd_prepared) {
 		memset(enabled, 0, sizeof(enabled));
@@ -106,18 +105,18 @@ static int qsd_state_seq_show(struct seq_file *m, void *data)
 			strcat(enabled, "g");
 		if (strlen(enabled) == 0)
 			strcat(enabled, "none");
-		rc += seq_printf(m, "space acct:     %s\n"
-				"user uptodate:  glb[%d],slv[%d],reint[%d]\n"
-				"group uptodate: glb[%d],slv[%d],reint[%d]\n",
-				enabled,
-				qsd->qsd_type_array[USRQUOTA]->qqi_glb_uptodate,
-				qsd->qsd_type_array[USRQUOTA]->qqi_slv_uptodate,
-				qsd->qsd_type_array[USRQUOTA]->qqi_reint,
-				qsd->qsd_type_array[GRPQUOTA]->qqi_glb_uptodate,
-				qsd->qsd_type_array[GRPQUOTA]->qqi_slv_uptodate,
-				qsd->qsd_type_array[GRPQUOTA]->qqi_reint);
+		seq_printf(m, "space acct:     %s\n"
+			   "user uptodate:  glb[%d],slv[%d],reint[%d]\n"
+			   "group uptodate: glb[%d],slv[%d],reint[%d]\n",
+			   enabled,
+			   qsd->qsd_type_array[USRQUOTA]->qqi_glb_uptodate,
+			   qsd->qsd_type_array[USRQUOTA]->qqi_slv_uptodate,
+			   qsd->qsd_type_array[USRQUOTA]->qqi_reint,
+			   qsd->qsd_type_array[GRPQUOTA]->qqi_glb_uptodate,
+			   qsd->qsd_type_array[GRPQUOTA]->qqi_slv_uptodate,
+			   qsd->qsd_type_array[GRPQUOTA]->qqi_reint);
 	}
-	return rc;
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(qsd_state);
 
@@ -136,7 +135,8 @@ static int qsd_enabled_seq_show(struct seq_file *m, void *data)
 	if (strlen(enabled) == 0)
 		strcat(enabled, "none");
 
-	return seq_printf(m, "%s\n", enabled);
+	seq_printf(m, "%s\n", enabled);
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(qsd_enabled);
 
@@ -185,7 +185,8 @@ static int qsd_timeout_seq_show(struct seq_file *m, void *data)
 	struct qsd_instance *qsd = m->private;
 	LASSERT(qsd != NULL);
 
-	return seq_printf(m, "%d\n", qsd_wait_timeout(qsd));
+	seq_printf(m, "%d\n", qsd_wait_timeout(qsd));
+	return 0;
 }
 
 static ssize_t

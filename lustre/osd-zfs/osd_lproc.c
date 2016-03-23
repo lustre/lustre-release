@@ -217,7 +217,8 @@ out:
 
 static int zfs_osd_fstype_seq_show(struct seq_file *m, void *data)
 {
-	return seq_printf(m, "zfs\n");
+	seq_puts(m, "zfs\n");
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(zfs_osd_fstype);
 
@@ -226,7 +227,8 @@ static int zfs_osd_mntdev_seq_show(struct seq_file *m, void *data)
 	struct osd_device *osd = osd_dt_dev((struct dt_device *)m->private);
 
 	LASSERT(osd != NULL);
-	return seq_printf(m, "%s\n", osd->od_mntdev);
+	seq_printf(m, "%s\n", osd->od_mntdev);
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(zfs_osd_mntdev);
 
@@ -254,7 +256,8 @@ static int zfs_osd_iused_est_seq_show(struct seq_file *m, void *data)
 	struct osd_device *osd = osd_dt_dev((struct dt_device *)m->private);
 	LASSERT(osd != NULL);
 
-	return seq_printf(m, "%d\n", osd->od_quota_iused_est);
+	seq_printf(m, "%d\n", osd->od_quota_iused_est);
+	return 0;
 }
 
 static ssize_t

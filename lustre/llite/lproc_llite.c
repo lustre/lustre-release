@@ -66,7 +66,7 @@ static int ll_blksize_seq_show(struct seq_file *m, void *v)
 				cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
 				OBD_STATFS_NODELAY);
 	if (!rc)
-		rc = seq_printf(m, "%u\n", osfs.os_bsize);
+		seq_printf(m, "%u\n", osfs.os_bsize);
 	return rc;
 }
 LPROC_SEQ_FOPS_RO(ll_blksize);
@@ -88,7 +88,7 @@ static int ll_kbytestotal_seq_show(struct seq_file *m, void *v)
 		while (blk_size >>= 1)
 			result <<= 1;
 
-		rc = seq_printf(m, LPU64"\n", result);
+		seq_printf(m, LPU64"\n", result);
 	}
 	return rc;
 }
@@ -111,7 +111,7 @@ static int ll_kbytesfree_seq_show(struct seq_file *m, void *v)
 		while (blk_size >>= 1)
 			result <<= 1;
 
-		rc = seq_printf(m, LPU64"\n", result);
+		seq_printf(m, LPU64"\n", result);
 	}
 	return rc;
 }
@@ -134,7 +134,7 @@ static int ll_kbytesavail_seq_show(struct seq_file *m, void *v)
 		while (blk_size >>= 1)
 			result <<= 1;
 
-		rc = seq_printf(m, LPU64"\n", result);
+		seq_printf(m, LPU64"\n", result);
 	}
 	return rc;
 }
@@ -151,7 +151,7 @@ static int ll_filestotal_seq_show(struct seq_file *m, void *v)
 				cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
 				OBD_STATFS_NODELAY);
 	if (!rc)
-		rc = seq_printf(m, LPU64"\n", osfs.os_files);
+		seq_printf(m, LPU64"\n", osfs.os_files);
 	return rc;
 }
 LPROC_SEQ_FOPS_RO(ll_filestotal);
@@ -167,7 +167,7 @@ static int ll_filesfree_seq_show(struct seq_file *m, void *v)
 				cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
 				OBD_STATFS_NODELAY);
 	if (!rc)
-		rc = seq_printf(m, LPU64"\n", osfs.os_ffree);
+		seq_printf(m, LPU64"\n", osfs.os_ffree);
 	return rc;
 }
 LPROC_SEQ_FOPS_RO(ll_filesfree);
@@ -175,15 +175,14 @@ LPROC_SEQ_FOPS_RO(ll_filesfree);
 static int ll_client_type_seq_show(struct seq_file *m, void *v)
 {
 	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
-	int rc;
 
 	LASSERT(sbi != NULL);
 
 	if (sbi->ll_flags & LL_SBI_RMT_CLIENT)
-		rc = seq_printf(m, "remote client\n");
+		seq_puts(m, "remote client\n");
 	else
-		rc = seq_printf(m, "local client\n");
-	return rc;
+		seq_puts(m, "local client\n");
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(ll_client_type);
 
@@ -192,7 +191,8 @@ static int ll_fstype_seq_show(struct seq_file *m, void *v)
 	struct super_block *sb = m->private;
 
 	LASSERT(sb != NULL);
-	return seq_printf(m, "%s\n", sb->s_type->name);
+	seq_printf(m, "%s\n", sb->s_type->name);
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(ll_fstype);
 
@@ -201,7 +201,8 @@ static int ll_sb_uuid_seq_show(struct seq_file *m, void *v)
 	struct super_block *sb = m->private;
 
 	LASSERT(sb != NULL);
-	return seq_printf(m, "%s\n", ll_s2sbi(sb)->ll_sb_uuid.uuid);
+	seq_printf(m, "%s\n", ll_s2sbi(sb)->ll_sb_uuid.uuid);
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(ll_sb_uuid);
 
@@ -209,7 +210,8 @@ static int ll_xattr_cache_seq_show(struct seq_file *m, void *v)
 {
 	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
 
-	return seq_printf(m, "%u\n", sbi->ll_xattr_cache_enabled);
+	seq_printf(m, "%u\n", sbi->ll_xattr_cache_enabled);
+	return 0;
 }
 
 static ssize_t ll_xattr_cache_seq_write(struct file *file,
@@ -407,17 +409,17 @@ static int ll_max_cached_mb_seq_show(struct seq_file *m, void *v)
 
 	max_cached_mb = cache->ccc_lru_max >> shift;
 	unused_mb = atomic_long_read(&cache->ccc_lru_left) >> shift;
-	return seq_printf(m,
-			"users: %d\n"
-			"max_cached_mb: %ld\n"
-			"used_mb: %ld\n"
-			"unused_mb: %ld\n"
-			"reclaim_count: %u\n",
-			atomic_read(&cache->ccc_users),
-			max_cached_mb,
-			max_cached_mb - unused_mb,
-			unused_mb,
-			cache->ccc_lru_shrinkers);
+	seq_printf(m, "users: %d\n"
+		   "max_cached_mb: %ld\n"
+		   "used_mb: %ld\n"
+		   "unused_mb: %ld\n"
+		   "reclaim_count: %u\n",
+		   atomic_read(&cache->ccc_users),
+		   max_cached_mb,
+		   max_cached_mb - unused_mb,
+		   unused_mb,
+		   cache->ccc_lru_shrinkers);
+	return 0;
 }
 
 static ssize_t
@@ -538,7 +540,8 @@ static int ll_checksum_seq_show(struct seq_file *m, void *v)
 	struct super_block *sb = m->private;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 
-	return seq_printf(m, "%u\n", (sbi->ll_flags & LL_SBI_CHECKSUM) ? 1 : 0);
+	seq_printf(m, "%u\n", (sbi->ll_flags & LL_SBI_CHECKSUM) ? 1 : 0);
+	return 0;
 }
 
 static ssize_t ll_checksum_seq_write(struct file *file,
@@ -575,13 +578,14 @@ static int ll_rd_track_id(struct seq_file *m, enum stats_track_type type)
 	struct super_block *sb = m->private;
 
 	if (ll_s2sbi(sb)->ll_stats_track_type == type) {
-		return seq_printf(m, "%d\n",
-				  ll_s2sbi(sb)->ll_stats_track_id);
+		seq_printf(m, "%d\n",
+			   ll_s2sbi(sb)->ll_stats_track_id);
 	} else if (ll_s2sbi(sb)->ll_stats_track_type == STATS_TRACK_ALL) {
-		return seq_printf(m, "0 (all)\n");
+		seq_puts(m, "0 (all)\n");
 	} else {
-		return seq_printf(m, "untracked\n");
+		seq_puts(m, "untracked\n");
 	}
+	return 0;
 }
 
 static int ll_wr_track_id(const char __user *buffer, unsigned long count,
@@ -649,7 +653,8 @@ static int ll_statahead_max_seq_show(struct seq_file *m, void *v)
 	struct super_block *sb = m->private;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 
-	return seq_printf(m, "%u\n", sbi->ll_sa_max);
+	seq_printf(m, "%u\n", sbi->ll_sa_max);
+	return 0;
 }
 
 static ssize_t ll_statahead_max_seq_write(struct file *file,
@@ -679,8 +684,9 @@ static int ll_statahead_agl_seq_show(struct seq_file *m, void *v)
 	struct super_block *sb = m->private;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 
-	return seq_printf(m, "%u\n",
-			  sbi->ll_flags & LL_SBI_AGL_ENABLED ? 1 : 0);
+	seq_printf(m, "%u\n",
+		   sbi->ll_flags & LL_SBI_AGL_ENABLED ? 1 : 0);
+	return 0;
 }
 
 static ssize_t ll_statahead_agl_seq_write(struct file *file,
@@ -709,13 +715,13 @@ static int ll_statahead_stats_seq_show(struct seq_file *m, void *v)
 	struct super_block *sb = m->private;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 
-	return seq_printf(m,
-                        "statahead total: %u\n"
-                        "statahead wrong: %u\n"
-                        "agl total: %u\n",
-                        atomic_read(&sbi->ll_sa_total),
-                        atomic_read(&sbi->ll_sa_wrong),
-                        atomic_read(&sbi->ll_agl_total));
+	seq_printf(m, "statahead total: %u\n"
+		    "statahead wrong: %u\n"
+		    "agl total: %u\n",
+		    atomic_read(&sbi->ll_sa_total),
+		    atomic_read(&sbi->ll_sa_wrong),
+		    atomic_read(&sbi->ll_agl_total));
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(ll_statahead_stats);
 
@@ -724,8 +730,9 @@ static int ll_lazystatfs_seq_show(struct seq_file *m, void *v)
 	struct super_block *sb = m->private;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 
-	return seq_printf(m, "%u\n",
-			  (sbi->ll_flags & LL_SBI_LAZYSTATFS) ? 1 : 0);
+	seq_printf(m, "%u\n",
+		   (sbi->ll_flags & LL_SBI_LAZYSTATFS) ? 1 : 0);
+	return 0;
 }
 
 static ssize_t ll_lazystatfs_seq_write(struct file *file,
@@ -760,7 +767,8 @@ static int ll_max_easize_seq_show(struct seq_file *m, void *v)
 	if (rc)
 		return rc;
 
-	return seq_printf(m, "%u\n", ealen);
+	seq_printf(m, "%u\n", ealen);
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(ll_max_easize);
 
@@ -786,7 +794,8 @@ static int ll_default_easize_seq_show(struct seq_file *m, void *v)
 	if (rc)
 		return rc;
 
-	return seq_printf(m, "%u\n", ealen);
+	seq_printf(m, "%u\n", ealen);
+	return 0;
 }
 
 /**
@@ -865,10 +874,11 @@ static int ll_unstable_stats_seq_show(struct seq_file *m, void *v)
 	pages = atomic_long_read(&cache->ccc_unstable_nr);
 	mb    = (pages * PAGE_CACHE_SIZE) >> 20;
 
-	return seq_printf(m, "unstable_check:     %8d\n"
-			     "unstable_pages: %12ld\n"
-			     "unstable_mb:        %8d\n",
-			  cache->ccc_unstable_check, pages, mb);
+	seq_printf(m, "unstable_check:     %8d\n"
+		   "unstable_pages: %12ld\n"
+		   "unstable_mb:        %8d\n",
+		   cache->ccc_unstable_check, pages, mb);
+	return 0;
 }
 
 static ssize_t ll_unstable_stats_seq_write(struct file *file,
@@ -910,7 +920,8 @@ static int ll_root_squash_seq_show(struct seq_file *m, void *v)
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 	struct root_squash_info *squash = &sbi->ll_squash;
 
-	return seq_printf(m, "%u:%u\n", squash->rsi_uid, squash->rsi_gid);
+	seq_printf(m, "%u:%u\n", squash->rsi_uid, squash->rsi_gid);
+	return 0;
 }
 
 static ssize_t ll_root_squash_seq_write(struct file *file,
@@ -932,20 +943,20 @@ static int ll_nosquash_nids_seq_show(struct seq_file *m, void *v)
 	struct super_block *sb = m->private;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 	struct root_squash_info *squash = &sbi->ll_squash;
-	int len, rc;
+	int len;
 
 	down_read(&squash->rsi_sem);
 	if (!list_empty(&squash->rsi_nosquash_nids)) {
 		len = cfs_print_nidlist(m->buf + m->count, m->size - m->count,
 					&squash->rsi_nosquash_nids);
 		m->count += len;
-		rc = seq_printf(m, "\n");
+		seq_putc(m, '\n');
 	} else {
-		rc = seq_printf(m, "NONE\n");
+		seq_puts(m, "NONE\n");
 	}
 	up_read(&squash->rsi_sem);
 
-	return rc;
+	return 0;
 }
 
 static ssize_t ll_nosquash_nids_seq_write(struct file *file,
@@ -1333,9 +1344,7 @@ static int ll_rw_extents_stats_pp_seq_show(struct seq_file *seq, void *v)
 	do_gettimeofday(&now);
 
 	if (!sbi->ll_rw_stats_on) {
-		seq_printf(seq, "disabled\n"
-                                "write anything in this file to activate, "
-                                "then 0 or \"[D/d]isabled\" to deactivate\n");
+		seq_puts(seq, "disabled\n write anything in this file to activate, then 0 or \[D/d]isabled\" to deactivate\n");
                 return 0;
         }
         seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
@@ -1412,18 +1421,16 @@ static int ll_rw_extents_stats_seq_show(struct seq_file *seq, void *v)
 	do_gettimeofday(&now);
 
 	if (!sbi->ll_rw_stats_on) {
-                seq_printf(seq, "disabled\n"
-                                "write anything in this file to activate, "
-                                "then 0 or \"[D/d]isabled\" to deactivate\n");
-                return 0;
-        }
-        seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
-                   now.tv_sec, now.tv_usec);
+		seq_puts(seq, "disabled\n write anything in this file to activate, then 0 or \"[D/d]isabled\" to deactivate\n");
+		return 0;
+	}
+	seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
+		   now.tv_sec, now.tv_usec);
 
-        seq_printf(seq, "%15s %19s       | %20s\n", " ", "read", "write");
-        seq_printf(seq, "%13s   %14s %4s %4s  | %14s %4s %4s\n",
-                   "extents", "calls", "%", "cum%",
-                   "calls", "%", "cum%");
+	seq_printf(seq, "%15s %19s       | %20s\n", " ", "read", "write");
+	seq_printf(seq, "%13s   %14s %4s %4s  | %14s %4s %4s\n",
+		   "extents", "calls", "%", "cum%",
+		   "calls", "%", "cum%");
 	spin_lock(&sbi->ll_lock);
 	ll_display_extents_info(io_extents, seq, LL_PROCESS_HIST_MAX);
 	spin_unlock(&sbi->ll_lock);
@@ -1591,11 +1598,9 @@ static int ll_rw_offset_stats_seq_show(struct seq_file *seq, void *v)
 	do_gettimeofday(&now);
 
 	if (!sbi->ll_rw_stats_on) {
-                seq_printf(seq, "disabled\n"
-                                "write anything in this file to activate, "
-                                "then 0 or \"[D/d]isabled\" to deactivate\n");
-                return 0;
-        }
+		seq_puts(seq, "disabled\n write anything in this file to activate, then 0 or \"[D/d]isabled\" to deactivate\n");
+		return 0;
+	}
 	spin_lock(&sbi->ll_process_lock);
 
         seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",

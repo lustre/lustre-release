@@ -292,7 +292,8 @@ EXPORT_SYMBOL(lprocfs_register);
 /* Generic callbacks */
 int lprocfs_uint_seq_show(struct seq_file *m, void *data)
 {
-	return seq_printf(m, "%u\n", *(unsigned int *)data);
+	seq_printf(m, "%u\n", *(unsigned int *)data);
+	return 0;
 }
 EXPORT_SYMBOL(lprocfs_uint_seq_show);
 
@@ -333,7 +334,8 @@ EXPORT_SYMBOL(lprocfs_uint_seq_write);
 int lprocfs_u64_seq_show(struct seq_file *m, void *data)
 {
 	LASSERT(data != NULL);
-	return seq_printf(m, LPU64"\n", *(__u64 *)data);
+	seq_printf(m, LPU64"\n", *(__u64 *)data);
+	return 0;
 }
 EXPORT_SYMBOL(lprocfs_u64_seq_show);
 
@@ -341,7 +343,8 @@ int lprocfs_atomic_seq_show(struct seq_file *m, void *data)
 {
 	atomic_t *atom = data;
 	LASSERT(atom != NULL);
-	return seq_printf(m, "%d\n", atomic_read(atom));
+	seq_printf(m, "%d\n", atomic_read(atom));
+	return 0;
 }
 EXPORT_SYMBOL(lprocfs_atomic_seq_show);
 
@@ -370,7 +373,8 @@ int lprocfs_uuid_seq_show(struct seq_file *m, void *data)
 	struct obd_device *obd = data;
 
 	LASSERT(obd != NULL);
-	return seq_printf(m, "%s\n", obd->obd_uuid.uuid);
+	seq_printf(m, "%s\n", obd->obd_uuid.uuid);
+	return 0;
 }
 EXPORT_SYMBOL(lprocfs_uuid_seq_show);
 
@@ -379,7 +383,8 @@ int lprocfs_name_seq_show(struct seq_file *m, void *data)
 	struct obd_device *dev = data;
 
 	LASSERT(dev != NULL);
-	return seq_printf(m, "%s\n", dev->obd_name);
+	seq_printf(m, "%s\n", dev->obd_name);
+	return 0;
 }
 EXPORT_SYMBOL(lprocfs_name_seq_show);
 
@@ -391,7 +396,7 @@ int lprocfs_blksize_seq_show(struct seq_file *m, void *data)
 			    cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
 			    OBD_STATFS_NODELAY);
 	if (!rc)
-		rc = seq_printf(m, "%u\n", osfs.os_bsize);
+		seq_printf(m, "%u\n", osfs.os_bsize);
 	return rc;
 }
 EXPORT_SYMBOL(lprocfs_blksize_seq_show);
@@ -410,7 +415,7 @@ int lprocfs_kbytestotal_seq_show(struct seq_file *m, void *data)
 		while (blk_size >>= 1)
 			result <<= 1;
 
-		rc = seq_printf(m, LPU64"\n", result);
+		seq_printf(m, LPU64"\n", result);
 	}
 	return rc;
 }
@@ -430,7 +435,7 @@ int lprocfs_kbytesfree_seq_show(struct seq_file *m, void *data)
 		while (blk_size >>= 1)
 			result <<= 1;
 
-		rc = seq_printf(m, LPU64"\n", result);
+		seq_printf(m, LPU64"\n", result);
 	}
 	return rc;
 }
@@ -450,7 +455,7 @@ int lprocfs_kbytesavail_seq_show(struct seq_file *m, void *data)
 		while (blk_size >>= 1)
 			result <<= 1;
 
-		rc = seq_printf(m, LPU64"\n", result);
+		seq_printf(m, LPU64"\n", result);
 	}
 	return rc;
 }
@@ -464,7 +469,7 @@ int lprocfs_filestotal_seq_show(struct seq_file *m, void *data)
 			    cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
 			    OBD_STATFS_NODELAY);
 	if (!rc)
-		rc = seq_printf(m, LPU64"\n", osfs.os_files);
+		seq_printf(m, LPU64"\n", osfs.os_files);
 	return rc;
 }
 EXPORT_SYMBOL(lprocfs_filestotal_seq_show);
@@ -477,7 +482,7 @@ int lprocfs_filesfree_seq_show(struct seq_file *m, void *data)
 			    cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
 			    OBD_STATFS_NODELAY);
 	if (!rc)
-		rc = seq_printf(m, LPU64"\n", osfs.os_ffree);
+		seq_printf(m, LPU64"\n", osfs.os_ffree);
 	return rc;
 }
 EXPORT_SYMBOL(lprocfs_filesfree_seq_show);
@@ -493,8 +498,8 @@ int lprocfs_server_uuid_seq_show(struct seq_file *m, void *data)
 	LPROCFS_CLIMP_CHECK(obd);
 	imp = obd->u.cli.cl_import;
 	imp_state_name = ptlrpc_import_state_name(imp->imp_state);
-	rc = seq_printf(m, "%s\t%s%s\n", obd2cli_tgt(obd), imp_state_name,
-			imp->imp_deactive ? "\tDEACTIVATED" : "");
+	seq_printf(m, "%s\t%s%s\n", obd2cli_tgt(obd), imp_state_name,
+		   imp->imp_deactive ? "\tDEACTIVATED" : "");
 
 	LPROCFS_CLIMP_EXIT(obd);
 	return rc;
@@ -512,9 +517,9 @@ int lprocfs_conn_uuid_seq_show(struct seq_file *m, void *data)
 	LPROCFS_CLIMP_CHECK(obd);
 	conn = obd->u.cli.cl_import->imp_connection;
 	if (conn && obd->u.cli.cl_import)
-		rc = seq_printf(m, "%s\n", conn->c_remote_uuid.uuid);
+		seq_printf(m, "%s\n", conn->c_remote_uuid.uuid);
 	else
-		rc = seq_printf(m, "%s\n", "<none>");
+		seq_printf(m, "%s\n", "<none>");
 
 	LPROCFS_CLIMP_EXIT(obd);
 	return rc;
@@ -705,16 +710,16 @@ static void obd_connect_data_seqprint(struct seq_file *m,
 	flags = ocd->ocd_connect_flags;
 
 	seq_printf(m, "    connect_data:\n"
-		      "       flags: "LPX64"\n"
-		      "       instance: %u\n",
-		      ocd->ocd_connect_flags,
-		      ocd->ocd_instance);
+		   "       flags: "LPX64"\n"
+		   "       instance: %u\n",
+		   ocd->ocd_connect_flags,
+		   ocd->ocd_instance);
 	if (flags & OBD_CONNECT_VERSION)
 		seq_printf(m, "       target_version: %u.%u.%u.%u\n",
-			      OBD_OCD_VERSION_MAJOR(ocd->ocd_version),
-			      OBD_OCD_VERSION_MINOR(ocd->ocd_version),
-			      OBD_OCD_VERSION_PATCH(ocd->ocd_version),
-			      OBD_OCD_VERSION_FIX(ocd->ocd_version));
+			   OBD_OCD_VERSION_MAJOR(ocd->ocd_version),
+			   OBD_OCD_VERSION_MINOR(ocd->ocd_version),
+			   OBD_OCD_VERSION_PATCH(ocd->ocd_version),
+			   OBD_OCD_VERSION_FIX(ocd->ocd_version));
 	if (flags & OBD_CONNECT_MDS)
 		seq_printf(m, "       mdt_index: %d\n", ocd->ocd_group);
 	if (flags & OBD_CONNECT_GRANT)
@@ -725,30 +730,30 @@ static void obd_connect_data_seqprint(struct seq_file *m,
 		seq_printf(m, "       max_brw_size: %d\n", ocd->ocd_brw_size);
 	if (flags & OBD_CONNECT_IBITS)
 		seq_printf(m, "       ibits_known: "LPX64"\n",
-				ocd->ocd_ibits_known);
+			   ocd->ocd_ibits_known);
 	if (flags & OBD_CONNECT_GRANT_PARAM)
 		seq_printf(m, "       grant_block_size: %d\n"
-			      "       grant_inode_size: %d\n"
-			      "       grant_max_extent_size: %d\n"
-			      "       grant_extent_tax: %d\n",
-			      1 << ocd->ocd_grant_blkbits,
-			      1 << ocd->ocd_grant_inobits,
-			      ocd->ocd_grant_max_blks << ocd->ocd_grant_blkbits,
-			      ocd->ocd_grant_tax_kb << 10);
+			   "       grant_inode_size: %d\n"
+			   "       grant_max_extent_size: %d\n"
+			   "       grant_extent_tax: %d\n",
+			   1 << ocd->ocd_grant_blkbits,
+			   1 << ocd->ocd_grant_inobits,
+			   ocd->ocd_grant_max_blks << ocd->ocd_grant_blkbits,
+			   ocd->ocd_grant_tax_kb << 10);
 	if (flags & OBD_CONNECT_TRANSNO)
 		seq_printf(m, "       first_transno: "LPX64"\n",
-				ocd->ocd_transno);
+			   ocd->ocd_transno);
 	if (flags & OBD_CONNECT_CKSUM)
 		seq_printf(m, "       cksum_types: %#x\n",
-			      ocd->ocd_cksum_types);
+			   ocd->ocd_cksum_types);
 	if (flags & OBD_CONNECT_MAX_EASIZE)
 		seq_printf(m, "       max_easize: %d\n", ocd->ocd_max_easize);
 	if (flags & OBD_CONNECT_MAXBYTES)
 		seq_printf(m, "       max_object_bytes: "LPU64"\n",
-			      ocd->ocd_maxbytes);
+			   ocd->ocd_maxbytes);
 	if (flags & OBD_CONNECT_MULTIMODRPCS)
 		seq_printf(m, "       max_mod_rpcs: %hu\n",
-			      ocd->ocd_maxmodrpcs);
+			   ocd->ocd_maxmodrpcs);
 }
 
 int lprocfs_import_seq_show(struct seq_file *m, void *data)
@@ -770,23 +775,23 @@ int lprocfs_import_seq_show(struct seq_file *m, void *data)
 	ocd = &imp->imp_connect_data;
 
 	seq_printf(m, "import:\n"
-		      "    name: %s\n"
-		      "    target: %s\n"
-		      "    state: %s\n"
-		      "    connect_flags: [ ",
-		      obd->obd_name,
-		      obd2cli_tgt(obd),
-		      ptlrpc_import_state_name(imp->imp_state));
+		   "    name: %s\n"
+		   "    target: %s\n"
+		   "    state: %s\n"
+		   "    connect_flags: [ ",
+		   obd->obd_name,
+		   obd2cli_tgt(obd),
+		   ptlrpc_import_state_name(imp->imp_state));
 	obd_connect_seq_flags2str(m, imp->imp_connect_data.ocd_connect_flags,
-					", ");
+				  ", ");
 	seq_printf(m, " ]\n");
 	obd_connect_data_seqprint(m, ocd);
 	seq_printf(m, "    import_flags: [ ");
 	obd_import_flags2str(imp, m);
 
 	seq_printf(m, " ]\n"
-		      "    connection:\n"
-		      "       failover_nids: [ ");
+		   "    connection:\n"
+		   "       failover_nids: [ ");
 	spin_lock(&imp->imp_lock);
 	j = 0;
 	list_for_each_entry(conn, &imp->imp_conn_list, oic_item) {
@@ -801,14 +806,14 @@ int lprocfs_import_seq_show(struct seq_file *m, void *data)
 	else
 		strncpy(nidstr, "<none>", sizeof(nidstr));
 	seq_printf(m, " ]\n"
-		      "       current_connection: %s\n"
-		      "       connection_attempts: %u\n"
-		      "       generation: %u\n"
-		      "       in-progress_invalidations: %u\n",
-		      nidstr,
-		      imp->imp_conn_cnt,
-		      imp->imp_generation,
-		      atomic_read(&imp->imp_inval_count));
+		   "       current_connection: %s\n"
+		   "       connection_attempts: %u\n"
+		   "       generation: %u\n"
+		   "       in-progress_invalidations: %u\n",
+		   nidstr,
+		   imp->imp_conn_cnt,
+		   imp->imp_generation,
+		   atomic_read(&imp->imp_inval_count));
 	spin_unlock(&imp->imp_lock);
 
 	if (obd->obd_svc_stats == NULL)
@@ -824,14 +829,14 @@ int lprocfs_import_seq_show(struct seq_file *m, void *data)
 	} else
 		ret.lc_sum = 0;
 	seq_printf(m, "    rpcs:\n"
-		      "       inflight: %u\n"
-		      "       unregistering: %u\n"
-		      "       timeouts: %u\n"
-		      "       avg_waittime: "LPU64" %s\n",
-		      atomic_read(&imp->imp_inflight),
-		      atomic_read(&imp->imp_unregistering),
-		      atomic_read(&imp->imp_timeouts),
-		      ret.lc_sum, header->lc_units);
+		   "       inflight: %u\n"
+		   "       unregistering: %u\n"
+		   "       timeouts: %u\n"
+		   "       avg_waittime: "LPU64" %s\n",
+		   atomic_read(&imp->imp_inflight),
+		   atomic_read(&imp->imp_unregistering),
+		   atomic_read(&imp->imp_timeouts),
+		   ret.lc_sum, header->lc_units);
 
 	k = 0;
 	for(j = 0; j < IMP_AT_MAX_PORTALS; j++) {
@@ -841,18 +846,18 @@ int lprocfs_import_seq_show(struct seq_file *m, void *data)
 			  at_get(&imp->imp_at.iat_service_estimate[j]));
 	}
 	seq_printf(m, "    service_estimates:\n"
-		      "       services: %u sec\n"
-		      "       network: %u sec\n",
-		      k,
-		      at_get(&imp->imp_at.iat_net_latency));
+		   "       services: %u sec\n"
+		   "       network: %u sec\n",
+		   k,
+		   at_get(&imp->imp_at.iat_net_latency));
 
 	seq_printf(m, "    transactions:\n"
-		      "       last_replay: "LPU64"\n"
-		      "       peer_committed: "LPU64"\n"
-		      "       last_checked: "LPU64"\n",
-		      imp->imp_last_replay_transno,
-		      imp->imp_peer_committed_transno,
-		      imp->imp_last_transno_checked);
+		   "       last_replay: "LPU64"\n"
+		   "       peer_committed: "LPU64"\n"
+		   "       last_checked: "LPU64"\n",
+		   imp->imp_last_replay_transno,
+		   imp->imp_peer_committed_transno,
+		   imp->imp_last_transno_checked);
 
 	/* avg data rates */
 	for (rw = 0; rw <= 1; rw++) {
@@ -865,9 +870,9 @@ int lprocfs_import_seq_show(struct seq_file *m, void *data)
 			do_div(sum, ret.lc_count);
 			ret.lc_sum = sum;
 			seq_printf(m, "    %s_data_averages:\n"
-				      "       bytes_per_rpc: "LPU64"\n",
-				      rw ? "write" : "read",
-				      ret.lc_sum);
+				   "       bytes_per_rpc: "LPU64"\n",
+				   rw ? "write" : "read",
+				   ret.lc_sum);
 		}
 		k = (int)ret.lc_sum;
 		j = opcode_offset(OST_READ + rw) + EXTRA_MAX_OPCODES;
@@ -879,11 +884,11 @@ int lprocfs_import_seq_show(struct seq_file *m, void *data)
 			do_div(sum, ret.lc_count);
 			ret.lc_sum = sum;
 			seq_printf(m, "       %s_per_rpc: "LPU64"\n",
-					header->lc_units, ret.lc_sum);
+				   header->lc_units, ret.lc_sum);
 			j = (int)ret.lc_sum;
 			if (j > 0)
 				seq_printf(m, "       MB_per_sec: %u.%.02u\n",
-						k / j, (100 * k / j) % 100);
+					   k / j, (100 * k / j) % 100);
 		}
 	}
 
@@ -1225,8 +1230,8 @@ static int lprocfs_stats_seq_show(struct seq_file *p, void *v)
 		struct timeval now;
 
 		do_gettimeofday(&now);
-		rc = seq_printf(p, "%-25s %lu.%lu secs.usecs\n",
-				"snapshot_time", now.tv_sec, now.tv_usec);
+		seq_printf(p, "%-25s %lu.%lu secs.usecs\n",
+			   "snapshot_time", now.tv_sec, now.tv_usec);
 		if (rc < 0)
 			return rc;
 	}
@@ -1237,22 +1242,22 @@ static int lprocfs_stats_seq_show(struct seq_file *p, void *v)
 	if (ctr.lc_count == 0)
 		goto out;
 
-	rc = seq_printf(p, "%-25s "LPD64" samples [%s]", hdr->lc_name,
-			ctr.lc_count, hdr->lc_units);
+	seq_printf(p, "%-25s "LPD64" samples [%s]", hdr->lc_name,
+		   ctr.lc_count, hdr->lc_units);
 	if (rc < 0)
 		goto out;
 
 	if ((hdr->lc_config & LPROCFS_CNTR_AVGMINMAX) && ctr.lc_count > 0) {
-		rc = seq_printf(p, " "LPD64" "LPD64" "LPD64,
-				ctr.lc_min, ctr.lc_max, ctr.lc_sum);
+		seq_printf(p, " "LPD64" "LPD64" "LPD64,
+			   ctr.lc_min, ctr.lc_max, ctr.lc_sum);
 		if (rc < 0)
 			goto out;
 		if (hdr->lc_config & LPROCFS_CNTR_STDDEV)
-			rc = seq_printf(p, " "LPD64, ctr.lc_sumsquare);
+			seq_printf(p, " "LPD64, ctr.lc_sumsquare);
 		if (rc < 0)
 			goto out;
 	}
-	rc = seq_printf(p, "\n");
+	seq_putc(p, '\n');
 out:
 	return (rc < 0) ? rc : 0;
 }
@@ -1851,12 +1856,11 @@ int lprocfs_obd_max_pages_per_rpc_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *dev = data;
 	struct client_obd *cli = &dev->u.cli;
-	int rc;
 
 	spin_lock(&cli->cl_loi_list_lock);
-	rc = seq_printf(m, "%d\n", cli->cl_max_pages_per_rpc);
+	seq_printf(m, "%d\n", cli->cl_max_pages_per_rpc);
 	spin_unlock(&cli->cl_loi_list_lock);
-	return rc;
+	return 0;
 }
 EXPORT_SYMBOL(lprocfs_obd_max_pages_per_rpc_seq_show);
 

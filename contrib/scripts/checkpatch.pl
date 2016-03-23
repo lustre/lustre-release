@@ -472,6 +472,8 @@ my %dep_functions = (
 	'strcat',			'strncat',
 	'tempnam',			'mkstemp',
 	'f_dentry',			'f_path.dentry',
+	'= seq_printf',			'seq_printf',
+	'return seq_printf',		'seq_printf',
 );
 
 my @rawlines = ();

@@ -78,7 +78,8 @@ static int mdd_atime_diff_seq_show(struct seq_file *m, void *data)
 {
 	struct mdd_device *mdd = m->private;
 
-	return seq_printf(m, "%lu\n", mdd->mdd_atime_diff);
+	seq_printf(m, "%lu\n", mdd->mdd_atime_diff);
+	return 0;
 }
 LPROC_SEQ_FOPS(mdd_atime_diff);
 
@@ -182,7 +183,8 @@ static int mdd_sync_perm_seq_show(struct seq_file *m, void *data)
 	struct mdd_device *mdd = m->private;
 
 	LASSERT(mdd != NULL);
-	return seq_printf(m, "%d\n", mdd->mdd_sync_permission);
+	seq_printf(m, "%d\n", mdd->mdd_sync_permission);
+	return 0;
 }
 
 static ssize_t

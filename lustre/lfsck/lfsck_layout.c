@@ -4747,73 +4747,59 @@ static int lfsck_layout_slave_post(const struct lu_env *env,
 	return rc;
 }
 
-static int lfsck_layout_dump(const struct lu_env *env,
-			     struct lfsck_component *com, struct seq_file *m)
+static void lfsck_layout_dump(const struct lu_env *env,
+			      struct lfsck_component *com, struct seq_file *m)
 {
 	struct lfsck_instance	*lfsck = com->lc_lfsck;
 	struct lfsck_bookmark	*bk    = &lfsck->li_bookmark_ram;
 	struct lfsck_layout	*lo    = com->lc_file_ram;
-	int			 rc;
 
 	down_read(&com->lc_sem);
 	seq_printf(m, "name: lfsck_layout\n"
-		      "magic: %#x\n"
-		      "version: %d\n"
-		      "status: %s\n",
-		      lo->ll_magic,
-		      bk->lb_version,
-		      lfsck_status2name(lo->ll_status));
+		   "magic: %#x\n"
+		   "version: %d\n"
+		   "status: %s\n",
+		   lo->ll_magic,
+		   bk->lb_version,
+		   lfsck_status2name(lo->ll_status));
 
-	rc = lfsck_bits_dump(m, lo->ll_flags, lfsck_flags_names, "flags");
-	if (rc < 0)
-		goto out;
+	lfsck_bits_dump(m, lo->ll_flags, lfsck_flags_names, "flags");
 
-	rc = lfsck_bits_dump(m, bk->lb_param, lfsck_param_names, "param");
-	if (rc < 0)
-		goto out;
+	lfsck_bits_dump(m, bk->lb_param, lfsck_param_names, "param");
 
-	rc = lfsck_time_dump(m, lo->ll_time_last_complete,
-			     "last_completed");
-	if (rc < 0)
-		goto out;
+	lfsck_time_dump(m, lo->ll_time_last_complete, "last_completed");
 
-	rc = lfsck_time_dump(m, lo->ll_time_latest_start,
-			     "latest_start");
-	if (rc < 0)
-		goto out;
+	lfsck_time_dump(m, lo->ll_time_latest_start, "latest_start");
 
-	rc = lfsck_time_dump(m, lo->ll_time_last_checkpoint,
-			     "last_checkpoint");
-	if (rc < 0)
-		goto out;
+	lfsck_time_dump(m, lo->ll_time_last_checkpoint, "last_checkpoint");
 
 	seq_printf(m, "latest_start_position: "LPU64"\n"
-		      "last_checkpoint_position: "LPU64"\n"
-		      "first_failure_position: "LPU64"\n",
-		      lo->ll_pos_latest_start,
-		      lo->ll_pos_last_checkpoint,
-		      lo->ll_pos_first_inconsistent);
+		   "last_checkpoint_position: "LPU64"\n"
+		   "first_failure_position: "LPU64"\n",
+		   lo->ll_pos_latest_start,
+		   lo->ll_pos_last_checkpoint,
+		   lo->ll_pos_first_inconsistent);
 
 	seq_printf(m, "success_count: %u\n"
-		      "repaired_dangling: "LPU64"\n"
-		      "repaired_unmatched_pair: "LPU64"\n"
-		      "repaired_multiple_referenced: "LPU64"\n"
-		      "repaired_orphan: "LPU64"\n"
-		      "repaired_inconsistent_owner: "LPU64"\n"
-		      "repaired_others: "LPU64"\n"
-		      "skipped: "LPU64"\n"
-		      "failed_phase1: "LPU64"\n"
-		      "failed_phase2: "LPU64"\n",
-		      lo->ll_success_count,
-		      lo->ll_objs_repaired[LLIT_DANGLING - 1],
-		      lo->ll_objs_repaired[LLIT_UNMATCHED_PAIR - 1],
-		      lo->ll_objs_repaired[LLIT_MULTIPLE_REFERENCED - 1],
-		      lo->ll_objs_repaired[LLIT_ORPHAN - 1],
-		      lo->ll_objs_repaired[LLIT_INCONSISTENT_OWNER - 1],
-		      lo->ll_objs_repaired[LLIT_OTHERS - 1],
-		      lo->ll_objs_skipped,
-		      lo->ll_objs_failed_phase1,
-		      lo->ll_objs_failed_phase2);
+		   "repaired_dangling: "LPU64"\n"
+		   "repaired_unmatched_pair: "LPU64"\n"
+		   "repaired_multiple_referenced: "LPU64"\n"
+		   "repaired_orphan: "LPU64"\n"
+		   "repaired_inconsistent_owner: "LPU64"\n"
+		   "repaired_others: "LPU64"\n"
+		   "skipped: "LPU64"\n"
+		   "failed_phase1: "LPU64"\n"
+		   "failed_phase2: "LPU64"\n",
+		   lo->ll_success_count,
+		   lo->ll_objs_repaired[LLIT_DANGLING - 1],
+		   lo->ll_objs_repaired[LLIT_UNMATCHED_PAIR - 1],
+		   lo->ll_objs_repaired[LLIT_MULTIPLE_REFERENCED - 1],
+		   lo->ll_objs_repaired[LLIT_ORPHAN - 1],
+		   lo->ll_objs_repaired[LLIT_INCONSISTENT_OWNER - 1],
+		   lo->ll_objs_repaired[LLIT_OTHERS - 1],
+		   lo->ll_objs_skipped,
+		   lo->ll_objs_failed_phase1,
+		   lo->ll_objs_failed_phase2);
 
 	if (lo->ll_status == LS_SCANNING_PHASE1) {
 		__u64 pos;
@@ -4833,19 +4819,19 @@ static int lfsck_layout_dump(const struct lu_env *env,
 		if (rtime != 0)
 			do_div(speed, rtime);
 		seq_printf(m, "checked_phase1: "LPU64"\n"
-			      "checked_phase2: "LPU64"\n"
-			      "run_time_phase1: %u seconds\n"
-			      "run_time_phase2: %u seconds\n"
-			      "average_speed_phase1: "LPU64" items/sec\n"
-			      "average_speed_phase2: N/A\n"
-			      "real-time_speed_phase1: "LPU64" items/sec\n"
-			      "real-time_speed_phase2: N/A\n",
-			      checked,
-			      lo->ll_objs_checked_phase2,
-			      rtime,
-			      lo->ll_run_time_phase2,
-			      speed,
-			      new_checked);
+			   "checked_phase2: "LPU64"\n"
+			   "run_time_phase1: %u seconds\n"
+			   "run_time_phase2: %u seconds\n"
+			   "average_speed_phase1: "LPU64" items/sec\n"
+			   "average_speed_phase2: N/A\n"
+			   "real-time_speed_phase1: "LPU64" items/sec\n"
+			   "real-time_speed_phase2: N/A\n",
+			   checked,
+			   lo->ll_objs_checked_phase2,
+			   rtime,
+			   lo->ll_run_time_phase2,
+			   speed,
+			   new_checked);
 
 		LASSERT(lfsck->li_di_oit != NULL);
 
@@ -4878,26 +4864,23 @@ static int lfsck_layout_dump(const struct lu_env *env,
 			do_div(speed1, lo->ll_run_time_phase1);
 		if (rtime != 0)
 			do_div(speed2, rtime);
-		rc = seq_printf(m, "checked_phase1: "LPU64"\n"
-				"checked_phase2: "LPU64"\n"
-				"run_time_phase1: %u seconds\n"
-				"run_time_phase2: %u seconds\n"
-				"average_speed_phase1: "LPU64" items/sec\n"
-				"average_speed_phase2: "LPU64" items/sec\n"
-				"real-time_speed_phase1: N/A\n"
-				"real-time_speed_phase2: "LPU64" items/sec\n"
-				"current_position: "DFID"\n",
-				lo->ll_objs_checked_phase1,
-				checked,
-				lo->ll_run_time_phase1,
-				rtime,
-				speed1,
-				speed2,
-				new_checked,
-				PFID(&com->lc_fid_latest_scanned_phase2));
-		if (rc <= 0)
-			goto out;
-
+		seq_printf(m, "checked_phase1: "LPU64"\n"
+			   "checked_phase2: "LPU64"\n"
+			   "run_time_phase1: %u seconds\n"
+			   "run_time_phase2: %u seconds\n"
+			   "average_speed_phase1: "LPU64" items/sec\n"
+			   "average_speed_phase2: "LPU64" items/sec\n"
+			   "real-time_speed_phase1: N/A\n"
+			   "real-time_speed_phase2: "LPU64" items/sec\n"
+			   "current_position: "DFID"\n",
+			   lo->ll_objs_checked_phase1,
+			   checked,
+			   lo->ll_run_time_phase1,
+			   rtime,
+			   speed1,
+			   speed2,
+			   new_checked,
+			   PFID(&com->lc_fid_latest_scanned_phase2));
 	} else {
 		__u64 speed1 = lo->ll_objs_checked_phase1;
 		__u64 speed2 = lo->ll_objs_checked_phase2;
@@ -4922,10 +4905,8 @@ static int lfsck_layout_dump(const struct lu_env *env,
 			   speed1,
 			   speed2);
 	}
-out:
-	up_read(&com->lc_sem);
 
-	return rc;
+	up_read(&com->lc_sem);
 }
 
 static int lfsck_layout_master_double_scan(const struct lu_env *env,

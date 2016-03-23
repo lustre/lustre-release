@@ -96,25 +96,26 @@ void gss_stat_oos_record_svc(int phase, int replay)
 
 static int gss_proc_oos_seq_show(struct seq_file *m, void *v)
 {
-	return seq_printf(m, "seqwin:		   %u\n"
-			  "backwin:		%u\n"
-			  "client fall behind seqwin\n"
-			  "  occurrence:	%d\n"
-			  "  max seq behind:	%d\n"
-			  "server replay detected:\n"
-			  "  phase 0:		%d\n"
-			  "  phase 1:		%d\n"
-			  "  phase 2:		%d\n"
-			  "server verify ok:\n"
-			  "  phase 2:		%d\n",
-			  GSS_SEQ_WIN_MAIN,
-			  GSS_SEQ_WIN_BACK,
-			  atomic_read(&gss_stat_oos.oos_cli_count),
-			  gss_stat_oos.oos_cli_behind,
-			  atomic_read(&gss_stat_oos.oos_svc_replay[0]),
-			  atomic_read(&gss_stat_oos.oos_svc_replay[1]),
-			  atomic_read(&gss_stat_oos.oos_svc_replay[2]),
-			  atomic_read(&gss_stat_oos.oos_svc_pass[2]));
+	seq_printf(m, "seqwin:		   %u\n"
+		   "backwin:		%u\n"
+		   "client fall behind seqwin\n"
+		   "  occurrence:	%d\n"
+		   "  max seq behind:	%d\n"
+		   "server replay detected:\n"
+		   "  phase 0:		%d\n"
+		   "  phase 1:		%d\n"
+		   "  phase 2:		%d\n"
+		   "server verify ok:\n"
+		   "  phase 2:		%d\n",
+		   GSS_SEQ_WIN_MAIN,
+		   GSS_SEQ_WIN_BACK,
+		   atomic_read(&gss_stat_oos.oos_cli_count),
+		   gss_stat_oos.oos_cli_behind,
+		   atomic_read(&gss_stat_oos.oos_svc_replay[0]),
+		   atomic_read(&gss_stat_oos.oos_svc_replay[1]),
+		   atomic_read(&gss_stat_oos.oos_svc_replay[2]),
+		   atomic_read(&gss_stat_oos.oos_svc_pass[2]));
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(gss_proc_oos);
 
@@ -154,7 +155,8 @@ static int gss_lk_debug_level = 1;
 
 static int gss_lk_proc_dl_seq_show(struct seq_file *m, void *v)
 {
-	return seq_printf(m, "%u\n", gss_lk_debug_level);
+	seq_printf(m, "%u\n", gss_lk_debug_level);
+	return 0;
 }
 
 static ssize_t

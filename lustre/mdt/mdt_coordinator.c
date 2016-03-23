@@ -2067,17 +2067,20 @@ int mdt_hsm_cdt_control_seq_show(struct seq_file *m, void *data)
 static int
 mdt_hsm_request_mask_show(struct seq_file *m, __u64 mask)
 {
-	int i, rc = 0;
+	bool first = true;
+	int i;
 	ENTRY;
 
 	for (i = 0; i < 8 * sizeof(mask); i++) {
-		if (mask & (1UL << i))
-			rc += seq_printf(m, "%s%s", rc == 0 ? "" : " ",
-					hsm_copytool_action2name(i));
+		if (mask & (1UL << i)) {
+			seq_printf(m, "%s%s", first ? "" : " ",
+				   hsm_copytool_action2name(i));
+			first = false;
+		}
 	}
-	rc += seq_printf(m, "\n");
+	seq_putc(m, '\n');
 
-	RETURN(rc);
+	RETURN(0);
 }
 
 static int

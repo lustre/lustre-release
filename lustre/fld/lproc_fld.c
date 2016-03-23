@@ -263,7 +263,7 @@ static int fldb_seq_show(struct seq_file *p, void *v)
 		       fld->lsf_name, rc);
 	} else if (fld_rec->lsr_start != 0) {
 		range_be_to_cpu(fld_rec, fld_rec);
-		rc = seq_printf(p, DRANGE"\n", PRANGE(fld_rec));
+		seq_printf(p, DRANGE"\n", PRANGE(fld_rec));
 	}
 
 	return rc;

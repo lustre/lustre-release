@@ -64,7 +64,8 @@ static int ofd_seqs_seq_show(struct seq_file *m, void *data)
 	struct obd_device *obd = m->private;
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	return seq_printf(m, "%u\n", ofd->ofd_seq_count);
+	seq_printf(m, "%u\n", ofd->ofd_seq_count);
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(ofd_seqs);
 
@@ -84,7 +85,8 @@ static int ofd_tot_dirty_seq_show(struct seq_file *m, void *data)
 
 	LASSERT(obd != NULL);
 	ofd = ofd_dev(obd->obd_lu_dev);
-	return seq_printf(m, LPU64"\n", ofd->ofd_tot_dirty);
+	seq_printf(m, LPU64"\n", ofd->ofd_tot_dirty);
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(ofd_tot_dirty);
 
@@ -104,7 +106,8 @@ static int ofd_tot_granted_seq_show(struct seq_file *m, void *data)
 
 	LASSERT(obd != NULL);
 	ofd = ofd_dev(obd->obd_lu_dev);
-	return seq_printf(m, LPU64"\n", ofd->ofd_tot_granted);
+	seq_printf(m, LPU64"\n", ofd->ofd_tot_granted);
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(ofd_tot_granted);
 
@@ -124,7 +127,8 @@ static int ofd_tot_pending_seq_show(struct seq_file *m, void *data)
 
 	LASSERT(obd != NULL);
 	ofd = ofd_dev(obd->obd_lu_dev);
-	return seq_printf(m, LPU64"\n", ofd->ofd_tot_pending);
+	seq_printf(m, LPU64"\n", ofd->ofd_tot_pending);
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(ofd_tot_pending);
 
@@ -142,8 +146,9 @@ static int ofd_grant_precreate_seq_show(struct seq_file *m, void *data)
 	struct obd_device *obd = m->private;
 
 	LASSERT(obd != NULL);
-	return seq_printf(m, "%ld\n",
-			  obd->obd_self_export->exp_filter_data.fed_grant);
+	seq_printf(m, "%ld\n",
+		   obd->obd_self_export->exp_filter_data.fed_grant);
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(ofd_grant_precreate);
 
@@ -163,7 +168,8 @@ static int ofd_precreate_batch_seq_show(struct seq_file *m, void *data)
 
 	LASSERT(obd != NULL);
 	ofd = ofd_dev(obd->obd_lu_dev);
-	return seq_printf(m, "%d\n", ofd->ofd_precreate_batch);
+	seq_printf(m, "%d\n", ofd->ofd_precreate_batch);
+	return 0;
 }
 
 /**
@@ -215,7 +221,6 @@ static int ofd_last_id_seq_show(struct seq_file *m, void *data)
 	struct obd_device	*obd = m->private;
 	struct ofd_device	*ofd;
 	struct ofd_seq		*oseq = NULL;
-	int			retval = 0, rc;
 
 	if (obd == NULL)
 		return 0;
@@ -230,15 +235,10 @@ static int ofd_last_id_seq_show(struct seq_file *m, void *data)
 		      fid_idif_seq(ostid_id(&oseq->os_oi),
 				   ofd->ofd_lut.lut_lsd.lsd_osd_index) :
 		      ostid_seq(&oseq->os_oi);
-		rc = seq_printf(m, DOSTID"\n", seq, ostid_id(&oseq->os_oi));
-		if (rc < 0) {
-			retval = rc;
-			break;
-		}
-		retval += rc;
+		seq_printf(m, DOSTID"\n", seq, ostid_id(&oseq->os_oi));
 	}
 	read_unlock(&ofd->ofd_seq_list_lock);
-	return retval;
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(ofd_last_id);
 
@@ -256,7 +256,8 @@ static int ofd_fmd_max_num_seq_show(struct seq_file *m, void *data)
 	struct obd_device *obd = m->private;
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	return seq_printf(m, "%u\n", ofd->ofd_fmd_max_num);
+	seq_printf(m, "%u\n", ofd->ofd_fmd_max_num);
+	return 0;
 }
 
 /**
@@ -311,8 +312,9 @@ static int ofd_fmd_max_age_seq_show(struct seq_file *m, void *data)
 	struct obd_device *obd = m->private;
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	return seq_printf(m, "%ld\n", jiffies_to_msecs(ofd->ofd_fmd_max_age) /
-				      MSEC_PER_SEC);
+	seq_printf(m, "%ld\n", jiffies_to_msecs(ofd->ofd_fmd_max_age) /
+		   MSEC_PER_SEC);
+	return 0;
 }
 
 /**
@@ -371,7 +373,8 @@ static int ofd_degraded_seq_show(struct seq_file *m, void *data)
 	struct obd_device *obd = m->private;
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	return seq_printf(m, "%u\n", ofd->ofd_raid_degraded);
+	seq_printf(m, "%u\n", ofd->ofd_raid_degraded);
+	return 0;
 }
 
 /**
@@ -429,7 +432,8 @@ static int ofd_fstype_seq_show(struct seq_file *m, void *data)
 	LASSERT(ofd->ofd_osd);
 	d = &ofd->ofd_osd->dd_lu_dev;
 	LASSERT(d->ld_type);
-	return seq_printf(m, "%s\n", d->ld_type->ldt_name);
+	seq_printf(m, "%s\n", d->ld_type->ldt_name);
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(ofd_fstype);
 
@@ -455,7 +459,8 @@ static int ofd_syncjournal_seq_show(struct seq_file *m, void *data)
 	struct obd_device	*obd = m->private;
 	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
 
-	return seq_printf(m, "%u\n", ofd->ofd_syncjournal);
+	seq_printf(m, "%u\n", ofd->ofd_syncjournal);
+	return 0;
 }
 
 /**
@@ -517,8 +522,9 @@ static int ofd_sync_lock_cancel_seq_show(struct seq_file *m, void *data)
 	struct obd_device	*obd = m->private;
 	struct lu_target	*tgt = obd->u.obt.obt_lut;
 
-	return seq_printf(m, "%s\n",
-			  sync_on_cancel_states[tgt->lut_sync_lock_cancel]);
+	seq_printf(m, "%s\n",
+		   sync_on_cancel_states[tgt->lut_sync_lock_cancel]);
+	return 0;
 }
 
 /**
@@ -611,7 +617,8 @@ static int ofd_grant_compat_disable_seq_show(struct seq_file *m, void *data)
 	struct obd_device *obd = m->private;
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	return seq_printf(m, "%u\n", ofd->ofd_grant_compat_disable);
+	seq_printf(m, "%u\n", ofd->ofd_grant_compat_disable);
+	return 0;
 }
 
 /**
@@ -789,11 +796,11 @@ static int ofd_lfsck_verify_pfid_seq_show(struct seq_file *m, void *data)
 	struct obd_device *obd = m->private;
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	return seq_printf(m,
-			  "switch: %s\ndetected: "LPU64"\nrepaired: "LPU64"\n",
-			  ofd->ofd_lfsck_verify_pfid ? "on" : "off",
-			  ofd->ofd_inconsistency_self_detected,
-			  ofd->ofd_inconsistency_self_repaired);
+	seq_printf(m, "switch: %s\ndetected: "LPU64"\nrepaired: "LPU64"\n",
+		   ofd->ofd_lfsck_verify_pfid ? "on" : "off",
+		   ofd->ofd_inconsistency_self_detected,
+		   ofd->ofd_inconsistency_self_repaired);
+	return 0;
 }
 
 /**

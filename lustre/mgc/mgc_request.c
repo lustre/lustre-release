@@ -490,8 +490,8 @@ int lprocfs_mgc_rd_ir_state(struct seq_file *m, void *data)
 		if (cld->cld_recover == NULL)
 			continue;
 		seq_printf(m,  "    - { client: %s, nidtbl_version: %u }\n",
-			       cld->cld_logname,
-			       cld->cld_recover->cld_cfg.cfg_last_idx);
+			   cld->cld_logname,
+			   cld->cld_recover->cld_cfg.cfg_last_idx);
 	}
 	spin_unlock(&config_list_lock);
 

@@ -3611,75 +3611,75 @@ static void lfsck_namespace_dump_statistics(struct seq_file *m,
 					    __u32 time_phase2)
 {
 	seq_printf(m, "checked_phase1: "LPU64"\n"
-		      "checked_phase2: "LPU64"\n"
-		      "updated_phase1: "LPU64"\n"
-		      "updated_phase2: "LPU64"\n"
-		      "failed_phase1: "LPU64"\n"
-		      "failed_phase2: "LPU64"\n"
-		      "directories: "LPU64"\n"
-		      "dirent_repaired: "LPU64"\n"
-		      "linkea_repaired: "LPU64"\n"
-		      "nlinks_repaired: "LPU64"\n"
-		      "multiple_linked_checked: "LPU64"\n"
-		      "multiple_linked_repaired: "LPU64"\n"
-		      "unknown_inconsistency: "LPU64"\n"
-		      "unmatched_pairs_repaired: "LPU64"\n"
-		      "dangling_repaired: "LPU64"\n"
-		      "multiple_referenced_repaired: "LPU64"\n"
-		      "bad_file_type_repaired: "LPU64"\n"
-		      "lost_dirent_repaired: "LPU64"\n"
-		      "local_lost_found_scanned: "LPU64"\n"
-		      "local_lost_found_moved: "LPU64"\n"
-		      "local_lost_found_skipped: "LPU64"\n"
-		      "local_lost_found_failed: "LPU64"\n"
-		      "striped_dirs_scanned: "LPU64"\n"
-		      "striped_dirs_repaired: "LPU64"\n"
-		      "striped_dirs_failed: "LPU64"\n"
-		      "striped_dirs_disabled: "LPU64"\n"
-		      "striped_dirs_skipped: "LPU64"\n"
-		      "striped_shards_scanned: "LPU64"\n"
-		      "striped_shards_repaired: "LPU64"\n"
-		      "striped_shards_failed: "LPU64"\n"
-		      "striped_shards_skipped: "LPU64"\n"
-		      "name_hash_repaired: "LPU64"\n"
-		      "success_count: %u\n"
-		      "run_time_phase1: %u seconds\n"
-		      "run_time_phase2: %u seconds\n",
-		      checked_phase1,
-		      checked_phase2,
-		      ns->ln_items_repaired,
-		      ns->ln_objs_repaired_phase2,
-		      ns->ln_items_failed,
-		      ns->ln_objs_failed_phase2,
-		      ns->ln_dirs_checked,
-		      ns->ln_dirent_repaired,
-		      ns->ln_linkea_repaired,
-		      ns->ln_objs_nlink_repaired,
-		      ns->ln_mul_linked_checked,
-		      ns->ln_mul_linked_repaired,
-		      ns->ln_unknown_inconsistency,
-		      ns->ln_unmatched_pairs_repaired,
-		      ns->ln_dangling_repaired,
-		      ns->ln_mul_ref_repaired,
-		      ns->ln_bad_type_repaired,
-		      ns->ln_lost_dirent_repaired,
-		      ns->ln_local_lpf_scanned,
-		      ns->ln_local_lpf_moved,
-		      ns->ln_local_lpf_skipped,
-		      ns->ln_local_lpf_failed,
-		      ns->ln_striped_dirs_scanned,
-		      ns->ln_striped_dirs_repaired,
-		      ns->ln_striped_dirs_failed,
-		      ns->ln_striped_dirs_disabled,
-		      ns->ln_striped_dirs_skipped,
-		      ns->ln_striped_shards_scanned,
-		      ns->ln_striped_shards_repaired,
-		      ns->ln_striped_shards_failed,
-		      ns->ln_striped_shards_skipped,
-		      ns->ln_name_hash_repaired,
-		      ns->ln_success_count,
-		      time_phase1,
-		      time_phase2);
+		   "checked_phase2: "LPU64"\n"
+		   "updated_phase1: "LPU64"\n"
+		   "updated_phase2: "LPU64"\n"
+		   "failed_phase1: "LPU64"\n"
+		   "failed_phase2: "LPU64"\n"
+		   "directories: "LPU64"\n"
+		   "dirent_repaired: "LPU64"\n"
+		   "linkea_repaired: "LPU64"\n"
+		   "nlinks_repaired: "LPU64"\n"
+		   "multiple_linked_checked: "LPU64"\n"
+		   "multiple_linked_repaired: "LPU64"\n"
+		   "unknown_inconsistency: "LPU64"\n"
+		   "unmatched_pairs_repaired: "LPU64"\n"
+		   "dangling_repaired: "LPU64"\n"
+		   "multiple_referenced_repaired: "LPU64"\n"
+		   "bad_file_type_repaired: "LPU64"\n"
+		   "lost_dirent_repaired: "LPU64"\n"
+		   "local_lost_found_scanned: "LPU64"\n"
+		   "local_lost_found_moved: "LPU64"\n"
+		   "local_lost_found_skipped: "LPU64"\n"
+		   "local_lost_found_failed: "LPU64"\n"
+		   "striped_dirs_scanned: "LPU64"\n"
+		   "striped_dirs_repaired: "LPU64"\n"
+		   "striped_dirs_failed: "LPU64"\n"
+		   "striped_dirs_disabled: "LPU64"\n"
+		   "striped_dirs_skipped: "LPU64"\n"
+		   "striped_shards_scanned: "LPU64"\n"
+		   "striped_shards_repaired: "LPU64"\n"
+		   "striped_shards_failed: "LPU64"\n"
+		   "striped_shards_skipped: "LPU64"\n"
+		   "name_hash_repaired: "LPU64"\n"
+		   "success_count: %u\n"
+		   "run_time_phase1: %u seconds\n"
+		   "run_time_phase2: %u seconds\n",
+		   checked_phase1,
+		   checked_phase2,
+		   ns->ln_items_repaired,
+		   ns->ln_objs_repaired_phase2,
+		   ns->ln_items_failed,
+		   ns->ln_objs_failed_phase2,
+		   ns->ln_dirs_checked,
+		   ns->ln_dirent_repaired,
+		   ns->ln_linkea_repaired,
+		   ns->ln_objs_nlink_repaired,
+		   ns->ln_mul_linked_checked,
+		   ns->ln_mul_linked_repaired,
+		   ns->ln_unknown_inconsistency,
+		   ns->ln_unmatched_pairs_repaired,
+		   ns->ln_dangling_repaired,
+		   ns->ln_mul_ref_repaired,
+		   ns->ln_bad_type_repaired,
+		   ns->ln_lost_dirent_repaired,
+		   ns->ln_local_lpf_scanned,
+		   ns->ln_local_lpf_moved,
+		   ns->ln_local_lpf_skipped,
+		   ns->ln_local_lpf_failed,
+		   ns->ln_striped_dirs_scanned,
+		   ns->ln_striped_dirs_repaired,
+		   ns->ln_striped_dirs_failed,
+		   ns->ln_striped_dirs_disabled,
+		   ns->ln_striped_dirs_skipped,
+		   ns->ln_striped_shards_scanned,
+		   ns->ln_striped_shards_repaired,
+		   ns->ln_striped_shards_failed,
+		   ns->ln_striped_shards_skipped,
+		   ns->ln_name_hash_repaired,
+		   ns->ln_success_count,
+		   time_phase1,
+		   time_phase2);
 }
 
 static void lfsck_namespace_release_lmv(const struct lu_env *env,
@@ -4243,14 +4243,13 @@ static int lfsck_namespace_post(const struct lu_env *env,
 	RETURN(rc);
 }
 
-static int
+static void
 lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 		     struct seq_file *m)
 {
 	struct lfsck_instance	*lfsck = com->lc_lfsck;
 	struct lfsck_bookmark	*bk    = &lfsck->li_bookmark_ram;
 	struct lfsck_namespace	*ns    = com->lc_file_ram;
-	int			 rc;
 
 	down_read(&com->lc_sem);
 	seq_printf(m, "name: lfsck_namespace\n"
@@ -4261,43 +4260,23 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 		   bk->lb_version,
 		   lfsck_status2name(ns->ln_status));
 
-	rc = lfsck_bits_dump(m, ns->ln_flags, lfsck_flags_names, "flags");
-	if (rc < 0)
-		goto out;
+	lfsck_bits_dump(m, ns->ln_flags, lfsck_flags_names, "flags");
 
-	rc = lfsck_bits_dump(m, bk->lb_param, lfsck_param_names, "param");
-	if (rc < 0)
-		goto out;
+	lfsck_bits_dump(m, bk->lb_param, lfsck_param_names, "param");
 
-	rc = lfsck_time_dump(m, ns->ln_time_last_complete,
-			     "last_completed");
-	if (rc < 0)
-		goto out;
+	lfsck_time_dump(m, ns->ln_time_last_complete, "last_completed");
 
-	rc = lfsck_time_dump(m, ns->ln_time_latest_start,
-			     "latest_start");
-	if (rc < 0)
-		goto out;
+	lfsck_time_dump(m, ns->ln_time_latest_start, "latest_start");
 
-	rc = lfsck_time_dump(m, ns->ln_time_last_checkpoint,
-			     "last_checkpoint");
-	if (rc < 0)
-		goto out;
+	lfsck_time_dump(m, ns->ln_time_last_checkpoint, "last_checkpoint");
 
-	rc = lfsck_pos_dump(m, &ns->ln_pos_latest_start,
-			    "latest_start_position");
-	if (rc < 0)
-		goto out;
+	lfsck_pos_dump(m, &ns->ln_pos_latest_start, "latest_start_position");
 
-	rc = lfsck_pos_dump(m, &ns->ln_pos_last_checkpoint,
-			    "last_checkpoint_position");
-	if (rc < 0)
-		goto out;
+	lfsck_pos_dump(m, &ns->ln_pos_last_checkpoint,
+		       "last_checkpoint_position");
 
-	rc = lfsck_pos_dump(m, &ns->ln_pos_first_inconsistent,
-			    "first_failure_position");
-	if (rc < 0)
-		goto out;
+	lfsck_pos_dump(m, &ns->ln_pos_first_inconsistent,
+		       "first_failure_position");
 
 	if (ns->ln_status == LS_SCANNING_PHASE1) {
 		struct lfsck_position pos;
@@ -4319,13 +4298,13 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 
 		lfsck_namespace_dump_statistics(m, ns, checked, 0, rtime, 0);
 		seq_printf(m, "average_speed_phase1: "LPU64" items/sec\n"
-			      "average_speed_phase2: N/A\n"
-			      "average_speed_total: "LPU64" items/sec\n"
-			      "real_time_speed_phase1: "LPU64" items/sec\n"
-			      "real_time_speed_phase2: N/A\n",
-			      speed,
-			      speed,
-			      new_checked);
+			   "average_speed_phase2: N/A\n"
+			   "average_speed_total: "LPU64" items/sec\n"
+			   "real_time_speed_phase1: "LPU64" items/sec\n"
+			   "real_time_speed_phase2: N/A\n",
+			   speed,
+			   speed,
+			   new_checked);
 
 		LASSERT(lfsck->li_di_oit != NULL);
 
@@ -4389,16 +4368,16 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 						checked,
 						ns->ln_run_time_phase1, rtime);
 		seq_printf(m, "average_speed_phase1: "LPU64" items/sec\n"
-			      "average_speed_phase2: "LPU64" objs/sec\n"
-			      "average_speed_total: "LPU64" items/sec\n"
-			      "real_time_speed_phase1: N/A\n"
-			      "real_time_speed_phase2: "LPU64" objs/sec\n"
-			      "current_position: "DFID"\n",
-			      speed1,
-			      speed2,
-			      speed0,
-			      new_checked,
-			      PFID(&ns->ln_fid_latest_scanned_phase2));
+			   "average_speed_phase2: "LPU64" objs/sec\n"
+			   "average_speed_total: "LPU64" items/sec\n"
+			   "real_time_speed_phase1: N/A\n"
+			   "real_time_speed_phase2: "LPU64" objs/sec\n"
+			   "current_position: "DFID"\n",
+			   speed1,
+			   speed2,
+			   speed0,
+			   new_checked,
+			   PFID(&ns->ln_fid_latest_scanned_phase2));
 	} else {
 		__u64 speed1 = ns->ln_items_checked;
 		__u64 speed2 = ns->ln_objs_checked_phase2;
@@ -4423,18 +4402,17 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 						ns->ln_run_time_phase1,
 						ns->ln_run_time_phase2);
 		seq_printf(m, "average_speed_phase1: "LPU64" items/sec\n"
-			      "average_speed_phase2: "LPU64" objs/sec\n"
-			      "average_speed_total: "LPU64" items/sec\n"
-			      "real_time_speed_phase1: N/A\n"
-			      "real_time_speed_phase2: N/A\n"
-			      "current_position: N/A\n",
-			      speed1,
-			      speed2,
-			      speed0);
+			   "average_speed_phase2: "LPU64" objs/sec\n"
+			   "average_speed_total: "LPU64" items/sec\n"
+			   "real_time_speed_phase1: N/A\n"
+			   "real_time_speed_phase2: N/A\n"
+			   "current_position: N/A\n",
+			   speed1,
+			   speed2,
+			   speed0);
 	}
-out:
+
 	up_read(&com->lc_sem);
-	return 0;
 }
 
 static int lfsck_namespace_double_scan(const struct lu_env *env,

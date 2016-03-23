@@ -239,7 +239,8 @@ static int nodemap_exports_open(struct inode *inode, struct file *file)
  */
 static int nodemap_active_seq_show(struct seq_file *m, void *data)
 {
-	return seq_printf(m, "%u\n", (unsigned int)nodemap_active);
+	seq_printf(m, "%u\n", (unsigned int)nodemap_active);
+	return 0;
 }
 
 /**
@@ -290,21 +291,20 @@ LPROC_SEQ_FOPS(nodemap_active);
 static int nodemap_id_seq_show(struct seq_file *m, void *data)
 {
 	struct lu_nodemap *nodemap;
-	int rc;
 
 	mutex_lock(&active_config_lock);
 	nodemap = nodemap_lookup(m->private);
 	mutex_unlock(&active_config_lock);
 	if (IS_ERR(nodemap)) {
-		rc = PTR_ERR(nodemap);
+		int rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
 			(char *)m->private, rc);
 		return rc;
 	}
 
-	rc = seq_printf(m, "%u\n", nodemap->nm_id);
+	seq_printf(m, "%u\n", nodemap->nm_id);
 	nodemap_putref(nodemap);
-	return rc;
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(nodemap_id);
 
@@ -318,21 +318,20 @@ LPROC_SEQ_FOPS_RO(nodemap_id);
 static int nodemap_squash_uid_seq_show(struct seq_file *m, void *data)
 {
 	struct lu_nodemap *nodemap;
-	int rc;
 
 	mutex_lock(&active_config_lock);
 	nodemap = nodemap_lookup(m->private);
 	mutex_unlock(&active_config_lock);
 	if (IS_ERR(nodemap)) {
-		rc = PTR_ERR(nodemap);
+		int rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
 			(char *)m->private, rc);
 		return rc;
 	}
 
-	rc = seq_printf(m, "%u\n", nodemap->nm_squash_uid);
+	seq_printf(m, "%u\n", nodemap->nm_squash_uid);
 	nodemap_putref(nodemap);
-	return rc;
+	return 0;
 }
 
 /**
@@ -345,21 +344,20 @@ static int nodemap_squash_uid_seq_show(struct seq_file *m, void *data)
 static int nodemap_squash_gid_seq_show(struct seq_file *m, void *data)
 {
 	struct lu_nodemap *nodemap;
-	int rc;
 
 	mutex_lock(&active_config_lock);
 	nodemap = nodemap_lookup(m->private);
 	mutex_unlock(&active_config_lock);
 	if (IS_ERR(nodemap)) {
-		rc = PTR_ERR(nodemap);
+		int rc = PTR_ERR(nodemap);
 		CERROR("cannot find nodemap '%s': rc = %d\n",
 			(char *)m->private, rc);
 		return rc;
 	}
 
-	rc = seq_printf(m, "%u\n", nodemap->nm_squash_gid);
+	seq_printf(m, "%u\n", nodemap->nm_squash_gid);
 	nodemap_putref(nodemap);
-	return rc;
+	return 0;
 }
 
 /**
@@ -372,21 +370,21 @@ static int nodemap_squash_gid_seq_show(struct seq_file *m, void *data)
 static int nodemap_trusted_seq_show(struct seq_file *m, void *data)
 {
 	struct lu_nodemap *nodemap;
-	int rc;
 
 	mutex_lock(&active_config_lock);
 	nodemap = nodemap_lookup(m->private);
 	mutex_unlock(&active_config_lock);
 	if (IS_ERR(nodemap)) {
-		rc = PTR_ERR(nodemap);
+		int rc = PTR_ERR(nodemap);
+
 		CERROR("cannot find nodemap '%s': rc = %d\n",
 			(char *)m->private, rc);
 		return rc;
 	}
 
-	rc = seq_printf(m, "%d\n", (int)nodemap->nmf_trust_client_ids);
+	seq_printf(m, "%d\n", (int)nodemap->nmf_trust_client_ids);
 	nodemap_putref(nodemap);
-	return rc;
+	return 0;
 }
 
 /**
@@ -411,9 +409,9 @@ static int nodemap_admin_seq_show(struct seq_file *m, void *data)
 		return rc;
 	}
 
-	rc = seq_printf(m, "%d\n", (int)nodemap->nmf_allow_root_access);
+	seq_printf(m, "%d\n", (int)nodemap->nmf_allow_root_access);
 	nodemap_putref(nodemap);
-	return rc;
+	return 0;
 }
 
 #ifdef NODEMAP_PROC_DEBUG

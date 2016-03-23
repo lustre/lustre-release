@@ -398,7 +398,7 @@ static int hsm_actions_show_cb(const struct lu_env *env,
 	struct llog_agent_req_rec    *larr = (struct llog_agent_req_rec *)hdr;
 	struct seq_file		     *s = data;
 	struct agent_action_iterator *aai;
-	int			      rc, sz;
+	int			      sz;
 	size_t			      count;
 	char			      buf[12];
 	ENTRY;
@@ -417,35 +417,29 @@ static int hsm_actions_show_cb(const struct lu_env *env,
 
 	count = s->count;
 	sz = larr->arr_hai.hai_len - sizeof(larr->arr_hai);
-	rc = seq_printf(s, "lrh=[type=%X len=%d idx=%d/%d] fid="DFID
-			" dfid="DFID
-			" compound/cookie="LPX64"/"LPX64
-			" action=%s archive#=%d flags="LPX64
-			" extent="LPX64"-"LPX64
-			" gid="LPX64" datalen=%d status=%s"
-			" data=[%s]\n",
-			hdr->lrh_type, hdr->lrh_len,
-			llh->lgh_hdr->llh_cat_idx, hdr->lrh_index,
-			PFID(&larr->arr_hai.hai_fid),
-			PFID(&larr->arr_hai.hai_dfid),
-			larr->arr_compound_id, larr->arr_hai.hai_cookie,
-			hsm_copytool_action2name(larr->arr_hai.hai_action),
-			larr->arr_archive_id,
-			larr->arr_flags,
-			larr->arr_hai.hai_extent.offset,
-			larr->arr_hai.hai_extent.length,
-			larr->arr_hai.hai_gid, sz,
-			agent_req_status2name(larr->arr_status),
-			hai_dump_data_field(&larr->arr_hai, buf, sizeof(buf)));
-	if (rc == 0) {
-		aai->aai_cat_index = llh->lgh_hdr->llh_cat_idx;
-		aai->aai_index = hdr->lrh_index;
-	} else {
-		if (s->count == s->size && count > 0) /* rewind the buffer */
-			s->count = count;
-		rc = LLOG_PROC_BREAK;
-	}
-	RETURN(rc);
+	seq_printf(s, "lrh=[type=%X len=%d idx=%d/%d] fid="DFID
+		   " dfid="DFID" compound/cookie="LPX64"/"LPX64
+		   " action=%s archive#=%d flags="LPX64
+		   " extent="LPX64"-"LPX64
+		   " gid="LPX64" datalen=%d status=%s data=[%s]\n",
+		   hdr->lrh_type, hdr->lrh_len,
+		   llh->lgh_hdr->llh_cat_idx, hdr->lrh_index,
+		   PFID(&larr->arr_hai.hai_fid),
+		   PFID(&larr->arr_hai.hai_dfid),
+		   larr->arr_compound_id, larr->arr_hai.hai_cookie,
+		   hsm_copytool_action2name(larr->arr_hai.hai_action),
+		   larr->arr_archive_id,
+		   larr->arr_flags,
+		   larr->arr_hai.hai_extent.offset,
+		   larr->arr_hai.hai_extent.length,
+		   larr->arr_hai.hai_gid, sz,
+		   agent_req_status2name(larr->arr_status),
+		   hai_dump_data_field(&larr->arr_hai, buf, sizeof(buf)));
+
+	aai->aai_cat_index = llh->lgh_hdr->llh_cat_idx;
+	aai->aai_index = hdr->lrh_index;
+
+	RETURN(0);
 }
 
 /**
