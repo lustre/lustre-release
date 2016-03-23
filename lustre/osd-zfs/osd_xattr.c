@@ -267,39 +267,18 @@ int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	RETURN(rc);
 }
 
-void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,
-			     int vallen, const char *name,
-			     struct osd_thandle *oh)
+/* the function is used to declare EAs when SA is not supported */
+void __osd_xattr_declare_legacy(const struct lu_env *env,
+				struct osd_object *obj,
+				int vallen, const char *name,
+				struct osd_thandle *oh)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
-	dmu_buf_t         *db = obj->oo_db;
-	dmu_tx_t          *tx = oh->ot_tx;
-	uint64_t           xa_data_obj;
-	int                rc = 0;
-	int                here;
+	dmu_tx_t *tx = oh->ot_tx;
+	uint64_t xa_data_obj;
+	int rc;
 
-	if (unlikely(obj->oo_destroyed))
-		return;
-
-	here = dt_object_exists(&obj->oo_dt);
-
-	/* object may be not yet created */
-	if (here) {
-		LASSERT(db);
-		LASSERT(obj->oo_sa_hdl);
-		/* we might just update SA_ZPL_DXATTR */
-		dmu_tx_hold_sa(tx, obj->oo_sa_hdl, 1);
-
-		if (obj->oo_xattr == ZFS_NO_OBJECT)
-			rc = -ENOENT;
-	}
-
-	if (!here || rc == -ENOENT) {
-		/* we'll be updating SA_ZPL_XATTR */
-		if (here) {
-			LASSERT(obj->oo_sa_hdl);
-			dmu_tx_hold_sa(tx, obj->oo_sa_hdl, 1);
-		}
+	if (obj->oo_xattr == ZFS_NO_OBJECT) {
 		/* xattr zap + entry */
 		dmu_tx_hold_zap(tx, DMU_NEW_OBJECT, TRUE, (char *) name);
 		/* xattr value obj */
@@ -318,7 +297,6 @@ void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,
 		dmu_tx_hold_bonus(tx, xa_data_obj);
 		dmu_tx_hold_free(tx, xa_data_obj, vallen, DMU_OBJECT_END);
 		dmu_tx_hold_write(tx, xa_data_obj, 0, vallen);
-		return;
 	} else if (rc == -ENOENT) {
 		/*
 		 * Entry doesn't exist, we need to create a new one and a new
@@ -328,11 +306,43 @@ void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,
 		dmu_tx_hold_zap(tx, obj->oo_xattr, TRUE, (char *) name);
 		dmu_tx_hold_sa_create(tx, ZFS_SA_BASE_ATTR_SIZE);
 		dmu_tx_hold_write(tx, DMU_NEW_OBJECT, 0, vallen);
+	}
+}
+
+void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,
+			     int vallen, const char *name,
+			     struct osd_thandle *oh)
+{
+	dmu_buf_t         *db = obj->oo_db;
+	dmu_tx_t          *tx = oh->ot_tx;
+
+	if (unlikely(obj->oo_destroyed))
+		return;
+
+	if (unlikely(!osd_obj2dev(obj)->od_xattr_in_sa)) {
+		__osd_xattr_declare_legacy(env, obj, vallen, name, oh);
 		return;
 	}
 
-	/* An error happened */
-	tx->tx_err = -rc;
+	/* declare EA in SA */
+	if (dt_object_exists(&obj->oo_dt)) {
+		LASSERT(obj->oo_sa_hdl);
+		/* XXX: it should be possible to skip spill
+		 * declaration if specific EA is part of
+		 * bonus and doesn't grow */
+		dmu_tx_hold_spill(tx, db->db_object);
+		return;
+	}
+
+	/* the object doesn't exist, but we've declared bonus
+	 * in osd_declare_object_create() yet */
+	if (obj->oo_ea_in_bonus > DN_MAX_BONUSLEN) {
+		/* spill has been declared already */
+	} else if (obj->oo_ea_in_bonus + vallen > DN_MAX_BONUSLEN) {
+		/* we're about to exceed bonus, let's declare spill */
+		dmu_tx_hold_spill(tx, DMU_NEW_OBJECT);
+	}
+	obj->oo_ea_in_bonus += vallen;
 }
 
 int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
@@ -361,8 +371,7 @@ int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
  *
  * No locking is done here.
  */
-static int
-__osd_sa_xattr_update(const struct lu_env *env, struct osd_object *obj,
+int __osd_sa_xattr_update(const struct lu_env *env, struct osd_object *obj,
 		      struct osd_thandle *oh)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
@@ -494,8 +503,7 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 
 		la->la_valid = LA_MODE;
 		la->la_mode = S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO;
-		rc = __osd_zap_create(env, osd, &xa_zap_db, tx, la,
-				      obj->oo_db->db_object, 0);
+		rc = __osd_zap_create(env, osd, &xa_zap_db, tx, la, 0);
 		if (rc)
 			return rc;
 
@@ -550,8 +558,7 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 
 		la->la_valid = LA_MODE;
 		la->la_mode = S_IFREG | S_IRUGO | S_IWUSR;
-		rc = __osd_object_create(env, obj, &xa_data_db, tx, la,
-					 obj->oo_xattr);
+		rc = __osd_object_create(env, obj, &xa_data_db, tx, la);
 		if (rc)
 			goto out;
 		xa_data_obj = xa_data_db->db_object;

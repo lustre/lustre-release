@@ -347,10 +347,17 @@ struct osd_object {
 
 	/* the i_flags in LMA */
 	__u32			 oo_lma_flags;
-	/* record size for index file */
-	unsigned char		 oo_keysize;
-	unsigned char		 oo_recsize;
-	unsigned char		 oo_recusize;	/* unit size */
+	union {
+		int		oo_ea_in_bonus; /* EA bytes we expect */
+		struct {
+			/* record size for index file */
+			unsigned char		 oo_keysize;
+			unsigned char		 oo_recsize;
+			unsigned char		 oo_recusize;	/* unit size */
+		};
+	};
+
+
 };
 
 int osd_statfs(const struct lu_env *, struct dt_device *, struct obd_statfs *);
@@ -465,10 +472,12 @@ int osd_object_sa_update(struct osd_object *obj, sa_attr_type_t type,
 			 void *buf, uint32_t buflen, struct osd_thandle *oh);
 int __osd_zap_create(const struct lu_env *env, struct osd_device *osd,
 		     dmu_buf_t **zap_dbp, dmu_tx_t *tx, struct lu_attr *la,
-		     uint64_t parent, zap_flags_t flags);
+		     zap_flags_t flags);
 int __osd_object_create(const struct lu_env *env, struct osd_object *obj,
-			dmu_buf_t **dbp, dmu_tx_t *tx, struct lu_attr *la,
-			uint64_t parent);
+			dmu_buf_t **dbp, dmu_tx_t *tx, struct lu_attr *la);
+int __osd_attr_init(const struct lu_env *env, struct osd_device *osd,
+		    sa_handle_t *sa_hdl, dmu_tx_t *tx,
+		    struct lu_attr *la, uint64_t parent);
 
 /* osd_oi.c */
 int osd_oi_init(const struct lu_env *env, struct osd_device *o);
@@ -476,7 +485,7 @@ void osd_oi_fini(const struct lu_env *env, struct osd_device *o);
 int osd_fid_lookup(const struct lu_env *env,
 		   struct osd_device *, const struct lu_fid *, uint64_t *);
 uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
-			    const struct lu_fid *fid, char *buf);
+			    const struct lu_fid *fid, char *buf, int bufsize);
 int osd_options_init(void);
 int osd_ost_seq_exists(const struct lu_env *env, struct osd_device *osd,
 		       __u64 seq);
@@ -525,6 +534,8 @@ int __osd_sa_xattr_set(const struct lu_env *env, struct osd_object *obj,
 int __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 		    const struct lu_buf *buf, const char *name, int fl,
 		    struct osd_thandle *oh);
+int __osd_sa_xattr_update(const struct lu_env *env, struct osd_object *obj,
+			  struct osd_thandle *oh);
 static inline int
 osd_xattr_set_internal(const struct lu_env *env, struct osd_object *obj,
 		       const struct lu_buf *buf, const char *name, int fl,
