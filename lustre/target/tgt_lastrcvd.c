@@ -1717,20 +1717,6 @@ int tgt_txn_start_cb(const struct lu_env *env, struct thandle *th,
 	if (tsi->tsi_exp == NULL)
 		return 0;
 
-	dto = dt_object_locate(tgt->lut_last_rcvd, th->th_dev);
-	tti_buf_lcd(tti);
-
-	rc = dt_declare_record_write(env, dto, &tti->tti_buf,
-				     tsi->tsi_exp->exp_target_data.ted_lr_off,
-				     th);
-	if (rc)
-		return rc;
-
-	tti_buf_lsd(tti);
-	rc = dt_declare_record_write(env, dto, &tti->tti_buf, 0, th);
-	if (rc)
-		return rc;
-
 	if (tgt_is_multimodrpcs_client(tsi->tsi_exp)) {
 		/*
 		 * Use maximum possible file offset for declaration to ensure
@@ -1744,6 +1730,14 @@ int tgt_txn_start_cb(const struct lu_env *env, struct thandle *th,
 		tti->tti_buf.lb_buf = NULL;
 		tti->tti_buf.lb_len = sizeof(struct lsd_reply_data);
 		dto = dt_object_locate(tgt->lut_reply_data, th->th_dev);
+		rc = dt_declare_record_write(env, dto, &tti->tti_buf,
+					     tti->tti_off, th);
+		if (rc)
+			return rc;
+	} else {
+		dto = dt_object_locate(tgt->lut_last_rcvd, th->th_dev);
+		tti_buf_lcd(tti);
+		tti->tti_off = tsi->tsi_exp->exp_target_data.ted_lr_off;
 		rc = dt_declare_record_write(env, dto, &tti->tti_buf,
 					     tti->tti_off, th);
 		if (rc)

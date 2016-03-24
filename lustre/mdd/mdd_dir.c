@@ -1862,24 +1862,15 @@ out_free:
 static int mdd_declare_object_initialize(const struct lu_env *env,
 					 struct mdd_object *parent,
 					 struct mdd_object *child,
-					 struct lu_attr *attr,
+					 const struct lu_attr *attr,
 					 struct thandle *handle)
 {
 	int rc;
 	ENTRY;
 
-	/*
-	 * inode mode has been set in creation time, and it's based on umask,
-	 * la_mode and acl, don't set here again! (which will go wrong
-	 * because below function doesn't consider umask).
-	 * I'd suggest set all object attributes in creation time, see above.
-	 */
 	LASSERT(attr->la_valid & (LA_MODE | LA_TYPE));
-	attr->la_valid &= ~(LA_MODE | LA_TYPE);
-	rc = mdo_declare_attr_set(env, child, attr, handle);
-	attr->la_valid |= LA_MODE | LA_TYPE;
-	if (rc != 0 || !S_ISDIR(attr->la_mode))
-		RETURN(rc);
+	if (!S_ISDIR(attr->la_mode))
+		RETURN(0);
 
 	rc = mdo_declare_index_insert(env, child, mdo2fid(child), S_IFDIR,
 				      dot, handle);
