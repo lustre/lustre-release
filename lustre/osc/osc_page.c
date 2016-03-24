@@ -84,8 +84,6 @@ static void osc_page_transfer_add(const struct lu_env *env,
 {
 	struct osc_object *obj = cl2osc(opg->ops_cl.cpl_obj);
 
-	/* ops_lru and ops_inflight share the same field, so take it from LRU
-	 * first and then use it as inflight. */
 	osc_lru_use(osc_cli(obj), opg);
 }
 
