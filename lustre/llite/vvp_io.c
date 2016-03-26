@@ -1217,12 +1217,6 @@ static int vvp_io_fault_start(const struct lu_env *env,
 	pgoff_t			 last_index;
 	ENTRY;
 
-	if (fio->ft_executable &&
-	    LTIME_S(inode->i_mtime) != vio->u.fault.ft_mtime)
-		CWARN("binary "DFID
-		      " changed while waiting for the page fault lock\n",
-		      PFID(lu_object_fid(&obj->co_lu)));
-
 	down_read(&lli->lli_trunc_sem);
 
         /* offset of the last byte on the page */
