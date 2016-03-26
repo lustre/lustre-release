@@ -1301,18 +1301,6 @@ static inline int md_null_inode(struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int md_find_cbdata(struct obd_export *exp,
-                                 const struct lu_fid *fid,
-                                 ldlm_iterator_t it, void *data)
-{
-        int rc;
-        ENTRY;
-        EXP_CHECK_MD_OP(exp, find_cbdata);
-        EXP_MD_COUNTER_INCREMENT(exp, find_cbdata);
-        rc = MDP(exp->exp_obd, find_cbdata)(exp, fid, it, data);
-        RETURN(rc);
-}
-
 static inline int md_close(struct obd_export *exp, struct md_op_data *op_data,
                            struct md_open_data *mod,
                            struct ptlrpc_request **request)

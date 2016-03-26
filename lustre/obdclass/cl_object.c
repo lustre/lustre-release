@@ -362,30 +362,6 @@ int cl_object_getstripe(const struct lu_env *env, struct cl_object *obj,
 EXPORT_SYMBOL(cl_object_getstripe);
 
 /**
- * Find whether there is any callback data (ldlm lock) attached upon this
- * object.
- */
-int cl_object_find_cbdata(const struct lu_env *env, struct cl_object *obj,
-			   ldlm_iterator_t iter, void *data)
-{
-	struct lu_object_header	*top;
-	int			result = 0;
-	ENTRY;
-
-	top = obj->co_lu.lo_header;
-	list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
-		if (obj->co_ops->coo_find_cbdata != NULL) {
-			result = obj->co_ops->coo_find_cbdata(env, obj, iter,
-							      data);
-			if (result != 0)
-				break;
-		}
-	}
-	RETURN(result);
-}
-EXPORT_SYMBOL(cl_object_find_cbdata);
-
-/**
  * Get fiemap extents from file object.
  *
  * \param env [in]	lustre environment

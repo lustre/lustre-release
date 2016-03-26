@@ -510,6 +510,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_MAKE_LOVEA_HOLE		    0x1406
 #define OBD_FAIL_LLITE_LOST_LAYOUT		    0x1407
 #define OBD_FAIL_LLITE_NO_CHECK_DEAD		    0x1408
+#define OBD_FAIL_GETATTR_DELAY			    0x1409
 
 #define OBD_FAIL_FID_INDIR	0x1501
 #define OBD_FAIL_FID_INLMA	0x1502

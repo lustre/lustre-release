@@ -125,43 +125,6 @@ static int ll_dcompare(struct dentry *parent, struct qstr *d_name,
 	RETURN(0);
 }
 
-static inline int return_if_equal(struct ldlm_lock *lock, void *data)
-{
-	return (ldlm_is_canceling(lock) && ldlm_is_discard_data(lock)) ?
-		LDLM_ITER_CONTINUE : LDLM_ITER_STOP;
-}
-
-/* find any ldlm lock of the inode in mdc and lov
- * return 0    not find
- *        1    find one
- *      < 0    error */
-static int find_cbdata(struct inode *inode)
-{
-	struct lu_env			*env;
-	__u16				refcheck;
-	struct ll_sb_info		*sbi = ll_i2sbi(inode);
-	int				rc = 0;
-	ENTRY;
-
-	LASSERT(inode);
-	rc = md_find_cbdata(sbi->ll_md_exp, ll_inode2fid(inode),
-			    return_if_equal, NULL);
-	if (rc != 0)
-		RETURN(rc);
-
-	if (ll_i2info(inode)->lli_clob != NULL) {
-		env = cl_env_get(&refcheck);
-		if (IS_ERR(env))
-			RETURN(PTR_ERR(env));
-
-		rc = cl_object_find_cbdata(env, ll_i2info(inode)->lli_clob,
-					   return_if_equal, NULL);
-		cl_env_put(env, &refcheck);
-	}
-
-	RETURN(rc);
-}
-
 /**
  * Called when last reference to a dentry is dropped and dcache wants to know
  * whether or not it should cache it:
@@ -428,18 +391,9 @@ static int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
 }
 #endif
 
-static void ll_d_iput(struct dentry *de, struct inode *inode)
-{
-	LASSERT(inode);
-	if (!find_cbdata(inode))
-		clear_nlink(inode);
-	iput(inode);
-}
-
 const struct dentry_operations ll_d_ops = {
         .d_revalidate = ll_revalidate_nd,
         .d_release = ll_release,
         .d_delete  = ll_ddelete,
-        .d_iput    = ll_d_iput,
         .d_compare = ll_dcompare,
 };

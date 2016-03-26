@@ -1072,9 +1072,6 @@ struct md_ops {
 	int (*m_getstatus)(struct obd_export *, struct lu_fid *);
 	int (*m_null_inode)(struct obd_export *, const struct lu_fid *);
 
-	int (*m_find_cbdata)(struct obd_export *, const struct lu_fid *,
-			     ldlm_iterator_t, void *);
-
 	int (*m_getattr_name)(struct obd_export *, struct md_op_data *,
 			      struct ptlrpc_request **);
 
