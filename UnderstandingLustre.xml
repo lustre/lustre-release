@@ -133,7 +133,7 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>2.5 TB/sec I/O</para>
+                <para>10 TB/sec I/O</para>
               </entry>
               <entry>
                 <para>
@@ -187,7 +187,7 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>Single OSS:</emphasis>
                 </para>
-                <para>5 GB/sec</para>
+                <para>10 GB/sec</para>
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
@@ -197,7 +197,7 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>Single OSS:</emphasis>
                 </para>
-                <para>2.0+ GB/sec</para>
+                <para>6.0+ GB/sec</para>
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
@@ -489,7 +489,7 @@ xml:id="understandinglustre">
       <itemizedlist>
         <listitem>
           <para>
-          <emphasis role="bold">Metadata Server (MDS)</emphasis>- The MDS makes
+          <emphasis role="bold">Metadata Servers (MDS)</emphasis>- The MDS makes
           metadata stored in one or more MDTs available to Lustre clients. Each
           MDS manages the names and directories in the Lustre file system(s)
           and provides network request handling for one or more local
@@ -497,7 +497,7 @@ xml:id="understandinglustre">
         </listitem>
         <listitem>
           <para>
-          <emphasis role="bold">Metadata Target (MDT</emphasis>) - For Lustre
+          <emphasis role="bold">Metadata Targets (MDT</emphasis>) - For Lustre
           software release 2.3 and earlier, each file system has one MDT. The
           MDT stores metadata (such as filenames, directories, permissions and
           file layout) on storage attached to an MDS. Each file system has one
@@ -506,19 +506,14 @@ xml:id="understandinglustre">
           fails, a standby MDS can serve the MDT and make it available to
           clients. This is referred to as MDS failover.</para>
           <para condition="l24">Since Lustre software release 2.4, multiple
-          MDTs are supported. Each file system has at least one MDT. An MDT on
-          a shared storage target can be available via multiple MDSs, although
-          only one MDS can export the MDT to the clients at one time. Two MDS
-          machines share storage for two or more MDTs. After the failure of one
-          MDS, the remaining MDS begins serving the MDT(s) of the failed
-          MDS.</para>
-          <para condition="l28">Since Lustre software release 2.8,
-          multiple MDTs can be employed to share the inode records for files
-          contained in a single directory. A directory for which inode records
-          are distributed across multiple MDTs is known as a <emphasis>striped
-          directory</emphasis>. In the case of a Lustre filesystem the inode
-          records maybe also be referred to as the 'metadata' portion of the
-          file record.</para>
+          MDTs are supported in the Distributed Namespace Environment (DNE).
+          In addition to the primary MDT that holds the filesystem root, it
+          is possible to add additional MDS nodes, each with their own MDTs,
+          to hold sub-directory trees of the filesystem.</para>
+          <para condition="l28">Since Lustre software release 2.8, DNE also
+          allows the filesystem to distribute files of a single directory over
+          multiple MDT nodes. A directory which is distributed across multiple
+          MDTs is known as a <emphasis>striped directory</emphasis>.</para>
         </listitem>
         <listitem>
           <para>
@@ -556,6 +551,13 @@ xml:id="understandinglustre">
       Several clients can write to different parts of the same file
       simultaneously, while, at the same time, other clients can read from the
       file.</para>
+      <para>A logical metadata volume (LMV) aggregates the MDCs to provide
+      transparent access across all the MDTs in a similar manner as the LOV
+      does for file access.  This allows the client to see the directory tree
+      on multiple MDTs as a single coherent namespace, and striped directories
+      are merged on the clients to form a single visible directory to users
+      and applications.
+      </para>
       <para>
       <xref linkend="understandinglustre.tab.storagerequire" />provides the
       requirements for attached storage for each Lustre file system component
@@ -613,11 +615,11 @@ xml:id="understandinglustre">
                 </para>
               </entry>
               <entry>
-                <para>1-16 TB per OST, 1-8 OSTs per OSS</para>
+                <para>1-128 TB per OST, 1-8 OSTs per OSS</para>
               </entry>
               <entry>
                 <para>Good bus bandwidth. Recommended that storage be balanced
-                evenly across OSSs.</para>
+                evenly across OSSs and matched to network bandwidth.</para>
               </entry>
             </row>
             <row>
@@ -627,7 +629,7 @@ xml:id="understandinglustre">
                 </para>
               </entry>
               <entry>
-                <para>None</para>
+                <para>No local storage needed</para>
               </entry>
               <entry>
                 <para>Low latency, high bandwidth network.</para>
@@ -700,7 +702,7 @@ xml:id="understandinglustre">
     MDTs). This change enabled future support for multiple MDTs (introduced in
     Lustre software release 2.4) and ZFS (introduced in Lustre software release
     2.4).</para>
-    <para>Also introduced in release 2.0 is a feature call
+    <para>Also introduced in release 2.0 is an ldiskfs feature named
     <emphasis role="italic">FID-in-dirent</emphasis>(also known as
     <emphasis role="italic">dirdata</emphasis>) in which the FID is stored as
     part of the name of the file in the parent directory. This feature
@@ -708,13 +710,12 @@ xml:id="understandinglustre">
     <literal>ls</literal> command executions by reducing disk I/O. The
     FID-in-dirent is generated at the time the file is created.</para>
     <note>
-      <para>The FID-in-dirent feature is not compatible with the Lustre
-      software release 1.8 format. Therefore, when an upgrade from Lustre
-      software release 1.8 to a Lustre software release 2.x is performed, the
-      FID-in-dirent feature is not automatically enabled. For upgrades from
-      Lustre software release 1.8 to Lustre software releases 2.0 through 2.3,
-      FID-in-dirent can be enabled manually but only takes effect for new
-      files.</para>
+      <para>The FID-in-dirent feature is not backward compatible with the
+      release 1.8 ldiskfs disk format. Therefore, when an upgrade from
+      release 1.8 to release 2.x is performed, the FID-in-dirent feature is
+      not automatically enabled. For upgrades from release 1.8 to releases
+      2.0 through 2.3, FID-in-dirent can be enabled manually but only takes
+      effect for new files.</para>
       <para>For more information about upgrading from Lustre software release
       1.8 and enabling FID-in-dirent for existing files, see
       <xref xmlns:xlink="http://www.w3.org/1999/xlink"
@@ -739,8 +740,8 @@ xml:id="understandinglustre">
         if it is invalid or missing. The
         <emphasis role="italic">linkEA</emphasis>consists of the file name and
         parent FID. It is stored as an extended attribute in the file
-        itself. Thus, the linkEA can be used to reconstruct the full path name of
-        a file.</para>
+        itself. Thus, the linkEA can be used to reconstruct the full path name
+	of a file.</para>
       </listitem>
     </itemizedlist></para>
     <para>Information about where file data is located on the OST(s) is stored

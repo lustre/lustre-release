@@ -268,48 +268,56 @@ Changing a Server NID</title>
 	  <para>where <replaceable>devicename</replaceable> is the Lustre target name, e.g.
             <literal>testfs-OST0013</literal></para>
         </listitem>
-	<listitem>
-	  <para>If the MGS and MDS share a partition, stop the MGS:</para>
-	  <screen>umount <replaceable>mount_point</replaceable></screen>
-	</listitem>
+        <listitem>
+          <para>If the MGS and MDS share a partition, stop the MGS:</para>
+          <screen>umount <replaceable>mount_point</replaceable></screen>
+        </listitem>
       </orderedlist>
-      <note><para>The <literal>replace_nids</literal> command also cleans all old, invalidated records out of the configuration log, while preserving all other current settings.</para></note> 
-      <note><para>The previous configuration log is backed up on the MGS disk with the suffix <literal>'.bak'</literal>.</para></note>
+      <note><para>The <literal>replace_nids</literal> command also cleans
+      all old, invalidated records out of the configuration log, while
+      preserving all other current settings.</para></note> 
+      <note><para>The previous configuration log is backed up on the MGS
+      disk with the suffix <literal>'.bak'</literal>.</para></note>
     </section>
     <section xml:id="dbdoclet.addingamdt" condition='l24'>
       <title><indexterm>
         <primary>maintenance</primary>
         <secondary>adding an MDT</secondary>
       </indexterm>Adding a New MDT to a Lustre File System</title>
-        <para>Additional MDTs can be added to serve one or more remote sub-directories within the
-      file system. It is possible to have multiple remote sub-directories reference the same MDT.
-      However, the root directory will always be located on MDT0. To add a new MDT into the file
-      system:</para>
+        <para>Additional MDTs can be added using the DNE feature to serve one
+        or more remote sub-directories within a filesystem, in order to
+        increase the total number of files that can be created in the
+        filesystem, to increase aggregate metadata performance, or to isolate
+        user or application workloads from other users of the filesystem. It
+        is possible to have multiple remote sub-directories reference the
+        same MDT.  However, the root directory will always be located on
+        MDT0. To add a new MDT into the file system:</para>
       <orderedlist>
         <listitem>
-			<para>Discover the maximum MDT index. Each MDTs must have unique index.</para>
-		<screen>
+          <para>Discover the maximum MDT index. Each MDTs must have unique index.</para>
+<screen>
 client$ lctl dl | grep mdc
 36 UP mdc testfs-MDT0000-mdc-ffff88004edf3c00 4c8be054-144f-9359-b063-8477566eb84e 5
 37 UP mdc testfs-MDT0001-mdc-ffff88004edf3c00 4c8be054-144f-9359-b063-8477566eb84e 5
 38 UP mdc testfs-MDT0002-mdc-ffff88004edf3c00 4c8be054-144f-9359-b063-8477566eb84e 5
 39 UP mdc testfs-MDT0003-mdc-ffff88004edf3c00 4c8be054-144f-9359-b063-8477566eb84e 5
-		</screen>
+</screen>
         </listitem>
         <listitem>
-			<para>Add the new block device as a new MDT at the next available index. In this example, the next available index is 4.</para>
-		<screen>
-mds# mkfs.lustre --reformat --fsname=<replaceable>filesystem_name</replaceable> --mdt --mgsnode=<replaceable>mgsnode</replaceable> --index 4 <replaceable>/dev/mdt4_device</replaceable>
-		</screen>
+          <para>Add the new block device as a new MDT at the next available
+          index. In this example, the next available index is 4.</para>
+<screen>
+mds# mkfs.lustre --reformat --fsname=<replaceable>testfs</replaceable> --mdt --mgsnode=<replaceable>mgsnode</replaceable> --index 4 <replaceable>/dev/mdt4_device</replaceable>
+</screen>
         </listitem>
         <listitem>
-			<para>Mount the MDTs.</para>
-		<screen>
+          <para>Mount the MDTs.</para>
+<screen>
 mds# mount –t lustre <replaceable>/dev/mdt4_blockdevice</replaceable> /mnt/mdt4
-		</screen>
+</screen>
         </listitem>
       </orderedlist>
-	</section>
+    </section>
     <section xml:id="dbdoclet.50438199_22527">
       <title><indexterm><primary>maintenance</primary><secondary>adding a OST</secondary></indexterm>
 Adding a New OST to a Lustre File System</title>

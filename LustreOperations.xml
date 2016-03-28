@@ -376,9 +376,9 @@ client# lfs mkdir –i
 </screen>
     <para>This command will allocate the sub-directory
     <literal>remote_dir</literal> onto the MDT of index
-    <literal>mdtindex</literal>. For more information on adding additional MDTs
+    <literal>mdt_index</literal>. For more information on adding additional MDTs
     and 
-    <literal>mdtindex</literal> see
+    <literal>mdt_index</literal> see
     <xref linkend='dbdoclet.addmdtindex' />.</para>
     <warning>
       <para>An administrator can allocate remote sub-directories to separate
@@ -420,9 +420,11 @@ client# lfs mkdir –i
       <primary>striping</primary>
       <secondary>metadata</secondary>
     </indexterm>Creating a directory striped across multiple MDTs</title>
-	<para>Lustre 2.8 enables individual files in a given directory to
-    record their metadata on separate MDTs (a <emphasis>striped
-    directory</emphasis>). The result of this is that metadata requests for
+    <para>The Lustre 2.8 DNE feature enables individual files in a given
+    directory to store their metadata on separate MDTs (a <emphasis>striped
+    directory</emphasis>) once additional MDTs have been added to the
+    filesystem, see <xref linkend="dbdoclet.addingamdt"/>.
+    The result of this is that metadata requests for
     files in a striped directory are serviced by multiple MDTs and metadata
     service load is distributed over all the MDTs that service a given
     directory. By distributing metadata service load over multiple MDTs,
@@ -430,13 +432,16 @@ client# lfs mkdir –i
     performance. Prior to the development of this feature all files in a
     directory must record their metadata on a single MDT.</para>
     <para>This command to stripe a directory over
-	<replaceable>mdt_count</replaceable> MDTs is:
-	</para>
+    <replaceable>mdt_count</replaceable> MDTs is:
+    </para>
     <screen>
-client# lfs setdirstripe -c
+client# lfs mkdir -c
 <replaceable>mdt_count</replaceable>
 <replaceable>/mount_point/new_directory</replaceable>
 </screen>
+    <para>The striped directory feature is most useful for distributing
+    single large directories (50k entries or more) across multiple MDTs,
+    since it incurs more overhead than non-striped directories.</para>
   </section>
   <section xml:id="dbdoclet.50438194_88980">
     <title>

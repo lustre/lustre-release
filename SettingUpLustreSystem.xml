@@ -52,7 +52,7 @@
         <para>Running the MDS and a client on the same machine can cause recovery and deadlock issues and impact the performance of other Lustre clients.</para>
       </listitem>
     </itemizedlist>
-	</warning>
+    </warning>
     <para>Only servers running on 64-bit CPUs are tested and supported. 64-bit CPU clients are
       typically used for testing to match expected customer usage and avoid limitations due to the 4
       GB limit for RAM size, 1 GB low-memory limitation, and 16 TB file size limit of 32-bit CPUs.
@@ -86,14 +86,36 @@
       <para>For maximum performance, the MDT should be configured as RAID1 with an internal journal and two disks from different controllers.</para>
       <para>If you need a larger MDT, create multiple RAID1 devices from pairs of disks, and then make a RAID0 array of the RAID1 devices. This ensures maximum reliability because multiple disk failures only have a small chance of hitting both disks in the same RAID1 device.</para>
       <para>Doing the opposite (RAID1 of a pair of RAID0 devices) has a 50% chance that even two disk failures can cause the loss of the whole MDT device. The first failure disables an entire half of the mirror and the second failure has a 50% chance of disabling the remaining mirror.</para>
-      <para condition='l24'>If multiple MDTs are going to be present in the system, each MDT should be specified for the anticipated usage and load.</para>
-      <warning condition='l24'><para>MDT0 contains the root of the Lustre file system. If MDT0 is unavailable for any reason, the
-          file system cannot be used.</para></warning>
-      <note condition='l24'><para>Additional MDTs can be dedicated to sub-directories off the root file system provided by MDT0.
-          Subsequent directories may also be configured to have their own MDT. If an MDT serving a
-          subdirectory becomes unavailable this subdirectory and all directories beneath it will
-          also become unavailable. Configuring multiple levels of MDTs is an experimental feature
-          for the Lustre software release 2.4.</para></note>
+      <para condition='l24'>If multiple MDTs are going to be present in the
+      system, each MDT should be specified for the anticipated usage and load.
+      For details on how to add additional MDTs to the filesystem, see
+      <xref linkend="dbdoclet.addingamdt"/>.</para>
+      <warning condition='l24'><para>MDT0 contains the root of the Lustre file
+      system. If MDT0 is unavailable for any reason, the file system cannot be
+      used.</para></warning>
+      <note condition='l24'><para>Using the DNE feature it is possible to
+      dedicate additional MDTs to sub-directories off the file system root
+      directory stored on MDT0, or arbitrarily for lower-level subdirectories.
+      using the <literal>lfs mkdir -i <replaceable>mdt_index</replaceable></literal> command.
+      If an MDT serving a subdirectory becomes unavailable, any subdirectories
+      on that MDT and all directories beneath it will also become inaccessible.
+      Configuring multiple levels of MDTs is an experimental feature for the
+      2.4 release, and is fully functional in the 2.8 release.  This is
+      typically useful for top-level directories to assign different users
+      or projects to separate MDTs, or to distribute other large working sets
+      of files to multiple MDTs.</para></note>
+      <note condition='l28'><para>Starting in the 2.8 release it is possible
+      to spread a single large directory across multiple MDTs using the DNE
+      striped directory feature by specifying multiple stripes (or shards)
+      at creation time using the
+      <literal>lfs mkdir -c <replaceable>stripe_count</replaceable></literal>
+      command, where <replaceable>stripe_count</replaceable> is often the
+      number of MDTs in the filesystem.  Striped directories should typically
+      not be used for all directories in the filesystem, since this incurs
+      extra overhead compared to non-striped directories, but is useful for
+      larger directories (over 50k entries) where many output files are being
+      created at one time.
+      </para></note>
     </section>
     <section remap="h3">
       <title><indexterm><primary>setup</primary><secondary>OST</secondary></indexterm>OST Storage Hardware Considerations</title>
@@ -159,24 +181,52 @@
           <primary>space</primary>
           <secondary>determining MDT requirements</secondary>
         </indexterm> Determining MDT Space Requirements</title>
-      <para>When calculating the MDT size, the important factor to consider is the number of files
-        to be stored in the file system. This determines the number of inodes needed, which drives
-        the MDT sizing. To be on the safe side, plan for 2 KB per inode on the MDT, which is the
-        default value. Attached storage required for Lustre file system metadata is typically 1-2
-        percent of the file system capacity depending upon file size.</para>
-      <para>For example, if the average file size is 5 MB and you have 100 TB of usable OST space, then you can calculate the minimum number of inodes as follows:</para>
+      <para>When calculating the MDT size, the important factor to consider
+      is the number of files to be stored in the file system. This determines
+      the number of inodes needed, which drives the MDT sizing. To be on the
+      safe side, plan for 2 KB per ldiskfs inode on the MDT, which is the
+      default value. Attached storage required for Lustre file system metadata
+      is typically 1-2 percent of the file system capacity depending upon
+      file size.</para>
+      <note condition='l24'><para>Starting in release 2.4, using the DNE
+      remote directory feature it is possible to increase the metadata
+      capacity of a single filesystem by configuting additional MDTs into
+      the filesystem, see <xref linkend="dbdoclet.addingamdt"/>.  In order
+      to start creating new files and directories on the new MDT(s) they
+      need to be attached into the namespace at one or more subdirectories
+      using the <literal>lfs mkdir</literal> command.</para></note>
+      <para>For example, if the average file size is 5 MB and you have
+      100 TB of usable OST space, then you can calculate the minimum number
+      of inodes as follows:</para>
       <informalexample>
         <para>(100 TB * 1024 GB/TB * 1024 MB/GB) / 5 MB/inode = 20 million inodes</para>
       </informalexample>
-      <para>We recommend that you use at least twice the minimum number of inodes to allow for future expansion and allow for an average file size smaller than expected. Thus, the required space is:</para>
+      <para>It is recommended that the MDT have at least twice the minimum
+      number of inodes to allow for future expansion and allow for an average
+      file size smaller than expected. Thus, the required space is:</para>
       <informalexample>
-        <para>2 KB/inode * 40 million inodes = 80 GB</para>
+        <para>2 KB/inode x 20 million inodes x 2 = 80 GB</para>
       </informalexample>
-      <para>If the average file size is small, 4 KB for example, the Lustre file system is not very
-        efficient as the MDT uses as much space as the OSTs. However, this is not a common
-        configuration for a Lustre environment.</para>
+      <para>If the average file size is small, 4 KB for example, the Lustre
+      file system is not very efficient as the MDT will use as much space
+      for each file as the space used on the OST. However, this is not a
+      common configuration for a Lustre environment.</para>
       <note>
-        <para>If the MDT is too small, this can cause all the space on the OSTs to be unusable. Be sure to determine the appropriate size of the MDT needed to support the file system before formatting the file system. It is difficult to increase the number of inodes after the file system is formatted.</para>
+        <para>If the MDT is too small, this can cause the space on the OSTs
+        to be inaccessible since no new files can be created. Be sure to
+        determine the appropriate size of the MDT needed to support the file
+        system before formatting the file system. It is possible to increase the
+        number of inodes after the file system is formatted, depending on the
+        storage.  For ldiskfs MDT filesystems the <literal>resize2fs</literal>
+        tool can be used if the underlying block device is on a LVM logical
+        volume.  For ZFS new (mirrored) VDEVs can be added to the MDT pool.
+        Inodes will be added approximately in proportion to space added.</para>
+      </note>
+      <note condition='l24'><para>It is also possible to increase the number
+        of inodes available, as well as increasing the aggregate metadata
+        performance, by adding additional MDTs using the DNE remote directory
+        feature available in Lustre release 2.4 and later, see
+        <xref linkend="dbdoclet.addingamdt"/>.</para>
       </note>
     </section>
     <section remap="h3">
@@ -523,11 +573,17 @@
                 <para> 10 million files (ldiskfs), 2^48 (ZFS)</para>
               </entry>
               <entry>
-                <para>The Lustre software uses the ldiskfs hashed directory code, which has a limit
-                  of about 10 million files depending on the length of the file name. The limit on
-                  subdirectories is the same as the limit on regular files.</para>
-                <para>Lustre file systems are tested with ten million files in a single
-                  directory.</para>
+                <para>The Lustre software uses the ldiskfs hashed directory
+                code, which has a limit of about 10 million files, depending
+                on the length of the file name. The limit on subdirectories
+                is the same as the limit on regular files.</para>
+                <note condition='l28'><para>Starting in the 2.8 release it is
+                possible to exceed this limit by striping a single directory
+                over multiple MDTs with the <literal>lfs mkdir -c</literal>
+                command, which increases the single directory limit by a
+                factor of the number of directory stripes used.</para></note>
+                <para>Lustre file systems are tested with ten million files
+                in a single directory.</para>
               </entry>
             </row>
             <row>
@@ -536,14 +592,24 @@
               </entry>
               <entry>
                 <para> 4 billion (ldiskfs), 256 trillion (ZFS)</para>
-                <para condition='l24'>4096 times the per-MDT limit</para>
+                <para condition='l24'>up to 256 times the per-MDT limit</para>
               </entry>
               <entry>
-                <para>The ldiskfs file system imposes an upper limit of 4 billion inodes. By default, the MDS file system is formatted with 2KB of space per inode, meaning 1 billion inodes per file system of 2 TB.</para>
-                <para>This can be increased initially, at the time of MDS file system creation. For more information, see <xref linkend="settinguplustresystem"/>.</para>
-				<para condition="l24">Each additional MDT can hold up to the above maximum number of additional files, depending
-                  on available space and the distribution directories and files in the file
-                  system.</para>
+                <para>The ldiskfs filesystem imposes an upper limit of
+                4 billion inodes per filesystem. By default, the MDT
+                filesystem is formatted with one inode per 2KB of space,
+                meaning 512 million inodes per TB of MDT space. This can be
+                increased initially at the time of MDT filesystem creation.
+                For more information, see
+                <xref linkend="settinguplustresystem"/>.</para>
+                <para condition="l24">The ZFS filesystem
+                dynamically allocates inodes and does not have a fixed ratio
+                of inodes per unit of MDT space, but consumes approximately
+                4KB of space per inode, depending on the configuration.</para>
+                <para condition="l24">Each additional MDT can hold up to the
+                above maximum number of additional files, depending on
+                available space and the distribution directories and files
+                in the filesystem.</para>
               </entry>
             </row>
             <row>
@@ -554,7 +620,8 @@
                 <para> 255 bytes (filename)</para>
               </entry>
               <entry>
-                <para>This limit is 255 bytes for a single filename, the same as the limit in the underlying file systems.</para>
+                <para>This limit is 255 bytes for a single filename, the
+                same as the limit in the underlying filesystems.</para>
               </entry>
             </row>
             <row>

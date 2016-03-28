@@ -33,31 +33,31 @@ xml:id="managingfilesystemio">
 client# lfs df -h
 UUID                       bytes           Used            Available       \
 Use%            Mounted on
-lustre-MDT0000_UUID        4.4G            214.5M          3.9G            \
-4%              /mnt/lustre[MDT:0]
-lustre-OST0000_UUID        2.0G            751.3M          1.1G            \
-37%             /mnt/lustre[OST:0]
-lustre-OST0001_UUID        2.0G            755.3M          1.1G            \
-37%             /mnt/lustre[OST:1]
-lustre-OST0002_UUID        2.0G            1.7G            155.1M          \
-86%             /mnt/lustre[OST:2] &lt;-
-lustre-OST0003_UUID        2.0G            751.3M          1.1G            \
-37%             /mnt/lustre[OST:3]
-lustre-OST0004_UUID        2.0G            747.3M          1.1G            \
-37%             /mnt/lustre[OST:4]
-lustre-OST0005_UUID        2.0G            743.3M          1.1G            \
-36%             /mnt/lustre[OST:5]
+testfs-MDT0000_UUID        4.4G            214.5M          3.9G            \
+4%              /mnt/testfs[MDT:0]
+testfs-OST0000_UUID        2.0G            751.3M          1.1G            \
+37%             /mnt/testfs[OST:0]
+testfs-OST0001_UUID        2.0G            755.3M          1.1G            \
+37%             /mnt/testfs[OST:1]
+testfs-OST0002_UUID        2.0G            1.7G            155.1M          \
+86%             /mnt/testfs[OST:2] ****
+testfs-OST0003_UUID        2.0G            751.3M          1.1G            \
+37%             /mnt/testfs[OST:3]
+testfs-OST0004_UUID        2.0G            747.3M          1.1G            \
+37%             /mnt/testfs[OST:4]
+testfs-OST0005_UUID        2.0G            743.3M          1.1G            \
+36%             /mnt/testfs[OST:5]
  
 filesystem summary:        11.8G           5.4G            5.8G            \
-45%             /mnt/lustre
+45%             /mnt/testfs
 </screen>
-      <para>In this case, OST:2 is almost full and when an attempt is made to
+      <para>In this case, OST0002 is almost full and when an attempt is made to
       write additional information to the file system (even with uniform
       striping over all the OSTs), the write command fails as follows:</para>
       <screen>
-client# lfs setstripe /mnt/lustre 4M 0 -1
-client# dd if=/dev/zero of=/mnt/lustre/test_3 bs=10M count=100
-dd: writing '/mnt/lustre/test_3': No space left on device
+client# lfs setstripe /mnt/testfs 4M 0 -1
+client# dd if=/dev/zero of=/mnt/testfs/test_3 bs=10M count=100
+dd: writing '/mnt/testfs/test_3': No space left on device
 98+0 records in
 97+0 records out
 1017192448 bytes (1.0 GB) copied, 23.2411 seconds, 43.8 MB/s
@@ -92,14 +92,14 @@ mds# lctl dl
 0 UP mgs MGS MGS 9 
 1 UP mgc MGC192.168.0.10@tcp e384bb0e-680b-ce25-7bc9-81655dd1e813 5
 2 UP mdt MDS MDS_uuid 3
-3 UP lov lustre-mdtlov lustre-mdtlov_UUID 4
-4 UP mds lustre-MDT0000 lustre-MDT0000_UUID 5
-5 UP osc lustre-OST0000-osc lustre-mdtlov_UUID 5
-6 UP osc lustre-OST0001-osc lustre-mdtlov_UUID 5
-7 UP osc lustre-OST0002-osc lustre-mdtlov_UUID 5
-8 UP osc lustre-OST0003-osc lustre-mdtlov_UUID 5
-9 UP osc lustre-OST0004-osc lustre-mdtlov_UUID 5
-10 UP osc lustre-OST0005-osc lustre-mdtlov_UUID 5
+3 UP lov testfs-mdtlov testfs-mdtlov_UUID 4
+4 UP mds testfs-MDT0000 testfs-MDT0000_UUID 5
+5 UP osc testfs-OST0000-osc testfs-mdtlov_UUID 5
+6 UP osc testfs-OST0001-osc testfs-mdtlov_UUID 5
+7 UP osc testfs-OST0002-osc testfs-mdtlov_UUID 5
+8 UP osc testfs-OST0003-osc testfs-mdtlov_UUID 5
+9 UP osc testfs-OST0004-osc testfs-mdtlov_UUID 5
+10 UP osc testfs-OST0005-osc testfs-mdtlov_UUID 5
 </screen>
         </listitem>
         <listitem>
@@ -117,14 +117,14 @@ mds# lctl dl
 0 UP mgs MGS MGS 9
 1 UP mgc MGC192.168.0.10@tcp e384bb0e-680b-ce25-7bc9-81655dd1e813 5
 2 UP mdt MDS MDS_uuid 3
-3 UP lov lustre-mdtlov lustre-mdtlov_UUID 4
-4 UP mds lustre-MDT0000 lustre-MDT0000_UUID 5
-5 UP osc lustre-OST0000-osc lustre-mdtlov_UUID 5
-6 UP osc lustre-OST0001-osc lustre-mdtlov_UUID 5
-7 IN osc lustre-OST0002-osc lustre-mdtlov_UUID 5
-8 UP osc lustre-OST0003-osc lustre-mdtlov_UUID 5
-9 UP osc lustre-OST0004-osc lustre-mdtlov_UUID 5
-10 UP osc lustre-OST0005-osc lustre-mdtlov_UUID 5
+3 UP lov testfs-mdtlov testfs-mdtlov_UUID 4
+4 UP mds testfs-MDT0000 testfs-MDT0000_UUID 5
+5 UP osc testfs-OST0000-osc testfs-mdtlov_UUID 5
+6 UP osc testfs-OST0001-osc testfs-mdtlov_UUID 5
+7 IN osc testfs-OST0002-osc testfs-mdtlov_UUID 5
+8 UP osc testfs-OST0003-osc testfs-mdtlov_UUID 5
+9 UP osc testfs-OST0004-osc testfs-mdtlov_UUID 5
+10 UP osc testfs-OST0005-osc testfs-mdtlov_UUID 5
 </screen>
         </listitem>
       </orderedlist>
@@ -148,12 +148,13 @@ mds# lctl dl
         <secondary>full OSTs</secondary>
       </indexterm>Migrating Data within a File System</title>
 
-	  <para condition='l28'>Lustre software version 2.8 includes a
-      feature to migrate metadata between MDTs. This migration can only be
-      performed on whole directories. To migrate the contents of
-      <literal>/lustre/testremote</literal> from the current MDT to
-      MDT index 0, the sequence of commands is as follows:</para>
-      <screen>$ cd /lustre
+      <para condition='l28'>Lustre software version 2.8 includes a feature
+      to migrate metadata (directories and inodes therein) between MDTs.
+      This migration can only be performed on whole directories. For example,
+      to migrate the contents of the <literal>/testfs/testremote</literal>
+      directory from the MDT it currently resides on to MDT0000, the
+      sequence of commands is as follows:</para>
+      <screen>$ cd /testfs
 lfs getdirstripe -M ./testremote <lineannotation>which MDT is dir on?</lineannotation>
 1
 $ for i in $(seq 3); do touch ./testremote/${i}.txt; done <lineannotation>create test files</lineannotation>
@@ -169,16 +170,15 @@ $ for i in $(seq 3); do lfs getstripe -M ./testremote/${i}.txt; done <lineannota
 0
 0</screen>
       <para>For more information, see <literal>man lfs</literal></para>
-	  <warning><para>Currently, only whole directories can be migrated
+      <warning><para>Currently, only whole directories can be migrated
       between MDTs. During migration each file receives a new identifier
-      (FID). As a consequence, the file receives a new inode number. File
-      system tools (for example, backup and archiving tools) may behave
-      incorrectly with files that are unchanged except for a new inode number.
+      (FID). As a consequence, the file receives a new inode number. Some
+      system tools (for example, backup and archiving tools) may consider
+      the migrated files to be new, even though the contents are unchanged.
       </para></warning>
-      <para>As stripes cannot be moved within the file system, data must be
-      migrated manually by copying and renaming the file, removing the original
-      file, and renaming the new file with the original file name. The simplest
-      way to do this is to use the
+      <para>If there is a need to migrate the file data from the current
+      OST(s) to new OSTs, the data must be migrated (copied) to the new
+      location.  The simplest way to do this is to use the
       <literal>lfs_migrate</literal> command (see
       <xref linkend="dbdoclet.50438206_42260" />). However, the steps for
       migrating a file by hand are also shown here for reference.</para>
@@ -186,25 +186,26 @@ $ for i in $(seq 3); do lfs getstripe -M ./testremote/${i}.txt; done <lineannota
         <listitem>
           <para>Identify the file(s) to be moved.</para>
           <para>In the example below, output from the
-          <literal>getstripe</literal> command indicates that the file
-          <literal>test_2</literal> is located entirely on OST2:</para>
+          <literal>lfs getstripe</literal> command below shows that the
+          <literal>test_2</literal>file is located entirely on OST0002:</para>
           <screen>
-client# lfs getstripe /mnt/lustre/test_2
-/mnt/lustre/test_2
+client# lfs getstripe /mnt/testfs/test_2
+/mnt/testfs/test_2
 obdidx     objid   objid   group
      2      8     0x8       0
 </screen>
         </listitem>
         <listitem>
-          <para>To move single object(s), create a new copy and remove the
-          original. Enter:</para>
+          <para>To move the data, create a copy and remove the original:</para>
           <screen>
-client# cp -a /mnt/lustre/test_2 /mnt/lustre/test_2.tmp
-client# mv /mnt/lustre/test_2.tmp /mnt/lustre/test_2
+client# cp -a /mnt/testfs/test_2 /mnt/testfs/test_2.tmp
+client# mv /mnt/testfs/test_2.tmp /mnt/testfs/test_2
 </screen>
         </listitem>
         <listitem>
-          <para>To migrate large files from one or more OSTs, enter:</para>
+          <para>If the space usage of OSTs is severely imbalanced, it is
+          possible to find and migrate large files from their current location
+          onto OSTs that have more space, one could run:</para>
           <screen>
 client# lfs find --ost 
 <replaceable>ost_name</replaceable> -size +1G | lfs_migrate -y
@@ -213,31 +214,31 @@ client# lfs find --ost
         <listitem>
           <para>Check the file system balance.</para>
           <para>The 
-          <literal>df</literal> output in the example below shows a more
+          <literal>lfs df</literal> output in the example below shows a more
           balanced system compared to the 
-          <literal>df</literal> output in the example in 
+          <literal>lfs df</literal> output in the example in 
           <xref linkend="dbdoclet.50438211_17536" />.</para>
           <screen>
 client# lfs df -h
 UUID                 bytes         Used            Available       Use%    \
         Mounted on
-lustre-MDT0000_UUID   4.4G         214.5M          3.9G            4%      \
-        /mnt/lustre[MDT:0]
-lustre-OST0000_UUID   2.0G         1.3G            598.1M          65%     \
-        /mnt/lustre[OST:0]
-lustre-OST0001_UUID   2.0G         1.3G            594.1M          65%     \
-        /mnt/lustre[OST:1]
-lustre-OST0002_UUID   2.0G         913.4M          1000.0M         45%     \
-        /mnt/lustre[OST:2]
-lustre-OST0003_UUID   2.0G         1.3G            602.1M          65%     \
-        /mnt/lustre[OST:3]
-lustre-OST0004_UUID   2.0G         1.3G            606.1M          64%     \
-        /mnt/lustre[OST:4]
-lustre-OST0005_UUID   2.0G         1.3G            610.1M          64%     \
-        /mnt/lustre[OST:5]
+testfs-MDT0000_UUID   4.4G         214.5M          3.9G            4%      \
+        /mnt/testfs[MDT:0]
+testfs-OST0000_UUID   2.0G         1.3G            598.1M          65%     \
+        /mnt/testfs[OST:0]
+testfs-OST0001_UUID   2.0G         1.3G            594.1M          65%     \
+        /mnt/testfs[OST:1]
+testfs-OST0002_UUID   2.0G         913.4M          1000.0M         45%     \
+        /mnt/testfs[OST:2]
+testfs-OST0003_UUID   2.0G         1.3G            602.1M          65%     \
+        /mnt/testfs[OST:3]
+testfs-OST0004_UUID   2.0G         1.3G            606.1M          64%     \
+        /mnt/testfs[OST:4]
+testfs-OST0005_UUID   2.0G         1.3G            610.1M          64%     \
+        /mnt/testfs[OST:5]
  
 filesystem summary:  11.8G 7.3G            3.9G    61%                     \
-/mnt/lustre
+/mnt/testfs
 </screen>
         </listitem>
       </orderedlist>
@@ -261,14 +262,14 @@ filesystem summary:  11.8G 7.3G            3.9G    61%                     \
   0 UP mgs MGS MGS 9
   1 UP mgc MGC192.168.0.10@tcp e384bb0e-680b-ce25-7bc9-816dd1e813 5
   2 UP mdt MDS MDS_uuid 3
-  3 UP lov lustre-mdtlov lustre-mdtlov_UUID 4
-  4 UP mds lustre-MDT0000 lustre-MDT0000_UUID 5
-  5 UP osc lustre-OST0000-osc lustre-mdtlov_UUID 5
-  6 UP osc lustre-OST0001-osc lustre-mdtlov_UUID 5
-  7 UP osc lustre-OST0002-osc lustre-mdtlov_UUID 5
-  8 UP osc lustre-OST0003-osc lustre-mdtlov_UUID 5
-  9 UP osc lustre-OST0004-osc lustre-mdtlov_UUID 5
- 10 UP osc lustre-OST0005-osc lustre-mdtlov_UUID
+  3 UP lov testfs-mdtlov testfs-mdtlov_UUID 4
+  4 UP mds testfs-MDT0000 testfs-MDT0000_UUID 5
+  5 UP osc testfs-OST0000-osc testfs-mdtlov_UUID 5
+  6 UP osc testfs-OST0001-osc testfs-mdtlov_UUID 5
+  7 UP osc testfs-OST0002-osc testfs-mdtlov_UUID 5
+  8 UP osc testfs-OST0003-osc testfs-mdtlov_UUID 5
+  9 UP osc testfs-OST0004-osc testfs-mdtlov_UUID 5
+ 10 UP osc testfs-OST0005-osc testfs-mdtlov_UUID
 </screen>
     </section>
   </section>
@@ -397,12 +398,12 @@ mgs# lctl pool_add
       <literal>_UUID</literal> are missing, they are automatically added.</para>
       <para>For example, to add even-numbered OSTs to 
       <literal>pool1</literal> on file system 
-      <literal>lustre</literal>, run a single command (
+      <literal>testfs</literal>, run a single command (
       <literal>pool_add</literal>) to add many OSTs to the pool at one
       time:</para>
       <para>
         <screen>
-lctl pool_add lustre.pool1 OST[0-10/2]
+lctl pool_add testfs.pool1 OST[0-10/2]
 </screen>
       </para>
       <note>
@@ -509,9 +510,9 @@ client# lfs setstripe [--size|-s stripe_size] [--offset|-o start_ost]
       <listitem>
         <para>Add a new OST by passing on the following commands, run:</para>
         <screen>
-oss# mkfs.lustre --fsname=spfs --mgsnode=mds16@tcp0 --ost --index=12 /dev/sda
-oss# mkdir -p /mnt/test/ost12
-oss# mount -t lustre /dev/sda /mnt/test/ost12
+oss# mkfs.lustre --fsname=testfs --mgsnode=mds16@tcp0 --ost --index=12 /dev/sda
+oss# mkdir -p /mnt/testfs/ost12
+oss# mount -t lustre /dev/sda /mnt/testfs/ost12
 </screen>
       </listitem>
       <listitem>
@@ -653,11 +654,11 @@ $ lctl set_param osc.*.checksum_type=
         checksum algorithm is now in use.</para>
         <screen>
 $ lctl get_param osc.*.checksum_type
-osc.lustre-OST0000-osc-ffff81012b2c48e0.checksum_type=crc32 [adler]
+osc.testfs-OST0000-osc-ffff81012b2c48e0.checksum_type=crc32 [adler]
 $ lctl set_param osc.*.checksum_type=crc32
-osc.lustre-OST0000-osc-ffff81012b2c48e0.checksum_type=crc32
+osc.testfs-OST0000-osc-ffff81012b2c48e0.checksum_type=crc32
 $ lctl get_param osc.*.checksum_type
-osc.lustre-OST0000-osc-ffff81012b2c48e0.checksum_type=[crc32] adler
+osc.testfs-OST0000-osc-ffff81012b2c48e0.checksum_type=[crc32] adler
 </screen>
       </section>
     </section>

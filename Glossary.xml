@@ -82,17 +82,17 @@ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
     <glossentry xml:id="DNE" condition='l24'>
       <glossterm>Distributed namespace (DNE)</glossterm>
       <glossdef>
-		<para>A collection of metadata targets serving a single file
+        <para>A collection of metadata targets serving a single file
         system namespace. Prior to DNE, Lustre file systems were limited to a
         single metadata target for the entire name space. Without the ability 
         to distribute metadata load over multiple targets, Lustre file system
         performance is limited. Lustre was enhanced with DNE functionality in
         two development phases. After completing the first phase of development
         in Lustre software version 2.4, <emphasis>Remote Directories</emphasis>
-        allowed the metadata for sub-directories to be serviced by an
+        allows the metadata for sub-directories to be serviced by an
         independent MDT(s). After completing the second phase of development in
         Lustre software version 2.8, <emphasis>Striped Directories</emphasis>
-        allowed files in a single directory to be serviced by multiple MDTs.
+        allows files in a single directory to be serviced by multiple MDTs.
         </para>
       </glossdef>
     </glossentry>
@@ -666,7 +666,7 @@ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
     <glossentry xml:id="remotedirectories" condition='l24'>
       <glossterm>Remote directory</glossterm>
       <glossdef>
-		<para>A remote directory describes a feature of
+        <para>A remote directory describes a feature of
         Lustre where metadata for files in a given directory may be
         stored on a different MDT than the metadata for the parent
         directory. Remote directories only became possible with the
@@ -746,7 +746,7 @@ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
     <glossentry xml:id="stripeddirectory" condition='l28'>
       <glossterm>Striped Directory</glossterm>
       <glossdef>
-		<para>A striped directory is a feature of Lustre
+        <para>A striped directory is a feature of Lustre
         software where metadata for files in a given directory are
         distributed evenly over multiple MDTs. Striped directories
         are only available in Lustre software version 2.8 or later.

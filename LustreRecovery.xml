@@ -112,17 +112,21 @@
         recovery will take as long as is needed for the single MDS to be restarted.</para>
       <para>When <xref linkend="imperativerecovery"/> is enabled, clients are notified of an MDS restart (either the backup or a restored primary). Clients always may detect an MDS failure either by timeouts of in-flight requests or idle-time ping messages. In either case the clients then connect to the new backup MDS and use the Metadata Replay protocol. Metadata Replay is responsible for ensuring that the backup MDS re-acquires state resulting from transactions whose effects were made visible to clients, but which were not committed to the disk.</para>
       <para>The reconnection to a new (or restarted) MDS is managed by the file system configuration loaded by the client when the file system is first mounted. If a failover MDS has been configured (using the <literal>--failnode=</literal> option to <literal>mkfs.lustre</literal> or <literal>tunefs.lustre</literal>), the client tries to reconnect to both the primary and backup MDS until one of them responds that the failed MDT is again available. At that point, the client begins recovery. For more information, see <xref linkend="metadatereplay"/>.</para>
-      <para>Transaction numbers are used to ensure that operations are replayed in the order they
-        were originally performed, so that they are guaranteed to succeed and present the same file
-        system state as before the failure. In addition, clients inform the new server of their
-        existing lock state (including locks that have not yet been granted). All metadata and lock
-        replay must complete before new, non-recovery operations are permitted. In addition, only
-        clients that were connected at the time of MDS failure are permitted to reconnect during the
-        recovery window, to avoid the introduction of state changes that might conflict with what is
-        being replayed by previously-connected clients.</para>
-		<para condition="l24">Lustre software release 2.4 introduces multiple metadata targets. If
-        multiple metadata targets are in use, active-active failover is possible. See <xref
-          linkend="dbdoclet.mdtactiveactive"/> for more information.</para>
+      <para>Transaction numbers are used to ensure that operations are
+      replayed in the order they were originally performed, so that they
+      are guaranteed to succeed and present the same file system state as
+      before the failure. In addition, clients inform the new server of their
+      existing lock state (including locks that have not yet been granted).
+      All metadata and lock replay must complete before new, non-recovery
+      operations are permitted. In addition, only clients that were connected
+      at the time of MDS failure are permitted to reconnect during the recovery
+      window, to avoid the introduction of state changes that might conflict
+      with what is being replayed by previously-connected clients.</para>
+      <para condition="l24">Lustre software release 2.4 introduces multiple
+      metadata targets. If multiple MDTs are in use, active-active failover
+      is possible (e.g. two MDS nodes, each actively serving one or more
+      different MDTs for the same filesystem). See
+      <xref linkend="dbdoclet.mdtactiveactive"/> for more information.</para>
     </section>
     <section remap="h3">
       <title><indexterm><primary>recovery</primary><secondary>OST failure</secondary></indexterm>OST Failure (Failover)</title>

@@ -390,8 +390,8 @@ Changelog records consumed: 42</screen>
     <title>
     <indexterm>
       <primary>backup</primary>
-      <secondary>MDS/OST device level</secondary>
-    </indexterm>Backing Up and Restoring an MDS or OST (Device Level)</title>
+      <secondary>MDT/OST device level</secondary>
+    </indexterm>Backing Up and Restoring an MDT or OST (Device Level)</title>
     <para>In some cases, it is useful to do a full device-level backup of an
     individual device (MDT or OST), before replacing hardware, performing
     maintenance, etc. Doing full device-level backups ensures that all of the
