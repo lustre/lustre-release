@@ -4959,6 +4959,10 @@ run_one() {
 	local SAVE_UMASK=`umask`
 	umask 0022
 
+	if ! grep -q $DIR /proc/mounts; then
+		$SETUP
+	fi
+
 	banner "test $testnum: $message"
 	test_${testnum} || error "test_$testnum failed with $?"
 	cd $SAVE_PWD
@@ -4974,6 +4978,7 @@ run_one() {
 	unset tdir
 	unset tfile
 	umask $SAVE_UMASK
+	$CLEANUP
 	return 0
 }
 
