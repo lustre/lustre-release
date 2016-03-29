@@ -569,6 +569,10 @@ static int jt_lcfg_mgsparam2(int argc, char **argv, struct param_opts *popt)
 		/* put an '=' on the end in case it doesn't have one */
 		if (popt->po_delete && argv[i][len - 1] != '=') {
 			buf = malloc(len + 1);
+			if (buf == NULL) {
+				rc = -ENOMEM;
+				break;
+			}
 			sprintf(buf, "%s=", argv[i]);
 		} else {
 			buf = argv[i];
@@ -638,6 +642,10 @@ int jt_lcfg_mgsparam(int argc, char **argv)
 
                 /* for delete, make it "<param>=\0" */
                 buf = malloc(strlen(argv[optind]) + 2);
+		if (buf == NULL) {
+			rc = -ENOMEM;
+			goto out;
+		}
                 /* put an '=' on the end in case it doesn't have one */
                 sprintf(buf, "%s=", argv[optind]);
                 /* then truncate after the first '=' */
@@ -654,16 +662,19 @@ int jt_lcfg_mgsparam(int argc, char **argv)
 		rc = -ENOMEM;
 	} else {
 		rc = lcfg_mgs_ioctl(argv[0], OBD_DEV_ID, lcfg);
+		if (rc < 0)
+			rc = -errno;
 		lustre_cfg_free(lcfg);
 	}
-        if (buf)
-                free(buf);
-        if (rc < 0) {
-                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-                        strerror(rc = errno));
-        }
+	if (buf)
+		free(buf);
+out:
+	if (rc < 0) {
+		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+			strerror(-rc));
+	}
 
-        return rc;
+	return rc;
 }
 
 /**
