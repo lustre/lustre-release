@@ -1521,8 +1521,14 @@ static int kiblnd_alloc_freg_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t *fpo)
 			goto out_middle;
 		}
 
+#ifdef HAVE_IB_ALLOC_FAST_REG_MR
 		frd->frd_mr = ib_alloc_fast_reg_mr(fpo->fpo_hdev->ibh_pd,
 						   LNET_MAX_PAYLOAD/PAGE_SIZE);
+#else
+		frd->frd_mr = ib_alloc_mr(fpo->fpo_hdev->ibh_pd,
+					  IB_MR_TYPE_MEM_REG,
+					  LNET_MAX_PAYLOAD/PAGE_SIZE);
+#endif
 		if (IS_ERR(frd->frd_mr)) {
 			rc = PTR_ERR(frd->frd_mr);
 			CERROR("Failed to allocate ib_fast_reg_mr: %d\n", rc);

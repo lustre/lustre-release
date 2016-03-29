@@ -379,6 +379,28 @@ AS_IF([test $ENABLEO2IB != "no"], [
 			[struct ib_cq_init_attr is used by ib_create_cq])
 	])
 ])
+
+# 4.3 removed ib_alloc_fast_reg_mr()
+AS_IF([test $ENABLEO2IB != "no"], [
+	LB_CHECK_COMPILE([if 'ib_alloc_fast_reg_mr' exists],
+	ib_alloc_fast_reg_mr, [
+		#ifdef HAVE_COMPAT_RDMA
+		#undef PACKAGE_NAME
+		#undef PACKAGE_TARNAME
+		#undef PACKAGE_VERSION
+		#undef PACKAGE_STRING
+		#undef PACKAGE_BUGREPORT
+		#undef PACKAGE_URL
+		#include <linux/compat-2.6.h>
+		#endif
+		#include <rdma/ib_verbs.h>
+	],[
+		ib_alloc_fast_reg_mr(NULL, 0);
+	],[
+		AC_DEFINE(HAVE_IB_ALLOC_FAST_REG_MR, 1,
+			[ib_alloc_fast_reg_mr is defined])
+	])
+])
 ]) # LN_CONFIG_O2IB
 
 #
