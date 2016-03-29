@@ -1123,6 +1123,7 @@ void __class_export_add_lock_ref(struct obd_export *exp, struct ldlm_lock *lock)
                lock, exp, lock->l_exp_refs_nr);
 	spin_unlock(&exp->exp_locks_list_guard);
 }
+EXPORT_SYMBOL(__class_export_add_lock_ref);
 
 void __class_export_del_lock_ref(struct obd_export *exp, struct ldlm_lock *lock)
 {
@@ -1141,6 +1142,7 @@ void __class_export_del_lock_ref(struct obd_export *exp, struct ldlm_lock *lock)
                lock, exp, lock->l_exp_refs_nr);
 	spin_unlock(&exp->exp_locks_list_guard);
 }
+EXPORT_SYMBOL(__class_export_del_lock_ref);
 #endif
 
 /* A connection defines an export context in which preallocation can
@@ -1529,6 +1531,7 @@ int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid)
 
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
 void (*class_export_dump_hook)(struct obd_export*) = NULL;
+EXPORT_SYMBOL(class_export_dump_hook);
 #endif
 
 static void print_export_data(struct obd_export *exp, const char *status,

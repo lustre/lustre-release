@@ -117,6 +117,7 @@ static struct ll_sb_info *ll_init_sbi(void)
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         sbi->ll_flags |= LL_SBI_LRU_RESIZE;
 #endif
+	sbi->ll_flags |= LL_SBI_LAZYSTATFS;
 
         for (i = 0; i <= LL_PROCESS_HIST_MAX; i++) {
 		spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i].
