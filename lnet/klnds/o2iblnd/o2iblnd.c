@@ -2677,7 +2677,6 @@ kiblnd_create_dev(char *ifname)
         if (dev == NULL)
                 return NULL;
 
-        memset(dev, 0, sizeof(*dev));
         netdev = dev_get_by_name(&init_net, ifname);
         if (netdev == NULL) {
                 dev->ibd_can_failover = 0;
@@ -3067,8 +3066,6 @@ kiblnd_startup (lnet_ni_t *ni)
         ni->ni_data = net;
         if (net == NULL)
                 goto failed;
-
-	memset(net, 0, sizeof(*net));
 
 	do_gettimeofday(&tv);
 	net->ibn_incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
