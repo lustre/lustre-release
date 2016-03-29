@@ -472,6 +472,7 @@ out_free:
  */
 int llapi_hsm_register_event_fifo(const char *path)
 {
+	int rc;
 	int read_fd;
 	struct stat statbuf;
 
@@ -508,16 +509,18 @@ int llapi_hsm_register_event_fifo(const char *path)
 	/* Open the FIFO for writes, but don't block on waiting
 	 * for a reader. */
 	llapi_hsm_event_fd = open(path, O_WRONLY | O_NONBLOCK);
-	if (llapi_hsm_event_fd < 0) {
-		llapi_error(LLAPI_MSG_ERROR, errno,
-			    "cannot open(%s) for write", path);
-		return -errno;
-	}
+	rc = -errno;
 
 	/* Now close the reader. An external monitoring process can
 	 * now open the FIFO for reads. If no reader comes along the
 	 * events are lost. NOTE: Only one reader at a time! */
 	close(read_fd);
+
+	if (llapi_hsm_event_fd < 0) {
+		llapi_error(LLAPI_MSG_ERROR, -rc,
+			    "cannot open(%s) for write", path);
+		return rc;
+	}
 
 	/* Ignore SIGPIPEs -- can occur if the reader goes away. */
 	signal(SIGPIPE, SIG_IGN);
