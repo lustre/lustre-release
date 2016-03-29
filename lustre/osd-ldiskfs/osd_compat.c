@@ -421,12 +421,9 @@ cleanup_alloc:
 	return rc;
 }
 
-static void osd_seq_free(struct osd_obj_map *map,
-			 struct osd_obj_seq *osd_seq)
+static void osd_seq_free(struct osd_obj_seq *osd_seq)
 {
 	int j;
-
-	list_del_init(&osd_seq->oos_seq_list);
 
 	if (osd_seq->oos_dirs) {
 		for (j = 0; j < osd_seq->oos_subdir_count; j++) {
@@ -456,7 +453,10 @@ static void osd_ost_fini(struct osd_device *osd)
 	write_lock(&map->om_seq_list_lock);
 	list_for_each_entry_safe(osd_seq, tmp, &map->om_seq_list,
 				 oos_seq_list) {
-		osd_seq_free(map, osd_seq);
+		list_del_init(&osd_seq->oos_seq_list);
+		write_unlock(&map->om_seq_list_lock);
+		osd_seq_free(osd_seq);
+		write_lock(&map->om_seq_list_lock);
 	}
 	write_unlock(&map->om_seq_list_lock);
 	if (map->om_root)
