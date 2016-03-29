@@ -357,7 +357,7 @@ struct osd_thandle {
         unsigned short          ot_credits;
         unsigned short          ot_id_cnt;
         unsigned short          ot_id_type;
-	int			ot_remove_agents:1;
+	unsigned int		ot_remove_agents:1;
         uid_t                   ot_id_array[OSD_MAX_UGID_CNT];
 	struct lquota_trans    *ot_quota_trans;
 #if OSD_THANDLE_STATS
