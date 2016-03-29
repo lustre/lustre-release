@@ -25,5 +25,4 @@ EXTRA_DIST = \
 	libcfs_time.h \
 	libcfs_workitem.h \
 	list.h \
-	types.h \
-	user-time.h
+	types.h

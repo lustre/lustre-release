@@ -47,7 +47,6 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
-#include "mount_utils.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -71,9 +70,7 @@
 #include <lnet/lnetctl.h>
 #include <lustre_ver.h>
 
-#ifndef PATH_MAX
-#define PATH_MAX 4096
-#endif
+#include "mount_utils.h"
 
 char *progname;
 int verbose = 1;

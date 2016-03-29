@@ -42,9 +42,9 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
-#include "mount_utils.h"
 #include <getopt.h>
 #include <mntent.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -52,12 +52,15 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/mount.h>
-#include "obdctl.h"
 #include <lustre_ver.h>
 #include <ctype.h>
 #include <limits.h>
 #include <lnet/nidstr.h>
 #include <lustre/lustre_idl.h>
+
+#include "obdctl.h"
+#include "mount_utils.h"
+
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 10, 53, 0)
 /*
  * LU-1783

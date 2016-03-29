@@ -60,7 +60,6 @@
 
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/param.h>
-#include <libcfs/user-time.h>
 #include <libcfs/libcfs_debug.h>
 #include <lnet/lnetctl.h>
 
@@ -535,7 +534,7 @@ int jt_dbg_debug_kernel(int argc, char **argv)
 		}
 		strncpy(filename, argv[1], sizeof(filename));
 	} else {
-		if (snprintf(filename, sizeof(filename), "%s"CFS_TIME_T".%u",
+		if (snprintf(filename, sizeof(filename), "%s%lu.%u",
 			     LIBCFS_DEBUG_FILE_PATH_DEFAULT, time(NULL),
 			     getpid())
 		    >= sizeof(filename)) {

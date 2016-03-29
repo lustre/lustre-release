@@ -27,6 +27,7 @@
  * Author: Brian Behlendorf <behlendorf1@llnl.gov>
  */
 #include "mount_utils.h"
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include <libzfs.h>

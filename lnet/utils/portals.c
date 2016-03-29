@@ -37,7 +37,6 @@
 
 #include <libcfs/util/string.h>
 #include <libcfs/util/ioctl.h>
-#include <libcfs/user-time.h>
 #include <libcfs/libcfs_debug.h>
 #include <lnet/lnetctl.h>
 #include <lnet/socklnd.h>

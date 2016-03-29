@@ -39,9 +39,7 @@
 
 #include <libcfs/list.h>
 
-#ifndef __KERNEL__
-# include <libcfs/user-time.h>
-# else /* __KERNEL__ */
+#ifdef __KERNEL__
 # include <libcfs/linux/libcfs.h>
 # include <libcfs/types.h>
 # include "curproc.h"
@@ -126,9 +124,7 @@ void cfs_get_random_bytes(void *buf, int size);
 # include <libcfs/libcfs_cpu.h>
 # include <libcfs/libcfs_ioctl.h>
 # include <libcfs/libcfs_prim.h>
-#endif /* __KERNEL__ */
-#include <libcfs/libcfs_time.h>
-#ifdef __KERNEL__
+# include <libcfs/libcfs_time.h>
 # include <libcfs/libcfs_string.h>
 # include <libcfs/libcfs_workitem.h>
 # include <libcfs/libcfs_hash.h>

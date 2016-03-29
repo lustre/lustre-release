@@ -38,7 +38,8 @@
 #  include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#include "mount_utils.h"
+#include <inttypes.h>
+#include <limits.h>
 #include <mntent.h>
 #include <stdio.h>
 #include <errno.h>
@@ -52,6 +53,8 @@
 #include <sys/utsname.h>
 #include <linux/loop.h>
 #include <dlfcn.h>
+
+#include "mount_utils.h"
 
 extern char *progname;
 extern int verbose;

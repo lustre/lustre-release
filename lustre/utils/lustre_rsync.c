@@ -120,6 +120,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <utime.h>
+#include <time.h>
 #include <sys/xattr.h>
 
 #include <libcfs/util/string.h>

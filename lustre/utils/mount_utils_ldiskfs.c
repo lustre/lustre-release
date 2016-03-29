@@ -47,12 +47,13 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
-#include "mount_utils.h"
-#include <stdlib.h>
+#include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <inttypes.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <stdarg.h>
 #include <mntent.h>
 #include <glob.h>
 
@@ -78,6 +79,8 @@
 #ifdef HAVE_SELINUX
 #include <selinux/selinux.h>
 #endif
+
+#include "mount_utils.h"
 
 #define MAX_HW_SECTORS_KB_PATH	"queue/max_hw_sectors_kb"
 #define MAX_SECTORS_KB_PATH	"queue/max_sectors_kb"
