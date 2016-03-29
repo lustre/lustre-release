@@ -117,7 +117,7 @@ static int osd_oi_index_create_one(struct osd_thread_info *info,
 
 	dentry = osd_child_dentry_by_inode(env, dir, name, strlen(name));
 	bh = osd_ldiskfs_find_entry(dir, &dentry->d_name, &de, NULL, NULL);
-	if (bh) {
+	if (!IS_ERR(bh)) {
 		osd_id_gen(id, le32_to_cpu(de->inode), OSD_OII_NOGEN);
 		brelse(bh);
 		inode = osd_iget(info, osd, id);
