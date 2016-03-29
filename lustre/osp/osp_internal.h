@@ -55,8 +55,8 @@
  */
 struct osp_id_tracker {
 	spinlock_t		 otr_lock;
-	__u32			 otr_next_id;
-	__u32			 otr_committed_id;
+	__u64			 otr_next_id;
+	__u64			 otr_committed_id;
 	/* callback is register once per diskfs -- that's the whole point */
 	struct dt_txn_callback	 otr_tx_cb;
 	/* single node can run many clusters */
@@ -215,12 +215,12 @@ struct osp_device {
 	/* osd api's commit cb control structure */
 	struct dt_txn_callback		 opd_syn_txn_cb;
 	/* last used change number -- semantically similar to transno */
-	unsigned long			 opd_syn_last_used_id;
+	__u64				 opd_syn_last_used_id;
 	/* last committed change number -- semantically similar to
 	 * last_committed */
-	unsigned long			 opd_syn_last_committed_id;
+	__u64				 opd_syn_last_committed_id;
 	/* last processed (taken from llog) id */
-	unsigned long			 opd_syn_last_processed_id;
+	__u64				 opd_syn_last_processed_id;
 	struct osp_id_tracker		*opd_syn_tracker;
 	struct list_head		 opd_syn_ontrack;
 	/* stop processing new requests until barrier=0 */
@@ -420,7 +420,7 @@ static inline struct osp_thread_info *osp_env_info(const struct lu_env *env)
 }
 
 struct osp_txn_info {
-	__u32   oti_current_id;
+	__u64   oti_current_id;
 };
 
 extern struct lu_context_key osp_txn_key;

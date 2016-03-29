@@ -3598,6 +3598,23 @@ test_102d() {
 }
 run_test 102d "check replay & reconstruction with multiple mod RPCs in flight"
 
+test_103() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+#define OBD_FAIL_MDS_TRACK_OVERFLOW 0x162
+	do_facet mds1 $LCTL set_param fail_loc=0x80000162
+
+	mkdir -p $DIR/$tdir
+	createmany -o $DIR/$tdir/t- 30 ||
+		error "create files on remote directory failed"
+	sync
+	rm -rf $DIR/$tdir/t-*
+	sync
+#MDS should crash with tr->otr_next_id overflow
+	fail mds1
+}
+run_test 103 "Check otr_next_id overflow"
+
+
 check_striped_dir_110()
 {
 	$CHECKSTAT -t dir $DIR/$tdir/striped_dir ||

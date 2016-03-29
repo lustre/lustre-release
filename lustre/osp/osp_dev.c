@@ -811,7 +811,7 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 	if (rc != 0)
 		GOTO(out, rc);
 
-	CDEBUG(D_CACHE, "%s: id: used %lu, processed %lu\n",
+	CDEBUG(D_CACHE, "%s: id: used %lu, processed "LPU64"\n",
 	       d->opd_obd->obd_name, id, d->opd_syn_last_processed_id);
 
 	/* wait till all-in-line are processed */
