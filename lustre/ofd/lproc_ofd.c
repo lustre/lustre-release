@@ -839,6 +839,14 @@ ofd_lfsck_verify_pfid_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(ofd_lfsck_verify_pfid);
 
+static int ofd_site_stats_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+
+	return lu_site_stats_seq_print(obd->obd_lu_dev->ld_site, m);
+}
+LPROC_SEQ_FOPS_RO(ofd_site_stats);
+
 LPROC_SEQ_FOPS_RO_TYPE(ofd, uuid);
 LPROC_SEQ_FOPS_RO_TYPE(ofd, blksize);
 LPROC_SEQ_FOPS_RO_TYPE(ofd, kbytestotal);
@@ -923,6 +931,8 @@ struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	  .fops =	&ofd_lfsck_layout_fops		},
 	{ .name	=	"lfsck_verify_pfid",
 	  .fops	=	&ofd_lfsck_verify_pfid_fops	},
+	{ .name =	"site_stats",
+	  .fops =	&ofd_site_stats_fops		},
 	{ NULL }
 };
 
