@@ -10,4 +10,4 @@ for SUB in $DEFAULT_SUITES; do
 	[ "$(eval echo \$$ENV)" = "no" ] && continue
 	SUITES="$SUITES $SUB"
 done
-sh auster -r -v -f ${NAME:-lustre} $SUITES
+sh auster -r -R -v -f ${NAME:-lustre} $SUITES
