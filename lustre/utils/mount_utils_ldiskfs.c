@@ -568,7 +568,7 @@ static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
 {
 	if (IS_OST(&mop->mo_ldd)) {
 		append_unique(anchor, user_spec ? "," : " -O ",
-			      "extents", NULL, sizeof(mop->mo_mkfsopts));
+			      "extents", NULL, maxbuflen);
 		append_unique(anchor, ",", "uninit_bg", NULL, maxbuflen);
 	} else if (IS_MDT(&mop->mo_ldd)) {
 		append_unique(anchor, user_spec ? "," : " -O ",
