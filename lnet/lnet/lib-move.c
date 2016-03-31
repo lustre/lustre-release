@@ -1344,6 +1344,13 @@ again:
 		return -EHOSTUNREACH;
 	}
 
+	if (!peer->lp_multi_rail && lnet_get_num_peer_nis(peer) > 1) {
+		CERROR("peer %s is declared to be non MR capable, "
+		       "yet configured with more than one NID\n",
+		       libcfs_nid2str(dst_nid));
+		return -EINVAL;
+	}
+
 	/*
 	 * STEP 1: first jab at determineing best_ni
 	 * if src_nid is explicitly specified, then best_ni is already
@@ -1541,6 +1548,13 @@ set_ni:
 	 * been used and pick the next NI.
 	 */
 	best_ni->ni_seq++;
+
+	/*
+	 * if the peer is not MR capable, then we should always send to it
+	 * using the first NI in the NET we determined.
+	 */
+	if (!peer->lp_multi_rail && local_net != NULL)
+		best_ni = lnet_net2ni_locked(local_net->net_id, cpt);
 
 	if (!best_ni) {
 		lnet_net_unlock(cpt);

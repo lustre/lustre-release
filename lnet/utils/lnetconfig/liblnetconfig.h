@@ -271,10 +271,11 @@ int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
  *
  *     knid - Key NID of the peer
  *     nid - list of nids to add
+ *     mr - true if this peer is MR capable.
  *     seq_no - sequence number of the command
  *     err_rc - YAML strucutre of the resultant return code.
  */
-int lustre_lnet_config_peer_nid(char *knid, char **nid, int seq_no,
+int lustre_lnet_config_peer_nid(char *knid, char **nid, bool mr, int seq_no,
 				struct cYAML **err_rc);
 
 /*

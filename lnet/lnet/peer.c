@@ -467,6 +467,7 @@ lnet_build_peer_hierarchy(struct lnet_peer_ni *lpni)
 	peer_net->lpn_peer = peer;
 	lpni->lpni_peer_net = peer_net;
 	peer->lp_primary_nid = lpni->lpni_nid;
+	peer->lp_multi_rail = false;
 	list_add_tail(&peer_net->lpn_on_peer_list, &peer->lp_peer_nets);
 	list_add_tail(&lpni->lpni_on_peer_net_list, &peer_net->lpn_peer_nis);
 	list_add_tail(&peer->lp_on_lnet_peer_list, &the_lnet.ln_peers);
@@ -491,7 +492,7 @@ lnet_peer_get_net_locked(struct lnet_peer *peer, __u32 net_id)
  * is unique
  */
 int
-lnet_add_peer_ni_to_peer(lnet_nid_t key_nid, lnet_nid_t nid)
+lnet_add_peer_ni_to_peer(lnet_nid_t key_nid, lnet_nid_t nid, bool mr)
 {
 	struct lnet_peer_ni *lpni, *lpni2;
 	struct lnet_peer *peer;
@@ -524,14 +525,14 @@ lnet_add_peer_ni_to_peer(lnet_nid_t key_nid, lnet_nid_t nid)
 			return -EINVAL;
 		}
 		peer = lpni->lpni_peer_net->lpn_peer;
-		peer->lp_multi_rail = true;
+		peer->lp_multi_rail = mr;
 		lnet_peer_ni_decref_locked(lpni);
 		lnet_net_unlock(cpt2);
 	} else {
 		lnet_net_lock(LNET_LOCK_EX);
 		rc = lnet_nid2peerni_locked(&lpni, nid, LNET_LOCK_EX);
 		if (rc == 0) {
-			lpni->lpni_peer_net->lpn_peer->lp_multi_rail = true;
+			lpni->lpni_peer_net->lpn_peer->lp_multi_rail = mr;
 			lnet_peer_ni_decref_locked(lpni);
 		}
 		lnet_net_unlock(LNET_LOCK_EX);

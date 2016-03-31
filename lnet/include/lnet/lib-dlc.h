@@ -210,6 +210,7 @@ struct lnet_ioctl_peer_cfg {
 	lnet_nid_t prcfg_key_nid;
 	lnet_nid_t prcfg_cfg_nid;
 	__u32 prcfg_idx;
+	bool prcfg_mr;
 	char prcfg_bulk[0];
 };
 

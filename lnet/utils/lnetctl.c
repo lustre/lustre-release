@@ -1080,11 +1080,13 @@ static int jt_add_peer_nid(int argc, char **argv)
 	int idx = 0;
 	struct cYAML *err_rc = NULL;
 	int rc, opt;
+	bool non_mr = false;
 
-	const char *const short_options = "k:n:h";
+	const char *const short_options = "k:n:mh";
 	const struct option long_options[] = {
 		{ "key_nid", 1, NULL, 'k' },
 		{ "nid", 1, NULL, 'n' },
+		{ "non_mr", 1, NULL, 'm'},
 		{ "help", 0, NULL, 'h' },
 		{ NULL, 0, NULL, 0 },
 	};
@@ -1114,6 +1116,8 @@ static int jt_add_peer_nid(int argc, char **argv)
 			strncpy(nid[idx], optarg, strlen(optarg));
 			idx++;
 			break;
+		case 'm':
+			non_mr = true;
 		case 'h':
 			print_help(peer_cmds, "peer", "add");
 			return 0;
@@ -1122,7 +1126,7 @@ static int jt_add_peer_nid(int argc, char **argv)
 		}
 	}
 
-	rc = lustre_lnet_config_peer_nid(key_nid, nid, -1, &err_rc);
+	rc = lustre_lnet_config_peer_nid(key_nid, nid, !non_mr, -1, &err_rc);
 
 failed:
 	idx = 0;
