@@ -450,6 +450,7 @@ your distribution.
 			AC_DEFINE(HAVE_SPA_MAXBLOCKSIZE, 1,
 				[Have spa_maxblocksize in ZFS])
 		])
+
 		dnl #
 		dnl # ZFS 0.7.x adds support for large dnodes.  This
 		dnl # allows Lustre to optionally specify the size of a
@@ -478,6 +479,29 @@ your distribution.
 		],[
 			AC_DEFINE(HAVE_DMU_OBJECT_ALLOC_DNSIZE, 1,
 				[Have dmu_object_alloc_dnsize in ZFS])
+		])
+
+		dnl #
+		dnl # ZFS 0.7.x extended dmu_prefetch() to take an additional
+		dnl # 'level' and 'priority' argument.  Use a level of 0 and a
+		dnl # priority of ZIO_PRIORITY_SYNC_READ to replicate the
+		dnl # behavior of the four argument version.
+		dnl #
+		LB_CHECK_COMPILE([if ZFS has 'dmu_prefetch' with 6 args],
+		dmu_prefetch, [
+			#include <sys/dmu.h>
+		],[
+			objset_t *os = NULL;
+			uint64_t object = 0;
+			int64_t level = 0;
+			uint64_t offset = 0;
+			uint64_t len = 0;
+			enum zio_priority pri = ZIO_PRIORITY_SYNC_READ;
+
+			dmu_prefetch(os, object, level, offset, len, pri);
+		],[
+			AC_DEFINE(HAVE_DMU_PREFETCH_6ARG, 1,
+				[Have 6 argument dmu_pretch in ZFS])
 		])
 	])
 
