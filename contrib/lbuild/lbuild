@@ -1333,7 +1333,8 @@ build_kernel_with_srpm() {
         local REUSE_SIGNATURE=$({ echo -en $release_str;
                                   echo $BUILD_GEN;
                                   cat "$CONFIG_FILE";
-                                  cat "$TARGET_FILE";
+                                  cat "$TARGET_FILE" |
+                                  sed -e '/_VERSION=/s/_[0-9]*_g.*$//g';
                                   cat "$FULL_PATCH";
                                   cat "$LBUILD_DIR/lbuild";
                                   cat "$LBUILD_DIR/lbuild-$DISTROMAJ"; } |
