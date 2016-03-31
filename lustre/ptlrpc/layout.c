@@ -1103,8 +1103,9 @@ EXPORT_SYMBOL(RMF_LAYOUT_INTENT);
  * OST request field.
  */
 struct req_msg_field RMF_OST_BODY =
-        DEFINE_MSGF("ost_body", 0,
-                    sizeof(struct ost_body), lustre_swab_ost_body, dump_ost_body);
+	DEFINE_MSGF("ost_body", 0,
+		    sizeof(struct ost_body), lustre_swab_ost_body,
+		    dump_ost_body);
 EXPORT_SYMBOL(RMF_OST_BODY);
 
 struct req_msg_field RMF_OBD_IOOBJ =
