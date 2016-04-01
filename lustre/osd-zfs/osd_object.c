@@ -1390,8 +1390,9 @@ static dmu_buf_t *osd_mkreg(const struct lu_env *env, struct osd_object *obj,
 			    struct lu_attr *la, uint64_t parent,
 			    struct osd_thandle *oh)
 {
-	dmu_buf_t	  *db;
-	int		   rc;
+	const struct lu_fid *fid = lu_object_fid(&obj->oo_dt.do_lu);
+	dmu_buf_t	    *db;
+	int		     rc;
 	struct osd_device *osd = osd_obj2dev(obj);
 
 	LASSERT(S_ISREG(la->la_mode));
@@ -1406,7 +1407,7 @@ static dmu_buf_t *osd_mkreg(const struct lu_env *env, struct osd_object *obj,
 	 * blocksize is selected based on the file size rather than the
 	 * making broad assumptions based on the osd type.
 	 */
-	if (!lu_device_is_md(osd2lu_dev(osd))) {
+	if ((fid_is_idif(fid) || fid_is_norm(fid)) && osd->od_is_ost) {
 		rc = -dmu_object_set_blocksize(osd->od_os, db->db_object,
 					       osd->od_max_blksz, 0, oh->ot_tx);
 		if (unlikely(rc)) {
