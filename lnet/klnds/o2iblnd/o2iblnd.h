@@ -78,7 +78,7 @@
 #include <lnet/lnet.h>
 #include <lnet/lib-lnet.h>
 
-#define IBLND_PEER_HASH_SIZE		101	/* # peer lists */
+#define IBLND_PEER_HASH_SIZE		101	/* # peer_ni lists */
 /* # scheduler loops before reschedule */
 #define IBLND_RESCHED			100
 
@@ -110,8 +110,8 @@ extern kib_tunables_t  kiblnd_tunables;
 #define IBLND_MSG_QUEUE_SIZE_V1      8          /* V1 only : # messages/RDMAs in-flight */
 #define IBLND_CREDIT_HIGHWATER_V1    7          /* V1 only : when eagerly to return credits */
 
-#define IBLND_CREDITS_DEFAULT        8          /* default # of peer credits */
-#define IBLND_CREDITS_MAX          ((typeof(((kib_msg_t*) 0)->ibm_credits)) - 1)  /* Max # of peer credits */
+#define IBLND_CREDITS_DEFAULT        8          /* default # of peer_ni credits */
+#define IBLND_CREDITS_MAX          ((typeof(((kib_msg_t*) 0)->ibm_credits)) - 1)  /* Max # of peer_ni credits */
 
 /* when eagerly to return credits */
 #define IBLND_CREDITS_HIGHWATER(t, v) ((v) == IBLND_MSG_VERSION_1 ? \
@@ -398,7 +398,7 @@ typedef struct
 	/* schedulers sleep here */
 	wait_queue_head_t	kib_failover_waitq;
 	atomic_t		kib_nthreads;	/* # live threads */
-	/* stabilize net/dev/peer/conn ops */
+	/* stabilize net/dev/peer_ni/conn ops */
 	rwlock_t		kib_global_lock;
 	/* hash table of all my known peers */
 	struct list_head	*kib_peers;
@@ -535,7 +535,7 @@ typedef struct {
         __u16            ibr_version;           /* sender's version */
         __u8             ibr_why;               /* reject reason */
         __u8             ibr_padding;           /* padding */
-        __u64            ibr_incarnation;       /* incarnation of peer */
+        __u64            ibr_incarnation;       /* incarnation of peer_ni */
         kib_connparams_t ibr_cp;                /* connection parameters */
 } WIRE_ATTR kib_rej_t;
 
@@ -544,12 +544,12 @@ typedef struct {
 #define IBLND_REJECT_NO_RESOURCES    2          /* Out of memory/conns etc */
 #define IBLND_REJECT_FATAL           3          /* Anything else */
 
-#define IBLND_REJECT_CONN_UNCOMPAT   4          /* incompatible version peer */
-#define IBLND_REJECT_CONN_STALE      5          /* stale peer */
+#define IBLND_REJECT_CONN_UNCOMPAT   4          /* incompatible version peer_ni */
+#define IBLND_REJECT_CONN_STALE      5          /* stale peer_ni */
 
-/* peer's rdma frags doesn't match mine */
+/* peer_ni's rdma frags doesn't match mine */
 #define IBLND_REJECT_RDMA_FRAGS      6
-/* peer's msg queue size doesn't match mine */
+/* peer_ni's msg queue size doesn't match mine */
 #define IBLND_REJECT_MSG_QUEUE_SIZE  7
 
 /***********************************************************************/
@@ -578,7 +578,7 @@ typedef struct kib_rx                           /* receive message */
 
 #define IBLND_POSTRX_DONT_POST    0             /* don't post */
 #define IBLND_POSTRX_NO_CREDIT    1             /* post: no credits */
-#define IBLND_POSTRX_PEER_CREDIT  2             /* post: give peer back 1 credit */
+#define IBLND_POSTRX_PEER_CREDIT  2             /* post: give peer_ni back 1 credit */
 #define IBLND_POSTRX_RSRVD_CREDIT 3             /* post: give myself back 1 reserved credit */
 
 typedef struct kib_tx                           /* transmit message */
@@ -593,7 +593,7 @@ typedef struct kib_tx                           /* transmit message */
 	short			tx_sending;
 	/* queued for sending */
 	short			tx_queued;
-	/* waiting for peer */
+	/* waiting for peer_ni */
 	short			tx_waiting;
 	/* LNET completion status */
 	int			tx_status;
@@ -639,11 +639,11 @@ typedef struct kib_conn
 {
 	/* scheduler information */
 	struct kib_sched_info	*ibc_sched;
-	/* owning peer */
+	/* owning peer_ni */
 	struct kib_peer		*ibc_peer;
 	/* HCA bound on */
 	kib_hca_dev_t		*ibc_hdev;
-	/* stash on peer's conn list */
+	/* stash on peer_ni's conn list */
 	struct list_head	ibc_list;
 	/* schedule for attention */
 	struct list_head	ibc_sched_list;
@@ -720,7 +720,7 @@ typedef struct kib_conn
 
 typedef struct kib_peer
 {
-	/* stash on global peer list */
+	/* stash on global peer_ni list */
 	struct list_head	ibp_list;
 	/* who's on the other end(s) */
 	lnet_nid_t		ibp_nid;
@@ -730,31 +730,31 @@ typedef struct kib_peer
 	struct list_head	ibp_conns;
 	/* msgs waiting for a conn */
 	struct list_head	ibp_tx_queue;
-	/* incarnation of peer */
+	/* incarnation of peer_ni */
 	__u64			ibp_incarnation;
 	/* when (in jiffies) I was last alive */
 	cfs_time_t		ibp_last_alive;
 	/* # users */
 	atomic_t		ibp_refcount;
-	/* version of peer */
+	/* version of peer_ni */
 	__u16			ibp_version;
 	/* current passive connection attempts */
 	unsigned short		ibp_accepting;
 	/* current active connection attempts */
 	unsigned short		ibp_connecting;
-	/* reconnect this peer later */
+	/* reconnect this peer_ni later */
 	unsigned short		ibp_reconnecting:1;
 	/* counter of how many times we triggered a conn race */
 	unsigned char		ibp_races;
 	/* # consecutive reconnection attempts to this peer */
 	unsigned int		ibp_reconnected;
-	/* errno on closing this peer */
+	/* errno on closing this peer_ni */
 	int			ibp_error;
 	/* max map_on_demand */
 	__u16			ibp_max_frags;
 	/* max_peer_credits */
 	__u16			ibp_queue_depth;
-} kib_peer_t;
+} kib_peer_ni_t;
 
 #ifndef HAVE_IB_INC_RKEY
 /**
@@ -868,36 +868,36 @@ do {									\
 	}								\
 } while (0)
 
-#define kiblnd_peer_addref(peer)                                \
+#define kiblnd_peer_addref(peer_ni)                                \
 do {                                                            \
-	CDEBUG(D_NET, "peer[%p] -> %s (%d)++\n",                \
-	       (peer), libcfs_nid2str((peer)->ibp_nid),         \
-	       atomic_read (&(peer)->ibp_refcount));        	\
-	atomic_inc(&(peer)->ibp_refcount);                  	\
+	CDEBUG(D_NET, "peer_ni[%p] -> %s (%d)++\n",                \
+	       (peer_ni), libcfs_nid2str((peer_ni)->ibp_nid),         \
+	       atomic_read (&(peer_ni)->ibp_refcount));        	\
+	atomic_inc(&(peer_ni)->ibp_refcount);                  	\
 } while (0)
 
-#define kiblnd_peer_decref(peer)                                \
+#define kiblnd_peer_decref(peer_ni)                                \
 do {                                                            \
-	CDEBUG(D_NET, "peer[%p] -> %s (%d)--\n",                \
-	       (peer), libcfs_nid2str((peer)->ibp_nid),         \
-	       atomic_read (&(peer)->ibp_refcount));        	\
-	LASSERT_ATOMIC_POS(&(peer)->ibp_refcount);              \
-	if (atomic_dec_and_test(&(peer)->ibp_refcount))     	\
-		kiblnd_destroy_peer(peer);                      \
+	CDEBUG(D_NET, "peer_ni[%p] -> %s (%d)--\n",                \
+	       (peer_ni), libcfs_nid2str((peer_ni)->ibp_nid),         \
+	       atomic_read (&(peer_ni)->ibp_refcount));        	\
+	LASSERT_ATOMIC_POS(&(peer_ni)->ibp_refcount);              \
+	if (atomic_dec_and_test(&(peer_ni)->ibp_refcount))     	\
+		kiblnd_destroy_peer(peer_ni);                      \
 } while (0)
 
 static inline bool
-kiblnd_peer_connecting(kib_peer_t *peer)
+kiblnd_peer_connecting(kib_peer_ni_t *peer_ni)
 {
-	return peer->ibp_connecting != 0 ||
-	       peer->ibp_reconnecting != 0 ||
-	       peer->ibp_accepting != 0;
+	return peer_ni->ibp_connecting != 0 ||
+	       peer_ni->ibp_reconnecting != 0 ||
+	       peer_ni->ibp_accepting != 0;
 }
 
 static inline bool
-kiblnd_peer_idle(kib_peer_t *peer)
+kiblnd_peer_idle(kib_peer_ni_t *peer_ni)
 {
-	return !kiblnd_peer_connecting(peer) && list_empty(&peer->ibp_conns);
+	return !kiblnd_peer_connecting(peer_ni) && list_empty(&peer_ni->ibp_conns);
 }
 
 static inline struct list_head *
@@ -910,19 +910,19 @@ kiblnd_nid2peerlist (lnet_nid_t nid)
 }
 
 static inline int
-kiblnd_peer_active (kib_peer_t *peer)
+kiblnd_peer_active (kib_peer_ni_t *peer_ni)
 {
-	/* Am I in the peer hash table? */
-	return !list_empty(&peer->ibp_list);
+	/* Am I in the peer_ni hash table? */
+	return !list_empty(&peer_ni->ibp_list);
 }
 
 static inline kib_conn_t *
-kiblnd_get_conn_locked (kib_peer_t *peer)
+kiblnd_get_conn_locked (kib_peer_ni_t *peer_ni)
 {
-	LASSERT(!list_empty(&peer->ibp_conns));
+	LASSERT(!list_empty(&peer_ni->ibp_conns));
 
         /* just return the first connection */
-	return list_entry(peer->ibp_conns.next, kib_conn_t, ibc_list);
+	return list_entry(peer_ni->ibp_conns.next, kib_conn_t, ibc_list);
 }
 
 static inline int
@@ -1179,17 +1179,17 @@ int  kiblnd_cm_callback(struct rdma_cm_id *cmid,
 int  kiblnd_translate_mtu(int value);
 
 int  kiblnd_dev_failover(kib_dev_t *dev);
-int  kiblnd_create_peer(lnet_ni_t *ni, kib_peer_t **peerp, lnet_nid_t nid);
-void kiblnd_destroy_peer (kib_peer_t *peer);
-bool kiblnd_reconnect_peer(kib_peer_t *peer);
+int  kiblnd_create_peer(lnet_ni_t *ni, kib_peer_ni_t **peerp, lnet_nid_t nid);
+void kiblnd_destroy_peer (kib_peer_ni_t *peer);
+bool kiblnd_reconnect_peer(kib_peer_ni_t *peer);
 void kiblnd_destroy_dev (kib_dev_t *dev);
-void kiblnd_unlink_peer_locked (kib_peer_t *peer);
-kib_peer_t *kiblnd_find_peer_locked(struct lnet_ni *ni, lnet_nid_t nid);
-int  kiblnd_close_stale_conns_locked (kib_peer_t *peer,
+void kiblnd_unlink_peer_locked (kib_peer_ni_t *peer_ni);
+kib_peer_ni_t *kiblnd_find_peer_locked(struct lnet_ni *ni, lnet_nid_t nid);
+int  kiblnd_close_stale_conns_locked (kib_peer_ni_t *peer_ni,
                                       int version, __u64 incarnation);
-int  kiblnd_close_peer_conns_locked (kib_peer_t *peer, int why);
+int  kiblnd_close_peer_conns_locked (kib_peer_ni_t *peer_ni, int why);
 
-kib_conn_t *kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
+kib_conn_t *kiblnd_create_conn(kib_peer_ni_t *peer_ni, struct rdma_cm_id *cmid,
 			       int state, int version);
 void kiblnd_destroy_conn(kib_conn_t *conn, bool free_conn);
 void kiblnd_close_conn (kib_conn_t *conn, int error);
