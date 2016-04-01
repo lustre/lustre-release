@@ -3372,8 +3372,11 @@ static int __ll_inode_revalidate(struct dentry *dentry, __u64 ibits)
                    do_lookup() -> ll_revalidate_it(). We cannot use d_drop
                    here to preserve get_cwd functionality on 2.6.
                    Bug 10503 */
-		if (!dentry->d_inode->i_nlink)
+		if (!dentry->d_inode->i_nlink) {
+			ll_lock_dcache(inode);
 			d_lustre_invalidate(dentry, 0);
+			ll_unlock_dcache(inode);
+		}
 
                 ll_lookup_finish_locks(&oit, dentry);
         } else if (!ll_have_md_lock(dentry->d_inode, &ibits, LCK_MINMODE)) {
