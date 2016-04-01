@@ -2069,6 +2069,46 @@ test_27E() {
 }
 run_test 27E "check that default extended attribute size properly increases"
 
+test_27F() { # LU-5346/LU-7975
+
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.51) ]] &&
+		skip "Need MDS version at least 2.8.51" && return
+
+	test_mkdir -p $DIR/$tdir
+	rm -f $DIR/$tdir/f0
+	$SETSTRIPE -c 2 $DIR/$tdir
+
+	# stop all OSTs to reproduce situation for LU-7975 ticket
+	for num in $(seq $OSTCOUNT); do
+		stop ost$num
+	done
+
+	# open/create f0 with O_LOV_DELAY_CREATE
+	# truncate f0 to a non-0 size
+	# close
+	multiop $DIR/$tdir/f0 oO_RDWR:O_CREAT:O_LOV_DELAY_CREATE:T1050000c
+
+	$CHECKSTAT -s 1050000 $DIR/$tdir/f0 || error "checkstat failed"
+	# open/write it again to force delayed layout creation
+	cat /etc/hosts > $DIR/$tdir/f0 &
+	catpid=$!
+
+	# restart OSTs
+	for num in $(seq $OSTCOUNT); do
+		start ost$num $(ostdevname $num) $OST_MOUNT_OPTS ||
+			error "ost$num failed to start"
+	done
+
+	wait $catpid || error "cat failed"
+
+	cmp /etc/hosts $DIR/$tdir/f0 || error "cmp failed"
+	[[ $($GETSTRIPE -c $DIR/$tdir/f0) == 2 ]] || error "wrong stripecount"
+
+}
+run_test 27F "Client resend delayed layout creation with non-zero size"
+
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091
