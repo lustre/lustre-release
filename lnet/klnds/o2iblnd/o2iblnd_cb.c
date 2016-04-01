@@ -1379,7 +1379,7 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
          * connected */
 	read_lock_irqsave(g_lock, flags);
 
-        peer = kiblnd_find_peer_locked(nid);
+        peer = kiblnd_find_peer_locked(ni, nid);
 	if (peer != NULL && !list_empty(&peer->ibp_conns)) {
                 /* Found a peer with an established connection */
                 conn = kiblnd_get_conn_locked(peer);
@@ -1397,7 +1397,7 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
 	/* Re-try with a write lock */
 	write_lock(g_lock);
 
-        peer = kiblnd_find_peer_locked(nid);
+        peer = kiblnd_find_peer_locked(ni, nid);
         if (peer != NULL) {
 		if (list_empty(&peer->ibp_conns)) {
                         /* found a peer, but it's still connecting... */
@@ -1435,7 +1435,7 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
 
 	write_lock_irqsave(g_lock, flags);
 
-        peer2 = kiblnd_find_peer_locked(nid);
+        peer2 = kiblnd_find_peer_locked(ni, nid);
         if (peer2 != NULL) {
 		if (list_empty(&peer2->ibp_conns)) {
                         /* found a peer, but it's still connecting... */
@@ -2377,7 +2377,7 @@ kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
 
 	write_lock_irqsave(g_lock, flags);
 
-        peer2 = kiblnd_find_peer_locked(nid);
+        peer2 = kiblnd_find_peer_locked(ni, nid);
         if (peer2 != NULL) {
                 if (peer2->ibp_version == 0) {
                         peer2->ibp_version     = version;

@@ -1184,7 +1184,7 @@ void kiblnd_destroy_peer (kib_peer_t *peer);
 bool kiblnd_reconnect_peer(kib_peer_t *peer);
 void kiblnd_destroy_dev (kib_dev_t *dev);
 void kiblnd_unlink_peer_locked (kib_peer_t *peer);
-kib_peer_t *kiblnd_find_peer_locked (lnet_nid_t nid);
+kib_peer_t *kiblnd_find_peer_locked(struct lnet_ni *ni, lnet_nid_t nid);
 int  kiblnd_close_stale_conns_locked (kib_peer_t *peer,
                                       int version, __u64 incarnation);
 int  kiblnd_close_peer_conns_locked (kib_peer_t *peer, int why);
