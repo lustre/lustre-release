@@ -90,7 +90,7 @@ static struct hlist_head *alloc_rmtperm_hash(void)
 
 	OBD_SLAB_ALLOC_GFP(hash, ll_rmtperm_hash_cachep,
 			   REMOTE_PERM_HASHSIZE * sizeof(*hash),
-			   GFP_IOFS);
+			   GFP_NOFS);
         if (!hash)
                 return NULL;
 

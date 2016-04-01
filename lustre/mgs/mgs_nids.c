@@ -146,7 +146,7 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
 
 			if (units_in_page == 0) {
 				/* allocate a new page */
-				pages[index] = alloc_page(GFP_IOFS);
+				pages[index] = alloc_page(GFP_KERNEL);
 				if (pages[index] == NULL) {
 					rc = -ENOMEM;
 					break;

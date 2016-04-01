@@ -57,11 +57,6 @@
 # include <linux/mm_inline.h>
 #endif
 
-/* GFP_IOFS was added in 2.6.33 kernel */
-#ifndef GFP_IOFS
-#define GFP_IOFS       (__GFP_IO | __GFP_FS)
-#endif
-
 /*
  * Shrinker
  */

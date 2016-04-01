@@ -144,7 +144,7 @@ srpc_alloc_bulk(int cpt, unsigned bulk_npg, unsigned bulk_len, int sink)
 		struct page *pg;
 		int	    nob;
 
-		pg = cfs_page_cpt_alloc(lnet_cpt_table(), cpt, GFP_IOFS);
+		pg = cfs_page_cpt_alloc(lnet_cpt_table(), cpt, GFP_KERNEL);
 		if (pg == NULL) {
 			CERROR("Can't allocate page %d of %d\n", i, bulk_npg);
 			srpc_free_bulk(bk);

@@ -394,7 +394,7 @@ int tgt_mod_init(void)
 {
 	ENTRY;
 
-	tgt_page_to_corrupt = alloc_page(GFP_IOFS);
+	tgt_page_to_corrupt = alloc_page(GFP_KERNEL);
 
 	tgt_key_init_generic(&tgt_thread_key, NULL);
 	lu_context_key_register_many(&tgt_thread_key, NULL);

@@ -1587,7 +1587,7 @@ static int mgc_process_recover_log(struct obd_device *obd,
                 GOTO(out, rc = -ENOMEM);
 
         for (i = 0; i < nrpages; i++) {
-		pages[i] = alloc_page(GFP_IOFS);
+		pages[i] = alloc_page(GFP_KERNEL);
                 if (pages[i] == NULL)
                         GOTO(out, rc = -ENOMEM);
         }
