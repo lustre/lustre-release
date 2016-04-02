@@ -125,10 +125,17 @@ extern kib_tunables_t  kiblnd_tunables;
 					IBLND_CREDIT_HIGHWATER_V1 : \
 					t->lnd_peercredits_hiw)
 
-#ifdef HAVE_RDMA_CREATE_ID_4ARG
-#define kiblnd_rdma_create_id(cb, dev, ps, qpt) rdma_create_id(cb, dev, ps, qpt)
+#ifdef HAVE_RDMA_CREATE_ID_5ARG
+# define kiblnd_rdma_create_id(cb, dev, ps, qpt) rdma_create_id(current->nsproxy->net_ns, \
+								cb, dev, \
+								ps, qpt)
 #else
-#define kiblnd_rdma_create_id(cb, dev, ps, qpt) rdma_create_id(cb, dev, ps)
+# ifdef HAVE_RDMA_CREATE_ID_4ARG
+#  define kiblnd_rdma_create_id(cb, dev, ps, qpt) rdma_create_id(cb, dev, \
+								 ps, qpt)
+# else
+#  define kiblnd_rdma_create_id(cb, dev, ps, qpt) rdma_create_id(cb, dev, ps)
+# endif
 #endif
 
 /* 2 OOB shall suffice for 1 keepalive and 1 returning credits */
