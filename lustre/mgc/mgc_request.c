@@ -711,13 +711,13 @@ static int mgc_local_llog_fini(const struct lu_env *env,
 	RETURN(0);
 }
 
-static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb)
+static int mgc_fs_setup(const struct lu_env *env, struct obd_device *obd,
+			struct super_block *sb)
 {
 	struct lustre_sb_info	*lsi = s2lsi(sb);
 	struct client_obd	*cli = &obd->u.cli;
 	struct lu_fid		 rfid, fid;
 	struct dt_object	*root, *dto;
-	struct lu_env		*env;
 	int			 rc = 0;
 
 	ENTRY;
@@ -725,29 +725,21 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb)
 	LASSERT(lsi);
 	LASSERT(lsi->lsi_dt_dev);
 
-	OBD_ALLOC_PTR(env);
-	if (env == NULL)
-		RETURN(-ENOMEM);
-
 	/* The mgc fs exclusion mutex. Only one fs can be setup at a time. */
 	mutex_lock(&cli->cl_mgc_mutex);
 
 	/* Setup the configs dir */
-	rc = lu_env_init(env, LCT_MG_THREAD);
-	if (rc)
-		GOTO(out_err, rc);
-
 	fid.f_seq = FID_SEQ_LOCAL_NAME;
 	fid.f_oid = 1;
 	fid.f_ver = 0;
 	rc = local_oid_storage_init(env, lsi->lsi_dt_dev, &fid,
 				    &cli->cl_mgc_los);
 	if (rc)
-		GOTO(out_env, rc);
+		RETURN(rc);
 
 	rc = dt_root_get(env, lsi->lsi_dt_dev, &rfid);
 	if (rc)
-		GOTO(out_env, rc);
+		GOTO(out_los, rc);
 
 	root = dt_locate_at(env, lsi->lsi_dt_dev, &rfid,
 			    &cli->cl_mgc_los->los_dev->dd_lu_dev, NULL);
@@ -785,37 +777,24 @@ out_los:
 		cli->cl_mgc_los = NULL;
 		mutex_unlock(&cli->cl_mgc_mutex);
 	}
-out_env:
-	lu_env_fini(env);
-out_err:
-	OBD_FREE_PTR(env);
 	return rc;
 }
 
-static int mgc_fs_cleanup(struct obd_device *obd)
+static int mgc_fs_cleanup(const struct lu_env *env, struct obd_device *obd)
 {
-	struct lu_env		 env;
 	struct client_obd	*cli = &obd->u.cli;
-	int			 rc;
-
 	ENTRY;
 
 	LASSERT(cli->cl_mgc_los != NULL);
 
-	rc = lu_env_init(&env, LCT_MG_THREAD);
-	if (rc)
-		GOTO(unlock, rc);
+	mgc_local_llog_fini(env, obd);
 
-	mgc_local_llog_fini(&env, obd);
-
-	lu_object_put_nocache(&env, &cli->cl_mgc_configs_dir->do_lu);
+	lu_object_put_nocache(env, &cli->cl_mgc_configs_dir->do_lu);
 	cli->cl_mgc_configs_dir = NULL;
 
-	local_oid_storage_fini(&env, cli->cl_mgc_los);
+	local_oid_storage_fini(env, cli->cl_mgc_los);
 	cli->cl_mgc_los = NULL;
-	lu_env_fini(&env);
 
-unlock:
 	class_decref(obd, "mgc_fs", obd);
 	mutex_unlock(&cli->cl_mgc_mutex);
 
@@ -1219,13 +1198,13 @@ static int mgc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 		if (vallen != sizeof(struct super_block))
 			RETURN(-EINVAL);
 
-		rc = mgc_fs_setup(exp->exp_obd, sb);
+		rc = mgc_fs_setup(env, exp->exp_obd, sb);
 		RETURN(rc);
 	}
 	if (KEY_IS(KEY_CLEAR_FS)) {
 		if (vallen != 0)
 			RETURN(-EINVAL);
-		rc = mgc_fs_cleanup(exp->exp_obd);
+		rc = mgc_fs_cleanup(env, exp->exp_obd);
 		RETURN(rc);
 	}
         if (KEY_IS(KEY_SET_INFO)) {
