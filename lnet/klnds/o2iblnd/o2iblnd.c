@@ -1517,6 +1517,7 @@ static int kiblnd_alloc_freg_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t *fpo)
 			rc = PTR_ERR(frd->frd_frpl);
 			CERROR("Failed to allocate ib_fast_reg_page_list: %d\n",
 				rc);
+			frd->frd_frpl = NULL;
 			goto out_middle;
 		}
 
@@ -1525,6 +1526,7 @@ static int kiblnd_alloc_freg_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t *fpo)
 		if (IS_ERR(frd->frd_mr)) {
 			rc = PTR_ERR(frd->frd_mr);
 			CERROR("Failed to allocate ib_fast_reg_mr: %d\n", rc);
+			frd->frd_mr = NULL;
 			goto out_middle;
 		}
 
