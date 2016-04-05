@@ -243,7 +243,7 @@ free_bit:
 	LIBCFS_FREE(fma_blk->gnm_bit_array, BITS_TO_LONGS(num_mbox) * sizeof (unsigned long));
 free_blk:
 	if (fma_blk->gnm_state == GNILND_FMABLK_VIRT) {
-		LIBCFS_FREE(fma_blk->gnm_block, fma_blk->gnm_blk_size);
+		kgnilnd_vfree(fma_blk->gnm_block, fma_blk->gnm_blk_size);
 	} else {
 		kmem_cache_free(kgnilnd_data.kgn_mbox_cache, fma_blk->gnm_block);
 	}
@@ -347,7 +347,7 @@ kgnilnd_free_fmablk_locked(kgn_device_t *dev, kgn_fma_memblock_t *fma_blk)
 	if (fma_blk->gnm_state == GNILND_FMABLK_PHYS) {
 		kmem_cache_free(kgnilnd_data.kgn_mbox_cache, fma_blk->gnm_block);
 	} else {
-		LIBCFS_FREE(fma_blk->gnm_block, fma_blk->gnm_blk_size);
+		kgnilnd_vfree(fma_blk->gnm_block, fma_blk->gnm_blk_size);
 	}
 	fma_blk->gnm_state = GNILND_FMABLK_FREED;
 

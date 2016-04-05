@@ -977,6 +977,12 @@ static inline void *kgnilnd_vzalloc(int size)
 	return ret;
 }
 
+static inline void kgnilnd_vfree(void *ptr, int size)
+{
+	libcfs_kmem_dec(ptr, size);
+	vfree(ptr);
+}
+
 /* Copied from DEBUG_REQ in Lustre - the dance is needed to save stack space */
 
 extern void

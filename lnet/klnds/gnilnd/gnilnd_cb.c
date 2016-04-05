@@ -237,7 +237,7 @@ kgnilnd_free_tx(kgn_tx_t *tx)
 
 	/* Only free the buffer if we used it */
 	if (tx->tx_buffer_copy != NULL) {
-		vfree(tx->tx_buffer_copy);
+		kgnilnd_vfree(tx->tx_buffer_copy, tx->tx_rdma_desc.length);
 		tx->tx_buffer_copy = NULL;
 		CDEBUG(D_MALLOC, "vfreed buffer2\n");
 	}
@@ -1936,7 +1936,7 @@ kgnilnd_rdma(kgn_tx_t *tx, int type,
 			if (tx->tx_buffer_copy == NULL) {
 				/* Allocate the largest copy buffer we will need, this will prevent us from overwriting data
 				 * and require at most we allocate a few extra bytes. */
-				tx->tx_buffer_copy = vmalloc(desc_nob);
+				tx->tx_buffer_copy = kgnilnd_vzalloc(desc_nob);
 
 				if (!tx->tx_buffer_copy) {
 					/* allocation of buffer failed nak the rdma */
@@ -1948,7 +1948,8 @@ kgnilnd_rdma(kgn_tx_t *tx, int type,
 				rc = kgnilnd_mem_register(conn->gnc_device->gnd_handle, (__u64)tx->tx_buffer_copy, desc_nob, NULL, GNI_MEM_READWRITE, &tx->tx_buffer_copy_map_key);
 				if (rc != GNI_RC_SUCCESS) {
 					/* Registration Failed nak rdma and kill the tx. */
-					vfree(tx->tx_buffer_copy);
+					kgnilnd_vfree(tx->tx_buffer_copy,
+						      desc_nob);
 					tx->tx_buffer_copy = NULL;
 					kgnilnd_nak_rdma(tx->tx_conn, tx->tx_msg.gnm_type, -EFAULT, cookie, tx->tx_msg.gnm_srcnid);
 					kgnilnd_tx_done(tx, -EFAULT);
@@ -2014,7 +2015,7 @@ kgnilnd_rdma(kgn_tx_t *tx, int type,
 		kgnilnd_unmap_buffer(tx, 0);
 
 		if (tx->tx_buffer_copy != NULL) {
-			vfree(tx->tx_buffer_copy);
+			kgnilnd_vfree(tx->tx_buffer_copy, desc_nob);
 			tx->tx_buffer_copy = NULL;
 		}
 

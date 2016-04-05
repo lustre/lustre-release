@@ -319,7 +319,8 @@ kgnilnd_create_conn(kgn_conn_t **connp, kgn_device_t *dev)
 
 failed:
 	atomic_dec(&kgnilnd_data.kgn_nconns);
-	LIBCFS_FREE(conn->gnc_tx_ref_table, GNILND_MAX_MSG_ID * sizeof(void *));
+	kgnilnd_vfree(conn->gnc_tx_ref_table,
+		      GNILND_MAX_MSG_ID * sizeof(void *));
 	LIBCFS_FREE(conn, sizeof(*conn));
 	return rc;
 }
@@ -493,8 +494,8 @@ kgnilnd_destroy_conn(kgn_conn_t *conn)
 		kgnilnd_peer_decref(conn->gnc_peer);
 
 	if (conn->gnc_tx_ref_table != NULL) {
-		LIBCFS_FREE(conn->gnc_tx_ref_table,
-			    GNILND_MAX_MSG_ID * sizeof(void *));
+		kgnilnd_vfree(conn->gnc_tx_ref_table,
+			      GNILND_MAX_MSG_ID * sizeof(void *));
 	}
 
 	LIBCFS_FREE(conn, sizeof(*conn));
