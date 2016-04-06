@@ -569,13 +569,15 @@ load_modules_local() {
     load_module lov/lov
     load_module mgc/mgc
     load_module obdecho/obdecho
-    if ! client_only; then
-        SYMLIST=/proc/kallsyms
-        grep -q crc16 $SYMLIST || { modprobe crc16 2>/dev/null || true; }
-        grep -q -w jbd $SYMLIST || { modprobe jbd 2>/dev/null || true; }
-        grep -q -w jbd2 $SYMLIST || { modprobe jbd2 2>/dev/null || true; }
+	if ! client_only; then
+		SYMLIST=/proc/kallsyms
+		grep -q crc16 $SYMLIST ||
+			{ modprobe crc16 2>/dev/null || true; }
+		grep -q -w jbd2 $SYMLIST ||
+			{ modprobe jbd2 2>/dev/null || true; }
 		load_module lfsck/lfsck
-		[ "$LQUOTA" != "no" ] && load_module quota/lquota $LQUOTAOPTS
+		[ "$LQUOTA" != "no" ] &&
+			load_module quota/lquota $LQUOTAOPTS
 		if [[ $(node_fstypes $HOSTNAME) == *zfs* ]]; then
 			modprobe zfs
 			load_module osd-zfs/osd_zfs
@@ -583,6 +585,8 @@ load_modules_local() {
 		if [[ $(node_fstypes $HOSTNAME) == *ldiskfs* ]]; then
 			grep -q exportfs_decode_fh $SYMLIST ||
 				{ modprobe exportfs 2> /dev/null || true; }
+			grep -q -w mbcache $SYMLIST ||
+				{ modprobe mbcache 2>/dev/null || true; }
 			load_module ../ldiskfs/ldiskfs
 			load_module osd-ldiskfs/osd_ldiskfs
 		fi
@@ -594,7 +598,7 @@ load_modules_local() {
 		load_module osp/osp
 		load_module ofd/ofd
 		load_module osp/osp
-    fi
+	fi
 
 	load_module llite/lustre
 	llite_lloop_enabled && load_module llite/llite_lloop
