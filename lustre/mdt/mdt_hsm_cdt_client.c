@@ -464,9 +464,9 @@ record:
 
 	GOTO(out, rc);
 out:
-	/* if work has been added, wake up coordinator */
+	/* if work has been added, signal the coordinator */
 	if (rc == 0 || rc == -ENODATA)
-		mdt_hsm_cdt_wakeup(mdt);
+		mdt_hsm_cdt_event(cdt);
 
 	return rc;
 }
