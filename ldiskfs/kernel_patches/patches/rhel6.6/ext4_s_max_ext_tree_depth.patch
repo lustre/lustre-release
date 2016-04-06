@@ -1,0 +1,156 @@
+Fix ext4_ext_find_extent() to already pre-allocate ext4_ext_path[]
+array of the max depth instead of current depth.
+This will avoid racy cases of concurrent ext_depth() growth in
+current and unsafe implementation with ext4_ext_path[] array
+re-[sizing,allocation], even with more recent and related patches
+that will be integrated in more recent Kernels.
+
+Index: linux-2.6.32-504.el6.x86_64/fs/ext4/ext4.h
+===================================================================
+--- linux-2.6.32-504.el6.x86_64.orig/fs/ext4/ext4.h
++++ linux-2.6.32-504.el6.x86_64/fs/ext4/ext4.h
+@@ -1147,6 +1147,9 @@
+ 	unsigned long s_ext_extents;
+ #endif
+ 
++	/* maximum possible extents tree depth, to be computed at mount time */
++	unsigned int s_max_ext_tree_depth;
++
+ 	/* for buddy allocator */
+ 	struct ext4_group_info ***s_group_info;
+ 	struct inode *s_buddy_cache;
+Index: linux-2.6.32-504.el6.x86_64/fs/ext4/super.c
+===================================================================
+--- linux-2.6.32-504.el6.x86_64.orig/fs/ext4/super.c
++++ linux-2.6.32-504.el6.x86_64/fs/ext4/super.c
+@@ -3529,6 +3529,8 @@
+ 		if (ext4_multi_mount_protect(sb, le64_to_cpu(es->s_mmp_block)))
+ 			goto failed_mount3;
+ 
++	ext4_ext_init(sb); /* needed before using extent-mapped journal */
++
+ 	/*
+ 	 * The first inode we look at is the journal inode.  Don't try
+ 	 * root first: it may be modified in the journal!
+@@ -3722,7 +3724,6 @@
+ 		goto failed_mount4a;
+ 	}
+ 
+-	ext4_ext_init(sb);
+ 	err = ext4_mb_init(sb, needs_recovery);
+ 	if (err) {
+ 		ext4_msg(sb, KERN_ERR, "failed to initalize mballoc (%d)",
+Index: linux-2.6.32-504.el6.x86_64/fs/ext4/extents.c
+===================================================================
+--- linux-2.6.32-504.el6.x86_64.orig/fs/ext4/extents.c
++++ linux-2.6.32-504.el6.x86_64/fs/ext4/extents.c
+@@ -699,8 +699,9 @@
+ 
+ 	/* account possible depth increase */
+ 	if (!path) {
+-		path = kzalloc(sizeof(struct ext4_ext_path) * (depth + 2),
+-				GFP_NOFS);
++		path = kzalloc(sizeof(struct ext4_ext_path) *
++			       EXT4_SB(inode->i_sb)->s_max_ext_tree_depth,
++			       GFP_NOFS);
+ 		if (!path)
+ 			return ERR_PTR(-ENOMEM);
+ 		alloc = 1;
+@@ -1915,11 +1916,8 @@
+ 		/* find extent for this block */
+ 		down_read(&EXT4_I(inode)->i_data_sem);
+ 
+-		if (path && ext_depth(inode) != depth) {
+-			/* depth was changed. we have to realloc path */
+-			kfree(path);
+-			path = NULL;
+-		}
++		/* path of max possible depth will be allocated during
++		 * first pass, so its space can be re-used for each loop */
+ 
+ 		path = ext4_ext_find_extent(inode, block, path);
+ 		if (IS_ERR(path)) {
+@@ -2664,8 +2662,9 @@
+ 			path[k].p_block =
+ 				le16_to_cpu(path[k].p_hdr->eh_entries)+1;
+ 	} else {
+-		path = kzalloc(sizeof(struct ext4_ext_path) * (depth + 1),
+-			       GFP_NOFS);
++		path = kzalloc(sizeof(struct ext4_ext_path) *
++			       EXT4_SB(inode->i_sb)->s_max_ext_tree_depth,
++			       GFP_NOFS);
+ 		if (path == NULL) {
+ 			ext4_journal_stop(handle);
+ 			return -ENOMEM;
+@@ -2790,13 +2789,15 @@
+  */
+ void ext4_ext_init(struct super_block *sb)
+ {
++	ext4_fsblk_t maxblocks;
++
+ 	/*
+ 	 * possible initialization would be here
+ 	 */
+ 
+ 	if (EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_EXTENTS)) {
+-#if defined(AGGRESSIVE_TEST) || defined(CHECK_BINSEARCH) || defined(EXTENTS_STATS)
+-		printk(KERN_INFO "EXT4-fs: file extents enabled");
++		printk(KERN_INFO "EXT4-fs (%s): file extents enabled",
++		       sb->s_id);
+ #ifdef AGGRESSIVE_TEST
+ 		printk(", aggressive tests");
+ #endif
+@@ -2805,14 +2806,35 @@
+ #endif
+ #ifdef EXTENTS_STATS
+ 		printk(", stats");
+-#endif
+-		printk("\n");
+-#endif
+-#ifdef EXTENTS_STATS
+ 		spin_lock_init(&EXT4_SB(sb)->s_ext_stats_lock);
+ 		EXT4_SB(sb)->s_ext_min = 1 << 30;
+ 		EXT4_SB(sb)->s_ext_max = 0;
+ #endif
++		EXT4_SB(sb)->s_max_ext_tree_depth = 1;
++
++		maxblocks = sb->s_maxbytes / sb->s_blocksize;
++
++		/* 1st/root level/node of extents tree stands in i_data and
++		 * entries stored in tree nodes can be of type ext4_extent
++		 * (leaf node) or ext4_extent_idx (internal node) */
++		maxblocks /= (sizeof(((struct ext4_inode_info *)0x0)->i_data) -
++			      sizeof(struct ext4_extent_header)) /
++			     max(sizeof(struct ext4_extent),
++				 sizeof(struct ext4_extent_idx));
++
++		/* compute maximum extents tree depth for a fully populated
++		 * file of max size made of only minimal/1-block extents */
++		while (maxblocks > 0) {
++			maxblocks /= (sb->s_blocksize -
++				      sizeof(struct ext4_extent_header)) /
++				     max(sizeof(struct ext4_extent),
++					 sizeof(struct ext4_extent_idx));
++			EXT4_SB(sb)->s_max_ext_tree_depth++;
++		}
++
++		printk(", maximum tree depth=%u",
++		       EXT4_SB(sb)->s_max_ext_tree_depth);
++		printk("\n");
+ 	}
+ }
+ 
+@@ -4614,11 +4636,8 @@
+ 			break;
+ 		}
+ 
+-		if (ext_depth(inode) != depth) {
+-			/* depth was changed. we have to realloc path */
+-			kfree(path);
+-			path = NULL;
+-		}
++		/* path of max possible depth will be allocated during
++		 * first pass, so its space can be re-used for each loop */
+ 
+ 		block = cbex.ec_block + cbex.ec_len;
+ 	}
