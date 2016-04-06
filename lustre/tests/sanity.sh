@@ -7617,9 +7617,10 @@ test_116a() { # was previously test_116()
 	echo "Wrote ${DIFF}KB to smaller OST $MINI1"
 	DIFF2=$(($MAXV1 - ${AVAIL[$MAXI1]}))
 	echo "Wrote ${DIFF2}KB to larger OST $MAXI1"
-	FILL=$(($DIFF2 * 100 / $DIFF - 100))
-	[ $DIFF -gt 0 ] &&
+	if [[ $DIFF -gt 0 ]]; then
+		FILL=$(($DIFF2 * 100 / $DIFF - 100))
 		echo "Wrote ${FILL}% more data to larger OST $MAXI1"
+	fi
 
 	# Figure out which files were written where
 	UUID=$(lctl get_param -n lov.${FSNAME}-clilov-*.target_obd |
@@ -7632,9 +7633,10 @@ test_116a() { # was previously test_116()
 	echo $UUID
 	MAXC=$($GETSTRIPE --ost $UUID $DIR/$tdir | grep $DIR | wc -l)
 	echo "$MAXC files created on larger OST $MAXI1"
-	FILL=$(($MAXC * 100 / $MINC - 100))
-	[[ $MINC -gt 0 ]] &&
+	if [[ $MINC -gt 0 ]]; then
+		FILL=$(($MAXC * 100 / $MINC - 100))
 		echo "Wrote ${FILL}% more files to larger OST $MAXI1"
+	fi
 	[[ $MAXC -gt $MINC ]] ||
 		error_ignore LU-9 "stripe QOS didn't balance free space"
 	simple_cleanup_common
