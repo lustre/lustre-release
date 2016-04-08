@@ -422,6 +422,7 @@ int loop_setup(struct mkfs_opts *mop)
 		}
 		/* find or allocate a free loop device to use */
 		i = ioctl(ret, LOOP_CTL_GET_FREE);
+		close(ret);
 		if (i < 0) {
 			fprintf(stderr, "%s: access loop control error\n", progname);
 			return EACCES;
