@@ -63,12 +63,11 @@ EXPORT_SYMBOL(lustre_lma_init);
  */
 void lustre_lma_swab(struct lustre_mdt_attrs *lma)
 {
-	/* Use LUSTRE_MSG_MAGIC to detect local endianess. */
-	if (LUSTRE_MSG_MAGIC != cpu_to_le32(LUSTRE_MSG_MAGIC)) {
-		__swab32s(&lma->lma_compat);
-		__swab32s(&lma->lma_incompat);
-		lustre_swab_lu_fid(&lma->lma_self_fid);
-	}
+#ifdef __BIG_ENDIAN
+	__swab32s(&lma->lma_compat);
+	__swab32s(&lma->lma_incompat);
+	lustre_swab_lu_fid(&lma->lma_self_fid);
+#endif
 };
 EXPORT_SYMBOL(lustre_lma_swab);
 
@@ -80,13 +79,12 @@ EXPORT_SYMBOL(lustre_lma_swab);
  */
 void lustre_hsm_swab(struct hsm_attrs *attrs)
 {
-	/* Use LUSTRE_MSG_MAGIC to detect local endianess. */
-	if (LUSTRE_MSG_MAGIC != cpu_to_le32(LUSTRE_MSG_MAGIC)) {
-		__swab32s(&attrs->hsm_compat);
-		__swab32s(&attrs->hsm_flags);
-		__swab64s(&attrs->hsm_arch_id);
-		__swab64s(&attrs->hsm_arch_ver);
-	}
+#ifdef __BIG_ENDIAN
+	__swab32s(&attrs->hsm_compat);
+	__swab32s(&attrs->hsm_flags);
+	__swab64s(&attrs->hsm_arch_id);
+	__swab64s(&attrs->hsm_arch_ver);
+#endif
 };
 
 /*
