@@ -819,7 +819,7 @@ int mdt_hsm_coordinator_update(struct mdt_thread_info *mti,
 			       struct hsm_progress_kernel *pgs);
 /* mdt/mdt_hsm_cdt_client.c */
 int mdt_hsm_add_actions(struct mdt_thread_info *info,
-			struct hsm_action_list *hal, __u64 *compound_id);
+			struct hsm_action_list *hal);
 int mdt_hsm_get_actions(struct mdt_thread_info *mti,
 			struct hsm_action_list *hal);
 int mdt_hsm_get_running(struct mdt_thread_info *mti,

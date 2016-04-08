@@ -496,7 +496,6 @@ int mdt_hsm_request(struct tgt_session_info *tsi)
 	int				 hui_list_size;
 	int				 data_size;
 	enum hsm_copytool_action	 action = HSMA_NONE;
-	__u64				 compound_id;
 	int				 hal_size, i, rc;
 	ENTRY;
 
@@ -583,7 +582,7 @@ int mdt_hsm_request(struct tgt_session_info *tsi)
 		hal->hal_count++;
 	}
 
-	rc = mdt_hsm_add_actions(info, hal, &compound_id);
+	rc = mdt_hsm_add_actions(info, hal);
 
 	MDT_HSM_FREE(hal, hal_size);
 
