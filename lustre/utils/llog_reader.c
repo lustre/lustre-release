@@ -186,9 +186,10 @@ int main(int argc, char **argv)
 
 	is_ext = is_fstype_ext(fd);
 	if (is_ext < 0) {
+		rc = is_ext;
 		printf("Unable to determine type of filesystem containing %s\n",
 		       argv[1]);
-		goto out;
+		goto out_fd;
 	}
 
 	rc = llog_pack_buffer(fd, &llog_buf, &recs_buf, &rec_number);
