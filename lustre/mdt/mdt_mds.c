@@ -71,34 +71,33 @@ struct mds_device {
  *  * Initialized in mdt_mod_init().
  *   */
 static unsigned long mdt_num_threads;
-CFS_MODULE_PARM(mdt_num_threads, "ul", ulong, 0444,
-		"number of MDS service threads to start "
-		"(deprecated in favor of mds_num_threads)");
+module_param(mdt_num_threads, ulong, 0444);
+MODULE_PARM_DESC(mdt_num_threads, "number of MDS service threads to start (deprecated in favor of mds_num_threads)");
 
 static unsigned long mds_num_threads;
-CFS_MODULE_PARM(mds_num_threads, "ul", ulong, 0444,
-		"number of MDS service threads to start");
+module_param(mds_num_threads, ulong, 0444);
+MODULE_PARM_DESC(mds_num_threads, "number of MDS service threads to start");
 
 static char *mds_num_cpts;
-CFS_MODULE_PARM(mds_num_cpts, "c", charp, 0444,
-		"CPU partitions MDS threads should run on");
+module_param(mds_num_cpts, charp, 0444);
+MODULE_PARM_DESC(mds_num_cpts, "CPU partitions MDS threads should run on");
 
 static unsigned long mds_rdpg_num_threads;
-CFS_MODULE_PARM(mds_rdpg_num_threads, "ul", ulong, 0444,
-		"number of MDS readpage service threads to start");
+module_param(mds_rdpg_num_threads, ulong, 0444);
+MODULE_PARM_DESC(mds_rdpg_num_threads, "number of MDS readpage service threads to start");
 
 static char *mds_rdpg_num_cpts;
-CFS_MODULE_PARM(mds_rdpg_num_cpts, "c", charp, 0444,
-		"CPU partitions MDS readpage threads should run on");
+module_param(mds_rdpg_num_cpts, charp, 0444);
+MODULE_PARM_DESC(mds_rdpg_num_cpts, "CPU partitions MDS readpage threads should run on");
 
 /* NB: these two should be removed along with setattr service in the future */
 static unsigned long mds_attr_num_threads;
-CFS_MODULE_PARM(mds_attr_num_threads, "ul", ulong, 0444,
-		"number of MDS setattr service threads to start");
+module_param(mds_attr_num_threads, ulong, 0444);
+MODULE_PARM_DESC(mds_attr_num_threads, "number of MDS setattr service threads to start");
 
 static char *mds_attr_num_cpts;
-CFS_MODULE_PARM(mds_attr_num_cpts, "c", charp, 0444,
-		"CPU partitions MDS setattr threads should run on");
+module_param(mds_attr_num_cpts, charp, 0444);
+MODULE_PARM_DESC(mds_attr_num_cpts, "CPU partitions MDS setattr threads should run on");
 
 /* device init/fini methods */
 static void mds_stop_ptlrpc_service(struct mds_device *m)

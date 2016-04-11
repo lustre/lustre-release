@@ -55,16 +55,16 @@
 #define NRS_POL_NAME_TBF	"tbf"
 
 static int tbf_jobid_cache_size = 8192;
-CFS_MODULE_PARM(tbf_jobid_cache_size, "i", int, 0644,
-		"The size of jobid cache");
+module_param(tbf_jobid_cache_size, int, 0644);
+MODULE_PARM_DESC(tbf_jobid_cache_size, "The size of jobid cache");
 
 static int tbf_rate = 10000;
-CFS_MODULE_PARM(tbf_rate, "i", int, 0644,
-		"Default rate limit in RPCs/s");
+module_param(tbf_rate, int, 0644);
+MODULE_PARM_DESC(tbf_rate, "Default rate limit in RPCs/s");
 
 static int tbf_depth = 3;
-CFS_MODULE_PARM(tbf_depth, "i", int, 0644,
-		"How many tokens that a client can save up");
+module_param(tbf_depth, int, 0644);
+MODULE_PARM_DESC(tbf_depth, "How many tokens that a client can save up");
 
 static enum hrtimer_restart nrs_tbf_timer_cb(struct hrtimer *timer)
 {

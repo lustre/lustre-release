@@ -482,8 +482,8 @@ osd_object_unlinked_add(struct osd_object *obj, struct osd_thandle *oh)
 /* Default to max data size covered by a level-1 indirect block */
 static unsigned long osd_sync_destroy_max_size =
 	1UL << (DN_MAX_INDBLKSHIFT - SPA_BLKPTRSHIFT + SPA_MAXBLOCKSHIFT);
-CFS_MODULE_PARM(osd_sync_destroy_max_size, "ul", ulong, 0444,
-		"Maximum object size to use synchronous destroy.");
+module_param(osd_sync_destroy_max_size, ulong, 0444);
+MODULE_PARM_DESC(osd_sync_destroy_max_size, "Maximum object size to use synchronous destroy.");
 
 static inline void
 osd_object_set_destroy_type(struct osd_object *obj)

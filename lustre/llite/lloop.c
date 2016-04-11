@@ -910,7 +910,8 @@ static void __exit lloop_exit(void)
 	OBD_FREE(loop_dev, max_loop * sizeof(*loop_dev));
 }
 
-CFS_MODULE_PARM(max_loop, "i", int, 0444, "maximum of lloop_device");
+module_param(max_loop, int, 0444);
+MODULE_PARM_DESC(max_loop, "maximum of lloop_device");
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre virtual block device");
 MODULE_VERSION(LUSTRE_VERSION_STRING);

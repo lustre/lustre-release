@@ -48,28 +48,28 @@
 #include "ost_internal.h"
 
 int oss_max_threads = 512;
-CFS_MODULE_PARM(oss_max_threads, "i", int, 0444,
-		"maximum number of OSS service threads");
+module_param(oss_max_threads, int, 0444);
+MODULE_PARM_DESC(oss_max_threads, "maximum number of OSS service threads");
 
 static int oss_num_threads;
-CFS_MODULE_PARM(oss_num_threads, "i", int, 0444,
-                "number of OSS service threads to start");
+module_param(oss_num_threads, int, 0444);
+MODULE_PARM_DESC(oss_num_threads, "number of OSS service threads to start");
 
 static int ost_num_threads;
-CFS_MODULE_PARM(ost_num_threads, "i", int, 0444,
-                "number of OST service threads to start (deprecated)");
+module_param(ost_num_threads, int, 0444);
+MODULE_PARM_DESC(ost_num_threads, "number of OST service threads to start (deprecated)");
 
 static int oss_num_create_threads;
-CFS_MODULE_PARM(oss_num_create_threads, "i", int, 0444,
-                "number of OSS create threads to start");
+module_param(oss_num_create_threads, int, 0444);
+MODULE_PARM_DESC(oss_num_create_threads, "number of OSS create threads to start");
 
 static char *oss_cpts;
-CFS_MODULE_PARM(oss_cpts, "s", charp, 0444,
-		"CPU partitions OSS threads should run on");
+module_param(oss_cpts, charp, 0444);
+MODULE_PARM_DESC(oss_cpts, "CPU partitions OSS threads should run on");
 
 static char *oss_io_cpts;
-CFS_MODULE_PARM(oss_io_cpts, "s", charp, 0444,
-		"CPU partitions OSS IO threads should run on");
+module_param(oss_io_cpts, charp, 0444);
+MODULE_PARM_DESC(oss_io_cpts, "CPU partitions OSS IO threads should run on");
 
 #define OST_WATCHDOG_TIMEOUT (obd_timeout * 1000)
 

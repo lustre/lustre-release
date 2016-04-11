@@ -39,9 +39,9 @@
 #include <lnet/lib-lnet.h>
 
 /* NB: add /proc interfaces in upcoming patches */
-int	portal_rotor	= LNET_PTL_ROTOR_HASH_RT;
-CFS_MODULE_PARM(portal_rotor, "i", int, 0644,
-		"redirect PUTs to different cpu-partitions");
+int portal_rotor = LNET_PTL_ROTOR_HASH_RT;
+module_param(portal_rotor, int, 0644);
+MODULE_PARM_DESC(portal_rotor, "redirect PUTs to different cpu-partitions");
 
 static int
 lnet_ptl_match_type(unsigned int index, lnet_process_id_t match_id,

@@ -55,9 +55,9 @@
 
 static int mult = 20 - PAGE_CACHE_SHIFT;
 static int enc_pool_max_memory_mb;
-CFS_MODULE_PARM(enc_pool_max_memory_mb, "i", int, 0644,
-		"Encoding pool max memory (MB), 1/8 of total physical memory by default");
-
+module_param(enc_pool_max_memory_mb, int, 0644);
+MODULE_PARM_DESC(enc_pool_max_memory_mb,
+		 "Encoding pool max memory (MB), 1/8 of total physical memory by default");
 
 /****************************************
  * bulk encryption page pools           *

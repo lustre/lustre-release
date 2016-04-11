@@ -26,181 +26,181 @@
 #include "gnilnd.h"
 
 static int credits = 256;
-CFS_MODULE_PARM(credits, "i", int, 0444,
-		"# concurrent sends");
+module_param(credits, int, 0444);
+MODULE_PARM_DESC(credits, "# concurrent sends");
 
 static int eager_credits = 256 * 1024;
-CFS_MODULE_PARM(eager_credits, "i", int, 0644,
-		"# eager buffers");
+module_param(eager_credits, int, 0644);
+MODULE_PARM_DESC(eager_credits, "# eager buffers");
 
 static int peer_credits = 16;
-CFS_MODULE_PARM(peer_credits, "i", int, 0444,
-		"# LNet peer credits");
+module_param(peer_credits, int, 0444);
+MODULE_PARM_DESC(peer_credits, "# LNet peer credits");
 
 /* NB - we'll not actually limit sends to this, we just size the mailbox buffer
  * such that at most we'll have concurrent_sends * max_immediate messages
  * in the mailbox */
 static int concurrent_sends = 0;
-CFS_MODULE_PARM(concurrent_sends, "i", int, 0444,
-		"# concurrent HW sends to 1 peer");
+module_param(concurrent_sends, int, 0444);
+MODULE_PARM_DESC(concurrent_sends, "# concurrent HW sends to 1 peer");
 
 /* default for 2k nodes @ 16 peer credits */
 static int fma_cq_size = 32768;
-CFS_MODULE_PARM(fma_cq_size, "i", int, 0444,
-		"size of the completion queue");
+module_param(fma_cq_size, int, 0444);
+MODULE_PARM_DESC(fma_cq_size, "size of the completion queue");
 
 static int timeout = GNILND_BASE_TIMEOUT;
 /* can't change @ runtime because LNet gets NI data at startup from
  * this value */
-CFS_MODULE_PARM(timeout, "i", int, 0444,
-		"communications timeout (seconds)");
+module_param(timeout, int, 0444);
+MODULE_PARM_DESC(timeout, "communications timeout (seconds)");
 
 /* time to wait between datagram timeout and sending of next dgram */
 static int min_reconnect_interval = GNILND_MIN_RECONNECT_TO;
-CFS_MODULE_PARM(min_reconnect_interval, "i", int, 0644,
-		"minimum connection retry interval (seconds)");
+module_param(min_reconnect_interval, int, 0644);
+MODULE_PARM_DESC(min_reconnect_interval, "minimum connection retry interval (seconds)");
 
 /* if this goes longer than timeout, we'll timeout the TX before
  * the dgram */
 static int max_reconnect_interval = GNILND_MAX_RECONNECT_TO;
-CFS_MODULE_PARM(max_reconnect_interval, "i", int, 0644,
-		"maximum connection retry interval (seconds)");
+module_param(max_reconnect_interval, int, 0644);
+MODULE_PARM_DESC(max_reconnect_interval, "maximum connection retry interval (seconds)");
 
 static int max_immediate = 2048;
-CFS_MODULE_PARM(max_immediate, "i", int, 0444,
-		"immediate/RDMA breakpoint");
+module_param(max_immediate, int, 0444);
+MODULE_PARM_DESC(max_immediate, "immediate/RDMA breakpoint");
 
 static int checksum = GNILND_CHECKSUM_DEFAULT;
-CFS_MODULE_PARM(checksum, "i", int, 0644,
-		"0: None, 1: headers, 2: short msg, 3: all traffic");
+module_param(checksum, int, 0644);
+MODULE_PARM_DESC(checksum, "0: None, 1: headers, 2: short msg, 3: all traffic");
 
 static int checksum_dump = 0;
-CFS_MODULE_PARM(checksum_dump, "i", int, 0644,
-		"0: None, 1: dump log on failure, 2: payload data to D_INFO log");
+module_param(checksum_dump, int, 0644);
+MODULE_PARM_DESC(checksum_dump, "0: None, 1: dump log on failure, 2: payload data to D_INFO log");
 
 static int bte_dlvr_mode = GNILND_RDMA_DLVR_OPTION;
-CFS_MODULE_PARM(bte_dlvr_mode, "i", int, 0644,
-		"enable hashing for BTE (RDMA) transfers");
+module_param(bte_dlvr_mode, int, 0644);
+MODULE_PARM_DESC(bte_dlvr_mode, "enable hashing for BTE (RDMA) transfers");
 
 static int bte_relaxed_ordering = 1;
-CFS_MODULE_PARM(bte_relaxed_ordering, "i", int, 0644,
-		"enable relaxed ordering (PASSPW) for BTE (RDMA) transfers");
+module_param(bte_relaxed_ordering, int, 0644);
+MODULE_PARM_DESC(bte_relaxed_ordering, "enable relaxed ordering (PASSPW) for BTE (RDMA) transfers");
 
 #ifdef CONFIG_MK1OM
 static int ptag = GNI_PTAG_LND_KNC;
 #else
 static int ptag = GNI_PTAG_LND;
 #endif
-CFS_MODULE_PARM(ptag, "i", int, 0444,
-		"ptag for Gemini CDM");
+module_param(ptag, int, 0444);
+MODULE_PARM_DESC(ptag, "ptag for Gemini CDM");
 
 static int pkey = GNI_JOB_CREATE_COOKIE(GNI_PKEY_LND, 0);
-CFS_MODULE_PARM(pkey, "i", int, 0444, "pkey for CDM");
+module_param(pkey, int, 0444);
+MODULE_PARM_DESC(pkey, "pkey for CDM");
 
 static int max_retransmits = 1024;
-CFS_MODULE_PARM(max_retransmits, "i", int, 0444,
-		"max retransmits for FMA");
+module_param(max_retransmits, int, 0444);
+MODULE_PARM_DESC(max_retransmits, "max retransmits for FMA");
 
 static int nwildcard = 4;
-CFS_MODULE_PARM(nwildcard, "i", int, 0444,
-		"# wildcard datagrams to post per net (interface)");
+module_param(nwildcard, int, 0444);
+MODULE_PARM_DESC(nwildcard, "# wildcard datagrams to post per net (interface)");
 
 static int nice = -20;
-CFS_MODULE_PARM(nice, "i", int, 0444,
-		"nice value for kgnilnd threads, default -20");
+module_param(nice, int, 0444);
+MODULE_PARM_DESC(nice, "nice value for kgnilnd threads, default -20");
 
 static int rdmaq_intervals = 4;
-CFS_MODULE_PARM(rdmaq_intervals, "i", int, 0644,
-		"# intervals per second for rdmaq throttling, default 4, 0 to disable");
+module_param(rdmaq_intervals, int, 0644);
+MODULE_PARM_DESC(rdmaq_intervals, "# intervals per second for rdmaq throttling, default 4, 0 to disable");
 
 static int loops = 100;
-CFS_MODULE_PARM(loops, "i", int, 0644,
-		"# of loops before scheduler is friendly, default 100");
+module_param(loops, int, 0644);
+MODULE_PARM_DESC(loops, "# of loops before scheduler is friendly, default 100");
 
 static int hash_size = 503;
-CFS_MODULE_PARM(hash_size, "i", int, 0444,
-		"prime number for peer/conn hash sizing, default 503");
+module_param(hash_size, int, 0444);
+MODULE_PARM_DESC(hash_size, "prime number for peer/conn hash sizing, default 503");
 
 static int peer_health = 0;
-CFS_MODULE_PARM(peer_health, "i", int, 0444,
-		"Disable peer timeout for LNet peer health, default off, > 0 to enable");
+module_param(peer_health, int, 0444);
+MODULE_PARM_DESC(peer_health, "Disable peer timeout for LNet peer health, default off, > 0 to enable");
 
 static int peer_timeout = -1;
-CFS_MODULE_PARM(peer_timeout, "i", int, 0444,
-		"Peer timeout used for peer_health, default based on gnilnd timeout, > -1 to manually set");
+module_param(peer_timeout, int, 0444);
+MODULE_PARM_DESC(peer_timeout, "Peer timeout used for peer_health, default based on gnilnd timeout, > -1 to manually set");
 
 static int vmap_cksum = 0;
-CFS_MODULE_PARM(vmap_cksum, "i", int, 0644,
-		"use vmap for all kiov checksumming, default off");
+module_param(vmap_cksum, int, 0644);
+MODULE_PARM_DESC(vmap_cksum, "use vmap for all kiov checksumming, default off");
 
 static int mbox_per_block = GNILND_FMABLK;
-CFS_MODULE_PARM(mbox_per_block, "i", int, 0644,
-		"mailboxes per block");
+module_param(mbox_per_block, int, 0644);
+MODULE_PARM_DESC(mbox_per_block, "mailboxes per block");
 
 static int nphys_mbox = 0;
-CFS_MODULE_PARM(nphys_mbox, "i", int, 0444,
-		"# mbox to preallocate from physical memory, default 0");
+module_param(nphys_mbox, int, 0444);
+MODULE_PARM_DESC(nphys_mbox, "# mbox to preallocate from physical memory, default 0");
 
 static int mbox_credits = GNILND_MBOX_CREDITS;
-CFS_MODULE_PARM(mbox_credits, "i", int, 0644,
-		"number of credits per mailbox");
+module_param(mbox_credits, int, 0644);
+MODULE_PARM_DESC(mbox_credits, "number of credits per mailbox");
 
 static int sched_threads = GNILND_SCHED_THREADS;
-CFS_MODULE_PARM(sched_threads, "i", int, 0444,
-		"number of threads for moving data");
+module_param(sched_threads, int, 0444);
+MODULE_PARM_DESC(sched_threads, "number of threads for moving data");
 
 static int net_hash_size = 11;
-CFS_MODULE_PARM(net_hash_size, "i", int, 0444,
-		"prime number for net hash sizing, default 11");
+module_param(net_hash_size, int, 0444);
+MODULE_PARM_DESC(net_hash_size, "prime number for net hash sizing, default 11");
 
 static int hardware_timeout = GNILND_HARDWARE_TIMEOUT;
-CFS_MODULE_PARM(hardware_timeout, "i", int, 0444,
-		"maximum time for traffic to get from one node to another");
+module_param(hardware_timeout, int, 0444);
+MODULE_PARM_DESC(hardware_timeout, "maximum time for traffic to get from one node to another");
 
 static int mdd_timeout = GNILND_MDD_TIMEOUT;
-CFS_MODULE_PARM(mdd_timeout, "i", int, 0644,
-		"maximum time (in minutes) for mdd to be held");
+module_param(mdd_timeout, int, 0644);
+MODULE_PARM_DESC(mdd_timeout, "maximum time (in minutes) for mdd to be held");
 
 static int sched_timeout = GNILND_SCHED_TIMEOUT;
-CFS_MODULE_PARM(sched_timeout, "i", int, 0644,
-		"scheduler aliveness in seconds max time");
+module_param(sched_timeout, int, 0644);
+MODULE_PARM_DESC(sched_timeout, "scheduler aliveness in seconds max time");
 
 static int sched_nice = GNILND_SCHED_NICE;
-CFS_MODULE_PARM(sched_nice, "i", int, 0444,
-		"scheduler's nice setting, default compute 0 service -20");
+module_param(sched_nice, int, 0444);
+MODULE_PARM_DESC(sched_nice, "scheduler's nice setting, default compute 0 service -20");
 
 static int reverse_rdma = GNILND_REVERSE_RDMA;
-CFS_MODULE_PARM(reverse_rdma, "i", int, 0644,
-		"Normal 0: Reverse GET: 1 Reverse Put: 2 Reverse Both: 3");
+module_param(reverse_rdma, int, 0644);
+MODULE_PARM_DESC(reverse_rdma, "Normal 0: Reverse GET: 1 Reverse Put: 2 Reverse Both: 3");
 
 static int dgram_timeout = GNILND_DGRAM_TIMEOUT;
-CFS_MODULE_PARM(dgram_timeout, "i", int, 0644,
-		"dgram thread aliveness seconds max time");
+module_param(dgram_timeout, int, 0644);
+MODULE_PARM_DESC(dgram_timeout, "dgram thread aliveness seconds max time");
 
 static int efault_lbug = 0;
-CFS_MODULE_PARM(efault_lbug, "i", int, 0644,
-		"If a compute receives an EFAULT in"
-		" a message should it LBUG. 0 off 1 on");
+module_param(efault_lbug, int, 0644);
+MODULE_PARM_DESC(efault_lbug, "If a compute receives an EFAULT in a message should it LBUG. 0 off 1 on");
 
 static int fast_reconn = GNILND_FAST_RECONNECT;
-CFS_MODULE_PARM(fast_reconn, "i", int, 0644,
-		"fast reconnect on connection timeout");
+module_param(fast_reconn, int, 0644);
+MODULE_PARM_DESC(fast_reconn, "fast reconnect on connection timeout");
 
 static int max_conn_purg = GNILND_PURGATORY_MAX;
-CFS_MODULE_PARM(max_conn_purg, "i", int, 0644,
-		"Max number of connections per peer in purgatory");
+module_param(max_conn_purg, int, 0644);
+MODULE_PARM_DESC(max_conn_purg, "Max number of connections per peer in purgatory");
 
 static int thread_affinity = 0;
-CFS_MODULE_PARM(thread_affinity, "i", int, 0444,
-		"scheduler thread affinity default 0 (disabled)");
+module_param(thread_affinity, int, 0444);
+MODULE_PARM_DESC(thread_affinity, "scheduler thread affinity default 0 (disabled)");
 
 static int thread_safe = GNILND_TS_ENABLE;
-CFS_MODULE_PARM(thread_safe, "i", int, 0444,
-		"Use kgni thread safe API if available");
+module_param(thread_safe, int, 0444);
+MODULE_PARM_DESC(thread_safe, "Use kgni thread safe API if available");
 
 static int reg_fail_timeout = GNILND_REGFAILTO_DISABLE;
-CFS_MODULE_PARM(reg_fail_timeout, "i", int, 0644,
-		"fmablk registration timeout LBUG");
+module_param(reg_fail_timeout, int, 0644);
+MODULE_PARM_DESC(reg_fail_timeout, "fmablk registration timeout LBUG");
 
 kgn_tunables_t kgnilnd_tunables = {
 	.kgn_min_reconnect_interval = &min_reconnect_interval,

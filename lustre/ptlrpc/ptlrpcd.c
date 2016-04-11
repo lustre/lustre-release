@@ -85,8 +85,8 @@ struct ptlrpcd {
  * is used to derive a setting for ptlrpcd_per_cpt_max.
  */
 static int max_ptlrpcds;
-CFS_MODULE_PARM(max_ptlrpcds, "i", int, 0644,
-		"Max ptlrpcd thread count to be started.");
+module_param(max_ptlrpcds, int, 0644);
+MODULE_PARM_DESC(max_ptlrpcds, "Max ptlrpcd thread count to be started.");
 
 /*
  * ptlrpcd_bind_policy is obsolete, but retained to ensure that
@@ -95,16 +95,17 @@ CFS_MODULE_PARM(max_ptlrpcds, "i", int, 0644,
  * is used to derive a setting for ptlrpcd_partner_group_size.
  */
 static int ptlrpcd_bind_policy;
-CFS_MODULE_PARM(ptlrpcd_bind_policy, "i", int, 0644,
-		"Ptlrpcd threads binding mode (obsolete).");
+module_param(ptlrpcd_bind_policy, int, 0644);
+MODULE_PARM_DESC(ptlrpcd_bind_policy,
+		 "Ptlrpcd threads binding mode (obsolete).");
 
 /*
  * ptlrpcd_per_cpt_max: The maximum number of ptlrpcd threads to run
  * in a CPT.
  */
 static int ptlrpcd_per_cpt_max;
-CFS_MODULE_PARM(ptlrpcd_per_cpt_max, "i", int, 0644,
-		"Max ptlrpcd thread count to be started per cpt.");
+MODULE_PARM_DESC(ptlrpcd_per_cpt_max,
+		 "Max ptlrpcd thread count to be started per cpt.");
 
 /*
  * ptlrpcd_partner_group_size: The desired number of threads in each
@@ -113,8 +114,9 @@ CFS_MODULE_PARM(ptlrpcd_per_cpt_max, "i", int, 0644,
  * a CPT partners of each other.
  */
 static int ptlrpcd_partner_group_size;
-CFS_MODULE_PARM(ptlrpcd_partner_group_size, "i", int, 0644,
-		"Number of ptlrpcd threads in a partner group.");
+module_param(ptlrpcd_partner_group_size, int, 0644);
+MODULE_PARM_DESC(ptlrpcd_partner_group_size,
+		 "Number of ptlrpcd threads in a partner group.");
 
 /*
  * ptlrpcd_cpts: A CPT string describing the CPU partitions that
@@ -133,8 +135,9 @@ CFS_MODULE_PARM(ptlrpcd_partner_group_size, "i", int, 0644,
  *   run ptlrpcd threads on CPTS 0, 1, 2, 3, 5, and 7.
  */
 static char *ptlrpcd_cpts;
-CFS_MODULE_PARM(ptlrpcd_cpts, "s", charp, 0644,
-		"CPU partitions ptlrpcd threads should run in");
+module_param(ptlrpcd_cpts, charp, 0644);
+MODULE_PARM_DESC(ptlrpcd_cpts,
+		 "CPU partitions ptlrpcd threads should run in");
 
 /* ptlrpcds_cpt_idx maps cpt numbers to an index in the ptlrpcds array. */
 static int		*ptlrpcds_cpt_idx;

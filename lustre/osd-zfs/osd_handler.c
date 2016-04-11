@@ -1395,9 +1395,8 @@ static void __exit osd_exit(void)
 }
 
 extern unsigned int osd_oi_count;
-CFS_MODULE_PARM(osd_oi_count, "i", int, 0444,
-		"Number of Object Index containers to be created, "
-		"it's only valid for new filesystem.");
+module_param(osd_oi_count, int, 0444);
+MODULE_PARM_DESC(osd_oi_count, "Number of Object Index containers to be created, it's only valid for new filesystem.");
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Object Storage Device ("LUSTRE_OSD_ZFS_NAME")");

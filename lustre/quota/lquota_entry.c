@@ -35,8 +35,8 @@
 #include "lquota_internal.h"
 
 static int hash_lqs_cur_bits = HASH_LQE_CUR_BITS;
-CFS_MODULE_PARM(hash_lqs_cur_bits, "i", int, 0444,
-                "the current bits of lqe hash");
+module_param(hash_lqs_cur_bits, int, 0444);
+MODULE_PARM_DESC(hash_lqs_cur_bits, "the current bits of lqe hash");
 
 static unsigned
 lqe64_hash_hash(struct cfs_hash *hs, const void *key, unsigned mask)

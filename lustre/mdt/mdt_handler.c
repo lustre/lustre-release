@@ -71,8 +71,8 @@
 
 
 static unsigned int max_mod_rpcs_per_client = 8;
-CFS_MODULE_PARM(max_mod_rpcs_per_client, "i", uint, 0644,
-		"maximum number of modify RPCs in flight allowed per client");
+module_param(max_mod_rpcs_per_client, uint, 0644);
+MODULE_PARM_DESC(max_mod_rpcs_per_client, "maximum number of modify RPCs in flight allowed per client");
 
 mdl_mode_t mdt_mdl_lock_modes[] = {
         [LCK_MINMODE] = MDL_MINMODE,

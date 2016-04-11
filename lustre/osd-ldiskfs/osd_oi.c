@@ -63,9 +63,8 @@
 #include "osd_scrub.h"
 
 static unsigned int osd_oi_count = OSD_OI_FID_NR;
-CFS_MODULE_PARM(osd_oi_count, "i", int, 0444,
-                "Number of Object Index containers to be created, "
-                "it's only valid for new filesystem.");
+module_param(osd_oi_count, int, 0444);
+MODULE_PARM_DESC(osd_oi_count, "Number of Object Index containers to be created, it's only valid for new filesystem.");
 
 /** to serialize concurrent OI index initialization */
 static struct mutex oi_init_lock;

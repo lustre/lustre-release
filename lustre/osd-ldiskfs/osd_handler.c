@@ -83,12 +83,12 @@
 #include <lustre_linkea.h>
 
 int ldiskfs_pdo = 1;
-CFS_MODULE_PARM(ldiskfs_pdo, "i", int, 0644,
-                "ldiskfs with parallel directory operations");
+module_param(ldiskfs_pdo, int, 0644);
+MODULE_PARM_DESC(ldiskfs_pdo, "ldiskfs with parallel directory operations");
 
 int ldiskfs_track_declares_assert;
-CFS_MODULE_PARM(ldiskfs_track_declares_assert, "i", int, 0644,
-		"LBUG during tracking of declares");
+module_param(ldiskfs_track_declares_assert, int, 0644);
+MODULE_PARM_DESC(ldiskfs_track_declares_assert, "LBUG during tracking of declares");
 
 /* Slab to allocate dynlocks */
 struct kmem_cache *dynlock_cachep;

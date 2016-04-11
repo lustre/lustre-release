@@ -44,20 +44,20 @@ lnet_t      the_lnet;                           /* THE state of the network */
 EXPORT_SYMBOL(the_lnet);
 
 static char *ip2nets = "";
-CFS_MODULE_PARM(ip2nets, "s", charp, 0444,
-                "LNET network <- IP table");
+module_param(ip2nets, charp, 0444);
+MODULE_PARM_DESC(ip2nets, "LNET network <- IP table");
 
 static char *networks = "";
-CFS_MODULE_PARM(networks, "s", charp, 0444,
-                "local networks");
+module_param(networks, charp, 0444);
+MODULE_PARM_DESC(networks, "local networks");
 
 static char *routes = "";
-CFS_MODULE_PARM(routes, "s", charp, 0444,
-                "routes to non-local networks");
+module_param(routes, charp, 0444);
+MODULE_PARM_DESC(routes, "routes to non-local networks");
 
 static int rnet_htable_size = LNET_REMOTE_NETS_HASH_DEFAULT;
-CFS_MODULE_PARM(rnet_htable_size, "i", int, 0444,
-		"size of remote network hash table");
+module_param(rnet_htable_size, int, 0444);
+MODULE_PARM_DESC(rnet_htable_size, "size of remote network hash table");
 
 static int lnet_ping(lnet_process_id_t id, int timeout_ms,
 		     lnet_process_id_t __user *ids, int n_ids);

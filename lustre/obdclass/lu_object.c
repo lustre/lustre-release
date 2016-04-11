@@ -79,12 +79,12 @@ enum {
 
 
 static unsigned int lu_cache_percent = LU_CACHE_PERCENT_DEFAULT;
-CFS_MODULE_PARM(lu_cache_percent, "i", int, 0644,
-		"Percentage of memory to be used as lu_object cache");
+module_param(lu_cache_percent, int, 0644);
+MODULE_PARM_DESC(lu_cache_percent, "Percentage of memory to be used as lu_object cache");
 
 static long lu_cache_nr = LU_CACHE_NR_DEFAULT;
-CFS_MODULE_PARM(lu_cache_nr, "l", long, 0644,
-		"Maximum number of objects in lu_object cache");
+module_param(lu_cache_nr, long, 0644);
+MODULE_PARM_DESC(lu_cache_nr, "Maximum number of objects in lu_object cache");
 
 static void lu_object_free(const struct lu_env *env, struct lu_object *o);
 static __u32 ls_stats_read(struct lprocfs_stats *stats, int idx);
