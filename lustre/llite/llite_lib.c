@@ -42,6 +42,7 @@
 
 #include <linux/module.h>
 #include <linux/statfs.h>
+#include <linux/time.h>
 #include <linux/types.h>
 #include <linux/version.h>
 #include <linux/mm.h>
@@ -1621,17 +1622,17 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
         /* We mark all of the fields "set" so MDS/OST does not re-set them */
 	if (!(attr->ia_valid & ATTR_CTIME_SET) &&
 	    (attr->ia_valid & ATTR_CTIME)) {
-                attr->ia_ctime = CFS_CURRENT_TIME;
+		attr->ia_ctime = CURRENT_TIME;
                 attr->ia_valid |= ATTR_CTIME_SET;
         }
 	if (!(attr->ia_valid & ATTR_ATIME_SET) &&
 	    (attr->ia_valid & ATTR_ATIME)) {
-                attr->ia_atime = CFS_CURRENT_TIME;
+		attr->ia_atime = CURRENT_TIME;
                 attr->ia_valid |= ATTR_ATIME_SET;
         }
 	if (!(attr->ia_valid & ATTR_MTIME_SET) &&
 	    (attr->ia_valid & ATTR_MTIME)) {
-                attr->ia_mtime = CFS_CURRENT_TIME;
+		attr->ia_mtime = CURRENT_TIME;
                 attr->ia_valid |= ATTR_MTIME_SET;
         }
 

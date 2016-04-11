@@ -45,23 +45,51 @@
 #error This include is only for kernel use.
 #endif
 
-
+#include <linux/bitops.h>
+#include <linux/compiler.h>
+#include <linux/ctype.h>
+#include <linux/errno.h>
+#include <linux/file.h>
+#include <linux/fs.h>
+#include <linux/highmem.h>
+#include <linux/interrupt.h>
+#include <linux/kallsyms.h>
+#include <linux/kernel.h>
+#include <linux/kmod.h>
+#include <linux/kthread.h>
+#include <linux/miscdevice.h>
+#include <linux/mm.h>
+#include <linux/module.h>
+#include <linux/moduleparam.h>
+#include <linux/mutex.h>
+#include <linux/notifier.h>
+#include <linux/random.h>
+#include <linux/rbtree.h>
+#include <linux/rwsem.h>
+#include <linux/scatterlist.h>
+#include <linux/sched.h>
+#include <linux/signal.h>
+#include <linux/slab.h>
+#include <linux/smp.h>
+#include <linux/stat.h>
+#include <linux/string.h>
+#include <linux/time.h>
+#include <linux/timer.h>
+#include <linux/types.h>
+#include <linux/unistd.h>
+#include <linux/vmalloc.h>
+#include <net/sock.h>
+#include <linux/atomic.h>
+#include <asm/div64.h>
+#include <linux/timex.h>
+#include <linux/uaccess.h>
 #include <stdarg.h>
+
 #include <libcfs/linux/linux-cpu.h>
 #include <libcfs/linux/linux-time.h>
 #include <libcfs/linux/linux-mem.h>
+#include <libcfs/linux/linux-misc.h>
 #include <libcfs/linux/linux-fs.h>
-#include <libcfs/linux/kp30.h>
-
-#ifdef HAVE_ASM_TYPES_H
-#include <asm/types.h>
-#endif
-#include <linux/types.h>
-#include <asm/timex.h>
-#include <linux/sched.h> /* THREAD_SIZE */
-#include <linux/rbtree.h>
-#include <linux/bitops.h>
-#include <linux/capability.h>
 
 #if !defined(__x86_64__)
 # ifdef  __ia64__
@@ -106,18 +134,6 @@ int lprocfs_call_handler(void *data, int write, loff_t *ppos,
 			 void __user *buffer, size_t *lenp,
 			 int (*handler)(void *data, int write,
 			 loff_t pos, void __user *buffer, int len));
-
-#ifndef HAVE_KSTRTOUL
-static inline int kstrtoul(const char *s, unsigned int base, unsigned long *res)
-{
-	char *end = (char *)s;
-
-	*res = simple_strtoul(s, &end, base);
-	if (end - s == 0)
-		return -EINVAL;
-	return 0;
-}
-#endif /* !HAVE_KSTRTOUL */
 
 #ifndef WITH_WATCHDOG
 #define WITH_WATCHDOG

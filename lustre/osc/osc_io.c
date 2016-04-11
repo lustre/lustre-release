@@ -247,7 +247,7 @@ static void osc_page_touch_at(const struct lu_env *env,
                kms > loi->loi_kms ? "" : "not ", loi->loi_kms, kms,
                loi->loi_lvb.lvb_size);
 
-	attr->cat_mtime = attr->cat_ctime = LTIME_S(CFS_CURRENT_TIME);
+	attr->cat_mtime = attr->cat_ctime = LTIME_S(CURRENT_TIME);
 	valid = CAT_MTIME | CAT_CTIME;
 	if (kms > loi->loi_kms) {
 		attr->cat_kms = kms;
@@ -725,7 +725,7 @@ static int osc_io_read_start(const struct lu_env *env,
 
 	if (!slice->cis_io->ci_noatime) {
 		cl_object_attr_lock(obj);
-		attr->cat_atime = LTIME_S(CFS_CURRENT_TIME);
+		attr->cat_atime = LTIME_S(CURRENT_TIME);
 		rc = cl_object_attr_update(env, obj, attr, CAT_ATIME);
 		cl_object_attr_unlock(obj);
 	}
@@ -743,7 +743,7 @@ static int osc_io_write_start(const struct lu_env *env,
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_DELAY_SETTIME, 1);
 	cl_object_attr_lock(obj);
-	attr->cat_mtime = attr->cat_ctime = LTIME_S(CFS_CURRENT_TIME);
+	attr->cat_mtime = attr->cat_ctime = LTIME_S(CURRENT_TIME);
 	rc = cl_object_attr_update(env, obj, attr, CAT_MTIME | CAT_CTIME);
 	cl_object_attr_unlock(obj);
 

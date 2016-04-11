@@ -434,10 +434,6 @@ do {                                                            \
 /* logical equivalence */
 #define equi(a, b) (!!(a) == !!(b))
 
-#ifndef CFS_CURRENT_TIME
-# define CFS_CURRENT_TIME time(0)
-#endif
-
 /* what used to be in portals_lib.h */
 #ifndef MIN
 # define MIN(a,b) (((a)<(b)) ? (a): (b))
