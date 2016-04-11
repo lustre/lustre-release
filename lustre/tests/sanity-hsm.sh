@@ -1938,8 +1938,7 @@ test_24a() {
 	[ $ctime0 -eq $ctime1 ] ||
 		error "release changed ctime from $ctime0 to $ctime1"
 
-	# Restore should not change atime or mtime and should not
-	# decrease ctime.
+	# Restore should not change any timestamps.
 	$LFS hsm_restore $file
 	wait_request_state $fid RESTORE SUCCEED
 

@@ -1180,13 +1180,14 @@ int llapi_hsm_action_end(struct hsm_copyaction_private **phcp,
 			.lfu_ctime_nsec = hcp->stat.st_ctim.tv_nsec,
 		};
 
-		/* Set {a,m,c}time of volatile file to that of original. */
-		if (ioctl(hcp->data_fd, LL_IOC_FUTIMES_3, &lfu) < 0) {
+		rc = fsync(hcp->data_fd);
+		if (rc < 0) {
 			errval = -errno;
 			goto end;
 		}
 
-		rc = fsync(hcp->data_fd);
+		/* Set {a,m,c}time of volatile file to that of original. */
+		rc = ioctl(hcp->data_fd, LL_IOC_FUTIMES_3, &lfu);
 		if (rc < 0) {
 			errval = -errno;
 			goto end;
