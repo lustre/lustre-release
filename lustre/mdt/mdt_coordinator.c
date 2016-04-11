@@ -130,17 +130,19 @@ void mdt_hsm_dump_hal(int level, const char *prefix,
  * data passed to llog_cat_process() callback
  * to scan requests and take actions
  */
+struct hsm_scan_request {
+	int			 hal_sz;
+	int			 hal_used_sz;
+	struct hsm_action_list	*hal;
+};
+
 struct hsm_scan_data {
 	struct mdt_thread_info		*mti;
 	char				 fs_name[MTI_NAME_MAXLEN+1];
 	/* request to be send to agents */
 	int				 max_requests;	/** vector size */
 	int				 request_cnt;	/** used count */
-	struct {
-		int			 hal_sz;
-		int			 hal_used_sz;
-		struct hsm_action_list	*hal;
-	} *request;
+	struct hsm_scan_request		*request;
 };
 
 /**
@@ -176,6 +178,7 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 	switch (larr->arr_status) {
 	case ARS_WAITING: {
 		int i, empty_slot, found;
+		struct hsm_scan_request *request;
 
 		/* Are agents full? */
 		if (atomic_read(&cdt->cdt_request_count) >=
@@ -209,18 +212,20 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 			struct hsm_action_list *hal;
 
 			/* request is not already known */
+			request = &hsd->request[empty_slot];
+
 			/* allocates hai vector size just needs to be large
 			 * enough */
-			hsd->request[empty_slot].hal_sz =
-				     sizeof(*hsd->request[empty_slot].hal) +
-				     cfs_size_round(MTI_NAME_MAXLEN+1) +
-				     2 * cfs_size_round(larr->arr_hai.hai_len);
-			OBD_ALLOC(hal, hsd->request[empty_slot].hal_sz);
+			request->hal_sz =
+				sizeof(*request->hal) +
+				cfs_size_round(MTI_NAME_MAXLEN+1) +
+				2 * cfs_size_round(larr->arr_hai.hai_len);
+			OBD_ALLOC(hal, request->hal_sz);
 			if (!hal) {
 				CERROR("%s: Cannot allocate memory (%d o)"
 				       "for compound "LPX64"\n",
 				       mdt_obd_name(mdt),
-				       hsd->request[i].hal_sz,
+				       request->hal_sz,
 				       larr->arr_compound_id);
 				RETURN(-ENOMEM);
 			}
@@ -231,13 +236,15 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 			hal->hal_archive_id = larr->arr_archive_id;
 			hal->hal_flags = larr->arr_flags;
 			hal->hal_count = 0;
-			hsd->request[empty_slot].hal_used_sz = hal_size(hal);
-			hsd->request[empty_slot].hal = hal;
+			request->hal_used_sz = hal_size(hal);
+			request->hal = hal;
 			hsd->request_cnt++;
 			found = empty_slot;
 			hai = hai_first(hal);
 		} else {
 			/* request is known */
+			request = &hsd->request[found];
+
 			/* we check if record archive num is the same as the
 			 * known request, if not we will serve it in multiple
 			 * time because we do not know if the agent can serve
@@ -246,17 +253,17 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 			 * where the files are not archived in the same backend
 			 */
 			if (larr->arr_archive_id !=
-			    hsd->request[found].hal->hal_archive_id)
+			    request->hal->hal_archive_id)
 				RETURN(0);
 
-			if (hsd->request[found].hal_sz <
-			    hsd->request[found].hal_used_sz +
-			     cfs_size_round(larr->arr_hai.hai_len)) {
+			if (request->hal_sz <
+			    request->hal_used_sz +
+			    cfs_size_round(larr->arr_hai.hai_len)) {
 				/* Not enough room, need an extension */
 				void *hal_buffer;
 				int sz;
 
-				sz = 2 * hsd->request[found].hal_sz;
+				sz = 2 * request->hal_sz;
 				OBD_ALLOC(hal_buffer, sz);
 				if (!hal_buffer) {
 					CERROR("%s: Cannot allocate memory "
@@ -265,25 +272,23 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 					       larr->arr_compound_id);
 					RETURN(-ENOMEM);
 				}
-				memcpy(hal_buffer, hsd->request[found].hal,
-				       hsd->request[found].hal_used_sz);
-				OBD_FREE(hsd->request[found].hal,
-					 hsd->request[found].hal_sz);
-				hsd->request[found].hal = hal_buffer;
-				hsd->request[found].hal_sz = sz;
+				memcpy(hal_buffer, request->hal,
+				       request->hal_used_sz);
+				OBD_FREE(request->hal,
+					 request->hal_sz);
+				request->hal = hal_buffer;
+				request->hal_sz = sz;
 			}
-			hai = hai_first(hsd->request[found].hal);
-			for (i = 0; i < hsd->request[found].hal->hal_count;
-			     i++)
+			hai = hai_first(request->hal);
+			for (i = 0; i < request->hal->hal_count; i++)
 				hai = hai_next(hai);
 		}
 		memcpy(hai, &larr->arr_hai, larr->arr_hai.hai_len);
 		hai->hai_cookie = larr->arr_hai.hai_cookie;
 		hai->hai_gid = larr->arr_hai.hai_gid;
 
-		hsd->request[found].hal_used_sz +=
-						   cfs_size_round(hai->hai_len);
-		hsd->request[found].hal->hal_count++;
+		request->hal_used_sz += cfs_size_round(hai->hai_len);
+		request->hal->hal_count++;
 		break;
 	}
 	case ARS_STARTED: {
@@ -513,7 +518,8 @@ static int mdt_coordinator(void *data)
 
 		/* here hsd contains a list of requests to be started */
 		for (i = 0; i < hsd.max_requests; i++) {
-			struct hsm_action_list	*hal = hsd.request[i].hal;
+			struct hsm_scan_request *request = &hsd.request[i];
+			struct hsm_action_list	*hal = request->hal;
 			struct hsm_action_item	*hai;
 			__u64			*cookies;
 			int			 sz, j;
@@ -527,7 +533,6 @@ static int mdt_coordinator(void *data)
 			if (hal == NULL)
 				continue;
 
-			/* found a request, we start it */
 			rc = mdt_hsm_agent_send(mti, hal, 0);
 			/* if failure, we suppose it is temporary
 			 * if the copy tool failed to do the request
@@ -568,11 +573,12 @@ static int mdt_coordinator(void *data)
 clean_cb_alloc:
 		/* free hal allocated by callback */
 		for (i = 0; i < hsd.max_requests; i++) {
-			if (hsd.request[i].hal) {
-				OBD_FREE(hsd.request[i].hal,
-					 hsd.request[i].hal_sz);
-				hsd.request[i].hal_sz = 0;
-				hsd.request[i].hal = NULL;
+			struct hsm_scan_request *request = &hsd.request[i];
+
+			if (request->hal) {
+				OBD_FREE(request->hal, request->hal_sz);
+				request->hal_sz = 0;
+				request->hal = NULL;
 				hsd.request_cnt--;
 			}
 		}
