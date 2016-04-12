@@ -817,7 +817,7 @@ facet_type() {
 facet_number() {
 	local facet=$1
 
-	if [ $facet == mgs ]; then
+	if [ $facet == mgs ] || [ $facet == client ]; then
 		return 1
 	fi
 
