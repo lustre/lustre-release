@@ -1908,21 +1908,6 @@ struct kuc_hdr * kuc_ptr(void *p)
 }
 EXPORT_SYMBOL(kuc_ptr);
 
-/* Test if payload is part of kuc message
- * @param p Pointer to payload area
- * @returns boolean
- */
-int kuc_ispayload(void *p)
-{
-        struct kuc_hdr *kh = ((struct kuc_hdr *)p) - 1;
-
-        if (kh->kuc_magic == KUC_MAGIC)
-                return 1;
-        else
-                return 0;
-}
-EXPORT_SYMBOL(kuc_ispayload);
-
 /* Alloc space for a message, and fill in header
  * @return Pointer to payload area
  */

@@ -110,7 +110,6 @@ void obd_zombie_barrier(void);
 void obd_exports_barrier(struct obd_device *obd);
 int kuc_len(int payload_len);
 struct kuc_hdr * kuc_ptr(void *p);
-int kuc_ispayload(void *p);
 void *kuc_alloc(int payload_len, int transport, int type);
 void kuc_free(void *p, int payload_len);
 int obd_get_request_slot(struct client_obd *cli);

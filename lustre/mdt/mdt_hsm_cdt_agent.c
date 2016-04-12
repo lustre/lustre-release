@@ -344,18 +344,10 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 	       hal->hal_archive_id);
 
 	len = hal_size(hal);
-	if (kuc_ispayload(hal)) {
-		/* hal is already a kuc payload
-		 * we do not need to alloc a new one
-		 * this avoid a alloc/memcpy/free
-		 */
-		buf = hal;
-	} else {
-		buf = kuc_alloc(len, KUC_TRANSPORT_HSM, HMT_ACTION_LIST);
-		if (IS_ERR(buf))
-			RETURN(PTR_ERR(buf));
-		memcpy(buf, hal, len);
-	}
+	buf = kuc_alloc(len, KUC_TRANSPORT_HSM, HMT_ACTION_LIST);
+	if (IS_ERR(buf))
+		RETURN(PTR_ERR(buf));
+	memcpy(buf, hal, len);
 
 	/* Check if request is still valid (cf file hsm flags) */
 	fail_request = false;
@@ -487,8 +479,7 @@ out:
 	}
 
 out_buf:
-	if (buf != hal)
-		kuc_free(buf, len);
+	kuc_free(buf, len);
 
 	RETURN(rc);
 }

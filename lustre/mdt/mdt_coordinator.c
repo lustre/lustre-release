@@ -514,7 +514,7 @@ static int mdt_coordinator(void *data)
 
 		/* here hsd contains a list of requests to be started */
 		for (i = 0; i < hsd.max_requests; i++) {
-			struct hsm_action_list	*hal;
+			struct hsm_action_list	*hal = hsd.request[i].hal;
 			struct hsm_action_item	*hai;
 			__u64			*cookies;
 			int			 sz, j;
@@ -525,26 +525,10 @@ static int mdt_coordinator(void *data)
 			    cdt->cdt_max_requests)
 				break;
 
-			if (hsd.request[i].hal == NULL)
+			if (hal == NULL)
 				continue;
 
 			/* found a request, we start it */
-			/* kuc payload allocation so we avoid an additionnal
-			 * allocation in mdt_hsm_agent_send()
-			 */
-			hal = kuc_alloc(hsd.request[i].hal_used_sz,
-					KUC_TRANSPORT_HSM, HMT_ACTION_LIST);
-			if (IS_ERR(hal)) {
-				CERROR("%s: Cannot allocate memory (%d o) "
-				       "for compound "LPX64"\n",
-				       mdt_obd_name(mdt),
-				       hsd.request[i].hal_used_sz,
-				       hsd.request[i].hal->hal_compound_id);
-				continue;
-			}
-			memcpy(hal, hsd.request[i].hal,
-			       hsd.request[i].hal_used_sz);
-
 			rc = mdt_hsm_agent_send(mti, hal, 0);
 			/* if failure, we suppose it is temporary
 			 * if the copy tool failed to do the request
@@ -555,35 +539,33 @@ static int mdt_coordinator(void *data)
 			/* set up cookie vector to set records status
 			 * after copy tools start or failed
 			 */
-			sz = hsd.request[i].hal->hal_count * sizeof(__u64);
+			sz = hal->hal_count * sizeof(__u64);
 			OBD_ALLOC(cookies, sz);
 			if (cookies == NULL) {
 				CERROR("%s: Cannot allocate memory (%d o) "
 				       "for cookies vector "LPX64"\n",
 				       mdt_obd_name(mdt), sz,
-				       hsd.request[i].hal->hal_compound_id);
+				       hal->hal_compound_id);
 				kuc_free(hal, hsd.request[i].hal_used_sz);
 				continue;
 			}
 			hai = hai_first(hal);
-			for (j = 0; j < hsd.request[i].hal->hal_count; j++) {
+			for (j = 0; j < hal->hal_count; j++) {
 				cookies[j] = hai->hai_cookie;
 				hai = hai_next(hai);
 			}
 
 			rc = mdt_agent_record_update(mti->mti_env, mdt, cookies,
-						hsd.request[i].hal->hal_count,
-						status);
+						     hal->hal_count, status);
 			if (rc)
 				CERROR("%s: mdt_agent_record_update() failed, "
 				       "rc=%d, cannot update status to %s "
 				       "for %d cookies\n",
 				       mdt_obd_name(mdt), rc,
 				       agent_req_status2name(status),
-				       hsd.request[i].hal->hal_count);
+				       hal->hal_count);
 
 			OBD_FREE(cookies, sz);
-			kuc_free(hal, hsd.request[i].hal_used_sz);
 		}
 clean_cb_alloc:
 		/* free hal allocated by callback */
