@@ -1415,8 +1415,11 @@ full:
 		       *count < max) {
 			if (param.offset +
 				ldiskfs_itable_unused_count(param.sb, desc) >
-			    LDISKFS_INODES_PER_GROUP(param.sb))
+			    LDISKFS_INODES_PER_GROUP(param.sb)) {
+				*pos = 1 + (param.bg + 1) *
+					LDISKFS_INODES_PER_GROUP(param.sb);
 				goto next_group;
+			}
 
 			rc = next(info, dev, &param, &oic, noslot);
 			switch (rc) {
