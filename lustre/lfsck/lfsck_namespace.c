@@ -2871,7 +2871,6 @@ static int lfsck_namespace_repair_nlink(const struct lu_env *env,
 	ENTRY;
 
 	LASSERT(!dt_object_remote(obj));
-	LASSERT(S_ISREG(lfsck_object_type(obj)));
 
 	rc = lfsck_ibits_lock(env, lfsck, obj, &lh,
 			      MDS_INODELOCK_UPDATE, LCK_PW);
@@ -3546,10 +3545,23 @@ out:
 			return rc;
 
 		if (la->la_nlink != 0 && la->la_nlink != count) {
-			rc = lfsck_namespace_repair_nlink(env, com, child, la);
-			if (rc > 0) {
-				ns->ln_objs_nlink_repaired++;
-				rc = 0;
+			if (unlikely(!S_ISREG(lfsck_object_type(child)) &&
+				     !S_ISLNK(lfsck_object_type(child)))) {
+				CDEBUG(D_LFSCK, "%s: namespace LFSCK finds "
+				       "the object "DFID"'s nlink count %d "
+				       "does not match linkEA count %d, "
+				       "type %o, skip it.\n",
+				       lfsck_lfsck2name(lfsck),
+				       PFID(lfsck_dto2fid(child)),
+				       la->la_nlink, count,
+				       lfsck_object_type(child));
+			} else {
+				rc = lfsck_namespace_repair_nlink(env, com,
+								  child, la);
+				if (rc > 0) {
+					ns->ln_objs_nlink_repaired++;
+					rc = 0;
+				}
 			}
 		}
 	}
