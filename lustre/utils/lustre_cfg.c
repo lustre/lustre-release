@@ -1457,15 +1457,6 @@ int jt_lcfg_setparam(int argc, char **argv)
 			continue;
 		}
 
-		/* A value containing '=' is indicative of user error, e.g.:
-		 *     lctl set_param param1 param2=value2
-		 *     lctl set_param param1=param2=value2
-		 */
-		if (strchr(value, '=') != NULL)
-			fprintf(stderr,
-				"warning: %s: value '%s' contains '='\n",
-				jt_cmdname(argv[0]), value);
-
 		rc2 = param_display(&popt, path, value, SET_PARAM);
 		if (rc == 0)
 			rc = rc2;

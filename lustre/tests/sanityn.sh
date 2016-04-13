@@ -3053,7 +3053,7 @@ tbf_rule_operate()
 	shift 1
 
 	do_facet $facet lctl set_param \
-		ost.OSS.ost_io.nrs_tbf_rule="$@"
+		ost.OSS.ost_io.nrs_tbf_rule="$*"
 	[ $? -ne 0 ] &&
 		error "failed to operate on TBF rules"
 }
@@ -3067,19 +3067,26 @@ test_77e() {
 			error "failed to set TBF policy"
 	done
 
+	local idis
+	local rateis
+	if [ $(lustre_version_code ost1) -ge $(version_code 2.8.54) ]; then
+		idis="nid="
+		rateis="rate="
+	fi
+
 	# Only operate rules on ost1 since OSTs might run on the same OSS
 	# Add some rules
-	tbf_rule_operate ost1 "start\ localhost\ {0@lo}\ 1000"
+	tbf_rule_operate ost1 "start\ localhost\ ${idis}{0@lo}\ ${rateis}1000"
 	local address=$(comma_list "$(host_nids_address $CLIENTS $NETTYPE)")
 	local client_nids=$(nids_list $address "\\")
-	tbf_rule_operate ost1 "start\ clients\ {$client_nids}\ 100"
-	tbf_rule_operate ost1 "start\ others\ {*.*.*.*@$NETTYPE}\ 50"
+	tbf_rule_operate ost1 "start\ clients\ ${idis}{$client_nids}\ ${rateis}100"
+	tbf_rule_operate ost1 "start\ others\ ${idis}{*.*.*.*@$NETTYPE}\ ${rateis}50"
 	nrs_write_read
 
 	# Change the rules
-	tbf_rule_operate ost1 "change\ localhost\ 1001"
-	tbf_rule_operate ost1 "change\ clients\ 101"
-	tbf_rule_operate ost1 "change\ others\ 51"
+	tbf_rule_operate ost1 "change\ localhost\ ${rateis}1001"
+	tbf_rule_operate ost1 "change\ clients\ ${rateis}101"
+	tbf_rule_operate ost1 "change\ others\ ${rateis}51"
 	nrs_write_read
 
 	# Stop the rules
@@ -3118,17 +3125,24 @@ test_77f() {
 			error "failed to set TBF policy"
 	done
 
+	local idis
+	local rateis
+	if [ $(lustre_version_code ost1) -ge $(version_code 2.8.54) ]; then
+		idis="jobid="
+		rateis="rate="
+	fi
+
 	# Only operate rules on ost1 since OSTs might run on the same OSS
 	# Add some rules
-	tbf_rule_operate ost1 "start\ runas\ {iozone.$RUNAS_ID\ dd.$RUNAS_ID\ tiotest.$RUNAS_ID}\ 1000"
-	tbf_rule_operate ost1 "start\ iozone_runas\ {iozone.$RUNAS_ID}\ 100"
-	tbf_rule_operate ost1 "start\ dd_runas\ {dd.$RUNAS_ID}\ 50"
+	tbf_rule_operate ost1 "start\ runas\ ${idis}{iozone.$RUNAS_ID\ dd.$RUNAS_ID\ tiotest.$RUNAS_ID}\ ${rateis}1000"
+	tbf_rule_operate ost1 "start\ iozone_runas\ ${idis}{iozone.$RUNAS_ID}\ ${rateis}100"
+	tbf_rule_operate ost1 "start\ dd_runas\ ${idis}{dd.$RUNAS_ID}\ ${rateis}50"
 	nrs_write_read "$RUNAS"
 
 	# Change the rules
-	tbf_rule_operate ost1 "change\ runas\ 1001"
-	tbf_rule_operate ost1 "change\ iozone_runas\ 101"
-	tbf_rule_operate ost1 "change\ dd_runas\ 51"
+	tbf_rule_operate ost1 "change\ runas\ ${rateis}1001"
+	tbf_rule_operate ost1 "change\ iozone_runas\ ${rateis}101"
+	tbf_rule_operate ost1 "change\ dd_runas\ ${rateis}51"
 	nrs_write_read "$RUNAS"
 
 	# Stop the rules
@@ -3174,9 +3188,16 @@ test_77g() {
 			error "failed to set TBF policy"
 	done
 
+	local idis
+	local rateis
+	if [ $(lustre_version_code ost1) -ge $(version_code 2.8.54) ]; then
+		idis="jobid="
+		rateis="rate="
+	fi
+
 	# Add a rule that only valid for Jobid TBF. If direct change between
 	# TBF types is not supported, this operation will fail.
-	tbf_rule_operate ost1 "start\ dd_runas\ {dd.$RUNAS_ID}\ 50"
+	tbf_rule_operate ost1 "start\ dd_runas\ ${idis}{dd.$RUNAS_ID}\ ${rateis}50"
 
 	# Cleanup the TBF policy
 	for i in $(seq 1 $OSTCOUNT)

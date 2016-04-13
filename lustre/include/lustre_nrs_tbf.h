@@ -150,6 +150,7 @@ struct nrs_tbf_ops {
 #define NRS_TBF_TYPE_JOBID	"jobid"
 #define NRS_TBF_TYPE_NID	"nid"
 #define NRS_TBF_TYPE_MAX_LEN	20
+#define NRS_TBF_FLAG_INVALID	0
 #define NRS_TBF_FLAG_JOBID	0x0000001
 #define NRS_TBF_FLAG_NID	0x0000002
 
@@ -226,19 +227,26 @@ struct nrs_tbf_head {
 enum nrs_tbf_cmd_type {
 	NRS_CTL_TBF_START_RULE = 0,
 	NRS_CTL_TBF_STOP_RULE,
-	NRS_CTL_TBF_CHANGE_RATE,
+	NRS_CTL_TBF_CHANGE_RULE,
 };
 
 struct nrs_tbf_cmd {
-	enum nrs_tbf_cmd_type	 tc_cmd;
-	char			*tc_name;
-	__u64			 tc_rpc_rate;
-	struct list_head	 tc_nids;
-	char			*tc_nids_str;
-	struct list_head	 tc_jobids;
-	char			*tc_jobids_str;
-	__u32			 tc_valid_types;
-	__u32			 tc_rule_flags;
+	enum nrs_tbf_cmd_type			 tc_cmd;
+	char					*tc_name;
+	union {
+		struct nrs_tbf_cmd_start {
+			__u64			 ts_rpc_rate;
+			struct list_head	 ts_nids;
+			char			*ts_nids_str;
+			struct list_head	 ts_jobids;
+			char			*ts_jobids_str;
+			__u32			 ts_valid_type;
+			__u32			 ts_rule_flags;
+		} tc_start;
+		struct nrs_tbf_cmd_change {
+			__u64			 tc_rpc_rate;
+		} tc_change;
+	} u;
 };
 
 struct nrs_tbf_req {
@@ -264,6 +272,10 @@ enum nrs_ctl_tbf {
 	 * Write the the data of a TBF policy.
 	 */
 	NRS_CTL_TBF_WR_RULE,
+	/**
+	 * Read the TBF policy type preset by proc entry "nrs_policies".
+	 */
+	NRS_CTL_TBF_RD_TYPE_FLAG,
 };
 
 /** @} tbf */
