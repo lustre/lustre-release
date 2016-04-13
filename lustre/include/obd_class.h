@@ -1665,7 +1665,8 @@ struct lwp_register_item {
 	struct obd_export **lri_exp;
 	register_lwp_cb	    lri_cb_func;
 	void		   *lri_cb_data;
-	struct list_head	    lri_list;
+	struct list_head    lri_list;
+	atomic_t	    lri_ref;
 	char		    lri_name[MTI_NAME_MAXLEN];
 };
 
