@@ -54,16 +54,25 @@ fi
 [ -z "$MODPROBECONF" -a -f /etc/modprobe.conf ] &&
     MODPROBECONF=/etc/modprobe.conf
 
+sanitize_parameters() {
+	for i in DIR DIR1 DIR2 MOUNT MOUNT1 MOUNT2
+	do
+		local path=${!i}
+		if [ -d "$path" ]; then
+			eval export $i=$(echo $path | sed -E 's/\/+$//g')
+		fi
+	done
+}
 assert_DIR () {
-    local failed=""
-    [[ $DIR/ = $MOUNT/* ]] || \
-        { failed=1 && echo "DIR=$DIR not in $MOUNT. Aborting."; }
-    [[ $DIR1/ = $MOUNT1/* ]] || \
-        { failed=1 && echo "DIR1=$DIR1 not in $MOUNT1. Aborting."; }
-    [[ $DIR2/ = $MOUNT2/* ]] || \
-        { failed=1 && echo "DIR2=$DIR2 not in $MOUNT2. Aborting"; }
+	local failed=""
+	[[ $DIR/ = $MOUNT/* ]] ||
+		{ failed=1 && echo "DIR=$DIR not in $MOUNT. Aborting."; }
+	[[ $DIR1/ = $MOUNT1/* ]] ||
+		{ failed=1 && echo "DIR1=$DIR1 not in $MOUNT1. Aborting."; }
+	[[ $DIR2/ = $MOUNT2/* ]] ||
+		{ failed=1 && echo "DIR2=$DIR2 not in $MOUNT2. Aborting"; }
 
-    [ -n "$failed" ] && exit 99 || true
+	[ -n "$failed" ] && exit 99 || true
 }
 
 usage() {
@@ -3975,12 +3984,13 @@ is_empty_fs() {
 }
 
 check_and_setup_lustre() {
-    nfs_client_mode && return
+	sanitize_parameters
+	nfs_client_mode && return
 	cifs_client_mode && return
 
-    local MOUNTED=$(mounted_lustre_filesystems)
+	local MOUNTED=$(mounted_lustre_filesystems)
 
-    local do_check=true
+	local do_check=true
     # 1.
     # both MOUNT and MOUNT2 are not mounted
     if ! is_mounted $MOUNT && ! is_mounted $MOUNT2; then
