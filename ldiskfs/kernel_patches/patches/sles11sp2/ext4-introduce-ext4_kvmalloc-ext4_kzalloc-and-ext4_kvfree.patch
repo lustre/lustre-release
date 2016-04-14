@@ -42,7 +42,7 @@ index cfe9f39..658f586 100644
 +{
 +	void *ret;
 +
-+	ret = kmalloc(size, flags);
++	ret = kmalloc(size, flags | __GFP_NOWARN);
 +	if (!ret)
 +		ret = __vmalloc(size, flags, PAGE_KERNEL);
 +	return ret;
@@ -52,7 +52,7 @@ index cfe9f39..658f586 100644
 +{
 +	void *ret;
 +
-+	ret = kmalloc(size, flags);
++	ret = kzalloc(size, flags | __GFP_NOWARN);
 +	if (!ret)
 +		ret = __vmalloc(size, flags | __GFP_ZERO, PAGE_KERNEL);
 +	return ret;
