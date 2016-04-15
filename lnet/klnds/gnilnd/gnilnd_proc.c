@@ -1265,12 +1265,11 @@ kgnilnd_peer_seq_show(struct seq_file *s, void *iter)
 
 	read_unlock(&kgnilnd_data.kgn_peer_conn_lock);
 
-	seq_printf(s, "%p->%s [%d] %s NIC 0x%x q %d conn %c purg %d "
-		"last %d@%dms dgram %d@%dms "
-		"reconn %dms to %lus \n",
+	seq_printf(s, "%p->%s [%d] %s NIC 0x%x q %d conn %c purg %d last %d@%dms dgram %d@%dms reconn %dms to %lus \n",
 		peer, libcfs_nid2str(peer->gnp_nid),
 		atomic_read(&peer->gnp_refcount),
-		(peer->gnp_down == GNILND_RCA_NODE_DOWN) ? "down" : "up",
+		(peer->gnp_state == GNILND_PEER_DOWN) ? "down" :
+		peer->gnp_state == GNILND_PEER_TIMED_OUT ? "timedout" : "up",
 		peer->gnp_host_id,
 		kgnilnd_count_list(&peer->gnp_tx_queue),
 		conn_str,

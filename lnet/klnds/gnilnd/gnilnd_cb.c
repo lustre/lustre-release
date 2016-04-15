@@ -1805,7 +1805,7 @@ kgnilnd_launch_tx(kgn_tx_t *tx, kgn_net_t *net, lnet_process_id_t *target)
 		}
 
 		/* don't create a connection if the peer is marked down */
-		if (peer->gnp_down == GNILND_RCA_NODE_DOWN) {
+		if (peer->gnp_state != GNILND_PEER_UP) {
 			read_unlock(&kgnilnd_data.kgn_peer_conn_lock);
 			rc = -ENETRESET;
 			GOTO(no_peer, rc);
@@ -1844,7 +1844,7 @@ kgnilnd_launch_tx(kgn_tx_t *tx, kgn_net_t *net, lnet_process_id_t *target)
 	kgnilnd_add_peer_locked(target->nid, new_peer, &peer);
 
 	/* don't create a connection if the peer is not up */
-	if (peer->gnp_down != GNILND_RCA_NODE_UP) {
+	if (peer->gnp_state != GNILND_PEER_UP) {
 		write_unlock(&kgnilnd_data.kgn_peer_conn_lock);
 		rc = -ENETRESET;
 		GOTO(no_peer, rc);
@@ -2749,7 +2749,7 @@ kgnilnd_check_conn_timeouts_locked(kgn_conn_t *conn)
 	if (time_after_eq(now, newest_last_rx + timeout)) {
 		uint32_t level = D_CONSOLE|D_NETERROR;
 
-		if (conn->gnc_peer->gnp_down == GNILND_RCA_NODE_DOWN) {
+		if (conn->gnc_peer->gnp_state == GNILND_PEER_DOWN) {
 			level = D_NET;
 		}
 			GNIDBG_CONN(level, conn,
@@ -2825,6 +2825,14 @@ kgnilnd_check_peer_timeouts_locked(kgn_peer_t *peer, struct list_head *todie,
 				conn->gnc_close_recvd = GNILND_CLOSE_INJECT1;
 				conn->gnc_peer_error = -ETIMEDOUT;
 			}
+
+			if (*kgnilnd_tunables.kgn_to_reconn_disable &&
+			    rc == -ETIMEDOUT) {
+				peer->gnp_state = GNILND_PEER_TIMED_OUT;
+				CDEBUG(D_WARNING, "%s conn timed out, will "
+				       "reconnect upon request from peer\n",
+				       libcfs_nid2str(conn->gnc_peer->gnp_nid));
+			}
 			/* Once we mark closed, any of the scheduler threads could
 			 * get it and move through before we hit the fail loc code */
 			kgnilnd_close_conn_locked(conn, rc);
@@ -2868,7 +2876,7 @@ kgnilnd_check_peer_timeouts_locked(kgn_peer_t *peer, struct list_head *todie,
 	/* Don't reconnect if we are still trying to clear out old conns.
 	 * This prevents us sending traffic on the new mbox before ensuring we are done
 	 * with the old one */
-	reconnect = (peer->gnp_down == GNILND_RCA_NODE_UP) &&
+	reconnect = (peer->gnp_state == GNILND_PEER_UP) &&
 		    (atomic_read(&peer->gnp_dirty_eps) == 0);
 
 	/* fast reconnect after a timeout */

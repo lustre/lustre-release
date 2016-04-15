@@ -651,7 +651,7 @@ subscribe_retry:
 		}
 
 		if (krca_get_message(&rca_krt, &event) == 0) {
-			int node_down = GNILND_RCA_NODE_UNKNOWN;
+			int node_down = GNILND_PEER_UNKNOWN;
 			rs_state_t state;
 			LIST_HEAD(zombies);
 
@@ -675,7 +675,7 @@ subscribe_retry:
 			switch (event.ev_id) {
 			case ec_node_available:
 				CDEBUG(D_INFO, "ec_node_available\n");
-				node_down = GNILND_RCA_NODE_UP;
+				node_down = GNILND_PEER_UP;
 				break;
 			case ec_node_failed:
 				CDEBUG(D_INFO, "ec_node_failed\n");
@@ -684,7 +684,7 @@ subscribe_retry:
 						"ec_node_failed ignored\n");
 					break;
 				}
-				node_down = GNILND_RCA_NODE_DOWN;
+				node_down = GNILND_PEER_DOWN;
 				break;
 			case ec_node_unavailable:
 				state = RSN_GET_FLD(event.ev_gen.svid_node.rsn_intval, STATE);
@@ -701,7 +701,7 @@ subscribe_retry:
 						" RS_CS_READY state\n");
 					break;
 				}
-				node_down = GNILND_RCA_NODE_DOWN;
+				node_down = GNILND_PEER_DOWN;
 				break;
 			default:
 				CDEBUG(D_INFO, "unknown event\n");
@@ -710,9 +710,8 @@ subscribe_retry:
 
 			/* if we get an event we don't know about, just go ahead
 			 * and wait for another event */
-			if (node_down == GNILND_RCA_NODE_UNKNOWN) {
+			if (node_down == GNILND_PEER_UNKNOWN)
 				continue;
-			}
 
 			nid = RSN_GET_FLD(event.ev_gen.svid_node.rs_node_flat,
 					  NID);
@@ -768,7 +767,7 @@ int
 kgnilnd_get_node_state(__u32 nid)
 {
 	int i;
-	int rc = GNILND_RCA_NODE_UNKNOWN;
+	int rc = GNILND_PEER_UNKNOWN;
 	int ret;
 	rs_node_array_t nlist;
 	rs_node_t       *na = NULL;
@@ -783,7 +782,7 @@ kgnilnd_get_node_state(__u32 nid)
 	for (i = 0; i < nlist.na_len; i++) {
 		if ((rca_nid_t)RSN_GET_FLD(na[i].rs_node_flat, NID) == nid) {
 			rc = RSN_GET_FLD(na[i].rs_node_flat, STATE) == RS_CS_READY ?
-				GNILND_RCA_NODE_UP : GNILND_RCA_NODE_DOWN;
+				GNILND_PEER_UP : GNILND_PEER_DOWN;
 			break;
 		}
 	}
@@ -810,6 +809,6 @@ kgnilnd_wakeup_rca_thread(void)
 int
 kgnilnd_get_node_state(__u32 nid)
 {
-	return GNILND_RCA_NODE_UP;
+	return GNILND_PEER_UP;
 }
 #endif /* GNILND_USE_RCA */

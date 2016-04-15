@@ -1794,7 +1794,7 @@ kgnilnd_finish_connect(kgn_dgram_t *dgram)
 	/* assume this is a new peer  - it makes locking cleaner when it isn't */
 	/* no holding kgn_net_rw_sem - already are at the kgnilnd_dgram_mover level */
 
-	rc = kgnilnd_create_peer_safe(&new_peer, her_nid, NULL, GNILND_RCA_NODE_UP);
+	rc = kgnilnd_create_peer_safe(&new_peer, her_nid, NULL, GNILND_PEER_UP);
 	if (rc != 0) {
 		CERROR("Can't create peer for %s\n", libcfs_nid2str(her_nid));
 		return rc;
@@ -1849,12 +1849,12 @@ kgnilnd_finish_connect(kgn_dgram_t *dgram)
 		}
 	}
 
-	if (peer->gnp_down == GNILND_RCA_NODE_DOWN) {
+	if (peer->gnp_state == GNILND_PEER_DOWN) {
 		CNETERR("Received connection request from down nid %s\n",
 			libcfs_nid2str(her_nid));
-		peer->gnp_down = GNILND_RCA_NODE_UP;
 	}
 
+	peer->gnp_state = GNILND_PEER_UP;
 	nstale = kgnilnd_close_stale_conns_locked(peer, conn);
 
 	/* either way with peer (new or existing), we are ok with ref counts here as the

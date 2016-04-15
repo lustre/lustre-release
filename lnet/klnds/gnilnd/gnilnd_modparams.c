@@ -206,6 +206,11 @@ static int reg_fail_timeout = GNILND_REGFAILTO_DISABLE;
 module_param(reg_fail_timeout, int, 0644);
 MODULE_PARM_DESC(reg_fail_timeout, "fmablk registration timeout LBUG");
 
+static int to_reconn_disable;
+module_param(to_reconn_disable, int, 0644);
+MODULE_PARM_DESC(to_reconn_disable,
+		  "Timed out connection waits for peer before reconnecting");
+
 kgn_tunables_t kgnilnd_tunables = {
 	.kgn_min_reconnect_interval = &min_reconnect_interval,
 	.kgn_max_reconnect_interval = &max_reconnect_interval,
@@ -248,6 +253,7 @@ kgn_tunables_t kgnilnd_tunables = {
 	.kgn_thread_affinity	    = &thread_affinity,
 	.kgn_thread_safe	    = &thread_safe,
 	.kgn_reg_fail_timeout	    = &reg_fail_timeout,
+	.kgn_to_reconn_disable	    = &to_reconn_disable,
 	.kgn_max_purgatory	    = &max_conn_purg
 };
 

@@ -636,7 +636,7 @@ kgnilnd_close_conn_locked(kgn_conn_t *conn, int error)
 
 	/* if we NETERROR, make sure it is rate limited */
 	if (!kgnilnd_conn_clean_errno(error) &&
-	    peer->gnp_down == GNILND_RCA_NODE_UP) {
+	    peer->gnp_state != GNILND_PEER_DOWN) {
 		CNETERR("closing conn to %s: error %d\n",
 		       libcfs_nid2str(peer->gnp_nid), error);
 	} else {
@@ -809,19 +809,13 @@ kgnilnd_complete_closed_conn(kgn_conn_t *conn)
 	logmsg = (nlive + nrdma + nq_rdma);
 
 	if (logmsg) {
-		if (conn->gnc_peer->gnp_down == GNILND_RCA_NODE_UP) {
-			CNETERR("Closed conn 0x%p->%s (errno %d, peer errno %d): "
-				"canceled %d TX, %d/%d RDMA\n",
-				conn, libcfs_nid2str(conn->gnc_peer->gnp_nid),
-				conn->gnc_error, conn->gnc_peer_error,
-				nlive, nq_rdma, nrdma);
-		} else {
-			CDEBUG(D_NET, "Closed conn 0x%p->%s (errno %d,"
-				" peer errno %d): canceled %d TX, %d/%d RDMA\n",
-				conn, libcfs_nid2str(conn->gnc_peer->gnp_nid),
-				conn->gnc_error, conn->gnc_peer_error,
-				nlive, nq_rdma, nrdma);
-		}
+		int level = conn->gnc_peer->gnp_state == GNILND_PEER_UP ?
+				D_NETERROR : D_NET;
+		CDEBUG(level, "Closed conn 0x%p->%s (errno %d,"
+			" peer errno %d): canceled %d TX, %d/%d RDMA\n",
+			conn, libcfs_nid2str(conn->gnc_peer->gnp_nid),
+			conn->gnc_error, conn->gnc_peer_error,
+			nlive, nq_rdma, nrdma);
 	}
 
 	kgnilnd_destroy_conn_ep(conn);
@@ -1005,7 +999,7 @@ kgnilnd_create_peer_safe(kgn_peer_t **peerp,
 		return -ENOMEM;
 	}
 	peer->gnp_nid = nid;
-	peer->gnp_down = node_state;
+	peer->gnp_state = node_state;
 
 	/* translate from nid to nic addr & store */
 	rc = kgnilnd_nid_to_nicaddrs(LNET_NIDADDR(nid), 1, &peer->gnp_host_id);
@@ -1725,9 +1719,8 @@ kgnilnd_report_node_state(lnet_nid_t nid, int down)
 		write_unlock(&kgnilnd_data.kgn_peer_conn_lock);
 
 		/* Don't add a peer for node up events */
-		if (down == GNILND_RCA_NODE_UP) {
+		if (down == GNILND_PEER_UP)
 			return 0;
-		}
 
 		/* find any valid net - we don't care which one... */
 		down_read(&kgnilnd_data.kgn_net_rw_sem);
@@ -1771,9 +1764,9 @@ kgnilnd_report_node_state(lnet_nid_t nid, int down)
 		}
 	}
 
-	peer->gnp_down = down;
+	peer->gnp_state = down;
 
-	if (down == GNILND_RCA_NODE_DOWN) {
+	if (down == GNILND_PEER_DOWN) {
 		kgn_conn_t *conn;
 
 		peer->gnp_down_event_time = jiffies;
@@ -1789,7 +1782,7 @@ kgnilnd_report_node_state(lnet_nid_t nid, int down)
 
 	write_unlock(&kgnilnd_data.kgn_peer_conn_lock);
 
-	if (down == GNILND_RCA_NODE_DOWN) {
+	if (down == GNILND_PEER_DOWN) {
 		/* using ENETRESET so we don't get messages from
 		 * kgnilnd_tx_done
 		 */

@@ -250,9 +250,10 @@
 #define GNILND_DEL_PEER              1
 #define GNILND_CLEAR_PURGATORY       2
 
-#define GNILND_RCA_NODE_UP           0
-#define GNILND_RCA_NODE_DOWN         1
-#define GNILND_RCA_NODE_UNKNOWN      2
+#define GNILND_PEER_UP               0
+#define GNILND_PEER_DOWN             1
+#define GNILND_PEER_TIMED_OUT        2
+#define GNILND_PEER_UNKNOWN          3
 
 /* defines for reverse RDMA states */
 #define GNILND_REVERSE_NONE		0
@@ -487,6 +488,7 @@ typedef struct kgn_tunables {
 	int     *kgn_max_purgatory;    /* # conns/peer to keep in purgatory */
 	int     *kgn_reg_fail_timeout; /* registration failure timeout */
 	int     *kgn_thread_affinity;  /* bind scheduler threads to cpus */
+	int     *kgn_to_reconn_disable;/* disable reconnect after timeout */
 	int     *kgn_thread_safe;      /* use thread safe kgni API */
 } kgn_tunables_t;
 
@@ -778,7 +780,7 @@ typedef struct kgn_peer {
 	unsigned long       gnp_reconnect_time;         /* get_seconds() when reconnect OK */
 	unsigned long       gnp_reconnect_interval;     /* exponential backoff */
 	atomic_t            gnp_dirty_eps;              /* # of old but yet to be destroyed EPs from conns */
-	int                 gnp_down;                   /* rca says peer down */
+	int                 gnp_state;                  /* up/down/timedout */
 	unsigned long       gnp_down_event_time;        /* time peer down */
 	unsigned long       gnp_up_event_time;          /* time peer back up */
 } kgn_peer_t;
