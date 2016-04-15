@@ -1522,8 +1522,8 @@ int lr_replicate()
 
 	/* Open changelogs for consumption*/
 	rc = llapi_changelog_start(&changelog_priv,
-				   CHANGELOG_FLAG_BLOCK | CHANGELOG_FLAG_JOBID,
-				   status->ls_source_fs, status->ls_last_recno);
+				CHANGELOG_FLAG_BLOCK | CHANGELOG_FLAG_JOBID,
+				status->ls_mdt_device, status->ls_last_recno);
         if (rc < 0) {
                 fprintf(stderr, "Error opening changelog file for fs %s.\n",
                         status->ls_source_fs);
