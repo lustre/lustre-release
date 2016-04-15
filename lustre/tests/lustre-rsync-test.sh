@@ -534,17 +534,18 @@ run_test 5b "Kill / restart lustre_rsync"
 
 # Test 6 - lustre_rsync large no of hard links
 test_6() {
-    init_src
-    init_changelog
+	init_src
+	init_changelog
 
-    local NUMLINKS=128
-    touch $DIR/$tdir/link0
-    local i=1
-    while [ $i -lt $NUMLINKS ];
-    do
-      ln $DIR/$tdir/link0  $DIR/$tdir/link${i}
-      i=$(expr $i + 1)
-    done
+	local num_links=128
+	local i
+
+	touch $DIR/$tdir/link0
+	for ((i = 1; i < num_links - 1; i++)); do
+		ln $DIR/$tdir/link0 $DIR/$tdir/link$i
+	done
+	# create an extra hard link of src name ending with dest name
+	ln $DIR/$tdir/link0 $DIR/$tdir/ink0
 
 	local LRSYNC_LOG=$(generate_logname "lrsync_log")
 	# Replicate the changes to $TGT
@@ -553,15 +554,16 @@ test_6() {
 	check_diff $DIR/$tdir $TGT/$tdir
 	check_diff $DIR/$tdir $TGT2/$tdir
 
-    local count1=$(ls -l $TGT/$tdir/link0 | sed -r 's/ +/ /g' | cut -f 2 -d ' ')
-    local count2=$(ls -l $TGT/$tdir/link0 | sed -r 's/ +/ /g' | cut -f 2 -d ' ')
-    if [[ $count1 -ne $NUMLINKS ]] ||  [[ $count2 -ne $NUMLINKS ]]; then
-	ls -l $TGT/$tdir/link0 $TGT2/$tdir/link0
-	error "Incorrect no of hard links found $count1, $count2"
-    fi
-    fini_changelog
-    cleanup_src_tgt
-    return 0
+	local count1=$(stat --format=%h $TGT/$tdir/link0)
+	local count2=$(stat --format=%h $TGT2/$tdir/link0)
+	if ((count1 != num_links || count2 != num_links)); then
+		ls -l $TGT/$tdir/link0 $TGT2/$tdir/link0
+		error "Incorrect no of hard links found $count1, $count2"
+	fi
+
+	fini_changelog
+	cleanup_src_tgt
+	return 0
 }
 run_test 6 "lustre_rsync large no of hard links"
 

@@ -989,7 +989,6 @@ int lr_move(struct lr_info *info)
 int lr_link(struct lr_info *info)
 {
         int i;
-        int len;
         int rc;
         int rc1;
         struct stat st;
@@ -1002,41 +1001,56 @@ int lr_link(struct lr_info *info)
         for (info->target_no = 0; info->target_no < status->ls_num_targets;
              info->target_no++) {
 
-                info->src[0] = 0;
-                info->dest[0] = 0;
-                rc1 = 0;
+		info->src[0] = 0;
+		info->dest[0] = 0;
+		rc1 = 0;
 
-                /* Search through the hardlinks to get the src and dest */
-                for (i = 0; i < st.st_nlink && (info->src[0] == 0 ||
-                                                info->dest[0] == 0); i++) {
+		/*
+		 * The changelog record has the new parent directory FID and
+		 * name of the target file. So info->dest can be constructed
+		 * by getting the path of the new parent directory and
+		 * appending the target file name.
+		 */
+		rc1 = lr_get_path(info, info->pfid);
+		lr_debug(rc1 ? 0 : DTRACE, "\tparent fid2path %s, %s, rc=%d\n",
+			 info->path, info->name, rc1);
+
+		if (rc1 == 0) {
+			snprintf(info->dest, sizeof(info->dest), "%s/%s/%s",
+				 status->ls_targets[info->target_no],
+				 info->path, info->name);
+			lr_debug(DINFO, "link destination is %s\n", info->dest);
+		}
+
+		/* Search through the hardlinks to get the src */
+		for (i = 0; i < st.st_nlink && info->src[0] == 0; i++) {
                         rc1 = lr_get_path_ln(info, info->tfid, i);
                         lr_debug(rc1 ? 0:DTRACE, "\tfid2path %s, %s, %d rc=%d\n",
                                  info->path, info->name, i, rc1);
                         if (rc1)
                                 break;
 
-                        len = strlen(info->path) - strlen(info->name);
-			if (len >= 0 && strcmp(info->path + len,
-                                              info->name) == 0)
-                                snprintf(info->dest, PATH_MAX, "%s/%s",
-                                        status->ls_targets[info->target_no],
-                                        info->path);
-                        else if (info->src[0] == 0)
-                                snprintf(info->src, PATH_MAX, "%s/%s",
-                                        status->ls_targets[info->target_no],
-                                        info->path);
-                }
+			/*
+			 * Compare the path of target FID with info->dest
+			 * to find out info->src.
+			 */
+			char srcpath[PATH_MAX];
+
+			snprintf(srcpath, sizeof(srcpath), "%s/%s",
+				 status->ls_targets[info->target_no],
+				 info->path);
+
+			if (strcmp(srcpath, info->dest) != 0) {
+				strlcpy(info->src, srcpath, sizeof(info->src));
+				lr_debug(DINFO, "link source is %s\n",
+					 info->src);
+			}
+		}
 
                 if (rc1) {
                         rc = rc1;
                         continue;
                 }
-
-                if (info->src[0] == 0 || info->dest[0] == 0)
-                        /* Could not find the source or destination.
-                         This can happen when some links don't exist
-                         anymore. */
-                        return -EINVAL;
 
                 if (info->src[0] == 0)
                         snprintf(info->src, PATH_MAX, "%s/%s/%s",
@@ -1047,9 +1061,10 @@ int lr_link(struct lr_info *info)
                                 status->ls_targets[info->target_no],
                                 SPECIAL_DIR, info->tfid);
 
-                rc1 = link(info->src, info->dest);
-                lr_debug(rc1?0:DINFO, "link: %s [to] %s; rc1=%d %s\n",
-                         info->src, info->dest, rc1, strerror(errno));
+		rc1 = link(info->src, info->dest);
+		lr_debug(DINFO, "link: %s [to] %s; rc1=%d %s\n",
+			 info->src, info->dest, rc1,
+			 strerror(rc1 ? errno : 0));
 
                 if (rc1)
                         rc = rc1;
