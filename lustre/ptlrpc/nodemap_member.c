@@ -147,10 +147,15 @@ void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap)
 	mutex_lock(&nodemap->nm_member_list_lock);
 	list_for_each_entry_safe(exp, tmp, &nodemap->nm_member_list,
 				 exp_target_data.ted_nodemap_member) {
-		lnet_nid_t nid = exp->exp_connection->c_peer.nid;
+		struct ptlrpc_connection *conn = exp->exp_connection;
 
-		/* nodemap_classify_nid requires nmc_range_tree_lock */
-		new_nodemap = nodemap_classify_nid(nid);
+		/* if no conn assigned to this exp, reconnect will reclassify */
+		if (conn)
+			/* nodemap_classify_nid requires nmc_range_tree_lock */
+			new_nodemap = nodemap_classify_nid(conn->c_peer.nid);
+		else
+			continue;
+
 		if (new_nodemap != nodemap) {
 			/* don't use member_del because ted_nodemap
 			 * should never be null
