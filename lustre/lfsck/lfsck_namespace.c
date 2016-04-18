@@ -367,6 +367,7 @@ static int lfsck_namespace_load(const struct lu_env *env,
 		       lfsck_lfsck2name(com->lc_lfsck), len, rc);
 		if (rc >= 0)
 			rc = -ESTALE;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 8, 53, 0)
 	} else {
 		/* Check whether it is old trace file or not.
 		 * If yes, it should be reset via returning -ESTALE. */
@@ -375,6 +376,7 @@ static int lfsck_namespace_load(const struct lu_env *env,
 				  XATTR_NAME_LFSCK_NAMESPACE_OLD);
 		if (rc >= 0)
 			rc = -ESTALE;
+#endif
 	}
 
 	return rc;
