@@ -460,6 +460,22 @@ out:
 	return rc;
 }
 
+/* Return true if a FID is present in an action list. */
+static bool is_fid_in_hal(struct hsm_action_list *hal, const lustre_fid *fid)
+{
+	struct hsm_action_item *hai;
+	int i;
+
+	for (hai = hai_first(hal), i = 0;
+	     i < hal->hal_count;
+	     i++, hai = hai_next(hai)) {
+		if (lu_fid_eq(&hai->hai_fid, fid))
+			return true;
+	}
+
+	return false;
+}
+
 /**
  * Process the HSM actions described in a struct hsm_user_request.
  *
@@ -548,9 +564,14 @@ int mdt_hsm_request(struct tgt_session_info *tsi)
 	obd_uuid2fsname(hal->hal_fsname, mdt_obd_name(info->mti_mdt),
 			MTI_NAME_MAXLEN);
 
-	hal->hal_count = hr->hr_itemcount;
+	hal->hal_count = 0;
 	hai = hai_first(hal);
 	for (i = 0; i < hr->hr_itemcount; i++, hai = hai_next(hai)) {
+		/* Get rid of duplicate entries. Otherwise we get
+		 * duplicated work in the llog. */
+		if (is_fid_in_hal(hal, &hui[i].hui_fid))
+			continue;
+
 		hai->hai_action = action;
 		hai->hai_cookie = 0;
 		hai->hai_gid = 0;
@@ -558,6 +579,8 @@ int mdt_hsm_request(struct tgt_session_info *tsi)
 		hai->hai_extent = hui[i].hui_extent;
 		memcpy(hai->hai_data, data, hr->hr_data_len);
 		hai->hai_len = sizeof(*hai) + hr->hr_data_len;
+
+		hal->hal_count++;
 	}
 
 	rc = mdt_hsm_add_actions(info, hal, &compound_id);
