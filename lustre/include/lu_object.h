@@ -41,6 +41,7 @@
 #include <libcfs/libcfs.h>
 #include <lustre/lustre_idl.h>
 #include <lu_ref.h>
+#include <linux/percpu_counter.h>
 
 struct seq_file;
 struct proc_dir_entry;
@@ -590,7 +591,6 @@ enum {
 	LU_SS_CACHE_RACE,
 	LU_SS_CACHE_DEATH_RACE,
 	LU_SS_LRU_PURGED,
-	LU_SS_LRU_LEN,	/* # of objects in lsb_lru lists */
 	LU_SS_LAST_STAT
 };
 
@@ -647,6 +647,11 @@ struct lu_site {
 	 * Pointer to the lu_target for this site.
 	 */
 	struct lu_target	*ls_tgt;
+
+	/**
+	 * Number of objects in lsb_lru_lists - used for shrinking
+	 */
+	struct percpu_counter   ls_lru_len_counter;
 };
 
 static inline struct lu_site_bkt_data *
