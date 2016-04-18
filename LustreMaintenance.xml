@@ -294,7 +294,7 @@ Changing a Server NID</title>
         MDT0. To add a new MDT into the file system:</para>
       <orderedlist>
         <listitem>
-          <para>Discover the maximum MDT index. Each MDTs must have unique index.</para>
+          <para>Discover the maximum MDT index. Each MDT must have unique index.</para>
 <screen>
 client$ lctl dl | grep mdc
 36 UP mdc testfs-MDT0000-mdc-ffff88004edf3c00 4c8be054-144f-9359-b063-8477566eb84e 5
@@ -314,6 +314,20 @@ mds# mkfs.lustre --reformat --fsname=<replaceable>testfs</replaceable> --mdt --m
           <para>Mount the MDTs.</para>
 <screen>
 mds# mount –t lustre <replaceable>/dev/mdt4_blockdevice</replaceable> /mnt/mdt4
+</screen>
+        </listitem>
+        <listitem>
+           <para>In order to start creating new files and directories on the
+	   new MDT(s) they need to be attached into the namespace at one or
+	   more subdirectories using the <literal>lfs mkdir</literal> command.
+	   All files and directories below those created with
+	   <literal>lfs mkdir</literal> will also be created on the same MDT
+	   unless otherwise specified.
+	   </para>
+<screen>
+client# lfs mkdir -i 3 /mnt/testfs/new_dir_on_mdt3
+client# lfs mkdir -i 4 /mnt/testfs/new_dir_on_mdt4
+client# lfs mkdir -c 4 /mnt/testfs/new_directory_striped_across_4_mdts
 </screen>
         </listitem>
       </orderedlist>

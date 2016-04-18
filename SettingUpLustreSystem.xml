@@ -119,42 +119,66 @@
     </section>
     <section remap="h3">
       <title><indexterm><primary>setup</primary><secondary>OST</secondary></indexterm>OST Storage Hardware Considerations</title>
-      <para>The data access pattern for the OSS storage is a streaming I/O pattern that is dependent on the access patterns of applications being used. Each OSS can manage multiple object storage targets (OSTs), one for each volume with I/O traffic load-balanced between servers and targets. An OSS should be configured to have a balance between the network bandwidth and the attached storage bandwidth to prevent bottlenecks in the I/O path. Depending on the server hardware, an OSS typically serves between 2 and 8 targets, with each target up to 128 terabytes (TBs) in size.</para>
-      <para>Lustre file system capacity is the sum of the capacities provided by the targets. For
-        example, 64 OSSs, each with two 8 TB targets, provide a file system with a capacity of
-        nearly 1 PB. If each OST uses ten 1 TB SATA disks (8 data disks plus 2 parity disks in a
-        RAID 6 configuration), it may be possible to get 50 MB/sec from each drive, providing up to
-        400 MB/sec of disk bandwidth per OST. If this system is used as storage backend with a
-        system network, such as the InfiniBand network, that provides a similar bandwidth, then each
-        OSS could provide 800 MB/sec of end-to-end I/O throughput. (Although the architectural
-        constraints described here are simple, in practice it takes careful hardware selection,
-        benchmarking and integration to obtain such results.)</para>
+      <para>The data access pattern for the OSS storage is a streaming I/O
+      pattern that is dependent on the access patterns of applications being
+      used. Each OSS can manage multiple object storage targets (OSTs), one
+      for each volume with I/O traffic load-balanced between servers and
+      targets. An OSS should be configured to have a balance between the
+      network bandwidth and the attached storage bandwidth to prevent
+      bottlenecks in the I/O path. Depending on the server hardware, an OSS
+      typically serves between 2 and 8 targets, with each target between
+      24-48TB, but may be up to 256 terabytes (TBs) in size.</para>
+      <para>Lustre file system capacity is the sum of the capacities provided
+      by the targets. For example, 64 OSSs, each with two 8 TB OSTs,
+      provide a file system with a capacity of nearly 1 PB. If each OST uses
+      ten 1 TB SATA disks (8 data disks plus 2 parity disks in a RAID-6
+      configuration), it may be possible to get 50 MB/sec from each drive,
+      providing up to 400 MB/sec of disk bandwidth per OST. If this system
+      is used as storage backend with a system network, such as the InfiniBand
+      network, that provides a similar bandwidth, then each OSS could provide
+      800 MB/sec of end-to-end I/O throughput. (Although the architectural
+      constraints described here are simple, in practice it takes careful
+      hardware selection, benchmarking and integration to obtain such
+      results.)</para>
     </section>
   </section>
   <section xml:id="dbdoclet.50438256_31079">
       <title><indexterm><primary>setup</primary><secondary>space</secondary></indexterm>
           <indexterm><primary>space</primary><secondary>determining requirements</secondary></indexterm>
           Determining Space Requirements</title>
-    <para>The desired performance characteristics of the backing file systems on the MDT and OSTs
-      are independent of one another. The size of the MDT backing file system depends on the number
-      of inodes needed in the total Lustre file system, while the aggregate OST space depends on the
-      total amount of data stored on the file system. If MGS data is to be stored on the MDT device
-      (co-located MGT and MDT), add 100 MB to the required size estimate for the MDT.</para>
-    <para>Each time a file is created on a Lustre file system, it consumes one inode on the MDT and one inode for each OST object over which the file is striped. Normally, each file&apos;s stripe count is based on the system-wide default stripe count. However, this can be changed for individual files using the <literal>lfs setstripe</literal> option. For more details, see <xref linkend="managingstripingfreespace"/>.</para>
-    <para>In a Lustre ldiskfs file system, all the inodes are allocated on the MDT and OSTs when the file system is first formatted. The total number of inodes on a formatted MDT or OST cannot be easily changed, although it is possible to add OSTs with additional space and corresponding inodes. Thus, the number of inodes created at format time should be generous enough to anticipate future expansion.</para>
-    <para>When the file system is in use and a file is created, the metadata associated with that file is stored in one of the pre-allocated inodes and does not consume any of the free space used to store file data.</para>
-    <note>
-      <para>By default, the ldiskfs file system used by Lustre servers to store user-data objects
-        and system data reserves 5% of space that cannot be used by the Lustre file system.
-        Additionally, a Lustre file system reserves up to 400 MB on each OST for journal use and a
-        small amount of space outside the journal to store accounting data. This reserved space is
-        unusable for general storage. Thus, at least 400 MB of space is used on each OST before any
-        file object data is saved.</para>
-    </note>
+    <para>The desired performance characteristics of the backing file systems
+    on the MDT and OSTs are independent of one another. The size of the MDT
+    backing file system depends on the number of inodes needed in the total
+    Lustre file system, while the aggregate OST space depends on the total
+    amount of data stored on the file system. If MGS data is to be stored
+    on the MDT device (co-located MGT and MDT), add 100 MB to the required
+    size estimate for the MDT.</para>
+    <para>Each time a file is created on a Lustre file system, it consumes
+    one inode on the MDT and one OST object over which the file is striped.
+    Normally, each file&apos;s stripe count is based on the system-wide
+    default stripe count.  However, this can be changed for individual files
+    using the <literal>lfs setstripe</literal> option. For more details,
+    see <xref linkend="managingstripingfreespace"/>.</para>
+    <para>In a Lustre ldiskfs file system, all the MDT inodes and OST
+    objects are allocated when the file system is first formatted.  When
+    the file system is in use and a file is created, metadata associated
+    with that file is stored in one of the pre-allocated inodes and does
+    not consume any of the free space used to store file data.  The total
+    number of inodes on a formatted ldiskfs MDT or OST cannot be easily
+    changed. Thus, the number of inodes created at format time should be
+    generous enough to anticipate near term expected usage, with some room
+    for growth without the effort of additional storage.</para>
+    <para>By default, the ldiskfs file system used by Lustre servers to store
+    user-data objects and system data reserves 5% of space that cannot be used
+    by the Lustre file system.  Additionally, a Lustre file system reserves up
+    to 400 MB on each OST, and up to 4GB on each MDT for journal use and a
+    small amount of space outside the journal to store accounting data. This
+    reserved space is unusable for general storage. Thus, at least this much
+    space will be used on each OST before any file object data is saved.</para>
     <para condition="l24">With a ZFS backing filesystem for the MDT or OST,
     the space allocation for inodes and file data is dynamic, and inodes are
-    allocated as needed.  A minimum of 2kB of usable space (before RAID) is
-    needed for each inode, exclusive of other overhead such as directories,
+    allocated as needed.  A minimum of 2kB of usable space (before mirroring)
+    is needed for each inode, exclusive of other overhead such as directories,
     internal log files, extended attributes, ACLs, etc.
     Since the size of extended attributes and ACLs is highly dependent on
     kernel versions and site-specific policies, it is best to over-estimate
@@ -169,8 +193,9 @@
           <primary>space</primary>
           <secondary>determining MGT requirements</secondary>
         </indexterm> Determining MGT Space Requirements</title>
-      <para>Less than 100 MB of space is required for the MGT. The size is determined by the number
-        of servers in the Lustre file system cluster(s) that are managed by the MGS.</para>
+      <para>Less than 100 MB of space is required for the MGT. The size
+      is determined by the number of servers in the Lustre file system
+      cluster(s) that are managed by the MGS.</para>
     </section>
     <section xml:id="dbdoclet.50438256_87676">
         <title><indexterm>
@@ -191,29 +216,31 @@
       <note condition='l24'><para>Starting in release 2.4, using the DNE
       remote directory feature it is possible to increase the metadata
       capacity of a single filesystem by configuting additional MDTs into
-      the filesystem, see <xref linkend="dbdoclet.addingamdt"/>.  In order
-      to start creating new files and directories on the new MDT(s) they
-      need to be attached into the namespace at one or more subdirectories
-      using the <literal>lfs mkdir</literal> command.</para></note>
+      the filesystem, see <xref linkend="dbdoclet.addingamdt"/> for details.
+      </para></note>
       <para>For example, if the average file size is 5 MB and you have
       100 TB of usable OST space, then you can calculate the minimum number
       of inodes as follows:</para>
       <informalexample>
         <para>(100 TB * 1024 GB/TB * 1024 MB/GB) / 5 MB/inode = 20 million inodes</para>
       </informalexample>
+      <para>For details about formatting options for MDT and OST file systems,
+      see <xref linkend="dbdoclet.ldiskfs_mdt_mkfs"/>.</para>
       <para>It is recommended that the MDT have at least twice the minimum
       number of inodes to allow for future expansion and allow for an average
       file size smaller than expected. Thus, the required space is:</para>
       <informalexample>
         <para>2 KB/inode x 20 million inodes x 2 = 80 GB</para>
       </informalexample>
-      <para>If the average file size is small, 4 KB for example, the Lustre
-      file system is not very efficient as the MDT will use as much space
-      for each file as the space used on the OST. However, this is not a
-      common configuration for a Lustre environment.</para>
       <note>
-        <para>If the MDT is too small, this can cause the space on the OSTs
-        to be inaccessible since no new files can be created. Be sure to
+        <para>If the average file size is very small, 4 KB for example, the
+        Lustre file system is not very efficient as the MDT will use as much
+        space for each file as the space used on the OST. However, this is not
+        a common configuration for a Lustre environment.</para>
+      </note>
+      <note>
+        <para>If the MDT has too few inodes, this can cause the space on the
+	OSTs to be inaccessible since no new files can be created. Be sure to
         determine the appropriate size of the MDT needed to support the file
         system before formatting the file system. It is possible to increase the
         number of inodes after the file system is formatted, depending on the
@@ -238,12 +265,15 @@
           <primary>space</primary>
           <secondary>determining OST requirements</secondary>
         </indexterm> Determining OST Space Requirements</title>
-      <para>For the OST, the amount of space taken by each object depends on the usage pattern of
-        the users/applications running on the system. The Lustre software defaults to a conservative
-        estimate for the object size (16 KB per object). If you are confident that the average file
-        size for your applications will be larger than this, you can specify a larger average file
-        size (fewer total inodes) to reduce file system overhead and minimize file system check
-        time. See <xref linkend="dbdoclet.50438256_53886"/> for more details.</para>
+      <para>For the OST, the amount of space taken by each object depends on
+      the usage pattern of the users/applications running on the system. The
+      Lustre software defaults to a conservative estimate for the average
+      object size (between 64KB per object for 10GB OSTs, and 1MB per object
+      for 16TB and larger OSTs). If you are confident that the average file
+      size for your applications will be larger than this, you can specify a
+      larger average file size (fewer total inodes for a given OST size) to
+      reduce file system overhead and minimize file system check time.
+      See <xref linkend="dbdoclet.ldiskfs_ost_mkfs"/> for more details.</para>
     </section>
   </section>
   <section xml:id="dbdoclet.50438256_84701">
@@ -280,34 +310,63 @@
     <screen>--mkfsoptions=&apos;backing fs options&apos;</screen>
     <para>For other <literal>mkfs.lustre</literal> options, see the Linux man page for
         <literal>mke2fs(8)</literal>.</para>
-    <section xml:id="dbdoclet.50438256_pgfId-1293228">
+    <section xml:id="dbdoclet.ldiskfs_mdt_mkfs">
       <title><indexterm>
           <primary>inodes</primary>
           <secondary>MDS</secondary>
         </indexterm><indexterm>
           <primary>setup</primary>
           <secondary>inodes</secondary>
-        </indexterm>Setting Formatting Options for an MDT</title>
-      <para>The number of inodes on the MDT is determined at format time based on the total size of
-        the file system to be created. The default <emphasis role="italic"
-          >bytes-per-inode</emphasis> ratio ("inode ratio") for an MDT is optimized at one inode for
-        every 2048 bytes of file system space. It is recommended that this value not be changed for
-        MDTs.</para>
-      <para>This setting takes into account the space needed for additional metadata, such as the
-        journal (up to 400 MB), bitmaps and directories, and a few files that the Lustre file system
-        uses to maintain cluster consistency.</para>
+        </indexterm>Setting Formatting Options for an ldiskfs MDT</title>
+      <para>The number of inodes on the MDT is determined at format time
+      based on the total size of the file system to be created. The default
+      <emphasis role="italic">bytes-per-inode</emphasis> ratio ("inode ratio")
+      for an MDT is optimized at one inode for every 2048 bytes of file
+      system space. It is recommended that this value not be changed for
+      MDTs.</para>
+      <para>This setting takes into account the space needed for additional
+      ldiskfs filesystem-wide metadata, such as the journal (up to 4 GB),
+      bitmaps, and directories, as well as files that Lustre uses internally
+      to maintain cluster consistency.  There is additional per-file metadata
+      such as file layout for files with a large number of stripes, Access
+      Control Lists (ACLs), and user extended attributes.</para>
+      <para> It is possible to reserve less than the recommended 2048 bytes
+      per inode for an ldiskfs MDT when it is first formatted by adding the
+      <literal>--mkfsoptions="-i bytes-per-inode"</literal> option to
+      <literal>mkfs.lustre</literal>.  Decreasing the inode ratio tunable
+      <literal>bytes-per-inode</literal> will create more inodes for a given
+      MDT size, but will leave less space for extra per-file metadata.  The
+      inode ratio must always be strictly larget than the MDT inode size,
+      which is 512 bytes by default.  It is recommended to use an inode ratio
+      at least 512 bytes larger than the inode size to ensure the MDT does
+      not run out of space.</para>
+      <para>The size of the inode may be changed by adding the
+      <literal>--stripe-count-hint=N</literal> to have
+      <literal>mkfs.lustre</literal> automatically calculate a reasonable
+      inode size based on the default stripe count that will be used by the
+      filesystem, or directly by specifying the
+      <literal>--mkfsoptions="-I inode-size"</literal> option.  Increasing
+      the inode size will provide more space in the inode for a larger Lustre
+      file layout, ACLs, user and system extended attributes, SELinux and
+      other security labels, and other internal metadata.  However, if these
+      features or other in-inode xattrs are not needed, the larger inode size
+      will hurt metadata performance as 2x, 4x, or 8x as much data would be
+      read or written for each MDT inode access.
+      </para>
     </section>
-    <section xml:id="dbdoclet.50438256_53886">
+    <section xml:id="dbdoclet.ldiskfs_ost_mkfs">
       <title><indexterm>
           <primary>inodes</primary>
           <secondary>OST</secondary>
-        </indexterm>Setting Formatting Options for an OST</title>
-      <para>When formatting OST file systems, it is normally advantageous to take local file system
-        usage into account. When doing so, try to minimize the number of inodes on each OST, while
-        keeping enough margin for potential variations in future usage. This helps reduce the format
-        and file system check time and makes more space available for data.</para>
-      <para>The table below shows the default <emphasis role="italic">bytes-per-inode
-        </emphasis>ratio ("inode ratio") used for OSTs of various sizes when they are formatted. </para>
+        </indexterm>Setting Formatting Options for an ldiskfs OST</title>
+      <para>When formatting an OST file system, it is normally advantageous
+      to take local file system usage into account. When doing so, try to
+      reduce the number of inodes on each OST, while keeping enough margin
+      for potential variations in future usage. This helps reduce the format
+      and file system check time and makes more space available for data.</para>
+      <para>The table below shows the default
+      <emphasis role="italic">bytes-per-inode</emphasis>ratio ("inode ratio")
+      used for OSTs of various sizes when they are formatted.</para>
       <para>
         <table frame="all">
           <title xml:id="settinguplustresystem.tab1">Inode Ratios Used for Newly Formatted
@@ -378,20 +437,24 @@
           </tgroup>
         </table>
       </para>
-      <para>In environments with few small files, the default inode ratio may result in far too many
-        inodes for the average file size. In this case, performance can be improved by increasing
-        the number of <emphasis role="italic">bytes-per-inode</emphasis>.To set the inode ratio, use
-        the <literal>-i</literal> argument to <literal>mkfs.lustre</literal> to specify the
-          <emphasis role="italic">bytes-per-inode</emphasis> value. </para>
+      <para>In environments with few small files, the default inode ratio
+      may result in far too many inodes for the average file size. In this
+      case, performance can be improved by increasing the number of
+      <emphasis role="italic">bytes-per-inode</emphasis>.  To set the inode
+      ratio, use the <literal>-i</literal> argument to
+      <literal>mkfs.lustre</literal> to specify the
+      <emphasis role="italic">bytes-per-inode</emphasis> value.</para>
       <note>
-        <para>File system check time on OSTs is affected by a number of  variables in addition to
-          the number of inodes, including the size of the file system, the number of allocated
-          blocks, the distribution of allocated blocks on the disk, disk speed, CPU speed, and the
-          amount of RAM on the server. Reasonable file system check times are 5-30 minutes per
-          TB.</para>
+        <para>File system check time on OSTs is affected by a number of
+	variables in addition to the number of inodes, including the size of
+	the file system, the number of allocated blocks, the distribution of
+	allocated blocks on the disk, disk speed, CPU speed, and the amount
+	of RAM on the server. Reasonable file system check times for valid
+	filesystems are 5-30 minutes per TB, but may increase significantly
+	if substantial errors are detected and need to be required.</para>
       </note>
-      <para>For more details about formatting MDT and OST file systems, see <xref
-          linkend="dbdoclet.50438208_51921"/>.</para>
+      <para>For more details about formatting MDT and OST file systems,
+      see <xref linkend="dbdoclet.50438208_51921"/>.</para>
     </section>
     <section remap="h3">
       <title><indexterm>
@@ -655,14 +718,19 @@
       </table>
       <para>&#160;</para>
       <note>
-        <para condition="l22">In Lustre software releases prior to release 2.2, the maximum stripe
-          count for a single file was limited to 160 OSTs. In Lustre software release 2.2, the large
-            <literal>xattr</literal> feature ("wide striping") was added to support up to 2000 OSTs.
-          This feature is disabled by default at <literal>mkfs.lustre</literal> time. In order to
-          enable this feature, set the "<literal>-O large_xattr</literal>" or "<literal>-O ea_inode</literal>"
-          option on the MDT either by using <literal>--mkfsoptions</literal> at format time or by using
-            <literal>tune2fs</literal>. Using either "<literal>large_xattr</literal>" or "<literal>ea_inode</literal>"
-          results in "<literal>ea_inode</literal>" in the file system feature list.</para>
+        <para condition="l22">In Lustre software releases prior to version 2.2,
+	the maximum stripe count for a single file was limited to 160 OSTs.
+	In version 2.2, the wide striping feature was added to support files
+	striped over up to 2000 OSTs.  In order to store the layout for
+	such large files, the ldiskfs <literal>ea_inode</literal> feature must
+	be enabled on the MDT.  This feature is disabled by default at
+	<literal>mkfs.lustre</literal> time. In order to enable this feature,
+	specify <literal>--mkfsoptions="-O ea_inode"</literal> at MDT format
+	time, or use <literal>tune2fs -O ea_inode</literal> to enable it after
+	the MDT has been formatted.  Using either the deprecated
+	<literal>large_xattr</literal> or preferred <literal>ea_inode</literal>
+	feature name results in <literal>ea_inode</literal> being shown in
+	the file system feature list.</para>
       </note>
     </section>
   </section>
