@@ -2689,15 +2689,46 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
 		wake_up(&obd->obd_next_transno_waitq);
 		spin_lock(&obd->obd_recovery_task_lock);
 		if (obd->obd_recovering) {
+			struct ptlrpc_request *tmp;
+			struct ptlrpc_request *duplicate = NULL;
+
+			if (likely(!req->rq_export->exp_replay_done)) {
+				req->rq_export->exp_replay_done = 1;
+				list_add_tail(&req->rq_list,
+					      &obd->obd_final_req_queue);
+				spin_unlock(&obd->obd_recovery_task_lock);
+				RETURN(0);
+			}
+
+			/* XXX O(n), but only happens if final ping is
+			 * timed out, probably reorganize the list as
+			 * a hash list later */
+			list_for_each_entry_safe(reqiter, tmp,
+						 &obd->obd_final_req_queue,
+						 rq_list) {
+				if (reqiter->rq_export == req->rq_export) {
+					list_del_init(&reqiter->rq_list);
+					duplicate = reqiter;
+					break;
+				}
+			}
+
 			list_add_tail(&req->rq_list,
-					  &obd->obd_final_req_queue);
+				      &obd->obd_final_req_queue);
+			req->rq_export->exp_replay_done = 1;
+			spin_unlock(&obd->obd_recovery_task_lock);
+
+			if (duplicate != NULL) {
+				DEBUG_REQ(D_HA, duplicate,
+					  "put prev final req\n");
+				target_request_copy_put(duplicate);
+			}
+			RETURN(0);
 		} else {
 			spin_unlock(&obd->obd_recovery_task_lock);
 			target_request_copy_put(req);
 			RETURN(obd->obd_stopping ? -ENOTCONN : 1);
 		}
-		spin_unlock(&obd->obd_recovery_task_lock);
-		RETURN(0);
 	}
 	if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REQ_REPLAY_DONE) {
 		/* client declares he's ready to replay locks */

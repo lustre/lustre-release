@@ -3265,7 +3265,7 @@ test_90() { # bug 19494
 }
 run_test 90 "lfs find identifies the missing striped file segments"
 
-test_93() {
+test_93a() {
 	local server_version=$(lustre_version_code $SINGLEMDS)
 		[[ $server_version -ge $(version_code 2.6.90) ]] ||
 		[[ $server_version -ge $(version_code 2.5.4) &&
@@ -3287,7 +3287,28 @@ test_93() {
 	do_facet ost1 "$LCTL set_param fail_loc=0x715"
 	fail ost1
 }
-run_test 93 "replay + reconnect"
+run_test 93a "replay + reconnect"
+
+test_93b() {
+	local server_version=$(lustre_version_code $SINGLEMDS)
+		[[ $server_version -ge $(version_code 2.7.90) ]] ||
+		{ skip "Need MDS version 2.7.90+"; return; }
+
+	cancel_lru_locks mdc
+
+	createmany -o $DIR/$tfile 20 ||
+			error "createmany -o $DIR/$tfile failed"
+
+	#define OBD_FAIL_TGT_REPLAY_RECONNECT     0x715
+	# We need to emulate a state that MDT is waiting for other clients
+	# not completing the recovery. Final ping is queued, but reply will be
+	# sent on the recovery completion. It is done by sleep before
+	# processing final pings
+	do_facet mds1 "$LCTL set_param fail_val=80"
+	do_facet mds1 "$LCTL set_param fail_loc=0x715"
+	fail mds1
+}
+run_test 93b "replay + reconnect on mds"
 
 striped_dir_check_100() {
 	local striped_dir=$DIR/$tdir/striped_dir

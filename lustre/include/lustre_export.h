@@ -270,7 +270,10 @@ struct obd_export {
                                   exp_libclient:1, /* liblustre client? */
 				  /* if to swap nidtbl entries for 2.2 clients.
 				   * Only used by the MGS to fix LU-1644. */
-				  exp_need_mne_swab:1;
+				  exp_need_mne_swab:1,
+				  /* The export already got final replay ping
+				   * request. */
+				  exp_replay_done:1;
         /* also protected by exp_lock */
         enum lustre_sec_part      exp_sp_peer;
         struct sptlrpc_flavor     exp_flvr;             /* current */
