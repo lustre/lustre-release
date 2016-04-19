@@ -4960,6 +4960,29 @@ test_56x() {
 }
 run_test 56x "lfs migration support"
 
+test_56xa() {
+	check_swap_layouts_support && return 0
+	[[ $OSTCOUNT -lt 2 ]] &&
+		skip_env "need 2 OST, skipping test" && return
+
+	local dir0=$DIR/$tdir/$testnum
+	test_mkdir -p $dir0 || error "creating dir $dir0"
+
+	local ref1=/etc/passwd
+	local file1=$dir0/file1
+
+	$SETSTRIPE -c 2 $file1
+	cp $ref1 $file1
+	$LFS migrate --block -c 1 $file1 || error "migrate failed rc = $?"
+	local stripe=$($GETSTRIPE -c $file1)
+	[[ $stripe == 1 ]] || error "stripe of $file1 is $stripe != 1"
+	cmp $file1 $ref1 || error "content mismatch $file1 differs from $ref1"
+
+	# clean up
+	rm -f $file1
+}
+run_test 56xa "lfs migration --block support"
+
 test_56y() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.53) ] &&
 		skip "No HSM $(lustre_build_version $SINGLEMDS) MDS < 2.4.53" &&
