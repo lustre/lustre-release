@@ -428,11 +428,6 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 		    strcmp(xattr_name, XATTR_NAME_HSM) == 0 ||
 		    strcmp(xattr_name, XATTR_NAME_LFSCK_NAMESPACE) == 0)
 			GOTO(out, rc = 0);
-
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 8, 53, 0)
-		if (strcmp(xattr_name, XATTR_NAME_LFSCK_NAMESPACE_OLD) == 0)
-			GOTO(out, rc = 0);
-#endif
 	} else if ((valid & OBD_MD_FLXATTR) &&
 		   (strcmp(xattr_name, XATTR_NAME_ACL_ACCESS) == 0 ||
 		    strcmp(xattr_name, XATTR_NAME_ACL_DEFAULT) == 0)) {

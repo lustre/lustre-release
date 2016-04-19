@@ -7056,7 +7056,7 @@ test_102n() { # LU-4101 mdt: protect internal xattrs
 	# Get 'before' xattrs of $file1.
 	getfattr --absolute-names --dump --match=- $file1 > $xattr0
 
-	for name in lov lma lmv link fid version som hsm lfsck_namespace; do
+	for name in lov lma lmv link fid version som hsm; do
 		# Try to copy xattr from $file0 to $file1.
 		value=$(getxattr $file0 trusted.$name 2> /dev/null)
 

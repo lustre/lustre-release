@@ -327,12 +327,6 @@ static int lfsck_namespace_load_bitmap(const struct lu_env *env,
 /**
  * Load namespace LFSCK statistics information from the trace file.
  *
- * For old release (Lustre-2.6 or older), the statistics information was
- * stored as XATTR_NAME_LFSCK_NAMESPACE_OLD EA. But in Lustre-2.7, we need
- * more statistics information. To avoid confusing old MDT when downgrade,
- * Lustre-2.7 stores the namespace LFSCK statistics information as new
- * XATTR_NAME_LFSCK_NAMESPACE EA.
- *
  * \param[in] env	pointer to the thread context
  * \param[in] com	pointer to the lfsck component
  *
@@ -367,23 +361,13 @@ static int lfsck_namespace_load(const struct lu_env *env,
 		       lfsck_lfsck2name(com->lc_lfsck), len, rc);
 		if (rc >= 0)
 			rc = -ESTALE;
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 8, 53, 0)
-	} else {
-		/* Check whether it is old trace file or not.
-		 * If yes, it should be reset via returning -ESTALE. */
-		rc = dt_xattr_get(env, com->lc_obj,
-				  lfsck_buf_get(env, com->lc_file_disk, len),
-				  XATTR_NAME_LFSCK_NAMESPACE_OLD);
-		if (rc >= 0)
-			rc = -ESTALE;
-#endif
 	}
 
 	return rc;
 }
 
 static int lfsck_namespace_store(const struct lu_env *env,
-				 struct lfsck_component *com, bool init)
+				 struct lfsck_component *com)
 {
 	struct dt_object		*obj	= com->lc_obj;
 	struct lfsck_instance		*lfsck	= com->lc_lfsck;
@@ -395,9 +379,6 @@ static int lfsck_namespace_store(const struct lu_env *env,
 	__u32				 nbits	= 0;
 	int				 len    = com->lc_file_size;
 	int				 rc;
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 8, 53, 0)
-	struct lu_buf		 tbuf	= { &len, sizeof(len) };
-#endif
 	ENTRY;
 
 	if (lad != NULL) {
@@ -429,20 +410,6 @@ static int lfsck_namespace_store(const struct lu_env *env,
 			GOTO(out, rc);
 	}
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 8, 53, 0)
-	/* To be compatible with old Lustre-2.x MDT (x <= 6), generate dummy
-	 * XATTR_NAME_LFSCK_NAMESPACE_OLD EA, then when downgrade to Lustre-2.x,
-	 * the old LFSCK will find "invalid" XATTR_NAME_LFSCK_NAMESPACE_OLD EA,
-	 * then reset the namespace LFSCK trace file. */
-	if (init) {
-		rc = dt_declare_xattr_set(env, obj, &tbuf,
-					  XATTR_NAME_LFSCK_NAMESPACE_OLD,
-					  LU_XATTR_CREATE, handle);
-		if (rc != 0)
-			GOTO(out, rc);
-	}
-#endif
-
 	rc = dt_trans_start_local(env, dev, handle);
 	if (rc != 0)
 		GOTO(out, rc);
@@ -454,13 +421,6 @@ static int lfsck_namespace_store(const struct lu_env *env,
 		rc = dt_xattr_set(env, obj,
 				  lfsck_buf_get(env, bitmap->data, nbits >> 3),
 				  XATTR_NAME_LFSCK_BITMAP, 0, handle);
-
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 8, 53, 0)
-	if (rc == 0 && init)
-		rc = dt_xattr_set(env, obj, &tbuf,
-				  XATTR_NAME_LFSCK_NAMESPACE_OLD,
-				  LU_XATTR_CREATE, handle);
-#endif
 
 	GOTO(out, rc);
 
@@ -542,7 +502,7 @@ static int lfsck_namespace_init(const struct lu_env *env,
 	ns->ln_magic = LFSCK_NAMESPACE_MAGIC;
 	ns->ln_status = LS_INIT;
 	down_write(&com->lc_sem);
-	rc = lfsck_namespace_store(env, com, true);
+	rc = lfsck_namespace_store(env, com);
 	up_write(&com->lc_sem);
 	if (rc == 0)
 		rc = lfsck_namespace_load_sub_trace_files(env, com, true);
@@ -3783,7 +3743,7 @@ static int lfsck_namespace_reset(const struct lu_env *env,
 	lad->lad_incomplete = 0;
 	CFS_RESET_BITMAP(lad->lad_bitmap);
 
-	rc = lfsck_namespace_store(env, com, true);
+	rc = lfsck_namespace_store(env, com);
 
 	GOTO(out, rc);
 
@@ -3928,7 +3888,7 @@ static int lfsck_namespace_checkpoint(const struct lu_env *env,
 		com->lc_new_checked = 0;
 	}
 
-	rc = lfsck_namespace_store(env, com, false);
+	rc = lfsck_namespace_store(env, com);
 	up_write(&com->lc_sem);
 
 log:
@@ -4236,7 +4196,7 @@ static int lfsck_namespace_post(const struct lu_env *env,
 		com->lc_new_checked = 0;
 	}
 
-	rc = lfsck_namespace_store(env, com, false);
+	rc = lfsck_namespace_store(env, com);
 	up_write(&com->lc_sem);
 
 	CDEBUG(D_LFSCK, "%s: namespace LFSCK post done: rc = %d\n",
@@ -6114,7 +6074,7 @@ checkpoint:
 			ns->ln_time_last_checkpoint = cfs_time_current_sec();
 			ns->ln_objs_checked_phase2 += com->lc_new_checked;
 			com->lc_new_checked = 0;
-			rc = lfsck_namespace_store(env, com, false);
+			rc = lfsck_namespace_store(env, com);
 			up_write(&com->lc_sem);
 			if (rc != 0)
 				GOTO(put, rc);
@@ -6240,7 +6200,7 @@ static int lfsck_namespace_double_scan_result(const struct lu_env *env,
 		ns->ln_status = LS_FAILED;
 	}
 
-	rc = lfsck_namespace_store(env, com, false);
+	rc = lfsck_namespace_store(env, com);
 	up_write(&com->lc_sem);
 
 	return rc;
