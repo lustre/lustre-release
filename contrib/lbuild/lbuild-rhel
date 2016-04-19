@@ -102,7 +102,7 @@ prepare_and_build_srpm() {
     rpmbuildopt="$rpmbuildopt $(get_rpmbuildopts)"
 
     # now build it
-    if ! eval $RPMBUILD $rpmbuildopt $targets --with baseonly \
+    if ! eval rpmbuild $rpmbuildopt $targets --with baseonly \
                    --define \"_topdir $TOPDIR\" \
                    --define \"buildid $buildid\" \
                    --define \"_tmppath $TMPDIR\" \

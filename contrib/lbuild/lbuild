@@ -36,7 +36,7 @@ push_exit_trap "kill -INT -$$ || true" kill_children
 #BUILD_GEN=5	# TT-107: don't cache the BUILD dir
 BUILD_GEN=6	# TT-1092: don't cache the BUILD dir, to rebuild external OFED
 
-TOPDIR=$PWD
+TOPDIR="$PWD"
 
 KERNELDIR=
 LINUX=
@@ -102,8 +102,6 @@ CONFIG=
 LUSTRE_TESTS=true
 
 DATE=$(date)
-
-RPMBUILD=
 
 export CC=${CC:-gcc}
 
@@ -333,31 +331,47 @@ check_options() {
         TIMESTAMP=$(date -d "$DATE" "+%Y%m%d%H%M%S")
     fi
 
-    RPMBUILD=$(which rpmbuild 2>/dev/null | head -1)
-    if [ ! "$RPMBUILD" -o "$RPMBUILD" == "" ]; then
-        RPMBUILD=$(which rpm 2>/dev/null | head -1)
-        if [ ! "$RPMBUILD" -o "$RPMBUILD" == "" ]; then
-            usage 1 "Could not find binary for making rpms (tried rpmbuild and rpm)."
-        fi
+    local RPMBUILD=$(which rpmbuild 2>/dev/null | head -n 1)
+    RPMBUILD=${RPMBUILD:-$(which rpm 2>/dev/null | head -n 1)}
+    if [ -z "$RPMBUILD" ]; then
+        usage 1 "Could not find binary for making rpms (tried rpmbuild and rpm)."
     fi
+
+    local BINDIR="$TOPDIR/bin"
+    if [ -d $BINDIR ]; then
+        rm -rf $BINDIR >/dev/null 2>&1 || true
+    fi
+
+    mkdir -p $BINDIR || fatal 1 "error trying to create $BINDIR"
+    export PATH=$BINDIR:$PATH
+
+    cat >${BINDIR}/rpmbuild <<EOF
+#!/bin/bash
+
+ARGS="\${FIND_REQUIRES:+--define \"__find_requires \$FIND_REQUIRES\"}"
+for arg; do
+    case \$arg in
+    *\'* ) ARGS="\$ARGS \"\$arg\"" ;;
+    * ) ARGS="\$ARGS '\$arg'" ;;
+    esac
+done
+
+eval $RPMBUILD \$ARGS
+EOF
+    chmod 755 ${BINDIR}/rpmbuild
 
     if [ -n "$CCACHE" ]; then
         which "$DISTCC" &>/dev/null && export DISTCC RPM_BUILD_NCPUS
 
         if which "$CCACHE" &>/dev/null; then
-            local ccache=$(which "$CCACHE")
-            local bindir="$TOPDIR/bin"
+            local ccache=$(which "$CCACHE" 2>/dev/null | head -n 1)
 
-            if [ ! -d $bindir ]; then
-                mkdir -p $bindir || fatal 1 "error trying to create $bindir"
-            else
-                rm ${bindir}/* > /dev/null 2>&1 || true
-            fi
-            ln -s "$ccache" ${bindir}/ccache
-            ln -s "$ccache" ${bindir}/cc
-            ln -s "$ccache" ${bindir}/$CC
-            export PATH=$bindir:$PATH
-            export CCACHE && export CC="ccache $CC"
+            ln -s "$ccache" ${BINDIR}/ccache
+            ln -s "$ccache" ${BINDIR}/cc
+            ln -s "$ccache" ${BINDIR}/$CC
+
+            export CCACHE
+            export CC="ccache $CC"
             # zero the cache so we can see how effective we are being with it
             echo -n "ccache "
             ccache -z
@@ -370,7 +384,6 @@ check_options() {
     fi
 
     return 0
-
 }
 
 # compare two versions $1 and $2. if $1 < $2, return 0 otherwise return 1.
@@ -836,17 +849,24 @@ build_lustre() {
 
 # Only zfs Lustre DKMS Server is supported
 build_lustre_dkms() {
+    local build_args=""
+    local name_prefix="lustre"
     local ver=$(sed -n -e 's/^LUSTRE_VERSION = //p' LUSTRE-VERSION-FILE)
+
     echo "Building Lustre DKMS RPMs for: $BUILD_ARCHS..."
-    ./configure --enable-dist || return 255
+    ./configure --enable-dist || fatal 1 "Error in DKMS configure."
 
     if $PATCHLESS; then
-	$RPMBUILD --define="_topdir $TOPDIR" --without servers -bs lustre-dkms.spec || return 255
-        $RPMBUILD --rebuild --define="_topdir $TOPDIR" --without servers $TOPDIR/SRPMS/lustre-client-dkms-$ver-*.src.rpm || return 255
-    else
-	$RPMBUILD --define="_topdir $TOPDIR" -bs lustre-dkms.spec || return 255
-        $RPMBUILD --rebuild --define="_topdir $TOPDIR" $TOPDIR/SRPMS/lustre-dkms-$ver-*.src.rpm || return 255
+        build_args="--without servers"
+        name_prefix="lustre-client"
     fi
+
+    rpmbuild --define "_topdir $TOPDIR" $build_args -bs lustre-dkms.spec ||
+        fatal 1 "Error building DKMS .src.rpm for $BUILD_ARCHS."
+    rpmbuild --define "_topdir $TOPDIR" $build_args \
+             --rebuild $TOPDIR/SRPMS/$name_prefix-dkms-$ver-*.src.rpm ||
+        fatal 1 "Error building DKMS .rpm for $BUILD_ARCHS."
+
     return 0
 }
 
@@ -935,7 +955,7 @@ build_spl_zfs() {
         # Manually build rpms
         for spec in $speclist; do
             echo "Building RPMs from $pkg/$specdir/$spec"
-            if ! $RPMBUILD $rpmb $pkg/$specdir/$spec \
+            if ! rpmbuild $rpmb $pkg/$specdir/$spec \
                 --nodeps -v \
                 --define "require_kdir ${LINUX}" \
                 ${LINUXOBJ:+--define "require_kobj ${LINUXOBJ}"} \
@@ -1172,8 +1192,7 @@ EOF
     if compare_version $OFED_VERSION 3.0; then
         local OFA_KERNEL_RELEASE=$(echo -n ${linuxrelease} | sed -e 's/-/_/g')
     fi
-    if ! $RPMBUILD $BUILD_TYPE --define 'build_kernel_ib 1' --define 'build_kernel_ib_devel 1' \
-                  ${FIND_REQUIRES:+--define "__find_requires $FIND_REQUIRES"} \
+    if ! rpmbuild $BUILD_TYPE --define 'build_kernel_ib 1' --define 'build_kernel_ib_devel 1' \
                   --define "_topdir ${TOPDIR}" --target ${TARGET_ARCH} \
                   --define "KVERSION ${linuxrelease}" \
                   --define "$K_SRC ${linux}" \
@@ -1566,7 +1585,7 @@ build_with_srpm() {
     # infrastructure files so that find-requires can find our unpacked
     # kernel-devel artifacts
     cp $RPM_HELPERS_DIR/{symset-table,find-requires{,.ksyms}} .
-    FIND_REQUIRES="$(pwd)/find-requires"
+    export FIND_REQUIRES="$(pwd)/find-requires"
     chmod 755 {symset-table,find-requires{,.ksyms}}
     local tmp="$(pwd)"
     tmp="${tmp//\//\\/}"

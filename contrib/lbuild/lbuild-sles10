@@ -176,11 +176,11 @@ EOF
         for arch in $BUILD_ARCHS; do
             targets="--target $(resolve_arch $arch $PATCHLESS) $targets"
         done
-        if ! $RPMBUILD --rebuild --nodeps $targets \
-                                 --define "symsetsdir ${TOPDIR}/reused/boot" \
-                                 --define "kobjdir ${LINUXOBJ%/*/*}" \
-                                 --define "_tmppath /var/tmp" \
-                                 --define "_topdir ${TOPDIR}" \
+        if ! rpmbuild --rebuild --nodeps $targets \
+                                --define "symsetsdir ${TOPDIR}/reused/boot" \
+                                --define "kobjdir ${LINUXOBJ%/*/*}" \
+                                --define "_tmppath /var/tmp" \
+                                --define "_topdir ${TOPDIR}" \
                       ${SOURCE} 2>&1; then
             rm ~/.rpmmacros
             if [ -n "$tmpfile" ]; then

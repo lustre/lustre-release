@@ -44,7 +44,7 @@ prepare_and_build_srpm() {
 #     landing.
 #if false; then
     # now build it
-    if ! $RPMBUILD $rpmbuildopt $targets \
+    if ! rpmbuild $rpmbuildopt $targets \
                    --define "_topdir $TOPDIR" \
                    $TOPDIR/SOURCES/kernel-$RPMSMPTYPE.spec 2>&1; then
         fatal 1 "Failed to build kernel RPM"
@@ -52,7 +52,7 @@ prepare_and_build_srpm() {
 #fi
 
     # for SLES, we also need to build the kernel-source rpm
-    if ! $RPMBUILD $rpmbuildopt $targets \
+    if ! rpmbuild $rpmbuildopt $targets \
                    --define "_topdir $TOPDIR" \
                    $TOPDIR/SOURCES/kernel-source.spec 2>&1; then
         fatal 1 "Failed to build kernel source RPM"
