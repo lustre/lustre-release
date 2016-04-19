@@ -312,6 +312,14 @@ static int mdt_lookup_fileset(struct mdt_thread_info *info, const char *fileset,
 			rc = -EINVAL;
 			break;
 		}
+
+		/* reject .. as a path component */
+		if (lname->ln_namelen == 2 &&
+		    strncmp(s1, "..", 2) == 0) {
+			rc = -EINVAL;
+			break;
+		}
+
 		strncpy(name, s1, lname->ln_namelen);
 		name[lname->ln_namelen] = '\0';
 

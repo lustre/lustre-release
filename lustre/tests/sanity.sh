@@ -13566,6 +13566,22 @@ test_247d() {
 }
 run_test 247d "running fid2path inside root"
 
+# LU-8037
+test_247e() {
+	lctl get_param -n mdc.$FSNAME-MDT0000*.import |
+		grep -q subtree ||
+		{ skip "Fileset feature is not supported"; return; }
+
+	local submount=${MOUNT}_$tdir
+
+	mkdir $MOUNT/$tdir
+	mkdir -p $submount || error "mkdir $submount failed"
+	FILESET="$FILESET/.." mount_client $submount &&
+		error "mount $submount should fail"
+	rmdir $submount
+}
+run_test 247e "mount .. as fileset"
+
 test_250() {
 	[ "$(facet_fstype ost$(($($GETSTRIPE -i $DIR/$tfile) + 1)))" = "zfs" ] \
 	 && skip "no 16TB file size limit on ZFS" && return
