@@ -255,7 +255,9 @@ static int tgt_ost_body_unpack(struct tgt_session_info *tsi, __u32 flags)
 	if (rc)
 		RETURN(rc);
 
-	nodemap = tsi->tsi_exp->exp_target_data.ted_nodemap;
+	nodemap = nodemap_get_from_exp(tsi->tsi_exp);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
 
 	body->oa.o_uid = nodemap_map_id(nodemap, NODEMAP_UID,
 					NODEMAP_CLIENT_TO_FS,
@@ -263,6 +265,7 @@ static int tgt_ost_body_unpack(struct tgt_session_info *tsi, __u32 flags)
 	body->oa.o_gid = nodemap_map_id(nodemap, NODEMAP_GID,
 					NODEMAP_CLIENT_TO_FS,
 					body->oa.o_gid);
+	nodemap_putref(nodemap);
 
 	tsi->tsi_ost_body = body;
 	tsi->tsi_fid = body->oa.o_oi.oi_fid;

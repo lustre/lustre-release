@@ -648,7 +648,6 @@ static int nodemap_load_entries(const struct lu_env *env,
 
 	/* acquires active config lock */
 	new_config = nodemap_config_alloc();
-
 	if (IS_ERR(new_config)) {
 		rc = PTR_ERR(new_config);
 		new_config = NULL;

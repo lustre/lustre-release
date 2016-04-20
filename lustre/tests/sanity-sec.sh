@@ -1079,7 +1079,6 @@ do_fops_quota_test() {
 	local qused_high=$((qused_orig + quota_fuzz))
 	local qused_low=$((qused_orig - quota_fuzz))
 	local testfile=$DIR/$tdir/$tfile
-	chmod 777 $DIR/$tdir
 	$run_u dd if=/dev/zero of=$testfile bs=1M count=1 >& /dev/null
 	sync; sync_all_data || true
 
@@ -1221,6 +1220,22 @@ test_fops() {
 
 					do_create_delete "$run_u" "$key"
 				done
+
+				# set test dir to 777 for quota test
+				do_facet mgs $LCTL nodemap_modify \
+					--name c$cli_i		  \
+					--property admin	  \
+					--value 1
+				do_servers_not_mgs $LCTL set_param \
+					nodemap.c$cli_i.admin_nodemap=1
+				do_node $client chmod 777 $DIR/$tdir ||
+					error unable to chmod 777 $DIR/$tdir
+				do_facet mgs $LCTL nodemap_modify \
+					--name c$cli_i		  \
+					--property admin	  \
+					--value $admin
+				do_servers_not_mgs $LCTL set_param \
+				    nodemap.c$cli_i.admin_nodemap=$admin
 
 				# check quota
 				do_fops_quota_test "$run_u"

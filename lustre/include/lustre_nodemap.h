@@ -135,4 +135,6 @@ struct nm_config_file *nm_config_file_register(const struct lu_env *env,
 					       struct dt_object *obj);
 void nm_config_file_deregister(const struct lu_env *env,
 			       struct nm_config_file *ncf);
+struct lu_nodemap *nodemap_get_from_exp(struct obd_export *exp);
+void nodemap_putref(struct lu_nodemap *nodemap);
 #endif	/* _LUSTRE_NODEMAP_H */

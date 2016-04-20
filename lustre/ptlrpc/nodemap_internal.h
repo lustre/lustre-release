@@ -35,6 +35,12 @@
 
 #define DEFAULT_NODEMAP "default"
 
+/* Turn on proc debug interface to allow OSS and
+ * MDS nodes to configure nodemap independently of
+ * MGS (since the nodemap distribution is not written
+ * yet */
+#define NODEMAP_PROC_DEBUG 1
+
 /* Default nobody uid and gid values */
 
 #define NODEMAP_NOBODY_UID 99
@@ -192,6 +198,7 @@ int nodemap_add_range_helper(struct nodemap_config *config,
 
 struct rb_node *nm_rb_next_postorder(const struct rb_node *node);
 struct rb_node *nm_rb_first_postorder(const struct rb_root *root);
+void nodemap_getref(struct lu_nodemap *nodemap);
 void nodemap_putref(struct lu_nodemap *nodemap);
 
 #define nm_rbtree_postorder_for_each_entry_safe(pos, n,			\

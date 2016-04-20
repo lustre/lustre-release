@@ -550,9 +550,16 @@ static int mdt_finish_open(struct mdt_thread_info *info,
                 }
         }
 #ifdef CONFIG_FS_POSIX_ACL
-	else if (exp_connect_flags(exp) & OBD_CONNECT_ACL)
-		rc = mdt_pack_acl2body(info, repbody, o,
-				       exp->exp_target_data.ted_nodemap);
+	else if (exp_connect_flags(exp) & OBD_CONNECT_ACL) {
+		struct lu_nodemap *nodemap = nodemap_get_from_exp(exp);
+		if (IS_ERR(nodemap))
+			RETURN(PTR_ERR(nodemap));
+
+		rc = mdt_pack_acl2body(info, repbody, o, nodemap);
+		nodemap_putref(nodemap);
+		if (rc)
+			RETURN(rc);
+	}
 #endif
 
         /*

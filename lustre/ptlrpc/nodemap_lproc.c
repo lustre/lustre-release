@@ -37,12 +37,6 @@
 #include <interval_tree.h>
 #include "nodemap_internal.h"
 
-/* Turn on proc debug interface to allow OSS and
- * MDS nodes to configure nodemap independently of
- * MGS (since the nodemap distribution is not written
- * yet */
-#define NODEMAP_PROC_DEBUG 1
-
 static LIST_HEAD(nodemap_pde_list);
 
 /**

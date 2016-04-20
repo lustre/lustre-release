@@ -69,7 +69,18 @@ struct tg_export_data {
 	/** Client index in last_rcvd file */
 	int			ted_lr_idx;
 
-	/** nodemap this export is a member of */
+	/**
+	 * ted_nodemap_lock is used to ensure that the nodemap is not destroyed
+	 * between the time that ted_nodemap is checked for NULL, and a
+	 * reference is taken. Modifications to ted_nodemap require that the
+	 * active_config_lock and the nodemap(s)'s nm_member_list_lock be
+	 * taken, as well as ted_nodemap_lock, so the export can be properly
+	 * added to or removed from the nodemap's member list. When an export
+	 * is added to a nodemap, a reference on that nodemap must be taken.
+	 * That reference can be put only after ted_nodemap no longer refers to
+	 * it.
+	 */
+	spinlock_t		ted_nodemap_lock;
 	struct lu_nodemap	*ted_nodemap;
 	struct list_head	ted_nodemap_member;
 

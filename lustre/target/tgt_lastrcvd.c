@@ -378,6 +378,9 @@ int tgt_client_alloc(struct obd_export *exp)
 	ENTRY;
 	LASSERT(exp != exp->exp_obd->obd_self_export);
 
+	spin_lock_init(&exp->exp_target_data.ted_nodemap_lock);
+	INIT_LIST_HEAD(&exp->exp_target_data.ted_nodemap_member);
+
 	OBD_ALLOC_PTR(exp->exp_target_data.ted_lcd);
 	if (exp->exp_target_data.ted_lcd == NULL)
 		RETURN(-ENOMEM);

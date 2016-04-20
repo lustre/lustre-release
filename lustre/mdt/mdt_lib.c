@@ -464,20 +464,12 @@ out:
 }
 
 static int old_init_ucred_common(struct mdt_thread_info *info,
-				  bool drop_fs_cap)
+				 struct lu_nodemap *nodemap,
+				 bool drop_fs_cap)
 {
 	struct lu_ucred		*uc = mdt_ucred(info);
 	struct mdt_device	*mdt = info->mti_mdt;
 	struct md_identity	*identity = NULL;
-	struct lu_nodemap	*nodemap =
-		info->mti_exp->exp_target_data.ted_nodemap;
-
-	if (nodemap == NULL) {
-		CDEBUG(D_SEC, "%s: cli %s/%p nodemap not set.\n",
-		       mdt2obd_dev(mdt)->obd_name,
-		       info->mti_exp->exp_client_uuid.uuid, info->mti_exp);
-		RETURN(-EACCES);
-	}
 
 	if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
 		identity = mdt_identity_get(mdt->mdt_identity_cache,
@@ -495,7 +487,7 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 	}
 	uc->uc_identity = identity;
 
-	if (uc->uc_o_uid == nodemap->nm_squash_uid) {
+	if (nodemap && uc->uc_o_uid == nodemap->nm_squash_uid) {
 		uc->uc_fsuid = nodemap->nm_squash_uid;
 		uc->uc_fsgid = nodemap->nm_squash_gid;
 		uc->uc_cap = 0;
@@ -518,11 +510,14 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 static int old_init_ucred(struct mdt_thread_info *info,
 			  struct mdt_body *body, bool drop_fs_cap)
 {
-	struct lu_ucred		*uc = mdt_ucred(info);
-	struct lu_nodemap	*nodemap =
-		info->mti_exp->exp_target_data.ted_nodemap;
-	int			 rc;
+	struct lu_ucred *uc = mdt_ucred(info);
+	struct lu_nodemap *nodemap;
+	int rc;
 	ENTRY;
+
+	nodemap = nodemap_get_from_exp(info->mti_exp);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
 
 	body->mbo_uid = nodemap_map_id(nodemap, NODEMAP_UID,
 				       NODEMAP_CLIENT_TO_FS, body->mbo_uid);
@@ -544,18 +539,22 @@ static int old_init_ucred(struct mdt_thread_info *info,
 	uc->uc_ginfo = NULL;
 	uc->uc_cap = body->mbo_capability;
 
-	rc = old_init_ucred_common(info, drop_fs_cap);
+	rc = old_init_ucred_common(info, nodemap, drop_fs_cap);
+	nodemap_putref(nodemap);
 
 	RETURN(rc);
 }
 
 static int old_init_ucred_reint(struct mdt_thread_info *info)
 {
-	struct lu_ucred		*uc = mdt_ucred(info);
-	struct lu_nodemap	*nodemap =
-		info->mti_exp->exp_target_data.ted_nodemap;
-	int			 rc;
+	struct lu_ucred *uc = mdt_ucred(info);
+	struct lu_nodemap *nodemap;
+	int rc;
 	ENTRY;
+
+	nodemap = nodemap_get_from_exp(info->mti_exp);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
 
 	LASSERT(uc != NULL);
 
@@ -569,7 +568,8 @@ static int old_init_ucred_reint(struct mdt_thread_info *info)
 	uc->uc_o_gid = uc->uc_o_fsgid = uc->uc_gid = uc->uc_fsgid;
 	uc->uc_ginfo = NULL;
 
-	rc = old_init_ucred_common(info, true); /* drop_fs_cap = true */
+	rc = old_init_ucred_common(info, nodemap, true); /* drop_fs_cap=true */
+	nodemap_putref(nodemap);
 
 	RETURN(rc);
 }
@@ -914,8 +914,7 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 	struct req_capsule	*pill = info->mti_pill;
 	struct mdt_reint_record	*rr = &info->mti_rr;
 	struct mdt_rec_setattr	*rec;
-	struct lu_nodemap	*nodemap =
-		info->mti_exp->exp_target_data.ted_nodemap;
+	struct lu_nodemap	*nodemap;
         ENTRY;
 
         CLASSERT(sizeof(struct mdt_rec_setattr)== sizeof(struct mdt_rec_reint));
@@ -934,10 +933,17 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 	la->la_valid = mdt_attr_valid_xlate(rec->sa_valid, rr, ma);
 	la->la_mode  = rec->sa_mode;
 	la->la_flags = rec->sa_attr_flags;
+
+	nodemap = nodemap_get_from_exp(info->mti_exp);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
+
 	la->la_uid   = nodemap_map_id(nodemap, NODEMAP_UID,
 				      NODEMAP_CLIENT_TO_FS, rec->sa_uid);
 	la->la_gid   = nodemap_map_id(nodemap, NODEMAP_GID,
 				      NODEMAP_CLIENT_TO_FS, rec->sa_gid);
+	nodemap_putref(nodemap);
+
 	la->la_size  = rec->sa_size;
 	la->la_blocks = rec->sa_blocks;
 	la->la_ctime = rec->sa_ctime;

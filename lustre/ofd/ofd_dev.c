@@ -2209,11 +2209,10 @@ static int ofd_ladvise_hdl(struct tgt_session_info *tsi)
  */
 static int ofd_quotactl(struct tgt_session_info *tsi)
 {
-	struct obd_quotactl	*oqctl, *repoqc;
-	struct lu_nodemap	*nodemap =
-		tsi->tsi_exp->exp_target_data.ted_nodemap;
-	int			 id;
-	int			 rc;
+	struct obd_quotactl *oqctl, *repoqc;
+	struct lu_nodemap *nodemap;
+	int id;
+	int rc;
 
 	ENTRY;
 
@@ -2227,6 +2226,10 @@ static int ofd_quotactl(struct tgt_session_info *tsi)
 
 	*repoqc = *oqctl;
 
+	nodemap = nodemap_get_from_exp(tsi->tsi_exp);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
+
 	id = repoqc->qc_id;
 	if (oqctl->qc_type == USRQUOTA)
 		id = nodemap_map_id(nodemap, NODEMAP_UID,
@@ -2236,6 +2239,8 @@ static int ofd_quotactl(struct tgt_session_info *tsi)
 		id = nodemap_map_id(nodemap, NODEMAP_GID,
 				    NODEMAP_CLIENT_TO_FS,
 				    repoqc->qc_id);
+
+	nodemap_putref(nodemap);
 
 	if (repoqc->qc_id != id)
 		swap(repoqc->qc_id, id);
