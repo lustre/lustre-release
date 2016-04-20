@@ -2534,6 +2534,10 @@ test_130_base() {
 
 test_130a() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	local server_version=$(lustre_version_code $SINGLEMDS)
+	[[ $server_version -ge $(version_code 2.7.2) ]] ||
+		{ skip "Need server version newer than 2.7.1"; return 0; }
+
 	test_130_base
 
 	wait $T130_PID || [ $? -eq 0 ] && error "stat should fail"
@@ -2543,6 +2547,10 @@ run_test 130a "enqueue resend on not existing file"
 
 test_130b() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	local server_version=$(lustre_version_code $SINGLEMDS)
+	[[ $server_version -ge $(version_code 2.7.2) ]] ||
+		{ skip "Need server version newer than 2.7.1"; return 0; }
+
 	test_130_base
 	# let the reply to be dropped
 	sleep 10
