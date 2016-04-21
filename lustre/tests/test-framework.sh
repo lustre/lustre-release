@@ -59,7 +59,7 @@ sanitize_parameters() {
 	do
 		local path=${!i}
 		if [ -d "$path" ]; then
-			eval export $i=$(echo $path | sed -E 's/\/+$//g')
+			eval export $i=$(echo $path | sed -r 's/\/+$//g')
 		fi
 	done
 }
