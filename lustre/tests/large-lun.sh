@@ -11,7 +11,7 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-if ! [ "$REFORMAT" ]; then
+if [ "$REFORMAT" != "yes" ]; then
 	skip_env "$0 reformats all devices,\
 		please set REFORMAT to run this test"
 	exit 0

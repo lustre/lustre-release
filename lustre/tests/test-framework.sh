@@ -333,20 +333,20 @@ init_test_env() {
 	export SHUTDOWN_ATTEMPTS=${SHUTDOWN_ATTEMPTS:-3}
 	export OSD_TRACK_DECLARES_LBUG=${OSD_TRACK_DECLARES_LBUG:-"yes"}
 
-    # command line
+	# command line
 
-    while getopts "rvwf:" opt $*; do
-        case $opt in
-            f) CONFIG=$OPTARG;;
-            r) REFORMAT=--reformat;;
-            v) VERBOSE=true;;
-            w) WRITECONF=writeconf;;
-            \?) usage;;
-        esac
-    done
+	while getopts "rvwf:" opt $*; do
+		case $opt in
+			f) CONFIG=$OPTARG;;
+			r) REFORMAT=yes;;
+			v) VERBOSE=true;;
+			w) WRITECONF=writeconf;;
+			\?) usage;;
+		esac
+	done
 
-    shift $((OPTIND - 1))
-    ONLY=${ONLY:-$*}
+	shift $((OPTIND - 1))
+	ONLY=${ONLY:-$*}
 
 	# print the durations of each test if "true"
 	DDETAILS=${DDETAILS:-false}
@@ -3995,15 +3995,15 @@ check_and_setup_lustre() {
 	local MOUNTED=$(mounted_lustre_filesystems)
 
 	local do_check=true
-    # 1.
-    # both MOUNT and MOUNT2 are not mounted
-    if ! is_mounted $MOUNT && ! is_mounted $MOUNT2; then
-        [ "$REFORMAT" ] && formatall
-        # setupall mounts both MOUNT and MOUNT2 (if MOUNT_2 is set)
-        setupall
-        is_mounted $MOUNT || error "NAME=$NAME not mounted"
-        export I_MOUNTED=yes
-        do_check=false
+	# 1.
+	# both MOUNT and MOUNT2 are not mounted
+	if ! is_mounted $MOUNT && ! is_mounted $MOUNT2; then
+		[ "$REFORMAT" = "yes" ] && formatall
+		# setupall mounts both MOUNT and MOUNT2 (if MOUNT_2 is set)
+		setupall
+		is_mounted $MOUNT || error "NAME=$NAME not mounted"
+		export I_MOUNTED=yes
+		do_check=false
     # 2.
     # MOUNT2 is mounted
     elif is_mounted $MOUNT2; then
