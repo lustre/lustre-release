@@ -856,6 +856,8 @@ int mdt_cdt_remove_request(struct coordinator *cdt, __u64 cookie);
 /* mdt/mdt_coordinator.c */
 void mdt_hsm_dump_hal(int level, const char *prefix,
 		      struct hsm_action_list *hal);
+struct cdt_restore_handle *mdt_hsm_restore_hdl_find(struct coordinator *cdt,
+						const struct lu_fid *fid);
 /* coordinator management */
 int mdt_hsm_cdt_init(struct mdt_device *mdt);
 int mdt_hsm_cdt_start(struct mdt_device *mdt);
