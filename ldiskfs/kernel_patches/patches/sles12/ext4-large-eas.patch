@@ -114,6 +114,20 @@ Index: linux-stage/fs/ext4/inode.c
  	inode->i_size = 0;
  	err = ext4_mark_inode_dirty(handle, inode);
  	if (err) {
+@@ -269,10 +296,10 @@ void ext4_evict_inode(struct inode *inod
+ 	 * enough credits left in the handle to remove the inode from
+ 	 * the orphan list and set the dtime field.
+ 	 */
+-	if (!ext4_handle_has_enough_credits(handle, 3)) {
+-		err = ext4_journal_extend(handle, 3);
++	if (!ext4_handle_has_enough_credits(handle, extra_credits)) {
++		err = ext4_journal_extend(handle, extra_credits);
+ 		if (err > 0)
+-			err = ext4_journal_restart(handle, 3);
++			err = ext4_journal_restart(handle, extra_credits);
+ 		if (err != 0) {
+ 			ext4_warning(inode->i_sb,
+ 				     "couldn't extend journal (err %d)", err);
 @@ -307,6 +334,9 @@ void ext4_evict_inode(struct inode *inod
  		ext4_free_inode(handle, inode);
  	ext4_journal_stop(handle);
