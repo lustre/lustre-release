@@ -2842,8 +2842,7 @@ struct obdo {
 	struct lustre_handle	o_handle;	/* brw: lock handle to prolong
 						 * locks */
 	struct llog_cookie	o_lcookie;	/* destroy: unlink cookie from
-						 * MDS, obsolete in 2.8, reused
-						 * in OSP */
+						 * MDS, obsolete in 2.8 */
 	__u32			o_uid_h;
 	__u32			o_gid_h;
 
