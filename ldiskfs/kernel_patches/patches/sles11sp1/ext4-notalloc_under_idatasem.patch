@@ -1,0 +1,14 @@
+Index: linux-stage/fs/ext4/extents.c
+===================================================================
+--- linux-stage.orig/fs/ext4/extents.c	2015-07-13 22:22:56.000000000 +0300
++++ linux-stage/fs/ext4/extents.c	2015-07-13 22:24:05.000000000 +0300
+@@ -3954,7 +3954,8 @@ static int ext4_ext_fiemap_cb(struct ino
+ 		struct buffer_head *head = NULL;
+ 		unsigned int nr_pages = PAGE_SIZE / sizeof(struct page *);
+ 
+-		pages = kmalloc(PAGE_SIZE, GFP_KERNEL);
++		/* we are running under i_data_sem so don't reenter the FS code */
++		pages = kmalloc(PAGE_SIZE, GFP_NOFS);
+ 		if (pages == NULL)
+ 			return -ENOMEM;
+ 
