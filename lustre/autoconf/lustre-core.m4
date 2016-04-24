@@ -1260,6 +1260,23 @@ inode_ops_atomic_open, [
 ]) # LC_HAVE_IOP_ATOMIC_OPEN
 
 #
+# LC_HAVE_SB_START_WRITE
+#
+# RHEL6 2.6.32, 3.6 or newer support wrapped FS freeze functions
+#
+AC_DEFUN([LC_HAVE_SB_START_WRITE], [
+LB_CHECK_COMPILE([if kernel supports wrapped FS freeze functions],
+sb_start_write, [
+	#include <linux/fs.h>
+],[
+	sb_start_write(NULL);
+],[
+	AC_DEFINE(HAVE_SB_START_WRITE, 1,
+		[kernel supports wrapped FS freeze functions])
+])
+]) # LC_HAVE_SB_START_WRITE
+
+#
 # LC_HAVE_POSIXACL_USER_NS
 #
 # 3.7 posix_acl_{to,from}_xattr take struct user_namespace
@@ -2135,6 +2152,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_DATA_FOR_LLITE_IS_LIST
 	LC_DENTRY_OPEN_USE_PATH
 	LC_HAVE_IOP_ATOMIC_OPEN
+	LC_HAVE_SB_START_WRITE
 
 	# 3.7
 	LC_HAVE_POSIXACL_USER_NS
