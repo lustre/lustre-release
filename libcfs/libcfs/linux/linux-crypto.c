@@ -27,11 +27,26 @@
  * Copyright (c) 2012, 2014, Intel Corporation.
  */
 
-#include <linux/crypto.h>
+#include <crypto/hash.h>
 #include <linux/scatterlist.h>
 #include <libcfs/libcfs.h>
 #include <libcfs/libcfs_crypto.h>
 #include <libcfs/linux/linux-crypto.h>
+
+#ifndef crypto_ahash_alg_name
+static inline const char *crypto_ahash_alg_name(struct crypto_ahash *tfm)
+{
+	return crypto_tfm_alg_name(crypto_ahash_tfm(tfm));
+}
+#endif
+
+#ifndef crypto_ahash_driver_name
+static inline const char *crypto_ahash_driver_name(struct crypto_ahash *tfm)
+{
+	return crypto_tfm_alg_driver_name(crypto_ahash_tfm(tfm));
+}
+#endif
+
 /**
  *  Array of hash algorithm speed in MByte per second
  */
@@ -47,7 +62,7 @@ static int cfs_crypto_hash_speeds[CFS_HASH_ALG_MAX];
  *
  * \param[in]  hash_alg	hash algorithm id (CFS_HASH_ALG_*)
  * \param[out] type	pointer to the hash description in hash_types[] array
- * \param[in,out] hdesc	hash state descriptor to be initialized
+ * \param[in,out] req	ahash request to be initialized
  * \param[in]  key	initial hash value/state, NULL to use default value
  * \param[in]  key_len	length of \a key
  *
@@ -56,9 +71,11 @@ static int cfs_crypto_hash_speeds[CFS_HASH_ALG_MAX];
  */
 static int cfs_crypto_hash_alloc(enum cfs_crypto_hash_alg hash_alg,
 				 const struct cfs_crypto_hash_type **type,
-				 struct hash_desc *hdesc, unsigned char *key,
+				 struct ahash_request **req,
+				 unsigned char *key,
 				 unsigned int key_len)
 {
+	struct crypto_ahash *tfm;
 	int err = 0;
 
 	*type = cfs_crypto_hash_type(hash_alg);
@@ -68,37 +85,46 @@ static int cfs_crypto_hash_alloc(enum cfs_crypto_hash_alg hash_alg,
 		      hash_alg, CFS_HASH_ALG_MAX);
 		return -EINVAL;
 	}
-	hdesc->tfm = crypto_alloc_hash((*type)->cht_name, 0, 0);
-
-	if (hdesc->tfm == NULL)
-		return -EINVAL;
-
-	if (IS_ERR(hdesc->tfm)) {
+	tfm = crypto_alloc_ahash((*type)->cht_name, 0, CRYPTO_ALG_ASYNC);
+	if (IS_ERR(tfm)) {
 		CDEBUG(D_INFO, "Failed to alloc crypto hash %s\n",
 		       (*type)->cht_name);
-		return PTR_ERR(hdesc->tfm);
+		return PTR_ERR(tfm);
 	}
 
-	hdesc->flags = 0;
+	*req = ahash_request_alloc(tfm, GFP_KERNEL);
+	if (!*req) {
+		CDEBUG(D_INFO, "Failed to alloc ahash_request for %s\n",
+		       (*type)->cht_name);
+		crypto_free_ahash(tfm);
+		return -ENOMEM;
+	}
 
-	if (key != NULL)
-		err = crypto_hash_setkey(hdesc->tfm, key, key_len);
+	ahash_request_set_callback(*req, 0, NULL, NULL);
+
+	if (key)
+		err = crypto_ahash_setkey(tfm, key, key_len);
 	else if ((*type)->cht_key != 0)
-		err = crypto_hash_setkey(hdesc->tfm,
+		err = crypto_ahash_setkey(tfm,
 					 (unsigned char *)&((*type)->cht_key),
 					 (*type)->cht_size);
 
 	if (err != 0) {
-		crypto_free_hash(hdesc->tfm);
+		ahash_request_free(*req);
+		crypto_free_ahash(tfm);
 		return err;
 	}
 
 	CDEBUG(D_INFO, "Using crypto hash: %s (%s) speed %d MB/s\n",
-	       (crypto_hash_tfm(hdesc->tfm))->__crt_alg->cra_name,
-	       (crypto_hash_tfm(hdesc->tfm))->__crt_alg->cra_driver_name,
+	       crypto_ahash_alg_name(tfm), crypto_ahash_driver_name(tfm),
 	       cfs_crypto_hash_speeds[hash_alg]);
 
-	return crypto_hash_init(hdesc);
+	err = crypto_ahash_init(*req);
+	if (err) {
+		ahash_request_free(*req);
+		crypto_free_ahash(tfm);
+	}
+	return err;
 }
 
 /**
@@ -117,7 +143,7 @@ static int cfs_crypto_hash_alloc(enum cfs_crypto_hash_alg hash_alg,
  *			\a hash_len is to digest size in bytes, retval -ENOSPC
  * \param[in,out] hash_len size of \a hash buffer
  *
- * \retval -EINVAL       \a buf, \a buf_len, \a hash_len, \a alg_id invalid
+ * \retval -EINVAL       \a buf, \a buf_len, \a hash_len, \a hash_alg invalid
  * \retval -ENOENT       \a hash_alg is unsupported
  * \retval -ENOSPC       \a hash is NULL, or \a hash_len less than digest size
  * \retval		0 for success
@@ -129,27 +155,29 @@ int cfs_crypto_hash_digest(enum cfs_crypto_hash_alg hash_alg,
 			   unsigned char *hash, unsigned int *hash_len)
 {
 	struct scatterlist	sl;
-	struct hash_desc	hdesc;
+	struct ahash_request *req;
 	int			err;
 	const struct cfs_crypto_hash_type	*type;
 
-	if (buf == NULL || buf_len == 0 || hash_len == NULL)
+	if (!buf || buf_len == 0 || !hash_len)
 		return -EINVAL;
 
-	err = cfs_crypto_hash_alloc(hash_alg, &type, &hdesc, key, key_len);
+	err = cfs_crypto_hash_alloc(hash_alg, &type, &req, key, key_len);
 	if (err != 0)
 		return err;
 
-	if (hash == NULL || *hash_len < type->cht_size) {
+	if (!hash || *hash_len < type->cht_size) {
 		*hash_len = type->cht_size;
-		crypto_free_hash(hdesc.tfm);
+		crypto_free_ahash(crypto_ahash_reqtfm(req));
+		ahash_request_free(req);
 		return -ENOSPC;
 	}
 	sg_init_one(&sl, (void *)buf, buf_len);
 
-	hdesc.flags = 0;
-	err = crypto_hash_digest(&hdesc, &sl, sl.length, hash);
-	crypto_free_hash(hdesc.tfm);
+	ahash_request_set_crypt(req, &sl, hash, sl.length);
+	err = crypto_ahash_digest(req);
+	crypto_free_ahash(crypto_ahash_reqtfm(req));
+	ahash_request_free(req);
 
 	return err;
 }
@@ -176,22 +204,14 @@ struct cfs_crypto_hash_desc *
 	cfs_crypto_hash_init(enum cfs_crypto_hash_alg hash_alg,
 			     unsigned char *key, unsigned int key_len)
 {
-
-	struct  hash_desc			*hdesc;
+	struct ahash_request *req;
 	int					err;
 	const struct cfs_crypto_hash_type       *type;
 
-	hdesc = kmalloc(sizeof(*hdesc), 0);
-	if (hdesc == NULL)
-		return ERR_PTR(-ENOMEM);
-
-	err = cfs_crypto_hash_alloc(hash_alg, &type, hdesc, key, key_len);
-
-	if (err) {
-		kfree(hdesc);
-		hdesc = ERR_PTR(err);
-	}
-	return (struct cfs_crypto_hash_desc *)hdesc;
+	err = cfs_crypto_hash_alloc(hash_alg, &type, &req, key, key_len);
+	if (err)
+		return ERR_PTR(err);
+	return (struct cfs_crypto_hash_desc *)req;
 }
 EXPORT_SYMBOL(cfs_crypto_hash_init);
 
@@ -210,12 +230,14 @@ int cfs_crypto_hash_update_page(struct cfs_crypto_hash_desc *hdesc,
 				struct page *page, unsigned int offset,
 				unsigned int len)
 {
+	struct ahash_request *req = (void *)hdesc;
 	struct scatterlist sl;
 
 	sg_init_table(&sl, 1);
 	sg_set_page(&sl, page, len, offset & ~PAGE_MASK);
 
-	return crypto_hash_update((struct hash_desc *)hdesc, &sl, sl.length);
+	ahash_request_set_crypt(req, &sl, NULL, sl.length);
+	return crypto_ahash_update(req);
 }
 EXPORT_SYMBOL(cfs_crypto_hash_update_page);
 
@@ -232,11 +254,13 @@ EXPORT_SYMBOL(cfs_crypto_hash_update_page);
 int cfs_crypto_hash_update(struct cfs_crypto_hash_desc *hdesc,
 			   const void *buf, unsigned int buf_len)
 {
+	struct ahash_request *req = (void *)hdesc;
 	struct scatterlist sl;
 
 	sg_init_one(&sl, (void *)buf, buf_len);
 
-	return crypto_hash_update((struct hash_desc *)hdesc, &sl, sl.length);
+	ahash_request_set_crypt(req, &sl, NULL, sl.length);
+	return crypto_ahash_update(req);
 }
 EXPORT_SYMBOL(cfs_crypto_hash_update);
 
@@ -256,10 +280,11 @@ EXPORT_SYMBOL(cfs_crypto_hash_update);
 int cfs_crypto_hash_final(struct cfs_crypto_hash_desc *hdesc,
 			  unsigned char *hash, unsigned int *hash_len)
 {
-	int     size = crypto_hash_digestsize(((struct hash_desc *)hdesc)->tfm);
-	int     err;
+	struct ahash_request *req = (void *)hdesc;
+	int size = crypto_ahash_digestsize(crypto_ahash_reqtfm(req));
+	int err;
 
-	if (hash == NULL || hash_len == NULL) {
+	if (!hash || !hash_len) {
 		err = 0;
 		goto free;
 	}
@@ -268,12 +293,13 @@ int cfs_crypto_hash_final(struct cfs_crypto_hash_desc *hdesc,
 		goto free;
 	}
 
-	err = crypto_hash_final((struct hash_desc *)hdesc, hash);
+	ahash_request_set_crypt(req, NULL, hash, 0);
+	err = crypto_ahash_final(req);
 	if (err == 0)
 		*hash_len = size;
 free:
-	crypto_free_hash(((struct hash_desc *)hdesc)->tfm);
-	kfree(hdesc);
+	crypto_free_ahash(crypto_ahash_reqtfm(req));
+	ahash_request_free(req);
 
 	return err;
 }
