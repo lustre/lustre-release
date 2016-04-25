@@ -3121,7 +3121,7 @@ static int
 mdt_intent_lock_replace(struct mdt_thread_info *info,
 			struct ldlm_lock **lockp,
 			struct mdt_lock_handle *lh,
-			__u64 flags)
+			__u64 flags, int result)
 {
         struct ptlrpc_request  *req = mdt_info_req(info);
         struct ldlm_lock       *lock = *lockp;
@@ -3135,8 +3135,19 @@ mdt_intent_lock_replace(struct mdt_thread_info *info,
                 RETURN(0);
         }
 
-        LASSERTF(new_lock != NULL,
-                 "lockh "LPX64"\n", lh->mlh_reg_lh.cookie);
+	if (new_lock == NULL && (flags & LDLM_FL_RESENT)) {
+		/* Lock is pinned by ldlm_handle_enqueue0() as it is
+		 * a resend case, however, it could be already destroyed
+		 * due to client eviction or a raced cancel RPC. */
+		LDLM_DEBUG_NOLOCK("Invalid lock handle "LPX64"\n",
+				  lh->mlh_reg_lh.cookie);
+		lh->mlh_reg_lh.cookie = 0;
+		RETURN(-ESTALE);
+	}
+
+	LASSERTF(new_lock != NULL,
+		 "lockh "LPX64" flags "LPX64" rc %d\n",
+		 lh->mlh_reg_lh.cookie, flags, result);
 
         /*
          * If we've already given this lock to a client once, then we should
@@ -3270,7 +3281,7 @@ static int mdt_intent_getxattr(enum mdt_it_code opcode,
 
 	grc = mdt_getxattr(info);
 
-	rc = mdt_intent_lock_replace(info, lockp, lhc, flags);
+	rc = mdt_intent_lock_replace(info, lockp, lhc, flags, 0);
 
 	if (mdt_info_req(info)->rq_repmsg != NULL)
 		ldlm_rep = req_capsule_server_get(info->mti_pill, &RMF_DLM_REP);
@@ -3339,7 +3350,7 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
                 GOTO(out_ucred, rc = ELDLM_LOCK_ABORTED);
         }
 
-	rc = mdt_intent_lock_replace(info, lockp, lhc, flags);
+	rc = mdt_intent_lock_replace(info, lockp, lhc, flags, rc);
         EXIT;
 out_ucred:
         mdt_exit_ucred(info);
@@ -3409,7 +3420,7 @@ out_obj:
 	mdt_object_put(info->mti_env, obj);
 
 	if (rc == 0 && lustre_handle_is_used(&lhc->mlh_reg_lh))
-		rc = mdt_intent_lock_replace(info, lockp, lhc, flags);
+		rc = mdt_intent_lock_replace(info, lockp, lhc, flags, rc);
 
 out:
 	lhc->mlh_reg_lh.cookie = 0;
@@ -3464,7 +3475,7 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
 	if (lustre_handle_is_used(&lhc->mlh_reg_lh) &&
 	    (rc == 0 || rc == -MDT_EREMOTE_OPEN)) {
 		rep->lock_policy_res2 = 0;
-		rc = mdt_intent_lock_replace(info, lockp, lhc, flags);
+		rc = mdt_intent_lock_replace(info, lockp, lhc, flags, rc);
 		RETURN(rc);
 	}
 
