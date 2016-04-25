@@ -180,16 +180,9 @@ srpm: @PACKAGE_TARNAME@.spec dist Makefile
 	rm -rf $$rpmbuilddir
 
 # In the debs target, first make sure what's in the changelog reflects
-# the software version.  Here's how we could dig the version out of the
-# autoconf version file directly:
-# lversion=$$(sed -ne 's/m4_define(\[LUSTRE_[A-Z][A-Z]*\],\[\([0-9][0-9]*\)\])$$/\1/p'
-#	lustre/autoconf/lustre-version.ac | tr '\n' '.' | sed -e 's/.$//');
-#
-# However, one cannot really run "make debs" without having done a
-# configure first, so we could use the easier method of digging the
-# version out of the config.h file.
+# the software version.
 debs: undef.h
-	lversion=$$(sed -ne 's/^#define VERSION "\(.*\)"$$/\1/p' config.h); \
+	lversion=$$(echo @VERSION@ | tr '_' '-'); \
 	cversion=$$(sed -ne '1s/^lustre (\(.*\)-[0-9][0-9]*).*$$/\1/p' debian/changelog); \
 	if [ "$$lversion" != "$$cversion" ]; then \
 		echo -e "1i\nlustre ($$lversion-1) unstable; urgency=low\n\n  * Automated changelog entry update\n\n -- Brian J. Murrell <brian@interlinx.bc.ca>  $$(date -R)\n\n.\nwq" | ed debian/changelog; \
