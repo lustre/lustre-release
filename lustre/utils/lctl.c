@@ -133,7 +133,7 @@ command_t cmdlist[] = {
 	 "usage: net_delay_add <-s | --source NID>\n"
 	 "		       <-d | --dest NID>\n"
 	 "		       <<-r | --rate DROP_RATE> |\n"
-	 "		        <-i | --interval SECONDS>>\n"
+	 "			<-i | --interval SECONDS>>\n"
 	 "		       <-l | --latency SECONDS>\n"
 	 "		       [<-p | --portal> PORTAL...]\n"
 	 "		       [<-m | --message> <PUT|ACK|GET|REPLY>...]\n"},
@@ -146,30 +146,30 @@ command_t cmdlist[] = {
 	{"net_delay_list", jt_ptl_delay_list, 0, "list LNet delay rules\n"
 	 "usage: net_delay_list"},
 
-        /* Device selection commands */
-        {"==== obd device selection ====", jt_noop, 0, "device selection"},
-        {"device", jt_obd_device, 0,
-         "set current device to <name|devno>\n"
-         "usage: device <%name|$name|devno>"},
-        {"device_list", jt_obd_list, 0, "show all devices\n"
-         "usage: device_list"},
-        {"dl", jt_obd_list, 0, "show all devices\n"
-         "usage: dl [-t]"},
+	/* Device selection commands */
+	{"==== obd device selection ====", jt_noop, 0, "device selection"},
+	{"device", jt_obd_device, 0,
+	 "set current device to <name|devno>\n"
+	 "usage: device <%name|$name|devno>"},
+	{"device_list", jt_obd_list, 0, "show all devices\n"
+	 "usage: device_list"},
+	{"dl", jt_obd_list, 0, "show all devices\n"
+	 "usage: dl [-t]"},
 
-        /* Device operations */
-        {"==== obd device operations ====", jt_noop, 0, "device operations"},
-        {"activate", jt_obd_activate, 0, "activate an import\n"},
-        {"deactivate", jt_obd_deactivate, 0, "deactivate an import. "
-         "This command should be used on failed OSC devices in an MDT LOV.\n"},
-        {"abort_recovery", jt_obd_abort_recovery, 0,
-         "abort recovery on a restarting MDT or OST device\n"},
-        {"set_timeout", jt_lcfg_set_timeout, 0,
-         "usage: conf_param obd_timeout=<secs>\n"},
+	/* Device operations */
+	{"==== obd device operations ====", jt_noop, 0, "device operations"},
+	{"activate", jt_obd_activate, 0, "activate an import\n"},
+	{"deactivate", jt_obd_deactivate, 0, "deactivate an import. "
+	 "This command should be used on failed OSC devices in an MDT LOV.\n"},
+	{"abort_recovery", jt_obd_abort_recovery, 0,
+	 "abort recovery on a restarting MDT or OST device\n"},
+	{"set_timeout", jt_lcfg_set_timeout, 0,
+	 "usage: conf_param obd_timeout=<secs>\n"},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
-        {"conf_param", jt_lcfg_mgsparam, 0,"set a permanent config parameter.\n"
-         "This command must be run on the MGS node\n"
-         "usage: conf_param [-d] <target.keyword=val>\n"
-         "  -d  Remove the permanent setting."},
+	{"conf_param", jt_lcfg_mgsparam, 0,"set a permanent config parameter.\n"
+	 "This command must be run on the MGS node\n"
+	 "usage: conf_param [-d] <target.keyword=val>\n"
+	 "  -d  Remove the permanent setting."},
 #endif
 	{"local_param", jt_lcfg_param, 0, "set a temporary, local param\n"
 	 "usage: local_param <target.keyword=val>\n"},
@@ -199,66 +199,66 @@ command_t cmdlist[] = {
 	 "  -D  Only list directories.\n"
 	 "  -R  Recursively list all parameters under the specified path.\n"},
 
-        /* Debug commands */
-        {"==== debugging control ====", jt_noop, 0, "debug"},
-        {"debug_daemon", jt_dbg_debug_daemon, 0,
-         "debug daemon control and dump to a file\n"
-         "usage: debug_daemon {start file [#MB]|stop}"},
-        {"debug_kernel", jt_dbg_debug_kernel, 0,
-         "get debug buffer and dump to a file, same as dk\n"
-         "usage: debug_kernel [file] [raw]"},
-        {"dk", jt_dbg_debug_kernel, 0,
-         "get debug buffer and dump to a file, same as debug_kernel\n"
-         "usage: dk [file] [raw]"},
-        {"debug_file", jt_dbg_debug_file, 0,
-         "convert a binary debug file dumped by the kernel to ASCII text\n"
-         "usage: debug_file <input> [output]"},
-        {"df", jt_dbg_debug_file, 0,
-         "read debug buffer from input and dump to output, same as debug_file\n"
-         "usage: df <input> [output]"},
-        {"clear", jt_dbg_clear_debug_buf, 0, "clear kernel debug buffer\n"
-         "usage: clear"},
-        {"mark", jt_dbg_mark_debug_buf, 0,
-         "insert marker text in kernel debug buffer\n"
-         "usage: mark <text>"},
-        {"filter", jt_dbg_filter, 0, "filter message type\n"
-         "usage: filter <subsystem id/debug mask>"},
-        {"show", jt_dbg_show, 0, "Show specific type of messages\n"
-         "usage: show <subsystem id/debug mask>"},
-        {"debug_list", jt_dbg_list, 0, "list subsystem and debug types\n"
-         "usage: debug_list <subs/types>"},
-        {"modules", jt_dbg_modules, 0,
-         "provide gdb-friendly module information\n"
-         "usage: modules <path>"},
+	/* Debug commands */
+	{"==== debugging control ====", jt_noop, 0, "debug"},
+	{"debug_daemon", jt_dbg_debug_daemon, 0,
+	 "debug daemon control and dump to a file\n"
+	 "usage: debug_daemon {start file [#MB]|stop}"},
+	{"debug_kernel", jt_dbg_debug_kernel, 0,
+	 "get debug buffer and dump to a file, same as dk\n"
+	 "usage: debug_kernel [file] [raw]"},
+	{"dk", jt_dbg_debug_kernel, 0,
+	 "get debug buffer and dump to a file, same as debug_kernel\n"
+	 "usage: dk [file] [raw]"},
+	{"debug_file", jt_dbg_debug_file, 0,
+	 "convert a binary debug file dumped by the kernel to ASCII text\n"
+	 "usage: debug_file <input> [output]"},
+	{"df", jt_dbg_debug_file, 0,
+	 "read debug buffer from input and dump to output, same as debug_file\n"
+	 "usage: df <input> [output]"},
+	{"clear", jt_dbg_clear_debug_buf, 0, "clear kernel debug buffer\n"
+	 "usage: clear"},
+	{"mark", jt_dbg_mark_debug_buf, 0,
+	 "insert marker text in kernel debug buffer\n"
+	 "usage: mark <text>"},
+	{"filter", jt_dbg_filter, 0, "filter message type\n"
+	 "usage: filter <subsystem id/debug mask>"},
+	{"show", jt_dbg_show, 0, "Show specific type of messages\n"
+	 "usage: show <subsystem id/debug mask>"},
+	{"debug_list", jt_dbg_list, 0, "list subsystem and debug types\n"
+	 "usage: debug_list <subs/types>"},
+	{"modules", jt_dbg_modules, 0,
+	 "provide gdb-friendly module information\n"
+	 "usage: modules <path>"},
 
-        /* virtual block operations */
-        {"==== virtual block device ====", jt_noop, 0, "virtual block device"},
-        {"blockdev_attach", jt_blockdev_attach, 0,
-         "attach a lustre regular file to a virtual block device\n"
-         "usage: blockdev_attach <file_name> <device_name>"},
-        {"blockdev_detach", jt_blockdev_detach, 0,
-         "detach a lustre regular file from a virtual block device\n"
-         "usage: blockdev_detach <device_name>"},
-        {"blockdev_info", jt_blockdev_info, 0,
+	/* virtual block operations */
+	{"==== virtual block device ====", jt_noop, 0, "virtual block device"},
+	{"blockdev_attach", jt_blockdev_attach, 0,
+	 "attach a lustre regular file to a virtual block device\n"
+	 "usage: blockdev_attach <file_name> <device_name>"},
+	{"blockdev_detach", jt_blockdev_detach, 0,
+	 "detach a lustre regular file from a virtual block device\n"
+	 "usage: blockdev_detach <device_name>"},
+	{"blockdev_info", jt_blockdev_info, 0,
 	 "get the device info of an attached file\n"
-         "usage: blockdev_info <device_name>"},
+	 "usage: blockdev_info <device_name>"},
 
-        /* Pool commands */
-        {"===  Pools ==", jt_noop, 0, "pool management"},
-        {"pool_new", jt_pool_cmd, 0,
-         "add a new pool\n"
+	/* Pool commands */
+	{"===  Pools ==", jt_noop, 0, "pool management"},
+	{"pool_new", jt_pool_cmd, 0,
+	 "add a new pool\n"
 	 "usage: pool_new <fsname>.<poolname>"},
 	{"pool_add", jt_pool_cmd, 0,
-         "add the named OSTs to the pool\n"
+	 "add the named OSTs to the pool\n"
 	 "usage: pool_add <fsname>.<poolname> <ostname indexed list>"},
-        {"pool_remove", jt_pool_cmd, 0,
-         "remove the named OST from the pool\n"
+	{"pool_remove", jt_pool_cmd, 0,
+	 "remove the named OST from the pool\n"
 	 "usage: pool_remove <fsname>.<poolname> <ostname indexed list>"},
-        {"pool_destroy", jt_pool_cmd, 0,
-         "destroy a pool\n"
+	{"pool_destroy", jt_pool_cmd, 0,
+	 "destroy a pool\n"
 	 "usage: pool_destroy <fsname>.<poolname>"},
-        {"pool_list", jt_pool_cmd, 0,
-         "list pools and pools members\n"
+	{"pool_list", jt_pool_cmd, 0,
+	 "list pools and pools members\n"
 	 "usage: pool_list  <fsname>[.<poolname>] | <pathname>"},
 
 	/* Nodemap commands */
@@ -295,41 +295,41 @@ command_t cmdlist[] = {
 	{"nodemap_info", jt_nodemap_info, 0,
 	 "Usage: nodemap_info [list|nodemap_name|all]"},
 
-        /* Changelog commands */
-        {"===  Changelogs ==", jt_noop, 0, "changelog user management"},
-        {"changelog_register", jt_changelog_register, 0,
-         "register a new persistent changelog user, returns id\n"
-         "usage:\tdevice <mdtname>\n\tchangelog_register [-n]"},
-        {"changelog_deregister", jt_changelog_deregister, 0,
-         "deregister an existing changelog user\n"
-         "usage:\tdevice <mdtname>\n\tchangelog_deregister <id>"},
+	/* Changelog commands */
+	{"===  Changelogs ==", jt_noop, 0, "changelog user management"},
+	{"changelog_register", jt_changelog_register, 0,
+	 "register a new persistent changelog user, returns id\n"
+	 "usage: --device <mdtname> changelog_register [-n]"},
+	{"changelog_deregister", jt_changelog_deregister, 0,
+	 "deregister an existing changelog user\n"
+	 "usage: --device <mdtname> changelog_deregister <id>"},
 
-        /* Device configuration commands */
-        {"== device setup (these are not normally used post 1.4) ==",
-                jt_noop, 0, "device config"},
-        {"attach", jt_lcfg_attach, 0,
-         "set the type, name, and uuid of the current device\n"
-         "usage: attach type name uuid"},
-        {"detach", jt_obd_detach, 0,
-         "remove driver (and name and uuid) from current device\n"
-         "usage: detach"},
-        {"setup", jt_lcfg_setup, 0,
-         "type specific device configuration information\n"
-         "usage: setup <args...>"},
-        {"cleanup", jt_obd_cleanup, 0, "cleanup previously setup device\n"
-         "usage: cleanup [force | failover]"},
+	/* Device configuration commands */
+	{"== device setup (these are not normally used post 1.4) ==",
+		jt_noop, 0, "device config"},
+	{"attach", jt_lcfg_attach, 0,
+	 "set the type, name, and uuid of the current device\n"
+	 "usage: attach type name uuid"},
+	{"detach", jt_obd_detach, 0,
+	 "remove driver (and name and uuid) from current device\n"
+	 "usage: detach"},
+	{"setup", jt_lcfg_setup, 0,
+	 "type specific device configuration information\n"
+	 "usage: setup <args...>"},
+	{"cleanup", jt_obd_cleanup, 0, "cleanup previously setup device\n"
+	 "usage: cleanup [force | failover]"},
 
-        /* Test only commands */
-        {"==== testing (DANGEROUS) ====", jt_noop, 0, "testing (DANGEROUS)"},
-        {"--threads", jt_opt_threads, 0,
-         "run <threads> separate instances of <command> on device <devno>\n"
-         "--threads <threads> <verbose> <devno> <command [args ...]>"},
-        {"lookup", jt_obd_mdc_lookup, 0, "report file mode info\n"
-         "usage: lookup <directory> <file>"},
-        {"readonly", jt_obd_set_readonly, 0,
-         "disable writes to the underlying device\n"},
-        {"notransno", jt_obd_no_transno, 0,
-         "disable sending of committed-transno updates\n"},
+	/* Test only commands */
+	{"==== testing (DANGEROUS) ====", jt_noop, 0, "testing (DANGEROUS)"},
+	{"--threads", jt_opt_threads, 0,
+	 "run <threads> separate instances of <command> on device <devno>\n"
+	 "--threads <threads> <verbose> <devno> <command [args ...]>"},
+	{"lookup", jt_obd_mdc_lookup, 0, "report file mode info\n"
+	 "usage: lookup <directory> <file>"},
+	{"readonly", jt_obd_set_readonly, 0,
+	 "disable writes to the underlying device\n"},
+	{"notransno", jt_obd_no_transno, 0,
+	 "disable sending of committed-transno updates\n"},
 	{"add_uuid", jt_lcfg_add_uuid, 0, "associate a UUID with a NID\n"
 	 "usage: add_uuid <uuid> <nid>"},
 	{"del_uuid", jt_lcfg_del_uuid, 0, "delete a UUID association\n"
@@ -354,58 +354,58 @@ command_t cmdlist[] = {
 	 "otherwise fail 'count' messages.\n"
 	 "usage: fail nid|_all_ [count]"},
 
-        /*Test commands for echo client*/
-        {"test_create", jt_obd_test_create, 0,
-         "create files on MDT by echo client\n"
-         "usage: test_create [-d parent_basedir] <-D parent_count> "
-         "[-b child_base_id] <-c stripe_count> <-n count> <-t time>\n"},
-        {"test_mkdir", jt_obd_test_mkdir, 0,
-         "mkdir on MDT by echo client\n"
-         "usage: test_mkdir [-d parent_basedir] <-D parent_count>"
-         "[-b child_base_id] [-n count] <-t time>\n"},
-        {"test_destroy", jt_obd_test_destroy, 0,
-         "Destroy files on MDT by echo client\n"
-         "usage: test_destroy [-d parent_basedir] <-D parent_count>"
-         "[-b child_base_id] [-n count] <-t time>\n"},
-        {"test_rmdir", jt_obd_test_rmdir, 0,
-         "rmdir on MDT by echo client\n"
-         "usage: test_rmdir [-d parent_basedir] <-D parent_count>"
-         "[-b child_base_id] [-n count] <-t time>\n"},
-        {"test_lookup", jt_obd_test_lookup, 0,
-         "lookup files on MDT by echo client\n"
-         "usage: test_lookup [-d parent_basedir] <-D parent_count>"
-         "[-b child_base_id] [-n count] <-t time>\n"},
-        {"test_setxattr", jt_obd_test_setxattr, 0,
-         "Set EA for files/directory on MDT by echo client\n"
-         "usage: test_setxattr [-d parent_baseid] <-D parent_count>"
-         "[-b child_base_id] [-n count] <-t time>\n"},
-        {"test_md_getattr", jt_obd_test_md_getattr, 0,
-         "getattr files on MDT by echo client\n"
-         "usage: test_md_getattr [-d parent_basedir] <-D parent_count>"
-         "[-b child_base_id] [-n count] <-t time>\n"},
-        {"getattr", jt_obd_getattr, 0,
-         "get attribute for OST object <objid>\n"
-         "usage: getattr <objid>"},
-        {"setattr", jt_obd_setattr, 0,
-         "set mode attribute for OST object <objid>\n"
-         "usage: setattr <objid> <mode>"},
-        {"create", jt_obd_create, 0,
-         "create <num> OST objects (with <mode>)\n"
-         "usage: create [num [mode [verbose [lsm data]]]]"},
-        {"destroy", jt_obd_destroy, 0,
-         "destroy OST object <objid> [num [verbose]]\n"
-         "usage: destroy <num> objects, starting at objid <objid>"},
-        {"test_getattr", jt_obd_test_getattr, 0,
-         "do <num> getattrs (on OST object <objid> (objid+1 on each thread))\n"
-         "usage: test_getattr <num> [verbose [[t]objid]]"},
-        {"test_setattr", jt_obd_test_setattr, 0,
-         "do <num> setattrs (on OST object <objid> (objid+1 on each thread))\n"
-         "usage: test_setattr <num> [verbose [[t]objid]]"},
-        {"test_brw", jt_obd_test_brw, 0,
-         "do <num> bulk read/writes (<npages> per I/O, on OST object <objid>)\n"
-         "usage: test_brw [t]<num> [write [verbose [npages [[t]objid]]]]"},
-        {"getobjversion", jt_get_obj_version, 0,
-         "get the version of an object on servers\n"
+	/*Test commands for echo client*/
+	{"test_create", jt_obd_test_create, 0,
+	 "create files on MDT by echo client\n"
+	 "usage: test_create [-d parent_basedir] <-D parent_count> "
+	 "[-b child_base_id] <-c stripe_count> <-n count> <-t time>\n"},
+	{"test_mkdir", jt_obd_test_mkdir, 0,
+	 "mkdir on MDT by echo client\n"
+	 "usage: test_mkdir [-d parent_basedir] <-D parent_count>"
+	 "[-b child_base_id] [-n count] <-t time>\n"},
+	{"test_destroy", jt_obd_test_destroy, 0,
+	 "Destroy files on MDT by echo client\n"
+	 "usage: test_destroy [-d parent_basedir] <-D parent_count>"
+	 "[-b child_base_id] [-n count] <-t time>\n"},
+	{"test_rmdir", jt_obd_test_rmdir, 0,
+	 "rmdir on MDT by echo client\n"
+	 "usage: test_rmdir [-d parent_basedir] <-D parent_count>"
+	 "[-b child_base_id] [-n count] <-t time>\n"},
+	{"test_lookup", jt_obd_test_lookup, 0,
+	 "lookup files on MDT by echo client\n"
+	 "usage: test_lookup [-d parent_basedir] <-D parent_count>"
+	 "[-b child_base_id] [-n count] <-t time>\n"},
+	{"test_setxattr", jt_obd_test_setxattr, 0,
+	 "Set EA for files/directory on MDT by echo client\n"
+	 "usage: test_setxattr [-d parent_baseid] <-D parent_count>"
+	 "[-b child_base_id] [-n count] <-t time>\n"},
+	{"test_md_getattr", jt_obd_test_md_getattr, 0,
+	 "getattr files on MDT by echo client\n"
+	 "usage: test_md_getattr [-d parent_basedir] <-D parent_count>"
+	 "[-b child_base_id] [-n count] <-t time>\n"},
+	{"getattr", jt_obd_getattr, 0,
+	 "get attribute for OST object <objid>\n"
+	 "usage: getattr <objid>"},
+	{"setattr", jt_obd_setattr, 0,
+	 "set mode attribute for OST object <objid>\n"
+	 "usage: setattr <objid> <mode>"},
+	{"create", jt_obd_create, 0,
+	 "create <num> OST objects (with <mode>)\n"
+	 "usage: create [num [mode [verbose [lsm data]]]]"},
+	{"destroy", jt_obd_destroy, 0,
+	 "destroy OST object <objid> [num [verbose]]\n"
+	 "usage: destroy <num> objects, starting at objid <objid>"},
+	{"test_getattr", jt_obd_test_getattr, 0,
+	 "do <num> getattrs (on OST object <objid> (objid+1 on each thread))\n"
+	 "usage: test_getattr <num> [verbose [[t]objid]]"},
+	{"test_setattr", jt_obd_test_setattr, 0,
+	 "do <num> setattrs (on OST object <objid> (objid+1 on each thread))\n"
+	 "usage: test_setattr <num> [verbose [[t]objid]]"},
+	{"test_brw", jt_obd_test_brw, 0,
+	 "do <num> bulk read/writes (<npages> per I/O, on OST object <objid>)\n"
+	 "usage: test_brw [t]<num> [write [verbose [npages [[t]objid]]]]"},
+	{"getobjversion", jt_get_obj_version, 0,
+	 "get the version of an object on servers\n"
 	 "usage: getobjversion <fid>\n"
 	 "	 getobjversion -i <id> -g <group>"},
 
