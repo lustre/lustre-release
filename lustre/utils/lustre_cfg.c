@@ -1171,7 +1171,7 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 			 * there isn't much point trying to use fprintf() */
 			continue;
 		}
-		if (rc >= sizeof(pathname)) {
+		if (rc2 >= sizeof(pathname)) {
 			fprintf(stderr, "error: %s: overflow processing '%s'\n",
 				opname, pathname);
 			if (rc == 0)
