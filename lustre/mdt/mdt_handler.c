@@ -5313,6 +5313,8 @@ static int mdt_obd_connect(const struct lu_env *env,
 	ENTRY;
 
 	LASSERT(env != NULL);
+	LASSERT(data != NULL);
+
 	if (!exp || !obd || !cluuid)
 		RETURN(-EINVAL);
 
@@ -5329,7 +5331,7 @@ static int mdt_obd_connect(const struct lu_env *env,
 	 * XXX: probably not very appropriate method is used now
 	 *      at some point we should find a better one
 	 */
-	if (!test_bit(MDT_FL_SYNCED, &mdt->mdt_state) && data != NULL &&
+	if (!test_bit(MDT_FL_SYNCED, &mdt->mdt_state) &&
 	    !(data->ocd_connect_flags & OBD_CONNECT_LIGHTWEIGHT) &&
 	    !(data->ocd_connect_flags & OBD_CONNECT_MDS_MDS)) {
 		rc = obd_get_info(env, mdt->mdt_child_exp,
