@@ -382,6 +382,11 @@ fi
 find $RPM_BUILD_ROOT%{_libdir}/@PACKAGE@ \
     -name \*.la -type f -exec rm -f {} \;
 
+%if %{with lustre_modules}
+# mark modules executable for find-debuginfo.sh
+find $RPM_BUILD_ROOT/lib/modules -name \*.ko -type f -exec chmod u+x {} \;
+%endif
+
 %if %{with lustre_tests}
 echo '%{_libdir}/lustre/tests/*' >>lustre-tests.files
 echo '%{_bindir}/mcreate' >>lustre-tests.files
