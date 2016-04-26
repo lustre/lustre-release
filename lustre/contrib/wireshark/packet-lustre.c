@@ -253,8 +253,8 @@ typedef enum {
   REINT_RENAME   = 5,
   REINT_OPEN     = 6,
   REINT_SETXATTR = 7,
-  //      REINT_CLOSE    = 8,
-  //      REINT_WRITE    = 9,
+  REINT_RMENTRY  = 8,
+  REINT_MIGRATE  = 9,
   REINT_MAX
 } mds_reint_t;
 
@@ -1127,6 +1127,8 @@ const value_string lustre_mds_reint_t_vals[] = {
   { REINT_RENAME, "REINT_RENAME" },
   { REINT_OPEN, "REINT_OPEN" },
   { REINT_SETXATTR, "REINT_SETXATTR" },
+  { REINT_RMENTRY, "REINT_RMENTRY" },
+  { REINT_MIGRATE, "REINT_MIGRATE" },
   { 0, NULL }
 };
 const value_string lustre_op_codes[] = {
