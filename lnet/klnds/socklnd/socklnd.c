@@ -2866,7 +2866,6 @@ ksocknal_startup (lnet_ni_t *ni)
 static void __exit ksocklnd_exit(void)
 {
 	lnet_unregister_lnd(&the_ksocklnd);
-	ksocknal_tunables_fini();
 }
 
 static int __init ksocklnd_init(void)

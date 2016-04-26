@@ -172,9 +172,6 @@ typedef struct
 #if SOCKNAL_VERSION_DEBUG
         int              *ksnd_protocol;        /* protocol version */
 #endif
-#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
-	struct ctl_table_header *ksnd_sysctl;   /* sysctl interface */
-#endif
 } ksock_tunables_t;
 
 typedef struct
@@ -681,9 +678,6 @@ extern int ksocknal_lib_get_conn_tunables(ksock_conn_t *conn, int *txmem,
 					  int *rxmem, int *nagle);
 
 extern int ksocknal_tunables_init(void);
-extern void ksocknal_tunables_fini(void);
-extern int ksocknal_lib_tunables_init(void);
-extern void ksocknal_lib_tunables_fini(void);
 
 extern void ksocknal_lib_csum_tx(ksock_tx_t *tx);
 

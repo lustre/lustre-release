@@ -2883,7 +2883,6 @@ static void __exit kgnilnd_exit(void)
 	lnet_unregister_lnd(&the_kgnilnd);
 	kgnilnd_proc_fini();
 	kgnilnd_remove_sysctl();
-	kgnilnd_tunables_fini();
 }
 
 static int __init kgnilnd_init(void)

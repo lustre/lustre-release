@@ -103,9 +103,6 @@ typedef struct
 	int              *kib_retry_count;
 	int              *kib_rnr_retry_count;
 	int		 *kib_ib_mtu;		/* IB MTU */
-#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
-	struct ctl_table_header *kib_sysctl;  /* sysctl interface */
-#endif
 	int              *kib_require_priv_port;/* accept only privileged ports */
 	int              *kib_use_priv_port;    /* use privileged port for active connect */
 	/* # threads on each CPT */
@@ -1160,7 +1157,6 @@ void kiblnd_fmr_pool_unmap(kib_fmr_t *fmr, int status);
 
 int  kiblnd_tunables_setup(struct lnet_ni *ni);
 int  kiblnd_tunables_init(void);
-void kiblnd_tunables_fini(void);
 
 int  kiblnd_connd (void *arg);
 int  kiblnd_scheduler(void *arg);

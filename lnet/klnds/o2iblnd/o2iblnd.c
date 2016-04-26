@@ -3170,7 +3170,6 @@ static lnd_t the_o2iblnd = {
 static void __exit ko2iblnd_exit(void)
 {
 	lnet_unregister_lnd(&the_o2iblnd);
-	kiblnd_tunables_fini();
 }
 
 static int __init ko2iblnd_init(void)

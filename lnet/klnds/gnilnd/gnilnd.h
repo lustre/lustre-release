@@ -64,7 +64,6 @@
 
 #define DEBUG_SUBSYSTEM S_LND
 
-#include <libcfs/linux/kp30.h>
 #include <libcfs/libcfs.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-lnet.h>
@@ -491,9 +490,6 @@ typedef struct kgn_tunables {
 	int     *kgn_reg_fail_timeout; /* registration failure timeout */
 	int     *kgn_thread_affinity;  /* bind scheduler threads to cpus */
 	int     *kgn_thread_safe;      /* use thread safe kgni API */
-#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
-	struct ctl_table_header *kgn_sysctl;  /* sysctl interface */
-#endif
 } kgn_tunables_t;
 
 typedef struct kgn_mbox_info {
@@ -1811,7 +1807,6 @@ int kgnilnd_start_rca_thread(void);
 int kgnilnd_get_node_state(__u32 nid);
 
 int kgnilnd_tunables_init(void);
-void kgnilnd_tunables_fini(void);
 void kgnilnd_init_msg(kgn_msg_t *msg, int type, lnet_nid_t source);
 
 void kgnilnd_bump_timeouts(__u32 nap_time, char *reason);
