@@ -629,6 +629,9 @@ static int lustre_free_lsi(struct super_block *sb)
 				 strlen(lsi->lsi_lmd->lmd_osd_type) + 1);
 		if (lsi->lsi_lmd->lmd_params != NULL)
 			OBD_FREE(lsi->lsi_lmd->lmd_params, 4096);
+		if (lsi->lsi_lmd->lmd_nidnet != NULL)
+			OBD_FREE(lsi->lsi_lmd->lmd_nidnet,
+				strlen(lsi->lsi_lmd->lmd_nidnet) + 1);
 
 		OBD_FREE_PTR(lsi->lsi_lmd);
 	}
@@ -974,6 +977,31 @@ static int lmd_parse_mgssec(struct lustre_mount_data *lmd, char *ptr)
         return 0;
 }
 
+static int lmd_parse_network(struct lustre_mount_data *lmd, char *ptr)
+{
+	char   *tail;
+	int     length;
+
+	if (lmd->lmd_nidnet != NULL) {
+		OBD_FREE(lmd->lmd_nidnet, strlen(lmd->lmd_nidnet) + 1);
+		lmd->lmd_nidnet = NULL;
+	}
+
+	tail = strchr(ptr, ',');
+	if (tail == NULL)
+		length = strlen(ptr);
+	else
+		length = tail - ptr;
+
+	OBD_ALLOC(lmd->lmd_nidnet, length + 1);
+	if (lmd->lmd_nidnet == NULL)
+		return -ENOMEM;
+
+	memcpy(lmd->lmd_nidnet, ptr, length);
+	lmd->lmd_nidnet[length] = '\0';
+	return 0;
+}
+
 static int lmd_parse_string(char **handle, char *ptr)
 {
 	char   *tail;
@@ -1131,68 +1159,70 @@ static int lmd_parse_nidlist(char *buf, char **endh)
 static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 {
 	char *s1, *s2, *s3, *devname = NULL;
-        struct lustre_mount_data *raw = (struct lustre_mount_data *)options;
-        int rc = 0;
-        ENTRY;
+	struct lustre_mount_data *raw = (struct lustre_mount_data *)options;
+	int rc = 0;
+	ENTRY;
 
-        LASSERT(lmd);
-        if (!options) {
-                LCONSOLE_ERROR_MSG(0x162, "Missing mount data: check that "
-                                   "/sbin/mount.lustre is installed.\n");
-                RETURN(-EINVAL);
-        }
+	LASSERT(lmd);
+	if (!options) {
+		LCONSOLE_ERROR_MSG(0x162, "Missing mount data: check that "
+				   "/sbin/mount.lustre is installed.\n");
+		RETURN(-EINVAL);
+	}
 
-        /* Options should be a string - try to detect old lmd data */
-        if ((raw->lmd_magic & 0xffffff00) == (LMD_MAGIC & 0xffffff00)) {
-                LCONSOLE_ERROR_MSG(0x163, "You're using an old version of "
-                                   "/sbin/mount.lustre.  Please install "
-                                   "version %s\n", LUSTRE_VERSION_STRING);
-                RETURN(-EINVAL);
-        }
-        lmd->lmd_magic = LMD_MAGIC;
+	/* Options should be a string - try to detect old lmd data */
+	if ((raw->lmd_magic & 0xffffff00) == (LMD_MAGIC & 0xffffff00)) {
+		LCONSOLE_ERROR_MSG(0x163, "You're using an old version of "
+				   "/sbin/mount.lustre.  Please install "
+				   "version %s\n", LUSTRE_VERSION_STRING);
+		RETURN(-EINVAL);
+	}
+	lmd->lmd_magic = LMD_MAGIC;
 
 	OBD_ALLOC(lmd->lmd_params, LMD_PARAMS_MAXLEN);
 	if (lmd->lmd_params == NULL)
 		RETURN(-ENOMEM);
 	lmd->lmd_params[0] = '\0';
 
-        /* Set default flags here */
+	/* Set default flags here */
 
-        s1 = options;
-        while (*s1) {
-                int clear = 0;
-                int time_min = OBD_RECOVERY_TIME_MIN;
+	s1 = options;
+	while (*s1) {
+		int clear = 0;
+		int time_min = OBD_RECOVERY_TIME_MIN;
 
-                /* Skip whitespace and extra commas */
-                while (*s1 == ' ' || *s1 == ',')
-                        s1++;
+		/* Skip whitespace and extra commas */
+		while (*s1 == ' ' || *s1 == ',')
+			s1++;
 		s3 = s1;
 
-                /* Client options are parsed in ll_options: eg. flock,
-                   user_xattr, acl */
+		/* Client options are parsed in ll_options: eg. flock,
+		   user_xattr, acl */
 
-                /* Parse non-ldiskfs options here. Rather than modifying
-                   ldiskfs, we just zero these out here */
-                if (strncmp(s1, "abort_recov", 11) == 0) {
-                        lmd->lmd_flags |= LMD_FLG_ABORT_RECOV;
-                        clear++;
-                } else if (strncmp(s1, "recovery_time_soft=", 19) == 0) {
-                        lmd->lmd_recovery_time_soft = max_t(int,
-                                simple_strtoul(s1 + 19, NULL, 10), time_min);
-                        clear++;
-                } else if (strncmp(s1, "recovery_time_hard=", 19) == 0) {
-                        lmd->lmd_recovery_time_hard = max_t(int,
-                                simple_strtoul(s1 + 19, NULL, 10), time_min);
-                        clear++;
-                } else if (strncmp(s1, "noir", 4) == 0) {
-                        lmd->lmd_flags |= LMD_FLG_NOIR; /* test purpose only. */
-                        clear++;
-                } else if (strncmp(s1, "nosvc", 5) == 0) {
-                        lmd->lmd_flags |= LMD_FLG_NOSVC;
-                        clear++;
-                } else if (strncmp(s1, "nomgs", 5) == 0) {
-                        lmd->lmd_flags |= LMD_FLG_NOMGS;
-                        clear++;
+		/* Parse non-ldiskfs options here. Rather than modifying
+		   ldiskfs, we just zero these out here */
+		if (strncmp(s1, "abort_recov", 11) == 0) {
+			lmd->lmd_flags |= LMD_FLG_ABORT_RECOV;
+			clear++;
+		} else if (strncmp(s1, "recovery_time_soft=", 19) == 0) {
+			lmd->lmd_recovery_time_soft =
+				max_t(int, simple_strtoul(s1 + 19, NULL, 10),
+				      time_min);
+			clear++;
+		} else if (strncmp(s1, "recovery_time_hard=", 19) == 0) {
+			lmd->lmd_recovery_time_hard =
+				max_t(int, simple_strtoul(s1 + 19, NULL, 10),
+				      time_min);
+			clear++;
+		} else if (strncmp(s1, "noir", 4) == 0) {
+			lmd->lmd_flags |= LMD_FLG_NOIR; /* test purpose only. */
+			clear++;
+		} else if (strncmp(s1, "nosvc", 5) == 0) {
+			lmd->lmd_flags |= LMD_FLG_NOSVC;
+			clear++;
+		} else if (strncmp(s1, "nomgs", 5) == 0) {
+			lmd->lmd_flags |= LMD_FLG_NOMGS;
+			clear++;
 		} else if (strncmp(s1, "noscrub", 7) == 0) {
 			lmd->lmd_flags |= LMD_FLG_NOSCRUB;
 			clear++;
@@ -1209,9 +1239,9 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 				goto invalid;
 			s3 = s2;
 			clear++;
-                } else if (strncmp(s1, "writeconf", 9) == 0) {
-                        lmd->lmd_flags |= LMD_FLG_WRITECONF;
-                        clear++;
+		} else if (strncmp(s1, "writeconf", 9) == 0) {
+			lmd->lmd_flags |= LMD_FLG_WRITECONF;
+			clear++;
 		} else if (strncmp(s1, "update", 6) == 0) {
 			lmd->lmd_flags |= LMD_FLG_UPDATE;
 			clear++;
@@ -1221,17 +1251,17 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 		} else if (strncmp(s1, "noprimnode", 10) == 0) {
 			lmd->lmd_flags |= LMD_FLG_NO_PRIMNODE;
 			clear++;
-                } else if (strncmp(s1, "mgssec=", 7) == 0) {
-                        rc = lmd_parse_mgssec(lmd, s1 + 7);
-                        if (rc)
-                                goto invalid;
-                        clear++;
-                /* ost exclusion list */
-                } else if (strncmp(s1, "exclude=", 8) == 0) {
-                        rc = lmd_make_exclusion(lmd, s1 + 7);
-                        if (rc)
-                                goto invalid;
-                        clear++;
+		} else if (strncmp(s1, "mgssec=", 7) == 0) {
+			rc = lmd_parse_mgssec(lmd, s1 + 7);
+			if (rc)
+				goto invalid;
+			clear++;
+			/* ost exclusion list */
+		} else if (strncmp(s1, "exclude=", 8) == 0) {
+			rc = lmd_make_exclusion(lmd, s1 + 7);
+			if (rc)
+				goto invalid;
+			clear++;
 		} else if (strncmp(s1, "mgs", 3) == 0) {
 			/* We are an MGS */
 			lmd->lmd_flags |= LMD_FLG_MGS;
@@ -1269,36 +1299,41 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 			if (rc)
 				goto invalid;
 			clear++;
-                }
-                /* Linux 2.4 doesn't pass the device, so we stuck it at the
-                   end of the options. */
-                else if (strncmp(s1, "device=", 7) == 0) {
-                        devname = s1 + 7;
-                        /* terminate options right before device.  device
-                           must be the last one. */
-                        *s1 = '\0';
-                        break;
-                }
+		}
+		/* Linux 2.4 doesn't pass the device, so we stuck it at the
+		   end of the options. */
+		else if (strncmp(s1, "device=", 7) == 0) {
+			devname = s1 + 7;
+			/* terminate options right before device.  device
+			   must be the last one. */
+			*s1 = '\0';
+			break;
+		} else if (strncmp(s1, "network=", 8) == 0) {
+			rc = lmd_parse_network(lmd, s1 + 8);
+			if (rc)
+				goto invalid;
+			clear++;
+		}
 
 		/* Find next opt */
 		s2 = strchr(s3, ',');
-                if (s2 == NULL) {
-                        if (clear)
-                                *s1 = '\0';
-                        break;
-                }
-                s2++;
-                if (clear)
-                        memmove(s1, s2, strlen(s2) + 1);
-                else
-                        s1 = s2;
-        }
+		if (s2 == NULL) {
+			if (clear)
+				*s1 = '\0';
+			break;
+		}
+		s2++;
+		if (clear)
+			memmove(s1, s2, strlen(s2) + 1);
+		else
+			s1 = s2;
+	}
 
-        if (!devname) {
-                LCONSOLE_ERROR_MSG(0x164, "Can't find the device name "
-                                   "(need mount option 'device=...')\n");
-                goto invalid;
-        }
+	if (!devname) {
+		LCONSOLE_ERROR_MSG(0x164, "Can't find the device name "
+				   "(need mount option 'device=...')\n");
+		goto invalid;
+	}
 
 	s1 = strstr(devname, ":/");
 	if (s1) {
@@ -1327,39 +1362,50 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 			OBD_ALLOC(lmd->lmd_fileset, s2 - s1 + 2);
 			if (lmd->lmd_fileset == NULL) {
 				OBD_FREE(lmd->lmd_profile,
-					strlen(lmd->lmd_profile) + 1);
+					 strlen(lmd->lmd_profile) + 1);
 				RETURN(-ENOMEM);
 			}
 			strncat(lmd->lmd_fileset, s1, s2 - s1 + 1);
 		}
+	} else {
+		/* server mount */
+		if (lmd->lmd_nidnet != NULL) {
+			/* 'network=' mount option forbidden for server */
+			OBD_FREE(lmd->lmd_nidnet, strlen(lmd->lmd_nidnet) + 1);
+			lmd->lmd_nidnet = NULL;
+			rc = -EINVAL;
+			CERROR("%s: option 'network=' not allowed for Lustre "
+			       "servers: rc = %d\n", devname, rc);
+			RETURN(rc);
+		}
 	}
 
-        /* Freed in lustre_free_lsi */
-        OBD_ALLOC(lmd->lmd_dev, strlen(devname) + 1);
-        if (!lmd->lmd_dev)
-                RETURN(-ENOMEM);
-        strcpy(lmd->lmd_dev, devname);
+	/* Freed in lustre_free_lsi */
+	OBD_ALLOC(lmd->lmd_dev, strlen(devname) + 1);
+	if (!lmd->lmd_dev)
+		RETURN(-ENOMEM);
+	strncpy(lmd->lmd_dev, devname, strlen(devname)+1);
 
-        /* Save mount options */
-        s1 = options + strlen(options) - 1;
-        while (s1 >= options && (*s1 == ',' || *s1 == ' '))
-                *s1-- = 0;
-        if (*options != 0) {
-                /* Freed in lustre_free_lsi */
-                OBD_ALLOC(lmd->lmd_opts, strlen(options) + 1);
-                if (!lmd->lmd_opts)
-                        RETURN(-ENOMEM);
-                strcpy(lmd->lmd_opts, options);
-        }
+	/* Save mount options */
+	s1 = options + strlen(options) - 1;
+	while (s1 >= options && (*s1 == ',' || *s1 == ' '))
+		*s1-- = 0;
+	if (*options != 0) {
+		/* Freed in lustre_free_lsi */
+		OBD_ALLOC(lmd->lmd_opts, strlen(options) + 1);
+		if (!lmd->lmd_opts)
+			RETURN(-ENOMEM);
+		strncpy(lmd->lmd_opts, options, strlen(options)+1);
+	}
 
-        lmd_print(lmd);
-        lmd->lmd_magic = LMD_MAGIC;
+	lmd_print(lmd);
+	lmd->lmd_magic = LMD_MAGIC;
 
-        RETURN(rc);
+	RETURN(rc);
 
 invalid:
-        CERROR("Bad mount options %s\n", options);
-        RETURN(-EINVAL);
+	CERROR("Bad mount options %s\n", options);
+	RETURN(-EINVAL);
 }
 
 struct lustre_mount_data2 {

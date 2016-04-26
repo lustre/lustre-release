@@ -54,71 +54,75 @@
 static int import_set_conn(struct obd_import *imp, struct obd_uuid *uuid,
                            int priority, int create)
 {
-        struct ptlrpc_connection *ptlrpc_conn;
-        struct obd_import_conn *imp_conn = NULL, *item;
-        int rc = 0;
-        ENTRY;
+	struct ptlrpc_connection *ptlrpc_conn;
+	struct obd_import_conn *imp_conn = NULL, *item;
+	lnet_nid_t nid4refnet = LNET_NID_ANY;
+	int rc = 0;
+	ENTRY;
 
-        if (!create && !priority) {
-                CDEBUG(D_HA, "Nothing to do\n");
-                RETURN(-EINVAL);
-        }
+	if (!create && !priority) {
+		CDEBUG(D_HA, "Nothing to do\n");
+		RETURN(-EINVAL);
+	}
 
-        ptlrpc_conn = ptlrpc_uuid_to_connection(uuid);
-        if (!ptlrpc_conn) {
-                CDEBUG(D_HA, "can't find connection %s\n", uuid->uuid);
-                RETURN (-ENOENT);
-        }
+	if (imp->imp_connection &&
+	    imp->imp_connection->c_remote_uuid.uuid[0] == 0)
+		/* nid4refnet is used to restrict network connections */
+		nid4refnet = imp->imp_connection->c_self;
+	ptlrpc_conn = ptlrpc_uuid_to_connection(uuid, nid4refnet);
+	if (!ptlrpc_conn) {
+		CDEBUG(D_HA, "can't find connection %s\n", uuid->uuid);
+		RETURN(-ENOENT);
+	}
 
-        if (create) {
-                OBD_ALLOC(imp_conn, sizeof(*imp_conn));
-                if (!imp_conn) {
-                        GOTO(out_put, rc = -ENOMEM);
-                }
-        }
+	if (create) {
+		OBD_ALLOC(imp_conn, sizeof(*imp_conn));
+		if (!imp_conn)
+			GOTO(out_put, rc = -ENOMEM);
+	}
 
 	spin_lock(&imp->imp_lock);
 	list_for_each_entry(item, &imp->imp_conn_list, oic_item) {
-                if (obd_uuid_equals(uuid, &item->oic_uuid)) {
-                        if (priority) {
+		if (obd_uuid_equals(uuid, &item->oic_uuid)) {
+			if (priority) {
 				list_del(&item->oic_item);
 				list_add(&item->oic_item,
-                                             &imp->imp_conn_list);
-                                item->oic_last_attempt = 0;
-                        }
-                        CDEBUG(D_HA, "imp %p@%s: found existing conn %s%s\n",
-                               imp, imp->imp_obd->obd_name, uuid->uuid,
-                               (priority ? ", moved to head" : ""));
+					 &imp->imp_conn_list);
+				item->oic_last_attempt = 0;
+			}
+			CDEBUG(D_HA, "imp %p@%s: found existing conn %s%s\n",
+			       imp, imp->imp_obd->obd_name, uuid->uuid,
+			       (priority ? ", moved to head" : ""));
 			spin_unlock(&imp->imp_lock);
-                        GOTO(out_free, rc = 0);
-                }
-        }
+			GOTO(out_free, rc = 0);
+		}
+	}
 	/* No existing import connection found for \a uuid. */
-        if (create) {
-                imp_conn->oic_conn = ptlrpc_conn;
-                imp_conn->oic_uuid = *uuid;
-                imp_conn->oic_last_attempt = 0;
-                if (priority)
+	if (create) {
+		imp_conn->oic_conn = ptlrpc_conn;
+		imp_conn->oic_uuid = *uuid;
+		imp_conn->oic_last_attempt = 0;
+		if (priority)
 			list_add(&imp_conn->oic_item, &imp->imp_conn_list);
-                else
+		else
 			list_add_tail(&imp_conn->oic_item,
-                                          &imp->imp_conn_list);
-                CDEBUG(D_HA, "imp %p@%s: add connection %s at %s\n",
-                       imp, imp->imp_obd->obd_name, uuid->uuid,
-                       (priority ? "head" : "tail"));
-        } else {
+				      &imp->imp_conn_list);
+		CDEBUG(D_HA, "imp %p@%s: add connection %s at %s\n",
+		       imp, imp->imp_obd->obd_name, uuid->uuid,
+		       (priority ? "head" : "tail"));
+	} else {
 		spin_unlock(&imp->imp_lock);
 		GOTO(out_free, rc = -ENOENT);
 	}
 
 	spin_unlock(&imp->imp_lock);
-        RETURN(0);
+	RETURN(0);
 out_free:
-        if (imp_conn)
-                OBD_FREE(imp_conn, sizeof(*imp_conn));
+	if (imp_conn)
+		OBD_FREE(imp_conn, sizeof(*imp_conn));
 out_put:
-        ptlrpc_connection_put(ptlrpc_conn);
-        RETURN(rc);
+	ptlrpc_connection_put(ptlrpc_conn);
+	RETURN(rc);
 }
 
 int import_set_conn_priority(struct obd_import *imp, struct obd_uuid *uuid)
@@ -256,6 +260,7 @@ static int osc_on_mdt(char *obdname)
  * 1 - client UUID
  * 2 - server UUID
  * 3 - inactive-on-startup
+ * 4 - restrictive net
  */
 int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 {
@@ -266,6 +271,8 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 	char *name = obddev->obd_type->typ_name;
 	enum ldlm_ns_type ns_type = LDLM_NS_TYPE_UNKNOWN;
 	char *cli_name = lustre_cfg_buf(lcfg, 0);
+	struct ptlrpc_connection fake_conn = { .c_self = 0,
+					       .c_remote_uuid.uuid[0] = 0 };
 	int rc;
 	ENTRY;
 
@@ -453,11 +460,26 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
                LUSTRE_CFG_BUFLEN(lcfg, 1));
         class_import_put(imp);
 
-        rc = client_import_add_conn(imp, &server_uuid, 1);
-        if (rc) {
-                CERROR("can't add initial connection\n");
-                GOTO(err_import, rc);
-        }
+	if (lustre_cfg_buf(lcfg, 4)) {
+		__u32 refnet = libcfs_str2net(lustre_cfg_string(lcfg, 4));
+
+		if (refnet == LNET_NIDNET(LNET_NID_ANY)) {
+			rc = -EINVAL;
+			CERROR("%s: bad mount option 'network=%s': rc = %d\n",
+			       obddev->obd_name, lustre_cfg_string(lcfg, 4),
+			       rc);
+			GOTO(err_import, rc);
+		}
+		fake_conn.c_self = LNET_MKNID(refnet, 0);
+		imp->imp_connection = &fake_conn;
+	}
+
+	rc = client_import_add_conn(imp, &server_uuid, 1);
+	if (rc) {
+		CERROR("can't add initial connection\n");
+		GOTO(err_import, rc);
+	}
+	imp->imp_connection = NULL;
 
 	cli->cl_import = imp;
 	/* cli->cl_max_mds_easize updated by mdc_init_ea_size() */

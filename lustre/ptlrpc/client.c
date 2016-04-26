@@ -79,31 +79,33 @@ EXPORT_SYMBOL(ptlrpc_init_client);
 /**
  * Return PortalRPC connection for remore uud \a uuid
  */
-struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid)
+struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid,
+						    lnet_nid_t nid4refnet)
 {
-        struct ptlrpc_connection *c;
-        lnet_nid_t                self;
-        lnet_process_id_t         peer;
-        int                       err;
+	struct ptlrpc_connection *c;
+	lnet_nid_t                self;
+	lnet_process_id_t         peer;
+	int                       err;
 
 	/* ptlrpc_uuid_to_peer() initializes its 2nd parameter
 	 * before accessing its values. */
 	/* coverity[uninit_use_in_call] */
-        err = ptlrpc_uuid_to_peer(uuid, &peer, &self);
-        if (err != 0) {
-                CNETERR("cannot find peer %s!\n", uuid->uuid);
-                return NULL;
-        }
+	peer.nid = nid4refnet;
+	err = ptlrpc_uuid_to_peer(uuid, &peer, &self);
+	if (err != 0) {
+		CNETERR("cannot find peer %s!\n", uuid->uuid);
+		return NULL;
+	}
 
-        c = ptlrpc_connection_get(peer, self, uuid);
-        if (c) {
-                memcpy(c->c_remote_uuid.uuid,
-                       uuid->uuid, sizeof(c->c_remote_uuid.uuid));
-        }
+	c = ptlrpc_connection_get(peer, self, uuid);
+	if (c) {
+		memcpy(c->c_remote_uuid.uuid,
+		       uuid->uuid, sizeof(c->c_remote_uuid.uuid));
+	}
 
-        CDEBUG(D_INFO, "%s -> %p\n", uuid->uuid, c);
+	CDEBUG(D_INFO, "%s -> %p\n", uuid->uuid, c);
 
-        return c;
+	return c;
 }
 
 /**

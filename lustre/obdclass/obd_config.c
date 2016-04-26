@@ -1583,6 +1583,7 @@ int class_config_llog_handler(const struct lu_env *env,
 				lcfg->lcfg_command = LCFG_LOV_ADD_INA;
 		}
 
+		lustre_cfg_bufs_reset(&bufs, NULL);
 		lustre_cfg_bufs_init(&bufs, lcfg);
 
 		if (cfg->cfg_instance &&
@@ -1625,6 +1626,48 @@ int class_config_llog_handler(const struct lu_env *env,
 						   cfg->cfg_obdname);
 		}
 
+		/* Add net info to setup command
+		 * if given on command line.
+		 * So config log will be:
+		 * [0]: client name
+		 * [1]: client UUID
+		 * [2]: server UUID
+		 * [3]: inactive-on-startup
+		 * [4]: restrictive net
+		 */
+		if (cfg && cfg->cfg_sb && s2lsi(cfg->cfg_sb) &&
+		    !IS_SERVER(s2lsi(cfg->cfg_sb))) {
+			struct lustre_sb_info *lsi = s2lsi(cfg->cfg_sb);
+			char *nidnet = lsi->lsi_lmd->lmd_nidnet;
+
+			if (lcfg->lcfg_command == LCFG_SETUP &&
+			    lcfg->lcfg_bufcount != 2 && nidnet) {
+				CDEBUG(D_CONFIG, "Adding net %s info to setup "
+				       "command for client %s\n", nidnet,
+				       lustre_cfg_string(lcfg, 0));
+				lustre_cfg_bufs_set_string(&bufs, 4, nidnet);
+			}
+		}
+
+		/* Skip add_conn command if uuid is
+		 * not on restricted net */
+		if (cfg && cfg->cfg_sb && s2lsi(cfg->cfg_sb) &&
+		    !IS_SERVER(s2lsi(cfg->cfg_sb))) {
+			struct lustre_sb_info *lsi = s2lsi(cfg->cfg_sb);
+			char *uuid_str = lustre_cfg_string(lcfg, 1);
+
+			if (lcfg->lcfg_command == LCFG_ADD_CONN &&
+			    lsi->lsi_lmd->lmd_nidnet &&
+			    LNET_NIDNET(libcfs_str2nid(uuid_str)) !=
+			    libcfs_str2net(lsi->lsi_lmd->lmd_nidnet)) {
+				CDEBUG(D_CONFIG, "skipping add_conn for %s\n",
+				       uuid_str);
+				rc = 0;
+				/* No processing! */
+				break;
+			}
+		}
+
 		lcfg_new = lustre_cfg_new(lcfg->lcfg_command, &bufs);
 		if (lcfg_new == NULL)
 			GOTO(out, rc = -ENOMEM);
@@ -1632,8 +1675,8 @@ int class_config_llog_handler(const struct lu_env *env,
 		lcfg_new->lcfg_num   = lcfg->lcfg_num;
 		lcfg_new->lcfg_flags = lcfg->lcfg_flags;
 
-                /* XXX Hack to try to remain binary compatible with
-                 * pre-newconfig logs */
+		/* XXX Hack to try to remain binary compatible with
+		 * pre-newconfig logs */
 		if (lcfg->lcfg_nal != 0 &&      /* pre-newconfig log? */
 		    (lcfg->lcfg_nid >> 32) == 0) {
 			__u32 addr = (__u32)(lcfg->lcfg_nid & 0xffffffff);
@@ -1658,7 +1701,7 @@ int class_config_llog_handler(const struct lu_env *env,
 	}
 	default:
 		CERROR("Unknown llog record type %#x encountered\n",
-			rec->lrh_type);
+		       rec->lrh_type);
 		break;
 	}
 out:

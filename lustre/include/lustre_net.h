@@ -2084,7 +2084,8 @@ void ptlrpc_request_committed(struct ptlrpc_request *req, int force);
 void ptlrpc_init_client(int req_portal, int rep_portal, char *name,
                         struct ptlrpc_client *);
 void ptlrpc_cleanup_client(struct obd_import *imp);
-struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid);
+struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid,
+						    lnet_nid_t nid4refnet);
 
 int ptlrpc_queue_wait(struct ptlrpc_request *req);
 int ptlrpc_replay_req(struct ptlrpc_request *req);

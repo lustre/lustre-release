@@ -239,6 +239,7 @@ struct lustre_mount_data {
 	__u32  *lmd_exclude;	/* array of OSTs to ignore */
 	char   *lmd_mgs;	/* MGS nid */
 	char   *lmd_osd_type;	/* OSD type */
+	char   *lmd_nidnet;     /* network to restrict this client to */
 };
 
 #define LMD_FLG_SERVER		0x0001	/* Mounting a server */
