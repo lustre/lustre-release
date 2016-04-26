@@ -186,13 +186,6 @@ ZFS hooks for mount/mkfs into a dynamic library.
 %endif
 %endif # with lustre_modules
 
-%package source
-Summary: Object-Based Disk storage driver source
-Group: Development/Kernel
-
-%description source
-Lustre sources for further development
-
 # Since the RPMs we ship are to be used on both SLES and RHEL, we
 # can't include any dependency information (since the package names
 # are different on the two platforms).
@@ -350,13 +343,6 @@ echo '%{_sysconfdir}/init.d/lnet' >>lustre.files
 echo '%{_sysconfdir}/init.d/lsvcgss' >>lustre.files
 %endif
 
-# Create the pristine source directory.
-cd $RPM_BUILD_DIR/lustre-%{version}
-mkdir -p $RPM_BUILD_ROOT%{_prefix}/src
-rm -f lustre-source
-ln -s $RPM_BUILD_ROOT%{_prefix}/src lustre-source
-make distdir distdir=lustre-source/lustre-%{version}
-chmod -R go-w lustre-source/lustre-%{version}
 # fc18 needs 'x' permission for library files
 find $RPM_BUILD_ROOT -name \*.so -type f -exec chmod +x {} \;
 
@@ -478,10 +464,6 @@ echo '/lib/modules/%{kversion}/%{kmoddir}/kernel/fs/@PACKAGE@/llog_test.ko' >>lu
 %endif
 %endif
 %endif # with lustre_modules
-
-%files source
-%defattr(-,root,root)
-%{_prefix}/src/lustre-%{version}
 
 # uncomment these lines to enable deps packages
 # %files deps-sles
