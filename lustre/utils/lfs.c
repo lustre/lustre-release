@@ -75,6 +75,10 @@
 #include <lustre_ver.h>
 #include <lustre_param.h>
 
+#ifndef ARRAY_SIZE
+# define ARRAY_SIZE(a) ((sizeof(a)) / (sizeof((a)[0])))
+#endif /* !ARRAY_SIZE */
+
 /* all functions */
 static int lfs_setstripe(int argc, char **argv);
 static int lfs_find(int argc, char **argv);

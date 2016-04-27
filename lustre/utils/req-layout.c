@@ -56,6 +56,10 @@
 #include <lustre_req_layout.h>
 #include <lustre/lustreapi.h>
 
+#ifndef ARRAY_SIZE
+# define ARRAY_SIZE(a) ((sizeof(a)) / (sizeof((a)[0])))
+#endif /* !ARRAY_SIZE */
+
 #define lustre_swab_generic_32s NULL
 #define lustre_swab_lu_seq_range NULL
 #define lustre_swab_mdt_body NULL
