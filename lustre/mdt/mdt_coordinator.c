@@ -546,7 +546,6 @@ static int mdt_coordinator(void *data)
 				       "for cookies vector "LPX64"\n",
 				       mdt_obd_name(mdt), sz,
 				       hal->hal_compound_id);
-				kuc_free(hal, hsd.request[i].hal_used_sz);
 				continue;
 			}
 			hai = hai_first(hal);
