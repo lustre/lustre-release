@@ -605,7 +605,7 @@ for ((rsz = $rszlo; rsz <= $rszhi; rsz*=2)); do
 						str=$(printf "%17s " SHORT)
 					fi
 				else
-					str=$(awk "BEGIN {printf \"[%7.2f,%7.2f] \",\
+					str=$(awk "BEGIN {printf \"[%7.2f, %7.2f] \",\
 					(${stats[1]} * $actual_rsz)/1024,\
 					(${stats[2]} * $actual_rsz)/1024; exit}")
 				fi
