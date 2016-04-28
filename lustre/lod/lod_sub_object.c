@@ -986,7 +986,7 @@ int lod_sub_prep_llog(const struct lu_env *env, struct lod_device *lod,
 
 	LASSERT(lgh != NULL);
 
-	rc = llog_cat_init_and_process(env, lgh);
+	rc = llog_init_handle(env, lgh, LLOG_F_IS_CAT, NULL);
 	if (rc != 0)
 		GOTO(out_close, rc);
 

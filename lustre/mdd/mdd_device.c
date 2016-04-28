@@ -340,7 +340,7 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 	if (rc)
 		GOTO(out_cleanup, rc);
 
-	rc = llog_cat_init_and_process(env, ctxt->loc_handle);
+	rc = llog_init_handle(env, ctxt->loc_handle, LLOG_F_IS_CAT, NULL);
 	if (rc)
 		GOTO(out_close, rc);
 
@@ -376,7 +376,7 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 	uctxt->loc_handle->lgh_logops->lop_add = llog_cat_add_rec;
 	uctxt->loc_handle->lgh_logops->lop_declare_add = llog_cat_declare_add_rec;
 
-	rc = llog_cat_init_and_process(env, uctxt->loc_handle);
+	rc = llog_init_handle(env, uctxt->loc_handle, LLOG_F_IS_CAT, NULL);
 	if (rc)
 		GOTO(out_uclose, rc);
 
@@ -836,7 +836,7 @@ static int mdd_hsm_actions_llog_init(const struct lu_env *env,
 		GOTO(out_cleanup, rc);
 	}
 
-	rc = llog_cat_init_and_process(env, ctxt->loc_handle);
+	rc = llog_init_handle(env, ctxt->loc_handle, LLOG_F_IS_CAT, NULL);
 	if (rc)
 		GOTO(out_close, rc);
 

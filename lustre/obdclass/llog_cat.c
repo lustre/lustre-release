@@ -1070,17 +1070,3 @@ int llog_cat_cleanup(const struct lu_env *env, struct llog_handle *cathandle,
 		       index, POSTID(&cathandle->lgh_id.lgl_oi));
 	return rc;
 }
-
-/* helper to initialize catalog llog and process it to cancel */
-int llog_cat_init_and_process(const struct lu_env *env,
-			      struct llog_handle *llh)
-{
-	int rc;
-
-	rc = llog_init_handle(env, llh, LLOG_F_IS_CAT, NULL);
-	if (rc)
-		RETURN(rc);
-
-	RETURN(0);
-}
-EXPORT_SYMBOL(llog_cat_init_and_process);

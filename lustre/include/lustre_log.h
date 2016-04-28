@@ -163,9 +163,6 @@ __u64 llog_cat_size(const struct lu_env *env, struct llog_handle *cat_llh);
 int llog_cat_reverse_process(const struct lu_env *env,
 			     struct llog_handle *cat_llh, llog_cb_t cb,
 			     void *data);
-int llog_cat_init_and_process(const struct lu_env *env,
-			      struct llog_handle *llh);
-
 /* llog_obd.c */
 int llog_setup(const struct lu_env *env, struct obd_device *obd,
 	       struct obd_llog_group *olg, int index,

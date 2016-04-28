@@ -1313,7 +1313,7 @@ static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 	LASSERT(lgh != NULL);
 	ctxt->loc_handle = lgh;
 
-	rc = llog_cat_init_and_process(env, lgh);
+	rc = llog_init_handle(env, lgh, LLOG_F_IS_CAT, NULL);
 	if (rc)
 		GOTO(out_close, rc);
 
