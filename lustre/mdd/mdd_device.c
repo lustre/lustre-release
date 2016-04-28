@@ -124,6 +124,10 @@ static int mdd_init0(const struct lu_env *env, struct mdd_device *mdd,
 	const char *dev;
 	ENTRY;
 
+	/* LU-8040 Set defaults here, before values configs */
+	mdd->mdd_cl.mc_flags = 0; /* off by default */
+	mdd->mdd_cl.mc_mask = CHANGELOG_DEFMASK;
+
 	dev = lustre_cfg_string(lcfg, 0);
 	if (dev == NULL)
 		RETURN(rc);
@@ -416,8 +420,6 @@ static int mdd_changelog_init(const struct lu_env *env, struct mdd_device *mdd)
 	mdd->mdd_cl.mc_index = 0;
 	spin_lock_init(&mdd->mdd_cl.mc_lock);
 	mdd->mdd_cl.mc_starttime = cfs_time_current_64();
-	mdd->mdd_cl.mc_flags = 0; /* off by default */
-	mdd->mdd_cl.mc_mask = CHANGELOG_DEFMASK;
 	spin_lock_init(&mdd->mdd_cl.mc_user_lock);
 	mdd->mdd_cl.mc_lastuser = 0;
 

@@ -5117,6 +5117,28 @@ test_76b() { # LU-4783
 }
 run_test 76b "verify params log setup correctly"
 
+test_76c() {
+	[[ $(lustre_version_code mgs) -ge $(version_code 2.8.54) ]] ||
+		{ skip "Need MDS version at least 2.4.52" && return 0; }
+	setupall
+	local MASK_PARAM="mdd.*.changelog_mask"
+	echo "Change changelog_mask"
+	do_facet mgs $LCTL set_param -P $MASK_PARAM=-CLOSE ||
+		error "Can't change changlog_mask"
+	wait_update $(facet_host mds) "$LCTL get_param -n $MASK_PARAM |
+		grep 'CLOSE'" ""
+
+	echo "Check the value is stored after mds remount"
+	stop_mds || error "Failed to stop MDS"
+	start_mds || error "Failed to start MDS"
+	local CHANGELOG_MASK=$(do_facet mgs $LCTL get_param -n $MASK_PARAM)
+	echo $CHANGELOG_MASK | grep CLOSE > /dev/null &&
+		error "changelog_mask is not changed"
+
+	stopall
+}
+run_test 76c "verify changelog_mask is applied with set_param -P"
+
 test_77() { # LU-3445
 	local server_version=$(lustre_version_code $SINGLEMDS)
 
