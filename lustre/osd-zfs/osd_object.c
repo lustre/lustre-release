@@ -798,7 +798,7 @@ static inline int qsd_transfer(const struct lu_env *env,
 	if (unlikely(qsd == NULL))
 		return 0;
 
-	LASSERT(qtype >= 0 && qtype < MAXQUOTAS);
+	LASSERT(qtype >= 0 && qtype < LL_MAXQUOTAS);
 	qi->lqi_type = qtype;
 
 	/* inode accounting */

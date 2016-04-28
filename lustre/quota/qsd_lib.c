@@ -160,7 +160,7 @@ lprocfs_force_reint_seq_write(struct file *file, const char __user *buffer,
 		rc = -EAGAIN;
 	} else {
 		/* mark all indexes as stale */
-		for (qtype = USRQUOTA; qtype < MAXQUOTAS; qtype++) {
+		for (qtype = USRQUOTA; qtype < LL_MAXQUOTAS; qtype++) {
 			qsd->qsd_type_array[qtype]->qqi_glb_uptodate = false;
 			qsd->qsd_type_array[qtype]->qqi_slv_uptodate = false;
 		}
@@ -171,7 +171,7 @@ lprocfs_force_reint_seq_write(struct file *file, const char __user *buffer,
 		return rc;
 
 	/* kick off reintegration */
-	for (qtype = USRQUOTA; qtype < MAXQUOTAS; qtype++) {
+	for (qtype = USRQUOTA; qtype < LL_MAXQUOTAS; qtype++) {
 		rc = qsd_start_reint_thread(qsd->qsd_type_array[qtype]);
 		if (rc)
 			break;
@@ -252,7 +252,7 @@ static int qsd_conn_callback(void *data)
 	 * reintegration procedure (i.e. global lock enqueue and slave
 	 * index transfer) since the space usage reconciliation (i.e.
 	 * step 3) will have to wait for qsd_start() to be called */
-	for (type = USRQUOTA; type < MAXQUOTAS; type++) {
+	for (type = USRQUOTA; type < LL_MAXQUOTAS; type++) {
 		struct qsd_qtype_info *qqi = qsd->qsd_type_array[type];
 		wake_up(&qqi->qqi_reint_thread.t_ctl_waitq);
 	}
@@ -494,7 +494,7 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 	qsd_stop_upd_thread(qsd);
 
 	/* shutdown the reintegration threads */
-	for (qtype = USRQUOTA; qtype < MAXQUOTAS; qtype++) {
+	for (qtype = USRQUOTA; qtype < LL_MAXQUOTAS; qtype++) {
 		if (qsd->qsd_type_array[qtype] == NULL)
 			continue;
 		qsd_stop_reint_thread(qsd->qsd_type_array[qtype]);
@@ -505,7 +505,7 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 	}
 
 	/* free per-quota type data */
-	for (qtype = USRQUOTA; qtype < MAXQUOTAS; qtype++)
+	for (qtype = USRQUOTA; qtype < LL_MAXQUOTAS; qtype++)
 		qsd_qtype_fini(env, qsd, qtype);
 
 	/* deregister connection to the quota master */
@@ -692,7 +692,7 @@ int qsd_prepare(const struct lu_env *env, struct qsd_instance *qsd)
 	}
 
 	/* initialize per-quota type data */
-	for (qtype = USRQUOTA; qtype < MAXQUOTAS; qtype++) {
+	for (qtype = USRQUOTA; qtype < LL_MAXQUOTAS; qtype++) {
 		rc = qsd_qtype_init(env, qsd, qtype);
 		if (rc)
 			RETURN(rc);
@@ -704,7 +704,7 @@ int qsd_prepare(const struct lu_env *env, struct qsd_instance *qsd)
 	write_unlock(&qsd->qsd_lock);
 
 	/* start reintegration thread for each type, if required */
-	for (qtype = USRQUOTA; qtype < MAXQUOTAS; qtype++) {
+	for (qtype = USRQUOTA; qtype < LL_MAXQUOTAS; qtype++) {
 		struct qsd_qtype_info	*qqi = qsd->qsd_type_array[qtype];
 
 		if (qsd_type_enabled(qsd, qtype) && qsd->qsd_acct_failed) {
@@ -792,7 +792,7 @@ int qsd_start(const struct lu_env *env, struct qsd_instance *qsd)
 
 	/* Trigger the 3rd step of reintegration: If usage > granted, acquire
 	 * up to usage; If usage < granted, release down to usage.  */
-	for (type = USRQUOTA; type < MAXQUOTAS; type++) {
+	for (type = USRQUOTA; type < LL_MAXQUOTAS; type++) {
 		struct qsd_qtype_info	*qqi = qsd->qsd_type_array[type];
 		wake_up(&qqi->qqi_reint_thread.t_ctl_waitq);
 	}

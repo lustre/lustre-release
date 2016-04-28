@@ -47,7 +47,7 @@ int osc_quota_chkdq(struct client_obd *cli, const unsigned int qid[])
 	int type;
 	ENTRY;
 
-	for (type = 0; type < MAXQUOTAS; type++) {
+	for (type = 0; type < LL_MAXQUOTAS; type++) {
 		struct osc_quota_info *oqi;
 
 		oqi = cfs_hash_lookup(cli->cl_quota_hash[type], &qid[type]);
@@ -81,7 +81,7 @@ int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
 	if ((valid & (OBD_MD_FLUSRQUOTA | OBD_MD_FLGRPQUOTA)) == 0)
 		RETURN(0);
 
-	for (type = 0; type < MAXQUOTAS; type++) {
+	for (type = 0; type < LL_MAXQUOTAS; type++) {
 		struct osc_quota_info *oqi;
 
 		if ((valid & MD_QUOTA_FLAG(type)) == 0)
@@ -210,7 +210,7 @@ int osc_quota_setup(struct obd_device *obd)
 	int i, type;
 	ENTRY;
 
-	for (type = 0; type < MAXQUOTAS; type++) {
+	for (type = 0; type < LL_MAXQUOTAS; type++) {
 		cli->cl_quota_hash[type] = cfs_hash_create("QUOTA_HASH",
 							   HASH_QUOTA_CUR_BITS,
 							   HASH_QUOTA_MAX_BITS,
@@ -224,7 +224,7 @@ int osc_quota_setup(struct obd_device *obd)
 			break;
 	}
 
-	if (type == MAXQUOTAS)
+	if (type == LL_MAXQUOTAS)
 		RETURN(0);
 
 	for (i = 0; i < type; i++)
@@ -239,7 +239,7 @@ int osc_quota_cleanup(struct obd_device *obd)
 	int type;
 	ENTRY;
 
-	for (type = 0; type < MAXQUOTAS; type++)
+	for (type = 0; type < LL_MAXQUOTAS; type++)
 		cfs_hash_putref(cli->cl_quota_hash[type]);
 
 	RETURN(0);

@@ -198,7 +198,7 @@ int qsd_process_config(struct lustre_cfg *lcfg)
 				continue;
 			}
 
-			for (type = USRQUOTA; type < MAXQUOTAS; type++) {
+			for (type = USRQUOTA; type < LL_MAXQUOTAS; type++) {
 				qqi = qsd->qsd_type_array[type];
 				qsd_start_reint_thread(qqi);
 			}

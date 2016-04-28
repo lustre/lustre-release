@@ -209,7 +209,7 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 
 	LASSERT(qmt != NULL);
 
-	if (oqctl->qc_type >= MAXQUOTAS)
+	if (oqctl->qc_type >= LL_MAXQUOTAS)
 		/* invalid quota type */
 		RETURN(-EINVAL);
 

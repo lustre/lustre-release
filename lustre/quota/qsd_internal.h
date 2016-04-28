@@ -70,7 +70,7 @@ struct qsd_instance {
 	 *
 	 * This will have to be revisited if new quota types are added in the
 	 * future. For the time being, we can just use an array. */
-	struct qsd_qtype_info	*qsd_type_array[MAXQUOTAS];
+	struct qsd_qtype_info	*qsd_type_array[LL_MAXQUOTAS];
 
 	/* per-filesystem quota information */
 	struct qsd_fsinfo	*qsd_fsinfo;
@@ -277,7 +277,7 @@ static inline int qsd_type_enabled(struct qsd_instance *qsd, int type)
 	int	enabled, pool;
 
 	LASSERT(qsd != NULL);
-	LASSERT(type < MAXQUOTAS);
+	LASSERT(type < LL_MAXQUOTAS);
 
 	if (qsd->qsd_fsinfo == NULL)
 		return 0;

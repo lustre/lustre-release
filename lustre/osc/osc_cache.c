@@ -2332,7 +2332,7 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 	if (!(cmd & OBD_BRW_NOQUOTA)) {
 		struct cl_object *obj;
 		struct cl_attr   *attr;
-		unsigned int qid[MAXQUOTAS];
+		unsigned int qid[LL_MAXQUOTAS];
 
 		obj = cl_object_top(&osc->oo_cl);
 		attr = &osc_env_info(env)->oti_attr;

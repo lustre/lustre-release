@@ -47,6 +47,10 @@
 #define MAX_DQ_TIME  604800     /* (7*24*60*60) 1 week */
 #endif
 
+#ifndef LL_MAXQUOTAS
+#define LL_MAXQUOTAS 2
+#endif
+
 struct lquota_id_info;
 struct lquota_trans;
 
