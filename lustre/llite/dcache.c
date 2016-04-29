@@ -150,17 +150,6 @@ static int ll_ddelete(HAVE_D_DELETE_CONST struct dentry *de)
 	LASSERT(ll_d_count(de) == 1);
 #endif
 
-	/* Disable this piece of code temproarily because this is called
-	 * inside dcache_lock so it's not appropriate to do lots of work
-	 * here. ATTENTION: Before this piece of code enabling, LU-2487 must be
-	 * resolved. */
-#if 0
-	/* if not ldlm lock for this inode, set i_nlink to 0 so that
-	 * this inode can be recycled later b=20433 */
-	if (de->d_inode && !find_cbdata(de->d_inode))
-		clear_nlink(de->d_inode);
-#endif
-
 	if (d_lustre_invalid((struct dentry *)de))
 		RETURN(1);
 	RETURN(0);
