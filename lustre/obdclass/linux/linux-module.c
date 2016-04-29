@@ -277,8 +277,8 @@ static int obd_proc_health_seq_show(struct seq_file *m, void *data)
 
 	if (healthy)
 		seq_puts(m, "healthy\n");
-
-	seq_printf(m, "NOT HEALTHY\n");
+	else
+		seq_puts(m, "NOT HEALTHY\n");
 	return 0;
 }
 LPROC_SEQ_FOPS_RO(obd_proc_health);
