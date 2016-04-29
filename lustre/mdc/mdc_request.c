@@ -2791,7 +2791,7 @@ static struct obd_ops mdc_obd_ops = {
 };
 
 static struct md_ops mdc_md_ops = {
-	.m_getstatus        = mdc_get_root,
+	.m_get_root	    = mdc_get_root,
         .m_null_inode	    = mdc_null_inode,
         .m_close            = mdc_close,
         .m_create           = mdc_create,

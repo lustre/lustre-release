@@ -1361,7 +1361,7 @@ EXPORT_SYMBOL(lprocfs_counter_init);
 
 void lprocfs_init_mps_stats(int num_private_stats, struct lprocfs_stats *stats)
 {
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, getstatus);
+	LPROCFS_MD_OP_INIT(num_private_stats, stats, get_root);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, null_inode);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, close);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, create);

@@ -1272,9 +1272,9 @@ static inline int md_get_root(struct obd_export *exp, const char *fileset,
 	int rc;
 
 	ENTRY;
-	EXP_CHECK_MD_OP(exp, getstatus);
-	EXP_MD_COUNTER_INCREMENT(exp, getstatus);
-	rc = MDP(exp->exp_obd, getstatus)(exp, fileset, fid);
+	EXP_CHECK_MD_OP(exp, get_root);
+	EXP_MD_COUNTER_INCREMENT(exp, get_root);
+	rc = MDP(exp->exp_obd, get_root)(exp, fileset, fid);
 
 	RETURN(rc);
 }
