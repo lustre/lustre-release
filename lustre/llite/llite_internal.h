@@ -823,11 +823,7 @@ struct ll_cl_context *ll_cl_find(struct file *file);
 void ll_cl_add(struct file *file, const struct lu_env *env, struct cl_io *io);
 void ll_cl_remove(struct file *file, const struct lu_env *env);
 
-#ifndef MS_HAS_NEW_AOPS
 extern const struct address_space_operations ll_aops;
-#else
-extern const struct address_space_operations_ext ll_aops;
-#endif
 
 /* llite/file.c */
 extern struct file_operations ll_file_operations;

@@ -806,7 +806,6 @@ static int ll_migratepage(struct address_space *mapping,
 }
 #endif
 
-#ifndef MS_HAS_NEW_AOPS
 const struct address_space_operations ll_aops = {
 	.readpage	= ll_readpage,
 	.direct_IO	= ll_direct_IO,
@@ -821,19 +820,3 @@ const struct address_space_operations ll_aops = {
 	.migratepage	= ll_migratepage,
 #endif
 };
-#else
-const struct address_space_operations_ext ll_aops = {
-	.orig_aops.readpage		= ll_readpage,
-	.orig_aops.direct_IO		= ll_direct_IO,
-	.orig_aops.writepage		= ll_writepage,
-	.orig_aops.writepages		= ll_writepages,
-	.orig_aops.set_page_dirty	= __set_page_dirty_nobuffers,
-	.orig_aops.invalidatepage	= ll_invalidatepage,
-	.orig_aops.releasepage		= ll_releasepage,
-#ifdef CONFIG_MIGRATION
-	.orig_aops.migratepage		= ll_migratepage,
-#endif
-	.write_begin			= ll_write_begin,
-	.write_end			= ll_write_end
-};
-#endif
