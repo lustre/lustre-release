@@ -1884,15 +1884,29 @@ void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
 	EXIT;
 }
 
+static int ldlm_callback_reply(struct ptlrpc_request *req, int rc)
+{
+	if (req->rq_no_reply)
+		return 0;
+
+	req->rq_status = rc;
+	if (!req->rq_packed_final) {
+		rc = lustre_pack_reply(req, 1, NULL, NULL);
+		if (rc)
+			return rc;
+	}
+	return ptlrpc_reply(req);
+}
+
 /**
  * Callback handler for receiving incoming completion ASTs.
  *
  * This only can happen on client side.
  */
-static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
-				    struct ldlm_namespace *ns,
-				    struct ldlm_request *dlm_req,
-				    struct ldlm_lock *lock)
+static int ldlm_handle_cp_callback(struct ptlrpc_request *req,
+                                    struct ldlm_namespace *ns,
+                                    struct ldlm_request *dlm_req,
+                                    struct ldlm_lock *lock)
 {
 	struct list_head ast_list;
 	int lvb_len;
@@ -1905,6 +1919,8 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
 	INIT_LIST_HEAD(&ast_list);
 	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_BL_CB_RACE)) {
 		long to = cfs_time_seconds(1);
+
+		ldlm_callback_reply(req, 0);
 
 		while (to > 0) {
 			set_current_state(TASK_INTERRUPTIBLE);
@@ -1947,6 +1963,12 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
 		}
 		LDLM_DEBUG(lock, "completion AST, new resource");
 		lock_res_and_lock(lock);
+	}
+
+	if (ldlm_is_failed(lock)) {
+		unlock_res_and_lock(lock);
+		LDLM_LOCK_RELEASE(lock);
+		RETURN(-EINVAL);
 	}
 
 	if (ldlm_is_destroyed(lock) ||
@@ -2021,6 +2043,8 @@ out:
 		wake_up(&lock->l_waitq);
 	}
 	LDLM_LOCK_RELEASE(lock);
+
+	return 0;
 }
 
 /**
@@ -2075,20 +2099,6 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
 	unlock_res_and_lock(lock);
 	LDLM_LOCK_RELEASE(lock);
 	EXIT;
-}
-
-static int ldlm_callback_reply(struct ptlrpc_request *req, int rc)
-{
-	if (req->rq_no_reply)
-		return 0;
-
-	req->rq_status = rc;
-	if (!req->rq_packed_final) {
-		rc = lustre_pack_reply(req, 1, NULL, NULL);
-		if (rc)
-			return rc;
-	}
-	return ptlrpc_reply(req);
 }
 
 static int __ldlm_bl_to_thread(struct ldlm_bl_work_item *blwi,
@@ -2426,8 +2436,9 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 	case LDLM_CP_CALLBACK:
 		CDEBUG(D_INODE, "completion ast\n");
 		req_capsule_extend(&req->rq_pill, &RQF_LDLM_CP_CALLBACK);
-		ldlm_callback_reply(req, 0);
-		ldlm_handle_cp_callback(req, ns, dlm_req, lock);
+		rc = ldlm_handle_cp_callback(req, ns, dlm_req, lock);
+		if (!OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_BL_CB_RACE))
+			ldlm_callback_reply(req, rc);
 		break;
 	case LDLM_GL_CALLBACK:
 		CDEBUG(D_INODE, "glimpse ast\n");

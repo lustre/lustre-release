@@ -4514,6 +4514,42 @@ test_93() {
 }
 run_test 93 "alloc_rr should not allocate on same ost"
 
+test_94() {
+	$LCTL set_param osc.*.idle_timeout=0
+	dd if=/dev/zero of=$DIR2/$tfile bs=4k count=2 conv=fsync
+
+	local before=$(date +%s)
+	local evict
+
+	$LCTL mark write
+#define OBD_FAIL_LDLM_PAUSE_CANCEL       0x312
+	$LCTL set_param fail_val=5 fail_loc=0x80000312
+	dd if=/dev/zero of=$DIR/$tfile conv=notrunc oflag=append bs=4k count=1 &
+	local pid=$!
+	sleep 2
+
+#define OBD_FAIL_LDLM_PAUSE_CANCEL_LOCAL 0x329
+	$LCTL set_param fail_val=6 fail_loc=0x80000329
+	$LCTL mark kill $pid
+	kill -ALRM $pid
+
+	dd if=/dev/zero of=$DIR2/$tfile conv=notrunc oflag=append bs=4k count=1
+
+	wait $pid
+	dd if=/dev/zero of=$DIR/$tfile bs=4k count=1 conv=fsync
+
+	evict=$(do_facet client $LCTL get_param \
+		osc.$FSNAME-OST*-osc-*/state |
+	    awk -F"[ [,]" '/EVICTED ]$/ { if (t<$5) {t=$5;} } END { print t }')
+
+	[ -z "$evict" ] || [[ $evict -le $before ]] ||
+		(do_facet client $LCTL get_param \
+			osc.$FSNAME-OST*-osc-*/state;
+		    error "eviction happened: $evict before:$before")
+	$LCTL set_param osc.*.idle_timeout=debug
+}
+run_test 94 "signal vs CP callback race"
+
 # Data-on-MDT tests
 test_100a() {
 	skip "Reserved for glimpse-ahead" && return

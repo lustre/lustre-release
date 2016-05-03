@@ -1226,6 +1226,9 @@ static __u64 ldlm_cli_cancel_local(struct ldlm_lock *lock)
 		bool local_only;
 
 		LDLM_DEBUG(lock, "client-side cancel");
+		OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_PAUSE_CANCEL_LOCAL,
+				 cfs_fail_val);
+
 		/* Set this flag to prevent others from getting new references*/
 		lock_res_and_lock(lock);
 		ldlm_set_cbpending(lock);
