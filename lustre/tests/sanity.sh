@@ -3334,29 +3334,27 @@ test_39l() {
 	# test setting directory atime to future
 	touch -a -d @$TEST_39_ATIME $DIR/$tdir
 	local atime=$(stat -c %X $DIR/$tdir)
-	[ "$atime" = $TEST_39_ATIME ] || \
+	[ "$atime" = $TEST_39_ATIME ] ||
 		error "atime is not set to future: $atime, $TEST_39_ATIME"
 
 	# test setting directory atime from future to now
-	local d1=$(date +%s)
-	ls $DIR/$tdir
-	local d2=$(date +%s)
+	local now=$(date +%s)
+	touch -a -d @$now $DIR/$tdir
 
-	cancel_lru_locks mdc
 	atime=$(stat -c %X $DIR/$tdir)
-	[ "$atime" -ge "$d1" -a "$atime" -le "$d2" ] || \
-		error "atime is not updated from future: $atime, $d1<atime<$d2"
+	[ "$atime" -eq "$now"  ] ||
+		error "atime is not updated from future: $atime, $now"
 
 	do_facet $SINGLEMDS lctl set_param -n mdd.*MDT0000*.atime_diff=2
 	sleep 3
 
 	# test setting directory atime when now > dir atime + atime_diff
-	d1=$(date +%s)
+	local d1=$(date +%s)
 	ls $DIR/$tdir
-	d2=$(date +%s)
+	local d2=$(date +%s)
 	cancel_lru_locks mdc
 	atime=$(stat -c %X $DIR/$tdir)
-	[ "$atime" -ge "$d1" -a "$atime" -le "$d2" ] || \
+	[ "$atime" -ge "$d1" -a "$atime" -le "$d2" ] ||
 		error "atime is not updated  : $atime, should be $d2"
 
 	do_facet $SINGLEMDS lctl set_param -n mdd.*MDT0000*.atime_diff=60
@@ -3366,7 +3364,7 @@ test_39l() {
 	ls $DIR/$tdir
 	cancel_lru_locks mdc
 	atime=$(stat -c %X $DIR/$tdir)
-	[ "$atime" -ge "$d1" -a "$atime" -le "$d2" ] || \
+	[ "$atime" -ge "$d1" -a "$atime" -le "$d2" ] ||
 		error "atime is updated to $atime, should remain $d1<atime<$d2"
 
 	do_facet $SINGLEMDS \
@@ -3469,6 +3467,18 @@ test_39p() {
 }
 run_test 39p "remote directory cached attributes updated after create ========"
 
+
+test_39p() { # LU-8041
+	local testdir=$DIR/$tdir
+	mkdir -p $testdir
+	multiop_bg_pause $testdir D_c || error "multiop failed"
+	local multipid=$!
+	cancel_lru_locks mdc
+	kill -USR1 $multipid
+	local atime=$(stat -c %X $testdir)
+	[ "$atime" -ne 0 ] || error "atime is zero"
+}
+run_test 39p "close won't zero out atime"
 
 test_40() {
 	dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1

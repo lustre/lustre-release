@@ -475,9 +475,8 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 	}
 
 	if (la->la_valid == LA_ATIME) {
-		/* This is atime only set for read atime update on close. */
-		if (la->la_atime >= oattr->la_atime &&
-		    la->la_atime < (oattr->la_atime +
+		/* This is an atime-only attribute update for close RPCs. */
+		if (la->la_atime < (oattr->la_atime +
 				mdd_obj2mdd_dev(obj)->mdd_atime_diff))
 			la->la_valid &= ~LA_ATIME;
 		RETURN(0);
