@@ -45,6 +45,7 @@
 #include "obdctl.h"
 #include <linux/lustre/lustre_ver.h>
 #include <lustre/lustreapi.h>
+#include "lctl_thread.h"
 
 static int jt_pcc(int argc, char **argv);
 
@@ -194,13 +195,21 @@ command_t cmdlist[] = {
 	 "      (Especially useful when using patterns.)\n"
 	 "  -R  Get parameters recursively from the specified entry.\n"},
 	{"set_param", jt_lcfg_setparam, 0, "set the Lustre or LNET parameter\n"
-	 "usage: set_param [-n] [-P] [-d] [-F]"
-	 "<param_path1=value1 param_path2=value2 ...>\n"
+	 "usage: set_param [-n] [-P] [-d] [-F] "
+#ifdef HAVE_LIBPTHREAD
+	 "[-t[THREAD_COUNT]] "
+#endif
+	 "PARAM1=VALUE1 [PARAM2=VALUE2 ...]\n"
 	 "Set the value of the Lustre or LNET parameter at the specified path.\n"
 	 "  -n  Disable printing of the key name when printing values.\n"
 	 "  -P  Set the parameter permanently, filesystem-wide.\n"
 	 "  -d  Remove the permanent setting (only with -P option).\n"
-	 "  -F  Read permanent configuration from a YAML file.\n"},
+	 "  -F  Read permanent configuration from a YAML file.\n"
+#ifdef HAVE_LIBPTHREAD
+	 "  -t  Set parameters in parallel, max THREAD_COUNT threads\n"
+	 "    (default " STRINGIFY(LCFG_THREADS_DEF) ").\n"
+#endif
+	},
 	{"apply_yaml", jt_lcfg_applyyaml, 0, "set/config the Lustre or LNET "
 	 "parameters using configuration from a YAML file.\n"
 	 "usage: apply_yaml file\n"},

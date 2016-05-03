@@ -3572,43 +3572,25 @@ test_29() {
 	log 'first d29'
 	ls -l $DIR/d29
 
-	declare -i LOCKCOUNTORIG=0
-	for lock_count in $(lctl get_param -n ldlm.namespaces.*mdc*.lock_count); do
-		let LOCKCOUNTORIG=$LOCKCOUNTORIG+$lock_count
-	done
-	[ $LOCKCOUNTORIG -eq 0 ] && error "No mdc lock count" && return 1
+	local locks_orig=$(total_used_locks mdc)
+	(( $locks_orig != 0 )) || error "No mdc lock count"
 
-	declare -i LOCKUNUSEDCOUNTORIG=0
-	for unused_count in $(lctl get_param -n ldlm.namespaces.*mdc*.lock_unused_count); do
-		let LOCKUNUSEDCOUNTORIG=$LOCKUNUSEDCOUNTORIG+$unused_count
-	done
+	local locks_unused_orig=$(total_unused_locks mdc)
 
 	log 'second d29'
 	ls -l $DIR/d29
 	log 'done'
 
-	declare -i LOCKCOUNTCURRENT=0
-	for lock_count in $(lctl get_param -n ldlm.namespaces.*mdc*.lock_count); do
-		let LOCKCOUNTCURRENT=$LOCKCOUNTCURRENT+$lock_count
-	done
+	local locks_current=$(total_used_locks mdc)
 
-	declare -i LOCKUNUSEDCOUNTCURRENT=0
-	for unused_count in $(lctl get_param -n ldlm.namespaces.*mdc*.lock_unused_count); do
-		let LOCKUNUSEDCOUNTCURRENT=$LOCKUNUSEDCOUNTCURRENT+$unused_count
-	done
+	local locks_unused_current=$(total_unused_locks mdc)
 
-	if [[ $LOCKCOUNTCURRENT -gt $LOCKCOUNTORIG ]]; then
+	if (( $locks_current > $locks_orig )); then
 		$LCTL set_param -n ldlm.dump_namespaces ""
-		error "CURRENT: $LOCKCOUNTCURRENT > $LOCKCOUNTORIG"
-		$LCTL dk | sort -k4 -t: > $TMP/test_29.dk
-		log "dumped log to $TMP/test_29.dk (bug 5793)"
-		return 2
+		error "CURRENT: $locks_current > $locks_orig"
 	fi
-	if [[ $LOCKUNUSEDCOUNTCURRENT -gt $LOCKUNUSEDCOUNTORIG ]]; then
-		error "UNUSED: $LOCKUNUSEDCOUNTCURRENT > $LOCKUNUSEDCOUNTORIG"
-		$LCTL dk | sort -k4 -t: > $TMP/test_29.dk
-		log "dumped log to $TMP/test_29.dk (bug 5793)"
-		return 3
+	if (( $locks_unused_current > $locks_unused_orig )); then
+		error "UNUSED: $locks_unused_current > $locks_unused_orig"
 	fi
 }
 run_test 29 "IT_GETATTR regression  ============================"
@@ -11347,10 +11329,6 @@ cleanup_test101bc() {
 	set_osd_param $list '' writethrough_cache_enable 1
 }
 
-calc_total() {
-	awk 'BEGIN{total=0}; {total+=$1}; END{print total}'
-}
-
 ra_check_101() {
 	local read_size=$1
 	local stripe_size=$2
@@ -11359,7 +11337,7 @@ ra_check_101() {
 	local discard_limit=$(( ((stride_length - 1) * 3 / stride_width) *
 			        (stride_width - stride_length) ))
 	local discard=$($LCTL get_param -n llite.*.read_ahead_stats |
-		  get_named_value 'read.but.discarded' | calc_total)
+		  get_named_value 'read.but.discarded' | calc_sum)
 
 	if [[ $discard -gt $discard_limit ]]; then
 		$LCTL get_param llite.*.read_ahead_stats
@@ -11524,7 +11502,7 @@ test_101e() {
 	$LCTL get_param llite.*.max_cached_mb
 	$LCTL get_param llite.*.read_ahead_stats
 	local miss=$($LCTL get_param -n llite.*.read_ahead_stats |
-		     get_named_value 'misses' | calc_total)
+		     get_named_value 'misses' | calc_sum)
 
 	for ((i = 0; i < $count; i++)); do
 		rm -rf $file.$i 2>/dev/null
@@ -11558,7 +11536,7 @@ test_101f() {
 	echo checking missing pages
 	$LCTL get_param llite.*.read_ahead_stats
 	local miss=$($LCTL get_param -n llite.*.read_ahead_stats |
-			get_named_value 'misses' | calc_total)
+			get_named_value 'misses' | calc_sum)
 
 	$LCTL set_param debug="$old_debug"
 	[ $miss -lt 3 ] || error "misses too much pages ('$miss')!"
@@ -11663,7 +11641,7 @@ test_101h() {
 	echo "Read 10M of data but cross 64M bundary"
 	dd if=$DIR/$tfile of=/dev/null bs=10M skip=6 count=1
 	local miss=$($LCTL get_param -n llite.*.read_ahead_stats |
-		     get_named_value 'misses' | calc_total)
+		     get_named_value 'misses' | calc_sum)
 	[ $miss -eq 1 ] || error "expected miss 1 but got $miss"
 	rm -f $p $DIR/$tfile
 }
@@ -11711,7 +11689,7 @@ test_101j() {
 		local count=$(($file_size / $blk))
 		dd if=$DIR/$tfile bs=$blk count=$count of=/dev/null
 		local miss=$($LCTL get_param -n llite.*.read_ahead_stats |
-			     get_named_value 'failed.to.fast.read' | calc_total)
+			     get_named_value 'failed.to.fast.read' | calc_sum)
 		$LCTL get_param -n llite.*.read_ahead_stats
 		[ $miss -eq $count ] || error "expected $count got $miss"
 	done
@@ -11739,7 +11717,7 @@ test_readahead_base() {
 	$MULTIOP $file or${iosz}c || error "failed to read $file"
 	$LCTL get_param -n llite.*.read_ahead_stats
 	ranum=$($LCTL get_param -n llite.*.read_ahead_stats |
-		awk '/readahead.pages/ { print $7 }' | calc_total)
+		awk '/readahead.pages/ { print $7 }' | calc_sum)
 	(( $ranum <= $ramax )) ||
 		error "read-ahead pages is $ranum more than $ramax"
 	rm -rf $file || error "failed to remove $file"
@@ -14709,7 +14687,7 @@ test_124d() {
 
 	[ $remaining -eq 0 ] || error "$remaining locks are not canceled"
 }
-run_test 124d "cancel very aged locks if lru-resize diasbaled"
+run_test 124d "cancel very aged locks if lru-resize disabled"
 
 test_125() { # 13358
 	$LCTL get_param -n llite.*.client_type | grep -q local ||

@@ -49,7 +49,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <ctype.h>
-
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/string.h>
 #include <libcfs/util/param.h>
@@ -59,10 +58,11 @@
 #include <linux/lnet/lnetctl.h>
 #include <linux/lustre/lustre_cfg.h>
 #include <linux/lustre/lustre_ioctl.h>
-#include <linux/lustre/lustre_ver.h>
-
 #include <linux/lustre/lustre_kernelcomm.h>
+#include <linux/lustre/lustre_ver.h>
 #include <lnetconfig/liblnetconfig.h>
+
+#include "lctl_thread.h"
 #include "lustreapi_internal.h"
 
 #include <sys/un.h>
@@ -444,19 +444,6 @@ int jt_lcfg_param(int argc, char **argv)
 
 	return jt_lcfg_ioctl(&bufs, argv[0], LCFG_PARAM);
 }
-
-struct param_opts {
-	unsigned int po_only_path:1;
-	unsigned int po_show_path:1;
-	unsigned int po_show_type:1;
-	unsigned int po_recursive:1;
-	unsigned int po_perm:1;
-	unsigned int po_delete:1;
-	unsigned int po_only_dir:1;
-	unsigned int po_file:1;
-	unsigned int po_yaml:1;
-	unsigned int po_detail:1;
-};
 
 int lcfg_setparam_perm(char *func, char *buf)
 {
@@ -857,7 +844,7 @@ free_buf:
  * \retval number of bytes written on success.
  * \retval -errno on error.
  */
-static int
+int
 write_param(const char *path, const char *param_name, struct param_opts *popt,
 	    const char *value)
 {
@@ -1094,35 +1081,48 @@ error:
 	return rc;
 }
 
+
 /**
  * Perform a read, write or just a listing of a parameter
  *
- * \param[in] popt		list,set,get parameter options
- * \param[in] pattern		search filter for the path of the parameter
- * \param[in] value		value to set the parameter if write operation
- * \param[in] mode		what operation to perform with the parameter
+ * \param[in] popt	list,set,get parameter options
+ * \param[in] pattern	search filter for the path of the parameter
+ * \param[in] value	value to set the parameter if write operation
+ * \param[in] oper	what operation to perform with the parameter
+ * \param[out] wq	the work queue to which work items will be added or NULL
+ *			if not in parallel
  *
  * \retval number of bytes written on success.
  * \retval -errno on error and prints error message.
  */
 static int
-param_display(struct param_opts *popt, char *pattern, char *value,
-	      enum parameter_operation mode)
+do_param_op(struct param_opts *popt, char *pattern, char *value,
+	    enum parameter_operation oper, struct sp_workq *wq)
 {
 	int dup_count = 0;
 	char **dup_cache;
 	glob_t paths;
-	char *opname = parameter_opname[mode];
+	char *opname = parameter_opname[oper];
 	int rc, i;
 
+	if (!wq && popt_is_parallel(*popt))
+		return -EINVAL;
+
 	rc = llapi_param_get_paths(pattern, &paths);
-	if (rc != 0) {
+	if (rc) {
 		rc = -errno;
 		if (!popt->po_recursive && !(rc == -ENOENT && getuid() != 0)) {
 			fprintf(stderr, "error: %s: param_path '%s': %s\n",
 				opname, pattern, strerror(errno));
 		}
 		return rc;
+	}
+
+	if (popt_is_parallel(*popt) && paths.gl_pathc > 1) {
+		/* Allocate space for the glob paths in advance. */
+		rc = spwq_expand(wq, paths.gl_pathc);
+		if (rc < 0)
+			goto out_param;
 	}
 
 	dup_cache = calloc(paths.gl_pathc, sizeof(char *));
@@ -1143,7 +1143,7 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 		if (stat(paths.gl_pathv[i], &st) == -1) {
 			fprintf(stderr, "error: %s: stat '%s': %s\n",
 				opname, paths.gl_pathv[i], strerror(errno));
-			if (rc == 0)
+			if (!rc)
 				rc = -errno;
 			continue;
 		}
@@ -1156,26 +1156,33 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 			fprintf(stderr,
 				"error: %s: generating name for '%s': %s\n",
 				opname, paths.gl_pathv[i], strerror(ENOMEM));
-			if (rc == 0)
+			if (!rc)
 				rc = -ENOMEM;
 			continue;
 		}
 
-		switch (mode) {
+		switch (oper) {
 		case GET_PARAM:
 			/* Read the contents of file to stdout */
 			if (S_ISREG(st.st_mode)) {
 				rc2 = read_param(paths.gl_pathv[i], param_name,
 						 popt);
-				if (rc2 < 0 && rc == 0)
+				if (rc2 < 0 && !rc)
 					rc = rc2;
 			}
 			break;
 		case SET_PARAM:
 			if (S_ISREG(st.st_mode)) {
-				rc2 = write_param(paths.gl_pathv[i],
-						  param_name, popt, value);
-				if (rc2 < 0 && rc == 0)
+				if (popt_is_parallel(*popt))
+					rc2 = spwq_add_item(wq,
+							    paths.gl_pathv[i],
+							    param_name, value);
+				else
+					rc2 = write_param(paths.gl_pathv[i],
+							  param_name, popt,
+							  value);
+
+				if (rc2 < 0 && !rc)
 					rc = rc2;
 			}
 			break;
@@ -1228,7 +1235,7 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 				opname, param_name, strerror(-rc2));
 			free(param_name);
 			param_name = NULL;
-			if (rc == 0)
+			if (!rc)
 				rc = rc2;
 			continue;
 		}
@@ -1244,7 +1251,7 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 
 		/* Shouldn't happen but just in case */
 		if (!tmp) {
-			if (rc == 0)
+			if (!rc)
 				rc = -EINVAL;
 			continue;
 		}
@@ -1261,15 +1268,15 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 		if (rc2 >= sizeof(pathname)) {
 			fprintf(stderr, "error: %s: overflow processing '%s'\n",
 				opname, pathname);
-			if (rc == 0)
+			if (!rc)
 				rc = -EINVAL;
 			continue;
 		}
 
-		rc2 = param_display(popt, pathname, value, mode);
-		if (rc2 != 0 && rc2 != -ENOENT) {
-			/* errors will be printed by param_display() */
-			if (rc == 0)
+		rc2 = do_param_op(popt, pathname, value, oper, wq);
+		if (!rc2 && rc2 != -ENOENT) {
+			/* errors will be printed by do_param_op() */
+			if (!rc)
 				rc = rc2;
 			continue;
 		}
@@ -1334,7 +1341,7 @@ int jt_lcfg_listparam(int argc, char **argv)
 			continue;
 		}
 
-		rc2 = param_display(&popt, path, NULL, LIST_PARAM);
+		rc2 = do_param_op(&popt, path, NULL, LIST_PARAM, NULL);
 		if (rc2 < 0) {
 			if (rc == 0)
 				rc = rc2;
@@ -1422,7 +1429,9 @@ int jt_lcfg_getparam(int argc, char **argv)
 			continue;
 		}
 
-		rc2 = param_display(&popt, path, NULL, mode);
+		rc2 = do_param_op(&popt, path, NULL,
+				  popt.po_only_path ? LIST_PARAM : GET_PARAM,
+				  NULL);
 		if (rc2 < 0) {
 			if (rc == 0)
 				rc = rc2;
@@ -1600,14 +1609,14 @@ int jt_nodemap_info(int argc, char **argv)
 
 	if (argc == 1 || strcmp("list", argv[1]) == 0) {
 		popt.po_only_dir = 1;
-		rc = param_display(&popt, "nodemap/*", NULL, LIST_PARAM);
+		rc = do_param_op(&popt, "nodemap/*", NULL, LIST_PARAM, NULL);
 	} else if (strcmp("all", argv[1]) == 0) {
-		rc = param_display(&popt, "nodemap/*/*", NULL, GET_PARAM);
+		rc = do_param_op(&popt, "nodemap/*/*", NULL, GET_PARAM, NULL);
 	} else {
 		char	pattern[PATH_MAX];
 
 		snprintf(pattern, sizeof(pattern), "nodemap/%s/*", argv[1]);
-		rc = param_display(&popt, pattern, NULL, GET_PARAM);
+		rc = do_param_op(&popt, pattern, NULL, GET_PARAM, NULL);
 		if (rc == -ESRCH)
 			fprintf(stderr,
 				"error: nodemap_info: cannot find nodemap %s\n",
@@ -1617,6 +1626,15 @@ int jt_nodemap_info(int argc, char **argv)
 }
 #endif
 
+/**
+ * Parses the command-line options to set_param.
+ *
+ * \param[in] argc	count of arguments given to set_param
+ * \param[in] argv	array of arguments given to set_param
+ * \param[out] popt	where set_param options will be saved
+ *
+ * \retval index in argv of the first non-option argv element (optind value)
+ */
 static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 {
 	int ch;
@@ -1628,11 +1646,34 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 	popt->po_perm = 0;
 	popt->po_delete = 0;
 	popt->po_file = 0;
+	popt->po_parallel_threads = 0;
+	opterr = 0;
 
-	while ((ch = getopt(argc, argv, "nPdF")) != -1) {
+	while ((ch = getopt(argc, argv, "dFnPt::")) != -1) {
 		switch (ch) {
 		case 'n':
 			popt->po_show_path = 0;
+			break;
+		case 't':
+#if HAVE_LIBPTHREAD
+			if (optarg)
+				popt->po_parallel_threads = atoi(optarg);
+			else
+				popt->po_parallel_threads = LCFG_THREADS_DEF;
+			if (popt->po_parallel_threads < 2)
+				return -EINVAL;
+			break;
+#else
+			{
+			static bool printed;
+
+			if (!printed) {
+				printed = true;
+				fprintf(stderr,
+					"warning: set_param: no pthread support, proceeding serially.\n");
+			}
+			}
+#endif
 			break;
 		case 'P':
 			popt->po_perm = 1;
@@ -1652,6 +1693,48 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
 		popt->po_perm = 0;
 	}
 	return optind;
+}
+
+/**
+ * Parse the arguments to set_param and return the first parameter and value
+ * pair and the number of arguments consumed.
+ *
+ * \param[in] argc   number of arguments remaining in argv
+ * \param[in] argv   list of param-value arguments to set_param (this function
+ *                   will modify the strings by overwriting '=' with '\0')
+ * \param[out] param the parameter name
+ * \param[out] value the parameter value
+ *
+ * \retval the number of args consumed from argv (1 for "param=value" format, 2
+ *         for "param value" format)
+ * \retval -errno if unsuccessful
+ */
+static int sp_parse_param_value(int argc, char **argv, char **param,
+				char **value)
+{
+	char *tmp;
+
+	if (argc < 1 || !(argv && param && value))
+		return -EINVAL;
+
+	*param = argv[0];
+	tmp = strchr(*param, '=');
+	if (tmp) {
+		/* format: set_param a=b */
+		*tmp = '\0';
+		tmp++;
+		if (*tmp == '\0')
+			return -EINVAL;
+		*value = tmp;
+		return 1;
+	}
+
+	/* format: set_param a b */
+	if (argc < 2)
+		return -EINVAL;
+	*value = argv[1];
+
+	return 2;
 }
 
 enum paramtype {
@@ -1887,11 +1970,22 @@ int jt_lcfg_applyyaml(int argc, char **argv)
 	return lcfg_apply_param_yaml(argv[0], argv[index]);
 }
 
+/**
+ * Main set_param function.
+ *
+ * \param[in] argc	count of arguments given to set_param
+ * \param[in] argv	array of arguments given to set_param
+ *
+ * \retval 0 if successful
+ * \retval -errno if unsuccessful
+ */
 int jt_lcfg_setparam(int argc, char **argv)
 {
-	int rc = 0, index, i;
+	int rc = 0;
+	int index = 0;
 	struct param_opts popt;
-	char *path = NULL, *value = NULL;
+	struct sp_workq wq;
+	struct sp_workq *wq_ptr = NULL;
 
 	memset(&popt, 0, sizeof(popt));
 	index = setparam_cmdline(argc, argv, &popt);
@@ -1914,49 +2008,65 @@ int jt_lcfg_setparam(int argc, char **argv)
 		return lcfg_apply_param_yaml(argv[0], argv[index]);
 #endif
 	}
-	for (i = index; i < argc; i++) {
-		int rc2;
 
-		path = argv[i];
-		value = strchr(path, '=');
-		if (value) {
-			/* format: set_param a=b */
-			*value = '\0';
-			value++;
-			if (*value == '\0') {
-				fprintf(stderr,
-					"error: %s: setting %s: no value\n",
-					jt_cmdname(argv[0]), path);
-				if (rc == 0)
-					rc = -EINVAL;
-				continue;
-			}
+	if (popt_is_parallel(popt)) {
+		rc = spwq_init(&wq, &popt);
+		if (rc < 0) {
+			fprintf(stderr,
+				"warning: parallel %s: failed to init work queue: %s. Proceeding serially.\n",
+				jt_cmdname(argv[0]), strerror(-rc));
+			rc = 0;
+			popt.po_parallel_threads = 0;
 		} else {
-			/* format: set_param a b */
-			i++;
-			if (i >= argc) {
-				fprintf(stderr,
-					"error: %s: setting %s: no value\n",
-					jt_cmdname(argv[0]), path);
-				if (rc == 0)
-					rc = -EINVAL;
-				break;
-			}
-			value = argv[i];
+			wq_ptr = &wq;
 		}
+	}
 
-		rc2 = clean_path(&popt, path);
+	while (index < argc) {
+		char *path = NULL;
+		char *value = NULL;
+
+		rc = sp_parse_param_value(argc - index, argv + index,
+					  &path, &value);
+		if (rc < 0) {
+			fprintf(stderr, "error: %s: setting %s: %s\n",
+				jt_cmdname(argv[0]), path, strerror(-rc));
+			break;
+		}
+		/* Increment index by the number of arguments consumed. */
+		index += rc;
+
+		rc = clean_path(&popt, path);
+		if (rc < 0)
+			break;
+
+		rc = do_param_op(&popt, path, value, SET_PARAM, wq_ptr);
+		if (rc < 0)
+			fprintf(stderr, "error: %s: setting '%s'='%s': %s\n",
+				jt_cmdname(argv[0]), path, value,
+				strerror(-rc));
+	}
+
+	if (popt_is_parallel(popt)) {
+		int rc2;
+		/* Spawn threads to set the parameters which made it into the
+		 * work queue to emulate serial set_param behavior when errors
+		 * are encountered above.
+		 */
+		rc2 = sp_run_threads(&wq);
 		if (rc2 < 0) {
-			fprintf(stderr, "error: %s: cleaning %s: %s\n",
-				jt_cmdname(argv[0]), path, strerror(-rc2));
-			if (rc == 0)
+			fprintf(stderr,
+				"error: parallel %s: failed to run threads: %s\n",
+				jt_cmdname(argv[0]), strerror(-rc2));
+			if (!rc)
 				rc = rc2;
-			continue;
 		}
-
-		rc2 = param_display(&popt, path, value, SET_PARAM);
-		if (rc == 0)
-			rc = rc2;
+		rc2 = spwq_destroy(&wq);
+		if (rc2 < 0) {
+			fprintf(stderr,
+				"warning: parallel %s: failed to cleanup work queue: %s\n",
+				jt_cmdname(argv[0]), strerror(-rc2));
+		}
 	}
 
 	return rc;

@@ -2,7 +2,13 @@
 .SH NAME
 lctl-set_param \- Lustre filesystem set parameter utility
 .SH SYNOPSIS
-.IR "\fBlctl set_param " [ -n "] [" -P "] [" -d "] <" parameter \B= value ...>
+.B "\fBlctl set_param "
+.RB [ \-d ]
+.RB [ \-h ]
+.RB [ \-n ]
+.RB [ \-P ]
+.RB [ \-t [ \fITHREAD_COUNT ]]
+.RI < parameter \= value ...>
 .br
 .IR "\fBlctl set_param -F " < filename >
 .SH DESCRIPTION
@@ -63,6 +69,20 @@ and
 such as the filesystem and/or target name.  This option is only available
 in Lustre 2.5.0 and later clients, older clients cannot set persistent
 parameters, nor will they see them.
+.TP
+.B -t
+Spawn threads to set multiple parameters in parallel, optionally specifying
+the maximum number of threads to run (with no space between
+.B -t
+and
+.IR THREAD_COUNT ).
+Without this option parameter(s) are set serially.
+If
+.B lctl
+was compiled without pthread support, a warning message will be
+printed and parameters will be set serially.  If
+.B -t
+is specified without any argument, it runs up to 8 threads by default.
 .SH EXAMPLES
 .B # lctl set_param fail_loc=0 timeout=20
 .br
@@ -75,6 +95,13 @@ timeout=20
 0
 .br
 20
+.br
+.B
+# lctl set_param -t2 "ldlm.namespaces.*osc*.lru_size=clear"
+.br
+ldlm.namespaces.fsname-OST0001-osc-MDT0000.lru_size=clear
+.br
+ldlm.namespaces.fsname-OST0000-osc-MDT0000.lru_size=clear
 .br
 .B # lctl set_param -P osc.testfs-OST*.max_dirty_mb=512
 .br

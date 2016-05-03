@@ -68,6 +68,7 @@ pkglib_LTLIBRARIES =
 lib_LTLIBRARIES = liblustreapi.la
 
 lctl_SOURCES = portals.c debug.c obd.c lustre_cfg.c lctl.c obdctl.h
+lctl_SOURCES += lctl_thread.c lctl_thread.h
 if SERVER
 lctl_SOURCES += lustre_lfsck.c lsnapshot.c
 endif
