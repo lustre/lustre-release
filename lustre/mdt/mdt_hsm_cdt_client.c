@@ -281,47 +281,21 @@ hsm_action_permission(struct mdt_thread_info *mti,
 	RETURN(*mask & (1UL << hsma) ? 0 : -EPERM);
 }
 
-/*
- * Coordinator external API
- */
-
-/**
- * register a list of requests
- * \param mti [IN]
- * \param hal [IN] list of requests
- * \retval 0 success
- * \retval -ve failure
- * in case of restore, caller must hold layout lock
- */
-int mdt_hsm_add_actions(struct mdt_thread_info *mti,
-			struct hsm_action_list *hal)
+/* Process a single HAL. hsm_find_compatible has already been called
+ * on it. */
+static int mdt_hsm_register_hal(struct mdt_thread_info *mti,
+				struct mdt_device *mdt,
+				struct coordinator *cdt,
+				struct hsm_action_list *hal)
 {
-	struct mdt_device	*mdt = mti->mti_mdt;
-	struct coordinator	*cdt = &mdt->mdt_coordinator;
 	struct hsm_action_item	*hai;
 	struct mdt_object	*obj = NULL;
-	int			 rc = 0, i;
+	int			 rc, i;
 	struct md_hsm		 mh;
 	bool			 is_restore = false;
 	__u64			 compound_id;
-	ENTRY;
-
-	/* no coordinator started, so we cannot serve requests */
-	if (cdt->cdt_state == CDT_STOPPED)
-		RETURN(-EAGAIN);
-
-	if (!hal_is_sane(hal))
-		RETURN(-EINVAL);
 
 	compound_id = atomic_inc_return(&cdt->cdt_compound_id);
-
-	/* search for compatible request, if found hai_cookie is set
-	 * to the request cookie
-	 * it is also used to set the cookie for cancel request by FID
-	 */
-	rc = hsm_find_compatible(mti->mti_env, mdt, hal);
-	if (rc)
-		GOTO(out, rc);
 
 	hai = hai_first(hal);
 	for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai)) {
@@ -476,6 +450,49 @@ record:
 		rc = -ENODATA;
 	else
 		rc = 0;
+
+	GOTO(out, rc);
+
+out:
+	return rc;
+}
+
+/*
+ * Coordinator external API
+ */
+
+/**
+ * register a list of requests
+ * \param mti [IN]
+ * \param hal [IN] list of requests
+ * \retval 0 success
+ * \retval -ve failure
+ * in case of restore, caller must hold layout lock
+ */
+int mdt_hsm_add_actions(struct mdt_thread_info *mti,
+			struct hsm_action_list *hal)
+{
+	struct mdt_device	*mdt = mti->mti_mdt;
+	struct coordinator	*cdt = &mdt->mdt_coordinator;
+	int			 rc;
+	ENTRY;
+
+	/* no coordinator started, so we cannot serve requests */
+	if (cdt->cdt_state == CDT_STOPPED)
+		RETURN(-EAGAIN);
+
+	if (!hal_is_sane(hal))
+		RETURN(-EINVAL);
+
+	/* search for compatible request, if found hai_cookie is set
+	 * to the request cookie
+	 * it is also used to set the cookie for cancel request by FID
+	 */
+	rc = hsm_find_compatible(mti->mti_env, mdt, hal);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = mdt_hsm_register_hal(mti, mdt, cdt, hal);
 
 	GOTO(out, rc);
 out:
