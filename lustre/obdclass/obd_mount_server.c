@@ -1131,6 +1131,13 @@ static int server_lsi2mti(struct lustre_sb_info *lsi,
 		}
 	}
 
+	if (mti->mti_nid_count == 0) {
+		CERROR("Failed to get NID for server %s, please check whether "
+		       "the target is specifed with improper --servicenode or "
+		       "--network options.\n", mti->mti_svname);
+		RETURN(-EINVAL);
+	}
+
 	mti->mti_lustre_ver = LUSTRE_VERSION_CODE;
 	mti->mti_config_ver = 0;
 
