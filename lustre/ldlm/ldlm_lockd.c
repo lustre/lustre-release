@@ -659,31 +659,33 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
  * Perform lock cleanup if AST reply came with error.
  */
 static int ldlm_handle_ast_error(struct ldlm_lock *lock,
-                                 struct ptlrpc_request *req, int rc,
-                                 const char *ast_type)
+				 struct ptlrpc_request *req, int rc,
+				 const char *ast_type)
 {
 	lnet_process_id_t peer = req->rq_import->imp_connection->c_peer;
 
 	if (!req->rq_replied || (rc && rc != -EINVAL)) {
 		if (lock->l_export && lock->l_export->exp_libclient) {
-			LDLM_DEBUG(lock, "%s AST to liblustre client (nid %s)"
-				   " timeout, just cancelling lock", ast_type,
+			LDLM_DEBUG(lock,
+				   "%s AST (req@%p x"LPU64") to liblustre client (nid %s) timeout, just cancelling lock",
+				   ast_type, req, req->rq_xid,
 				   libcfs_nid2str(peer.nid));
 			ldlm_lock_cancel(lock);
 			rc = -ERESTART;
 		} else if (ldlm_is_cancel(lock)) {
-			LDLM_DEBUG(lock, "%s AST timeout from nid %s, but "
-				   "cancel was received (AST reply lost?)",
-				   ast_type, libcfs_nid2str(peer.nid));
+			LDLM_DEBUG(lock,
+				   "%s AST (req@%p x"LPU64") timeout from nid %s, but cancel was received (AST reply lost?)",
+				   ast_type, req, req->rq_xid,
+				   libcfs_nid2str(peer.nid));
 			ldlm_lock_cancel(lock);
 			rc = -ERESTART;
 		} else {
-			LDLM_ERROR(lock, "client (nid %s) %s %s AST "
-				   "(req status %d rc %d), evict it",
+			LDLM_ERROR(lock,
+				   "client (nid %s) %s %s AST (req@%p x"LPU64" status %d rc %d), evict it",
 				   libcfs_nid2str(peer.nid),
 				   req->rq_replied ? "returned error from" :
 				   "failed to reply to",
-				   ast_type,
+				   ast_type, req, req->rq_xid,
 				   (req->rq_repmsg != NULL) ?
 				   lustre_msg_get_status(req->rq_repmsg) : 0,
 				   rc);
@@ -695,12 +697,12 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
 	if (rc == -EINVAL) {
 		struct ldlm_resource *res = lock->l_resource;
 
-		LDLM_DEBUG(lock, "client (nid %s) returned %d"
-			   " from %s AST - normal race",
+		LDLM_DEBUG(lock,
+			   "client (nid %s) returned %d from %s AST (req@%p x"LPU64") - normal race",
 			   libcfs_nid2str(peer.nid),
 			   req->rq_repmsg ?
 			   lustre_msg_get_status(req->rq_repmsg) : -1,
-			   ast_type);
+			   ast_type, req, req->rq_xid);
 		if (res) {
 			/* update lvbo to return proper attributes.
 			 * see bug 23174 */
