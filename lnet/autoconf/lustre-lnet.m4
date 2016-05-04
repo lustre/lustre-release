@@ -423,6 +423,28 @@ AS_IF([test $ENABLEO2IB != "no"], [
 			[rdma_create_id wants 5 args])
 	])
 ])
+
+# new fast registration API introduced in 4.4
+AS_IF([test $ENABLEO2IB != "no"], [
+	LB_CHECK_COMPILE([if 'ib_map_mr_sg' exists],
+	ib_map_mr_sg, [
+		#ifdef HAVE_COMPAT_RDMA
+		#undef PACKAGE_NAME
+		#undef PACKAGE_TARNAME
+		#undef PACKAGE_VERSION
+		#undef PACKAGE_STRING
+		#undef PACKAGE_BUGREPORT
+		#undef PACKAGE_URL
+		#include <linux/compat-2.6.h>
+		#endif
+		#include <rdma/ib_verbs.h>
+	],[
+		ib_map_mr_sg(NULL, NULL, 0, 0);
+	],[
+		AC_DEFINE(HAVE_IB_MAP_MR_SG, 1,
+			[ib_map_mr_sg exists])
+	])
+])
 ]) # LN_CONFIG_O2IB
 
 #

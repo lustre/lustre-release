@@ -313,9 +313,13 @@ typedef struct
 struct kib_fast_reg_descriptor { /* For fast registration */
 	struct list_head		 frd_list;
 	struct ib_send_wr		 frd_inv_wr;
+#ifdef HAVE_IB_MAP_MR_SG
+	struct ib_reg_wr		 frd_fastreg_wr;
+#else
 	struct ib_send_wr		 frd_fastreg_wr;
+	struct ib_fast_reg_page_list	*frd_frpl;
+#endif
 	struct ib_mr			*frd_mr;
-	struct ib_fast_reg_page_list    *frd_frpl;
 	bool				 frd_valid;
 };
 
@@ -1151,8 +1155,9 @@ void kiblnd_unmap_rx_descs(kib_conn_t *conn);
 void kiblnd_pool_free_node(kib_pool_t *pool, struct list_head *node);
 struct list_head *kiblnd_pool_alloc_node(kib_poolset_t *ps);
 
-int  kiblnd_fmr_pool_map(kib_fmr_poolset_t *fps, __u64 *pages, int npages,
-			 __u32 nob, __u64 iov, bool is_rx, kib_fmr_t *fmr);
+int  kiblnd_fmr_pool_map(kib_fmr_poolset_t *fps, kib_tx_t *tx,
+			 kib_rdma_desc_t *rd, __u32 nob, __u64 iov,
+			 kib_fmr_t *fmr);
 void kiblnd_fmr_pool_unmap(kib_fmr_t *fmr, int status);
 
 int  kiblnd_tunables_setup(struct lnet_ni *ni);

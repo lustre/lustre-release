@@ -565,34 +565,20 @@ static int
 kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, __u32 nob)
 {
 	kib_hca_dev_t		*hdev;
-	__u64			*pages = tx->tx_pages;
 	kib_fmr_poolset_t	*fps;
-	int			npages;
-	int			size;
 	int			cpt;
 	int			rc;
-	int			i;
 
 	LASSERT(tx->tx_pool != NULL);
 	LASSERT(tx->tx_pool->tpo_pool.po_owner != NULL);
 
-	hdev  = tx->tx_pool->tpo_hdev;
-
-        for (i = 0, npages = 0; i < rd->rd_nfrags; i++) {
-                for (size = 0; size <  rd->rd_frags[i].rf_nob;
-                               size += hdev->ibh_page_size) {
-                        pages[npages ++] = (rd->rd_frags[i].rf_addr &
-                                            hdev->ibh_page_mask) + size;
-                }
-        }
-
+	hdev = tx->tx_pool->tpo_hdev;
 	cpt = tx->tx_pool->tpo_pool.po_owner->ps_cpt;
 
 	fps = net->ibn_fmr_ps[cpt];
-	rc = kiblnd_fmr_pool_map(fps, pages, npages, nob, 0, (rd != tx->tx_rd),
-				 &tx->fmr);
+	rc = kiblnd_fmr_pool_map(fps, tx, rd, nob, 0, &tx->fmr);
 	if (rc != 0) {
-		CERROR("Can't map %d pages: %d\n", npages, rc);
+		CERROR("Can't map %u pages: %d\n", nob, rc);
 		return rc;
 	}
 
@@ -854,11 +840,19 @@ __must_hold(&conn->ibc_lock)
 		if (frd != NULL) {
 			if (!frd->frd_valid) {
 				wrq = &frd->frd_inv_wr;
+#ifdef HAVE_IB_MAP_MR_SG
+				wrq->next = &frd->frd_fastreg_wr.wr;
+			} else {
+				wrq = &frd->frd_fastreg_wr.wr;
+			}
+			frd->frd_fastreg_wr.wr.next = tx->tx_wrq;
+#else
 				wrq->next = &frd->frd_fastreg_wr;
 			} else {
 				wrq = &frd->frd_fastreg_wr;
 			}
 			frd->frd_fastreg_wr.next = tx->tx_wrq;
+#endif
 		}
 
 		LASSERTF(bad->wr_id == kiblnd_ptr2wreqid(tx, IBLND_WID_TX),
