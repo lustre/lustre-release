@@ -263,7 +263,6 @@ fi
 	%{!?with_zfs:--without-zfs} \
 	%{!?with_lnet_dlc:--disable-dlc} \
 	%{!?with_manpages:--disable-manpages} \
-	--with-release=%{release} \
 	--with-linux=%{kdir} \
 	--with-linux-obj=%{kobjdir} \
 	--with-kmp-moddir=%{kmoddir}/%{name}

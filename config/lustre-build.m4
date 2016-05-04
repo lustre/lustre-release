@@ -463,7 +463,6 @@ for arg; do
 		-C | --cache-file=* ) ;;
 		--prefix=* | --*-prefix=* ) ;;
 		--enable-dist ) ;;
-		--with-release=* ) ;;
 		--with-kmp-moddir=* ) ;;
 		--with-linux=* | --with-linux-obj=* ) ;;
 		--enable-shared | --disable-shared ) ;;
