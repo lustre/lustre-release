@@ -32,7 +32,11 @@
 #include <crypto/internal/hash.h>
 #include <linux/crc32.h>
 #include <asm/cpufeature.h>
+#ifdef HAVE_FPU_API_HEADER
+#include <asm/fpu/api.h>
+#else
 #include <asm/i387.h>
+#endif
 #include <libcfs/libcfs.h>
 
 #define CHKSUM_BLOCK_SIZE	1

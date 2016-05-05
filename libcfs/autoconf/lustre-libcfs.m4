@@ -312,6 +312,16 @@ topology_sibling_cpumask, [
 ]) # LIBCFS_HAVE_TOPOLOGY_SIBLING_CPUMASK
 
 #
+# Kernel version 4.2 commit df6b35f409af0a8ff1ef62f552b8402f3fef8665
+# header file i387.h was renamed to fpu/api.h
+#
+AC_DEFUN([LIBCFS_FPU_API], [
+LB_CHECK_LINUX_HEADER([asm/fpu/api.h], [
+	AC_DEFINE(HAVE_FPU_API_HEADER, 1,
+		[fpu/api.h is present])])
+]) # LIBCFS_FPU_API
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LibCFS linux kernel checks
@@ -350,6 +360,7 @@ LIBCFS_SHRINKER_COUNT
 LIBCFS_HLIST_ADD_AFTER
 # 4.2
 LIBCFS_HAVE_TOPOLOGY_SIBLING_CPUMASK
+LIBCFS_FPU_API
 ]) # LIBCFS_PROG_LINUX
 
 #
