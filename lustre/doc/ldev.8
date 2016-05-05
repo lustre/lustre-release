@@ -60,6 +60,9 @@ Print device type of LABEL, i.e. "zfs" or "md".
 .I "-z, --zpool LABEL"
 Print zpool containing LABEL.
 .TP
+.I "-R, --role ROLE"
+Filter output based on role, i.e. mdt, ost, mgs.
+.TP
 .I "CMD [ARGS...]"
 Run one instance of \fICMD [ARGS]\fR for each label in parallel.
 Only the local labels are used by default, but foreign, all, or file system

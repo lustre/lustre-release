@@ -6705,6 +6705,80 @@ test_96() {
 }
 run_test 96 "ldev returns hostname and backend fs correctly in command sub"
 
+test_97() {
+	if [ -z "$LDEV" ]; then
+		error "ldev is missing!"
+	fi
+
+	local LDEVCONFPATH=$TMP/ldev.conf
+	local NIDSPATH=$TMP/nids
+
+	generate_ldev_conf $LDEVCONFPATH
+	generate_nids $NIDSPATH
+
+	local LDEV_OUTPUT=$TMP/ldev-output.txt
+	local EXPECTED_OUTPUT=$TMP/ldev-expected-output.txt
+
+	echo -e "\nMDT role"
+	$LDEV -c $LDEVCONFPATH -n $NIDSPATH -F $FSNAME -R mdt > $LDEV_OUTPUT
+
+	if [ $? -ne 0 ]; then
+		rm $LDEVCONFPATH $NIDSPATH $LDEV_OUTPUT
+		error "ldev failed to execute for mdt role!"
+	fi
+
+	for num in $(seq $MDSCOUNT); do
+		printf "%s-MDT%04d\n" $FSNAME $num >> $EXPECTED_OUTPUT
+	done
+
+	compare_ldev_output $LDEV_OUTPUT $EXPECTED_OUTPUT
+
+	if [ $? -ne 0 ]; then
+		rm $LDEVCONFPATH $NIDSPATH $EXPECTED_OUTPUT $LDEV_OUTPUT
+		error "ldev failed to produce the correct output for mdt role!"
+	fi
+
+	echo -e "\nOST role"
+	$LDEV -c $LDEVCONFPATH -n $NIDSPATH -F $FSNAME -R ost > $LDEV_OUTPUT
+
+	if [ $? -ne 0 ]; then
+		rm $LDEVCONFPATH $NIDSPATH $LDEV_OUTPUT $EXPECTED_OUTPUT
+		error "ldev failed to execute for ost role!"
+	fi
+
+	rm $EXPECTED_OUTPUT
+	for num in $(seq $OSTCOUNT); do
+		printf "%s-OST%04d\n" $FSNAME $num >> $EXPECTED_OUTPUT
+	done
+
+	compare_ldev_output $LDEV_OUTPUT $EXPECTED_OUTPUT
+
+	if [ $? -ne 0 ]; then
+		rm $LDEVCONFPATH $NIDSPATH $EXPECTED_OUTPUT $LDEV_OUTPUT
+		error "ldev failed to produce the correct output for ost role!"
+	fi
+
+	echo -e "\nMGS role"
+	$LDEV -c $LDEVCONFPATH -n $NIDSPATH -F $FSNAME -R mgs > $LDEV_OUTPUT
+
+	if [ $? -ne 0 ]; then
+		rm $LDEVCONFPATH $NIDSPATH $LDEV_OUTPUT $EXPECTED_OUTPUT
+		error "ldev failed to execute for mgs role!"
+	fi
+
+	printf "%s-MGS0000\n" $FSNAME > $EXPECTED_OUTPUT
+
+	compare_ldev_output $LDEV_OUTPUT $EXPECTED_OUTPUT
+
+	if [ $? -ne 0 ]; then
+		rm $LDEVCONFPATH $NIDSPATH $EXPECTED_OUTPUT $LDEV_OUTPUT
+		error "ldev failed to produce the correct output for mgs role!"
+	fi
+
+	rm $LDEVCONFPATH $NIDSPATH $EXPECTED_OUTPUT $LDEV_OUTPUT
+}
+run_test 97 "ldev returns correct ouput when querying based on role"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi
