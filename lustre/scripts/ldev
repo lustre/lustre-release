@@ -32,6 +32,7 @@ Parse ldev.conf and answer the following queries:
   CMD [ARGS] ...      Run CMD in parallel for each device substituting:
                       %f=fsname  %d=device  %i=dec-index %n=main-nid %l=label
                       %t=srvtype %j=journal %I=hex-index %N=fail-nid %m=mgs-nid
+                      %H=hostname %b=backing-fs
                       May be used in combination with -l, -f, -a, -F options.
 EOF
 
@@ -418,6 +419,7 @@ sub exec_cmd
     my @labels = ();
     my @cmds = ();
     my %label2dev = %{$conf{label2dev}};
+    my %label2type = %{$conf{label2type}};
     my %label2journal = %{$conf{label2journal}};
     my %filesys2mgs = %{$conf{filesys2mgs}};
     my %label2hostname = %{$conf{label2hostname}};
@@ -466,6 +468,11 @@ sub exec_cmd
             log_fatal ("%j used but no journal defined for $_\n");
         }
         my $journal = $label2journal{$_};
+        my $fstype = $label2type{$_};
+        if (!defined $fstype or $fstype ne "zfs") {
+            $fstype = "ldiskfs";
+        }
+        my $hostname = $label2hostname{$_};
         my $mgsnid;
         if ($cmd =~ /%m/) {
             if (!exists $filesys2mgs{$fsname}) {
@@ -495,6 +502,8 @@ sub exec_cmd
         $cmd =~ s/%n/$nid/g;     # %n = nid
         $cmd =~ s/%N/$failnid/g; # %N = failnid
         $cmd =~ s/%m/$mgsnid/g;  # %m = MGS nid
+        $cmd =~ s/%b/$fstype/g;  # %b = backing file system type
+        $cmd =~ s/%H/$hostname/g;# %H = hostname
 
         push @cmds, "$_ $cmd";
     }

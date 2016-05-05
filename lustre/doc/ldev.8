@@ -67,8 +67,8 @@ labels may be selected by adding the \fI--foreign\fR, \fI--all\fR, or
 \fI--filesys\fR options.
 The following substitutions are made:
 %f=fsname, %d=device, %j=journal, %i=index, %I=hex-index, %t=type, %l=label,
-%n=nid, %N=failnid, %m=mgsnid.  On failure of any child processes, \fBldev\fR will
-return a non-zero exit code.
+%n=nid, %N=failnid, %m=mgsnid, %H=hostname, %b=backing-fs.  On failure of
+any child processes, \fBldev\fR will return a non-zero exit code.
 .LP
 It is an error if %n, %N, or %m is used in a command and /etc/nids does not
 contain appropriate host to NID mappings.
