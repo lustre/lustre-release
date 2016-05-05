@@ -22,6 +22,7 @@ Parse ldev.conf and answer the following queries:
   -l, --local         Print labels for local devices.
   -f, --foreign       Print labels for foreign devices.
   -a, --all           Print labels for local and foreign devices.
+  -F, --filesys NAME  Print labels for file system NAME.
   -s, --sanity        Sanity check config on this node.
   -d, --device LABEL  Print storage device of LABEL.
   -j, --journal LABEL Print journal device of LABEL if it exists.
@@ -31,7 +32,7 @@ Parse ldev.conf and answer the following queries:
   CMD [ARGS] ...      Run CMD in parallel for each device substituting:
                       %f=fsname  %d=device  %i=dec-index %n=main-nid %l=label
                       %t=srvtype %j=journal %I=hex-index %N=fail-nid %m=mgs-nid
-                      May be used in combination with -l, -f, -a options.
+                      May be used in combination with -l, -f, -a, -F options.
 EOF
 
 my %eparse = (
@@ -62,6 +63,7 @@ query_journal ()  if $conf{journal};
 query_raidtab ()  if $conf{raidtab};
 query_type ()     if $conf{type};
 query_zpool ()    if $conf{zpool};
+query_filesys ()  if $conf{fsname};
 
 exit(0);
 
@@ -85,6 +87,7 @@ sub parse_cmdline
     $conf{sanity} = 0;
     $conf{execcmd} = "";
     $conf{journal} = "";
+    $conf{fsname} = "";
 
     my $rc = GetOptions (
         "help|h!"         => \$help,
@@ -101,11 +104,19 @@ sub parse_cmdline
         "raidtab|r=s"     => \$conf{raidtab},
         "type|t=s"        => \$conf{type},
         "zpool|z=s"       => \$conf{zpool},
+        "filesys|F=s"     => \$conf{fsname},
     );
 
     usage() if $help || !$rc;
 
     log_fatal ("cannot read config file\n") if (! -r $conf{config});
+
+    my $filters = 0;
+    $filters++ if ($conf{local});
+    $filters++ if ($conf{foreign});
+    $filters++ if ($conf{all});
+    $filters++ if ($conf{fsname});
+    log_fatal ("Only one of -l, -f, -a, or -F may be used.\n") if ($filters > 1);
 
     if (@ARGV) {
         $conf{execcmd} = " " . join " ", @ARGV;
@@ -128,6 +139,7 @@ sub parse_config
     my %label2hostname = ();
     my @local_labels = ();
     my @foreign_labels = ();
+    my @fs_labels = ();
 
     open (CONF, "< $conf{config}") or log_fatal ("$conf{config}: $!\n");
 
@@ -173,6 +185,10 @@ sub parse_config
         } elsif ($foreign eq $conf{hostname}) {
             push @foreign_labels, $label;
         }
+
+        if ($conf{fsname} and $filesys eq $conf{fsname}) {
+            push @fs_labels, $label;
+        }
     }
     close CONF;
 
@@ -185,6 +201,7 @@ sub parse_config
 
     @{$conf{local_labels}} = @local_labels;
     @{$conf{foreign_labels}} = @foreign_labels;
+    @{$conf{fs_labels}} = @fs_labels;
     %{$conf{l2f}} = %l2f;
     %{$conf{label2dev}} = %label2dev;
     %{$conf{label2local}} = %label2local;
@@ -240,6 +257,11 @@ sub query_local
 sub query_foreign
 {
     map { print "$_\n"; } @{$conf{foreign_labels}};
+}
+
+sub query_filesys
+{
+    map { print "$_\n"; } @{$conf{fs_labels}};
 }
 
 sub query_all
@@ -420,13 +442,16 @@ sub exec_cmd
         $failnid = $host2nid{$l2f{$conf{hostname}}};
     }
 
-    if ($conf{foreign} and !$conf{local} and !$conf{all}) {
+    if ($conf{foreign}) {
         @labels = @{$conf{foreign_labels}};
-    } elsif (!$conf{foreign} and !$conf{all}) {
-        @labels = @{$conf{local_labels}};
-    } else {
+    } elsif ($conf{all}) {
         @labels = (@{$conf{local_labels}}, @{$conf{foreign_labels}});
+    } elsif ($conf{fsname}) {
+        @labels = (@labels, @{$conf{fs_labels}});
+    } else {
+        @labels = @{$conf{local_labels}};
     }
+
     foreach (@labels) {
         /(\w+)-(OST|MDT|MGT|MGS)([0-9a-fA-F]{4})/;
 

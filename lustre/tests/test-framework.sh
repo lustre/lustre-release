@@ -294,6 +294,8 @@ init_test_env() {
     export DIR2
     export SAVE_PWD=${SAVE_PWD:-$LUSTRE/tests}
     export AT_MAX_PATH
+    export LDEV=${LDEV:-"$LUSTRE/scripts/ldev"}
+    [ ! -f "$LDEV" ] && export LDEV=$(which ldev 2> /dev/null)
 
     if [ "$ACCEPTOR_PORT" ]; then
         export PORT_OPT="--port $ACCEPTOR_PORT"

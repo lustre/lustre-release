@@ -33,6 +33,9 @@ Print labels for foreign devices.
 .I "-a, --all"
 Print labels for local and foreign devices.
 .TP
+.I "-F, --filesys NAME"
+Print labels for file system NAME.
+.TP
 .I "-s, --sanity"
 Sanity check config on this node.
 If any expected local or foreign devices are not present, print an error.
@@ -59,8 +62,9 @@ Print zpool containing LABEL.
 .TP
 .I "CMD [ARGS...]"
 Run one instance of \fICMD [ARGS]\fR for each label in parallel.
-Only the local labels are used by default, but foreign or all labels
-may be selected by adding the \fI--foreign\fR or \fI--all\fR options.
+Only the local labels are used by default, but foreign, all, or file system
+labels may be selected by adding the \fI--foreign\fR, \fI--all\fR, or
+\fI--filesys\fR options.
 The following substitutions are made:
 %f=fsname, %d=device, %j=journal, %i=index, %I=hex-index, %t=type, %l=label,
 %n=nid, %N=failnid, %m=mgsnid.  On failure of any child processes, \fBldev\fR will
