@@ -177,41 +177,6 @@ ZFS hooks for mount/mkfs into a dynamic library.
 
 %endif # with lustre_modules
 
-# Since the RPMs we ship are to be used on both SLES and RHEL, we
-# can't include any dependency information (since the package names
-# are different on the two platforms).
-#
-# Instead, we can build these empty meta-packages that only include
-# dependency information.  These let people get the correct
-# dependencies for their platform and lets them use tools like yum and
-# red carpet to install the correct files.
-#
-# Unfortunately I have not seen this come up on the lists much, so I
-# have disabled them (by commenting out their empty files section
-# below) until it's clear that they resolve more confusion than they
-# add.
-
-%package deps-sles
-Summary: Lustre dependencies meta-package for SLES
-Group: Utilities/System
-Provides: lustre-deps = %{version}
-Requires: %{name} = %{version}, sles-release
-Conflicts: %{name}-deps-rhel
-
-%description deps-sles
-This package has RPM dependencies appropriate for SLES systems.
-
-%package deps-rhel
-Summary: Lustre dependencies meta-package for RHEL
-Group: Utilities/System
-Provides: lustre-deps = %{version}
-Requires: %{name} = %{version}, redhat-release
-Conflicts: %{name}-deps-sles
-
-%description deps-rhel
-This package has RPM dependencies appropriate for RHEL, RHL, and FC
-systems.
-
 %package tests
 Summary: Lustre testing framework
 Group: Development/Kernel
@@ -457,10 +422,6 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 %endif
 
 %endif # with lustre_modules
-
-# uncomment these lines to enable deps packages
-# %files deps-sles
-# %files deps-rhel
 
 %if %{with lustre_tests}
 %files tests -f lustre-tests.files
