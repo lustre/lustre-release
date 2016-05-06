@@ -22,7 +22,7 @@ require_dsh_mds || exit 0
 
 # Skip these tests
 # bug number for skipped tests:
-#                                    b=17466/LU-472
+#                                    LU-472
 ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT 61d"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
@@ -2036,6 +2036,10 @@ check_for_process () {
 
 test_70b () {
 	local clients=${CLIENTS:-$HOSTNAME}
+	local mdscount=$MDSCOUNT
+
+	# until LU-6844 is fixed, run on one MDT instead of disabling test
+	mdscount=1
 
 	zconf_mount_clients $clients $MOUNT
 
@@ -2048,9 +2052,9 @@ test_70b () {
 	local start_ts=$(date +%s)
 	local cmd="rundbench 1 -t $duration"
 	local pid=""
-	if [ $MDSCOUNT -ge 2 ]; then
-		test_mkdir -p -c$MDSCOUNT $DIR/$tdir
-		$LFS setdirstripe -D -c$MDSCOUNT $DIR/$tdir
+	if [ $mdscount -ge 2 ]; then
+		test_mkdir -p -c$mdscount $DIR/$tdir
+		$LFS setdirstripe -D -c$mdscount $DIR/$tdir
 	fi
 	do_nodesv $clients "set -x; MISSING_DBENCH_OK=$MISSING_DBENCH_OK \
 		PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests/:$DBENCH_LIB \
@@ -2087,7 +2091,7 @@ test_70b () {
 		log "$TESTNAME fail mds$fail_index $num_failovers times"
 		fail mds$fail_index
 		elapsed=$(($(date +%s) - start_ts))
-		if [ $fail_index -ge $MDSCOUNT ]; then
+		if [ $fail_index -ge $mdscount ]; then
 			fail_index=1
 		else
 			fail_index=$((fail_index+1))
