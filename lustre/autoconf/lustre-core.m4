@@ -244,17 +244,11 @@ AC_MSG_RESULT([$enable_gss_keyring])
 AS_IF([test "x$enable_gss_keyring" != xno], [
 	LB_CHECK_CONFIG_IM([KEYS], [], [
 		gss_keyring_conf_test="fail"
-		AC_MSG_WARN([
-
-GSS keyring backend require that CONFIG_KEYS be enabled in your kernel.
-])])
+		AC_MSG_WARN([GSS keyring backend requires that CONFIG_KEYS be enabled in your kernel.])])
 
 	AC_CHECK_LIB([keyutils], [keyctl_search], [], [
 		gss_keyring_conf_test="fail"
-		AC_MSG_WARN([
-
-libkeyutils is not found, which is required by gss keyring backend
-])])
+		AC_MSG_WARN([GSS keyring backend requires libkeyutils])])
 
 	AS_IF([test "x$gss_keyring_conf_test" != xfail], [
 		AC_DEFINE([HAVE_GSS_KEYRING], [1],
@@ -262,15 +256,7 @@ libkeyutils is not found, which is required by gss keyring backend
 		enable_gss_keyring="yes"
 	], [
 		AS_IF([test "x$enable_gss_keyring" = xyes], [
-			AC_MSG_ERROR([
-
-Cannot enable gss_keyring. See above for details.
-])
-		], [
-			AC_MSG_WARN([
-
-Cannot enable gss keyring. See above for details.
-])
+			AC_MSG_ERROR([Cannot enable gss_keyring. See above for details.])
 		])
 	])
 ])
@@ -360,7 +346,6 @@ AS_IF([test "x$enable_gss" != xno], [
 	AS_IF([test -n "$KRBDIR"], [
 		gss_conf_test="success"
 	], [
-		AC_MSG_WARN([not found!])
 		gss_conf_test="failure"
 	])
 

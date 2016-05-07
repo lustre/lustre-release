@@ -141,6 +141,8 @@ Using $KRBDIR instead of requested value of $krb5_with for Kerberos!
     AC_SUBST([KRBLDFLAGS])
     AC_SUBST([K5VERS])
 
+  else
+    AC_MSG_RESULT([not found!])
   fi # "x$KRBDIR" != "x"
 
 ])
