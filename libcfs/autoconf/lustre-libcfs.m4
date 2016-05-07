@@ -247,10 +247,7 @@ LB_CHECK_CONFIG_IM([CRYPTO_CRC32_PCLMUL],
 	[enable_crc32_crypto="no"], [enable_crc32_crypto="yes"])
 AS_IF([test "x$have_crc32" = xyes -a "x$enable_crc32_crypto" = xyes], [
 	AC_DEFINE(NEED_CRC32_ACCEL, 1, [need pclmulqdq based crc32])
-	AC_MSG_WARN([
-
-No crc32 pclmulqdq crypto api found, enable internal pclmulqdq based crc32
-])])
+	AC_MSG_WARN([No crc32 pclmulqdq crypto api found, enable internal pclmulqdq based crc32])])
 ]) # LIBCFS_ENABLE_CRC32_ACCEL
 
 #
@@ -261,10 +258,7 @@ LB_CHECK_CONFIG_IM([CRYPTO_CRC32C_INTEL],
 	[enable_crc32c_crypto="no"], [enable_crc32c_crypto="yes"])
 AS_IF([test "x$enable_crc32c_crypto" = xyes], [
 	AC_DEFINE(NEED_CRC32C_ACCEL, 1, [need pclmulqdq based crc32c])
-	AC_MSG_WARN([
-
-No crc32c pclmulqdq crypto api found, enable internal pclmulqdq based crc32c
-])])
+	AC_MSG_WARN([No crc32c pclmulqdq crypto api found, enable internal pclmulqdq based crc32c])])
 ]) # LIBCFS_ENABLE_CRC32C_ACCEL
 
 #
