@@ -6075,11 +6075,11 @@ test_86() {
 run_test 86 "Replacing mkfs.lustre -G option"
 
 test_87() { #LU-6544
-	[[ $(lustre_version_code $SINGLEMDS1) -ge $(version_code 2.7.56) ]] ||
-		{ skip "Need MDS version at least 2.7.56" && return; }
+	[[ $(lustre_version_code $SINGLEMDS1) -ge $(version_code 2.9.51) ]] ||
+		{ skip "Need MDS version at least 2.9.51" && return; }
 	[[ $(facet_fstype $SINGLEMDS) != ldiskfs ]] &&
 		{ skip "Only applicable to ldiskfs-based MDTs" && return; }
-	[[ $OSTCOUNT -gt 69 ]] &&
+	[[ $OSTCOUNT -gt 59 ]] &&
 		{ skip "Ignore wide striping situation" && return; }
 
 	local mdsdev=$(mdsdevname 1)
@@ -6087,23 +6087,22 @@ test_87() { #LU-6544
 	local file=$DIR/$tfile
 	local mntpt=$(facet_mntpt $SINGLEMDS)
 	local used_xattr_blk=0
-	local inode_size=${1:-512}
+	local inode_size=${1:-1024}
 	local left_size=0
 	local xtest="trusted.test"
 	local value
 	local orig
 	local i
+	local stripe_cnt=$(($OSTCOUNT + 2))
 
-	#Please see LU-6544 for MDT inode size calculation
-	if [ $OSTCOUNT -gt 26 ]; then
+	#Please see ldiskfs_make_lustre() for MDT inode size calculation
+	if [ $stripe_cnt -gt 16 ]; then
 		inode_size=2048
-	elif [ $OSTCOUNT -gt 5 ]; then
-		inode_size=1024
 	fi
 	left_size=$(expr $inode_size - \
 			156 - \
 			32 - \
-			32 - $OSTCOUNT \* 24 - 16 - 3 -  \
+			32 - 40 \* 3 - 32 \* 3 - $stripe_cnt \* 24 - 16 - 3 -  \
 			24 - 16 - 3 - \
 			24 - 18 - $(expr length $tfile) - 16 - 4)
 	if [ $left_size -le 0 ]; then
@@ -6117,7 +6116,7 @@ test_87() { #LU-6544
 	unload_modules
 	reformat
 
-	add mds1 $(mkfs_opts mds1 ${mdsdev}) --stripe-count-hint=$OSTCOUNT \
+	add mds1 $(mkfs_opts mds1 ${mdsdev}) --stripe-count-hint=$stripe_cnt \
 		--reformat $mdsdev $mdsvdev || error "add mds1 failed"
 	start_mdt 1 > /dev/null || error "start mdt1 failed"
 	for i in $(seq $OSTCOUNT); do
@@ -6128,9 +6127,9 @@ test_87() { #LU-6544
 	check_mount || error "check client $MOUNT failed"
 
 	#set xattr
-	$SETSTRIPE -c -1 $file || error "$SETSTRIPE -c -1 $file failed"
-	$GETSTRIPE $file || error "$GETSTRIPE $file failed"
-	i=$($GETSTRIPE -c $file)
+	$SETSTRIPE -E 1M -c 1 -E 64M -c 1 -E -1 -c -1 $file ||
+		error "Create file with 3 components failed"
+	i=$($GETSTRIPE -I 3 -c $file)
 	if [ $i -ne $OSTCOUNT ]; then
 		left_size=$(expr $left_size + $(expr $OSTCOUNT - $i) \* 24)
 		echo -n "Since only $i out $OSTCOUNT OSTs are used, "

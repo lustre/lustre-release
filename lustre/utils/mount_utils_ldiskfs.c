@@ -756,11 +756,17 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 			}
 		}
 
-		/* Inode size includes:
+		/*
+		 * The inode size is constituted by following elements
+		 * (assuming all files are in composite layout and has
+		 * 3 components):
+		 *
 		 *   ldiskfs inode size: 156
 		 *   extended attributes size, including:
 		 *	ext4_xattr_header: 32
-		 *	LOV EA size: 32(lov_mds_md) +
+		 *	LOV EA size: 32(lov_comp_md_v1) +
+		 *		     3 * 40(lov_comp_md_entry_v1) +
+		 *		     3 * 32(lov_mds_md) +
 		 *		     stripes * 24(lov_ost_data) +
 		 *		     16(xattr_entry) + 3(lov)
 		 *	LMA EA size: 24(lustre_mdt_attrs) +
@@ -771,24 +777,22 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 		 *
 		 * If we say the average filename length is about 32 bytes,
 		 * the calculation looks like:
-		 * 156 + 32 + (32+24*N+19) + (24+19) + (24+18+~32+20) + other <=
-		 * 512*2^m, {m=0,1,2,3}
+		 * 156 + 32 + (32+3*(40 + 32)+24*N+19) + (24+19) +
+		 * (24+18+~32+20) + other <= 512*2^m, {m=0,1,2,3}
 		 */
 		if (strstr(mop->mo_mkfsopts, "-I") == NULL) {
 			if (IS_MDT(&mop->mo_ldd)) {
-				if (mop->mo_stripe_count > 69)
+				if (mop->mo_stripe_count > 59)
 					inode_size = 512; /* bz 7241 */
 				/* see also "-i" below for EA blocks */
-				else if (mop->mo_stripe_count > 26)
+				else if (mop->mo_stripe_count > 16)
 					inode_size = 2048;
-				else if (mop->mo_stripe_count > 5)
-					inode_size = 1024;
 				else
-					inode_size = 512;
+					inode_size = 1024;
 			} else if (IS_OST(&mop->mo_ldd)) {
-				/* We store MDS FID and OST objid in EA on OST
-				 * we need to make inode bigger as well. */
-				inode_size = 256;
+				/* We store MDS FID and necessary composite
+				 * layout information in the OST object EA. */
+				inode_size = 512;
 			}
 
 			if (inode_size > 0) {
@@ -811,7 +815,7 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 			if (IS_MDT(&mop->mo_ldd)) {
 				bytes_per_inode = inode_size + 1536;
 
-				if (mop->mo_stripe_count > 69) {
+				if (mop->mo_stripe_count > 59) {
 					int extra = mop->mo_stripe_count * 24;
 					extra = ((extra - 1) | 4095) + 1;
 					bytes_per_inode += extra;
