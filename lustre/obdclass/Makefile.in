@@ -12,10 +12,10 @@ obdclass-all-objs += lustre_handles.o lustre_peer.o local_storage.o
 obdclass-all-objs += statfs_pack.o obdo.o obd_config.o obd_mount.o
 obdclass-all-objs += lu_object.o dt_object.o
 obdclass-all-objs += cl_object.o cl_page.o cl_lock.o cl_io.o lu_ref.o
-obdclass-all-objs += acl.o
 obdclass-all-objs += linkea.o
 obdclass-all-objs += kernelcomm.o
 
+@SERVER_TRUE@obdclass-all-objs += acl.o
 @SERVER_TRUE@obdclass-all-objs += idmap.o
 @SERVER_TRUE@obdclass-all-objs += upcall_cache.o
 @SERVER_TRUE@obdclass-all-objs += lprocfs_jobstats.o
@@ -31,6 +31,7 @@ EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LDISKFS_DIR@ -I@LDISKFS_DIR@/ldiskfs
 EXTRA_DIST = $(obdclass-all-objs:.o=.c) llog_test.c llog_internal.h
 EXTRA_DIST += cl_internal.h local_storage.h
 
+@SERVER_FALSE@EXTRA_DIST += acl.c
 @SERVER_FALSE@EXTRA_DIST += idmap.c
 @SERVER_FALSE@EXTRA_DIST += upcall_cache.c
 @SERVER_FALSE@EXTRA_DIST += lprocfs_jobstats.c

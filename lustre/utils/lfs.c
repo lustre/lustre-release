@@ -3361,36 +3361,44 @@ static int lfs_flushctx(int argc, char **argv)
 
 static int lfs_lsetfacl(int argc, char **argv)
 {
-        argv[0]++;
-        return(llapi_lsetfacl(argc, argv));
+	fprintf(stderr, "local client sets facl for remote client.\n"
+		"obsolete, does not support it anymore.\n");
+	return 0;
 }
 
 static int lfs_lgetfacl(int argc, char **argv)
 {
-        argv[0]++;
-        return(llapi_lgetfacl(argc, argv));
+	fprintf(stderr, "local client gets facl for remote client.\n"
+		"obsolete, does not support it anymore.\n");
+	return 0;
 }
 
 static int lfs_rsetfacl(int argc, char **argv)
 {
-        argv[0]++;
-        return(llapi_rsetfacl(argc, argv));
+	fprintf(stderr, "remote client sets facl for remote client.\n"
+		"obsolete, does not support it anymore.\n");
+	return 0;
 }
 
 static int lfs_rgetfacl(int argc, char **argv)
 {
-        argv[0]++;
-        return(llapi_rgetfacl(argc, argv));
+	fprintf(stderr, "remote client gets facl for remote client.\n"
+		"obsolete, does not support it anymore.\n");
+	return 0;
 }
 
 static int lfs_cp(int argc, char **argv)
 {
-        return(llapi_cp(argc, argv));
+	fprintf(stderr, "remote client copy file(s).\n"
+		"obsolete, does not support it anymore.\n");
+	return 0;
 }
 
 static int lfs_ls(int argc, char **argv)
 {
-        return(llapi_ls(argc, argv));
+	fprintf(stderr, "remote client lists directory contents.\n"
+		"obsolete, does not support it anymore.\n");
+	return 0;
 }
 
 static int lfs_changelog(int argc, char **argv)

@@ -47,15 +47,11 @@ nobase_noinst_SCRIPTS += racer/file_link.sh racer/file_rename.sh racer/file_syml
 nobase_noinst_SCRIPTS += racer/dir_remote.sh racer/dir_migrate.sh racer/file_chmod.sh
 nobase_noinst_SCRIPTS += racer/file_chown.sh racer/file_delxattr.sh racer/file_getxattr.sh
 nobase_noinst_SCRIPTS += racer/file_mknod.sh racer/file_setxattr.sh racer/file_truncate.sh
-nobase_noinst_SCRIPTS += rmtacl/make-tree rmtacl/run
 nobase_noinst_SCRIPTS += posix/posix.cfg
 nobase_noinst_DATA = acl/cp.test acl/getfacl-noacl.test acl/inheritance.test
 nobase_noinst_DATA += acl/misc.test acl/permissions.test acl/setfacl.test
 nobase_noinst_DATA += acl/974.test acl/974_remote.test
 nobase_noinst_DATA += acl/2561.test acl/2561_zfs.test acl/4924.test
-nobase_noinst_DATA += rmtacl/misc.test rmtacl/permissions.test
-nobase_noinst_DATA += rmtacl/setfacl.test rmtacl/cp.test
-nobase_noinst_DATA += rmtacl/getfacl-noacl.test rmtacl/inheritance.test
 nobase_noinst_DATA += clientapi/simple_test.c
 
 EXTRA_DIST = $(noinst_SCRIPTS) $(noinst_DATA) \

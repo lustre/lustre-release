@@ -149,7 +149,6 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	struct lu_ucred         *ucred = mdt_ucred(info);
         lnet_nid_t               peernid = req->rq_peer.nid;
         __u32                    perm = 0;
-        __u32                    remote = exp_connect_rmtclient(info->mti_exp);
         int                      setuid;
         int                      setgid;
         int                      rc = 0;
@@ -175,72 +174,44 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 		ucred->uc_suppgids[1] = -1;
 	}
 
-	/* sanity check: we expect the uid which client claimed is true */
-	if (remote) {
-		if (!uid_valid(make_kuid(&init_user_ns, req->rq_auth_mapped_uid))) {
-			CDEBUG(D_SEC, "remote user not mapped, deny access!\n");
-			RETURN(-EACCES);
-		}
+	if (!flvr_is_rootonly(req->rq_flvr.sf_rpc) &&
+	    req->rq_auth_uid != pud->pud_uid) {
+		CDEBUG(D_SEC, "local client %s: auth uid %u "
+		       "while client claims %u:%u/%u:%u\n",
+		       libcfs_nid2str(peernid), req->rq_auth_uid,
+		       pud->pud_uid, pud->pud_gid,
+		       pud->pud_fsuid, pud->pud_fsgid);
+		RETURN(-EACCES);
+	}
 
-		if (ptlrpc_user_desc_do_idmap(req, pud))
-			RETURN(-EACCES);
+	if (is_identity_get_disabled(mdt->mdt_identity_cache)) {
+		ucred->uc_identity = NULL;
+		perm = CFS_SETUID_PERM | CFS_SETGID_PERM | CFS_SETGRP_PERM;
+	} else {
+		struct md_identity *identity;
 
-                if (req->rq_auth_mapped_uid != pud->pud_uid) {
-                        CDEBUG(D_SEC, "remote client %s: auth/mapped uid %u/%u "
-                               "while client claims %u:%u/%u:%u\n",
-                               libcfs_nid2str(peernid), req->rq_auth_uid,
-                               req->rq_auth_mapped_uid,
-                               pud->pud_uid, pud->pud_gid,
-                               pud->pud_fsuid, pud->pud_fsgid);
-                        RETURN(-EACCES);
-                }
-        } else {
-		if (!flvr_is_rootonly(req->rq_flvr.sf_rpc) &&
-		    req->rq_auth_uid != pud->pud_uid) {
-                        CDEBUG(D_SEC, "local client %s: auth uid %u "
-                               "while client claims %u:%u/%u:%u\n",
-                               libcfs_nid2str(peernid), req->rq_auth_uid,
-                               pud->pud_uid, pud->pud_gid,
-                               pud->pud_fsuid, pud->pud_fsgid);
-                        RETURN(-EACCES);
-                }
-        }
-
-        if (is_identity_get_disabled(mdt->mdt_identity_cache)) {
-                if (remote) {
-                        CDEBUG(D_SEC, "remote client must run with identity_get "
-                               "enabled!\n");
-                        RETURN(-EACCES);
-                } else {
-			ucred->uc_identity = NULL;
-                        perm = CFS_SETUID_PERM | CFS_SETGID_PERM |
-                               CFS_SETGRP_PERM;
-                }
-        } else {
-                struct md_identity *identity;
-
-                identity = mdt_identity_get(mdt->mdt_identity_cache,
-                                            pud->pud_uid);
-                if (IS_ERR(identity)) {
-                        if (unlikely(PTR_ERR(identity) == -EREMCHG &&
-                                     !remote)) {
+		identity = mdt_identity_get(mdt->mdt_identity_cache,
+					    pud->pud_uid);
+		if (IS_ERR(identity)) {
+			if (unlikely(PTR_ERR(identity) == -EREMCHG)) {
 				ucred->uc_identity = NULL;
-                                perm = CFS_SETUID_PERM | CFS_SETGID_PERM |
-                                       CFS_SETGRP_PERM;
-                        } else {
-                                CDEBUG(D_SEC, "Deny access without identity: uid %u\n",
-                                       pud->pud_uid);
-                                RETURN(-EACCES);
-                        }
-                } else {
+				perm = CFS_SETUID_PERM | CFS_SETGID_PERM |
+				       CFS_SETGRP_PERM;
+			} else {
+				CDEBUG(D_SEC,
+				       "Deny access without identity: uid %u\n",
+				       pud->pud_uid);
+				RETURN(-EACCES);
+			}
+		} else {
 			ucred->uc_identity = identity;
 			perm = mdt_identity_get_perm(ucred->uc_identity,
-						     remote, peernid);
-                }
-        }
+						     peernid);
+		}
+	}
 
-        /* find out the setuid/setgid attempt */
-        setuid = (pud->pud_uid != pud->pud_fsuid);
+	/* find out the setuid/setgid attempt */
+	setuid = (pud->pud_uid != pud->pud_fsuid);
 	setgid = ((pud->pud_gid != pud->pud_fsgid) ||
 		  (ucred->uc_identity &&
 		   (pud->pud_gid != ucred->uc_identity->mi_gid)));
@@ -261,10 +232,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 		GOTO(out, rc = -EACCES);
         }
 
-        /*
-         * NB: remote client not allowed to setgroups anyway.
-         */
-	if (!remote && perm & CFS_SETGRP_PERM) {
+	if (perm & CFS_SETGRP_PERM) {
 		if (pud->pud_ngroups) {
 			/* setgroups for local client */
 			ucred->uc_ginfo = groups_alloc(pud->pud_ngroups);
@@ -299,9 +267,6 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 		ucred->uc_cap = pud->pud_cap & ~CFS_CAP_FS_MASK;
 	else
 		ucred->uc_cap = pud->pud_cap;
-	if (remote && !(perm & CFS_RMTOWN_PERM))
-		ucred->uc_cap &= ~(CFS_CAP_SYS_RESOURCE_MASK |
-				   CFS_CAP_CHOWN_MASK);
 	ucred->uc_valid = UCRED_NEW;
 	ucred_set_jobid(info, ucred);
 
@@ -334,17 +299,12 @@ out:
  */
 bool allow_client_chgrp(struct mdt_thread_info *info, struct lu_ucred *uc)
 {
-	__u32 remote = exp_connect_rmtclient(info->mti_exp);
 	__u32 perm;
 
-	/* 1. If identity_upcall is disabled, then forbid remote client to set
-	 *    supplementary group IDs, but permit local client to do that. */
-	if (is_identity_get_disabled(info->mti_mdt->mdt_identity_cache)) {
-		if (remote)
-			return false;
-
+	/* 1. If identity_upcall is disabled,
+	 *    permit local client to do anything. */
+	if (is_identity_get_disabled(info->mti_mdt->mdt_identity_cache))
 		return true;
-	}
 
 	/* 2. If fail to get related identities, then forbid any client to
 	 *    set supplementary group IDs. */
@@ -352,7 +312,7 @@ bool allow_client_chgrp(struct mdt_thread_info *info, struct lu_ucred *uc)
 		return false;
 
 	/* 3. Check the permission in the identities. */
-	perm = mdt_identity_get_perm(uc->uc_identity, remote,
+	perm = mdt_identity_get_perm(uc->uc_identity,
 				     mdt_info_req(info)->rq_peer.nid);
 	if (perm & CFS_SETGRP_PERM)
 		return true;
@@ -369,7 +329,6 @@ int mdt_check_ucred(struct mdt_thread_info *info)
         struct md_identity      *identity = NULL;
         lnet_nid_t               peernid = req->rq_peer.nid;
         __u32                    perm = 0;
-        __u32                    remote = exp_connect_rmtclient(info->mti_exp);
         int                      setuid;
         int                      setgid;
         int                      rc = 0;
@@ -380,63 +339,36 @@ int mdt_check_ucred(struct mdt_thread_info *info)
 	if ((ucred->uc_valid == UCRED_OLD) || (ucred->uc_valid == UCRED_NEW))
 		RETURN(0);
 
-        if (!req->rq_auth_gss || req->rq_auth_usr_mdt || !req->rq_user_desc)
-                RETURN(0);
+	if (!req->rq_auth_gss || req->rq_auth_usr_mdt || !req->rq_user_desc)
+		RETURN(0);
 
-        /* sanity check: if we use strong authentication, we expect the
-         * uid which client claimed is true */
-        if (remote) {
-		if (!uid_valid(make_kuid(&init_user_ns, req->rq_auth_mapped_uid))) {
-                        CDEBUG(D_SEC, "remote user not mapped, deny access!\n");
-                        RETURN(-EACCES);
-                }
+	/* sanity check: if we use strong authentication, we expect the
+	 * uid which client claimed is true */
+	if (!flvr_is_rootonly(req->rq_flvr.sf_rpc) &&
+	    req->rq_auth_uid != pud->pud_uid) {
+		CDEBUG(D_SEC, "local client %s: auth uid %u "
+		       "while client claims %u:%u/%u:%u\n",
+		       libcfs_nid2str(peernid), req->rq_auth_uid,
+		       pud->pud_uid, pud->pud_gid,
+		       pud->pud_fsuid, pud->pud_fsgid);
+		RETURN(-EACCES);
+	}
 
-                if (ptlrpc_user_desc_do_idmap(req, pud))
-                        RETURN(-EACCES);
+	if (is_identity_get_disabled(mdt->mdt_identity_cache))
+		RETURN(0);
 
-                if (req->rq_auth_mapped_uid != pud->pud_uid) {
-                        CDEBUG(D_SEC, "remote client %s: auth/mapped uid %u/%u "
-                               "while client claims %u:%u/%u:%u\n",
-                               libcfs_nid2str(peernid), req->rq_auth_uid,
-                               req->rq_auth_mapped_uid,
-                               pud->pud_uid, pud->pud_gid,
-                               pud->pud_fsuid, pud->pud_fsgid);
-                        RETURN(-EACCES);
-                }
-        } else {
-		if (!flvr_is_rootonly(req->rq_flvr.sf_rpc) &&
-		    req->rq_auth_uid != pud->pud_uid) {
-                        CDEBUG(D_SEC, "local client %s: auth uid %u "
-                               "while client claims %u:%u/%u:%u\n",
-                               libcfs_nid2str(peernid), req->rq_auth_uid,
-                               pud->pud_uid, pud->pud_gid,
-                               pud->pud_fsuid, pud->pud_fsgid);
-                        RETURN(-EACCES);
-                }
-        }
+	identity = mdt_identity_get(mdt->mdt_identity_cache, pud->pud_uid);
+	if (IS_ERR(identity)) {
+		if (unlikely(PTR_ERR(identity) == -EREMCHG)) {
+			RETURN(0);
+		} else {
+			CDEBUG(D_SEC, "Deny access without identity: uid %u\n",
+			       pud->pud_uid);
+			RETURN(-EACCES);
+		}
+	}
 
-        if (is_identity_get_disabled(mdt->mdt_identity_cache)) {
-                if (remote) {
-                        CDEBUG(D_SEC, "remote client must run with identity_get "
-                               "enabled!\n");
-                        RETURN(-EACCES);
-                }
-                RETURN(0);
-        }
-
-        identity = mdt_identity_get(mdt->mdt_identity_cache, pud->pud_uid);
-        if (IS_ERR(identity)) {
-                if (unlikely(PTR_ERR(identity) == -EREMCHG &&
-                             !remote)) {
-                        RETURN(0);
-                } else {
-                        CDEBUG(D_SEC, "Deny access without identity: uid %u\n",
-                               pud->pud_uid);
-                        RETURN(-EACCES);
-               }
-        }
-
-        perm = mdt_identity_get_perm(identity, remote, peernid);
+	perm = mdt_identity_get_perm(identity, peernid);
         /* find out the setuid/setgid attempt */
         setuid = (pud->pud_uid != pud->pud_fsuid);
         setgid = (pud->pud_gid != pud->pud_fsgid ||
@@ -1131,7 +1063,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
                 if (tgt == NULL)
                         RETURN(-EFAULT);
         } else {
-                req_capsule_extend(pill, &RQF_MDS_REINT_CREATE_RMT_ACL);
+		req_capsule_extend(pill, &RQF_MDS_REINT_CREATE_ACL);
 		if (S_ISDIR(attr->la_mode) &&
 		    req_capsule_get_size(pill, &RMF_EADATA, RCL_CLIENT) > 0) {
 			sp->u.sp_ea.eadata =

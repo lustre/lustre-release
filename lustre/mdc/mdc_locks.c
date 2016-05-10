@@ -315,11 +315,6 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
 			     obddev->u.cli.cl_max_mds_easize);
-
-        /* for remote client, fetch remote perm for current user */
-        if (client_is_remote(exp))
-                req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER,
-                                     sizeof(struct mdt_remote_perm));
         ptlrpc_request_set_replen(req);
         return req;
 }
@@ -417,9 +412,7 @@ static struct ptlrpc_request *mdc_intent_getattr_pack(struct obd_export *exp,
 	struct obd_device	*obddev = class_exp2obd(exp);
 	u64			 valid = OBD_MD_FLGETATTR | OBD_MD_FLEASIZE |
 					 OBD_MD_FLMODEASIZE | OBD_MD_FLDIREA |
-					 OBD_MD_MEA |
-					 (client_is_remote(exp) ?
-					  OBD_MD_FLRMTPERM : OBD_MD_FLACL);
+					 OBD_MD_MEA | OBD_MD_FLACL;
 	struct ldlm_intent	*lit;
 	int			 rc;
 	__u32			 easize;
@@ -452,9 +445,6 @@ static struct ptlrpc_request *mdc_intent_getattr_pack(struct obd_export *exp,
 	mdc_getattr_pack(req, valid, it->it_flags, op_data, easize);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER, easize);
-	if (client_is_remote(exp))
-		req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER,
-				     sizeof(struct mdt_remote_perm));
 	ptlrpc_request_set_replen(req);
 	RETURN(req);
 }
@@ -659,16 +649,6 @@ static int mdc_finish_enqueue(struct obd_export *exp,
 					       body->mbo_eadatasize);
 			}
 		}
-
-		if (body->mbo_valid & OBD_MD_FLRMTPERM) {
-                        struct mdt_remote_perm *perm;
-
-                        LASSERT(client_is_remote(exp));
-                        perm = req_capsule_server_swab_get(pill, &RMF_ACL,
-                                                lustre_swab_mdt_remote_perm);
-                        if (perm == NULL)
-                                RETURN(-EPROTO);
-                }
         } else if (it->it_op & IT_LAYOUT) {
 		/* maybe the lock was granted right away and layout
 		 * is packed into RMF_DLM_LVB of req */

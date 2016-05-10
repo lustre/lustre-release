@@ -203,8 +203,6 @@ static perm_type_t perm_types[] = {
         { "setuid", CFS_SETUID_PERM },
         { "setgid", CFS_SETGID_PERM },
         { "setgrp", CFS_SETGRP_PERM },
-        { "rmtacl", CFS_RMTACL_PERM },
-        { "rmtown", CFS_RMTOWN_PERM },
         { 0 }
 };
 
@@ -212,8 +210,6 @@ static perm_type_t noperm_types[] = {
         { "nosetuid", CFS_SETUID_PERM },
         { "nosetgid", CFS_SETGID_PERM },
         { "nosetgrp", CFS_SETGRP_PERM },
-        { "normtacl", CFS_RMTACL_PERM },
-        { "normtown", CFS_RMTOWN_PERM },
         { 0 }
 };
 

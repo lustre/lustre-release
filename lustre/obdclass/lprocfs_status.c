@@ -1421,7 +1421,6 @@ void lprocfs_init_mps_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_MD_OP_INIT(num_private_stats, stats, set_lock_data);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, lock_match);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, cancel_unused);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, get_remote_perm);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, intent_getattr_async);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, revalidate_lock);
 }

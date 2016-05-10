@@ -513,18 +513,6 @@ static inline int is_serious(int rc)
 	return (rc < 0 && -rc & ESERIOUS);
 }
 
-/**
- * Do not return server-side uid/gid to remote client
- */
-static inline void tgt_drop_id(struct obd_export *exp, struct obdo *oa)
-{
-	if (unlikely(exp_connect_rmtclient(exp))) {
-		oa->o_uid = -1;
-		oa->o_gid = -1;
-		oa->o_valid &= ~(OBD_MD_FLUID | OBD_MD_FLGID);
-	}
-}
-
 /*
  * Unified target generic handers macros and generic functions.
  */

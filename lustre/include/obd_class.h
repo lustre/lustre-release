@@ -1577,17 +1577,6 @@ static inline int md_init_ea_size(struct obd_export *exp, __u32 ea_size,
 	RETURN(MDP(exp->exp_obd, init_ea_size)(exp, ea_size, def_ea_size));
 }
 
-static inline int md_get_remote_perm(struct obd_export *exp,
-				     const struct lu_fid *fid, u32 suppgid,
-				     struct ptlrpc_request **request)
-{
-	ENTRY;
-	EXP_CHECK_MD_OP(exp, get_remote_perm);
-	EXP_MD_COUNTER_INCREMENT(exp, get_remote_perm);
-
-	RETURN(MDP(exp->exp_obd, get_remote_perm)(exp, fid, suppgid, request));
-}
-
 static inline int md_intent_getattr_async(struct obd_export *exp,
 					  struct md_enqueue_info *minfo)
 {

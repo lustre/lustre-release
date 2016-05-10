@@ -8310,7 +8310,7 @@ static int reint_opcode_process(tvbuff_t *tvb _U_, int offset _U_, packet_info *
       offset=lustre_dissect_struct_mdt_rec_create(tvb, offset, pinfo, tree, hf_lustre_mdt_rec_create);
       offset=lustre_dissect_struct_capa(tvb, offset, pinfo, tree, hf_lustre_capa, LUSTRE_REQ_REC_OFF+1);
       offset=lustre_dissect_element_string(tvb, offset, pinfo, tree, hf_lustre_reint_name, LUSTRE_REQ_REC_OFF+2);
-      /* REINT_CREATE_SLAVE / SYM / RMT_ACL */
+      /* REINT_CREATE_SLAVE / SYM */
       if (LUSTRE_BUFCOUNT > 4) {
 	/* for CREATE_SYM this is actually name of target - encoded in mdt_rec_create.cr_mode */
 	offset=lustre_dissect_element_data(tvb, offset, pinfo, tree, hf_lustre_reint_name, LUSTRE_REQ_REC_OFF+3);

@@ -36,13 +36,9 @@ Usage: $(basename $0) <KDC_distro> <KDC_node> <MGS_node> <MDS_node>[:MDS_node:..
     "RESET_KDC=false".
 
     2) The script will create principals for some runas users and add them into
-    the Kerberos database by default. The UIDs of the runas users specified in 
+    the Kerberos database by default. The UIDs of the runas users specified in
     "LOCAL_UIDS" variable need exist on KDC, MDS and Client nodes. If you do not
     need runas users, please set "CFG_RUNAS=false".
-
-    3) The script will create idmap.conf and perm.conf under /etc/lustre dir on
-    MDS node for remote ACL by default. If you do not need remote ACL, please
-    set "CFG_IDMAP=false".
 
 EOF
 }
@@ -74,9 +70,8 @@ ACCEPTOR_PORT=${ACCEPTOR_PORT:-988}
 
 # check and configure runas users
 CFG_RUNAS=${CFG_RUNAS:-true}
-# uids for local and remote users
+# uids for local users
 LOCAL_UIDS=${LOCAL_UIDS:-"500 501"}
-REMOTE_UIDS=${REMOTE_UIDS:-"500 501"}   # for remote ACL testing
 
 # remove the original Kerberos and KDC settings
 RESET_KDC=${RESET_KDC:-true}
@@ -98,12 +93,6 @@ KRB5_TICKET_LIFETIME=${KRB5_TICKET_LIFETIME:-"24h"}
 # configuration files for libgssapi and keyutils
 GSSAPI_MECH_CONF=${GSSAPI_MECH_CONF:-"/etc/gssapi_mech.conf"}
 REQUEST_KEY_CONF=${REQUEST_KEY_CONF:-"/etc/request-key.conf"}
-
-# create configuration files for remote ACL testing
-CFG_IDMAP=${CFG_IDMAP:-true}
-LUSTRE_CONF_DIR=${LUSTRE_CONF_DIR:-"/etc/lustre"}
-IDMAP_CONF=$LUSTRE_CONF_DIR/idmap.conf
-PERM_CONF=$LUSTRE_CONF_DIR/perm.conf
 
 # krb5 realm & domain
 KRB5_REALM=${KRB5_REALM:-"CO.CFS"}
@@ -324,7 +313,7 @@ check_users() {
             echo -n "Checking uid/gid $id/$id on $node..."
             user=$(my_do_node $node getent passwd | grep :$id:$id: | cut -d: -f1)
             if [ -z "$user" ]; then
-                echo -e "\nPlease set LOCAL_UIDS and REMOTE_UIDS to some users \
+				echo -e "\nPlease set LOCAL_UIDS to some users \
 which exist on KDC, MDS and client or add user/group $id/$id on these nodes."
                 return 1
             fi
@@ -1003,84 +992,6 @@ exit ${PIPESTATUS[0]})
     return 0
 }
 
-#
-# create and install idmap.conf on the MDS
-#
-cfg_idmap_conf() {
-    local tmpcfg="$TMP/idmap.conf"
-    local fqdn 
-    local user
-    local uid
-    local client_nids client_nid
-    local rc
-
-    echo "+++ Installing idmap.conf on MDS"
-    echo "Getting Client NID..."
-    client_nids=$(get_client_nids)
-    rc=${PIPESTATUS[0]}
-    if [ $rc -ne 0 ]; then
-        echo $client_nids
-        return $rc
-    fi
-
-    rm -f $tmpcfg
-    if $SPLIT_KEYTAB; then
-        for fqdn in $MY_CLIENTNODES; do
-            echo "lustre_root/$fqdn@$KRB5_REALM * 0" >> $tmpcfg
-        done
-    else
-        echo "lustre_root@$KRB5_REALM * 0" >> $tmpcfg
-    fi
-    cat <<EOF >> $tmpcfg
-bin@$KRB5_REALM * 1
-daemon@$KRB5_REALM * 2
-games@$KRB5_REALM * 12
-EOF
-
-    for node in $MY_MDSNODES; do
-        for uid in $LOCAL_UIDS; do
-            user=$(my_do_node $node getent passwd $uid | cut -d: -f1)
-            for client_nid in $client_nids; do
-                echo "$user@$KRB5_REALM $client_nid $uid" >> $tmpcfg
-            done
-        done
-    done
-
-    for node in $MY_MDSNODES; do
-        my_do_node $node "mkdir -p $LUSTRE_CONF_DIR" || return ${PIPESTATUS[0]}
-        $SCP $tmpcfg root@$node:$IDMAP_CONF || return ${PIPESTATUS[0]}
-    done
-    rm -f $tmpcfg
-    echo "OK!"
-}
-
-#
-# create and install perm.conf on the MDS for remote ACL testing
-#
-cfg_perm_conf() {
-    local tmpcfg="$TMP/perm.conf"
-    local uid
-
-    echo "+++ Installing perm.conf on MDS"
-
-    rm -f $tmpcfg
-    for node in $MY_MDSNODES; do
-        my_do_node $node "mkdir -p $LUSTRE_CONF_DIR" || return ${PIPESTATUS[0]}
-
-        for uid in $LOCAL_UIDS $REMOTE_UIDS; do
-            if ! grep -q " $uid " $tmpcfg 2>/dev/null; then
-                echo "* $uid rmtacl" >> $tmpcfg
-            fi
-        done
-
-        echo "* 0 setgid" >> $tmpcfg
-
-        $SCP $tmpcfg root@$node:$PERM_CONF || return ${PIPESTATUS[0]}
-    done
-    rm -f $tmpcfg
-    echo "OK!"
-}
-
 # ******************************** Main Flow ******************************** #
 normalize_names || exit ${PIPESTATUS[0]}
 check_rsh || exit ${PIPESTATUS[0]}
@@ -1088,9 +999,6 @@ check_entropy || exit ${PIPESTATUS[0]}
 
 if $CFG_RUNAS; then
     check_users || exit ${PIPESTATUS[0]}
-elif $CFG_IDMAP; then
-    echo "Remote ACL operations need local and remote users!"
-    exit 1
 fi
 
 check_kdc || exit ${PIPESTATUS[0]}
@@ -1123,10 +1031,5 @@ fi
 
 cfg_kdc_princs || exit ${PIPESTATUS[0]}
 cfg_keytab || exit ${PIPESTATUS[0]}
-
-if $CFG_IDMAP; then
-    cfg_idmap_conf || exit ${PIPESTATUS[0]}
-    cfg_perm_conf || exit ${PIPESTATUS[0]}
-fi
 
 echo "Complete successfully!"

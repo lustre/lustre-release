@@ -215,20 +215,6 @@ LB_CHECK_EXPORT([delete_from_page_cache], [mm/filemap.c],
 ]) # LC_EXPORT_TRUNCATE_COMPLETE_PAGE
 
 #
-# LC_CONFIG_RMTCLIENT
-#
-dnl FIXME
-dnl the AES symbol usually tied with arch, e.g. CRYPTO_AES_586
-dnl FIXME
-AC_DEFUN([LC_CONFIG_RMTCLIENT], [
-LB_CHECK_CONFIG_IM([CRYPTO_AES], [],
-	[AC_MSG_WARN([
-
-Lustre remote client require that CONFIG_CRYPTO_AES is enabled in your kernel.
-])])
-]) # LC_CONFIG_RMTCLIENT
-
-#
 # LC_CONFIG_GSS_KEYRING
 #
 # default 'auto', tests for dependencies, if found, enables;
@@ -2120,7 +2106,6 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_LLITE_LLOOP_MODULE
 
 	LC_GLIBC_SUPPORT_FHANDLES
-	LC_CONFIG_RMTCLIENT
 	LC_CONFIG_GSS
 	LC_HAVE_VOID_OPENSSL_HMAC_FUNCS
 

@@ -835,8 +835,6 @@ EXPORT_SYMBOL(tgt_counter_incr);
  */
 static inline void tgt_init_sec_none(struct obd_connect_data *reply)
 {
-	reply->ocd_connect_flags &= ~(OBD_CONNECT_RMT_CLIENT |
-				      OBD_CONNECT_RMT_CLIENT_FORCE);
 }
 
 static int tgt_init_sec_level(struct ptlrpc_request *req)
@@ -845,7 +843,6 @@ static int tgt_init_sec_level(struct ptlrpc_request *req)
 	char			*client;
 	struct obd_connect_data	*data, *reply;
 	int			 rc = 0;
-	bool			 remote;
 	ENTRY;
 
 	data = req_capsule_client_get(&req->rq_pill, &RMF_CONNECT_DATA);
@@ -880,8 +877,7 @@ static int tgt_init_sec_level(struct ptlrpc_request *req)
 	}
 
 	/* old version case */
-	if (unlikely(!(data->ocd_connect_flags & OBD_CONNECT_RMT_CLIENT) ||
-		     !(data->ocd_connect_flags & OBD_CONNECT_MDS_CAPA) ||
+	if (unlikely(!(data->ocd_connect_flags & OBD_CONNECT_MDS_CAPA) ||
 		     !(data->ocd_connect_flags & OBD_CONNECT_OSS_CAPA))) {
 		if (tgt->lut_sec_level > LUSTRE_SEC_NONE) {
 			CWARN("client %s -> target %s uses old version, "
@@ -897,46 +893,18 @@ static int tgt_init_sec_level(struct ptlrpc_request *req)
 		}
 	}
 
-	remote = data->ocd_connect_flags & OBD_CONNECT_RMT_CLIENT_FORCE;
-	if (remote) {
-		if (!req->rq_auth_remote)
-			CDEBUG(D_SEC, "client (local realm) %s -> target %s "
-			       "asked to be remote.\n", client, tgt_name(tgt));
-	} else if (req->rq_auth_remote) {
-		remote = true;
-		CDEBUG(D_SEC, "client (remote realm) %s -> target %s is set "
-		       "as remote by default.\n", client, tgt_name(tgt));
+	if (!uid_valid(make_kuid(&init_user_ns, req->rq_auth_uid))) {
+		CDEBUG(D_SEC, "client %s -> target %s: user is not "
+		       "authenticated!\n", client, tgt_name(tgt));
+		RETURN(-EACCES);
 	}
-
-	if (remote == 0) {
-		if (!uid_valid(make_kuid(&init_user_ns, req->rq_auth_uid))) {
-			CDEBUG(D_SEC, "client %s -> target %s: user is not "
-			       "authenticated!\n", client, tgt_name(tgt));
-			RETURN(-EACCES);
-		}
-	}
-
 
 	switch (tgt->lut_sec_level) {
 	case LUSTRE_SEC_NONE:
-		if (remote) {
-			CDEBUG(D_SEC,
-			       "client %s -> target %s is set as remote, "
-			       "can not run under security level %d.\n",
-			       client, tgt_name(tgt), tgt->lut_sec_level);
-			RETURN(-EACCES);
-		}
+	case LUSTRE_SEC_REMOTE:
 		tgt_init_sec_none(reply);
 		break;
-	case LUSTRE_SEC_REMOTE:
-		if (!remote)
-			tgt_init_sec_none(reply);
-		break;
 	case LUSTRE_SEC_ALL:
-		if (remote)
-			break;
-		reply->ocd_connect_flags &= ~(OBD_CONNECT_RMT_CLIENT |
-					      OBD_CONNECT_RMT_CLIENT_FORCE);
 		reply->ocd_connect_flags &= ~OBD_CONNECT_OSS_CAPA;
 		reply->ocd_connect_flags &= ~OBD_CONNECT_MDS_CAPA;
 		break;
@@ -1990,8 +1958,6 @@ out_commitrw:
 	/* Must commit after prep above in all cases */
 	rc = obd_commitrw(tsi->tsi_env, OBD_BRW_READ, exp, &repbody->oa, 1, ioo,
 			  remote_nb, npages, local_nb, rc);
-	if (rc == 0)
-		tgt_drop_id(exp, &repbody->oa);
 out_lock:
 	tgt_brw_unlock(ioo, remote_nb, &lockh, LCK_PR);
 
@@ -2285,8 +2251,6 @@ skip_transfer:
 		}
 		LASSERT(j == npages);
 		ptlrpc_lprocfs_brw(req, nob);
-
-		tgt_drop_id(exp, &repbody->oa);
 	}
 out_lock:
 	tgt_brw_unlock(ioo, remote_nb, &lockh, LCK_PW);

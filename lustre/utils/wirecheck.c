@@ -636,16 +636,11 @@ check_obdo(void)
 	CHECK_DEFINE_64X(OBD_MD_FLXATTRLS);
 	CHECK_DEFINE_64X(OBD_MD_FLXATTRRM);
 	CHECK_DEFINE_64X(OBD_MD_FLACL);
-	CHECK_DEFINE_64X(OBD_MD_FLRMTPERM);
 	CHECK_DEFINE_64X(OBD_MD_FLMDSCAPA);
 	CHECK_DEFINE_64X(OBD_MD_FLOSSCAPA);
 	CHECK_DEFINE_64X(OBD_MD_FLCKSPLIT);
 	CHECK_DEFINE_64X(OBD_MD_FLCROSSREF);
 	CHECK_DEFINE_64X(OBD_MD_FLGETATTRLOCK);
-	CHECK_DEFINE_64X(OBD_MD_FLRMTLSETFACL);
-	CHECK_DEFINE_64X(OBD_MD_FLRMTLGETFACL);
-	CHECK_DEFINE_64X(OBD_MD_FLRMTRSETFACL);
-	CHECK_DEFINE_64X(OBD_MD_FLRMTRGETFACL);
 	CHECK_DEFINE_64X(OBD_MD_FLDATAVERSION);
 
 	CHECK_CVALUE_X(OBD_FL_INLINEDATA);
@@ -1017,25 +1012,6 @@ check_mdt_ioepoch(void)
 	CHECK_MEMBER(mdt_ioepoch, mio_unused1);
 	CHECK_MEMBER(mdt_ioepoch, mio_unused2);
 	CHECK_MEMBER(mdt_ioepoch, mio_padding);
-}
-
-static void
-check_mdt_remote_perm(void)
-{
-	BLANK_LINE();
-	CHECK_STRUCT(mdt_remote_perm);
-	CHECK_MEMBER(mdt_remote_perm, rp_uid);
-	CHECK_MEMBER(mdt_remote_perm, rp_gid);
-	CHECK_MEMBER(mdt_remote_perm, rp_fsuid);
-	CHECK_MEMBER(mdt_remote_perm, rp_fsgid);
-	CHECK_MEMBER(mdt_remote_perm, rp_access_perm);
-	CHECK_MEMBER(mdt_remote_perm, rp_padding);
-
-	CHECK_VALUE_X(CFS_SETUID_PERM);
-	CHECK_VALUE_X(CFS_SETGID_PERM);
-	CHECK_VALUE_X(CFS_SETGRP_PERM);
-	CHECK_VALUE_X(CFS_RMTACL_PERM);
-	CHECK_VALUE_X(CFS_RMTOWN_PERM);
 }
 
 static void
@@ -2652,7 +2628,6 @@ main(int argc, char **argv)
 	check_ll_fid();
 	check_mdt_body();
 	check_mdt_ioepoch();
-	check_mdt_remote_perm();
 	check_mdt_rec_setattr();
 	check_mdt_rec_create();
 	check_mdt_rec_link();

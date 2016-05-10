@@ -108,8 +108,6 @@ struct mdt_export_data {
 	/** List of all files opened by client on this MDT */
 	struct list_head	med_open_head;
 	spinlock_t		med_open_lock; /* med_open_head, mfd_list */
-	struct mutex		med_idmap_mutex;
-	struct lustre_idmap_table *med_idmap;
 };
 
 struct ec_export_data { /* echo client */
@@ -351,20 +349,6 @@ static inline int exp_connect_lru_resize(struct obd_export *exp)
 {
 	LASSERT(exp != NULL);
 	return !!(exp_connect_flags(exp) & OBD_CONNECT_LRU_RESIZE);
-}
-
-static inline int exp_connect_rmtclient(struct obd_export *exp)
-{
-	LASSERT(exp != NULL);
-	return !!(exp_connect_flags(exp) & OBD_CONNECT_RMT_CLIENT);
-}
-
-static inline int client_is_remote(struct obd_export *exp)
-{
-        struct obd_import *imp = class_exp2cliimp(exp);
-
-        return !!(imp->imp_connect_data.ocd_connect_flags &
-                  OBD_CONNECT_RMT_CLIENT);
 }
 
 static inline int exp_connect_vbr(struct obd_export *exp)

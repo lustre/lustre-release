@@ -631,10 +631,6 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 			lnb[j+k].lnb_flags = rnb[i].rnb_flags;
 			if (!(rnb[i].rnb_flags & OBD_BRW_GRANTED))
 				lnb[j+k].lnb_rc = -ENOSPC;
-
-			/* remote client can't break through quota */
-			if (exp_connect_rmtclient(exp))
-				lnb[j+k].lnb_flags &= ~OBD_BRW_NOQUOTA;
 		}
 		j += rc;
 		*nr_local += rc;

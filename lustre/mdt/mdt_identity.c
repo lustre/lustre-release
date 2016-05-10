@@ -245,16 +245,14 @@ void mdt_flush_identity(struct upcall_cache *cache, int uid)
  * If there is LNET_NID_ANY in perm[i].mp_nid,
  * it must be perm[0].mp_nid, and act as default perm.
  */
-__u32 mdt_identity_get_perm(struct md_identity *identity,
-                            __u32 is_rmtclient, lnet_nid_t nid)
+__u32 mdt_identity_get_perm(struct md_identity *identity, lnet_nid_t nid)
 {
-        struct md_perm *perm;
-        int i;
 
-        if (!identity) {
-                LASSERT(is_rmtclient == 0);
-                return CFS_SETGRP_PERM;
-        }
+	struct md_perm *perm;
+	int i;
+
+	if (!identity)
+		return CFS_SETGRP_PERM;
 
         perm = identity->mi_perms;
         /* check exactly matched nid first */
@@ -270,39 +268,5 @@ __u32 mdt_identity_get_perm(struct md_identity *identity,
                 return perm[0].mp_perm;
 
         /* return default last */
-        return is_rmtclient ? 0 : CFS_SETGRP_PERM;
-}
-
-int mdt_pack_remote_perm(struct mdt_thread_info *info, struct mdt_object *o,
-                         void *buf)
-{
-	struct lu_ucred         *uc = mdt_ucred_check(info);
-        struct md_object        *next = mdt_object_child(o);
-        struct mdt_remote_perm  *perm = buf;
-
-        ENTRY;
-
-        /* remote client request always pack ptlrpc_user_desc! */
-        LASSERT(perm);
-
-        if (!exp_connect_rmtclient(info->mti_exp))
-                RETURN(-EBADE);
-
-	if (uc == NULL)
-		RETURN(-EINVAL);
-
-	perm->rp_uid = uc->uc_o_uid;
-	perm->rp_gid = uc->uc_o_gid;
-	perm->rp_fsuid = uc->uc_o_fsuid;
-	perm->rp_fsgid = uc->uc_o_fsgid;
-
-        perm->rp_access_perm = 0;
-        if (mo_permission(info->mti_env, NULL, next, NULL, MAY_READ) == 0)
-                perm->rp_access_perm |= MAY_READ;
-        if (mo_permission(info->mti_env, NULL, next, NULL, MAY_WRITE) == 0)
-                perm->rp_access_perm |= MAY_WRITE;
-        if (mo_permission(info->mti_env, NULL, next, NULL, MAY_EXEC) == 0)
-                perm->rp_access_perm |= MAY_EXEC;
-
-        RETURN(0);
+	return CFS_SETGRP_PERM;
 }

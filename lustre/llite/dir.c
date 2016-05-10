@@ -948,17 +948,15 @@ static int quotactl_ioctl(struct ll_sb_info *sbi, struct if_quotactl *qctl)
         switch (cmd) {
         case Q_SETQUOTA:
         case Q_SETINFO:
-                if (!cfs_capable(CFS_CAP_SYS_ADMIN) ||
-                    sbi->ll_flags & LL_SBI_RMT_CLIENT)
-                        RETURN(-EPERM);
-                break;
+		if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+			RETURN(-EPERM);
+		break;
 	case Q_GETQUOTA:
 		if (((type == USRQUOTA &&
 		      !uid_eq(current_euid(), make_kuid(&init_user_ns, id))) ||
 		     (type == GRPQUOTA &&
 		      !in_egroup_p(make_kgid(&init_user_ns, id)))) &&
-		    (!cfs_capable(CFS_CAP_SYS_ADMIN) ||
-		     sbi->ll_flags & LL_SBI_RMT_CLIENT))
+		    (!cfs_capable(CFS_CAP_SYS_ADMIN)))
 			RETURN(-EPERM);
                 break;
         case Q_GETINFO:
@@ -969,9 +967,6 @@ static int quotactl_ioctl(struct ll_sb_info *sbi, struct if_quotactl *qctl)
         }
 
         if (valid != QC_GENERAL) {
-                if (sbi->ll_flags & LL_SBI_RMT_CLIENT)
-                        RETURN(-EOPNOTSUPP);
-
                 if (cmd == Q_GETINFO)
                         qctl->qc_cmd = Q_GETOINFO;
                 else if (cmd == Q_GETQUOTA)
@@ -1486,21 +1481,6 @@ out_rmdir:
                 RETURN(ll_get_obd_name(inode, cmd, arg));
         case LL_IOC_FLUSHCTX:
                 RETURN(ll_flush_ctx(inode));
-#ifdef CONFIG_FS_POSIX_ACL
-        case LL_IOC_RMTACL: {
-            if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
-                inode == inode->i_sb->s_root->d_inode) {
-                struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
-
-		LASSERT(fd != NULL);
-		rc = rct_add(&sbi->ll_rct, current_pid(), arg);
-		if (!rc)
-			fd->fd_flags |= LL_FILE_RMTACL;
-		RETURN(rc);
-            } else
-                RETURN(0);
-        }
-#endif
         case LL_IOC_GETOBDCOUNT: {
 		u32 count, vallen;
                 struct obd_export *exp;

@@ -1196,8 +1196,16 @@ struct ptlrpc_body_v2 {
                                                   *to be reused.*/
 #define OBD_CONNECT_ATTRFID            0x4000ULL /*Server can GetAttr By Fid*/
 #define OBD_CONNECT_NODEVOH            0x8000ULL /*No open hndl on specl nodes*/
-#define OBD_CONNECT_RMT_CLIENT        0x10000ULL /*Remote client */
-#define OBD_CONNECT_RMT_CLIENT_FORCE  0x20000ULL /*Remote client by force */
+#define OBD_CONNECT_RMT_CLIENT        0x10000ULL /* Remote client, never used
+						  * in production. Removed in
+						  * 2.9. Keep this flag to
+						  * avoid reusing.
+						  */
+#define OBD_CONNECT_RMT_CLIENT_FORCE  0x20000ULL /* Remote client by force,
+						  * never used in production.
+						  * Removed in 2.9. Keep this
+						  * flag to avoid reusing.
+						  */
 #define OBD_CONNECT_BRW_SIZE          0x40000ULL /*Max bytes per rpc */
 #define OBD_CONNECT_QUOTA64           0x80000ULL /*Not used since 2.4 */
 #define OBD_CONNECT_MDS_CAPA         0x100000ULL /*MDS capability */
@@ -1279,16 +1287,13 @@ struct ptlrpc_body_v2 {
 #endif
 
 #define MDT_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY | OBD_CONNECT_VERSION | \
-                                OBD_CONNECT_ACL | OBD_CONNECT_XATTR | \
-                                OBD_CONNECT_IBITS | \
-                                OBD_CONNECT_NODEVOH | OBD_CONNECT_ATTRFID | \
-                                OBD_CONNECT_CANCELSET | OBD_CONNECT_AT | \
-                                OBD_CONNECT_RMT_CLIENT | \
-                                OBD_CONNECT_RMT_CLIENT_FORCE | \
-				OBD_CONNECT_BRW_SIZE | OBD_CONNECT_MDS_MDS | \
-                                OBD_CONNECT_FID | LRU_RESIZE_CONNECT_FLAG | \
-                                OBD_CONNECT_VBR | OBD_CONNECT_LOV_V3 | \
-				OBD_CONNECT_FULL20 | \
+				OBD_CONNECT_ACL | OBD_CONNECT_XATTR | \
+				OBD_CONNECT_IBITS | OBD_CONNECT_NODEVOH | \
+				OBD_CONNECT_ATTRFID | OBD_CONNECT_CANCELSET | \
+				OBD_CONNECT_AT | OBD_CONNECT_BRW_SIZE | \
+				OBD_CONNECT_MDS_MDS | OBD_CONNECT_FID | \
+				LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_VBR | \
+				OBD_CONNECT_LOV_V3 | OBD_CONNECT_FULL20 | \
 				OBD_CONNECT_64BITHASH | OBD_CONNECT_JOBSTATS | \
 				OBD_CONNECT_EINPROGRESS | \
 				OBD_CONNECT_LIGHTWEIGHT | OBD_CONNECT_UMASK | \
@@ -1306,17 +1311,15 @@ struct ptlrpc_body_v2 {
 #define MDT_CONNECT_SUPPORTED2 OBD_CONNECT2_FILE_SECCTX
 
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
-                                OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
-                                OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
-				OBD_CONNECT_BRW_SIZE | \
-                                OBD_CONNECT_CANCELSET | OBD_CONNECT_AT | \
-                                LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_CKSUM | \
-                                OBD_CONNECT_RMT_CLIENT | \
-                                OBD_CONNECT_RMT_CLIENT_FORCE | OBD_CONNECT_VBR | \
-                                OBD_CONNECT_MDS | OBD_CONNECT_SKIP_ORPHAN | \
-                                OBD_CONNECT_GRANT_SHRINK | OBD_CONNECT_FULL20 | \
-                                OBD_CONNECT_64BITHASH | OBD_CONNECT_MAXBYTES | \
-                                OBD_CONNECT_MAX_EASIZE | \
+				OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
+				OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
+				OBD_CONNECT_BRW_SIZE | OBD_CONNECT_CANCELSET | \
+				OBD_CONNECT_AT | LRU_RESIZE_CONNECT_FLAG | \
+				OBD_CONNECT_CKSUM | OBD_CONNECT_VBR | \
+				OBD_CONNECT_MDS | OBD_CONNECT_SKIP_ORPHAN | \
+				OBD_CONNECT_GRANT_SHRINK | OBD_CONNECT_FULL20 |\
+				OBD_CONNECT_64BITHASH | OBD_CONNECT_MAXBYTES | \
+				OBD_CONNECT_MAX_EASIZE | \
 				OBD_CONNECT_EINPROGRESS | \
 				OBD_CONNECT_JOBSTATS | \
 				OBD_CONNECT_LIGHTWEIGHT | OBD_CONNECT_LVB_TYPE|\
@@ -1707,7 +1710,7 @@ lov_mds_md_max_stripe_count(size_t buf_size, __u32 lmm_magic)
 #define OBD_MD_FLXATTRLS     (0x0000002000000000ULL) /* xattr list */
 #define OBD_MD_FLXATTRRM     (0x0000004000000000ULL) /* xattr remove */
 #define OBD_MD_FLACL         (0x0000008000000000ULL) /* ACL */
-#define OBD_MD_FLRMTPERM     (0x0000010000000000ULL) /* remote permission */
+/*	OBD_MD_FLRMTPERM     (0x0000010000000000ULL) remote perm, obsolete */
 #define OBD_MD_FLMDSCAPA     (0x0000020000000000ULL) /* MDS capability */
 #define OBD_MD_FLOSSCAPA     (0x0000040000000000ULL) /* OSS capability */
 #define OBD_MD_FLCKSPLIT     (0x0000080000000000ULL) /* Check split on server */
@@ -1718,10 +1721,10 @@ lov_mds_md_max_stripe_count(size_t buf_size, __u32 lmm_magic)
                                                       * client holds the lock */
 #define OBD_MD_FLOBJCOUNT    (0x0000400000000000ULL) /* for multiple destroy */
 
-#define OBD_MD_FLRMTLSETFACL (0x0001000000000000ULL) /* lfs lsetfacl case */
-#define OBD_MD_FLRMTLGETFACL (0x0002000000000000ULL) /* lfs lgetfacl case */
-#define OBD_MD_FLRMTRSETFACL (0x0004000000000000ULL) /* lfs rsetfacl case */
-#define OBD_MD_FLRMTRGETFACL (0x0008000000000000ULL) /* lfs rgetfacl case */
+/*	OBD_MD_FLRMTLSETFACL (0x0001000000000000ULL) lfs lsetfacl, obsolete */
+/*	OBD_MD_FLRMTLGETFACL (0x0002000000000000ULL) lfs lgetfacl, obsolete */
+/*	OBD_MD_FLRMTRSETFACL (0x0004000000000000ULL) lfs rsetfacl, obsolete */
+/*	OBD_MD_FLRMTRGETFACL (0x0008000000000000ULL) lfs rgetfacl, obsolete */
 
 #define OBD_MD_FLDATAVERSION (0x0010000000000000ULL) /* iversion sum */
 #define OBD_MD_CLOSE_INTENT_EXECED (0x0020000000000000ULL) /* close intent
@@ -2248,21 +2251,6 @@ enum {
         CFS_SETUID_PERM = 0x01,
         CFS_SETGID_PERM = 0x02,
         CFS_SETGRP_PERM = 0x04,
-        CFS_RMTACL_PERM = 0x08,
-        CFS_RMTOWN_PERM = 0x10
-};
-
-/* inode access permission for remote user, the inode info are omitted,
- * for client knows them. */
-struct mdt_remote_perm {
-        __u32           rp_uid;
-        __u32           rp_gid;
-        __u32           rp_fsuid;
-        __u32           rp_fsuid_h;
-        __u32           rp_fsgid;
-        __u32           rp_fsgid_h;
-        __u32           rp_access_perm; /* MAY_READ/WRITE/EXEC */
-        __u32           rp_padding;
 };
 
 struct mdt_rec_setattr {

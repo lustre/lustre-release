@@ -1324,7 +1324,6 @@ static int ofd_getattr_hdl(struct tgt_session_info *tsi)
 
 		obdo_from_la(&repbody->oa, &fti->fti_attr,
 			     OFD_VALID_FLAGS | LA_UID | LA_GID);
-		tgt_drop_id(tsi->tsi_exp, &repbody->oa);
 
 		/* Store object version in reply */
 		curr_version = dt_version_get(tsi->tsi_env,
@@ -1420,7 +1419,6 @@ static int ofd_setattr_hdl(struct tgt_session_info *tsi)
 
 	obdo_from_la(&repbody->oa, &fti->fti_attr,
 		     OFD_VALID_FLAGS | LA_UID | LA_GID);
-	tgt_drop_id(tsi->tsi_exp, &repbody->oa);
 
 	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_SETATTR,
 			 tsi->tsi_jobid, 1);

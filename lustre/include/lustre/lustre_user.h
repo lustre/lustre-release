@@ -260,7 +260,7 @@ struct ll_futimes_3 {
 #define IOC_OBD_STATFS                  _IOWR('f', 164, struct obd_statfs *)
 /*	IOC_LOV_GETINFO                 165 obsolete */
 #define LL_IOC_FLUSHCTX                 _IOW ('f', 166, long)
-#define LL_IOC_RMTACL                   _IOW ('f', 167, long)
+/*	LL_IOC_RMTACL                   167 obsolete */
 #define LL_IOC_GETOBDCOUNT              _IOR ('f', 168, long)
 #define LL_IOC_LLOOP_ATTACH             _IOWR('f', 169, long)
 #define LL_IOC_LLOOP_DETACH             _IOWR('f', 170, long)
@@ -331,7 +331,6 @@ enum ll_lease_type {
 #define LL_FILE_READAHEA        0x00000004
 #define LL_FILE_LOCKED_DIRECTIO 0x00000008 /* client-side locks with dio */
 #define LL_FILE_LOCKLESS_IO     0x00000010 /* server-side locks with cio */
-#define LL_FILE_RMTACL          0x00000020
 
 #define LOV_USER_MAGIC_V1	0x0BD10BD0
 #define LOV_USER_MAGIC		LOV_USER_MAGIC_V1
@@ -603,19 +602,6 @@ struct identity_downcall_data {
         __u32                            idd_ngroups;
         struct perm_downcall_data idd_perms[N_PERMS_MAX];
         __u32                            idd_groups[0];
-};
-
-/* for non-mapped uid/gid */
-#define NOBODY_UID      99
-#define NOBODY_GID      99
-
-#define INVALID_ID      (-1)
-
-enum {
-        RMT_LSETFACL    = 1,
-        RMT_LGETFACL    = 2,
-        RMT_RSETFACL    = 3,
-        RMT_RGETFACL    = 4
 };
 
 #ifdef NEED_QUOTA_DEFS

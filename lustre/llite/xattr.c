@@ -119,9 +119,6 @@ int ll_setxattr_common(struct inode *inode, const char *name,
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct ptlrpc_request *req = NULL;
         int xattr_type, rc;
-        posix_acl_xattr_header *new_value = NULL;
-        struct rmtacl_ctl_entry *rce = NULL;
-        ext_acl_xattr_header *acl = NULL;
         const char *pv = value;
         ENTRY;
 
@@ -146,7 +143,7 @@ int ll_setxattr_common(struct inode *inode, const char *name,
 #endif
 		return -EPERM;
 
-        /* b10667: ignore lustre special xattr for now */
+	/* b10667: ignore lustre special xattr for now */
 	if (strcmp(name, XATTR_NAME_HSM) == 0 ||
 		(xattr_type == XATTR_TRUSTED_T &&
 		strcmp(name, XATTR_NAME_LOV) == 0) ||
@@ -164,60 +161,8 @@ int ll_setxattr_common(struct inode *inode, const char *name,
             strcmp(name, "security.selinux") == 0)
                 RETURN(-EOPNOTSUPP);
 
-#ifdef CONFIG_FS_POSIX_ACL
-	if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
-	    (xattr_type == XATTR_ACL_ACCESS_T ||
-	    xattr_type == XATTR_ACL_DEFAULT_T)) {
-		rce = rct_search(&sbi->ll_rct, current_pid());
-		if (rce == NULL ||
-		    (rce->rce_ops != RMT_LSETFACL &&
-		    rce->rce_ops != RMT_RSETFACL))
-			RETURN(-EOPNOTSUPP);
-
-		if (rce->rce_ops == RMT_LSETFACL) {
-			struct eacl_entry *ee;
-
-			ee = et_search_del(&sbi->ll_et, current_pid(),
-					   ll_inode2fid(inode), xattr_type);
-			LASSERT(ee != NULL);
-                        if (valid & OBD_MD_FLXATTR) {
-                                acl = lustre_acl_xattr_merge2ext(
-                                                (posix_acl_xattr_header *)value,
-                                                size, ee->ee_acl);
-                                if (IS_ERR(acl)) {
-                                        ee_free(ee);
-                                        RETURN(PTR_ERR(acl));
-                                }
-                                size =  CFS_ACL_XATTR_SIZE(\
-                                                le32_to_cpu(acl->a_count), \
-                                                ext_acl_xattr);
-                                pv = (const char *)acl;
-                        }
-                        ee_free(ee);
-                } else if (rce->rce_ops == RMT_RSETFACL) {
-			int acl_size = lustre_posix_acl_xattr_filter(
-						(posix_acl_xattr_header *)value,
-						size, &new_value);
-			if (unlikely(acl_size < 0))
-				RETURN(acl_size);
-			size = acl_size;
-
-                        pv = (const char *)new_value;
-                } else
-                        RETURN(-EOPNOTSUPP);
-
-                valid |= rce_ops2valid(rce->rce_ops);
-        }
-#endif
 	rc = md_setxattr(sbi->ll_md_exp, ll_inode2fid(inode), valid, name, pv,
 			 size, 0, flags, ll_i2suppgid(inode), &req);
-
-#ifdef CONFIG_FS_POSIX_ACL
-        if (new_value != NULL)
-                lustre_posix_acl_xattr_free(new_value, size);
-        if (acl != NULL)
-                lustre_ext_acl_xattr_free(acl);
-#endif
         if (rc) {
                 if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
                         LCONSOLE_INFO("Disabling user_xattr feature because "
@@ -362,7 +307,6 @@ int ll_getxattr_common(struct inode *inode, const char *name,
         struct mdt_body *body;
         int xattr_type, rc;
         void *xdata;
-        struct rmtacl_ctl_entry *rce = NULL;
 	struct ll_inode_info *lli = ll_i2info(inode);
         ENTRY;
 
@@ -394,26 +338,12 @@ int ll_getxattr_common(struct inode *inode, const char *name,
                 RETURN(-EOPNOTSUPP);
 
 #ifdef CONFIG_FS_POSIX_ACL
-	if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
-	    (xattr_type == XATTR_ACL_ACCESS_T ||
-	    xattr_type == XATTR_ACL_DEFAULT_T)) {
-		rce = rct_search(&sbi->ll_rct, current_pid());
-		if (rce == NULL ||
-		    (rce->rce_ops != RMT_LSETFACL &&
-		    rce->rce_ops != RMT_LGETFACL &&
-		    rce->rce_ops != RMT_RSETFACL &&
-		    rce->rce_ops != RMT_RGETFACL))
-			RETURN(-EOPNOTSUPP);
-	}
-
         /* posix acl is under protection of LOOKUP lock. when calling to this,
          * we just have path resolution to the target inode, so we have great
          * chance that cached ACL is uptodate.
          */
-        if (xattr_type == XATTR_ACL_ACCESS_T &&
-            !(sbi->ll_flags & LL_SBI_RMT_CLIENT)) {
-
-                struct posix_acl *acl;
+	if (xattr_type == XATTR_ACL_ACCESS_T) {
+		struct posix_acl *acl;
 
 		spin_lock(&lli->lli_lock);
 		acl = posix_acl_dup(lli->lli_posix_acl);
@@ -456,8 +386,7 @@ do_getxattr:
 	} else {
 getxattr_nocache:
 		rc = md_getxattr(sbi->ll_md_exp, ll_inode2fid(inode),
-				valid | (rce ? rce_ops2valid(rce->rce_ops) : 0),
-				name, NULL, 0, size, 0, &req);
+				valid, name, NULL, 0, size, 0, &req);
 
 		if (rc < 0)
 			GOTO(out_xattr, rc);
@@ -488,22 +417,6 @@ getxattr_nocache:
 		rc = body->mbo_eadatasize;
 	}
 
-#ifdef CONFIG_FS_POSIX_ACL
-	if (rce != NULL && rce->rce_ops == RMT_LSETFACL) {
-		ext_acl_xattr_header *acl;
-
-		acl = lustre_posix_acl_xattr_2ext(buffer, rc);
-		if (IS_ERR(acl))
-			GOTO(out, rc = PTR_ERR(acl));
-
-		rc = ee_add(&sbi->ll_et, current_pid(), ll_inode2fid(inode),
-			    xattr_type, acl);
-		if (unlikely(rc < 0)) {
-			lustre_ext_acl_xattr_free(acl);
-			GOTO(out, rc);
-		}
-	}
-#endif
 	EXIT;
 
 out_xattr:

@@ -3128,27 +3128,6 @@ int lmv_clear_open_replay_data(struct obd_export *exp,
         RETURN(md_clear_open_replay_data(tgt->ltd_exp, och));
 }
 
-static int lmv_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
-			       u32 suppgid, struct ptlrpc_request **request)
-{
-        struct obd_device       *obd = exp->exp_obd;
-        struct lmv_obd          *lmv = &obd->u.lmv;
-        struct lmv_tgt_desc     *tgt;
-        int                      rc;
-        ENTRY;
-
-        rc = lmv_check_connect(obd);
-        if (rc)
-                RETURN(rc);
-
-        tgt = lmv_find_target(lmv, fid);
-        if (IS_ERR(tgt))
-                RETURN(PTR_ERR(tgt));
-
-	rc = md_get_remote_perm(tgt->ltd_exp, fid, suppgid, request);
-	RETURN(rc);
-}
-
 int lmv_intent_getattr_async(struct obd_export *exp,
 			     struct md_enqueue_info *minfo)
 {
@@ -3364,7 +3343,6 @@ struct md_ops lmv_md_ops = {
 	.m_merge_attr		= lmv_merge_attr,
         .m_set_open_replay_data = lmv_set_open_replay_data,
         .m_clear_open_replay_data = lmv_clear_open_replay_data,
-        .m_get_remote_perm      = lmv_get_remote_perm,
         .m_intent_getattr_async = lmv_intent_getattr_async,
 	.m_revalidate_lock      = lmv_revalidate_lock,
 	.m_get_fid_from_lsm	= lmv_get_fid_from_lsm,

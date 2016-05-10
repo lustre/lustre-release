@@ -582,9 +582,6 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
 		       PFID(fid), b->mbo_nlink, b->mbo_mode, b->mbo_valid);
 	}
 
-	if (info != NULL)
-		mdt_body_reverse_idmap(info, b);
-
 	if (!(attr->la_valid & LA_TYPE))
 		return;
 
@@ -1138,23 +1135,8 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 		       repbody->mbo_max_mdsize);
 	}
 
-	if (exp_connect_rmtclient(info->mti_exp) &&
-	    reqbody->mbo_valid & OBD_MD_FLRMTPERM) {
-		void *buf = req_capsule_server_get(pill, &RMF_ACL);
-
-		/* mdt_getattr_lock only */
-		rc = mdt_pack_remote_perm(info, o, buf);
-		if (rc) {
-			repbody->mbo_valid &= ~OBD_MD_FLRMTPERM;
-			repbody->mbo_aclsize = 0;
-			RETURN(rc);
-		} else {
-			repbody->mbo_valid |= OBD_MD_FLRMTPERM;
-			repbody->mbo_aclsize = sizeof(struct mdt_remote_perm);
-		}
-	}
 #ifdef CONFIG_FS_POSIX_ACL
-	else if ((exp_connect_flags(req->rq_export) & OBD_CONNECT_ACL) &&
+	if ((exp_connect_flags(req->rq_export) & OBD_CONNECT_ACL) &&
 		 (reqbody->mbo_valid & OBD_MD_FLACL)) {
 		struct lu_nodemap *nodemap = nodemap_get_from_exp(exp);
 		if (IS_ERR(nodemap))
@@ -1227,18 +1209,13 @@ static int mdt_getattr(struct tgt_session_info *tsi)
 	repbody->mbo_eadatasize = 0;
 	repbody->mbo_aclsize = 0;
 
-	if (reqbody->mbo_valid & OBD_MD_FLRMTPERM)
-		rc = mdt_init_ucred(info, reqbody);
-	else
-		rc = mdt_check_ucred(info);
+	rc = mdt_check_ucred(info);
 	if (unlikely(rc))
 		GOTO(out_shrink, rc);
 
 	info->mti_cross_ref = !!(reqbody->mbo_valid & OBD_MD_FLCROSSREF);
 
 	rc = mdt_getattr_internal(info, obj, 0);
-	if (reqbody->mbo_valid & OBD_MD_FLRMTPERM)
-                mdt_exit_ucred(info);
         EXIT;
 out_shrink:
         mdt_client_compatibility(info);
@@ -1842,6 +1819,26 @@ free_rdpg:
 	return rc;
 }
 
+static int mdt_fix_attr_ucred(struct mdt_thread_info *info, __u32 op)
+{
+	struct lu_ucred *uc = mdt_ucred_check(info);
+	struct lu_attr *attr = &info->mti_attr.ma_attr;
+
+	if (uc == NULL)
+		return -EINVAL;
+
+	if (op != REINT_SETATTR) {
+		if ((attr->la_valid & LA_UID) && (attr->la_uid != -1))
+			attr->la_uid = uc->uc_fsuid;
+		/* for S_ISGID, inherit gid from his parent, such work will be
+		 * done in cmm/mdd layer, here set all cases as uc->uc_fsgid. */
+		if ((attr->la_valid & LA_GID) && (attr->la_gid != -1))
+			attr->la_gid = uc->uc_fsgid;
+	}
+
+	return 0;
+}
+
 static int mdt_reint_internal(struct mdt_thread_info *info,
                               struct mdt_lock_handle *lhc,
                               __u32 op)
@@ -2094,32 +2091,7 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 		GOTO(out_nodemap, rc = -EFAULT);
 	}
 
-	/* map uid/gid for remote client */
 	id = oqctl->qc_id;
-	if (exp_connect_rmtclient(exp)) {
-		struct lustre_idmap_table *idmap;
-
-		idmap = exp->exp_mdt_data.med_idmap;
-
-		if (unlikely(oqctl->qc_cmd != Q_GETQUOTA &&
-			     oqctl->qc_cmd != Q_GETINFO))
-			GOTO(out_nodemap, rc = -EPERM);
-
-		if (oqctl->qc_type == USRQUOTA)
-			id = lustre_idmap_lookup_uid(NULL, idmap, 0,
-						     oqctl->qc_id);
-		else if (oqctl->qc_type == GRPQUOTA)
-			id = lustre_idmap_lookup_gid(NULL, idmap, 0,
-						     oqctl->qc_id);
-		else
-			GOTO(out_nodemap, rc = -EINVAL);
-
-		if (id == CFS_IDMAP_NOTFOUND) {
-			CDEBUG(D_QUOTA, "no mapping for id %u\n", oqctl->qc_id);
-			GOTO(out_nodemap, rc = -EACCES);
-		}
-	}
-
 	if (oqctl->qc_type == USRQUOTA)
 		id = nodemap_map_id(nodemap, NODEMAP_UID,
 				    NODEMAP_CLIENT_TO_FS, id);
@@ -2218,21 +2190,9 @@ static int mdt_llog_ctxt_unclone(const struct lu_env *env,
  */
 static int mdt_sec_ctx_handle(struct tgt_session_info *tsi)
 {
-	int rc;
-
-	rc = mdt_handle_idmap(tsi);
-	if (unlikely(rc)) {
-		struct ptlrpc_request	*req = tgt_ses_req(tsi);
-		__u32			 opc;
-
-		opc = lustre_msg_get_opc(req->rq_reqmsg);
-		if (opc == SEC_CTX_INIT || opc == SEC_CTX_INIT_CONT)
-			sptlrpc_svc_ctx_invalidate(req);
-	}
-
 	CFS_FAIL_TIMEOUT(OBD_FAIL_SEC_CTX_HDL_PAUSE, cfs_fail_val);
 
-	return rc;
+	return 0;
 }
 
 /*
@@ -3034,11 +2994,6 @@ struct mdt_thread_info *tsi2mdt_info(struct tgt_session_info *tsi)
 
 static int mdt_tgt_connect(struct tgt_session_info *tsi)
 {
-	struct ptlrpc_request	*req = tgt_ses_req(tsi);
-	int			 rc;
-
-	ENTRY;
-
 	if (OBD_FAIL_CHECK(OBD_FAIL_TGT_DELAY_CONDITIONAL) &&
 	    cfs_fail_val ==
 	    tsi2mdt_info(tsi)->mti_mdt->mdt_seq_site.ss_node_id) {
@@ -3046,17 +3001,7 @@ static int mdt_tgt_connect(struct tgt_session_info *tsi)
 		schedule_timeout(msecs_to_jiffies(3 * MSEC_PER_SEC));
 	}
 
-	rc = tgt_connect(tsi);
-	if (rc != 0)
-		RETURN(rc);
-
-	rc = mdt_init_idmap(tsi);
-	if (rc != 0)
-		GOTO(err, rc);
-	RETURN(0);
-err:
-	obd_disconnect(class_export_get(req->rq_export));
-	return rc;
+	return tgt_connect(tsi);
 }
 
 enum mdt_it_code {
@@ -5417,8 +5362,6 @@ static int mdt_init_export(struct obd_export *exp)
 
 	INIT_LIST_HEAD(&med->med_open_head);
 	spin_lock_init(&med->med_open_lock);
-	mutex_init(&med->med_idmap_mutex);
-	med->med_idmap = NULL;
 	spin_lock(&exp->exp_lock);
 	exp->exp_connecting = 1;
 	spin_unlock(&exp->exp_lock);
@@ -5449,9 +5392,6 @@ err:
 static int mdt_destroy_export(struct obd_export *exp)
 {
         ENTRY;
-
-        if (exp_connect_rmtclient(exp))
-                mdt_cleanup_idmap(&exp->exp_mdt_data);
 
         target_destroy_export(exp);
         /* destroy can be called from failed obd_setup, so

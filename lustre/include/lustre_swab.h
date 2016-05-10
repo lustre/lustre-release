@@ -66,7 +66,6 @@ void lustre_swab_lquota_lvb(struct lquota_lvb *lvb);
 void lustre_swab_generic_32s(__u32 *val);
 void lustre_swab_mdt_body(struct mdt_body *b);
 void lustre_swab_mdt_ioepoch(struct mdt_ioepoch *b);
-void lustre_swab_mdt_remote_perm(struct mdt_remote_perm *p);
 void lustre_swab_mdt_rec_setattr(struct mdt_rec_setattr *sa);
 void lustre_swab_mdt_rec_reint(struct mdt_rec_reint *rr);
 void lustre_swab_lmv_desc(struct lmv_desc *ld);

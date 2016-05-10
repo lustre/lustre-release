@@ -129,19 +129,6 @@ static int __init lustre_init(void)
 	if (ll_file_data_slab == NULL)
 		GOTO(out_cache, rc = -ENOMEM);
 
-	ll_remote_perm_cachep = kmem_cache_create("ll_remote_perm_cache",
-						  sizeof(struct ll_remote_perm),
-						  0, 0, NULL);
-	if (ll_remote_perm_cachep == NULL)
-		GOTO(out_cache, rc = -ENOMEM);
-
-	ll_rmtperm_hash_cachep = kmem_cache_create("ll_rmtperm_hash_cache",
-						   REMOTE_PERM_HASHSIZE *
-						   sizeof(struct hlist_head),
-						   0, 0, NULL);
-	if (ll_rmtperm_hash_cachep == NULL)
-		GOTO(out_cache, rc = -ENOMEM);
-
 	entry = lprocfs_register("llite", proc_lustre_root, NULL, NULL);
 	if (IS_ERR(entry)) {
 		rc = PTR_ERR(entry);
@@ -201,12 +188,6 @@ out_cache:
 	if (ll_file_data_slab != NULL)
 		kmem_cache_destroy(ll_file_data_slab);
 
-	if (ll_remote_perm_cachep != NULL)
-		kmem_cache_destroy(ll_remote_perm_cachep);
-
-	if (ll_rmtperm_hash_cachep != NULL)
-		kmem_cache_destroy(ll_rmtperm_hash_cachep);
-
 	return rc;
 }
 
@@ -223,8 +204,6 @@ static void __exit lustre_exit(void)
 	vvp_global_fini();
 
 	kmem_cache_destroy(ll_inode_cachep);
-	kmem_cache_destroy(ll_rmtperm_hash_cachep);
-	kmem_cache_destroy(ll_remote_perm_cachep);
 	kmem_cache_destroy(ll_file_data_slab);
 }
 

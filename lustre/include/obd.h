@@ -976,7 +976,6 @@ struct lustre_md {
 #ifdef CONFIG_FS_POSIX_ACL
 	struct posix_acl        *posix_acl;
 #endif
-	struct mdt_remote_perm  *remote_perm;
 };
 
 struct md_open_data {
@@ -1105,9 +1104,6 @@ struct md_ops {
 	int (*m_cancel_unused)(struct obd_export *, const struct lu_fid *,
 			       union ldlm_policy_data *, enum ldlm_mode,
 			       enum ldlm_cancel_flags flags, void *opaque);
-
-	int (*m_get_remote_perm)(struct obd_export *, const struct lu_fid *,
-				 u32, struct ptlrpc_request **);
 
 	int (*m_get_fid_from_lsm)(struct obd_export *,
 				  const struct lmv_stripe_md *,

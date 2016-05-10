@@ -428,7 +428,6 @@ void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
 		     enum cl_req_type crt, int brw_flags)
 {
 	struct osc_async_page *oap = &opg->ops_oap;
-	struct osc_object     *obj = oap->oap_obj;
 
 	LINVRNT(osc_page_protected(env, opg,
 				   crt == CRT_WRITE ? CLM_WRITE : CLM_READ, 1));
@@ -443,8 +442,7 @@ void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
 	oap->oap_count     = opg->ops_to - opg->ops_from;
 	oap->oap_brw_flags = OBD_BRW_SYNC | brw_flags;
 
-	if (!client_is_remote(osc_export(obj)) &&
-			cfs_capable(CFS_CAP_SYS_RESOURCE)) {
+	if (cfs_capable(CFS_CAP_SYS_RESOURCE)) {
 		oap->oap_brw_flags |= OBD_BRW_NOQUOTA;
 		oap->oap_cmd |= OBD_BRW_NOQUOTA;
 	}

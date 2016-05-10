@@ -178,10 +178,7 @@ static int ll_client_type_seq_show(struct seq_file *m, void *v)
 
 	LASSERT(sbi != NULL);
 
-	if (sbi->ll_flags & LL_SBI_RMT_CLIENT)
-		seq_puts(m, "remote client\n");
-	else
-		seq_puts(m, "local client\n");
+	seq_puts(m, "local client\n");
 	return 0;
 }
 LPROC_SEQ_FOPS_RO(ll_client_type);

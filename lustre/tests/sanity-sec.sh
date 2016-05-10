@@ -107,16 +107,6 @@ IDENTITY_FLUSH=mdt.$MDT.identity_flush
 IDENTITY_UPCALL=mdt.$MDT.identity_upcall
 MDSSECLEVEL=mdt.$MDT.sec_level
 
-# for CLIENT_TYPE
-if [ -z "$(lctl get_param -n llite.*.client_type | grep remote 2>/dev/null)" ]
-then
-	CLIENT_TYPE="local"
-	echo "local client"
-else
-	CLIENT_TYPE="remote"
-	echo "remote client"
-fi
-
 SAVE_PWD=$PWD
 
 build_test_filter
@@ -164,17 +154,7 @@ test_0() {
 	chmod 0755 $DIR || error "chmod (1)"
 	rm -rf $DIR/$tdir || error "rm (1)"
 	mkdir -p $DIR/$tdir || error "mkdir (1)"
-
-	if [ "$CLIENT_TYPE" = "remote" ]; then
-		do_facet $SINGLEMDS "echo '* 0 normtown' > $PERM_CONF"
-		do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
-		chown $USER0 $DIR/$tdir && error "chown (1)"
-		do_facet $SINGLEMDS "echo '* 0 rmtown' > $PERM_CONF"
-		do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
-	else
-		chown $USER0 $DIR/$tdir || error "chown (2)"
-	fi
-
+	chown $USER0 $DIR/$tdir || error "chown (2)"
 	$RUNAS_CMD -u $ID0 ls $DIR || error "ls (1)"
 	rm -f $DIR/f0 || error "rm (2)"
 	$RUNAS_CMD -u $ID0 touch $DIR/f0 && error "touch (1)"
@@ -188,22 +168,12 @@ test_0() {
 	$RUNAS_CMD -u $ID1 touch $DIR/$tdir/f5 && error "touch (6)"
 	touch $DIR/$tdir/f6 || error "touch (7)"
 	rm -rf $DIR/$tdir || error "rm (3)"
-
-	if [ "$CLIENT_TYPE" = "remote" ]; then
-		do_facet $SINGLEMDS "rm -f $PERM_CONF"
-		do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
-	fi
 }
 run_test 0 "uid permission ============================="
 
 # setuid/gid
 test_1() {
 	[ $GSS_SUP = 0 ] && skip "without GSS support." && return
-
-	if [ "$CLIENT_TYPE" = "remote" ]; then
-		do_facet $SINGLEMDS "echo '* 0 rmtown' > $PERM_CONF"
-		do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
-	fi
 
 	rm -rf $DIR/$tdir
 	mkdir -p $DIR/$tdir
@@ -235,60 +205,6 @@ test_1() {
 }
 run_test 1 "setuid/gid ============================="
 
-run_rmtacl_subtest() {
-	$SAVE_PWD/rmtacl/run $SAVE_PWD/rmtacl/$1.test
-	return $?
-}
-
-# remote_acl
-# for remote client only
-test_2 () {
-	[ "$CLIENT_TYPE" = "local" ] &&
-		skip "remote_acl for remote client only" && return
-	[ -z "$(lctl get_param -n mdc.*-mdc-*.connect_flags | grep ^acl)" ] &&
-		skip "must have acl enabled" && return
-	[ -z "$(which setfacl 2>/dev/null)" ] &&
-		skip "could not find setfacl" && return
-	[ "$UID" != 0 ] && skip "must run as root" && return
-
-	do_facet $SINGLEMDS "echo '* 0 rmtacl,rmtown' > $PERM_CONF"
-	do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
-
-	sec_login root root
-	sec_login bin bin
-	sec_login daemon daemon
-	sec_login games users
-
-	SAVE_UMASK=$(umask)
-	umask 0022
-	cd $DIR
-
-	echo "performing cp ..."
-	run_rmtacl_subtest cp || error "cp"
-	echo "performing getfacl-noacl..."
-	run_rmtacl_subtest getfacl-noacl || error "getfacl-noacl"
-	echo "performing misc..."
-	run_rmtacl_subtest misc || error "misc"
-	echo "performing permissions..."
-	run_rmtacl_subtest permissions || error "permissions"
-	echo "performing setfacl..."
-	run_rmtacl_subtest setfacl || error "setfacl"
-
-	# inheritance test got from HP
-	echo "performing inheritance..."
-	cp $SAVE_PWD/rmtacl/make-tree .
-	chmod +x make-tree
-	run_rmtacl_subtest inheritance || error "inheritance"
-	rm -f make-tree
-
-	cd $SAVE_PWD
-	umask $SAVE_UMASK
-
-	do_facet $SINGLEMDS "rm -f $PERM_CONF"
-	do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
-}
-run_test 2 "rmtacl ============================="
-
 # bug 3285 - supplementary group should always succeed.
 # NB: the supplementary groups are set for local client only,
 # as for remote client, the groups of the specified uid on MDT
@@ -301,22 +217,15 @@ test_4() {
 	   $server_version -lt $(version_code 2.5.50) ]] ||
 		{ skip "Need MDS version at least 2.6.93 or 2.5.35"; return; }
 
-	if [ "$CLIENT_TYPE" = "remote" ]; then
-		do_facet $SINGLEMDS "echo '* 0 rmtown' > $PERM_CONF"
-	        do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
-	fi
-
 	rm -rf $DIR/$tdir
 	mkdir -p $DIR/$tdir
 	chmod 0771 $DIR/$tdir
 	chgrp $ID0 $DIR/$tdir
 	$RUNAS_CMD -u $ID0 ls $DIR/$tdir || error "setgroups (1)"
-	if [ "$CLIENT_TYPE" = "local" ]; then
-		do_facet $SINGLEMDS "echo '* $ID1 setgrp' > $PERM_CONF"
-		do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
-		$RUNAS_CMD -u $ID1 -G1,2,$ID0 ls $DIR/$tdir ||
-			error "setgroups (2)"
-	fi
+	do_facet $SINGLEMDS "echo '* $ID1 setgrp' > $PERM_CONF"
+	do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
+	$RUNAS_CMD -u $ID1 -G1,2,$ID0 ls $DIR/$tdir ||
+		error "setgroups (2)"
 	$RUNAS_CMD -u $ID1 -G1,2 ls $DIR/$tdir && error "setgroups (3)"
 	rm -rf $DIR/$tdir
 

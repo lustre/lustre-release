@@ -537,20 +537,8 @@ static int mdt_finish_open(struct mdt_thread_info *info,
 		RETURN(-ENOENT);
 	}
 
-        if (exp_connect_rmtclient(exp)) {
-                void *buf = req_capsule_server_get(info->mti_pill, &RMF_ACL);
-
-                rc = mdt_pack_remote_perm(info, o, buf);
-                if (rc) {
-			repbody->mbo_valid &= ~OBD_MD_FLRMTPERM;
-			repbody->mbo_aclsize = 0;
-		} else {
-			repbody->mbo_valid |= OBD_MD_FLRMTPERM;
-			repbody->mbo_aclsize = sizeof(struct mdt_remote_perm);
-                }
-        }
 #ifdef CONFIG_FS_POSIX_ACL
-	else if (exp_connect_flags(exp) & OBD_CONNECT_ACL) {
+	if (exp_connect_flags(exp) & OBD_CONNECT_ACL) {
 		struct lu_nodemap *nodemap = nodemap_get_from_exp(exp);
 		if (IS_ERR(nodemap))
 			RETURN(PTR_ERR(nodemap));

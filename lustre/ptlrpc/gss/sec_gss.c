@@ -2441,7 +2441,6 @@ int gss_svc_accept(struct ptlrpc_sec_policy *policy, struct ptlrpc_request *req)
                 LASSERT (grctx->src_ctx);
 
                 req->rq_auth_gss = 1;
-                req->rq_auth_remote = grctx->src_ctx->gsc_remote;
                 req->rq_auth_usr_mdt = grctx->src_ctx->gsc_usr_mds;
                 req->rq_auth_usr_ost = grctx->src_ctx->gsc_usr_oss;
                 req->rq_auth_usr_root = grctx->src_ctx->gsc_usr_root;

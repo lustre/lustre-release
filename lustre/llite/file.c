@@ -322,20 +322,6 @@ int ll_file_release(struct inode *inode, struct file *file)
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p)\n",
 	       PFID(ll_inode2fid(inode)), inode);
 
-#ifdef CONFIG_FS_POSIX_ACL
-	if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
-	    inode == inode->i_sb->s_root->d_inode) {
-		struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
-
-		LASSERT(fd != NULL);
-		if (unlikely(fd->fd_flags & LL_FILE_RMTACL)) {
-			fd->fd_flags &= ~LL_FILE_RMTACL;
-			rct_del(&sbi->ll_rct, current_pid());
-			et_search_free(&sbi->ll_et, current_pid());
-		}
-	}
-#endif
-
 	if (inode->i_sb->s_root != file->f_path.dentry)
                 ll_stats_ops_tally(sbi, LPROC_LL_RELEASE, 1);
         fd = LUSTRE_FPRIVATE(file);
@@ -3689,12 +3675,7 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
 	}
 
 	ll_stats_ops_tally(sbi, LPROC_LL_INODE_PERM, 1);
-
-	if (sbi->ll_flags & LL_SBI_RMT_CLIENT)
-		rc = lustre_check_remote_perm(inode, mask);
-	else
-		rc = ll_generic_permission(inode, mask, flags, ll_check_acl);
-
+	rc = ll_generic_permission(inode, mask, flags, ll_check_acl);
 	/* restore current process's credentials and FS capability */
 	if (squash_id) {
 		revert_creds(old_cred);

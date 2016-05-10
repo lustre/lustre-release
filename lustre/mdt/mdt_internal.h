@@ -735,17 +735,6 @@ int mdt_links_read(struct mdt_thread_info *info,
 		   struct linkea_data *ldata);
 int mdt_close_internal(struct mdt_thread_info *info, struct ptlrpc_request *req,
 		       struct mdt_body *repbody);
-/* mdt_idmap.c */
-int mdt_init_idmap(struct tgt_session_info *tsi);
-void mdt_cleanup_idmap(struct mdt_export_data *);
-int mdt_handle_idmap(struct tgt_session_info *tsi);
-int ptlrpc_user_desc_do_idmap(struct ptlrpc_request *,
-                              struct ptlrpc_user_desc *);
-void mdt_body_reverse_idmap(struct mdt_thread_info *,
-                            struct mdt_body *);
-int mdt_remote_perm_reverse_idmap(struct ptlrpc_request *,
-                                  struct mdt_remote_perm *);
-int mdt_fix_attr_ucred(struct mdt_thread_info *, __u32);
 
 static inline struct mdt_device *mdt_dev(struct lu_device *d)
 {
@@ -779,9 +768,7 @@ void mdt_identity_put(struct upcall_cache *, struct md_identity *);
 
 void mdt_flush_identity(struct upcall_cache *, int);
 
-__u32 mdt_identity_get_perm(struct md_identity *, __u32, lnet_nid_t);
-
-int mdt_pack_remote_perm(struct mdt_thread_info *, struct mdt_object *, void *);
+__u32 mdt_identity_get_perm(struct md_identity *, lnet_nid_t);
 
 /* mdt/mdt_recovery.c */
 __u64 mdt_req_from_lrd(struct ptlrpc_request *req, struct tg_reply_data *trd);
