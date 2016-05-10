@@ -360,81 +360,103 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 	RETURN(th);
 }
 
-/* Estimate the number of objects from a number of blocks */
-uint64_t osd_objs_count_estimate(uint64_t refdbytes, uint64_t usedobjs,
+/* Estimate the total number of objects from a number of blocks */
+uint64_t osd_objs_count_estimate(uint64_t usedbytes, uint64_t usedobjs,
 				 uint64_t nrblocks, uint64_t est_maxblockshift)
 {
-	uint64_t est_objs, est_refdblocks, est_usedobjs;
+	uint64_t est_totobjs, est_usedblocks, est_usedobjs;
 
-	/* Compute an nrblocks estimate based on the actual number of
-	 * dnodes that could fit in the space.  Since we don't know the
-	 * overhead associated with each dnode (xattrs, SAs, VDEV overhead,
-	 * etc) just using DNODE_SHIFT isn't going to give a good estimate.
-	 * Instead, compute an estimate based on the average space usage per
-	 * dnode, with an upper and lower cap.
+	/*
+	 * If blocksize is below 64KB (e.g. MDT with recordsize=4096) then
+	 * bump the free dnode estimate to assume blocks at least 64KB in
+	 * case of a directory-heavy MDT (at 32KB/directory).
+	 */
+	if (est_maxblockshift < 16) {
+		nrblocks >>= (16 - est_maxblockshift);
+		est_maxblockshift = 16;
+	}
+
+	/*
+	 * Estimate the total number of dnodes from the total blocks count
+	 * and the space used per dnode.  Since we don't know the overhead
+	 * associated with each dnode (xattrs, SAs, VDEV overhead, etc.)
+	 * just using DNODE_SHIFT isn't going to give a good estimate.
+	 * Instead, compute the current average space usage per dnode, with
+	 * an upper and lower cap to avoid unrealistic estimates..
 	 *
 	 * In case there aren't many dnodes or blocks used yet, add a small
-	 * correction factor using OSD_DNODE_EST_SHIFT.  This correction
-	 * factor gradually disappears as the number of real dnodes grows.
-	 * This also avoids the need to check for divide-by-zero later.
+	 * correction factor (OSD_DNODE_EST_{COUNT,BLKSHIFT}).  This factor
+	 * gradually disappears as the number of real dnodes grows.  It also
+	 * avoids the need to check for divide-by-zero computing dn_per_block.
 	 */
 	CLASSERT(OSD_DNODE_MIN_BLKSHIFT > 0);
 	CLASSERT(OSD_DNODE_EST_BLKSHIFT > 0);
 
-	est_refdblocks = (refdbytes >> est_maxblockshift) +
+	est_usedblocks = (usedbytes >> est_maxblockshift) +
 			 (OSD_DNODE_EST_COUNT >> OSD_DNODE_EST_BLKSHIFT);
 	est_usedobjs   = usedobjs + OSD_DNODE_EST_COUNT;
 
-	/* Average space/dnode more than maximum dnode size, use max dnode
-	 * size to estimate free dnodes from adjusted free blocks count.
-	 * OSTs typically use more than one block dnode so this case applies. */
-	if (est_usedobjs <= est_refdblocks * 2) {
-		est_objs = nrblocks;
+	if (est_usedobjs <= est_usedblocks) {
+		/*
+		 * Average space/dnode more than maximum block size, use max
+		 * block size to estimate free dnodes from adjusted free blocks
+		 * count.  OSTs typically use multiple blocks per dnode so this
+		 * case applies.
+		 */
+		est_totobjs = nrblocks;
 
-	/* Average space/dnode smaller than min dnode size (probably due to
-	 * metadnode compression), use min dnode size to estimate the number of
-	 * objects.
-	 * An MDT typically uses below 512 bytes/dnode so this case applies. */
-	} else if (est_usedobjs >= (est_refdblocks << OSD_DNODE_MIN_BLKSHIFT)) {
-		est_objs = nrblocks << OSD_DNODE_MIN_BLKSHIFT;
+	} else if (est_usedobjs >= (est_usedblocks << OSD_DNODE_MIN_BLKSHIFT)) {
+		/*
+		 * Average space/dnode smaller than min dnode size (probably
+		 * due to metadnode compression), use min dnode size to
+		 * estimate object count.  MDTs may use only one block per node
+		 * so this case applies.
+		 */
+		est_totobjs = nrblocks << OSD_DNODE_MIN_BLKSHIFT;
 
-		/* Between the extremes, we try to use the average size of
-		 * existing dnodes to compute the number of dnodes that fit
-		 * into nrblocks:
+	} else {
+		/*
+		 * Between the extremes, use average space per existing dnode
+		 * to compute the number of dnodes that will fit into nrblocks:
 		 *
-		 * est_objs = nrblocks * (est_usedobjs / est_refblocks);
+		 *    est_totobjs = nrblocks * (est_usedobjs / est_usedblocks)
 		 *
-		 * but this may overflow 64 bits or become 0 if not handled well
+		 * this may overflow 64 bits or become 0 if not handled well.
 		 *
-		 * We know nrblocks is below (64 - 17 = 47) bits from
-		 * SPA_MAXBLKSHIFT, and est_usedobjs is under 48 bits due to
-		 * DN_MAX_OBJECT_SHIFT, which means that multiplying them may
-		 * get as large as 2 ^ 95.
+		 * We know nrblocks is below 2^(64 - blkbits) bits, and
+		 * est_usedobjs is under 48 bits due to DN_MAX_OBJECT_SHIFT,
+		 * which means that multiplying them may get as large as
+		 * 2 ^ 96 for the minimum blocksize of 64KB allowed above.
 		 *
-		 * We also know (est_usedobjs / est_refdblocks) is between 2 and
-		 * 256, due to above checks, we can safely compute this first.
+		 * The ratio of dnodes per block (est_usedobjs / est_usedblocks)
+		 * is under 2^(blkbits - DNODE_SHIFT) = blocksize / 512 due to
+		 * the limit checks above, so we can safely compute this first.
 		 * We care more about accuracy on the MDT (many dnodes/block)
 		 * which is good because this is where truncation errors are
-		 * smallest.  This adds 8 bits to nrblocks so we can use 7 bits
-		 * to compute a fixed-point fraction and nrblocks can still fit
-		 * in 64 bits. */
-	} else {
-		unsigned dnodes_per_block = (est_usedobjs << 7)/est_refdblocks;
+		 * smallest.  Since both nrblocks and dn_per_block are a
+		 * function of blkbits, their product is at most:
+		 *
+		 *    2^(64 - blkbits) * 2^(blkbits - DNODE_SHIFT) = 2^(64 - 9)
+		 *
+		 * so we can safely use 7 bits to compute a fixed-point
+		 * fraction and est_totobjs can still fit in 64 bits.
+		 */
+		unsigned dn_per_block = (est_usedobjs << 7) / est_usedblocks;
 
-		est_objs = (nrblocks * dnodes_per_block) >> 7;
+		est_totobjs = (nrblocks * dn_per_block) >> 7;
 	}
-	return est_objs;
+	return est_totobjs;
 }
 
 static int osd_objset_statfs(struct osd_device *osd, struct obd_statfs *osfs)
 {
 	struct objset *os = osd->od_os;
-	uint64_t refdbytes, availbytes, usedobjs, availobjs;
+	uint64_t usedbytes, availbytes, usedobjs, availobjs;
 	uint64_t est_availobjs;
 	uint64_t reserved;
 	uint64_t bshift;
 
-	dmu_objset_space(os, &refdbytes, &availbytes, &usedobjs, &availobjs);
+	dmu_objset_space(os, &usedbytes, &availbytes, &usedobjs, &availobjs);
 
 	memset(osfs, 0, sizeof(*osfs));
 
@@ -452,7 +474,7 @@ static int osd_objset_statfs(struct osd_device *osd, struct obd_statfs *osfs)
 	osfs->os_bsize = osd->od_max_blksz;
 	bshift = fls64(osfs->os_bsize) - 1;
 
-	osfs->os_blocks = (refdbytes + availbytes) >> bshift;
+	osfs->os_blocks = (usedbytes + availbytes) >> bshift;
 	osfs->os_bfree = availbytes >> bshift;
 	osfs->os_bavail = osfs->os_bfree; /* no extra root reservation */
 
@@ -484,7 +506,7 @@ static int osd_objset_statfs(struct osd_device *osd, struct obd_statfs *osfs)
 	 * issues like how much space is actually available in the pool.
 	 * Compute a better estimate in udmu_objs_count_estimate().
 	 */
-	est_availobjs = osd_objs_count_estimate(refdbytes, usedobjs,
+	est_availobjs = osd_objs_count_estimate(usedbytes, usedobjs,
 						osfs->os_bfree, bshift);
 
 	osfs->os_ffree = min(availobjs, est_availobjs);

@@ -85,7 +85,7 @@
 
 /* Statfs {minimum, safe estimate, and maximum} dnodes per block */
 #define OSD_DNODE_MIN_BLKSHIFT	(DNODES_PER_BLOCK_SHIFT)
-#define OSD_DNODE_EST_BLKSHIFT	(DNODES_PER_BLOCK_SHIFT >> 1)
+#define OSD_DNODE_EST_BLKSHIFT	(DNODE_BLOCK_SHIFT - 12)     /* est 4KB/dnode */
 #define OSD_DNODE_EST_COUNT	1024
 
 #define OSD_GRANT_FOR_LOCAL_OIDS (2ULL << 20) /* 2MB for last_rcvd, ... */
