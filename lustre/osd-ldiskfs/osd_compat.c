@@ -332,9 +332,19 @@ int osd_lookup_in_remote_parent(struct osd_thread_info *oti,
 	if (bh == NULL) {
 		rc = -ENOENT;
 	} else {
-		rc = 0;
+		struct inode *inode;
+
 		osd_id_gen(id, le32_to_cpu(de->inode), OSD_OII_NOGEN);
 		brelse(bh);
+		inode = osd_iget(oti, osd, id);
+		if (IS_ERR(inode)) {
+			rc = PTR_ERR(inode);
+			if (rc == -ESTALE)
+				rc = -ENOENT;
+		} else {
+			iput(inode);
+			rc = 0;
+		}
 	}
 	mutex_unlock(&parent->d_inode->i_mutex);
 	if (rc == 0)

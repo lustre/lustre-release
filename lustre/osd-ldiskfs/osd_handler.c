@@ -767,6 +767,176 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 	RETURN(rc);
 }
 
+struct osd_check_lmv_buf {
+#ifdef HAVE_DIR_CONTEXT
+	/* please keep it as first member */
+	struct dir_context	 ctx;
+#endif
+	struct osd_thread_info	*oclb_info;
+	struct osd_device	*oclb_dev;
+	struct osd_idmap_cache	*oclb_oic;
+};
+
+/**
+ * It is called internally by ->readdir() to filter out the
+ * local slave object's FID of the striped directory.
+ *
+ * \retval	1 found the local slave's FID
+ * \retval	0 continue to check next item
+ * \retval	-ve for failure
+ */
+#ifdef HAVE_FILLDIR_USE_CTX
+static int osd_stripe_dir_filldir(struct dir_context *buf,
+#else
+static int osd_stripe_dir_filldir(void *buf,
+#endif
+				  const char *name, int namelen,
+				  loff_t offset, __u64 ino, unsigned d_type)
+{
+	struct osd_check_lmv_buf *oclb = (struct osd_check_lmv_buf *)buf;
+	struct osd_thread_info *oti = oclb->oclb_info;
+	struct lu_fid *fid = &oti->oti_fid3;
+	struct osd_inode_id *id = &oti->oti_id3;
+	struct osd_device *dev = oclb->oclb_dev;
+	struct osd_idmap_cache *oic = oclb->oclb_oic;
+	struct inode *inode;
+	int rc;
+
+	if (name[0] == '.')
+		return 0;
+
+	fid_zero(fid);
+	sscanf(name + 1, SFID, RFID(fid));
+	if (!fid_is_sane(fid))
+		return 0;
+
+	if (osd_remote_fid(oti->oti_env, dev, fid))
+		return 0;
+
+	osd_id_gen(id, ino, OSD_OII_NOGEN);
+	inode = osd_iget(oti, dev, id);
+	if (IS_ERR(inode))
+		return PTR_ERR(inode);
+
+	iput(inode);
+	osd_add_oi_cache(oti, dev, id, fid);
+	oic->oic_fid = *fid;
+	oic->oic_lid = *id;
+	oic->oic_dev = dev;
+	rc = osd_oii_insert(dev, oic, true);
+
+	return rc == 0 ? 1 : rc;
+}
+
+/* When lookup item under striped directory, we need to locate the master
+ * MDT-object of the striped directory firstly, then the client will send
+ * lookup (getattr_by_name) RPC to the MDT with some slave MDT-object's FID
+ * and the item's name. If the system is restored from MDT file level backup,
+ * then before the OI scrub completely built the OI files, the OI mappings of
+ * the master MDT-object and slave MDT-object may be invalid. Usually, it is
+ * not a problem for the master MDT-object. Because when locate the master
+ * MDT-object, we will do name based lookup (for the striped directory itself)
+ * firstly, during such process we can setup the correct OI mapping for the
+ * master MDT-object. But it will be trouble for the slave MDT-object. Because
+ * the client will not trigger name based lookup on the MDT to locate the slave
+ * MDT-object before locating item under the striped directory, then when
+ * osd_fid_lookup(), it will find that the OI mapping for the slave MDT-object
+ * is invalid and does not know what the right OI mapping is, then the MDT has
+ * to return -EINPROGRESS to the client to notify that the OI scrub is rebuiding
+ * the OI file, related OI mapping is unknown yet, please try again later. And
+ * then client will re-try the RPC again and again until related OI mapping has
+ * been updated. That is quite inefficient.
+ *
+ * To resolve above trouble, we will handle it as the following two cases:
+ *
+ * 1) The slave MDT-object and the master MDT-object are on different MDTs.
+ *    It is relative easy. Be as one of remote MDT-objects, the slave MDT-object
+ *    is linked under /REMOTE_PARENT_DIR with the name of its FID string.
+ *    We can locate the slave MDT-object via lookup the /REMOTE_PARENT_DIR
+ *    directly. Please check osd_fid_lookup().
+ *
+ * 2) The slave MDT-object and the master MDT-object reside on the same MDT.
+ *    Under such case, during lookup the master MDT-object, we will lookup the
+ *    slave MDT-object via readdir against the master MDT-object, because the
+ *    slave MDT-objects information are stored as sub-directories with the name
+ *    "${FID}:${index}". Then when find the local slave MDT-object, its OI
+ *    mapping will be recorded. Then subsequent osd_fid_lookup() will know
+ *    the correct OI mapping for the slave MDT-object. */
+static int osd_check_lmv(struct osd_thread_info *oti, struct osd_device *dev,
+			 struct inode *inode, struct osd_idmap_cache *oic)
+{
+	struct lu_buf *buf = &oti->oti_big_buf;
+	struct dentry *dentry = &oti->oti_obj_dentry;
+	struct file *filp = &oti->oti_file;
+	const struct file_operations *fops;
+	struct lmv_mds_md_v1 *lmv1;
+	struct osd_check_lmv_buf oclb = {
+#ifdef HAVE_DIR_CONTEXT
+		.ctx.actor = osd_stripe_dir_filldir,
+#endif
+		.oclb_info = oti,
+		.oclb_dev = dev,
+		.oclb_oic = oic
+	};
+	int rc = 0;
+	ENTRY;
+
+again:
+	rc = __osd_xattr_get(inode, dentry, XATTR_NAME_LMV, buf->lb_buf,
+			     buf->lb_len);
+	if (rc == -ERANGE) {
+		rc = __osd_xattr_get(inode, dentry, XATTR_NAME_LMV, NULL, 0);
+		if (rc > 0) {
+			lu_buf_realloc(buf, rc);
+			if (buf->lb_buf == NULL)
+				GOTO(out, rc = -ENOMEM);
+
+			goto again;
+		}
+	}
+
+	if (unlikely(rc == 0 || rc == -ENODATA))
+		GOTO(out, rc = 0);
+
+	if (rc < 0)
+		GOTO(out, rc);
+
+	if (unlikely(buf->lb_buf == NULL)) {
+		lu_buf_realloc(buf, rc);
+		if (buf->lb_buf == NULL)
+			GOTO(out, rc = -ENOMEM);
+
+		goto again;
+	}
+
+	lmv1 = buf->lb_buf;
+	if (le32_to_cpu(lmv1->lmv_magic) != LMV_MAGIC_V1)
+		GOTO(out, rc = 0);
+
+	fops = inode->i_fop;
+	dentry->d_inode = inode;
+	dentry->d_sb = inode->i_sb;
+	filp->f_pos = 0;
+	filp->f_path.dentry = dentry;
+	filp->f_mode = FMODE_64BITHASH;
+	filp->f_mapping = inode->i_mapping;
+	filp->f_op = fops;
+	filp->private_data = NULL;
+	set_file_inode(filp, inode);
+
+#ifdef HAVE_DIR_CONTEXT
+	oclb.ctx.pos = filp->f_pos;
+	rc = fops->iterate(filp, &oclb.ctx);
+	filp->f_pos = oclb.ctx.pos;
+#else
+	rc = fops->readdir(filp, &oclb, osd_stripe_dir_filldir);
+#endif
+	fops->release(inode, filp);
+
+out:
+	RETURN(rc >= 0 ? 0 : rc);
+}
+
 static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 			  const struct lu_fid *fid,
 			  const struct lu_object_conf *conf)
@@ -990,7 +1160,13 @@ found:
 	obj->oo_compat_dot_created = 1;
 	obj->oo_compat_dotdot_created = 1;
 
-	if (!S_ISDIR(inode->i_mode) || !ldiskfs_pdo) /* done */
+	if (!S_ISDIR(inode->i_mode))
+		GOTO(out, result = 0);
+
+	if (flags & SS_AUTO_PARTIAL)
+		osd_check_lmv(info, dev, inode, oic);
+
+	if (!ldiskfs_pdo)
 		GOTO(out, result = 0);
 
 	LASSERT(obj->oo_hl_head == NULL);
@@ -4627,7 +4803,8 @@ osd_consistency_check(struct osd_thread_info *oti, struct osd_device *dev,
 {
 	struct osd_scrub    *scrub = &dev->od_scrub;
 	struct lu_fid	    *fid   = &oic->oic_fid;
-	struct osd_inode_id *id    = &oti->oti_id;
+	struct osd_inode_id *id    = &oic->oic_lid;
+	struct inode	    *inode = NULL;
 	int		     once  = 0;
 	int		     rc;
 	ENTRY;
@@ -4639,13 +4816,14 @@ osd_consistency_check(struct osd_thread_info *oti, struct osd_device *dev,
 		RETURN(0);
 
 again:
-	rc = osd_oi_lookup(oti, dev, fid, id, 0);
+	rc = osd_oi_lookup(oti, dev, fid, &oti->oti_id, 0);
 	if (rc == -ENOENT) {
-		struct inode *inode;
+		__u32 gen = id->oii_gen;
 
-		*id = oic->oic_lid;
-		inode = osd_iget(oti, dev, &oic->oic_lid);
+		if (inode != NULL)
+			goto trigger;
 
+		inode = osd_iget(oti, dev, id);
 		/* The inode has been removed (by race maybe). */
 		if (IS_ERR(inode)) {
 			rc = PTR_ERR(inode);
@@ -4653,15 +4831,15 @@ again:
 			RETURN(rc == -ESTALE ? -ENOENT : rc);
 		}
 
-		iput(inode);
 		/* The OI mapping is lost. */
-		if (id->oii_gen != OSD_OII_NOGEN)
+		if (gen != OSD_OII_NOGEN)
 			goto trigger;
 
+		iput(inode);
 		/* The inode may has been reused by others, we do not know,
 		 * leave it to be handled by subsequent osd_fid_lookup(). */
 		RETURN(0);
-	} else if (rc != 0 || osd_id_eq(id, &oic->oic_lid)) {
+	} else if (rc != 0 || osd_id_eq(id, &oti->oti_id)) {
 		RETURN(rc);
 	}
 
@@ -4675,21 +4853,41 @@ trigger:
 		if (unlikely(rc == -EAGAIN))
 			goto again;
 
-		RETURN(0);
+		if (inode == NULL) {
+			inode = osd_iget(oti, dev, id);
+			/* The inode has been removed (by race maybe). */
+			if (IS_ERR(inode)) {
+				rc = PTR_ERR(inode);
+
+				RETURN(rc == -ESTALE ? -ENOENT : rc);
+			}
+		}
+
+		if (!S_ISDIR(inode->i_mode))
+			rc = 0;
+		else
+			rc = osd_check_lmv(oti, dev, inode, oic);
+
+		iput(inode);
+		RETURN(rc);
 	}
 
 	if (!dev->od_noscrub && ++once == 1) {
 		rc = osd_scrub_start(dev, SS_AUTO_PARTIAL | SS_CLEAR_DRYRUN |
 				     SS_CLEAR_FAILOUT);
-		CDEBUG(D_LFSCK | D_CONSOLE, "%.16s: trigger OI scrub by RPC "
-		       "for "DFID", rc = %d [2]\n",
+		CDEBUG(D_LFSCK | D_CONSOLE | D_WARNING,
+		       "%.16s: trigger partial OI scrub for RPC inconsistency "
+		       "checking FID "DFID": rc = %d\n",
 		       LDISKFS_SB(osd_sb(dev))->s_es->s_volume_name,
 		       PFID(fid), rc);
 		if (rc == 0 || rc == -EALREADY)
 			goto again;
 	}
 
-	RETURN(0);
+	if (inode != NULL)
+		iput(inode);
+
+	RETURN(rc);
 }
 
 static int osd_fail_fid_lookup(struct osd_thread_info *oti,
@@ -5485,13 +5683,12 @@ struct osd_filldir_cbs {
  * \retval 1 on buffer full
  */
 #ifdef HAVE_FILLDIR_USE_CTX
-static int osd_ldiskfs_filldir(struct dir_context  *buf,
-			       const char *name, int namelen,
+static int osd_ldiskfs_filldir(struct dir_context *buf,
 #else
-static int osd_ldiskfs_filldir(void *buf, const char *name, int namelen,
+static int osd_ldiskfs_filldir(void *buf,
 #endif
-                               loff_t offset, __u64 ino,
-                               unsigned d_type)
+			       const char *name, int namelen,
+			       loff_t offset, __u64 ino, unsigned d_type)
 {
 	struct osd_it_ea	*it   =
 		((struct osd_filldir_cbs *)buf)->it;
