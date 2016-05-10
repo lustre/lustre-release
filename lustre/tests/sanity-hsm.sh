@@ -3620,8 +3620,8 @@ get_agent_uuid() {
 
 	# Lustre mount-point is mandatory and last parameter on
 	# copytool cmd-line.
-	local mntpnt=$(do_rpc_nodes $agent pgrep -fl $HSMTOOL_BASE |
-		       grep -v pgrep | awk '{print $NF}')
+	local mntpnt=$(do_rpc_nodes $agent ps -C $HSMTOOL_BASE -o args= |
+		       awk '{print $NF}')
 	[ -n "$mntpnt" ] || error "Found no Agent or with no mount-point "\
 				  "parameter"
 	do_rpc_nodes $agent get_client_uuid $mntpnt | cut -d' ' -f2
