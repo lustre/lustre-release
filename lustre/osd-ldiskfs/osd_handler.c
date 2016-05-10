@@ -775,10 +775,12 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	struct osd_device      *dev;
 	struct osd_idmap_cache *oic;
 	struct osd_inode_id    *id;
-	struct inode	       *inode;
+	struct inode	       *inode = NULL;
 	struct osd_scrub       *scrub;
 	struct scrub_file      *sf;
-	int			result;
+	__u32			flags = SS_CLEAR_DRYRUN | SS_CLEAR_FAILOUT |
+					SS_AUTO_FULL;
+	int			result  = 0;
 	int			rc1	= 0;
 	bool			cached	= true;
 	bool			remote	= false;
@@ -869,34 +871,44 @@ trigger:
 				if (rc1 == 0) {
 					remote = true;
 					cached = true;
+					flags |= SS_AUTO_PARTIAL;
+					flags &= ~SS_AUTO_FULL;
 					goto iget;
 				}
 			}
 
 			if (thread_is_running(&scrub->os_thread)) {
-				if (remote) {
-					osd_add_oi_cache(info, dev, id, fid);
-					osd_oii_insert(dev, oic, true);
+				if (scrub->os_partial_scan &&
+				    !scrub->os_in_join) {
+					goto join;
 				} else {
-					result = -EINPROGRESS;
+					if (inode != NULL && !IS_ERR(inode)) {
+						LASSERT(remote);
+
+						osd_add_oi_cache(info, dev, id,
+								 fid);
+						osd_oii_insert(dev, oic, true);
+					} else {
+						result = -EINPROGRESS;
+					}
 				}
 			} else if (!dev->od_noscrub) {
-				__u32 flags = SS_CLEAR_DRYRUN |
-					      SS_CLEAR_FAILOUT;
 
-				flags |= (remote ? SS_AUTO_PARTIAL :
-						   SS_AUTO_FULL);
+join:
 				rc1 = osd_scrub_start(dev, flags);
 				LCONSOLE_WARN("%.16s: trigger OI scrub by RPC "
 					      "for the "DFID" with flags 0x%x,"
 					      " rc = %d\n", osd_name(dev),
 					      PFID(fid), flags, rc1);
 				if (rc1 == 0 || rc1 == -EALREADY) {
-					result = -EINPROGRESS;
-					if (remote) {
+					if (inode != NULL && !IS_ERR(inode)) {
+						LASSERT(remote);
+
 						osd_add_oi_cache(info, dev, id,
 								 fid);
 						osd_oii_insert(dev, oic, true);
+					} else {
+						result = -EINPROGRESS;
 					}
 				} else {
 					result = -EREMCHG;
@@ -906,9 +918,9 @@ trigger:
 			}
 		}
 
-		GOTO(out, result);
+		if (inode == NULL || IS_ERR(inode))
+			GOTO(out, result);
 	} else if (remote) {
-		result = 0;
 		goto trigger;
 	}
 
@@ -947,6 +959,7 @@ trigger:
 		}
 
 		iput(inode);
+		inode = NULL;
 		obj->oo_inode = NULL;
 		if (result != -EREMCHG)
 			GOTO(out, result);

@@ -2396,7 +2396,7 @@ again:
 		spin_unlock(&scrub->os_lock);
 		if (!(scrub->os_file.sf_flags & SF_AUTO ||
 		      scrub->os_partial_scan) ||
-		     (flags & (SS_AUTO_FULL | SS_AUTO_PARTIAL)))
+		     (flags & SS_AUTO_PARTIAL))
 			RETURN(-EALREADY);
 
 		osd_scrub_join(dev, flags, false);
