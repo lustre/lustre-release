@@ -59,6 +59,9 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .B lfs osts
 .RB [ path ]
 .br
+.B lfs mdts
+.RB [ path ]
+.br
 .B lfs path2fid [--parents] <path> ...
 .br
 .B lfs pool_list <filesystem>[.<pool>] | <pathname>
@@ -367,6 +370,9 @@ Check the status of all servers (MDT, OST)
 .TP
 .B $ lfs osts
 List all the OSTs
+.TP
+.B $ lfs mdts
+List all the MDTs
 .TP
 .B $ lfs df -h
 Lists space usage per OST and MDT in human readable format.
