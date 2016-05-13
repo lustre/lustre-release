@@ -1790,7 +1790,8 @@ static void handler(int signal)
 /* Daemon waits for messages from the kernel; run it in the background. */
 static int ct_run(void)
 {
-	int	rc;
+	struct sigaction cleanup_sigaction;
+	int rc;
 
 	if (opt.o_daemonize) {
 		rc = daemon(1, 1);
@@ -1820,14 +1821,17 @@ static int ct_run(void)
 		return rc;
 	}
 
-	signal(SIGINT, handler);
-	signal(SIGTERM, handler);
+	memset(&cleanup_sigaction, 0, sizeof(cleanup_sigaction));
+	cleanup_sigaction.sa_handler = handler;
+	sigemptyset(&cleanup_sigaction.sa_mask);
+	sigaction(SIGINT, &cleanup_sigaction, NULL);
+	sigaction(SIGTERM, &cleanup_sigaction, NULL);
 
 	while (1) {
-		struct hsm_action_list	*hal;
-		struct hsm_action_item	*hai;
-		int			 msgsize;
-		int			 i = 0;
+		struct hsm_action_list *hal;
+		struct hsm_action_item *hai;
+		int msgsize;
+		int i = 0;
 
 		CT_TRACE("waiting for message from kernel");
 
