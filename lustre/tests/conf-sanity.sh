@@ -5164,8 +5164,12 @@ test_78() {
 		skip "only applicable to ldiskfs-based MDTs and OSTs" && return
 
 	# reformat the Lustre filesystem with a smaller size
+	local saved_MDSCOUNT=$MDSCOUNT
 	local saved_MDSSIZE=$MDSSIZE
+	local saved_OSTCOUNT=$OSTCOUNT
 	local saved_OSTSIZE=$OSTSIZE
+	MDSCOUNT=1
+	OSTCOUNT=1
 	MDSSIZE=$((MDSSIZE - 20000))
 	OSTSIZE=$((OSTSIZE - 20000))
 	reformat || error "(1) reformat Lustre filesystem failed"
@@ -5180,11 +5184,23 @@ test_78() {
 	local i
 	local file
 	local num_files=100
+
 	mkdir $MOUNT/$tdir || error "(3) mkdir $MOUNT/$tdir failed"
+	$LFS df; $LFS df -i
 	for i in $(seq $num_files); do
 		file=$MOUNT/$tdir/$tfile-$i
-		dd if=/dev/urandom of=$file count=1 bs=1M ||
+		dd if=/dev/urandom of=$file count=1 bs=1M || {
+			$LCTL get_param osc.*.cur*grant*
+			$LFS df; $LFS df -i;
+			# stop creating files if there is no more space
+			[ -e $file ] || break
+
+			$LFS getstripe -v $file
+			local ost_idx=$(LFS getstripe -i $file)
+			do_facet ost$((ost_idx + 1)) \
+				$LCTL get_param obdfilter.*.*grant*
 			error "(4) create $file failed"
+		}
 	done
 
 	# unmount the Lustre filesystem
@@ -5296,6 +5312,9 @@ test_78() {
 	# unmount and reformat the Lustre filesystem
 	cleanup || error "(12) cleanup Lustre filesystem failed"
 	combined_mgs_mds || stop_mgs || error "(13) stop mgs failed"
+
+	MDSCOUNT=$saved_MDSCOUNT
+	OSTCOUNT=$saved_OSTCOUNT
 	reformat || error "(14) reformat Lustre filesystem failed"
 }
 run_test 78 "run resize2fs on MDT and OST filesystems"
