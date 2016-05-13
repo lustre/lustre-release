@@ -35,7 +35,11 @@
  */
 
 #include <stdio.h>
+#include <errno.h>
+#include <string.h>
 #include <unistd.h>
+#include <limits.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <lustre/lustre_idl.h>
@@ -1833,7 +1837,7 @@ check_getinfo_fid2path(void)
 	CHECK_MEMBER(getinfo_fid2path, gf_recno);
 	CHECK_MEMBER(getinfo_fid2path, gf_linkno);
 	CHECK_MEMBER(getinfo_fid2path, gf_pathlen);
-	CHECK_MEMBER(getinfo_fid2path, gf_path[0]);
+	CHECK_MEMBER(getinfo_fid2path, gf_u.gf_path[0]);
 }
 
 /* We don't control the definitions of posix_acl_xattr_{entry,header}
