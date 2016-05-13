@@ -3238,7 +3238,7 @@ facet_mntpt () {
     [[ $facet = mgs ]] && combined_mgs_mds && facet="mds1"
 
     local var=${facet}_MOUNT
-    eval mntpt=${!var:-${MOUNT%/*}/$facet}
+    eval mntpt=${!var:-${MOUNT}-$facet}
 
     echo -n $mntpt
 }
