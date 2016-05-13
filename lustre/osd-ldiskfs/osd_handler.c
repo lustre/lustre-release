@@ -593,21 +593,25 @@ check_oi:
 		 *	Generally, when the device is mounted, it will
 		 *	auto check whether the system is restored from
 		 *	file-level backup or not. We trust such detect
-		 *	to distinguish the 1st case from the 2nd case. */
-		if (rc == 0) {
-			if (!IS_ERR(inode) && inode->i_generation != 0 &&
-			    inode->i_generation == id->oii_gen)
-				/* "id->oii_gen != OSD_OII_NOGEN" is for
-				 * "@cached == false" case. */
-				rc = -ENOENT;
-			else
-				rc = -EREMCHG;
-		} else {
+		 *	to distinguish the 1st case from the 2nd case:
+		 *	if the OI files are consistent but may contain
+		 *	stale OI mappings because of case 2, if iget()
+		 *	returns -ENOENT or -ESTALE, then it should be
+		 *	the case 2. */
+		if (rc != 0)
 			/* If the OI mapping was in OI file before the
 			 * osd_iget_check(), but now, it is disappear,
 			 * then it must be removed by race. That is a
 			 * normal race case. */
-		}
+			GOTO(put, rc);
+
+		if ((!IS_ERR(inode) && inode->i_generation != 0 &&
+		     inode->i_generation == id->oii_gen) ||
+		    (IS_ERR(inode) && !(dev->od_scrub.os_file.sf_flags &
+					SF_INCONSISTENT)))
+			rc = -ENOENT;
+		else
+			rc = -EREMCHG;
 	} else {
 		if (id->oii_gen == OSD_OII_NOGEN)
 			osd_id_gen(id, inode->i_ino, inode->i_generation);
@@ -955,11 +959,14 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	struct osd_device      *dev;
 	struct osd_idmap_cache *oic;
 	struct osd_inode_id    *id;
+	struct osd_inode_id    *tid;
 	struct inode	       *inode = NULL;
 	struct osd_scrub       *scrub;
 	struct scrub_file      *sf;
 	__u32			flags = SS_CLEAR_DRYRUN | SS_CLEAR_FAILOUT |
 					SS_AUTO_FULL;
+	__u32			saved_ino;
+	__u32			saved_gen;
 	int			result  = 0;
 	int			rc1	= 0;
 	bool			cached	= true;
@@ -1024,7 +1031,7 @@ iget:
 	if (IS_ERR(inode)) {
 		result = PTR_ERR(inode);
 		if (result == -ENOENT || result == -ESTALE)
-			GOTO(out, result = -ENOENT);
+			GOTO(out, result = 0);
 
 		if (result == -EREMCHG) {
 
@@ -1108,62 +1115,78 @@ join:
 	LASSERT(obj->oo_inode->i_sb == osd_sb(dev));
 
 	result = osd_check_lma(env, obj);
-	if (result != 0) {
-		if (result == -ENODATA) {
-			if (cached) {
-				result = osd_oi_lookup(info, dev, fid, id,
-						       OI_CHECK_FLD);
-				if (result != 0) {
-					/* result == -ENOENT means that the OI
-					 * mapping has been removed by race,
-					 * the target inode belongs to other
-					 * object.
-					 *
-					 * Others error also can be returned
-					 * directly. */
-					iput(inode);
-					obj->oo_inode = NULL;
-					GOTO(out, result);
-				} else {
-					/* result == 0 means the cached OI
-					 * mapping is still in the OI file,
-					 * the target the inode is valid. */
-				}
-			} else {
-				/* The current OI mapping is from the OI file,
-				 * since the inode has been found via
-				 * osd_iget_check(), no need recheck OI. */
-			}
+	if (result == 0)
+		goto found;
 
-			goto found;
-		}
+	tid = &info->oti_id3;
+	LASSERT(tid != id);
 
-		iput(inode);
-		inode = NULL;
-		obj->oo_inode = NULL;
-		if (result != -EREMCHG)
-			GOTO(out, result);
-
-		if (cached) {
-			result = osd_oi_lookup(info, dev, fid, id,
-					       OI_CHECK_FLD);
-			/* result == -ENOENT means the cached OI mapping
-			 * has been removed from the OI file by race,
-			 * above target inode belongs to other object.
-			 *
-			 * Others error also can be returned directly. */
-			if (result != 0)
-				GOTO(out, result);
-
-			/* result == 0, goto trigger */
-		} else {
+	if (result == -ENODATA) {
+		if (!cached)
 			/* The current OI mapping is from the OI file,
 			 * since the inode has been found via
 			 * osd_iget_check(), no need recheck OI. */
+			goto found;
+
+		result = osd_oi_lookup(info, dev, fid, tid, OI_CHECK_FLD);
+		if (result == 0) {
+			LASSERTF(tid->oii_ino == id->oii_ino &&
+				 tid->oii_gen == id->oii_gen,
+				 "OI mapping changed(1): %u/%u => %u/%u",
+				 tid->oii_ino, tid->oii_gen,
+				 id->oii_ino, id->oii_gen);
+
+			LASSERTF(tid->oii_ino == inode->i_ino &&
+				 tid->oii_gen == inode->i_generation,
+				 "locate wrong inode(1): %u/%u => %ld/%u",
+				 tid->oii_ino, tid->oii_gen,
+				 inode->i_ino, inode->i_generation);
+
+			/* "result == 0" means the cached OI mapping is still in
+			 * the OI file, so the target the inode is valid. */
+			goto found;
 		}
 
-		goto trigger;
+		/* "result == -ENOENT" means that the OI mappinghas been removed
+		 * by race, the target inode belongs to other object.
+		 *
+		 * Others error can be returned  directly. */
+		if (result == -ENOENT)
+			result = 0;
 	}
+
+	saved_ino = inode->i_ino;
+	saved_gen = inode->i_generation;
+	iput(inode);
+	inode = NULL;
+	obj->oo_inode = NULL;
+
+	if (result != -EREMCHG)
+		GOTO(out, result);
+
+	if (!cached)
+		/* The current OI mapping is from the OI file,
+		 * since the inode has been found via
+		 * osd_iget_check(), no need recheck OI. */
+		goto trigger;
+
+	result = osd_oi_lookup(info, dev, fid, tid, OI_CHECK_FLD);
+	/* "result == -ENOENT" means the cached OI mapping has been removed from
+	 * the OI file by race, above target inode belongs to other object.
+	 *
+	 * Others error can be returned directly. */
+	if (result != 0)
+		GOTO(out, result = (result == -ENOENT ? 0 : result));
+
+	LASSERTF(tid->oii_ino == id->oii_ino && tid->oii_gen == id->oii_gen,
+		 "OI mapping changed(2): %u/%u => %u/%u",
+		 tid->oii_ino, tid->oii_gen, id->oii_ino, id->oii_gen);
+
+	LASSERTF(tid->oii_ino == saved_ino && tid->oii_gen == saved_gen,
+		 "locate wrong inode(2): %u/%u => %u/%u",
+		 tid->oii_ino, tid->oii_gen, saved_ino, saved_gen);
+
+	goto trigger;
 
 found:
 	obj->oo_compat_dot_created = 1;
@@ -3115,7 +3138,8 @@ static int osd_declare_object_destroy(const struct lu_env *env,
 			     osd_dto_credits_noquota[DTO_OBJECT_DELETE]);
 	/* Recycle idle OI leaf may cause additional three OI blocks
 	 * to be changed. */
-	osd_trans_declare_op(env, oh, OSD_OT_DELETE,
+	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ2))
+		osd_trans_declare_op(env, oh, OSD_OT_DELETE,
 			     osd_dto_credits_noquota[DTO_INDEX_DELETE] + 3);
 	/* one less inode */
 	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
@@ -3174,8 +3198,10 @@ static int osd_object_destroy(const struct lu_env *env,
 	osd_trans_exec_op(env, th, OSD_OT_DESTROY);
 
 	ldiskfs_set_inode_state(inode, LDISKFS_STATE_LUSTRE_DESTROY);
-	result = osd_oi_delete(osd_oti_get(env), osd, fid, oh->ot_handle,
-			       OI_CHECK_FLD);
+
+	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ2))
+		result = osd_oi_delete(osd_oti_get(env), osd, fid,
+				       oh->ot_handle, OI_CHECK_FLD);
 
 	osd_trans_exec_check(env, th, OSD_OT_DESTROY);
 	/* XXX: add to ext3 orphan list */
