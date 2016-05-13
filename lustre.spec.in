@@ -98,7 +98,7 @@ Name: %{lustre_name}
 Version: %{version}
 Release: 1%{?dist}
 License: GPL
-Group: Utilities/System
+Group: System Environment/Kernel
 Source: lustre-%{version}.tar.gz
 Source1: kmp-lustre.preamble
 Source2: kmp-lustre.files
@@ -109,13 +109,12 @@ Source6: kmp-lustre-osd-zfs.files
 Source7: kmp-lustre-tests.files
 URL: https://wiki.hpdd.intel.com/
 BuildRoot: %{_tmppath}/lustre-%{version}-root
-Obsoletes: lustre-lite, lustre-lite-utils, lustre-ldap nfs-utils-lustre
-Provides: lustre-lite = %{version}, lustre-lite-utils = %{version}
 Requires: %{requires_kmod_name} = %{requires_kmod_version}
 BuildRequires: libtool
 %if %{with servers}
 Requires: lustre-osd
 Requires: lustre-osd-mount
+Obsoletes: lustre-client <= %{version}
 Provides: lustre-client = %{version}-%{release}
 %endif
 # GSS requires this: BuildRequires: pkgconfig, libgssapi-devel >= 0.10
@@ -142,8 +141,8 @@ Userspace tools and files for the Lustre file system.
 %if %{with lustre_utils}
 %package osd-ldiskfs-mount
 Summary: osd-ldiskfs-mount contains mount's ldiskfs specific dso.
-Provides: lustre-osd-mount
-Group: Development/Kernel
+Provides: lustre-osd-mount = %{version}-%{fullrelease}
+Group: System Environment/Kernel
 
 %description osd-ldiskfs-mount
 LDISKFS hooks for mount/mkfs into a dynamic library.
@@ -156,8 +155,8 @@ LDISKFS hooks for mount/mkfs into a dynamic library.
 %if %{with lustre_utils}
 %package osd-zfs-mount
 Summary: osd-zfs-mount contains mount's zfs specific dso.
-Provides: lustre-osd-mount
-Group: Development/Kernel
+Provides: lustre-osd-mount = %{version}-%{fullrelease}
+Group: System Environment/Kernel
 
 %description osd-zfs-mount
 ZFS hooks for mount/mkfs into a dynamic library.
@@ -181,7 +180,7 @@ environment for both Pacemaker and rgmanager.
 
 %package tests
 Summary: Lustre testing framework
-Group: Development/Kernel
+Group: System Environment/Kernel
 Provides: %{name}-tests = %{version}
 Requires: %{name} = %{version}, lustre-iokit
 Requires: %{requires_kmod_name} = %{requires_kmod_version}
