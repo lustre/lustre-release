@@ -1034,7 +1034,7 @@ static int lfsck_create_lpf(const struct lu_env *env,
 		*cfid = bk->lb_lpf_fid;
 	}
 
-	child = lfsck_object_find_bottom(env, lfsck, cfid);
+	child = lfsck_object_find_bottom_new(env, lfsck, cfid);
 	if (IS_ERR(child))
 		GOTO(unlock, rc = PTR_ERR(child));
 

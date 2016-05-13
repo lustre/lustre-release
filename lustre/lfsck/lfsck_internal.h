@@ -1234,6 +1234,16 @@ static inline u32 lfsck_dev_idx(struct lfsck_instance *lfsck)
 }
 
 static inline struct dt_object *
+lfsck_object_find_by_dev_new(const struct lu_env *env, struct dt_device *dev,
+			     const struct lu_fid *fid)
+{
+	struct lu_object_conf	*conf = &lfsck_env_info(env)->lti_conf;
+
+	conf->loc_flags = LOC_F_NEW;
+	return lu2dt(lu_object_find_slice(env, dt2lu_dev(dev), fid, conf));
+}
+
+static inline struct dt_object *
 lfsck_object_find_by_dev_nowait(const struct lu_env *env, struct dt_device *dev,
 				const struct lu_fid *fid)
 {
@@ -1304,6 +1314,20 @@ lfsck_object_find_bottom_nowait(const struct lu_env *env,
 		return (struct dt_object *)dev;
 
 	return lfsck_object_find_by_dev_nowait(env, dev, fid);
+}
+
+static inline struct dt_object *
+lfsck_object_find_bottom_new(const struct lu_env *env,
+			     struct lfsck_instance *lfsck,
+			     const struct lu_fid *fid)
+{
+	struct dt_device *dev;
+
+	dev = lfsck_find_dev_by_fid(env, lfsck, fid);
+	if (IS_ERR(dev))
+		return (struct dt_object *)dev;
+
+	return lfsck_object_find_by_dev_new(env, dev, fid);
 }
 
 static inline struct dt_object *
