@@ -531,6 +531,14 @@ int lfsck_find_mdt_idx_by_fid(const struct lu_env *env,
 	struct lu_seq_range	*range	= &lfsck_env_info(env)->lti_range;
 	int			 rc;
 
+	if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE)) {
+		/* "ROOT" is always on the MDT0. */
+		if (lu_fid_eq(fid, &lfsck->li_global_root_fid))
+			return 0;
+
+		return lfsck_dev_idx(lfsck);
+	}
+
 	fld_range_set_mdt(range);
 	rc = fld_server_lookup(env, ss->ss_server_fld, fid_seq(fid), range);
 	if (rc == 0)

@@ -5544,7 +5544,8 @@ out:
 			break;
 		}
 
-		if (count == 1 && S_ISREG(lfsck_object_type(obj)))
+		if (obj != NULL && count == 1 &&
+		    S_ISREG(lfsck_object_type(obj)))
 			dt_attr_get(env, obj, la);
 	}
 
@@ -5566,15 +5567,14 @@ trace:
 		if (!(bk->lb_param & LPF_FAILOUT))
 			rc = 0;
 	} else {
-		if (log)
-			CDEBUG(D_LFSCK, "%s: namespace LFSCK assistant "
-			       "repaired the entry: "DFID", parent "DFID
-			       ", name %.*s\n", lfsck_lfsck2name(lfsck),
-			       PFID(&lnr->lnr_fid), PFID(pfid),
-			       lnr->lnr_namelen, lnr->lnr_name);
-
 		if (repaired) {
 			ns->ln_items_repaired++;
+			if (log)
+				CDEBUG(D_LFSCK, "%s: namespace LFSCK assistant "
+				       "repaired the entry: "DFID", parent "DFID
+				       ", name %.*s\n", lfsck_lfsck2name(lfsck),
+				       PFID(&lnr->lnr_fid), PFID(pfid),
+				       lnr->lnr_namelen, lnr->lnr_name);
 
 			switch (type) {
 			case LNIT_DANGLING:
@@ -5601,8 +5601,17 @@ trace:
 			ns->ln_name_hash_repaired++;
 
 			/* Not count repeatedly. */
-			if (!repaired)
+			if (!repaired) {
 				ns->ln_items_repaired++;
+				if (log)
+					CDEBUG(D_LFSCK, "%s: namespace LFSCK "
+					       "assistant repaired the entry: "
+					       DFID", parent "DFID
+					       ", name %.*s\n",
+					       lfsck_lfsck2name(lfsck),
+					       PFID(&lnr->lnr_fid), PFID(pfid),
+					       lnr->lnr_namelen, lnr->lnr_name);
+			}
 
 			if (bk->lb_param & LPF_DRYRUN &&
 			    lfsck_pos_is_zero(&ns->ln_pos_first_inconsistent))
