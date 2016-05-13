@@ -1952,6 +1952,7 @@ static int lnet_handle_dbg_task(struct lnet_ioctl_dbg *dbg,
 static void
 lnet_fill_ni_info(struct lnet_ni *ni, struct lnet_ioctl_config_ni *cfg_ni,
 		   struct lnet_ioctl_config_lnd_tunables *tun,
+		   struct lnet_ioctl_element_stats *stats,
 		   __u32 tun_size)
 {
 	size_t min_size = 0;
@@ -1976,6 +1977,11 @@ lnet_fill_ni_info(struct lnet_ni *ni, struct lnet_ioctl_config_ni *cfg_ni,
 	cfg_ni->lic_dev_cpt = ni->dev_cpt;
 
 	memcpy(&tun->lt_cmn, &ni->ni_net->net_tunables, sizeof(tun->lt_cmn));
+
+	if (stats) {
+		stats->send_count = atomic_read(&ni->ni_stats.send_count);
+		stats->recv_count = atomic_read(&ni->ni_stats.recv_count);
+	}
 
 	/*
 	 * tun->lt_tun will always be present, but in order to be
@@ -2173,13 +2179,14 @@ lnet_get_net_config(struct lnet_ioctl_config_data *config)
 int
 lnet_get_ni_config(struct lnet_ioctl_config_ni *cfg_ni,
 		   struct lnet_ioctl_config_lnd_tunables *tun,
+		   struct lnet_ioctl_element_stats *stats,
 		   __u32 tun_size)
 {
 	struct lnet_ni		*ni;
 	int			cpt;
 	int			rc = -ENOENT;
 
-	if (!cfg_ni || !tun)
+	if (!cfg_ni || !tun || !stats)
 		return -EINVAL;
 
 	cpt = lnet_net_lock_current();
@@ -2189,7 +2196,7 @@ lnet_get_ni_config(struct lnet_ioctl_config_ni *cfg_ni,
 	if (ni) {
 		rc = 0;
 		lnet_ni_lock(ni);
-		lnet_fill_ni_info(ni, cfg_ni, tun, tun_size);
+		lnet_fill_ni_info(ni, cfg_ni, tun, stats, tun_size);
 		lnet_ni_unlock(ni);
 	}
 
@@ -2662,20 +2669,24 @@ LNetCtl(unsigned int cmd, void *arg)
 	case IOC_LIBCFS_GET_LOCAL_NI: {
 		struct lnet_ioctl_config_ni *cfg_ni;
 		struct lnet_ioctl_config_lnd_tunables *tun = NULL;
+		struct lnet_ioctl_element_stats *stats;
 		__u32 tun_size;
 
 		cfg_ni = arg;
 		/* get the tunables if they are available */
 		if (cfg_ni->lic_cfg_hdr.ioc_len <
-		    sizeof(*cfg_ni) + sizeof(*tun))
+		    sizeof(*cfg_ni) + sizeof(*stats)+ sizeof(*tun))
 			return -EINVAL;
 
+		stats = (struct lnet_ioctl_element_stats *)
+			cfg_ni->lic_bulk;
 		tun = (struct lnet_ioctl_config_lnd_tunables *)
-				cfg_ni->lic_bulk;
+				(cfg_ni->lic_bulk + sizeof(*stats));
 
-		tun_size = cfg_ni->lic_cfg_hdr.ioc_len - sizeof(*cfg_ni);
+		tun_size = cfg_ni->lic_cfg_hdr.ioc_len - sizeof(*cfg_ni) -
+			sizeof(*stats);
 
-		return lnet_get_ni_config(cfg_ni, tun, tun_size);
+		return lnet_get_ni_config(cfg_ni, tun, stats, tun_size);
 	}
 
 	case IOC_LIBCFS_GET_NET: {
@@ -2806,15 +2817,20 @@ LNetCtl(unsigned int cmd, void *arg)
 	case IOC_LIBCFS_GET_PEER_NI: {
 		struct lnet_ioctl_peer_cfg *cfg = arg;
 		struct lnet_peer_ni_credit_info *lpni_cri;
-		size_t total = sizeof(*cfg) + sizeof(*lpni_cri);
+		struct lnet_ioctl_element_stats *lpni_stats;
+		size_t total = sizeof(*cfg) + sizeof(*lpni_cri) +
+			       sizeof(*lpni_stats);
 
 		if (cfg->prcfg_hdr.ioc_len < total)
 			return -EINVAL;
 
 		lpni_cri = (struct lnet_peer_ni_credit_info*) cfg->prcfg_bulk;
+		lpni_stats = (struct lnet_ioctl_element_stats *)
+			     (cfg->prcfg_bulk + sizeof(*lpni_cri));
 
 		return lnet_get_peer_info(cfg->prcfg_idx, &cfg->prcfg_key_nid,
-					  &cfg->prcfg_cfg_nid, lpni_cri);
+					  &cfg->prcfg_cfg_nid, lpni_cri,
+					  lpni_stats);
 	}
 
 	case IOC_LIBCFS_NOTIFY_ROUTER: {

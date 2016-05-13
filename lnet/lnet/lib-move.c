@@ -805,6 +805,10 @@ lnet_post_send_locked(lnet_msg_t *msg, int do_send)
 		the_lnet.ln_counters[cpt]->drop_count++;
 		the_lnet.ln_counters[cpt]->drop_length += msg->msg_len;
 		lnet_net_unlock(cpt);
+		if (msg->msg_txpeer)
+			atomic_inc(&msg->msg_txpeer->lpni_stats.drop_count);
+		if (msg->msg_txni)
+			atomic_inc(&msg->msg_txni->ni_stats.drop_count);
 
 		CNETERR("Dropping message for %s: peer not alive\n",
 			libcfs_id2str(msg->msg_target));

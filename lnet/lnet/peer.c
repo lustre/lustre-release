@@ -965,7 +965,8 @@ int lnet_get_peer_ni_info(__u32 peer_index, __u64 *nid,
 }
 
 int lnet_get_peer_info(__u32 idx, lnet_nid_t *primary_nid, lnet_nid_t *nid,
-		       struct lnet_peer_ni_credit_info *peer_ni_info)
+		       struct lnet_peer_ni_credit_info *peer_ni_info,
+		       struct lnet_ioctl_element_stats *peer_ni_stats)
 {
 	struct lnet_peer_ni *lpni = NULL;
 	struct lnet_peer_net *lpn = NULL;
@@ -991,6 +992,10 @@ int lnet_get_peer_info(__u32 idx, lnet_nid_t *primary_nid, lnet_nid_t *nid,
 	peer_ni_info->cr_peer_rtr_credits = lpni->lpni_rtrcredits;
 	peer_ni_info->cr_peer_min_rtr_credits = lpni->lpni_mintxcredits;
 	peer_ni_info->cr_peer_tx_qnob = lpni->lpni_txqnob;
+
+	peer_ni_stats->send_count = atomic_read(&lpni->lpni_stats.send_count);
+	peer_ni_stats->recv_count = atomic_read(&lpni->lpni_stats.recv_count);
+	peer_ni_stats->drop_count = atomic_read(&lpni->lpni_stats.drop_count);
 
 	return 0;
 }

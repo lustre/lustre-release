@@ -141,6 +141,12 @@ struct lnet_ioctl_config_data {
 	char cfg_bulk[0];
 };
 
+struct lnet_ioctl_element_stats {
+	__u32	send_count;
+	__u32	recv_count;
+	__u32	drop_count;
+};
+
 /*
  * lnet_ioctl_config_ni
  *  This structure describes an NI configuration. There are multiple components

@@ -1405,6 +1405,7 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 	char *buf;
 	struct lnet_ioctl_config_ni *ni_data;
 	struct lnet_ioctl_config_lnd_tunables *lnd;
+	struct lnet_ioctl_element_stats *stats;
 	__u32 net = LNET_NIDNET(LNET_NID_ANY);
 	__u32 prev_net = LNET_NIDNET(LNET_NID_ANY);
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM, i, j;
@@ -1412,14 +1413,14 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 	struct cYAML *root = NULL, *tunables = NULL,
 		*net_node = NULL, *interfaces = NULL,
 		*item = NULL, *first_seq = NULL,
-		*tmp = NULL;
+		*tmp = NULL, *statistics = NULL;
 	int str_buf_len = LNET_MAX_SHOW_NUM_CPT * 2;
 	char str_buf[str_buf_len];
 	char *pos;
 	char err_str[LNET_MAX_STR_LEN];
 	bool exist = false, new_net = true;
 	int net_num = 0;
-	size_t buf_size = sizeof(*ni_data) + sizeof(*lnd);
+	size_t buf_size = sizeof(*ni_data) + sizeof(*lnd) + sizeof(*stats);
 
 	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
 
@@ -1479,7 +1480,9 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 		rc = -1;
 		exist = true;
 
-		lnd = (struct lnet_ioctl_config_lnd_tunables *)ni_data->lic_bulk;
+		stats = (struct lnet_ioctl_element_stats *)ni_data->lic_bulk;
+		lnd = (struct lnet_ioctl_config_lnd_tunables *)
+			(ni_data->lic_bulk + sizeof(*stats));
 
 		if (rc_net != prev_net) {
 			prev_net = rc_net;
@@ -1539,6 +1542,25 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 
 		if (detail) {
 			char *limit;
+
+			statistics = cYAML_create_object(item, "statistics");
+			if (statistics == NULL)
+				goto out;
+
+			if (cYAML_create_number(statistics, "send_count",
+						stats->send_count)
+							== NULL)
+				goto out;
+
+			if (cYAML_create_number(statistics, "recv_count",
+						stats->recv_count)
+							== NULL)
+				goto out;
+
+			if (cYAML_create_number(statistics, "drop_count",
+						stats->drop_count)
+							== NULL)
+				goto out;
 
 			tunables = cYAML_create_object(item, "tunables");
 			if (!tunables)
@@ -1889,13 +1911,16 @@ int lustre_lnet_show_peer(char *knid, int seq_no, struct cYAML **show_rc,
 {
 	struct lnet_ioctl_peer_cfg *peer_info;
 	struct lnet_peer_ni_credit_info *lpni_cri;
+	struct lnet_ioctl_element_stats *lpni_stats;
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM, ncpt = 0, i = 0, j = 0;
 	int l_errno = 0;
 	struct cYAML *root = NULL, *peer = NULL, *peer_ni = NULL,
 		     *first_seq = NULL, *peer_root = NULL, *tmp = NULL;
 	char err_str[LNET_MAX_STR_LEN];
 	lnet_nid_t prev_primary_nid = LNET_NID_ANY, primary_nid = LNET_NID_ANY;
-	char *data = calloc(sizeof(*peer_info) + sizeof(*lpni_cri), 1);
+	int data_size = sizeof(*peer_info) + sizeof(*lpni_cri) +
+			sizeof(*lpni_stats);
+	char *data = calloc(data_size, 1);
 	bool new_peer = true;
 
 	snprintf(err_str, sizeof(err_str),
@@ -1920,10 +1945,9 @@ int lustre_lnet_show_peer(char *knid, int seq_no, struct cYAML **show_rc,
 
 	do {
 		for (i = 0;; i++) {
-			memset(data, 0, sizeof(*peer_info) + sizeof(*lpni_cri));
+			memset(data, 0, data_size);
 			LIBCFS_IOC_INIT_V2(*peer_info, prcfg_hdr);
-			peer_info->prcfg_hdr.ioc_len = sizeof(*peer_info) +
-						       sizeof(*lpni_cri);
+			peer_info->prcfg_hdr.ioc_len = data_size;
 			peer_info->prcfg_idx = i;
 
 			rc = l_ioctl(LNET_DEV_ID,
@@ -1938,6 +1962,9 @@ int lustre_lnet_show_peer(char *knid, int seq_no, struct cYAML **show_rc,
 					continue;
 
 			lpni_cri = (struct lnet_peer_ni_credit_info*)peer_info->prcfg_bulk;
+			lpni_stats = (struct lnet_ioctl_element_stats *)
+				     (peer_info->prcfg_bulk +
+				     sizeof(*lpni_cri));
 
 			peer = cYAML_create_seq_item(peer_root);
 			if (peer == NULL)
@@ -2004,6 +2031,21 @@ int lustre_lnet_show_peer(char *knid, int seq_no, struct cYAML **show_rc,
 
 			if (cYAML_create_number(peer_ni, "tx_q_num_of_buf",
 						lpni_cri->cr_peer_tx_qnob)
+			    == NULL)
+				goto out;
+
+			if (cYAML_create_number(peer_ni, "send_count",
+						lpni_stats->send_count)
+			    == NULL)
+				goto out;
+
+			if (cYAML_create_number(peer_ni, "recv_count",
+						lpni_stats->recv_count)
+			    == NULL)
+				goto out;
+
+			if (cYAML_create_number(peer_ni, "drop_count",
+						lpni_stats->drop_count)
 			    == NULL)
 				goto out;
 		}
