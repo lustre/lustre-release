@@ -1254,9 +1254,13 @@ static int mdd_declare_link(const struct lu_env *env,
 			    struct lu_attr *la,
 			    struct linkea_data *data)
 {
+	struct lu_fid tfid = *mdo2fid(c);
 	int rc;
 
-	rc = mdo_declare_index_insert(env, p, mdo2fid(c), mdd_object_type(c),
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING3))
+		tfid.f_oid = cfs_fail_val;
+
+	rc = mdo_declare_index_insert(env, p, &tfid, mdd_object_type(c),
 				      name->ln_name, handle);
 	if (rc != 0)
 		return rc;
@@ -1301,8 +1305,9 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
         struct mdd_object *mdd_sobj = md2mdd_obj(src_obj);
 	struct lu_attr	  *cattr = MDD_ENV_VAR(env, cattr);
 	struct lu_attr	  *tattr = MDD_ENV_VAR(env, tattr);
-        struct mdd_device *mdd = mdo2mdd(src_obj);
-        struct thandle *handle;
+	struct mdd_device *mdd = mdo2mdd(src_obj);
+	struct thandle *handle;
+	struct lu_fid *tfid = &mdd_env_info(env)->mti_fid2;
 	struct linkea_data *ldata = &mdd_env_info(env)->mti_link_data;
 	int rc;
 	ENTRY;
@@ -1351,19 +1356,12 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 			GOTO(out_unlock, rc);
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING3)) {
-		struct lu_fid tfid = *mdo2fid(mdd_sobj);
+	*tfid = *mdo2fid(mdd_sobj);
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING3))
+		tfid->f_oid = cfs_fail_val;
 
-		tfid.f_oid++;
-		rc = __mdd_index_insert_only(env, mdd_tobj, &tfid,
-					     mdd_object_type(mdd_sobj),
-					     name, handle);
-	} else {
-		rc = __mdd_index_insert_only(env, mdd_tobj, mdo2fid(mdd_sobj),
-					     mdd_object_type(mdd_sobj),
-					     name, handle);
-	}
-
+	rc = __mdd_index_insert_only(env, mdd_tobj, tfid,
+				     mdd_object_type(mdd_sobj), name, handle);
 	if (rc != 0) {
 		mdo_ref_del(env, mdd_sobj, handle);
 		GOTO(out_unlock, rc);

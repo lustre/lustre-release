@@ -3047,11 +3047,22 @@ test_23b() {
 	echo "dummy" > $DIR/$tdir/d0/f0 || error "(2) Fail to touch on MDT0"
 	echo "dead" > $DIR/$tdir/d0/f1 || error "(3) Fail to touch on MDT0"
 
+	local OID=$($LFS path2fid $DIR/$tdir/d0/f1 | awk -F':' '{print $2}')
+	OID=$(printf %d $OID)
+
+	if [ $OID -eq 1 ]; then
+		# To guarantee that the f0 and f1 are in the same FID seq
+		rm -f $DIR/$tdir/d0/f0 ||
+			error "(3.1) Fail to unlink $DIR/$tdir/d0/f0"
+		echo "dummy" > $DIR/$tdir/d0/f0 ||
+			error "(3.2) Fail to touch on MDT0"
+	fi
+
 	echo "Inject failure stub on MDT0 to simulate dangling name entry"
 	#define OBD_FAIL_LFSCK_DANGLING3	0x1621
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1621
+	do_facet $SINGLEMDS $LCTL set_param fail_val=$OID fail_loc=0x1621
 	ln $DIR/$tdir/d0/f0 $DIR/$tdir/d0/foo || error "(4) Fail to hard link"
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	do_facet $SINGLEMDS $LCTL set_param fail_val=0 fail_loc=0
 
 	rm -f $DIR/$tdir/d0/f1 || error "(5) Fail to unlink $DIR/$tdir/d0/f1"
 
@@ -3106,11 +3117,22 @@ test_23c() {
 	echo "dummy" > $DIR/$tdir/d0/f0 || error "(2) Fail to touch on MDT0"
 	echo "dead" > $DIR/$tdir/d0/f1 || error "(3) Fail to touch on MDT0"
 
+	local OID=$($LFS path2fid $DIR/$tdir/d0/f1 | awk -F':' '{print $2}')
+	OID=$(printf %d $OID)
+
+	if [ $OID -eq 1 ]; then
+		# To guarantee that the f0 and f1 are in the same FID seq
+		rm -f $DIR/$tdir/d0/f0 ||
+			error "(3.1) Fail to unlink $DIR/$tdir/d0/f0"
+		echo "dummy" > $DIR/$tdir/d0/f0 ||
+			error "(3.2) Fail to touch on MDT0"
+	fi
+
 	echo "Inject failure stub on MDT0 to simulate dangling name entry"
 	#define OBD_FAIL_LFSCK_DANGLING3	0x1621
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1621
+	do_facet $SINGLEMDS $LCTL set_param fail_val=$OID fail_loc=0x1621
 	ln $DIR/$tdir/d0/f0 $DIR/$tdir/d0/foo || error "(4) Fail to hard link"
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	do_facet $SINGLEMDS $LCTL set_param fail_val=0 fail_loc=0
 
 	rm -f $DIR/$tdir/d0/f1 || error "(5) Fail to unlink $DIR/$tdir/d0/f1"
 
@@ -3126,7 +3148,7 @@ test_23c() {
 		error "(7) Fail to start LFSCK for namespace"
 
 	wait_update_facet client "stat $DIR/$tdir/d0/foo |
-		awk '/Size/ { print \\\$2 }'" "0" 32 || {
+		awk '/Size/ { print \\\$2 }'" "0" $LTIME || {
 		stat $DIR/$tdir/guard
 		$SHOW_NAMESPACE
 		error "(8) unexpected size"
