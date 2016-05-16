@@ -514,45 +514,6 @@ mdt_evict_tgt_nids_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(mdt_evict_tgt_nids);
 
-
-static int mdt_sec_level_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_device *obd = m->private;
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	seq_printf(m, "%d\n", mdt->mdt_lut.lut_sec_level);
-	return 0;
-}
-
-static ssize_t
-mdt_sec_level_seq_write(struct file *file, const char __user *buffer,
-			size_t count, loff_t *off)
-{
-	struct seq_file	  *m = file->private_data;
-	struct obd_device *obd = m->private;
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	int rc;
-	__s64 val;
-
-	rc = lprocfs_str_to_s64(buffer, count, &val);
-	if (rc)
-		return rc;
-
-	if (val > LUSTRE_SEC_ALL || val < LUSTRE_SEC_NONE)
-		return -EINVAL;
-
-	if (val == LUSTRE_SEC_SPECIFY) {
-		CWARN("security level %d will be supported in future.\n",
-		      LUSTRE_SEC_SPECIFY);
-		return -EINVAL;
-	}
-
-	mdt->mdt_lut.lut_sec_level = val;
-
-	return count;
-}
-LPROC_SEQ_FOPS(mdt_sec_level);
-
 static int mdt_cos_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -845,8 +806,6 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 	  .fops =	&mdt_evict_tgt_nids_fops		},
 	{ .name =	"hash_stats",
 	  .fops =	&mdt_hash_fops				},
-	{ .name =	"sec_level",
-	  .fops =	&mdt_sec_level_fops			},
 	{ .name =	"commit_on_sharing",
 	  .fops =	&mdt_cos_fops				},
 	{ .name =	"root_squash",

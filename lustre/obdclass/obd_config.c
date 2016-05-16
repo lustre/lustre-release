@@ -1382,6 +1382,11 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
 			j++;
 		}
 		if (!matched) {
+			/* It was upgraded from old MDT/OST device,
+			 * ignore the obsolete "sec_level" parameter. */
+			if (strncmp("sec_level", key, keylen) == 0)
+				continue;
+
 			CERROR("%.*s: %s unknown param %s\n",
 			       (int)strlen(prefix) - 1, prefix,
 			       (char *)lustre_cfg_string(lcfg, 0), key);

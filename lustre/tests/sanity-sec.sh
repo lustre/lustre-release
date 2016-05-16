@@ -105,7 +105,6 @@ MDT=$(do_facet $SINGLEMDS lctl get_param -N "mdt.\*MDT0000" |
 do_facet $SINGLEMDS "mkdir -p $CONFDIR"
 IDENTITY_FLUSH=mdt.$MDT.identity_flush
 IDENTITY_UPCALL=mdt.$MDT.identity_upcall
-MDSSECLEVEL=mdt.$MDT.sec_level
 
 SAVE_PWD=$PWD
 

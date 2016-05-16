@@ -830,91 +830,6 @@ EXPORT_SYMBOL(tgt_counter_incr);
  * Unified target generic handlers.
  */
 
-/*
- * Security functions
- */
-static inline void tgt_init_sec_none(struct obd_connect_data *reply)
-{
-}
-
-static int tgt_init_sec_level(struct ptlrpc_request *req)
-{
-	struct lu_target	*tgt = class_exp2tgt(req->rq_export);
-	char			*client;
-	struct obd_connect_data	*data, *reply;
-	int			 rc = 0;
-	ENTRY;
-
-	data = req_capsule_client_get(&req->rq_pill, &RMF_CONNECT_DATA);
-	reply = req_capsule_server_get(&req->rq_pill, &RMF_CONNECT_DATA);
-	if (data == NULL || reply == NULL)
-		RETURN(-EFAULT);
-
-	/* connection from MDT is always trusted */
-	if (req->rq_auth_usr_mdt) {
-		tgt_init_sec_none(reply);
-		RETURN(0);
-	}
-
-	if (unlikely(tgt == NULL)) {
-		DEBUG_REQ(D_ERROR, req, "%s: No target for connected export\n",
-			  class_exp2obd(req->rq_export)->obd_name);
-		RETURN(-EINVAL);
-	}
-
-	client = libcfs_nid2str(req->rq_peer.nid);
-	/* no GSS support case */
-	if (!req->rq_auth_gss) {
-		if (tgt->lut_sec_level > LUSTRE_SEC_NONE) {
-			CWARN("client %s -> target %s does not use GSS, "
-			      "can not run under security level %d.\n",
-			      client, tgt_name(tgt), tgt->lut_sec_level);
-			RETURN(-EACCES);
-		} else {
-			tgt_init_sec_none(reply);
-			RETURN(0);
-		}
-	}
-
-	/* old version case */
-	if (unlikely(!(data->ocd_connect_flags & OBD_CONNECT_MDS_CAPA) ||
-		     !(data->ocd_connect_flags & OBD_CONNECT_OSS_CAPA))) {
-		if (tgt->lut_sec_level > LUSTRE_SEC_NONE) {
-			CWARN("client %s -> target %s uses old version, "
-			      "can not run under security level %d.\n",
-			      client, tgt_name(tgt), tgt->lut_sec_level);
-			RETURN(-EACCES);
-		} else {
-			CWARN("client %s -> target %s uses old version, "
-			      "run under security level %d.\n",
-			      client, tgt_name(tgt), tgt->lut_sec_level);
-			tgt_init_sec_none(reply);
-			RETURN(0);
-		}
-	}
-
-	if (!uid_valid(make_kuid(&init_user_ns, req->rq_auth_uid))) {
-		CDEBUG(D_SEC, "client %s -> target %s: user is not "
-		       "authenticated!\n", client, tgt_name(tgt));
-		RETURN(-EACCES);
-	}
-
-	switch (tgt->lut_sec_level) {
-	case LUSTRE_SEC_NONE:
-	case LUSTRE_SEC_REMOTE:
-		tgt_init_sec_none(reply);
-		break;
-	case LUSTRE_SEC_ALL:
-		reply->ocd_connect_flags &= ~OBD_CONNECT_OSS_CAPA;
-		reply->ocd_connect_flags &= ~OBD_CONNECT_MDS_CAPA;
-		break;
-	default:
-		RETURN(-EINVAL);
-	}
-
-	RETURN(rc);
-}
-
 int tgt_connect_check_sptlrpc(struct ptlrpc_request *req, struct obd_export *exp)
 {
 	struct lu_target	*tgt = class_exp2tgt(exp);
@@ -1014,10 +929,6 @@ int tgt_connect(struct tgt_session_info *tsi)
 	int			 rc;
 
 	ENTRY;
-
-	rc = tgt_init_sec_level(req);
-	if (rc != 0)
-		GOTO(out, rc);
 
 	/* XXX: better to call this check right after getting new export but
 	 * before last_rcvd slot allocation to avoid server load upon insecure
