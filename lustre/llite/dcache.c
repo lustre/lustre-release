@@ -320,7 +320,11 @@ static int ll_revalidate_dentry(struct dentry *dentry,
 		return 1;
 
 	/* Symlink - always valid as long as the dentry was found */
+#ifdef HAVE_IOP_GET_LINK
+	if (dentry->d_inode && dentry->d_inode->i_op->get_link)
+#else
 	if (dentry->d_inode && dentry->d_inode->i_op->follow_link)
+#endif
 		return 1;
 
 	/*

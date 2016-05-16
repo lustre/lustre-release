@@ -2125,6 +2125,25 @@ inode_lock, [
 ]) # LC_HAVE_INODE_LOCK
 
 #
+# LC_HAVE_IOP_GET_LINK
+#
+# 4.5 vfs replaced iop->follow_link with
+# iop->get_link
+#
+AC_DEFUN([LC_HAVE_IOP_GET_LINK], [
+LB_CHECK_COMPILE([if 'iop' has 'get_link'],
+inode_ops_get_link, [
+	#include <linux/fs.h>
+],[
+	struct inode_operations iop;
+	iop.get_link = NULL;
+],[
+	AC_DEFINE(HAVE_IOP_GET_LINK, 1,
+		[have iop get_link])
+])
+]) # LC_HAVE_IOP_GET_LINK
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2302,6 +2321,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.5
 	LC_HAVE_INODE_LOCK
+	LC_HAVE_IOP_GET_LINK
 
 	#
 	AS_IF([test "x$enable_server" != xno], [

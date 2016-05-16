@@ -122,6 +122,20 @@ failed:
 }
 
 #ifdef HAVE_SYMLINK_OPS_USE_NAMEIDATA
+static void ll_put_link(struct dentry *dentry,
+			struct nameidata *nd, void *cookie)
+#else
+# ifdef HAVE_IOP_GET_LINK
+static void ll_put_link(void *cookie)
+# else
+static void ll_put_link(struct inode *unused, void *cookie)
+# endif
+#endif
+{
+	ptlrpc_req_finished(cookie);
+}
+
+#ifdef HAVE_SYMLINK_OPS_USE_NAMEIDATA
 static void *ll_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
 	struct inode *inode = dentry->d_inode;
@@ -156,6 +170,34 @@ static void *ll_follow_link(struct dentry *dentry, struct nameidata *nd)
 	RETURN(request);
 }
 #else
+# ifdef HAVE_IOP_GET_LINK
+static const char *ll_get_link(struct dentry *dentry,
+			       struct inode *inode,
+			       struct delayed_call *done)
+{
+	struct ptlrpc_request *request;
+	char *symname = NULL;
+	int rc;
+
+	ENTRY;
+	CDEBUG(D_VFSTRACE, "VFS Op\n");
+	if (!dentry)
+		RETURN(ERR_PTR(-ECHILD));
+	ll_inode_size_lock(inode);
+	rc = ll_readlink_internal(inode, &request, &symname);
+	ll_inode_size_unlock(inode);
+	if (rc < 0) {
+		ptlrpc_req_finished(request);
+		return ERR_PTR(rc);
+	}
+
+	/* symname may contain a pointer to the request message buffer,
+	 * we delay request releasing then.
+	 */
+	set_delayed_call(done, ll_put_link, request);
+	RETURN(symname);
+}
+# else
 static const char *ll_follow_link(struct dentry *dentry, void **cookie)
 {
 	struct inode *inode = d_inode(dentry);
@@ -179,22 +221,18 @@ static const char *ll_follow_link(struct dentry *dentry, void **cookie)
 	*cookie = request;
 	RETURN(symname);
 }
+# endif /* HAVE_IOP_GET_LINK */
 #endif /* HAVE_SYMLINK_OPS_USE_NAMEIDATA */
-
-#ifdef HAVE_SYMLINK_OPS_USE_NAMEIDATA
-static void ll_put_link(struct dentry *dentry, struct nameidata *nd, void *cookie)
-#else
-static void ll_put_link(struct inode *unused, void *cookie)
-#endif
-{
-	ptlrpc_req_finished(cookie);
-}
 
 struct inode_operations ll_fast_symlink_inode_operations = {
 	.readlink	= generic_readlink,
 	.setattr	= ll_setattr,
+#ifdef HAVE_IOP_GET_LINK
+	.get_link	= ll_get_link,
+#else
 	.follow_link	= ll_follow_link,
 	.put_link	= ll_put_link,
+#endif
 	.getattr	= ll_getattr,
 	.permission	= ll_inode_permission,
 	.setxattr	= ll_setxattr,
