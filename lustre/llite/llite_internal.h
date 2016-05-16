@@ -1009,7 +1009,6 @@ struct ll_cl_context {
 };
 
 struct ll_thread_info {
-	struct iovec		lti_local_iov;
 	struct vvp_io_args	lti_args;
 	struct ra_io_arg	lti_ria;
 	struct kiocb		lti_kiocb;

@@ -1246,72 +1246,45 @@ static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
 				unsigned long nr_segs, loff_t pos)
 {
 	struct iovec *local_iov;
-	struct iov_iter	*to;
+	struct iov_iter	to;
 	size_t iov_count;
 	ssize_t result;
-	struct lu_env *env = NULL;
-	__u16 refcheck;
 	ENTRY;
 
 	result = ll_file_get_iov_count(iov, &nr_segs, &iov_count);
 	if (result)
 		RETURN(result);
 
-	if (nr_segs == 1) {
+	OBD_ALLOC(local_iov, sizeof(*iov) * nr_segs);
+	if (local_iov == NULL)
+		RETURN(-ENOMEM);
 
-		env = cl_env_get(&refcheck);
-		if (IS_ERR(env))
-			RETURN(PTR_ERR(env));
+	memcpy(local_iov, iov, sizeof(*iov) * nr_segs);
 
-		local_iov = &ll_env_info(env)->lti_local_iov;
-		*local_iov = *iov;
-
-	} else {
-		OBD_ALLOC(local_iov, sizeof(*iov) * nr_segs);
-		if (local_iov == NULL)
-			RETURN(-ENOMEM);
-
-		memcpy(local_iov, iov, sizeof(*iov) * nr_segs);
-	}
-
-	OBD_ALLOC_PTR(to);
-	if (to == NULL) {
-		result = -ENOMEM;
-		goto out;
-	}
 # ifdef HAVE_IOV_ITER_INIT_DIRECTION
-	iov_iter_init(to, READ, local_iov, nr_segs, iov_count);
+	iov_iter_init(&to, READ, local_iov, nr_segs, iov_count);
 # else /* !HAVE_IOV_ITER_INIT_DIRECTION */
-	iov_iter_init(to, local_iov, nr_segs, iov_count, 0);
+	iov_iter_init(&to, local_iov, nr_segs, iov_count, 0);
 # endif /* HAVE_IOV_ITER_INIT_DIRECTION */
 
-	result = ll_file_read_iter(iocb, to);
+	result = ll_file_read_iter(iocb, &to);
 
-	OBD_FREE_PTR(to);
-out:
-	if (nr_segs == 1)
-		cl_env_put(env, &refcheck);
-	else
-		OBD_FREE(local_iov, sizeof(*iov) * nr_segs);
-
+	OBD_FREE(local_iov, sizeof(*iov) * nr_segs);
 	RETURN(result);
 }
 
 static ssize_t ll_file_read(struct file *file, char __user *buf, size_t count,
 			    loff_t *ppos)
 {
-	struct lu_env *env;
 	struct iovec   iov = { .iov_base = buf, .iov_len = count };
         struct kiocb  *kiocb;
         ssize_t        result;
-	__u16          refcheck;
         ENTRY;
 
-        env = cl_env_get(&refcheck);
-        if (IS_ERR(env))
-                RETURN(PTR_ERR(env));
+	OBD_ALLOC_PTR(kiocb);
+	if (kiocb == NULL)
+		RETURN(-ENOMEM);
 
-	kiocb = &ll_env_info(env)->lti_kiocb;
         init_sync_kiocb(kiocb, file);
         kiocb->ki_pos = *ppos;
 #ifdef HAVE_KIOCB_KI_LEFT
@@ -1323,7 +1296,7 @@ static ssize_t ll_file_read(struct file *file, char __user *buf, size_t count,
 	result = ll_file_aio_read(kiocb, &iov, 1, kiocb->ki_pos);
 	*ppos = kiocb->ki_pos;
 
-	cl_env_put(env, &refcheck);
+	OBD_FREE_PTR(kiocb);
 	RETURN(result);
 }
 
@@ -1335,51 +1308,30 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 				 unsigned long nr_segs, loff_t pos)
 {
 	struct iovec *local_iov;
-	struct iov_iter *from;
+	struct iov_iter from;
 	size_t iov_count;
 	ssize_t result;
-	struct lu_env *env = NULL;
-	__u16 refcheck;
 	ENTRY;
 
 	result = ll_file_get_iov_count(iov, &nr_segs, &iov_count);
 	if (result)
 		RETURN(result);
 
-	if (nr_segs == 1) {
-		env = cl_env_get(&refcheck);
-		if (IS_ERR(env))
-			RETURN(PTR_ERR(env));
+	OBD_ALLOC(local_iov, sizeof(*iov) * nr_segs);
+	if (local_iov == NULL)
+		RETURN(-ENOMEM);
 
-		local_iov = &ll_env_info(env)->lti_local_iov;
-		*local_iov = *iov;
-	} else {
-		OBD_ALLOC(local_iov, sizeof(*iov) * nr_segs);
-		if (local_iov == NULL)
-			RETURN(-ENOMEM);
+	memcpy(local_iov, iov, sizeof(*iov) * nr_segs);
 
-		memcpy(local_iov, iov, sizeof(*iov) * nr_segs);
-	}
-
-	OBD_ALLOC_PTR(from);
-	if (from == NULL) {
-		result = -ENOMEM;
-		goto out;
-	}
 # ifdef HAVE_IOV_ITER_INIT_DIRECTION
-	iov_iter_init(from, WRITE, local_iov, nr_segs, iov_count);
+	iov_iter_init(&from, WRITE, local_iov, nr_segs, iov_count);
 # else /* !HAVE_IOV_ITER_INIT_DIRECTION */
-	iov_iter_init(from, local_iov, nr_segs, iov_count, 0);
+	iov_iter_init(&from, local_iov, nr_segs, iov_count, 0);
 # endif /* HAVE_IOV_ITER_INIT_DIRECTION */
 
-	result = ll_file_write_iter(iocb, from);
+	result = ll_file_write_iter(iocb, &from);
 
-	OBD_FREE_PTR(from);
-out:
-	if (nr_segs == 1)
-		cl_env_put(env, &refcheck);
-	else
-		OBD_FREE(local_iov, sizeof(*iov) * nr_segs);
+	OBD_FREE(local_iov, sizeof(*iov) * nr_segs);
 
 	RETURN(result);
 }
@@ -1914,11 +1866,11 @@ restart:
  */
 int ll_hsm_release(struct inode *inode)
 {
-	struct cl_env_nest nest;
 	struct lu_env *env;
 	struct obd_client_handle *och = NULL;
 	__u64 data_version = 0;
 	int rc;
+	__u16 refcheck;
 	ENTRY;
 
 	CDEBUG(D_INODE, "%s: Releasing file "DFID".\n",
@@ -1934,12 +1886,12 @@ int ll_hsm_release(struct inode *inode)
 	if (rc != 0)
 		GOTO(out, rc);
 
-	env = cl_env_nested_get(&nest);
+	env = cl_env_get(&refcheck);
 	if (IS_ERR(env))
 		GOTO(out, rc = PTR_ERR(env));
 
 	ll_merge_attr(env, inode);
-	cl_env_nested_put(&nest, env);
+	cl_env_put(env, &refcheck);
 
 	/* Release the file.
 	 * NB: lease lock handle is released in mdc_hsm_release_pack() because
@@ -2224,14 +2176,14 @@ static int ll_file_futimes_3(struct file *file, const struct ll_futimes_3 *lfu)
 static int ll_ladvise(struct inode *inode, struct file *file, __u64 flags,
 		      struct lu_ladvise *ladvise)
 {
-	struct cl_env_nest nest;
 	struct lu_env *env;
 	struct cl_io *io;
 	struct cl_ladvise_io *lio;
 	int rc;
+	__u16 refcheck;
 	ENTRY;
 
-	env = cl_env_nested_get(&nest);
+	env = cl_env_get(&refcheck);
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
@@ -2252,7 +2204,7 @@ static int ll_ladvise(struct inode *inode, struct file *file, __u64 flags,
 		rc = io->ci_result;
 
 	cl_io_fini(env, io);
-	cl_env_nested_put(&nest, env);
+	cl_env_put(env, &refcheck);
 	RETURN(rc);
 }
 
@@ -2787,18 +2739,18 @@ static int ll_flush(struct file *file, fl_owner_t id)
 int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 		       enum cl_fsync_mode mode, int ignore_layout)
 {
-	struct cl_env_nest nest;
 	struct lu_env *env;
 	struct cl_io *io;
 	struct cl_fsync_io *fio;
 	int result;
+	__u16 refcheck;
 	ENTRY;
 
 	if (mode != CL_FSYNC_NONE && mode != CL_FSYNC_LOCAL &&
 	    mode != CL_FSYNC_DISCARD && mode != CL_FSYNC_ALL)
 		RETURN(-EINVAL);
 
-	env = cl_env_nested_get(&nest);
+	env = cl_env_get(&refcheck);
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
@@ -2821,7 +2773,7 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 	if (result == 0)
 		result = fio->fi_nr_written;
 	cl_io_fini(env, io);
-	cl_env_nested_put(&nest, env);
+	cl_env_put(env, &refcheck);
 
 	RETURN(result);
 }
@@ -3873,15 +3825,15 @@ int ll_layout_conf(struct inode *inode, const struct cl_object_conf *conf)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct cl_object *obj = lli->lli_clob;
-	struct cl_env_nest nest;
 	struct lu_env *env;
 	int rc;
+	__u16 refcheck;
 	ENTRY;
 
 	if (obj == NULL)
 		RETURN(0);
 
-	env = cl_env_nested_get(&nest);
+	env = cl_env_get(&refcheck);
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
@@ -3916,7 +3868,7 @@ int ll_layout_conf(struct inode *inode, const struct cl_object_conf *conf)
 	}
 
 out:
-	cl_env_nested_put(&nest, env);
+	cl_env_put(env, &refcheck);
 
 	RETURN(rc);
 }

@@ -892,10 +892,10 @@ int ll_writepage(struct page *vmpage, struct writeback_control *wbc)
         struct cl_io           *io;
         struct cl_page         *page;
         struct cl_object       *clob;
-        struct cl_env_nest      nest;
 	bool redirtied = false;
 	bool unlocked = false;
         int result;
+	__u16 refcheck;
         ENTRY;
 
         LASSERT(PageLocked(vmpage));
@@ -903,7 +903,7 @@ int ll_writepage(struct page *vmpage, struct writeback_control *wbc)
 
 	LASSERT(ll_i2dtexp(inode) != NULL);
 
-	env = cl_env_nested_get(&nest);
+	env = cl_env_get(&refcheck);
 	if (IS_ERR(env))
 		GOTO(out, result = PTR_ERR(env));
 
@@ -964,7 +964,7 @@ int ll_writepage(struct page *vmpage, struct writeback_control *wbc)
 		}
 	}
 
-        cl_env_nested_put(&nest, env);
+	cl_env_put(env, &refcheck);
 	GOTO(out, result);
 
 out:

@@ -227,20 +227,16 @@ void cl_inode_fini(struct inode *inode)
 {
 	struct lu_env           *env;
 	struct ll_inode_info    *lli  = ll_i2info(inode);
-        struct cl_object        *clob = lli->lli_clob;
+	struct cl_object        *clob = lli->lli_clob;
 	__u16  refcheck;
-        int emergency;
+	int emergency;
 
-        if (clob != NULL) {
-                void                    *cookie;
-
-                cookie = cl_env_reenter();
-                env = cl_env_get(&refcheck);
-                emergency = IS_ERR(env);
+	if (clob != NULL) {
+		env = cl_env_get(&refcheck);
+		emergency = IS_ERR(env);
 		if (emergency) {
 			mutex_lock(&cl_inode_fini_guard);
 			LASSERT(cl_inode_fini_env != NULL);
-			cl_env_implant(cl_inode_fini_env, &refcheck);
 			env = cl_inode_fini_env;
 		}
 
@@ -253,15 +249,11 @@ void cl_inode_fini(struct inode *inode)
                 lu_object_ref_del(&clob->co_lu, "inode", inode);
                 cl_object_put_last(env, clob);
                 lli->lli_clob = NULL;
-		if (emergency) {
-			cl_env_unplant(cl_inode_fini_env, &refcheck);
+		if (emergency)
 			mutex_unlock(&cl_inode_fini_guard);
-		} else {
+		else
 			cl_env_put(env, &refcheck);
-		}
-
-                cl_env_reexit(cookie);
-        }
+	}
 }
 
 /**

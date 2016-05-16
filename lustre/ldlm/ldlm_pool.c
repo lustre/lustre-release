@@ -1050,15 +1050,12 @@ static unsigned long ldlm_pools_count(enum ldlm_side client, gfp_t gfp_mask)
 	int nr_ns;
 	struct ldlm_namespace *ns;
 	struct ldlm_namespace *ns_old = NULL; /* loop detection */
-	void *cookie;
 
 	if (client == LDLM_NAMESPACE_CLIENT && !(gfp_mask & __GFP_FS))
 		return 0;
 
 	CDEBUG(D_DLMTRACE, "Request to count %s locks from all pools\n",
 	       client == LDLM_NAMESPACE_CLIENT ? "client" : "server");
-
-	cookie = cl_env_reenter();
 
 	/*
 	 * Find out how many resources we may release.
@@ -1068,7 +1065,6 @@ static unsigned long ldlm_pools_count(enum ldlm_side client, gfp_t gfp_mask)
 		mutex_lock(ldlm_namespace_lock(client));
 		if (list_empty(ldlm_namespace_list(client))) {
 			mutex_unlock(ldlm_namespace_lock(client));
-			cl_env_reexit(cookie);
 			return 0;
 		}
 		ns = ldlm_namespace_first_locked(client);
@@ -1094,7 +1090,6 @@ static unsigned long ldlm_pools_count(enum ldlm_side client, gfp_t gfp_mask)
 		ldlm_namespace_put(ns);
 	}
 
-	cl_env_reexit(cookie);
 	return total;
 }
 
@@ -1104,12 +1099,9 @@ static unsigned long ldlm_pools_scan(enum ldlm_side client, int nr,
 	unsigned long freed = 0;
 	int tmp, nr_ns;
 	struct ldlm_namespace *ns;
-	void *cookie;
 
 	if (client == LDLM_NAMESPACE_CLIENT && !(gfp_mask & __GFP_FS))
 		return -1;
-
-	cookie = cl_env_reenter();
 
 	/*
 	 * Shrink at least ldlm_namespace_nr_read(client) namespaces.
@@ -1140,7 +1132,6 @@ static unsigned long ldlm_pools_scan(enum ldlm_side client, int nr,
 		freed += ldlm_pool_shrink(&ns->ns_pool, cancel, gfp_mask);
 		ldlm_namespace_put(ns);
 	}
-	cl_env_reexit(cookie);
 	/*
 	 * we only decrease the SLV in server pools shrinker, return
 	 * SHRINK_STOP to kernel to avoid needless loop. LU-1128

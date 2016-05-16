@@ -961,7 +961,6 @@ static int osc_extent_wait(const struct lu_env *env, struct osc_extent *ext,
 static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 				bool partial)
 {
-	struct cl_env_nest     nest;
 	struct lu_env         *env;
 	struct cl_io          *io;
 	struct osc_object     *obj = ext->oe_obj;
@@ -975,6 +974,7 @@ static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 	int                    grants   = 0;
 	int                    nr_pages = 0;
 	int                    rc       = 0;
+	__u16		       refcheck;
 	ENTRY;
 
 	LASSERT(sanity_check(ext) == 0);
@@ -984,7 +984,7 @@ static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 	/* Request new lu_env.
 	 * We can't use that env from osc_cache_truncate_start() because
 	 * it's from lov_io_sub and not fully initialized. */
-	env = cl_env_nested_get(&nest);
+	env = cl_env_get(&refcheck);
 	io  = &osc_env_info(env)->oti_io;
 	io->ci_obj = cl_object_top(osc2cl(obj));
 	rc = cl_io_init(env, io, CIT_MISC, io->ci_obj);
@@ -1069,7 +1069,7 @@ static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 
 out:
 	cl_io_fini(env, io);
-	cl_env_nested_put(&nest, env);
+	cl_env_put(env, &refcheck);
 	RETURN(rc);
 }
 
