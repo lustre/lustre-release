@@ -310,14 +310,20 @@ typedef struct
 	cfs_time_t		fps_next_retry;
 } kib_fmr_poolset_t;
 
+#ifndef HAVE_IB_RDMA_WR
+struct ib_rdma_wr {
+	struct ib_send_wr wr;
+};
+#endif
+
 struct kib_fast_reg_descriptor { /* For fast registration */
 	struct list_head		 frd_list;
-	struct ib_send_wr		 frd_inv_wr;
+	struct ib_rdma_wr		 frd_inv_wr;
 #ifdef HAVE_IB_MAP_MR_SG
 	struct ib_reg_wr		 frd_fastreg_wr;
 #else
-	struct ib_send_wr		 frd_fastreg_wr;
-	struct ib_fast_reg_page_list	*frd_frpl;
+	struct ib_rdma_wr		 frd_fastreg_wr;
+	struct ib_fast_reg_page_list    *frd_frpl;
 #endif
 	struct ib_mr			*frd_mr;
 	bool				 frd_valid;
@@ -610,7 +616,7 @@ typedef struct kib_tx                           /* transmit message */
 	/* # send work items */
 	int			tx_nwrq;
 	/* send work items... */
-	struct ib_send_wr	*tx_wrq;
+	struct ib_rdma_wr	*tx_wrq;
 	/* ...and their memory */
 	struct ib_sge		*tx_sge;
 	/* rdma descriptor */
