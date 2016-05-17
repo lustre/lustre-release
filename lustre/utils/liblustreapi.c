@@ -4288,34 +4288,6 @@ int llapi_get_connect_flags(const char *mnt, __u64 *flags)
         return rc;
 }
 
-int llapi_get_version(char *buffer, int buffer_size,
-                      char **version)
-{
-        int rc;
-        int fd;
-        struct obd_ioctl_data *data = (struct obd_ioctl_data *)buffer;
-
-        fd = open(OBD_DEV_PATH, O_RDONLY);
-        if (fd == -1)
-                return -errno;
-
-        memset(buffer, 0, buffer_size);
-        data->ioc_version = OBD_IOCTL_VERSION;
-        data->ioc_inllen1 = buffer_size - cfs_size_round(sizeof(*data));
-        data->ioc_inlbuf1 = buffer + cfs_size_round(sizeof(*data));
-        data->ioc_len = obd_ioctl_packlen(data);
-
-        rc = ioctl(fd, OBD_GET_VERSION, buffer);
-        if (rc == -1) {
-                rc = -errno;
-                close(fd);
-                return rc;
-        }
-        close(fd);
-        *version = data->ioc_bulk;
-        return 0;
-}
-
 /**
  * Get a 64-bit value representing the version of file data pointed by fd.
  *

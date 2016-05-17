@@ -67,7 +67,7 @@ get_lustre_param_path(const char *obd_type, const char *filter,
 	char pattern[PATH_MAX];
 	int rc = 0;
 
-	if (filter == NULL || obd_type == NULL)
+	if (filter == NULL && type != FILTER_BY_NONE)
 		return -EINVAL;
 
 	switch (type) {
@@ -91,14 +91,20 @@ get_lustre_param_path(const char *obd_type, const char *filter,
 			return -EINVAL;
 		rc = 0;
 		break;
-	default:
+	case FILTER_BY_EXACT:
 		if (strlen(filter) + 1 > sizeof(pattern))
 			return -E2BIG;
 		strncpy(pattern, filter, sizeof(pattern));
 		break;
+	case FILTER_BY_NONE:
+	default:
+		break;
 	}
 
-	if (param_name != NULL) {
+	if (type == FILTER_BY_NONE) {
+		if (cfs_get_param_paths(param, "%s", param_name) != 0)
+			rc = -errno;
+	} else if (param_name != NULL) {
 		if (cfs_get_param_paths(param, "%s/%s/%s",
 				       obd_type, pattern, param_name) != 0)
 			rc = -errno;

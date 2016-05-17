@@ -927,21 +927,19 @@ int jt_obd_abort_recovery(int argc, char **argv)
 
 int jt_get_version(int argc, char **argv)
 {
-        int rc;
-        char rawbuf[MAX_IOC_BUFLEN];
-        char *version;
+	char version[128];
+	int rc;
 
-        if (argc != 1)
-                return CMD_HELP;
+	if (argc != 1)
+		return CMD_HELP;
 
-        rc = llapi_get_version(rawbuf, MAX_IOC_BUFLEN, &version);
-        if (rc)
-                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-                        strerror(-rc));
+	rc = llapi_get_version_string(version, sizeof(version));
+	if (rc)
+		printf("Lustre version: %s\n", LUSTRE_VERSION_STRING);
 	else
 		printf("Lustre version: %s\n", version);
 
-	return rc;
+	return 0;
 }
 
 static void print_obd_line(char *s)

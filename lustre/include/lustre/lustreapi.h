@@ -303,7 +303,10 @@ extern int llapi_chomp_string(char *buf);
 extern int llapi_open_by_fid(const char *dir, const lustre_fid *fid,
 			     int open_flags);
 
-extern int llapi_get_version(char *buffer, int buffer_size, char **version);
+extern int llapi_get_version_string(char *version, unsigned int version_size);
+/* llapi_get_version() is deprecated, use llapi_get_version_string() instead */
+extern int llapi_get_version(char *buffer, int buffer_size, char **version)
+	__attribute__((deprecated));
 extern int llapi_get_data_version(int fd, __u64 *data_version, __u64 flags);
 extern int llapi_hsm_state_get_fd(int fd, struct hsm_user_state *hus);
 extern int llapi_hsm_state_get(const char *path, struct hsm_user_state *hus);

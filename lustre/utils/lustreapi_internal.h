@@ -65,6 +65,7 @@ int root_ioctl(const char *mdtname, int opc, void *data, int *mdtidxp,
  *		      path as is.
  */
 enum param_filter {
+	FILTER_BY_NONE,
 	FILTER_BY_EXACT,
 	FILTER_BY_FS_NAME,
 	FILTER_BY_PATH

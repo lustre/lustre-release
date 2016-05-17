@@ -60,28 +60,28 @@ static int jt_opt_ignore_errors(int argc, char **argv) {
 }
 
 command_t cmdlist[] = {
-        /* Metacommands */
-        {"===== metacommands =======", jt_noop, 0, "metacommands"},
-        {"--device", jt_opt_device, 0,
-         "run <command> after connecting to device <devno>\n"
-         "--device <devno> <command [args ...]>"},
-        {"--ignore_errors", jt_opt_ignore_errors, 0,
-         "ignore errors that occur during script processing\n"
-         "--ignore_errors"},
-        {"ignore_errors", jt_opt_ignore_errors, 0,
-         "ignore errors that occur during script processing\n"
-         "ignore_errors"},
+	/* Metacommands */
+	{"===== metacommands =======", jt_noop, 0, "metacommands"},
+	{"--device", jt_opt_device, 0,
+	 "run <command> after connecting to device <devno>\n"
+	 "--device <devno> <command [args ...]>"},
+	{"--ignore_errors", jt_opt_ignore_errors, 0,
+	 "ignore errors that occur during script processing\n"
+	 "--ignore_errors"},
+	{"ignore_errors", jt_opt_ignore_errors, 0,
+	 "ignore errors that occur during script processing\n"
+	 "ignore_errors"},
 
-        /* User interface commands */
-        {"======== control =========", jt_noop, 0, "control commands"},
-        {"help", Parser_help, 0, "help"},
-        {"lustre_build_version", jt_get_version, 0,
-         "print the build version of lustre\n"
-         "usage: lustre_build_version"},
+	/* User interface commands */
+	{"======== control =========", jt_noop, 0, "control commands"},
+	{"help", Parser_help, 0, "help"},
+	{"lustre_build_version", jt_get_version, 0,
+	 "print version of Lustre modules\n"
+	 "usage: lustre_build_version"},
 	{"exit", Parser_quit, 0, "quit"},
 	{"quit", Parser_quit, 0, "quit"},
 	{"--version", Parser_version, 0,
-	 "output build version of the utility and exit"},
+	 "print build version of this utility and exit"},
 
 	/* Network configuration commands */
 	{"===== network config =====", jt_noop, 0, "network config"},
