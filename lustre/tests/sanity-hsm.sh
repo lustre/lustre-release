@@ -1704,7 +1704,8 @@ test_16() {
 	$LFS hsm_archive $f
 	wait_request_state $fid ARCHIVE SUCCEED
 	local end=$(date +%s)
-	local duration=$((end - start))
+	# Add 1 to account for rounding errors between start and end (LU-8155)
+	local duration=$((end - start + 1))
 
 	[[ $duration -ge $goal ]] ||
 		error "Transfer is too fast $duration < $goal"
