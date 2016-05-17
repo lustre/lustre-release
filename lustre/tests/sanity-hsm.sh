@@ -811,6 +811,66 @@ parse_json_event() {
 	echo $raw_event | python -c "$json_parser"
 }
 
+get_agent_by_uuid_mdt() {
+	local uuid=$1
+	local mdtidx=$2
+	local mds=mds$(($mdtidx + 1))
+	do_facet $mds "$LCTL get_param -n ${MDT_PREFIX}${mdtidx}.hsm.agents |\
+		 grep $uuid"
+}
+
+check_agent_registered_by_mdt() {
+	local uuid=$1
+	local mdtidx=$2
+	local mds=mds$(($mdtidx + 1))
+	local agent=$(get_agent_by_uuid_mdt $uuid $mdtidx)
+	if [[ ! -z "$agent" ]]; then
+		echo "found agent $agent on $mds"
+	else
+		error "uuid $uuid not found in agent list on $mds"
+	fi
+}
+
+check_agent_unregistered_by_mdt() {
+	local uuid=$1
+	local mdtidx=$2
+	local mds=mds$(($mdtidx + 1))
+	local agent=$(get_agent_by_uuid_mdt $uuid $mdtidx)
+	if [[ -z "$agent" ]]; then
+		echo "uuid not found in agent list on $mds"
+	else
+		error "uuid found in agent list on $mds: $agent"
+	fi
+}
+
+check_agent_registered() {
+	local uuid=$1
+	local mdsno
+	for mdsno in $(seq 1 $MDSCOUNT); do
+		check_agent_registered_by_mdt $uuid $((mdsno - 1))
+	done
+}
+
+check_agent_unregistered() {
+	local uuid=$1
+	local mdsno
+	for mdsno in $(seq 1 $MDSCOUNT); do
+		check_agent_unregistered_by_mdt $uuid $((mdsno - 1))
+	done
+}
+
+get_agent_uuid() {
+	local agent=${1:-$(facet_active_host $SINGLEAGT)}
+
+	# Lustre mount-point is mandatory and last parameter on
+	# copytool cmd-line.
+	local mntpnt=$(do_rpc_nodes $agent ps -C $HSMTOOL_BASE -o args= |
+		       awk '{print $NF}')
+	[ -n "$mntpnt" ] || error "Found no Agent or with no mount-point "\
+				  "parameter"
+	do_rpc_nodes $agent get_client_uuid $mntpnt | cut -d' ' -f2
+}
+
 # initiate variables
 init_agt_vars
 
@@ -999,13 +1059,19 @@ test_8() {
 run_test 8 "Test default archive number"
 
 test_9() {
-	mkdir -p $DIR/$tdir
-	local f=$DIR/$tdir/$tfile
-	local fid=$(copy_file /etc/passwd $f)
 	# we do not use the default one to be sure
 	local new_an=$((HSM_ARCHIVE_NUMBER + 1))
 	copytool_cleanup
 	copytool_setup $SINGLEAGT $MOUNT $new_an
+
+	# give time for CT to register with MDTs
+	sleep $(($MDSCOUNT*2))
+	local uuid=$(get_agent_uuid $(facet_active_host $SINGLEAGT))
+	check_agent_registered $uuid
+
+	mkdir -p $DIR/$tdir
+	local f=$DIR/$tdir/$tfile
+	local fid=$(copy_file /etc/passwd $f)
 	$LFS hsm_archive --archive $new_an $f
 	wait_request_state $fid ARCHIVE SUCCEED
 
@@ -3567,66 +3633,6 @@ test_105() {
 		      "before shutdown $reqcnt1"
 }
 run_test 105 "Restart of coordinator"
-
-get_agent_by_uuid_mdt() {
-	local uuid=$1
-	local mdtidx=$2
-	local mds=mds$(($mdtidx + 1))
-	do_facet $mds "$LCTL get_param -n ${MDT_PREFIX}${mdtidx}.hsm.agents |\
-		 grep $uuid"
-}
-
-check_agent_registered_by_mdt() {
-	local uuid=$1
-	local mdtidx=$2
-	local mds=mds$(($mdtidx + 1))
-	local agent=$(get_agent_by_uuid_mdt $uuid $mdtidx)
-	if [[ ! -z "$agent" ]]; then
-		echo "found agent $agent on $mds"
-	else
-		error "uuid $uuid not found in agent list on $mds"
-	fi
-}
-
-check_agent_unregistered_by_mdt() {
-	local uuid=$1
-	local mdtidx=$2
-	local mds=mds$(($mdtidx + 1))
-	local agent=$(get_agent_by_uuid_mdt $uuid $mdtidx)
-	if [[ -z "$agent" ]]; then
-		echo "uuid not found in agent list on $mds"
-	else
-		error "uuid found in agent list on $mds: $agent"
-	fi
-}
-
-check_agent_registered() {
-	local uuid=$1
-	local mdsno
-	for mdsno in $(seq 1 $MDSCOUNT); do
-		check_agent_registered_by_mdt $uuid $((mdsno - 1))
-	done
-}
-
-check_agent_unregistered() {
-	local uuid=$1
-	local mdsno
-	for mdsno in $(seq 1 $MDSCOUNT); do
-		check_agent_unregistered_by_mdt $uuid $((mdsno - 1))
-	done
-}
-
-get_agent_uuid() {
-	local agent=${1:-$(facet_active_host $SINGLEAGT)}
-
-	# Lustre mount-point is mandatory and last parameter on
-	# copytool cmd-line.
-	local mntpnt=$(do_rpc_nodes $agent ps -C $HSMTOOL_BASE -o args= |
-		       awk '{print $NF}')
-	[ -n "$mntpnt" ] || error "Found no Agent or with no mount-point "\
-				  "parameter"
-	do_rpc_nodes $agent get_client_uuid $mntpnt | cut -d' ' -f2
-}
 
 test_106() {
 	# test needs a running copytool
