@@ -5839,6 +5839,15 @@ test_85() {
 }
 run_test 85 "osd_ost init: fail ea_fid_set"
 
+cleanup_86() {
+	trap 0
+
+	# ost1 has already registered to the MGS before the reformat.
+	# So after reformatting it with option "-G", it could not be
+	# mounted to the MGS. Cleanup the system for subsequent tests.
+	reformat_and_config
+}
+
 test_86() {
 	[ "$(facet_fstype ost1)" = "zfs" ] &&
 		skip "LU-6442: no such mkfs params for ZFS OSTs" && return
@@ -5862,6 +5871,9 @@ test_86() {
 
 	echo "params: $opts"
 
+	trap cleanup_86 EXIT ERR
+
+	stopall
 	add ost1 $opts || error "add ost1 failed with new params"
 
 	local FOUNDSIZE=$(do_facet ost1 "$DEBUGFS -c -R stats $(ostdevname 1)" |
@@ -5869,7 +5881,8 @@ test_86() {
 
 	[[ $FOUNDSIZE == $NEWSIZE ]] ||
 		error "Flex block group size: $FOUNDSIZE, expected: $NEWSIZE"
-	return 0
+
+	cleanup_86
 }
 run_test 86 "Replacing mkfs.lustre -G option"
 
