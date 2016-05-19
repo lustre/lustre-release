@@ -1049,6 +1049,14 @@ int tgt_client_del(const struct lu_env *env, struct obd_export *exp)
 	    exp_connect_flags(exp) & OBD_CONNECT_LIGHTWEIGHT)
 		RETURN(0);
 
+	/* Slot may be not yet assigned, use case is race between Client
+	 * reconnect and forced eviction */
+	if (ted->ted_lr_idx < 0) {
+		CWARN("%s: client with UUID '%s' not in bitmap\n",
+		      tgt->lut_obd->obd_name, ted->ted_lcd->lcd_uuid);
+		RETURN(0);
+	}
+
 	CDEBUG(D_INFO, "%s: del client at idx %u, off %lld, UUID '%s'\n",
 	       tgt->lut_obd->obd_name, ted->ted_lr_idx, ted->ted_lr_off,
 	       ted->ted_lcd->lcd_uuid);
