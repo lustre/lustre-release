@@ -693,6 +693,95 @@ static int ll_md_blocking_lease_ast(struct ldlm_lock *lock,
 }
 
 /**
+ * When setting a lease on a file, we take ownership of the lli_mds_*_och
+ * and save it as fd->fd_och so as to force client to reopen the file even
+ * if it has an open lock in cache already.
+ */
+static int ll_lease_och_acquire(struct inode *inode, struct file *file,
+				struct lustre_handle *old_handle)
+{
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct obd_client_handle **och_p;
+	__u64 *och_usecount;
+	int rc = 0;
+	ENTRY;
+
+	/* Get the openhandle of the file */
+	mutex_lock(&lli->lli_och_mutex);
+	if (fd->fd_lease_och != NULL)
+		GOTO(out_unlock, rc = -EBUSY);
+
+	if (fd->fd_och == NULL) {
+		if (file->f_mode & FMODE_WRITE) {
+			LASSERT(lli->lli_mds_write_och != NULL);
+			och_p = &lli->lli_mds_write_och;
+			och_usecount = &lli->lli_open_fd_write_count;
+		} else {
+			LASSERT(lli->lli_mds_read_och != NULL);
+			och_p = &lli->lli_mds_read_och;
+			och_usecount = &lli->lli_open_fd_read_count;
+		}
+
+		if (*och_usecount > 1)
+			GOTO(out_unlock, rc = -EBUSY);
+
+		fd->fd_och = *och_p;
+		*och_usecount = 0;
+		*och_p = NULL;
+	}
+
+	*old_handle = fd->fd_och->och_fh;
+
+	EXIT;
+out_unlock:
+	mutex_unlock(&lli->lli_och_mutex);
+	return rc;
+}
+
+/**
+ * Release ownership on lli_mds_*_och when putting back a file lease.
+ */
+static int ll_lease_och_release(struct inode *inode, struct file *file)
+{
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct obd_client_handle **och_p;
+	struct obd_client_handle *old_och = NULL;
+	__u64 *och_usecount;
+	int rc = 0;
+	ENTRY;
+
+	mutex_lock(&lli->lli_och_mutex);
+	if (file->f_mode & FMODE_WRITE) {
+		och_p = &lli->lli_mds_write_och;
+		och_usecount = &lli->lli_open_fd_write_count;
+	} else {
+		och_p = &lli->lli_mds_read_och;
+		och_usecount = &lli->lli_open_fd_read_count;
+	}
+
+	/* The file may have been open by another process (broken lease) so
+	 * *och_p is not NULL. In this case we should simply increase usecount
+	 * and close fd_och.
+	 */
+	if (*och_p != NULL) {
+		old_och = fd->fd_och;
+		(*och_usecount)++;
+	} else {
+		*och_p = fd->fd_och;
+		*och_usecount = 1;
+	}
+	fd->fd_och = NULL;
+	mutex_unlock(&lli->lli_och_mutex);
+
+	if (old_och != NULL)
+		rc = ll_close_inode_openhandle(inode, old_och, 0, NULL);
+
+	RETURN(rc);
+}
+
+/**
  * Acquire a lease and open the file.
  */
 static struct obd_client_handle *
@@ -713,45 +802,12 @@ ll_lease_open(struct inode *inode, struct file *file, fmode_t fmode,
 		RETURN(ERR_PTR(-EINVAL));
 
 	if (file != NULL) {
-		struct ll_inode_info *lli = ll_i2info(inode);
-		struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
-		struct obd_client_handle **och_p;
-		__u64 *och_usecount;
-
 		if (!(fmode & file->f_mode) || (file->f_mode & FMODE_EXEC))
 			RETURN(ERR_PTR(-EPERM));
 
-		/* Get the openhandle of the file */
-		rc = -EBUSY;
-		mutex_lock(&lli->lli_och_mutex);
-		if (fd->fd_lease_och != NULL) {
-			mutex_unlock(&lli->lli_och_mutex);
+		rc = ll_lease_och_acquire(inode, file, &old_handle);
+		if (rc)
 			RETURN(ERR_PTR(rc));
-		}
-
-		if (fd->fd_och == NULL) {
-			if (file->f_mode & FMODE_WRITE) {
-				LASSERT(lli->lli_mds_write_och != NULL);
-				och_p = &lli->lli_mds_write_och;
-				och_usecount = &lli->lli_open_fd_write_count;
-			} else {
-				LASSERT(lli->lli_mds_read_och != NULL);
-				och_p = &lli->lli_mds_read_och;
-				och_usecount = &lli->lli_open_fd_read_count;
-			}
-			if (*och_usecount == 1) {
-				fd->fd_och = *och_p;
-				*och_p = NULL;
-				*och_usecount = 0;
-				rc = 0;
-			}
-		}
-		mutex_unlock(&lli->lli_och_mutex);
-		if (rc < 0) /* more than 1 opener */
-			RETURN(ERR_PTR(rc));
-
-		LASSERT(fd->fd_och != NULL);
-		old_handle = fd->fd_och->och_fh;
 	}
 
 	OBD_ALLOC_PTR(och);
@@ -914,10 +970,11 @@ static int ll_lease_close(struct obd_client_handle *och, struct inode *inode,
 	}
 
 	CDEBUG(D_INODE, "lease for "DFID" broken? %d\n",
-		PFID(&ll_i2info(inode)->lli_fid), cancelled);
+	       PFID(&ll_i2info(inode)->lli_fid), cancelled);
 
 	if (!cancelled)
 		ldlm_cli_cancel(&och->och_lease_handle, 0);
+
 	if (lease_broken != NULL)
 		*lease_broken = cancelled;
 
@@ -2529,6 +2586,10 @@ out:
 
 			fmode = och->och_flags;
 			rc = ll_lease_close(och, inode, &lease_broken);
+			if (rc < 0)
+				RETURN(rc);
+
+			rc = ll_lease_och_release(inode, file);
 			if (rc < 0)
 				RETURN(rc);
 

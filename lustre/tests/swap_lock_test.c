@@ -437,11 +437,8 @@ static void test15(void)
 	ASSERTF(rc == 0,
 		"invalid lease type on '%s': %s", filename, strerror(-rc));
 
-#if 0
-	/* BUG! This returns EBUSY but there's no lease. */
 	rc = llapi_lease_get(fd, LL_LEASE_RDLCK);
 	ASSERTF(rc == 0, "cannot get lease '%s': %s", filename, strerror(-rc));
-#endif
 
 	close(fd);
 
@@ -464,11 +461,8 @@ static void test15(void)
 	ASSERTF(rc == 0,
 		"invalid lease type on '%s': %s", filename, strerror(-rc));
 
-#if 0
-	/* BUG! This returns EBUSY but there's no lease. */
 	rc = llapi_lease_get(fd, LL_LEASE_WRLCK);
 	ASSERTF(rc == 0, "cannot get lease '%s': %s", filename, strerror(-rc));
-#endif
 
 	close(fd);
 
@@ -477,8 +471,6 @@ static void test15(void)
 	ASSERTF(fd >= 0, "open failed for '%s': %s", filename, strerror(errno));
 
 	for (i = 0; i < 1000; i++) {
-#if 0
-		/* BUG! Same as above */
 		rc = llapi_lease_get(fd, LL_LEASE_WRLCK);
 		ASSERTF(rc == 0, "cannot get lease '%s': %s",
 			filename, strerror(-rc));
@@ -496,8 +488,55 @@ static void test15(void)
 		ASSERTF(rc == LL_LEASE_RDLCK,
 			"was not able to put back lease '%s': %s",
 			filename, strerror(-rc));
-#endif
 	}
+
+	close(fd);
+
+	/* Get a write lease, release and take a read one */
+	fd = open(filename, O_RDWR);
+	ASSERTF(fd >= 0, "open failed for '%s': %s", filename, strerror(errno));
+
+	rc = llapi_lease_get(fd, LL_LEASE_WRLCK);
+	ASSERTF(rc == 0, "cannot get lease '%s': %s", filename, strerror(-rc));
+
+	rc = llapi_lease_check(fd);
+	ASSERTF(rc == LL_LEASE_WRLCK,
+		"invalid lease type on '%s': %s", filename, strerror(-rc));
+
+	rc = llapi_lease_put(fd);
+	ASSERTF(rc == LL_LEASE_WRLCK, "was not able to put back lease '%s': %s",
+		filename, strerror(-rc));
+
+	rc = llapi_lease_check(fd);
+	ASSERTF(rc == 0,
+		"invalid lease type on '%s': %s", filename, strerror(-rc));
+
+	rc = llapi_lease_get(fd, LL_LEASE_RDLCK);
+	ASSERTF(rc == 0, "cannot get lease '%s': %s", filename, strerror(-rc));
+
+	close(fd);
+
+	/* Get a read lease, release and take a write one */
+	fd = open(filename, O_RDWR);
+	ASSERTF(fd >= 0, "open failed for '%s': %s", filename, strerror(errno));
+
+	rc = llapi_lease_get(fd, LL_LEASE_RDLCK);
+	ASSERTF(rc == 0, "cannot get lease '%s': %s", filename, strerror(-rc));
+
+	rc = llapi_lease_check(fd);
+	ASSERTF(rc == LL_LEASE_RDLCK,
+		"invalid lease type on '%s': %s", filename, strerror(-rc));
+
+	rc = llapi_lease_put(fd);
+	ASSERTF(rc == LL_LEASE_RDLCK, "was not able to put back lease '%s': %s",
+		filename, strerror(-rc));
+
+	rc = llapi_lease_check(fd);
+	ASSERTF(rc == 0,
+		"invalid lease type on '%s': %s", filename, strerror(-rc));
+
+	rc = llapi_lease_get(fd, LL_LEASE_WRLCK);
+	ASSERTF(rc == 0, "cannot get lease '%s': %s", filename, strerror(-rc));
 
 	close(fd);
 
