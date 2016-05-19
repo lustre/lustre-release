@@ -1246,34 +1246,34 @@ struct hsm_action_item {
 	char       hai_data[0]; /* variable length */
 } __attribute__((packed));
 
-/*
+/**
  * helper function which print in hexa the first bytes of
  * hai opaque field
- * \param hai [IN] record to print
- * \param buffer [OUT] output buffer
- * \param len [IN] max buffer len
+ *
+ * \param hai [IN]        record to print
+ * \param buffer [IN,OUT] buffer to write the hex string to
+ * \param len [IN]        max buffer length
+ *
  * \retval buffer
  */
 static inline char *hai_dump_data_field(const struct hsm_action_item *hai,
-                                        char *buffer, int len)
+					char *buffer, size_t len)
 {
-        int i, sz, data_len;
-        char *ptr;
+	int i;
+	int data_len;
+	char *ptr;
 
-        ptr = buffer;
-        sz = len;
-        data_len = hai->hai_len - sizeof(*hai);
-        for (i = 0 ; (i < data_len) && (sz > 0) ; i++)
-        {
-                int cnt;
+	ptr = buffer;
+	data_len = hai->hai_len - sizeof(*hai);
+	for (i = 0; (i < data_len) && (len > 2); i++) {
+		snprintf(ptr, 3, "%02X", (unsigned char)hai->hai_data[i]);
+		ptr += 2;
+		len -= 2;
+	}
 
-                cnt = snprintf(ptr, sz, "%.2X",
-                               (unsigned char)hai->hai_data[i]);
-                ptr += cnt;
-                sz -= cnt;
-        }
-        *ptr = '\0';
-        return buffer;
+	*ptr = '\0';
+
+	return buffer;
 }
 
 /* Copytool action list */
