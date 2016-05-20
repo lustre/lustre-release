@@ -1293,9 +1293,8 @@ int __osd_object_create(const struct lu_env *env, struct osd_object *obj,
 		     fid_seq_is_local_file(fid_seq(fid))))
 		type = DMU_OTN_UINT8_METADATA;
 
-	/* Create a new DMU object. */
-	oid = dmu_object_alloc(osd->od_os, type, 0,
-			       DMU_OT_SA, DN_MAX_BONUSLEN, tx);
+	/* Create a new DMU object using the default dnode size. */
+	oid = osd_dmu_object_alloc(osd->od_os, type, 0, 0, tx);
 	rc = -sa_buf_hold(osd->od_os, oid, osd_obj_tag, dbp);
 	LASSERTF(rc == 0, "sa_buf_hold "LPU64" failed: %d\n", oid, rc);
 
@@ -1335,11 +1334,11 @@ int __osd_zap_create(const struct lu_env *env, struct osd_device *osd,
 	   transaction group. */
 	LASSERT(tx->tx_txg != 0);
 
-	oid = zap_create_flags(osd->od_os, 0, flags | ZAP_FLAG_HASH64,
-			       DMU_OT_DIRECTORY_CONTENTS,
-			       14, /* == ZFS fzap_default_block_shift */
-			       DN_MAX_INDBLKSHIFT, /* indirect block shift */
-			       DMU_OT_SA, DN_MAX_BONUSLEN, tx);
+	oid = osd_zap_create_flags(osd->od_os, 0, flags | ZAP_FLAG_HASH64,
+				   DMU_OT_DIRECTORY_CONTENTS,
+				   14, /* == ZFS fzap_default_blockshift */
+				   DN_MAX_INDBLKSHIFT, /* indirect blockshift */
+				   0, tx);
 
 	rc = -sa_buf_hold(osd->od_os, oid, osd_obj_tag, zap_dbp);
 	if (rc)

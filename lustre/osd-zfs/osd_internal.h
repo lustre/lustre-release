@@ -595,4 +595,49 @@ osd_zio_buf_free(void *buf, size_t size)
 #define	osd_zio_buf_free(buf, size)	zio_buf_free(buf, size)
 #endif
 
+#ifdef HAVE_DMU_OBJECT_ALLOC_DNSIZE
+static inline uint64_t
+osd_dmu_object_alloc(objset_t *os, dmu_object_type_t objtype, int blocksize,
+		     int dnodesize, dmu_tx_t *tx)
+{
+	if (dnodesize == 0)
+		dnodesize = MAX(dmu_objset_dnodesize(os), DNODE_MIN_SIZE);
+
+	return dmu_object_alloc_dnsize(os, objtype, blocksize, DMU_OT_SA,
+				       DN_BONUS_SIZE(dnodesize), dnodesize, tx);
+}
+
+static inline uint64_t
+osd_zap_create_flags(objset_t *os, int normflags, zap_flags_t flags,
+		     dmu_object_type_t ot, int leaf_blockshift,
+		     int indirect_blockshift, int dnodesize, dmu_tx_t *tx)
+{
+	if (dnodesize == 0)
+		dnodesize = MAX(dmu_objset_dnodesize(os), DNODE_MIN_SIZE);
+
+	return zap_create_flags_dnsize(os, normflags, flags, ot,
+				       leaf_blockshift, indirect_blockshift,
+				       DMU_OT_SA, DN_BONUS_SIZE(dnodesize),
+				       dnodesize, tx);
+}
+#else
+static inline uint64_t
+osd_dmu_object_alloc(objset_t *os, dmu_object_type_t objtype, int blocksize,
+		     int dnodesize, dmu_tx_t *tx)
+{
+	return dmu_object_alloc(os, objtype, blocksize, DMU_OT_SA,
+				DN_MAX_BONUSLEN, tx);
+}
+
+static inline uint64_t
+osd_zap_create_flags(objset_t *os, int normflags, zap_flags_t flags,
+		     dmu_object_type_t ot, int leaf_blockshift,
+		     int indirect_blockshift, int dnodesize, dmu_tx_t *tx)
+{
+	return zap_create_flags(os, normflags, flags, ot, leaf_blockshift,
+				indirect_blockshift, DMU_OT_SA,
+				DN_MAX_BONUSLEN, tx);
+}
+#endif /* HAVE_DMU_OBJECT_ALLOC_DNSIZE */
+
 #endif /* _OSD_INTERNAL_H */
