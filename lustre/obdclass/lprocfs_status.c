@@ -1708,6 +1708,17 @@ static int preprocess_numeric_str(char *buffer, __u64 *mult, __u64 def_mult,
 	start = buffer;
 
 	while (*buffer) {
+		/* allow for a single new line before the null terminator */
+		if (*buffer == '\n') {
+			*buffer = '\0';
+			buffer++;
+
+			if (*buffer)
+				return -EINVAL;
+
+			break;
+		}
+
 		/* any chars after our unit indicates a malformed string */
 		if (hit_unit)
 			return -EINVAL;
