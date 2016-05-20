@@ -584,6 +584,7 @@ restart:
         } else {
                 LASSERT(*och_usecount == 0);
 		if (!it->it_disposition) {
+			struct ll_dentry_data *ldd = ll_d2d(file->f_path.dentry);
                         /* We cannot just request lock handle now, new ELC code
                            means that one of other OPEN locks for this file
                            could be cancelled, and since blocking ast handler
@@ -597,12 +598,24 @@ restart:
 			 *    handle to be returned from LOOKUP|OPEN request,
 			 *    for example if the target entry was a symlink.
 			 *
-			 * Always fetch MDS_OPEN_LOCK if this is not setstripe.
+			 *  Only fetch MDS_OPEN_LOCK if this is in NFS path,
+			 *  marked by a bit set in ll_iget_for_nfs. Clear the
+			 *  bit so that it's not confusing later callers.
 			 *
+			 *  NB; when ldd is NULL, it must have come via normal
+			 *  lookup path only, since ll_iget_for_nfs always calls
+			 *  ll_d_init().
+			 */
+			if (ldd && ldd->lld_nfs_dentry) {
+				ldd->lld_nfs_dentry = 0;
+				it->it_flags |= MDS_OPEN_LOCK;
+			}
+
+			 /*
 			 * Always specify MDS_OPEN_BY_FID because we don't want
 			 * to get file with different fid.
 			 */
-			it->it_flags |= MDS_OPEN_LOCK | MDS_OPEN_BY_FID;
+			it->it_flags |= MDS_OPEN_BY_FID;
                         rc = ll_intent_file_open(file, NULL, 0, it);
                         if (rc)
                                 GOTO(out_openerr, rc);

@@ -334,13 +334,13 @@ static int ll_revalidate_dentry(struct dentry *dentry,
 	if (dentry->d_inode && dentry->d_inode->i_op->follow_link)
 		return 1;
 
-	/* Last path component lookup for open or create - we always
-	 * return 0 here to go through re-lookup and properly signal
-	 * MDS whenever we do or do not want an open-cache to be engaged.
-	 * For create we also ensure the entry is really created no matter
-	 * what races might have happened.
-	 * LU-4367 */
-	if (lookup_flags & (LOOKUP_OPEN | LOOKUP_CREATE))
+	/*
+	 * if open&create is set, talk to MDS to make sure file is created if
+	 * necessary, because we can't do this in ->open() later since that's
+	 * called on an inode. return 0 here to let lookup to handle this.
+	 */
+	if ((lookup_flags & (LOOKUP_OPEN | LOOKUP_CREATE)) ==
+	    (LOOKUP_OPEN | LOOKUP_CREATE))
 		return 0;
 
 	if (!dentry_may_statahead(dir, dentry))
