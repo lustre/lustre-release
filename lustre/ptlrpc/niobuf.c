@@ -504,11 +504,24 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
 	 * (to be ignored by client) if it's an error reply during recovery.
          * (bz15815) */
         if (req->rq_type == PTL_RPC_MSG_ERR &&
-            (req->rq_export == NULL || req->rq_export->exp_obd->obd_recovering))
+	    (req->rq_export == NULL ||
+	     req->rq_export->exp_obd->obd_recovering)) {
                 lustre_msg_set_timeout(req->rq_repmsg, 0);
-        else
-                lustre_msg_set_timeout(req->rq_repmsg,
-				       at_get(&svcpt->scp_at_estimate));
+	} else {
+		__u32 timeout;
+
+		if (req->rq_export && req->rq_reqmsg != NULL &&
+		    lustre_msg_get_flags(req->rq_reqmsg) &
+		    (MSG_REPLAY | MSG_REQ_REPLAY_DONE | MSG_LOCK_REPLAY_DONE))
+			timeout = cfs_time_current_sec() -
+				req->rq_arrival_time.tv_sec +
+				min(at_extra,
+				    req->rq_export->exp_obd->
+				    obd_recovery_timeout / 4);
+		else
+			timeout = at_get(&svcpt->scp_at_estimate);
+		lustre_msg_set_timeout(req->rq_repmsg, timeout);
+	}
 
 	if (req->rq_reqmsg &&
 	    !(lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT)) {
