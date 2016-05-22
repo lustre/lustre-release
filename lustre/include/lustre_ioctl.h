@@ -30,7 +30,6 @@
 
 #include <linux/types.h>
 #include <libcfs/libcfs.h>
-#include <libcfs/util/ioctl.h>
 #include <lustre/lustre_idl.h>
 
 #ifdef __KERNEL__
@@ -40,6 +39,7 @@
 #else /* __KERNEL__ */
 # include <malloc.h>
 # include <string.h>
+#include <libcfs/util/ioctl.h>
 #endif /* !__KERNEL__ */
 
 #if !defined(__KERNEL__) && !defined(LUSTRE_UTILS)
