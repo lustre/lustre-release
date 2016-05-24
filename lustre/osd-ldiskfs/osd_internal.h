@@ -148,6 +148,8 @@ struct osd_object {
 #ifdef CONFIG_LOCKDEP
         struct lockdep_map      oo_dep_map;
 #endif
+
+	struct list_head	oo_xattr_list;
 };
 
 struct osd_obj_seq {

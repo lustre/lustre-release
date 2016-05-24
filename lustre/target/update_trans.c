@@ -72,7 +72,7 @@ static void top_multiple_thandle_dump(struct top_multiple_thandle *tmt,
 	struct sub_thandle	*st;
 
 	LASSERT(tmt->tmt_magic == TOP_THANDLE_MAGIC);
-	CDEBUG(mask, "%s tmt %p refcount %d committed %d result %d"
+	CDEBUG(mask, "%s tmt %p refcount %d committed %d result %d "
 	       "batchid "LPU64"\n",
 	       tmt->tmt_master_sub_dt ?
 	       tmt->tmt_master_sub_dt->dd_lu_dev.ld_obd->obd_name :
