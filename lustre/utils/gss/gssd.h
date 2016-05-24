@@ -86,7 +86,6 @@ struct clnt_info {
 void init_client_list(void);
 int update_client_list(void);
 void handle_krb5_upcall(struct clnt_info *clp);
-void handle_spkm3_upcall(struct clnt_info *clp);
 void lgssd_run(void);
 
 

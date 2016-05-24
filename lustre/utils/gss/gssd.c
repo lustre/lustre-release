@@ -247,11 +247,6 @@ main(int argc, char *argv[])
 	signal(SIGTERM, sig_die);
 	signal(SIGHUP, sig_hup);
 
-#if 0
-	/* Determine Kerberos information from the kernel */
-	gssd_obtain_kernel_krb5_info();
-#endif
-
 	lgssd_init_mutexs();
 
 	printerr(0, "lgssd initialized and ready to serve\n");

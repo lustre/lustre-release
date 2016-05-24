@@ -87,8 +87,6 @@ scan_poll_results(int ret)
 		if (i >= 0 && pollarray[i].revents) {
 			if (pollarray[i].revents & POLLHUP)
 				dir_changed = 1;
-			if (pollarray[i].revents & POLLIN)
-				handle_spkm3_upcall(clp);
 			pollarray[clp->spkm3_poll_index].revents = 0;
 			ret--;
 			if (!ret)

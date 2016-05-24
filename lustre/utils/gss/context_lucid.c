@@ -508,27 +508,18 @@ prepare_krb5_rfc4121_buffer(gss_krb5_lucid_context_v1_t *lctx,
 		else
 			keyptr = &lctx->cfx_kd.ctx_key;
 
-#if 0
-		if (lctx->initiate == 1) {
-			sign_usage = KG_USAGE_INITIATOR_SIGN;
-			seal_usage = KG_USAGE_INITIATOR_SEAL;
-		} else {
-			sign_usage = KG_USAGE_ACCEPTOR_SIGN;
-			seal_usage = KG_USAGE_ACCEPTOR_SEAL;
-		}
-#else
 		/* FIXME
-		 * These are from rfc4142, but I don't understand: if we supply
-		 * different 'usage' value for client & server, then the peers
-		 * will have different derived keys. How could this work?
+		 * These are from rfc4142, but I don't understand:
+		 * if we supply different 'usage' value for client &
+		 * server, then the peers will have different derived
+		 * keys. How could this work?
 		 *
-		 * Here we simply use old SIGN/SEAL values until we find the
-		 * answer.  --ericm
+		 * Here we simply use old SIGN/SEAL values until we
+		 * find the answer.  --ericm
 		 * FIXME
 		 */
 		sign_usage = KG_USAGE_SIGN;
 		seal_usage = KG_USAGE_SEAL;
-#endif
 
 		/* derive and send down: Ke, Ki, and Kc */
 
