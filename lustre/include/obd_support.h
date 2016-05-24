@@ -749,7 +749,11 @@ do {									      \
 
 #define OBD_ALLOC_LARGE(ptr, size)                                            \
 do {                                                                          \
-	OBD_ALLOC_GFP(ptr, size, GFP_NOFS | __GFP_NOWARN);                    \
+	/* LU-8196 - force large allocations to use vmalloc, not kmalloc */   \
+	if ((size) > KMALLOC_MAX_SIZE)                                          \
+		ptr = NULL;                                                   \
+	else                                                                  \
+		OBD_ALLOC_GFP(ptr, size, GFP_NOFS | __GFP_NOWARN);            \
 	if (ptr == NULL)                                                      \
                 OBD_VMALLOC(ptr, size);                                       \
 } while (0)
