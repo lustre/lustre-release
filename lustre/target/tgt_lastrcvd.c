@@ -50,7 +50,8 @@ static int tgt_bitmap_chunk_alloc(struct lu_target *lut, int chunk)
 {
 	unsigned long *bm;
 
-	OBD_ALLOC(bm, BITS_TO_LONGS(LUT_REPLY_SLOTS_PER_CHUNK) * sizeof(long));
+	OBD_ALLOC_LARGE(bm, BITS_TO_LONGS(LUT_REPLY_SLOTS_PER_CHUNK) *
+			sizeof(long));
 	if (bm == NULL)
 		return -ENOMEM;
 
@@ -59,7 +60,7 @@ static int tgt_bitmap_chunk_alloc(struct lu_target *lut, int chunk)
 	if (lut->lut_reply_bitmap[chunk] != NULL) {
 		/* someone else already allocated the bitmap for this chunk */
 		spin_unlock(&lut->lut_client_bitmap_lock);
-		OBD_FREE(bm, BITS_TO_LONGS(LUT_REPLY_SLOTS_PER_CHUNK) *
+		OBD_FREE_LARGE(bm, BITS_TO_LONGS(LUT_REPLY_SLOTS_PER_CHUNK) *
 			 sizeof(long));
 		return 0;
 	}
@@ -154,6 +155,12 @@ static int tgt_clear_reply_slot(struct lu_target *lut, int idx)
 
 	LASSERT(chunk < LUT_REPLY_SLOTS_MAX_CHUNKS);
 	LASSERT(b < LUT_REPLY_SLOTS_PER_CHUNK);
+
+	if (lut->lut_reply_bitmap[chunk] == NULL) {
+		CERROR("%s: slot %d not allocated\n",
+		       tgt_name(lut), idx);
+		return -ENOENT;
+	}
 
 	if (test_and_clear_bit(b, lut->lut_reply_bitmap[chunk]) == 0) {
 		CERROR("%s: slot %d already clear in bitmap\n",
@@ -1885,7 +1892,11 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 
 			/* create in-memory reply_data and link it to
 			 * target export's reply list */
-			tgt_set_reply_slot(tgt, idx);
+			rc = tgt_set_reply_slot(tgt, idx);
+			if (rc != 0) {
+				mutex_unlock(&ted->ted_lcd_lock);
+				GOTO(out, rc);
+			}
 			trd->trd_reply = *lrd;
 			trd->trd_pre_versions[0] = 0;
 			trd->trd_pre_versions[1] = 0;
