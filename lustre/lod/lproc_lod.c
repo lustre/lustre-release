@@ -95,7 +95,7 @@ lod_stripesize_seq_write(struct file *file, const char __user *buffer,
 
 	LASSERT(dev != NULL);
 	lod  = lu2lod_dev(dev->obd_lu_dev);
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, '1');
 	if (rc)
 		return rc;
 	if (val < 0)
@@ -155,7 +155,7 @@ lod_stripeoffset_seq_write(struct file *file, const char __user *buffer,
 
 	LASSERT(dev != NULL);
 	lod  = lu2lod_dev(dev->obd_lu_dev);
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, '1');
 	if (rc)
 		return rc;
 	if (val < 0)

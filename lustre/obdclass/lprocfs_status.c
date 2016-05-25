@@ -1924,12 +1924,14 @@ EXPORT_SYMBOL(lprocfs_str_to_s64);
 int lprocfs_str_with_units_to_s64(const char __user *buffer,
 				  unsigned long count, __s64 *val, char defunit)
 {
-	__u64 mult;
+	__u64 mult = 1;
 	int rc;
 
-	rc = get_mult(defunit, &mult);
-	if (rc)
-		return rc;
+	if (defunit != '1') {
+		rc = get_mult(defunit, &mult);
+		if (rc)
+			return rc;
+	}
 
 	return str_to_s64_internal(buffer, count, val, mult, true);
 }
