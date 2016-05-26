@@ -51,7 +51,9 @@ static struct option long_opt_start[] = {
 	{"device",		required_argument, 0, 'M'},
 	{"all",			no_argument,	   0, 'A'},
 	{"create_ostobj",	optional_argument, 0, 'c'},
+	{"create-ostobj",	optional_argument, 0, 'c'},
 	{"create_mdtobj",	optional_argument, 0, 'C'},
+	{"create-mdtobj",	optional_argument, 0, 'C'},
 	{"error",		required_argument, 0, 'e'},
 	{"help",		no_argument,	   0, 'h'},
 	{"dryrun",		optional_argument, 0, 'n'},
@@ -60,6 +62,7 @@ static struct option long_opt_start[] = {
 	{"speed",		required_argument, 0, 's'},
 	{"type",		required_argument, 0, 't'},
 	{"window_size",		required_argument, 0, 'w'},
+	{"window-size",		required_argument, 0, 'w'},
 	{0,			0,		   0,  0 }
 };
 
@@ -129,7 +132,8 @@ static void usage_start(void)
 		"	     [-w | --window_size size]\n"
 		"options:\n"
 		"-M: device to start LFSCK/scrub on\n"
-		"-A: start LFSCK on all MDT devices\n"
+		"-A: start LFSCK on all nodes via the specified MDT device "
+		    "(see \"-M\" option) by single LFSCK command\n"
 		"-c: create the lost OST-object for dangling LOV EA "
 		    "(default 'off', or 'on')\n"
 		"-C: create the lost MDT-object for dangling name entry "
@@ -154,7 +158,8 @@ static void usage_stop(void)
 		"           [-A | --all] [-h | --help]\n"
 		"options:\n"
 		"-M: device to stop LFSCK/scrub on\n"
-		"-A: stop LFSCK on all MDT devices\n"
+		"-A: stop LFSCK on all nodes via the specified MDT device "
+		    "(see \"-M\" option) by single LFSCK command\n"
 		"-h: this help message\n");
 }
 

@@ -364,111 +364,32 @@ Modify a nodemap property.
 .RE
 
 .SS LFSCK
-An on-line Lustre consistency check and repair tool.
-.TP
-.B lfsck_start \fR<-M | --device [MDT,OST]_device>
-     \fR[-A | --all] [-c | --create_ostobj [on | off]]
-     \fR[-e | --error <continue | abort>] [-h | --help]
-     \fR[-n | --dryrun [on | off]] [-o | --orphan]
-     \fR[-r | --reset] [-s | --speed speed_limit]
-     \fR[-t | --type lfsck_type[,lfsck_type...]]
-     \fR[-w | --window_size size]
-.br
+An on-line Lustre consistency check and repair tool. It is used for totally
+replacing the old lfsck tool for kinds of Lustre inconsistency verification,
+including: corrupted or lost OI mapping, corrupted or lost link EA, corrupted
+or lost FID in name entry, dangling name entry, multiple referenced name entry,
+unmatched MDT-object and name entry pairs, orphan MDT-object, incorrect
+MDT-object links count, corrupted namespace, corrupted or lost lov EA, lost
+OST-object, multiple referenced OST-object, unmatched MDT-object and OST-object
+pairs, orphan OST-object, and so on.
+
+See also:
+
+.PP
+\fBlctl-lfsck-start\fR(8)
+.RS 4
 Start LFSCK on the specified MDT or OST device with specified parameters.
-.TP
-  -M, --device <MDT,OST_device>
-The MDT or OST device to start LFSCK/scrub on.
-.TP
-  -A, --all
-Start LFSCK on all available MDT devices.
-.TP
-  -c, --create_ostobj [on | off]
-Create the lost OST-object for dangling LOV EA: 'off' (default) or 'on'. Under
-default mode, when the LFSCK find some MDT-object with dangling reference, it
-will report the inconsistency but will not repair it.  If 'on' is given, then
-LFSCK will re-create the missed OST-object.
-.TP
-  -e, --error <error_handle>
-With error_handle as 'abort' then if a repair is impossible LFSCK will save
-the current position stop with an error.  Otherwise the default behavior is
-to 'continue' if a repair is impossible.
-.TP
-  -h, --help
-Show the usage message.
-.TP
-  -n, --dryrun [on | off]
-Perform a trial run with no changes made, if 'on' or no argument is given.
-Default is 'off', meaning that any inconsistencies found will be repaired.
-.TP
-  -o, --orphan
-Handle orphan objects, such as orphan OST-objects for layout LFSCK by
-linking them under the .../.lustre/lost+found directory.
-.TP
-  -r, --reset
-Set the current position of object iteration to the beginning of the specified
-device. The non-specified parameters will also be reset to the default. By
-default the iterator will resume the scanning from the last saved checkpoint
-position, and other unspecified parameters will be the same as the prior
-incomplete run.
-.TP
-  -s, --speed <speed_limit>
-Set the upper limit of LFSCK processing in objects per second to reduce load
-on the servers and storage. If no value is specified the saved value is used
-(if resuming from a checkpoint). Otherwise the default value of 0 is used,
-which means check the filesystem as quickly as possible.
-.TP
-  -t, --type <lfsck_type[,lfsck_type...]>
-The type of LFSCK checking/repair to execute. If no type is given and the
-previous run was incomplete or internal consistency checks detected an error,
-then the same types are used for the next run.  Otherwise, the default is to
-check all types of consistency.  Any time LFSCK is triggered on an ldiskfs
-MDT or OST then OI Scrub is run.  Valid types are a comma-separated list of one or more of
-.B scrub
-to run only the local OI Scrub on ldiskfs targets,
-.B namespace
-for FID-in-dirent and linkEA checking on the MDT(s),
-.B layout
-for MDT-OST cross-reference consistency, and
-.B all
-to run all of the available check types.
-.TP
-  -w, --window_size <size>
-Specifies the maximum number of in-flight request being processed at
-one time.  This controls the load placed on remote OSTs when running
-.B layout
-checks.  By default there are at most 1024 outstanding requests.
-.TP
-.B lfsck_stop  \fR<-M | --device [MDT,OST]_device> [-A | --all] [-h | --help]
+.RE
+.PP
+\fBlctl-lfsck-stop\fR(8)
+.RS 4
 Stop LFSCK on the specified MDT or OST device.
-.TP
-  -M, --device <[MDT,OST]_device>
-The MDT or OST device to stop LFSCK/scrub on.
-.TP
-  -A, --all
-Stop LFSCK on all devices.
-.TP
-  -h, --help
-Show this help.
-.TP
-.B lfsck_query \fR<-M | --device MDT_device> [-h | --help]
-    \fR[-t | --type lfsck_type[,lfsck_type...]] [-w | --wait]
-.br
+.RE
+.PP
+\fBlctl-lfsck-query\fR(8)
+.RS 4
 Get the LFSCK global status via the specified MDT device.
-.TP
-  -M, --device <MDT_device>
-Specify the MDT device on which the LFSCK runs or ever ran.
-.TP
-  -t, --type <lfsck_type[,lfsck_type...]>
-Specify what kind(s) of LFSCK to be checked. If no type is given, the default
-is to check all types of LFSCK status. Valid types are a comma-separated list
-of one or more of: namespace, layout, all
-.TP
-  -h, --help
-Show this help.
-.TP
-  -w, --wait
-Do not return until there is no on-going LFSCK scanning on any target
-associated with this filesystem (MDT or OST).
+.RE
 .SS Debug
 .TP 
 .BI debug_daemon 

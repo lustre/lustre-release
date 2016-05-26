@@ -1,0 +1,28 @@
+.TH lctl-lfsck-stop 8 "2016 Apr 1" Lustre "Lustre online fsck"
+.SH SYNOPSIS
+.br
+.B lctl lfsck_stop  \fR<-M | --device [MDT,OST]_device> [-A | --all] [-h | --help]
+.br
+.SH DESCRIPTION
+Stop LFSCK on the specified MDT or OST device.
+.SH OPTIONS
+.TP
+.B  -M, --device <[MDT,OST]_device>
+The MDT or OST device to stop LFSCK/scrub on.
+.TP
+.B  -A, --all
+Stop LFSCK on all nodes via the specified MDT device (see "-M" option) by
+single LFSCK command.
+.TP
+.B  -h, --help
+Show this help.
+
+.SH AVAILABILITY
+.B lctl
+is part of the
+.BR Lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-lfsck-start (8),
+.BR lctl-lfsck-query (8)

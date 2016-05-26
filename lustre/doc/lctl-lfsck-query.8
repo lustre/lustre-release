@@ -1,0 +1,34 @@
+.TH lctl-lfsck-stop 8 "2016 Apr 1" Lustre "Lustre online fsck"
+.SH SYNOPSIS
+.br
+.B lctl lfsck_query \fR<-M | --device MDT_device> [-h | --help]
+            \fR[-t | --type lfsck_type[,lfsck_type...]] [-w | --wait]
+.br
+.SH DESCRIPTION
+Get the LFSCK global status via the specified MDT device.
+.SH OPTIONS
+.TP
+.B  -M, --device <MDT_device>
+Specify the MDT device on which the LFSCK runs or ever ran.
+.TP
+.B  -t, --type <lfsck_type[,lfsck_type...]>
+Specify what kind(s) of LFSCK to be checked. If no type is given, the default
+is to check all types of LFSCK status. Valid types are a comma-separated list
+of one or more of: namespace, layout, all.
+.TP
+.B  -h, --help
+Show this help.
+.TP
+.B  -w, --wait
+Do not return until there is no on-going LFSCK scanning on any target
+associated with this filesystem (MDT or OST).
+
+.SH AVAILABILITY
+.B lctl
+is part of the
+.BR Lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-lfsck-start (8),
+.BR lctl-lfsck-stop (8)

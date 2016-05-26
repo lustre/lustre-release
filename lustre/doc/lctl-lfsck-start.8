@@ -1,0 +1,94 @@
+.TH lctl-lfsck-start 8 "2016 Apr 1" Lustre "Lustre online fsck"
+.SH SYNOPSIS
+.br
+.B lctl lfsck_start \fR<-M | --device [MDT,OST]_device>
+     \fR[-A | --all] [-c | --create-ostobj [on | off]]
+     \fR[-C | --create-mttobj [on | off]]
+     \fR[-e | --error <continue | abort>] [-h | --help]
+     \fR[-n | --dryrun [on | off]] [-o | --orphan]
+     \fR[-r | --reset] [-s | --speed speed_limit]
+     \fR[-t | --type lfsck_type[,lfsck_type...]]
+     \fR[-w | --window-size size]
+.br
+.SH DESCRIPTION
+Start LFSCK on the specified MDT or OST device with specified parameters.
+.SH OPTIONS
+.TP
+.B  -M, --device <MDT,OST_device>
+The MDT or OST device to start LFSCK/scrub on.
+.TP
+.B  -A, --all
+Start LFSCK on all nodes via the specified MDT device (see "-M" option) by
+single LFSCK command.
+.TP
+.B  -c, --create-ostobj [on | off]
+Create the lost OST-object for dangling LOV EA: 'off' (default) or 'on'. Under
+default mode, when the LFSCK find some MDT-object with dangling reference, it
+will report the inconsistency but will not repair it.  If 'on' is given, then
+LFSCK will re-create the missed OST-object.
+.TP
+.B  -C, --create-mdtobj [on | off]
+Create the lost MDT-object for dangling name entry: 'off' (default) or 'on'.
+Under default mode, when the LFSCK find dangling name entry, it will report
+the inconsistency but will not repair it.  If 'on' is given, then LFSCK will
+re-create the missed MDT-object.
+.TP
+.B  -e, --error <error_handle>
+With error_handle as 'abort' then if the repair of a file is not possible, then
+LFSCK will save the current position stop with an error.  Otherwise the default
+behavior is to 'continue' if the repair of a file is not possible.
+.TP
+.B  -h, --help
+Show the usage message.
+.TP
+.B  -n, --dryrun [on | off]
+Perform a trial run with no changes made, if 'on' or no argument is given.
+Default is 'off', meaning that any inconsistencies found will be repaired.
+.TP
+.B  -o, --orphan
+Handle orphan objects, such as orphan OST-objects for layout LFSCK by
+linking them under the .../.lustre/lost+found directory.
+.TP
+.B  -r, --reset
+Set the current position of object iteration to the beginning of the specified
+device. The non-specified parameters will also be reset to the default. By
+default the iterator will resume the scanning from the last saved checkpoint
+position, and other unspecified parameters will be the same as the prior
+incomplete run.
+.TP
+.B  -s, --speed <speed_limit>
+Set the upper limit of LFSCK processing in objects per second to reduce load
+on the servers and storage. If no value is specified the saved value is used
+(if resuming from a checkpoint). Otherwise the default value of 0 is used,
+which means check the filesystem as quickly as possible.
+.TP
+.B  -t, --type <lfsck_type[,lfsck_type...]>
+The type of LFSCK checking/repair to execute. If no type is given and the
+previous run was incomplete or internal consistency checks detected an error,
+then the same types are used for the next run. Otherwise, the default is to
+check all types of consistency. Any time LFSCK is triggered on an ldiskfs
+MDT or OST then OI Scrub is run. Valid types are a comma-separated list of one or more of:
+.B scrub
+to run only the local OI Scrub on ldiskfs targets,
+.B namespace
+for FID-in-dirent and linkEA checking on the MDT(s),
+.B layout
+for MDT-OST cross-reference consistency, and
+.B all
+to run all of the available check types.
+.TP
+.B  -w, --window-size <size>
+Specifies the maximum number of in-flight request being processed at
+one time.  This controls the load placed on remote OSTs when running
+.B layout
+checks.  By default there are at most 1024 outstanding requests.
+
+.SH AVAILABILITY
+.B lctl
+is part of the
+.BR Lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-lfsck-stop (8),
+.BR lctl-lfsck-query (8)
