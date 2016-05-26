@@ -121,6 +121,38 @@ check_diff() {
 	fi
 }
 
+procs_are_stopped() {
+	local pids="$*"
+	local state
+
+	for state in $(ps -p "$pids" -o state=); do
+		if [[ "$state" != T ]]; then
+			return 1
+		fi
+	done
+
+	return 0
+}
+
+# Send SIGSTOP to PIDs and wait up to 60 seconds for them to show a
+# stopped process state.
+stop_procs() {
+	local pids="$*"
+	local end
+
+	$KILL -SIGSTOP $pids
+	end=$((SECONDS + 60))
+	while ((SECONDS < end)); do
+		if procs_are_stopped $pids; then
+			return 0
+		fi
+
+		sleep 1
+	done
+
+	return 1
+}
+
 # Test 1 - test basic operations
 test_1() {
     init_src
@@ -291,7 +323,7 @@ test_2b() {
 
 	echo PIDs: $child_pid
 	echo Stopping dbench
-	$KILL -SIGSTOP $child_pid
+	stop_procs $child_pid
 
 	local LRSYNC_LOG=$(generate_logname "lrsync_log")
 	echo Starting replication
@@ -304,7 +336,7 @@ test_2b() {
     sleep 10
 
     echo Stopping dbench
-    $KILL -SIGSTOP $child_pid
+	stop_procs $child_pid
 
 	echo Starting replication
 	$LRSYNC -l $LREPL_LOG -D $LRSYNC_LOG
@@ -444,7 +476,7 @@ test_4() {
         MOUNT=${DIR}/$tdir run_iozone.sh &
     sleep 30
     child_pid=$(pgrep iozone)
-    $KILL -SIGSTOP $child_pid
+	stop_procs $child_pid
 
 	local LRSYNC_LOG=$(generate_logname "lrsync_log")
 	# Replicate the changes to $TGT
