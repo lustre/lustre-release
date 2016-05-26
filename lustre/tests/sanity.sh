@@ -3531,7 +3531,7 @@ test_39p() {
 run_test 39p "remote directory cached attributes updated after create ========"
 
 
-test_39p() { # LU-8041
+test_39q() { # LU-8041
 	local testdir=$DIR/$tdir
 	mkdir -p $testdir
 	multiop_bg_pause $testdir D_c || error "multiop failed"
@@ -3541,7 +3541,7 @@ test_39p() { # LU-8041
 	local atime=$(stat -c %X $testdir)
 	[ "$atime" -ne 0 ] || error "atime is zero"
 }
-run_test 39p "close won't zero out atime"
+run_test 39q "close won't zero out atime"
 
 test_40() {
 	dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1
