@@ -138,7 +138,8 @@ command_t peer_cmds[] = {
 	 "\t--key_nid: NID to identify peer. If not provided then the first\n"
 	 "\t           NID in the list becomes the key NID of a newly created\n"
 	 "\t           peer. \n"
-	 "\t--nid: one or more peer NIDs\n"},
+	 "\t--nid: one or more peer NIDs\n"
+	 "\t--non_mr: create this peer as not Multi-Rail capable\n"},
 	{"del", jt_del_peer_nid, 0, "delete a peer NID\n"
 	 "\t--key_nid: NID to identify peer.\n"
 	 "\t--nid: list of NIDs to remove. If none provided,\n"
@@ -1062,6 +1063,18 @@ static int jt_export(int argc, char **argv)
 		cYAML_free_tree(err_rc);
 	}
 
+	rc = lustre_lnet_show_peer(NULL, 1, -1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+	}
+
+	rc = lustre_lnet_show_numa_range(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+	}
+
 	if (show_rc != NULL) {
 		cYAML_print_tree2file(f, show_rc);
 		cYAML_free_tree(show_rc);
@@ -1076,17 +1089,17 @@ static int jt_export(int argc, char **argv)
 static int jt_add_peer_nid(int argc, char **argv)
 {
 	char *key_nid = NULL;
-	char *nid[LNET_MAX_INTERFACES] = {NULL};
-	int idx = 0;
+	char **nids = NULL, **nids2 = NULL;
+	int size = 0;
 	struct cYAML *err_rc = NULL;
-	int rc, opt;
+	int rc = LUSTRE_CFG_RC_NO_ERR, opt, i;
 	bool non_mr = false;
 
 	const char *const short_options = "k:n:mh";
 	const struct option long_options[] = {
 		{ "key_nid", 1, NULL, 'k' },
 		{ "nid", 1, NULL, 'n' },
-		{ "non_mr", 1, NULL, 'm'},
+		{ "non_mr", 0, NULL, 'm'},
 		{ "help", 0, NULL, 'h' },
 		{ NULL, 0, NULL, 0 },
 	};
@@ -1098,26 +1111,16 @@ static int jt_add_peer_nid(int argc, char **argv)
 			key_nid = optarg;
 			break;
 		case 'n':
-			if (idx >= LNET_MAX_INTERFACES) {
-				cYAML_build_error(-1, -1, "peer_ni", "add",
-						  "too many interfaces",
-						  &err_rc);
-				rc = LUSTRE_CFG_RC_BAD_PARAM;
+			size = lustre_lnet_parse_nids(optarg, nids, size,
+						      &nids2);
+			if (nids2 == NULL)
 				goto failed;
-			}
-			nid[idx] = calloc(strlen(optarg) + 1, 1);
-			if (nid[idx] == NULL) {
-				cYAML_build_error(-1, -1, "peer_ni", "add",
-						  "out of memory",
-						  &err_rc);
-				rc = LUSTRE_CFG_RC_BAD_PARAM;
-				goto failed;
-			}
-			strncpy(nid[idx], optarg, strlen(optarg));
-			idx++;
+			nids = nids2;
+			rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 			break;
 		case 'm':
 			non_mr = true;
+			break;
 		case 'h':
 			print_help(peer_cmds, "peer", "add");
 			return 0;
@@ -1126,14 +1129,13 @@ static int jt_add_peer_nid(int argc, char **argv)
 		}
 	}
 
-	rc = lustre_lnet_config_peer_nid(key_nid, nid, !non_mr, -1, &err_rc);
+	rc = lustre_lnet_config_peer_nid(key_nid, nids, size,
+					 !non_mr, -1, &err_rc);
 
 failed:
-	idx = 0;
-	while (nid[idx] != NULL) {
-		free(nid[idx]);
-		idx++;
-	}
+	for (i = 0; i < size; i++)
+		free(nids[i]);
+	free(nids);
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
@@ -1146,10 +1148,9 @@ failed:
 static int jt_del_peer_nid(int argc, char **argv)
 {
 	char *key_nid = NULL;
-	char *nid[LNET_MAX_INTERFACES] = {NULL};
-	int idx = 0;
+	char **nids = NULL, **nids2 = NULL;
 	struct cYAML *err_rc = NULL;
-	int rc, opt;
+	int rc = LUSTRE_CFG_RC_NO_ERR, opt, i, size = 0;
 
 	const char *const short_options = "k:n:h";
 	const struct option long_options[] = {
@@ -1166,23 +1167,12 @@ static int jt_del_peer_nid(int argc, char **argv)
 			key_nid = optarg;
 			break;
 		case 'n':
-			if (idx >= LNET_MAX_INTERFACES) {
-				cYAML_build_error(-1, -1, "peer_ni", "del",
-						  "too many interfaces",
-						  &err_rc);
-				rc = LUSTRE_CFG_RC_BAD_PARAM;
+			size = lustre_lnet_parse_nids(optarg, nids, size,
+						      &nids2);
+			if (nids2 == NULL)
 				goto failed;
-			}
-			nid[idx] = calloc(strlen(optarg) + 1, 1);
-			if (nid[idx] == NULL) {
-				cYAML_build_error(-1, -1, "peer_ni", "del",
-						  "out of memory",
-						  &err_rc);
-				rc = LUSTRE_CFG_RC_BAD_PARAM;
-				goto failed;
-			}
-			strncpy(nid[idx], optarg, strlen(optarg));
-			idx++;
+			nids = nids2;
+			rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 			break;
 		case 'h':
 			print_help(peer_cmds, "peer", "del");
@@ -1192,9 +1182,13 @@ static int jt_del_peer_nid(int argc, char **argv)
 		}
 	}
 
-	rc = lustre_lnet_del_peer_nid(key_nid, nid, -1, &err_rc);
+	rc = lustre_lnet_del_peer_nid(key_nid, nids, size, -1, &err_rc);
 
 failed:
+	for (i = 0; i < size; i++)
+		free(nids[i]);
+	free(nids);
+
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
 
@@ -1208,10 +1202,12 @@ static int jt_show_peer(int argc, char **argv)
 	char *key_nid = NULL;
 	int rc, opt;
 	struct cYAML *err_rc = NULL, *show_rc = NULL;
+	int detail = 0;
 
 	const char *const short_options = "k:vh";
 	const struct option long_options[] = {
 		{ "key_nid", 1, NULL, 'k' },
+		{ "verbose", 0, NULL, 'v' },
 		{ "help", 0, NULL, 'h' },
 		{ NULL, 0, NULL, 0 },
 	};
@@ -1222,6 +1218,9 @@ static int jt_show_peer(int argc, char **argv)
 		case 'k':
 			key_nid = optarg;
 			break;
+		case 'v':
+			detail = 1;
+			break;
 		case 'h':
 			print_help(peer_cmds, "peer", "add");
 			return 0;
@@ -1230,7 +1229,7 @@ static int jt_show_peer(int argc, char **argv)
 		}
 	}
 
-	rc = lustre_lnet_show_peer(key_nid, -1, &show_rc, &err_rc);
+	rc = lustre_lnet_show_peer(key_nid, detail, -1, &show_rc, &err_rc);
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);

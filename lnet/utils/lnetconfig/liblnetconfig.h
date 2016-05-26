@@ -271,12 +271,13 @@ int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
  *
  *     knid - Key NID of the peer
  *     nid - list of nids to add
+ *     num_nids - number of nids in the nid array
  *     mr - true if this peer is MR capable.
  *     seq_no - sequence number of the command
  *     err_rc - YAML strucutre of the resultant return code.
  */
-int lustre_lnet_config_peer_nid(char *knid, char **nid, bool mr, int seq_no,
-				struct cYAML **err_rc);
+int lustre_lnet_config_peer_nid(char *knid, char **nid, int num_nids,
+				bool mr, int seq_no, struct cYAML **err_rc);
 
 /*
  * lustre_lnet_del_peer_nid
@@ -287,11 +288,12 @@ int lustre_lnet_config_peer_nid(char *knid, char **nid, bool mr, int seq_no,
  *
  *     knid - Key NID of the peer
  *     nid - list of nids to add
+ *     num_nids - number of nids in the nid array
  *     seq_no - sequence number of the command
  *     err_rc - YAML strucutre of the resultant return code.
  */
-int lustre_lnet_del_peer_nid(char *knid, char **nid, int seq_no,
-			     struct cYAML **err_rc);
+int lustre_lnet_del_peer_nid(char *knid, char **nid, int num_nids,
+			     int seq_no, struct cYAML **err_rc);
 
 /*
  * lustre_lnet_show_peer
@@ -299,13 +301,14 @@ int lustre_lnet_del_peer_nid(char *knid, char **nid, int seq_no,
  *   system are shown.
  *
  *     knid - Key NID of the peer
+ *     detail - display detailed information
  *     seq_no - sequence number of the command
  *     show_rc - YAML structure of the resultant show
  *     err_rc - YAML strucutre of the resultant return code.
  *
  */
-int lustre_lnet_show_peer(char *knid, int seq_no, struct cYAML **show_rc,
-			  struct cYAML **err_rc);
+int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
+			  struct cYAML **show_rc, struct cYAML **err_rc);
 
 /*
  * lustre_yaml_config
@@ -355,6 +358,24 @@ void lustre_lnet_init_nw_descr(struct lnet_dlc_network_descr *nw_descr);
  */
 int lustre_lnet_parse_interfaces(char *intf_str,
 				 struct lnet_dlc_network_descr *nw_descr);
+
+/*
+ * lustre_lnet_parse_nids
+ *	Parse a set of nids into a locally allocated array and return the
+ *	pointer of the array to the caller. The caller is responsible for
+ *	freeing the array. If an initial array is provided then copy over
+ *	the contents of that array into the new array and append to it the
+ *	new content.
+ *	The nids can be of the form "nid [,nid, nid, nid]"
+ *		nids: nids string to be parsed
+ *		array: initial array of content
+ *		size: num of elements in the array
+ *		out_array: [OUT] new allocated array.
+ *	Returns size of array
+ *		sets the out_array to NULL on failure.
+ */
+int lustre_lnet_parse_nids(char *nids, char **array, int size,
+			   char ***out_array);
 
 /*
  * lustre_lnet_send_dbg_task

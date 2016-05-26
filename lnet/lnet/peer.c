@@ -84,6 +84,8 @@ lnet_peer_tables_destroy(void)
 		if (!hash) /* not intialized */
 			break;
 
+		LASSERT(list_empty(&ptable->pt_zombie_list));
+
 		ptable->pt_hash = NULL;
 		for (j = 0; j < LNET_PEER_HASH_SIZE; j++)
 			LASSERT(list_empty(&hash[j]));
@@ -119,6 +121,9 @@ lnet_peer_tables_create(void)
 			return -ENOMEM;
 		}
 
+		spin_lock_init(&ptable->pt_zombie_lock);
+		INIT_LIST_HEAD(&ptable->pt_zombie_list);
+
 		for (j = 0; j < LNET_PEER_HASH_SIZE; j++)
 			INIT_LIST_HEAD(&hash[j]);
 		ptable->pt_hash = hash; /* sign of initialization */
@@ -127,57 +132,230 @@ lnet_peer_tables_create(void)
 	return 0;
 }
 
-void lnet_peer_uninit()
+static struct lnet_peer_ni *
+lnet_peer_ni_alloc(lnet_nid_t nid)
 {
+	struct lnet_peer_ni *lpni;
+	struct lnet_net *net;
 	int cpt;
-	struct lnet_peer_ni *lpni, *tmp;
-	struct lnet_peer_table *ptable = NULL;
 
-	/* remove all peer_nis from the remote peer and he hash list */
-	list_for_each_entry_safe(lpni, tmp, &the_lnet.ln_remote_peer_ni_list,
-				 lpni_on_remote_peer_ni_list) {
-		list_del_init(&lpni->lpni_on_remote_peer_ni_list);
-		lnet_peer_ni_decref_locked(lpni);
+	cpt = lnet_nid_cpt_hash(nid, LNET_CPT_NUMBER);
 
-		cpt = lnet_cpt_of_nid_locked(lpni->lpni_nid, NULL);
-		ptable = the_lnet.ln_peer_tables[cpt];
-		ptable->pt_zombies++;
+	LIBCFS_CPT_ALLOC(lpni, lnet_cpt_table(), cpt, sizeof(*lpni));
+	if (!lpni)
+		return NULL;
 
-		list_del_init(&lpni->lpni_hashlist);
-		lnet_peer_ni_decref_locked(lpni);
+	INIT_LIST_HEAD(&lpni->lpni_txq);
+	INIT_LIST_HEAD(&lpni->lpni_rtrq);
+	INIT_LIST_HEAD(&lpni->lpni_routes);
+	INIT_LIST_HEAD(&lpni->lpni_hashlist);
+	INIT_LIST_HEAD(&lpni->lpni_on_peer_net_list);
+	INIT_LIST_HEAD(&lpni->lpni_on_remote_peer_ni_list);
+
+	lpni->lpni_alive = !lnet_peers_start_down(); /* 1 bit!! */
+	lpni->lpni_last_alive = cfs_time_current(); /* assumes alive */
+	lpni->lpni_ping_feats = LNET_PING_FEAT_INVAL;
+	lpni->lpni_nid = nid;
+	lpni->lpni_cpt = cpt;
+	lnet_set_peer_ni_health_locked(lpni, true);
+
+	net = lnet_get_net_locked(LNET_NIDNET(nid));
+	lpni->lpni_net = net;
+	if (net) {
+		lpni->lpni_txcredits = net->net_tunables.lct_peer_tx_credits;
+		lpni->lpni_mintxcredits = lpni->lpni_txcredits;
+		lpni->lpni_rtrcredits = lnet_peer_buffer_credits(net);
+		lpni->lpni_minrtrcredits = lpni->lpni_rtrcredits;
+	} else {
+		/*
+		 * This peer_ni is not on a local network, so we
+		 * cannot add the credits here. In case the net is
+		 * added later, add the peer_ni to the remote peer ni
+		 * list so it can be easily found and revisited.
+		 */
+		/* FIXME: per-net implementation instead? */
+		atomic_inc(&lpni->lpni_refcount);
+		list_add_tail(&lpni->lpni_on_remote_peer_ni_list,
+			      &the_lnet.ln_remote_peer_ni_list);
 	}
 
+	/* TODO: update flags */
+
+	return lpni;
+}
+
+static struct lnet_peer_net *
+lnet_peer_net_alloc(__u32 net_id)
+{
+	struct lnet_peer_net *lpn;
+
+	LIBCFS_CPT_ALLOC(lpn, lnet_cpt_table(), CFS_CPT_ANY, sizeof(*lpn));
+	if (!lpn)
+		return NULL;
+
+	INIT_LIST_HEAD(&lpn->lpn_on_peer_list);
+	INIT_LIST_HEAD(&lpn->lpn_peer_nis);
+	lpn->lpn_net_id = net_id;
+
+	return lpn;
+}
+
+static struct lnet_peer *
+lnet_peer_alloc(lnet_nid_t nid)
+{
+	struct lnet_peer *lp;
+
+	LIBCFS_CPT_ALLOC(lp, lnet_cpt_table(), CFS_CPT_ANY, sizeof(*lp));
+	if (!lp)
+		return NULL;
+
+	INIT_LIST_HEAD(&lp->lp_on_lnet_peer_list);
+	INIT_LIST_HEAD(&lp->lp_peer_nets);
+	lp->lp_primary_nid = nid;
+
+	/* TODO: update flags */
+
+	return lp;
+}
+
+
+static void
+lnet_try_destroy_peer_hierarchy_locked(struct lnet_peer_ni *lpni)
+{
+	struct lnet_peer_net *peer_net;
+	struct lnet_peer *peer;
+
+	/* TODO: could the below situation happen? accessing an already
+	 * destroyed peer? */
+	if (lpni->lpni_peer_net == NULL ||
+	    lpni->lpni_peer_net->lpn_peer == NULL)
+		return;
+
+	peer_net = lpni->lpni_peer_net;
+	peer = lpni->lpni_peer_net->lpn_peer;
+
+	list_del_init(&lpni->lpni_on_peer_net_list);
+	lpni->lpni_peer_net = NULL;
+
+	/* if peer_net is empty, then remove it from the peer */
+	if (list_empty(&peer_net->lpn_peer_nis)) {
+		list_del_init(&peer_net->lpn_on_peer_list);
+		peer_net->lpn_peer = NULL;
+		LIBCFS_FREE(peer_net, sizeof(*peer_net));
+
+		/* if the peer is empty then remove it from the
+		 * the_lnet.ln_peers */
+		if (list_empty(&peer->lp_peer_nets)) {
+			list_del_init(&peer->lp_on_lnet_peer_list);
+			LIBCFS_FREE(peer, sizeof(*peer));
+		}
+	}
+}
+
+/* called with lnet_net_lock LNET_LOCK_EX held */
+static void
+lnet_peer_ni_del_locked(struct lnet_peer_ni *lpni)
+{
+	struct lnet_peer_table *ptable = NULL;
+
+	lnet_peer_remove_from_remote_list(lpni);
+
+	/* remove peer ni from the hash list. */
+	list_del_init(&lpni->lpni_hashlist);
+
+	/* decrement the ref count on the peer table */
+	ptable = the_lnet.ln_peer_tables[lpni->lpni_cpt];
+	LASSERT(atomic_read(&ptable->pt_number) > 0);
+	atomic_dec(&ptable->pt_number);
+
+	/*
+	 * The peer_ni can no longer be found with a lookup. But there
+	 * can be current users, so keep track of it on the zombie
+	 * list until the reference count has gone to zero.
+	 *
+	 * The last reference may be lost in a place where the
+	 * lnet_net_lock locks only a single cpt, and that cpt may not
+	 * be lpni->lpni_cpt. So the zombie list of this peer_table
+	 * has its own lock.
+	 */
+	spin_lock(&ptable->pt_zombie_lock);
+	list_add(&lpni->lpni_hashlist, &ptable->pt_zombie_list);
+	ptable->pt_zombies++;
+	spin_unlock(&ptable->pt_zombie_lock);
+
+	/* no need to keep this peer on the hierarchy anymore */
+	lnet_try_destroy_peer_hierarchy_locked(lpni);
+
+	/* decrement reference on peer */
+	lnet_peer_ni_decref_locked(lpni);
+}
+
+void lnet_peer_uninit()
+{
+	struct lnet_peer_ni *lpni, *tmp;
+
+	lnet_net_lock(LNET_LOCK_EX);
+
+	/* remove all peer_nis from the remote peer and the hash list */
+	list_for_each_entry_safe(lpni, tmp, &the_lnet.ln_remote_peer_ni_list,
+				 lpni_on_remote_peer_ni_list)
+		lnet_peer_ni_del_locked(lpni);
+
 	lnet_peer_tables_destroy();
+
+	lnet_net_unlock(LNET_LOCK_EX);
 }
 
 static void
-lnet_peer_table_cleanup_locked(lnet_ni_t *ni, struct lnet_peer_table *ptable)
+lnet_peer_del_locked(struct lnet_peer *peer)
+{
+	struct lnet_peer_ni *lpni = NULL, *lpni2;
+
+	lpni = lnet_get_next_peer_ni_locked(peer, NULL, lpni);
+	while (lpni != NULL) {
+		lpni2 = lnet_get_next_peer_ni_locked(peer, NULL, lpni);
+		lnet_peer_ni_del_locked(lpni);
+		lpni = lpni2;
+	}
+}
+
+static void
+lnet_peer_table_cleanup_locked(struct lnet_net *net,
+			       struct lnet_peer_table *ptable)
 {
 	int			 i;
-	struct lnet_peer_ni	*lp;
+	struct lnet_peer_ni	*lpni;
 	struct lnet_peer_ni	*tmp;
+	struct lnet_peer	*peer;
 
 	for (i = 0; i < LNET_PEER_HASH_SIZE; i++) {
-		list_for_each_entry_safe(lp, tmp, &ptable->pt_hash[i],
+		list_for_each_entry_safe(lpni, tmp, &ptable->pt_hash[i],
 					 lpni_hashlist) {
-			if (ni != NULL && ni->ni_net != lp->lpni_net)
+			if (net != NULL && net != lpni->lpni_net)
 				continue;
-			list_del_init(&lp->lpni_hashlist);
-			/* Lose hash table's ref */
-			ptable->pt_zombies++;
-			lnet_peer_ni_decref_locked(lp);
+
+			/*
+			 * check if by removing this peer ni we should be
+			 * removing the entire peer.
+			 */
+			peer = lpni->lpni_peer_net->lpn_peer;
+
+			if (peer->lp_primary_nid == lpni->lpni_nid)
+				lnet_peer_del_locked(peer);
+			else
+				lnet_peer_ni_del_locked(lpni);
 		}
 	}
 }
 
 static void
-lnet_peer_table_finalize_wait_locked(struct lnet_peer_table *ptable,
-				     int cpt_locked)
+lnet_peer_ni_finalize_wait(struct lnet_peer_table *ptable)
 {
-	int	i;
+	int	i = 3;
 
-	for (i = 3; ptable->pt_zombies != 0; i++) {
-		lnet_net_unlock(cpt_locked);
+	spin_lock(&ptable->pt_zombie_lock);
+	while (ptable->pt_zombies) {
+		spin_unlock(&ptable->pt_zombie_lock);
 
 		if (IS_PO2(i)) {
 			CDEBUG(D_WARNING,
@@ -186,13 +364,14 @@ lnet_peer_table_finalize_wait_locked(struct lnet_peer_table *ptable,
 		}
 		set_current_state(TASK_UNINTERRUPTIBLE);
 		schedule_timeout(cfs_time_seconds(1) >> 1);
-		lnet_net_lock(cpt_locked);
+		spin_lock(&ptable->pt_zombie_lock);
 	}
+	spin_unlock(&ptable->pt_zombie_lock);
 }
 
 static void
-lnet_peer_table_del_rtrs_locked(lnet_ni_t *ni, struct lnet_peer_table *ptable,
-				int cpt_locked)
+lnet_peer_table_del_rtrs_locked(struct lnet_net *net,
+				struct lnet_peer_table *ptable)
 {
 	struct lnet_peer_ni	*lp;
 	struct lnet_peer_ni	*tmp;
@@ -202,7 +381,7 @@ lnet_peer_table_del_rtrs_locked(lnet_ni_t *ni, struct lnet_peer_table *ptable,
 	for (i = 0; i < LNET_PEER_HASH_SIZE; i++) {
 		list_for_each_entry_safe(lp, tmp, &ptable->pt_hash[i],
 					 lpni_hashlist) {
-			if (ni->ni_net != lp->lpni_net)
+			if (net != lp->lpni_net)
 				continue;
 
 			if (lp->lpni_rtr_refcount == 0)
@@ -210,41 +389,37 @@ lnet_peer_table_del_rtrs_locked(lnet_ni_t *ni, struct lnet_peer_table *ptable,
 
 			lpni_nid = lp->lpni_nid;
 
-			lnet_net_unlock(cpt_locked);
+			lnet_net_unlock(LNET_LOCK_EX);
 			lnet_del_route(LNET_NIDNET(LNET_NID_ANY), lpni_nid);
-			lnet_net_lock(cpt_locked);
+			lnet_net_lock(LNET_LOCK_EX);
 		}
 	}
 }
 
 void
-lnet_peer_tables_cleanup(lnet_ni_t *ni)
+lnet_peer_tables_cleanup(struct lnet_net *net)
 {
 	int				i;
 	struct lnet_peer_table		*ptable;
 
-	LASSERT(the_lnet.ln_shutdown || ni != NULL);
+	LASSERT(the_lnet.ln_shutdown || net != NULL);
 	/* If just deleting the peers for a NI, get rid of any routes these
 	 * peers are gateways for. */
 	cfs_percpt_for_each(ptable, i, the_lnet.ln_peer_tables) {
 		lnet_net_lock(LNET_LOCK_EX);
-		lnet_peer_table_del_rtrs_locked(ni, ptable, i);
+		lnet_peer_table_del_rtrs_locked(net, ptable);
 		lnet_net_unlock(LNET_LOCK_EX);
 	}
 
 	/* Start the cleanup process */
 	cfs_percpt_for_each(ptable, i, the_lnet.ln_peer_tables) {
 		lnet_net_lock(LNET_LOCK_EX);
-		lnet_peer_table_cleanup_locked(ni, ptable);
+		lnet_peer_table_cleanup_locked(net, ptable);
 		lnet_net_unlock(LNET_LOCK_EX);
 	}
 
-	/* Wait until all peers have been destroyed. */
-	cfs_percpt_for_each(ptable, i, the_lnet.ln_peer_tables) {
-		lnet_net_lock(LNET_LOCK_EX);
-		lnet_peer_table_finalize_wait_locked(ptable, i);
-		lnet_net_unlock(LNET_LOCK_EX);
-	}
+	cfs_percpt_for_each(ptable, i, the_lnet.ln_peer_tables)
+		lnet_peer_ni_finalize_wait(ptable);
 }
 
 static struct lnet_peer_ni *
@@ -281,23 +456,23 @@ lnet_find_peer_ni_locked(lnet_nid_t nid)
 	return lpni;
 }
 
-int
-lnet_find_or_create_peer_locked(lnet_nid_t dst_nid, int cpt, struct lnet_peer **peer)
+struct lnet_peer *
+lnet_find_or_create_peer_locked(lnet_nid_t dst_nid, int cpt)
 {
 	struct lnet_peer_ni *lpni;
+	struct lnet_peer *lp;
 
 	lpni = lnet_find_peer_ni_locked(dst_nid);
 	if (!lpni) {
-		int rc;
-		rc = lnet_nid2peerni_locked(&lpni, dst_nid, cpt);
-		if (rc != 0)
-			return rc;
+		lpni = lnet_nid2peerni_locked(dst_nid, cpt);
+		if (IS_ERR(lpni))
+			return ERR_CAST(lpni);
 	}
 
-	*peer = lpni->lpni_peer_net->lpn_peer;
+	lp = lpni->lpni_peer_net->lpn_peer;
 	lnet_peer_ni_decref_locked(lpni);
 
-	return 0;
+	return lp;
 }
 
 struct lnet_peer_ni *
@@ -404,77 +579,6 @@ lnet_peer_primary_nid(lnet_nid_t nid)
 	return primary_nid;
 }
 
-static void
-lnet_try_destroy_peer_hierarchy_locked(struct lnet_peer_ni *lpni)
-{
-	struct lnet_peer_net *peer_net;
-	struct lnet_peer *peer;
-
-	/* TODO: could the below situation happen? accessing an already
-	 * destroyed peer? */
-	if (lpni->lpni_peer_net == NULL ||
-	    lpni->lpni_peer_net->lpn_peer == NULL)
-		return;
-
-	peer_net = lpni->lpni_peer_net;
-	peer = lpni->lpni_peer_net->lpn_peer;
-
-	list_del_init(&lpni->lpni_on_peer_net_list);
-	lpni->lpni_peer_net = NULL;
-
-	/* if peer_net is empty, then remove it from the peer */
-	if (list_empty(&peer_net->lpn_peer_nis)) {
-		list_del_init(&peer_net->lpn_on_peer_list);
-		peer_net->lpn_peer = NULL;
-		LIBCFS_FREE(peer_net, sizeof(*peer_net));
-
-		/* if the peer is empty then remove it from the
-		 * the_lnet.ln_peers */
-		if (list_empty(&peer->lp_peer_nets)) {
-			list_del_init(&peer->lp_on_lnet_peer_list);
-			LIBCFS_FREE(peer, sizeof(*peer));
-		}
-	}
-}
-
-static int
-lnet_build_peer_hierarchy(struct lnet_peer_ni *lpni)
-{
-	struct lnet_peer *peer;
-	struct lnet_peer_net *peer_net;
-	__u32 lpni_net = LNET_NIDNET(lpni->lpni_nid);
-
-	peer = NULL;
-	peer_net = NULL;
-
-	LIBCFS_ALLOC(peer, sizeof(*peer));
-	if (peer == NULL)
-		return -ENOMEM;
-
-	LIBCFS_ALLOC(peer_net, sizeof(*peer_net));
-	if (peer_net == NULL) {
-		LIBCFS_FREE(peer, sizeof(*peer));
-		return -ENOMEM;
-	}
-
-	INIT_LIST_HEAD(&peer->lp_on_lnet_peer_list);
-	INIT_LIST_HEAD(&peer->lp_peer_nets);
-	INIT_LIST_HEAD(&peer_net->lpn_on_peer_list);
-	INIT_LIST_HEAD(&peer_net->lpn_peer_nis);
-
-	/* build the hierarchy */
-	peer_net->lpn_net_id = lpni_net;
-	peer_net->lpn_peer = peer;
-	lpni->lpni_peer_net = peer_net;
-	peer->lp_primary_nid = lpni->lpni_nid;
-	peer->lp_multi_rail = false;
-	list_add_tail(&peer_net->lpn_on_peer_list, &peer->lp_peer_nets);
-	list_add_tail(&lpni->lpni_on_peer_net_list, &peer_net->lpn_peer_nis);
-	list_add_tail(&peer->lp_on_lnet_peer_list, &the_lnet.ln_peers);
-
-	return 0;
-}
-
 struct lnet_peer_net *
 lnet_peer_get_net_locked(struct lnet_peer *peer, __u32 net_id)
 {
@@ -486,186 +590,307 @@ lnet_peer_get_net_locked(struct lnet_peer *peer, __u32 net_id)
 	return NULL;
 }
 
-/*
- * given the key nid find the peer to add the new peer NID to. If the key
- * nid is NULL, then create a new peer, but first make sure that the NID
- * is unique
- */
-int
-lnet_add_peer_ni_to_peer(lnet_nid_t key_nid, lnet_nid_t nid, bool mr)
+static int
+lnet_peer_setup_hierarchy(struct lnet_peer *lp, struct lnet_peer_ni *lpni,
+			  lnet_nid_t nid)
 {
-	struct lnet_peer_ni *lpni, *lpni2;
+	struct lnet_peer_net *lpn = NULL;
+	struct lnet_peer_table *ptable;
+        __u32 net_id = LNET_NIDNET(nid);
+
+	/*
+	 * Create the peer_ni, peer_net, and peer if they don't exist
+	 * yet.
+	 */
+	if (lp) {
+		lpn = lnet_peer_get_net_locked(lp, net_id);
+	} else {
+		lp = lnet_peer_alloc(nid);
+		if (!lp)
+			goto out_enomem;
+	}
+
+	if (!lpn) {
+		lpn = lnet_peer_net_alloc(net_id);
+		if (!lpn)
+			goto out_maybe_free_lp;
+	}
+
+	if (!lpni) {
+		lpni = lnet_peer_ni_alloc(nid);
+		if (!lpni)
+			goto out_maybe_free_lpn;
+	}
+
+	/* Install the new peer_ni */
+	lnet_net_lock(LNET_LOCK_EX);
+	/* Add peer_ni to global peer table hash, if necessary. */
+	if (list_empty(&lpni->lpni_hashlist)) {
+		ptable = the_lnet.ln_peer_tables[lpni->lpni_cpt];
+		list_add_tail(&lpni->lpni_hashlist,
+			      &ptable->pt_hash[lnet_nid2peerhash(nid)]);
+		ptable->pt_version++;
+		atomic_inc(&ptable->pt_number);
+		atomic_inc(&lpni->lpni_refcount);
+	}
+
+	/* Detach the peer_ni from an existing peer, if necessary. */
+	if (lpni->lpni_peer_net && lpni->lpni_peer_net->lpn_peer != lp)
+		lnet_try_destroy_peer_hierarchy_locked(lpni);
+
+	/* Add peer_ni to peer_net */
+	lpni->lpni_peer_net = lpn;
+	list_add_tail(&lpni->lpni_on_peer_net_list, &lpn->lpn_peer_nis);
+
+	/* Add peer_net to peer */
+	if (!lpn->lpn_peer) {
+		lpn->lpn_peer = lp;
+		list_add_tail(&lpn->lpn_on_peer_list, &lp->lp_peer_nets);
+	}
+
+	/* Add peer to global peer list */
+	if (list_empty(&lp->lp_on_lnet_peer_list))
+		list_add_tail(&lp->lp_on_lnet_peer_list, &the_lnet.ln_peers);
+	lnet_net_unlock(LNET_LOCK_EX);
+
+	return 0;
+
+out_maybe_free_lpn:
+	if (list_empty(&lpn->lpn_on_peer_list))
+		LIBCFS_FREE(lpn, sizeof(*lpn));
+out_maybe_free_lp:
+	if (list_empty(&lp->lp_on_lnet_peer_list))
+		LIBCFS_FREE(lp, sizeof(*lp));
+out_enomem:
+	return -ENOMEM;
+}
+
+static int
+lnet_add_prim_lpni(lnet_nid_t nid)
+{
+	int rc;
 	struct lnet_peer *peer;
-	struct lnet_peer_net *peer_net, *pn;
-	int cpt, cpt2, rc;
-	struct lnet_peer_table *ptable = NULL;
-	__u32 net_id = LNET_NIDNET(nid);
+	struct lnet_peer_ni *lpni;
+
+	LASSERT(nid != LNET_NID_ANY);
+
+	/*
+	 * lookup the NID and its peer
+	 *  if the peer doesn't exist, create it.
+	 *  if this is a non-MR peer then change its state to MR and exit.
+	 *  if this is an MR peer and it's a primary NI: NO-OP.
+	 *  if this is an MR peer and it's not a primary NI. Operation not
+	 *     allowed.
+	 *
+	 * The adding and deleting of peer nis is being serialized through
+	 * the api_mutex. So we can look up peers with the mutex locked
+	 * safely. Only when we need to change the ptable, do we need to
+	 * exclusively lock the lnet_net_lock()
+	 */
+	lpni = lnet_find_peer_ni_locked(nid);
+	if (!lpni) {
+		rc = lnet_peer_setup_hierarchy(NULL, NULL, nid);
+		if (rc != 0)
+			return rc;
+		lpni = lnet_find_peer_ni_locked(nid);
+	}
+
+	LASSERT(lpni);
+
+	lnet_peer_ni_decref_locked(lpni);
+
+	peer = lpni->lpni_peer_net->lpn_peer;
+
+	/*
+	 * If we found a lpni with the same nid as the NID we're trying to
+	 * create, then we're trying to create an already existing lpni 
+	 * that belongs to a different peer
+	 */
+	if (peer->lp_primary_nid != nid)
+		return -EEXIST;
+
+	/*
+	 * if we found an lpni that is not a multi-rail, which could occur
+	 * if lpni is already created as a non-mr lpni or we just created
+	 * it, then make sure you indicate that this lpni is a primary mr
+	 * capable peer.
+	 *
+	 * TODO: update flags if necessary
+	 */
+	if (!peer->lp_multi_rail && peer->lp_primary_nid == nid)
+		peer->lp_multi_rail = true;
+
+	return rc;
+}
+
+static int
+lnet_add_peer_ni_to_prim_lpni(lnet_nid_t key_nid, lnet_nid_t nid)
+{
+	struct lnet_peer *peer, *primary_peer;
+	struct lnet_peer_ni *lpni = NULL, *klpni = NULL;
+
+	LASSERT(key_nid != LNET_NID_ANY && nid != LNET_NID_ANY);
+
+	/*
+	 * key nid must be created by this point. If not then this
+	 * operation is not permitted
+	 */
+	klpni = lnet_find_peer_ni_locked(key_nid);
+	if (!klpni)
+		return -ENOENT;
+
+	lnet_peer_ni_decref_locked(klpni);
+
+	primary_peer = klpni->lpni_peer_net->lpn_peer;
+
+	lpni = lnet_find_peer_ni_locked(nid);
+	if (lpni) {
+		lnet_peer_ni_decref_locked(lpni);
+
+		peer = lpni->lpni_peer_net->lpn_peer;
+		/*
+		 * lpni already exists in the system but it belongs to
+		 * a different peer. We can't re-added it
+		 */
+		if (peer->lp_primary_nid != key_nid && peer->lp_multi_rail) {
+			CERROR("Cannot add NID %s owned by peer %s to peer %s\n",
+			       libcfs_nid2str(lpni->lpni_nid),
+			       libcfs_nid2str(peer->lp_primary_nid),
+			       libcfs_nid2str(key_nid));
+			return -EEXIST;
+		} else if (peer->lp_primary_nid == key_nid) {
+			/*
+			 * found a peer_ni that is already part of the
+			 * peer. This is a no-op operation.
+			 */
+			return 0;
+		}
+
+		/*
+		 * TODO: else if (peer->lp_primary_nid != key_nid &&
+		 *		  !peer->lp_multi_rail)
+		 * peer is not an MR peer and it will be moved in the next
+		 * step to klpni, so update its flags accordingly.
+		 * lnet_move_peer_ni()
+		 */
+
+		/*
+		 * TODO: call lnet_update_peer() from here to update the
+		 * flags. This is the case when the lpni you're trying to
+		 * add is already part of the peer. This could've been
+		 * added by the DD previously, so go ahead and do any
+		 * updates to the state if necessary
+		 */
+
+	}
+
+	/*
+	 * When we get here we either have found an existing lpni, which
+	 * we can switch to the new peer. Or we need to create one and
+	 * add it to the new peer
+	 */
+	return lnet_peer_setup_hierarchy(primary_peer, lpni, nid);
+}
+
+/*
+ * lpni creation initiated due to traffic either sending or receiving.
+ */
+static int
+lnet_peer_ni_traffic_add(lnet_nid_t nid)
+{
+	struct lnet_peer_ni *lpni;
+	int rc = 0;
 
 	if (nid == LNET_NID_ANY)
 		return -EINVAL;
 
-	/* check that nid is unique */
-	cpt = lnet_nid_cpt_hash(nid, LNET_CPT_NUMBER);
-	lnet_net_lock(cpt);
+	/* lnet_net_lock is not needed here because ln_api_lock is held */
 	lpni = lnet_find_peer_ni_locked(nid);
-	if (lpni != NULL) {
+	if (lpni) {
+		/*
+		 * TODO: lnet_update_primary_nid() but not all of it
+		 * only indicate if we're converting this to MR capable
+		 * Can happen due to DD
+		 */
 		lnet_peer_ni_decref_locked(lpni);
-		lnet_net_unlock(cpt);
+	} else {
+		rc = lnet_peer_setup_hierarchy(NULL, NULL, nid);
+	}
+
+	return rc;
+
+}
+
+static int
+lnet_peer_ni_add_non_mr(lnet_nid_t nid)
+{
+	struct lnet_peer_ni *lpni;
+
+	lpni = lnet_find_peer_ni_locked(nid);
+	if (lpni) {
+		CERROR("Cannot add %s as non-mr when it already exists\n",
+		       libcfs_nid2str(nid));
+		lnet_peer_ni_decref_locked(lpni);
 		return -EEXIST;
 	}
-	lnet_net_unlock(cpt);
 
-	if (key_nid != LNET_NID_ANY) {
-		cpt2 = lnet_nid_cpt_hash(key_nid, LNET_CPT_NUMBER);
-		lnet_net_lock(cpt2);
-		lpni = lnet_find_peer_ni_locked(key_nid);
-		if (lpni == NULL) {
-			lnet_net_unlock(cpt2);
-			/* key_nid refers to a non-existant peer_ni.*/
-			return -EINVAL;
-		}
-		peer = lpni->lpni_peer_net->lpn_peer;
-		peer->lp_multi_rail = mr;
-		lnet_peer_ni_decref_locked(lpni);
-		lnet_net_unlock(cpt2);
-	} else {
-		lnet_net_lock(LNET_LOCK_EX);
-		rc = lnet_nid2peerni_locked(&lpni, nid, LNET_LOCK_EX);
-		if (rc == 0) {
-			lpni->lpni_peer_net->lpn_peer->lp_multi_rail = mr;
-			lnet_peer_ni_decref_locked(lpni);
-		}
-		lnet_net_unlock(LNET_LOCK_EX);
-		return rc;
-	}
+	return lnet_peer_setup_hierarchy(NULL, NULL, nid);
+}
 
-	lpni = NULL;
+/*
+ * This API handles the following combinations:
+ *	Create a primary NI if only the key_nid is provided
+ *	Create or add an lpni to a primary NI. Primary NI must've already
+ *	been created
+ *	Create a non-MR peer.
+ */
+int
+lnet_add_peer_ni_to_peer(lnet_nid_t key_nid, lnet_nid_t nid, bool mr)
+{
+	/*
+	 * Caller trying to setup an MR like peer hierarchy but
+	 * specifying it to be non-MR. This is not allowed.
+	 */
+	if (key_nid != LNET_NID_ANY &&
+	    nid != LNET_NID_ANY && !mr)
+		return -EPERM;
 
-	LIBCFS_CPT_ALLOC(lpni, lnet_cpt_table(), cpt, sizeof(*lpni));
-	if (lpni == NULL)
-		return -ENOMEM;
+	/* Add the primary NID of a peer */
+	if (key_nid != LNET_NID_ANY &&
+	    nid == LNET_NID_ANY && mr)
+		return lnet_add_prim_lpni(key_nid);
 
-	INIT_LIST_HEAD(&lpni->lpni_txq);
-	INIT_LIST_HEAD(&lpni->lpni_rtrq);
-	INIT_LIST_HEAD(&lpni->lpni_routes);
-	INIT_LIST_HEAD(&lpni->lpni_hashlist);
-	INIT_LIST_HEAD(&lpni->lpni_on_peer_net_list);
-	INIT_LIST_HEAD(&lpni->lpni_on_remote_peer_ni_list);
+	/* Add a NID to an existing peer */
+	if (key_nid != LNET_NID_ANY &&
+	    nid != LNET_NID_ANY && mr)
+		return lnet_add_peer_ni_to_prim_lpni(key_nid, nid);
 
-	lpni->lpni_alive = !lnet_peers_start_down(); /* 1 bit!! */
-	lpni->lpni_last_alive = cfs_time_current(); /* assumes alive */
-	lpni->lpni_ping_feats = LNET_PING_FEAT_INVAL;
-	lpni->lpni_nid = nid;
-	lpni->lpni_cpt = cpt;
-	lnet_set_peer_ni_health_locked(lpni, true);
+	/* Add a non-MR peer NI */
+	if (((key_nid != LNET_NID_ANY &&
+	      nid == LNET_NID_ANY) ||
+	     (key_nid == LNET_NID_ANY &&
+	      nid != LNET_NID_ANY)) && !mr)
+		return lnet_peer_ni_add_non_mr(key_nid != LNET_NID_ANY ?
+							 key_nid : nid);
 
-	/* allocate here in case we need to add a new peer_net */
-	peer_net = NULL;
-	LIBCFS_ALLOC(peer_net, sizeof(*peer_net));
-	if (peer_net == NULL) {
-		rc = -ENOMEM;
-		if (lpni != NULL)
-			LIBCFS_FREE(lpni, sizeof(*lpni));
-		return rc;
-	}
-
-	lnet_net_lock(LNET_LOCK_EX);
-
-	ptable = the_lnet.ln_peer_tables[cpt];
-	ptable->pt_number++;
-
-	lpni2 = lnet_find_peer_ni_locked(nid);
-	if (lpni2 != NULL) {
-		lnet_peer_ni_decref_locked(lpni2);
-		/* sanity check that lpni2's peer is what we expect */
-		if (lpni2->lpni_peer_net->lpn_peer != peer)
-			rc = -EEXIST;
-		else
-			rc = -EINVAL;
-
-		ptable->pt_number--;
-		/* another thread has already added it */
-		lnet_net_unlock(LNET_LOCK_EX);
-		LIBCFS_FREE(peer_net, sizeof(*peer_net));
-		return rc;
-	}
-
-	lpni->lpni_net = lnet_get_net_locked(LNET_NIDNET(lpni->lpni_nid));
-	if (lpni->lpni_net != NULL) {
-		lpni->lpni_txcredits    =
-		lpni->lpni_mintxcredits =
-			lpni->lpni_net->net_tunables.lct_peer_tx_credits;
-		lpni->lpni_rtrcredits =
-		lpni->lpni_minrtrcredits = lnet_peer_buffer_credits(lpni->lpni_net);
-	} else {
-		/*
-		 * if you're adding a peer which is not on a local network
-		 * then we can't assign any of the credits. It won't be
-		 * picked for sending anyway. Eventually a network can be
-		 * added, in this case we need to revisit this peer and
-		 * update its credits.
-		 */
-
-		/* increment refcount for remote peer list */
-		atomic_inc(&lpni->lpni_refcount);
-		list_add_tail(&lpni->lpni_on_remote_peer_ni_list,
-			      &the_lnet.ln_remote_peer_ni_list);
-	}
-
-	/* increment refcount for peer on hash list */
-	atomic_inc(&lpni->lpni_refcount);
-
-	list_add_tail(&lpni->lpni_hashlist,
-		      &ptable->pt_hash[lnet_nid2peerhash(nid)]);
-	ptable->pt_version++;
-
-	/* add the lpni to a net */
-	list_for_each_entry(pn, &peer->lp_peer_nets, lpn_on_peer_list) {
-		if (pn->lpn_net_id == net_id) {
-			list_add_tail(&lpni->lpni_on_peer_net_list,
-				      &pn->lpn_peer_nis);
-			lpni->lpni_peer_net = pn;
-			lnet_net_unlock(LNET_LOCK_EX);
-			LIBCFS_FREE(peer_net, sizeof(*peer_net));
-			return 0;
-		}
-	}
-
-	INIT_LIST_HEAD(&peer_net->lpn_on_peer_list);
-	INIT_LIST_HEAD(&peer_net->lpn_peer_nis);
-
-	/* build the hierarchy */
-	peer_net->lpn_net_id = net_id;
-	peer_net->lpn_peer = peer;
-	lpni->lpni_peer_net = peer_net;
-	list_add_tail(&lpni->lpni_on_peer_net_list, &peer_net->lpn_peer_nis);
-	list_add_tail(&peer_net->lpn_on_peer_list, &peer->lp_peer_nets);
-
-	lnet_net_unlock(LNET_LOCK_EX);
 	return 0;
 }
 
 int
 lnet_del_peer_ni_from_peer(lnet_nid_t key_nid, lnet_nid_t nid)
 {
-	int cpt;
 	lnet_nid_t local_nid;
 	struct lnet_peer *peer;
-	struct lnet_peer_ni *lpni, *lpni2;
-	struct lnet_peer_table *ptable = NULL;
+	struct lnet_peer_ni *lpni;
 
 	if (key_nid == LNET_NID_ANY)
 		return -EINVAL;
 
 	local_nid = (nid != LNET_NID_ANY) ? nid : key_nid;
-	cpt = lnet_nid_cpt_hash(local_nid, LNET_CPT_NUMBER);
-	lnet_net_lock(LNET_LOCK_EX);
 
 	lpni = lnet_find_peer_ni_locked(local_nid);
-	if (lpni == NULL) {
-		lnet_net_unlock(cpt);
+	if (!lpni)
 		return -EINVAL;
-	}
 	lnet_peer_ni_decref_locked(lpni);
 
 	peer = lpni->lpni_peer_net->lpn_peer;
@@ -676,30 +901,15 @@ lnet_del_peer_ni_from_peer(lnet_nid_t key_nid, lnet_nid_t nid)
 		 * deleting the primary ni is equivalent to deleting the
 		 * entire peer
 		 */
-		lpni = NULL;
-		lpni = lnet_get_next_peer_ni_locked(peer, NULL, lpni);
-		while (lpni != NULL) {
-			lpni2 = lnet_get_next_peer_ni_locked(peer, NULL, lpni);
-			cpt = lnet_nid_cpt_hash(lpni->lpni_nid,
-						LNET_CPT_NUMBER);
-			lnet_peer_remove_from_remote_list(lpni);
-			ptable = the_lnet.ln_peer_tables[cpt];
-			ptable->pt_zombies++;
-			list_del_init(&lpni->lpni_hashlist);
-			lnet_peer_ni_decref_locked(lpni);
-			lpni = lpni2;
-		}
+		lnet_net_lock(LNET_LOCK_EX);
+		lnet_peer_del_locked(peer);
 		lnet_net_unlock(LNET_LOCK_EX);
 
 		return 0;
 	}
 
-	lnet_peer_remove_from_remote_list(lpni);
-	cpt = lnet_nid_cpt_hash(lpni->lpni_nid, LNET_CPT_NUMBER);
-	ptable = the_lnet.ln_peer_tables[cpt];
-	ptable->pt_zombies++;
-	list_del_init(&lpni->lpni_hashlist);
-	lnet_peer_ni_decref_locked(lpni);
+	lnet_net_lock(LNET_LOCK_EX);
+	lnet_peer_ni_del_locked(lpni);
 	lnet_net_unlock(LNET_LOCK_EX);
 
 	return 0;
@@ -713,160 +923,70 @@ lnet_destroy_peer_ni_locked(struct lnet_peer_ni *lpni)
 	LASSERT(atomic_read(&lpni->lpni_refcount) == 0);
 	LASSERT(lpni->lpni_rtr_refcount == 0);
 	LASSERT(list_empty(&lpni->lpni_txq));
-	LASSERT(list_empty(&lpni->lpni_hashlist));
 	LASSERT(lpni->lpni_txqnob == 0);
-	LASSERT(lpni->lpni_peer_net != NULL);
-	LASSERT(lpni->lpni_peer_net->lpn_peer != NULL);
-
-	ptable = the_lnet.ln_peer_tables[lpni->lpni_cpt];
-	LASSERT(ptable->pt_number > 0);
-	ptable->pt_number--;
 
 	lpni->lpni_net = NULL;
 
-	lnet_try_destroy_peer_hierarchy_locked(lpni);
+	/* remove the peer ni from the zombie list */
+	ptable = the_lnet.ln_peer_tables[lpni->lpni_cpt];
+	spin_lock(&ptable->pt_zombie_lock);
+	list_del_init(&lpni->lpni_hashlist);
+	ptable->pt_zombies--;
+	spin_unlock(&ptable->pt_zombie_lock);
 
 	LIBCFS_FREE(lpni, sizeof(*lpni));
-
-	LASSERT(ptable->pt_zombies > 0);
-	ptable->pt_zombies--;
 }
 
-int
-lnet_nid2peerni_locked(struct lnet_peer_ni **lpnip, lnet_nid_t nid, int cpt)
+struct lnet_peer_ni *
+lnet_nid2peerni_locked(lnet_nid_t nid, int cpt)
 {
 	struct lnet_peer_table	*ptable;
 	struct lnet_peer_ni	*lpni = NULL;
-	struct lnet_peer_ni	*lpni2;
 	int			cpt2;
-	int			rc = 0;
+	int			rc;
 
-	*lpnip = NULL;
 	if (the_lnet.ln_shutdown) /* it's shutting down */
-		return -ESHUTDOWN;
+		return ERR_PTR(-ESHUTDOWN);
 
 	/*
 	 * calculate cpt2 with the standard hash function
-	 * This cpt2 becomes the slot where we'll find or create the peer.
+	 * This cpt2 is the slot where we'll find or create the peer.
 	 */
 	cpt2 = lnet_nid_cpt_hash(nid, LNET_CPT_NUMBER);
-
-	/*
-	 * Any changes to the peer tables happen under exclusive write
-	 * lock. Any reads to the peer tables can be done via a standard
-	 * CPT read lock.
-	 */
-	if (cpt != LNET_LOCK_EX) {
-		lnet_net_unlock(cpt);
-		lnet_net_lock(LNET_LOCK_EX);
-	}
-
 	ptable = the_lnet.ln_peer_tables[cpt2];
 	lpni = lnet_get_peer_ni_locked(ptable, nid);
-	if (lpni != NULL) {
-		*lpnip = lpni;
-		if (cpt != LNET_LOCK_EX) {
-			lnet_net_unlock(LNET_LOCK_EX);
-			lnet_net_lock(cpt);
-		}
-		return 0;
-	}
+	if (lpni)
+		return lpni;
 
+	/* Slow path: serialized using the ln_api_mutex. */
+	lnet_net_unlock(cpt);
+	mutex_lock(&the_lnet.ln_api_mutex);
 	/*
-	 * take extra refcount in case another thread has shutdown LNet
-	 * and destroyed locks and peer-table before I finish the allocation
+	 * Shutdown is only set under the ln_api_lock, so a single
+	 * check here is sufficent.
+	 *
+	 * lnet_add_nid_to_peer() also handles the case where we've
+	 * raced and a different thread added the NID.
 	 */
-	ptable->pt_number++;
-	lnet_net_unlock(LNET_LOCK_EX);
-
-	LIBCFS_CPT_ALLOC(lpni, lnet_cpt_table(), cpt2, sizeof(*lpni));
-
-	if (lpni == NULL) {
-		rc = -ENOMEM;
-		lnet_net_lock(cpt);
-		goto out;
-	}
-
-	INIT_LIST_HEAD(&lpni->lpni_txq);
-	INIT_LIST_HEAD(&lpni->lpni_rtrq);
-	INIT_LIST_HEAD(&lpni->lpni_routes);
-	INIT_LIST_HEAD(&lpni->lpni_hashlist);
-	INIT_LIST_HEAD(&lpni->lpni_on_peer_net_list);
-	INIT_LIST_HEAD(&lpni->lpni_on_remote_peer_ni_list);
-
-	lpni->lpni_alive = !lnet_peers_start_down(); /* 1 bit!! */
-	lpni->lpni_last_alive = cfs_time_current(); /* assumes alive */
-	lpni->lpni_ping_feats = LNET_PING_FEAT_INVAL;
-	lpni->lpni_nid = nid;
-	lpni->lpni_cpt = cpt2;
-	atomic_set(&lpni->lpni_refcount, 2);	/* 1 for caller; 1 for hash */
-
-	rc = lnet_build_peer_hierarchy(lpni);
-	if (rc != 0)
-		goto out;
-
-	lnet_net_lock(LNET_LOCK_EX);
-
 	if (the_lnet.ln_shutdown) {
-		rc = -ESHUTDOWN;
-		goto out;
+		lpni = ERR_PTR(-ESHUTDOWN);
+		goto out_mutex_unlock;
 	}
 
-	lpni2 = lnet_get_peer_ni_locked(ptable, nid);
-	if (lpni2 != NULL) {
-		*lpnip = lpni2;
-		goto out;
+	rc = lnet_peer_ni_traffic_add(nid);
+	if (rc) {
+		lpni = ERR_PTR(rc);
+		goto out_mutex_unlock;
 	}
 
-	lpni->lpni_net = lnet_get_net_locked(LNET_NIDNET(lpni->lpni_nid));
-	if (lpni->lpni_net) {
-		lpni->lpni_txcredits    =
-		lpni->lpni_mintxcredits =
-			lpni->lpni_net->net_tunables.lct_peer_tx_credits;
-		lpni->lpni_rtrcredits    =
-		lpni->lpni_minrtrcredits =
-			lnet_peer_buffer_credits(lpni->lpni_net);
-	} else {
-		/*
-		 * if you're adding a peer which is not on a local network
-		 * then we can't assign any of the credits. It won't be
-		 * picked for sending anyway. Eventually a network can be
-		 * added, in this case we need to revisit this peer and
-		 * update its credits.
-		 */
+	lpni = lnet_get_peer_ni_locked(ptable, nid);
+	LASSERT(lpni);
 
-		CDEBUG(D_NET, "peer_ni %s is not directly connected\n",
-		       libcfs_nid2str(nid));
-		/* increment refcount for remote peer list */
-		atomic_inc(&lpni->lpni_refcount);
-		list_add_tail(&lpni->lpni_on_remote_peer_ni_list,
-			      &the_lnet.ln_remote_peer_ni_list);
-	}
+out_mutex_unlock:
+	mutex_unlock(&the_lnet.ln_api_mutex);
+	lnet_net_lock(cpt);
 
-	lnet_set_peer_ni_health_locked(lpni, true);
-
-	list_add_tail(&lpni->lpni_hashlist,
-			&ptable->pt_hash[lnet_nid2peerhash(nid)]);
-	ptable->pt_version++;
-	*lpnip = lpni;
-
-	if (cpt != LNET_LOCK_EX) {
-		lnet_net_unlock(LNET_LOCK_EX);
-		lnet_net_lock(cpt);
-	}
-
-	return 0;
-out:
-	if (lpni != NULL) {
-		lnet_try_destroy_peer_hierarchy_locked(lpni);
-		LIBCFS_FREE(lpni, sizeof(*lpni));
-	}
-	ptable->pt_number--;
-	if (cpt != LNET_LOCK_EX) {
-		lnet_net_unlock(LNET_LOCK_EX);
-		lnet_net_lock(cpt);
-	}
-	return rc;
+	return lpni;
 }
 
 void
@@ -874,14 +994,13 @@ lnet_debug_peer(lnet_nid_t nid)
 {
 	char			*aliveness = "NA";
 	struct lnet_peer_ni	*lp;
-	int			rc;
 	int			cpt;
 
 	cpt = lnet_cpt_of_nid(nid, NULL);
 	lnet_net_lock(cpt);
 
-	rc = lnet_nid2peerni_locked(&lp, nid, cpt);
-	if (rc != 0) {
+	lp = lnet_nid2peerni_locked(nid, cpt);
+	if (IS_ERR(lp)) {
 		lnet_net_unlock(cpt);
 		CDEBUG(D_WARNING, "No peer %s\n", libcfs_nid2str(nid));
 		return;
@@ -965,7 +1084,7 @@ int lnet_get_peer_ni_info(__u32 peer_index, __u64 *nid,
 }
 
 int lnet_get_peer_info(__u32 idx, lnet_nid_t *primary_nid, lnet_nid_t *nid,
-		       struct lnet_peer_ni_credit_info *peer_ni_info,
+		       bool *mr, struct lnet_peer_ni_credit_info *peer_ni_info,
 		       struct lnet_ioctl_element_stats *peer_ni_stats)
 {
 	struct lnet_peer_ni *lpni = NULL;
@@ -978,6 +1097,7 @@ int lnet_get_peer_info(__u32 idx, lnet_nid_t *primary_nid, lnet_nid_t *nid,
 		return -ENOENT;
 
 	*primary_nid = lp->lp_primary_nid;
+	*mr = lp->lp_multi_rail;
 	*nid = lpni->lpni_nid;
 	snprintf(peer_ni_info->cr_aliveness, LNET_MAX_STR_LEN, "NA");
 	if (lnet_isrouter(lpni) ||

@@ -302,6 +302,7 @@ lnet_add_route(__u32 net, __u32 hops, lnet_nid_t gateway,
 	lnet_remotenet_t	*rnet2;
 	lnet_route_t		*route;
 	lnet_ni_t		*ni;
+	struct lnet_peer_ni	*lpni;
 	int			add_route;
 	int			rc;
 
@@ -340,13 +341,14 @@ lnet_add_route(__u32 net, __u32 hops, lnet_nid_t gateway,
 
 	lnet_net_lock(LNET_LOCK_EX);
 
-	rc = lnet_nid2peerni_locked(&route->lr_gateway, gateway, LNET_LOCK_EX);
-	if (rc != 0) {
+	lpni = lnet_nid2peerni_locked(gateway, LNET_LOCK_EX);
+	if (IS_ERR(lpni)) {
 		lnet_net_unlock(LNET_LOCK_EX);
 
 		LIBCFS_FREE(route, sizeof(*route));
 		LIBCFS_FREE(rnet, sizeof(*rnet));
 
+		rc = PTR_ERR(lpni);
 		if (rc == -EHOSTUNREACH) /* gateway is not on a local net. */
 			return rc;	 /* ignore the route entry */
 		CERROR("Error %d creating route %s %d %s\n", rc,
@@ -354,7 +356,7 @@ lnet_add_route(__u32 net, __u32 hops, lnet_nid_t gateway,
 			libcfs_nid2str(gateway));
 		return rc;
 	}
-
+	route->lr_gateway = lpni;
 	LASSERT(!the_lnet.ln_shutdown);
 
 	rnet2 = lnet_find_rnet_locked(net);
