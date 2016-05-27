@@ -39,6 +39,7 @@
 
 #include <linux/fs_struct.h>
 #include <linux/namei.h>
+#include <linux/bio.h>
 
 #include <lustre_patchless_compat.h>
 
@@ -407,6 +408,10 @@ static inline void truncate_inode_pages_final(struct address_space *map)
 # define ll_security_inode_init_security(inode, dir, name, value, len, \
 					 initxattrs, dentry)	       \
 	 security_inode_init_security(inode, dir, name, value, len)
+#endif
+
+#ifndef bio_for_each_segment_all /* since kernel version 3.9 */
+#define bio_for_each_segment_all(bv, bio, it) bio_for_each_segment(bv, bio, it)
 #endif
 
 #endif /* _LUSTRE_COMPAT_H */
