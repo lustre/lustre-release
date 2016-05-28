@@ -1785,6 +1785,12 @@ static int osd_ro(const struct lu_env *env, struct dt_device *d)
 #ifdef HAVE_DEV_SET_RDONLY
 	CERROR("*** setting %s read-only ***\n", osd_dt_dev(d)->od_svname);
 
+	if (sb->s_op->freeze_fs) {
+		rc = sb->s_op->freeze_fs(sb);
+		if (rc)
+			goto out;
+	}
+
 	if (jdev && (jdev != dev)) {
 		CDEBUG(D_IOCTL | D_HA, "set journal dev %lx rdonly\n",
 		       (long)jdev);
@@ -1792,10 +1798,16 @@ static int osd_ro(const struct lu_env *env, struct dt_device *d)
 	}
 	CDEBUG(D_IOCTL | D_HA, "set dev %lx rdonly\n", (long)dev);
 	dev_set_rdonly(dev);
-#else
-	CERROR("%s: %lx CANNOT BE SET READONLY: rc = %d\n",
-	       osd_dt_dev(d)->od_svname, (long)dev, rc);
+
+	if (sb->s_op->unfreeze_fs)
+		sb->s_op->unfreeze_fs(sb);
+
+out:
 #endif
+	if (rc)
+		CERROR("%s: %lx CANNOT BE SET READONLY: rc = %d\n",
+		       osd_dt_dev(d)->od_svname, (long)dev, rc);
+
 	RETURN(rc);
 }
 

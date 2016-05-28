@@ -5910,13 +5910,15 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         if (rc)
                 RETURN(rc);
 
-        switch (cmd) {
-        case OBD_IOC_SYNC:
-                rc = mdt_device_sync(&env, mdt);
-                break;
-        case OBD_IOC_SET_READONLY:
-                rc = dt->dd_ops->dt_ro(&env, dt);
-                break;
+	switch (cmd) {
+	case OBD_IOC_SYNC:
+		rc = mdt_device_sync(&env, mdt);
+		break;
+	case OBD_IOC_SET_READONLY:
+		rc = dt_sync(&env, dt);
+		if (rc == 0)
+			rc = dt_ro(&env, dt);
+		break;
 	case OBD_IOC_ABORT_RECOVERY:
 		CERROR("%s: Aborting recovery for device\n", mdt_obd_name(mdt));
 		obd->obd_abort_recovery = 1;

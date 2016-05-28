@@ -896,14 +896,14 @@ extern struct lu_context_key       mdt_thread_key;
 static inline int mdt_fail_write(const struct lu_env *env,
                                  struct dt_device *dd, int id)
 {
-        if (OBD_FAIL_CHECK_ORSET(id, OBD_FAIL_ONCE)) {
-                CERROR(LUSTRE_MDT_NAME": cfs_fail_loc=%x, fail write ops\n",
-                       id);
-                return dd->dd_ops->dt_ro(env, dd);
-                /* We set FAIL_ONCE because we never "un-fail" a device */
-        }
+	if (OBD_FAIL_CHECK_ORSET(id, OBD_FAIL_ONCE)) {
+		CERROR(LUSTRE_MDT_NAME": cfs_fail_loc=%x, fail write ops\n",
+		       id);
+		return dt_ro(env, dd);
+		/* We set FAIL_ONCE because we never "un-fail" a device */
+	}
 
-        return 0;
+	return 0;
 }
 
 static inline struct mdt_export_data *mdt_req2med(struct ptlrpc_request *req)
