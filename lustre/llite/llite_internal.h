@@ -445,6 +445,7 @@ enum stats_track_type {
 #define LL_SBI_NOROOTSQUASH  0x100000 /* do not apply root squash */
 #define LL_SBI_ALWAYS_PING   0x200000 /* always ping even if server
 				       * suppress_pings */
+#define LL_SBI_FAST_READ     0x400000 /* fast read support */
 
 #define LL_SBI_FLAGS { 	\
 	"nolck",	\
@@ -469,6 +470,7 @@ enum stats_track_type {
 	"xattr_cache",	\
 	"norootsquash",	\
 	"always_ping",	\
+	"fast_read",	\
 }
 
 #define RCE_HASHES      32
@@ -714,6 +716,11 @@ static inline int ll_need_32bit_api(struct ll_sb_info *sbi)
 #endif
 }
 
+static inline bool ll_sbi_has_fast_read(struct ll_sb_info *sbi)
+{
+	return !!(sbi->ll_flags & LL_SBI_FAST_READ);
+}
+
 void ll_ras_enter(struct file *f);
 
 /* llite/lcommon_misc.c */
@@ -748,6 +755,8 @@ enum {
 	LPROC_LL_OPEN,
 	LPROC_LL_RELEASE,
 	LPROC_LL_MAP,
+	LPROC_LL_FAULT,
+	LPROC_LL_MKWRITE,
 	LPROC_LL_LLSEEK,
 	LPROC_LL_FSYNC,
 	LPROC_LL_READDIR,
@@ -819,9 +828,12 @@ int ll_writepages(struct address_space *, struct writeback_control *wbc);
 int ll_readpage(struct file *file, struct page *page);
 void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras);
 int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io);
-struct ll_cl_context *ll_cl_find(struct file *file);
-void ll_cl_add(struct file *file, const struct lu_env *env, struct cl_io *io);
+
+enum lcc_type;
+void ll_cl_add(struct file *file, const struct lu_env *env, struct cl_io *io,
+	       enum lcc_type type);
 void ll_cl_remove(struct file *file, const struct lu_env *env);
+struct ll_cl_context *ll_cl_find(struct file *file);
 
 extern const struct address_space_operations ll_aops;
 
@@ -1000,15 +1012,22 @@ struct vvp_io_args {
         } u;
 };
 
+enum lcc_type {
+	LCC_RW = 1,
+	LCC_MMAP
+};
+
 struct ll_cl_context {
 	struct list_head	 lcc_list;
 	void			*lcc_cookie;
 	const struct lu_env	*lcc_env;
 	struct cl_io		*lcc_io;
 	struct cl_page		*lcc_page;
+	enum lcc_type		 lcc_type;
 };
 
 struct ll_thread_info {
+	struct iov_iter		lti_iter;
 	struct vvp_io_args	lti_args;
 	struct ra_io_arg	lti_ria;
 	struct kiocb		lti_kiocb;

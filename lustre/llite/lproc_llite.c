@@ -867,6 +867,40 @@ static int ll_sbi_flags_seq_show(struct seq_file *m, void *v)
 }
 LPROC_SEQ_FOPS_RO(ll_sbi_flags);
 
+static int ll_fast_read_seq_show(struct seq_file *m, void *v)
+{
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+	seq_printf(m, "%u\n", !!(sbi->ll_flags & LL_SBI_FAST_READ));
+	return 0;
+}
+
+static ssize_t
+ll_fast_read_seq_write(struct file *file, const char __user *buffer,
+		       size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	int rc;
+	__s64 val;
+
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	spin_lock(&sbi->ll_lock);
+	if (val == 1)
+		sbi->ll_flags |= LL_SBI_FAST_READ;
+	else
+		sbi->ll_flags &= ~LL_SBI_FAST_READ;
+	spin_unlock(&sbi->ll_lock);
+
+	return count;
+}
+LPROC_SEQ_FOPS(ll_fast_read);
+
 static int ll_unstable_stats_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block	*sb    = m->private;
@@ -1044,6 +1078,8 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_root_squash_fops			},
 	{ .name	=	"nosquash_nids",
 	  .fops	=	&ll_nosquash_nids_fops			},
+	{ .name =       "fast_read",
+	  .fops =       &ll_fast_read_fops,                     },
 	{ NULL }
 };
 
@@ -1069,6 +1105,8 @@ static const struct llite_file_opcode {
         { LPROC_LL_OPEN,           LPROCFS_TYPE_REGS, "open" },
         { LPROC_LL_RELEASE,        LPROCFS_TYPE_REGS, "close" },
         { LPROC_LL_MAP,            LPROCFS_TYPE_REGS, "mmap" },
+	{ LPROC_LL_FAULT,          LPROCFS_TYPE_REGS, "page_fault" },
+	{ LPROC_LL_MKWRITE,        LPROCFS_TYPE_REGS, "page_mkwrite" },
         { LPROC_LL_LLSEEK,         LPROCFS_TYPE_REGS, "seek" },
         { LPROC_LL_FSYNC,          LPROCFS_TYPE_REGS, "fsync" },
         { LPROC_LL_READDIR,        LPROCFS_TYPE_REGS, "readdir" },

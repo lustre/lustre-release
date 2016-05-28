@@ -1048,7 +1048,8 @@ struct ll_cl_context *ll_cl_find(struct file *file)
 	return found;
 }
 
-void ll_cl_add(struct file *file, const struct lu_env *env, struct cl_io *io)
+void ll_cl_add(struct file *file, const struct lu_env *env, struct cl_io *io,
+	       enum lcc_type type)
 {
 	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
 	struct ll_cl_context *lcc = &ll_env_info(env)->lti_io_ctx;
@@ -1058,6 +1059,7 @@ void ll_cl_add(struct file *file, const struct lu_env *env, struct cl_io *io)
 	lcc->lcc_cookie = current;
 	lcc->lcc_env = env;
 	lcc->lcc_io = io;
+	lcc->lcc_type = type;
 
 	write_lock(&fd->fd_lock);
 	list_add(&lcc->lcc_list, &fd->fd_lccs);
@@ -1075,11 +1077,11 @@ void ll_cl_remove(struct file *file, const struct lu_env *env)
 }
 
 static int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
-			   struct cl_page *page)
+			   struct cl_page *page, struct file *file)
 {
 	struct inode              *inode  = vvp_object_inode(page->cp_obj);
 	struct ll_sb_info         *sbi    = ll_i2sbi(inode);
-	struct ll_file_data       *fd     = vvp_env_io(env)->vui_fd;
+	struct ll_file_data       *fd     = LUSTRE_FPRIVATE(file);
 	struct ll_readahead_state *ras    = &fd->fd_ras;
 	struct cl_2queue          *queue  = &io->ci_queue;
 	struct vvp_page           *vpg;
@@ -1091,7 +1093,8 @@ static int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	uptodate = vpg->vpg_defer_uptodate;
 
 	if (sbi->ll_ra_info.ra_max_pages_per_file > 0 &&
-	    sbi->ll_ra_info.ra_max_pages > 0) {
+	    sbi->ll_ra_info.ra_max_pages > 0 &&
+	    !vpg->vpg_ra_updated) {
 		struct vvp_io *vio = vvp_env_io(env);
 		enum ras_update_flags flags = 0;
 
@@ -1152,14 +1155,61 @@ int ll_readpage(struct file *file, struct page *vmpage)
 
 	env = lcc->lcc_env;
 	io  = lcc->lcc_io;
-	LASSERT(io != NULL);
+	if (io == NULL) { /* fast read */
+		struct inode *inode = file_inode(file);
+		struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+		struct ll_readahead_state *ras = &fd->fd_ras;
+		struct vvp_page *vpg;
+
+		result = -ENODATA;
+
+		/* TODO: need to verify the layout version to make sure
+		 * the page is not invalid due to layout change. */
+		page = cl_vmpage_page(vmpage, clob);
+		if (page == NULL) {
+			unlock_page(vmpage);
+			RETURN(result);
+		}
+
+		vpg = cl2vvp_page(cl_object_page_slice(page->cp_obj, page));
+		if (vpg->vpg_defer_uptodate) {
+			enum ras_update_flags flags = LL_RAS_HIT;
+
+			if (lcc->lcc_type == LCC_MMAP)
+				flags |= LL_RAS_MMAP;
+
+			/* For fast read, it updates read ahead state only
+			 * if the page is hit in cache because non cache page
+			 * case will be handled by slow read later. */
+			ras_update(ll_i2sbi(inode), inode, ras, vvp_index(vpg),
+				   flags);
+			/* avoid duplicate ras_update() call */
+			vpg->vpg_ra_updated = 1;
+
+			/* Check if we can issue a readahead RPC, if that is
+			 * the case, we can't do fast IO because we will need
+			 * a cl_io to issue the RPC. */
+			if (ras->ras_window_start + ras->ras_window_len <
+			    ras->ras_next_readahead + PTLRPC_MAX_BRW_PAGES) {
+				/* export the page and skip io stack */
+				vpg->vpg_ra_used = 1;
+				cl_page_export(env, page, 1);
+				result = 0;
+			}
+		}
+
+		unlock_page(vmpage);
+		cl_page_put(env, page);
+		RETURN(result);
+	}
+
 	LASSERT(io->ci_state == CIS_IO_GOING);
 	page = cl_page_find(env, clob, vmpage->index, vmpage, CPT_CACHEABLE);
 	if (!IS_ERR(page)) {
 		LASSERT(page->cp_type == CPT_CACHEABLE);
 		if (likely(!PageUptodate(vmpage))) {
 			cl_page_assume(env, io, page);
-			result = ll_io_read_page(env, io, page);
+			result = ll_io_read_page(env, io, page, file);
 		} else {
 			/* Page from a non-object file. */
 			unlock_page(vmpage);

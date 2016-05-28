@@ -940,9 +940,19 @@ int ll_merge_attr(const struct lu_env *env, struct inode *inode)
 
 	ll_inode_size_lock(inode);
 
-	/* merge timestamps the most recently obtained from mds with
-	   timestamps obtained from osts */
-	LTIME_S(inode->i_atime) = lli->lli_atime;
+	/* Merge timestamps the most recently obtained from MDS with
+	 * timestamps obtained from OSTs.
+	 *
+	 * Do not overwrite atime of inode because it may be refreshed
+	 * by file_accessed() function. If the read was served by cache
+	 * data, there is no RPC to be sent so that atime may not be
+	 * transferred to OSTs at all. MDT only updates atime at close time
+	 * if it's at least 'mdd.*.atime_diff' older.
+	 * All in all, the atime in Lustre does not strictly comply with
+	 * POSIX. Solving this problem needs to send an RPC to MDT for each
+	 * read, this will hurt performance. */
+	if (LTIME_S(inode->i_atime) < lli->lli_atime)
+		LTIME_S(inode->i_atime) = lli->lli_atime;
 	LTIME_S(inode->i_mtime) = lli->lli_mtime;
 	LTIME_S(inode->i_ctime) = lli->lli_ctime;
 
@@ -1094,7 +1104,7 @@ restart:
 			LBUG();
 		}
 
-		ll_cl_add(file, env, io);
+		ll_cl_add(file, env, io, LCC_RW);
 		rc = cl_io_loop(env, io);
 		ll_cl_remove(file, env);
 
@@ -1155,26 +1165,103 @@ out:
 	return result > 0 ? result : rc;
 }
 
+/**
+ * The purpose of fast read is to overcome per I/O overhead and improve IOPS
+ * especially for small I/O.
+ *
+ * To serve a read request, CLIO has to create and initialize a cl_io and
+ * then request DLM lock. This has turned out to have siginificant overhead
+ * and affects the performance of small I/O dramatically.
+ *
+ * It's not necessary to create a cl_io for each I/O. Under the help of read
+ * ahead, most of the pages being read are already in memory cache and we can
+ * read those pages directly because if the pages exist, the corresponding DLM
+ * lock must exist so that page content must be valid.
+ *
+ * In fast read implementation, the llite speculatively finds and reads pages
+ * in memory cache. There are three scenarios for fast read:
+ *   - If the page exists and is uptodate, kernel VM will provide the data and
+ *     CLIO won't be intervened;
+ *   - If the page was brought into memory by read ahead, it will be exported
+ *     and read ahead parameters will be updated;
+ *   - Otherwise the page is not in memory, we can't do fast read. Therefore,
+ *     it will go back and invoke normal read, i.e., a cl_io will be created
+ *     and DLM lock will be requested.
+ *
+ * POSIX compliance: posix standard states that read is intended to be atomic.
+ * Lustre read implementation is in line with Linux kernel read implementation
+ * and neither of them complies with POSIX standard in this matter. Fast read
+ * doesn't make the situation worse on single node but it may interleave write
+ * results from multiple nodes due to short read handling in ll_file_aio_read().
+ *
+ * \param env - lu_env
+ * \param iocb - kiocb from kernel
+ * \param iter - user space buffers where the data will be copied
+ *
+ * \retval - number of bytes have been read, or error code if error occurred.
+ */
+static ssize_t
+ll_do_fast_read(const struct lu_env *env, struct kiocb *iocb,
+		struct iov_iter *iter)
+{
+	ssize_t result;
+
+	if (!ll_sbi_has_fast_read(ll_i2sbi(file_inode(iocb->ki_filp))))
+		return 0;
+
+	/* NB: we can't do direct IO for fast read because it will need a lock
+	 * to make IO engine happy. */
+	if (iocb->ki_filp->f_flags & O_DIRECT)
+		return 0;
+
+	ll_cl_add(iocb->ki_filp, env, NULL, LCC_RW);
+	result = generic_file_read_iter(iocb, iter);
+	ll_cl_remove(iocb->ki_filp, env);
+
+	/* If the first page is not in cache, generic_file_aio_read() will be
+	 * returned with -ENODATA.
+	 * See corresponding code in ll_readpage(). */
+	if (result == -ENODATA)
+		result = 0;
+
+	if (result > 0)
+		ll_stats_ops_tally(ll_i2sbi(file_inode(iocb->ki_filp)),
+				LPROC_LL_READ_BYTES, result);
+
+	return result;
+}
+
 /*
  * Read from a file (through the page cache).
  */
 static ssize_t ll_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 {
-	struct vvp_io_args *args;
 	struct lu_env *env;
+	struct vvp_io_args *args;
 	ssize_t result;
+	ssize_t rc2;
 	__u16 refcheck;
 
 	env = cl_env_get(&refcheck);
 	if (IS_ERR(env))
 		return PTR_ERR(env);
 
+	result = ll_do_fast_read(env, iocb, to);
+	if (result < 0 || iov_iter_count(to) == 0)
+		GOTO(out, result);
+
 	args = ll_env_args(env, IO_NORMAL);
 	args->u.normal.via_iter = to;
 	args->u.normal.via_iocb = iocb;
 
-	result = ll_file_io_generic(env, args, iocb->ki_filp, CIT_READ,
-				    &iocb->ki_pos, iov_iter_count(to));
+	rc2 = ll_file_io_generic(env, args, iocb->ki_filp, CIT_READ,
+				 &iocb->ki_pos, iov_iter_count(to));
+	if (rc2 > 0)
+		result += rc2;
+	else if (result == 0)
+		result = rc2;
+
+out:
 	cl_env_put(env, &refcheck);
 	return result;
 }

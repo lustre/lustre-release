@@ -241,6 +241,7 @@ struct vvp_object {
 struct vvp_page {
 	struct cl_page_slice vpg_cl;
 	unsigned	vpg_defer_uptodate:1,
+			vpg_ra_updated:1,
 			vpg_ra_used:1;
 	/** VM page */
 	struct page	*vpg_page;

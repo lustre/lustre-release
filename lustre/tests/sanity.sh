@@ -13716,6 +13716,63 @@ test_247e() {
 }
 run_test 247e "mount .. as fileset"
 
+test_248() {
+	local my_error=error
+
+	# This test case is time sensitive and maloo uses kvm to run auto test.
+	# Therefore the complete time of I/O task is unreliable and depends on
+	# the work load on the host machine when the task is running.
+	which virt-what 2> /dev/null && [ "$(virt-what)" != "kvm" ] ||
+		{ echo "no virt-what installed or running in kvm; ignore error";
+		  my_error=error_ignore; }
+
+	# create a large file for fast read verification
+	dd if=/dev/zero of=$DIR/$tfile bs=128M count=1 > /dev/null 2>&1
+
+	# make sure the file is created correctly
+	$CHECKSTAT -s $((128*1024*1024)) $DIR/$tfile ||
+		{ rm -f $DIR/$tfile; skip "file creation error" && return; }
+
+	local saved_fast_read=$($LCTL get_param -n llite.*.fast_read)
+
+	echo "Test 1: verify that fast read is 4 times faster on cache read"
+
+	# small read with fast read enabled
+	$LCTL set_param -n llite.*.fast_read=1
+	local t_fast=$(eval time -p dd if=$DIR/$tfile of=/dev/null bs=4k 2>&1 |
+		   awk '/real/ { print $2 }')
+
+	# small read with fast read disabled
+	$LCTL set_param -n llite.*.fast_read=0
+	local t_slow=$(eval time -p dd if=$DIR/$tfile of=/dev/null bs=4k 2>&1 |
+		   awk '/real/ { print $2 }')
+
+	# verify that fast read is 4 times faster for cache read
+	[ $(bc <<< "4 * $t_fast < $t_slow") -eq 1 ] ||
+		$my_error "fast read was not 4 times faster: $t_fast vs $t_slow"
+
+	echo "Test 2: verify the performance between big and small read"
+	$LCTL set_param -n llite.*.fast_read=1
+
+	# 1k non-cache read
+	cancel_lru_locks osc
+	local t_1k=$(eval time -p dd if=$DIR/$tfile of=/dev/null bs=1k 2>&1 |
+	     awk '/real/ { print $2 }')
+
+	# 1M non-cache read
+	cancel_lru_locks osc
+	local t_1m=$(eval time -p dd if=$DIR/$tfile of=/dev/null bs=1M 2>&1 |
+	     awk '/real/ { print $2 }')
+
+	# verify that big IO is not 4 times faster than small IO
+	[ $(bc <<< "4 * $t_1k >= $t_1m") -eq 1 ] ||
+		$my_error "bigger IO is way too fast: $t_1k vs $t_1m"
+
+	$LCTL set_param -n llite.*.fast_read=$saved_fast_read
+	rm -f $DIR/$tfile
+}
+run_test 248 "fast read verification"
+
 test_250() {
 	[ "$(facet_fstype ost$(($($GETSTRIPE -i $DIR/$tfile) + 1)))" = "zfs" ] \
 	 && skip "no 16TB file size limit on ZFS" && return
