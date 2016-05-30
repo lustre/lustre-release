@@ -547,10 +547,16 @@ int mdt_init_ucred_reint(struct mdt_thread_info *info)
 {
 	struct ptlrpc_request *req = mdt_info_req(info);
 	struct lu_ucred       *uc  = mdt_ucred(info);
+	struct md_attr        *ma  = &info->mti_attr;
 
 	LASSERT(uc != NULL);
 	if ((uc->uc_valid == UCRED_OLD) || (uc->uc_valid == UCRED_NEW))
 		return 0;
+
+	/* LU-5564: for normal close request, skip permission check */
+	if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE &&
+	    !(ma->ma_attr_flags & (MDS_HSM_RELEASE | MDS_CLOSE_LAYOUT_SWAP)))
+		uc->uc_cap |= CFS_CAP_FS_MASK;
 
 	mdt_exit_ucred(info);
 
