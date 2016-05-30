@@ -41,3 +41,4 @@ rhel6.5/ext4-give-warning-with-dir-htree-growing.patch
 sles11sp3/ext4-mmp-brelse.patch
 sles11sp3/ext4_s_max_ext_tree_depth.patch
 sles11sp1/ext4-notalloc_under_idatasem.patch
+rhel6.5/ext4-fix-journal-quota.patch
