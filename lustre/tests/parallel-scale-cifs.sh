@@ -211,6 +211,9 @@ test_iozone() {
 	[[ $((size * nclients)) -gt $((space * 3 / 4)) ]] &&
 		size=$((space * 3 / 4 / nclients))
 
+	do_node $LUSTRE_CLIENT_SMBSRV "mkdir $SMBSRVMNTPT/$tdir
+		lfs setstripe -c -1 $SMBSRVMNTPT/$tdir"
+
 	log "free space: $space Kb, using $size size, $nclients number of clients"
 
 	local cmd="iozone -a -e -+d -s $size "
@@ -219,8 +222,8 @@ test_iozone() {
 
 	do_nodesv $clients "set -x; \
 		PATH=\$PATH \
-		$cmd -f $SMBCLIMNTPT/f0.iozone_\\\$(hostname) 2>&1 | tee $log; \
-		exit \\\${PIPESTATUS[0]}" &
+		$cmd -f $SMBCLIMNTPT/$tdir/f0.iozone_\\\$(hostname) \
+		2>&1 | tee $log; exit \\\${PIPESTATUS[0]}" &
 	pid=$!
 
 	# check that iozone is started on all clients after
@@ -237,6 +240,7 @@ test_iozone() {
 	rc=$?
 	log "Processing iozone log"
 	do_nodesv $clients "tail -1 $log | grep -q complete" || rc=2
+	do_node $LUSTRE_CLIENT_SMBSRV "rm -rf $SMBSRVMNTPT/$tdir"
 	[ $rc -eq 0 ] || error "iozone load on $clients failed! rc=$rc"
 }
 run_test iozone "iozone on cifs clients"
