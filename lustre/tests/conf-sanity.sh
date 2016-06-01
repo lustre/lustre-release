@@ -5193,7 +5193,10 @@ test_78() {
 			$LCTL get_param osc.*.cur*grant*
 			$LFS df; $LFS df -i;
 			# stop creating files if there is no more space
-			[ -e $file ] || break
+			if [ ! -e $file ]; then
+				num_files=$((i - 1))
+				break
+			fi
 
 			$LFS getstripe -v $file
 			local ost_idx=$(LFS getstripe -i $file)
