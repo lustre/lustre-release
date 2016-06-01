@@ -688,7 +688,11 @@ kiblnd_setup_rd_iov(lnet_ni_t *ni, kib_tx_t *tx, kib_rdma_desc_t *rd,
                 fragnob = min(fragnob, (int)PAGE_SIZE - page_offset);
 
                 sg_set_page(sg, page, fragnob, page_offset);
-                sg++;
+		sg = sg_next(sg);
+		if (!sg) {
+			CERROR("lacking enough sg entries to map tx\n");
+			return -EFAULT;
+		}
 
                 if (offset + fragnob < iov->iov_len) {
                         offset += fragnob;
@@ -730,9 +734,13 @@ kiblnd_setup_rd_kiov (lnet_ni_t *ni, kib_tx_t *tx, kib_rdma_desc_t *rd,
 
                 fragnob = min((int)(kiov->kiov_len - offset), nob);
 
-                sg_set_page(sg, kiov->kiov_page, fragnob,
-                            kiov->kiov_offset + offset);
-                sg++;
+		sg_set_page(sg, kiov->kiov_page, fragnob,
+			    kiov->kiov_offset + offset);
+		sg = sg_next(sg);
+		if (!sg) {
+			CERROR("lacking enough sg entries to map tx\n");
+			return -EFAULT;
+		}
 
                 offset = 0;
                 kiov++;

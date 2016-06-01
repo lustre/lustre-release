@@ -2216,8 +2216,8 @@ kiblnd_destroy_tx_pool(kib_pool_t *pool)
                                     sizeof(*tx->tx_pages));
                 if (tx->tx_frags != NULL)
                         LIBCFS_FREE(tx->tx_frags,
-                                    IBLND_MAX_RDMA_FRAGS *
-                                            sizeof(*tx->tx_frags));
+				    (1 + IBLND_MAX_RDMA_FRAGS) *
+				    sizeof(*tx->tx_frags));
                 if (tx->tx_wrq != NULL)
                         LIBCFS_FREE(tx->tx_wrq,
                                     (1 + IBLND_MAX_RDMA_FRAGS) *
@@ -2295,11 +2295,12 @@ kiblnd_create_tx_pool(kib_poolset_t *ps, int size, kib_pool_t **pp_po)
 		}
 
 		LIBCFS_CPT_ALLOC(tx->tx_frags, lnet_cpt_table(), ps->ps_cpt,
-				 IBLND_MAX_RDMA_FRAGS * sizeof(*tx->tx_frags));
+				 (1 + IBLND_MAX_RDMA_FRAGS) *
+				 sizeof(*tx->tx_frags));
 		if (tx->tx_frags == NULL)
 			break;
 
-		sg_init_table(tx->tx_frags, IBLND_MAX_RDMA_FRAGS);
+		sg_init_table(tx->tx_frags, IBLND_MAX_RDMA_FRAGS + 1);
 
 		LIBCFS_CPT_ALLOC(tx->tx_wrq, lnet_cpt_table(), ps->ps_cpt,
 				 (1 + IBLND_MAX_RDMA_FRAGS) *
