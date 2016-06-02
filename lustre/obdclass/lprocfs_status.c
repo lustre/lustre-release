@@ -1270,7 +1270,6 @@ static int lprocfs_stats_seq_show(struct seq_file *p, void *v)
 	struct lprocfs_counter_header	*hdr;
 	struct lprocfs_counter		 ctr;
 	int				 idx	= *(loff_t *)v;
-	int				 rc	= 0;
 
 	if (idx == 0) {
 		struct timeval now;
@@ -1278,34 +1277,25 @@ static int lprocfs_stats_seq_show(struct seq_file *p, void *v)
 		do_gettimeofday(&now);
 		seq_printf(p, "%-25s %lu.%lu secs.usecs\n",
 			   "snapshot_time", now.tv_sec, now.tv_usec);
-		if (rc < 0)
-			return rc;
 	}
 
 	hdr = &stats->ls_cnt_header[idx];
 	lprocfs_stats_collect(stats, idx, &ctr);
 
 	if (ctr.lc_count == 0)
-		goto out;
+		return 0;
 
 	seq_printf(p, "%-25s "LPD64" samples [%s]", hdr->lc_name,
 		   ctr.lc_count, hdr->lc_units);
-	if (rc < 0)
-		goto out;
 
 	if ((hdr->lc_config & LPROCFS_CNTR_AVGMINMAX) && ctr.lc_count > 0) {
 		seq_printf(p, " "LPD64" "LPD64" "LPD64,
 			   ctr.lc_min, ctr.lc_max, ctr.lc_sum);
-		if (rc < 0)
-			goto out;
 		if (hdr->lc_config & LPROCFS_CNTR_STDDEV)
 			seq_printf(p, " "LPD64, ctr.lc_sumsquare);
-		if (rc < 0)
-			goto out;
 	}
 	seq_putc(p, '\n');
-out:
-	return (rc < 0) ? rc : 0;
+	return 0;
 }
 
 static const struct seq_operations lprocfs_stats_seq_sops = {
