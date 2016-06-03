@@ -566,7 +566,7 @@ static void osp_update_fini(const struct lu_env *env, struct osp_device *osp)
 		LASSERT(our->our_th != NULL);
 		osp_trans_callback(env, our->our_th, -EIO);
 		/* our will be destroyed in osp_thandle_put() */
-		osp_thandle_put(our->our_th);
+		osp_thandle_put(env, our->our_th);
 	}
 	spin_unlock(&ou->ou_lock);
 
@@ -1329,7 +1329,7 @@ static struct lu_device *osp_device_fini(const struct lu_env *env,
 	ENTRY;
 
 	if (osp->opd_async_requests != NULL) {
-		osp_update_request_destroy(osp->opd_async_requests);
+		osp_update_request_destroy(env, osp->opd_async_requests);
 		osp->opd_async_requests = NULL;
 	}
 

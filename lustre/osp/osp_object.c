@@ -556,7 +556,7 @@ out:
 	if (req != NULL)
 		ptlrpc_req_finished(req);
 
-	osp_update_request_destroy(update);
+	osp_update_request_destroy(env, update);
 
 	return rc;
 }
@@ -1014,7 +1014,7 @@ out:
 		ptlrpc_req_finished(req);
 
 	if (update != NULL && !IS_ERR(update))
-		osp_update_request_destroy(update);
+		osp_update_request_destroy(env, update);
 
 	if (oxe != NULL)
 		osp_oac_xattr_put(oxe);
@@ -2087,6 +2087,7 @@ static int osp_object_init(const struct lu_env *env, struct lu_object *o,
 	spin_lock_init(&po->opo_lock);
 	o->lo_header->loh_attr |= LOHA_REMOTE;
 	INIT_LIST_HEAD(&po->opo_xattr_list);
+	INIT_LIST_HEAD(&po->opo_invalidate_cb_list);
 
 	if (is_ost_obj(o)) {
 		po->opo_obj.do_ops = &osp_obj_ops;

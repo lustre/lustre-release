@@ -196,6 +196,7 @@ struct osp_update_request *osp_update_request_create(struct dt_device *dt)
 	INIT_LIST_HEAD(&our->our_req_list);
 	INIT_LIST_HEAD(&our->our_cb_items);
 	INIT_LIST_HEAD(&our->our_list);
+	INIT_LIST_HEAD(&our->our_invalidate_cb_list);
 	spin_lock_init(&our->our_list_lock);
 
 	rc = osp_object_update_request_create(our, OUT_UPDATE_INIT_BUFFER_SIZE);
@@ -206,7 +207,8 @@ struct osp_update_request *osp_update_request_create(struct dt_device *dt)
 	return our;
 }
 
-void osp_update_request_destroy(struct osp_update_request *our)
+void osp_update_request_destroy(const struct lu_env *env,
+				struct osp_update_request *our)
 {
 	struct osp_update_request_sub *ours;
 	struct osp_update_request_sub *tmp;
@@ -220,6 +222,31 @@ void osp_update_request_destroy(struct osp_update_request *our)
 			OBD_FREE_LARGE(ours->ours_req, ours->ours_req_size);
 		OBD_FREE_PTR(ours);
 	}
+
+	if (!list_empty(&our->our_invalidate_cb_list)) {
+		struct lu_env lenv;
+		struct osp_object *obj;
+		struct osp_object *next;
+
+		if (env == NULL) {
+			lu_env_init(&lenv, LCT_MD_THREAD | LCT_DT_THREAD);
+			env = &lenv;
+		}
+
+		list_for_each_entry_safe(obj, next,
+					 &our->our_invalidate_cb_list,
+					 opo_invalidate_cb_list) {
+			spin_lock(&obj->opo_lock);
+			list_del_init(&obj->opo_invalidate_cb_list);
+			spin_unlock(&obj->opo_lock);
+
+			lu_object_put(env, &obj->opo_obj.do_lu);
+		}
+
+		if (env == &lenv)
+			lu_env_fini(&lenv);
+	}
+
 	OBD_FREE_PTR(our);
 }
 
@@ -484,41 +511,26 @@ int osp_remote_sync(const struct lu_env *env, struct osp_device *osp,
  * \param[in] oth	osp thandle.
  */
 static void osp_thandle_invalidate_object(const struct lu_env *env,
-					  struct osp_thandle *oth)
+					  struct osp_thandle *oth,
+					  int result)
 {
 	struct osp_update_request *our = oth->ot_our;
-	struct osp_update_request_sub *ours;
+	struct osp_object *obj;
+	struct osp_object *next;
 
 	if (our == NULL)
 		return;
 
-	list_for_each_entry(ours, &our->our_req_list, ours_list) {
-		struct object_update_request *our_req = ours->ours_req;
-		unsigned int i;
-		struct lu_object *obj;
+	list_for_each_entry_safe(obj, next, &our->our_invalidate_cb_list,
+				 opo_invalidate_cb_list) {
+		if (result < 0)
+			osp_invalidate(env, &obj->opo_obj);
 
-		for (i = 0; i < our_req->ourq_count; i++) {
-			struct object_update *update;
+		spin_lock(&obj->opo_lock);
+		list_del_init(&obj->opo_invalidate_cb_list);
+		spin_unlock(&obj->opo_lock);
 
-			update = object_update_request_get(our_req, i, NULL);
-			if (update == NULL)
-				break;
-
-			if (update->ou_type != OUT_WRITE)
-				continue;
-
-			if (!fid_is_sane(&update->ou_fid))
-				continue;
-
-			obj = lu_object_find_slice(env,
-					&oth->ot_super.th_dev->dd_lu_dev,
-					&update->ou_fid, NULL);
-			if (IS_ERR(obj))
-				break;
-
-			osp_invalidate(env, lu2dt_obj(obj));
-			lu_object_put(env, obj);
-		}
+		lu_object_put(env, &obj->opo_obj.do_lu);
 	}
 }
 
@@ -538,8 +550,7 @@ static void osp_trans_stop_cb(const struct lu_env *env,
 		dcb->dcb_func(NULL, &oth->ot_super, dcb, result);
 	}
 
-	if (result < 0)
-		osp_thandle_invalidate_object(env, oth);
+	osp_thandle_invalidate_object(env, oth, result);
 }
 
 /**
@@ -690,9 +701,9 @@ static int osp_update_interpret(const struct lu_env *env,
 		/* oth and osp_update_requests will be destoryed in
 		 * osp_thandle_put */
 		osp_trans_stop_cb(env, oth, rc);
-		osp_thandle_put(oth);
+		osp_thandle_put(env, oth);
 	} else {
-		osp_update_request_destroy(our);
+		osp_update_request_destroy(env, our);
 	}
 
 	RETURN(rc);
@@ -732,7 +743,7 @@ int osp_unplug_async_request(const struct lu_env *env,
 						     ouc->ouc_data, 0, rc);
 			osp_update_callback_fini(env, ouc);
 		}
-		osp_update_request_destroy(our);
+		osp_update_request_destroy(env, our);
 	} else {
 		args = ptlrpc_req_async_args(req);
 		args->oaua_update = our;
@@ -914,13 +925,14 @@ int osp_trans_update_request_create(struct thandle *th)
 	return 0;
 }
 
-void osp_thandle_destroy(struct osp_thandle *oth)
+void osp_thandle_destroy(const struct lu_env *env,
+			 struct osp_thandle *oth)
 {
 	LASSERT(oth->ot_magic == OSP_THANDLE_MAGIC);
 	LASSERT(list_empty(&oth->ot_commit_dcb_list));
 	LASSERT(list_empty(&oth->ot_stop_dcb_list));
 	if (oth->ot_our != NULL)
-		osp_update_request_destroy(oth->ot_our);
+		osp_update_request_destroy(env, oth->ot_our);
 	OBD_FREE_PTR(oth);
 }
 
@@ -1046,7 +1058,7 @@ static void osp_request_commit_cb(struct ptlrpc_request *req)
 
 	osp_trans_commit_cb(oth, result);
 	req->rq_committed = 1;
-	osp_thandle_put(oth);
+	osp_thandle_put(NULL, oth);
 	EXIT;
 }
 
@@ -1128,14 +1140,14 @@ static int osp_send_update_req(const struct lu_env *env,
 	if (!oth->ot_super.th_wait_submit && !oth->ot_super.th_sync) {
 		if (!osp->opd_imp_active || !osp->opd_imp_connected) {
 			osp_trans_callback(env, oth, rc);
-			osp_thandle_put(oth);
+			osp_thandle_put(env, oth);
 			GOTO(out, rc = -ENOTCONN);
 		}
 
 		rc = obd_get_request_slot(&osp->opd_obd->u.cli);
 		if (rc != 0) {
 			osp_trans_callback(env, oth, rc);
-			osp_thandle_put(oth);
+			osp_thandle_put(env, oth);
 			GOTO(out, rc = -ENOTCONN);
 		}
 		args->oaua_flow_control = true;
@@ -1181,13 +1193,13 @@ static int osp_send_update_req(const struct lu_env *env,
 				/* If osp_update_interpret is not being called,
 				 * release the osp_thandle */
 				args->oaua_update = NULL;
-				osp_thandle_put(oth);
+				osp_thandle_put(env, oth);
 			}
 
 			req->rq_cb_data = NULL;
 			rc = rc == 0 ? req->rq_status : rc;
 			osp_trans_callback(env, oth, rc);
-			osp_thandle_put(oth);
+			osp_thandle_put(env, oth);
 			GOTO(out, rc);
 		}
 	}
@@ -1400,7 +1412,7 @@ void osp_invalidate_request(struct osp_device *osp)
 		spin_unlock(&our->our_list_lock);
 		osp_trans_callback(&env, our->our_th,
 				   our->our_th->ot_super.th_result);
-		osp_thandle_put(our->our_th);
+		osp_thandle_put(&env, our->our_th);
 	}
 	lu_env_fini(&env);
 }
@@ -1448,7 +1460,7 @@ int osp_send_update_thread(void *arg)
 		if (!osp_send_update_thread_running(osp)) {
 			if (our != NULL) {
 				osp_trans_callback(&env, our->our_th, -EINTR);
-				osp_thandle_put(our->our_th);
+				osp_thandle_put(&env, our->our_th);
 			}
 			break;
 		}
@@ -1479,7 +1491,7 @@ int osp_send_update_thread(void *arg)
 			osp_invalidate_request(osp);
 
 		/* Balanced for thandle_get in osp_check_and_set_rpc_version */
-		osp_thandle_put(our->our_th);
+		osp_thandle_put(&env, our->our_th);
 	}
 
 	thread->t_flags = SVC_STOPPED;
@@ -1591,7 +1603,7 @@ int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 		osp_trans_callback(env, oth, th->th_result);
 	}
 out:
-	osp_thandle_put(oth);
+	osp_thandle_put(env, oth);
 
 	RETURN(rc);
 }

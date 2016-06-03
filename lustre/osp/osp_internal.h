@@ -112,6 +112,7 @@ struct osp_update_request {
 	int				our_update_nr;
 
 	struct list_head		our_cb_items;
+	struct list_head		our_invalidate_cb_list;
 
 	/* points to thandle if this update request belongs to one */
 	struct osp_thandle		*our_th;
@@ -293,6 +294,7 @@ struct osp_object {
 	const struct lu_env	*opo_owner;
 	struct lu_attr		opo_attr;
 	struct list_head	opo_xattr_list;
+	struct list_head	opo_invalidate_cb_list;
 	/* Protect opo_ooa. */
 	spinlock_t		opo_lock;
 };
@@ -683,22 +685,24 @@ int osp_insert_update_callback(const struct lu_env *env,
 			       osp_update_interpreter_t interpreter);
 
 struct osp_update_request *osp_update_request_create(struct dt_device *dt);
-void osp_update_request_destroy(struct osp_update_request *update);
+void osp_update_request_destroy(const struct lu_env *env,
+				struct osp_update_request *update);
 
 int osp_send_update_thread(void *arg);
 int osp_check_and_set_rpc_version(struct osp_thandle *oth,
 				  struct osp_object *obj);
 
-void osp_thandle_destroy(struct osp_thandle *oth);
+void osp_thandle_destroy(const struct lu_env *env, struct osp_thandle *oth);
 static inline void osp_thandle_get(struct osp_thandle *oth)
 {
 	atomic_inc(&oth->ot_refcount);
 }
 
-static inline void osp_thandle_put(struct osp_thandle *oth)
+static inline void osp_thandle_put(const struct lu_env *env,
+				   struct osp_thandle *oth)
 {
 	if (atomic_dec_and_test(&oth->ot_refcount))
-		osp_thandle_destroy(oth);
+		osp_thandle_destroy(env, oth);
 }
 
 int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
