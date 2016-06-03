@@ -115,7 +115,8 @@ static int osd_scrub_refresh_mapping(struct osd_thread_info *info,
 		rc = PTR_ERR(th);
 		CDEBUG(D_LFSCK, "%s: fail to start trans for scrub op %d "
 		       DFID" => %u/%u: rc = %d\n", osd_name(dev), ops,
-		       PFID(fid), id->oii_ino, id->oii_gen, rc);
+		       PFID(fid), id ? id->oii_ino : -1, id ? id->oii_gen : -1,
+		       rc);
 		RETURN(rc);
 	}
 
