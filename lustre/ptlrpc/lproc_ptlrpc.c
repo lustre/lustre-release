@@ -175,6 +175,19 @@ const char *ll_opcode2str(__u32 opcode)
         return ll_rpc_opcode_table[offset].opname;
 }
 
+const int ll_str2opcode(const char *ops)
+{
+	int i;
+
+	for (i = 0; i < LUSTRE_MAX_OPCODES; i++) {
+		if (ll_rpc_opcode_table[i].opname != NULL &&
+		    strcmp(ll_rpc_opcode_table[i].opname, ops) == 0)
+			return ll_rpc_opcode_table[i].opcode;
+	}
+
+	return -EINVAL;
+}
+
 static const char *ll_eopcode2str(__u32 opcode)
 {
         LASSERT(ll_eopcode_table[opcode].opcode == opcode);

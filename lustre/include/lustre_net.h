@@ -2657,6 +2657,7 @@ void ptlrpcd_decref(void);
  * @{
  */
 const char* ll_opcode2str(__u32 opcode);
+const int ll_str2opcode(const char *ops);
 #ifdef CONFIG_PROC_FS
 void ptlrpc_lprocfs_register_obd(struct obd_device *obd);
 void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd);

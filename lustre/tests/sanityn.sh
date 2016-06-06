@@ -3075,6 +3075,39 @@ tbf_rule_operate()
 		error "failed to run operate '$*' on TBF rules"
 }
 
+tbf_verify() {
+	local dir=$DIR/$tdir
+	local client1=${CLIENT1:-`hostname`}
+	local myRUNAS="$3"
+
+	mkdir $dir || error "mkdir $dir failed"
+	$LFS setstripe -c 1 $dir || error "setstripe to $dir failed"
+	chmod 777 $dir
+
+	echo "Limited write rate: $1, read rate: $2"
+	echo "Verify the write rate is under TBF control"
+	local rate=$(do_node $client1 $myRUNAS dd if=/dev/zero of=$dir/tbf \
+		bs=1M count=100 oflag=direct 2>&1 | awk '/bytes/ {print $8}')
+	echo "Write speed is $rate"
+
+	# verify the write rate does not exceed 110% of TBF limited rate
+	[ $(bc <<< "$rate < 1.1 * $1") -eq 1 ] ||
+		error "The write rate ($rate) exceeds 110% of preset rate ($1)"
+
+	cancel_lru_locks osc
+
+	echo "Verify the read rate is under TBF control"
+	rate=$(do_node $client1 $myRUNAS dd if=$dir/tbf of=/dev/null \
+		bs=1M count=100 iflag=direct 2>&1 | awk '/bytes/ {print $8}')
+	echo "Read speed is $rate"
+
+	# verify the read rate does not exceed 110% of TBF limited rate
+	[ $(bc <<< "$rate < 1.1 * $2") -eq 1 ] ||
+		error "The read rate ($rate) exceeds 110% of preset rate ($2)"
+
+	rm -rf $dir || error "rm -rf $dir failed"
+}
+
 test_77e() {
 	local server_version=$(lustre_version_code ost1)
 	[[ $server_version -ge $(version_code 2.7.58) ]] ||
@@ -3322,6 +3355,35 @@ test_77i() {
 	return 0
 }
 run_test 77i "Change rank of TBF rule"
+
+test_77j() {
+	local idis
+	local rateis
+	if [ $(lustre_version_code ost1) -ge $(version_code 2.8.60) ]; then
+		idis="opcode="
+		rateis="rate="
+	fi
+
+	do_nodes $(comma_list $(osts_nodes)) \
+		lctl set_param jobid_var=procname_uid \
+			ost.OSS.ost_io.nrs_policies="tbf\ opcode" \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ost_r\ ${idis}{ost_read}\ ${rateis}5" \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ost_w\ ${idis}{ost_write}\ ${rateis}20"
+
+	nrs_write_read
+	tbf_verify 20 5
+
+	do_nodes $(comma_list $(osts_nodes)) \
+		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ ost_r" \
+			ost.OSS.ost_io.nrs_tbf_rule="stop\ ost_w" \
+			ost.OSS.ost_io.nrs_policies="fifo"
+
+	# sleep 3 seconds to wait the tbf policy stop completely,
+	# or the next test case is possible get -EAGAIN when
+	# setting the tbf policy
+	sleep 3
+}
+run_test 77j "check TBF-OPCode NRS policy"
 
 test_78() { #LU-6673
 	local server_version=$(lustre_version_code ost1)
