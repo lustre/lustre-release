@@ -612,8 +612,13 @@ int lr_mkfile(struct lr_info *info)
         } else {
                 rc = mknod(info->dest, S_IFREG | 0777, 0);
         }
-        if (rc)
-                return -errno;
+
+	if (rc < 0) {
+		if (errno == EEXIST)
+			rc = 0;
+		else
+			return -errno;
+	}
 
         /* Sync data and attributes */
         if (info->type == CL_CREATE || info->type == CL_MKDIR) {
