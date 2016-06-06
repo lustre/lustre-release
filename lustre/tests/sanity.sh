@@ -13724,7 +13724,7 @@ test_248() {
 	# the work load on the host machine when the task is running.
 	which virt-what 2> /dev/null && [ "$(virt-what)" != "kvm" ] ||
 		{ echo "no virt-what installed or running in kvm; ignore error";
-		  my_error=error_ignore; }
+		  my_error="error_ignore env=kvm"; }
 
 	# create a large file for fast read verification
 	dd if=/dev/zero of=$DIR/$tfile bs=128M count=1 > /dev/null 2>&1
