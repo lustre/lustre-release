@@ -26,19 +26,28 @@ $subsys->{LOG} = 1 << 6;
 $subsys->{LLITE} = 1 << 7;
 $subsys->{RPC} = 1 << 8;
 $subsys->{MGMT} = 1 << 9;
-$subsys->{PORTALS} = 1 << 10;
-$subsys->{SOCKNAL} = 1 << 11;
-$subsys->{QSWNAL} = 1 << 12;
-$subsys->{PINGER} = 1 << 13;
-$subsys->{FILTER} = 1 << 14;
-$subsys->{PTLBD} = 1 << 15;
-$subsys->{ECHO} = 1 << 16;
-$subsys->{LDLM} = 1 << 17;
-$subsys->{LOV} = 1 << 18;
-$subsys->{GMNAL} = 1 << 19;
-$subsys->{PTLROUTER} = 1 << 20;
-$subsys->{COBD} = 1 << 21;
-$subsys->{OPENIBNAL} = 1 << 22;
+$subsys->{LNET} = 1 << 10;
+$subsys->{LND} = 1 << 11;
+$subsys->{PINGER} = 1 << 12;
+$subsys->{FILTER} = 1 << 13;
+# /* 1<< 14 unused */
+$subsys->{ECHO} = 1 << 15;
+$subsys->{LDLM} = 1 << 16;
+$subsys->{LOV} = 1 << 17;
+$subsys->{LQUOTA} = 1 << 18;
+$subsys->{OSD} = 1 << 19;
+$subsys->{LFSCK} = 1 << 20;
+# /* 1<< 21 unused */
+# /* 1<< 22 unused */
+$subsys->{LMV} = 1 << 23; #/* b_new_cmd */
+# /* 1<< 24 unused */
+$subsys->{SEC} = 1 << 25; #/* upcall cache */
+$subsys->{GSS} = 1 << 26; #/* b_new_cmd */
+# /* 1<< 27 unused */
+$subsys->{MGC} = 1 << 28;
+$usbsys->{MGS} = 1 << 29;
+$subsys->{FID} = 1 << 30;  #/* b_new_cmd */
+$subsys->{FLD} = 1 << 31;  #/* b_new_cmd */
 
 
 $masks->{TRACE} = 1 << 0; # /* ENTRY/EXIT markers */
@@ -49,25 +58,34 @@ $masks->{MALLOC} = 1 << 4; # /* print malloc, free information */
 $masks->{CACHE} = 1 << 5; # /* cache-related items */
 $masks->{INFO} = 1 << 6; # /* general information */
 $masks->{IOCTL} = 1 << 7; # /* ioctl related information */
-$masks->{BLOCKS} = 1 << 8; # /* ext2 block allocation */
+$masks->{NETERROR} = 1 << 8; # /* network errors */
 $masks->{NET} = 1 << 9; # /* network communications */
 $masks->{WARNING} = 1 << 10; #
 $masks->{BUFFS} = 1 << 11; #
 $masks->{OTHER} = 1 << 12; #
 $masks->{DENTRY} = 1 << 13; #
-$masks->{PORTALS} = 1 << 14; # /* ENTRY/EXIT markers */
+$masks->{NETTRACE} = 1 << 14; # /* ENTRY/EXIT markers */
 $masks->{PAGE} = 1 << 15; # /* bulk page handling */
 $masks->{DLMTRACE} = 1 << 16; #
 $masks->{ERROR} = 1 << 17; # /* CERROR} = ...) == CDEBUG} = D_ERROR, ...) */
 $masks->{EMERG} = 1 << 18; # /* CEMERG} = ...) == CDEBUG} = D_EMERG, ...) */
 $masks->{HA} = 1 << 19; # /* recovery and failover */
-$masks->{RPCTRACE} = 1 << 19; # /* recovery and failover */
+$masks->{RPCTRACE} = 1 << 20; # /* recovery and failover */
+$masks->{VFSTRACE} = 1 << 21;
+$masks->{READA} = 1 << 22; #/* read-ahead */
+$masks->{MMAP} = 1 << 23;
+$masks->{CONFIG} = 1 << 24;
+$masks->{CONSOLE} = 1 << 25;
+$masks->{QUOTA} = 1 << 26;
+$masks->{SEC} = 1 << 27;
+$masks->{LFSCK} = 1 << 28;
+$masks->{HSM} = 1 << 29;
 
 sub extractpid
 {
     $line = shift;
 #    print "$_\n";
-    if ($line =~ /(\d+)\:(\d+)\:(\d+)\:(\d+\.\d+)\:(\d+)\:(\d+)\:.*/) {
+    if ($line =~ /(\d+)\:(\d+)\:(\d+\.\d+)\:(\d+\.\d+)\:(\d+)\:(\d+)\:.*/) {
 	return $6;
     }
 }
@@ -76,7 +94,7 @@ sub extracthostpid
 {
     $line = shift;
 #    print "$_\n";
-    if ($line =~ /(\d+)\:(\d+)\:(\d+)\:(\d+\.\d+)\:(\d+)\:(\d+)\:(\d+)\:.*/) {
+    if ($line =~ /(\d+)\:(\d+)\:(\d+\.\d+)\:(\d+)\:(\d+)\:(\d+)\:(\d+)\:.*/) {
 	return $7;
     }
 }
@@ -153,14 +171,14 @@ sub study_lock
     $_ = shift;
     my $rc;
 
-    $rc = /completion callback handler START ns: (.*) lock: (.*) lrc: (.*) mode/;
+    $rc = /client-side enqueue returned a blocked.* ns: (.*) lock: (.*) lrc: (.*) mode/;
     if ($rc) {
         $completion_callbacks{$1}->{$2} = $3;
 #         print color("white");
 #         print "---CP CB START: $1 $2 $3\n";
 #         print color("reset");
     }
-    $rc = /callback handler finished.* ns: (.*) lock: (.*) lrc: (.*) mode/;
+    $rc = /client-side enqueue:.* ns: (.*) lock: (.*) lrc: (.*) mode/;
     if ($rc) {
 #         print color("white");
 #         print "---CP CB END: $1 $2 $3 deleting $completion_callbacks{$1}->{$2}\n";
@@ -168,8 +186,8 @@ sub study_lock
         delete $completion_callbacks{$1}->{$2};
     }
 
+    $rc = /client blocking AST callback handler ns: (.*) lock: (.*) lrc: (.*) mode/;
     if ($rc) {
-        $rc = /client blocking AST callback handler START ns: (.*) lock: (.*) lrc: (.*) mode/;
         $blocking_callbacks{$1}->{$2} = $3;
 #         print color("white");
 #         print "---BL CB START: $1 $2\n";
@@ -268,6 +286,7 @@ if ($ARGV[1]) {
 
 print "nodlm $nodlm, nonet $nonet, trace $trace\n";
 print "pid: $pid, dlm_ns: $dlm_ns\n";
+print "rpctrace: $rpctrace\n";
 print "extract_start: $extract_start\n";
 print "extract_end:   $extract_end\n";
 while (<LOG>) {
@@ -315,11 +334,8 @@ while (<LOG>) {
         next if ($nonet && 
                  (  $linesubsys == $subsys->{RPC} ||
                     $linesubsys == $subsys->{NET} ||
-                    $linesubsys == $subsys->{PORTALS} ||
-                    $linesubsys == $subsys->{SOCKNAL} ||
-                    $linesubsys == $subsys->{QSWNAL} ||
-                    $linesubsys == $subsys->{OPENIBNAL} ||
-                    $linesubsys == $subsys->{GMNAL}));
+                    $linesubsys == $subsys->{LNET} ||
+                    $linesubsys == $subsys->{LND}));
 	if(!$entering_rpc) {entering_rpc($_);}
 	if(!$leaving_rpc) {leaving_rpc($_);}
 
