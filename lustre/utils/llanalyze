@@ -289,6 +289,7 @@ print "pid: $pid, dlm_ns: $dlm_ns\n";
 print "rpctrace: $rpctrace\n";
 print "extract_start: $extract_start\n";
 print "extract_end:   $extract_end\n";
+print "width: $width\n";
 while (<LOG>) {
     if ($extract_start && $extract_start ne "LLANAYZE_FOUND") {
         next if (index($_, $extract_start, 0) == -1);
@@ -322,7 +323,7 @@ while (<LOG>) {
     }
 
     if ( !$pid || $linepid == $pid || $linehpid == $pid) {
-        next if (!$entering_rpc && $rpctrace && $linemask != $masks->{RPCTRACE});
+        next if ($rpctrace && !$entering_rpc && $linemask != $masks->{RPCTRACE});
         next if ($trace && $linemask != $masks->{TRACE});
         next if ($nodlm && 
                  (  $linesubsys == $subsys->{LDLM}));
@@ -336,8 +337,8 @@ while (<LOG>) {
                     $linesubsys == $subsys->{NET} ||
                     $linesubsys == $subsys->{LNET} ||
                     $linesubsys == $subsys->{LND}));
-	if(!$entering_rpc) {entering_rpc($_);}
-	if(!$leaving_rpc) {leaving_rpc($_);}
+	if($rpctrace && !$entering_rpc) {entering_rpc($_);}
+	if($rpctrace && !$leaving_rpc) {leaving_rpc($_);}
 
 #        printf "sub/mask: %s - %s\n", getsubsys($_), getmask($_);
         if (!$silent) {
