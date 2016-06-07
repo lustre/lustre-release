@@ -217,7 +217,7 @@ kgnilnd_alloc_fmablk(kgn_device_t *device, int use_phys)
 	fma_blk->gnm_avail_mboxs = fma_blk->gnm_num_mboxs = num_mbox;
 
 	CDEBUG(D_MALLOC, "alloc fmablk 0x%p num %d msg_maxsize %d credits %d "
-		"mbox_size %d MDD "LPX64"."LPX64"\n",
+		"mbox_size %d MDD %#llx.%#llx\n",
 		fma_blk, num_mbox, smsg_attr.msg_maxsize, smsg_attr.mbox_maxcredit,
 		fma_blk->gnm_mbox_size, fma_blk->gnm_hndl.qword1,
 		fma_blk->gnm_hndl.qword2);
@@ -415,7 +415,7 @@ kgnilnd_find_free_mbox(kgn_conn_t *conn)
 
 		CDEBUG(D_NET, "conn %p smsg %p fmablk %p "
 			"allocating SMSG mbox %d buf %p "
-			"offset %u hndl "LPX64"."LPX64"\n",
+			"offset %u hndl %#llx.%#llx\n",
 			conn, smsg_attr, fma_blk, id,
 			smsg_attr->msg_buffer, smsg_attr->mbox_offset,
 			fma_blk->gnm_hndl.qword1,
@@ -505,14 +505,14 @@ kgnilnd_release_mbox(kgn_conn_t *conn, int purgatory_hold)
 	 * > 0 - hold it for now */
 	if (purgatory_hold == 0) {
 		CDEBUG(D_NET, "conn %p smsg %p fmablk %p freeing SMSG mbox %d "
-			"hndl "LPX64"."LPX64"\n",
+			"hndl %#llx.%#llx\n",
 			conn, smsg_attr, fma_blk, id,
 			fma_blk->gnm_hndl.qword1, fma_blk->gnm_hndl.qword2);
 		fma_blk->gnm_avail_mboxs++;
 
 	} else if (purgatory_hold > 0) {
 		CDEBUG(D_NET, "conn %p smsg %p fmablk %p holding SMSG mbox %d "
-			"hndl "LPX64"."LPX64"\n",
+			"hndl %#llx.%#llx\n",
 			conn, smsg_attr, fma_blk, id,
 			fma_blk->gnm_hndl.qword1, fma_blk->gnm_hndl.qword2);
 
@@ -521,7 +521,7 @@ kgnilnd_release_mbox(kgn_conn_t *conn, int purgatory_hold)
 						conn->gnc_timeout);
 	} else {
 		CDEBUG(D_NET, "conn %p smsg %p fmablk %p release SMSG mbox %d "
-			"hndl "LPX64"."LPX64"\n",
+			"hndl %#llx.%#llx\n",
 			conn, smsg_attr, fma_blk, id,
 			fma_blk->gnm_hndl.qword1, fma_blk->gnm_hndl.qword2);
 
@@ -941,7 +941,7 @@ kgnilnd_unpack_connreq(kgn_dgram_t *dgram)
 	}
 
 	if (connreq->gncr_peerstamp == 0 || connreq->gncr_connstamp == 0) {
-		CERROR("Recived bad timestamps peer "LPU64" conn "LPU64"\n",
+		CERROR("Recived bad timestamps peer %llu conn %llu\n",
 		connreq->gncr_peerstamp, connreq->gncr_connstamp);
 		return -EPROTO;
 	}
@@ -1439,13 +1439,13 @@ kgnilnd_probe_for_dgram(kgn_device_t *dev, kgn_dgram_t **dgramp)
 		RETURN(0);
 	}
 
-	CDEBUG(D_NET, "ready "LPX64" on device 0x%p\n",
+	CDEBUG(D_NET, "ready %#llx on device 0x%p\n",
 		readyid, dev);
 
 	dgram = (kgn_dgram_t *)readyid;
 
 	LASSERTF(dgram->gndg_magic == GNILND_DGRAM_MAGIC,
-		 "dgram 0x%p from id "LPX64" with bad magic %x\n",
+		 "dgram 0x%p from id %#llx with bad magic %x\n",
 		 dgram, readyid, dgram->gndg_magic);
 
 	LASSERTF(dgram->gndg_state == GNILND_DGRAM_POSTED ||
@@ -1479,7 +1479,7 @@ kgnilnd_probe_for_dgram(kgn_device_t *dev, kgn_dgram_t **dgramp)
 	spin_unlock(&dev->gnd_dgram_lock);
 
 	LASSERTF(grc != GNI_RC_NO_MATCH, "kgni lied! probe_by_id told us that"
-		 " id "LPU64" was ready\n", readyid);
+		 " id %llu was ready\n", readyid);
 
 	CDEBUG(D_NET, "grc %d dgram 0x%p type %s post_state %d "
 		"remote_addr %u remote_id %u\n", grc, dgram,
@@ -1695,7 +1695,7 @@ kgnilnd_wait_for_canceled_dgrams(kgn_device_t *dev)
 		if (grc != GNI_RC_SUCCESS)
 			continue;
 
-		CDEBUG(D_NET, "ready "LPX64" on device %d->0x%p\n",
+		CDEBUG(D_NET, "ready %#llx on device %d->0x%p\n",
 			readyid, dev->gnd_id, dev);
 
 		rc = kgnilnd_probe_for_dgram(dev, &dgram);

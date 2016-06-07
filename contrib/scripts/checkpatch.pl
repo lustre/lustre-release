@@ -465,6 +465,17 @@ my %dep_functions = (
 	'ldlm_type_t',			'enum ldlm_type',
 	'ldlm_wire_policy_data_t',	'union ldlm_wire_policy_data',
 
+	'LPU64'				'%llu'
+	'LPD64'				'%lld'
+	'LPX64'				'%#llx'
+	'LPX64i'			'%llx'
+	'LPO64'				'%#llo'
+
+	'LPLU'				'%lu'
+	'LPLD'				'%ld'
+	'LPLX'				'%#lx'
+	'LPPID'				'%d'
+
 	'LPROCFS',			'CONFIG_PROC_FS',
 	'mktemp',			'mkstemp',
 	'sprintf',			'snprintf',

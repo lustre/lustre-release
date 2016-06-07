@@ -385,7 +385,7 @@ srpc_post_passive_rdma(int portal, int local, __u64 matchbits, void *buf,
         }
 
         CDEBUG (D_NET,
-                "Posted passive RDMA: peer %s, portal %d, matchbits "LPX64"\n",
+		"Posted passive RDMA: peer %s, portal %d, matchbits %#llx\n",
                 libcfs_id2str(peer), portal, matchbits);
         return 0;
 }
@@ -425,7 +425,7 @@ srpc_post_active_rdma(int portal, __u64 matchbits, void *buf, int len,
         }
 
         if (rc != 0) {
-                CERROR ("LNet%s(%s, %d, "LPD64") failed: %d\n",
+		CERROR ("LNet%s(%s, %d, %lld) failed: %d\n",
                         ((options & LNET_MD_OP_PUT) != 0) ? "Put" : "Get",
                         libcfs_id2str(peer), portal, matchbits, rc);
 
@@ -436,7 +436,7 @@ srpc_post_active_rdma(int portal, __u64 matchbits, void *buf, int len,
                 LASSERT (rc == 0);
         } else {
                 CDEBUG (D_NET,
-                        "Posted active RDMA: peer %s, portal %u, matchbits "LPX64"\n",
+			"Posted active RDMA: peer %s, portal %u, matchbits %#llx\n",
                         libcfs_id2str(peer), portal, matchbits);
         }
         return 0;

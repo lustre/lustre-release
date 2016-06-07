@@ -576,7 +576,7 @@ static void
 kiblnd_debug_tx (kib_tx_t *tx)
 {
         CDEBUG(D_CONSOLE, "      %p snd %d q %d w %d rc %d dl %lx "
-               "cookie "LPX64" msg %s%s type %x cred %d\n",
+	       "cookie %#llx msg %s%s type %x cred %d\n",
                tx, tx->tx_sending, tx->tx_queued, tx->tx_waiting,
                tx->tx_status, tx->tx_deadline, tx->tx_cookie,
                tx->tx_lntmsg[0] == NULL ? "-" : "!",
@@ -1030,7 +1030,7 @@ kiblnd_close_stale_conns_locked(kib_peer_t *peer,
 			continue;
 
 		CDEBUG(D_NET, "Closing stale conn -> %s version: %x, "
-			      "incarnation:"LPX64"(%x, "LPX64")\n",
+			      "incarnation:%#llx(%x, %#llx)\n",
 		       libcfs_nid2str(peer->ibp_nid),
 		       conn->ibc_version, conn->ibc_incarnation,
 		       version, incarnation);
@@ -1266,7 +1266,7 @@ kiblnd_map_rx_descs(kib_conn_t *conn)
 						  rx->rx_msgaddr));
 		KIBLND_UNMAP_ADDR_SET(rx, rx_msgunmap, rx->rx_msgaddr);
 
-		CDEBUG(D_NET, "rx %d: %p "LPX64"("LPX64")\n",
+		CDEBUG(D_NET, "rx %d: %p %#llx(%#llx)\n",
 		       i, rx->rx_msg, rx->rx_msgaddr,
 		       (__u64)(page_to_phys(pg) + pg_off));
 
@@ -2494,7 +2494,7 @@ kiblnd_hdev_get_attr(kib_hca_dev_t *hdev)
                 return 0;
         }
 
-        CERROR("Invalid mr size: "LPX64"\n", hdev->ibh_mr_size);
+	CERROR("Invalid mr size: %#llx\n", hdev->ibh_mr_size);
         return -EINVAL;
 }
 

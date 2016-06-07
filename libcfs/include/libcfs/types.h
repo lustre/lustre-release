@@ -65,7 +65,4 @@
 # error "cannot define L{I,L,P}_POISON"
 #endif /* BITS_PER_LONG != 32 */
 
-typedef unsigned long ulong_ptr_t;
-typedef long long_ptr_t;
-
 #endif /* _LIBCFS_TYPES_H */

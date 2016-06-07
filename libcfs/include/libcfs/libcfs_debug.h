@@ -291,13 +291,13 @@ do {                                                                    \
 #if defined(CDEBUG_ENTRY_EXIT) && defined(__KERNEL__)
 
 void libcfs_log_goto(struct libcfs_debug_msg_data *goto_data,
-		     const char *label, long_ptr_t rc);
+		     const char *label, long rc);
 
 # define GOTO(label, rc)						\
 do {									\
 	if (cfs_cdebug_show(D_TRACE, DEBUG_SUBSYSTEM)) {		\
 		LIBCFS_DEBUG_MSG_DATA_DECL(_goto_data, D_TRACE, NULL);	\
-		libcfs_log_goto(&_goto_data, #label, (long_ptr_t)(rc));	\
+		libcfs_log_goto(&_goto_data, #label, (long)(rc));	\
 	} else {							\
 		(void)(rc);						\
 	}								\
@@ -329,7 +329,7 @@ do {									\
 	if (cfs_cdebug_show(D_TRACE, DEBUG_SUBSYSTEM)) {		\
 		typeof(rc) __rc = (rc);					\
 		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_TRACE, NULL);	\
-		libcfs_log_return(&msgdata, (long_ptr_t)__rc);		\
+		libcfs_log_return(&msgdata, (long)__rc);		\
 		return __rc;						\
 	}								\
 									\

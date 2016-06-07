@@ -474,7 +474,7 @@ kgnilnd_nak_rdma(kgn_conn_t *conn, int rx_type, int error, __u64 cookie, lnet_ni
 		LBUG();
 	}
 	/* only allow NAK on error and truncate to zero */
-	LASSERTF(error <= 0, "error %d conn 0x%p, cookie "LPU64"\n",
+	LASSERTF(error <= 0, "error %d conn 0x%p, cookie %llu\n",
 		 error, conn, cookie);
 
 	tx = kgnilnd_new_tx_msg(nak_type, source);
@@ -947,7 +947,7 @@ kgnilnd_mem_add_map_list(kgn_device_t *dev, kgn_tx_t *tx)
 	if (tx->tx_msg.gnm_type == GNILND_MSG_PUT_ACK ||
 	    tx->tx_msg.gnm_type == GNILND_MSG_GET_REQ) {
 		atomic64_add(bytes, &dev->gnd_rdmaq_bytes_out);
-		GNIDBG_TX(D_NETTRACE, tx, "rdma ++ %d to "LPD64"",
+		GNIDBG_TX(D_NETTRACE, tx, "rdma ++ %d to %lld",
 			  bytes, atomic64_read(&dev->gnd_rdmaq_bytes_out));
 	}
 
@@ -998,7 +998,7 @@ kgnilnd_mem_del_map_list(kgn_device_t *dev, kgn_tx_t *tx)
 		atomic64_sub(bytes, &dev->gnd_rdmaq_bytes_out);
 		LASSERTF(atomic64_read(&dev->gnd_rdmaq_bytes_out) >= 0,
 			 "bytes_out negative! %ld\n", atomic64_read(&dev->gnd_rdmaq_bytes_out));
-		GNIDBG_TX(D_NETTRACE, tx, "rdma -- %d to "LPD64"",
+		GNIDBG_TX(D_NETTRACE, tx, "rdma -- %d to %lld",
 			  bytes, atomic64_read(&dev->gnd_rdmaq_bytes_out));
 	}
 
@@ -1057,7 +1057,7 @@ kgnilnd_map_buffer(kgn_tx_t *tx)
 		 *  GART resource, etc starvation handling */
 		if (rrc != GNI_RC_SUCCESS) {
 			GNIDBG_TX(D_NET, tx, "Can't map %d pages: dev %d "
-				"phys %u pp %u, virt %u nob "LPU64"",
+				"phys %u pp %u, virt %u nob %llu",
 				tx->tx_phys_npages, dev->gnd_id,
 				dev->gnd_map_nphys, dev->gnd_map_physnop,
 				dev->gnd_map_nvirt, dev->gnd_map_virtnob);
@@ -1074,7 +1074,7 @@ kgnilnd_map_buffer(kgn_tx_t *tx)
 			NULL, flags, &tx->tx_map_key);
 		if (rrc != GNI_RC_SUCCESS) {
 			GNIDBG_TX(D_NET, tx, "Can't map %u bytes: dev %d "
-				"phys %u pp %u, virt %u nob "LPU64"",
+				"phys %u pp %u, virt %u nob %llu",
 				tx->tx_nob, dev->gnd_id,
 				dev->gnd_map_nphys, dev->gnd_map_physnop,
 				dev->gnd_map_nvirt, dev->gnd_map_virtnob);
@@ -1175,7 +1175,7 @@ kgnilnd_unmap_buffer(kgn_tx_t *tx, int error)
 			hold_timeout = GNILND_TIMEOUT2DEADMAN;
 
 			GNIDBG_TX(D_NET, tx,
-				 "dev %p delaying MDD release for %dms key "LPX64"."LPX64"",
+				 "dev %p delaying MDD release for %dms key %#llx.%#llx",
 				 tx->tx_conn->gnc_device, hold_timeout,
 				 tx->tx_map_key.qword1, tx->tx_map_key.qword2);
 		}
@@ -1990,7 +1990,7 @@ kgnilnd_rdma(kgn_tx_t *tx, int type,
 		 tx, conn, conn->gnc_close_sent);
 
 	GNIDBG_TX(D_NET, tx, "Post RDMA type 0x%02x conn %p dlvr_mode "
-		"0x%x cookie:"LPX64,
+		"0x%x cookie:%#llx",
 		type, conn, tx->tx_rdma_desc.dlvr_mode, cookie);
 
 	/* set CQ dedicated for RDMA */
@@ -2377,7 +2377,7 @@ kgnilnd_eager_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
 		CERROR("Couldnt find matching peer %p or conn %p / %p\n",
 			peer, conn, found_conn);
 		if (found_conn) {
-			CERROR("Unexpected connstamp "LPX64"("LPX64" expected)"
+			CERROR("Unexpected connstamp %#llx(%#llx expected)"
 				" from %s", rxmsg->gnm_connstamp,
 				found_conn->gnc_peer_connstamp,
 				libcfs_nid2str(peer->gnp_nid));
@@ -3193,7 +3193,7 @@ kgnilnd_check_rdma_cq(kgn_device_t *dev)
 			"this is bad, somehow our credits didn't protect us"
 			" from CQ overrun\n");
 		LASSERTF(GNI_CQ_GET_TYPE(event_data) == GNI_CQ_EVENT_TYPE_POST,
-			"rrc %d, GNI_CQ_GET_TYPE("LPX64") = "LPX64"\n", rrc,
+			"rrc %d, GNI_CQ_GET_TYPE(%#llx) = %#llx\n", rrc,
 			event_data, GNI_CQ_GET_TYPE(event_data));
 
 		rrc = kgnilnd_get_completed(dev->gnd_snd_rdma_cqh, event_data,
@@ -3346,7 +3346,7 @@ kgnilnd_check_fma_send_cq(kgn_device_t *dev)
 
 		if (rrc == GNI_RC_NOT_DONE) {
 			CDEBUG(D_INFO,
-			       "SMSG send CQ %d not ready (data "LPX64") "
+			       "SMSG send CQ %d not ready (data %#llx) "
 			       "processed %ld\n", dev->gnd_id, event_data,
 			       num_processed);
 			return num_processed;
@@ -3359,7 +3359,7 @@ kgnilnd_check_fma_send_cq(kgn_device_t *dev)
 			"this is bad, somehow our credits didn't "
 			"protect us from CQ overrun\n");
 		LASSERTF(GNI_CQ_GET_TYPE(event_data) == GNI_CQ_EVENT_TYPE_SMSG,
-			"rrc %d, GNI_CQ_GET_TYPE("LPX64") = "LPX64"\n", rrc,
+			"rrc %d, GNI_CQ_GET_TYPE(%#llx) = %#llx\n", rrc,
 			event_data, GNI_CQ_GET_TYPE(event_data));
 
 		/* if SMSG couldn't handle an error, time for conn to die */
@@ -3373,7 +3373,7 @@ kgnilnd_check_fma_send_cq(kgn_device_t *dev)
 			if (conn == NULL) {
 				/* Conn was destroyed? */
 				CDEBUG(D_NET,
-					"SMSG CQID lookup "LPX64" failed\n",
+					"SMSG CQID lookup %#llx failed\n",
 					GNI_CQ_GET_INST_ID(event_data));
 				write_unlock(&kgnilnd_data.kgn_peer_conn_lock);
 				continue;
@@ -3501,7 +3501,7 @@ kgnilnd_check_fma_rcv_cq(kgn_device_t *dev)
 		kgnilnd_gl_mutex_unlock(&dev->gnd_cq_mutex);
 
 		if (rrc == GNI_RC_NOT_DONE) {
-			CDEBUG(D_INFO, "SMSG RX CQ %d empty data "LPX64" "
+			CDEBUG(D_INFO, "SMSG RX CQ %d empty data %#llx "
 				"processed %ld\n",
 				dev->gnd_id, event_data, num_processed);
 			return num_processed;
@@ -3525,7 +3525,7 @@ kgnilnd_check_fma_rcv_cq(kgn_device_t *dev)
 		/* sender should get error event too and take care
 		of failed transaction by re-transmitting */
 		if (rrc == GNI_RC_TRANSACTION_ERROR) {
-			CDEBUG(D_NET, "SMSG RX CQ error "LPX64"\n", event_data);
+			CDEBUG(D_NET, "SMSG RX CQ error %#llx\n", event_data);
 			continue;
 		}
 
@@ -3534,12 +3534,12 @@ kgnilnd_check_fma_rcv_cq(kgn_device_t *dev)
 			conn = kgnilnd_cqid2conn_locked(
 						 GNI_CQ_GET_INST_ID(event_data));
 			if (conn == NULL) {
-				CDEBUG(D_NET, "SMSG RX CQID lookup "LPU64" "
-					"failed, dropping event "LPX64"\n",
+				CDEBUG(D_NET, "SMSG RX CQID lookup %llu "
+					"failed, dropping event %#llx\n",
 					GNI_CQ_GET_INST_ID(event_data),
 					event_data);
 			} else {
-				CDEBUG(D_NET, "SMSG RX: CQID "LPU64" "
+				CDEBUG(D_NET, "SMSG RX: CQID %llu "
 				       "conn %p->%s\n",
 					GNI_CQ_GET_INST_ID(event_data),
 					conn, conn->gnc_peer ?
@@ -3799,7 +3799,7 @@ kgnilnd_process_fmaq(kgn_conn_t *conn)
 	GNITX_ASSERTF(tx, tx->tx_id.txe_smsg_id != 0,
 		      "tx with zero id", NULL);
 
-	CDEBUG(D_NET, "sending regular msg: %p, type %s(0x%02x), cookie "LPX64"\n",
+	CDEBUG(D_NET, "sending regular msg: %p, type %s(0x%02x), cookie %#llx\n",
 	       tx, kgnilnd_msgtype2str(tx->tx_msg.gnm_type),
 	       tx->tx_msg.gnm_type, tx->tx_id.txe_cookie);
 
@@ -3997,8 +3997,8 @@ _kgnilnd_match_reply(kgn_conn_t *conn, int type1, int type2, __u64 cookie)
 		GNITX_ASSERTF(tx, ((tx->tx_id.txe_idx == ev_id.txe_idx) &&
 				  (tx->tx_id.txe_cookie = cookie)),
 			      "conn 0x%p->%s tx_ref_table hosed: wanted "
-			      "txe_cookie "LPX64" txe_idx %d "
-			      "found tx %p cookie "LPX64" txe_idx %d\n",
+			      "txe_cookie %#llx txe_idx %d "
+			      "found tx %p cookie %#llx txe_idx %d\n",
 			      conn, libcfs_nid2str(conn->gnc_peer->gnp_nid),
 			      cookie, ev_id.txe_idx,
 			      tx, tx->tx_id.txe_cookie, tx->tx_id.txe_idx);
@@ -4012,7 +4012,7 @@ _kgnilnd_match_reply(kgn_conn_t *conn, int type1, int type2, __u64 cookie)
 			tx->tx_state, GNILND_TX_WAITING_REPLY,
 			libcfs_nid2str(conn->gnc_peer->gnp_nid));
 	} else {
-		CWARN("Unmatched reply %02x, or %02x/"LPX64" from %s\n",
+		CWARN("Unmatched reply %02x, or %02x/%#llx from %s\n",
 		      type1, type2, cookie, libcfs_nid2str(conn->gnc_peer->gnp_nid));
 	}
 	return tx;
@@ -4040,7 +4040,7 @@ kgnilnd_complete_tx(kgn_tx_t *tx, int rc)
 	tx->tx_state &= ~GNILND_TX_WAITING_REPLY;
 
 	if (rc == -EFAULT) {
-		CDEBUG(D_NETERROR, "Error %d TX data: TX %p tx_id %x nob %16"LPF64"u physnop %8d buffertype %#8x MemHandle "LPX64"."LPX64"x\n",
+		CDEBUG(D_NETERROR, "Error %d TX data: TX %p tx_id %x nob %16llu physnop %8d buffertype %#8x MemHandle %#llx.%#llxx\n",
 			rc, tx, id, nob, physnop, buftype, hndl.qword1, hndl.qword2);
 
 		if(*kgnilnd_tunables.kgn_efault_lbug) {
@@ -4287,7 +4287,7 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 	}
 
 	if (msg->gnm_connstamp != conn->gnc_peer_connstamp) {
-		GNIDBG_MSG(D_NETERROR, msg, "Unexpected connstamp "LPX64"("LPX64
+		GNIDBG_MSG(D_NETERROR, msg, "Unexpected connstamp %#llx(%#llx"
 		       " expected) from %s",
 		       msg->gnm_connstamp, conn->gnc_peer_connstamp,
 		       libcfs_nid2str(peer->gnp_nid));
@@ -4844,7 +4844,7 @@ kgnilnd_process_mapped_tx(kgn_device_t *dev)
 		} else {
 		       GNIDBG_TX(log_retrans_level, tx,
 				"transient map failure #%d %d pages/%d bytes phys %u@%u "
-				"virt %u@"LPU64" "
+				"virt %u@%llu "
 				"nq_map %d mdd# %d/%d GART %ld",
 				dev->gnd_map_attempt, tx->tx_phys_npages, tx->tx_nob,
 				dev->gnd_map_nphys, dev->gnd_map_physnop * PAGE_SIZE,

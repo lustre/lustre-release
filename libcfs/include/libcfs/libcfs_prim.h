@@ -45,7 +45,7 @@
 /*
  * Timer
  */
-typedef  void (cfs_timer_func_t)(ulong_ptr_t);
+typedef  void (cfs_timer_func_t)(uintptr_t);
 
 void cfs_init_timer(struct timer_list *t);
 void cfs_timer_init(struct timer_list *t, cfs_timer_func_t *func, void *arg);

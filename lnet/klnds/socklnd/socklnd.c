@@ -2474,7 +2474,7 @@ ksocknal_base_startup(void)
 
 		snprintf(name, sizeof(name), "socknal_cd%02d", i);
 		rc = ksocknal_thread_start(ksocknal_connd,
-					   (void *)((ulong_ptr_t)i), name);
+					   (void *)((uintptr_t)i), name);
 		if (rc != 0) {
 			spin_lock_bh(&ksocknal_data.ksnd_connd_lock);
 			ksocknal_data.ksnd_connd_starting--;
@@ -2524,7 +2524,7 @@ ksocknal_debug_peerhash (lnet_ni_t *ni)
                 ksock_conn_t  *conn;
 
 		CWARN ("Active peer on shutdown: %s, ref %d, scnt %d, "
-		       "closing %d, accepting %d, err %d, zcookie "LPU64", "
+		       "closing %d, accepting %d, err %d, zcookie %llu, "
 		       "txq %d, zc_req %d\n", libcfs_id2str(peer->ksnp_id),
 		       atomic_read(&peer->ksnp_refcount),
 		       peer->ksnp_sharecount, peer->ksnp_closing,

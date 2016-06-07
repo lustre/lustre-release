@@ -83,7 +83,7 @@ _kgnilnd_debug_tx(kgn_tx_t *tx, struct libcfs_debug_msg_data *msgdata,
 
 	va_start(args, fmt);
 	libcfs_debug_vmsg2(msgdata, fmt, args,
-		" tx@0x%p->%s id "LPX64
+		" tx@0x%p->%s id %#llx"
 		"/%u/%d:%d msg %x/%s/%d x%d q %s@%lds->0x%p f %x re %d\n",
 		tx, nid, id->txe_cookie, id->txe_smsg_id, id->txe_cqid,
 		id->txe_idx, tx->tx_msg.gnm_type,

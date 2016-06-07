@@ -184,7 +184,7 @@ lnet_try_match_md(lnet_libmd_t *md,
 		mlength = info->mi_rlength;
 	} else if ((md->md_options & LNET_MD_TRUNCATE) == 0) {
 		/* this packet _really_ is too big */
-		CERROR("Matching packet from %s, match "LPU64
+		CERROR("Matching packet from %s, match %llu"
 		       " length %d too big: %d left, %d allowed\n",
 		       libcfs_id2str(info->mi_id), info->mi_mbits,
 		       info->mi_rlength, md->md_length - offset, mlength);
@@ -194,7 +194,7 @@ lnet_try_match_md(lnet_libmd_t *md,
 
 	/* Commit to this ME/MD */
 	CDEBUG(D_NET, "Incoming %s index %x from %s of "
-	       "length %d/%d into md "LPX64" [%d] + %d\n",
+	       "length %d/%d into md %#llx [%d] + %d\n",
 	       (info->mi_opc == LNET_MD_OP_PUT) ? "put" : "get",
 	       info->mi_portal, libcfs_id2str(info->mi_id), mlength,
 	       info->mi_rlength, md->md_lh.lh_cookie, md->md_niov, offset);
@@ -567,7 +567,7 @@ lnet_ptl_match_md(struct lnet_match_info *info, struct lnet_msg *msg)
 	int			rc;
 
 	CDEBUG(D_NET, "Request from %s of length %d into portal %d "
-	       "MB="LPX64"\n", libcfs_id2str(info->mi_id),
+	       "MB=%#llx\n", libcfs_id2str(info->mi_id),
 	       info->mi_rlength, info->mi_portal, info->mi_mbits);
 
 	if (info->mi_portal >= the_lnet.ln_nportals) {
@@ -623,7 +623,7 @@ lnet_ptl_match_md(struct lnet_match_info *info, struct lnet_msg *msg)
 	/* LNET_MATCHMD_NONE means msg was added to the delay queue */
 	if (rc & LNET_MATCHMD_NONE) {
 		CDEBUG(D_NET,
-		       "Delaying %s from %s ptl %d MB "LPX64" off %d len %d\n",
+		       "Delaying %s from %s ptl %d MB %#llx off %d len %d\n",
 		       info->mi_opc == LNET_MD_OP_PUT ? "PUT" : "GET",
 		       libcfs_id2str(info->mi_id), info->mi_portal,
 		       info->mi_mbits, info->mi_roffset, info->mi_rlength);
@@ -714,7 +714,7 @@ lnet_ptl_attach_md(lnet_me_t *me, lnet_libmd_t *md,
 			list_add_tail(&msg->msg_list, matches);
 
 			CDEBUG(D_NET, "Resuming delayed PUT from %s portal %d "
-			       "match "LPU64" offset %d length %d.\n",
+			       "match %llu offset %d length %d.\n",
 			       libcfs_id2str(info.mi_id),
 			       info.mi_portal, info.mi_mbits,
 			       info.mi_roffset, info.mi_rlength);

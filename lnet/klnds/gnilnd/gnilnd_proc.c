@@ -136,7 +136,7 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 
 	diff = kgnilnd_ts_sub(end, begin);
 
-	LCONSOLE_INFO("running "LPD64"MB took %ld.%ld seconds\n",
+	LCONSOLE_INFO("running %lldMB took %ld.%ld seconds\n",
 		      mbytes, diff.tv_sec, diff.tv_nsec);
 
 unwind:
@@ -238,7 +238,7 @@ kgnilnd_stats_seq_show(struct seq_file *sf, void *v)
 			   "TX phys nmaps: %d\n"
 			   "TX phys bytes: %lu\n"
 			   "TX virt nmaps: %d\n"
-			   "TX virt bytes: "LPU64"\n"
+			   "TX virt bytes: %llu\n"
 			   "RDMAQ bytes_auth: %ld\n"
 			   "RDMAQ bytes_left: %ld\n"
 			   "RDMAQ nstalls: %d\n"
@@ -491,7 +491,7 @@ kgnilnd_mdd_seq_show(struct seq_file *s, void *iter)
 	hndl.qword1 = tx->tx_map_key.qword1;
 	hndl.qword2 = tx->tx_map_key.qword2;
 
-	seq_printf(s, "%p %x %16"LPF64"u %8d %#8x "LPX64"."LPX64"x\n",
+	seq_printf(s, "%p %x %16llu %8d %#8x %#llx.%#llxx\n",
 		tx, id, nob, physnop, buftype,
 		hndl.qword1, hndl.qword2);
 
@@ -697,7 +697,7 @@ kgnilnd_smsg_seq_show(struct seq_file *s, void *iter)
 	spin_unlock(&dev->gnd_fmablk_lock);
 
 	if (live) {
-		seq_printf(s, "%5d %4s %6d/%5d/%5d %9d %18p   "LPX64"."LPX64"\n",
+		seq_printf(s, "%5d %4s %6d/%5d/%5d %9d %18p   %#llx.%#llx\n",
 			   (int) gseq->gsmsg_off, kgnilnd_fmablk_state2str(state),
 			   avail_mboxs, held_mboxs, num_mboxs, blk_size,
 			   fmablk, hndl.qword1, hndl.qword2);
@@ -905,7 +905,7 @@ kgnilnd_conn_seq_show(struct seq_file *s, void *iter)
 		"rx sq %u %dms/%dms "
 		"noop r/s %d/%d w/s/cq %lds/%lds/%lds "
 		"sched a/d %lds/%lds "
-		"tx_re "LPD64" TO %ds %s\n",
+		"tx_re %lld TO %ds %s\n",
 		conn, peer ? libcfs_nid2str(peer->gnp_nid) : "<?>",
 		atomic_read(&conn->gnc_refcount),
 		kgnilnd_count_list(&conn->gnc_fmaq),

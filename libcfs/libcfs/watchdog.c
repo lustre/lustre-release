@@ -107,7 +107,7 @@ lcw_dump(struct lc_watchdog *lcw)
         ENTRY;
         rcu_read_lock();
        if (lcw->lcw_task == NULL) {
-                LCONSOLE_WARN("Process " LPPID " was not found in the task "
+		LCONSOLE_WARN("Process %d was not found in the task "
                               "list; watchdog callback may be incomplete\n",
                               (int)lcw->lcw_pid);
         } else {
@@ -118,7 +118,7 @@ lcw_dump(struct lc_watchdog *lcw)
         EXIT;
 }
 
-static void lcw_cb(ulong_ptr_t data)
+static void lcw_cb(uintptr_t data)
 {
         struct lc_watchdog *lcw = (struct lc_watchdog *)data;
         ENTRY;
@@ -209,7 +209,7 @@ static void lcw_dump_stack(struct lc_watchdog *lcw)
 
 static void lc_watchdog_dumplog(pid_t pid, void *data)
 {
-	libcfs_debug_dumplog_internal((void *)((long_ptr_t)pid));
+	libcfs_debug_dumplog_internal((void *)((uintptr_t)pid));
 }
 
 static int lcw_dispatch_main(void *data)
@@ -272,7 +272,7 @@ static int lcw_dispatch_main(void *data)
 			spin_unlock_bh(&lcw_pending_timers_lock);
 			spin_unlock_bh(&lcw->lcw_lock);
 
-                        CDEBUG(D_INFO, "found lcw for pid " LPPID "\n",
+			CDEBUG(D_INFO, "found lcw for pid %d\n",
                                lcw->lcw_pid);
                         lcw_dump_stack(lcw);
 

@@ -476,7 +476,7 @@ static inline gni_return_t kgnilnd_get_quiesce_status(
 #undef apick_fmt
 
 #define apick_fn "kgnilnd_cq_create"
-#define apick_fmt "0x%p, %u, %u, 0x%p, "LPX64", 0x%p"
+#define apick_fmt "0x%p, %u, %u, 0x%p, %#llx, 0x%p"
 static inline gni_return_t kgnilnd_cq_create(
 		IN gni_nic_handle_t	nic_hndl,
 		IN uint32_t		entry_count,
@@ -964,7 +964,7 @@ static inline gni_return_t kgnilnd_ep_destroy(
 #undef apick_fmt
 
 #define apick_fn "kgnilnd_ep_postdata_w_id"
-#define apick_fmt "0x%p, 0x%p, %d, 0x%p, %d, "LPU64""
+#define apick_fmt "0x%p, 0x%p, %d, 0x%p, %d, %llu"
 static inline gni_return_t kgnilnd_ep_postdata_w_id(
 		IN gni_ep_handle_t ep_hndl,
 		IN void            *in_data,
@@ -1010,7 +1010,7 @@ static inline gni_return_t kgnilnd_ep_postdata_w_id(
 #undef apick_fmt
 
 #define apick_fn "kgnilnd_ep_postdata_test_by_id"
-#define apick_fmt "0x%p, "LPU64", 0x%p, 0x%p, 0x%p"
+#define apick_fmt "0x%p, %llu, 0x%p, 0x%p, 0x%p"
 static inline gni_return_t kgnilnd_ep_postdata_test_by_id(
 		IN gni_ep_handle_t      ep_hndl,
 		IN uint64_t             datagram_id,
@@ -1066,7 +1066,7 @@ static inline gni_return_t kgnilnd_ep_postdata_test_by_id(
 #undef apick_fmt
 
 #define apick_fn "kgnilnd_ep_postdata_cancel_by_id"
-#define apick_fmt "0x%p, "LPU64""
+#define apick_fmt "0x%p, %llu"
 static inline gni_return_t kgnilnd_ep_postdata_cancel_by_id(
 		IN gni_ep_handle_t      ep_hndl,
 		IN uint64_t             datagram_id
@@ -1217,7 +1217,7 @@ static inline gni_return_t kgnilnd_post_rdma(
 #undef apick_fmt
 
 #define apick_fn "kgnilnd_get_completed"
-#define apick_fmt "0x%p,"LPX64",0x%p"
+#define apick_fmt "0x%p,%#llx,0x%p"
 static inline gni_return_t kgnilnd_get_completed(
 		IN gni_cq_handle_t              cq_hndl,
 		IN gni_cq_entry_t               event_data,
@@ -1262,7 +1262,7 @@ static inline gni_return_t kgnilnd_get_completed(
 #undef apick_fmt
 
 #define apick_fn "kgnilnd_cq_error_str"
-#define apick_fmt LPX64",0x%p,%d"
+#define apick_fmt "%#llx,0x%p,%d"
 static inline gni_return_t kgnilnd_cq_error_str(
 		IN gni_cq_entry_t       entry,
 		IN void                *buffer,
@@ -1307,7 +1307,7 @@ static inline gni_return_t kgnilnd_cq_error_str(
 #undef apick_fmt
 
 #define apick_fn "kgnilnd_cq_error_recoverable"
-#define apick_fmt LPX64",0x%p"
+#define apick_fmt "%#llx,0x%p"
 static inline gni_return_t kgnilnd_cq_error_recoverable(
 		IN gni_cq_entry_t       entry,
 		IN uint32_t            *recoverable
@@ -1392,7 +1392,7 @@ kgnilnd_mem_register_segments(
 #undef apick_fmt
 
 #define apick_fn "kgnilnd_mem_register"
-#define apick_fmt "0x%p,"LPX64","LPX64"0x%p,%u,0x%p"
+#define apick_fmt "0x%p,%#llx,%#llx0x%p,%u,0x%p"
 static inline gni_return_t kgnilnd_mem_register(
 		IN gni_nic_handle_t     nic_hndl,
 		IN uint64_t             address,

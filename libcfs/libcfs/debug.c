@@ -231,8 +231,8 @@ void libcfs_debug_dumplog_internal(void *arg)
 	    current_time > last_dump_time) {
 		last_dump_time = current_time;
 		snprintf(debug_file_name, sizeof(debug_file_name) - 1,
-			 "%s.%ld." LPLD, libcfs_debug_file_path_arr,
-			 current_time, (long_ptr_t)arg);
+			 "%s.%ld.%ld", libcfs_debug_file_path_arr,
+			 current_time, (uintptr_t)arg);
 		printk(KERN_ALERT "LustreError: dumping log to %s\n",
 		       debug_file_name);
 		cfs_tracefile_dump_all_pages(debug_file_name);
@@ -349,9 +349,9 @@ long libcfs_log_return(struct libcfs_debug_msg_data *msgdata, long rc)
 EXPORT_SYMBOL(libcfs_log_return);
 
 void libcfs_log_goto(struct libcfs_debug_msg_data *msgdata, const char *label,
-                     long_ptr_t rc)
+		     long rc)
 {
-        libcfs_debug_msg(msgdata, "Process leaving via %s (rc=" LPLU " : " LPLD
-                         " : " LPLX ")\n", label, (ulong_ptr_t)rc, rc, rc);
+	libcfs_debug_msg(msgdata, "Process leaving via %s (rc=%lu : %ld"
+			 " : %#lx)\n", label, rc, rc, rc);
 }
 EXPORT_SYMBOL(libcfs_log_goto);

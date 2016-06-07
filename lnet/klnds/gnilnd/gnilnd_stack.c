@@ -535,7 +535,7 @@ kgnilnd_quiesce_end_callback(gni_nic_handle_t nic_handle, uint64_t msecs)
 
 	if (!kgnilnd_data.kgn_ruhroh_shutdown) {
 
-		CDEBUG(D_NET, "requesting timeout bump by "LPD64" msecs\n", msecs);
+		CDEBUG(D_NET, "requesting timeout bump by %lld msecs\n", msecs);
 
 		/* Save the bump interval and request the bump.
 		 * The memory barrier ensures that the interval is in place before

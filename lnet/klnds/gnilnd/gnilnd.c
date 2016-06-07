@@ -117,8 +117,8 @@ kgnilnd_close_stale_conns_locked(kgn_peer_t *peer, kgn_conn_t *newconn)
 		    newconn->gnc_peer_connstamp == conn->gnc_my_connstamp) {
 			CDEBUG(D_NET, "skipping prune of %p, "
 				"loopback and matching stamps"
-				" connstamp "LPU64"("LPU64")"
-				" peerstamp "LPU64"("LPU64")\n",
+				" connstamp %llu(%llu)"
+				" peerstamp %llu(%llu)\n",
 				conn, newconn->gnc_my_connstamp,
 				conn->gnc_peer_connstamp,
 				newconn->gnc_peer_connstamp,
@@ -128,25 +128,25 @@ kgnilnd_close_stale_conns_locked(kgn_peer_t *peer, kgn_conn_t *newconn)
 
 		if (conn->gnc_peerstamp != newconn->gnc_peerstamp) {
 			LASSERTF(conn->gnc_peerstamp < newconn->gnc_peerstamp,
-				"conn 0x%p peerstamp "LPU64" >= "
-				"newconn 0x%p peerstamp "LPU64"\n",
+				"conn 0x%p peerstamp %llu >= "
+				"newconn 0x%p peerstamp %llu\n",
 				conn, conn->gnc_peerstamp,
 				newconn, newconn->gnc_peerstamp);
 
 			CDEBUG(D_NET, "Closing stale conn nid: %s "
-			       " peerstamp:"LPX64"("LPX64")\n",
+			       " peerstamp:%#llx(%#llx)\n",
 			       libcfs_nid2str(peer->gnp_nid),
 			       conn->gnc_peerstamp, newconn->gnc_peerstamp);
 		} else {
 
 			LASSERTF(conn->gnc_peer_connstamp < newconn->gnc_peer_connstamp,
-				"conn 0x%p peer_connstamp "LPU64" >= "
-				"newconn 0x%p peer_connstamp "LPU64"\n",
+				"conn 0x%p peer_connstamp %llu >= "
+				"newconn 0x%p peer_connstamp %llu\n",
 				conn, conn->gnc_peer_connstamp,
 				newconn, newconn->gnc_peer_connstamp);
 
 			CDEBUG(D_NET, "Closing stale conn nid: %s"
-			       " connstamp:"LPU64"("LPU64")\n",
+			       " connstamp:%llu(%llu)\n",
 			       libcfs_nid2str(peer->gnp_nid),
 			       conn->gnc_peer_connstamp, newconn->gnc_peer_connstamp);
 		}
@@ -175,8 +175,8 @@ kgnilnd_conn_isdup_locked(kgn_peer_t *peer, kgn_conn_t *newconn)
 	list_for_each(tmp, &peer->gnp_conns) {
 		conn = list_entry(tmp, kgn_conn_t, gnc_list);
 		CDEBUG(D_NET, "checking conn 0x%p for peer %s"
-			" lo %d new "LPU64" existing "LPU64
-			" new peer "LPU64" existing peer "LPU64
+			" lo %d new %llu existing %llu"
+			" new peer %llu existing peer %llu"
 			" new dev %p existing dev %p\n",
 			conn, libcfs_nid2str(peer->gnp_nid),
 			loopback,
@@ -924,8 +924,8 @@ kgnilnd_set_conn_params(kgn_dgram_t *dgram)
 
 	/* log this for help in debuggin SMSG buffer re-use */
 	CDEBUG(D_NET, "conn %p src %s dst %s smsg %p acquired"
-		" local cqid %u SMSG %p->%u hndl "LPX64"."LPX64
-		" remote cqid %u SMSG %p->%u hndl "LPX64"."LPX64"\n",
+		" local cqid %u SMSG %p->%u hndl %#llx.%#llx"
+		" remote cqid %u SMSG %p->%u hndl %#llx.%#llx\n",
 		conn, libcfs_nid2str(connreq->gncr_srcnid),
 		libcfs_nid2str(connreq->gncr_dstnid),
 		&conn->gnpr_smsg_attr,
@@ -1224,7 +1224,7 @@ kgnilnd_release_purgatory_list(struct list_head *conn_list)
 		list_for_each_entry_safe(gmp, gmpN, &conn->gnc_mdd_list,
 					 gmp_list) {
 			CDEBUG(D_NET,
-			       "dev %p releasing held mdd "LPX64"."LPX64"\n",
+			       "dev %p releasing held mdd %#llx.%#llx\n",
 			       conn->gnc_device, gmp->gmp_map_key.qword1,
 			       gmp->gmp_map_key.qword2);
 
@@ -2132,7 +2132,7 @@ kgnilnd_dev_fini(kgn_device_t *dev)
 		 dev->gnd_map_nphys, dev->gnd_map_physnop);
 
 	LASSERTF(dev->gnd_map_nvirt == 0 && dev->gnd_map_virtnob == 0,
-		"%d virtual mappings of "LPU64" bytes still mapped\n",
+		"%d virtual mappings of %llu bytes still mapped\n",
 		 dev->gnd_map_nvirt, dev->gnd_map_virtnob);
 
 	LASSERTF(atomic_read(&dev->gnd_n_mdd) == 0 &&

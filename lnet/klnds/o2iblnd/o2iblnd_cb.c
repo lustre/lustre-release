@@ -261,7 +261,7 @@ kiblnd_handle_completion(kib_conn_t *conn, int txtype, int status, __u64 cookie)
 	if (tx == NULL) {
 		spin_unlock(&conn->ibc_lock);
 
-                CWARN("Unmatched completion type %x cookie "LPX64" from %s\n",
+		CWARN("Unmatched completion type %x cookie %#llx from %s\n",
                       txtype, cookie, libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 kiblnd_close_conn(conn, -EPROTO);
                 return;
@@ -856,7 +856,7 @@ __must_hold(&conn->ibc_lock)
 		}
 
 		LASSERTF(bad->wr_id == kiblnd_ptr2wreqid(tx, IBLND_WID_TX),
-			 "bad wr_id "LPX64", opc %d, flags %d, peer: %s\n",
+			 "bad wr_id %#llx, opc %d, flags %d, peer: %s\n",
 			 bad->wr_id, bad->opcode, bad->send_flags,
 			 libcfs_nid2str(conn->ibc_peer->ibp_nid));
 
@@ -984,7 +984,7 @@ kiblnd_tx_complete (kib_tx_t *tx, int status)
 
         if (failed) {
                 if (conn->ibc_state == IBLND_CONN_ESTABLISHED)
-                        CNETERR("Tx -> %s cookie "LPX64
+			CNETERR("Tx -> %s cookie %#llx"
                                 " sending %d waiting %d: failed %d\n",
                                 libcfs_nid2str(conn->ibc_peer->ibp_nid),
                                 tx->tx_cookie, tx->tx_sending, tx->tx_waiting,
@@ -2412,7 +2412,7 @@ kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
 			}
 			write_unlock_irqrestore(g_lock, flags);
 
-			CWARN("Conn stale %s version %x/%x incarnation "LPU64"/"LPU64"\n",
+			CWARN("Conn stale %s version %x/%x incarnation %llu/%llu\n",
 			      libcfs_nid2str(nid), peer2->ibp_version, version,
 			      peer2->ibp_incarnation, reqmsg->ibm_srcstamp);
 
