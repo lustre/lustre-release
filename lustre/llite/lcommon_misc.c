@@ -37,6 +37,7 @@
  * future).
  *
  */
+#define DEBUG_SUBSYSTEM S_LLITE
 #include <obd_class.h>
 #include <obd_support.h>
 #include <obd.h>
@@ -138,7 +139,6 @@ int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
 
 	io = vvp_env_thread_io(env);
         io->ci_obj = obj;
-	io->ci_ignore_layout = 1;
 
 	rc = cl_io_init(env, io, CIT_MISC, io->ci_obj);
 	if (rc != 0) {
