@@ -978,6 +978,19 @@ facet_vdevice() {
 	echo -n $device
 }
 
+running_in_vm() {
+	local virt=$(virt-what 2> /dev/null)
+
+	[ $? -eq 0 ] && [ -n "$virt" ] && { echo $virt; return; }
+
+	virt=$(dmidecode -s system-product-name | awk '{print $1}')
+
+	case $virt in
+		VMware|KVM|VirtualBox|Parallels) echo ${virt,,} ;;
+		*) ;;
+	esac
+}
+
 #
 # Re-read the partition table on failover partner host.
 # After a ZFS storage pool is created on a shared device, the partition table
