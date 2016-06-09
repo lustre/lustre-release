@@ -106,11 +106,20 @@ lnet_notify_locked(struct lnet_peer_ni *lp, int notifylnd, int alive,
 		return;
 	}
 
+	/*
+	 * This function can be called with different cpt locks being
+	 * held. lpni_alive_count modification needs to be properly protected.
+	 * Significant reads to lpni_alive_count are also protected with
+	 * the same lock
+	 */
+	spin_lock(&lp->lpni_lock);
+
 	lp->lpni_timestamp = when;                /* update timestamp */
 	lp->lpni_ping_deadline = 0;               /* disable ping timeout */
 
 	if (lp->lpni_alive_count != 0 &&          /* got old news */
 	    (!lp->lpni_alive) == (!alive)) {      /* new date for old news */
+		spin_unlock(&lp->lpni_lock);
 		CDEBUG(D_NET, "Old news\n");
 		return;
 	}
@@ -118,30 +127,43 @@ lnet_notify_locked(struct lnet_peer_ni *lp, int notifylnd, int alive,
 	/* Flag that notification is outstanding */
 
 	lp->lpni_alive_count++;
-	lp->lpni_alive = !(!alive);               /* 1 bit! */
+	lp->lpni_alive = (alive) ? 1 : 0;
 	lp->lpni_notify = 1;
-	lp->lpni_notifylnd |= notifylnd;
+	lp->lpni_notifylnd = notifylnd;
 	if (lp->lpni_alive)
 		lp->lpni_ping_feats = LNET_PING_FEAT_INVAL; /* reset */
+
+	spin_unlock(&lp->lpni_lock);
 
 	CDEBUG(D_NET, "set %s %d\n", libcfs_nid2str(lp->lpni_nid), alive);
 }
 
+/*
+ * This function will always be called with lp->lpni_cpt lock held.
+ */
 static void
 lnet_ni_notify_locked(lnet_ni_t *ni, struct lnet_peer_ni *lp)
 {
-	int        alive;
-	int        notifylnd;
+	int alive;
+	int notifylnd;
 
 	/* Notify only in 1 thread at any time to ensure ordered notification.
 	 * NB individual events can be missed; the only guarantee is that you
 	 * always get the most recent news */
 
-	if (lp->lpni_notifying || ni == NULL)
+	spin_lock(&lp->lpni_lock);
+
+	if (lp->lpni_notifying || ni == NULL) {
+		spin_unlock(&lp->lpni_lock);
 		return;
+	}
 
 	lp->lpni_notifying = 1;
 
+	/*
+	 * lp->lpni_notify needs to be protected because it can be set in
+	 * lnet_notify_locked().
+	 */
 	while (lp->lpni_notify) {
 		alive     = lp->lpni_alive;
 		notifylnd = lp->lpni_notifylnd;
@@ -150,6 +172,7 @@ lnet_ni_notify_locked(lnet_ni_t *ni, struct lnet_peer_ni *lp)
 		lp->lpni_notify    = 0;
 
 		if (notifylnd && ni->ni_net->net_lnd->lnd_notify != NULL) {
+			spin_unlock(&lp->lpni_lock);
 			lnet_net_unlock(lp->lpni_cpt);
 
 			/* A new notification could happen now; I'll handle it
@@ -159,12 +182,13 @@ lnet_ni_notify_locked(lnet_ni_t *ni, struct lnet_peer_ni *lp)
 							  alive);
 
 			lnet_net_lock(lp->lpni_cpt);
+			spin_lock(&lp->lpni_lock);
 		}
 	}
 
 	lp->lpni_notifying = 0;
+	spin_unlock(&lp->lpni_lock);
 }
-
 
 static void
 lnet_rtr_addref_locked(struct lnet_peer_ni *lp)
@@ -656,6 +680,12 @@ lnet_parse_rc_info(lnet_rc_data_t *rcd)
 	if (!gw->lpni_alive)
 		return;
 
+	/*
+	 * Protect gw->lpni_ping_feats. This can be set from
+	 * lnet_notify_locked with different locks being held
+	 */
+	spin_lock(&gw->lpni_lock);
+
 	if (info->pi_magic == __swab32(LNET_PROTO_PING_MAGIC))
 		lnet_swap_pinginfo(info);
 
@@ -664,6 +694,7 @@ lnet_parse_rc_info(lnet_rc_data_t *rcd)
 		CDEBUG(D_NET, "%s: Unexpected magic %08x\n",
 		       libcfs_nid2str(gw->lpni_nid), info->pi_magic);
 		gw->lpni_ping_feats = LNET_PING_FEAT_INVAL;
+		spin_unlock(&gw->lpni_lock);
 		return;
 	}
 
@@ -671,11 +702,14 @@ lnet_parse_rc_info(lnet_rc_data_t *rcd)
 	if ((gw->lpni_ping_feats & LNET_PING_FEAT_MASK) == 0) {
 		CDEBUG(D_NET, "%s: Unexpected features 0x%x\n",
 		       libcfs_nid2str(gw->lpni_nid), gw->lpni_ping_feats);
+		spin_unlock(&gw->lpni_lock);
 		return; /* nothing I can understand */
 	}
 
-	if ((gw->lpni_ping_feats & LNET_PING_FEAT_NI_STATUS) == 0)
+	if ((gw->lpni_ping_feats & LNET_PING_FEAT_NI_STATUS) == 0) {
+		spin_unlock(&gw->lpni_lock);
 		return; /* can't carry NI status info */
+	}
 
 	list_for_each_entry(rte, &gw->lpni_routes, lr_gwlist) {
 		int	down = 0;
@@ -695,6 +729,7 @@ lnet_parse_rc_info(lnet_rc_data_t *rcd)
 				CDEBUG(D_NET, "%s: unexpected LNET_NID_ANY\n",
 				       libcfs_nid2str(gw->lpni_nid));
 				gw->lpni_ping_feats = LNET_PING_FEAT_INVAL;
+				spin_unlock(&gw->lpni_lock);
 				return;
 			}
 
@@ -717,6 +752,7 @@ lnet_parse_rc_info(lnet_rc_data_t *rcd)
 			CDEBUG(D_NET, "%s: Unexpected status 0x%x\n",
 			       libcfs_nid2str(gw->lpni_nid), stat->ns_status);
 			gw->lpni_ping_feats = LNET_PING_FEAT_INVAL;
+			spin_unlock(&gw->lpni_lock);
 			return;
 		}
 
@@ -731,13 +767,15 @@ lnet_parse_rc_info(lnet_rc_data_t *rcd)
 
 		rte->lr_downis = down;
 	}
+
+	spin_unlock(&gw->lpni_lock);
 }
 
 static void
 lnet_router_checker_event(lnet_event_t *event)
 {
-	lnet_rc_data_t		*rcd = event->md.user_ptr;
-	struct lnet_peer_ni	*lp;
+	lnet_rc_data_t *rcd = event->md.user_ptr;
+	struct lnet_peer_ni *lp;
 
 	LASSERT(rcd != NULL);
 
@@ -803,10 +841,14 @@ lnet_wait_known_routerstate(void)
 			rtr = list_entry(entry, struct lnet_peer_ni,
 					 lpni_rtr_list);
 
+			spin_lock(&rtr->lpni_lock);
+
 			if (rtr->lpni_alive_count == 0) {
 				all_known = 0;
+				spin_unlock(&rtr->lpni_lock);
 				break;
 			}
+			spin_unlock(&rtr->lpni_lock);
 		}
 
 		lnet_net_unlock(cpt);
@@ -1723,9 +1765,9 @@ lnet_rtrpools_disable(void)
 int
 lnet_notify(lnet_ni_t *ni, lnet_nid_t nid, int alive, cfs_time_t when)
 {
-	struct lnet_peer_ni	*lp = NULL;
-	cfs_time_t		now = cfs_time_current();
-	int			cpt = lnet_cpt_of_nid(nid, ni);
+	struct lnet_peer_ni *lp = NULL;
+	cfs_time_t now = cfs_time_current();
+	int cpt = lnet_cpt_of_nid(nid, ni);
 
 	LASSERT (!in_interrupt ());
 
@@ -1771,6 +1813,18 @@ lnet_notify(lnet_ni_t *ni, lnet_nid_t nid, int alive, cfs_time_t when)
 		lnet_net_unlock(cpt);
 		CDEBUG(D_NET, "%s not found\n", libcfs_nid2str(nid));
 		return 0;
+	}
+
+	/*
+	 * It is possible for this function to be called for the same peer
+	 * but with different NIs. We want to synchronize the notification
+	 * between the different calls. So we will use the lpni_cpt to
+	 * grab the net lock.
+	 */
+	if (lp->lpni_cpt != cpt) {
+		lnet_net_unlock(cpt);
+		cpt = lp->lpni_cpt;
+		lnet_net_lock(cpt);
 	}
 
 	/* We can't fully trust LND on reporting exact peer last_alive

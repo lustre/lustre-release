@@ -363,6 +363,9 @@ typedef struct lnet_ni {
 	/* instance-specific data */
 	void			*ni_data;
 
+	/* per ni credits */
+	atomic_t		ni_tx_credits;
+
 	/* percpt TX queues */
 	struct lnet_tx_queue	**ni_tx_queues;
 
@@ -452,6 +455,8 @@ struct lnet_peer_ni {
 	struct lnet_peer_net	*lpni_peer_net;
 	/* statistics kept on each peer NI */
 	struct lnet_element_stats lpni_stats;
+	/* spin lock protecting credits and lpni_txq / lpni_rtrq */
+	spinlock_t		lpni_lock;
 	/* # tx credits available */
 	int			lpni_txcredits;
 	/* low water mark */
@@ -461,16 +466,16 @@ struct lnet_peer_ni {
 	/* low water mark */
 	int			lpni_minrtrcredits;
 	/* alive/dead? */
-	unsigned int		lpni_alive:1;
+	bool			lpni_alive;
 	/* notification outstanding? */
-	unsigned int		lpni_notify:1;
+	bool			lpni_notify;
 	/* outstanding notification for LND? */
-	unsigned int		lpni_notifylnd:1;
+	bool			lpni_notifylnd;
 	/* some thread is handling notification */
-	unsigned int		lpni_notifying:1;
+	bool			lpni_notifying;
 	/* SEND event outstanding from ping */
-	unsigned int		lpni_ping_notsent;
-	/* # times router went dead<->alive */
+	bool			lpni_ping_notsent;
+	/* # times router went dead<->alive. Protected with lpni_lock */
 	int			lpni_alive_count;
 	/* bytes queued for sending */
 	long			lpni_txqnob;
@@ -498,7 +503,7 @@ struct lnet_peer_ni {
 	__u32			lpni_seq;
 	/* health flag */
 	bool			lpni_healthy;
-	/* returned RC ping features */
+	/* returned RC ping features. Protected with lpni_lock */
 	unsigned int		lpni_ping_feats;
 	/* routes on this peer */
 	struct list_head	lpni_routes;

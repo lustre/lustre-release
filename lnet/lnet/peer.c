@@ -152,6 +152,8 @@ lnet_peer_ni_alloc(lnet_nid_t nid)
 	INIT_LIST_HEAD(&lpni->lpni_on_peer_net_list);
 	INIT_LIST_HEAD(&lpni->lpni_on_remote_peer_ni_list);
 
+	spin_lock_init(&lpni->lpni_lock);
+
 	lpni->lpni_alive = !lnet_peers_start_down(); /* 1 bit!! */
 	lpni->lpni_last_alive = cfs_time_current(); /* assumes alive */
 	lpni->lpni_ping_feats = LNET_PING_FEAT_INVAL;

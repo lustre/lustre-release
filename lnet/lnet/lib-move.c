@@ -674,18 +674,26 @@ lnet_ni_eager_recv(lnet_ni_t *ni, lnet_msg_t *msg)
 	return rc;
 }
 
-/* NB: caller shall hold a ref on 'lp' as I'd drop lnet_net_lock */
+/*
+ * This function can be called from two paths:
+ *	1. when sending a message
+ *	2. when decommiting a message (lnet_msg_decommit_tx())
+ * In both these cases the peer_ni should have it's reference count
+ * acquired by the caller and therefore it is safe to drop the spin
+ * lock before calling lnd_query()
+ */
 static void
 lnet_ni_query_locked(lnet_ni_t *ni, struct lnet_peer_ni *lp)
 {
 	cfs_time_t last_alive = 0;
+	int cpt = lnet_cpt_of_nid_locked(lp->lpni_nid, ni);
 
 	LASSERT(lnet_peer_aliveness_enabled(lp));
 	LASSERT(ni->ni_net->net_lnd->lnd_query != NULL);
 
-	lnet_net_unlock(lp->lpni_cpt);
+	lnet_net_unlock(cpt);
 	(ni->ni_net->net_lnd->lnd_query)(ni, lp->lpni_nid, &last_alive);
-	lnet_net_lock(lp->lpni_cpt);
+	lnet_net_lock(cpt);
 
 	lp->lpni_last_query = cfs_time_current();
 
@@ -706,9 +714,12 @@ lnet_peer_is_alive (struct lnet_peer_ni *lp, cfs_time_t now)
 	 * Trust lnet_notify() if it has more recent aliveness news, but
 	 * ignore the initial assumed death (see lnet_peers_start_down()).
 	 */
+	spin_lock(&lp->lpni_lock);
 	if (!lp->lpni_alive && lp->lpni_alive_count > 0 &&
-	    cfs_time_aftereq(lp->lpni_timestamp, lp->lpni_last_alive))
+	    cfs_time_aftereq(lp->lpni_timestamp, lp->lpni_last_alive)) {
+		spin_unlock(&lp->lpni_lock);
 		return 0;
+	}
 
 	deadline =
 	  cfs_time_add(lp->lpni_last_alive,
@@ -722,8 +733,12 @@ lnet_peer_is_alive (struct lnet_peer_ni *lp, cfs_time_t now)
 	 * case, and moreover lpni_last_alive at peer creation is assumed.
 	 */
 	if (alive && !lp->lpni_alive &&
-	    !(lnet_isrouter(lp) && lp->lpni_alive_count == 0))
+	    !(lnet_isrouter(lp) && lp->lpni_alive_count == 0)) {
+		spin_unlock(&lp->lpni_lock);
 		lnet_notify_locked(lp, 0, 1, lp->lpni_last_alive);
+	} else {
+		spin_unlock(&lp->lpni_lock);
+	}
 
 	return alive;
 }
@@ -857,6 +872,7 @@ lnet_post_send_locked(lnet_msg_t *msg, int do_send)
 
 		msg->msg_txcredit = 1;
 		tq->tq_credits--;
+		atomic_dec(&ni->ni_tx_credits);
 
 		if (tq->tq_credits < tq->tq_credits_min)
 			tq->tq_credits_min = tq->tq_credits;
@@ -989,6 +1005,7 @@ lnet_return_tx_credits_locked(lnet_msg_t *msg)
 			!list_empty(&tq->tq_delayed));
 
 		tq->tq_credits++;
+		atomic_inc(&ni->ni_tx_credits);
 		if (tq->tq_credits <= 0) {
 			msg2 = list_entry(tq->tq_delayed.next,
 					  lnet_msg_t, msg_list);
@@ -1452,8 +1469,12 @@ again:
 		 *	3. Round Robin
 		 */
 		while ((ni = lnet_get_next_ni_locked(local_net, ni))) {
+			int ni_credits;
+
 			if (!lnet_is_ni_healthy_locked(ni))
 				continue;
+
+			ni_credits = atomic_read(&ni->ni_tx_credits);
 
 			/*
 			 * calculate the distance from the cpt on which
@@ -1530,11 +1551,9 @@ again:
 				 * select using credits followed by Round
 				 * Robin.
 				 */
-				if (ni->ni_tx_queues[cpt]->tq_credits <
-					best_credits) {
+				if (ni_credits < best_credits) {
 					continue;
-				} else if (ni->ni_tx_queues[cpt]->tq_credits ==
-						best_credits) {
+				} else if (ni_credits == best_credits) {
 					if (best_ni) {
 						if (best_ni->ni_seq <= ni->ni_seq)
 							continue;
@@ -1543,7 +1562,7 @@ again:
 			}
 set_ni:
 			best_ni = ni;
-			best_credits = ni->ni_tx_queues[cpt]->tq_credits;
+			best_credits = ni_credits;
 		}
 	}
 	/*
@@ -1717,13 +1736,15 @@ pick_peer:
 
 send:
 	/*
-	 * determine the cpt to use and if it has changed then
-	 * lock the new cpt and check if the config has changed.
-	 * If it has changed then repeat the algorithm since the
-	 * ni or peer list could have changed and the algorithm
-	 * would endup picking a different ni/peer_ni pair.
+	 * Use lnet_cpt_of_nid() to determine the CPT used to commit the
+	 * message. This ensures that we get a CPT that is correct for
+	 * the NI when the NI has been restricted to a subset of all CPTs.
+	 * If the selected CPT differs from the one currently locked, we
+	 * must unlock and relock the lnet_net_lock(), and then check whether
+	 * the configuration has changed. We don't have a hold on the best_ni
+	 * or best_peer_ni yet, and they may have vanished.
 	 */
-	cpt2 = best_lpni->lpni_cpt;
+	cpt2 = lnet_cpt_of_nid_locked(best_lpni->lpni_nid, best_ni);
 	if (cpt != cpt2) {
 		lnet_net_unlock(cpt);
 		cpt = cpt2;
@@ -1875,7 +1896,7 @@ lnet_parse_put(lnet_ni_t *ni, lnet_msg_t *msg)
 	info.mi_rlength	= hdr->payload_length;
 	info.mi_roffset	= hdr->msg.put.offset;
 	info.mi_mbits	= hdr->msg.put.match_bits;
-	info.mi_cpt	= msg->msg_rxpeer->lpni_cpt;
+	info.mi_cpt	= lnet_cpt_of_nid(msg->msg_rxpeer->lpni_nid, ni);
 
 	msg->msg_rx_ready_delay = ni->ni_net->net_lnd->lnd_eager_recv == NULL;
 	ready_delay = msg->msg_rx_ready_delay;
@@ -2511,8 +2532,7 @@ lnet_drop_delayed_msg_list(struct list_head *head, char *reason)
 		 * called lnet_drop_message(), so I just hang onto msg as well
 		 * until that's done */
 
-		lnet_drop_message(msg->msg_rxni,
-				  msg->msg_rxpeer->lpni_cpt,
+		lnet_drop_message(msg->msg_rxni, msg->msg_rx_cpt,
 				  msg->msg_private, msg->msg_len);
 		/*
 		 * NB: message will not generate event because w/o attached MD,
