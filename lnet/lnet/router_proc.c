@@ -513,7 +513,7 @@ proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
 				aliveness = peer->lpni_alive ? "up" : "down";
 
 			if (lnet_peer_aliveness_enabled(peer)) {
-				cfs_time_t     now = cfs_time_current();
+				cfs_time_t now = cfs_time_current();
 				cfs_duration_t delta;
 
 				delta = cfs_time_sub(now, peer->lpni_last_alive);

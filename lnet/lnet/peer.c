@@ -56,12 +56,15 @@ lnet_peer_net_added(struct lnet_net *net)
 
 		if (LNET_NIDNET(lpni->lpni_nid) == net->net_id) {
 			lpni->lpni_net = net;
+
+			spin_lock(&lpni->lpni_lock);
 			lpni->lpni_txcredits =
-			lpni->lpni_mintxcredits =
 				lpni->lpni_net->net_tunables.lct_peer_tx_credits;
+			lpni->lpni_mintxcredits = lpni->lpni_txcredits;
 			lpni->lpni_rtrcredits =
-			lpni->lpni_minrtrcredits =
 				lnet_peer_buffer_credits(lpni->lpni_net);
+			lpni->lpni_minrtrcredits = lpni->lpni_rtrcredits;
+			spin_unlock(&lpni->lpni_lock);
 
 			lnet_peer_remove_from_remote_list(lpni);
 		}
