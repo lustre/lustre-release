@@ -1312,48 +1312,44 @@ lnet_find_route_locked(struct lnet_net *net, lnet_nid_t target,
 
 static int
 lnet_select_pathway(lnet_nid_t src_nid, lnet_nid_t dst_nid,
-		    struct lnet_msg *msg, lnet_nid_t rtr_nid, bool *lo_sent)
+		    struct lnet_msg *msg, lnet_nid_t rtr_nid)
 {
-	struct lnet_ni		*best_ni = NULL;
-	struct lnet_peer_ni	*best_lpni = NULL;
-	struct lnet_peer_ni	*net_gw = NULL;
-	struct lnet_peer_ni	*best_gw = NULL;
+	struct lnet_ni		*best_ni;
+	struct lnet_peer_ni	*best_lpni;
+	struct lnet_peer_ni	*best_gw;
 	struct lnet_peer_ni	*lpni;
-	struct lnet_peer	*peer = NULL;
+	struct lnet_peer	*peer;
 	struct lnet_peer_net	*peer_net;
 	struct lnet_net		*local_net;
-	struct lnet_ni		*ni = NULL;
+	struct lnet_ni		*ni;
+	__u32			seq;
 	int			cpt, cpt2, rc;
-	bool			routing = false;
-	bool			ni_is_pref = false;
-	bool			preferred = false;
-	int			best_credits = 0;
-	__u32			seq, seq2;
-	int			best_lpni_credits = INT_MIN;
-	int			md_cpt = 0;
-	int			shortest_distance = INT_MAX;
-	int			distance = 0;
-	bool			found_ir = false;
+	bool			routing;
+	bool			ni_is_pref;
+	bool			preferred;
+	int			best_credits;
+	int			best_lpni_credits;
+	int			md_cpt;
+	int			shortest_distance;
 
-again:
 	/*
 	 * get an initial CPT to use for locking. The idea here is not to
 	 * serialize the calls to select_pathway, so that as many
 	 * operations can run concurrently as possible. To do that we use
 	 * the CPT where this call is being executed. Later on when we
 	 * determine the CPT to use in lnet_message_commit, we switch the
-	 * lock and check if there was any configuration changes, if none,
-	 * then we proceed, if there is, then we'll need to update the cpt
-	 * and redo the operation.
+	 * lock and check if there was any configuration change.  If none,
+	 * then we proceed, if there is, then we restart the operation.
 	 */
 	cpt = lnet_net_lock_current();
-
-	best_gw = NULL;
-	routing = false;
-	local_net = NULL;
+again:
 	best_ni = NULL;
-	shortest_distance = INT_MAX;
-	found_ir = false;
+	best_lpni = NULL;
+	best_gw = NULL;
+	local_net = NULL;
+	routing = false;
+
+	seq = lnet_get_dlc_seq_locked();
 
 	if (the_lnet.ln_shutdown) {
 		lnet_net_unlock(cpt);
@@ -1365,13 +1361,6 @@ again:
 		md_cpt = lnet_cpt_of_cookie(msg->msg_md->md_lh.lh_cookie);
 	else
 		md_cpt = CFS_CPT_ANY;
-
-	/*
-	 * initialize the variables which could be reused if we go to
-	 * again
-	 */
-	lpni = NULL;
-	seq = lnet_get_dlc_seq_locked();
 
 	peer = lnet_find_or_create_peer_locked(dst_nid, cpt);
 	if (IS_ERR(peer)) {
@@ -1415,10 +1404,8 @@ again:
 				      libcfs_nid2str(src_nid));
 			return -EINVAL;
 		}
-	}
-
-	if (best_ni)
 		goto pick_peer;
+	}
 
 	/*
 	 * Decide whether we need to route to peer_ni.
@@ -1435,6 +1422,7 @@ again:
 
 		local_net = lnet_get_net_locked(peer_net->lpn_net_id);
 		if (!local_net) {
+			struct lnet_peer_ni *net_gw;
 			/*
 			 * go through each peer_ni on that peer_net and
 			 * determine the best possible gw to go through
@@ -1488,8 +1476,12 @@ again:
 		 *	2. NI available credits
 		 *	3. Round Robin
 		 */
+		shortest_distance = INT_MAX;
+		best_credits = INT_MIN;
+		ni = NULL;
 		while ((ni = lnet_get_next_ni_locked(local_net, ni))) {
 			int ni_credits;
+			int distance;
 
 			if (!lnet_is_ni_healthy_locked(ni))
 				continue;
@@ -1497,7 +1489,7 @@ again:
 			ni_credits = atomic_read(&ni->ni_tx_credits);
 
 			/*
-			 * calculate the distance from the cpt on which
+			 * calculate the distance from the CPT on which
 			 * the message memory is allocated to the CPT of
 			 * the NI's physical device
 			 */
@@ -1506,85 +1498,31 @@ again:
 						    ni->dev_cpt);
 
 			/*
-			 * If we already have a closer NI within the NUMA
-			 * range provided, then there is no need to
-			 * consider the current NI. Move on to the next
-			 * one.
+			 * All distances smaller than the NUMA range
+			 * are treated equally.
 			 */
-			if (distance > shortest_distance &&
-			    distance > lnet_get_numa_range())
-				continue;
+			if (distance < lnet_get_numa_range())
+				distance = lnet_get_numa_range();
 
-			if (distance < shortest_distance &&
-			    distance > lnet_get_numa_range()) {
-				/*
-				 * The current NI is the closest one that we
-				 * have found, even though it's not in the
-				 * NUMA range specified. This occurs if
-				 * the NUMA range is less than the least
-				 * of the distances in the system.
-				 * In effect NUMA range consideration is
-				 * turned off.
-				 */
+			/*
+			 * Select on shorter distance, then available
+			 * credits, then round-robin.
+			 */
+			if (distance > shortest_distance) {
+				continue;
+			} else if (distance < shortest_distance) {
 				shortest_distance = distance;
-			} else if ((distance <= shortest_distance &&
-				    distance < lnet_get_numa_range()) ||
-				   distance == shortest_distance) {
-				/*
-				 * This NI is either within range or it's
-				 * equidistant. In both of these cases we
-				 * would want to select the NI based on
-				 * its available credits first, and then
-				 * via Round Robin.
-				 */
-				if (distance <= shortest_distance &&
-				    distance < lnet_get_numa_range()) {
-					/*
-					 * If this is the first NI that's
-					 * within range, then set the
-					 * shortest distance to the range
-					 * specified by the user. In
-					 * effect we're saying that all
-					 * NIs that fall within this NUMA
-					 * range shall be dealt with as
-					 * having equal NUMA weight. Which
-					 * will mean that we should select
-					 * through that set by their
-					 * available credits first
-					 * followed by Round Robin.
-					 *
-					 * And since this is the first NI
-					 * in the range, let's just set it
-					 * as our best_ni for now. The
-					 * following NIs found in the
-					 * range will be dealt with as
-					 * mentioned previously.
-					 */
-					shortest_distance = lnet_get_numa_range();
-					if (!found_ir) {
-						found_ir = true;
-						goto set_ni;
-					}
-				}
-				/*
-				 * This NI is NUMA equidistant let's
-				 * select using credits followed by Round
-				 * Robin.
-				 */
-				if (ni_credits < best_credits) {
+			} else if (ni_credits < best_credits) {
+				continue;
+			} else if (ni_credits == best_credits) {
+				if (best_ni && best_ni->ni_seq <= ni->ni_seq)
 					continue;
-				} else if (ni_credits == best_credits) {
-					if (best_ni) {
-						if (best_ni->ni_seq <= ni->ni_seq)
-							continue;
-					}
-				}
 			}
-set_ni:
 			best_ni = ni;
 			best_credits = ni_credits;
 		}
 	}
+
 	/*
 	 * if the peer is not MR capable, then we should always send to it
 	 * using the first NI in the NET we determined.
@@ -1618,16 +1556,11 @@ pick_peer:
 			msg->msg_hdr.src_nid = cpu_to_le64(best_ni->ni_nid);
 		msg->msg_target.nid = best_ni->ni_nid;
 		lnet_msg_commit(msg, cpt);
-
-		lnet_net_unlock(cpt);
 		msg->msg_txni = best_ni;
-		lnet_ni_send(best_ni, msg);
+		lnet_net_unlock(cpt);
 
-		*lo_sent = true;
-		return 0;
+		return LNET_CREDIT_OK;
 	}
-
-	lpni = NULL;
 
 	if (msg->msg_type == LNET_MSG_REPLY ||
 	    msg->msg_type == LNET_MSG_ACK) {
@@ -1689,14 +1622,22 @@ pick_peer:
 		 * to find another peer_net that we can use
 		 */
 		__u32 net_id = peer_net->lpn_net_id;
-		lnet_net_unlock(cpt);
-		if (!best_lpni)
-			LCONSOLE_WARN("peer net %s unhealthy\n",
-				      libcfs_net2str(net_id));
+		LCONSOLE_WARN("peer net %s unhealthy\n",
+			      libcfs_net2str(net_id));
 		goto again;
 	}
 
-	best_lpni = NULL;
+	/*
+	 * Look at the peer NIs for the destination peer that connect
+	 * to the chosen net. If a peer_ni is preferred when using the
+	 * best_ni to communicate, we use that one. If there is no
+	 * preferred peer_ni, or there are multiple preferred peer_ni,
+	 * the available transmit credits are used. If the transmit
+	 * credits are equal, we round-robin over the peer_ni.
+	 */
+	lpni = NULL;
+	best_lpni_credits = INT_MIN;
+	preferred = false;
 	while ((lpni = lnet_get_next_peer_ni_locked(peer, peer_net, lpni))) {
 		/*
 		 * if this peer ni is not healthy just skip it, no point in
@@ -1739,12 +1680,6 @@ pick_peer:
 		best_lpni_credits = lpni->lpni_txcredits;
 	}
 
-	/*
-	 * Increment sequence number of the peer selected so that we can
-	 * pick the next one in Round Robin.
-	 */
-	best_lpni->lpni_seq++;
-
 	/* if we still can't find a peer ni then we can't reach it */
 	if (!best_lpni) {
 		__u32 net_id = peer_net->lpn_net_id;
@@ -1756,22 +1691,40 @@ pick_peer:
 
 send:
 	/*
+	 * Increment sequence number of the peer selected so that we
+	 * pick the next one in Round Robin.
+	 */
+	best_lpni->lpni_seq++;
+
+	/*
+	 * When routing the best gateway found acts as the best peer
+	 * NI to send to.
+	 */
+	if (routing)
+		best_lpni = best_gw;
+
+	/*
+	 * grab a reference on the peer_ni so it sticks around even if
+	 * we need to drop and relock the lnet_net_lock below.
+	 */
+	lnet_peer_ni_addref_locked(best_lpni);
+
+	/*
 	 * Use lnet_cpt_of_nid() to determine the CPT used to commit the
 	 * message. This ensures that we get a CPT that is correct for
 	 * the NI when the NI has been restricted to a subset of all CPTs.
 	 * If the selected CPT differs from the one currently locked, we
 	 * must unlock and relock the lnet_net_lock(), and then check whether
 	 * the configuration has changed. We don't have a hold on the best_ni
-	 * or best_peer_ni yet, and they may have vanished.
+	 * yet, and it may have vanished.
 	 */
 	cpt2 = lnet_cpt_of_nid_locked(best_lpni->lpni_nid, best_ni);
 	if (cpt != cpt2) {
 		lnet_net_unlock(cpt);
 		cpt = cpt2;
 		lnet_net_lock(cpt);
-		seq2 = lnet_get_dlc_seq_locked();
-		if (seq2 != seq) {
-			lnet_net_unlock(cpt);
+		if (seq != lnet_get_dlc_seq_locked()) {
+			lnet_peer_ni_decref_locked(best_lpni);
 			goto again;
 		}
 	}
@@ -1780,15 +1733,15 @@ send:
 	 * store the best_lpni in the message right away to avoid having
 	 * to do the same operation under different conditions
 	 */
-	msg->msg_txpeer = (routing) ? best_gw : best_lpni;
+	msg->msg_txpeer = best_lpni;
 	msg->msg_txni = best_ni;
+
 	/*
 	 * grab a reference for the best_ni since now it's in use in this
 	 * send. the reference will need to be dropped when the message is
 	 * finished in lnet_finalize()
 	 */
 	lnet_ni_addref_locked(msg->msg_txni, cpt);
-	lnet_peer_ni_addref_locked(msg->msg_txpeer);
 
 	/*
 	 * set the destination nid in the message here because it's
@@ -1837,7 +1790,6 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg, lnet_nid_t rtr_nid)
 {
 	lnet_nid_t		dst_nid = msg->msg_target.nid;
 	int			rc;
-	bool                    lo_sent = false;
 
 	/*
 	 * NB: rtr_nid is set to LNET_NID_ANY for all current use-cases,
@@ -1854,8 +1806,8 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg, lnet_nid_t rtr_nid)
 
 	LASSERT(!msg->msg_tx_committed);
 
-	rc = lnet_select_pathway(src_nid, dst_nid, msg, rtr_nid, &lo_sent);
-	if (rc < 0 || lo_sent)
+	rc = lnet_select_pathway(src_nid, dst_nid, msg, rtr_nid);
+	if (rc < 0)
 		return rc;
 
 	if (rc == LNET_CREDIT_OK)

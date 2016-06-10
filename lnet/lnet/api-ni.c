@@ -69,10 +69,10 @@ MODULE_PARM_DESC(lnet_numa_range,
 
 /*
  * This sequence number keeps track of how many times DLC was used to
- * update the configuration. It is incremented on any DLC update and
- * checked when sending a message to determine if there is a need to
- * re-run the selection algorithm to handle configuration change.
- * Look at lnet_select_pathway() for more details on its usage.
+ * update the local NIs. It is incremented when a NI is added or
+ * removed and checked when sending a message to determine if there is
+ * a need to re-run the selection algorithm. See lnet_select_pathway()
+ * for more details on its usage.
  */
 static atomic_t lnet_dlc_seq_no = ATOMIC_INIT(0);
 
@@ -1292,6 +1292,7 @@ lnet_shutdown_lndni(struct lnet_ni *ni)
 	lnet_net_lock(LNET_LOCK_EX);
 	ni->ni_state = LNET_NI_STATE_DELETING;
 	lnet_ni_unlink_locked(ni);
+	lnet_incr_dlc_seq();
 	lnet_net_unlock(LNET_LOCK_EX);
 
 	/* clear messages for this NI on the lazy portal */
@@ -2804,7 +2805,6 @@ LNetCtl(unsigned int cmd, void *arg)
 			return -EINVAL;
 
 		mutex_lock(&the_lnet.ln_api_mutex);
-		lnet_incr_dlc_seq();
 		rc = lnet_add_peer_ni_to_peer(cfg->prcfg_key_nid,
 					      cfg->prcfg_cfg_nid,
 					      cfg->prcfg_mr);
@@ -2819,7 +2819,6 @@ LNetCtl(unsigned int cmd, void *arg)
 			return -EINVAL;
 
 		mutex_lock(&the_lnet.ln_api_mutex);
-		lnet_incr_dlc_seq();
 		rc = lnet_del_peer_ni_from_peer(cfg->prcfg_key_nid,
 						cfg->prcfg_cfg_nid);
 		mutex_unlock(&the_lnet.ln_api_mutex);
