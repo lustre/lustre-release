@@ -1429,7 +1429,8 @@ int gss_kt_update(struct key *key, const void *data, size_t datalen)
 			goto out;
 		}
 
-		rc = rawobj_extract_local(&tmpobj, (__u32 **) &data,&datalen32);
+		rc = rawobj_extract_local(&tmpobj,
+					  (__u32 **) &data, &datalen32);
 		if (rc) {
 			CERROR("failed extract mech\n");
 			goto out;

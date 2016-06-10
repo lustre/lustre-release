@@ -228,8 +228,8 @@ void gss_teardown_sgtable(struct sg_table *sgt)
 		sg_free_table(sgt);
 }
 
-int gss_crypt_generic(struct crypto_blkcipher *tfm, int decrypt, void *iv,
-		      void *in, void *out, int length)
+int gss_crypt_generic(struct crypto_blkcipher *tfm, int decrypt, const void *iv,
+		      const void *in, void *out, size_t length)
 {
 	struct blkcipher_desc desc;
 	struct scatterlist sg;
@@ -243,7 +243,7 @@ int gss_crypt_generic(struct crypto_blkcipher *tfm, int decrypt, void *iv,
 	desc.flags = 0;
 
 	if (length % crypto_blkcipher_blocksize(tfm) != 0) {
-		CERROR("output length %d mismatch blocksize %d\n",
+		CERROR("output length %zu mismatch blocksize %d\n",
 		       length, crypto_blkcipher_blocksize(tfm));
 		goto out;
 	}
@@ -323,7 +323,7 @@ int gss_digest_hmac(struct crypto_hash *tfm,
 	}
 
 	if (hdr) {
-		rc = gss_setup_sgtable(&sgt, sg, (char *)hdr, sizeof(*hdr));
+		rc = gss_setup_sgtable(&sgt, sg, hdr, sizeof(*hdr));
 		if (rc != 0)
 			return rc;
 		rc = crypto_hash_update(&desc, sg, sizeof(hdr->len));
@@ -385,7 +385,7 @@ int gss_digest_norm(struct crypto_hash *tfm,
 	}
 
 	if (hdr) {
-		rc = gss_setup_sgtable(&sgt, sg, (char *)hdr, sizeof(*hdr));
+		rc = gss_setup_sgtable(&sgt, sg, hdr, sizeof(*hdr));
 		if (rc != 0)
 			return rc;
 

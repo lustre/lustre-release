@@ -256,7 +256,11 @@ main(int argc, char *argv[])
 	initerr(progname, verbosity, fg);
 
 	/* For kerberos use gss mechanisms but ignore for sk and null */
-	if (krb_enabled && gssd_check_mechs() == 0) {
+	if (krb_enabled) {
+		if (gssd_check_mechs()) {
+			printerr(0, "ERROR: problem with gssapi library\n");
+			exit(1);
+		}
 		if (gssd_get_local_realm()) {
 			printerr(0, "ERROR: Can't get Local Kerberos realm\n");
 			exit(1);
