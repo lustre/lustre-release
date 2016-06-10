@@ -451,13 +451,6 @@ static inline void
 lnet_msg_free(lnet_msg_t *msg)
 {
 	LASSERT(!msg->msg_onactivelist);
-
-	/* Make sure we have no references to an NI. */
-	if (msg->msg_txni)
-		lnet_ni_decref_locked(msg->msg_txni, msg->msg_tx_cpt);
-	if (msg->msg_rxni)
-		lnet_ni_decref_locked(msg->msg_rxni, msg->msg_rx_cpt);
-
 	LIBCFS_FREE(msg, sizeof(*msg));
 }
 
