@@ -2119,7 +2119,7 @@ run_test 28 "create/mknod/mkdir with bad file types ============"
 
 test_29() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return 0
-	cancel_lru_locks mdc
+	cancel_lru_locks
 	test_mkdir $DIR/d29
 	touch $DIR/d29/foo
 	log 'first d29'
