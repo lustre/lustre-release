@@ -3086,7 +3086,7 @@ tbf_rule_operate()
 
 tbf_verify() {
 	local dir=$DIR/$tdir
-	local client1=${CLIENT1:-`hostname`}
+	local client1=${CLIENT1:-$(hostname)}
 	local myRUNAS="$3"
 
 	mkdir $dir || error "mkdir $dir failed"
@@ -3114,6 +3114,7 @@ tbf_verify() {
 	[ $(bc <<< "$rate < 1.1 * $2") -eq 1 ] ||
 		error "The read rate ($rate) exceeds 110% of preset rate ($2)"
 
+	cancel_lru_locks osc
 	rm -rf $dir || error "rm -rf $dir failed"
 }
 
@@ -3270,10 +3271,6 @@ test_77h() {
 	[ $? -eq 0 ] && error "should return error"
 
 	do_facet ost1 lctl set_param \
-		ost.OSS.ost_io.nrs_policies="tbf\ reg"
-	[ $? -eq 0 ] && error "should return error"
-
-	do_facet ost1 lctl set_param \
 		ost.OSS.ost_io.nrs_policies="tbf\ reg\ abc"
 	[ $? -eq 0 ] && error "should return error"
 
@@ -3393,6 +3390,57 @@ test_77j() {
 	sleep 3
 }
 run_test 77j "check TBF-OPCode NRS policy"
+
+test_77k() {
+	[[ $(lustre_version_code ost1) -ge $(version_code 2.9.53) ]] ||
+		{ skip "Need OST version at least 2.9.53"; return 0; }
+
+	do_nodes $(comma_list $(osts_nodes)) \
+		lctl set_param ost.OSS.ost_io.nrs_policies="tbf" \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_w\ jobid={dd.$RUNAS_ID}\&opcode={ost_write}\ rate=20" \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_r\ jobid={dd.$RUNAS_ID}\&opcode={ost_read}\ rate=10"
+
+	nrs_write_read "$RUNAS"
+	tbf_verify 20 10 "$RUNAS"
+
+	local address=$(comma_list "$(host_nids_address $CLIENTS $NETTYPE)")
+	local client_nids=$(nids_list $address "\\")
+	do_nodes $(comma_list $(osts_nodes)) \
+		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_w" \
+			ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_r" \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_w\ nid={0@lo\ $client_nids}\&opcode={ost_write}\ rate=20" \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_r\ nid={0@lo\ $client_nids}\&opcode={ost_read}\ rate=10"
+
+	nrs_write_read
+	tbf_verify 20 10
+
+	do_nodes $(comma_list $(osts_nodes)) \
+		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_w" \
+			ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_r" \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ext\ nid={0@lo\ $client_nids}\&jobid={dd.$RUNAS_ID}\ rate=20"
+
+	nrs_write_read "$RUNAS"
+	tbf_verify 20 20 "$RUNAS"
+
+	do_nodes $(comma_list $(osts_nodes)) \
+		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ ext" \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_a\ jobid={dd.$RUNAS_ID},opcode={ost_write}\ rate=20" \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_b\ jobid={dd.$RUNAS_ID},opcode={ost_read}\ rate=10"
+
+	nrs_write_read "$RUNAS"
+	# with parameter "RUNAS", it will match the latest rule
+	# "ext_b" first, so the limited write rate is 10.
+	tbf_verify 10 10 "$RUNAS"
+	tbf_verify 20 10
+
+	do_nodes $(comma_list $(osts_nodes)) \
+		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_a" \
+			ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_b" \
+			ost.OSS.ost_io.nrs_policies="fifo"
+
+	sleep 3
+}
+run_test 77k "check the extended TBF policy with NID/JobID/OPCode expression"
 
 test_78() { #LU-6673
 	local server_version=$(lustre_version_code ost1)

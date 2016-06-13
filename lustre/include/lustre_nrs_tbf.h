@@ -47,6 +47,7 @@ struct nrs_tbf_jobid {
 	struct list_head tj_linkage;
 };
 
+#define NRS_TBF_KEY_LEN	(LNET_NIDSTR_SIZE + LUSTRE_JOBID_SIZE + 3 + 2)
 struct nrs_tbf_client {
 	/** Resource object for policy instance. */
 	struct ptlrpc_nrs_resource	 tc_res;
@@ -58,6 +59,8 @@ struct nrs_tbf_client {
 	char				 tc_jobid[LUSTRE_JOBID_SIZE];
 	/** opcode of the client. */
 	__u32				 tc_opcode;
+	/** Hash key of the client. */
+	char				 tc_key[NRS_TBF_KEY_LEN];
 	/** Reference number of the client. */
 	atomic_t			 tc_ref;
 	/** Lock to protect rule and linkage. */
@@ -117,6 +120,10 @@ struct nrs_tbf_rule {
 	struct cfs_bitmap		*tr_opcodes;
 	/** Opcode list string of the rule.*/
 	char				*tr_opcodes_str;
+	/** Condition list of the rule.*/
+	struct list_head		tr_conds;
+	/** Generic condition string of the rule. */
+	char				*tr_conds_str;
 	/** RPC/s limit. */
 	__u64				 tr_rpc_rate;
 	/** Time to wait for next token. */
@@ -156,6 +163,7 @@ struct nrs_tbf_ops {
 #define NRS_TBF_TYPE_JOBID	"jobid"
 #define NRS_TBF_TYPE_NID	"nid"
 #define NRS_TBF_TYPE_OPCODE	"opcode"
+#define NRS_TBF_TYPE_GENERIC	"generic"
 #define NRS_TBF_TYPE_MAX_LEN	20
 
 enum nrs_tbf_flag {
@@ -163,6 +171,7 @@ enum nrs_tbf_flag {
 	NRS_TBF_FLAG_JOBID	= 0x0000001,
 	NRS_TBF_FLAG_NID	= 0x0000002,
 	NRS_TBF_FLAG_OPCODE	= 0x0000004,
+	NRS_TBF_FLAG_GENERIC	= 0x0000008,
 };
 
 struct nrs_tbf_type {
@@ -259,6 +268,8 @@ struct nrs_tbf_cmd {
 			char			*ts_jobids_str;
 			struct cfs_bitmap	*ts_opcodes;
 			char			*ts_opcodes_str;
+			struct list_head	 ts_conds;
+			char			*ts_conds_str;
 			__u32			 ts_valid_type;
 			__u32			 ts_rule_flags;
 			char			*ts_next_name;
@@ -268,6 +279,31 @@ struct nrs_tbf_cmd {
 			char			*tc_next_name;
 		} tc_change;
 	} u;
+};
+
+enum nrs_tbf_field {
+	NRS_TBF_FIELD_NID,
+	NRS_TBF_FIELD_JOBID,
+	NRS_TBF_FIELD_OPCODE,
+	NRS_TBF_FIELD_MAX
+};
+
+struct nrs_tbf_expression {
+	enum nrs_tbf_field	 te_field;
+	struct list_head	 te_cond;
+	struct cfs_bitmap	*te_opcodes;
+	struct list_head	 te_linkage;
+};
+
+struct nrs_tbf_conjunction {
+	/**
+	 * link to disjunction.
+	 */
+	struct list_head tc_linkage;
+	/**
+	 * list of logical conjunction
+	 */
+	struct list_head tc_expressions;
 };
 
 struct nrs_tbf_req {
