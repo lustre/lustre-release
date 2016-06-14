@@ -2191,6 +2191,7 @@ static int ofd_ladvise_hdl(struct tgt_session_info *tsi)
 	struct lustre_handle	 lockh = { 0 };
 	__u64			 flags = 0;
 	int			 i;
+	struct dt_object	*dob;
 	ENTRY;
 
 	CFS_FAIL_TIMEOUT(OBD_FAIL_OST_LADVISE_PAUSE, cfs_fail_val);
@@ -2237,6 +2238,7 @@ static int ofd_ladvise_hdl(struct tgt_session_info *tsi)
 		RETURN(rc);
 	}
 	LASSERT(fo != NULL);
+	dob = ofd_object_child(fo);
 
 	for (i = 0; i < num_advise; i++, ladvise++) {
 		if (ladvise->lla_end <= ladvise->lla_start) {
@@ -2265,6 +2267,10 @@ static int ofd_ladvise_hdl(struct tgt_session_info *tsi)
 				ladvise->lla_start,
 				ladvise->lla_end);
 			tgt_extent_unlock(&lockh, LCK_PR);
+			break;
+		case LU_LADVISE_DONTNEED:
+			rc = dt_ladvise(env, dob, ladvise->lla_start,
+					ladvise->lla_end, LU_LADVISE_DONTNEED);
 			break;
 		}
 		if (rc != 0)

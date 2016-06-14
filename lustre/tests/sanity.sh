@@ -14226,6 +14226,71 @@ test_255a() {
 }
 run_test 255a "check 'lfs ladvise -a willread'"
 
+facet_meminfo() {
+	local facet=$1
+	local info=$2
+
+	do_facet $facet "cat /proc/meminfo | grep ^${info}:" | awk '{print $2}'
+}
+
+test_255b() {
+	lfs setstripe -c -1 -i 0 $DIR/$tfile
+
+	ladvise_no_type dontneed $DIR/$tfile &&
+		skip "dontneed ladvise is not supported" && return
+
+	ladvise_no_ioctl $DIR/$tfile &&
+		skip "ladvise ioctl is not supported" && return
+
+	[ $(lustre_version_code ost1) -lt $(version_code 2.8.54) ] &&
+		skip "lustre < 2.8.54 does not support ladvise" && return
+
+	[ "$(facet_fstype ost1)" = "zfs" ] &&
+		skip "zfs-osd does not support dontneed advice" && return
+
+	local size_mb=100
+	local size=$((size_mb * 1048576))
+	# In order to prevent disturbance of other processes, only check 3/4
+	# of the memory usage
+	local kibibytes=$((size_mb * 1024 * 3 / 4))
+
+	dd if=/dev/zero of=$DIR/$tfile bs=1048576 count=$size_mb ||
+		error "dd to $DIR/$tfile failed"
+
+	local total=$(facet_meminfo ost1 MemTotal)
+	echo "Total memory: $total KiB"
+
+	do_facet ost1 "sync && echo 3 > /proc/sys/vm/drop_caches"
+	local before_read=$(facet_meminfo ost1 Cached)
+	echo "Cache used before read: $before_read KiB"
+
+	lfs ladvise -a willread $DIR/$tfile ||
+		error "Ladvise willread failed"
+	local after_read=$(facet_meminfo ost1 Cached)
+	echo "Cache used after read: $after_read KiB"
+
+	lfs ladvise -a dontneed $DIR/$tfile ||
+		error "Ladvise dontneed again failed"
+	local no_read=$(facet_meminfo ost1 Cached)
+	echo "Cache used after dontneed ladvise: $no_read KiB"
+
+	if [ $total -lt $((before_read + kibibytes)) ]; then
+		echo "Memory is too small, abort checking"
+		return 0
+	fi
+
+	if [ $((before_read + kibibytes)) -gt $after_read ]; then
+		error "Ladvise willread should use more memory" \
+			"than $kibibytes KiB"
+	fi
+
+	if [ $((no_read + kibibytes)) -gt $after_read ]; then
+		error "Ladvise dontneed should release more memory" \
+			"than $kibibytes KiB"
+	fi
+}
+run_test 255b "check 'lfs ladvise -a dontneed'"
+
 test_256() {
 	local cl_user
 	local cat_sl

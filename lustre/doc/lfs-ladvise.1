@@ -19,6 +19,8 @@ Give advice or hint of type \fIADVICE\fR. Advice types are:
 .RS 1.2i
 .TP
 \fBwillread\fR to prefetch data into server cache
+.TP
+\fBdontneed\fR to cleanup data cache on server
 .RE
 .TP
 \fB\-b\fR, \fB\-\-background
@@ -58,6 +60,11 @@ filesystem, while ladvise can send advices or hints to Lustre server sides.
 .B $ lfs ladvise -a willread -s 0 -e 1048576000 /mnt/lustre/file1
 This gives the OST(s) holding the first 1GB of \fB/mnt/lustre/file1\fR a hint
 that the first 1GB of the file will be read soon.
+.TP
+.B $ lfs ladvise -a dontneed -s 0 -e 1048576000 /mnt/lustre/file1
+This gives the OST(s) holding the first 1GB of \fB/mnt/lustre/file1\fR a hint
+that the first 1GB of file will not be read in the near future, thus the OST(s)
+could clear the cache of the file in the memory.
 .SH AVAILABILITY
 The lfs ladvise command is part of the Lustre filesystem.
 .SH SEE ALSO

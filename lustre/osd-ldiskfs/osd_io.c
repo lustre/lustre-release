@@ -1933,10 +1933,18 @@ static int osd_fiemap_get(const struct lu_env *env, struct dt_object *dt,
 static int osd_ladvise(const struct lu_env *env, struct dt_object *dt,
 		       __u64 start, __u64 end, enum lu_ladvise_type advice)
 {
-	int	rc;
+	int		 rc = 0;
+	struct inode	*inode = osd_dt_obj(dt)->oo_inode;
 	ENTRY;
 
 	switch (advice) {
+	case LU_LADVISE_DONTNEED:
+		if (end == 0)
+			break;
+		invalidate_mapping_pages(inode->i_mapping,
+					 start >> PAGE_CACHE_SHIFT,
+					 (end - 1) >> PAGE_CACHE_SHIFT);
+		break;
 	default:
 		rc = -ENOTSUPP;
 		break;

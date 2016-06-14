@@ -324,6 +324,7 @@ check_lu_ladvise(void)
 	CHECK_MEMBER(lu_ladvise, lla_value3);
 	CHECK_MEMBER(lu_ladvise, lla_value4);
 	CHECK_VALUE(LU_LADVISE_WILLREAD);
+	CHECK_VALUE(LU_LADVISE_DONTNEED);
 
 	CHECK_VALUE(LF_ASYNC);
 	CHECK_VALUE(LADVISE_MAGIC);
