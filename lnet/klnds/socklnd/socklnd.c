@@ -1439,11 +1439,6 @@ ksocknal_close_conn_locked (ksock_conn_t *conn, int error)
 
 		conn->ksnc_route = NULL;
 
-#if 0		/* irrelevent with only eager routes */
-		/* make route least favourite */
-		list_del(&route->ksnr_list);
-		list_add_tail(&route->ksnr_list, &peer->ksnp_routes);
-#endif
 		ksocknal_route_decref(route);	/* drop conn's ref on route */
 	}
 

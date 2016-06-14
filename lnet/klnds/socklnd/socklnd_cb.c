@@ -1987,13 +1987,6 @@ ksocknal_connect (ksock_route_t *route)
 		list_splice_init(&peer->ksnp_tx_queue, &zombies);
         }
 
-#if 0           /* irrelevent with only eager routes */
-        if (!route->ksnr_deleted) {
-                /* make this route least-favourite for re-selection */
-		list_del(&route->ksnr_list);
-		list_add_tail(&route->ksnr_list, &peer->ksnp_routes);
-        }
-#endif
 	write_unlock_bh(&ksocknal_data.ksnd_global_lock);
 
         ksocknal_peer_failed(peer);

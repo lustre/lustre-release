@@ -447,23 +447,7 @@ lnet_finalize(lnet_ni_t *ni, lnet_msg_t *msg, int status)
 
 	if (msg == NULL)
 		return;
-#if 0
-        CDEBUG(D_WARNING, "%s msg->%s Flags:%s%s%s%s%s%s%s%s%s%s%s txp %s rxp %s\n",
-               lnet_msgtyp2str(msg->msg_type), libcfs_id2str(msg->msg_target),
-               msg->msg_target_is_router ? "t" : "",
-               msg->msg_routing ? "X" : "",
-               msg->msg_ack ? "A" : "",
-               msg->msg_sending ? "S" : "",
-               msg->msg_receiving ? "R" : "",
-               msg->msg_delayed ? "d" : "",
-               msg->msg_txcredit ? "C" : "",
-               msg->msg_peertxcredit ? "c" : "",
-               msg->msg_rtrcredit ? "F" : "",
-               msg->msg_peerrtrcredit ? "f" : "",
-               msg->msg_onactivelist ? "!" : "",
-               msg->msg_txpeer == NULL ? "<none>" : libcfs_nid2str(msg->msg_txpeer->lp_nid),
-               msg->msg_rxpeer == NULL ? "<none>" : libcfs_nid2str(msg->msg_rxpeer->lp_nid));
-#endif
+
         msg->msg_ev.status = status;
 
 	if (msg->msg_md != NULL) {
