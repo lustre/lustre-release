@@ -54,30 +54,7 @@ static int lov_stripesize_seq_show(struct seq_file *m, void *v)
 	seq_printf(m, LPU64"\n", desc->ld_default_stripe_size);
 	return 0;
 }
-
-static ssize_t lov_stripesize_seq_write(struct file *file,
-					const char __user *buffer,
-					size_t count, loff_t *off)
-{
-	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
-	struct lov_desc *desc;
-	__s64 val;
-	int rc;
-
-	LASSERT(dev != NULL);
-	desc = &dev->u.lov.desc;
-	rc = lprocfs_str_to_s64(buffer, count, &val);
-	if (rc)
-		return rc;
-	if (val < 0)
-		return -ERANGE;
-
-	lov_fix_desc_stripe_size(&val);
-	desc->ld_default_stripe_size = val;
-
-	return count;
-}
-LPROC_SEQ_FOPS(lov_stripesize);
+LPROC_SEQ_FOPS_RO(lov_stripesize);
 
 static int lov_stripeoffset_seq_show(struct seq_file *m, void *v)
 {
@@ -89,29 +66,7 @@ static int lov_stripeoffset_seq_show(struct seq_file *m, void *v)
 	seq_printf(m, LPU64"\n", desc->ld_default_stripe_offset);
 	return 0;
 }
-
-static ssize_t lov_stripeoffset_seq_write(struct file *file,
-					  const char __user *buffer,
-					  size_t count, loff_t *off)
-{
-	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
-	struct lov_desc *desc;
-	__s64 val;
-	int rc;
-
-	LASSERT(dev != NULL);
-	desc = &dev->u.lov.desc;
-	rc = lprocfs_str_to_s64(buffer, count, &val);
-	if (rc)
-		return rc;
-	if (val < 0)
-		return -ERANGE;
-
-	desc->ld_default_stripe_offset = val;
-
-	return count;
-}
-LPROC_SEQ_FOPS(lov_stripeoffset);
+LPROC_SEQ_FOPS_RO(lov_stripeoffset);
 
 static int lov_stripetype_seq_show(struct seq_file *m, void *v)
 {
@@ -123,31 +78,7 @@ static int lov_stripetype_seq_show(struct seq_file *m, void *v)
 	seq_printf(m, "%u\n", desc->ld_pattern);
 	return 0;
 }
-
-static ssize_t lov_stripetype_seq_write(struct file *file,
-					const char __user *buffer,
-					size_t count, loff_t *off)
-{
-	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
-	struct lov_desc *desc;
-	int pattern, rc;
-	__s64 val;
-
-	LASSERT(dev != NULL);
-	desc = &dev->u.lov.desc;
-	rc = lprocfs_str_to_s64(buffer, count, &val);
-	if (rc)
-		return rc;
-	if (val < INT_MIN || val > INT_MAX)
-		return -ERANGE;
-
-	pattern = val;
-	lov_fix_desc_pattern(&pattern);
-	desc->ld_pattern = pattern;
-
-	return count;
-}
-LPROC_SEQ_FOPS(lov_stripetype);
+LPROC_SEQ_FOPS_RO(lov_stripetype);
 
 static int lov_stripecount_seq_show(struct seq_file *m, void *v)
 {
@@ -160,32 +91,7 @@ static int lov_stripecount_seq_show(struct seq_file *m, void *v)
 		  (__s16)(desc->ld_default_stripe_count + 1) - 1);
 	return 0;
 }
-
-static ssize_t lov_stripecount_seq_write(struct file *file,
-					 const char __user *buffer,
-					 size_t count, loff_t *off)
-{
-	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
-	struct lov_desc *desc;
-	int rc;
-	__u32 stripe_count;
-	__s64 val;
-
-	LASSERT(dev != NULL);
-	desc = &dev->u.lov.desc;
-	rc = lprocfs_str_to_s64(buffer, count, &val);
-	if (rc)
-		return rc;
-	if (val < 0)
-		return -ERANGE;
-
-	stripe_count = val;
-	lov_fix_desc_stripe_count(&stripe_count);
-	desc->ld_default_stripe_count = stripe_count;
-
-	return count;
-}
-LPROC_SEQ_FOPS(lov_stripecount);
+LPROC_SEQ_FOPS_RO(lov_stripecount);
 
 static int lov_numobd_seq_show(struct seq_file *m, void *v)
 {
