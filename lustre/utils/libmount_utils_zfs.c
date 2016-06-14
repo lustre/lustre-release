@@ -717,11 +717,10 @@ int zfs_make_lustre(struct mkfs_opts *mop)
 	/*
 	 * Create the ZFS filesystem with any required mkfs options:
 	 * - canmount=off is set to prevent zfs automounting
-	 * - xattr=sa is set to use system attribute based xattrs
 	 */
 	memset(mkfs_cmd, 0, PATH_MAX);
 	snprintf(mkfs_cmd, PATH_MAX,
-		 "zfs create -o canmount=off -o xattr=sa%s %s",
+		 "zfs create -o canmount=off %s %s",
 		 zfs_mkfs_opts(mop, mkfs_tmp, PATH_MAX), ds);
 
 	vprint("mkfs_cmd = %s\n", mkfs_cmd);
@@ -731,6 +730,42 @@ int zfs_make_lustre(struct mkfs_opts *mop)
 		fprintf(stderr, "Unable to create filesystem %s (%d)\n",
 			ds, ret);
 		goto out;
+	}
+
+	/*
+	 * Attempt to set dataset properties to reasonable defaults
+	 * to optimize performance, unless the values were specified
+	 * at the mkfs command line. Some ZFS pools or ZFS versions
+	 * do not support these properties. We can safely ignore the
+	 * errors and continue in those cases.
+	 *
+	 * zfs 0.6.1 - system attribute based xattrs
+	 * zfs 0.6.5 - large block support
+	 * zfs 0.7.0 - large dnode support
+	 *
+	 * Check if zhp is NULL as a defensive measure. Any dataset
+	 * validation errors that would cause zfs_open() to fail
+	 * should have been caught earlier.
+	 */
+	zhp = zfs_open(g_zfs, ds, ZFS_TYPE_FILESYSTEM);
+	if (zhp) {
+		/* zfs 0.6.1 - system attribute based xattrs */
+		if (!strstr(mop->mo_mkfsopts, "xattr="))
+			zfs_set_prop_str(zhp, "xattr", "sa");
+
+		/* zfs 0.7.0 - large dnode support */
+		if (!strstr(mop->mo_mkfsopts, "dnodesize=") &&
+		    !strstr(mop->mo_mkfsopts, "dnsize="))
+			zfs_set_prop_str(zhp, "dnodesize", "auto");
+
+		if (IS_OST(&mop->mo_ldd)) {
+			/* zfs 0.6.5 - large block support */
+			if (!strstr(mop->mo_mkfsopts, "recordsize=") &&
+			    !strstr(mop->mo_mkfsopts, "recsize="))
+				zfs_set_prop_str(zhp, "recordsize", "1M");
+		}
+
+		zfs_close(zhp);
 	}
 
 out:
