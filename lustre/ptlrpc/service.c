@@ -1583,7 +1583,14 @@ static int ptlrpc_server_hpreq_init(struct ptlrpc_service_part *svcpt,
 		 * list otherwise it may hit swab race at LU-1044. */
 		if (req->rq_ops->hpreq_check != NULL) {
 			rc = req->rq_ops->hpreq_check(req);
-			LASSERT(rc <= 1); /* can only return error, 0, or 1 */
+			if (rc == -ESTALE) {
+				req->rq_status = rc;
+				ptlrpc_error(req);
+			}
+			/** can only return error,
+			 * 0 for normal request,
+			 *  or 1 for high priority request */
+			LASSERT(rc <= 1);
 		}
 	}
 

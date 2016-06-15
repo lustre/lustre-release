@@ -632,6 +632,112 @@ destroylock:
 }
 
 /**
+ * This function refresh eviction timer for cancelled lock.
+ * \param[in] lock		ldlm lock for refresh
+ * \param[in] arg		ldlm prolong arguments, timeout, export, extent
+ *				and counter are used
+ */
+void ldlm_lock_prolong_one(struct ldlm_lock *lock,
+			   struct ldlm_prolong_args *arg)
+{
+	int timeout;
+
+	if (arg->lpa_export != lock->l_export ||
+	    lock->l_flags & LDLM_FL_DESTROYED)
+		/* ignore unrelated locks */
+		return;
+
+	arg->lpa_locks_cnt++;
+
+	if (!(lock->l_flags & LDLM_FL_AST_SENT))
+		/* ignore locks not being cancelled */
+		return;
+
+	/* We are in the middle of the process - BL AST is sent, CANCEL
+	 * is ahead. Take half of BL AT + IO AT process time.
+	 */
+	timeout = arg->lpa_timeout + (ldlm_bl_timeout(lock) >> 1);
+
+	LDLM_DEBUG(lock, "refreshed to %ds.\n", timeout);
+
+	arg->lpa_blocks_cnt++;
+
+	/* OK. this is a possible lock the user holds doing I/O
+	 * let's refresh eviction timer for it.
+	 */
+	ldlm_refresh_waiting_lock(lock, timeout);
+}
+EXPORT_SYMBOL(ldlm_lock_prolong_one);
+
+static enum interval_iter ldlm_resource_prolong_cb(struct interval_node *n,
+						   void *data)
+{
+	struct ldlm_prolong_args *arg = data;
+	struct ldlm_interval *node = to_ldlm_interval(n);
+	struct ldlm_lock *lock;
+
+	ENTRY;
+
+	LASSERT(!list_empty(&node->li_group));
+
+	list_for_each_entry(lock, &node->li_group, l_sl_policy) {
+		ldlm_lock_prolong_one(lock, arg);
+	}
+
+	RETURN(INTERVAL_ITER_CONT);
+}
+
+/**
+ * Walk through granted tree and prolong locks if they overlaps extent.
+ *
+ * \param[in] arg		prolong args
+ */
+void ldlm_resource_prolong(struct ldlm_prolong_args *arg)
+{
+	struct ldlm_interval_tree *tree;
+	struct ldlm_resource *res;
+	struct interval_node_extent ex = { .start = arg->lpa_extent.start,
+					   .end = arg->lpa_extent.end };
+	int idx;
+
+	ENTRY;
+
+	res = ldlm_resource_get(arg->lpa_export->exp_obd->obd_namespace, NULL,
+				&arg->lpa_resid, LDLM_EXTENT, 0);
+	if (IS_ERR(res)) {
+		CDEBUG(D_DLMTRACE, "Failed to get resource for resid "LPU64"/"
+		       LPU64"\n", arg->lpa_resid.name[0],
+		       arg->lpa_resid.name[1]);
+		RETURN_EXIT;
+	}
+
+	lock_res(res);
+	for (idx = 0; idx < LCK_MODE_NUM; idx++) {
+		tree = &res->lr_itree[idx];
+		if (tree->lit_root == NULL) /* empty tree, skipped */
+			continue;
+
+		/* There is no possibility to check for the groupID
+		 * so all the group locks are considered as valid
+		 * here, especially because the client is supposed
+		 * to check it has such a lock before sending an RPC.
+		 */
+		if (!(tree->lit_mode & arg->lpa_mode))
+			continue;
+
+		interval_search(tree->lit_root, &ex,
+				ldlm_resource_prolong_cb, arg);
+	}
+
+	unlock_res(res);
+	ldlm_resource_putref(res);
+
+	EXIT;
+}
+EXPORT_SYMBOL(ldlm_resource_prolong);
+
+
+/**
  * Discard all AST work items from list.
  *
  * If for whatever reason we do not want to send ASTs to conflicting locks
