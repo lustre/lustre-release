@@ -9284,8 +9284,10 @@ test_133a() {
 	touch ${testdir}/${tfile} || "touch failed"
 	check_stats $SINGLEMDS "open" 1
 	check_stats $SINGLEMDS "close" 1
-	mknod ${testdir}/${tfile}-pipe p || "mknod failed"
-	check_stats $SINGLEMDS "mknod" 1
+	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.8.54) ] && {
+		mknod ${testdir}/${tfile}-pipe p || "mknod failed"
+		check_stats $SINGLEMDS "mknod" 2
+	}
 	rm -f ${testdir}/${tfile}-pipe || "pipe remove failed"
 	check_stats $SINGLEMDS "unlink" 1
 	rm -f ${testdir}/${tfile} || error "file remove failed"
