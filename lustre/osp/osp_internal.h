@@ -797,4 +797,23 @@ void __osp_sync_check_for_work(struct osp_device *d);
 extern struct obd_ops lwp_obd_device_ops;
 extern struct lu_device_type lwp_device_type;
 
+static inline struct lu_device *osp2top(const struct osp_device *osp)
+{
+	return osp->opd_dt_dev.dd_lu_dev.ld_site->ls_top_dev;
+}
+
+static inline void osp_set_req_replay(const struct osp_device *osp,
+				      struct ptlrpc_request *req)
+{
+	struct obd_device *obd = osp2top(osp)->ld_obd;
+
+	/* The RPC must be recovery related for the cases:
+	 *
+	 * 1. sent during recovery, or
+	 * 2. sent before the recovery thread target_recovery_thread() start,
+	 *    such as triggered by lod_sub_recovery_thread(). */
+	if (obd->obd_recovering || (obd->obd_replayable && obd->obd_no_conn))
+		req->rq_allow_replay = 1;
+}
+
 #endif
