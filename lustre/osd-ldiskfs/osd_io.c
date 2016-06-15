@@ -1274,16 +1274,20 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
                 thandle->th_local = 1;
         }
 
-        if (likely(rc == 0)) {
-                if (isize > i_size_read(inode)) {
-                        i_size_write(inode, isize);
-                        LDISKFS_I(inode)->i_disksize = isize;
+	if (likely(rc == 0)) {
+		spin_lock(&inode->i_lock);
+		if (isize > i_size_read(inode)) {
+			i_size_write(inode, isize);
+			LDISKFS_I(inode)->i_disksize = isize;
+			spin_unlock(&inode->i_lock);
 			ll_dirty_inode(inode, I_DIRTY_DATASYNC);
-                }
+		} else {
+			spin_unlock(&inode->i_lock);
+		}
 
-                rc = osd_do_bio(osd, inode, iobuf);
-                /* we don't do stats here as in read path because
-                 * write is async: we'll do this in osd_put_bufs() */
+		rc = osd_do_bio(osd, inode, iobuf);
+		/* we don't do stats here as in read path because
+		 * write is async: we'll do this in osd_put_bufs() */
 	} else {
 		osd_fini_iobuf(osd, iobuf);
 	}
