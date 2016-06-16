@@ -429,6 +429,7 @@ int lod_sub_init_llog(const struct lu_env *env, struct lod_device *lod,
 void lod_sub_fini_llog(const struct lu_env *env,
 		       struct dt_device *dt, struct ptlrpc_thread *thread);
 int lodname2mdt_index(char *lodname, __u32 *mdt_index);
+extern void target_recovery_fini(struct obd_device *obd);
 
 /* lod_lov.c */
 void lod_getref(struct lod_tgt_descs *ltd);

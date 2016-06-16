@@ -4521,7 +4521,6 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 	next->md_ops->mdo_iocontrol(env, next, OBD_IOC_STOP_LFSCK, 0, &stop);
 
 	mdt_stack_pre_fini(env, m, md2lu_dev(m->mdt_child));
-	target_recovery_fini(obd);
 	ping_evictor_stop();
 
 	if (m->mdt_opts.mo_coordinator)
