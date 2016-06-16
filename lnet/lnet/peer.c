@@ -329,26 +329,32 @@ lnet_peer_table_cleanup_locked(struct lnet_net *net,
 			       struct lnet_peer_table *ptable)
 {
 	int			 i;
+	struct lnet_peer_ni	*next;
 	struct lnet_peer_ni	*lpni;
-	struct lnet_peer_ni	*tmp;
 	struct lnet_peer	*peer;
 
 	for (i = 0; i < LNET_PEER_HASH_SIZE; i++) {
-		list_for_each_entry_safe(lpni, tmp, &ptable->pt_hash[i],
+		list_for_each_entry_safe(lpni, next, &ptable->pt_hash[i],
 					 lpni_hashlist) {
 			if (net != NULL && net != lpni->lpni_net)
 				continue;
 
-			/*
-			 * check if by removing this peer ni we should be
-			 * removing the entire peer.
-			 */
 			peer = lpni->lpni_peer_net->lpn_peer;
-
-			if (peer->lp_primary_nid == lpni->lpni_nid)
-				lnet_peer_del_locked(peer);
-			else
+			if (peer->lp_primary_nid != lpni->lpni_nid) {
 				lnet_peer_ni_del_locked(lpni);
+				continue;
+			}
+			/*
+			 * Removing the primary NID implies removing
+			 * the entire peer. Advance next beyond any
+			 * peer_ni that belongs to the same peer.
+			 */
+			list_for_each_entry_from(next, &ptable->pt_hash[i],
+						 lpni_hashlist) {
+				if (next->lpni_peer_net->lpn_peer != peer)
+					break;
+			}
+			lnet_peer_del_locked(peer);
 		}
 	}
 }
