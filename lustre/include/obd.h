@@ -1094,7 +1094,8 @@ struct md_ops {
 	int (*m_clear_open_replay_data)(struct obd_export *,
 					struct obd_client_handle *);
 
-	int (*m_set_lock_data)(struct obd_export *, __u64 *, void *, __u64 *);
+	int (*m_set_lock_data)(struct obd_export *,
+			       const struct lustre_handle *, void *, __u64 *);
 
 	enum ldlm_mode (*m_lock_match)(struct obd_export *, __u64,
 				       const struct lu_fid *, enum ldlm_type,

@@ -1331,7 +1331,7 @@ static inline void ll_set_lock_data(struct obd_export *exp, struct inode *inode,
 			       "(%p) for remote lock "LPX64"\n",
 			       PFID(ll_inode2fid(inode)), inode,
 			       handle.cookie);
-			md_set_lock_data(exp, &handle.cookie, inode, NULL);
+			md_set_lock_data(exp, &handle, inode, NULL);
 		}
 
 		handle.cookie = it->it_lock_handle;
@@ -1340,8 +1340,7 @@ static inline void ll_set_lock_data(struct obd_export *exp, struct inode *inode,
 		       " for lock "LPX64"\n",
 		       PFID(ll_inode2fid(inode)), inode, handle.cookie);
 
-		md_set_lock_data(exp, &handle.cookie, inode,
-				 &it->it_lock_bits);
+		md_set_lock_data(exp, &handle, inode, &it->it_lock_bits);
 		it->it_lock_set = 1;
 	}
 

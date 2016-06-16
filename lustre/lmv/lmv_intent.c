@@ -242,7 +242,7 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 			LTIME_S(inode->i_mtime) = body->mbo_mtime;
 		}
 
-		md_set_lock_data(tgt->ltd_exp, &lockh->cookie, inode, NULL);
+		md_set_lock_data(tgt->ltd_exp, lockh, inode, NULL);
 		if (it.it_lock_mode != 0 && lockh != NULL) {
 			ldlm_lock_decref(lockh, it.it_lock_mode);
 			it.it_lock_mode = 0;
