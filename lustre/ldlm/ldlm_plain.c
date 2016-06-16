@@ -176,14 +176,29 @@ int ldlm_process_plain_lock(struct ldlm_lock *lock, __u64 *flags,
                 rc = ldlm_run_ast_work(ldlm_res_to_ns(res), &rpc_list,
                                        LDLM_WORK_BL_AST);
                 lock_res(res);
-		if (rc == -ERESTART)
+		if (rc == -ERESTART) {
+			/* We were granted while waiting, nothing left to do */
+			if (lock->l_granted_mode == lock->l_req_mode)
+				GOTO(out, rc = 0);
+			/* Lock was destroyed while we were waiting, abort */
+			if (ldlm_is_destroyed(lock))
+				GOTO(out, rc = -EAGAIN);
+
+			/* Otherwise try again */
 			GOTO(restart, rc);
+		}
                 *flags |= LDLM_FL_BLOCK_GRANTED;
         } else {
                 ldlm_resource_unlink_lock(lock);
                 ldlm_grant_lock(lock, NULL);
         }
-        RETURN(0);
+
+	rc = 0;
+out:
+	*err = rc;
+	LASSERT(list_empty(&rpc_list));
+
+	RETURN(rc);
 }
 #endif /* HAVE_SERVER_SUPPORT */
 
