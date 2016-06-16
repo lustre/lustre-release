@@ -1,5 +1,16 @@
 #!/bin/bash
 #
+# $Id: lnet.rc bogl Exp $
+#
+### BEGIN INIT INFO
+# Provides:          lnet
+# Required-Start:    $network openibd
+# Required-Stop:     $network openibd
+# Default-Start:     3
+# Default-Stop:      0 1 2 5 6
+# Description:       Enable Lustre Networking
+### END INIT INFO
+#
 # lnet	This shell script takes care of starting and stopping
 #       the lnet (Lustre networking) services.
 #
