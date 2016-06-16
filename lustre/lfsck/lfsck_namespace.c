@@ -658,11 +658,9 @@ static int lfsck_declare_namespace_exec_dir(const struct lu_env *env,
 
 	/* For destroying all invalid linkEA entries. */
 	rc = dt_declare_xattr_del(env, obj, XATTR_NAME_LINK, handle);
-	if (rc != 0)
-		return rc;
-
-	/* For insert new linkEA entry. */
-	rc = dt_declare_xattr_set(env, obj,
+	if (rc == 0)
+		/* For insert new linkEA entry. */
+		rc = dt_declare_xattr_set(env, obj,
 			lfsck_buf_get_const(env, NULL, DEFAULT_LINKEA_SIZE),
 			XATTR_NAME_LINK, 0, handle);
 	return rc;
@@ -683,7 +681,10 @@ int __lfsck_links_read(const struct lu_env *env, struct dt_object *obj,
 	if (rc == -ERANGE) {
 		/* Buf was too small, figure out what we need. */
 		rc = dt_xattr_get(env, obj, &LU_BUF_NULL, XATTR_NAME_LINK);
-		if (rc <= 0)
+		if (unlikely(rc == 0))
+			return -ENODATA;
+
+		if (rc < 0)
 			return rc;
 
 		lu_buf_realloc(ldata->ld_buf, rc);
@@ -692,6 +693,9 @@ int __lfsck_links_read(const struct lu_env *env, struct dt_object *obj,
 
 		rc = dt_xattr_get(env, obj, ldata->ld_buf, XATTR_NAME_LINK);
 	}
+
+	if (unlikely(rc == 0))
+		return -ENODATA;
 
 	if (rc > 0)
 		rc = linkea_init(ldata);
@@ -776,16 +780,59 @@ static int lfsck_links_write(const struct lu_env *env, struct dt_object *obj,
 	return dt_xattr_set(env, obj, buf, XATTR_NAME_LINK, 0, handle);
 }
 
-static void lfsck_namespace_unpack_linkea_entry(struct linkea_data *ldata,
-						struct lu_name *cname,
-						struct lu_fid *pfid,
-						char *buf)
+static int lfsck_namespace_unpack_linkea_entry(struct linkea_data *ldata,
+					       struct lu_name *cname,
+					       struct lu_fid *pfid,
+					       char *buf, const int buflen)
 {
 	linkea_entry_unpack(ldata->ld_lee, &ldata->ld_reclen, cname, pfid);
+	if (unlikely(ldata->ld_reclen <= 0 ||
+		     ldata->ld_reclen + sizeof(struct link_ea_header) >
+			ldata->ld_leh->leh_len ||
+		     cname->ln_namelen <= 0 ||
+		     cname->ln_namelen > NAME_MAX ||
+		     cname->ln_namelen >= buflen ||
+		     !fid_is_sane(pfid)))
+		return -EINVAL;
+
 	/* To guarantee the 'name' is terminated with '0'. */
 	memcpy(buf, cname->ln_name, cname->ln_namelen);
 	buf[cname->ln_namelen] = 0;
 	cname->ln_name = buf;
+
+	return 0;
+}
+
+static void lfsck_linkea_del_buf(struct linkea_data *ldata,
+				 const struct lu_name *lname)
+{
+	LASSERT(ldata->ld_leh != NULL && ldata->ld_lee != NULL);
+
+	/* If current record is corrupted, all the subsequent
+	 * records will be dropped. */
+	if (unlikely(ldata->ld_reclen <= 0 ||
+		     ldata->ld_reclen + sizeof(struct link_ea_header) >
+			ldata->ld_leh->leh_len)) {
+		void *ptr = ldata->ld_lee;
+
+		ldata->ld_leh->leh_len = sizeof(struct link_ea_header);
+		ldata->ld_leh->leh_reccount = 0;
+		linkea_first_entry(ldata);
+		while (ldata->ld_lee != NULL &&
+		       (char *)ldata->ld_lee < (char *)ptr) {
+			int reclen = (ldata->ld_lee->lee_reclen[0] << 8) |
+				     ldata->ld_lee->lee_reclen[1];
+
+			ldata->ld_leh->leh_len += reclen;
+			ldata->ld_leh->leh_reccount++;
+			ldata->ld_lee = (struct link_ea_entry *)
+					((char *)ldata->ld_lee + reclen);
+		}
+
+		ldata->ld_lee = NULL;
+	} else {
+		linkea_del_buf(ldata, lname);
+	}
 }
 
 static int lfsck_namespace_filter_linkea_entry(struct linkea_data *ldata,
@@ -809,7 +856,7 @@ static int lfsck_namespace_filter_linkea_entry(struct linkea_data *ldata,
 			if (!remove)
 				break;
 
-			linkea_del_buf(ldata, cname);
+			lfsck_linkea_del_buf(ldata, cname);
 		} else {
 			linkea_next_entry(ldata);
 		}
@@ -877,7 +924,7 @@ static int lfsck_namespace_insert_orphan(const struct lu_env *env,
 	struct thandle			*th	= NULL;
 	struct lfsck_lock_handle	*pllh	= &info->lti_llh;
 	struct lustre_handle		 clh	= { 0 };
-	struct linkea_data		 ldata	= { NULL };
+	struct linkea_data		 ldata2	= { NULL };
 	struct lu_buf			 linkea_buf;
 	int				 namelen;
 	int				 idx	= 0;
@@ -930,11 +977,11 @@ again:
 
 	cname->ln_name = info->lti_key;
 	cname->ln_namelen = namelen;
-	rc = linkea_data_new(&ldata, &info->lti_linkea_buf2);
+	rc = linkea_data_new(&ldata2, &info->lti_linkea_buf2);
 	if (rc != 0)
 		GOTO(log, rc);
 
-	rc = linkea_add_buf(&ldata, cname, pfid);
+	rc = linkea_add_buf(&ldata2, cname, pfid);
 	if (rc != 0)
 		GOTO(log, rc);
 
@@ -944,8 +991,8 @@ again:
 	if (rc != 0)
 		GOTO(log, rc);
 
-	lfsck_buf_init(&linkea_buf, ldata.ld_buf->lb_buf,
-		       ldata.ld_leh->leh_len);
+	lfsck_buf_init(&linkea_buf, ldata2.ld_buf->lb_buf,
+		       ldata2.ld_leh->leh_len);
 	th = dt_trans_create(env, dev);
 	if (IS_ERR(th))
 		GOTO(log, rc = PTR_ERR(th));
@@ -997,9 +1044,10 @@ again:
 		GOTO(stop, rc);
 
 	dt_write_lock(env, orphan, 0);
-	rc = lfsck_links_read(env, orphan, &ldata);
+	rc = lfsck_links_read2(env, orphan, &ldata2);
 	if (likely((rc == -ENODATA) || (rc == -EINVAL) ||
-		   (rc == 0 && ldata.ld_leh->leh_reccount == 0))) {
+		   (rc == 0 && ldata2.ld_leh != NULL &&
+		    ldata2.ld_leh->leh_reccount == 0))) {
 		if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
 			GOTO(unlock, rc = 1);
 
@@ -1021,7 +1069,7 @@ again:
 				  th);
 	} else {
 		if (rc == 0 && count != NULL)
-			*count = ldata.ld_leh->leh_reccount;
+			*count = ldata2.ld_leh->leh_reccount;
 
 		GOTO(unlock, rc);
 	}
@@ -1510,6 +1558,7 @@ static int lfsck_namespace_shrink_linkea(const struct lu_env *env,
 	struct lustre_handle		 lh	   = { 0 };
 	struct linkea_data		 ldata_new = { NULL };
 	struct lu_buf			 linkea_buf;
+	int				 buflen    = 0;
 	int				 rc	   = 0;
 	ENTRY;
 
@@ -1520,20 +1569,26 @@ static int lfsck_namespace_shrink_linkea(const struct lu_env *env,
 		GOTO(log, rc);
 
 	if (next)
-		linkea_del_buf(ldata, cname);
+		lfsck_linkea_del_buf(ldata, cname);
 	else
 		lfsck_namespace_filter_linkea_entry(ldata, cname, pfid,
 						    true);
-	lfsck_buf_init(&linkea_buf, ldata->ld_buf->lb_buf,
-		       ldata->ld_leh->leh_len);
+	if (ldata->ld_leh->leh_reccount > 0) {
+		lfsck_buf_init(&linkea_buf, ldata->ld_buf->lb_buf,
+			       ldata->ld_leh->leh_len);
+		buflen = linkea_buf.lb_len;
+	}
 
 again:
 	th = dt_trans_create(env, dev);
 	if (IS_ERR(th))
 		GOTO(unlock1, rc = PTR_ERR(th));
 
-	rc = dt_declare_xattr_set(env, obj, &linkea_buf,
-				  XATTR_NAME_LINK, 0, th);
+	if (buflen != 0)
+		rc = dt_declare_xattr_set(env, obj, &linkea_buf,
+					  XATTR_NAME_LINK, 0, th);
+	else
+		rc = dt_declare_xattr_del(env, obj, XATTR_NAME_LINK, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
@@ -1547,7 +1602,8 @@ again:
 
 	rc = lfsck_links_read2(env, obj, &ldata_new);
 	if (rc != 0)
-		GOTO(unlock2, rc);
+		GOTO(unlock2,
+		     rc = (rc == -ENODATA ? 0 : rc));
 
 	/* The specified linkEA entry has been removed by race. */
 	rc = linkea_links_find(&ldata_new, cname, pfid);
@@ -1558,12 +1614,12 @@ again:
 		GOTO(unlock2, rc = 1);
 
 	if (next)
-		linkea_del_buf(&ldata_new, cname);
+		lfsck_linkea_del_buf(&ldata_new, cname);
 	else
 		lfsck_namespace_filter_linkea_entry(&ldata_new, cname, pfid,
 						    true);
 
-	if (linkea_buf.lb_len < ldata_new.ld_leh->leh_len) {
+	if (buflen < ldata_new.ld_leh->leh_len) {
 		dt_write_unlock(env, obj);
 		dt_trans_stop(env, dev, th);
 		lfsck_buf_init(&linkea_buf, ldata_new.ld_buf->lb_buf,
@@ -1571,9 +1627,14 @@ again:
 		goto again;
 	}
 
-	lfsck_buf_init(&linkea_buf, ldata_new.ld_buf->lb_buf,
-		       ldata_new.ld_leh->leh_len);
-	rc = dt_xattr_set(env, obj, &linkea_buf, XATTR_NAME_LINK, 0, th);
+	if (ldata_new.ld_leh->leh_reccount > 0) {
+		lfsck_buf_init(&linkea_buf, ldata_new.ld_buf->lb_buf,
+			       ldata_new.ld_leh->leh_len);
+		rc = dt_xattr_set(env, obj, &linkea_buf,
+				  XATTR_NAME_LINK, 0, th);
+	} else {
+		rc = dt_xattr_del(env, obj, XATTR_NAME_LINK, th);
+	}
 
 	GOTO(unlock2, rc = (rc == 0 ? 1 : rc));
 
@@ -2041,7 +2102,7 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 			GOTO(stop, rc);
 	}
 
-	if (dec) {
+	if (dec && S_ISDIR(type)) {
 		rc = dt_declare_ref_del(env, parent, th);
 		if (rc != 0)
 			GOTO(stop, rc);
@@ -2082,7 +2143,7 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 			GOTO(unlock2, rc);
 	}
 
-	if (dec) {
+	if (dec && S_ISDIR(type)) {
 		rc = dt_ref_del(env, parent, th);
 		if (rc != 0)
 			GOTO(unlock2, rc);
@@ -2319,6 +2380,7 @@ lfsck_namespace_dsd_orphan(const struct lu_env *env,
  * \param[out] type	to tell the caller what the inconsistency is
  * \param[in] retry	if found inconsistency, but the caller does not hold
  *			ldlm lock on the @child, then set @retry as true
+ * \param[in] unknown	set if does not know how to repair the inconsistency
  *
  * \retval		positive number for repaired cases
  * \retval		0 if nothing to be repaired
@@ -2332,7 +2394,7 @@ lfsck_namespace_dsd_single(const struct lu_env *env,
 			   struct linkea_data *ldata,
 			   struct lustre_handle *lh,
 			   enum lfsck_namespace_inconsistency_type *type,
-			   bool *retry)
+			   bool *retry, bool *unknown)
 {
 	struct lfsck_thread_info *info		= lfsck_env_info(env);
 	struct lu_name		 *cname		= &info->lti_name;
@@ -2345,9 +2407,11 @@ lfsck_namespace_dsd_single(const struct lu_env *env,
 	int			  rc		= 0;
 	ENTRY;
 
-	lfsck_namespace_unpack_linkea_entry(ldata, cname, &tfid, info->lti_key);
+	rc = lfsck_namespace_unpack_linkea_entry(ldata, cname, &tfid,
+						 info->lti_key,
+						 sizeof(info->lti_key));
 	/* The unique linkEA entry with bad parent will be handled as orphan. */
-	if (!fid_is_sane(&tfid)) {
+	if (rc != 0) {
 		if (!lustre_handle_is_used(lh) && retry != NULL)
 			*retry = true;
 		else
@@ -2441,7 +2505,7 @@ lost_parent:
 		}
 
 		GOTO(out, rc);
-	}
+	} /* !dt_object_exists(parent) */
 
 	/* The unique linkEA entry with bad parent will be handled as orphan. */
 	if (unlikely(!dt_try_as_dir(env, parent))) {
@@ -2527,7 +2591,7 @@ lost_parent:
 		}
 
 		GOTO(out, rc);
-	}
+	} /* rc == -ENOENT */
 
 	if (rc != 0)
 		GOTO(out, rc);
@@ -2552,8 +2616,18 @@ lost_parent:
 		GOTO(out, rc);
 	}
 
-	if (fid_is_zero(pfid))
+	/* Zero FID may because the remote directroy object has invalid linkEA,
+	 * or lost linkEA. Under such case, the LFSCK on this MDT does not know
+	 * how to repair the inconsistency, but the namespace LFSCK on the MDT
+	 * where its name entry resides may has more information (name, FID) to
+	 * repair such inconsistency. So here, keep the inconsistency to avoid
+	 * some imporper repairing. */
+	if (fid_is_zero(pfid)) {
+		if (unknown)
+			*unknown = true;
+
 		GOTO(out, rc = 0);
+	}
 
 	/* The ".." name entry is wrong, update it. */
 	if (!lu_fid_eq(pfid, lfsck_dto2fid(parent))) {
@@ -2595,6 +2669,7 @@ out:
  * \param[in,out] lh	ldlm lock handler for the given @child
  * \param[out] type	to tell the caller what the inconsistency is
  * \param[in] lpf	true if the ".." entry is under lost+found/MDTxxxx/
+ * \param[in] unknown	set if does not know how to repair the inconsistency
  *
  * \retval		positive number for repaired cases
  * \retval		0 if nothing to be repaired
@@ -2608,7 +2683,7 @@ lfsck_namespace_dsd_multiple(const struct lu_env *env,
 			     struct linkea_data *ldata,
 			     struct lustre_handle *lh,
 			     enum lfsck_namespace_inconsistency_type *type,
-			     bool lpf)
+			     bool lpf, bool *unknown)
 {
 	struct lfsck_thread_info *info		= lfsck_env_info(env);
 	struct lu_name		 *cname		= &info->lti_name;
@@ -2621,23 +2696,23 @@ lfsck_namespace_dsd_multiple(const struct lu_env *env,
 	struct dt_object	 *parent	= NULL;
 	struct linkea_data	  ldata_new	= { NULL };
 	int			  dirent_count	= 0;
-	int			  linkea_count	= 0;
 	int			  rc		= 0;
 	bool			  once		= true;
 	ENTRY;
 
 again:
 	while (ldata->ld_lee != NULL) {
-		lfsck_namespace_unpack_linkea_entry(ldata, cname, &tfid,
-						    info->lti_key);
-		/* Drop repeated linkEA entries. */
-		lfsck_namespace_filter_linkea_entry(ldata, cname, &tfid, true);
+		rc = lfsck_namespace_unpack_linkea_entry(ldata, cname, &tfid,
+							 info->lti_key,
+							 sizeof(info->lti_key));
 		/* Drop invalid linkEA entry. */
-		if (!fid_is_sane(&tfid)) {
-			linkea_del_buf(ldata, cname);
-			linkea_count++;
+		if (rc != 0) {
+			lfsck_linkea_del_buf(ldata, cname);
 			continue;
 		}
+
+		/* Drop repeated linkEA entries. */
+		lfsck_namespace_filter_linkea_entry(ldata, cname, &tfid, true);
 
 		/* If current dotdot is the .lustre/lost+found/MDTxxxx/,
 		 * then it is possible that: the directry object has ever
@@ -2668,8 +2743,7 @@ again:
 				 * there is still other chance to make the
 				 * child to be visible via other parent, then
 				 * remove this linkEA entry. */
-				linkea_del_buf(ldata, cname);
-				linkea_count++;
+				lfsck_linkea_del_buf(ldata, cname);
 				continue;
 			}
 
@@ -2679,8 +2753,7 @@ again:
 		/* The linkEA entry with bad parent will be removed. */
 		if (unlikely(!dt_try_as_dir(env, parent))) {
 			lfsck_object_put(env, parent);
-			linkea_del_buf(ldata, cname);
-			linkea_count++;
+			lfsck_linkea_del_buf(ldata, cname);
 			continue;
 		}
 
@@ -2701,6 +2774,10 @@ again:
 
 		if (lu_fid_eq(&tfid, cfid)) {
 			lfsck_object_put(env, parent);
+			/* If the parent (that is declared via linkEA entry)
+			 * directory contains the specified child, but such
+			 * parent does not match the dotdot name entry, then
+			 * trust the linkEA. */
 			if (!lu_fid_eq(pfid, pfid2)) {
 				*type = LNIT_UNMATCHED_PAIRS;
 				rc = lfsck_namespace_repair_unmatched_pairs(env,
@@ -2726,15 +2803,15 @@ rebuild:
 			if (rc < 0)
 				RETURN(rc);
 
-			linkea_del_buf(ldata, cname);
-			linkea_count++;
+			lfsck_linkea_del_buf(ldata, cname);
 			linkea_first_entry(ldata);
 			/* There may be some invalid dangling name entries under
 			 * other parent directories, remove all of them. */
 			while (ldata->ld_lee != NULL) {
-				lfsck_namespace_unpack_linkea_entry(ldata,
-						cname, &tfid, info->lti_key);
-				if (!fid_is_sane(&tfid))
+				rc = lfsck_namespace_unpack_linkea_entry(ldata,
+						cname, &tfid, info->lti_key,
+						sizeof(info->lti_key));
+				if (rc != 0)
 					goto next;
 
 				parent = lfsck_object_find_bottom(env, lfsck,
@@ -2767,13 +2844,13 @@ rebuild:
 				dirent_count += rc;
 
 next:
-				linkea_del_buf(ldata, cname);
+				lfsck_linkea_del_buf(ldata, cname);
 			}
 
 			ns->ln_dirent_repaired += dirent_count;
 
 			RETURN(rc);
-		}
+		} /* lu_fid_eq(&tfid, lfsck_dto2fid(child)) */
 
 		lfsck_ibits_unlock(lh, LCK_EX);
 		/* The name entry references another MDT-object that may be
@@ -2788,17 +2865,13 @@ next:
 		if (rc > 0)
 			goto rebuild;
 
-		linkea_del_buf(ldata, cname);
-	}
+		lfsck_linkea_del_buf(ldata, cname);
+	} /* while (ldata->ld_lee != NULL) */
 
 	linkea_first_entry(ldata);
 	if (ldata->ld_leh->leh_reccount == 1) {
 		rc = lfsck_namespace_dsd_single(env, com, child, pfid, ldata,
-						lh, type, NULL);
-
-		if (rc == 0 && fid_is_zero(pfid) && linkea_count > 0)
-			rc = lfsck_namespace_rebuild_linkea(env, com, child,
-							    ldata);
+						lh, type, NULL, unknown);
 
 		RETURN(rc);
 	}
@@ -3131,13 +3204,13 @@ lock:
 		}
 
 		GOTO(out, rc);
-	}
+	} /* rc != 0 */
 
 	linkea_first_entry(&ldata);
 	/* This is the most common case: the object has unique linkEA entry. */
 	if (ldata.ld_leh->leh_reccount == 1) {
 		rc = lfsck_namespace_dsd_single(env, com, child, pfid, &ldata,
-						&lh, &type, &retry);
+						&lh, &type, &retry, &unknown);
 		if (retry) {
 			LASSERT(!lustre_handle_is_used(&lh));
 
@@ -3169,7 +3242,7 @@ lock:
 	 *    but the LFSCK cannot aware that at that time, then it adds
 	 *    the bad linkEA entry for further processing. */
 	rc = lfsck_namespace_dsd_multiple(env, com, child, pfid, &ldata,
-					  &lh, &type, lpf);
+					  &lh, &type, lpf, &unknown);
 
 	GOTO(out, rc);
 
@@ -3250,13 +3323,42 @@ static int lfsck_namespace_double_scan_one(const struct lu_env *env,
 
 	rc = lfsck_links_read(env, child, &ldata);
 	dt_read_unlock(env, child);
+
+	if (rc == -EINVAL) {
+		struct lustre_handle lh	= { 0 };
+
+		rc = lfsck_ibits_lock(env, com->lc_lfsck, child, &lh,
+				      MDS_INODELOCK_UPDATE |
+				      MDS_INODELOCK_XATTR, LCK_EX);
+		if (rc == 0) {
+			rc = lfsck_namespace_links_remove(env, com, child);
+			lfsck_ibits_unlock(&lh, LCK_EX);
+		}
+
+		GOTO(out, rc = (rc == -ENOENT ? 0 : rc));
+	}
+
 	if (rc != 0)
 		GOTO(out, rc);
 
 	linkea_first_entry(&ldata);
 	while (ldata.ld_lee != NULL) {
-		lfsck_namespace_unpack_linkea_entry(&ldata, cname, pfid,
-						    info->lti_key);
+		rc = lfsck_namespace_unpack_linkea_entry(&ldata, cname, pfid,
+							 info->lti_key,
+							 sizeof(info->lti_key));
+		/* Invalid PFID in the linkEA entry. */
+		if (rc != 0) {
+			rc = lfsck_namespace_shrink_linkea(env, com, child,
+						&ldata, cname, pfid, true);
+			if (rc < 0)
+				GOTO(out, rc);
+
+			if (rc > 0)
+				repaired = true;
+
+			continue;
+		}
+
 		rc = lfsck_namespace_filter_linkea_entry(&ldata, cname, pfid,
 							 false);
 		/* Found repeated linkEA entries */
@@ -3272,19 +3374,6 @@ static int lfsck_namespace_double_scan_one(const struct lu_env *env,
 			repaired = true;
 
 			/* fall through */
-		}
-
-		/* Invalid PFID in the linkEA entry. */
-		if (!fid_is_sane(pfid)) {
-			rc = lfsck_namespace_shrink_linkea(env, com, child,
-						&ldata, cname, pfid, true);
-			if (rc < 0)
-				GOTO(out, rc);
-
-			if (rc > 0)
-				repaired = true;
-
-			continue;
 		}
 
 		parent = lfsck_object_find_bottom(env, lfsck, pfid);
@@ -3357,7 +3446,7 @@ lost_parent:
 				repaired = true;
 
 			continue;
-		}
+		} /* !dt_object_exists(parent) */
 
 		/* The linkEA entry with bad parent will be removed. */
 		if (unlikely(!dt_try_as_dir(env, parent))) {
@@ -3416,6 +3505,8 @@ lost_parent:
 
 			continue;
 		}
+
+		/* The following handles -ENOENT case */
 
 		rc = dt_attr_get(env, child, la);
 		if (rc != 0)
@@ -3512,11 +3603,8 @@ out:
 	if (rc < 0 && rc != -ENODATA)
 		return rc;
 
-	if (rc == 0) {
-		LASSERT(ldata.ld_leh != NULL);
-
+	if (rc == 0 && ldata.ld_leh != NULL)
 		count = ldata.ld_leh->leh_reccount;
-	}
 
 	if (count == 0) {
 		/* If the LFSCK is marked as LF_INCOMPLETE, then means some
@@ -5332,7 +5420,7 @@ nodata:
 			LASSERT(newdata);
 
 			rc = dt_xattr_del(env, obj, XATTR_NAME_LINK, handle);
-			if (rc != 0)
+			if (rc != 0 && rc != -ENOENT && rc != -ENODATA)
 				GOTO(stop, rc);
 		}
 

@@ -772,6 +772,11 @@ checkpoint:
 		}
 
 		rc = iops->next(env, di);
+		if (rc < 0)
+			CDEBUG(D_LFSCK, "%s dir engine fail to locate next "
+			       "for the directory "DFID": rc = %d\n",
+			       lfsck_lfsck2name(lfsck),
+			       PFID(&lfsck->li_pos_current.lp_dir_parent), rc);
 	} while (rc == 0);
 
 	if (rc > 0 && !lfsck->li_oit_over)
@@ -981,6 +986,10 @@ checkpoint:
 			lfsck->li_oit_over = 1;
 		else if (likely(rc == 0))
 			lfsck->li_current_oit_processed = 0;
+		else
+			CDEBUG(D_LFSCK, "%s oit engine fail to locate next at "
+			       LPU64 ": rc = %d\n", lfsck_lfsck2name(lfsck),
+			       iops->store(env, di), rc);
 
 		if (unlikely(!thread_is_running(thread))) {
 			CDEBUG(D_LFSCK, "%s: OIT scan exit for engine stop, "
