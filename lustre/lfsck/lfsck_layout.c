@@ -2089,6 +2089,11 @@ static int lfsck_layout_conflict_create(const struct lu_env *env,
 	int			  rc		= 0;
 	ENTRY;
 
+	while (CFS_FAIL_TIMEOUT(OBD_FAIL_LFSCK_DELAY3, cfs_fail_val)) {
+		if (unlikely(!thread_is_running(&com->lc_lfsck->li_thread)))
+			RETURN(0);
+	}
+
 	ostid_le_to_cpu(&slot->l_ost_oi, oi);
 	rc = ostid_to_fid(cfid2, oi, ost_idx2);
 	if (rc != 0)
