@@ -194,7 +194,7 @@ struct osp_device {
 	/* unique generation, to recognize start of new records in the llog */
 	struct llog_gen			 opd_syn_generation;
 	/* number of changes to sync, used to wake up sync thread */
-	unsigned long			 opd_syn_changes;
+	atomic_t			 opd_syn_changes;
 	/* processing of changes from previous mount is done? */
 	int				 opd_syn_prev_done;
 	/* found records */
@@ -207,10 +207,10 @@ struct osp_device {
 	/* number of changes being under sync */
 	int				 opd_syn_sync_in_progress;
 	/* number of RPCs in flight - flow control */
-	int				 opd_syn_rpc_in_flight;
+	atomic_t			 opd_syn_rpc_in_flight;
 	int				 opd_syn_max_rpc_in_flight;
 	/* number of RPC in processing (including non-committed by OST) */
-	int				 opd_syn_rpc_in_progress;
+	atomic_t			 opd_syn_rpc_in_progress;
 	int				 opd_syn_max_rpc_in_progress;
 	/* osd api's commit cb control structure */
 	struct dt_txn_callback		 opd_syn_txn_cb;
@@ -220,7 +220,7 @@ struct osp_device {
 	 * last_committed */
 	__u64				 opd_syn_last_committed_id;
 	/* last processed (taken from llog) id */
-	__u64				 opd_syn_last_processed_id;
+	volatile __u64			 opd_syn_last_processed_id;
 	struct osp_id_tracker		*opd_syn_tracker;
 	struct list_head		 opd_syn_ontrack;
 	/* stop processing new requests until barrier=0 */

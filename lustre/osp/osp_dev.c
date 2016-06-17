@@ -844,26 +844,27 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 	atomic_inc(&d->opd_syn_barrier);
 
 	CDEBUG(D_CACHE, "%s: %u in flight\n", d->opd_obd->obd_name,
-	       d->opd_syn_rpc_in_flight);
+	       atomic_read(&d->opd_syn_rpc_in_flight));
 
 	/* wait till all-in-flight are replied, so executed by the target */
 	/* XXX: this is used by LFSCK at the moment, which doesn't require
 	 *	all the changes to be committed, but in general it'd be
 	 *	better to wait till commit */
-	while (d->opd_syn_rpc_in_flight > 0) {
+	while (atomic_read(&d->opd_syn_rpc_in_flight) > 0) {
 
-		old = d->opd_syn_rpc_in_flight;
+		old = atomic_read(&d->opd_syn_rpc_in_flight);
 
 		expire = cfs_time_shift(obd_timeout);
 		lwi = LWI_TIMEOUT(expire - cfs_time_current(),
 				  osp_sync_timeout, d);
 		l_wait_event(d->opd_syn_barrier_waitq,
-				d->opd_syn_rpc_in_flight == 0, &lwi);
+			     atomic_read(&d->opd_syn_rpc_in_flight) == 0,
+			     &lwi);
 
-		if (d->opd_syn_rpc_in_flight == 0)
+		if (atomic_read(&d->opd_syn_rpc_in_flight) == 0)
 			break;
 
-		if (d->opd_syn_rpc_in_flight != old) {
+		if (atomic_read(&d->opd_syn_rpc_in_flight) != old) {
 			/* some progress have been made */
 			continue;
 		}
