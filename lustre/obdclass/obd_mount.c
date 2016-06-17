@@ -1421,7 +1421,7 @@ static int lustre_fill_super(struct super_block *sb, void *data, int silent)
 		} else {
 			rc = lustre_start_mgc(sb);
 			if (rc) {
-				lustre_put_lsi(sb);
+				lustre_common_put_super(sb);
 				GOTO(out, rc);
 			}
 			/* Connect and start */
