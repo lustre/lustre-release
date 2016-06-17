@@ -168,6 +168,7 @@ struct lnet_ioctl_config_ni {
 	__u32			lic_tcp_bonding;
 	__u32			lic_idx;
 	__s32			lic_dev_cpt;
+	char			pad[4];
 	char 			lic_bulk[0];
 };
 
@@ -176,9 +177,10 @@ struct lnet_peer_ni_credit_info {
 	__u32 cr_refcount;
 	__s32 cr_ni_peer_tx_credits;
 	__s32 cr_peer_tx_credits;
+	__s32 cr_peer_min_tx_credits;
+	__u32 cr_peer_tx_qnob;
 	__s32 cr_peer_rtr_credits;
 	__s32 cr_peer_min_rtr_credits;
-	__u32 cr_peer_tx_qnob;
 	__u32 cr_ncpt;
 };
 

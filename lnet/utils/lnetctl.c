@@ -468,7 +468,7 @@ static int jt_add_ni(int argc, char **argv)
 	char *ip2net = NULL;
 	long int pto = -1, pc = -1, pbc = -1, cre = -1;
 	struct cYAML *err_rc = NULL;
-	int rc, opt, num_global_cpts = 0;
+	int rc, opt, cpt_rc = -1;
 	struct lnet_dlc_network_descr nw_descr;
 	struct cfs_expr_list *global_cpts = NULL;
 	struct lnet_ioctl_config_lnd_tunables tunables;
@@ -542,10 +542,9 @@ static int jt_add_ni(int argc, char **argv)
 			}
 			break;
 		case 's':
-			num_global_cpts =
-				cfs_expr_list_parse(optarg,
-						 strlen(optarg),
-						 0, UINT_MAX, &global_cpts);
+			cpt_rc = cfs_expr_list_parse(optarg,
+						     strlen(optarg), 0,
+						     UINT_MAX, &global_cpts);
 			break;
 		case 'h':
 			print_help(net_cmds, "net", "add");
@@ -564,7 +563,7 @@ static int jt_add_ni(int argc, char **argv)
 	}
 
 	rc = lustre_lnet_config_ni(&nw_descr,
-				   (num_global_cpts > 0) ? global_cpts: NULL,
+				   (cpt_rc == 0) ? global_cpts: NULL,
 				   ip2net, (found) ? &tunables : NULL,
 				   -1, &err_rc);
 

@@ -1121,7 +1121,8 @@ int lnet_get_peer_info(__u32 idx, lnet_nid_t *primary_nid, lnet_nid_t *nid,
 		lpni->lpni_net->net_tunables.lct_peer_tx_credits : 0;
 	peer_ni_info->cr_peer_tx_credits = lpni->lpni_txcredits;
 	peer_ni_info->cr_peer_rtr_credits = lpni->lpni_rtrcredits;
-	peer_ni_info->cr_peer_min_rtr_credits = lpni->lpni_mintxcredits;
+	peer_ni_info->cr_peer_min_rtr_credits = lpni->lpni_minrtrcredits;
+	peer_ni_info->cr_peer_min_tx_credits = lpni->lpni_mintxcredits;
 	peer_ni_info->cr_peer_tx_qnob = lpni->lpni_txqnob;
 
 	peer_ni_stats->send_count = atomic_read(&lpni->lpni_stats.send_count);

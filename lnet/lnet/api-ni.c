@@ -2356,7 +2356,7 @@ int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf)
 	struct lnet_net *net;
 	struct lnet_ni *ni;
 	struct lnet_ioctl_config_lnd_tunables *tun = NULL;
-	int rc;
+	int rc, i;
 	__u32 net_id;
 
 	/* get the tunables if they are available */
@@ -2375,6 +2375,11 @@ int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf)
 	net = lnet_net_alloc(net_id, NULL);
 	if (!net)
 		return -ENOMEM;
+
+	for (i = 0; i < conf->lic_ncpts; i++) {
+		if (conf->lic_cpts[i] >= LNET_CPT_NUMBER)
+			return -EINVAL;
+	}
 
 	ni = lnet_ni_alloc_w_cpt_array(net, conf->lic_cpts, conf->lic_ncpts,
 				       conf->lic_ni_intf[0]);
@@ -2841,7 +2846,7 @@ LNetCtl(unsigned int cmd, void *arg)
 		   &peer_info->pr_lnd_u.pr_peer_credits.cr_ni_peer_tx_credits,
 		   &peer_info->pr_lnd_u.pr_peer_credits.cr_peer_tx_credits,
 		   &peer_info->pr_lnd_u.pr_peer_credits.cr_peer_rtr_credits,
-		   &peer_info->pr_lnd_u.pr_peer_credits.cr_peer_min_rtr_credits,
+		   &peer_info->pr_lnd_u.pr_peer_credits.cr_peer_min_tx_credits,
 		   &peer_info->pr_lnd_u.pr_peer_credits.cr_peer_tx_qnob);
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		return rc;
