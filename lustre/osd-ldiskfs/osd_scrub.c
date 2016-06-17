@@ -642,7 +642,10 @@ out:
 		iput(inode);
 
 	if (oii != NULL) {
-		LASSERT(list_empty(&oii->oii_list));
+		spin_lock(&scrub->os_lock);
+		if (likely(!list_empty(&oii->oii_list)))
+			list_del(&oii->oii_list);
+		spin_unlock(&scrub->os_lock);
 
 		OBD_FREE_PTR(oii);
 	}
@@ -1033,7 +1036,6 @@ static int osd_scrub_next(struct osd_thread_info *info, struct osd_device *dev,
 
 			oii = list_entry(scrub->os_inconsistent_items.next,
 				struct osd_inconsistent_item, oii_list);
-			list_del_init(&oii->oii_list);
 			spin_unlock(&scrub->os_lock);
 
 			*oic = &oii->oii_cache;
@@ -1224,15 +1226,15 @@ static void osd_scrub_join(struct osd_device *dev, __u32 flags,
 		sf->sf_status = SS_SCANNING;
 	}
 
-	if (flags & SS_AUTO_FULL) {
-		sf->sf_flags |= SF_AUTO;
-		scrub->os_full_speed = 1;
-	}
-
 	if (sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT | SF_UPGRADE))
 		scrub->os_full_speed = 1;
 	else
 		scrub->os_full_speed = 0;
+
+	if (flags & SS_AUTO_FULL) {
+		sf->sf_flags |= SF_AUTO;
+		scrub->os_full_speed = 1;
+	}
 
 	scrub->os_new_checked = 0;
 	if (sf->sf_pos_last_checkpoint != 0)
@@ -1903,11 +1905,11 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
  * or filter_fid_old), move them back to its proper /O/<seq>/d<x>.
  */
 #ifdef HAVE_FILLDIR_USE_CTX
-static int osd_ios_lf_fill(struct dir_context *buf, const char *name,
-			   int namelen,
+static int osd_ios_lf_fill(struct dir_context *buf,
 #else
-static int osd_ios_lf_fill(void *buf, const char *name, int namelen,
+static int osd_ios_lf_fill(void *buf,
 #endif
+			   const char *name, int namelen,
 			   loff_t offset, __u64 ino, unsigned d_type)
 {
 	struct osd_ios_filldir_buf *fill_buf =
@@ -1977,11 +1979,11 @@ put:
 }
 
 #ifdef HAVE_FILLDIR_USE_CTX
-static int osd_ios_varfid_fill(struct dir_context  *buf, const char *name,
-			       int namelen,
+static int osd_ios_varfid_fill(struct dir_context *buf,
 #else
-static int osd_ios_varfid_fill(void *buf, const char *name, int namelen,
+static int osd_ios_varfid_fill(void *buf,
 #endif
+			       const char *name, int namelen,
 			       loff_t offset, __u64 ino, unsigned d_type)
 {
 	struct osd_ios_filldir_buf *fill_buf =
@@ -2010,11 +2012,11 @@ static int osd_ios_varfid_fill(void *buf, const char *name, int namelen,
 }
 
 #ifdef HAVE_FILLDIR_USE_CTX
-static int osd_ios_dl_fill(struct dir_context  *buf, const char *name,
-			   int namelen,
+static int osd_ios_dl_fill(struct dir_context *buf,
 #else
-static int osd_ios_dl_fill(void *buf, const char *name, int namelen,
+static int osd_ios_dl_fill(void *buf,
 #endif
+			   const char *name, int namelen,
 			   loff_t offset, __u64 ino, unsigned d_type)
 {
 	struct osd_ios_filldir_buf *fill_buf =
@@ -2052,11 +2054,11 @@ static int osd_ios_dl_fill(void *buf, const char *name, int namelen,
 }
 
 #ifdef HAVE_FILLDIR_USE_CTX
-static int osd_ios_uld_fill(struct dir_context *buf, const char *name,
-			    int namelen,
+static int osd_ios_uld_fill(struct dir_context *buf,
 #else
-static int osd_ios_uld_fill(void *buf, const char *name, int namelen,
+static int osd_ios_uld_fill(void *buf,
 #endif
+			    const char *name, int namelen,
 			    loff_t offset, __u64 ino, unsigned d_type)
 {
 	struct osd_ios_filldir_buf *fill_buf =
@@ -2087,11 +2089,11 @@ static int osd_ios_uld_fill(void *buf, const char *name, int namelen,
 }
 
 #ifdef HAVE_FILLDIR_USE_CTX
-static int osd_ios_root_fill(struct dir_context *buf, const char *name,
-			     int namelen,
+static int osd_ios_root_fill(struct dir_context *buf,
 #else
-static int osd_ios_root_fill(void *buf, const char *name, int namelen,
+static int osd_ios_root_fill(void *buf,
 #endif
+			     const char *name, int namelen,
 			     loff_t offset, __u64 ino, unsigned d_type)
 {
 	struct osd_ios_filldir_buf *fill_buf =

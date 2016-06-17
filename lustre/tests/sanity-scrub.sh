@@ -128,13 +128,8 @@ scrub_prep() {
 	echo "preparing... $(date)"
 	for n in $(seq $MDSCOUNT); do
 		echo "creating $nfiles files on mds$n"
-		if [ $n -eq 1 ]; then
-			mkdir $DIR/$tdir/mds$n ||
-				error "Failed to create directory mds$n"
-		else
-			$LFS mkdir -i $((n - 1)) $DIR/$tdir/mds$n ||
-				error "Failed to create remote directory mds$n"
-		fi
+		test_mkdir -i $((n - 1)) $DIR/$tdir/mds$n ||
+			error "Failed to create directory mds$n"
 		cp $LUSTRE/tests/*.sh $DIR/$tdir/mds$n ||
 			error "Failed to copy files to mds$n"
 		mkdir -p $DIR/$tdir/mds$n/d_$tfile ||
@@ -287,7 +282,7 @@ scrub_backup_restore() {
 
 	for n in $(seq $MDSCOUNT); do
 		mds_backup_restore mds$n $igif ||
-			error "(error_id) Backup/restore on mds$n failed"
+			error "($error_id) Backup/restore on mds$n failed"
 	done
 }
 
@@ -466,6 +461,10 @@ test_4b() {
 	for n in $(seq $MDSCOUNT); do
 		updated0[$n]=$(scrub_status $n |
 			       awk '/^prior_updated/ { print $2 }')
+
+		echo "OI scrub on MDS$n status for the 1st time:"
+		do_facet mds$n $LCTL get_param -n \
+			osd-ldiskfs.$(facet_svc mds$n).oi_scrub
 	done
 
 	scrub_check_data2 sanity-scrub.sh 9
@@ -478,6 +477,11 @@ test_4b() {
 	for n in $(seq $MDSCOUNT); do
 		updated1[$n]=$(scrub_status $n |
 			       awk '/^prior_updated/ { print $2 }')
+
+		echo "OI scrub on MDS$n status for the 2nd time:"
+		do_facet mds$n $LCTL get_param -n \
+			osd-ldiskfs.$(facet_svc mds$n).oi_scrub
+
 		[ ${updated0[$n]} -lt ${updated1[$n]} ] ||
 			error "(12) Auto trigger full scrub unexpectedly"
 	done
@@ -494,6 +498,11 @@ test_4b() {
 	for n in $(seq $MDSCOUNT); do
 		updated0[$n]=$(scrub_status $n |
 			       awk '/^prior_updated/ { print $2 }')
+
+		echo "OI scrub on MDS$n status for the 3rd time:"
+		do_facet mds$n $LCTL get_param -n \
+			osd-ldiskfs.$(facet_svc mds$n).oi_scrub
+
 		[ ${updated0[$n]} -gt ${updated1[$n]} ] ||
 			error "(16) Auto trigger full scrub unexpectedly"
 	done
@@ -506,8 +515,13 @@ test_4b() {
 	for n in $(seq $MDSCOUNT); do
 		updated1[$n]=$(scrub_status $n |
 			       awk '/^prior_updated/ { print $2 }')
-		[ ${updated0[$n]} -eq ${updated1[$n]} ] ||
+		[ ${updated0[$n]} -eq ${updated1[$n]} ] || {
+			echo "OI scrub on MDS$n status for the 4th time:"
+			do_facet mds$n $LCTL get_param -n \
+				osd-ldiskfs.$(facet_svc mds$n).oi_scrub
+
 			error "(18) NOT auto trigger full scrub as expected"
+		}
 	done
 }
 run_test 4b "Auto trigger OI scrub if bad OI mapping was found (2)"
@@ -532,6 +546,10 @@ test_4c() {
 	for n in $(seq $MDSCOUNT); do
 		updated0[$n]=$(scrub_status $n |
 			       awk '/^prior_updated/ { print $2 }')
+
+		echo "OI scrub on MDS$n status for the 1st time:"
+		do_facet mds$n $LCTL get_param -n \
+			osd-ldiskfs.$(facet_svc mds$n).oi_scrub
 	done
 
 	scrub_check_data2 sanity-scrub.sh 9
@@ -544,6 +562,11 @@ test_4c() {
 	for n in $(seq $MDSCOUNT); do
 		updated1[$n]=$(scrub_status $n |
 			       awk '/^prior_updated/ { print $2 }')
+
+		echo "OI scrub on MDS$n status for the 2nd time:"
+		do_facet mds$n $LCTL get_param -n \
+			osd-ldiskfs.$(facet_svc mds$n).oi_scrub
+
 		[ ${updated0[$n]} -lt ${updated1[$n]} ] ||
 			error "(12) Auto trigger full scrub unexpectedly"
 	done
@@ -560,6 +583,11 @@ test_4c() {
 	for n in $(seq $MDSCOUNT); do
 		updated0[$n]=$(scrub_status $n |
 			       awk '/^prior_updated/ { print $2 }')
+
+		echo "OI scrub on MDS$n status for the 3rd time:"
+		do_facet mds$n $LCTL get_param -n \
+			osd-ldiskfs.$(facet_svc mds$n).oi_scrub
+
 		[ ${updated0[$n]} -gt ${updated1[$n]} ] ||
 			error "(16) Auto trigger full scrub unexpectedly"
 	done
@@ -572,8 +600,13 @@ test_4c() {
 	for n in $(seq $MDSCOUNT); do
 		updated1[$n]=$(scrub_status $n |
 			       awk '/^prior_updated/ { print $2 }')
-		[ ${updated0[$n]} -eq ${updated1[$n]} ] ||
+		[ ${updated0[$n]} -eq ${updated1[$n]} ] || {
+			echo "OI scrub on MDS$n status for the 4th time:"
+			do_facet mds$n $LCTL get_param -n \
+				osd-ldiskfs.$(facet_svc mds$n).oi_scrub
+
 			error "(18) NOT auto trigger full scrub as expected"
+		}
 	done
 }
 run_test 4c "Auto trigger OI scrub if bad OI mapping was found (3)"
@@ -590,12 +623,12 @@ test_5() {
 	scrub_check_flags 4 recreated,inconsistent
 	mount_client $MOUNT || error "(5) Fail to start client!"
 	scrub_enable_auto
+	full_scrub_ratio 0
 
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
 	do_nodes $(comma_list $(mdts_nodes)) \
 		$LCTL set_param fail_val=3 fail_loc=0x190
 
-	full_scrub_ratio 0
 	scrub_check_data 6
 	umount_client $MOUNT || error "(7) Fail to stop client!"
 	scrub_check_status 8 scanning
@@ -657,12 +690,12 @@ test_6() {
 	scrub_check_flags 4 recreated,inconsistent
 	mount_client $MOUNT || error "(5) Fail to start client!"
 	scrub_enable_auto
+	full_scrub_ratio 0
 
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
 	do_nodes $(comma_list $(mdts_nodes)) \
 		$LCTL set_param fail_val=2 fail_loc=0x190
 
-	full_scrub_ratio 0
 	scrub_check_data 6
 
 	# Sleep 5 sec to guarantee at least one object processed by OI scrub
@@ -735,12 +768,12 @@ test_7() {
 	scrub_check_flags 4 recreated,inconsistent
 	mount_client $MOUNT || error "(5) Fail to start client!"
 	scrub_enable_auto
+	full_scrub_ratio 0
 
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
 	do_nodes $(comma_list $(mdts_nodes)) \
 		$LCTL set_param fail_val=3 fail_loc=0x190
 
-	full_scrub_ratio 0
 	scrub_check_data 6
 
 	local n
@@ -874,12 +907,12 @@ test_10a() {
 	scrub_check_flags 4 recreated,inconsistent
 	mount_client $MOUNT || error "(5) Fail to start client!"
 	scrub_enable_auto
+	full_scrub_ratio 0
 
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
 	do_nodes $(comma_list $(mdts_nodes)) \
 		$LCTL set_param fail_val=1 fail_loc=0x190
 
-	full_scrub_ratio 0
 	scrub_check_data 6
 	scrub_check_status 7 scanning
 	umount_client $MOUNT || error "(8) Fail to stop client!"
@@ -938,7 +971,7 @@ test_11() {
 	check_mount_and_prep
 
 	for n in $(seq $MDSCOUNT); do
-		$LFS mkdir -i $((n - 1)) $DIR/$tdir/mds$n ||
+		test_mkdir -i $((n - 1)) $DIR/$tdir/mds$n ||
 			error "(1) Fail to mkdir $DIR/$tdir/mds$n"
 
 		createmany -o $DIR/$tdir/mds$n/f $CREATED ||
