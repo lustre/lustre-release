@@ -3767,6 +3767,10 @@ run_test 102d "check replay & reconstruction with multiple mod RPCs in flight"
 
 test_103() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	local mds_version=$(lustre_version_code $SINGLEMDS)
+	[[ $mds_version -gt $(version_code 2.8.54) ]] ||
+		{ skip "Need MDS version 2.8.54+"; return; }
+
 #define OBD_FAIL_MDS_TRACK_OVERFLOW 0x162
 	do_facet mds1 $LCTL set_param fail_loc=0x80000162
 
