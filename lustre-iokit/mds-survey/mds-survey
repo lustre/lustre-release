@@ -61,6 +61,7 @@ create_directories () {
 	local ndir=$3
 	local rfile=$4
 	local mdtidx=$5
+	local dir_stripes=$6
 	local idx
 
 	for ((idx = 0; idx < $ndir; idx++)); do
@@ -69,7 +70,8 @@ create_directories () {
 		else
 			dirname="$(printf "${mdtbasedir}" $mdtidx)${basedir}${idx}"
 		fi
-		remote_shell $host $lctl --device $devno test_mkdir /$dirname > $rfile 2>&1
+		remote_shell $host $lctl --device $devno test_mkdir /$dirname \
+			-c $dir_stripes --stripe_index $mdtidx > $rfile 2>&1
 		while read line; do
 			echo "$line" | grep -q 'error: test_mkdir'
 			if [ $?  -eq 0 ]; then
@@ -291,7 +293,7 @@ for ((idx = 0; idx < $ndevs; idx++)); do
 	mdtidx=${client_indexes[$idx]}
 	echo "=======> Create $dir_count directories on $client_name" >> $workf
 	destroy_directories $host $devno $dir_count $tmpf $mdtidx
-	ret=$(create_directories $host $devno $dir_count $tmpf $mdtidx)
+	ret=$(create_directories $host $devno $dir_count $tmpf $mdtidx $ndevs)
 	cat $tmpf >> $workf
 	rm $tmpf
 	if [ $ret = "ERROR" ]; then

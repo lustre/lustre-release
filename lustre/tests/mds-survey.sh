@@ -67,29 +67,50 @@ cleanup_mount $MOUNT
 cleanup_mount $MOUNT2
 
 get_target() {
-    local mds=$(facet_host $SINGLEMDS)
-    echo $(do_nodes $mds 'lctl dl' | \
-        awk "{if (\$2 == \"UP\" && \$3 == \"mdt\") {print \$4}}")
+	local node=$1
+	local mdt
+	local mdts
+	local target
+
+	mdts=$(do_node $node "$LCTL dl" |
+	       awk "{if (\$2 == \"UP\" && \$3 == \"mdt\") {print \$4}}")
+
+	for mdt in $mdts; do
+		target+="${target:+ }$node:$mdt"
+	done
+
+	echo -n $target
+}
+
+get_targets() {
+	local targets
+	local node
+
+	for node in $(mdts_nodes); do
+		targets+="${targets:+ }$(get_target $node)"
+	done
+
+	echo -n $targets
 }
 
 mds_survey_run() {
-    local layer=${1:-mdd}
-    local stripe_count=${2:-0}
-    local mds=$(facet_host $SINGLEMDS)
-    local rc=0
+	local layer=${1:-mdd}
+	local stripe_count=${2:-0}
+	local rc=0
 
-    rm -f ${TMP}/mds_survey*
+	rm -f ${TMP}/mds_survey*
 
-    local target=$(get_target)
-    local cmd="file_count=$file_count thrlo=$thrlo thrhi=$thrhi"
-    local cmd+=" dir_count=$dir_count layer=$layer stripe_count=$stripe_count"
-    local cmd+=" rslt_loc=${TMP} targets=\"$mds:$target\" $MDSSURVEY"
+	local cmd="file_count=$file_count thrlo=$thrlo thrhi=$thrhi"
+	cmd+=" dir_count=$dir_count layer=$layer stripe_count=$stripe_count"
+	cmd+=" rslt_loc=${TMP} targets=\"$(get_targets)\" $MDSSURVEY"
 
-    echo + $cmd
-    eval $cmd || rc=$?
-    cat ${TMP}/mds_survey*
-    rm -f ${TMP}/mds_survey*
-    ((rc == 0)) || error "mds-survey failed"
+	trap cleanup_echo_devs EXIT ERR
+
+	echo + $cmd
+	eval $cmd || rc=$?
+	cat ${TMP}/mds_survey*
+	rm -f ${TMP}/mds_survey*
+	((rc == 0)) || error "mds-survey failed"
 }
 
 test_1() {

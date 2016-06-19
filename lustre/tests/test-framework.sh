@@ -3378,12 +3378,14 @@ stopall() {
 }
 
 cleanup_echo_devs () {
-    local devs=$($LCTL dl | grep echo | awk '{print $4}')
+	trap 0
+	local dev
+	local devs=$($LCTL dl | grep echo | awk '{print $4}')
 
-    for dev in $devs; do
-        $LCTL --device $dev cleanup
-        $LCTL --device $dev detach
-    done
+	for dev in $devs; do
+		$LCTL --device $dev cleanup
+		$LCTL --device $dev detach
+	done
 }
 
 cleanupall() {
