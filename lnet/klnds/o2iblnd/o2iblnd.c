@@ -1579,9 +1579,11 @@ kiblnd_create_fmr_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t **pp_fpo)
 	kib_fmr_pool_t *fpo;
 	int rc;
 
+#ifndef HAVE_IB_DEVICE_ATTRS
 	dev_attr = kmalloc(sizeof(*dev_attr), GFP_KERNEL);
 	if (!dev_attr)
 		return -ENOMEM;
+#endif
 
 	LIBCFS_CPT_ALLOC(fpo, lnet_cpt_table(), fps->fps_cpt, sizeof(*fpo));
 	if (!fpo) {
@@ -1591,12 +1593,16 @@ kiblnd_create_fmr_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t **pp_fpo)
 
 	fpo->fpo_hdev = kiblnd_current_hdev(dev);
 
+#ifdef HAVE_IB_DEVICE_ATTRS
+	dev_attr = &fpo->fpo_hdev->ibh_ibdev->attrs;
+#else
 	rc = ib_query_device(fpo->fpo_hdev->ibh_ibdev, dev_attr);
 	if (rc) {
 		CERROR("Query device failed for %s: %d\n",
 			fpo->fpo_hdev->ibh_ibdev->name, rc);
 		goto out_dev_attr;
 	}
+#endif
 
 	/* Check for FMR or FastReg support */
 	fpo->fpo_is_fmr = 0;
@@ -1621,7 +1627,9 @@ kiblnd_create_fmr_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t **pp_fpo)
 	if (rc)
 		goto out_fpo;
 
+#ifndef HAVE_IB_DEVICE_ATTRS
 	kfree(dev_attr);
+#endif
 	fpo->fpo_deadline = cfs_time_shift(IBLND_POOL_DEADLINE);
 	fpo->fpo_owner    = fps;
 	*pp_fpo = fpo;
@@ -1633,7 +1641,9 @@ out_fpo:
 	LIBCFS_FREE(fpo, sizeof(*fpo));
 
 out_dev_attr:
+#ifndef HAVE_IB_DEVICE_ATTRS
 	kfree(dev_attr);
+#endif
 
 	return rc;
 }
@@ -2463,8 +2473,10 @@ kiblnd_net_init_pools(kib_net_t *net, lnet_ni_t *ni, __u32 *cpts, int ncpts)
 static int
 kiblnd_hdev_get_attr(kib_hca_dev_t *hdev)
 {
-        struct ib_device_attr *attr;
-        int                    rc;
+#ifndef HAVE_IB_DEVICE_ATTRS
+	struct ib_device_attr *attr;
+	int                    rc;
+#endif
 
         /* It's safe to assume a HCA can handle a page size
          * matching that of the native system */
@@ -2472,6 +2484,9 @@ kiblnd_hdev_get_attr(kib_hca_dev_t *hdev)
         hdev->ibh_page_size  = 1 << PAGE_SHIFT;
         hdev->ibh_page_mask  = ~((__u64)hdev->ibh_page_size - 1);
 
+#ifdef HAVE_IB_DEVICE_ATTRS
+	hdev->ibh_mr_size = hdev->ibh_ibdev->attrs.max_mr_size;
+#else
         LIBCFS_ALLOC(attr, sizeof(*attr));
         if (attr == NULL) {
                 CERROR("Out of memory\n");
@@ -2488,6 +2503,7 @@ kiblnd_hdev_get_attr(kib_hca_dev_t *hdev)
                 CERROR("Failed to query IB device: %d\n", rc);
                 return rc;
         }
+#endif
 
         if (hdev->ibh_mr_size == ~0ULL) {
                 hdev->ibh_mr_shift = 64;

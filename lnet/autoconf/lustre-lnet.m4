@@ -470,6 +470,28 @@ AS_IF([test $ENABLEO2IB != "no"], [
 		AC_DEFINE(HAVE_IB_MAP_MR_SG, 1,
 			[ib_map_mr_sg exists])
 	])
+
+	# ib_query_device() removed in 4.5
+	LB_CHECK_COMPILE([if 'struct ib_device' has member 'attrs'],
+	ib_device.attrs, [
+		#ifdef HAVE_COMPAT_RDMA
+		#undef PACKAGE_NAME
+		#undef PACKAGE_TARNAME
+		#undef PACKAGE_VERSION
+		#undef PACKAGE_STRING
+		#undef PACKAGE_BUGREPORT
+		#undef PACKAGE_URL
+		#include <linux/compat-2.6.h>
+		#endif
+		#include <rdma/ib_verbs.h>
+	],[
+		struct ib_device dev;
+		struct ib_device_attr dev_attr = {};
+		dev.attrs = dev_attr;
+	],[
+		AC_DEFINE(HAVE_IB_DEVICE_ATTRS, 1,
+			[struct ib_device.attrs is defined])
+	])
 	EXTRA_CHECK_INCLUDE=""
 ]) # ENABLEO2IB != "no"
 ]) # LN_CONFIG_O2IB
