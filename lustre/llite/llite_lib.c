@@ -901,7 +901,6 @@ void ll_lli_init(struct ll_inode_info *lli)
 	lli->lli_posix_acl = NULL;
 	/* Do not set lli_fid, it has been initialized already. */
 	fid_zero(&lli->lli_pfid);
-	atomic_set(&lli->lli_open_count, 0);
 	lli->lli_mds_read_och = NULL;
         lli->lli_mds_write_och = NULL;
         lli->lli_mds_exec_och = NULL;
