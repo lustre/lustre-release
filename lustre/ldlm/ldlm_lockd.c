@@ -2767,6 +2767,11 @@ static int ldlm_bl_thread_main(void *arg)
 
 		if (rc == LDLM_ITER_STOP)
 			break;
+
+		/* If there are many namespaces, we will not sleep waiting for
+		 * work, and must do a cond_resched to avoid holding the CPU
+		 * for too long */
+		cond_resched();
 	}
 
 	atomic_dec(&blp->blp_num_threads);
