@@ -1305,7 +1305,7 @@ extern ssize_t ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io,
 static inline int ll_file_nolock(const struct file *file)
 {
         struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode((struct file *)file);
 
         LASSERT(fd != NULL);
         return ((fd->fd_flags & LL_FILE_IGNORE_LOCK) ||
@@ -1442,13 +1442,6 @@ void cl_inode_fini(struct inode *inode);
 
 u64 cl_fid_build_ino(const struct lu_fid *fid, int api32);
 u32 cl_fid_build_gen(const struct lu_fid *fid);
-
-#ifndef HAVE_FILE_INODE
-static inline struct inode *file_inode(struct file *file)
-{
-	return file->f_path.dentry->d_inode;
-}
-#endif
 
 #ifndef HAVE_IOV_ITER_TRUNCATE
 static inline void iov_iter_truncate(struct iov_iter *i, u64 count)

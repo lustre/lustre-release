@@ -992,7 +992,7 @@ static int tracefiled(void *arg)
 		set_fs(get_ds());
 
 		list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
-			struct dentry *de = filp->f_path.dentry;
+			struct dentry *de = file_dentry(filp);
 			static loff_t f_pos;
 
 			__LASSERT_TAGE_INVARIANT(tage);

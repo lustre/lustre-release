@@ -99,7 +99,7 @@ ll_fault_io_init(struct lu_env *env, struct vm_area_struct *vma,
 		 pgoff_t index, unsigned long *ra_flags)
 {
 	struct file	       *file = vma->vm_file;
-	struct inode	       *inode = file->f_path.dentry->d_inode;
+	struct inode	       *inode = file_inode(file);
 	struct cl_io	       *io;
 	struct cl_fault_io     *fio;
 	int			rc;
@@ -405,7 +405,7 @@ static int ll_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
                 result = ll_page_mkwrite0(vma, vmf->page, &retry);
 
                 if (!printed && ++count > 16) {
-			const struct dentry *de = vma->vm_file->f_path.dentry;
+			const struct dentry *de = file_dentry(vma->vm_file);
 
 			CWARN("app(%s): the page %lu of file "DFID" is under"
 			      " heavy contention\n",
@@ -444,7 +444,7 @@ static int ll_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
  */
 static void ll_vm_open(struct vm_area_struct * vma)
 {
-	struct inode *inode    = vma->vm_file->f_path.dentry->d_inode;
+	struct inode *inode    = file_inode(vma->vm_file);
 	struct vvp_object *vob = cl_inode2vvp(inode);
 
 	ENTRY;
@@ -459,7 +459,7 @@ static void ll_vm_open(struct vm_area_struct * vma)
  */
 static void ll_vm_close(struct vm_area_struct *vma)
 {
-	struct inode      *inode = vma->vm_file->f_path.dentry->d_inode;
+	struct inode      *inode = file_inode(vma->vm_file);
 	struct vvp_object *vob   = cl_inode2vvp(inode);
 
 	ENTRY;
@@ -495,7 +495,7 @@ static const struct vm_operations_struct ll_file_vm_ops = {
 
 int ll_file_mmap(struct file *file, struct vm_area_struct * vma)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(file);
         int rc;
         ENTRY;
 

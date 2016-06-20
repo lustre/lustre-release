@@ -322,7 +322,7 @@ int ll_file_release(struct inode *inode, struct file *file)
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p)\n",
 	       PFID(ll_inode2fid(inode)), inode);
 
-	if (inode->i_sb->s_root != file->f_path.dentry)
+	if (inode->i_sb->s_root != file_dentry(file))
                 ll_stats_ops_tally(sbi, LPROC_LL_RELEASE, 1);
         fd = LUSTRE_FPRIVATE(file);
         LASSERT(fd != NULL);
@@ -332,7 +332,7 @@ int ll_file_release(struct inode *inode, struct file *file)
 	if (S_ISDIR(inode->i_mode) && lli->lli_opendir_key == fd)
 		ll_deauthorize_statahead(inode, fd);
 
-	if (inode->i_sb->s_root == file->f_path.dentry) {
+	if (inode->i_sb->s_root == file_dentry(file)) {
 		LUSTRE_FPRIVATE(file) = NULL;
 		ll_file_data_put(fd);
 		RETURN(0);
@@ -355,7 +355,7 @@ int ll_file_release(struct inode *inode, struct file *file)
 static int ll_intent_file_open(struct file *file, void *lmm, int lmmsize,
 				struct lookup_intent *itp)
 {
-	struct dentry *de = file->f_path.dentry;
+	struct dentry *de = file_dentry(file);
 	struct ll_sb_info *sbi = ll_i2sbi(de->d_inode);
 	struct dentry *parent = de->d_parent;
 	const char *name = NULL;
@@ -435,7 +435,7 @@ static int ll_och_fill(struct obd_export *md_exp, struct lookup_intent *it,
 static int ll_local_open(struct file *file, struct lookup_intent *it,
 			 struct ll_file_data *fd, struct obd_client_handle *och)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(file);
 	ENTRY;
 
 	LASSERT(!LUSTRE_FPRIVATE(file));
@@ -499,7 +499,7 @@ int ll_file_open(struct inode *inode, struct file *file)
 	if (S_ISDIR(inode->i_mode))
 		ll_authorize_statahead(inode, fd);
 
-	if (inode->i_sb->s_root == file->f_path.dentry) {
+	if (inode->i_sb->s_root == file_dentry(file)) {
                 LUSTRE_FPRIVATE(file) = fd;
                 RETURN(0);
         }
@@ -557,7 +557,7 @@ restart:
                                 GOTO(out_openerr, rc);
                         }
 
-			ll_release_openhandle(file->f_path.dentry, it);
+			ll_release_openhandle(file_dentry(file), it);
                 }
                 (*och_usecount)++;
 
@@ -994,7 +994,7 @@ out_size_unlock:
 static bool file_is_noatime(const struct file *file)
 {
 	const struct vfsmount *mnt = file->f_path.mnt;
-	const struct inode *inode = file->f_path.dentry->d_inode;
+	const struct inode *inode = file_inode((struct file *)file);
 
 	/* Adapted from file_accessed() and touch_atime().*/
 	if (file->f_flags & O_NOATIME)
@@ -1020,7 +1020,7 @@ static bool file_is_noatime(const struct file *file)
 
 static void ll_io_init(struct cl_io *io, const struct file *file, int write)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode((struct file *)file);
 
         io->u.ci_rw.crw_nonblock = file->f_flags & O_NONBLOCK;
 	if (write) {
@@ -1047,7 +1047,7 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 		   loff_t *ppos, size_t count)
 {
 	struct vvp_io		*vio = vvp_env_io(env);
-	struct inode		*inode = file->f_path.dentry->d_inode;
+	struct inode		*inode = file_inode(file);
 	struct ll_inode_info	*lli = ll_i2info(inode);
 	struct ll_file_data	*fd  = LUSTRE_FPRIVATE(file);
 	struct cl_io		*io;
@@ -1058,7 +1058,7 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 	ENTRY;
 
 	CDEBUG(D_VFSTRACE, "file: %s, type: %d ppos: "LPU64", count: %zu\n",
-		file->f_path.dentry->d_name.name, iot, *ppos, count);
+		file_dentry(file)->d_name.name, iot, *ppos, count);
 
 restart:
 	io = vvp_env_thread_io(env);
@@ -1133,7 +1133,7 @@ out:
 	if ((rc == 0 || rc == -ENODATA) && count > 0 && io->ci_need_restart) {
 		CDEBUG(D_VFSTRACE,
 		       "%s: restart %s from %lld, count:%zu, result: %zd\n",
-		       file->f_path.dentry->d_name.name,
+		       file_dentry(file)->d_name.name,
 		       iot == CIT_READ ? "read" : "write",
 		       *ppos, count, result);
 		goto restart;
@@ -1472,7 +1472,7 @@ int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
 	if (rc < 0)
 		GOTO(out_unlock, rc);
 
-	ll_release_openhandle(file->f_path.dentry, &oit);
+	ll_release_openhandle(file_dentry(file), &oit);
 
 out_unlock:
 	ll_inode_size_unlock(inode);
@@ -1993,8 +1993,8 @@ static int ll_swap_layouts(struct file *file1, struct file *file2,
 	if (llss == NULL)
 		RETURN(-ENOMEM);
 
-	llss->inode1 = file1->f_path.dentry->d_inode;
-	llss->inode2 = file2->f_path.dentry->d_inode;
+	llss->inode1 = file_inode(file1);
+	llss->inode2 = file_inode(file2);
 
 	rc = ll_check_swap_layouts_validity(llss->inode1, llss->inode2);
 	if (rc < 0)
@@ -2163,7 +2163,7 @@ static int ll_hsm_import(struct inode *inode, struct file *file,
 
 	mutex_lock(&inode->i_mutex);
 
-	rc = ll_setattr_raw(file->f_path.dentry, attr, true);
+	rc = ll_setattr_raw(file_dentry(file), attr, true);
 	if (rc == -ENODATA)
 		rc = 0;
 
@@ -2187,7 +2187,7 @@ static inline long ll_lease_type_from_fmode(fmode_t fmode)
 
 static int ll_file_futimes_3(struct file *file, const struct ll_futimes_3 *lfu)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(file);
 	struct iattr ia = {
 		.ia_valid = ATTR_ATIME | ATTR_ATIME_SET |
 			    ATTR_MTIME | ATTR_MTIME_SET |
@@ -2215,7 +2215,7 @@ static int ll_file_futimes_3(struct file *file, const struct ll_futimes_3 *lfu)
 		RETURN(-EINVAL);
 
 	mutex_lock(&inode->i_mutex);
-	rc = ll_setattr_raw(file->f_path.dentry, &ia, false);
+	rc = ll_setattr_raw(file_dentry(file), &ia, false);
 	mutex_unlock(&inode->i_mutex);
 
 	RETURN(rc);
@@ -2273,7 +2273,7 @@ static int ll_ladvise(struct inode *inode, struct file *file, __u64 flags,
 static long
 ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-	struct inode		*inode = file->f_path.dentry->d_inode;
+	struct inode		*inode = file_inode(file);
 	struct ll_file_data	*fd = LUSTRE_FPRIVATE(file);
 	int			 flags, rc;
 	ENTRY;
@@ -2352,7 +2352,7 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			mutex_unlock(&lli->lli_och_mutex);
 			if (och == NULL)
 				GOTO(out, rc = -ENOLCK);
-			inode2 = file2->f_path.dentry->d_inode;
+			inode2 = file_inode(file2);
 			rc = ll_swap_layouts_close(och, inode, inode2);
 		} else {
 			rc = ll_swap_layouts(file, file2, &lsl);
@@ -2694,7 +2694,7 @@ static loff_t
 generic_file_llseek_size(struct file *file, loff_t offset, int origin,
                 loff_t maxsize, loff_t eof)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(file);
 
 	switch (origin) {
 	case SEEK_END:
@@ -2743,7 +2743,7 @@ generic_file_llseek_size(struct file *file, loff_t offset, int origin,
 
 static loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(file);
 	loff_t retval, eof = 0;
 
 	ENTRY;
@@ -2768,7 +2768,7 @@ static loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 
 static int ll_flush(struct file *file, fl_owner_t id)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(file);
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
 	int rc, err;
@@ -2841,19 +2841,19 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 }
 
 /*
- * When dentry is provided (the 'else' case), *file->f_path.dentry may be
+ * When dentry is provided (the 'else' case), file_dentry() may be
  * null and dentry must be used directly rather than pulled from
- * *file->f_path.dentry as is done otherwise.
+ * file_dentry() as is done otherwise.
  */
 
 #ifdef HAVE_FILE_FSYNC_4ARGS
 int ll_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 {
-	struct dentry *dentry = file->f_path.dentry;
+	struct dentry *dentry = file_dentry(file);
 #elif defined(HAVE_FILE_FSYNC_2ARGS)
 int ll_fsync(struct file *file, int datasync)
 {
-	struct dentry *dentry = file->f_path.dentry;
+	struct dentry *dentry = file_dentry(file);
 	loff_t start = 0;
 	loff_t end = LLONG_MAX;
 #else
@@ -2920,7 +2920,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int datasync)
 static int
 ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
+	struct inode *inode = file_inode(file);
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct ldlm_enqueue_info einfo = {
 		.ei_type	= LDLM_FLOCK,
@@ -3120,7 +3120,7 @@ int ll_migrate(struct inode *parent, struct file *file, int mdtidx,
 	qstr.hash = full_name_hash(name, namelen);
 	qstr.name = name;
 	qstr.len = namelen;
-	dchild = d_lookup(file->f_path.dentry, &qstr);
+	dchild = d_lookup(file_dentry(file), &qstr);
 	if (dchild != NULL) {
 		if (dchild->d_inode != NULL)
 			child_inode = igrab(dchild->d_inode);

@@ -55,12 +55,26 @@
 #include <linux/backing-dev.h>
 #include <linux/posix_acl_xattr.h>
 
+#ifndef HAVE_FILE_DENTRY
+static inline struct dentry *file_dentry(const struct file *file)
+{
+	return file->f_path.dentry;
+}
+#endif
+
+#ifndef HAVE_FILE_INODE
+static inline struct inode *file_inode(const struct file *file)
+{
+	return file->f_path.dentry->d_inode;
+}
+#endif
+
 #if defined(HAVE_FILE_FSYNC_4ARGS) || defined(HAVE_FILE_FSYNC_2ARGS)
 #define ll_vfs_fsync_range(fp, start, end, datasync) \
 	vfs_fsync_range(fp, start, end, datasync)
 #else
 #define ll_vfs_fsync_range(fp, start, end, datasync) \
-	vfs_fsync_range(fp, (fp)->f_path.dentry, start, end, datasync)
+	vfs_fsync_range(fp, file_dentry(fp), start, end, datasync)
 #endif
 
 #define flock_type(fl)			((fl)->fl_type)

@@ -2527,7 +2527,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 		RETURN(PTR_ERR(filp));
 	}
 
-	inode = filp->f_path.dentry->d_inode;
+	inode = file_inode(filp);
 	/* 'What the @fid is' is not imporatant, because the object
 	 * has no OI mapping, and only is visible inside the OSD.*/
 	lu_igif_build(fid, inode->i_ino, inode->i_generation);

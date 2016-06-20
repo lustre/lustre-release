@@ -788,7 +788,7 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 		unplug = true;
 	}
 	if (unplug ||
-	    file->f_flags & O_SYNC || IS_SYNC(file->f_path.dentry->d_inode))
+	    file->f_flags & O_SYNC || IS_SYNC(file_inode(file)))
 		result = vvp_io_write_commit(env, io);
 
 	if (result < 0)
