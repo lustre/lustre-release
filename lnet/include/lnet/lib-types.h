@@ -541,9 +541,6 @@ struct lnet_peer_net {
 
 	/* Net ID */
 	__u32			lpn_net_id;
-
-	/* health flag */
-	bool			lpn_healthy;
 };
 
 /* peer hash size */
