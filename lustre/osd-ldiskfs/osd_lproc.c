@@ -173,10 +173,11 @@ static int osd_brw_stats_seq_show(struct seq_file *seq, void *v)
         return 0;
 }
 
-static ssize_t osd_brw_stats_seq_write(struct file *file, const char *buf,
-                                       size_t len, loff_t *off)
+static ssize_t osd_brw_stats_seq_write(struct file *file,
+				       const char __user *buf,
+				       size_t len, loff_t *off)
 {
-        struct seq_file *seq = file->private_data;
+	struct seq_file *seq = file->private_data;
         struct osd_device *osd = seq->private;
         int i;
 
@@ -274,7 +275,7 @@ static int ldiskfs_osd_cache_seq_show(struct seq_file *m, void *data)
 }
 
 static ssize_t
-ldiskfs_osd_cache_seq_write(struct file *file, const char *buffer,
+ldiskfs_osd_cache_seq_write(struct file *file, const char __user *buffer,
 			    size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
@@ -309,7 +310,7 @@ static int ldiskfs_osd_wcache_seq_show(struct seq_file *m, void *data)
 }
 
 static ssize_t
-ldiskfs_osd_wcache_seq_write(struct file *file, const char *buffer,
+ldiskfs_osd_wcache_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
@@ -332,7 +333,7 @@ ldiskfs_osd_wcache_seq_write(struct file *file, const char *buffer,
 LPROC_SEQ_FOPS(ldiskfs_osd_wcache);
 
 static ssize_t
-lprocfs_osd_force_sync_seq_write(struct file *file, const char *buffer,
+lprocfs_osd_force_sync_seq_write(struct file *file, const char __user *buffer,
 					size_t count, loff_t *off)
 {
 	struct seq_file	  *m = file->private_data;
@@ -362,7 +363,7 @@ static int ldiskfs_osd_pdo_seq_show(struct seq_file *m, void *data)
 }
 
 static ssize_t
-ldiskfs_osd_pdo_seq_write(struct file *file, const char *buffer,
+ldiskfs_osd_pdo_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off)
 {
 	int rc;
@@ -391,7 +392,7 @@ static int ldiskfs_osd_auto_scrub_seq_show(struct seq_file *m, void *data)
 }
 
 static ssize_t
-ldiskfs_osd_auto_scrub_seq_write(struct file *file, const char *buffer,
+ldiskfs_osd_auto_scrub_seq_write(struct file *file, const char __user *buffer,
 					size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
@@ -426,7 +427,8 @@ static int ldiskfs_osd_full_scrub_ratio_seq_show(struct seq_file *m, void *data)
 }
 
 static ssize_t
-ldiskfs_osd_full_scrub_ratio_seq_write(struct file *file, const char *buffer,
+ldiskfs_osd_full_scrub_ratio_seq_write(struct file *file,
+				       const char __user *buffer,
 				       size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
@@ -467,7 +469,7 @@ static int ldiskfs_osd_full_scrub_threshold_rate_seq_show(struct seq_file *m,
 
 static ssize_t
 ldiskfs_osd_full_scrub_threshold_rate_seq_write(struct file *file,
-						const char *buffer,
+						const char __user *buffer,
 						size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
@@ -501,7 +503,7 @@ ldiskfs_osd_track_declares_assert_seq_show(struct seq_file *m, void *data)
 
 static ssize_t
 ldiskfs_osd_track_declares_assert_seq_write(struct file *file,
-						const char *buffer,
+						const char __user *buffer,
 						size_t count, loff_t *off)
 {
 	__s64 track_declares_assert;
@@ -542,7 +544,7 @@ static int ldiskfs_osd_readcache_seq_show(struct seq_file *m, void *data)
 }
 
 static ssize_t
-ldiskfs_osd_readcache_seq_write(struct file *file, const char *buffer,
+ldiskfs_osd_readcache_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
@@ -581,7 +583,8 @@ static int ldiskfs_osd_index_in_idif_seq_show(struct seq_file *m, void *data)
 }
 
 static ssize_t
-ldiskfs_osd_index_in_idif_seq_write(struct file *file, const char *buffer,
+ldiskfs_osd_index_in_idif_seq_write(struct file *file,
+				    const char __user *buffer,
 				    size_t count, loff_t *off)
 {
 	struct lu_env env;
