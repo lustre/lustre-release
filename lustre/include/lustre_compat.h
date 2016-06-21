@@ -411,7 +411,12 @@ static inline void truncate_inode_pages_final(struct address_space *map)
 #endif
 
 #ifndef bio_for_each_segment_all /* since kernel version 3.9 */
+#ifdef HAVE_BVEC_ITER
+#define bio_for_each_segment_all(bv, bio, it) \
+	for (it = 0, bv = (bio)->bi_io_vec; it < (bio)->bi_vcnt; it++, bv++)
+#else
 #define bio_for_each_segment_all(bv, bio, it) bio_for_each_segment(bv, bio, it)
+#endif
 #endif
 
 #endif /* _LUSTRE_COMPAT_H */
