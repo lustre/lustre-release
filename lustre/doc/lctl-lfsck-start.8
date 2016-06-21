@@ -1,7 +1,7 @@
 .TH lctl-lfsck-start 8 "2016 Apr 1" Lustre "Lustre online fsck"
 .SH SYNOPSIS
 .br
-.B lctl lfsck_start \fR<-M | --device [MDT,OST]_device>
+.B lctl lfsck_start \fR[-M | --device [MDT,OST]_device]
      \fR[-A | --all] [-c | --create-ostobj [on | off]]
      \fR[-C | --create-mttobj [on | off]]
      \fR[-e | --error <continue | abort>] [-h | --help]
@@ -15,11 +15,16 @@ Start LFSCK on the specified MDT or OST device with specified parameters.
 .SH OPTIONS
 .TP
 .B  -M, --device <MDT,OST_device>
-The MDT or OST device to start LFSCK/scrub on.
+The MDT or OST device to start LFSCK/scrub on. If "-M" option is not specified,
+it will select the available Lustre device on current server automatically.
+But under the following cases you need to specify the device (see "-M" option)
+explicitly: if there are multiple devices on current server those belong to
+different Lustre filesystems, or if "-A" option is not specified and there are
+multiple devices on current server.
 .TP
 .B  -A, --all
-Start LFSCK on all nodes via the specified MDT device (see "-M" option) by
-single LFSCK command.
+Start LFSCK on all available devices in the system by single LFSCK command.
+Such LFSCK command can be executed on any MDT deivce in the system.
 .TP
 .B  -c, --create-ostobj [on | off]
 Create the lost OST-object for dangling LOV EA: 'off' (default) or 'on'. Under

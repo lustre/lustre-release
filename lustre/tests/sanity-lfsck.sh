@@ -1382,9 +1382,9 @@ test_11b() {
 }
 run_test 11b "LFSCK can rebuild crashed last_id"
 
-test_12() {
+test_12a() {
 	[ $MDSCOUNT -lt 2 ] &&
-		skip "We need at least 2 MDSes for test_12" && return
+		skip "We need at least 2 MDSes for test_12a" && return
 
 	check_mount_and_prep
 	for k in $(seq $MDSCOUNT); do
@@ -1447,7 +1447,30 @@ test_12() {
 
 	stop_full_debug_logging
 }
-run_test 12 "single command to trigger LFSCK on all devices"
+run_test 12a "single command to trigger LFSCK on all devices"
+
+test_12b() {
+	check_mount_and_prep
+
+	echo "Start LFSCK without '-M' specified."
+	do_facet mds1 $LCTL lfsck_start -A -r ||
+		error "(0) Fail to start LFSCK without '-M'"
+
+	wait_all_targets_blocked namespace completed 1
+	wait_all_targets_blocked layout completed 2
+
+	local count=$(do_facet mds1 $LCTL dl |
+		      awk '{ print $3 }' | grep mdt | wc -l)
+	if [ $count -gt 1 ]; then
+		echo
+		echo "Start layout LFSCK on the node with multipe targets,"
+		echo "but not specify '-M'/'-A' option. Should get failure."
+		echo
+		do_facet mds1 $LCTL lfsck_start -t layout -r &&
+			error "(3) Start layout LFSCK should fail" || true
+	fi
+}
+run_test 12b "auto detect Lustre device"
 
 test_13() {
 	echo "#####"

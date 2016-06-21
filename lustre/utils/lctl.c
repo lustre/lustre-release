@@ -412,7 +412,7 @@ command_t cmdlist[] = {
 	/* LFSCK commands */
 	{"==== LFSCK ====", jt_noop, 0, "LFSCK"},
 	{"lfsck_start", jt_lfsck_start, 0, "start LFSCK\n"
-	 "usage: lfsck_start <-M | --device [MDT,OST]_device>\n"
+	 "usage: lfsck_start [-M | --device [MDT,OST]_device]\n"
 	 "		     [-A | --all] [-c | --create-ostobj [on | off]]\n"
 	 "		     [-C | --create-mdtobj [on | off]]\n"
 	 "		     [-e | --error {continue | abort}] [-h | --help]\n"
@@ -421,10 +421,10 @@ command_t cmdlist[] = {
 	 "		     [-t | --type lfsck_type[,lfsck_type...]]\n"
 	 "		     [-w | --window-size size]"},
 	{"lfsck_stop", jt_lfsck_stop, 0, "stop lfsck(s)\n"
-	 "usage: lfsck_stop <-M | --device [MDT,OST]_device>\n"
+	 "usage: lfsck_stop [-M | --device [MDT,OST]_device]\n"
 	 "		    [-A | --all] [-h | --help]"},
 	{"lfsck_query", jt_lfsck_query, 0, "check lfsck(s) status\n"
-	 "usage: lfsck_query <-M | --device MDT_device> [-h | --help]\n"
+	 "usage: lfsck_query [-M | --device MDT_device] [-h | --help]\n"
 	 "		     [-t | --type lfsck_type[,lfsck_type...]]\n"
 	 "		     [-w | --wait]"},
 

@@ -1,11 +1,15 @@
 .TH lctl-lfsck-stop 8 "2016 Apr 1" Lustre "Lustre online fsck"
 .SH SYNOPSIS
 .br
-.B lctl lfsck_query \fR<-M | --device MDT_device> [-h | --help]
+.B lctl lfsck_query \fR[-M | --device MDT_device] [-h | --help]
             \fR[-t | --type lfsck_type[,lfsck_type...]] [-w | --wait]
 .br
 .SH DESCRIPTION
-Get the LFSCK global status via the specified MDT device.
+Get the LFSCK global status via the specified MDT device. If "-M" option
+is not specified, it will select the available Lustre device on current
+server automatically. But if there are multiple devices on current server
+those belong to different Lustre filesystems, you need to specify the
+device (see "-M" option) explicitly.
 .SH OPTIONS
 .TP
 .B  -M, --device <MDT_device>

@@ -1,18 +1,23 @@
 .TH lctl-lfsck-stop 8 "2016 Apr 1" Lustre "Lustre online fsck"
 .SH SYNOPSIS
 .br
-.B lctl lfsck_stop  \fR<-M | --device [MDT,OST]_device> [-A | --all] [-h | --help]
+.B lctl lfsck_stop  \fR[-M | --device [MDT,OST]_device] [-A | --all] [-h | --help]
 .br
 .SH DESCRIPTION
 Stop LFSCK on the specified MDT or OST device.
 .SH OPTIONS
 .TP
 .B  -M, --device <[MDT,OST]_device>
-The MDT or OST device to stop LFSCK/scrub on.
+The MDT or OST device to stop LFSCK/scrub on. If "-M" option is not specified,
+it will select the available Lustre device on current server automatically.
+But under the following cases you need to specify the device (see "-M" option)
+explicitly: if there are multiple devices on current server those belong to
+different Lustre filesystems, or if "-A" option is not specified and there are
+multiple devices on current server.
 .TP
 .B  -A, --all
-Stop LFSCK on all nodes via the specified MDT device (see "-M" option) by
-single LFSCK command.
+Stop LFSCK on all available devices in the system by single LFSCK command.
+Such LFSCK command can be executed on any MDT deivce in the system.
 .TP
 .B  -h, --help
 Show this help.
