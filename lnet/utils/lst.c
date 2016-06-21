@@ -1498,17 +1498,17 @@ int
 lst_stat_ioctl (char *name, int count, lnet_process_id_t *idsp,
 		int timeout, struct list_head *resultp)
 {
-        lstio_stat_args_t args = {0};
+	lstio_stat_args_t args = {0};
 
-        args.lstio_sta_key     = session_key;
-        args.lstio_sta_timeout = timeout;
-        args.lstio_sta_nmlen   = strlen(name);
-        args.lstio_sta_namep   = name;
-        args.lstio_sta_count   = count;
-        args.lstio_sta_idsp    = idsp;
-        args.lstio_sta_resultp = resultp;
+	args.lstio_sta_key     = session_key;
+	args.lstio_sta_timeout = timeout;
+	args.lstio_sta_nmlen   = strlen(name);
+	args.lstio_sta_namep   = name;
+	args.lstio_sta_count   = count;
+	args.lstio_sta_idsp    = idsp;
+	args.lstio_sta_resultp = resultp;
 
-        return lst_ioctl (LSTIO_STAT_QUERY, &args, sizeof(args));
+	return lst_ioctl(LSTIO_STAT_QUERY, &args, sizeof(args));
 }
 
 typedef struct {
@@ -1655,127 +1655,132 @@ lst_timeval_diff(struct timeval *tv1,
 	return;
 }
 
-void
+static void
 lst_cal_lnet_stat(float delta, lnet_counters_t *lnet_new,
-                  lnet_counters_t *lnet_old)
+		  lnet_counters_t *lnet_old, int mbs)
 {
-        float perf;
-        float rate;
+	float perf;
+	float rate;
+	unsigned int unit_divisor;
 
-        perf = (float)(lnet_new->send_length -
-                       lnet_old->send_length) / (1024 * 1024) / delta;
-        lnet_stat_result.lnet_total_sndperf += perf;
+	unit_divisor = (mbs) ? (1000 * 1000) : (1024 * 1024);
+	perf = (float)(lnet_new->send_length -
+		       lnet_old->send_length) / unit_divisor / delta;
+	lnet_stat_result.lnet_total_sndperf += perf;
 
-        if (lnet_stat_result.lnet_min_sndperf > perf ||
-            lnet_stat_result.lnet_min_sndperf == 0)
-                lnet_stat_result.lnet_min_sndperf = perf;
+	if (lnet_stat_result.lnet_min_sndperf > perf ||
+	    lnet_stat_result.lnet_min_sndperf == 0)
+		lnet_stat_result.lnet_min_sndperf = perf;
 
-        if (lnet_stat_result.lnet_max_sndperf < perf)
-                lnet_stat_result.lnet_max_sndperf = perf;
+	if (lnet_stat_result.lnet_max_sndperf < perf)
+		lnet_stat_result.lnet_max_sndperf = perf;
 
-        perf = (float)(lnet_new->recv_length -
-                       lnet_old->recv_length) / (1024 * 1024) / delta;
-        lnet_stat_result.lnet_total_rcvperf += perf;
+	perf = (float)(lnet_new->recv_length -
+		       lnet_old->recv_length) / unit_divisor / delta;
+	lnet_stat_result.lnet_total_rcvperf += perf;
 
-        if (lnet_stat_result.lnet_min_rcvperf > perf ||
-            lnet_stat_result.lnet_min_rcvperf == 0)
-                lnet_stat_result.lnet_min_rcvperf = perf;
+	if (lnet_stat_result.lnet_min_rcvperf > perf ||
+	    lnet_stat_result.lnet_min_rcvperf == 0)
+		lnet_stat_result.lnet_min_rcvperf = perf;
 
-        if (lnet_stat_result.lnet_max_rcvperf < perf)
-                lnet_stat_result.lnet_max_rcvperf = perf;
+	if (lnet_stat_result.lnet_max_rcvperf < perf)
+		lnet_stat_result.lnet_max_rcvperf = perf;
 
-        rate = (lnet_new->send_count - lnet_old->send_count) / delta;
-        lnet_stat_result.lnet_total_sndrate += rate;
+	rate = (lnet_new->send_count - lnet_old->send_count) / delta;
+	lnet_stat_result.lnet_total_sndrate += rate;
 
-        if (lnet_stat_result.lnet_min_sndrate > rate ||
-            lnet_stat_result.lnet_min_sndrate == 0)
-                lnet_stat_result.lnet_min_sndrate = rate;
+	if (lnet_stat_result.lnet_min_sndrate > rate ||
+	    lnet_stat_result.lnet_min_sndrate == 0)
+		lnet_stat_result.lnet_min_sndrate = rate;
 
-        if (lnet_stat_result.lnet_max_sndrate < rate)
-                lnet_stat_result.lnet_max_sndrate = rate;
+	if (lnet_stat_result.lnet_max_sndrate < rate)
+		lnet_stat_result.lnet_max_sndrate = rate;
 
-        rate = (lnet_new->recv_count - lnet_old->recv_count) / delta;
-        lnet_stat_result.lnet_total_rcvrate += rate;
+	rate = (lnet_new->recv_count - lnet_old->recv_count) / delta;
+	lnet_stat_result.lnet_total_rcvrate += rate;
 
-        if (lnet_stat_result.lnet_min_rcvrate > rate ||
-            lnet_stat_result.lnet_min_rcvrate == 0)
-                lnet_stat_result.lnet_min_rcvrate = rate;
+	if (lnet_stat_result.lnet_min_rcvrate > rate ||
+	    lnet_stat_result.lnet_min_rcvrate == 0)
+		lnet_stat_result.lnet_min_rcvrate = rate;
 
-        if (lnet_stat_result.lnet_max_rcvrate < rate)
-                lnet_stat_result.lnet_max_rcvrate = rate;
+	if (lnet_stat_result.lnet_max_rcvrate < rate)
+		lnet_stat_result.lnet_max_rcvrate = rate;
 
-        lnet_stat_result.lnet_stat_count ++;
+	lnet_stat_result.lnet_stat_count++;
 
-        lnet_stat_result.lnet_avg_sndrate = lnet_stat_result.lnet_total_sndrate /
-                                            lnet_stat_result.lnet_stat_count;
-        lnet_stat_result.lnet_avg_rcvrate = lnet_stat_result.lnet_total_rcvrate /
-                                            lnet_stat_result.lnet_stat_count;
+	lnet_stat_result.lnet_avg_sndrate = lnet_stat_result.lnet_total_sndrate /
+					    lnet_stat_result.lnet_stat_count;
+	lnet_stat_result.lnet_avg_rcvrate = lnet_stat_result.lnet_total_rcvrate /
+					    lnet_stat_result.lnet_stat_count;
 
-        lnet_stat_result.lnet_avg_sndperf = lnet_stat_result.lnet_total_sndperf /
-                                            lnet_stat_result.lnet_stat_count;
-        lnet_stat_result.lnet_avg_rcvperf = lnet_stat_result.lnet_total_rcvperf /
-                                            lnet_stat_result.lnet_stat_count;
-
+	lnet_stat_result.lnet_avg_sndperf = lnet_stat_result.lnet_total_sndperf /
+					    lnet_stat_result.lnet_stat_count;
+	lnet_stat_result.lnet_avg_rcvperf = lnet_stat_result.lnet_total_rcvperf /
+					    lnet_stat_result.lnet_stat_count;
 }
 
-void
-lst_print_lnet_stat(char *name, int bwrt, int rdwr, int type)
+static void
+lst_print_lnet_stat(char *name, int bwrt, int rdwr, int type, int mbs)
 {
-        int     start1 = 0;
-        int     end1   = 1;
-        int     start2 = 0;
-        int     end2   = 1;
-        int     i;
-        int     j;
+	int	start1 = 0;
+	int	end1   = 1;
+	int	start2 = 0;
+	int	end2   = 1;
+	int	i;
+	int	j;
+	char   *units;
 
-        if (lnet_stat_result.lnet_stat_count == 0)
-                return;
+	if (lnet_stat_result.lnet_stat_count == 0)
+		return;
 
-        if (bwrt == 1) /* bw only */
-                start1 = 1;
+	units = (mbs) ? "MB/s  " : "MiB/s ";
 
-        if (bwrt == 2) /* rates only */
-                end1 = 0;
+	if (bwrt == 1) /* bw only */
+		start1 = 1;
 
-        if (rdwr == 1) /* recv only */
-                start2 = 1;
+	if (bwrt == 2) /* rates only */
+		end1 = 0;
 
-        if (rdwr == 2) /* send only */
-                end2 = 0;
+	if (rdwr == 1) /* recv only */
+		start2 = 1;
 
-        for (i = start1; i <= end1; i++) {
-                fprintf(stdout, "[LNet %s of %s]\n",
-                        i == 0 ? "Rates" : "Bandwidth", name);
+	if (rdwr == 2) /* send only */
+		end2 = 0;
 
-                for (j = start2; j <= end2; j++) {
-                        fprintf(stdout, "[%c] ", j == 0 ? 'R' : 'W');
+	for (i = start1; i <= end1; i++) {
+		fprintf(stdout, "[LNet %s of %s]\n",
+			i == 0 ? "Rates" : "Bandwidth", name);
 
-                        if ((type & 1) != 0) {
-                                fprintf(stdout, i == 0 ? "Avg: %-8.0f RPC/s " :
-                                                         "Avg: %-8.2f MB/s  ",
-                                        lst_lnet_stat_value(i, j, 0));
-                        }
+		for (j = start2; j <= end2; j++) {
+			fprintf(stdout, "[%c] ", j == 0 ? 'R' : 'W');
 
-                        if ((type & 2) != 0) {
-                                fprintf(stdout, i == 0 ? "Min: %-8.0f RPC/s " :
-                                                         "Min: %-8.2f MB/s  ",
-                                        lst_lnet_stat_value(i, j, 1));
-                        }
+			if ((type & 1) != 0) {
+				fprintf(stdout, i == 0 ? "Avg: %-8.0f RPC/s " :
+							 "Avg: %-8.2f %s",
+					lst_lnet_stat_value(i, j, 0), units);
+			}
 
-                        if ((type & 4) != 0) {
-                                fprintf(stdout, i == 0 ? "Max: %-8.0f RPC/s" :
-                                                         "Max: %-8.2f MB/s",
-                                        lst_lnet_stat_value(i, j, 2));
-                        }
+			if ((type & 2) != 0) {
+				fprintf(stdout, i == 0 ? "Min: %-8.0f RPC/s " :
+							 "Min: %-8.2f %s",
+					lst_lnet_stat_value(i, j, 1), units);
+			}
 
-                        fprintf(stdout, "\n");
-                }
-        }
+			if ((type & 4) != 0) {
+				fprintf(stdout, i == 0 ? "Max: %-8.0f RPC/s" :
+							 "Max: %-8.2f %s",
+					lst_lnet_stat_value(i, j, 2), units);
+			}
+
+			fprintf(stdout, "\n");
+		}
+	}
 }
 
-void
+static void
 lst_print_stat(char *name, struct list_head *resultp,
-	       int idx, int lnet, int bwrt, int rdwr, int type)
+	       int idx, int lnet, int bwrt, int rdwr, int type,
+	       int mbs)
 {
 	struct list_head        tmp[2];
         lstcon_rpc_ent_t *new;
@@ -1857,44 +1862,44 @@ lst_print_stat(char *name, struct list_head *resultp,
 			delta = tv.tv_sec + (float)tv.tv_usec / 1000000;
 		}
 
-                if (!lnet) /* TODO */
-                        continue;
+		if (!lnet) /* TODO */
+			continue;
 
-                lst_cal_lnet_stat(delta, lnet_new, lnet_old);
-        }
+		lst_cal_lnet_stat(delta, lnet_new, lnet_old, mbs);
+	}
 
 	list_splice(&tmp[idx], &resultp[idx]);
 	list_splice(&tmp[1 - idx], &resultp[1 - idx]);
 
-        if (errcount > 0)
-                fprintf(stdout, "Failed to stat on %d nodes\n", errcount);
+	if (errcount > 0)
+		fprintf(stdout, "Failed to stat on %d nodes\n", errcount);
 
-        if (!lnet)  /* TODO */
-                return;
+	if (!lnet)  /* TODO */
+		return;
 
-        lst_print_lnet_stat(name, bwrt, rdwr, type);
+	lst_print_lnet_stat(name, bwrt, rdwr, type, mbs);
 }
 
 int
 jt_lst_stat(int argc, char **argv)
 {
 	struct list_head	head;
-        lst_stat_req_param_t *srp;
-        time_t                last    = 0;
-        int                   optidx  = 0;
-        int                   timeout = 5; /* default timeout, 5 sec */
-        int                   delay   = 5; /* default delay, 5 sec */
-        int                   count   = -1; /* run forever */
-        int                   lnet    = 1; /* lnet stat by default */
-        int                   bwrt    = 0;
-        int                   rdwr    = 0;
-        int                   type    = -1;
-        int                   idx     = 0;
-        int                   rc;
-        int                   c;
+	lst_stat_req_param_t *srp;
+	time_t		      last    = 0;
+	int		      optidx  = 0;
+	int		      timeout = 5; /* default timeout, 5 sec */
+	int		      delay   = 5; /* default delay, 5 sec */
+	int		      count   = -1; /* run forever */
+	int		      lnet    = 1; /* lnet stat by default */
+	int		      bwrt    = 0;
+	int		      rdwr    = 0;
+	int		      type    = -1;
+	int		      idx     = 0;
+	int		      rc;
+	int		      c;
+	int		      mbs     = 0; /* report as MB/s */
 
-        static struct option stat_opts[] =
-        {
+	static struct option stat_opts[] = {
 		{"timeout"   , required_argument, 0, 't' },
 		{"delay"     , required_argument, 0, 'd' },
 		{"count"     , required_argument, 0, 'o' },
@@ -1907,6 +1912,7 @@ jt_lst_stat(int argc, char **argv)
 		{"avg"	     , no_argument,	 0, 'g' },
 		{"min"	     , no_argument,	 0, 'n' },
 		{"max"	     , no_argument,	 0, 'x' },
+		{"mbs"	     , no_argument,	 0, 'm' },
 		{0,	       0,		 0,  0  }
         };
 
@@ -1917,7 +1923,8 @@ jt_lst_stat(int argc, char **argv)
         }
 
         while (1) {
-		c = getopt_long(argc, argv, "t:d:lcbarwgnx", stat_opts, &optidx);
+		c = getopt_long(argc, argv, "t:d:lcbarwgnxm", stat_opts,
+				&optidx);
 
                 if (c == -1)
                         break;
@@ -1964,19 +1971,22 @@ jt_lst_stat(int argc, char **argv)
                         }
                         type |= 2;
                         break;
-                case 'x':
-                        if (type == -1) {
-                                type = 4;
-                                break;
-                        }
-                        type |= 4;
-                        break;
+		case 'x':
+			if (type == -1) {
+				type = 4;
+				break;
+			}
+			type |= 4;
+			break;
+		case 'm':
+			mbs = 1;
+			break;
 
-                default:
-                        lst_print_usage(argv[0]);
-                        return -1;
-                }
-        }
+		default:
+			lst_print_usage(argv[0]);
+			return -1;
+		}
+	}
 
         if (optind == argc) {
                 lst_print_usage(argv[0]);
@@ -2027,10 +2037,10 @@ jt_lst_stat(int argc, char **argv)
                         }
 
 			lst_print_stat(srp->srp_name, srp->srp_result,
-				       idx, lnet, bwrt, rdwr, type);
+				       idx, lnet, bwrt, rdwr, type, mbs);
 
-                        lst_reset_rpcent(&srp->srp_result[1 - idx]);
-                }
+			lst_reset_rpcent(&srp->srp_result[1 - idx]);
+		}
 
                 idx = 1 - idx;
 
@@ -3252,7 +3262,7 @@ static command_t lst_cmdlist[] = {
           "Usage: lst list_group [--active] [--busy] [--down] [--unknown] GROUP ..."    },
 	{"stat",                jt_lst_stat,            NULL,
 	 "Usage: lst stat [--bw] [--rate] [--read] [--write] [--max] [--min] [--avg] "
-	 " [--timeout #] [--delay #] [--count #] GROUP [GROUP]"                         },
+	 " [--mbs] [--timeout #] [--delay #] [--count #] GROUP [GROUP]"                 },
         {"show_error",          jt_lst_show_error,      NULL,
          "Usage: lst show_error NAME | IDS ..."                                         },
         {"add_batch",           jt_lst_add_batch,       NULL,
