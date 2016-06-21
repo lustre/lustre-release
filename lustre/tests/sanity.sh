@@ -5304,14 +5304,14 @@ test_60d() {
 
 	# verify "lctl mark" is even working"
 	MESSAGE="test message ID $RANDOM $$"
-	$LCTL mark "$HOSTNAME $MESSAGE" || error "$LCTL mark failed"
+	$LCTL mark "$MESSAGE" || error "$LCTL mark failed"
 	dmesg | grep -q "$MESSAGE" || error "didn't find debug marker in log"
 
 	lctl set_param printk=0 || error "set lnet.printk failed"
 	lctl get_param -n printk | grep emerg || error "lnet.printk dropped emerg"
 	MESSAGE="new test message ID $RANDOM $$"
 	# Assume here that libcfs_debug_mark_buffer() uses D_WARNING
-	$LCTL mark "$HOSTNAME $MESSAGE" || error "$LCTL mark failed"
+	$LCTL mark "$MESSAGE" || error "$LCTL mark failed"
 	dmesg | grep -q "$MESSAGE" && error "D_WARNING wasn't masked" || true
 
 	lctl set_param -n printk="$SAVEPRINTK"
