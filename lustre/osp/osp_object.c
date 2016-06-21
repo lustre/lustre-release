@@ -771,11 +771,13 @@ static int osp_declare_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	struct osp_object	*obj	 = dt2osp_obj(dt);
 	struct osp_device	*osp	 = lu2osp_dev(dt->do_lu.lo_dev);
 	struct osp_xattr_entry	*oxe;
-	__u16			 namelen = strlen(name);
+	__u16 namelen;
 	int			 rc	 = 0;
 
 	LASSERT(buf != NULL);
 	LASSERT(name != NULL);
+
+	namelen = strlen(name);
 
 	/* If only for xattr size, return directly. */
 	if (unlikely(buf->lb_len == 0))
