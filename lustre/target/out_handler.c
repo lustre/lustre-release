@@ -1057,7 +1057,7 @@ int out_handle(struct tgt_session_info *tsi)
 	reply->ourp_count = updates;
 	tti->tti_u.update.tti_update_reply = reply;
 	tti->tti_mult_trans = !req_is_replay(tgt_ses_req(tsi));
- 
+
 	/* Walk through updates in the request to execute them */
 	for (i = 0; i < update_buf_count; i++) {
 		struct tgt_handler	*h;
@@ -1069,9 +1069,16 @@ int out_handle(struct tgt_session_info *tsi)
 		our = update_bufs[i];
 		update_count = our->ourq_count;
 		for (j = 0; j < update_count; j++) {
-			update = object_update_request_get(our, j, NULL);
+			struct lu_object_conf conf;
 
-			dt_obj = dt_locate(env, dt, &update->ou_fid);
+			update = object_update_request_get(our, j, NULL);
+			if (update->ou_type == OUT_CREATE)
+				conf.loc_flags = LOC_F_NEW;
+			else
+				conf.loc_flags = 0;
+
+			dt_obj = dt_locate_at(env, dt, &update->ou_fid,
+				dt->dd_lu_dev.ld_site->ls_top_dev, &conf);
 			if (IS_ERR(dt_obj))
 				GOTO(out, rc = PTR_ERR(dt_obj));
 

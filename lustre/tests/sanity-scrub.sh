@@ -143,6 +143,18 @@ scrub_prep() {
 	done
 	echo "prepared $(date)."
 	cleanup_mount $MOUNT > /dev/null || error "Fail to stop client!"
+
+	# sync local transactions on every MDT
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"$LCTL set_param -n osd*.*MDT*.force_sync=1"
+
+	# wait for a while to cancel update logs after transactions committed.
+	sleep 3
+
+	# sync again to guarantee all things done.
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"$LCTL set_param -n osd*.*MDT*.force_sync=1"
+
 	for n in $(seq $MDSCOUNT); do
 		echo "stop mds$n"
 		stop mds$n > /dev/null || error "Fail to stop MDS$n!"
@@ -667,15 +679,23 @@ test_5() {
 		$LCTL set_param fail_val=3 fail_loc=0x190
 
 	local n
+	declare -a pids
+
 	for n in $(seq $MDSCOUNT); do
-		stat $DIR/$tdir/mds$n/${tfile}800 ||
-			error "(17) Failed to stat mds$n/${tfile}800"
+		stat $DIR/$tdir/mds$n/${tfile}800 &
+		pids[$n]=$!
 	done
 
-	scrub_check_status 18 scanning
+	sleep 3
+
+	scrub_check_status 17 scanning
 
 	do_nodes $(comma_list $(mdts_nodes)) \
 		$LCTL set_param fail_loc=0 fail_val=0
+
+	for n in $(seq $MDSCOUNT); do
+		wait ${pids[$n]} || error "(18) Fail to stat mds$n/${tfile}800"
+	done
 
 	scrub_check_status 19 completed
 	scrub_check_flags 20 ""

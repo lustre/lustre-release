@@ -1167,6 +1167,17 @@ static int update_recovery_exec(const struct lu_env *env,
 		dt_obj = dt_locate(env, tdtd->tdtd_dt, fid);
 		if (IS_ERR(dt_obj)) {
 			rc = PTR_ERR(dt_obj);
+			if (rc == -EREMCHG)
+				LCONSOLE_WARN("%.16s: hit invalid OI mapping "
+					      "for "DFID" during recovering, "
+					      "that may because auto scrub is "
+					      "disabled on related MDT, and "
+					      "will cause recovery failure. "
+					      "Please enable auto scrub and "
+					      "retry the recovery.\n",
+					      tdtd->tdtd_lut->lut_obd->obd_name,
+					      PFID(fid));
+
 			break;
 		}
 		sub_dt_obj = dt_object_child(dt_obj);
