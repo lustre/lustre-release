@@ -231,7 +231,7 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	OBD_ALLOC(lut->lut_reply_bitmap,
 		  LUT_REPLY_SLOTS_MAX_CHUNKS * sizeof(unsigned long *));
 	if (lut->lut_reply_bitmap == NULL)
-		GOTO(out, rc);
+		GOTO(out, rc = -ENOMEM);
 
 	memset(&attr, 0, sizeof(attr));
 	attr.la_valid = LA_MODE;
