@@ -2128,7 +2128,7 @@ LNetCtl(unsigned int cmd, void *arg)
 		id.nid = data->ioc_nid;
 		id.pid = data->ioc_u32[0];
 		rc = lnet_ping(id, data->ioc_u32[1], /* timeout */
-			       (lnet_process_id_t __user *)data->ioc_pbuf1,
+			       data->ioc_pbuf1,
 			       data->ioc_plen1/sizeof(lnet_process_id_t));
 		if (rc < 0)
 			return rc;
