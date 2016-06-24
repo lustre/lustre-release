@@ -361,7 +361,6 @@ static struct lu_device *lwp_device_fini(const struct lu_env *env,
 	struct lwp_device	*m = lu2lwp_dev(ludev);
 	struct ptlrpc_thread	*thread = &m->lpd_notify_thread;
 	struct l_wait_info	 lwi = { 0 };
-	struct obd_import	*imp;
 	int			 rc;
 	ENTRY;
 
@@ -371,8 +370,6 @@ static struct lu_device *lwp_device_fini(const struct lu_env *env,
 
 	if (m->lpd_exp != NULL)
 		class_disconnect(m->lpd_exp);
-
-	imp = m->lpd_obd->u.cli.cl_import;
 
 	LASSERT(m->lpd_obd);
 	ptlrpc_lprocfs_unregister_obd(m->lpd_obd);

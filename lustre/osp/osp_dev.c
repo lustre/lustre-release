@@ -1323,7 +1323,6 @@ static struct lu_device *osp_device_fini(const struct lu_env *env,
 					 struct lu_device *ld)
 {
 	struct osp_device *osp = lu2osp_dev(ld);
-	struct obd_import *imp;
 	int                rc;
 
 	ENTRY;
@@ -1335,8 +1334,6 @@ static struct lu_device *osp_device_fini(const struct lu_env *env,
 
 	if (osp->opd_storage_exp)
 		obd_disconnect(osp->opd_storage_exp);
-
-	imp = osp->opd_obd->u.cli.cl_import;
 
 	if (osp->opd_symlink)
 		lprocfs_remove(&osp->opd_symlink);
