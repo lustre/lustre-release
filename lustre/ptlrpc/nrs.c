@@ -264,14 +264,6 @@ static int nrs_policy_start_locked(struct ptlrpc_nrs_policy *policy, char *arg)
 		RETURN(-ENODEV);
 	}
 
-	if (arg != NULL) {
-		if (strlen(arg) + 1 > sizeof(policy->pol_arg)) {
-			CERROR("NRS: arg '%s' is too long\n", arg);
-			GOTO(out, rc = -E2BIG);
-		}
-		strncpy(policy->pol_arg, arg, sizeof(policy->pol_arg));
-	}
-
 	/**
 	 * Serialize policy starting across the NRS head
 	 */
@@ -291,6 +283,14 @@ static int nrs_policy_start_locked(struct ptlrpc_nrs_policy *policy, char *arg)
 
 			policy->pol_state = NRS_POL_STATE_STOPPED;
 			GOTO(out, rc);
+		}
+	}
+
+	if (arg != NULL) {
+		if (strlcpy(policy->pol_arg, arg, sizeof(policy->pol_arg)) >=
+		    sizeof(policy->pol_arg)) {
+			CERROR("NRS: arg '%s' is too long\n", arg);
+			GOTO(out, rc = -E2BIG);
 		}
 	}
 
