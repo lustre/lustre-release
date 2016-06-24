@@ -769,14 +769,36 @@ static int target_handle_reconnect(struct lustre_handle *conn,
 	now = cfs_time_current();
 	deadline = cfs_timer_deadline(&target->obd_recovery_timer);
 	if (cfs_time_before(now, deadline)) {
+		struct target_distribute_txn_data *tdtd =
+					class_exp2tgt(exp)->lut_tdtd;
+		int size = 0;
+		int count = 0;
+		char *buf = NULL;
+
 		timeout = cfs_duration_sec(cfs_time_sub(deadline, now));
-		LCONSOLE_WARN("%s: Client %s (at %s) reconnecting,"
-			" waiting for %d clients in recovery for"
-			" %d:%.02d\n", target->obd_name,
-			obd_uuid2str(&exp->exp_client_uuid),
-			obd_export_nid2str(exp),
-			target->obd_max_recoverable_clients,
-			timeout / 60, timeout % 60);
+		if (tdtd && tdtd->tdtd_show_update_logs_retrievers)
+			buf = tdtd->tdtd_show_update_logs_retrievers(
+				tdtd->tdtd_show_retrievers_cbdata,
+				&size, &count);
+
+		if (count > 0)
+			LCONSOLE_WARN("%s: Recovery already passed deadline "
+				      "%d:%.02d. It is due to DNE recovery "
+				      "failed/stuck on the %d MDT(s):%s. "
+				      "Please wait until all MDTs recovered "
+				      "or abort the recovery by force.\n",
+				      target->obd_name, timeout / 60,
+				      timeout % 60, count,
+				      buf ? buf : "unknown (not enough RAM)");
+		else
+			LCONSOLE_WARN("%s: Recovery already passed deadline "
+				      "%d:%.02d. If you do not want to wait "
+				      "more, please abort the recovery by "
+				      "force.\n", target->obd_name,
+				      timeout / 60, timeout % 60);
+
+		if (buf != NULL)
+			OBD_FREE(buf, size);
 	} else {
 		timeout = cfs_duration_sec(cfs_time_sub(now, deadline));
 		LCONSOLE_WARN("%s: Recovery already passed deadline"

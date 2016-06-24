@@ -739,6 +739,57 @@ static void lod_sub_fini_all_llogs(const struct lu_env *env,
 	lod_putref(lod, ltd);
 }
 
+static char *lod_show_update_logs_retrievers(void *data, int *size, int *count)
+{
+	struct lod_device	*lod = (struct lod_device *)data;
+	struct lu_target	*lut = lod2lu_dev(lod)->ld_site->ls_tgt;
+	struct lod_tgt_descs	*ltd = &lod->lod_mdt_descs;
+	struct lod_tgt_desc	*tgt = NULL;
+	char			*buf;
+	int			 len = 0;
+	int			 rc;
+	int			 i;
+
+	*count = atomic_read(&lut->lut_tdtd->tdtd_recovery_threads_count);
+	if (*count == 0) {
+		*size = 0;
+		return NULL;
+	}
+
+	*size = 5 * *count + 1;
+	OBD_ALLOC(buf, *size);
+	if (buf == NULL)
+		return NULL;
+
+	*count = 0;
+	memset(buf, 0, *size);
+
+	if (!lod->lod_child_got_update_log) {
+		rc = lodname2mdt_index(lod2obd(lod)->obd_name, &i);
+		LASSERTF(rc == 0, "Fail to parse target index: rc = %d\n", rc);
+
+		rc = snprintf(buf + len, *size - len, " %04x", i);
+		LASSERT(rc > 0);
+
+		len += rc;
+		(*count)++;
+	}
+
+	cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
+		tgt = LTD_TGT(ltd, i);
+		if (!tgt->ltd_got_update_log) {
+			rc = snprintf(buf + len, *size - len, " %04x", i);
+			if (unlikely(rc <= 0))
+				break;
+
+			len += rc;
+			(*count)++;
+		}
+	}
+
+	return buf;
+}
+
 /**
  * Prepare distribute txn
  *
@@ -774,6 +825,10 @@ static int lod_prepare_distribute_txn(const struct lu_env *env,
 		OBD_FREE_PTR(tdtd);
 		RETURN(rc);
 	}
+
+	tdtd->tdtd_show_update_logs_retrievers =
+		lod_show_update_logs_retrievers;
+	tdtd->tdtd_show_retrievers_cbdata = lod;
 
 	lut->lut_tdtd = tdtd;
 

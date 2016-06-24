@@ -83,6 +83,8 @@ struct target_distribute_txn_data;
 typedef int (*distribute_txn_replay_handler_t)(struct lu_env *env,
 				       struct target_distribute_txn_data *tdtd,
 				       struct distribute_txn_replay_req *dtrq);
+typedef char *(*target_show_update_logs_retrievers_t)(void *data, int *size,
+						      int *count);
 struct target_distribute_txn_data {
 	/* Distribution ID is used to identify updates log on different
 	 * MDTs for one operation */
@@ -113,6 +115,9 @@ struct target_distribute_txn_data {
 	/* Manage the llog recovery threads */
 	atomic_t		tdtd_recovery_threads_count;
 	wait_queue_head_t	tdtd_recovery_threads_waitq;
+	target_show_update_logs_retrievers_t
+				tdtd_show_update_logs_retrievers;
+	void			*tdtd_show_retrievers_cbdata;
 };
 
 struct lu_target {

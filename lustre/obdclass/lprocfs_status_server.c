@@ -564,6 +564,7 @@ EXPORT_SYMBOL(lprocfs_hash_seq_show);
 int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
+	struct target_distribute_txn_data *tdtd;
 
 	LASSERT(obd != NULL);
 
@@ -595,6 +596,33 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 		seq_printf(m, "IR: %s\n", obd->obd_no_ir ?
 			   "DISABLED" : "ENABLED");
 		goto out;
+	}
+
+	tdtd = obd->u.obt.obt_lut->lut_tdtd;
+	if (tdtd && tdtd->tdtd_show_update_logs_retrievers) {
+		char *buf;
+		int size = 0;
+		int count = 0;
+
+		buf = tdtd->tdtd_show_update_logs_retrievers(
+			tdtd->tdtd_show_retrievers_cbdata,
+			&size, &count);
+		if (count > 0) {
+			seq_printf(m, "WAITING\n");
+			seq_printf(m, "non-ready MDTs: %s\n",
+				   buf ? buf : "unknown (not enough RAM)");
+			seq_printf(m, "recovery_start: %lu\n",
+				   obd->obd_recovery_start);
+			seq_printf(m, "time_waited: %lu\n",
+				   cfs_time_current_sec() -
+				   obd->obd_recovery_start);
+		}
+
+		if (buf != NULL)
+			OBD_FREE(buf, size);
+
+		if (likely(count > 0))
+			return 0;
 	}
 
 	seq_printf(m, "RECOVERING\n");
