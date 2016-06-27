@@ -306,6 +306,59 @@ int mdt_hsm_find_best_agent(struct coordinator *cdt, __u32 archive,
 	RETURN(rc);
 }
 
+int mdt_hsm_send_action_to_each_archive(struct mdt_thread_info *mti,
+				    struct hsm_action_item *hai)
+{
+	__u64 compound_id;
+	struct hsm_agent *ha;
+	__u32 archive_mask = 0;
+	struct coordinator *cdt = &mti->mti_mdt->mdt_coordinator;
+	int i;
+	/* return error by default in case all archive_ids have unregistered */
+	int rc = -EAGAIN;
+	ENTRY;
+
+	/* send action to all registered archive_ids */
+	down_read(&cdt->cdt_agent_lock);
+	list_for_each_entry(ha, &cdt->cdt_agents, ha_list) {
+		for (i = 0; (i < ha->ha_archive_cnt); i++) {
+			/* only send once for each archive_id */
+			if ((1 << ha->ha_archive_id[i]) & archive_mask)
+				continue;
+			archive_mask |= (1 << ha->ha_archive_id[i]);
+
+			/* XXX: instead of creating one request record per
+			 * new action, it could make sense to gather
+			 * all for the same archive_id as one compound
+			 * request/id, like in mdt_hsm_add_actions() ?? */
+			compound_id = atomic_inc_return(&cdt->cdt_compound_id);
+			rc = mdt_agent_record_add(mti->mti_env, mti->mti_mdt,
+						  compound_id,
+						  ha->ha_archive_id[i], 0,
+						  hai);
+			if (rc) {
+				CERROR("%s: unable to add HSM remove request "
+				       "for "DFID": rc=%d\n",
+				       mdt_obd_name(mti->mti_mdt),
+				       PFID(&hai->hai_fid), rc);
+				break;
+			} else {
+				CDEBUG(D_HSM, "%s: added HSM remove request "
+				       "for "DFID", archive_id=%d\n",
+				       mdt_obd_name(mti->mti_mdt),
+				       PFID(&hai->hai_fid),
+				       ha->ha_archive_id[i]);
+			}
+		}
+		/* early exit from loop due to error? */
+		if (i != ha->ha_archive_cnt)
+			break;
+	}
+	up_read(&cdt->cdt_agent_lock);
+
+	RETURN(rc);
+}
+
 /**
  * send a compound request to the agent
  * \param mti [IN] context
@@ -334,6 +387,61 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 	ENTRY;
 
 	rc = mdt_hsm_find_best_agent(cdt, hal->hal_archive_id, &uuid);
+	if (rc && hal->hal_archive_id == 0) {
+		uint notrmcount = 0;
+		int rc2 = 0;
+
+		/* special case of remove requests with no archive_id specified,
+		 * and no agent registered to serve all archives, then create a
+		 * set of new requests, each to be sent to each registered
+		 * archives.
+		 * Todo so, find all HSMA_REMOVE entries, and then :
+		 *     _ set completed status as SUCCESS (or FAIL?)
+		 *     _ create a new LLOG record for each archive_id
+		 *       presently being served by any CT
+		 */
+		hai = hai_first(hal);
+		for (i = 0; i < hal->hal_count; i++,
+		     hai = hai_next(hai)) {
+			/* only removes are concerned */
+			if (hai->hai_action != HSMA_REMOVE) {
+				/* count if other actions than HSMA_REMOVE,
+				 * to return original error/rc */
+				notrmcount++;
+				continue;
+			}
+
+			/* send remove request to all registered archive_ids */
+			rc2 = mdt_hsm_send_action_to_each_archive(mti, hai);
+			if (rc2)
+				break;
+
+			/* only update original request as SUCCEED if it has
+			 * been successfully broadcasted to all available
+			 * archive_ids
+			 * XXX: this should only cause duplicates to be sent,
+			 * unless a method to record already successfully
+			 * reached archive_ids is implemented */
+			rc2 = mdt_agent_record_update(mti->mti_env, mdt,
+						     &hai->hai_cookie,
+						     1, ARS_SUCCEED);
+			if (rc2) {
+				CERROR("%s: mdt_agent_record_update() "
+				      "failed, cannot update "
+				      "status to %s for cookie "
+				      LPX64": rc = %d\n",
+				      mdt_obd_name(mdt),
+				      agent_req_status2name(ARS_SUCCEED),
+				      hai->hai_cookie, rc2);
+				break;
+			}
+		}
+		/* only remove requests with archive_id=0 */
+		if (notrmcount == 0)
+			RETURN(rc2);
+
+	}
+
 	if (rc) {
 		CERROR("%s: Cannot find agent for archive %d: rc = %d\n",
 		       mdt_obd_name(mdt), hal->hal_archive_id, rc);

@@ -157,11 +157,13 @@ int mdt_agent_record_add(const struct lu_env *env,
 	/* in case of cancel request, the cookie is already set to the
 	 * value of the request cookie to be cancelled
 	 * so we do not change it */
-	if (hai->hai_action != HSMA_CANCEL) {
+	if (hai->hai_action == HSMA_CANCEL) {
+		larr->arr_hai.hai_cookie = hai->hai_cookie;
+	} else {
 		cdt->cdt_last_cookie++;
-		hai->hai_cookie = cdt->cdt_last_cookie;
+		larr->arr_hai.hai_cookie = cdt->cdt_last_cookie;
 	}
-	larr->arr_hai.hai_cookie = hai->hai_cookie;
+
 	rc = llog_cat_add(env, lctxt->loc_handle, &larr->arr_hdr, NULL);
 	if (rc > 0)
 		rc = 0;
