@@ -578,15 +578,15 @@ test_21b() {
 
 	test_21b_sub $facet || error "Not all renames are replayed. COS=$COS"
 
-	# COS disabled (should fail)
-	COS=0
-	do_facet $facet lctl set_param mdt.*.commit_on_sharing=$COS
-
 	# there is still a window when transactions may be written to disk
 	# before the mds device is set R/O. To avoid such a rare test failure,
 	# the check is repeated several times.
+	COS=0
 	local n_attempts=1
 	while true; do
+		# COS disabled (should fail)
+		do_facet $facet lctl set_param mdt.*.commit_on_sharing=$COS
+
 		test_21b_sub $facet || break
 		n_attempts=$((n_attempts + 1))
 		[ $n_attempts -gt 3 ] &&
