@@ -94,7 +94,11 @@
 	%global requires_kmod_version %{version}
 %else	#for Suse
 	%global requires_kmod_name %{lustre_name}-kmp
-	%global requires_kmod_version %{version}_%(echo %{krequires} | sed -r 'y/-/_/; s/^(2\.6\.[0-9]+)_/\\1.0_/;')
+	%if 0%{?suse_version} >= 1200
+		%global requires_kmod_version %{version}_k%(echo %{krequires} | sed -r 'y/-/_/; s/^(2\.6\.[0-9]+)_/\\1.0_/;')
+	%else
+		%global requires_kmod_version %{version}_%(echo %{krequires} | sed -r 'y/-/_/; s/^(2\.6\.[0-9]+)_/\\1.0_/;')
+	%endif
 %endif
 
 Summary: Lustre File System
