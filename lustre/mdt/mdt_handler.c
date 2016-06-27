@@ -380,6 +380,7 @@ static int mdt_get_root(struct tgt_session_info *tsi)
 
 	nodemap_fileset = nodemap_get_fileset(exp->exp_target_data.ted_nodemap);
 	if (nodemap_fileset && nodemap_fileset[0]) {
+		CDEBUG(D_INFO, "nodemap fileset is %s\n", nodemap_fileset);
 		if (fileset) {
 			/* consider fileset from client as a sub-fileset
 			 * of the nodemap one */
@@ -397,6 +398,7 @@ static int mdt_get_root(struct tgt_session_info *tsi)
 	}
 
 	if (fileset) {
+		CDEBUG(D_INFO, "Getting fileset %s\n", fileset);
 		rc = mdt_lookup_fileset(info, fileset, &repbody->mbo_fid1);
 		if (rc < 0)
 			GOTO(out, rc = err_serious(rc));

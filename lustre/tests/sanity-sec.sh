@@ -880,6 +880,8 @@ wait_nm_sync() {
 	local mgs_ip=$(host_nids_address $mgs_HOST $NETTYPE | cut -d' ' -f1)
 	local i
 
+	echo "On MGS ${mgs_ip}, ${proc_param} = $out1"
+
 	# wait up to 10 seconds for other servers to sync with mgs
 	for i in $(seq 1 10); do
 		for node in $(all_server_nodes); do
@@ -891,6 +893,7 @@ wait_nm_sync() {
 
 		    out2=$(do_node $node_ip $LCTL get_param \
 				   nodemap.$proc_param 2>/dev/null)
+		    echo "On $node ${node_ip}, ${proc_param} = $out2"
 		    [ "$out1" != "$out2" ] && is_sync=false && break
 		done
 		$is_sync && break
@@ -1689,7 +1692,7 @@ test_27() {
 
 	# test mount point content
 	do_node ${clients_arr[0]} test -d $MOUNT/$subdir ||
-		error "fileset not cleared on nodemap c0"
+		(ls $MOUNT ; error "fileset not cleared on nodemap c0")
 
 	fileset_test_cleanup
 	nodemap_test_cleanup
