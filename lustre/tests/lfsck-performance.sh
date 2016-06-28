@@ -179,7 +179,7 @@ test_1() {
 
 	stopall
 	do_rpc_nodes $(facet_active_host $SINGLEMDS) load_modules_local
-	reformat_mdt $(facet_number $SINGLEMDS)
+	format_mdt $(facet_number $SINGLEMDS)
 
 	for ((i = $MINCOUNT_REPAIR; i <= $MAXCOUNT_REPAIR;
 	      i = $((i * FACTOR)))); do
