@@ -905,11 +905,21 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 	if (IS_ERR(mp))
 		RETURN(PTR_ERR(mp));
 
-	if (!mdt_object_remote(mp)) {
+	if (mdt_object_remote(mp)) {
+		cos_incompat = true;
+	} else {
 		rc = mdt_version_get_check_save(info, mp, 0);
 		if (rc)
 			GOTO(put_parent, rc);
 	}
+
+relock:
+	parent_lh = &info->mti_lh[MDT_LH_PARENT];
+	mdt_lock_pdo_init(parent_lh, LCK_PW, &rr->rr_name);
+	rc = mdt_reint_object_lock(info, mp, parent_lh, MDS_INODELOCK_UPDATE,
+				   cos_incompat);
+	if (rc != 0)
+		GOTO(put_parent, rc);
 
 	/* lookup child object along with version checking */
 	fid_zero(child_fid);
@@ -935,27 +945,24 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 			no_name = 1;
 			*child_fid = *rr->rr_fid2;
 		 } else {
-			GOTO(put_parent, rc);
+			GOTO(unlock_parent, rc);
 		 }
 	}
 
 	if (!fid_is_md_operative(child_fid))
-		GOTO(put_parent, rc = -EPERM);
+		GOTO(unlock_parent, rc = -EPERM);
 
 	/* We will lock the child regardless it is local or remote. No harm. */
 	mc = mdt_object_find(info->mti_env, info->mti_mdt, child_fid);
 	if (IS_ERR(mc))
-		GOTO(put_parent, rc = PTR_ERR(mc));
+		GOTO(unlock_parent, rc = PTR_ERR(mc));
 
-	rc = mdt_init_slaves(info, mc, s0_fid);
-	cos_incompat = (mdt_object_remote(mp) || (rc > 0));
-
-	parent_lh = &info->mti_lh[MDT_LH_PARENT];
-	mdt_lock_pdo_init(parent_lh, LCK_PW, &rr->rr_name);
-	rc = mdt_reint_object_lock(info, mp, parent_lh, MDS_INODELOCK_UPDATE,
-				   cos_incompat);
-	if (rc != 0)
-		GOTO(put_child, rc);
+	if (!cos_incompat && mdt_init_slaves(info, mc, s0_fid) > 0) {
+		cos_incompat = true;
+		mdt_object_put(info->mti_env, mc);
+		mdt_object_unlock(info, mp, parent_lh, -EAGAIN);
+		goto relock;
+	}
 
 	child_lh = &info->mti_lh[MDT_LH_CHILD];
 	mdt_lock_reg_init(child_lh, LCK_EX);
@@ -964,16 +971,16 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
 		if (!mdt_is_dne_client(req->rq_export))
 			/* Return -ENOTSUPP for old client */
-			GOTO(unlock_parent, rc = -ENOTSUPP);
+			GOTO(put_child, rc = -ENOTSUPP);
 
 		if (!md_capable(uc, CFS_CAP_SYS_ADMIN))
-			GOTO(unlock_parent, rc = -EPERM);
+			GOTO(put_child, rc = -EPERM);
 
 		ma->ma_need = MA_INODE;
 		ma->ma_valid = 0;
 		rc = mdo_unlink(info->mti_env, mdt_object_child(mp),
 				NULL, &rr->rr_name, ma, no_name);
-		GOTO(unlock_parent, rc);
+		GOTO(put_child, rc);
 	}
 
 	if (mdt_object_remote(mc)) {
@@ -983,7 +990,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 			CDEBUG(D_INFO, "%s: name "DNAME" cannot find "DFID"\n",
 			       mdt_obd_name(info->mti_mdt),
 			       PNAME(&rr->rr_name), PFID(mdt_object_fid(mc)));
-			GOTO(unlock_parent, rc = -ENOENT);
+			GOTO(put_child, rc = -ENOENT);
 		}
 		CDEBUG(D_INFO, "%s: name "DNAME": "DFID" is on another MDT\n",
 		       mdt_obd_name(info->mti_mdt),
@@ -991,7 +998,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
 		if (!mdt_is_dne_client(req->rq_export))
 			/* Return -ENOTSUPP for old client */
-			GOTO(unlock_parent, rc = -ENOTSUPP);
+			GOTO(put_child, rc = -ENOTSUPP);
 
 		/* Revoke the LOOKUP lock of the remote object granted by
 		 * this MDT. Since the unlink will happen on another MDT,
@@ -1016,7 +1023,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 					    child_lh->mlh_rreg_mode,
 					    MDS_INODELOCK_LOOKUP, false);
 		if (rc != ELDLM_OK)
-			GOTO(unlock_parent, rc);
+			GOTO(put_child, rc);
 
 		lock_ibits &= ~MDS_INODELOCK_LOOKUP;
 	}
@@ -1082,10 +1089,10 @@ unlock_child:
 	mdt_unlock_slaves(info, mc, MDS_INODELOCK_UPDATE, s0_lh, s0_obj, einfo,
 			  rc);
 	mdt_object_unlock(info, mc, child_lh, rc);
-unlock_parent:
-	mdt_object_unlock(info, mp, parent_lh, rc);
 put_child:
 	mdt_object_put(info->mti_env, mc);
+unlock_parent:
+	mdt_object_unlock(info, mp, parent_lh, rc);
 put_parent:
 	mdt_object_put(info->mti_env, mp);
         return rc;
