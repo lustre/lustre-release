@@ -48,6 +48,7 @@
 #include <sys/vfs.h>
 #include <sys/ioctl.h>
 #include <sys/xattr.h>
+#include <sys/file.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -414,6 +415,10 @@ int main(int argc, char **argv)
 				perror("create stripe file");
 				exit(save_errno);
 			}
+			break;
+		case 'j':
+			if (flock(fd, LOCK_EX) == -1)
+				errx(-1, "flock()");
 			break;
 		case 'K':
 			oldpath = POP_ARG();

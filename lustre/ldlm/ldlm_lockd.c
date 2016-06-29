@@ -1341,6 +1341,14 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
 	 * without them. */
 	lock->l_flags |= ldlm_flags_from_wire(dlm_req->lock_flags &
 					      LDLM_FL_INHERIT_MASK);
+
+	ldlm_convert_policy_to_local(req->rq_export,
+				     dlm_req->lock_desc.l_resource.lr_type,
+				     &dlm_req->lock_desc.l_policy_data,
+				     &lock->l_policy_data);
+	if (dlm_req->lock_desc.l_resource.lr_type == LDLM_EXTENT)
+		lock->l_req_extent = lock->l_policy_data.l_extent;
+
 existing_lock:
 
         if (flags & LDLM_FL_HAS_INTENT) {
@@ -1361,14 +1369,6 @@ existing_lock:
                 if (rc)
                         GOTO(out, rc);
         }
-
-        if (dlm_req->lock_desc.l_resource.lr_type != LDLM_PLAIN)
-                ldlm_convert_policy_to_local(req->rq_export,
-                                          dlm_req->lock_desc.l_resource.lr_type,
-                                          &dlm_req->lock_desc.l_policy_data,
-                                          &lock->l_policy_data);
-        if (dlm_req->lock_desc.l_resource.lr_type == LDLM_EXTENT)
-                lock->l_req_extent = lock->l_policy_data.l_extent;
 
 	err = ldlm_lock_enqueue(ns, &lock, cookie, &flags);
 	if (err) {

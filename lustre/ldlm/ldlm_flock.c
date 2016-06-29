@@ -108,7 +108,7 @@ static inline void ldlm_flock_blocking_link(struct ldlm_lock *req,
                 lock->l_policy_data.l_flock.owner;
         req->l_policy_data.l_flock.blocking_export =
 		lock->l_export;
-	req->l_policy_data.l_flock.blocking_refs = 0;
+	atomic_set(&req->l_policy_data.l_flock.blocking_refs, 0);
 
 	cfs_hash_add(req->l_export->exp_flock_hash,
 		     &req->l_policy_data.l_flock.owner,
@@ -843,7 +843,6 @@ int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 void ldlm_flock_policy_wire_to_local(const union ldlm_wire_policy_data *wpolicy,
 				     union ldlm_policy_data *lpolicy)
 {
-	memset(lpolicy, 0, sizeof(*lpolicy));
 	lpolicy->l_flock.start = wpolicy->l_flock.lfw_start;
 	lpolicy->l_flock.end = wpolicy->l_flock.lfw_end;
 	lpolicy->l_flock.pid = wpolicy->l_flock.lfw_pid;
@@ -902,7 +901,7 @@ ldlm_export_flock_get(struct cfs_hash *hs, struct hlist_node *hnode)
 	flock = &lock->l_policy_data.l_flock;
 	LASSERT(flock->blocking_export != NULL);
 	class_export_get(flock->blocking_export);
-	flock->blocking_refs++;
+	atomic_inc(&flock->blocking_refs);
 }
 
 static void
@@ -912,15 +911,15 @@ ldlm_export_flock_put(struct cfs_hash *hs, struct hlist_node *hnode)
 	struct ldlm_flock *flock;
 
 	lock = hlist_entry(hnode, struct ldlm_lock, l_exp_flock_hash);
-	LDLM_LOCK_RELEASE(lock);
 
 	flock = &lock->l_policy_data.l_flock;
 	LASSERT(flock->blocking_export != NULL);
 	class_export_put(flock->blocking_export);
-	if (--flock->blocking_refs == 0) {
+	if (atomic_dec_and_test(&flock->blocking_refs)) {
 		flock->blocking_owner = 0;
 		flock->blocking_export = NULL;
 	}
+	LDLM_LOCK_RELEASE(lock);
 }
 
 static struct cfs_hash_ops ldlm_export_flock_ops = {

@@ -2528,6 +2528,29 @@ test_131() {
 }
 run_test 131 "IO vs evict results to IO under staled lock"
 
+test_133() {
+	local list=$(comma_list $(mdts_nodes))
+
+	local t=$((TIMEOUT * 2))
+	touch $DIR/$tfile
+
+	flock $DIR/$tfile -c "echo bl lock;sleep $t;echo bl flock unlocked" &
+	sleep 1
+	multiop_bg_pause $DIR/$tfile O_jc || return 1
+	PID=$!
+
+	#define OBD_FAIL_LDLM_REPLY              0x30c
+	do_nodes $list $LCTL set_param fail_loc=0x8000030c
+	kill -USR1 $PID
+	echo "waiting for multiop $PID"
+	wait $PID || return 2
+
+	rm -f $DIR/$tfile
+
+	return 0
+}
+run_test 133 "don't fail on flock resend"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
