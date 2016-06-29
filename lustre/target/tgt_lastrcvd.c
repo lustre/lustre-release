@@ -781,6 +781,11 @@ static void tgt_cb_last_committed(struct lu_env *env, struct thandle *th,
 	LASSERT(ccb->llcc_tgt != NULL);
 	LASSERT(ccb->llcc_exp->exp_obd == ccb->llcc_tgt->lut_obd);
 
+	/* error hit, don't update last committed to provide chance to
+	 * replay data after fail */
+	if (err != 0)
+		goto out;
+
 	/* Fast path w/o spinlock, if exp_last_committed was updated
 	 * with higher transno, no need to take spinlock and check,
 	 * also no need to update obd_last_committed. */
