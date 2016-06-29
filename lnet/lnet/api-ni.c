@@ -62,8 +62,8 @@ module_param(use_tcp_bonding, int, 0444);
 MODULE_PARM_DESC(use_tcp_bonding,
 		 "Set to 1 to use socklnd bonding. 0 to use Multi-Rail");
 
-static __u32 lnet_numa_range = 0;
-module_param(lnet_numa_range, int, 0444);
+unsigned int lnet_numa_range = 0;
+module_param(lnet_numa_range, uint, 0444);
 MODULE_PARM_DESC(lnet_numa_range,
 		"NUMA range to consider during Multi-Rail selection");
 
@@ -2600,11 +2600,6 @@ void lnet_incr_dlc_seq(void)
 __u32 lnet_get_dlc_seq_locked(void)
 {
 	return atomic_read(&lnet_dlc_seq_no);
-}
-
-inline __u32 lnet_get_numa_range(void)
-{
-	return lnet_numa_range;
 }
 
 /**

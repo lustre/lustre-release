@@ -497,6 +497,7 @@ struct lnet_net *lnet_get_net_locked(__u32 net_id);
 int lnet_lib_init(void);
 void lnet_lib_exit(void);
 
+extern unsigned int lnet_numa_range;
 extern int portal_rotor;
 
 int lnet_notify(lnet_ni_t *ni, lnet_nid_t peer, int alive, cfs_time_t when);
@@ -789,7 +790,6 @@ bool lnet_net_unique(__u32 net_id, struct list_head *nilist,
 bool lnet_ni_unique_net(struct list_head *nilist, char *iface);
 void lnet_incr_dlc_seq(void);
 __u32 lnet_get_dlc_seq_locked(void);
-inline __u32 lnet_get_numa_range(void);
 
 struct lnet_peer_ni *lnet_get_next_peer_ni_locked(struct lnet_peer *peer,
 						  struct lnet_peer_net *peer_net,

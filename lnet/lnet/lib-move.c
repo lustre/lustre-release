@@ -1331,7 +1331,7 @@ lnet_select_pathway(lnet_nid_t src_nid, lnet_nid_t dst_nid,
 	int			best_credits;
 	int			best_lpni_credits;
 	int			md_cpt;
-	int			shortest_distance;
+	unsigned int		shortest_distance;
 
 	/*
 	 * get an initial CPT to use for locking. The idea here is not to
@@ -1522,7 +1522,7 @@ again:
 	 * b. Iterate through each of the peer_nets/nis to decide
 	 * the best peer/local_ni pair to use
 	 */
-	shortest_distance = INT_MAX;
+	shortest_distance = UINT_MAX;
 	best_credits = INT_MIN;
 	list_for_each_entry(peer_net, &peer->lp_peer_nets, lpn_on_peer_list) {
 		if (!lnet_is_peer_net_healthy_locked(peer_net))
@@ -1583,8 +1583,8 @@ again:
 		 */
 		ni = NULL;
 		while ((ni = lnet_get_next_ni_locked(local_net, ni))) {
+			unsigned int distance;
 			int ni_credits;
-			int distance;
 
 			if (!lnet_is_ni_healthy_locked(ni))
 				continue;
@@ -1604,8 +1604,8 @@ again:
 			 * All distances smaller than the NUMA range
 			 * are treated equally.
 			 */
-			if (distance < lnet_get_numa_range())
-				distance = lnet_get_numa_range();
+			if (distance < lnet_numa_range)
+				distance = lnet_numa_range;
 
 			/*
 			 * Select on shorter distance, then available
