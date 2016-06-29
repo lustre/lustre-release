@@ -282,6 +282,45 @@ test_10d() {
 }
 run_test 10d "test failed blocking ast"
 
+test_10e()
+{
+	[[ $(lustre_version_code ost1) -le $(version_code 2.8.58) ]] &&
+		skip "Need OST version at least 2.8.59" && return 0
+	[ $CLIENTCOUNT -lt 2 ] && skip "need two clients" && return 0
+	[ $(facet_host client) == $(facet_host ost1) ] &&
+		skip "need ost1 and client on different nodes" && return 0
+	local -a clients=(${CLIENTS//,/ })
+	local client1=${clients[0]}
+	local client2=${clients[1]}
+
+	$LFS setstripe -c 1 -i 0 $DIR/$tfile-1 $DIR/$tfile-2
+	$MULTIOP $DIR/$tfile-1 Ow1048576c
+
+#define OBD_FAIL_LDLM_BL_CALLBACK_NET                   0x305
+	$LCTL set_param fail_loc=0x80000305
+
+#define OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT 0x30e
+	do_facet ost1 "$LCTL set_param fail_loc=0x1000030e"
+	# hit OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT twice:
+	# 1. to return ENOTCONN from ldlm_handle_enqueue0
+	# 2. to pause reconnect handling between resend and setting
+	# import to LUSTRE_IMP_FULL state
+	do_facet ost1 "$LCTL set_param fail_val=3"
+
+	# client1 fails ro respond to bl ast
+	do_node $client2 "$MULTIOP $DIR/$tfile-1 Ow1048576c" &
+	MULTIPID=$!
+
+	# ost1 returns error on enqueue, which causes client1 to reconnect
+	do_node $client1 "$MULTIOP $DIR/$tfile-2 Ow1048576c" ||
+		error "multiop failed"
+	wait $MULTIPID
+
+	do_facet ost1 "$LCTL set_param fail_loc=0"
+	do_facet ost1 "$LCTL set_param fail_val=0"
+}
+run_test 10e "re-send BL AST vs reconnect race 2"
+
 #bug 2460
 # wake up a thread waiting for completion after eviction
 test_11(){
