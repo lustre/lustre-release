@@ -850,6 +850,11 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
                 /* Don't need to do anything here. */
                 RETURN(0);
 
+	if (OBD_FAIL_PRECHECK(OBD_FAIL_LDLM_SRV_BL_AST)) {
+		LDLM_DEBUG(lock, "dropping BL AST");
+		RETURN(0);
+	}
+
         LASSERT(lock);
         LASSERT(data != NULL);
         if (lock->l_export->exp_obd->obd_recovering != 0)

@@ -1002,6 +1002,28 @@ test_26() {
 }
 run_test 26 "dbench and tar with mds failover"
 
+test_28() {
+	$SETSTRIPE -i 0 -c 1 $DIR2/$tfile
+	dd if=/dev/zero of=$DIR2/$tfile bs=4096 count=1
+
+	#define OBD_FAIL_LDLM_SRV_BL_AST	 0x324
+	do_facet ost1 $LCTL set_param fail_loc=0x80000324
+
+	dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1 &
+	local pid=$!
+	sleep 2
+
+	#define OBD_FAIL_LDLM_GRANT_CHECK        0x32a
+	do_facet ost1 $LCTL set_param fail_loc=0x32a
+
+	fail ost1
+
+	sleep 2
+	cancel_lru_locks OST0000-osc
+	wait $pid || error "dd failed"
+}
+run_test 28 "lock replay should be ordered: waiting after granted"
+
 complete $SECONDS
 SLEEP=$((SECONDS - $NOW))
 [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP

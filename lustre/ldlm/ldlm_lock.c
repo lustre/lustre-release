@@ -2144,6 +2144,7 @@ void ldlm_reprocess_all(struct ldlm_resource *res)
 {
 	struct list_head rpc_list;
 #ifdef HAVE_SERVER_SUPPORT
+	struct obd_device *obd;
         int rc;
         ENTRY;
 
@@ -2154,6 +2155,13 @@ void ldlm_reprocess_all(struct ldlm_resource *res)
                 return;
         }
 
+	/* Disable reprocess during lock replay stage but allow during
+	 * request replay stage.
+	 */
+	obd = ldlm_res_to_ns(res)->ns_obd;
+	if (obd->obd_recovering &&
+	    atomic_read(&obd->obd_req_replay_clients) == 0)
+		RETURN_EXIT;
 restart:
         lock_res(res);
         rc = ldlm_reprocess_queue(res, &res->lr_converting, &rpc_list);
