@@ -195,9 +195,9 @@ struct md_object_operations {
 
         int (*moo_readlink)(const struct lu_env *env, struct md_object *obj,
                             struct lu_buf *buf);
-        int (*moo_changelog)(const struct lu_env *env,
-                             enum changelog_rec_type type, int flags,
-                             struct md_object *obj);
+	int (*moo_changelog)(const struct lu_env *env,
+			     enum changelog_rec_type type, int flags,
+			     struct md_device *m, const struct lu_fid *fid);
 
         int (*moo_open)(const struct lu_env *env,
                         struct md_object *obj, int flag);
@@ -355,11 +355,28 @@ static inline int mo_readlink(const struct lu_env *env,
 }
 
 static inline int mo_changelog(const struct lu_env *env,
-                               enum changelog_rec_type type,
-                               int flags, struct md_object *m)
+			       enum changelog_rec_type type,
+			       int flags, struct md_device *m,
+			       const struct lu_fid *fid)
 {
-        LASSERT(m->mo_ops->moo_changelog);
-        return m->mo_ops->moo_changelog(env, type, flags, m);
+	struct lu_fid rootfid;
+	struct md_object *root;
+	int rc;
+
+	rc = m->md_ops->mdo_root_get(env, m, &rootfid);
+	if (rc)
+		return rc;
+
+	root = md_object_find_slice(env, m, &rootfid);
+	if (IS_ERR(root))
+		RETURN(PTR_ERR(root));
+
+	LASSERT(root->mo_ops->moo_changelog);
+	rc = root->mo_ops->moo_changelog(env, type, flags, m, fid);
+
+	lu_object_put(env, &root->mo_lu);
+
+	return rc;
 }
 
 static inline int mo_attr_set(const struct lu_env *env,

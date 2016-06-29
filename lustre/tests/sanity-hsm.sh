@@ -377,6 +377,13 @@ copytool_suspend() {
 	echo "Copytool is suspended on $agents"
 }
 
+copytool_continue() {
+	local agents=${1:-$(facet_active_host $SINGLEAGT)}
+
+	do_nodesv $agents "pkill -CONT -x $HSMTOOL_BASE" || return 0
+	echo "Copytool is continued on $agents"
+}
+
 copytool_remove_backend() {
 	local fid=$1
 	local be=$(do_facet $SINGLEAGT find $HSM_ARCHIVE -name $fid)
@@ -3981,6 +3988,40 @@ test_220() {
 }
 run_test 220 "Changelog for archive"
 
+test_220a() {
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+
+	local f=$DIR/$tdir/$tfile
+	local fid=$(copy_file /etc/passwd $f)
+
+	changelog_setup
+
+	# block copytool operations to allow for HSM request to be
+	# submitted and file be unlinked (CDT will find object removed)
+	copytool_suspend
+
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
+
+	rm -f $f
+
+	copytool_continue
+
+	wait_request_state $fid ARCHIVE FAILED
+
+	local flags=$(changelog_get_flags ${MDT[0]} HSM $fid | tail -1)
+	changelog_cleanup
+
+	# HE_ARCHIVE|ENOENT
+	local target=0x2
+	[[ $flags == $target ]] || error "Changelog flag is $flags not $target"
+
+	copytool_cleanup
+}
+run_test 220a "Changelog for failed archive"
+
 test_221() {
 	# test needs a running copytool
 	copytool_setup
@@ -4059,6 +4100,68 @@ test_222b() {
 	cleanup
 }
 run_test 222b "Changelog for implicit restore"
+
+test_222c() {
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+	copy2archive /etc/passwd $tdir/$tfile
+
+	local f=$DIR/$tdir/$tfile
+	import_file $tdir/$tfile $f
+	local fid=$(path2fid $f)
+
+	changelog_setup
+
+	# block copytool operations to allow for HSM request to be
+	# submitted and file be unlinked (CDT will find object removed)
+	copytool_suspend
+
+	$LFS hsm_restore $f
+	rm -f $f
+
+	copytool_continue
+
+	wait_request_state $fid RESTORE FAILED
+
+	local flags=$(changelog_get_flags ${MDT[0]} HSM $fid | tail -1)
+
+	# HE_RESTORE|ENOENT
+	local target=0x82
+	[[ $flags == $target ]] || error "Changelog flag is $flags not $target"
+
+	cleanup
+}
+run_test 222c "Changelog for failed explicit restore"
+
+test_222d() {
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+	local f=$DIR/$tdir/$tfile
+	local fid=$(copy_file /etc/passwd $f)
+
+	changelog_setup
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
+	wait_request_state $fid ARCHIVE SUCCEED
+	$LFS hsm_release $f
+
+	copytool_remove_backend $fid
+	md5sum $f
+
+	wait_request_state $fid RESTORE FAILED
+
+	local flags=$(changelog_get_flags ${MDT[0]} HSM $fid | tail -1)
+
+	# HE_RESTORE|ENOENT
+	local target=0x82
+	[[ $flags == $target ]] || error "Changelog flag is $flags not $target"
+
+	cleanup
+}
+run_test 222d "Changelog for failed implicit restore"
 
 test_223a() {
 	# test needs a running copytool
@@ -4146,6 +4249,43 @@ test_224() {
 	cleanup
 }
 run_test 224 "Changelog for remove"
+
+test_224a() {
+	# test needs a running copytool
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+
+	local f=$DIR/$tdir/$tfile
+	local fid=$(copy_file /etc/passwd $f)
+
+	changelog_setup
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	copytool_remove_backend $fid
+
+	# block copytool operations to allow for HSM request to be
+	# submitted and file be unlinked (CDT will find object removed)
+	copytool_suspend
+
+	$LFS hsm_remove $f
+	rm -f $f
+
+	copytool_continue
+
+	wait_request_state $fid REMOVE FAILED
+
+	local flags=$(changelog_get_flags ${MDT[0]} HSM $fid | tail -n 1)
+
+	# HE_REMOVE|ENOENT
+	local target=0x202
+	[[ $flags == $target ]] ||
+		error "Changelog flag is $flags not $target"
+
+	cleanup
+}
+run_test 224a "Changelog for failed remove"
 
 test_225() {
 	# test needs a running copytool
