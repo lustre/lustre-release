@@ -3298,7 +3298,7 @@ static int mgs_write_log_param(const struct lu_env *env,
 	struct mgs_thread_info *mgi = mgs_env_info(env);
         char *logname;
         char *tmp;
-        int rc = 0, rc2 = 0;
+	int rc = 0;
         ENTRY;
 
         /* For various parameter settings, we have to figure out which logs
@@ -3713,13 +3713,12 @@ active_err:
 	}
 
         LCONSOLE_WARN("Ignoring unrecognized param '%s'\n", ptr);
-        rc2 = -ENOSYS;
 
 end:
         if (rc)
                 CERROR("err %d on param '%s'\n", rc, ptr);
 
-        RETURN(rc ?: rc2);
+	RETURN(rc);
 }
 
 int mgs_write_log_target(const struct lu_env *env, struct mgs_device *mgs,
