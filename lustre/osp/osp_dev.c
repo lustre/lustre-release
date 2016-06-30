@@ -1578,6 +1578,7 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 			    enum obd_import_event event)
 {
 	struct osp_device *d = lu2osp_dev(obd->obd_lu_dev);
+	int rc;
 
 	switch (event) {
 	case IMP_EVENT_DISCON:
@@ -1599,9 +1600,11 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 		d->opd_obd->obd_inactive = 1;
 		if (d->opd_connect_mdt)
 			break;
-
 		if (d->opd_pre != NULL) {
-			osp_pre_update_status(d, -ENODEV);
+			/* Import is invalid, we can`t get stripes so
+			 * wakeup waiters */
+			rc = imp->imp_deactive ? -ESHUTDOWN : -ENODEV;
+			osp_pre_update_status(d, rc);
 			wake_up(&d->opd_pre_waitq);
 		}
 
