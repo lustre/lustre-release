@@ -898,11 +898,29 @@ int llog_write_rec(const struct lu_env *env, struct llog_handle *handle,
 
 	ENTRY;
 
+	/* API sanity checks */
+	if (handle == NULL) {
+		CERROR("loghandle is missed\n");
+		RETURN(-EPROTO);
+	} else if (handle->lgh_obj == NULL) {
+		CERROR("loghandle %p with NULL object\n",
+			handle);
+		RETURN(-EPROTO);
+	} else if (th == NULL) {
+		CERROR("%s: missed transaction handle\n",
+			handle->lgh_obj->do_lu.lo_dev->ld_obd->obd_name);
+		RETURN(-EPROTO);
+	} else if (handle->lgh_hdr == NULL) {
+		CERROR("%s: loghandle %p with no header\n",
+			handle->lgh_obj->do_lu.lo_dev->ld_obd->obd_name,
+			handle);
+		RETURN(-EPROTO);
+	}
+
 	rc = llog_handle2ops(handle, &lop);
 	if (rc)
 		RETURN(rc);
 
-	LASSERT(lop);
 	if (lop->lop_write_rec == NULL)
 		RETURN(-EOPNOTSUPP);
 

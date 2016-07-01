@@ -387,12 +387,8 @@ static int llog_osd_write_rec(const struct lu_env *env,
 	__u64			orig_write_offset;
 	ENTRY;
 
-	LASSERT(env);
 	llh = loghandle->lgh_hdr;
-	LASSERT(llh);
 	o = loghandle->lgh_obj;
-	LASSERT(o);
-	LASSERT(th);
 
 	chunk_size = llh->llh_hdr.lrh_len;
 	CDEBUG(D_OTHER, "new record %x to "DFID"\n",
@@ -1176,6 +1172,7 @@ static int llog_osd_open(const struct lu_env *env, struct llog_handle *handle,
 	struct ls_device		*ls;
 	struct local_oid_storage	*los = NULL;
 	int				 rc = 0;
+	bool new_id = false;
 
 	ENTRY;
 
@@ -1236,6 +1233,7 @@ static int llog_osd_open(const struct lu_env *env, struct llog_handle *handle,
 			/* generate fid for new llog */
 			rc = local_object_fid_generate(env, los,
 						       &lgi->lgi_fid);
+			new_id = true;
 		}
 		if (rc < 0)
 			GOTO(out, rc);
@@ -1247,14 +1245,29 @@ static int llog_osd_open(const struct lu_env *env, struct llog_handle *handle,
 	} else {
 		LASSERTF(open_param & LLOG_OPEN_NEW, "%#x\n", open_param);
 		/* generate fid for new llog */
+generate:
 		rc = local_object_fid_generate(env, los, &lgi->lgi_fid);
 		if (rc < 0)
 			GOTO(out, rc);
+		new_id = true;
 	}
 
 	o = ls_locate(env, ls, &lgi->lgi_fid, NULL);
 	if (IS_ERR(o))
 		GOTO(out_name, rc = PTR_ERR(o));
+
+	if (dt_object_exists(o) && new_id) {
+		/* llog exists with just generated ID, e.g. some old llog file
+		 * still is in use or is orphan, drop a warn and skip it. */
+		CDEBUG(D_INFO, "%s: llog exists with the same FID: "DFID
+		       ", skipping\n",
+		       o->do_lu.lo_dev->ld_obd->obd_name,
+		       PFID(lu_object_fid(&o->do_lu)));
+		lu_object_put(env, &o->do_lu);
+		/* just skip this llog ID, we shouldn't delete it because we
+		 * don't know exactly what is its purpose and state. */
+		goto generate;
+	}
 
 after_open:
 	/* No new llog is expected but doesn't exist */
