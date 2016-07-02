@@ -234,33 +234,42 @@ pios_file_size () {
 }
 
 space_check () {
-    local testdir=$DIR/$tdir
-    local stripe=$($LFS getstripe -c $testdir)
+	local testdir=$DIR/$tdir
+	local stripe=$($LFS getstripe -c $testdir)
+	local min_space_available=0
 
-    # if stripe_count = 1 the size should be less than min ost size, bug 24294
-    local space=$(lfs_df $testdir | grep "summary"  | awk '{print $4}')
-    [ $stripe -eq 1 ] && space=$(min_ost_size)
+	# if stripe_count = 1 the size should be less than min ost size,
+	# bug 24294
+	min_space_available=$(lfs df | grep "^$FSNAME-OST" | \
+		awk '{print $4}' | sort -un | head -1)
+	local space=$((min_space_available * OSTCOUNT))
 
-    local size=$(pios_file_size)
-    size=$(( size + size / 10 ))
-    # we can not use pios --cleanup|-x because we need the files exist for pios --verify,
-    # so, we need space available for each of pios_THREADCOUNT value run
-    local num_runs=$(echo ${pios_THREADCOUNT//,/ } | wc -w)
-    size=$(( size * $num_runs))
-    space=$((space * 1024))
-    echo size=$size space=$space
-    if [ $space -le $size ]; then
-        local ratio=$(( size / space + 1 ))
-        echo "Need free space atleast $size, available $space, ratio=$ratio"
-        local rgcount=$(( pios_REGIONCOUNT / ratio ))
-        echo "reducing pios_REGIONCOUNT=$pios_REGIONCOUNT on $ratio"
-        if [ $rgcount -eq 0 ]; then
-            echo "fs is too small, reduced pios_REGIONCOUNT=$rgcount"
-            return 10
-        fi
-        pios_REGIONCOUNT=$(( pios_REGIONCOUNT / ratio ))
-        echo using pios_REGIONCOUNT=$pios_REGIONCOUNT size=$(pios_file_size)
-    fi
+	[ $stripe -eq 1 ] && space=$(min_ost_size)
+
+	local size=$(pios_file_size)
+	size=$(( size + size / 10 ))
+	# we can not use pios --cleanup|-x because we need the files exist for
+	# pios --verify, so, we need space available for each of
+	# pios_THREADCOUNT value run
+	local num_runs=$(echo ${pios_THREADCOUNT//,/ } | wc -w)
+	size=$(( size * $num_runs))
+	space=$((space * 1024))
+	echo size=$size space=$space
+	if [ $space -le $size ]; then
+		local ratio=$(( size / space + 1 ))
+		echo "Need free space atleast $size, \
+			available $space, ratio=$ratio"
+		local rgcount=$(( pios_REGIONCOUNT / ratio ))
+		echo "reducing pios_REGIONCOUNT=$pios_REGIONCOUNT on $ratio"
+		if [ $rgcount -eq 0 ]; then
+			echo "fs is too small, \
+				reduced pios_REGIONCOUNT=$rgcount"
+			return 10
+		fi
+		pios_REGIONCOUNT=$(( pios_REGIONCOUNT / ratio ))
+		echo using pios_REGIONCOUNT=$pios_REGIONCOUNT \
+			size=$(pios_file_size)
+	fi
 }
 
 pios_setup() { 
