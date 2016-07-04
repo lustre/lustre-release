@@ -365,7 +365,7 @@ lnet_add_route(__u32 net, __u32 hops, lnet_nid_t gateway,
 
 	lnet_net_lock(LNET_LOCK_EX);
 
-	lpni = lnet_nid2peerni_locked(gateway, LNET_LOCK_EX);
+	lpni = lnet_nid2peerni_ex(gateway, LNET_LOCK_EX);
 	if (IS_ERR(lpni)) {
 		lnet_net_unlock(LNET_LOCK_EX);
 

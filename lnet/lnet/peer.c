@@ -949,35 +949,73 @@ lnet_destroy_peer_ni_locked(struct lnet_peer_ni *lpni)
 }
 
 struct lnet_peer_ni *
-lnet_nid2peerni_locked(lnet_nid_t nid, int cpt)
+lnet_nid2peerni_ex(lnet_nid_t nid, int cpt)
 {
-	struct lnet_peer_table	*ptable;
-	struct lnet_peer_ni	*lpni = NULL;
-	int			cpt2;
-	int			rc;
+	struct lnet_peer_ni *lpni = NULL;
+	int rc;
 
 	if (the_lnet.ln_shutdown) /* it's shutting down */
 		return ERR_PTR(-ESHUTDOWN);
 
 	/*
-	 * calculate cpt2 with the standard hash function
-	 * This cpt2 is the slot where we'll find or create the peer.
+	 * find if a peer_ni already exists.
+	 * If so then just return that.
 	 */
-	cpt2 = lnet_nid_cpt_hash(nid, LNET_CPT_NUMBER);
-	ptable = the_lnet.ln_peer_tables[cpt2];
-	lpni = lnet_get_peer_ni_locked(ptable, nid);
+	lpni = lnet_find_peer_ni_locked(nid);
 	if (lpni)
 		return lpni;
 
-	/* Slow path: serialized using the ln_api_mutex. */
+	lnet_net_unlock(cpt);
+
+	rc = lnet_peer_ni_traffic_add(nid);
+	if (rc) {
+		lpni = ERR_PTR(rc);
+		goto out_net_relock;
+	}
+
+	lpni = lnet_find_peer_ni_locked(nid);
+	LASSERT(lpni);
+
+out_net_relock:
+	lnet_net_lock(cpt);
+
+	return lpni;
+}
+
+struct lnet_peer_ni *
+lnet_nid2peerni_locked(lnet_nid_t nid, int cpt)
+{
+	struct lnet_peer_ni *lpni = NULL;
+	int rc;
+
+	if (the_lnet.ln_shutdown) /* it's shutting down */
+		return ERR_PTR(-ESHUTDOWN);
+
+	/*
+	 * find if a peer_ni already exists.
+	 * If so then just return that.
+	 */
+	lpni = lnet_find_peer_ni_locked(nid);
+	if (lpni)
+		return lpni;
+
+	/*
+	 * Slow path:
+	 * use the lnet_api_mutex to serialize the creation of the peer_ni
+	 * and the creation/deletion of the local ni/net. When a local ni is
+	 * created, if there exists a set of peer_nis on that network,
+	 * they need to be traversed and updated. When a local NI is
+	 * deleted, which could result in a network being deleted, then
+	 * all peer nis on that network need to be removed as well.
+	 *
+	 * Creation through traffic should also be serialized with
+	 * creation through DLC.
+	 */
 	lnet_net_unlock(cpt);
 	mutex_lock(&the_lnet.ln_api_mutex);
 	/*
 	 * Shutdown is only set under the ln_api_lock, so a single
 	 * check here is sufficent.
-	 *
-	 * lnet_add_nid_to_peer() also handles the case where we've
-	 * raced and a different thread added the NID.
 	 */
 	if (the_lnet.ln_shutdown) {
 		lpni = ERR_PTR(-ESHUTDOWN);
@@ -990,7 +1028,7 @@ lnet_nid2peerni_locked(lnet_nid_t nid, int cpt)
 		goto out_mutex_unlock;
 	}
 
-	lpni = lnet_get_peer_ni_locked(ptable, nid);
+	lpni = lnet_find_peer_ni_locked(nid);
 	LASSERT(lpni);
 
 out_mutex_unlock:

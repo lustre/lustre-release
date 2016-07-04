@@ -1744,16 +1744,9 @@ send:
 	lnet_ni_addref_locked(msg->msg_txni, cpt);
 
 	/*
-	 * set the destination nid in the message here because it's
-	 * possible that we'd be sending to a different nid than the one
-	 * originaly given.
-	 */
-	msg->msg_hdr.dest_nid = cpu_to_le64(msg->msg_txpeer->lpni_nid);
-
-	/*
 	 * Always set the target.nid to the best peer picked. Either the
 	 * nid will be one of the preconfigured NIDs, or the same NID as
-	 * what was originaly set in the target or it will be the NID of
+	 * what was originally set in the target or it will be the NID of
 	 * a router if this message should be routed
 	 */
 	msg->msg_target.nid = msg->msg_txpeer->lpni_nid;
@@ -1776,6 +1769,19 @@ send:
 	if (routing) {
 		msg->msg_target_is_router = 1;
 		msg->msg_target.pid = LNET_PID_LUSTRE;
+		/*
+		 * since we're routing we want to ensure that the
+		 * msg_hdr.dest_nid is set to the final destination. When
+		 * the router receives this message it knows how to route
+		 * it.
+		 */
+		msg->msg_hdr.dest_nid = cpu_to_le64(dst_nid);
+	} else {
+		/*
+		 * if we're not routing set the dest_nid to the best peer
+		 * ni that we picked earlier in the algorithm.
+		 */
+		msg->msg_hdr.dest_nid = cpu_to_le64(msg->msg_txpeer->lpni_nid);
 	}
 
 	rc = lnet_post_send_locked(msg, 0);
@@ -1931,6 +1937,7 @@ lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg, int rdma_get)
 	info.mi_rlength	= hdr->msg.get.sink_length;
 	info.mi_roffset	= hdr->msg.get.src_offset;
 	info.mi_mbits	= hdr->msg.get.match_bits;
+	info.mi_cpt	= lnet_cpt_of_nid(msg->msg_rxpeer->lpni_nid, ni);
 
 	rc = lnet_ptl_match_md(&info, msg);
 	if (rc == LNET_MATCHMD_DROP) {
