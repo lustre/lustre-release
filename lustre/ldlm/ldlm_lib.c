@@ -3174,8 +3174,7 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
 		if (req->rq_bulk_read)
 			rc = sptlrpc_svc_wrap_bulk(req, desc);
 
-		if ((exp->exp_connect_data.ocd_connect_flags &
-		     OBD_CONNECT_BULK_MBITS) != 0)
+		if (OCD_HAS_FLAG(&exp->exp_connect_data, BULK_MBITS))
 			req->rq_mbits = lustre_msg_get_mbits(req->rq_reqmsg);
 		else /* old version, bulk matchbits is rq_xid */
 			req->rq_mbits = req->rq_xid;
