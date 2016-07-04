@@ -22,3 +22,4 @@ rhel7/ext4-use-GFP_NOFS-in-ext4_inode_attach_jinode.patch
 rhel7/ext4-export-orphan-add.patch
 rhel7/ext4-mmp-dont-mark-bh-dirty.patch
 ubuntu18/ext4-include-terminating-u32-in-size-of-xattr-entries-when-expanding-inodes.patch
+sles12sp2/ext4-export-mb-stream-allocator-variables.patch
