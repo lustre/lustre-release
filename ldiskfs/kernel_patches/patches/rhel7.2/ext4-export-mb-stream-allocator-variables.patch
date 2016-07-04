@@ -1,0 +1,103 @@
+Index: linux-3.10.0-327.10.1.el7.x86_64/fs/ext4/mballoc.c
+===================================================================
+--- linux-3.10.0-327.10.1.el7.x86_64.orig/fs/ext4/mballoc.c
++++ linux-3.10.0-327.10.1.el7.x86_64/fs/ext4/mballoc.c
+@@ -2435,6 +2435,77 @@ static struct kmem_cache *get_groupinfo_
+ 	return cachep;
+ }
+
++#define EXT4_MB_MAX_INPUT_STRING_SIZE 32
++
++static ssize_t ext4_mb_last_group_write(struct file *file,
++					const char __user *buf,
++					size_t cnt, loff_t *pos)
++{
++	char dummy[EXT4_MB_MAX_INPUT_STRING_SIZE + 1];
++	struct super_block *sb = PDE_DATA(file_inode(file));
++	struct ext4_sb_info *sbi = EXT4_SB(sb);
++	unsigned long val;
++	char *end;
++
++	if (cnt > EXT4_MB_MAX_INPUT_STRING_SIZE)
++		return -EINVAL;
++	if (copy_from_user(dummy, buf, cnt))
++		return -EFAULT;
++	dummy[cnt] = '\0';
++	val = simple_strtoul(dummy, &end, 0);
++	if (dummy == end)
++		return -EINVAL;
++	if (val >= ext4_get_groups_count(sb))
++		return -ERANGE;
++	spin_lock(&sbi->s_md_lock);
++	sbi->s_mb_last_group = val;
++	sbi->s_mb_last_start = 0;
++	spin_unlock(&sbi->s_md_lock);
++	return cnt;
++}
++
++static int ext4_mb_seq_last_group_seq_show(struct seq_file *m, void *v)
++{
++	struct ext4_sb_info *sbi = EXT4_SB(m->private);
++
++	seq_printf(m , "%ld\n", sbi->s_mb_last_group);
++	return 0;
++}
++
++static int ext4_mb_seq_last_group_open(struct inode *inode, struct file *file)
++{
++	return single_open(file, ext4_mb_seq_last_group_seq_show, PDE_DATA(inode));
++}
++
++static const struct file_operations ext4_mb_seq_last_group_fops = {
++	.owner         = THIS_MODULE,
++	.open          = ext4_mb_seq_last_group_open,
++	.read          = seq_read,
++	.llseek        = seq_lseek,
++	.release       = seq_release,
++	.write         = ext4_mb_last_group_write,
++};
++
++static int ext4_mb_seq_last_start_seq_show(struct seq_file *m, void *v)
++{
++	struct ext4_sb_info *sbi = EXT4_SB(m->private);
++
++	seq_printf(m , "%ld\n", sbi->s_mb_last_start);
++	return 0;
++}
++
++static int ext4_mb_seq_last_start_open(struct inode *inode, struct file *file)
++{
++	return single_open(file, ext4_mb_seq_last_start_seq_show, PDE_DATA(inode));
++}
++static const struct file_operations ext4_mb_seq_last_start_fops = {
++	.owner         = THIS_MODULE,
++	.open          = ext4_mb_seq_last_start_open,
++	.read          = seq_read,
++	.llseek        = seq_lseek,
++	.release       = seq_release,
++};
++
+ /*
+  * Allocate the top-level s_group_info array for the specified number
+  * of groups
+@@ -2790,6 +2861,11 @@ int ext4_mb_init(struct super_block *sb)
+ 		proc_create_data(EXT4_MB_PREALLOC_TABLE, S_IFREG | S_IRUGO |
+ 				 S_IWUSR, sbi->s_proc,
+ 				 &ext4_mb_prealloc_seq_fops, sb);
++		proc_create_data("mb_last_group", S_IFREG | S_IRUGO |
++				 S_IWUSR, sbi->s_proc,
++				 &ext4_mb_seq_last_group_fops, sb);
++		proc_create_data("mb_last_start", S_IFREG | S_IRUGO,
++				 sbi->s_proc, &ext4_mb_seq_last_start_fops, sb);
+ 	}
+
+ 	return 0;
+@@ -2835,6 +2911,8 @@ int ext4_mb_release(struct super_block *
+
+ 	if (sbi->s_proc) {
+ 		remove_proc_entry("mb_groups", sbi->s_proc);
++		remove_proc_entry("mb_last_group", sbi->s_proc);
++		remove_proc_entry("mb_last_start", sbi->s_proc);
+ 		remove_proc_entry(EXT4_MB_PREALLOC_TABLE, sbi->s_proc);
+ 	}
+
