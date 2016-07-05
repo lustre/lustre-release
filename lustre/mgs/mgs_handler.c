@@ -736,7 +736,9 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 		if (rc != 0)
 			GOTO(out_lcfg, rc = -EINVAL);
 
-		fs_id = nodemap_test_id(nid, idtype, client_id);
+		rc = nodemap_test_id(nid, idtype, client_id, &fs_id);
+		if (rc < 0)
+			GOTO(out_lcfg, rc = -EINVAL);
 
 		if (data->ioc_plen1 < sizeof(fs_idstr))
 			GOTO(out_lcfg, rc = -EINVAL);

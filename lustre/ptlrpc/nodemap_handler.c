@@ -253,11 +253,30 @@ struct lu_nodemap *nodemap_lookup(const char *name)
  * \param	nid			nid to classify
  * \retval	nodemap			nodemap containing the nid
  * \retval	default_nodemap		default nodemap
+ * \retval	-EINVAL			LO nid given without other local nid
  */
 struct lu_nodemap *nodemap_classify_nid(lnet_nid_t nid)
 {
 	struct lu_nid_range	*range;
 	struct lu_nodemap	*nodemap;
+	int rc;
+
+	ENTRY;
+
+	/* don't use 0@lo, use the first non-lo local NID instead */
+	if (LNET_NETTYP(LNET_NIDNET(nid)) == LOLND) {
+		lnet_process_id_t id;
+		int i = 0;
+
+		do {
+			rc = LNetGetId(i++, &id);
+			if (rc < 0)
+				RETURN(ERR_PTR(-EINVAL));
+		} while (LNET_NETTYP(LNET_NIDNET(id.nid)) == LOLND);
+
+		nid = id.nid;
+		CDEBUG(D_INFO, "found nid %s\n", libcfs_nid2str(nid));
+	}
 
 	range = range_search(&active_config->nmc_range_tree, nid);
 	if (range != NULL)
@@ -268,7 +287,7 @@ struct lu_nodemap *nodemap_classify_nid(lnet_nid_t nid)
 	LASSERT(nodemap != NULL);
 	nodemap_getref(nodemap);
 
-	return nodemap;
+	RETURN(nodemap);
 }
 
 /**
@@ -356,25 +375,33 @@ EXPORT_SYMBOL(nodemap_parse_idmap);
  * \param	nid		nid to add to the members
  * \param	exp		obd_export structure for the connection
  *				that is being added
- * \retval	-EINVAL		export is NULL
+ * \retval	-EINVAL		export is NULL, or has invalid NID
  * \retval	-EEXIST		export is already member of a nodemap
  */
 int nodemap_add_member(lnet_nid_t nid, struct obd_export *exp)
 {
 	struct lu_nodemap *nodemap;
-	int rc;
+	int rc = 0;
 	ENTRY;
 
 	mutex_lock(&active_config_lock);
 	down_read(&active_config->nmc_range_tree_lock);
 
 	nodemap = nodemap_classify_nid(nid);
-	rc = nm_member_add(nodemap, exp);
+
+	if (IS_ERR(nodemap)) {
+		CWARN("%s: error adding to nodemap, no valid NIDs found\n",
+			  exp->exp_obd->obd_name);
+		rc = -EINVAL;
+	} else {
+		rc = nm_member_add(nodemap, exp);
+	}
 
 	up_read(&active_config->nmc_range_tree_lock);
 	mutex_unlock(&active_config_lock);
 
-	nodemap_putref(nodemap);
+	if (!IS_ERR(nodemap))
+		nodemap_putref(nodemap);
 
 	RETURN(rc);
 }
@@ -1477,6 +1504,9 @@ void nodemap_test_nid(lnet_nid_t nid, char *name_buf, size_t name_len)
 	up_read(&active_config->nmc_range_tree_lock);
 	mutex_unlock(&active_config_lock);
 
+	if (IS_ERR(nodemap))
+		return;
+
 	strncpy(name_buf, nodemap->nm_name, name_len);
 	if (name_len > 0)
 		name_buf[name_len - 1] = '\0';
@@ -1486,20 +1516,21 @@ void nodemap_test_nid(lnet_nid_t nid, char *name_buf, size_t name_len)
 EXPORT_SYMBOL(nodemap_test_nid);
 
 /**
- * Returns the id mapping for a given nid/id pair. Useful for testing the
+ * Passes back the id mapping for a given nid/id pair. Useful for testing the
  * nodemap configuration to make sure it is working as expected.
  *
  * \param	nid		nid to classify
  * \param	idtype		uid or gid
  * \param	client_id	id to map to fs
+ * \param	fs_id_buf	pointer to save mapped fs_id to
  *
- * \retval	the mapped fs_id of the given client_id
+ * \retval	0	success
+ * \retval	-EINVAL	invalid NID
  */
-__u32 nodemap_test_id(lnet_nid_t nid, enum nodemap_id_type idtype,
-		      __u32 client_id)
+int nodemap_test_id(lnet_nid_t nid, enum nodemap_id_type idtype,
+		    __u32 client_id, __u32 *fs_id)
 {
 	struct lu_nodemap	*nodemap;
-	__u32			 fs_id;
 
 	mutex_lock(&active_config_lock);
 	down_read(&active_config->nmc_range_tree_lock);
@@ -1507,10 +1538,13 @@ __u32 nodemap_test_id(lnet_nid_t nid, enum nodemap_id_type idtype,
 	up_read(&active_config->nmc_range_tree_lock);
 	mutex_unlock(&active_config_lock);
 
-	fs_id = nodemap_map_id(nodemap, idtype, NODEMAP_CLIENT_TO_FS,
+	if (IS_ERR(nodemap))
+		return PTR_ERR(nodemap);
+
+	*fs_id = nodemap_map_id(nodemap, idtype, NODEMAP_CLIENT_TO_FS,
 			       client_id);
 	nodemap_putref(nodemap);
 
-	return fs_id;
+	return 0;
 }
 EXPORT_SYMBOL(nodemap_test_id);

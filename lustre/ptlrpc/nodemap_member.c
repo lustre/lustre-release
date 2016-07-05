@@ -190,6 +190,8 @@ void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap)
 
 		/* nodemap_classify_nid requires nmc_range_tree_lock */
 		new_nodemap = nodemap_classify_nid(nid);
+		if (IS_ERR(new_nodemap))
+			continue;
 
 		if (new_nodemap != nodemap) {
 			/* could deadlock if new_nodemap also reclassifying,
