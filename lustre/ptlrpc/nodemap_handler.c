@@ -777,15 +777,21 @@ int nodemap_add_range_helper(struct nodemap_config *config,
 	}
 
 	list_add(&range->rn_list, &nodemap->nm_ranges);
-	nm_member_reclassify_nodemap(config->nmc_default_nodemap);
+
+	/* nodemaps have no members if they aren't on the active config */
+	if (config == active_config)
+		nm_member_reclassify_nodemap(config->nmc_default_nodemap);
+
 	up_write(&config->nmc_range_tree_lock);
 
 	/* if range_id is non-zero, we are loading from disk */
 	if (range_id == 0)
 		rc = nodemap_idx_range_add(range, nid);
 
-	nm_member_revoke_locks(config->nmc_default_nodemap);
-	nm_member_revoke_locks(nodemap);
+	if (config == active_config) {
+		nm_member_revoke_locks(config->nmc_default_nodemap);
+		nm_member_revoke_locks(nodemap);
+	}
 
 out:
 	return rc;
@@ -1375,15 +1381,18 @@ void nodemap_config_dealloc(struct nodemap_config *config)
 	 */
 	list_for_each_entry_safe(nodemap, nodemap_temp, &nodemap_list_head,
 				 nm_list) {
+		mutex_lock(&active_config_lock);
 		down_write(&config->nmc_range_tree_lock);
 
-		/* move members to new config */
+		/* move members to new config, requires ac lock */
 		nm_member_reclassify_nodemap(nodemap);
 		list_for_each_entry_safe(range, range_temp, &nodemap->nm_ranges,
 					 rn_list)
 			range_delete(&config->nmc_range_tree, range);
 		up_write(&config->nmc_range_tree_lock);
+		mutex_unlock(&active_config_lock);
 
+		/* putref must be outside of ac lock if nm could be destroyed */
 		nodemap_putref(nodemap);
 	}
 	OBD_FREE_PTR(config);
