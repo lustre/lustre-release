@@ -1009,29 +1009,6 @@ void cl_page_list_fini(const struct lu_env *env, struct cl_page_list *plist)
 EXPORT_SYMBOL(cl_page_list_fini);
 
 /**
- * Owns all pages in a queue.
- */
-int cl_page_list_own(const struct lu_env *env,
-		     struct cl_io *io, struct cl_page_list *plist)
-{
-	struct cl_page *page;
-	struct cl_page *temp;
-	int result;
-
-	LINVRNT(plist->pl_owner == current);
-
-	ENTRY;
-	result = 0;
-	cl_page_list_for_each_safe(page, temp, plist) {
-		if (cl_page_own(env, io, page) == 0)
-			result = result ?: page->cp_error;
-		else
-			cl_page_list_del(env, plist, page);
-	}
-	RETURN(result);
-}
-
-/**
  * Assumes all pages in a queue.
  */
 void cl_page_list_assume(const struct lu_env *env,

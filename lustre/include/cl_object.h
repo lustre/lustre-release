@@ -714,8 +714,6 @@ enum cl_page_type {
 struct cl_page {
 	/** Reference counter. */
 	atomic_t		 cp_ref;
-	/** Transfer error. */
-	int                      cp_error;
 	/** An object this page is a part of. Immutable after creation. */
 	struct cl_object	*cp_obj;
 	/** vmpage */
@@ -2363,8 +2361,6 @@ void cl_page_list_splice (struct cl_page_list *list,
 void cl_page_list_del    (const struct lu_env *env,
                           struct cl_page_list *plist, struct cl_page *page);
 void cl_page_list_disown (const struct lu_env *env,
-                          struct cl_io *io, struct cl_page_list *plist);
-int  cl_page_list_own    (const struct lu_env *env,
                           struct cl_io *io, struct cl_page_list *plist);
 void cl_page_list_assume (const struct lu_env *env,
                           struct cl_io *io, struct cl_page_list *plist);
