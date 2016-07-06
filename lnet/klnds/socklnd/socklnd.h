@@ -66,6 +66,10 @@
 	tcp_sendpage(sk, page, offset, size, flags)
 #endif /* HAVE_TCP_SENDPAGE_USE_SOCKET */
 
+#ifndef NETIF_F_CSUM_MASK
+# define NETIF_F_CSUM_MASK NETIF_F_ALL_CSUM
+#endif
+
 /* assume one thread for each connection type */
 #define SOCKNAL_NSCHEDS		3
 #define SOCKNAL_NSCHEDS_HIGH	(SOCKNAL_NSCHEDS << 1)
