@@ -466,6 +466,7 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 	struct inode		 *inode = NULL;
 	__u64			  bits = 0;
 	int			  rc;
+	struct dentry *alias;
 	ENTRY;
 
 	/* NB 1 request reference will be taken away by ll_intent_lock()
@@ -492,21 +493,11 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 	/* Only hash *de if it is unhashed (new dentry).
 	 * Atoimc_open may passin hashed dentries for open.
 	 */
-	if (d_unhashed(*de)) {
-		struct dentry *alias;
+	alias = ll_splice_alias(inode, *de);
+	if (IS_ERR(alias))
+		GOTO(out, rc = PTR_ERR(alias));
 
-		alias = ll_splice_alias(inode, *de);
-		if (IS_ERR(alias))
-			GOTO(out, rc = PTR_ERR(alias));
-
-		*de = alias;
-	} else if (!it_disposition(it, DISP_LOOKUP_NEG)  &&
-		   !it_disposition(it, DISP_OPEN_CREATE)) {
-		/* With DISP_OPEN_CREATE dentry will
-		   instantiated in ll_create_it. */
-		LASSERT((*de)->d_inode == NULL);
-		d_instantiate(*de, inode);
-	}
+	*de = alias;
 
 	if (!it_disposition(it, DISP_LOOKUP_NEG)) {
 		/* we have lookup look - unhide dentry */
@@ -707,6 +698,24 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 			   "open_flags %x, mode %x opened %d\n",
 	       dentry->d_name.len, dentry->d_name.name,
 	       PFID(ll_inode2fid(dir)), dir, file, open_flags, mode, *opened);
+
+	/* Only negative dentries enter here */
+	LASSERT(dentry->d_inode == NULL);
+
+	if (!d_unhashed(dentry)) {
+		/* A valid negative dentry that just passed revalidation,
+		 * there's little point to try and open it server-side,
+		 * even though there's a minuscule chance it might succeed.
+		 * Either way it's a valid race to just return -ENOENT here.
+		 */
+		if (!(open_flags & O_CREAT))
+			return -ENOENT;
+
+		/* Otherwise we just unhash it to be rehashed afresh via
+		 * lookup if necessary
+		 */
+		d_drop(dentry);
+	}
 
 	OBD_ALLOC(it, sizeof(*it));
 	if (!it)
