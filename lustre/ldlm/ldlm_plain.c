@@ -73,14 +73,14 @@ ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 			struct list_head *work_list)
 {
 	enum ldlm_mode req_mode = req->l_req_mode;
-	struct ldlm_lock *lock;
-	struct list_head *tmp;
+	struct ldlm_lock *lock, *next_lock;
 	int compat = 1;
 	ENTRY;
 
 	lockmode_verify(req_mode);
 
-	list_for_each_entry(lock, queue, l_res_link) {
+	list_for_each_entry_safe(lock, next_lock, queue, l_res_link) {
+
 		/* We stop walking the queue if we hit ourselves so we don't
 		 * take conflicting locks enqueued after us into account,
 		 * or we'd wait forever. */
@@ -88,8 +88,10 @@ ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 			RETURN(compat);
 
 		/* Advance loop cursor to last lock of mode group. */
-		tmp = &list_entry(lock->l_sl_mode.prev, struct ldlm_lock,
-				  l_sl_mode)->l_res_link;
+		next_lock = list_entry(list_entry(lock->l_sl_mode.prev,
+						  struct ldlm_lock,
+						  l_sl_mode)->l_res_link.next,
+				       struct ldlm_lock, l_res_link);
 
 		if (lockmode_compat(lock->l_req_mode, req_mode))
                         continue;
