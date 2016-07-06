@@ -448,7 +448,6 @@ static void ll_vm_open(struct vm_area_struct * vma)
 	struct vvp_object *vob = cl_inode2vvp(inode);
 
 	ENTRY;
-	LASSERT(vma->vm_file);
 	LASSERT(atomic_read(&vob->vob_mmap_cnt) >= 0);
 	atomic_inc(&vob->vob_mmap_cnt);
 	EXIT;
@@ -463,7 +462,6 @@ static void ll_vm_close(struct vm_area_struct *vma)
 	struct vvp_object *vob   = cl_inode2vvp(inode);
 
 	ENTRY;
-	LASSERT(vma->vm_file);
 	atomic_dec(&vob->vob_mmap_cnt);
 	LASSERT(atomic_read(&vob->vob_mmap_cnt) >= 0);
 	EXIT;
