@@ -30,8 +30,9 @@
 
 #ifndef _LUSTRE_UPDATE_H
 #define _LUSTRE_UPDATE_H
-#include <lustre_net.h>
 #include <dt_object.h>
+#include <lustre_net.h>
+#include <obj_update.h>
 
 #define OUT_UPDATE_INIT_BUFFER_SIZE	4096
 #define OUT_UPDATE_REPLY_SIZE		4096

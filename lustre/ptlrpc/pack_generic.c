@@ -54,6 +54,7 @@
 #include <obd_cksum.h>
 #include <obd_class.h>
 #include <obd_support.h>
+#include <obj_update.h>
 
 #include "ptlrpc_internal.h"
 

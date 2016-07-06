@@ -1107,6 +1107,16 @@ static ssize_t osp_md_write(const struct lu_env *env, struct dt_object *dt,
 	RETURN(buf->lb_len);
 }
 
+static inline void orr_le_to_cpu(struct out_read_reply *orr_dst,
+				 const struct out_read_reply *orr_src)
+{
+	orr_dst->orr_size = le32_to_cpu(orr_src->orr_size);
+	orr_dst->orr_padding = le32_to_cpu(orr_src->orr_padding);
+	orr_dst->orr_offset = le64_to_cpu(orr_dst->orr_offset);
+}
+
+
+
 static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
 			   struct lu_buf *rbuf, loff_t *pos)
 {

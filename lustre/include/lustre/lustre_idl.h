@@ -3815,12 +3815,6 @@ struct object_update_param {
 	char	oup_buf[0];
 };
 
-static inline size_t
-object_update_param_size(const struct object_update_param *param)
-{
-	return cfs_size_round(sizeof(*param) + param->oup_len);
-}
-
 /* object update */
 struct object_update {
 	__u16		ou_type;		/* enum update_type */
@@ -3860,52 +3854,6 @@ struct out_update_buffer {
 	__u32	oub_padding;
 };
 
-static inline size_t
-object_update_params_size(const struct object_update *update)
-{
-	const struct object_update_param *param;
-	size_t				 total_size = 0;
-	unsigned int			 i;
-
-	param = &update->ou_params[0];
-	for (i = 0; i < update->ou_params_count; i++) {
-		size_t size = object_update_param_size(param);
-
-		param = (struct object_update_param *)((char *)param + size);
-		total_size += size;
-	}
-
-	return total_size;
-}
-
-static inline size_t
-object_update_size(const struct object_update *update)
-{
-	return offsetof(struct object_update, ou_params[0]) +
-	       object_update_params_size(update);
-}
-
-static inline struct object_update *
-object_update_request_get(const struct object_update_request *our,
-			  unsigned int index, size_t *size)
-{
-	void	*ptr;
-	unsigned int i;
-
-	if (index >= our->ourq_count)
-		return NULL;
-
-	ptr = (void *)&our->ourq_updates[0];
-	for (i = 0; i < index; i++)
-		ptr += object_update_size(ptr);
-
-	if (size != NULL)
-		*size = object_update_size(ptr);
-
-	return ptr;
-}
-
-
 /* the result of object update */
 struct object_update_result {
 	__u32   our_rc;
@@ -3925,33 +3873,6 @@ struct object_update_reply {
 	__u16	ourp_lens[0];
 };
 
-static inline struct object_update_result *
-object_update_result_get(const struct object_update_reply *reply,
-			 unsigned int index, size_t *size)
-{
-	__u16 count = reply->ourp_count;
-	unsigned int i;
-	void *ptr;
-
-	if (index >= count)
-		return NULL;
-
-	ptr = (char *)reply +
-	      cfs_size_round(offsetof(struct object_update_reply,
-				      ourp_lens[count]));
-	for (i = 0; i < index; i++) {
-		if (reply->ourp_lens[i] == 0)
-			return NULL;
-
-		ptr += cfs_size_round(reply->ourp_lens[i]);
-	}
-
-	if (size != NULL)
-		*size = reply->ourp_lens[index];
-
-	return ptr;
-}
-
 /* read update result */
 struct out_read_reply {
 	__u32	orr_size;
@@ -3959,22 +3880,6 @@ struct out_read_reply {
 	__u64	orr_offset;
 	char	orr_data[0];
 };
-
-static inline void orr_cpu_to_le(struct out_read_reply *orr_dst,
-				 const struct out_read_reply *orr_src)
-{
-	orr_dst->orr_size = cpu_to_le32(orr_src->orr_size);
-	orr_dst->orr_padding = cpu_to_le32(orr_src->orr_padding);
-	orr_dst->orr_offset = cpu_to_le64(orr_dst->orr_offset);
-}
-
-static inline void orr_le_to_cpu(struct out_read_reply *orr_dst,
-				 const struct out_read_reply *orr_src)
-{
-	orr_dst->orr_size = le32_to_cpu(orr_src->orr_size);
-	orr_dst->orr_padding = le32_to_cpu(orr_src->orr_padding);
-	orr_dst->orr_offset = le64_to_cpu(orr_dst->orr_offset);
-}
 
 /** layout swap request structure
  * fid1 and fid2 are in mdt_body
