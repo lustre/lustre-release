@@ -468,9 +468,9 @@ static int vvp_transient_page_is_vmlocked(const struct lu_env *env,
 	struct inode    *inode = vvp_object_inode(slice->cpl_obj);
 	int	locked;
 
-	locked = !mutex_trylock(&inode->i_mutex);
+	locked = !inode_trylock(inode);
 	if (!locked)
-		mutex_unlock(&inode->i_mutex);
+		inode_unlock(inode);
 	return locked ? -EBUSY : -ENODATA;
 }
 

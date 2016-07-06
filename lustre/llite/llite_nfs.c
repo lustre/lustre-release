@@ -265,13 +265,13 @@ static int ll_get_name(struct dentry *dentry, char *name,
 		GOTO(out, rc = PTR_ERR(op_data));
 
 	op_data->op_max_pages = ll_i2sbi(dir)->ll_md_brw_pages;
-	mutex_lock(&dir->i_mutex);
+	inode_lock(dir);
 #ifdef HAVE_DIR_CONTEXT
 	rc = ll_dir_read(dir, &pos, op_data, &lgd.ctx);
 #else
 	rc = ll_dir_read(dir, &pos, op_data, &lgd, ll_nfs_get_name_filldir);
 #endif
-	mutex_unlock(&dir->i_mutex);
+	inode_unlock(dir);
 	ll_finish_md_op_data(op_data);
 	if (!rc && !lgd.lgd_found)
 		rc = -ENOENT;

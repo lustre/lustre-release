@@ -1715,7 +1715,7 @@ static loff_t ll_dir_seek(struct file *file, loff_t offset, int origin)
         loff_t ret = -EINVAL;
         ENTRY;
 
-	mutex_lock(&inode->i_mutex);
+	inode_lock(inode);
         switch (origin) {
                 case SEEK_SET:
                         break;
@@ -1753,7 +1753,7 @@ static loff_t ll_dir_seek(struct file *file, loff_t offset, int origin)
         GOTO(out, ret);
 
 out:
-	mutex_unlock(&inode->i_mutex);
+	inode_unlock(inode);
         return ret;
 }
 

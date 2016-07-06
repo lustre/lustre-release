@@ -1495,10 +1495,10 @@ static int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data)
 	 * cache is not cleared yet. */
 	op_data->op_attr.ia_valid &= ~(TIMES_SET_FLAGS | ATTR_SIZE);
 	if (S_ISREG(inode->i_mode))
-		mutex_lock(&inode->i_mutex);
+		inode_lock(inode);
 	rc = simple_setattr(dentry, &op_data->op_attr);
 	if (S_ISREG(inode->i_mode))
-		mutex_unlock(&inode->i_mutex);
+		inode_unlock(inode);
 	op_data->op_attr.ia_valid = ia_valid;
 
 	rc = ll_update_inode(inode, &md);
@@ -1587,7 +1587,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 	if (S_ISREG(inode->i_mode)) {
 		if (attr->ia_valid & ATTR_SIZE)
 			inode_dio_write_done(inode);
-		mutex_unlock(&inode->i_mutex);
+		inode_unlock(inode);
 	}
 
 	/* We always do an MDS RPC, even if we're only changing the size;
@@ -1664,7 +1664,7 @@ out:
 		ll_finish_md_op_data(op_data);
 
 	if (S_ISREG(inode->i_mode)) {
-		mutex_lock(&inode->i_mutex);
+		inode_lock(inode);
 		if ((attr->ia_valid & ATTR_SIZE) && !hsm_import)
 			inode_dio_wait(inode);
 	}

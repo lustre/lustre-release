@@ -86,9 +86,9 @@ ll_lookup_one_len(const char *fid_name, struct dentry *dparent,
 {
 	struct dentry *dchild;
 
-	mutex_lock(&dparent->d_inode->i_mutex);
+	inode_lock(dparent->d_inode);
 	dchild = lookup_one_len(fid_name, dparent, fid_namelen);
-	mutex_unlock(&dparent->d_inode->i_mutex);
+	inode_unlock(dparent->d_inode);
 
 	if (IS_ERR(dchild) || dchild->d_inode == NULL)
 		return dchild;
