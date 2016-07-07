@@ -248,7 +248,7 @@ int osd_add_to_remote_parent(const struct lu_env *env, struct osd_device *osd,
 	dentry = osd_child_dentry_by_inode(env, parent->d_inode,
 					   name, strlen(name));
 	mutex_lock(&parent->d_inode->i_mutex);
-	rc = osd_ldiskfs_add_entry(info, oh->ot_handle, dentry,
+	rc = osd_ldiskfs_add_entry(info, osd, oh->ot_handle, dentry,
 				   obj->oo_inode, NULL);
 	CDEBUG(D_INODE, "%s: add %s:%lu to remote parent %lu.\n", osd_name(osd),
 	       name, obj->oo_inode->i_ino, parent->d_inode->i_ino);
@@ -748,7 +748,7 @@ static int osd_obj_add_entry(struct osd_thread_info *info,
 
 	ll_vfs_dq_init(dir->d_inode);
 	mutex_lock(&dir->d_inode->i_mutex);
-	rc = osd_ldiskfs_add_entry(info, th, child, inode, NULL);
+	rc = osd_ldiskfs_add_entry(info, osd, th, child, inode, NULL);
 	mutex_unlock(&dir->d_inode->i_mutex);
 
 	RETURN(rc);
@@ -1192,7 +1192,7 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 	if (rc != 0)
 		GOTO(unlock, rc);
 
-	rc = osd_ldiskfs_add_entry(info, jh, tgt_child, inode, NULL);
+	rc = osd_ldiskfs_add_entry(info, osd, jh, tgt_child, inode, NULL);
 
 	GOTO(unlock, rc);
 

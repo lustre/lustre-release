@@ -178,7 +178,7 @@ struct osd_mdobj {
 struct osd_mdobj_map {
 	struct dentry	*omm_remote_parent;
 };
-int osd_ldiskfs_add_entry(struct osd_thread_info *info,
+int osd_ldiskfs_add_entry(struct osd_thread_info *info, struct osd_device *osd,
 			  handle_t *handle, struct dentry *child,
 			  struct inode *inode, struct htree_lock *hlock);
 
@@ -546,10 +546,6 @@ struct osd_thread_info {
          * XXX temporary: for ->i_op calls.
          */
         struct timespec        oti_time;
-
-        /** osd_device reference, initialized in osd_trans_start() and
-            used in osd_trans_stop() */
-        struct osd_device     *oti_dev;
 
         /**
          * following ipd and it structures are used for osd_index_iam_lookup()

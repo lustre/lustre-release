@@ -150,7 +150,7 @@ static int osd_oi_index_create_one(struct osd_thread_info *info,
 				     feat->dif_ptrsize, feat->dif_recsize_max,
 				     jh);
 	dentry = osd_child_dentry_by_inode(env, dir, name, strlen(name));
-	rc = osd_ldiskfs_add_entry(info, jh, dentry, inode, NULL);
+	rc = osd_ldiskfs_add_entry(info, osd, jh, dentry, inode, NULL);
 	ldiskfs_journal_stop(jh);
 	iput(inode);
 	return rc;

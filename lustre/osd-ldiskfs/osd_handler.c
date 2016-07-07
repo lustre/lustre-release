@@ -434,7 +434,7 @@ struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 	return inode;
 }
 
-int osd_ldiskfs_add_entry(struct osd_thread_info *info,
+int osd_ldiskfs_add_entry(struct osd_thread_info *info, struct osd_device *osd,
 			  handle_t *handle, struct dentry *child,
 			  struct inode *inode, struct htree_lock *hlock)
 {
@@ -442,41 +442,40 @@ int osd_ldiskfs_add_entry(struct osd_thread_info *info,
 
 	rc = __ldiskfs_add_entry(handle, child, inode, hlock);
 	if (rc == -ENOBUFS || rc == -ENOSPC) {
-		char fidbuf[FID_LEN + 1];
-		struct lustre_mdt_attrs lma;
-		struct lu_fid fid = { };
-		char *errstr;
-		struct dentry *p_dentry = child->d_parent;
+		struct lustre_mdt_attrs *lma = &info->oti_mdt_attrs;
+		struct inode *parent = child->d_parent->d_inode;
+		struct lu_fid *fid = NULL;
 
-		rc2 = osd_get_lma(info, p_dentry->d_inode, p_dentry,
-				 &lma);
+		rc2 = osd_get_lma(info, parent, child->d_parent, lma);
 		if (rc2 == 0) {
-			fid = lma.lma_self_fid;
-			snprintf(fidbuf, sizeof(fidbuf), DFID, PFID(&fid));
+			fid = &lma->lma_self_fid;
 		} else if (rc2 == -ENODATA) {
-			if (unlikely(p_dentry->d_inode ==
-				     inode->i_sb->s_root->d_inode))
-				lu_local_obj_fid(&fid, OSD_FS_ROOT_OID);
-			else if (info->oti_dev && !info->oti_dev->od_is_ost &&
-				 fid_seq_is_mdt0(fid_seq(&fid)))
-				lu_igif_build(&fid, p_dentry->d_inode->i_ino,
-					      p_dentry->d_inode->i_generation);
-			snprintf(fidbuf, sizeof(fidbuf), DFID, PFID(&fid));
-		} else {
-			snprintf(fidbuf, FID_LEN, "%s", "unknown");
+			if (unlikely(parent == inode->i_sb->s_root->d_inode)) {
+				fid = &info->oti_fid3;
+				lu_local_obj_fid(fid, OSD_FS_ROOT_OID);
+			} else if (!osd->od_is_ost && osd->od_index == 0) {
+				fid = &info->oti_fid3;
+				lu_igif_build(fid, parent->i_ino,
+					      parent->i_generation);
+			}
 		}
 
-		if (rc == -ENOSPC)
-			errstr = "has reached";
+		if (fid != NULL)
+			CWARN("%s: directory (inode: %lu, FID: "DFID") %s "
+			      "maximum entry limit\n",
+			      osd_name(osd), parent->i_ino, PFID(fid),
+			      rc == -ENOSPC ? "has reached" : "is approaching");
 		else
-			errstr = "is approaching";
-		CWARN("%.16s: directory (inode: %lu FID: %s) %s maximum entry limit\n",
-			LDISKFS_SB(inode->i_sb)->s_es->s_volume_name,
-			p_dentry->d_inode->i_ino, fidbuf, errstr);
+			CWARN("%s: directory (inode: %lu, FID: unknown) %s "
+			      "maximum entry limit\n",
+			      osd_name(osd), parent->i_ino,
+			      rc == -ENOSPC ? "has reached" : "is approaching");
+
 		/* ignore such error now */
 		if (rc == -ENOBUFS)
 			rc = 0;
 	}
+
 	return rc;
 }
 
@@ -4690,8 +4689,8 @@ static int __osd_ea_add_rec(struct osd_thread_info *info,
 	child = osd_child_dentry_get(info->oti_env, pobj, name, strlen(name));
 	child->d_fsdata = (void *)ldp;
 	ll_vfs_dq_init(pobj->oo_inode);
-	rc = osd_ldiskfs_add_entry(info, oth->ot_handle, child,
-				   cinode, hlock);
+	rc = osd_ldiskfs_add_entry(info, osd_obj2dev(pobj), oth->ot_handle,
+				   child, cinode, hlock);
 	if (rc == 0 && OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_TYPE)) {
 		struct ldiskfs_dir_entry_2	*de;
 		struct buffer_head		*bh;
@@ -5940,10 +5939,11 @@ osd_dirent_has_space(struct ldiskfs_dir_entry_2 *de, __u16 namelen,
 }
 
 static int
-osd_dirent_reinsert(const struct lu_env *env, handle_t *jh,
-		    struct dentry *dentry, const struct lu_fid *fid,
-		    struct buffer_head *bh, struct ldiskfs_dir_entry_2 *de,
-		    struct htree_lock *hlock, int dot_dotdot)
+osd_dirent_reinsert(const struct lu_env *env, struct osd_device *dev,
+		    handle_t *jh, struct dentry *dentry,
+		    const struct lu_fid *fid, struct buffer_head *bh,
+		    struct ldiskfs_dir_entry_2 *de, struct htree_lock *hlock,
+		    int dot_dotdot)
 {
 	struct inode		    *dir	= dentry->d_parent->d_inode;
 	struct inode		    *inode	= dentry->d_inode;
@@ -5985,7 +5985,7 @@ osd_dirent_reinsert(const struct lu_env *env, handle_t *jh,
 	osd_get_ldiskfs_dirent_param(ldp, fid);
 	dentry->d_fsdata = (void *)ldp;
 	ll_vfs_dq_init(dir);
-	rc = osd_ldiskfs_add_entry(info, jh, dentry, inode, hlock);
+	rc = osd_ldiskfs_add_entry(info, dev, jh, dentry, inode, hlock);
 	/* It is too bad, we cannot reinsert the name entry back.
 	 * That means we lose it! */
 	if (rc != 0)
@@ -6172,8 +6172,8 @@ again:
 			*fid = lma->lma_self_fid;
 			dirty = true;
 			/* Update the FID-in-dirent. */
-			rc = osd_dirent_reinsert(env, jh, dentry, fid, bh, de,
-						 hlock, dot_dotdot);
+			rc = osd_dirent_reinsert(env, dev, jh, dentry, fid,
+						 bh, de, hlock, dot_dotdot);
 			if (rc == 0)
 				*attr |= LUDA_REPAIR;
 			else
@@ -6208,8 +6208,8 @@ again:
 			*fid = lma->lma_self_fid;
 			dirty = true;
 			/* Append the FID-in-dirent. */
-			rc = osd_dirent_reinsert(env, jh, dentry, fid, bh, de,
-						 hlock, dot_dotdot);
+			rc = osd_dirent_reinsert(env, dev, jh, dentry, fid,
+						 bh, de, hlock, dot_dotdot);
 			if (rc == 0)
 				*attr |= LUDA_REPAIR;
 			else
@@ -6265,8 +6265,8 @@ again:
 			lu_igif_build(fid, inode->i_ino, inode->i_generation);
 			/* It is probably IGIF object. Only aappend the
 			 * FID-in-dirent. OI scrub will process FID-in-LMA. */
-			rc = osd_dirent_reinsert(env, jh, dentry, fid, bh, de,
-						 hlock, dot_dotdot);
+			rc = osd_dirent_reinsert(env, dev, jh, dentry, fid,
+						 bh, de, hlock, dot_dotdot);
 			if (rc == 0)
 				*attr |= LUDA_UPGRADE;
 			else
