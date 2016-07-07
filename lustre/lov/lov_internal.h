@@ -157,37 +157,20 @@ struct lov_request {
 	struct lov_request_set	*rq_rqset;
 	struct list_head	 rq_link;
 	int			 rq_idx;	/* index in lov->tgts array */
-	int			 rq_stripe;	/* stripe number */
-	int			 rq_complete;
-	int			 rq_rc;
 };
 
 struct lov_request_set {
 	struct obd_info		*set_oi;
-	atomic_t		 set_refcount;
-	struct obd_export	*set_exp;
-	/* XXX: There is @set_exp already, however obd_statfs gets
-	   obd_device only. */
 	struct obd_device	*set_obd;
 	int			 set_count;
 	atomic_t		 set_completes;
 	atomic_t		 set_success;
-	atomic_t		 set_finish_checked;
 	struct list_head	 set_list;
-	wait_queue_head_t	 set_waitq;
 };
 
 extern struct kmem_cache *lov_oinfo_slab;
 
 extern struct lu_kmem_descr lov_caches[];
-
-void lov_finish_set(struct lov_request_set *set);
-
-static inline void lov_put_reqset(struct lov_request_set *set)
-{
-	if (atomic_dec_and_test(&set->set_refcount))
-		lov_finish_set(set);
-}
 
 #define lov_uuid2str(lv, index) \
         (char *)((lv)->lov_tgts[index]->ltd_uuid.uuid)
@@ -210,19 +193,9 @@ pgoff_t lov_stripe_pgoff(struct lov_stripe_md *lsm, pgoff_t stripe_index,
 			 int stripe);
 
 /* lov_request.c */
-void lov_set_add_req(struct lov_request *req, struct lov_request_set *set);
-int lov_set_finished(struct lov_request_set *set, int idempotent);
-void lov_update_set(struct lov_request_set *set,
-                    struct lov_request *req, int rc);
-int lov_check_and_wait_active(struct lov_obd *lov, int ost_idx);
 int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
                         struct lov_request_set **reqset);
-void lov_update_statfs(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
-                       int success);
-int lov_fini_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                    int success);
 int lov_fini_statfs_set(struct lov_request_set *set);
-int lov_statfs_interpret(struct ptlrpc_request_set *rqset, void *data, int rc);
 
 /* lov_obd.c */
 void lov_stripe_lock(struct lov_stripe_md *md);

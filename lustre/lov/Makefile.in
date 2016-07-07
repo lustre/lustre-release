@@ -12,7 +12,6 @@ lov-objs := lov_dev.o \
 	lov_pool.o \
 	lov_request.o \
 	lovsub_dev.o \
-	lovsub_io.o \
 	lovsub_lock.o \
 	lovsub_object.o \
 	lovsub_page.o \

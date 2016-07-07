@@ -48,13 +48,10 @@ static void lov_init_set(struct lov_request_set *set)
 	set->set_count = 0;
 	atomic_set(&set->set_completes, 0);
 	atomic_set(&set->set_success, 0);
-	atomic_set(&set->set_finish_checked, 0);
 	INIT_LIST_HEAD(&set->set_list);
-	atomic_set(&set->set_refcount, 1);
-	init_waitqueue_head(&set->set_waitq);
 }
 
-void lov_finish_set(struct lov_request_set *set)
+static void lov_finish_set(struct lov_request_set *set)
 {
 	struct list_head *pos, *n;
 	struct lov_request *req;
@@ -75,35 +72,16 @@ void lov_finish_set(struct lov_request_set *set)
 	EXIT;
 }
 
-int lov_set_finished(struct lov_request_set *set, int idempotent)
+static void
+lov_update_set(struct lov_request_set *set, struct lov_request *req, int rc)
 {
-	int completes = atomic_read(&set->set_completes);
-
-	CDEBUG(D_INFO, "check set %d/%d\n", completes, set->set_count);
-
-	if (completes == set->set_count) {
-		if (idempotent)
-			return 1;
-		if (atomic_inc_return(&set->set_finish_checked) == 1)
-			return 1;
-	}
-	return 0;
-}
-
-void lov_update_set(struct lov_request_set *set,
-		    struct lov_request *req, int rc)
-{
-	req->rq_complete = 1;
-	req->rq_rc = rc;
-
 	atomic_inc(&set->set_completes);
 	if (rc == 0)
 		atomic_inc(&set->set_success);
-
-	wake_up(&set->set_waitq);
 }
 
-void lov_set_add_req(struct lov_request *req, struct lov_request_set *set)
+static void
+lov_set_add_req(struct lov_request *req, struct lov_request_set *set)
 {
 	list_add_tail(&req->rq_link, &set->set_list);
         set->set_count++;
@@ -129,7 +107,7 @@ static int lov_check_set(struct lov_obd *lov, int idx)
  * If the OSC has not yet had a chance to connect to the OST the first time,
  * wait once for it to connect instead of returning an error.
  */
-int lov_check_and_wait_active(struct lov_obd *lov, int ost_idx)
+static int lov_check_and_wait_active(struct lov_obd *lov, int ost_idx)
 {
 	wait_queue_head_t waitq;
 	struct l_wait_info lwi;
@@ -175,7 +153,8 @@ out:
                         (tot) += (add);                                 \
         } while(0)
 
-int lov_fini_statfs(struct obd_device *obd, struct obd_statfs *osfs,int success)
+static int
+lov_fini_statfs(struct obd_device *obd, struct obd_statfs *osfs, int success)
 {
         ENTRY;
 
@@ -209,12 +188,15 @@ int lov_fini_statfs_set(struct lov_request_set *set)
 		rc = lov_fini_statfs(set->set_obd, set->set_oi->oi_osfs,
 				     atomic_read(&set->set_success));
 	}
-	lov_put_reqset(set);
+
+	lov_finish_set(set);
+
 	RETURN(rc);
 }
 
-void lov_update_statfs(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
-                       int success)
+static void
+lov_update_statfs(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
+		  int success)
 {
         int shift = 0, quit = 0;
         __u64 tmp;
@@ -325,12 +307,6 @@ out_update:
         obd_putref(lovobd);
 
 out:
-	if (set->set_oi->oi_flags & OBD_STATFS_PTLRPCD &&
-	    lov_set_finished(set, 0)) {
-		lov_statfs_interpret(NULL, set, set->set_count !=
-				     atomic_read(&set->set_success));
-	}
-
 	RETURN(0);
 }
 
