@@ -22,8 +22,8 @@ require_dsh_mds || exit 0
 
 # Skip these tests
 # bug number for skipped tests:
-#                                    LU-472
-ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT 61d"
+#                                    LU-472 LU-4039
+ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT 61d    90"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 case "$(lsb_release -sr)" in	# only disable tests for el7
