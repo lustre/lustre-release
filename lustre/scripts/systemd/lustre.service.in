@@ -1,0 +1,16 @@
+[Unit]
+Description=Lustre shutdown
+After=network.target network-online.target lnet.service
+DefaultDependencies=false
+Conflicts=umount.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/bin/true
+ExecStop=@bindir@/umount -a -t lustre
+ExecStop=@sbindir@/lustre_rmmod
+
+[Install]
+WantedBy=sysinit.target
+WantedBy=final.target
