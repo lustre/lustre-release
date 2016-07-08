@@ -394,12 +394,12 @@ echo '%{_sysconfdir}/ha.d/resource.d/Lustre' >>lustre.files
 # systemd is on redhat, fedora, and suse
 %if %{with systemd}
 echo '%{_unitdir}/lnet.service' >>lustre.files
+echo '%{_unitdir}/lustre.service' >>lustre.files
 %endif
 
 %if %{_vendor}=="redhat"
 # The following scripts are Red Hat specific
 %if %{with servers}
-echo '%{_sysconfdir}/init.d/lustre' >>lustre.files
 echo '%{_sysconfdir}/sysconfig/lustre' >>lustre.files
 %if %{with gss_keyring}
 echo '%{_sysconfdir}/init.d/lsvcgss' >>lustre.files
@@ -409,6 +409,7 @@ echo '%{_sysconfdir}/sysconfig/lsvcgss' >>lustre.files
 
 %if %{without systemd}
 echo '%{_sysconfdir}/init.d/lnet' >>lustre.files
+echo '%{_sysconfdir}/init.d/lustre' >>lustre.files
 %endif
 %endif
 %if %{with gss_keyring}
@@ -572,15 +573,18 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 %post
 %if %{with systemd}
 %systemd_post lnet.service
+%systemd_post lustre.service
 %endif
 
 %preun
 %if %{with systemd}
+%systemd_preun lustre.service
 %systemd_preun lnet.service
 %endif
 
 %postun
 %if %{with systemd}
+%systemd_postun_with_restart lustre.service
 %systemd_postun_with_restart lnet.service
 %endif
 
