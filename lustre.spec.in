@@ -338,8 +338,9 @@ if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/snmp ] ; then
 	echo '%{_libdir}/lustre/snmp' >>lustre.files
 fi
 
-find $RPM_BUILD_ROOT%{_libdir}/@PACKAGE@ \
-    -name \*.la -type f -exec rm -f {} \;
+%if %{with lustre_utils}
+find $RPM_BUILD_ROOT%{_libdir}/@PACKAGE@ -name \*.la -type f -exec rm -f {} \;
+%endif
 
 %if %{with lustre_modules}
 # mark modules executable for find-debuginfo.sh
