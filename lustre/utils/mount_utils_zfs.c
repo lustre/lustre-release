@@ -142,7 +142,7 @@ static int zfs_set_prop_params(zfs_handle_t *zhp, char *params)
 {
 	char *params_dup, *token, *key, *value;
 	char *save_token = NULL;
-	char prop_name[ZFS_MAXNAMELEN];
+	char prop_name[ZFS_MAXPROPLEN];
 	int ret = 0;
 
 	params_dup = strdup(params);
@@ -320,7 +320,7 @@ static int zfs_get_prop_params(zfs_handle_t *zhp, char *param, int len)
 {
 	nvlist_t *props;
 	nvpair_t *nvp;
-	char key[ZFS_MAXNAMELEN];
+	char key[ZFS_MAXPROPLEN];
 	char *value;
 	int ret = 0;
 
