@@ -124,6 +124,7 @@ struct ofd_device {
 	/* last_rcvd file */
 	struct lu_target	 ofd_lut;
 	struct dt_object	*ofd_health_check_file;
+	struct local_oid_storage *ofd_los;
 
 	int			 ofd_subdir_count;
 	__u64			 ofd_inconsistency_self_detected;

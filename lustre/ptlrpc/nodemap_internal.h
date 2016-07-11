@@ -171,6 +171,9 @@ struct rb_node *nm_rb_next_postorder(const struct rb_node *node);
 struct rb_node *nm_rb_first_postorder(const struct rb_root *root);
 void nodemap_getref(struct lu_nodemap *nodemap);
 void nodemap_putref(struct lu_nodemap *nodemap);
+int nm_hash_list_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
+		    struct hlist_node *hnode,
+		    void *nodemap_list_head);
 
 #define nm_rbtree_postorder_for_each_entry_safe(pos, n,			\
 						root, field)		\

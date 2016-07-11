@@ -51,6 +51,7 @@
 #include <lu_object.h>
 #include <lustre_param.h>
 #include <lustre_fid.h>
+#include <lustre_nodemap.h>
 
 #include "mdd_internal.h"
 
@@ -883,6 +884,7 @@ static void mdd_device_shutdown(const struct lu_env *env, struct mdd_device *m,
 	mdd_changelog_fini(env, m);
 	orph_index_fini(env, m);
 	mdd_dot_lustre_cleanup(env, m);
+	nodemap_fs_fini(env, mdd2obd_dev(m));
 	if (m->mdd_los != NULL) {
 		local_oid_storage_fini(env, m->mdd_los);
 		m->mdd_los = NULL;
@@ -1056,15 +1058,24 @@ static int mdd_prepare(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(out_changelog, rc);
 
+	rc = nodemap_fs_init(env, mdd->mdd_bottom, mdd2obd_dev(mdd),
+			     mdd->mdd_los);
+	if (rc != 0)
+		GOTO(out_hsm, rc);
+
 	rc = lfsck_register(env, mdd->mdd_bottom, mdd->mdd_child,
 			    mdd2obd_dev(mdd), mdd_lfsck_out_notify,
 			    mdd, true);
 	if (rc != 0) {
 		CERROR("%s: failed to initialize lfsck: rc = %d\n",
 		       mdd2obd_dev(mdd)->obd_name, rc);
-		GOTO(out_hsm, rc);
+		GOTO(out_nodemap, rc);
 	}
+
 	RETURN(0);
+
+out_nodemap:
+	nodemap_fs_fini(env, mdd2obd_dev(mdd));
 out_hsm:
 	mdd_hsm_actions_llog_fini(env, mdd);
 out_changelog:

@@ -192,6 +192,11 @@ void nodemap_config_set_active_mgc(struct nodemap_config *config);
 
 int nodemap_process_idx_pages(struct nodemap_config *config, union lu_page *lip,
 			      struct lu_nodemap **recent_nodemap);
+
+struct dt_device;
+int nodemap_fs_init(const struct lu_env *env, struct dt_device *dev,
+		    struct obd_device *obd, struct local_oid_storage *los);
+void nodemap_fs_fini(const struct lu_env *env, struct obd_device *obd);
 #else /* disable nodemap processing in MGC of non-servers */
 static inline int nodemap_process_idx_pages(void *config,
 					    union lu_page *lip,
