@@ -80,9 +80,11 @@
 
 %if %{_vendor}=="redhat" || %{_vendor}=="fedora"
 	%global requires_kmod_name kmod-%{lustre_name}
+	%global requires_kmod_tests_name kmod-%{lustre_name}-tests
 	%global requires_kmod_version %{version}
 %else	#for Suse
 	%global requires_kmod_name %{lustre_name}-kmp
+	%global requires_kmod_tests_name %{lustre_name}-tests-kmp
 	%define krequires %(echo %{kversion} | sed -e 's/\.x86_64$//' -e 's/\.i[3456]86$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/[-.]ppc64$//' -e 's/\.aarch64$//' -e 's/-default$//')
 	%if 0%{?suse_version} >= 1200
 		%global requires_kmod_version %{version}_k%(echo %{krequires} | sed -r 'y/-/_/; s/^(2\.6\.[0-9]+)_/\\1.0_/;')
@@ -123,6 +125,7 @@ BuildRequires: libselinux-devel
 Requires: libselinux
 %endif
 %if %{with lustre_modules}
+BuildRequires: %kernel_module_package_buildreqs
 %if %{_vendor}=="redhat"
 BuildRequires: redhat-rpm-config
 %endif
@@ -132,9 +135,6 @@ BuildRequires: redhat-rpm-config
 Userspace tools and files for the Lustre file system.
 
 %if %{with lustre_modules}
-%kernel_module_package_buildreqs
-
-# Lustre modules
 %kernel_module_package -n %{name} -p %SOURCE1 -f %SOURCE2 default
 
 %if %{with ldiskfs}
@@ -171,7 +171,9 @@ ZFS hooks for mount/mkfs into a dynamic library.
 Summary: Lustre testing framework
 Group: Development/Kernel
 Provides: %{name}-tests = %{version}
-Requires: %{name} = %{version}, %{requires_kmod_name} = %{requires_kmod_version}, lustre-iokit
+Requires: %{name} = %{version}, lustre-iokit
+Requires: %{requires_kmod_name} = %{requires_kmod_version}
+Requires: %{requires_kmod_tests_name} = %{requires_kmod_version}
 Requires: attr, rsync, perl, lsof, /usr/bin/getconf
 
 %description tests
@@ -179,7 +181,7 @@ This package contains a set of test binaries and scripts that are intended
 to be used by the Lustre testing framework.
 
 %if %{with lustre_modules}
-%kernel_module_package -n %{name}-tests -f %SOURCE7  default
+%kernel_module_package -n %{name}-tests -f %SOURCE7 default
 %endif
 
 %if %{with lustre_iokit}

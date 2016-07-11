@@ -58,6 +58,13 @@ prepare_and_build_srpm() {
         fatal 1 "Failed to build kernel source RPM"
     fi
 
+    # for SLES, we also need to build the kernel-syms rpm
+    if ! rpmbuild $rpmbuildopt $targets \
+                   --define "_topdir $TOPDIR" \
+                   $TOPDIR/SOURCES/kernel-syms.spec 2>&1; then
+        fatal 1 "Failed to build kernel syms RPM"
+    fi
+
 }
 
 devel_kernel_name() {

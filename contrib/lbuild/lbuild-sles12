@@ -23,7 +23,7 @@ edit_specs() {
     # edit the SPECs with our changes
     local spec
     (cd $TOPDIR/SOURCES; ./mkspec --release ${lnxrel})
-    for spec in $RPMSMPTYPE source; do
+    for spec in $RPMSMPTYPE source syms; do
         #cp $TOPDIR/SOURCES/kernel-$spec.spec{,.orig}
         sed -i -e "s/^\(Release: *\).*$/\1${lnxrel}_${buildid}/" \
                -e '/^%setup /a\
