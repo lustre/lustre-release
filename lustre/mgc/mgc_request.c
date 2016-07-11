@@ -485,12 +485,9 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
 		config_log_put(cld_params);
 	}
 
-	if (cld_nodemap) {
-		mutex_lock(&cld_nodemap->cld_lock);
-		cld_nodemap->cld_stopping = 1;
-		mutex_unlock(&cld_nodemap->cld_lock);
+	/* don't set cld_stopping on nm lock as other targets may be active */
+	if (cld_nodemap)
 		config_log_put(cld_nodemap);
-	}
 
 	/* drop the ref from the find */
 	config_log_put(cld);

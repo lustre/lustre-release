@@ -156,6 +156,7 @@ void nm_member_delete_list(struct lu_nodemap *nodemap);
 struct lu_nodemap *nodemap_classify_nid(lnet_nid_t nid);
 void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap);
 void nm_member_revoke_locks(struct lu_nodemap *nodemap);
+void nm_member_revoke_locks_always(struct lu_nodemap *nodemap);
 void nm_member_revoke_all(void);
 
 int nodemap_add_idmap_helper(struct lu_nodemap *nodemap,

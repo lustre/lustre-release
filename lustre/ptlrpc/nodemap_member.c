@@ -213,7 +213,9 @@ void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap)
 			list_add(&exp->exp_target_data.ted_nodemap_member,
 				 &new_nodemap->nm_member_list);
 			mutex_unlock(&new_nodemap->nm_member_list_lock);
-			nm_member_exp_revoke(exp);
+
+			if (nodemap_active)
+				nm_member_exp_revoke(exp);
 		} else {
 			nodemap_putref(new_nodemap);
 		}
@@ -224,14 +226,23 @@ void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap)
 }
 
 /**
- * Revoke the locks for member exports. Changing the idmap is
- * akin to deleting the security context. If the locks are not
- * canceled, the client could cache permissions that are no
- * longer correct with the map.
+ * Revoke the locks for member exports if nodemap system is active.
+ *
+ * Changing the idmap is akin to deleting the security context. If the locks
+ * are not canceled, the client could cache permissions that are no longer
+ * correct with the map.
  *
  * \param	nodemap		nodemap that has been altered
  */
 void nm_member_revoke_locks(struct lu_nodemap *nodemap)
+{
+	if (!nodemap_active)
+		return;
+
+	nm_member_revoke_locks_always(nodemap);
+}
+
+void nm_member_revoke_locks_always(struct lu_nodemap *nodemap)
 {
 	struct obd_export *exp;
 	struct obd_export *tmp;

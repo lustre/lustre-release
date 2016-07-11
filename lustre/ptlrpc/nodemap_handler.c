@@ -1415,6 +1415,7 @@ void nodemap_config_set_active(struct nodemap_config *config)
 	struct nodemap_config	*old_config = active_config;
 	struct lu_nodemap	*nodemap;
 	struct lu_nodemap	*tmp;
+	bool revoke_locks;
 	LIST_HEAD(nodemap_list_head);
 
 	ENTRY;
@@ -1445,6 +1446,14 @@ void nodemap_config_set_active(struct nodemap_config *config)
 		}
 	}
 
+	/*
+	 * We only need to revoke locks if old nodemap was active, and new
+	 * config is now nodemap inactive. nodemap_config_dealloc will
+	 * reclassify exports, triggering a lock revoke if and only if new
+	 * nodemap is active.
+	 */
+	revoke_locks = !config->nmc_nodemap_is_active && nodemap_active;
+
 	/* if new config is inactive, deactivate live config before switching */
 	if (!config->nmc_nodemap_is_active)
 		nodemap_active = false;
@@ -1457,7 +1466,8 @@ void nodemap_config_set_active(struct nodemap_config *config)
 	if (old_config != NULL)
 		nodemap_config_dealloc(old_config);
 
-	nm_member_revoke_all();
+	if (revoke_locks)
+		nm_member_revoke_all();
 
 	EXIT;
 }
@@ -1519,7 +1529,7 @@ void nm_member_revoke_all(void)
 
 	/* revoke_locks sleeps, so can't call in cfs hash cb */
 	list_for_each_entry_safe(nodemap, tmp, &nodemap_list_head, nm_list)
-		nm_member_revoke_locks(nodemap);
+		nm_member_revoke_locks_always(nodemap);
 	mutex_unlock(&active_config_lock);
 }
 
