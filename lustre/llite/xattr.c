@@ -57,6 +57,14 @@
 #define XATTR_NAME_EVM		"security.evm"
 #endif
 
+#ifndef XATTR_NAME_POSIX_ACL_ACCESS
+# define XATTR_NAME_POSIX_ACL_ACCESS POSIX_ACL_XATTR_ACCESS
+#endif
+
+#ifndef XATTR_NAME_POSIX_ACL_DEFAULT
+# define XATTR_NAME_POSIX_ACL_DEFAULT POSIX_ACL_XATTR_DEFAULT
+#endif
+
 #define XATTR_USER_T            (1)
 #define XATTR_TRUSTED_T         (2)
 #define XATTR_SECURITY_T        (3)
@@ -68,10 +76,10 @@
 static
 int get_xattr_type(const char *name)
 {
-        if (!strcmp(name, POSIX_ACL_XATTR_ACCESS))
+	if (!strcmp(name, XATTR_NAME_POSIX_ACL_ACCESS))
                 return XATTR_ACL_ACCESS_T;
 
-        if (!strcmp(name, POSIX_ACL_XATTR_DEFAULT))
+	if (!strcmp(name, XATTR_NAME_POSIX_ACL_DEFAULT))
                 return XATTR_ACL_DEFAULT_T;
 
         if (!strncmp(name, XATTR_USER_PREFIX,
